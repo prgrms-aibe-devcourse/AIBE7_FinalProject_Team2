@@ -1,0 +1,24 @@
+# 로컬 개발용 PostgreSQL (backend 폴더에서 `docker compose up -d`)
+# AWS 키 없이 로컬에서 개발이 끝나도록 DB를 컨테이너로 띄운다.
+services:
+  postgres:
+    # pgvector가 포함된 PostgreSQL 이미지 (RAG 전환 대비)
+    # 태그는 RDS에서 사용할 PostgreSQL 버전과 맞춘다. CI(backend-ci.yml)도 같은 태그를 쓴다.
+    image: pgvector/pgvector:pg17
+    container_name: lawnambul-postgres
+    environment:
+      POSTGRES_DB: lawnambul
+      POSTGRES_USER: lawnambul
+      POSTGRES_PASSWORD: lawnambul   # 로컬 전용 임시 비밀번호 (운영 비밀번호 아님)
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data   # 컨테이너를 지워도 데이터 유지
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lawnambul -d lawnambul"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:

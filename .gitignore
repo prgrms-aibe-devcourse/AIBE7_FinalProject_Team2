@@ -1,0 +1,17 @@
+# ===== 비밀값 (절대 커밋 금지) =====
+.env
+.env.*
+!.env.example
+
+# ===== 개인 설정 =====
+.claude/settings.local.json
+.idea/
+*.iml
+.DS_Store
+
+# ===== 빌드 결과물 =====
+build/
+out/
+.gradle/
+node_modules/
+dist/

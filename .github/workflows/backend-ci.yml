@@ -1,0 +1,80 @@
+name: Backend CI
+
+on:
+  pull_request:
+    branches: [develop]
+    paths:
+      - Backend/**
+      - .github/workflows/backend-ci.yml
+  push:
+    branches: [develop]
+    paths:
+      - Backend/**
+      - .github/workflows/backend-ci.yml
+  workflow_dispatch:
+
+# 같은 PR에 새 push가 오면 이전 실행을 취소한다 (CI 전용, 배포 파일에는 쓰지 말 것)
+concurrency:
+  group: backend-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Test and build image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        # 로컬 docker-compose.yml과 같은 이미지/버전을 사용한다
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_DB: lawnambul
+          POSTGRES_USER: lawnambul
+          POSTGRES_PASSWORD: lawnambul   # CI 안에서만 쓰는 임시 계정
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U lawnambul -d lawnambul"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    # application.yml이 읽는 환경변수 이름과 반드시 일치해야 한다
+    env:
+      DB_URL: jdbc:postgresql://localhost:5432/lawnambul
+      DB_USERNAME: lawnambul
+      DB_PASSWORD: lawnambul
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+          cache-dependency-path: |
+            Backend/*.gradle*
+            Backend/gradle/wrapper/gradle-wrapper.properties
+
+      - name: Run backend tests
+        working-directory: Backend
+        run: |
+          chmod +x gradlew
+          ./gradlew test --no-daemon
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Dockerfile이 깨지지 않았는지 이미지 빌드만 확인한다 (push 안 함)
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./Backend
+          file: ./Backend/Dockerfile
+          push: false
+          tags: lawnambul-backend:ci-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
