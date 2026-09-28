@@ -1,0 +1,60 @@
+# CodeRabbit 설정 파일
+# 문서: https://docs.coderabbit.ai/reference/configuration
+
+language: "ko-KR"
+
+tone_instructions: >
+  모든 리뷰 코멘트와 요약은 한국어로 작성한다. 코드 식별자(변수명, 함수명, 클래스명 등)와
+  기술 용어는 원문(영어)을 그대로 유지하되, 설명은 한국어로 작성한다. 존댓말을 사용하고,
+  지적은 명확하지만 정중한 어조로 작성한다.
+
+early_access: false
+
+reviews:
+  profile: "chill"
+  request_changes_workflow: false
+  high_level_summary: true
+  high_level_summary_placeholder: "@coderabbitai summary"
+  auto_title_instructions: "PR 제목에 Jira Issue Key([BE-15], [FE-8], [COMMON-1] 등)가 포함되어 있는지 확인하고, 없다면 제안한다."
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+  sequence_diagrams: true
+  changed_files_summary: true
+  path_filters:
+    - "!**/*.lock"
+    - "!**/package-lock.json"
+    - "!**/gradlew"
+    - "!**/gradlew.bat"
+    - "!**/gradle/wrapper/**"
+    - "!**/build/**"
+    - "!**/dist/**"
+    - "!**/*.min.js"
+  path_instructions:
+    - path: "Backend/**/*.java"
+      instructions: >
+        Spring Boot 백엔드 코드를 리뷰한다. 예외 처리 누락, N+1 쿼리, 트랜잭션 경계 설정,
+        DTO/Entity 분리 여부, 보안(인증/인가, 입력값 검증) 이슈를 우선적으로 확인하고
+        한국어로 설명한다.
+    - path: "Frontend/**/*.{js,jsx,ts,tsx}"
+      instructions: >
+        프론트엔드 코드를 리뷰한다. 불필요한 리렌더링, 상태 관리 패턴, API 호출 시 에러 처리,
+        접근성(a11y) 이슈를 우선적으로 확인하고 한국어로 설명한다.
+    - path: "**/*.yml"
+      instructions: >
+        CI/CD 워크플로우 및 설정 파일을 리뷰한다. 시크릿 노출 위험, 불필요한 권한, 캐시 설정
+        오류를 우선적으로 확인한다.
+  abort_on_close: true
+  auto_review:
+    enabled: true
+    auto_incremental_review: true
+    base_branches:
+      - "main"
+      - "develop"
+
+chat:
+  auto_reply: true
+
+knowledge_base:
+  learnings:
+    scope: "auto"

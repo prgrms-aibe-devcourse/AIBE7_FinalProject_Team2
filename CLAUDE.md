@@ -50,8 +50,11 @@ Claude Code가 Atlassian MCP로 수행하는 작업 범위:
 | --- | --- | --- |
 | 백엔드 | Backend | `BE` |
 | 프론트엔드 | Frontend | `FE` |
+| 공통 | Common | `COMMON` |
 
-예: `BE-15`(로그인 API 구현), `FE-8`(로그인 화면 구현)
+예: `BE-15`(로그인 API 구현), `FE-8`(로그인 화면 구현), `COMMON-1`(CodeRabbit 한국어 코드 리뷰 설정 추가)
+
+`COMMON` Space는 특정 팀(백엔드/프론트엔드)에 국한되지 않는 저장소 공통 설정 작업에 사용한다. (예: CI/CD 설정, 코드 리뷰 봇 설정, 저장소 전역 문서/정책 정비 등)
 
 ---
 
@@ -97,8 +100,8 @@ Claude Code가 Atlassian MCP로 수행하는 작업 범위:
 
 Branch 이름에는 반드시 Jira Issue Key를 포함한다. Claude Code는 브랜치를 생성하기 전에 대상 Jira 이슈가 존재하는지 확인하고, 없다면 먼저 이슈 생성 여부를 사용자에게 확인한다.
 
-- 형식: `feature/{ISSUE-KEY}-{작업내용}`, `fix/{ISSUE-KEY}-{작업내용}`, `refactor/{ISSUE-KEY}-{작업내용}`
-- 예: `feature/BE-15-login-api`, `feature/FE-8-login-page`, `fix/BE-21-login-error`, `refactor/BE-30-auth-service`
+- 형식: `feature/{ISSUE-KEY}-{작업내용}`, `fix/{ISSUE-KEY}-{작업내용}`, `refactor/{ISSUE-KEY}-{작업내용}`, `setup/{ISSUE-KEY}-{작업내용}`(저장소 공통 기초 설정 작업, 주로 `COMMON` Space와 함께 사용)
+- 예: `feature/BE-15-login-api`, `feature/FE-8-login-page`, `fix/BE-21-login-error`, `refactor/BE-30-auth-service`, `setup/COMMON-1-coderabbit-config`
 - 작업 내용은 영어 소문자와 하이픈(-)을 사용한다.
 - main(또는 팀에서 정한 기준 Branch)에서 새 Branch를 생성한다.
 
