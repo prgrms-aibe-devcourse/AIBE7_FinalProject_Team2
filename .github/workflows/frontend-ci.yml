@@ -1,0 +1,56 @@
+name: Frontend CI
+
+on:
+  pull_request:
+    branches: [develop]
+    paths:
+      - Frontend/**
+      - .github/workflows/frontend-ci.yml
+  push:
+    branches: [develop]
+    paths:
+      - Frontend/**
+      - .github/workflows/frontend-ci.yml
+  workflow_dispatch:
+
+# 같은 PR에 새 push가 오면 이전 실행을 취소한다 (CI 전용, 배포 파일에는 쓰지 말 것)
+concurrency:
+  group: frontend-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Test and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    defaults:
+      run:
+        working-directory: Frontend   # 모든 run 명령을 Frontend/ 안에서 실행
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # 팀원 로컬 개발 환경과 같은 메이저 버전 사용
+          node-version: 24
+          cache: npm
+          cache-dependency-path: Frontend/package-lock.json   # 락 파일이 루트가 아니라서 경로 지정
+
+      # package-lock.json 기준으로 정확히 설치 (락 파일이 반드시 커밋되어 있어야 함)
+      - name: Install dependencies
+        run: npm ci
+
+      # package.json에 test 스크립트가 있을 때만 실행 (--if-present)
+      - name: Test
+        run: npm run test --if-present
+
+      # 빌드 시 필요한 환경변수는 여기에 넣는다. 비밀값이면 GitHub Secrets 사용
+      - name: Build
+        run: npm run build
+        env:
+          VITE_API_BASE_URL: /api/v1
