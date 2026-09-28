@@ -1,15 +1,15 @@
-name: Backend CI
+name: backend CI
 
 on:
   pull_request:
     branches: [develop]
     paths:
-      - Backend/**
+      - backend/**
       - .github/workflows/backend-ci.yml
   push:
     branches: [develop]
     paths:
-      - Backend/**
+      - backend/**
       - .github/workflows/backend-ci.yml
   workflow_dispatch:
 
@@ -58,11 +58,11 @@ jobs:
           java-version: 17
           cache: gradle
           cache-dependency-path: |
-            Backend/*.gradle*
-            Backend/gradle/wrapper/gradle-wrapper.properties
+            backend/*.gradle*
+            backend/gradle/wrapper/gradle-wrapper.properties
 
       - name: Run backend tests
-        working-directory: Backend
+        working-directory: backend
         run: |
           chmod +x gradlew
           ./gradlew test --no-daemon
@@ -72,8 +72,8 @@ jobs:
       # Dockerfile이 깨지지 않았는지 이미지 빌드만 확인한다 (push 안 함)
       - uses: docker/build-push-action@v6
         with:
-          context: ./Backend
-          file: ./Backend/Dockerfile
+          context: ./backend
+          file: ./backend/Dockerfile
           push: false
           tags: lawnambul-backend:ci-${{ github.sha }}
           cache-from: type=gha
