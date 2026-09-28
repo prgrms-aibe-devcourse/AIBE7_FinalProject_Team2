@@ -274,7 +274,7 @@ Jira 상태: 검토 중 → 완료 (Atlassian MCP)
 
 1. 어떤 작업이든 모델/Effort를 먼저 제안하고 동의를 받은 뒤, "시작하자"라는 명시적 입력이 있어야 실제 작업을 시작한다.
 2. 모든 개발 작업은 Jira Issue를 생성한 뒤 시작한다. (Issue 없이 바로 개발하지 않는다.)
-3. Branch 이름에 Issue Key를 넣는다. (백엔드 `BE`, 프론트엔드 `FE`)
+3. Branch 이름에 Issue Key를 넣는다. (백엔드 `BE`, 프론트엔드 `FE`, 공통 `COMMON`)
 4. Commit 메시지에 Issue Key를 넣는다.
 5. PR 제목에 Issue Key를 넣는다.
 6. Branch 생성 시 Jira를 "진행 중"으로, PR 생성 후 "검토 중"으로 변경한다.
