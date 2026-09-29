@@ -26,6 +26,10 @@ Claude: (모델/Effort 설정 변경) "설정을 변경했습니다. '시작하�
 Claude: (그제서야 Jira 이슈 확인 → 브랜치 생성 → 개발 시작)
 ```
 
+### 0-1. Commit / PR은 별도 지시가 있을 때만 실행
+
+"시작하자" 이후 진행하는 작업(파일 수정, 브랜치 생성, Jira 이슈 생성/전환 등)과 별개로, **`git commit`과 Pull Request 생성은 사용자가 명시적으로 요청하기 전까지 수행하지 않는다.** "시작하자"라는 입력만으로 커밋/PR까지 자동으로 진행하지 않으며, 코드/문서 변경을 마친 뒤에는 결과만 보고하고 커밋 여부를 확인받는다. 사용자가 "커밋해줘", "PR 올려줘"처럼 명시적으로 지시한 경우에만 아래 3~6장의 Commit/PR 규칙에 따라 실행한다.
+
 ---
 
 ## 1. Jira 연동 개요 (Atlassian MCP)
@@ -50,8 +54,11 @@ Claude Code가 Atlassian MCP로 수행하는 작업 범위:
 | --- | --- | --- |
 | 백엔드 | Backend | `BE` |
 | 프론트엔드 | Frontend | `FE` |
+| 공통 | Common | `COMMON` |
 
-예: `BE-15`(로그인 API 구현), `FE-8`(로그인 화면 구현)
+예: `BE-15`(로그인 API 구현), `FE-8`(로그인 화면 구현), `COMMON-1`(CodeRabbit 한국어 코드 리뷰 설정 추가)
+
+`COMMON` Space는 특정 팀(백엔드/프론트엔드)에 국한되지 않는 저장소 공통 설정 작업에 사용한다. (예: CI/CD 설정, 코드 리뷰 봇 설정, 저장소 전역 문서/정책 정비 등)
 
 ---
 
@@ -97,8 +104,8 @@ Claude Code가 Atlassian MCP로 수행하는 작업 범위:
 
 Branch 이름에는 반드시 Jira Issue Key를 포함한다. Claude Code는 브랜치를 생성하기 전에 대상 Jira 이슈가 존재하는지 확인하고, 없다면 먼저 이슈 생성 여부를 사용자에게 확인한다.
 
-- 형식: `feature/{ISSUE-KEY}-{작업내용}`, `fix/{ISSUE-KEY}-{작업내용}`, `refactor/{ISSUE-KEY}-{작업내용}`
-- 예: `feature/BE-15-login-api`, `feature/FE-8-login-page`, `fix/BE-21-login-error`, `refactor/BE-30-auth-service`
+- 형식: `feature/{ISSUE-KEY}-{작업내용}`, `fix/{ISSUE-KEY}-{작업내용}`, `refactor/{ISSUE-KEY}-{작업내용}`, `setup/{ISSUE-KEY}-{작업내용}`(저장소 공통 기초 설정 작업, 주로 `COMMON` Space와 함께 사용)
+- 예: `feature/BE-15-login-api`, `feature/FE-8-login-page`, `fix/BE-21-login-error`, `refactor/BE-30-auth-service`, `setup/COMMON-1-coderabbit-config`
 - 작업 내용은 영어 소문자와 하이픈(-)을 사용한다.
 - main(또는 팀에서 정한 기준 Branch)에서 새 Branch를 생성한다.
 
@@ -225,10 +232,12 @@ Claude Code는 다음과 같이 두 축의 도구를 조합해 하나의 작업 
 1. Atlassian MCP로 `BE-15` 이슈 조회 (없으면 사용자에게 생성 여부 확인 후 이슈 생성)
 2. `main`에서 `feature/BE-15-login-api` 브랜치 생성
 3. Atlassian MCP로 `BE-15` 상태를 "할 일 → 진행 중"으로 전환
-4. 개발 진행 (Commit 생성 시 Jira Issue Key 포함)
-5. 개발 완료 후 Pull Request 생성 (제목/본문에 Jira Issue Key 포함)
-6. Atlassian MCP로 `BE-15` 상태를 "진행 중 → 검토 중"으로 전환
+4. 개발 진행 (0-1장에 따라, 사용자가 명시적으로 "커밋해줘"라고 지시할 때 Commit 생성. Commit 메시지에는 Jira Issue Key 포함)
+5. 사용자가 명시적으로 "PR 올려줘"라고 지시하면 Pull Request 생성 (제목/본문에 Jira Issue Key 포함)
+6. PR 생성 직후 Atlassian MCP로 `BE-15` 상태를 "진행 중 → 검토 중"으로 전환
 7. PR이 Merge되면 Atlassian MCP로 `BE-15` 상태를 "검토 중 → 완료"로 전환
+
+이 단계들 중 4~5번(Commit 생성, PR 생성)은 0-1장의 원칙에 따라 사용자의 명시적 지시가 있을 때만 실행하며, 브랜치 생성과 Jira 상태 전환(1~3, 6~7번)은 별도 커밋/PR 지시 없이도 진행할 수 있다.
 
 ### 10-1. 이슈 키 없이 작업을 지시하는 경우
 
@@ -237,7 +246,7 @@ Claude Code는 다음과 같이 두 축의 도구를 조합해 하나의 작업 
 1. 어떤 Jira Space(Backend `BE` / Frontend `FE`)에 만들 작업인지 **항상 사용자에게 먼저 확인**한다. 지시 내용만으로 임의 판단하지 않는다.
 2. Space가 정해지면, 동일하거나 매우 유사한 제목의 기존 이슈가 있는지 Atlassian MCP로 먼저 검색한다. 이미 있다면 새로 만들지 말고 그 이슈를 사용할지 사용자에게 확인한다.
 3. 해당하는 기존 이슈가 없으면 신규 이슈를 생성한다. 이때도 3번(담당자 지정) 규칙에 따라 담당자를 확인한다. 이슈 키(예: `BE-16`)는 Jira가 생성 시점에 자동으로 다음 순번을 부여하므로, Claude Code는 Jira가 응답한 키를 그대로 사용한다.
-4. 이후 절차(브랜치 생성 → "할 일 → 진행 중" 전환 → 개발 → PR 생성 → "검토 중" 전환 → Merge 후 "완료" 전환)는 10장 본문의 절차와 동일하게 진행한다.
+4. 이후 절차(브랜치 생성 → "할 일 → 진행 중" 전환 → 개발 → PR 생성 → "검토 중" 전환 → Merge 후 "완료" 전환)는 10장 본문의 절차와 동일하게 진행하며, Commit/PR 생성은 마찬가지로 사용자의 명시적 지시가 있을 때만 실행한다.
 
 이 흐름도 0장의 모델/Effort 제안 → 동의 → "시작하자" 입력 절차를 생략하지 않는다.
 
@@ -270,8 +279,9 @@ Jira 상태: 검토 중 → 완료 (Atlassian MCP)
 ## 12. 반드시 지킬 것
 
 1. 어떤 작업이든 모델/Effort를 먼저 제안하고 동의를 받은 뒤, "시작하자"라는 명시적 입력이 있어야 실제 작업을 시작한다.
+1-1. Commit과 Pull Request 생성은 "시작하자" 입력과 별개로, 사용자가 별도로 명시 지시할 때만 수행한다.
 2. 모든 개발 작업은 Jira Issue를 생성한 뒤 시작한다. (Issue 없이 바로 개발하지 않는다.)
-3. Branch 이름에 Issue Key를 넣는다. (백엔드 `BE`, 프론트엔드 `FE`)
+3. Branch 이름에 Issue Key를 넣는다. (백엔드 `BE`, 프론트엔드 `FE`, 공통 `COMMON`)
 4. Commit 메시지에 Issue Key를 넣는다.
 5. PR 제목에 Issue Key를 넣는다.
 6. Branch 생성 시 Jira를 "진행 중"으로, PR 생성 후 "검토 중"으로 변경한다.
