@@ -30,12 +30,12 @@ reviews:
     - "!**/dist/**"
     - "!**/*.min.js"
   path_instructions:
-    - path: "Backend/**/*.java"
+    - path: "backend/**/*.java"
       instructions: >
         Spring Boot 백엔드 코드를 리뷰한다. 예외 처리 누락, N+1 쿼리, 트랜잭션 경계 설정,
         DTO/Entity 분리 여부, 보안(인증/인가, 입력값 검증) 이슈를 우선적으로 확인하고
         한국어로 설명한다.
-    - path: "Frontend/**/*.{js,jsx,ts,tsx}"
+    - path: "frontend/**/*.{js,jsx,ts,tsx}"
       instructions: >
         프론트엔드 코드를 리뷰한다. 불필요한 리렌더링, 상태 관리 패턴, API 호출 시 에러 처리,
         접근성(a11y) 이슈를 우선적으로 확인하고 한국어로 설명한다.
