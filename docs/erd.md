@@ -2,35 +2,11 @@
 
 | 버전 | 날짜 | 내용 |
 | --- | --- | --- |
-| **v0.1** | **2026-09-28** | **초안** 
-• 테이블 11개
-•  관계도
-•  컬럼 정의
-•  상태 전이 규칙
-•  결정 필요 사항 |
-| v1.0 | 2026-09-28 | 결정 사항 확정  
-• 결정 #1~#6 확정(4장)
-• judgment 구현 규칙 추가(7장)
-• experience에 attempt_no · member_id 추가 및 유니크 제약 변경(재체험·회원 연결 대비)
-• penalty_rule을 법정형 / 선고 가능 범위로 분리 |
-| v1.1 | 2026-09-28 | 비교 분석 실시간 생성(시퀀스 v0.2 안 B) 반영
-• comparison_analysis 테이블 추가(확장 단계, 체험당 1개)
-• 관계도 · 서버 규칙 갱신 |
-| **v1.3** | **2026-09-29** | **문서 정합성 점검 결정 반영 (COMMON-4)**
-• DB를 PostgreSQL로 확정(기술 스택 2장): 타입을 `jsonb` · `timestamptz`로, MySQL 관련 문구 삭제
-• `judgment.references` → `reference_tags` (SQL 예약어 회피)
-• 무죄(`NOT_GUILTY`) MVP 제외
-• 경합범 서비스 제외에 따라 예시 데이터(6장)를 단일 범행 사건으로 교체
-• `legal_case.thumbnail_url` · `deidentified_items`(확장), `factor.summary_tag`, `judgment.summary` 추가, 범죄 분류명은 코드 상수 |
-| v1.2 | 2026-09-28 | 전체 문서 교차 검토 반영
-• case_section.stage에 SUMMARY 추가 · 섹션
-•  출처 명시, 공개 판단 유일 조건을 (case_id, subject_type)별로 정정
-• 형벌 종류별 CHECK 제약 추가
-• judgment.references 추가 (v1.3에서 `reference_tags`로 변경)
-• 선고 가능 하한 정의 명확화(법률상 감경 + 작량감경) · 벌금 예시 하한 25,000원
-• last_reviewed_step 규칙
-• 선택 FK 관계선 표기
-• 서버 규칙 표 보완 |
+| **v0.1** | **2026-09-28** | **초안**<br>• 테이블 11개<br>•  관계도<br>•  컬럼 정의<br>•  상태 전이 규칙<br>•  결정 필요 사항 |
+| v1.0 | 2026-09-28 | 결정 사항 확정<br>• 결정 #1~#6 확정(4장)<br>• judgment 구현 규칙 추가(7장)<br>• experience에 attempt_no · member_id 추가 및 유니크 제약 변경(재체험·회원 연결 대비)<br>• penalty_rule을 법정형 / 선고 가능 범위로 분리 |
+| v1.1 | 2026-09-28 | 비교 분석 실시간 생성(시퀀스 v0.2 안 B) 반영<br>• comparison_analysis 테이블 추가(확장 단계, 체험당 1개)<br>• 관계도 · 서버 규칙 갱신 |
+| **v1.3** | **2026-09-29** | **문서 정합성 점검 결정 반영 (COMMON-4)**<br>• DB를 PostgreSQL로 확정(기술 스택 2장): 타입을 `jsonb` · `timestamptz`로, MySQL 관련 문구 삭제<br>• `judgment.references` → `reference_tags` (SQL 예약어 회피)<br>• 무죄(`NOT_GUILTY`) MVP 제외<br>• 경합범 서비스 제외에 따라 예시 데이터(6장)를 단일 범행 사건으로 교체<br>• `legal_case.thumbnail_url` · `deidentified_items`(확장), `factor.summary_tag`, `judgment.summary` 추가, 범죄 분류명은 코드 상수 |
+| v1.2 | 2026-09-28 | 전체 문서 교차 검토 반영<br>• case_section.stage에 SUMMARY 추가 · 섹션<br>•  출처 명시, 공개 판단 유일 조건을 (case_id, subject_type)별로 정정<br>• 형벌 종류별 CHECK 제약 추가<br>• judgment.references 추가 (v1.3에서 `reference_tags`로 변경)<br>• 선고 가능 하한 정의 명확화(법률상 감경 + 작량감경) · 벌금 예시 하한 25,000원<br>• last_reviewed_step 규칙<br>• 선택 FK 관계선 표기<br>• 서버 규칙 표 보완 |
 
 ---
 
