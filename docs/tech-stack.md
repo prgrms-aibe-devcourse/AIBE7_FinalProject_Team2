@@ -408,4 +408,4 @@ Jira: 완료
 
 AI 코딩 도구는 사람의 코드 리뷰를 대체하지 않고 개발 보조 역할로 사용한다.
 
-구체적인 브랜치, 커밋, PR 규칙은 `docs/GIT_CONVENTIONS.md`, 코드 규칙은 `docs/CODE_CONVENTIONS.md`에서 관리한다.
+구체적인 브랜치, 커밋, PR 규칙은 `docs/conventions/GIT_CONVENTIONS.md`, 코드 규칙은 `docs/conventions/CODE_CONVENTIONS.md`에서 관리한다.
