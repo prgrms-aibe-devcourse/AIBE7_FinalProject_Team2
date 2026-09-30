@@ -8,7 +8,7 @@
 | **v1.3** | **2026-09-29** | **문서 정합성 점검 결정 반영 (COMMON-4)**<br>• DB를 PostgreSQL로 확정(기술 스택 2장): 타입을 `jsonb` · `timestamptz`로, MySQL 관련 문구 삭제<br>• `judgment.references` → `reference_tags` (SQL 예약어 회피)<br>• 무죄(`NOT_GUILTY`) MVP 제외<br>• 경합범 서비스 제외에 따라 예시 데이터(6장)를 단일 범행 사건으로 교체<br>• `legal_case.thumbnail_url` · `deidentified_items`(확장), `factor.summary_tag`, `judgment.summary` 추가, 범죄 분류명은 코드 상수 |
 | **v1.4** | **2026-09-30** | **대표 사건(살인) 가공 결정 반영 (BE-13)**<br>• `penalty_type`에 사형(`DEATH`) · 무기징역(`LIFE`) 추가. `LIFE` · `DEATH` 행의 `allowed_min` ~ `allowed_max`는 작량감경해 징역으로 선고할 때의 범위(무기 → 10 ~ 50년, 사형 → 20 ~ 50년)<br>• `judgment.reduced_to`(감경 후 형벌) 추가, 형벌 종류별 CHECK · 선고 가능 범위 검증 규칙 갱신<br>• `sentence_range_option.kind`에 `LIFE` · `DEATH` 추가<br>• `extra_dispositions.type` 값 목록 명시, 몰수(`CONFISCATION`) 추가<br>• `penalty_rule` 예 3(살인) 추가<br>• `reduced_to`는 형벌 종류가 바뀌는 감경만 기록한다고 명시, 살인은 `sentence_range_option`에 `FINE` 구간을 두지 않음 |
 | v1.2 | 2026-09-28 | 전체 문서 교차 검토 반영<br>• case_section.stage에 SUMMARY 추가 · 섹션<br>•  출처 명시, 공개 판단 유일 조건을 (case_id, subject_type)별로 정정<br>• 형벌 종류별 CHECK 제약 추가<br>• judgment.references 추가 (v1.3에서 `reference_tags`로 변경)<br>• 선고 가능 하한 정의 명확화(법률상 감경 + 작량감경) · 벌금 예시 하한 25,000원<br>• last_reviewed_step 규칙<br>• 선택 FK 관계선 표기<br>• 서버 규칙 표 보완 |
-| v1.5 | 2026-09-30 | BE-2 마이그레이션 반영<br>• `penalty_rule` 유니크 (`case_id`, `penalty_type`), `DEATH` · `LIFE` 행 CHECK(법정형 NULL, 집행유예 불가)<br>• `experience` CHECK(`last_reviewed_step` 0 ~ 4, `attempt_no` 1 이상), `comparison_analysis.fail_reason` CHECK 명시<br>• 7장에 마이그레이션 공통 규칙 추가<br>• `penalty_rule` 컬럼 표 중간의 `DEATH` · `LIFE` 설명을 표 아래로 옮김(표가 끊겨 마지막 3개 컬럼이 표로 보이지 않던 문제) |
+| v1.5 | 2026-09-30 | BE-2 마이그레이션 반영<br>• `penalty_rule` 유니크 (`case_id`, `penalty_type`), `DEATH` · `LIFE` 행 CHECK(법정형 NULL, 집행유예 불가)<br>• `experience` CHECK(`last_reviewed_step` 0 ~ 4, `attempt_no` 1 이상), `comparison_analysis.fail_reason` CHECK 명시<br>• `judgment` CHECK: 형량 값 양수(`prison_months` · `fine_amount` · `suspension_months` > 0), 사용자 판단은 항상 공개(PR #26 리뷰 반영)<br>• 7장에 마이그레이션 공통 규칙 추가<br>• `penalty_rule` 컬럼 표 중간의 `DEATH` · `LIFE` 설명을 표 아래로 옮김(표가 끊겨 마지막 3개 컬럼이 표로 보이지 않던 문제) |
 
 ---
 
@@ -350,6 +350,8 @@ IA 9장의 진행 상태를 저장한다.
 | CHECK: 형벌 종류별 값 (v1.2) | `PRISON` → `prison_months` 필수 · `fine_amount` NULL / `FINE` → `fine_amount` 필수 · `prison_months` NULL (v1.3: `NOT_GUILTY` 조건 삭제) | AI · COURT 판결을 SQL로 넣을 때도 형식 보장 |
 | CHECK: 사형 · 무기 (v1.4) | `reduced_to`는 `penalty_type = DEATH`일 때 `LIFE` · `PRISON`, `LIFE`일 때 `PRISON`만 가능하고 그 밖에는 NULL / 최종 선고 형벌이 `DEATH` · `LIFE`면 `prison_months` · `fine_amount` · `suspension_months` NULL / 최종 선고 형벌이 `PRISON`이면 `prison_months` 필수 · `fine_amount` NULL / `penalty_type`이 `DEATH` · `LIFE`면 `reduced_to`와 관계없이(감경해 `PRISON`이 돼도) `suspension_months` NULL | 사형 · 무기 판결 형식 |
 | CHECK: 주체와 체험 (v1.2) | `subject_type = USER` ⇔ `experience_id` NOT NULL | 사용자 판단은 체험에 속함 |
+| CHECK: 형량 값 양수 (v1.5) | `prison_months` · `fine_amount` · `suspension_months`는 NULL이거나 0보다 큼 | AI · COURT 판결을 SQL로 넣을 때 0 · 음수 방지 (집행유예 1 ~ 5년 등 법 규정은 코드 상수) |
+| CHECK: 사용자 판단 공개 (v1.5) | `subject_type = USER`이면 `is_published = true` | 사용자 판단은 검수 대상이 아님 |
 | 공개 판단 1개 | `subject_type` ∈ {AI, COURT} 이고 `is_published = true`인 행은 (`case_id`, `subject_type`)별로 1개 — 사건마다 공개 AI 판결 1개, 공개 실제 판결 1개. PostgreSQL 부분 유니크 인덱스로 구현(기술 스택 2장 `uk_judgment_published`) | 모든 사용자에게 같은 AI 판결 (REQ-046) |
 | 수정 없음 | `USER` 판단은 INSERT만 하고 UPDATE API를 두지 않음 | IA 결정 #4 |
 | 선고 가능 범위 | `USER` `FINAL` 저장 시 `penalty_rule.allowed_min` ~ `allowed_max` 밖이면 거절 (서비스 로직). 비교하는 행은 `penalty_type`(고른 형벌)의 행이다. 무기 · 사형을 감경해 징역으로 선고하면 그 행의 감경 범위로 검사한다 (v1.4) | FR-3-3 ② |
