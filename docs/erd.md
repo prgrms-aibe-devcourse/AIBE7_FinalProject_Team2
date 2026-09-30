@@ -7,6 +7,7 @@
 | v1.1 | 2026-09-28 | 비교 분석 실시간 생성(시퀀스 v0.2 안 B) 반영<br>• comparison_analysis 테이블 추가(확장 단계, 체험당 1개)<br>• 관계도 · 서버 규칙 갱신 |
 | **v1.3** | **2026-09-29** | **문서 정합성 점검 결정 반영 (COMMON-4)**<br>• DB를 PostgreSQL로 확정(기술 스택 2장): 타입을 `jsonb` · `timestamptz`로, MySQL 관련 문구 삭제<br>• `judgment.references` → `reference_tags` (SQL 예약어 회피)<br>• 무죄(`NOT_GUILTY`) MVP 제외<br>• 경합범 서비스 제외에 따라 예시 데이터(6장)를 단일 범행 사건으로 교체<br>• `legal_case.thumbnail_url` · `deidentified_items`(확장), `factor.summary_tag`, `judgment.summary` 추가, 범죄 분류명은 코드 상수 |
 | **v1.4** | **2026-09-30** | **대표 사건(살인) 가공 결정 반영 (BE-13)**<br>• `penalty_type`에 사형(`DEATH`) · 무기징역(`LIFE`) 추가. `LIFE` · `DEATH` 행의 `allowed_min` ~ `allowed_max`는 작량감경해 징역으로 선고할 때의 범위(무기 → 10 ~ 50년, 사형 → 20 ~ 50년)<br>• `judgment.reduced_to`(감경 후 형벌) 추가, 형벌 종류별 CHECK · 선고 가능 범위 검증 규칙 갱신<br>• `sentence_range_option.kind`에 `LIFE` · `DEATH` 추가<br>• `extra_dispositions.type` 값 목록 명시, 몰수(`CONFISCATION`) 추가<br>• `penalty_rule` 예 3(살인) 추가<br>• `reduced_to`는 형벌 종류가 바뀌는 감경만 기록한다고 명시, 살인은 `sentence_range_option`에 `FINE` 구간을 두지 않음 |
+| v1.5 | 2026-09-30 | 예시 사건을 가상 살인 사건으로 교체 (COMMON-11)<br>• 6장 예시 데이터를 "빌린 돈 문제로 찾아온 지인을 살해한 사건"(가상)으로 전면 교체: `penalty_rule` 3행(사형 · 무기 · 징역), 살인용 `sentence_range_option` 8개, 판단 요소 11개, 세 판결 · 매트릭스 · 변화 유형<br>• `case_section` · `factor` 설명의 사기 예시 문구 교체 |
 | v1.2 | 2026-09-28 | 전체 문서 교차 검토 반영<br>• case_section.stage에 SUMMARY 추가 · 섹션<br>•  출처 명시, 공개 판단 유일 조건을 (case_id, subject_type)별로 정정<br>• 형벌 종류별 CHECK 제약 추가<br>• judgment.references 추가 (v1.3에서 `reference_tags`로 변경)<br>• 선고 가능 하한 정의 명확화(법률상 감경 + 작량감경) · 벌금 예시 하한 25,000원<br>• last_reviewed_step 규칙<br>• 선택 FK 관계선 표기<br>• 서버 규칙 표 보완 |
 
 ---
@@ -137,7 +138,7 @@ erDiagram
 | overview | text | ✓ | S-03 사건 개요 (뉴스 수준, 중립 표현) | REQ-015, 094 |
 | thumbnail_url | varchar(300) |  | S-02 사건 카드 이미지 경로 (v1.3). 없으면 화면이 범죄 유형별 기본 이미지를 쓴다 | REQ-006 |
 | deidentified_items | jsonb |  | (확장) 비식별화한 항목 종류 배열 (예: `["인명", "지명", "사건번호", "업체명"]`). 원래 값은 넣지 않는다 (v1.3) | FR-5-2, REQ-055 |
-| applied_law | varchar(200) | ✓ | 적용 법조문 (예: 형법 제347조) — 고정 입력값 | REQ-042 |
+| applied_law | varchar(200) | ✓ | 적용 법조문 (예: 형법 제250조 제1항) — 고정 입력값 | REQ-042 |
 | statutory_penalty_text | varchar(200) | ✓ | 법정형 안내 문구 (예: 10년 이하의 징역 또는 2천만 원 이하의 벌금) | REQ-023 |
 | recommended_min_months | int |  | 권고 형량 하한 (개월) | REQ-034 |
 | recommended_max_months | int |  | 권고 형량 상한 (개월) | REQ-034 |
@@ -168,13 +169,13 @@ S-04 · S-05에 보여 줄 사건 정보를 섹션 단위로 저장한다(결정
 | section_type | stage | 내용 | data 예시 |
 | --- | --- | --- | --- |
 | `FACTS` | DETAIL | 주요 사실관계 | — |
-| `DAMAGE` | DETAIL | 피해 결과 요약 카드 | `[{"label":"피해자 수","value":"1명"}, {"label":"피해 금액","value":"4,500만 원"}, ...]` |
+| `DAMAGE` | DETAIL | 피해 결과 요약 카드 | `[{"label":"피해자 수","value":"1명"}, {"label":"피해 결과","value":"사망"}, {"label":"범행 도구","value":"집에 있던 흉기"}, ...]` |
 | `DEFENDANT` | DETAIL | 피고인 관련 주요 사실 | — |
 | `SETTLEMENT` | DETAIL | 합의 · 피해 회복 | — |
 | `PROSECUTOR` | ARGUMENT | 검사 측 주장 | — |
 | `DEFENSE` | ARGUMENT | 피고인 · 변호인 측 주장 | — |
 | `LAW_TERM` | LAW | 법률 · 양형기준 용어 설명 | `[{"term":"기본영역","desc":"..."}]` |
-| `SUMMARY` | SUMMARY | S-05 핵심 사실 요약 | `["지인 1명에게 1회 4,500만 원 송금받음", ...]` |
+| `SUMMARY` | SUMMARY | S-05 핵심 사실 요약 | `["집으로 찾아온 지인 1명을 살해", "다투던 중 집에 있던 흉기를 사용", ...]` |
 - 적용 법률 · 법정형 · 권고 범위는 `legal_case` 컬럼에서, 선고 가능 범위는 `penalty_rule`에서 꺼내 LAW 단계에 함께 보여 준다.
 - 범죄 유형마다 섹션 종류가 달라지면 `section_type` 값만 추가한다.
 
@@ -215,7 +216,7 @@ S-06에서 보여 줄 형벌 선택지, 그리고 **선고 가능 범위 밖 판
 | --- | --- | --- | --- | --- |
 | id | bigint PK | ✓ |  |  |
 | case_id | bigint FK | ✓ |  | REQ-031 |
-| label | varchar(100) | ✓ | 판단 요소 문구 (예: 피해 금액이 4,500만 원이다) | REQ-076 |
+| label | varchar(100) | ✓ | 판단 요소 문구 (예: 다투던 중 집에 있던 흉기를 집어 들었다) | REQ-076 |
 | pre_label | varchar(100) |  | 사전 판단용 짧은 문구 (예: 피해 금액이 수천만 원이다). `OVERVIEW` 요소만 | REQ-093 |
 | reveal_stage | varchar(20) | ✓ | 처음 알게 되는 단계: `OVERVIEW` / `DETAIL` / `ARGUMENT` / `LAW` | REQ-095 |
 | summary_tag | varchar(20) | ✓ | 요약 태그 (v1.3). 요소를 묶는 짧은 분류명 (예: `피해 규모`, `범행 방식`, `피해 회복`, `피해자 의사`, `반성`, `전력`). S-09 "내 판결" 한 줄 요약의 규칙 문장에 쓴다 | REQ-060 |
@@ -243,7 +244,7 @@ S-06에서 보여 줄 형벌 선택지, 그리고 **선고 가능 범위 밖 판
 | 컬럼 | 타입 | 필수 | 설명 |
 | --- | --- | --- | --- |
 | id | bigint PK | ✓ |  |
-| crime_category | varchar(50) | ✓ | 예: 사기범죄 |
+| crime_category | varchar(50) | ✓ | 예: 살인범죄 |
 | version_name | varchar(50) | ✓ | 예: 2024 개정 |
 | effective_date | date | ✓ | 시행일 |
 | source_url | varchar(300) |  |  |
@@ -332,7 +333,7 @@ IA 9장의 진행 상태를 저장한다.
 | plain_explanation | text |  | 쉬운 설명 (COURT) |
 | excerpt | text |  | 판결문 발췌 (COURT, 비식별화 적용) |
 | free_opinion | text |  | 자유 의견 (USER, 비교 대상 아님) |
-| reference_tags | jsonb |  | 참고 자료 태그 (AI, 예: `["형법 제347조", "사기범죄 양형기준", "유사 판례 5건"]`). S-07에 표시 (v1.2 추가, v1.3에서 `references` → `reference_tags`: `REFERENCES`는 SQL 예약어) |
+| reference_tags | jsonb |  | 참고 자료 태그 (AI, 예: `["형법 제250조", "살인범죄 양형기준", "유사 판례 5건"]`). S-07에 표시 (v1.2 추가, v1.3에서 `references` → `reference_tags`: `REFERENCES`는 SQL 예약어) |
 | is_published | boolean | ✓ | AI · COURT는 검수 후 `true`만 노출. USER는 항상 `true` |
 | created_at | timestamptz | ✓ |  |
 
@@ -452,70 +453,112 @@ IA 9장의 규칙을 어느 테이블·제약이 책임지는지 정리한다.
 
 ---
 
-## 6. 예시 데이터 (지인 투자금 편취 사건, v1.3)
+## 6. 예시 데이터 (가상 살인 사건, v1.5)
 
-단일 범행 사기 사건을 설명용으로 가정한 예시다(피해자 1명, 1회 송금 4,500만 원). v1.2까지의 예시(중고거래 반복 사기, 피해자 37명)는 **경합범이라 서비스 대상에서 제외**되어(REQ-081) v1.3에서 바꿨다. 와이어프레임 v2.1은 아직 예전 예시 기준이다. 권고 범위(징역 6개월 ~ 1년 6개월, 일반사기 제1유형 기본영역)와 아래 값은 **대표 판례 등록 시 팀이 다시 계산한다.**
+설명용으로 지어낸 **가상 사건**이다(빌린 돈 문제로 찾아온 지인 1명을 살해, 범행 1회). 실제 사건 데이터는 저장소에 두지 않고 배포 때 따로 넣는다. v1.3 ~ v1.4의 예시(지인 투자금 편취, 사기)는 MVP 최초 목표가 살인 사건 1건 완성이라 v1.5에서 바꿨다. 와이어프레임 v2.1은 아직 사기 예시 기준이다.
+
+**법정형과 선고 가능 범위는 형법 조문 그대로**이고, 형량 · 판단 요소 방향 · 권고 범위는 지어낸 값이다. 실제 사건을 등록할 때 팀이 다시 계산한다.
+
+**사건 설정**
+
+| 항목 | 값 |
+| --- | --- |
+| `title` | 빌린 돈 문제로 찾아온 지인을 살해한 사건 |
+| `crime_type` / `charge_name` | `MURDER` / 살인 |
+| `applied_law` | 형법 제250조 제1항 |
+| `statutory_penalty_text` | 사형, 무기 또는 5년 이상의 징역 |
+| `overview` | 피고인이 빌린 돈을 갚지 못해 오래 다투던 지인이 집으로 찾아오자, 말다툼 끝에 집에 있던 흉기로 피해자를 살해하고 구호 조치 없이 집을 나간 사건이다. |
+| 권고 범위 | 84 ~ 144 (징역 7년 ~ 12년) |
+| `recommended_basis` | 살인범죄 제2유형(보통 동기 살인). 특별감경인자 1개(실질적 피해 회복 — 5,000만 원 공탁)가 있고 특별가중인자는 없어 감경영역을 적용한다. 계획 없이 다투던 중 벌어진 범행이라 특별가중인자인 '계획적 살인 범행'에 해당하지 않는다. |
 
 **penalty_rule**
 
-| penalty_type | statutory_min | statutory_max | allowed_min | allowed_max | suspension_allowed |
-| --- | --- | --- | --- | --- | --- |
-| PRISON | NULL | 120 | 1 | 120 | true |
-| FINE | NULL | 20,000,000 | 25,000 | 20,000,000 | true |
+| penalty_type | statutory_min | statutory_max | allowed_min | allowed_max | allowed_basis | suspension_allowed |
+| --- | --- | --- | --- | --- | --- | --- |
+| DEATH | NULL | NULL | 240 | 600 | 사형을 작량감경하면 무기 또는 징역 20 ~ 50년 (형법 제55조 제1항 제1호) | false |
+| LIFE | NULL | NULL | 120 | 600 | 무기징역을 작량감경하면 징역 10 ~ 50년 (같은 항 제2호) | false |
+| PRISON | 60 | 360 | 30 | 360 | 유기징역 선택, 작량감경 시 하한 1/2. 법률상 감경 · 가중 사유 없음 | true |
 
-→ 12년(144개월)을 입력하면 `allowed_max` 120을 넘으므로 확정 불가(S-06c). 단일 범행이라 경합범 가중이 없다.
+→ 벌금은 법정형에 없어 `FINE` 행을 두지 않는다. 징역 31년(372개월)을 입력하면 `allowed_max` 360을 넘으므로 확정 불가(S-06c). 무기징역을 고른 뒤 감경해 징역 50년으로 선고하면 `penalty_type = LIFE`, `reduced_to = PRISON`, `prison_months = 600`이고, `LIFE` 행의 120 ~ 600으로 검사한다.
+
+**sentence_range_option** (`crime_type = MURDER`, 8개)
+
+| # | label | kind | min_months | max_months |
+| --- | --- | --- | --- | --- |
+| 1 | 징역형 집행유예 | SUSPENDED | NULL | NULL |
+| 2 | 실형 3년 미만 | PRISON | NULL | 36 |
+| 3 | 실형 3년 이상 ~ 5년 미만 | PRISON | 36 | 60 |
+| 4 | 실형 5년 이상 ~ 10년 미만 | PRISON | 60 | 120 |
+| 5 | 실형 10년 이상 ~ 20년 미만 | PRISON | 120 | 240 |
+| 6 | 실형 20년 이상 | PRISON | 240 | NULL |
+| 7 | 무기징역 | LIFE | NULL | NULL |
+| 8 | 사형 | DEATH | NULL | NULL |
+
+→ 살인은 법정형에 벌금이 없어 `FINE` 구간을 빼고 `LIFE` · `DEATH`를 더해 8개다(요구사항 FR-2-8).
 
 **factor**
 
 | id | label | reveal_stage | summary_tag |
 | --- | --- | --- | --- |
-| 1 | 피해 금액이 4,500만 원이다 | OVERVIEW | 피해 규모 |
-| 2 | 10년 가까이 알고 지낸 지인 관계를 이용했다 | OVERVIEW | 범행 방식 |
-| 3 | 처음부터 투자할 생각 없이 받은 돈을 생활비와 빚 갚는 데 썼다 | DETAIL | 범행 방식 |
-| 4 | 재판 중 피해 금액 중 1,500만 원을 갚았다 | DETAIL | 피해 회복 |
-| 5 | 피해자가 처벌을 원한다 | DETAIL | 피해자 의사 |
-| 6 | 수사 단계부터 범행을 인정하고 반성했다 | DETAIL | 반성 |
-| 7 | 형사처벌 전력이 없다 | DETAIL | 전력 |
+| 1 | 빌린 돈을 갚지 못해 오래 다툼이 있었다 | OVERVIEW | 범행 경위 |
+| 2 | 다투던 중 집에 있던 흉기를 집어 들었다 | OVERVIEW | 범행 방식 |
+| 3 | 범행 뒤 구호 조치 없이 현장을 떠났다 | OVERVIEW | 범행 후 정황 |
+| 4 | 사건 3개월 전부터 변제 문제로 여러 차례 다퉜다 | DETAIL | 범행 경위 |
+| 5 | 유족이 엄벌을 원한다 | DETAIL | 피해자 의사 |
+| 6 | 피해자에게는 부양하던 어린 자녀 2명이 있다 | DETAIL | 피해 결과 |
+| 7 | 수사 초기부터 범행을 인정하고 반성하고 있다 | DETAIL | 반성 |
+| 8 | 형사처벌 전력이 없다 | DETAIL | 전력 |
+| 9 | 피해 회복을 위해 5,000만 원을 공탁했다 | DETAIL | 피해 회복 |
+| 10 | 피고인은 우발적 범행이라고 주장한다 | ARGUMENT | 범행 경위 |
+| 11 | 피고인은 오랜 채무로 정신적으로 지쳐 있었다고 주장한다 | ARGUMENT | 피고인 사정 |
 
-`pre_label`: 1 = "피해 금액이 수천만 원이다", 2 = "오래 알고 지낸 사이를 이용했다"
+- 피해자의 사망은 살인죄의 구성요건 결과라 판단 요소로 두지 않는다(이중평가 방지).
+
+`pre_label`: 1 = "돈 문제로 오래 다툼이 있었다", 2 = "다투던 중 흉기를 집어 들었다", 3 = "범행 뒤 현장을 떠났다"
 
 **judgment**
 
-| id | subject_type | timing | experience_id | range_option_id | penalty_type | prison_months | suspension_months | summary |
+| id | subject_type | timing | experience_id | range_option_id | penalty_type | reduced_to | prison_months | summary |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 10 | USER | PRE | 100 | (실형 3년 미만) | NULL | NULL | NULL | NULL |
-| 11 | USER | FINAL | 100 | NULL | PRISON | 18 | 36 | NULL (응답 시 규칙 문장 생성) |
-| 20 | AI | FINAL | NULL | NULL | PRISON | 12 | 24 | 피해 규모와 변제 · 반성을 함께 저울질한 판단 |
-| 30 | COURT | FINAL | NULL | NULL | PRISON | 10 | 24 | 변제와 반성, 초범인 점을 크게 본 판단 |
+| 10 | USER | PRE | 100 | 4 (실형 5년 이상 ~ 10년 미만) | NULL | NULL | NULL | NULL |
+| 11 | USER | FINAL | 100 | NULL | PRISON | NULL | 180 | NULL (응답 시 규칙 문장 생성) |
+| 20 | AI | FINAL | NULL | NULL | PRISON | NULL | 144 | 다투다 벌어진 범행과 공탁 · 반성을 함께 저울질한 판단 |
+| 30 | COURT | FINAL | NULL | NULL | PRISON | NULL | 120 | 유족의 처벌 의사를 무겁게 보면서도 공탁과 반성을 감안한 판단 |
 
-재판부 `extra_dispositions`: `[{"type":"COMMUNITY_SERVICE","value":"80시간"}]`
+- `suspension_months`는 모두 NULL이다(선고형이 3년을 넘어 집행유예 대상이 아니다).
+- 재판부 `extra_dispositions`: `[{"type":"CONFISCATION","value":"범행에 사용한 흉기"}]`
+- 내 판결 180개월(15년)은 권고 범위(84 ~ 144) 밖이지만 선고 가능 범위(30 ~ 360) 안이라 그대로 확정된다. 권고 범위 이탈 안내는 확장 단계다(REQ-036).
 
 **judgment_factor**
 
 | judgment_id | factor_id | direction |
 | --- | --- | --- |
 | 10 | 1, 2 | NULL |
-| 11 | 1, 3 | UP |
-| 11 | 6 | DOWN |
-| 20 | 1, 3 | UP |
-| 20 | 4, 6, 7 | DOWN |
-| 30 | 1, 5 | UP |
-| 30 | 4, 6, 7 | DOWN |
+| 11 | 2, 6 | UP |
+| 11 | 7 | DOWN |
+| 20 | 2, 3, 5 | UP |
+| 20 | 7, 8, 9 | DOWN |
+| 30 | 2, 3, 5, 6 | UP |
+| 30 | 7, 8, 9 | DOWN |
 
-→ S-09 매트릭스(API 14): 요소 7개 × (USER FINAL · AI · COURT)를 조회해 행이 없으면 "—"로 표시한다.
+→ S-09 매트릭스(API 14): 요소 11개 × (USER FINAL · AI · COURT)를 조회해 행이 없으면 "—"로 표시한다.
 
 | 요소 | 내 판결 | AI | 재판부 | 분류 |
 | --- | --- | --- | --- | --- |
-| 1 | ↑ | ↑ | ↑ | `ALL_SAME` 셋 모두 같게 본 요소 |
-| 2 | — | — | — | 세 주체 모두 고려하지 않아 매트릭스에서 뺌 |
-| 3 | ↑ | ↑ | — | `DIVERGED` 판단이 엇갈린 요소 |
-| 4 | — | ↓ | ↓ | `ONLY_ME_MISSED` 나만 고려하지 않은 요소 |
-| 5 | — | — | ↑ | `DIVERGED` |
-| 6 | ↓ | ↓ | ↓ | `ALL_SAME` |
-| 7 | — | ↓ | ↓ | `ONLY_ME_MISSED` |
+| 1 | — | — | — | 세 주체 모두 고려하지 않아 매트릭스에서 뺌 |
+| 2 | ↑ | ↑ | ↑ | `ALL_SAME` 셋 모두 같게 본 요소 |
+| 3 | — | ↑ | ↑ | `ONLY_ME_MISSED` 나만 고려하지 않은 요소 |
+| 4 | — | — | — | 매트릭스에서 뺌 |
+| 5 | — | ↑ | ↑ | `ONLY_ME_MISSED` |
+| 6 | ↑ | — | ↑ | `DIVERGED` 판단이 엇갈린 요소 |
+| 7 | ↓ | ↓ | ↓ | `ALL_SAME` |
+| 8 | — | ↓ | ↓ | `ONLY_ME_MISSED` |
+| 9 | — | ↓ | ↓ | `ONLY_ME_MISSED` |
+| 10, 11 | — | — | — | 매트릭스에서 뺌 |
 
-→ 내 판결 한 줄 요약(MVP 규칙 문장): ↑ 요소 1 · 3의 태그 `피해 규모` · `범행 방식`, ↓ 요소 6의 태그 `반성` → "피해 규모 · 범행 방식을 무겁게 보고 반성을 감안한 판단". 확장 단계에서는 AI 비교 분석의 `perspectives.USER`로 바꾼다.
-→ 판단 이유 변화(REQ-096, 확장): `PRE`의 요소(1, 2 — 모두 OVERVIEW)와 `FINAL`의 요소(1, 3, 6)를 비교한다. 1은 양쪽에 있으므로 "처음부터 알던 요소"(API `KEPT`), 2는 `PRE`에만 있으므로 "이미 알던 요소의 무게가 바뀜"(API `WEIGHT_CHANGED`), 3 · 6은 `reveal_stage = DETAIL`이고 `FINAL`에만 있으므로 "새로 알게 된 요소"(API `NEWLY_LEARNED`)다. 요소 2처럼 매트릭스에서 빠지는 요소도 사전 판단에서 골랐다면 변화 유형은 보여 준다(API 14 `matrix` 규칙).
+→ 내 판결 한 줄 요약(MVP 규칙 문장): ↑ 요소 2 · 6의 태그 `범행 방식` · `피해 결과`, ↓ 요소 7의 태그 `반성` → "범행 방식 · 피해 결과를 무겁게 보고 반성을 감안한 판단". 확장 단계에서는 AI 비교 분석의 `perspectives.USER`로 바꾼다.
+→ 판단 이유 변화(REQ-096, 확장): `PRE`의 요소(1, 2 — 모두 OVERVIEW)와 `FINAL`의 요소(2, 6, 7)를 비교한다. 2는 양쪽에 있으므로 "처음부터 알던 요소"(API `KEPT`), 1은 `PRE`에만 있으므로 "이미 알던 요소의 무게가 바뀜"(API `WEIGHT_CHANGED` — 사전 판단에서는 골랐지만 최종 판결에서는 고르지 않았다는 뜻이다. `PRE` 기록에는 방향이 없어 처음 판단의 강도는 알 수 없다), 6 · 7은 `reveal_stage = DETAIL`이고 `FINAL`에만 있으므로 "새로 알게 된 요소"(API `NEWLY_LEARNED`)다. 요소 1처럼 매트릭스에서 빠지는 요소도 사전 판단에서 골랐다면 변화 유형은 보여 준다(API 14 `matrix` 규칙).
+→ 사전 판단 구간 4(60 ~ 120)와 최종 판결 180개월을 비교하면 `preToFinal.direction`은 `HEAVIER`다.
 
 ---
 
