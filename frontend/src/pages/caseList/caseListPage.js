@@ -6,7 +6,7 @@ const chips = [
   { crimeType: 'FRAUD', label: '사기' },
   { crimeType: 'INJURY', label: '상해' },
 ];
-const difficultyLabels = { LOW: '쉬움', MEDIUM: '보통', HIGH: '어려움' };
+const difficultyLabels = { LOW: '쉬움', MID: '보통', HIGH: '어려움' };
 // API 명세 1-6 "보낼 화면" 표. 새로 시작하면 S-03, 진행 중이면 현재 단계, 완료면 S-09.
 const screenByStatus = {
   STARTED: 'overview', PRE_JUDGED: 'review', REVIEWING: 'review', REVIEWED: 'summary',
@@ -25,10 +25,10 @@ export async function renderCaseListPage(container, { api, navigate }) {
   const main = element('main', 'list-main');
   root.append(renderSiteHeader({ navigate, onIntro: () => navigate('landing', { section: 'intro' }) }), main, renderSiteFooter());
 
-  function showError(error, retry) {
+  function showError(retry) {
     const box = element('section', 'message-panel');
     box.setAttribute('role', 'alert');
-    box.append(element('p', '', error?.message ?? '사건 목록을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.'), button('다시 시도', retry));
+    box.append(element('p', '', '사건 목록을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.'), button('다시 시도', retry));
     main.replaceChildren(box);
   }
 
@@ -109,7 +109,7 @@ export async function renderCaseListPage(container, { api, navigate }) {
       const data = await api.getCases(crimeType);
       if (active()) draw(data);
     } catch (error) {
-      if (active()) showError(error, () => load(crimeType));
+      if (active()) showError(() => load(crimeType));
     }
   }
 
