@@ -7,6 +7,8 @@
   <title>FE-6 사건 정보 확인 · 미리보기</title>
   <link rel="icon" href="data:,">
   <!-- FE-2 연결 시 각 화면에 해당하는 CSS를 함께 로드한다. -->
+  <link rel="stylesheet" href="./src/pages/landing/landing.css">
+  <link rel="stylesheet" href="./src/pages/caseList/caseList.css">
   <link rel="stylesheet" href="./src/pages/review/review.css">
   <link rel="stylesheet" href="./src/pages/summary/summary.css">
   <link rel="stylesheet" href="./src/pages/verdict/verdict.css">
@@ -26,6 +28,8 @@
   <div class="preview-tools">
     <fieldset id="tools">
       <legend>FE-6 개발용 미리보기</legend>
+      <button type="button" data-page="landing">S-01 보기</button>
+      <button type="button" data-page="list">S-02 보기</button>
       <button type="button" data-page="review">S-04 보기</button>
       <button type="button" data-page="summary">S-05 보기</button>
       <button type="button" data-page="verdict">S-06 보기</button>
@@ -46,12 +50,15 @@
     import { mockCaseHeader } from './src/mocks/reviewMockData.js';
     import * as reviewApi from './src/mocks/reviewMockApi.js';
     import * as verdictApi from './src/mocks/verdictMockApi.js';
+    import * as caseListApi from './src/mocks/caseListMockApi.js';
+    import { renderLandingPage } from './src/pages/landing/landingPage.js';
+    import { renderCaseListPage } from './src/pages/caseList/caseListPage.js';
     import { renderReviewPage } from './src/pages/review/reviewPage.js';
     import { renderSummaryPage } from './src/pages/summary/summaryPage.js';
     import { renderVerdictPage } from './src/pages/verdict/verdictPage.js';
     import { clearDraft } from './src/pages/verdict/verdictDraft.js';
 
-    const api = { ...reviewApi, ...verdictApi };
+    const api = { ...reviewApi, ...verdictApi, ...caseListApi };
 
     // TODO: API 6에 사건 제목 없음, 정합성 2차 점검 D-01 결정 후 실제 제목 공급원으로 교체.
     const caseHeader = mockCaseHeader;
@@ -60,10 +67,12 @@
     const error = document.querySelector('#preview-error');
     let currentPage = 'review';
     // FE-2 라우터 도입 시 삭제. 개발용 화면 전환만 수행한다.
-    async function navigate(name) {
+    async function navigate(name, params = {}) {
       currentPage = name;
-      const dependencies = { caseId: caseHeader.caseId, caseHeader, api, navigate };
-      if (name === 'review') await renderReviewPage(container, dependencies);
+      const dependencies = { caseId: params.caseId ?? caseHeader.caseId, caseHeader, api, navigate, section: params.section };
+      if (name === 'landing') renderLandingPage(container, dependencies);
+      else if (name === 'list') await renderCaseListPage(container, dependencies);
+      else if (name === 'review') await renderReviewPage(container, dependencies);
       else if (name === 'summary') await renderSummaryPage(container, dependencies);
       else if (name === 'verdict') await renderVerdictPage(container, dependencies);
       else {
@@ -71,7 +80,7 @@
         placeholder.className = 'review-page';
         const message = document.createElement('p');
         message.className = 'message-panel';
-        message.textContent = `${name === 'ai' ? 'AI 판결' : name === 'list' ? '사건 목록' : '판결'} 화면 준비 중`;
+        message.textContent = `${{ ai: 'AI 판결', overview: '사건 개요 · 사전 판단', court: '실제 판결', comparison: '세 판결 비교' }[name] ?? '판결'} 화면 준비 중`;
         placeholder.append(message);
         container.replaceChildren(placeholder);
       }
