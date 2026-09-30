@@ -9,6 +9,7 @@
   <!-- FE-2 연결 시 각 화면에 해당하는 CSS를 함께 로드한다. -->
   <link rel="stylesheet" href="./src/pages/review/review.css">
   <link rel="stylesheet" href="./src/pages/summary/summary.css">
+  <link rel="stylesheet" href="./src/pages/verdict/verdict.css">
   <style>
     body { margin: 0; background: #eeeae6; }
     .preview-tools { max-width: 1180px; margin: 24px auto 16px; padding: 0 12px; box-sizing: border-box; font: 13px/1.6 'Malgun Gothic', sans-serif; }
@@ -27,6 +28,7 @@
       <legend>FE-6 개발용 미리보기</legend>
       <button type="button" data-page="review">S-04 보기</button>
       <button type="button" data-page="summary">S-05 보기</button>
+      <button type="button" data-page="verdict">S-06 보기</button>
       <button type="button" id="reset">처음 상태로</button>
       <label>상태 강제 선택
         <select id="status">
@@ -42,9 +44,14 @@
   <div id="preview" class="preview-container"></div>
   <script type="module">
     import { mockCaseHeader } from './src/mocks/reviewMockData.js';
-    import * as api from './src/mocks/reviewMockApi.js';
+    import * as reviewApi from './src/mocks/reviewMockApi.js';
+    import * as verdictApi from './src/mocks/verdictMockApi.js';
     import { renderReviewPage } from './src/pages/review/reviewPage.js';
     import { renderSummaryPage } from './src/pages/summary/summaryPage.js';
+    import { renderVerdictPage } from './src/pages/verdict/verdictPage.js';
+    import { clearDraft } from './src/pages/verdict/verdictDraft.js';
+
+    const api = { ...reviewApi, ...verdictApi };
 
     // TODO: API 6에 사건 제목 없음, 정합성 2차 점검 D-01 결정 후 실제 제목 공급원으로 교체.
     const caseHeader = mockCaseHeader;
@@ -58,12 +65,13 @@
       const dependencies = { caseId: caseHeader.caseId, caseHeader, api, navigate };
       if (name === 'review') await renderReviewPage(container, dependencies);
       else if (name === 'summary') await renderSummaryPage(container, dependencies);
+      else if (name === 'verdict') await renderVerdictPage(container, dependencies);
       else {
         const placeholder = document.createElement('div');
         placeholder.className = 'review-page';
         const message = document.createElement('p');
         message.className = 'message-panel';
-        message.textContent = `${name === 'list' ? '사건 목록' : '판결'} 화면 준비 중`;
+        message.textContent = `${name === 'ai' ? 'AI 판결' : name === 'list' ? '사건 목록' : '판결'} 화면 준비 중`;
         placeholder.append(message);
         container.replaceChildren(placeholder);
       }
@@ -86,7 +94,10 @@
         document.querySelector('#status').value = '';
       }
     }
-    document.querySelector('#reset').addEventListener('click', () => changeState(() => api.resetMock(), 'review'));
+    document.querySelector('#reset').addEventListener('click', () => changeState(async () => {
+      await api.resetMock();
+      clearDraft(1);
+    }, 'review'));
     document.querySelector('#status').addEventListener('change', (event) => {
       const status = event.target.value;
       if (status) changeState(() => api.setMockStatus(status), currentPage);
