@@ -5,6 +5,7 @@
 | 버전 | 날짜 | 내용 |
 | --- | --- | --- |
 | v1 | 2026-09-29 | `docs/` 설계 문서(COMMON-4 반영본) 교차 검토 후 MVP 범위 · 흐름 · 완료 기준 · 선행 결정 사항 정리 (COMMON-5) |
+| v1.1 | 2026-09-30 | 대표 사건(살인) 가공 결정 반영 (BE-13): REQ-029 형벌 종류에 사형 · 무기징역 추가, 근거 문서 버전 갱신 |
 
 ## 근거 문서
 
@@ -13,11 +14,11 @@
 | 문서 | 버전 | 이 문서에서 가져온 것 |
 | --- | --- | --- |
 | `final-planning.md` | v4.2 | MVP 목표, 포지셔닝, 기능 우선순위(MoSCoW) |
-| `requirements-specification.md` | v5.5 | MVP 검증 목표, 데이터 구조 요구사항(DR), 미결정 사항(15장) |
-| `functional-specification.md` | v3.2 | 기능별 구현 단계(MVP 48 · 확장 26 · 이후 24 · 데이터 13) |
-| `information-architecture.md` | v1.6 | 화면 목록(S-01 ~ S-14), 체험 진행 상태, 진입 조건 |
-| `api-specification.md` | v0.3 | MVP API 14개 |
-| `erd.md` | v1.3 | 테이블 구성, 선고 가능 범위 결정 |
+| `requirements-specification.md` | v5.6 | MVP 검증 목표, 데이터 구조 요구사항(DR), 미결정 사항(15장) |
+| `functional-specification.md` | v3.3 | 기능별 구현 단계(MVP 48 · 확장 26 · 이후 24 · 데이터 13) |
+| `information-architecture.md` | v1.8 | 화면 목록(S-01 ~ S-14), 체험 진행 상태, 진입 조건 |
+| `api-specification.md` | v0.4 | MVP API 14개 |
+| `erd.md` | v1.4 | 테이블 구성, 선고 가능 범위 결정 |
 | `sequence-diagram.md` | v0.4 | 체험 흐름별 처리 순서 |
 | `tech-stack.md` | v1.1 | MVP 기술 구성 |
 | `document-consistency-report.md` | — | 와이어프레임 미반영 목록 |
@@ -136,7 +137,7 @@ flowchart LR
 
 | ID | 기능 | 비고 |
 | --- | --- | --- |
-| REQ-029 | 형벌 및 형량 입력 | 징역 · 벌금만 (**무죄 제외**) |
+| REQ-029 | 형벌 및 형량 입력 | 사형 · 무기징역 · 징역 · 벌금 중 사건 법정형에 있는 것 (**무죄 제외**). 사형 · 무기는 v1.1 추가 |
 | REQ-030 | 집행유예 입력 | 여부 · 기간 |
 | REQ-031 | 사건별 판단 요소 조회 | 공통 목록 전체 |
 | REQ-032 | 판단 요소 선택 및 방향 | 복수 선택 + ↑/↓ |
