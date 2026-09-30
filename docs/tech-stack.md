@@ -7,6 +7,7 @@
 | v1 | 2026-09-28 | 초안 — Backend(Spring Boot 4 · JPA · 도메인별 패키지), DB(PostgreSQL · Flyway · Redis 캐시 · pgvector), 익명 ID 쿠키 기반 사용자 식별, REST API 규칙, Vanilla JS + Vite 프론트 구조, AI(사전 생성 · 검수, 비교 분석 실시간 생성), Docker · GitHub Actions CI, EC2 배포, 협업 도구 |
 | **v1.1** | **2026-09-29** | **문서 정합성 점검 결정 반영 (COMMON-4)** — API 응답 형식 · 에러 코드 · 경로를 API 명세서 기준으로 정정(4 · 5장), 화면 진입 시 상태 조회 없이 `INVALID_STATE`로 이동(5장), AI 판결은 RAG 우선 · 안 되면 퓨샷(6장), 쿠키 삭제 안내는 확장 기능으로 표시 · 문구 미정(3장), 문서 관리 위치 · 디렉터리명 정정(5 · 9장), Jira 공통 Space `COMMON` 추가(9장), 프론트엔드를 같은 도메인으로 배포(Nginx + `/api` 프록시, 8장), 작성 이력 표 신설 |
 | v1.2 | 2026-09-30 | BE-2 진행 반영 — 2장 마이그레이션 파일 목록을 실제 구성(V1 ~ V5)으로 교체, `ddl-auto: validate`를 모든 환경 기준으로 정정 |
+| v1.3 | 2026-09-30 | BE-16 반영 — 2장에 개발용 임시 시드(가상 살인 사건, `db/seed/R__seed_sample_case.sql`, 로컬 · CI 전용 · `FLYWAY_LOCATIONS`로 켬) 추가, 실제 사건 데이터는 저장소 밖에서 넣는다는 원칙, DB 운영 단계(개발 Docker PostgreSQL → 최종 AWS RDS, 비용 사유) 신설 |
 
 
 ## **1. Backend**
@@ -93,9 +94,36 @@ backend/src/main/resources/db/migration
  ├─ V3__create_experience.sql         -- 익명 사용자, 체험
  ├─ V4__create_judgment.sql           -- 판단, 판단 요소 평가 (+ CHECK · 부분 유니크 인덱스)
  └─ V5__create_extension_tables.sql   -- (확장) AI 판결 생성 기록, 세 판결 비교 분석
+
+backend/src/main/resources/db/seed          -- 로컬 · CI 전용 (운영에는 넣지 않음)
+ └─ R__seed_sample_case.sql           -- 개발용 임시 시드: 가상 살인 사건 1건 (ERD 6장 예시)
 ```
 
 MVP에는 관리자 화면이 없으므로 대표 사건 데이터와 검수된 AI·재판부 판결은 SQL 스크립트로 넣는다.
+
+- **개발용 시드는 운영 DB에 넣지 않는다.** 시드는 스키마(`db/migration`)와 따로 `db/seed`에 두고, Flyway가 읽을 위치를 환경변수 `FLYWAY_LOCATIONS`로 정한다.
+
+  | 환경 | `FLYWAY_LOCATIONS` | 결과 |
+  | --- | --- | --- |
+  | 운영 (기본값) | 지정하지 않음 → `classpath:db/migration` | 스키마만 |
+  | 로컬 · CI | `classpath:db/migration,classpath:db/seed` | 스키마 + 가상 사건 1건 |
+
+  기본값을 스키마만으로 둬서, 운영에서 환경변수를 빠뜨려도 시드가 들어가지 않는다. CI(`backend-ci.yml`)는 시드까지 켜서 시드가 스키마 제약을 깨지 않는지 매번 확인한다.
+- 시드는 **반복 마이그레이션(`R__`)**이다. 버전 번호가 없어 `db/migration`의 새 버전 파일과 번호가 겹치지 않고, 모든 버전 마이그레이션 다음에 실행된다. 이미 사건이 있으면 아무것도 하지 않는다. 시드 값을 바꿔 다시 넣으려면 로컬 DB를 비운다(`docker compose down -v` 후 다시 `up`).
+- **실제 사건 데이터는 시드로 커밋하지 않는다.** 저장소가 공개라 실제 형량 · 재판부 판단 요소 · 판결문 발췌가 그대로 공개되기 때문이다. 실제 사건은 저장소 밖에서 넣으며, 방법은 BE-17에서 정한다(MVP 정의서 11장).
+- 이미 적용된 버전 마이그레이션(`V*`) 파일은 고치지 않는다(Flyway 체크섬). 스키마를 바꿀 때는 새 버전 파일을 추가한다.
+
+### DB 운영 단계
+
+비용 문제로 개발 기간에는 AWS를 쓰지 않고, 최종 단계에서만 AWS RDS로 옮긴다.
+
+| 단계 | DB | 비고 |
+| --- | --- | --- |
+| 개발 (로컬 · CI) | Docker PostgreSQL (`pgvector/pgvector:pg17`, `backend/docker-compose.yml`) | AWS 키 없이 로컬에서 개발이 끝나도록 컨테이너로 띄운다. CI도 같은 이미지 태그를 쓴다 |
+| 최종 (운영) | AWS RDS for PostgreSQL | 이미지 태그를 RDS에서 쓸 PostgreSQL 버전과 맞춘다. 접속 정보는 EC2 실행 시 환경변수로만 넘긴다 |
+
+- 접속 정보는 `DB_URL` · `DB_USERNAME` · `DB_PASSWORD` 환경변수로 받고, 값이 없으면 로컬 Docker 기본값을 쓴다(`application.yml`). 단계를 옮겨도 코드는 바꾸지 않고 환경변수만 바꾼다.
+- 운영 계정 · 비밀번호는 저장소 어디에도 적지 않는다.
 
 Redis는 캐시 용도로만 사용한다. 체험 진행 상태나 판결 같은 원본 데이터는 모두 PostgreSQL에 저장하고, Redis가 없어도 서비스가 동작하도록 한다.
 

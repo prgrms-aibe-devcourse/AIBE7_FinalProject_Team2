@@ -18,6 +18,8 @@ spring:
 
   flyway:
     enabled: true
-    locations: classpath:db/migration
+    # 기본값은 스키마(db/migration)만. 운영에서 환경변수를 빠뜨려도 시드가 들어가지 않도록 기본값을 안전한 쪽으로 둔다.
+    # 로컬 · CI에서만 FLYWAY_LOCATIONS=classpath:db/migration,classpath:db/seed 로 개발용 가상 사건 시드를 함께 넣는다.
+    locations: ${FLYWAY_LOCATIONS:classpath:db/migration}
     # 운영 DB 전체 삭제를 막기 위해 clean 명령은 항상 막아 둔다 (기본값이지만 명시)
     clean-disabled: true

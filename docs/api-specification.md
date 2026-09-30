@@ -7,6 +7,7 @@
 | **v0.3** | **2026-09-29** | **문서 정합성 점검 결정 반영 (COMMON-4)** — 6장 #1 확정(화면 진입 시 상태 조회 없이 각 API의 `INVALID_STATE`로 이동, 1-6 · 5장), 무죄 선택지 MVP 제외(API 8 · 9 · 14, 6장 #5), 예시 사건을 단일 범행 사건(지인 투자금 편취)으로 교체(경합범 서비스 제외), 판결 카드 한 줄 요약 `summary` 추가(내 판결은 요약 태그 규칙 문장, 확장에서 AI 요약으로 교체), 사건 목록 `crimeCategoryLabel` · `thumbnailUrl`, (확장) 실제 판결 `deidentifiedItems`, 참고 자료 태그 출처 컬럼명 `reference_tags`, (확장) 쿠키 삭제 안내(REQ-108). (낮음 항목) 같은 도메인 배포 확정(1-2 · 6장 #2), 시퀀스 후보 대응표 삭제, 톤 규칙 참조를 요구사항 11장으로 정정 |
 | **v0.4** | **2026-09-30** | **대표 사건(살인) 가공 결정 반영 (BE-13)** — 형벌 종류에 사형(`DEATH`) · 무기징역(`LIFE`) 추가(API 6 · 8 · 9, 판결 응답 공통 형식), 판결 제출에 `reducedTo`(감경 후 형벌) 추가, `diffFromMine` 비교 기준을 최종 선고 형벌로 명시, 부가 처분 `CONFISCATION`(몰수) 추가 (ERD v1.4), API 14 형벌 무게 순서에 `LIFE` < `DEATH` 추가, `reducedTo`는 형벌 종류가 바뀌는 감경만 기록한다고 명시, 최종 선고 형벌이 `DEATH` · `LIFE`일 때 형량 값이 있으면 `VALIDATION_ERROR`로 명시 |
 | v0.5 | 2026-09-30 | 예시 사건을 가상 살인 사건으로 교체 (COMMON-11) — API 1 · 4 · 6 · 8 · 9 · 10 · 12 · 14 예시를 "빌린 돈 문제로 찾아온 지인을 살해한 사건"(가상)으로 교체, 사전 판단 구간 예시를 살인용 8개(벌금형 제외 · 무기 · 사형 추가)로, 형벌 선택지 예시를 사형 · 무기 · 징역 3종으로 교체 (ERD v1.5) |
+| v0.6 | 2026-09-30 | BE-16 시드 반영 — API 4 · 5 · 14 예시의 사전 판단 구간 `rangeOptionId`를 DB 실제 값(살인 8 ~ 15, 예시 선택 11)으로 정정 (ERD v1.6) |
 
 ---
 
@@ -189,7 +190,7 @@ json
 json
 
 ```json
-{  "case": {    "caseId": 1,    "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",    "crimeType": "MURDER",    "crimeCategoryLabel": "생명범죄",    "chargeName": "살인",    "overview": "피고인이 빌린 돈을 갚지 못해 오래 다투던 지인이 집으로 찾아오자, 말다툼 끝에 집에 있던 흉기로 피해자를 살해하고 구호 조치 없이 집을 나간 사건이다."  },  "rangeOptions": [    { "rangeOptionId": 1, "label": "징역형 집행유예" },    { "rangeOptionId": 2, "label": "실형 3년 미만" },    { "rangeOptionId": 3, "label": "실형 3년 이상 ~ 5년 미만" },    { "rangeOptionId": 4, "label": "실형 5년 이상 ~ 10년 미만" },    { "rangeOptionId": 5, "label": "실형 10년 이상 ~ 20년 미만" },    { "rangeOptionId": 6, "label": "실형 20년 이상" },    { "rangeOptionId": 7, "label": "무기징역" },    { "rangeOptionId": 8, "label": "사형" }  ],  "preFactors": [    { "factorId": 1, "label": "돈 문제로 오래 다툼이 있었다" },    { "factorId": 2, "label": "다투던 중 흉기를 집어 들었다" },    { "factorId": 3, "label": "범행 뒤 현장을 떠났다" }  ]}
+{  "case": {    "caseId": 1,    "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",    "crimeType": "MURDER",    "crimeCategoryLabel": "생명범죄",    "chargeName": "살인",    "overview": "피고인이 빌린 돈을 갚지 못해 오래 다투던 지인이 집으로 찾아오자, 말다툼 끝에 집에 있던 흉기로 피해자를 살해하고 구호 조치 없이 집을 나간 사건이다."  },  "rangeOptions": [    { "rangeOptionId": 8, "label": "징역형 집행유예" },    { "rangeOptionId": 9, "label": "실형 3년 미만" },    { "rangeOptionId": 10, "label": "실형 3년 이상 ~ 5년 미만" },    { "rangeOptionId": 11, "label": "실형 5년 이상 ~ 10년 미만" },    { "rangeOptionId": 12, "label": "실형 10년 이상 ~ 20년 미만" },    { "rangeOptionId": 13, "label": "실형 20년 이상" },    { "rangeOptionId": 14, "label": "무기징역" },    { "rangeOptionId": 15, "label": "사형" }  ],  "preFactors": [    { "factorId": 1, "label": "돈 문제로 오래 다툼이 있었다" },    { "factorId": 2, "label": "다투던 중 흉기를 집어 들었다" },    { "factorId": 3, "label": "범행 뒤 현장을 떠났다" }  ]}
 ```
 
 - `rangeOptions`: 이 사건 `crime_type`의 `sentence_range_option`.
@@ -209,7 +210,7 @@ json
 json
 
 ```json
-{ "rangeOptionId": 3, "factorIds": [1, 2] }
+{ "rangeOptionId": 11, "factorIds": [1, 2] }
 ```
 
 | 필드 | 필수 | 규칙 |
@@ -478,7 +479,7 @@ json
 json
 
 ```json
-{  "preToFinal": {    "preJudgment": { "rangeOptionId": 4, "label": "실형 5년 이상 ~ 10년 미만", "factorIds": [1, 2] },    "finalJudgmentText": "징역 15년",    "direction": "HEAVIER",    "summaryText": "사건을 모두 확인한 뒤, 처음 생각보다 무거운 판결을 내렸어요."  },  "judgments": {    "USER": { "subjectType": "USER", "summary": "범행 방식 · 피해 결과를 무겁게 보고 반성을 감안한 판단", "…": "…" },    "AI": { "subjectType": "AI", "summary": "다투다 벌어진 범행과 공탁 · 반성을 함께 저울질한 판단", "…": "…" },    "COURT": { "subjectType": "COURT", "summary": "유족의 처벌 의사를 무겁게 보면서도 공탁과 반성을 감안한 판단", "…": "…" }  },  "matrix": [    { "factorId": 2, "label": "다투던 중 집에 있던 흉기를 집어 들었다", "revealStage": "OVERVIEW",      "user": "UP", "ai": "UP", "court": "UP", "category": "ALL_SAME" },    { "factorId": 6, "label": "피해자에게는 부양하던 어린 자녀 2명이 있다", "revealStage": "DETAIL",      "user": "UP", "ai": null, "court": "UP", "category": "DIVERGED" },    { "factorId": 9, "label": "피해 회복을 위해 5,000만 원을 공탁했다", "revealStage": "DETAIL",      "user": null, "ai": "DOWN", "court": "DOWN", "category": "ONLY_ME_MISSED" }  ],  "ruleSentences": {    "common": ["세 판결 모두 다투던 중 집에 있던 흉기를 집어 든 점을 형량을 높이는 요소로 봤어요."],    "differences": ["AI와 재판부는 5,000만 원을 공탁한 점을 고려했지만, 내 판결에서는 고려하지 않았어요."]  },  "analysisAvailable": false}
+{  "preToFinal": {    "preJudgment": { "rangeOptionId": 11, "label": "실형 5년 이상 ~ 10년 미만", "factorIds": [1, 2] },    "finalJudgmentText": "징역 15년",    "direction": "HEAVIER",    "summaryText": "사건을 모두 확인한 뒤, 처음 생각보다 무거운 판결을 내렸어요."  },  "judgments": {    "USER": { "subjectType": "USER", "summary": "범행 방식 · 피해 결과를 무겁게 보고 반성을 감안한 판단", "…": "…" },    "AI": { "subjectType": "AI", "summary": "다투다 벌어진 범행과 공탁 · 반성을 함께 저울질한 판단", "…": "…" },    "COURT": { "subjectType": "COURT", "summary": "유족의 처벌 의사를 무겁게 보면서도 공탁과 반성을 감안한 판단", "…": "…" }  },  "matrix": [    { "factorId": 2, "label": "다투던 중 집에 있던 흉기를 집어 들었다", "revealStage": "OVERVIEW",      "user": "UP", "ai": "UP", "court": "UP", "category": "ALL_SAME" },    { "factorId": 6, "label": "피해자에게는 부양하던 어린 자녀 2명이 있다", "revealStage": "DETAIL",      "user": "UP", "ai": null, "court": "UP", "category": "DIVERGED" },    { "factorId": 9, "label": "피해 회복을 위해 5,000만 원을 공탁했다", "revealStage": "DETAIL",      "user": null, "ai": "DOWN", "court": "DOWN", "category": "ONLY_ME_MISSED" }  ],  "ruleSentences": {    "common": ["세 판결 모두 다투던 중 집에 있던 흉기를 집어 든 점을 형량을 높이는 요소로 봤어요."],    "differences": ["AI와 재판부는 5,000만 원을 공탁한 점을 고려했지만, 내 판결에서는 고려하지 않았어요."]  },  "analysisAvailable": false}
 ```
 
 **`preToFinal.direction`** — 사전 판단 구간과 최종 판결을 비교한다(`sentence_range_option.kind` · 개월 범위 사용).

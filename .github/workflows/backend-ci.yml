@@ -48,6 +48,8 @@ jobs:
       DB_URL: jdbc:postgresql://localhost:5432/lawnambul
       DB_USERNAME: lawnambul
       DB_PASSWORD: lawnambul
+      # 개발용 가상 사건 시드(db/seed)도 함께 적용해, 시드가 스키마 제약을 깨지 않는지 CI에서 확인한다 (운영에는 넣지 않음)
+      FLYWAY_LOCATIONS: classpath:db/migration,classpath:db/seed
 
     steps:
       - uses: actions/checkout@v4

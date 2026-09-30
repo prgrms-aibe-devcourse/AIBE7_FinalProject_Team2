@@ -9,6 +9,7 @@
 | **v1.4** | **2026-09-30** | **대표 사건(살인) 가공 결정 반영 (BE-13)**<br>• `penalty_type`에 사형(`DEATH`) · 무기징역(`LIFE`) 추가. `LIFE` · `DEATH` 행의 `allowed_min` ~ `allowed_max`는 작량감경해 징역으로 선고할 때의 범위(무기 → 10 ~ 50년, 사형 → 20 ~ 50년)<br>• `judgment.reduced_to`(감경 후 형벌) 추가, 형벌 종류별 CHECK · 선고 가능 범위 검증 규칙 갱신<br>• `sentence_range_option.kind`에 `LIFE` · `DEATH` 추가<br>• `extra_dispositions.type` 값 목록 명시, 몰수(`CONFISCATION`) 추가<br>• `penalty_rule` 예 3(살인) 추가<br>• `reduced_to`는 형벌 종류가 바뀌는 감경만 기록한다고 명시, 살인은 `sentence_range_option`에 `FINE` 구간을 두지 않음 |
 | v1.5 | 2026-09-30 | 예시 사건을 가상 살인 사건으로 교체 (COMMON-11)<br>• 6장 예시 데이터를 "빌린 돈 문제로 찾아온 지인을 살해한 사건"(가상)으로 전면 교체: `penalty_rule` 3행(사형 · 무기 · 징역), 살인용 `sentence_range_option` 8개, 판단 요소 11개, 세 판결 · 매트릭스 · 변화 유형<br>• `case_section` · `factor` 설명의 사기 예시 문구 교체 |
 | v1.2 | 2026-09-28 | 전체 문서 교차 검토 반영<br>• case_section.stage에 SUMMARY 추가 · 섹션<br>•  출처 명시, 공개 판단 유일 조건을 (case_id, subject_type)별로 정정<br>• 형벌 종류별 CHECK 제약 추가<br>• judgment.references 추가 (v1.3에서 `reference_tags`로 변경)<br>• 선고 가능 하한 정의 명확화(법률상 감경 + 작량감경) · 벌금 예시 하한 25,000원<br>• last_reviewed_step 규칙<br>• 선택 FK 관계선 표기<br>• 서버 규칙 표 보완 |
+| v1.6 | 2026-09-30 | BE-16 시드 반영<br>• 6장 `sentence_range_option` 예시를 V1이 넣은 실제 `id`(8 ~ 15) · `display_order`(2 ~ 9)로 정정, 사용자 사전 판단 예시 구간을 11로 정정 |
 | v1.5 | 2026-09-30 | BE-2 마이그레이션 반영<br>• `penalty_rule` 유니크 (`case_id`, `penalty_type`), `DEATH` · `LIFE` 행 CHECK(법정형 NULL, 집행유예 불가)<br>• `experience` CHECK(`last_reviewed_step` 0 ~ 4, `attempt_no` 1 이상), `comparison_analysis.fail_reason` CHECK 명시<br>• `judgment` CHECK: 형량 값 양수(`prison_months` · `fine_amount` · `suspension_months` > 0), 사용자 판단은 항상 공개(PR #26 리뷰 반영)<br>• 7장에 마이그레이션 공통 규칙 추가<br>• `penalty_rule` 컬럼 표 중간의 `DEATH` · `LIFE` 설명을 표 아래로 옮김(표가 끊겨 마지막 3개 컬럼이 표로 보이지 않던 문제) |
 
 ---
@@ -490,18 +491,19 @@ IA 9장의 규칙을 어느 테이블·제약이 책임지는지 정리한다.
 
 **sentence_range_option** (`crime_type = MURDER`, 8개)
 
-| # | label | kind | min_months | max_months |
-| --- | --- | --- | --- | --- |
-| 1 | 징역형 집행유예 | SUSPENDED | NULL | NULL |
-| 2 | 실형 3년 미만 | PRISON | NULL | 36 |
-| 3 | 실형 3년 이상 ~ 5년 미만 | PRISON | 36 | 60 |
-| 4 | 실형 5년 이상 ~ 10년 미만 | PRISON | 60 | 120 |
-| 5 | 실형 10년 이상 ~ 20년 미만 | PRISON | 120 | 240 |
-| 6 | 실형 20년 이상 | PRISON | 240 | NULL |
-| 7 | 무기징역 | LIFE | NULL | NULL |
-| 8 | 사형 | DEATH | NULL | NULL |
+| id | label | kind | min_months | max_months | display_order |
+| --- | --- | --- | --- | --- | --- |
+| 8 | 징역형 집행유예 | SUSPENDED | NULL | NULL | 2 |
+| 9 | 실형 3년 미만 | PRISON | NULL | 36 | 3 |
+| 10 | 실형 3년 이상 ~ 5년 미만 | PRISON | 36 | 60 | 4 |
+| 11 | 실형 5년 이상 ~ 10년 미만 | PRISON | 60 | 120 | 5 |
+| 12 | 실형 10년 이상 ~ 20년 미만 | PRISON | 120 | 240 | 6 |
+| 13 | 실형 20년 이상 | PRISON | 240 | NULL | 7 |
+| 14 | 무기징역 | LIFE | NULL | NULL | 8 |
+| 15 | 사형 | DEATH | NULL | NULL | 9 |
 
 → 살인은 법정형에 벌금이 없어 `FINE` 구간을 빼고 `LIFE` · `DEATH`를 더해 8개다(요구사항 FR-2-8).
+→ `id` · `display_order`는 V1 마이그레이션이 넣은 실제 값이다. V1은 모든 범죄 유형의 구간을 사기(1 ~ 7) → 살인(8 ~ 15) → 상해(16 ~ 22) 순서로 넣고, 공통 7개 구간의 순서(벌금형 = 1)를 그대로 쓴 뒤 살인에서 벌금형(1)만 빼므로 살인의 `display_order`는 2부터 시작한다. 화면은 `display_order` 오름차순으로 보여 주면 된다.
 
 **factor**
 
@@ -527,7 +529,7 @@ IA 9장의 규칙을 어느 테이블·제약이 책임지는지 정리한다.
 
 | id | subject_type | timing | experience_id | range_option_id | penalty_type | reduced_to | prison_months | summary |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 10 | USER | PRE | 100 | 4 (실형 5년 이상 ~ 10년 미만) | NULL | NULL | NULL | NULL |
+| 10 | USER | PRE | 100 | 11 (실형 5년 이상 ~ 10년 미만) | NULL | NULL | NULL | NULL |
 | 11 | USER | FINAL | 100 | NULL | PRISON | NULL | 180 | NULL (응답 시 규칙 문장 생성) |
 | 20 | AI | FINAL | NULL | NULL | PRISON | NULL | 144 | 다투다 벌어진 범행과 공탁 · 반성을 함께 저울질한 판단 |
 | 30 | COURT | FINAL | NULL | NULL | PRISON | NULL | 120 | 유족의 처벌 의사를 무겁게 보면서도 공탁과 반성을 감안한 판단 |
@@ -565,7 +567,7 @@ IA 9장의 규칙을 어느 테이블·제약이 책임지는지 정리한다.
 
 → 내 판결 한 줄 요약(MVP 규칙 문장): ↑ 요소 2 · 6의 태그 `범행 방식` · `피해 결과`, ↓ 요소 7의 태그 `반성` → "범행 방식 · 피해 결과를 무겁게 보고 반성을 감안한 판단". 확장 단계에서는 AI 비교 분석의 `perspectives.USER`로 바꾼다.
 → 판단 이유 변화(REQ-096, 확장): `PRE`의 요소(1, 2 — 모두 OVERVIEW)와 `FINAL`의 요소(2, 6, 7)를 비교한다. 2는 양쪽에 있으므로 "처음부터 알던 요소"(API `KEPT`), 1은 `PRE`에만 있으므로 "이미 알던 요소의 무게가 바뀜"(API `WEIGHT_CHANGED` — 사전 판단에서는 골랐지만 최종 판결에서는 고르지 않았다는 뜻이다. `PRE` 기록에는 방향이 없어 처음 판단의 강도는 알 수 없다), 6 · 7은 `reveal_stage = DETAIL`이고 `FINAL`에만 있으므로 "새로 알게 된 요소"(API `NEWLY_LEARNED`)다. 요소 1처럼 매트릭스에서 빠지는 요소도 사전 판단에서 골랐다면 변화 유형은 보여 준다(API 14 `matrix` 규칙).
-→ 사전 판단 구간 4(60 ~ 120)와 최종 판결 180개월을 비교하면 `preToFinal.direction`은 `HEAVIER`다.
+→ 사전 판단 구간 11(60 ~ 120)과 최종 판결 180개월을 비교하면 `preToFinal.direction`은 `HEAVIER`다.
 
 ---
 
