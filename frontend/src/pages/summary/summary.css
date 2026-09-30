@@ -1,0 +1,22 @@
+/* 공유 컴포넌트 스타일도 두 페이지 루트 아래로 한정한다. */
+@import '../review/review.css';
+.summary-page { word-break: keep-all; overflow-wrap: anywhere; }
+.summary-page .summary-main { padding: 32px 28px; }
+.summary-page .summary-intro { margin-bottom: 28px; }
+.summary-page .summary-intro h1 { font-size: 28px; margin-bottom: 8px; }
+.summary-page .summary-layout { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 28px; }
+.summary-page .summary-facts,
+.summary-page .summary-law { min-width: 0; }
+.summary-page .summary-block { padding-bottom: 24px; margin-bottom: 24px; border-bottom: 1px solid var(--color-border); }
+.summary-page .summary-block:last-child { border-bottom: 0; margin-bottom: 0; }
+.summary-page .summary-block h2 { color: #ac301e; font-size: 14px; margin-bottom: 14px; }
+.summary-page .summary-list { padding-left: 20px; margin: 0; }
+.summary-page .summary-list li + li { margin-top: 8px; }
+.summary-page .argument-card { padding: 16px; font-size: 13px; }
+.summary-page .summary-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--color-border); }
+@media (max-width: 760px) {
+  .summary-page .summary-main { padding: 24px 16px; }
+  .summary-page .summary-intro h1 { font-size: 24px; }
+  .summary-page .summary-layout { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .summary-page .summary-actions { flex-direction: column; }
+}
