@@ -17,5 +17,6 @@ node_modules/
 dist/
 
 # ===== 사건 데이터 (내부 보관, 커밋 금지) =====
-docs/cases/murder/long-marriage-conflict.md
-docs/cases/murder/long-marriage-conflict-ai-input.md
+# 사건 파일(.md)은 폴더 위치와 이름에 관계없이 모두 제외한다. README는 docs/cases/README.md라 대상이 아니다.
+docs/cases/**/*.md
+!docs/cases/README.md

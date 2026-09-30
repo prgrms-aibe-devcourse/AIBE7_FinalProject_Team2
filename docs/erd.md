@@ -6,7 +6,7 @@
 | v1.0 | 2026-09-28 | 결정 사항 확정<br>• 결정 #1~#6 확정(4장)<br>• judgment 구현 규칙 추가(7장)<br>• experience에 attempt_no · member_id 추가 및 유니크 제약 변경(재체험·회원 연결 대비)<br>• penalty_rule을 법정형 / 선고 가능 범위로 분리 |
 | v1.1 | 2026-09-28 | 비교 분석 실시간 생성(시퀀스 v0.2 안 B) 반영<br>• comparison_analysis 테이블 추가(확장 단계, 체험당 1개)<br>• 관계도 · 서버 규칙 갱신 |
 | **v1.3** | **2026-09-29** | **문서 정합성 점검 결정 반영 (COMMON-4)**<br>• DB를 PostgreSQL로 확정(기술 스택 2장): 타입을 `jsonb` · `timestamptz`로, MySQL 관련 문구 삭제<br>• `judgment.references` → `reference_tags` (SQL 예약어 회피)<br>• 무죄(`NOT_GUILTY`) MVP 제외<br>• 경합범 서비스 제외에 따라 예시 데이터(6장)를 단일 범행 사건으로 교체<br>• `legal_case.thumbnail_url` · `deidentified_items`(확장), `factor.summary_tag`, `judgment.summary` 추가, 범죄 분류명은 코드 상수 |
-| **v1.4** | **2026-09-30** | **대표 사건(살인) 가공 결정 반영 (BE-13)**<br>• `penalty_type`에 사형(`DEATH`) · 무기징역(`LIFE`) 추가. `LIFE` · `DEATH` 행의 `allowed_min` ~ `allowed_max`는 작량감경해 징역으로 선고할 때의 범위(무기 → 10 ~ 50년, 사형 → 20 ~ 50년)<br>• `judgment.reduced_to`(감경 후 형벌) 추가, 형벌 종류별 CHECK · 선고 가능 범위 검증 규칙 갱신<br>• `sentence_range_option.kind`에 `LIFE` · `DEATH` 추가<br>• `extra_dispositions.type` 값 목록 명시, 몰수(`CONFISCATION`) 추가<br>• `penalty_rule` 예 3(살인) 추가 |
+| **v1.4** | **2026-09-30** | **대표 사건(살인) 가공 결정 반영 (BE-13)**<br>• `penalty_type`에 사형(`DEATH`) · 무기징역(`LIFE`) 추가. `LIFE` · `DEATH` 행의 `allowed_min` ~ `allowed_max`는 작량감경해 징역으로 선고할 때의 범위(무기 → 10 ~ 50년, 사형 → 20 ~ 50년)<br>• `judgment.reduced_to`(감경 후 형벌) 추가, 형벌 종류별 CHECK · 선고 가능 범위 검증 규칙 갱신<br>• `sentence_range_option.kind`에 `LIFE` · `DEATH` 추가<br>• `extra_dispositions.type` 값 목록 명시, 몰수(`CONFISCATION`) 추가<br>• `penalty_rule` 예 3(살인) 추가<br>• `reduced_to`는 형벌 종류가 바뀌는 감경만 기록한다고 명시, 살인은 `sentence_range_option`에 `FINE` 구간을 두지 않음 |
 | v1.2 | 2026-09-28 | 전체 문서 교차 검토 반영<br>• case_section.stage에 SUMMARY 추가 · 섹션<br>•  출처 명시, 공개 판단 유일 조건을 (case_id, subject_type)별로 정정<br>• 형벌 종류별 CHECK 제약 추가<br>• judgment.references 추가 (v1.3에서 `reference_tags`로 변경)<br>• 선고 가능 하한 정의 명확화(법률상 감경 + 작량감경) · 벌금 예시 하한 25,000원<br>• last_reviewed_step 규칙<br>• 선택 FK 관계선 표기<br>• 서버 규칙 표 보완 |
 
 ---
@@ -262,6 +262,7 @@ S-03의 객관식 선택지. 범죄 유형별로 정의한다(FR-2-8).
 | max_months | int |  | 실형 구간 상한 |
 | display_order | int | ✓ |  |
 - `kind`와 개월 범위가 있어야 S-09에서 "처음 생각보다 가벼운/무거운 판결"을 계산할 수 있다.
+- 법정형에 벌금이 없는 범죄 유형(살인)은 `FINE` 구간을 두지 않는다. 살인은 집행유예부터 사형까지 8개다(요구사항 FR-2-8, v1.4).
 - 무겁기 순서: `FINE` < `SUSPENDED` < `PRISON`(개월 순) < `LIFE` < `DEATH` (v1.4). 최종 판결은 `reduced_to`가 있으면 그 값으로 비교한다.
 
 ### 3-2. 사용자 체험 (시스템이 기록)
@@ -321,7 +322,7 @@ IA 9장의 진행 상태를 저장한다.
 | experience_id | bigint FK |  | `USER`일 때만 |
 | range_option_id | bigint FK |  | `PRE`일 때만 (사전 판단 형량 구간) |
 | penalty_type | varchar(20) |  | 법정형에서 고른 형벌: `DEATH` / `LIFE` / `PRISON` / `FINE` (`DEATH` · `LIFE`는 v1.4). `FINAL`일 때 필수 (무죄는 MVP 제외, v1.3) |
-| reduced_to | varchar(20) |  | (v1.4) 감경 후 형벌. `DEATH`를 감경하면 `LIFE` 또는 `PRISON`, `LIFE`를 감경하면 `PRISON`. 감경하지 않았거나 `PRISON` · `FINE`이면 NULL. **최종 선고 형벌 = `reduced_to`가 있으면 그 값, 없으면 `penalty_type`** |
+| reduced_to | varchar(20) |  | (v1.4) 감경 후 형벌. `DEATH`를 감경하면 `LIFE` 또는 `PRISON`, `LIFE`를 감경하면 `PRISON`. 감경하지 않았거나 `PRISON` · `FINE`이면 NULL. **형벌 종류가 바뀌는 감경만 기록한다**(유기징역 안의 작량감경은 기록하지 않는다). **최종 선고 형벌 = `reduced_to`가 있으면 그 값, 없으면 `penalty_type`** |
 | prison_months | int |  | 징역 개월 |
 | fine_amount | bigint |  | 벌금 (원) |
 | suspension_months | int |  | 집행유예 기간 (개월). 없으면 NULL |
