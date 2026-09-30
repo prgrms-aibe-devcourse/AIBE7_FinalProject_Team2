@@ -69,7 +69,7 @@ docs/cases/
 
 ## 관련 문서
 
-- 선정 원칙: `final-planning.md` 6-1
-- 데이터 확보 경로와 미결정 사항: `requirements-specification.md` FR-1-9, 15장
-- 데이터 구조: `erd.md` (`legal_case`, `penalty_rule`, `factor`, `case_source`)
-- 일정과 위험(R1): `wbs.md`
+- 선정 원칙: [`final-planning.md`](../final-planning.md) 6-1
+- 데이터 확보 경로와 미결정 사항: [`requirements-specification.md`](../requirements-specification.md) FR-1-9, 15장
+- 데이터 구조: [`erd.md`](../erd.md) (`legal_case`, `penalty_rule`, `factor`, `case_source`)
+- 일정과 위험(R1): [`wbs.md`](../wbs.md)
