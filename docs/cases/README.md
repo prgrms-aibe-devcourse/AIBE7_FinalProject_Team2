@@ -54,6 +54,7 @@ docs/cases/
 
 ## 3. 선고 가능 범위 계산
 - 법정형:
+- 집행유예 가능 여부 (형법 제62조 단서, ERD `penalty_rule.suspension_allowed`):
 - 법률상 감경 · 작량감경 반영 하한:
 - 가중 반영 상한:
 - 권고 형량 범위와 산출 근거:
@@ -69,7 +70,7 @@ docs/cases/
 
 ## 관련 문서
 
-- 선정 원칙: [`final-planning.md`](../final-planning.md) 6-1
+- 선정 원칙: [`final-planning.md`](../final-planning.md) 6-1, 9장
 - 데이터 확보 경로와 미결정 사항: [`requirements-specification.md`](../requirements-specification.md) FR-1-9, 15장
 - 데이터 구조: [`erd.md`](../erd.md) (`legal_case`, `penalty_rule`, `factor`, `case_source`)
 - 일정과 위험(R1): [`wbs.md`](../wbs.md)
