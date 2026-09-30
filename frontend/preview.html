@@ -1,0 +1,97 @@
+<!-- FE-2 라우터 도입 시 삭제: FE-6 개발용 미리보기 -->
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FE-6 사건 정보 확인 · 미리보기</title>
+  <link rel="icon" href="data:,">
+  <!-- FE-2 연결 시 각 화면에 해당하는 CSS를 함께 로드한다. -->
+  <link rel="stylesheet" href="./src/pages/review/review.css">
+  <link rel="stylesheet" href="./src/pages/summary/summary.css">
+  <style>
+    body { margin: 0; background: #eeeae6; }
+    .preview-tools { max-width: 1180px; margin: 24px auto 16px; padding: 0 12px; box-sizing: border-box; font: 13px/1.6 'Malgun Gothic', sans-serif; }
+    .preview-tools fieldset { border: 0; margin: 0; padding: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+    .preview-tools legend { padding: 0 0 8px; color: #625951; font-weight: bold; }
+    .preview-tools button, .preview-tools select { font: inherit; padding: 8px 10px; background: white; border: 1px solid #bdb4ad; border-radius: 4px; }
+    .preview-tools button { cursor: pointer; }
+    .preview-tools label { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+    .preview-tools output { display: block; color: #ad2b18; }
+    .preview-container { padding: 0 12px 36px; }
+  </style>
+</head>
+<body>
+  <div class="preview-tools">
+    <fieldset id="tools">
+      <legend>FE-6 개발용 미리보기</legend>
+      <button type="button" data-page="review">S-04 보기</button>
+      <button type="button" data-page="summary">S-05 보기</button>
+      <button type="button" id="reset">처음 상태로</button>
+      <label>상태 강제 선택
+        <select id="status">
+          <option value="">상태 선택</option>
+          <option>STARTED</option><option>PRE_JUDGED</option><option>REVIEWING</option>
+          <option>REVIEWED</option><option>VERDICT_CONFIRMED</option>
+          <option>AI_REVEALED</option><option>COMPLETED</option>
+        </select>
+      </label>
+    </fieldset>
+    <output id="preview-error" role="alert"></output>
+  </div>
+  <div id="preview" class="preview-container"></div>
+  <script type="module">
+    import { mockCaseHeader } from './src/mocks/reviewMockData.js';
+    import * as api from './src/mocks/reviewMockApi.js';
+    import { renderReviewPage } from './src/pages/review/reviewPage.js';
+    import { renderSummaryPage } from './src/pages/summary/summaryPage.js';
+
+    // TODO: API 6에 사건 제목 없음, 정합성 2차 점검 D-01 결정 후 실제 제목 공급원으로 교체.
+    const caseHeader = mockCaseHeader;
+    const container = document.querySelector('#preview');
+    const tools = document.querySelector('#tools');
+    const error = document.querySelector('#preview-error');
+    let currentPage = 'review';
+    // FE-2 라우터 도입 시 삭제. 개발용 화면 전환만 수행한다.
+    async function navigate(name) {
+      currentPage = name;
+      const dependencies = { caseId: caseHeader.caseId, caseHeader, api, navigate };
+      if (name === 'review') await renderReviewPage(container, dependencies);
+      else if (name === 'summary') await renderSummaryPage(container, dependencies);
+      else {
+        const placeholder = document.createElement('div');
+        placeholder.className = 'review-page';
+        const message = document.createElement('p');
+        message.className = 'message-panel';
+        message.textContent = `${name === 'list' ? '사건 목록' : '판결'} 화면 준비 중`;
+        placeholder.append(message);
+        container.replaceChildren(placeholder);
+      }
+    }
+    document.querySelectorAll('[data-page]').forEach((button) => {
+      button.addEventListener('click', () => navigate(button.dataset.page));
+    });
+    async function changeState(action, page) {
+      tools.disabled = true;
+      error.textContent = '';
+      // 이전 화면의 진행 요청/응답과 상태 변경이 섞이지 않게 화면을 먼저 분리한다.
+      container.replaceChildren();
+      try {
+        await action();
+        await navigate(page);
+      } catch {
+        error.textContent = '목 상태를 저장하지 못했어요. 브라우저 저장소 설정을 확인해 주세요.';
+      } finally {
+        tools.disabled = false;
+        document.querySelector('#status').value = '';
+      }
+    }
+    document.querySelector('#reset').addEventListener('click', () => changeState(() => api.resetMock(), 'review'));
+    document.querySelector('#status').addEventListener('change', (event) => {
+      const status = event.target.value;
+      if (status) changeState(() => api.setMockStatus(status), currentPage);
+    });
+    await navigate('review');
+  </script>
+</body>
+</html>

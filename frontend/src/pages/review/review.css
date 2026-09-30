@@ -1,0 +1,112 @@
+:is(.review-page, .summary-page) {
+  --color-primary: #e8391e;
+  --color-text: #1a1a1a;
+  --color-muted: #66615e;
+  --color-border: #dfd9d5;
+  --color-surface: #faf8f6;
+  --space-md: 16px;
+  --content-width: 1180px;
+  color: var(--color-text);
+  background: #fff;
+  font: 15px/1.75 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+  max-width: var(--content-width);
+  margin: 0 auto;
+  border: 1px solid var(--color-border);
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+}
+:is(.review-page, .summary-page) * { box-sizing: border-box; }
+:is(.review-page, .summary-page) [hidden] { display: none !important; }
+:is(.review-page, .summary-page) h1,
+:is(.review-page, .summary-page) h2,
+:is(.review-page, .summary-page) h3,
+:is(.review-page, .summary-page) p { margin: 0; }
+:is(.review-page, .summary-page) button { font: inherit; cursor: pointer; }
+:is(.review-page, .summary-page) button:disabled { cursor: default; }
+:is(.review-page, .summary-page) button:focus-visible { outline: 3px solid #224d8a; outline-offset: 4px; }
+:is(.review-page, .summary-page) .case-topbar {
+  display: flex; align-items: center; gap: 16px; padding: 20px 28px; border-bottom: 1px solid var(--color-border);
+}
+:is(.review-page, .summary-page) .back-button { flex-shrink: 0; border: 0; background: transparent; padding: 6px 0; color: var(--color-muted); }
+:is(.review-page, .summary-page) .case-title { font-size: 16px; }
+:is(.review-page, .summary-page) .case-badge { padding: 2px 9px; border-radius: 3px; background: #fff0eb; color: #a92a16; font-size: 12px; white-space: nowrap; }
+:is(.review-page, .summary-page) .top-progress { margin-left: auto; display: flex; align-items: center; gap: 12px; white-space: nowrap; font-size: 13px; color: var(--color-muted); }
+:is(.review-page, .summary-page) progress { width: 110px; height: 5px; border: none; background: #e9e4e1; accent-color: var(--color-primary); }
+:is(.review-page, .summary-page) progress::-webkit-progress-bar { background: #e9e4e1; }
+:is(.review-page, .summary-page) progress::-webkit-progress-value { background: var(--color-primary); }
+:is(.review-page, .summary-page) progress::-moz-progress-bar { background: var(--color-primary); }
+:is(.review-page, .summary-page) .primary-button,
+:is(.review-page, .summary-page) .secondary-button { min-height: 44px; padding: 10px 18px; border: 1px solid var(--color-border); border-radius: 4px; font-weight: 700; }
+:is(.review-page, .summary-page) .primary-button { background: #c83019; border-color: #c83019; color: #fff; }
+:is(.review-page, .summary-page) .primary-button:hover:not(:disabled) { background: #a92612; }
+:is(.review-page, .summary-page) .primary-button:disabled { opacity: .6; }
+:is(.review-page, .summary-page) .secondary-button { color: var(--color-text); background: #fff; }
+:is(.review-page, .summary-page) .secondary-button:hover { background: var(--color-surface); }
+:is(.review-page, .summary-page) .muted { color: var(--color-muted); font-size: 13px; }
+:is(.review-page, .summary-page) .message-panel { padding: 44px 28px; }
+:is(.review-page, .summary-page) .message-panel button { margin-top: 20px; }
+:is(.review-page, .summary-page) .argument-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+:is(.review-page, .summary-page) .argument-card { padding: 20px; border: 1px solid var(--color-border); border-top: 3px solid #b8b0aa; border-radius: 4px; }
+:is(.review-page, .summary-page) .argument-card h3 { margin-bottom: 10px; font-size: 14px; }
+:is(.review-page, .summary-page) .law-info-box { padding: 22px; border: 1px solid var(--color-border); border-radius: 4px; }
+:is(.review-page, .summary-page) .law-info-box h3,
+:is(.review-page, .summary-page) .recommended-range h3 { color: #ac301e; font-size: 13px; margin-bottom: 16px; }
+:is(.review-page, .summary-page) .law-info-box dl { margin: 0 0 14px; display: grid; grid-template-columns: 135px minmax(0, 1fr); gap: 10px 16px; }
+:is(.review-page, .summary-page) .law-info-box dt { color: var(--color-muted); font-size: 13px; }
+:is(.review-page, .summary-page) .law-info-box dd { margin: 0; font-weight: 700; }
+:is(.review-page, .summary-page) .recommended-range { margin-top: 20px; padding: 22px; border: 1px solid #c8b6aa; background: #fcfaf8; border-radius: 4px; }
+:is(.review-page, .summary-page) .range-value { font-size: 23px; font-weight: 800; line-height: 1.5; margin-bottom: 18px; }
+:is(.review-page, .summary-page) .range-track { position: relative; height: 20px; background: #eae5e1; border: 1px solid #ccc3bd; }
+:is(.review-page, .summary-page) .range-fill { position: absolute; top: -1px; bottom: -1px; background: #efb19f; border-inline: 2px solid var(--color-primary); }
+:is(.review-page, .summary-page) .range-labels { display: flex; justify-content: space-between; gap: 20px; font-size: 11px; color: var(--color-muted); margin: 6px 0 16px; }
+:is(.review-page, .summary-page) .range-labels span:last-child { text-align: right; }
+:is(.review-page, .summary-page) .range-note { margin-top: 16px; font-size: 13px; font-weight: 700; }
+.review-page .review-layout { display: grid; grid-template-columns: minmax(0, 1fr) 260px; }
+.review-page .review-main { min-width: 0; }
+.review-page .page-heading { font-size: 22px; padding: 26px 28px 18px; }
+.review-page .review-section { border-top: 1px solid var(--color-border); }
+.review-page .review-section:last-child { border-bottom: 1px solid var(--color-border); }
+.review-page .section-toggle { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 22px 28px; width: 100%; border: 0; background: var(--color-surface); color: var(--color-text); text-align: left; }
+.review-page .section-name { font-weight: 700; font-size: 16px; }
+.review-page .section-state { font-size: 12px; color: var(--color-muted); text-align: right; font-weight: 400; }
+.review-page .is-open > h2 .section-toggle { background: #fff; box-shadow: inset 4px 0 var(--color-primary); }
+.review-page .is-open > h2 .section-state { color: #ac301e; }
+.review-page .is-locked .section-toggle { color: #77716c; background: #f7f6f5; }
+.review-page .section-body { padding: 8px 28px 28px; }
+.review-page .fact-block { margin-top: 20px; }
+.review-page .fact-block h3 { font-size: 13px; color: #ac301e; margin-bottom: 10px; }
+.review-page .damage-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; border: 1px solid var(--color-border); border-radius: 4px; overflow: hidden; }
+.review-page .damage-card { padding: 15px 18px; background: var(--color-surface); }
+.review-page .damage-card:nth-child(odd) { border-right: 1px solid var(--color-border); }
+.review-page .damage-card:nth-child(-n+2) { border-bottom: 1px solid var(--color-border); }
+.review-page .damage-card dt { color: var(--color-muted); font-size: 12px; }
+.review-page .damage-card dd { margin: 4px 0 0; font-weight: 700; font-size: 17px; }
+.review-page .section-actions { display: flex; justify-content: flex-end; padding-top: 24px; }
+.review-page .review-main > .section-actions { padding: 24px 28px; }
+.review-page .law-terms { padding: 18px 0 0; margin: 0; font-size: 13px; }
+.review-page .law-terms dt { font-weight: 700; }
+.review-page .law-terms dd { margin: 6px 0 14px; color: var(--color-muted); }
+.review-page .progress-sidebar { padding: 30px 22px; border-left: 1px solid var(--color-border); background: #f5f2ef; }
+.review-page .progress-sidebar h2 { font-size: 14px; margin-bottom: 18px; }
+.review-page .progress-sidebar ol { list-style: none; padding: 0; margin: 0; font-size: 13px; }
+.review-page .progress-sidebar li { padding: 9px 10px; color: var(--color-muted); border-radius: 4px; }
+.review-page .progress-sidebar .is-viewing { font-weight: 700; background: #fce6dc; color: #a92a16; }
+.review-page .progress-sidebar p { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--color-border); color: var(--color-muted); font-size: 12px; }
+@media (max-width: 760px) {
+  :is(.review-page, .summary-page) .case-topbar { flex-wrap: wrap; gap: 10px; padding: 16px; }
+  :is(.review-page, .summary-page) .case-title { flex: 1; min-width: 160px; }
+  :is(.review-page, .summary-page) .top-progress { gap: 8px; }
+  :is(.review-page, .summary-page) .argument-grid { grid-template-columns: minmax(0, 1fr); }
+  :is(.review-page, .summary-page) .law-info-box,
+  :is(.review-page, .summary-page) .recommended-range { padding: 18px; }
+  :is(.review-page, .summary-page) .law-info-box dl { grid-template-columns: minmax(0, 1fr); gap: 3px; }
+  :is(.review-page, .summary-page) .law-info-box dd { margin-bottom: 10px; }
+  .review-page .review-layout { grid-template-columns: minmax(0, 1fr); }
+  .review-page .section-toggle { padding: 18px 16px; flex-wrap: wrap; gap: 4px; }
+  .review-page .section-state { text-align: left; }
+  .review-page .section-body { padding: 8px 16px 24px; }
+  .review-page .page-heading { padding: 20px 16px; }
+  .review-page .progress-sidebar { border-left: 0; border-top: 1px solid var(--color-border); padding: 24px 16px; }
+  .review-page .section-actions .primary-button { width: 100%; }
+  .review-page .damage-card { padding: 12px; }
+}
