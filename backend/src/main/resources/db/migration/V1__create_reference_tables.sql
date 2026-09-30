@@ -23,14 +23,14 @@ CREATE TABLE sentence_range_option (
     CONSTRAINT pk_sentence_range_option PRIMARY KEY (id),
     CONSTRAINT chk_sentence_range_option_crime_type CHECK (crime_type IN ('MURDER', 'FRAUD', 'INJURY')),
     CONSTRAINT chk_sentence_range_option_kind
-        CHECK (kind IN ('FINE', 'SUSPENDED', 'PRISON', 'LIFE_IMPRISONMENT', 'DEATH_PENALTY'))
+        CHECK (kind IN ('FINE', 'SUSPENDED', 'PRISON', 'LIFE', 'DEATH'))
 );
 
 -- 범죄 유형별 구간 조회용 (API 4)
 CREATE INDEX idx_sentence_range_option_crime_type ON sentence_range_option (crime_type);
 
--- 형량 구간 (모든 환경에 같은 값이 있어야 하는 고정 데이터)
--- 공통 7개를 모든 범죄 유형에 넣고, 법정형에 무기징역 · 사형이 있는 살인에만 2개를 더한다 (살인 9개)
+-- 형량 구간 (모든 환경에 같은 값이 있어야 하는 고정 데이터, ERD 3-1 · 요구사항 FR-2-8)
+-- 공통 7개를 기본으로 쓰되, 살인은 법정형에 벌금이 없어 벌금형을 빼고 무기징역 · 사형을 더한다 (살인 8개)
 -- 사기를 먼저 넣어 ID가 1 ~ 7이 되도록 해 API 명세서 예시(rangeOptionId 1 ~ 7)와 맞춘다
 INSERT INTO sentence_range_option (crime_type, label, kind, min_months, max_months, display_order)
 SELECT s.crime_type, s.label, s.kind, s.min_months, s.max_months, s.display_order
@@ -47,14 +47,16 @@ FROM (
         ('실형 10년 이상 ~ 20년 미만', 'PRISON',    120,       240,       6),
         ('실형 20년 이상',             'PRISON',    240,       NULL,      7)
     ) AS o(label, kind, min_months, max_months, display_order)
+    -- 살인은 법정형에 벌금이 없어 벌금형 구간을 두지 않는다
+    WHERE NOT (t.crime_type = 'MURDER' AND o.kind = 'FINE')
 
     UNION ALL
 
     -- 살인 전용 구간 2개 (개월 범위 없음)
     SELECT 'MURDER', 2, e.label, e.kind, e.min_months, e.max_months, e.display_order
     FROM (VALUES
-        ('무기징역', 'LIFE_IMPRISONMENT', NULL::int, NULL::int, 8),
-        ('사형',     'DEATH_PENALTY',     NULL,      NULL,      9)
+        ('무기징역', 'LIFE',  NULL::int, NULL::int, 8),
+        ('사형',     'DEATH', NULL,      NULL,      9)
     ) AS e(label, kind, min_months, max_months, display_order)
 ) AS s
 ORDER BY s.type_order, s.display_order;

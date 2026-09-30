@@ -8,7 +8,8 @@ CREATE TABLE judgment (
     timing             varchar(10)  NOT NULL,  -- PRE는 사용자 사전 판단, FINAL은 최종 판결
     experience_id      bigint,                 -- USER일 때만
     range_option_id    bigint,                 -- PRE일 때만 (사전 판단 형량 구간)
-    penalty_type       varchar(20),            -- FINAL일 때 필수
+    penalty_type       varchar(20),            -- 법정형에서 고른 형벌. FINAL일 때 필수
+    reduced_to         varchar(20),            -- 감경 후 형벌 (형벌 종류가 바뀌는 감경만). 최종 선고 형벌 = reduced_to ?? penalty_type
     prison_months      int,                    -- 징역 개월
     fine_amount        bigint,                 -- 벌금 (원)
     suspension_months  int,                    -- 집행유예 기간 (개월)
@@ -32,26 +33,37 @@ CREATE TABLE judgment (
     CONSTRAINT chk_judgment_subject_type CHECK (subject_type IN ('USER', 'AI', 'COURT')),
     CONSTRAINT chk_judgment_timing CHECK (timing IN ('PRE', 'FINAL')),
     CONSTRAINT chk_judgment_penalty_type
-        CHECK (penalty_type IN ('PRISON', 'FINE', 'LIFE_IMPRISONMENT', 'DEATH_PENALTY')),
+        CHECK (penalty_type IN ('DEATH', 'LIFE', 'PRISON', 'FINE')),
+    -- 감경 조합: 사형 → 무기 · 징역, 무기 → 징역만 (ERD v1.4)
+    CONSTRAINT chk_judgment_reduced_to CHECK (
+        reduced_to IS NULL
+        OR (penalty_type = 'DEATH' AND reduced_to IN ('LIFE', 'PRISON'))
+        OR (penalty_type = 'LIFE' AND reduced_to = 'PRISON')
+    ),
 
     -- 사전 판단 형식: 사용자만, 형량 구간 필수, 형벌 값은 모두 비움
     CONSTRAINT chk_judgment_pre CHECK (
         timing <> 'PRE'
         OR (subject_type = 'USER' AND range_option_id IS NOT NULL
-            AND penalty_type IS NULL AND prison_months IS NULL
+            AND penalty_type IS NULL AND reduced_to IS NULL AND prison_months IS NULL
             AND fine_amount IS NULL AND suspension_months IS NULL)
     ),
     -- 최종 판결 형식: 형벌 종류 필수, 형량 구간은 비움
     CONSTRAINT chk_judgment_final CHECK (
         timing <> 'FINAL' OR (penalty_type IS NOT NULL AND range_option_id IS NULL)
     ),
-    -- 형벌 종류별 값: 징역은 개월, 벌금은 금액, 무기징역 · 사형은 개월 · 금액 · 집행유예 모두 없음
+    -- 최종 선고 형벌(reduced_to가 있으면 그 값, 없으면 penalty_type)별 값:
+    -- 징역은 개월, 벌금은 금액, 사형 · 무기는 개월 · 금액 · 집행유예 모두 없음
     CONSTRAINT chk_judgment_penalty_values CHECK (
         penalty_type IS NULL
-        OR (penalty_type = 'PRISON' AND prison_months IS NOT NULL AND fine_amount IS NULL)
-        OR (penalty_type = 'FINE' AND fine_amount IS NOT NULL AND prison_months IS NULL)
-        OR (penalty_type IN ('LIFE_IMPRISONMENT', 'DEATH_PENALTY')
+        OR (COALESCE(reduced_to, penalty_type) = 'PRISON' AND prison_months IS NOT NULL AND fine_amount IS NULL)
+        OR (COALESCE(reduced_to, penalty_type) = 'FINE' AND fine_amount IS NOT NULL AND prison_months IS NULL)
+        OR (COALESCE(reduced_to, penalty_type) IN ('DEATH', 'LIFE')
             AND prison_months IS NULL AND fine_amount IS NULL AND suspension_months IS NULL)
+    ),
+    -- 사형 · 무기를 고르면 감경해 징역이 돼도 집행유예 불가
+    CONSTRAINT chk_judgment_death_life_no_suspension CHECK (
+        penalty_type NOT IN ('DEATH', 'LIFE') OR suspension_months IS NULL
     ),
     -- 사용자 판단만 체험에 속한다
     CONSTRAINT chk_judgment_user_experience CHECK ((subject_type = 'USER') = (experience_id IS NOT NULL))
