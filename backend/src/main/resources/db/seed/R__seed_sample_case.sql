@@ -1,10 +1,18 @@
--- V6__seed_sample_case.sql
--- 개발용 임시 시드: 가상 살인 사건 1건 (ERD v1.5 6장 · API 명세 v0.5 예시와 같은 값)
+-- R__seed_sample_case.sql
+-- 개발용 임시 시드: 가상 살인 사건 1건 (ERD 6장 · API 명세 예시와 같은 값)
 --
 -- ⚠️ 설명용으로 지어낸 가상 사건이다. 실제 판례가 아니다.
 --    - 법정형 · 선고 가능 범위는 형법 조문 그대로 (형법 제250조 제1항, 제55조 제1항)
 --    - 형량 · 판단 요소 방향 · 권고 범위 · 판결문 발췌는 지어낸 값
---    - 실제 사건 데이터는 저장소가 공개라 여기에 넣지 않는다 (BE-16 D5, 저장소 밖에서 주입)
+--    - 실제 사건 데이터는 저장소가 공개라 여기에 넣지 않는다 (BE-17, 저장소 밖에서 주입)
+--
+-- ⚠️ 운영 DB에는 들어가지 않는다.
+--    이 파일은 db/migration이 아니라 db/seed에 있고, Flyway는 기본적으로 db/migration만 읽는다.
+--    로컬 · CI에서만 환경변수 FLYWAY_LOCATIONS=classpath:db/migration,classpath:db/seed 로 켠다 (application.yml).
+--
+-- 반복 마이그레이션(R__)이라 버전 번호가 없고, 모든 버전 마이그레이션 다음에 실행된다.
+-- 파일 내용이 바뀌면 다시 실행되므로, 이미 넣은 사건이 있으면 아무것도 하지 않는다.
+-- 시드 값을 바꿔 다시 넣으려면 로컬 DB를 비운다 (backend 폴더에서 docker compose down -v 후 다시 up).
 --
 -- 사전 판단 형량 구간(sentence_range_option)은 V1에서 이미 넣었으므로 여기서 넣지 않는다.
 -- ID에 기대지 않도록 PL/pgSQL 변수로 새로 만든 행의 ID를 받아 쓴다.
@@ -16,6 +24,11 @@ DECLARE
     v_ai_id        bigint;
     v_court_id     bigint;
 BEGIN
+    -- 이미 넣었으면 건너뛴다 (반복 실행 대비)
+    IF EXISTS (SELECT 1 FROM legal_case WHERE title = '빌린 돈 문제로 찾아온 지인을 살해한 사건') THEN
+        RETURN;
+    END IF;
+
     -- 양형기준 버전 (가상 예시 값)
     INSERT INTO sentencing_guideline (crime_category, version_name, effective_date, source_url)
     VALUES ('살인범죄', '가상 예시 버전', DATE '2024-01-01', NULL)
@@ -100,7 +113,7 @@ BEGIN
     -- 원본 판결문 (내부 전용). 가상 사건이라 실제 사건번호 · 법원 · 원문이 없다
     INSERT INTO case_source (case_id, court_level, case_number, court_name, decided_at, is_final, source_org, original_text, note)
     VALUES (v_case_id, 'FIRST', 'SAMPLE-0001', NULL, NULL, true, '가상 예시 사건 (실제 판례 아님)', NULL,
-            '개발용 임시 시드. 실제 사건 등록 시 교체한다 (BE-16 D5).');
+            '개발용 임시 시드 (로컬 · CI 전용). 실제 사건은 BE-17에서 저장소 밖으로 주입한다.');
 
     -- AI 판결 (오프라인 생성 · 검수 결과 적재를 가정한 가상 값)
     INSERT INTO judgment (case_id, subject_type, timing, penalty_type, reduced_to, prison_months, fine_amount, suspension_months,
