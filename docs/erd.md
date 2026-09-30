@@ -7,6 +7,7 @@
 | v1.1 | 2026-09-28 | 비교 분석 실시간 생성(시퀀스 v0.2 안 B) 반영<br>• comparison_analysis 테이블 추가(확장 단계, 체험당 1개)<br>• 관계도 · 서버 규칙 갱신 |
 | **v1.3** | **2026-09-29** | **문서 정합성 점검 결정 반영 (COMMON-4)**<br>• DB를 PostgreSQL로 확정(기술 스택 2장): 타입을 `jsonb` · `timestamptz`로, MySQL 관련 문구 삭제<br>• `judgment.references` → `reference_tags` (SQL 예약어 회피)<br>• 무죄(`NOT_GUILTY`) MVP 제외<br>• 경합범 서비스 제외에 따라 예시 데이터(6장)를 단일 범행 사건으로 교체<br>• `legal_case.thumbnail_url` · `deidentified_items`(확장), `factor.summary_tag`, `judgment.summary` 추가, 범죄 분류명은 코드 상수 |
 | v1.2 | 2026-09-28 | 전체 문서 교차 검토 반영<br>• case_section.stage에 SUMMARY 추가 · 섹션<br>•  출처 명시, 공개 판단 유일 조건을 (case_id, subject_type)별로 정정<br>• 형벌 종류별 CHECK 제약 추가<br>• judgment.references 추가 (v1.3에서 `reference_tags`로 변경)<br>• 선고 가능 하한 정의 명확화(법률상 감경 + 작량감경) · 벌금 예시 하한 25,000원<br>• last_reviewed_step 규칙<br>• 선택 FK 관계선 표기<br>• 서버 규칙 표 보완 |
+| v1.4 | 2026-09-30 | 무기징역 · 사형 형벌 추가 (BE-2)<br>• `penalty_rule` · `judgment`의 `penalty_type`에 `LIFE_IMPRISONMENT` · `DEATH_PENALTY` 추가<br>• `sentence_range_option.kind`에 같은 값 추가, 살인 전용 구간<br>• 형벌 종류별 CHECK에 무기징역 · 사형(개월 · 금액 · 집행유예 모두 NULL) 추가<br>• (BE-2 마이그레이션 반영) `penalty_rule` 유니크 (`case_id`, `penalty_type`), `experience` CHECK(`last_reviewed_step` 0 ~ 4, `attempt_no` 1 이상), `comparison_analysis.fail_reason` CHECK 명시<br>• 7장에 마이그레이션 공통 규칙 추가 |
 
 ---
 
@@ -184,7 +185,7 @@ S-06에서 보여 줄 형벌 선택지, 그리고 **선고 가능 범위 밖 판
 | --- | --- | --- | --- |
 | id | bigint PK | ✓ |  |
 | case_id | bigint FK | ✓ |  |
-| penalty_type | varchar(20) | ✓ | `PRISON` / `FINE`. 무죄(`NOT_GUILTY`)는 MVP에서 뺐다(v1.3, 요구사항 15장) |
+| penalty_type | varchar(20) | ✓ | `PRISON` / `FINE` / `LIFE_IMPRISONMENT`(무기징역) / `DEATH_PENALTY`(사형). 무기징역 · 사형은 법정형에 있는 사건(예: 살인)에만 두며, 형량 범위가 없어 법정형 · 선고 가능 범위 컬럼은 NULL, `suspension_allowed = false`로 입력한다(v1.4). 무죄(`NOT_GUILTY`)는 MVP에서 뺐다(v1.3, 요구사항 15장) |
 | statutory_min | bigint |  | 법정형 하한 (징역: 개월, 벌금: 원). 없으면 NULL |
 | statutory_max | bigint |  | 법정형 상한 |
 | allowed_min | bigint |  | **선고 가능 하한** — 법정형 하한에 사실관계로 인정되는 법률상 감경(자수 · 심신미약 등)과 작량감경(재판상 감경, 형법 제53조)을 모두 적용했을 때의 값 |
@@ -200,6 +201,8 @@ S-06에서 보여 줄 형벌 선택지, 그리고 **선고 가능 범위 밖 판
 - **경합범 가중(형법 제38조)은 반영하지 않는다.** 경합범(같은 죄를 여러 번 저지른 동종 경합범 포함) 사건은 서비스 대상에서 뺐으므로(REQ-081, v1.3) 상한은 단일 범행 기준이다.
 - MVP는 팀이 판결문 · 법조문을 확인해 계산한 값을 입력한다. 자동 계산은 확장 단계.
 - 집행유예 가능 조건(선고형 3년 이하 징역 또는 500만 원 이하 벌금, 기간 1~5년, 형법 제62조 본문)은 법 규정이라 테이블이 아니라 코드 상수로 둔다. 같은 조 단서의 결격 사유(금고 이상 형 확정 후 집행 종료 · 면제 뒤 3년 안에 범한 죄)는 사건마다 다르므로 `suspension_allowed`에 반영해 입력한다.
+- **유니크 제약**: (`case_id`, `penalty_type`) — 사건마다 형벌 종류별 규칙은 1개 (v1.4)
+- **CHECK**: `LIFE_IMPRISONMENT` · `DEATH_PENALTY`이면 법정형 · 선고 가능 범위 컬럼(`statutory_*` · `allowed_*`)이 모두 NULL이고 `suspension_allowed = false` (v1.4)
 
 #### `factor` — 사건별 판단 요소 목록
 
@@ -251,7 +254,7 @@ S-03의 객관식 선택지. 범죄 유형별로 정의한다(FR-2-8).
 | id | bigint PK | ✓ |  |
 | crime_type | varchar(20) | ✓ |  |
 | label | varchar(50) | ✓ | 예: 실형 3년 이상 ~ 5년 미만 |
-| kind | varchar(20) | ✓ | `FINE` / `SUSPENDED` / `PRISON` |
+| kind | varchar(20) | ✓ | `FINE` / `SUSPENDED` / `PRISON` / `LIFE_IMPRISONMENT` / `DEATH_PENALTY`. 무기징역 · 사형 구간은 법정형에 있는 살인(`MURDER`)에만 둔다(v1.4) |
 | min_months | int |  | 실형 구간 하한 |
 | max_months | int |  | 실형 구간 상한 |
 | display_order | int | ✓ |  |
@@ -291,6 +294,7 @@ IA 9장의 진행 상태를 저장한다.
 | completed_at | timestamptz |  |  |
 | updated_at | timestamptz | ✓ |  |
 - **유니크 제약**: (`anonymous_user_id`, `case_id`, `attempt_no`)
+- **CHECK**: `last_reviewed_step`은 0 ~ 4, `attempt_no`는 1 이상 (v1.4)
 - MVP에서는 `attempt_no = 1`만 만든다. 같은 브라우저에서 이미 체험을 시작한 사건에 들어오면 새 체험을 만들지 않고 기존 체험의 진행 단계로 보낸다. 완료(`COMPLETED`)한 사건이면 S-09 결과 화면으로 보낸다.
 - 통계와 참여자 비교에는 `attempt_no = 1`인 체험만 쓴다. 두 번째 체험부터는 실제 판결을 이미 알고 있는 상태이기 때문이다.
 - 체험 당시 로그인 여부 구분:
@@ -313,7 +317,7 @@ IA 9장의 진행 상태를 저장한다.
 | timing | varchar(10) | ✓ | `PRE` / `FINAL`. `PRE`는 `USER`만 |
 | experience_id | bigint FK |  | `USER`일 때만 |
 | range_option_id | bigint FK |  | `PRE`일 때만 (사전 판단 형량 구간) |
-| penalty_type | varchar(20) |  | `PRISON` / `FINE`. `FINAL`일 때 필수 (무죄는 MVP 제외, v1.3) |
+| penalty_type | varchar(20) |  | `PRISON` / `FINE` / `LIFE_IMPRISONMENT` / `DEATH_PENALTY`. `FINAL`일 때 필수 (무죄는 MVP 제외 v1.3, 무기징역 · 사형 추가 v1.4) |
 | prison_months | int |  | 징역 개월 |
 | fine_amount | bigint |  | 벌금 (원) |
 | suspension_months | int |  | 집행유예 기간 (개월). 없으면 NULL |
@@ -334,7 +338,7 @@ IA 9장의 진행 상태를 저장한다.
 | 유니크 (`experience_id`, `timing`) | 한 체험에 사전 판단 1개, 최종 판결 1개 | 수정·재제출 불가 (IA 결정 #4) |
 | CHECK: `timing = PRE` | `subject_type = USER`, `range_option_id` 필수, `penalty_type` · `prison_months` · `fine_amount` · `suspension_months`는 NULL | 사전 판단 형식 |
 | CHECK: `timing = FINAL` | `penalty_type` 필수, `range_option_id`는 NULL | 최종 판결 형식 |
-| CHECK: 형벌 종류별 값 (v1.2) | `PRISON` → `prison_months` 필수 · `fine_amount` NULL / `FINE` → `fine_amount` 필수 · `prison_months` NULL (v1.3: `NOT_GUILTY` 조건 삭제) | AI · COURT 판결을 SQL로 넣을 때도 형식 보장 |
+| CHECK: 형벌 종류별 값 (v1.2) | `PRISON` → `prison_months` 필수 · `fine_amount` NULL / `FINE` → `fine_amount` 필수 · `prison_months` NULL / `LIFE_IMPRISONMENT` · `DEATH_PENALTY` → `prison_months` · `fine_amount` · `suspension_months` 모두 NULL (v1.3: `NOT_GUILTY` 조건 삭제, v1.4: 무기징역 · 사형 추가) | AI · COURT 판결을 SQL로 넣을 때도 형식 보장 |
 | CHECK: 주체와 체험 (v1.2) | `subject_type = USER` ⇔ `experience_id` NOT NULL | 사용자 판단은 체험에 속함 |
 | 공개 판단 1개 | `subject_type` ∈ {AI, COURT} 이고 `is_published = true`인 행은 (`case_id`, `subject_type`)별로 1개 — 사건마다 공개 AI 판결 1개, 공개 실제 판결 1개. PostgreSQL 부분 유니크 인덱스로 구현(기술 스택 2장 `uk_judgment_published`) | 모든 사용자에게 같은 AI 판결 (REQ-046) |
 | 수정 없음 | `USER` 판단은 INSERT만 하고 UPDATE API를 두지 않음 | IA 결정 #4 |
@@ -389,6 +393,7 @@ AI 판결 1건을 어떤 조건으로 만들었는지 남긴다(REQ-047, 079). M
 | created_at | timestamptz | ✓ | 생성 시작 (S-08 진입, `AI_REVEALED`) |
 | completed_at | timestamptz |  | `DONE` · `FAILED`가 된 시각 |
 - 행은 실제 판결 공개(`AI_REVEALED`) 시 `PENDING`으로 만들고, 생성 작업이 끝나면 `DONE` 또는 `FAILED`로 바꾼다. 유니크 제약으로 동시 요청이 와도 한 번만 생성한다.
+- **CHECK**: `fail_reason`은 위 표의 5개 값만 허용 (v1.4)
 - `FAILED`는 자동으로 다시 만들지 않는다(MVP와 같은 규칙 문장이 보이므로 체험은 정상). 재시도 정책은 기술 설계에서 정한다.
 - 비교 분석은 `COMPLETED` 상태에서만 응답한다.
 - `content.perspectives.USER`는 확장 단계의 AI "내 판결" 요약이다(REQ-062, v1.3). `DONE`이면 S-09 내 판결 카드의 한 줄 요약(MVP: `summary_tag` 규칙 문장)을 이 값으로 바꾼다. 따로 테이블을 두지 않고 이 행에 함께 저장한다.
@@ -509,6 +514,20 @@ IA 9장의 규칙을 어느 테이블·제약이 책임지는지 정리한다.
 ---
 
 ## 7. 구현 가이드 (v1.0 신규)
+
+### 마이그레이션 공통 규칙 (v1.4)
+
+스키마는 Flyway 파일(`backend/src/main/resources/db/migration`)로만 만든다. 13개 테이블 모두에 아래 규칙을 적용한다.
+
+| 규칙 | 내용 |
+| --- | --- |
+| 열거값 | `varchar` + 허용 값 CHECK. 값이 계속 늘어나는 `case_section.section_type`, `factor.summary_tag`만 CHECK를 두지 않는다 |
+| ID | `bigint GENERATED BY DEFAULT AS IDENTITY` (JPA `GenerationType.IDENTITY`). 시드 데이터는 ID를 지정하지 않고 넣는다 (지정하면 자동 번호가 올라가지 않아 이후 번호가 겹친다) |
+| 익명 ID | `anonymous_user.id`(uuid)는 쿠키를 발급하는 서버 코드에서 만든다. DB 기본값 없음 |
+| 필수 시각 | `created_at` · `started_at` · `last_seen_at` · `updated_at`은 `DEFAULT now()`. `updated_at` 갱신은 애플리케이션이 한다 |
+| 이름 | `pk_` · `fk_{테이블}_{참조 테이블}` · `uk_{테이블}_{내용}` · `chk_{테이블}_{내용}` · `idx_{테이블}_{컬럼}` |
+| FK 인덱스 | FK 컬럼마다 인덱스를 만든다. 유니크 제약의 첫 컬럼과 겹치면 생략한다 |
+| FK 삭제 동작 | 기본값(`NO ACTION`). 오픈 전 스키마 변경은 DB 초기화 후 재적용, 오픈 후에는 새 마이그레이션만 추가한다 |
 
 ### `judgment` 한 테이블을 안전하게 쓰기 위한 규칙 (결정 #2)
 

@@ -5,6 +5,7 @@
 | v0.1 | 2026-09-28 | 초안 — 공통 규칙(경로 · 익명 ID 쿠키 · 에러 형식 · 에러 코드), MVP API 14개와 확장 API 1개의 요청 · 응답 · 거절 조건, 상태별 호출 가능 API 표 |
 | v0.2 | 2026-09-28 | 전체 문서 교차 검토 반영 — API 6 · 7 허용 상태 정정, 예시 요소 ID를 ERD 예시(1 ~ 7)와 통일, 섹션 ① 데이터 출처 명시, 벌금 선고 가능 하한 25,000원(형법 제45조 단서), 무죄 선택지 · `references` 출처 · `perspectives` 근거 요소 · `changeType`(`KEPT` 추가) · 형벌 무게 순서 보완, 사기 양형기준 유형 표기 정정(제1유형), 시퀀스 후보 대응표 |
 | **v0.3** | **2026-09-29** | **문서 정합성 점검 결정 반영 (COMMON-4)** — 6장 #1 확정(화면 진입 시 상태 조회 없이 각 API의 `INVALID_STATE`로 이동, 1-6 · 5장), 무죄 선택지 MVP 제외(API 8 · 9 · 14, 6장 #5), 예시 사건을 단일 범행 사건(지인 투자금 편취)으로 교체(경합범 서비스 제외), 판결 카드 한 줄 요약 `summary` 추가(내 판결은 요약 태그 규칙 문장, 확장에서 AI 요약으로 교체), 사건 목록 `crimeCategoryLabel` · `thumbnailUrl`, (확장) 실제 판결 `deidentifiedItems`, 참고 자료 태그 출처 컬럼명 `reference_tags`, (확장) 쿠키 삭제 안내(REQ-108). (낮음 항목) 같은 도메인 배포 확정(1-2 · 6장 #2), 시퀀스 후보 대응표 삭제, 톤 규칙 참조를 요구사항 11장으로 정정 |
+| v0.4 | 2026-09-30 | 무기징역 · 사형 형벌 추가 (BE-2) — API 4 살인 구간 9개, API 6 `allowedRanges` · API 8 `penaltyOptions`의 무기징역 · 사형 표현, API 9 입력 규칙, API 14 형벌 무게 순서 |
 
 ---
 
@@ -190,7 +191,7 @@ json
 {  "case": {    "caseId": 1,    "title": "지인 투자금 편취 사건",    "crimeType": "FRAUD",    "crimeCategoryLabel": "재산범죄",    "chargeName": "사기",    "overview": "피고인이 10년 가까이 알고 지낸 지인에게 사업 투자 수익을 약속하고 4,500만 원을 한 번에 송금받은 뒤, 약속한 수익과 원금을 돌려주지 않은 사건이다."  },  "rangeOptions": [    { "rangeOptionId": 1, "label": "벌금형" },    { "rangeOptionId": 2, "label": "징역형 집행유예" },    { "rangeOptionId": 3, "label": "실형 3년 미만" },    { "rangeOptionId": 4, "label": "실형 3년 이상 ~ 5년 미만" },    { "rangeOptionId": 5, "label": "실형 5년 이상 ~ 10년 미만" },    { "rangeOptionId": 6, "label": "실형 10년 이상 ~ 20년 미만" },    { "rangeOptionId": 7, "label": "실형 20년 이상" }  ],  "preFactors": [    { "factorId": 1, "label": "피해 금액이 수천만 원이다" },    { "factorId": 2, "label": "오래 알고 지낸 사이를 이용했다" }  ]}
 ```
 
-- `rangeOptions`: 이 사건 `crime_type`의 `sentence_range_option`.
+- `rangeOptions`: 이 사건 `crime_type`의 `sentence_range_option`. 살인(`MURDER`) 사건은 무기징역 · 사형 구간이 더해져 9개다(v0.4).
 - `preFactors`: `reveal_stage = OVERVIEW`인 요소의 `pre_label`. **확장(REQ-093)** — MVP 화면은 쓰지 않아도 된다.
 - 법정형 · 선고 가능 범위 · 권고 범위 · 실제 판결은 **넣지 않는다**(FR-2-8).
 
@@ -261,7 +262,7 @@ json
 
 - 권고 범위 예시 값(6 ~ 18개월)은 설명용이다. 사기 제1유형(1억 원 미만) 기본영역(6개월 ~ 1년 6개월)을 가정한 값이며, **대표 판례 등록 시 팀이 양형기준으로 다시 계산한다.** (와이어프레임 v2.1의 예시 값 "징역 1년 ~ 3년 6개월 · 제2유형"은 예전 예시 사건 기준이라 이 명세와 다르다.)
 - `summary`: `REVIEWED`일 때 S-05용 핵심 사실 요약(`case_section` `SUMMARY`)을 채운다.
-- `allowedRanges`: `penalty_rule` 중 범위가 있는 형벌(징역 · 벌금)을 모두 넣는다. 화면에는 징역만 보여 줘도 된다.
+- `allowedRanges`: `penalty_rule` 중 범위가 있는 형벌(징역 · 벌금)을 모두 넣는다. 화면에는 징역만 보여 줘도 된다. 무기징역 · 사형은 범위가 없어 넣지 않는다(v0.4).
 - `allowedRangeNote`는 서버 고정 문구다. `penalty_rule.allowed_basis`(산출 근거)는 내부용이라 응답하지 않는다.
 - `allowedRanges.text`는 서버가 만들어 주는 표시 문구다. 화면마다 "1개월 ~ 10년" 표기가 달라지지 않게 하기 위해서다.
 - 사전 판단은 넣지 않는다.
@@ -318,7 +319,7 @@ json
 {  "penaltyOptions": [    { "penaltyType": "PRISON", "allowedMin": 1, "allowedMax": 120, "text": "징역 1개월 ~ 10년", "suspensionAllowed": true },    { "penaltyType": "FINE", "allowedMin": 25000, "allowedMax": 20000000, "text": "벌금 2만 5천 원 ~ 2천만 원", "suspensionAllowed": true }  ],  "statutoryPenaltyText": "10년 이하 징역 또는 2천만 원 이하 벌금",  "allowedRangeNote": "감경·가중 사유를 반영해 법률상 선고할 수 있는 가장 넓은 범위예요.",  "recommended": { "minMonths": 6, "maxMonths": 18, "basis": "…" },  "suspensionRule": { "maxPrisonMonths": 36, "maxFineAmount": 5000000, "minMonths": 12, "maxMonths": 60 },  "factors": [    { "factorId": 1, "label": "피해 금액이 4,500만 원이다" },    { "factorId": 2, "label": "10년 가까이 알고 지낸 지인 관계를 이용했다" },    { "factorId": 3, "label": "처음부터 투자할 생각 없이 받은 돈을 생활비와 빚 갚는 데 썼다" },    { "factorId": 4, "label": "재판 중 피해 금액 중 1,500만 원을 갚았다" },    { "factorId": 5, "label": "피해자가 처벌을 원한다" },    { "factorId": 6, "label": "수사 단계부터 범행을 인정하고 반성했다" },    { "factorId": 7, "label": "형사처벌 전력이 없다" }  ]}
 ```
 
-- `penaltyOptions`: `penalty_rule`의 `display_order` 순. 화면은 여기 있는 형벌만 보여 준다(FR-3-1). 버튼 비활성 판단(S-06c)도 이 값으로 한다.
+- `penaltyOptions`: `penalty_rule`의 `display_order` 순. 화면은 여기 있는 형벌만 보여 준다(FR-3-1). 버튼 비활성 판단(S-06c)도 이 값으로 한다. 무기징역(`LIFE_IMPRISONMENT`) · 사형(`DEATH_PENALTY`)은 법정형에 있는 사건에만 들어가며, 형량 입력이 없어 `allowedMin` · `allowedMax`가 `null`이고 `suspensionAllowed: false`다(v0.4).
 - 무죄는 MVP 선택지에서 뺐다(요구사항 15장, v0.3). `penalty_rule`에도 무죄 행을 두지 않는다.
 - 벌금 선고 가능 하한 25,000원은 형법 제45조 단서(감경 시 5만 원 미만 가능)와 제55조 제1항 제6호(벌금 감경 시 1/2)를 적용한 값이다(ERD 6장).
 - `suspensionRule`: 집행유예 가능 조건(코드 상수, ERD `penalty_rule` 비고). 화면에서 집행유예 입력을 보여 줄지 판단한다.
@@ -346,6 +347,7 @@ json
 | `penaltyType` | ✓ | 이 사건 `penalty_rule`에 있는 형벌 |
 | `prisonMonths` | `PRISON`일 때 ✓ | `allowedMin` ~ `allowedMax` |
 | `fineAmount` | `FINE`일 때 ✓ | `allowedMin` ~ `allowedMax` |
+| — | `LIFE_IMPRISONMENT` · `DEATH_PENALTY`일 때 | `prisonMonths` · `fineAmount` · `suspensionMonths` 모두 `null` (v0.4) |
 | `suspensionMonths` |  | 형벌이 집행유예 허용이고, 징역 36개월 이하 또는 벌금 500만 원 이하일 때만. 12 ~ 60 |
 | `factors` |  | 0개 이상, 이 사건 요소, 중복 없음, `direction` 필수(`UP` / `DOWN`) |
 | `freeOpinion` |  | 확장(REQ-033). 최대 1,000자. 비교 대상 아님 |
@@ -480,7 +482,7 @@ json
 | `HEAVIER` | 최종 판결이 구간보다 무거움 (예: 구간은 집행유예인데 실형, 실형 구간 상한보다 긺) |
 | `SAME` | 최종 판결이 구간 안 |
 | `LIGHTER` | 최종 판결이 구간보다 가벼움 (예: 구간은 실형인데 집행유예) |
-- 형벌 종류의 무게는 `FINE`(벌금, 벌금 집행유예 포함) < `SUSPENDED`(징역 집행유예) < `PRISON`(실형) 순으로 먼저 비교하고, 같은 종류면 개월로 비교한다. 무죄는 MVP에서 뺐으므로 비교 대상이 아니다(v0.3). 세부 규칙은 구현 때 테스트 케이스로 확정한다.
+- 형벌 종류의 무게는 `FINE`(벌금, 벌금 집행유예 포함) < `SUSPENDED`(징역 집행유예) < `PRISON`(실형) < `LIFE_IMPRISONMENT`(무기징역) < `DEATH_PENALTY`(사형) 순으로 먼저 비교하고, 같은 종류면 개월로 비교한다(개월 비교는 `PRISON`만, v0.4). 무죄는 MVP에서 뺐으므로 비교 대상이 아니다(v0.3). 세부 규칙은 구현 때 테스트 케이스로 확정한다.
 
 **`matrix[].category`** — 와이어프레임 S-09의 분류 태그(FR-6-4).
 

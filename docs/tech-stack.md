@@ -6,6 +6,7 @@
 | --- | --- | --- |
 | v1 | 2026-09-28 | 초안 — Backend(Spring Boot 4 · JPA · 도메인별 패키지), DB(PostgreSQL · Flyway · Redis 캐시 · pgvector), 익명 ID 쿠키 기반 사용자 식별, REST API 규칙, Vanilla JS + Vite 프론트 구조, AI(사전 생성 · 검수, 비교 분석 실시간 생성), Docker · GitHub Actions CI, EC2 배포, 협업 도구 |
 | **v1.1** | **2026-09-29** | **문서 정합성 점검 결정 반영 (COMMON-4)** — API 응답 형식 · 에러 코드 · 경로를 API 명세서 기준으로 정정(4 · 5장), 화면 진입 시 상태 조회 없이 `INVALID_STATE`로 이동(5장), AI 판결은 RAG 우선 · 안 되면 퓨샷(6장), 쿠키 삭제 안내는 확장 기능으로 표시 · 문구 미정(3장), 문서 관리 위치 · 디렉터리명 정정(5 · 9장), Jira 공통 Space `COMMON` 추가(9장), 프론트엔드를 같은 도메인으로 배포(Nginx + `/api` 프록시, 8장), 작성 이력 표 신설 |
+| v1.2 | 2026-09-30 | BE-2 진행 반영 — 2장 마이그레이션 파일 목록을 실제 구성(V1 ~ V5)으로 교체, `ddl-auto: validate`를 모든 환경 기준으로 정정 |
 
 
 ## **1. Backend**
@@ -83,15 +84,15 @@ CREATE UNIQUE INDEX uk_judgment_published
     WHERE is_published = TRUE AND subject_type IN ('AI', 'COURT');
 ```
 
-이런 제약은 JPA 자동 생성(`ddl-auto`)으로 만들 수 없으므로 Flyway를 사용해 Migration 파일로 관리한다. 운영 환경은 `ddl-auto: validate`로 두고 스키마는 Migration 파일로만 변경한다.
+이런 제약은 JPA 자동 생성(`ddl-auto`)으로 만들 수 없으므로 Flyway를 사용해 Migration 파일로 관리한다. 모든 환경(로컬 · CI · 운영)에서 `ddl-auto: validate`로 두고, 스키마는 Migration 파일로만 변경한다.
 
 ```
-V1__create_legal_case.sql
-V2__create_factor_and_penalty_rule.sql
-V3__create_experience.sql
-V4__create_judgment.sql
-V5__insert_sample_case.sql
-...
+backend/src/main/resources/db/migration
+ ├─ V1__create_reference_tables.sql   -- 양형기준 버전, 사전 판단 형량 구간 (+ 고정값)
+ ├─ V2__create_case_content.sql       -- 사건, 사건 정보 섹션, 형벌 규칙, 판단 요소, 원본 판결문
+ ├─ V3__create_experience.sql         -- 익명 사용자, 체험
+ ├─ V4__create_judgment.sql           -- 판단, 판단 요소 평가 (+ CHECK · 부분 유니크 인덱스)
+ └─ V5__create_extension_tables.sql   -- (확장) AI 판결 생성 기록, 세 판결 비교 분석
 ```
 
 MVP에는 관리자 화면이 없으므로 대표 사건 데이터와 검수된 AI·재판부 판결은 SQL 스크립트로 넣는다.
