@@ -41,6 +41,10 @@ public class Experience {
 
 	private OffsetDateTime startedAt;
 
+	private OffsetDateTime preJudgedAt;
+
+	private OffsetDateTime updatedAt;
+
 	public static Experience start(UUID anonymousUserId, Long caseId, OffsetDateTime now) {
 		Experience experience = new Experience();
 		experience.anonymousUserId = anonymousUserId;
@@ -49,6 +53,7 @@ public class Experience {
 		experience.status = ExperienceStatus.STARTED;
 		experience.lastReviewedStep = 0;
 		experience.startedAt = now;
+		experience.updatedAt = now;
 		return experience;
 	}
 }

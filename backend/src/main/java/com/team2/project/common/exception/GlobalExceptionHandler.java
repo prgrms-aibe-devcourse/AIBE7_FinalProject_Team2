@@ -18,7 +18,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 	@ExceptionHandler(BusinessException.class)
 	public ResponseEntity<ApiErrorResponse> handleBusiness(BusinessException e) {
 		ErrorCode errorCode = e.getErrorCode();
-		return ResponseEntity.status(errorCode.getStatus()).body(ApiErrorResponse.of(errorCode));
+		return ResponseEntity.status(errorCode.getStatus()).body(ApiErrorResponse.of(errorCode, e.getCurrentStatus()));
 	}
 
 	@ExceptionHandler(Exception.class)

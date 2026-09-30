@@ -55,6 +55,13 @@ public class LegalCaseService {
 		}
 	}
 
+	/** 공개(PUBLISHED)된 사건을 돌려주고, 아니면 CASE_NOT_FOUND. */
+	@Transactional(readOnly = true)
+	public LegalCase getPublished(Long caseId) {
+		return legalCaseRepository.findByIdAndStatus(caseId, CaseStatus.PUBLISHED)
+				.orElseThrow(() -> new BusinessException(ErrorCode.CASE_NOT_FOUND));
+	}
+
 	private Summary summarize(List<LegalCase> published) {
 		Map<CrimeType, Integer> byCrimeType = new EnumMap<>(CrimeType.class);
 		for (CrimeType type : CrimeType.values()) {

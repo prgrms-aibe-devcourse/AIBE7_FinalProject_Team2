@@ -1,6 +1,7 @@
 package com.team2.project.legalcase.repository;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -15,4 +16,6 @@ public interface LegalCaseRepository extends JpaRepository<LegalCase, Long> {
 	List<LegalCase> findByStatusLatestFirst(CaseStatus status);
 
 	boolean existsByIdAndStatus(Long id, CaseStatus status);
+
+	Optional<LegalCase> findByIdAndStatus(Long id, CaseStatus status);
 }

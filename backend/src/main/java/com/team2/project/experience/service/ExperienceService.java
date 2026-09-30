@@ -52,12 +52,18 @@ public class ExperienceService {
 	/** API 3. 내 체험 상태 */
 	public ExperienceResponse getMyExperience(Long caseId, UUID cookieId) {
 		legalCaseService.requirePublished(caseId);
+		return ExperienceResponse.from(findMine(caseId, cookieId));
+	}
+
+	/**
+	 * 쿠키 주인의 이 사건 체험 (API 명세서 1-3). 공개된 사건인지는 호출하는 쪽이 먼저 확인한다.
+	 * 쿠키가 없거나 DB에 없는 익명 ID, 체험이 없는 경우는 모두 EXPERIENCE_NOT_FOUND다.
+	 */
+	public Experience findMine(Long caseId, UUID cookieId) {
 		if (!anonymousUserService.touch(cookieId)) {
 			throw new BusinessException(ErrorCode.EXPERIENCE_NOT_FOUND);
 		}
-		return findLatest(cookieId, caseId)
-				.map(ExperienceResponse::from)
-				.orElseThrow(() -> new BusinessException(ErrorCode.EXPERIENCE_NOT_FOUND));
+		return findLatest(cookieId, caseId).orElseThrow(() -> new BusinessException(ErrorCode.EXPERIENCE_NOT_FOUND));
 	}
 
 	private Optional<Experience> findLatest(UUID anonymousUserId, Long caseId) {

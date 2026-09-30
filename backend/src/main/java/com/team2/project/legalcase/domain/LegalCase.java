@@ -31,6 +31,10 @@ public class LegalCase {
 
 	private String title;
 
+	private String chargeName;
+
+	private String overview;
+
 	@Enumerated(EnumType.STRING)
 	private CrimeType crimeType;
 
