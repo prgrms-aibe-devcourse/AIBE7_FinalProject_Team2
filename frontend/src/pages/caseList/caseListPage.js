@@ -1,4 +1,5 @@
 import { button, element, renderSiteFooter, renderSiteHeader } from '../../components/siteLayout.js';
+import { screenByStatus } from '../../utils/screenByStatus.js';
 
 const chips = [
   { crimeType: undefined, label: '전체' },
@@ -7,11 +8,6 @@ const chips = [
   { crimeType: 'INJURY', label: '상해' },
 ];
 const difficultyLabels = { LOW: '쉬움', MID: '보통', HIGH: '어려움' };
-// API 명세 1-6 "보낼 화면" 표. 새로 시작하면 S-03, 진행 중이면 현재 단계, 완료면 S-09.
-const screenByStatus = {
-  STARTED: 'overview', PRE_JUDGED: 'review', REVIEWING: 'review', REVIEWED: 'summary',
-  VERDICT_CONFIRMED: 'ai', AI_REVEALED: 'court', COMPLETED: 'comparison',
-};
 
 // S-02 사건 목록
 export async function renderCaseListPage(container, { api, navigate }) {
