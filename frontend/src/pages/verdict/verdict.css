@@ -1,0 +1,77 @@
+@import '../review/review.css';
+
+.verdict-page { word-break: keep-all; overflow-wrap: anywhere; }
+.verdict-page .case-topbar { justify-content: space-between; }
+.verdict-page .verdict-layout { display: grid; grid-template-columns: minmax(0, 1fr) 330px; }
+.verdict-page .verdict-main { padding: 28px; min-width: 0; }
+.verdict-page h1 { font-size: 28px; }
+.verdict-page .verdict-intro { margin: 6px 0 28px; }
+.verdict-page .verdict-controls,
+.verdict-page .verdict-group { border: 0; padding: 0; margin: 0; min-width: 0; }
+.verdict-page .verdict-group { margin-bottom: 28px; }
+.verdict-page .verdict-group > legend { font-size: 14px; font-weight: 700; color: #ac301e; padding: 0; margin-bottom: 14px; }
+.verdict-page .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+.verdict-page .penalty-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.verdict-page .penalty-option { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer; }
+.verdict-page .penalty-option:has(input:checked) { background: #fff0eb; border-color: var(--color-primary); color: #a92a16; font-weight: 700; }
+.verdict-page input { font: inherit; color: inherit; accent-color: var(--color-primary); }
+.verdict-page input:focus-visible { outline: 3px solid #224d8a; outline-offset: 3px; }
+.verdict-page input[type='radio'],
+.verdict-page input[type='checkbox'] { width: 18px; height: 18px; flex-shrink: 0; }
+.verdict-page .number-fields { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
+.verdict-page .number-field { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.verdict-page .number-field input { width: 110px; max-width: 100%; min-height: 46px; border: 1px solid #a99e96; border-radius: 4px; padding: 8px 12px; background: #fff; }
+.verdict-page .number-field input[name='fineAmount'] { width: 180px; }
+.verdict-page input[aria-invalid='true'] { border-color: var(--color-primary); }
+.verdict-page .money-readable { color: var(--color-muted); font-size: 14px; }
+.verdict-page .field-error { color: #aa2715; font-size: 13px; margin-top: 8px; }
+.verdict-page .field-error:empty { display: none; }
+.verdict-page .verdict-range .recommended-range { margin-top: 18px; }
+.verdict-page .range-marker { position: absolute; top: -7px; bottom: -7px; width: 3px; transform: translateX(-50%); background: #224d8a; }
+.verdict-page .range-marker::before { content: ''; position: absolute; top: -3px; left: -4px; border-inline: 5px solid transparent; border-top: 6px solid #224d8a; }
+.verdict-page .range-marker.is-warning { background: #b62310; }
+.verdict-page .range-marker.is-warning::before { border-top-color: #b62310; }
+.verdict-page .range-warning { border: 1px solid #c83019; border-radius: 4px; background: #fff0ec; padding: 16px; margin-top: 16px; color: #92200f; }
+.verdict-page .range-warning strong { display: block; margin-bottom: 8px; }
+.verdict-page .range-warning p { font-size: 13px; }
+.verdict-page .range-reference { padding: 12px 16px; margin-top: 16px; background: #f3f1ee; border-left: 3px solid #81756b; font-size: 13px; }
+.verdict-page .suspension-area { margin-top: 20px; }
+.verdict-page .suspension-toggle { display: flex; align-items: center; gap: 8px; font-weight: 700; margin-bottom: 12px; }
+.verdict-page .factor-list { list-style: none; padding: 0; margin: 16px 0 0; border: 1px solid var(--color-border); border-radius: 4px; overflow: hidden; }
+.verdict-page .factor-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px; }
+.verdict-page .factor-row + .factor-row { border-top: 1px solid var(--color-border); }
+.verdict-page .factor-row.is-selected { background: #fff4ef; }
+.verdict-page .factor-label { font-size: 14px; }
+.verdict-page .factor-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.verdict-page .factor-button { background: #fff; border: 1px solid #bdb1a8; border-radius: 4px; padding: 8px 10px; min-height: 44px; color: #62564e; font-size: 12px; }
+.verdict-page .factor-button[aria-pressed='true'] { background: #a92a16; border-color: #a92a16; color: #fff; }
+.verdict-page .verdict-submit { border-top: 1px solid var(--color-border); padding-top: 22px; display: flex; align-items: center; justify-content: flex-end; gap: 16px; }
+.verdict-page .confirmation-box { margin-top: 22px; padding: 22px; border: 1px solid #a99e96; border-radius: 4px; background: var(--color-surface); }
+.verdict-page .confirmation-box h2 { font-size: 18px; margin-bottom: 8px; }
+.verdict-page .confirmation-box p { font-size: 14px; }
+.verdict-page .confirmation-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+.verdict-page .verdict-sidebar { padding: 28px 22px; min-width: 0; border-left: 1px solid var(--color-border); background: #f5f2ef; }
+.verdict-page .verdict-sidebar > h2 { font-size: 14px; margin-bottom: 18px; }
+.verdict-page .verdict-sidebar .law-info-box { background: #fff; padding: 18px; }
+.verdict-page .verdict-sidebar .law-info-box dl { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+.verdict-page .verdict-sidebar .law-info-box dd { margin-bottom: 10px; }
+.verdict-page .verdict-sidebar .range-value { font-size: 20px; }
+.verdict-page .verdict-sidebar > button { margin-top: 20px; width: 100%; }
+.verdict-page :disabled { cursor: default; }
+.verdict-page .verdict-controls:disabled input { background: #f5f2ef; }
+.verdict-page button:disabled { opacity: .55; }
+@media (max-width: 900px) {
+  .verdict-page .verdict-layout { grid-template-columns: minmax(0, 1fr); }
+  .verdict-page .verdict-sidebar { border-left: 0; border-top: 1px solid var(--color-border); }
+}
+@media (max-width: 600px) {
+  .verdict-page .verdict-main { padding: 24px 16px; }
+  .verdict-page h1 { font-size: 24px; }
+  .verdict-page .factor-row { flex-direction: column; align-items: stretch; gap: 10px; }
+  .verdict-page .factor-actions { justify-content: flex-end; }
+  .verdict-page .number-field input { width: 88px; }
+  .verdict-page .verdict-submit { flex-direction: column; align-items: stretch; gap: 10px; }
+  .verdict-page .confirmation-box { padding: 18px; }
+  .verdict-page .confirmation-actions { flex-direction: column; }
+  .verdict-page .verdict-sidebar { padding: 24px 16px; }
+}
