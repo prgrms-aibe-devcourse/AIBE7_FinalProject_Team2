@@ -16,7 +16,7 @@
 .verdict-page .range-track-with-ticks { margin-top: 34px; }
 .verdict-page .range-ticks { position: relative; height: 22px; margin-top: 6px; font-size: 11px; color: var(--color-muted); }
 .verdict-page .range-tick { position: absolute; top: 0; white-space: nowrap; max-width: 100%; }
-.verdict-page .range-input-label { top: -54px; color: #224d8a; font-weight: 700; }
+.verdict-page .range-input-label { top: auto; bottom: calc(100% + 6px); font-size: 11px; color: #224d8a; font-weight: 700; }
 
 .verdict-page { word-break: keep-all; overflow-wrap: anywhere; }
 .verdict-page .case-topbar { justify-content: space-between; }

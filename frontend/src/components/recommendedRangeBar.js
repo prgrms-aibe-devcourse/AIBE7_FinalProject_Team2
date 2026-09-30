@@ -4,11 +4,12 @@ export function formatMonths(months) {
   return [years ? `${years}년` : '', remainder || !years ? `${remainder}개월` : ''].filter(Boolean).join(' ');
 }
 
-function arrangeTicks(labels) {
+function arrangeTicks(labels, track) {
   const width = labels.clientWidth;
   if (!width) return;
   const accepted = [];
-  const ticks = [...labels.children].sort((a, b) => Number(b.dataset.priority) - Number(a.dataset.priority));
+  const ticks = [...labels.children, ...track.querySelectorAll('.range-input-label')]
+    .sort((a, b) => Number(b.dataset.priority) - Number(a.dataset.priority));
   for (const tick of ticks) {
     tick.hidden = false;
     const position = Number(tick.dataset.position);
@@ -22,7 +23,22 @@ function arrangeTicks(labels) {
   }
 }
 
-window.addEventListener('resize', () => document.querySelectorAll('.range-ticks').forEach(arrangeTicks));
+function observeTicks(labels, track) {
+  let mounted = labels.isConnected;
+  const resizeObserver = new ResizeObserver(() => {
+    if (labels.isConnected) arrangeTicks(labels, track);
+  });
+  const removalObserver = new MutationObserver((records) => {
+    if (labels.isConnected) {
+      mounted = true;
+    } else if (mounted || records.some((record) => [...record.removedNodes].some((node) => node.contains(labels)))) {
+      resizeObserver.disconnect();
+      removalObserver.disconnect();
+    }
+  });
+  removalObserver.observe(document.documentElement, { childList: true, subtree: true });
+  resizeObserver.observe(labels);
+}
 
 export function renderRecommendedRangeBar(container, { law, markerMonths = null, showTrack = true, trackMaxMonths = null, allowedMinMonths = null, penaltyType = 'PRISON' }) {
   const box = document.createElement('section');
@@ -106,7 +122,10 @@ export function renderRecommendedRangeBar(container, { law, markerMonths = null,
         label.textContent = months === 0 ? '0' : formatMonths(months);
         label.dataset.position = Math.max(0, Math.min(100, months / max * 100));
         label.dataset.priority = priority;
-        labels.append(label);
+        if (className === 'range-input-label') {
+          label.setAttribute('aria-hidden', 'true');
+          track.append(label);
+        } else labels.append(label);
       };
       if (markerLabel) tick(markerMonths, 3, 'range-input-label');
       // 끝점은 유지하되 입력값과 충돌하면 입력값을 우선한다.
@@ -117,7 +136,7 @@ export function renderRecommendedRangeBar(container, { law, markerMonths = null,
         tick(overlapMin, 1);
         tick(overlapMax, 1);
       }
-      requestAnimationFrame(() => arrangeTicks(labels));
+      observeTicks(labels, track);
       const lower = document.createElement('p');
       lower.className = 'range-lower-label';
       lower.textContent = '빗금: 선고할 수 없는 구간';
