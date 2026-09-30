@@ -5,6 +5,7 @@
 | 버전 | 날짜 | 내용 |
 | --- | --- | --- |
 | v1 | 2026-09-29 | `docs/` 설계 문서(COMMON-4 반영본) 교차 검토 후 MVP 범위 · 흐름 · 완료 기준 · 선행 결정 사항 정리 (COMMON-5) |
+| v1.1 | 2026-09-30 | 대표 사건(살인) 가공 결정 반영 (BE-13): REQ-029 형벌 종류에 사형 · 무기징역 추가, 근거 문서 버전 갱신, 살인 사전 판단 구간 8개(벌금형 제외) 반영 |
 
 ## 근거 문서
 
@@ -13,11 +14,11 @@
 | 문서 | 버전 | 이 문서에서 가져온 것 |
 | --- | --- | --- |
 | `final-planning.md` | v4.2 | MVP 목표, 포지셔닝, 기능 우선순위(MoSCoW) |
-| `requirements-specification.md` | v5.5 | MVP 검증 목표, 데이터 구조 요구사항(DR), 미결정 사항(15장) |
-| `functional-specification.md` | v3.2 | 기능별 구현 단계(MVP 48 · 확장 26 · 이후 24 · 데이터 13) |
-| `information-architecture.md` | v1.6 | 화면 목록(S-01 ~ S-14), 체험 진행 상태, 진입 조건 |
-| `api-specification.md` | v0.3 | MVP API 14개 |
-| `erd.md` | v1.3 | 테이블 구성, 선고 가능 범위 결정 |
+| `requirements-specification.md` | v5.6 | MVP 검증 목표, 데이터 구조 요구사항(DR), 미결정 사항(15장) |
+| `functional-specification.md` | v3.3 | 기능별 구현 단계(MVP 48 · 확장 26 · 이후 24 · 데이터 13) |
+| `information-architecture.md` | v1.8 | 화면 목록(S-01 ~ S-14), 체험 진행 상태, 진입 조건 |
+| `api-specification.md` | v0.4 | MVP API 14개 |
+| `erd.md` | v1.4 | 테이블 구성, 선고 가능 범위 결정 |
 | `sequence-diagram.md` | v0.4 | 체험 흐름별 처리 순서 |
 | `tech-stack.md` | v1.1 | MVP 기술 구성 |
 | `document-consistency-report.md` | — | 와이어프레임 미반영 목록 |
@@ -88,7 +89,7 @@ flowchart LR
 
 ## 5. MVP 포함 기능 (48개)
 
-기능 명세서 v3.2에서 구현 단계가 **MVP**인 항목 전체다. 화면 기준으로 묶었다.
+기능 명세서 v3.3에서 구현 단계가 **MVP**인 항목 전체다. 화면 기준으로 묶었다.
 
 ### 5-1. 공통 · 랜딩 (S-01)
 
@@ -115,7 +116,7 @@ flowchart LR
 | --- | --- | --- |
 | REQ-015 | 사건 개요 조회 | 뉴스 기사 수준, 중립 표현 |
 | REQ-092 | 사전 판단 안내 문구 | "지금은 뉴스에서 볼 수 있는 정도의 정보만 있어요…" |
-| REQ-016 | 사전 판단 형량 구간 선택 | 7개 구간 중 1개 (벌금형 ~ 실형 20년 이상) |
+| REQ-016 | 사전 판단 형량 구간 선택 | 7개 구간 중 1개 (벌금형 ~ 실형 20년 이상). 살인은 벌금형을 빼고 무기징역 · 사형을 더한 8개 |
 | REQ-017 | 사전 판단 저장 | `judgment` `timing = PRE` |
 
 ### 5-4. 사건 정보 확인 · 최종 정리 (S-04, S-05)
@@ -136,7 +137,7 @@ flowchart LR
 
 | ID | 기능 | 비고 |
 | --- | --- | --- |
-| REQ-029 | 형벌 및 형량 입력 | 징역 · 벌금만 (**무죄 제외**) |
+| REQ-029 | 형벌 및 형량 입력 | 사형 · 무기징역 · 징역 · 벌금 중 사건 법정형에 있는 것 (**무죄 제외**). 사형 · 무기는 v1.1 추가 |
 | REQ-030 | 집행유예 입력 | 여부 · 기간 |
 | REQ-031 | 사건별 판단 요소 조회 | 공통 목록 전체 |
 | REQ-032 | 판단 요소 선택 및 방향 | 복수 선택 + ↑/↓ |
@@ -221,7 +222,7 @@ flowchart LR
 | REQ-075 | 판례 가공 검증 | 원문 대비 누락 · 의미 변경 점검 |
 | REQ-102 | AI 사전 학습 여부 점검 | AI가 사건 · 형량을 알아맞히지 않는지 확인 |
 
-사건 1건을 적재하려면 다음 데이터가 모두 있어야 한다: `legal_case`(권고 범위 · 산출 근거 포함), `case_section` 4종 + 용어 설명, `penalty_rule`(법정형 · 선고 가능 범위), `factor`(공개 단계 · 요약 태그), `sentence_range_option` 7개, `case_source`, `sentencing_guideline`, AI · COURT `judgment` + `judgment_factor`(+ 한 줄 요약).
+사건 1건을 적재하려면 다음 데이터가 모두 있어야 한다: `legal_case`(권고 범위 · 산출 근거 포함), `case_section` 4종 + 용어 설명, `penalty_rule`(법정형 · 선고 가능 범위), `factor`(공개 단계 · 요약 태그), `sentence_range_option` 7개(살인은 8개), `case_source`, `sentencing_guideline`, AI · COURT `judgment` + `judgment_factor`(+ 한 줄 요약).
 
 ---
 
