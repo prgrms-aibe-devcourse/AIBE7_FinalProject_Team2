@@ -7,6 +7,7 @@
 | v1 | 2026-09-29 | `docs/` 설계 문서(COMMON-4 반영본) 교차 검토 후 MVP 범위 · 흐름 · 완료 기준 · 선행 결정 사항 정리 (COMMON-5) |
 | v1.1 | 2026-09-30 | 대표 사건(살인) 가공 결정 반영 (BE-13): REQ-029 형벌 종류에 사형 · 무기징역 추가, 근거 문서 버전 갱신, 살인 사전 판단 구간 8개(벌금형 제외) 반영 |
 | v1.2 | 2026-09-30 | 예시 사건을 가상 살인 사건으로 교체 (COMMON-11): 근거 문서 버전 갱신, 11장 차단 이슈에서 대표 판례 · 데이터 확보 경로를 해결로 표시하고 실제 사건 데이터 주입 방법을 신규 항목으로 추가 |
+| v1.3 | 2026-09-30 | BE-16 시드 반영: 근거 문서 버전 갱신(ERD v1.6 · API v0.6 · 기술 스택 v1.3) |
 
 ## 근거 문서
 
@@ -18,10 +19,10 @@
 | `requirements-specification.md` | v5.6 | MVP 검증 목표, 데이터 구조 요구사항(DR), 미결정 사항(15장) |
 | `functional-specification.md` | v3.3 | 기능별 구현 단계(MVP 48 · 확장 26 · 이후 24 · 데이터 13) |
 | `information-architecture.md` | v1.9 | 화면 목록(S-01 ~ S-14), 체험 진행 상태, 진입 조건 |
-| `api-specification.md` | v0.5 | MVP API 14개 |
-| `erd.md` | v1.5 | 테이블 구성, 선고 가능 범위 결정 |
+| `api-specification.md` | v0.6 | MVP API 14개 |
+| `erd.md` | v1.6 | 테이블 구성, 선고 가능 범위 결정 |
 | `sequence-diagram.md` | v0.5 | 체험 흐름별 처리 순서 |
-| `tech-stack.md` | v1.1 | MVP 기술 구성 |
+| `tech-stack.md` | v1.3 | MVP 기술 구성 |
 | `document-consistency-report.md` | — | 와이어프레임 미반영 목록 |
 
 ---
