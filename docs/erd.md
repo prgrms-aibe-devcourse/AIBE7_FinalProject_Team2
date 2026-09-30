@@ -138,7 +138,7 @@ erDiagram
 | overview | text | ✓ | S-03 사건 개요 (뉴스 수준, 중립 표현) | REQ-015, 094 |
 | thumbnail_url | varchar(300) |  | S-02 사건 카드 이미지 경로 (v1.3). 없으면 화면이 범죄 유형별 기본 이미지를 쓴다 | REQ-006 |
 | deidentified_items | jsonb |  | (확장) 비식별화한 항목 종류 배열 (예: `["인명", "지명", "사건번호", "업체명"]`). 원래 값은 넣지 않는다 (v1.3) | FR-5-2, REQ-055 |
-| applied_law | varchar(200) | ✓ | 적용 법조문 (예: 형법 제347조) — 고정 입력값 | REQ-042 |
+| applied_law | varchar(200) | ✓ | 적용 법조문 (예: 형법 제250조 제1항) — 고정 입력값 | REQ-042 |
 | statutory_penalty_text | varchar(200) | ✓ | 법정형 안내 문구 (예: 10년 이하의 징역 또는 2천만 원 이하의 벌금) | REQ-023 |
 | recommended_min_months | int |  | 권고 형량 하한 (개월) | REQ-034 |
 | recommended_max_months | int |  | 권고 형량 상한 (개월) | REQ-034 |
@@ -244,7 +244,7 @@ S-06에서 보여 줄 형벌 선택지, 그리고 **선고 가능 범위 밖 판
 | 컬럼 | 타입 | 필수 | 설명 |
 | --- | --- | --- | --- |
 | id | bigint PK | ✓ |  |
-| crime_category | varchar(50) | ✓ | 예: 사기범죄 |
+| crime_category | varchar(50) | ✓ | 예: 살인범죄 |
 | version_name | varchar(50) | ✓ | 예: 2024 개정 |
 | effective_date | date | ✓ | 시행일 |
 | source_url | varchar(300) |  |  |
@@ -333,7 +333,7 @@ IA 9장의 진행 상태를 저장한다.
 | plain_explanation | text |  | 쉬운 설명 (COURT) |
 | excerpt | text |  | 판결문 발췌 (COURT, 비식별화 적용) |
 | free_opinion | text |  | 자유 의견 (USER, 비교 대상 아님) |
-| reference_tags | jsonb |  | 참고 자료 태그 (AI, 예: `["형법 제347조", "사기범죄 양형기준", "유사 판례 5건"]`). S-07에 표시 (v1.2 추가, v1.3에서 `references` → `reference_tags`: `REFERENCES`는 SQL 예약어) |
+| reference_tags | jsonb |  | 참고 자료 태그 (AI, 예: `["형법 제250조", "살인범죄 양형기준", "유사 판례 5건"]`). S-07에 표시 (v1.2 추가, v1.3에서 `references` → `reference_tags`: `REFERENCES`는 SQL 예약어) |
 | is_published | boolean | ✓ | AI · COURT는 검수 후 `true`만 노출. USER는 항상 `true` |
 | created_at | timestamptz | ✓ |  |
 
@@ -557,7 +557,7 @@ IA 9장의 규칙을 어느 테이블·제약이 책임지는지 정리한다.
 | 10, 11 | — | — | — | 매트릭스에서 뺌 |
 
 → 내 판결 한 줄 요약(MVP 규칙 문장): ↑ 요소 2 · 6의 태그 `범행 방식` · `피해 결과`, ↓ 요소 7의 태그 `반성` → "범행 방식 · 피해 결과를 무겁게 보고 반성을 감안한 판단". 확장 단계에서는 AI 비교 분석의 `perspectives.USER`로 바꾼다.
-→ 판단 이유 변화(REQ-096, 확장): `PRE`의 요소(1, 2 — 모두 OVERVIEW)와 `FINAL`의 요소(2, 6, 7)를 비교한다. 2는 양쪽에 있으므로 "처음부터 알던 요소"(API `KEPT`), 1은 `PRE`에만 있으므로 "이미 알던 요소의 무게가 바뀜"(API `WEIGHT_CHANGED`), 6 · 7은 `reveal_stage = DETAIL`이고 `FINAL`에만 있으므로 "새로 알게 된 요소"(API `NEWLY_LEARNED`)다. 요소 1처럼 매트릭스에서 빠지는 요소도 사전 판단에서 골랐다면 변화 유형은 보여 준다(API 14 `matrix` 규칙).
+→ 판단 이유 변화(REQ-096, 확장): `PRE`의 요소(1, 2 — 모두 OVERVIEW)와 `FINAL`의 요소(2, 6, 7)를 비교한다. 2는 양쪽에 있으므로 "처음부터 알던 요소"(API `KEPT`), 1은 `PRE`에만 있으므로 "이미 알던 요소의 무게가 바뀜"(API `WEIGHT_CHANGED` — 사전 판단에서는 골랐지만 최종 판결에서는 고르지 않았다는 뜻이다. `PRE` 기록에는 방향이 없어 처음 판단의 강도는 알 수 없다), 6 · 7은 `reveal_stage = DETAIL`이고 `FINAL`에만 있으므로 "새로 알게 된 요소"(API `NEWLY_LEARNED`)다. 요소 1처럼 매트릭스에서 빠지는 요소도 사전 판단에서 골랐다면 변화 유형은 보여 준다(API 14 `matrix` 규칙).
 → 사전 판단 구간 4(60 ~ 120)와 최종 판결 180개월을 비교하면 `preToFinal.direction`은 `HEAVIER`다.
 
 ---

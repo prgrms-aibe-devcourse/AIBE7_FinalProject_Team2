@@ -258,10 +258,10 @@ json
 json
 
 ```json
-"law": {  "appliedLaw": "형법 제347조 사기",  "statutoryPenaltyText": "10년 이하 징역 또는 2천만 원 이하 벌금",  "allowedRanges": [    { "penaltyType": "PRISON", "allowedMin": 1, "allowedMax": 120, "text": "징역 1개월 ~ 10년" },    { "penaltyType": "FINE", "allowedMin": 25000, "allowedMax": 20000000, "text": "벌금 2만 5천 원 ~ 2천만 원" }  ],  "allowedRangeNote": "감경·가중 사유를 반영해 법률상 선고할 수 있는 가장 넓은 범위예요.",  "recommended": { "minMonths": 6, "maxMonths": 18, "basis": "일반사기 제1유형(1억 원 미만), 기본영역. 특별양형인자 없음" },  "terms": [ { "term": "기본영역", "desc": "형을 무겁게 하거나 가볍게 하는 특별한 사정이 없어 기본 권고 형량이 적용되는 구간" } ]}
+"law": {  "appliedLaw": "형법 제250조 제1항 살인",  "statutoryPenaltyText": "사형, 무기 또는 5년 이상의 징역",  "allowedRanges": [    { "penaltyType": "DEATH", "allowedMin": 240, "allowedMax": 600, "text": "사형, 또는 감경 시 무기징역 · 징역 20년 ~ 50년" },    { "penaltyType": "LIFE", "allowedMin": 120, "allowedMax": 600, "text": "무기징역, 또는 감경 시 징역 10년 ~ 50년" },    { "penaltyType": "PRISON", "allowedMin": 30, "allowedMax": 360, "text": "징역 2년 6개월 ~ 30년" }  ],  "allowedRangeNote": "감경·가중 사유를 반영해 법률상 선고할 수 있는 가장 넓은 범위예요.",  "recommended": { "minMonths": 84, "maxMonths": 144, "basis": "살인범죄 제2유형(보통 동기 살인), 감경영역. 특별감경인자 1개(실질적 피해 회복), 특별가중인자 없음" },  "terms": [ { "term": "감경영역", "desc": "형을 가볍게 할 특별한 사정이 있어 기본 권고 형량보다 낮은 구간이 적용되는 구간" } ]}
 ```
 
-- 권고 범위 예시 값(6 ~ 18개월)은 설명용이다. 사기 제1유형(1억 원 미만) 기본영역(6개월 ~ 1년 6개월)을 가정한 값이며, **대표 판례 등록 시 팀이 양형기준으로 다시 계산한다.** (와이어프레임 v2.1의 예시 값 "징역 1년 ~ 3년 6개월 · 제2유형"은 예전 예시 사건 기준이라 이 명세와 다르다.)
+- 권고 범위 예시 값(84 ~ 144개월)은 설명용이다. 살인 제2유형(보통 동기 살인) 감경영역(7년 ~ 12년)을 가정한 **가상 값**이며, **대표 판례 등록 시 팀이 양형기준으로 다시 계산한다.** (와이어프레임 v2.1의 예시 값은 예전 사기 예시 사건 기준이라 이 명세와 다르다.)
 - `summary`: `REVIEWED`일 때 S-05용 핵심 사실 요약(`case_section` `SUMMARY`)을 채운다.
 - `allowedRanges`: `penalty_rule` 중 범위가 있는 형벌(징역 · 벌금)을 모두 넣는다. 화면에는 징역만 보여 줘도 된다.
 - (v0.4) 사형 · 무기가 법정형에 있는 사건은 `DEATH` · `LIFE` 항목도 넣는다. 이때 `allowedMin` ~ `allowedMax`는 작량감경해 징역으로 선고할 때의 범위이고, `text`에 그대로 선고할 수 있다는 내용을 함께 쓴다. 예: `{ "penaltyType": "LIFE", "allowedMin": 120, "allowedMax": 600, "text": "무기징역, 또는 감경 시 징역 10년 ~ 50년" }`, `{ "penaltyType": "DEATH", "allowedMin": 240, "allowedMax": 600, "text": "사형, 또는 감경 시 무기징역이나 징역 20년 ~ 50년" }`
@@ -343,7 +343,7 @@ json
 json
 
 ```json
-{  "penaltyType": "PRISON",  "prisonMonths": 18,  "fineAmount": null,  "suspensionMonths": 36,  "factors": [    { "factorId": 1, "direction": "UP" },    { "factorId": 3, "direction": "UP" },    { "factorId": 6, "direction": "DOWN" }  ],  "freeOpinion": null}
+{  "penaltyType": "PRISON",  "reducedTo": null,  "prisonMonths": 180,  "fineAmount": null,  "suspensionMonths": null,  "factors": [    { "factorId": 2, "direction": "UP" },    { "factorId": 6, "direction": "UP" },    { "factorId": 7, "direction": "DOWN" }  ],  "freeOpinion": null}
 ```
 
 | 필드 | 필수 | 규칙 |
@@ -414,7 +414,7 @@ json
 json
 
 ```json
-{  "judgment": { "subjectType": "AI", "penaltyType": "PRISON", "prisonMonths": 12, "suspensionMonths": 24, "…": "…" },  "myJudgment": { "subjectType": "USER", "penaltyType": "PRISON", "prisonMonths": 18, "suspensionMonths": 36, "…": "…" },  "diffFromMine": { "samePenaltyType": true, "prisonMonthsDiff": -6, "fineAmountDiff": null },  "references": ["형법 제347조", "사기범죄 양형기준", "유사 판례 5건"]}
+{  "judgment": { "subjectType": "AI", "penaltyType": "PRISON", "prisonMonths": 144, "suspensionMonths": null, "…": "…" },  "myJudgment": { "subjectType": "USER", "penaltyType": "PRISON", "prisonMonths": 180, "suspensionMonths": null, "…": "…" },  "diffFromMine": { "samePenaltyType": true, "prisonMonthsDiff": -36, "fineAmountDiff": null },  "references": ["형법 제250조", "살인범죄 양형기준", "유사 판례 5건"]}
 ```
 
 - 공개 AI 판결(`AI`, `is_published = true`)을 DB에서 읽기만 한다. **AI를 호출하지 않는다**(시퀀스 6장).
