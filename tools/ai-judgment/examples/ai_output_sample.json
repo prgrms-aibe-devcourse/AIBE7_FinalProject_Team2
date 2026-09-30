@@ -1,0 +1,18 @@
+{
+  "penaltyType": "PRISON",
+  "reducedTo": null,
+  "prisonMonths": 144,
+  "fineAmount": null,
+  "suspensionMonths": null,
+  "factors": [
+    { "factorId": 2, "direction": "UP", "reason": "다투던 중 집에 있던 흉기를 집어 들어 피해자를 공격했다." },
+    { "factorId": 3, "direction": "UP", "reason": "범행 뒤 구호 조치 없이 현장을 떠났다." },
+    { "factorId": 5, "direction": "UP", "reason": "유족이 엄벌을 원한다." },
+    { "factorId": 7, "direction": "DOWN", "reason": "수사 초기부터 범행을 인정하고 반성하고 있다." },
+    { "factorId": 8, "direction": "DOWN", "reason": "형사처벌 전력이 없다." },
+    { "factorId": 9, "direction": "DOWN", "reason": "피해 회복을 위해 5,000만 원을 공탁했다." }
+  ],
+  "reasoning": "흉기를 집어 들어 피해자를 공격하고 구호 조치 없이 자리를 떠난 점과 유족이 엄벌을 원하는 점은 무겁지만, 공탁으로 피해 회복을 시도했고 범행을 인정하며 전력이 없는 점을 고려해 유기징역을 선택하고 권고 범위 안에서 형을 정했다.",
+  "summary": "다투다 벌어진 범행과 공탁 · 반성을 함께 저울질한 판단",
+  "referenceTags": ["형법 제250조 제1항", "살인범죄 양형기준", "유사 판례 2건"]
+}
