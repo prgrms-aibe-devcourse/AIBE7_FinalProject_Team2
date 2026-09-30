@@ -11,7 +11,13 @@ spring:
 
   jpa:
     hibernate:
-      # 로컬 개발 중에는 스키마를 자동 반영하고, 운영에서는 DDL_AUTO=validate로 덮어쓴다.
-      # 팀에서 마이그레이션 도구(Flyway 등)를 도입하면 validate로 고정한다.
-      ddl-auto: ${DDL_AUTO:update}
+      # 스키마는 Flyway 마이그레이션(db/migration)으로만 변경한다.
+      # Hibernate는 엔티티와 테이블이 일치하는지만 검사한다.
+      ddl-auto: ${DDL_AUTO:validate}
     open-in-view: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    # 운영 DB 전체 삭제를 막기 위해 clean 명령은 항상 막아 둔다 (기본값이지만 명시)
+    clean-disabled: true
