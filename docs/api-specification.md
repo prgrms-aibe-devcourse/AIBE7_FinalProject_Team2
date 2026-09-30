@@ -8,6 +8,7 @@
 | **v0.4** | **2026-09-30** | **대표 사건(살인) 가공 결정 반영 (BE-13)** — 형벌 종류에 사형(`DEATH`) · 무기징역(`LIFE`) 추가(API 6 · 8 · 9, 판결 응답 공통 형식), 판결 제출에 `reducedTo`(감경 후 형벌) 추가, `diffFromMine` 비교 기준을 최종 선고 형벌로 명시, 부가 처분 `CONFISCATION`(몰수) 추가 (ERD v1.4), API 14 형벌 무게 순서에 `LIFE` < `DEATH` 추가, `reducedTo`는 형벌 종류가 바뀌는 감경만 기록한다고 명시, 최종 선고 형벌이 `DEATH` · `LIFE`일 때 형량 값이 있으면 `VALIDATION_ERROR`로 명시 |
 | v0.5 | 2026-09-30 | 예시 사건을 가상 살인 사건으로 교체 (COMMON-11) — API 1 · 4 · 6 · 8 · 9 · 10 · 12 · 14 예시를 "빌린 돈 문제로 찾아온 지인을 살해한 사건"(가상)으로 교체, 사전 판단 구간 예시를 살인용 8개(벌금형 제외 · 무기 · 사형 추가)로, 형벌 선택지 예시를 사형 · 무기 · 징역 3종으로 교체 (ERD v1.5) |
 | v0.6 | 2026-09-30 | BE-16 시드 반영 — API 4 · 5 · 14 예시의 사전 판단 구간 `rangeOptionId`를 DB 실제 값(살인 8 ~ 15, 예시 선택 11)으로 정정 (ERD v1.6) |
+| v0.7 | 2026-09-30 | API 4 · 5 구현 반영 (BE-7) — API 4 형량 구간 개수를 범죄 유형별로 명시(살인 8개, 사기 · 상해 7개), 두 API의 404 · 400 거절 조건 추가, API 5 검사 순서 · 거절 시 저장 없음 · `factorIds` 규칙 순서 명시 |
 
 ---
 
@@ -193,12 +194,14 @@ json
 {  "case": {    "caseId": 1,    "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",    "crimeType": "MURDER",    "crimeCategoryLabel": "생명범죄",    "chargeName": "살인",    "overview": "피고인이 빌린 돈을 갚지 못해 오래 다투던 지인이 집으로 찾아오자, 말다툼 끝에 집에 있던 흉기로 피해자를 살해하고 구호 조치 없이 집을 나간 사건이다."  },  "rangeOptions": [    { "rangeOptionId": 8, "label": "징역형 집행유예" },    { "rangeOptionId": 9, "label": "실형 3년 미만" },    { "rangeOptionId": 10, "label": "실형 3년 이상 ~ 5년 미만" },    { "rangeOptionId": 11, "label": "실형 5년 이상 ~ 10년 미만" },    { "rangeOptionId": 12, "label": "실형 10년 이상 ~ 20년 미만" },    { "rangeOptionId": 13, "label": "실형 20년 이상" },    { "rangeOptionId": 14, "label": "무기징역" },    { "rangeOptionId": 15, "label": "사형" }  ],  "preFactors": [    { "factorId": 1, "label": "돈 문제로 오래 다툼이 있었다" },    { "factorId": 2, "label": "다투던 중 흉기를 집어 들었다" },    { "factorId": 3, "label": "범행 뒤 현장을 떠났다" }  ]}
 ```
 
-- `rangeOptions`: 이 사건 `crime_type`의 `sentence_range_option`.
+- `rangeOptions`: 이 사건 `crime_type`의 `sentence_range_option`을 `display_order` 순으로. 사기 · 상해는 공통 7개, 살인은 벌금형을 빼고 무기징역 · 사형을 더한 8개다.
 - `preFactors`: `reveal_stage = OVERVIEW`인 요소의 `pre_label`. **확장(REQ-093)** — MVP 화면은 쓰지 않아도 된다.
 - 법정형 · 선고 가능 범위 · 권고 범위 · 실제 판결은 **넣지 않는다**(FR-2-8).
 
 | 거절 | 조건 |
 | --- | --- |
+| 404 `CASE_NOT_FOUND` | 사건 없음 · 비공개 |
+| 404 `EXPERIENCE_NOT_FOUND` | 이 사건의 내 체험이 없음 (쿠키 없음 포함) → 화면은 S-02로 |
 | 409 `INVALID_STATE` | `STARTED`가 아님 (이미 제출) → `currentStatus`의 화면 (1-6) |
 
 ---
@@ -229,12 +232,18 @@ json
 - 한 트랜잭션: `judgment`(`USER`, `PRE`) + `judgment_factor`(방향 NULL) 저장, 상태 `STARTED` → `PRE_JUDGED`, `last_reviewed_step = 1`(섹션 ① 개요는 S-03에서 본 것으로 처리).
 - 상태 변경은 조건부 갱신("`status = STARTED`일 때만")으로 한다. 동시에 두 번 오면 하나만 성공하고 나머지는 `INVALID_STATE`.
 - 응답에 사전 판단 내용을 되돌려주지 않는다(S-09 전까지 다시 보여 주지 않음).
+- 검사 순서: 사건 · 체험(404) → 상태(409) → 형량 구간(422) → 판단 요소(422: 개수 → 유효성). 첫 번째로 걸린 사유 하나로 거절하며, 거절하면 상태 · 판단 · 판단 요소 어느 것도 저장하지 않는다. 요청 형식 오류(400)는 그 앞에서 걸러진다.
+- `factorIds`(확장)의 유효성은 "이 사건의 `OVERVIEW` 요소이고 중복이 없다"이다. 하나라도 어긋나면 전체를 `INVALID_FACTOR`로 거절한다.
 
 | 거절 | 조건 |
 | --- | --- |
+| 400 `VALIDATION_ERROR` | `rangeOptionId` 누락 · 형식 오류, `factorIds` 형식 오류 |
+| 404 `CASE_NOT_FOUND` | 사건 없음 · 비공개 |
+| 404 `EXPERIENCE_NOT_FOUND` | 이 사건의 내 체험이 없음 (쿠키 없음 포함) → 화면은 S-02로 |
 | 409 `INVALID_STATE` | `STARTED`가 아님 |
-| 422 `INVALID_RANGE_OPTION` |  |
-| 422 `INVALID_FACTOR` / `TOO_MANY_FACTORS` |  |
+| 422 `INVALID_RANGE_OPTION` | 없는 구간이거나 이 사건 범죄 유형의 구간이 아님 |
+| 422 `INVALID_FACTOR` | 이 사건의 요소가 아님, `OVERVIEW`가 아닌 요소, 중복, 없는 요소 |
+| 422 `TOO_MANY_FACTORS` | 2개 초과 (확장) |
 
 ---
 
