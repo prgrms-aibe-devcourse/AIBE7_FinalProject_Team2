@@ -66,7 +66,16 @@ CREATE TABLE judgment (
         penalty_type NOT IN ('DEATH', 'LIFE') OR suspension_months IS NULL
     ),
     -- 사용자 판단만 체험에 속한다
-    CONSTRAINT chk_judgment_user_experience CHECK ((subject_type = 'USER') = (experience_id IS NOT NULL))
+    CONSTRAINT chk_judgment_user_experience CHECK ((subject_type = 'USER') = (experience_id IS NOT NULL)),
+    -- 형량 값은 양수 (0 · 음수 금지). NULL은 해당 형벌이 아니라는 뜻이라 허용
+    -- 집행유예 기간 1 ~ 5년 같은 법 규정은 서비스 코드 상수로 검사한다 (ERD 3-1)
+    CONSTRAINT chk_judgment_positive_values CHECK (
+        (prison_months IS NULL OR prison_months > 0)
+        AND (fine_amount IS NULL OR fine_amount > 0)
+        AND (suspension_months IS NULL OR suspension_months > 0)
+    ),
+    -- 사용자 판단은 항상 공개 (검수 대상은 AI · COURT만)
+    CONSTRAINT chk_judgment_user_published CHECK (subject_type <> 'USER' OR is_published)
 );
 
 -- 사건마다 공개된 AI 판결 1개, 공개된 재판부 판결 1개 (모든 사용자에게 같은 판결, REQ-046)
