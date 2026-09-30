@@ -60,12 +60,21 @@ def check_case_input(case):
             raise InputError(f"{rule['penaltyType']}은 suspensionAllowed가 false여야 합니다")
 
 
+def render_data_item(item):
+    """case_section.data 항목 한 줄. 피해 결과 카드는 label/value, 용어 설명(LAW_TERM)은 term/desc다."""
+    if "label" in item and "value" in item:
+        return f"- {item['label']}: {item['value']}"
+    if "term" in item and "desc" in item:
+        return f"- {item['term']}: {item['desc']}"
+    raise InputError(f"섹션 data 항목은 label/value 또는 term/desc여야 합니다: {item}")
+
+
 def render_sections(sections):
     blocks = []
     for section in sections:
         title = section.get("title") or section.get("sectionType", "")
         if section.get("data"):
-            body = "\n".join(f"- {item['label']}: {item['value']}" for item in section["data"])
+            body = "\n".join(render_data_item(item) for item in section["data"])
         else:
             body = section.get("content", "")
         blocks.append(f"### {title}\n\n{body}")

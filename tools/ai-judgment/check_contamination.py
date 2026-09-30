@@ -50,8 +50,12 @@ def judge_one(court, prediction):
     형벌은 최종 선고 형벌로 비교한다. 실제 판결 파일은 reducedTo가 있으면 그 값, 모델 응답의
     penaltyType은 "실제로 선고된 형벌"을 묻는 것이라 그대로 최종 선고 형벌로 본다.
     """
-    if prediction.get("knowsCase") is True:
+    knows_case = prediction.get("knowsCase")
+    if knows_case is True or (isinstance(knows_case, str) and knows_case.strip().lower() == "true"):
         return "CONTAMINATED", f"사건을 안다고 답함: {prediction.get('note', '')}"
+    if not (knows_case is False or (isinstance(knows_case, str) and knows_case.strip().lower() == "false")):
+        # 형식이 어긋난 응답은 "모른다"로 넘기지 않고 팀이 본다
+        return "SUSPECT", f"knowsCase가 true / false가 아님: {knows_case!r}"
 
     actual_penalty = final_penalty(court)
     if prediction.get("penaltyType") != actual_penalty:

@@ -8,7 +8,8 @@
 - 경고가 있으면 팀 검수에서 확인했다는 뜻으로 --accept-warnings를 붙여야 만든다 (REQ-078).
 - 이미 공개된 AI 판결이 있으면 비공개로 바꾸고 새 판결을 공개한다. 기존 행은 지우지 않는다
   (ERD ai_generation 비고 · REQ-079, 공개 판결 부분 유니크 인덱스).
-- 사건 입력의 caseId · factorId는 DB의 legal_case.id · factor.id와 같아야 한다.
+- 사건 입력의 caseId · factorId는 DB의 legal_case.id · factor.id와 같아야 한다. 시드는 ID를 지정하지 않고 넣으므로
+  (ERD 7장), 시드 적재 후 DB에서 조회한 값을 입력 파일에 적는다. 요소가 이 사건 소속이 아니면 SQL이 멈춘다.
 - 감경해 형벌 종류가 바뀐 판결은 reduced_to에 함께 넣는다 (ERD v1.4).
 """
 
@@ -55,10 +56,26 @@ factors AS (
         else ""
     )
     input_snapshot = {"promptVersion": prompt["promptVersion"], "system": prompt["system"], "user": prompt["user"]}
+    # 제목에 줄바꿈이 있으면 주석이 끝나 뒤 내용이 SQL로 실행된다. 공백을 한 칸으로 합친다.
+    title = " ".join(str(case.get("title", "")).split())
+    factor_ids = sorted({int(f["factorId"]) for f in output["factors"]})
+    factor_check = (
+        f"""
+-- 판단 요소가 모두 이 사건 소속인지 확인한다 (다른 사건 요소면 외래 키만으로는 막히지 않는다)
+DO $$
+BEGIN
+    IF (SELECT count(*) FROM factor WHERE case_id = {case_id} AND id IN ({", ".join(map(str, factor_ids))})) <> {len(factor_ids)} THEN
+        RAISE EXCEPTION '판단 요소 id가 caseId={case_id} 사건 소속이 아닙니다. 사건 입력 파일의 id를 DB 값으로 확인하세요';
+    END IF;
+END $$;
+"""
+        if factor_ids
+        else ""
+    )
 
-    return f"""-- AI 판결 적재: {case.get('title', '')} (caseId={case['caseId']}, prompt={prompt['promptVersion']})
+    return f"""-- AI 판결 적재: {title} (caseId={case_id}, prompt={prompt['promptVersion']})
 BEGIN;
-
+{factor_check}
 -- 기존 공개 AI 판결은 비공개로 돌린다 (행은 지우지 않음)
 UPDATE judgment
 SET is_published = false

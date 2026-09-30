@@ -190,7 +190,10 @@ def check_factors(case, output, report):
         seen.add(factor_id)
         if factor.get("direction") not in DIRECTIONS:
             report.error(f"factors[{i}]: direction은 UP / DOWN이어야 합니다 (factorId={factor_id})")
-        if not str(factor.get("reason", "")).strip():
+        reason = factor.get("reason", "")
+        if not isinstance(reason, str):
+            report.error(f"factors[{i}]: reason은 문자열이어야 합니다 (factorId={factor_id})")
+        elif not reason.strip():
             report.warn(f"factors[{i}]: 이유(reason)가 비어 있습니다 (factorId={factor_id})")
 
 
@@ -212,6 +215,8 @@ def check_texts(output, report):
     tags = output.get("referenceTags")
     if not isinstance(tags, list) or not all(isinstance(tag, str) and tag.strip() for tag in tags):
         report.error("referenceTags는 비어 있지 않은 문자열 배열이어야 합니다")
+    elif not tags:
+        report.warn("referenceTags가 비어 있습니다. S-07 '참고한 자료'가 비어 보입니다")
 
 
 def _normalize_number(text):
@@ -221,10 +226,12 @@ def _normalize_number(text):
 def check_unknown_numbers(case, output, report):
     """판결 이유 · 요소 이유에 나온 숫자 표현이 사건 입력에 있는지 본다. 없으면 검수 대상으로 표시한다."""
     source = _normalize_number(json.dumps(case, ensure_ascii=False))
-    texts = [output.get("reasoning") or ""] + [
-        f.get("reason", "") for f in output.get("factors", []) if isinstance(f, dict)
-    ]
-    for text in texts:
+    # 형식이 틀린 값은 check_texts · check_factors가 이미 오류로 남긴다. 여기서는 문자열만 본다.
+    factors = output.get("factors")
+    texts = [output.get("reasoning")] + (
+        [f.get("reason") for f in factors if isinstance(f, dict)] if isinstance(factors, list) else []
+    )
+    for text in (t for t in texts if isinstance(t, str)):
         for match in NUMBER_PATTERN.findall(text):
             if _normalize_number(match) not in source:
                 report.warn(f"입력에 없는 숫자 표현 '{match.strip()}' — 없는 사실을 만든 것인지 검수하세요")

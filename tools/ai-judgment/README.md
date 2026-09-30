@@ -34,7 +34,14 @@ mkdir -p out cases   # out/ · cases/는 git에 올리지 않는다
 
 `examples/case_input.json`과 같은 형식으로 대표 사건 파일을 `cases/`에 만든다(BE-13 사건 가공 결과, `docs/cases/`의 사건 파일).
 
-- `caseId` · `factors[].factorId`는 DB의 `legal_case.id` · `factor.id`와 **같은 값**이어야 한다(BE-16 시드와 맞춘다).
+- `caseId` · `factors[].factorId`는 DB의 `legal_case.id` · `factor.id`와 **같은 값**이어야 한다. 시드는 ID를 지정하지 않고 넣으므로(ERD 7장 마이그레이션 공통 규칙) ID는 적재 후에 정해진다. 그래서 **BE-16 사건 시드를 먼저 적재한 뒤**, DB에서 조회한 값을 입력 파일에 적는다.
+
+  ```sql
+  SELECT id FROM legal_case WHERE title = '대표 사건 제목';
+  SELECT id, display_order, label FROM factor WHERE case_id = :caseId ORDER BY display_order;
+  ```
+
+  적재 SQL은 판단 요소가 모두 이 사건 소속인지 먼저 확인하고, 아니면 오류를 내고 멈춘다(6단계).
 - `penaltyRules`에는 사건의 `penalty_rule` 행을 그대로 넣는다(법정형에 있는 형벌만, 무죄 제외).
   - `DEATH` · `LIFE`의 `allowedMin` ~ `allowedMax`는 **작량감경해 징역으로 선고할 때의 범위**(개월)다. 예: 무기 120 ~ 600, 사형 240 ~ 600 (ERD 3-1 `penalty_rule`).
   - `DEATH` · `LIFE`는 `suspensionAllowed: false`여야 한다(감경해도 징역 10년 이상).
@@ -109,6 +116,7 @@ python3 to_seed_sql.py case.json out/ai_output.json \
 - 감경해 형벌 종류가 바뀐 판결은 `judgment.reduced_to`에 함께 들어간다
 
 - 검증을 다시 돌려 오류가 있으면 SQL을 만들지 않는다. 경고가 있으면 검수했다는 뜻으로 `--accept-warnings`가 필요하다.
+- 판단 요소 id가 모두 이 사건(`caseId`) 소속인지 먼저 확인하고, 아니면 `RAISE EXCEPTION`으로 멈춘다(트랜잭션 전체 취소).
 - 기존 공개 AI 판결은 비공개로 바꾸고 새 판결을 공개한다. 기존 행은 지우지 않는다(REQ-079).
 - `ai_generation`에 입력 프롬프트 전체(`input_snapshot`) · 원본 출력(`raw_output`) · 프롬프트 버전 · 검수자를 남긴다.
 - 만든 SQL은 BE-16 시드 스크립트에 넣거나 따로 실행한다.

@@ -114,6 +114,20 @@ class BuildPromptTest(Fixtures):
         with self.assertRaises(InputError):
             build_prompt(case)
 
+    def test_renders_law_term_section(self):
+        # 용어 설명(LAW_TERM) 섹션은 data가 term/desc다 (API 6 terms, case_section LAW_TERM)
+        case = copy.deepcopy(self.case)
+        case["sections"].append({"stage": "LAW", "sectionType": "LAW_TERM", "title": "용어 설명",
+                                 "data": [{"term": "작량감경", "desc": "재판상 감경"}]})
+        prompt = build_prompt(case)
+        self.assertIn("- 작량감경: 재판상 감경", prompt["user"])
+
+    def test_rejects_unknown_data_item(self):
+        case = copy.deepcopy(self.case)
+        case["sections"][1]["data"].append({"name": "x"})
+        with self.assertRaises(InputError):
+            build_prompt(case)
+
     def test_rejects_unknown_penalty_type(self):
         case = copy.deepcopy(self.case)
         case["penaltyRules"].append({"penaltyType": "NOT_GUILTY", "allowedMin": 0, "allowedMax": 0})
@@ -249,6 +263,22 @@ class ValidateFactorsAndTextsTest(Fixtures):
         report = validate(self.case, output)
         self.assertTrue(self.errors_contain(report, "reducedTo"))
 
+    def test_non_string_reason_is_error(self):
+        factors = [{"factorId": 2, "direction": "UP", "reason": 123}]
+        report = validate(self.case, self.with_output(factors=factors))
+        self.assertTrue(self.errors_contain(report, "reason은 문자열"))
+
+    def test_malformed_types_do_not_crash(self):
+        # 형식이 틀려도 예외 없이 오류 목록으로 돌려준다
+        report = validate(self.case, self.with_output(factors=None, reasoning=123))
+        self.assertTrue(self.errors_contain(report, "factors는 배열"))
+        self.assertTrue(self.errors_contain(report, "reasoning"))
+
+    def test_empty_reference_tags_is_warning(self):
+        report = validate(self.case, self.with_output(referenceTags=[]))
+        self.assertTrue(report.ok)
+        self.assertTrue(any("referenceTags가 비어" in w for w in report.warnings))
+
     def test_unknown_number_is_warning(self):
         report = validate(self.case, self.with_output(reasoning="피해 금액 9,000만 원을 고려했다."))
         self.assertTrue(any("9,000만 원" in w for w in report.warnings))
@@ -274,6 +304,14 @@ class ContaminationTest(Fixtures):
     def test_knows_case(self):
         verdict, _ = judge_one(self.court, self.prediction(knowsCase=True))
         self.assertEqual(verdict, "CONTAMINATED")
+
+    def test_knows_case_as_string(self):
+        verdict, _ = judge_one(self.court, self.prediction(knowsCase="true"))
+        self.assertEqual(verdict, "CONTAMINATED")
+
+    def test_knows_case_not_boolean_is_suspect(self):
+        verdict, _ = judge_one(self.court, self.prediction(knowsCase="모름"))
+        self.assertEqual(verdict, "SUSPECT")
 
     def test_exact_match(self):
         verdict, _ = judge_one(self.court, self.prediction(prisonMonths=120))
@@ -322,6 +360,19 @@ class SeedSqlTest(Fixtures):
         output = self.with_output(penaltyType="LIFE", reducedTo="PRISON", prisonMonths=180)
         sql = build_sql(self.case, output, build_prompt(self.case), "m", "r")
         self.assertIn("'LIFE', 'PRISON', 180", sql)
+
+    def test_sql_checks_factor_ownership(self):
+        sql = build_sql(self.case, self.output, build_prompt(self.case), "m", "r")
+        self.assertIn("FROM factor WHERE case_id = 1 AND id IN (2, 3, 5, 7, 8, 9)) <> 6", sql)
+        self.assertIn("RAISE EXCEPTION", sql)
+
+    def test_sql_comment_title_has_no_newline(self):
+        case = copy.deepcopy(self.case)
+        case["title"] = "제목\nDROP TABLE judgment;"
+        sql = build_sql(case, self.output, build_prompt(case), "m", "r")
+        first_line = sql.splitlines()[0]
+        self.assertTrue(first_line.startswith("-- AI 판결 적재: 제목 DROP TABLE judgment;"))
+        self.assertIn("(caseId=1,", first_line)
 
     def test_sql_escapes_quotes(self):
         output = self.with_output(reasoning="피고인의 '반성'을 고려했다.")
