@@ -2,6 +2,7 @@ package com.team2.project.experience.service;
 
 import com.team2.project.common.exception.BusinessException;
 import com.team2.project.common.exception.ErrorCode;
+import com.team2.project.common.exception.UniqueViolations;
 import com.team2.project.experience.domain.Experience;
 import com.team2.project.experience.domain.ExperienceStatus;
 import com.team2.project.experience.domain.InvalidExperienceStateException;
@@ -11,6 +12,7 @@ import jakarta.persistence.EntityManager;
 import java.time.Clock;
 import java.util.function.Consumer;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,9 +23,10 @@ import org.springframework.transaction.annotation.Transactional;
  * 2. 조건부 갱신으로 DB에 반영한다 — 읽은 뒤 다른 요청이 상태를 바꿨으면 0건이 되어 반영하지 않는다
  * 3. 0건이면 다른 요청이 먼저 처리한 것이다. 그때의 현재 상태로 INVALID_STATE를 응답한다 (멱등 요청은 성공으로 본다)
  *
- * 사용 규칙: 같은 트랜잭션에서 이 메서드(상태 전이)를 먼저 부르고, 판단 저장(Judgment 등)은 그 다음에 한다.
- * 반대 순서(판단 먼저 저장)로 하면, 동시 요청의 패자가 조건부 갱신에 닿기 전에 판단 테이블의 유니크 제약
- * 위반으로 먼저 실패해 currentStatus 없는 일반 INVALID_STATE 응답이 나간다 (리뷰 반영).
+ * 판단(Judgment) 등 함께 저장할 데이터가 있으면 {@link #apply(Experience, Runnable, Consumer)}를 쓴다.
+ * 저장 순서를 직접 맞출 필요 없이, 이 메서드 하나가 "함께 저장 → 조건부 전이"를 한 트랜잭션으로 묶고
+ * 동시 제출로 유니크 제약을 만나도 currentStatus 포함 INVALID_STATE로 통일해서 응답한다 (리뷰 반영 —
+ * 같은 패턴을 PR마다 다르게 짜지 않도록 여기 한 곳에 둔다).
  * 넘긴 체험 엔티티는 영속성 컨텍스트에서 분리되므로, 호출 뒤에는 그 체험의 지연 로딩(getLegalCase() 등)을 쓰지 않는다.
  * (다른 엔티티는 그대로 관리된다)
  */
@@ -38,11 +41,27 @@ public class ExperienceTransitionService {
 	private final Clock clock;
 
 	/**
-	 * 한 번만 성공해야 하는 상태 이동 (사전 판단 제출, 판결 확정)
+	 * 한 번만 성공해야 하는 상태 이동 (공개처럼 함께 저장할 데이터가 없는 경우)
 	 * 다른 요청이 먼저 바꿨으면 INVALID_STATE (currentStatus 포함)
 	 */
 	@Transactional
 	public void apply(Experience experience, Consumer<Experience> change) {
+		applyChange(experience, change, false);
+	}
+
+	/**
+	 * 한 번만 성공해야 하는 상태 이동이면서, 판단(Judgment) 등 함께 저장할 데이터가 있는 경우
+	 * (사전 판단 제출 API 5, 판결 확정 API 9). relatedWrites를 먼저 실행한 뒤 상태를 전이한다.
+	 * relatedWrites 저장이 유니크 제약 위반으로 실패하면(동시 중복 제출) 현재 상태를 다시 읽어
+	 * INVALID_STATE(currentStatus 포함)로 바꿔 던진다 — 호출 쪽에서 저장 순서를 신경 쓰지 않아도 된다.
+	 */
+	@Transactional
+	public void apply(Experience experience, Runnable relatedWrites, Consumer<Experience> change) {
+		try {
+			relatedWrites.run();
+		} catch (DataIntegrityViolationException e) {
+			throw asCleanConflict(experience.getId(), e);
+		}
 		applyChange(experience, change, false);
 	}
 
@@ -82,13 +101,28 @@ public class ExperienceTransitionService {
 		}
 
 		// 다른 요청이 먼저 처리함
-		ExperienceState current = experienceRepository.findStateById(experience.getId())
-			.orElseThrow(() -> new BusinessException(ErrorCode.EXPERIENCE_NOT_FOUND));
+		ExperienceState current = currentState(experience.getId());
 		boolean alreadyThere = current.status().ordinal() > targetStatus.ordinal()
 			|| (current.status() == targetStatus && current.lastReviewedStep() >= targetStep);
 		if (idempotent && alreadyThere) {
 			return false;
 		}
 		throw new InvalidExperienceStateException(current.status(), "다른 요청이 먼저 처리되었습니다.");
+	}
+
+	private ExperienceState currentState(Long experienceId) {
+		return experienceRepository.findStateById(experienceId)
+			.orElseThrow(() -> new BusinessException(ErrorCode.EXPERIENCE_NOT_FOUND));
+	}
+
+	/** 유니크 제약 위반이면 현재 상태로 깨끗한 INVALID_STATE를, 그 밖의 제약 위반이면 원래 예외를 그대로 돌려준다 */
+	private RuntimeException asCleanConflict(Long experienceId, DataIntegrityViolationException e) {
+		if (!UniqueViolations.isUniqueViolation(e)) {
+			return e;
+		}
+		// 지금 트랜잭션은 DB가 이미 실패 상태로 만들어서 더 조회할 수 없다. 새 트랜잭션(별도 커넥션)에서 읽는다.
+		ExperienceState current = experienceRepository.findStateInNewTransaction(experienceId)
+			.orElseThrow(() -> new BusinessException(ErrorCode.EXPERIENCE_NOT_FOUND));
+		return new InvalidExperienceStateException(current.status(), "다른 요청이 먼저 처리되었습니다.");
 	}
 }

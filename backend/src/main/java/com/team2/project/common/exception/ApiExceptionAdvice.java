@@ -1,6 +1,5 @@
 package com.team2.project.common.exception;
 
-import java.sql.SQLException;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -27,9 +26,6 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 @RestControllerAdvice
 public class ApiExceptionAdvice extends ResponseEntityExceptionHandler {
 
-	/** PostgreSQL 유니크 위반 SQLSTATE */
-	private static final String UNIQUE_VIOLATION = "23505";
-
 	/** 비즈니스 예외 (도메인 예외 포함) → ErrorCode 그대로 */
 	@ExceptionHandler(BusinessException.class)
 	public ResponseEntity<ErrorResponse> handleBusiness(BusinessException e) {
@@ -53,7 +49,7 @@ public class ApiExceptionAdvice extends ResponseEntityExceptionHandler {
 	 */
 	@ExceptionHandler(DataIntegrityViolationException.class)
 	public ResponseEntity<ErrorResponse> handleDataIntegrity(DataIntegrityViolationException e) {
-		if (isUniqueViolation(e)) {
+		if (UniqueViolations.isUniqueViolation(e)) {
 			log.info("유니크 제약 위반 (동시 요청): {}", e.getMostSpecificCause().getMessage());
 			return ResponseEntity.status(ErrorCode.INVALID_STATE.getStatus()).body(ErrorResponse.of(ErrorCode.INVALID_STATE));
 		}
@@ -95,14 +91,5 @@ public class ApiExceptionAdvice extends ResponseEntityExceptionHandler {
 	private ResponseEntity<ErrorResponse> internalError(Exception e) {
 		log.error("처리하지 못한 예외", e);
 		return ResponseEntity.status(ErrorCode.INTERNAL_ERROR.getStatus()).body(ErrorResponse.of(ErrorCode.INTERNAL_ERROR));
-	}
-
-	private boolean isUniqueViolation(Throwable e) {
-		for (Throwable cause = e; cause != null; cause = cause.getCause()) {
-			if (cause instanceof SQLException sqlException && UNIQUE_VIOLATION.equals(sqlException.getSQLState())) {
-				return true;
-			}
-		}
-		return false;
 	}
 }

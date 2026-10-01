@@ -19,15 +19,16 @@ import jakarta.persistence.EntityManager;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
-import org.hibernate.exception.ConstraintViolationException;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * 내 체험 찾기 · 상태 전이(조건부 갱신) · 익명 사용자 발급 검증 (실제 PostgreSQL, 테스트마다 롤백)
@@ -67,6 +68,21 @@ class ExperienceServiceTest {
 		AnonymousUser user = anonymousUserRepository.save(AnonymousUser.issue(Instant.now()));
 		anonymousId = user.getId();
 		experienceRepository.save(Experience.start(user, legalCaseRepository.getReferenceById(caseId)));
+	}
+
+	/** 자동 롤백되지 않는 테스트(NOT_SUPPORTED)를 위한 수동 정리. 일반 테스트는 클래스 레벨 @Transactional이 롤백한다 */
+	@AfterEach
+	void cleanCommittedFixtures() {
+		if (TransactionSynchronizationManager.isActualTransactionActive()) {
+			return;
+		}
+		jdbc.update("DELETE FROM judgment_factor WHERE judgment_id IN (SELECT id FROM judgment WHERE case_id IN (?, ?))",
+			caseId, draftCaseId);
+		jdbc.update("DELETE FROM judgment WHERE case_id IN (?, ?)", caseId, draftCaseId);
+		jdbc.update("DELETE FROM experience WHERE case_id IN (?, ?)", caseId, draftCaseId);
+		jdbc.update("DELETE FROM anonymous_user WHERE id = ?", anonymousId);
+		jdbc.update("DELETE FROM penalty_rule WHERE case_id IN (?, ?)", caseId, draftCaseId);
+		jdbc.update("DELETE FROM legal_case WHERE id IN (?, ?)", caseId, draftCaseId);
 	}
 
 	@Test
@@ -145,47 +161,45 @@ class ExperienceServiceTest {
 	}
 
 	@Test
-	@DisplayName("권장 순서(상태 전이 먼저, 판단 저장은 그 다음)면 동시 판결 확정의 패자가 유니크 위반 없이 깨끗하게 거절된다 (리뷰 반영)")
-	void apply_beforeSavingJudgment_losesCleanlyWithoutUniqueViolation() {
+	@DisplayName("판단 저장 + 상태 전이를 한 번에 묶으면, 정상 제출은 둘 다 반영된다")
+	void apply_withRelatedWrites_savesJudgmentAndTransitionsTogether() {
 		Experience experience = myExperienceService.getMyExperience(caseId, Optional.of(anonymousId));
 		jdbc.update("UPDATE experience SET status = 'REVIEWED', last_reviewed_step = 4 WHERE id = ?", experience.getId());
 		entityManager.clear();
 		Experience reloaded = myExperienceService.getMyExperience(caseId, Optional.of(anonymousId));
-		// 다른 요청이 먼저 판결을 확정한 상황
-		jdbc.update("UPDATE experience SET status = 'VERDICT_CONFIRMED' WHERE id = ?", reloaded.getId());
 
-		// 권장 순서: 판단을 저장하기 전에 상태 전이부터 시도한다
-		assertThatThrownBy(() -> transitionService.apply(reloaded, e -> e.markVerdictConfirmed(Instant.now())))
-			.isInstanceOfSatisfying(InvalidExperienceStateException.class,
-				e -> assertThat(e.getExperienceStatus()).isEqualTo(ExperienceStatus.VERDICT_CONFIRMED));
+		transitionService.apply(reloaded,
+			() -> judgmentRepository.saveAndFlush(Judgment.userFinal(reloaded, PenaltyType.PRISON, null, 120, null, null, null)),
+			e -> e.markVerdictConfirmed(Instant.now()));
 
-		// 패자는 여기서 멈추므로 judgment를 저장하지 않는다 → 유니크 제약 위반 자체가 발생하지 않는다
 		assertThat(jdbc.queryForObject("SELECT count(*) FROM judgment WHERE experience_id = ?", Integer.class,
-			reloaded.getId())).isZero();
+			reloaded.getId())).isEqualTo(1);
+		assertThat(experienceRepository.findById(reloaded.getId()).orElseThrow().getStatus())
+			.isEqualTo(ExperienceStatus.VERDICT_CONFIRMED);
 	}
 
 	@Test
-	@DisplayName("반대 순서(판단 저장을 먼저)면 패자가 currentStatus 없는 날 DataIntegrityViolationException으로 실패한다 (문제 재현)")
-	void apply_afterSavingJudgment_losesWithRawUniqueViolationInstead() {
+	@Transactional(propagation = Propagation.NOT_SUPPORTED)
+	@DisplayName("판단 저장 + 상태 전이를 한 번에 묶으면, 동시 중복 제출의 패자도 유니크 위반 없이 currentStatus 포함 INVALID_STATE를 받는다 (리뷰 2번 반영)")
+	void apply_withRelatedWrites_duplicateSubmission_losesCleanlyWithCurrentStatus() {
 		Experience experience = myExperienceService.getMyExperience(caseId, Optional.of(anonymousId));
 		jdbc.update("UPDATE experience SET status = 'REVIEWED', last_reviewed_step = 4 WHERE id = ?", experience.getId());
 		entityManager.clear();
 		Experience reloaded = myExperienceService.getMyExperience(caseId, Optional.of(anonymousId));
-		Long experienceId = reloaded.getId();
-		judgmentRepository.saveAndFlush(Judgment.userFinal(reloaded, PenaltyType.PRISON, null, 120, null, null, null));
-		// 다른 요청(승자)이 이미 FINAL 판단을 저장한 상황. 패자가 잘못된 순서로 판단을 먼저 저장하면 유니크 제약에 걸린다
+		// 다른 요청(승자)이 이미 판단을 저장하고 상태까지 확정한 상황
+		judgmentRepository.saveAndFlush(Judgment.userFinal(reloaded, PenaltyType.PRISON, null, 150, null, null, null));
+		jdbc.update("UPDATE experience SET status = 'VERDICT_CONFIRMED' WHERE id = ?", reloaded.getId());
 
-		assertThatThrownBy(() -> judgmentRepository.saveAndFlush(
-			Judgment.userFinal(experienceRepository.findById(experienceId).orElseThrow(),
-				PenaltyType.PRISON, null, 150, null, null, null)))
-			.isInstanceOfSatisfying(DataIntegrityViolationException.class, e -> {
-				var cause = e.getCause();
-				assertThat(cause).isInstanceOf(ConstraintViolationException.class);
-				assertThat(((ConstraintViolationException) cause).getConstraintName())
-					.isEqualTo("uk_judgment_experience_timing");
-			});
-		// 이 경로로 오면 ApiExceptionAdvice.handleDataIntegrity가 currentStatus 없는 일반 INVALID_STATE로 응답한다.
-		// (서비스가 직접 잡아 InvalidExperienceStateException으로 바꾸지 않는 한) — 그래서 호출 순서를 뒤집어 피한다.
+		// 패자: relatedWrites(판단 저장)에서 유니크 위반이 나도, apply 한 메서드가 알아서 깨끗하게 바꿔 던진다
+		assertThatThrownBy(() -> transitionService.apply(reloaded,
+			() -> judgmentRepository.saveAndFlush(Judgment.userFinal(reloaded, PenaltyType.PRISON, null, 120, null, null, null)),
+			e -> e.markVerdictConfirmed(Instant.now())))
+			.isInstanceOfSatisfying(InvalidExperienceStateException.class,
+				e -> assertThat(e.getExperienceStatus()).isEqualTo(ExperienceStatus.VERDICT_CONFIRMED));
+
+		// 승자의 판단 1건만 남아 있다 (패자의 판단은 저장되지 않음)
+		assertThat(jdbc.queryForObject("SELECT count(*) FROM judgment WHERE experience_id = ?", Integer.class,
+			reloaded.getId())).isEqualTo(1);
 	}
 
 	@Test

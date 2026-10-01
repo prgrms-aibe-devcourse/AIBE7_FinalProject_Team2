@@ -9,6 +9,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 public interface ExperienceRepository extends JpaRepository<Experience, Long> {
 
@@ -40,6 +42,16 @@ public interface ExperienceRepository extends JpaRepository<Experience, Long> {
 	@Query("select new com.team2.project.experience.repository.ExperienceState(e.status, e.lastReviewedStep) "
 		+ "from Experience e where e.id = :id")
 	Optional<ExperienceState> findStateById(@Param("id") Long id);
+
+	/**
+	 * findStateById와 같은 내용이지만 별도 트랜잭션에서 읽는다.
+	 * 유니크 제약 위반 뒤에 쓴다 — PostgreSQL은 제약 위반이 나면 그 트랜잭션 전체를 실패 상태로 만들어
+	 * 같은 트랜잭션에서는 SELECT조차 거절하므로, 새 트랜잭션(별도 커넥션)에서 읽어야 한다.
+	 */
+	@Transactional(propagation = Propagation.REQUIRES_NEW)
+	@Query("select new com.team2.project.experience.repository.ExperienceState(e.status, e.lastReviewedStep) "
+		+ "from Experience e where e.id = :id")
+	Optional<ExperienceState> findStateInNewTransaction(@Param("id") Long id);
 
 	/**
 	 * 조건부 갱신: 읽은 뒤 다른 요청이 상태를 바꾸지 않았을 때만(status · lastReviewedStep이 그대로일 때만) 새 상태를 반영한다.
