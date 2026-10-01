@@ -26,17 +26,17 @@ export async function getComparison(caseId) {
   checkState(caseId);
   const myJudgment = getMyJudgment();
   const preJudgment = readPreJudgment() ?? fallbackPreJudgment;
-  const { ai, court, factorLabels } = mockComparisonBase;
-  const matrix = buildMatrix(myJudgment.factors ?? [], ai.factors, court.factors, factorLabels);
+  const { ai, court, factorLabels, factorTags, factorRevealStages } = mockComparisonBase;
+  const matrix = buildMatrix(myJudgment.factors ?? [], ai.factors, court.factors, factorLabels, factorRevealStages);
   return {
     preToFinal: buildPreToFinal(myJudgment, preJudgment, mockOverview.rangeOptions),
     judgments: {
-      USER: { ...myJudgment, summary: buildUserSummary(myJudgment.factors ?? [], factorLabels) },
+      USER: { ...myJudgment, summary: buildUserSummary(myJudgment.factors ?? [], factorTags) },
       AI: { ...ai },
       COURT: { ...court },
     },
     matrix,
-    ruleSentences: buildRuleSentences(matrix),
+    ruleSentences: buildRuleSentences(matrix, factorTags),
     // (확장) AI 비교 분석: MVP에서는 항상 false(API 14 명세).
     analysisAvailable: false,
   };

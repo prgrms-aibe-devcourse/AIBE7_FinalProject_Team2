@@ -37,6 +37,16 @@ export const mockComparisonBase = {
     10: '피고인은 우발적 범행이라고 주장한다',
     11: '피고인은 오랜 채무로 정신적으로 지쳐 있었다고 주장한다',
   },
+  // 한 줄 요약 · 공통점 · 차이점 문장에 쓰는 짧은 명사구(ERD `factor.summary_tag`에 대응하는 목).
+  // factorLabels는 "~다"로 끝나는 완전한 문장이라 그대로 이어붙이면 문법이 깨진다(코드리뷰 지적).
+  factorTags: {
+    1: '채무 다툼', 2: '흉기 사용', 3: '구호 조치 없음', 4: '반복된 다툼',
+    5: '유족의 엄벌 의사', 6: '피해자의 부양 가족', 7: '범행 인정 · 반성', 8: '전과 없음',
+    9: '피해 회복 공탁', 10: '우발적 범행 주장', 11: '정신적 피로 주장',
+  },
+  // factorId 1 ~ 3은 S-03 사전 판단에서 먼저 보여준다(OVERVIEW), 나머지는 S-04에서 보여준다(DETAIL).
+  // API 14 명세의 matrix[].revealStage와 모양을 맞춘다((확장) changeType은 쓰지 않는다).
+  factorRevealStages: { 1: 'OVERVIEW', 2: 'OVERVIEW', 3: 'OVERVIEW' },
 };
 
 // S-06을 거치지 않고 "상태 강제 선택"으로 들어온 경우를 대비한 대체 사용자 판단(myJudgmentMock.js).
