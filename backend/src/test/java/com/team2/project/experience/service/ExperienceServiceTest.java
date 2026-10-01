@@ -142,22 +142,24 @@ class ExperienceServiceTest {
 	}
 
 	@Test
-	@DisplayName("섹션 확인(API 7) 동시 클릭: 다른 요청이 이미 그 섹션 이상으로 진행시켰으면 성공으로 본다 (리뷰 반영)")
-	void applyIdempotent_reviewStepAlreadyReachedByOther_succeeds() {
+	@DisplayName("섹션 확인(API 7) 동시 클릭: 다른 요청이 이미 그 섹션 이상으로 진행시켰으면 성공으로 보고, 실제 현재 값을 돌려준다 (리뷰 반영)")
+	void applyIdempotent_reviewStepAlreadyReachedByOther_succeedsWithActualState() {
 		Experience experience = myExperienceService.getMyExperience(caseId, Optional.of(anonymousId));
 		Instant now = Instant.now();
 		transitionService.apply(experience, e -> e.markPreJudged(now));			// STARTED -> PRE_JUDGED, step 1
 		transitionService.apply(experience, e -> e.confirmReviewStep(2, now));	// -> REVIEWING, step 2
-		// 두 요청이 동시에 step 3을 확인했고, 다른 요청(승자)이 먼저 반영된 상황.
-		// status는 그대로(REVIEWING)인 채 lastReviewedStep만 앞서 있어서, status만 비교하면 "바뀌지 않았다"고 오판하기 쉽다.
-		jdbc.update("UPDATE experience SET last_reviewed_step = 3 WHERE id = ?", experience.getId());
+		// 두 요청이 동시에 step 3을 확인했고, 다른 요청(승자)이 step 4까지 먼저 끝낸 상황.
+		// 패자의 체험 엔티티에는 "step 3"(이번 요청이 만들려던 값)이 들어 있어, 그걸 그대로 응답에 쓰면
+		// 명세(API 7 "현재 상태를 그대로 돌려준다")와 다르게 step 3으로 잘못 응답하게 된다.
+		jdbc.update("UPDATE experience SET status = 'REVIEWED', last_reviewed_step = 4 WHERE id = ?", experience.getId());
 
-		boolean changed = transitionService.applyIdempotent(experience, e -> e.confirmReviewStep(3, now));
+		var result = transitionService.applyIdempotent(experience, e -> e.confirmReviewStep(3, now));
 
-		assertThat(changed).isFalse();	// 실패가 아니라 "이미 그 지점" 성공으로 처리됨
-		Experience reloaded = experienceRepository.findById(experience.getId()).orElseThrow();
-		assertThat(reloaded.getStatus()).isEqualTo(ExperienceStatus.REVIEWING);
-		assertThat(reloaded.getLastReviewedStep()).isEqualTo(3);	// 승자가 반영한 값 그대로, 패자가 덮어쓰지 않음
+		assertThat(result.changed()).isFalse();	// 실패가 아니라 "이미 그 지점" 성공으로 처리됨
+		// 호출 쪽은 이 값으로 응답을 만들어야 한다. 엔티티의 getLastReviewedStep()(=3, 이번 요청이 만들려던 값)이 아니라
+		// 실제 현재 값(승자가 반영한 4)이어야 한다.
+		assertThat(result.status()).isEqualTo(ExperienceStatus.REVIEWED);
+		assertThat(result.lastReviewedStep()).isEqualTo(4);
 	}
 
 	@Test
@@ -211,9 +213,10 @@ class ExperienceServiceTest {
 		Experience experience = myExperienceService.getMyExperience(caseId, Optional.of(anonymousId));
 		jdbc.update("UPDATE experience SET status = 'AI_REVEALED' WHERE id = ?", experienceId);
 
-		boolean changed = transitionService.applyIdempotent(experience, e -> e.revealCourt(Instant.now()));
+		var result = transitionService.applyIdempotent(experience, e -> e.revealCourt(Instant.now()));
 
-		assertThat(changed).isFalse();
+		assertThat(result.changed()).isFalse();
+		assertThat(result.status()).isEqualTo(ExperienceStatus.AI_REVEALED);
 		assertThat(experienceRepository.findStatusById(experienceId)).contains(ExperienceStatus.AI_REVEALED);
 	}
 

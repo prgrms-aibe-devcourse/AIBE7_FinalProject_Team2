@@ -59,6 +59,11 @@ public class ExperienceTransitionService {
 	public void apply(Experience experience, Runnable relatedWrites, Consumer<Experience> change) {
 		try {
 			relatedWrites.run();
+			// relatedWrites가 기존 엔티티를 고치기만 했다면(예: 다른 엔티티의 필드 변경) 그 UPDATE는
+			// 보통 뒤의 조건부 갱신(flushAutomatically) 때야 나간다. 여기서 바로 flush해서, 그 변경이
+			// 유니크 제약을 위반하더라도 이 catch에서 받히게 한다 (ID 생성 전략이 IDENTITY가 아닌
+			// 엔티티를 저장하는 경우에도 안전).
+			entityManager.flush();
 		} catch (DataIntegrityViolationException e) {
 			throw asCleanConflict(experience.getId(), e);
 		}
@@ -71,14 +76,21 @@ public class ExperienceTransitionService {
 	 * - 섹션 확인(API 7): 상태가 같아도(REVIEWING 안에서 2 → 3) lastReviewedStep까지 비교해야
 	 *   "이미 그 섹션 이상"을 올바르게 판정할 수 있다 (리뷰 반영)
 	 * 다른 요청이 이미 그 지점(상태, 그리고 상태가 같다면 섹션까지) 이상으로 진행시켰으면 성공으로 본다.
-	 * @return 이번 요청이 상태를 바꿨으면 true, 이미 그 지점 이상이었으면 false
+	 * 이미 그 지점이었던 경우, 넘긴 체험 엔티티에는 "이번 요청이 만들려던 값"이 들어 있을 뿐 실제
+	 * 현재 값이 아닐 수 있다(예: 동시에 step 3을 확인하는 중 다른 요청이 step 4까지 먼저 끝난 경우).
+	 * API 명세 API 7 "현재 상태를 그대로 돌려준다"를 지키려면, 호출 쪽은 TransitionResult의
+	 * status · lastReviewedStep으로 응답을 만들어야 한다(엔티티 값을 쓰지 말 것) (리뷰 반영).
 	 */
 	@Transactional
-	public boolean applyIdempotent(Experience experience, Consumer<Experience> change) {
+	public TransitionResult applyIdempotent(Experience experience, Consumer<Experience> change) {
 		return applyChange(experience, change, true);
 	}
 
-	private boolean applyChange(Experience experience, Consumer<Experience> change, boolean idempotent) {
+	/** 상태 전이 결과. changed가 false(멱등 성공)일 때 status · lastReviewedStep은 실제 현재 값이다 */
+	public record TransitionResult(boolean changed, ExperienceStatus status, int lastReviewedStep) {
+	}
+
+	private TransitionResult applyChange(Experience experience, Consumer<Experience> change, boolean idempotent) {
 		ExperienceStatus beforeStatus = experience.getStatus();
 		int beforeStep = experience.getLastReviewedStep();
 
@@ -88,7 +100,7 @@ public class ExperienceTransitionService {
 		ExperienceStatus targetStatus = experience.getStatus();
 		int targetStep = experience.getLastReviewedStep();
 		if (targetStatus == beforeStatus && targetStep == beforeStep) {
-			return false;	// 바뀐 것이 없음 (이미 공개됨, 이미 확인한 섹션 등)
+			return new TransitionResult(false, targetStatus, targetStep);	// 바뀐 것이 없음 (이미 공개됨, 이미 확인한 섹션 등)
 		}
 
 		int updated = experienceRepository.updateStateIfUnchanged(
@@ -97,7 +109,7 @@ public class ExperienceTransitionService {
 			experience.getPreJudgedAt(), experience.getReviewedAt(), experience.getVerdictConfirmedAt(),
 			experience.getAiRevealedAt(), experience.getCompletedAt(), clock.instant());
 		if (updated == 1) {
-			return true;
+			return new TransitionResult(true, targetStatus, targetStep);
 		}
 
 		// 다른 요청이 먼저 처리함
@@ -105,7 +117,7 @@ public class ExperienceTransitionService {
 		boolean alreadyThere = current.status().ordinal() > targetStatus.ordinal()
 			|| (current.status() == targetStatus && current.lastReviewedStep() >= targetStep);
 		if (idempotent && alreadyThere) {
-			return false;
+			return new TransitionResult(false, current.status(), current.lastReviewedStep());
 		}
 		throw new InvalidExperienceStateException(current.status(), "다른 요청이 먼저 처리되었습니다.");
 	}
