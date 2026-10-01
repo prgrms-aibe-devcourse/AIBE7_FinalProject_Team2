@@ -28,6 +28,12 @@ spring:
     # 운영 DB 전체 삭제를 막기 위해 clean 명령은 항상 막아 둔다 (기본값이지만 명시)
     clean-disabled: true
 
+  jackson:
+    deserialization:
+      # 정수 필드(형량 개월 · 금액 · step · id 등)에 소수가 오면 소수점을 버리지 않고 400 VALIDATION_ERROR로 거절한다 (BE-22, B안)
+      # 36.7 → 36처럼 사용자가 보낸 값과 다른 값이 조용히 저장되는 것을 막는다. "36" 같은 문자열 숫자는 허용한다
+      accept-float-as-int: false
+
 # Swagger UI · OpenAPI 문서. 기본값은 꺼짐: 운영에서 환경변수를 빠뜨려도 API 문서가 노출되지 않도록 안전한 쪽에 둔다.
 # 로컬 · 개발에서만 SWAGGER_ENABLED=true 로 켠다.
 springdoc:
