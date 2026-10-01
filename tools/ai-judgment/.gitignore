@@ -5,3 +5,6 @@ out/
 cases/
 
 __pycache__/
+
+# case-extractor 가상 환경
+.venv/
