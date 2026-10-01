@@ -28,3 +28,34 @@ export function read() {
   }
   return save(initialState());
 }
+
+function jsonStore(key) {
+  return {
+    save: (value) => {
+      localStorage.setItem(key, JSON.stringify(value));
+      return value;
+    },
+    read: () => {
+      const raw = localStorage.getItem(key);
+      if (!raw) return null;
+      try {
+        return JSON.parse(raw);
+      } catch {
+        return null;
+      }
+    },
+    clear: () => localStorage.removeItem(key),
+  };
+}
+
+// S-06에서 확정 제출한 판결 · S-03에서 고른 사전 판단(목 전용, S-09에서 사용).
+// 상태(storageKey)와 별도 키로 둬서 다른 save() 호출이 이 값들을 덮어쓰지 않게 한다.
+const judgmentStore = jsonStore('nlnb-mock-judgment');
+export const saveJudgment = judgmentStore.save;
+export const readJudgment = judgmentStore.read;
+export const clearJudgment = judgmentStore.clear;
+
+const preJudgmentStore = jsonStore('nlnb-mock-pre-judgment');
+export const savePreJudgment = preJudgmentStore.save;
+export const readPreJudgment = preJudgmentStore.read;
+export const clearPreJudgment = preJudgmentStore.clear;
