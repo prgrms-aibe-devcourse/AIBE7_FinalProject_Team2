@@ -47,7 +47,9 @@ public class ReviewResponseAssembler {
 	}
 
 	private ReviewResponse.Law law(LegalCase legalCase, List<CaseSection> sections, List<PenaltyRule> rules) {
-		var ranges = rules.stream().sorted(Comparator.comparingInt(PenaltyRule::getDisplayOrder))
+		var ranges = rules.stream()
+			.filter(rule -> rule.getAllowedMin() != null && rule.getAllowedMax() != null)
+			.sorted(Comparator.comparingInt(PenaltyRule::getDisplayOrder))
 			.map(rule -> new ReviewResponse.AllowedRange(rule.getPenaltyType(), rule.getAllowedMin(), rule.getAllowedMax(),
 				PenaltyRangeText.format(rule.getPenaltyType(), rule.getAllowedMin(), rule.getAllowedMax()))).toList();
 		return new ReviewResponse.Law(legalCase.getAppliedLaw(), legalCase.getStatutoryPenaltyText(), ranges, ALLOWED_RANGE_NOTE,

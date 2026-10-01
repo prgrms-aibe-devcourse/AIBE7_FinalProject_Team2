@@ -114,6 +114,28 @@ class ReviewResponseAssemblerTest {
 	}
 
 	@Test
+	void assemble_missingRangeBounds_excludesRulesAndPreservesDisplayOrder() {
+		var missingMin = rule(PenaltyType.DEATH, 240, 600, 1);
+		when(missingMin.getAllowedMin()).thenReturn(null);
+		var missingMax = rule(PenaltyType.FINE, 25000, 20000000, 2);
+		when(missingMax.getAllowedMax()).thenReturn(null);
+		rules = List.of(rule(PenaltyType.PRISON, 30, 360, 4), missingMax,
+			rule(PenaltyType.LIFE, 120, 600, 3), missingMin);
+		assertThat(response(ExperienceStatus.REVIEWED, 4).law().allowedRanges()).containsExactly(
+			new ReviewResponse.AllowedRange(PenaltyType.LIFE, 120L, 600L, "무기징역 (감경하면 징역 10년 ~ 50년)"),
+			new ReviewResponse.AllowedRange(PenaltyType.PRISON, 30L, 360L, "징역 2년 6개월 ~ 30년"));
+	}
+
+	@Test
+	void assemble_noCompleteRange_returnsEmptyAllowedRanges() {
+		var missingBounds = rule(PenaltyType.DEATH, 240, 600, 1);
+		when(missingBounds.getAllowedMin()).thenReturn(null);
+		when(missingBounds.getAllowedMax()).thenReturn(null);
+		rules = List.of(missingBounds);
+		assertThat(response(ExperienceStatus.REVIEWED, 4).law().allowedRanges()).isEmpty();
+	}
+
+	@Test
 	void assemble_nullItemFields_omitsOnlyItemNulls() {
 		var tree = mapper.valueToTree(response(ExperienceStatus.PRE_JUDGED, 1));
 		var items = tree.get("sections").get(1).get("items");
