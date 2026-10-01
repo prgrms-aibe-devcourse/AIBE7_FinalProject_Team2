@@ -10,6 +10,7 @@
 | v0.6 | 2026-09-30 | BE-16 시드 반영 — API 4 · 5 · 14 예시의 사전 판단 구간 `rangeOptionId`를 DB 실제 값(살인 8 ~ 15, 예시 선택 11)으로 정정 (ERD v1.6) |
 | v0.7 | 2026-09-30 | API 4 · 5 구현 반영 (BE-7) — API 4 형량 구간 개수를 범죄 유형별로 명시(살인 8개, 사기 · 상해 7개), 두 API의 404 · 400 거절 조건 추가, API 5 검사 순서 · 거절 시 저장 없음 · `factorIds` 규칙 순서 명시 |
 | v0.8 | 2026-10-01 | BE-8 리뷰 반영 — API 6의 선고 가능 범위는 하한·상한이 모두 있는 규칙만 포함, 범위 표시 문구를 API 8 형식으로 통일, LAW_TERM은 law.terms로만 전달하도록 명시 |
+| v0.9 | 2026-10-01 | 후속 정리 (COMMON-14) — 1-1에 숫자 입력 규칙 추가(정수 필드의 소수는 `VALIDATION_ERROR`, 문자열 숫자는 허용, BE-22), API 9에 열거값에 없는 `penaltyType`도 `INVALID_PENALTY_TYPE`으로 거절한다고 명시(1-5 열거값 규칙보다 우선, BE-9) |
 
 ---
 
@@ -24,6 +25,7 @@
 | 필드 이름 | camelCase |
 | 날짜 · 시각 | ISO 8601 (`2026-09-28T15:30:00+09:00`) |
 | 형량 단위 | 징역 · 집행유예는 **개월**(int), 벌금은 **원**(long). 화면에서 "2년 6개월"로 바꿔 보여 준다 |
+| 숫자 입력 | (v0.9) 정수 필드(형량 개월 · 금액 · `step` · ID 등)에 소수(`36.7`, `36.0`)가 오면 400 `VALIDATION_ERROR`로 거절한다. 소수점을 버려 다른 값으로 저장하지 않기 위해서다. `"36"`처럼 숫자로 읽을 수 있는 문자열은 숫자로 받고, `"삼십육"`처럼 읽을 수 없는 문자열은 400이다. 본문 형식 오류라 사건 · 체험 조회보다 먼저 거절한다 (BE-22) |
 | 열거값 | ERD 값을 그대로 쓴다 (`PRISON`, `UP`, `COMPLETED` 등) |
 | 인증 | MVP는 로그인 없음. **익명 ID 쿠키**로 사용자를 구분한다 (1-2) |
 
@@ -370,6 +372,7 @@ json
 - 선택하지 않은 형벌의 값(`PRISON`인데 `fineAmount`)은 `null`이어야 한다. 값이 있으면 `VALIDATION_ERROR`. 최종 선고 형벌(`reducedTo`가 있으면 그 값)이 `DEATH` · `LIFE`인데 `prisonMonths` · `fineAmount` · `suspensionMonths`에 값이 있어도 `VALIDATION_ERROR`다.
 - (v0.4) 최종 선고 형벌은 `reducedTo`가 있으면 그 값, 없으면 `penaltyType`이다. 예: 무기징역 그대로 `{ "penaltyType": "LIFE", "reducedTo": null, "prisonMonths": null }`, 무기징역을 감경해 징역 40년 `{ "penaltyType": "LIFE", "reducedTo": "PRISON", "prisonMonths": 480 }`
 - 무죄는 MVP에서 받지 않는다(요구사항 15장, v0.3). `penalty_rule`에 없는 형벌이므로 `INVALID_PENALTY_TYPE`으로 거절된다.
+- (v0.9) `penaltyType`이 형벌 열거값(`DEATH` · `LIFE` · `PRISON` · `FINE`)에 없는 문자열(`NOT_GUILTY`, 오타 등)이어도 400이 아니라 422 `INVALID_PENALTY_TYPE`이다. 무죄를 위 규칙대로 거절하기 위해서이며, 1-5의 "잘못된 열거값 → `VALIDATION_ERROR`"보다 이 규칙이 우선한다. 그래서 서버는 `penaltyType` · `reducedTo`를 문자열로 받는다.
 
 **응답 200**
 
