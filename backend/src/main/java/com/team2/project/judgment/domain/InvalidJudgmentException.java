@@ -15,7 +15,11 @@ public class InvalidJudgmentException extends RuntimeException {
 		INVALID_REDUCTION("INVALID_PENALTY_TYPE"),		// 허용되지 않은 감경 조합 (사형 → 무기 · 징역, 무기 → 징역만)
 		INVALID_TERM_VALUES("VALIDATION_ERROR"),		// 형벌 종류에 맞지 않는 개월 · 금액 조합, 0 이하 값
 		SUSPENSION_NOT_ALLOWED("INVALID_SUSPENSION"),	// 사형 · 무기를 고른 뒤 집행유예
-		MISSING_DIRECTION("INVALID_FACTOR");			// 최종 판결 판단 요소에 방향 없음
+		MISSING_DIRECTION("INVALID_FACTOR"),			// 최종 판결 판단 요소에 방향 없음
+		PENALTY_NOT_OFFERED("INVALID_PENALTY_TYPE"),
+		OUT_OF_ALLOWED_RANGE("OUT_OF_ALLOWED_RANGE"),
+		SUSPENSION_CONDITION("INVALID_SUSPENSION"),
+		INVALID_FACTOR("INVALID_FACTOR");
 
 		private final String apiErrorCode;
 
@@ -29,9 +33,17 @@ public class InvalidJudgmentException extends RuntimeException {
 	}
 
 	private final Reason reason;
+	private final String field;
 
 	public InvalidJudgmentException(Reason reason, String message) {
 		super(message);
 		this.reason = reason;
+		this.field = null;
+	}
+
+	public InvalidJudgmentException(Reason reason, String message, String field) {
+		super(message);
+		this.reason = reason;
+		this.field = field;
 	}
 }
