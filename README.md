@@ -66,6 +66,7 @@ FLYWAY_LOCATIONS=classpath:db/migration,classpath:db/seed ./gradlew bootRun
 | `DB_PASSWORD` | `lawnambul` | DB 비밀번호 (로컬 전용 값) |
 | `DDL_AUTO` | `validate` | Hibernate 스키마 처리 방식 (스키마는 Flyway로만 바꾼다) |
 | `FLYWAY_LOCATIONS` | `classpath:db/migration` | 마이그레이션 위치. 시드는 `,classpath:db/seed`를 덧붙여 켠다 |
+| `SWAGGER_ENABLED` | `false` | Swagger UI · OpenAPI 문서 노출. 로컬 · 개발에서만 `true`로 켠다 (`/swagger-ui/index.html`, `/v3/api-docs`) |
 
 운영 DB 계정은 이 저장소에 적지 않고 실행할 때 환경변수로만 넘긴다. 시드는 운영에 넣지 않는다.
 
