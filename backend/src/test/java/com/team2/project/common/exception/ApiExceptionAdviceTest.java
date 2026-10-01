@@ -24,6 +24,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -109,6 +110,23 @@ class ApiExceptionAdviceTest {
 			.andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 	}
 
+	@Test
+	@DisplayName("필수 헤더 누락처럼 목록에 따로 적지 않은 Spring MVC 예외도 500이 아니라 400 VALIDATION_ERROR (리뷰 반영)")
+	void handleExceptionInternal_missingRequiredHeader_returnsValidationErrorNotInternal() throws Exception {
+		mockMvc.perform(get("/test/with-header"))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+	}
+
+	@Test
+	@DisplayName("처리할 수 없는 Accept 헤더도 목록에 없지만 500이 아니라 406을 그대로 유지한다 (리뷰 반영)")
+	void handleExceptionInternal_notAcceptable_keepsStatusInsteadOfInternalError() throws Exception {
+		// 클라이언트가 JSON을 받지 않겠다고 선언했으므로(Accept: application/xml), 서버가 JSON 에러 본문을
+		// 실어 보내지 않는 것 자체가 올바른 동작이다. 여기서 확인할 것은 500으로 새지 않는다는 것뿐이다.
+		mockMvc.perform(get("/test/only-json").accept(MediaType.APPLICATION_XML))
+			.andExpect(status().isNotAcceptable());
+	}
+
 	@RestController
 	static class TestController {
 
@@ -143,6 +161,15 @@ class ApiExceptionAdviceTest {
 		@GetMapping("/test/unexpected")
 		void unexpected() {
 			throw new IllegalStateException("내부 구현 정보가 담긴 메시지");
+		}
+
+		@GetMapping("/test/with-header")
+		void withHeader(@RequestHeader("X-Required") String header) {
+		}
+
+		@GetMapping(value = "/test/only-json", produces = MediaType.APPLICATION_JSON_VALUE)
+		String onlyJson() {
+			return "{}";
 		}
 	}
 

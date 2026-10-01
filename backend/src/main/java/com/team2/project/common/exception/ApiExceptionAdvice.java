@@ -4,26 +4,28 @@ import java.sql.SQLException;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
-import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.BindException;
-import org.springframework.web.ErrorResponseException;
-import org.springframework.web.HttpMediaTypeNotSupportedException;
-import org.springframework.web.HttpRequestMethodNotSupportedException;
-import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
-import org.springframework.web.servlet.resource.NoResourceFoundException;
+import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 /**
  * 글로벌 예외 처리. 예외 → 공통 에러 응답(API 명세 1-4) 변환은 여기 한 곳에서만 한다.
  * 응답에는 사용자에게 필요한 메시지만 담고, 원인 · 스택 트레이스는 로그에만 남긴다 (CODE_CONVENTIONS 3-3).
+ *
+ * ResponseEntityExceptionHandler를 상속해서 Spring MVC가 던지는 요청 처리 예외(폼 바인딩, 형식 · 헤더 ·
+ * 경로변수 오류, 지원하지 않는 메서드 · Content-Type, 없는 주소 등 그 목록 전체)를 handleExceptionInternal
+ * 한 곳에서 받는다. 개별 예외를 하나씩 @ExceptionHandler로 나열하지 않아도 되고, 목록에서 빠뜨려 500으로
+ * 새는 경우도 없앤다 (리뷰 반영).
  */
 @Slf4j
 @RestControllerAdvice
-public class ApiExceptionAdvice {
+public class ApiExceptionAdvice extends ResponseEntityExceptionHandler {
 
 	/** PostgreSQL 유니크 위반 SQLSTATE */
 	private static final String UNIQUE_VIOLATION = "23505";
@@ -34,24 +36,13 @@ public class ApiExceptionAdvice {
 		return ResponseEntity.status(e.getErrorCode().getStatus()).body(ErrorResponse.from(e));
 	}
 
-	/** @Valid 검증 실패 → VALIDATION_ERROR + 필드별 사유 (사유는 제약 이름, 예: NotNull · Min) */
-	@ExceptionHandler(BindException.class)
-	public ResponseEntity<ErrorResponse> handleBind(BindException e) {
-		List<FieldErrorDetail> details = e.getFieldErrors().stream()
-			.map(error -> new FieldErrorDetail(error.getField(), error.getCode()))
-			.toList();
-		return validationError(details);
-	}
-
-	/** 요청 형식 오류: JSON 파싱 · 잘못된 열거값, 경로 · 파라미터 타입 오류, 필수 파라미터 누락, 메서드 파라미터 검증 실패 */
-	@ExceptionHandler({
-		HttpMessageNotReadableException.class,
-		MethodArgumentTypeMismatchException.class,
-		MissingServletRequestParameterException.class,
-		HandlerMethodValidationException.class
-	})
-	public ResponseEntity<ErrorResponse> handleBadRequest(Exception e) {
-		log.debug("요청 형식 오류: {}", e.getMessage());
+	/**
+	 * 경로 · 쿼리 파라미터 타입 오류(예: {caseId}에 숫자가 아닌 값).
+	 * ResponseEntityExceptionHandler가 이 예외를 자체 처리하지 않을 수 있어 안전하게 직접 잡는다.
+	 */
+	@ExceptionHandler(MethodArgumentTypeMismatchException.class)
+	public ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
+		log.debug("경로 · 파라미터 타입 오류: {}", e.getMessage());
 		return validationError(null);
 	}
 
@@ -69,28 +60,31 @@ public class ApiExceptionAdvice {
 		return internalError(e);
 	}
 
-	/**
-	 * Spring MVC가 정한 요청 오류(없는 주소, 지원하지 않는 메서드 · Content-Type 등)는 HTTP 상태를 그대로 두고
-	 * 4xx는 VALIDATION_ERROR(개발 오류, API 명세 1-5)로 응답한다.
-	 */
-	@ExceptionHandler({
-		NoResourceFoundException.class,
-		HttpRequestMethodNotSupportedException.class,
-		HttpMediaTypeNotSupportedException.class,
-		ErrorResponseException.class
-	})
-	public ResponseEntity<ErrorResponse> handleSpringWeb(Exception e) {
-		var status = ((org.springframework.web.ErrorResponse) e).getStatusCode();
-		if (status.is5xxServerError()) {
-			return internalError(e);
-		}
-		return ResponseEntity.status(status).body(ErrorResponse.of(ErrorCode.VALIDATION_ERROR));
-	}
-
 	/** 그 밖의 모든 예외 → INTERNAL_ERROR (원인은 로그에만) */
 	@ExceptionHandler(Exception.class)
 	public ResponseEntity<ErrorResponse> handleUnexpected(Exception e) {
 		return internalError(e);
+	}
+
+	/**
+	 * ResponseEntityExceptionHandler가 처리하는 모든 Spring MVC 예외의 공통 통로.
+	 * BindException(@Valid 포함)은 필드별 사유를 details에 담는다. 4xx는 VALIDATION_ERROR,
+	 * 5xx는 INTERNAL_ERROR로 통일한다 (API 명세에 이 예외들에 대응하는 별도 코드가 없음, 1-5).
+	 */
+	@Override
+	protected ResponseEntity<Object> handleExceptionInternal(Exception ex, Object body, HttpHeaders headers,
+		HttpStatusCode statusCode, WebRequest request) {
+		if (statusCode.is5xxServerError()) {
+			log.error("처리하지 못한 요청 예외", ex);
+			return ResponseEntity.status(statusCode).body(ErrorResponse.of(ErrorCode.INTERNAL_ERROR));
+		}
+		List<FieldErrorDetail> details = ex instanceof BindException bindException
+			? bindException.getFieldErrors().stream()
+				.map(error -> new FieldErrorDetail(error.getField(), error.getCode()))
+				.toList()
+			: null;
+		log.debug("요청 처리 중 오류: {}", ex.getMessage());
+		return ResponseEntity.status(statusCode).body(ErrorResponse.of(ErrorCode.VALIDATION_ERROR, details));
 	}
 
 	private ResponseEntity<ErrorResponse> validationError(List<FieldErrorDetail> details) {

@@ -11,16 +11,21 @@ import com.team2.project.experience.domain.ExperienceStatus;
 import com.team2.project.experience.domain.InvalidExperienceStateException;
 import com.team2.project.experience.repository.AnonymousUserRepository;
 import com.team2.project.experience.repository.ExperienceRepository;
+import com.team2.project.judgment.domain.Judgment;
+import com.team2.project.judgment.repository.JudgmentRepository;
+import com.team2.project.legalcase.domain.PenaltyType;
 import com.team2.project.legalcase.repository.LegalCaseRepository;
 import jakarta.persistence.EntityManager;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
+import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,6 +46,7 @@ class ExperienceServiceTest {
 	@Autowired AnonymousUserRepository anonymousUserRepository;
 	@Autowired ExperienceRepository experienceRepository;
 	@Autowired LegalCaseRepository legalCaseRepository;
+	@Autowired JudgmentRepository judgmentRepository;
 
 	private Long caseId;
 	private Long draftCaseId;
@@ -55,6 +61,9 @@ class ExperienceServiceTest {
 			RETURNING id""";
 		caseId = jdbc.queryForObject(sql, Long.class, "PUBLISHED");
 		draftCaseId = jdbc.queryForObject(sql, Long.class, "DRAFT");
+		jdbc.update("""
+			INSERT INTO penalty_rule (case_id, penalty_type, allowed_min, allowed_max, suspension_allowed, display_order)
+			VALUES (?, 'PRISON', 60, 360, true, 1)""", caseId);
 		AnonymousUser user = anonymousUserRepository.save(AnonymousUser.issue(Instant.now()));
 		anonymousId = user.getId();
 		experienceRepository.save(Experience.start(user, legalCaseRepository.getReferenceById(caseId)));
@@ -114,6 +123,69 @@ class ExperienceServiceTest {
 		assertThatThrownBy(() -> transitionService.apply(experience, e -> e.markPreJudged(Instant.now())))
 			.isInstanceOfSatisfying(InvalidExperienceStateException.class,
 				e -> assertThat(e.getExperienceStatus()).isEqualTo(ExperienceStatus.PRE_JUDGED));
+	}
+
+	@Test
+	@DisplayName("섹션 확인(API 7) 동시 클릭: 다른 요청이 이미 그 섹션 이상으로 진행시켰으면 성공으로 본다 (리뷰 반영)")
+	void applyIdempotent_reviewStepAlreadyReachedByOther_succeeds() {
+		Experience experience = myExperienceService.getMyExperience(caseId, Optional.of(anonymousId));
+		Instant now = Instant.now();
+		transitionService.apply(experience, e -> e.markPreJudged(now));			// STARTED -> PRE_JUDGED, step 1
+		transitionService.apply(experience, e -> e.confirmReviewStep(2, now));	// -> REVIEWING, step 2
+		// 두 요청이 동시에 step 3을 확인했고, 다른 요청(승자)이 먼저 반영된 상황.
+		// status는 그대로(REVIEWING)인 채 lastReviewedStep만 앞서 있어서, status만 비교하면 "바뀌지 않았다"고 오판하기 쉽다.
+		jdbc.update("UPDATE experience SET last_reviewed_step = 3 WHERE id = ?", experience.getId());
+
+		boolean changed = transitionService.applyIdempotent(experience, e -> e.confirmReviewStep(3, now));
+
+		assertThat(changed).isFalse();	// 실패가 아니라 "이미 그 지점" 성공으로 처리됨
+		Experience reloaded = experienceRepository.findById(experience.getId()).orElseThrow();
+		assertThat(reloaded.getStatus()).isEqualTo(ExperienceStatus.REVIEWING);
+		assertThat(reloaded.getLastReviewedStep()).isEqualTo(3);	// 승자가 반영한 값 그대로, 패자가 덮어쓰지 않음
+	}
+
+	@Test
+	@DisplayName("권장 순서(상태 전이 먼저, 판단 저장은 그 다음)면 동시 판결 확정의 패자가 유니크 위반 없이 깨끗하게 거절된다 (리뷰 반영)")
+	void apply_beforeSavingJudgment_losesCleanlyWithoutUniqueViolation() {
+		Experience experience = myExperienceService.getMyExperience(caseId, Optional.of(anonymousId));
+		jdbc.update("UPDATE experience SET status = 'REVIEWED', last_reviewed_step = 4 WHERE id = ?", experience.getId());
+		entityManager.clear();
+		Experience reloaded = myExperienceService.getMyExperience(caseId, Optional.of(anonymousId));
+		// 다른 요청이 먼저 판결을 확정한 상황
+		jdbc.update("UPDATE experience SET status = 'VERDICT_CONFIRMED' WHERE id = ?", reloaded.getId());
+
+		// 권장 순서: 판단을 저장하기 전에 상태 전이부터 시도한다
+		assertThatThrownBy(() -> transitionService.apply(reloaded, e -> e.markVerdictConfirmed(Instant.now())))
+			.isInstanceOfSatisfying(InvalidExperienceStateException.class,
+				e -> assertThat(e.getExperienceStatus()).isEqualTo(ExperienceStatus.VERDICT_CONFIRMED));
+
+		// 패자는 여기서 멈추므로 judgment를 저장하지 않는다 → 유니크 제약 위반 자체가 발생하지 않는다
+		assertThat(jdbc.queryForObject("SELECT count(*) FROM judgment WHERE experience_id = ?", Integer.class,
+			reloaded.getId())).isZero();
+	}
+
+	@Test
+	@DisplayName("반대 순서(판단 저장을 먼저)면 패자가 currentStatus 없는 날 DataIntegrityViolationException으로 실패한다 (문제 재현)")
+	void apply_afterSavingJudgment_losesWithRawUniqueViolationInstead() {
+		Experience experience = myExperienceService.getMyExperience(caseId, Optional.of(anonymousId));
+		jdbc.update("UPDATE experience SET status = 'REVIEWED', last_reviewed_step = 4 WHERE id = ?", experience.getId());
+		entityManager.clear();
+		Experience reloaded = myExperienceService.getMyExperience(caseId, Optional.of(anonymousId));
+		Long experienceId = reloaded.getId();
+		judgmentRepository.saveAndFlush(Judgment.userFinal(reloaded, PenaltyType.PRISON, null, 120, null, null, null));
+		// 다른 요청(승자)이 이미 FINAL 판단을 저장한 상황. 패자가 잘못된 순서로 판단을 먼저 저장하면 유니크 제약에 걸린다
+
+		assertThatThrownBy(() -> judgmentRepository.saveAndFlush(
+			Judgment.userFinal(experienceRepository.findById(experienceId).orElseThrow(),
+				PenaltyType.PRISON, null, 150, null, null, null)))
+			.isInstanceOfSatisfying(DataIntegrityViolationException.class, e -> {
+				var cause = e.getCause();
+				assertThat(cause).isInstanceOf(ConstraintViolationException.class);
+				assertThat(((ConstraintViolationException) cause).getConstraintName())
+					.isEqualTo("uk_judgment_experience_timing");
+			});
+		// 이 경로로 오면 ApiExceptionAdvice.handleDataIntegrity가 currentStatus 없는 일반 INVALID_STATE로 응답한다.
+		// (서비스가 직접 잡아 InvalidExperienceStateException으로 바꾸지 않는 한) — 그래서 호출 순서를 뒤집어 피한다.
 	}
 
 	@Test

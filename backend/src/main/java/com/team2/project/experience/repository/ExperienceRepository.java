@@ -34,6 +34,14 @@ public interface ExperienceRepository extends JpaRepository<Experience, Long> {
 	Optional<ExperienceStatus> findStatusById(@Param("id") Long id);
 
 	/**
+	 * 체험의 현재 상태 + 마지막 확인 섹션을 함께 다시 읽는다.
+	 * 조건부 갱신이 0건일 때, 섹션 확인(API 7)처럼 상태만으로는 "이미 그 지점 이상"을 판정할 수 없는 경우에 쓴다.
+	 */
+	@Query("select new com.team2.project.experience.repository.ExperienceState(e.status, e.lastReviewedStep) "
+		+ "from Experience e where e.id = :id")
+	Optional<ExperienceState> findStateById(@Param("id") Long id);
+
+	/**
 	 * 조건부 갱신: 읽은 뒤 다른 요청이 상태를 바꾸지 않았을 때만(status · lastReviewedStep이 그대로일 때만) 새 상태를 반영한다.
 	 * 동시에 두 요청이 오면 하나만 1을 돌려받고 나머지는 0 (API 명세 API 5 · 9 "조건부 갱신")
 	 * ExperienceTransitionService가 체험 엔티티를 영속성 컨텍스트에서 분리한 뒤 부르므로 컨텍스트를 비우지 않는다.
