@@ -3,6 +3,7 @@ package com.team2.project.persistence;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.team2.project.common.exception.ErrorCode;
 import com.team2.project.comparison.domain.AnalysisFailReason;
 import com.team2.project.comparison.domain.AnalysisStatus;
 import com.team2.project.comparison.domain.ComparisonAnalysis;
@@ -224,17 +225,17 @@ class JpaMappingTest {
 		// 허용되지 않은 감경 조합, 사형 · 무기 감경 후 집행유예, 0 이하 형량
 		assertThatThrownBy(() -> Judgment.userFinal(experience, PenaltyType.LIFE, PenaltyType.LIFE, null, null, null, null))
 			.isInstanceOfSatisfying(InvalidJudgmentException.class,
-				e -> assertThat(e.getReason().getApiErrorCode()).isEqualTo("INVALID_PENALTY_TYPE"));
+				e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.INVALID_PENALTY_TYPE));
 		assertThatThrownBy(() -> Judgment.userFinal(experience, PenaltyType.LIFE, PenaltyType.PRISON, 120, null, 24, null))
 			.isInstanceOfSatisfying(InvalidJudgmentException.class,
-				e -> assertThat(e.getReason().getApiErrorCode()).isEqualTo("INVALID_SUSPENSION"));
+				e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.INVALID_SUSPENSION));
 		// 감경 없이 사형 · 무기 + 집행유예도 VALIDATION_ERROR가 아니라 INVALID_SUSPENSION (API 명세 1-5)
 		assertThatThrownBy(() -> Judgment.userFinal(experience, PenaltyType.DEATH, null, null, null, 12, null))
 			.isInstanceOfSatisfying(InvalidJudgmentException.class,
-				e -> assertThat(e.getReason().getApiErrorCode()).isEqualTo("INVALID_SUSPENSION"));
+				e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.INVALID_SUSPENSION));
 		assertThatThrownBy(() -> Judgment.userFinal(experience, PenaltyType.LIFE, null, null, null, 24, null))
 			.isInstanceOfSatisfying(InvalidJudgmentException.class,
-				e -> assertThat(e.getReason().getApiErrorCode()).isEqualTo("INVALID_SUSPENSION"));
+				e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.INVALID_SUSPENSION));
 		assertThatThrownBy(() -> Judgment.userFinal(experience, PenaltyType.PRISON, null, 0, null, null, null))
 			.isInstanceOfSatisfying(InvalidJudgmentException.class,
 				e -> assertThat(e.getReason()).isEqualTo(InvalidJudgmentException.Reason.INVALID_TERM_VALUES));

@@ -155,7 +155,7 @@ class VerdictValidatorTest {
 		assertThat(FACTORY.getValidator().validate(request)).isEmpty();
 		if (constraint.equals("uk_judgment_experience_timing")) {
 			assertThatThrownBy(() -> service.submit(1L, request)).isInstanceOfSatisfying(InvalidExperienceStateException.class,
-				error -> assertThat(error.getCurrentStatus()).isEqualTo(ExperienceStatus.VERDICT_CONFIRMED));
+				error -> assertThat(error.getExperienceStatus()).isEqualTo(ExperienceStatus.VERDICT_CONFIRMED));
 		} else {
 			assertThatThrownBy(() -> service.submit(1L, request)).isSameAs(original);
 		}
