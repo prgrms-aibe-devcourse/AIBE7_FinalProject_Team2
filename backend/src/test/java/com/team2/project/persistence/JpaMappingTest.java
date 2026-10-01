@@ -3,6 +3,10 @@ package com.team2.project.persistence;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.team2.project.comparison.domain.AnalysisFailReason;
+import com.team2.project.comparison.domain.AnalysisStatus;
+import com.team2.project.comparison.domain.ComparisonAnalysis;
+import com.team2.project.comparison.repository.ComparisonAnalysisRepository;
 import com.team2.project.experience.domain.AnonymousUser;
 import com.team2.project.experience.domain.Experience;
 import com.team2.project.experience.domain.ExperienceStatus;
@@ -28,6 +32,7 @@ import com.team2.project.legalcase.domain.RangeKind;
 import com.team2.project.legalcase.domain.RevealStage;
 import com.team2.project.legalcase.domain.SentenceRangeOption;
 import com.team2.project.legalcase.repository.CaseSectionRepository;
+import com.team2.project.legalcase.repository.CaseSourceRepository;
 import com.team2.project.legalcase.repository.FactorRepository;
 import com.team2.project.legalcase.repository.LegalCaseRepository;
 import com.team2.project.legalcase.repository.PenaltyRuleRepository;
@@ -42,6 +47,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -64,6 +70,8 @@ class JpaMappingTest {
 	@Autowired ExperienceRepository experienceRepository;
 	@Autowired JudgmentRepository judgmentRepository;
 	@Autowired JudgmentFactorRepository judgmentFactorRepository;
+	@Autowired CaseSourceRepository caseSourceRepository;
+	@Autowired ComparisonAnalysisRepository comparisonAnalysisRepository;
 
 	private Long caseId;
 	private Long overviewFactorId;
@@ -220,6 +228,13 @@ class JpaMappingTest {
 		assertThatThrownBy(() -> Judgment.userFinal(experience, PenaltyType.LIFE, PenaltyType.PRISON, 120, null, 24, null))
 			.isInstanceOfSatisfying(InvalidJudgmentException.class,
 				e -> assertThat(e.getReason().getApiErrorCode()).isEqualTo("INVALID_SUSPENSION"));
+		// 감경 없이 사형 · 무기 + 집행유예도 VALIDATION_ERROR가 아니라 INVALID_SUSPENSION (API 명세 1-5)
+		assertThatThrownBy(() -> Judgment.userFinal(experience, PenaltyType.DEATH, null, null, null, 12, null))
+			.isInstanceOfSatisfying(InvalidJudgmentException.class,
+				e -> assertThat(e.getReason().getApiErrorCode()).isEqualTo("INVALID_SUSPENSION"));
+		assertThatThrownBy(() -> Judgment.userFinal(experience, PenaltyType.LIFE, null, null, null, 24, null))
+			.isInstanceOfSatisfying(InvalidJudgmentException.class,
+				e -> assertThat(e.getReason().getApiErrorCode()).isEqualTo("INVALID_SUSPENSION"));
 		assertThatThrownBy(() -> Judgment.userFinal(experience, PenaltyType.PRISON, null, 0, null, null, null))
 			.isInstanceOfSatisfying(InvalidJudgmentException.class,
 				e -> assertThat(e.getReason()).isEqualTo(InvalidJudgmentException.Reason.INVALID_TERM_VALUES));
@@ -227,5 +242,37 @@ class JpaMappingTest {
 		// 사전 판단 전에 판결 확정 불가
 		assertThatThrownBy(() -> experience.markVerdictConfirmed(Instant.now()))
 			.isInstanceOf(InvalidExperienceStateException.class);
+	}
+
+	@Test
+	@DisplayName("사건마다 최종 확정 판결 원본은 1건만 넣을 수 있다")
+	void caseSource_duplicateFinal_isRejected() {
+		String sql = """
+			INSERT INTO case_source (case_id, court_level, case_number, is_final, source_org)
+			VALUES (?, ?, ?, ?, '가상 예시')""";
+		jdbc.update(sql, caseId, "FIRST", "SAMPLE-1", false);
+		jdbc.update(sql, caseId, "APPEAL", "SAMPLE-2", true);
+
+		assertThat(caseSourceRepository.findFinalByCaseId(caseId).orElseThrow().getCaseNumber()).isEqualTo("SAMPLE-2");
+		// 최종 확정 판결을 하나 더 넣으면 uk_case_source_final 위반 (이후 트랜잭션은 중단되므로 마지막에 확인)
+		assertThatThrownBy(() -> jdbc.update(sql, caseId, "SUPREME", "SAMPLE-3", true))
+			.isInstanceOf(DataIntegrityViolationException.class)
+			.hasMessageContaining("uk_case_source_final");
+	}
+
+	@Test
+	@DisplayName("비교 분석은 PENDING일 때만 끝나고, 끝난 결과는 덮어쓰지 않는다")
+	void comparisonAnalysis_finished_isNotOverwritten() {
+		Instant now = Instant.now();
+		Experience experience = experienceRepository.save(Experience.start(
+			anonymousUserRepository.save(AnonymousUser.issue(now)), legalCaseRepository.getReferenceById(caseId)));
+		ComparisonAnalysis done = comparisonAnalysisRepository.save(ComparisonAnalysis.pending(experience, "model", "v1"));
+
+		assertThat(done.complete(Map.of("common", List.of()), Map.of(), Map.of(), now)).isTrue();
+		// 시간 초과 처리가 늦게 와도 DONE 결과를 FAILED로 덮어쓰지 않는다
+		assertThat(done.fail(AnalysisFailReason.TIMEOUT, Map.of(), Map.of(), now)).isFalse();
+		assertThat(done.getStatus()).isEqualTo(AnalysisStatus.DONE);
+		assertThat(done.getFailReason()).isNull();
+		assertThat(done.getContent()).isNotNull();
 	}
 }

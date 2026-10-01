@@ -72,23 +72,39 @@ public class ComparisonAnalysis {
 		return analysis;
 	}
 
-	/** 검증 통과 → DONE */
-	public void complete(Map<String, Object> content, Map<String, Object> inputSnapshot,
+	/**
+	 * 검증 통과 → DONE. PENDING일 때만 바꾸고, 이미 끝난 분석이면 아무것도 하지 않고 false를 돌려준다.
+	 * (시간 초과로 FAILED 처리한 뒤 늦게 도착한 응답이 결과를 덮어쓰지 않도록)
+	 */
+	public boolean complete(Map<String, Object> content, Map<String, Object> inputSnapshot,
 		Map<String, Object> rawOutput, Instant now) {
+		if (status != AnalysisStatus.PENDING) {
+			return false;
+		}
 		this.status = AnalysisStatus.DONE;
 		this.content = content;
+		this.failReason = null;
 		this.inputSnapshot = inputSnapshot;
 		this.rawOutput = rawOutput;
 		this.completedAt = now;
+		return true;
 	}
 
-	/** 실패 → FAILED (화면은 규칙 문장 유지) */
-	public void fail(AnalysisFailReason reason, Map<String, Object> inputSnapshot,
+	/**
+	 * 실패 → FAILED (화면은 규칙 문장 유지). PENDING일 때만 바꾸고, 이미 끝난 분석이면 false를 돌려준다.
+	 * (검증을 통과해 DONE이 된 결과를 늦은 시간 초과 처리가 덮어쓰지 않도록)
+	 */
+	public boolean fail(AnalysisFailReason reason, Map<String, Object> inputSnapshot,
 		Map<String, Object> rawOutput, Instant now) {
+		if (status != AnalysisStatus.PENDING) {
+			return false;
+		}
 		this.status = AnalysisStatus.FAILED;
 		this.failReason = reason;
+		this.content = null;
 		this.inputSnapshot = inputSnapshot;
 		this.rawOutput = rawOutput;
 		this.completedAt = now;
+		return true;
 	}
 }

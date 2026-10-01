@@ -140,16 +140,17 @@ public class Judgment {
 			throw new InvalidJudgmentException(Reason.INVALID_REDUCTION,
 				penaltyType + "은(는) " + reducedTo + "(으)로 감경할 수 없습니다.");
 		}
+		// 집행유예는 형벌 종류별 값 검사보다 먼저 본다. 사형 · 무기를 골랐으면 감경 여부와 관계없이 INVALID_SUSPENSION
+		if (penaltyType.isDeathOrLife() && suspensionMonths != null) {
+			throw new InvalidJudgmentException(Reason.SUSPENSION_NOT_ALLOWED,
+				"사형 · 무기징역을 고르면 감경해도 집행유예를 적용할 수 없습니다.");
+		}
 		PenaltyType finalType = reducedTo != null ? reducedTo : penaltyType;
 		switch (finalType) {
 			case PRISON -> require(prisonMonths != null && fineAmount == null, "징역은 개월 수만 입력합니다.");
 			case FINE -> require(fineAmount != null && prisonMonths == null, "벌금은 금액만 입력합니다.");
-			case DEATH, LIFE -> require(prisonMonths == null && fineAmount == null && suspensionMonths == null,
-				"사형 · 무기징역은 형량 · 집행유예를 입력하지 않습니다.");
-		}
-		if (penaltyType.isDeathOrLife() && suspensionMonths != null) {
-			throw new InvalidJudgmentException(Reason.SUSPENSION_NOT_ALLOWED,
-				"사형 · 무기징역을 고르면 감경해도 집행유예를 적용할 수 없습니다.");
+			case DEATH, LIFE -> require(prisonMonths == null && fineAmount == null,
+				"사형 · 무기징역은 형량을 입력하지 않습니다.");
 		}
 		require(isPositiveOrNull(prisonMonths) && isPositiveOrNull(fineAmount) && isPositiveOrNull(suspensionMonths),
 			"형량 값은 0보다 커야 합니다.");
