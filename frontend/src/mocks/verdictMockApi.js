@@ -1,5 +1,5 @@
 import { mockVerdictForm } from './verdictMockData.js';
-import { read, save } from './mockExperienceStore.js';
+import { read, save, saveJudgment } from './mockExperienceStore.js';
 
 const delay = () => new Promise((resolve) => setTimeout(resolve, 250));
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -78,7 +78,15 @@ export async function postVerdict(caseId, body) {
       || !['UP', 'DOWN'].includes(direction)) fail('INVALID_FACTOR', status);
     ids.add(factorId);
   }
-  // 입력 내용은 저장하지 않는다. 공유하는 목 체험 진행 상태만 갱신한다.
+  // S-07 · S-08에서 "내 판결"로 보여줘야 해서 형벌 판단값만 별도로 저장한다(요소·자유 의견은 저장하지 않는다).
+  saveJudgment({
+    subjectType: 'USER',
+    penaltyType,
+    reducedTo: reducedTo ?? null,
+    prisonMonths: finalType === 'PRISON' ? prisonMonths : null,
+    fineAmount: finalType === 'FINE' ? fineAmount : null,
+    suspensionMonths: suspensionMonths ?? null,
+  });
   save({ status: 'VERDICT_CONFIRMED', lastReviewedStep: 4 });
   return { status: 'VERDICT_CONFIRMED' };
 }

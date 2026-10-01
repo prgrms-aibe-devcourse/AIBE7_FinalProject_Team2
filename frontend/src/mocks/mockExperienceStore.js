@@ -28,3 +28,26 @@ export function read() {
   }
   return save(initialState());
 }
+
+// S-06에서 확정 제출한 판결(목 전용). 상태(storageKey)와 별도 키로 둬서
+// 다른 save() 호출이 이 값을 덮어쓰지 않게 한다.
+export const judgmentStorageKey = 'nlnb-mock-judgment';
+
+export function saveJudgment(judgment) {
+  localStorage.setItem(judgmentStorageKey, JSON.stringify(judgment));
+  return judgment;
+}
+
+export function readJudgment() {
+  const raw = localStorage.getItem(judgmentStorageKey);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+export function clearJudgment() {
+  localStorage.removeItem(judgmentStorageKey);
+}

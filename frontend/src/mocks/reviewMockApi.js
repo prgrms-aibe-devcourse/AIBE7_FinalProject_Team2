@@ -1,5 +1,5 @@
 import { mockSections, mockLaw, mockSummary } from './reviewMockData.js';
-import { defaultSteps, initialState, validState, save, read } from './mockExperienceStore.js';
+import { defaultSteps, initialState, validState, save, read, clearJudgment } from './mockExperienceStore.js';
 
 const allowedStatuses = ['PRE_JUDGED', 'REVIEWING', 'REVIEWED'];
 const delay = () => new Promise((resolve) => setTimeout(resolve, 250));
@@ -56,6 +56,7 @@ export async function postReviewStep(caseId, step) {
 
 export async function resetMock() {
   await delay();
+  clearJudgment();
   return save(initialState());
 }
 
