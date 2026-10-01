@@ -13,6 +13,8 @@
   <link rel="stylesheet" href="./src/pages/overview/overview.css">
   <link rel="stylesheet" href="./src/pages/summary/summary.css">
   <link rel="stylesheet" href="./src/pages/verdict/verdict.css">
+  <link rel="stylesheet" href="./src/pages/ai/ai.css">
+  <link rel="stylesheet" href="./src/pages/court/court.css">
   <style>
     body { margin: 0; background: #eeeae6; }
     .preview-tools { max-width: 1180px; margin: 24px auto 16px; padding: 0 12px; box-sizing: border-box; font: 13px/1.6 'Malgun Gothic', sans-serif; }
@@ -35,6 +37,8 @@
       <button type="button" data-page="review">S-04 보기</button>
       <button type="button" data-page="summary">S-05 보기</button>
       <button type="button" data-page="verdict">S-06 보기</button>
+      <button type="button" data-page="ai">S-07 보기</button>
+      <button type="button" data-page="court">S-08 보기</button>
       <button type="button" id="reset">처음 상태로</button>
       <label>상태 강제 선택
         <select id="status">
@@ -54,15 +58,19 @@
     import * as verdictApi from './src/mocks/verdictMockApi.js';
     import * as caseListApi from './src/mocks/caseListMockApi.js';
     import * as overviewApi from './src/mocks/overviewMockApi.js';
+    import * as aiApi from './src/mocks/aiMockApi.js';
+    import * as courtApi from './src/mocks/courtMockApi.js';
     import { renderLandingPage } from './src/pages/landing/landingPage.js';
     import { renderCaseListPage } from './src/pages/caseList/caseListPage.js';
     import { renderOverviewPage } from './src/pages/overview/overviewPage.js';
     import { renderReviewPage } from './src/pages/review/reviewPage.js';
     import { renderSummaryPage } from './src/pages/summary/summaryPage.js';
     import { renderVerdictPage } from './src/pages/verdict/verdictPage.js';
+    import { renderAiPage } from './src/pages/ai/aiPage.js';
+    import { renderCourtPage } from './src/pages/court/courtPage.js';
     import { clearDraft } from './src/pages/verdict/verdictDraft.js';
 
-    const api = { ...reviewApi, ...verdictApi, ...caseListApi, ...overviewApi };
+    const api = { ...reviewApi, ...verdictApi, ...caseListApi, ...overviewApi, ...aiApi, ...courtApi };
 
     // TODO: API 6에 사건 제목 없음, 정합성 2차 점검 D-01 결정 후 실제 제목 공급원으로 교체.
     const caseHeader = mockCaseHeader;
@@ -80,12 +88,14 @@
       else if (name === 'review') await renderReviewPage(container, dependencies);
       else if (name === 'summary') await renderSummaryPage(container, dependencies);
       else if (name === 'verdict') await renderVerdictPage(container, dependencies);
+      else if (name === 'ai') await renderAiPage(container, dependencies);
+      else if (name === 'court') await renderCourtPage(container, dependencies);
       else {
         const placeholder = document.createElement('div');
         placeholder.className = 'review-page';
         const message = document.createElement('p');
         message.className = 'message-panel';
-        message.textContent = `${{ ai: 'AI 판결', court: '실제 판결', comparison: '세 판결 비교' }[name] ?? '판결'} 화면 준비 중`;
+        message.textContent = `${{ comparison: '세 판결 비교' }[name] ?? '판결'} 화면 준비 중`;
         placeholder.append(message);
         container.replaceChildren(placeholder);
       }

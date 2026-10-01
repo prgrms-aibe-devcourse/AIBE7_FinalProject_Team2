@@ -1,0 +1,33 @@
+@import '../review/review.css';
+
+.court-page { word-break: keep-all; overflow-wrap: anywhere; }
+.court-page .case-topbar { justify-content: space-between; }
+.court-page .court-banner { display: flex; justify-content: space-between; gap: 24px; flex-wrap: wrap; padding: 28px; background: #c83019; color: #fff; }
+.court-page .banner-main .muted { color: #ffd9cf; display: block; margin-bottom: 8px; }
+.court-page .banner-penalty { display: block; font-size: 32px; font-weight: 800; }
+.court-page .banner-sub { margin-top: 8px; font-size: 14px; }
+.court-page .banner-compare { text-align: right; font-size: 13px; color: #ffe3da; }
+.court-page .banner-compare p + p { margin-top: 6px; }
+.court-page .court-main { padding: 28px; }
+.court-page .court-main h2 { color: #ac301e; font-size: 14px; margin-bottom: 12px; }
+.court-page .court-reasoning { margin-bottom: 24px; }
+.court-page .court-excerpt { margin: 0 0 24px; padding: 18px 20px; border-left: 3px solid var(--color-primary); background: var(--color-surface); font-style: normal; }
+.court-page .court-excerpt p { font-size: 14px; }
+.court-page .court-plain { margin-bottom: 24px; }
+.court-page .court-plain h3 { font-size: 13px; margin-bottom: 10px; }
+.court-page .factor-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.court-page .factor-group { padding: 16px 18px; border: 1px solid var(--color-border); border-radius: 4px; }
+.court-page .factor-group h3 { font-size: 13px; margin-bottom: 10px; }
+.court-page .factor-group-up h3 { color: #ac301e; }
+.court-page .factor-group-down h3 { color: #224d8a; }
+.court-page .factor-list-plain { list-style: none; padding: 0; margin: 0; font-size: 13px; }
+.court-page .factor-list-plain li + li { margin-top: 10px; }
+.court-page .factor-evidence { margin: 4px 0 0; padding-left: 12px; border-left: 2px solid var(--color-border); color: var(--color-muted); font-size: 12px; }
+.court-page .court-footer { display: flex; justify-content: flex-end; padding: 24px 28px; border-top: 1px solid var(--color-border); }
+@media (max-width: 760px) {
+  .court-page .court-banner { flex-direction: column; padding: 20px 16px; }
+  .court-page .banner-compare { text-align: left; }
+  .court-page .court-main { padding: 20px 16px; }
+  .court-page .factor-grid { grid-template-columns: minmax(0, 1fr); }
+  .court-page .court-footer { padding: 20px 16px; }
+}
