@@ -1,0 +1,93 @@
+"""판결문 비식별화 보조: API로 보내기 전 패턴 마스킹, 받은 뒤 남은 개인정보 검사.
+
+마스킹은 정규식으로 확실히 잡히는 값(주민등록번호, 전화번호, 사건번호, 법원명, 상세 주소 등)만 한다.
+인명 · 직업 · 발언 같은 문맥이 필요한 비식별화는 모델이 하고, 결과는 residual_check와 팀 검수로 다시 본다.
+"""
+
+import re
+
+RRN = re.compile(r"\d{6}\s?-\s?[1-8]\d{6}")
+EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
+PHONE = re.compile(r"(?<!\d)0\d{1,2}[-\s]?\d{3,4}[-\s]?\d{4}(?!\d)")
+ACCOUNT = re.compile(r"\d{2,6}-\d{2,6}-\d{2,8}(?:-\d{1,4})?")
+CASE_NUMBER = re.compile(
+    r"(?:19|20)?\d{2}\s?(?:재)?(?:고합|고단|고정|고약|감고|감노|감도|전고|전노|전도|초기|노|도)\s?\d{1,7}(?!\d)"
+)
+SEIZURE_NUMBER = re.compile(r"(?:19|20)\d{2}\s?압\s?(?:제\s?)?\d+(?:-\d+)?\s?호?")
+COURT = re.compile(r"[가-힣]{2,}(?:지방|고등|가정|행정)법원(?:\s?[가-힣]{2,}지원)?|대\s?법\s?원(?!\s?양형위원회)")
+PLATE = re.compile(r"(?<!\d)\d{2,3}\s?[가-힣]\s?\d{4}(?!\d)")
+ROAD_ADDRESS = re.compile(r"[가-힣\d]+(?:대로|로|길)\s?\d{1,4}(?:-\d{1,4})?(?=[\s,)]|$)")
+UNIT_ADDRESS = re.compile(r"\d{1,4}동\s?\d{1,4}호")
+LOT_ADDRESS = re.compile(r"[가-힣]+동\s?\d{1,5}(?:-\d{1,5})?\s?번지")
+
+# (항목 이름, 패턴, 바꿀 값). 순서가 중요하다: 주민등록번호를 계좌 · 전화보다, 전화를 계좌보다 먼저 둔다.
+MASK_RULES = [
+    ("주민등록번호", RRN, "[주민등록번호]"),
+    ("이메일", EMAIL, "[이메일]"),
+    ("전화번호", PHONE, "[전화번호]"),
+    ("계좌번호", ACCOUNT, "[계좌번호]"),
+    ("사건번호", CASE_NUMBER, "[사건번호]"),
+    ("압수번호", SEIZURE_NUMBER, "[압수번호]"),
+    ("법원명", COURT, "[법원명]"),
+    ("차량번호", PLATE, "[차량번호]"),
+    ("주소", ROAD_ADDRESS, "[주소]"),
+    ("주소", UNIT_ADDRESS, "[주소]"),
+    ("주소", LOT_ADDRESS, "[주소]"),
+]
+
+MASK_TOKEN = re.compile(r"\[(?:주민등록번호|이메일|계좌번호|전화번호|사건번호|압수번호|법원명|차량번호|주소)\]")
+
+# 결과 검사에서 오류로 보는 패턴 (나오면 case.json을 만들지 않는다)
+RESIDUAL_ERROR_RULES = [
+    ("마스킹 표시가 남음", MASK_TOKEN),
+    ("주민등록번호", RRN),
+    ("이메일", EMAIL),
+    ("전화번호", PHONE),
+    ("사건번호", CASE_NUMBER),
+    ("법원명", re.compile(r"[가-힣]{2,}(?:지방|고등|가정|행정)법원|[가-힣]{2,}지원(?=[\s,.)]|$)")),
+    ("상세 주소", re.compile(r"[가-힣]+(?:시|도)\s[가-힣]+(?:구|군)|\d{1,4}동\s?\d{1,4}호")),
+    ("정확한 날짜", re.compile(r"(?:19|20)\d{2}\s?[.년]\s?\d{1,2}\s?[.월]\s?\d{1,2}")),
+    ("정확한 나이", re.compile(r"(?:만\s?)?\d{1,3}\s?세(?![가-힣])")),
+]
+
+# 결과 검사에서 경고로 보는 패턴 (팀 검수에서 확인한다)
+ROLE_NAME = re.compile(
+    r"(피고인|피해자|증인|변호인|검사|판사|재판장|공범)\s?([가-힣]{2,4})(?=씨|은|는|이|가|을|를|의|에게|과|와|,|\s)"
+)
+# 역할어 뒤에 와도 사람 이름이 아닌 말
+ROLE_NAME_ALLOWED = {
+    "측", "측은", "측이", "본인", "자신", "가족", "유족", "들", "등", "모두", "및", "역시", "또한", "스스로",
+    "에게", "으로", "으로서", "로서", "로부터", "와의", "과의", "사이", "쪽", "부부", "남편", "아내", "자녀",
+    "어머니", "아버지", "주장", "진술", "명의", "소유", "집", "자택",
+}
+
+
+def premask(text):
+    """확실한 개인정보 패턴을 표시로 바꾼다. (바꾼 텍스트, {항목: 개수})를 돌려준다."""
+    counts = {}
+    for name, pattern, token in MASK_RULES:
+        text, n = pattern.subn(token, text)
+        if n:
+            counts[name] = counts.get(name, 0) + n
+    return text, counts
+
+
+def residual_check(texts):
+    """비식별화 결과에 남은 개인정보를 찾는다.
+
+    texts: [(위치, 문자열)] — 사용자에게 보일 수 있는 필드만 넣는다(개요 · 섹션 · 판단 요소).
+    (오류 목록, 경고 목록)을 돌려준다.
+    """
+    errors, warnings = [], []
+    for where, text in texts:
+        if not text:
+            continue
+        for name, pattern in RESIDUAL_ERROR_RULES:
+            for match in pattern.finditer(text):
+                errors.append(f"{where}: {name} 의심 — \"{match.group(0)}\"")
+        for match in ROLE_NAME.finditer(text):
+            word = match.group(2)
+            if word in ROLE_NAME_ALLOWED or any(word.startswith(a) for a in ROLE_NAME_ALLOWED):
+                continue
+            warnings.append(f"{where}: 실명일 수 있음 — \"{match.group(0)}\"")
+    return errors, warnings
