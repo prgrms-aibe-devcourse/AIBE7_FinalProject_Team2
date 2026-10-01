@@ -176,6 +176,20 @@ class ProcessOutputTest(unittest.TestCase):
 
                 self.assertFalse(any("실제 선고 형량" in e for e in errors))
 
+    def test_processOutput_largerAmountOrPeriod_isNotSentenceLeak(self):
+        # 실제 형량의 뒷부분이 더 큰 금액 · 기간의 일부로 나오는 전과 설명은 보존한다
+        for court, text in (
+            ({"penaltyType": "FINE", "reducedTo": None, "prisonMonths": None, "fineAmount": 20_000_000,
+              "suspensionMonths": None}, "과거 1억 2천만원의 벌금을 낸 적이 있다."),
+            ({"penaltyType": "PRISON", "reducedTo": None, "prisonMonths": 6, "fineAmount": None,
+              "suspensionMonths": None}, "과거 2년 6개월의 징역을 받았다."),
+        ):
+            with self.subTest(text=text):
+                _, _, errors, _ = process_output(output_with(
+                    overview=FAKE_OUTPUT["overview"] + " " + text, courtJudgment=court))
+
+                self.assertFalse(any("실제 선고 형량" in e for e in errors))
+
     def test_processOutput_noOverviewFactor_isError(self):
         factors = [f for f in FAKE_OUTPUT["factors"] if f["revealStage"] != "OVERVIEW"]
 
@@ -256,7 +270,7 @@ class RunTest(unittest.TestCase):
         self.assertFalse((out / "same-name.court_judgment_internal.json").exists())
 
     def test_run_identifiersInReportFields_areErroredAndScrubbed(self):
-        output = output_with(reviewNotes=["원문에는 010-1234-5678과 2099고합123이 있었다"])
+        output = output_with(reviewNotes=["원문에는 010-1234-5678과 2099고합123, 계좌 123456-12-123456이 있었다"])
         output["penaltyRules"][0]["allowedBasis"] = "가상지방법원 2099. 1. 10. 기준"
 
         with self.assertRaises(ExtractError):
@@ -264,10 +278,21 @@ class RunTest(unittest.TestCase):
 
         raw = (self.dir / "out" / "leaky-case.report.json").read_text(encoding="utf-8")
         report = json.loads(raw)
-        for value in ("010-1234-5678", "2099고합123", "가상지방법원", "2099. 1. 10."):
+        for value in ("010-1234-5678", "2099고합123", "123456-12-123456", "가상지방법원", "2099. 1. 10."):
             self.assertNotIn(value, raw)
         self.assertTrue(any("reviewNotes[0]" in e for e in report["errors"]))
         self.assertTrue(any("penaltyRuleBasis[" in e for e in report["errors"]))
+
+    def test_run_checkErrors_removesStaleDryRunRequest(self):
+        out = self.dir / "out"
+        [request] = run(self.input, "same-name", out_dir=out, dry_run=True)
+        self.assertTrue(request.exists())
+
+        with self.assertRaises(ExtractError):
+            run(self.input, "same-name", out_dir=out,
+                call=fake_call(output_with(overview="2099. 1. 10. 가상지방법원 사건이다.")))
+
+        self.assertFalse(request.exists())
 
     def test_run_dryRun_writesMaskedRequestWithoutCalling(self):
         def must_not_call(*args):

@@ -65,7 +65,7 @@ python3 extract_case.py ../cases/raw/판결문.pdf --name long-marriage-conflict
 - `penaltyRuleBasis`: 형벌별 선고 가능 범위 계산 근거 (`penalty_rule.allowed_basis` 후보)
 - `errors` · `warnings` · `reviewNotes`
 
-**검사에서 오류가 하나라도 나오면 `case.json`을 만들지 않고 `report.json`만 남긴다.** 같은 이름의 이전 결과 파일도 지운다. 프롬프트나 입력을 고쳐 다시 실행한다.
+**검사에서 오류가 하나라도 나오면 `case.json`을 만들지 않고 `report.json`만 남긴다.** 같은 이름의 이전 결과 파일(`case.json`, `court_judgment_internal.json`, `--dry-run`의 `request.md`)도 지운다. 프롬프트나 입력을 고쳐 다시 실행한다.
 
 ## 처리 순서
 

@@ -221,8 +221,8 @@ def run(input_path, name, out_dir=DEFAULT_OUT_DIR, model=DEFAULT_MODEL, effort=D
     court_path = out_dir / f"{name}.court_judgment_internal.json"
     if errors:
         # 같은 이름으로 다시 돌렸을 때 이전 실행의 결과물이 남아 통과한 것처럼 보이지 않게 한다
-        case_path.unlink(missing_ok=True)
-        court_path.unlink(missing_ok=True)
+        for stale in (case_path, court_path, out_dir / f"{name}.request.md"):
+            stale.unlink(missing_ok=True)
         raise ExtractError(f"검사 오류 {len(errors)}건 — case.json을 만들지 않았습니다. 보고서: {report_path}")
 
     write_json(case_path, case_input)

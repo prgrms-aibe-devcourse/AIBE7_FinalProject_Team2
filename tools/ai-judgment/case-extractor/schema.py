@@ -241,16 +241,17 @@ def _leak_patterns(court):
     """(표시할 형량, 공백 없는 문장에서 찾을 패턴) 목록. 형량 용어와 기간 · 금액이 함께 있는 표현만 본다."""
     patterns = []
 
-    def add(label, term, forms):
+    def add(label, term, forms, before):
+        # before: 역방향 표현에서 앞에 올 수 없는 글자. 더 큰 금액 · 기간의 뒷부분("1억 2천만원", "2년 6개월")을 잘라 오탐하지 않는다
         alt = _alternatives(forms)
-        patterns.append((label, re.compile(f"(?:{term}{alt}{_AMOUNT_END}|(?<!\\d){alt}(?:간|의)?{term})")))
+        patterns.append((label, re.compile(f"(?:{term}{alt}{_AMOUNT_END}|(?<![{before}]){alt}(?:간|의)?{term})")))
 
     if court.get("prisonMonths"):
-        add(f"징역 {format_months(court['prisonMonths'])}", "징역형?", _month_forms(court["prisonMonths"]))
+        add(f"징역 {format_months(court['prisonMonths'])}", "징역형?", _month_forms(court["prisonMonths"]), r"\d년")
     if court.get("fineAmount"):
-        add(f"벌금 {format_won(court['fineAmount'])}", "벌금형?", _won_forms(court["fineAmount"]))
+        add(f"벌금 {format_won(court['fineAmount'])}", "벌금형?", _won_forms(court["fineAmount"]), r"\d억천백")
     if court.get("suspensionMonths"):
-        add(f"집행유예 {format_months(court['suspensionMonths'])}", "집행유예", _month_forms(court["suspensionMonths"]))
+        add(f"집행유예 {format_months(court['suspensionMonths'])}", "집행유예", _month_forms(court["suspensionMonths"]), r"\d년")
         patterns.append(("집행유예", re.compile("징역형?의?집행을?유예")))
     return patterns
 
