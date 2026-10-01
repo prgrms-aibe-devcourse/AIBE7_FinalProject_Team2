@@ -8,7 +8,15 @@ import java.util.Locale;
 public final class PenaltyRangeText {
 	private PenaltyRangeText() { }
 
-	public static String format(PenaltyType type, long min, long max) {
+	public static String format(PenaltyType type, Long min, Long max) {
+		if (min == null || max == null) {
+			return switch (type) {
+				case PRISON -> "징역";
+				case FINE -> "벌금";
+				case DEATH -> "사형";
+				case LIFE -> "무기징역";
+			};
+		}
 		if (type == PenaltyType.FINE) return "벌금 " + formatMoney(min) + " ~ " + formatMoney(max);
 		String prison = "징역 " + formatMonths(min) + " ~ " + formatMonths(max);
 		if (type == PenaltyType.PRISON) return prison;
