@@ -17,8 +17,12 @@ public interface ExperienceRepository extends JpaRepository<Experience, Long> {
 		return findFirstByAnonymousUser_IdAndLegalCase_IdOrderByAttemptNoDesc(anonymousUserId, caseId);
 	}
 
-	/** 참여자 수: 1회차이고 완료한 체험 수 (API 1 participantCount) */
-	@Query("select count(e) from Experience e where e.legalCase.id = :caseId and e.attemptNo = 1 "
+	/** 참여자 수: 1회차이고 완료한 체험 수 (API 1 participantCount, 통계는 1회차만, DR-7) */
+	default long countCompletedFirstAttempts(Long caseId) {
+		return countCompletedByAttemptNo(caseId, Experience.FIRST_ATTEMPT);
+	}
+
+	@Query("select count(e) from Experience e where e.legalCase.id = :caseId and e.attemptNo = :attemptNo "
 		+ "and e.status = com.team2.project.experience.domain.ExperienceStatus.COMPLETED")
-	long countCompletedFirstAttempts(@Param("caseId") Long caseId);
+	long countCompletedByAttemptNo(@Param("caseId") Long caseId, @Param("attemptNo") int attemptNo);
 }
