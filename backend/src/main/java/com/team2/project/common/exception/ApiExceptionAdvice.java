@@ -66,13 +66,14 @@ public class ApiExceptionAdvice extends ResponseEntityExceptionHandler {
 	 * ResponseEntityExceptionHandler가 처리하는 모든 Spring MVC 예외의 공통 통로.
 	 * BindException(@Valid 포함)은 필드별 사유를 details에 담는다. 4xx는 VALIDATION_ERROR,
 	 * 5xx는 INTERNAL_ERROR로 통일한다 (API 명세에 이 예외들에 대응하는 별도 코드가 없음, 1-5).
+	 * headers는 그대로 돌려준다 — 405 응답의 Allow처럼 HTTP 명세가 요구하는 헤더가 여기 들어 있다 (리뷰 반영).
 	 */
 	@Override
 	protected ResponseEntity<Object> handleExceptionInternal(Exception ex, Object body, HttpHeaders headers,
 		HttpStatusCode statusCode, WebRequest request) {
 		if (statusCode.is5xxServerError()) {
 			log.error("처리하지 못한 요청 예외", ex);
-			return ResponseEntity.status(statusCode).body(ErrorResponse.of(ErrorCode.INTERNAL_ERROR));
+			return ResponseEntity.status(statusCode).headers(headers).body(ErrorResponse.of(ErrorCode.INTERNAL_ERROR));
 		}
 		List<FieldErrorDetail> details = ex instanceof BindException bindException
 			? bindException.getFieldErrors().stream()
@@ -80,7 +81,7 @@ public class ApiExceptionAdvice extends ResponseEntityExceptionHandler {
 				.toList()
 			: null;
 		log.debug("요청 처리 중 오류: {}", ex.getMessage());
-		return ResponseEntity.status(statusCode).body(ErrorResponse.of(ErrorCode.VALIDATION_ERROR, details));
+		return ResponseEntity.status(statusCode).headers(headers).body(ErrorResponse.of(ErrorCode.VALIDATION_ERROR, details));
 	}
 
 	private ResponseEntity<ErrorResponse> validationError(List<FieldErrorDetail> details) {

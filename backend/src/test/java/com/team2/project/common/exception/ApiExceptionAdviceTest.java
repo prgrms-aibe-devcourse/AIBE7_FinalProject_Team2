@@ -1,9 +1,11 @@
 package com.team2.project.common.exception;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -103,11 +105,12 @@ class ApiExceptionAdviceTest {
 	}
 
 	@Test
-	@DisplayName("지원하지 않는 메서드는 HTTP 상태(405)를 유지하고 VALIDATION_ERROR")
-	void handleSpringWeb_methodNotAllowed_keepsStatus() throws Exception {
+	@DisplayName("지원하지 않는 메서드는 HTTP 상태(405)를 유지하고 VALIDATION_ERROR, Allow 헤더도 그대로 돌려준다 (리뷰 반영)")
+	void handleSpringWeb_methodNotAllowed_keepsStatusAndAllowHeader() throws Exception {
 		mockMvc.perform(delete("/test/unexpected"))
 			.andExpect(status().isMethodNotAllowed())
-			.andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+			.andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+			.andExpect(header().string("Allow", containsString("GET")));
 	}
 
 	@Test
