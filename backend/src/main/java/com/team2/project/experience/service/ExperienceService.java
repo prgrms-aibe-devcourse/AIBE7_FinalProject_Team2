@@ -5,19 +5,17 @@ import java.util.UUID;
 
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import com.team2.project.common.exception.BusinessException;
-import com.team2.project.common.exception.ErrorCode;
 import com.team2.project.experience.domain.Experience;
 import com.team2.project.experience.dto.ExperienceResponse;
 import com.team2.project.experience.repository.ExperienceRepository;
-import com.team2.project.experience.service.AnonymousUserService.ResolvedAnonymousUser;
 import com.team2.project.legalcase.service.LegalCaseService;
 
 import lombok.RequiredArgsConstructor;
 
 /**
- * 트랜잭션은 각 협력 빈(AnonymousUserService, ExperienceWriter, Repository)이 따로 잡는다.
+ * API 2(체험 시작)의 트랜잭션은 각 협력 빈(AnonymousUserService, ExperienceWriter, Repository)이 따로 잡는다.
  * 체험 생성이 유니크 제약에 걸려도 그 트랜잭션만 롤백되고, 여기서 새 트랜잭션으로 기존 체험을 읽을 수 있다.
  */
 @Service
@@ -26,48 +24,35 @@ public class ExperienceService {
 
 	private final LegalCaseService legalCaseService;
 	private final AnonymousUserService anonymousUserService;
+	private final MyExperienceService myExperienceService;
 	private final ExperienceWriter experienceWriter;
 	private final ExperienceRepository experienceRepository;
 
 	/** API 2. 체험 시작. 이미 있으면 새로 만들지 않고 기존 체험을 돌려준다. */
-	public StartResult start(Long caseId, UUID cookieId) {
+	public StartResult start(Long caseId, Optional<UUID> anonymousId) {
 		legalCaseService.requirePublished(caseId);
-		ResolvedAnonymousUser user = anonymousUserService.resolveOrIssue(cookieId);
-		UUID issuedCookieId = user.issued() ? user.id() : null;
+		AnonymousUserService.IssuedAnonymousUser issued = anonymousUserService.getOrIssue(anonymousId);
+		UUID userId = issued.user().getId();
+		UUID issuedCookieId = issued.issued() ? userId : null;
 
-		Optional<Experience> existing = findLatest(user.id(), caseId);
+		Optional<Experience> existing = experienceRepository.findLatest(userId, caseId);
 		if (existing.isPresent()) {
 			return new StartResult(ExperienceResponse.from(existing.get()), false, issuedCookieId);
 		}
 		try {
-			Experience created = experienceWriter.create(user.id(), caseId);
+			Experience created = experienceWriter.create(userId, caseId);
 			return new StartResult(ExperienceResponse.from(created), true, issuedCookieId);
 		} catch (DataIntegrityViolationException e) {
 			// 동시에 시작한 다른 요청이 먼저 만들었다: 기존 체험을 다시 읽어 그대로 돌려준다
-			Experience winner = findLatest(user.id(), caseId).orElseThrow(() -> e);
+			Experience winner = experienceRepository.findLatest(userId, caseId).orElseThrow(() -> e);
 			return new StartResult(ExperienceResponse.from(winner), false, issuedCookieId);
 		}
 	}
 
-	/** API 3. 내 체험 상태 */
-	public ExperienceResponse getMyExperience(Long caseId, UUID cookieId) {
-		legalCaseService.requirePublished(caseId);
-		return ExperienceResponse.from(findMine(caseId, cookieId));
-	}
-
-	/**
-	 * 쿠키 주인의 이 사건 체험 (API 명세서 1-3). 공개된 사건인지는 호출하는 쪽이 먼저 확인한다.
-	 * 쿠키가 없거나 DB에 없는 익명 ID, 체험이 없는 경우는 모두 EXPERIENCE_NOT_FOUND다.
-	 */
-	public Experience findMine(Long caseId, UUID cookieId) {
-		if (!anonymousUserService.touch(cookieId)) {
-			throw new BusinessException(ErrorCode.EXPERIENCE_NOT_FOUND);
-		}
-		return findLatest(cookieId, caseId).orElseThrow(() -> new BusinessException(ErrorCode.EXPERIENCE_NOT_FOUND));
-	}
-
-	private Optional<Experience> findLatest(UUID anonymousUserId, Long caseId) {
-		return experienceRepository.findLatest(anonymousUserId, caseId);
+	/** API 3. 내 체험 상태 (사건 · 쿠키 · 체험 확인은 MyExperienceService, DTO 변환까지 읽기 전용 트랜잭션 안에서) */
+	@Transactional(readOnly = true)
+	public ExperienceResponse getMyExperience(Long caseId, Optional<UUID> anonymousId) {
+		return ExperienceResponse.from(myExperienceService.getMyExperience(caseId, anonymousId));
 	}
 
 	/**

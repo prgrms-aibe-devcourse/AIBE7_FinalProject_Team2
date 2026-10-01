@@ -1,8 +1,9 @@
 package com.team2.project.experience.service;
 
-import java.time.Instant;
+import java.time.Clock;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
@@ -15,7 +16,6 @@ import com.team2.project.experience.domain.ExperienceStatus;
 import com.team2.project.experience.dto.OverviewResponse;
 import com.team2.project.experience.dto.PreJudgmentRequest;
 import com.team2.project.experience.dto.PreJudgmentResponse;
-import com.team2.project.experience.repository.ExperienceRepository;
 import com.team2.project.judgment.domain.Judgment;
 import com.team2.project.judgment.domain.JudgmentFactor;
 import com.team2.project.judgment.repository.JudgmentFactorRepository;
@@ -24,7 +24,6 @@ import com.team2.project.legalcase.domain.LegalCase;
 import com.team2.project.legalcase.domain.RevealStage;
 import com.team2.project.legalcase.repository.FactorRepository;
 import com.team2.project.legalcase.repository.SentenceRangeOptionRepository;
-import com.team2.project.legalcase.service.LegalCaseService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -36,22 +35,20 @@ public class PreJudgmentService {
 	/** 사전 판단에 고를 수 있는 판단 요소 수 (확장). */
 	static final int MAX_FACTORS = 2;
 
-	private final LegalCaseService legalCaseService;
-	private final ExperienceService experienceService;
-	private final ExperienceRepository experienceRepository;
+	private final MyExperienceService myExperienceService;
+	private final ExperienceTransitionService transitionService;
 	private final SentenceRangeOptionRepository sentenceRangeOptionRepository;
 	private final FactorRepository factorRepository;
 	private final JudgmentRepository judgmentRepository;
 	private final JudgmentFactorRepository judgmentFactorRepository;
+	private final Clock clock;
 
-	/**
-	 * API 4. 읽기 전용 트랜잭션으로 묶지 않는다: 익명 사용자의 last_seen_at을 갱신하는 UPDATE가 함께 실행되는데,
-	 * PostgreSQL은 읽기 전용 트랜잭션 안의 UPDATE를 거절한다.
-	 */
-	@Transactional
-	public OverviewResponse getOverview(Long caseId, UUID cookieId) {
-		LegalCase legalCase = legalCaseService.getPublished(caseId);
-		requireStarted(experienceService.findMine(caseId, cookieId));
+	/** API 4. 사건 · 체험(404) → 상태(STARTED가 아니면 409) 확인 뒤, DTO 변환까지 읽기 전용 트랜잭션 안에서 한다. */
+	@Transactional(readOnly = true)
+	public OverviewResponse getOverview(Long caseId, Optional<UUID> anonymousId) {
+		Experience experience = myExperienceService.getMyExperienceBetween(caseId, anonymousId,
+				ExperienceStatus.STARTED, ExperienceStatus.STARTED);
+		LegalCase legalCase = experience.getLegalCase();
 
 		return OverviewResponse.of(
 				legalCase,
@@ -61,36 +58,31 @@ public class PreJudgmentService {
 
 	/** API 5. 검사 순서: 사건 · 체험(404) → 상태(409) → 형량 구간 · 판단 요소(422). */
 	@Transactional
-	public PreJudgmentResponse submit(Long caseId, UUID cookieId, PreJudgmentRequest request) {
-		LegalCase legalCase = legalCaseService.getPublished(caseId);
-		Experience experience = experienceService.findMine(caseId, cookieId);
-		requireStarted(experience);
+	public PreJudgmentResponse submit(Long caseId, Optional<UUID> anonymousId, PreJudgmentRequest request) {
+		Experience experience = myExperienceService.getMyExperienceBetween(caseId, anonymousId,
+				ExperienceStatus.STARTED, ExperienceStatus.STARTED);
+		LegalCase legalCase = experience.getLegalCase();
 
 		List<Long> factorIds = request.factorIdsOrEmpty();
 		validateRangeOption(legalCase, request.rangeOptionId());
 		validateFactors(caseId, factorIds);
 
-		// 저장보다 먼저 상태를 조건부로 바꿔서 동시에 온 요청 중 하나만 통과시킨다.
-		// 뒤의 저장이 실패하면 이 갱신도 함께 롤백된다.
-		int updated = experienceRepository.advanceToPreJudged(experience.getId(), Instant.now());
-		if (updated == 0) {
-			throw new BusinessException(ErrorCode.INVALID_STATE, currentStatusOf(experience));
-		}
+		// 판단 저장과 상태 전이를 한 트랜잭션으로 묶는다. 동시 제출의 패자는 유니크 위반 대신
+		// currentStatus가 담긴 INVALID_STATE를 받는다 (ExperienceTransitionService)
+		transitionService.apply(experience,
+				() -> saveJudgment(experience, request.rangeOptionId(), factorIds),
+				e -> e.markPreJudged(clock.instant()));
 
-		// 검증을 마친 ID라 조회 없이 참조만 걸어 FK 값으로 저장한다
+		return new PreJudgmentResponse(experience.getStatus(), experience.getLastReviewedStep());
+	}
+
+	/** 검증을 마친 ID라 조회 없이 참조만 걸어 FK 값으로 저장한다 */
+	private void saveJudgment(Experience experience, Long rangeOptionId, List<Long> factorIds) {
 		Judgment judgment = judgmentRepository.save(Judgment.userPre(experience,
-				sentenceRangeOptionRepository.getReferenceById(request.rangeOptionId())));
+				sentenceRangeOptionRepository.getReferenceById(rangeOptionId)));
 		judgmentFactorRepository.saveAll(factorIds.stream()
 				.map(factorId -> JudgmentFactor.forPre(judgment, factorRepository.getReferenceById(factorId)))
 				.toList());
-
-		return new PreJudgmentResponse(ExperienceStatus.PRE_JUDGED, Experience.OVERVIEW_STEP);
-	}
-
-	private void requireStarted(Experience experience) {
-		if (experience.getStatus() != ExperienceStatus.STARTED) {
-			throw new BusinessException(ErrorCode.INVALID_STATE, experience.getStatus().name());
-		}
 	}
 
 	private void validateRangeOption(LegalCase legalCase, Long rangeOptionId) {
@@ -111,12 +103,5 @@ public class PreJudgmentService {
 				factorIds) != factorIds.size()) {
 			throw new BusinessException(ErrorCode.INVALID_FACTOR);
 		}
-	}
-
-	/** 상태 갱신이 0건이면 그 사이 다른 요청이 상태를 바꾼 것이다. 바뀐 현재 상태를 다시 읽어 알려 준다. */
-	private String currentStatusOf(Experience experience) {
-		return experienceRepository.findById(experience.getId())
-				.map(latest -> latest.getStatus().name())
-				.orElse(experience.getStatus().name());
 	}
 }

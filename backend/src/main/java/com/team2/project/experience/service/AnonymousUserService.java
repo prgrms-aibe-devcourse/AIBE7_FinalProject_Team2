@@ -1,41 +1,55 @@
 package com.team2.project.experience.service;
 
+import com.team2.project.experience.domain.AnonymousUser;
+import com.team2.project.experience.repository.AnonymousUserRepository;
+import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
-
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.team2.project.experience.domain.AnonymousUser;
-import com.team2.project.experience.repository.AnonymousUserRepository;
-
-import lombok.RequiredArgsConstructor;
-
+/**
+ * 익명 사용자 조회 · 발급 (API 명세 1-2)
+ * 쿠키 읽기 · 쓰기는 AnonymousIdCookie가 하고, 여기서는 쿠키 값으로 DB의 익명 사용자를 다룬다.
+ */
 @Service
 @RequiredArgsConstructor
 public class AnonymousUserService {
 
+	/** 최근 접속 시각은 이 간격이 지났을 때만 갱신한다 (조회 요청마다 UPDATE 방지) */
+	static final Duration TOUCH_INTERVAL = Duration.ofMinutes(10);
+
 	private final AnonymousUserRepository anonymousUserRepository;
 
-	/** 쿠키의 익명 ID가 DB에 있으면 last_seen_at만 갱신하고, 없거나 쿠키가 없으면 새 익명 사용자를 만든다. */
+	private final Clock clock;
+
+	/** 쿠키 값의 익명 사용자. 쿠키가 없거나 DB에 없는 값이면 empty. 찾으면 최근 접속 시각을 갱신한다 */
 	@Transactional
-	public ResolvedAnonymousUser resolveOrIssue(UUID cookieId) {
-		Instant now = Instant.now();
-		if (cookieId != null && anonymousUserRepository.touch(cookieId, now) > 0) {
-			return new ResolvedAnonymousUser(cookieId, false);
-		}
-		// 클라이언트가 보낸 값을 그대로 채택하지 않고 서버가 새 ID를 생성한다
-		AnonymousUser issued = anonymousUserRepository.save(AnonymousUser.issue(now));
-		return new ResolvedAnonymousUser(issued.getId(), true);
+	public Optional<AnonymousUser> findAndTouch(Optional<UUID> anonymousId) {
+		Instant now = clock.instant();
+		return anonymousId
+			.flatMap(anonymousUserRepository::findById)
+			.map(user -> {
+				anonymousUserRepository.touchIfStale(user.getId(), now, now.minus(TOUCH_INTERVAL));
+				return user;
+			});
 	}
 
-	/** 쿠키의 익명 ID가 DB에 있으면 last_seen_at을 갱신하고 true를 돌려준다. */
+	/**
+	 * 체험 시작(API 2) 전용: 쿠키의 익명 사용자가 있으면 그대로, 없거나 DB에 없는 값이면 새로 발급한다.
+	 * issued가 true면 컨트롤러가 Set-Cookie로 새 익명 ID를 내려준다.
+	 */
 	@Transactional
-	public boolean touch(UUID cookieId) {
-		return cookieId != null && anonymousUserRepository.touch(cookieId, Instant.now()) > 0;
+	public IssuedAnonymousUser getOrIssue(Optional<UUID> anonymousId) {
+		return findAndTouch(anonymousId)
+			.map(user -> new IssuedAnonymousUser(user, false))
+			.orElseGet(() -> new IssuedAnonymousUser(anonymousUserRepository.save(AnonymousUser.issue(clock.instant())), true));
 	}
 
-	/** issued가 true면 쿠키를 새로 내려줘야 한다. */
-	public record ResolvedAnonymousUser(UUID id, boolean issued) {
+	/** 조회 또는 발급 결과 */
+	public record IssuedAnonymousUser(AnonymousUser user, boolean issued) {
 	}
 }

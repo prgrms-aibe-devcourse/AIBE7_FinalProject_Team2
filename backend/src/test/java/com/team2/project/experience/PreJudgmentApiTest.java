@@ -17,6 +17,7 @@ import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.web.servlet.ResultActions;
 
 import jakarta.servlet.http.Cookie;
@@ -322,8 +323,9 @@ class PreJudgmentApiTest extends ApiIntegrationTest {
 	}
 
 	/**
-	 * 종단 동작 확인용. 같은 사용자의 동시 요청은 anonymous_user 행 잠금에서 먼저 직렬화되므로
-	 * 조건부 갱신 SQL 자체는 ExperienceRepositoryTest가 따로 검증한다.
+	 * 동시 제출: 하나만 성공하고, 나머지는 유니크 위반(500)이 아니라 currentStatus가 담긴 409여야 한다.
+	 * 화면은 currentStatus로 이동할 화면을 정하므로 값까지 확인한다 (API 명세 1-6).
+	 * 조건부 갱신 SQL 자체는 ExperienceServiceTest(BE-4)가 검증한다.
 	 */
 	@Test
 	void submit_concurrentRequests_onlyOneSucceedsAndOneJudgmentSaved() throws Exception {
@@ -336,21 +338,26 @@ class PreJudgmentApiTest extends ApiIntegrationTest {
 		CountDownLatch go = new CountDownLatch(1);
 		ExecutorService pool = Executors.newFixedThreadPool(threads);
 		try {
-			Callable<Integer> request = () -> {
+			Callable<MockHttpServletResponse> request = () -> {
 				ready.countDown();
 				go.await();
-				return submit(caseId, cookie, body).andReturn().getResponse().getStatus();
+				return submit(caseId, cookie, body).andReturn().getResponse();
 			};
-			List<Future<Integer>> futures = IntStream.range(0, threads).mapToObj(i -> pool.submit(request)).toList();
+			List<Future<MockHttpServletResponse>> futures = IntStream.range(0, threads)
+					.mapToObj(i -> pool.submit(request)).toList();
 			ready.await();
 			go.countDown();
 
 			int succeeded = 0;
-			for (Future<Integer> future : futures) {
-				int httpStatus = future.get();
-				assertThat(httpStatus).isIn(200, 409);
-				if (httpStatus == 200) {
+			for (Future<MockHttpServletResponse> future : futures) {
+				MockHttpServletResponse response = future.get();
+				assertThat(response.getStatus()).isIn(200, 409);
+				if (response.getStatus() == 200) {
 					succeeded++;
+				} else {
+					assertThat(response.getContentAsString())
+							.contains("\"code\":\"INVALID_STATE\"")
+							.contains("\"currentStatus\":\"PRE_JUDGED\"");
 				}
 			}
 			assertThat(succeeded).isEqualTo(1);

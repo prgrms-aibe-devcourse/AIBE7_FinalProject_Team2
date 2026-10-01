@@ -31,8 +31,8 @@ public class Experience {
 	/** MVP는 사건당 1회 체험 (ERD 결정 #5) */
 	public static final int FIRST_ATTEMPT = 1;
 
-	/** 섹션 ①(개요)은 S-03에서 본 것으로 처리 (사전 판단 조건부 갱신 ExperienceRepository.advanceToPreJudged도 이 값을 쓴다) */
-	public static final int OVERVIEW_STEP = 1;
+	/** 섹션 ①(개요)은 S-03에서 본 것으로 처리 */
+	private static final int OVERVIEW_STEP = 1;
 
 	/** 사용자가 확인하는 첫 섹션 ②(상세 사실관계) */
 	private static final int FIRST_CONFIRM_STEP = 2;
@@ -90,11 +90,7 @@ public class Experience {
 		return new Experience(anonymousUser, legalCase);
 	}
 
-	/**
-	 * 사전 판단 제출 → PRE_JUDGED, 섹션 ①은 확인한 것으로 처리
-	 * API 5는 동시 제출을 막으려고 같은 규칙을 조건부 UPDATE(ExperienceRepository.advanceToPreJudged)로 실행한다.
-	 * 규칙을 바꾸면 두 곳을 함께 고친다.
-	 */
+	/** 사전 판단 제출 → PRE_JUDGED, 섹션 ①은 확인한 것으로 처리 */
 	public void markPreJudged(Instant now) {
 		moveTo(ExperienceStatus.PRE_JUDGED);
 		this.lastReviewedStep = OVERVIEW_STEP;
