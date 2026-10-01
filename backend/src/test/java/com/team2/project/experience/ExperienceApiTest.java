@@ -24,13 +24,11 @@ import com.team2.project.support.ApiIntegrationTest;
 
 class ExperienceApiTest extends ApiIntegrationTest {
 
-	private static final String COOKIE = "NLNB_AID";
-
 	@Test
 	void start_firstTime_createsExperienceAndIssuesCookie() throws Exception {
 		long caseId = insertCase("MURDER", "PUBLISHED");
 
-		MockHttpServletResponse response = mockMvc.perform(post(url(caseId)))
+		MockHttpServletResponse response = mockMvc.perform(post(experienceUrl(caseId)))
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.caseId").value(caseId))
 				.andExpect(jsonPath("$.attemptNo").value(1))
@@ -50,7 +48,7 @@ class ExperienceApiTest extends ApiIntegrationTest {
 		long caseId = insertCase("MURDER", "PUBLISHED");
 		Cookie cookie = startAndGetCookie(caseId);
 
-		MockHttpServletResponse second = mockMvc.perform(post(url(caseId)).cookie(cookie))
+		MockHttpServletResponse second = mockMvc.perform(post(experienceUrl(caseId)).cookie(cookie))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.status").value("STARTED"))
 				.andReturn().getResponse();
@@ -65,7 +63,7 @@ class ExperienceApiTest extends ApiIntegrationTest {
 		UUID userId = UUID.randomUUID();
 		insertExperience(userId, caseId, 1, "COMPLETED");
 
-		mockMvc.perform(post(url(caseId)).cookie(new Cookie(COOKIE, userId.toString())))
+		mockMvc.perform(post(experienceUrl(caseId)).cookie(new Cookie(COOKIE, userId.toString())))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.status").value("COMPLETED"));
 		assertThat(countExperiences(caseId)).isEqualTo(1);
@@ -76,7 +74,7 @@ class ExperienceApiTest extends ApiIntegrationTest {
 		long caseId = insertCase("MURDER", "PUBLISHED");
 		UUID unknown = UUID.randomUUID();
 
-		MockHttpServletResponse response = mockMvc.perform(post(url(caseId)).cookie(new Cookie(COOKIE, unknown.toString())))
+		MockHttpServletResponse response = mockMvc.perform(post(experienceUrl(caseId)).cookie(new Cookie(COOKIE, unknown.toString())))
 				.andExpect(status().isCreated())
 				.andReturn().getResponse();
 
@@ -87,7 +85,7 @@ class ExperienceApiTest extends ApiIntegrationTest {
 	void start_malformedCookie_treatedAsNoCookie() throws Exception {
 		long caseId = insertCase("MURDER", "PUBLISHED");
 
-		mockMvc.perform(post(url(caseId)).cookie(new Cookie(COOKIE, "not-a-uuid")))
+		mockMvc.perform(post(experienceUrl(caseId)).cookie(new Cookie(COOKIE, "not-a-uuid")))
 				.andExpect(status().isCreated());
 	}
 
@@ -97,7 +95,7 @@ class ExperienceApiTest extends ApiIntegrationTest {
 		long second = insertCase("FRAUD", "PUBLISHED");
 		Cookie cookie = startAndGetCookie(first);
 
-		mockMvc.perform(post(url(second)).cookie(cookie)).andExpect(status().isCreated());
+		mockMvc.perform(post(experienceUrl(second)).cookie(cookie)).andExpect(status().isCreated());
 
 		assertThat(countExperiences(first)).isEqualTo(1);
 		assertThat(countExperiences(second)).isEqualTo(1);
@@ -105,7 +103,7 @@ class ExperienceApiTest extends ApiIntegrationTest {
 
 	@Test
 	void start_unknownCase_returnsCaseNotFound() throws Exception {
-		mockMvc.perform(post(url(Long.MAX_VALUE)))
+		mockMvc.perform(post(experienceUrl(Long.MAX_VALUE)))
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.code").value("CASE_NOT_FOUND"));
 	}
@@ -114,7 +112,7 @@ class ExperienceApiTest extends ApiIntegrationTest {
 	void start_unpublishedCase_returnsCaseNotFound() throws Exception {
 		long caseId = insertCase("MURDER", "DRAFT");
 
-		mockMvc.perform(post(url(caseId)))
+		mockMvc.perform(post(experienceUrl(caseId)))
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.code").value("CASE_NOT_FOUND"));
 		assertThat(countExperiences(caseId)).isZero();
@@ -135,7 +133,7 @@ class ExperienceApiTest extends ApiIntegrationTest {
 			Callable<Integer> request = () -> {
 				ready.countDown();
 				go.await();
-				return mockMvc.perform(post(url(caseId)).cookie(cookie)).andReturn().getResponse().getStatus();
+				return mockMvc.perform(post(experienceUrl(caseId)).cookie(cookie)).andReturn().getResponse().getStatus();
 			};
 			List<Future<Integer>> futures = java.util.stream.IntStream.range(0, threads)
 					.mapToObj(i -> pool.submit(request)).toList();
@@ -162,7 +160,7 @@ class ExperienceApiTest extends ApiIntegrationTest {
 		long caseId = insertCase("MURDER", "PUBLISHED");
 		Cookie cookie = startAndGetCookie(caseId);
 
-		mockMvc.perform(get(url(caseId)).cookie(cookie))
+		mockMvc.perform(get(experienceUrl(caseId)).cookie(cookie))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.caseId").value(caseId))
 				.andExpect(jsonPath("$.status").value("STARTED"))
@@ -173,7 +171,7 @@ class ExperienceApiTest extends ApiIntegrationTest {
 	void getMyExperience_noCookie_returnsExperienceNotFound() throws Exception {
 		long caseId = insertCase("MURDER", "PUBLISHED");
 
-		mockMvc.perform(get(url(caseId)))
+		mockMvc.perform(get(experienceUrl(caseId)))
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.code").value("EXPERIENCE_NOT_FOUND"));
 	}
@@ -184,14 +182,14 @@ class ExperienceApiTest extends ApiIntegrationTest {
 		startAndGetCookie(caseId);
 		Cookie stranger = startAndGetCookie(insertCase("FRAUD", "PUBLISHED"));
 
-		mockMvc.perform(get(url(caseId)).cookie(stranger))
+		mockMvc.perform(get(experienceUrl(caseId)).cookie(stranger))
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.code").value("EXPERIENCE_NOT_FOUND"));
 	}
 
 	@Test
 	void getMyExperience_unknownCase_returnsCaseNotFound() throws Exception {
-		mockMvc.perform(get(url(Long.MAX_VALUE)))
+		mockMvc.perform(get(experienceUrl(Long.MAX_VALUE)))
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.code").value("CASE_NOT_FOUND"));
 	}
@@ -203,22 +201,11 @@ class ExperienceApiTest extends ApiIntegrationTest {
 		jdbcTemplate.update("UPDATE anonymous_user SET last_seen_at = now() - interval '1 day' WHERE id = ?",
 				UUID.fromString(cookie.getValue()));
 
-		mockMvc.perform(get(url(caseId)).cookie(cookie)).andExpect(status().isOk());
+		mockMvc.perform(get(experienceUrl(caseId)).cookie(cookie)).andExpect(status().isOk());
 
 		Boolean refreshed = jdbcTemplate.queryForObject(
 				"SELECT last_seen_at > now() - interval '1 minute' FROM anonymous_user WHERE id = ?",
 				Boolean.class, UUID.fromString(cookie.getValue()));
 		assertThat(refreshed).isTrue();
-	}
-
-	private Cookie startAndGetCookie(long caseId) throws Exception {
-		MockHttpServletResponse response = mockMvc.perform(post(url(caseId))).andExpect(status().isCreated())
-				.andReturn().getResponse();
-		String value = response.getHeader(HttpHeaders.SET_COOKIE).split(";")[0].substring((COOKIE + "=").length());
-		return new Cookie(COOKIE, value);
-	}
-
-	private static String url(long caseId) {
-		return "/api/v1/cases/" + caseId + "/experience";
 	}
 }

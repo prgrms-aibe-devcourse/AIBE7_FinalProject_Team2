@@ -9,4 +9,7 @@ public interface SentenceRangeOptionRepository extends JpaRepository<SentenceRan
 
 	/** 범죄 유형별 사전 판단 구간, 표시 순서 (API 4 · 5) */
 	List<SentenceRangeOption> findAllByCrimeTypeOrderByDisplayOrderAsc(CrimeType crimeType);
+
+	/** 사건의 범죄 유형에 속한 구간인지 (API 5 검증, 다른 범죄 유형의 구간은 거절) */
+	boolean existsByIdAndCrimeType(Long id, CrimeType crimeType);
 }
