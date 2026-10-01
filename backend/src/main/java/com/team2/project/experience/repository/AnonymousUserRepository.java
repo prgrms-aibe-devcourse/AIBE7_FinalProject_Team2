@@ -7,11 +7,18 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 public interface AnonymousUserRepository extends JpaRepository<AnonymousUser, UUID> {
 
-	/** last_seen_at을 갱신하고 갱신된 행 수를 돌려준다. 0이면 DB에 없는 익명 ID다 (조회 없이 존재 확인 겸 갱신) */
+	/**
+	 * 최근 접속 시각 갱신. 마지막 갱신이 threshold보다 오래됐을 때만 바꿔, 조회 요청마다 UPDATE가 나가지 않게 한다.
+	 * 조회 API는 @Transactional(readOnly = true) 안에서 부르므로, 읽기 전용 트랜잭션에서도 쓸 수 있게 별도 트랜잭션으로 실행한다.
+	 * @return 갱신한 행 수 (0이면 최근에 이미 갱신됨)
+	 */
 	@Modifying
-	@Query("update AnonymousUser u set u.lastSeenAt = :now where u.id = :id")
-	int touch(@Param("id") UUID id, @Param("now") Instant now);
+	@Transactional(propagation = Propagation.REQUIRES_NEW)
+	@Query("update AnonymousUser a set a.lastSeenAt = :now where a.id = :id and a.lastSeenAt < :threshold")
+	int touchIfStale(@Param("id") UUID id, @Param("now") Instant now, @Param("threshold") Instant threshold);
 }
