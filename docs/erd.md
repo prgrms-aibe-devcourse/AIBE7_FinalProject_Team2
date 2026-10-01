@@ -12,6 +12,7 @@
 | v1.6 | 2026-09-30 | BE-16 시드 반영<br>• 6장 `sentence_range_option` 예시를 V1이 넣은 실제 `id`(8 ~ 15) · `display_order`(2 ~ 9)로 정정, 사용자 사전 판단 예시 구간을 11로 정정 |
 | v1.5 | 2026-09-30 | BE-2 마이그레이션 반영<br>• `penalty_rule` 유니크 (`case_id`, `penalty_type`), `DEATH` · `LIFE` 행 CHECK(법정형 NULL, 집행유예 불가)<br>• `experience` CHECK(`last_reviewed_step` 0 ~ 4, `attempt_no` 1 이상), `comparison_analysis.fail_reason` CHECK 명시<br>• `judgment` CHECK: 형량 값 양수(`prison_months` · `fine_amount` · `suspension_months` > 0), 사용자 판단은 항상 공개(PR #26 리뷰 반영)<br>• 7장에 마이그레이션 공통 규칙 추가<br>• `penalty_rule` 컬럼 표 중간의 `DEATH` · `LIFE` 설명을 표 아래로 옮김(표가 끊겨 마지막 3개 컬럼이 표로 보이지 않던 문제) |
 | v1.7 | 2026-10-01 | BE-3 엔티티 반영 — 7장 마이그레이션 공통 규칙에 jsonb 형식(배열 컬럼, `case_section.data` 원소 형식, 부가 처분 `type` 값) 추가 |
+| v1.8 | 2026-10-01 | BE-3 리뷰 반영 — `case_source` 최종 확정 판결 부분 유니크(V6 마이그레이션) 추가, `comparison_analysis`는 `PENDING`일 때만 `DONE` · `FAILED`로 바뀜(엔티티 규칙) |
 
 ---
 
@@ -243,6 +244,7 @@ S-06에서 보여 줄 형벌 선택지, 그리고 **선고 가능 범위 밖 판
 | original_text | text |  | 판결문 원문 또는 저장 위치 |
 | note | text |  | 가공 · 검수 메모 |
 - 1심과 항소심 판결문을 모두 쓰는 사건은 행을 2개 둔다(FR-2-2).
+- **부분 유니크 제약**: `case_id` WHERE `is_final = true` — 사건마다 최종 확정 판결은 1건 (V6, v1.8)
 
 #### `sentencing_guideline` — 양형기준 버전
 
