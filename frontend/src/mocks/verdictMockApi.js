@@ -39,27 +39,35 @@ export async function postVerdict(caseId, body) {
   // 목 규칙: 상태 → 형식 → 형벌 → 형량 범위 → 집행유예 → 요소 순서.
   if (!isObject(body)) fail('VALIDATION_ERROR', status);
   const {
-    penaltyType, prisonMonths = null, fineAmount = null, suspensionMonths = null,
+    penaltyType, reducedTo = null, prisonMonths = null, fineAmount = null, suspensionMonths = null,
     factors = [], freeOpinion = null,
   } = body;
   if (typeof penaltyType !== 'string'
+    || (reducedTo !== null && typeof reducedTo !== 'string')
     || ![prisonMonths, fineAmount, suspensionMonths].every(nullableInteger)
-    || (penaltyType === 'PRISON' && (prisonMonths === null || fineAmount !== null))
-    || (penaltyType === 'FINE' && (fineAmount === null || prisonMonths !== null))
     || !Array.isArray(factors)
     || !factors.every((factor) => isObject(factor) && Number.isInteger(factor.factorId))
     || freeOpinion !== null) {
     fail('VALIDATION_ERROR', status);
   }
   const option = mockVerdictForm.penaltyOptions.find((item) => item.penaltyType === penaltyType);
-  if (!option) fail('INVALID_PENALTY_TYPE', status);
-  const field = penaltyType === 'PRISON' ? 'prisonMonths' : 'fineAmount';
-  const value = penaltyType === 'PRISON' ? prisonMonths : fineAmount;
-  if (value < option.allowedMin || value > option.allowedMax) {
+  const validCombination = option && (reducedTo === null || (option.reducibleTo ?? []).includes(reducedTo));
+  const finalType = reducedTo ?? penaltyType;
+  // 조합이 유효할 때만 최종 형벌의 필수값을 검사한다.
+  if (validCombination && (
+    (finalType === 'PRISON' && (prisonMonths === null || fineAmount !== null))
+    || (finalType === 'FINE' && (fineAmount === null || prisonMonths !== null))
+    || (['DEATH', 'LIFE'].includes(finalType) && [prisonMonths, fineAmount, suspensionMonths].some((value) => value !== null))
+  )) fail('VALIDATION_ERROR', status);
+  if (!validCombination) fail('INVALID_PENALTY_TYPE', status);
+  const numeric = ['PRISON', 'FINE'].includes(finalType);
+  const field = finalType === 'PRISON' ? 'prisonMonths' : 'fineAmount';
+  const value = finalType === 'PRISON' ? prisonMonths : fineAmount;
+  if (numeric && (value < option.allowedMin || value > option.allowedMax)) {
     fail('OUT_OF_ALLOWED_RANGE', status, [{ field, reason: 'OUT_OF_ALLOWED_RANGE' }]);
   }
   const rule = mockVerdictForm.suspensionRule;
-  const ceiling = penaltyType === 'PRISON' ? rule.maxPrisonMonths : rule.maxFineAmount;
+  const ceiling = finalType === 'PRISON' ? rule.maxPrisonMonths : rule.maxFineAmount;
   if (suspensionMonths !== null && (!option.suspensionAllowed || value > ceiling
     || suspensionMonths < rule.minMonths || suspensionMonths > rule.maxMonths)) {
     fail('INVALID_SUSPENSION', status);

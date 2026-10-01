@@ -1,0 +1,44 @@
+{
+  "_comment": "설명용 가상 사건 (ERD 6장 · API 명세 v0.5 예시와 같음). 법정형 · 선고 가능 범위는 형법 조문 그대로이고, 사실관계 · 권고 범위 · 양형기준 · 유사 판례는 지어낸 값이다. 실제 대표 사건 입력은 cases/에 두고 git에 올리지 않는다.",
+  "caseId": 1,
+  "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",
+  "crimeType": "MURDER",
+  "chargeName": "살인",
+  "appliedLaw": "형법 제250조 제1항 살인",
+  "statutoryPenaltyText": "사형, 무기 또는 5년 이상의 징역",
+  "overview": "피고인이 빌린 돈을 갚지 못해 오래 다투던 지인이 집으로 찾아오자, 말다툼 끝에 집에 있던 흉기로 피해자를 살해하고 구호 조치 없이 집을 나간 사건이다.",
+  "sections": [
+    { "stage": "DETAIL", "sectionType": "FACTS", "title": "주요 사실관계", "content": "사건 3개월 전부터 변제 문제로 여러 차례 다툼이 있었다. 사건 당일 피해자가 피고인의 집으로 찾아와 돈을 갚으라고 요구했고, 말다툼 끝에 피고인이 집에 있던 흉기를 집어 들어 피해자를 공격했다. 피고인은 구호 조치 없이 현장을 떠났다. 피해자에게는 부양하던 어린 자녀 2명이 있다." },
+    { "stage": "DETAIL", "sectionType": "DAMAGE", "title": "피해 결과", "data": [ { "label": "피해자 수", "value": "1명" }, { "label": "피해 결과", "value": "사망" }, { "label": "피해자와의 관계", "value": "지인 (돈을 빌린 사이)" }, { "label": "범행 도구", "value": "집에 있던 흉기" } ] },
+    { "stage": "DETAIL", "sectionType": "DEFENDANT", "title": "피고인 관련 사실", "content": "30대이고 형사처벌을 받은 전력이 없다. 수사 초기부터 범행을 인정하고 반성하고 있다." },
+    { "stage": "DETAIL", "sectionType": "SETTLEMENT", "title": "합의 · 피해 회복", "content": "피해 회복을 위해 5,000만 원을 공탁했으나 합의에 이르지 못했고, 유족은 엄벌을 원한다." },
+    { "stage": "ARGUMENT", "sectionType": "PROSECUTOR", "title": "검사", "content": "피고인은 흉기를 집어 들어 피해자를 공격했고, 쓰러진 피해자를 두고 구호 조치 없이 현장을 떠났다. 피해자에게는 부양하던 어린 자녀가 있고 유족이 엄벌을 원한다." },
+    { "stage": "ARGUMENT", "sectionType": "DEFENSE", "title": "피고인 · 변호인", "content": "피고인은 범행을 모두 인정하고 반성하고 있다. 미리 계획한 것이 아니라 말다툼 중에 벌어진 우발적 범행이고, 오랜 채무로 정신적으로 지쳐 있었다. 전력이 없고, 피해 회복을 위해 공탁했다." }
+  ],
+  "penaltyRules": [
+    { "penaltyType": "DEATH", "statutoryMin": null, "statutoryMax": null, "allowedMin": 240, "allowedMax": 600, "suspensionAllowed": false },
+    { "penaltyType": "LIFE", "statutoryMin": null, "statutoryMax": null, "allowedMin": 120, "allowedMax": 600, "suspensionAllowed": false },
+    { "penaltyType": "PRISON", "statutoryMin": 60, "statutoryMax": 360, "allowedMin": 30, "allowedMax": 360, "suspensionAllowed": true }
+  ],
+  "recommended": { "minMonths": 84, "maxMonths": 144, "basis": "살인범죄 제2유형(보통 동기 살인), 감경영역. 특별감경인자 1개(실질적 피해 회복), 특별가중인자 없음" },
+  "factors": [
+    { "factorId": 1, "label": "빌린 돈을 갚지 못해 오래 다툼이 있었다", "revealStage": "OVERVIEW" },
+    { "factorId": 2, "label": "다투던 중 집에 있던 흉기를 집어 들었다", "revealStage": "OVERVIEW" },
+    { "factorId": 3, "label": "범행 뒤 구호 조치 없이 현장을 떠났다", "revealStage": "OVERVIEW" },
+    { "factorId": 4, "label": "사건 3개월 전부터 변제 문제로 여러 차례 다퉜다", "revealStage": "DETAIL" },
+    { "factorId": 5, "label": "유족이 엄벌을 원한다", "revealStage": "DETAIL" },
+    { "factorId": 6, "label": "피해자에게는 부양하던 어린 자녀 2명이 있다", "revealStage": "DETAIL" },
+    { "factorId": 7, "label": "수사 초기부터 범행을 인정하고 반성하고 있다", "revealStage": "DETAIL" },
+    { "factorId": 8, "label": "형사처벌 전력이 없다", "revealStage": "DETAIL" },
+    { "factorId": 9, "label": "피해 회복을 위해 5,000만 원을 공탁했다", "revealStage": "DETAIL" },
+    { "factorId": 10, "label": "피고인은 우발적 범행이라고 주장한다", "revealStage": "ARGUMENT" },
+    { "factorId": 11, "label": "피고인은 오랜 채무로 정신적으로 지쳐 있었다고 주장한다", "revealStage": "ARGUMENT" }
+  ],
+  "references": {
+    "sentencingGuideline": "살인범죄 양형기준 — 제2유형(보통 동기 살인): 감경영역 7년 ~ 12년, 기본영역 10년 ~ 16년, 가중영역 15년 이상 또는 무기 이상. (예시 값, 사건 등록 시 사건 발생 시점의 양형기준 원문으로 교체)",
+    "similarCases": [
+      { "title": "유사 판례 A (예시)", "summary": "채무 문제로 다투던 지인을 말다툼 중 흉기로 살해. 범행 인정, 전력 없음, 일부 공탁, 유족 엄벌 탄원.", "sentence": "징역 12년" },
+      { "title": "유사 판례 B (예시)", "summary": "금전 문제로 다툰 동료를 흉기로 살해하고 도주. 범행 부인, 동종 전력 없음, 피해 회복 없음.", "sentence": "징역 18년" }
+    ]
+  }
+}

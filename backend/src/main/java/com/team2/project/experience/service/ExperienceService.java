@@ -61,7 +61,7 @@ public class ExperienceService {
 	}
 
 	private Optional<Experience> findLatest(UUID anonymousUserId, Long caseId) {
-		return experienceRepository.findFirstByAnonymousUserIdAndCaseIdOrderByAttemptNoDesc(anonymousUserId, caseId);
+		return experienceRepository.findLatest(anonymousUserId, caseId);
 	}
 
 	/**
