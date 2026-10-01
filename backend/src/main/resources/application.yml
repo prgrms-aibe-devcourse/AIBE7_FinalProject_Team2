@@ -27,3 +27,11 @@ spring:
     ignore-migration-patterns: "*:future,repeatable:missing"
     # 운영 DB 전체 삭제를 막기 위해 clean 명령은 항상 막아 둔다 (기본값이지만 명시)
     clean-disabled: true
+
+# Swagger UI · OpenAPI 문서. 기본값은 꺼짐: 운영에서 환경변수를 빠뜨려도 API 문서가 노출되지 않도록 안전한 쪽에 둔다.
+# 로컬 · 개발에서만 SWAGGER_ENABLED=true 로 켠다.
+springdoc:
+  api-docs:
+    enabled: ${SWAGGER_ENABLED:false}
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:false}
