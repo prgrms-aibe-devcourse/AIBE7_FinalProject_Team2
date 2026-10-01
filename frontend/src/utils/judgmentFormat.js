@@ -1,4 +1,4 @@
-// S-07 · S-08 공통 — 판결(사용자 · AI · 실제) 표시 형식을 맞추는 순수 함수 모음.
+// S-07 · S-08 · S-09 공통 — 판결(사용자 · AI · 실제) 표시 형식을 맞추는 순수 함수 모음.
 import { formatMonths } from '../components/recommendedRangeBar.js';
 
 export const penaltyLabels = { DEATH: '사형', LIFE: '무기징역', PRISON: '징역', FINE: '벌금' };
