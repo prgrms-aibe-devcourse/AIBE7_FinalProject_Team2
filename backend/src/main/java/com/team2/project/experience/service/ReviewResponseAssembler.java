@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 import org.springframework.stereotype.Component;
 
 /** DB에 접근하지 않고 이미 조회한 사건 정보에서 공개된 단계만 조립한다. */
@@ -39,7 +40,7 @@ public class ReviewResponseAssembler {
 			IntStream.rangeClosed(visibleThrough + 1, 4).boxed().toList(),
 			visibleThrough == 4 ? law(legalCase, sections, rules) : null,
 			status == ExperienceStatus.REVIEWED
-				? data(sections, SectionStage.SUMMARY, "SUMMARY").stream().map(String.class::cast).toList() : null);
+				? data(sections, SectionStage.SUMMARY, "SUMMARY").stream().map(String::valueOf).toList() : null);
 	}
 
 	public static Integer openStep(int lastStep) {
@@ -60,6 +61,6 @@ public class ReviewResponseAssembler {
 	private List<Object> data(List<CaseSection> sections, SectionStage stage, String type) {
 		return sections.stream().filter(section -> section.getStage() == stage && type.equals(section.getSectionType()))
 			.sorted(Comparator.comparingInt(CaseSection::getDisplayOrder))
-			.flatMap(section -> section.getData() == null ? java.util.stream.Stream.empty() : section.getData().stream()).toList();
+			.flatMap(section -> section.getData() == null ? Stream.empty() : section.getData().stream()).toList();
 	}
 }
