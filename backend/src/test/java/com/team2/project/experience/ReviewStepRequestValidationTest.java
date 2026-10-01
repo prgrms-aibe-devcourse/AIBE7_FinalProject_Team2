@@ -15,8 +15,14 @@ class ReviewStepRequestValidationTest {
 	void validate_nullStep_hasViolation() {
 		assertThat(FACTORY.getValidator().validate(new ReviewStepRequest(null))).hasSize(1);
 	}
-	@Test
-	void validate_stepThree_passes() {
-		assertThat(FACTORY.getValidator().validate(new ReviewStepRequest(3))).isEmpty();
+	@org.junit.jupiter.params.ParameterizedTest
+	@org.junit.jupiter.params.provider.ValueSource(ints = {2, 3, 4})
+	void validate_stepInRange_passes(int step) {
+		assertThat(FACTORY.getValidator().validate(new ReviewStepRequest(step))).isEmpty();
+	}
+	@org.junit.jupiter.params.ParameterizedTest
+	@org.junit.jupiter.params.provider.ValueSource(ints = {0, 1, 5})
+	void validate_stepOutOfRange_hasViolation(int step) {
+		assertThat(FACTORY.getValidator().validate(new ReviewStepRequest(step))).hasSize(1);
 	}
 }

@@ -14,6 +14,7 @@ import com.team2.project.judgment.service.VerdictService;
 import com.team2.project.legalcase.domain.PenaltyType;
 import jakarta.validation.Validator;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CyclicBarrier;
@@ -93,7 +94,7 @@ class VerdictServiceTest {
 	@Test
 	@Transactional(propagation = Propagation.NOT_SUPPORTED)
 	void getForm_reviewed_returnsOrderedPublicFields() {
-		var result = forms.getForm(experienceId);
+		var result = forms.getForm(caseId, Optional.of(userId));
 		assertThat(result.penaltyOptions()).extracting(option -> option.penaltyType())
 			.containsExactly(PenaltyType.DEATH, PenaltyType.LIFE, PenaltyType.PRISON);
 		assertThat(result.penaltyOptions().get(0).reducibleTo()).containsExactly(PenaltyType.LIFE, PenaltyType.PRISON);
@@ -119,7 +120,7 @@ class VerdictServiceTest {
 	@Test
 	void getForm_preJudged_rejectsState() {
 		jdbc.update("UPDATE experience SET status = 'PRE_JUDGED' WHERE id = ?", experienceId);
-		assertThatThrownBy(() -> forms.getForm(experienceId)).isInstanceOfSatisfying(InvalidExperienceStateException.class,
+		assertThatThrownBy(() -> forms.getForm(caseId, Optional.of(userId))).isInstanceOfSatisfying(InvalidExperienceStateException.class,
 			exception -> assertThat(exception.getExperienceStatus()).isEqualTo(ExperienceStatus.PRE_JUDGED));
 	}
 
@@ -127,7 +128,7 @@ class VerdictServiceTest {
 	@Transactional(propagation = Propagation.NOT_SUPPORTED)
 	void submit_validRequest_commitsJudgmentFactorsAndState() {
 		// 서비스 자체 트랜잭션이 끝난 뒤 새 트랜잭션에서 DB 저장 결과를 확인한다.
-		assertThat(service.submit(experienceId, validRequest()).status()).isEqualTo(ExperienceStatus.VERDICT_CONFIRMED);
+		assertThat(service.submit(caseId, Optional.of(userId), validRequest()).status()).isEqualTo(ExperienceStatus.VERDICT_CONFIRMED);
 		new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
 			var rows = jdbc.queryForList("SELECT subject_type, timing, penalty_type, reduced_to, prison_months FROM judgment WHERE experience_id = ?", experienceId);
 			assertThat(rows).hasSize(1);
@@ -138,14 +139,14 @@ class VerdictServiceTest {
 			assertThat(found.getStatus()).isEqualTo(ExperienceStatus.VERDICT_CONFIRMED);
 			assertThat(found.getVerdictConfirmedAt()).isNotNull();
 		});
-		assertThatThrownBy(() -> service.submit(experienceId, validRequest())).isInstanceOf(InvalidExperienceStateException.class);
+		assertThatThrownBy(() -> service.submit(caseId, Optional.of(userId), validRequest())).isInstanceOf(InvalidExperienceStateException.class);
 	}
 
 	@Test
 	@Transactional(propagation = Propagation.NOT_SUPPORTED)
 	void submit_wrongState_doesNotSave() {
 		jdbc.update("UPDATE experience SET status = 'PRE_JUDGED' WHERE id = ?", experienceId);
-		assertThatThrownBy(() -> service.submit(experienceId, validRequest())).isInstanceOf(InvalidExperienceStateException.class);
+		assertThatThrownBy(() -> service.submit(caseId, Optional.of(userId), validRequest())).isInstanceOf(InvalidExperienceStateException.class);
 		assertUnchanged("PRE_JUDGED");
 	}
 
@@ -154,7 +155,20 @@ class VerdictServiceTest {
 	void submit_invalidRange_doesNotSave() {
 		var request = new VerdictRequest("LIFE", "PRISON", 119, null, null, null, null);
 		assertThat(beanValidator.validate(request)).isEmpty();
-		assertThatThrownBy(() -> service.submit(experienceId, request)).isInstanceOf(InvalidJudgmentException.class);
+		assertThatThrownBy(() -> service.submit(caseId, Optional.of(userId), request)).isInstanceOf(InvalidJudgmentException.class);
+		assertUnchanged("REVIEWED");
+	}
+
+	@Test
+	@Transactional(propagation = Propagation.NOT_SUPPORTED)
+	void submitAndGetForm_otherAnonymousUser_rejectsNotFound() {
+		var stranger = Optional.of(UUID.randomUUID());
+		assertThatThrownBy(() -> forms.getForm(caseId, stranger)).isInstanceOfSatisfying(
+			com.team2.project.common.exception.BusinessException.class,
+			exception -> assertThat(exception.getErrorCode()).isEqualTo(com.team2.project.common.exception.ErrorCode.EXPERIENCE_NOT_FOUND));
+		assertThatThrownBy(() -> service.submit(caseId, stranger, validRequest())).isInstanceOfSatisfying(
+			com.team2.project.common.exception.BusinessException.class,
+			exception -> assertThat(exception.getErrorCode()).isEqualTo(com.team2.project.common.exception.ErrorCode.EXPERIENCE_NOT_FOUND));
 		assertUnchanged("REVIEWED");
 	}
 
@@ -176,7 +190,7 @@ class VerdictServiceTest {
 					experiences.findById(experienceId).orElseThrow();
 					try { barrier.await(10, TimeUnit.SECONDS); }
 					catch (Exception exception) { throw new IllegalStateException(exception); }
-					service.submit(experienceId, request);
+					service.submit(caseId, Optional.of(userId), request);
 					return "SUCCESS";
 				});
 			} catch (InvalidExperienceStateException exception) {

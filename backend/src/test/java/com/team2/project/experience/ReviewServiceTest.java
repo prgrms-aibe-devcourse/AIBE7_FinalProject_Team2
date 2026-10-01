@@ -3,6 +3,8 @@ package com.team2.project.experience;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.team2.project.common.exception.BusinessException;
+import com.team2.project.common.exception.ErrorCode;
 import com.team2.project.experience.domain.ExperienceStatus;
 import com.team2.project.experience.domain.InvalidExperienceStateException;
 import com.team2.project.experience.domain.InvalidReviewStepException;
@@ -10,9 +12,9 @@ import com.team2.project.experience.domain.ReviewStepOutOfOrderException;
 import com.team2.project.experience.dto.ReviewStepRequest;
 import com.team2.project.experience.dto.ReviewStepResponse;
 import com.team2.project.experience.service.ReviewService;
-import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Validator;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
@@ -95,6 +97,9 @@ class ReviewServiceTest {
 	private void state(ExperienceStatus status, int step) {
 		jdbc.update("UPDATE experience SET status = ?, last_reviewed_step = ? WHERE id = ?", status.name(), step, experienceId);
 	}
+	private Optional<UUID> me() {
+		return Optional.of(userId);
+	}
 	private ReviewStepRequest request(int step) {
 		var request = new ReviewStepRequest(step);
 		assertThat(validator.validate(request)).isEmpty();
@@ -114,7 +119,7 @@ class ReviewServiceTest {
 	@CsvSource({"PRE_JUDGED,1,2", "REVIEWING,2,3", "REVIEWING,3,4", "REVIEWED,4,4"})
 	void getReview_progress_matchesContract(ExperienceStatus status, int last, int visible) {
 		state(status, last);
-		var result = service.getReview(experienceId);
+		var result = service.getReview(caseId, me());
 		assertThat(result.status()).isEqualTo(status);
 		assertThat(result.lastReviewedStep()).isEqualTo(last);
 		assertThat(result.sections()).hasSize(visible);
@@ -137,21 +142,21 @@ class ReviewServiceTest {
 	@EnumSource(value = ExperienceStatus.class, names = {"STARTED", "VERDICT_CONFIRMED", "AI_REVEALED", "COMPLETED"})
 	void getReview_forbiddenState_rejects(ExperienceStatus status) {
 		state(status, status == ExperienceStatus.STARTED ? 0 : 4);
-		assertThatThrownBy(() -> service.getReview(experienceId)).isInstanceOfSatisfying(InvalidExperienceStateException.class,
-			exception -> assertThat(exception.getCurrentStatus()).isEqualTo(status));
+		assertThatThrownBy(() -> service.getReview(caseId, me())).isInstanceOfSatisfying(InvalidExperienceStateException.class,
+			exception -> assertThat(exception.getExperienceStatus()).isEqualTo(status));
 	}
 
 	@Test
 	void confirmStep_sequentialAndRepeated_commitsMonotonicProgress() {
 		for (int step = 2; step <= 4; step++) {
 			var status = step == 4 ? ExperienceStatus.REVIEWED : ExperienceStatus.REVIEWING;
-			response(service.confirmStep(experienceId, request(step)), status, step);
+			response(service.confirmStep(caseId, me(), request(step)), status, step);
 			stored(status, step);
-			response(service.confirmStep(experienceId, request(step)), status, step);
+			response(service.confirmStep(caseId, me(), request(step)), status, step);
 		}
 		var reviewedAt = jdbc.queryForObject("SELECT reviewed_at FROM experience WHERE id = ?", java.sql.Timestamp.class, experienceId);
 		assertThat(reviewedAt).isNotNull();
-		response(service.confirmStep(experienceId, request(2)), ExperienceStatus.REVIEWED, 4);
+		response(service.confirmStep(caseId, me(), request(2)), ExperienceStatus.REVIEWED, 4);
 		stored(ExperienceStatus.REVIEWED, 4);
 		assertThat(jdbc.queryForObject("SELECT reviewed_at FROM experience WHERE id = ?", java.sql.Timestamp.class, experienceId)).isEqualTo(reviewedAt);
 	}
@@ -159,28 +164,37 @@ class ReviewServiceTest {
 	@ParameterizedTest
 	@ValueSource(ints = {1, 5})
 	void confirmStep_invalidStep_doesNotChangeState(int step) {
-		assertThatThrownBy(() -> service.confirmStep(experienceId, request(step))).isInstanceOf(InvalidReviewStepException.class);
+		// HTTP에서는 @Valid가 먼저 400으로 거절한다(ReviewStepRequestValidationTest). 서비스 직접 호출도 엔티티가 막는다.
+		assertThatThrownBy(() -> service.confirmStep(caseId, me(), new ReviewStepRequest(step))).isInstanceOf(InvalidReviewStepException.class);
 		stored(ExperienceStatus.PRE_JUDGED, 1);
-		state(ExperienceStatus.VERDICT_CONFIRMED, 4);
-		assertThatThrownBy(() -> service.confirmStep(experienceId, request(step))).isInstanceOf(InvalidReviewStepException.class);
-		stored(ExperienceStatus.VERDICT_CONFIRMED, 4);
 	}
 
 	@Test
 	void confirmStep_skippedStep_doesNotChangeState() {
-		assertThatThrownBy(() -> service.confirmStep(experienceId, request(4))).isInstanceOf(ReviewStepOutOfOrderException.class);
+		assertThatThrownBy(() -> service.confirmStep(caseId, me(), request(4))).isInstanceOf(ReviewStepOutOfOrderException.class);
 		stored(ExperienceStatus.PRE_JUDGED, 1);
 	}
 	@Test
 	void confirmStep_verdictConfirmed_doesNotChangeState() {
 		state(ExperienceStatus.VERDICT_CONFIRMED, 4);
-		assertThatThrownBy(() -> service.confirmStep(experienceId, request(4))).isInstanceOf(InvalidExperienceStateException.class);
+		assertThatThrownBy(() -> service.confirmStep(caseId, me(), request(4))).isInstanceOf(InvalidExperienceStateException.class);
 		stored(ExperienceStatus.VERDICT_CONFIRMED, 4);
 	}
 	@Test
 	void getReviewAndConfirmStep_missingExperience_rejects() {
-		assertThatThrownBy(() -> service.getReview(-1L)).isInstanceOf(EntityNotFoundException.class);
-		assertThatThrownBy(() -> service.confirmStep(-1L, request(2))).isInstanceOf(EntityNotFoundException.class);
+		errorCode(() -> service.getReview(caseId, Optional.of(UUID.randomUUID())), ErrorCode.EXPERIENCE_NOT_FOUND);
+		errorCode(() -> service.getReview(caseId, Optional.empty()), ErrorCode.EXPERIENCE_NOT_FOUND);
+		errorCode(() -> service.confirmStep(caseId, Optional.empty(), request(2)), ErrorCode.EXPERIENCE_NOT_FOUND);
+		stored(ExperienceStatus.PRE_JUDGED, 1);
+	}
+	@Test
+	void getReviewAndConfirmStep_missingCase_rejects() {
+		errorCode(() -> service.getReview(-1L, me()), ErrorCode.CASE_NOT_FOUND);
+		errorCode(() -> service.confirmStep(-1L, me(), request(2)), ErrorCode.CASE_NOT_FOUND);
+	}
+	private static void errorCode(org.assertj.core.api.ThrowableAssert.ThrowingCallable call, ErrorCode code) {
+		assertThatThrownBy(call).isInstanceOfSatisfying(BusinessException.class,
+			exception -> assertThat(exception.getErrorCode()).isEqualTo(code));
 	}
 
 	@Test
@@ -190,7 +204,7 @@ class ReviewServiceTest {
 		var barrier = new CyclicBarrier(2);
 		java.util.concurrent.Callable<ReviewStepResponse> call = () -> {
 			barrier.await(10, TimeUnit.SECONDS);
-			return service.confirmStep(experienceId, request(3));
+			return service.confirmStep(caseId, me(), request(3));
 		};
 		try {
 			var first = executor.submit(call);
@@ -215,7 +229,7 @@ class ReviewServiceTest {
 		var secondPid = new AtomicInteger();
 		try {
 			var first = executor.submit(() -> new TransactionTemplate(transactionManager).execute(tx -> {
-				var result = service.confirmStep(experienceId, request(3));
+				var result = service.confirmStep(caseId, me(), request(3));
 				locked.countDown();
 				await(release);
 				return result;
@@ -225,10 +239,10 @@ class ReviewServiceTest {
 				var duplicate = new TransactionTemplate(transactionManager).execute(tx -> {
 					secondPid.set(jdbc.queryForObject("SELECT pg_backend_pid()", Integer.class));
 					attempting.countDown();
-					return service.confirmStep(experienceId, request(3));
+					return service.confirmStep(caseId, me(), request(3));
 				});
 				response(duplicate, ExperienceStatus.REVIEWING, 3);
-				return service.confirmStep(experienceId, request(4));
+				return service.confirmStep(caseId, me(), request(4));
 			});
 			assertThat(attempting.await(10, TimeUnit.SECONDS)).isTrue();
 			// 시간 지연만으로 추측하지 않고 PostgreSQL이 실제로 잠금 대기 중인지 확인한다.
@@ -243,7 +257,7 @@ class ReviewServiceTest {
 			release.countDown();
 			response(first.get(10, TimeUnit.SECONDS), ExperienceStatus.REVIEWING, 3);
 			response(second.get(10, TimeUnit.SECONDS), ExperienceStatus.REVIEWED, 4);
-			response(service.confirmStep(experienceId, request(3)), ExperienceStatus.REVIEWED, 4);
+			response(service.confirmStep(caseId, me(), request(3)), ExperienceStatus.REVIEWED, 4);
 			stored(ExperienceStatus.REVIEWED, 4);
 		} finally {
 			release.countDown();
