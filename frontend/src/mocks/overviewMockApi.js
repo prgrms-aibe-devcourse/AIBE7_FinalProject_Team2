@@ -1,5 +1,5 @@
 import { mockOverview } from './overviewMockData.js';
-import { read, save } from './mockExperienceStore.js';
+import { read, save, savePreJudgment } from './mockExperienceStore.js';
 
 const delay = () => new Promise((resolve) => setTimeout(resolve, 250));
 
@@ -49,6 +49,7 @@ export async function postPreJudgment(caseId, body) {
     || !factorIds.every((id) => mockOverview.preFactors.some((item) => item.factorId === id))) {
     fail('INVALID_FACTOR', status);
   }
-  // 입력 내용은 저장하지 않는다. 공유하는 목 체험 진행 상태만 갱신한다.
+  // S-09 최상단 "처음 판단 → 직접 판결"에서 써야 해서 사전 판단 선택값을 저장한다.
+  savePreJudgment({ rangeOptionId: body.rangeOptionId, factorIds });
   return save({ status: 'PRE_JUDGED', lastReviewedStep: 1 });
 }

@@ -1,4 +1,4 @@
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) {
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) {
   --color-primary: #e8391e;
   --color-text: #1a1a1a;
   --color-muted: #66615e;
@@ -15,52 +15,52 @@
   overflow-wrap: anywhere;
   word-break: keep-all;
 }
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) * { box-sizing: border-box; }
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) [hidden] { display: none !important; }
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) h1,
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) h2,
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) h3,
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) p { margin: 0; }
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) button { font: inherit; cursor: pointer; }
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) button:disabled { cursor: default; }
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) button:focus-visible { outline: 3px solid #224d8a; outline-offset: 4px; }
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) .case-topbar {
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) * { box-sizing: border-box; }
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) [hidden] { display: none !important; }
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) h1,
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) h2,
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) h3,
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) p { margin: 0; }
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) button { font: inherit; cursor: pointer; }
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) button:disabled { cursor: default; }
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) button:focus-visible { outline: 3px solid #224d8a; outline-offset: 4px; }
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .case-topbar {
   display: flex; align-items: center; gap: 16px; padding: 20px 28px; border-bottom: 1px solid var(--color-border);
 }
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) .back-button { flex-shrink: 0; border: 0; background: transparent; padding: 6px 0; color: var(--color-muted); }
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) .case-title { font-size: 16px; }
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) .case-badge { padding: 2px 9px; border-radius: 3px; background: #fff0eb; color: #a92a16; font-size: 12px; white-space: nowrap; }
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) .top-progress { margin-left: auto; display: flex; align-items: center; gap: 12px; white-space: nowrap; font-size: 13px; color: var(--color-muted); }
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) progress { width: 110px; height: 5px; border: none; background: #e9e4e1; accent-color: var(--color-primary); }
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) progress::-webkit-progress-bar { background: #e9e4e1; }
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) progress::-webkit-progress-value { background: var(--color-primary); }
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) progress::-moz-progress-bar { background: var(--color-primary); }
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) .primary-button,
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) .secondary-button { min-height: 44px; padding: 10px 18px; border: 1px solid var(--color-border); border-radius: 4px; font-weight: 700; }
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) .primary-button { background: #c83019; border-color: #c83019; color: #fff; }
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) .primary-button:hover:not(:disabled) { background: #a92612; }
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) .primary-button:disabled { opacity: .6; }
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) .secondary-button { color: var(--color-text); background: #fff; }
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) .secondary-button:hover { background: var(--color-surface); }
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) .muted { color: var(--color-muted); font-size: 13px; }
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) .message-panel { padding: 44px 28px; }
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) .message-panel button { margin-top: 20px; }
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) .argument-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) .argument-card { padding: 20px; border: 1px solid var(--color-border); border-top: 3px solid #b8b0aa; border-radius: 4px; }
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) .argument-card h3 { margin-bottom: 10px; font-size: 14px; }
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) .law-info-box { padding: 22px; border: 1px solid var(--color-border); border-radius: 4px; }
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) .law-info-box h3,
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) .recommended-range h3 { color: #ac301e; font-size: 13px; margin-bottom: 16px; }
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) .law-info-box dl { margin: 0 0 14px; display: grid; grid-template-columns: 135px minmax(0, 1fr); gap: 10px 16px; }
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) .law-info-box dt { color: var(--color-muted); font-size: 13px; }
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) .law-info-box dd { margin: 0; font-weight: 700; }
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) .recommended-range { margin-top: 20px; padding: 22px; border: 1px solid #c8b6aa; background: #fcfaf8; border-radius: 4px; }
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) .range-value { font-size: 23px; font-weight: 800; line-height: 1.5; margin-bottom: 18px; }
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) .range-track { position: relative; height: 20px; background: #eae5e1; border: 1px solid #ccc3bd; }
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) .range-fill { position: absolute; top: -1px; bottom: -1px; background: #efb19f; border-inline: 2px solid var(--color-primary); }
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) .range-labels { display: flex; justify-content: space-between; gap: 20px; font-size: 11px; color: var(--color-muted); margin: 6px 0 16px; }
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) .range-labels span:last-child { text-align: right; }
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) .range-note { margin-top: 16px; font-size: 13px; font-weight: 700; }
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .back-button { flex-shrink: 0; border: 0; background: transparent; padding: 6px 0; color: var(--color-muted); }
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .case-title { font-size: 16px; }
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .case-badge { padding: 2px 9px; border-radius: 3px; background: #fff0eb; color: #a92a16; font-size: 12px; white-space: nowrap; }
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .top-progress { margin-left: auto; display: flex; align-items: center; gap: 12px; white-space: nowrap; font-size: 13px; color: var(--color-muted); }
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) progress { width: 110px; height: 5px; border: none; background: #e9e4e1; accent-color: var(--color-primary); }
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) progress::-webkit-progress-bar { background: #e9e4e1; }
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) progress::-webkit-progress-value { background: var(--color-primary); }
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) progress::-moz-progress-bar { background: var(--color-primary); }
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .primary-button,
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .secondary-button { min-height: 44px; padding: 10px 18px; border: 1px solid var(--color-border); border-radius: 4px; font-weight: 700; }
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .primary-button { background: #c83019; border-color: #c83019; color: #fff; }
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .primary-button:hover:not(:disabled) { background: #a92612; }
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .primary-button:disabled { opacity: .6; }
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .secondary-button { color: var(--color-text); background: #fff; }
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .secondary-button:hover { background: var(--color-surface); }
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .muted { color: var(--color-muted); font-size: 13px; }
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .message-panel { padding: 44px 28px; }
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .message-panel button { margin-top: 20px; }
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .argument-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .argument-card { padding: 20px; border: 1px solid var(--color-border); border-top: 3px solid #b8b0aa; border-radius: 4px; }
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .argument-card h3 { margin-bottom: 10px; font-size: 14px; }
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .law-info-box { padding: 22px; border: 1px solid var(--color-border); border-radius: 4px; }
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .law-info-box h3,
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .recommended-range h3 { color: #ac301e; font-size: 13px; margin-bottom: 16px; }
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .law-info-box dl { margin: 0 0 14px; display: grid; grid-template-columns: 135px minmax(0, 1fr); gap: 10px 16px; }
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .law-info-box dt { color: var(--color-muted); font-size: 13px; }
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .law-info-box dd { margin: 0; font-weight: 700; }
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .recommended-range { margin-top: 20px; padding: 22px; border: 1px solid #c8b6aa; background: #fcfaf8; border-radius: 4px; }
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .range-value { font-size: 23px; font-weight: 800; line-height: 1.5; margin-bottom: 18px; }
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .range-track { position: relative; height: 20px; background: #eae5e1; border: 1px solid #ccc3bd; }
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .range-fill { position: absolute; top: -1px; bottom: -1px; background: #efb19f; border-inline: 2px solid var(--color-primary); }
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .range-labels { display: flex; justify-content: space-between; gap: 20px; font-size: 11px; color: var(--color-muted); margin: 6px 0 16px; }
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .range-labels span:last-child { text-align: right; }
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .range-note { margin-top: 16px; font-size: 13px; font-weight: 700; }
 .review-page .review-layout { display: grid; grid-template-columns: minmax(0, 1fr) 260px; }
 .review-page .review-main { min-width: 0; }
 .review-page .page-heading { font-size: 22px; padding: 26px 28px 18px; }
@@ -93,14 +93,14 @@
 .review-page .progress-sidebar .is-viewing { font-weight: 700; background: #fce6dc; color: #a92a16; }
 .review-page .progress-sidebar p { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--color-border); color: var(--color-muted); font-size: 12px; }
 @media (max-width: 760px) {
-  :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) .case-topbar { flex-wrap: wrap; gap: 10px; padding: 16px; }
-  :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) .case-title { flex: 1; min-width: 160px; }
-  :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) .top-progress { gap: 8px; }
-  :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) .argument-grid { grid-template-columns: minmax(0, 1fr); }
-  :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) .law-info-box,
-  :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) .recommended-range { padding: 18px; }
-  :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) .law-info-box dl { grid-template-columns: minmax(0, 1fr); gap: 3px; }
-  :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page) .law-info-box dd { margin-bottom: 10px; }
+  :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .case-topbar { flex-wrap: wrap; gap: 10px; padding: 16px; }
+  :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .case-title { flex: 1; min-width: 160px; }
+  :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .top-progress { gap: 8px; }
+  :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .argument-grid { grid-template-columns: minmax(0, 1fr); }
+  :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .law-info-box,
+  :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .recommended-range { padding: 18px; }
+  :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .law-info-box dl { grid-template-columns: minmax(0, 1fr); gap: 3px; }
+  :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .law-info-box dd { margin-bottom: 10px; }
   .review-page .review-layout { grid-template-columns: minmax(0, 1fr); }
   .review-page .section-toggle { padding: 18px 16px; flex-wrap: wrap; gap: 4px; }
   .review-page .section-state { text-align: left; }
