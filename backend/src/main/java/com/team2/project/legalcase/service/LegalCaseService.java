@@ -13,7 +13,6 @@ import com.team2.project.common.exception.BusinessException;
 import com.team2.project.common.exception.ErrorCode;
 import com.team2.project.experience.repository.CaseParticipantCount;
 import com.team2.project.experience.repository.ExperienceRepository;
-import com.team2.project.legalcase.domain.CaseStatus;
 import com.team2.project.legalcase.domain.CrimeType;
 import com.team2.project.legalcase.domain.LegalCase;
 import com.team2.project.legalcase.dto.CaseListResponse;
@@ -36,8 +35,8 @@ public class LegalCaseService {
 	 */
 	@Transactional(readOnly = true)
 	public CaseListResponse getCases(CrimeType crimeType) {
-		List<LegalCase> published = legalCaseRepository.findByStatusLatestFirst(CaseStatus.PUBLISHED);
-		Map<Long, Long> participantCounts = experienceRepository.countCompletedFirstAttempts().stream()
+		List<LegalCase> published = legalCaseRepository.findAllPublished();
+		Map<Long, Long> participantCounts = experienceRepository.countCompletedFirstAttemptsByCase().stream()
 				.collect(Collectors.toMap(CaseParticipantCount::getCaseId, CaseParticipantCount::getParticipantCount));
 
 		List<CaseItem> items = published.stream()
@@ -50,7 +49,7 @@ public class LegalCaseService {
 	/** 공개(PUBLISHED)된 사건이 아니면 CASE_NOT_FOUND. 사건 없음과 비공개를 구분하지 않는다. */
 	@Transactional(readOnly = true)
 	public void requirePublished(Long caseId) {
-		if (!legalCaseRepository.existsByIdAndStatus(caseId, CaseStatus.PUBLISHED)) {
+		if (!legalCaseRepository.existsPublishedById(caseId)) {
 			throw new BusinessException(ErrorCode.CASE_NOT_FOUND);
 		}
 	}
@@ -58,7 +57,7 @@ public class LegalCaseService {
 	/** 공개(PUBLISHED)된 사건을 돌려주고, 아니면 CASE_NOT_FOUND. */
 	@Transactional(readOnly = true)
 	public LegalCase getPublished(Long caseId) {
-		return legalCaseRepository.findByIdAndStatus(caseId, CaseStatus.PUBLISHED)
+		return legalCaseRepository.findPublishedById(caseId)
 				.orElseThrow(() -> new BusinessException(ErrorCode.CASE_NOT_FOUND));
 	}
 

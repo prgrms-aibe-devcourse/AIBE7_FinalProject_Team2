@@ -2,6 +2,8 @@ import { renderLawInfoBox } from '../../components/lawInfoBox.js';
 import { renderRecommendedRangeBar, formatMonths } from '../../components/recommendedRangeBar.js';
 import { getDraft, saveDraft, clearDraft } from './verdictDraft.js';
 
+const penaltyLabels = { DEATH: '사형', LIFE: '무기징역', PRISON: '징역', FINE: '벌금' };
+
 // 원문을 유지해 빈 칸, 0, 잘못 입력한 값을 구별한다.
 function parseInteger(raw) {
   const text = raw.trim();
@@ -68,10 +70,10 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
   }
 
   function draw(form) {
-    const draft = getDraft(caseId) ?? {
+    const draft = { reducing: false, reducedTo: null, ...(getDraft(caseId) ?? {
       penaltyType: '', prisonYears: '', prisonMonths: '', fineAmount: '',
       suspended: false, suspensionYears: '', suspensionMonths: '', factors: {},
-    };
+    }) };
     const law = {
       statutoryPenaltyText: form.statutoryPenaltyText, allowedRanges: form.penaltyOptions,
       allowedRangeNote: form.allowedRangeNote, recommended: form.recommended,
@@ -125,12 +127,24 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       inputs.suspensionMonths.value = '';
     }
     function changed(key) {
-      const sentenceKeys = ['penaltyType', 'prisonYears', 'prisonMonths', 'fineAmount'];
+      const sentenceKeys = ['penaltyType', 'reducing', 'reducedTo', 'prisonYears', 'prisonMonths', 'fineAmount'];
       if (serverError === 'OUT_OF_ALLOWED_RANGE' && sentenceKeys.includes(key)) serverError = null;
       if (serverError === 'INVALID_SUSPENSION'
         && [...sentenceKeys, 'suspended', 'suspensionYears', 'suspensionMonths'].includes(key)) serverError = null;
       update();
       saveDraft(caseId, draft);
+    }
+
+    function clearSentence() {
+      for (const key of ['prisonYears', 'prisonMonths', 'fineAmount']) {
+        draft[key] = '';
+        inputs[key].value = '';
+      }
+      clearSuspension();
+    }
+
+    function finalPenalty() {
+      return draft.reducing ? draft.reducedTo : draft.penaltyType;
     }
 
     const penaltyGroup = group('1. 형벌 종류');
@@ -145,17 +159,50 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       radio.addEventListener('change', () => {
         if (!radio.checked) return;
         draft.penaltyType = option.penaltyType;
-        for (const key of ['prisonYears', 'prisonMonths', 'fineAmount']) {
-          draft[key] = '';
-          inputs[key].value = '';
-        }
-        clearSuspension();
+        draft.reducing = false;
+        draft.reducedTo = null;
+        clearSentence();
         changed('penaltyType');
       });
-      label.append(radio, element('span', '', option.penaltyType === 'PRISON' ? '징역' : '벌금'));
+      label.append(radio, element('span', '', penaltyLabels[option.penaltyType]));
       radios.append(label);
     }
     penaltyGroup.append(radios);
+
+    const reductionArea = element('div', 'reduction-area');
+    const reductionLabel = element('label', 'reduction-toggle');
+    const reductionCheck = element('input');
+    reductionCheck.type = 'checkbox';
+    reductionCheck.addEventListener('change', () => {
+      draft.reducing = reductionCheck.checked;
+      const choices = form.penaltyOptions.find((item) => item.penaltyType === draft.penaltyType)?.reducibleTo ?? [];
+      draft.reducedTo = draft.reducing && choices.length === 1 ? choices[0] : null;
+      clearSentence();
+      changed('reducing');
+    });
+    reductionLabel.append(reductionCheck, element('span', '', '감경해서 선고하기'));
+    const reductionChoices = element('fieldset', 'reduction-choices');
+    reductionChoices.append(element('legend', 'visually-hidden', '감경 후 형벌'));
+    const reductionRadios = [];
+    for (const type of [...new Set(form.penaltyOptions.flatMap((option) => option.reducibleTo ?? []))]) {
+      const label = element('label', 'reduction-option');
+      const radio = element('input');
+      radio.type = 'radio';
+      radio.name = `verdict-reduced-${caseId}`;
+      radio.value = type;
+      radio.addEventListener('change', () => {
+        if (!radio.checked) return;
+        draft.reducedTo = type;
+        clearSentence();
+        changed('reducedTo');
+      });
+      label.append(radio, element('span', '', `${penaltyLabels[type]}으로`));
+      reductionChoices.append(label);
+      reductionRadios.push({ type, label, radio });
+    }
+    const reductionAuto = element('p', 'reduction-auto');
+    reductionArea.append(reductionLabel, element('p', 'muted', '판사는 참작할 사정이 있으면 형을 줄여서 선고할 수 있어요(작량감경).'), reductionChoices, reductionAuto);
+    penaltyGroup.append(reductionArea);
 
     const sentenceGroup = group('2. 형량 · 금액');
     const chooseHint = element('p', 'muted', '먼저 형벌 종류를 선택해 주세요.');
@@ -171,7 +218,8 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
     fineFields.append(money);
     const rangeBox = element('div', 'verdict-range');
     const feedback = element('div', 'sentence-feedback');
-    sentenceGroup.append(chooseHint, prisonFields, fineFields, sentenceError, rangeBox, feedback);
+    const fixedPenalty = element('div', 'fixed-penalty');
+    sentenceGroup.append(chooseHint, fixedPenalty, prisonFields, fineFields, sentenceError, rangeBox, feedback);
 
     const suspensionArea = element('div', 'suspension-area');
     const suspensionLabel = element('label', 'suspension-toggle');
@@ -192,6 +240,8 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
     const suspensionHint = element('p', 'muted', `징역 ${formatMonths(rule.maxPrisonMonths)} 이하 또는 벌금 ${formatMoney(rule.maxFineAmount)} 이하일 때 집행유예를 붙일 수 있어요.`);
     suspensionArea.append(suspensionLabel, suspensionFields, suspensionError, suspensionHint);
     sentenceGroup.append(suspensionArea);
+    const noSuspension = element('p', 'muted no-suspension', '사형 · 무기징역을 고르면 감경해도 집행유예를 붙일 수 없어요.');
+    sentenceGroup.append(noSuspension);
 
     const factorGroup = group('3. 판단 요소');
     factorGroup.append(element('p', 'muted', '판결에 중요하게 고려한 요소를 고르고, 형량을 무겁게 했으면 ↑, 가볍게 했으면 ↓를 눌러 주세요.'));
@@ -226,8 +276,9 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       if (value.reason || confirming || submitting) return;
       payload = {
         penaltyType: draft.penaltyType,
-        prisonMonths: draft.penaltyType === 'PRISON' ? value.sentence.value : null,
-        fineAmount: draft.penaltyType === 'FINE' ? value.sentence.value : null,
+        reducedTo: draft.reducing ? draft.reducedTo : null,
+        prisonMonths: finalPenalty() === 'PRISON' ? value.sentence.value : null,
+        fineAmount: finalPenalty() === 'FINE' ? value.sentence.value : null,
         suspensionMonths: draft.suspended ? value.suspension.value : null,
         factors: Object.entries(draft.factors).map(([factorId, direction]) => ({ factorId: Number(factorId), direction })),
         freeOpinion: null,
@@ -279,8 +330,10 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
         if (active() && main.isConnected) {
           update();
           if (serverError) {
-            const target = serverError === 'INVALID_SUSPENSION' ? inputs.suspensionYears
-              : draft.penaltyType === 'PRISON' ? inputs.prisonYears : inputs.fineAmount;
+            const type = finalPenalty();
+            const target = serverError === 'INVALID_SUSPENSION' && !suspensionFields.hidden && !suspensionArea.hidden
+              ? inputs.suspensionYears : type === 'PRISON' ? inputs.prisonYears : type === 'FINE' ? inputs.fineAmount
+                : radios.querySelector('input:checked') ?? radios.querySelector('input');
             target.focus();
           } else if (confirming) submit.focus();
         }
@@ -302,10 +355,16 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
     root.replaceChildren(header, layout);
 
     function update() {
-      const prison = draft.penaltyType === 'PRISON';
       const option = form.penaltyOptions.find((item) => item.penaltyType === draft.penaltyType);
-      const sentence = prison ? parsePeriod(draft.prisonYears, draft.prisonMonths) : parseInteger(draft.fineAmount);
-      const present = Boolean(option) && sentence.value !== null && !sentence.invalid;
+      const choices = option?.reducibleTo ?? [];
+      const pendingReduction = draft.reducing && !choices.includes(draft.reducedTo);
+      const finalType = finalPenalty();
+      const prison = finalType === 'PRISON';
+      const fine = finalType === 'FINE';
+      const fixed = ['DEATH', 'LIFE'].includes(finalType) && !pendingReduction;
+      const sentence = prison ? parsePeriod(draft.prisonYears, draft.prisonMonths)
+        : fine ? parseInteger(draft.fineAmount) : { value: null, invalid: false };
+      const present = Boolean(option) && !pendingReduction && sentence.value !== null && !sentence.invalid;
       const inRange = present && sentence.value >= option.allowedMin && sentence.value <= option.allowedMax;
       const eligible = inRange && option.suspensionAllowed
         && sentence.value <= (prison ? rule.maxPrisonMonths : rule.maxFineAmount);
@@ -314,26 +373,54 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       const suspensionInvalid = draft.suspended && (suspension.invalid || suspension.value === null
         || suspension.value < rule.minMonths || suspension.value > rule.maxMonths);
       chooseHint.hidden = Boolean(option);
+      reductionArea.hidden = !choices.length;
+      reductionCheck.checked = draft.reducing;
+      reductionChoices.hidden = !draft.reducing || choices.length < 2;
+      reductionAuto.hidden = !draft.reducing || choices.length !== 1;
+      reductionAuto.textContent = choices.length === 1 ? `${penaltyLabels[choices[0]]}으로 감경해요` : '';
+      for (const { type, label, radio } of reductionRadios) {
+        label.hidden = !choices.includes(type);
+        radio.checked = draft.reducedTo === type;
+      }
       prisonFields.hidden = !prison;
-      fineFields.hidden = draft.penaltyType !== 'FINE';
+      fineFields.hidden = !fine;
+      fixedPenalty.hidden = !fixed;
+      fixedPenalty.replaceChildren();
+      if (fixed) fixedPenalty.append(element('strong', 'fixed-penalty-name', penaltyLabels[finalType]),
+        element('p', 'muted', `형량 입력 없이 ${penaltyLabels[finalType]}으로 선고해요.`),
+        element('p', 'muted', `양형기준 권고 범위(징역 ${formatMonths(form.recommended.minMonths)} ~ ${formatMonths(form.recommended.maxMonths)})는 유기징역 기준이라 ${penaltyLabels[finalType]}에는 적용되지 않아요.`));
       sentenceError.textContent = sentence.invalid
         ? prison ? '숫자로 입력해 주세요. 개월은 0 ~ 11입니다.' : '금액은 0 이상의 정수로 입력해 주세요.' : '';
       for (const key of ['prisonYears', 'prisonMonths', 'fineAmount']) inputs[key].setAttribute('aria-invalid', String(sentence.invalid));
       money.textContent = !prison && present ? formatMoney(sentence.value) : '';
       rangeBox.replaceChildren();
-      if (option) renderRecommendedRangeBar(rangeBox, { law, markerMonths: prison && present ? sentence.value : null });
+      if (option && !fixed) renderRecommendedRangeBar(rangeBox, {
+        law, markerMonths: prison && present ? sentence.value : null,
+        showTrack: !fixed && !pendingReduction,
+        trackMaxMonths: prison ? option.allowedMax : null,
+        allowedMinMonths: prison ? option.allowedMin : null,
+        penaltyType: draft.penaltyType,
+      });
       feedback.replaceChildren();
       if ((present && !inRange) || serverError === 'OUT_OF_ALLOWED_RANGE') {
         const warning = element('div', 'range-warning');
         warning.setAttribute('role', 'alert');
+        const rangeText = prison ? `징역 ${formatMonths(option.allowedMin)} ~ ${formatMonths(option.allowedMax)}` : option.text;
+        const alternative = draft.penaltyType === 'PRISON' && present && sentence.value > option.allowedMax
+          ? ['LIFE', 'DEATH'].map((type) => form.penaltyOptions.find((item) => item.penaltyType === type))
+            .find((item) => item && (item.reducibleTo ?? []).includes('PRISON')
+              && sentence.value >= item.allowedMin && sentence.value <= item.allowedMax) : null;
+        const help = alternative ? ` 징역 ${formatMonths(option.allowedMax)}을 넘기려면 ${penaltyLabels[alternative.penaltyType]}을 고른 뒤 감경해서 선고할 수 있어요.` : '';
         warning.append(element('strong', '', '! 선고할 수 있는 범위를 벗어났습니다.'),
-          element('p', '', `이 사건에서 선고할 수 있는 형량은 ${option.text}입니다. 범위 안으로 형량을 조정해야 판결을 확정할 수 있어요.`));
+          element('p', '', `이 사건에서 선고할 수 있는 형량은 ${rangeText}입니다. 범위 안으로 형량을 조정해야 판결을 확정할 수 있어요.${help}`));
         feedback.append(warning);
       } else if (prison && inRange && sentence.value >= form.recommended.minMonths && sentence.value <= form.recommended.maxMonths) {
         feedback.append(element('p', 'range-reference', '입력한 형량은 권고 범위 안에 있습니다.'));
       }
       // 확장: REQ-036 S-06b — 권고 범위 밖이지만 선고 가능하면 별도 경고 없음.
       suspensionArea.hidden = !inRange;
+      noSuspension.hidden = !['DEATH', 'LIFE'].includes(draft.penaltyType);
+      if (!noSuspension.hidden) suspensionArea.hidden = true;
       suspensionLabel.hidden = !eligible;
       checkbox.checked = draft.suspended;
       suspensionFields.hidden = !eligible || !draft.suspended;
@@ -346,8 +433,9 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
         toggle.setAttribute('aria-pressed', String(draft.factors[factorId] === direction));
         row.classList.toggle('is-selected', Boolean(draft.factors[factorId]));
       }
-      const disabledReason = !present ? '형량을 입력해 주세요.'
-        : !inRange || serverError === 'OUT_OF_ALLOWED_RANGE' ? '선고할 수 있는 범위 안으로 형량을 조정해 주세요.'
+      const disabledReason = pendingReduction ? '감경 후 형벌을 골라 주세요.'
+        : !fixed && !present ? '형량을 입력해 주세요.'
+        : (!fixed && !inRange) || serverError === 'OUT_OF_ALLOWED_RANGE' ? '선고할 수 있는 범위 안으로 형량을 조정해 주세요.'
           : suspensionInvalid || serverError === 'INVALID_SUSPENSION' ? '집행유예 기간을 확인해 주세요.' : '';
       reason.textContent = disabledReason;
       openConfirmation.disabled = Boolean(disabledReason) || confirming;

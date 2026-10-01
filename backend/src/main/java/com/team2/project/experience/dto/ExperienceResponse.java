@@ -19,10 +19,11 @@ public record ExperienceResponse(
 
 	public static ExperienceResponse from(Experience experience) {
 		return new ExperienceResponse(
-				experience.getCaseId(),
+				// 지연 로딩 프록시라도 ID만 읽으므로 사건을 조회하지 않는다
+				experience.getLegalCase().getId(),
 				experience.getAttemptNo(),
 				experience.getStatus(),
 				experience.getLastReviewedStep(),
-				experience.getStartedAt().atZoneSameInstant(KST).toOffsetDateTime());
+				experience.getStartedAt().atZone(KST).toOffsetDateTime());
 	}
 }

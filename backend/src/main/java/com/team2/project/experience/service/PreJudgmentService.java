@@ -1,6 +1,6 @@
 package com.team2.project.experience.service;
 
-import java.time.OffsetDateTime;
+import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
 import java.util.UUID;
@@ -36,9 +36,6 @@ public class PreJudgmentService {
 	/** 사전 판단에 고를 수 있는 판단 요소 수 (확장). */
 	static final int MAX_FACTORS = 2;
 
-	/** 섹션 ① 개요는 S-03에서 본 것으로 처리한다. */
-	static final int LAST_REVIEWED_STEP_AFTER_PRE_JUDGMENT = 1;
-
 	private final LegalCaseService legalCaseService;
 	private final ExperienceService experienceService;
 	private final ExperienceRepository experienceRepository;
@@ -58,8 +55,8 @@ public class PreJudgmentService {
 
 		return OverviewResponse.of(
 				legalCase,
-				sentenceRangeOptionRepository.findByCrimeTypeOrderByDisplayOrder(legalCase.getCrimeType()),
-				factorRepository.findByCaseIdAndRevealStageOrderByDisplayOrder(caseId, RevealStage.OVERVIEW));
+				sentenceRangeOptionRepository.findAllByCrimeTypeOrderByDisplayOrderAsc(legalCase.getCrimeType()),
+				factorRepository.findAllByCaseIdAndRevealStage(caseId, RevealStage.OVERVIEW));
 	}
 
 	/** API 5. 검사 순서: 사건 · 체험(404) → 상태(409) → 형량 구간 · 판단 요소(422). */
@@ -75,18 +72,19 @@ public class PreJudgmentService {
 
 		// 저장보다 먼저 상태를 조건부로 바꿔서 동시에 온 요청 중 하나만 통과시킨다.
 		// 뒤의 저장이 실패하면 이 갱신도 함께 롤백된다.
-		int updated = experienceRepository.advanceToPreJudged(experience.getId(), ExperienceStatus.STARTED,
-				ExperienceStatus.PRE_JUDGED, LAST_REVIEWED_STEP_AFTER_PRE_JUDGMENT, OffsetDateTime.now());
+		int updated = experienceRepository.advanceToPreJudged(experience.getId(), Instant.now());
 		if (updated == 0) {
 			throw new BusinessException(ErrorCode.INVALID_STATE, currentStatusOf(experience));
 		}
 
-		Judgment judgment = judgmentRepository
-				.save(Judgment.userPreJudgment(caseId, experience.getId(), request.rangeOptionId()));
-		judgmentFactorRepository
-				.saveAll(factorIds.stream().map(factorId -> new JudgmentFactor(judgment.getId(), factorId)).toList());
+		// 검증을 마친 ID라 조회 없이 참조만 걸어 FK 값으로 저장한다
+		Judgment judgment = judgmentRepository.save(Judgment.userPre(experience,
+				sentenceRangeOptionRepository.getReferenceById(request.rangeOptionId())));
+		judgmentFactorRepository.saveAll(factorIds.stream()
+				.map(factorId -> JudgmentFactor.forPre(judgment, factorRepository.getReferenceById(factorId)))
+				.toList());
 
-		return new PreJudgmentResponse(ExperienceStatus.PRE_JUDGED, LAST_REVIEWED_STEP_AFTER_PRE_JUDGMENT);
+		return new PreJudgmentResponse(ExperienceStatus.PRE_JUDGED, Experience.OVERVIEW_STEP);
 	}
 
 	private void requireStarted(Experience experience) {

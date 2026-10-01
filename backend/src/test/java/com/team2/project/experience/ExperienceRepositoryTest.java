@@ -2,14 +2,13 @@ package com.team2.project.experience;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.time.OffsetDateTime;
+import java.time.Instant;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import com.team2.project.experience.domain.ExperienceStatus;
 import com.team2.project.experience.repository.ExperienceRepository;
 import com.team2.project.support.ApiIntegrationTest;
 
@@ -57,8 +56,7 @@ class ExperienceRepositoryTest extends ApiIntegrationTest {
 	}
 
 	private int advance(long experienceId) {
-		return transactionTemplate.execute(status -> experienceRepository.advanceToPreJudged(
-				experienceId, ExperienceStatus.STARTED, ExperienceStatus.PRE_JUDGED, 1, OffsetDateTime.now()));
+		return transactionTemplate.execute(status -> experienceRepository.advanceToPreJudged(experienceId, Instant.now()));
 	}
 
 	private long experienceId(long caseId) {
