@@ -1,5 +1,6 @@
 import { mockAiJudgment } from './aiMockData.js';
 import { read } from './mockExperienceStore.js';
+import { getMyJudgment, diffFromJudgment } from './myJudgmentMock.js';
 
 const delay = () => new Promise((resolve) => setTimeout(resolve, 250));
 
@@ -21,5 +22,11 @@ function checkState(caseId) {
 export async function getAiJudgment(caseId) {
   await delay();
   checkState(caseId);
-  return structuredClone(mockAiJudgment);
+  const myJudgment = getMyJudgment();
+  return {
+    judgment: structuredClone(mockAiJudgment.judgment),
+    myJudgment,
+    diffFromMine: diffFromJudgment(mockAiJudgment.judgment, myJudgment),
+    references: structuredClone(mockAiJudgment.references),
+  };
 }

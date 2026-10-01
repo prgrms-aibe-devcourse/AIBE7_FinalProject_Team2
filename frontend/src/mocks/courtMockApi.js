@@ -1,5 +1,6 @@
 import { mockCourtJudgment } from './courtMockData.js';
 import { read, save } from './mockExperienceStore.js';
+import { getMyJudgment } from './myJudgmentMock.js';
 
 const delay = () => new Promise((resolve) => setTimeout(resolve, 250));
 
@@ -30,7 +31,13 @@ export async function getCourtJudgment(caseId) {
   await delay();
   // AI_REVEALED 전(= S-07 미확인) 거절. 화면은 S-07로 안내한다(REQ-050 순서 유지).
   checkState(caseId, ['AI_REVEALED', 'COMPLETED']);
-  return structuredClone(mockCourtJudgment);
+  return {
+    judgment: structuredClone(mockCourtJudgment.judgment),
+    myJudgment: getMyJudgment(),
+    aiJudgment: structuredClone(mockCourtJudgment.aiJudgment),
+    source: structuredClone(mockCourtJudgment.source),
+    deidentifiedItems: structuredClone(mockCourtJudgment.deidentifiedItems),
+  };
 }
 
 // API 13 — POST /cases/{caseId}/experience/comparison-reveal

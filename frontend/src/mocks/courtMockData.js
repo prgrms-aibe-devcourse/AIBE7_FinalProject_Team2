@@ -20,7 +20,7 @@ export const mockCourtJudgment = {
       { factorId: 8, label: '형사처벌 전력이 없다', direction: 'DOWN', evidence: '피고인은 형사처벌 받은 전력이 없다.' },
     ],
   },
-  myJudgment: { subjectType: 'USER', penaltyType: 'PRISON', reducedTo: null, prisonMonths: 180, fineAmount: null, suspensionMonths: null },
+  // myJudgment는 S-06에서 실제로 제출한 판결에서 계산한다(myJudgmentMock.js). AI 판결은 비교 대상 고정 목.
   aiJudgment: { subjectType: 'AI', penaltyType: 'PRISON', reducedTo: null, prisonMonths: 144, fineAmount: null, suspensionMonths: null },
   // (확장) 이 사건에 대하여 사이드바: 이번 FE-8 범위에는 포함하지 않는다.
   source: { sourceOrg: '법원 판결서 인터넷열람 서비스' },

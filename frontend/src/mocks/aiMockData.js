@@ -18,7 +18,6 @@ export const mockAiJudgment = {
       { factorId: 8, label: '형사처벌 전력이 없다', direction: 'DOWN', evidence: null },
     ],
   },
-  myJudgment: { subjectType: 'USER', penaltyType: 'PRISON', reducedTo: null, prisonMonths: 180, fineAmount: null, suspensionMonths: null },
-  diffFromMine: { samePenaltyType: true, prisonMonthsDiff: -36, fineAmountDiff: null },
+  // myJudgment · diffFromMine은 S-06에서 실제로 제출한 판결에서 계산한다(myJudgmentMock.js).
   references: ['형법 제250조', '살인범죄 양형기준', '유사 판례 5건'],
 };

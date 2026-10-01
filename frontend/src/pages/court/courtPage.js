@@ -1,4 +1,5 @@
 import { formatPenalty, formatDispositions } from '../../utils/judgmentFormat.js';
+import { screenByStatus } from '../../utils/screenByStatus.js';
 
 const directionLabels = { UP: '재판부 가중 요소', DOWN: '재판부 감경 요소' };
 
@@ -28,6 +29,14 @@ export async function renderCourtPage(container, { caseId, caseHeader, api, navi
     panel.append(element('p', '', text));
     if (action) panel.append(action);
     root.replaceChildren(panel);
+  }
+
+  // 이미 지나왔거나 아직 이르지 않은 단계(INVALID_STATE)면 현재 상태의 화면으로 보낸다.
+  // AI 판결 미확인(VERDICT_CONFIRMED)이면 S-07로 이동한다(IA 9장, REQ-050 순서 유지).
+  function redirectByState(error) {
+    const screen = screenByStatus[error.currentStatus];
+    if (screen && screen !== 'court') navigate(screen, { caseId });
+    return Boolean(screen);
   }
 
   function factorGroup(direction, factors) {
@@ -88,6 +97,7 @@ export async function renderCourtPage(container, { caseId, caseHeader, api, navi
         if (active()) navigate('comparison');
       } catch (error) {
         if (!active()) return;
+        if (error?.code === 'INVALID_STATE' && redirectByState(error)) return;
         if (error?.code === 'INVALID_STATE') {
           message(`지금 단계에서는 이 화면을 볼 수 없어요. (현재 상태: ${error.currentStatus})`);
           console.info('현재 상태:', error.currentStatus);
@@ -112,9 +122,9 @@ export async function renderCourtPage(container, { caseId, caseHeader, api, navi
       if (active()) draw(data);
     } catch (error) {
       if (!active()) return;
+      if (error?.code === 'INVALID_STATE' && redirectByState(error)) return;
       if (error?.code === 'INVALID_STATE') {
-        // AI 판결 미확인이면 S-07로 이동한다(IA 9장, REQ-050 순서 유지).
-        message('먼저 AI 판결을 확인해 주세요.', button('AI 판결 확인하러 가기', () => navigate('ai'), 'primary-button'));
+        message(`지금 단계에서는 이 화면을 볼 수 없어요. (현재 상태: ${error.currentStatus})`);
         console.info('현재 상태:', error.currentStatus);
       } else {
         message('정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.', button('다시 시도', load));

@@ -40,11 +40,13 @@ export function formatDispositions(judgment) {
   return parts.join(' · ');
 }
 
-// API 10 diffFromMine → "내 판결보다 짧음/김" 문구 (화면 문구 규칙은 미정, 요구사항 15장).
+// API 10 diffFromMine → "내 판결보다 짧음/김 · 적음/많음" 문구 (화면 문구 규칙은 미정, 요구사항 15장).
 export function diffPhrase(diff) {
   if (!diff.samePenaltyType) return '형벌 종류가 달라 단순 비교하기 어려워요.';
+  const isFine = diff.prisonMonthsDiff == null && diff.fineAmountDiff != null;
   const value = diff.prisonMonthsDiff ?? diff.fineAmountDiff;
   if (!value) return '내 판결과 같아요.';
-  const amountText = diff.prisonMonthsDiff != null ? formatMonths(Math.abs(value)) : formatMoney(Math.abs(value));
-  return `내 판결보다 ${amountText} ${value < 0 ? '짧아요' : '길어요'}.`;
+  const amountText = isFine ? formatMoney(Math.abs(value)) : formatMonths(Math.abs(value));
+  const comparative = isFine ? (value < 0 ? '적어요' : '많아요') : (value < 0 ? '짧아요' : '길어요');
+  return `내 판결보다 ${amountText} ${comparative}.`;
 }
