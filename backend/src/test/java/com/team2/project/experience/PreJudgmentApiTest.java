@@ -94,6 +94,17 @@ class PreJudgmentApiTest extends ApiIntegrationTest {
 	}
 
 	@Test
+	void getOverview_preFactorWithoutPreLabel_fallsBackToLabel() throws Exception {
+		long caseId = insertCase("MURDER", "PUBLISHED");
+		insertFactor(caseId, "OVERVIEW", "짧은 문구가 없는 요소", null, 1);
+		Cookie cookie = startAndGetCookie(caseId);
+
+		mockMvc.perform(get(overviewUrl(caseId)).cookie(cookie))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.preFactors[0].label").value("짧은 문구가 없는 요소"));
+	}
+
+	@Test
 	void getOverview_afterPreJudgment_returnsInvalidStateWithCurrentStatus() throws Exception {
 		long caseId = insertCase("MURDER", "PUBLISHED");
 		Cookie cookie = startAndGetCookie(caseId);

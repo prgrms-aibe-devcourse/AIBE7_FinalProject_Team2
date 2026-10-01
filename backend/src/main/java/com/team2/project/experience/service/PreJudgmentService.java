@@ -33,7 +33,7 @@ import lombok.RequiredArgsConstructor;
 public class PreJudgmentService {
 
 	/** 사전 판단에 고를 수 있는 판단 요소 수 (확장). */
-	static final int MAX_FACTORS = 2;
+	private static final int MAX_FACTORS = 2;
 
 	private final MyExperienceService myExperienceService;
 	private final ExperienceTransitionService transitionService;
@@ -73,6 +73,7 @@ public class PreJudgmentService {
 				() -> saveJudgment(experience, request.rangeOptionId(), factorIds),
 				e -> e.markPreJudged(clock.instant()));
 
+		// apply가 성공하면 넘긴 엔티티에 전이 결과(PRE_JUDGED, step 1)가 들어 있다 (분리된 상태라 지연 로딩은 쓰지 않는다)
 		return new PreJudgmentResponse(experience.getStatus(), experience.getLastReviewedStep());
 	}
 
