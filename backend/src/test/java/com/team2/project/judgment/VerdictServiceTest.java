@@ -120,7 +120,7 @@ class VerdictServiceTest {
 	void getForm_preJudged_rejectsState() {
 		jdbc.update("UPDATE experience SET status = 'PRE_JUDGED' WHERE id = ?", experienceId);
 		assertThatThrownBy(() -> forms.getForm(experienceId)).isInstanceOfSatisfying(InvalidExperienceStateException.class,
-			exception -> assertThat(exception.getCurrentStatus()).isEqualTo(ExperienceStatus.PRE_JUDGED));
+			exception -> assertThat(exception.getExperienceStatus()).isEqualTo(ExperienceStatus.PRE_JUDGED));
 	}
 
 	@Test
@@ -180,7 +180,7 @@ class VerdictServiceTest {
 					return "SUCCESS";
 				});
 			} catch (InvalidExperienceStateException exception) {
-				assertThat(exception.getCurrentStatus()).isEqualTo(ExperienceStatus.VERDICT_CONFIRMED);
+				assertThat(exception.getExperienceStatus()).isEqualTo(ExperienceStatus.VERDICT_CONFIRMED);
 				return "INVALID_STATE";
 			}
 		};
