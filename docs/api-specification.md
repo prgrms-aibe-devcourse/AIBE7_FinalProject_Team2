@@ -9,6 +9,7 @@
 | v0.5 | 2026-09-30 | 예시 사건을 가상 살인 사건으로 교체 (COMMON-11) — API 1 · 4 · 6 · 8 · 9 · 10 · 12 · 14 예시를 "빌린 돈 문제로 찾아온 지인을 살해한 사건"(가상)으로 교체, 사전 판단 구간 예시를 살인용 8개(벌금형 제외 · 무기 · 사형 추가)로, 형벌 선택지 예시를 사형 · 무기 · 징역 3종으로 교체 (ERD v1.5) |
 | v0.6 | 2026-09-30 | BE-16 시드 반영 — API 4 · 5 · 14 예시의 사전 판단 구간 `rangeOptionId`를 DB 실제 값(살인 8 ~ 15, 예시 선택 11)으로 정정 (ERD v1.6) |
 | v0.7 | 2026-09-30 | API 4 · 5 구현 반영 (BE-7) — API 4 형량 구간 개수를 범죄 유형별로 명시(살인 8개, 사기 · 상해 7개), 두 API의 404 · 400 거절 조건 추가, API 5 검사 순서 · 거절 시 저장 없음 · `factorIds` 규칙 순서 명시 |
+| v0.8 | 2026-10-01 | BE-8 리뷰 반영 — API 6의 선고 가능 범위는 하한·상한이 모두 있는 규칙만 포함, 범위 표시 문구를 API 8 형식으로 통일, LAW_TERM은 law.terms로만 전달하도록 명시 |
 
 ---
 
@@ -264,19 +265,20 @@ json
 - step 1의 항목은 `case_section`이 아니라 `legal_case.overview`로 만든다(`sectionType: "OVERVIEW"`는 응답용 값). step 2 ~ 4는 `case_section`의 `stage`별 항목이다.
 - **열린 섹션(`lastReviewedStep + 1`)까지만** 본문을 넣는다. 잠긴 섹션은 번호만 `lockedSteps`에 넣는다(개발자 도구로 미리 보기 방지).
 - `law`: 섹션 ④가 열리면 채운다.
+- 용어 설명(`case_section` `LAW_TERM`)은 섹션 ④ `items`에 넣지 않고 `law.terms`로만 보낸다.
 
 json
 
 ```json
-"law": {  "appliedLaw": "형법 제250조 제1항 살인",  "statutoryPenaltyText": "사형, 무기 또는 5년 이상의 징역",  "allowedRanges": [    { "penaltyType": "DEATH", "allowedMin": 240, "allowedMax": 600, "text": "사형, 또는 감경 시 무기징역 · 징역 20년 ~ 50년" },    { "penaltyType": "LIFE", "allowedMin": 120, "allowedMax": 600, "text": "무기징역, 또는 감경 시 징역 10년 ~ 50년" },    { "penaltyType": "PRISON", "allowedMin": 30, "allowedMax": 360, "text": "징역 2년 6개월 ~ 30년" }  ],  "allowedRangeNote": "감경·가중 사유를 반영해 법률상 선고할 수 있는 가장 넓은 범위예요.",  "recommended": { "minMonths": 84, "maxMonths": 144, "basis": "살인범죄 제2유형(보통 동기 살인), 감경영역. 특별감경인자 1개(실질적 피해 회복), 특별가중인자 없음" },  "terms": [ { "term": "감경영역", "desc": "형을 가볍게 할 특별한 사정이 있어 기본 권고 형량보다 낮은 구간이 적용되는 구간" } ]}
+"law": {  "appliedLaw": "형법 제250조 제1항 살인",  "statutoryPenaltyText": "사형, 무기 또는 5년 이상의 징역",  "allowedRanges": [    { "penaltyType": "DEATH", "allowedMin": 240, "allowedMax": 600, "text": "사형 (감경하면 무기징역 또는 징역 20년 ~ 50년)" },    { "penaltyType": "LIFE", "allowedMin": 120, "allowedMax": 600, "text": "무기징역 (감경하면 징역 10년 ~ 50년)" },    { "penaltyType": "PRISON", "allowedMin": 30, "allowedMax": 360, "text": "징역 2년 6개월 ~ 30년" }  ],  "allowedRangeNote": "감경·가중 사유를 반영해 법률상 선고할 수 있는 가장 넓은 범위예요.",  "recommended": { "minMonths": 84, "maxMonths": 144, "basis": "살인범죄 제2유형(보통 동기 살인), 감경영역. 특별감경인자 1개(실질적 피해 회복), 특별가중인자 없음" },  "terms": [ { "term": "감경영역", "desc": "형을 가볍게 할 특별한 사정이 있어 기본 권고 형량보다 낮은 구간이 적용되는 구간" } ]}
 ```
 
 - 권고 범위 예시 값(84 ~ 144개월)은 설명용이다. 살인 제2유형(보통 동기 살인) 감경영역(7년 ~ 12년)을 가정한 **가상 값**이며, **대표 판례 등록 시 팀이 양형기준으로 다시 계산한다.** (와이어프레임 v2.1의 예시 값은 예전 사기 예시 사건 기준이라 이 명세와 다르다.)
 - `summary`: `REVIEWED`일 때 S-05용 핵심 사실 요약(`case_section` `SUMMARY`)을 채운다.
-- `allowedRanges`: `penalty_rule` 중 범위가 있는 형벌(징역 · 벌금)을 모두 넣는다. 화면에는 징역만 보여 줘도 된다.
-- (v0.4) 사형 · 무기가 법정형에 있는 사건은 `DEATH` · `LIFE` 항목도 넣는다. 이때 `allowedMin` ~ `allowedMax`는 작량감경해 징역으로 선고할 때의 범위이고, `text`에 그대로 선고할 수 있다는 내용을 함께 쓴다. 예: `{ "penaltyType": "LIFE", "allowedMin": 120, "allowedMax": 600, "text": "무기징역, 또는 감경 시 징역 10년 ~ 50년" }`, `{ "penaltyType": "DEATH", "allowedMin": 240, "allowedMax": 600, "text": "사형, 또는 감경 시 무기징역이나 징역 20년 ~ 50년" }`
+- `allowedRanges`: `penalty_rule` 중 범위(`allowed_min` · `allowed_max`)가 모두 있는 규칙만 넣는다. 화면에는 징역만 보여 줘도 된다.
+- (v0.4) 사형 · 무기가 법정형에 있는 사건은 `DEATH` · `LIFE` 항목도 넣는다. 이때 `allowedMin` ~ `allowedMax`는 작량감경해 징역으로 선고할 때의 범위이고, `text`에 그대로 선고할 수 있다는 내용을 함께 쓴다. 예: `{ "penaltyType": "LIFE", "allowedMin": 120, "allowedMax": 600, "text": "무기징역 (감경하면 징역 10년 ~ 50년)" }`, `{ "penaltyType": "DEATH", "allowedMin": 240, "allowedMax": 600, "text": "사형 (감경하면 무기징역 또는 징역 20년 ~ 50년)" }`
 - `allowedRangeNote`는 서버 고정 문구다. `penalty_rule.allowed_basis`(산출 근거)는 내부용이라 응답하지 않는다.
-- `allowedRanges.text`는 서버가 만들어 주는 표시 문구다. 화면마다 "1개월 ~ 10년" 표기가 달라지지 않게 하기 위해서다.
+- `allowedRanges.text`는 서버가 만들어 주는 표시 문구다. 화면마다 "1개월 ~ 10년" 표기가 달라지지 않게 하기 위해서다. 형식은 API 8 `options[].text`와 같다.
 - 사전 판단은 넣지 않는다.
 
 | 거절 | 조건 |
@@ -333,7 +335,7 @@ json
 
 - `penaltyOptions`: `penalty_rule`의 `display_order` 순. 화면은 여기 있는 형벌만 보여 준다(FR-3-1). 버튼 비활성 판단(S-06c)도 이 값으로 한다.
 - 무죄는 MVP 선택지에서 뺐다(요구사항 15장, v0.3). `penalty_rule`에도 무죄 행을 두지 않는다.
-- (v0.4) 사형 · 무기가 법정형에 있는 사건은 `penaltyOptions`에 `DEATH` · `LIFE`가 들어간다. 항목마다 `reducibleTo`(감경해서 선고할 수 있는 형벌)를 함께 준다: `DEATH` → `["LIFE", "PRISON"]`, `LIFE` → `["PRISON"]`, `PRISON` · `FINE` → `[]`. `allowedMin` ~ `allowedMax`는 감경해 징역으로 선고할 때의 범위이고, `suspensionAllowed`는 `false`다. 예(살인): `{ "penaltyType": "LIFE", "allowedMin": 120, "allowedMax": 600, "text": "무기징역, 또는 감경 시 징역 10년 ~ 50년", "suspensionAllowed": false, "reducibleTo": ["PRISON"] }`
+- (v0.4) 사형 · 무기가 법정형에 있는 사건은 `penaltyOptions`에 `DEATH` · `LIFE`가 들어간다. 항목마다 `reducibleTo`(감경해서 선고할 수 있는 형벌)를 함께 준다: `DEATH` → `["LIFE", "PRISON"]`, `LIFE` → `["PRISON"]`, `PRISON` · `FINE` → `[]`. `allowedMin` ~ `allowedMax`는 감경해 징역으로 선고할 때의 범위이고, `suspensionAllowed`는 `false`다. 예(살인): `{ "penaltyType": "LIFE", "allowedMin": 120, "allowedMax": 600, "text": "무기징역 (감경하면 징역 10년 ~ 50년)", "suspensionAllowed": false, "reducibleTo": ["PRISON"] }`
 - (v0.4) 선고할 수 있는 범위 막대(FR-3-2)는 고른 형벌 항목의 `allowedMax`를 상한으로 쓴다. 유기징역이면 30년, 무기 · 사형을 감경하면 50년이다.
 - 벌금 선고 가능 하한 25,000원은 형법 제45조 단서(감경 시 5만 원 미만 가능)와 제55조 제1항 제6호(벌금 감경 시 1/2)를 적용한 값이다(ERD 6장).
 - `suspensionRule`: 집행유예 가능 조건(코드 상수, ERD `penalty_rule` 비고). 화면에서 집행유예 입력을 보여 줄지 판단한다.
