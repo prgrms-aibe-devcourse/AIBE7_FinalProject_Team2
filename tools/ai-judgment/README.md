@@ -20,6 +20,7 @@ LLM 호출은 이 도구가 하지 않는다. 프롬프트를 만들어 주면, 
 | `examples/` | 예시 사건(ERD 6장 가상 살인 사건 "빌린 돈 문제로 찾아온 지인을 살해한 사건") 입력 · AI 출력 · 실제 판결(내부 전용) |
 | `cases/` | **실제 대표 사건** 입력 · 실제 판결을 두는 곳. git에 올리지 않는다(`.gitignore`) |
 | `tests/` | 단위 테스트 |
+| `case-extractor/` | 판결문(PDF · txt) → 비식별화한 사건 입력 JSON 초안 (BE-20). Claude API를 쓰므로 패키지 설치가 필요하다. [README](case-extractor/README.md) |
 
 ## 작업 순서
 
@@ -32,7 +33,7 @@ mkdir -p out cases   # out/ · cases/는 git에 올리지 않는다
 
 ### 1. 사건 입력 파일 준비
 
-`examples/case_input.json`과 같은 형식으로 대표 사건 파일을 `cases/`에 만든다(BE-13 사건 가공 결과, `docs/cases/`의 사건 파일).
+`examples/case_input.json`과 같은 형식으로 대표 사건 파일을 `cases/`에 만든다(BE-13 사건 가공 결과, `docs/cases/`의 사건 파일). 판결문에서 초안을 만들려면 `case-extractor/`를 쓴다.
 
 - `caseId` · `factors[].factorId`는 DB의 `legal_case.id` · `factor.id`와 **같은 값**이어야 한다. 시드는 ID를 지정하지 않고 넣으므로(ERD 7장 마이그레이션 공통 규칙) ID는 적재 후에 정해진다. 그래서 **BE-16 사건 시드를 먼저 적재한 뒤**, DB에서 조회한 값을 입력 파일에 적는다.
 

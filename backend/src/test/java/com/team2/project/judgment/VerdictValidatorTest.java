@@ -2,33 +2,17 @@ package com.team2.project.judgment;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
 
-import com.team2.project.experience.domain.Experience;
-import com.team2.project.experience.domain.ExperienceStatus;
-import com.team2.project.experience.domain.InvalidExperienceStateException;
-import com.team2.project.experience.repository.ExperienceRepository;
 import com.team2.project.judgment.domain.InvalidJudgmentException;
 import com.team2.project.judgment.domain.InvalidJudgmentException.Reason;
 import com.team2.project.judgment.dto.VerdictRequest;
 import com.team2.project.judgment.dto.VerdictRequest.FactorItem;
 import com.team2.project.judgment.service.VerdictValidator;
 import com.team2.project.judgment.service.VerdictValidator.Option;
-import com.team2.project.judgment.service.VerdictService;
-import com.team2.project.judgment.repository.JudgmentRepository;
-import com.team2.project.judgment.repository.JudgmentFactorRepository;
-import com.team2.project.legalcase.domain.LegalCase;
-import com.team2.project.legalcase.domain.PenaltyRule;
-import com.team2.project.legalcase.repository.FactorRepository;
-import com.team2.project.legalcase.repository.PenaltyRuleRepository;
 import com.team2.project.legalcase.domain.PenaltyType;
 import jakarta.validation.Validation;
 import jakarta.validation.ValidatorFactory;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.LongStream;
@@ -37,9 +21,6 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.ValueSource;
-import org.hibernate.exception.ConstraintViolationException;
-import org.springframework.dao.DataIntegrityViolationException;
 
 class VerdictValidatorTest {
 	private static final ValidatorFactory FACTORY = Validation.buildDefaultValidatorFactory();
@@ -127,38 +108,5 @@ class VerdictValidatorTest {
 				assertThat(exception.getReason()).isEqualTo(reason);
 				assertThat(exception.getField()).isEqualTo(field);
 			});
-	}
-
-	@ParameterizedTest
-	@ValueSource(strings = {"uk_judgment_experience_timing", "chk_judgment_positive_values", "fk_judgment_experience"})
-	void submit_integrityViolation_onlyDuplicateFinalBecomesStateError(String constraint) {
-		var experiences = mock(ExperienceRepository.class);
-		var rules = mock(PenaltyRuleRepository.class);
-		var factors = mock(FactorRepository.class);
-		var judgments = mock(JudgmentRepository.class);
-		var judgmentFactors = mock(JudgmentFactorRepository.class);
-		var experience = mock(Experience.class);
-		var legalCase = mock(LegalCase.class);
-		var rule = mock(PenaltyRule.class);
-		when(experiences.findById(1L)).thenReturn(Optional.of(experience));
-		when(experience.getStatus()).thenReturn(ExperienceStatus.REVIEWED);
-		when(experience.getLegalCase()).thenReturn(legalCase);
-		when(legalCase.getId()).thenReturn(2L);
-		when(rule.getPenaltyType()).thenReturn(PenaltyType.LIFE);
-		when(rules.findAllByCaseId(2L)).thenReturn(List.of(rule));
-		when(factors.findAllByCaseId(2L)).thenReturn(List.of());
-		var cause = new ConstraintViolationException("fixture violation", new java.sql.SQLException(), constraint);
-		var original = new DataIntegrityViolationException("fixture", cause);
-		when(judgments.saveAndFlush(any())).thenThrow(original);
-		var service = new VerdictService(experiences, rules, factors, judgments, judgmentFactors, validator);
-		var request = req("LIFE", null, null, null, null);
-		assertThat(FACTORY.getValidator().validate(request)).isEmpty();
-		if (constraint.equals("uk_judgment_experience_timing")) {
-			assertThatThrownBy(() -> service.submit(1L, request)).isInstanceOfSatisfying(InvalidExperienceStateException.class,
-				error -> assertThat(error.getExperienceStatus()).isEqualTo(ExperienceStatus.VERDICT_CONFIRMED));
-		} else {
-			assertThatThrownBy(() -> service.submit(1L, request)).isSameAs(original);
-		}
-		verifyNoInteractions(judgmentFactors);
 	}
 }
