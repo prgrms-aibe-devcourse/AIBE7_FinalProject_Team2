@@ -21,6 +21,10 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+	// DB 스키마 마이그레이션 (Spring Boot 4는 Flyway 자동 설정이 별도 스타터로 분리됨)
+	implementation 'org.springframework.boot:spring-boot-starter-flyway'
+	// Flyway 10 이상은 PostgreSQL 지원 모듈이 따로 필요
+	runtimeOnly 'org.flywaydb:flyway-database-postgresql'
 	// Swagger UI + OpenAPI 문서 (Spring Boot 4는 springdoc-openapi 3.x 필요)
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.1'
 	compileOnly 'org.projectlombok:lombok'

@@ -1,0 +1,137 @@
+<!-- FE-2 라우터 도입 시 삭제: FE-6 개발용 미리보기 -->
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FE-6 사건 정보 확인 · 미리보기</title>
+  <link rel="icon" href="data:,">
+  <!-- FE-2 연결 시 각 화면에 해당하는 CSS를 함께 로드한다. -->
+  <link rel="stylesheet" href="./src/pages/landing/landing.css">
+  <link rel="stylesheet" href="./src/pages/caseList/caseList.css">
+  <link rel="stylesheet" href="./src/pages/review/review.css">
+  <link rel="stylesheet" href="./src/pages/overview/overview.css">
+  <link rel="stylesheet" href="./src/pages/summary/summary.css">
+  <link rel="stylesheet" href="./src/pages/verdict/verdict.css">
+  <link rel="stylesheet" href="./src/pages/ai/ai.css">
+  <link rel="stylesheet" href="./src/pages/court/court.css">
+  <link rel="stylesheet" href="./src/pages/comparison/comparison.css">
+  <style>
+    body { margin: 0; background: #eeeae6; }
+    .preview-tools { max-width: 1180px; margin: 24px auto 16px; padding: 0 12px; box-sizing: border-box; font: 13px/1.6 'Malgun Gothic', sans-serif; }
+    .preview-tools fieldset { border: 0; margin: 0; padding: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+    .preview-tools legend { padding: 0 0 8px; color: #625951; font-weight: bold; }
+    .preview-tools button, .preview-tools select { font: inherit; padding: 8px 10px; background: white; border: 1px solid #bdb4ad; border-radius: 4px; }
+    .preview-tools button { cursor: pointer; }
+    .preview-tools label { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+    .preview-tools output { display: block; color: #ad2b18; }
+    .preview-container { padding: 0 12px 36px; }
+  </style>
+</head>
+<body>
+  <div class="preview-tools">
+    <fieldset id="tools">
+      <legend>FE-6 개발용 미리보기</legend>
+      <button type="button" data-page="landing">S-01 보기</button>
+      <button type="button" data-page="list">S-02 보기</button>
+      <button type="button" data-page="overview">S-03 보기</button>
+      <button type="button" data-page="review">S-04 보기</button>
+      <button type="button" data-page="summary">S-05 보기</button>
+      <button type="button" data-page="verdict">S-06 보기</button>
+      <button type="button" data-page="ai">S-07 보기</button>
+      <button type="button" data-page="court">S-08 보기</button>
+      <button type="button" data-page="comparison">S-09 보기</button>
+      <button type="button" id="reset">처음 상태로</button>
+      <label>상태 강제 선택
+        <select id="status">
+          <option value="">상태 선택</option>
+          <option>STARTED</option><option>PRE_JUDGED</option><option>REVIEWING</option>
+          <option>REVIEWED</option><option>VERDICT_CONFIRMED</option>
+          <option>AI_REVEALED</option><option>COMPLETED</option>
+        </select>
+      </label>
+    </fieldset>
+    <output id="preview-error" role="alert"></output>
+  </div>
+  <div id="preview" class="preview-container"></div>
+  <script type="module">
+    import { mockCaseHeader } from './src/mocks/reviewMockData.js';
+    import * as reviewApi from './src/mocks/reviewMockApi.js';
+    import * as verdictApi from './src/mocks/verdictMockApi.js';
+    import * as caseListApi from './src/mocks/caseListMockApi.js';
+    import * as overviewApi from './src/mocks/overviewMockApi.js';
+    import * as aiApi from './src/mocks/aiMockApi.js';
+    import * as courtApi from './src/mocks/courtMockApi.js';
+    import * as comparisonApi from './src/mocks/comparisonMockApi.js';
+    import { renderLandingPage } from './src/pages/landing/landingPage.js';
+    import { renderCaseListPage } from './src/pages/caseList/caseListPage.js';
+    import { renderOverviewPage } from './src/pages/overview/overviewPage.js';
+    import { renderReviewPage } from './src/pages/review/reviewPage.js';
+    import { renderSummaryPage } from './src/pages/summary/summaryPage.js';
+    import { renderVerdictPage } from './src/pages/verdict/verdictPage.js';
+    import { renderAiPage } from './src/pages/ai/aiPage.js';
+    import { renderCourtPage } from './src/pages/court/courtPage.js';
+    import { renderComparisonPage } from './src/pages/comparison/comparisonPage.js';
+    import { clearDraft } from './src/pages/verdict/verdictDraft.js';
+
+    const api = { ...reviewApi, ...verdictApi, ...caseListApi, ...overviewApi, ...aiApi, ...courtApi, ...comparisonApi };
+
+    // TODO: API 6에 사건 제목 없음, 정합성 2차 점검 D-01 결정 후 실제 제목 공급원으로 교체.
+    const caseHeader = mockCaseHeader;
+    const container = document.querySelector('#preview');
+    const tools = document.querySelector('#tools');
+    const error = document.querySelector('#preview-error');
+    let currentPage = 'review';
+    // FE-2 라우터 도입 시 삭제. 개발용 화면 전환만 수행한다.
+    async function navigate(name, params = {}) {
+      currentPage = name;
+      const dependencies = { caseId: params.caseId ?? caseHeader.caseId, caseHeader, api, navigate, section: params.section };
+      if (name === 'landing') renderLandingPage(container, dependencies);
+      else if (name === 'list') await renderCaseListPage(container, dependencies);
+      else if (name === 'overview') await renderOverviewPage(container, dependencies);
+      else if (name === 'review') await renderReviewPage(container, dependencies);
+      else if (name === 'summary') await renderSummaryPage(container, dependencies);
+      else if (name === 'verdict') await renderVerdictPage(container, dependencies);
+      else if (name === 'ai') await renderAiPage(container, dependencies);
+      else if (name === 'court') await renderCourtPage(container, dependencies);
+      else if (name === 'comparison') await renderComparisonPage(container, dependencies);
+      else {
+        const placeholder = document.createElement('div');
+        placeholder.className = 'review-page';
+        const message = document.createElement('p');
+        message.className = 'message-panel';
+        message.textContent = '판결 화면 준비 중';
+        placeholder.append(message);
+        container.replaceChildren(placeholder);
+      }
+    }
+    document.querySelectorAll('[data-page]').forEach((button) => {
+      button.addEventListener('click', () => navigate(button.dataset.page));
+    });
+    async function changeState(action, page) {
+      tools.disabled = true;
+      error.textContent = '';
+      // 이전 화면의 진행 요청/응답과 상태 변경이 섞이지 않게 화면을 먼저 분리한다.
+      container.replaceChildren();
+      try {
+        await action();
+        await navigate(page);
+      } catch {
+        error.textContent = '목 상태를 저장하지 못했어요. 브라우저 저장소 설정을 확인해 주세요.';
+      } finally {
+        tools.disabled = false;
+        document.querySelector('#status').value = '';
+      }
+    }
+    document.querySelector('#reset').addEventListener('click', () => changeState(async () => {
+      await api.resetMock();
+      clearDraft(1);
+    }, 'review'));
+    document.querySelector('#status').addEventListener('change', (event) => {
+      const status = event.target.value;
+      if (status) changeState(() => api.setMockStatus(status), currentPage);
+    });
+    await navigate('review');
+  </script>
+</body>
+</html>

@@ -1,5 +1,6 @@
 # 로컬 개발용 PostgreSQL (backend 폴더에서 `docker compose up -d`)
 # AWS 키 없이 로컬에서 개발이 끝나도록 DB를 컨테이너로 띄운다.
+# 개발용 가상 사건 시드까지 넣으려면 앱 실행 시 FLYWAY_LOCATIONS=classpath:db/migration,classpath:db/seed 를 준다.
 services:
   postgres:
     # pgvector가 포함된 PostgreSQL 이미지 (RAG 전환 대비)

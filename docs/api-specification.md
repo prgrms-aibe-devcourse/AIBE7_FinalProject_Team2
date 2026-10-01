@@ -5,6 +5,12 @@
 | v0.1 | 2026-09-28 | 초안 — 공통 규칙(경로 · 익명 ID 쿠키 · 에러 형식 · 에러 코드), MVP API 14개와 확장 API 1개의 요청 · 응답 · 거절 조건, 상태별 호출 가능 API 표 |
 | v0.2 | 2026-09-28 | 전체 문서 교차 검토 반영 — API 6 · 7 허용 상태 정정, 예시 요소 ID를 ERD 예시(1 ~ 7)와 통일, 섹션 ① 데이터 출처 명시, 벌금 선고 가능 하한 25,000원(형법 제45조 단서), 무죄 선택지 · `references` 출처 · `perspectives` 근거 요소 · `changeType`(`KEPT` 추가) · 형벌 무게 순서 보완, 사기 양형기준 유형 표기 정정(제1유형), 시퀀스 후보 대응표 |
 | **v0.3** | **2026-09-29** | **문서 정합성 점검 결정 반영 (COMMON-4)** — 6장 #1 확정(화면 진입 시 상태 조회 없이 각 API의 `INVALID_STATE`로 이동, 1-6 · 5장), 무죄 선택지 MVP 제외(API 8 · 9 · 14, 6장 #5), 예시 사건을 단일 범행 사건(지인 투자금 편취)으로 교체(경합범 서비스 제외), 판결 카드 한 줄 요약 `summary` 추가(내 판결은 요약 태그 규칙 문장, 확장에서 AI 요약으로 교체), 사건 목록 `crimeCategoryLabel` · `thumbnailUrl`, (확장) 실제 판결 `deidentifiedItems`, 참고 자료 태그 출처 컬럼명 `reference_tags`, (확장) 쿠키 삭제 안내(REQ-108). (낮음 항목) 같은 도메인 배포 확정(1-2 · 6장 #2), 시퀀스 후보 대응표 삭제, 톤 규칙 참조를 요구사항 11장으로 정정 |
+| **v0.4** | **2026-09-30** | **대표 사건(살인) 가공 결정 반영 (BE-13)** — 형벌 종류에 사형(`DEATH`) · 무기징역(`LIFE`) 추가(API 6 · 8 · 9, 판결 응답 공통 형식), 판결 제출에 `reducedTo`(감경 후 형벌) 추가, `diffFromMine` 비교 기준을 최종 선고 형벌로 명시, 부가 처분 `CONFISCATION`(몰수) 추가 (ERD v1.4), API 14 형벌 무게 순서에 `LIFE` < `DEATH` 추가, `reducedTo`는 형벌 종류가 바뀌는 감경만 기록한다고 명시, 최종 선고 형벌이 `DEATH` · `LIFE`일 때 형량 값이 있으면 `VALIDATION_ERROR`로 명시 |
+| v0.5 | 2026-09-30 | 예시 사건을 가상 살인 사건으로 교체 (COMMON-11) — API 1 · 4 · 6 · 8 · 9 · 10 · 12 · 14 예시를 "빌린 돈 문제로 찾아온 지인을 살해한 사건"(가상)으로 교체, 사전 판단 구간 예시를 살인용 8개(벌금형 제외 · 무기 · 사형 추가)로, 형벌 선택지 예시를 사형 · 무기 · 징역 3종으로 교체 (ERD v1.5) |
+| v0.6 | 2026-09-30 | BE-16 시드 반영 — API 4 · 5 · 14 예시의 사전 판단 구간 `rangeOptionId`를 DB 실제 값(살인 8 ~ 15, 예시 선택 11)으로 정정 (ERD v1.6) |
+| v0.7 | 2026-09-30 | API 4 · 5 구현 반영 (BE-7) — API 4 형량 구간 개수를 범죄 유형별로 명시(살인 8개, 사기 · 상해 7개), 두 API의 404 · 400 거절 조건 추가, API 5 검사 순서 · 거절 시 저장 없음 · `factorIds` 규칙 순서 명시 |
+| v0.8 | 2026-10-01 | BE-8 리뷰 반영 — API 6의 선고 가능 범위는 하한·상한이 모두 있는 규칙만 포함, 범위 표시 문구를 API 8 형식으로 통일, LAW_TERM은 law.terms로만 전달하도록 명시 |
+| v0.9 | 2026-10-01 | 후속 정리 (COMMON-14) — 1-1에 숫자 입력 규칙 추가(정수 필드의 소수는 `VALIDATION_ERROR`, 문자열 숫자는 허용, BE-22), API 9에 열거값에 없는 `penaltyType`도 `INVALID_PENALTY_TYPE`으로 거절한다고 명시(1-5 열거값 규칙보다 우선, BE-9) |
 
 ---
 
@@ -19,6 +25,7 @@
 | 필드 이름 | camelCase |
 | 날짜 · 시각 | ISO 8601 (`2026-09-28T15:30:00+09:00`) |
 | 형량 단위 | 징역 · 집행유예는 **개월**(int), 벌금은 **원**(long). 화면에서 "2년 6개월"로 바꿔 보여 준다 |
+| 숫자 입력 | (v0.9) 정수 필드(형량 개월 · 금액 · `step` · ID 등)에 소수(`36.7`, `36.0`)가 오면 400 `VALIDATION_ERROR`로 거절한다. 소수점을 버려 다른 값으로 저장하지 않기 위해서다. `"36"`처럼 숫자로 읽을 수 있는 문자열은 숫자로 받고, `"삼십육"`처럼 읽을 수 없는 문자열은 400이다. 본문 형식 오류라 사건 · 체험 조회보다 먼저 거절한다 (BE-22) |
 | 열거값 | ERD 값을 그대로 쓴다 (`PRISON`, `UP`, `COMPLETED` 등) |
 | 인증 | MVP는 로그인 없음. **익명 ID 쿠키**로 사용자를 구분한다 (1-2) |
 
@@ -75,7 +82,7 @@ json
 | 422 | `INVALID_RANGE_OPTION` | 사전 판단 구간이 이 사건 범죄 유형의 선택지가 아님 | 개발 오류 |
 | 422 | `INVALID_FACTOR` | 이 사건의 판단 요소가 아님, 사전 판단에 `OVERVIEW`가 아닌 요소, 중복 요소, 방향 누락 | 개발 오류 |
 | 422 | `TOO_MANY_FACTORS` | 사전 판단 작용 요소가 2개를 넘음 (확장) | 개발 오류 |
-| 422 | `INVALID_PENALTY_TYPE` | 이 사건에서 허용되지 않은 형벌 | 개발 오류 |
+| 422 | `INVALID_PENALTY_TYPE` | 이 사건에서 허용되지 않은 형벌, 허용되지 않은 감경 조합(`reducedTo`) | 개발 오류 |
 | 422 | `OUT_OF_ALLOWED_RANGE` | 형량이 선고할 수 있는 범위 밖 | S-06c 경고 유지 (정상 화면이면 버튼이 비활성이라 오지 않음) |
 | 422 | `INVALID_SUSPENSION` | 집행유예를 허용하지 않는 형벌 · 형량인데 값이 있음, 기간이 1 ~ 5년 밖 | 입력 안내 |
 | 500 | `INTERNAL_ERROR` | 서버 오류 | 일반 오류 안내 |
@@ -135,7 +142,7 @@ json
 json
 
 ```json
-{  "summary": { "total": 9, "byCrimeType": { "MURDER": 3, "FRAUD": 3, "INJURY": 3 } },  "cases": [    {      "caseId": 1,      "title": "지인 투자금 편취 사건",      "crimeType": "FRAUD",      "crimeCategoryLabel": "재산범죄",      "shortIntro": "투자 수익을 약속하며 오래 알고 지낸 지인에게서 받은 투자금을 돌려주지 않은 사건입니다.",      "keywords": ["아는 사이", "투자 약속"],      "difficulty": "LOW",      "estimatedMinutes": 10,      "participantCount": 1284,      "thumbnailUrl": null    }  ]}
+{  "summary": { "total": 9, "byCrimeType": { "MURDER": 3, "FRAUD": 3, "INJURY": 3 } },  "cases": [    {      "caseId": 1,      "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",      "crimeType": "MURDER",      "crimeCategoryLabel": "생명범죄",      "shortIntro": "빌린 돈 문제로 찾아온 지인과 다투다 흉기로 살해한 사건입니다.",      "keywords": ["돈 문제", "집으로 찾아옴"],      "difficulty": "HIGH",      "estimatedMinutes": 15,      "participantCount": 1284,      "thumbnailUrl": null    }  ]}
 ```
 
 - `PUBLISHED` 사건만. `summary`는 필터와 관계없이 전체 기준(칩 옆 건수 표시용).
@@ -187,15 +194,17 @@ json
 json
 
 ```json
-{  "case": {    "caseId": 1,    "title": "지인 투자금 편취 사건",    "crimeType": "FRAUD",    "crimeCategoryLabel": "재산범죄",    "chargeName": "사기",    "overview": "피고인이 10년 가까이 알고 지낸 지인에게 사업 투자 수익을 약속하고 4,500만 원을 한 번에 송금받은 뒤, 약속한 수익과 원금을 돌려주지 않은 사건이다."  },  "rangeOptions": [    { "rangeOptionId": 1, "label": "벌금형" },    { "rangeOptionId": 2, "label": "징역형 집행유예" },    { "rangeOptionId": 3, "label": "실형 3년 미만" },    { "rangeOptionId": 4, "label": "실형 3년 이상 ~ 5년 미만" },    { "rangeOptionId": 5, "label": "실형 5년 이상 ~ 10년 미만" },    { "rangeOptionId": 6, "label": "실형 10년 이상 ~ 20년 미만" },    { "rangeOptionId": 7, "label": "실형 20년 이상" }  ],  "preFactors": [    { "factorId": 1, "label": "피해 금액이 수천만 원이다" },    { "factorId": 2, "label": "오래 알고 지낸 사이를 이용했다" }  ]}
+{  "case": {    "caseId": 1,    "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",    "crimeType": "MURDER",    "crimeCategoryLabel": "생명범죄",    "chargeName": "살인",    "overview": "피고인이 빌린 돈을 갚지 못해 오래 다투던 지인이 집으로 찾아오자, 말다툼 끝에 집에 있던 흉기로 피해자를 살해하고 구호 조치 없이 집을 나간 사건이다."  },  "rangeOptions": [    { "rangeOptionId": 8, "label": "징역형 집행유예" },    { "rangeOptionId": 9, "label": "실형 3년 미만" },    { "rangeOptionId": 10, "label": "실형 3년 이상 ~ 5년 미만" },    { "rangeOptionId": 11, "label": "실형 5년 이상 ~ 10년 미만" },    { "rangeOptionId": 12, "label": "실형 10년 이상 ~ 20년 미만" },    { "rangeOptionId": 13, "label": "실형 20년 이상" },    { "rangeOptionId": 14, "label": "무기징역" },    { "rangeOptionId": 15, "label": "사형" }  ],  "preFactors": [    { "factorId": 1, "label": "돈 문제로 오래 다툼이 있었다" },    { "factorId": 2, "label": "다투던 중 흉기를 집어 들었다" },    { "factorId": 3, "label": "범행 뒤 현장을 떠났다" }  ]}
 ```
 
-- `rangeOptions`: 이 사건 `crime_type`의 `sentence_range_option`.
+- `rangeOptions`: 이 사건 `crime_type`의 `sentence_range_option`을 `display_order` 순으로. 사기 · 상해는 공통 7개, 살인은 벌금형을 빼고 무기징역 · 사형을 더한 8개다.
 - `preFactors`: `reveal_stage = OVERVIEW`인 요소의 `pre_label`. **확장(REQ-093)** — MVP 화면은 쓰지 않아도 된다.
 - 법정형 · 선고 가능 범위 · 권고 범위 · 실제 판결은 **넣지 않는다**(FR-2-8).
 
 | 거절 | 조건 |
 | --- | --- |
+| 404 `CASE_NOT_FOUND` | 사건 없음 · 비공개 |
+| 404 `EXPERIENCE_NOT_FOUND` | 이 사건의 내 체험이 없음 (쿠키 없음 포함) → 화면은 S-02로 |
 | 409 `INVALID_STATE` | `STARTED`가 아님 (이미 제출) → `currentStatus`의 화면 (1-6) |
 
 ---
@@ -207,7 +216,7 @@ json
 json
 
 ```json
-{ "rangeOptionId": 3, "factorIds": [1, 2] }
+{ "rangeOptionId": 11, "factorIds": [1, 2] }
 ```
 
 | 필드 | 필수 | 규칙 |
@@ -224,14 +233,20 @@ json
 ```
 
 - 한 트랜잭션: `judgment`(`USER`, `PRE`) + `judgment_factor`(방향 NULL) 저장, 상태 `STARTED` → `PRE_JUDGED`, `last_reviewed_step = 1`(섹션 ① 개요는 S-03에서 본 것으로 처리).
-- 상태 변경은 조건부 갱신("`status = STARTED`일 때만")으로 한다. 동시에 두 번 오면 하나만 성공하고 나머지는 `INVALID_STATE`.
+- 상태 변경은 조건부 갱신("`status = STARTED`일 때만")으로 한다. 동시에 두 번 오면 하나만 성공하고 나머지는 `INVALID_STATE`(`currentStatus` 포함). 패자가 판단 저장에서 유니크 제약에 걸려도 같은 응답으로 바꿔 돌려준다.
 - 응답에 사전 판단 내용을 되돌려주지 않는다(S-09 전까지 다시 보여 주지 않음).
+- 검사 순서: 사건 · 체험(404) → 상태(409) → 형량 구간(422) → 판단 요소(422: 개수 → 유효성). 첫 번째로 걸린 사유 하나로 거절하며, 거절하면 상태 · 판단 · 판단 요소 어느 것도 저장하지 않는다. 요청 형식 오류(400)는 그 앞에서 걸러진다.
+- `factorIds`(확장)의 유효성은 "이 사건의 `OVERVIEW` 요소이고 중복이 없다"이다. 하나라도 어긋나면 전체를 `INVALID_FACTOR`로 거절한다.
 
 | 거절 | 조건 |
 | --- | --- |
+| 400 `VALIDATION_ERROR` | `rangeOptionId` 누락 · 형식 오류, `factorIds` 형식 오류 |
+| 404 `CASE_NOT_FOUND` | 사건 없음 · 비공개 |
+| 404 `EXPERIENCE_NOT_FOUND` | 이 사건의 내 체험이 없음 (쿠키 없음 포함) → 화면은 S-02로 |
 | 409 `INVALID_STATE` | `STARTED`가 아님 |
-| 422 `INVALID_RANGE_OPTION` |  |
-| 422 `INVALID_FACTOR` / `TOO_MANY_FACTORS` |  |
+| 422 `INVALID_RANGE_OPTION` | 없는 구간이거나 이 사건 범죄 유형의 구간이 아님 |
+| 422 `INVALID_FACTOR` | 이 사건의 요소가 아님, `OVERVIEW`가 아닌 요소, 중복, 없는 요소 |
+| 422 `TOO_MANY_FACTORS` | 2개 초과 (확장) |
 
 ---
 
@@ -246,24 +261,26 @@ S-04와 S-05가 함께 쓴다.
 json
 
 ```json
-{  "status": "REVIEWING",  "lastReviewedStep": 2,  "openStep": 3,  "sections": [    { "step": 1, "stage": "OVERVIEW", "confirmed": true,      "items": [ { "sectionType": "OVERVIEW", "title": "사건 개요", "content": "피고인이 10년 가까이 알고 지낸 지인에게 …" } ] },    { "step": 2, "stage": "DETAIL", "confirmed": true,      "items": [        { "sectionType": "FACTS", "title": "주요 사실관계", "content": "2023년 5월, 피고인은 운영하던 사업이 어려운 상태에서 …" },        { "sectionType": "DAMAGE", "title": "피해 결과", "data": [ { "label": "피해자 수", "value": "1명" }, { "label": "피해 금액", "value": "4,500만 원" }, { "label": "범행 기간", "value": "1회 (2023년 5월)" }, { "label": "회복 금액", "value": "1,500만 원" } ] },        { "sectionType": "DEFENDANT", "title": "피고인 관련 사실", "content": "형사처벌을 받은 전력이 없다." },        { "sectionType": "SETTLEMENT", "title": "합의 · 피해 회복", "content": "재판 중 1,500만 원을 갚았으나 합의에는 이르지 못했고, 피해자는 처벌을 원한다." }      ] },    { "step": 3, "stage": "ARGUMENT", "confirmed": false,      "items": [        { "sectionType": "PROSECUTOR", "title": "검사", "content": "…" },        { "sectionType": "DEFENSE", "title": "피고인 · 변호인", "content": "…" }      ] }  ],  "lockedSteps": [4],  "law": null,  "summary": null}
+{  "status": "REVIEWING",  "lastReviewedStep": 2,  "openStep": 3,  "sections": [    { "step": 1, "stage": "OVERVIEW", "confirmed": true,      "items": [ { "sectionType": "OVERVIEW", "title": "사건 개요", "content": "피고인이 빌린 돈을 갚지 못해 오래 다투던 지인이 집으로 찾아오자 …" } ] },    { "step": 2, "stage": "DETAIL", "confirmed": true,      "items": [        { "sectionType": "FACTS", "title": "주요 사실관계", "content": "사건 3개월 전부터 변제 문제로 여러 차례 다툼이 있었고 …" },        { "sectionType": "DAMAGE", "title": "피해 결과", "data": [ { "label": "피해자 수", "value": "1명" }, { "label": "피해 결과", "value": "사망" }, { "label": "피해자와의 관계", "value": "지인 (돈을 빌린 사이)" }, { "label": "범행 도구", "value": "집에 있던 흉기" } ] },        { "sectionType": "DEFENDANT", "title": "피고인 관련 사실", "content": "30대이고 형사처벌을 받은 전력이 없다." },        { "sectionType": "SETTLEMENT", "title": "합의 · 피해 회복", "content": "피해 회복을 위해 5,000만 원을 공탁했으나 합의에 이르지 못했고, 유족은 엄벌을 원한다." }      ] },    { "step": 3, "stage": "ARGUMENT", "confirmed": false,      "items": [        { "sectionType": "PROSECUTOR", "title": "검사", "content": "…" },        { "sectionType": "DEFENSE", "title": "피고인 · 변호인", "content": "…" }      ] }  ],  "lockedSteps": [4],  "law": null,  "summary": null}
 ```
 
 - step 1의 항목은 `case_section`이 아니라 `legal_case.overview`로 만든다(`sectionType: "OVERVIEW"`는 응답용 값). step 2 ~ 4는 `case_section`의 `stage`별 항목이다.
 - **열린 섹션(`lastReviewedStep + 1`)까지만** 본문을 넣는다. 잠긴 섹션은 번호만 `lockedSteps`에 넣는다(개발자 도구로 미리 보기 방지).
 - `law`: 섹션 ④가 열리면 채운다.
+- 용어 설명(`case_section` `LAW_TERM`)은 섹션 ④ `items`에 넣지 않고 `law.terms`로만 보낸다.
 
 json
 
 ```json
-"law": {  "appliedLaw": "형법 제347조 사기",  "statutoryPenaltyText": "10년 이하 징역 또는 2천만 원 이하 벌금",  "allowedRanges": [    { "penaltyType": "PRISON", "allowedMin": 1, "allowedMax": 120, "text": "징역 1개월 ~ 10년" },    { "penaltyType": "FINE", "allowedMin": 25000, "allowedMax": 20000000, "text": "벌금 2만 5천 원 ~ 2천만 원" }  ],  "allowedRangeNote": "감경·가중 사유를 반영해 법률상 선고할 수 있는 가장 넓은 범위예요.",  "recommended": { "minMonths": 6, "maxMonths": 18, "basis": "일반사기 제1유형(1억 원 미만), 기본영역. 특별양형인자 없음" },  "terms": [ { "term": "기본영역", "desc": "형을 무겁게 하거나 가볍게 하는 특별한 사정이 없어 기본 권고 형량이 적용되는 구간" } ]}
+"law": {  "appliedLaw": "형법 제250조 제1항 살인",  "statutoryPenaltyText": "사형, 무기 또는 5년 이상의 징역",  "allowedRanges": [    { "penaltyType": "DEATH", "allowedMin": 240, "allowedMax": 600, "text": "사형 (감경하면 무기징역 또는 징역 20년 ~ 50년)" },    { "penaltyType": "LIFE", "allowedMin": 120, "allowedMax": 600, "text": "무기징역 (감경하면 징역 10년 ~ 50년)" },    { "penaltyType": "PRISON", "allowedMin": 30, "allowedMax": 360, "text": "징역 2년 6개월 ~ 30년" }  ],  "allowedRangeNote": "감경·가중 사유를 반영해 법률상 선고할 수 있는 가장 넓은 범위예요.",  "recommended": { "minMonths": 84, "maxMonths": 144, "basis": "살인범죄 제2유형(보통 동기 살인), 감경영역. 특별감경인자 1개(실질적 피해 회복), 특별가중인자 없음" },  "terms": [ { "term": "감경영역", "desc": "형을 가볍게 할 특별한 사정이 있어 기본 권고 형량보다 낮은 구간이 적용되는 구간" } ]}
 ```
 
-- 권고 범위 예시 값(6 ~ 18개월)은 설명용이다. 사기 제1유형(1억 원 미만) 기본영역(6개월 ~ 1년 6개월)을 가정한 값이며, **대표 판례 등록 시 팀이 양형기준으로 다시 계산한다.** (와이어프레임 v2.1의 예시 값 "징역 1년 ~ 3년 6개월 · 제2유형"은 예전 예시 사건 기준이라 이 명세와 다르다.)
+- 권고 범위 예시 값(84 ~ 144개월)은 설명용이다. 살인 제2유형(보통 동기 살인) 감경영역(7년 ~ 12년)을 가정한 **가상 값**이며, **대표 판례 등록 시 팀이 양형기준으로 다시 계산한다.** (와이어프레임 v2.1의 예시 값은 예전 사기 예시 사건 기준이라 이 명세와 다르다.)
 - `summary`: `REVIEWED`일 때 S-05용 핵심 사실 요약(`case_section` `SUMMARY`)을 채운다.
-- `allowedRanges`: `penalty_rule` 중 범위가 있는 형벌(징역 · 벌금)을 모두 넣는다. 화면에는 징역만 보여 줘도 된다.
+- `allowedRanges`: `penalty_rule` 중 범위(`allowed_min` · `allowed_max`)가 모두 있는 규칙만 넣는다. 화면에는 징역만 보여 줘도 된다.
+- (v0.4) 사형 · 무기가 법정형에 있는 사건은 `DEATH` · `LIFE` 항목도 넣는다. 이때 `allowedMin` ~ `allowedMax`는 작량감경해 징역으로 선고할 때의 범위이고, `text`에 그대로 선고할 수 있다는 내용을 함께 쓴다. 예: `{ "penaltyType": "LIFE", "allowedMin": 120, "allowedMax": 600, "text": "무기징역 (감경하면 징역 10년 ~ 50년)" }`, `{ "penaltyType": "DEATH", "allowedMin": 240, "allowedMax": 600, "text": "사형 (감경하면 무기징역 또는 징역 20년 ~ 50년)" }`
 - `allowedRangeNote`는 서버 고정 문구다. `penalty_rule.allowed_basis`(산출 근거)는 내부용이라 응답하지 않는다.
-- `allowedRanges.text`는 서버가 만들어 주는 표시 문구다. 화면마다 "1개월 ~ 10년" 표기가 달라지지 않게 하기 위해서다.
+- `allowedRanges.text`는 서버가 만들어 주는 표시 문구다. 화면마다 "1개월 ~ 10년" 표기가 달라지지 않게 하기 위해서다. 형식은 API 8 `options[].text`와 같다.
 - 사전 판단은 넣지 않는다.
 
 | 거절 | 조건 |
@@ -315,11 +332,13 @@ json
 json
 
 ```json
-{  "penaltyOptions": [    { "penaltyType": "PRISON", "allowedMin": 1, "allowedMax": 120, "text": "징역 1개월 ~ 10년", "suspensionAllowed": true },    { "penaltyType": "FINE", "allowedMin": 25000, "allowedMax": 20000000, "text": "벌금 2만 5천 원 ~ 2천만 원", "suspensionAllowed": true }  ],  "statutoryPenaltyText": "10년 이하 징역 또는 2천만 원 이하 벌금",  "allowedRangeNote": "감경·가중 사유를 반영해 법률상 선고할 수 있는 가장 넓은 범위예요.",  "recommended": { "minMonths": 6, "maxMonths": 18, "basis": "…" },  "suspensionRule": { "maxPrisonMonths": 36, "maxFineAmount": 5000000, "minMonths": 12, "maxMonths": 60 },  "factors": [    { "factorId": 1, "label": "피해 금액이 4,500만 원이다" },    { "factorId": 2, "label": "10년 가까이 알고 지낸 지인 관계를 이용했다" },    { "factorId": 3, "label": "처음부터 투자할 생각 없이 받은 돈을 생활비와 빚 갚는 데 썼다" },    { "factorId": 4, "label": "재판 중 피해 금액 중 1,500만 원을 갚았다" },    { "factorId": 5, "label": "피해자가 처벌을 원한다" },    { "factorId": 6, "label": "수사 단계부터 범행을 인정하고 반성했다" },    { "factorId": 7, "label": "형사처벌 전력이 없다" }  ]}
+{  "penaltyOptions": [    { "penaltyType": "DEATH", "allowedMin": 240, "allowedMax": 600, "text": "사형 (감경하면 무기징역 또는 징역 20년 ~ 50년)", "suspensionAllowed": false, "reducibleTo": ["LIFE", "PRISON"] },    { "penaltyType": "LIFE", "allowedMin": 120, "allowedMax": 600, "text": "무기징역 (감경하면 징역 10년 ~ 50년)", "suspensionAllowed": false, "reducibleTo": ["PRISON"] },    { "penaltyType": "PRISON", "allowedMin": 30, "allowedMax": 360, "text": "징역 2년 6개월 ~ 30년", "suspensionAllowed": true, "reducibleTo": [] }  ],  "statutoryPenaltyText": "사형, 무기 또는 5년 이상의 징역",  "allowedRangeNote": "감경·가중 사유를 반영해 법률상 선고할 수 있는 가장 넓은 범위예요.",  "recommended": { "minMonths": 84, "maxMonths": 144, "basis": "…" },  "suspensionRule": { "maxPrisonMonths": 36, "maxFineAmount": 5000000, "minMonths": 12, "maxMonths": 60 },  "factors": [    { "factorId": 1, "label": "빌린 돈을 갚지 못해 오래 다툼이 있었다" },    { "factorId": 2, "label": "다투던 중 집에 있던 흉기를 집어 들었다" },    { "factorId": 3, "label": "범행 뒤 구호 조치 없이 현장을 떠났다" },    { "factorId": 4, "label": "사건 3개월 전부터 변제 문제로 여러 차례 다퉜다" },    { "factorId": 5, "label": "유족이 엄벌을 원한다" },    { "factorId": 6, "label": "피해자에게는 부양하던 어린 자녀 2명이 있다" },    { "factorId": 7, "label": "수사 초기부터 범행을 인정하고 반성하고 있다" },    { "factorId": 8, "label": "형사처벌 전력이 없다" },    { "factorId": 9, "label": "피해 회복을 위해 5,000만 원을 공탁했다" },    { "factorId": 10, "label": "피고인은 우발적 범행이라고 주장한다" },    { "factorId": 11, "label": "피고인은 오랜 채무로 정신적으로 지쳐 있었다고 주장한다" }  ]}
 ```
 
 - `penaltyOptions`: `penalty_rule`의 `display_order` 순. 화면은 여기 있는 형벌만 보여 준다(FR-3-1). 버튼 비활성 판단(S-06c)도 이 값으로 한다.
 - 무죄는 MVP 선택지에서 뺐다(요구사항 15장, v0.3). `penalty_rule`에도 무죄 행을 두지 않는다.
+- (v0.4) 사형 · 무기가 법정형에 있는 사건은 `penaltyOptions`에 `DEATH` · `LIFE`가 들어간다. 항목마다 `reducibleTo`(감경해서 선고할 수 있는 형벌)를 함께 준다: `DEATH` → `["LIFE", "PRISON"]`, `LIFE` → `["PRISON"]`, `PRISON` · `FINE` → `[]`. `allowedMin` ~ `allowedMax`는 감경해 징역으로 선고할 때의 범위이고, `suspensionAllowed`는 `false`다. 예(살인): `{ "penaltyType": "LIFE", "allowedMin": 120, "allowedMax": 600, "text": "무기징역 (감경하면 징역 10년 ~ 50년)", "suspensionAllowed": false, "reducibleTo": ["PRISON"] }`
+- (v0.4) 선고할 수 있는 범위 막대(FR-3-2)는 고른 형벌 항목의 `allowedMax`를 상한으로 쓴다. 유기징역이면 30년, 무기 · 사형을 감경하면 50년이다.
 - 벌금 선고 가능 하한 25,000원은 형법 제45조 단서(감경 시 5만 원 미만 가능)와 제55조 제1항 제6호(벌금 감경 시 1/2)를 적용한 값이다(ERD 6장).
 - `suspensionRule`: 집행유예 가능 조건(코드 상수, ERD `penalty_rule` 비고). 화면에서 집행유예 입력을 보여 줄지 판단한다.
 - `factors`: 사건의 판단 요소 전체(`label`). 공개 단계와 관계없이 모두.
@@ -338,19 +357,22 @@ json
 json
 
 ```json
-{  "penaltyType": "PRISON",  "prisonMonths": 18,  "fineAmount": null,  "suspensionMonths": 36,  "factors": [    { "factorId": 1, "direction": "UP" },    { "factorId": 3, "direction": "UP" },    { "factorId": 6, "direction": "DOWN" }  ],  "freeOpinion": null}
+{  "penaltyType": "PRISON",  "reducedTo": null,  "prisonMonths": 180,  "fineAmount": null,  "suspensionMonths": null,  "factors": [    { "factorId": 2, "direction": "UP" },    { "factorId": 6, "direction": "UP" },    { "factorId": 7, "direction": "DOWN" }  ],  "freeOpinion": null}
 ```
 
 | 필드 | 필수 | 규칙 |
 | --- | --- | --- |
-| `penaltyType` | ✓ | 이 사건 `penalty_rule`에 있는 형벌 |
-| `prisonMonths` | `PRISON`일 때 ✓ | `allowedMin` ~ `allowedMax` |
+| `penaltyType` | ✓ | 이 사건 `penalty_rule`에 있는 형벌 (법정형에서 고른 형벌: `DEATH` / `LIFE` / `PRISON` / `FINE`) |
+| `reducedTo` |  | (v0.4) 감경 후 형벌. `DEATH` → `LIFE` · `PRISON`, `LIFE` → `PRISON`만 가능. 감경하지 않으면 `null`. 그 밖의 조합은 `INVALID_PENALTY_TYPE`. **형벌 종류가 바뀌는 감경만 기록한다.** 유기징역(`PRISON`) 안의 작량감경은 `reducedTo`에 기록하지 않는다 |
+| `prisonMonths` | 최종 선고 형벌이 `PRISON`일 때 ✓ | 고른 형벌(`penaltyType`) 항목의 `allowedMin` ~ `allowedMax`. 최종 선고 형벌이 `DEATH` · `LIFE`면 `null` |
 | `fineAmount` | `FINE`일 때 ✓ | `allowedMin` ~ `allowedMax` |
-| `suspensionMonths` |  | 형벌이 집행유예 허용이고, 징역 36개월 이하 또는 벌금 500만 원 이하일 때만. 12 ~ 60 |
+| `suspensionMonths` |  | 형벌이 집행유예 허용이고, 징역 36개월 이하 또는 벌금 500만 원 이하일 때만. 12 ~ 60. `DEATH` · `LIFE`를 고르면 감경해도 불가 |
 | `factors` |  | 0개 이상, 이 사건 요소, 중복 없음, `direction` 필수(`UP` / `DOWN`) |
 | `freeOpinion` |  | 확장(REQ-033). 최대 1,000자. 비교 대상 아님 |
-- 선택하지 않은 형벌의 값(`PRISON`인데 `fineAmount`)은 `null`이어야 한다. 값이 있으면 `VALIDATION_ERROR`.
+- 선택하지 않은 형벌의 값(`PRISON`인데 `fineAmount`)은 `null`이어야 한다. 값이 있으면 `VALIDATION_ERROR`. 최종 선고 형벌(`reducedTo`가 있으면 그 값)이 `DEATH` · `LIFE`인데 `prisonMonths` · `fineAmount` · `suspensionMonths`에 값이 있어도 `VALIDATION_ERROR`다.
+- (v0.4) 최종 선고 형벌은 `reducedTo`가 있으면 그 값, 없으면 `penaltyType`이다. 예: 무기징역 그대로 `{ "penaltyType": "LIFE", "reducedTo": null, "prisonMonths": null }`, 무기징역을 감경해 징역 40년 `{ "penaltyType": "LIFE", "reducedTo": "PRISON", "prisonMonths": 480 }`
 - 무죄는 MVP에서 받지 않는다(요구사항 15장, v0.3). `penalty_rule`에 없는 형벌이므로 `INVALID_PENALTY_TYPE`으로 거절된다.
+- (v0.9) `penaltyType`이 형벌 열거값(`DEATH` · `LIFE` · `PRISON` · `FINE`)에 없는 문자열(`NOT_GUILTY`, 오타 등)이어도 400이 아니라 422 `INVALID_PENALTY_TYPE`이다. 무죄를 위 규칙대로 거절하기 위해서이며, 1-5의 "잘못된 열거값 → `VALIDATION_ERROR`"보다 이 규칙이 우선한다. 그래서 서버는 `penaltyType` · `reducedTo`를 문자열로 받는다.
 
 **응답 200**
 
@@ -361,7 +383,7 @@ json
 ```
 
 - 한 트랜잭션: `judgment`(`USER`, `FINAL`) + `judgment_factor` 저장, 상태 `REVIEWED` → `VERDICT_CONFIRMED`(조건부 갱신).
-- 검사 순서: 상태 → 형벌 → 형량 범위 → 집행유예 → 요소. 첫 번째로 걸린 사유 하나로 거절한다.
+- 검사 순서: 상태 → 형벌(감경 조합 포함) → 형량 범위 → 집행유예 → 요소. 첫 번째로 걸린 사유 하나로 거절한다.
 
 | 거절 | 조건 |
 | --- | --- |
@@ -381,7 +403,7 @@ json
 json
 
 ```json
-{  "subjectType": "AI",  "penaltyType": "PRISON",  "prisonMonths": 12,  "fineAmount": null,  "suspensionMonths": 24,  "extraDispositions": [],  "summary": "피해 규모와 변제 · 반성을 함께 저울질한 판단",  "reasoning": "피해 금액이 크고 처음부터 갚을 생각 없이 돈을 받은 점은 무겁지만, 일부를 갚았고 범행을 인정하며 전력이 없는 점을 고려했다.",  "factors": [    { "factorId": 1, "label": "피해 금액이 4,500만 원이다", "direction": "UP", "evidence": null }  ]}
+{  "subjectType": "AI",  "penaltyType": "PRISON",  "reducedTo": null,  "prisonMonths": 144,  "fineAmount": null,  "suspensionMonths": null,  "extraDispositions": [],  "summary": "다투다 벌어진 범행과 공탁 · 반성을 함께 저울질한 판단",  "reasoning": "흉기를 집어 들어 피해자를 공격하고 구호 조치 없이 자리를 떠난 점은 무겁지만, 공탁으로 피해 회복을 시도했고 범행을 인정하며 전력이 없는 점을 고려했다.",  "factors": [    { "factorId": 2, "label": "다투던 중 집에 있던 흉기를 집어 들었다", "direction": "UP", "evidence": null }  ]}
 ```
 
 | 필드 | USER | AI | COURT |
@@ -389,7 +411,8 @@ json
 | `summary` | 판단 요소 요약 태그로 만든 규칙 문장 (MVP) | 팀 입력 (`judgment.summary`) | 팀 입력 (`judgment.summary`) |
 | `reasoning` | `null` | 판결 이유 | 재판부 판단 근거 요약 |
 | `excerpt` · `plainExplanation` | 없음 | 없음 | 판결문 발췌 · 쉽게 말하면 |
-| `extraDispositions` | `[]` | `[]` | 부가 처분 (예: 사회봉사 80시간) |
+| `extraDispositions` | `[]` | `[]` | 부가 처분 (예: 사회봉사 80시간, 몰수). `type`: `COMMUNITY_SERVICE` · `CONFISCATION` (ERD v1.4) |
+| `reducedTo` | 제출값 | 등록값 | 등록값. 감경 후 형벌 (v0.4, ERD `judgment.reduced_to`) |
 | `factors[].evidence` | `null` | `null` | 판결문 근거 문장 |
 - `factors`에는 **고려한 요소만** 들어간다. 없는 요소는 "—"(ERD 결정 #1).
 - `summary`는 S-09 판결 카드의 한 줄 요약이다.
@@ -406,11 +429,11 @@ json
 json
 
 ```json
-{  "judgment": { "subjectType": "AI", "penaltyType": "PRISON", "prisonMonths": 12, "suspensionMonths": 24, "…": "…" },  "myJudgment": { "subjectType": "USER", "penaltyType": "PRISON", "prisonMonths": 18, "suspensionMonths": 36, "…": "…" },  "diffFromMine": { "samePenaltyType": true, "prisonMonthsDiff": -6, "fineAmountDiff": null },  "references": ["형법 제347조", "사기범죄 양형기준", "유사 판례 5건"]}
+{  "judgment": { "subjectType": "AI", "penaltyType": "PRISON", "prisonMonths": 144, "suspensionMonths": null, "…": "…" },  "myJudgment": { "subjectType": "USER", "penaltyType": "PRISON", "prisonMonths": 180, "suspensionMonths": null, "…": "…" },  "diffFromMine": { "samePenaltyType": true, "prisonMonthsDiff": -36, "fineAmountDiff": null },  "references": ["형법 제250조", "살인범죄 양형기준", "유사 판례 5건"]}
 ```
 
 - 공개 AI 판결(`AI`, `is_published = true`)을 DB에서 읽기만 한다. **AI를 호출하지 않는다**(시퀀스 6장).
-- `diffFromMine`: MVP는 숫자 차이만. 형벌 종류가 다르면 `prisonMonthsDiff` · `fineAmountDiff` 모두 `null`이고 `samePenaltyType: false`다. 화면이 "내 판결보다 6개월 짧음"으로 표시한다. 문구 규칙은 미정(요구사항 15장).
+- `diffFromMine`: MVP는 숫자 차이만. 형벌 종류는 **최종 선고 형벌**(`reducedTo`가 있으면 그 값, v0.4)로 비교한다. 형벌 종류가 다르면 `prisonMonthsDiff` · `fineAmountDiff` 모두 `null`이고 `samePenaltyType: false`다. 화면이 "내 판결보다 6개월 짧음"으로 표시한다. 문구 규칙은 미정(요구사항 15장).
 - `references`: 참고 자료 태그. `judgment.reference_tags`(AI 판결 등록 시 팀이 입력, ERD v1.3)에서 읽는다. 값이 없으면 빈 배열. (컬럼명은 SQL 예약어 `REFERENCES`를 피해 `reference_tags`로 두고, 응답 필드명은 `references` 그대로 쓴다.)
 
 | 거절 | 조건 |
@@ -439,7 +462,7 @@ json
 json
 
 ```json
-{  "judgment": {    "subjectType": "COURT",    "penaltyType": "PRISON",    "prisonMonths": 10,    "suspensionMonths": 24,    "extraDispositions": [ { "type": "COMMUNITY_SERVICE", "value": "80시간" } ],    "summary": "변제와 반성, 초범인 점을 크게 본 판단",    "reasoning": "…",    "excerpt": "…",    "plainExplanation": "…",    "factors": [ { "factorId": 1, "label": "피해 금액이 4,500만 원이다", "direction": "UP", "evidence": "…" } ]  },  "myJudgment": { "subjectType": "USER", "prisonMonths": 18, "suspensionMonths": 36, "…": "…" },  "aiJudgment": { "subjectType": "AI", "prisonMonths": 12, "suspensionMonths": 24, "…": "…" },  "source": { "sourceOrg": "법원 판결서 인터넷열람 서비스" },  "deidentifiedItems": ["인명", "지명", "사건번호", "업체명"]}
+{  "judgment": {    "subjectType": "COURT",    "penaltyType": "PRISON",    "reducedTo": null,    "prisonMonths": 120,    "suspensionMonths": null,    "extraDispositions": [ { "type": "CONFISCATION", "value": "범행에 사용한 흉기" } ],    "summary": "유족의 처벌 의사를 무겁게 보면서도 공탁과 반성을 감안한 판단",    "reasoning": "…",    "excerpt": "…",    "plainExplanation": "…",    "factors": [ { "factorId": 2, "label": "다투던 중 집에 있던 흉기를 집어 들었다", "direction": "UP", "evidence": "…" } ]  },  "myJudgment": { "subjectType": "USER", "prisonMonths": 180, "suspensionMonths": null, "…": "…" },  "aiJudgment": { "subjectType": "AI", "prisonMonths": 144, "suspensionMonths": null, "…": "…" },  "source": { "sourceOrg": "법원 판결서 인터넷열람 서비스" },  "deidentifiedItems": ["인명", "지명", "사건번호", "날짜"]}
 ```
 
 - `source`는 확장(REQ-055). `case_source` 중 `is_final = true`인 행의 `source_org`. 사건번호 · 법원명 · 선고일은 **절대 넣지 않는다**(FR-5-3).
@@ -470,7 +493,7 @@ json
 json
 
 ```json
-{  "preToFinal": {    "preJudgment": { "rangeOptionId": 3, "label": "실형 3년 미만", "factorIds": [1, 2] },    "finalJudgmentText": "징역 1년 6개월 · 집행유예 3년",    "direction": "LIGHTER",    "summaryText": "사건을 모두 확인한 뒤, 처음 생각보다 가벼운 판결을 내렸어요."  },  "judgments": {    "USER": { "subjectType": "USER", "summary": "피해 규모 · 범행 방식을 무겁게 보고 반성을 감안한 판단", "…": "…" },    "AI": { "subjectType": "AI", "summary": "피해 규모와 변제 · 반성을 함께 저울질한 판단", "…": "…" },    "COURT": { "subjectType": "COURT", "summary": "변제와 반성, 초범인 점을 크게 본 판단", "…": "…" }  },  "matrix": [    { "factorId": 1, "label": "피해 금액이 4,500만 원이다", "revealStage": "OVERVIEW",      "user": "UP", "ai": "UP", "court": "UP", "category": "ALL_SAME" },    { "factorId": 3, "label": "처음부터 투자할 생각 없이 받은 돈을 생활비와 빚 갚는 데 썼다", "revealStage": "DETAIL",      "user": "UP", "ai": "UP", "court": null, "category": "DIVERGED" },    { "factorId": 4, "label": "재판 중 피해 금액 중 1,500만 원을 갚았다", "revealStage": "DETAIL",      "user": null, "ai": "DOWN", "court": "DOWN", "category": "ONLY_ME_MISSED" }  ],  "ruleSentences": {    "common": ["세 판결 모두 피해 금액이 4,500만 원이라는 점을 형량을 높이는 요소로 봤어요."],    "differences": ["AI와 재판부는 1,500만 원을 갚은 점을 고려했지만, 내 판결에서는 고려하지 않았어요."]  },  "analysisAvailable": false}
+{  "preToFinal": {    "preJudgment": { "rangeOptionId": 11, "label": "실형 5년 이상 ~ 10년 미만", "factorIds": [1, 2] },    "finalJudgmentText": "징역 15년",    "direction": "HEAVIER",    "summaryText": "사건을 모두 확인한 뒤, 처음 생각보다 무거운 판결을 내렸어요."  },  "judgments": {    "USER": { "subjectType": "USER", "summary": "범행 방식 · 피해 결과를 무겁게 보고 반성을 감안한 판단", "…": "…" },    "AI": { "subjectType": "AI", "summary": "다투다 벌어진 범행과 공탁 · 반성을 함께 저울질한 판단", "…": "…" },    "COURT": { "subjectType": "COURT", "summary": "유족의 처벌 의사를 무겁게 보면서도 공탁과 반성을 감안한 판단", "…": "…" }  },  "matrix": [    { "factorId": 2, "label": "다투던 중 집에 있던 흉기를 집어 들었다", "revealStage": "OVERVIEW",      "user": "UP", "ai": "UP", "court": "UP", "category": "ALL_SAME" },    { "factorId": 6, "label": "피해자에게는 부양하던 어린 자녀 2명이 있다", "revealStage": "DETAIL",      "user": "UP", "ai": null, "court": "UP", "category": "DIVERGED" },    { "factorId": 9, "label": "피해 회복을 위해 5,000만 원을 공탁했다", "revealStage": "DETAIL",      "user": null, "ai": "DOWN", "court": "DOWN", "category": "ONLY_ME_MISSED" }  ],  "ruleSentences": {    "common": ["세 판결 모두 다투던 중 집에 있던 흉기를 집어 든 점을 형량을 높이는 요소로 봤어요."],    "differences": ["AI와 재판부는 5,000만 원을 공탁한 점을 고려했지만, 내 판결에서는 고려하지 않았어요."]  },  "analysisAvailable": false}
 ```
 
 **`preToFinal.direction`** — 사전 판단 구간과 최종 판결을 비교한다(`sentence_range_option.kind` · 개월 범위 사용).
@@ -480,7 +503,7 @@ json
 | `HEAVIER` | 최종 판결이 구간보다 무거움 (예: 구간은 집행유예인데 실형, 실형 구간 상한보다 긺) |
 | `SAME` | 최종 판결이 구간 안 |
 | `LIGHTER` | 최종 판결이 구간보다 가벼움 (예: 구간은 실형인데 집행유예) |
-- 형벌 종류의 무게는 `FINE`(벌금, 벌금 집행유예 포함) < `SUSPENDED`(징역 집행유예) < `PRISON`(실형) 순으로 먼저 비교하고, 같은 종류면 개월로 비교한다. 무죄는 MVP에서 뺐으므로 비교 대상이 아니다(v0.3). 세부 규칙은 구현 때 테스트 케이스로 확정한다.
+- 형벌 종류의 무게는 `FINE`(벌금, 벌금 집행유예 포함) < `SUSPENDED`(징역 집행유예) < `PRISON`(실형) < `LIFE`(무기징역) < `DEATH`(사형) 순으로 먼저 비교하고, 같은 종류면 개월로 비교한다. 최종 판결은 `reducedTo`가 있으면 그 값(최종 선고 형벌)으로 비교한다(ERD `sentence_range_option` 무겁기 순서와 같다). 무죄는 MVP에서 뺐으므로 비교 대상이 아니다(v0.3). 세부 규칙은 구현 때 테스트 케이스로 확정한다.
 
 **`matrix[].category`** — 와이어프레임 S-09의 분류 태그(FR-6-4).
 

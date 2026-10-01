@@ -11,7 +11,33 @@ spring:
 
   jpa:
     hibernate:
-      # 로컬 개발 중에는 스키마를 자동 반영하고, 운영에서는 DDL_AUTO=validate로 덮어쓴다.
-      # 팀에서 마이그레이션 도구(Flyway 등)를 도입하면 validate로 고정한다.
-      ddl-auto: ${DDL_AUTO:update}
+      # 스키마는 Flyway 마이그레이션(db/migration)으로만 변경한다.
+      # Hibernate는 엔티티와 테이블이 일치하는지만 검사한다.
+      ddl-auto: ${DDL_AUTO:validate}
     open-in-view: false
+
+  flyway:
+    enabled: true
+    # 기본값은 스키마(db/migration)만. 운영에서 환경변수를 빠뜨려도 시드가 들어가지 않도록 기본값을 안전한 쪽으로 둔다.
+    # 로컬 · CI에서만 FLYWAY_LOCATIONS=classpath:db/migration,classpath:db/seed 로 개발용 가상 사건 시드를 함께 넣는다.
+    locations: ${FLYWAY_LOCATIONS:classpath:db/migration}
+    # 시드(R__)를 한 번 적용한 DB에서 시드 위치를 빼고 실행해도 기동되도록, 적용된 반복 마이그레이션이 없어도 검증을 통과시킨다.
+    # (없으면 "Detected applied migration not resolved locally"로 기동 실패) 버전 파일 검증은 그대로 유지한다.
+    # 운영에도 적용되는 설정이다. 지금 R__ 파일은 개발용 시드뿐이라 안전하지만, 시드 외의 R__ 파일을 추가하면 이 설정을 재검토한다.
+    ignore-migration-patterns: "*:future,repeatable:missing"
+    # 운영 DB 전체 삭제를 막기 위해 clean 명령은 항상 막아 둔다 (기본값이지만 명시)
+    clean-disabled: true
+
+  jackson:
+    deserialization:
+      # 정수 필드(형량 개월 · 금액 · step · id 등)에 소수가 오면 소수점을 버리지 않고 400 VALIDATION_ERROR로 거절한다 (BE-22, B안)
+      # 36.7 → 36처럼 사용자가 보낸 값과 다른 값이 조용히 저장되는 것을 막는다. "36" 같은 문자열 숫자는 허용한다
+      accept-float-as-int: false
+
+# Swagger UI · OpenAPI 문서. 기본값은 꺼짐: 운영에서 환경변수를 빠뜨려도 API 문서가 노출되지 않도록 안전한 쪽에 둔다.
+# 로컬 · 개발에서만 SWAGGER_ENABLED=true 로 켠다.
+springdoc:
+  api-docs:
+    enabled: ${SWAGGER_ENABLED:false}
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:false}

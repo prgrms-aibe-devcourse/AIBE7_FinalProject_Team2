@@ -1,0 +1,9 @@
+{
+  "_comment": "내부 전용. 사전 학습 점검(check_contamination.py)에서 AI 예측과 비교할 때만 쓴다. AI 판결 생성 프롬프트에는 절대 넣지 않는다. 가상 사건 예시 값(ERD 6장 judgment 30).",
+  "caseId": 1,
+  "penaltyType": "PRISON",
+  "reducedTo": null,
+  "prisonMonths": 120,
+  "fineAmount": null,
+  "suspensionMonths": null
+}
