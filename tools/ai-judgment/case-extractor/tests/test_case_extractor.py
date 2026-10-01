@@ -99,6 +99,14 @@ class PremaskTest(unittest.TestCase):
 
         self.assertIn("대법원 양형위원회", masked)
 
+    def test_premask_hyphenDate_isNotAccount(self):
+        masked, counts = premask("2099-01-10 범행, 계좌 110-123-456789, 12345-1234-12345678901")
+
+        self.assertIn("2099-01-10", masked)
+        self.assertNotIn("110-123-456789", masked)
+        self.assertEqual(counts.get("계좌번호"), 1)
+        self.assertIn("12345-1234-12345678901", masked)  # 더 긴 숫자열의 일부는 잡지 않는다
+
     def test_premask_judgmentDates_areKept(self):
         # 날짜는 모델이 "사건 3개월 전"처럼 바꾸는 데 필요해 미리 가리지 않는다
         masked, _ = premask("2099. 1. 10. 20:00경")
@@ -118,7 +126,8 @@ class ResidualCheckTest(unittest.TestCase):
         _, warnings = residual_check([("facts", "피고인 김철수는 범행을 인정했다. 피고인 측은 선처를 구했다.")])
 
         self.assertEqual(len(warnings), 1)
-        self.assertIn("김철수", warnings[0])
+        self.assertIn("실명일 수 있음", warnings[0])
+        self.assertNotIn("김철수", warnings[0])  # 보고서에 원본 이름을 남기지 않는다
 
     def test_residualCheck_anonymizedText_isClean(self):
         errors, warnings = residual_check([("overview", FAKE_OUTPUT["overview"]), ("facts", FAKE_OUTPUT["facts"])])
@@ -145,6 +154,27 @@ class ProcessOutputTest(unittest.TestCase):
         _, _, errors, _ = process_output(output)
 
         self.assertTrue(any("실제 선고 형량" in e for e in errors))
+
+    def test_processOutput_sentenceVariants_areErrors(self):
+        court = {"penaltyType": "PRISON", "reducedTo": None, "prisonMonths": 120, "fineAmount": 20_000_000,
+                 "suspensionMonths": 24}
+        for text in ("재판부는 징역10년을 선고했다.", "10년의 징역에 처했다.", "징역 120개월이 나왔다.",
+                     "120개월의 징역이다.", "벌금 2천만 원이 나왔다.", "2천만원의 벌금이다.",
+                     "집행유예 2년이다.", "2년간 집행유예가 붙었다.", "징역형의 집행을 유예했다."):
+            with self.subTest(text=text):
+                _, _, errors, _ = process_output(output_with(
+                    overview=FAKE_OUTPUT["overview"] + " " + text, courtJudgment=court))
+
+                self.assertTrue(any("실제 선고 형량" in e for e in errors))
+
+    def test_processOutput_unrelatedNumbers_areNotSentenceLeak(self):
+        # 법정형 범위 · 범행 기간 · 전과처럼 형량 용어와 붙지 않은 숫자는 보존한다
+        for text in ("법정형은 징역 10년 이상이다.", "두 사람은 10년 동안 알고 지냈다.", "징역 110년은 없다.",
+                     "과거 징역 3년형을 산 적이 있다."):
+            with self.subTest(text=text):
+                _, _, errors, _ = process_output(output_with(overview=FAKE_OUTPUT["overview"] + " " + text))
+
+                self.assertFalse(any("실제 선고 형량" in e for e in errors))
 
     def test_processOutput_noOverviewFactor_isError(self):
         factors = [f for f in FAKE_OUTPUT["factors"] if f["revealStage"] != "OVERVIEW"]
@@ -211,6 +241,33 @@ class RunTest(unittest.TestCase):
 
         self.assertTrue((self.dir / "out" / "bad-case.report.json").exists())
         self.assertFalse((self.dir / "out" / "bad-case.case.json").exists())
+
+    def test_run_checkErrors_removesStaleOutputs(self):
+        out = self.dir / "out"
+        run(self.input, "same-name", out_dir=out, call=fake_call(FAKE_OUTPUT))
+        self.assertTrue((out / "same-name.case.json").exists())
+
+        with self.assertRaises(ExtractError):
+            run(self.input, "same-name", out_dir=out,
+                call=fake_call(output_with(overview="2099. 1. 10. 가상지방법원 사건이다.")))
+
+        self.assertTrue((out / "same-name.report.json").exists())
+        self.assertFalse((out / "same-name.case.json").exists())
+        self.assertFalse((out / "same-name.court_judgment_internal.json").exists())
+
+    def test_run_identifiersInReportFields_areErroredAndScrubbed(self):
+        output = output_with(reviewNotes=["원문에는 010-1234-5678과 2099고합123이 있었다"])
+        output["penaltyRules"][0]["allowedBasis"] = "가상지방법원 2099. 1. 10. 기준"
+
+        with self.assertRaises(ExtractError):
+            run(self.input, "leaky-case", out_dir=self.dir / "out", call=fake_call(output))
+
+        raw = (self.dir / "out" / "leaky-case.report.json").read_text(encoding="utf-8")
+        report = json.loads(raw)
+        for value in ("010-1234-5678", "2099고합123", "가상지방법원", "2099. 1. 10."):
+            self.assertNotIn(value, raw)
+        self.assertTrue(any("reviewNotes[0]" in e for e in report["errors"]))
+        self.assertTrue(any("penaltyRuleBasis[" in e for e in report["errors"]))
 
     def test_run_dryRun_writesMaskedRequestWithoutCalling(self):
         def must_not_call(*args):

@@ -65,7 +65,7 @@ python3 extract_case.py ../cases/raw/판결문.pdf --name long-marriage-conflict
 - `penaltyRuleBasis`: 형벌별 선고 가능 범위 계산 근거 (`penalty_rule.allowed_basis` 후보)
 - `errors` · `warnings` · `reviewNotes`
 
-**검사에서 오류가 하나라도 나오면 `case.json`을 만들지 않고 `report.json`만 남긴다.** 프롬프트나 입력을 고쳐 다시 실행한다.
+**검사에서 오류가 하나라도 나오면 `case.json`을 만들지 않고 `report.json`만 남긴다.** 같은 이름의 이전 결과 파일도 지운다. 프롬프트나 입력을 고쳐 다시 실행한다.
 
 ## 처리 순서
 
@@ -75,7 +75,7 @@ python3 extract_case.py ../cases/raw/판결문.pdf --name long-marriage-conflict
     - 날짜 · 나이는 가리지 않는다. 모델이 "사건 3개월 전", "70대"처럼 바꾸는 데 필요하다.
 3. **비식별화 · 구조화 (Claude API)**: `prompts/extract_system.md`의 원칙대로 인명 · 지명 · 날짜 · 나이 · 직업 · 발언 · 범행 도구 등을 일반화하고, 양형 사실은 유지한다(FR-1-1). 구조화 출력으로 스키마에 맞는 JSON만 받는다. 모델이 거절하면 서버 측 대체 모델이 이어서 처리한다(`fallbacks: "default"`).
 4. **검사**
-    - **오류**: 마스킹 표시가 남음, 주민등록번호 · 전화번호 · 사건번호 · 법원명 · 상세 주소 · 정확한 날짜 · 정확한 나이가 개요 · 섹션 · 판단 요소에 남음, 실제 선고 형량(예: "징역 10년")이 AI 입력에 드러남, `build_prompt.py`의 사건 입력 검사 실패, 판단 요소 길이 · OVERVIEW 요소 없음 · 형벌 규칙 형식 오류
+    - **오류**: 마스킹 표시가 남음, 주민등록번호 · 전화번호 · 사건번호 · 법원명 · 상세 주소 · 정확한 날짜 · 정확한 나이가 개요 · 섹션 · 판단 요소 · `reviewNotes` · 형벌 규칙 근거에 남음(보고서에는 위치와 규칙만 적고 원본 값은 적지 않으며, `reviewNotes` · 형벌 규칙 근거에서 걸린 값은 `[삭제됨]`으로 바꿔 저장한다), 실제 선고 형량(예: "징역 10년")이 AI 입력에 드러남, `build_prompt.py`의 사건 입력 검사 실패, 판단 요소 길이 · OVERVIEW 요소 없음 · 형벌 규칙 형식 오류
     - **경고**: "피고인 ○○○"처럼 역할어 뒤에 실명일 수 있는 말, 재판부 판단이 드러날 수 있는 "선고"라는 말, OVERVIEW 요소에 `preLabel` 없음, 형벌 규칙은 모델이 계산한 값이라는 안내
 
 ## 지켜야 할 것

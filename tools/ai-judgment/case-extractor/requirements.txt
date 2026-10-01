@@ -1,2 +1,2 @@
 anthropic>=1.0
-pypdf>=5.0
+pypdf>=6.14.2

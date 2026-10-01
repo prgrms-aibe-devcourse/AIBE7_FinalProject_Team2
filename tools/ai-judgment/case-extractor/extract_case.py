@@ -14,7 +14,7 @@ import re
 import sys
 from pathlib import Path
 
-from deidentify import premask, residual_check
+from deidentify import premask, residual_check, scrub
 from schema import (
     EXTRACT_PROMPT_VERSION,
     OUTPUT_SCHEMA,
@@ -147,6 +147,13 @@ def parse_response_text(content):
         raise ExtractError(f"응답 JSON을 읽지 못했습니다: {e}") from e
 
 
+def report_texts(output):
+    """보고서에만 저장하는 자유 텍스트 [(위치, 문자열)]. 사용자에게 보이지 않아도 개인정보 검사는 한다."""
+    texts = [(f"reviewNotes[{i}]", note) for i, note in enumerate(output.get("reviewNotes", []))]
+    texts += [(f"penaltyRuleBasis[{r['penaltyType']}]", r["allowedBasis"]) for r in output.get("penaltyRules", [])]
+    return texts
+
+
 def process_output(output):
     """모델 응답 → (case.json, 실제 판결, 오류 목록, 경고 목록)."""
     errors, warnings = check_output(output)
@@ -164,8 +171,9 @@ def process_output(output):
     texts = visible_texts(case_input)
     pii_errors, pii_warnings = residual_check(texts)
     leak_errors, leak_warnings = sentence_leak_check(case_input, court)
-    errors += pii_errors + leak_errors
-    warnings += pii_warnings + leak_warnings
+    report_errors, report_warnings = residual_check(report_texts(output))
+    errors += pii_errors + report_errors + leak_errors
+    warnings += pii_warnings + report_warnings + leak_warnings
     return case_input, court, errors, warnings
 
 
@@ -202,18 +210,21 @@ def run(input_path, name, out_dir=DEFAULT_OUT_DIR, model=DEFAULT_MODEL, effort=D
         "premasked": mask_counts,
         "deidentifiedItems": output.get("deidentifiedItems", []),
         "factorExtras": build_factor_extras(output),
-        "penaltyRuleBasis": {r["penaltyType"]: r["allowedBasis"] for r in output.get("penaltyRules", [])},
+        "penaltyRuleBasis": {r["penaltyType"]: scrub(r["allowedBasis"]) for r in output.get("penaltyRules", [])},
         "errors": errors,
         "warnings": warnings,
-        "reviewNotes": output.get("reviewNotes", []),
+        "reviewNotes": [scrub(note) for note in output.get("reviewNotes", [])],
     }
     report_path = out_dir / f"{name}.report.json"
     write_json(report_path, report)
-    if errors:
-        raise ExtractError(f"검사 오류 {len(errors)}건 — case.json을 만들지 않았습니다. 보고서: {report_path}")
-
     case_path = out_dir / f"{name}.case.json"
     court_path = out_dir / f"{name}.court_judgment_internal.json"
+    if errors:
+        # 같은 이름으로 다시 돌렸을 때 이전 실행의 결과물이 남아 통과한 것처럼 보이지 않게 한다
+        case_path.unlink(missing_ok=True)
+        court_path.unlink(missing_ok=True)
+        raise ExtractError(f"검사 오류 {len(errors)}건 — case.json을 만들지 않았습니다. 보고서: {report_path}")
+
     write_json(case_path, case_input)
     write_json(court_path, court)
     return [case_path, court_path, report_path]

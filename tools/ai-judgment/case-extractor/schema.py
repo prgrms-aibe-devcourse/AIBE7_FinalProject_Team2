@@ -4,6 +4,7 @@
 실제 판결(courtJudgment)은 case.json에 넣지 않고 내부 전용 파일로 따로 쓴다(FR-4-1, REQ-041).
 """
 
+import re
 import sys
 from pathlib import Path
 
@@ -218,22 +219,57 @@ def visible_texts(case_input):
     return texts
 
 
-def sentence_leak_check(case_input, court):
-    """실제 선고 형량이 AI 입력(개요 · 사실관계 · 주장 · 요소)에 드러났는지 본다 (FR-4-1)."""
-    needles = []
+_AMOUNT_END = r"(?!\d|이상|이하|미만|이내|초과|부터|까지|에서)"
+
+
+def _alternatives(forms):
+    return "(?:" + "|".join(re.escape(f) for f in sorted(forms, key=len, reverse=True)) + ")"
+
+
+def _month_forms(months):
+    """개월 수의 표기 변형 (공백은 뺀 형태): "10년", "120개월", "10년6개월"."""
+    return {format_months(months).replace(" ", ""), f"{months}개월"}
+
+
+def _won_forms(amount):
+    """금액의 표기 변형: "2천만원", "2천만", "20,000,000원"."""
+    text = format_won(amount).replace(" ", "")
+    return {text, text.removesuffix("원"), f"{amount:,}원", f"{amount}원"}
+
+
+def _leak_patterns(court):
+    """(표시할 형량, 공백 없는 문장에서 찾을 패턴) 목록. 형량 용어와 기간 · 금액이 함께 있는 표현만 본다."""
+    patterns = []
+
+    def add(label, term, forms):
+        alt = _alternatives(forms)
+        patterns.append((label, re.compile(f"(?:{term}{alt}{_AMOUNT_END}|(?<!\\d){alt}(?:간|의)?{term})")))
+
     if court.get("prisonMonths"):
-        needles.append(f"징역 {format_months(court['prisonMonths'])}")
+        add(f"징역 {format_months(court['prisonMonths'])}", "징역형?", _month_forms(court["prisonMonths"]))
     if court.get("fineAmount"):
-        needles.append(f"벌금 {format_won(court['fineAmount']).replace(' 원', '')}")
+        add(f"벌금 {format_won(court['fineAmount'])}", "벌금형?", _won_forms(court["fineAmount"]))
     if court.get("suspensionMonths"):
-        needles.append(f"집행유예 {format_months(court['suspensionMonths'])}")
+        add(f"집행유예 {format_months(court['suspensionMonths'])}", "집행유예", _month_forms(court["suspensionMonths"]))
+        patterns.append(("집행유예", re.compile("징역형?의?집행을?유예")))
+    return patterns
+
+
+def sentence_leak_check(case_input, court):
+    """실제 선고 형량이 AI 입력(개요 · 사실관계 · 주장 · 요소)에 드러났는지 본다 (FR-4-1).
+
+    공백과 어순이 달라도("징역10년", "10년의 징역", "징역 120개월") 잡되,
+    법정형 범위("징역 10년 이상")나 범행 기간 같은 다른 숫자는 형량 용어와 붙어 있을 때만 본다.
+    """
+    patterns = _leak_patterns(court)
     errors, warnings = [], []
     for where, text in visible_texts(case_input):
         if where.startswith("sections") and "LAW_TERM" in where:
             continue  # 용어 설명은 법정형 · 감경 범위 숫자를 쓴다
-        for needle in needles:
-            if needle in text:
-                errors.append(f"{where}: 실제 선고 형량이 드러남 — \"{needle}\"")
+        compact = re.sub(r"\s+", "", text)
+        for label, pattern in patterns:
+            if pattern.search(compact):
+                errors.append(f"{where}: 실제 선고 형량이 드러남 — \"{label}\"")
         if "선고" in text:
             warnings.append(f"{where}: '선고'라는 말이 있음 — 재판부 판단이 드러나지 않는지 확인")
     return errors, warnings

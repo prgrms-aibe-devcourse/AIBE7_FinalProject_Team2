@@ -9,7 +9,10 @@ import re
 RRN = re.compile(r"\d{6}\s?-\s?[1-8]\d{6}")
 EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 PHONE = re.compile(r"(?<!\d)0\d{1,2}[-\s]?\d{3,4}[-\s]?\d{4}(?!\d)")
-ACCOUNT = re.compile(r"\d{2,6}-\d{2,6}-\d{2,8}(?:-\d{1,4})?")
+# 2099-01-10 같은 연도로 시작하는 짧은 날짜는 계좌번호가 아니다. 더 긴 숫자열의 일부도 잡지 않는다.
+ACCOUNT = re.compile(
+    r"(?<!\d)(?!(?:19|20)\d{2}-\d{1,2}-\d{1,2}(?!\d))\d{2,6}-\d{2,6}-\d{2,8}(?:-\d{1,4})?(?!\d)"
+)
 CASE_NUMBER = re.compile(
     r"(?:19|20)?\d{2}\s?(?:재)?(?:고합|고단|고정|고약|감고|감노|감도|전고|전노|전도|초기|노|도)\s?\d{1,7}(?!\d)"
 )
@@ -72,11 +75,18 @@ def premask(text):
     return text, counts
 
 
+def scrub(text):
+    """residual_check 오류 패턴에 걸리는 값을 지운다. 보고서에 저장하는 자유 텍스트용이다."""
+    for _, pattern in RESIDUAL_ERROR_RULES[1:]:
+        text = pattern.sub("[삭제됨]", text)
+    return text
+
+
 def residual_check(texts):
     """비식별화 결과에 남은 개인정보를 찾는다.
 
     texts: [(위치, 문자열)] — 사용자에게 보일 수 있는 필드만 넣는다(개요 · 섹션 · 판단 요소).
-    (오류 목록, 경고 목록)을 돌려준다.
+    (오류 목록, 경고 목록)을 돌려준다. 보고서에 원본 식별자가 남지 않도록 메시지에는 위치와 규칙만 담는다.
     """
     errors, warnings = [], []
     for where, text in texts:
@@ -84,10 +94,10 @@ def residual_check(texts):
             continue
         for name, pattern in RESIDUAL_ERROR_RULES:
             for match in pattern.finditer(text):
-                errors.append(f"{where}: {name} 의심 — \"{match.group(0)}\"")
+                errors.append(f"{where}: {name} 의심")
         for match in ROLE_NAME.finditer(text):
             word = match.group(2)
             if word in ROLE_NAME_ALLOWED or any(word.startswith(a) for a in ROLE_NAME_ALLOWED):
                 continue
-            warnings.append(f"{where}: 실명일 수 있음 — \"{match.group(0)}\"")
+            warnings.append(f"{where}: 실명일 수 있음")
     return errors, warnings
