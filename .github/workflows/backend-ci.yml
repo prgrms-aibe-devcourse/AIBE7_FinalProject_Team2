@@ -72,6 +72,8 @@ jobs:
           ./gradlew test --no-daemon
 
       # 테스트가 CI에서만 실패했을 때 어느 테스트 · 제약인지 바로 볼 수 있도록 리포트를 남긴다
+      # 공개 저장소라 아티팩트는 GitHub 로그인한 누구나 내려받을 수 있다.
+      # 테스트는 실제 사건 데이터 · 비밀값을 출력하지 않아야 한다 (CI는 서브모듈을 받지 않음).
       - name: Upload test report
         if: failure()
         uses: actions/upload-artifact@v4
