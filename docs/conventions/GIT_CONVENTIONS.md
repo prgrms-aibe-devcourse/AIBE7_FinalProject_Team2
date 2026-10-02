@@ -1,6 +1,6 @@
 # Git 규칙 (Branch / Commit / Pull Request)
 
-이 문서는 **Git / GitHub 관련 규칙**을 사람이 보기 쉽게 정리한 문서다. AI 코딩 에이전트의 작업 규칙 원본은 저장소 루트의 `CLAUDE.md`이며(`AGENTS.md` · `.claude/skills`는 `CLAUDE.md`를 가리키기만 한다), 두 문서가 다르면 `CLAUDE.md`를 따른다.
+이 문서는 **Git / GitHub 관련 규칙**을 사람이 보기 쉽게 정리한 문서다. AI 코딩 에이전트가 공통으로 따르는 작업 규칙의 원본은 저장소 루트의 `CLAUDE.md`이며, `AGENTS.md`는 전용 기능이 없는 에이전트에만 적용하는 예외를 담는다. 공통 규칙이 문서마다 다르면 `CLAUDE.md`를 따른다.
 
 ---
 
