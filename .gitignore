@@ -17,6 +17,7 @@ node_modules/
 dist/
 
 # ===== 사건 데이터 (내부 보관, 커밋 금지) =====
-# 사건 파일(.md)은 폴더 위치와 이름에 관계없이 모두 제외한다. README는 docs/cases/README.md라 대상이 아니다.
+# 실제 사건 파일은 저장소에 두지 않는다(BE-17). 실수로 커밋되지 않도록 이 폴더의 .md를 모두 막고, 가이드와 가상 샘플만 예외로 둔다.
 docs/cases/**/*.md
 !docs/cases/README.md
+!docs/cases/sample-virtual-murder.md

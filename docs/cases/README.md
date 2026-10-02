@@ -1,36 +1,42 @@
-# 사건 사례 모음 (`docs/cases/`)
+# 사건 파일 작성 가이드 (`docs/cases/`)
 
-내Law남불에 사용할 **사건 후보와 확정 사건의 조사 · 검토 기록**을 죄명별로 모아 두는 폴더다. Jira: BE-12(대표 판례 선정 및 데이터 확보 경로 확정).
+내Law남불에 쓰는 **사건 파일(사건 후보 · 확정 사건의 조사 · 가공 기록)을 어떻게 쓰는지** 정리한 폴더다. 이 저장소에는 가이드와 가상 사건 샘플만 둔다. Jira: BE-12(대표 판례 선정), BE-13(사건 가공), BE-17(실제 데이터 보관).
 
 ## 폴더 구조
 
 ```
 docs/cases/
-├── README.md
-├── murder/    살인 (crimeType: MURDER)
-├── injury/    상해 (crimeType: INJURY)
-└── fraud/     사기 (crimeType: FRAUD)
+├── README.md                    이 문서 (작성 규칙 · 템플릿 · 보관 원칙)
+└── sample-virtual-murder.md     샘플: 가상 살인 사건으로 템플릿을 채운 예시 (실제 판례 아님)
 ```
 
-- 사건 파일은 `docs/cases/<죄명 폴더>/<사건 식별자>.md`로 만든다.
-- 사건 식별자는 영어 소문자와 하이픈만 쓰고, 사건을 특정할 수 없는 이름으로 짓는다. (예: `fraud/acquaintance-investment.md`)
-- 각 폴더의 `.gitkeep`은 빈 폴더를 유지하기 위한 파일이다. 사건 파일은 `.gitignore`로 막혀 있어 폴더가 Git에서 비지 않도록 `.gitkeep`을 지우지 않는다.
-- **사건 파일(`docs/cases/<죄명 폴더>/*.md`)은 `.gitignore`(`docs/cases/**/*.md`)로 자동 제외되어 커밋되지 않는다.** 파일 이름과 관계없이 적용되며, AI 입력 파일(`*-ai-input.md`)도 포함된다. 팀 내부에서만 공유한다.
+## 실제 사건 자료는 어디에 두나
+
+| 자료 | 위치 | 공유 |
+| --- | --- | --- |
+| 판결문 원본(PDF) | 비공개 저장소 `source/` (공개 저장소의 `backend/private-seed` 서브모듈) | 비공개 저장소 협업자(팀원) |
+| DB 적재 SQL (`case_source` 사건번호 · 법원명 · 원문 포함) | 비공개 저장소 `seed/` | 비공개 저장소 협업자 |
+| 사건 파일(조사 · 가공 기록 `.md`) · AI 입력 정리 | **저장소에 올리지 않는다.** 각자 로컬에 둔다 | 필요하면 판결문 PDF에서 다시 만든다 |
+| 사건 입력 JSON 초안 | `tools/ai-judgment/cases/` (`.gitignore` 대상) | — |
+
+- 사건 파일은 저장소에 올리지 않는다. 판결문 PDF(비공개 저장소)가 원본이고, `tools/ai-judgment/case-extractor`(BE-20)로 PDF에서 사건 입력 JSON 초안을 바로 만들 수 있기 때문이다.
+- 실수로 커밋되지 않도록 `.gitignore`가 이 폴더의 `.md`를 모두 막는다(`docs/cases/**/*.md`). 예외는 이 README와 샘플 파일뿐이다.
 
 ## 반드시 지킬 것
 
-이 저장소는 팀 전체가 보므로 **원본 판결문 정보를 올리지 않는다.**
+이 저장소는 공개이므로 **원본 판결문 정보와 실제 사건 내용을 올리지 않는다.**
 
-- 사건번호, 법원명, 판결문 원문, 원문 링크, 실제 인명 · 지명 · 기관명은 이 폴더에 쓰지 않는다.
-- 위 정보는 내부 전용 `case_source`(REQ-074)로만 관리하고, 원본은 **비공개 저장소**(공개 저장소의 `backend/private-seed` 서브모듈)에 둔다(BE-17).
-  - 판결문 원본(PDF)은 비공개 저장소 `source/`, DB 적재 SQL은 `seed/`에 둔다. 접근은 비공개 저장소 협업자(팀원)로 제한한다.
+- 사건번호, 법원명, 판결문 원문, 원문 링크, 실제 인명 · 지명 · 기관명, 실제 형량 · 판단 요소 방향은 이 저장소 어디에도 쓰지 않는다. 공개 저장소의 커밋 메시지 · PR · Jira 댓글에도 쓰지 않는다.
+- 위 정보는 내부 전용 `case_source`(REQ-074)로만 관리하고, 원본은 **비공개 저장소**에 둔다(BE-17).
   - **목적은 사용자가 보지 못하게 하는 것이다.** 판결문은 법원 공개본을 그대로 보관하며(당사자만 가명, 법조인 실명 · 사건번호 · 범행 일시 등은 남아 있음), 사용자 응답에는 `case_source.source_org`만 쓴다(FR-5-3). `source_org`에는 법원명 · 서비스명을 쓰지 않고 `법원 공개 판결문`으로 적는다.
   - 판결문의 "영리목적 이용 · 무단 배포 금지" 문구를 지킨다. 이 프로젝트는 영리 목적이 아니며, 판결문을 비공개 저장소 밖으로 공유하거나 공개 저장소 · 화면 · 문서에 원문을 옮기지 않는다.
-  - 공개 저장소의 커밋 메시지 · PR · Jira 댓글에도 사건 내용(형량 · 판단 요소 · 사실관계)을 쓰지 않는다.
-- 파일에는 **비식별화한 내용**만 쓴다. (REQ-014, 056) 비식별화한 정리라도 형량 · 판단 요소 방향 등 실제 판결 정보가 담기므로 저장소에는 올리지 않는다.
+- 사건 파일 · DB 콘텐츠에는 **비식별화한 내용**만 쓴다. (REQ-014, 056)
 - 사건 개요는 실제 기사 수준의 중립적인 표현으로 쓴다. (REQ-094)
+- 사건 파일 이름(사건 식별자)은 영어 소문자와 하이픈만 쓰고, 사건을 특정할 수 없는 이름으로 짓는다. (예: `acquaintance-investment`)
 
 ## 사건 파일 템플릿
+
+채운 예시는 [`sample-virtual-murder.md`](sample-virtual-murder.md)를 본다.
 
 ````markdown
 # <사건 제목>
@@ -66,16 +72,22 @@ docs/cases/
 
 ## 4. 사건 개요 (중립, 비식별화)
 
-## 5. 판단 요소 후보
-| 요소 | 공개 단계 (OVERVIEW / DETAIL / ARGUMENT / LAW) | 재판부 고려 여부 · 방향 |
-| --- | --- | --- |
+## 5. 사건 정보 섹션 (`case_section`)
 
-## 6. 확인 필요 사항
+## 6. 판단 요소 (`factor`)
+| id | label | pre_label | reveal_stage | summary_tag | 재판부 방향 |
+| --- | --- | --- | --- | --- | --- |
+
+## 7. 실제 판결 (`judgment` COURT)
+
+## 8. 가공 검증 (REQ-075)
 ````
 
 ## 관련 문서
 
 - 선정 원칙: [`final-planning.md`](../final-planning.md) 6-1, 9장
 - 데이터 확보 경로와 미결정 사항: [`requirements-specification.md`](../requirements-specification.md) FR-1-9, 15장
-- 데이터 구조: [`erd.md`](../erd.md) (`legal_case`, `penalty_rule`, `factor`, `case_source`)
+- 데이터 구조: [`erd.md`](../erd.md) (`legal_case`, `case_section`, `penalty_rule`, `factor`, `case_source`)
+- 실제 데이터 주입 방식: [`tech-stack.md`](../tech-stack.md) 2장 (비공개 저장소 서브모듈)
+- 판결문 → 사건 입력 JSON 초안: [`tools/ai-judgment/case-extractor`](../../tools/ai-judgment/case-extractor/README.md)
 - 일정과 위험(R1): [`wbs.md`](../wbs.md)

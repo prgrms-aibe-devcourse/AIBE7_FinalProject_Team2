@@ -81,7 +81,7 @@ python3 extract_case.py ../cases/raw/판결문.pdf --name long-marriage-conflict
 ## 지켜야 할 것
 
 - 판결문 텍스트는 가공을 위해 Claude API로 전송된다. **법원이 공개한 판결문(가명 처리본)을 넣는다.** 보낼 내용은 `--dry-run`으로 미리 확인할 수 있다.
-- 결과는 초안이다. 팀이 원 판결문과 대조해 **핵심 사실 누락, 비식별화로 인한 의미 변경, 실제 판결 누출**을 확인한다(REQ-075). 확인 기준은 `docs/cases/README.md` 템플릿과 BE-13 사건 파일의 "가공 검증" 표를 따른다.
+- 결과는 초안이다. 팀이 원 판결문과 대조해 **핵심 사실 누락, 비식별화로 인한 의미 변경, 실제 판결 누출**을 확인한다(REQ-075). 확인 기준은 `docs/cases/README.md` 템플릿과 샘플(`docs/cases/sample-virtual-murder.md`)의 "가공 검증" 표를 따른다.
 - `penaltyRules`(선고 가능 범위)와 `recommended`(권고 범위)는 모델이 판결문에서 계산한 값이다. 법조문 · 양형기준으로 다시 확인한다(ERD `penalty_rule`).
 - `references.similarCases`는 비워 둔다. 대상 사건 판결문만으로는 만들 수 없고, 대상 사건을 뺀 유사 판례를 팀이 채운다(FR-4-2).
 - `caseId`는 `null`, `factorId`는 1부터 붙인 임시값이다. 시드 적재 뒤 DB 값으로 바꾼다(상위 README 1단계).

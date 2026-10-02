@@ -33,9 +33,9 @@ mkdir -p out cases   # out/ · cases/는 git에 올리지 않는다
 
 ### 1. 사건 입력 파일 준비
 
-`examples/case_input.json`과 같은 형식으로 대표 사건 파일을 `cases/`에 만든다(BE-13 사건 가공 결과, `docs/cases/`의 사건 파일). 판결문에서 초안을 만들려면 `case-extractor/`를 쓴다.
+`examples/case_input.json`과 같은 형식으로 대표 사건 파일을 `cases/`에 만든다. 판결문 원본(비공개 저장소 `source/`, 공개 저장소의 `backend/private-seed` 서브모듈)에서 `case-extractor/`로 초안을 만들고 팀이 검수한다. 사건 파일 작성 규칙은 [`docs/cases/README.md`](../../docs/cases/README.md)를 따른다.
 
-- `caseId` · `factors[].factorId`는 DB의 `legal_case.id` · `factor.id`와 **같은 값**이어야 한다. 시드는 ID를 지정하지 않고 넣으므로(ERD 7장 마이그레이션 공통 규칙) ID는 적재 후에 정해진다. 그래서 **BE-16 사건 시드를 먼저 적재한 뒤**, DB에서 조회한 값을 입력 파일에 적는다.
+- `caseId` · `factors[].factorId`는 DB의 `legal_case.id` · `factor.id`와 **같은 값**이어야 한다. 시드는 ID를 지정하지 않고 넣으므로(ERD 7장 마이그레이션 공통 규칙) ID는 적재 후에 정해진다. 그래서 **실제 사건 콘텐츠(비공개 저장소 `seed/R__10_...`)를 먼저 적재한 뒤**, DB에서 조회한 값을 입력 파일에 적는다. ID는 환경(로컬 · 운영)마다 다르므로 SQL을 적용할 환경의 값을 써야 한다(사건 제목 · 표시 순서로 찾도록 바꾸는 것을 BE-15에서 논의 중).
 
   ```sql
   SELECT id FROM legal_case WHERE title = '대표 사건 제목';
@@ -120,7 +120,8 @@ python3 to_seed_sql.py case.json out/ai_output.json \
 - 판단 요소 id가 모두 이 사건(`caseId`) 소속인지 먼저 확인하고, 아니면 `RAISE EXCEPTION`으로 멈춘다(트랜잭션 전체 취소).
 - 기존 공개 AI 판결은 비공개로 바꾸고 새 판결을 공개한다. 기존 행은 지우지 않는다(REQ-079).
 - `ai_generation`에 입력 프롬프트 전체(`input_snapshot`) · 원본 출력(`raw_output`) · 프롬프트 버전 · 검수자를 남긴다.
-- 만든 SQL은 BE-16 시드 스크립트에 넣거나 따로 실행한다.
+- **만든 SQL은 공개 저장소에 커밋하지 않는다**(가상 시드 `db/seed`에도 넣지 않는다). 실제 사건 AI 판결이므로 비공개 저장소 `seed/`에 둔다(BE-17).
+- 지금 출력은 `BEGIN;` · `COMMIT;`과 숫자 ID가 들어 있어 Flyway 반복 마이그레이션 파일로 그대로 쓸 수 없다. 보완 전에는 적용할 DB에 `psql`로 직접 실행한다(Flyway용 출력 · 제목 기반 조회는 BE-15에서 논의 중).
 
 ## Claude 앱으로 생성할 때
 
