@@ -13,9 +13,11 @@
 //
 // INVALID_STATE로 이동할 때는 replace를 써서 지금 기록 하나만 바꾼다. 하지만 그보다 앞선 기록들은
 // (목록 → 사건정보 → 최종정리 → 판결입력 순으로 쌓인 것들) 그대로 남아 있어서, 뒤로 가기를 거듭 누르면
-// 그 기록들을 하나씩 다시 지나가며 매번 같은 화면으로 또 보내진다 (리뷰 반영). 조회(get*) 중에 바로 직전과
-// 같은 화면으로 다시 보내졌다면 "뒤로 가기를 거듭 누른 것"으로 보고, 기록을 한 걸음 더 건너뛴다. 이렇게 하면
-// 두 번째 뒤로 가기부터는 자동으로 이어져서, 몇 번만 누르면 더 지나가지 않는 지점(목록 등)까지 빠르게 도착한다.
+// 그 기록들을 하나씩 다시 지나가며 매번 같은 화면으로 또 보내진다. 실제로 뒤로 · 앞으로 가기(popstate)로
+// 시작된 조회(get*)가 직전과 같은 화면 · 같은 사건으로 또 보내졌다면 "뒤로 가기를 거듭 누른 것"으로 보고,
+// 기록을 한 걸음 더 건너뛴다. 코드로 부른 이동(navigate())이나 다른 사건으로의 이동은 여기 해당하지
+// 않는다 — 예를 들어 목록에서 서로 다른 두 사건을 연달아 열었는데 둘 다 같은 화면으로 리다이렉트돼도,
+// 그건 뒤로 가기가 아니므로 기록을 건너뛰지 않는다 (리뷰 반영, isFromHistoryNav · caseId로 구분).
 // 제출(post*)은 사용자가 직접 누른 동작이라 건너뛰지 않는다 — 잘못 건드려 뒤로 보내면 더 혼란스럽다.
 import { screenByStatus } from '../utils/screenByStatus.js';
 
@@ -25,15 +27,15 @@ const handledByPage = {
   startExperience: ['CASE_NOT_FOUND'],
 };
 
-// 직전 INVALID_STATE 이동을 기억해 둔다. 뒤로 가기 연타 감지용 (기본 내보내기 밖에서 테스트가 리셋할 수 있게 둠)
-const repeatWindow = { screen: null, at: 0 };
+// 직전 INVALID_STATE 이동을 기억해 둔다. 뒤로 가기 연타 감지용. screen · caseId가 모두 같아야 "반복"으로 본다
+const repeatWindow = { screen: null, caseId: null, at: 0 };
 const REPEAT_MS = 4000;
 
 /**
  * @param {object} api  목 또는 실제 api 객체
- * @param {{ navigate: Function, currentCaseId: () => number|undefined, navigationToken: () => number }} options
+ * @param {{ navigate: Function, currentCaseId: () => number|undefined, navigationToken: () => number, isFromHistoryNav: () => boolean }} options
  */
-export function withErrorRedirect(api, { navigate, currentCaseId, navigationToken }) {
+export function withErrorRedirect(api, { navigate, currentCaseId, navigationToken, isFromHistoryNav }) {
   const wrapped = {};
   for (const [name, fn] of Object.entries(api)) {
     if (typeof fn !== 'function') continue;
@@ -44,7 +46,7 @@ export function withErrorRedirect(api, { navigate, currentCaseId, navigationToke
       } catch (error) {
         // 요청을 시작한 화면이 아직 보일 때만 이동한다 (이미 다른 화면이면 이전 요청의 에러가 새 화면을 덮어쓰지 않게)
         if (navigationToken() === startedAt) {
-          redirectIfNeeded(name, args, error, navigate, currentCaseId);
+          redirectIfNeeded(name, args, error, navigate, currentCaseId, isFromHistoryNav);
         }
         throw error;
       }
@@ -53,21 +55,28 @@ export function withErrorRedirect(api, { navigate, currentCaseId, navigationToke
   return wrapped;
 }
 
-function redirectIfNeeded(name, args, error, navigate, currentCaseId) {
+function redirectIfNeeded(name, args, error, navigate, currentCaseId, isFromHistoryNav) {
   const code = error?.code;
   if (!code || handledByPage[name]?.includes(code)) return;
   // 사건 ID가 첫 인자인 API가 대부분이다 (getCases · 목 전용 함수는 제외)
   const caseId = typeof args[0] === 'number' ? args[0] : currentCaseId();
+  // navigate() 호출 자체가 show()를 실행시켜 "지금 보여 주는 화면" 정보를 곧바로 덮어쓴다.
+  // isFromHistoryNav()는 그 전에 미리 읽어 둬야, 뒤로 가기로 시작된 조회였는지를 정확히 알 수 있다.
+  const cameFromHistoryNav = isFromHistoryNav();
 
   // replace: 잘못된 주소를 기록에 남기지 않는다. 뒤로 가기를 눌렀을 때 같은 에러로 되돌아오지 않게 하기 위해서다.
   if (code === 'INVALID_STATE') {
     const screen = screenByStatus[error.currentStatus];
     if (!screen) return;
     navigate(screen, { caseId }, { replace: true });
-    if (name.startsWith('get')) {
+    // 뒤로 · 앞으로 가기로 시작된 조회에서만 반복을 추적한다. 코드로 부른 이동은 여기 해당하지 않는다.
+    if (name.startsWith('get') && cameFromHistoryNav) {
       const now = Date.now();
-      const isBackButtonRepeat = screen === repeatWindow.screen && now - repeatWindow.at < REPEAT_MS;
+      const isBackButtonRepeat = screen === repeatWindow.screen
+        && caseId === repeatWindow.caseId
+        && now - repeatWindow.at < REPEAT_MS;
       repeatWindow.screen = screen;
+      repeatWindow.caseId = caseId;
       repeatWindow.at = now;
       if (isBackButtonRepeat) {
         history.go(-1); // 기록을 한 걸음 더 건너뛴다 (뒤로 가기 연타 대응)

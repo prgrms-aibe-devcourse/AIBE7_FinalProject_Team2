@@ -58,9 +58,9 @@ export function createRouter({ view, footerHost, routes }) {
     return null;
   }
 
-  async function show(route, caseId, extras, path) {
+  async function show(route, caseId, extras, path, fromHistoryNav) {
     const mine = ++token;
-    current = { name: route.name, path, caseId, extras };
+    current = { name: route.name, path, caseId, extras, fromHistoryNav };
     document.title = route.name === 'landing' ? SITE_TITLE : `${route.title} · ${SITE_TITLE}`;
 
     let caseHeader;
@@ -89,7 +89,7 @@ export function createRouter({ view, footerHost, routes }) {
 
   // 주소는 바꾸지 않고 404 · 오류 화면만 보여 준다 (새로고침하면 같은 주소가 다시 판정된다)
   async function showNotFound() {
-    await show(notFound, undefined, {}, null);
+    await show(notFound, undefined, {}, null, false);
   }
 
   /** 화면 이동. 반환값은 화면을 그리는 작업의 완료 시점이다 (기다리지 않아도 된다) */
@@ -113,11 +113,12 @@ export function createRouter({ view, footerHost, routes }) {
     }
     history[replace ? 'replaceState' : 'pushState']({ extras }, '', path);
     window.scrollTo(0, 0);
-    return show(route, caseId, extras, path);
+    return show(route, caseId, extras, path, false); // 코드로 호출한 이동은 "뒤로 가기"가 아니다
   }
 
   // 지금 주소에 맞는 화면을 그린다 (처음 접속 · 새로고침 · 뒤로 가기)
-  function renderLocation() {
+  // fromHistoryNav: 뒤로 · 앞으로 가기(popstate)로 시작됐으면 true. 최초 접속 · 새로고침은 false
+  function renderLocation(fromHistoryNav) {
     const found = match(window.location.pathname);
     if (!found) {
       return showNotFound();
@@ -129,7 +130,7 @@ export function createRouter({ view, footerHost, routes }) {
     if (path !== raw) {
       history.replaceState(history.state, '', path);
     }
-    return show(found.route, found.caseId, history.state?.extras ?? {}, path);
+    return show(found.route, found.caseId, history.state?.extras ?? {}, path, fromHistoryNav);
   }
 
   return {
@@ -138,13 +139,15 @@ export function createRouter({ view, footerHost, routes }) {
     currentCaseId: () => current.caseId,
     /** 화면이 바뀔 때마다 1씩 커지는 번호. 요청을 시작한 화면이 아직 보이는지 확인하는 데 쓴다 */
     navigationToken: () => token,
+    /** 지금 보여 주는 중인 화면이 뒤로 · 앞으로 가기(popstate)로 시작됐는지. 코드로 부른 navigate()면 false */
+    isFromHistoryNav: () => current.fromHistoryNav,
     /** 지금 화면을 같은 주소로 다시 그린다 (이동 무시 규칙을 건너뛴다) */
-    reload: () => renderLocation(),
+    reload: () => renderLocation(false),
     /** 라우터 시작. api는 화면에 넘길 api 객체 */
     start(appApi) {
       api = appApi;
-      window.addEventListener('popstate', renderLocation);
-      return renderLocation();
+      window.addEventListener('popstate', () => renderLocation(true));
+      return renderLocation(false); // 최초 접속 · 새로고침은 "뒤로 가기"가 아니다
     },
   };
 }
