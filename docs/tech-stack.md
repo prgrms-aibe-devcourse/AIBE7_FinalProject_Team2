@@ -11,6 +11,7 @@
 | v1.4 | 2026-10-01 | BE-3 반영 — 2장에 시드를 켰던 DB에서 꺼도 기동되는 Flyway 설정(`ignore-migration-patterns`) 설명 추가 |
 | v1.5 | 2026-10-01 | BE-3 리뷰 반영 — 2장 마이그레이션 파일 목록에 V6(원본 판결문 최종 확정 판결 유니크) 추가, `ignore-migration-patterns` 운영 적용 시 재검토 조건 명시 |
 | v1.6 | 2026-10-02 | COMMON-15 반영 — 9장 `CLAUDE.md`(규칙 원본) · `AGENTS.md`(다른 에이전트용 안내) 역할 구분 |
+| v1.7 | 2026-10-02 | BE-17 반영 — 2장에 실제 사건 데이터 주입 방식 추가(비공개 저장소 `backend/private-seed` 서브모듈 + Flyway `filesystem:` 위치), `FLYWAY_LOCATIONS` 표에 실제 사건 행 추가, `repeatable:missing` 재검토 결과 |
 
 
 ## **1. Backend**
@@ -111,11 +112,18 @@ MVP에는 관리자 화면이 없으므로 대표 사건 데이터와 검수된 
   | --- | --- | --- |
   | 운영 (기본값) | 지정하지 않음 → `classpath:db/migration` | 스키마만 |
   | 로컬 · CI | `classpath:db/migration,classpath:db/seed` | 스키마 + 가상 사건 1건 |
+  | 로컬 (실제 사건 확인) | `classpath:db/migration,filesystem:./private-seed/seed` (가상 사건도 보려면 `,classpath:db/seed` 추가) | 스키마 + 실제 사건 (비공개 저장소 권한 필요) |
+  | 운영 (최종) | `classpath:db/migration,filesystem:<서버의 실제 데이터 경로>` | 스키마 + 실제 사건 (가상 사건 제외) |
 
   기본값을 스키마만으로 둬서, 운영에서 환경변수를 빠뜨려도 시드가 들어가지 않는다. CI(`backend-ci.yml`)는 시드까지 켜서 시드가 스키마 제약을 깨지 않는지 매번 확인한다.
 - 시드는 **반복 마이그레이션(`R__`)**이다. 버전 번호가 없어 `db/migration`의 새 버전 파일과 번호가 겹치지 않고, 모든 버전 마이그레이션 다음에 실행된다. 이미 사건이 있으면 아무것도 하지 않는다. 시드 값을 바꿔 다시 넣으려면 로컬 DB를 비운다(`docker compose down -v` 후 다시 `up`).
-- 한 번 시드를 켠 DB에서 시드 위치를 빼고 실행해도 기동된다. `spring.flyway.ignore-migration-patterns: "*:future,repeatable:missing"`로 적용된 반복 마이그레이션이 없어도 검증을 통과시킨다 (없으면 `Detected applied migration not resolved locally`로 기동 실패). 운영에도 적용되는 설정이라, 시드 외의 `R__` 파일을 추가할 때는 이 설정을 재검토한다.
-- **실제 사건 데이터는 시드로 커밋하지 않는다.** 저장소가 공개라 실제 형량 · 재판부 판단 요소 · 판결문 발췌가 그대로 공개되기 때문이다. 실제 사건은 저장소 밖에서 넣으며, 방법은 BE-17에서 정한다(MVP 정의서 11장).
+- 한 번 시드를 켠 DB에서 시드 위치를 빼고 실행해도 기동된다. `spring.flyway.ignore-migration-patterns: "*:future,repeatable:missing"`로 적용된 반복 마이그레이션이 없어도 검증을 통과시킨다 (없으면 `Detected applied migration not resolved locally`로 기동 실패). 운영에도 적용되는 설정이라, 시드 외의 `R__` 파일을 추가할 때는 이 설정을 재검토한다. (BE-17 재검토: 실제 사건 데이터도 위치에 따라 있을 수도 없을 수도 있는 반복 마이그레이션이라 이 설정을 그대로 둔다)
+- **실제 사건 데이터는 공개 저장소에 커밋하지 않는다.** 저장소가 공개라 실제 형량 · 재판부 판단 요소 · 판결문 발췌가 그대로 공개되기 때문이다. 실제 사건은 **비공개 저장소를 `backend/private-seed` 서브모듈로 연결**해 넣는다(BE-17).
+  - 비공개 저장소 `seed/`의 반복 마이그레이션(`R__10` 콘텐츠, 이후 `R__20` 재판부 판결 · `R__30` AI 판결)을 Flyway `filesystem:` 위치로 읽는다. 여러 위치의 반복 마이그레이션은 이름 순서로 실행된다(`10 ...` → `seed sample case`, 검증함).
+  - SQL은 환경마다 다른 숫자 ID 대신 사건 제목 · 표시 순서로 행을 찾고, 같은 제목의 사건이 있으면 건너뛴다.
+  - 서브모듈은 `src/main/resources` 밖이라 jar에 들어가지 않고, `backend/.dockerignore`로 Docker 빌드 컨텍스트에서도 뺀다. CI는 서브모듈을 받지 않는다.
+  - 운영(EC2)에서는 실제 데이터 폴더를 컨테이너에 읽기 전용으로 붙이고 위 표의 "운영 (최종)" 값으로 실행한다. `classpath:db/seed`는 넣지 않는다.
+  - 판결문 원본 보관 원칙은 [`docs/cases/README.md`](cases/README.md)를 따른다.
 - 이미 적용된 버전 마이그레이션(`V*`) 파일은 고치지 않는다(Flyway 체크섬). 스키마를 바꿀 때는 새 버전 파일을 추가한다.
 
 ### DB 운영 단계
