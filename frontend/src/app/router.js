@@ -132,6 +132,8 @@ export function createRouter({ view, footerHost, routes }) {
     navigate,
     /** 지금 보고 있는 사건 번호 (없으면 undefined) */
     currentCaseId: () => current.caseId,
+    /** 화면이 바뀔 때마다 1씩 커지는 번호. 요청을 시작한 화면이 아직 보이는지 확인하는 데 쓴다 */
+    navigationToken: () => token,
     /** 지금 화면을 같은 주소로 다시 그린다 (이동 무시 규칙을 건너뛴다) */
     reload: () => renderLocation(),
     /** 라우터 시작. api는 화면에 넘길 api 객체 */

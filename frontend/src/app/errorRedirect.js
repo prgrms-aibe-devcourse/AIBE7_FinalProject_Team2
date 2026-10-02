@@ -6,6 +6,10 @@
 //
 // 화면은 이미 에러 코드별 안내를 직접 처리하고 있다. 여기서는 이동만 하고 에러는 그대로 다시 던진다.
 // 화면이 이동 뒤에 자기 안내를 그려도 이미 화면에서 떼어진 뒤라 보이지 않는다.
+//
+// 요청을 시작한 뒤 사용자가 다른 화면으로 이동했다면(요청 중에도 목록 이동 등이 가능하다) 그 요청의 에러로는 이동하지 않는다.
+// 요청 시작 시점의 이동 번호(navigationToken)를 저장해 두고, 에러가 왔을 때 지금 번호와 같을 때만 이동한다.
+// 같은 화면에서 동시에 보낸 요청이 여러 개 실패해도 처음 실패한 요청만 이동시키고 나머지는 건너뛴다.
 import { screenByStatus } from '../utils/screenByStatus.js';
 
 // 이 API는 아래 에러를 화면이 직접 처리하므로 이동하지 않는다.
@@ -16,17 +20,21 @@ const handledByPage = {
 
 /**
  * @param {object} api  목 또는 실제 api 객체
- * @param {{ navigate: Function, currentCaseId: () => number|undefined }} options
+ * @param {{ navigate: Function, currentCaseId: () => number|undefined, navigationToken: () => number }} options
  */
-export function withErrorRedirect(api, { navigate, currentCaseId }) {
+export function withErrorRedirect(api, { navigate, currentCaseId, navigationToken }) {
   const wrapped = {};
   for (const [name, fn] of Object.entries(api)) {
     if (typeof fn !== 'function') continue;
     wrapped[name] = async (...args) => {
+      const startedAt = navigationToken();
       try {
         return await fn(...args);
       } catch (error) {
-        redirectIfNeeded(name, args, error, navigate, currentCaseId);
+        // 요청을 시작한 화면이 아직 보일 때만 이동한다 (이미 다른 화면이면 이전 요청의 에러가 새 화면을 덮어쓰지 않게)
+        if (navigationToken() === startedAt) {
+          redirectIfNeeded(name, args, error, navigate, currentCaseId);
+        }
         throw error;
       }
     };

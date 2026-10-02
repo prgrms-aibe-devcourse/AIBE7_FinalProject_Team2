@@ -14,7 +14,11 @@ app.replaceChildren(view, footerHost);
 
 try {
   const router = createRouter({ view, footerHost, routes });
-  const api = createAppApi(await loadApi(), { navigate: router.navigate, currentCaseId: router.currentCaseId });
+  const api = createAppApi(await loadApi(), {
+    navigate: router.navigate,
+    currentCaseId: router.currentCaseId,
+    navigationToken: router.navigationToken,
+  });
   await router.start(api);
 } catch (error) {
   // 시작 단계의 예외(스크립트 불러오기 실패 등)로 빈 화면이 되지 않도록 안내한다

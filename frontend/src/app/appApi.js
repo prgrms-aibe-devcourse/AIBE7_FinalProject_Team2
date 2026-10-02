@@ -2,7 +2,7 @@
 import { rememberFromList, rememberFromOverview } from './caseHeader.js';
 import { withErrorRedirect } from './errorRedirect.js';
 
-export function createAppApi(baseApi, { navigate, currentCaseId }) {
+export function createAppApi(baseApi, { navigate, currentCaseId, navigationToken }) {
   const remembering = {
     ...baseApi,
     // 목록 · 개요 응답이 지나갈 때 사건 제목을 기억해 둔다 (S-04 이후 상단 바에 쓴다)
@@ -17,5 +17,5 @@ export function createAppApi(baseApi, { navigate, currentCaseId }) {
       return data;
     },
   };
-  return withErrorRedirect(remembering, { navigate, currentCaseId });
+  return withErrorRedirect(remembering, { navigate, currentCaseId, navigationToken });
 }
