@@ -107,13 +107,16 @@ Branch 이름에는 반드시 Jira Issue Key를 포함한다. Claude Code는 브
 - 형식: `feature/{ISSUE-KEY}-{작업내용}`, `fix/{ISSUE-KEY}-{작업내용}`, `refactor/{ISSUE-KEY}-{작업내용}`, `setup/{ISSUE-KEY}-{작업내용}`(저장소 공통 기초 설정 작업, 주로 `COMMON` Space와 함께 사용)
 - 예: `feature/BE-15-login-api`, `feature/FE-8-login-page`, `fix/BE-21-login-error`, `refactor/BE-30-auth-service`, `setup/COMMON-1-coderabbit-config`
 - 작업 내용은 영어 소문자와 하이픈(-)을 사용한다.
-- main(또는 팀에서 정한 기준 Branch)에서 새 Branch를 생성한다.
+- 작업 기준 Branch는 `develop`이다. 새 Branch는 최신 `develop`에서 생성한다.
 
   ```bash
-  git checkout main
-  git pull origin main
+  git checkout develop
+  git pull origin develop
   git checkout -b feature/BE-15-login-api
   ```
+
+- Pull Request의 base도 `develop`으로 한다. 저장소 기본 Branch가 `main`이라 PR 생성 화면의 기본값이 `main`이므로 반드시 확인한다. `main`에는 `develop → main` PR로만 반영한다.
+- 선행 작업의 결과물이 필요하면, 그 PR이 `develop`에 Merge된 뒤에 분기한다.
 
 - 브랜치 생성 직후 Claude Code는 Atlassian MCP를 통해 해당 Jira 이슈 상태를 "할 일 → 진행 중"으로 전환한다.
 
@@ -230,7 +233,7 @@ Claude Code는 다음과 같이 두 축의 도구를 조합해 하나의 작업 
 한 번의 작업 지시(예: "BE-15 로그인 API 개발 시작하자")에 대해 Claude Code는 다음을 순서대로 수행한다.
 
 1. Atlassian MCP로 `BE-15` 이슈 조회 (없으면 사용자에게 생성 여부 확인 후 이슈 생성)
-2. `main`에서 `feature/BE-15-login-api` 브랜치 생성
+2. 최신 `develop`에서 `feature/BE-15-login-api` 브랜치 생성
 3. Atlassian MCP로 `BE-15` 상태를 "할 일 → 진행 중"으로 전환
 4. 개발 진행 (0-1장에 따라, 사용자가 명시적으로 "커밋해줘"라고 지시할 때 Commit 생성. Commit 메시지에는 Jira Issue Key 포함)
 5. 사용자가 명시적으로 "PR 올려줘"라고 지시하면 Pull Request 생성 (제목/본문에 Jira Issue Key 포함)
