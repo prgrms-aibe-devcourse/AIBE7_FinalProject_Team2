@@ -18,7 +18,7 @@ try {
     navigate: router.navigate,
     currentCaseId: router.currentCaseId,
     navigationToken: router.navigationToken,
-    isFromHistoryNav: router.isFromHistoryNav,
+    isBackNav: router.isBackNav,
   });
   await router.start(api);
 } catch (error) {

@@ -44,6 +44,10 @@ export function createRouter({ view, footerHost, routes }) {
   let api = null;
   let current = { name: null, path: null, caseId: undefined, extras: {} };
   let token = 0;
+  // 기록 항목마다 순번을 매겨 둔다. popstate가 오면 지금 알고 있던 순번과 비교해서 뒤로 · 앞으로 가기를
+  // 구분한다 (브라우저는 popstate에 방향을 담아 주지 않는다, 리뷰 반영 — 앞으로 가기에서는 건너뛰지 않음).
+  let historySeq = 0;
+  let lastKnownSeq = 0;
 
   const needsCaseId = (route) => Boolean(route.path?.includes(':caseId'));
 
@@ -58,9 +62,9 @@ export function createRouter({ view, footerHost, routes }) {
     return null;
   }
 
-  async function show(route, caseId, extras, path, fromHistoryNav) {
+  async function show(route, caseId, extras, path, navKind) {
     const mine = ++token;
-    current = { name: route.name, path, caseId, extras, fromHistoryNav };
+    current = { name: route.name, path, caseId, extras, navKind };
     document.title = route.name === 'landing' ? SITE_TITLE : `${route.title} · ${SITE_TITLE}`;
 
     let caseHeader;
@@ -89,7 +93,7 @@ export function createRouter({ view, footerHost, routes }) {
 
   // 주소는 바꾸지 않고 404 · 오류 화면만 보여 준다 (새로고침하면 같은 주소가 다시 판정된다)
   async function showNotFound() {
-    await show(notFound, undefined, {}, null, false);
+    await show(notFound, undefined, {}, null, 'navigate');
   }
 
   /** 화면 이동. 반환값은 화면을 그리는 작업의 완료 시점이다 (기다리지 않아도 된다) */
@@ -111,14 +115,17 @@ export function createRouter({ view, footerHost, routes }) {
     if (path === current.path && sameExtras(extras, current.extras)) {
       return undefined;
     }
-    history[replace ? 'replaceState' : 'pushState']({ extras }, '', path);
+    // replace는 지금 기록 항목을 바꾸는 것이라 순번을 유지하고, push는 새 항목이라 순번을 새로 매긴다
+    const seq = replace ? (history.state?.seq ?? ++historySeq) : ++historySeq;
+    history[replace ? 'replaceState' : 'pushState']({ extras, seq }, '', path);
+    lastKnownSeq = seq; // 코드로 만든 이동이니 바로 갱신해 둔다 (다음 popstate 비교 기준)
     window.scrollTo(0, 0);
-    return show(route, caseId, extras, path, false); // 코드로 호출한 이동은 "뒤로 가기"가 아니다
+    return show(route, caseId, extras, path, 'navigate'); // 코드로 호출한 이동은 뒤로 · 앞으로 가기가 아니다
   }
 
-  // 지금 주소에 맞는 화면을 그린다 (처음 접속 · 새로고침 · 뒤로 가기)
-  // fromHistoryNav: 뒤로 · 앞으로 가기(popstate)로 시작됐으면 true. 최초 접속 · 새로고침은 false
-  function renderLocation(fromHistoryNav) {
+  // 지금 주소에 맞는 화면을 그린다 (처음 접속 · 새로고침 · 뒤로 · 앞으로 가기)
+  // navKind: 'back' | 'forward' | 'navigate' (코드로 부른 이동, 최초 접속 · 새로고침 포함)
+  function renderLocation(navKind) {
     const found = match(window.location.pathname);
     if (!found) {
       return showNotFound();
@@ -128,9 +135,9 @@ export function createRouter({ view, footerHost, routes }) {
     // 달라져서 "같은 화면으로의 이동 무시"가 깨진다. 주소창도 정규화된 경로로 맞춰 둔다 (리뷰 반영)
     const path = found.caseId === undefined ? raw : buildPath(found.route.path, found.caseId);
     if (path !== raw) {
-      history.replaceState(history.state, '', path);
+      history.replaceState(history.state, '', path); // state(순번 포함)는 그대로 유지한다
     }
-    return show(found.route, found.caseId, history.state?.extras ?? {}, path, fromHistoryNav);
+    return show(found.route, found.caseId, history.state?.extras ?? {}, path, navKind);
   }
 
   return {
@@ -139,15 +146,26 @@ export function createRouter({ view, footerHost, routes }) {
     currentCaseId: () => current.caseId,
     /** 화면이 바뀔 때마다 1씩 커지는 번호. 요청을 시작한 화면이 아직 보이는지 확인하는 데 쓴다 */
     navigationToken: () => token,
-    /** 지금 보여 주는 중인 화면이 뒤로 · 앞으로 가기(popstate)로 시작됐는지. 코드로 부른 navigate()면 false */
-    isFromHistoryNav: () => current.fromHistoryNav,
+    /** 지금 보여 주는 중인 화면이 "뒤로 가기"로 시작됐는지. 앞으로 가기 · 코드로 부른 이동은 false (리뷰 반영) */
+    isBackNav: () => current.navKind === 'back',
     /** 지금 화면을 같은 주소로 다시 그린다 (이동 무시 규칙을 건너뛴다) */
-    reload: () => renderLocation(false),
+    reload: () => renderLocation('navigate'),
     /** 라우터 시작. api는 화면에 넘길 api 객체 */
     start(appApi) {
       api = appApi;
-      window.addEventListener('popstate', () => renderLocation(true));
-      return renderLocation(false); // 최초 접속 · 새로고침은 "뒤로 가기"가 아니다
+      // 최초 진입 기록에도 순번을 매겨 둬야 이후 popstate에서 방향을 비교할 수 있다
+      const seq = history.state?.seq ?? ++historySeq;
+      if (history.state?.seq !== seq) {
+        history.replaceState({ ...(history.state ?? {}), seq }, '', window.location.pathname);
+      }
+      lastKnownSeq = seq;
+      window.addEventListener('popstate', () => {
+        const seq2 = history.state?.seq;
+        const direction = seq2 === undefined ? 'navigate' : seq2 < lastKnownSeq ? 'back' : seq2 > lastKnownSeq ? 'forward' : 'navigate';
+        lastKnownSeq = seq2 ?? lastKnownSeq;
+        renderLocation(direction);
+      });
+      return renderLocation('navigate'); // 최초 접속 · 새로고침은 뒤로 가기가 아니다
     },
   };
 }
