@@ -119,7 +119,7 @@ python3 to_seed_sql.py case.json out/ai_output.json \
 
 - 검증을 다시 돌려 오류가 있으면 SQL을 만들지 않는다. 경고가 있으면 검수했다는 뜻으로 `--accept-warnings`가 필요하다.
 - 사건은 `legal_case.title`로, 판단 요소는 `factor.display_order` · `label`로 **실행 시점에 조회**해 쓴다. 제목 조회는 STRICT라 제목이 없으면(`NO_DATA_FOUND`), 중복돼 있으면(`TOO_MANY_ROWS`) 각각 다른 메시지로 멈춘다. 요소는 번호(`display_order`)와 라벨(`label`)이 모두 DB와 맞는지 확인하고, 아니면 `RAISE EXCEPTION`으로 멈춘다(트랜잭션 전체 취소) — 번호만 보면 시드의 요소 순서가 바뀌었을 때(요소 추가 · 삭제 · 순서 변경) 엉뚱한 요소에 방향이 붙어도 걸러지지 않기 때문이다. 그래서 로컬 · 운영처럼 auto-increment id가 다른 환경에도 같은 SQL을 쓸 수 있다.
-- `legal_case.title` · `factor(case_id, display_order)`의 유일성은 DB 유니크 제약(V7 마이그레이션)으로도 막는다. 입력에 있는 큰따옴표 `$` 조합(드물게 reasoning · summary 등에 `$sql_seed$` 같은 문자열이 그대로 들어오는 경우)으로 `DO` 블록의 dollar-quote 구분자가 깨지지 않도록, 구분자는 내용과 겹치지 않는 값을 자동으로 고른다.
+- `legal_case.title` · `factor(case_id, display_order)`의 유일성은 DB 유니크 제약(V7 마이그레이션)으로도 막는다. 입력에 `$…$` 형태의 문자열이 있어도(드물게 reasoning · summary 등에 `$sql_seed$` 같은 문자열이 그대로 들어오는 경우) `DO` 블록의 dollar-quote 구분자가 깨지지 않도록, 구분자는 내용과 겹치지 않는 값을 자동으로 고른다.
 - 기존 공개 AI 판결은 비공개로 바꾸고 새 판결을 공개한다. 기존 행은 지우지 않는다(REQ-079).
 - `ai_generation`에 입력 프롬프트 전체(`input_snapshot`) · 원본 출력(`raw_output`) · 프롬프트 버전 · 검수자를 남긴다.
 - 만든 SQL은 실제 대표 사건 비공개 저장소(`backend/private-seed`, BE-17)의 `seed/` 폴더에 `R__30_...` 파일로 넣는다. 공개 저장소의 BE-16 시드 파일(`db/seed/`)에는 실제 사건 내용을 넣지 않는다.
