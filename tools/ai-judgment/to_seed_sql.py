@@ -8,13 +8,17 @@
 - 경고가 있으면 팀 검수에서 확인했다는 뜻으로 --accept-warnings를 붙여야 만든다 (REQ-078).
 - 이미 공개된 AI 판결이 있으면 비공개로 바꾸고 새 판결을 공개한다. 기존 행은 지우지 않는다
   (ERD ai_generation 비고 · REQ-079, 공개 판결 부분 유니크 인덱스).
-- 사건은 legal_case.title로, 판단 요소는 factor.display_order(사건 안에서만 유일)로 찾는다. 환경마다
-  auto-increment id가 달라도(로컬은 가상 시드가 먼저 들어가 번호가 밀린다) 같은 SQL을 그대로 쓸 수 있다.
-  입력 파일의 caseId · factorId를 시드 적재 후 DB id로 바꿔 적을 필요가 없다. 요소가 이 사건 소속이
-  아니면(display_order가 없으면) SQL이 멈춘다.
-- 기본 출력은 BEGIN; ~ COMMIT;으로 감싸 psql에 바로 붙여 넣을 수 있게 한다. Flyway(R__ 반복 마이그레이션)에
-  그대로 쓸 때는 --flyway를 붙인다. Flyway가 마이그레이션마다 자체 트랜잭션으로 감싸므로, 파일 안에
-  BEGIN/COMMIT이 또 있으면 그 트랜잭션이 중간에 끝나 적용 기록이 어긋날 수 있다.
+- 사건은 legal_case.title로, 판단 요소는 factor.display_order(사건 안에서만 유일, DB에
+  UNIQUE(case_id, display_order) 제약 있음)로 찾는다. 환경마다 auto-increment id가 달라도
+  (로컬은 가상 시드가 먼저 들어가 번호가 밀린다) 같은 SQL을 그대로 쓸 수 있다. 입력 파일의
+  caseId · factorId를 시드 적재 후 DB id로 바꿔 적을 필요가 없다.
+- 번호(display_order)만으로는 사건 파일과 시드의 요소 순서가 어긋나도(시드에서 요소 추가 · 삭제 ·
+  순서 변경 등) 걸러지지 않으므로, factor.label까지 함께 맞는지 확인하고 다르면 멈춘다.
+- title 조회는 STRICT로 하여, 제목이 없거나(NO_DATA_FOUND) legal_case.title UNIQUE 제약이
+  없던 과거 데이터로 중복돼 있으면(TOO_MANY_ROWS) 각각 다른 메시지로 멈춘다.
+- 기본 출력은 BEGIN; ~ COMMIT;으로 감싸 psql에 바로 붙여 넣을 수 있게 한다. Flyway(R__ 반복
+  마이그레이션)에 그대로 쓸 때는 --flyway를 붙인다. Flyway가 마이그레이션마다 자체 트랜잭션으로
+  감싸므로, 파일 안에 BEGIN/COMMIT이 또 있으면 그 트랜잭션이 중간에 끝나 적용 기록이 어긋날 수 있다.
 - 감경해 형벌 종류가 바뀐 판결은 reduced_to에 함께 넣는다 (ERD v1.4).
 """
 
@@ -23,7 +27,7 @@ import json
 import sys
 
 from build_prompt import InputError, build_prompt
-from common import load_json
+from common import factors_by_id, load_json
 from validate_output import parse_output, validate
 
 NAME_MAX_LENGTH = 50  # ai_generation.model_name · reviewed_by varchar(50)
@@ -43,52 +47,79 @@ def sql_jsonb(value):
     return sql_text(json.dumps(value, ensure_ascii=False)) + "::jsonb"
 
 
-def build_sql(case, output, prompt, model_name, reviewed_by, *, flyway=False):
-    # 제목에 줄바꿈이 있으면 주석이 끝나 뒤 내용이 SQL로 실행된다. 공백을 한 칸으로 합친다.
-    title = " ".join(str(case.get("title", "")).split())
-    title_literal = sql_text(title)
+def dollar_quote_tag(text):
+    """text 안에 나타나지 않는 dollar-quote 구분자를 고른다.
 
-    display_orders = sorted({int(f["factorId"]) for f in output["factors"]})
+    사람이 쓴 reasoning · summary · title 등에 흔치 않은 '$sql_seed$' 같은 문자열이 그대로
+    들어 있으면 DO 블록이 그 자리에서 조기 종료된다. 충돌하면 번호를 붙여 다시 고른다.
+    """
+    tag = "$sql_seed$"
+    i = 0
+    while tag in text:
+        i += 1
+        tag = f"$sql_seed{i}$"
+    return tag
+
+
+def build_sql(case, output, prompt, model_name, reviewed_by, *, flyway=False):
+    raw_title = str(case.get("title", ""))
+    title_literal = sql_text(raw_title)
+    # 주석 줄은 제목에 줄바꿈이 있으면 거기서 끝나 뒤 내용이 SQL로 실행된다. 주석에만 공백 한 칸으로 합친
+    # 값을 쓰고, 조회 · 오류 메시지에는 legal_case.title과 그대로 비교되는 원본 제목을 쓴다.
+    comment_title = " ".join(raw_title.split())
+
+    case_factors = factors_by_id(case)
+    factor_items = sorted(
+        (int(f["factorId"]), f["direction"], case_factors[int(f["factorId"])]["label"]) for f in output["factors"]
+    )
+
+    label_rows = ",\n            ".join(f"({order}, {sql_text(label)})" for order, _, label in factor_items)
     factor_check = (
         f"""
-    IF (SELECT count(*) FROM factor WHERE case_id = v_case_id AND display_order IN ({", ".join(map(str, display_orders))})) <> {len(display_orders)} THEN
-        RAISE EXCEPTION '판단 요소 번호(factorId)가 사건(title=%) 소속이 아닙니다. 사건 입력 파일의 factorId를 확인하세요', {title_literal};
+    IF EXISTS (
+        SELECT 1 FROM (VALUES
+            {label_rows}
+        ) AS v(display_order, label)
+        LEFT JOIN factor f ON f.case_id = v_case_id AND f.display_order = v.display_order
+        WHERE f.id IS NULL OR f.label <> v.label
+    ) THEN
+        RAISE EXCEPTION '판단 요소 번호 · 라벨이 DB와 다릅니다 (사건 파일과 시드의 요소 순서를 확인하세요, title=%)', {title_literal};
     END IF;
 """
-        if display_orders
+        if factor_items
         else ""
     )
 
-    factor_rows = ",\n        ".join(
-        f"({sql_int(f['factorId'])}, {sql_text(f['direction'])})" for f in output["factors"]
-    )
+    direction_rows = ",\n        ".join(f"({order}, {sql_text(direction)})" for order, direction, _ in factor_items)
     factor_insert = (
         f"""
     INSERT INTO judgment_factor (judgment_id, factor_id, direction)
     SELECT v_judgment_id, f.id, v.direction
     FROM factor f
     JOIN (VALUES
-        {factor_rows}
+        {direction_rows}
     ) AS v(display_order, direction) ON f.display_order = v.display_order
     WHERE f.case_id = v_case_id;
 """
-        if output["factors"]
+        if factor_items
         else ""
     )
 
     input_snapshot = {"promptVersion": prompt["promptVersion"], "system": prompt["system"], "user": prompt["user"]}
 
-    body = f"""-- AI 판결 적재: {title} (prompt={prompt['promptVersion']})
--- 사건은 legal_case.title, 판단 요소는 factor.display_order로 찾는다 (환경마다 id가 달라도 같은 SQL을 쓴다)
-DO $$
+    inner = f"""
 DECLARE
     v_case_id     bigint;
     v_judgment_id bigint;
 BEGIN
-    SELECT id INTO v_case_id FROM legal_case WHERE title = {title_literal};
-    IF v_case_id IS NULL THEN
-        RAISE EXCEPTION 'legal_case에서 title=%를 찾을 수 없습니다', {title_literal};
-    END IF;
+    BEGIN
+        SELECT id INTO STRICT v_case_id FROM legal_case WHERE title = {title_literal};
+    EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+            RAISE EXCEPTION 'legal_case에서 title=%를 찾을 수 없습니다', {title_literal};
+        WHEN TOO_MANY_ROWS THEN
+            RAISE EXCEPTION 'legal_case에서 title=%가 유일하지 않습니다 (DB 확인 필요)', {title_literal};
+    END;
 {factor_check}
     -- 기존 공개 AI 판결은 비공개로 돌린다 (행은 지우지 않음)
     UPDATE judgment
@@ -117,7 +148,12 @@ BEGIN
         {sql_jsonb(input_snapshot)}, {sql_jsonb(output)},
         'APPROVED', {sql_text(reviewed_by)}, now(), now()
     );
-END $$;
+END"""
+
+    tag = dollar_quote_tag(inner)
+    body = f"""-- AI 판결 적재: {comment_title} (prompt={prompt['promptVersion']})
+-- 사건은 legal_case.title, 판단 요소는 factor.display_order · label로 찾는다 (환경마다 id가 달라도 같은 SQL을 쓴다)
+DO {tag}{inner} {tag};
 """
 
     if flyway:

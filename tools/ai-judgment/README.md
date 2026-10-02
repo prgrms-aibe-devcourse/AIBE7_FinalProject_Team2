@@ -37,7 +37,7 @@ mkdir -p out cases   # out/ · cases/는 git에 올리지 않는다
 
 - `factors[].factorId`는 사건 파일 안에서 요소 번호(1부터)로, **사건 시드 SQL의 `factor.display_order`와 같은 값**을 쓴다(시드 작성 규칙 — 사건 파일 6장 번호 = `display_order`). `caseId`는 파일 구분용 값일 뿐 DB와 맞출 필요가 없다. `to_seed_sql.py`가 만드는 SQL은 `legal_case.title`로 사건을, `factor.display_order`로 요소를 **실행 시점에** 찾으므로, DB의 auto-increment id가 환경마다 달라도(로컬은 가상 시드가 먼저 들어가 번호가 밀린다) **같은 SQL 파일 하나를 로컬 · 운영에 그대로 쓸 수 있다.** 시드 적재 후 ID를 조회해 입력 파일에 옮겨 적는 과정이 필요 없다.
 
-  적재 SQL은 판단 요소(`display_order`)가 모두 이 사건(`title`) 소속인지 먼저 확인하고, 아니면 오류를 내고 멈춘다(6단계).
+  적재 SQL은 판단 요소(`display_order` · `label`)가 모두 이 사건(`title`) 소속인지 먼저 확인하고, 아니면 오류를 내고 멈춘다(6단계). `display_order` 숫자만이 아니라 `label`까지 맞는지 보므로, 시드에서 요소 순서가 바뀌었는데 사건 파일을 갱신하지 않은 경우도 걸러진다. `legal_case.title`과 `factor(case_id, display_order)`에는 DB 유니크 제약이 있다(V7 마이그레이션).
 - `penaltyRules`에는 사건의 `penalty_rule` 행을 그대로 넣는다(법정형에 있는 형벌만, 무죄 제외).
   - `DEATH` · `LIFE`의 `allowedMin` ~ `allowedMax`는 **작량감경해 징역으로 선고할 때의 범위**(개월)다. 예: 무기 120 ~ 600, 사형 240 ~ 600 (ERD 3-1 `penalty_rule`).
   - `DEATH` · `LIFE`는 `suspensionAllowed: false`여야 한다(감경해도 징역 10년 이상).
@@ -118,7 +118,8 @@ python3 to_seed_sql.py case.json out/ai_output.json \
 - 감경해 형벌 종류가 바뀐 판결은 `judgment.reduced_to`에 함께 들어간다
 
 - 검증을 다시 돌려 오류가 있으면 SQL을 만들지 않는다. 경고가 있으면 검수했다는 뜻으로 `--accept-warnings`가 필요하다.
-- 사건은 `legal_case.title`로, 판단 요소는 `factor.display_order`(이 사건 안에서만 유일)로 **실행 시점에 조회**해 쓴다. 모두 이 사건 소속인지 먼저 확인하고, 아니면 `RAISE EXCEPTION`으로 멈춘다(트랜잭션 전체 취소). 그래서 로컬 · 운영처럼 auto-increment id가 다른 환경에도 같은 SQL을 쓸 수 있다.
+- 사건은 `legal_case.title`로, 판단 요소는 `factor.display_order` · `label`로 **실행 시점에 조회**해 쓴다. 제목 조회는 STRICT라 제목이 없으면(`NO_DATA_FOUND`), 중복돼 있으면(`TOO_MANY_ROWS`) 각각 다른 메시지로 멈춘다. 요소는 번호(`display_order`)와 라벨(`label`)이 모두 DB와 맞는지 확인하고, 아니면 `RAISE EXCEPTION`으로 멈춘다(트랜잭션 전체 취소) — 번호만 보면 시드의 요소 순서가 바뀌었을 때(요소 추가 · 삭제 · 순서 변경) 엉뚱한 요소에 방향이 붙어도 걸러지지 않기 때문이다. 그래서 로컬 · 운영처럼 auto-increment id가 다른 환경에도 같은 SQL을 쓸 수 있다.
+- `legal_case.title` · `factor(case_id, display_order)`의 유일성은 DB 유니크 제약(V7 마이그레이션)으로도 막는다. 입력에 있는 큰따옴표 `$` 조합(드물게 reasoning · summary 등에 `$sql_seed$` 같은 문자열이 그대로 들어오는 경우)으로 `DO` 블록의 dollar-quote 구분자가 깨지지 않도록, 구분자는 내용과 겹치지 않는 값을 자동으로 고른다.
 - 기존 공개 AI 판결은 비공개로 바꾸고 새 판결을 공개한다. 기존 행은 지우지 않는다(REQ-079).
 - `ai_generation`에 입력 프롬프트 전체(`input_snapshot`) · 원본 출력(`raw_output`) · 프롬프트 버전 · 검수자를 남긴다.
 - 만든 SQL은 실제 대표 사건 비공개 저장소(`backend/private-seed`, BE-17)의 `seed/` 폴더에 `R__30_...` 파일로 넣는다. 공개 저장소의 BE-16 시드 파일(`db/seed/`)에는 실제 사건 내용을 넣지 않는다.
