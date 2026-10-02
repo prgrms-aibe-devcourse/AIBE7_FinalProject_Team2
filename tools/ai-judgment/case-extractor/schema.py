@@ -119,7 +119,8 @@ def build_sections(output):
 
 
 def build_case_input(output):
-    """모델 응답 → case.json. caseId · factorId는 시드 적재 전이라 임시값이다(README 참고)."""
+    """모델 응답 → case.json. factorId는 1부터 붙여 시드 SQL의 factor.display_order와 맞춘다(README 참고).
+    caseId는 파일 구분용일 뿐 DB와 맞출 필요가 없다."""
     factors = [
         {"factorId": i, "label": f["label"], "revealStage": f["revealStage"]}
         for i, f in enumerate(output["factors"], start=1)
@@ -130,8 +131,9 @@ def build_case_input(output):
         for rule in output["penaltyRules"]
     ]
     return {
-        "_comment": "판결문 가공 스크립트(case-extractor)가 만든 초안. 팀 검수 전이다. caseId는 null, factorId는 "
-                    "1부터 붙인 임시값이라 적재 SQL을 만들기 전에 DB 값으로 바꾼다. git에 올리지 않는다.",
+        "_comment": "판결문 가공 스크립트(case-extractor)가 만든 초안. 팀 검수 전이다. caseId는 null(파일 구분용일 "
+                    "뿐 DB와 맞출 필요 없음), factorId는 1부터 붙여 시드 SQL의 display_order와 맞춘다. "
+                    "git에 올리지 않는다.",
         "caseId": None,
         "title": output["title"],
         "crimeType": output["crimeType"],

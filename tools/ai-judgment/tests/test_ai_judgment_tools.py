@@ -348,6 +348,7 @@ class ContaminationTest(Fixtures):
 class SeedSqlTest(Fixtures):
     def test_sql_shape(self):
         sql = build_sql(self.case, self.output, build_prompt(self.case), "model-x", "백승호")
+        self.assertIn("SELECT id INTO STRICT v_case_id FROM legal_case WHERE title =", sql)
         self.assertIn("SET is_published = false", sql)
         self.assertIn("penalty_type, reduced_to, prison_months", sql)
         self.assertIn("'PRISON', NULL, 144", sql)
@@ -355,29 +356,77 @@ class SeedSqlTest(Fixtures):
         self.assertIn("(2, 'UP')", sql)
         self.assertIn("'APPROVED', '백승호'", sql)
         self.assertIn("'judgment-v2'", sql)
+        # 기본 출력은 psql에 바로 붙여 넣을 수 있게 BEGIN/COMMIT으로 감싼다
+        self.assertTrue(sql.startswith("BEGIN;\n"))
+        self.assertIn("\nCOMMIT;\n", sql)
 
     def test_sql_with_reduced_to(self):
         output = self.with_output(penaltyType="LIFE", reducedTo="PRISON", prisonMonths=180)
         sql = build_sql(self.case, output, build_prompt(self.case), "m", "r")
         self.assertIn("'LIFE', 'PRISON', 180", sql)
 
-    def test_sql_checks_factor_ownership(self):
+    def test_sql_title_lookup_is_strict_with_distinct_exceptions(self):
+        # 제목 중복(TOO_MANY_ROWS)과 제목 없음(NO_DATA_FOUND)을 각각 다른 메시지로 멈춘다
         sql = build_sql(self.case, self.output, build_prompt(self.case), "m", "r")
-        self.assertIn("FROM factor WHERE case_id = 1 AND id IN (2, 3, 5, 7, 8, 9)) <> 6", sql)
+        self.assertIn("WHEN NO_DATA_FOUND THEN", sql)
+        self.assertIn("찾을 수 없습니다", sql)
+        self.assertIn("WHEN TOO_MANY_ROWS THEN", sql)
+        self.assertIn("유일하지 않습니다", sql)
+
+    def test_sql_checks_factor_label_not_just_order(self):
+        # display_order뿐 아니라 label까지 맞아야 통과한다 (사건 파일 · 시드의 요소 순서가 어긋나면 멈춤)
+        sql = build_sql(self.case, self.output, build_prompt(self.case), "m", "r")
+        self.assertIn("(2, '다투던 중 집에 있던 흉기를 집어 들었다')", sql)
+        self.assertIn("LEFT JOIN factor f ON f.case_id = v_case_id AND f.display_order = v.display_order", sql)
+        self.assertIn("WHERE f.id IS NULL OR f.label IS DISTINCT FROM v.label", sql)
+
+    def test_sql_factor_check_handles_null_label(self):
+        # label이 NULL인 요소도 DB 라벨과 다르면 걸러져야 한다 (NULL과의 <> 비교는 UNKNOWN이라 통과해 버림)
+        case = copy.deepcopy(self.case)
+        for f in case["factors"]:
+            if f["factorId"] == 2:
+                f["label"] = None
+        sql = build_sql(case, self.output, build_prompt(case), "m", "r")
+        self.assertIn("(2, NULL)", sql)
+        self.assertIn("IS DISTINCT FROM", sql)
         self.assertIn("RAISE EXCEPTION", sql)
 
-    def test_sql_comment_title_has_no_newline(self):
+    def test_sql_looks_up_case_by_title_not_literal_id(self):
+        # 환경마다 legal_case.id가 달라도 같은 SQL을 쓸 수 있어야 한다 (숫자 id를 그대로 심지 않는다)
+        sql = build_sql(self.case, self.output, build_prompt(self.case), "m", "r")
+        self.assertNotIn("caseId=", sql)
+        self.assertIn(f"title = '{self.case['title']}'", sql)
+
+    def test_sql_comment_title_has_no_newline_but_lookup_uses_raw_title(self):
         case = copy.deepcopy(self.case)
         case["title"] = "제목\nDROP TABLE judgment;"
         sql = build_sql(case, self.output, build_prompt(case), "m", "r")
-        first_line = sql.splitlines()[0]
-        self.assertTrue(first_line.startswith("-- AI 판결 적재: 제목 DROP TABLE judgment;"))
-        self.assertIn("(caseId=1,", first_line)
+        body_first_line = sql.splitlines()[1]  # [0]은 BEGIN;
+        self.assertTrue(body_first_line.startswith("-- AI 판결 적재: 제목 DROP TABLE judgment;"))
+        # 조회 · 오류 메시지에는 정규화하지 않은 원본 제목을 그대로 써서 시드의 title과 비교된다
+        self.assertIn("WHERE title = '제목\nDROP TABLE judgment;'", sql)
 
     def test_sql_escapes_quotes(self):
         output = self.with_output(reasoning="피고인의 '반성'을 고려했다.")
         sql = build_sql(self.case, output, build_prompt(self.case), "m", "r")
         self.assertIn("''반성''", sql)
+
+    def test_sql_flyway_omits_begin_commit(self):
+        sql = build_sql(self.case, self.output, build_prompt(self.case), "m", "r", flyway=True)
+        self.assertNotIn("BEGIN;", sql)
+        self.assertNotIn("COMMIT;", sql)
+        self.assertTrue(sql.startswith("-- AI 판결 적재:"))
+        self.assertIn("DO $sql_seed$", sql)
+        self.assertIn("$sql_seed$;", sql)
+
+    def test_sql_dollar_quote_avoids_collision_in_embedded_text(self):
+        # reasoning에 기본 구분자($sql_seed$)와 같은 문자열이 들어 있으면 블록이 조기 종료되지 않도록
+        # 다른 구분자를 고른다
+        output = self.with_output(reasoning="이상한 입력입니다 $sql_seed$ DROP TABLE judgment; $sql_seed$")
+        sql = build_sql(self.case, output, build_prompt(self.case), "m", "r")
+        self.assertIn("DO $sql_seed1$", sql)
+        self.assertIn("$sql_seed1$;", sql)
+        self.assertNotIn("DO $sql_seed$", sql)
 
 
 if __name__ == "__main__":
