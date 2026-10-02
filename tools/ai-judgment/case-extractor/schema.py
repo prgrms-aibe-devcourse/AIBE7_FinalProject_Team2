@@ -125,10 +125,12 @@ def build_case_input(output):
         {"factorId": i, "label": f["label"], "revealStage": f["revealStage"]}
         for i, f in enumerate(output["factors"], start=1)
     ]
+    # 형벌 표시 순서(penalty_rule.display_order): 법조문 표기 순서대로 무거운 형벌부터 DEATH → LIFE → PRISON → FINE (ERD v1.9).
+    # 모델이 다른 순서로 줘도 PENALTY_TYPES 순서로 맞춘다
     penalty_rules = [
         {key: rule[key] for key in
          ("penaltyType", "statutoryMin", "statutoryMax", "allowedMin", "allowedMax", "suspensionAllowed")}
-        for rule in output["penaltyRules"]
+        for rule in sorted(output["penaltyRules"], key=lambda rule: PENALTY_TYPES.index(rule["penaltyType"]))
     ]
     return {
         "_comment": "판결문 가공 스크립트(case-extractor)가 만든 초안. 팀 검수 전이다. caseId는 null(파일 구분용일 "

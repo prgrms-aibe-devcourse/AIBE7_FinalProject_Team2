@@ -148,6 +148,15 @@ class ProcessOutputTest(unittest.TestCase):
         self.assertNotIn("allowedBasis", case_input["penaltyRules"][0])
         self.assertEqual(court["prisonMonths"], 120)
 
+    def test_processOutput_penaltyRules_areSortedHeaviestFirst(self):
+        # 모델이 징역부터 줘도 표시 순서는 사형 → 무기 → 징역 → 벌금 (ERD v1.9 penalty_rule.display_order)
+        reversed_rules = list(reversed(FAKE_OUTPUT["penaltyRules"]))
+
+        case_input, _, errors, _ = process_output(output_with(penaltyRules=reversed_rules))
+
+        self.assertEqual(errors, [])
+        self.assertEqual([r["penaltyType"] for r in case_input["penaltyRules"]], ["DEATH", "LIFE", "PRISON"])
+
     def test_processOutput_sentenceInOverview_isError(self):
         output = output_with(overview=FAKE_OUTPUT["overview"] + " 재판부는 징역 10년을 선고했다.")
 
