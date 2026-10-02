@@ -11,6 +11,7 @@
 | v1.4 | 2026-10-01 | BE-3 반영 — 2장에 시드를 켰던 DB에서 꺼도 기동되는 Flyway 설정(`ignore-migration-patterns`) 설명 추가 |
 | v1.5 | 2026-10-01 | BE-3 리뷰 반영 — 2장 마이그레이션 파일 목록에 V6(원본 판결문 최종 확정 판결 유니크) 추가, `ignore-migration-patterns` 운영 적용 시 재검토 조건 명시 |
 | v1.6 | 2026-10-02 | FE-2 리뷰 반영 — 8장에 Nginx SPA fallback(`try_files $uri $uri/ /index.html`) 요구사항 추가. History API 하위 경로(`/cases/1/review` 등) 새로고침 시 404 방지용 |
+| v1.7 | 2026-10-02 | COMMON-15 반영 — 9장 `CLAUDE.md`(규칙 원본) · `AGENTS.md`(다른 에이전트용 안내) 역할 구분 |
 
 
 ## **1. Backend**
@@ -448,7 +449,8 @@ location / {
 | Notion | 회의록 · 논의 기록 · 조사 자료 보관 (저장소에 없는 참고 문서) |
 | Claude Code | 코드 작성, 분석, 수정 및 테스트 지원 |
 | Atlassian MCP | Claude Code에서 Jira 이슈 생성·상태 전환 연동 |
-| `CLAUDE.md` / `AGENTS.md` | AI 코딩 도구가 따를 프로젝트 개발 규칙 관리 |
+| `CLAUDE.md` | AI 코딩 도구가 따를 프로젝트 개발 규칙의 원본. 브랜치 · 커밋 · PR 규칙의 기준 문서 (Jira · Branch · Commit · PR 규칙) |
+| `AGENTS.md` | Claude Code 외 에이전트용 안내. 규칙을 복제하지 않고 `CLAUDE.md`를 따르게 하며, 해당 에이전트에만 적용하는 예외만 담는다 |
 
 작업은 Jira 이슈를 기준으로 진행하고, 브랜치·커밋·PR에 이슈 키를 포함해 연결한다.
 
@@ -459,9 +461,15 @@ Jira 이슈 생성
 feature/BE-15-experience-start-api (Branch 생성) → Jira: 진행 중
 
 ↓
+
+개발 · 문서 작업 → 결과 보고 (Commit 여부를 확인받는다)
+
+↓ "커밋해줘" (사용자가 명시적으로 요청할 때만)
+
 feat : BE-15 체험 시작 API 구현 (Commit)
 
-↓
+↓ "PR 올려줘" (사용자가 명시적으로 요청할 때만)
+
 [BE-15] 체험 시작 API 구현 (Pull Request) → Jira: 검토 중
 
 ↓
@@ -473,4 +481,4 @@ Jira: 완료
 
 AI 코딩 도구는 사람의 코드 리뷰를 대체하지 않고 개발 보조 역할로 사용한다.
 
-구체적인 브랜치, 커밋, PR 규칙은 `docs/conventions/GIT_CONVENTIONS.md`, 코드 규칙은 `docs/conventions/CODE_CONVENTIONS.md`에서 관리한다.
+브랜치, 커밋, PR 규칙의 기준은 `CLAUDE.md`이며, `docs/conventions/GIT_CONVENTIONS.md`는 이를 사람이 읽기 쉽게 정리한 참고 문서다. 코드 규칙은 `docs/conventions/CODE_CONVENTIONS.md`에서 관리한다.
