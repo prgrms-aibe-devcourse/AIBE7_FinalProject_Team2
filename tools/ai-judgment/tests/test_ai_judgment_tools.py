@@ -348,6 +348,7 @@ class ContaminationTest(Fixtures):
 class SeedSqlTest(Fixtures):
     def test_sql_shape(self):
         sql = build_sql(self.case, self.output, build_prompt(self.case), "model-x", "백승호")
+        self.assertIn("SELECT id INTO v_case_id FROM legal_case WHERE title =", sql)
         self.assertIn("SET is_published = false", sql)
         self.assertIn("penalty_type, reduced_to, prison_months", sql)
         self.assertIn("'PRISON', NULL, 144", sql)
@@ -355,6 +356,9 @@ class SeedSqlTest(Fixtures):
         self.assertIn("(2, 'UP')", sql)
         self.assertIn("'APPROVED', '백승호'", sql)
         self.assertIn("'judgment-v2'", sql)
+        # 기본 출력은 psql에 바로 붙여 넣을 수 있게 BEGIN/COMMIT으로 감싼다
+        self.assertTrue(sql.startswith("BEGIN;\n"))
+        self.assertIn("\nCOMMIT;\n", sql)
 
     def test_sql_with_reduced_to(self):
         output = self.with_output(penaltyType="LIFE", reducedTo="PRISON", prisonMonths=180)
@@ -363,21 +367,35 @@ class SeedSqlTest(Fixtures):
 
     def test_sql_checks_factor_ownership(self):
         sql = build_sql(self.case, self.output, build_prompt(self.case), "m", "r")
-        self.assertIn("FROM factor WHERE case_id = 1 AND id IN (2, 3, 5, 7, 8, 9)) <> 6", sql)
+        self.assertIn(
+            "FROM factor WHERE case_id = v_case_id AND display_order IN (2, 3, 5, 7, 8, 9)) <> 6", sql
+        )
         self.assertIn("RAISE EXCEPTION", sql)
+
+    def test_sql_looks_up_case_by_title_not_literal_id(self):
+        # 환경마다 legal_case.id가 달라도 같은 SQL을 쓸 수 있어야 한다 (숫자 id를 그대로 심지 않는다)
+        sql = build_sql(self.case, self.output, build_prompt(self.case), "m", "r")
+        self.assertNotIn("caseId=", sql)
+        self.assertIn(f"title = '{self.case['title']}'", sql)
 
     def test_sql_comment_title_has_no_newline(self):
         case = copy.deepcopy(self.case)
         case["title"] = "제목\nDROP TABLE judgment;"
         sql = build_sql(case, self.output, build_prompt(case), "m", "r")
-        first_line = sql.splitlines()[0]
-        self.assertTrue(first_line.startswith("-- AI 판결 적재: 제목 DROP TABLE judgment;"))
-        self.assertIn("(caseId=1,", first_line)
+        body_first_line = sql.splitlines()[1]  # [0]은 BEGIN;
+        self.assertTrue(body_first_line.startswith("-- AI 판결 적재: 제목 DROP TABLE judgment;"))
 
     def test_sql_escapes_quotes(self):
         output = self.with_output(reasoning="피고인의 '반성'을 고려했다.")
         sql = build_sql(self.case, output, build_prompt(self.case), "m", "r")
         self.assertIn("''반성''", sql)
+
+    def test_sql_flyway_omits_begin_commit(self):
+        sql = build_sql(self.case, self.output, build_prompt(self.case), "m", "r", flyway=True)
+        self.assertNotIn("BEGIN;", sql)
+        self.assertNotIn("COMMIT;", sql)
+        self.assertTrue(sql.startswith("-- AI 판결 적재:"))
+        self.assertIn("DO $$", sql)
 
 
 if __name__ == "__main__":
