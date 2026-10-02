@@ -9,3 +9,15 @@ body {
   margin: 0;
   font-family: system-ui, -apple-system, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
 }
+
+/* 공통 디자인 변수. 화면 CSS도 같은 이름 · 같은 값을 쓴다 (와이어프레임 v2.2 기준).
+   새 화면은 색상 · 간격을 여기 변수로 쓰고, 값을 바꿀 때는 이 한 곳만 고친다. */
+:root {
+  --color-primary: #e8391e;   /* 강조 색 (선택된 형벌, 경고) */
+  --color-text: #1a1a1a;
+  --color-muted: #66615e;
+  --color-border: #dfd9d5;
+  --color-surface: #faf8f6;
+  --space-md: 16px;
+  --content-width: 1180px;
+}
