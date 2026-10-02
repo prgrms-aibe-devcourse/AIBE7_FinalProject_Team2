@@ -5,7 +5,7 @@
 // - 같은 화면(주소 · 값이 같음)으로의 이동은 무시한다. 에러 이동과 화면 자체 이동이 겹쳐도 한 번만 그려진다.
 // - 새로고침 · 주소 직접 입력 · 뒤로 가기 모두 같은 화면을 다시 그린다.
 // - 오래된 이동의 결과는 버린다 (빠르게 연속 이동했을 때 마지막 이동만 그려진다).
-import { renderSiteFooter } from '../components/siteLayout.js';
+import { element, renderSiteFooter } from '../components/siteLayout.js';
 import { loadCaseHeader } from './caseHeader.js';
 
 const SITE_TITLE = '내Law남불';
@@ -24,16 +24,11 @@ function sameExtras(a, b) {
   return [...keys].every((key) => a[key] === b[key]);
 }
 
-// 불러오는 중 · 오류 안내. .message-panel 스타일이 .review-page 안에서만 정의돼 있어 같은 래퍼를 쓴다.
+// 불러오는 중 · 오류 안내. 공통 스타일은 src/style.css의 .message-panel (화면 CSS를 빌리지 않는다, 리뷰 반영)
 function messagePanel(text) {
-  const wrapper = document.createElement('div');
-  wrapper.className = 'review-page';
-  const panel = document.createElement('p');
-  panel.className = 'message-panel';
+  const panel = element('p', 'message-panel', text);
   panel.setAttribute('role', 'status');
-  panel.textContent = text;
-  wrapper.append(panel);
-  return wrapper;
+  return panel;
 }
 
 /**
@@ -82,7 +77,9 @@ export function createRouter({ view, footerHost, routes }) {
 
     footerHost.replaceChildren(...(route.ownsFooter ? [] : [renderSiteFooter()]));
     try {
-      await route.render(view, { caseId, caseHeader, api, navigate, section: extras.section, ...extras });
+      // extras를 먼저 펼쳐야 한다 — navigate(name, { api: ... })처럼 같은 이름의 값이 와도
+      // 라우터가 주입하는 api · navigate · caseId · caseHeader를 덮어쓰지 않는다 (리뷰 반영)
+      await route.render(view, { ...extras, caseId, caseHeader, api, navigate });
     } catch (error) {
       if (mine !== token) return;
       console.error('화면을 그리지 못했어요:', error);
@@ -125,7 +122,14 @@ export function createRouter({ view, footerHost, routes }) {
     if (!found) {
       return showNotFound();
     }
-    return show(found.route, found.caseId, history.state?.extras ?? {}, window.location.pathname.replace(/(.)\/$/, '$1'));
+    const raw = window.location.pathname.replace(/(.)\/$/, '$1');
+    // /cases/01/review처럼 정규화되지 않은 사건 번호로 들어오면, navigate()가 만드는 경로(/cases/1/review)와
+    // 달라져서 "같은 화면으로의 이동 무시"가 깨진다. 주소창도 정규화된 경로로 맞춰 둔다 (리뷰 반영)
+    const path = found.caseId === undefined ? raw : buildPath(found.route.path, found.caseId);
+    if (path !== raw) {
+      history.replaceState(history.state, '', path);
+    }
+    return show(found.route, found.caseId, history.state?.extras ?? {}, path);
   }
 
   return {

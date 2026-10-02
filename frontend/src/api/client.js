@@ -31,11 +31,20 @@ export async function request(method, endpoint, body) {
   if (response.status === 204) return null;
 
   let data = null;
+  let bodyIsJson = true;
   try {
     data = await response.json();
-  } catch { /* 본문이 JSON이 아니면 아래에서 공통 에러로 처리한다. */ }
+  } catch {
+    bodyIsJson = false; // 본문이 JSON이 아니면 아래에서 처리한다 (프록시 오류로 HTML이 온 경우 등)
+  }
 
-  if (response.ok) return data;
+  if (response.ok) {
+    // 200인데 JSON이 아니면 조용히 null을 돌려주지 않는다 (화면이 구조 분해하다 TypeError로 원인을 숨기게 됨, 리뷰 반영)
+    if (!bodyIsJson) {
+      throw fallbackError('INTERNAL_ERROR', '서버 응답을 해석할 수 없어요.', response.status);
+    }
+    return data;
+  }
 
   // 서버의 공통 에러 형식(API 명세 1-4)이면 그대로 던진다.
   if (data && typeof data.code === 'string') {

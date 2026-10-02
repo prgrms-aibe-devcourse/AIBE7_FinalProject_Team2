@@ -18,7 +18,9 @@ export function rememberFromList(data) {
     cache.set(item.caseId, {
       caseId: item.caseId,
       title: item.title,
-      chargeName: crimeTypeLabel[item.crimeType] ?? item.crimeCategoryLabel ?? '',
+      // 서버가 준 분류명(crimeCategoryLabel, 예: "재산범죄")을 우선한다. crimeType으로 만든 라벨("사기" 등)은
+      // 실제 죄명과 다를 수 있다 (예: 횡령 성격 사건도 crimeType=FRAUD일 수 있음) (리뷰 반영)
+      chargeName: item.crimeCategoryLabel ?? crimeTypeLabel[item.crimeType] ?? '',
       exact: false,
     });
   }

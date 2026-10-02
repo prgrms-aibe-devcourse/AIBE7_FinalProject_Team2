@@ -21,3 +21,29 @@ body {
   --space-md: 16px;
   --content-width: 1180px;
 }
+
+/* 공통 버튼. 화면 CSS에도 같은 값으로 정의돼 있다(화면마다 일부러 중복). 여기 정의는
+   라우터 · 404 화면처럼 특정 화면 CSS를 빌리지 않는 곳에서 쓴다 (리뷰 반영, router.js 참고). */
+.primary-button,
+.secondary-button {
+  min-height: 44px;
+  padding: 10px 18px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.primary-button { background: #c83019; border-color: #c83019; color: #fff; }
+.primary-button:hover:not(:disabled) { background: #a92612; }
+.primary-button:disabled { opacity: .6; }
+.secondary-button { color: var(--color-text); background: #fff; }
+.secondary-button:hover { background: var(--color-surface); }
+
+/* 불러오는 중 · 오류 안내. 화면 CSS는 각자 .message-panel에 padding을 더 얹어 쓴다(review.css 등). */
+.message-panel {
+  padding: 44px 28px;
+  color: var(--color-text);
+  font: 15px/1.75 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+}
+.message-panel button { margin-top: 20px; }
