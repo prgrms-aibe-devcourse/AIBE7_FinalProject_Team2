@@ -49,6 +49,19 @@ docker compose up -d      # PostgreSQL 컨테이너(lawnambul-postgres, 5432) �
 FLYWAY_LOCATIONS=classpath:db/migration,classpath:db/seed ./gradlew bootRun
 ```
 
+실제 대표 사건 데이터는 공개 저장소에 두지 않고 **비공개 저장소를 서브모듈(`backend/private-seed`)로 연결**해 쓴다(BE-17). 접근 권한이 있는 팀원만 받을 수 있고, 권한이 없으면 빈 폴더로 남으며 가상 시드로 그대로 개발할 수 있다.
+
+```bash
+# 저장소 루트에서 (처음 한 번, 권한 필요)
+git submodule update --init backend/private-seed
+# backend 폴더로 이동해 실제 사건까지 넣어 실행
+cd backend
+FLYWAY_LOCATIONS=classpath:db/migration,filesystem:./private-seed/seed ./gradlew bootRun
+```
+
+- 서브모듈 안의 파일을 공개 저장소의 다른 위치(`db/seed` 등)로 **복사하지 않는다.** 공개 저장소의 커밋 메시지 · PR · Jira 댓글에도 사건 내용(형량 · 판단 요소 · 사실관계)을 쓰지 않는다.
+- 서브모듈은 `src/main/resources` 밖에 있어 jar에 들어가지 않고, `backend/.dockerignore`로 Docker 빌드에서도 뺀다.
+
 로컬 DB를 비우고 처음부터 다시 만들려면 `docker compose down -v && docker compose up -d`를 실행한다. (볼륨이 삭제된다)
 
 테스트는 실제 PostgreSQL에 연결하므로 DB를 먼저 띄운 뒤 실행한다.
@@ -65,7 +78,7 @@ FLYWAY_LOCATIONS=classpath:db/migration,classpath:db/seed ./gradlew bootRun
 | `DB_USERNAME` | `lawnambul` | DB 계정 (로컬 전용 값) |
 | `DB_PASSWORD` | `lawnambul` | DB 비밀번호 (로컬 전용 값) |
 | `DDL_AUTO` | `validate` | Hibernate 스키마 처리 방식 (스키마는 Flyway로만 바꾼다) |
-| `FLYWAY_LOCATIONS` | `classpath:db/migration` | 마이그레이션 위치. 시드는 `,classpath:db/seed`를 덧붙여 켠다 |
+| `FLYWAY_LOCATIONS` | `classpath:db/migration` | 마이그레이션 위치. 가상 시드는 `,classpath:db/seed`, 실제 사건은 `,filesystem:./private-seed/seed`를 덧붙여 켠다 |
 | `SWAGGER_ENABLED` | `false` | Swagger UI · OpenAPI 문서 노출. 로컬 · 개발에서만 `true`로 켠다 (`/swagger-ui/index.html`, `/v3/api-docs`) |
 
 운영 DB 계정은 이 저장소에 적지 않고 실행할 때 환경변수로만 넘긴다. 시드는 운영에 넣지 않는다.
