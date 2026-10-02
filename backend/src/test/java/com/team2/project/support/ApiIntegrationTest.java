@@ -104,6 +104,7 @@ public abstract class ApiIntegrationTest {
 		userIds.forEach(id -> jdbcTemplate.update("DELETE FROM anonymous_user WHERE id = ?", id));
 		for (Long caseId : createdCaseIds) {
 			jdbcTemplate.update("DELETE FROM factor WHERE case_id = ?", caseId);
+			jdbcTemplate.update("DELETE FROM case_source WHERE case_id = ?", caseId);
 			jdbcTemplate.update("DELETE FROM legal_case WHERE id = ?", caseId);
 		}
 		createdCaseIds.clear();
