@@ -54,7 +54,8 @@ FLYWAY_LOCATIONS=classpath:db/migration,classpath:db/seed ./gradlew bootRun
 ```bash
 # 저장소 루트에서 (처음 한 번, 권한 필요)
 git submodule update --init backend/private-seed
-# backend 폴더에서: 실제 사건까지 넣어 실행
+# backend 폴더로 이동해 실제 사건까지 넣어 실행
+cd backend
 FLYWAY_LOCATIONS=classpath:db/migration,filesystem:./private-seed/seed ./gradlew bootRun
 ```
 
