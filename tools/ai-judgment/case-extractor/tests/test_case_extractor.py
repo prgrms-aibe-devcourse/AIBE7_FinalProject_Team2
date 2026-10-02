@@ -167,6 +167,34 @@ class ProcessOutputTest(unittest.TestCase):
 
                 self.assertTrue(any("실제 선고 형량" in e for e in errors))
 
+    def test_processOutput_validOutput_hasNoCourtEvaluationWarning(self):
+        _, _, _, warnings = process_output(copy.deepcopy(FAKE_OUTPUT))
+
+        self.assertFalse(any("재판부 평가" in w for w in warnings))
+
+    def test_processOutput_courtEvaluation_isWarning(self):
+        # 판결문 양형 이유의 재판부 평가 · 결론을 옮긴 문장 (가상 문구)
+        for text in ("죄책이 매우 무거우므로 엄중하게 처벌해야 한다.", "어떠한 이유로도 용서될 수 없다.",
+                     "생명을 빼앗은 행위는 정당화될 수 없다.", "죄질이 좋지 않다.", "참작할 만한 사정이다.",
+                     "반인륜적 범죄다.", "보통 동기 살인으로 봄이 상당하다.", "유리한 정상으로는 반성이 있다.",
+                     "재판부는 우발적 범행으로 봤다."):
+            with self.subTest(text=text):
+                _, _, errors, warnings = process_output(output_with(prosecutor=text))
+
+                self.assertEqual(errors, [])  # 사실과 섞일 수 있어 오류가 아니라 경고다
+                self.assertTrue(any("sections[4](PROSECUTOR)" in w and "재판부 평가" in w for w in warnings))
+
+    def test_processOutput_factsAndLawTerms_areNotCourtEvaluation(self):
+        # 사실 · 피해자 의사 · 변호인 주장 · 법률 용어 설명은 걸리지 않는다
+        output = output_with(
+            settlement="유족은 엄벌을 원한다.",
+            defense="상당한 정신적 고통을 받아 왔고, 동기를 참작해야 한다고 주장한다.",
+            lawTerms=[{"term": "작량감경", "desc": "참작할 만한 사정이 있을 때 판사가 형을 줄이는 것"}])
+
+        _, _, _, warnings = process_output(output)
+
+        self.assertFalse(any("재판부 평가" in w for w in warnings))
+
     def test_processOutput_unrelatedNumbers_areNotSentenceLeak(self):
         # 법정형 범위 · 범행 기간 · 전과처럼 형량 용어와 붙지 않은 숫자는 보존한다
         for text in ("법정형은 징역 10년 이상이다.", "두 사람은 10년 동안 알고 지냈다.", "징역 110년은 없다.",
