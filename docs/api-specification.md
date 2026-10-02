@@ -11,7 +11,7 @@
 | v0.7 | 2026-09-30 | API 4 · 5 구현 반영 (BE-7) — API 4 형량 구간 개수를 범죄 유형별로 명시(살인 8개, 사기 · 상해 7개), 두 API의 404 · 400 거절 조건 추가, API 5 검사 순서 · 거절 시 저장 없음 · `factorIds` 규칙 순서 명시 |
 | v0.8 | 2026-10-01 | BE-8 리뷰 반영 — API 6의 선고 가능 범위는 하한·상한이 모두 있는 규칙만 포함, 범위 표시 문구를 API 8 형식으로 통일, LAW_TERM은 law.terms로만 전달하도록 명시 |
 | v0.9 | 2026-10-01 | 후속 정리 (COMMON-14) — 1-1에 숫자 입력 규칙 추가(정수 필드의 소수는 `VALIDATION_ERROR`, 문자열 숫자는 허용, BE-22), API 9에 열거값에 없는 `penaltyType`도 `INVALID_PENALTY_TYPE`으로 거절한다고 명시(1-5 열거값 규칙보다 우선, BE-9) |
-| v0.10 | 2026-10-02 | API 10 ~ 13 구현 · 리뷰 반영 (BE-10) — `diffFromMine`은 최종 선고 형벌에 해당하는 값만 내려가고 **집행유예 여부가 다르면 다른 형벌로 본다**고 명시(API 10), 내 판결 한 줄 요약에서 같은 태그가 ↑ · ↓ 양쪽에 있으면 먼저 고른 방향에만 남기고 조사는 끝의 한글 · 숫자 기준으로 `을` · `를`을 고른다고 명시(판결 응답 공통 형식), 공개 요청(API 11 · 13)은 상태를 옮기기 전에 검수한 AI · 재판부 판결이 등록돼 있는지 먼저 확인한다고 명시, 공개 사건에 그 판결이 없으면 `500 INTERNAL_ERROR`로 둔다고 명시(API 10 · 12) |
+| v0.10 | 2026-10-02 | API 10 ~ 13 구현 · 리뷰 반영 (BE-10) — `diffFromMine`은 최종 선고 형벌에 해당하는 값만 내려가고 **집행유예 여부가 다르면 다른 형벌로 본다**고 명시하고 유예 기간 차이 `suspensionMonthsDiff` 추가(API 10), 내 판결 한 줄 요약에서 같은 태그가 ↑ · ↓ 양쪽에 있으면 먼저 고른 방향에만 남기고 조사는 끝의 한글 · 숫자 기준으로 `을` · `를`을 고른다고 명시(판결 응답 공통 형식), 공개 요청(API 11 · 13)은 상태를 옮기기 전에 검수한 AI · 재판부 판결이 등록돼 있는지 먼저 확인한다고 명시, 공개 사건에 그 판결이 없으면 `500 INTERNAL_ERROR`로 둔다고 명시(API 10 · 12) |
 
 ---
 
@@ -430,11 +430,11 @@ json
 json
 
 ```json
-{  "judgment": { "subjectType": "AI", "penaltyType": "PRISON", "prisonMonths": 144, "suspensionMonths": null, "…": "…" },  "myJudgment": { "subjectType": "USER", "penaltyType": "PRISON", "prisonMonths": 180, "suspensionMonths": null, "…": "…" },  "diffFromMine": { "samePenaltyType": true, "prisonMonthsDiff": -36, "fineAmountDiff": null },  "references": ["형법 제250조", "살인범죄 양형기준", "유사 판례 5건"]}
+{  "judgment": { "subjectType": "AI", "penaltyType": "PRISON", "prisonMonths": 144, "suspensionMonths": null, "…": "…" },  "myJudgment": { "subjectType": "USER", "penaltyType": "PRISON", "prisonMonths": 180, "suspensionMonths": null, "…": "…" },  "diffFromMine": { "samePenaltyType": true, "prisonMonthsDiff": -36, "fineAmountDiff": null, "suspensionMonthsDiff": null },  "references": ["형법 제250조", "살인범죄 양형기준", "유사 판례 5건"]}
 ```
 
 - 공개 AI 판결(`AI`, `is_published = true`)을 DB에서 읽기만 한다. **AI를 호출하지 않는다**(시퀀스 6장).
-- `diffFromMine`: MVP는 숫자 차이만. 형벌 종류는 **최종 선고 형벌**(`reducedTo`가 있으면 그 값, v0.4)로 비교한다. 형벌 종류가 같아도 그 종류에 해당하는 값만 내려간다 — `PRISON`은 `prisonMonthsDiff`, `FINE`은 `fineAmountDiff`, `DEATH` · `LIFE`는 형량 값이 없어 둘 다 `null`이다(BE-10). **집행유예 여부가 다르면 같은 형벌로 보지 않는다** — 징역 2년 집행유예 3년과 징역 2년 실형은 개월 수가 같아도 같은 판결이 아니다(API 14 형벌 무게 순서 `SUSPENDED` < `PRISON`, BE-10). 형벌 종류가 다르면 `prisonMonthsDiff` · `fineAmountDiff` 모두 `null`이고 `samePenaltyType: false`다. 화면이 "내 판결보다 6개월 짧음"으로 표시한다. 문구 규칙은 미정(요구사항 15장).
+- `diffFromMine`: MVP는 숫자 차이만. 형벌 종류는 **최종 선고 형벌**(`reducedTo`가 있으면 그 값, v0.4)로 비교한다. 형벌 종류가 같아도 그 종류에 해당하는 값만 내려간다 — `PRISON`은 `prisonMonthsDiff`, `FINE`은 `fineAmountDiff`, `DEATH` · `LIFE`는 형량 값이 없어 둘 다 `null`이다(BE-10). **집행유예 여부가 다르면 같은 형벌로 보지 않는다** — 징역 2년 집행유예 3년과 징역 2년 실형은 개월 수가 같아도 같은 판결이 아니다(API 14 형벌 무게 순서 `SUSPENDED` < `PRISON`, BE-10). **둘 다 집행유예면 유예 기간도 `suspensionMonthsDiff`로 비교한다** — 징역 2년 집행유예 1년과 징역 2년 집행유예 3년은 징역 개월 수가 같아도 같은 판결이 아니다. 둘 다 집행유예가 아니면 `null`이다 (BE-10). 형벌 종류가 다르면 `prisonMonthsDiff` · `fineAmountDiff` 모두 `null`이고 `samePenaltyType: false`다. 화면이 "내 판결보다 6개월 짧음"으로 표시한다. 문구 규칙은 미정(요구사항 15장).
 - `references`: 참고 자료 태그. `judgment.reference_tags`(AI 판결 등록 시 팀이 입력, ERD v1.3)에서 읽는다. 값이 없으면 빈 배열. (컬럼명은 SQL 예약어 `REFERENCES`를 피해 `reference_tags`로 두고, 응답 필드명은 `references` 그대로 쓴다.)
 - 공개 사건인데 검수한 AI 판결(`AI`, `is_published = true`)이 등록돼 있지 않으면 `500 INTERNAL_ERROR`다. 사용자가 고칠 수 없는 데이터 문제라 거절 조건으로 두지 않는다 (BE-10).
 

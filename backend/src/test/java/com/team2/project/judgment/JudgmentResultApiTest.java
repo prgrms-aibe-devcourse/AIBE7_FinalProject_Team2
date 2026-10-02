@@ -341,6 +341,18 @@ class JudgmentResultApiTest extends ApiIntegrationTest {
 	}
 
 	@Test
+	void revealComparison_withoutPublishedJudgment_keepsStatusSoUserIsNotTrapped() throws Exception {
+		// API 11과 같은 이유 — 상태만 COMPLETED로 넘어가면 그 뒤 API 14가 매번 500이라 갇힌다
+		Cookie cookie = startExperienceAt("AI_REVEALED");
+		removePublishedJudgment("AI");
+
+		mockMvc.perform(post(url("/comparison-reveal")).cookie(cookie))
+			.andExpect(status().isInternalServerError());
+
+		assertThat(statusOf(experienceId())).isEqualTo("AI_REVEALED");
+	}
+
+	@Test
 	void revealComparison_beforeCourtReveal_returns409AndKeepsStatus() throws Exception {
 		Cookie cookie = startExperienceAt("VERDICT_CONFIRMED");
 
