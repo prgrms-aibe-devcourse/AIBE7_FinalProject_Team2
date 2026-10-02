@@ -10,7 +10,8 @@
 | v1.3 | 2026-09-30 | BE-16 반영 — 2장에 개발용 임시 시드(가상 살인 사건, `db/seed/R__seed_sample_case.sql`, 로컬 · CI 전용 · `FLYWAY_LOCATIONS`로 켬) 추가, 실제 사건 데이터는 저장소 밖에서 넣는다는 원칙, DB 운영 단계(개발 Docker PostgreSQL → 최종 AWS RDS, 비용 사유) 신설 |
 | v1.4 | 2026-10-01 | BE-3 반영 — 2장에 시드를 켰던 DB에서 꺼도 기동되는 Flyway 설정(`ignore-migration-patterns`) 설명 추가 |
 | v1.5 | 2026-10-01 | BE-3 리뷰 반영 — 2장 마이그레이션 파일 목록에 V6(원본 판결문 최종 확정 판결 유니크) 추가, `ignore-migration-patterns` 운영 적용 시 재검토 조건 명시 |
-| v1.6 | 2026-10-02 | COMMON-15 반영 — 9장 `CLAUDE.md`(규칙 원본) · `AGENTS.md`(다른 에이전트용 안내) 역할 구분 |
+| v1.6 | 2026-10-02 | FE-2 리뷰 반영 — 8장에 Nginx SPA fallback(`try_files $uri $uri/ /index.html`) 요구사항 추가. History API 하위 경로(`/cases/1/review` 등) 새로고침 시 404 방지용 |
+| v1.7 | 2026-10-02 | COMMON-15 반영 — 9장 `CLAUDE.md`(규칙 원본) · `AGENTS.md`(다른 에이전트용 안내) 역할 구분 |
 
 
 ## **1. Backend**
@@ -421,6 +422,17 @@ PostgreSQL / Redis 연결
 브라우저 → https://{도메인}
     ├─ /        → Nginx → 프론트엔드 빌드 파일
     └─ /api/**  → Nginx → 백엔드 컨테이너 (Spring Boot)
+```
+
+프론트는 History API로 `/cases/1/review` 같은 하위 경로를 직접 연다(FE-2). 이런 주소를 새로고침하거나 바로 열면
+그 경로의 실제 파일이 없으므로, Nginx가 `index.html`로 넘겨야 한다(SPA fallback). 로컬 `npm run dev`(Vite)는
+이 처리를 자동으로 해 주지만 Nginx는 직접 설정해야 한다(FE-2 PR #55 리뷰 반영).
+
+```nginx
+location / {
+    root /var/www/frontend;        # 프론트엔드 빌드 산출물(dist) 경로
+    try_files $uri $uri/ /index.html;
+}
 ```
 
 배포 자동화(CD)는 개발이 어느 정도 완료된 이후 추가한다.
