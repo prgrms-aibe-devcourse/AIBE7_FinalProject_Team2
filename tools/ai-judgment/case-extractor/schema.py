@@ -125,10 +125,12 @@ def build_case_input(output):
         {"factorId": i, "label": f["label"], "revealStage": f["revealStage"]}
         for i, f in enumerate(output["factors"], start=1)
     ]
+    # 형벌 표시 순서(penalty_rule.display_order): 법조문 표기 순서대로 무거운 형벌부터 DEATH → LIFE → PRISON → FINE (ERD v1.9).
+    # 모델이 다른 순서로 줘도 PENALTY_TYPES 순서로 맞춘다
     penalty_rules = [
         {key: rule[key] for key in
          ("penaltyType", "statutoryMin", "statutoryMax", "allowedMin", "allowedMax", "suspensionAllowed")}
-        for rule in output["penaltyRules"]
+        for rule in sorted(output["penaltyRules"], key=lambda rule: PENALTY_TYPES.index(rule["penaltyType"]))
     ]
     return {
         "_comment": "판결문 가공 스크립트(case-extractor)가 만든 초안. 팀 검수 전이다. caseId는 null(파일 구분용일 "
@@ -276,3 +278,45 @@ def sentence_leak_check(case_input, court):
         if "선고" in text:
             warnings.append(f"{where}: '선고'라는 말이 있음 — 재판부 판단이 드러나지 않는지 확인")
     return errors, warnings
+
+
+# 판결문 양형 이유에서 재판부가 평가 · 결론을 말할 때 쓰는 표현 (공백을 뺀 문장에서 찾는다).
+# 사실("범행을 인정했다", "유족이 엄벌을 원한다")은 걸리지 않도록 평가에만 쓰이는 말로 좁힌다.
+_MITIGATING_LABEL = "유리한 · 불리한 정상"
+_COURT_EVALUATION_PATTERNS = [
+    ("죄책", re.compile("죄책")),
+    ("죄질", re.compile("죄질")),
+    ("엄중", re.compile("엄중")),
+    ("참작한다", re.compile("참작(?:할만한|한다|하였|하기로)")),
+    ("용서 · 용납 · 정당화될 수 없다", re.compile("(?:용서|용납|정당화)(?:될|할)수없")),
+    ("반인륜", re.compile("반인륜")),
+    ("~함이 마땅 · 상당하다", re.compile("(?:함이|봄이|보는것이)(?:마땅|상당)")),
+    (_MITIGATING_LABEL, re.compile("(?:유리|불리)한정상")),
+    ("재판부 · 원심", re.compile("재판부|원심")),
+]
+
+
+def court_evaluation_check(case_input):
+    """재판부의 평가 · 결론 문장이 사용자 화면과 AI 입력에 남았는지 본다 (프롬프트 2절, FR-4-1).
+
+    판결문 양형 이유를 옮기다 "죄책이 무거워 엄중한 처벌이 필요하다"처럼 재판부 결론이 섞이면
+    판결 공개 전에 재판부 판단이 드러나고 AI 판결도 그 결론을 보고 만들게 된다. 사실과 섞여 있을 수 있어 경고로만 남긴다.
+    검사 · 피고인 측 섹션(PROSECUTOR · DEFENSE)은 각 측의 주장이라 같은 표현이 정상일 수 있어, 재판부를 명시하지 않았다면
+    "재판부 평가" 대신 "양형 이유 표현일 수 있음"으로 안내한다.
+    """
+    warnings = []
+    for where, text in visible_texts(case_input):
+        if where.startswith("sections") and "LAW_TERM" in where:
+            continue  # 용어 설명은 "참작" 같은 법률 용어를 쓴다
+        compact = re.sub(r"\s+", "", text)
+        # 검사 · 피고인 측 섹션은 각 측의 주장이라 "엄중한 처벌이 필요하다" 같은 말이 흔하다.
+        # "재판부" · "원심"이 함께 없으면 재판부 평가라고 단정하지 않고, 판결문 양형 이유 표현일 수 있다는 안내만 낸다
+        party_section = ("(PROSECUTOR)" in where or "(DEFENSE)" in where) and not re.search("재판부|원심", compact)
+        for label, pattern in _COURT_EVALUATION_PATTERNS:
+            if not pattern.search(compact):
+                continue
+            if party_section:
+                warnings.append(f"{where}: 판결문 양형 이유의 표현일 수 있음 \"{label}\" — 재판부의 평가 · 결론을 옮긴 문장이면 빼고 각 측의 사정 · 주장으로 바꿔 쓴다 (프롬프트 2절)")
+                continue
+            warnings.append(f"{where}: 재판부 평가로 보이는 표현 \"{label}\" — 사실만 남기고 평가 · 결론은 뺀다 (프롬프트 2절)")
+    return warnings

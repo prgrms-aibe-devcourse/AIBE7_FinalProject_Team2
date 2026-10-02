@@ -23,6 +23,7 @@ from schema import (
     build_court_judgment,
     build_factor_extras,
     check_output,
+    court_evaluation_check,
     sentence_leak_check,
     visible_texts,
 )
@@ -173,7 +174,7 @@ def process_output(output):
     leak_errors, leak_warnings = sentence_leak_check(case_input, court)
     report_errors, report_warnings = residual_check(report_texts(output))
     errors += pii_errors + report_errors + leak_errors
-    warnings += pii_warnings + report_warnings + leak_warnings
+    warnings += pii_warnings + report_warnings + leak_warnings + court_evaluation_check(case_input)
     return case_input, court, errors, warnings
 
 

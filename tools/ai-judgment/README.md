@@ -33,7 +33,7 @@ mkdir -p out cases   # out/ · cases/는 git에 올리지 않는다
 
 ### 1. 사건 입력 파일 준비
 
-`examples/case_input.json`과 같은 형식으로 대표 사건 파일을 `cases/`에 만든다(BE-13 사건 가공 결과, `docs/cases/`의 사건 파일). 판결문에서 초안을 만들려면 `case-extractor/`를 쓴다.
+`examples/case_input.json`과 같은 형식으로 대표 사건 파일을 `cases/`에 만든다. 판결문 원본(비공개 저장소 `source/`, 공개 저장소의 `backend/private-seed` 서브모듈)에서 `case-extractor/`로 초안을 만들고 팀이 검수한다. 사건 파일 작성 규칙은 [`docs/cases/README.md`](../../docs/cases/README.md)를 따른다.
 
 - `factors[].factorId`는 사건 파일 안에서 요소 번호(1부터)로, **사건 시드 SQL의 `factor.display_order`와 같은 값**을 쓴다(시드 작성 규칙 — 사건 파일 6장 번호 = `display_order`). `caseId`는 파일 구분용 값일 뿐 DB와 맞출 필요가 없다. `to_seed_sql.py`가 만드는 SQL은 `legal_case.title`로 사건을, `factor.display_order`로 요소를 **실행 시점에** 찾으므로, DB의 auto-increment id가 환경마다 달라도(로컬은 가상 시드가 먼저 들어가 번호가 밀린다) **같은 SQL 파일 하나를 로컬 · 운영에 그대로 쓸 수 있다.** 시드 적재 후 ID를 조회해 입력 파일에 옮겨 적는 과정이 필요 없다.
 

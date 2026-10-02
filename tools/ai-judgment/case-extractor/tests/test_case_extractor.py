@@ -148,6 +148,15 @@ class ProcessOutputTest(unittest.TestCase):
         self.assertNotIn("allowedBasis", case_input["penaltyRules"][0])
         self.assertEqual(court["prisonMonths"], 120)
 
+    def test_processOutput_penaltyRules_areSortedHeaviestFirst(self):
+        # 모델이 징역부터 줘도 표시 순서는 사형 → 무기 → 징역 → 벌금 (ERD v1.9 penalty_rule.display_order)
+        reversed_rules = list(reversed(FAKE_OUTPUT["penaltyRules"]))
+
+        case_input, _, errors, _ = process_output(output_with(penaltyRules=reversed_rules))
+
+        self.assertEqual(errors, [])
+        self.assertEqual([r["penaltyType"] for r in case_input["penaltyRules"]], ["DEATH", "LIFE", "PRISON"])
+
     def test_processOutput_sentenceInOverview_isError(self):
         output = output_with(overview=FAKE_OUTPUT["overview"] + " 재판부는 징역 10년을 선고했다.")
 
@@ -166,6 +175,55 @@ class ProcessOutputTest(unittest.TestCase):
                     overview=FAKE_OUTPUT["overview"] + " " + text, courtJudgment=court))
 
                 self.assertTrue(any("실제 선고 형량" in e for e in errors))
+
+    def test_processOutput_validOutput_hasNoCourtEvaluationWarning(self):
+        _, _, _, warnings = process_output(copy.deepcopy(FAKE_OUTPUT))
+
+        self.assertFalse(any("재판부 평가" in w for w in warnings))
+
+    def test_processOutput_courtEvaluation_isWarning(self):
+        # 판결문 양형 이유의 재판부 평가 · 결론을 옮긴 문장 (가상 문구)
+        for text in ("죄책이 무거워 처벌이 필요하다.", "엄중한 처벌이 필요하다.", "어떠한 경우에도 용서될 수 없다.",
+                     "그 행위는 정당화될 수 없다.", "죄질이 좋지 않다.", "참작할 만한 사정이다.",
+                     "반인륜적 범죄다.", "보통 동기 살인으로 봄이 상당하다.",
+                     "재판부는 우발적 범행으로 봤다.", "재판부는 유리한 정상으로 봤다."):
+            with self.subTest(text=text):
+                _, _, errors, warnings = process_output(output_with(facts=text))
+
+                self.assertEqual(errors, [])  # 사실과 섞일 수 있어 오류가 아니라 경고다
+                self.assertTrue(any("sections[0](FACTS)" in w and "재판부 평가" in w for w in warnings))
+
+    def test_processOutput_partySectionCommonExpressions_haveSourceWarningOnly(self):
+        # 각 측 주장에 흔한 표현("엄중한 처벌이 필요하다", "유리한 정상")은 재판부 평가가 아니라 양형 이유 표현일 수 있다는 안내만 낸다
+        for where, field, text in (("sections[4](PROSECUTOR)", "prosecutor", "엄중한 처벌이 필요하다."),
+                                   ("sections[4](PROSECUTOR)", "prosecutor", "죄책이 무거워 처벌이 필요하다."),
+                                   ("sections[5](DEFENSE)", "defense", "피고인에게 유리한 정상으로는 반성이 있다고 주장한다.")):
+            with self.subTest(text=text):
+                _, _, errors, warnings = process_output(output_with(**{field: text}))
+
+                self.assertEqual(errors, [])
+                self.assertTrue(any(where in w and "양형 이유의 표현일 수 있음" in w for w in warnings))
+                self.assertFalse(any("재판부 평가" in w for w in warnings))
+
+    def test_processOutput_partySectionNamingCourt_isCourtEvaluation(self):
+        # 재판부 · 원심을 명시한 문장은 각 측 주장이라도 재판부 평가로 본다
+        for field, text in (("prosecutor", "재판부는 엄중한 처벌이 필요하다고 봤다."),
+                            ("defense", "원심은 유리한 정상으로 참작하였다.")):
+            with self.subTest(text=text):
+                _, _, _, warnings = process_output(output_with(**{field: text}))
+
+                self.assertTrue(any("재판부 평가" in w for w in warnings))
+
+    def test_processOutput_factsAndLawTerms_areNotCourtEvaluation(self):
+        # 사실 · 피해자 의사 · 변호인 주장 · 법률 용어 설명은 걸리지 않는다
+        output = output_with(
+            settlement="유족은 엄벌을 원한다.",
+            defense="상당한 정신적 고통을 받아 왔고, 동기를 참작해야 한다고 주장한다.",
+            lawTerms=[{"term": "작량감경", "desc": "참작할 만한 사정이 있을 때 판사가 형을 줄이는 것"}])
+
+        _, _, _, warnings = process_output(output)
+
+        self.assertFalse(any("재판부 평가" in w for w in warnings))
 
     def test_processOutput_unrelatedNumbers_areNotSentenceLeak(self):
         # 법정형 범위 · 범행 기간 · 전과처럼 형량 용어와 붙지 않은 숫자는 보존한다

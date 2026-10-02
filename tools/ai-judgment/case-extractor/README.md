@@ -10,7 +10,7 @@
 | --- | --- |
 | `extract_case.py` | 실행 스크립트. 텍스트 추출 → 패턴 마스킹 → Claude API → 검사 → 파일 저장 |
 | `deidentify.py` | API로 보내기 전 패턴 마스킹, 결과에 남은 개인정보 검사 |
-| `schema.py` | 모델 응답 JSON 스키마, 응답 → `case.json` 조립, 판결 누출 검사 |
+| `schema.py` | 모델 응답 JSON 스키마, 응답 → `case.json` 조립, 판결 누출 검사 (선고 형량 · 재판부 평가 표현) |
 | `prompts/extract_system.md` | 비식별화 원칙 · 작성 형식을 담은 시스템 프롬프트 |
 | `requirements.txt` | `anthropic`, `pypdf` |
 | `tests/` | 단위 테스트 (API를 호출하지 않는다) |
@@ -76,15 +76,15 @@ python3 extract_case.py ../cases/raw/판결문.pdf --name long-marriage-conflict
 3. **비식별화 · 구조화 (Claude API)**: `prompts/extract_system.md`의 원칙대로 인명 · 지명 · 날짜 · 나이 · 직업 · 발언 · 범행 도구 등을 일반화하고, 양형 사실은 유지한다(FR-1-1). 구조화 출력으로 스키마에 맞는 JSON만 받는다. 모델이 거절하면 서버 측 대체 모델이 이어서 처리한다(`fallbacks: "default"`).
 4. **검사**
     - **오류**: 마스킹 표시가 남음, 주민등록번호 · 전화번호 · 사건번호 · 법원명 · 상세 주소 · 정확한 날짜 · 정확한 나이가 개요 · 섹션 · 판단 요소 · `reviewNotes` · 형벌 규칙 근거에 남음(보고서에는 위치와 규칙만 적고 원본 값은 적지 않으며, `reviewNotes` · 형벌 규칙 근거에서 걸린 값은 `[삭제됨]`으로 바꿔 저장한다), 실제 선고 형량(예: "징역 10년")이 AI 입력에 드러남, `build_prompt.py`의 사건 입력 검사 실패, 판단 요소 길이 · OVERVIEW 요소 없음 · 형벌 규칙 형식 오류
-    - **경고**: "피고인 ○○○"처럼 역할어 뒤에 실명일 수 있는 말, 재판부 판단이 드러날 수 있는 "선고"라는 말, OVERVIEW 요소에 `preLabel` 없음, 형벌 규칙은 모델이 계산한 값이라는 안내
+    - **경고**: "피고인 ○○○"처럼 역할어 뒤에 실명일 수 있는 말, 재판부 판단이 드러날 수 있는 "선고"라는 말, 재판부의 평가 · 결론으로 보이는 표현("죄책", "엄중", "참작한다", "용서 · 정당화될 수 없다", "봄이 상당하다", "유리한 · 불리한 정상", "재판부" 등. 용어 설명은 제외. 검사 · 피고인 측 섹션에서는 "재판부" · "원심"이 함께 없으면 "양형 이유 표현일 수 있음" 안내로 낮춘다), OVERVIEW 요소에 `preLabel` 없음, 형벌 규칙은 모델이 계산한 값이라는 안내
 
 ## 지켜야 할 것
 
 - 판결문 텍스트는 가공을 위해 Claude API로 전송된다. **법원이 공개한 판결문(가명 처리본)을 넣는다.** 보낼 내용은 `--dry-run`으로 미리 확인할 수 있다.
-- 결과는 초안이다. 팀이 원 판결문과 대조해 **핵심 사실 누락, 비식별화로 인한 의미 변경, 실제 판결 누출**을 확인한다(REQ-075). 확인 기준은 `docs/cases/README.md` 템플릿과 BE-13 사건 파일의 "가공 검증" 표를 따른다.
-- `penaltyRules`(선고 가능 범위)와 `recommended`(권고 범위)는 모델이 판결문에서 계산한 값이다. 법조문 · 양형기준으로 다시 확인한다(ERD `penalty_rule`).
+- 결과는 초안이다. 팀이 원 판결문과 대조해 **핵심 사실 누락, 비식별화로 인한 의미 변경, 실제 판결 누출**을 확인한다(REQ-075). 확인 기준은 `docs/cases/README.md` 템플릿과 샘플(`docs/cases/sample-virtual-murder.md`)의 "가공 검증" 표를 따른다.
+- `penaltyRules`(선고 가능 범위)와 `recommended`(권고 범위)는 모델이 판결문에서 계산한 값이다. 법조문 · 양형기준으로 다시 확인한다(ERD `penalty_rule`). `penaltyRules`는 모델 응답 순서와 관계없이 `DEATH` → `LIFE` → `PRISON` → `FINE`(무거운 형벌부터)로 정렬해 `case.json`에 넣는다. 시드 SQL의 `penalty_rule.display_order`도 이 순서로 매긴다(ERD v1.9).
 - `references.similarCases`는 비워 둔다. 대상 사건 판결문만으로는 만들 수 없고, 대상 사건을 뺀 유사 판례를 팀이 채운다(FR-4-2).
-- `caseId`는 `null`, `factorId`는 1부터 붙인 임시값이다. 시드 적재 뒤 DB 값으로 바꾼다(상위 README 1단계).
+- `caseId`는 `null`(파일 구분용일 뿐 DB와 맞출 필요 없음), `factorId`는 1부터 붙여 시드 SQL의 `factor.display_order`와 맞춘다(상위 README 1단계). 적재 뒤 DB 값으로 바꿀 필요가 없다.
 - 출력 파일과 판결문 원본은 git에 올리지 않는다.
 
 ## 프롬프트 · 스키마를 고칠 때

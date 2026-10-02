@@ -39,7 +39,7 @@
 | 문서 | 내용 |
 | --- | --- |
 | [document-consistency-report.md](document-consistency-report.md) | 문서 정합성 점검 보고서. 문서 사이 불일치와 결정 기록 |
-| [cases/](cases/README.md) | 사건 후보 · 확정 사건의 조사 기록 폴더. 사건 파일은 커밋하지 않는다 |
+| [cases/](cases/README.md) | 사건 파일 작성 가이드와 가상 사건 샘플. 실제 사건 파일은 저장소에 두지 않고, 판결문 원본 · 적재 SQL은 비공개 저장소(`backend/private-seed`)에 둔다 |
 
 ## 읽는 순서 (처음 보는 사람)
 
