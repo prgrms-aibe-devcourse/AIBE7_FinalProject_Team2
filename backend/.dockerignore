@@ -6,3 +6,5 @@ build/
 .env
 .env.*
 docker-compose.yml
+# 실제 사건 데이터 서브모듈 (BE-17). Dockerfile이 골라서 복사하더라도 빌드 컨텍스트에서부터 뺀다
+private-seed/
