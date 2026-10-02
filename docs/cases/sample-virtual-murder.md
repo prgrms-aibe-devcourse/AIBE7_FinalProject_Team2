@@ -54,16 +54,17 @@
 
 | stage · section_type | 제목 | 내용 형식 |
 | --- | --- | --- |
-| DETAIL · `FACTS` | 주요 사실관계 | `content` 문단 |
+| DETAIL · `FACTS` | 주요 사실관계 | `content` 항목 목록 (한 줄에 하나) |
 | DETAIL · `DAMAGE` | 피해 결과 | `data` 배열 `[{"label", "value"}]` (피해자 수 · 피해 결과 · 피해자와의 관계 · 범행 도구) |
-| DETAIL · `DEFENDANT` | 피고인 관련 사실 | `content` 문단 |
-| DETAIL · `SETTLEMENT` | 합의 · 피해 회복 | `content` 문단 |
-| ARGUMENT · `PROSECUTOR` | 검사 | `content` 문단 |
-| ARGUMENT · `DEFENSE` | 피고인 · 변호인 | `content` 문단 |
+| DETAIL · `DEFENDANT` | 피고인 관련 사실 | `content` 항목 목록 |
+| DETAIL · `SETTLEMENT` | 합의 · 피해 회복 | `content` 항목 목록 |
+| ARGUMENT · `PROSECUTOR` | 검사 | `content` 항목 목록 |
+| ARGUMENT · `DEFENSE` | 피고인 · 변호인 | `content` 항목 목록 |
 | LAW · `LAW_TERM` | 용어 설명 | `data` 배열 `[{"term", "desc"}]` |
 | SUMMARY · `SUMMARY` | 핵심 사실 요약 | `data` 문자열 배열 |
 
-- 화면은 `content`를 한 문단으로 그린다. 항목이 여럿이면 문장으로 이어 쓴다.
+- 사건 파일에는 항목을 `-` 목록으로 쓰고, DB `content`에는 항목 하나를 한 줄로 넣어 줄바꿈(`\n`)으로 나눈다. 화면은 줄바꿈을 그대로 보여 준다(ERD v1.9). 각 항목은 마침표로 끝낸다.
+- 양측 주장 섹션 위 안내 문구("판결문의 양형 이유 중 … 정리했어요")는 화면 고정 문구라 사건 파일 · DB에 쓰지 않는다([정보 구조](../information-architecture.md) S-04 v1.10). 판결문에 검사 주장이 따로 있는 등 이 문구가 맞지 않는 사건이면 팀에 알린다.
 - jsonb 컬럼은 반드시 **배열**로 쓴다(ERD 7장). 실제 문구는 가상 시드 파일을 참고한다.
 
 ## 6. 판단 요소 (`factor`)

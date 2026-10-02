@@ -45,6 +45,7 @@
 - `defendant`: 피고인 관련 사실 (연령대 · 건강 · 전과 · 자백과 반성)
 - `settlement`: 합의 · 피해 회복 · 공탁 · 피해자나 유족의 처벌 의사. 없으면 "합의나 피해 회복 내용은 없다"처럼 쓴다
 - `prosecutor`, `defense`: 2절 기준
+- 섹션 본문(`facts` · `defendant` · `settlement` · `prosecutor` · `defense`)은 사실 하나를 한 줄로 쓰고 줄바꿈(`\n`)으로 나눈다. 줄마다 마침표로 끝낸다. 화면이 줄바꿈을 그대로 보여 준다(ERD v1.9)
 - `lawTerms`: 사용자가 모를 법률 · 양형기준 용어 설명 (`term`/`desc`). 법정형, 작량감경, 양형기준, 적용된 양형 유형, 특별양형인자 등
 - `penaltyRules`: 법정형에 있는 형벌마다 1개. 형량 단위는 징역 개월(int), 벌금 원(int)
     - `statutoryMin` · `statutoryMax`: 법정형 하한 · 상한. 조문에 없으면 null. `DEATH` · `LIFE`는 둘 다 null
