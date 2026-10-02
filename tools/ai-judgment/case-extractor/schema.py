@@ -301,19 +301,22 @@ def court_evaluation_check(case_input):
 
     판결문 양형 이유를 옮기다 "죄책이 무거워 엄중한 처벌이 필요하다"처럼 재판부 결론이 섞이면
     판결 공개 전에 재판부 판단이 드러나고 AI 판결도 그 결론을 보고 만들게 된다. 사실과 섞여 있을 수 있어 경고로만 남긴다.
+    검사 · 피고인 측 섹션(PROSECUTOR · DEFENSE)은 각 측의 주장이라 같은 표현이 정상일 수 있어, 재판부를 명시하지 않았다면
+    "재판부 평가" 대신 "양형 이유 표현일 수 있음"으로 안내한다.
     """
     warnings = []
     for where, text in visible_texts(case_input):
         if where.startswith("sections") and "LAW_TERM" in where:
             continue  # 용어 설명은 "참작" 같은 법률 용어를 쓴다
         compact = re.sub(r"\s+", "", text)
-        party_section = "(PROSECUTOR)" in where or "(DEFENSE)" in where
+        # 검사 · 피고인 측 섹션은 각 측의 주장이라 "엄중한 처벌이 필요하다" 같은 말이 흔하다.
+        # "재판부" · "원심"이 함께 없으면 재판부 평가라고 단정하지 않고, 판결문 양형 이유 표현일 수 있다는 안내만 낸다
+        party_section = ("(PROSECUTOR)" in where or "(DEFENSE)" in where) and not re.search("재판부|원심", compact)
         for label, pattern in _COURT_EVALUATION_PATTERNS:
             if not pattern.search(compact):
                 continue
-            if party_section and label == _MITIGATING_LABEL and not re.search("재판부|원심", compact):
-                # 각 측 주장에 쓴 "유리한 정상"은 허용되는 말이지만, 판결문 양형 이유의 표현이라 출처가 드러날 수 있다
-                warnings.append(f"{where}: 판결문 양형 이유의 표현 \"{label}\" — 재판부가 인정한 사정인지 짐작할 수 있으니 \"유리한 사정\"처럼 바꾼다 (프롬프트 2절)")
+            if party_section:
+                warnings.append(f"{where}: 판결문 양형 이유의 표현일 수 있음 \"{label}\" — 재판부의 평가 · 결론을 옮긴 문장이면 빼고 각 측의 사정 · 주장으로 바꿔 쓴다 (프롬프트 2절)")
                 continue
             warnings.append(f"{where}: 재판부 평가로 보이는 표현 \"{label}\" — 사실만 남기고 평가 · 결론은 뺀다 (프롬프트 2절)")
     return warnings
