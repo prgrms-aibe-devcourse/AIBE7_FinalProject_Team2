@@ -378,7 +378,17 @@ class SeedSqlTest(Fixtures):
         sql = build_sql(self.case, self.output, build_prompt(self.case), "m", "r")
         self.assertIn("(2, '다투던 중 집에 있던 흉기를 집어 들었다')", sql)
         self.assertIn("LEFT JOIN factor f ON f.case_id = v_case_id AND f.display_order = v.display_order", sql)
-        self.assertIn("WHERE f.id IS NULL OR f.label <> v.label", sql)
+        self.assertIn("WHERE f.id IS NULL OR f.label IS DISTINCT FROM v.label", sql)
+
+    def test_sql_factor_check_handles_null_label(self):
+        # label이 NULL인 요소도 DB 라벨과 다르면 걸러져야 한다 (NULL과의 <> 비교는 UNKNOWN이라 통과해 버림)
+        case = copy.deepcopy(self.case)
+        for f in case["factors"]:
+            if f["factorId"] == 2:
+                f["label"] = None
+        sql = build_sql(case, self.output, build_prompt(case), "m", "r")
+        self.assertIn("(2, NULL)", sql)
+        self.assertIn("IS DISTINCT FROM", sql)
         self.assertIn("RAISE EXCEPTION", sql)
 
     def test_sql_looks_up_case_by_title_not_literal_id(self):

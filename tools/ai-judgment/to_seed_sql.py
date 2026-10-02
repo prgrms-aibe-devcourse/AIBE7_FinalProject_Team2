@@ -81,7 +81,7 @@ def build_sql(case, output, prompt, model_name, reviewed_by, *, flyway=False):
             {label_rows}
         ) AS v(display_order, label)
         LEFT JOIN factor f ON f.case_id = v_case_id AND f.display_order = v.display_order
-        WHERE f.id IS NULL OR f.label <> v.label
+        WHERE f.id IS NULL OR f.label IS DISTINCT FROM v.label
     ) THEN
         RAISE EXCEPTION '판단 요소 번호 · 라벨이 DB와 다릅니다 (사건 파일과 시드의 요소 순서를 확인하세요, title=%)', {title_literal};
     END IF;
