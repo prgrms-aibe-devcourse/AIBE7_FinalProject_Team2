@@ -176,13 +176,21 @@ class ProcessOutputTest(unittest.TestCase):
         # 판결문 양형 이유의 재판부 평가 · 결론을 옮긴 문장 (가상 문구)
         for text in ("죄책이 무거워 처벌이 필요하다.", "엄중한 처벌이 필요하다.", "어떠한 경우에도 용서될 수 없다.",
                      "그 행위는 정당화될 수 없다.", "죄질이 좋지 않다.", "참작할 만한 사정이다.",
-                     "반인륜적 범죄다.", "보통 동기 살인으로 봄이 상당하다.", "유리한 정상으로는 반성이 있다.",
-                     "재판부는 우발적 범행으로 봤다."):
+                     "반인륜적 범죄다.", "보통 동기 살인으로 봄이 상당하다.",
+                     "재판부는 우발적 범행으로 봤다.", "재판부는 유리한 정상으로 봤다."):
             with self.subTest(text=text):
                 _, _, errors, warnings = process_output(output_with(prosecutor=text))
 
                 self.assertEqual(errors, [])  # 사실과 섞일 수 있어 오류가 아니라 경고다
                 self.assertTrue(any("sections[4](PROSECUTOR)" in w and "재판부 평가" in w for w in warnings))
+
+    def test_processOutput_partySectionFavorableCircumstance_hasSourceWarningOnly(self):
+        # 각 측 주장의 "유리한 정상"은 재판부 평가 경고가 아니라 양형 이유 출처 노출 경고만 낸다
+        _, _, errors, warnings = process_output(output_with(defense="피고인에게 유리한 정상으로는 반성이 있다고 주장한다."))
+
+        self.assertEqual(errors, [])
+        self.assertTrue(any("sections[5](DEFENSE)" in w and "양형 이유의 표현" in w for w in warnings))
+        self.assertFalse(any("재판부 평가" in w for w in warnings))
 
     def test_processOutput_factsAndLawTerms_areNotCourtEvaluation(self):
         # 사실 · 피해자 의사 · 변호인 주장 · 법률 용어 설명은 걸리지 않는다

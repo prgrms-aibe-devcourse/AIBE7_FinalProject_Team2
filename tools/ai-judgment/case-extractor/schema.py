@@ -280,6 +280,7 @@ def sentence_leak_check(case_input, court):
 
 # 판결문 양형 이유에서 재판부가 평가 · 결론을 말할 때 쓰는 표현 (공백을 뺀 문장에서 찾는다).
 # 사실("범행을 인정했다", "유족이 엄벌을 원한다")은 걸리지 않도록 평가에만 쓰이는 말로 좁힌다.
+_MITIGATING_LABEL = "유리한 · 불리한 정상"
 _COURT_EVALUATION_PATTERNS = [
     ("죄책", re.compile("죄책")),
     ("죄질", re.compile("죄질")),
@@ -288,7 +289,7 @@ _COURT_EVALUATION_PATTERNS = [
     ("용서 · 용납 · 정당화될 수 없다", re.compile("(?:용서|용납|정당화)(?:될|할)수없")),
     ("반인륜", re.compile("반인륜")),
     ("~함이 마땅 · 상당하다", re.compile("(?:함이|봄이|보는것이)(?:마땅|상당)")),
-    ("유리한 · 불리한 정상", re.compile("(?:유리|불리)한정상")),
+    (_MITIGATING_LABEL, re.compile("(?:유리|불리)한정상")),
     ("재판부 · 원심", re.compile("재판부|원심")),
 ]
 
@@ -304,7 +305,13 @@ def court_evaluation_check(case_input):
         if where.startswith("sections") and "LAW_TERM" in where:
             continue  # 용어 설명은 "참작" 같은 법률 용어를 쓴다
         compact = re.sub(r"\s+", "", text)
+        party_section = "(PROSECUTOR)" in where or "(DEFENSE)" in where
         for label, pattern in _COURT_EVALUATION_PATTERNS:
-            if pattern.search(compact):
-                warnings.append(f"{where}: 재판부 평가로 보이는 표현 \"{label}\" — 사실만 남기고 평가 · 결론은 뺀다 (프롬프트 2절)")
+            if not pattern.search(compact):
+                continue
+            if party_section and label == _MITIGATING_LABEL and not re.search("재판부|원심", compact):
+                # 각 측 주장에 쓴 "유리한 정상"은 허용되는 말이지만, 판결문 양형 이유의 표현이라 출처가 드러날 수 있다
+                warnings.append(f"{where}: 판결문 양형 이유의 표현 \"{label}\" — 재판부가 인정한 사정인지 짐작할 수 있으니 \"유리한 사정\"처럼 바꾼다 (프롬프트 2절)")
+                continue
+            warnings.append(f"{where}: 재판부 평가로 보이는 표현 \"{label}\" — 사실만 남기고 평가 · 결론은 뺀다 (프롬프트 2절)")
     return warnings
