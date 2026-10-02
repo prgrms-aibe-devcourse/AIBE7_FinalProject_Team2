@@ -63,11 +63,27 @@ jobs:
             backend/*.gradle*
             backend/gradle/wrapper/gradle-wrapper.properties
 
-      - name: Run backend tests
+      # DB 제약(부분 유니크 인덱스 · CHECK)을 포함한 통합 테스트가 위 PostgreSQL 서비스 컨테이너에 붙어 실행된다.
+      # 부분 유니크 인덱스는 PostgreSQL 전용이라 H2 같은 인메모리 DB로는 검증할 수 없다 (docs/tech-stack.md 7장).
+      - name: Run backend tests (PostgreSQL 서비스 컨테이너, DB 제약 검증 포함)
         working-directory: backend
         run: |
           chmod +x gradlew
           ./gradlew test --no-daemon
+
+      # 테스트가 CI에서만 실패했을 때 어느 테스트 · 제약인지 바로 볼 수 있도록 리포트를 남긴다
+      # 공개 저장소라 아티팩트는 GitHub 로그인한 누구나 내려받을 수 있다.
+      # 테스트는 실제 사건 데이터 · 비밀값을 출력하지 않아야 한다 (CI는 서브모듈을 받지 않음).
+      - name: Upload test report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-report
+          path: |
+            backend/build/reports/tests/test
+            backend/build/test-results/test
+          retention-days: 7
+          if-no-files-found: ignore
 
       - uses: docker/setup-buildx-action@v3
 
