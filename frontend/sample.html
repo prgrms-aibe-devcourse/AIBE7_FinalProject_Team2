@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FE 연동 확인 · 내Law남불</title>
+  <link rel="icon" href="data:,">
+  <style>
+    body { margin: 0; background: #f5f2ef; }
+    main { max-width: 980px; margin: 0 auto; padding: 32px 20px 64px; font: 15px/1.7 system-ui, -apple-system, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; color: var(--color-text, #1a1a1a); }
+    h1 { margin: 0 0 4px; font-size: 26px; }
+    h2 { margin: 40px 0 8px; padding-bottom: 6px; border-bottom: 2px solid var(--color-primary, #e8391e); font-size: 19px; }
+    h3 { margin: 22px 0 6px; font-size: 16px; }
+    p, li { margin: 6px 0; }
+    .lead { color: var(--color-muted, #66615e); margin-bottom: 20px; }
+    .mode { display: inline-block; padding: 2px 10px; border-radius: 999px; background: var(--color-primary, #e8391e); color: #fff; font-size: 13px; font-weight: bold; }
+    table { width: 100%; border-collapse: collapse; background: #fff; font-size: 14px; }
+    th, td { padding: 8px 10px; border: 1px solid var(--color-border, #dfd9d5); text-align: left; vertical-align: top; }
+    th { background: var(--color-surface, #faf8f6); }
+    code, pre { font: 13px/1.6 ui-monospace, Menlo, Consolas, monospace; }
+    code { padding: 1px 5px; background: #fff; border: 1px solid var(--color-border, #dfd9d5); border-radius: 3px; }
+    pre { margin: 8px 0; padding: 12px 14px; overflow-x: auto; background: #1f1d1b; color: #f3efeb; border-radius: 6px; }
+    pre code { padding: 0; background: none; border: 0; color: inherit; }
+    .tool { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0; }
+    .tool label { display: flex; align-items: center; gap: 6px; }
+    input, select, button, textarea { font: inherit; padding: 6px 10px; border: 1px solid #bdb4ad; border-radius: 4px; background: #fff; }
+    button { cursor: pointer; }
+    button.primary { background: var(--color-primary, #e8391e); border-color: var(--color-primary, #e8391e); color: #fff; }
+    .note { margin: 10px 0; padding: 10px 14px; background: #fff; border-left: 4px solid var(--color-primary, #e8391e); font-size: 14px; }
+    #result { min-height: 60px; white-space: pre-wrap; }
+    a { color: #224d8a; }
+  </style>
+  <link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+  <main>
+    <h1>FE 연동 확인 페이지</h1>
+    <p class="lead">화면 이동 · API 연결 · 에러 처리를 눌러 보며 확인하는 페이지입니다. 지금 API 모드: <span class="mode" id="mode"></span></p>
+
+    <h2>0. 기준 사건</h2>
+    <p>아래 링크와 API 호출에 쓸 사건이에요. 사건 목록(API 1)에서 불러와요. 실제 백엔드의 사건 ID는 시드 적재 순서에 따라 <code>1</code>이 아닐 수 있어요.</p>
+    <div class="tool">
+      <label>사건 <select id="baseCase" style="min-width:320px"></select></label>
+      <button type="button" id="reloadCases">사건 목록 다시 불러오기</button>
+      <span id="casesMsg"></span>
+    </div>
+    <p class="note" id="mockCaseNote" hidden>목 모드에서는 <strong>사건 1번만</strong> S-03 이후 화면과 연결돼요. 나머지 사건은 사건 목록 · 체험 시작까지만 동작해요.</p>
+
+    <h2>1. 앱 실행과 API 모드</h2>
+    <pre><code>cd frontend
+npm install
+npm run dev                         # 목 데이터로 동작 (기본, 백엔드 필요 없음)
+VITE_API_MODE=real npm run dev      # 실제 백엔드로 요청 (백엔드를 8080에서 먼저 실행)</code></pre>
+    <ul>
+      <li><code>.env.example</code>을 복사해 <code>.env.local</code>로 두면 <code>VITE_API_MODE</code>를 파일로 정할 수 있어요 (<code>.env.local</code>은 커밋하지 않아요).</li>
+      <li>실제 모드에서 개발 서버는 <code>/api</code> 요청을 <code>localhost:8080</code>으로 넘겨요. 같은 주소로 요청하니 CORS 설정이 필요 없고, 익명 ID 쿠키(<code>NLNB_AID</code>)도 그대로 붙어요.</li>
+    </ul>
+
+    <h2>2. 화면 주소 (라우터)</h2>
+    <p>화면은 <code>src/app/routes.js</code>의 표로 관리해요. 주소는 정보 구조도(IA) 4장과 같고, 링크는 기준 사건으로 만들어져요. 새로고침 · 주소 직접 입력 · 뒤로 가기 모두 같은 화면을 다시 그려요.</p>
+    <table id="routes"><thead><tr><th>화면 이름</th><th>주소</th><th>화면</th><th>푸터</th><th>사건 상단 바</th></tr></thead><tbody></tbody></table>
+
+
+    <h2>3. API 호출 해 보기</h2>
+    <p>화면이 받는 것과 같은 api 객체를 직접 불러 봐요. 성공하면 응답 본문, 실패하면 <strong>화면이 받는 에러 본문</strong>이 그대로 나와요.</p>
+    <div class="tool">
+      <label>함수 <select id="fn"></select></label>
+      <label>caseId <input id="caseId" type="number" min="1" value="1" style="width:90px"></label>
+      <label>추가 인자(JSON) <input id="extra" type="text" placeholder="" style="width:260px"></label>
+      <button class="primary" id="run" type="button">호출</button>
+    </div>
+    <p id="hint" class="note"></p>
+    <pre id="result"><code>여기에 결과가 나와요.</code></pre>
+
+    <h2>4. 에러 코드와 화면 이동</h2>
+    <p>화면이 API를 부를 때 <code>src/app/errorRedirect.js</code>가 에러를 보고 맞는 화면으로 보내요 (API 명세 1-5 · 1-6). 이동은 <code>replace</code>라서 뒤로 가기를 눌러도 같은 에러로 되돌아오지 않아요.</p>
+    <table>
+      <thead><tr><th>에러 코드</th><th>언제</th><th>이동</th></tr></thead>
+      <tbody>
+        <tr><td><code>INVALID_STATE</code></td><td>지금 체험 단계에서 할 수 없는 요청</td><td>에러의 <code>currentStatus</code>에 맞는 화면 (아래 표)</td></tr>
+        <tr><td><code>EXPERIENCE_NOT_FOUND</code></td><td>체험을 시작한 적이 없거나 쿠키가 없음</td><td>사건 목록 (S-02)</td></tr>
+        <tr><td><code>CASE_NOT_FOUND</code></td><td>없는 사건 · 비공개 사건</td><td>404 · 오류 화면 (S-14). 단, 목록의 <code>startExperience</code>는 화면이 직접 안내해요</td></tr>
+        <tr><td>그 밖의 코드</td><td><code>VALIDATION_ERROR</code>, <code>OUT_OF_ALLOWED_RANGE</code> 등</td><td>이동하지 않아요. 화면이 코드별로 안내해요</td></tr>
+      </tbody>
+    </table>
+    <h3>체험 상태 → 보낼 화면 (<code>src/utils/screenByStatus.js</code>)</h3>
+    <table id="screens"><thead><tr><th>체험 상태</th><th>화면 이름</th><th>주소</th></tr></thead><tbody></tbody></table>
+
+    <h3>목 모드에서 상태를 바꿔 이동 확인하기</h3>
+    <div class="tool" id="mockTools">
+      <label>체험 상태 <select id="status"></select></label>
+      <button type="button" id="applyStatus">상태 적용</button>
+      <button type="button" id="resetMock">처음 상태로</button>
+      <span id="mockMsg"></span>
+    </div>
+    <p>상태를 바꾼 뒤 아래 주소를 열어 보세요. 허용되지 않은 화면이면 상태에 맞는 화면으로 이동해요.</p>
+    <p id="quickLinks"></p>
+    <p class="note" id="realNote" hidden>실제 모드에서는 상태가 서버에 있어요. 위 API 호출 도구의 <code>startExperience</code>를 부르면 기존 체험의 현재 상태(<code>status</code>)를 돌려줘요. 상태를 바꾸려면 체험을 처음부터 진행하세요. (백엔드의 API 10 ~ 14는 아직 없어서 AI · 실제 판결 · 비교 화면은 오류 안내가 나와요)</p>
+
+    <h2>5. 사건 제목은 어디서 와요?</h2>
+    <p>S-04 이후 화면의 API에는 사건 제목이 없어서(정합성 점검 D-01 미결정), 사건 목록 응답(API 1)에서 <code>caseId</code>로 찾아 상단 바에 넣어요. 새로고침해도 목록을 다시 불러 채워요. <code>src/app/caseHeader.js</code> 한 곳만 바꾸면 되니, API가 제목을 주도록 정해지면 그때 교체해요.</p>
+  </main>
+  <script type="module" src="/src/sample/sample.js"></script>
+</body>
+</html>
