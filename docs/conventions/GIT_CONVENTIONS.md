@@ -1,6 +1,6 @@
 # Git 규칙 (Branch / Commit / Pull Request)
 
-이 문서는 CLAUDE.md·AGENTS.md·.claude/skills에 흩어져 있던 **Git / GitHub 관련 규칙**을 한 군데로 모은다. 개발 워크플로우 전체 흐름과 Jira 상태 전환 시점은 아래를 따른다.
+이 문서는 **Git / GitHub 관련 규칙**을 사람이 보기 쉽게 정리한 문서다. AI 코딩 에이전트가 공통으로 따르는 작업 규칙의 원본은 저장소 루트의 `CLAUDE.md`이며, `AGENTS.md`는 전용 기능이 없는 에이전트에만 적용하는 예외를 담는다. 공통 규칙이 문서마다 다르면 `CLAUDE.md`를 따른다.
 
 ---
 
@@ -15,9 +15,12 @@ feature/{ISSUE-KEY}-{작업내용} 브랜치 생성
    ↓
 Jira 상태: 할 일 → 진행 중
    ↓
-Commit (메시지에 ISSUE-KEY 포함)
-   ↓
-Pull Request 생성 (제목/본문에 ISSUE-KEY 포함)
+개발 · 문서 작업 → 결과 보고 (여기서 멈추고 Commit 여부를 확인받는다)
+
+────── 아래는 사용자가 명시적으로 지시할 때만 ──────
+
+"커밋해줘" → Commit (메시지에 ISSUE-KEY 포함)
+"PR 올려줘" → Pull Request 생성 (제목/본문에 ISSUE-KEY 포함)
    ↓
 Jira 상태: 진행 중 → 검토 중
    ↓
@@ -26,6 +29,7 @@ Code Review → PR Merge
 Jira 상태: 검토 중 → 완료 (Merge 이후에만)
 ```
 
+- **"시작하자" 같은 작업 지시 한 번으로 Commit과 Pull Request까지 이어서 수행하지 않는다.** Commit은 "커밋해줘", PR은 "PR 올려줘"처럼 사용자가 따로 명시적으로 지시했을 때만 수행한다. (`CLAUDE.md` 0-1장)
 - 상태 전환은 실제 상황과 반드시 일치시킨다. PR 생성만으로 "완료"로 바꾸지 않는다.
 
 ---
@@ -34,17 +38,20 @@ Jira 상태: 검토 중 → 완료 (Merge 이후에만)
 
 Branch 이름에는 반드시 Jira Issue Key를 포함한다.
 
-- 형식: `feature/{ISSUE-KEY}-{작업내용}`, `fix/{ISSUE-KEY}-{작업내용}`, `refactor/{ISSUE-KEY}-{작업내용}`
+- 형식: `feature/{ISSUE-KEY}-{작업내용}`, `fix/{ISSUE-KEY}-{작업내용}`, `refactor/{ISSUE-KEY}-{작업내용}`, `setup/{ISSUE-KEY}-{작업내용}`(저장소 공통 기초 설정 작업, 주로 `COMMON` Space와 함께 사용)
 - 작업내용은 영어 소문자 + 하이픈(-)
-- 예: `feature/BE-15-login-api`, `feature/FE-8-login-page`, `fix/BE-21-login-error`, `refactor/BE-30-auth-service`
+- 예: `feature/BE-15-login-api`, `feature/FE-8-login-page`, `fix/BE-21-login-error`, `refactor/BE-30-auth-service`, `setup/COMMON-1-coderabbit-config`
 
-생성 절차:
+작업 기준 Branch는 `develop`이다. 새 Branch는 최신 `develop`에서 생성한다.
 
 ```bash
-git checkout main
-git pull origin main
+git checkout develop
+git pull origin develop
 git checkout -b feature/BE-15-login-api
 ```
+
+- Pull Request의 base도 `develop`으로 한다. 저장소 기본 Branch가 `main`이라 PR 생성 화면의 기본값이 `main`이므로 반드시 확인한다. `main`에는 `develop → main` PR로만 반영한다.
+- 선행 작업의 결과물이 필요하면, 그 PR이 `develop`에 Merge된 뒤에 분기한다.
 
 브랜치 생성 직후 Jira 상태를 "할 일 → 진행 중"으로 전환한다. (Atlassian MCP)
 
@@ -112,7 +119,7 @@ git checkout -b feature/BE-15-login-api
 - 테스트가 필요한 부분을 테스트했는가?
 - 보안상 문제가 없는가?
 
-수정 요청이 발생하면 **새 PR을 만들지 않고** 같은 Branch에서 추가 Commit으로 반영한 뒤 다시 리뷰를 요청한다.
+수정 요청이 발생하면 **새 PR을 만들지 않고** 같은 Branch에서 추가 Commit으로 반영한 뒤 다시 리뷰를 요청한다. 리뷰 반영 Commit · Push도 사용자가 명시적으로 지시했을 때만 수행한다.
 
 ```bash
 git add .
@@ -141,4 +148,4 @@ PR이 **실제로 Merge된 이후에만** Jira 상태를 "검토 중 → 완료"
 1. 백엔드(`BE`)/프론트엔드(`FE`) 중 어디에 만들 작업인지 **먼저 사용자에게 확인**한다.
 2. 동일/유사 제목의 기존 이슈가 있는지 Atlassian MCP로 검색한다. 있으면 새로 만들지 않고 사용 여부를 확인한다.
 3. 없으면 신규 이슈를 생성하고, Jira가 부여한 키를 그대로 사용한다.
-4. 이후 절차는 위와 동일하다.
+4. 이후 절차는 위와 동일하다. Commit · PR은 마찬가지로 명시적 지시가 있을 때만 수행한다.
