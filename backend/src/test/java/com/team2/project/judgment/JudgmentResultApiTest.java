@@ -11,6 +11,7 @@ import jakarta.servlet.http.Cookie;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.web.servlet.ResultActions;
 
 /**
  * API 10 ~ 13 통합 테스트 (결과 공개 · 조회)
@@ -39,6 +40,9 @@ class JudgmentResultApiTest extends ApiIntegrationTest {
 				INSERT INTO case_source (case_id, court_level, case_number, court_name, is_final, source_org)
 				VALUES (?, 'FIRST', ?, ?, true, ?)
 				""", caseId, SECRET_CASE_NUMBER, SECRET_COURT_NAME, SOURCE_ORG);
+		// 공개 사건에는 검수를 마친 AI · 재판부 판결이 등록돼 있다 (없는 경우는 따로 지우고 검증한다)
+		insertAiJudgment();
+		insertCourtJudgment();
 	}
 
 	private long insertFactorWithTag(String revealStage, String label, String summaryTag, int displayOrder) {
@@ -47,21 +51,6 @@ class JudgmentResultApiTest extends ApiIntegrationTest {
 				VALUES (?, ?, ?, ?, ?, ?)
 				RETURNING id
 				""", Long.class, caseId, label, label, revealStage, summaryTag, displayOrder);
-	}
-
-	/** 그 상태의 체험 1건과 사용자 최종 판결(징역 15년, 요소 2개)을 만든다 */
-	private Cookie startExperienceAt(String status) {
-		insertExperience(anonymousId, caseId, 1, status);
-		long experienceId = jdbcTemplate.queryForObject(
-			"SELECT id FROM experience WHERE case_id = ? AND anonymous_user_id = ?", Long.class, caseId, anonymousId);
-		long myJudgmentId = jdbcTemplate.queryForObject("""
-				INSERT INTO judgment (case_id, subject_type, timing, experience_id, penalty_type, prison_months, is_published)
-				VALUES (?, 'USER', 'FINAL', ?, 'PRISON', 180, true)
-				RETURNING id
-				""", Long.class, caseId, experienceId);
-		insertJudgmentFactor(myJudgmentId, weaponFactorId, "UP", null);
-		insertJudgmentFactor(myJudgmentId, depositFactorId, "DOWN", null);
-		return new Cookie(COOKIE, anonymousId.toString());
 	}
 
 	/** 검수를 마친 공개 AI 판결 (징역 12년) */
@@ -88,10 +77,32 @@ class JudgmentResultApiTest extends ApiIntegrationTest {
 		insertJudgmentFactor(id, depositFactorId, "DOWN", null);
 	}
 
+	/** 판결을 아직 등록하지 않은 사건을 만든다 (검수 누락 상황) */
+	private void removePublishedJudgment(String subjectType) {
+		jdbcTemplate.update("""
+				DELETE FROM judgment_factor WHERE judgment_id IN
+				    (SELECT id FROM judgment WHERE case_id = ? AND subject_type = ?)
+				""", caseId, subjectType);
+		jdbcTemplate.update("DELETE FROM judgment WHERE case_id = ? AND subject_type = ?", caseId, subjectType);
+	}
+
 	private void insertJudgmentFactor(long judgmentId, long factorId, String direction, String evidence) {
 		jdbcTemplate.update(
 			"INSERT INTO judgment_factor (judgment_id, factor_id, direction, evidence) VALUES (?, ?, ?, ?)",
 			judgmentId, factorId, direction, evidence);
+	}
+
+	/** 그 상태의 체험 1건과 사용자 최종 판결(징역 15년, 요소 2개)을 만든다 */
+	private Cookie startExperienceAt(String status) {
+		insertExperience(anonymousId, caseId, 1, status);
+		long myJudgmentId = jdbcTemplate.queryForObject("""
+				INSERT INTO judgment (case_id, subject_type, timing, experience_id, penalty_type, prison_months, is_published)
+				VALUES (?, 'USER', 'FINAL', ?, 'PRISON', 180, true)
+				RETURNING id
+				""", Long.class, caseId, experienceId());
+		insertJudgmentFactor(myJudgmentId, weaponFactorId, "UP", null);
+		insertJudgmentFactor(myJudgmentId, depositFactorId, "DOWN", null);
+		return new Cookie(COOKIE, anonymousId.toString());
 	}
 
 	private String url(String path) {
@@ -112,7 +123,6 @@ class JudgmentResultApiTest extends ApiIntegrationTest {
 	@Test
 	void getAiJudgment_afterVerdict_returnsAiAndMyJudgmentWithDiff() throws Exception {
 		Cookie cookie = startExperienceAt("VERDICT_CONFIRMED");
-		insertAiJudgment();
 
 		mockMvc.perform(get(url("/judgments/ai")).cookie(cookie))
 			.andExpect(status().isOk())
@@ -131,7 +141,6 @@ class JudgmentResultApiTest extends ApiIntegrationTest {
 	@Test
 	void getAiJudgment_buildsMySummaryFromFactorTags() throws Exception {
 		Cookie cookie = startExperienceAt("VERDICT_CONFIRMED");
-		insertAiJudgment();
 
 		mockMvc.perform(get(url("/judgments/ai")).cookie(cookie))
 			.andExpect(status().isOk())
@@ -139,21 +148,29 @@ class JudgmentResultApiTest extends ApiIntegrationTest {
 	}
 
 	@Test
-	void getAiJudgment_hidesCourtOnlyFields() throws Exception {
+	void getAiJudgment_hidesCourtOnlyFieldsAndExtraDispositions() throws Exception {
 		Cookie cookie = startExperienceAt("VERDICT_CONFIRMED");
-		insertAiJudgment();
 
 		mockMvc.perform(get(url("/judgments/ai")).cookie(cookie))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.judgment.excerpt").isEmpty())
 			.andExpect(jsonPath("$.judgment.plainExplanation").isEmpty())
+			.andExpect(jsonPath("$.judgment.extraDispositions").isEmpty())
 			.andExpect(jsonPath("$.judgment.factors[0].evidence").isEmpty());
+	}
+
+	@Test
+	void getAiJudgment_neverExposesCaseNumberOrCourtName() throws Exception {
+		Cookie cookie = startExperienceAt("VERDICT_CONFIRMED");
+
+		assertThat(bodyOf(mockMvc.perform(get(url("/judgments/ai")).cookie(cookie)).andExpect(status().isOk())))
+			.doesNotContain(SECRET_CASE_NUMBER)
+			.doesNotContain(SECRET_COURT_NAME);
 	}
 
 	@Test
 	void getAiJudgment_beforeVerdict_returns409WithCurrentStatus() throws Exception {
 		Cookie cookie = startExperienceAt("REVIEWED");
-		insertAiJudgment();
 
 		mockMvc.perform(get(url("/judgments/ai")).cookie(cookie))
 			.andExpect(status().isConflict())
@@ -164,11 +181,20 @@ class JudgmentResultApiTest extends ApiIntegrationTest {
 	@Test
 	void getAiJudgment_withoutCookie_returns404ExperienceNotFound() throws Exception {
 		startExperienceAt("VERDICT_CONFIRMED");
-		insertAiJudgment();
 
 		mockMvc.perform(get(url("/judgments/ai")))
 			.andExpect(status().isNotFound())
 			.andExpect(jsonPath("$.code").value("EXPERIENCE_NOT_FOUND"));
+	}
+
+	@Test
+	void getAiJudgment_withoutPublishedAiJudgment_returns500() throws Exception {
+		Cookie cookie = startExperienceAt("VERDICT_CONFIRMED");
+		removePublishedJudgment("AI");
+
+		mockMvc.perform(get(url("/judgments/ai")).cookie(cookie))
+			.andExpect(status().isInternalServerError())
+			.andExpect(jsonPath("$.code").value("INTERNAL_ERROR"));
 	}
 
 	// --- API 11. 실제 판결 공개 ---
@@ -219,13 +245,23 @@ class JudgmentResultApiTest extends ApiIntegrationTest {
 		assertThat(statusOf(experienceId())).isEqualTo("REVIEWED");
 	}
 
+	@Test
+	void revealCourt_withoutPublishedCourtJudgment_keepsStatusSoUserIsNotTrapped() throws Exception {
+		// 상태만 넘어가면 그 뒤 API 12가 매번 500이라 되돌릴 방법 없이 결과 화면에 갇힌다
+		Cookie cookie = startExperienceAt("VERDICT_CONFIRMED");
+		removePublishedJudgment("COURT");
+
+		mockMvc.perform(post(url("/court-reveal")).cookie(cookie))
+			.andExpect(status().isInternalServerError());
+
+		assertThat(statusOf(experienceId())).isEqualTo("VERDICT_CONFIRMED");
+	}
+
 	// --- API 12. 실제 판결 ---
 
 	@Test
 	void getCourtJudgment_afterReveal_returnsThreeJudgmentsWithSource() throws Exception {
 		Cookie cookie = startExperienceAt("AI_REVEALED");
-		insertAiJudgment();
-		insertCourtJudgment();
 
 		mockMvc.perform(get(url("/judgments/court")).cookie(cookie))
 			.andExpect(status().isOk())
@@ -244,21 +280,15 @@ class JudgmentResultApiTest extends ApiIntegrationTest {
 	@Test
 	void getCourtJudgment_neverExposesCaseNumberOrCourtName() throws Exception {
 		Cookie cookie = startExperienceAt("AI_REVEALED");
-		insertAiJudgment();
-		insertCourtJudgment();
 
-		String body = mockMvc.perform(get(url("/judgments/court")).cookie(cookie))
-			.andExpect(status().isOk())
-			.andReturn().getResponse().getContentAsString();
-
-		assertThat(body).doesNotContain(SECRET_CASE_NUMBER).doesNotContain(SECRET_COURT_NAME);
+		assertThat(bodyOf(mockMvc.perform(get(url("/judgments/court")).cookie(cookie)).andExpect(status().isOk())))
+			.doesNotContain(SECRET_CASE_NUMBER)
+			.doesNotContain(SECRET_COURT_NAME);
 	}
 
 	@Test
 	void getCourtJudgment_beforeReveal_returns409WithCurrentStatus() throws Exception {
 		Cookie cookie = startExperienceAt("VERDICT_CONFIRMED");
-		insertAiJudgment();
-		insertCourtJudgment();
 
 		mockMvc.perform(get(url("/judgments/court")).cookie(cookie))
 			.andExpect(status().isConflict())
@@ -269,12 +299,20 @@ class JudgmentResultApiTest extends ApiIntegrationTest {
 	@Test
 	void getCourtJudgment_doesNotChangeStatus() throws Exception {
 		Cookie cookie = startExperienceAt("AI_REVEALED");
-		insertAiJudgment();
-		insertCourtJudgment();
 
 		mockMvc.perform(get(url("/judgments/court")).cookie(cookie)).andExpect(status().isOk());
 
 		assertThat(statusOf(experienceId())).isEqualTo("AI_REVEALED");
+	}
+
+	@Test
+	void getCourtJudgment_withoutPublishedCourtJudgment_returns500() throws Exception {
+		Cookie cookie = startExperienceAt("AI_REVEALED");
+		removePublishedJudgment("COURT");
+
+		mockMvc.perform(get(url("/judgments/court")).cookie(cookie))
+			.andExpect(status().isInternalServerError())
+			.andExpect(jsonPath("$.code").value("INTERNAL_ERROR"));
 	}
 
 	// --- API 13. 비교 공개 ---
@@ -312,5 +350,9 @@ class JudgmentResultApiTest extends ApiIntegrationTest {
 			.andExpect(jsonPath("$.currentStatus").value("VERDICT_CONFIRMED"));
 
 		assertThat(statusOf(experienceId())).isEqualTo("VERDICT_CONFIRMED");
+	}
+
+	private static String bodyOf(ResultActions result) throws Exception {
+		return result.andReturn().getResponse().getContentAsString();
 	}
 }

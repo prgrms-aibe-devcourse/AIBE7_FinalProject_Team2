@@ -77,4 +77,42 @@ class UserSummarySentenceTest {
 		assertThat(UserSummarySentence.of(List.of(factor(Direction.UP, null))))
 			.isEqualTo("판단 요소를 고르지 않은 판단");
 	}
+
+	@Test
+	void of_sameTagOnBothDirections_keepsOnlyTheFirstOne() {
+		// 한 사건의 여러 요소가 같은 태그를 가질 수 있다. 하나를 ↑, 다른 하나를 ↓로 고르면
+		// "범행 경위를 무겁게 보고 범행 경위를 감안한 판단"처럼 스스로 모순되는 문장이 된다
+		String sentence = UserSummarySentence.of(List.of(
+			factor(Direction.UP, "범행 경위"),
+			factor(Direction.DOWN, "범행 경위")));
+
+		assertThat(sentence).isEqualTo("범행 경위를 무겁게 본 판단");
+	}
+
+	@Test
+	void of_sameTagOnBothDirections_doesNotDropOtherTags() {
+		String sentence = UserSummarySentence.of(List.of(
+			factor(Direction.UP, "범행 경위"),
+			factor(Direction.DOWN, "범행 경위"),
+			factor(Direction.DOWN, "반성")));
+
+		assertThat(sentence).isEqualTo("범행 경위를 무겁게 보고 반성을 감안한 판단");
+	}
+
+	@Test
+	void of_tagEndingWithBracket_usesParticleOfLastHangul() {
+		// "반성(자백)" → 괄호를 건너뛰고 "백"의 받침으로 판정한다
+		assertThat(UserSummarySentence.of(List.of(factor(Direction.DOWN, "반성(자백)"))))
+			.isEqualTo("반성(자백)을 감안한 판단");
+	}
+
+	@Test
+	void of_tagEndingWithDigit_usesParticleOfKoreanReading() {
+		// "전과 3" → 삼(받침 ㅁ) → 을
+		assertThat(UserSummarySentence.of(List.of(factor(Direction.UP, "전과 3"))))
+			.isEqualTo("전과 3을 무겁게 본 판단");
+		// "피해자 2" → 이(받침 없음) → 를
+		assertThat(UserSummarySentence.of(List.of(factor(Direction.UP, "피해자 2"))))
+			.isEqualTo("피해자 2를 무겁게 본 판단");
+	}
 }

@@ -1,6 +1,5 @@
 package com.team2.project.judgment.domain;
 
-import com.team2.project.legalcase.domain.Factor;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -22,13 +21,38 @@ public final class UserSummarySentence {
 	private static final char HANGUL_LAST = 0xD7A3;
 	private static final int JONGSEONG_COUNT = 28;
 
+	/** 숫자를 한글로 읽었을 때 받침이 있는지 (0 영 · 1 일 · 3 삼 · 6 육 · 7 칠 · 8 팔) */
+	private static final boolean[] DIGIT_HAS_FINAL_CONSONANT = {
+		true, true, false, true, false, false, true, true, true, false
+	};
+
 	private UserSummarySentence() {
 	}
 
-	/** 최종 판결의 판단 요소 기록으로 한 줄 요약을 만든다. 요소 순서는 넘어온 순서(표시 순서)를 그대로 쓴다 */
+	/**
+	 * 최종 판결의 판단 요소 기록으로 한 줄 요약을 만든다. 요소 순서는 넘어온 순서(표시 순서)를 그대로 쓴다.
+	 * 같은 태그는 한 번만 쓴다. 한 사건 안의 여러 요소가 같은 태그를 가질 수 있고(ERD), 그중 하나를 ↑로
+	 * 다른 하나를 ↓로 고를 수도 있다. 그때는 **먼저 고른(표시 순서가 앞선) 방향에만** 남겨
+	 * "A를 무겁게 보고 A를 감안한 판단"처럼 스스로 모순되는 문장이 나오지 않게 한다 (BE-10 리뷰).
+	 */
 	public static String of(List<JudgmentFactor> factors) {
-		String up = joinTags(factors, Direction.UP);
-		String down = joinTags(factors, Direction.DOWN);
+		List<String> up = new ArrayList<>();
+		List<String> down = new ArrayList<>();
+		for (JudgmentFactor judgmentFactor : factors) {
+			String tag = judgmentFactor.getFactor().getSummaryTag();
+			if (tag == null || tag.isBlank() || up.contains(tag) || down.contains(tag)) {
+				continue;
+			}
+			if (judgmentFactor.getDirection() == Direction.UP) {
+				up.add(tag);
+			} else if (judgmentFactor.getDirection() == Direction.DOWN) {
+				down.add(tag);
+			}
+		}
+		return sentence(String.join(TAG_DELIMITER, up), String.join(TAG_DELIMITER, down));
+	}
+
+	private static String sentence(String up, String down) {
 		if (up.isEmpty() && down.isEmpty()) {
 			return NO_FACTOR;
 		}
@@ -41,28 +65,21 @@ public final class UserSummarySentence {
 		return up + objectParticle(up) + " 무겁게 보고 " + down + objectParticle(down) + " 감안한 판단";
 	}
 
-	/** 같은 태그는 한 번만 쓴다. 태그가 없는 요소는 문장에 넣지 않는다 */
-	private static String joinTags(List<JudgmentFactor> factors, Direction direction) {
-		List<String> tags = new ArrayList<>();
-		for (JudgmentFactor judgmentFactor : factors) {
-			if (judgmentFactor.getDirection() != direction) {
-				continue;
-			}
-			Factor factor = judgmentFactor.getFactor();
-			String tag = factor == null ? null : factor.getSummaryTag();
-			if (tag != null && !tag.isBlank() && !tags.contains(tag)) {
-				tags.add(tag);
-			}
-		}
-		return String.join(TAG_DELIMITER, tags);
-	}
-
-	/** 받침이 있으면 "을", 없으면 "를". 한글이 아닌 글자로 끝나면 "를" */
+	/**
+	 * 받침이 있으면 "을", 없으면 "를".
+	 * 요약 태그는 팀이 자유롭게 입력하는 값이라 괄호 · 문장부호로 끝날 수 있다("반성(자백)").
+	 * 그래서 끝에서부터 거슬러 올라가 처음 만나는 한글 또는 숫자로 판정한다 (BE-10 리뷰).
+	 */
 	private static String objectParticle(String word) {
-		char last = word.charAt(word.length() - 1);
-		if (last < HANGUL_FIRST || last > HANGUL_LAST) {
-			return "를";
+		for (int i = word.length() - 1; i >= 0; i--) {
+			char letter = word.charAt(i);
+			if (letter >= HANGUL_FIRST && letter <= HANGUL_LAST) {
+				return (letter - HANGUL_FIRST) % JONGSEONG_COUNT == 0 ? "를" : "을";
+			}
+			if (letter >= '0' && letter <= '9') {
+				return DIGIT_HAS_FINAL_CONSONANT[letter - '0'] ? "을" : "를";
+			}
 		}
-		return (last - HANGUL_FIRST) % JONGSEONG_COUNT == 0 ? "를" : "을";
+		return "를";
 	}
 }

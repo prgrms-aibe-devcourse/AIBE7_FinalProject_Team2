@@ -5,9 +5,9 @@ import com.team2.project.experience.domain.ExperienceStatus;
 import com.team2.project.experience.service.MyExperienceService;
 import com.team2.project.judgment.domain.Judgment;
 import com.team2.project.judgment.domain.JudgmentFactor;
+import com.team2.project.judgment.domain.PenaltyDifference;
 import com.team2.project.judgment.domain.SubjectType;
 import com.team2.project.judgment.dto.AiJudgmentResponse;
-import com.team2.project.judgment.dto.AiJudgmentResponse.DiffFromMine;
 import com.team2.project.judgment.dto.CourtJudgmentResponse;
 import com.team2.project.judgment.dto.CourtJudgmentResponse.Source;
 import com.team2.project.judgment.dto.JudgmentView;
@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -44,15 +45,16 @@ public class JudgmentResultService {
 	public AiJudgmentResponse getAiJudgment(Long caseId, Optional<UUID> anonymousId) {
 		Experience experience = myExperienceService.getMyExperienceAtLeast(caseId, anonymousId,
 			ExperienceStatus.VERDICT_CONFIRMED);
-		Judgment ai = published(caseId, SubjectType.AI);
+		Judgment ai = judgmentRepository.findPublishedJudgment(caseId, SubjectType.AI)
+			.orElseThrow(() -> missingJudgment(caseId, SubjectType.AI));
 		Judgment mine = userFinal(experience);
 
 		Map<Long, List<JudgmentFactor>> factors = factorsOf(ai, mine);
 		return new AiJudgmentResponse(
 			view(ai, factors),
 			view(mine, factors),
-			DiffFromMine.between(ai, mine),
-			ai.getReferenceTags() == null ? List.of() : ai.getReferenceTags());
+			PenaltyDifference.between(ai, mine),
+			ai.getReferenceTags());
 	}
 
 	/** API 12. 실제 판결을 공개한 뒤(AI_REVEALED 이상)에만 볼 수 있다 */
@@ -60,12 +62,14 @@ public class JudgmentResultService {
 	public CourtJudgmentResponse getCourtJudgment(Long caseId, Optional<UUID> anonymousId) {
 		Experience experience = myExperienceService.getMyExperienceAtLeast(caseId, anonymousId,
 			ExperienceStatus.AI_REVEALED);
-		Judgment court = published(caseId, SubjectType.COURT);
-		Judgment ai = published(caseId, SubjectType.AI);
+		// 공개 판결은 주체별로 1건씩이므로 한 번에 읽는다
+		Map<SubjectType, Judgment> published = judgmentRepository.findPublishedJudgments(caseId).stream()
+			.collect(Collectors.toMap(Judgment::getSubjectType, Function.identity()));
+		Judgment court = required(published, caseId, SubjectType.COURT);
+		Judgment ai = required(published, caseId, SubjectType.AI);
 		Judgment mine = userFinal(experience);
 
 		Map<Long, List<JudgmentFactor>> factors = factorsOf(court, ai, mine);
-		List<String> deidentifiedItems = experience.getLegalCase().getDeidentifiedItems();
 		return new CourtJudgmentResponse(
 			view(court, factors),
 			view(mine, factors),
@@ -73,7 +77,7 @@ public class JudgmentResultService {
 			caseSourceRepository.findFinalByCaseId(caseId)
 				.map(source -> new Source(source.getSourceOrg()))
 				.orElse(null),
-			deidentifiedItems == null ? List.of() : deidentifiedItems);
+			experience.getLegalCase().getDeidentifiedItems());
 	}
 
 	private JudgmentView view(Judgment judgment, Map<Long, List<JudgmentFactor>> factors) {
@@ -87,14 +91,21 @@ public class JudgmentResultService {
 			.collect(Collectors.groupingBy(factor -> factor.getJudgment().getId()));
 	}
 
+	private Judgment required(Map<SubjectType, Judgment> published, Long caseId, SubjectType subjectType) {
+		Judgment judgment = published.get(subjectType);
+		if (judgment == null) {
+			throw missingJudgment(caseId, subjectType);
+		}
+		return judgment;
+	}
+
 	/**
-	 * 사건의 공개된 AI · 재판부 판결. 공개 사건이라면 검수를 마친 판결이 반드시 등록돼 있어야 한다.
-	 * 없다면 사용자가 고칠 수 없는 데이터 문제이므로 500으로 두고 로그로 남긴다 (API 명세 거절 조건에 없음).
+	 * 공개 사건이라면 검수를 마친 AI · 재판부 판결이 반드시 등록돼 있어야 한다.
+	 * 없다면 사용자가 고칠 수 없는 데이터 문제이므로 500으로 두고 로그로 남긴다 (API 명세 v0.10).
+	 * 상태를 옮기기 전에 RevealService가 먼저 같은 검사를 하므로, 결과 화면에 갇히지는 않는다.
 	 */
-	private Judgment published(Long caseId, SubjectType subjectType) {
-		return judgmentRepository.findPublishedJudgment(caseId, subjectType)
-			.orElseThrow(() -> new IllegalStateException(
-				"사건 " + caseId + "에 공개된 " + subjectType + " 판결이 없습니다."));
+	static IllegalStateException missingJudgment(Long caseId, SubjectType subjectType) {
+		return new IllegalStateException("사건 " + caseId + "에 공개된 " + subjectType + " 판결이 없습니다.");
 	}
 
 	/** 판결을 확정한 체험이므로 최종 판결이 반드시 있다 */

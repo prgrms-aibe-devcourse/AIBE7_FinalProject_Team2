@@ -90,12 +90,19 @@ class JudgmentViewAssemblerTest {
 	}
 
 	@Test
-	void toView_noExtraDispositions_returnsEmptyList() {
+	void toView_onlyCourtKeepsExtraDispositions() {
+		// 명세 판결 응답 공통 형식: extraDispositions는 USER · AI 모두 []
+		assertThat(assembler.toView(judgment(SubjectType.COURT), List.of()).extraDispositions()).hasSize(1);
+		assertThat(assembler.toView(judgment(SubjectType.AI), List.of()).extraDispositions()).isEmpty();
+		assertThat(assembler.toView(judgment(SubjectType.USER), List.of()).extraDispositions()).isEmpty();
+	}
+
+	@Test
+	void toView_noFactor_returnsEmptyListsAndFallbackSummary() {
 		Judgment judgment = mock(Judgment.class);
 		when(judgment.getSubjectType()).thenReturn(SubjectType.USER);
-		when(judgment.getExtraDispositions()).thenReturn(null);
 
-		JudgmentView view = assembler.toView(judgment, null);
+		JudgmentView view = assembler.toView(judgment, List.of());
 
 		assertThat(view.extraDispositions()).isEmpty();
 		assertThat(view.factors()).isEmpty();

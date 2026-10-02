@@ -15,9 +15,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class JudgmentViewAssembler {
 
-	/** 판단 1건을 응답 형식으로. factors는 이 판단의 요소 기록(표시 순서) */
+	/** 판단 1건을 응답 형식으로. factors는 이 판단의 요소 기록(표시 순서, 없으면 빈 목록) */
 	public JudgmentView toView(Judgment judgment, List<JudgmentFactor> factors) {
-		List<JudgmentFactor> considered = factors == null ? List.of() : factors;
 		boolean user = judgment.getSubjectType() == SubjectType.USER;
 		boolean court = judgment.getSubjectType() == SubjectType.COURT;
 		return new JudgmentView(
@@ -27,13 +26,14 @@ public class JudgmentViewAssembler {
 			judgment.getPrisonMonths(),
 			judgment.getFineAmount(),
 			judgment.getSuspensionMonths(),
-			judgment.getExtraDispositions() == null ? List.of() : judgment.getExtraDispositions(),
-			// USER는 저장값이 없고 요약 태그로 규칙 문장을 만든다 (API 명세 판결 응답 공통 형식)
-			user ? UserSummarySentence.of(considered) : judgment.getSummary(),
+			// 부가 처분은 재판부 판결에만 둔다 (API 명세 판결 응답 공통 형식: USER · AI는 [])
+			court ? judgment.getExtraDispositions() : List.of(),
+			// USER는 저장값이 없고 요약 태그로 규칙 문장을 만든다
+			user ? UserSummarySentence.of(factors) : judgment.getSummary(),
 			user ? null : judgment.getReasoning(),
 			court ? judgment.getExcerpt() : null,
 			court ? judgment.getPlainExplanation() : null,
-			considered.stream()
+			factors.stream()
 				.map(factor -> new JudgmentView.FactorView(
 					factor.getFactor().getId(),
 					factor.getFactor().getLabel(),
