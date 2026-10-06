@@ -19,7 +19,7 @@ spring:
   flyway:
     enabled: true
     # 기본값은 스키마(db/migration)만. 운영에서 환경변수를 빠뜨려도 시드가 들어가지 않도록 기본값을 안전한 쪽으로 둔다.
-    # 로컬 · CI에서만 FLYWAY_LOCATIONS=classpath:db/migration,classpath:db/seed 로 개발용 가상 사건 시드를 함께 넣는다.
+    # 로컬 ./gradlew bootRun은 build.gradle이 시드 위치를 자동으로 정한다(BE-28). CI는 FLYWAY_LOCATIONS로 가상 사건 시드를 켠다.
     locations: ${FLYWAY_LOCATIONS:classpath:db/migration}
     # 시드(R__)를 한 번 적용한 DB에서 시드 위치를 빼고 실행해도 기동되도록, 적용된 반복 마이그레이션이 없어도 검증을 통과시킨다.
     # (없으면 "Detected applied migration not resolved locally"로 기동 실패) 버전 파일 검증은 그대로 유지한다.
