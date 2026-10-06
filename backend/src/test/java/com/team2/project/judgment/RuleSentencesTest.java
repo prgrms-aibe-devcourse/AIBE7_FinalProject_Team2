@@ -85,6 +85,19 @@ class RuleSentencesTest {
 	}
 
 	@Test
+	void from_sameTagOnTwoFactorsInSameCategory_mentionsTagOnlyOnce() {
+		// 같은 요약어를 가진 요소가 둘 다 DIVERGED면 "A · A에 대한 판단이…"처럼 중복되면 안 된다 (PR #67 리뷰)
+		MatrixRow first = row(6, "피해자에게는 부양하던 어린 자녀 2명이 있다", "피해자의 부양 가족",
+			Direction.UP, null, Direction.UP, MatrixCategory.DIVERGED);
+		MatrixRow second = row(10, "다른 요소지만 같은 요약어", "피해자의 부양 가족",
+			Direction.DOWN, Direction.UP, null, MatrixCategory.DIVERGED);
+
+		RuleSentences sentences = RuleSentences.from(List.of(first, second));
+
+		assertThat(sentences.differences()).containsExactly("피해자의 부양 가족에 대한 판단이 세 판결 사이에서 엇갈렸어요.");
+	}
+
+	@Test
 	void from_onlyMeMissedAndDiverged_bothAppearAsSeparateSentences() {
 		MatrixRow onlyMeMissed = row(9, "공탁했다", "피해 회복 공탁",
 			null, Direction.DOWN, Direction.DOWN, MatrixCategory.ONLY_ME_MISSED);

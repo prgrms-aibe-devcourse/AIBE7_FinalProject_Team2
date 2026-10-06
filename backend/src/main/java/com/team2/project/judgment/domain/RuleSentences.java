@@ -61,6 +61,7 @@ public record RuleSentences(List<String> common, List<String> differences) {
 			.filter(row -> row.category() == category)
 			.filter(row -> direction == null || row.user() == direction)
 			.map(RuleSentences::tagOf)
+			.distinct()
 			.reduce((a, b) -> a + " · " + b)
 			.orElse("");
 	}
