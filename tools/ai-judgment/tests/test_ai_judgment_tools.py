@@ -422,6 +422,15 @@ class SeedSqlTest(Fixtures):
         sql = build_sql(self.case, self.output, build_prompt(self.case), "m", "r")
         self.assertIn("'APPROVED', 'r', now(), now()", sql)
 
+    def test_parse_reviewed_at_rejects_offset_out_of_range(self):
+        # PostgreSQL이 받지 못하는 오프셋은 SQL을 만들기 전에 막는다. 실제 범위의 양 끝은 통과
+        self.assertEqual(parse_reviewed_at("2026-10-06T00:00:00+14:00").utcoffset().total_seconds(), 14 * 3600)
+        self.assertEqual(parse_reviewed_at("2026-10-06T00:00:00-12:00").utcoffset().total_seconds(), -12 * 3600)
+        for bad in ("2026-10-06T00:00:00+16:00", "2026-10-06T00:00:00-13:00", "2026-10-06T00:00:00+14:01"):
+            with self.subTest(bad=bad):
+                with self.assertRaisesRegex(ValueError, "범위"):
+                    parse_reviewed_at(bad)
+
     def test_parse_reviewed_at_requires_timezone_and_format(self):
         self.assertEqual(parse_reviewed_at("2026-10-06T09:30:00Z").utcoffset().total_seconds(), 0)
         for bad in ("2026-10-06T00:00:00", "2026-10-06 오전", "어제"):

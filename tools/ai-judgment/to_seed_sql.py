@@ -66,8 +66,15 @@ def dollar_quote_tag(text):
     return tag
 
 
+# 실제 세계 시간대 범위(UTC−12:00 ~ UTC+14:00). Python은 ±24시간 미만이면 받아들이지만
+# PostgreSQL 숫자 오프셋은 약 ±15:59까지만 받으므로, 범위 밖 값은 SQL 적재 단계가 아니라 여기서 막는다
+MIN_UTC_OFFSET = datetime.timedelta(hours=-12)
+MAX_UTC_OFFSET = datetime.timedelta(hours=14)
+
+
 def parse_reviewed_at(text):
-    """--reviewed-at 값(ISO 8601, 시간대 필수) → 시간대가 있는 datetime. 형식이 틀리거나 시간대가 없으면 ValueError."""
+    """--reviewed-at 값(ISO 8601, 시간대 필수) → 시간대가 있는 datetime.
+    형식이 틀리거나, 시간대가 없거나, 시간대 오프셋이 UTC−12:00 ~ UTC+14:00 밖이면 ValueError."""
     value = text.strip()
     if value.endswith("Z"):  # Python 3.10 이하 fromisoformat은 Z를 읽지 못한다
         value = value[:-1] + "+00:00"
@@ -77,6 +84,9 @@ def parse_reviewed_at(text):
         raise ValueError(f"--reviewed-at 형식이 올바르지 않습니다: {text!r} (예: 2026-10-06T00:00:00+09:00)") from None
     if parsed.tzinfo is None:
         raise ValueError(f"--reviewed-at에 시간대를 넣어야 합니다: {text!r} (예: 2026-10-06T00:00:00+09:00)")
+    offset = parsed.utcoffset()
+    if not MIN_UTC_OFFSET <= offset <= MAX_UTC_OFFSET:
+        raise ValueError(f"--reviewed-at의 시간대 오프셋이 범위(UTC-12:00 ~ UTC+14:00)를 벗어났습니다: {text!r}")
     return parsed
 
 

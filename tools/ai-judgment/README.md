@@ -116,7 +116,7 @@ python3 to_seed_sql.py case.json out/ai_output.json \
 ```
 
 - `--model-name` · `--reviewed-by`는 50자 이내 (`ai_generation` 컬럼 길이)
-- `--reviewed-at`은 **팀 검수를 마친 시각**(ISO 8601, 시간대 필수, 예: `2026-10-06T00:00:00+09:00`)이다. `ai_generation.reviewed_at`에 고정값으로 들어간다. 빼면 `now()`가 들어가 SQL이 **실행된 시각**(운영 첫 배포일, Flyway가 파일을 다시 실행한 날 등)이 검수 시각으로 남고, 다시 실행될 때마다 다른 날짜의 `APPROVED` 기록이 쌓여 "언제 검수했는지"를 추적할 수 없다(빼면 경고를 낸다). `created_at`(적재 시각)은 `now()` 그대로다.
+- `--reviewed-at`은 **팀 검수를 마친 시각**(ISO 8601, 시간대 필수, 예: `2026-10-06T00:00:00+09:00`)이다. 시간대 오프셋은 실제 범위(UTC−12:00 ~ UTC+14:00) 안이어야 한다(PostgreSQL이 받지 못하는 값을 SQL 만들기 전에 막는다). `ai_generation.reviewed_at`에 고정값으로 들어간다. 빼면 `now()`가 들어가 SQL이 **실행된 시각**(운영 첫 배포일, Flyway가 파일을 다시 실행한 날 등)이 검수 시각으로 남고, 다시 실행될 때마다 다른 날짜의 `APPROVED` 기록이 쌓여 "언제 검수했는지"를 추적할 수 없다(빼면 경고를 낸다). `created_at`(적재 시각)은 `now()` 그대로다.
 - `--flyway`는 `BEGIN;` · `COMMIT;`을 빼고 출력한다. Flyway는 마이그레이션마다 자체 트랜잭션으로 감싸므로, 파일 안에 또 `BEGIN`/`COMMIT`이 있으면 그 트랜잭션이 중간에 끝나 적용 기록이 어긋날 수 있다. 붙이지 않으면(기본값) 지금처럼 `BEGIN`/`COMMIT`을 포함해 수동 `psql` 실행에 바로 쓸 수 있다.
 - 감경해 형벌 종류가 바뀐 판결은 `judgment.reduced_to`에 함께 들어간다
 
