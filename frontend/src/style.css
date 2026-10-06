@@ -94,3 +94,8 @@ body {
 /* .message-panel button의 위 여백(20px)이 gap과 겹치지 않게 지운다 (버튼 간격은 gap만 쓴다).
    .message-panel button과 우선순위가 같으면 선언 순서에 기대게 되므로, 부모 클래스를 붙여 확실히 이기게 한다 */
 .not-found-panel .not-found-actions button { margin-top: 0; }
+
+/* 섹션 본문 점 목록 (FE-14). utils/contentLines.js의 renderContent가 만든다.
+   여러 화면(S-04 · S-05, 이후 다른 화면)이 함께 쓰므로 화면 클래스 없이 여기 둔다 */
+.content-lines { margin: 0; padding-left: 20px; }
+.content-lines li + li { margin-top: 6px; }
