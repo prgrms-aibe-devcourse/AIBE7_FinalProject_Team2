@@ -31,8 +31,8 @@ class ComparisonApiTest extends ApiIntegrationTest {
 		weaponFactorId = insertFactor(caseId, "OVERVIEW", "다투던 중 집에 있던 흉기를 집어 들었다",
 			"다투던 중 흉기를 집어 들었다", 1);
 		depositFactorId = insertFactor(caseId, "DETAIL", "피해 회복을 위해 5,000만 원을 공탁했다", null, 2);
-		jdbcTemplate.update("UPDATE factor SET summary_tag = ? WHERE id = ?", "범행 방식", weaponFactorId);
-		jdbcTemplate.update("UPDATE factor SET summary_tag = ? WHERE id = ?", "피해 회복", depositFactorId);
+		jdbcTemplate.update("UPDATE factor SET summary_tag = ? WHERE id = ?", "흉기 사용", weaponFactorId);
+		jdbcTemplate.update("UPDATE factor SET summary_tag = ? WHERE id = ?", "피해 회복 공탁", depositFactorId);
 		// "실형 5년 이상 ~ 10년 미만"(60 ~ 120개월), MURDER crime_type 구간의 4번째(SUSPENDED, <3년, 3~5년 다음)
 		preRangeOptionId = rangeOptionIds("MURDER").get(3);
 
@@ -132,11 +132,11 @@ class ComparisonApiTest extends ApiIntegrationTest {
 	void getComparison_buildsRuleSentenceFromSummaryTagForAllSameFactor() throws Exception {
 		Cookie cookie = startCompletedExperience();
 
-		// 규칙 문장은 라벨(완전한 서술문)이 아니라 요약 태그("범행 방식")로 만든다 (BE-26 확정)
+		// 규칙 문장은 라벨(완전한 서술문)이 아니라 요약 태그("흉기 사용")로 만든다 (BE-26 확정)
 		mockMvc.perform(get(url()).cookie(cookie))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.ruleSentences.common[0]")
-				.value("세 판결 모두 범행 방식을 형량을 높이는 요소로 봤어요."))
+				.value("세 판결 모두 흉기 사용을 형량을 높이는 요소로 봤어요."))
 			.andExpect(jsonPath("$.ruleSentences.differences").isNotEmpty())
 			.andExpect(jsonPath("$.matrix[0].summaryTag").doesNotExist());
 	}

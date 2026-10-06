@@ -34,8 +34,8 @@ class JudgmentResultApiTest extends ApiIntegrationTest {
 		caseId = insertCase("MURDER", "PUBLISHED");
 		jdbcTemplate.update("UPDATE legal_case SET deidentified_items = ?::jsonb WHERE id = ?",
 			"[\"인명\", \"지명\"]", caseId);
-		weaponFactorId = insertFactorWithTag("OVERVIEW", "다투던 중 흉기를 집어 들었다", "범행 방식", 1);
-		depositFactorId = insertFactorWithTag("DETAIL", "피해 회복을 위해 공탁했다", "피해 회복", 2);
+		weaponFactorId = insertFactorWithTag("OVERVIEW", "다투던 중 흉기를 집어 들었다", "흉기 사용", 1);
+		depositFactorId = insertFactorWithTag("DETAIL", "피해 회복을 위해 공탁했다", "피해 회복 공탁", 2);
 		jdbcTemplate.update("""
 				INSERT INTO case_source (case_id, court_level, case_number, court_name, is_final, source_org)
 				VALUES (?, 'FIRST', ?, ?, true, ?)
@@ -144,7 +144,7 @@ class JudgmentResultApiTest extends ApiIntegrationTest {
 
 		mockMvc.perform(get(url("/judgments/ai")).cookie(cookie))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.myJudgment.summary").value("범행 방식을 무겁게 보고 피해 회복을 감안한 판단"));
+			.andExpect(jsonPath("$.myJudgment.summary").value("흉기 사용을 무겁게 보고 피해 회복 공탁을 감안한 판단"));
 	}
 
 	@Test

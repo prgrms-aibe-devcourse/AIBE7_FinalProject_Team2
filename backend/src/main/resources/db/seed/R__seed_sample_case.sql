@@ -24,6 +24,27 @@ DECLARE
     v_ai_id        bigint;
     v_court_id     bigint;
 BEGIN
+    -- 판단 요소 요약어 기준 변경(BE-26): summary_tag는 분류명이 아니라 요소별 요약어를 쓴다.
+    -- 이 시드는 "이미 넣은 사건이면 건너뛰기" 구조라 아래 INSERT만 고치면 이미 사건이 들어간 로컬 DB에는
+    -- 반영되지 않는다. title + display_order로 찾아 바꾸는 UPDATE를 먼저 실행해 기존 DB에도 반영한다.
+    UPDATE factor f
+    SET summary_tag = x.summary_tag
+    FROM (VALUES
+        (1, '채무 다툼'),
+        (2, '흉기 사용'),
+        (3, '구호 조치 없음'),
+        (4, '반복된 다툼'),
+        (5, '유족의 엄벌 의사'),
+        (6, '피해자의 부양 가족'),
+        (7, '범행 인정 · 반성'),
+        (8, '전과 없음'),
+        (9, '피해 회복 공탁'),
+        (10, '우발적 범행 주장'),
+        (11, '정신적 피로 주장')
+    ) AS x(display_order, summary_tag)
+    WHERE f.case_id = (SELECT id FROM legal_case WHERE title = '빌린 돈 문제로 찾아온 지인을 살해한 사건')
+      AND f.display_order = x.display_order;
+
     -- 이미 넣었으면 건너뛴다 (반복 실행 대비)
     IF EXISTS (SELECT 1 FROM legal_case WHERE title = '빌린 돈 문제로 찾아온 지인을 살해한 사건') THEN
         RETURN;
@@ -97,18 +118,19 @@ BEGIN
     (v_case_id, 'PRISON', 60,   360,  30,  360, '유기징역 선택, 작량감경 시 하한 1/2. 법률상 감경 · 가중 사유 없음', true, 3);
 
     -- 판단 요소 11개 (display_order = ERD 6장 요소 번호)
+    -- summary_tag는 여러 요소를 묶는 분류명이 아니라 요소마다 붙이는 요약어다(BE-26 확정, 프론트 목과 같은 값).
     INSERT INTO factor (case_id, label, pre_label, reveal_stage, summary_tag, display_order) VALUES
-    (v_case_id, '빌린 돈을 갚지 못해 오래 다툼이 있었다',                 '돈 문제로 오래 다툼이 있었다', 'OVERVIEW', '범행 경위',     1),
-    (v_case_id, '다투던 중 집에 있던 흉기를 집어 들었다',                 '다투던 중 흉기를 집어 들었다', 'OVERVIEW', '범행 방식',     2),
-    (v_case_id, '범행 뒤 구호 조치 없이 현장을 떠났다',                   '범행 뒤 현장을 떠났다',        'OVERVIEW', '범행 후 정황',  3),
-    (v_case_id, '사건 3개월 전부터 변제 문제로 여러 차례 다퉜다',         NULL,                            'DETAIL',   '범행 경위',     4),
-    (v_case_id, '유족이 엄벌을 원한다',                                   NULL,                            'DETAIL',   '피해자 의사',   5),
-    (v_case_id, '피해자에게는 부양하던 어린 자녀 2명이 있다',             NULL,                            'DETAIL',   '피해 결과',     6),
-    (v_case_id, '수사 초기부터 범행을 인정하고 반성하고 있다',            NULL,                            'DETAIL',   '반성',          7),
-    (v_case_id, '형사처벌 전력이 없다',                                   NULL,                            'DETAIL',   '전력',          8),
-    (v_case_id, '피해 회복을 위해 5,000만 원을 공탁했다',                 NULL,                            'DETAIL',   '피해 회복',     9),
-    (v_case_id, '피고인은 우발적 범행이라고 주장한다',                    NULL,                            'ARGUMENT', '범행 경위',     10),
-    (v_case_id, '피고인은 오랜 채무로 정신적으로 지쳐 있었다고 주장한다', NULL,                            'ARGUMENT', '피고인 사정',   11);
+    (v_case_id, '빌린 돈을 갚지 못해 오래 다툼이 있었다',                 '돈 문제로 오래 다툼이 있었다', 'OVERVIEW', '채무 다툼',        1),
+    (v_case_id, '다투던 중 집에 있던 흉기를 집어 들었다',                 '다투던 중 흉기를 집어 들었다', 'OVERVIEW', '흉기 사용',        2),
+    (v_case_id, '범행 뒤 구호 조치 없이 현장을 떠났다',                   '범행 뒤 현장을 떠났다',        'OVERVIEW', '구호 조치 없음',   3),
+    (v_case_id, '사건 3개월 전부터 변제 문제로 여러 차례 다퉜다',         NULL,                            'DETAIL',   '반복된 다툼',      4),
+    (v_case_id, '유족이 엄벌을 원한다',                                   NULL,                            'DETAIL',   '유족의 엄벌 의사', 5),
+    (v_case_id, '피해자에게는 부양하던 어린 자녀 2명이 있다',             NULL,                            'DETAIL',   '피해자의 부양 가족', 6),
+    (v_case_id, '수사 초기부터 범행을 인정하고 반성하고 있다',            NULL,                            'DETAIL',   '범행 인정 · 반성', 7),
+    (v_case_id, '형사처벌 전력이 없다',                                   NULL,                            'DETAIL',   '전과 없음',        8),
+    (v_case_id, '피해 회복을 위해 5,000만 원을 공탁했다',                 NULL,                            'DETAIL',   '피해 회복 공탁',   9),
+    (v_case_id, '피고인은 우발적 범행이라고 주장한다',                    NULL,                            'ARGUMENT', '우발적 범행 주장', 10),
+    (v_case_id, '피고인은 오랜 채무로 정신적으로 지쳐 있었다고 주장한다', NULL,                            'ARGUMENT', '정신적 피로 주장', 11);
 
     -- 원본 판결문 (내부 전용). 가상 사건이라 실제 사건번호 · 법원 · 원문이 없다
     INSERT INTO case_source (case_id, court_level, case_number, court_name, decided_at, is_final, source_org, original_text, note)
