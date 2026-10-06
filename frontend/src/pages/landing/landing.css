@@ -31,12 +31,8 @@
 :is(.landing-page, .case-list-page) .message-panel { padding: 44px 28px; }
 :is(.landing-page, .case-list-page) .message-panel button { margin-top: 20px; }
 
-.site-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 28px; border-bottom: 1px solid var(--color-border); }
-.site-nav { display: flex; gap: 8px; }
-.logo-button { border: 0; background: transparent; padding: 6px 0; font-size: 18px; font-weight: 800; color: var(--color-text); }
-.nav-button { border: 0; background: transparent; padding: 10px 12px; min-height: 44px; color: var(--color-muted); }
-.nav-button:hover { color: var(--color-text); }
-.site-footer { padding: 24px 28px; border-top: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-muted); font-size: 13px; }
+/* 사이트 헤더 · 푸터(.site-header · .site-nav · .logo-button · .nav-button · .site-footer)는 공통 컴포넌트라
+   src/style.css에만 정의한다. S-01만 다르게 해야 하면 여기에 .landing-page .site-header처럼 화면 클래스로 감싸서 추가한다. */
 
 .landing-page .hero { padding: 88px 28px 72px; text-align: center; }
 .landing-page .hero h1 { font-size: 34px; line-height: 1.4; }
@@ -51,7 +47,6 @@
 .landing-page .feature-card p { color: var(--color-muted); font-size: 14px; }
 
 @media (max-width: 720px) {
-  .site-header { padding: 12px 16px; }
   .landing-page .hero { padding: 56px 20px 48px; }
   .landing-page .hero h1 { font-size: 26px; }
   .landing-page .feature-section { padding: 40px 20px 48px; }

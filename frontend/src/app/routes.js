@@ -27,6 +27,6 @@ export const routes = [
   { name: 'ai', path: '/cases/:caseId/result/ai', render: renderAiPage, needsHeader: true, title: 'AI 판결' },
   { name: 'court', path: '/cases/:caseId/result/court', render: renderCourtPage, needsHeader: true, title: '실제 판결' },
   { name: 'comparison', path: '/cases/:caseId/result/compare', render: renderComparisonPage, needsHeader: true, title: '세 판결 비교' },
-  // S-14: 주소가 없다. 맞는 화면이 없는 주소거나 없는 사건일 때 보여 준다 (FE-3에서 화면 교체)
+  // S-14: 주소가 없다. 맞는 화면이 없는 주소거나 없는 사건일 때 보여 준다 (라우터 showNotFound · errorRedirect CASE_NOT_FOUND)
   { name: 'notFound', path: null, render: renderNotFoundPage, title: '찾을 수 없어요' },
 ];
