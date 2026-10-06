@@ -42,6 +42,35 @@ tasks.named('test') {
 	useJUnitPlatform()
 }
 
+// 로컬 실행(./gradlew bootRun) 전용: Flyway 마이그레이션 위치를 자동으로 정한다 (BE-28)
+// 셸 환경변수(FLYWAY_LOCATIONS)는 다른 터미널 · IDE에서 실행하면 빠지기 쉽고, 빠져도 오류 없이 시드 없이 떠서 알아채기 어렵다.
+// - 기본: 스키마 + 가상 사건 시드(db/seed)
+// - 비공개 서브모듈(private-seed/seed)에 SQL이 있으면 실제 사건도 넣는다 (권한이 없으면 빈 폴더라 자동으로 빠진다)
+// - FLYWAY_LOCATIONS를 직접 주면 그 값을 그대로 쓴다
+// 운영(jar · Docker) · 테스트는 이 설정을 쓰지 않는다 → application.yml 기본값(스키마만) 그대로
+tasks.named('bootRun') {
+	doFirst {
+		def given = System.getenv('FLYWAY_LOCATIONS')
+		def locations = given
+		if (!given) {
+			def realSeed = file('private-seed/seed')
+			def realSeedFiles = realSeed.isDirectory() ? realSeed.listFiles({ f -> f.name.endsWith('.sql') } as FileFilter) : null
+			locations = 'classpath:db/migration,classpath:db/seed'
+			if (realSeedFiles) {
+				// 절대 경로로 넘겨 실행 위치와 상관없이 같은 폴더를 읽게 한다
+				locations += ",filesystem:${realSeed.absolutePath}"
+			}
+		}
+		environment 'FLYWAY_LOCATIONS', locations
+		def source = given ? '직접 지정' : '자동'
+		def realCase = locations.contains('private-seed') ? '포함'
+			: given ? '없음 (FLYWAY_LOCATIONS에 private-seed 위치가 없음)'
+			: '없음 (backend/private-seed 서브모듈이 비어 있음 — 권한이 있으면 git submodule update --init backend/private-seed)'
+		logger.lifecycle("[bootRun] Flyway 위치(${source}): ${locations}")
+		logger.lifecycle("[bootRun] 실제 사건 시드: ${realCase}")
+	}
+}
+
 // 실행 가능한 bootJar 하나만 만들도록 plain jar 생성을 끈다 (Dockerfile의 *.jar 복사가 한 파일만 잡도록)
 tasks.named('jar') {
 	enabled = false

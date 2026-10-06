@@ -13,6 +13,7 @@
 | v1.6 | 2026-10-02 | FE-2 리뷰 반영 — 8장에 Nginx SPA fallback(`try_files $uri $uri/ /index.html`) 요구사항 추가. History API 하위 경로(`/cases/1/review` 등) 새로고침 시 404 방지용 |
 | v1.7 | 2026-10-02 | COMMON-15 반영 — 9장 `CLAUDE.md`(규칙 원본) · `AGENTS.md`(다른 에이전트용 안내) 역할 구분 |
 | v1.8 | 2026-10-02 | BE-17 반영 — 2장에 실제 사건 데이터 주입 방식 추가(비공개 저장소 `backend/private-seed` 서브모듈 + Flyway `filesystem:` 위치), `FLYWAY_LOCATIONS` 표에 실제 사건 행 추가, `repeatable:missing` 재검토 결과 |
+| v1.9 | 2026-10-06 | BE-28 반영 — 2장 `FLYWAY_LOCATIONS` 표: 로컬 `./gradlew bootRun`은 가상 시드 + (서브모듈에 SQL이 있으면) 실제 사건 위치를 `build.gradle`이 자동으로 정함. 환경변수를 주면 그 값 우선, 운영 · 테스트 · CI는 변경 없음 |
 
 
 ## **1. Backend**
@@ -112,11 +113,11 @@ MVP에는 관리자 화면이 없으므로 대표 사건 데이터와 검수된 
   | 환경 | `FLYWAY_LOCATIONS` | 결과 |
   | --- | --- | --- |
   | 운영 (기본값) | 지정하지 않음 → `classpath:db/migration` | 스키마만 |
-  | 로컬 · CI | `classpath:db/migration,classpath:db/seed` | 스키마 + 가상 사건 1건 |
-  | 로컬 (실제 사건 확인) | `classpath:db/migration,filesystem:./private-seed/seed` (가상 사건도 보려면 `,classpath:db/seed` 추가) | 스키마 + 실제 사건 (비공개 저장소 권한 필요) |
+  | 로컬 (`./gradlew bootRun`) | 지정하지 않음 → `build.gradle`이 자동으로 정함: `classpath:db/migration,classpath:db/seed` + 서브모듈에 SQL이 있으면 `,filesystem:<backend/private-seed/seed 절대 경로>` (BE-28) | 스키마 + 가상 사건 (+ 실제 사건, 비공개 저장소 권한 필요) |
+  | CI | `classpath:db/migration,classpath:db/seed` | 스키마 + 가상 사건 1건 |
   | 운영 (최종) | `classpath:db/migration,filesystem:<서버의 실제 데이터 경로>` | 스키마 + 실제 사건 (가상 사건 제외) |
 
-  기본값을 스키마만으로 둬서, 운영에서 환경변수를 빠뜨려도 시드가 들어가지 않는다. CI(`backend-ci.yml`)는 시드까지 켜서 시드가 스키마 제약을 깨지 않는지 매번 확인한다.
+  기본값을 스키마만으로 둬서, 운영에서 환경변수를 빠뜨려도 시드가 들어가지 않는다. 로컬 `bootRun`만 자동 설정을 쓰는 이유는 셸 환경변수가 다른 터미널 · IDE 실행에서 빠지기 쉽고, 빠져도 오류 없이 시드 없이 떠서 알아채기 어렵기 때문이다(BE-28). `FLYWAY_LOCATIONS`를 주면 자동 설정보다 우선하고, 기동 로그에 `[bootRun] Flyway 위치(...)` · `[bootRun] 실제 사건 시드: 포함 / 없음`이 찍힌다. CI(`backend-ci.yml`)는 시드까지 켜서 시드가 스키마 제약을 깨지 않는지 매번 확인한다.
 - 시드는 **반복 마이그레이션(`R__`)**이다. 버전 번호가 없어 `db/migration`의 새 버전 파일과 번호가 겹치지 않고, 모든 버전 마이그레이션 다음에 실행된다. 이미 사건이 있으면 아무것도 하지 않는다. 시드 값을 바꿔 다시 넣으려면 로컬 DB를 비운다(`docker compose down -v` 후 다시 `up`).
 - 한 번 시드를 켠 DB에서 시드 위치를 빼고 실행해도 기동된다. `spring.flyway.ignore-migration-patterns: "*:future,repeatable:missing"`로 적용된 반복 마이그레이션이 없어도 검증을 통과시킨다 (없으면 `Detected applied migration not resolved locally`로 기동 실패). 운영에도 적용되는 설정이라, 시드 외의 `R__` 파일을 추가할 때는 이 설정을 재검토한다. (BE-17 재검토: 실제 사건 데이터도 위치에 따라 있을 수도 없을 수도 있는 반복 마이그레이션이라 이 설정을 그대로 둔다)
 - **실제 사건 데이터는 공개 저장소에 커밋하지 않는다.** 저장소가 공개라 실제 형량 · 재판부 판단 요소 · 판결문 발췌가 그대로 공개되기 때문이다. 실제 사건은 **비공개 저장소를 `backend/private-seed` 서브모듈로 연결**해 넣는다(BE-17).

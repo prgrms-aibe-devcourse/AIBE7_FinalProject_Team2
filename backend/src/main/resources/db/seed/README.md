@@ -12,11 +12,11 @@
 
 ## 실행 방법
 
-Flyway는 기본적으로 `db/migration`만 읽는다. 시드는 **환경변수로 위치를 추가해야** 들어간다. (`application.yml`의 `FLYWAY_LOCATIONS`)
+Flyway는 기본적으로 `db/migration`만 읽는다(`application.yml`의 `FLYWAY_LOCATIONS`). 로컬 실행 `./gradlew bootRun`은 이 시드 위치를 **자동으로 추가**한다(BE-28, `backend/build.gradle`). 기동 로그의 `[bootRun] Flyway 위치(...)` 줄에서 확인할 수 있다.
 
 ```bash
 # backend 폴더에서
-FLYWAY_LOCATIONS=classpath:db/migration,classpath:db/seed ./gradlew bootRun
+./gradlew bootRun
 ```
 
 CI(`backend-ci.yml`)도 같은 값으로 시드를 켜서, 시드가 스키마 제약을 깨지 않는지 확인한다.
@@ -24,7 +24,7 @@ CI(`backend-ci.yml`)도 같은 값으로 시드를 켜서, 시드가 스키마 �
 ## 지켜야 할 것
 
 - **운영 DB에는 넣지 않는다.** 운영에서는 `FLYWAY_LOCATIONS`를 지정하지 않아 `db/migration`만 읽는다.
-- 실제 사건 데이터는 저장소가 공개이므로 여기에 넣지 않는다. 비공개 저장소 서브모듈(`backend/private-seed`)에 두고 `FLYWAY_LOCATIONS`에 `filesystem:./private-seed/seed`를 덧붙여 주입한다(BE-17, [루트 README](../../../../../../README.md)). 서브모듈의 파일을 이 폴더로 복사하지 않는다.
+- 실제 사건 데이터는 저장소가 공개이므로 여기에 넣지 않는다. 비공개 저장소 서브모듈(`backend/private-seed`)에 두고 Flyway `filesystem:` 위치로 주입한다. 로컬 `bootRun`은 서브모듈에 SQL이 있으면 자동으로 넣는다(BE-17 · BE-28, [루트 README](../../../../../../README.md)). 서브모듈의 파일을 이 폴더로 복사하지 않는다.
 - 같은 제목의 사건이 이미 있으면 아무것도 하지 않아서, 여러 번 실행해도 중복으로 들어가지 않는다.
 - 파일 내용을 바꾸면 Flyway가 다시 실행하지만, 이미 사건이 있으면 건너뛴다. **값을 바꿔 다시 넣으려면 로컬 DB를 비운다.**
 
