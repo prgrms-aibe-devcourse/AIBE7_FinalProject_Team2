@@ -107,6 +107,18 @@ class UserSummarySentenceTest {
 	}
 
 	@Test
+	void of_moreThanThreeTagsPerDirection_keepsOnlyFirstThree() {
+		// API 명세 6장 #7: 방향별 태그 최대 3개
+		String sentence = UserSummarySentence.of(List.of(
+			factor(Direction.UP, "피해 규모"),
+			factor(Direction.UP, "범행 방식"),
+			factor(Direction.UP, "흉기 사용"),
+			factor(Direction.UP, "전력")));
+
+		assertThat(sentence).isEqualTo("피해 규모 · 범행 방식 · 흉기 사용을 무겁게 본 판단");
+	}
+
+	@Test
 	void of_tagEndingWithDigit_usesParticleOfKoreanReading() {
 		// "전과 3" → 삼(받침 ㅁ) → 을
 		assertThat(UserSummarySentence.of(List.of(factor(Direction.UP, "전과 3"))))
