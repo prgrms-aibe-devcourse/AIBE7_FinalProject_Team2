@@ -12,6 +12,7 @@ import com.team2.project.common.web.AnonymousIdCookie;
 import com.team2.project.experience.domain.ExperienceStatus;
 import com.team2.project.experience.domain.InvalidExperienceStateException;
 import com.team2.project.judgment.dto.RevealResponse;
+import com.team2.project.judgment.service.ComparisonService;
 import com.team2.project.judgment.service.JudgmentResultService;
 import com.team2.project.judgment.service.RevealService;
 import jakarta.servlet.http.Cookie;
@@ -29,12 +30,14 @@ class JudgmentResultControllerTest {
 
 	private final JudgmentResultService resultService = mock(JudgmentResultService.class);
 	private final RevealService revealService = mock(RevealService.class);
+	private final ComparisonService comparisonService = mock(ComparisonService.class);
 	private MockMvc mockMvc;
 
 	@BeforeEach
 	void setUp() {
 		mockMvc = MockMvcBuilders
-			.standaloneSetup(new JudgmentResultController(resultService, revealService, new AnonymousIdCookie()))
+			.standaloneSetup(new JudgmentResultController(resultService, revealService, comparisonService,
+				new AnonymousIdCookie()))
 			.setControllerAdvice(new ApiExceptionAdvice())
 			.build();
 	}
@@ -83,6 +86,17 @@ class JudgmentResultControllerTest {
 		mockMvc.perform(post("/api/v1/cases/7/experience/comparison-reveal").cookie(cookie()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.status").value("COMPLETED"));
+	}
+
+	@Test
+	void getComparison_beforeComplete_returns409WithCurrentStatus() throws Exception {
+		when(comparisonService.getComparison(7L, Optional.of(ANONYMOUS_ID)))
+			.thenThrow(new InvalidExperienceStateException(ExperienceStatus.AI_REVEALED, "x"));
+
+		mockMvc.perform(get("/api/v1/cases/7/experience/comparison").cookie(cookie()))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.code").value("INVALID_STATE"))
+			.andExpect(jsonPath("$.currentStatus").value("AI_REVEALED"));
 	}
 
 	@Test
