@@ -11,7 +11,7 @@ sys.path.insert(0, str(TOOL_DIR))
 from build_prompt import InputError, build_prompt  # noqa: E402
 from check_contamination import build_contamination_prompt, judge, judge_one  # noqa: E402
 from common import final_penalty, format_months, format_penalty_range, format_won, load_json  # noqa: E402
-from to_seed_sql import build_sql  # noqa: E402
+from to_seed_sql import build_sql, parse_reviewed_at  # noqa: E402
 from validate_output import parse_output, validate  # noqa: E402
 
 EXAMPLES = TOOL_DIR / "examples"
@@ -410,6 +410,24 @@ class SeedSqlTest(Fixtures):
         output = self.with_output(reasoning="피고인의 '반성'을 고려했다.")
         sql = build_sql(self.case, output, build_prompt(self.case), "m", "r")
         self.assertIn("''반성''", sql)
+
+    def test_sql_reviewed_at_fixed_when_given(self):
+        # 검수 시각을 주면 고정값, 적재 시각(created_at)은 now() 그대로
+        sql = build_sql(self.case, self.output, build_prompt(self.case), "m", "r",
+                        reviewed_at=parse_reviewed_at("2026-10-06T00:00:00+09:00"))
+        self.assertIn("'APPROVED', 'r', TIMESTAMPTZ '2026-10-06 00:00:00+09:00', now()", sql)
+
+    def test_sql_reviewed_at_defaults_to_now(self):
+        # 기존 사용법(옵션 없음)은 그대로 now()
+        sql = build_sql(self.case, self.output, build_prompt(self.case), "m", "r")
+        self.assertIn("'APPROVED', 'r', now(), now()", sql)
+
+    def test_parse_reviewed_at_requires_timezone_and_format(self):
+        self.assertEqual(parse_reviewed_at("2026-10-06T09:30:00Z").utcoffset().total_seconds(), 0)
+        for bad in ("2026-10-06T00:00:00", "2026-10-06 오전", "어제"):
+            with self.subTest(bad=bad):
+                with self.assertRaises(ValueError):
+                    parse_reviewed_at(bad)
 
     def test_sql_flyway_omits_begin_commit(self):
         sql = build_sql(self.case, self.output, build_prompt(self.case), "m", "r", flyway=True)
