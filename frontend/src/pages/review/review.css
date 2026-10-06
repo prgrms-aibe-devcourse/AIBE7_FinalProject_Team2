@@ -75,6 +75,11 @@
 .review-page .section-body { padding: 8px 28px 28px; }
 .review-page .fact-block { margin-top: 20px; }
 .review-page .fact-block h3 { font-size: 13px; color: #ac301e; margin-bottom: 10px; }
+/* FE-14: 줄바꿈이 있는 본문은 줄마다 점 목록으로 보여 준다 (utils/contentLines.js) */
+:is(.review-page, .summary-page) .content-lines { margin: 0; padding-left: 20px; }
+:is(.review-page, .summary-page) .content-lines li + li { margin-top: 6px; }
+/* FE-14: 양측 주장 안내 문구 (S-04 ③) */
+.review-page .argument-card .argument-notice { margin-bottom: 10px; font-size: 12px; color: var(--color-muted); }
 .review-page .damage-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; border: 1px solid var(--color-border); border-radius: 4px; overflow: hidden; }
 .review-page .damage-card { padding: 15px 18px; background: var(--color-surface); }
 .review-page .damage-card:nth-child(odd) { border-right: 1px solid var(--color-border); }
