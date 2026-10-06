@@ -18,6 +18,7 @@ import com.team2.project.judgment.dto.JudgmentView;
 import com.team2.project.judgment.repository.JudgmentFactorRepository;
 import com.team2.project.judgment.repository.JudgmentRepository;
 import java.util.Arrays;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -55,18 +56,20 @@ public class ComparisonService {
 		Judgment mine = userFinal(experience);
 		Judgment pre = preJudgment(experience);
 
-		Map<Long, List<JudgmentFactor>> finalFactors = factorsOf(mine, ai, court);
-		List<JudgmentFactor> preFactors = judgmentFactorRepository.findAllByJudgmentIds(List.of(pre.getId()));
+		// 사전 판단까지 한 쿼리로 같이 읽는다 (PR #62 리뷰: 조회 한 번으로 줄이기)
+		Map<Long, List<JudgmentFactor>> factors = factorsOf(pre, mine, ai, court);
+		List<JudgmentFactor> preFactors = factors.getOrDefault(pre.getId(), List.of());
 
-		Map<SubjectType, JudgmentView> judgments = Map.of(
-			SubjectType.USER, view(mine, finalFactors),
-			SubjectType.AI, view(ai, finalFactors),
-			SubjectType.COURT, view(court, finalFactors));
+		// 응답 JSON의 USER · AI · COURT 키 순서를 고정한다(enum 선언 순서, PR #62 리뷰)
+		Map<SubjectType, JudgmentView> judgments = new EnumMap<>(SubjectType.class);
+		judgments.put(SubjectType.USER, view(mine, factors));
+		judgments.put(SubjectType.AI, view(ai, factors));
+		judgments.put(SubjectType.COURT, view(court, factors));
 
 		List<MatrixRow> matrix = ComparisonMatrix.build(
-			finalFactors.getOrDefault(mine.getId(), List.of()),
-			finalFactors.getOrDefault(ai.getId(), List.of()),
-			finalFactors.getOrDefault(court.getId(), List.of()));
+			factors.getOrDefault(mine.getId(), List.of()),
+			factors.getOrDefault(ai.getId(), List.of()),
+			factors.getOrDefault(court.getId(), List.of()));
 
 		PreToFinal preToFinal = preToFinal(pre, preFactors, mine);
 

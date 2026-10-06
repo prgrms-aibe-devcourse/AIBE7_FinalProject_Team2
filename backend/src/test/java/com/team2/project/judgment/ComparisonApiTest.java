@@ -129,14 +129,16 @@ class ComparisonApiTest extends ApiIntegrationTest {
 	}
 
 	@Test
-	void getComparison_buildsRuleSentenceForAllSameFactor() throws Exception {
+	void getComparison_buildsRuleSentenceFromSummaryTagForAllSameFactor() throws Exception {
 		Cookie cookie = startCompletedExperience();
 
+		// 규칙 문장은 라벨(완전한 서술문)이 아니라 요약 태그("범행 방식")로 만든다 (BE-26 확정)
 		mockMvc.perform(get(url()).cookie(cookie))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.ruleSentences.common[0]")
-				.value("세 판결 모두 \"다투던 중 집에 있던 흉기를 집어 들었다\"를 형량을 높이는 요소로 봤어요."))
-			.andExpect(jsonPath("$.ruleSentences.differences").isNotEmpty());
+				.value("세 판결 모두 범행 방식을 형량을 높이는 요소로 봤어요."))
+			.andExpect(jsonPath("$.ruleSentences.differences").isNotEmpty())
+			.andExpect(jsonPath("$.matrix[0].summaryTag").doesNotExist());
 	}
 
 	@Test

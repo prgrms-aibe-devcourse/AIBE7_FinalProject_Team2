@@ -31,7 +31,8 @@ public final class ComparisonMatrix {
 				continue;
 			}
 			rows.add(new MatrixRow(factor.getId(), factor.getLabel(), factor.getRevealStage(),
-				userDirection, aiDirection, courtDirection, category(userDirection, aiDirection, courtDirection)));
+				userDirection, aiDirection, courtDirection, category(userDirection, aiDirection, courtDirection),
+				factor.getSummaryTag()));
 		}
 		rows.sort(Comparator.comparingInt(row -> factorsById.get(row.factorId()).getDisplayOrder()));
 		return rows;
