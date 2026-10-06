@@ -2,7 +2,8 @@
 
 사용법:
     python3 to_seed_sql.py examples/case_input.json examples/ai_output_sample.json \\
-        --model-name "모델 이름" --reviewed-by "검수자" [--accept-warnings] [--flyway] > out/ai_judgment.sql
+        --model-name "모델 이름" --reviewed-by "검수자" [--reviewed-at 2026-10-06T00:00:00+09:00] \\
+        [--accept-warnings] [--flyway] > out/ai_judgment.sql
 
 - 만들기 전에 validate_output.py와 같은 검증을 다시 돌린다. 오류가 있으면 SQL을 만들지 않는다.
 - 경고가 있으면 팀 검수에서 확인했다는 뜻으로 --accept-warnings를 붙여야 만든다 (REQ-078).
@@ -20,9 +21,14 @@
   마이그레이션)에 그대로 쓸 때는 --flyway를 붙인다. Flyway가 마이그레이션마다 자체 트랜잭션으로
   감싸므로, 파일 안에 BEGIN/COMMIT이 또 있으면 그 트랜잭션이 중간에 끝나 적용 기록이 어긋날 수 있다.
 - 감경해 형벌 종류가 바뀐 판결은 reduced_to에 함께 넣는다 (ERD v1.4).
+- ai_generation.reviewed_at(팀 검수 시각, REQ-078 · 079)은 --reviewed-at으로 실제 검수 시각을 고정해 넣는다.
+  --flyway(R__ 반복 마이그레이션)는 로컬 · 개발 · 운영에서 각각 다른 시각에 실행되므로 --reviewed-at이 필수다.
+  psql 수동 실행용(기본)은 빼도 되지만 now()(SQL 실행 시각)가 검수 시각으로 남는다(경고를 낸다).
+  현재보다 미래 시각이면 입력 실수일 수 있어 경고한다. created_at(적재 시각)은 now() 그대로 둔다.
 """
 
 import argparse
+import datetime
 import json
 import sys
 
@@ -61,7 +67,38 @@ def dollar_quote_tag(text):
     return tag
 
 
-def build_sql(case, output, prompt, model_name, reviewed_by, *, flyway=False):
+# 실제 세계 시간대 범위(UTC−12:00 ~ UTC+14:00). Python은 ±24시간 미만이면 받아들이지만
+# PostgreSQL 숫자 오프셋은 약 ±15:59까지만 받으므로, 범위 밖 값은 SQL 적재 단계가 아니라 여기서 막는다
+MIN_UTC_OFFSET = datetime.timedelta(hours=-12)
+MAX_UTC_OFFSET = datetime.timedelta(hours=14)
+
+
+def parse_reviewed_at(text):
+    """--reviewed-at 값(ISO 8601, 시간대 필수) → 시간대가 있는 datetime.
+    형식이 틀리거나, 시간대가 없거나, 시간대 오프셋이 UTC−12:00 ~ UTC+14:00 밖이면 ValueError."""
+    value = text.strip()
+    if value.endswith("Z"):  # Python 3.10 이하 fromisoformat은 Z를 읽지 못한다
+        value = value[:-1] + "+00:00"
+    try:
+        parsed = datetime.datetime.fromisoformat(value)
+    except ValueError:
+        raise ValueError(f"--reviewed-at 형식이 올바르지 않습니다: {text!r} (예: 2026-10-06T00:00:00+09:00)") from None
+    if parsed.tzinfo is None:
+        raise ValueError(f"--reviewed-at에 시간대를 넣어야 합니다: {text!r} (예: 2026-10-06T00:00:00+09:00)")
+    offset = parsed.utcoffset()
+    if not MIN_UTC_OFFSET <= offset <= MAX_UTC_OFFSET:
+        raise ValueError(f"--reviewed-at의 시간대 오프셋이 범위(UTC-12:00 ~ UTC+14:00)를 벗어났습니다: {text!r}")
+    return parsed
+
+
+def sql_reviewed_at(reviewed_at):
+    """검수 시각 SQL 값. 없으면 now()(실행 시각)."""
+    if reviewed_at is None:
+        return "now()"
+    return f"TIMESTAMPTZ '{reviewed_at.isoformat(sep=' ')}'"
+
+
+def build_sql(case, output, prompt, model_name, reviewed_by, *, flyway=False, reviewed_at=None):
     raw_title = str(case.get("title", ""))
     title_literal = sql_text(raw_title)
     # 주석 줄은 제목에 줄바꿈이 있으면 거기서 끝나 뒤 내용이 SQL로 실행된다. 주석에만 공백 한 칸으로 합친
@@ -146,7 +183,7 @@ BEGIN
     ) VALUES (
         v_judgment_id, {sql_text(model_name)}, {sql_text(prompt['promptVersion'])},
         {sql_jsonb(input_snapshot)}, {sql_jsonb(output)},
-        'APPROVED', {sql_text(reviewed_by)}, now(), now()
+        'APPROVED', {sql_text(reviewed_by)}, {sql_reviewed_at(reviewed_at)}, now()
     );
 END"""
 
@@ -167,6 +204,11 @@ def main():
     parser.add_argument("ai_output")
     parser.add_argument("--model-name", required=True, help="생성에 쓴 모델 이름 (ai_generation.model_name)")
     parser.add_argument("--reviewed-by", required=True, help="검수자 이름 (ai_generation.reviewed_by)")
+    parser.add_argument(
+        "--reviewed-at",
+        help="팀 검수 시각, ISO 8601 · 시간대 필수 (예: 2026-10-06T00:00:00+09:00). "
+        "ai_generation.reviewed_at에 고정값으로 넣는다. --flyway에는 필수, 그 밖에는 빼면 SQL 실행 시각(now())이 남는다",
+    )
     parser.add_argument("--accept-warnings", action="store_true", help="경고를 팀 검수에서 확인했음")
     parser.add_argument(
         "--flyway",
@@ -180,6 +222,22 @@ def main():
         if not value.strip() or len(value) > NAME_MAX_LENGTH:
             print(f"[오류] {label}는 1 ~ {NAME_MAX_LENGTH}자여야 합니다 (ai_generation varchar(50))", file=sys.stderr)
             return 1
+
+    reviewed_at = None
+    if args.reviewed_at is not None:
+        try:
+            reviewed_at = parse_reviewed_at(args.reviewed_at)
+        except ValueError as e:
+            print(f"[오류] {e}", file=sys.stderr)
+            return 1
+        # 검수 시각이 현재보다 미래면 입력 실수일 가능성이 높다 (막지는 않는다)
+        if reviewed_at > datetime.datetime.now(datetime.timezone.utc):
+            print(f"[경고] --reviewed-at이 현재보다 미래입니다: {reviewed_at.isoformat()}", file=sys.stderr)
+    elif args.flyway:
+        # Flyway 파일은 여러 환경에서 다른 시각에 실행되므로 검수 시각을 반드시 고정한다
+        print("[오류] --flyway에는 --reviewed-at이 필요합니다 (환경마다 실행 시각이 달라 검수 시각이 어긋납니다)",
+              file=sys.stderr)
+        return 1
 
     case = load_json(args.case_input)
     with open(args.ai_output, encoding="utf-8") as f:
@@ -201,7 +259,10 @@ def main():
         print("[중단] 경고가 있습니다. 팀 검수 후 --accept-warnings를 붙여 다시 실행하세요", file=sys.stderr)
         return 1
 
-    print(build_sql(case, output, prompt, args.model_name, args.reviewed_by, flyway=args.flyway))
+    if reviewed_at is None:
+        print("[경고] --reviewed-at이 없어 ai_generation.reviewed_at에 now()(SQL 실행 시각)가 들어갑니다. "
+              "실제 검수 시각을 넣으려면 --reviewed-at을 붙이세요", file=sys.stderr)
+    print(build_sql(case, output, prompt, args.model_name, args.reviewed_by, flyway=args.flyway, reviewed_at=reviewed_at))
     return 0
 
 
