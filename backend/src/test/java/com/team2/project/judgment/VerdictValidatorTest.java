@@ -50,6 +50,15 @@ class VerdictValidatorTest {
 			Arguments.of(req("PRISON", null, 30, null, 12), MURDER),
 			Arguments.of(req("PRISON", null, 36, null, 60), MURDER),
 			Arguments.of(req("FINE", null, null, 3000000L, 24), FRAUD),
+			// 경계값 정확히 (BE-27)
+			Arguments.of(req("PRISON", null, 360, null, null), MURDER),
+			Arguments.of(req("LIFE", "PRISON", 120, null, null), MURDER),
+			Arguments.of(req("LIFE", "PRISON", 600, null, null), MURDER),
+			Arguments.of(req("DEATH", "PRISON", 600, null, null), MURDER),
+			Arguments.of(req("FINE", null, null, 25000L, null), FRAUD),
+			Arguments.of(req("FINE", null, null, 20000000L, null), FRAUD),
+			Arguments.of(req("FINE", null, null, 5000000L, 12), FRAUD),
+			Arguments.of(req("PRISON", null, 1, null, null), FRAUD),
 			Arguments.of(req("LIFE", null, null, null, null, IDS.stream().sorted()
 				.map(id -> new FactorItem(id, "DOWN")).toArray(FactorItem[]::new)), MURDER));
 	}
@@ -92,7 +101,14 @@ class VerdictValidatorTest {
 			failure(req("PRISON", null, 601, null, 11, new FactorItem(12L, "UP")), Reason.OUT_OF_ALLOWED_RANGE),
 			failure(req("PRISON", null, 36, null, 11, new FactorItem(12L, "UP")), Reason.SUSPENSION_CONDITION),
 			Arguments.of(req("FINE", null, null, 6000000L, 24), FRAUD, Reason.SUSPENSION_CONDITION, null),
-			Arguments.of(req("FINE", null, null, 20000L, null), FRAUD, Reason.OUT_OF_ALLOWED_RANGE, "fineAmount"));
+			Arguments.of(req("FINE", null, null, 20000L, null), FRAUD, Reason.OUT_OF_ALLOWED_RANGE, "fineAmount"),
+			// 경계값 바로 바깥 (BE-27)
+			failure(req("DEATH", "PRISON", 239, null, null), Reason.OUT_OF_ALLOWED_RANGE),
+			failure(req("DEATH", "PRISON", 601, null, null), Reason.OUT_OF_ALLOWED_RANGE),
+			Arguments.of(req("FINE", null, null, 24999L, null), FRAUD, Reason.OUT_OF_ALLOWED_RANGE, "fineAmount"),
+			Arguments.of(req("FINE", null, null, 20000001L, null), FRAUD, Reason.OUT_OF_ALLOWED_RANGE, "fineAmount"),
+			Arguments.of(req("FINE", null, null, 5000001L, 12), FRAUD, Reason.SUSPENSION_CONDITION, null),
+			Arguments.of(req("PRISON", null, 121, null, null), FRAUD, Reason.OUT_OF_ALLOWED_RANGE, "prisonMonths"));
 	}
 
 	private static Arguments failure(VerdictRequest request, Reason reason) {

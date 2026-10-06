@@ -7,6 +7,7 @@ import com.team2.project.experience.domain.ExperienceStatus;
 import com.team2.project.experience.domain.InvalidExperienceStateException;
 import com.team2.project.experience.repository.ExperienceRepository;
 import com.team2.project.judgment.domain.InvalidJudgmentException;
+import com.team2.project.judgment.domain.InvalidJudgmentException.Reason;
 import com.team2.project.judgment.dto.VerdictRequest;
 import com.team2.project.judgment.dto.VerdictRequest.FactorItem;
 import com.team2.project.judgment.service.VerdictFormService;
@@ -20,9 +21,13 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -170,6 +175,37 @@ class VerdictServiceTest {
 			com.team2.project.common.exception.BusinessException.class,
 			exception -> assertThat(exception.getErrorCode()).isEqualTo(com.team2.project.common.exception.ErrorCode.EXPERIENCE_NOT_FOUND));
 		assertUnchanged("REVIEWED");
+	}
+
+	static Stream<Arguments> rejectedRequests() {
+		return Stream.of(
+			Arguments.of("범위 아래", new VerdictRequest("PRISON", null, 29, null, null, null, null), Reason.OUT_OF_ALLOWED_RANGE),
+			Arguments.of("범위 위", new VerdictRequest("PRISON", null, 361, null, null, null, null), Reason.OUT_OF_ALLOWED_RANGE),
+			Arguments.of("감경 범위 아래", new VerdictRequest("LIFE", "PRISON", 119, null, null, null, null), Reason.OUT_OF_ALLOWED_RANGE),
+			Arguments.of("허용 안 된 감경", new VerdictRequest("PRISON", "LIFE", 180, null, null, null, null), Reason.INVALID_REDUCTION),
+			Arguments.of("사건에 없는 형벌", new VerdictRequest("FINE", null, null, 1000000L, null, null, null), Reason.PENALTY_NOT_OFFERED),
+			Arguments.of("집행유예 조건 위반", new VerdictRequest("PRISON", null, 37, null, 24, null, null), Reason.SUSPENSION_CONDITION),
+			Arguments.of("사건에 없는 판단 요소", new VerdictRequest("PRISON", null, 120, null, null,
+				List.of(new FactorItem(-1L, "UP")), null), Reason.INVALID_FACTOR));
+	}
+
+	// 강사 리뷰(2026-10-06) 반영 · BE-27: 거절 사유마다 아무것도 저장되지 않고, 거절 뒤에도 올바른 요청은 정상 확정된다
+	@ParameterizedTest(name = "{0}")
+	@MethodSource("rejectedRequests")
+	@Transactional(propagation = Propagation.NOT_SUPPORTED)
+	void submit_rejectedRequest_leavesNoJudgmentAndKeepsReviewed(String name, VerdictRequest request, Reason reason) {
+		assertThat(beanValidator.validate(request)).isEmpty();
+		assertThatThrownBy(() -> service.submit(caseId, Optional.of(userId), request))
+			.isInstanceOfSatisfying(InvalidJudgmentException.class, exception -> assertThat(exception.getReason()).isEqualTo(reason));
+		assertUnchanged("REVIEWED");
+		assertThat(jdbc.queryForObject("SELECT count(*) FROM judgment_factor WHERE judgment_id IN (SELECT id FROM judgment WHERE experience_id = ?)",
+			Integer.class, experienceId)).isZero();
+		assertThat(jdbc.queryForObject("SELECT verdict_confirmed_at FROM experience WHERE id = ?", java.sql.Timestamp.class, experienceId)).isNull();
+
+		// 거절이 체험을 망가뜨리지 않는다: 같은 체험으로 올바른 요청을 보내면 확정된다
+		assertThat(service.submit(caseId, Optional.of(userId), validRequest()).status()).isEqualTo(ExperienceStatus.VERDICT_CONFIRMED);
+		assertThat(jdbc.queryForObject("SELECT count(*) FROM judgment WHERE experience_id = ?", Integer.class, experienceId)).isEqualTo(1);
+		assertThat(jdbc.queryForObject("SELECT status FROM experience WHERE id = ?", String.class, experienceId)).isEqualTo("VERDICT_CONFIRMED");
 	}
 
 	private void assertUnchanged(String status) {

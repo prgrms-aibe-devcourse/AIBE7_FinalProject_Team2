@@ -197,6 +197,29 @@ class ReviewServiceTest {
 			exception -> assertThat(exception.getErrorCode()).isEqualTo(code));
 	}
 
+	// 강사 리뷰(2026-10-06) 반영 · BE-27: 거절이 연달아 와도 상태 · 시각이 그대로이고, 다음 올바른 단계는 진행된다
+	@Test
+	void confirmStep_rejected_thenNextValidStepStillWorks() {
+		assertThatThrownBy(() -> service.confirmStep(caseId, me(), new ReviewStepRequest(4))).isInstanceOf(ReviewStepOutOfOrderException.class);
+		storedWithTimes(ExperienceStatus.PRE_JUDGED, 1);
+		assertThatThrownBy(() -> service.confirmStep(caseId, me(), new ReviewStepRequest(5))).isInstanceOf(InvalidReviewStepException.class);
+		storedWithTimes(ExperienceStatus.PRE_JUDGED, 1);
+		response(service.confirmStep(caseId, me(), request(2)), ExperienceStatus.REVIEWING, 2);
+		stored(ExperienceStatus.REVIEWING, 2);
+
+		state(ExperienceStatus.VERDICT_CONFIRMED, 4);
+		assertThatThrownBy(() -> service.confirmStep(caseId, me(), request(4))).isInstanceOf(InvalidExperienceStateException.class);
+		storedWithTimes(ExperienceStatus.VERDICT_CONFIRMED, 4);
+	}
+
+	/** 상태 · 단계에 더해 확인 완료 시각과 판결 확정 시각이 바뀌지 않았는지(이 픽스처에서는 NULL) 확인한다 */
+	private void storedWithTimes(ExperienceStatus status, int step) {
+		stored(status, step);
+		var row = jdbc.queryForMap("SELECT reviewed_at, verdict_confirmed_at FROM experience WHERE id = ?", experienceId);
+		assertThat(row.get("reviewed_at")).isNull();
+		assertThat(row.get("verdict_confirmed_at")).isNull();
+	}
+
 	@Test
 	void confirmStep_sameStepConcurrent_bothSucceed() throws Exception {
 		state(ExperienceStatus.REVIEWING, 2);
