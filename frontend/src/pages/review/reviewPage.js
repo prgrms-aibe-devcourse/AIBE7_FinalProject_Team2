@@ -1,6 +1,15 @@
 import { renderLawInfoBox } from '../../components/lawInfoBox.js';
 import { renderRecommendedRangeBar } from '../../components/recommendedRangeBar.js';
 import { renderProgressSidebar } from './progressSidebar.js';
+import { renderContent } from '../../utils/contentLines.js';
+
+// 양측 주장 카드 위 안내 (정보 구조 S-04 v1.10, FE-14). 서버 응답에 없는 화면 고정 문구다.
+// "양형 이유" 같은 출처 표현은 쓰지 않는다 — 재판부가 인정한 사정인지가 판결 공개 전에 드러난다.
+// 매핑에 없는 sectionType은 안내 없이 그린다.
+const ARGUMENT_NOTICES = {
+  PROSECUTOR: '판결문에 나온 사정을 검사 측 입장에서 정리했어요.',
+  DEFENSE: '판결문에 나온 사정을 피고인 · 변호인 측 입장에서 정리했어요.',
+};
 
 export async function renderReviewPage(container, { caseId, caseHeader, api, navigate }) {
   const root = document.createElement('div');
@@ -39,7 +48,9 @@ export async function renderReviewPage(container, { caseId, caseHeader, api, nav
     for (const item of section.items) {
       const article = element('section', section.step === 3 ? 'argument-card' : 'fact-block');
       article.append(element('h3', '', item.title));
-      if (item.content) article.append(element('p', '', item.content));
+      const notice = section.step === 3 ? ARGUMENT_NOTICES[item.sectionType] : undefined;
+      if (notice) article.append(element('p', 'argument-notice', notice));
+      if (item.content) article.append(renderContent(item.content));
       if (item.data) {
         const grid = element('dl', 'damage-grid');
         item.data.forEach(({ label, value }) => {

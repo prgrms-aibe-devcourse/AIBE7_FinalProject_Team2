@@ -1,5 +1,6 @@
 import { renderLawInfoBox } from '../../components/lawInfoBox.js';
 import { renderRecommendedRangeBar } from '../../components/recommendedRangeBar.js';
+import { renderContent } from '../../utils/contentLines.js';
 
 export async function renderSummaryPage(container, { caseId, caseHeader, api, navigate }) {
   const root = document.createElement('div');
@@ -58,7 +59,8 @@ export async function renderSummaryPage(container, { caseId, caseHeader, api, na
     const grid = element('div', 'argument-grid');
     data.sections.find(({ step }) => step === 3)?.items.forEach((item) => {
       const card = element('section', 'argument-card');
-      card.append(element('h3', '', item.title), element('p', '', item.content));
+      card.append(element('h3', '', item.title));
+      if (item.content) card.append(renderContent(item.content));
       grid.append(card);
     });
     argumentsBox.append(grid);
