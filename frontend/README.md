@@ -38,10 +38,15 @@ npm run build   # dist/ 에 배포용 파일 생성
 | --- | --- |
 | [`src/app/`](src/app/README.md) | 라우터 · 화면 표 · 에러 시 화면 이동 · 사건 제목 · 앱 api 조립 |
 | [`src/api/`](src/api/README.md) | `fetch` 공통 함수와 실제 API, 목 ↔ 실제 선택 |
-| `src/pages/` | 화면 (S-01 ~ S-09) |
+| `src/pages/` | 화면 (S-01 ~ S-09). S-14 오류 화면은 사건 맥락이 없어 `src/app/notFoundPage.js`에 둔다 |
 | [`src/components/`](src/components/README.md) | 여러 화면이 쓰는 공통 UI |
 | [`src/mocks/`](src/mocks/README.md) | 백엔드 없이 화면을 만들 때 쓰는 목 API · 데이터 |
 | [`src/utils/`](src/utils/README.md) | 작은 유틸 |
+
+## 반응형 기준
+
+- MVP는 **모바일에서 깨지지 않는 수준**만 대응한다(REQ-004 기본). 390px · 360px에서 가로 스크롤이 생기지 않고 내용이 겹치지 않으면 된다. 390px 전용 레이아웃은 확장 단계에서 한다.
+- 화면별 조정은 각 화면 CSS의 `@media`에, 여러 화면이 함께 쓰는 규칙은 `src/style.css`에 둔다.
 
 ## 가이드 · 미리보기
 
