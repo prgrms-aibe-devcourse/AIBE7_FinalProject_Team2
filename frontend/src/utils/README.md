@@ -19,6 +19,6 @@
 | `AI_REVEALED` | `court` |
 | `COMPLETED` | `comparison` |
 
-- 사건 목록에서 체험을 시작할 때(API 2 응답의 `status`)와, 개요 화면이 `INVALID_STATE`를 받았을 때 이 표로 화면을 정한다.
+- 사건 목록에서 체험을 시작할 때(API 2 응답의 `status`)와, 공통 래퍼(`app/errorRedirect.js`)가 `INVALID_STATE`를 받았을 때 이 표로 화면을 정한다. 각 화면은 상태 불일치로 직접 이동하지 않는다.
 - `ai` · `court` · `comparison` 화면 파일은 아직 없다. 해당 화면을 만들 때 이 이름에 맞춘다.
 - API 명세서 1-6이 바뀌면 이 표도 함께 바꾼다.
