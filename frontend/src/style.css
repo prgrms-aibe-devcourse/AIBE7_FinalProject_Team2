@@ -49,8 +49,8 @@ body {
 .message-panel button { margin-top: 20px; }
 
 /* 공통 사이트 헤더 · 푸터 (siteLayout.js의 renderSiteHeader · renderSiteFooter).
-   S-01 · S-02는 landing.css(FE-4)에 같은 값이 있다. 라우터 푸터 · S-14처럼 랜딩 CSS를 빌리지 않는 곳에서도
-   보이도록 같은 값을 여기에도 둔다(공통 버튼과 같은 방식, 화면 CSS가 뒤에 불려도 값이 같아 결과는 같다). */
+   S-01 · S-02 · S-14 · 라우터 푸터(S-03 ~ S-09)가 모두 쓰는 유일한 정의다. 화면 CSS에 같은 규칙을 다시 두지 않는다.
+   특정 화면만 다르게 해야 하면 그 화면 CSS에 .landing-page .site-header처럼 화면 클래스로 감싸서 추가한다. */
 .site-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 28px; border-bottom: 1px solid var(--color-border); }
 .site-nav { display: flex; gap: 8px; }
 .logo-button { border: 0; background: transparent; padding: 6px 0; font-size: 18px; font-weight: 800; color: var(--color-text); }

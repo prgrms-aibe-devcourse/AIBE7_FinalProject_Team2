@@ -1,4 +1,4 @@
-// S-01 · S-02 공통 헤더 · 푸터 (REQ-071 법적 고지)
+// 공통 사이트 헤더 · 푸터 (REQ-071 법적 고지). S-01 · S-02 · S-14가 헤더를 그리고, 푸터는 S-01 · S-02가 직접, 나머지 화면은 라우터가 붙인다. 스타일은 src/style.css
 export function element(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;
