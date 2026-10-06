@@ -33,7 +33,6 @@
 | [wbs.md](wbs.md) | WBS. 작업 분해, 일정, 업무 분장 |
 | [conventions/GIT_CONVENTIONS.md](conventions/GIT_CONVENTIONS.md) | Git 컨벤션. 브랜치 · 커밋 · PR |
 | [conventions/CODE_CONVENTIONS.md](conventions/CODE_CONVENTIONS.md) | 코드 컨벤션 |
-| [troubleshooting.md](troubleshooting.md) | 로컬 개발 트러블슈팅. 실제 사건이 안 보임 · 포트 충돌 · 목/실제 모드 구분 · 자주 나오는 오류 |
 
 ### 점검 기록 · 사건 자료
 

@@ -56,9 +56,6 @@ git submodule update --init backend/private-seed
 ```
 
 이 자동 설정은 로컬 실행(`bootRun`)에만 적용된다. 운영(jar · Docker) · 테스트는 `application.yml` 기본값(스키마만)을 그대로 쓴다.
-
-실행이 안 되거나 실제 사건이 화면에 안 보이면 [트러블슈팅](docs/troubleshooting.md)을 먼저 본다.
-
 - 서브모듈 안의 파일을 공개 저장소의 다른 위치(`db/seed` 등)로 **복사하지 않는다.** 공개 저장소의 커밋 메시지 · PR · Jira 댓글에도 사건 내용(형량 · 판단 요소 · 사실관계)을 쓰지 않는다.
 - 서브모듈은 `src/main/resources` 밖에 있어 jar에 들어가지 않고, `backend/.dockerignore`로 Docker 빌드에서도 뺀다.
 
