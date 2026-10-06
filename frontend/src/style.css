@@ -62,6 +62,20 @@ body {
 }
 
 /* S-14 404 · 오류 화면 (FE-3) */
+/* 페이지 틀은 사이트 헤더를 쓰는 S-01 · S-02(landing.css의 :is(.landing-page, .case-list-page))와 같게 맞춘다.
+   헤더 버튼은 브라우저 기본 버튼 글꼴(13.3px Arial)이 아니라 페이지 글꼴을 따르게 한다(S-01 · S-02와 같은 크기 · 글꼴).
+   이동 버튼(.primary-button 등)의 굵기는 유지해야 하므로 font: inherit는 헤더 안 버튼에만 둔다 */
+.not-found-page {
+  max-width: var(--content-width);
+  margin: 0 auto;
+  border: 1px solid var(--color-border);
+  background: #fff;
+  color: var(--color-text);
+  font: 15px/1.75 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+}
+.not-found-page .site-header button { font: inherit; cursor: pointer; }
 .not-found-panel {
   max-width: 480px;
   margin: 48px auto;
