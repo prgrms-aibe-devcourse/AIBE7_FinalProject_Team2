@@ -6,6 +6,7 @@
 | --- | --- |
 | `contentLines.js` | 섹션 본문을 그린다. 줄바꿈이 있으면 줄마다 점 목록, 없으면 문단 하나 (FE-14, S-04 · S-05) |
 | `screenByStatus.js` | 체험 상태(`status`)에 따라 **이어서 볼 화면**을 정하는 표. API 명세서 1-6 "체험 상태 → 화면"과 같은 값이다 |
+| `koreanParticle.js` | 한글 단어 뒤 목적격 조사(을 · 를) 판정. 백엔드 `KoreanParticle`과 같은 규칙 (FE-15, S-09) |
 
 ## screenByStatus
 
