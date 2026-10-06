@@ -1,5 +1,4 @@
 import { formatPenalty, formatDispositions } from '../../utils/judgmentFormat.js';
-import { screenByStatus } from '../../utils/screenByStatus.js';
 
 const directionSymbols = { UP: '↑', DOWN: '↓' };
 const categoryLabels = { ALL_SAME: '셋 모두 같게 본 요소', ONLY_ME_MISSED: '나만 고려하지 않은 요소', DIVERGED: '판단이 엇갈린 요소' };
@@ -31,13 +30,6 @@ export async function renderComparisonPage(container, { caseId, caseHeader, api,
     panel.append(element('p', '', text));
     if (action) panel.append(action);
     root.replaceChildren(panel);
-  }
-
-  // 아직 이르지 않은 단계(INVALID_STATE)면 현재 상태의 화면으로 보낸다(API 명세 1-6, 보통 S-08).
-  function redirectByState(error) {
-    const screen = screenByStatus[error.currentStatus];
-    if (screen && screen !== 'comparison') navigate(screen, { caseId });
-    return Boolean(screen);
   }
 
   function judgmentCard(subjectType, judgment) {
@@ -120,7 +112,9 @@ export async function renderComparisonPage(container, { caseId, caseHeader, api,
       if (active()) draw(data);
     } catch (error) {
       if (!active()) return;
-      if (error?.code === 'INVALID_STATE' && redirectByState(error)) return;
+      // 보통은 withErrorRedirect가 currentStatus에 맞는 화면으로 먼저 이동시킨다(app/errorRedirect.js).
+      // 여기 오는 것은 래퍼가 이동하지 못한 경우다 — 화면 표(screenByStatus)에 없는 상태값이거나,
+      // 이미 이 화면이라 라우터가 이동을 건너뛴 경우(예: 이 화면에서 보낸 요청이 지금 상태를 그대로 돌려줌).
       if (error?.code === 'INVALID_STATE') {
         message(`지금 단계에서는 이 화면을 볼 수 없어요. (현재 상태: ${error.currentStatus})`);
         console.info('현재 상태:', error.currentStatus);

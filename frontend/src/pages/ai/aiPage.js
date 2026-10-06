@@ -99,6 +99,9 @@ export async function renderAiPage(container, { caseId, caseHeader, api, navigat
         if (active()) navigate('court');
       } catch (error) {
         if (!active()) return;
+        // 보통은 withErrorRedirect가 currentStatus에 맞는 화면으로 먼저 이동시킨다(app/errorRedirect.js).
+        // 여기 오는 것은 래퍼가 이동하지 못한 경우다 — 화면 표(screenByStatus)에 없는 상태값이거나,
+        // 이미 이 화면이라 라우터가 이동을 건너뛴 경우(예: 이 화면에서 보낸 요청이 지금 상태를 그대로 돌려줌).
         if (error?.code === 'INVALID_STATE') {
           message(`지금 단계에서는 이 화면을 볼 수 없어요. (현재 상태: ${error.currentStatus})`);
           console.info('현재 상태:', error.currentStatus);
@@ -123,10 +126,12 @@ export async function renderAiPage(container, { caseId, caseHeader, api, navigat
       if (active()) draw(data);
     } catch (error) {
       if (!active()) return;
+      // 보통은 withErrorRedirect가 currentStatus에 맞는 화면으로 먼저 이동시킨다(app/errorRedirect.js).
+      // 여기 오는 것은 래퍼가 이동하지 못한 경우다 — 화면 표(screenByStatus)에 없는 상태값이거나,
+      // 이미 이 화면이라 라우터가 이동을 건너뛴 경우(예: 이 화면에서 보낸 요청이 지금 상태를 그대로 돌려줌).
       if (error?.code === 'INVALID_STATE') {
         message(`지금 단계에서는 이 화면을 볼 수 없어요. (현재 상태: ${error.currentStatus})`);
         console.info('현재 상태:', error.currentStatus);
-        // TODO: FE-2 라우터 연결 시 currentStatus에 해당하는 화면으로 이동한다.
       } else {
         message('정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.', button('다시 시도', load));
       }
