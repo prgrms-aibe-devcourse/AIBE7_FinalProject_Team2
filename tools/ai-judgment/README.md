@@ -146,7 +146,7 @@ python3 to_seed_sql.py case.json out/ai_output.json \
 
 - **Claude 앱(claude.ai)**: 임시 채팅(incognito)을 쓰면 메모리 · 이전 대화 참조가 꺼진다. 일반 대화에는 시스템 프롬프트 칸이 없다.
 - **Google AI Studio · Gemini**: AI Studio에는 시스템 지시 칸과 토큰 수 표시가 있어 기록하기 쉽다. 검색 연동(Grounding with Google Search) 같은 도구는 끈다. Gemini 앱으로 할 때는 저장된 정보 · 이전 대화 참조 기능을 끄고 새 대화를 쓴다.
-- **API로 호출할 때**: 응답의 사용량 정보(Gemini는 `usage_metadata`, Claude는 `usage`)에서 입력 · 출력 토큰을 옮겨 적는다.
+- **API로 호출할 때**: 응답의 사용량 정보(Gemini는 `usage_metadata`, Claude는 `usage`)를 아래 "토큰 사용 기록"의 칸 대응표대로 옮겨 적는다. 서비스마다 사고 토큰을 세는 방식이 달라 합계를 직접 더하면 중복될 수 있다.
 
 ### 토큰 사용 기록
 
@@ -158,6 +158,18 @@ python3 to_seed_sql.py case.json out/ai_output.json \
 
 - 결과 칸: 점검은 `CLEAN` / `SUSPECT` / `CONTAMINATED`, 생성은 `validate_output.py` 결과(오류 · 경고 수)
 - 무료 등급은 분당 · 일당 요청 수와 토큰 한도가 있다. 한도에 걸려 실패한 시도도 적어 둔다.
+
+**칸 대응표** (API 사용량 정보 → 기록 칸)
+
+| 기록 칸 | Gemini (`usage_metadata`) | Claude (`usage`) |
+| --- | --- | --- |
+| 입력 토큰 | `prompt_token_count` | `input_tokens` |
+| 출력 토큰 | `candidates_token_count` | `output_tokens` (사고 토큰이 이미 포함됨) |
+| 사고 토큰 | `thoughts_token_count` | 적지 않는다(`—`). 사고 토큰은 `output_tokens`에 들어 있다 |
+| 합계 | `total_token_count`를 **그대로** 옮긴다. 사고 토큰을 다시 더하지 않는다 | 입력 + 출력 |
+
+- 화면(AI Studio 등)에 합계만 보이면 합계 칸에만 적고 나머지 칸은 비워 둔다(`—`). 칸을 추측해 나누지 않는다.
+- 모델 · 서비스를 비교할 때는 같은 기준(합계)끼리 비교한다. 사고 토큰을 따로 적은 기록과 출력에 포함된 기록을 그대로 더하거나 비교하지 않는다.
 
 ## 프롬프트를 고칠 때
 
