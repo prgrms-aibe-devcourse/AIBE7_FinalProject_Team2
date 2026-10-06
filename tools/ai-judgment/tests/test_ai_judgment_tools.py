@@ -1,8 +1,11 @@
 """AI 판결 오프라인 도구 테스트. 실행: tools/ai-judgment에서 `python3 -m unittest discover tests`"""
 
 import copy
+import io
 import sys
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
+from unittest import mock
 from pathlib import Path
 
 TOOL_DIR = Path(__file__).resolve().parent.parent
@@ -11,7 +14,7 @@ sys.path.insert(0, str(TOOL_DIR))
 from build_prompt import InputError, build_prompt  # noqa: E402
 from check_contamination import build_contamination_prompt, judge, judge_one  # noqa: E402
 from common import final_penalty, format_months, format_penalty_range, format_won, load_json  # noqa: E402
-from to_seed_sql import build_sql, parse_reviewed_at  # noqa: E402
+from to_seed_sql import build_sql, main as to_seed_sql_main, parse_reviewed_at  # noqa: E402
 from validate_output import parse_output, validate  # noqa: E402
 
 EXAMPLES = TOOL_DIR / "examples"
@@ -421,6 +424,44 @@ class SeedSqlTest(Fixtures):
         # 기존 사용법(옵션 없음)은 그대로 now()
         sql = build_sql(self.case, self.output, build_prompt(self.case), "m", "r")
         self.assertIn("'APPROVED', 'r', now(), now()", sql)
+
+    def run_cli(self, *extra):
+        """to_seed_sql main()을 예시 파일로 실행 → (종료 코드, stdout, stderr)."""
+        argv = ["to_seed_sql.py", str(EXAMPLES / "case_input.json"), str(EXAMPLES / "ai_output_sample.json"),
+                "--model-name", "m", "--reviewed-by", "r", "--accept-warnings", *extra]
+        out, err = io.StringIO(), io.StringIO()
+        with mock.patch.object(sys, "argv", argv), redirect_stdout(out), redirect_stderr(err):
+            code = to_seed_sql_main()
+        return code, out.getvalue(), err.getvalue()
+
+    def test_main_rejects_invalid_reviewed_at(self):
+        # 형식이 틀리면 SQL을 만들지 않고 종료 코드 1
+        code, out, err = self.run_cli("--reviewed-at", "어제")
+        self.assertEqual(code, 1)
+        self.assertEqual(out, "")
+        self.assertIn("[오류]", err)
+
+    def test_main_flyway_requires_reviewed_at(self):
+        # Flyway 파일은 환경마다 실행 시각이 달라 검수 시각을 반드시 고정한다
+        code, out, err = self.run_cli("--flyway")
+        self.assertEqual(code, 1)
+        self.assertEqual(out, "")
+        self.assertIn("--flyway에는 --reviewed-at이 필요합니다", err)
+        code, out, _ = self.run_cli("--flyway", "--reviewed-at", "2026-10-06T00:00:00+09:00")
+        self.assertEqual(code, 0)
+        self.assertIn("TIMESTAMPTZ '2026-10-06 00:00:00+09:00'", out)
+
+    def test_main_without_reviewed_at_warns_for_psql_mode(self):
+        # 수동 psql용(기본)은 옵션 없이도 만들지만 now()가 들어간다고 경고한다
+        code, out, err = self.run_cli()
+        self.assertEqual(code, 0)
+        self.assertIn("now(), now()", out)
+        self.assertIn("[경고] --reviewed-at이 없어", err)
+
+    def test_main_warns_future_reviewed_at(self):
+        code, out, err = self.run_cli("--reviewed-at", "2999-01-01T00:00:00+09:00")
+        self.assertEqual(code, 0)
+        self.assertIn("현재보다 미래", err)
 
     def test_parse_reviewed_at_rejects_offset_out_of_range(self):
         # PostgreSQL이 받지 못하는 오프셋은 SQL을 만들기 전에 막는다. 실제 범위의 양 끝은 통과

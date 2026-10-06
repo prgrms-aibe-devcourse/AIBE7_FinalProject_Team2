@@ -22,8 +22,9 @@
   감싸므로, 파일 안에 BEGIN/COMMIT이 또 있으면 그 트랜잭션이 중간에 끝나 적용 기록이 어긋날 수 있다.
 - 감경해 형벌 종류가 바뀐 판결은 reduced_to에 함께 넣는다 (ERD v1.4).
 - ai_generation.reviewed_at(팀 검수 시각, REQ-078 · 079)은 --reviewed-at으로 실제 검수 시각을 고정해 넣는다.
-  빼면 now()가 들어가 SQL이 실행된 시각(운영 첫 배포일, Flyway 재실행일 등)이 검수 시각으로 남는다(경고를 낸다).
-  created_at(적재 시각)은 now() 그대로 둔다.
+  --flyway(R__ 반복 마이그레이션)는 로컬 · 개발 · 운영에서 각각 다른 시각에 실행되므로 --reviewed-at이 필수다.
+  psql 수동 실행용(기본)은 빼도 되지만 now()(SQL 실행 시각)가 검수 시각으로 남는다(경고를 낸다).
+  현재보다 미래 시각이면 입력 실수일 수 있어 경고한다. created_at(적재 시각)은 now() 그대로 둔다.
 """
 
 import argparse
@@ -206,7 +207,7 @@ def main():
     parser.add_argument(
         "--reviewed-at",
         help="팀 검수 시각, ISO 8601 · 시간대 필수 (예: 2026-10-06T00:00:00+09:00). "
-        "ai_generation.reviewed_at에 고정값으로 넣는다. 빼면 SQL 실행 시각(now())이 남는다",
+        "ai_generation.reviewed_at에 고정값으로 넣는다. --flyway에는 필수, 그 밖에는 빼면 SQL 실행 시각(now())이 남는다",
     )
     parser.add_argument("--accept-warnings", action="store_true", help="경고를 팀 검수에서 확인했음")
     parser.add_argument(
@@ -229,6 +230,14 @@ def main():
         except ValueError as e:
             print(f"[오류] {e}", file=sys.stderr)
             return 1
+        # 검수 시각이 현재보다 미래면 입력 실수일 가능성이 높다 (막지는 않는다)
+        if reviewed_at > datetime.datetime.now(datetime.timezone.utc):
+            print(f"[경고] --reviewed-at이 현재보다 미래입니다: {reviewed_at.isoformat()}", file=sys.stderr)
+    elif args.flyway:
+        # Flyway 파일은 여러 환경에서 다른 시각에 실행되므로 검수 시각을 반드시 고정한다
+        print("[오류] --flyway에는 --reviewed-at이 필요합니다 (환경마다 실행 시각이 달라 검수 시각이 어긋납니다)",
+              file=sys.stderr)
+        return 1
 
     case = load_json(args.case_input)
     with open(args.ai_output, encoding="utf-8") as f:
