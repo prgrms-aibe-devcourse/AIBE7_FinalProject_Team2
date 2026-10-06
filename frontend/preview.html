@@ -101,7 +101,12 @@
     const error = document.querySelector('#preview-error');
     let currentPage = 'review';
     // 화면 단독 확인용 화면 전환. 상태 불일치 이동은 위의 공통 래퍼가 맡는다 (실제 앱과 같은 동작)
-    async function navigate(name, params = {}) {
+    async function navigate(name, params = {}, { replace = false } = {}) {
+      // 실제 라우터(router.js navigate의 같은 주소 검사)와 같게: 래퍼가 지금 화면으로 다시 보내면 이동하지 않는다.
+      // 다시 그리면 같은 요청 → 같은 에러 → 같은 이동이 끝없이 반복된다. 건너뛰면 화면이 "지금 단계에서는…" 안내를 그린다.
+      // 래퍼만 replace로 부르므로 도구 버튼 · 상태 선택(replace 없음)은 지금처럼 같은 화면도 다시 그린다.
+      // 미리보기는 사건이 하나(caseHeader.caseId)라 화면 이름만 비교해도 실제 라우터의 주소 비교와 같다.
+      if (replace && name === currentPage) return;
       navToken += 1;
       currentPage = name;
       const dependencies = { caseId: params.caseId ?? caseHeader.caseId, caseHeader, api, navigate, section: params.section };
