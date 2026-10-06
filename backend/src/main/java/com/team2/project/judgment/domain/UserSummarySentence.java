@@ -16,9 +16,6 @@ public final class UserSummarySentence {
 	/** 요약 태그 사이 구분자 */
 	private static final String TAG_DELIMITER = " · ";
 
-	/** 방향별로 요약에 담는 태그 최대 개수 (API 명세 6장 #7) */
-	private static final int MAX_TAGS_PER_DIRECTION = 3;
-
 	/** 고른 요소가 하나도 없을 때 */
 	private static final String NO_FACTOR = "판단 요소를 고르지 않은 판단";
 
@@ -30,7 +27,8 @@ public final class UserSummarySentence {
 	 * 같은 태그는 한 번만 쓴다. 한 사건 안의 여러 요소가 같은 태그를 가질 수 있고(ERD), 그중 하나를 ↑로
 	 * 다른 하나를 ↓로 고를 수도 있다. 그때는 **먼저 고른(표시 순서가 앞선) 방향에만** 남겨
 	 * "A를 무겁게 보고 A를 감안한 판단"처럼 스스로 모순되는 문장이 나오지 않게 한다 (BE-10 리뷰).
-	 * 방향별 태그는 최대 {@value #MAX_TAGS_PER_DIRECTION}개까지만 담는다(API 명세 6장 #7).
+	 * 방향별 태그 수는 제한하지 않는다 — 요소마다 서로 다른 요약어가 붙으므로 많이 고르면 문장이 길어질 수
+	 * 있지만, 우선 그대로 두고 S-09에서 실제로 문제가 되면 상한을 다시 검토한다 (BE-26 확정).
 	 */
 	public static String of(List<JudgmentFactor> factors) {
 		List<String> up = new ArrayList<>();
@@ -41,9 +39,9 @@ public final class UserSummarySentence {
 			if (tag == null || tag.isBlank() || !seen.add(tag)) {
 				continue;
 			}
-			if (judgmentFactor.getDirection() == Direction.UP && up.size() < MAX_TAGS_PER_DIRECTION) {
+			if (judgmentFactor.getDirection() == Direction.UP) {
 				up.add(tag);
-			} else if (judgmentFactor.getDirection() == Direction.DOWN && down.size() < MAX_TAGS_PER_DIRECTION) {
+			} else if (judgmentFactor.getDirection() == Direction.DOWN) {
 				down.add(tag);
 			}
 		}

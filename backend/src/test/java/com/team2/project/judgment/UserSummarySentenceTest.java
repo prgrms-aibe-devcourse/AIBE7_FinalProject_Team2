@@ -107,15 +107,15 @@ class UserSummarySentenceTest {
 	}
 
 	@Test
-	void of_moreThanThreeTagsPerDirection_keepsOnlyFirstThree() {
-		// API 명세 6장 #7: 방향별 태그 최대 3개
+	void of_manyTagsPerDirection_keepsAllOfThem() {
+		// BE-26 확정: 방향별 태그 수는 제한하지 않는다
 		String sentence = UserSummarySentence.of(List.of(
 			factor(Direction.UP, "피해 규모"),
 			factor(Direction.UP, "범행 방식"),
 			factor(Direction.UP, "흉기 사용"),
 			factor(Direction.UP, "전력")));
 
-		assertThat(sentence).isEqualTo("피해 규모 · 범행 방식 · 흉기 사용을 무겁게 본 판단");
+		assertThat(sentence).isEqualTo("피해 규모 · 범행 방식 · 흉기 사용 · 전력을 무겁게 본 판단");
 	}
 
 	@Test
