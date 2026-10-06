@@ -48,6 +48,8 @@ tasks.named('test') {
 // - 비공개 서브모듈(private-seed/seed)에 SQL이 있으면 실제 사건도 넣는다 (권한이 없으면 빈 폴더라 자동으로 빠진다)
 // - FLYWAY_LOCATIONS를 직접 주면 그 값을 그대로 쓴다
 // 운영(jar · Docker) · 테스트는 이 설정을 쓰지 않는다 → application.yml 기본값(스키마만) 그대로
+// 참고: doFirst에서 file(...) · System.getenv를 실행 시점에 읽으므로 Gradle 설정 캐시(org.gradle.configuration-cache=true)와는 맞지 않는다.
+//       나중에 설정 캐시를 켜면 providers.environmentVariable(...) · layout.projectDirectory.dir(...)로 값을 미리 잡는 방식으로 바꾼다.
 tasks.named('bootRun') {
 	doFirst {
 		def given = System.getenv('FLYWAY_LOCATIONS')
@@ -63,8 +65,9 @@ tasks.named('bootRun') {
 		}
 		environment 'FLYWAY_LOCATIONS', locations
 		def source = given ? '직접 지정' : '자동'
-		def realCase = locations.contains('private-seed') ? '포함'
-			: given ? '없음 (FLYWAY_LOCATIONS에 private-seed 위치가 없음)'
+		// 직접 지정한 경우에는 실제 데이터 폴더 이름을 알 수 없으므로(예: filesystem:/srv/real-seed) 포함 여부를 추측하지 않는다
+		def realCase = given ? '판정 안 함 (FLYWAY_LOCATIONS 직접 지정 — 지정한 위치를 그대로 사용)'
+			: locations.contains('private-seed') ? '포함'
 			: '없음 (backend/private-seed 서브모듈이 비어 있음 — 권한이 있으면 git submodule update --init backend/private-seed)'
 		logger.lifecycle("[bootRun] Flyway 위치(${source}): ${locations}")
 		logger.lifecycle("[bootRun] 실제 사건 시드: ${realCase}")
