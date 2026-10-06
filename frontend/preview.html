@@ -1,4 +1,4 @@
-<!-- FE-2 라우터 도입 시 삭제: FE-6 개발용 미리보기 -->
+<!-- 화면 단독 확인용 미리보기 (목 데이터). 상태 강제 선택으로 화면 하나를 바로 연다. 실제 앱 흐름은 index.html · sample.html에서 확인 -->
 <!doctype html>
 <html lang="ko">
 <head>
@@ -75,8 +75,24 @@
     import { renderCourtPage } from './src/pages/court/courtPage.js';
     import { renderComparisonPage } from './src/pages/comparison/comparisonPage.js';
     import { clearDraft } from './src/pages/verdict/verdictDraft.js';
+    import { withErrorRedirect } from './src/app/errorRedirect.js';
+    import { renderNotFoundPage } from './src/app/notFoundPage.js';
 
-    const api = { ...reviewApi, ...verdictApi, ...caseListApi, ...overviewApi, ...aiApi, ...courtApi, ...comparisonApi };
+    // 화면을 그릴 때마다 1씩 올린다. 이전 화면 요청의 에러가 새 화면을 이동시키지 않게 래퍼가 이 값을 비교한다
+    let navToken = 0;
+
+    // 실제 앱(app/appApi.js)과 같게 목 api를 공통 래퍼로 감싼다.
+    // 상태가 맞지 않으면(INVALID_STATE) 래퍼가 그 상태의 화면으로 보낸다 — 화면 코드는 이동하지 않는다 (FE-12)
+    const api = withErrorRedirect(
+      { ...reviewApi, ...verdictApi, ...caseListApi, ...overviewApi, ...aiApi, ...courtApi, ...comparisonApi },
+      {
+        navigate,
+        currentCaseId: () => caseHeader.caseId,
+        navigationToken: () => navToken,
+        // 미리보기는 브라우저 기록을 쓰지 않는다. true면 래퍼의 뒤로 가기 연타 처리(history.go(-1))가 미리보기 페이지를 벗어날 수 있다
+        isBackNav: () => false,
+      },
+    );
 
     // TODO: API 6에 사건 제목 없음, 정합성 2차 점검 D-01 결정 후 실제 제목 공급원으로 교체.
     const caseHeader = mockCaseHeader;
@@ -84,8 +100,9 @@
     const tools = document.querySelector('#tools');
     const error = document.querySelector('#preview-error');
     let currentPage = 'review';
-    // FE-2 라우터 도입 시 삭제. 개발용 화면 전환만 수행한다.
+    // 화면 단독 확인용 화면 전환. 상태 불일치 이동은 위의 공통 래퍼가 맡는다 (실제 앱과 같은 동작)
     async function navigate(name, params = {}) {
+      navToken += 1;
       currentPage = name;
       const dependencies = { caseId: params.caseId ?? caseHeader.caseId, caseHeader, api, navigate, section: params.section };
       if (name === 'landing') renderLandingPage(container, dependencies);
@@ -97,6 +114,8 @@
       else if (name === 'ai') await renderAiPage(container, dependencies);
       else if (name === 'court') await renderCourtPage(container, dependencies);
       else if (name === 'comparison') await renderComparisonPage(container, dependencies);
+      // 래퍼가 CASE_NOT_FOUND일 때 보내는 화면 (S-14)
+      else if (name === 'notFound') renderNotFoundPage(container, { navigate });
       else {
         const placeholder = document.createElement('div');
         placeholder.className = 'review-page';
