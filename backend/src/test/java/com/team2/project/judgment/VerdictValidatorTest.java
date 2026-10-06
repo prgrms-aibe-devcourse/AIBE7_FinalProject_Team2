@@ -59,6 +59,7 @@ class VerdictValidatorTest {
 			Arguments.of(req("FINE", null, null, 20000000L, null), FRAUD),
 			Arguments.of(req("FINE", null, null, 5000000L, 12), FRAUD),
 			Arguments.of(req("PRISON", null, 1, null, null), FRAUD),
+			Arguments.of(req("PRISON", null, 120, null, null), FRAUD),
 			Arguments.of(req("LIFE", null, null, null, null, IDS.stream().sorted()
 				.map(id -> new FactorItem(id, "DOWN")).toArray(FactorItem[]::new)), MURDER));
 	}

@@ -14,6 +14,7 @@ import com.team2.project.judgment.service.VerdictFormService;
 import com.team2.project.judgment.service.VerdictService;
 import com.team2.project.legalcase.domain.PenaltyType;
 import jakarta.validation.Validator;
+import java.sql.Timestamp;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -200,7 +201,7 @@ class VerdictServiceTest {
 		assertUnchanged("REVIEWED");
 		assertThat(jdbc.queryForObject("SELECT count(*) FROM judgment_factor WHERE judgment_id IN (SELECT id FROM judgment WHERE experience_id = ?)",
 			Integer.class, experienceId)).isZero();
-		assertThat(jdbc.queryForObject("SELECT verdict_confirmed_at FROM experience WHERE id = ?", java.sql.Timestamp.class, experienceId)).isNull();
+		assertThat(jdbc.queryForObject("SELECT verdict_confirmed_at FROM experience WHERE id = ?", Timestamp.class, experienceId)).isNull();
 
 		// 거절이 체험을 망가뜨리지 않는다: 같은 체험으로 올바른 요청을 보내면 확정된다
 		assertThat(service.submit(caseId, Optional.of(userId), validRequest()).status()).isEqualTo(ExperienceStatus.VERDICT_CONFIRMED);

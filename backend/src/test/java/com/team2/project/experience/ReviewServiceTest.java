@@ -14,6 +14,7 @@ import com.team2.project.experience.dto.ReviewStepResponse;
 import com.team2.project.experience.service.ReviewService;
 import jakarta.validation.Validator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -197,27 +198,41 @@ class ReviewServiceTest {
 			exception -> assertThat(exception.getErrorCode()).isEqualTo(code));
 	}
 
-	// 강사 리뷰(2026-10-06) 반영 · BE-27: 거절이 연달아 와도 상태 · 시각이 그대로이고, 다음 올바른 단계는 진행된다
+	// 강사 리뷰(2026-10-06) 반영 · BE-27: 거절이 연달아 와도 아무것도 바뀌지 않고, 다음 올바른 단계는 진행된다
 	@Test
 	void confirmStep_rejected_thenNextValidStepStillWorks() {
-		assertThatThrownBy(() -> service.confirmStep(caseId, me(), new ReviewStepRequest(4))).isInstanceOf(ReviewStepOutOfOrderException.class);
-		storedWithTimes(ExperienceStatus.PRE_JUDGED, 1);
+		var before = snapshot();
+		assertThatThrownBy(() -> service.confirmStep(caseId, me(), request(4))).isInstanceOf(ReviewStepOutOfOrderException.class);
+		assertThat(snapshot()).isEqualTo(before);
+		// 5는 @Valid에서 400으로 막히는 값이라 helper(request)의 Bean Validation을 일부러 거치지 않고 서비스에 직접 보낸다
 		assertThatThrownBy(() -> service.confirmStep(caseId, me(), new ReviewStepRequest(5))).isInstanceOf(InvalidReviewStepException.class);
-		storedWithTimes(ExperienceStatus.PRE_JUDGED, 1);
+		assertThat(snapshot()).isEqualTo(before);
+
 		response(service.confirmStep(caseId, me(), request(2)), ExperienceStatus.REVIEWING, 2);
 		stored(ExperienceStatus.REVIEWING, 2);
-
-		state(ExperienceStatus.VERDICT_CONFIRMED, 4);
-		assertThatThrownBy(() -> service.confirmStep(caseId, me(), request(4))).isInstanceOf(InvalidExperienceStateException.class);
-		storedWithTimes(ExperienceStatus.VERDICT_CONFIRMED, 4);
 	}
 
-	/** 상태 · 단계에 더해 확인 완료 시각과 판결 확정 시각이 바뀌지 않았는지(이 픽스처에서는 NULL) 확인한다 */
-	private void storedWithTimes(ExperienceStatus status, int step) {
-		stored(status, step);
-		var row = jdbc.queryForMap("SELECT reviewed_at, verdict_confirmed_at FROM experience WHERE id = ?", experienceId);
-		assertThat(row.get("reviewed_at")).isNull();
-		assertThat(row.get("verdict_confirmed_at")).isNull();
+	// 강사 리뷰(2026-10-06) 반영 · BE-27: 판결 확정 뒤 섹션 확인은 거절되고 상태 · 단계 · 시각이 그대로다
+	@Test
+	void confirmStep_afterVerdictConfirmed_rejectedAndUnchanged() {
+		// 실제 흐름과 같게 확인 완료 · 판결 확정 시각을 채운 픽스처
+		jdbc.update("""
+			UPDATE experience SET status = 'VERDICT_CONFIRMED', last_reviewed_step = 4,
+			    reviewed_at = now() - interval '10 minutes', verdict_confirmed_at = now() - interval '5 minutes'
+			WHERE id = ?
+			""", experienceId);
+		var before = snapshot();
+
+		assertThatThrownBy(() -> service.confirmStep(caseId, me(), request(4))).isInstanceOf(InvalidExperienceStateException.class);
+
+		assertThat(snapshot()).isEqualTo(before);
+		assertThat(before.get("verdict_confirmed_at")).isNotNull();
+	}
+
+	/** 거절 전후 비교용. 픽스처 값에 기대지 않고 "바뀌지 않았음"을 확인한다 */
+	private Map<String, Object> snapshot() {
+		return jdbc.queryForMap(
+			"SELECT status, last_reviewed_step, reviewed_at, verdict_confirmed_at FROM experience WHERE id = ?", experienceId);
 	}
 
 	@Test
