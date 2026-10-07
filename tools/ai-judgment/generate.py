@@ -10,9 +10,9 @@
 결과는 out/runs/<batch>/<공급자__모델>/run-001.json 형태로 쌓인다 (git 제외 폴더).
 - run-NNN.json: 메타(모델 · 토큰 · 소요 시간) · 원문 응답 · 파싱 결과 · 검증 결과
 - run-NNN.output.json: 파싱한 판결 JSON만. 검수를 마치면 to_seed_sql.py에 그대로 넣는다
-- run-NNN.factor-labels.json: 생성 시점 사건 파일의 판단 요소 factorId → label 스냅샷. 검수 뒤
-  판단 요소 구성(순서 · 라벨)이 바뀌었는데 이 출력을 그대로 적재하지 않도록 to_seed_sql.py
-  --factor-labels에 넣는다
+- run-NNN.factor-labels.json: 생성 시점 사건 제목 · 판단 요소 factorId → label 스냅샷. 검수 뒤
+  이 출력이 고른 요소의 라벨이 바뀌었는데 그대로 적재하지 않도록 to_seed_sql.py --factor-labels에
+  넣는다
 - batch.json: 이 묶음의 사건 제목 · 프롬프트 버전 · 프롬프트 해시. 프롬프트가 다른 실행이 섞이지 않게 막는다
 모델별 비교표는 compare.py로 만든다.
 
@@ -133,10 +133,13 @@ def save_run(model_dir, spec, case, prompt, raw_text, meta, call_error=None, set
     write_json(path, record)
     if output is not None:
         write_json(model_dir / f"run-{index:03d}.output.json", output)
-        # 판단 요소 구성(순서 · 라벨)이 나중에 바뀌어도, 이 출력이 생성될 때 어떤 라벨을 보고
-        # 판단했는지 남겨 to_seed_sql.py --factor-labels로 드리프트를 잡을 수 있게 한다
-        write_json(model_dir / f"run-{index:03d}.factor-labels.json",
-                   {str(fid): f["label"] for fid, f in factors_by_id(case).items()})
+        # 판단 요소 구성(라벨)이 나중에 바뀌어도, 이 출력이 생성될 때 어떤 사건 · 라벨을 보고
+        # 판단했는지 남겨 to_seed_sql.py --factor-labels로 드리프트를 잡을 수 있게 한다. caseTitle을
+        # 같이 남겨 다른 사건의 스냅샷을 잘못 넣는 것도 걸러낸다
+        write_json(model_dir / f"run-{index:03d}.factor-labels.json", {
+            "caseTitle": case.get("title"),
+            "labels": {str(fid): f["label"] for fid, f in factors_by_id(case).items()},
+        })
     return path, record
 
 

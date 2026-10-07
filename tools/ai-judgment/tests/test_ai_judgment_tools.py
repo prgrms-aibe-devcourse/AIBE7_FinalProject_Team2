@@ -434,9 +434,13 @@ class SeedSqlTest(Fixtures):
         self.addCleanup(lambda: Path(tmp.name).unlink(missing_ok=True))
         return tmp.name
 
-    def label_snapshot(self, changes=None):
-        snapshot = {str(fid): f["label"] for fid, f in factors_by_id(self.case).items()}
-        snapshot.update(changes or {})
+    def label_snapshot(self, label_changes=None, **top_changes):
+        snapshot = {
+            "caseTitle": self.case["title"],
+            "labels": {str(fid): f["label"] for fid, f in factors_by_id(self.case).items()},
+        }
+        snapshot["labels"].update(label_changes or {})
+        snapshot.update(top_changes)
         return snapshot
 
     def test_factor_label_drift_skipped_without_snapshot(self):
@@ -456,9 +460,43 @@ class SeedSqlTest(Fixtures):
         self.assertTrue(any("예전에는 다른 뜻이었던 요소" in e for e in errors))
 
     def test_factor_label_drift_ignores_unselected_factors(self):
-        # 이 출력이 고르지 않은 요소의 라벨이 바뀐 건 상관없다
+        # 이 출력이 고르지 않은 요소의 라벨이 바뀐 건 상관없다(출력이 참조하지 않으므로)
         path = self.write_temp_json(self.label_snapshot({"99": "출력에 없는 요소"}))
         self.assertEqual(check_factor_label_drift(self.case, self.output, path), [])
+
+    def test_factor_label_drift_detects_removed_factor(self):
+        # 이 출력이 고른 요소가 지금 사건 파일에서 아예 삭제됐으면 current_label이 None이라 역시 다르게 잡힌다
+        case = copy.deepcopy(self.case)
+        case["factors"] = [f for f in case["factors"] if f["factorId"] != 2]
+        path = self.write_temp_json(self.label_snapshot())
+        errors = check_factor_label_drift(case, self.output, path)
+        self.assertTrue(any("factorId=2" in e and "None" in e for e in errors))
+
+    def test_factor_label_drift_rejects_selected_factor_missing_in_snapshot(self):
+        # 출력이 고른 요소는 생성 시점에 반드시 있었다 → 스냅샷에 없으면 다른 회차 · 사건의
+        # 스냅샷을 잘못 지정한 것이니 조용히 통과시키지 않는다
+        selected = str(self.output["factors"][0]["factorId"])
+        snapshot = self.label_snapshot()
+        del snapshot["labels"][selected]
+        path = self.write_temp_json(snapshot)
+        errors = check_factor_label_drift(self.case, self.output, path)
+        self.assertTrue(any(f"factorId={selected}" in e for e in errors))
+        self.assertTrue(any("스냅샷에 없는 요소" in e for e in errors))
+
+    def test_factor_label_drift_rejects_case_title_mismatch(self):
+        path = self.write_temp_json(self.label_snapshot(caseTitle="다른 사건"))
+        errors = check_factor_label_drift(self.case, self.output, path)
+        self.assertTrue(any("사건" in e and "다릅니다" in e for e in errors))
+
+    def test_factor_label_drift_rejects_malformed_snapshot_shape(self):
+        path = self.write_temp_json({"caseTitle": self.case["title"]})  # labels가 없다
+        errors = check_factor_label_drift(self.case, self.output, path)
+        self.assertTrue(any("형식이 올바르지 않습니다" in e for e in errors))
+
+    def test_factor_label_drift_rejects_unreadable_snapshot_file(self):
+        missing = str(Path(tempfile.gettempdir()) / "does-not-exist-factor-labels.json")
+        errors = check_factor_label_drift(self.case, self.output, missing)
+        self.assertTrue(any("읽을 수 없습니다" in e for e in errors))
 
     def run_cli(self, *extra):
         """to_seed_sql main()을 예시 파일로 실행 → (종료 코드, stdout, stderr)."""
@@ -499,6 +537,12 @@ class SeedSqlTest(Fixtures):
         code, out, _ = self.run_cli("--flyway", "--reviewed-at", "2026-10-06T00:00:00+09:00")
         self.assertEqual(code, 0)
         self.assertIn("TIMESTAMPTZ '2026-10-06 00:00:00+09:00'", out)
+
+    def test_main_flyway_without_factor_labels_warns(self):
+        # 필수는 아니지만, 드리프트 검사를 건너뛰고 있다는 걸 경고로 알린다
+        code, out, err = self.run_cli("--flyway", "--reviewed-at", "2026-10-06T00:00:00+09:00")
+        self.assertEqual(code, 0)
+        self.assertIn("[경고] --factor-labels가 없어", err)
 
     def test_main_without_reviewed_at_warns_for_psql_mode(self):
         # 수동 psql용(기본)은 옵션 없이도 만들지만 now()가 들어간다고 경고한다

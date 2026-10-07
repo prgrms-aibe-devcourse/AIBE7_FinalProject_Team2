@@ -19,8 +19,10 @@
 - 이 두 검사는 모두 "지금" 사건 파일 · DB 기준이라, 사건 파일과 DB가 함께(사이좋게) 바뀌면
   서로는 맞아떨어진다. 그 사이 판단 요소 구성이 바뀐 뒤의 **예전** AI 출력을 그대로 적재하면
   지금은 뜻이 달라진 같은 번호의 요소에 조용히 연결될 수 있다. --factor-labels에 generate.py가
-  남긴 생성 시점 라벨 스냅샷(run-NNN.factor-labels.json)을 주면, 그때 라벨과 지금 사건 파일의
-  라벨이 다른 요소가 있는지 먼저 확인해 다르면 멈춘다.
+  남긴 생성 시점 스냅샷(run-NNN.factor-labels.json: 사건 제목 · 출력이 고른 요소의 라벨)을
+  주면, (1) 스냅샷의 사건 제목이 지금 사건 파일과 다르거나 (2) 출력이 고른 요소가 스냅샷에
+  없거나 (3) 그 라벨이 지금 사건 파일과 다르면 멈춘다. **출력이 고르지 않은 요소**의 라벨 변경이나
+  생성 뒤 새로 추가된 요소는 이 검사로 잡히지 않는다(출력이 참조하지 않으므로 적재 결과에 영향이 없다).
 - title 조회는 STRICT로 하여, 제목이 없거나(NO_DATA_FOUND) legal_case.title UNIQUE 제약이
   없던 과거 데이터로 중복돼 있으면(TOO_MANY_ROWS) 각각 다른 메시지로 멈춘다.
 - 기본 출력은 BEGIN; ~ COMMIT;으로 감싸 psql에 바로 붙여 넣을 수 있게 한다. Flyway(R__ 반복
@@ -205,26 +207,50 @@ DO {tag}{inner} {tag};
 
 
 def check_factor_label_drift(case, output, factor_labels_path):
-    """생성 시점 라벨 스냅샷과 지금 사건 파일의 라벨이 다른 요소가 있으면 오류 메시지 목록을 돌려준다.
+    """생성 시점 스냅샷과 지금 사건 파일이 다르면(출력이 참조하는 범위 안에서) 오류 메시지 목록을 돌려준다.
 
     factorId · display_order가 그대로여도, 그 사이 사건 파일(과 DB)에서 요소의 label이 바뀌었다면
     이 출력은 지금과 다른 판단 요소 구성으로 생성된 것이다. 사건 파일 · DB가 함께 바뀌면 서로는
     맞아떨어지므로 build_sql의 DB 대조만으로는 잡히지 않는다.
+
+    스냅샷 파일을 읽거나 파싱하지 못하면(--factor-labels에 잘못된 경로 · 손상된 JSON을 준 경우)
+    traceback 대신 이 목록으로 오류를 돌려준다.
     """
     if factor_labels_path is None:
         return []
-    snapshot = load_json(factor_labels_path)
-    case_factors = factors_by_id(case)
+    try:
+        snapshot = load_json(factor_labels_path)
+    except (OSError, json.JSONDecodeError) as e:
+        return [f"--factor-labels 파일을 읽을 수 없습니다 ({factor_labels_path}): {e}"]
+    if not isinstance(snapshot, dict) or not isinstance(snapshot.get("labels"), dict):
+        return [f"--factor-labels 파일 형식이 올바르지 않습니다 (caseTitle · labels가 있는 객체여야 함): "
+                f"{factor_labels_path}"]
+
     errors = []
+    if snapshot.get("caseTitle") != case.get("title"):
+        # 사건 자체가 다르면 라벨을 비교할 수 없다 (다른 사건의 스냅샷을 잘못 지정했을 가능성)
+        errors.append(
+            f"스냅샷의 사건({snapshot.get('caseTitle')!r})과 지금 사건 파일({case.get('title')!r})이 다릅니다"
+        )
+        return errors
+
+    labels = snapshot["labels"]
+    case_factors = factors_by_id(case)
     for factor in output.get("factors") or []:
         factor_id = factor.get("factorId") if isinstance(factor, dict) else None
         if factor_id is None:
             continue
         key = str(factor_id)
-        if key not in snapshot:
+        if key not in labels:
+            # 출력이 고른 요소는 생성 시점 사건 파일에 반드시 있었다 → 없으면 이 출력과 짝이 맞는
+            # 스냅샷이 아니다(다른 회차 · 다른 사건 파일을 잘못 지정했을 가능성)
+            errors.append(
+                f"factorId={factor_id}: 생성 시점 라벨 스냅샷에 없는 요소입니다. "
+                "이 출력과 같은 회차의 factor-labels.json인지 확인하세요"
+            )
             continue
         current_label = case_factors.get(int(factor_id), {}).get("label")
-        snapshot_label = snapshot[key]
+        snapshot_label = labels[key]
         if snapshot_label != current_label:
             errors.append(
                 f"factorId={factor_id}: 생성 시점 라벨({snapshot_label!r})과 지금 사건 파일의 라벨"
@@ -294,20 +320,26 @@ def main():
         print(report.to_text(), file=sys.stderr)
         print("[중단] 검증 오류가 있어 SQL을 만들지 않았습니다", file=sys.stderr)
         return 1
-    if report.warnings and not args.accept_warnings:
-        print(report.to_text(), file=sys.stderr)
-        print("[중단] 경고가 있습니다. 팀 검수 후 --accept-warnings를 붙여 다시 실행하세요", file=sys.stderr)
-        return 1
 
+    # 라벨 드리프트는 --accept-warnings로 넘길 수 있는 경고가 아니라 하드 오류이므로, 경고 확인보다
+    # 먼저 걸러낸다 (경고를 확인하고 다시 실행했는데 그제야 이 오류로 막히는 일이 없게)
     drift_errors = check_factor_label_drift(case, output, args.factor_labels)
     if drift_errors:
         print("\n".join(f"[ERROR] {e}" for e in drift_errors), file=sys.stderr)
         print("[중단] 판단 요소 라벨이 생성 시점과 달라 SQL을 만들지 않았습니다", file=sys.stderr)
         return 1
 
+    if report.warnings and not args.accept_warnings:
+        print(report.to_text(), file=sys.stderr)
+        print("[중단] 경고가 있습니다. 팀 검수 후 --accept-warnings를 붙여 다시 실행하세요", file=sys.stderr)
+        return 1
+
     if reviewed_at is None:
         print("[경고] --reviewed-at이 없어 ai_generation.reviewed_at에 now()(SQL 실행 시각)가 들어갑니다. "
               "실제 검수 시각을 넣으려면 --reviewed-at을 붙이세요", file=sys.stderr)
+    if args.flyway and args.factor_labels is None:
+        print("[경고] --factor-labels가 없어 판단 요소 라벨 드리프트 검사를 건너뜁니다. "
+              "generate.py가 남긴 run-NNN.factor-labels.json을 넣는 것을 권합니다", file=sys.stderr)
     print(build_sql(case, output, prompt, args.model_name, args.reviewed_by, flyway=args.flyway, reviewed_at=reviewed_at))
     return 0
 

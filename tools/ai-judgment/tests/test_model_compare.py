@@ -202,8 +202,10 @@ class GenerateCompareTest(unittest.TestCase):
         self.assertEqual(load_json(model_dir / "run-001.output.json"), self.output)
         # 생성 시점 사건 파일의 요소 라벨 스냅샷도 함께 남겨, 나중에 사건 파일이 바뀌어도
         # to_seed_sql.py --factor-labels로 드리프트를 확인할 수 있게 한다
-        self.assertEqual(load_json(model_dir / "run-001.factor-labels.json"),
-                         {str(f["factorId"]): f["label"] for f in self.case["factors"]})
+        self.assertEqual(load_json(model_dir / "run-001.factor-labels.json"), {
+            "caseTitle": self.case["title"],
+            "labels": {str(f["factorId"]): f["label"] for f in self.case["factors"]},
+        })
         statuses = [(r["callError"] is not None, r["parseError"] is not None, r["validation"]["ok"]) for r in records]
         self.assertEqual(statuses, [(False, False, True), (False, False, True), (False, True, False),
                                     (False, True, False), (False, False, False), (True, False, False)])
