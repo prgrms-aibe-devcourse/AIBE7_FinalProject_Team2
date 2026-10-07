@@ -14,7 +14,7 @@ sys.path.insert(0, str(PARENT_DIR))
 from common import NO_TERM_PENALTIES, PENALTY_TYPES, REDUCIBLE_TO, format_months, format_won  # noqa: E402
 
 # 프롬프트나 스키마를 고치면 올린다. 보고서(report.json)에 기록된다.
-EXTRACT_PROMPT_VERSION = "extract-v3"  # v3: Claude 외 공급자 요청에 JSON 스키마 안내를 붙임 (BE-35)
+EXTRACT_PROMPT_VERSION = "extract-v4"  # v3: Claude 외 공급자 스키마 안내 (BE-35), v4: 사건 발생일 incidentDate (BE-38)
 
 CRIME_TYPES = ("MURDER", "FRAUD", "INJURY")  # ERD legal_case.crime_type
 REVEAL_STAGES = ("OVERVIEW", "DETAIL", "ARGUMENT", "LAW")  # ERD factor.reveal_stage
@@ -97,6 +97,8 @@ OUTPUT_SCHEMA = _object({
         "fineAmount": _NULLABLE_INT,
         "suspensionMonths": _NULLABLE_INT,
     }),
+    # 사건 발생일 YYYY-MM-DD (내부 전용, BE-38). case.json · 사용자 화면에는 넣지 않고 source_internal.json · legal_case.incident_date에만 둔다
+    "incidentDate": _NULLABLE_STRING,
     "deidentifiedItems": {"type": "array", "items": _STRING},
     "reviewNotes": {"type": "array", "items": _STRING},
 })

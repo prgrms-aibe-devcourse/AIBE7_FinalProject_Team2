@@ -55,7 +55,9 @@ DEFAULT_CONFIG = {
     # 판결문 원본. 여러 개면 같은 사건의 심급별 판결문(1심 · 항소심). 자동으로 못 찾은 원본 정보는 여기에 직접 넣는다
     # [{"path": "...", "caseNumber": null, "courtName": null, "decidedAt": null, "courtLevel": null, "note": null}]
     "sources": [],
-    "finalSourceIndex": None,  # 최종 확정 판결 번호(0부터). 없으면 심급이 가장 높은 판결
+    "finalSourceIndex": None,
+    # 사건 발생일 YYYY-MM-DD. 주면 추출 결과(source_internal.json incidentDate)보다 우선한다 (BE-38)
+    "incidentDate": None,  # 최종 확정 판결 번호(0부터). 없으면 심급이 가장 높은 판결
     # extract를 건너뛸 때 쓸 파일 (extract를 돌리면 그 결과가 우선)
     "inputs": {"case": None, "court": None, "report": None, "source": None},
     "stages": {
@@ -113,6 +115,11 @@ def validate_config(config):
     if not name or not all(c.islower() or c.isdigit() or c == "-" for c in name):
         errors.append("name은 영어 소문자 · 숫자 · 하이픈으로 정한다 (사건을 특정할 수 없는 이름, 예: long-marriage-conflict)")
     stages = config["stages"]
+    if config.get("incidentDate") is not None:
+        try:
+            datetime.date.fromisoformat(config["incidentDate"])
+        except (TypeError, ValueError):
+            errors.append("incidentDate는 YYYY-MM-DD다")
     if stages["extract"]["enabled"] and not config["sources"]:
         errors.append("extract를 쓰려면 sources에 판결문 경로를 넣는다")
     extract_model = stages["extract"]["model"]
@@ -423,7 +430,9 @@ def stage_load(config, state, log, apply=None):
         overrides = [{k: v for k, v in s.items() if k != "path"} for s in config["sources"]]
         try:
             sources = resolve_sources(source["sources"], overrides, config["finalSourceIndex"])
-            parts.append(build_case_sql(case, report, sources, source_org=cfg["sourceOrg"], source_note=cfg["sourceNote"]))
+            incident_date = config.get("incidentDate") or source.get("incidentDate")
+            parts.append(build_case_sql(case, report, sources, source_org=cfg["sourceOrg"], source_note=cfg["sourceNote"],
+                                        incident_date=incident_date))
         except CaseSeedError as e:
             raise PipelineError(str(e))
 

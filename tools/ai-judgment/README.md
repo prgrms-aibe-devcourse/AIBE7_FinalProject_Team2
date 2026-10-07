@@ -261,7 +261,7 @@ python3 pipeline.py status cases/my-case.pipeline.json
 
 ### 적재 (`stages.load`)
 
-- **사건**: `legal_case.status='DRAFT'` → 사용자 목록 · 체험에서 보이지 않는다(서버가 `PUBLISHED`만 조회). 섹션 · 형벌 규칙 · 판단 요소 · 원본 판결문(`case_source`)을 함께 넣는다. 양형기준 연결 · 사건 발생일 · **재판부 판결(COURT)은 넣지 않는다** — 재판부 판결은 지금처럼 따로 작성해 넣고(BE-14 · `R__20` 방식), 관리자가 공개 전에 채운다.
+- **사건**: `legal_case.status='DRAFT'` → 사용자 목록 · 체험에서 보이지 않는다(서버가 `PUBLISHED`만 조회). 섹션 · 형벌 규칙 · 판단 요소 · 원본 판결문(`case_source`)을 함께 넣는다. 사건 발생일은 비식별화 단계가 원문 · 선고일과 대조해 확인한 값(또는 설정 `incidentDate`)을 넣는다(BE-38). 양형기준 연결 · **재판부 판결(COURT)은 넣지 않는다** — 재판부 판결은 지금처럼 따로 작성해 넣고(BE-14 · `R__20` 방식), 관리자가 공개 전에 채운다.
 - **AI 판결**: `judgment.is_published=false`, `ai_generation.review_status='PENDING'`(검수자 · 검수 시각 없음). 기존 공개 AI 판결은 그대로 둔다. `ai_generation.generation_report`(V8)에 검증 경고 · 사전 학습 점검 판정 · 회차 선택 이유 · 모델 · 토큰을 남겨 관리자가 검수할 때 본다(실제 판결 값은 넣지 않는다).
 - **같은 SQL을 두 번 실행해도 안전하다**: 같은 제목의 DRAFT 사건이 있으면 사건 적재를 건너뛰고, 같은 실행(`runKey`)의 AI 판결이 있으면 건너뛴다(`runKey`는 DB 부분 유니크 인덱스로도 막는다). 판단 요소가 다르면 전체가 취소된다.
 - **같은 제목의 공개 · 검토 중 사건이 있으면 멈춘다**(전체 취소). 모델이 만든 중립 제목은 다른 사건과 겹칠 수 있어서다. 이미 공개된 사건에 AI 판결만 넣으려면 `load.case: false`로 사건 SQL을 뺀다.

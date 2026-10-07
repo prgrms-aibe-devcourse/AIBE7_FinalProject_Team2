@@ -72,6 +72,14 @@ class CaseSeedSqlTest(unittest.TestCase):
         self.assertIn("'2099-05-01'::date", sql)
         self.assertIn("'법원 공개 판결문'", sql)
 
+    def test_build_case_sql_incident_date(self):
+        case = listing_case()
+        sources = resolve_sources(SOURCES, [{}, {"caseNumber": "2099노2"}])
+        self.assertIn("NULL, '2099-01-10'::date,", build_case_sql(case, report_for(case), sources, incident_date="2099-01-10"))
+        self.assertIn("NULL, NULL,", build_case_sql(case, report_for(case), sources))
+        with self.assertRaises(CaseSeedError):
+            build_case_sql(case, report_for(case), sources, incident_date="2099/01/10")
+
     def test_build_case_sql_missing_values(self):
         case = listing_case()
         with self.assertRaises(CaseSeedError) as ctx:
@@ -322,6 +330,24 @@ class PipelineTest(unittest.TestCase):
         stages = pipeline.load_state(config)["stages"]
         self.assertNotIn("select", stages)
         self.assertNotIn("load", stages)
+
+    def test_load_incident_date_source_and_override(self):
+        write_json(self.raw_config["inputs"]["source"], {"incidentDate": "2099-01-10", "sources": SOURCES})
+        config = self.config(generate={"models": ["openai:a"], "runs": 1}, load={"applyToDb": False})
+        state = self.run_with(config, {"openai:a": [self.output]})
+        self.assertIn("'2099-01-10'::date", Path(state["stages"]["load"]["outputs"]["sqlFile"]).read_text(encoding="utf-8"))
+        raw = copy.deepcopy(self.raw_config)
+        raw["incidentDate"] = "2099-02-02"
+        write_json(self.dir / "config.json", raw)
+        config = pipeline.load_config(self.dir / "config.json")
+        config["stages"]["generate"].update(models=["openai:a"], runs=1)
+        config["stages"]["load"]["applyToDb"] = False
+        state = self.run_with(config, {"openai:a": [self.output]}, start="load")
+        self.assertIn("'2099-02-02'::date", Path(state["stages"]["load"]["outputs"]["sqlFile"]).read_text(encoding="utf-8"))
+        raw["incidentDate"] = "2099-2-2"
+        write_json(self.dir / "config.json", raw)
+        with self.assertRaises(pipeline.PipelineError):
+            pipeline.load_config(self.dir / "config.json")
 
     def test_load_without_db_and_case(self):
         config = self.config(generate={"models": ["openai:a"], "runs": 1}, load={"applyToDb": False, "case": False})

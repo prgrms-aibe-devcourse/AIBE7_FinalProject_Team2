@@ -78,7 +78,9 @@ python3 extract_case.py ../cases/raw/1심.pdf ../cases/raw/항소심.pdf --name 
 | `<name>.case.json` | AI 판결 입력 (`examples/case_input.json` 형식). 실제 판결은 들어 있지 않다 | 상위 README 1단계의 사건 입력 파일 |
 | `<name>.court_judgment_internal.json` | 실제 판결 (최종 확정 판결) | 상위 README 2단계 사전 학습 점검에만 쓴다 |
 | `<name>.report.json` | 검사 결과 · 검수 메모 | 팀 검수 |
-| `<name>.source_internal.json` | 원본 판결문 정보(사건번호 · 법원명 · 선고일 · 심급 · 원문). **마스킹 전에 로컬 정규식으로 꺼낸 값이고 API로 보내지 않는다.** 내부 전용 | 사건 적재 SQL의 `case_source` (`case_seed_sql.py`, BE-31). 못 찾은 값은 파이프라인 설정 `sources[]`에 직접 넣는다 |
+| `<name>.source_internal.json` | 원본 판결문 정보(사건번호 · 법원명 · 선고일 · 심급 · 원문)와 **사건 발생일**(`incidentDate`, BE-38). **마스킹 전에 로컬 정규식으로 꺼낸 값이고 API로 보내지 않는다.** 내부 전용 | 사건 적재 SQL의 `case_source` (`case_seed_sql.py`, BE-31). 못 찾은 값은 파이프라인 설정 `sources[]`에 직접 넣는다 |
+
+**사건 발생일(BE-38)**: 모델이 범죄사실의 범행 날짜를 `incidentDate`(YYYY-MM-DD)로 내고, 스크립트가 ① 형식 ② **원문에 그 날짜가 실제로 나오는지** ③ 선고일보다 늦지 않은지 확인한다. 하나라도 어긋나면 넣지 않고 경고를 남긴다(경고에 날짜 값은 적지 않는다). 확인한 값은 `source_internal.json`에만 두고 `case.json` · 보고서 · AI 입력에는 넣지 않는다. 적재 SQL이 `legal_case.incident_date`에 넣는다(양형기준 버전 판단용, 서비스 화면에는 보이지 않음).
 
 `case.json`에는 목록 카드 값(`listing`: `shortIntro` · `keywords` · `difficulty` · `estimatedMinutes`)도 들어간다. AI 판결 프롬프트에는 들어가지 않는다(`build_prompt.py`가 허용 항목만 고른다). `court_judgment_internal.json`에는 `compare.py --court`가 대조할 `caseTitle`이 들어간다.
 

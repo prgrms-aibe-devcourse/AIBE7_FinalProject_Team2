@@ -15,7 +15,9 @@ import re
 import sys
 from pathlib import Path
 
-from deidentify import extract_source_info, premask, residual_check, scrub
+import datetime
+
+from deidentify import date_in_text, extract_source_info, premask, residual_check, scrub
 from schema import (
     EXTRACT_PROMPT_VERSION,
     OUTPUT_SCHEMA,
@@ -111,6 +113,26 @@ def join_judgments(judgments):
 def build_source_records(judgments):
     """case_source 적재용 원본 정보 (내부 전용). 원문은 마스킹 전 그대로 둔다."""
     return [{"file": path.name, **extract_source_info(text), "originalText": text} for path, text in judgments]
+
+
+def resolve_incident_date(value, judgments, sources):
+    """모델이 준 사건 발생일을 확인한다 (BE-38). (확정한 날짜 또는 None, 경고 목록).
+
+    날짜 형식, 원문에 실제로 나오는지, 선고일보다 늦지 않은지를 본다. 하나라도 어긋나면 넣지 않는다(관리자가 채운다).
+    경고에는 날짜 값을 적지 않는다 (보고서에 정확한 날짜를 남기지 않게).
+    """
+    if value is None:
+        return None, ["사건 발생일을 찾지 못했습니다 (관리자가 채우거나 파이프라인 설정 incidentDate로 넣으세요)"]
+    try:
+        parsed = datetime.date.fromisoformat(value)
+    except (TypeError, ValueError):
+        return None, ["사건 발생일 형식이 YYYY-MM-DD가 아니라 넣지 않았습니다"]
+    if not any(date_in_text(value, text) for _, text in judgments):
+        return None, ["모델이 준 사건 발생일이 원문에서 확인되지 않아 넣지 않았습니다"]
+    decided = [s.get("decidedAt") for s in sources if s.get("decidedAt")]
+    if decided and parsed > min(datetime.date.fromisoformat(d) for d in decided):
+        return None, ["사건 발생일이 선고일보다 늦어 넣지 않았습니다"]
+    return value, []
 
 
 def build_messages(masked_text):
@@ -305,6 +327,9 @@ def run(input_path, name, out_dir=DEFAULT_OUT_DIR, model=DEFAULT_MODEL, effort=D
     except (KeyError, TypeError, OutputError) as e:
         raise ExtractError(f"응답 형식이 스키마와 다릅니다: {e}") from e
 
+    sources = build_source_records(judgments)
+    incident_date, incident_warnings = resolve_incident_date(output.get("incidentDate"), judgments, sources)
+    warnings += incident_warnings
     report = {
         "promptVersion": EXTRACT_PROMPT_VERSION,
         "model": served_model,
@@ -338,7 +363,9 @@ def run(input_path, name, out_dir=DEFAULT_OUT_DIR, model=DEFAULT_MODEL, effort=D
     # 원본 판결문 정보(사건번호 · 법원명 · 선고일 · 원문)는 API로 보내지 않고 로컬에서 꺼낸 값이다. 내부 전용 (BE-31)
     write_json(source_path, {
         "_comment": "내부 전용. 사건 적재 SQL의 case_source에만 쓴다. 사용자 화면 · AI 입력 · 공개 저장소에 넣지 않는다.",
-        "sources": build_source_records(judgments),
+        # 사건 발생일 (BE-38). 모델이 원문에서 찾고 원문 · 선고일과 대조해 확인한 값. legal_case.incident_date에 들어간다
+        "incidentDate": incident_date,
+        "sources": sources,
     })
     return [case_path, court_path, report_path, source_path]
 
