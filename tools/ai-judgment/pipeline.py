@@ -43,6 +43,8 @@ from validate_output import parse_output
 
 STAGES = ("extract", "contamination", "generate", "select", "load")
 PIPELINE_DIR = TOOL_DIR / "out" / "pipeline"
+PUBLIC_ROOT = TOOL_DIR.parent.parent  # 공개 저장소 루트
+PRIVATE_SEED_DIR = PUBLIC_ROOT / "backend" / "private-seed"
 CASES_DIR = TOOL_DIR / "cases"
 EXTRACTOR_DIR = TOOL_DIR / "case-extractor"
 SELECT_STRATEGIES = ("consensus", "first-valid", "fewest-warnings", "manual")
@@ -414,9 +416,7 @@ def stage_load(config, state, log, apply=None):
     sql_dir = Path(cfg["sqlDir"])
     if not sql_dir.is_absolute():
         sql_dir = (TOOL_DIR / sql_dir).resolve()  # tools/ai-judgment 기준
-    if not sql_dir.parent.exists():
-        raise PipelineError(f"SQL 보관 폴더의 상위 폴더가 없습니다: {sql_dir.parent} "
-                            "(private-seed 서브모듈을 받거나 stages.load.sqlDir를 바꾸세요)")
+    check_sql_dir(sql_dir)
     stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     sql_path = sql_dir / f"{stamp}-{config['name']}.sql"
     sql_dir.mkdir(exist_ok=True)
@@ -436,11 +436,61 @@ def stage_load(config, state, log, apply=None):
     return outputs
 
 
+def check_sql_dir(sql_dir):
+    """적재 SQL에는 마스킹 전 원문(case_source)이 들어가므로 비공개 저장소 체크아웃 안에만 둔다.
+
+    - 상위 폴더가 실제 git 체크아웃이어야 한다. 서브모듈을 받지 않으면 private-seed는 빈 폴더로 남아 exists()만으로는
+      통과하는데, 그러면 비공개 저장소에 커밋되지 않고 나중에 submodule update도 실패할 수 있다(서브모듈의 .git은 파일)
+    - 공개 저장소 작업 트리 안이면 private-seed 아래만 허용한다 (공개 저장소에 원문이 커밋되지 않게)
+    """
+    root = sql_dir.parent
+    if not (root / ".git").exists():
+        raise PipelineError(f"SQL 보관 폴더가 git 저장소 체크아웃이 아닙니다: {root} "
+                            "(git submodule update --init backend/private-seed 로 받거나 stages.load.sqlDir를 바꾸세요). "
+                            "원본 판결문이 들어 있어 비공개 저장소 밖에 두지 않습니다")
+    resolved = sql_dir.resolve()
+    if _is_within(resolved, PUBLIC_ROOT.resolve()) and not _is_within(resolved, PRIVATE_SEED_DIR.resolve()):
+        raise PipelineError(f"SQL 보관 폴더가 공개 저장소 안에 있습니다: {sql_dir} (backend/private-seed 아래만 됩니다)")
+
+
+def _is_within(path, parent):
+    try:
+        path.relative_to(parent)
+        return True
+    except ValueError:
+        return False
+
+
+def _is_local_host(host):
+    """libpq 호스트 값이 이 컴퓨터인지. '/'로 시작하면 유닉스 소켓 디렉터리다."""
+    return host in LOCAL_HOSTS or (isinstance(host, str) and host.startswith("/"))
+
+
+def _local_docker_endpoint():
+    """현재 docker 대상(DOCKER_HOST, 없으면 현재 context)이 로컬인지 확인한다. 원격이면 PipelineError."""
+    endpoint = os.environ.get("DOCKER_HOST")
+    if not endpoint:
+        try:
+            completed = subprocess.run(["docker", "context", "inspect", "--format", "{{.Endpoints.docker.Host}}"],
+                                       capture_output=True, timeout=30)
+            endpoint = completed.stdout.decode("utf-8", "replace").strip()
+        except (OSError, subprocess.SubprocessError):
+            endpoint = ""
+    if not endpoint:
+        raise PipelineError("docker 대상(context)을 확인하지 못했습니다. 로컬 docker인지 확인할 수 없어 적재하지 않습니다")
+    parsed = urllib.parse.urlparse(endpoint)
+    local = parsed.scheme in ("unix", "npipe") or (parsed.scheme == "tcp" and parsed.hostname in LOCAL_HOSTS)
+    if not local:
+        raise PipelineError(f"원격 docker({endpoint})에는 적재하지 않습니다. 운영은 SQL 파일을 서버에서 실행하세요")
+    return endpoint
+
+
 def apply_sql(sql_path, db):
     """로컬 DB에만 적재한다. 운영 반영은 SQL 파일을 별도 절차로 실행한다."""
     if db["mode"] == "docker":
         if not shutil.which("docker"):
             raise PipelineError("docker 명령이 없습니다 (stages.load.db.mode=psql로 바꾸거나 applyToDb=false)")
+        _local_docker_endpoint()  # DOCKER_HOST · docker context가 원격을 가리키면 거부
         command = ["docker", "exec", "-i", db["container"], "psql", "-v", "ON_ERROR_STOP=1", "-q",
                    "-U", db["user"], "-d", db["database"]]
         env = None
@@ -450,9 +500,13 @@ def apply_sql(sql_path, db):
         parsed = urllib.parse.urlparse(url)
         # libpq는 쿼리의 host · hostaddr를 URL 호스트보다 우선해 쓰고, 쉼표로 여러 호스트를 받는다. 모두 로컬이어야 한다
         query = urllib.parse.parse_qs(parsed.query)
-        hosts = [parsed.hostname] + [h for key in ("host", "hostaddr") for value in query.get(key, [])
-                                     for h in value.split(",")]
-        if any(h not in LOCAL_HOSTS for h in hosts):
+        hosts = [h for key in ("host", "hostaddr") for value in query.get(key, []) for h in value.split(",")]
+        if parsed.hostname:
+            hosts.append(parsed.hostname)
+        if not hosts:
+            # URL에 호스트가 없으면(postgresql:///db) libpq는 PGHOST · PGHOSTADDR, 없으면 로컬 유닉스 소켓을 쓴다
+            hosts = [h for env in ("PGHOST", "PGHOSTADDR") for h in os.environ.get(env, "").split(",") if h]
+        if any(not _is_local_host(h) for h in hosts):
             raise PipelineError(f"로컬 DB에만 직접 적재합니다 (받은 호스트: {', '.join(str(h) for h in hosts)}). "
                                 "운영은 만들어진 SQL 파일을 서버에서 실행하세요")
         if not shutil.which("psql"):
@@ -481,7 +535,8 @@ STAGE_FUNCTIONS = {
 
 def plan(config, state, start=None, until=None, skip=(), rerun=False):
     """이번에 돌릴 단계: 설정에서 켜져 있고, start ~ until 안이고, skip이 아닌 단계.
-    이미 끝난(done) 단계는 건너뛴다. start를 주면 그 단계부터는 끝났어도 다시 돌린다."""
+    이미 끝난(done) 단계는 건너뛴다. 단 앞 단계가 이번에 다시 돌면 뒤 단계 결과는 낡은 것이므로 끝났어도 함께 돌린다
+    (예: generate가 실패한 뒤 이어서 돌리면 generate · select · load). start를 주면 그 단계부터는 끝났어도 다시 돌린다."""
     start_i = STAGES.index(start) if start else 0
     until_i = STAGES.index(until) if until else len(STAGES) - 1
     steps = []
@@ -489,7 +544,7 @@ def plan(config, state, start=None, until=None, skip=(), rerun=False):
         if not config["stages"][stage]["enabled"] or stage in skip or not start_i <= i <= until_i:
             continue
         done = (state["stages"].get(stage) or {}).get("status") == "done"
-        if done and not rerun and not start:
+        if done and not rerun and not start and not steps:
             continue
         steps.append(stage)
     return steps
@@ -569,7 +624,7 @@ def main():
         if args.command == "status":
             print_status(config)
             return 0
-        run_pipeline(config, args.start, args.until, args.skip, args.rerun)
+        state = run_pipeline(config, args.start, args.until, args.skip, args.rerun)
     except PipelineError as e:
         print(f"\n[중단] {e.args[0]}", file=sys.stderr)
         return 1
@@ -579,7 +634,13 @@ def main():
     except LLMError as e:
         print(f"[오류] {e}", file=sys.stderr)
         return 1
-    print("\n완료. 적재한 사건 · AI 판결은 비공개이며 관리자 검수 후 공개됩니다.")
+    load = stage_output(state, "load")
+    if load.get("applied"):
+        print("\n완료. 로컬 DB에 적재한 사건 · AI 판결은 비공개이며 관리자 검수 후 공개됩니다.")
+    elif load:
+        print(f"\n완료. 적재 SQL만 만들었습니다(DB 적재 안 함): {load['sqlFile']}")
+    else:
+        print("\n완료. 적재(load) 단계는 돌지 않았습니다. 이어서 적재하려면 다시 run 하세요.")
     return 0
 
 

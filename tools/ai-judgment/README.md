@@ -226,7 +226,7 @@ python3 pipeline.py status cases/my-case.pipeline.json
 | `select` | 검증을 통과한 회차 중 하나를 고른다 | 아래 "회차 선택" |
 | `load` | 사건(DRAFT) + AI 판결(비공개 · PENDING) 적재 SQL을 만들어 보관하고 로컬 DB에 적재한다 | `case: false`면 사건은 빼고 AI 판결만(사건이 이미 DB에 있을 때). `applyToDb: false`면 SQL만 만든다 |
 
-**단계 분기 (명령 옵션)**: 끝난 단계는 다음 실행에서 건너뛰고 이어서 한다(상태: `out/pipeline/<name>/state.json`).
+**단계 분기 (명령 옵션)**: 끝난 단계는 다음 실행에서 건너뛰고 이어서 한다(상태: `out/pipeline/<name>/state.json`). 단 앞 단계가 다시 돌면 그 뒤 단계는 끝났어도 함께 다시 돈다(예: `generate`가 실패한 뒤 옵션 없이 다시 `run`하면 `generate → select → load`). 끝날 때 적재까지 했는지(DB 적재 · SQL만 · 적재 안 함)를 구분해 알려 준다.
 
 | 옵션 | 뜻 |
 | --- | --- |
@@ -254,9 +254,10 @@ python3 pipeline.py status cases/my-case.pipeline.json
 
 - **사건**: `legal_case.status='DRAFT'` → 사용자 목록 · 체험에서 보이지 않는다(서버가 `PUBLISHED`만 조회). 섹션 · 형벌 규칙 · 판단 요소 · 원본 판결문(`case_source`)을 함께 넣는다. 양형기준 연결 · 사건 발생일 · **재판부 판결(COURT)은 넣지 않는다** — 재판부 판결은 지금처럼 따로 작성해 넣고(BE-14 · `R__20` 방식), 관리자가 공개 전에 채운다.
 - **AI 판결**: `judgment.is_published=false`, `ai_generation.review_status='PENDING'`(검수자 · 검수 시각 없음). 기존 공개 AI 판결은 그대로 둔다. `ai_generation.generation_report`(V8)에 검증 경고 · 사전 학습 점검 판정 · 회차 선택 이유 · 모델 · 토큰을 남겨 관리자가 검수할 때 본다(실제 판결 값은 넣지 않는다).
-- **같은 SQL을 두 번 실행해도 안전하다**: 같은 제목의 사건이 있으면 사건 적재를 건너뛰고, 같은 실행(`runKey`)의 AI 판결이 있으면 건너뛴다. 같은 제목의 사건이 있는데 판단 요소가 다르면 전체가 취소된다.
-- **SQL 보관**: `sqlDir`(기본 `backend/private-seed/loads/`)에 `<시각>-<name>.sql`로 남긴다. 원본 판결문이 들어 있으므로 **비공개 저장소에만** 둔다. Flyway가 읽는 `seed/`가 아니라서 자동 실행되지 않는다(관리자가 DB에서 바꾼 검수 상태를 R__ 재실행이 덮지 않게).
-- **DB 적재는 로컬에만**: `db.mode`가 `docker`(기본, `lawnambul-postgres` 컨테이너) 또는 `psql`(`DB_URL`, URL 호스트와 쿼리의 `host` · `hostaddr`가 모두 localhost가 아니면 거부). 운영은 보관한 SQL 파일을 서버에서 실행한다: `psql -v ON_ERROR_STOP=1 -f <파일>`.
+- **같은 SQL을 두 번 실행해도 안전하다**: 같은 제목의 DRAFT 사건이 있으면 사건 적재를 건너뛰고, 같은 실행(`runKey`)의 AI 판결이 있으면 건너뛴다(`runKey`는 DB 부분 유니크 인덱스로도 막는다). 판단 요소가 다르면 전체가 취소된다.
+- **같은 제목의 공개 · 검토 중 사건이 있으면 멈춘다**(전체 취소). 모델이 만든 중립 제목은 다른 사건과 겹칠 수 있어서다. 이미 공개된 사건에 AI 판결만 넣으려면 `load.case: false`로 사건 SQL을 뺀다.
+- **SQL 보관**: `sqlDir`(기본 `backend/private-seed/loads/`)에 `<시각>-<name>.sql`로 남긴다. 원본 판결문이 들어 있으므로 **비공개 저장소에만** 둔다. 보관 폴더의 상위가 실제 git 체크아웃이어야 하고(서브모듈을 받지 않아 빈 `private-seed` 폴더면 멈춘다), 공개 저장소 안이면 `backend/private-seed` 아래만 허용한다. Flyway가 읽는 `seed/`가 아니라서 자동 실행되지 않는다(관리자가 DB에서 바꾼 검수 상태를 R__ 재실행이 덮지 않게).
+- **DB 적재는 로컬에만**: `db.mode`가 `docker`(기본, `lawnambul-postgres` 컨테이너. `DOCKER_HOST` · docker context가 원격이면 거부) 또는 `psql`(`DB_URL`. URL 호스트와 쿼리의 `host` · `hostaddr`가 모두 localhost여야 한다. 호스트 없는 URL은 `PGHOST`를 보고, 없으면 유닉스 소켓이라 허용). 운영은 보관한 SQL 파일을 서버에서 실행한다: `psql -v ON_ERROR_STOP=1 -f <파일>`.
 
 ### 보안 · 데이터
 

@@ -5,7 +5,8 @@ case-extractor 결과 세 파일을 합쳐 legal_case · case_section · penalty
 - <name>.report.json: 판단 요소 preLabel · summaryTag, 형벌 규칙 근거, 비식별화 항목
 - <name>.source_internal.json: 원본 판결문 정보(사건번호 · 법원명 · 선고일 · 원문, 로컬에서 꺼낸 내부 전용 값)
 
-- 같은 제목의 사건이 이미 있으면 아무것도 바꾸지 않고 건너뛴다 (같은 SQL을 두 번 실행해도 안전, 기존 공개 사건 보호)
+- 같은 제목의 DRAFT 사건이 이미 있으면 건너뛴다 (같은 SQL을 두 번 실행해도 안전). 같은 제목의 사건이 DRAFT가 아니면
+  다른 사건일 수 있으므로 멈춘다(전체 취소). 이미 공개된 사건에 AI 판결만 넣을 때는 파이프라인 load.case=false로 사건 SQL을 뺀다
 - 양형기준 연결(guideline_id) · 사건 발생일(incident_date)은 비워 둔다. 관리자가 공개 전에 채운다
 - 재판부 판결(COURT)은 넣지 않는다. 지금처럼 따로 작성해 넣는다(private-seed R__20 방식)
 - 공개(PUBLISHED)는 관리자가 검수 후 한다. 이 SQL은 공개하지 않는다
@@ -152,8 +153,13 @@ def build_case_sql(case, report, sources, *, source_org=DEFAULT_SOURCE_ORG, sour
 DECLARE
     v_case_id bigint;
 BEGIN
+    -- 같은 제목의 사건이 DRAFT가 아니면(공개 · 검토 중) 다른 사건일 수 있으므로 멈춘다 (모델이 만든 중립 제목은 겹칠 수 있다)
+    IF EXISTS (SELECT 1 FROM legal_case WHERE title = {title} AND status <> 'DRAFT') THEN
+        RAISE EXCEPTION '같은 제목의 공개 · 검토 중 사건이 이미 있습니다. 제목을 바꾸거나 확인하세요 (title=%)', {title};
+    END IF;
+    -- 같은 제목의 DRAFT(이전 파이프라인 적재분)면 건너뛴다 (같은 SQL을 두 번 실행해도 안전)
     IF EXISTS (SELECT 1 FROM legal_case WHERE title = {title}) THEN
-        RAISE NOTICE '사건 적재 건너뜀: 같은 제목의 사건이 이미 있습니다 (title=%)', {title};
+        RAISE NOTICE '사건 적재 건너뜀: 같은 제목의 DRAFT 사건이 이미 있습니다 (title=%)', {title};
         RETURN;
     END IF;
 

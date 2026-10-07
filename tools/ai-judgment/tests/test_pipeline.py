@@ -4,6 +4,7 @@
 """
 
 import copy
+import io
 import json
 import os
 import sys
@@ -61,7 +62,10 @@ class CaseSeedSqlTest(unittest.TestCase):
         sql = build_case_sql(case, report_for(case), resolve_sources(SOURCES, [{}, {"caseNumber": "2099노2"}]))
         self.assertIn("'DRAFT', NULL", sql)
         self.assertNotIn("'PUBLISHED'", sql)
-        self.assertIn("같은 제목의 사건이 이미 있습니다", sql)
+        self.assertIn("같은 제목의 DRAFT 사건이 이미 있습니다", sql)
+        # 같은 제목의 공개 · 검토 중 사건이면 다른 사건일 수 있어 멈춘다
+        self.assertIn("status <> 'DRAFT'", sql)
+        self.assertIn("RAISE EXCEPTION '같은 제목의 공개 · 검토 중 사건", sql)
         self.assertIn("'원문 ''따옴표'''", sql)  # 작은따옴표 이스케이프
         self.assertEqual(sql.count("INSERT INTO factor"), len(case["factors"]))
         self.assertEqual(sql.count("INSERT INTO case_source"), 2)
@@ -126,6 +130,7 @@ class PipelineTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.dir = Path(self.tmp.name)
+        (self.dir / ".git").write_text("gitdir: x\n", encoding="utf-8")  # SQL 보관 폴더(loads)의 상위가 git 체크아웃인 것처럼
         patches = [mock.patch.object(pipeline, "PIPELINE_DIR", self.dir / "pipeline"),
                    mock.patch.object(pipeline, "RUNS_DIR", self.dir / "runs")]
         for p in patches:
@@ -196,6 +201,21 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(pipeline.plan(config, state, start="generate"), ["generate", "select", "load"])
         self.assertEqual(pipeline.plan(config, state, rerun=True, until="select"), ["generate", "select"])
         self.assertEqual(pipeline.plan(config, state, skip=["load"]), ["select"])
+
+    def test_plan_resume_after_failure_runs_later_stages(self):
+        # 중간 단계가 실패했으면 이어서 돌릴 때 뒤 단계도 다시 돈다 (낡은 결과로 끝내지 않게)
+        config = self.config(extract={"enabled": True})
+        state = {"stages": {"extract": {"status": "done"}, "generate": {"status": "failed"},
+                            "select": {"status": "done"}, "load": {"status": "done"}}}
+        self.assertEqual(pipeline.plan(config, state), ["generate", "select", "load"])
+
+    def test_resume_after_generate_failure_loads(self):
+        config = self.config(generate={"models": ["openai:a"], "runs": 1, "maxRetries": 0})
+        self.run_with(config, {"openai:a": [self.output]})
+        with self.assertRaises(pipeline.PipelineError):
+            self.run_with(config, {"openai:a": ["x"]}, start="generate")
+        state = self.run_with(config, {"openai:a": [self.output]})  # 옵션 없이 이어서
+        self.assertEqual([state["stages"][s]["status"] for s in ("generate", "select", "load")], ["done"] * 3)
 
     # ---- 전체 흐름
 
@@ -318,6 +338,17 @@ class PipelineTest(unittest.TestCase):
             self.run_with(config, {"openai:a": [self.output]})
         self.assertIn("private-seed", str(ctx.exception))
 
+    def test_sql_dir_must_be_private_checkout(self):
+        empty = self.dir / "empty-submodule"
+        empty.mkdir()
+        with self.assertRaises(pipeline.PipelineError) as ctx:  # 빈 서브모듈 폴더 (.git 없음)
+            pipeline.check_sql_dir(empty / "loads")
+        self.assertIn("git 저장소 체크아웃이 아닙니다", str(ctx.exception))
+        with self.assertRaises(pipeline.PipelineError) as ctx:  # 공개 저장소 안 (private-seed 밖)
+            pipeline.check_sql_dir(pipeline.PUBLIC_ROOT / "loads")
+        self.assertIn("공개 저장소 안", str(ctx.exception))
+        pipeline.check_sql_dir(self.dir / "loads")  # 별도 git 체크아웃은 허용
+
     def test_apply_sql_rejects_remote_db(self):
         with self.assertRaises(pipeline.PipelineError) as ctx:
             pipeline.apply_sql(self.dir / "x.sql", {"mode": "psql", "url": "jdbc:postgresql://prod.example.com:5432/db"})
@@ -328,6 +359,44 @@ class PipelineTest(unittest.TestCase):
                     "postgresql://localhost/db?host=localhost,prod.example.com"):
             with self.assertRaises(pipeline.PipelineError, msg=url):
                 pipeline.apply_sql(self.dir / "x.sql", {"mode": "psql", "url": url})
+
+    def test_apply_sql_unix_socket_and_pghost(self):
+        socket_url = {"mode": "psql", "url": "postgresql:///lawnambul"}
+        with mock.patch.dict(os.environ, {}, clear=True), mock.patch("shutil.which", return_value=None):
+            with self.assertRaises(pipeline.PipelineError) as ctx:
+                pipeline.apply_sql(self.dir / "x.sql", socket_url)
+        self.assertIn("psql 명령이 없습니다", str(ctx.exception))  # 호스트 확인은 통과 (유닉스 소켓 = 로컬)
+        with mock.patch.dict(os.environ, {"PGHOST": "prod.example.com"}, clear=True):
+            with self.assertRaises(pipeline.PipelineError) as ctx:
+                pipeline.apply_sql(self.dir / "x.sql", socket_url)
+        self.assertIn("로컬 DB에만", str(ctx.exception))
+
+    def test_docker_mode_rejects_remote_endpoint(self):
+        with mock.patch.dict(os.environ, {"DOCKER_HOST": "tcp://prod.example.com:2376"}):
+            with self.assertRaises(pipeline.PipelineError) as ctx:
+                pipeline._local_docker_endpoint()
+        self.assertIn("원격 docker", str(ctx.exception))
+        for local in ("unix:///var/run/docker.sock", "tcp://127.0.0.1:2375"):
+            with mock.patch.dict(os.environ, {"DOCKER_HOST": local}):
+                self.assertEqual(pipeline._local_docker_endpoint(), local)
+        context = mock.Mock(stdout=b"ssh://deploy@prod.example.com\n")
+        with mock.patch.dict(os.environ, {}, clear=True), mock.patch("subprocess.run", return_value=context):
+            with self.assertRaises(pipeline.PipelineError):
+                pipeline._local_docker_endpoint()
+
+    def test_main_completion_message_by_load(self):
+        config_path = self.dir / "config.json"
+        write_json(config_path, self.raw_config)
+        for state, expected in (({"stages": {}}, "돌지 않았습니다"),
+                                ({"stages": {"load": {"status": "done", "outputs": {"applied": False, "sqlFile": "a.sql"}}}},
+                                 "SQL만 만들었습니다"),
+                                ({"stages": {"load": {"status": "done", "outputs": {"applied": True, "sqlFile": "a.sql"}}}},
+                                 "로컬 DB에 적재한")):
+            out = io.StringIO()
+            with mock.patch.object(sys, "argv", ["pipeline.py", "run", str(config_path), "--until", "select"]), \
+                    mock.patch.object(pipeline, "run_pipeline", return_value=state), mock.patch("sys.stdout", out):
+                self.assertEqual(pipeline.main(), 0)
+            self.assertIn(expected, out.getvalue())
 
     def test_extract_ineligible_stops(self):
         config = self.config(extract={"enabled": True})

@@ -393,7 +393,7 @@ AI 판결 1건을 어떤 조건으로 만들었는지 남긴다(REQ-047, 079). M
 | review_status | varchar(20) | ✓ | `PENDING` / `APPROVED` / `REJECTED` |
 | reviewed_by | varchar(50) |  | 검수자 |
 | reviewed_at | timestamptz |  |  |
-| generation_report | jsonb |  | 자동 생성 정보 (v1.11, BE-31): 검증 경고 · 사전 학습 점검 판정 · 회차 선택 이유 · 모델 · 토큰 · 실행 식별자(`runKey`, 같은 적재 SQL 중복 실행 방지). 사람이 검수해 넣은 행은 NULL |
+| generation_report | jsonb |  | 자동 생성 정보 (v1.11, BE-31): 검증 경고 · 사전 학습 점검 판정 · 회차 선택 이유 · 모델 · 토큰 · 실행 식별자(`runKey`, 같은 적재 SQL 중복 실행 방지, 부분 유니크 인덱스 `ux_ai_generation_run_key`). 사람이 검수해 넣은 행은 NULL |
 | created_at | timestamptz | ✓ |  |
 - 자동 파이프라인(BE-31)은 AI 판결을 비공개(`judgment.is_published=false`) · `review_status='PENDING'`으로 넣는다. 관리자가 검수해 `APPROVED`로 바꾸고 공개 판단을 교체한다(후검수). `REJECTED`는 공개하지 않는다.
 - 모델·프롬프트가 바뀌면 새 `judgment` + 새 `ai_generation`을 만들고, 검수 후 공개 판단을 교체한다. 기존 행은 지우지 않는다(REQ-079).

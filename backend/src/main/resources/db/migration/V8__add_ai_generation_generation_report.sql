@@ -4,3 +4,9 @@
 -- 실행 식별자(runKey)는 같은 적재 SQL을 두 번 실행해도 행이 두 번 생기지 않게 하는 데도 쓴다.
 -- 기존 행(R__30 등 사람이 검수해 APPROVED로 넣은 판결)은 NULL로 둔다.
 ALTER TABLE ai_generation ADD COLUMN generation_report jsonb;
+
+-- 같은 실행(runKey)이 두 번 적재되지 않게 DB 제약으로도 막는다. 적재 SQL의 IF EXISTS 확인은 동시에 두 번 실행하면 둘 다 통과할 수 있다.
+-- runKey가 있는 행(자동 파이프라인 적재분)만 대상으로 한다. 사람이 검수해 넣은 행(NULL)은 제외
+CREATE UNIQUE INDEX ux_ai_generation_run_key
+    ON ai_generation ((generation_report ->> 'runKey'))
+    WHERE generation_report ? 'runKey';

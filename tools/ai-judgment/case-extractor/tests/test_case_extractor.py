@@ -434,6 +434,14 @@ class ListingEligibilitySourceTest(unittest.TestCase):
                          ("2099노45", "APPEAL", "2099-09-03"))
         self.assertEqual(extract_source_info("머리 정보 없음")["caseNumber"], None)
 
+    def test_extractSourceInfo_courtLevelBySign(self):
+        # 사건 부호 → 심급 (1심 · 항소심 · 상고심, 군사법원 감 · 전자 부호 포함)
+        expected = {"2099고합1": "FIRST", "2099고단5": "FIRST", "2099노45": "APPEAL", "2099감노2": "APPEAL",
+                    "2099도1": "SUPREME", "2099감도3": "SUPREME"}
+        for number, level in expected.items():
+            info = extract_source_info(f"사건 {number} 살인\n판결선고 2099. 1. 1.")
+            self.assertEqual((info["caseNumber"], info["courtLevel"]), (number, level), number)
+
     def test_run_multipleJudgments_sourceKeptLocal(self):
         first, appeal = self.dir / "first.txt", self.dir / "appeal.txt"
         first.write_text(FAKE_JUDGMENT, encoding="utf-8")
