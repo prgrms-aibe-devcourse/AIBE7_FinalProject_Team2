@@ -109,7 +109,7 @@ def _post_json(url, headers, body, timeout):
                                          headers={"Content-Type": "application/json", **headers})
         try:
             with urllib.request.urlopen(request, timeout=timeout) as response:
-                return json.loads(response.read().decode("utf-8"))
+                raw = response.read()
         except urllib.error.HTTPError as e:
             detail = _error_detail(e)
             if e.code in RETRY_STATUSES and attempt < MAX_ATTEMPTS:
@@ -117,12 +117,23 @@ def _post_json(url, headers, body, timeout):
                 continue
             raise LLMError(f"API 오류 ({e.code}): {detail}") from None
         except urllib.error.URLError as e:
+            # Python 3.9 이하는 연결 단계 timeout이 URLError(reason=socket.timeout)로 온다. 읽기 timeout과 같게 다시 보내지 않는다
+            if isinstance(e.reason, (TimeoutError, socket.timeout)):
+                raise LLMError(f"응답 대기 시간({timeout}초)을 넘었습니다") from None
             if attempt < MAX_ATTEMPTS:
                 time.sleep(2 ** attempt)
                 continue
             raise LLMError(f"API에 연결하지 못했습니다: {e.reason}") from None
         except (TimeoutError, socket.timeout):  # Python 3.9 이하는 socket.timeout이 따로 있다
             raise LLMError(f"응답 대기 시간({timeout}초)을 넘었습니다") from None
+        # 프록시 · 호환 엔드포인트가 200에 HTML 등을 보내도 회차 실패로 기록되게 LLMError로 바꾼다
+        try:
+            payload = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            raise LLMError("API 응답이 JSON이 아닙니다") from None
+        if not isinstance(payload, dict):
+            raise LLMError("API 응답 형식이 올바르지 않습니다 (JSON 객체가 아님)")
+        return payload
     raise LLMError("API 호출에 실패했습니다")  # 도달하지 않음
 
 

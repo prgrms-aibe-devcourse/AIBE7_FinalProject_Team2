@@ -4,11 +4,14 @@
 """
 
 import copy
+import io
 import json
 import os
+import socket
 import sys
 import tempfile
 import unittest
+import urllib.error
 from pathlib import Path
 from unittest import mock
 
@@ -17,7 +20,7 @@ sys.path.insert(0, str(TOOL_DIR))
 
 import llm  # noqa: E402
 from common import load_json  # noqa: E402
-from compare import CompareError, load_runs, parse_prices, render_csv, render_markdown, summarize  # noqa: E402
+from compare import CompareError, check_court_case, load_runs, parse_prices, render_csv, render_markdown, summarize  # noqa: E402
 from generate import GenerateError, generate_runs, import_runs, model_slug  # noqa: E402
 
 EXAMPLES = TOOL_DIR / "examples"
@@ -115,6 +118,29 @@ class ProviderTest(unittest.TestCase):
                 llm.call("openai:gpt-x", "S", "U", http=FakeHttp({}))
         self.assertIn("OPENAI_API_KEY", str(ctx.exception))
 
+    def test_post_json_rejects_non_object_body(self):
+        for body in (b"<html>gateway</html>", b"[1, 2]", b"\xff\xfe"):
+            with mock.patch("urllib.request.urlopen", return_value=io.BytesIO(body)):
+                with self.assertRaises(llm.LLMError):
+                    llm._post_json("https://example.invalid", {}, {}, 1)
+        with mock.patch("urllib.request.urlopen", return_value=io.BytesIO(b'{"ok": true}')):
+            self.assertEqual(llm._post_json("https://example.invalid", {}, {}, 1), {"ok": True})
+
+    def test_post_json_connect_timeout_not_retried(self):
+        error = urllib.error.URLError(socket.timeout("timed out"))
+        with mock.patch("urllib.request.urlopen", side_effect=error) as urlopen, mock.patch("time.sleep"):
+            with self.assertRaises(llm.LLMError) as ctx:
+                llm._post_json("https://example.invalid", {}, {}, 7)
+        self.assertEqual(urlopen.call_count, 1)
+        self.assertIn("7초", str(ctx.exception))
+
+    def test_post_json_connection_error_retried(self):
+        error = urllib.error.URLError("connection refused")
+        with mock.patch("urllib.request.urlopen", side_effect=error) as urlopen, mock.patch("time.sleep"):
+            with self.assertRaises(llm.LLMError):
+                llm._post_json("https://example.invalid", {}, {}, 1)
+        self.assertEqual(urlopen.call_count, llm.MAX_ATTEMPTS)
+
     def test_manual_cannot_call(self):
         with self.assertRaises(llm.LLMError):
             llm.call("manual:app", "S", "U", http=FakeHttp({}))
@@ -206,6 +232,22 @@ class GenerateCompareTest(unittest.TestCase):
         self.assertEqual(records[0]["meta"]["source"], "answer.json")
         with self.assertRaises(GenerateError):
             import_runs(self.case, "openai:gpt-x", [response], self.batch_dir, log=lambda *_: None)
+
+    def test_import_missing_file_records_nothing(self):
+        response = Path(self.tmp.name) / "answer.json"
+        response.write_text(json.dumps(self.output, ensure_ascii=False), encoding="utf-8")
+        with self.assertRaises(GenerateError) as ctx:
+            import_runs(self.case, "manual:app", [response, Path(self.tmp.name) / "none.json"], self.batch_dir,
+                        log=lambda *_: None)
+        self.assertIn("none.json", str(ctx.exception))
+        self.assertFalse(self.batch_dir.exists())
+
+    def test_court_case_must_match_batch(self):
+        batch = {"caseTitle": self.case["title"]}
+        check_court_case(self.court, batch)  # 예시 파일은 같은 사건
+        for court in ({**self.court, "caseTitle": "다른 사건"}, {k: v for k, v in self.court.items() if k != "caseTitle"}):
+            with self.assertRaises(CompareError):
+                check_court_case(court, batch)
 
     def test_compare_summary(self):
         self.run_batch()

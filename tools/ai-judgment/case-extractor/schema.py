@@ -159,6 +159,8 @@ def build_court_judgment(output):
     court = output["courtJudgment"]
     return {
         "_comment": "내부 전용. 사전 학습 점검(check_contamination.py)에서만 쓴다. AI 판결 생성 프롬프트에 절대 넣지 않는다.",
+        # compare.py --court가 결과 묶음(batch.json)의 사건과 같은 사건인지 대조하는 값. case.json의 title과 같다
+        "caseTitle": output["title"],
         "caseId": None,
         **court,
     }

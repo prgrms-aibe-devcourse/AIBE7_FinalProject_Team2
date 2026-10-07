@@ -190,6 +190,15 @@ def summarize(case, groups, court=None, prices=None):
     return rows, details, consensus
 
 
+def check_court_case(court, batch):
+    """다른 사건의 실제 판결로 비교하지 않게, 판결 파일의 caseTitle이 묶음의 사건 제목과 같은지 확인한다."""
+    if not court.get("caseTitle"):
+        raise CompareError("--court 파일에 caseTitle이 없습니다. 사건 입력 파일(case.json)의 title과 같은 값을 "
+                           "\"caseTitle\"로 넣으세요 (case-extractor로 만든 파일에는 들어 있다)")
+    if court["caseTitle"] != batch.get("caseTitle"):
+        raise CompareError(f"--court의 사건({court['caseTitle']})이 묶음의 사건({batch.get('caseTitle')})과 다릅니다")
+
+
 def court_diff(court, valid):
     """실제 판결과의 차이 (내부 전용). 형벌은 최종 선고 형벌로 비교한다."""
     actual = final_penalty(court)
@@ -319,6 +328,8 @@ def main():
         if not args.case:
             case = _case_from_records(groups)
         court = load_json(args.court) if args.court else None
+        if court is not None:
+            check_court_case(court, batch)
         rows, details, consensus = summarize(case, groups, court, parse_prices(args.price))
     except CompareError as e:
         print(f"[오류] {e}", file=sys.stderr)

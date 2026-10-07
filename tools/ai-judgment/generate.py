@@ -164,6 +164,10 @@ def import_runs(case, spec, response_paths, batch_dir, log=print):
     provider, model = parse_model_spec(spec)
     if provider != "manual":
         raise GenerateError(f"import에는 manual:<이름>을 씁니다 (받은 값: {spec})")
+    # 중간 파일이 없어 일부만 기록되고 멈추지 않게 먼저 모두 확인한다
+    missing = [str(p) for p in response_paths if not Path(p).is_file()]
+    if missing:
+        raise GenerateError(f"응답 파일이 없습니다: {', '.join(missing)}")
     prompt = prepare_batch(case, batch_dir)
     model_dir = Path(batch_dir) / model_slug(spec)
     records = []
