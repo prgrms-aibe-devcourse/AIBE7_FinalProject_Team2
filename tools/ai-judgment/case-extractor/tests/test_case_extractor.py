@@ -14,7 +14,7 @@ from types import SimpleNamespace
 EXTRACTOR_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(EXTRACTOR_DIR))
 
-from deidentify import premask, residual_check  # noqa: E402
+from deidentify import extract_source_info, premask, residual_check  # noqa: E402
 from extract_case import ExtractError, parse_response_text, process_output, read_judgment, run  # noqa: E402
 
 # 설명용 가상 판결문 (tools/ai-judgment/examples의 가상 살인 사건). 개인정보 값은 모두 지어낸 것이다.
@@ -33,6 +33,11 @@ FAKE_JUDGMENT = """
 
 FAKE_OUTPUT = {
     "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",
+    "shortIntro": "빌린 돈 문제로 다투던 지인을 집에서 살해한 사건이다.",
+    "keywords": ["금전 갈등", "자백", "우발적 범행"],
+    "difficulty": "MID",
+    "estimatedMinutes": 10,
+    "eligibility": {"eligible": True, "reasons": []},
     "crimeType": "MURDER",
     "chargeName": "살인",
     "appliedLaw": "형법 제250조 제1항 살인",
@@ -298,7 +303,8 @@ class RunTest(unittest.TestCase):
         paths = run(self.input, "sample-case", out_dir=self.dir / "out", call=fake_call(FAKE_OUTPUT))
 
         self.assertEqual([p.name for p in paths],
-                         ["sample-case.case.json", "sample-case.court_judgment_internal.json", "sample-case.report.json"])
+                         ["sample-case.case.json", "sample-case.court_judgment_internal.json", "sample-case.report.json",
+                          "sample-case.source_internal.json"])
         report = json.loads(paths[2].read_text(encoding="utf-8"))
         self.assertEqual(report["status"], "NEEDS_REVIEW")
         # compare.py --court가 결과 묶음과 대조할 사건 제목이 판결 파일에 들어 있다
@@ -382,6 +388,65 @@ class RunTest(unittest.TestCase):
 
         with self.assertRaises(ExtractError):
             read_judgment(path)
+
+
+class ListingEligibilitySourceTest(unittest.TestCase):
+    """BE-31: 목록 카드 칸 · 선정 조건 판정 · 원본 판결문 정보"""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_listing_inCaseInput_notInPrompt(self):
+        case_input, _, errors, _ = process_output(copy.deepcopy(FAKE_OUTPUT))
+        self.assertEqual(errors, [])
+        self.assertEqual(case_input["listing"]["difficulty"], "MID")
+        from build_prompt import build_prompt
+        prompt = build_prompt(case_input)
+        self.assertNotIn(FAKE_OUTPUT["shortIntro"], prompt["user"])
+
+    def test_listing_shortIntroTooLong_isError_andPiiChecked(self):
+        _, _, errors, _ = process_output(output_with(shortIntro="가" * 201))
+        self.assertTrue(any("shortIntro" in e for e in errors))
+        _, _, errors, _ = process_output(output_with(keywords=["2099. 1. 10. 사건", "자백"]))
+        self.assertTrue(any("listing.keywords[0]" in e for e in errors))
+
+    def test_eligibility_false_isWarning_andInReport(self):
+        output = output_with(eligibility={"eligible": False, "reasons": ["경합범이다"]})
+        _, _, errors, warnings = process_output(copy.deepcopy(output))
+        self.assertEqual(errors, [])
+        self.assertTrue(any("서비스 대상이 아닌" in w for w in warnings))
+        path = self.dir / "j.txt"
+        path.write_text(FAKE_JUDGMENT, encoding="utf-8")
+        paths = run(path, "sample-case", out_dir=self.dir / "out", call=fake_call(output))
+        report = json.loads(paths[2].read_text(encoding="utf-8"))
+        self.assertEqual(report["eligibility"], {"eligible": False, "reasons": ["경합범이다"]})
+
+    def test_extractSourceInfo_header(self):
+        info = extract_source_info(FAKE_JUDGMENT)
+        self.assertEqual(info, {"caseNumber": "2099고합123", "courtName": "서울가상지방법원",
+                                "decidedAt": "2099-05-01", "courtLevel": "FIRST"})
+        appeal = extract_source_info("가상고등법원\n사건 2099노45 살인\n판결선고 2099. 9. 3.")
+        self.assertEqual((appeal["caseNumber"], appeal["courtLevel"], appeal["decidedAt"]),
+                         ("2099노45", "APPEAL", "2099-09-03"))
+        self.assertEqual(extract_source_info("머리 정보 없음")["caseNumber"], None)
+
+    def test_run_multipleJudgments_sourceKeptLocal(self):
+        first, appeal = self.dir / "first.txt", self.dir / "appeal.txt"
+        first.write_text(FAKE_JUDGMENT, encoding="utf-8")
+        appeal.write_text("가상고등법원\n사건 2099노45 살인\n판결선고 2099. 9. 3.\n" + "항소를 기각한다. " * 30,
+                          encoding="utf-8")
+        paths = run([first, appeal], "sample-case", out_dir=self.dir / "out", call=fake_call(FAKE_OUTPUT))
+        source = json.loads(paths[3].read_text(encoding="utf-8"))["sources"]
+        self.assertEqual([s["caseNumber"] for s in source], ["2099고합123", "2099노45"])
+        self.assertIn("990101-1234567", source[0]["originalText"])  # 원문은 그대로 (내부 전용)
+        # 모델에는 두 판결문을 머리표로 나눠 보내고, 사건번호 등은 가려서 보낸다
+        self.assertIn("===== 판결문 2 =====", fake_call.last_user)
+        self.assertNotIn("2099노45", fake_call.last_user)
+        self.assertNotIn("2099고합123", fake_call.last_user)
 
 
 if __name__ == "__main__":

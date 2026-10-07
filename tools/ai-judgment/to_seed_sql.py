@@ -98,7 +98,17 @@ def sql_reviewed_at(reviewed_at):
     return f"TIMESTAMPTZ '{reviewed_at.isoformat(sep=' ')}'"
 
 
-def build_sql(case, output, prompt, model_name, reviewed_by, *, flyway=False, reviewed_at=None):
+def build_sql(case, output, prompt, model_name, reviewed_by, *, flyway=False, reviewed_at=None, pending=False,
+              generation_report=None):
+    """적재 SQL. pending=True면 후검수용(BE-31)으로 만든다.
+
+    - 기존 공개 AI 판결을 건드리지 않고, 새 판결을 비공개(is_published=false)로 넣는다
+    - ai_generation은 review_status='PENDING', 검수자 · 검수 시각 없이 넣고 generation_report(V8)를 남긴다
+    - generation_report.runKey가 같은 생성 기록이 이 사건에 이미 있으면 아무것도 하지 않는다 (같은 SQL을 두 번 실행해도 안전)
+    관리자가 검수 후 공개한다 (관리자 페이지 BE-33 · FE-16).
+    """
+    if pending and not (generation_report or {}).get("runKey"):
+        raise ValueError("pending 적재에는 generation_report.runKey가 필요합니다")
     raw_title = str(case.get("title", ""))
     title_literal = sql_text(raw_title)
     # 주석 줄은 제목에 줄바꿈이 있으면 거기서 끝나 뒤 내용이 SQL로 실행된다. 주석에만 공백 한 칸으로 합친
@@ -144,6 +154,34 @@ def build_sql(case, output, prompt, model_name, reviewed_by, *, flyway=False, re
 
     input_snapshot = {"promptVersion": prompt["promptVersion"], "system": prompt["system"], "user": prompt["user"]}
 
+    if pending:
+        run_key = sql_text(generation_report["runKey"])
+        guard = f"""
+    -- 같은 실행(runKey)을 이미 적재했으면 건너뛴다
+    IF EXISTS (
+        SELECT 1 FROM ai_generation g JOIN judgment j ON j.id = g.judgment_id
+        WHERE j.case_id = v_case_id AND g.generation_report ->> 'runKey' = {run_key}
+    ) THEN
+        RAISE NOTICE 'AI 판결 적재 건너뜀: 이미 적재한 실행입니다 (runKey=%)', {run_key};
+        RETURN;
+    END IF;
+"""
+        unpublish = ""
+        published = "false"
+        generation_columns = "review_status, reviewed_by, reviewed_at, generation_report, created_at"
+        generation_values = f"'PENDING', NULL, NULL, {sql_jsonb(generation_report)}, now()"
+    else:
+        guard = ""
+        unpublish = """
+    -- 기존 공개 AI 판결은 비공개로 돌린다 (행은 지우지 않음)
+    UPDATE judgment
+    SET is_published = false
+    WHERE case_id = v_case_id AND subject_type = 'AI' AND is_published = true;
+"""
+        published = "true"
+        generation_columns = "review_status, reviewed_by, reviewed_at, created_at"
+        generation_values = f"'APPROVED', {sql_text(reviewed_by)}, {sql_reviewed_at(reviewed_at)}, now()"
+
     inner = f"""
 DECLARE
     v_case_id     bigint;
@@ -157,12 +195,7 @@ BEGIN
         WHEN TOO_MANY_ROWS THEN
             RAISE EXCEPTION 'legal_case에서 title=%가 유일하지 않습니다 (DB 확인 필요)', {title_literal};
     END;
-{factor_check}
-    -- 기존 공개 AI 판결은 비공개로 돌린다 (행은 지우지 않음)
-    UPDATE judgment
-    SET is_published = false
-    WHERE case_id = v_case_id AND subject_type = 'AI' AND is_published = true;
-
+{factor_check}{guard}{unpublish}
     INSERT INTO judgment (
         case_id, subject_type, timing,
         penalty_type, reduced_to, prison_months, fine_amount, suspension_months,
@@ -172,23 +205,24 @@ BEGIN
         v_case_id, 'AI', 'FINAL',
         {sql_text(output['penaltyType'])}, {sql_text(output.get('reducedTo'))}, {sql_int(output.get('prisonMonths'))}, {sql_int(output.get('fineAmount'))}, {sql_int(output.get('suspensionMonths'))},
         '[]'::jsonb, {sql_text(output['reasoning'])}, {sql_text(output['summary'])}, {sql_jsonb(output['referenceTags'])},
-        true, now()
+        {published}, now()
     )
     RETURNING id INTO v_judgment_id;
 {factor_insert}
     INSERT INTO ai_generation (
         judgment_id, model_name, prompt_version,
         input_snapshot, raw_output,
-        review_status, reviewed_by, reviewed_at, created_at
+        {generation_columns}
     ) VALUES (
         v_judgment_id, {sql_text(model_name)}, {sql_text(prompt['promptVersion'])},
         {sql_jsonb(input_snapshot)}, {sql_jsonb(output)},
-        'APPROVED', {sql_text(reviewed_by)}, {sql_reviewed_at(reviewed_at)}, now()
+        {generation_values}
     );
 END"""
 
     tag = dollar_quote_tag(inner)
-    body = f"""-- AI 판결 적재: {comment_title} (prompt={prompt['promptVersion']})
+    mode = "비공개 · 검수 대기(PENDING)" if pending else "공개 · 검수 완료(APPROVED)"
+    body = f"""-- AI 판결 적재: {comment_title} (prompt={prompt['promptVersion']}, {mode})
 -- 사건은 legal_case.title, 판단 요소는 factor.display_order · label로 찾는다 (환경마다 id가 달라도 같은 SQL을 쓴다)
 DO {tag}{inner} {tag};
 """

@@ -54,6 +54,9 @@ public class AiGeneration {
 
 	private Instant reviewedAt;
 
+	@JdbcTypeCode(SqlTypes.JSON)
+	private Map<String, Object> generationReport;	// 자동 생성 정보 (검증 경고 · 사전 학습 점검 · 회차 선택, BE-31 후검수용)
+
 	@CreationTimestamp
 	private Instant createdAt;
 }

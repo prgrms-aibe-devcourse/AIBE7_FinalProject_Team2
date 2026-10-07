@@ -162,7 +162,8 @@ def _openai(system, user, model, options):
     base_url = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
     body = {
         "model": model,
-        "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+        # system이 비었으면(사전 학습 점검처럼 사용자 메시지 하나만 보낼 때) 시스템 메시지를 넣지 않는다
+        "messages": ([{"role": "system", "content": system}] if system else []) + [{"role": "user", "content": user}],
         # 사고 모델은 max_tokens 대신 max_completion_tokens만 받는다
         "max_completion_tokens": options["max_tokens"],
     }
@@ -200,9 +201,10 @@ def _anthropic(system, user, model, options):
     body = {
         "model": model,
         "max_tokens": options["max_tokens"],
-        "system": system,
         "messages": [{"role": "user", "content": user}],
     }
+    if system:
+        body["system"] = system
     if options["temperature"] is not None:
         body["temperature"] = options["temperature"]
     response = options["http"](
@@ -239,10 +241,11 @@ def _gemini(system, user, model, options):
     if options["temperature"] is not None:
         generation_config["temperature"] = options["temperature"]
     body = {
-        "systemInstruction": {"parts": [{"text": system}]},
         "contents": [{"role": "user", "parts": [{"text": user}]}],
         "generationConfig": generation_config,
     }
+    if system:
+        body["systemInstruction"] = {"parts": [{"text": system}]}
     response = options["http"](
         f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
         {"x-goog-api-key": api_key("gemini")},

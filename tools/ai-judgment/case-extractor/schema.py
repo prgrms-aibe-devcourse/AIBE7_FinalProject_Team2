@@ -14,7 +14,7 @@ sys.path.insert(0, str(PARENT_DIR))
 from common import NO_TERM_PENALTIES, PENALTY_TYPES, REDUCIBLE_TO, format_months, format_won  # noqa: E402
 
 # 프롬프트나 스키마를 고치면 올린다. 보고서(report.json)에 기록된다.
-EXTRACT_PROMPT_VERSION = "extract-v1"
+EXTRACT_PROMPT_VERSION = "extract-v2"
 
 CRIME_TYPES = ("MURDER", "FRAUD", "INJURY")  # ERD legal_case.crime_type
 REVEAL_STAGES = ("OVERVIEW", "DETAIL", "ARGUMENT", "LAW")  # ERD factor.reveal_stage
@@ -22,6 +22,10 @@ REVEAL_STAGES = ("OVERVIEW", "DETAIL", "ARGUMENT", "LAW")  # ERD factor.reveal_s
 LABEL_MAX_LENGTH = 100  # ERD factor.label · pre_label varchar(100)
 SUMMARY_TAG_MAX_LENGTH = 20  # ERD factor.summary_tag varchar(20)
 TITLE_MAX_LENGTH = 100  # ERD legal_case.title varchar(100)
+SHORT_INTRO_MAX_LENGTH = 200  # ERD legal_case.short_intro varchar(200)
+DIFFICULTIES = ("LOW", "MID", "HIGH")  # ERD legal_case.difficulty
+KEYWORD_COUNT = (2, 6)  # 목록 카드 키워드 개수 (권장)
+ESTIMATED_MINUTES = (3, 60)  # 예상 소요 시간(분) 상식 범위 (권장)
 
 _STRING = {"type": "string"}
 _NULLABLE_STRING = {"type": ["string", "null"]}
@@ -39,6 +43,13 @@ def _object(properties):
 
 OUTPUT_SCHEMA = _object({
     "title": _STRING,
+    # 목록 카드 (ERD legal_case short_intro · keywords · difficulty · estimated_minutes, BE-31)
+    "shortIntro": _STRING,
+    "keywords": {"type": "array", "items": _STRING},
+    "difficulty": {"type": "string", "enum": list(DIFFICULTIES)},
+    "estimatedMinutes": {"type": "integer"},
+    # 서비스 대상 판결인지 (docs/cases/README.md 1장 선정 조건). 파이프라인(BE-31)이 적재 전에 본다
+    "eligibility": _object({"eligible": {"type": "boolean"}, "reasons": {"type": "array", "items": _STRING}}),
     "crimeType": {"type": "string", "enum": list(CRIME_TYPES)},
     "chargeName": _STRING,
     "appliedLaw": _STRING,
@@ -147,6 +158,13 @@ def build_case_input(output):
         "penaltyRules": penalty_rules,
         "recommended": output.get("recommended"),
         "factors": factors,
+        # 목록 카드 값. AI 판결 프롬프트에는 들어가지 않는다(build_prompt.py가 허용 항목만 고른다). 사건 적재 SQL이 쓴다
+        "listing": {
+            "shortIntro": output["shortIntro"],
+            "keywords": output["keywords"],
+            "difficulty": output["difficulty"],
+            "estimatedMinutes": output["estimatedMinutes"],
+        },
         "references": {
             "sentencingGuideline": output.get("sentencingGuideline"),
             # 유사 판례는 대상 사건 판결문만으로 만들 수 없다. 팀이 대상 사건을 뺀 판례로 채운다 (FR-4-2)
@@ -179,6 +197,15 @@ def check_output(output):
     errors, warnings = [], []
     if len(output["title"]) > TITLE_MAX_LENGTH:
         errors.append(f"사건 제목이 {TITLE_MAX_LENGTH}자를 넘습니다")
+    if not output["shortIntro"].strip() or len(output["shortIntro"]) > SHORT_INTRO_MAX_LENGTH:
+        errors.append(f"목록 카드 소개(shortIntro)는 1 ~ {SHORT_INTRO_MAX_LENGTH}자여야 합니다")
+    if not KEYWORD_COUNT[0] <= len(output["keywords"]) <= KEYWORD_COUNT[1]:
+        warnings.append(f"키워드가 {len(output['keywords'])}개입니다 (권장 {KEYWORD_COUNT[0]} ~ {KEYWORD_COUNT[1]}개)")
+    if not ESTIMATED_MINUTES[0] <= output["estimatedMinutes"] <= ESTIMATED_MINUTES[1]:
+        warnings.append(f"예상 소요 시간 {output['estimatedMinutes']}분이 상식 범위"
+                        f"({ESTIMATED_MINUTES[0]} ~ {ESTIMATED_MINUTES[1]}분) 밖입니다")
+    if not output["eligibility"]["eligible"]:
+        warnings.append("모델이 서비스 대상이 아닌 판결로 판정했습니다: " + " / ".join(output["eligibility"]["reasons"]))
     if not output["factors"]:
         errors.append("판단 요소가 없습니다")
     if not any(f["revealStage"] == "OVERVIEW" for f in output["factors"]):
@@ -214,6 +241,11 @@ def check_output(output):
 def visible_texts(case_input):
     """사용자에게 보일 수 있는 문자열 [(위치, 문자열)]. 비식별화 · 판결 누출 검사 대상이다."""
     texts = [("title", case_input["title"]), ("overview", case_input["overview"])]
+    listing = case_input.get("listing") or {}
+    if listing.get("shortIntro"):
+        texts.append(("listing.shortIntro", listing["shortIntro"]))
+    for i, keyword in enumerate(listing.get("keywords") or []):
+        texts.append((f"listing.keywords[{i}]", keyword))
     for i, section in enumerate(case_input["sections"]):
         where = f"sections[{i}]({section['sectionType']})"
         if section.get("content"):
