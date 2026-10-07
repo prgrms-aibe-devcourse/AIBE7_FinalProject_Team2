@@ -398,6 +398,29 @@ class PipelineTest(unittest.TestCase):
                 self.assertEqual(pipeline.main(), 0)
             self.assertIn(expected, out.getvalue())
 
+    def test_extract_model_spec_and_provider(self):
+        self.assertEqual(pipeline.extract_provider(self.config()), "anthropic")  # 기본 Claude
+        for spec, provider in (("gemini:gem-x", "gemini"), ("openai:gpt-x", "openai"), ("anthropic:claude-x", "anthropic")):
+            self.assertEqual(pipeline.extract_provider(self.config(extract={"model": spec})), provider)
+        bad = copy.deepcopy(self.raw_config)
+        bad["stages"]["extract"] = {"model": "manual:x"}
+        write_json(self.dir / "bad2.json", bad)
+        with self.assertRaises(pipeline.PipelineError) as ctx:
+            pipeline.load_config(self.dir / "bad2.json")
+        self.assertIn("manual", str(ctx.exception))
+
+    def test_extract_passes_model_and_max_tokens(self):
+        config = self.config(extract={"enabled": True, "model": "gemini:gem-x", "maxTokens": 4000})
+        fake_module = mock.MagicMock()
+        fake_module.run.return_value = (self.raw_config["inputs"]["case"], self.raw_config["inputs"]["court"],
+                                        self.raw_config["inputs"]["report"], self.raw_config["inputs"]["source"])
+        fake_module.ExtractError = RuntimeError
+        with mock.patch.dict(sys.modules, {"extract_case": fake_module}):
+            pipeline.stage_extract(config, {"stages": {}}, self.logs.append)
+        kwargs = fake_module.run.call_args.kwargs
+        self.assertEqual((kwargs["model"], kwargs["max_tokens"]), ("gemini:gem-x", 4000))
+        self.assertTrue(any("gemini:gem-x" in line for line in self.logs))
+
     def test_extract_ineligible_stops(self):
         config = self.config(extract={"enabled": True})
         report = report_for(self.case)

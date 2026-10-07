@@ -4,6 +4,8 @@
 
 상위 폴더(`tools/ai-judgment`)는 표준 라이브러리만 쓰지만, 이 폴더는 Claude API(`anthropic`)와 PDF 읽기(`pypdf`) 때문에 **패키지 설치가 필요하다.** Python 3.10 이상.
 
+비식별화 모델은 옵션으로 바꿀 수 있다 (BE-35): Claude(기본) 외에 OpenAI · Gemini도 쓴다 (아래 "모델 선택").
+
 ## 파일
 
 | 파일 | 역할 |
@@ -49,9 +51,23 @@ python3 extract_case.py ../cases/raw/1심.pdf ../cases/raw/항소심.pdf --name 
 | --- | --- | --- |
 | `--name` | (필수) | 출력 파일 이름. 영어 소문자 · 숫자 · 하이픈만, **사건을 특정할 수 없는 이름**으로 짓는다(`docs/cases` 규칙과 같음) |
 | `--out-dir` | `../cases` | 출력 폴더. git에 올라가는 위치로 바꾸지 않는다 |
-| `--model` | `claude-opus-5-5` | Claude 모델 |
-| `--effort` | `high` | `low` · `medium` · `high` · `xhigh` · `max` |
+| `--model` | `claude-opus-5-5` | 모델. Claude는 모델 ID(또는 `anthropic:모델ID`), 다른 공급자는 `openai:모델ID` · `gemini:모델ID` (아래 "모델 선택") |
+| `--effort` | `high` | `low` · `medium` · `high` · `xhigh` · `max`. **Claude 전용**(다른 공급자는 무시) |
+| `--max-tokens` | 32000 | Claude 외 공급자의 출력 상한 (Claude는 64000 고정) |
 | `--dry-run` | | API를 호출하지 않고, 마스킹한 판결문과 프롬프트만 저장한다 |
+
+### 모델 선택 (BE-35)
+
+| `--model` 값 | 호출 방식 | 키 |
+| --- | --- | --- |
+| `claude-opus-5-5` · `anthropic:claude-…` | Claude SDK. **구조화 출력으로 스키마를 강제**하고 서버 측 대체 모델을 쓴다 | `ANTHROPIC_API_KEY` 또는 `ant auth login` |
+| `openai:<모델ID>` | 상위 폴더 `llm.py`(Chat Completions, JSON 모드) | `OPENAI_API_KEY` |
+| `gemini:<모델ID>` | 상위 폴더 `llm.py`(generateContent, JSON 응답) | `GEMINI_API_KEY` 또는 `GOOGLE_API_KEY` |
+
+- Claude 외 공급자는 스키마를 강제할 수 없어서 **스키마를 프롬프트에 붙여 보내고**(`--dry-run` 파일에도 그대로 들어간다), 응답이 JSON이 아니거나 스키마와 다르면(타입 · 필수 항목 · 허용 값) 오류 내용을 알려 주며 **최대 2번 다시 요청**한다. 그래도 안 맞으면 멈춘다.
+- 모델이 바뀌어도 이후 검사(개인정보 잔존 · 실제 판결 누출 · 서비스 대상 판정)는 같다. `report.json`에 요청한 모델(`requestedModel`)과 실제 응답한 모델(`model`)을 남긴다.
+- 모델마다 비식별화 품질이 다르다. **어느 모델이든 결과는 원 판결문과 대조해 검수한다**(REQ-075). Claude 외 모델로 처음 가공할 때는 `warnings` · `reviewNotes`와 실명 · 지명 · 날짜 잔존을 특히 꼼꼼히 본다.
+- 판결문은 선택한 공급자로 전송된다(로컬 마스킹 후). 실행하는 파이프라인(`pipeline.py`)은 전송 대상 공급자를 먼저 출력한다.
 
 ### 출력
 

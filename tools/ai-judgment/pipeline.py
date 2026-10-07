@@ -59,7 +59,9 @@ DEFAULT_CONFIG = {
     # extract를 건너뛸 때 쓸 파일 (extract를 돌리면 그 결과가 우선)
     "inputs": {"case": None, "court": None, "report": None, "source": None},
     "stages": {
-        "extract": {"enabled": True, "model": "claude-opus-5-5", "effort": "high", "requireEligible": True},
+        # model: Claude는 모델 ID(또는 anthropic:모델ID), 다른 공급자는 openai:모델ID · gemini:모델ID (BE-35). maxTokens는 Claude 외 공급자의 출력 상한
+        "extract": {"enabled": True, "model": "claude-opus-5-5", "effort": "high", "requireEligible": True,
+                    "maxTokens": None},
         "contamination": {
             "enabled": False, "runs": 10, "models": None,  # models가 없으면 generate.models를 점검한다
             "onContaminated": "stop", "onSuspect": "continue", "delay": 0.0, "timeout": 300,
@@ -113,6 +115,13 @@ def validate_config(config):
     stages = config["stages"]
     if stages["extract"]["enabled"] and not config["sources"]:
         errors.append("extract를 쓰려면 sources에 판결문 경로를 넣는다")
+    extract_model = stages["extract"]["model"]
+    if ":" in extract_model:
+        try:
+            if parse_model_spec(extract_model)[0] == "manual":
+                errors.append(f"비식별화는 API 공급자만 쓴다 (manual 불가): {extract_model}")
+        except LLMError as e:
+            errors.append(str(e))
     for spec in stages["generate"]["models"] + (stages["contamination"]["models"] or []):
         try:
             if parse_model_spec(spec)[0] == "manual":
@@ -198,6 +207,15 @@ def active_models(config, state):
 
 # ---------------------------------------------------------------- 단계
 
+def extract_provider(config):
+    """비식별화 모델의 실제 공급자 (외부 전송 안내용). 공급자 없는 이름은 Claude(anthropic)다."""
+    model = config["stages"]["extract"]["model"]
+    if ":" not in model:
+        return "anthropic"
+    provider = parse_model_spec(model)[0]
+    return "anthropic" if provider == "anthropic" else provider
+
+
 def stage_extract(config, state, log):
     sys.path.insert(0, str(EXTRACTOR_DIR))
     try:
@@ -206,10 +224,11 @@ def stage_extract(config, state, log):
         raise PipelineError(f"case-extractor를 불러오지 못했습니다 (pip install -r case-extractor/requirements.txt): {e}")
     cfg = config["stages"]["extract"]
     sources = [resolve_path(config, s["path"]) for s in config["sources"]]
-    log(f"판결문 {len(sources)}개 → Claude({cfg['model']})로 비식별화 · 구조화 (로컬 마스킹 후 전송)")
+    log(f"판결문 {len(sources)}개 → {cfg['model']}로 비식별화 · 구조화 (로컬 마스킹 후 전송)")
     try:
         case_path, court_path, report_path, source_path = extract_run(
-            sources, config["name"], out_dir=CASES_DIR, model=cfg["model"], effort=cfg["effort"])
+            sources, config["name"], out_dir=CASES_DIR, model=cfg["model"], effort=cfg["effort"],
+            max_tokens=cfg.get("maxTokens"))
     except ExtractError as e:
         raise PipelineError(f"비식별화 실패: {e}")
     outputs = {"case": str(case_path), "court": str(court_path), "report": str(report_path), "source": str(source_path)}
@@ -561,7 +580,7 @@ def run_pipeline(config, start=None, until=None, skip=(), rerun=False, log=print
                         + (config["stages"]["contamination"]["models"] or [])})
     log(f"단계: {' → '.join(steps)}")
     if "extract" in steps:
-        log("외부 전송: 비식별화 단계에서 마스킹한 판결문이 anthropic으로 전송됩니다")
+        log(f"외부 전송: 비식별화 단계에서 마스킹한 판결문이 {extract_provider(config)}로 전송됩니다")
     if {"contamination", "generate"} & set(steps):
         log(f"외부 전송: 비식별화한 사건 내용이 {', '.join(providers)}로 전송됩니다")
     for stage in steps:

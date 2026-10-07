@@ -111,6 +111,57 @@ TEXT_SECTIONS = [
 ]
 
 
+def validate_against_schema(value, schema, path="$"):
+    """모델 응답이 OUTPUT_SCHEMA를 따르는지 검사해 오류 목록을 돌려준다 (BE-35).
+
+    Claude는 구조화 출력으로 스키마를 강제하지만 다른 공급자는 그렇지 않아, 타입이 어긋난 값(문자열이어야 할 곳의 배열 등)이
+    조용히 통과하지 않게 직접 검사한다. 이 스키마가 쓰는 부분(type · enum · properties · required ·
+    additionalProperties · items · anyOf)만 지원한다.
+    """
+    if "anyOf" in schema:
+        if any(not validate_against_schema(value, option, path) for option in schema["anyOf"]):
+            return []
+        return [f"{path}: 허용되는 형식이 아닙니다"]
+    errors = []
+    types = schema.get("type")
+    if types is not None:
+        types = [types] if isinstance(types, str) else types
+        if not any(_matches_type(value, t) for t in types):
+            return [f"{path}: {'/'.join(types)} 형식이어야 합니다 (받은 값: {type(value).__name__})"]
+    if "enum" in schema and value not in schema["enum"]:
+        errors.append(f"{path}: 허용되는 값이 아닙니다 ({value!r})")
+    if isinstance(value, dict):
+        for key in schema.get("required", []):
+            if key not in value:
+                errors.append(f"{path}.{key}: 필수 항목이 없습니다")
+        properties = schema.get("properties", {})
+        for key, child in value.items():
+            if key in properties:
+                errors += validate_against_schema(child, properties[key], f"{path}.{key}")
+            elif schema.get("additionalProperties") is False:
+                errors.append(f"{path}.{key}: 스키마에 없는 항목입니다")
+    if isinstance(value, list) and "items" in schema:
+        for i, child in enumerate(value):
+            errors += validate_against_schema(child, schema["items"], f"{path}[{i}]")
+    return errors
+
+
+def _matches_type(value, name):
+    if name == "string":
+        return isinstance(value, str)
+    if name == "integer":
+        return isinstance(value, int) and not isinstance(value, bool)
+    if name == "boolean":
+        return isinstance(value, bool)
+    if name == "array":
+        return isinstance(value, list)
+    if name == "object":
+        return isinstance(value, dict)
+    if name == "null":
+        return value is None
+    return True
+
+
 class OutputError(Exception):
     pass
 

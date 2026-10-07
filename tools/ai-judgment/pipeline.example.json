@@ -8,7 +8,7 @@
   "finalSourceIndex": null,
   "inputs": { "case": null, "court": null, "report": null, "source": null },
   "stages": {
-    "extract": { "enabled": true, "model": "claude-opus-5-5", "effort": "high", "requireEligible": true },
+    "extract": { "enabled": true, "model": "claude-opus-5-5", "effort": "high", "requireEligible": true, "maxTokens": null },
     "contamination": {
       "enabled": false,
       "runs": 10,
