@@ -244,10 +244,11 @@ python3 pipeline.py status cases/my-case.pipeline.json
 | `consensus` (기본) | 후보 전체(검증 통과 회차)의 판단 요소별 다수 의견과 가장 많이 일치하는 회차. 같으면 경고가 적은 것, 그다음 앞선 것 |
 | `first-valid` | 검증을 통과한 첫 회차 |
 | `fewest-warnings` | 경고가 가장 적은 회차 |
-| `manual` | `run`에 직접 지정 (예: `"openai__gpt-x/run-003"`, `out/runs/<name>/` 아래 경로). 검증을 통과한 회차만 된다 |
+| `manual` | `run`에 직접 지정 (예: `"openai__gpt-x/run-003"`, `out/runs/<name>-<해시>/` 아래 경로). 검증을 통과한 회차만 된다 |
 
 - `model`을 주면 그 모델의 회차 안에서만 고른다. 사전 학습 점검으로 뺀 모델은 후보가 아니다.
-- 후보 회차는 `out/runs/<name>/`에 쌓인 모든 실행이다(이전 실행 포함). `compare.py out/runs/<name>`로 비교표를 보고 `manual`로 바꿔 `--from select`로 다시 적재할 수 있다.
+- 후보 회차는 생성 묶음 `out/runs/<name>-<프롬프트 해시 8자리>/`에 쌓인 모든 실행이다(같은 프롬프트의 이전 실행 포함). 사건 내용이나 프롬프트가 바뀌면(예: `--from extract`로 다시 가공) 새 묶음을 쓰므로 다른 프롬프트의 회차는 섞이지 않는다. 묶음 경로는 `status`의 생성 결과(`state.json`의 `batchDir`)에서 확인한다.
+- `compare.py <묶음 경로>`로 비교표를 보고 `manual`로 바꿔 `--from select`로 다시 적재할 수 있다.
 
 ### 적재 (`stages.load`)
 
@@ -255,7 +256,7 @@ python3 pipeline.py status cases/my-case.pipeline.json
 - **AI 판결**: `judgment.is_published=false`, `ai_generation.review_status='PENDING'`(검수자 · 검수 시각 없음). 기존 공개 AI 판결은 그대로 둔다. `ai_generation.generation_report`(V8)에 검증 경고 · 사전 학습 점검 판정 · 회차 선택 이유 · 모델 · 토큰을 남겨 관리자가 검수할 때 본다(실제 판결 값은 넣지 않는다).
 - **같은 SQL을 두 번 실행해도 안전하다**: 같은 제목의 사건이 있으면 사건 적재를 건너뛰고, 같은 실행(`runKey`)의 AI 판결이 있으면 건너뛴다. 같은 제목의 사건이 있는데 판단 요소가 다르면 전체가 취소된다.
 - **SQL 보관**: `sqlDir`(기본 `backend/private-seed/loads/`)에 `<시각>-<name>.sql`로 남긴다. 원본 판결문이 들어 있으므로 **비공개 저장소에만** 둔다. Flyway가 읽는 `seed/`가 아니라서 자동 실행되지 않는다(관리자가 DB에서 바꾼 검수 상태를 R__ 재실행이 덮지 않게).
-- **DB 적재는 로컬에만**: `db.mode`가 `docker`(기본, `lawnambul-postgres` 컨테이너) 또는 `psql`(`DB_URL`, 호스트가 localhost가 아니면 거부). 운영은 보관한 SQL 파일을 서버에서 실행한다: `psql -v ON_ERROR_STOP=1 -f <파일>`.
+- **DB 적재는 로컬에만**: `db.mode`가 `docker`(기본, `lawnambul-postgres` 컨테이너) 또는 `psql`(`DB_URL`, URL 호스트와 쿼리의 `host` · `hostaddr`가 모두 localhost가 아니면 거부). 운영은 보관한 SQL 파일을 서버에서 실행한다: `psql -v ON_ERROR_STOP=1 -f <파일>`.
 
 ### 보안 · 데이터
 

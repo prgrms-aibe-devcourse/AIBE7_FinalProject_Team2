@@ -263,7 +263,7 @@ class PipelineTest(unittest.TestCase):
         self.run_with(config, {"openai:a": [many_warnings, self.output, self.variant(factors=self.output["factors"][:2])]},
                       until="generate")
         state = pipeline.load_state(config)
-        _, groups = pipeline.load_runs(self.dir / "runs" / "test-case")
+        _, groups = pipeline.load_runs(state["stages"]["generate"]["outputs"]["batchDir"])
         case = self.case
         first, _, _ = pipeline.select_run(case, groups, ["openai:a"], "first-valid")
         self.assertEqual(first["runIndex"], 1)
@@ -279,6 +279,20 @@ class PipelineTest(unittest.TestCase):
         with self.assertRaises(pipeline.PipelineError):
             pipeline.select_run(case, groups, ["gemini:b"], "manual", "openai__a/run-001")
         self.assertEqual(state["stages"]["generate"]["status"], "done")
+
+    def test_changed_case_uses_new_batch(self):
+        config = self.config(generate={"models": ["openai:a"], "runs": 1})
+        state = self.run_with(config, {"openai:a": [self.output]}, until="generate")
+        first = state["stages"]["generate"]["outputs"]["batchDir"]
+        self.assertTrue(Path(first).name.startswith("test-case-"))
+        # 사건 내용이 바뀌면(다시 가공) 이전 묶음 때문에 막히지 않고 새 묶음에 생성한다
+        changed = dict(self.case, overview=self.case["overview"] + " 추가 사실.")
+        write_json(self.raw_config["inputs"]["case"], changed)
+        state = self.run_with(config, {"openai:a": [self.output]}, start="generate", until="select")
+        second = state["stages"]["generate"]["outputs"]["batchDir"]
+        self.assertNotEqual(first, second)
+        self.assertEqual(state["stages"]["select"]["outputs"]["runIndex"], 1)
+        self.assertTrue(state["stages"]["select"]["outputs"]["runFile"].startswith(second))
 
     def test_rerun_earlier_stage_clears_later(self):
         config = self.config(generate={"models": ["openai:a"], "runs": 1})
@@ -308,6 +322,12 @@ class PipelineTest(unittest.TestCase):
         with self.assertRaises(pipeline.PipelineError) as ctx:
             pipeline.apply_sql(self.dir / "x.sql", {"mode": "psql", "url": "jdbc:postgresql://prod.example.com:5432/db"})
         self.assertIn("로컬 DB에만", str(ctx.exception))
+        # libpq가 URL 호스트보다 우선하는 쿼리 host · hostaddr로 우회하지 못한다
+        for url in ("postgresql://localhost:5432/db?host=prod.example.com",
+                    "postgresql://localhost/db?hostaddr=10.0.0.5",
+                    "postgresql://localhost/db?host=localhost,prod.example.com"):
+            with self.assertRaises(pipeline.PipelineError, msg=url):
+                pipeline.apply_sql(self.dir / "x.sql", {"mode": "psql", "url": url})
 
     def test_extract_ineligible_stops(self):
         config = self.config(extract={"enabled": True})

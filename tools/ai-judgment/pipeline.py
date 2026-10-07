@@ -36,7 +36,7 @@ from case_seed_sql import DEFAULT_SOURCE_ORG, CaseSeedError, build_case_sql, res
 from check_contamination import VERDICT_ORDER, build_contamination_prompt, judge_one
 from common import TOOL_DIR, load_json, write_json
 from compare import _majority, direction_table, load_runs
-from generate import RUNS_DIR, GenerateError, generate_runs, model_slug
+from generate import RUNS_DIR, GenerateError, generate_runs, model_slug, prompt_digest
 from llm import LLMError, api_key, call, parse_model_spec
 from to_seed_sql import NAME_MAX_LENGTH, build_sql
 from validate_output import parse_output
@@ -178,6 +178,16 @@ def input_file(config, state, key):
     return Path(path)
 
 
+def batch_dir_for(config, case):
+    """생성 묶음 폴더: <name>-<프롬프트 해시 8자리>. 사건 내용 · 프롬프트가 바뀌면(예: --from extract로 다시 가공) 새 묶음을 써서
+    다른 프롬프트의 회차가 섞이지 않고, 이전 묶음 때문에 생성이 막히지도 않는다."""
+    try:
+        digest = prompt_digest(build_prompt(case))[:8]
+    except InputError as e:
+        raise PipelineError(str(e))
+    return RUNS_DIR / f"{config['name']}-{digest}"
+
+
 def active_models(config, state):
     """생성 · 선택에 쓸 모델: generate.models에서 사전 학습 점검으로 뺀 모델을 제외한다."""
     excluded = set(stage_output(state, "contamination").get("excluded") or [])
@@ -265,7 +275,7 @@ def stage_contamination(config, state, log, caller=call):
 def stage_generate(config, state, log, caller=call):
     cfg = config["stages"]["generate"]
     case = load_json(input_file(config, state, "case"))
-    batch_dir = RUNS_DIR / config["name"]
+    batch_dir = batch_dir_for(config, case)
     options = {"temperature": cfg["temperature"], "max_tokens": cfg["maxTokens"], "timeout": cfg["timeout"],
                "delay": cfg["delay"], "caller": caller, "log": log}
     summary = {}
@@ -327,7 +337,7 @@ def select_run(case, groups, models, strategy, manual_run=None):
 def stage_select(config, state, log):
     cfg = config["stages"]["select"]
     case = load_json(input_file(config, state, "case"))
-    batch_dir = Path(stage_output(state, "generate").get("batchDir") or RUNS_DIR / config["name"])
+    batch_dir = Path(stage_output(state, "generate").get("batchDir") or batch_dir_for(config, case))
     _, groups = load_runs(batch_dir)
     models = active_models(config, state)
     if cfg["model"]:
@@ -437,9 +447,13 @@ def apply_sql(sql_path, db):
     else:
         url = db.get("url") or os.environ.get("DB_URL") or "postgresql://localhost:5432/lawnambul"
         url = url[len("jdbc:"):] if url.startswith("jdbc:") else url
-        host = urllib.parse.urlparse(url).hostname
-        if host not in LOCAL_HOSTS:
-            raise PipelineError(f"로컬 DB에만 직접 적재합니다 (받은 호스트: {host}). "
+        parsed = urllib.parse.urlparse(url)
+        # libpq는 쿼리의 host · hostaddr를 URL 호스트보다 우선해 쓰고, 쉼표로 여러 호스트를 받는다. 모두 로컬이어야 한다
+        query = urllib.parse.parse_qs(parsed.query)
+        hosts = [parsed.hostname] + [h for key in ("host", "hostaddr") for value in query.get(key, [])
+                                     for h in value.split(",")]
+        if any(h not in LOCAL_HOSTS for h in hosts):
+            raise PipelineError(f"로컬 DB에만 직접 적재합니다 (받은 호스트: {', '.join(str(h) for h in hosts)}). "
                                 "운영은 만들어진 SQL 파일을 서버에서 실행하세요")
         if not shutil.which("psql"):
             raise PipelineError("psql 명령이 없습니다 (stages.load.db.mode=docker로 바꾸세요)")
@@ -527,6 +541,9 @@ def print_status(config, log=print):
         if entry and entry.get("error"):
             line += f" — {entry['error'].splitlines()[0]}"
         log(line)
+    generated = stage_output(state, "generate")
+    if generated:
+        log(f"생성 묶음: {generated['batchDir']} (비교표: python3 compare.py {generated['batchDir']})")
     selection = stage_output(state, "select")
     if selection:
         log(f"선택된 회차: {selection['modelSpec']} run-{selection['runIndex']:03d} ({selection['reason']})")
