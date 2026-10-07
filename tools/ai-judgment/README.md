@@ -111,6 +111,7 @@ python3 compare.py out/runs/case --case case.json --out out/runs/case/comparison
 | `prompt.md` | 보낸 프롬프트 |
 | `<공급자>__<모델>/run-NNN.json` | 실행 한 건: 모델 · 실제 응답 모델 · 토큰 · 소요 시간 · 원문 응답 · 파싱 결과 · 검증 오류/경고. 회차 번호는 이어서 붙는다 |
 | `<공급자>__<모델>/run-NNN.output.json` | 파싱한 판결 JSON만. 검수할 회차를 골라 4 ~ 6단계(`validate_output.py` · `to_seed_sql.py`)에 그대로 넣는다 |
+| `<공급자>__<모델>/run-NNN.factor-labels.json` | 생성 시점 사건 제목 · 판단 요소 `factorId → label` 스냅샷. 6단계 `to_seed_sql.py --factor-labels`에 넣으면, 이 출력이 고른 요소의 라벨이 그 뒤 바뀐 사건 파일로 적재하려 할 때 멈춘다(출력이 고르지 않은 요소의 라벨 변경 · 새로 추가된 요소는 이 검사로 잡히지 않는다) |
 
 생성할 때 검증(4단계)도 함께 돌려 기록한다. 그래도 검수 대상으로 고른 회차는 4 ~ 5단계를 그대로 거친다. `to_seed_sql.py`의 `--model-name`에는 `run-NNN.json`의 `meta.servedModel`(실제 응답한 모델 ID)을 적는다.
 
@@ -171,6 +172,7 @@ python3 validate_output.py case.json out/ai_output.json
 # 사람이 psql에 바로 붙여 넣을 때 (기본값, BEGIN ~ COMMIT으로 감싼다)
 python3 to_seed_sql.py case.json out/ai_output.json \
     --model-name "사용한 모델" --reviewed-by "검수자" --reviewed-at "2026-10-06T00:00:00+09:00" \
+    --factor-labels out/runs/case/openai__gpt-5/run-001.factor-labels.json \
     [--accept-warnings] > out/ai_judgment.sql
 
 # 실제 사건 비공개 저장소(backend/private-seed)의 Flyway R__ 반복 마이그레이션에 그대로 쓸 때
@@ -179,6 +181,12 @@ python3 to_seed_sql.py case.json out/ai_output.json \
     --flyway > R__30_ai_judgment.sql
 ```
 
+- `--factor-labels`에 `generate.py`가 남긴 `run-NNN.factor-labels.json`(그 출력이 생성될 때 사건 제목 · `factorId → label` 스냅샷)을 주면, **이 출력이 고른 요소**에 한해 아래를 확인하고 다르면 멈춘다(`--accept-warnings`로 넘길 수 없는 하드 오류). 사건 파일과 DB를 함께 재시딩해 서로는 맞아떨어지는 경우에도, 이 출력이 지금과 다른 사건 · 라벨을 보고 판단했다면 잡아낸다(`validate_output.py`의 `factorId` 검사나 DB 대조만으로는 잡히지 않는다).
+  - 스냅샷의 사건 제목이 지금 사건 파일의 제목과 다름
+  - 이 출력이 고른 `factorId`가 스냅샷에 없음(다른 회차 · 다른 사건 파일의 스냅샷을 잘못 지정했을 가능성)
+  - 이 출력이 고른 `factorId`의 라벨이 스냅샷과 지금 사건 파일에서 다름
+  - **범위 밖(이 검사로 잡히지 않음)**: 이 출력이 고르지 않은 요소의 라벨 변경, 생성 뒤 새로 추가된 요소 — 출력이 참조하지 않으므로 적재 결과에 영향이 없다
+  - 주지 않으면(기본값) 이 확인을 건너뛴다(기존 동작과 같음). `--flyway`에 주지 않으면 경고를 낸다(필수는 아니다)
 - `--model-name` · `--reviewed-by`는 50자 이내 (`ai_generation` 컬럼 길이)
 - `--reviewed-at`은 **팀 검수를 마친 시각**(ISO 8601, 시간대 필수, 예: `2026-10-06T00:00:00+09:00`)이다. 시간대 오프셋은 실제 범위(UTC−12:00 ~ UTC+14:00) 안이어야 한다(PostgreSQL이 받지 못하는 값을 SQL 만들기 전에 막는다). `ai_generation.reviewed_at`에 고정값으로 들어간다. 빼면 `now()`가 들어가 SQL이 **실행된 시각**(운영 첫 배포일, 로컬에서 띄운 날 등)이 검수 시각으로 남는다.
   - **`--flyway`에는 필수다.** Flyway 파일은 로컬 · 개발 · 운영에서 각각 다른 시각에 실행되므로, 빼면 환경마다 검수 시각이 달라진다. 빼면 오류로 멈춘다.

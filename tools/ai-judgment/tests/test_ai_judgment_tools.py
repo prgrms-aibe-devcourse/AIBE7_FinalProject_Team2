@@ -2,7 +2,9 @@
 
 import copy
 import io
+import json
 import sys
+import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from unittest import mock
@@ -13,8 +15,8 @@ sys.path.insert(0, str(TOOL_DIR))
 
 from build_prompt import InputError, build_prompt  # noqa: E402
 from check_contamination import build_contamination_prompt, judge, judge_one  # noqa: E402
-from common import final_penalty, format_months, format_penalty_range, format_won, load_json  # noqa: E402
-from to_seed_sql import build_sql, main as to_seed_sql_main, parse_reviewed_at  # noqa: E402
+from common import factors_by_id, final_penalty, format_months, format_penalty_range, format_won, load_json  # noqa: E402
+from to_seed_sql import build_sql, check_factor_label_drift, main as to_seed_sql_main, parse_reviewed_at  # noqa: E402
 from validate_output import parse_output, validate  # noqa: E402
 
 EXAMPLES = TOOL_DIR / "examples"
@@ -425,6 +427,77 @@ class SeedSqlTest(Fixtures):
         sql = build_sql(self.case, self.output, build_prompt(self.case), "m", "r")
         self.assertIn("'APPROVED', 'r', now(), now()", sql)
 
+    def write_temp_json(self, data):
+        tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False, encoding="utf-8")
+        json.dump(data, tmp)
+        tmp.close()
+        self.addCleanup(lambda: Path(tmp.name).unlink(missing_ok=True))
+        return tmp.name
+
+    def label_snapshot(self, label_changes=None, **top_changes):
+        snapshot = {
+            "caseTitle": self.case["title"],
+            "labels": {str(fid): f["label"] for fid, f in factors_by_id(self.case).items()},
+        }
+        snapshot["labels"].update(label_changes or {})
+        snapshot.update(top_changes)
+        return snapshot
+
+    def test_factor_label_drift_skipped_without_snapshot(self):
+        # --factor-labels를 주지 않으면 기존 동작 그대로 건너뛴다
+        self.assertEqual(check_factor_label_drift(self.case, self.output, None), [])
+
+    def test_factor_label_drift_passes_when_labels_match(self):
+        path = self.write_temp_json(self.label_snapshot())
+        self.assertEqual(check_factor_label_drift(self.case, self.output, path), [])
+
+    def test_factor_label_drift_detects_changed_label(self):
+        # 사건 파일과 DB가 함께 바뀌어 서로는 맞아떨어져도, 이 출력이 생성될 때의 라벨과
+        # 다르면(판단 요소 구성이 바뀐 뒤의 예전 출력) 잡아내야 한다
+        path = self.write_temp_json(self.label_snapshot({"2": "예전에는 다른 뜻이었던 요소"}))
+        errors = check_factor_label_drift(self.case, self.output, path)
+        self.assertTrue(any("factorId=2" in e for e in errors))
+        self.assertTrue(any("예전에는 다른 뜻이었던 요소" in e for e in errors))
+
+    def test_factor_label_drift_ignores_unselected_factors(self):
+        # 이 출력이 고르지 않은 요소의 라벨이 바뀐 건 상관없다(출력이 참조하지 않으므로)
+        path = self.write_temp_json(self.label_snapshot({"99": "출력에 없는 요소"}))
+        self.assertEqual(check_factor_label_drift(self.case, self.output, path), [])
+
+    def test_factor_label_drift_detects_removed_factor(self):
+        # 이 출력이 고른 요소가 지금 사건 파일에서 아예 삭제됐으면 current_label이 None이라 역시 다르게 잡힌다
+        case = copy.deepcopy(self.case)
+        case["factors"] = [f for f in case["factors"] if f["factorId"] != 2]
+        path = self.write_temp_json(self.label_snapshot())
+        errors = check_factor_label_drift(case, self.output, path)
+        self.assertTrue(any("factorId=2" in e and "None" in e for e in errors))
+
+    def test_factor_label_drift_rejects_selected_factor_missing_in_snapshot(self):
+        # 출력이 고른 요소는 생성 시점에 반드시 있었다 → 스냅샷에 없으면 다른 회차 · 사건의
+        # 스냅샷을 잘못 지정한 것이니 조용히 통과시키지 않는다
+        selected = str(self.output["factors"][0]["factorId"])
+        snapshot = self.label_snapshot()
+        del snapshot["labels"][selected]
+        path = self.write_temp_json(snapshot)
+        errors = check_factor_label_drift(self.case, self.output, path)
+        self.assertTrue(any(f"factorId={selected}" in e for e in errors))
+        self.assertTrue(any("스냅샷에 없는 요소" in e for e in errors))
+
+    def test_factor_label_drift_rejects_case_title_mismatch(self):
+        path = self.write_temp_json(self.label_snapshot(caseTitle="다른 사건"))
+        errors = check_factor_label_drift(self.case, self.output, path)
+        self.assertTrue(any("사건" in e and "다릅니다" in e for e in errors))
+
+    def test_factor_label_drift_rejects_malformed_snapshot_shape(self):
+        path = self.write_temp_json({"caseTitle": self.case["title"]})  # labels가 없다
+        errors = check_factor_label_drift(self.case, self.output, path)
+        self.assertTrue(any("형식이 올바르지 않습니다" in e for e in errors))
+
+    def test_factor_label_drift_rejects_unreadable_snapshot_file(self):
+        missing = str(Path(tempfile.gettempdir()) / "does-not-exist-factor-labels.json")
+        errors = check_factor_label_drift(self.case, self.output, missing)
+        self.assertTrue(any("읽을 수 없습니다" in e for e in errors))
+
     def run_cli(self, *extra):
         """to_seed_sql main()을 예시 파일로 실행 → (종료 코드, stdout, stderr)."""
         argv = ["to_seed_sql.py", str(EXAMPLES / "case_input.json"), str(EXAMPLES / "ai_output_sample.json"),
@@ -433,6 +506,20 @@ class SeedSqlTest(Fixtures):
         with mock.patch.object(sys, "argv", argv), redirect_stdout(out), redirect_stderr(err):
             code = to_seed_sql_main()
         return code, out.getvalue(), err.getvalue()
+
+    def test_main_accepts_matching_factor_labels(self):
+        path = self.write_temp_json(self.label_snapshot())
+        code, out, err = self.run_cli("--factor-labels", path)
+        self.assertEqual(code, 0)
+        self.assertIn("INSERT INTO judgment_factor", out)
+
+    def test_main_rejects_factor_label_drift(self):
+        path = self.write_temp_json(self.label_snapshot({"2": "바뀐 라벨"}))
+        code, out, err = self.run_cli("--factor-labels", path)
+        self.assertEqual(code, 1)
+        self.assertEqual(out, "")
+        self.assertIn("factorId=2", err)
+        self.assertIn("[중단] 판단 요소 라벨이 생성 시점과 달라", err)
 
     def test_main_rejects_invalid_reviewed_at(self):
         # 형식이 틀리면 SQL을 만들지 않고 종료 코드 1
@@ -450,6 +537,12 @@ class SeedSqlTest(Fixtures):
         code, out, _ = self.run_cli("--flyway", "--reviewed-at", "2026-10-06T00:00:00+09:00")
         self.assertEqual(code, 0)
         self.assertIn("TIMESTAMPTZ '2026-10-06 00:00:00+09:00'", out)
+
+    def test_main_flyway_without_factor_labels_warns(self):
+        # 필수는 아니지만, 드리프트 검사를 건너뛰고 있다는 걸 경고로 알린다
+        code, out, err = self.run_cli("--flyway", "--reviewed-at", "2026-10-06T00:00:00+09:00")
+        self.assertEqual(code, 0)
+        self.assertIn("[경고] --factor-labels가 없어", err)
 
     def test_main_without_reviewed_at_warns_for_psql_mode(self):
         # 수동 psql용(기본)은 옵션 없이도 만들지만 now()가 들어간다고 경고한다
