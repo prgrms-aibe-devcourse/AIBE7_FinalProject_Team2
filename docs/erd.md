@@ -15,6 +15,7 @@
 | v1.8 | 2026-10-01 | BE-3 리뷰 반영 — `case_source` 최종 확정 판결 부분 유니크(V6 마이그레이션) 추가, `comparison_analysis`는 `PENDING`일 때만 `DONE` · `FAILED`로 바뀜(엔티티 규칙) |
 | v1.9 | 2026-10-02 | 사건 정보 섹션 표시 방식 팀 결정 반영 (BE-17)<br>• `case_section.content`는 항목 하나를 한 줄로 쓰고 줄바꿈(`\n`)으로 나눈다. 화면은 줄바꿈을 그대로 보여 준다(7장 규칙 추가)<br>• 양측 주장(`PROSECUTOR` · `DEFENSE`) 섹션 위 안내 문구는 DB에 두지 않고 화면 고정 문구로 둔다. 컬럼을 추가하지 않는다<br>• `penalty_rule.display_order` 규칙 추가: 법조문 표기 순서대로 무거운 형벌부터(사형 → 무기 → 징역 → 벌금). 예시 · 가상 시드는 이미 이 순서이고 실제 사건 시드(비공개)를 맞춤 |
 | v1.10 | 2026-10-06 | 판단 요소별 요약어 기준 확정 반영 (BE-26)<br>• `factor.summary_tag` 설명을 "요소를 묶는 분류명"에서 "요소마다 붙이는 요약어"로 정정<br>• 6장 `factor` 예시의 `summary_tag` 11개 값을 요소별 요약어로 교체(가상 시드 · 프론트 목과 같은 값) |
+| v1.11 | 2026-10-07 | AI 판결 자동 파이프라인 · 후검수 반영 (BE-31)<br>• `ai_generation.generation_report`(jsonb) 추가(V8 마이그레이션): 자동 생성 정보(검증 경고 · 사전 학습 점검 판정 · 회차 선택 · 실행 식별자 `runKey`)<br>• 자동 적재는 AI 판결을 비공개(`is_published=false`) · `PENDING`으로, 사건을 `DRAFT`로 넣고 관리자가 검수 후 공개한다 |
 
 ---
 
@@ -392,7 +393,9 @@ AI 판결 1건을 어떤 조건으로 만들었는지 남긴다(REQ-047, 079). M
 | review_status | varchar(20) | ✓ | `PENDING` / `APPROVED` / `REJECTED` |
 | reviewed_by | varchar(50) |  | 검수자 |
 | reviewed_at | timestamptz |  |  |
+| generation_report | jsonb |  | 자동 생성 정보 (v1.11, BE-31): 검증 경고 · 사전 학습 점검 판정 · 회차 선택 이유 · 모델 · 토큰 · 실행 식별자(`runKey`, 같은 적재 SQL 중복 실행 방지, 부분 유니크 인덱스 `ux_ai_generation_run_key`). 사람이 검수해 넣은 행은 NULL |
 | created_at | timestamptz | ✓ |  |
+- 자동 파이프라인(BE-31)은 AI 판결을 비공개(`judgment.is_published=false`) · `review_status='PENDING'`으로 넣는다. 관리자가 검수해 `APPROVED`로 바꾸고 공개 판단을 교체한다(후검수). `REJECTED`는 공개하지 않는다.
 - 모델·프롬프트가 바뀌면 새 `judgment` + 새 `ai_generation`을 만들고, 검수 후 공개 판단을 교체한다. 기존 행은 지우지 않는다(REQ-079).
 
 #### `comparison_analysis` — 세 판결 비교 분석 (확장 단계, v1.1)

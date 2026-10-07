@@ -7,6 +7,8 @@ AI 판결 생성(3단계)은 두 가지 방법 중 하나로 한다. 외부 LLM 
 - **API로 생성 (BE-30)**: `generate.py`가 공급자(OpenAI · Anthropic · Gemini) API를 직접 불러 여러 모델 · 여러 회차로 생성하고 검증까지 기록한다. 모델은 옵션으로 갈아끼우고, `compare.py`가 모델별 비교표를 만든다. 이것도 표준 라이브러리만 쓴다.
 - **채팅 화면에서 생성**: `build_prompt.py`로 프롬프트를 만들어 LLM 서비스에 붙여 넣고 응답을 파일로 저장한다. 저장한 응답은 `generate.py import`로 같은 기록에 넣어 비교할 수 있다.
 
+**전체 자동 실행 (BE-31)**: `pipeline.py`가 판결문 → 비식별화 → (사전 학습 점검) → 생성 → 회차 선택 → 적재를 한 명령으로 이어서 실행한다. 사람 검수 없이 **비공개로 적재하고, 관리자가 나중에 검수 · 공개한다(후검수)**. 아래 "파이프라인 (BE-31)". 아래 "작업 순서" 1 ~ 6단계는 단계별로 직접 돌릴 때의 방법이다.
+
 **형벌 종류**: 사형(`DEATH`) · 무기징역(`LIFE`) · 징역(`PRISON`) · 벌금(`FINE`)과, 사형 · 무기를 감경해 다른 형벌로 선고하는 경우(`reducedTo`)를 다룬다(ERD v1.4 · API 명세 9). 무죄는 MVP에서 뺐다.
 
 ## 파일
@@ -27,6 +29,9 @@ AI 판결 생성(3단계)은 두 가지 방법 중 하나로 한다. 외부 LLM 
 | `cases/` | **실제 대표 사건** 입력 · 실제 판결을 두는 곳. git에 올리지 않는다(`.gitignore`) |
 | `tests/` | 단위 테스트 |
 | `case-extractor/` | 판결문(PDF · txt) → 비식별화한 사건 입력 JSON 초안 (BE-20). Claude API를 쓰므로 패키지 설치가 필요하다. [README](case-extractor/README.md) |
+| `pipeline.py` | 판결문 → 적재까지 자동 실행 · 단계 분기 · 이어 하기 (BE-31) |
+| `pipeline.example.json` | 파이프라인 설정 예시 (복사해 `cases/`에 두고 고친다) |
+| `case_seed_sql.py` | 비식별화한 사건 파일 → 사건 콘텐츠 적재 SQL (`legal_case` DRAFT · 섹션 · 형벌 규칙 · 판단 요소 · 원본 판결문) (BE-31) |
 
 ## 작업 순서
 
@@ -130,7 +135,7 @@ python3 compare.py out/runs/case --case case.json --out out/runs/case/comparison
 | 실제 판결 형벌 일치율 · 징역 차이 평균 | `--court court_judgment_internal.json`을 줄 때만. **내부 전용** — 이 칸이 있는 비교표는 공유 · 커밋하지 않는다. 다른 사건의 판결로 비교하지 않게 판결 파일의 `caseTitle`이 묶음의 사건 제목(`case.json`의 `title`)과 같아야 한다. `case-extractor`로 만든 파일에는 들어 있고, 예전에 만든 파일은 `"caseTitle"`을 직접 넣는다 |
 
 - ⚠️ 모델을 여러 개 돌리면 비식별화한 사건 내용이 그 공급자 모두에게 전송된다. 공급자마다 데이터 사용 약관을 확인하고 팀이 정한 공급자만 쓴다("외부 LLM으로 생성할 때").
-- 비교에 쓴 모델 중 실제로 적재할 모델은 **그 모델로** 2단계 사전 학습 점검을 거쳐야 한다(점검 결과는 모델마다 다르다).
+- 비교에 쓴 모델 중 실제로 적재할 모델은 **그 모델로** 2단계 사전 학습 점검을 거쳐야 한다(점검 결과는 모델마다 다르다). 파이프라인은 `contamination`을 켜면 생성 모델마다 점검한다.
 
 비교표는 모델 선택 참고용이다. 어느 모델이 실제 판결에 가까운지가 "좋은 판결"의 기준은 아니다(AI 판결은 독립 판단이 목적이다). 검증 통과율 · 일관성 · 비용을 주로 보고, 판결 이유의 질은 팀 검수(5단계)로 본다.
 
@@ -158,7 +163,7 @@ python3 validate_output.py case.json out/ai_output.json
 
 ### 5. 팀 검수
 
-스크립트가 잡지 못하는 부분은 사람이 본다(REQ-078).
+스크립트가 잡지 못하는 부분은 사람이 본다(REQ-078). 파이프라인(BE-31)으로 적재할 때는 이 검수를 관리자 페이지에서 공개 전에 한다(후검수).
 
 - [ ] 판결 이유가 입력에 없는 사실 · 근거를 쓰지 않았는가
 - [ ] 판단 요소 방향과 판결 이유가 서로 맞는가
@@ -202,6 +207,75 @@ python3 to_seed_sql.py case.json out/ai_output.json \
 - 기존 공개 AI 판결은 비공개로 바꾸고 새 판결을 공개한다. 기존 행은 지우지 않는다(REQ-079).
 - `ai_generation`에 입력 프롬프트 전체(`input_snapshot`) · 원본 출력(`raw_output`) · 프롬프트 버전 · 검수자를 남긴다.
 - 만든 SQL은 실제 대표 사건 비공개 저장소(`backend/private-seed`, BE-17)의 `seed/` 폴더에 `R__30_...` 파일로 넣는다. 공개 저장소의 BE-16 시드 파일(`db/seed/`)에는 실제 사건 내용을 넣지 않는다.
+
+## 파이프라인 (BE-31)
+
+판결문을 넣으면 적재까지 자동으로 이어서 실행한다. **사람 검수 단계는 없다.** 대신 적재한 결과는 사용자에게 보이지 않고, 관리자가 검수한 뒤 공개한다(후검수, 관리자 페이지 BE-33 · FE-16).
+
+```bash
+cd tools/ai-judgment
+cp pipeline.example.json cases/my-case.pipeline.json    # cases/는 git 제외. 판결문도 cases/raw/ 등에 둔다
+# 설정에서 name · sources · stages.generate.models를 고친다
+
+export ANTHROPIC_API_KEY=...   # extract (비식별화)
+export OPENAI_API_KEY=...      # generate · contamination에 쓰는 공급자 키
+
+python3 pipeline.py run cases/my-case.pipeline.json
+python3 pipeline.py status cases/my-case.pipeline.json
+```
+
+### 단계
+
+| 단계 | 하는 일 | 끄기 · 멈춤 조건 |
+| --- | --- | --- |
+| `extract` | `case-extractor`로 판결문(여러 개면 1심 · 항소심 함께)을 비식별화 · 구조화한다. 사건번호 · 법원명 · 선고일은 **마스킹 전에 로컬에서** 꺼내 내부 파일에만 둔다. 목록 카드 칸(소개 · 키워드 · 난이도 · 예상 시간)도 함께 만든다 | 모델이 서비스 대상이 아니라고 판정하면 멈춘다(`requireEligible: false`로 무시). 판정 기준은 `docs/cases/README.md` 1장 선정 조건 |
+| `contamination` | 모델마다 사전 학습 점검을 `runs`회(기본 10) 자동으로 묻고 판정한다(REQ-102). 판정은 가장 나쁜 결과 | **기본 꺼짐**(`enabled: true`로 켬). `onContaminated`: `stop`(기본) · `exclude`(그 모델만 생성에서 뺌). `onSuspect`: `continue`(기본) · `exclude` · `stop` |
+| `generate` | 모델마다 `runs`회 생성 · 검증한다(`generate.py`와 같음). 검증 통과 회차가 없으면 한 번씩 더 생성한다(최대 `maxRetries`회) | 모든 모델에서 통과 회차가 없으면 멈춘다 |
+| `select` | 검증을 통과한 회차 중 하나를 고른다 | 아래 "회차 선택" |
+| `load` | 사건(DRAFT) + AI 판결(비공개 · PENDING) 적재 SQL을 만들어 보관하고 로컬 DB에 적재한다 | `case: false`면 사건은 빼고 AI 판결만(사건이 이미 DB에 있을 때). `applyToDb: false`면 SQL만 만든다 |
+
+**단계 분기 (명령 옵션)**: 끝난 단계는 다음 실행에서 건너뛰고 이어서 한다(상태: `out/pipeline/<name>/state.json`). 단 앞 단계가 다시 돌면 그 뒤 단계는 끝났어도 함께 다시 돈다(예: `generate`가 실패한 뒤 옵션 없이 다시 `run`하면 `generate → select → load`). 끝날 때 적재까지 했는지(DB 적재 · SQL만 · 적재 안 함)를 구분해 알려 준다.
+
+| 옵션 | 뜻 |
+| --- | --- |
+| `--from <단계>` | 그 단계부터 끝났어도 다시 돌린다. 앞 단계를 다시 돌리면 뒤 단계 결과는 지운다(낡은 결과로 적재하지 않게) |
+| `--until <단계>` | 그 단계까지만 돌린다 (예: `--until select`로 적재 전까지 보고 결정) |
+| `--skip <단계>` | 이번 실행에서 뺀다 (여러 번 가능) |
+| `--rerun` | 켜진 단계를 모두 다시 돌린다 |
+
+설정 파일의 `stages.<단계>.enabled: false`는 항상 끈다. `extract`를 끄면 `inputs`(case · court · report · source)에 이미 만든 파일을 넣는다.
+
+### 회차 선택 (`stages.select`)
+
+| `strategy` | 고르는 방법 |
+| --- | --- |
+| `consensus` (기본) | 후보 전체(검증 통과 회차)의 판단 요소별 다수 의견과 가장 많이 일치하는 회차. 같으면 경고가 적은 것, 그다음 앞선 것 |
+| `first-valid` | 검증을 통과한 첫 회차 |
+| `fewest-warnings` | 경고가 가장 적은 회차 |
+| `manual` | `run`에 직접 지정 (예: `"openai__gpt-x/run-003"`, `out/runs/<name>-<해시>/` 아래 경로). 검증을 통과한 회차만 된다 |
+
+- `model`을 주면 그 모델의 회차 안에서만 고른다. 사전 학습 점검으로 뺀 모델은 후보가 아니다.
+- 후보 회차는 생성 묶음 `out/runs/<name>-<프롬프트 해시 8자리>/`에 쌓인 모든 실행이다(같은 프롬프트의 이전 실행 포함). 사건 내용이나 프롬프트가 바뀌면(예: `--from extract`로 다시 가공) 새 묶음을 쓰므로 다른 프롬프트의 회차는 섞이지 않는다. 묶음 경로는 `status`의 생성 결과(`state.json`의 `batchDir`)에서 확인한다.
+- `compare.py <묶음 경로>`로 비교표를 보고 `manual`로 바꿔 `--from select`로 다시 적재할 수 있다.
+
+### 적재 (`stages.load`)
+
+- **사건**: `legal_case.status='DRAFT'` → 사용자 목록 · 체험에서 보이지 않는다(서버가 `PUBLISHED`만 조회). 섹션 · 형벌 규칙 · 판단 요소 · 원본 판결문(`case_source`)을 함께 넣는다. 양형기준 연결 · 사건 발생일 · **재판부 판결(COURT)은 넣지 않는다** — 재판부 판결은 지금처럼 따로 작성해 넣고(BE-14 · `R__20` 방식), 관리자가 공개 전에 채운다.
+- **AI 판결**: `judgment.is_published=false`, `ai_generation.review_status='PENDING'`(검수자 · 검수 시각 없음). 기존 공개 AI 판결은 그대로 둔다. `ai_generation.generation_report`(V8)에 검증 경고 · 사전 학습 점검 판정 · 회차 선택 이유 · 모델 · 토큰을 남겨 관리자가 검수할 때 본다(실제 판결 값은 넣지 않는다).
+- **같은 SQL을 두 번 실행해도 안전하다**: 같은 제목의 DRAFT 사건이 있으면 사건 적재를 건너뛰고, 같은 실행(`runKey`)의 AI 판결이 있으면 건너뛴다(`runKey`는 DB 부분 유니크 인덱스로도 막는다). 판단 요소가 다르면 전체가 취소된다.
+- **같은 제목의 공개 · 검토 중 사건이 있으면 멈춘다**(전체 취소). 모델이 만든 중립 제목은 다른 사건과 겹칠 수 있어서다. 이미 공개된 사건에 AI 판결만 넣으려면 `load.case: false`로 사건 SQL을 뺀다.
+- **SQL 보관**: `sqlDir`(기본 `backend/private-seed/loads/`)에 `<시각>-<name>.sql`로 남긴다. 원본 판결문이 들어 있으므로 **비공개 저장소에만** 둔다. 보관 폴더의 상위가 실제 git 체크아웃이어야 하고(서브모듈을 받지 않아 빈 `private-seed` 폴더면 멈춘다), 공개 저장소 안이면 `backend/private-seed` 아래만 허용한다. Flyway가 읽는 `seed/`가 아니라서 자동 실행되지 않는다(관리자가 DB에서 바꾼 검수 상태를 R__ 재실행이 덮지 않게).
+- **DB 적재는 로컬에만**: `db.mode`가 `docker`(기본, `lawnambul-postgres` 컨테이너. `DOCKER_HOST` · docker context가 원격이면 거부) 또는 `psql`(`DB_URL`. URL 호스트와 쿼리의 `host` · `hostaddr`가 모두 localhost여야 한다. 호스트 없는 URL은 `PGHOST`를 보고, 없으면 유닉스 소켓이라 허용). 운영은 보관한 SQL 파일을 서버에서 실행한다: `psql -v ON_ERROR_STOP=1 -f <파일>`.
+
+### 보안 · 데이터
+
+| 항목 | 처리 |
+| --- | --- |
+| 외부 전송 | `extract`는 정규식 마스킹을 거친 판결문을 Anthropic으로, `contamination` · `generate`는 비식별화한 사건 내용을 설정한 공급자로 보낸다. 실행할 때 전송 대상을 먼저 출력한다 |
+| 원본 판결문 정보 | 사건번호 · 법원명 · 선고일 · 원문은 마스킹 전에 로컬에서 꺼내 `cases/<name>.source_internal.json`(git 제외) → DB `case_source`(API는 `source_org`만 노출)에만 둔다. 모델에 보내지 않는다 |
+| 비식별화 검수 | 사람 검수 없이 적재하므로 비식별화 누락이 있을 수 있다. **사건은 항상 DRAFT로만 넣고 자동으로 공개하지 않는다.** 관리자 페이지(BE-33 · FE-16)의 공개 승인이 비식별화 검수(REQ-075)를 겸한다 |
+| 운영 DB | 파이프라인은 운영 DB에 접속하지 않는다. 운영 계정을 개발 PC에 두지 않는다 |
+| 승인 상태 | 후검수 뒤 공개 · 승인 상태는 DB에만 있다(파일에 없음). 운영 DB 백업이 원본이다 |
 
 ## 외부 LLM으로 생성할 때
 

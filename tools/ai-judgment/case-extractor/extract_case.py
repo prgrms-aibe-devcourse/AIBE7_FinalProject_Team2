@@ -3,6 +3,7 @@
 사용법 (tools/ai-judgment/case-extractor에서):
     python3 extract_case.py ../cases/raw/판결문.pdf --name long-marriage-conflict
     python3 extract_case.py ../cases/raw/판결문.txt --name long-marriage-conflict --dry-run
+    python3 extract_case.py ../cases/raw/1심.pdf ../cases/raw/항소심.pdf --name long-marriage-conflict   # 여러 심급
 
 순서: 텍스트 추출 → 패턴 마스킹(로컬) → Claude API로 비식별화 · 구조화 → 남은 개인정보 · 판결 누출 검사 → 파일 저장.
 검사에서 오류가 나오면 case.json을 만들지 않고 보고서만 남긴다.
@@ -14,7 +15,7 @@ import re
 import sys
 from pathlib import Path
 
-from deidentify import premask, residual_check, scrub
+from deidentify import extract_source_info, premask, residual_check, scrub
 from schema import (
     EXTRACT_PROMPT_VERSION,
     OUTPUT_SCHEMA,
@@ -82,6 +83,25 @@ def _read_txt(path):
         except UnicodeDecodeError:
             continue
     raise ExtractError("텍스트 파일 인코딩을 알 수 없습니다 (UTF-8 · CP949로 저장하세요)")
+
+
+def read_judgments(input_paths):
+    """판결문 여러 개(예: 1심 · 항소심)를 읽어 [(파일, 원문)]으로 돌려준다."""
+    if isinstance(input_paths, (str, Path)):
+        input_paths = [input_paths]
+    return [(Path(path), read_judgment(path)) for path in input_paths]
+
+
+def join_judgments(judgments):
+    """모델에 보낼 한 덩어리. 여러 개면 판결문마다 머리표를 붙인다."""
+    if len(judgments) == 1:
+        return judgments[0][1]
+    return "\n\n".join(f"===== 판결문 {i} =====\n{text}" for i, (_, text) in enumerate(judgments, start=1))
+
+
+def build_source_records(judgments):
+    """case_source 적재용 원본 정보 (내부 전용). 원문은 마스킹 전 그대로 둔다."""
+    return [{"file": path.name, **extract_source_info(text), "originalText": text} for path, text in judgments]
 
 
 def build_messages(masked_text):
@@ -152,6 +172,8 @@ def report_texts(output):
     """보고서에만 저장하는 자유 텍스트 [(위치, 문자열)]. 사용자에게 보이지 않아도 개인정보 검사는 한다."""
     texts = [(f"reviewNotes[{i}]", note) for i, note in enumerate(output.get("reviewNotes", []))]
     texts += [(f"penaltyRuleBasis[{r['penaltyType']}]", r["allowedBasis"]) for r in output.get("penaltyRules", [])]
+    texts += [(f"eligibility.reasons[{i}]", reason)
+              for i, reason in enumerate((output.get("eligibility") or {}).get("reasons", []))]
     return texts
 
 
@@ -184,7 +206,8 @@ def run(input_path, name, out_dir=DEFAULT_OUT_DIR, model=DEFAULT_MODEL, effort=D
     if not NAME_PATTERN.match(name):
         raise ExtractError("--name은 영어 소문자 · 숫자 · 하이픈만 씁니다 (사건을 특정할 수 없는 이름, 예: long-marriage-conflict)")
     out_dir = Path(out_dir)
-    masked_text, mask_counts = premask(read_judgment(input_path))
+    judgments = read_judgments(input_path)
+    masked_text, mask_counts = premask(join_judgments(judgments))
     system, user = build_messages(masked_text)
 
     if dry_run:
@@ -207,6 +230,10 @@ def run(input_path, name, out_dir=DEFAULT_OUT_DIR, model=DEFAULT_MODEL, effort=D
         "deidentifiedItems": output.get("deidentifiedItems", []),
         "factorExtras": build_factor_extras(output),
         "penaltyRuleBasis": {r["penaltyType"]: scrub(r["allowedBasis"]) for r in output.get("penaltyRules", [])},
+        "eligibility": {
+            "eligible": output["eligibility"]["eligible"],
+            "reasons": [scrub(reason) for reason in output["eligibility"]["reasons"]],
+        },
         "errors": errors,
         "warnings": warnings,
         "reviewNotes": [scrub(note) for note in output.get("reviewNotes", [])],
@@ -215,20 +242,26 @@ def run(input_path, name, out_dir=DEFAULT_OUT_DIR, model=DEFAULT_MODEL, effort=D
     write_json(report_path, report)
     case_path = out_dir / f"{name}.case.json"
     court_path = out_dir / f"{name}.court_judgment_internal.json"
+    source_path = out_dir / f"{name}.source_internal.json"
     if errors:
         # 같은 이름으로 다시 돌렸을 때 이전 실행의 결과물이 남아 통과한 것처럼 보이지 않게 한다
-        for stale in (case_path, court_path, out_dir / f"{name}.request.md"):
+        for stale in (case_path, court_path, source_path, out_dir / f"{name}.request.md"):
             stale.unlink(missing_ok=True)
         raise ExtractError(f"검사 오류 {len(errors)}건 — case.json을 만들지 않았습니다. 보고서: {report_path}")
 
     write_json(case_path, case_input)
     write_json(court_path, court)
-    return [case_path, court_path, report_path]
+    # 원본 판결문 정보(사건번호 · 법원명 · 선고일 · 원문)는 API로 보내지 않고 로컬에서 꺼낸 값이다. 내부 전용 (BE-31)
+    write_json(source_path, {
+        "_comment": "내부 전용. 사건 적재 SQL의 case_source에만 쓴다. 사용자 화면 · AI 입력 · 공개 저장소에 넣지 않는다.",
+        "sources": build_source_records(judgments),
+    })
+    return [case_path, court_path, report_path, source_path]
 
 
 def main():
     parser = argparse.ArgumentParser(description="판결문을 비식별화해 사건 입력 JSON(case.json)으로 가공한다")
-    parser.add_argument("input", help="판결문 파일 (.pdf 또는 .txt)")
+    parser.add_argument("input", nargs="+", help="판결문 파일 (.pdf 또는 .txt). 1심 · 항소심처럼 여러 개를 함께 넣을 수 있다")
     parser.add_argument("--name", required=True, help="출력 파일 이름 (영어 소문자 · 하이픈, 사건을 특정할 수 없게)")
     parser.add_argument("--out-dir", default=str(DEFAULT_OUT_DIR), help=f"출력 폴더 (기본: {DEFAULT_OUT_DIR})")
     parser.add_argument("--model", default=DEFAULT_MODEL, help=f"Claude 모델 (기본: {DEFAULT_MODEL})")

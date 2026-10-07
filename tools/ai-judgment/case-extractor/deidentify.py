@@ -102,3 +102,37 @@ def residual_check(texts):
                 continue
             warnings.append(f"{where}: 실명일 수 있음")
     return errors, warnings
+
+
+# 원본 판결문 정보 (case_source, BE-31). 마스킹하기 **전에** 로컬에서만 꺼내 내부 파일 · DB에만 둔다. API로 보내지 않는다
+DECIDED_AT = re.compile(r"(?:판결\s?)?선\s?고\s*((?:19|20)\d{2})\s?\.\s?(\d{1,2})\s?\.\s?(\d{1,2})\s?\.")
+# 사건번호의 사건 부호 → 심급 (ERD case_source.court_level)
+COURT_LEVELS = (
+    (re.compile(r"(?:고합|고단|고정|고약|감고|전고|초기)"), "FIRST"),
+    (re.compile(r"(?:감노|전노|노)"), "APPEAL"),
+    (re.compile(r"(?:감도|전도|도)"), "SUPREME"),
+)
+
+
+def extract_source_info(text):
+    """판결문 원문에서 사건번호 · 법원명 · 선고일 · 심급을 꺼낸다. 못 찾은 값은 None (설정 파일로 직접 넣는다).
+
+    판결문 머리(사건 · 법원 · 선고)가 앞에 오므로 각각 처음 나온 값을 쓴다.
+    """
+    case_number = CASE_NUMBER.search(text)
+    court = COURT.search(text)
+    decided = DECIDED_AT.search(text)
+    number = re.sub(r"\s", "", case_number.group(0)) if case_number else None
+    level = None
+    if number:
+        for pattern, name in COURT_LEVELS:
+            if pattern.search(number):
+                level = name
+                break
+    return {
+        "caseNumber": number,
+        "courtName": re.sub(r"\s", "", court.group(0)) if court else None,
+        "decidedAt": (f"{decided.group(1)}-{int(decided.group(2)):02d}-{int(decided.group(3)):02d}"
+                      if decided else None),
+        "courtLevel": level,
+    }

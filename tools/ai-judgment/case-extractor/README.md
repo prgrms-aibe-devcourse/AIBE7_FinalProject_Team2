@@ -38,7 +38,12 @@ python3 extract_case.py ../cases/raw/판결문.pdf --name long-marriage-conflict
 
 # 2. 가공
 python3 extract_case.py ../cases/raw/판결문.pdf --name long-marriage-conflict
+
+# 같은 사건의 판결문이 여러 개(1심 · 항소심)면 함께 넣는다. 모델에는 판결문마다 머리표를 붙여 한 번에 보낸다
+python3 extract_case.py ../cases/raw/1심.pdf ../cases/raw/항소심.pdf --name long-marriage-conflict
 ```
+
+전체 자동 실행(비식별화 → 생성 → 적재)은 상위 폴더 `pipeline.py`(BE-31)가 이 스크립트를 부른다.
 
 | 옵션 | 기본값 | 설명 |
 | --- | --- | --- |
@@ -55,10 +60,14 @@ python3 extract_case.py ../cases/raw/판결문.pdf --name long-marriage-conflict
 | `<name>.case.json` | AI 판결 입력 (`examples/case_input.json` 형식). 실제 판결은 들어 있지 않다 | 상위 README 1단계의 사건 입력 파일 |
 | `<name>.court_judgment_internal.json` | 실제 판결 (최종 확정 판결) | 상위 README 2단계 사전 학습 점검에만 쓴다 |
 | `<name>.report.json` | 검사 결과 · 검수 메모 | 팀 검수 |
+| `<name>.source_internal.json` | 원본 판결문 정보(사건번호 · 법원명 · 선고일 · 심급 · 원문). **마스킹 전에 로컬 정규식으로 꺼낸 값이고 API로 보내지 않는다.** 내부 전용 | 사건 적재 SQL의 `case_source` (`case_seed_sql.py`, BE-31). 못 찾은 값은 파이프라인 설정 `sources[]`에 직접 넣는다 |
+
+`case.json`에는 목록 카드 값(`listing`: `shortIntro` · `keywords` · `difficulty` · `estimatedMinutes`)도 들어간다. AI 판결 프롬프트에는 들어가지 않는다(`build_prompt.py`가 허용 항목만 고른다). `court_judgment_internal.json`에는 `compare.py --court`가 대조할 `caseTitle`이 들어간다.
 
 `report.json`에는 다음이 들어간다.
 
 - `status`: `NEEDS_REVIEW`(오류 없음, 검수 필요) 또는 `ERROR`
+- `eligibility`: 서비스 대상 판결인지 모델이 판정한 값(`eligible`, 어긋난 조건 `reasons`). 기준은 `docs/cases/README.md` 1장 선정 조건(최종 확정 · 살인/사기/상해 단일 범행 · 형 선고 · 양형기준 적용과 근거 · 자백). false면 경고를 내고, 파이프라인은 기본으로 멈춘다
 - `premasked`: 로컬에서 미리 가린 항목과 개수
 - `deidentifiedItems`: 모델이 비식별화한 항목 종류 (`legal_case.deidentified_items` 후보)
 - `factorExtras`: 판단 요소별 `preLabel` · `summaryTag` (`case.json` 형식에는 없지만 `factor` 시드에 필요)
