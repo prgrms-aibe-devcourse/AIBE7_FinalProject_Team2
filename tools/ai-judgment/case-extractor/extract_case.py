@@ -33,7 +33,7 @@ PARENT_DIR = EXTRACTOR_DIR.parent
 sys.path.insert(0, str(PARENT_DIR))
 
 from build_prompt import InputError, check_case_input  # noqa: E402
-from common import find_forbidden_keys  # noqa: E402
+from common import find_forbidden_keys, write_json  # noqa: E402
 
 DEFAULT_MODEL = "claude-opus-5-5"
 DEFAULT_EFFORT = "high"
@@ -176,11 +176,6 @@ def process_output(output):
     errors += pii_errors + report_errors + leak_errors
     warnings += pii_warnings + report_warnings + leak_warnings + court_evaluation_check(case_input)
     return case_input, court, errors, warnings
-
-
-def write_json(path, value):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 def run(input_path, name, out_dir=DEFAULT_OUT_DIR, model=DEFAULT_MODEL, effort=DEFAULT_EFFORT,

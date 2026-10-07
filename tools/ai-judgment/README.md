@@ -2,7 +2,10 @@
 
 MVP의 AI 판결은 서비스 안에서 만들지 않고, **팀이 오프라인에서 생성 · 검수한 결과를 DB에 적재**한다(요구사항 FR-4-2, REQ-046). 이 폴더는 그 과정에 쓰는 프롬프트와 검증 스크립트다. 서비스 코드(`backend/`)와 분리된 운영 도구이며, 설치 없이 돌도록 **Python 3.8 이상 표준 라이브러리만** 쓴다.
 
-LLM 호출은 이 도구가 하지 않는다. 프롬프트를 만들어 주면, 팀이 정한 LLM에 넣고 응답을 파일로 저장해 검증한다(외부 LLM 서비스에서 할 때의 주의 사항은 아래 "외부 LLM으로 생성할 때").
+AI 판결 생성(3단계)은 두 가지 방법 중 하나로 한다. 외부 LLM 서비스에서 할 때의 주의 사항은 아래 "외부 LLM으로 생성할 때"를 따른다.
+
+- **API로 생성 (BE-30)**: `generate.py`가 공급자(OpenAI · Anthropic · Gemini) API를 직접 불러 여러 모델 · 여러 회차로 생성하고 검증까지 기록한다. 모델은 옵션으로 갈아끼우고, `compare.py`가 모델별 비교표를 만든다. 이것도 표준 라이브러리만 쓴다.
+- **채팅 화면에서 생성**: `build_prompt.py`로 프롬프트를 만들어 LLM 서비스에 붙여 넣고 응답을 파일로 저장한다. 저장한 응답은 `generate.py import`로 같은 기록에 넣어 비교할 수 있다.
 
 **형벌 종류**: 사형(`DEATH`) · 무기징역(`LIFE`) · 징역(`PRISON`) · 벌금(`FINE`)과, 사형 · 무기를 감경해 다른 형벌로 선고하는 경우(`reducedTo`)를 다룬다(ERD v1.4 · API 명세 9). 무죄는 MVP에서 뺐다.
 
@@ -17,6 +20,9 @@ LLM 호출은 이 도구가 하지 않는다. 프롬프트를 만들어 주면, 
 | `validate_output.py` | 모델 응답 JSON 검증 (오류 · 경고) |
 | `check_contamination.py` | 사전 학습 점검 프롬프트 생성 · 응답 판정 (REQ-102) |
 | `to_seed_sql.py` | 검수 통과본 → 적재 SQL (`judgment` · `judgment_factor` · `ai_generation`) |
+| `llm.py` | LLM 공급자 공통 호출 (OpenAI · Anthropic · Gemini, 표준 라이브러리 HTTP). API 키는 환경변수로만 읽는다 (BE-30) |
+| `generate.py` | 여러 모델 · 여러 회차 AI 판결 생성 → 검증 → 실행 기록 (`out/runs/`). 채팅 응답 파일 넣기(`import`) (BE-30) |
+| `compare.py` | 실행 기록 → 모델별 비교표 (Markdown · CSV) (BE-30) |
 | `examples/` | 예시 사건(ERD 6장 가상 살인 사건 "빌린 돈 문제로 찾아온 지인을 살해한 사건") 입력 · AI 출력 · 실제 판결(내부 전용) |
 | `cases/` | **실제 대표 사건** 입력 · 실제 판결을 두는 곳. git에 올리지 않는다(`.gitignore`) |
 | `tests/` | 단위 테스트 |
@@ -68,6 +74,64 @@ python3 build_prompt.py case.json > out/prompt.md
 ```
 
 `out/prompt.md`의 `[SYSTEM]` 부분을 시스템 프롬프트로, `[USER]` 부분을 사용자 메시지로 LLM에 넣고, 응답 JSON을 `out/ai_output.json`으로 저장한다. 쓴 모델 이름을 적어 둔다.
+
+#### API로 생성하고 모델끼리 비교하기 (BE-30)
+
+```bash
+export OPENAI_API_KEY=...        # 쓰는 공급자의 키만 설정한다 (ANTHROPIC_API_KEY, GEMINI_API_KEY 또는 GOOGLE_API_KEY)
+
+# 모델은 '공급자:모델ID'. --model을 여러 번 주면 모델마다 --runs회씩 생성한다
+python3 generate.py run case.json --model openai:<모델ID> --model gemini:<모델ID> --runs 5
+
+# 채팅 화면에서 받은 응답도 같은 묶음에 넣을 수 있다 (공급자는 manual, 이름은 자유)
+python3 generate.py import case.json --model manual:gemini-app out/answer1.json out/answer2.json
+
+# 모델별 비교표
+python3 compare.py out/runs/case --case case.json --out out/runs/case/comparison.md --csv out/runs/case/comparison.csv
+```
+
+| 공급자 | 호출 API | 키 환경변수 | JSON 출력 강제 |
+| --- | --- | --- | --- |
+| `openai` | Chat Completions (`OPENAI_BASE_URL`로 호환 엔드포인트 지정 가능) | `OPENAI_API_KEY` | `response_format: json_object` |
+| `anthropic` | Messages | `ANTHROPIC_API_KEY` | 프롬프트로만 (응답이 코드 블록이어도 받아 준다) |
+| `gemini` | `generateContent` | `GEMINI_API_KEY` 또는 `GOOGLE_API_KEY` | `responseMimeType: application/json` |
+| `manual` | 부르지 않음 (`import` 전용) | — | — |
+
+- 모델 ID는 공급자가 정한 정확한 ID를 그대로 쓴다. 도구에 기본 모델은 없다(모델이 자주 바뀌므로 매번 명시한다).
+- 검색 · 그라운딩 같은 도구는 붙이지 않는다. 매 회차가 독립 요청이라 이전 회차 응답이 섞이지 않는다("외부 LLM으로 생성할 때" 원칙과 같다).
+- 옵션: `--temperature`(주지 않으면 공급자 기본값. 사고 모델 중에는 받지 않는 것이 있다), `--max-tokens`(기본 16000), `--timeout`(초, 기본 300), `--delay`(요청 사이 쉬는 초, 무료 등급 분당 한도용), `--batch`(묶음 이름, 기본은 사건 파일 이름).
+- 한도 초과(429) · 서버 오류(5xx)는 최대 3번까지 자동으로 다시 보낸다. 그래도 실패하면 그 회차는 "호출 실패"로 기록하고 다음 회차로 넘어간다. API 키가 없으면 아무것도 기록하지 않고 바로 멈춘다.
+- 공급자를 추가하려면 `llm.py`에 `_call_<공급자>` 형태의 함수를 만들고 `PROVIDERS` · `API_KEY_ENVS`에 등록한다.
+
+**결과 폴더** (`out/runs/<batch>/`, git 제외)
+
+| 파일 | 내용 |
+| --- | --- |
+| `batch.json` | 사건 제목 · 프롬프트 버전 · 프롬프트 해시. 사건이나 프롬프트가 바뀌었는데 같은 묶음에 넣으려 하면 멈춘다(비교가 섞이지 않게). 새 이름은 `--batch`로 정한다 |
+| `prompt.md` | 보낸 프롬프트 |
+| `<공급자>__<모델>/run-NNN.json` | 실행 한 건: 모델 · 실제 응답 모델 · 토큰 · 소요 시간 · 원문 응답 · 파싱 결과 · 검증 오류/경고. 회차 번호는 이어서 붙는다 |
+| `<공급자>__<모델>/run-NNN.output.json` | 파싱한 판결 JSON만. 검수할 회차를 골라 4 ~ 6단계(`validate_output.py` · `to_seed_sql.py`)에 그대로 넣는다 |
+
+생성할 때 검증(4단계)도 함께 돌려 기록한다. 그래도 검수 대상으로 고른 회차는 4 ~ 5단계를 그대로 거친다. `to_seed_sql.py`의 `--model-name`에는 `run-NNN.json`의 `meta.servedModel`(실제 응답한 모델 ID)을 적는다.
+
+**비교표 항목** (`compare.py`)
+
+| 항목 | 뜻 |
+| --- | --- |
+| 실행 · 호출 실패 · 파싱 실패 · 검증 통과 | 모델별 회차 수. 파싱 실패는 응답이 JSON이 아니거나, JSON이어도 판결 객체가 아닌 경우(배열 · 숫자 · 문자열) |
+| 평균 오류 · 평균 경고 | 파싱된 회차의 `validate_output.py` 오류 · 경고 수 평균 |
+| 최종 형벌 분포 · 징역 최소 / 중앙값 / 최대 · 집행유예 · 권고 범위 안 | 검증 통과 회차만 센다. 권고 범위는 `--case`를 줘야 계산한다 |
+| 요소 방향 일관성 | 같은 모델의 회차끼리 판단 요소마다 다수 의견과 같은 비율의 평균. 1에 가까울수록 매번 같은 방향으로 판단한다(고르지 않은 요소도 "선택 안 함"으로 센다). 검증 통과 회차가 2개 이상일 때만 |
+| 전체 다수 의견 일치율 | 모든 모델 · 회차를 합친 요소별 다수 의견과 같은 비율. 다른 모델들과 얼마나 비슷하게 판단하는지 |
+| 평균 입력 · 출력 · 합계 토큰 | 공급자가 준 값을 그대로 쓴다. 사고 토큰 셈법이 공급자마다 달라 **합계끼리** 비교한다(아래 "토큰 사용 기록") |
+| 평균 소요(초) | 요청 한 건의 응답 시간 |
+| 회당 비용(USD) | `--price 공급자:모델=입력단가,출력단가`(100만 토큰당 USD)를 준 모델만 계산한다. 단가는 공급자 가격표에서 확인해 넣는다 |
+| 실제 판결 형벌 일치율 · 징역 차이 평균 | `--court court_judgment_internal.json`을 줄 때만. **내부 전용** — 이 칸이 있는 비교표는 공유 · 커밋하지 않는다. 다른 사건의 판결로 비교하지 않게 판결 파일의 `caseTitle`이 묶음의 사건 제목(`case.json`의 `title`)과 같아야 한다. `case-extractor`로 만든 파일에는 들어 있고, 예전에 만든 파일은 `"caseTitle"`을 직접 넣는다 |
+
+- ⚠️ 모델을 여러 개 돌리면 비식별화한 사건 내용이 그 공급자 모두에게 전송된다. 공급자마다 데이터 사용 약관을 확인하고 팀이 정한 공급자만 쓴다("외부 LLM으로 생성할 때").
+- 비교에 쓴 모델 중 실제로 적재할 모델은 **그 모델로** 2단계 사전 학습 점검을 거쳐야 한다(점검 결과는 모델마다 다르다).
+
+비교표는 모델 선택 참고용이다. 어느 모델이 실제 판결에 가까운지가 "좋은 판결"의 기준은 아니다(AI 판결은 독립 판단이 목적이다). 검증 통과율 · 일관성 · 비용을 주로 보고, 판결 이유의 질은 팀 검수(5단계)로 본다.
 
 ### 4. 검증
 
@@ -153,7 +217,7 @@ python3 to_seed_sql.py case.json out/ai_output.json \
 
 - **Claude 앱(claude.ai)**: 임시 채팅(incognito)을 쓰면 메모리 · 이전 대화 참조가 꺼진다. 일반 대화에는 시스템 프롬프트 칸이 없다.
 - **Google AI Studio · Gemini**: AI Studio에는 시스템 지시 칸과 토큰 수 표시가 있어 기록하기 쉽다. 검색 연동(Grounding with Google Search) 같은 도구는 끈다. Gemini 앱으로 할 때는 저장된 정보 · 이전 대화 참조 기능을 끄고 새 대화를 쓴다.
-- **API로 호출할 때**: 응답의 사용량 정보(Gemini는 `usage_metadata`, Claude는 `usage`)를 아래 "토큰 사용 기록"의 칸 대응표대로 옮겨 적는다. 서비스마다 사고 토큰을 세는 방식이 달라 합계를 직접 더하면 중복될 수 있다.
+- **API로 호출할 때**: `generate.py`를 쓰면 사용량이 실행 기록(`run-NNN.json`의 `meta.usage`)에 자동으로 남고 `compare.py` 비교표에 모인다. 직접 호출했다면 응답의 사용량 정보(Gemini는 `usage_metadata`, Claude는 `usage`)를 아래 "토큰 사용 기록"의 칸 대응표대로 옮겨 적는다. 서비스마다 사고 토큰을 세는 방식이 달라 합계를 직접 더하면 중복될 수 있다.
 
 ### 토큰 사용 기록
 
@@ -166,14 +230,14 @@ python3 to_seed_sql.py case.json out/ai_output.json \
 - 결과 칸: 점검은 `CLEAN` / `SUSPECT` / `CONTAMINATED`, 생성은 `validate_output.py` 결과(오류 · 경고 수)
 - 무료 등급은 분당 · 일당 요청 수와 토큰 한도가 있다. 한도에 걸려 실패한 시도도 적어 둔다.
 
-**칸 대응표** (API 사용량 정보 → 기록 칸)
+**칸 대응표** (API 사용량 정보 → 기록 칸, `llm.py`도 같은 규칙으로 옮긴다)
 
-| 기록 칸 | Gemini (`usage_metadata`) | Claude (`usage`) |
-| --- | --- | --- |
-| 입력 토큰 | `prompt_token_count` | `input_tokens` |
-| 출력 토큰 | `candidates_token_count` | `output_tokens` (사고 토큰이 이미 포함됨) |
-| 사고 토큰 | `thoughts_token_count` | 적지 않는다(`—`). 사고 토큰은 `output_tokens`에 들어 있다 |
-| 합계 | `total_token_count`를 **그대로** 옮긴다. 사고 토큰을 다시 더하지 않는다 | 입력 + 출력 |
+| 기록 칸 | Gemini (`usage_metadata`) | Claude (`usage`) | OpenAI (`usage`) |
+| --- | --- | --- | --- |
+| 입력 토큰 | `prompt_token_count` | `input_tokens` | `prompt_tokens` |
+| 출력 토큰 | `candidates_token_count` | `output_tokens` (사고 토큰이 이미 포함됨) | `completion_tokens` (사고 토큰이 이미 포함됨) |
+| 사고 토큰 | `thoughts_token_count` | 적지 않는다(`—`). 사고 토큰은 `output_tokens`에 들어 있다 | 적지 않는다(`—`). `completion_tokens_details.reasoning_tokens`는 출력에 이미 들어 있다 |
+| 합계 | `total_token_count`를 **그대로** 옮긴다. 사고 토큰을 다시 더하지 않는다 | 입력 + 출력 | `total_tokens` |
 
 - 화면(AI Studio 등)에 합계만 보이면 합계 칸에만 적고 나머지 칸은 비워 둔다(`—`). 칸을 추측해 나누지 않는다.
 - 모델 · 서비스를 비교할 때는 같은 기준(합계)끼리 비교한다. 사고 토큰을 따로 적은 기록과 출력에 포함된 기록을 그대로 더하거나 비교하지 않는다.

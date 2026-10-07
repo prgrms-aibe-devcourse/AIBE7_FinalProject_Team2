@@ -301,6 +301,10 @@ class RunTest(unittest.TestCase):
                          ["sample-case.case.json", "sample-case.court_judgment_internal.json", "sample-case.report.json"])
         report = json.loads(paths[2].read_text(encoding="utf-8"))
         self.assertEqual(report["status"], "NEEDS_REVIEW")
+        # compare.py --court가 결과 묶음과 대조할 사건 제목이 판결 파일에 들어 있다
+        case = json.loads(paths[0].read_text(encoding="utf-8"))
+        court = json.loads(paths[1].read_text(encoding="utf-8"))
+        self.assertEqual(court["caseTitle"], case["title"])
         self.assertIn("사건번호", report["premasked"])
         # 모델에 보낸 텍스트에는 미리 가린 값이 없다
         self.assertNotIn("990101-1234567", fake_call.last_user)
