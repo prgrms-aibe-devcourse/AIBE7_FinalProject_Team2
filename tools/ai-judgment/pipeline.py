@@ -116,7 +116,13 @@ def validate_config(config):
     if stages["extract"]["enabled"] and not config["sources"]:
         errors.append("extract를 쓰려면 sources에 판결문 경로를 넣는다")
     extract_model = stages["extract"]["model"]
-    if ":" in extract_model:
+    extract_max_tokens = stages["extract"].get("maxTokens")
+    if extract_max_tokens is not None and (not isinstance(extract_max_tokens, int) or isinstance(extract_max_tokens, bool)
+                                           or extract_max_tokens <= 0):
+        errors.append("stages.extract.maxTokens는 null 또는 양의 정수다")
+    if not isinstance(extract_model, str) or not extract_model.strip():
+        errors.append("stages.extract.model은 모델 이름 문자열이다 (예: claude-opus-5-5, openai:모델ID)")
+    elif ":" in extract_model:
         try:
             if parse_model_spec(extract_model)[0] == "manual":
                 errors.append(f"비식별화는 API 공급자만 쓴다 (manual 불가): {extract_model}")
@@ -212,8 +218,7 @@ def extract_provider(config):
     model = config["stages"]["extract"]["model"]
     if ":" not in model:
         return "anthropic"
-    provider = parse_model_spec(model)[0]
-    return "anthropic" if provider == "anthropic" else provider
+    return parse_model_spec(model)[0]
 
 
 def stage_extract(config, state, log):

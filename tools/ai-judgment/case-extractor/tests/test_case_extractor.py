@@ -532,6 +532,25 @@ class OtherProviderTest(unittest.TestCase):
             call_llm("S", "U", "openai:gpt-x", "high", max_tokens=1234, caller=caller)
         self.assertIn("1234", str(ctx.exception))
 
+    def test_callLlm_blockedStop_notRetried(self):
+        for reason in ("SAFETY", "RECITATION", "content_filter"):
+            caller, calls = self.fake_llm(["", "", ""], stop_reason=reason)
+            with self.assertRaises(ExtractError) as ctx:
+                call_llm("S", "U", "gemini:gem-x", "high", caller=caller)
+            self.assertEqual(len(calls), 1, reason)  # 같은 판결문을 다시 보내지 않는다
+            self.assertIn(reason, str(ctx.exception))
+        for reason in ("stop", "STOP", "end_turn", None):
+            caller, _ = self.fake_llm([json.dumps(FAKE_OUTPUT, ensure_ascii=False)], stop_reason=reason)
+            self.assertEqual(call_llm("S", "U", "openai:gpt-x", "high", caller=caller)[0]["title"], FAKE_OUTPUT["title"])
+
+    def test_cli_maxTokens_mustBePositive(self):
+        from extract_case import main as extract_main
+        for bad in ("0", "-5", "abc"):
+            with mock.patch.object(sys, "argv", ["extract_case.py", str(self.input), "--name", "x", "--max-tokens", bad]), \
+                    mock.patch("sys.stderr"):
+                with self.assertRaises(SystemExit):
+                    extract_main()
+
     def test_dryRun_nonClaude_includesSchema(self):
         paths = run(self.input, "sample-case", out_dir=self.dir / "out", model="openai:gpt-x", dry_run=True)
         request = paths[0].read_text(encoding="utf-8")

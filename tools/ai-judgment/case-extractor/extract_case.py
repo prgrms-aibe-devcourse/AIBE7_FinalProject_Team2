@@ -46,6 +46,9 @@ MAX_TOKENS = 64000
 NON_CLAUDE_MAX_TOKENS = 32000  # Claude 외 공급자의 기본 출력 상한 (공급자마다 모델별 한도가 달라 더 작게 잡는다)
 SCHEMA_RETRIES = 2  # Claude 외 공급자가 JSON · 스키마를 어겼을 때 다시 요청하는 횟수
 TRUNCATED_REASONS = ("length", "max_tokens", "MAX_TOKENS")
+# 정상 종료 사유. 이 밖의 사유(Gemini SAFETY · RECITATION, OpenAI content_filter 등)는 차단 · 거절이라 다시 보내도
+# 같으므로 재시도하지 않는다 (판결문을 같은 공급자에게 거듭 보내지 않게)
+NORMAL_STOP_REASONS = (None, "stop", "STOP", "end_turn", "stop_sequence")
 
 NAME_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 TXT_ENCODINGS = ("utf-8-sig", "cp949", "euc-kr")
@@ -162,6 +165,9 @@ def call_llm(system, user, model, effort, max_tokens=None, caller=llm_call):
         if result.stop_reason in TRUNCATED_REASONS:
             raise ExtractError(f"출력이 최대 길이({max_tokens or NON_CLAUDE_MAX_TOKENS} 토큰)에서 잘렸습니다. "
                                "--max-tokens를 늘리거나 판결문을 나눠 넣으세요")
+        if result.stop_reason not in NORMAL_STOP_REASONS:
+            raise ExtractError(f"응답이 비정상 종료되었습니다 (사유: {result.stop_reason}). 공급자의 안전 필터 · 인용 차단 등이면 "
+                               "다시 보내도 같으므로 재시도하지 않습니다. 다른 모델을 쓰세요")
         try:
             output = parse_output(result.text)
         except (json.JSONDecodeError, ValueError) as e:
@@ -344,6 +350,17 @@ def run(input_path, name, out_dir=DEFAULT_OUT_DIR, model=DEFAULT_MODEL, effort=D
     return [case_path, court_path, report_path, source_path]
 
 
+def positive_int(text):
+    """--max-tokens: 양의 정수만 받는다 (0이면 기본값으로 조용히 바뀌는 것을 막는다)."""
+    try:
+        value = int(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"양의 정수여야 합니다: {text!r}") from None
+    if value <= 0:
+        raise argparse.ArgumentTypeError(f"양의 정수여야 합니다: {text!r}")
+    return value
+
+
 def main():
     parser = argparse.ArgumentParser(description="판결문을 비식별화해 사건 입력 JSON(case.json)으로 가공한다")
     parser.add_argument("input", nargs="+", help="판결문 파일 (.pdf 또는 .txt). 1심 · 항소심처럼 여러 개를 함께 넣을 수 있다")
@@ -354,7 +371,7 @@ def main():
                              "'openai:모델ID' · 'gemini:모델ID' (키는 환경변수)")
     parser.add_argument("--effort", default=DEFAULT_EFFORT, choices=("low", "medium", "high", "xhigh", "max"),
                         help="Claude 전용 (다른 공급자는 무시)")
-    parser.add_argument("--max-tokens", type=int, help=f"Claude 외 공급자의 출력 상한 (기본 {NON_CLAUDE_MAX_TOKENS})")
+    parser.add_argument("--max-tokens", type=positive_int, help=f"Claude 외 공급자의 출력 상한 (기본 {NON_CLAUDE_MAX_TOKENS})")
     parser.add_argument("--dry-run", action="store_true", help="API를 호출하지 않고, 보낼 내용만 파일로 저장한다")
     args = parser.parse_args()
     try:

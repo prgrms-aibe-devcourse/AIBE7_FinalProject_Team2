@@ -409,6 +409,18 @@ class PipelineTest(unittest.TestCase):
             pipeline.load_config(self.dir / "bad2.json")
         self.assertIn("manual", str(ctx.exception))
 
+    def test_extract_config_validation(self):
+        for extract, part in (({"model": None}, "stages.extract.model"), ({"model": ""}, "stages.extract.model"),
+                              ({"maxTokens": "32000"}, "maxTokens"), ({"maxTokens": 0}, "maxTokens"),
+                              ({"maxTokens": -1}, "maxTokens"), ({"maxTokens": True}, "maxTokens")):
+            bad = copy.deepcopy(self.raw_config)
+            bad["stages"]["extract"] = extract
+            write_json(self.dir / "bad3.json", bad)
+            with self.assertRaises(pipeline.PipelineError, msg=str(extract)) as ctx:
+                pipeline.load_config(self.dir / "bad3.json")
+            self.assertIn(part, str(ctx.exception))
+        self.config(extract={"maxTokens": 4000})  # 양의 정수는 통과
+
     def test_extract_passes_model_and_max_tokens(self):
         config = self.config(extract={"enabled": True, "model": "gemini:gem-x", "maxTokens": 4000})
         fake_module = mock.MagicMock()
