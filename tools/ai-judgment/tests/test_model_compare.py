@@ -127,6 +127,55 @@ class ProviderTest(unittest.TestCase):
         with mock.patch("urllib.request.urlopen", return_value=io.BytesIO(b'{"ok": true}')):
             self.assertEqual(llm._post_json("https://example.invalid", {}, {}, 1), {"ok": True})
 
+    def test_ssl_context_falls_back_to_system_ca(self):
+        class FakeContext:
+            def __init__(self, count):
+                self.count, self.loaded = count, []
+
+            def cert_store_stats(self):
+                return {"x509_ca": self.count}
+
+            def load_verify_locations(self, cafile=None):
+                self.loaded.append(cafile)
+                self.count = 100
+
+        llm.ssl_context.cache_clear()
+        self.addCleanup(llm.ssl_context.cache_clear)
+        # 기본 위치에 인증서가 없으면 존재하는 첫 시스템 CA 묶음을 추가한다
+        empty = FakeContext(0)
+        with mock.patch("ssl.create_default_context", return_value=empty), \
+                mock.patch("os.path.isfile", side_effect=lambda p: p == llm.SYSTEM_CA_FILES[1]):
+            self.assertIs(llm.ssl_context(), empty)
+        self.assertEqual(empty.loaded, [llm.SYSTEM_CA_FILES[1]])
+        # 기본 위치에 인증서가 이미 있으면 건드리지 않는다
+        llm.ssl_context.cache_clear()
+        loaded = FakeContext(50)
+        with mock.patch("ssl.create_default_context", return_value=loaded):
+            llm.ssl_context()
+        self.assertEqual(loaded.loaded, [])
+
+    def test_ssl_context_keeps_verification_on(self):
+        llm.ssl_context.cache_clear()
+        self.addCleanup(llm.ssl_context.cache_clear)
+        import ssl
+        context = llm.ssl_context()
+        self.assertEqual(context.verify_mode, ssl.CERT_REQUIRED)
+        self.assertTrue(context.check_hostname)
+
+    def test_post_json_uses_ssl_context(self):
+        with mock.patch("urllib.request.urlopen", return_value=io.BytesIO(b'{"ok": true}')) as urlopen:
+            llm._post_json("https://example.invalid", {}, {}, 1)
+        self.assertIs(urlopen.call_args.kwargs["context"], llm.ssl_context())
+
+    def test_post_json_cert_error_not_retried_with_help(self):
+        import ssl
+        error = urllib.error.URLError(ssl.SSLCertVerificationError(1, "unable to get local issuer certificate"))
+        with mock.patch("urllib.request.urlopen", side_effect=error) as urlopen, mock.patch("time.sleep"):
+            with self.assertRaises(llm.LLMError) as ctx:
+                llm._post_json("https://example.invalid", {}, {}, 1)
+        self.assertEqual(urlopen.call_count, 1)
+        self.assertIn("SSL_CERT_FILE", str(ctx.exception))
+
     def test_post_json_connect_timeout_not_retried(self):
         error = urllib.error.URLError(socket.timeout("timed out"))
         with mock.patch("urllib.request.urlopen", side_effect=error) as urlopen, mock.patch("time.sleep"):

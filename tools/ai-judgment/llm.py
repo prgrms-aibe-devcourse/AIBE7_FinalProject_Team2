@@ -10,9 +10,11 @@
 함수는 (system, user, model, options) → LLMResult를 돌려준다.
 """
 
+import functools
 import json
 import os
 import socket
+import ssl
 import time
 import urllib.error
 import urllib.request
@@ -21,6 +23,16 @@ DEFAULT_TIMEOUT = 300  # 초. 사고(reasoning) 모델은 응답이 오래 걸�
 DEFAULT_MAX_TOKENS = 16000
 RETRY_STATUSES = (429, 500, 502, 503, 504, 529)
 MAX_ATTEMPTS = 3
+
+# 기본 인증서 위치에 인증서가 없을 때(예: macOS python.org Python) 찾아볼 시스템 CA 묶음 (BE-34)
+SYSTEM_CA_FILES = (
+    "/etc/ssl/cert.pem",                       # macOS · BSD
+    "/etc/ssl/certs/ca-certificates.crt",      # Debian · Ubuntu
+    "/etc/pki/tls/certs/ca-bundle.crt",        # RHEL · CentOS · Fedora
+    "/etc/ssl/ca-bundle.pem",                  # openSUSE
+    "/opt/homebrew/etc/openssl@3/cert.pem",    # Homebrew (Apple Silicon)
+    "/usr/local/etc/openssl@3/cert.pem",       # Homebrew (Intel)
+)
 
 # 공급자별 API 키 환경변수 (앞의 것부터 찾는다)
 API_KEY_ENVS = {
@@ -60,6 +72,32 @@ class LLMResult:
             "latencySeconds": self.latency_seconds,
             "stopReason": self.stop_reason,
         }
+
+
+@functools.lru_cache(maxsize=1)
+def ssl_context():
+    """HTTPS 인증서 검증용 SSL 컨텍스트 (BE-34). **검증은 항상 켠 상태**다.
+
+    macOS python.org Python처럼 기본 인증서 위치가 비어 있으면 모든 호출이 CERTIFICATE_VERIFY_FAILED로 실패한다.
+    그래서 기본 위치(SSL_CERT_FILE · SSL_CERT_DIR 환경변수 포함)에 인증서가 하나도 없을 때만 시스템 CA 묶음을 찾아 추가한다.
+    """
+    context = ssl.create_default_context()
+    if context.cert_store_stats().get("x509_ca", 0) == 0:
+        for path in SYSTEM_CA_FILES:
+            if os.path.isfile(path):
+                try:
+                    context.load_verify_locations(cafile=path)
+                except (ssl.SSLError, OSError):
+                    continue
+                if context.cert_store_stats().get("x509_ca", 0) > 0:
+                    break
+    return context
+
+
+SSL_HELP = ("HTTPS 인증서를 확인하지 못했습니다. 시스템 인증서 묶음 경로를 환경변수 SSL_CERT_FILE로 지정하세요 "
+            "(macOS 예: SSL_CERT_FILE=/etc/ssl/cert.pem). python.org Python이면 "
+            "'/Applications/Python 3.x/Install Certificates.command'를 한 번 실행해도 됩니다. "
+            "인증서 검증을 끄는 방법은 지원하지 않습니다")
 
 
 def parse_model_spec(spec):
@@ -108,7 +146,7 @@ def _post_json(url, headers, body, timeout):
         request = urllib.request.Request(url, data=data, method="POST",
                                          headers={"Content-Type": "application/json", **headers})
         try:
-            with urllib.request.urlopen(request, timeout=timeout) as response:
+            with urllib.request.urlopen(request, timeout=timeout, context=ssl_context()) as response:
                 raw = response.read()
         except urllib.error.HTTPError as e:
             detail = _error_detail(e)
@@ -117,6 +155,8 @@ def _post_json(url, headers, body, timeout):
                 continue
             raise LLMError(f"API 오류 ({e.code}): {detail}") from None
         except urllib.error.URLError as e:
+            if isinstance(e.reason, ssl.SSLCertVerificationError):
+                raise LLMError(f"{SSL_HELP} ({e.reason})") from None  # 다시 보내도 같으므로 재시도하지 않는다
             # Python 3.9 이하는 연결 단계 timeout이 URLError(reason=socket.timeout)로 온다. 읽기 timeout과 같게 다시 보내지 않는다
             if isinstance(e.reason, (TimeoutError, socket.timeout)):
                 raise LLMError(f"응답 대기 시간({timeout}초)을 넘었습니다") from None
