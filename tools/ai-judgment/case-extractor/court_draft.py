@@ -284,8 +284,12 @@ def request_draft(system, user, case, masked_text, model, max_tokens=MAX_TOKENS,
     raise CourtDraftError(f"{1 + RETRIES}번 모두 검사를 통과하지 못했습니다: " + " | ".join(last_errors[:8]))
 
 
-def run(name, out_dir=DEFAULT_OUT_DIR, model=DEFAULT_MODEL, max_tokens=MAX_TOKENS, caller=None):
-    """초안 생성 전체 흐름. (초안 파일, 보고서 파일). 실패하면 CourtDraftError (보고서는 남김)."""
+def run(name, out_dir=DEFAULT_OUT_DIR, model=DEFAULT_MODEL, max_tokens=MAX_TOKENS, caller=None,
+        case_path=None, court_path=None, source_path=None):
+    """초안 생성 전체 흐름. (초안 파일, 보고서 파일). 실패하면 CourtDraftError (보고서는 남김).
+
+    입력 파일은 기본으로 out_dir/<name>.case.json 등을 쓰고, 경로를 주면 그 파일을 쓴다(파이프라인 inputs).
+    """
     if not NAME_PATTERN.match(name):
         raise CourtDraftError("--name은 영어 소문자 · 숫자 · 하이픈만 씁니다")
     out_dir = Path(out_dir)
@@ -294,9 +298,9 @@ def run(name, out_dir=DEFAULT_OUT_DIR, model=DEFAULT_MODEL, max_tokens=MAX_TOKEN
     except ExtractError as e:
         raise CourtDraftError(str(e)) from e
     spec = f"{'anthropic' if provider == 'claude' else provider}:{model_id}"
-    case = load_json(out_dir / f"{name}.case.json")
-    court = load_json(out_dir / f"{name}.court_judgment_internal.json")
-    source = load_json(out_dir / f"{name}.source_internal.json")
+    case = load_json(case_path or out_dir / f"{name}.case.json")
+    court = load_json(court_path or out_dir / f"{name}.court_judgment_internal.json")
+    source = load_json(source_path or out_dir / f"{name}.source_internal.json")
     if find_forbidden_keys(case):
         raise CourtDraftError("case.json에 실제 판결 등 금지 항목이 있습니다")
     originals = [s["originalText"] for s in source.get("sources", []) if s.get("originalText")]

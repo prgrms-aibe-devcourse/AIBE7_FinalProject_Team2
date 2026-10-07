@@ -11,6 +11,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 TOOL_DIR = Path(__file__).resolve().parent.parent
@@ -21,6 +22,7 @@ import pipeline  # noqa: E402
 from build_prompt import build_prompt  # noqa: E402
 from case_seed_sql import CaseSeedError, build_case_sql, resolve_sources  # noqa: E402
 from common import load_json, write_json  # noqa: E402
+from court_seed_sql import CourtSeedError, build_court_sql, check_court  # noqa: E402
 from to_seed_sql import build_sql  # noqa: E402
 
 EXAMPLES = TOOL_DIR / "examples"
@@ -91,6 +93,42 @@ class CaseSeedSqlTest(unittest.TestCase):
         self.assertIn("listing.shortIntro", str(ctx.exception))
 
 
+class CourtSeedSqlTest(unittest.TestCase):
+    def setUp(self):
+        self.data = {"caseTitle": "사건",
+                     "judgment": {"penaltyType": "PRISON", "reducedTo": None, "prisonMonths": 6, "fineAmount": None,
+                                  "suspensionMonths": None, "extraDispositions": [], "summary": "요약 '인용'",
+                                  "reasoning": "이유", "plainExplanation": "설명", "excerpt": "발췌"},
+                     "judgmentFactors": [{"factorId": 1, "label": "요소", "direction": "UP", "evidence": "근거"}]}
+
+    def test_sql_unpublished_and_idempotent(self):
+        sql = build_court_sql(self.data, "사건")
+        self.assertIn("false, now()", sql)
+        self.assertNotIn("SET is_published", sql)
+        self.assertIn("같은 내용의 재판부 판결이 이미 있습니다", sql)
+        self.assertIn("요약 ''인용''", sql)
+        self.assertIn("IS DISTINCT FROM v.label", sql)
+
+    def test_checks(self):
+        j = self.data["judgment"]
+        bad_cases = [
+            (dict(j, prisonMonths=None), "prisonMonths가 필요"),
+            (dict(j, penaltyType="LIFE", prisonMonths=None, suspensionMonths=12), "사형 · 무기"),
+            (dict(j, summary="가" * 101), "100자"),
+            (dict(j, excerpt=" "), "excerpt"),
+            (dict(j, extraDispositions=[{"type": "FORFEIT", "value": "x"}]), "부가 처분"),
+            (dict(j, reducedTo="LIFE"), "감경 조합"),
+        ]
+        for judgment, part in bad_cases:
+            with self.assertRaises(CourtSeedError, msg=part) as ctx:
+                check_court(dict(self.data, judgment=judgment))
+            self.assertIn(part, str(ctx.exception))
+        with self.assertRaises(CourtSeedError):
+            check_court(dict(self.data, judgmentFactors=[]))
+        with self.assertRaises(CourtSeedError):
+            build_court_sql(self.data, "다른 사건")  # caseTitle 불일치
+
+
 class PendingSqlTest(unittest.TestCase):
     def setUp(self):
         self.case = load_json(EXAMPLES / "case_input.json")
@@ -139,6 +177,8 @@ class PipelineTest(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.dir = Path(self.tmp.name)
         (self.dir / ".git").write_text("gitdir: x\n", encoding="utf-8")  # SQL 보관 폴더(loads)의 상위가 git 체크아웃인 것처럼
+        self.loads_before = set(pipeline.PRIVATE_SEED_DIR.joinpath("loads").glob("*")) if pipeline.PRIVATE_SEED_DIR.joinpath("loads").exists() else set()
+        self.addCleanup(self.assert_no_real_loads)
         patches = [mock.patch.object(pipeline, "PIPELINE_DIR", self.dir / "pipeline"),
                    mock.patch.object(pipeline, "RUNS_DIR", self.dir / "runs")]
         for p in patches:
@@ -156,7 +196,7 @@ class PipelineTest(unittest.TestCase):
             "name": "test-case",
             "sources": [{"path": "a.txt"}, {"path": "b.txt", "caseNumber": "2099노2"}],
             "inputs": files,
-            "stages": {"extract": {"enabled": False},
+            "stages": {"extract": {"enabled": False}, "court": {"enabled": False},
                        "generate": {"models": ["openai:a", "gemini:b"], "runs": 2, "maxRetries": 2},
                        "load": {"sqlDir": str(self.dir / "loads")}},
         }
@@ -164,6 +204,12 @@ class PipelineTest(unittest.TestCase):
 
     def tearDown(self):
         self.tmp.cleanup()
+
+    def assert_no_real_loads(self):
+        """테스트가 실제 비공개 저장소(private-seed/loads)에 SQL을 쓰지 않았는지 확인한다."""
+        loads = pipeline.PRIVATE_SEED_DIR.joinpath("loads")
+        after = set(loads.glob("*")) if loads.exists() else set()
+        self.assertEqual(after - self.loads_before, set(), "테스트가 실제 private-seed/loads에 파일을 만들었다")
 
     def config(self, **stage_changes):
         raw = copy.deepcopy(self.raw_config)
@@ -173,9 +219,18 @@ class PipelineTest(unittest.TestCase):
         write_json(path, raw)
         return pipeline.load_config(path)
 
-    def run_with(self, config, answers, applied=None, **kwargs):
+    def run_with(self, config, answers, applied=None, court_answers=None, **kwargs):
         caller = fake_caller(answers)
         functions = dict(pipeline.STAGE_FUNCTIONS)
+        court_queue = list(court_answers or [])
+        self.court_requests = getattr(self, "court_requests", [])
+
+        def court_caller(spec, system, user, **kw):
+            self.court_requests.append(user)
+            item = court_queue.pop(0)
+            return SimpleNamespace(text=json.dumps(item, ensure_ascii=False), served_model="court-served", stop_reason="stop")
+
+        functions["court"] = lambda c, s, log: pipeline.stage_court(c, s, log, caller=court_caller)
         functions["contamination"] = lambda c, s, log: pipeline.stage_contamination(c, s, log, caller=caller)
         functions["generate"] = lambda c, s, log: pipeline.stage_generate(c, s, log, caller=caller)
         functions["load"] = lambda c, s, log: pipeline.stage_load(
@@ -458,6 +513,92 @@ class PipelineTest(unittest.TestCase):
         kwargs = fake_module.run.call_args.kwargs
         self.assertEqual((kwargs["model"], kwargs["max_tokens"]), ("gemini:gem-x", 4000))
         self.assertTrue(any("gemini:gem-x" in line for line in self.logs))
+
+    # ---- 재판부 판결 (BE-38)
+
+    COURT_SOURCE = ("주 문\n피고인을 징역 10년에 처한다.\n양형의 이유\n피고인이 수사 초기부터 범행을 인정하고 반성하고 있는 점은 "
+                    "유리한 정상이다. 그러나 다투던 중 집에 있던 흉기를 사용하여 피해자를 살해한 점은 불리한 정상이다.\n")
+    COURT_DRAFT = {
+        "summary": "흉기 사용을 무겁게 보되 자백과 반성을 참작한 판단",
+        "reasoning": "재판부는 피고인이 범행을 인정하고 반성하는 점을 유리하게, 흉기를 사용한 점을 불리하게 보았다.",
+        "plainExplanation": "잘못을 인정한 점은 고려했지만 흉기를 쓴 점을 무겁게 보았다.",
+        "excerpt": "그러나 다투던 중 집에 있던 흉기를 사용하여 피해자를 살해한 점은 불리한 정상이다.",
+        "extraDispositions": [],
+        "factors": [
+            {"factorId": 2, "direction": "UP", "evidence": "다투던 중 집에 있던 흉기를 사용하여 피해자를 살해한 점은 불리한 정상이다."},
+            {"factorId": 7, "direction": "DOWN", "evidence": "피고인이 수사 초기부터 범행을 인정하고 반성하고 있는 점은 유리한 정상이다."},
+        ],
+        "notes": [],
+    }
+
+    def court_config(self, **changes):
+        write_json(self.raw_config["inputs"]["source"],
+                   {"sources": [dict(SOURCES[0], originalText=self.COURT_SOURCE), dict(SOURCES[1], caseNumber="2099노2")]})
+        stages = {"court": {"enabled": True, "model": "openai:court-x"},
+                  "generate": {"models": ["openai:a"], "runs": 1}, "load": {"applyToDb": False}}
+        for stage, value in changes.items():
+            stages.setdefault(stage, {}).update(value)
+        return self.config(**stages)
+
+    def test_court_stage_and_load_unpublished(self):
+        config = self.court_config()
+        state = self.run_with(config, {"openai:a": [self.output]}, court_answers=[self.COURT_DRAFT])
+        court = state["stages"]["court"]["outputs"]
+        self.assertEqual(court["model"], "court-served")
+        draft = load_json(court["courtDraft"])
+        self.assertEqual((draft["judgment"]["prisonMonths"], draft["judgment"]["isPublished"]), (120, False))
+        self.assertEqual(draft["excludedFactors"]["factorIds"], [1, 3, 4, 5, 6, 8, 9, 10, 11])
+        sql = Path(state["stages"]["load"]["outputs"]["sqlFile"]).read_text(encoding="utf-8")
+        self.assertTrue(state["stages"]["load"]["outputs"]["court"])
+        self.assertIn("'COURT', 'FINAL'", sql)
+        court_block = sql.split("-- 재판부 판결 적재")[1].split("-- AI 판결 적재")[0]
+        self.assertIn("false, now()", court_block)  # 비공개
+        self.assertNotIn("SET is_published", court_block)  # 기존 공개 재판부 판결을 건드리지 않는다
+        self.assertTrue(any("재판부 판결 초안 단계" in line for line in self.logs))  # 외부 전송 안내
+
+    def test_court_draft_isolated_from_ai_inputs(self):
+        config = self.court_config(contamination={"enabled": True, "runs": 1})
+        clean = {"knowsCase": False, "penaltyType": "PRISON", "prisonMonths": 60, "fineAmount": None, "suspensionMonths": None}
+        self.run_with(config, {"contamination:openai:a": [clean], "openai:a": [self.output]}, court_answers=[self.COURT_DRAFT])
+        batch = pipeline.load_state(config)["stages"]["generate"]["outputs"]["batchDir"]
+        prompt = (Path(batch) / "prompt.md").read_text(encoding="utf-8")
+        # 예시 사건 프롬프트에는 선고 가능 범위로 "징역 10년" 같은 문구가 원래 있으므로 재판부 판결 고유 문구로 확인한다
+        for text in (self.COURT_DRAFT["summary"], self.COURT_DRAFT["excerpt"], self.COURT_DRAFT["reasoning"]):
+            self.assertNotIn(text, prompt)  # 재판부 판결은 AI 판결 프롬프트에 들어가지 않는다
+        self.assertNotIn("judgment", load_json(self.raw_config["inputs"]["case"]))
+
+    def test_court_human_written_input(self):
+        human = {"caseTitle": self.case["title"],
+                 "judgment": {"subjectType": "COURT", "timing": "FINAL", "penaltyType": "PRISON", "reducedTo": None,
+                              "prisonMonths": 120, "fineAmount": None, "suspensionMonths": None, "extraDispositions": [],
+                              "summary": "요약", "reasoning": "이유", "plainExplanation": "설명", "excerpt": "발췌"},
+                 "judgmentFactors": [{"factorId": 2, "label": self.case["factors"][1]["label"], "direction": "UP",
+                                      "evidence": "근거"}]}
+        write_json(self.dir / "human.json", human)
+        raw = copy.deepcopy(self.raw_config)
+        raw["inputs"]["courtDraft"] = str(self.dir / "human.json")
+        raw["stages"]["generate"] = {"models": ["openai:a"], "runs": 1}
+        raw["stages"]["load"] = dict(raw["stages"]["load"], applyToDb=False)  # sqlDir(임시 폴더)는 유지한다
+        write_json(self.dir / "config.json", raw)
+        state = self.run_with(pipeline.load_config(self.dir / "config.json"), {"openai:a": [self.output]})
+        self.assertIn("'COURT', 'FINAL'", Path(state["stages"]["load"]["outputs"]["sqlFile"]).read_text(encoding="utf-8"))
+
+    def test_court_missing_draft_loads_without_court(self):
+        config = self.config(generate={"models": ["openai:a"], "runs": 1}, load={"applyToDb": False})
+        state = self.run_with(config, {"openai:a": [self.output]})
+        self.assertFalse(state["stages"]["load"]["outputs"]["court"])
+        self.assertTrue(any("재판부 판결 초안이 없어" in line for line in self.logs))
+
+    def test_court_config_validation(self):
+        for court, part in (({"model": ""}, "stages.court.model"), ({"maxTokens": 0}, "stages.court.maxTokens")):
+            bad = copy.deepcopy(self.raw_config)
+            bad["stages"]["court"] = court
+            write_json(self.dir / "bad4.json", bad)
+            with self.assertRaises(pipeline.PipelineError) as ctx:
+                pipeline.load_config(self.dir / "bad4.json")
+            self.assertIn(part, str(ctx.exception))
+        config = self.config(extract={"model": "gemini:g"})
+        self.assertEqual(pipeline.court_model(config), "gemini:g")  # 지정 안 하면 extract 모델
 
     def test_extract_ineligible_stops(self):
         config = self.config(extract={"enabled": True})

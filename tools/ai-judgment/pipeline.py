@@ -33,6 +33,7 @@ from pathlib import Path
 
 from build_prompt import InputError, build_prompt
 from case_seed_sql import DEFAULT_SOURCE_ORG, CaseSeedError, build_case_sql, resolve_sources
+from court_seed_sql import CourtSeedError, build_court_sql
 from check_contamination import VERDICT_ORDER, build_contamination_prompt, judge_one
 from common import TOOL_DIR, load_json, write_json
 from compare import _majority, direction_table, load_runs
@@ -41,7 +42,7 @@ from llm import LLMError, api_key, call, model_provider, parse_model_spec
 from to_seed_sql import NAME_MAX_LENGTH, build_sql
 from validate_output import parse_output
 
-STAGES = ("extract", "contamination", "generate", "select", "load")
+STAGES = ("extract", "court", "contamination", "generate", "select", "load")
 PIPELINE_DIR = TOOL_DIR / "out" / "pipeline"
 PUBLIC_ROOT = TOOL_DIR.parent.parent  # 공개 저장소 루트
 PRIVATE_SEED_DIR = PUBLIC_ROOT / "backend" / "private-seed"
@@ -59,11 +60,14 @@ DEFAULT_CONFIG = {
     # 사건 발생일 YYYY-MM-DD. 주면 추출 결과(source_internal.json incidentDate)보다 우선한다 (BE-38)
     "incidentDate": None,  # 최종 확정 판결 번호(0부터). 없으면 심급이 가장 높은 판결
     # extract를 건너뛸 때 쓸 파일 (extract를 돌리면 그 결과가 우선)
-    "inputs": {"case": None, "court": None, "report": None, "source": None},
+    # courtDraft: 재판부 판결(BE-14 형식) 파일. court 단계를 끄고 사람이 쓴 판결을 넣을 때 쓴다 (BE-38)
+    "inputs": {"case": None, "court": None, "report": None, "source": None, "courtDraft": None},
     "stages": {
         # model: Claude는 모델 ID(또는 anthropic:모델ID), 다른 공급자는 openai:모델ID · gemini:모델ID (BE-35). maxTokens는 Claude 외 공급자의 출력 상한
         "extract": {"enabled": True, "model": "claude-opus-5-5", "effort": "high", "requireEligible": True,
                     "maxTokens": None},
+        # 재판부 판결(COURT) 초안 자동 생성 (BE-38). model이 null이면 extract 모델을 쓴다. 결과는 비공개로 적재된다
+        "court": {"enabled": True, "model": None, "maxTokens": 16000},
         "contamination": {
             "enabled": False, "runs": 10, "models": None,  # models가 없으면 generate.models를 점검한다
             "onContaminated": "stop", "onSuspect": "continue", "delay": 0.0, "timeout": 300,
@@ -74,7 +78,8 @@ DEFAULT_CONFIG = {
         },
         "select": {"enabled": True, "strategy": "consensus", "model": None, "run": None},
         "load": {
-            "enabled": True, "case": True, "applyToDb": True,
+            # court: 재판부 판결 초안이 있으면 비공개로 함께 적재한다 (BE-38)
+            "enabled": True, "case": True, "court": True, "applyToDb": True,
             "sqlDir": "../../backend/private-seed/loads",  # tools/ai-judgment 기준
             "sourceOrg": DEFAULT_SOURCE_ORG, "sourceNote": None,
             "db": {"mode": "docker", "container": "lawnambul-postgres", "user": "lawnambul", "database": "lawnambul",
@@ -123,6 +128,12 @@ def validate_config(config):
     if stages["extract"]["enabled"] and not config["sources"]:
         errors.append("extract를 쓰려면 sources에 판결문 경로를 넣는다")
     extract_model = stages["extract"]["model"]
+    court_model = stages["court"].get("model")
+    if court_model is not None and (not isinstance(court_model, str) or not court_model.strip()):
+        errors.append("stages.court.model은 null 또는 모델 이름 문자열이다")
+    court_max_tokens = stages["court"].get("maxTokens")
+    if not isinstance(court_max_tokens, int) or isinstance(court_max_tokens, bool) or court_max_tokens <= 0:
+        errors.append("stages.court.maxTokens는 양의 정수다")
     extract_max_tokens = stages["extract"].get("maxTokens")
     if extract_max_tokens is not None and (not isinstance(extract_max_tokens, int) or isinstance(extract_max_tokens, bool)
                                            or extract_max_tokens <= 0):
@@ -196,7 +207,8 @@ def stage_output(state, stage):
 
 def input_file(config, state, key):
     """case · court · report · source 파일: extract 결과가 있으면 그것, 없으면 설정 inputs."""
-    path = stage_output(state, "extract").get(key) or resolve_path(config, config["inputs"].get(key))
+    produced = stage_output(state, "court") if key == "courtDraft" else stage_output(state, "extract")
+    path = produced.get(key) or resolve_path(config, config["inputs"].get(key))
     if not path or not Path(path).exists():
         raise PipelineError(f"{key} 파일이 없습니다. extract 단계를 돌리거나 설정 inputs.{key}에 경로를 넣으세요")
     return Path(path)
@@ -219,6 +231,8 @@ def active_models(config, state):
 
 
 # ---------------------------------------------------------------- 단계
+
+
 
 def extract_provider(config):
     """비식별화 모델의 실제 공급자 (외부 전송 안내용). 규칙은 llm.model_provider와 같다 (비식별화 호출도 같은 함수를 쓴다)."""
@@ -249,6 +263,35 @@ def stage_extract(config, state, log):
         raise PipelineError("서비스 대상이 아닌 판결로 판정됐습니다 (stages.extract.requireEligible=false로 무시 가능): "
                             + " / ".join(eligibility.get("reasons", [])), outputs)
     return outputs
+
+
+def court_model(config):
+    """재판부 판결 초안 모델: stages.court.model, 없으면 extract 모델."""
+    return config["stages"]["court"].get("model") or config["stages"]["extract"]["model"]
+
+
+def stage_court(config, state, log, caller=None):
+    """재판부 판결(COURT) 초안 생성 (BE-38). 원문을 마스킹해 모델에 보내고 인용 · 형량 대조 검사를 통과한 초안만 남긴다.
+    초안은 실제 판결이 들어 있는 내부 파일이다. 이후 contamination · generate는 이 파일을 읽지 않는다."""
+    sys.path.insert(0, str(EXTRACTOR_DIR))
+    try:
+        from court_draft import CourtDraftError, run as court_run  # noqa: E402
+    except ImportError as e:
+        raise PipelineError(f"court_draft를 불러오지 못했습니다: {e}")
+    cfg, model = config["stages"]["court"], court_model(config)
+    log(f"재판부 판결 초안 → {model} (마스킹한 판결문 전송, 인용은 원문과 대조)")
+    try:
+        draft_path, report_path = court_run(
+            config["name"], out_dir=CASES_DIR, model=model, max_tokens=cfg["maxTokens"], caller=caller,
+            case_path=input_file(config, state, "case"), court_path=input_file(config, state, "court"),
+            source_path=input_file(config, state, "source"))
+    except CourtDraftError as e:
+        raise PipelineError(f"재판부 판결 초안 실패: {e}")
+    report = load_json(report_path)
+    log(f"초안: 고려한 요소 {report.get('factorsChosen')}개 · 제외 {report.get('factorsExcluded')}개 · "
+        f"경고 {len(report.get('warnings', []))} · 시도 {report.get('attempts')}회")
+    return {"courtDraft": str(draft_path), "report": str(report_path), "model": report.get("model"),
+            "warnings": len(report.get("warnings", []))}
 
 
 def stage_contamination(config, state, log, caller=call):
@@ -436,6 +479,18 @@ def stage_load(config, state, log, apply=None):
         except CaseSeedError as e:
             raise PipelineError(str(e))
 
+    court_path = None
+    if cfg["court"]:
+        produced = stage_output(state, "court").get("courtDraft") or resolve_path(config, config["inputs"].get("courtDraft"))
+        if produced and Path(produced).exists():
+            court_path = Path(produced)
+            try:
+                parts.append(build_court_sql(load_json(court_path), case["title"]))
+            except CourtSeedError as e:
+                raise PipelineError(str(e))
+        else:
+            log("재판부 판결 초안이 없어 사건 · AI 판결만 적재합니다 (공개 전에 재판부 판결이 필요합니다)")
+
     model_name = (run_record.get("meta") or {}).get("servedModel") or parse_model_spec(selection["modelSpec"])[1]
     if len(model_name) > NAME_MAX_LENGTH:
         model_name = parse_model_spec(selection["modelSpec"])[1][:NAME_MAX_LENGTH]
@@ -452,12 +507,13 @@ def stage_load(config, state, log, apply=None):
     sql_dir.mkdir(exist_ok=True)
     header = (f"-- AI 판결 파이프라인 적재 (BE-31): {config['name']}\n"
               f"-- 생성: {_now()} · 모델 {selection['modelSpec']} · {selection['reason']}\n"
-              "-- 사건은 DRAFT, AI 판결은 비공개 · PENDING으로 넣는다. 사용자에게 보이지 않고 관리자가 검수 · 공개한다.\n"
+              "-- 사건은 DRAFT, 재판부 판결 · AI 판결은 비공개(AI는 PENDING)로 넣는다. 사용자에게 보이지 않고 관리자가 검수 · 공개한다.\n"
               "-- 원본 판결문(case_source)이 들어 있다. 공개 저장소에 두지 않는다. 같은 파일을 두 번 실행해도 중복되지 않는다.\n"
               "-- 운영 반영: 서버에서 psql -v ON_ERROR_STOP=1 -f <이 파일>\n")
     sql_path.write_text(header + "BEGIN;\n" + "\n".join(parts) + "COMMIT;\n", encoding="utf-8")
     log(f"SQL: {sql_path}")
-    outputs = {"sqlFile": str(sql_path), "applied": False, "runKey": report_json["runKey"]}
+    outputs = {"sqlFile": str(sql_path), "applied": False, "runKey": report_json["runKey"],
+               "court": court_path is not None}
     if cfg["applyToDb"]:
         messages = (apply or apply_sql)(sql_path, cfg["db"])
         outputs.update(applied=True, messages=messages)
@@ -554,6 +610,7 @@ def apply_sql(sql_path, db):
 
 STAGE_FUNCTIONS = {
     "extract": stage_extract,
+    "court": stage_court,
     "contamination": stage_contamination,
     "generate": stage_generate,
     "select": stage_select,
@@ -592,6 +649,8 @@ def run_pipeline(config, start=None, until=None, skip=(), rerun=False, log=print
     log(f"단계: {' → '.join(steps)}")
     if "extract" in steps:
         log(f"외부 전송: 비식별화 단계에서 마스킹한 판결문이 {extract_provider(config)}로 전송됩니다")
+    if "court" in steps:
+        log(f"외부 전송: 재판부 판결 초안 단계에서 마스킹한 판결문이 {model_provider(court_model(config))}로 전송됩니다")
     if {"contamination", "generate"} & set(steps):
         log(f"외부 전송: 비식별화한 사건 내용이 {', '.join(providers)}로 전송됩니다")
     for stage in steps:
@@ -666,7 +725,7 @@ def main():
         return 1
     load = stage_output(state, "load")
     if load.get("applied"):
-        print("\n완료. 로컬 DB에 적재한 사건 · AI 판결은 비공개이며 관리자 검수 후 공개됩니다.")
+        print("\n완료. 로컬 DB에 적재한 사건 · 재판부 판결 · AI 판결은 비공개이며 관리자 검수 후 공개됩니다.")
     elif load:
         print(f"\n완료. 적재 SQL만 만들었습니다(DB 적재 안 함): {load['sqlFile']}")
     else:

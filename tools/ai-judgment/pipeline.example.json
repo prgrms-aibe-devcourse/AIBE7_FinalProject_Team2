@@ -2,13 +2,35 @@
   "_comment": "AI 판결 파이프라인 설정 예시 (BE-31). 복사해 cases/<name>.pipeline.json으로 두고 고친다 (cases/는 git 제외). 경로는 이 설정 파일 위치 기준. 설명은 README '파이프라인 (BE-31)'.",
   "name": "long-marriage-conflict",
   "sources": [
-    { "path": "raw/long-marriage-conflict-first.pdf" },
-    { "path": "raw/long-marriage-conflict-appeal.pdf", "note": "판결서 인터넷열람 출력본" }
+    {
+      "path": "raw/long-marriage-conflict-first.pdf"
+    },
+    {
+      "path": "raw/long-marriage-conflict-appeal.pdf",
+      "note": "판결서 인터넷열람 출력본"
+    }
   ],
   "finalSourceIndex": null,
-  "inputs": { "case": null, "court": null, "report": null, "source": null },
+  "inputs": {
+    "case": null,
+    "court": null,
+    "report": null,
+    "source": null,
+    "courtDraft": null
+  },
   "stages": {
-    "extract": { "enabled": true, "model": "claude-opus-5-5", "effort": "high", "requireEligible": true, "maxTokens": null },
+    "extract": {
+      "enabled": true,
+      "model": "claude-opus-5-5",
+      "effort": "high",
+      "requireEligible": true,
+      "maxTokens": null
+    },
+    "court": {
+      "enabled": true,
+      "model": null,
+      "maxTokens": 16000
+    },
     "contamination": {
       "enabled": false,
       "runs": 10,
@@ -19,22 +41,36 @@
     },
     "generate": {
       "enabled": true,
-      "models": ["openai:<모델ID>"],
+      "models": [
+        "openai:<모델ID>"
+      ],
       "runs": 3,
       "maxRetries": 3,
       "temperature": null,
       "maxTokens": 16000,
       "delay": 0
     },
-    "select": { "enabled": true, "strategy": "consensus", "model": null, "run": null },
+    "select": {
+      "enabled": true,
+      "strategy": "consensus",
+      "model": null,
+      "run": null
+    },
     "load": {
       "enabled": true,
       "case": true,
+      "court": true,
       "applyToDb": true,
       "sqlDir": "../../backend/private-seed/loads",
       "sourceOrg": "법원 공개 판결문",
       "sourceNote": null,
-      "db": { "mode": "docker", "container": "lawnambul-postgres", "user": "lawnambul", "database": "lawnambul" }
+      "db": {
+        "mode": "docker",
+        "container": "lawnambul-postgres",
+        "user": "lawnambul",
+        "database": "lawnambul"
+      }
     }
-  }
+  },
+  "incidentDate": null
 }

@@ -31,6 +31,7 @@ AI 판결 생성(3단계)은 두 가지 방법 중 하나로 한다. 외부 LLM 
 | `case-extractor/` | 판결문(PDF · txt) → 비식별화한 사건 입력 JSON 초안 (BE-20). Claude API를 쓰므로 패키지 설치가 필요하다. [README](case-extractor/README.md) |
 | `pipeline.py` | 판결문 → 적재까지 자동 실행 · 단계 분기 · 이어 하기 (BE-31) |
 | `pipeline.example.json` | 파이프라인 설정 예시 (복사해 `cases/`에 두고 고친다) |
+| `court_seed_sql.py` | 재판부 판결(BE-14 형식) → **비공개** 적재 SQL (`judgment` COURT · `judgment_factor`) (BE-38) |
 | `case_seed_sql.py` | 비식별화한 사건 파일 → 사건 콘텐츠 적재 SQL (`legal_case` DRAFT · 섹션 · 형벌 규칙 · 판단 요소 · 원본 판결문) (BE-31) |
 
 ## 작업 순서
@@ -230,6 +231,7 @@ python3 pipeline.py status cases/my-case.pipeline.json
 | 단계 | 하는 일 | 끄기 · 멈춤 조건 |
 | --- | --- | --- |
 | `extract` | `case-extractor`로 판결문(여러 개면 1심 · 항소심 함께)을 비식별화 · 구조화한다. 모델은 `stages.extract.model`로 고른다(Claude 모델 ID, `openai:모델ID`, `gemini:모델ID` — BE-35, `maxTokens`는 Claude 외 출력 상한). 사건번호 · 법원명 · 선고일은 **마스킹 전에 로컬에서** 꺼내 내부 파일에만 둔다. 목록 카드 칸(소개 · 키워드 · 난이도 · 예상 시간)도 함께 만든다 | 모델이 서비스 대상이 아니라고 판정하면 멈춘다(`requireEligible: false`로 무시). 판정 기준은 `docs/cases/README.md` 1장 선정 조건 |
+| `court` | 재판부 판결(COURT) 초안을 만든다(`case-extractor/court_draft.py`, BE-38). 마스킹한 원문을 모델에 보내 요약 · 이유 · 쉬운 설명 · 발췌 · 요소별 방향과 근거를 받고, **발췌 · 근거가 원문을 글자 그대로 인용했는지**(바꾼 식별 정보만 `⟦ ⟧`) · **형량이 판결문 주문과 맞는지** · 개인정보 잔존을 자동으로 검사한다. 모델은 `stages.court.model`(없으면 extract 모델) | 검사를 통과하지 못하면 멈춘다(오류를 알려 주며 최대 2번 다시 요청). 끄고 사람이 쓴 BE-14 JSON을 `inputs.courtDraft`로 넣을 수 있다 |
 | `contamination` | 모델마다 사전 학습 점검을 `runs`회(기본 10) 자동으로 묻고 판정한다(REQ-102). 판정은 가장 나쁜 결과 | **기본 꺼짐**(`enabled: true`로 켬). `onContaminated`: `stop`(기본) · `exclude`(그 모델만 생성에서 뺌). `onSuspect`: `continue`(기본) · `exclude` · `stop` |
 | `generate` | 모델마다 `runs`회 생성 · 검증한다(`generate.py`와 같음). 검증 통과 회차가 없으면 한 번씩 더 생성한다(최대 `maxRetries`회) | 모든 모델에서 통과 회차가 없으면 멈춘다 |
 | `select` | 검증을 통과한 회차 중 하나를 고른다 | 아래 "회차 선택" |
@@ -261,7 +263,9 @@ python3 pipeline.py status cases/my-case.pipeline.json
 
 ### 적재 (`stages.load`)
 
-- **사건**: `legal_case.status='DRAFT'` → 사용자 목록 · 체험에서 보이지 않는다(서버가 `PUBLISHED`만 조회). 섹션 · 형벌 규칙 · 판단 요소 · 원본 판결문(`case_source`)을 함께 넣는다. 사건 발생일은 비식별화 단계가 원문 · 선고일과 대조해 확인한 값(또는 설정 `incidentDate`)을 넣는다(BE-38). 양형기준 연결 · **재판부 판결(COURT)은 넣지 않는다** — 재판부 판결은 지금처럼 따로 작성해 넣고(BE-14 · `R__20` 방식), 관리자가 공개 전에 채운다.
+- **사건**: `legal_case.status='DRAFT'` → 사용자 목록 · 체험에서 보이지 않는다(서버가 `PUBLISHED`만 조회). 섹션 · 형벌 규칙 · 판단 요소 · 원본 판결문(`case_source`)을 함께 넣는다. 사건 발생일은 비식별화 단계가 원문 · 선고일과 대조해 확인한 값(또는 설정 `incidentDate`)을 넣는다(BE-38). 재판부 판결은 아래 "재판부 판결"대로 비공개로 넣는다(BE-38). 양형기준 연결은 넣지 않는다.
+- **재판부 판결 (BE-38)**: `court` 단계 초안(또는 `inputs.courtDraft`)이 있으면 `judgment`(COURT · FINAL) · `judgment_factor`를 **비공개**(`is_published=false`)로 넣는다. 기존 공개 재판부 판결은 건드리지 않고, 같은 내용이 이미 있으면 건너뛴다. `load.court: false`면 뺀다. 초안은 **실제 판결이 들어 있는 내부 파일**이라 AI 판결 단계(contamination · generate)는 읽지 않는다. 사실 기록이므로 공개 전에 원 판결문과 대조해 검수한다(REQ-075 · 077).
+- **공개에 필요한 것**: 사건 `PUBLISHED` + 공개 재판부 판결 + 공개 AI 판결. 셋이 갖춰지면 체험 흐름 전체(사전 판단 → 판결 → AI 판결 → 실제 판결 → 세 판결 비교)가 동작한다(임시 DB로 확인). 양형기준 연결(`guideline_id`)은 서비스 코드가 읽지 않아 비어 있어도 된다(이후 RAG로 연결).
 - **AI 판결**: `judgment.is_published=false`, `ai_generation.review_status='PENDING'`(검수자 · 검수 시각 없음). 기존 공개 AI 판결은 그대로 둔다. `ai_generation.generation_report`(V8)에 검증 경고 · 사전 학습 점검 판정 · 회차 선택 이유 · 모델 · 토큰을 남겨 관리자가 검수할 때 본다(실제 판결 값은 넣지 않는다).
 - **같은 SQL을 두 번 실행해도 안전하다**: 같은 제목의 DRAFT 사건이 있으면 사건 적재를 건너뛰고, 같은 실행(`runKey`)의 AI 판결이 있으면 건너뛴다(`runKey`는 DB 부분 유니크 인덱스로도 막는다). 판단 요소가 다르면 전체가 취소된다.
 - **같은 제목의 공개 · 검토 중 사건이 있으면 멈춘다**(전체 취소). 모델이 만든 중립 제목은 다른 사건과 겹칠 수 있어서다. 이미 공개된 사건에 AI 판결만 넣으려면 `load.case: false`로 사건 SQL을 뺀다.
@@ -273,6 +277,7 @@ python3 pipeline.py status cases/my-case.pipeline.json
 | 항목 | 처리 |
 | --- | --- |
 | 외부 전송 | `extract`는 정규식 마스킹을 거친 판결문을 설정한 비식별화 모델의 공급자(기본 Anthropic)로, `contamination` · `generate`는 비식별화한 사건 내용을 설정한 공급자로 보낸다. 실행할 때 전송 대상을 먼저 출력한다 |
+| 재판부 판결 초안 | 실제 판결(형량 · 재판부 판단)이 들어 있다. `cases/<name>.court_draft.json`(git 제외) → DB 비공개 행에만 둔다. AI 판결 입력과 분리돼 있다(테스트로 확인) |
 | 원본 판결문 정보 | 사건번호 · 법원명 · 선고일 · 원문은 마스킹 전에 로컬에서 꺼내 `cases/<name>.source_internal.json`(git 제외) → DB `case_source`(API는 `source_org`만 노출)에만 둔다. 모델에 보내지 않는다 |
 | 비식별화 검수 | 사람 검수 없이 적재하므로 비식별화 누락이 있을 수 있다. **사건은 항상 DRAFT로만 넣고 자동으로 공개하지 않는다.** 관리자 페이지(BE-33 · FE-16)의 공개 승인이 비식별화 검수(REQ-075)를 겸한다 |
 | 운영 DB | 파이프라인은 운영 DB에 접속하지 않는다. 운영 계정을 개발 PC에 두지 않는다 |
