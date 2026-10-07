@@ -55,6 +55,13 @@ def load_json(path):
         return json.load(f)
 
 
+def write_json(path, value):
+    """JSON 파일 쓰기 (한글 그대로, 들여쓰기 2칸, 끝 줄바꿈). 폴더가 없으면 만든다."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
 def read_prompt(name):
     return (PROMPT_DIR / name).read_text(encoding="utf-8")
 

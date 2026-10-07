@@ -27,7 +27,7 @@ import time
 from pathlib import Path
 
 from build_prompt import InputError, build_prompt
-from common import TOOL_DIR, final_penalty, load_json
+from common import TOOL_DIR, final_penalty, load_json, write_json
 from llm import DEFAULT_MAX_TOKENS, DEFAULT_TIMEOUT, LLMError, api_key, call, parse_model_spec
 from validate_output import parse_output, validate
 
@@ -74,7 +74,7 @@ def prepare_batch(case, batch_dir):
     else:
         path.parent.mkdir(parents=True, exist_ok=True)
         info["createdAt"] = _now()
-        _write_json(path, info)
+        write_json(path, info)
         (path.parent / "prompt.md").write_text(
             f"<!-- prompt_version: {prompt['promptVersion']} -->\n# [SYSTEM]\n\n{prompt['system']}\n# [USER]\n\n{prompt['user']}\n",
             encoding="utf-8",
@@ -88,6 +88,10 @@ def evaluate(case, raw_text):
         output = parse_output(raw_text)
     except (json.JSONDecodeError, ValueError) as e:
         return None, f"JSON으로 읽을 수 없습니다: {e}", {"ok": False, "errors": ["JSON 파싱 실패"], "warnings": []}
+    if not isinstance(output, dict):
+        # 배열 · 숫자 · 문자열처럼 문법은 맞지만 판결 객체가 아닌 응답. 판결로 다루지 않고 파싱 실패로 기록한다
+        return None, f"JSON 객체가 아닙니다 ({type(output).__name__})", {
+            "ok": False, "errors": ["JSON 객체가 아님"], "warnings": []}
     report = validate(case, output)
     return output, None, {"ok": report.ok, "errors": report.errors, "warnings": report.warnings}
 
@@ -119,13 +123,13 @@ def save_run(model_dir, spec, case, prompt, raw_text, meta, call_error=None, set
         "rawText": raw_text,
         "parseError": parse_error,
         "output": output,
-        "finalPenalty": final_penalty(output) if isinstance(output, dict) else None,
+        "finalPenalty": final_penalty(output) if output is not None else None,
         "validation": validation,
     }
     path = model_dir / f"run-{index:03d}.json"
-    _write_json(path, record)
+    write_json(path, record)
     if output is not None:
-        _write_json(model_dir / f"run-{index:03d}.output.json", output)
+        write_json(model_dir / f"run-{index:03d}.output.json", output)
     return path, record
 
 
@@ -136,8 +140,8 @@ def generate_runs(case, specs, runs, batch_dir, *, temperature=None, max_tokens=
         provider, _ = parse_model_spec(spec)
         if provider == "manual":
             raise GenerateError(f"{spec}: manual 공급자는 run이 아니라 import로 넣습니다")
-        if caller is call:
-            api_key(provider)  # 키가 없으면 실패 기록을 쌓지 않고 바로 멈춘다
+        # caller가 무엇이든(call을 감싼 래퍼 포함) 키를 먼저 확인한다. 없으면 실패 기록 · 앞 모델 비용 없이 바로 멈춘다
+        api_key(provider)
     prompt = prepare_batch(case, batch_dir)
     settings = {"temperature": temperature, "maxTokens": max_tokens}
     records = []
@@ -198,10 +202,6 @@ def _now():
     return datetime.datetime.now(datetime.timezone.utc).astimezone().isoformat(timespec="seconds")
 
 
-def _write_json(path, value):
-    Path(path).write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-
-
 def batch_dir_for(args):
     name = args.batch or Path(args.case_input).stem
     if not BATCH_NAME_PATTERN.match(name):
@@ -244,6 +244,12 @@ def main():
             records = import_runs(case, args.model, args.responses, batch_dir)
     except (GenerateError, LLMError) as e:
         print(f"[오류] {e}", file=sys.stderr)
+        return 1
+    except OSError as e:
+        print(f"[오류] 파일을 읽거나 쓰지 못했습니다: {e}", file=sys.stderr)
+        return 1
+    except json.JSONDecodeError as e:
+        print(f"[오류] 사건 입력 파일이 JSON이 아닙니다: {e}", file=sys.stderr)
         return 1
     passed = sum(1 for r in records if r["validation"]["ok"])
     print(f"검증 통과 {passed}/{len(records)} · 결과 폴더: {batch_dir}")

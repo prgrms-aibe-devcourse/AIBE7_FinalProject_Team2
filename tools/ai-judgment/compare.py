@@ -14,11 +14,12 @@
 - 평균 입력 · 출력 · 합계 토큰, 평균 소요 시간, (단가를 주면) 회당 예상 비용
 - --court를 주면 실제 판결과 형벌 종류 일치율 · 징역 개월 평균 차이 (내부 전용 — 이 결과는 공유 · 커밋하지 않는다)
 
-요소 방향은 검증을 통과한 실행만으로 센다. 고르지 않은 요소는 '선택 안 함'이라는 값으로 센다.
+요소 방향은 검증을 통과한 실행만으로 센다. 고르지 않은 요소는 '선택 안 함'(None)으로 센다.
 """
 
 import argparse
 import csv
+import json
 import io
 import statistics
 import sys
@@ -28,7 +29,9 @@ from pathlib import Path
 from common import NO_TERM_PENALTIES, final_penalty, load_json
 from generate import RUN_SCHEMA
 
-NOT_SELECTED = "-"
+# 고르지 않은 요소의 방향. 실제 방향 값(UP · DOWN)과 타입으로 구분되게 None을 쓰고, 표에 쓸 때만 라벨로 바꾼다
+NOT_SELECTED = None
+NOT_SELECTED_LABEL = "선택 안 함"
 
 
 class CompareError(Exception):
@@ -47,6 +50,7 @@ def load_runs(batch_dir):
         record = load_json(path)
         if record.get("schema") != RUN_SCHEMA:
             continue
+        record.pop("rawText", None)  # 비교표에는 쓰지 않는다. 회차가 많을 때 메모리를 아낀다
         groups.setdefault(record["modelSpec"], []).append(record)
     if not groups:
         raise CompareError(f"{batch_dir}에 실행 기록이 없습니다")
@@ -63,7 +67,8 @@ def _majority(values):
     """가장 많은 값. 동수면 정렬 순서로 첫 값을 고른다 (결과가 매번 같도록)."""
     counts = Counter(values)
     best = max(counts.values())
-    return sorted(v for v, c in counts.items() if c == best)[0]
+    # None(선택 안 함)이 섞여도 정렬되게 방향 값 뒤로 보낸다
+    return sorted((v for v, c in counts.items() if c == best), key=lambda v: (v is None, v or ""))[0]
 
 
 def direction_table(valid_records, factor_ids):
@@ -171,7 +176,7 @@ def summarize(case, groups, court=None, prices=None):
 
         for r in records:
             usage = (r.get("meta") or {}).get("usage") or {}
-            output = r["output"] or {}
+            output = r["output"] if isinstance(r["output"], dict) else {}
             details.append({
                 "model": spec,
                 "run": r["runIndex"],
@@ -283,7 +288,7 @@ def markdown_table(columns, rows):
 def render_markdown(batch, rows, details, consensus, case, with_court):
     result_columns = RESULT_COLUMNS + (COURT_COLUMNS if with_court else [])
     labels = {int(f["factorId"]): f["label"] for f in case.get("factors", [])}
-    consensus_lines = [f"- {fid}. {labels.get(fid, '')}: {'선택 안 함' if d == NOT_SELECTED else d}"
+    consensus_lines = [f"- {fid}. {labels.get(fid, '')}: {NOT_SELECTED_LABEL if d is NOT_SELECTED else d}"
                        for fid, d in sorted(consensus.items())]
     parts = [
         "# 모델별 AI 판결 비교",
@@ -333,6 +338,12 @@ def main():
         rows, details, consensus = summarize(case, groups, court, parse_prices(args.price))
     except CompareError as e:
         print(f"[오류] {e}", file=sys.stderr)
+        return 1
+    except OSError as e:
+        print(f"[오류] 파일을 읽지 못했습니다: {e}", file=sys.stderr)
+        return 1
+    except json.JSONDecodeError as e:
+        print(f"[오류] JSON이 아닌 파일이 있습니다: {e}", file=sys.stderr)
         return 1
     markdown = render_markdown(batch, rows, details, consensus, case, court is not None)
     if args.out:
