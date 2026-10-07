@@ -94,7 +94,7 @@ python3 extract_case.py ../cases/raw/1심.pdf ../cases/raw/항소심.pdf --name 
 
 ## 처리 순서
 
-1. **텍스트 추출**: PDF는 `pypdf`, txt는 UTF-8 · CP949 순서로 읽는다. 텍스트가 거의 없으면(스캔본) 멈춘다. 스캔본은 OCR로 txt를 만든 뒤 넣는다.
+1. **텍스트 추출**: PDF는 `pypdf`, txt는 UTF-8 · CP949 순서로 읽는다. 법원 판결문 PDF는 AES로 암호화된 경우가 많아 `cryptography` 패키지가 필요하다(`requirements.txt`에 포함. 없으면 `cryptography>=3.1 is required for AES algorithm` 오류로 읽지 못한다). 텍스트가 거의 없으면(스캔본) 멈춘다. 스캔본은 OCR로 txt를 만든 뒤 넣는다.
 2. **패턴 마스킹 (로컬)**: 정규식으로 확실히 잡히는 값을 `[사건번호]`처럼 바꾼 뒤에 API로 보낸다.
     - 주민등록번호, 이메일, 전화번호, 계좌번호, 사건번호, 압수번호, 법원명, 차량번호, 상세 주소(도로명 · 동호수 · 번지)
     - 날짜 · 나이는 가리지 않는다. 모델이 "사건 3개월 전", "70대"처럼 바꾸는 데 필요하다.
