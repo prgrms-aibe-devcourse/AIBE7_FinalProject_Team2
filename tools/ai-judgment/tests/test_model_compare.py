@@ -196,9 +196,14 @@ class GenerateCompareTest(unittest.TestCase):
         self.assertTrue((self.batch_dir / "batch.json").exists())
         self.assertTrue((self.batch_dir / "prompt.md").exists())
         self.assertEqual(sorted(p.name for p in model_dir.iterdir()),
-                         ["run-001.json", "run-001.output.json", "run-002.json", "run-002.output.json",
+                         ["run-001.factor-labels.json", "run-001.json", "run-001.output.json",
+                          "run-002.factor-labels.json", "run-002.json", "run-002.output.json",
                           "run-003.json", "run-004.json"])
         self.assertEqual(load_json(model_dir / "run-001.output.json"), self.output)
+        # 생성 시점 사건 파일의 요소 라벨 스냅샷도 함께 남겨, 나중에 사건 파일이 바뀌어도
+        # to_seed_sql.py --factor-labels로 드리프트를 확인할 수 있게 한다
+        self.assertEqual(load_json(model_dir / "run-001.factor-labels.json"),
+                         {str(f["factorId"]): f["label"] for f in self.case["factors"]})
         statuses = [(r["callError"] is not None, r["parseError"] is not None, r["validation"]["ok"]) for r in records]
         self.assertEqual(statuses, [(False, False, True), (False, False, True), (False, True, False),
                                     (False, True, False), (False, False, False), (True, False, False)])
