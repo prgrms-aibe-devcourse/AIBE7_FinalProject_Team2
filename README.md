@@ -55,6 +55,15 @@ docker compose up -d      # PostgreSQL 컨테이너(lawnambul-postgres, 5432) �
 git submodule update --init backend/private-seed
 ```
 
+⚠️ `git pull`은 서브모듈을 갱신하지 않는다. 공개 저장소가 서브모듈 커밋을 올렸다면(예: `R__20` 재판부 판결 · `R__30` AI 판결 추가) pull 뒤에 `git submodule update --init backend/private-seed`를 다시 실행해야 한다. 그렇지 않으면 예전 커밋의 시드만 들어가고, `bootRun`은 SQL이 하나라도 있으면 "포함"으로 찍어 오류 없이 뜬다. 이때 실제 사건에서 `GET /api/v1/cases/{id}/experience/judgments/ai` · `/judgments/court`가 500(`IllegalStateException`, 공개 사건인데 AI · 재판부 판결 row가 없음)을 낸다. 아래로 확인한다. (BE-29)
+
+```bash
+git submodule status backend/private-seed   # 맨 앞이 '-'(미초기화) 또는 '+'(커밋 불일치)이면 위 update 명령 실행
+ls backend/private-seed/seed                # R__10 · R__20 · R__30 세 파일이 있어야 한다
+```
+
+서브모듈을 맞춘 뒤 `bootRun`을 다시 띄우면 Flyway가 새 시드를 반복 마이그레이션(`R__`)으로 적용한다. DB를 비울 필요는 없다.
+
 이 자동 설정은 로컬 실행(`bootRun`)에만 적용된다. 운영(jar · Docker) · 테스트는 `application.yml` 기본값(스키마만)을 그대로 쓴다.
 
 ⚠️ IDE에서 실행할 때는 `BackendApplication`의 ▶ 버튼(main 클래스 실행) 대신 Gradle 창의 `Tasks > application > bootRun`을 쓴다. main 클래스로 실행하면 Gradle을 거치지 않아 자동 설정이 적용되지 않고 `application.yml` 기본값(스키마만)으로 떠서, 새 DB라면 사건이 하나도 없다. 꼭 main 클래스로 실행해야 하면 실행 구성의 환경변수에 `FLYWAY_LOCATIONS`를 직접 넣는다.
