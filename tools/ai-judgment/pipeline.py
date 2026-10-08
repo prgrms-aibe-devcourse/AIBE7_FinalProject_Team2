@@ -349,11 +349,15 @@ def stage_contamination(config, state, log, caller=call):
     results, excluded, stop_reasons = {}, [], []
     categories = {spec: [] for spec in models}
     exhausted = set()  # 일 한도 · 크레딧이 바닥난 모델
+    called = False
     # 모델을 번갈아 가며 회차 순서로 부른다 (BE-44). 한 모델의 분당 한도에 연속으로 걸리지 않는다
     for i in range(1, cfg["runs"] + 1):
         for spec in models:
             if spec in exhausted:
                 continue
+            if called and cfg["delay"]:  # 실제 호출 직전에만 쉰다 (건너뛴 모델 · 마지막 호출 뒤에는 쉬지 않는다)
+                time.sleep(cfg["delay"])
+            called = True
             record = {"modelSpec": spec, "run": i, "createdAt": _now()}
             try:
                 result = caller(spec, "", prompt, timeout=cfg["timeout"])
@@ -373,8 +377,6 @@ def stage_contamination(config, state, log, caller=call):
             write_json(out_dir / model_slug(spec) / f"run-{i:03d}.json", record)
             if category:
                 categories[spec].append(category)
-            if cfg["delay"] and spec not in exhausted:
-                time.sleep(cfg["delay"])
     for spec in models:
         # 호출이 모두 실패해도(응답 0개) INSUFFICIENT로 판정해 onInsufficient를 따른다
         answered = categories[spec]
@@ -402,10 +404,14 @@ def stage_generate(config, state, log, caller=call):
     batch_dir = batch_dir_for(config, case)
     options = {"temperature": cfg["temperature"], "max_tokens": cfg["maxTokens"], "timeout": cfg["timeout"],
                "delay": cfg["delay"], "caller": caller, "log": log}
-    summary = {}
     models = active_models(config, state)
     by_spec = {spec: [] for spec in models}
     retries = {spec: 0 for spec in models}
+
+    def summarize():
+        return {spec: {"runs": len(by_spec[spec]), "valid": sum(1 for r in by_spec[spec] if r["validation"]["ok"]),
+                       "retries": retries[spec]} for spec in models}
+
     try:
         # 모델을 번갈아 가며 회차 순서로 생성한다 (BE-44)
         for record in generate_runs(case, models, cfg["runs"], batch_dir, **options):
@@ -420,14 +426,13 @@ def stage_generate(config, state, log, caller=call):
             for spec in pending:
                 retries[spec] += 1
                 log(f"[{spec}] 검증 통과 회차 없음 → 재생성 {retries[spec]}/{cfg['maxRetries']}")
+            if cfg["delay"]:  # 앞 호출과 재생성 첫 호출 사이도 간격을 둔다
+                time.sleep(cfg["delay"])
             for record in generate_runs(case, pending, 1, batch_dir, **options):
                 by_spec[record["modelSpec"]].append(record)
     except (GenerateError, LLMError) as e:
-        raise PipelineError(f"생성 실패: {e}", {"batchDir": str(batch_dir), "models": summary})
-    for spec in models:
-        records = by_spec[spec]
-        summary[spec] = {"runs": len(records), "valid": sum(1 for r in records if r["validation"]["ok"]),
-                         "retries": retries[spec]}
+        raise PipelineError(f"생성 실패: {e}", {"batchDir": str(batch_dir), "models": summarize()})
+    summary = summarize()
     outputs = {"batchDir": str(batch_dir), "models": summary}
     if not any(s["valid"] for s in summary.values()):
         raise PipelineError("검증을 통과한 회차가 없습니다 (재생성 포함). out/runs의 기록과 compare.py로 원인을 보세요", outputs)
