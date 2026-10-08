@@ -37,7 +37,7 @@ from check_contamination import VERDICT_ORDER, build_contamination_prompt, judge
 from common import TOOL_DIR, load_json, write_json
 from compare import _majority, direction_table, load_runs
 from generate import RUNS_DIR, GenerateError, generate_runs, model_slug, prompt_digest
-from llm import LLMError, api_key, call, parse_model_spec
+from llm import LLMError, api_key, call, model_provider, parse_model_spec
 from to_seed_sql import NAME_MAX_LENGTH, build_sql
 from validate_output import parse_output
 
@@ -214,11 +214,8 @@ def active_models(config, state):
 # ---------------------------------------------------------------- 단계
 
 def extract_provider(config):
-    """비식별화 모델의 실제 공급자 (외부 전송 안내용). 공급자 없는 이름은 Claude(anthropic)다."""
-    model = config["stages"]["extract"]["model"]
-    if ":" not in model:
-        return "anthropic"
-    return parse_model_spec(model)[0]
+    """비식별화 모델의 실제 공급자 (외부 전송 안내용). 규칙은 llm.model_provider와 같다 (비식별화 호출도 같은 함수를 쓴다)."""
+    return model_provider(config["stages"]["extract"]["model"])
 
 
 def stage_extract(config, state, log):

@@ -74,6 +74,18 @@ def parse_model_spec(spec):
     return provider, model
 
 
+def model_provider(spec):
+    """모델 지정 → 실제로 데이터를 받는 공급자 이름 (BE-35).
+
+    `공급자:모델ID`는 그 공급자, 공급자가 없는 이름(예: `claude-opus-5-5`)은 Claude SDK로 부르므로 `anthropic`이다.
+    비식별화(extract_case.split_model)와 파이프라인의 외부 전송 안내가 이 함수 하나를 써서, 공급자 규칙이 바뀌어도
+    안내 문구와 실제 호출 대상이 어긋나지 않게 한다. 표준 라이브러리만 쓰는 모듈이라 pipeline.py가 바로 불러도 된다.
+    """
+    if not isinstance(spec, str) or ":" not in spec:
+        return "anthropic"
+    return parse_model_spec(spec)[0]
+
+
 def api_key(provider):
     for env in API_KEY_ENVS[provider]:
         value = os.environ.get(env)

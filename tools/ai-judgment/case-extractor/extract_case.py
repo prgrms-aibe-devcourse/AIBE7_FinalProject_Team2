@@ -36,7 +36,7 @@ sys.path.insert(0, str(PARENT_DIR))
 
 from build_prompt import InputError, check_case_input  # noqa: E402
 from common import find_forbidden_keys, write_json  # noqa: E402
-from llm import LLMError, api_key, call as llm_call, parse_model_spec  # noqa: E402
+from llm import LLMError, api_key, call as llm_call, model_provider, parse_model_spec  # noqa: E402
 from validate_output import parse_output  # noqa: E402
 
 DEFAULT_MODEL = "claude-opus-5-5"
@@ -121,21 +121,14 @@ def build_messages(masked_text):
 
 def split_model(model):
     """모델 지정 → (공급자, 모델 ID). 공급자가 없는 이름(`claude-opus-5-5`)과 `anthropic:`는 Claude SDK 경로(claude)다."""
-    if ":" not in model:
-        return "claude", model
     try:
-        provider, name = parse_model_spec(model)
+        provider = model_provider(model)  # 공급자 규칙은 llm.model_provider 하나에서 정한다
+        name = parse_model_spec(model)[1] if ":" in model else model
     except LLMError as e:
         raise ExtractError(str(e)) from e
     if provider == "manual":
         raise ExtractError("비식별화는 API 공급자만 씁니다 (manual 불가)")
     return ("claude" if provider == "anthropic" else provider), name
-
-
-def provider_for(model):
-    """모델 지정에서 실제로 데이터를 받는 공급자 이름 (외부 전송 안내용)."""
-    provider, _ = split_model(model)
-    return "anthropic" if provider == "claude" else provider
 
 
 def schema_instruction():

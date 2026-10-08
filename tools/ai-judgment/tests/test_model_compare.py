@@ -142,6 +142,14 @@ class ProviderTest(unittest.TestCase):
                 llm._post_json("https://example.invalid", {}, {}, 1)
         self.assertEqual(urlopen.call_count, llm.MAX_ATTEMPTS)
 
+    def test_model_provider(self):
+        self.assertEqual(llm.model_provider("claude-opus-5-5"), "anthropic")  # 공급자 없는 이름은 Claude SDK
+        self.assertEqual(llm.model_provider("anthropic:claude-x"), "anthropic")
+        self.assertEqual(llm.model_provider("openai:gpt-x"), "openai")
+        self.assertEqual(llm.model_provider("gemini:g:x"), "gemini")
+        with self.assertRaises(llm.LLMError):
+            llm.model_provider("unknown:x")
+
     def test_manual_cannot_call(self):
         with self.assertRaises(llm.LLMError):
             llm.call("manual:app", "S", "U", http=FakeHttp({}))

@@ -18,7 +18,7 @@ sys.path.insert(0, str(EXTRACTOR_DIR))
 
 from deidentify import extract_source_info, premask, residual_check  # noqa: E402
 from extract_case import (  # noqa: E402
-    ExtractError, call_llm, parse_response_text, process_output, provider_for, read_judgment, run, schema_instruction,
+    ExtractError, call_llm, parse_response_text, process_output, read_judgment, run, schema_instruction,
     split_model,
 )
 from schema import OUTPUT_SCHEMA, validate_against_schema  # noqa: E402
@@ -509,8 +509,10 @@ class OtherProviderTest(unittest.TestCase):
         self.assertEqual(split_model("claude-opus-5-5"), ("claude", "claude-opus-5-5"))
         self.assertEqual(split_model("anthropic:claude-opus-5-5"), ("claude", "claude-opus-5-5"))
         self.assertEqual(split_model("openai:gpt-x"), ("openai", "gpt-x"))
-        self.assertEqual(provider_for("gemini:gem-x"), "gemini")
-        self.assertEqual(provider_for("claude-opus-5-5"), "anthropic")
+        from llm import model_provider
+        self.assertEqual(model_provider("gemini:gem-x"), "gemini")
+        self.assertEqual(model_provider("claude-opus-5-5"), "anthropic")
+        self.assertEqual(model_provider("anthropic:claude-x"), "anthropic")
         for bad in ("manual:x", "unknown:x"):
             with self.assertRaises(ExtractError):
                 split_model(bad)
