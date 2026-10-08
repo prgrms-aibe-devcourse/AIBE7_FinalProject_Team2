@@ -341,6 +341,47 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(list(state["stages"]["generate"]["outputs"]["models"]), ["gemini:b"])
         self.assertEqual(state["stages"]["select"]["outputs"]["modelSpec"], "gemini:b")
 
+    # ---- 재시도 설정 · 한도 소진 (BE-36)
+
+    def test_retry_config(self):
+        raw = copy.deepcopy(self.raw_config)
+        raw["retry"] = {"maxAttempts": 8, "maxWait": 90}
+        write_json(self.dir / "retry.json", raw)
+        config = pipeline.load_config(self.dir / "retry.json")
+        self.addCleanup(llm.reset_retry)
+        self.run_with(config, {"openai:a": [self.output, self.output], "gemini:b": [self.output, self.output]})
+        self.assertEqual(llm.configure_retry(), {"max_attempts": 8, "max_wait": 90.0})  # 실행할 때 적용된다
+        default = self.config()
+        self.assertEqual(default["retry"], {"maxAttempts": llm.DEFAULT_MAX_ATTEMPTS, "maxWait": llm.DEFAULT_MAX_WAIT})
+        for bad in ({"maxAttempts": 0}, {"maxWait": -5}, {"maxAttempts": "3"}, {"unknown": 1}):
+            raw["retry"] = bad
+            write_json(self.dir / "bad-retry.json", raw)
+            with self.assertRaises(pipeline.PipelineError) as ctx:
+                pipeline.load_config(self.dir / "bad-retry.json")
+            self.assertIn("retry", str(ctx.exception), msg=bad)
+
+    def test_contamination_quota_exhausted_skips_remaining_runs(self):
+        clean = {"knowsCase": False, "penaltyType": "PRISON", "prisonMonths": 60, "fineAmount": None,
+                 "suspensionMonths": None}
+        config = self.config(contamination={"enabled": True, "runs": 3})
+        quota = llm.LLMQuotaExhaustedError("일 한도")
+        state = self.run_with(config, {
+            "contamination:openai:a": [clean, quota],  # 3번째는 꺼내지 않는다 (꺼내면 IndexError)
+            "contamination:gemini:b": [clean] * 3,
+            "openai:a": [self.output, self.output],
+            "gemini:b": [self.output, self.output],
+        })
+        result = state["stages"]["contamination"]["outputs"]["results"]["openai:a"]
+        self.assertEqual((result["answered"], result["runs"]), (1, 3))
+        self.assertTrue(any("남은 1회" in line for line in self.logs))
+
+    def test_generate_quota_exhausted_does_not_regenerate(self):
+        config = self.config(generate={"models": ["openai:a"], "runs": 3, "maxRetries": 2})
+        with self.assertRaises(pipeline.PipelineError):
+            self.run_with(config, {"openai:a": [llm.LLMQuotaExhaustedError("일 한도")]})  # 남은 회차 · 재생성 호출 없음
+        summary = pipeline.load_state(config)["stages"]["generate"]["outputs"]["models"]["openai:a"]
+        self.assertEqual((summary["runs"], summary["valid"], summary["retries"]), (1, 0, 0))
+
     def test_generate_retries_until_valid(self):
         config = self.config(generate={"models": ["openai:a"], "runs": 2, "maxRetries": 2})
         state = self.run_with(config, {"openai:a": ["x", "y", "z", self.output]}, until="generate")
