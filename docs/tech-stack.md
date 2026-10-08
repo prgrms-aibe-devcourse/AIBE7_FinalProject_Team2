@@ -102,7 +102,7 @@ backend/src/main/resources/db/migration
  ├─ V4__create_judgment.sql           -- 판단, 판단 요소 평가 (+ CHECK · 부분 유니크 인덱스)
  ├─ V5__create_extension_tables.sql   -- (확장) AI 판결 생성 기록, 세 판결 비교 분석
  ├─ V6__add_case_source_final_unique.sql   -- 사건마다 최종 확정 판결 1건 (부분 유니크)
- ├─ V7__add_legal_case_title_factor_display_order_unique.sql   -- 사건 제목 · (사건, 판단 요소 번호) 유일 (적재 SQL의 조회 키, BE-31)
+ ├─ V7__add_legal_case_title_factor_display_order_unique.sql   -- 사건 제목 · (사건, 판단 요소 번호) 유일 (적재 SQL의 조회 키, BE-15)
  └─ V8__add_ai_generation_generation_report.sql   -- ai_generation.generation_report (자동 생성 정보, BE-31)
 
 backend/src/main/resources/db/seed          -- 로컬 · CI 전용 (운영에는 넣지 않음)
@@ -359,7 +359,7 @@ AI 판결 생성 파이프라인은 **RAG를 기본으로** 한다. 별도 벡�
 
 **LLM 제공사**: 오프라인 생성 도구(`tools/ai-judgment`)는 Claude(Anthropic) · Gemini · OpenAI를 `공급자:모델ID`로 골라 쓴다(구현됨). 서비스 안의 생성 · 비교 분석 파이프라인(확장 단계)의 제공사는 AI 기능 구현 단계에서 결정한다. API 키는 DB 접속 정보와 같이 환경변수로만 주입하고 코드 · 출력 · 오류 메시지에 남기지 않는다.
 
-#### 오프라인 생성 도구의 호출 정책 (BE-30 ~ BE-45)
+### 오프라인 생성 도구의 호출 정책 (BE-30 ~ BE-45)
 
 전체 흐름과 단계별 설명은 [AI 판결 오프라인 파이프라인](ai-judgment-pipeline.md), 명령 · 옵션은 [`tools/ai-judgment/README.md`](../tools/ai-judgment/README.md)를 본다. 이 장에는 기술 선택만 적는다.
 
@@ -371,7 +371,7 @@ AI 판결 생성 파이프라인은 **RAG를 기본으로** 한다. 별도 벡�
 | 무료 모델 (BE-45) | `free_models.json`의 무료 등급 모델을 점검 · 생성에서 자동으로 쓰고(동시 `max`개, 일 한도로 막히면 대기 모델이 자리를 채움), 판결문 원문 단계는 유료 키만 쓴다. 팀이 공개 판결문에 한해 허용하면 `allowFreeTierForJudgment`로 마지막 백업에만 쓸 수 있다 |
 | HTTPS (BE-34) | 인증서 검증은 항상 켜고, 기본 위치에 인증서가 없으면 시스템 CA 묶음을 찾아 쓴다 |
 
-**무료 등급 데이터 정책**: 무료 등급은 입력을 제품 개선에 쓰고 사람이 검토할 수 있다(Gemini 약관). 정규식 마스킹만 거친 판결문 원문은 결제를 연결한 유료 키로만 보낸다.
+**무료 등급 데이터 정책**: 무료 등급은 입력을 제품 개선에 쓰고 사람이 검토할 수 있다(Gemini 약관). 정규식 마스킹만 거친 판결문 원문은 결제를 연결한 유료 키로만 보낸다(팀이 "이미 공개된 판결문에 한해" 허용한 `allowFreeTierForJudgment`의 마지막 백업만 예외, [ai-judgment-pipeline.md](ai-judgment-pipeline.md) 5-5). 정규식 마스킹은 법조인 실명 등을 지우지 못하므로 예외 설정은 공개 판결문에만 쓴다.
 
 **퓨샷 · RAG · 임베딩은 아직 구현하지 않았다.** 위 RAG · pgvector · 퓨샷 설명은 서비스 설계(FR-4-2)이고, 오프라인 도구의 참고 자료 중 유사 판례는 비어 있다(BE-25). 적용 위치(비식별화 · 재판부 초안 · 생성 · 회차 선택)만 정해 두었고, 판례 · 양형기준 저장소와 임베딩 모델 선정이 선행 작업이다.
 
