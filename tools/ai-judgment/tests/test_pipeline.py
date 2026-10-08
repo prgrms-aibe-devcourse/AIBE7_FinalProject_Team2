@@ -117,6 +117,20 @@ class CaseSeedSqlTest(unittest.TestCase):
         self.assertIn("(2, ", skip)
         self.assertIn("NULL::varchar, NULL::jsonb)", skip)  # 축 없음 · 투표 기록 없음
         self.assertIn("RAISE WARNING '가치관 축: 번호 · 라벨이 DB와 다른 요소", skip)
+        self.assertEqual(skip.count(f"(1, '{first}'"), 1)  # 요소 목록은 CTE 한 곳에만 둔다 (리뷰 반영)
+        unmatched = skip.split("SELECT (SELECT count(*) FROM updated)")[1]
+        self.assertIn("v.value_axis_votes IS NOT NULL", unmatched)  # 불일치 경고는 갱신 대상(투표 기록 있음)만 센다
+
+    def test_build_case_sql_valueAxisVotes_needsReviewConsistent_passes(self):
+        # requestedRuns가 있으면 그 기준으로, 없으면 runs 기준으로 needsReview를 확인한다
+        for votes in ({"runs": 2, "counts": {"FAULT_STANDARD": 2}, "needsReview": True, "requestedRuns": 5},  # 2개만 유효
+                      {"runs": 3, "counts": {"FAULT_STANDARD": 3}, "needsReview": False, "requestedRuns": 5},
+                      {"runs": 3, "counts": {"FAULT_STANDARD": 3}, "needsReview": True}):  # 예전 기록: true는 막지 않음
+            with self.subTest(votes):
+                case = listing_case()
+                report = report_for(case)
+                report["factorExtras"][0]["valueAxisVotes"] = votes
+                build_case_sql(case, report, resolve_sources(SOURCES, [{}, {"caseNumber": "2099노2"}]))
 
     def test_build_case_sql_invalidValueAxisVotes_isError(self):
         cases = [
@@ -127,6 +141,11 @@ class CaseSeedSqlTest(unittest.TestCase):
             ("키는", {"runs": 1, "counts": {"EMBEDDING": 1}, "needsReview": False}),
             ("합계", {"runs": 5, "counts": {"FAULT_STANDARD": 3}, "needsReview": False}),
             ("최다표", {"runs": 5, "counts": {"FAULT_STANDARD": 2, "NONE": 3}, "needsReview": False}),
+            # needsReview가 표 수와 맞지 않음 (리뷰 반영): 동률인데 false / 요청 횟수 기준 과반이 아닌데 false / 과반인데 true
+            ("과반이 아닙니다", {"runs": 4, "counts": {"FAULT_STANDARD": 2, "NONE": 2}, "needsReview": False}),
+            ("맞지 않습니다", {"runs": 2, "counts": {"FAULT_STANDARD": 2}, "needsReview": False, "requestedRuns": 5}),
+            ("맞지 않습니다", {"runs": 5, "counts": {"FAULT_STANDARD": 4, "NONE": 1}, "needsReview": True, "requestedRuns": 5}),
+            ("requestedRuns", {"runs": 5, "counts": {"FAULT_STANDARD": 5}, "needsReview": False, "requestedRuns": 3}),
         ]
         for message, votes in cases:
             with self.subTest(message):

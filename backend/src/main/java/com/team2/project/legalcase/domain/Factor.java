@@ -1,5 +1,6 @@
 package com.team2.project.legalcase.domain;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -46,7 +47,8 @@ public class Factor {
 	private ValueAxis valueAxis;	// 가치관 축 (성향 매칭용, 어느 축에도 맞지 않으면 null)
 
 	@Enumerated(EnumType.STRING)
-	private ValueAxisStatus valueAxisStatus;	// 가치관 축 후검수 상태 (AUTO · CONFIRMED)
+	@Column(nullable = false)
+	private ValueAxisStatus valueAxisStatus = ValueAxisStatus.AUTO;	// 가치관 축 후검수 상태 (AUTO · CONFIRMED). NOT NULL이라 새 행도 AUTO로 시작한다
 
 	@JdbcTypeCode(SqlTypes.JSON)
 	private ValueAxisVotes valueAxisVotes;	// 자동 분류 투표 기록 (사람 초안 · 투표 없이 정한 값은 null)

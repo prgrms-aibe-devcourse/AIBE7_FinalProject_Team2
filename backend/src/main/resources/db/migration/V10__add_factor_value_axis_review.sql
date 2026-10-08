@@ -14,4 +14,5 @@ ALTER TABLE factor ADD CONSTRAINT chk_factor_value_axis_status
 --   예: {"runs": 5, "counts": {"FAULT_STANDARD": 3, "PRINCIPLE_RELATION": 2}, "needsReview": false}
 --   counts: 표를 받은 축만 담는다. "어느 축에도 맞지 않음(NULL)" 표는 "NONE" 키로 센다
 --   needsReview: 최다표가 요청 횟수의 과반이 아니면(동률 · 유효 응답 부족 포함) true (관리자 확인 필요)
+--   requestedRuns: 요청한 분류 횟수(runs는 그중 유효 응답 수). 있으면 needsReview를 다시 계산할 수 있다
 ALTER TABLE factor ADD COLUMN value_axis_votes jsonb;
