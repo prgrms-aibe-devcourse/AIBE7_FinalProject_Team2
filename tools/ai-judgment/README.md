@@ -120,9 +120,9 @@ python3 compare.py out/runs/case --case case.json --out out/runs/case/comparison
 
 - 모델 ID는 공급자가 정한 정확한 ID를 그대로 쓴다. 도구에 기본 모델은 없다(모델이 자주 바뀌므로 매번 명시한다).
 - 검색 · 그라운딩 같은 도구는 붙이지 않는다. 매 회차가 독립 요청이라 이전 회차 응답이 섞이지 않는다("외부 LLM으로 생성할 때" 원칙과 같다).
-- 옵션: `--temperature`(주지 않으면 공급자 기본값. 사고 모델 중에는 받지 않는 것이 있다), `--max-tokens`(기본 16000), `--timeout`(초, 기본 300), `--delay`(요청 사이 쉬는 초, 무료 등급 분당 한도용), `--batch`(묶음 이름, 기본은 사건 파일 이름).
+- 옵션: `--temperature`(주지 않으면 공급자 기본값. 사고 모델 중에는 받지 않는 것이 있다), `--max-tokens`(기본 16000), `--timeout`(초, 기본 300), `--delay`(요청 사이 쉬는 초, 무료 등급 분당 한도용), `--max-attempts`(요청 한 건을 보내는 최대 횟수, 첫 시도 포함, 기본 5) · `--max-wait`(재시도 사이 한 번에 기다릴 최대 초, 기본 120) — "무료 등급 한도 대응", `--batch`(묶음 이름, 기본은 사건 파일 이름).
 - **HTTPS 인증서(BE-34)**: 인증서 검증은 항상 켜 둔다. 기본 인증서 위치에 인증서가 없으면(예: macOS python.org Python) `/etc/ssl/cert.pem` 같은 시스템 CA 묶음을 자동으로 찾아 쓴다. 그래도 `CERTIFICATE_VERIFY_FAILED`가 나면 `SSL_CERT_FILE`에 인증서 묶음 경로를 지정하거나(macOS: `/etc/ssl/cert.pem`) python.org Python의 `Install Certificates.command`를 한 번 실행한다. 인증서 오류는 다시 보내지 않고 바로 해결 방법을 안내한다. 검증을 끄는 옵션은 없다.
-- 한도 초과(429) · 서버 오류(5xx)는 최대 3번까지 자동으로 다시 보낸다. 그래도 실패하면 그 회차는 "호출 실패"로 기록하고 다음 회차로 넘어간다. API 키가 없으면 아무것도 기록하지 않고 바로 멈춘다.
+- 과부하(503 · 529) · 한도 초과(429) · 서버 오류(5xx)는 원인에 맞게 기다렸다가 자동으로 다시 보낸다(기본 최대 5번, "무료 등급 한도 대응"). 그래도 실패하면 그 회차는 원인(과부하 / 분당 한도 / 일 한도)을 적어 "호출 실패"로 기록하고 다음 회차로 넘어간다. 일 한도 · 크레딧 소진이면 그 모델의 남은 회차는 부르지 않고 건너뛴다. API 키가 없으면 아무것도 기록하지 않고 바로 멈춘다.
 - 공급자를 추가하려면 `llm.py`에 `_call_<공급자>` 형태의 함수를 만들고 `PROVIDERS` · `API_KEY_ENVS`에 등록한다.
 
 **결과 폴더** (`out/runs/<batch>/`, git 제외)
@@ -261,7 +261,7 @@ python3 pipeline.py status cases/my-case.pipeline.json
 | `--skip <단계>` | 이번 실행에서 뺀다 (여러 번 가능) |
 | `--rerun` | 켜진 단계를 모두 다시 돌린다 |
 
-설정 파일의 `stages.<단계>.enabled: false`는 항상 끈다. `extract`를 끄면 `inputs`(case · court · report · source)에 이미 만든 파일을 넣는다.
+설정 파일의 `retry`(`maxAttempts` · `maxWait`)는 모든 단계의 LLM 호출 재시도에 적용된다("무료 등급 한도 대응"). `stages.<단계>.enabled: false`는 항상 끈다. `extract`를 끄면 `inputs`(case · court · report · source)에 이미 만든 파일을 넣는다.
 
 ### 회차 선택 (`stages.select`)
 
@@ -321,6 +321,23 @@ python3 pipeline.py status cases/my-case.pipeline.json
 - **Claude 앱(claude.ai)**: 임시 채팅(incognito)을 쓰면 메모리 · 이전 대화 참조가 꺼진다. 일반 대화에는 시스템 프롬프트 칸이 없다.
 - **Google AI Studio · Gemini**: AI Studio에는 시스템 지시 칸과 토큰 수 표시가 있어 기록하기 쉽다. 검색 연동(Grounding with Google Search) 같은 도구는 끈다. Gemini 앱으로 할 때는 저장된 정보 · 이전 대화 참조 기능을 끄고 새 대화를 쓴다.
 - **API로 호출할 때**: `generate.py`를 쓰면 사용량이 실행 기록(`run-NNN.json`의 `meta.usage`)에 자동으로 남고 `compare.py` 비교표에 모인다. 직접 호출했다면 응답의 사용량 정보(Gemini는 `usage_metadata`, Claude는 `usage`)를 아래 "토큰 사용 기록"의 칸 대응표대로 옮겨 적는다. 서비스마다 사고 토큰을 세는 방식이 달라 합계를 직접 더하면 중복될 수 있다.
+
+### 무료 등급 한도 대응 (BE-36)
+
+무료 등급은 서버가 바쁘거나(503) 호출 한도(429)에 걸리는 일이 잦다. 파이프라인은 사전 학습 점검 N회 · 생성 N회를 연속으로 부르므로, 실패를 그냥 두면 회차가 실패로 쌓인다. `llm.py`는 원인마다 다르게 대응한다.
+
+| 원인 | 응답 | 대응 |
+| --- | --- | --- |
+| 서비스 과부하 | 503 · 529 | 5 · 10 · 20 · 40초…로 늘려 가며(±25% 지터) 다시 보낸다. 한 번에 `maxWait`초를 넘게 기다리지 않는다 |
+| 분당 한도 | 429 | 응답이 알려 준 시간(`Retry-After` 헤더, Gemini는 본문 `retryDelay`) + 1초를 기다린다. 안내가 없으면 1분(분당 한도가 풀릴 시간)을 기다린다. 안내가 `maxWait`보다 길면 기다려도 소용없으므로 바로 끝낸다 |
+| 일 한도 · 크레딧 소진 | 429 (Gemini `...PerDay...`, OpenAI `insufficient_quota`) | **다시 보내지 않는다.** 그 모델의 남은 회차 · 재생성도 건너뛴다 |
+| 그 밖의 서버 오류 · 연결 실패 | 500 · 502 · 504 등 | 2 · 4 · 8초…로 다시 보낸다 |
+
+- 최종 실패 시 오류 메시지가 원인(과부하 / 분당 한도 / 일 한도)과 다음에 할 일을 알려 준다. 실행 기록(`run-NNN.json`)의 `callErrorKind`에도 `overloaded` · `rate_limit` · `daily_quota`로 남는다.
+- **재시도 설정**: 파이프라인은 설정 파일 최상위 `"retry": {"maxAttempts": 5, "maxWait": 120}`, `generate.py`는 `--max-attempts` · `--max-wait`. `maxAttempts`는 첫 시도를 포함한 횟수, `maxWait`는 한 번에 기다릴 최대 초다. 기본값으로 시작하고, 과부하가 길어지면 `maxAttempts`를 늘린다.
+- **호출 사이 대기(`delay`) 권장**: 무료 등급은 분당 요청 수 한도가 있으므로 재시도에만 기대지 말고 `stages.contamination.delay` · `stages.generate.delay`(`generate.py`는 `--delay`)로 호출 사이를 띄운다. 값은 **60 ÷ (모델의 분당 요청 한도)초 이상**(여유를 조금 더 둔다)으로 잡는다. 예: 분당 5회면 13초 이상. 한도는 모델마다 · 시기마다 다르므로 서비스 화면(Google AI Studio의 요금 · 한도 표시 등)에서 확인한다. 점검은 `runs`번 연속이라 `delay: 0`이면 첫 분에 한도에 걸리기 쉽다.
+- 하루 한도가 모자라면 `runs`를 줄이거나, 다른 모델을 `models`에 함께 넣거나, 내일 `--from <단계>`로 이어서 한다. 모델은 각각 독립된 점검 · 선택 대상이므로 **한 모델이 막혔다고 다른 모델이 대신 생성하지는 않는다.**
+- **API 키를 여러 개 돌려 쓰지 않는다.** 같은 프로젝트의 키는 한도를 함께 쓰고, 계정 · 프로젝트를 나눠 무료 한도를 늘리는 것은 서비스 약관을 어길 수 있다. 공급자마다 키 하나씩 두는 것은 괜찮다(비식별화한 사건이 그만큼 여러 곳으로 나가므로 팀이 정한 공급자만 쓴다).
 
 ### 토큰 사용 기록
 

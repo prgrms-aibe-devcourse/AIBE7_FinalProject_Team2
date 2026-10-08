@@ -38,7 +38,8 @@ from check_contamination import DEFAULT_CRITERIA, aggregate, build_contamination
 from common import TOOL_DIR, load_json, write_json
 from compare import _majority, direction_table, load_runs
 from generate import RUNS_DIR, GenerateError, generate_runs, model_slug, prompt_digest
-from llm import LLMError, api_key, call, model_provider, parse_model_spec
+from llm import (DEFAULT_MAX_ATTEMPTS, DEFAULT_MAX_WAIT, LLMError, LLMQuotaExhaustedError, api_key, call,
+                 check_retry, configure_retry, model_provider, parse_model_spec)
 from to_seed_sql import NAME_MAX_LENGTH, build_sql
 from validate_output import parse_output
 
@@ -59,6 +60,9 @@ DEFAULT_CONFIG = {
     "finalSourceIndex": None,  # 최종 확정 판결 번호(0부터). 없으면 심급이 가장 높은 판결
     # 사건 발생일 YYYY-MM-DD. 주면 추출 결과(source_internal.json incidentDate)보다 우선한다 (BE-38)
     "incidentDate": None,
+    # LLM 호출 재시도 (BE-36). 과부하(503 · 529) · 한도(429) · 서버 오류 때 요청 한 건을 보내는 최대 횟수(첫 시도 포함)와
+    # 한 번에 기다릴 최대 시간(초). 무료 등급이면 각 단계의 delay(호출 사이 대기)도 함께 둔다 (README "무료 등급 한도 대응")
+    "retry": {"maxAttempts": DEFAULT_MAX_ATTEMPTS, "maxWait": DEFAULT_MAX_WAIT},
     # extract를 건너뛸 때 쓸 파일 (extract를 돌리면 그 결과가 우선)
     # courtDraft: 재판부 판결(BE-14 형식) 파일. court 단계를 끄고 사람이 쓴 판결을 넣을 때 쓴다 (BE-38)
     "inputs": {"case": None, "court": None, "report": None, "source": None, "courtDraft": None},
@@ -177,6 +181,14 @@ def validate_config(config):
         errors.append("manual 선택은 stages.select.run에 '공급자__모델/run-003' 형식으로 회차를 적는다")
     if stages["load"]["db"]["mode"] not in ("docker", "psql"):
         errors.append("stages.load.db.mode는 docker · psql 중 하나다")
+    retry = config["retry"]
+    if not isinstance(retry, dict) or set(retry) - {"maxAttempts", "maxWait"}:
+        errors.append("retry는 maxAttempts · maxWait만 가진 객체다")
+    else:
+        try:
+            check_retry(retry["maxAttempts"], retry["maxWait"])
+        except LLMError as e:
+            errors.append(f"retry: {e}")
     if errors:
         raise PipelineError("설정 오류:\n- " + "\n- ".join(errors))
 
@@ -348,10 +360,18 @@ def stage_contamination(config, state, log, caller=call):
                     category, reason = "INVALID", f"응답을 읽을 수 없음: {e}"
             except LLMError as e:
                 category, reason = None, f"호출 실패: {e}"  # 응답 수에 넣지 않는다 (표본 부족 판정으로 이어짐)
+                quota_exhausted = isinstance(e, LLMQuotaExhaustedError)
+            else:
+                quota_exhausted = False
             record.update(category=category, reason=reason)
             write_json(out_dir / model_slug(spec) / f"run-{i:03d}.json", record)
             if category:
                 categories.append(category)
+            if quota_exhausted:
+                # 일 한도 · 크레딧이 바닥났으니 남은 회차도 같은 실패로 쌓일 뿐이다. 이 모델은 여기서 멈춘다 (BE-36)
+                if i < cfg["runs"]:
+                    log(f"[{spec}] 호출 한도 소진 → 남은 {cfg['runs'] - i}회는 호출하지 않고 건너뜁니다")
+                break
             if cfg["delay"]:
                 time.sleep(cfg["delay"])
         # 호출이 모두 실패해도(응답 0개) INSUFFICIENT로 판정해 onInsufficient를 따른다
@@ -385,7 +405,8 @@ def stage_generate(config, state, log, caller=call):
             records = generate_runs(case, [spec], cfg["runs"], batch_dir, **options)
             retries = 0
             # 검증을 통과한 회차가 하나도 없으면 한 번씩 더 생성한다 (최대 maxRetries회)
-            while not any(r["validation"]["ok"] for r in records) and retries < cfg["maxRetries"]:
+            while (not any(r["validation"]["ok"] for r in records) and retries < cfg["maxRetries"]
+                   and not any(r["callErrorKind"] == LLMQuotaExhaustedError.kind for r in records)):  # 한도 소진이면 재생성도 실패한다
                 retries += 1
                 log(f"[{spec}] 검증 통과 회차 없음 → 재생성 {retries}/{cfg['maxRetries']}")
                 records += generate_runs(case, [spec], 1, batch_dir, **options)
@@ -668,6 +689,7 @@ def plan(config, state, start=None, until=None, skip=(), rerun=False):
 
 def run_pipeline(config, start=None, until=None, skip=(), rerun=False, log=print, functions=None):
     functions = functions or STAGE_FUNCTIONS
+    configure_retry(max_attempts=config["retry"]["maxAttempts"], max_wait=config["retry"]["maxWait"])
     state = load_state(config)
     steps = plan(config, state, start, until, skip, rerun)
     if not steps:

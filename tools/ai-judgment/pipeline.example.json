@@ -74,5 +74,9 @@
       }
     }
   },
-  "incidentDate": null
+  "incidentDate": null,
+  "retry": {
+    "maxAttempts": 5,
+    "maxWait": 120
+  }
 }
