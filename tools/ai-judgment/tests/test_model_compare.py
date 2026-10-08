@@ -191,6 +191,49 @@ class ProviderTest(unittest.TestCase):
                 llm._post_json("https://example.invalid", {}, {}, 1)
         self.assertEqual(urlopen.call_count, llm.MAX_ATTEMPTS)
 
+    def test_free_models_file_is_valid(self):
+        data = load_json(TOOL_DIR / "free_models.json")
+        self.assertRegex(data["checkedAt"], r"^\d{4}-\d{2}-\d{2}$")
+        for provider, entry in data.items():
+            if provider.startswith("_") or provider == "checkedAt":
+                continue
+            self.assertIn(provider, llm.PROVIDERS)
+            self.assertTrue(entry["source"].startswith("https://"))
+            self.assertTrue(entry["models"])
+            self.assertEqual(len(set(entry["models"])), len(entry["models"]))
+            self.assertFalse(set(entry["models"]) & set(entry.get("notWithFreeTier", [])))  # 무료 · 비무료 겹침 없음
+
+    def test_free_tier_model_list_keeps_file_order(self):
+        listed = llm.free_tier_model_list()
+        self.assertEqual(set(listed), llm.free_tier_models())
+        self.assertEqual(len(listed), len(set(listed)))
+        data = load_json(TOOL_DIR / "free_models.json")["gemini"]["models"]
+        self.assertEqual([m for m in listed if m.startswith("gemini:")], [f"gemini:{m}" for m in data])
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "free_models.json"
+            path.write_text('{"gemini": {"models": "x"}, "openai": {"models": ["a", "a", 3, "b"]}}', encoding="utf-8")
+            with mock.patch.object(llm, "FREE_MODELS_FILE", path):
+                self.assertEqual(llm.free_tier_model_list(), ["openai:a", "openai:b"])
+
+    def test_has_free_tier(self):
+        free = llm.free_tier_models()
+        self.assertIn("gemini:gemini-2.5-flash", free)
+        self.assertTrue(llm.has_free_tier("gemini:gemini-2.5-flash"))
+        self.assertTrue(llm.has_free_tier(" Gemini : gemini-2.5-flash "))
+        self.assertFalse(llm.has_free_tier("gemini:gemini-3.1-pro-preview"))  # 무료 등급이 없는 모델
+        self.assertFalse(llm.has_free_tier("claude-opus-5-5"))  # 공급자 없는 이름
+        self.assertFalse(llm.has_free_tier("openai:gpt-x"))
+        self.assertFalse(llm.has_free_tier(None))
+
+    def test_free_models_file_missing_or_broken_is_empty(self):
+        for content in (None, "{not json", "[1, 2]", '{"gemini": {"models": "x"}}'):
+            with tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / "free_models.json"
+                if content is not None:
+                    path.write_text(content, encoding="utf-8")
+                with mock.patch.object(llm, "FREE_MODELS_FILE", path):
+                    self.assertEqual(llm.free_tier_models(), set(), msg=str(content))
+
     def test_model_provider(self):
         self.assertEqual(llm.model_provider("claude-opus-5-5"), "anthropic")  # 공급자 없는 이름은 Claude SDK
         self.assertEqual(llm.model_provider("anthropic:claude-x"), "anthropic")
@@ -491,6 +534,57 @@ class GenerateCompareTest(unittest.TestCase):
             generate_runs(self.case, ["openai:gpt-x", "gemini:gem-x"], 3, self.batch_dir, caller=caller,
                           delay=1.0, log=lambda *_: None)
         self.assertEqual(order, ["openai:gpt-x", "gemini:gem-x", "openai:gpt-x", "gemini:gem-x", "gemini:gem-x"])
+
+    def test_on_exhausted_replacement_runs_under_its_own_name(self):
+        order, asked = [], []
+        inner = fake_caller({"openai:gpt-x": [self.output, llm.LLMQuotaExhaustedError("한도 소진")],
+                             "gemini:gem-x": [self.output] * 3, "gemini:gem-y": [self.output] * 3})
+
+        def caller(spec, *args, **kwargs):
+            order.append(spec)
+            return inner(spec, *args, **kwargs)
+
+        def on_exhausted(spec):
+            asked.append(spec)
+            return "gemini:gem-y"
+
+        with mock.patch("time.sleep"):
+            records = generate_runs(self.case, ["openai:gpt-x", "gemini:gem-x"], 3, self.batch_dir, caller=caller,
+                                    on_exhausted=on_exhausted, log=lambda *_: None)
+        self.assertEqual(asked, ["openai:gpt-x"])
+        by_spec = {}
+        for record in records:
+            by_spec.setdefault(record["modelSpec"], []).append(record["runIndex"])
+        # 소진된 모델이 끝낸 회차는 그 이름으로 남고, 새 모델은 자기 이름으로 처음부터 3회 (대신 만들지 않는다)
+        self.assertEqual(by_spec, {"openai:gpt-x": [1, 2], "gemini:gem-x": [1, 2, 3], "gemini:gem-y": [1, 2, 3]})
+        self.assertEqual(order[:4], ["openai:gpt-x", "gemini:gem-x", "openai:gpt-x", "gemini:gem-x"])  # 교차 순서 유지
+        self.assertEqual([r["callErrorKind"] for r in records if r["modelSpec"] == "openai:gpt-x"], [None, "daily_quota"])
+
+    def test_replacement_runs_overrides_runs_for_replacement_only(self):
+        inner = fake_caller({"openai:gpt-x": [llm.LLMQuotaExhaustedError("한도 소진")], "gemini:gem-y": [self.output] * 3})
+
+        def caller(spec, *args, **kwargs):
+            return inner(spec, *args, **kwargs)
+
+        records = generate_runs(self.case, ["openai:gpt-x"], 1, self.batch_dir, caller=caller, log=lambda *_: None,
+                                on_exhausted=lambda spec: "gemini:gem-y", replacement_runs=3)
+        # runs=1로 불러도(재생성처럼) 새 모델은 정해진 3회를 만든다
+        self.assertEqual([r["modelSpec"] for r in records], ["openai:gpt-x"] + ["gemini:gem-y"] * 3)
+
+    def test_on_exhausted_none_or_duplicate_adds_nothing(self):
+        for replacement in (None, "openai:gpt-x"):
+            caller = fake_caller({"openai:gpt-x": [llm.LLMQuotaExhaustedError("한도 소진")]})
+            records = generate_runs(self.case, ["openai:gpt-x"], 3, self.batch_dir / str(replacement), caller=caller,
+                                    on_exhausted=lambda spec, r=replacement: r, log=lambda *_: None)
+            self.assertEqual(len(records), 1, msg=str(replacement))
+
+    def test_on_exhausted_replacement_without_key_raises_before_call(self):
+        caller = fake_caller({"openai:gpt-x": [llm.LLMQuotaExhaustedError("한도 소진")]})
+        with mock.patch.dict(os.environ, {"OPENAI_API_KEY": "k"}, clear=True):
+            with self.assertRaises(llm.LLMError) as ctx:
+                generate_runs(self.case, ["openai:gpt-x"], 2, self.batch_dir, caller=caller,
+                              on_exhausted=lambda spec: "gemini:gem-y", log=lambda *_: None)
+        self.assertIn("GEMINI_API_KEY", str(ctx.exception))
 
     def test_call_error_kind_recorded(self):
         caller = fake_caller({"openai:gpt-x": [llm.LLMOverloadedError("busy"), llm.LLMError("other")]})

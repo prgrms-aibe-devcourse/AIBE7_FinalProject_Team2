@@ -146,27 +146,42 @@ def save_run(model_dir, spec, case, prompt, raw_text, meta, call_error=None, set
 
 
 def generate_runs(case, specs, runs, batch_dir, *, temperature=None, max_tokens=DEFAULT_MAX_TOKENS,
-                  timeout=DEFAULT_TIMEOUT, delay=0.0, caller=call, log=print):
+                  timeout=DEFAULT_TIMEOUT, delay=0.0, caller=call, log=print, on_exhausted=None, replacement_runs=None):
     """모델마다 runs회 생성해 기록하고, 기록 목록을 돌려준다. 파이프라인(BE-31)에서도 이 함수를 쓴다.
 
     호출 순서는 모델을 번갈아 가는 회차 우선이다(`m1 1회, m2 1회, m1 2회 …`, BE-44). 한 모델의 분당 한도에
     연속으로 걸리지 않고, 일 한도가 소진된 모델은 남은 회차만 건너뛴다. 모델별 기록 · 회차 번호는 그대로 모델마다 독립이다.
+
+    on_exhausted(spec)은 일 한도가 소진된 모델을 대신할 모델을 돌려주는 함수다 (무료 모델 자동 사용, BE-45). 새 모델이
+    오면 그 모델이 자기 이름으로 처음부터 runs회를 생성한다. 소진된 모델이 이미 끝낸 회차는 그 모델 이름으로 남고,
+    새 모델이 소진된 모델의 회차를 대신 만들지 않는다. 대신할 모델이 없으면 None이다.
+    replacement_runs는 새 모델이 만들 회차 수다(기본은 runs). 재생성처럼 runs를 1로 부르는 호출에서도 새 모델이
+    처음부터 정해진 회차를 만들게 하려고 따로 받는다.
     """
-    for spec in specs:
+    specs = list(specs)
+
+    def check_spec(spec):
         provider, _ = parse_model_spec(spec)
         if provider == "manual":
             raise GenerateError(f"{spec}: manual 공급자는 run이 아니라 import로 넣습니다")
         # caller가 무엇이든(call을 감싼 래퍼 포함) 키를 먼저 확인한다. 없으면 실패 기록 · 앞 모델 비용 없이 바로 멈춘다
         api_key(provider)
+
+    for spec in specs:
+        check_spec(spec)
     prompt = prepare_batch(case, batch_dir)
     settings = {"temperature": temperature, "maxTokens": max_tokens}
     records = []
+    done = {spec: 0 for spec in specs}  # 모델별로 끝낸 회차 수
+    target = {spec: runs for spec in specs}  # 모델별로 만들 회차 수
     exhausted = set()  # 일 한도 · 크레딧이 바닥난 모델
-    for i in range(runs):
-        for spec in specs:
-            if spec in exhausted:
-                continue
-            model_dir = Path(batch_dir) / model_slug(spec)
+    while True:
+        pending = [spec for spec in specs if spec not in exhausted and done[spec] < target[spec]]
+        if not pending:
+            break
+        for spec in pending:
+            i, model_dir = done[spec], Path(batch_dir) / model_slug(spec)
+            done[spec] += 1
             if records and delay:
                 time.sleep(delay)
             try:
@@ -179,12 +194,17 @@ def generate_runs(case, specs, runs, batch_dir, *, temperature=None, max_tokens=
                 path, record = save_run(model_dir, spec, case, prompt, None, meta, call_error=str(e), settings=settings,
                                         call_error_kind=e.kind)
             records.append(record)
-            log(f"[{spec}] {i + 1}/{runs} → {path.name}: {describe(record)}")
+            log(f"[{spec}] {i + 1}/{target[spec]} → {path.name}: {describe(record)}")
             if record["callErrorKind"] == LLMQuotaExhaustedError.kind:
                 # 남은 회차도 같은 실패로 쌓일 뿐이다. 이 모델만 여기서 멈추고 다른 모델은 계속한다
                 exhausted.add(spec)
-                if i + 1 < runs:
-                    log(f"[{spec}] 호출 한도 소진 → 남은 {runs - i - 1}회는 호출하지 않고 건너뜁니다")
+                if i + 1 < target[spec]:
+                    log(f"[{spec}] 호출 한도 소진 → 남은 {target[spec] - i - 1}회는 호출하지 않고 건너뜁니다")
+                replacement = on_exhausted(spec) if on_exhausted else None
+                if replacement and replacement not in done:
+                    check_spec(replacement)
+                    specs.append(replacement)
+                    done[replacement], target[replacement] = 0, replacement_runs or runs
     return records
 
 

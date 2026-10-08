@@ -19,6 +19,7 @@ import ssl
 import time
 import urllib.error
 import urllib.request
+from pathlib import Path
 
 DEFAULT_TIMEOUT = 300  # 초. 사고(reasoning) 모델은 응답이 오래 걸린다
 DEFAULT_MAX_TOKENS = 16000
@@ -50,6 +51,9 @@ API_KEY_ENVS = {
     "anthropic": ("ANTHROPIC_API_KEY",),
     "gemini": ("GEMINI_API_KEY", "GOOGLE_API_KEY"),
 }
+
+
+FREE_MODELS_FILE = Path(__file__).with_name("free_models.json")  # 무료 등급이 있는 모델 목록 (BE-45)
 
 
 class LLMError(Exception):
@@ -153,6 +157,40 @@ SSL_HELP = ("HTTPS 인증서를 확인하지 못했습니다. 시스템 인증�
             "(macOS 예: SSL_CERT_FILE=/etc/ssl/cert.pem). python.org Python이면 "
             "'/Applications/Python 3.x/Install Certificates.command'를 한 번 실행해도 됩니다. "
             "인증서 검증을 끄는 방법은 지원하지 않습니다")
+
+
+def free_tier_models():
+    """무료 등급이 있는 모델 목록(`공급자:모델ID` 집합). free_models.json이 없거나 깨졌으면 빈 집합이다.
+
+    '무료 등급이 있다'는 뜻이지 지금 키가 무료라는 뜻이 아니다 (결제를 연결한 프로젝트의 키는 같은 모델도 유료).
+    그래서 실제 판결문을 보내는 단계의 안내 · 한도 대응 안내에만 쓰고, 호출을 막는 데는 쓰지 않는다.
+    """
+    return set(free_tier_model_list())  # 파싱 규칙은 free_tier_model_list 한 곳에 둔다
+
+
+def free_tier_model_list():
+    """무료 등급이 있는 모델을 free_models.json에 적힌 순서대로 (`공급자:모델ID` 목록). free_tier_models와 같은 규칙이다."""
+    try:
+        data = json.loads(FREE_MODELS_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    if not isinstance(data, dict):
+        return []
+    specs = []
+    for provider, entry in data.items():
+        if isinstance(entry, dict) and isinstance(entry.get("models"), list):
+            for model in entry["models"]:
+                if isinstance(model, str) and f"{provider}:{model}" not in specs:
+                    specs.append(f"{provider}:{model}")
+    return specs
+
+
+def has_free_tier(spec):
+    """모델 지정(`공급자:모델ID`)에 무료 등급이 있는지. 공급자가 없는 이름(`claude-…`)은 아니다."""
+    if not isinstance(spec, str) or ":" not in spec:
+        return False
+    provider, _, model = spec.partition(":")
+    return f"{provider.strip().lower()}:{model.strip()}" in free_tier_models()
 
 
 def parse_model_spec(spec):
