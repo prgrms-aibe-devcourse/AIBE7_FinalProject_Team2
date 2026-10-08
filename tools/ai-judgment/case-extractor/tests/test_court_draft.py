@@ -318,6 +318,27 @@ class RunTest(unittest.TestCase):
         self.assertEqual([(f["model"], f["kind"]) for f in report["fallbacks"]], [("openai:gpt-x", "overloaded")])
         self.assertTrue(any("다음 모델 gemini:g" in line for line in logs))
 
+    def test_run_chain_freeTierBackup_warnsAndRecords(self):
+        call, _ = self.chain_caller({"openai:gpt-x": [llm.LLMOverloadedError("서비스 과부하 (503)")], "gemini:g": [DRAFT]})
+        logs = []
+        run("c", self.dir, ["openai:gpt-x", "gemini:g"], caller=call, log=logs.append, free_models={"gemini:g"})
+        report = self.report()
+        self.assertIs(report["usedFreeTier"], True)
+        self.assertEqual(len([line for line in logs if "무료 등급 모델입니다" in line and "gemini:g" in line]), 1)
+
+    def test_run_chain_paidAnswers_freeBackupUnused(self):
+        call, calls = self.chain_caller({"openai:gpt-x": [DRAFT], "gemini:g": [DRAFT]})
+        logs = []
+        run("c", self.dir, ["openai:gpt-x", "gemini:g"], caller=call, log=logs.append, free_models={"gemini:g"})
+        self.assertIs(self.report()["usedFreeTier"], False)
+        self.assertEqual([c["spec"] for c in calls], ["openai:gpt-x"])
+        self.assertFalse(any("무료 등급" in line for line in logs))
+
+    def test_run_noFreeModels_reportHasNoUsedFreeTier(self):
+        call, _ = self.chain_caller({"openai:gpt-x": [DRAFT]})
+        run("c", self.dir, "openai:gpt-x", caller=call, log=lambda *_: None)
+        self.assertNotIn("usedFreeTier", self.report())
+
     def test_run_chain_midRetry_nextModelStartsFresh(self):
         bad = draft_with(excerpt="지어낸 문장이다.")
         call, calls = self.chain_caller({"openai:gpt-x": [bad, llm.LLMQuotaExhaustedError("일 한도")],

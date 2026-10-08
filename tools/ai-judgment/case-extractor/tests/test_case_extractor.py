@@ -638,7 +638,7 @@ class OtherProviderTest(unittest.TestCase):
 
     # ---- 모델 대체 체인 (BE-45)
 
-    def run_chain(self, models, first_error=None, **patches):
+    def run_chain(self, models, first_error=None, free_models=(), **patches):
         """call_claude · call_llm을 가짜로 바꿔 run을 돌린다. (paths, 호출 기록, 안내 로그)"""
         calls, logs = [], []
 
@@ -653,7 +653,8 @@ class OtherProviderTest(unittest.TestCase):
         env = {"OPENAI_API_KEY": "k", "GEMINI_API_KEY": "k"}
         with mock.patch.dict(os.environ, env), mock.patch("extract_case.call_llm", fake("llm")), \
                 mock.patch("extract_case.call_claude", fake("claude")):
-            paths = run(self.input, "sample-case", out_dir=self.dir / "out", model=models, log=logs.append)
+            paths = run(self.input, "sample-case", out_dir=self.dir / "out", model=models, log=logs.append,
+                        free_models=free_models)
         return paths, calls, logs
 
     def test_run_chain_overloaded_fallsBackFromScratch(self):
@@ -669,6 +670,27 @@ class OtherProviderTest(unittest.TestCase):
         self.assertIn("<json_schema>", calls[1][2])
         self.assertEqual(calls[0][2], calls[1][2].split("\n\n---\n")[0])
         self.assertTrue(any("다음 모델 openai:gpt-x" in line and "과부하" in line for line in logs))
+
+    def test_run_chain_freeTierBackup_warnsAndRecords(self):
+        error = ModelUnavailableError("서비스 과부하 (503)", "overloaded")
+        paths, calls, logs = self.run_chain(["claude-x", "gemini:gem-x"], first_error=error, free_models={"gemini:gem-x"})
+        report = json.loads(paths[2].read_text(encoding="utf-8"))
+        self.assertTrue(report["usedFreeTier"])
+        self.assertEqual(report["requestedModel"], "gemini:gem-x")
+        warnings = [line for line in logs if "무료 등급 모델입니다" in line]
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("gemini:gem-x", warnings[0])  # 넘어가는 순간 어떤 모델인지 함께 경고
+
+    def test_run_chain_paidAnswers_freeBackupUnused(self):
+        paths, calls, logs = self.run_chain(["claude-x", "gemini:gem-x"], free_models={"gemini:gem-x"})
+        report = json.loads(paths[2].read_text(encoding="utf-8"))
+        self.assertIs(report["usedFreeTier"], False)  # 백업을 허용했지만 쓰지 않았다
+        self.assertEqual(len(calls), 1)
+        self.assertFalse(any("무료 등급" in line for line in logs))
+
+    def test_run_noFreeModels_reportHasNoUsedFreeTier(self):
+        paths, _, _ = self.run_chain(["openai:gpt-x"])
+        self.assertNotIn("usedFreeTier", json.loads(paths[2].read_text(encoding="utf-8")))
 
     def test_run_chain_firstModelAnswers_noFallbackRecorded(self):
         paths, calls, _ = self.run_chain(["openai:gpt-x", "gemini:gem-x"])

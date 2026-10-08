@@ -85,5 +85,7 @@
     "max": 3,
     "include": null,
     "exclude": []
-  }
+  },
+  "_allowFreeTierForJudgmentComment": "true면 stages.extract.model · stages.court.model 목록 맨 끝에 free:<공급자>를 마지막 백업으로 쓸 수 있다 (유료 모델이 모두 막힌 뒤에만). 무료 등급은 입력을 제품 개선에 쓰고 사람이 검토할 수 있으므로 공개된 판결문에만 켠다",
+  "allowFreeTierForJudgment": false
 }

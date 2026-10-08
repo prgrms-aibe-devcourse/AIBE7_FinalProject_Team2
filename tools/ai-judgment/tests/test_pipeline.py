@@ -1022,6 +1022,116 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(state["freeModels"]["replaced"], [])  # free:로 쓴 모델이 아니면 대체하지 않는다
         self.assertEqual(state["freeModels"]["active"], ["gemini:g1", "gemini:g2"])
 
+    # ---- 판결문 단계의 무료 등급 백업 (BE-45)
+
+    def patch_free_pool(self):
+        patcher = mock.patch.object(pipeline, "free_tier_model_list", return_value=list(self.FREE_POOL))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def judgment_config(self, extract_model=("claude-opus-5-5", "free:gemini"), court=None, allow=True, **top):
+        self.patch_free_pool()
+        stages = {"extract": {"enabled": True, "model": list(extract_model)}}
+        if court is not None:
+            stages["court"] = {"enabled": True, "model": court}
+        return self.config({"allowFreeTierForJudgment": allow, "freeModels": {"max": 2}, **top}, **stages)
+
+    def test_judgment_free_backup_config_validation(self):
+        self.patch_free_pool()
+        for top, extract, court, part in (
+                ({}, ["claude-opus-5-5", "free:gemini"], None, "allowFreeTierForJudgment를 true로"),
+                ({"allowFreeTierForJudgment": "yes"}, ["claude-opus-5-5"], None, "true · false다"),
+                ({"allowFreeTierForJudgment": True}, ["free:gemini"], None, "유료 모델을 하나 이상 앞에"),
+                ({"allowFreeTierForJudgment": True}, ["free:gemini", "claude-opus-5-5"], None, "맨 끝에"),
+                ({"allowFreeTierForJudgment": True}, ["claude-opus-5-5", "free:gemini", "openai:o"], None, "맨 끝에"),
+                ({"allowFreeTierForJudgment": True}, ["claude-opus-5-5", "free:nobody"], None, "'nobody'"),
+                ({"allowFreeTierForJudgment": True, "freeModels": {"exclude": ["g1", "g2", "g3", "g4"]}},
+                 ["claude-opus-5-5", "free:gemini"], None, "무료 모델이 없다"),
+                ({"allowFreeTierForJudgment": True}, ["claude-opus-5-5"], ["free:gemini"], "stages.court.model: free:는 백업"),
+                ({}, ["claude-opus-5-5"], ["openai:o", "free:gemini"], "stages.court.model에는 free:")):
+            raw = copy.deepcopy(self.raw_config)
+            raw.update(top)
+            raw["stages"]["extract"] = {"model": extract}
+            if court is not None:
+                raw["stages"]["court"] = {"model": court}
+            write_json(self.dir / "bad-judgment-free.json", raw)
+            with self.assertRaises(pipeline.PipelineError, msg=f"{top} {extract} {court}") as ctx:
+                pipeline.load_config(self.dir / "bad-judgment-free.json")
+            self.assertIn(part, str(ctx.exception), msg=f"{top} {extract} {court}")
+        self.judgment_config()  # 유료 모델 뒤에 free:를 두면 통과
+        self.judgment_config(court=["openai:o", "free:gemini"])
+        config = self.judgment_config()
+        self.assertIs(config["allowFreeTierForJudgment"], True)
+        self.assertIs(self.config()["allowFreeTierForJudgment"], False)  # 기본은 꺼짐
+
+    def test_expand_judgment_models(self):
+        config = self.judgment_config()
+        models, free = pipeline.expand_judgment_models(config, ["claude-opus-5-5", "free:gemini"])
+        self.assertEqual((models, free), (["claude-opus-5-5", "gemini:g1", "gemini:g2"], {"gemini:g1", "gemini:g2"}))  # max 2
+        self.assertEqual(pipeline.expand_judgment_models(config, "claude-opus-5-5"), ("claude-opus-5-5", set()))  # 표시가 없으면 그대로
+        models, free = pipeline.expand_judgment_models(config, ["gemini:g1", "free:gemini"])
+        self.assertEqual((models, free), (["gemini:g1", "gemini:g2"], {"gemini:g2"}))  # 직접 적은 모델은 무료 백업이 아니다
+
+    def test_expand_judgment_models_drops_backup_without_key(self):
+        config = self.judgment_config()
+        logs = []
+        with mock.patch.dict(os.environ, {"OPENAI_API_KEY": "k"}, clear=True):
+            models, free = pipeline.expand_judgment_models(config, ["openai:o", "free:gemini"], logs.append)
+        self.assertEqual((models, free), (["openai:o"], set()))  # 백업이라 실행을 막지 않고 뺀다
+        self.assertEqual(len([line for line in logs if "GEMINI_API_KEY" in line]), 2)
+
+    def test_judgment_stages_pass_expanded_models_and_report_free_tier_use(self):
+        config = self.judgment_config(court=None)
+        report = report_for(self.case)
+        report.update(requestedModel="gemini:g1", model="gemini-g1-2026", usedFreeTier=True,
+                      fallbacks=[{"model": "claude-opus-5-5", "kind": "overloaded", "error": "과부하"}])
+        write_json(self.dir / "r.json", report)
+        files = [self.raw_config["inputs"][k] for k in ("case", "court", "report", "source")]
+        extract_module = mock.MagicMock()
+        extract_module.run.return_value = (files[0], files[1], str(self.dir / "r.json"), files[3])
+        extract_module.ExtractError = RuntimeError
+        court_module = mock.MagicMock()
+        court_module.run.return_value = (str(self.dir / "d.json"), str(self.dir / "cr.json"))
+        court_module.CourtDraftError = RuntimeError
+        write_json(self.dir / "cr.json", {"model": "gemini-g2", "usedFreeTier": True, "fallbacks": [], "warnings": []})
+        with mock.patch.dict(sys.modules, {"extract_case": extract_module, "court_draft": court_module}):
+            outputs = pipeline.stage_extract(config, {"stages": {}}, self.logs.append)
+            court_outputs = pipeline.stage_court(config, {"stages": {}}, self.logs.append)
+        kwargs = extract_module.run.call_args.kwargs
+        self.assertEqual(kwargs["model"], ["claude-opus-5-5", "gemini:g1", "gemini:g2"])
+        self.assertEqual(kwargs["free_models"], {"gemini:g1", "gemini:g2"})
+        self.assertIs(outputs["usedFreeTier"], True)
+        # court 모델을 정하지 않으면 extract 목록(free: 포함)을 쓴다
+        self.assertEqual(court_module.run.call_args.kwargs["model"], ["claude-opus-5-5", "gemini:g1", "gemini:g2"])
+        self.assertEqual(court_module.run.call_args.kwargs["free_models"], {"gemini:g1", "gemini:g2"})
+        self.assertIs(court_outputs["usedFreeTier"], True)
+        self.assertEqual(len([line for line in self.logs if "무료 등급 백업 모델이 판결문 원문을 처리했습니다" in line]), 2)
+
+    def test_judgment_stages_without_free_tier_use_have_no_flag(self):
+        config = self.judgment_config()
+        report = report_for(self.case)
+        report.update(model="claude-x", usedFreeTier=False)
+        write_json(self.dir / "r.json", report)
+        files = [self.raw_config["inputs"][k] for k in ("case", "court", "report", "source")]
+        extract_module = mock.MagicMock()
+        extract_module.run.return_value = (files[0], files[1], str(self.dir / "r.json"), files[3])
+        extract_module.ExtractError = RuntimeError
+        with mock.patch.dict(sys.modules, {"extract_case": extract_module}):
+            outputs = pipeline.stage_extract(config, {"stages": {}}, self.logs.append)
+        self.assertNotIn("usedFreeTier", outputs)
+        self.assertFalse(any("무료 등급 백업 모델이" in line for line in self.logs))
+
+    def test_judgment_free_backup_notices(self):
+        config = self.judgment_config(court=["openai:o", "free:gemini"])
+        notices = self.run_notices(config, until="court")
+        strong = [line for line in notices if line.startswith("⚠")]
+        self.assertEqual(len(strong), 2)  # extract · court 각각
+        self.assertTrue(any("비식별화" in line and "free:gemini" in line for line in strong))
+        self.assertTrue(any("재판부" in line and "allowFreeTierForJudgment" in line and "공개된 판결문" in line for line in strong))
+        transfers = [line for line in self.logs if line.startswith("외부 전송")]
+        self.assertTrue(any("비식별화" in line and "anthropic, gemini" in line for line in transfers))
+        self.assertTrue(any("재판부" in line and "gemini, openai" in line for line in transfers))
+
     # ---- 무료 등급 모델 안내 (BE-45)
 
     def run_notices(self, config, **kwargs):
@@ -1031,7 +1141,7 @@ class PipelineTest(unittest.TestCase):
         with self.assertRaises(pipeline.PipelineError):
             pipeline.run_pipeline(config, functions={stage: stop for stage in pipeline.STAGES}, log=self.logs.append,
                                   **kwargs)
-        return [line for line in self.logs if line.startswith("주의") or line.startswith("무료 등급")]
+        return [line for line in self.logs if line.startswith(("주의", "무료 등급", "⚠"))]
 
     def test_free_tier_notice_for_judgment_stages_is_strong(self):
         config = self.config(extract={"enabled": True, "model": ["claude-opus-5-5", "gemini:gemini-2.5-flash"]},

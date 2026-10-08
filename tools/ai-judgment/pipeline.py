@@ -67,6 +67,9 @@ DEFAULT_CONFIG = {
     # 무료 모델 자동 사용 (BE-45): generate.models · contamination.models에 "free:<공급자>"를 적으면 free_models.json의 모델을
     # 쓴다. max개만 동시에 쓰고(안전장치), 일 한도로 막히면 다음 모델이 자리를 채운다. include는 쓸 모델 ID(앞이 우선), exclude는 뺄 모델 ID
     "freeModels": {"max": 3, "include": None, "exclude": []},
+    # 판결문 원문을 보내는 extract · court의 모델 목록 끝에 "free:<공급자>"를 백업으로 쓸 수 있게 허용한다 (기본 꺼짐).
+    # 무료 등급은 입력을 제품 개선에 쓰고 사람이 검토할 수 있으므로 공개된 판결문에만 켠다 (README "무료 등급 모델")
+    "allowFreeTierForJudgment": False,
     # extract를 건너뛸 때 쓸 파일 (extract를 돌리면 그 결과가 우선)
     # courtDraft: 재판부 판결(BE-14 형식) 파일. court 단계를 끄고 사람이 쓴 판결을 넣을 때 쓴다 (BE-38)
     "inputs": {"case": None, "court": None, "report": None, "source": None, "courtDraft": None},
@@ -185,10 +188,30 @@ def free_models_errors(config):
         elif not free_pool(config, {provider}):
             errors.append(f"{token}: freeModels의 include · exclude를 적용하면 쓸 수 있는 무료 모델이 없다")
     stages = config["stages"]
+    allow = config.get("allowFreeTierForJudgment")
+    if not isinstance(allow, bool):
+        errors.append("allowFreeTierForJudgment는 true · false다")
     for stage in ("extract", "court"):
         value = stages[stage].get("model")
-        if any(is_free_token(m) for m in ([value] if isinstance(value, str) else value or []) if isinstance(m, str)):
-            errors.append(f"stages.{stage}.model에는 free:를 쓸 수 없다 (판결문 원문을 보내는 단계는 유료 키만 쓴다)")
+        models = [m for m in ([value] if isinstance(value, str) else value or []) if isinstance(m, str)]
+        tokens = [m for m in models if is_free_token(m)]
+        if not tokens:
+            continue
+        if allow is not True:
+            errors.append(f"stages.{stage}.model에는 free:를 쓸 수 없다 (판결문 원문을 보내는 단계는 유료 키만 쓴다. 무료 등급을 "
+                          "마지막 백업으로 허용하려면 allowFreeTierForJudgment를 true로 한다)")
+            continue
+        if not any(not is_free_token(m) for m in models):
+            errors.append(f"stages.{stage}.model: free:는 백업이다. 유료 모델을 하나 이상 앞에 둔다")
+        elif any(is_free_token(m) for m in models[:max(i for i, m in enumerate(models) if not is_free_token(m)) + 1]):
+            errors.append(f"stages.{stage}.model: free:는 목록 맨 끝에 둔다 (유료 모델이 모두 막힌 뒤에만 쓰는 마지막 수단)")
+        known_tokens = {t.strip().lower() for t in tokens}
+        for token in sorted(known_tokens):
+            provider = free_token_provider(token)
+            if provider not in known:
+                errors.append(f"{token}: free_models.json에 {provider!r} 공급자가 없다")
+            elif not free_pool(config, {provider}):
+                errors.append(f"{token}: freeModels의 include · exclude를 적용하면 쓸 수 있는 무료 모델이 없다")
     return errors
 
 
@@ -213,6 +236,33 @@ def resolve_free_models(config, state, log, fresh=False):
                            "replaced": [], "skipped": [], "kept": []}
     log(f"무료 모델 자동 사용: {', '.join(pool[:cfg['max']])} (동시 {cfg['max']}개까지)"
         + (f" · 대기 {', '.join(pool[cfg['max']:])}" if pool[cfg["max"]:] else ""))
+
+
+def expand_judgment_models(config, model, log=print):
+    """extract · court 모델 설정의 `free:<공급자>`를 무료 백업 모델(freeModels.max개까지)로 펼친다. (모델 설정, 무료 백업 집합)
+
+    free: 표시가 없으면 설정을 그대로 돌려준다. 백업 공급자의 API 키가 없으면 그 모델은 빼고 알린다(백업이라 실행을 막지 않는다).
+    유료 모델과 같은 ID가 목록에 직접 적혀 있으면 직접 적은 쪽이 우선이고 무료 백업으로 치지 않는다."""
+    raw = [model] if isinstance(model, str) else list(model)
+    if not any(is_free_token(m) for m in raw):
+        return model, set()
+    models, free = [], set()
+    for spec in raw:
+        if not is_free_token(spec):
+            if spec not in models:
+                models.append(spec)
+            continue
+        for candidate in free_pool(config, {free_token_provider(spec)})[:config["freeModels"]["max"]]:
+            if candidate in raw or candidate in models:
+                continue
+            try:
+                api_key(parse_model_spec(candidate)[0])
+            except LLMError as e:
+                log(f"무료 백업 모델 {candidate} 제외: {e}")
+                continue
+            models.append(candidate)
+            free.add(candidate)
+    return models, free
 
 
 def expand_models(state, raw):
@@ -265,6 +315,8 @@ def chain_errors(label, value, expected):
     if len({m.strip() for m in models}) != len(models):
         errors.append(f"{label}에 같은 모델이 두 번 들어 있다")
     for m in models:
+        if is_free_token(m):
+            continue  # free_models_errors가 검사한다 (allowFreeTierForJudgment · 위치)
         if ":" in m:
             try:
                 if parse_model_spec(m)[0] == "manual":
@@ -287,7 +339,13 @@ def free_tier_notices(config, steps):
     for label, stage, model in judgment:
         if stage not in steps:
             continue
-        free = [m for m in ([model] if isinstance(model, str) else model) if has_free_tier(m)]
+        listed = [model] if isinstance(model, str) else model
+        tokens = [m.strip().lower() for m in listed if is_free_token(m)]
+        free = [m for m in listed if not is_free_token(m) and has_free_tier(m)]
+        if tokens:
+            notices.append(f"⚠ 주의: {label}에 무료 등급 백업이 켜져 있습니다 ({', '.join(tokens)}, allowFreeTierForJudgment). "
+                           "유료 모델이 모두 막히면 판결문 원문(정규식 마스킹만 거침)이 무료 등급으로 전송되어 제품 개선에 쓰이고 "
+                           "사람이 검토할 수 있습니다. 공개된 판결문에만 쓰세요 (README)")
         if free:
             notices.append(f"주의: {label} 모델({', '.join(free)})에는 무료 등급이 있습니다. 실제 판결문은 결제를 연결한 "
                            "유료 키로만 보내세요 (무료 등급은 입력을 제품 개선에 쓰고 사람이 검토할 수 있습니다, README)")
@@ -307,7 +365,8 @@ def chain_text(model):
 
 def providers_text(model):
     """모델 설정의 실제 공급자 (외부 전송 안내용). 목록이면 대체 모델까지 모두 적는다."""
-    return ", ".join(sorted({model_provider(m) for m in ([model] if isinstance(model, str) else model)}))
+    return ", ".join(sorted({free_token_provider(m) if is_free_token(m) else model_provider(m)
+                             for m in ([model] if isinstance(model, str) else model)}))
 
 
 def validate_config(config):
@@ -481,11 +540,12 @@ def stage_extract(config, state, log):
         raise PipelineError(f"case-extractor를 불러오지 못했습니다 (pip install -r case-extractor/requirements.txt): {e}")
     cfg = config["stages"]["extract"]
     sources = [resolve_path(config, s["path"]) for s in config["sources"]]
-    log(f"판결문 {len(sources)}개 → {chain_text(cfg['model'])}로 비식별화 · 구조화 (로컬 마스킹 후 전송)")
+    model, free_backup = expand_judgment_models(config, cfg["model"], log)
+    log(f"판결문 {len(sources)}개 → {chain_text(model)}로 비식별화 · 구조화 (로컬 마스킹 후 전송)")
     try:
         case_path, court_path, report_path, source_path = extract_run(
-            sources, config["name"], out_dir=CASES_DIR, model=cfg["model"], effort=cfg["effort"],
-            max_tokens=cfg.get("maxTokens"), log=log)
+            sources, config["name"], out_dir=CASES_DIR, model=model, effort=cfg["effort"],
+            max_tokens=cfg.get("maxTokens"), log=log, free_models=free_backup)
     except ExtractError as e:
         raise PipelineError(f"비식별화 실패: {e}")
     outputs = {"case": str(case_path), "court": str(court_path), "report": str(report_path), "source": str(source_path)}
@@ -494,6 +554,9 @@ def stage_extract(config, state, log):
     outputs["eligible"] = eligibility.get("eligible")
     outputs["warnings"] = len(report.get("warnings", []))
     outputs["model"] = report.get("model")  # 실제로 응답한 모델 (court 단계와 같다)
+    if report.get("usedFreeTier"):
+        outputs["usedFreeTier"] = True
+        log("⚠ 무료 등급 백업 모델이 판결문 원문을 처리했습니다 (제품 개선에 쓰이고 사람이 검토할 수 있습니다). report.json의 usedFreeTier 참고")
     if report.get("fallbacks"):  # 앞 모델이 과부하 · 한도로 막혀 대체 모델이 응답했다 (BE-45)
         outputs["fallbacks"] = [{"model": f["model"], "kind": f["kind"]} for f in report["fallbacks"]]
     if eligibility.get("eligible") is False and cfg["requireEligible"]:
@@ -515,13 +578,15 @@ def stage_court(config, state, log, caller=None):
         from court_draft import CourtDraftError, run as court_run  # noqa: E402
     except ImportError as e:
         raise PipelineError(f"court_draft를 불러오지 못했습니다: {e}")
-    cfg, model = config["stages"]["court"], court_model(config)
+    cfg = config["stages"]["court"]
+    model, free_backup = expand_judgment_models(config, court_model(config), log)
     log(f"재판부 판결 초안 → {chain_text(model)} (마스킹한 판결문 전송, 인용은 원문과 대조)")
     try:
         draft_path, report_path = court_run(
             config["name"], out_dir=CASES_DIR, model=model, max_tokens=cfg["maxTokens"], caller=caller,
             case_path=input_file(config, state, "case"), court_path=input_file(config, state, "court"),
-            source_path=input_file(config, state, "source"), final_index=config["finalSourceIndex"], log=log)
+            source_path=input_file(config, state, "source"), final_index=config["finalSourceIndex"], log=log,
+            free_models=free_backup)
     except CourtDraftError as e:
         raise PipelineError(f"재판부 판결 초안 실패: {e}")
     report = load_json(report_path)
@@ -529,6 +594,9 @@ def stage_court(config, state, log, caller=None):
         f"경고 {len(report.get('warnings', []))} · 시도 {report.get('attempts')}회")
     outputs = {"courtDraft": str(draft_path), "report": str(report_path), "model": report.get("model"),
                "warnings": len(report.get("warnings", []))}
+    if report.get("usedFreeTier"):
+        outputs["usedFreeTier"] = True
+        log("⚠ 무료 등급 백업 모델이 판결문 원문을 처리했습니다 (제품 개선에 쓰이고 사람이 검토할 수 있습니다). court_report.json의 usedFreeTier 참고")
     if report.get("fallbacks"):  # 앞 모델이 과부하 · 한도로 막혀 대체 모델이 응답했다 (BE-45)
         outputs["fallbacks"] = [{"model": f["model"], "kind": f["kind"]} for f in report["fallbacks"]]
     return outputs

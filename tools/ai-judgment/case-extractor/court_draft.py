@@ -346,12 +346,13 @@ def request_draft(system, user, case, masked_text, model, max_tokens=MAX_TOKENS,
 
 
 def run(name, out_dir=DEFAULT_OUT_DIR, model=DEFAULT_MODEL, max_tokens=MAX_TOKENS, caller=None,
-        case_path=None, court_path=None, source_path=None, final_index=None, log=print):
+        case_path=None, court_path=None, source_path=None, final_index=None, log=print, free_models=()):
     """초안 생성 전체 흐름. (초안 파일, 보고서 파일). 실패하면 CourtDraftError (보고서는 남김).
 
     입력 파일은 기본으로 out_dir/<name>.case.json 등을 쓰고, 경로를 주면 그 파일을 쓴다(파이프라인 inputs).
     model은 문자열 또는 모델 목록이다. 목록이면 앞 모델의 호출이 과부하 · 한도로 막혔을 때 다음 모델이 처음부터
-    다시 요청한다(재요청 횟수도 새로 센다) (BE-45).
+    다시 요청한다(재요청 횟수도 새로 센다) (BE-45). free_models는 그중 무료 등급 백업으로 허용한 모델이고,
+    응답한 모델이 이 중 하나면 보고서 usedFreeTier가 true다.
     """
     if not NAME_PATTERN.match(name):
         raise CourtDraftError("--name은 영어 소문자 · 숫자 · 하이픈만 씁니다")
@@ -404,7 +405,8 @@ def run(name, out_dir=DEFAULT_OUT_DIR, model=DEFAULT_MODEL, max_tokens=MAX_TOKEN
     system, user = build_messages(case, court, masked_text)
     try:
         (draft, warnings, served, attempts), used_model, skipped = run_with_fallback(
-            models, lambda m: request_draft(system, user, case, masked_text, spec_of(m), max_tokens, caller), log)
+            models, lambda m: request_draft(system, user, case, masked_text, spec_of(m), max_tokens, caller), log,
+            free_models)
     except (CourtDraftError, ModelUnavailableError) as e:
         draft_path.unlink(missing_ok=True)
         report.update(status="ERROR", errors=report["errors"] + [scrub(str(e))])
@@ -420,6 +422,8 @@ def run(name, out_dir=DEFAULT_OUT_DIR, model=DEFAULT_MODEL, max_tokens=MAX_TOKEN
     if len(models) > 1:
         report.update(requestedModel=used_model, modelChain=models,
                       fallbacks=[{**f, "error": scrub(f["error"])} for f in skipped])
+    if free_models:
+        report["usedFreeTier"] = used_model in free_models
     report.update(status="NEEDS_REVIEW", model=served, attempts=attempts, warnings=report["warnings"] + warnings,
                   notes=[scrub(n) for n in draft["notes"]],
                   factorsChosen=len(result["judgmentFactors"]), factorsExcluded=len(result["excludedFactors"]["factorIds"]))

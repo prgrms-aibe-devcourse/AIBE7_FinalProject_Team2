@@ -87,12 +87,16 @@ def model_chain(model):
     return models
 
 
-def run_with_fallback(models, attempt, log=print):
+FREE_TIER_WARNING = "⚠ 무료 등급 모델입니다: 판결문 원문이 제품 개선에 쓰이고 사람이 검토할 수 있습니다"
+
+
+def run_with_fallback(models, attempt, log=print, free_models=()):
     """모델 목록을 앞에서부터 attempt(모델)로 시도한다 (BE-45). (결과, 응답한 모델, 건너뛴 기록)을 돌려준다.
 
     호출이 막힌 경우(ModelUnavailableError: 과부하 · 한도, 앞 모델의 재시도는 이미 끝남)에만 다음 모델로 넘어간다.
     다음 모델은 같은 입력으로 처음부터 다시 시작하고, 앞 모델의 부분 결과는 쓰지 않는다 (한 결과에 두 모델이 섞이지 않게).
     품질 문제(형식 · 검사 실패)는 넘어가지 않고 그대로 멈춘다.
+    free_models: 무료 등급 백업으로 허용한 모델. 그 모델로 넘어가는 순간 경고를 함께 남긴다 (allowFreeTierForJudgment).
     """
     skipped = []
     for index, spec in enumerate(models):
@@ -110,7 +114,9 @@ def run_with_fallback(models, attempt, log=print):
                     kind=e.kind)
                 final.skipped, final.model = skipped, spec
                 raise final from e
-            log(f"[{spec}] 호출 불가 ({KIND_LABELS.get(e.kind, e.kind)}) → 다음 모델 {models[index + 1]}로 처음부터 다시 요청합니다")
+            following = models[index + 1]
+            log(f"[{spec}] 호출 불가 ({KIND_LABELS.get(e.kind, e.kind)}) → 다음 모델 {following}로 처음부터 다시 요청합니다"
+                + (f"\n{FREE_TIER_WARNING}: {following}" if following in free_models else ""))
         except Exception as e:
             # 품질 문제는 다른 모델로 넘기지 않고 멈추되, 어느 모델에서 났고 앞에서 어떤 모델을 건너뛰었는지 알 수 있게 붙인다
             e.skipped, e.model = skipped, spec
@@ -357,10 +363,11 @@ def process_output(output):
 
 
 def run(input_path, name, out_dir=DEFAULT_OUT_DIR, model=DEFAULT_MODEL, effort=DEFAULT_EFFORT,
-        dry_run=False, call=None, max_tokens=None, log=print):
+        dry_run=False, call=None, max_tokens=None, log=print, free_models=()):
     """전체 흐름. 만든 파일 경로 목록을 돌려준다. 검사 오류가 있으면 ExtractError(보고서는 남김).
 
     model은 문자열 또는 모델 목록이다. 목록이면 앞 모델의 호출이 과부하 · 한도로 막혔을 때 다음 모델로 넘어간다 (BE-45).
+    free_models는 그중 무료 등급 백업으로 허용한 모델이다. 응답한 모델이 이 중 하나면 보고서 usedFreeTier가 true다.
     """
     if not NAME_PATTERN.match(name):
         raise ExtractError("--name은 영어 소문자 · 숫자 · 하이픈만 씁니다 (사건을 특정할 수 없는 이름, 예: long-marriage-conflict)")
@@ -390,7 +397,7 @@ def run(input_path, name, out_dir=DEFAULT_OUT_DIR, model=DEFAULT_MODEL, effort=D
                     raise ExtractError(str(e)) from e
         call = lambda s, u, m, e: call_model(s, u, m, e, max_tokens)  # noqa: E731
     (output, served_model), used_model, skipped = run_with_fallback(
-        models, lambda spec: call(system, request_for(spec), spec, effort), log)
+        models, lambda spec: call(system, request_for(spec), spec, effort), log, free_models)
     try:
         case_input, court, errors, warnings = process_output(output)
     except (KeyError, TypeError, OutputError) as e:
@@ -405,6 +412,7 @@ def run(input_path, name, out_dir=DEFAULT_OUT_DIR, model=DEFAULT_MODEL, effort=D
         "requestedModel": used_model,
         **({"modelChain": models, "fallbacks": [{**f, "error": scrub(f["error"])} for f in skipped]}
            if len(models) > 1 else {}),
+        **({"usedFreeTier": used_model in free_models} if free_models else {}),
         "status": "ERROR" if errors else "NEEDS_REVIEW",
         "premasked": mask_counts,
         "deidentifiedItems": output.get("deidentifiedItems", []),
