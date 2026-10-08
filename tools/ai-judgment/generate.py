@@ -31,7 +31,8 @@ from pathlib import Path
 
 from build_prompt import InputError, build_prompt
 from common import TOOL_DIR, factors_by_id, final_penalty, load_json, write_json
-from llm import DEFAULT_MAX_TOKENS, DEFAULT_TIMEOUT, LLMError, api_key, call, parse_model_spec
+from llm import (DEFAULT_MAX_ATTEMPTS, DEFAULT_MAX_TOKENS, DEFAULT_MAX_WAIT, DEFAULT_TIMEOUT, LLMError, LLMQuotaExhaustedError,
+                 api_key, call, configure_retry, parse_model_spec)
 from validate_output import parse_output, validate
 
 RUNS_DIR = TOOL_DIR / "out" / "runs"
@@ -105,7 +106,7 @@ def next_run_index(model_dir):
     return max(indexes, default=0) + 1
 
 
-def save_run(model_dir, spec, case, prompt, raw_text, meta, call_error=None, settings=None):
+def save_run(model_dir, spec, case, prompt, raw_text, meta, call_error=None, settings=None, call_error_kind=None):
     """실행 한 건을 기록한다. 호출이 실패해도 기록을 남겨 비교표의 실패율에 넣는다."""
     model_dir = Path(model_dir)
     model_dir.mkdir(parents=True, exist_ok=True)
@@ -123,6 +124,7 @@ def save_run(model_dir, spec, case, prompt, raw_text, meta, call_error=None, set
         "settings": settings or {},
         "meta": meta,
         "callError": call_error,
+        "callErrorKind": call_error_kind,  # overloaded · rate_limit · daily_quota (BE-36). 호출 실패가 아니면 None
         "rawText": raw_text,
         "parseError": parse_error,
         "output": output,
@@ -167,9 +169,15 @@ def generate_runs(case, specs, runs, batch_dir, *, temperature=None, max_tokens=
             except LLMError as e:
                 provider, model = parse_model_spec(spec)
                 meta = {"provider": provider, "model": model}
-                path, record = save_run(model_dir, spec, case, prompt, None, meta, call_error=str(e), settings=settings)
+                path, record = save_run(model_dir, spec, case, prompt, None, meta, call_error=str(e), settings=settings,
+                                        call_error_kind=e.kind)
             records.append(record)
             log(f"[{spec}] {i + 1}/{runs} → {path.name}: {describe(record)}")
+            if record["callErrorKind"] == LLMQuotaExhaustedError.kind:
+                # 일 한도 · 크레딧이 바닥났으니 남은 회차도 같은 실패로 쌓일 뿐이다. 이 모델은 여기서 멈춘다
+                if i + 1 < runs:
+                    log(f"[{spec}] 호출 한도 소진 → 남은 {runs - i - 1}회는 호출하지 않고 건너뜁니다")
+                break
     return records
 
 
@@ -236,6 +244,10 @@ def main():
     run_cmd.add_argument("--max-tokens", type=int, default=DEFAULT_MAX_TOKENS)
     run_cmd.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT, help="요청 한 건 대기 시간(초)")
     run_cmd.add_argument("--delay", type=float, default=0.0, help="요청 사이 쉬는 시간(초). 무료 등급 분당 한도용")
+    run_cmd.add_argument("--max-attempts", type=int, default=DEFAULT_MAX_ATTEMPTS,
+                         help=f"과부하(503) · 한도(429) · 서버 오류 때 요청 한 건을 보내는 최대 횟수, 첫 시도 포함 (기본 {DEFAULT_MAX_ATTEMPTS})")
+    run_cmd.add_argument("--max-wait", type=float, default=DEFAULT_MAX_WAIT,
+                         help=f"재시도 사이 한 번에 기다릴 최대 시간(초) (기본 {DEFAULT_MAX_WAIT:g})")
 
     import_cmd = sub.add_parser("import", parents=[common_args], help="채팅 화면에서 받은 응답 파일을 넣는다")
     import_cmd.add_argument("--model", required=True, help="'manual:<이름>' (예: manual:gemini-app)")
@@ -248,6 +260,7 @@ def main():
         if args.command == "run":
             if args.runs < 1:
                 raise GenerateError("--runs는 1 이상이어야 합니다")
+            configure_retry(max_attempts=args.max_attempts, max_wait=args.max_wait)
             records = generate_runs(case, args.models, args.runs, batch_dir, temperature=args.temperature,
                                     max_tokens=args.max_tokens, timeout=args.timeout, delay=args.delay)
         else:

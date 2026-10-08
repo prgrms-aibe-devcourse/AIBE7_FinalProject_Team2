@@ -204,6 +204,154 @@ class ProviderTest(unittest.TestCase):
             llm.call("manual:app", "S", "U", http=FakeHttp({}))
 
 
+def http_error(code, body=None, headers=None):
+    data = json.dumps(body).encode("utf-8") if body is not None else b""
+    return urllib.error.HTTPError("https://example.invalid", code, "err", headers or {}, io.BytesIO(data))
+
+
+def gemini_429(retry_delay=None, per_day=False):
+    """Gemini 무료 등급 429 본문: 대기 시간은 RetryInfo, 일 한도는 QuotaFailure(...PerDay...)로 온다."""
+    details = []
+    if per_day:
+        details.append({"@type": "type.googleapis.com/google.rpc.QuotaFailure", "violations": [
+            {"quotaMetric": "generativelanguage.googleapis.com/generate_content_free_tier_requests",
+             "quotaId": "GenerateRequestsPerDayPerProjectPerModel-FreeTier"}]})
+    if retry_delay:
+        details.append({"@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": retry_delay})
+    return http_error(429, {"error": {"code": 429, "message": "You exceeded your current quota",
+                                      "status": "RESOURCE_EXHAUSTED", "details": details}})
+
+
+OK_BODY = b'{"ok": true}'
+
+
+def repeat(factory, count):
+    """오류 응답은 본문을 한 번만 읽을 수 있어 매번 새로 만든다."""
+    return [factory() for _ in range(count)]
+
+
+class RetryPolicyTest(unittest.TestCase):
+    """재시도 정책 (BE-36). 네트워크 · 실제 대기 없이 time.sleep · random을 가짜로 바꿔 확인한다."""
+
+    def setUp(self):
+        llm.reset_retry()
+        self.addCleanup(llm.reset_retry)
+        self.sleep = mock.patch("time.sleep").start()
+        mock.patch("random.uniform", return_value=1.0).start()  # 지터를 없앤다
+        self.addCleanup(mock.patch.stopall)
+
+    def post(self, *responses):
+        """응답을 차례로 주는 urlopen으로 _post_json을 부른다. (결과, urlopen 호출 수)"""
+        with mock.patch("urllib.request.urlopen", side_effect=list(responses)) as urlopen:
+            try:
+                return llm._post_json("https://example.invalid", {}, {}, 1), urlopen.call_count
+            except llm.LLMError as e:
+                e.calls = urlopen.call_count
+                raise
+
+    def waits(self):
+        return [call.args[0] for call in self.sleep.call_args_list]
+
+    def test_overload_backs_off_exponentially_then_succeeds(self):
+        result, calls = self.post(http_error(503), http_error(529), http_error(503), io.BytesIO(OK_BODY))
+        self.assertEqual(result, {"ok": True})
+        self.assertEqual(calls, 4)
+        self.assertEqual(self.waits(), [5.0, 10.0, 20.0])
+
+    def test_overload_wait_is_capped_by_max_wait(self):
+        llm.configure_retry(max_attempts=6, max_wait=12)
+        self.post(*repeat(lambda: http_error(503), 5), io.BytesIO(OK_BODY))
+        self.assertEqual(self.waits(), [5.0, 10.0, 12.0, 12.0, 12.0])
+
+    def test_overload_exhausted_raises_overloaded_error(self):
+        with self.assertRaises(llm.LLMOverloadedError) as ctx:
+            self.post(*repeat(lambda: http_error(503, {"error": {"message": "high demand"}}), 5))
+        self.assertEqual((ctx.exception.kind, ctx.exception.calls), ("overloaded", llm.DEFAULT_MAX_ATTEMPTS))
+        self.assertIn("과부하", str(ctx.exception))
+        self.assertIn("high demand", str(ctx.exception))
+        self.assertEqual(len(self.waits()), llm.DEFAULT_MAX_ATTEMPTS - 1)
+
+    def test_rate_limit_follows_retry_after_header(self):
+        self.post(http_error(429, headers={"retry-after": "7"}), io.BytesIO(OK_BODY))
+        self.assertEqual(self.waits(), [8.0])  # 안내 + 여유 1초
+
+    def test_rate_limit_follows_gemini_retry_info_in_body(self):
+        self.post(gemini_429(retry_delay="41.5s"), io.BytesIO(OK_BODY))
+        self.assertEqual(self.waits(), [42.5])
+
+    def test_rate_limit_without_hint_waits_a_minute(self):
+        self.post(http_error(429), io.BytesIO(OK_BODY))
+        self.assertEqual(self.waits(), [60.0])
+        self.sleep.reset_mock()
+        llm.configure_retry(max_wait=30)
+        self.post(http_error(429), io.BytesIO(OK_BODY))
+        self.assertEqual(self.waits(), [30.0])
+
+    def test_rate_limit_hint_longer_than_max_wait_is_not_waited(self):
+        with self.assertRaises(llm.LLMRateLimitError) as ctx:
+            self.post(http_error(429, headers={"retry-after": "600"}))
+        self.assertEqual(ctx.exception.calls, 1)
+        self.sleep.assert_not_called()
+        self.assertIn("maxWait", str(ctx.exception))
+
+    def test_rate_limit_exhausted_raises_rate_limit_error(self):
+        with self.assertRaises(llm.LLMRateLimitError) as ctx:
+            self.post(*repeat(lambda: http_error(429, headers={"retry-after": "1"}), 5))
+        self.assertEqual((ctx.exception.kind, ctx.exception.calls), ("rate_limit", 5))
+        self.assertIn("분당", str(ctx.exception))
+
+    def test_daily_quota_is_not_retried(self):
+        with self.assertRaises(llm.LLMQuotaExhaustedError) as ctx:
+            self.post(gemini_429(retry_delay="30s", per_day=True))
+        self.assertEqual((ctx.exception.kind, ctx.exception.calls), ("daily_quota", 1))
+        self.sleep.assert_not_called()
+        self.assertIn("한도를 모두 썼습니다", str(ctx.exception))
+
+    def test_openai_insufficient_quota_is_not_retried(self):
+        error = http_error(429, {"error": {"message": "You exceeded your current quota", "code": "insufficient_quota"}})
+        with self.assertRaises(llm.LLMQuotaExhaustedError) as ctx:
+            self.post(error)
+        self.assertEqual(ctx.exception.calls, 1)
+
+    def test_other_server_error_uses_short_backoff(self):
+        self.post(http_error(500), http_error(502), io.BytesIO(OK_BODY))
+        self.assertEqual(self.waits(), [2.0, 4.0])
+
+    def test_client_error_is_not_retried(self):
+        with self.assertRaises(llm.LLMError) as ctx:
+            self.post(http_error(400, {"error": {"message": "bad request"}}))
+        self.assertIs(type(ctx.exception), llm.LLMError)  # 원인 구분 하위 클래스가 아니다
+        self.assertEqual(ctx.exception.calls, 1)
+        self.assertIn("bad request", str(ctx.exception))
+
+    def test_jitter_stays_within_max_wait(self):
+        llm.configure_retry(max_attempts=3, max_wait=6)
+        with mock.patch("random.uniform", return_value=1.25):
+            self.post(http_error(503), http_error(503), io.BytesIO(OK_BODY))
+        self.assertEqual(self.waits(), [6.0, 6.0])  # 6.25 · 12.5 → 6으로 자른다
+
+    def test_configure_retry(self):
+        self.assertEqual(llm.configure_retry(max_attempts=2, max_wait=3),
+                         {"max_attempts": 2, "max_wait": 3.0})
+        with self.assertRaises(llm.LLMOverloadedError) as ctx:
+            self.post(http_error(503), http_error(503), http_error(503))
+        self.assertEqual(ctx.exception.calls, 2)
+        for bad in ({"max_attempts": 0}, {"max_attempts": True}, {"max_attempts": 1.5},
+                    {"max_wait": -1}, {"max_wait": "60"}):
+            with self.assertRaises(llm.LLMError, msg=bad):
+                llm.configure_retry(**bad)
+        llm.reset_retry()
+        self.assertEqual(llm.configure_retry(), {"max_attempts": llm.DEFAULT_MAX_ATTEMPTS,
+                                                 "max_wait": llm.DEFAULT_MAX_WAIT})
+
+    def test_failure_kinds_are_llm_errors(self):
+        for error, kind in ((llm.LLMOverloadedError, "overloaded"), (llm.LLMRateLimitError, "rate_limit"),
+                            (llm.LLMQuotaExhaustedError, "daily_quota")):
+            self.assertTrue(issubclass(error, llm.LLMError))
+            self.assertEqual(error.kind, kind)
+        self.assertIsNone(llm.LLMError.kind)
+
+
 def fake_caller(outputs):
     """모델별로 정해 둔 응답을 차례로 돌려주는 호출 함수. 값이 Exception이면 호출 실패로 만든다."""
     queues = {spec: list(items) for spec, items in outputs.items()}
@@ -299,6 +447,38 @@ class GenerateCompareTest(unittest.TestCase):
             with self.assertRaises(llm.LLMError):
                 generate_runs(self.case, ["openai:gpt-x"], 1, self.batch_dir, caller=wrapper, log=lambda *_: None)
         self.assertFalse(self.batch_dir.exists())
+
+    def test_quota_exhausted_stops_remaining_runs(self):
+        caller = fake_caller({"openai:gpt-x": [self.output, llm.LLMQuotaExhaustedError("한도 소진"), self.output],
+                              "gemini:gem-x": [self.output] * 3})
+        logs = []
+        records = generate_runs(self.case, ["openai:gpt-x", "gemini:gem-x"], 3, self.batch_dir, caller=caller,
+                                log=logs.append)
+        # openai는 2번째에서 멈춘다(3번째 응답은 꺼내지 않는다). 다음 모델은 정상으로 돈다
+        self.assertEqual([r["callErrorKind"] for r in records if r["modelSpec"] == "openai:gpt-x"],
+                         [None, "daily_quota"])
+        self.assertEqual(len([r for r in records if r["modelSpec"] == "gemini:gem-x"]), 3)
+        self.assertTrue(any("남은 1회" in line for line in logs))
+
+    def test_call_error_kind_recorded(self):
+        caller = fake_caller({"openai:gpt-x": [llm.LLMOverloadedError("busy"), llm.LLMError("other")]})
+        records = generate_runs(self.case, ["openai:gpt-x"], 2, self.batch_dir, caller=caller, log=lambda *_: None)
+        self.assertEqual([r["callErrorKind"] for r in records], ["overloaded", None])
+
+    def test_cli_retry_options(self):
+        case_path = Path(self.tmp.name) / "case.json"
+        case_path.write_text(json.dumps(self.case, ensure_ascii=False), encoding="utf-8")
+        self.addCleanup(llm.reset_retry)
+        argv = ["generate.py", "run", str(case_path), "--model", "openai:gpt-x", "--runs-dir", self.tmp.name,
+                "--max-attempts", "7", "--max-wait", "30"]
+        with mock.patch.object(sys, "argv", argv), mock.patch("generate.generate_runs", return_value=[]), \
+                mock.patch("sys.stdout", new_callable=io.StringIO):
+            generate_main()
+        self.assertEqual(llm.configure_retry(), {"max_attempts": 7, "max_wait": 30.0})
+        argv[argv.index("7")] = "0"
+        with mock.patch.object(sys, "argv", argv), mock.patch("sys.stderr", new_callable=io.StringIO) as err:
+            self.assertEqual(generate_main(), 1)
+        self.assertIn("maxAttempts", err.getvalue())
 
     def test_cli_missing_files_print_error(self):
         missing = str(Path(self.tmp.name) / "missing.json")

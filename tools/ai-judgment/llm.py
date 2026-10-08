@@ -13,6 +13,7 @@
 import functools
 import json
 import os
+import random
 import socket
 import ssl
 import time
@@ -22,7 +23,16 @@ import urllib.request
 DEFAULT_TIMEOUT = 300  # 초. 사고(reasoning) 모델은 응답이 오래 걸린다
 DEFAULT_MAX_TOKENS = 16000
 RETRY_STATUSES = (429, 500, 502, 503, 504, 529)
-MAX_ATTEMPTS = 3
+OVERLOAD_STATUSES = (503, 529)
+
+# 재시도 정책 (BE-36). 최대 시도 횟수 · 한 번에 기다릴 최대 시간은 configure_retry로 바꾼다
+DEFAULT_MAX_ATTEMPTS = 5
+DEFAULT_MAX_WAIT = 120.0  # 초
+MAX_ATTEMPTS = DEFAULT_MAX_ATTEMPTS
+OVERLOAD_BACKOFF_BASE = 5.0  # 과부하(503 · 529)는 길게 이어지므로 5 · 10 · 20 · 40초로 늘려 간다
+BACKOFF_BASE = 2.0  # 그 밖의 서버 오류 · 연결 실패: 2 · 4 · 8 · 16초
+RATE_LIMIT_WAIT = 60.0  # 429에 대기 시간 안내가 없을 때: 분당 한도가 풀리도록 1분을 기다린다
+RETRY_AFTER_MARGIN = 1.0  # 안내받은 시간 직후에 보내면 아직 막혀 있을 수 있어 조금 더 기다린다
 
 # 기본 인증서 위치에 인증서가 없을 때(예: macOS python.org Python) 찾아볼 시스템 CA 묶음 (BE-34)
 SYSTEM_CA_FILES = (
@@ -43,7 +53,52 @@ API_KEY_ENVS = {
 
 
 class LLMError(Exception):
-    pass
+    kind = None  # 실패 원인 구분. 아래 하위 클래스가 채운다 (BE-36)
+
+
+class LLMOverloadedError(LLMError):
+    """서비스 과부하(503 · 529)가 재시도 끝까지 이어졌다."""
+    kind = "overloaded"
+
+
+class LLMRateLimitError(LLMError):
+    """분당 호출 한도(429). 기다리면 풀리지만 허용한 대기 시간 안에 풀리지 않았다."""
+    kind = "rate_limit"
+
+
+class LLMQuotaExhaustedError(LLMError):
+    """일 한도 · 크레딧 소진(429). 기다려도 곧 풀리지 않으므로 재시도하지 않는다."""
+    kind = "daily_quota"
+
+
+_retry_policy = {"max_attempts": DEFAULT_MAX_ATTEMPTS, "max_wait": DEFAULT_MAX_WAIT}
+
+
+def check_retry(max_attempts=None, max_wait=None):
+    """재시도 설정 값이 올바른지만 확인한다 (적용하지 않는다). 잘못됐으면 LLMError."""
+    if max_attempts is not None and (not isinstance(max_attempts, int) or isinstance(max_attempts, bool)
+                                     or max_attempts < 1):
+        raise LLMError(f"재시도 횟수(maxAttempts)는 1 이상의 정수입니다 (첫 시도 포함): {max_attempts!r}")
+    if max_wait is not None and (not isinstance(max_wait, (int, float)) or isinstance(max_wait, bool) or max_wait < 0):
+        raise LLMError(f"최대 대기 시간(maxWait)은 0 이상의 숫자(초)입니다: {max_wait!r}")
+
+
+def configure_retry(max_attempts=None, max_wait=None):
+    """재시도 횟수(첫 시도 포함) · 한 번에 기다릴 최대 시간(초)을 바꾼다. None이면 현재 값을 유지한다.
+
+    파이프라인(run_pipeline) · generate.py 옵션이 시작할 때 한 번 부른다. 429의 대기 안내가 max_wait보다 길면
+    기다려도 소용이 없으므로 기다리지 않고 한도 초과로 끝낸다.
+    """
+    check_retry(max_attempts, max_wait)
+    if max_attempts is not None:
+        _retry_policy["max_attempts"] = max_attempts
+    if max_wait is not None:
+        _retry_policy["max_wait"] = float(max_wait)
+    return dict(_retry_policy)
+
+
+def reset_retry():
+    _retry_policy.update(max_attempts=DEFAULT_MAX_ATTEMPTS, max_wait=DEFAULT_MAX_WAIT)
 
 
 class LLMResult:
@@ -152,30 +207,44 @@ def call(spec, system, user, *, temperature=None, max_tokens=DEFAULT_MAX_TOKENS,
 
 
 def _post_json(url, headers, body, timeout):
-    """JSON POST. 재시도할 만한 오류(한도 · 서버 오류)는 잠깐 쉬었다가 다시 보낸다."""
+    """JSON POST. 재시도할 만한 오류(과부하 · 한도 · 서버 오류)는 원인에 맞게 기다렸다가 다시 보낸다 (BE-36).
+
+    - 503 · 529(과부하): 지수 백오프(5 · 10 · 20 · 40초…) + 지터. 최대 대기 시간을 넘지 않는다
+    - 429(한도): 응답이 안내한 시간(Retry-After 헤더 · 본문 retryDelay)만큼, 안내가 없으면 1분 기다린다.
+      일 한도 · 크레딧 소진이면 기다려도 풀리지 않으므로 바로 멈추고, 안내가 최대 대기보다 길어도 멈춘다
+    - 그 밖의 5xx · 연결 실패: 2 · 4 · 8초 백오프
+    """
     data = json.dumps(body).encode("utf-8")
-    for attempt in range(1, MAX_ATTEMPTS + 1):
+    max_attempts, max_wait = _retry_policy["max_attempts"], _retry_policy["max_wait"]
+    for attempt in range(1, max_attempts + 1):
         request = urllib.request.Request(url, data=data, method="POST",
                                          headers={"Content-Type": "application/json", **headers})
         try:
             with urllib.request.urlopen(request, timeout=timeout, context=ssl_context()) as response:
                 raw = response.read()
         except urllib.error.HTTPError as e:
-            detail = _error_detail(e)
-            if e.code in RETRY_STATUSES and attempt < MAX_ATTEMPTS:
-                time.sleep(_retry_delay(e, attempt))
+            info = _error_info(e)
+            kind = _failure_kind(e.code, info)
+            if kind == "daily_quota":
+                raise LLMQuotaExhaustedError(_final_message(kind, e.code, info, attempt, max_wait)) from None
+            if kind is None:
+                raise LLMError(f"API 오류 ({e.code}): {info['detail']}") from None
+            wait = _retry_wait(kind, info, attempt, max_wait)
+            if attempt < max_attempts and wait is not None:
+                time.sleep(wait)
                 continue
-            raise LLMError(f"API 오류 ({e.code}): {detail}") from None
+            message = _final_message(kind, e.code, info, attempt, max_wait, hint_too_long=wait is None)
+            raise _FAILURE_ERRORS.get(kind, LLMError)(message) from None
         except urllib.error.URLError as e:
             if isinstance(e.reason, ssl.SSLCertVerificationError):
                 raise LLMError(f"{SSL_HELP} ({e.reason})") from None  # 다시 보내도 같으므로 재시도하지 않는다
             # Python 3.9 이하는 연결 단계 timeout이 URLError(reason=socket.timeout)로 온다. 읽기 timeout과 같게 다시 보내지 않는다
             if isinstance(e.reason, (TimeoutError, socket.timeout)):
                 raise LLMError(f"응답 대기 시간({timeout}초)을 넘었습니다") from None
-            if attempt < MAX_ATTEMPTS:
-                time.sleep(2 ** attempt)
+            if attempt < max_attempts:
+                time.sleep(_backoff(attempt, BACKOFF_BASE, max_wait))
                 continue
-            raise LLMError(f"API에 연결하지 못했습니다: {e.reason}") from None
+            raise LLMError(f"API에 연결하지 못했습니다 ({attempt}번 시도): {e.reason}") from None
         except (TimeoutError, socket.timeout):  # Python 3.9 이하는 socket.timeout이 따로 있다
             raise LLMError(f"응답 대기 시간({timeout}초)을 넘었습니다") from None
         # 프록시 · 호환 엔드포인트가 200에 HTML 등을 보내도 회차 실패로 기록되게 LLMError로 바꾼다
@@ -189,24 +258,104 @@ def _post_json(url, headers, body, timeout):
     raise LLMError("API 호출에 실패했습니다")  # 도달하지 않음
 
 
-def _error_detail(error):
-    """오류 본문에서 메시지만 꺼낸다. 요청 헤더(키)는 오류에 들어가지 않는다."""
+_FAILURE_ERRORS = {"overloaded": LLMOverloadedError, "rate_limit": LLMRateLimitError}
+
+
+def _backoff(attempt, base, max_wait):
+    """지수 백오프(base · 2배 · 4배…)에 ±25% 지터를 더하고 최대 대기 시간으로 자른다."""
+    return min(max_wait, base * 2 ** (attempt - 1) * random.uniform(0.75, 1.25))
+
+
+def _failure_kind(status, info):
+    """HTTP 오류 → 실패 원인. 재시도 대상이 아니면 None."""
+    if status == 429:
+        return "daily_quota" if info["exhausted"] else "rate_limit"
+    if status in OVERLOAD_STATUSES:
+        return "overloaded"
+    if status in RETRY_STATUSES:
+        return "server"
+    return None
+
+
+def _retry_wait(kind, info, attempt, max_wait):
+    """다음 시도 전 기다릴 초. 기다려도 소용없으면(안내 시간이 최대 대기보다 길면) None."""
+    if kind == "rate_limit":
+        if info["retry_after"] is None:
+            return min(RATE_LIMIT_WAIT, max_wait)
+        wait = info["retry_after"] + RETRY_AFTER_MARGIN
+        return wait if wait <= max_wait else None
+    return _backoff(attempt, OVERLOAD_BACKOFF_BASE if kind == "overloaded" else BACKOFF_BASE, max_wait)
+
+
+def _final_message(kind, status, info, attempts, max_wait, hint_too_long=False):
+    """최종 실패 안내. 원인(과부하 / 분당 한도 / 일 한도)과 다음에 할 일을 알려 준다."""
+    detail = info["detail"]
+    if kind == "daily_quota":
+        return (f"호출 한도를 모두 썼습니다 (일 한도 · 크레딧 소진, {status}): {detail}\n"
+                "→ 한도가 초기화될 때까지 이 모델은 쓸 수 없습니다. 내일 다시 하거나 다른 모델 · 요금제를 쓰세요")
+    if kind == "rate_limit":
+        if hint_too_long:
+            return (f"분당 호출 한도 초과 ({status}): {info['retry_after']:.0f}초 뒤에 풀린다고 하지만 최대 대기 시간"
+                    f"({max_wait:.0f}초)을 넘습니다: {detail}\n→ 최대 대기(maxWait)를 늘리거나 나중에 다시 하세요")
+        return (f"분당 호출 한도 초과 ({status}): {attempts}번 시도해도 풀리지 않았습니다: {detail}\n"
+                "→ 호출 사이 대기(delay)를 늘리거나 재시도 횟수(maxAttempts)를 늘리세요")
+    if kind == "overloaded":
+        return (f"서비스 과부하 ({status}): {attempts}번 시도했지만 계속 바쁩니다: {detail}\n"
+                "→ 잠시 뒤 다시 하거나, 재시도 횟수(maxAttempts) · 최대 대기(maxWait)를 늘리거나 다른 모델을 쓰세요")
+    return f"API 오류 ({status}): {attempts}번 시도했지만 실패했습니다: {detail}"
+
+
+def _error_info(error):
+    """HTTP 오류 응답에서 메시지 · 대기 안내 · 한도 소진 여부를 꺼낸다. 요청 헤더(키)는 오류에 들어가지 않는다."""
     try:
         body = json.loads(error.read().decode("utf-8"))
     except Exception:
-        return error.reason
-    message = body.get("error", body)
+        body = None
+    message = body.get("error", body) if isinstance(body, dict) else None
+    details = message.get("details") if isinstance(message, dict) else None
+    details = [d for d in details if isinstance(d, dict)] if isinstance(details, list) else []
     if isinstance(message, dict):
-        message = message.get("message", message)
-    return str(message)[:500]
+        text = message.get("message", message)
+    else:
+        text = message
+    detail = str(text)[:500] if text else str(error.reason)
+    return {
+        "detail": detail,
+        "retry_after": _header_retry_after(error) or _body_retry_delay(details),
+        "exhausted": _quota_exhausted(message, details),
+    }
 
 
-def _retry_delay(error, attempt):
-    retry_after = error.headers.get("retry-after") if error.headers else None
+def _header_retry_after(error):
+    value = error.headers.get("retry-after") if error.headers else None
     try:
-        return min(float(retry_after), 60.0)
-    except (TypeError, ValueError):
-        return float(2 ** attempt)
+        seconds = float(value)
+    except (TypeError, ValueError):  # HTTP 날짜 형식은 쓰지 않는다
+        return None
+    return seconds if seconds >= 0 else None
+
+
+def _body_retry_delay(details):
+    """Gemini 429는 대기 시간을 본문 RetryInfo.retryDelay("41s")로 준다."""
+    for item in details:
+        delay = item.get("retryDelay")
+        if str(item.get("@type", "")).endswith("RetryInfo") and isinstance(delay, str) and delay.endswith("s"):
+            try:
+                return max(float(delay[:-1]), 0.0)
+            except ValueError:
+                return None
+    return None
+
+
+def _quota_exhausted(message, details):
+    """429가 일 한도(Gemini QuotaFailure ...PerDay...) · 크레딧 소진(OpenAI insufficient_quota)인지."""
+    if isinstance(message, dict) and message.get("code") == "insufficient_quota":
+        return True
+    for item in details:
+        for violation in item.get("violations") or []:
+            if isinstance(violation, dict) and "perday" in f"{violation.get('quotaId', '')}".lower():
+                return True
+    return False
 
 
 def _openai(system, user, model, options):
