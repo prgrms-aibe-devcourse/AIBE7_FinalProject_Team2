@@ -491,8 +491,17 @@ class OtherProviderTest(unittest.TestCase):
         errors = validate_against_schema(output_with(keywords="가", difficulty="EASY", extra=1, estimatedMinutes=True,
                                                      recommended={"minMonths": 1}), OUTPUT_SCHEMA)
         text = " | ".join(errors)
-        for part in ("$.keywords", "$.difficulty", "$.extra", "$.estimatedMinutes", "$.recommended"):
+        for part in ("$.keywords", "$.difficulty", "$: 스키마에 없는 항목이 1개", "$.estimatedMinutes", "$.recommended"):
             self.assertIn(part, text)
+
+    def test_validateAgainstSchema_errorsHaveNoValues(self):
+        # 모델이 판결문 속 실명을 엉뚱한 칸 · 항목 이름에 넣어도 오류 메시지에는 남지 않는다
+        output = output_with(difficulty="홍길동", **{"홍길동씨": "x"})
+        output["factors"] = [dict(FAKE_OUTPUT["factors"][0], revealStage="김철수")]
+        text = " | ".join(validate_against_schema(output, OUTPUT_SCHEMA))
+        self.assertTrue(text)
+        for name in ("홍길동", "김철수"):
+            self.assertNotIn(name, text)
         missing = {k: v for k, v in FAKE_OUTPUT.items() if k != "title"}
         self.assertIn("$.title: 필수 항목이 없습니다", validate_against_schema(missing, OUTPUT_SCHEMA))
 
