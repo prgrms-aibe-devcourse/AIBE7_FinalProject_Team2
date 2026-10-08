@@ -16,6 +16,7 @@
 | v1.9 | 2026-10-02 | 사건 정보 섹션 표시 방식 팀 결정 반영 (BE-17)<br>• `case_section.content`는 항목 하나를 한 줄로 쓰고 줄바꿈(`\n`)으로 나눈다. 화면은 줄바꿈을 그대로 보여 준다(7장 규칙 추가)<br>• 양측 주장(`PROSECUTOR` · `DEFENSE`) 섹션 위 안내 문구는 DB에 두지 않고 화면 고정 문구로 둔다. 컬럼을 추가하지 않는다<br>• `penalty_rule.display_order` 규칙 추가: 법조문 표기 순서대로 무거운 형벌부터(사형 → 무기 → 징역 → 벌금). 예시 · 가상 시드는 이미 이 순서이고 실제 사건 시드(비공개)를 맞춤 |
 | v1.10 | 2026-10-06 | 판단 요소별 요약어 기준 확정 반영 (BE-26)<br>• `factor.summary_tag` 설명을 "요소를 묶는 분류명"에서 "요소마다 붙이는 요약어"로 정정<br>• 6장 `factor` 예시의 `summary_tag` 11개 값을 요소별 요약어로 교체(가상 시드 · 프론트 목과 같은 값) |
 | v1.11 | 2026-10-07 | AI 판결 자동 파이프라인 · 후검수 반영 (BE-31)<br>• `ai_generation.generation_report`(jsonb) 추가(V8 마이그레이션): 자동 생성 정보(검증 경고 · 사전 학습 점검 판정 · 회차 선택 · 실행 식별자 `runKey`)<br>• 자동 적재는 AI 판결을 비공개(`is_published=false`) · `PENDING`으로, 사건을 `DRAFT`로 넣고 관리자가 검수 후 공개한다 |
+| v1.12 | 2026-10-08 | 관리자 계정 추가 (**확장 단계**, BE-39)<br>• `admin_account`(V9): 관리자 후검수 API 로그인 계정. 사용자(익명 ID)와 관계없음 |
 
 ---
 
@@ -397,6 +398,20 @@ AI 판결 1건을 어떤 조건으로 만들었는지 남긴다(REQ-047, 079). M
 | created_at | timestamptz | ✓ |  |
 - 자동 파이프라인(BE-31)은 AI 판결을 비공개(`judgment.is_published=false`) · `review_status='PENDING'`으로 넣는다. 관리자가 검수해 `APPROVED`로 바꾸고 공개 판단을 교체한다(후검수). `REJECTED`는 공개하지 않는다.
 - 모델·프롬프트가 바뀌면 새 `judgment` + 새 `ai_generation`을 만들고, 검수 후 공개 판단을 교체한다. 기존 행은 지우지 않는다(REQ-079).
+
+#### `admin_account` — 관리자 계정 (확장 단계, v1.12)
+
+관리자 후검수 API(`/api/v1/admin/**`, BE-33)에 로그인하는 관리자(BE-39). 사용자는 익명 ID로만 구분하므로 이 테이블과 관계가 없다.
+
+| 컬럼 | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| id | bigint PK | ✓ |  |
+| email | varchar(254) | ✓ | 로그인 아이디. 소문자로 정규화해 저장(CHECK `email = lower(email)`), 유니크 |
+| password_hash | varchar(100) |  | BCrypt 해시(`{bcrypt}` 접두어). OAuth로만 로그인하는 관리자(BE-40)는 NULL |
+| display_name | varchar(50) | ✓ | 화면 · 검수 기록에 쓰는 이름 |
+| enabled | boolean | ✓ | 비활성이면 로그인할 수 없다 |
+| created_at | timestamptz | ✓ |  |
+| last_login_at | timestamptz |  | 마지막 로그인 시각 |
 
 #### `comparison_analysis` — 세 판결 비교 분석 (확장 단계, v1.1)
 

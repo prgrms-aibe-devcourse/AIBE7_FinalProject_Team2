@@ -14,6 +14,7 @@
 | v1.7 | 2026-10-02 | COMMON-15 반영 — 9장 `CLAUDE.md`(규칙 원본) · `AGENTS.md`(다른 에이전트용 안내) 역할 구분 |
 | v1.8 | 2026-10-02 | BE-17 반영 — 2장에 실제 사건 데이터 주입 방식 추가(비공개 저장소 `backend/private-seed` 서브모듈 + Flyway `filesystem:` 위치), `FLYWAY_LOCATIONS` 표에 실제 사건 행 추가, `repeatable:missing` 재검토 결과 |
 | v1.9 | 2026-10-06 | BE-28 반영 — 2장 `FLYWAY_LOCATIONS` 표: 로컬 `./gradlew bootRun`은 가상 시드 + (서브모듈에 SQL이 있으면) 실제 사건 위치를 `build.gradle`이 자동으로 정함. 환경변수를 주면 그 값 우선, 운영 · 테스트 · CI는 변경 없음 |
+| v1.10 | 2026-10-08 | BE-39 반영 (**확장 단계**) — 3장에 관리자 인증 추가: Spring Security, 관리자 계정(V9 `admin_account`) · 세션 로그인, `/api/v1/admin/**`만 보호하고 사용자 API는 그대로(인증 · CSRF · 세션 없음), 관리자 상태 변경 요청 CSRF, OAuth 로그인(BE-40, 예정). 2장 마이그레이션 목록에 V7 ~ V9 추가. MVP 범위는 변경 없음(관리자 화면 없음) |
 
 
 ## **1. Backend**
@@ -100,7 +101,10 @@ backend/src/main/resources/db/migration
  ├─ V3__create_experience.sql         -- 익명 사용자, 체험
  ├─ V4__create_judgment.sql           -- 판단, 판단 요소 평가 (+ CHECK · 부분 유니크 인덱스)
  ├─ V5__create_extension_tables.sql   -- (확장) AI 판결 생성 기록, 세 판결 비교 분석
- └─ V6__add_case_source_final_unique.sql   -- 사건마다 최종 확정 판결 1건 (부분 유니크)
+ ├─ V6__add_case_source_final_unique.sql   -- 사건마다 최종 확정 판결 1건 (부분 유니크)
+ ├─ V7__add_legal_case_title_factor_display_order_unique.sql   -- 사건 제목 · 판단 요소 표시 순서 유니크 (적재 SQL 조회 키)
+ ├─ V8__add_ai_generation_generation_report.sql   -- (확장) AI 판결 자동 생성 정보 · runKey 유니크 (BE-31)
+ └─ V9__create_admin_account.sql      -- (확장) 관리자 계정 (BE-39)
 
 backend/src/main/resources/db/seed          -- 로컬 · CI 전용 (운영에는 넣지 않음)
  └─ R__seed_sample_case.sql           -- 개발용 임시 시드: 가상 살인 사건 1건 (ERD 6장 예시)
@@ -160,7 +164,7 @@ PostgreSQL 조회 → Redis 저장 → 반환
 | --- | --- |
 | 익명 ID (UUID 쿠키) | 로그인 없이 사용자의 체험 기록과 진행 상태 식별 |
 | HttpOnly Cookie | 브라우저 스크립트에서 익명 ID를 읽지 못하도록 보호 |
-| Spring Security | (이후) 회원 기능 도입 시 인증 및 API 접근 제어 |
+| Spring Security | (확장, BE-39) 관리자 인증 · 관리자 API 접근 제어. (이후) 회원 기능 도입 시 사용자 인증 |
 
 MVP는 회원가입 없이 핵심 체험이 끝까지 동작해야 한다. 사용자를 익명 ID로 구분하고, 같은 브라우저에서는 이어서 체험할 수 있도록 한다.
 
@@ -185,6 +189,22 @@ MVP는 회원가입 없이 핵심 체험이 끝까지 동작해야 한다. 사�
 원본 판결문, 사건번호 등 내부 정보는 사용자 API에서 절대 조회하지 않는다. AI 판결과 실제 판결은 진행 상태가 해당 단계에 도달했을 때만 응답에 포함한다.
 
 회원가입 / 로그인은 MVP 이후 기능이며, 도입 시 기존 익명 체험을 회원 기록으로 연결한다.
+
+### 관리자 인증 (확장 단계, BE-39 · BE-40)
+
+자동 파이프라인이 비공개로 적재한 사건 · 판결을 관리자가 검수 · 공개하는 **관리자 후검수(BE-33)** 를 위한 인증이다. **MVP 범위가 아니다**(MVP는 관리자 화면 없이 SQL로 적재, MVP 정의서).
+
+| 항목 | 내용 |
+| --- | --- |
+| 보호 범위 | `/api/v1/admin/**`만 관리자(`ROLE_ADMIN`)를 요구한다. **사용자 API는 지금처럼 인증 없이 동작**하고 세션 · CSRF 쿠키도 만들지 않는다 |
+| 계정 | `admin_account`(V9): 이메일(소문자 정규화, 유일) · 비밀번호 해시(BCrypt, `{bcrypt}` 접두어) · 표시 이름 · 활성 여부 · 마지막 로그인 시각 |
+| 로그인 | 세션 기반. `POST /api/v1/admin/auth/login`(JSON) → 세션 쿠키 `NLNB_ADMIN_SESSION`(HttpOnly · Secure · SameSite=Lax, 기본 30분). 로그인 시 세션 ID를 바꿔 세션 고정을 막는다. 실패는 계정 없음 · 비활성 · 비밀번호 불일치를 구분하지 않는다 |
+| CSRF | 관리자 API의 상태 변경 요청(로그인 포함)은 CSRF 토큰을 요구한다. `GET /api/v1/admin/auth/csrf`가 쿠키 `XSRF-TOKEN`을 내려 주고, 화면이 그 값을 헤더 `X-XSRF-TOKEN`에 담는다 |
+| 첫 계정 | 환경변수 `ADMIN_BOOTSTRAP_EMAIL` · `ADMIN_BOOTSTRAP_PASSWORD`(12자 이상)가 있고 그 이메일의 계정이 없을 때만 기동 시 한 번 만든다. 이미 있는 계정의 비밀번호는 바꾸지 않는다. 만든 뒤 환경변수를 지운다 |
+| OAuth (BE-40, 예정) | OAuth 2.0 / OIDC 로그인. 허용 목록(등록된 관리자 이메일)에 있을 때만 관리자 권한. 같은 세션 · 권한 경계를 쓴다 |
+| 오류 응답 | 필터에서 막힌 요청도 공통 에러 형식: 로그인 안 함 401 `UNAUTHORIZED`, 권한 없음 · CSRF 실패 403 `FORBIDDEN`, 로그인 실패 401 `INVALID_CREDENTIALS` |
+
+원본 판결문 등 내부 정보는 관리자 API(BE-41)에서만 보여 주고, 사용자 API에는 지금처럼 넣지 않는다.
 
 ---
 
