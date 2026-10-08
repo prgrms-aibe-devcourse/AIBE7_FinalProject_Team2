@@ -38,7 +38,8 @@ sys.path.insert(0, str(PARENT_DIR))
 
 from common import find_forbidden_keys, load_json, write_json  # noqa: E402
 from extract_case import (  # noqa: E402
-    DEFAULT_OUT_DIR, NORMAL_STOP_REASONS, TRUNCATED_REASONS, ExtractError, NAME_PATTERN, join_judgments, split_model,
+    DEFAULT_OUT_DIR, NORMAL_STOP_REASONS, TRUNCATED_REASONS, ExtractError, ModelUnavailableError, NAME_PATTERN,
+    join_judgments, model_chain, run_with_fallback, split_model,
 )
 from llm import LLMError, api_key, call as llm_call, model_provider  # noqa: E402
 from validate_output import FORBIDDEN_EXPRESSIONS, parse_output  # noqa: E402
@@ -325,6 +326,8 @@ def request_draft(system, user, case, masked_text, model, max_tokens=MAX_TOKENS,
         try:
             result = caller(model, system, message, max_tokens=max_tokens, json_output=True)
         except LLMError as e:
+            if e.kind:  # 과부하 · 한도: 다음 모델로 넘어갈 수 있다 (BE-45)
+                raise ModelUnavailableError(str(e), e.kind) from e
             raise CourtDraftError(str(e)) from e
         if result.stop_reason in TRUNCATED_REASONS:
             raise CourtDraftError(f"출력이 최대 길이({max_tokens} 토큰)에서 잘렸습니다")
@@ -343,19 +346,25 @@ def request_draft(system, user, case, masked_text, model, max_tokens=MAX_TOKENS,
 
 
 def run(name, out_dir=DEFAULT_OUT_DIR, model=DEFAULT_MODEL, max_tokens=MAX_TOKENS, caller=None,
-        case_path=None, court_path=None, source_path=None, final_index=None):
+        case_path=None, court_path=None, source_path=None, final_index=None, log=print):
     """초안 생성 전체 흐름. (초안 파일, 보고서 파일). 실패하면 CourtDraftError (보고서는 남김).
 
     입력 파일은 기본으로 out_dir/<name>.case.json 등을 쓰고, 경로를 주면 그 파일을 쓴다(파이프라인 inputs).
+    model은 문자열 또는 모델 목록이다. 목록이면 앞 모델의 호출이 과부하 · 한도로 막혔을 때 다음 모델이 처음부터
+    다시 요청한다(재요청 횟수도 새로 센다) (BE-45).
     """
     if not NAME_PATTERN.match(name):
         raise CourtDraftError("--name은 영어 소문자 · 숫자 · 하이픈만 씁니다")
     out_dir = Path(out_dir)
     try:
-        _, model_id = split_model(model)  # 모델 지정 검증 (manual · 알 수 없는 공급자 거부)
+        models = model_chain(model)
+        for m in models:
+            split_model(m)  # 모델 지정 검증 (manual · 알 수 없는 공급자 거부)
     except ExtractError as e:
         raise CourtDraftError(str(e)) from e
-    spec = f"{model_provider(model)}:{model_id}"  # 공급자 규칙은 llm.model_provider 하나에서 정한다
+
+    def spec_of(m):
+        return f"{model_provider(m)}:{split_model(m)[1]}"  # 공급자 규칙은 llm.model_provider 하나에서 정한다
     case = load_json(case_path or out_dir / f"{name}.case.json")
     court = load_json(court_path or out_dir / f"{name}.court_judgment_internal.json")
     source = load_json(source_path or out_dir / f"{name}.source_internal.json")
@@ -376,7 +385,8 @@ def run(name, out_dir=DEFAULT_OUT_DIR, model=DEFAULT_MODEL, max_tokens=MAX_TOKEN
     report_path = out_dir / f"{name}.court_report.json"
     draft_path = out_dir / f"{name}.court_draft.json"
     sentence_errors, sentence_warnings = check_sentence(court, originals, levels, final_index)
-    report = {"promptVersion": COURT_PROMPT_VERSION, "requestedModel": model, "errors": list(sentence_errors),
+    report = {"promptVersion": COURT_PROMPT_VERSION, "requestedModel": models[0],
+              "errors": list(sentence_errors),
               "warnings": list(sentence_warnings)}
     if sentence_errors:
         draft_path.unlink(missing_ok=True)
@@ -385,20 +395,29 @@ def run(name, out_dir=DEFAULT_OUT_DIR, model=DEFAULT_MODEL, max_tokens=MAX_TOKEN
         raise CourtDraftError("형량 교차 확인 실패 — 초안을 만들지 않았습니다. 보고서: " + str(report_path))
 
     if caller is None:
-        try:
-            api_key(spec.split(":")[0])
-        except LLMError as e:
-            raise CourtDraftError(str(e)) from e
+        for m in models:  # 대체 모델의 키도 호출 전에 확인한다
+            try:
+                api_key(model_provider(m))
+            except LLMError as e:
+                raise CourtDraftError(str(e)) from e
         caller = llm_call
     system, user = build_messages(case, court, masked_text)
     try:
-        draft, warnings, served, attempts = request_draft(system, user, case, masked_text, spec, max_tokens, caller)
-    except CourtDraftError as e:
+        (draft, warnings, served, attempts), used_model, skipped = run_with_fallback(
+            models, lambda m: request_draft(system, user, case, masked_text, spec_of(m), max_tokens, caller), log)
+    except (CourtDraftError, ModelUnavailableError) as e:
         draft_path.unlink(missing_ok=True)
         report.update(status="ERROR", errors=report["errors"] + [scrub(str(e))])
+        if len(models) > 1:
+            report.update(modelChain=models, fallbacks=[{**f, "error": scrub(f["error"])} for f in getattr(e, "skipped", [])])
         write_json(report_path, report)
+        if isinstance(e, ModelUnavailableError):
+            raise CourtDraftError(str(e)) from e
         raise
     result = build_court_draft(draft, case, court, served)
+    if len(models) > 1:
+        report.update(requestedModel=used_model, modelChain=models,
+                      fallbacks=[{**f, "error": scrub(f["error"])} for f in skipped])
     report.update(status="NEEDS_REVIEW", model=served, attempts=attempts, warnings=report["warnings"] + warnings,
                   notes=[scrub(n) for n in draft["notes"]],
                   factorsChosen=len(result["judgmentFactors"]), factorsExcluded=len(result["excludedFactors"]["factorIds"]))
@@ -411,11 +430,14 @@ def main():
     parser = argparse.ArgumentParser(description="재판부 판결(COURT) 초안을 만들고 원문과 대조한다 (BE-38)")
     parser.add_argument("--name", required=True, help="case-extractor에서 쓴 이름")
     parser.add_argument("--out-dir", default=str(DEFAULT_OUT_DIR))
-    parser.add_argument("--model", default=DEFAULT_MODEL, help="'공급자:모델ID' (openai · gemini · anthropic)")
+    parser.add_argument("--model", action="append",
+                        help=f"'공급자:모델ID' (openai · gemini · anthropic, 기본: {DEFAULT_MODEL}). 여러 번 주면 앞 모델이 "
+                             "과부하 · 한도로 막혔을 때 다음 모델로 넘어간다")
     parser.add_argument("--max-tokens", type=int, default=MAX_TOKENS)
     args = parser.parse_args()
     try:
-        paths = run(args.name, args.out_dir, args.model, args.max_tokens)
+        model = args.model[0] if args.model and len(args.model) == 1 else (args.model or DEFAULT_MODEL)
+        paths = run(args.name, args.out_dir, model, args.max_tokens)
     except (CourtDraftError, OSError, json.JSONDecodeError) as e:
         print(f"[오류] {e}", file=sys.stderr)
         return 1

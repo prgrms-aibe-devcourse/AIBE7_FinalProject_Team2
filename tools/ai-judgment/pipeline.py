@@ -68,6 +68,7 @@ DEFAULT_CONFIG = {
     "inputs": {"case": None, "court": None, "report": None, "source": None, "courtDraft": None},
     "stages": {
         # model: Claude는 모델 ID(또는 anthropic:모델ID), 다른 공급자는 openai:모델ID · gemini:모델ID (BE-35). maxTokens는 Claude 외 공급자의 출력 상한
+        # 목록으로 주면 앞 모델이 과부하 · 한도로 막혔을 때(재시도를 다 쓴 뒤) 다음 모델로 넘어간다 (BE-45)
         "extract": {"enabled": True, "model": "claude-opus-5-5", "effort": "high", "requireEligible": True,
                     "maxTokens": None},
         # 재판부 판결(COURT) 초안 자동 생성 (BE-38). model이 null이면 extract 모델을 쓴다. 결과는 비공개로 적재된다
@@ -125,6 +126,34 @@ def load_config(path):
     return config
 
 
+def chain_errors(label, value, expected):
+    """stages.extract.model · stages.court.model 검사. 문자열이거나, 앞 모델이 막히면 다음 모델로 넘어가는 목록 (BE-45)."""
+    models = [value] if isinstance(value, str) else value
+    if not isinstance(models, list) or not models or not all(isinstance(m, str) and m.strip() for m in models):
+        return [f"{label}은 {expected}이다"]
+    errors = []
+    if len({m.strip() for m in models}) != len(models):
+        errors.append(f"{label}에 같은 모델이 두 번 들어 있다")
+    for m in models:
+        if ":" in m:
+            try:
+                if parse_model_spec(m)[0] == "manual":
+                    errors.append(f"비식별화 · 재판부 판결 초안은 API 공급자만 쓴다 (manual 불가): {m}")
+            except LLMError as e:
+                errors.append(str(e))
+    return errors
+
+
+def chain_text(model):
+    """모델 설정(문자열 또는 목록) → 안내 문구용 `모델1 → 모델2`."""
+    return " → ".join([model] if isinstance(model, str) else model)
+
+
+def providers_text(model):
+    """모델 설정의 실제 공급자 (외부 전송 안내용). 목록이면 대체 모델까지 모두 적는다."""
+    return ", ".join(sorted({model_provider(m) for m in ([model] if isinstance(model, str) else model)}))
+
+
 def validate_config(config):
     errors = []
     name = config.get("name") or ""
@@ -140,8 +169,8 @@ def validate_config(config):
         errors.append("extract를 쓰려면 sources에 판결문 경로를 넣는다")
     extract_model = stages["extract"]["model"]
     court_model = stages["court"].get("model")
-    if court_model is not None and (not isinstance(court_model, str) or not court_model.strip()):
-        errors.append("stages.court.model은 null 또는 모델 이름 문자열이다")
+    if court_model is not None:
+        errors += chain_errors("stages.court.model", court_model, "null 또는 모델 이름 문자열 · 목록")
     court_max_tokens = stages["court"].get("maxTokens")
     if not isinstance(court_max_tokens, int) or isinstance(court_max_tokens, bool) or court_max_tokens <= 0:
         errors.append("stages.court.maxTokens는 양의 정수다")
@@ -149,14 +178,7 @@ def validate_config(config):
     if extract_max_tokens is not None and (not isinstance(extract_max_tokens, int) or isinstance(extract_max_tokens, bool)
                                            or extract_max_tokens <= 0):
         errors.append("stages.extract.maxTokens는 null 또는 양의 정수다")
-    if not isinstance(extract_model, str) or not extract_model.strip():
-        errors.append("stages.extract.model은 모델 이름 문자열이다 (예: claude-opus-5-5, openai:모델ID)")
-    elif ":" in extract_model:
-        try:
-            if parse_model_spec(extract_model)[0] == "manual":
-                errors.append(f"비식별화는 API 공급자만 쓴다 (manual 불가): {extract_model}")
-        except LLMError as e:
-            errors.append(str(e))
+    errors += chain_errors("stages.extract.model", extract_model, "모델 이름 문자열 · 목록 (예: claude-opus-5-5, openai:모델ID)")
     for spec in stages["generate"]["models"] + (stages["contamination"]["models"] or []):
         try:
             if parse_model_spec(spec)[0] == "manual":
@@ -277,8 +299,9 @@ def active_models(config, state):
 # ---------------------------------------------------------------- 단계
 
 def extract_provider(config):
-    """비식별화 모델의 실제 공급자 (외부 전송 안내용). 규칙은 llm.model_provider와 같다 (비식별화 호출도 같은 함수를 쓴다)."""
-    return model_provider(config["stages"]["extract"]["model"])
+    """비식별화 모델의 실제 공급자 (외부 전송 안내용). 규칙은 llm.model_provider와 같다 (비식별화 호출도 같은 함수를 쓴다).
+    모델 목록이면 대체 모델의 공급자까지 모두 적는다 (BE-45)."""
+    return providers_text(config["stages"]["extract"]["model"])
 
 
 def stage_extract(config, state, log):
@@ -289,11 +312,11 @@ def stage_extract(config, state, log):
         raise PipelineError(f"case-extractor를 불러오지 못했습니다 (pip install -r case-extractor/requirements.txt): {e}")
     cfg = config["stages"]["extract"]
     sources = [resolve_path(config, s["path"]) for s in config["sources"]]
-    log(f"판결문 {len(sources)}개 → {cfg['model']}로 비식별화 · 구조화 (로컬 마스킹 후 전송)")
+    log(f"판결문 {len(sources)}개 → {chain_text(cfg['model'])}로 비식별화 · 구조화 (로컬 마스킹 후 전송)")
     try:
         case_path, court_path, report_path, source_path = extract_run(
             sources, config["name"], out_dir=CASES_DIR, model=cfg["model"], effort=cfg["effort"],
-            max_tokens=cfg.get("maxTokens"))
+            max_tokens=cfg.get("maxTokens"), log=log)
     except ExtractError as e:
         raise PipelineError(f"비식별화 실패: {e}")
     outputs = {"case": str(case_path), "court": str(court_path), "report": str(report_path), "source": str(source_path)}
@@ -301,6 +324,9 @@ def stage_extract(config, state, log):
     eligibility = report.get("eligibility") or {}
     outputs["eligible"] = eligibility.get("eligible")
     outputs["warnings"] = len(report.get("warnings", []))
+    if report.get("fallbacks"):  # 앞 모델이 과부하 · 한도로 막혀 대체 모델이 응답했다 (BE-45)
+        outputs["fallbacks"] = [{"model": f["model"], "kind": f["kind"]} for f in report["fallbacks"]]
+        outputs["model"] = report.get("requestedModel")
     if eligibility.get("eligible") is False and cfg["requireEligible"]:
         raise PipelineError("서비스 대상이 아닌 판결로 판정됐습니다 (stages.extract.requireEligible=false로 무시 가능): "
                             + " / ".join(eligibility.get("reasons", [])), outputs)
@@ -321,19 +347,22 @@ def stage_court(config, state, log, caller=None):
     except ImportError as e:
         raise PipelineError(f"court_draft를 불러오지 못했습니다: {e}")
     cfg, model = config["stages"]["court"], court_model(config)
-    log(f"재판부 판결 초안 → {model} (마스킹한 판결문 전송, 인용은 원문과 대조)")
+    log(f"재판부 판결 초안 → {chain_text(model)} (마스킹한 판결문 전송, 인용은 원문과 대조)")
     try:
         draft_path, report_path = court_run(
             config["name"], out_dir=CASES_DIR, model=model, max_tokens=cfg["maxTokens"], caller=caller,
             case_path=input_file(config, state, "case"), court_path=input_file(config, state, "court"),
-            source_path=input_file(config, state, "source"), final_index=config["finalSourceIndex"])
+            source_path=input_file(config, state, "source"), final_index=config["finalSourceIndex"], log=log)
     except CourtDraftError as e:
         raise PipelineError(f"재판부 판결 초안 실패: {e}")
     report = load_json(report_path)
     log(f"초안: 고려한 요소 {report.get('factorsChosen')}개 · 제외 {report.get('factorsExcluded')}개 · "
         f"경고 {len(report.get('warnings', []))} · 시도 {report.get('attempts')}회")
-    return {"courtDraft": str(draft_path), "report": str(report_path), "model": report.get("model"),
-            "warnings": len(report.get("warnings", []))}
+    outputs = {"courtDraft": str(draft_path), "report": str(report_path), "model": report.get("model"),
+               "warnings": len(report.get("warnings", []))}
+    if report.get("fallbacks"):  # 앞 모델이 과부하 · 한도로 막혀 대체 모델이 응답했다 (BE-45)
+        outputs["fallbacks"] = [{"model": f["model"], "kind": f["kind"]} for f in report["fallbacks"]]
+    return outputs
 
 
 def stage_contamination(config, state, log, caller=call):
@@ -701,7 +730,7 @@ def run_pipeline(config, start=None, until=None, skip=(), rerun=False, log=print
     if "extract" in steps:
         log(f"외부 전송: 비식별화 단계에서 마스킹한 판결문이 {extract_provider(config)}로 전송됩니다")
     if "court" in steps:
-        log(f"외부 전송: 재판부 판결 초안 단계에서 마스킹한 판결문이 {model_provider(court_model(config))}로 전송됩니다")
+        log(f"외부 전송: 재판부 판결 초안 단계에서 마스킹한 판결문이 {providers_text(court_model(config))}로 전송됩니다")
     if {"contamination", "generate"} & set(steps):
         log(f"외부 전송: 비식별화한 사건 내용이 {', '.join(providers)}로 전송됩니다")
     for stage in steps:

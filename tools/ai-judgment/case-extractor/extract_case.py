@@ -59,6 +59,56 @@ class ExtractError(Exception):
     pass
 
 
+class ModelUnavailableError(ExtractError):
+    """호출 자체가 막혀 응답을 받지 못했다 (과부하 · 분당 한도 · 일 한도). 다음 모델로 넘어갈 수 있다 (BE-45).
+
+    kind는 llm.LLMError.kind와 같다: overloaded · rate_limit · daily_quota. 형식 · 검사 실패 같은 품질 문제는
+    이 오류가 아니며, 다른 모델로 덮지 않고 그대로 멈춘다.
+    """
+
+    def __init__(self, message, kind=None):
+        super().__init__(message)
+        self.kind = kind
+        self.skipped = []
+
+
+KIND_LABELS = {"overloaded": "과부하", "rate_limit": "분당 한도", "daily_quota": "일 한도 · 크레딧 소진"}
+
+
+def model_chain(model):
+    """모델 설정(문자열 또는 목록) → 모델 지정 목록. 앞 모델부터 쓰고, 호출이 막히면 다음 모델로 넘어간다 (BE-45)."""
+    models = [model] if isinstance(model, str) else model
+    if not isinstance(models, (list, tuple)) or not models or not all(isinstance(m, str) and m.strip() for m in models):
+        raise ExtractError(f"모델은 모델 이름 문자열이거나 그 목록입니다: {model!r}")
+    models = [m.strip() for m in models]
+    if len(set(models)) != len(models):
+        raise ExtractError("모델 목록에 같은 모델이 두 번 들어 있습니다: " + ", ".join(models))
+    return models
+
+
+def run_with_fallback(models, attempt, log=print):
+    """모델 목록을 앞에서부터 attempt(모델)로 시도한다 (BE-45). (결과, 응답한 모델, 건너뛴 기록)을 돌려준다.
+
+    호출이 막힌 경우(ModelUnavailableError: 과부하 · 한도, 앞 모델의 재시도는 이미 끝남)에만 다음 모델로 넘어간다.
+    다음 모델은 같은 입력으로 처음부터 다시 시작하고, 앞 모델의 부분 결과는 쓰지 않는다 (한 결과에 두 모델이 섞이지 않게).
+    품질 문제(형식 · 검사 실패)는 넘어가지 않고 그대로 멈춘다.
+    """
+    skipped = []
+    for index, spec in enumerate(models):
+        try:
+            return attempt(spec), spec, skipped
+        except ModelUnavailableError as e:
+            skipped.append({"model": spec, "kind": e.kind, "error": str(e)})
+            if index + 1 == len(models):
+                final = e if len(models) == 1 else ModelUnavailableError(
+                    "모든 모델을 쓸 수 없었습니다: " + " | ".join(
+                        f"{s['model']} ({KIND_LABELS.get(s['kind'], s['kind'])}) {s['error'].splitlines()[0]}" for s in skipped),
+                    kind=e.kind)
+                final.skipped = skipped
+                raise final from (None if final is e else e)
+            log(f"[{spec}] 호출 불가 ({KIND_LABELS.get(e.kind, e.kind)}) → 다음 모델 {models[index + 1]}로 처음부터 다시 요청합니다")
+
+
 def read_judgment(path):
     """판결문 파일에서 텍스트를 꺼낸다. PDF는 pypdf로, txt는 UTF-8 · CP949 순서로 읽는다."""
     path = Path(path)
@@ -175,6 +225,8 @@ def call_llm(system, user, model, effort, max_tokens=None, caller=llm_call):
         try:
             result = caller(spec, system, message, max_tokens=max_tokens or NON_CLAUDE_MAX_TOKENS, json_output=True)
         except LLMError as e:
+            if e.kind:  # 과부하 · 한도: 다음 모델로 넘어갈 수 있다 (BE-45)
+                raise ModelUnavailableError(str(e), e.kind) from e
             raise ExtractError(str(e)) from e
         if result.stop_reason in TRUNCATED_REASONS:
             raise ExtractError(f"출력이 최대 길이({max_tokens or NON_CLAUDE_MAX_TOKENS} 토큰)에서 잘렸습니다. "
@@ -230,10 +282,12 @@ def call_claude(system, user, model, effort):
     except anthropic.AuthenticationError as e:
         raise ExtractError("API 인증 실패: ANTHROPIC_API_KEY 또는 `ant auth login`을 확인하세요") from e
     except anthropic.RateLimitError as e:
-        raise ExtractError("요청 한도를 넘었습니다. 잠시 뒤 다시 실행하세요") from e
+        raise ModelUnavailableError("요청 한도를 넘었습니다. 잠시 뒤 다시 실행하세요", "rate_limit") from e
     except anthropic.BadRequestError as e:
         raise ExtractError(f"잘못된 요청: {e.message}") from e
     except anthropic.APIStatusError as e:
+        if e.status_code in (503, 529):
+            raise ModelUnavailableError(f"서비스 과부하 ({e.status_code}): {e.message}", "overloaded") from e
         raise ExtractError(f"API 오류 ({e.status_code}): {e.message}") from e
     except anthropic.APIConnectionError as e:
         raise ExtractError("API에 연결하지 못했습니다. 네트워크를 확인하세요") from e
@@ -295,32 +349,40 @@ def process_output(output):
 
 
 def run(input_path, name, out_dir=DEFAULT_OUT_DIR, model=DEFAULT_MODEL, effort=DEFAULT_EFFORT,
-        dry_run=False, call=None, max_tokens=None):
-    """전체 흐름. 만든 파일 경로 목록을 돌려준다. 검사 오류가 있으면 ExtractError(보고서는 남김)."""
+        dry_run=False, call=None, max_tokens=None, log=print):
+    """전체 흐름. 만든 파일 경로 목록을 돌려준다. 검사 오류가 있으면 ExtractError(보고서는 남김).
+
+    model은 문자열 또는 모델 목록이다. 목록이면 앞 모델의 호출이 과부하 · 한도로 막혔을 때 다음 모델로 넘어간다 (BE-45).
+    """
     if not NAME_PATTERN.match(name):
         raise ExtractError("--name은 영어 소문자 · 숫자 · 하이픈만 씁니다 (사건을 특정할 수 없는 이름, 예: long-marriage-conflict)")
     out_dir = Path(out_dir)
-    provider, _ = split_model(model)  # 모델 지정이 잘못됐으면 판결문을 읽기 전에 알린다
+    models = model_chain(model)
+    providers = [split_model(m)[0] for m in models]  # 모델 지정이 잘못됐으면 판결문을 읽기 전에 알린다
     judgments = read_judgments(input_path)
     masked_text, mask_counts = premask(join_judgments(judgments))
     system, user = build_messages(masked_text)
-    if provider != "claude":
-        user += schema_instruction()  # 스키마를 강제할 수 없는 공급자에게는 스키마를 프롬프트로 보낸다 (dry-run 파일에도 그대로)
+
+    def request_for(spec):
+        # 스키마를 강제할 수 없는 공급자에게는 스키마를 프롬프트로 보낸다 (dry-run 파일에도 그대로)
+        return user if split_model(spec)[0] == "claude" else user + schema_instruction()
 
     if dry_run:
         path = out_dir / f"{name}.request.md"
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(f"# [SYSTEM]\n\n{system}\n\n# [USER]\n\n{user}\n", encoding="utf-8")
+        path.write_text(f"# [SYSTEM]\n\n{system}\n\n# [USER]\n\n{request_for(models[0])}\n", encoding="utf-8")
         return [path]
 
     if call is None:
-        if provider != "claude":
-            try:
-                api_key(provider)
-            except LLMError as e:
-                raise ExtractError(str(e)) from e
+        for provider in providers:  # 대체 모델의 키도 호출 전에 확인한다
+            if provider != "claude":
+                try:
+                    api_key(provider)
+                except LLMError as e:
+                    raise ExtractError(str(e)) from e
         call = lambda s, u, m, e: call_model(s, u, m, e, max_tokens)  # noqa: E731
-    output, served_model = call(system, user, model, effort)
+    (output, served_model), used_model, skipped = run_with_fallback(
+        models, lambda spec: call(system, request_for(spec), spec, effort), log)
     try:
         case_input, court, errors, warnings = process_output(output)
     except (KeyError, TypeError, OutputError) as e:
@@ -332,7 +394,9 @@ def run(input_path, name, out_dir=DEFAULT_OUT_DIR, model=DEFAULT_MODEL, effort=D
     report = {
         "promptVersion": EXTRACT_PROMPT_VERSION,
         "model": served_model,
-        "requestedModel": model,
+        "requestedModel": used_model,
+        **({"modelChain": models, "fallbacks": [{**f, "error": scrub(f["error"])} for f in skipped]}
+           if len(models) > 1 else {}),
         "status": "ERROR" if errors else "NEEDS_REVIEW",
         "premasked": mask_counts,
         "deidentifiedItems": output.get("deidentifiedItems", []),
@@ -385,16 +449,18 @@ def main():
     parser.add_argument("input", nargs="+", help="판결문 파일 (.pdf 또는 .txt). 1심 · 항소심처럼 여러 개를 함께 넣을 수 있다")
     parser.add_argument("--name", required=True, help="출력 파일 이름 (영어 소문자 · 하이픈, 사건을 특정할 수 없게)")
     parser.add_argument("--out-dir", default=str(DEFAULT_OUT_DIR), help=f"출력 폴더 (기본: {DEFAULT_OUT_DIR})")
-    parser.add_argument("--model", default=DEFAULT_MODEL,
+    parser.add_argument("--model", action="append",
                         help=f"모델 (기본: {DEFAULT_MODEL}). Claude는 모델 ID(또는 anthropic:모델 ID), 다른 공급자는 "
-                             "'openai:모델ID' · 'gemini:모델ID' (키는 환경변수)")
+                             "'openai:모델ID' · 'gemini:모델ID' (키는 환경변수). 여러 번 주면 앞 모델이 과부하 · 한도로 막혔을 때 "
+                             "다음 모델로 넘어간다")
     parser.add_argument("--effort", default=DEFAULT_EFFORT, choices=("low", "medium", "high", "xhigh", "max"),
                         help="Claude 전용 (다른 공급자는 무시)")
     parser.add_argument("--max-tokens", type=positive_int, help=f"Claude 외 공급자의 출력 상한 (기본 {NON_CLAUDE_MAX_TOKENS})")
     parser.add_argument("--dry-run", action="store_true", help="API를 호출하지 않고, 보낼 내용만 파일로 저장한다")
     args = parser.parse_args()
     try:
-        paths = run(args.input, args.name, args.out_dir, args.model, args.effort, args.dry_run,
+        model = args.model[0] if args.model and len(args.model) == 1 else (args.model or DEFAULT_MODEL)
+        paths = run(args.input, args.name, args.out_dir, model, args.effort, args.dry_run,
                     max_tokens=args.max_tokens)
     except ExtractError as e:
         print(f"[오류] {e}", file=sys.stderr)

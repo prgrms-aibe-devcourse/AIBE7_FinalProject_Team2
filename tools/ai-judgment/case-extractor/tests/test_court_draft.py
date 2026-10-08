@@ -23,6 +23,7 @@ from court_draft import (  # noqa: E402
     quote_matches, run,
 )
 from common import write_json  # noqa: E402
+import llm  # noqa: E402
 
 # 설명용 가상 판결문. 개인정보 값은 모두 지어낸 것이다.
 JUDGMENT = """가상지방법원
@@ -283,6 +284,82 @@ class RunTest(unittest.TestCase):
         with self.assertRaises(CourtDraftError):
             run("c", self.dir, "openai:gpt-x", caller=call)
         self.assertEqual(calls, [])
+
+    # ---- 모델 대체 체인 (BE-45)
+
+    @staticmethod
+    def chain_caller(script):
+        """모델별로 정해 둔 응답을 차례로 준다. 값이 Exception이면 던진다."""
+        queues, calls = {spec: list(items) for spec, items in script.items()}, []
+
+        def call(spec, system, user, **kwargs):
+            calls.append({"spec": spec, "user": user})
+            item = queues[spec].pop(0)
+            if isinstance(item, Exception):
+                raise item
+            return SimpleNamespace(text=item if isinstance(item, str) else json.dumps(item, ensure_ascii=False),
+                                   served_model=f"{spec}-served", stop_reason="stop")
+
+        return call, calls
+
+    def report(self):
+        return json.loads((self.dir / "c.court_report.json").read_text(encoding="utf-8"))
+
+    def test_run_chain_overloaded_fallsBack(self):
+        call, calls = self.chain_caller({"openai:gpt-x": [llm.LLMOverloadedError("서비스 과부하 (503)")],
+                                         "gemini:g": [DRAFT]})
+        logs = []
+        draft_path, _ = run("c", self.dir, ["openai:gpt-x", "gemini:g"], caller=call, log=logs.append)
+        report = self.report()
+        self.assertEqual([c["spec"] for c in calls], ["openai:gpt-x", "gemini:g"])
+        self.assertTrue(draft_path.exists())
+        self.assertEqual((report["requestedModel"], report["model"]), ("gemini:g", "gemini:g-served"))
+        self.assertEqual(report["modelChain"], ["openai:gpt-x", "gemini:g"])
+        self.assertEqual([(f["model"], f["kind"]) for f in report["fallbacks"]], [("openai:gpt-x", "overloaded")])
+        self.assertTrue(any("다음 모델 gemini:g" in line for line in logs))
+
+    def test_run_chain_midRetry_nextModelStartsFresh(self):
+        bad = draft_with(excerpt="지어낸 문장이다.")
+        call, calls = self.chain_caller({"openai:gpt-x": [bad, llm.LLMQuotaExhaustedError("일 한도")],
+                                         "gemini:g": [DRAFT]})
+        run("c", self.dir, ["openai:gpt-x", "gemini:g"], caller=call, log=lambda *_: None)
+        self.assertEqual([c["spec"] for c in calls], ["openai:gpt-x", "openai:gpt-x", "gemini:g"])
+        self.assertIn("이전 응답의 오류", calls[1]["user"])      # 앞 모델의 재요청에는 오류 안내가 붙었지만
+        self.assertNotIn("이전 응답의 오류", calls[2]["user"])   # 대체 모델은 처음부터 (앞 모델의 응답 · 오류를 이어받지 않는다)
+        self.assertEqual(self.report()["attempts"], 1)           # 재요청 횟수도 새로 센다
+
+    def test_run_chain_qualityFailure_doesNotFallBack(self):
+        bad = draft_with(excerpt="지어낸 문장이다.")
+        call, calls = self.chain_caller({"openai:gpt-x": [bad, bad, bad], "gemini:g": [DRAFT]})
+        with self.assertRaises(CourtDraftError):
+            run("c", self.dir, ["openai:gpt-x", "gemini:g"], caller=call, log=lambda *_: None)
+        self.assertEqual({c["spec"] for c in calls}, {"openai:gpt-x"})  # 검사 실패는 다른 모델로 덮지 않는다
+        self.assertEqual(self.report()["status"], "ERROR")
+
+    def test_run_chain_allUnavailable_recordsFallbacks(self):
+        call, _ = self.chain_caller({"openai:gpt-x": [llm.LLMRateLimitError("분당 한도")],
+                                     "gemini:g": [llm.LLMQuotaExhaustedError("일 한도")]})
+        with self.assertRaises(CourtDraftError) as ctx:
+            run("c", self.dir, ["openai:gpt-x", "gemini:g"], caller=call, log=lambda *_: None)
+        self.assertIn("모든 모델을 쓸 수 없었습니다", str(ctx.exception))
+        report = self.report()
+        self.assertEqual(report["status"], "ERROR")
+        self.assertEqual([(f["model"], f["kind"]) for f in report["fallbacks"]],
+                         [("openai:gpt-x", "rate_limit"), ("gemini:g", "daily_quota")])
+        self.assertFalse((self.dir / "c.court_draft.json").exists())
+
+    def test_run_chain_singleModelList_reportUnchanged(self):
+        call, _ = self.chain_caller({"openai:gpt-x": [DRAFT]})
+        run("c", self.dir, ["openai:gpt-x"], caller=call, log=lambda *_: None)
+        report = self.report()
+        self.assertEqual(report["requestedModel"], "openai:gpt-x")
+        self.assertNotIn("fallbacks", report)
+
+    def test_run_chain_missingFallbackKey(self):
+        with mock.patch.dict(os.environ, {"OPENAI_API_KEY": "k"}, clear=True):
+            with self.assertRaises(CourtDraftError) as ctx:
+                run("c", self.dir, ["openai:gpt-x", "gemini:g"])
+        self.assertIn("GEMINI_API_KEY", str(ctx.exception))
 
     def test_run_missingKey(self):
         with mock.patch.dict(os.environ, {}, clear=True):

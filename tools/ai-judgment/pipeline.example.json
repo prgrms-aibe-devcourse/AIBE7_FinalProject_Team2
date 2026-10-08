@@ -22,6 +22,7 @@
     "extract": {
       "enabled": true,
       "model": "claude-opus-5-5",
+      "_modelComment": "목록으로 주면 앞 모델이 과부하 · 한도로 막혔을 때 다음 모델로 넘어간다 (BE-45). 예: [\"gemini:<모델ID>\", \"openai:<모델ID>\"]",
       "effort": "high",
       "requireEligible": true,
       "maxTokens": null

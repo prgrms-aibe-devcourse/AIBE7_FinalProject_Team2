@@ -71,6 +71,22 @@ python3 extract_case.py ../cases/raw/1심.pdf ../cases/raw/항소심.pdf --name 
 - 응답이 정상 종료가 아니면(Gemini `SAFETY` · `RECITATION`, OpenAI `content_filter` 등 차단 · 거절) 다시 보내지 않고 사유를 알려 주며 멈춘다. 형식 오류 재시도 때는 판결문 전체가 다시 전송된다는 점도 참고한다.
 - 판결문은 선택한 공급자로 전송된다(로컬 마스킹 후). 실행하는 파이프라인(`pipeline.py`)은 전송 대상 공급자를 먼저 출력한다.
 
+### 모델 대체 체인 (BE-45)
+
+`--model`을 **여러 번** 주면(파이프라인은 `stages.extract.model`을 목록으로) 앞 모델의 호출이 막혔을 때 다음 모델로 넘어간다.
+
+```bash
+python3 extract_case.py raw.pdf --name my-case --model gemini:<모델ID> --model openai:<모델ID>
+```
+
+- **넘어가는 경우는 호출 자체가 막힌 때뿐이다**: 과부하(503 · 529) · 분당 한도 · 일 한도 · 크레딧 소진(Claude SDK의 rate limit · 529 포함). 앞 모델의 재시도(BE-36, 기본 최대 5번)를 다 쓴 뒤에 넘어가고, 일 한도 · 크레딧 소진은 재시도 없이 바로 넘어간다.
+- **품질 문제는 넘어가지 않는다**: 스키마 불일치 · 안전 필터 차단 · 검사 오류(개인정보 잔존 · 형량 누출 · 서비스 대상 아님)는 다른 모델로 덮지 않고 그대로 멈춘다. 원인이 가려지기 때문이다.
+- **다음 모델은 같은 판결문으로 처음부터 다시 요청한다.** 앞 모델의 부분 결과는 쓰지 않는다(한 결과에 두 모델이 섞이지 않게). 앞 모델이 쓴 시간 · 비용은 버려진다.
+- 스키마 안내는 모델마다 맞춘다(Claude는 구조화 출력, 그 밖은 프롬프트에 스키마 첨부).
+- 모든 모델의 API 키를 호출 전에 확인한다. 하나라도 없으면 아무것도 보내지 않고 멈춘다.
+- `report.json`에 응답한 모델(`requestedModel` · `model`), 체인(`modelChain`), 건너뛴 모델과 원인(`fallbacks`: `kind`는 `overloaded` · `rate_limit` · `daily_quota`)을 남긴다. 모델을 하나만 주면 예전과 같다.
+- **대체 모델에도 판결문이 전송된다.** 목록의 모든 공급자가 외부 전송 대상이므로, 파이프라인은 전송 안내에 목록의 공급자를 모두 적는다. 쓰는 키는 모두 팀이 정한 유료 키여야 한다(위 안내).
+
 ### 출력
 
 | 파일 | 내용 | 다음 단계 |
@@ -103,6 +119,7 @@ python3 extract_case.py ../cases/raw/1심.pdf ../cases/raw/항소심.pdf --name 
 ```bash
 python3 court_draft.py --name long-marriage-conflict --model openai:<모델ID>
 #    → ../cases/<name>.court_draft.json (BE-14 형식, 내부 전용) · ../cases/<name>.court_report.json
+python3 court_draft.py --name long-marriage-conflict --model gemini:<모델ID> --model openai:<모델ID>   # 앞 모델이 막히면 다음 모델 (BE-45)
 ```
 
 | 단계 | 내용 |

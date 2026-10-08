@@ -711,6 +711,60 @@ class PipelineTest(unittest.TestCase):
         config = self.config(extract={"model": "gemini:g"})
         self.assertEqual(pipeline.court_model(config), "gemini:g")  # 지정 안 하면 extract 모델
 
+    # ---- 모델 대체 체인 (BE-45)
+
+    def test_model_chain_config_validation(self):
+        for stage, value, part in (("extract", [], "stages.extract.model"),
+                                   ("extract", ["openai:a", "openai:a"], "같은 모델"),
+                                   ("extract", ["openai:a", ""], "stages.extract.model"),
+                                   ("extract", ["openai:a", "manual:b"], "manual"),
+                                   ("court", [], "stages.court.model"),
+                                   ("court", ["gemini:g", "unknown:x"], "unknown")):
+            bad = copy.deepcopy(self.raw_config)
+            bad["stages"][stage] = {"model": value}
+            write_json(self.dir / "bad-chain.json", bad)
+            with self.assertRaises(pipeline.PipelineError, msg=f"{stage} {value}") as ctx:
+                pipeline.load_config(self.dir / "bad-chain.json")
+            self.assertIn(part, str(ctx.exception), msg=f"{stage} {value}")
+        config = self.config(extract={"model": ["claude-opus-5-5", "gemini:g"]}, court={"model": ["openai:o", "gemini:g"]})
+        self.assertEqual(pipeline.court_model(config), ["openai:o", "gemini:g"])
+        self.assertEqual(self.config(extract={"model": ["gemini:g", "openai:o"]})["stages"]["extract"]["model"],
+                         ["gemini:g", "openai:o"])
+
+    def test_model_chain_transfer_notice_lists_every_provider(self):
+        config = self.config(extract={"enabled": True, "model": ["claude-opus-5-5", "gemini:g"]},
+                             court={"enabled": True, "model": ["openai:o", "gemini:g"]})
+        self.assertEqual(pipeline.extract_provider(config), "anthropic, gemini")
+        self.assertEqual(pipeline.providers_text(pipeline.court_model(config)), "gemini, openai")
+        self.assertEqual(pipeline.extract_provider(self.config()), "anthropic")  # 문자열 하나면 그대로
+
+        def stop(*args, **kwargs):
+            raise pipeline.PipelineError("테스트 중단")
+
+        functions = {stage: stop for stage in pipeline.STAGES}
+        with self.assertRaises(pipeline.PipelineError):
+            pipeline.run_pipeline(config, functions=functions, until="court", log=self.logs.append)
+        notices = [line for line in self.logs if line.startswith("외부 전송")]
+        self.assertTrue(any("비식별화" in line and "anthropic, gemini" in line for line in notices))
+        self.assertTrue(any("재판부" in line and "gemini, openai" in line for line in notices))
+
+    def test_extract_stage_logs_chain_and_records_fallbacks(self):
+        config = self.config(extract={"enabled": True, "model": ["claude-opus-5-5", "gemini:g"]})
+        report = report_for(self.case)
+        report["fallbacks"] = [{"model": "claude-opus-5-5", "kind": "overloaded", "error": "서비스 과부하"}]
+        report["requestedModel"] = "gemini:g"
+        write_json(self.dir / "r.json", report)
+        fake_module = mock.MagicMock()
+        fake_module.run.return_value = (self.raw_config["inputs"]["case"], self.raw_config["inputs"]["court"],
+                                        str(self.dir / "r.json"), self.raw_config["inputs"]["source"])
+        fake_module.ExtractError = RuntimeError
+        with mock.patch.dict(sys.modules, {"extract_case": fake_module}):
+            outputs = pipeline.stage_extract(config, {"stages": {}}, self.logs.append)
+        self.assertEqual(fake_module.run.call_args.kwargs["model"], ["claude-opus-5-5", "gemini:g"])
+        self.assertTrue(any("claude-opus-5-5 → gemini:g" in line for line in self.logs))
+        self.assertEqual(outputs["fallbacks"], [{"model": "claude-opus-5-5", "kind": "overloaded"}])
+        self.assertEqual(outputs["model"], "gemini:g")
+
     def test_extract_ineligible_stops(self):
         config = self.config(extract={"enabled": True})
         report = report_for(self.case)

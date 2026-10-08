@@ -17,9 +17,10 @@ EXTRACTOR_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(EXTRACTOR_DIR))
 
 from deidentify import date_in_text, extract_source_info, premask, residual_check  # noqa: E402
+import llm  # noqa: E402 (extract_case를 불러오면 상위 폴더가 import 경로에 들어간다)
 from extract_case import (  # noqa: E402
-    ExtractError, call_llm, parse_response_text, process_output, read_judgment, run, schema_instruction,
-    split_model,
+    ExtractError, ModelUnavailableError, call_llm, model_chain, parse_response_text, process_output, read_judgment, run,
+    schema_instruction, split_model,
 )
 from schema import OUTPUT_SCHEMA, validate_against_schema  # noqa: E402
 
@@ -634,6 +635,107 @@ class OtherProviderTest(unittest.TestCase):
         self.assertEqual((sent["model"], sent["max_tokens"]), ("openai:gpt-x", 777))
         self.assertIn("<json_schema>", sent["user"])
         self.assertNotIn("990101-1234567", sent["user"])  # API로 가는 내용에 마스킹 전 값이 없다
+
+    # ---- 모델 대체 체인 (BE-45)
+
+    def run_chain(self, models, first_error=None, **patches):
+        """call_claude · call_llm을 가짜로 바꿔 run을 돌린다. (paths, 호출 기록, 안내 로그)"""
+        calls, logs = [], []
+
+        def fake(kind):
+            def inner(system, user, model, effort, max_tokens=None):
+                calls.append((kind, model, user))
+                if first_error is not None and len(calls) == 1:
+                    raise first_error
+                return copy.deepcopy(FAKE_OUTPUT), f"{model}-served"
+            return inner
+
+        env = {"OPENAI_API_KEY": "k", "GEMINI_API_KEY": "k"}
+        with mock.patch.dict(os.environ, env), mock.patch("extract_case.call_llm", fake("llm")), \
+                mock.patch("extract_case.call_claude", fake("claude")):
+            paths = run(self.input, "sample-case", out_dir=self.dir / "out", model=models, log=logs.append)
+        return paths, calls, logs
+
+    def test_run_chain_overloaded_fallsBackFromScratch(self):
+        error = ModelUnavailableError("서비스 과부하 (503)", "overloaded")
+        paths, calls, logs = self.run_chain(["claude-x", "openai:gpt-x"], first_error=error)
+        report = json.loads(paths[2].read_text(encoding="utf-8"))
+        self.assertEqual([(kind, model) for kind, model, _ in calls], [("claude", "claude-x"), ("llm", "openai:gpt-x")])
+        self.assertEqual((report["requestedModel"], report["model"]), ("openai:gpt-x", "openai:gpt-x-served"))
+        self.assertEqual(report["modelChain"], ["claude-x", "openai:gpt-x"])
+        self.assertEqual([(f["model"], f["kind"]) for f in report["fallbacks"]], [("claude-x", "overloaded")])
+        # 다음 모델은 같은 판결문으로 처음부터 요청한다. 스키마를 강제할 수 없는 공급자(openai)만 스키마 안내를 붙인다
+        self.assertNotIn("<json_schema>", calls[0][2])
+        self.assertIn("<json_schema>", calls[1][2])
+        self.assertEqual(calls[0][2], calls[1][2].split("\n\n---\n")[0])
+        self.assertTrue(any("다음 모델 openai:gpt-x" in line and "과부하" in line for line in logs))
+
+    def test_run_chain_firstModelAnswers_noFallbackRecorded(self):
+        paths, calls, _ = self.run_chain(["openai:gpt-x", "gemini:gem-x"])
+        report = json.loads(paths[2].read_text(encoding="utf-8"))
+        self.assertEqual(len(calls), 1)
+        self.assertEqual((report["requestedModel"], report["fallbacks"]), ("openai:gpt-x", []))
+
+    def test_run_singleModel_reportUnchanged(self):
+        paths, _, _ = self.run_chain("openai:gpt-x")
+        report = json.loads(paths[2].read_text(encoding="utf-8"))
+        self.assertEqual(report["requestedModel"], "openai:gpt-x")
+        self.assertNotIn("modelChain", report)
+        self.assertNotIn("fallbacks", report)
+
+    def test_run_chain_qualityFailure_doesNotFallBack(self):
+        with self.assertRaises(ExtractError) as ctx:
+            self.run_chain(["openai:gpt-x", "gemini:gem-x"], first_error=ExtractError("응답 형식이 맞지 않습니다"))
+        self.assertNotIsInstance(ctx.exception, ModelUnavailableError)
+        self.assertIn("형식", str(ctx.exception))
+
+    def test_run_chain_allUnavailable(self):
+        calls = []
+
+        def busy(system, user, model, effort, max_tokens=None):
+            calls.append(model)
+            raise ModelUnavailableError(f"{model} 일 한도\n→ 내일 다시", "daily_quota")
+
+        with mock.patch.dict(os.environ, {"OPENAI_API_KEY": "k", "GEMINI_API_KEY": "k"}), \
+                mock.patch("extract_case.call_llm", busy):
+            with self.assertRaises(ModelUnavailableError) as ctx:
+                run(self.input, "sample-case", out_dir=self.dir / "out", model=["openai:gpt-x", "gemini:gem-x"],
+                    log=lambda *_: None)
+        self.assertEqual(calls, ["openai:gpt-x", "gemini:gem-x"])
+        self.assertIn("모든 모델을 쓸 수 없었습니다", str(ctx.exception))
+        self.assertEqual([f["model"] for f in ctx.exception.skipped], ["openai:gpt-x", "gemini:gem-x"])
+
+    def test_run_chain_missingFallbackKey_stopsBeforeAnyCall(self):
+        with mock.patch.dict(os.environ, {"OPENAI_API_KEY": "k"}, clear=True), \
+                mock.patch("extract_case.call_llm") as called:
+            with self.assertRaises(ExtractError) as ctx:
+                run(self.input, "sample-case", out_dir=self.dir / "out", model=["openai:gpt-x", "gemini:gem-x"])
+        self.assertIn("GEMINI_API_KEY", str(ctx.exception))
+        called.assert_not_called()
+
+    def test_modelChain_validation(self):
+        self.assertEqual(model_chain("openai:a"), ["openai:a"])
+        self.assertEqual(model_chain([" openai:a ", "gemini:b"]), ["openai:a", "gemini:b"])
+        for bad in ([], "", ["openai:a", "openai:a"], ["openai:a", 3], None, 5):
+            with self.assertRaises(ExtractError, msg=repr(bad)):
+                model_chain(bad)
+        with self.assertRaises(ExtractError):
+            run(self.dir / "missing.txt", "sample-case", out_dir=self.dir / "out", model=["openai:a", "manual:b"])
+
+    def test_callLlm_failureKind_becomesModelUnavailable(self):
+        def blocked(kind_error):
+            def caller(*args, **kwargs):
+                raise kind_error
+            return caller
+
+        for error, kind in ((llm.LLMOverloadedError("busy"), "overloaded"), (llm.LLMRateLimitError("rate"), "rate_limit"),
+                            (llm.LLMQuotaExhaustedError("quota"), "daily_quota")):
+            with self.assertRaises(ModelUnavailableError) as ctx:
+                call_llm("S", "U", "gemini:gem-x", "high", caller=blocked(error))
+            self.assertEqual(ctx.exception.kind, kind)
+        with self.assertRaises(ExtractError) as ctx:  # 원인 구분이 없는 오류(잘못된 요청 등)는 대체하지 않는다
+            call_llm("S", "U", "gemini:gem-x", "high", caller=blocked(llm.LLMError("API 오류 (400): bad")))
+        self.assertNotIsInstance(ctx.exception, ModelUnavailableError)
 
     def test_run_missingKey_stopsBeforeCall(self):
         with mock.patch.dict(os.environ, {}, clear=True), mock.patch("extract_case.call_llm") as called:
