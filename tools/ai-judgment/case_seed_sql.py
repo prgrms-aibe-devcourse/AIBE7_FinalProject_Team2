@@ -7,7 +7,8 @@ case-extractor 결과 세 파일을 합쳐 legal_case · case_section · penalty
 
 - 같은 제목의 DRAFT 사건이 이미 있으면 건너뛴다 (같은 SQL을 두 번 실행해도 안전). 같은 제목의 사건이 DRAFT가 아니면
   다른 사건일 수 있으므로 멈춘다(전체 취소). 이미 공개된 사건에 AI 판결만 넣을 때는 파이프라인 load.case=false로 사건 SQL을 뺀다
-- 양형기준 연결(guideline_id) · 사건 발생일(incident_date)은 비워 둔다. 관리자가 공개 전에 채운다
+- 양형기준 연결(guideline_id)은 비워 둔다(이후 RAG로 연결). 사건 발생일(incident_date)은 source_internal.json의
+  incidentDate(원문 · 선고일과 대조해 확인한 값, BE-38) 또는 파이프라인 설정 incidentDate로 넣고, 없으면 비워 둔다
 - 재판부 판결(COURT)은 넣지 않는다. 지금처럼 따로 작성해 넣는다(private-seed R__20 방식)
 - 공개(PUBLISHED)는 관리자가 검수 후 한다. 이 SQL은 공개하지 않는다
 
@@ -15,6 +16,7 @@ python3 case_seed_sql.py cases/x.case.json cases/x.report.json cases/x.source_in
 """
 
 import argparse
+import datetime
 import sys
 
 from common import load_json
@@ -111,9 +113,21 @@ def check_inputs(case, report, sources, source_org):
         raise CaseSeedError("사건 적재 SQL을 만들 수 없습니다:\n- " + "\n- ".join(errors))
 
 
-def build_case_sql(case, report, sources, *, source_org=DEFAULT_SOURCE_ORG, source_note=None):
+def sql_date(value):
+    """YYYY-MM-DD → SQL date 값 (없으면 NULL). 형식이 틀리면 CaseSeedError."""
+    if value is None:
+        return "NULL"
+    try:
+        datetime.date.fromisoformat(value)
+    except (TypeError, ValueError):
+        raise CaseSeedError(f"사건 발생일은 YYYY-MM-DD여야 합니다: {value!r}") from None
+    return sql_text(value) + "::date"
+
+
+def build_case_sql(case, report, sources, *, source_org=DEFAULT_SOURCE_ORG, source_note=None, incident_date=None):
     """사건 콘텐츠 INSERT를 담은 DO 블록 (BEGIN/COMMIT 없음). sources는 resolve_sources를 거친 값."""
     check_inputs(case, report, sources, source_org)
+    incident_sql = sql_date(incident_date)
     listing = case["listing"]
     recommended = case.get("recommended") or {}
     extras = {e["factorId"]: e for e in report["factorExtras"]}
@@ -174,7 +188,7 @@ BEGIN
         {sql_jsonb(listing.get('keywords') or [])}, {sql_text(listing.get('difficulty'))}, {sql_int(listing.get('estimatedMinutes'))},
         {sql_text(case['overview'])},
         NULL, {sql_jsonb(report.get('deidentifiedItems') or [])}, {sql_text(case['appliedLaw'])}, {sql_text(case['statutoryPenaltyText'])},
-        {sql_int(recommended.get('minMonths'))}, {sql_int(recommended.get('maxMonths'))}, {sql_text(recommended.get('basis'))}, NULL, NULL,
+        {sql_int(recommended.get('minMonths'))}, {sql_int(recommended.get('maxMonths'))}, {sql_text(recommended.get('basis'))}, NULL, {incident_sql},
         'DRAFT', NULL
     )
     RETURNING id INTO v_case_id;
@@ -202,12 +216,15 @@ def main():
     parser.add_argument("source_internal")
     parser.add_argument("--source-org", default=DEFAULT_SOURCE_ORG)
     parser.add_argument("--source-note", help="case_source.note (받은 경로 등)")
+    parser.add_argument("--incident-date", help="사건 발생일 YYYY-MM-DD (주면 source_internal.json 값보다 우선)")
     parser.add_argument("--final-index", type=int, help="최종 확정 판결 번호(0부터). 없으면 심급이 가장 높은 판결")
     args = parser.parse_args()
     try:
-        sources = resolve_sources(load_json(args.source_internal)["sources"], final_index=args.final_index)
+        source = load_json(args.source_internal)
+        sources = resolve_sources(source["sources"], final_index=args.final_index)
         sql = build_case_sql(load_json(args.case_input), load_json(args.report), sources,
-                             source_org=args.source_org, source_note=args.source_note)
+                             source_org=args.source_org, source_note=args.source_note,
+                             incident_date=args.incident_date or source.get("incidentDate"))
     except CaseSeedError as e:
         print(f"[오류] {e}", file=sys.stderr)
         return 1

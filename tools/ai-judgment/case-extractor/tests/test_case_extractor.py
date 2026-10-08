@@ -16,7 +16,7 @@ from unittest import mock
 EXTRACTOR_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(EXTRACTOR_DIR))
 
-from deidentify import extract_source_info, premask, residual_check  # noqa: E402
+from deidentify import date_in_text, extract_source_info, premask, residual_check  # noqa: E402
 from extract_case import (  # noqa: E402
     ExtractError, call_llm, parse_response_text, process_output, read_judgment, run, schema_instruction,
     split_model,
@@ -77,6 +77,7 @@ FAKE_OUTPUT = {
     ],
     "courtJudgment": {"penaltyType": "PRISON", "reducedTo": None, "prisonMonths": 120, "fineAmount": None,
                       "suspensionMonths": None},
+    "incidentDate": "2099-01-10",  # FAKE_JUDGMENT 범죄사실의 범행일
     "deidentifiedItems": ["인명", "지명", "사건번호", "법원명", "날짜", "나이"],
     "reviewNotes": ["공탁 금액을 원 판결문과 대조할 것"],
 }
@@ -461,6 +462,55 @@ class ListingEligibilitySourceTest(unittest.TestCase):
         self.assertIn("===== 판결문 2 =====", fake_call.last_user)
         self.assertNotIn("2099노45", fake_call.last_user)
         self.assertNotIn("2099고합123", fake_call.last_user)
+
+
+class IncidentDateTest(unittest.TestCase):
+    """BE-38: 사건 발생일은 원문 · 선고일과 대조해 확인한 값만 내부 파일에 둔다"""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self.tmp.name)
+        self.input = self.dir / "judgment.txt"
+        self.input.write_text(FAKE_JUDGMENT, encoding="utf-8")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def run_with(self, **changes):
+        paths = run(self.input, "sample-case", out_dir=self.dir / "out", call=fake_call(output_with(**changes)))
+        report = json.loads(paths[2].read_text(encoding="utf-8"))
+        source = json.loads(paths[3].read_text(encoding="utf-8"))
+        case = json.loads(paths[0].read_text(encoding="utf-8"))
+        return case, report, source
+
+    def test_dateInText_forms(self):
+        text = "범행 2024. 1. 10. 20:00경, 다른 날 2024.02.03, 또 2024년 3월 4일"
+        for iso in ("2024-01-10", "2024-02-03", "2024-03-04"):
+            self.assertTrue(date_in_text(iso, text), iso)
+        for iso in ("2024-01-01", "2024-1-1x", None, "2024-11-10"):
+            self.assertFalse(date_in_text(iso, text), iso)
+        self.assertFalse(date_in_text("2099-01-10", "기록번호 12099. 1. 10. 이다"))  # 앞에 숫자가 붙으면 다른 값
+
+    def test_validDate_storedInternalOnly(self):
+        case, report, source = self.run_with()
+        self.assertEqual(source["incidentDate"], "2099-01-10")
+        self.assertNotIn("2099-01-10", json.dumps(case, ensure_ascii=False))  # 사용자 · AI 입력에는 없다
+        self.assertNotIn("incidentDate", case)
+        self.assertNotIn("2099-01-10", json.dumps(report, ensure_ascii=False))  # 보고서에도 날짜 값을 남기지 않는다
+
+    def test_invalidDates_areDropped_withWarning(self):
+        for value, part in ((None, "찾지 못했습니다"), ("2099/01/10", "형식"), ("2099-02-28", "원문에서 확인되지 않아"),
+                            ("2099-13-01", "형식")):
+            _, report, source = self.run_with(incidentDate=value)
+            self.assertIsNone(source["incidentDate"], value)
+            self.assertTrue(any(part in w for w in report["warnings"]), (value, report["warnings"]))
+
+    def test_dateAfterDecision_isDropped(self):
+        judgment = FAKE_JUDGMENT.replace("판결선고 2099. 5. 1.", "판결선고 2099. 5. 1.\n별건 2099. 6. 1. 기재")
+        self.input.write_text(judgment, encoding="utf-8")
+        _, report, source = self.run_with(incidentDate="2099-06-01")
+        self.assertIsNone(source["incidentDate"])
+        self.assertTrue(any("선고일보다 늦어" in w for w in report["warnings"]))
 
 
 class OtherProviderTest(unittest.TestCase):

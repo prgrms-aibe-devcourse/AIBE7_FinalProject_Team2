@@ -136,3 +136,14 @@ def extract_source_info(text):
                       if decided else None),
         "courtLevel": level,
     }
+
+
+def date_in_text(iso_date, text):
+    """YYYY-MM-DD 날짜가 원문에 실제로 나오는지 (예: 2024. 1. 10. · 2024.01.10 · 2024년 1월 10일). 사건 발생일 확인용 (BE-38)."""
+    try:
+        year, month, day = (int(x) for x in iso_date.split("-"))
+    except (AttributeError, ValueError):
+        return False
+    pattern = rf"(?<!\d){year}\s*[.년]\s*0?{month}\s*[.월]\s*0?{day}(?!\d)"  # 앞뒤가 다른 숫자에 붙지 않게
+    return re.search(pattern, text) is not None
+
