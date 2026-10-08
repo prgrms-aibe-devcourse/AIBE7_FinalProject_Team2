@@ -168,6 +168,23 @@ class DbConstraintTest {
 			.hasMessageContaining("chk_judgment_factor_direction");
 	}
 
+	// ---------- factor ----------
+
+	@Test
+	@DisplayName("판단 요소의 가치관 축은 네 축이거나 NULL만 허용한다 (BE-47)")
+	void checkValueAxis_unknownValue_isRejected() {
+		// 허용: NULL(어느 축에도 맞지 않음) · 네 축
+		assertThat(jdbc.queryForObject("SELECT value_axis FROM factor WHERE id = ?", String.class, factorId)).isNull();
+		for (String axis : List.of("APOLOGY_SINCERITY", "FAULT_STANDARD", "PRINCIPLE_RELATION", "ORDER_OPPORTUNITY")) {
+			jdbc.update("UPDATE factor SET value_axis = ? WHERE id = ?", axis, factorId);
+		}
+		jdbc.update("UPDATE factor SET value_axis = NULL WHERE id = ?", factorId);
+
+		assertThatThrownBy(() -> jdbc.update("UPDATE factor SET value_axis = 'EMBEDDING' WHERE id = ?", factorId))
+			.isInstanceOf(DataIntegrityViolationException.class)
+			.hasMessageContaining("chk_factor_value_axis");
+	}
+
 	// ---------- penalty_rule ----------
 
 	@Test

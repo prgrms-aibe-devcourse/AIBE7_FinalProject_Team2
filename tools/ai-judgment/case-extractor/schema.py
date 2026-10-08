@@ -14,10 +14,25 @@ sys.path.insert(0, str(PARENT_DIR))
 from common import NO_TERM_PENALTIES, PENALTY_TYPES, REDUCIBLE_TO, format_months, format_won  # noqa: E402
 
 # 프롬프트나 스키마를 고치면 올린다. 보고서(report.json)에 기록된다.
-EXTRACT_PROMPT_VERSION = "extract-v4"  # v3: Claude 외 공급자 스키마 안내 (BE-35), v4: 사건 발생일 incidentDate (BE-38)
+EXTRACT_PROMPT_VERSION = "extract-v5"  # v3: Claude 외 공급자 스키마 안내 (BE-35), v4: 사건 발생일 incidentDate (BE-38), v5: 판단 요소 가치관 축 valueAxis (BE-47)
 
 CRIME_TYPES = ("MURDER", "FRAUD", "INJURY")  # ERD legal_case.crime_type
 REVEAL_STAGES = ("OVERVIEW", "DETAIL", "ARGUMENT", "LAW")  # ERD factor.reveal_stage
+# ERD factor.value_axis (BE-47). 판결 체험에서 고르는 판단 요소를 사용자 성향과 매칭하는 가치관 축. null = 어느 축에도 맞지 않음(성향 계산 제외)
+VALUE_AXES = ("APOLOGY_SINCERITY", "FAULT_STANDARD", "PRINCIPLE_RELATION", "ORDER_OPPORTUNITY")
+VALUE_AXIS_NAMES = {
+    "APOLOGY_SINCERITY": "① 사과와 진정성",
+    "FAULT_STANDARD": "② 잘잘못의 기준",
+    "PRINCIPLE_RELATION": "③ 원칙과 관계",
+    "ORDER_OPPORTUNITY": "④ 질서와 기회",
+}
+# summaryTag에 이 말이 들어 있으면 해당 축일 가능성이 높다. 모델이 고른 축과 다르면 경고만 낸다(관리자가 확인). 판단은 모델이 한다
+VALUE_AXIS_KEYWORDS = {
+    "APOLOGY_SINCERITY": ("반성", "자수", "자백", "수사 협조", "사과", "사죄", "뉘우"),
+    "FAULT_STANDARD": ("동기", "계획", "수단", "범행 방식", "범행 내용", "흉기", "피해 규모", "피해 결과", "결과의 중대"),
+    "PRINCIPLE_RELATION": ("피해 회복", "합의", "처벌불원", "처벌 의사", "공탁", "피해자 의사", "피해자 책임", "피해자 과실"),
+    "ORDER_OPPORTUNITY": ("전력", "전과", "재범", "연령", "고령", "부양", "가족", "직업", "가장"),
+}
 
 LABEL_MAX_LENGTH = 100  # ERD factor.label · pre_label varchar(100)
 SUMMARY_TAG_MAX_LENGTH = 20  # ERD factor.summary_tag varchar(20)
@@ -88,6 +103,8 @@ OUTPUT_SCHEMA = _object({
             "preLabel": _NULLABLE_STRING,
             "revealStage": {"type": "string", "enum": list(REVEAL_STAGES)},
             "summaryTag": _STRING,
+            # 어느 축에도 맞지 않을 때만 null (BE-47). 사전 판단(OVERVIEW) 요소도 값은 붙이지만 성향 계산에는 쓰지 않는다
+            "valueAxis": {"anyOf": [{"type": "string", "enum": list(VALUE_AXES)}, {"type": "null"}]},
         }),
     },
     "courtJudgment": _object({
@@ -245,9 +262,22 @@ def build_court_judgment(output):
 def build_factor_extras(output):
     """case.json 형식에는 없지만 시드(factor 테이블)에 필요한 값. 보고서에 남긴다."""
     return [
-        {"factorId": i, "preLabel": f.get("preLabel"), "summaryTag": f["summaryTag"]}
+        {"factorId": i, "preLabel": f.get("preLabel"), "summaryTag": f["summaryTag"], "valueAxis": f.get("valueAxis")}
         for i, f in enumerate(output["factors"], start=1)
     ]
+
+
+def check_value_axis(index, factor):
+    """판단 요소의 가치관 축을 summaryTag 키워드와 교차 확인한다 (BE-47). 경고만 낸다 — 최종 값은 관리자가 고칠 수 있다."""
+    axis = factor.get("valueAxis")
+    if axis is None:
+        return [f"판단 요소 {index}: 가치관 축이 없습니다(null). 어느 축에도 맞지 않는 요소는 성향 계산에서 빠집니다"]
+    tag = factor["summaryTag"]
+    matched = [name for name, words in VALUE_AXIS_KEYWORDS.items() if any(word in tag for word in words)]
+    if len(matched) == 1 and matched[0] != axis:
+        return [f"판단 요소 {index}: 요약 태그가 {VALUE_AXIS_NAMES[matched[0]]} 쪽으로 보이는데 "
+                f"가치관 축은 {VALUE_AXIS_NAMES[axis]}입니다. 확인하세요"]
+    return []
 
 
 def check_output(output):
@@ -277,6 +307,7 @@ def check_output(output):
             warnings.append(f"판단 요소 {i}: preLabel은 OVERVIEW 요소에만 씁니다")
         if f["revealStage"] == "OVERVIEW" and not f.get("preLabel"):
             warnings.append(f"판단 요소 {i}: OVERVIEW 요소에 사전 판단용 짧은 문구(preLabel)가 없습니다")
+        warnings += check_value_axis(i, f)
 
     types = [rule["penaltyType"] for rule in output["penaltyRules"]]
     if len(types) != len(set(types)):

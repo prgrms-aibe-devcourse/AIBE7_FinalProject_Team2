@@ -37,7 +37,8 @@ def listing_case():
 
 
 def report_for(case):
-    return {"factorExtras": [{"factorId": f["factorId"], "preLabel": None, "summaryTag": "분류"} for f in case["factors"]],
+    return {"factorExtras": [{"factorId": f["factorId"], "preLabel": None, "summaryTag": "분류",
+                              "valueAxis": "FAULT_STANDARD" if f["factorId"] == 1 else None} for f in case["factors"]],
             "penaltyRuleBasis": {r["penaltyType"]: "근거" for r in case["penaltyRules"]},
             "deidentifiedItems": ["인명"], "eligibility": {"eligible": True, "reasons": []}, "warnings": []}
 
@@ -70,9 +71,28 @@ class CaseSeedSqlTest(unittest.TestCase):
         self.assertIn("RAISE EXCEPTION '같은 제목의 공개 · 검토 중 사건", sql)
         self.assertIn("'원문 ''따옴표'''", sql)  # 작은따옴표 이스케이프
         self.assertEqual(sql.count("INSERT INTO factor"), len(case["factors"]))
+        self.assertEqual(sql.count("summary_tag, value_axis, display_order"), len(case["factors"]))
+        self.assertEqual(sql.count("'FAULT_STANDARD'"), 1)  # 첫 요소만 축이 있고 나머지는 NULL (어느 축에도 맞지 않는 요소)
         self.assertEqual(sql.count("INSERT INTO case_source"), 2)
         self.assertIn("'2099-05-01'::date", sql)
         self.assertIn("'법원 공개 판결문'", sql)
+
+    def test_build_case_sql_invalidValueAxis_isError(self):
+        case = listing_case()
+        report = report_for(case)
+        report["factorExtras"][0]["valueAxis"] = "EMBEDDING"
+        with self.assertRaises(CaseSeedError) as ctx:
+            build_case_sql(case, report, resolve_sources(SOURCES, [{}, {"caseNumber": "2099노2"}]))
+        self.assertIn("valueAxis", str(ctx.exception))
+
+    def test_build_case_sql_reportWithoutValueAxis_insertsNull(self):
+        # extract-v5 이전 보고서(valueAxis 키 없음)도 적재된다
+        case = listing_case()
+        report = report_for(case)
+        for extra in report["factorExtras"]:
+            del extra["valueAxis"]
+        sql = build_case_sql(case, report, resolve_sources(SOURCES, [{}, {"caseNumber": "2099노2"}]))
+        self.assertNotIn("FAULT_STANDARD", sql)
 
     def test_build_case_sql_incident_date(self):
         case = listing_case()
