@@ -1126,7 +1126,9 @@ def apply_sql(sql_path, db):
     stderr = completed.stderr.decode("utf-8", "replace")
     if completed.returncode != 0:
         raise PipelineError("DB 적재 실패 (트랜잭션 전체 취소):\n" + stderr.strip()[-2000:])
-    return [line.strip() for line in stderr.splitlines() if "NOTICE" in line]
+    # NOTICE(건너뜀 · 갱신 행 수)와 WARNING(반영하지 못한 요소 등)을 로그로 돌려준다. WARNING은 ⚠로 구분한다
+    return [("⚠ " if "WARNING" in line else "") + line.strip() for line in stderr.splitlines()
+            if "NOTICE" in line or "WARNING" in line]
 
 
 STAGE_FUNCTIONS = {

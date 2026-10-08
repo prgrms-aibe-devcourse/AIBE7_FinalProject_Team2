@@ -822,6 +822,20 @@ class PipelineTest(unittest.TestCase):
                 pipeline.apply_sql(self.dir / "x.sql", socket_url)
         self.assertIn("로컬 DB에만", str(ctx.exception))
 
+    def test_apply_sql_returnsNoticeAndWarning(self):
+        # 적재 SQL의 WARNING(예: 번호 · 라벨이 달라 가치관 축을 반영하지 못한 요소)도 파이프라인 로그에 남긴다 (리뷰 반영)
+        stderr = ("psql:<stdin>:10: NOTICE:  사건 적재 건너뜀: 같은 제목의 DRAFT 사건이 이미 있습니다\n"
+                  "psql:<stdin>:10: WARNING:  가치관 축: 번호 · 라벨이 DB와 다른 요소 1개는 바꾸지 않았습니다\n"
+                  "psql:<stdin>:10: NOTICE:  가치관 축: 0행 갱신\n"
+                  "기타 출력\n").encode("utf-8")
+        (self.dir / "x.sql").write_text("SELECT 1;", encoding="utf-8")
+        done = SimpleNamespace(returncode=0, stderr=stderr)
+        with mock.patch("shutil.which", return_value="/usr/bin/psql"), mock.patch("subprocess.run", return_value=done):
+            messages = pipeline.apply_sql(self.dir / "x.sql", {"mode": "psql", "url": "postgresql://localhost:5432/x"})
+        self.assertEqual(len(messages), 3)
+        self.assertTrue(messages[1].startswith("⚠ ") and "WARNING" in messages[1])
+        self.assertFalse(messages[0].startswith("⚠"))
+
     def test_docker_mode_rejects_remote_endpoint(self):
         with mock.patch.dict(os.environ, {"DOCKER_HOST": "tcp://prod.example.com:2376"}):
             with self.assertRaises(pipeline.PipelineError) as ctx:
