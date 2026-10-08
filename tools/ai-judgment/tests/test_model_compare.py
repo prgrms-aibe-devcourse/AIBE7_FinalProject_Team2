@@ -191,6 +191,37 @@ class ProviderTest(unittest.TestCase):
                 llm._post_json("https://example.invalid", {}, {}, 1)
         self.assertEqual(urlopen.call_count, llm.MAX_ATTEMPTS)
 
+    def test_free_models_file_is_valid(self):
+        data = load_json(TOOL_DIR / "free_models.json")
+        self.assertRegex(data["checkedAt"], r"^\d{4}-\d{2}-\d{2}$")
+        for provider, entry in data.items():
+            if provider.startswith("_") or provider == "checkedAt":
+                continue
+            self.assertIn(provider, llm.PROVIDERS)
+            self.assertTrue(entry["source"].startswith("https://"))
+            self.assertTrue(entry["models"])
+            self.assertEqual(len(set(entry["models"])), len(entry["models"]))
+            self.assertFalse(set(entry["models"]) & set(entry.get("notWithFreeTier", [])))  # 무료 · 비무료 겹침 없음
+
+    def test_has_free_tier(self):
+        free = llm.free_tier_models()
+        self.assertIn("gemini:gemini-2.5-flash", free)
+        self.assertTrue(llm.has_free_tier("gemini:gemini-2.5-flash"))
+        self.assertTrue(llm.has_free_tier(" Gemini : gemini-2.5-flash "))
+        self.assertFalse(llm.has_free_tier("gemini:gemini-3.1-pro-preview"))  # 무료 등급이 없는 모델
+        self.assertFalse(llm.has_free_tier("claude-opus-5-5"))  # 공급자 없는 이름
+        self.assertFalse(llm.has_free_tier("openai:gpt-x"))
+        self.assertFalse(llm.has_free_tier(None))
+
+    def test_free_models_file_missing_or_broken_is_empty(self):
+        for content in (None, "{not json", "[1, 2]", '{"gemini": {"models": "x"}}'):
+            with tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / "free_models.json"
+                if content is not None:
+                    path.write_text(content, encoding="utf-8")
+                with mock.patch.object(llm, "FREE_MODELS_FILE", path):
+                    self.assertEqual(llm.free_tier_models(), set(), msg=str(content))
+
     def test_model_provider(self):
         self.assertEqual(llm.model_provider("claude-opus-5-5"), "anthropic")  # 공급자 없는 이름은 Claude SDK
         self.assertEqual(llm.model_provider("anthropic:claude-x"), "anthropic")

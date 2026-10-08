@@ -748,11 +748,45 @@ class PipelineTest(unittest.TestCase):
         self.assertTrue(any("비식별화" in line and "anthropic, gemini" in line for line in notices))
         self.assertTrue(any("재판부" in line and "gemini, openai" in line for line in notices))
 
+    # ---- 무료 등급 모델 안내 (BE-45)
+
+    def run_notices(self, config, **kwargs):
+        def stop(*args, **kw):
+            raise pipeline.PipelineError("테스트 중단")
+
+        with self.assertRaises(pipeline.PipelineError):
+            pipeline.run_pipeline(config, functions={stage: stop for stage in pipeline.STAGES}, log=self.logs.append,
+                                  **kwargs)
+        return [line for line in self.logs if line.startswith("주의") or line.startswith("무료 등급")]
+
+    def test_free_tier_notice_for_judgment_stages_is_strong(self):
+        config = self.config(extract={"enabled": True, "model": ["claude-opus-5-5", "gemini:gemini-2.5-flash"]},
+                             court={"enabled": True, "model": "gemini:gemini-3.1-pro-preview"})
+        notices = self.run_notices(config, until="court")
+        self.assertEqual(len(notices), 1)  # court 모델은 무료 등급이 없는 모델이라 안내가 없다
+        self.assertIn("비식별화", notices[0])
+        self.assertIn("gemini:gemini-2.5-flash", notices[0])
+        self.assertIn("유료 키", notices[0])
+        self.assertNotIn("claude-opus-5-5", notices[0])
+
+    def test_free_tier_notice_for_generate_models(self):
+        config = self.config(extract={"enabled": False}, generate={"models": ["gemini:gemini-3.5-flash", "openai:gpt-x"]})
+        notices = self.run_notices(config)
+        self.assertEqual(len(notices), 1)
+        self.assertIn("gemini:gemini-3.5-flash", notices[0])
+        self.assertNotIn("openai:gpt-x", notices[0])
+        self.assertIn("delay", notices[0])
+
+    def test_no_free_tier_notice_without_free_models(self):
+        config = self.config(extract={"enabled": True, "model": "claude-opus-5-5"},
+                             generate={"models": ["openai:gpt-x", "gemini:gemini-3.1-pro-preview"]})
+        self.assertEqual(self.run_notices(config), [])
+
     def test_extract_stage_logs_chain_and_records_fallbacks(self):
         config = self.config(extract={"enabled": True, "model": ["claude-opus-5-5", "gemini:g"]})
         report = report_for(self.case)
         report["fallbacks"] = [{"model": "claude-opus-5-5", "kind": "overloaded", "error": "서비스 과부하"}]
-        report["requestedModel"] = "gemini:g"
+        report["requestedModel"], report["model"] = "gemini:g", "gemini-g-2026"
         write_json(self.dir / "r.json", report)
         fake_module = mock.MagicMock()
         fake_module.run.return_value = (self.raw_config["inputs"]["case"], self.raw_config["inputs"]["court"],
@@ -763,7 +797,7 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(fake_module.run.call_args.kwargs["model"], ["claude-opus-5-5", "gemini:g"])
         self.assertTrue(any("claude-opus-5-5 → gemini:g" in line for line in self.logs))
         self.assertEqual(outputs["fallbacks"], [{"model": "claude-opus-5-5", "kind": "overloaded"}])
-        self.assertEqual(outputs["model"], "gemini:g")
+        self.assertEqual(outputs["model"], "gemini-g-2026")  # 실제로 응답한 모델 (fallbacks가 없어도 항상 들어간다)
 
     def test_extract_ineligible_stops(self):
         config = self.config(extract={"enabled": True})

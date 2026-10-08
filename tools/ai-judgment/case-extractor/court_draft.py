@@ -409,7 +409,9 @@ def run(name, out_dir=DEFAULT_OUT_DIR, model=DEFAULT_MODEL, max_tokens=MAX_TOKEN
         draft_path.unlink(missing_ok=True)
         report.update(status="ERROR", errors=report["errors"] + [scrub(str(e))])
         if len(models) > 1:
-            report.update(modelChain=models, fallbacks=[{**f, "error": scrub(f["error"])} for f in getattr(e, "skipped", [])])
+            # 실제로 실패한 모델(대체 모델일 수 있다)과 그 앞에서 건너뛴 모델을 남긴다
+            report.update(requestedModel=getattr(e, "model", models[0]), modelChain=models,
+                          fallbacks=[{**f, "error": scrub(f["error"])} for f in getattr(e, "skipped", [])])
         write_json(report_path, report)
         if isinstance(e, ModelUnavailableError):
             raise CourtDraftError(str(e)) from e

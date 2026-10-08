@@ -100,13 +100,20 @@ def run_with_fallback(models, attempt, log=print):
         except ModelUnavailableError as e:
             skipped.append({"model": spec, "kind": e.kind, "error": str(e)})
             if index + 1 == len(models):
-                final = e if len(models) == 1 else ModelUnavailableError(
+                e.skipped, e.model = skipped, spec
+                if len(models) == 1:
+                    raise  # 원래 오류와 원인 체인을 그대로 둔다
+                final = ModelUnavailableError(
                     "모든 모델을 쓸 수 없었습니다: " + " | ".join(
                         f"{s['model']} ({KIND_LABELS.get(s['kind'], s['kind'])}) {s['error'].splitlines()[0]}" for s in skipped),
                     kind=e.kind)
-                final.skipped = skipped
-                raise final from (None if final is e else e)
+                final.skipped, final.model = skipped, spec
+                raise final from e
             log(f"[{spec}] 호출 불가 ({KIND_LABELS.get(e.kind, e.kind)}) → 다음 모델 {models[index + 1]}로 처음부터 다시 요청합니다")
+        except Exception as e:
+            # 품질 문제는 다른 모델로 넘기지 않고 멈추되, 어느 모델에서 났고 앞에서 어떤 모델을 건너뛰었는지 알 수 있게 붙인다
+            e.skipped, e.model = skipped, spec
+            raise
 
 
 def read_judgment(path):

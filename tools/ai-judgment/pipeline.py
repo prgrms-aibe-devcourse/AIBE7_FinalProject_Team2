@@ -39,7 +39,7 @@ from common import TOOL_DIR, load_json, write_json
 from compare import _majority, direction_table, load_runs
 from generate import RUNS_DIR, GenerateError, generate_runs, model_slug, prompt_digest
 from llm import (DEFAULT_MAX_ATTEMPTS, DEFAULT_MAX_WAIT, LLMError, LLMQuotaExhaustedError, api_key, call,
-                 check_retry, configure_retry, model_provider, parse_model_spec)
+                 check_retry, configure_retry, has_free_tier, model_provider, parse_model_spec)
 from to_seed_sql import NAME_MAX_LENGTH, build_sql
 from validate_output import parse_output
 
@@ -142,6 +142,32 @@ def chain_errors(label, value, expected):
             except LLMError as e:
                 errors.append(str(e))
     return errors
+
+
+def free_tier_notices(config, steps):
+    """무료 등급이 있는 모델이 들어 있을 때 안내 (BE-45). 목록은 free_models.json.
+
+    모델에 무료 등급이 있다는 것이지 키가 무료라는 뜻은 아니므로(결제를 연결한 키는 유료) 막지 않고 알리기만 한다.
+    실제 판결문을 보내는 단계(extract · court)는 무료 키를 쓰면 안 되므로 따로 강하게 알린다.
+    """
+    stages, notices = config["stages"], []
+    judgment = [("비식별화", "extract", stages["extract"]["model"])]
+    if "court" in steps:
+        judgment.append(("재판부 판결 초안", "court", court_model(config)))
+    for label, stage, model in judgment:
+        if stage not in steps:
+            continue
+        free = [m for m in ([model] if isinstance(model, str) else model) if has_free_tier(m)]
+        if free:
+            notices.append(f"주의: {label} 모델({', '.join(free)})에는 무료 등급이 있습니다. 실제 판결문은 결제를 연결한 "
+                           "유료 키로만 보내세요 (무료 등급은 입력을 제품 개선에 쓰고 사람이 검토할 수 있습니다, README)")
+    if {"contamination", "generate"} & set(steps):
+        models = list(stages["generate"]["models"]) + list(stages["contamination"]["models"] or [])
+        free = sorted({m for m in models if has_free_tier(m)})
+        if free:
+            notices.append(f"무료 등급이 있는 모델: {', '.join(free)}. 무료 키라면 분당 · 일당 한도가 있으니 delay를 두고 "
+                           "교차 호출 · 재시도 설정을 확인하세요 (README \"무료 등급 한도 대응\"). 무료 등급은 입력이 제품 개선에 쓰일 수 있습니다")
+    return notices
 
 
 def chain_text(model):
@@ -324,9 +350,9 @@ def stage_extract(config, state, log):
     eligibility = report.get("eligibility") or {}
     outputs["eligible"] = eligibility.get("eligible")
     outputs["warnings"] = len(report.get("warnings", []))
+    outputs["model"] = report.get("model")  # 실제로 응답한 모델 (court 단계와 같다)
     if report.get("fallbacks"):  # 앞 모델이 과부하 · 한도로 막혀 대체 모델이 응답했다 (BE-45)
         outputs["fallbacks"] = [{"model": f["model"], "kind": f["kind"]} for f in report["fallbacks"]]
-        outputs["model"] = report.get("requestedModel")
     if eligibility.get("eligible") is False and cfg["requireEligible"]:
         raise PipelineError("서비스 대상이 아닌 판결로 판정됐습니다 (stages.extract.requireEligible=false로 무시 가능): "
                             + " / ".join(eligibility.get("reasons", [])), outputs)
@@ -733,6 +759,8 @@ def run_pipeline(config, start=None, until=None, skip=(), rerun=False, log=print
         log(f"외부 전송: 재판부 판결 초안 단계에서 마스킹한 판결문이 {providers_text(court_model(config))}로 전송됩니다")
     if {"contamination", "generate"} & set(steps):
         log(f"외부 전송: 비식별화한 사건 내용이 {', '.join(providers)}로 전송됩니다")
+    for notice in free_tier_notices(config, steps):
+        log(notice)
     for stage in steps:
         log(f"\n== {stage} ==")
         entry = {"status": "running", "startedAt": _now()}

@@ -336,6 +336,18 @@ class RunTest(unittest.TestCase):
         self.assertEqual({c["spec"] for c in calls}, {"openai:gpt-x"})  # 검사 실패는 다른 모델로 덮지 않는다
         self.assertEqual(self.report()["status"], "ERROR")
 
+    def test_run_chain_fallbackModelQualityFailure_reportsFailingModel(self):
+        bad = draft_with(excerpt="지어낸 문장이다.")
+        call, calls = self.chain_caller({"openai:gpt-x": [llm.LLMOverloadedError("서비스 과부하 (503)")],
+                                         "gemini:g": [bad, bad, bad]})
+        with self.assertRaises(CourtDraftError):
+            run("c", self.dir, ["openai:gpt-x", "gemini:g"], caller=call, log=lambda *_: None)
+        report = self.report()
+        self.assertEqual(report["status"], "ERROR")
+        self.assertEqual(report["requestedModel"], "gemini:g")  # 실제로 실패한 모델
+        self.assertEqual([(f["model"], f["kind"]) for f in report["fallbacks"]], [("openai:gpt-x", "overloaded")])
+        self.assertEqual([c["spec"] for c in calls], ["openai:gpt-x", "gemini:g", "gemini:g", "gemini:g"])
+
     def test_run_chain_allUnavailable_recordsFallbacks(self):
         call, _ = self.chain_caller({"openai:gpt-x": [llm.LLMRateLimitError("분당 한도")],
                                      "gemini:g": [llm.LLMQuotaExhaustedError("일 한도")]})

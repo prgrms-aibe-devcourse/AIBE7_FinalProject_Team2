@@ -17,11 +17,11 @@ EXTRACTOR_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(EXTRACTOR_DIR))
 
 from deidentify import date_in_text, extract_source_info, premask, residual_check  # noqa: E402
-import llm  # noqa: E402 (extract_case를 불러오면 상위 폴더가 import 경로에 들어간다)
 from extract_case import (  # noqa: E402
     ExtractError, ModelUnavailableError, call_llm, model_chain, parse_response_text, process_output, read_judgment, run,
-    schema_instruction, split_model,
+    run_with_fallback, schema_instruction, split_model,
 )
+import llm  # noqa: E402 (extract_case를 불러와야 상위 폴더가 import 경로에 들어간다. 위로 올리면 단독 실행에서 import 실패)
 from schema import OUTPUT_SCHEMA, validate_against_schema  # noqa: E402
 
 # 설명용 가상 판결문 (tools/ai-judgment/examples의 가상 살인 사건). 개인정보 값은 모두 지어낸 것이다.
@@ -704,6 +704,34 @@ class OtherProviderTest(unittest.TestCase):
         self.assertEqual(calls, ["openai:gpt-x", "gemini:gem-x"])
         self.assertIn("모든 모델을 쓸 수 없었습니다", str(ctx.exception))
         self.assertEqual([f["model"] for f in ctx.exception.skipped], ["openai:gpt-x", "gemini:gem-x"])
+
+    def test_runWithFallback_attachesModelAndSkipped(self):
+        unavailable = ModelUnavailableError("과부하", "overloaded")
+
+        def attempt(spec):
+            if spec == "a":
+                raise unavailable
+            raise ExtractError("형식 오류")  # 품질 문제
+
+        with self.assertRaises(ExtractError) as ctx:
+            run_with_fallback(["a", "b"], attempt, log=lambda *_: None)
+        self.assertNotIsInstance(ctx.exception, ModelUnavailableError)
+        self.assertEqual(ctx.exception.model, "b")  # 실제로 실패한 모델
+        self.assertEqual([(f["model"], f["kind"]) for f in ctx.exception.skipped], [("a", "overloaded")])
+
+    def test_runWithFallback_singleModel_keepsOriginalError(self):
+        cause = RuntimeError("원래 원인")
+        error = ModelUnavailableError("한도", "rate_limit")
+        error.__cause__ = cause
+
+        def attempt(spec):
+            raise error
+
+        with self.assertRaises(ModelUnavailableError) as ctx:
+            run_with_fallback(["a"], attempt)
+        self.assertIs(ctx.exception, error)
+        self.assertIs(ctx.exception.__cause__, cause)  # 원인 체인이 지워지지 않는다
+        self.assertEqual((ctx.exception.model, len(ctx.exception.skipped)), ("a", 1))
 
     def test_run_chain_missingFallbackKey_stopsBeforeAnyCall(self):
         with mock.patch.dict(os.environ, {"OPENAI_API_KEY": "k"}, clear=True), \

@@ -44,6 +44,7 @@
     },
     "generate": {
       "enabled": true,
+      "_modelsComment": "무료 등급이 있는 모델은 free_models.json 참고 (무료 키는 판결문 원문을 보내는 extract · court에는 쓰지 않는다). 무료 키면 delay를 두고 BE-36 retry · BE-44 교차 호출을 확인한다",
       "models": [
         "openai:<모델ID>"
       ],
