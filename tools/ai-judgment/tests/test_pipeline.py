@@ -125,6 +125,13 @@ class CourtSeedSqlTest(unittest.TestCase):
             self.assertIn(part, str(ctx.exception))
         with self.assertRaises(CourtSeedError):
             check_court(dict(self.data, judgmentFactors=[]))
+        # 오류 메시지에 입력 값(모델이 쓴 글 등)을 남기지 않는다
+        leaky = dict(self.data, judgment=dict(j, penaltyType="홍길동", extraDispositions=[{"type": "X", "value": "김철수"}]),
+                     judgmentFactors=[{"factorId": "이영희", "label": "l", "direction": "UP", "evidence": "e"}])
+        with self.assertRaises(CourtSeedError) as ctx:
+            check_court(leaky)
+        for name in ("홍길동", "김철수", "이영희"):
+            self.assertNotIn(name, str(ctx.exception))
         with self.assertRaises(CourtSeedError):
             build_court_sql(self.data, "다른 사건")  # caseTitle 불일치
 

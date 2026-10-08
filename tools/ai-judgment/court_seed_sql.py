@@ -33,7 +33,10 @@ def _positive_int(value):
 
 
 def check_court(data):
-    """judgment · judgment_factor CHECK와 같은 규칙. 오류는 모아서 CourtSeedError 하나로 알린다."""
+    """judgment · judgment_factor CHECK와 같은 규칙. 오류는 모아서 CourtSeedError 하나로 알린다.
+
+    오류에는 항목 위치와 위반 종류만 남기고 **입력 값(모델이 쓴 글 등)은 넣지 않는다** — 오류가 파이프라인 state.json으로 이어진다.
+    """
     if not isinstance(data.get("judgment"), dict) or not isinstance(data.get("judgmentFactors"), list):
         raise CourtSeedError("judgment(객체)와 judgmentFactors(배열)가 필요합니다")
     j, errors = data["judgment"], []
@@ -44,9 +47,9 @@ def check_court(data):
         errors.append("비어 있는 항목: " + ", ".join(missing))
     penalty, reduced = j.get("penaltyType"), j.get("reducedTo")
     if penalty not in PENALTY_TYPES:
-        errors.append(f"penaltyType이 허용 목록에 없습니다: {penalty!r}")
+        errors.append("penaltyType이 허용 목록에 없습니다")
     elif reduced is not None and reduced not in REDUCIBLE_TO[penalty]:
-        errors.append(f"감경 조합이 허용되지 않습니다: {penalty} → {reduced}")
+        errors.append("감경 조합(penaltyType → reducedTo)이 허용되지 않습니다")
     final = reduced or penalty
     prison, fine, suspension = j.get("prisonMonths"), j.get("fineAmount"), j.get("suspensionMonths")
     for key, value in (("prisonMonths", prison), ("fineAmount", fine), ("suspensionMonths", suspension)):
@@ -62,15 +65,15 @@ def check_court(data):
         errors.append("사형 · 무기를 고른 판결에는 집행유예를 넣을 수 없습니다")
     if len(str(j.get("summary") or "")) > SUMMARY_MAX_LENGTH:
         errors.append(f"summary는 {SUMMARY_MAX_LENGTH}자 이내입니다")
-    for d in j.get("extraDispositions") or []:
+    for i, d in enumerate(j.get("extraDispositions") or []):
         if not isinstance(d, dict) or d.get("type") not in DISPOSITION_TYPES or not str(d.get("value") or "").strip():
-            errors.append(f"부가 처분 형식이 올바르지 않습니다: {d!r}")
+            errors.append(f"extraDispositions[{i}]: 부가 처분 형식이 올바르지 않습니다")
 
     ids = []
-    for f in data["judgmentFactors"]:
-        fid = f.get("factorId")
+    for i, f in enumerate(data["judgmentFactors"]):
+        fid = f.get("factorId") if isinstance(f, dict) else None
         if not _positive_int(fid):
-            errors.append(f"factorId가 양의 정수가 아닙니다: {fid!r}")
+            errors.append(f"judgmentFactors[{i}]: factorId가 양의 정수가 아닙니다")
             continue
         ids.append(fid)
         if f.get("direction") not in ("UP", "DOWN"):
