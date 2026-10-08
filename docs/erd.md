@@ -240,7 +240,7 @@ S-06에서 보여 줄 형벌 선택지, 그리고 **선고 가능 범위 밖 판
 | value_axis_votes | jsonb |  | 축 분류 투표 기록 (v1.13 추가, BE-49). 예: `{"runs": 5, "counts": {"FAULT_STANDARD": 3, "NONE": 2}, "needsReview": false}`. `counts`는 표를 받은 축만, NULL 표는 `NONE` 키. `needsReview`는 최다표가 과반 미만이거나 동률일 때 true. 사람 초안 · 투표 없이 정한 값은 NULL | |
 | display_order | int | ✓ |  |  |
 - `value_axis`는 AI(사건 추출기 · 파이프라인 축 분류 투표) 또는 사람 초안(비공개 시드)이 기본값을 정하고, 관리자가 후검수로 확정한다(CHECK는 네 값 또는 NULL). 값이 NULL인 요소는 성향 계산에서 빠진다. 사전 판단(`OVERVIEW`)과 형량 선택은 성향 계산에 쓰지 않는다.
-- 값만으로는 "관리자가 일부러 NULL로 둔 요소"와 "아직 채우지 않은 요소"를 구분할 수 없어서 `value_axis_status`를 둔다. 시드(R__15) · 적재 SQL은 `AUTO` 행만 바꾸고, 관리자가 고치거나 그대로 승인하면 `CONFIRMED`가 된다(BE-43).
+- 값만으로는 "관리자가 일부러 NULL로 둔 요소"와 "아직 채우지 않은 요소"를 구분할 수 없어서 `value_axis_status`를 둔다. 시드(R__15)와 파이프라인 적재 SQL(이미 적재된 사건이면 번호 · 라벨이 같은 요소의 축 · 투표 기록만 갱신)은 `AUTO` 행만 바꾸고, 관리자가 고치거나 그대로 승인하면 `CONFIRMED`가 된다(BE-43).
 - `summary_tag`는 사건별로 팀이 붙인다. 요소마다 다른 요약어를 붙이는 것이 기본이지만, 같은 사건 안에 뜻이 겹치는 요소가 있으면 같은 태그를 쓸 수도 있다(그때는 UserSummarySentence · RuleSentences가 중복을 한 번만 쓴다). 태그 문구도 판단 요소와 같이 중립적으로 쓴다(FR-3-4).
 
 #### `case_source` — 원본 판결문 (내부 전용)
