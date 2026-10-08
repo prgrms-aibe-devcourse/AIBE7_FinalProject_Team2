@@ -22,7 +22,7 @@ from extract_case import (  # noqa: E402
     run_with_fallback, schema_instruction, split_model,
 )
 import llm  # noqa: E402 (extract_case를 불러와야 상위 폴더가 import 경로에 들어간다. 위로 올리면 단독 실행에서 import 실패)
-from schema import OUTPUT_SCHEMA, validate_against_schema  # noqa: E402
+from schema import OUTPUT_SCHEMA, build_factor_extras, validate_against_schema  # noqa: E402
 
 # 설명용 가상 판결문 (tools/ai-judgment/examples의 가상 살인 사건). 개인정보 값은 모두 지어낸 것이다.
 FAKE_JUDGMENT = """
@@ -71,10 +71,11 @@ FAKE_OUTPUT = {
     "sentencingGuideline": "살인범죄 양형기준 제2유형(보통 동기 살인)",
     "factors": [
         {"label": "빌린 돈을 갚지 못해 오래 다툼이 있었다", "preLabel": "돈 문제로 오래 다퉜다",
-         "revealStage": "OVERVIEW", "summaryTag": "범행 동기"},
-        {"label": "형사처벌 전력이 없다", "preLabel": None, "revealStage": "DETAIL", "summaryTag": "전력"},
+         "revealStage": "OVERVIEW", "summaryTag": "범행 동기", "valueAxis": "FAULT_STANDARD"},
+        {"label": "형사처벌 전력이 없다", "preLabel": None, "revealStage": "DETAIL", "summaryTag": "전력",
+         "valueAxis": "ORDER_OPPORTUNITY"},
         {"label": "피고인은 우발적 범행이라고 주장한다", "preLabel": None, "revealStage": "ARGUMENT",
-         "summaryTag": "범행 동기"},
+         "summaryTag": "범행 동기", "valueAxis": "FAULT_STANDARD"},
     ],
     "courtJudgment": {"penaltyType": "PRISON", "reducedTo": None, "prisonMonths": 120, "fineAmount": None,
                       "suspensionMonths": None},
@@ -260,6 +261,38 @@ class ProcessOutputTest(unittest.TestCase):
                     overview=FAKE_OUTPUT["overview"] + " " + text, courtJudgment=court))
 
                 self.assertFalse(any("실제 선고 형량" in e for e in errors))
+
+    def test_processOutput_valueAxis_isKeptInFactorExtras(self):
+        _, _, errors, warnings = process_output(output_with())
+        self.assertEqual(errors, [])
+        self.assertEqual([w for w in warnings if "가치관 축" in w or "쪽으로 보이는데" in w], [])
+        self.assertEqual([e["valueAxis"] for e in build_factor_extras(FAKE_OUTPUT)],
+                         ["FAULT_STANDARD", "ORDER_OPPORTUNITY", "FAULT_STANDARD"])
+
+    def test_processOutput_valueAxisNull_isAllowedWithWarning(self):
+        output = output_with()
+        output["factors"] = copy.deepcopy(FAKE_OUTPUT["factors"])
+        output["factors"][1]["valueAxis"] = None
+        _, _, errors, warnings = process_output(output)
+        self.assertEqual(errors, [])
+        self.assertIsNone(build_factor_extras(output)[1]["valueAxis"])
+        self.assertTrue(any("판단 요소 2" in w and "가치관 축이 없습니다" in w for w in warnings))
+
+    def test_processOutput_valueAxisDiffersFromSummaryTag_isWarning(self):
+        output = output_with()
+        output["factors"] = copy.deepcopy(FAKE_OUTPUT["factors"])
+        output["factors"][1]["valueAxis"] = "APOLOGY_SINCERITY"  # 요약 태그는 전력(④)
+        _, _, errors, warnings = process_output(output)
+        self.assertEqual(errors, [])
+        self.assertTrue(any("판단 요소 2" in w and "④ 질서와 기회" in w for w in warnings))
+
+    def test_validateValueAxis_unknownValueOrMissing_isSchemaError(self):
+        output = copy.deepcopy(FAKE_OUTPUT)
+        output["factors"][0]["valueAxis"] = "EMBEDDING"
+        del output["factors"][1]["valueAxis"]
+        errors = validate_against_schema(output, OUTPUT_SCHEMA)
+        self.assertTrue(any("factors[0].valueAxis" in e for e in errors))
+        self.assertTrue(any("factors[1].valueAxis" in e and "필수" in e for e in errors))
 
     def test_processOutput_noOverviewFactor_isError(self):
         factors = [f for f in FAKE_OUTPUT["factors"] if f["revealStage"] != "OVERVIEW"]
