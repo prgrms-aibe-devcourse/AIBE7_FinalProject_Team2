@@ -72,16 +72,21 @@ def resolve_sources(sources, overrides=None, final_index=None):
 def check_value_axis_votes(axis, votes):
     """투표 기록 형식 검사 (ERD factor.value_axis_votes). 오류 문구 목록을 돌려준다.
 
-    {"runs": 5, "counts": {"FAULT_STANDARD": 3, "NONE": 2}, "needsReview": false}
+    {"runs": 5, "counts": {"FAULT_STANDARD": 3, "NONE": 2}, "needsReview": false, "requestedRuns": 5}
     - counts: 표를 받은 축만, NULL 표는 "NONE" 키. 표 합계 = runs (실패한 회차는 runs에서 뺀다)
     - 고른 축(valueAxis)은 최다표 중 하나여야 한다 (동률이면 needsReview로 관리자가 고른다)
+    - needsReview = 최다표가 요청 횟수(requestedRuns)의 과반이 아님. requestedRuns가 없는 예전 기록은
+      요청 횟수 ≥ runs이므로 "runs 기준으로도 과반이 아닌데 false"인 경우만 막는다
     """
     if not isinstance(votes, dict):
         return ["valueAxisVotes는 객체입니다"]
     runs, counts, needs_review = votes.get("runs"), votes.get("counts"), votes.get("needsReview")
+    requested = votes.get("requestedRuns")
     errors = []
     if not isinstance(runs, int) or isinstance(runs, bool) or runs < 1:
         errors.append("valueAxisVotes.runs는 1 이상의 정수입니다")
+    elif requested is not None and (not isinstance(requested, int) or isinstance(requested, bool) or requested < runs):
+        errors.append("valueAxisVotes.requestedRuns는 runs 이상의 정수입니다")
     if not isinstance(needs_review, bool):
         errors.append("valueAxisVotes.needsReview는 true · false입니다")
     if not isinstance(counts, dict) or not counts:
@@ -94,11 +99,18 @@ def check_value_axis_votes(axis, votes):
             errors.append(f"valueAxisVotes.counts.{key}는 1 이상의 정수입니다")
     if errors:
         return errors
-    if isinstance(runs, int) and sum(counts.values()) != runs:
+    if sum(counts.values()) != runs:
         errors.append(f"valueAxisVotes.counts 합계({sum(counts.values())})가 runs({runs})와 다릅니다")
     top = max(counts.values())
     if counts.get(axis or VALUE_AXIS_NONE) != top:
         errors.append(f"valueAxis({axis})가 최다표 축이 아닙니다")
+    # needsReview가 표 수와 맞는지 (관리자 화면의 확인 필요 표시가 빠지지 않게)
+    if requested is not None:
+        if needs_review != (top * 2 <= requested):
+            errors.append(f"valueAxisVotes.needsReview({needs_review})가 표 수와 맞지 않습니다 "
+                          f"(최다표 {top} · 요청 {requested}회, 과반이 아니면 true)")
+    elif not needs_review and top * 2 <= runs:
+        errors.append("valueAxisVotes.needsReview가 false인데 최다표가 과반이 아닙니다(동률 포함)")
     return errors
 
 
@@ -241,26 +253,30 @@ BEGIN
         -- 관리자가 확정한 요소(CONFIRMED)는 건드리지 않는다. 번호와 라벨이 모두 같은 요소만 바꾼다(다시 추출해 요소가 달라졌으면 바꾸지 않는다).
         -- 투표 기록이 있는 값만 반영한다. 투표 없이 정한 값(축 단계를 건너뛴 적재 · 예전 적재 SQL)으로 투표 결과를 덮지 않는다
         SELECT id INTO v_case_id FROM legal_case WHERE title = {title};
-        UPDATE factor f
-        SET value_axis = v.value_axis, value_axis_votes = v.value_axis_votes
-        FROM (VALUES
+        -- 요소 목록은 한 곳(CTE v)에만 두고 갱신과 불일치 개수 세기에 함께 쓴다
+        WITH v(display_order, label, value_axis, value_axis_votes) AS (VALUES
 {axis_rows}
-        ) AS v(display_order, label, value_axis, value_axis_votes)
-        WHERE f.case_id = v_case_id
-          AND f.display_order = v.display_order
-          AND f.label = v.label
-          AND f.value_axis_status = 'AUTO'
-          AND v.value_axis_votes IS NOT NULL
-          AND (f.value_axis IS DISTINCT FROM v.value_axis OR f.value_axis_votes IS DISTINCT FROM v.value_axis_votes);
-        GET DIAGNOSTICS v_changed = ROW_COUNT;
-        SELECT count(*) INTO v_unmatched
-        FROM (VALUES
-{axis_rows}
-        ) AS v(display_order, label, value_axis, value_axis_votes)
-        WHERE NOT EXISTS (SELECT 1 FROM factor f
-                          WHERE f.case_id = v_case_id AND f.display_order = v.display_order AND f.label = v.label);
+        ), updated AS (
+            UPDATE factor f
+            SET value_axis = v.value_axis, value_axis_votes = v.value_axis_votes
+            FROM v
+            WHERE f.case_id = v_case_id
+              AND f.display_order = v.display_order
+              AND f.label = v.label
+              AND f.value_axis_status = 'AUTO'
+              AND v.value_axis_votes IS NOT NULL
+              AND (f.value_axis IS DISTINCT FROM v.value_axis OR f.value_axis_votes IS DISTINCT FROM v.value_axis_votes)
+            RETURNING f.id
+        )
+        SELECT (SELECT count(*) FROM updated),
+               -- 갱신 대상(투표 기록 있음)인데 번호 · 라벨이 DB와 달라 반영하지 못한 요소
+               (SELECT count(*) FROM v
+                WHERE v.value_axis_votes IS NOT NULL
+                  AND NOT EXISTS (SELECT 1 FROM factor f
+                                  WHERE f.case_id = v_case_id AND f.display_order = v.display_order AND f.label = v.label))
+        INTO v_changed, v_unmatched;
         IF v_unmatched > 0 THEN
-            RAISE WARNING '가치관 축: 번호 · 라벨이 DB와 다른 요소 %개는 바꾸지 않았습니다 (title=%)', v_unmatched, {title};
+            RAISE WARNING '가치관 축: 번호 · 라벨이 DB와 다른 요소 %개의 투표 결과는 반영하지 않았습니다 (title=%)', v_unmatched, {title};
         END IF;
         RAISE NOTICE '가치관 축: %행 갱신 (관리자 확정 요소 · 투표 기록 없는 값 제외, title=%)', v_changed, {title};
         RETURN;

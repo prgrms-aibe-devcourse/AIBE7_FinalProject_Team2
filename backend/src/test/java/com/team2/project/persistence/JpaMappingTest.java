@@ -144,7 +144,7 @@ class JpaMappingTest {
 	void findById_factorValueAxis_readsStatusAndVotes() {
 		jdbc.update("""
 			UPDATE factor SET value_axis = 'FAULT_STANDARD',
-			    value_axis_votes = '{"runs": 5, "counts": {"FAULT_STANDARD": 3, "NONE": 2}, "needsReview": false}'::jsonb
+			    value_axis_votes = '{"runs": 4, "counts": {"FAULT_STANDARD": 3, "NONE": 1}, "needsReview": false, "requestedRuns": 5}'::jsonb
 			WHERE id = ?""", overviewFactorId);
 		jdbc.update("UPDATE factor SET value_axis_status = 'CONFIRMED' WHERE id = ?", detailFactorId);	// NULL로 확정
 
@@ -153,7 +153,7 @@ class JpaMappingTest {
 
 		assertThat(voted.getValueAxis()).isEqualTo(ValueAxis.FAULT_STANDARD);
 		assertThat(voted.getValueAxisStatus()).isEqualTo(ValueAxisStatus.AUTO);	// 기본값
-		assertThat(voted.getValueAxisVotes()).isEqualTo(new ValueAxisVotes(5, Map.of("FAULT_STANDARD", 3, "NONE", 2), false));
+		assertThat(voted.getValueAxisVotes()).isEqualTo(new ValueAxisVotes(4, Map.of("FAULT_STANDARD", 3, "NONE", 1), false, 5));
 		assertThat(confirmed.getValueAxis()).isNull();
 		assertThat(confirmed.getValueAxisStatus()).isEqualTo(ValueAxisStatus.CONFIRMED);
 		assertThat(confirmed.getValueAxisVotes()).isNull();
