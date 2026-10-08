@@ -287,7 +287,8 @@ class ProcessOutputTest(unittest.TestCase):
 
                 _, _, _, warnings = process_output(output_with(factors=factors))
 
-                self.assertFalse(any("판단 요소가" in w and "권장" in w for w in warnings))
+                # 총 개수 경고만 본다 (OVERVIEW 개수 경고 "OVERVIEW 판단 요소가 …"와 섞이지 않게)
+                self.assertFalse(any(w.startswith("판단 요소가") for w in warnings))
 
     def test_processOutput_overviewCountOutsideRange_isWarning(self):
         overview = FAKE_OUTPUT["factors"][0]
