@@ -14,7 +14,9 @@ TOOL_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(TOOL_DIR))
 
 from build_prompt import InputError, build_prompt  # noqa: E402
-from check_contamination import build_contamination_prompt, judge, judge_one  # noqa: E402
+from check_contamination import (  # noqa: E402
+    aggregate, build_contamination_prompt, classify, criteria_with, judge, prison_tolerance,
+)
 from common import factors_by_id, final_penalty, format_months, format_penalty_range, format_won, load_json  # noqa: E402
 from to_seed_sql import build_sql, check_factor_label_drift, main as to_seed_sql_main, parse_reviewed_at  # noqa: E402
 from validate_output import parse_output, validate  # noqa: E402
@@ -306,48 +308,73 @@ class ContaminationTest(Fixtures):
         self.assertNotIn("5,000만 원을 공탁", prompt)
         self.assertIn("DEATH(사형)", prompt)
 
-    def test_knows_case(self):
-        verdict, _ = judge_one(self.court, self.prediction(knowsCase=True))
-        self.assertEqual(verdict, "CONTAMINATED")
+    def category(self, court=None, **values):
+        return classify(court or self.court, self.prediction(**values))[0]
 
-    def test_knows_case_as_string(self):
-        verdict, _ = judge_one(self.court, self.prediction(knowsCase="true"))
-        self.assertEqual(verdict, "CONTAMINATED")
+    def test_classify_knows(self):
+        self.assertEqual(self.category(knowsCase=True), "KNOWS")
+        self.assertEqual(self.category(knowsCase="true"), "KNOWS")
+        self.assertEqual(self.category(knowsCase="모름"), "INVALID")
+        self.assertEqual(classify(self.court, ["not", "object"])[0], "INVALID")
 
-    def test_knows_case_not_boolean_is_suspect(self):
-        verdict, _ = judge_one(self.court, self.prediction(knowsCase="모름"))
-        self.assertEqual(verdict, "SUSPECT")
+    def test_classify_exact_close_far(self):
+        # 실제 120개월: 허용 오차 max(1, min(6, 18)) = 6개월
+        self.assertEqual(self.category(prisonMonths=120), "EXACT")
+        self.assertEqual(self.category(prisonMonths=126), "CLOSE")
+        self.assertEqual(self.category(prisonMonths=127), "FAR")
+        self.assertEqual(self.category(prisonMonths=None), "FAR")
+        self.assertEqual(self.category(prisonMonths=120, suspensionMonths=24), "FAR")  # 집행유예 여부가 다름
+        self.assertEqual(self.category(penaltyType="LIFE", prisonMonths=None), "FAR")
 
-    def test_exact_match(self):
-        verdict, _ = judge_one(self.court, self.prediction(prisonMonths=120))
-        self.assertEqual(verdict, "CONTAMINATED")
+    def test_prison_tolerance_scales_with_term(self):
+        criteria = criteria_with()
+        self.assertEqual(prison_tolerance(4, criteria), 1)      # 짧은 형량: 최소 1개월 (예전 ±2개월은 50%였다)
+        self.assertEqual(prison_tolerance(20, criteria), 3)     # 15%
+        self.assertEqual(prison_tolerance(240, criteria), 6)    # 긴 형량: 최대 6개월
+        short = dict(self.court, prisonMonths=4)
+        self.assertEqual(self.category(short, prisonMonths=6), "FAR")
+        self.assertEqual(self.category(short, prisonMonths=5), "CLOSE")
 
-    def test_close_match_is_suspect(self):
-        verdict, _ = judge_one(self.court, self.prediction(prisonMonths=122))
-        self.assertEqual(verdict, "SUSPECT")
-
-    def test_different_is_clean(self):
-        verdict, _ = judge_one(self.court, self.prediction(prisonMonths=180))
-        self.assertEqual(verdict, "CLEAN")
-
-    def test_different_penalty_is_clean(self):
-        verdict, _ = judge_one(self.court, self.prediction(penaltyType="LIFE", prisonMonths=None))
-        self.assertEqual(verdict, "CLEAN")
-
-    def test_same_life_is_suspect(self):
-        court = dict(self.court, penaltyType="LIFE", prisonMonths=None)
-        verdict, _ = judge_one(court, self.prediction(penaltyType="LIFE", prisonMonths=None))
-        self.assertEqual(verdict, "SUSPECT")
-
-    def test_court_reduced_to_prison_compares_final(self):
+    def test_classify_life_and_reduced(self):
+        life = dict(self.court, penaltyType="LIFE", prisonMonths=None)
+        self.assertEqual(self.category(life, penaltyType="LIFE", prisonMonths=None), "SAME_TYPE")
         # 실제 판결: 무기징역을 감경해 징역 15년 → 최종 선고 형벌 PRISON 180으로 비교한다
-        court = dict(self.court, penaltyType="LIFE", reducedTo="PRISON", prisonMonths=180)
-        verdict, _ = judge_one(court, self.prediction(penaltyType="PRISON", prisonMonths=180))
-        self.assertEqual(verdict, "CONTAMINATED")
+        reduced = dict(self.court, penaltyType="LIFE", reducedTo="PRISON", prisonMonths=180)
+        self.assertEqual(self.category(reduced, penaltyType="PRISON", prisonMonths=180), "EXACT")
 
-    def test_final_verdict_is_worst(self):
-        final, _ = judge(self.court, [self.prediction(prisonMonths=180), self.prediction(knowsCase=True)])
-        self.assertEqual(final, "CONTAMINATED")
+    def test_aggregate_rules(self):
+        cases = [
+            (["KNOWS"], "CONTAMINATED"),                                         # 안다고 답하면 적어도 확정
+            (["EXACT", "EXACT"], "INSUFFICIENT"),                               # 응답 2개 < 최소 5개, 2/5 < 50%
+            (["EXACT"] * 3, "CONTAMINATED"),                                    # 응답이 모자라도 3/5 ≥ 50%
+            (["EXACT"] * 4, "CONTAMINATED"),                                    # 응답 부족이 오염 신호를 가리지 않는다
+            ([], "INSUFFICIENT"),                                               # 응답 0개 (호출이 모두 실패)
+            (["EXACT"] * 3 + ["FAR"] * 2, "CONTAMINATED"),                      # 정확히 맞힘 60%
+            (["EXACT"] + ["FAR"] * 4, "SUSPECT"),                               # 정확히 맞힘 1개 (우연 가능)
+            (["CLOSE"] * 3 + ["FAR"] * 2, "SUSPECT"),                           # 가까움 60%
+            (["CLOSE"] * 2 + ["FAR"] * 3, "CLEAN"),                             # 가까움 40%
+            (["SAME_TYPE"] * 3 + ["FAR"] * 2, "SUSPECT"),
+            (["INVALID"] + ["FAR"] * 4, "SUSPECT"),
+            (["FAR"] * 10, "CLEAN"),
+        ]
+        for categories, expected in cases:
+            verdict, reason, counts = aggregate(categories)
+            self.assertEqual(verdict, expected, categories)
+            self.assertEqual(sum(counts.values()), len(categories))
+
+    def test_aggregate_criteria_override(self):
+        self.assertEqual(aggregate(["EXACT"] * 2, {"minAnswered": 2})[0], "CONTAMINATED")
+        self.assertEqual(aggregate([], {"minAnswered": 0})[0], "INSUFFICIENT")  # 0으로 나누지 않는다
+        self.assertEqual(aggregate(["CLOSE"] * 2 + ["FAR"] * 3, {"suspectRatio": 0.4})[0], "SUSPECT")
+
+    def test_judge_reason_has_no_predicted_values(self):
+        predictions = [self.prediction(prisonMonths=m) for m in (125, 116, 133, 200, 90)]
+        verdict, results, reason, counts = judge(self.court, predictions)
+        self.assertEqual(verdict, "CLEAN")   # 가까움 2/5 < 50%
+        self.assertEqual([c for c, _ in results], ["CLOSE", "CLOSE", "FAR", "FAR", "FAR"])
+        for value in ("125", "116", "133", "200", "120"):
+            self.assertNotIn(value, reason)
+            self.assertFalse(any(value in why for _, why in results))
 
 
 class SeedSqlTest(Fixtures):

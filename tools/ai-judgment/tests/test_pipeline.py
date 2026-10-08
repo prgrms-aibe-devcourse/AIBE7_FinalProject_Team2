@@ -295,12 +295,12 @@ class PipelineTest(unittest.TestCase):
 
     def test_full_run_selects_and_loads(self):
         applied = []
-        config = self.config(contamination={"enabled": True, "runs": 3})
+        config = self.config(contamination={"enabled": True, "runs": 3, "criteria": {"minAnswered": 3}})
         clean = {"knowsCase": False, "penaltyType": "PRISON", "prisonMonths": 60, "fineAmount": None,
                  "suspensionMonths": None}
         state = self.run_with(config, {
             "contamination:openai:a": [clean] * 3,
-            "contamination:gemini:b": [clean, "읽을 수 없음", clean],  # 읽을 수 없는 응답은 SUSPECT → 기본은 진행
+            "contamination:gemini:b": [clean, "읽을 수 없음", clean],  # 읽을 수 없는 응답은 INVALID → SUSPECT → 기본은 진행
             "openai:a": [self.output, self.variant(prisonMonths=132)],
             "gemini:b": [self.variant(prisonMonths=150), "[1]"],
         }, applied)
@@ -318,23 +318,80 @@ class PipelineTest(unittest.TestCase):
         self.assertIn("'PENDING', NULL, NULL", sql)
         self.assertEqual(len(applied), 1)
         self.assertEqual(applied[0][1]["mode"], "docker")
-        # 생성 정보에는 실제 판결 값이 들어가지 않는다 (점검은 판정 · 횟수만)
+        # 생성 정보에는 실제 판결 · 예측 형량 값이 들어가지 않는다 (점검은 판정 · 근거 · 분류별 개수 · 기준만)
         report = json.loads(sql.split("'PENDING', NULL, NULL, '")[1].split("'::jsonb")[0].replace("''", "'"))
         self.assertEqual(report["contamination"]["verdict"], contamination[selection["modelSpec"]]["verdict"])
         self.assertNotIn("120", json.dumps(report["contamination"]))
         self.assertTrue(load["runKey"])
 
+    def test_contamination_insufficient_and_criteria(self):
+        clean = {"knowsCase": False, "penaltyType": "PRISON", "prisonMonths": 60, "fineAmount": None,
+                 "suspensionMonths": None}
+        # 응답이 최소 개수보다 적으면(호출 실패 · 한도) 판정을 확정하지 않고 기본은 멈춘다
+        config = self.config(contamination={"enabled": True, "runs": 3, "models": ["openai:a"],
+                                            "criteria": {"minAnswered": 3}},
+                             generate={"models": ["openai:a"], "runs": 1})
+        failing = [clean, llm.LLMError("API 오류 (429): quota"), llm.LLMError("API 오류 (429): quota")]
+        with self.assertRaises(pipeline.PipelineError) as ctx:
+            self.run_with(config, {"contamination:openai:a": failing})
+        self.assertIn("INSUFFICIENT", str(ctx.exception))
+        result = pipeline.load_state(config)["stages"]["contamination"]["outputs"]["results"]["openai:a"]
+        self.assertEqual((result["answered"], result["counts"]), (1, {"FAR": 1}))
+        # onInsufficient: continue면 진행한다
+        config = self.config(contamination={"enabled": True, "runs": 3, "models": ["openai:a"], "onInsufficient": "continue",
+                                            "criteria": {"minAnswered": 3}},
+                             generate={"models": ["openai:a"], "runs": 1})
+        state = self.run_with(config, {"contamination:openai:a": failing, "openai:a": [self.output]}, rerun=True)
+        self.assertEqual(state["stages"]["generate"]["status"], "done")
+
+    def test_contamination_all_calls_failed(self):
+        clean = {"knowsCase": False, "penaltyType": "LIFE"}
+        quota = [llm.LLMError("API 오류 (429): quota")] * 2
+        # 호출이 모두 실패해도 INSUFFICIENT로 판정하고, 다른 모델까지 점검한 뒤 기본(stop)대로 멈춘다
+        config = self.config(contamination={"enabled": True, "runs": 2, "criteria": {"minAnswered": 2}})
+        with self.assertRaises(pipeline.PipelineError) as ctx:
+            self.run_with(config, {"contamination:openai:a": quota, "contamination:gemini:b": [clean] * 2})
+        self.assertIn("openai:a: INSUFFICIENT", str(ctx.exception))
+        results = pipeline.load_state(config)["stages"]["contamination"]["outputs"]["results"]
+        self.assertEqual((results["openai:a"]["verdict"], results["openai:a"]["answered"]), ("INSUFFICIENT", 0))
+        self.assertIn("gemini:b", results)
+        # onInsufficient: exclude면 그 모델만 빼고 진행한다
+        config = self.config(contamination={"enabled": True, "runs": 2, "onInsufficient": "exclude",
+                                            "criteria": {"minAnswered": 2}})
+        state = self.run_with(config, {"contamination:openai:a": quota, "contamination:gemini:b": [clean] * 2,
+                                       "gemini:b": [self.output, self.output]}, rerun=True)
+        self.assertEqual(state["stages"]["contamination"]["outputs"]["excluded"], ["openai:a"])
+        self.assertEqual(list(state["stages"]["generate"]["outputs"]["models"]), ["gemini:b"])
+
+    def test_contamination_criteria_validation(self):
+        for criteria, part in (({"minAnswered": 0}, "minAnswered"), ({"closeRatio": 1.5}, "closeRatio"),
+                               ({"exactRatio": "0.5"}, "exactRatio"), ({"unknown": 1}, "알 수 없는"),
+                               ({"closeMinMonths": 6, "closeMaxMonths": 3}, "closeMinMonths"),
+                               ({"minAnswered": 11}, "runs보다")):
+            bad = copy.deepcopy(self.raw_config)
+            bad["stages"]["contamination"] = {"criteria": criteria}
+            write_json(self.dir / "bad5.json", bad)
+            with self.assertRaises(pipeline.PipelineError, msg=str(criteria)) as ctx:
+                pipeline.load_config(self.dir / "bad5.json")
+            self.assertIn(part, str(ctx.exception))
+        bad = copy.deepcopy(self.raw_config)
+        bad["stages"]["contamination"] = {"onInsufficient": "ignore"}
+        write_json(self.dir / "bad5.json", bad)
+        with self.assertRaises(pipeline.PipelineError):
+            pipeline.load_config(self.dir / "bad5.json")
+
     def test_contamination_stop_and_exclude(self):
         known = {"knowsCase": True, "note": "기사로 봤다"}
         clean = {"knowsCase": False, "penaltyType": "LIFE"}
-        config = self.config(contamination={"enabled": True, "runs": 1})
+        config = self.config(contamination={"enabled": True, "runs": 1, "criteria": {"minAnswered": 1}})
         with self.assertRaises(pipeline.PipelineError) as ctx:
             self.run_with(config, {"contamination:openai:a": [known], "contamination:gemini:b": [clean]})
         self.assertIn("openai:a: CONTAMINATED", str(ctx.exception))
         state = pipeline.load_state(config)
         self.assertEqual(state["stages"]["contamination"]["status"], "failed")
 
-        config = self.config(contamination={"enabled": True, "runs": 1, "onContaminated": "exclude"})
+        config = self.config(contamination={"enabled": True, "runs": 1, "onContaminated": "exclude",
+                                            "criteria": {"minAnswered": 1}})
         state = self.run_with(config, {"contamination:openai:a": [known], "contamination:gemini:b": [clean],
                                        "gemini:b": [self.output, self.output]}, rerun=True)
         self.assertEqual(state["stages"]["contamination"]["outputs"]["excluded"], ["openai:a"])
@@ -363,7 +420,9 @@ class PipelineTest(unittest.TestCase):
     def test_contamination_quota_exhausted_skips_remaining_runs(self):
         clean = {"knowsCase": False, "penaltyType": "PRISON", "prisonMonths": 60, "fineAmount": None,
                  "suspensionMonths": None}
-        config = self.config(contamination={"enabled": True, "runs": 3})
+        # 한도 소진으로 응답이 모자라면 INSUFFICIENT (BE-37) — 여기서는 회차를 건너뛰는지만 보려고 진행시킨다
+        config = self.config(contamination={"enabled": True, "runs": 3, "onInsufficient": "continue",
+                                            "criteria": {"minAnswered": 3}})
         quota = llm.LLMQuotaExhaustedError("일 한도")
         state = self.run_with(config, {
             "contamination:openai:a": [clean, quota],  # 3번째는 꺼내지 않는다 (꺼내면 IndexError)
@@ -372,7 +431,7 @@ class PipelineTest(unittest.TestCase):
             "gemini:b": [self.output, self.output],
         })
         result = state["stages"]["contamination"]["outputs"]["results"]["openai:a"]
-        self.assertEqual((result["answered"], result["runs"]), (1, 3))
+        self.assertEqual((result["answered"], result["runs"], result["verdict"]), (1, 3, "INSUFFICIENT"))
         self.assertTrue(any("남은 1회" in line for line in self.logs))
 
     def test_generate_quota_exhausted_does_not_regenerate(self):
@@ -609,7 +668,7 @@ class PipelineTest(unittest.TestCase):
         self.assertTrue(any("재판부 판결 초안 단계" in line for line in self.logs))  # 외부 전송 안내
 
     def test_court_draft_isolated_from_ai_inputs(self):
-        config = self.court_config(contamination={"enabled": True, "runs": 1})
+        config = self.court_config(contamination={"enabled": True, "runs": 1, "criteria": {"minAnswered": 1}})
         clean = {"knowsCase": False, "penaltyType": "PRISON", "prisonMonths": 60, "fineAmount": None, "suspensionMonths": None}
         self.run_with(config, {"contamination:openai:a": [clean], "openai:a": [self.output]}, court_answers=[self.COURT_DRAFT])
         batch = pipeline.load_state(config)["stages"]["generate"]["outputs"]["batchDir"]

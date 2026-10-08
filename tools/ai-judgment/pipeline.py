@@ -34,7 +34,7 @@ from pathlib import Path
 from build_prompt import InputError, build_prompt
 from case_seed_sql import DEFAULT_SOURCE_ORG, CaseSeedError, build_case_sql, resolve_sources
 from court_seed_sql import CourtSeedError, build_court_sql
-from check_contamination import VERDICT_ORDER, build_contamination_prompt, judge_one
+from check_contamination import DEFAULT_CRITERIA, aggregate, build_contamination_prompt, classify, criteria_with
 from common import TOOL_DIR, load_json, write_json
 from compare import _majority, direction_table, load_runs
 from generate import RUNS_DIR, GenerateError, generate_runs, model_slug, prompt_digest
@@ -74,7 +74,10 @@ DEFAULT_CONFIG = {
         "court": {"enabled": True, "model": None, "maxTokens": 16000},
         "contamination": {
             "enabled": False, "runs": 10, "models": None,  # models가 없으면 generate.models를 점검한다
-            "onContaminated": "stop", "onSuspect": "continue", "delay": 0.0, "timeout": 300,
+            "onContaminated": "stop", "onSuspect": "continue", "onInsufficient": "stop", "delay": 0.0, "timeout": 300,
+            # 판정 기준 (BE-37, check_contamination.py). 비우면 기본값: 최소 응답 5개, 징역 허용 오차
+            # max(1, min(6, 15%))개월, 벌금 10%, 정확히 맞힘 50% 이상 CONTAMINATED, 가까움 50% 이상 SUSPECT
+            "criteria": {},
         },
         "generate": {
             "enabled": True, "models": [], "runs": 3, "maxRetries": 3,
@@ -91,7 +94,11 @@ DEFAULT_CONFIG = {
         },
     },
 }
-CONTAMINATION_ACTIONS = {"onContaminated": ("stop", "exclude"), "onSuspect": ("continue", "exclude", "stop")}
+CONTAMINATION_ACTIONS = {"onContaminated": ("stop", "exclude"), "onSuspect": ("continue", "exclude", "stop"),
+                         "onInsufficient": ("stop", "continue", "exclude")}
+# 판정 기준 값의 허용 범위 (정수 키 · 비율 키)
+CRITERIA_INT_KEYS = ("minAnswered", "closeMinMonths", "closeMaxMonths")
+CRITERIA_RATIO_KEYS = ("closeRatio", "closeFineRatio", "exactRatio", "suspectRatio")
 
 
 class PipelineError(Exception):
@@ -166,6 +173,7 @@ def validate_config(config):
     for key, allowed in CONTAMINATION_ACTIONS.items():
         if stages["contamination"][key] not in allowed:
             errors.append(f"stages.contamination.{key}는 {' · '.join(allowed)} 중 하나다")
+    errors += criteria_errors(stages["contamination"].get("criteria"), stages["contamination"]["runs"])
     select = stages["select"]
     if select["strategy"] not in SELECT_STRATEGIES:
         errors.append(f"stages.select.strategy는 {' · '.join(SELECT_STRATEGIES)} 중 하나다")
@@ -183,6 +191,30 @@ def validate_config(config):
             errors.append(f"retry: {e}")
     if errors:
         raise PipelineError("설정 오류:\n- " + "\n- ".join(errors))
+
+
+def criteria_errors(criteria, runs):
+    """사전 학습 점검 판정 기준(stages.contamination.criteria) 검사."""
+    if criteria is None:
+        return []
+    if not isinstance(criteria, dict):
+        return ["stages.contamination.criteria는 객체다"]
+    errors = [f"stages.contamination.criteria.{key}는 알 수 없는 항목이다" for key in criteria if key not in DEFAULT_CRITERIA]
+    for key in CRITERIA_INT_KEYS:
+        value = criteria.get(key)
+        if value is not None and (not isinstance(value, int) or isinstance(value, bool) or value < (1 if key == "minAnswered" else 0)):
+            errors.append(f"stages.contamination.criteria.{key}는 0 이상(minAnswered는 1 이상) 정수다")
+    for key in CRITERIA_RATIO_KEYS:
+        value = criteria.get(key)
+        if value is not None and (isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 < value <= 1):
+            errors.append(f"stages.contamination.criteria.{key}는 0 초과 1 이하 숫자다")
+    if not errors:
+        merged = criteria_with(criteria)
+        if merged["closeMinMonths"] > merged["closeMaxMonths"]:
+            errors.append("stages.contamination.criteria.closeMinMonths가 closeMaxMonths보다 크다")
+        if isinstance(runs, int) and merged["minAnswered"] > runs:
+            errors.append("stages.contamination.criteria.minAnswered가 runs보다 커서 항상 INSUFFICIENT가 된다")
+    return errors
 
 
 def resolve_path(config, value):
@@ -313,30 +345,28 @@ def stage_contamination(config, state, log, caller=call):
     for spec in models:
         api_key(parse_model_spec(spec)[0])
     out_dir = PIPELINE_DIR / config["name"] / "contamination"
+    criteria = criteria_with(cfg.get("criteria"))
     results, excluded, stop_reasons = {}, [], []
     for spec in models:
-        verdicts = []
+        categories = []
         for i in range(1, cfg["runs"] + 1):
             record = {"modelSpec": spec, "run": i, "createdAt": _now()}
             try:
                 result = caller(spec, "", prompt, timeout=cfg["timeout"])
                 record.update(meta=result.meta(), rawText=result.text)
                 try:
-                    prediction = parse_output(result.text)
-                    if not isinstance(prediction, dict):
-                        raise ValueError("JSON 객체가 아님")
-                    verdict, reason = judge_one(court, prediction)
-                except ValueError as e:  # JSONDecodeError 포함
-                    verdict, reason = "SUSPECT", f"응답을 읽을 수 없음: {e}"
+                    category, reason = classify(court, parse_output(result.text), criteria)
+                except ValueError as e:  # JSONDecodeError 포함 — 읽을 수 없는 응답은 형식 오류로 센다
+                    category, reason = "INVALID", f"응답을 읽을 수 없음: {e}"
             except LLMError as e:
-                verdict, reason = None, f"호출 실패: {e}"
+                category, reason = None, f"호출 실패: {e}"  # 응답 수에 넣지 않는다 (표본 부족 판정으로 이어짐)
                 quota_exhausted = isinstance(e, LLMQuotaExhaustedError)
             else:
                 quota_exhausted = False
-            record.update(verdict=verdict, reason=reason)
+            record.update(category=category, reason=reason)
             write_json(out_dir / model_slug(spec) / f"run-{i:03d}.json", record)
-            if verdict:
-                verdicts.append(verdict)
+            if category:
+                categories.append(category)
             if quota_exhausted:
                 # 일 한도 · 크레딧이 바닥났으니 남은 회차도 같은 실패로 쌓일 뿐이다. 이 모델은 여기서 멈춘다 (BE-36)
                 if i < cfg["runs"]:
@@ -344,13 +374,13 @@ def stage_contamination(config, state, log, caller=call):
                 break
             if cfg["delay"]:
                 time.sleep(cfg["delay"])
-        if not verdicts:
-            raise PipelineError(f"{spec}: 사전 학습 점검 호출이 모두 실패했습니다")
-        final = max(verdicts, key=VERDICT_ORDER.index)
-        counts = {v: verdicts.count(v) for v in VERDICT_ORDER if v in verdicts}
-        results[spec] = {"verdict": final, "counts": counts, "answered": len(verdicts), "runs": cfg["runs"]}
-        log(f"[{spec}] {final} {counts} (응답 {len(verdicts)}/{cfg['runs']})")
-        action = {"CONTAMINATED": cfg["onContaminated"], "SUSPECT": cfg["onSuspect"]}.get(final, "continue")
+        # 호출이 모두 실패해도(응답 0개) INSUFFICIENT로 판정해 onInsufficient를 따른다
+        final, reason, counts = aggregate(categories, criteria)
+        results[spec] = {"verdict": final, "reason": reason, "counts": counts, "answered": len(categories),
+                         "runs": cfg["runs"], "criteria": criteria}
+        log(f"[{spec}] {final} — {reason} {counts} (응답 {len(categories)}/{cfg['runs']})")
+        action = {"CONTAMINATED": cfg["onContaminated"], "SUSPECT": cfg["onSuspect"],
+                  "INSUFFICIENT": cfg["onInsufficient"]}.get(final, "continue")
         if action == "exclude":
             excluded.append(spec)
         elif action == "stop":
@@ -466,8 +496,9 @@ def build_generation_report(config, state, run_record, selection):
         "usage": (run_record.get("meta") or {}).get("usage"),
         "validationWarnings": run_record["validation"]["warnings"],
         "selection": {"strategy": selection["strategy"], "reason": selection["reason"], "score": selection["score"]},
-        # 판정과 횟수만 남긴다 (예측 형량 등은 남기지 않음)
-        "contamination": ({"verdict": contamination["verdict"], "counts": contamination["counts"]}
+        # 판정 · 근거 · 분류별 개수 · 기준만 남긴다 (예측 형량 등은 남기지 않음)
+        "contamination": ({"verdict": contamination["verdict"], "reason": contamination.get("reason"),
+                           "counts": contamination["counts"], "criteria": contamination.get("criteria")}
                           if contamination else {"verdict": "SKIPPED"}),
     }
 
