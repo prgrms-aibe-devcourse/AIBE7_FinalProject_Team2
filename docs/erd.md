@@ -16,6 +16,7 @@
 | v1.9 | 2026-10-02 | 사건 정보 섹션 표시 방식 팀 결정 반영 (BE-17)<br>• `case_section.content`는 항목 하나를 한 줄로 쓰고 줄바꿈(`\n`)으로 나눈다. 화면은 줄바꿈을 그대로 보여 준다(7장 규칙 추가)<br>• 양측 주장(`PROSECUTOR` · `DEFENSE`) 섹션 위 안내 문구는 DB에 두지 않고 화면 고정 문구로 둔다. 컬럼을 추가하지 않는다<br>• `penalty_rule.display_order` 규칙 추가: 법조문 표기 순서대로 무거운 형벌부터(사형 → 무기 → 징역 → 벌금). 예시 · 가상 시드는 이미 이 순서이고 실제 사건 시드(비공개)를 맞춤 |
 | v1.10 | 2026-10-06 | 판단 요소별 요약어 기준 확정 반영 (BE-26)<br>• `factor.summary_tag` 설명을 "요소를 묶는 분류명"에서 "요소마다 붙이는 요약어"로 정정<br>• 6장 `factor` 예시의 `summary_tag` 11개 값을 요소별 요약어로 교체(가상 시드 · 프론트 목과 같은 값) |
 | v1.11 | 2026-10-07 | AI 판결 자동 파이프라인 · 후검수 반영 (BE-31)<br>• `ai_generation.generation_report`(jsonb) 추가(V8 마이그레이션): 자동 생성 정보(검증 경고 · 사전 학습 점검 판정 · 회차 선택 · 실행 식별자 `runKey`)<br>• 자동 적재는 AI 판결을 비공개(`is_published=false`) · `PENDING`으로, 사건을 `DRAFT`로 넣고 관리자가 검수 후 공개한다 |
+| v1.12 | 2026-10-08 | COMMON-19 반영 (AI 판결 파이프라인 BE-31 ~ BE-45)<br>• `legal_case.title` · `factor(case_id, display_order)` 유일 제약 설명 추가(V7, 적재 SQL의 조회 키)<br>• `legal_case.incident_date`: 자동 파이프라인이 원문 · 선고일과 대조해 확인한 값을 넣는다(BE-38)<br>• 자동 적재는 재판부 판결(COURT)도 비공개(`is_published=false`)로 넣고, 다시 돌리면 비공개 후보가 쌓일 수 있음을 명시(BE-38)<br>• `generation_report` 내용 구체화: 점검 판정 · 분류별 개수 · 기준(`criteria`) 등. 코드 변경 없음, 설명만 정정 |
 
 ---
 
@@ -151,11 +152,12 @@ erDiagram
 | recommended_max_months | int |  | 권고 형량 상한 (개월) | REQ-034 |
 | recommended_basis | text |  | 권고 범위 산출 근거 문구 | REQ-035 |
 | guideline_id | bigint FK |  | 적용 양형기준 버전 | REQ-080 |
-| incident_date | date |  | 사건 발생일 (양형기준 버전 판단 근거) | FR-3-5-1 |
+| incident_date | date |  | 사건 발생일 (양형기준 버전 판단 근거). 자동 파이프라인은 모델이 찾은 날짜를 판결문 원문 · 선고일과 대조해 확인된 값만 넣고, 원문에 날짜가 없으면 비운다(v1.12, BE-38) | FR-3-5-1 |
 | status | varchar(20) | ✓ | `DRAFT` / `REVIEW` / `PUBLISHED`. `PUBLISHED`만 사용자에게 노출 | REQ-047, 075 |
 | published_at | timestamptz |  |  |  |
 | created_at, updated_at | timestamptz | ✓ |  |  |
 - 권고 범위는 MVP에서 팀이 계산해 입력한 값을 그대로 쓴다. 자동 계산 로직은 확장 단계(결정 #4).
+- `title`은 유일하다(`uk_legal_case_title`, V7, v1.12). 적재 SQL이 제목으로 사건을 찾아 환경마다 id가 달라도 같은 SQL을 쓰기 위해서다. 모델이 만든 중립 제목이 다른 공개 · 검토 중 사건과 겹치면 자동 적재가 멈춘다(BE-31).
 - 화면에 보이는 범죄 분류명(예: "사기 / **재산범죄**")은 컬럼으로 두지 않고 `crime_type`별 코드 상수로 둔다(`MURDER` → 생명범죄, `FRAUD` → 재산범죄, `INJURY` → 신체범죄). API는 `crimeCategoryLabel`로 내려준다(v1.3).
 
 #### `case_section` — 사건 정보 섹션
@@ -231,6 +233,7 @@ S-06에서 보여 줄 형벌 선택지, 그리고 **선고 가능 범위 밖 판
 | reveal_stage | varchar(20) | ✓ | 처음 알게 되는 단계: `OVERVIEW` / `DETAIL` / `ARGUMENT` / `LAW` | REQ-095 |
 | summary_tag | varchar(20) | ✓ | 요약 태그 (v1.3 추가, v1.10 확정). 여러 요소를 묶는 분류명이 아니라 **요소마다 붙이는 짧은 요약어**다(예: 요소 "다투던 중 집에 있던 흉기를 집어 들었다" → `흉기 사용`). S-09 "내 판결" 한 줄 요약과 세 판결 비교 규칙 문장(API 14 `ruleSentences`)에 쓴다 | REQ-060 |
 | display_order | int | ✓ |  |  |
+- `(case_id, display_order)`는 유일하다(`uk_factor_case_display_order`, V7, v1.12). 적재 SQL이 요소를 번호와 문구로 찾기 때문이다.
 - `summary_tag`는 사건별로 팀이 붙인다. 요소마다 다른 요약어를 붙이는 것이 기본이지만, 같은 사건 안에 뜻이 겹치는 요소가 있으면 같은 태그를 쓸 수도 있다(그때는 UserSummarySentence · RuleSentences가 중복을 한 번만 쓴다). 태그 문구도 판단 요소와 같이 중립적으로 쓴다(FR-3-4).
 
 #### `case_source` — 원본 판결문 (내부 전용)
@@ -393,8 +396,9 @@ AI 판결 1건을 어떤 조건으로 만들었는지 남긴다(REQ-047, 079). M
 | review_status | varchar(20) | ✓ | `PENDING` / `APPROVED` / `REJECTED` |
 | reviewed_by | varchar(50) |  | 검수자 |
 | reviewed_at | timestamptz |  |  |
-| generation_report | jsonb |  | 자동 생성 정보 (v1.11, BE-31): 검증 경고 · 사전 학습 점검 판정 · 회차 선택 이유 · 모델 · 토큰 · 실행 식별자(`runKey`, 같은 적재 SQL 중복 실행 방지, 부분 유니크 인덱스 `ux_ai_generation_run_key`). 사람이 검수해 넣은 행은 NULL |
+| generation_report | jsonb |  | 자동 생성 정보 (v1.11, BE-31): 검증 경고 · 사전 학습 점검(판정 · 근거 · 분류별 개수 · 기준 `criteria`, 점검을 안 했으면 `SKIPPED`, BE-37) · 회차 선택(전략 · 이유 · 점수) · 모델(요청 모델 · 실제 응답 모델) · 토큰 · 실행 식별자(`runKey`, 같은 적재 SQL 중복 실행 방지, 부분 유니크 인덱스 `ux_ai_generation_run_key`). 예측 형량 · 실제 판결 값은 넣지 않는다. 사람이 검수해 넣은 행은 NULL |
 | created_at | timestamptz | ✓ |  |
+- 자동 파이프라인(BE-31)은 재판부 판결(COURT)도 비공개(`judgment.is_published=false`)로 넣는다(BE-38). 기존 공개 판결은 건드리지 않고, 파이프라인을 다시 돌리면 같은 사건에 비공개 COURT 후보가 하나 더 쌓일 수 있다(기존 행은 지우지 않음, REQ-079와 같은 원칙). 공개할 후보를 고르는 일은 후검수(BE-33 이후, 미구현)가 한다. COURT 판결에는 검수 상태 컬럼이 아직 없다.
 - 자동 파이프라인(BE-31)은 AI 판결을 비공개(`judgment.is_published=false`) · `review_status='PENDING'`으로 넣는다. 관리자가 검수해 `APPROVED`로 바꾸고 공개 판단을 교체한다(후검수). `REJECTED`는 공개하지 않는다.
 - 모델·프롬프트가 바뀌면 새 `judgment` + 새 `ai_generation`을 만들고, 검수 후 공개 판단을 교체한다. 기존 행은 지우지 않는다(REQ-079).
 
