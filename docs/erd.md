@@ -634,13 +634,15 @@ IA 9장의 규칙을 어느 테이블·제약이 책임지는지 정리한다.
 ## 8. (확장 · 제안) 판결 성향 테스트 테이블 (v1.13)
 
 > **미확정 제안이다.** 12차 회의 "DB에 성향 테스트 관련 내용 추가"를 위한 초안으로, 문항 산식 · 매핑 로직(요구사항 15장)이 정해지면 확정한다. 요구사항 DR-11, 기능 명세 REQ-112 ~ 119 · 127.
+>
+> **BE-47과의 관계**: 판단 요소가 **어느 가치관 축**에 속하는지는 이미 develop에 있는 `factor.value_axis`(v1.13, BE-47)로 정해져 있다. 이 장에서 새로 제안하는 `factor_axis_mapping`은 그 축을 다시 정의하지 않고, `factor.value_axis` 하나만으로는 담지 못하는 **형량 ↑ / ↓ 방향별 글자 기여 · 가중치**만 추가한다.
 
 ```mermaid
 erDiagram
     anonymous_user ||--o{ personality_result : "응시"
     personality_type ||--o{ personality_result : "결과 유형"
     personality_question ||--|{ personality_choice : "선택지"
-    factor ||--o{ factor_axis_mapping : "축 대응"
+    factor ||--o{ factor_axis_mapping : "방향별 글자 기여"
     experience ||--o| experience_personality : "체험별 성향 기여"
 ```
 
@@ -650,8 +652,9 @@ erDiagram
 | `personality_choice` | id, question_id FK, content, letter(`E`·`I` / `S`·`N` / `T`·`F` / `J`·`P`), score, display_order | 선택지가 어느 글자 쪽에 몇 점을 주는지 |
 | `personality_type` | code PK(char(4), 예: `INFP`), name(예: 너그러운 판다형), animal, one_liner, tolerance(0 ~ 4), description, image_url | 16유형 콘텐츠. 코드 상수로 둘 수도 있다 |
 | `personality_result` | id, anonymous_user_id FK, type_code FK, axis_scores jsonb, answers jsonb, is_current, created_at | 응시 결과. 재응시 시 새 행 + 이전 행 `is_current=false`(제안). 회원 연결은 `anonymous_user.member_id`로 따라간다 |
-| `factor_axis_mapping` | id, factor_id FK, axis, letter_when_up, letter_when_down, weight | 판단 요소가 형량 ↑ / ↓로 선택됐을 때 어느 축의 어느 글자에 기여하는지(요구사항 FR-8-7 대응표). 사건 등록 시 팀이 입력 |
+| `factor_axis_mapping` | id, factor_id FK unique, letter_when_up, letter_when_down, weight | 판단 요소가 형량 ↑ / ↓로 선택됐을 때 `factor.value_axis`의 어느 글자에 몇 점 기여하는지(요구사항 FR-8-7 대응표). 축 자체는 `factor.value_axis`를 따르므로 이 표에 `axis` 컬럼을 따로 두지 않는다. 사건 등록 시 팀이 입력 |
 | `experience_personality` | id, experience_id FK unique, axis_scores jsonb, type_code, created_at | 판결 체험이 `COMPLETED`가 될 때 계산한 성향 기여분. 성향 변화 흐름 · 종합 성향(평균) 계산에 쓴다. 성향 테스트 전에 한 체험도 남겨 둔다 |
 
 - 사용자 응답에 원본 판결문 정보가 섞이지 않는다는 원칙(5장)은 그대로다. 성향 기여는 사용자의 `USER` · `FINAL` 판단 요소 기록(`judgment_factor`)에서만 계산한다.
 - 공유 링크는 `personality_type`만 읽는다. `personality_result`의 응답 · 점수는 공유 응답에 넣지 않는다.
+- `factor.value_axis`가 `NULL`인 판단 요소는 `factor_axis_mapping`도 두지 않는다(성향 계산에서 제외, 4장 규칙과 동일).
