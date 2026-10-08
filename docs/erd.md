@@ -18,7 +18,7 @@
 | v1.11 | 2026-10-07 | AI 판결 자동 파이프라인 · 후검수 반영 (BE-31)<br>• `ai_generation.generation_report`(jsonb) 추가(V8 마이그레이션): 자동 생성 정보(검증 경고 · 사전 학습 점검 판정 · 회차 선택 · 실행 식별자 `runKey`)<br>• 자동 적재는 AI 판결을 비공개(`is_published=false`) · `PENDING`으로, 사건을 `DRAFT`로 넣고 관리자가 검수 후 공개한다 |
 | v1.12 | 2026-10-08 | COMMON-19 반영 (AI 판결 파이프라인 BE-31 ~ BE-45)<br>• `legal_case.title` · `factor(case_id, display_order)` 유일 제약 설명 추가(V7, 적재 SQL의 조회 키)<br>• `legal_case.incident_date`: 자동 파이프라인이 원문 · 선고일과 대조해 확인한 값을 넣는다(BE-38)<br>• 자동 적재는 재판부 판결(COURT)도 비공개(`is_published=false`)로 넣고, 다시 돌리면 비공개 후보가 쌓일 수 있음을 명시(BE-38)<br>• `generation_report` 내용 구체화: 점검 판정 · 분류별 개수 · 기준(`criteria`) 등. 코드 변경 없음, 설명만 정정 |
 | v1.13 | 2026-10-08 | 판단 요소 가치관 축 추가 (BE-47)<br>• `factor.value_axis` 추가(V9 마이그레이션, nullable): 판결 체험에서 고르는 판단 요소를 사용자 성향과 매칭하는 가치관 축 4개(`APOLOGY_SINCERITY` · `FAULT_STANDARD` · `PRINCIPLE_RELATION` · `ORDER_OPPORTUNITY`) 또는 NULL<br>• 사전 판단(`OVERVIEW`)과 형량 선택은 성향 계산에 쓰지 않는다(계산하는 쪽에서 제외) |
-| v1.14 | 2026-10-08 | 11 · 12차 회의 반영 (COMMON-20)<br>• `comparison_analysis`: AI 비교 분석(REQ-063) 제외로 보류. V5 마이그레이션의 테이블은 그대로 두고 쓰지 않는다(삭제 여부 미정)<br>• 8장 신설: 판결 성향 테스트 테이블 제안(미확정) — 문항 · 선택지 · 유형 · 결과 · 판단 요소 ↔ 축 대응 · 체험별 성향 기여 |
+| v1.14 | 2026-10-08 | 11 · 12차 회의 반영 (COMMON-20)<br>• `comparison_analysis`: AI 비교 분석(REQ-063) 제외로 보류. V5 마이그레이션의 테이블은 그대로 두고 쓰지 않는다(삭제 여부 미정)<br>• 8장 신설: 판결 성향 테스트 테이블 제안(미확정) — 문항 · 선택지 · 유형 · 결과 · 체험별 성향 기여. 판단 요소별 가치관 축은 새로 만들지 않고 `factor.value_axis`(v1.13, BE-47)를 쓴다 |
 
 ---
 
@@ -631,30 +631,30 @@ IA 9장의 규칙을 어느 테이블·제약이 책임지는지 정리한다.
 
 ---
 
-## 8. (확장 · 제안) 판결 성향 테스트 테이블 (v1.13)
+## 8. (확장 · 제안) 판결 성향 테스트 테이블 (v1.14)
 
 > **미확정 제안이다.** 12차 회의 "DB에 성향 테스트 관련 내용 추가"를 위한 초안으로, 문항 산식 · 매핑 로직(요구사항 15장)이 정해지면 확정한다. 요구사항 DR-11, 기능 명세 REQ-112 ~ 119 · 127.
 >
-> **BE-47과의 관계**: 판단 요소가 **어느 가치관 축**에 속하는지는 이미 develop에 있는 `factor.value_axis`(v1.13, BE-47)로 정해져 있다. 이 장에서 새로 제안하는 `factor_axis_mapping`은 그 축을 다시 정의하지 않고, `factor.value_axis` 하나만으로는 담지 못하는 **형량 ↑ / ↓ 방향별 글자 기여 · 가중치**만 추가한다.
+> **판단 요소 ↔ 가치관 축은 이 장에서 새로 만들지 않는다.** 요소가 어느 축에 속하는지는 이미 있는 `factor.value_axis`(v1.13, BE-47)를 그대로 쓴다. 값은 파이프라인의 AI 분류(BE-49)와 관리자 후검수(BE-48 · BE-43)로 정해진다. 축 이름도 같은 키(`APOLOGY_SINCERITY` · `FAULT_STANDARD` · `PRINCIPLE_RELATION` · `ORDER_OPPORTUNITY`)를 쓰므로 성향 테스트 점수와 체험 기여분을 같은 키로 합칠 수 있다.
+>
+> 형량 ↑ / ↓로 고른 것이 어느 글자(E/I 등)로 가는지는 가치관 축마다 정하는 규칙이므로 테이블 없이 산식 문서(WBS 6.1.4)로 정한다. 요소마다 글자 · 가중치가 달라야 한다는 결론이 나오면 그때 `factor` 옆에 보조 테이블을 추가한다.
 
 ```mermaid
 erDiagram
     anonymous_user ||--o{ personality_result : "응시"
     personality_type ||--o{ personality_result : "결과 유형"
     personality_question ||--|{ personality_choice : "선택지"
-    factor ||--o{ factor_axis_mapping : "방향별 글자 기여"
     experience ||--o| experience_personality : "체험별 성향 기여"
 ```
 
 | 테이블 | 주요 컬럼 (제안) | 설명 |
 | --- | --- | --- |
-| `personality_question` | id, axis(`APOLOGY` / `STANDARD` / `PRINCIPLE` / `ORDER`), scenario(`FRIEND` / `FAMILY` / `WORK` / `NEIGHBOR`), content, display_order, is_active | 일상 시나리오 문항. 축당 3 ~ 4개. 법률 용어 금지 |
+| `personality_question` | id, axis(`APOLOGY_SINCERITY` / `FAULT_STANDARD` / `PRINCIPLE_RELATION` / `ORDER_OPPORTUNITY`, `factor.value_axis`와 같은 값), scenario(`FRIEND` / `FAMILY` / `WORK` / `NEIGHBOR`), content, display_order, is_active | 일상 시나리오 문항. 축당 3 ~ 4개. 법률 용어 금지 |
 | `personality_choice` | id, question_id FK, content, letter(`E`·`I` / `S`·`N` / `T`·`F` / `J`·`P`), score, display_order | 선택지가 어느 글자 쪽에 몇 점을 주는지 |
 | `personality_type` | code PK(char(4), 예: `INFP`), name(예: 너그러운 판다형), animal, one_liner, tolerance(0 ~ 4), description, image_url | 16유형 콘텐츠. 코드 상수로 둘 수도 있다 |
-| `personality_result` | id, anonymous_user_id FK, type_code FK, axis_scores jsonb, answers jsonb, is_current, created_at | 응시 결과. 재응시 시 새 행 + 이전 행 `is_current=false`(제안). 회원 연결은 `anonymous_user.member_id`로 따라간다 |
-| `factor_axis_mapping` | id, factor_id FK unique, letter_when_up, letter_when_down, weight | 판단 요소가 형량 ↑ / ↓로 선택됐을 때 `factor.value_axis`의 어느 글자에 몇 점 기여하는지(요구사항 FR-8-7 대응표). 축 자체는 `factor.value_axis`를 따르므로 이 표에 `axis` 컬럼을 따로 두지 않는다. 사건 등록 시 팀이 입력 |
-| `experience_personality` | id, experience_id FK unique, axis_scores jsonb, type_code, created_at | 판결 체험이 `COMPLETED`가 될 때 계산한 성향 기여분. 성향 변화 흐름 · 종합 성향(평균) 계산에 쓴다. 성향 테스트 전에 한 체험도 남겨 둔다 |
+| `personality_result` | id, anonymous_user_id FK, type_code FK, axis_scores jsonb(키는 위 4개 축 이름), answers jsonb, is_current, created_at | 응시 결과. 재응시 시 새 행 + 이전 행 `is_current=false`(제안). 회원 연결은 `anonymous_user.member_id`로 따라간다 |
+| `experience_personality` | id, experience_id FK unique, axis_scores jsonb(키는 위 4개 축 이름), type_code, created_at | 판결 체험이 `COMPLETED`가 될 때 계산한 성향 기여분. 성향 변화 흐름 · 종합 성향(평균) 계산에 쓴다. 성향 테스트 전에 한 체험도 남겨 둔다 |
 
 - 사용자 응답에 원본 판결문 정보가 섞이지 않는다는 원칙(5장)은 그대로다. 성향 기여는 사용자의 `USER` · `FINAL` 판단 요소 기록(`judgment_factor`)에서만 계산한다.
 - 공유 링크는 `personality_type`만 읽는다. `personality_result`의 응답 · 점수는 공유 응답에 넣지 않는다.
-- `factor.value_axis`가 `NULL`인 판단 요소는 `factor_axis_mapping`도 두지 않는다(성향 계산에서 제외, 4장 규칙과 동일).
+- `factor.value_axis`가 `NULL`인 판단 요소는 성향 계산에서 빠진다(4장 규칙과 동일).
