@@ -34,6 +34,28 @@ spring:
       # 36.7 → 36처럼 사용자가 보낸 값과 다른 값이 조용히 저장되는 것을 막는다. "36" 같은 문자열 숫자는 허용한다
       accept-float-as-int: false
 
+# 관리자 세션 쿠키 (확장 단계, BE-39). 사용자 API는 세션을 쓰지 않는다(익명 ID 쿠키).
+server:
+  servlet:
+    session:
+      timeout: ${ADMIN_SESSION_TIMEOUT:30m}
+      cookie:
+        name: NLNB_ADMIN_SESSION
+        http-only: true
+        # 로컬 http 개발은 localhost라 브라우저가 Secure 쿠키를 허용한다. 운영은 항상 true
+        secure: ${SESSION_COOKIE_SECURE:true}
+        # Lax: OAuth 로그인(BE-40) 콜백은 외부 사이트에서 돌아오는 이동이라 Strict면 세션 쿠키가 빠져 실패한다.
+        # 상태를 바꾸는 관리자 요청은 CSRF 토큰으로 막는다
+        same-site: lax
+
+# 첫 관리자 계정 (BE-39). 값이 둘 다 있고 그 이메일의 계정이 없을 때만 기동 시 한 번 만든다.
+# 비밀번호는 환경변수로만 넘기고, 만든 뒤에는 환경변수에서 지운다(이미 있는 계정의 비밀번호는 바꾸지 않는다)
+admin:
+  bootstrap:
+    email: ${ADMIN_BOOTSTRAP_EMAIL:}
+    password: ${ADMIN_BOOTSTRAP_PASSWORD:}
+    display-name: ${ADMIN_BOOTSTRAP_NAME:관리자}
+
 # Swagger UI · OpenAPI 문서. 기본값은 꺼짐: 운영에서 환경변수를 빠뜨려도 API 문서가 노출되지 않도록 안전한 쪽에 둔다.
 # 로컬 · 개발에서만 SWAGGER_ENABLED=true 로 켠다.
 springdoc:
