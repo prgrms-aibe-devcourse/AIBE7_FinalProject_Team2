@@ -131,6 +131,9 @@ def check_inputs(case, report, sources, source_org):
         _check_length(errors, "section.title", section.get("title"))
 
     extras = {e["factorId"]: e for e in report.get("factorExtras", [])}
+    if not case.get("factors"):
+        # 판단 요소가 없으면 체험에 쓸 수 없고, 이미 적재된 사건의 축 갱신 SQL도 빈 VALUES가 되어 실행되지 않는다
+        errors.append("case.json에 판단 요소(factors)가 없습니다")
     for factor in case.get("factors", []):
         extra = extras.get(factor["factorId"])
         if not extra or not extra.get("summaryTag"):
@@ -144,8 +147,9 @@ def check_inputs(case, report, sources, source_org):
         # valueAxis는 없거나 null이어도 된다(extract-v5 이전 보고서 · 어느 축에도 맞지 않는 요소). 값이 있으면 허용 값이어야 한다
         if extra.get("valueAxis") not in (None, *VALUE_AXES):
             errors.append(f"판단 요소 {factor['factorId']}: valueAxis는 {' · '.join(VALUE_AXES)} 중 하나이거나 null입니다")
-        # valueAxisVotes(축 분류 투표 기록, BE-49)는 없어도 된다(추출기가 한 번 정한 값 · 사람 초안)
-        if extra.get("valueAxisVotes") is not None:
+        # valueAxisVotes(축 분류 투표 기록, BE-49)는 없어도 된다(추출기가 한 번 정한 값 · 사람 초안).
+        # 축 값이 올바를 때만 본다(형식이 틀린 축으로 표를 찾지 않는다)
+        elif extra.get("valueAxisVotes") is not None:
             errors += [f"판단 요소 {factor['factorId']}: {e}"
                        for e in check_value_axis_votes(extra.get("valueAxis"), extra["valueAxisVotes"])]
     for basis in (report.get("penaltyRuleBasis") or {}).values():
