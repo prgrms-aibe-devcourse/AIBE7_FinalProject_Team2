@@ -25,6 +25,7 @@
 | [api-specification.md](api-specification.md) | API 명세서. 경로 · 요청 · 응답 · 에러 코드 · 상태별 호출 가능 API |
 | [sequence-diagram.md](sequence-diagram.md) | 시퀀스 다이어그램. 사건 등록 · 체험 · 판결 · 비교 흐름 |
 | [tech-stack.md](tech-stack.md) | 기술 스택 정리 |
+| [ai-judgment-pipeline.md](ai-judgment-pipeline.md) | AI 판결 오프라인 파이프라인. 판결문 → 비식별화 → 재판부 초안 → 사전 학습 점검 → 생성 → 선택 → 적재 흐름, 모델 · 재시도 · 무료 등급 정책, 구현 상태 (`tools/ai-judgment`) |
 
 ### 일정 · 협업
 
