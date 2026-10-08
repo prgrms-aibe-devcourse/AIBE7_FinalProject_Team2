@@ -97,6 +97,17 @@ class AxisVoteTest(unittest.TestCase):
         # 추출기 값이 최다표 안에 없으면 그 값을 쓰지 않는다
         self.assertEqual(aggregate_votes(answers, IDS, preferred={1: "APOLOGY_SINCERITY"})[1]["valueAxis"], "FAULT_STANDARD")
 
+    def test_aggregate_votes_fewValidAnswers_needsReview(self):
+        # 5회 중 1개만 유효하면 표가 갈리지 않아도 근거가 약하므로 확인 필요 (과반은 요청 횟수 기준, 리뷰 반영)
+        one = [parse_axis_answer(answer("FAULT_STANDARD", None, None), IDS)]
+        votes = aggregate_votes(one, IDS, requested_runs=5)
+        self.assertEqual(votes[1]["valueAxisVotes"], {"runs": 1, "counts": {"FAULT_STANDARD": 1}, "needsReview": True})
+        # 5회 중 3개가 유효하고 3표가 모이면 과반 (3 > 5 / 2)
+        three = one * 3
+        self.assertFalse(aggregate_votes(three, IDS, requested_runs=5)[1]["valueAxisVotes"]["needsReview"])
+        # 요청 횟수를 주지 않으면 유효 응답 수 기준
+        self.assertFalse(aggregate_votes(one, IDS)[1]["valueAxisVotes"]["needsReview"])
+
     def test_aggregate_votes_emptyIsError(self):
         with self.assertRaises(AxisVoteError):
             aggregate_votes([], IDS)
