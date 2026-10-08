@@ -18,6 +18,7 @@ AI 판결 생성(3단계)은 두 가지 방법 중 하나로 한다. 외부 LLM 
 | `prompts/judgment_system.md` | AI 판결 생성 시스템 프롬프트 (원칙 · 판단 순서 · 출력 JSON 형식) |
 | `prompts/judgment_user.md` | 사건별 사용자 프롬프트 틀 |
 | `prompts/contamination_check.md` | 사전 학습 점검 프롬프트 틀 (개요 · 죄명만) |
+| `prompts/axis_system.md` | 판단 요소 가치관 축 분류 프롬프트 (축 정의 · 출력 JSON 형식, BE-49) |
 | `build_prompt.py` | 사건 입력 JSON → AI 판결 생성 프롬프트 |
 | `validate_output.py` | 모델 응답 JSON 검증 (오류 · 경고) |
 | `check_contamination.py` | 사전 학습 점검 프롬프트 생성 · 응답 판정 (REQ-102) |
@@ -30,6 +31,7 @@ AI 판결 생성(3단계)은 두 가지 방법 중 하나로 한다. 외부 LLM 
 | `tests/` | 단위 테스트 |
 | `case-extractor/` | 판결문(PDF · txt) → 비식별화한 사건 입력 JSON 초안 (BE-20). Claude API를 쓰므로 패키지 설치가 필요하다. [README](case-extractor/README.md) |
 | `pipeline.py` | 판결문 → 적재까지 자동 실행 · 단계 분기 · 이어 하기 (BE-31) |
+| `axis_vote.py` | 가치관 축 분류 투표: 프롬프트 · 응답 검사 · 집계(최다표 · 확인 필요) (BE-49) |
 | `pipeline.example.json` | 파이프라인 설정 예시 (복사해 `cases/`에 두고 고친다) |
 | `court_seed_sql.py` | 재판부 판결(BE-14 형식) → **비공개** 적재 SQL (`judgment` COURT · `judgment_factor`) (BE-38) |
 | `case_seed_sql.py` | 비식별화한 사건 파일 → 사건 콘텐츠 적재 SQL (`legal_case` DRAFT · 섹션 · 형벌 규칙 · 판단 요소 · 원본 판결문) (BE-31) |
@@ -250,6 +252,7 @@ python3 pipeline.py status cases/my-case.pipeline.json
 | `contamination` | 모델마다 사전 학습 점검을 `runs`회(기본 10) 자동으로 묻고 판정한다(REQ-102). 응답을 분류해 **비율로** 판정한다(위 "2. 사전 학습 점검", BE-37). 호출 실패는 응답 수에 넣지 않는다(모두 실패해도 `INSUFFICIENT`로 판정해 `onInsufficient`를 따르고, 멈출 때도 다른 모델까지 점검한 뒤 멈춘다) | **기본 꺼짐**(`enabled: true`로 켬). `onContaminated`: `stop`(기본) · `exclude`(그 모델만 생성에서 뺌). `onSuspect`: `continue`(기본) · `exclude` · `stop`. `onInsufficient`(응답 부족): `stop`(기본) · `continue` · `exclude`. 기준 값은 `criteria`(예: `{"minAnswered": 5, "closeRatio": 0.15, "closeMinMonths": 1, "closeMaxMonths": 6, "closeFineRatio": 0.1, "exactRatio": 0.5, "suspectRatio": 0.5}`, 빈 값은 기본값). `minAnswered`가 `runs`보다 크면 설정 오류 |
 | `generate` | 모델마다 `runs`회 생성 · 검증한다(`generate.py`와 같음). 검증 통과 회차가 없으면 한 번씩 더 생성한다(최대 `maxRetries`회) | 모든 모델에서 통과 회차가 없으면 멈춘다 |
 | `select` | 검증을 통과한 회차 중 하나를 고른다 | 아래 "회차 선택" |
+| `axis` | 판단 요소의 가치관 축만 같은 모델에 `runs`회(기본 5) 묻고 요소별로 표를 센다(BE-49, 아래 "가치관 축 투표") | 유효 응답이 하나도 없으면 멈춘다. `--skip axis`(또는 `enabled: false`)면 추출기가 한 번 정한 값으로 적재한다 |
 | `load` | 사건(DRAFT) + AI 판결(비공개 · PENDING) 적재 SQL을 만들어 보관하고 로컬 DB에 적재한다 | `case: false`면 사건은 빼고 AI 판결만(사건이 이미 DB에 있을 때). `applyToDb: false`면 SQL만 만든다 |
 
 **단계 분기 (명령 옵션)**: 끝난 단계는 다음 실행에서 건너뛰고 이어서 한다(상태: `out/pipeline/<name>/state.json`). 단 앞 단계가 다시 돌면 그 뒤 단계는 끝났어도 함께 다시 돈다(예: `generate`가 실패한 뒤 옵션 없이 다시 `run`하면 `generate → select → load`). 끝날 때 적재까지 했는지(DB 적재 · SQL만 · 적재 안 함)를 구분해 알려 준다.
@@ -276,6 +279,17 @@ python3 pipeline.py status cases/my-case.pipeline.json
 - 후보 회차는 생성 묶음 `out/runs/<name>-<프롬프트 해시 8자리>/`에 쌓인 모든 실행이다(같은 프롬프트의 이전 실행 포함). 사건 내용이나 프롬프트가 바뀌면(예: `--from extract`로 다시 가공) 새 묶음을 쓰므로 다른 프롬프트의 회차는 섞이지 않는다. 묶음 경로는 `status`의 생성 결과(`state.json`의 `batchDir`)에서 확인한다.
 - `compare.py <묶음 경로>`로 비교표를 보고 `manual`로 바꿔 `--from select`로 다시 적재할 수 있다.
 
+### 가치관 축 투표 (`stages.axis`, BE-49)
+
+추출기(extract-v5)는 요소마다 축을 한 번 정한다. 한 번 정한 값은 흔들릴 수 있어서 요소가 확정된 뒤 **축만** 여러 번 물어 투표한다(추출을 여러 번 돌리면 회차마다 요소 문구 · 개수가 달라져 비교할 수 없다). 결과는 기본값이고, 관리자가 후검수로 확정한다(BE-43 · FE-16).
+
+- **모델**: `model`(없으면 생성에 쓰는 첫 모델, `free:`는 지금 쓰는 무료 모델로 펼친 뒤). **한 모델로만** `runs`회 묻는다. 보내는 내용은 죄명 · 사건 개요 · 판단 요소 문구뿐이다(형량 · 판결 정보 없음, `prompts/axis_system.md`)
+- **집계**: 기본값 = 최다표 축. 동률이면 추출기 값이 최다표 안에 있으면 그것, 아니면 축 순서(① ~ ④, 없음)상 앞의 것
+- **확인 필요**: 최다표가 과반(유효 응답의 절반 초과)이 아니면(동률 포함) `needsReview: true`. 실행 로그와 `status`에 요소 번호를 보여 준다
+- **응답 검사**: 모든 요소에 한 번씩, 허용 값(4개 축 또는 null)으로 답해야 한다. 틀리면 그 회차를 `maxRetries`번(기본 2)까지 다시 묻고, 그래도 틀리면 집계에서 뺀다. 호출 한도가 바닥나면 남은 회차는 묻지 않고 받은 응답만 센다
+- **기록**: `out/pipeline/<name>/axis/votes.json`(요소별 축 · 표 분포)과 회차별 응답. 적재할 때 보고서의 `factorExtras[].valueAxis` · `valueAxisVotes`에 덮어써 넣는다(추출 결과 파일은 바꾸지 않는다). 형식: `{"runs": 5, "counts": {"FAULT_STANDARD": 3, "NONE": 2}, "needsReview": false}` (`NONE` = 어느 축에도 맞지 않음 표). DB `factor.value_axis_votes`(BE-48)
+- **다시 투표**: `--from axis`면 투표와 적재만 다시 돈다(생성은 다시 돌지 않는다)
+
 ### 적재 (`stages.load`)
 
 - **사건**: `legal_case.status='DRAFT'` → 사용자 목록 · 체험에서 보이지 않는다(서버가 `PUBLISHED`만 조회). 섹션 · 형벌 규칙 · 판단 요소 · 원본 판결문(`case_source`)을 함께 넣는다. 사건 발생일은 비식별화 단계가 원문 · 선고일과 대조해 확인한 값(또는 설정 `incidentDate`)을 넣는다(BE-38). 재판부 판결은 아래 "재판부 판결"대로 비공개로 넣는다(BE-38). 양형기준 연결은 넣지 않는다.
@@ -291,7 +305,7 @@ python3 pipeline.py status cases/my-case.pipeline.json
 
 | 항목 | 처리 |
 | --- | --- |
-| 외부 전송 | `extract`는 정규식 마스킹을 거친 판결문을 설정한 비식별화 모델의 공급자(기본 Anthropic)로, `contamination` · `generate`는 비식별화한 사건 내용을 설정한 공급자로 보낸다. 실행할 때 전송 대상을 먼저 출력한다 |
+| 외부 전송 | `extract`는 정규식 마스킹을 거친 판결문을 설정한 비식별화 모델의 공급자(기본 Anthropic)로, `contamination` · `generate`는 비식별화한 사건 내용을, `axis`는 비식별화한 사건 개요 · 판단 요소를 설정한 공급자로 보낸다. 실행할 때 전송 대상을 먼저 출력한다 |
 | 재판부 판결 초안 | 실제 판결(형량 · 재판부 판단)이 들어 있다. `cases/<name>.court_draft.json`(git 제외) → DB 비공개 행에만 둔다. AI 판결 입력과 분리돼 있다(테스트로 확인) |
 | 원본 판결문 정보 | 사건번호 · 법원명 · 선고일 · 원문은 마스킹 전에 로컬에서 꺼내 `cases/<name>.source_internal.json`(git 제외) → DB `case_source`(API는 `source_org`만 노출)에만 둔다. 모델에 보내지 않는다 |
 | 비식별화 검수 | 사람 검수 없이 적재하므로 비식별화 누락이 있을 수 있다. **사건은 항상 DRAFT로만 넣고 자동으로 공개하지 않는다.** 관리자 페이지(BE-33 · FE-16)의 공개 승인이 비식별화 검수(REQ-075)를 겸한다 |

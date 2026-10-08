@@ -60,6 +60,16 @@
       "model": null,
       "run": null
     },
+    "axis": {
+      "enabled": true,
+      "_comment": "가치관 축 투표 (BE-49). model이 null이면 생성에 쓰는 첫 모델로 runs회 묻는다. 최다표가 과반이 아니면(동률 포함) 관리자 확인 필요",
+      "model": null,
+      "runs": 5,
+      "maxRetries": 2,
+      "temperature": null,
+      "maxTokens": 4000,
+      "delay": 0
+    },
     "load": {
       "enabled": true,
       "case": true,
