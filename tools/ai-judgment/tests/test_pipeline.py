@@ -303,11 +303,28 @@ class PipelineTest(unittest.TestCase):
         write_json(path, raw)
         return pipeline.load_config(path)
 
-    def run_with(self, config, answers, applied=None, court_answers=None, caller=None, **kwargs):
+    def run_with(self, config, answers, applied=None, court_answers=None, caller=None, axis_answers=None, **kwargs):
         caller = caller or fake_caller(answers)
         functions = dict(pipeline.STAGE_FUNCTIONS)
         court_queue = list(court_answers or [])
         self.court_requests = getattr(self, "court_requests", [])
+        axis_queue = None if axis_answers is None else list(axis_answers)
+        self.axis_requests = getattr(self, "axis_requests", [])
+
+        def axis_caller_for(c, s):
+            def axis_caller(spec, system, user, **kw):
+                # 가치관 축 분류 (BE-49). 응답을 주지 않으면 보고서(추출기)의 축을 그대로 답한다
+                self.axis_requests.append((spec, user))
+                if axis_queue is None:
+                    extras = load_json(pipeline.input_file(c, s, "report"))["factorExtras"]
+                    item = {"factors": [{"factorId": e["factorId"], "valueAxis": e.get("valueAxis")} for e in extras]}
+                else:
+                    item = axis_queue.pop(0)
+                if isinstance(item, Exception):
+                    raise item
+                text = item if isinstance(item, str) else json.dumps(item, ensure_ascii=False)
+                return llm.LLMResult(text, *llm.parse_model_spec(spec), usage={"totalTokens": 5}, latency_seconds=0.1)
+            return axis_caller
 
         def court_caller(spec, system, user, **kw):
             self.court_requests.append(user)
@@ -317,6 +334,7 @@ class PipelineTest(unittest.TestCase):
         functions["court"] = lambda c, s, log: pipeline.stage_court(c, s, log, caller=court_caller)
         functions["contamination"] = lambda c, s, log: pipeline.stage_contamination(c, s, log, caller=caller)
         functions["generate"] = lambda c, s, log: pipeline.stage_generate(c, s, log, caller=caller)
+        functions["axis"] = lambda c, s, log: pipeline.stage_axis(c, s, log, caller=axis_caller_for(c, s))
         functions["load"] = lambda c, s, log: pipeline.stage_load(
             c, s, log, apply=lambda path, db: (applied.append((path, db)) if applied is not None else None) or [])
         return pipeline.run_pipeline(config, functions=functions, log=self.logs.append, **kwargs)
@@ -344,17 +362,19 @@ class PipelineTest(unittest.TestCase):
     def test_plan_resume_from_until_skip(self):
         config = self.config()
         state = {"stages": {"generate": {"status": "done"}}}
-        self.assertEqual(pipeline.plan(config, state), ["select", "load"])  # extract · contamination 꺼짐, generate 끝남
-        self.assertEqual(pipeline.plan(config, state, start="generate"), ["generate", "select", "load"])
+        self.assertEqual(pipeline.plan(config, state), ["select", "axis", "load"])  # extract · contamination 꺼짐, generate 끝남
+        self.assertEqual(pipeline.plan(config, state, start="generate"), ["generate", "select", "axis", "load"])
         self.assertEqual(pipeline.plan(config, state, rerun=True, until="select"), ["generate", "select"])
-        self.assertEqual(pipeline.plan(config, state, skip=["load"]), ["select"])
+        self.assertEqual(pipeline.plan(config, state, skip=["load"]), ["select", "axis"])
+        # 축만 다시 투표: 생성(비싼 단계)은 다시 돌지 않는다 (BE-49)
+        self.assertEqual(pipeline.plan(config, state, start="axis"), ["axis", "load"])
 
     def test_plan_resume_after_failure_runs_later_stages(self):
         # 중간 단계가 실패했으면 이어서 돌릴 때 뒤 단계도 다시 돈다 (낡은 결과로 끝내지 않게)
         config = self.config(extract={"enabled": True})
         state = {"stages": {"extract": {"status": "done"}, "generate": {"status": "failed"},
                             "select": {"status": "done"}, "load": {"status": "done"}}}
-        self.assertEqual(pipeline.plan(config, state), ["generate", "select", "load"])
+        self.assertEqual(pipeline.plan(config, state), ["generate", "select", "axis", "load"])
 
     def test_resume_after_generate_failure_loads(self):
         config = self.config(generate={"models": ["openai:a"], "runs": 1, "maxRetries": 0})
@@ -643,6 +663,99 @@ class PipelineTest(unittest.TestCase):
         self.assertFalse(load["applied"])
         sql = Path(load["sqlFile"]).read_text(encoding="utf-8")
         self.assertNotIn("INSERT INTO legal_case", sql)
+
+    # ---- 가치관 축 분류 투표 (BE-49)
+
+    def axis_answer(self, overrides=None):
+        """요소 11개 응답. 기본은 보고서(1번만 FAULT_STANDARD, 나머지 null)와 같고 overrides로 일부 요소를 바꾼다."""
+        axes = {f["factorId"]: ("FAULT_STANDARD" if f["factorId"] == 1 else None) for f in self.case["factors"]}
+        axes.update(overrides or {})
+        return {"factors": [{"factorId": i, "valueAxis": a} for i, a in axes.items()]}
+
+    def test_axis_votes_flagSplitFactorsAndLoad(self):
+        config = self.config(generate={"models": ["openai:a"], "runs": 1}, axis={"runs": 5})
+        split = {2: "APOLOGY_SINCERITY"}
+        answers = [self.axis_answer({**split, 3: "ORDER_OPPORTUNITY"}), self.axis_answer({**split, 3: "ORDER_OPPORTUNITY"}),
+                   self.axis_answer({**split, 3: "ORDER_OPPORTUNITY"}), self.axis_answer({3: "PRINCIPLE_RELATION"}),
+                   self.axis_answer({3: "PRINCIPLE_RELATION"})]
+        state = self.run_with(config, {"openai:a": [self.output]}, axis_answers=answers)
+        axis = state["stages"]["axis"]["outputs"]
+        self.assertEqual((axis["model"], axis["runs"], axis["requestedRuns"]), ("openai:a", 5, 5))  # 생성 첫 모델
+        self.assertEqual(axis["needsReview"], [])  # 2번 3 : 2, 3번 3 : 2 → 모두 과반
+        self.assertEqual(axis["changedFromExtract"], [2, 3])
+        self.assertEqual({spec for spec, _ in self.axis_requests}, {"openai:a"})  # 같은 모델로만 묻는다
+        votes = load_json(axis["votesFile"])
+        self.assertEqual(votes["promptVersion"], "axis-v1")
+        self.assertEqual(votes["factors"][1]["valueAxisVotes"],
+                         {"runs": 5, "counts": {"APOLOGY_SINCERITY": 3, "NONE": 2}, "needsReview": False})
+        # 적재 SQL은 투표 결과 축을 쓴다 (추출기 값 위에 덮어씀). 추출기 보고서 파일은 바뀌지 않는다
+        sql = Path(state["stages"]["load"]["outputs"]["sqlFile"]).read_text(encoding="utf-8")
+        self.assertIn("'분류', 'APOLOGY_SINCERITY', 2);", sql)
+        self.assertIn("'분류', 'ORDER_OPPORTUNITY', 3);", sql)
+        self.assertIsNone(load_json(self.raw_config["inputs"]["report"])["factorExtras"][1]["valueAxis"])
+        self.assertTrue(any("가치관 축 분류 단계" in line and "openai" in line for line in self.logs))  # 외부 전송 안내
+
+    def test_axis_votes_tie_needsReview(self):
+        config = self.config(generate={"models": ["openai:a"], "runs": 1}, axis={"runs": 4, "model": "gemini:b"})
+        answers = [self.axis_answer({4: "ORDER_OPPORTUNITY"}), self.axis_answer({4: "ORDER_OPPORTUNITY"}),
+                   self.axis_answer({4: "APOLOGY_SINCERITY"}), self.axis_answer()]
+        state = self.run_with(config, {"openai:a": [self.output]}, axis_answers=answers)
+        axis = state["stages"]["axis"]["outputs"]
+        self.assertEqual(axis["model"], "gemini:b")  # 설정한 모델
+        self.assertEqual(axis["needsReview"], [4])  # 2 : 1 : 1 → 과반 아님
+        self.assertTrue(any("요소 4" in line and "관리자 확인 필요" in line for line in self.logs))
+        pipeline.print_status(config, log=self.logs.append)
+        self.assertIn("가치관 축: gemini:b 4/4회 투표 · 관리자 확인 필요 요소 4", self.logs)
+
+    def test_axis_invalid_answer_retriedThenExcluded(self):
+        config = self.config(generate={"models": ["openai:a"], "runs": 1}, axis={"runs": 3, "maxRetries": 1})
+        bad = {"factors": [{"factorId": 1, "valueAxis": "EMBEDDING"}]}
+        answers = ["읽을 수 없음", self.axis_answer(),          # 1회차: 형식 오류 → 다시 물어 통과
+                   bad, llm.LLMError("서버 오류"),               # 2회차: 두 번 다 실패 → 집계에서 뺌
+                   self.axis_answer({5: "APOLOGY_SINCERITY"})]  # 3회차
+        state = self.run_with(config, {"openai:a": [self.output]}, axis_answers=answers)
+        axis = state["stages"]["axis"]["outputs"]
+        self.assertEqual((axis["runs"], axis["attempts"], axis["failures"]), (2, 5, 3))
+        self.assertEqual(axis["needsReview"], [5])  # 유효 2개 중 1 : 1
+        self.assertTrue(any("유효 응답 2/3개" in line for line in self.logs))
+
+    def test_axis_quota_exhausted_stopsRemainingRuns(self):
+        config = self.config(generate={"models": ["openai:a"], "runs": 1}, axis={"runs": 5})
+        answers = [self.axis_answer(), self.axis_answer(), llm.LLMQuotaExhaustedError("일 한도")]
+        state = self.run_with(config, {"openai:a": [self.output]}, axis_answers=answers)
+        axis = state["stages"]["axis"]["outputs"]
+        self.assertEqual((axis["runs"], axis["attempts"]), (2, 3))  # 한도 소진 뒤에는 호출하지 않는다
+
+    def test_axis_no_valid_answer_stops_and_skip_usesExtractor(self):
+        config = self.config(generate={"models": ["openai:a"], "runs": 1}, axis={"runs": 2, "maxRetries": 0})
+        with self.assertRaises(pipeline.PipelineError) as ctx:
+            self.run_with(config, {"openai:a": [self.output]}, axis_answers=["x", "y"])
+        self.assertIn("--skip axis", str(ctx.exception))
+        # 축 단계를 건너뛰면 추출기 값 그대로 적재한다
+        state = self.run_with(config, {}, skip=["axis"])
+        sql = Path(state["stages"]["load"]["outputs"]["sqlFile"]).read_text(encoding="utf-8")
+        self.assertIn("'분류', 'FAULT_STANDARD', 1);", sql)
+        self.assertIn("'분류', NULL, 2);", sql)
+        self.assertEqual(state["stages"]["axis"]["status"], "failed")  # 실패한 투표 결과는 쓰지 않는다
+
+    def test_axis_rerun_from_axis_keepsGeneration(self):
+        config = self.config(generate={"models": ["openai:a"], "runs": 1}, axis={"runs": 1})
+        self.run_with(config, {"openai:a": [self.output]})
+        state = self.run_with(config, {}, axis_answers=[self.axis_answer({6: "PRINCIPLE_RELATION"})], start="axis")
+        self.assertEqual(state["stages"]["axis"]["outputs"]["changedFromExtract"], [6])
+        self.assertEqual(state["stages"]["generate"]["status"], "done")  # 생성은 다시 돌지 않았다 (응답 목록이 비어 있음)
+
+    def test_axis_config_validation(self):
+        for changes, message in (({"model": "free:gemini"}, "stages.axis.model"), ({"model": "manual:x"}, "manual"),
+                                 ({"runs": 0}, "stages.axis.runs"), ({"maxRetries": -1}, "stages.axis.maxRetries")):
+            with self.subTest(changes):
+                with self.assertRaises(pipeline.PipelineError) as ctx:
+                    self.config(axis=changes)
+                self.assertIn(message, str(ctx.exception))
+        with self.assertRaises(pipeline.PipelineError) as ctx:  # 축 모델도 생성 모델도 없음
+            self.config(generate={"enabled": False, "models": []})
+        self.assertIn("stages.axis.model", str(ctx.exception))
+        self.config(generate={"enabled": False, "models": []}, axis={"enabled": False})  # 축을 끄면 된다
 
     def test_load_sql_dir_parent_missing(self):
         config = self.config(generate={"models": ["openai:a"], "runs": 1},
