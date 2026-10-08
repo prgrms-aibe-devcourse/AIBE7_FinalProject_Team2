@@ -185,6 +185,18 @@ class DbConstraintTest {
 			.hasMessageContaining("chk_factor_value_axis");
 	}
 
+	@Test
+	@DisplayName("판단 요소의 가치관 축 후검수 상태는 기본 AUTO이고 AUTO · CONFIRMED만 허용한다 (BE-48)")
+	void checkValueAxisStatus_unknownValue_isRejected() {
+		// 허용: 기본값 AUTO, 관리자 확정 CONFIRMED
+		assertThat(jdbc.queryForObject("SELECT value_axis_status FROM factor WHERE id = ?", String.class, factorId)).isEqualTo("AUTO");
+		jdbc.update("UPDATE factor SET value_axis_status = 'CONFIRMED' WHERE id = ?", factorId);
+
+		assertThatThrownBy(() -> jdbc.update("UPDATE factor SET value_axis_status = 'REVIEWED' WHERE id = ?", factorId))
+			.isInstanceOf(DataIntegrityViolationException.class)
+			.hasMessageContaining("chk_factor_value_axis_status");
+	}
+
 	// ---------- penalty_rule ----------
 
 	@Test

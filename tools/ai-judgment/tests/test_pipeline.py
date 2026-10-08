@@ -71,7 +71,9 @@ class CaseSeedSqlTest(unittest.TestCase):
         self.assertIn("RAISE EXCEPTION '같은 제목의 공개 · 검토 중 사건", sql)
         self.assertIn("'원문 ''따옴표'''", sql)  # 작은따옴표 이스케이프
         self.assertEqual(sql.count("INSERT INTO factor"), len(case["factors"]))
-        self.assertEqual(sql.count("summary_tag, value_axis, display_order"), len(case["factors"]))
+        self.assertEqual(sql.count("summary_tag, value_axis, value_axis_votes,"), len(case["factors"]))
+        self.assertNotIn("::jsonb, 1);", sql)  # 투표 기록이 없는 보고서는 value_axis_votes가 NULL
+        self.assertNotIn("value_axis_status", sql)  # 후검수 상태는 DB 기본값 AUTO
         self.assertEqual(sql.count("'FAULT_STANDARD'"), 1)  # 첫 요소만 축이 있고 나머지는 NULL (어느 축에도 맞지 않는 요소)
         self.assertEqual(sql.count("INSERT INTO case_source"), 2)
         self.assertIn("'2099-05-01'::date", sql)
@@ -84,6 +86,37 @@ class CaseSeedSqlTest(unittest.TestCase):
         with self.assertRaises(CaseSeedError) as ctx:
             build_case_sql(case, report, resolve_sources(SOURCES, [{}, {"caseNumber": "2099노2"}]))
         self.assertIn("valueAxis", str(ctx.exception))
+
+    def test_build_case_sql_valueAxisVotes_insertsJsonb(self):
+        # 축 분류 투표 기록(BE-49)은 value_axis_votes에 jsonb로 넣는다 (BE-48)
+        case = listing_case()
+        report = report_for(case)
+        report["factorExtras"][0]["valueAxisVotes"] = {
+            "runs": 5, "counts": {"FAULT_STANDARD": 3, "NONE": 2}, "needsReview": False}
+        report["factorExtras"][1]["valueAxisVotes"] = {
+            "runs": 4, "counts": {"NONE": 2, "ORDER_OPPORTUNITY": 2}, "needsReview": True}  # 동률, 축은 NULL을 고름
+        sql = build_case_sql(case, report, resolve_sources(SOURCES, [{}, {"caseNumber": "2099노2"}]))
+        self.assertIn("""'FAULT_STANDARD', '{"runs": 5, "counts": {"FAULT_STANDARD": 3, "NONE": 2}, "needsReview": false}'::jsonb, 1);""", sql)
+        self.assertIn(""", NULL, '{"runs": 4, "counts": {"NONE": 2, "ORDER_OPPORTUNITY": 2}, "needsReview": true}'::jsonb, 2);""", sql)
+
+    def test_build_case_sql_invalidValueAxisVotes_isError(self):
+        cases = [
+            ("객체", "votes"),
+            ("runs", {"runs": 0, "counts": {"FAULT_STANDARD": 1}, "needsReview": False}),
+            ("needsReview", {"runs": 1, "counts": {"FAULT_STANDARD": 1}, "needsReview": "no"}),
+            ("counts는 비어", {"runs": 1, "counts": {}, "needsReview": False}),
+            ("키는", {"runs": 1, "counts": {"EMBEDDING": 1}, "needsReview": False}),
+            ("합계", {"runs": 5, "counts": {"FAULT_STANDARD": 3}, "needsReview": False}),
+            ("최다표", {"runs": 5, "counts": {"FAULT_STANDARD": 2, "NONE": 3}, "needsReview": False}),
+        ]
+        for message, votes in cases:
+            with self.subTest(message):
+                case = listing_case()
+                report = report_for(case)
+                report["factorExtras"][0]["valueAxisVotes"] = votes  # 첫 요소의 축은 FAULT_STANDARD
+                with self.assertRaises(CaseSeedError) as ctx:
+                    build_case_sql(case, report, resolve_sources(SOURCES, [{}, {"caseNumber": "2099노2"}]))
+                self.assertIn(message, str(ctx.exception))
 
     def test_build_case_sql_reportWithoutValueAxis_insertsNull(self):
         # extract-v5 이전 보고서(valueAxis 키 없음)도 적재된다
