@@ -18,7 +18,8 @@
 | v1.11 | 2026-10-07 | AI 판결 자동 파이프라인 · 후검수 반영 (BE-31)<br>• `ai_generation.generation_report`(jsonb) 추가(V8 마이그레이션): 자동 생성 정보(검증 경고 · 사전 학습 점검 판정 · 회차 선택 · 실행 식별자 `runKey`)<br>• 자동 적재는 AI 판결을 비공개(`is_published=false`) · `PENDING`으로, 사건을 `DRAFT`로 넣고 관리자가 검수 후 공개한다 |
 | v1.12 | 2026-10-08 | COMMON-19 반영 (AI 판결 파이프라인 BE-31 ~ BE-45)<br>• `legal_case.title` · `factor(case_id, display_order)` 유일 제약 설명 추가(V7, 적재 SQL의 조회 키)<br>• `legal_case.incident_date`: 자동 파이프라인이 원문 · 선고일과 대조해 확인한 값을 넣는다(BE-38)<br>• 자동 적재는 재판부 판결(COURT)도 비공개(`is_published=false`)로 넣고, 다시 돌리면 비공개 후보가 쌓일 수 있음을 명시(BE-38)<br>• `generation_report` 내용 구체화: 점검 판정 · 분류별 개수 · 기준(`criteria`) 등. 코드 변경 없음, 설명만 정정 |
 | v1.13 | 2026-10-08 | 판단 요소 가치관 축 추가 (BE-47)<br>• `factor.value_axis` 추가(V9 마이그레이션, nullable): 판결 체험에서 고르는 판단 요소를 사용자 성향과 매칭하는 가치관 축 4개(`APOLOGY_SINCERITY` · `FAULT_STANDARD` · `PRINCIPLE_RELATION` · `ORDER_OPPORTUNITY`) 또는 NULL<br>• 사전 판단(`OVERVIEW`)과 형량 선택은 성향 계산에 쓰지 않는다(계산하는 쪽에서 제외) |
-| v1.14 | 2026-10-08 | 판단 요소 가치관 축 후검수 반영 (BE-48)<br>• `factor.value_axis_status` 추가(V10 마이그레이션, 기본 `AUTO`): `AUTO`(AI 투표 · 사람 초안 기본값) / `CONFIRMED`(관리자 확정, NULL 확정 포함). 시드 · 적재 SQL은 `CONFIRMED` 행을 덮어쓰지 않는다<br>• `factor.value_axis_votes`(jsonb) 추가: 축 분류 투표 기록(BE-49). 최다표가 요청 횟수의 과반이 아니면(동률 · 유효 응답 부족 포함) `needsReview` |
+| v1.14 | 2026-10-08 | 11 · 12차 회의 반영 (COMMON-20)<br>• `comparison_analysis`: AI 비교 분석(REQ-063) 제외로 보류. V5 마이그레이션의 테이블은 그대로 두고 쓰지 않는다(삭제 여부 미정)<br>• 8장 신설: 판결 성향 테스트 테이블 제안(미확정) — 문항 · 선택지 · 유형 · 결과 · 체험별 성향 기여. 판단 요소별 가치관 축은 새로 만들지 않고 `factor.value_axis`(v1.13, BE-47)를 쓴다 |
+| v1.15 | 2026-10-08 | 판단 요소 가치관 축 후검수 반영 (BE-48)<br>• `factor.value_axis_status` 추가(V10 마이그레이션, 기본 `AUTO`): `AUTO`(AI 투표 · 사람 초안 기본값) / `CONFIRMED`(관리자 확정, NULL 확정 포함). 시드 · 적재 SQL은 `CONFIRMED` 행을 덮어쓰지 않는다<br>• `factor.value_axis_votes`(jsonb) 추가: 축 분류 투표 기록(BE-49). 최다표가 요청 횟수의 과반이 아니면(동률 · 유효 응답 부족 포함) `needsReview` |
 
 ---
 
@@ -238,8 +239,8 @@ S-06에서 보여 줄 형벌 선택지, 그리고 **선고 가능 범위 밖 판
 | reveal_stage | varchar(20) | ✓ | 처음 알게 되는 단계: `OVERVIEW` / `DETAIL` / `ARGUMENT` / `LAW` | REQ-095 |
 | summary_tag | varchar(20) | ✓ | 요약 태그 (v1.3 추가, v1.10 확정). 여러 요소를 묶는 분류명이 아니라 **요소마다 붙이는 짧은 요약어**다(예: 요소 "다투던 중 집에 있던 흉기를 집어 들었다" → `흉기 사용`). S-09 "내 판결" 한 줄 요약과 세 판결 비교 규칙 문장(API 14 `ruleSentences`)에 쓴다 | REQ-060 |
 | value_axis | varchar(20) |  | 가치관 축 (v1.13 추가, BE-47). 사용자가 이 요소를 고르는 것으로 드러나는 성향을 매칭하는 축: `APOLOGY_SINCERITY`(사과와 진정성: 반성 · 자수 · 수사 협조 · 사후 정황) / `FAULT_STANDARD`(잘잘못의 기준: 범행 동기 · 수단 · 방법 · 계획성 · 결과의 중대성) / `PRINCIPLE_RELATION`(원칙과 관계: 피해 회복 · 합의 · 처벌불원 · 피해자 과실) / `ORDER_OPPORTUNITY`(질서와 기회: 전과 · 연령 · 가족 · 부양 · 직업 · 사회적 유대). 어느 축에도 맞지 않으면 NULL | |
-| value_axis_status | varchar(20) | ✓ | 가치관 축 후검수 상태 (v1.14 추가, BE-48): `AUTO`(기본값. AI 투표 · 사람 초안, 아직 관리자가 확정하지 않음) / `CONFIRMED`(관리자 확정, NULL로 확정한 것 포함). 기본 `AUTO` | |
-| value_axis_votes | jsonb |  | 축 분류 투표 기록 (v1.14 추가, BE-49). 예: `{"runs": 5, "counts": {"FAULT_STANDARD": 3, "NONE": 2}, "needsReview": false}`. `counts`는 표를 받은 축만, NULL 표는 `NONE` 키. `requestedRuns`(선택)는 요청한 횟수로, `runs`(유효 응답 수)와 다를 수 있다. `needsReview`는 최다표가 요청 횟수의 과반이 아니면(동률 · 유효 응답 부족 포함) true. 사람 초안 · 투표 없이 정한 값은 NULL | |
+| value_axis_status | varchar(20) | ✓ | 가치관 축 후검수 상태 (v1.15 추가, BE-48): `AUTO`(기본값. AI 투표 · 사람 초안, 아직 관리자가 확정하지 않음) / `CONFIRMED`(관리자 확정, NULL로 확정한 것 포함). 기본 `AUTO` | |
+| value_axis_votes | jsonb |  | 축 분류 투표 기록 (v1.15 추가, BE-49). 예: `{"runs": 5, "counts": {"FAULT_STANDARD": 3, "NONE": 2}, "needsReview": false}`. `counts`는 표를 받은 축만, NULL 표는 `NONE` 키. `requestedRuns`(선택)는 요청한 횟수로, `runs`(유효 응답 수)와 다를 수 있다. `needsReview`는 최다표가 요청 횟수의 과반이 아니면(동률 · 유효 응답 부족 포함) true. 사람 초안 · 투표 없이 정한 값은 NULL | |
 | display_order | int | ✓ |  |  |
 - `(case_id, display_order)`는 유일하다(`uk_factor_case_display_order`, V7 · BE-15, v1.12). 적재 SQL이 요소를 번호와 문구로 찾기 때문이다.
 - `value_axis`는 AI(사건 추출기 · 파이프라인 축 분류 투표) 또는 사람 초안(비공개 시드)이 기본값을 정하고, 관리자가 후검수로 확정한다(CHECK는 네 값 또는 NULL). 값이 NULL인 요소는 성향 계산에서 빠진다. 사전 판단(`OVERVIEW`)과 형량 선택은 성향 계산에 쓰지 않는다.
@@ -415,6 +416,8 @@ AI 판결 1건을 어떤 조건으로 만들었는지 남긴다(REQ-047, 079). M
 - 모델·프롬프트가 바뀌면 새 `judgment` + 새 `ai_generation`을 만들고, 검수 후 공개 판단을 교체한다. 기존 행은 지우지 않는다(REQ-079).
 
 #### `comparison_analysis` — 세 판결 비교 분석 (확장 단계, v1.1)
+
+> **(v1.13) 보류** — AI 비교 분석(REQ-062 · 063)을 11차 회의에서 확장 범위에서 제외했다. V5 마이그레이션으로 만든 테이블은 그대로 두고 쓰지 않는다. 아래 정의는 결정 기록으로 남긴다.
 
 체험 1건의 세 판결을 AI가 비교한 결과를 저장한다(FR-6-3). 사용자 판결이 체험마다 다르므로 **체험별로 실시간 생성**한다(시퀀스 8장). AI 판결(`ai_generation`)과 달리 공개 전 검수가 없으므로, 서버 검증을 통과한 결과만 `DONE`으로 저장한다.
 
@@ -632,3 +635,33 @@ IA 9장의 규칙을 어느 테이블·제약이 책임지는지 정리한다.
 1. 익명 ID가 없으면 발급한다.
 2. (`anonymous_user_id`, `case_id`)의 체험이 있으면 그 체험을 돌려준다. 없으면 `attempt_no = 1`로 새로 만든다.
 3. 화면은 돌려받은 `status`에 맞는 화면으로 이동한다(IA 5장).
+
+---
+
+## 8. (확장 · 제안) 판결 성향 테스트 테이블 (v1.14)
+
+> **미확정 제안이다.** 12차 회의 "DB에 성향 테스트 관련 내용 추가"를 위한 초안으로, 문항 산식 · 매핑 로직(요구사항 15장)이 정해지면 확정한다. 요구사항 DR-11, 기능 명세 REQ-112 ~ 119 · 127.
+>
+> **판단 요소 ↔ 가치관 축은 이 장에서 새로 만들지 않는다.** 요소가 어느 축에 속하는지는 이미 있는 `factor.value_axis`(v1.13, BE-47)를 그대로 쓴다. 값은 파이프라인의 AI 분류(BE-49)와 관리자 후검수(BE-48 · BE-43)로 정해진다. 축 이름도 같은 키(`APOLOGY_SINCERITY` · `FAULT_STANDARD` · `PRINCIPLE_RELATION` · `ORDER_OPPORTUNITY`)를 쓰므로 성향 테스트 점수와 체험 기여분을 같은 키로 합칠 수 있다.
+>
+> 형량 ↑ / ↓로 고른 것이 어느 글자(E/I 등)로 가는지는 가치관 축마다 정하는 규칙이므로 테이블 없이 산식 문서(WBS 6.1.4)로 정한다. 요소마다 글자 · 가중치가 달라야 한다는 결론이 나오면 그때 `factor` 옆에 보조 테이블을 추가한다.
+
+```mermaid
+erDiagram
+    anonymous_user ||--o{ personality_result : "응시"
+    personality_type ||--o{ personality_result : "결과 유형"
+    personality_question ||--|{ personality_choice : "선택지"
+    experience ||--o| experience_personality : "체험별 성향 기여"
+```
+
+| 테이블 | 주요 컬럼 (제안) | 설명 |
+| --- | --- | --- |
+| `personality_question` | id, axis(`APOLOGY_SINCERITY` / `FAULT_STANDARD` / `PRINCIPLE_RELATION` / `ORDER_OPPORTUNITY`, `factor.value_axis`와 같은 값), scenario(`FRIEND` / `FAMILY` / `WORK` / `NEIGHBOR`), content, display_order, is_active | 일상 시나리오 문항. 축당 3 ~ 4개. 법률 용어 금지 |
+| `personality_choice` | id, question_id FK, content, letter(`E`·`I` / `S`·`N` / `T`·`F` / `J`·`P`), score, display_order | 선택지가 어느 글자 쪽에 몇 점을 주는지 |
+| `personality_type` | code PK(char(4), 예: `INFP`), name(예: 너그러운 판다형), animal, one_liner, tolerance(0 ~ 4), description, image_url | 16유형 콘텐츠. 코드 상수로 둘 수도 있다 |
+| `personality_result` | id, anonymous_user_id FK, type_code FK, axis_scores jsonb(키는 위 4개 축 이름), answers jsonb, is_current, created_at | 응시 결과. 재응시 시 새 행 + 이전 행 `is_current=false`(제안). 회원 연결은 `anonymous_user.member_id`로 따라간다 |
+| `experience_personality` | id, experience_id FK unique, axis_scores jsonb(키는 위 4개 축 이름), type_code, created_at | 판결 체험이 `COMPLETED`가 될 때 계산한 성향 기여분. 성향 변화 흐름 · 종합 성향(평균) 계산에 쓴다. 성향 테스트 전에 한 체험도 남겨 둔다 |
+
+- 사용자 응답에 원본 판결문 정보가 섞이지 않는다는 원칙(5장)은 그대로다. 성향 기여는 사용자의 `USER` · `FINAL` 판단 요소 기록(`judgment_factor`)에서만 계산한다.
+- 공유 링크는 `personality_type`만 읽는다. `personality_result`의 응답 · 점수는 공유 응답에 넣지 않는다.
+- `factor.value_axis`가 `NULL`인 판단 요소는 성향 계산에서 빠진다(4장 규칙과 동일).

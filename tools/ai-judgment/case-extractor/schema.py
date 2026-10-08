@@ -40,6 +40,8 @@ SHORT_INTRO_MAX_LENGTH = 200  # ERD legal_case.short_intro varchar(200)
 DIFFICULTIES = ("LOW", "MID", "HIGH")  # ERD legal_case.difficulty
 KEYWORD_COUNT = (2, 6)  # 목록 카드 키워드 개수 (권장)
 ESTIMATED_MINUTES = (3, 60)  # 예상 소요 시간(분) 상식 범위 (권장)
+FACTOR_COUNT = (8, 15)  # 판단 요소 개수 (권장, extract 프롬프트 factors와 맞춘다)
+OVERVIEW_FACTOR_COUNT = (2, 4)  # OVERVIEW 판단 요소 개수 (권장, extract 프롬프트 revealStage와 맞춘다)
 
 _STRING = {"type": "string"}
 _NULLABLE_STRING = {"type": ["string", "null"]}
@@ -295,8 +297,15 @@ def check_output(output):
         warnings.append("모델이 서비스 대상이 아닌 판결로 판정했습니다: " + " / ".join(output["eligibility"]["reasons"]))
     if not output["factors"]:
         errors.append("판단 요소가 없습니다")
-    if not any(f["revealStage"] == "OVERVIEW" for f in output["factors"]):
+    overview_count = sum(1 for f in output["factors"] if f["revealStage"] == "OVERVIEW")
+    if overview_count == 0:
         errors.append("사전 판단에 쓸 OVERVIEW 판단 요소가 없습니다")
+    # 0개는 위에서 이미 오류다. 개수가 있을 때만 권장 범위를 본다
+    if output["factors"] and not FACTOR_COUNT[0] <= len(output["factors"]) <= FACTOR_COUNT[1]:
+        warnings.append(f"판단 요소가 {len(output['factors'])}개입니다 (권장 {FACTOR_COUNT[0]} ~ {FACTOR_COUNT[1]}개)")
+    if overview_count and not OVERVIEW_FACTOR_COUNT[0] <= overview_count <= OVERVIEW_FACTOR_COUNT[1]:
+        warnings.append(f"OVERVIEW 판단 요소가 {overview_count}개입니다 "
+                        f"(권장 {OVERVIEW_FACTOR_COUNT[0]} ~ {OVERVIEW_FACTOR_COUNT[1]}개)")
     for i, f in enumerate(output["factors"], start=1):
         if len(f["label"]) > LABEL_MAX_LENGTH:
             errors.append(f"판단 요소 {i}: 문구가 {LABEL_MAX_LENGTH}자를 넘습니다")

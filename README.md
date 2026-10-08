@@ -109,6 +109,7 @@ API 없이 화면만 확인하려면 개발 서버를 켠 뒤 `http://localhost:
 | [API 명세서](docs/api-specification.md) | 경로 · 요청 · 응답 · 에러 코드 |
 | [ERD](docs/erd.md) | 테이블 · 제약 · 예시 데이터 |
 | [정보 구조](docs/information-architecture.md) | 화면 목록과 흐름 |
+| [유저 흐름도](docs/user-flow.md) | MVP · 확장 단계 사용자 흐름 |
 
 ## 협업 규칙
 

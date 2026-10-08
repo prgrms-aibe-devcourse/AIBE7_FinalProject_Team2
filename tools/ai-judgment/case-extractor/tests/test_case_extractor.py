@@ -301,6 +301,56 @@ class ProcessOutputTest(unittest.TestCase):
 
         self.assertTrue(any("OVERVIEW" in e for e in errors))
 
+    def test_processOutput_factorCountOutsideRange_isWarning(self):
+        extra = {"label": "요소", "preLabel": None, "revealStage": "DETAIL", "summaryTag": "태그"}
+        for count in (3, 16):
+            with self.subTest(count=count):
+                factors = FAKE_OUTPUT["factors"][:1] + [copy.deepcopy(extra) for _ in range(count - 1)]
+
+                _, _, errors, warnings = process_output(output_with(factors=factors))
+
+                self.assertEqual(errors, [])
+                self.assertTrue(any(f"판단 요소가 {count}개입니다" in w for w in warnings))
+
+    def test_processOutput_factorCountInRange_hasNoCountWarning(self):
+        extra = {"label": "요소", "preLabel": None, "revealStage": "DETAIL", "summaryTag": "태그"}
+        for count in (8, 15):
+            with self.subTest(count=count):
+                factors = FAKE_OUTPUT["factors"][:1] * 2 + [copy.deepcopy(extra) for _ in range(count - 2)]
+
+                _, _, _, warnings = process_output(output_with(factors=factors))
+
+                # 총 개수 경고만 본다 (OVERVIEW 개수 경고 "OVERVIEW 판단 요소가 …"와 섞이지 않게)
+                self.assertFalse(any(w.startswith("판단 요소가") for w in warnings))
+
+    def test_processOutput_overviewCountOutsideRange_isWarning(self):
+        overview = FAKE_OUTPUT["factors"][0]
+        for count in (1, 5):
+            with self.subTest(count=count):
+                factors = [copy.deepcopy(overview) for _ in range(count)] + FAKE_OUTPUT["factors"][1:]
+
+                _, _, errors, warnings = process_output(output_with(factors=factors))
+
+                self.assertEqual(errors, [])
+                self.assertTrue(any(f"OVERVIEW 판단 요소가 {count}개입니다" in w for w in warnings))
+
+    def test_processOutput_overviewCountInRange_hasNoOverviewCountWarning(self):
+        overview = FAKE_OUTPUT["factors"][0]
+        for count in (2, 4):
+            with self.subTest(count=count):
+                factors = [copy.deepcopy(overview) for _ in range(count)] + FAKE_OUTPUT["factors"][1:]
+
+                _, _, _, warnings = process_output(output_with(factors=factors))
+
+                self.assertFalse(any("OVERVIEW 판단 요소가" in w for w in warnings))
+
+    def test_processOutput_noOverviewFactor_hasNoCountWarning(self):
+        factors = [f for f in FAKE_OUTPUT["factors"] if f["revealStage"] != "OVERVIEW"]
+
+        _, _, _, warnings = process_output(output_with(factors=factors))
+
+        self.assertFalse(any("OVERVIEW 판단 요소가" in w for w in warnings))  # 0개는 오류로만 알린다
+
     def test_processOutput_deathWithStatutoryRange_isError(self):
         rules = copy.deepcopy(FAKE_OUTPUT["penaltyRules"])
         rules[0]["statutoryMax"] = 600
