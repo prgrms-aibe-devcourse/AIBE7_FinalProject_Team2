@@ -2,7 +2,7 @@
 
 case-extractor 결과 세 파일을 합쳐 legal_case · case_section · penalty_rule · factor · case_source 행을 만든다.
 - <name>.case.json: 사건 · 섹션 · 형벌 규칙 · 판단 요소 · 목록 카드(listing)
-- <name>.report.json: 판단 요소 preLabel · summaryTag, 형벌 규칙 근거, 비식별화 항목
+- <name>.report.json: 판단 요소 preLabel · summaryTag · valueAxis(· 투표 기록 valueAxisVotes, BE-49), 형벌 규칙 근거, 비식별화 항목
 - <name>.source_internal.json: 원본 판결문 정보(사건번호 · 법원명 · 선고일 · 원문, 로컬에서 꺼낸 내부 전용 값)
 
 - 같은 제목의 DRAFT 사건이 이미 있으면 건너뛴다 (같은 SQL을 두 번 실행해도 안전). 같은 제목의 사건이 DRAFT가 아니면
@@ -25,6 +25,7 @@ from to_seed_sql import dollar_quote_tag, sql_int, sql_jsonb, sql_text
 DEFAULT_SOURCE_ORG = "법원 공개 판결문"  # 사용자에게 보일 수 있는 유일한 출처 칸. 법원명 · 서비스명을 쓰지 않는다
 COURT_LEVELS = ("FIRST", "APPEAL", "SUPREME")
 VALUE_AXES = ("APOLOGY_SINCERITY", "FAULT_STANDARD", "PRINCIPLE_RELATION", "ORDER_OPPORTUNITY")  # ERD factor.value_axis
+VALUE_AXIS_NONE = "NONE"  # 투표 기록(value_axis_votes)에서 "어느 축에도 맞지 않음(NULL)" 표의 키 (BE-48)
 # ERD 컬럼 길이 (DB에서 실패하기 전에 막는다)
 MAX_LENGTHS = {
     "title": 100, "charge_name": 100, "short_intro": 200, "applied_law": 200, "statutory_penalty_text": 200,
@@ -67,6 +68,39 @@ def resolve_sources(sources, overrides=None, final_index=None):
     return resolved
 
 
+def check_value_axis_votes(axis, votes):
+    """투표 기록 형식 검사 (ERD factor.value_axis_votes). 오류 문구 목록을 돌려준다.
+
+    {"runs": 5, "counts": {"FAULT_STANDARD": 3, "NONE": 2}, "needsReview": false}
+    - counts: 표를 받은 축만, NULL 표는 "NONE" 키. 표 합계 = runs (실패한 회차는 runs에서 뺀다)
+    - 고른 축(valueAxis)은 최다표 중 하나여야 한다 (동률이면 needsReview로 관리자가 고른다)
+    """
+    if not isinstance(votes, dict):
+        return ["valueAxisVotes는 객체입니다"]
+    runs, counts, needs_review = votes.get("runs"), votes.get("counts"), votes.get("needsReview")
+    errors = []
+    if not isinstance(runs, int) or isinstance(runs, bool) or runs < 1:
+        errors.append("valueAxisVotes.runs는 1 이상의 정수입니다")
+    if not isinstance(needs_review, bool):
+        errors.append("valueAxisVotes.needsReview는 true · false입니다")
+    if not isinstance(counts, dict) or not counts:
+        return errors + ["valueAxisVotes.counts는 비어 있지 않은 객체입니다"]
+    keys = (*VALUE_AXES, VALUE_AXIS_NONE)
+    for key, count in counts.items():
+        if key not in keys:
+            errors.append(f"valueAxisVotes.counts의 키는 {' · '.join(keys)} 중 하나입니다: {key}")
+        if not isinstance(count, int) or isinstance(count, bool) or count < 1:
+            errors.append(f"valueAxisVotes.counts.{key}는 1 이상의 정수입니다")
+    if errors:
+        return errors
+    if isinstance(runs, int) and sum(counts.values()) != runs:
+        errors.append(f"valueAxisVotes.counts 합계({sum(counts.values())})가 runs({runs})와 다릅니다")
+    top = max(counts.values())
+    if counts.get(axis or VALUE_AXIS_NONE) != top:
+        errors.append(f"valueAxis({axis})가 최다표 축이 아닙니다")
+    return errors
+
+
 def check_inputs(case, report, sources, source_org):
     errors = []
     listing = case.get("listing") or {}
@@ -97,6 +131,10 @@ def check_inputs(case, report, sources, source_org):
         # valueAxis는 없거나 null이어도 된다(extract-v5 이전 보고서 · 어느 축에도 맞지 않는 요소). 값이 있으면 허용 값이어야 한다
         if extra.get("valueAxis") not in (None, *VALUE_AXES):
             errors.append(f"판단 요소 {factor['factorId']}: valueAxis는 {' · '.join(VALUE_AXES)} 중 하나이거나 null입니다")
+        # valueAxisVotes(축 분류 투표 기록, BE-49)는 없어도 된다(추출기가 한 번 정한 값 · 사람 초안)
+        if extra.get("valueAxisVotes") is not None:
+            errors += [f"판단 요소 {factor['factorId']}: {e}"
+                       for e in check_value_axis_votes(extra.get("valueAxis"), extra["valueAxisVotes"])]
     for basis in (report.get("penaltyRuleBasis") or {}).values():
         _check_length(errors, "penalty_rule.allowed_basis", basis)
 
@@ -115,6 +153,11 @@ def check_inputs(case, report, sources, source_org):
     _check_length(errors, "source_org", source_org)
     if errors:
         raise CaseSeedError("사건 적재 SQL을 만들 수 없습니다:\n- " + "\n- ".join(errors))
+
+
+def sql_votes(votes):
+    """축 분류 투표 기록 → jsonb (없으면 NULL). 후검수 상태(value_axis_status)는 DB 기본값 AUTO로 둔다"""
+    return "NULL" if votes is None else sql_jsonb(votes)
 
 
 def sql_date(value):
@@ -153,10 +196,12 @@ def build_case_sql(case, report, sources, *, source_org=DEFAULT_SOURCE_ORG, sour
         for i, r in enumerate(case["penaltyRules"], start=1)
     )
     factors = "\n".join(
-        f"""    INSERT INTO factor (case_id, label, pre_label, reveal_stage, summary_tag, value_axis, display_order)
+        f"""    INSERT INTO factor (case_id, label, pre_label, reveal_stage, summary_tag, value_axis, value_axis_votes,
+                        display_order)
     VALUES (v_case_id, {sql_text(f['label'])}, {sql_text(extras[f['factorId']].get('preLabel'))}, """
         f"""{sql_text(f['revealStage'])}, {sql_text(extras[f['factorId']]['summaryTag'])}, """
-        f"""{sql_text(extras[f['factorId']].get('valueAxis'))}, {sql_int(f['factorId'])});"""
+        f"""{sql_text(extras[f['factorId']].get('valueAxis'))}, {sql_votes(extras[f['factorId']].get('valueAxisVotes'))}, """
+        f"""{sql_int(f['factorId'])});"""
         for f in case["factors"]
     )
     source_rows = "\n".join(
