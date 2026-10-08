@@ -94,7 +94,7 @@ DEFAULT_CONFIG = {
             "temperature": None, "maxTokens": 16000, "timeout": 300, "delay": 0.0,
         },
         "select": {"enabled": True, "strategy": "consensus", "model": None, "run": None},
-        # 가치관 축 분류 투표 (BE-49). 같은 모델로 runs회 묻고 요소별로 표를 센다. 최다표가 과반이 아니면(동률 포함) 확인 필요.
+        # 가치관 축 분류 투표 (BE-49). 같은 모델로 runs회 묻고 요소별로 표를 센다. 최다표가 runs의 과반이 아니면(동률 · 유효 응답 부족 포함) 확인 필요.
         # model이 null이면 generate.models의 첫 모델(free: 제외)을 쓴다(비식별화한 사건 내용이라 generate와 같은 공급자로 보낸다).
         # 응답 형식이 틀리면 그 회차를 최대 maxRetries번 다시 묻고, 그래도 틀리면 집계에서 뺀다
         "axis": {"enabled": True, "model": None, "runs": 5, "maxRetries": 2, "temperature": None, "maxTokens": 4000,
@@ -950,7 +950,7 @@ def stage_axis(config, state, log, caller=call):
     if not answers:
         raise PipelineError("가치관 축 분류에서 유효한 응답을 받지 못했습니다. 설정을 확인하거나 --skip axis로 추출기 값을 씁니다",
                             {"model": spec, "attempts": attempts})
-    votes = aggregate_votes(answers, factor_ids, preferred)
+    votes = aggregate_votes(answers, factor_ids, preferred, requested_runs=cfg["runs"])
     factors = [{"factorId": i, **votes[i]} for i in factor_ids]
     votes_file = out_dir / "votes.json"
     write_json(votes_file, {"promptVersion": AXIS_PROMPT_VERSION, "model": spec, "runs": len(answers),
@@ -1177,9 +1177,11 @@ def run_pipeline(config, start=None, until=None, skip=(), rerun=False, log=print
         log(f"외부 전송: 재판부 판결 초안 단계에서 마스킹한 판결문이 {providers_text(court_model(config))}로 전송됩니다")
     if {"contamination", "generate"} & set(steps):
         log(f"외부 전송: 비식별화한 사건 내용이 {', '.join(providers)}로 전송됩니다")
-    axis_spec = axis_model(config, state) if "axis" in steps else None
-    if axis_spec:
-        log(f"외부 전송: 가치관 축 분류 단계에서 비식별화한 사건 개요 · 판단 요소가 {providers_text(axis_spec)}로 전송됩니다")
+    if "axis" in steps:
+        # 무료 모델(free:)은 점검 단계에서 다시 정해지므로 지금 모델을 모를 수 있다. 그때는 생성 공급자로 안내한다(축 모델은 그중 하나)
+        axis_spec = axis_model(config, state)
+        log(f"외부 전송: 가치관 축 분류 단계에서 비식별화한 사건 개요 · 판단 요소가 "
+            f"{providers_text(axis_spec) if axis_spec else ', '.join(providers)}로 전송됩니다")
     for notice in free_tier_notices(config, steps):
         log(notice)
     for stage in steps:

@@ -724,6 +724,8 @@ class PipelineTest(unittest.TestCase):
         state = self.run_with(config, {"openai:a": [self.output]}, axis_answers=answers)
         axis = state["stages"]["axis"]["outputs"]
         self.assertEqual((axis["runs"], axis["attempts"]), (2, 3))  # 한도 소진 뒤에는 호출하지 않는다
+        # 5회 중 2개만 유효 → 표가 모여도 요청 횟수의 과반이 아니라 모두 확인 필요 (리뷰 반영)
+        self.assertEqual(axis["needsReview"], [f["factorId"] for f in self.case["factors"]])
 
     def test_axis_no_valid_answer_stops_and_skip_usesExtractor(self):
         config = self.config(generate={"models": ["openai:a"], "runs": 1}, axis={"runs": 2, "maxRetries": 0})
@@ -743,6 +745,15 @@ class PipelineTest(unittest.TestCase):
         state = self.run_with(config, {}, axis_answers=[self.axis_answer({6: "PRINCIPLE_RELATION"})], start="axis")
         self.assertEqual(state["stages"]["axis"]["outputs"]["changedFromExtract"], [6])
         self.assertEqual(state["stages"]["generate"]["status"], "done")  # 생성은 다시 돌지 않았다 (응답 목록이 비어 있음)
+
+    def test_axis_external_send_notice_withFreeModelsAndContamination(self):
+        # 무료 모델(free:)만 쓰고 점검 단계도 돌면 시작 시점에 축 모델을 모른다. 그래도 생성 공급자로 안내한다 (리뷰 반영)
+        config = self.config(generate={"models": ["free:gemini"]}, contamination={"enabled": True})
+        lines = []
+        with mock.patch.object(pipeline, "STAGES", ("contamination", "axis")):
+            pipeline.run_pipeline(config, functions={"contamination": lambda c, s, log: {}, "axis": lambda c, s, log: {}},
+                                  log=lines.append)
+        self.assertTrue(any(line.startswith("외부 전송: 가치관 축 분류 단계") and "gemini" in line for line in lines), lines)
 
     def test_axis_config_validation(self):
         for changes, message in (({"model": "free:gemini"}, "stages.axis.model"), ({"model": "manual:x"}, "manual"),
