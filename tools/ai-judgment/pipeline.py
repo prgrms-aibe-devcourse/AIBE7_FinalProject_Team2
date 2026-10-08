@@ -39,7 +39,8 @@ from common import TOOL_DIR, load_json, write_json
 from compare import _majority, direction_table, load_runs
 from generate import RUNS_DIR, GenerateError, generate_runs, model_slug, prompt_digest
 from llm import (DEFAULT_MAX_ATTEMPTS, DEFAULT_MAX_WAIT, LLMError, LLMQuotaExhaustedError, api_key, call,
-                 check_retry, configure_retry, has_free_tier, model_provider, parse_model_spec)
+                 check_retry, configure_retry, free_tier_model_list, has_free_tier, model_provider,
+                 parse_model_spec)
 from to_seed_sql import NAME_MAX_LENGTH, build_sql
 from validate_output import parse_output
 
@@ -63,6 +64,9 @@ DEFAULT_CONFIG = {
     # LLM 호출 재시도 (BE-36). 과부하(503 · 529) · 한도(429) · 서버 오류 때 요청 한 건을 보내는 최대 횟수(첫 시도 포함)와
     # 한 번에 기다릴 최대 시간(초). 무료 등급이면 각 단계의 delay(호출 사이 대기)도 함께 둔다 (README "무료 등급 한도 대응")
     "retry": {"maxAttempts": DEFAULT_MAX_ATTEMPTS, "maxWait": DEFAULT_MAX_WAIT},
+    # 무료 모델 자동 사용 (BE-45): generate.models · contamination.models에 "free:<공급자>"를 적으면 free_models.json의 모델을
+    # 쓴다. max개만 동시에 쓰고(안전장치), 일 한도로 막히면 다음 모델이 자리를 채운다. include는 쓸 모델 ID(앞이 우선), exclude는 뺄 모델 ID
+    "freeModels": {"max": 3, "include": None, "exclude": []},
     # extract를 건너뛸 때 쓸 파일 (extract를 돌리면 그 결과가 우선)
     # courtDraft: 재판부 판결(BE-14 형식) 파일. court 단계를 끄고 사람이 쓴 판결을 넣을 때 쓴다 (BE-38)
     "inputs": {"case": None, "court": None, "report": None, "source": None, "courtDraft": None},
@@ -126,6 +130,132 @@ def load_config(path):
     return config
 
 
+FREE_PREFIX = "free:"
+
+
+def is_free_token(spec):
+    """`free:<공급자>` — free_models.json의 그 공급자 무료 모델을 쓰라는 표시 (BE-45)."""
+    return isinstance(spec, str) and spec.strip().lower().startswith(FREE_PREFIX)
+
+
+def free_token_provider(spec):
+    return spec.strip().lower()[len(FREE_PREFIX):].strip()
+
+
+def free_tokens(config):
+    stages = config["stages"]
+    return [spec.strip().lower() for spec in list(stages["generate"]["models"]) + list(stages["contamination"]["models"] or [])
+            if is_free_token(spec)]
+
+
+def free_pool(config, providers=None):
+    """freeModels의 include · exclude를 적용한 무료 모델 목록(`공급자:모델ID`). include가 있으면 그 순서가 우선순위다."""
+    cfg = config["freeModels"]
+    include, exclude = cfg.get("include"), set(cfg.get("exclude") or [])
+    pool = []
+    for spec in free_tier_model_list():
+        provider, _, model = spec.partition(":")
+        if (providers is not None and provider not in providers) or (include is not None and model not in include) \
+                or model in exclude:
+            continue
+        pool.append(spec)
+    if include is not None:
+        pool.sort(key=lambda spec: include.index(spec.partition(":")[2]))
+    return pool
+
+
+def free_models_errors(config):
+    errors = []
+    cfg = config["freeModels"]
+    if not isinstance(cfg, dict) or set(cfg) - {"max", "include", "exclude"}:
+        return ["freeModels는 max · include · exclude만 가진 객체다"]
+    if not isinstance(cfg["max"], int) or isinstance(cfg["max"], bool) or cfg["max"] < 1:
+        errors.append("freeModels.max는 1 이상의 정수다 (동시에 쓸 무료 모델 수)")
+    for key in ("include", "exclude"):
+        value = cfg.get(key)
+        if value is not None and (not isinstance(value, list) or not all(isinstance(m, str) and m.strip() for m in value)):
+            errors.append(f"freeModels.{key}는 모델 ID 문자열 목록이다 (공급자 접두어 없이, 예: gemini-2.5-flash)")
+    if errors:
+        return errors
+    known = {spec.partition(":")[0] for spec in free_tier_model_list()}
+    for token in sorted(set(free_tokens(config))):
+        provider = free_token_provider(token)
+        if provider not in known:
+            errors.append(f"{token}: free_models.json에 {provider!r} 공급자가 없다 (있는 공급자: {', '.join(sorted(known)) or '없음'})")
+        elif not free_pool(config, {provider}):
+            errors.append(f"{token}: freeModels의 include · exclude를 적용하면 쓸 수 있는 무료 모델이 없다")
+    stages = config["stages"]
+    for stage in ("extract", "court"):
+        value = stages[stage].get("model")
+        if any(is_free_token(m) for m in ([value] if isinstance(value, str) else value or []) if isinstance(m, str)):
+            errors.append(f"stages.{stage}.model에는 free:를 쓸 수 없다 (판결문 원문을 보내는 단계는 유료 키만 쓴다)")
+    return errors
+
+
+def resolve_free_models(config, state, log, fresh=False):
+    """`free:` 표시를 실제 모델로 펼쳐 state["freeModels"]에 기록한다 (BE-45).
+
+    pool: 조건을 통과한 무료 모델 전체, active: 지금 쓰는 max개, reserve: 대기(일 한도로 막힌 모델 자리를 채운다).
+    설정이 같으면 이어 실행해도 같은 목록을 쓴다. fresh이거나 설정이 바뀌었으면 처음부터 다시 펼친다.
+    """
+    tokens = sorted(set(free_tokens(config)))
+    if not tokens:
+        state.pop("freeModels", None)
+        return
+    cfg = config["freeModels"]
+    source = {"tokens": tokens, "max": cfg["max"], "include": cfg.get("include"), "exclude": sorted(cfg.get("exclude") or []),
+              "models": free_tier_model_list()}
+    existing = state.get("freeModels")
+    if existing and not fresh and existing.get("source") == source:
+        return
+    pool = free_pool(config, {free_token_provider(t) for t in tokens})
+    state["freeModels"] = {"source": source, "pool": pool, "active": pool[:cfg["max"]], "reserve": pool[cfg["max"]:],
+                           "replaced": [], "skipped": [], "kept": []}
+    log(f"무료 모델 자동 사용: {', '.join(pool[:cfg['max']])} (동시 {cfg['max']}개까지)"
+        + (f" · 대기 {', '.join(pool[cfg['max']:])}" if pool[cfg["max"]:] else ""))
+
+
+def expand_models(state, raw):
+    """모델 목록의 `free:<공급자>`를 state의 현재 활성 무료 모델로 바꾼다. 적힌 순서와 위치를 지킨다."""
+    active = (state.get("freeModels") or {}).get("active", [])
+    models = []
+    for spec in raw:
+        found = [s for s in active if s.startswith(free_token_provider(spec) + ":")] if is_free_token(spec) else [spec]
+        models += [s for s in found if s not in models]
+    return models
+
+
+def replace_exhausted(state, spec, stage, log, vet=None):
+    """일 한도가 소진된 무료 모델의 자리를 대기 모델이 채운다 (BE-45). 새 모델 이름 또는 None.
+
+    새 모델은 새로운 독립 투표자다: 자기 이름으로 처음부터 기록하고, 소진된 모델이 이미 끝낸 회차는 그 모델 이름으로 남는다
+    (generate 단계에서는 kept로 선택 후보에 남긴다). vet(새 모델)이 False면(사전 학습 점검에서 제외) 건너뛰고 다음 대기 모델을 본다.
+    """
+    fm = state.get("freeModels")
+    if not fm or spec not in fm["active"]:
+        return None
+    while fm["reserve"]:
+        new = fm["reserve"].pop(0)
+        try:
+            api_key(parse_model_spec(new)[0])
+        except LLMError as e:
+            fm["skipped"].append({"model": new, "reason": str(e)})
+            log(f"[{new}] 대체 후보에서 제외: {e}")
+            continue
+        if vet is not None and not vet(new):
+            fm["skipped"].append({"model": new, "reason": "사전 학습 점검에서 제외"})
+            log(f"[{new}] 사전 학습 점검에서 제외되어 대체 후보에서 뺍니다")
+            continue
+        fm["active"][fm["active"].index(spec)] = new
+        fm["replaced"].append({"model": spec, "by": new, "stage": stage})
+        if stage == "generate":
+            fm["kept"].append(spec)
+        log(f"[{spec}] 일 한도 소진 → 무료 모델 {new}가 자리를 채웁니다 (자기 이름으로 처음부터 {stage})")
+        return new
+    log(f"[{spec}] 일 한도 소진 — 자리를 채울 무료 모델이 더 없습니다")
+    return None
+
+
 def chain_errors(label, value, expected):
     """stages.extract.model · stages.court.model 검사. 문자열이거나, 앞 모델이 막히면 다음 모델로 넘어가는 목록 (BE-45)."""
     models = [value] if isinstance(value, str) else value
@@ -163,7 +293,7 @@ def free_tier_notices(config, steps):
                            "유료 키로만 보내세요 (무료 등급은 입력을 제품 개선에 쓰고 사람이 검토할 수 있습니다, README)")
     if {"contamination", "generate"} & set(steps):
         models = list(stages["generate"]["models"]) + list(stages["contamination"]["models"] or [])
-        free = sorted({m for m in models if has_free_tier(m)})
+        free = sorted({m.strip().lower() if is_free_token(m) else m for m in models if is_free_token(m) or has_free_tier(m)})
         if free:
             notices.append(f"무료 등급이 있는 모델: {', '.join(free)}. 무료 키라면 분당 · 일당 한도가 있으니 delay를 두고 "
                            "교차 호출 · 재시도 설정을 확인하세요 (README \"무료 등급 한도 대응\"). 무료 등급은 입력이 제품 개선에 쓰일 수 있습니다")
@@ -205,7 +335,10 @@ def validate_config(config):
                                            or extract_max_tokens <= 0):
         errors.append("stages.extract.maxTokens는 null 또는 양의 정수다")
     errors += chain_errors("stages.extract.model", extract_model, "모델 이름 문자열 · 목록 (예: claude-opus-5-5, openai:모델ID)")
+    errors += free_models_errors(config)
     for spec in stages["generate"]["models"] + (stages["contamination"]["models"] or []):
+        if is_free_token(spec):
+            continue  # free_models_errors가 검사한다
         try:
             if parse_model_spec(spec)[0] == "manual":
                 errors.append(f"파이프라인은 API 공급자만 쓴다 (manual 불가): {spec}")
@@ -316,10 +449,17 @@ def batch_dir_for(config, case):
     return RUNS_DIR / f"{config['name']}-{digest}"
 
 
-def active_models(config, state):
-    """생성 · 선택에 쓸 모델: generate.models에서 사전 학습 점검으로 뺀 모델을 제외한다."""
+def active_models(config, state, include_kept=True):
+    """생성 · 선택에 쓸 모델: generate.models(free:는 지금 쓰는 무료 모델로 펼침)에서 사전 학습 점검으로 뺀 모델을 제외한다.
+
+    include_kept: 일 한도로 막혀 다른 모델로 대체됐지만 이미 끝낸 회차가 있는 모델(무료 모델 자동 사용)도 포함한다
+    (선택 후보용, 새로 호출하지는 않는다)."""
     excluded = set(stage_output(state, "contamination").get("excluded") or [])
-    return [spec for spec in config["stages"]["generate"]["models"] if spec not in excluded]
+    models = [spec for spec in expand_models(state, config["stages"]["generate"]["models"]) if spec not in excluded]
+    if include_kept:
+        models += [spec for spec in (state.get("freeModels") or {}).get("kept", [])
+                   if spec not in models and spec not in excluded]
+    return models
 
 
 # ---------------------------------------------------------------- 단계
@@ -391,29 +531,37 @@ def stage_court(config, state, log, caller=None):
     return outputs
 
 
-def stage_contamination(config, state, log, caller=call):
+def contamination_runs(config, state, models, log, caller, replace=None):
+    """models 각각을 사전 학습 점검 runs회 호출한다 (모델을 번갈아 가는 회차 순서, BE-44).
+
+    일 한도가 소진된 모델은 남은 회차를 건너뛰고(BE-36), replace(모델)이 새 모델을 주면(무료 모델 자동 사용, BE-45)
+    그 모델도 점검을 처음부터 runs회 받는다. (모델 목록(대체 포함), 모델별 응답 분류, {소진된 모델: 새 모델})
+    """
     cfg = config["stages"]["contamination"]
     case = load_json(input_file(config, state, "case"))
     court = load_json(input_file(config, state, "court"))
     prompt = build_contamination_prompt(case)
-    models = cfg["models"] or config["stages"]["generate"]["models"]
+    models = list(models)
     for spec in models:
         api_key(parse_model_spec(spec)[0])
     out_dir = PIPELINE_DIR / config["name"] / "contamination"
     criteria = criteria_with(cfg.get("criteria"))
-    results, excluded, stop_reasons = {}, [], []
     categories = {spec: [] for spec in models}
-    exhausted = set()  # 일 한도 · 크레딧이 바닥난 모델
+    next_run = {spec: 1 for spec in models}
+    exhausted, replaced = set(), {}  # 일 한도 · 크레딧이 바닥난 모델 / 대신 들어온 모델
     called = False
-    # 모델을 번갈아 가며 회차 순서로 부른다 (BE-44). 한 모델의 분당 한도에 연속으로 걸리지 않는다
-    for i in range(1, cfg["runs"] + 1):
-        for spec in models:
-            if spec in exhausted:
-                continue
+    while True:
+        pending = [spec for spec in models if spec not in exhausted and next_run[spec] <= cfg["runs"]]
+        if not pending:
+            break
+        for spec in pending:
+            i = next_run[spec]
+            next_run[spec] += 1
             if called and cfg["delay"]:  # 실제 호출 직전에만 쉰다 (건너뛴 모델 · 마지막 호출 뒤에는 쉬지 않는다)
                 time.sleep(cfg["delay"])
             called = True
             record = {"modelSpec": spec, "run": i, "createdAt": _now()}
+            quota_exhausted = False
             try:
                 result = caller(spec, "", prompt, timeout=cfg["timeout"])
                 record.update(meta=result.meta(), rawText=result.text)
@@ -423,21 +571,40 @@ def stage_contamination(config, state, log, caller=call):
                     category, reason = "INVALID", f"응답을 읽을 수 없음: {e}"
             except LLMError as e:
                 category, reason = None, f"호출 실패: {e}"  # 응답 수에 넣지 않는다 (표본 부족 판정으로 이어짐)
-                if isinstance(e, LLMQuotaExhaustedError):
-                    # 일 한도 · 크레딧이 바닥났으니 남은 회차도 같은 실패로 쌓일 뿐이다. 이 모델만 멈춘다 (BE-36)
-                    exhausted.add(spec)
-                    if i < cfg["runs"]:
-                        log(f"[{spec}] 호출 한도 소진 → 남은 {cfg['runs'] - i}회는 호출하지 않고 건너뜁니다")
+                quota_exhausted = isinstance(e, LLMQuotaExhaustedError)
             record.update(category=category, reason=reason)
             write_json(out_dir / model_slug(spec) / f"run-{i:03d}.json", record)
             if category:
                 categories[spec].append(category)
+            if quota_exhausted:
+                # 일 한도 · 크레딧이 바닥났으니 남은 회차도 같은 실패로 쌓일 뿐이다. 이 모델만 멈춘다 (BE-36)
+                exhausted.add(spec)
+                if i < cfg["runs"]:
+                    log(f"[{spec}] 호출 한도 소진 → 남은 {cfg['runs'] - i}회는 호출하지 않고 건너뜁니다")
+                new = replace(spec) if replace else None
+                if new and new not in categories:
+                    replaced[spec] = new
+                    models.append(new)
+                    categories[new], next_run[new] = [], 1
+    return models, categories, replaced
+
+
+def contamination_verdicts(config, models, categories, replaced, log):
+    """점검 응답 분류 → 모델별 판정과 설정(onContaminated 등)에 따른 제외 · 멈춤. (판정, 제외한 모델, 멈춤 사유)"""
+    cfg = config["stages"]["contamination"]
+    criteria = criteria_with(cfg.get("criteria"))
+    results, excluded, stop_reasons = {}, [], []
     for spec in models:
         # 호출이 모두 실패해도(응답 0개) INSUFFICIENT로 판정해 onInsufficient를 따른다
         answered = categories[spec]
         final, reason, counts = aggregate(answered, criteria)
         results[spec] = {"verdict": final, "reason": reason, "counts": counts, "answered": len(answered),
                          "runs": cfg["runs"], "criteria": criteria}
+        if spec in replaced:
+            # 자리를 다른 모델이 채웠으므로 이 모델은 더 쓰지 않는다 (제외 · 멈춤 설정을 적용하지 않는다)
+            results[spec]["replacedBy"] = replaced[spec]
+            log(f"[{spec}] {final} — 일 한도 소진으로 {replaced[spec]}가 대신합니다 (응답 {len(answered)}/{cfg['runs']})")
+            continue
         log(f"[{spec}] {final} — {reason} {counts} (응답 {len(answered)}/{cfg['runs']})")
         action = {"CONTAMINATED": cfg["onContaminated"], "SUSPECT": cfg["onSuspect"],
                   "INSUFFICIENT": cfg["onInsufficient"]}.get(final, "continue")
@@ -445,12 +612,39 @@ def stage_contamination(config, state, log, caller=call):
             excluded.append(spec)
         elif action == "stop":
             stop_reasons.append(f"{spec}: {final}")
+    return results, excluded, stop_reasons
+
+
+def stage_contamination(config, state, log, caller=call):
+    cfg = config["stages"]["contamination"]
+    resolve_free_models(config, state, log, fresh=True)  # 점검은 처음부터 다시 도는 단계라 무료 모델 목록도 처음부터
+    models = expand_models(state, cfg["models"] or config["stages"]["generate"]["models"])
+    models, categories, replaced = contamination_runs(
+        config, state, models, log, caller, replace=lambda spec: replace_exhausted(state, spec, "contamination", log))
+    results, excluded, stop_reasons = contamination_verdicts(config, models, categories, replaced, log)
     outputs = {"results": results, "excluded": excluded}
     if stop_reasons:
         raise PipelineError("사전 학습 점검에서 멈춤: " + ", ".join(stop_reasons), outputs)
-    if excluded and not [m for m in config["stages"]["generate"]["models"] if m not in excluded]:
+    if excluded and not [m for m in expand_models(state, config["stages"]["generate"]["models"]) if m not in excluded]:
         raise PipelineError("사전 학습 점검으로 생성 모델이 모두 빠졌습니다: " + ", ".join(excluded), outputs)
     return outputs
+
+
+def vet_replacement(config, state, spec, log, caller):
+    """생성 중 대신 들어올 무료 모델을 사전 학습 점검에 먼저 통과시킨다 (BE-45). 통과해야 생성에 참여한다.
+
+    점검이 꺼져 있거나 이번 실행에서 점검 단계를 돌리지 않았으면 점검하지 않는다. 결과는 점검 단계 결과(state)에 더한다."""
+    entry = state["stages"].get("contamination") or {}
+    if not config["stages"]["contamination"]["enabled"] or entry.get("status") != "done":
+        return True
+    models, categories, replaced = contamination_runs(config, state, [spec], log, caller)
+    results, excluded, stop_reasons = contamination_verdicts(config, models, categories, replaced, log)
+    outputs = entry.setdefault("outputs", {})
+    outputs.setdefault("results", {}).update(results)
+    outputs["excluded"] = list(outputs.get("excluded") or []) + excluded
+    if stop_reasons:
+        raise PipelineError("대체 모델 사전 학습 점검에서 멈춤: " + ", ".join(stop_reasons))
+    return spec not in excluded
 
 
 def stage_generate(config, state, log, caller=call):
@@ -458,24 +652,30 @@ def stage_generate(config, state, log, caller=call):
     case = load_json(input_file(config, state, "case"))
     batch_dir = batch_dir_for(config, case)
     options = {"temperature": cfg["temperature"], "max_tokens": cfg["maxTokens"], "timeout": cfg["timeout"],
-               "delay": cfg["delay"], "caller": caller, "log": log}
-    models = active_models(config, state)
+               "delay": cfg["delay"], "caller": caller, "log": log,
+               "on_exhausted": lambda spec: replace_exhausted(
+                   state, spec, "generate", log, vet=lambda new: vet_replacement(config, state, new, log, caller))}
+    models = active_models(config, state, include_kept=False)
     by_spec = {spec: [] for spec in models}
     retries = {spec: 0 for spec in models}
 
+    def collect(records):
+        for record in records:
+            by_spec.setdefault(record["modelSpec"], []).append(record)  # 대신 들어온 모델은 여기서 처음 나타난다
+            retries.setdefault(record["modelSpec"], 0)
+
     def summarize():
-        return {spec: {"runs": len(by_spec[spec]), "valid": sum(1 for r in by_spec[spec] if r["validation"]["ok"]),
-                       "retries": retries[spec]} for spec in models}
+        return {spec: {"runs": len(records), "valid": sum(1 for r in records if r["validation"]["ok"]),
+                       "retries": retries[spec]} for spec, records in by_spec.items()}
 
     try:
         # 모델을 번갈아 가며 회차 순서로 생성한다 (BE-44)
-        for record in generate_runs(case, models, cfg["runs"], batch_dir, **options):
-            by_spec[record["modelSpec"]].append(record)
+        collect(generate_runs(case, models, cfg["runs"], batch_dir, **options))
         # 검증을 통과한 회차가 하나도 없는 모델은 한 번씩 더 생성한다 (최대 maxRetries회). 한도 소진이면 재생성도 실패한다
         while True:
-            pending = [spec for spec in models if retries[spec] < cfg["maxRetries"]
-                       and not any(r["validation"]["ok"] for r in by_spec[spec])
-                       and not any(r["callErrorKind"] == LLMQuotaExhaustedError.kind for r in by_spec[spec])]
+            pending = [spec for spec, records in by_spec.items() if retries[spec] < cfg["maxRetries"]
+                       and not any(r["validation"]["ok"] for r in records)
+                       and not any(r["callErrorKind"] == LLMQuotaExhaustedError.kind for r in records)]
             if not pending:
                 break
             for spec in pending:
@@ -483,12 +683,14 @@ def stage_generate(config, state, log, caller=call):
                 log(f"[{spec}] 검증 통과 회차 없음 → 재생성 {retries[spec]}/{cfg['maxRetries']}")
             if cfg["delay"]:  # 앞 호출과 재생성 첫 호출 사이도 간격을 둔다
                 time.sleep(cfg["delay"])
-            for record in generate_runs(case, pending, 1, batch_dir, **options):
-                by_spec[record["modelSpec"]].append(record)
+            collect(generate_runs(case, pending, 1, batch_dir, **options))
     except (GenerateError, LLMError) as e:
         raise PipelineError(f"생성 실패: {e}", {"batchDir": str(batch_dir), "models": summarize()})
     summary = summarize()
     outputs = {"batchDir": str(batch_dir), "models": summary}
+    fm = state.get("freeModels")
+    if fm and fm["replaced"]:
+        outputs["freeModels"] = {"active": fm["active"], "replaced": fm["replaced"]}
     if not any(s["valid"] for s in summary.values()):
         raise PipelineError("검증을 통과한 회차가 없습니다 (재생성 포함). out/runs의 기록과 compare.py로 원인을 보세요", outputs)
     return outputs
@@ -769,8 +971,10 @@ def run_pipeline(config, start=None, until=None, skip=(), rerun=False, log=print
     if not steps:
         log("돌릴 단계가 없습니다 (모두 끝났거나 꺼짐). 다시 돌리려면 --from <단계>")
         return state
-    providers = sorted({parse_model_spec(m)[0] for m in config["stages"]["generate"]["models"]
-                        + (config["stages"]["contamination"]["models"] or [])})
+    if "contamination" not in steps:  # 점검 단계는 시작할 때 스스로 무료 모델 목록을 처음부터 펼친다
+        resolve_free_models(config, state, log, fresh=rerun or start in ("contamination", "generate"))
+    providers = sorted({free_token_provider(m) if is_free_token(m) else parse_model_spec(m)[0]
+                        for m in config["stages"]["generate"]["models"] + (config["stages"]["contamination"]["models"] or [])})
     log(f"단계: {' → '.join(steps)}")
     if "extract" in steps:
         log(f"외부 전송: 비식별화 단계에서 마스킹한 판결문이 {extract_provider(config)}로 전송됩니다")

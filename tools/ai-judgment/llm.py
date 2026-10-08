@@ -175,6 +175,23 @@ def free_tier_models():
             and isinstance(entry.get("models"), list) for model in entry["models"] if isinstance(model, str)}
 
 
+def free_tier_model_list():
+    """무료 등급이 있는 모델을 free_models.json에 적힌 순서대로 (`공급자:모델ID` 목록). free_tier_models와 같은 규칙이다."""
+    try:
+        data = json.loads(FREE_MODELS_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    if not isinstance(data, dict):
+        return []
+    specs = []
+    for provider, entry in data.items():
+        if isinstance(entry, dict) and isinstance(entry.get("models"), list):
+            for model in entry["models"]:
+                if isinstance(model, str) and f"{provider}:{model}" not in specs:
+                    specs.append(f"{provider}:{model}")
+    return specs
+
+
 def has_free_tier(spec):
     """모델 지정(`공급자:모델ID`)에 무료 등급이 있는지. 공급자가 없는 이름(`claude-…`)은 아니다."""
     if not isinstance(spec, str) or ":" not in spec:

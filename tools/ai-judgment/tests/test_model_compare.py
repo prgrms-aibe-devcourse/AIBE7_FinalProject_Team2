@@ -203,6 +203,18 @@ class ProviderTest(unittest.TestCase):
             self.assertEqual(len(set(entry["models"])), len(entry["models"]))
             self.assertFalse(set(entry["models"]) & set(entry.get("notWithFreeTier", [])))  # 무료 · 비무료 겹침 없음
 
+    def test_free_tier_model_list_keeps_file_order(self):
+        listed = llm.free_tier_model_list()
+        self.assertEqual(set(listed), llm.free_tier_models())
+        self.assertEqual(len(listed), len(set(listed)))
+        data = load_json(TOOL_DIR / "free_models.json")["gemini"]["models"]
+        self.assertEqual([m for m in listed if m.startswith("gemini:")], [f"gemini:{m}" for m in data])
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "free_models.json"
+            path.write_text('{"gemini": {"models": "x"}, "openai": {"models": ["a", "a", 3, "b"]}}', encoding="utf-8")
+            with mock.patch.object(llm, "FREE_MODELS_FILE", path):
+                self.assertEqual(llm.free_tier_model_list(), ["openai:a", "openai:b"])
+
     def test_has_free_tier(self):
         free = llm.free_tier_models()
         self.assertIn("gemini:gemini-2.5-flash", free)
@@ -522,6 +534,46 @@ class GenerateCompareTest(unittest.TestCase):
             generate_runs(self.case, ["openai:gpt-x", "gemini:gem-x"], 3, self.batch_dir, caller=caller,
                           delay=1.0, log=lambda *_: None)
         self.assertEqual(order, ["openai:gpt-x", "gemini:gem-x", "openai:gpt-x", "gemini:gem-x", "gemini:gem-x"])
+
+    def test_on_exhausted_replacement_runs_under_its_own_name(self):
+        order, asked = [], []
+        inner = fake_caller({"openai:gpt-x": [self.output, llm.LLMQuotaExhaustedError("한도 소진")],
+                             "gemini:gem-x": [self.output] * 3, "gemini:gem-y": [self.output] * 3})
+
+        def caller(spec, *args, **kwargs):
+            order.append(spec)
+            return inner(spec, *args, **kwargs)
+
+        def on_exhausted(spec):
+            asked.append(spec)
+            return "gemini:gem-y"
+
+        with mock.patch("time.sleep"):
+            records = generate_runs(self.case, ["openai:gpt-x", "gemini:gem-x"], 3, self.batch_dir, caller=caller,
+                                    on_exhausted=on_exhausted, log=lambda *_: None)
+        self.assertEqual(asked, ["openai:gpt-x"])
+        by_spec = {}
+        for record in records:
+            by_spec.setdefault(record["modelSpec"], []).append(record["runIndex"])
+        # 소진된 모델이 끝낸 회차는 그 이름으로 남고, 새 모델은 자기 이름으로 처음부터 3회 (대신 만들지 않는다)
+        self.assertEqual(by_spec, {"openai:gpt-x": [1, 2], "gemini:gem-x": [1, 2, 3], "gemini:gem-y": [1, 2, 3]})
+        self.assertEqual(order[:4], ["openai:gpt-x", "gemini:gem-x", "openai:gpt-x", "gemini:gem-x"])  # 교차 순서 유지
+        self.assertEqual([r["callErrorKind"] for r in records if r["modelSpec"] == "openai:gpt-x"], [None, "daily_quota"])
+
+    def test_on_exhausted_none_or_duplicate_adds_nothing(self):
+        for replacement in (None, "openai:gpt-x"):
+            caller = fake_caller({"openai:gpt-x": [llm.LLMQuotaExhaustedError("한도 소진")]})
+            records = generate_runs(self.case, ["openai:gpt-x"], 3, self.batch_dir / str(replacement), caller=caller,
+                                    on_exhausted=lambda spec, r=replacement: r, log=lambda *_: None)
+            self.assertEqual(len(records), 1, msg=str(replacement))
+
+    def test_on_exhausted_replacement_without_key_raises_before_call(self):
+        caller = fake_caller({"openai:gpt-x": [llm.LLMQuotaExhaustedError("한도 소진")]})
+        with mock.patch.dict(os.environ, {"OPENAI_API_KEY": "k"}, clear=True):
+            with self.assertRaises(llm.LLMError) as ctx:
+                generate_runs(self.case, ["openai:gpt-x"], 2, self.batch_dir, caller=caller,
+                              on_exhausted=lambda spec: "gemini:gem-y", log=lambda *_: None)
+        self.assertIn("GEMINI_API_KEY", str(ctx.exception))
 
     def test_call_error_kind_recorded(self):
         caller = fake_caller({"openai:gpt-x": [llm.LLMOverloadedError("busy"), llm.LLMError("other")]})

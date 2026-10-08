@@ -222,8 +222,9 @@ class PipelineTest(unittest.TestCase):
         after = set(loads.glob("*")) if loads.exists() else set()
         self.assertEqual(after - self.loads_before, set(), "테스트가 실제 private-seed/loads에 파일을 만들었다")
 
-    def config(self, **stage_changes):
+    def config(self, _top=None, **stage_changes):
         raw = copy.deepcopy(self.raw_config)
+        raw.update(_top or {})
         for stage, changes in stage_changes.items():
             raw["stages"].setdefault(stage, {}).update(changes)
         path = self.dir / "config.json"
@@ -796,6 +797,157 @@ class PipelineTest(unittest.TestCase):
         self.assertTrue(any("비식별화" in line and "anthropic, gemini" in line for line in notices))
         self.assertTrue(any("재판부" in line and "gemini, openai" in line for line in notices))
 
+    # ---- 무료 모델 자동 사용 (BE-45)
+
+    FREE_POOL = ["gemini:g1", "gemini:g2", "gemini:g3", "gemini:g4"]
+    CLEAN = {"knowsCase": False, "penaltyType": "PRISON", "prisonMonths": 60, "fineAmount": None, "suspensionMonths": None}
+
+    def free_config(self, max_models=2, contamination=None, runs=2, **top):
+        """generate.models = ["free:gemini"] (풀은 FREE_POOL로 고정). contamination을 주면 점검도 켠다."""
+        patcher = mock.patch.object(pipeline, "free_tier_model_list", return_value=list(self.FREE_POOL))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        stages = {"generate": {"models": ["free:gemini"], "runs": runs, "maxRetries": 0}}
+        if contamination is not None:
+            stages["contamination"] = {"enabled": True, "runs": runs, "criteria": {"minAnswered": 1}, **contamination}
+        return self.config({"freeModels": {"max": max_models, **top}}, **stages)
+
+    def test_free_models_config_validation(self):
+        pool = mock.patch.object(pipeline, "free_tier_model_list", return_value=list(self.FREE_POOL))
+        pool.start()
+        self.addCleanup(pool.stop)
+        for top, stages, part in (
+                ({"freeModels": {"max": 0}}, {"generate": {"models": ["free:gemini"]}}, "freeModels.max"),
+                ({"freeModels": {"max": True}}, {"generate": {"models": ["free:gemini"]}}, "freeModels.max"),
+                ({"freeModels": {"include": "g1"}}, {"generate": {"models": ["free:gemini"]}}, "freeModels.include"),
+                ({"freeModels": {"exclude": [1]}}, {"generate": {"models": ["free:gemini"]}}, "freeModels.exclude"),
+                ({"freeModels": {"unknown": 1}}, {"generate": {"models": ["free:gemini"]}}, "freeModels는"),
+                ({}, {"generate": {"models": ["free:nobody"]}}, "'nobody'"),
+                ({"freeModels": {"exclude": ["g1", "g2", "g3", "g4"]}}, {"generate": {"models": ["free:gemini"]}}, "무료 모델이 없다"),
+                ({"freeModels": {"include": ["zzz"]}}, {"generate": {"models": ["free:gemini"]}}, "무료 모델이 없다"),
+                ({}, {"extract": {"model": ["claude-opus-5-5", "free:gemini"]}}, "stages.extract.model에는 free:"),
+                ({}, {"court": {"model": "free:gemini"}}, "stages.court.model에는 free:")):
+            raw = copy.deepcopy(self.raw_config)
+            raw.update(top)
+            for stage, changes in stages.items():
+                raw["stages"].setdefault(stage, {}).update(changes)
+            write_json(self.dir / "bad-free.json", raw)
+            with self.assertRaises(pipeline.PipelineError, msg=f"{top} {stages}") as ctx:
+                pipeline.load_config(self.dir / "bad-free.json")
+            self.assertIn(part, str(ctx.exception), msg=f"{top} {stages}")
+        config = self.free_config(include=["g3", "g1"], exclude=["g1"])
+        self.assertEqual(pipeline.free_pool(config, {"gemini"}), ["gemini:g3"])
+
+    def test_free_models_pool_order_include_priority(self):
+        config = self.free_config(include=["g3", "g1", "g2"])
+        self.assertEqual(pipeline.free_pool(config), ["gemini:g3", "gemini:g1", "gemini:g2"])
+
+    def test_free_models_resolve_keeps_list_on_resume(self):
+        config = self.free_config(max_models=2)
+        state, logs = {"stages": {}}, []
+        pipeline.resolve_free_models(config, state, logs.append)
+        fm = state["freeModels"]
+        self.assertEqual((fm["active"], fm["reserve"]), (["gemini:g1", "gemini:g2"], ["gemini:g3", "gemini:g4"]))
+        self.assertTrue(any("gemini:g1, gemini:g2" in line and "대기 gemini:g3" in line for line in logs))
+        fm["reserve"].pop(0)
+        fm["active"][0] = "gemini:g3"  # 실행 중 자리를 채운 상태
+        pipeline.resolve_free_models(config, state, logs.append)  # 설정이 같으면 이어서 같은 목록
+        self.assertEqual(state["freeModels"]["active"], ["gemini:g3", "gemini:g2"])
+        pipeline.resolve_free_models(config, state, logs.append, fresh=True)  # 처음부터 다시
+        self.assertEqual(state["freeModels"]["active"], ["gemini:g1", "gemini:g2"])
+        changed = self.free_config(max_models=3)  # 설정이 바뀌면 다시 펼친다
+        pipeline.resolve_free_models(changed, state, logs.append)
+        self.assertEqual(state["freeModels"]["active"], ["gemini:g1", "gemini:g2", "gemini:g3"])
+        plain = self.config()  # free: 표시가 없으면 기록을 지운다
+        pipeline.resolve_free_models(plain, state, logs.append)
+        self.assertNotIn("freeModels", state)
+
+    def test_expand_models_keeps_position_and_dedupes(self):
+        state = {"freeModels": {"active": ["gemini:g1", "gemini:g2"]}}
+        self.assertEqual(pipeline.expand_models(state, ["openai:a", "free:gemini", "gemini:g2", "openai:b"]),
+                         ["openai:a", "gemini:g1", "gemini:g2", "openai:b"])
+
+    def test_free_models_generate_uses_only_active_models(self):
+        config = self.free_config(max_models=2)
+        answers = {"gemini:g1": [self.output] * 2, "gemini:g2": [self.output] * 2}
+        state = self.run_with(config, answers, caller=self.recording_caller(answers))
+        self.assertEqual({spec for spec, _ in self.calls}, {"gemini:g1", "gemini:g2"})  # g3 · g4는 대기
+        self.assertEqual(list(state["stages"]["generate"]["outputs"]["models"]), ["gemini:g1", "gemini:g2"])
+        self.assertEqual(state["freeModels"]["reserve"], ["gemini:g3", "gemini:g4"])
+
+    def test_free_models_contamination_replaces_exhausted_model(self):
+        config = self.free_config(max_models=2, contamination={})
+        quota = llm.LLMQuotaExhaustedError("일 한도")
+        answers = {"contamination:gemini:g1": [quota],  # 첫 호출에서 소진 → 대기 g3가 자리를 채운다
+                   "contamination:gemini:g2": [self.CLEAN] * 2, "contamination:gemini:g3": [self.CLEAN] * 2,
+                   "gemini:g2": [self.output] * 2, "gemini:g3": [self.output] * 2}
+        state = self.run_with(config, answers, caller=self.recording_caller(answers))
+        results = state["stages"]["contamination"]["outputs"]["results"]
+        self.assertEqual(results["gemini:g1"]["replacedBy"], "gemini:g3")
+        self.assertEqual(results["gemini:g3"]["answered"], 2)  # 새 모델은 자기 이름으로 처음부터 runs회
+        self.assertNotIn("gemini:g1", state["stages"]["contamination"]["outputs"]["excluded"])  # 대체된 모델에는 제외 설정을 적용하지 않는다
+        self.assertEqual(list(state["stages"]["generate"]["outputs"]["models"]), ["gemini:g3", "gemini:g2"])  # 자리는 그대로(g1 → g3)
+        self.assertNotIn(("gemini:g1", True), self.calls)  # 소진된 모델은 생성에 쓰지 않는다
+        self.assertEqual(state["freeModels"]["replaced"], [{"model": "gemini:g1", "by": "gemini:g3", "stage": "contamination"}])
+
+    def test_free_models_generate_replacement_is_vetted_and_keeps_finished_runs(self):
+        config = self.free_config(max_models=2, contamination={})
+        quota = llm.LLMQuotaExhaustedError("일 한도")
+        answers = {"contamination:gemini:g1": [self.CLEAN] * 2, "contamination:gemini:g2": [self.CLEAN] * 2,
+                   "contamination:gemini:g3": [self.CLEAN] * 2,  # 대신 들어오기 전에 점검을 받는다
+                   "gemini:g1": [self.output, quota], "gemini:g2": [self.output] * 2, "gemini:g3": [self.output] * 2}
+        state = self.run_with(config, answers, caller=self.recording_caller(answers))
+        order = [(spec, generating) for spec, generating in self.calls]
+        vet = [i for i, call in enumerate(order) if call == ("gemini:g3", False)]
+        first_generation = order.index(("gemini:g3", True))
+        self.assertEqual(len(vet), 2)
+        self.assertTrue(all(i < first_generation for i in vet))  # 점검이 생성보다 먼저
+        models = state["stages"]["generate"]["outputs"]["models"]
+        self.assertEqual({spec: (m["runs"], m["valid"]) for spec, m in models.items()},
+                         {"gemini:g1": (2, 1), "gemini:g2": (2, 2), "gemini:g3": (2, 2)})
+        # 소진된 g1이 끝낸 회차는 g1 이름으로 남아 선택 후보에 들어간다 (g3가 g1의 남은 회차를 대신 만들지 않았다)
+        self.assertEqual(state["freeModels"]["kept"], ["gemini:g1"])
+        self.assertEqual(pipeline.active_models(config, state), ["gemini:g3", "gemini:g2", "gemini:g1"])
+        self.assertEqual(pipeline.active_models(config, state, include_kept=False), ["gemini:g3", "gemini:g2"])
+        results = state["stages"]["contamination"]["outputs"]["results"]
+        self.assertEqual(results["gemini:g3"]["answered"], 2)  # 대체 모델의 점검 결과도 기록된다
+        self.assertEqual(state["stages"]["generate"]["outputs"]["freeModels"]["replaced"],
+                         [{"model": "gemini:g1", "by": "gemini:g3", "stage": "generate"}])
+
+    def test_free_models_replacement_failing_vet_is_skipped(self):
+        known = {"knowsCase": True, "note": "기사로 봤다"}
+        config = self.free_config(max_models=2, contamination={"onContaminated": "exclude"})
+        quota = llm.LLMQuotaExhaustedError("일 한도")
+        answers = {"contamination:gemini:g1": [self.CLEAN] * 2, "contamination:gemini:g2": [self.CLEAN] * 2,
+                   "contamination:gemini:g3": [known] * 2,  # 사건을 아는 모델 → 제외하고 다음 대기 g4를 본다
+                   "contamination:gemini:g4": [self.CLEAN] * 2,
+                   "gemini:g1": [self.output, quota], "gemini:g2": [self.output] * 2, "gemini:g4": [self.output] * 2}
+        state = self.run_with(config, answers, caller=self.recording_caller(answers))
+        fm = state["freeModels"]
+        self.assertEqual([(s["model"], s["reason"]) for s in fm["skipped"]], [("gemini:g3", "사전 학습 점검에서 제외")])
+        self.assertEqual(fm["replaced"], [{"model": "gemini:g1", "by": "gemini:g4", "stage": "generate"}])
+        self.assertNotIn(("gemini:g3", True), self.calls)  # 점검에서 걸린 모델은 생성하지 않는다
+        self.assertIn("gemini:g3", state["stages"]["contamination"]["outputs"]["excluded"])
+
+    def test_free_models_no_reserve_continues_without_replacement(self):
+        config = self.free_config(max_models=4)  # 풀 4개를 모두 쓰므로 대기가 없다
+        quota = llm.LLMQuotaExhaustedError("일 한도")
+        answers = {"gemini:g1": [quota], "gemini:g2": [self.output] * 2, "gemini:g3": [self.output] * 2,
+                   "gemini:g4": [self.output] * 2}
+        state = self.run_with(config, answers)
+        self.assertTrue(any("자리를 채울 무료 모델이 더 없습니다" in line for line in self.logs))
+        self.assertEqual(state["freeModels"]["replaced"], [])
+        self.assertEqual(state["stages"]["generate"]["outputs"]["models"]["gemini:g1"]["valid"], 0)
+
+    def test_free_models_explicit_models_are_never_replaced(self):
+        config = self.free_config(max_models=2)
+        config["stages"]["generate"]["models"] = ["openai:a", "free:gemini"]
+        quota = llm.LLMQuotaExhaustedError("일 한도")
+        answers = {"openai:a": [quota], "gemini:g1": [self.output] * 2, "gemini:g2": [self.output] * 2}
+        state = self.run_with(config, answers)
+        self.assertEqual(state["freeModels"]["replaced"], [])  # free:로 쓴 모델이 아니면 대체하지 않는다
+        self.assertEqual(state["freeModels"]["active"], ["gemini:g1", "gemini:g2"])
+
     # ---- 무료 등급 모델 안내 (BE-45)
 
     def run_notices(self, config, **kwargs):
@@ -816,6 +968,12 @@ class PipelineTest(unittest.TestCase):
         self.assertIn("gemini:gemini-2.5-flash", notices[0])
         self.assertIn("유료 키", notices[0])
         self.assertNotIn("claude-opus-5-5", notices[0])
+
+    def test_free_tier_notice_for_free_token(self):
+        config = self.free_config(max_models=2)
+        notices = self.run_notices(config)
+        self.assertEqual(len(notices), 1)
+        self.assertIn("free:gemini", notices[0])
 
     def test_free_tier_notice_for_generate_models(self):
         config = self.config(extract={"enabled": False}, generate={"models": ["gemini:gemini-3.5-flash", "openai:gpt-x"]})
