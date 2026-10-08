@@ -19,7 +19,7 @@ import argparse
 import datetime
 import sys
 
-from common import load_json
+from common import VALUE_AXES, load_json
 from to_seed_sql import dollar_quote_tag, sql_int, sql_jsonb, sql_text
 
 DEFAULT_SOURCE_ORG = "법원 공개 판결문"  # 사용자에게 보일 수 있는 유일한 출처 칸. 법원명 · 서비스명을 쓰지 않는다
@@ -93,6 +93,9 @@ def check_inputs(case, report, sources, source_org):
         _check_length(errors, "factor.summary_tag", extra["summaryTag"])
         if not factor.get("revealStage"):
             errors.append(f"판단 요소 {factor['factorId']}: revealStage가 없습니다")
+        # valueAxis는 없거나 null이어도 된다(extract-v5 이전 보고서 · 어느 축에도 맞지 않는 요소). 값이 있으면 허용 값이어야 한다
+        if extra.get("valueAxis") not in (None, *VALUE_AXES):
+            errors.append(f"판단 요소 {factor['factorId']}: valueAxis는 {' · '.join(VALUE_AXES)} 중 하나이거나 null입니다")
     for basis in (report.get("penaltyRuleBasis") or {}).values():
         _check_length(errors, "penalty_rule.allowed_basis", basis)
 
@@ -149,9 +152,10 @@ def build_case_sql(case, report, sources, *, source_org=DEFAULT_SOURCE_ORG, sour
         for i, r in enumerate(case["penaltyRules"], start=1)
     )
     factors = "\n".join(
-        f"""    INSERT INTO factor (case_id, label, pre_label, reveal_stage, summary_tag, display_order)
+        f"""    INSERT INTO factor (case_id, label, pre_label, reveal_stage, summary_tag, value_axis, display_order)
     VALUES (v_case_id, {sql_text(f['label'])}, {sql_text(extras[f['factorId']].get('preLabel'))}, """
-        f"""{sql_text(f['revealStage'])}, {sql_text(extras[f['factorId']]['summaryTag'])}, {sql_int(f['factorId'])});"""
+        f"""{sql_text(f['revealStage'])}, {sql_text(extras[f['factorId']]['summaryTag'])}, """
+        f"""{sql_text(extras[f['factorId']].get('valueAxis'))}, {sql_int(f['factorId'])});"""
         for f in case["factors"]
     )
     source_rows = "\n".join(

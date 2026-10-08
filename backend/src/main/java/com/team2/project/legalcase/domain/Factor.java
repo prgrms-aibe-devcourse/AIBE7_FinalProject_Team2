@@ -40,6 +40,9 @@ public class Factor {
 
 	private String summaryTag;	// 판결 카드 한 줄 요약용 태그
 
+	@Enumerated(EnumType.STRING)
+	private ValueAxis valueAxis;	// 가치관 축 (성향 매칭용, 어느 축에도 맞지 않으면 null)
+
 	private int displayOrder;
 
 	/** 사전 판단 작용 요소로 고를 수 있는지 (개요 단계 요소만) */
