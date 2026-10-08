@@ -156,6 +156,27 @@ class CaseSeedSqlTest(unittest.TestCase):
                     build_case_sql(case, report, resolve_sources(SOURCES, [{}, {"caseNumber": "2099노2"}]))
                 self.assertIn(message, str(ctx.exception))
 
+    def test_build_case_sql_malformedValueAxisWithVotes_isCaseSeedError(self):
+        # 축 값 형식이 틀리면 투표 기록 검사로 넘어가지 않고 CaseSeedError로 알린다 (TypeError 아님, CodeRabbit 리뷰 반영)
+        for bad in ([], ["FAULT_STANDARD"], {"x": 1}):  # 비어 있지 않은 목록 · 객체는 예전에 TypeError였다
+            with self.subTest(bad):
+                case = listing_case()
+                report = report_for(case)
+                report["factorExtras"][0]["valueAxis"] = bad
+                report["factorExtras"][0]["valueAxisVotes"] = {"runs": 1, "counts": {"FAULT_STANDARD": 1},
+                                                              "needsReview": False}
+                with self.assertRaises(CaseSeedError) as ctx:
+                    build_case_sql(case, report, resolve_sources(SOURCES, [{}, {"caseNumber": "2099노2"}]))
+                self.assertIn("valueAxis", str(ctx.exception))
+
+    def test_build_case_sql_noFactors_isError(self):
+        # 판단 요소가 없으면 적재 SQL을 만들지 않는다 (이미 적재된 사건의 축 갱신 SQL이 빈 VALUES가 되지 않게)
+        case = listing_case()
+        case["factors"] = []
+        with self.assertRaises(CaseSeedError) as ctx:
+            build_case_sql(case, report_for(case), resolve_sources(SOURCES, [{}, {"caseNumber": "2099노2"}]))
+        self.assertIn("판단 요소(factors)가 없습니다", str(ctx.exception))
+
     def test_build_case_sql_reportWithoutValueAxis_insertsNull(self):
         # extract-v5 이전 보고서(valueAxis 키 없음)도 적재된다
         case = listing_case()
