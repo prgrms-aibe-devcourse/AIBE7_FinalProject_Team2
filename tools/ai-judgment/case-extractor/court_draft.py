@@ -40,7 +40,7 @@ from common import find_forbidden_keys, load_json, write_json  # noqa: E402
 from extract_case import (  # noqa: E402
     DEFAULT_OUT_DIR, NORMAL_STOP_REASONS, TRUNCATED_REASONS, ExtractError, NAME_PATTERN, join_judgments, split_model,
 )
-from llm import LLMError, api_key, call as llm_call  # noqa: E402
+from llm import LLMError, api_key, call as llm_call, model_provider  # noqa: E402
 from validate_output import FORBIDDEN_EXPRESSIONS, parse_output  # noqa: E402
 
 COURT_PROMPT_VERSION = "court-v1"
@@ -294,10 +294,10 @@ def run(name, out_dir=DEFAULT_OUT_DIR, model=DEFAULT_MODEL, max_tokens=MAX_TOKEN
         raise CourtDraftError("--name은 영어 소문자 · 숫자 · 하이픈만 씁니다")
     out_dir = Path(out_dir)
     try:
-        provider, model_id = split_model(model)
+        _, model_id = split_model(model)  # 모델 지정 검증 (manual · 알 수 없는 공급자 거부)
     except ExtractError as e:
         raise CourtDraftError(str(e)) from e
-    spec = f"{'anthropic' if provider == 'claude' else provider}:{model_id}"
+    spec = f"{model_provider(model)}:{model_id}"  # 공급자 규칙은 llm.model_provider 하나에서 정한다
     case = load_json(case_path or out_dir / f"{name}.case.json")
     court = load_json(court_path or out_dir / f"{name}.court_judgment_internal.json")
     source = load_json(source_path or out_dir / f"{name}.source_internal.json")
