@@ -73,8 +73,9 @@ class CaseSeedSqlTest(unittest.TestCase):
         self.assertEqual(sql.count("INSERT INTO factor"), len(case["factors"]))
         self.assertEqual(sql.count("summary_tag, value_axis, value_axis_votes,"), len(case["factors"]))
         self.assertNotIn("::jsonb, 1);", sql)  # 투표 기록이 없는 보고서는 value_axis_votes가 NULL
-        self.assertNotIn("value_axis_status", sql)  # 후검수 상태는 DB 기본값 AUTO
-        self.assertEqual(sql.count("'FAULT_STANDARD'"), 1)  # 첫 요소만 축이 있고 나머지는 NULL (어느 축에도 맞지 않는 요소)
+        self.assertNotIn("summary_tag, value_axis, value_axis_votes, value_axis_status", sql)  # INSERT는 후검수 상태를 DB 기본값 AUTO로 둔다
+        inserted = sql.split("RETURNING id INTO v_case_id")[1]  # 새 사건 INSERT 부분 (앞은 이미 적재된 사건의 축 갱신)
+        self.assertEqual(inserted.count("'FAULT_STANDARD'"), 1)  # 첫 요소만 축이 있고 나머지는 NULL (어느 축에도 맞지 않는 요소)
         self.assertEqual(sql.count("INSERT INTO case_source"), 2)
         self.assertIn("'2099-05-01'::date", sql)
         self.assertIn("'법원 공개 판결문'", sql)
@@ -98,6 +99,23 @@ class CaseSeedSqlTest(unittest.TestCase):
         sql = build_case_sql(case, report, resolve_sources(SOURCES, [{}, {"caseNumber": "2099노2"}]))
         self.assertIn("""'FAULT_STANDARD', '{"runs": 5, "counts": {"FAULT_STANDARD": 3, "NONE": 2}, "needsReview": false}'::jsonb, 1);""", sql)
         self.assertIn(""", NULL, '{"runs": 4, "counts": {"NONE": 2, "ORDER_OPPORTUNITY": 2}, "needsReview": true}'::jsonb, 2);""", sql)
+
+    def test_build_case_sql_existingDraft_updatesAutoAxesOnly(self):
+        # 이미 적재된 DRAFT 사건이면 사건은 건너뛰고, 확정 전(AUTO) 요소의 축 · 투표 기록만 맞춘다 (리뷰 반영)
+        case = listing_case()
+        report = report_for(case)
+        report["factorExtras"][0]["valueAxisVotes"] = {
+            "runs": 5, "counts": {"FAULT_STANDARD": 3, "NONE": 2}, "needsReview": False}
+        sql = build_case_sql(case, report, resolve_sources(SOURCES, [{}, {"caseNumber": "2099노2"}]))
+        skip = sql.split("사건 적재 건너뜀")[1].split("RETURN;")[0]
+        self.assertIn("UPDATE factor f", skip)
+        self.assertIn("f.value_axis_status = 'AUTO'", skip)
+        self.assertIn("AND f.label = v.label", skip)  # 다시 추출해 요소가 달라졌으면 바꾸지 않는다
+        first = case["factors"][0]["label"].replace("'", "''")
+        self.assertIn(f"""(1, '{first}', 'FAULT_STANDARD'::varchar, '{{"runs": 5, "counts": {{"FAULT_STANDARD": 3, "NONE": 2}}, "needsReview": false}}'::jsonb)""", skip)
+        self.assertIn("(2, ", skip)
+        self.assertIn("NULL::varchar, NULL::jsonb)", skip)  # 축 없음 · 투표 기록 없음
+        self.assertIn("RAISE WARNING '가치관 축: 번호 · 라벨이 DB와 다른 요소", skip)
 
     def test_build_case_sql_invalidValueAxisVotes_isError(self):
         cases = [
