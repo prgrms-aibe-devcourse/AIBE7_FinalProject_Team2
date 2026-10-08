@@ -252,7 +252,7 @@ python3 pipeline.py status cases/my-case.pipeline.json
 | `contamination` | 모델마다 사전 학습 점검을 `runs`회(기본 10) 자동으로 묻고 판정한다(REQ-102). 응답을 분류해 **비율로** 판정한다(위 "2. 사전 학습 점검", BE-37). 호출 실패는 응답 수에 넣지 않는다(모두 실패해도 `INSUFFICIENT`로 판정해 `onInsufficient`를 따르고, 멈출 때도 다른 모델까지 점검한 뒤 멈춘다) | **기본 꺼짐**(`enabled: true`로 켬). `onContaminated`: `stop`(기본) · `exclude`(그 모델만 생성에서 뺌). `onSuspect`: `continue`(기본) · `exclude` · `stop`. `onInsufficient`(응답 부족): `stop`(기본) · `continue` · `exclude`. 기준 값은 `criteria`(예: `{"minAnswered": 5, "closeRatio": 0.15, "closeMinMonths": 1, "closeMaxMonths": 6, "closeFineRatio": 0.1, "exactRatio": 0.5, "suspectRatio": 0.5}`, 빈 값은 기본값). `minAnswered`가 `runs`보다 크면 설정 오류 |
 | `generate` | 모델마다 `runs`회 생성 · 검증한다(`generate.py`와 같음). 검증 통과 회차가 없으면 한 번씩 더 생성한다(최대 `maxRetries`회) | 모든 모델에서 통과 회차가 없으면 멈춘다 |
 | `select` | 검증을 통과한 회차 중 하나를 고른다 | 아래 "회차 선택" |
-| `axis` | 판단 요소의 가치관 축만 같은 모델에 `runs`회(기본 5) 묻고 요소별로 표를 센다(BE-49, 아래 "가치관 축 투표") | 유효 응답이 하나도 없으면 멈춘다. `--skip axis`(또는 `enabled: false`)면 추출기가 한 번 정한 값으로 적재한다 |
+| `axis` | 판단 요소의 가치관 축만 같은 모델에 `runs`회(기본 5) 묻고 요소별로 표를 센다(BE-49, 아래 "가치관 축 투표") | 유효 응답이 하나도 없으면 멈춘다. `enabled: false`면 추출기가 한 번 정한 값으로 적재한다(예전 투표 결과가 있어도 쓰지 않음). `--skip axis`는 다른 단계처럼 이번에 다시 투표하지 않을 뿐이라, 끝난 투표 결과가 있으면 그것을 쓰고 없으면 추출기 값을 쓴다 |
 | `load` | 사건(DRAFT) + AI 판결(비공개 · PENDING) 적재 SQL을 만들어 보관하고 로컬 DB에 적재한다 | `case: false`면 사건은 빼고 AI 판결만(사건이 이미 DB에 있을 때). `applyToDb: false`면 SQL만 만든다 |
 
 **단계 분기 (명령 옵션)**: 끝난 단계는 다음 실행에서 건너뛰고 이어서 한다(상태: `out/pipeline/<name>/state.json`). 단 앞 단계가 다시 돌면 그 뒤 단계는 끝났어도 함께 다시 돈다(예: `generate`가 실패한 뒤 옵션 없이 다시 `run`하면 `generate → select → load`). 끝날 때 적재까지 했는지(DB 적재 · SQL만 · 적재 안 함)를 구분해 알려 준다.

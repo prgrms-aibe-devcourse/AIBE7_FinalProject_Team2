@@ -740,6 +740,20 @@ class PipelineTest(unittest.TestCase):
         self.assertIn("'분류', NULL, NULL, 2);", sql)
         self.assertEqual(state["stages"]["axis"]["status"], "failed")  # 실패한 투표 결과는 쓰지 않는다
 
+    def test_axis_disabled_ignoresPreviousVotes_skipKeepsThem(self):
+        # 투표를 마친 뒤: --skip axis는 끝난 투표 결과를 그대로 쓰고(다른 단계와 같은 뜻), enabled: false는 추출기 값으로 적재한다 (CodeRabbit 리뷰 반영)
+        config = self.config(generate={"models": ["openai:a"], "runs": 1}, axis={"runs": 1})
+        self.run_with(config, {"openai:a": [self.output]}, axis_answers=[self.axis_answer({2: "APOLOGY_SINCERITY"})])
+        state = self.run_with(config, {}, start="load", skip=["axis"])
+        sql = Path(state["stages"]["load"]["outputs"]["sqlFile"]).read_text(encoding="utf-8")
+        self.assertIn("'분류', 'APOLOGY_SINCERITY', ", sql.split("RETURNING id INTO v_case_id")[1])
+        disabled = self.config(generate={"models": ["openai:a"], "runs": 1}, axis={"runs": 1, "enabled": False})
+        state = self.run_with(disabled, {}, start="load")
+        inserted = Path(state["stages"]["load"]["outputs"]["sqlFile"]).read_text(encoding="utf-8").split("RETURNING id INTO v_case_id")[1]
+        self.assertNotIn("APOLOGY_SINCERITY", inserted)
+        self.assertIn("'분류', NULL, NULL, 2);", inserted)  # 추출기 값(null) · 투표 기록 없음
+        self.assertFalse(any("투표 결과 사용" in line for line in self.logs[-5:]))
+
     def test_axis_rerun_from_axis_keepsGeneration(self):
         config = self.config(generate={"models": ["openai:a"], "runs": 1}, axis={"runs": 1})
         self.run_with(config, {"openai:a": [self.output]})

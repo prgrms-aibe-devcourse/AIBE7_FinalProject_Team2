@@ -984,9 +984,10 @@ def stage_load(config, state, log, apply=None):
     parts = []
     if cfg["case"]:
         report = load_json(input_file(config, state, "report"))
-        axis = stage_output(state, "axis")
+        # 가치관 축 투표 결과(BE-49)를 추출기 값 위에 덮어쓴다. axis를 끄면(enabled: false) 예전 투표가 남아 있어도 추출기 값 그대로.
+        # --skip axis는 다른 단계처럼 "이번에 다시 돌리지 않는다"는 뜻이라, 끝난 투표 결과가 있으면 그것을 쓴다
+        axis = stage_output(state, "axis") if config["stages"]["axis"]["enabled"] else {}
         if axis.get("votesFile"):
-            # 가치관 축 투표 결과(BE-49)를 추출기 값 위에 덮어쓴다. axis를 건너뛰었으면 추출기 값 그대로
             report = apply_votes(report, load_json(axis["votesFile"])["factors"])
             log(f"가치관 축: 투표 결과 사용 ({axis['model']} {axis['runs']}회, 확인 필요 {len(axis['needsReview'])}개)")
         source = load_json(input_file(config, state, "source"))
