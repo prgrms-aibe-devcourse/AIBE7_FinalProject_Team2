@@ -110,6 +110,7 @@ class CaseSeedSqlTest(unittest.TestCase):
         skip = sql.split("사건 적재 건너뜀")[1].split("RETURN;")[0]
         self.assertIn("UPDATE factor f", skip)
         self.assertIn("f.value_axis_status = 'AUTO'", skip)
+        self.assertIn("v.value_axis_votes IS NOT NULL", skip)  # 투표 없이 정한 값으로 투표 결과를 덮지 않는다 (셀프 리뷰 반영)
         self.assertIn("AND f.label = v.label", skip)  # 다시 추출해 요소가 달라졌으면 바꾸지 않는다
         first = case["factors"][0]["label"].replace("'", "''")
         self.assertIn(f"""(1, '{first}', 'FAULT_STANDARD'::varchar, '{{"runs": 5, "counts": {{"FAULT_STANDARD": 3, "NONE": 2}}, "needsReview": false}}'::jsonb)""", skip)

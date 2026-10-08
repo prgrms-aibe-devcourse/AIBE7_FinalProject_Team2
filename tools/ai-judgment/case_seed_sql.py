@@ -6,7 +6,8 @@ case-extractor 결과 세 파일을 합쳐 legal_case · case_section · penalty
 - <name>.source_internal.json: 원본 판결문 정보(사건번호 · 법원명 · 선고일 · 원문, 로컬에서 꺼낸 내부 전용 값)
 
 - 같은 제목의 DRAFT 사건이 이미 있으면 건너뛴다 (같은 SQL을 두 번 실행해도 안전). 이때 판단 요소의 가치관 축 · 투표 기록만
-  관리자가 확정하지 않은(AUTO) 요소에 맞춘다(축만 다시 투표한 결과 반영, BE-48 · BE-49). 번호 · 라벨이 다른 요소는 바꾸지 않는다. 같은 제목의 사건이 DRAFT가 아니면
+  관리자가 확정하지 않은(AUTO) 요소에 맞춘다(축만 다시 투표한 결과 반영, BE-48 · BE-49). 투표 기록이 있는 값만 반영하고
+  (추출기가 한 번 정한 값으로 투표 결과를 덮지 않는다), 번호 · 라벨이 다른 요소는 바꾸지 않는다. 같은 제목의 사건이 DRAFT가 아니면
   다른 사건일 수 있으므로 멈춘다(전체 취소). 이미 공개된 사건에 AI 판결만 넣을 때는 파이프라인 load.case=false로 사건 SQL을 뺀다
 - 양형기준 연결(guideline_id)은 비워 둔다(이후 RAG로 연결). 사건 발생일(incident_date)은 source_internal.json의
   incidentDate(원문 · 선고일과 대조해 확인한 값, BE-38) 또는 파이프라인 설정 incidentDate로 넣고, 없으면 비워 둔다
@@ -237,7 +238,8 @@ BEGIN
     IF EXISTS (SELECT 1 FROM legal_case WHERE title = {title}) THEN
         RAISE NOTICE '사건 적재 건너뜀: 같은 제목의 DRAFT 사건이 이미 있습니다 (title=%)', {title};
         -- 가치관 축만 맞춘다 (BE-48 · BE-49): 축만 다시 투표(--from axis)한 결과를 이미 적재된 사건에 반영한다.
-        -- 관리자가 확정한 요소(CONFIRMED)는 건드리지 않는다. 번호와 라벨이 모두 같은 요소만 바꾼다(다시 추출해 요소가 달라졌으면 바꾸지 않는다)
+        -- 관리자가 확정한 요소(CONFIRMED)는 건드리지 않는다. 번호와 라벨이 모두 같은 요소만 바꾼다(다시 추출해 요소가 달라졌으면 바꾸지 않는다).
+        -- 투표 기록이 있는 값만 반영한다. 투표 없이 정한 값(축 단계를 건너뛴 적재 · 예전 적재 SQL)으로 투표 결과를 덮지 않는다
         SELECT id INTO v_case_id FROM legal_case WHERE title = {title};
         UPDATE factor f
         SET value_axis = v.value_axis, value_axis_votes = v.value_axis_votes
@@ -248,6 +250,7 @@ BEGIN
           AND f.display_order = v.display_order
           AND f.label = v.label
           AND f.value_axis_status = 'AUTO'
+          AND v.value_axis_votes IS NOT NULL
           AND (f.value_axis IS DISTINCT FROM v.value_axis OR f.value_axis_votes IS DISTINCT FROM v.value_axis_votes);
         GET DIAGNOSTICS v_changed = ROW_COUNT;
         SELECT count(*) INTO v_unmatched
@@ -259,7 +262,7 @@ BEGIN
         IF v_unmatched > 0 THEN
             RAISE WARNING '가치관 축: 번호 · 라벨이 DB와 다른 요소 %개는 바꾸지 않았습니다 (title=%)', v_unmatched, {title};
         END IF;
-        RAISE NOTICE '가치관 축: %행 갱신 (관리자 확정 요소 제외, title=%)', v_changed, {title};
+        RAISE NOTICE '가치관 축: %행 갱신 (관리자 확정 요소 · 투표 기록 없는 값 제외, title=%)', v_changed, {title};
         RETURN;
     END IF;
 
