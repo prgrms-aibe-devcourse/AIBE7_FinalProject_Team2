@@ -361,14 +361,20 @@ def run(name, out_dir=DEFAULT_OUT_DIR, model=DEFAULT_MODEL, max_tokens=MAX_TOKEN
     source = load_json(source_path or out_dir / f"{name}.source_internal.json")
     if find_forbidden_keys(case):
         raise CourtDraftError("case.json에 실제 판결 등 금지 항목이 있습니다")
-    originals = [s["originalText"] for s in source.get("sources", []) if s.get("originalText")]
-    if not originals:
+    # 원문이 있는 판결문만 쓴다. 마스킹 텍스트 · 주문 대조 · 최종 판결 번호가 모두 같은 목록(같은 순서)을 기준으로 하도록
+    # 원래 번호를 함께 들고 다니고, 설정의 finalSourceIndex(전체 sources 기준)를 이 목록 기준으로 바꾼다
+    indexed = [(i, s) for i, s in enumerate(source.get("sources", [])) if s.get("originalText")]
+    if not indexed:
         raise CourtDraftError("source_internal.json에 판결문 원문이 없습니다")
-    masked_text, _ = premask(join_judgments([(Path(s.get("file", "")), s["originalText"]) for s in source["sources"]]))
+    originals = [s["originalText"] for _, s in indexed]
+    levels = [s.get("courtLevel") for _, s in indexed]
+    positions = [i for i, _ in indexed]
+    if final_index is not None:
+        final_index = positions.index(final_index) if final_index in positions else None
+    masked_text, _ = premask(join_judgments([(Path(s.get("file", "")), s["originalText"]) for _, s in indexed]))
 
     report_path = out_dir / f"{name}.court_report.json"
     draft_path = out_dir / f"{name}.court_draft.json"
-    levels = [s.get("courtLevel") for s in source["sources"] if s.get("originalText")]
     sentence_errors, sentence_warnings = check_sentence(court, originals, levels, final_index)
     report = {"promptVersion": COURT_PROMPT_VERSION, "requestedModel": model, "errors": list(sentence_errors),
               "warnings": list(sentence_warnings)}

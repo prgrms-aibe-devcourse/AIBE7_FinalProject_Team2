@@ -144,6 +144,6 @@ def date_in_text(iso_date, text):
         year, month, day = (int(x) for x in iso_date.split("-"))
     except (AttributeError, ValueError):
         return False
-    pattern = rf"{year}\s*[.년]\s*0?{month}\s*[.월]\s*0?{day}(?!\d)"
+    pattern = rf"(?<!\d){year}\s*[.년]\s*0?{month}\s*[.월]\s*0?{day}(?!\d)"  # 앞뒤가 다른 숫자에 붙지 않게
     return re.search(pattern, text) is not None
 

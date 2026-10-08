@@ -108,6 +108,10 @@ class CourtSeedSqlTest(unittest.TestCase):
         self.assertIn("같은 내용의 재판부 판결이 이미 있습니다", sql)
         self.assertIn("요약 ''인용''", sql)
         self.assertIn("IS DISTINCT FROM v.label", sql)
+        self.assertIn("reduced_to IS NOT DISTINCT FROM NULL", sql)  # 감경 여부까지 같아야 같은 판결로 본다
+        reduced = dict(self.data, judgment=dict(self.data["judgment"], penaltyType="LIFE", reducedTo="PRISON",
+                                                prisonMonths=180))
+        self.assertIn("reduced_to IS NOT DISTINCT FROM 'PRISON'", build_court_sql(reduced, "사건"))
 
     def test_checks(self):
         j = self.data["judgment"]

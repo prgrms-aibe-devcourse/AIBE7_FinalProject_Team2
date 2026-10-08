@@ -101,6 +101,7 @@ def build_court_sql(data, title):
         f"({f['factorId']}, {sql_text(f['direction'])}, {sql_text(f['evidence'])})" for f in factors)
     same = (f"summary = {sql_text(j['summary'])} AND reasoning = {sql_text(j['reasoning'])} "
             f"AND excerpt = {sql_text(j['excerpt'])} AND penalty_type = {sql_text(j['penaltyType'])} "
+            f"AND reduced_to IS NOT DISTINCT FROM {sql_text(j.get('reducedTo'))} "
             f"AND prison_months IS NOT DISTINCT FROM {sql_int(j.get('prisonMonths'))} "
             f"AND fine_amount IS NOT DISTINCT FROM {sql_int(j.get('fineAmount'))} "
             f"AND suspension_months IS NOT DISTINCT FROM {sql_int(j.get('suspensionMonths'))}")

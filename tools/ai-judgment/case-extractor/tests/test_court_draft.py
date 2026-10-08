@@ -266,6 +266,24 @@ class RunTest(unittest.TestCase):
             run("c", self.dir, "openai:gpt-x", caller=call)
         self.assertEqual(calls, [])
 
+    def test_run_sourcesWithoutText_finalIndexRemapped(self):
+        # 원문이 없는 항목이 섞여도 오류 없이, 최종 판결 번호는 전체 sources 기준으로 해석한다
+        appeal = "가상고등법원\n주 문\n원심판결을 파기한다. 피고인을 징역 4월에 처한다.\n" + "기록 " * 20
+        write_json(self.dir / "c.source_internal.json", {"sources": [
+            {"file": "missing.txt"},  # 원문 없음 (읽기 실패 등)
+            {"file": "a.txt", "originalText": JUDGMENT, "courtLevel": "FIRST"},
+            {"file": "b.txt", "originalText": appeal, "courtLevel": "APPEAL"},
+        ]})
+        call, calls = self.caller([DRAFT])
+        # 1심(전체 번호 1)을 최종으로 지정하면 1심 주문(6월)과 대조해 통과한다
+        run("c", self.dir, "openai:gpt-x", caller=call, final_index=1)
+        self.assertNotIn("missing.txt", calls[0]["user"])
+        # 지정하지 않으면 심급이 가장 높은 항소심 주문(4월)과 대조해 실패한다
+        call, calls = self.caller([DRAFT])
+        with self.assertRaises(CourtDraftError):
+            run("c", self.dir, "openai:gpt-x", caller=call)
+        self.assertEqual(calls, [])
+
     def test_run_missingKey(self):
         with mock.patch.dict(os.environ, {}, clear=True):
             with self.assertRaises(CourtDraftError) as ctx:

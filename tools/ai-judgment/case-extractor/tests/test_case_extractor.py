@@ -489,6 +489,7 @@ class IncidentDateTest(unittest.TestCase):
             self.assertTrue(date_in_text(iso, text), iso)
         for iso in ("2024-01-01", "2024-1-1x", None, "2024-11-10"):
             self.assertFalse(date_in_text(iso, text), iso)
+        self.assertFalse(date_in_text("2099-01-10", "기록번호 12099. 1. 10. 이다"))  # 앞에 숫자가 붙으면 다른 값
 
     def test_validDate_storedInternalOnly(self):
         case, report, source = self.run_with()
