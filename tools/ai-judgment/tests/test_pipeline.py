@@ -230,8 +230,8 @@ class PipelineTest(unittest.TestCase):
         write_json(path, raw)
         return pipeline.load_config(path)
 
-    def run_with(self, config, answers, applied=None, court_answers=None, **kwargs):
-        caller = fake_caller(answers)
+    def run_with(self, config, answers, applied=None, court_answers=None, caller=None, **kwargs):
+        caller = caller or fake_caller(answers)
         functions = dict(pipeline.STAGE_FUNCTIONS)
         court_queue = list(court_answers or [])
         self.court_requests = getattr(self, "court_requests", [])
@@ -440,6 +440,54 @@ class PipelineTest(unittest.TestCase):
             self.run_with(config, {"openai:a": [llm.LLMQuotaExhaustedError("일 한도")]})  # 남은 회차 · 재생성 호출 없음
         summary = pipeline.load_state(config)["stages"]["generate"]["outputs"]["models"]["openai:a"]
         self.assertEqual((summary["runs"], summary["valid"], summary["retries"]), (1, 0, 0))
+
+    # ---- 모델 교차 호출 (BE-44)
+
+    def recording_caller(self, answers):
+        """호출 순서를 기록하는 caller. (모델, 생성이면 True · 사전 학습 점검이면 False)"""
+        inner, self.calls = fake_caller(answers), []
+
+        def caller(spec, system, user, **kwargs):
+            self.calls.append((spec, bool(system)))
+            return inner(spec, system, user, **kwargs)
+
+        return caller
+
+    def test_contamination_and_generate_alternate_models(self):
+        clean = {"knowsCase": False, "penaltyType": "PRISON", "prisonMonths": 60, "fineAmount": None,
+                 "suspensionMonths": None}
+        config = self.config(contamination={"enabled": True, "runs": 2, "criteria": {"minAnswered": 1}})
+        answers = {"contamination:openai:a": [clean] * 2, "contamination:gemini:b": [clean] * 2,
+                   "openai:a": [self.output] * 2, "gemini:b": [self.output] * 2}
+        state = self.run_with(config, answers, caller=self.recording_caller(answers))
+        self.assertEqual(self.calls, [("openai:a", False), ("gemini:b", False)] * 2
+                         + [("openai:a", True), ("gemini:b", True)] * 2)
+        # 모델별 기록 · 회차 번호는 모델마다 독립이다
+        runs = state["stages"]["generate"]["outputs"]["models"]
+        self.assertEqual([runs[m]["runs"] for m in ("openai:a", "gemini:b")], [2, 2])
+        contamination = state["stages"]["contamination"]["outputs"]["results"]
+        self.assertEqual([contamination[m]["answered"] for m in ("openai:a", "gemini:b")], [2, 2])
+
+    def test_contamination_quota_exhausted_model_dropped_from_alternation(self):
+        clean = {"knowsCase": False, "penaltyType": "PRISON", "prisonMonths": 60, "fineAmount": None,
+                 "suspensionMonths": None}
+        config = self.config(contamination={"enabled": True, "runs": 3, "criteria": {"minAnswered": 1}})
+        answers = {"contamination:openai:a": [clean, llm.LLMQuotaExhaustedError("일 한도")],
+                   "contamination:gemini:b": [clean] * 3,
+                   "openai:a": [self.output] * 2, "gemini:b": [self.output] * 2}
+        self.run_with(config, answers, caller=self.recording_caller(answers))
+        points = [spec for spec, generating in self.calls if not generating]
+        self.assertEqual(points, ["openai:a", "gemini:b", "openai:a", "gemini:b", "gemini:b"])
+
+    def test_generate_regeneration_alternates_models(self):
+        config = self.config(generate={"runs": 1, "maxRetries": 1})
+        answers = {"openai:a": ["x", "x"], "gemini:b": ["x", "x"]}
+        with self.assertRaises(pipeline.PipelineError):
+            self.run_with(config, answers, caller=self.recording_caller(answers))
+        self.assertEqual([spec for spec, _ in self.calls], ["openai:a", "gemini:b", "openai:a", "gemini:b"])
+        summary = pipeline.load_state(config)["stages"]["generate"]["outputs"]["models"]
+        self.assertEqual([(summary[m]["runs"], summary[m]["retries"]) for m in ("openai:a", "gemini:b")],
+                         [(2, 1), (2, 1)])
 
     def test_generate_retries_until_valid(self):
         config = self.config(generate={"models": ["openai:a"], "runs": 2, "maxRetries": 2})
