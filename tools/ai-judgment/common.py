@@ -26,6 +26,10 @@ NO_TERM_PENALTIES = ("DEATH", "LIFE")
 
 DIRECTIONS = ("UP", "DOWN")
 
+# 판단 요소 가치관 축 (ERD factor.value_axis, BE-47). null = 어느 축에도 맞지 않음(성향 계산 제외).
+# 축이 바뀌면 함께 고친다: Java ValueAxis · V9 CHECK(chk_factor_value_axis) · 추출기 프롬프트(extract_system.md)
+VALUE_AXES = ("APOLOGY_SINCERITY", "FAULT_STANDARD", "PRINCIPLE_RELATION", "ORDER_OPPORTUNITY")
+
 # 집행유예 가능 조건 (형법 제62조, ERD penalty_rule 비고 · API 8 suspensionRule)
 SUSPENSION_MAX_PRISON_MONTHS = 36
 SUSPENSION_MAX_FINE_AMOUNT = 5_000_000

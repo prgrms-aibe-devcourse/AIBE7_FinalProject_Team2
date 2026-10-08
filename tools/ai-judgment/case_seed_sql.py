@@ -19,12 +19,11 @@ import argparse
 import datetime
 import sys
 
-from common import load_json
+from common import VALUE_AXES, load_json
 from to_seed_sql import dollar_quote_tag, sql_int, sql_jsonb, sql_text
 
 DEFAULT_SOURCE_ORG = "법원 공개 판결문"  # 사용자에게 보일 수 있는 유일한 출처 칸. 법원명 · 서비스명을 쓰지 않는다
 COURT_LEVELS = ("FIRST", "APPEAL", "SUPREME")
-VALUE_AXES = ("APOLOGY_SINCERITY", "FAULT_STANDARD", "PRINCIPLE_RELATION", "ORDER_OPPORTUNITY")  # ERD factor.value_axis
 # ERD 컬럼 길이 (DB에서 실패하기 전에 막는다)
 MAX_LENGTHS = {
     "title": 100, "charge_name": 100, "short_intro": 200, "applied_law": 200, "statutory_penalty_text": 200,

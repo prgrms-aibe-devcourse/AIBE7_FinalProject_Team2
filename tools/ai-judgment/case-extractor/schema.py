@@ -11,15 +11,14 @@ from pathlib import Path
 PARENT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PARENT_DIR))
 
-from common import NO_TERM_PENALTIES, PENALTY_TYPES, REDUCIBLE_TO, format_months, format_won  # noqa: E402
+from common import NO_TERM_PENALTIES, PENALTY_TYPES, REDUCIBLE_TO, VALUE_AXES, format_months, format_won  # noqa: E402
 
 # 프롬프트나 스키마를 고치면 올린다. 보고서(report.json)에 기록된다.
 EXTRACT_PROMPT_VERSION = "extract-v5"  # v3: Claude 외 공급자 스키마 안내 (BE-35), v4: 사건 발생일 incidentDate (BE-38), v5: 판단 요소 가치관 축 valueAxis (BE-47)
 
 CRIME_TYPES = ("MURDER", "FRAUD", "INJURY")  # ERD legal_case.crime_type
 REVEAL_STAGES = ("OVERVIEW", "DETAIL", "ARGUMENT", "LAW")  # ERD factor.reveal_stage
-# ERD factor.value_axis (BE-47). 판결 체험에서 고르는 판단 요소를 사용자 성향과 매칭하는 가치관 축. null = 어느 축에도 맞지 않음(성향 계산 제외)
-VALUE_AXES = ("APOLOGY_SINCERITY", "FAULT_STANDARD", "PRINCIPLE_RELATION", "ORDER_OPPORTUNITY")
+# 가치관 축 값(VALUE_AXES)은 common.py 한 곳에 둔다 (ERD factor.value_axis, BE-47). 판결 체험에서 고르는 판단 요소를 사용자 성향과 매칭한다
 VALUE_AXIS_NAMES = {
     "APOLOGY_SINCERITY": "① 사과와 진정성",
     "FAULT_STANDARD": "② 잘잘못의 기준",
@@ -31,7 +30,7 @@ VALUE_AXIS_KEYWORDS = {
     "APOLOGY_SINCERITY": ("반성", "자수", "자백", "수사 협조", "사과", "사죄", "뉘우"),
     "FAULT_STANDARD": ("동기", "계획", "수단", "범행 방식", "범행 내용", "흉기", "피해 규모", "피해 결과", "결과의 중대"),
     "PRINCIPLE_RELATION": ("피해 회복", "합의", "처벌불원", "처벌 의사", "공탁", "피해자 의사", "피해자 책임", "피해자 과실"),
-    "ORDER_OPPORTUNITY": ("전력", "전과", "재범", "연령", "고령", "부양", "가족", "직업", "가장"),
+    "ORDER_OPPORTUNITY": ("전력", "전과", "재범", "연령", "고령", "부양", "가족", "직업", "생계"),
 }
 
 LABEL_MAX_LENGTH = 100  # ERD factor.label · pre_label varchar(100)
