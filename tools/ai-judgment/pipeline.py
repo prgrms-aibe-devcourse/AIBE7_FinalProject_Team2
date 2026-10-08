@@ -347,9 +347,13 @@ def stage_contamination(config, state, log, caller=call):
     out_dir = PIPELINE_DIR / config["name"] / "contamination"
     criteria = criteria_with(cfg.get("criteria"))
     results, excluded, stop_reasons = {}, [], []
-    for spec in models:
-        categories = []
-        for i in range(1, cfg["runs"] + 1):
+    categories = {spec: [] for spec in models}
+    exhausted = set()  # 일 한도 · 크레딧이 바닥난 모델
+    # 모델을 번갈아 가며 회차 순서로 부른다 (BE-44). 한 모델의 분당 한도에 연속으로 걸리지 않는다
+    for i in range(1, cfg["runs"] + 1):
+        for spec in models:
+            if spec in exhausted:
+                continue
             record = {"modelSpec": spec, "run": i, "createdAt": _now()}
             try:
                 result = caller(spec, "", prompt, timeout=cfg["timeout"])
@@ -360,25 +364,24 @@ def stage_contamination(config, state, log, caller=call):
                     category, reason = "INVALID", f"응답을 읽을 수 없음: {e}"
             except LLMError as e:
                 category, reason = None, f"호출 실패: {e}"  # 응답 수에 넣지 않는다 (표본 부족 판정으로 이어짐)
-                quota_exhausted = isinstance(e, LLMQuotaExhaustedError)
-            else:
-                quota_exhausted = False
+                if isinstance(e, LLMQuotaExhaustedError):
+                    # 일 한도 · 크레딧이 바닥났으니 남은 회차도 같은 실패로 쌓일 뿐이다. 이 모델만 멈춘다 (BE-36)
+                    exhausted.add(spec)
+                    if i < cfg["runs"]:
+                        log(f"[{spec}] 호출 한도 소진 → 남은 {cfg['runs'] - i}회는 호출하지 않고 건너뜁니다")
             record.update(category=category, reason=reason)
             write_json(out_dir / model_slug(spec) / f"run-{i:03d}.json", record)
             if category:
-                categories.append(category)
-            if quota_exhausted:
-                # 일 한도 · 크레딧이 바닥났으니 남은 회차도 같은 실패로 쌓일 뿐이다. 이 모델은 여기서 멈춘다 (BE-36)
-                if i < cfg["runs"]:
-                    log(f"[{spec}] 호출 한도 소진 → 남은 {cfg['runs'] - i}회는 호출하지 않고 건너뜁니다")
-                break
-            if cfg["delay"]:
+                categories[spec].append(category)
+            if cfg["delay"] and spec not in exhausted:
                 time.sleep(cfg["delay"])
+    for spec in models:
         # 호출이 모두 실패해도(응답 0개) INSUFFICIENT로 판정해 onInsufficient를 따른다
-        final, reason, counts = aggregate(categories, criteria)
-        results[spec] = {"verdict": final, "reason": reason, "counts": counts, "answered": len(categories),
+        answered = categories[spec]
+        final, reason, counts = aggregate(answered, criteria)
+        results[spec] = {"verdict": final, "reason": reason, "counts": counts, "answered": len(answered),
                          "runs": cfg["runs"], "criteria": criteria}
-        log(f"[{spec}] {final} — {reason} {counts} (응답 {len(categories)}/{cfg['runs']})")
+        log(f"[{spec}] {final} — {reason} {counts} (응답 {len(answered)}/{cfg['runs']})")
         action = {"CONTAMINATED": cfg["onContaminated"], "SUSPECT": cfg["onSuspect"],
                   "INSUFFICIENT": cfg["onInsufficient"]}.get(final, "continue")
         if action == "exclude":
@@ -400,20 +403,31 @@ def stage_generate(config, state, log, caller=call):
     options = {"temperature": cfg["temperature"], "max_tokens": cfg["maxTokens"], "timeout": cfg["timeout"],
                "delay": cfg["delay"], "caller": caller, "log": log}
     summary = {}
+    models = active_models(config, state)
+    by_spec = {spec: [] for spec in models}
+    retries = {spec: 0 for spec in models}
     try:
-        for spec in active_models(config, state):
-            records = generate_runs(case, [spec], cfg["runs"], batch_dir, **options)
-            retries = 0
-            # 검증을 통과한 회차가 하나도 없으면 한 번씩 더 생성한다 (최대 maxRetries회)
-            while (not any(r["validation"]["ok"] for r in records) and retries < cfg["maxRetries"]
-                   and not any(r["callErrorKind"] == LLMQuotaExhaustedError.kind for r in records)):  # 한도 소진이면 재생성도 실패한다
-                retries += 1
-                log(f"[{spec}] 검증 통과 회차 없음 → 재생성 {retries}/{cfg['maxRetries']}")
-                records += generate_runs(case, [spec], 1, batch_dir, **options)
-            summary[spec] = {"runs": len(records), "valid": sum(1 for r in records if r["validation"]["ok"]),
-                             "retries": retries}
+        # 모델을 번갈아 가며 회차 순서로 생성한다 (BE-44)
+        for record in generate_runs(case, models, cfg["runs"], batch_dir, **options):
+            by_spec[record["modelSpec"]].append(record)
+        # 검증을 통과한 회차가 하나도 없는 모델은 한 번씩 더 생성한다 (최대 maxRetries회). 한도 소진이면 재생성도 실패한다
+        while True:
+            pending = [spec for spec in models if retries[spec] < cfg["maxRetries"]
+                       and not any(r["validation"]["ok"] for r in by_spec[spec])
+                       and not any(r["callErrorKind"] == LLMQuotaExhaustedError.kind for r in by_spec[spec])]
+            if not pending:
+                break
+            for spec in pending:
+                retries[spec] += 1
+                log(f"[{spec}] 검증 통과 회차 없음 → 재생성 {retries[spec]}/{cfg['maxRetries']}")
+            for record in generate_runs(case, pending, 1, batch_dir, **options):
+                by_spec[record["modelSpec"]].append(record)
     except (GenerateError, LLMError) as e:
         raise PipelineError(f"생성 실패: {e}", {"batchDir": str(batch_dir), "models": summary})
+    for spec in models:
+        records = by_spec[spec]
+        summary[spec] = {"runs": len(records), "valid": sum(1 for r in records if r["validation"]["ok"]),
+                         "retries": retries[spec]}
     outputs = {"batchDir": str(batch_dir), "models": summary}
     if not any(s["valid"] for s in summary.values()):
         raise PipelineError("검증을 통과한 회차가 없습니다 (재생성 포함). out/runs의 기록과 compare.py로 원인을 보세요", outputs)
