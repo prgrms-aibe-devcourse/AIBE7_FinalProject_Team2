@@ -56,9 +56,9 @@ DEFAULT_CONFIG = {
     # 판결문 원본. 여러 개면 같은 사건의 심급별 판결문(1심 · 항소심). 자동으로 못 찾은 원본 정보는 여기에 직접 넣는다
     # [{"path": "...", "caseNumber": null, "courtName": null, "decidedAt": null, "courtLevel": null, "note": null}]
     "sources": [],
-    "finalSourceIndex": None,
+    "finalSourceIndex": None,  # 최종 확정 판결 번호(0부터). 없으면 심급이 가장 높은 판결
     # 사건 발생일 YYYY-MM-DD. 주면 추출 결과(source_internal.json incidentDate)보다 우선한다 (BE-38)
-    "incidentDate": None,  # 최종 확정 판결 번호(0부터). 없으면 심급이 가장 높은 판결
+    "incidentDate": None,
     # extract를 건너뛸 때 쓸 파일 (extract를 돌리면 그 결과가 우선)
     # courtDraft: 재판부 판결(BE-14 형식) 파일. court 단계를 끄고 사람이 쓴 판결을 넣을 때 쓴다 (BE-38)
     "inputs": {"case": None, "court": None, "report": None, "source": None, "courtDraft": None},
@@ -232,8 +232,6 @@ def active_models(config, state):
 
 # ---------------------------------------------------------------- 단계
 
-
-
 def extract_provider(config):
     """비식별화 모델의 실제 공급자 (외부 전송 안내용). 규칙은 llm.model_provider와 같다 (비식별화 호출도 같은 함수를 쓴다)."""
     return model_provider(config["stages"]["extract"]["model"])
@@ -284,7 +282,7 @@ def stage_court(config, state, log, caller=None):
         draft_path, report_path = court_run(
             config["name"], out_dir=CASES_DIR, model=model, max_tokens=cfg["maxTokens"], caller=caller,
             case_path=input_file(config, state, "case"), court_path=input_file(config, state, "court"),
-            source_path=input_file(config, state, "source"))
+            source_path=input_file(config, state, "source"), final_index=config["finalSourceIndex"])
     except CourtDraftError as e:
         raise PipelineError(f"재판부 판결 초안 실패: {e}")
     report = load_json(report_path)

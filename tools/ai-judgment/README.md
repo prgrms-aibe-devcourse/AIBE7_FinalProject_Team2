@@ -231,7 +231,7 @@ python3 pipeline.py status cases/my-case.pipeline.json
 | 단계 | 하는 일 | 끄기 · 멈춤 조건 |
 | --- | --- | --- |
 | `extract` | `case-extractor`로 판결문(여러 개면 1심 · 항소심 함께)을 비식별화 · 구조화한다. 모델은 `stages.extract.model`로 고른다(Claude 모델 ID, `openai:모델ID`, `gemini:모델ID` — BE-35, `maxTokens`는 Claude 외 출력 상한). 사건번호 · 법원명 · 선고일은 **마스킹 전에 로컬에서** 꺼내 내부 파일에만 둔다. 목록 카드 칸(소개 · 키워드 · 난이도 · 예상 시간)도 함께 만든다 | 모델이 서비스 대상이 아니라고 판정하면 멈춘다(`requireEligible: false`로 무시). 판정 기준은 `docs/cases/README.md` 1장 선정 조건 |
-| `court` | 재판부 판결(COURT) 초안을 만든다(`case-extractor/court_draft.py`, BE-38). 마스킹한 원문을 모델에 보내 요약 · 이유 · 쉬운 설명 · 발췌 · 요소별 방향과 근거를 받고, **발췌 · 근거가 원문을 글자 그대로 인용했는지**(바꾼 식별 정보만 `⟦ ⟧`) · **형량이 판결문 주문과 맞는지** · 개인정보 잔존을 자동으로 검사한다. 모델은 `stages.court.model`(없으면 extract 모델) | 검사를 통과하지 못하면 멈춘다(오류를 알려 주며 최대 2번 다시 요청). 끄고 사람이 쓴 BE-14 JSON을 `inputs.courtDraft`로 넣을 수 있다 |
+| `court` | 재판부 판결(COURT) 초안을 만든다(`case-extractor/court_draft.py`, BE-38). 마스킹한 원문을 모델에 보내 요약 · 이유 · 쉬운 설명 · 발췌 · 요소별 방향과 근거를 받고, **발췌 · 근거가 원문을 글자 그대로 인용했는지**(바꾼 식별 정보만 `⟦ ⟧`) · **형량이 최종 판결문 주문과 맞는지** · 개인정보 잔존을 자동으로 검사한다. 모델은 `stages.court.model`(없으면 extract 모델) | 검사를 통과하지 못하면 **파이프라인이 멈춘다**(오류를 알려 주며 최대 2번 다시 요청한 뒤). 재판부 판결 없이 이어 가려면 `stages.court.enabled: false`로 끄거나 사람이 쓴 BE-14 JSON을 `inputs.courtDraft`로 넣고 `--from contamination`(또는 다음 단계)으로 다시 실행한다 |
 | `contamination` | 모델마다 사전 학습 점검을 `runs`회(기본 10) 자동으로 묻고 판정한다(REQ-102). 판정은 가장 나쁜 결과 | **기본 꺼짐**(`enabled: true`로 켬). `onContaminated`: `stop`(기본) · `exclude`(그 모델만 생성에서 뺌). `onSuspect`: `continue`(기본) · `exclude` · `stop` |
 | `generate` | 모델마다 `runs`회 생성 · 검증한다(`generate.py`와 같음). 검증 통과 회차가 없으면 한 번씩 더 생성한다(최대 `maxRetries`회) | 모든 모델에서 통과 회차가 없으면 멈춘다 |
 | `select` | 검증을 통과한 회차 중 하나를 고른다 | 아래 "회차 선택" |
@@ -264,7 +264,7 @@ python3 pipeline.py status cases/my-case.pipeline.json
 ### 적재 (`stages.load`)
 
 - **사건**: `legal_case.status='DRAFT'` → 사용자 목록 · 체험에서 보이지 않는다(서버가 `PUBLISHED`만 조회). 섹션 · 형벌 규칙 · 판단 요소 · 원본 판결문(`case_source`)을 함께 넣는다. 사건 발생일은 비식별화 단계가 원문 · 선고일과 대조해 확인한 값(또는 설정 `incidentDate`)을 넣는다(BE-38). 재판부 판결은 아래 "재판부 판결"대로 비공개로 넣는다(BE-38). 양형기준 연결은 넣지 않는다.
-- **재판부 판결 (BE-38)**: `court` 단계 초안(또는 `inputs.courtDraft`)이 있으면 `judgment`(COURT · FINAL) · `judgment_factor`를 **비공개**(`is_published=false`)로 넣는다. 기존 공개 재판부 판결은 건드리지 않고, 같은 내용이 이미 있으면 건너뛴다. `load.court: false`면 뺀다. 초안은 **실제 판결이 들어 있는 내부 파일**이라 AI 판결 단계(contamination · generate)는 읽지 않는다. 사실 기록이므로 공개 전에 원 판결문과 대조해 검수한다(REQ-075 · 077).
+- **재판부 판결 (BE-38)**: `court` 단계 초안(또는 `inputs.courtDraft`)이 있으면 `judgment`(COURT · FINAL) · `judgment_factor`를 **비공개**(`is_published=false`)로 넣는다. 기존 공개 재판부 판결은 건드리지 않고, 같은 내용이 이미 있으면 건너뛴다. `load.court: false`면 뺀다. **court 단계를 다시 돌리면** 모델이 다른 글을 만들어 내용이 달라지므로 같은 사건에 비공개 재판부 판결 후보가 하나 더 쌓인다(기존 행은 지우지 않음, REQ-079와 같은 원칙). 관리자 후검수(BE-33)에서 후보 중 하나를 골라 공개한다. 초안은 **실제 판결이 들어 있는 내부 파일**이라 AI 판결 단계(contamination · generate)는 읽지 않는다. 사실 기록이므로 공개 전에 원 판결문과 대조해 검수한다(REQ-075 · 077).
 - **공개에 필요한 것**: 사건 `PUBLISHED` + 공개 재판부 판결 + 공개 AI 판결. 셋이 갖춰지면 체험 흐름 전체(사전 판단 → 판결 → AI 판결 → 실제 판결 → 세 판결 비교)가 동작한다(임시 DB로 확인). 양형기준 연결(`guideline_id`)은 서비스 코드가 읽지 않아 비어 있어도 된다(이후 RAG로 연결).
 - **AI 판결**: `judgment.is_published=false`, `ai_generation.review_status='PENDING'`(검수자 · 검수 시각 없음). 기존 공개 AI 판결은 그대로 둔다. `ai_generation.generation_report`(V8)에 검증 경고 · 사전 학습 점검 판정 · 회차 선택 이유 · 모델 · 토큰을 남겨 관리자가 검수할 때 본다(실제 판결 값은 넣지 않는다).
 - **같은 SQL을 두 번 실행해도 안전하다**: 같은 제목의 DRAFT 사건이 있으면 사건 적재를 건너뛰고, 같은 실행(`runKey`)의 AI 판결이 있으면 건너뛴다(`runKey`는 DB 부분 유니크 인덱스로도 막는다). 판단 요소가 다르면 전체가 취소된다.

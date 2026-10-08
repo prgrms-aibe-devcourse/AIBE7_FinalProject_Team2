@@ -16,8 +16,11 @@ from unittest import mock
 EXTRACTOR_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(EXTRACTOR_DIR))
 
+import time  # noqa: E402
+
 from court_draft import (  # noqa: E402
-    CourtDraftError, build_court_draft, check_draft, check_sentence, display_text, parse_sentences, quote_matches, run,
+    CourtDraftError, build_court_draft, check_draft, check_sentence, display_text, effective_sentences, parse_sentences,
+    quote_matches, run,
 )
 from common import write_json  # noqa: E402
 
@@ -96,6 +99,28 @@ class QuoteTest(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIn("너무 적습니다", reason)
 
+    def test_insertedWords_rejected(self):
+        # 원문 사이에 없는 말을 끼워 넣는 것(0자 대체)은 원문 인용이 아니다
+        src = "피고인은 피해자에게 사과하고 깊이 반성하고 있다."
+        self.assertFalse(quote_matches("피고인은 피해자에게 사과하고 ⟦겉으로만⟧ 깊이 반성하고 있다.", src)[0])
+        self.assertTrue(quote_matches("⟦A는⟧ 피해자에게 사과하고 깊이 반성하고 있다.", src)[0])  # 원문 1자 이상 대체는 허용
+
+    def test_longReplacement_rejected(self):
+        ok, reason = quote_matches("피고인은 ⟦" + "가" * 21 + "⟧에서 술값을 지급할 의사나 능력이 없음에도", JUDGMENT)
+        self.assertFalse(ok)
+        self.assertIn("20자", reason)
+
+    def test_noCatastrophicBacktracking(self):
+        src = "피고인 " * 3000
+        quote = ("피고인 ⟦가⟧" * 5) + "원문에없는꼬리문장입니다"
+        started = time.monotonic()
+        self.assertFalse(quote_matches(quote, src)[0])
+        self.assertLess(time.monotonic() - started, 2.0)
+
+    def test_leadingAndTrailingReplacement(self):
+        self.assertTrue(quote_matches("⟦사건 당일 저녁⟧ ⟦한 주점⟧에서 술값을 지급할 의사나 능력이 없음에도", JUDGMENT)[0])
+        self.assertTrue(quote_matches("피고인이 범행을 자백하고 반성하는 점, ⟦일부⟧", JUDGMENT)[0])
+
     def test_unbalancedMarks_rejected(self):
         self.assertFalse(quote_matches("피고인을 징역 ⟦6월에 처한다.", JUDGMENT)[0])
 
@@ -110,6 +135,11 @@ class SentenceTest(unittest.TestCase):
         self.assertEqual(suspended["suspensionMonths"], 24)
         self.assertEqual(parse_sentences("피고인을 무기징역에 처한다.")[0]["penalty"], "LIFE")
         self.assertEqual(parse_sentences("항소를 기각한다."), [])
+        # "각 형의" · "N년 M월간"도 집행유예로 읽는다
+        each = parse_sentences("피고인들을 각 징역 1년에 처한다. 다만 이 판결 확정일부터 2년간 각 형의 집행을 유예한다.")[0]
+        self.assertEqual(each["suspensionMonths"], 24)
+        months = parse_sentences("피고인을 징역 6월에 처한다. 다만 이 판결 확정일부터 1년 6월간 위 형의 집행을 유예한다.")[0]
+        self.assertEqual(months["suspensionMonths"], 18)
 
     def test_checkSentence(self):
         self.assertEqual(check_sentence(COURT, [JUDGMENT]), ([], []))
@@ -120,6 +150,20 @@ class SentenceTest(unittest.TestCase):
         self.assertEqual(check_sentence(COURT, ["항소를 기각한다.", JUDGMENT]), ([], []))
         _, warnings = check_sentence(COURT, ["주문 없음"])
         self.assertTrue(warnings)
+
+    def test_checkSentence_usesFinalJudgmentOnly(self):
+        first = "주문 피고인을 징역 2년에 처한다. 다만 이 판결 확정일부터 3년간 위 형의 집행을 유예한다."
+        appeal = "주문 원심판결을 파기한다. 피고인을 징역 1년 6월에 처한다."
+        lower = {"penaltyType": "PRISON", "prisonMonths": 24, "suspensionMonths": 36, "fineAmount": None}
+        final = {"penaltyType": "PRISON", "prisonMonths": 18, "suspensionMonths": None, "fineAmount": None}
+        levels = ["FIRST", "APPEAL"]
+        self.assertTrue(check_sentence(lower, [first, appeal], levels)[0])  # 하급심 형량은 오류
+        self.assertEqual(check_sentence(final, [first, appeal], levels), ([], []))
+        # 항소 기각이면 1심 주문이 확정된 형이다
+        dismissed = "주문 피고인의 항소를 기각한다."
+        self.assertEqual(check_sentence(lower, [first, dismissed], levels), ([], []))
+        # 최종 판결 번호를 직접 주면 그 판결을 쓴다
+        self.assertEqual(effective_sentences([first, appeal], levels, final_index=0)[0]["prisonMonths"], 24)
 
 
 class CheckDraftTest(unittest.TestCase):

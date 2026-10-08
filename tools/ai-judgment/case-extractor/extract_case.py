@@ -10,12 +10,11 @@
 """
 
 import argparse
+import datetime
 import json
 import re
 import sys
 from pathlib import Path
-
-import datetime
 
 from deidentify import date_in_text, extract_source_info, premask, residual_check, scrub
 from schema import (
