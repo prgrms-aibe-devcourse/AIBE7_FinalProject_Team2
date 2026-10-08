@@ -4,7 +4,8 @@
 여러 번 물어 투표한다. 추출 자체를 여러 번 돌리면 회차마다 요소 문구 · 개수가 달라져 같은 요소끼리 비교할 수 없다.
 
 - 기본값 = 최다표 축. 동률이면 추출기가 정한 값이 최다표 안에 있으면 그것, 아니면 축 순서(① ~ ④, 없음)상 앞의 것
-- 최다표가 과반(유효 응답의 절반 초과)이 아니면 needsReview = true → 관리자가 후검수에서 확인한다 (BE-43 · FE-16)
+- 최다표가 요청 횟수의 과반(절반 초과)이 아니면 needsReview = true → 관리자가 후검수에서 확인한다 (BE-43 · FE-16)
+  표가 갈린 경우(동률 포함)와 유효 응답이 모자라 근거가 약한 경우(예: 5회 중 1개만 유효)를 함께 잡는다
 - 결과는 보고서 factorExtras[].valueAxis · valueAxisVotes 형식이다. 적재 SQL이 value_axis · value_axis_votes로 넣는다 (BE-48)
   {"runs": 5, "counts": {"FAULT_STANDARD": 3, "NONE": 2}, "needsReview": false}
   counts는 표를 받은 축만, "어느 축에도 맞지 않음(null)" 표는 "NONE" 키로 센다. runs는 집계에 들어간 유효 응답 수다
@@ -72,15 +73,17 @@ def parse_axis_answer(text, factor_ids):
     return answer
 
 
-def aggregate_votes(answers, factor_ids, preferred=None):
+def aggregate_votes(answers, factor_ids, preferred=None, requested_runs=None):
     """유효 응답 목록 → {factorId: {"valueAxis": 축 또는 None, "valueAxisVotes": {...}}}.
 
     preferred: 추출기가 정한 축 {factorId: 축}. 동률일 때만 쓴다.
+    requested_runs: 요청한 횟수. 과반은 이 수 기준이다(없으면 유효 응답 수). 실패한 회차가 많으면 표가 모여도 확인 필요다
     """
     if not answers:
         raise AxisVoteError("집계할 응답이 없습니다")
     preferred = preferred or {}
     runs = len(answers)
+    quorum = max(runs, requested_runs or 0)  # 과반 판정 기준 (유효 응답이 모자라면 요청 횟수)
     result = {}
     for factor_id in factor_ids:
         counts = {}
@@ -94,7 +97,7 @@ def aggregate_votes(answers, factor_ids, preferred=None):
         result[factor_id] = {
             "valueAxis": None if chosen == NONE_KEY else chosen,
             "valueAxisVotes": {"runs": runs, "counts": {key: counts[key] for key in AXIS_KEYS if key in counts},
-                               "needsReview": top * 2 <= runs},
+                               "needsReview": top * 2 <= quorum},
         }
     return result
 
