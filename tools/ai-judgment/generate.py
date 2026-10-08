@@ -147,7 +147,11 @@ def save_run(model_dir, spec, case, prompt, raw_text, meta, call_error=None, set
 
 def generate_runs(case, specs, runs, batch_dir, *, temperature=None, max_tokens=DEFAULT_MAX_TOKENS,
                   timeout=DEFAULT_TIMEOUT, delay=0.0, caller=call, log=print):
-    """모델마다 runs회 생성해 기록하고, 기록 목록을 돌려준다. 파이프라인(BE-31)에서도 이 함수를 쓴다."""
+    """모델마다 runs회 생성해 기록하고, 기록 목록을 돌려준다. 파이프라인(BE-31)에서도 이 함수를 쓴다.
+
+    호출 순서는 모델을 번갈아 가는 회차 우선이다(`m1 1회, m2 1회, m1 2회 …`, BE-44). 한 모델의 분당 한도에
+    연속으로 걸리지 않고, 일 한도가 소진된 모델은 남은 회차만 건너뛴다. 모델별 기록 · 회차 번호는 그대로 모델마다 독립이다.
+    """
     for spec in specs:
         provider, _ = parse_model_spec(spec)
         if provider == "manual":
@@ -157,9 +161,12 @@ def generate_runs(case, specs, runs, batch_dir, *, temperature=None, max_tokens=
     prompt = prepare_batch(case, batch_dir)
     settings = {"temperature": temperature, "maxTokens": max_tokens}
     records = []
-    for spec in specs:
-        model_dir = Path(batch_dir) / model_slug(spec)
-        for i in range(runs):
+    exhausted = set()  # 일 한도 · 크레딧이 바닥난 모델
+    for i in range(runs):
+        for spec in specs:
+            if spec in exhausted:
+                continue
+            model_dir = Path(batch_dir) / model_slug(spec)
             if records and delay:
                 time.sleep(delay)
             try:
@@ -174,10 +181,10 @@ def generate_runs(case, specs, runs, batch_dir, *, temperature=None, max_tokens=
             records.append(record)
             log(f"[{spec}] {i + 1}/{runs} → {path.name}: {describe(record)}")
             if record["callErrorKind"] == LLMQuotaExhaustedError.kind:
-                # 일 한도 · 크레딧이 바닥났으니 남은 회차도 같은 실패로 쌓일 뿐이다. 이 모델은 여기서 멈춘다
+                # 남은 회차도 같은 실패로 쌓일 뿐이다. 이 모델만 여기서 멈추고 다른 모델은 계속한다
+                exhausted.add(spec)
                 if i + 1 < runs:
                     log(f"[{spec}] 호출 한도 소진 → 남은 {runs - i - 1}회는 호출하지 않고 건너뜁니다")
-                break
     return records
 
 

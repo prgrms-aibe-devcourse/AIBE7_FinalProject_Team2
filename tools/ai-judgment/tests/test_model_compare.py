@@ -491,6 +491,38 @@ class GenerateCompareTest(unittest.TestCase):
         self.assertEqual(len([r for r in records if r["modelSpec"] == "gemini:gem-x"]), 3)
         self.assertTrue(any("남은 1회" in line for line in logs))
 
+    def test_generate_alternates_models_by_round(self):
+        order = []
+        inner = fake_caller({"openai:gpt-x": [self.output] * 3, "gemini:gem-x": [self.output] * 3})
+
+        def caller(spec, *args, **kwargs):
+            order.append(spec)
+            return inner(spec, *args, **kwargs)
+
+        with mock.patch("time.sleep") as sleep:
+            records = generate_runs(self.case, ["openai:gpt-x", "gemini:gem-x"], 3, self.batch_dir, caller=caller,
+                                    delay=2.0, log=lambda *_: None)
+        self.assertEqual(order, ["openai:gpt-x", "gemini:gem-x"] * 3)
+        self.assertEqual([r["modelSpec"] for r in records], order)
+        self.assertEqual(sleep.call_count, 5)  # 호출 사이마다 쉰다
+        # 모델별 기록 · 회차 번호는 모델마다 독립이다
+        for spec in ("openai:gpt-x", "gemini:gem-x"):
+            self.assertEqual([r["runIndex"] for r in records if r["modelSpec"] == spec], [1, 2, 3])
+
+    def test_quota_exhausted_model_dropped_from_alternation(self):
+        order = []
+        inner = fake_caller({"openai:gpt-x": [self.output, llm.LLMQuotaExhaustedError("한도 소진")],
+                             "gemini:gem-x": [self.output] * 3})
+
+        def caller(spec, *args, **kwargs):
+            order.append(spec)
+            return inner(spec, *args, **kwargs)
+
+        with mock.patch("time.sleep"):
+            generate_runs(self.case, ["openai:gpt-x", "gemini:gem-x"], 3, self.batch_dir, caller=caller,
+                          delay=1.0, log=lambda *_: None)
+        self.assertEqual(order, ["openai:gpt-x", "gemini:gem-x", "openai:gpt-x", "gemini:gem-x", "gemini:gem-x"])
+
     def test_call_error_kind_recorded(self):
         caller = fake_caller({"openai:gpt-x": [llm.LLMOverloadedError("busy"), llm.LLMError("other")]})
         records = generate_runs(self.case, ["openai:gpt-x"], 2, self.batch_dir, caller=caller, log=lambda *_: None)
