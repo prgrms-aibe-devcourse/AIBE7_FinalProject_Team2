@@ -105,6 +105,7 @@ python3 compare.py out/runs/case --case case.json --out out/runs/case/comparison
 - 모델 ID는 공급자가 정한 정확한 ID를 그대로 쓴다. 도구에 기본 모델은 없다(모델이 자주 바뀌므로 매번 명시한다).
 - 검색 · 그라운딩 같은 도구는 붙이지 않는다. 매 회차가 독립 요청이라 이전 회차 응답이 섞이지 않는다("외부 LLM으로 생성할 때" 원칙과 같다).
 - 옵션: `--temperature`(주지 않으면 공급자 기본값. 사고 모델 중에는 받지 않는 것이 있다), `--max-tokens`(기본 16000), `--timeout`(초, 기본 300), `--delay`(요청 사이 쉬는 초, 무료 등급 분당 한도용), `--batch`(묶음 이름, 기본은 사건 파일 이름).
+- **HTTPS 인증서(BE-34)**: 인증서 검증은 항상 켜 둔다. 기본 인증서 위치에 인증서가 없으면(예: macOS python.org Python) `/etc/ssl/cert.pem` 같은 시스템 CA 묶음을 자동으로 찾아 쓴다. 그래도 `CERTIFICATE_VERIFY_FAILED`가 나면 `SSL_CERT_FILE`에 인증서 묶음 경로를 지정하거나(macOS: `/etc/ssl/cert.pem`) python.org Python의 `Install Certificates.command`를 한 번 실행한다. 인증서 오류는 다시 보내지 않고 바로 해결 방법을 안내한다. 검증을 끄는 옵션은 없다.
 - 한도 초과(429) · 서버 오류(5xx)는 최대 3번까지 자동으로 다시 보낸다. 그래도 실패하면 그 회차는 "호출 실패"로 기록하고 다음 회차로 넘어간다. API 키가 없으면 아무것도 기록하지 않고 바로 멈춘다.
 - 공급자를 추가하려면 `llm.py`에 `_call_<공급자>` 형태의 함수를 만들고 `PROVIDERS` · `API_KEY_ENVS`에 등록한다.
 
