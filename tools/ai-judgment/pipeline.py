@@ -7,11 +7,12 @@
     python3 pipeline.py run cases/my-case.pipeline.json --skip contamination
     python3 pipeline.py status cases/my-case.pipeline.json                # 단계별 상태
 
-단계: extract → contamination → generate → select → load
+단계: extract → court → contamination → generate → select → axis → load
 - extract: case-extractor로 판결문을 비식별화 · 구조화한다. 서비스 대상이 아니라고 판정되면 멈춘다(설정으로 끌 수 있음)
 - contamination: 모델마다 사전 학습 점검을 N회 자동으로 한다(기본 꺼짐). CONTAMINATED는 멈춤, SUSPECT는 진행(설정)
 - generate: 모델마다 N회 생성 · 검증한다. 검증을 통과한 회차가 없으면 최대 K회 더 생성한다
 - select: 검증을 통과한 회차 중 하나를 고른다 (consensus · first-valid · fewest-warnings · manual)
+- axis: 판단 요소의 가치관 축만 같은 모델에 N회 물어 투표한다 (BE-49). 표가 갈린 요소는 관리자 확인 필요로 표시한다
 - load: 사건(DRAFT) + AI 판결(비공개 · PENDING) 적재 SQL을 private-seed/loads/에 남기고 **로컬 DB에만** 적재한다
 사람 검수 단계는 없다. 적재한 사건 · AI 판결은 사용자에게 보이지 않고, 관리자가 나중에 검수 · 공개한다(후검수).
 
@@ -35,7 +36,8 @@ from build_prompt import InputError, build_prompt
 from case_seed_sql import DEFAULT_SOURCE_ORG, CaseSeedError, build_case_sql, resolve_sources
 from court_seed_sql import CourtSeedError, build_court_sql
 from check_contamination import DEFAULT_CRITERIA, aggregate, build_contamination_prompt, classify, criteria_with
-from common import TOOL_DIR, load_json, write_json
+from axis_vote import AxisVoteError, aggregate_votes, apply_votes, build_axis_prompt, parse_axis_answer
+from common import AXIS_PROMPT_VERSION, TOOL_DIR, load_json, write_json
 from compare import _majority, direction_table, load_runs
 from generate import RUNS_DIR, GenerateError, generate_runs, model_slug, prompt_digest
 from llm import (DEFAULT_MAX_ATTEMPTS, DEFAULT_MAX_WAIT, LLMError, LLMQuotaExhaustedError, api_key, call,
@@ -44,7 +46,7 @@ from llm import (DEFAULT_MAX_ATTEMPTS, DEFAULT_MAX_WAIT, LLMError, LLMQuotaExhau
 from to_seed_sql import NAME_MAX_LENGTH, build_sql
 from validate_output import parse_output
 
-STAGES = ("extract", "court", "contamination", "generate", "select", "load")
+STAGES = ("extract", "court", "contamination", "generate", "select", "axis", "load")
 PIPELINE_DIR = TOOL_DIR / "out" / "pipeline"
 PUBLIC_ROOT = TOOL_DIR.parent.parent  # 공개 저장소 루트
 PRIVATE_SEED_DIR = PUBLIC_ROOT / "backend" / "private-seed"
@@ -92,6 +94,11 @@ DEFAULT_CONFIG = {
             "temperature": None, "maxTokens": 16000, "timeout": 300, "delay": 0.0,
         },
         "select": {"enabled": True, "strategy": "consensus", "model": None, "run": None},
+        # 가치관 축 분류 투표 (BE-49). 같은 모델로 runs회 묻고 요소별로 표를 센다. 최다표가 과반이 아니면(동률 포함) 확인 필요.
+        # model이 null이면 generate.models의 첫 모델(free: 제외)을 쓴다(비식별화한 사건 내용이라 generate와 같은 공급자로 보낸다).
+        # 응답 형식이 틀리면 그 회차를 최대 maxRetries번 다시 묻고, 그래도 틀리면 집계에서 뺀다
+        "axis": {"enabled": True, "model": None, "runs": 5, "maxRetries": 2, "temperature": None, "maxTokens": 4000,
+                 "timeout": 120, "delay": 0.0},
         "load": {
             # court: 재판부 판결 초안이 있으면 비공개로 함께 적재한다 (BE-38)
             "enabled": True, "case": True, "court": True, "applyToDb": True,
@@ -419,6 +426,7 @@ def validate_config(config):
         errors.append(f"stages.select.strategy는 {' · '.join(SELECT_STRATEGIES)} 중 하나다")
     if select["strategy"] == "manual" and not select["run"]:
         errors.append("manual 선택은 stages.select.run에 '공급자__모델/run-003' 형식으로 회차를 적는다")
+    errors += axis_errors(config)
     if stages["load"]["db"]["mode"] not in ("docker", "psql"):
         errors.append("stages.load.db.mode는 docker · psql 중 하나다")
     retry = config["retry"]
@@ -431,6 +439,29 @@ def validate_config(config):
             errors.append(f"retry: {e}")
     if errors:
         raise PipelineError("설정 오류:\n- " + "\n- ".join(errors))
+
+
+def axis_errors(config):
+    """가치관 축 분류 투표 설정(stages.axis) 검사 (BE-49)."""
+    cfg = config["stages"]["axis"]
+    errors = []
+    model = cfg.get("model")
+    if model is not None:
+        if not isinstance(model, str) or is_free_token(model):
+            errors.append("stages.axis.model은 null 또는 '공급자:모델ID' 문자열이다 (free: 자동 선택은 쓰지 않는다)")
+        else:
+            try:
+                if parse_model_spec(model)[0] == "manual":
+                    errors.append(f"파이프라인은 API 공급자만 쓴다 (manual 불가): {model}")
+            except LLMError as e:
+                errors.append(str(e))
+    elif cfg["enabled"] and not config["stages"]["generate"]["models"]:
+        errors.append("stages.axis.model이 없으면 generate.models의 첫 모델을 쓴다. 둘 다 없으니 stages.axis.model을 넣거나 axis를 끈다")
+    for key, minimum in (("runs", 1), ("maxRetries", 0), ("maxTokens", 1), ("timeout", 1)):
+        value = cfg.get(key)
+        if not isinstance(value, int) or isinstance(value, bool) or value < minimum:
+            errors.append(f"stages.axis.{key}는 {minimum} 이상 정수다")
+    return errors
 
 
 def criteria_errors(criteria, runs):
@@ -858,6 +889,85 @@ def build_generation_report(config, state, run_record, selection):
     }
 
 
+def axis_model(config, state):
+    """가치관 축 분류 모델: stages.axis.model, 없으면 생성에 쓰는 첫 모델(free:는 지금 쓰는 무료 모델로 펼친 뒤).
+    한 모델만 쓴다(같은 모델로 runs회)."""
+    model = config["stages"]["axis"].get("model")
+    if model:
+        return model
+    return next(iter(active_models(config, state, include_kept=False)), None)
+
+
+def stage_axis(config, state, log, caller=call):
+    """판단 요소의 가치관 축만 같은 모델에 runs회 물어 투표한다 (BE-49). 결과는 load 단계가 보고서에 덮어써 적재한다.
+
+    요소가 확정된 뒤(extract 결과) 축만 묻는다. 회차마다 응답 형식을 검사하고, 틀리면 maxRetries번까지 다시 묻는다.
+    호출 한도가 바닥나면 남은 회차를 멈추고 받은 응답만 센다. 유효 응답이 하나도 없으면 멈춘다(--skip axis면 추출기 값으로 적재)."""
+    cfg = config["stages"]["axis"]
+    spec = axis_model(config, state)
+    if not spec:
+        raise PipelineError("가치관 축 분류 모델이 없습니다. stages.axis.model을 넣거나 --skip axis로 추출기 값을 씁니다")
+    case = load_json(input_file(config, state, "case"))
+    report = load_json(input_file(config, state, "report"))
+    factor_ids = [f["factorId"] for f in case["factors"]]
+    preferred = {e["factorId"]: e.get("valueAxis") for e in report.get("factorExtras", [])}
+    system, user = build_axis_prompt(case)
+    api_key(parse_model_spec(spec)[0])
+    out_dir = PIPELINE_DIR / config["name"] / "axis"
+    if out_dir.exists():
+        shutil.rmtree(out_dir)  # 이전 실행의 회차와 섞지 않는다 (투표는 이번 실행의 응답만 센다)
+    log(f"가치관 축 분류: {spec} {cfg['runs']}회 투표 (요소 {len(factor_ids)}개)")
+    answers, failures, attempts, stopped = [], 0, 0, False
+    for run in range(1, cfg["runs"] + 1):
+        for retry in range(cfg["maxRetries"] + 1):
+            if attempts and cfg["delay"]:
+                time.sleep(cfg["delay"])
+            attempts += 1
+            record = {"modelSpec": spec, "run": run, "attempt": retry + 1, "createdAt": _now()}
+            try:
+                result = caller(spec, system, user, temperature=cfg["temperature"], max_tokens=cfg["maxTokens"],
+                                timeout=cfg["timeout"])
+                record.update(meta=result.meta() if hasattr(result, "meta") else {}, rawText=result.text)
+                answer = parse_axis_answer(result.text, factor_ids)
+            except LLMQuotaExhaustedError as e:
+                record["error"] = f"호출 한도 소진: {e}"
+                stopped = True
+            except LLMError as e:
+                record["error"] = f"호출 실패: {e}"
+            except AxisVoteError as e:
+                record["error"] = f"형식 오류: {e}"
+            else:
+                record["answer"] = {str(k): v for k, v in answer.items()}
+                answers.append(answer)
+            write_json(out_dir / f"run-{run:03d}-{retry + 1}.json", record)
+            if "error" not in record or stopped:
+                break
+            failures += 1
+            log(f"[{run}회차] {record['error'].splitlines()[0]}" + (" — 다시 묻습니다" if retry < cfg["maxRetries"] else " — 집계에서 뺍니다"))
+        if stopped:
+            log(f"호출 한도 소진 → 남은 회차는 호출하지 않습니다 (유효 응답 {len(answers)}개로 집계)")
+            break
+    if not answers:
+        raise PipelineError("가치관 축 분류에서 유효한 응답을 받지 못했습니다. 설정을 확인하거나 --skip axis로 추출기 값을 씁니다",
+                            {"model": spec, "attempts": attempts})
+    votes = aggregate_votes(answers, factor_ids, preferred)
+    factors = [{"factorId": i, **votes[i]} for i in factor_ids]
+    votes_file = out_dir / "votes.json"
+    write_json(votes_file, {"promptVersion": AXIS_PROMPT_VERSION, "model": spec, "runs": len(answers),
+                            "requestedRuns": cfg["runs"], "createdAt": _now(), "factors": factors})
+    needs_review = [f["factorId"] for f in factors if f["valueAxisVotes"]["needsReview"]]
+    changed = [f["factorId"] for f in factors if f["valueAxis"] != preferred.get(f["factorId"])]
+    for f in factors:
+        if f["factorId"] in needs_review:
+            counts = " · ".join(f"{k} {v}" for k, v in f["valueAxisVotes"]["counts"].items())
+            log(f"⚠ 요소 {f['factorId']}: {counts} → 관리자 확인 필요 (기본값 {f['valueAxis'] or '없음'})")
+    if len(answers) < cfg["runs"]:
+        log(f"⚠ 유효 응답 {len(answers)}/{cfg['runs']}개로 집계했습니다")
+    log(f"결과: 확인 필요 {len(needs_review)}개 · 추출기 값과 다름 {len(changed)}개 (요소 {len(factor_ids)}개)")
+    return {"votesFile": str(votes_file), "model": spec, "runs": len(answers), "requestedRuns": cfg["runs"],
+            "attempts": attempts, "failures": failures, "needsReview": needs_review, "changedFromExtract": changed}
+
+
 def stage_load(config, state, log, apply=None):
     cfg = config["stages"]["load"]
     selection = stage_output(state, "select")
@@ -874,6 +984,11 @@ def stage_load(config, state, log, apply=None):
     parts = []
     if cfg["case"]:
         report = load_json(input_file(config, state, "report"))
+        axis = stage_output(state, "axis")
+        if axis.get("votesFile"):
+            # 가치관 축 투표 결과(BE-49)를 추출기 값 위에 덮어쓴다. axis를 건너뛰었으면 추출기 값 그대로
+            report = apply_votes(report, load_json(axis["votesFile"])["factors"])
+            log(f"가치관 축: 투표 결과 사용 ({axis['model']} {axis['runs']}회, 확인 필요 {len(axis['needsReview'])}개)")
         source = load_json(input_file(config, state, "source"))
         overrides = [{k: v for k, v in s.items() if k != "path"} for s in config["sources"]]
         try:
@@ -1019,6 +1134,7 @@ STAGE_FUNCTIONS = {
     "contamination": stage_contamination,
     "generate": stage_generate,
     "select": stage_select,
+    "axis": stage_axis,
     "load": stage_load,
 }
 
@@ -1061,6 +1177,9 @@ def run_pipeline(config, start=None, until=None, skip=(), rerun=False, log=print
         log(f"외부 전송: 재판부 판결 초안 단계에서 마스킹한 판결문이 {providers_text(court_model(config))}로 전송됩니다")
     if {"contamination", "generate"} & set(steps):
         log(f"외부 전송: 비식별화한 사건 내용이 {', '.join(providers)}로 전송됩니다")
+    axis_spec = axis_model(config, state) if "axis" in steps else None
+    if axis_spec:
+        log(f"외부 전송: 가치관 축 분류 단계에서 비식별화한 사건 개요 · 판단 요소가 {providers_text(axis_spec)}로 전송됩니다")
     for notice in free_tier_notices(config, steps):
         log(notice)
     for stage in steps:
@@ -1101,6 +1220,10 @@ def print_status(config, log=print):
     selection = stage_output(state, "select")
     if selection:
         log(f"선택된 회차: {selection['modelSpec']} run-{selection['runIndex']:03d} ({selection['reason']})")
+    axis = stage_output(state, "axis")
+    if axis:
+        review = ", ".join(map(str, axis["needsReview"])) or "없음"
+        log(f"가치관 축: {axis['model']} {axis['runs']}/{axis['requestedRuns']}회 투표 · 관리자 확인 필요 요소 {review}")
     load = stage_output(state, "load")
     if load:
         log(f"적재 SQL: {load['sqlFile']} · DB 적재: {'예' if load['applied'] else '아니오'}")
