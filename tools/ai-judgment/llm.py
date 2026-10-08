@@ -165,14 +165,7 @@ def free_tier_models():
     '무료 등급이 있다'는 뜻이지 지금 키가 무료라는 뜻이 아니다 (결제를 연결한 프로젝트의 키는 같은 모델도 유료).
     그래서 실제 판결문을 보내는 단계의 안내 · 한도 대응 안내에만 쓰고, 호출을 막는 데는 쓰지 않는다.
     """
-    try:
-        data = json.loads(FREE_MODELS_FILE.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return set()
-    if not isinstance(data, dict):
-        return set()
-    return {f"{provider}:{model}" for provider, entry in data.items() if isinstance(entry, dict)
-            and isinstance(entry.get("models"), list) for model in entry["models"] if isinstance(model, str)}
+    return set(free_tier_model_list())  # 파싱 규칙은 free_tier_model_list 한 곳에 둔다
 
 
 def free_tier_model_list():

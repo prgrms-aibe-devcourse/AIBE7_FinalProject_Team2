@@ -72,7 +72,8 @@ class ModelUnavailableError(ExtractError):
         self.skipped = []
 
 
-KIND_LABELS = {"overloaded": "과부하", "rate_limit": "분당 한도", "daily_quota": "일 한도 · 크레딧 소진"}
+# rate_limit은 분당 한도로 단정하지 않는다: Claude의 429(rate_limit_error)는 요청률 · 사용량 · 지출 한도를 모두 가리킬 수 있다
+KIND_LABELS = {"overloaded": "과부하", "rate_limit": "요청 한도(429)", "daily_quota": "일 한도 · 크레딧 소진"}
 
 
 def model_chain(model):

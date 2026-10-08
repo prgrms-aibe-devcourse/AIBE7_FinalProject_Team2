@@ -719,6 +719,19 @@ class OtherProviderTest(unittest.TestCase):
         self.assertEqual(ctx.exception.model, "b")  # 실제로 실패한 모델
         self.assertEqual([(f["model"], f["kind"]) for f in ctx.exception.skipped], [("a", "overloaded")])
 
+    def test_runWithFallback_rateLimitLabel_doesNotClaimPerMinute(self):
+        logs = []
+
+        def attempt(spec):
+            if spec == "a":
+                raise ModelUnavailableError("429 rate_limit_error", "rate_limit")
+            return "ok"
+
+        result, used, skipped = run_with_fallback(["a", "b"], attempt, log=logs.append)
+        self.assertEqual((result, used), ("ok", "b"))
+        self.assertIn("요청 한도(429)", logs[0])  # Claude 429는 분당 한도 외에 사용량 · 지출 한도일 수 있다
+        self.assertNotIn("분당", logs[0])
+
     def test_runWithFallback_singleModel_keepsOriginalError(self):
         cause = RuntimeError("원래 원인")
         error = ModelUnavailableError("한도", "rate_limit")

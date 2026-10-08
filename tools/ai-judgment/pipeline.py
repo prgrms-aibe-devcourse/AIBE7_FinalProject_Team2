@@ -454,7 +454,10 @@ def active_models(config, state, include_kept=True):
 
     include_kept: 일 한도로 막혀 다른 모델로 대체됐지만 이미 끝낸 회차가 있는 모델(무료 모델 자동 사용)도 포함한다
     (선택 후보용, 새로 호출하지는 않는다)."""
-    excluded = set(stage_output(state, "contamination").get("excluded") or [])
+    contamination = stage_output(state, "contamination")
+    excluded = set(contamination.get("excluded") or [])
+    # 점검 중 일 한도로 다른 모델에 자리를 내준 모델은 점검을 다 받지 못했으므로 생성에 쓰지 않는다 (목록이 어긋나도 방어)
+    excluded |= {spec for spec, result in (contamination.get("results") or {}).items() if result.get("replacedBy")}
     models = [spec for spec in expand_models(state, config["stages"]["generate"]["models"]) if spec not in excluded]
     if include_kept:
         models += [spec for spec in (state.get("freeModels") or {}).get("kept", [])
@@ -608,6 +611,10 @@ def contamination_verdicts(config, models, categories, replaced, log):
         log(f"[{spec}] {final} — {reason} {counts} (응답 {len(answered)}/{cfg['runs']})")
         action = {"CONTAMINATED": cfg["onContaminated"], "SUSPECT": cfg["onSuspect"],
                   "INSUFFICIENT": cfg["onInsufficient"]}.get(final, "continue")
+        if action == "stop" and spec in replaced.values():
+            # 자동으로 자리를 채운 모델 때문에 파이프라인 전체를 멈추지 않는다. 그 모델만 제외한다 (BE-45)
+            log(f"[{spec}] 자동으로 들어온 모델이라 멈추지 않고 제외합니다")
+            action = "exclude"
         if action == "exclude":
             excluded.append(spec)
         elif action == "stop":
@@ -639,11 +646,13 @@ def vet_replacement(config, state, spec, log, caller):
         return True
     models, categories, replaced = contamination_runs(config, state, [spec], log, caller)
     results, excluded, stop_reasons = contamination_verdicts(config, models, categories, replaced, log)
+    if stop_reasons:
+        # 설정이 stop이어도 자동으로 들어올 후보 때문에 생성 도중 파이프라인 전체를 멈추지 않는다. 그 후보만 제외하고 다음 대기 모델을 본다
+        log(f"[{spec}] 대체 후보가 점검에서 걸렸습니다 ({', '.join(stop_reasons)}) — 멈추지 않고 제외합니다")
+        excluded = excluded + [spec]
     outputs = entry.setdefault("outputs", {})
     outputs.setdefault("results", {}).update(results)
     outputs["excluded"] = list(outputs.get("excluded") or []) + excluded
-    if stop_reasons:
-        raise PipelineError("대체 모델 사전 학습 점검에서 멈춤: " + ", ".join(stop_reasons))
     return spec not in excluded
 
 
@@ -652,7 +661,7 @@ def stage_generate(config, state, log, caller=call):
     case = load_json(input_file(config, state, "case"))
     batch_dir = batch_dir_for(config, case)
     options = {"temperature": cfg["temperature"], "max_tokens": cfg["maxTokens"], "timeout": cfg["timeout"],
-               "delay": cfg["delay"], "caller": caller, "log": log,
+               "delay": cfg["delay"], "caller": caller, "log": log, "replacement_runs": cfg["runs"],
                "on_exhausted": lambda spec: replace_exhausted(
                    state, spec, "generate", log, vet=lambda new: vet_replacement(config, state, new, log, caller))}
     models = active_models(config, state, include_kept=False)
@@ -684,8 +693,10 @@ def stage_generate(config, state, log, caller=call):
             if cfg["delay"]:  # 앞 호출과 재생성 첫 호출 사이도 간격을 둔다
                 time.sleep(cfg["delay"])
             collect(generate_runs(case, pending, 1, batch_dir, **options))
-    except (GenerateError, LLMError) as e:
-        raise PipelineError(f"생성 실패: {e}", {"batchDir": str(batch_dir), "models": summarize()})
+    except (GenerateError, LLMError, PipelineError) as e:
+        # 대체 모델 점검 중 오류(PipelineError)도 그때까지의 기록을 요약에 남긴다 (회차 파일은 이미 디스크에 있다)
+        message = e.args[0] if isinstance(e, PipelineError) else e
+        raise PipelineError(f"생성 실패: {message}", {"batchDir": str(batch_dir), "models": summarize()})
     summary = summarize()
     outputs = {"batchDir": str(batch_dir), "models": summary}
     fm = state.get("freeModels")
@@ -972,7 +983,7 @@ def run_pipeline(config, start=None, until=None, skip=(), rerun=False, log=print
         log("돌릴 단계가 없습니다 (모두 끝났거나 꺼짐). 다시 돌리려면 --from <단계>")
         return state
     if "contamination" not in steps:  # 점검 단계는 시작할 때 스스로 무료 모델 목록을 처음부터 펼친다
-        resolve_free_models(config, state, log, fresh=rerun or start in ("contamination", "generate"))
+        resolve_free_models(config, state, log, fresh=rerun or start == "contamination")
     providers = sorted({free_token_provider(m) if is_free_token(m) else parse_model_spec(m)[0]
                         for m in config["stages"]["generate"]["models"] + (config["stages"]["contamination"]["models"] or [])})
     log(f"단계: {' → '.join(steps)}")

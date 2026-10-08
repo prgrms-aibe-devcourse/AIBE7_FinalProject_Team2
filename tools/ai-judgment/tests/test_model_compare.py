@@ -560,6 +560,17 @@ class GenerateCompareTest(unittest.TestCase):
         self.assertEqual(order[:4], ["openai:gpt-x", "gemini:gem-x", "openai:gpt-x", "gemini:gem-x"])  # 교차 순서 유지
         self.assertEqual([r["callErrorKind"] for r in records if r["modelSpec"] == "openai:gpt-x"], [None, "daily_quota"])
 
+    def test_replacement_runs_overrides_runs_for_replacement_only(self):
+        inner = fake_caller({"openai:gpt-x": [llm.LLMQuotaExhaustedError("한도 소진")], "gemini:gem-y": [self.output] * 3})
+
+        def caller(spec, *args, **kwargs):
+            return inner(spec, *args, **kwargs)
+
+        records = generate_runs(self.case, ["openai:gpt-x"], 1, self.batch_dir, caller=caller, log=lambda *_: None,
+                                on_exhausted=lambda spec: "gemini:gem-y", replacement_runs=3)
+        # runs=1로 불러도(재생성처럼) 새 모델은 정해진 3회를 만든다
+        self.assertEqual([r["modelSpec"] for r in records], ["openai:gpt-x"] + ["gemini:gem-y"] * 3)
+
     def test_on_exhausted_none_or_duplicate_adds_nothing(self):
         for replacement in (None, "openai:gpt-x"):
             caller = fake_caller({"openai:gpt-x": [llm.LLMQuotaExhaustedError("한도 소진")]})

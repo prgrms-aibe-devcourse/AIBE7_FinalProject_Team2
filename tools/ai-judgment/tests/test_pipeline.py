@@ -929,6 +929,80 @@ class PipelineTest(unittest.TestCase):
         self.assertNotIn(("gemini:g3", True), self.calls)  # 점검에서 걸린 모델은 생성하지 않는다
         self.assertIn("gemini:g3", state["stages"]["contamination"]["outputs"]["excluded"])
 
+    def test_free_models_from_generate_keeps_list_and_never_revives_replaced_model(self):
+        config = self.free_config(max_models=2, contamination={})
+        quota = llm.LLMQuotaExhaustedError("일 한도")
+        answers = {"contamination:gemini:g1": [quota], "contamination:gemini:g2": [self.CLEAN] * 2,
+                   "contamination:gemini:g3": [self.CLEAN] * 2,
+                   "gemini:g2": [self.output] * 2, "gemini:g3": [self.output] * 2}
+        state = self.run_with(config, answers)
+        self.assertEqual(state["freeModels"]["active"], ["gemini:g3", "gemini:g2"])
+        # --from generate: 점검을 다 받지 못한 g1이 되살아나면 안 된다 (목록 유지, 점검을 통과한 g3로 생성)
+        again = {"gemini:g2": [self.output] * 2, "gemini:g3": [self.output] * 2}
+        state = self.run_with(config, again, caller=self.recording_caller(again), start="generate")
+        self.assertEqual(state["freeModels"]["active"], ["gemini:g3", "gemini:g2"])
+        self.assertEqual({spec for spec, _ in self.calls}, {"gemini:g2", "gemini:g3"})
+        # --from contamination: 처음부터 다시 고른다
+        fresh = {"contamination:gemini:g1": [self.CLEAN] * 2, "contamination:gemini:g2": [self.CLEAN] * 2,
+                 "gemini:g1": [self.output] * 2, "gemini:g2": [self.output] * 2}
+        state = self.run_with(config, fresh, start="contamination")
+        self.assertEqual(state["freeModels"]["active"], ["gemini:g1", "gemini:g2"])
+
+    def test_free_models_active_models_drops_models_replaced_in_contamination(self):
+        config = self.free_config(max_models=2)
+        state = {"stages": {"contamination": {"status": "done", "outputs": {
+            "excluded": [], "results": {"gemini:g1": {"verdict": "INSUFFICIENT", "replacedBy": "gemini:g3"}}}}},
+            "freeModels": {"active": ["gemini:g1", "gemini:g2"], "reserve": [], "kept": [], "replaced": [], "skipped": []}}
+        self.assertEqual(pipeline.active_models(config, state), ["gemini:g2"])  # 목록이 어긋나도 점검을 다 못 받은 모델은 뺀다
+
+    def test_free_models_regeneration_replacement_runs_full_count(self):
+        config = self.free_config(max_models=2, runs=2)
+        config["stages"]["generate"]["maxRetries"] = 1
+        quota = llm.LLMQuotaExhaustedError("일 한도")
+        answers = {"gemini:g1": ["x", "x", quota],  # 검증 통과 회차가 없어 재생성 → 재생성 중 소진
+                   "gemini:g2": [self.output] * 2, "gemini:g3": [self.output] * 2}
+        state = self.run_with(config, answers)
+        models = state["stages"]["generate"]["outputs"]["models"]
+        self.assertEqual((models["gemini:g3"]["runs"], models["gemini:g3"]["valid"]), (2, 2))  # 1회가 아니라 runs회
+
+    def test_free_models_generate_failure_keeps_summary(self):
+        config = self.free_config(max_models=2)
+        quota = llm.LLMQuotaExhaustedError("일 한도")
+        answers = {"gemini:g1": [self.output, quota], "gemini:g2": [self.output] * 2}
+        with mock.patch.object(pipeline, "vet_replacement", side_effect=pipeline.PipelineError("대체 모델 점검 오류")):
+            with self.assertRaises(pipeline.PipelineError) as ctx:
+                self.run_with(config, answers)
+        self.assertIn("대체 모델 점검 오류", str(ctx.exception))
+        entry = pipeline.load_state(config)["stages"]["generate"]
+        self.assertEqual(entry["status"], "failed")
+        self.assertEqual(set(entry["outputs"]["models"]), {"gemini:g1", "gemini:g2"})  # 그때까지의 요약이 남는다
+        self.assertIn("batchDir", entry["outputs"])
+
+    def test_free_models_vet_stop_setting_skips_candidate_instead_of_halting(self):
+        known = {"knowsCase": True, "note": "기사로 봤다"}
+        config = self.free_config(max_models=2, contamination={})  # onContaminated 기본값은 stop
+        quota = llm.LLMQuotaExhaustedError("일 한도")
+        answers = {"contamination:gemini:g1": [self.CLEAN] * 2, "contamination:gemini:g2": [self.CLEAN] * 2,
+                   "contamination:gemini:g3": [known] * 2, "contamination:gemini:g4": [self.CLEAN] * 2,
+                   "gemini:g1": [self.output, quota], "gemini:g2": [self.output] * 2, "gemini:g4": [self.output] * 2}
+        state = self.run_with(config, answers)  # 멈추지 않고 g3를 제외한 뒤 g4가 들어온다
+        fm = state["freeModels"]
+        self.assertEqual([s["model"] for s in fm["skipped"]], ["gemini:g3"])
+        self.assertEqual(fm["replaced"], [{"model": "gemini:g1", "by": "gemini:g4", "stage": "generate"}])
+        self.assertTrue(any("멈추지 않고 제외" in line for line in self.logs))
+
+    def test_free_models_contamination_stage_replacement_stop_setting_excludes(self):
+        known = {"knowsCase": True, "note": "기사로 봤다"}
+        config = self.free_config(max_models=2, contamination={})
+        quota = llm.LLMQuotaExhaustedError("일 한도")
+        answers = {"contamination:gemini:g1": [quota], "contamination:gemini:g2": [self.CLEAN] * 2,
+                   "contamination:gemini:g3": [known] * 2,  # 자동으로 들어온 g3가 걸려도 파이프라인은 멈추지 않는다
+                   "gemini:g2": [self.output] * 2}
+        state = self.run_with(config, answers)
+        outputs = state["stages"]["contamination"]["outputs"]
+        self.assertIn("gemini:g3", outputs["excluded"])
+        self.assertEqual(list(state["stages"]["generate"]["outputs"]["models"]), ["gemini:g2"])
+
     def test_free_models_no_reserve_continues_without_replacement(self):
         config = self.free_config(max_models=4)  # 풀 4개를 모두 쓰므로 대기가 없다
         quota = llm.LLMQuotaExhaustedError("일 한도")
