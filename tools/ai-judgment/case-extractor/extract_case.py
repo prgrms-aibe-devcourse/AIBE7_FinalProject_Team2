@@ -26,6 +26,7 @@ from schema import (
     check_output,
     court_evaluation_check,
     sentence_leak_check,
+    validate_against_schema,
     visible_texts,
 )
 
@@ -35,11 +36,19 @@ sys.path.insert(0, str(PARENT_DIR))
 
 from build_prompt import InputError, check_case_input  # noqa: E402
 from common import find_forbidden_keys, write_json  # noqa: E402
+from llm import LLMError, api_key, call as llm_call, model_provider, parse_model_spec  # noqa: E402
+from validate_output import parse_output  # noqa: E402
 
 DEFAULT_MODEL = "claude-opus-5-5"
 DEFAULT_EFFORT = "high"
 DEFAULT_OUT_DIR = PARENT_DIR / "cases"  # tools/ai-judgment/.gitignore가 막는 위치
 MAX_TOKENS = 64000
+NON_CLAUDE_MAX_TOKENS = 32000  # Claude 외 공급자의 기본 출력 상한 (공급자마다 모델별 한도가 달라 더 작게 잡는다)
+SCHEMA_RETRIES = 2  # Claude 외 공급자가 JSON · 스키마를 어겼을 때 다시 요청하는 횟수
+TRUNCATED_REASONS = ("length", "max_tokens", "MAX_TOKENS")
+# 정상 종료 사유. 이 밖의 사유(Gemini SAFETY · RECITATION, OpenAI content_filter 등)는 차단 · 거절이라 다시 보내도
+# 같으므로 재시도하지 않는다 (판결문을 같은 공급자에게 거듭 보내지 않게)
+NORMAL_STOP_REASONS = (None, "stop", "STOP", "end_turn", "stop_sequence")
 
 NAME_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 TXT_ENCODINGS = ("utf-8-sig", "cp949", "euc-kr")
@@ -108,6 +117,70 @@ def build_messages(masked_text):
     system = (EXTRACTOR_DIR / "prompts" / "extract_system.md").read_text(encoding="utf-8")
     user = "다음 판결문을 가공해 줘.\n\n<judgment>\n" + masked_text + "\n</judgment>"
     return system, user
+
+
+def split_model(model):
+    """모델 지정 → (공급자, 모델 ID). 공급자가 없는 이름(`claude-opus-5-5`)과 `anthropic:`는 Claude SDK 경로(claude)다."""
+    try:
+        provider = model_provider(model)  # 공급자 규칙은 llm.model_provider 하나에서 정한다
+        name = parse_model_spec(model)[1] if ":" in model else model
+    except LLMError as e:
+        raise ExtractError(str(e)) from e
+    if provider == "manual":
+        raise ExtractError("비식별화는 API 공급자만 씁니다 (manual 불가)")
+    return ("claude" if provider == "anthropic" else provider), name
+
+
+def schema_instruction():
+    """구조화 출력을 강제할 수 없는 공급자에게 보낼 스키마 안내 (사용자 메시지 끝에 붙인다)."""
+    return ("\n\n---\n응답은 아래 JSON 스키마를 따르는 **JSON 객체 하나만** 출력한다. 코드 블록 표시나 설명 문장을 붙이지 않는다. "
+            "모든 필드를 채우고, 스키마에 없는 필드는 넣지 않는다.\n\n<json_schema>\n"
+            + json.dumps(OUTPUT_SCHEMA, ensure_ascii=False) + "\n</json_schema>")
+
+
+def call_llm(system, user, model, effort, max_tokens=None, caller=llm_call):
+    """Claude 외 공급자(OpenAI · Gemini) 호출. (응답 JSON, 실제 응답한 모델 이름)을 돌려준다 (BE-35).
+
+    스키마를 강제하는 기능이 없으므로 user에 스키마 안내(`schema_instruction`)가 이미 붙어 있어야 한다(run이 붙인다).
+    응답이 JSON이 아니거나 스키마와 다르면 오류 내용을 알려 다시 요청한다(최대 SCHEMA_RETRIES회).
+    effort는 Claude 전용이라 쓰지 않는다. caller는 테스트에서 가짜 호출을 넣는 자리다.
+    """
+    spec = model
+    request = user
+    last_error = None
+    for attempt in range(1 + SCHEMA_RETRIES):
+        message = request if last_error is None else (
+            request + f"\n\n(이전 응답이 형식 오류였습니다: {last_error}. 형식을 지켜 다시 출력하세요)")
+        try:
+            result = caller(spec, system, message, max_tokens=max_tokens or NON_CLAUDE_MAX_TOKENS, json_output=True)
+        except LLMError as e:
+            raise ExtractError(str(e)) from e
+        if result.stop_reason in TRUNCATED_REASONS:
+            raise ExtractError(f"출력이 최대 길이({max_tokens or NON_CLAUDE_MAX_TOKENS} 토큰)에서 잘렸습니다. "
+                               "--max-tokens를 늘리거나 판결문을 나눠 넣으세요")
+        if result.stop_reason not in NORMAL_STOP_REASONS:
+            raise ExtractError(f"응답이 비정상 종료되었습니다 (사유: {result.stop_reason}). 공급자의 안전 필터 · 인용 차단 등이면 "
+                               "다시 보내도 같으므로 재시도하지 않습니다. 다른 모델을 쓰세요")
+        try:
+            output = parse_output(result.text)
+        except (json.JSONDecodeError, ValueError) as e:
+            last_error = f"JSON으로 읽을 수 없음: {e}"
+            continue
+        errors = validate_against_schema(output, OUTPUT_SCHEMA)
+        if errors:
+            last_error = "; ".join(errors[:5])
+            continue
+        return output, result.served_model
+    raise ExtractError(f"{spec}: 응답이 {1 + SCHEMA_RETRIES}번 모두 형식에 맞지 않았습니다 ({last_error}). "
+                       "다른 모델을 쓰거나 Claude(스키마 강제)를 쓰세요")
+
+
+def call_model(system, user, model, effort, max_tokens=None):
+    """모델 지정에 맞는 호출을 고른다. `claude-…` · `anthropic:…`는 Claude SDK(구조화 출력), `openai:…` · `gemini:…`는 call_llm."""
+    provider, name = split_model(model)
+    if provider == "claude":
+        return call_claude(system, user, name, effort)
+    return call_llm(system, user, f"{provider}:{name}", effort, max_tokens)
 
 
 def call_claude(system, user, model, effort):
@@ -201,14 +274,17 @@ def process_output(output):
 
 
 def run(input_path, name, out_dir=DEFAULT_OUT_DIR, model=DEFAULT_MODEL, effort=DEFAULT_EFFORT,
-        dry_run=False, call=call_claude):
+        dry_run=False, call=None, max_tokens=None):
     """전체 흐름. 만든 파일 경로 목록을 돌려준다. 검사 오류가 있으면 ExtractError(보고서는 남김)."""
     if not NAME_PATTERN.match(name):
         raise ExtractError("--name은 영어 소문자 · 숫자 · 하이픈만 씁니다 (사건을 특정할 수 없는 이름, 예: long-marriage-conflict)")
     out_dir = Path(out_dir)
+    provider, _ = split_model(model)  # 모델 지정이 잘못됐으면 판결문을 읽기 전에 알린다
     judgments = read_judgments(input_path)
     masked_text, mask_counts = premask(join_judgments(judgments))
     system, user = build_messages(masked_text)
+    if provider != "claude":
+        user += schema_instruction()  # 스키마를 강제할 수 없는 공급자에게는 스키마를 프롬프트로 보낸다 (dry-run 파일에도 그대로)
 
     if dry_run:
         path = out_dir / f"{name}.request.md"
@@ -216,6 +292,13 @@ def run(input_path, name, out_dir=DEFAULT_OUT_DIR, model=DEFAULT_MODEL, effort=D
         path.write_text(f"# [SYSTEM]\n\n{system}\n\n# [USER]\n\n{user}\n", encoding="utf-8")
         return [path]
 
+    if call is None:
+        if provider != "claude":
+            try:
+                api_key(provider)
+            except LLMError as e:
+                raise ExtractError(str(e)) from e
+        call = lambda s, u, m, e: call_model(s, u, m, e, max_tokens)  # noqa: E731
     output, served_model = call(system, user, model, effort)
     try:
         case_input, court, errors, warnings = process_output(output)
@@ -225,6 +308,7 @@ def run(input_path, name, out_dir=DEFAULT_OUT_DIR, model=DEFAULT_MODEL, effort=D
     report = {
         "promptVersion": EXTRACT_PROMPT_VERSION,
         "model": served_model,
+        "requestedModel": model,
         "status": "ERROR" if errors else "NEEDS_REVIEW",
         "premasked": mask_counts,
         "deidentifiedItems": output.get("deidentifiedItems", []),
@@ -259,17 +343,33 @@ def run(input_path, name, out_dir=DEFAULT_OUT_DIR, model=DEFAULT_MODEL, effort=D
     return [case_path, court_path, report_path, source_path]
 
 
+def positive_int(text):
+    """--max-tokens: 양의 정수만 받는다 (0이면 기본값으로 조용히 바뀌는 것을 막는다)."""
+    try:
+        value = int(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"양의 정수여야 합니다: {text!r}") from None
+    if value <= 0:
+        raise argparse.ArgumentTypeError(f"양의 정수여야 합니다: {text!r}")
+    return value
+
+
 def main():
     parser = argparse.ArgumentParser(description="판결문을 비식별화해 사건 입력 JSON(case.json)으로 가공한다")
     parser.add_argument("input", nargs="+", help="판결문 파일 (.pdf 또는 .txt). 1심 · 항소심처럼 여러 개를 함께 넣을 수 있다")
     parser.add_argument("--name", required=True, help="출력 파일 이름 (영어 소문자 · 하이픈, 사건을 특정할 수 없게)")
     parser.add_argument("--out-dir", default=str(DEFAULT_OUT_DIR), help=f"출력 폴더 (기본: {DEFAULT_OUT_DIR})")
-    parser.add_argument("--model", default=DEFAULT_MODEL, help=f"Claude 모델 (기본: {DEFAULT_MODEL})")
-    parser.add_argument("--effort", default=DEFAULT_EFFORT, choices=("low", "medium", "high", "xhigh", "max"))
+    parser.add_argument("--model", default=DEFAULT_MODEL,
+                        help=f"모델 (기본: {DEFAULT_MODEL}). Claude는 모델 ID(또는 anthropic:모델 ID), 다른 공급자는 "
+                             "'openai:모델ID' · 'gemini:모델ID' (키는 환경변수)")
+    parser.add_argument("--effort", default=DEFAULT_EFFORT, choices=("low", "medium", "high", "xhigh", "max"),
+                        help="Claude 전용 (다른 공급자는 무시)")
+    parser.add_argument("--max-tokens", type=positive_int, help=f"Claude 외 공급자의 출력 상한 (기본 {NON_CLAUDE_MAX_TOKENS})")
     parser.add_argument("--dry-run", action="store_true", help="API를 호출하지 않고, 보낼 내용만 파일로 저장한다")
     args = parser.parse_args()
     try:
-        paths = run(args.input, args.name, args.out_dir, args.model, args.effort, args.dry_run)
+        paths = run(args.input, args.name, args.out_dir, args.model, args.effort, args.dry_run,
+                    max_tokens=args.max_tokens)
     except ExtractError as e:
         print(f"[오류] {e}", file=sys.stderr)
         return 1

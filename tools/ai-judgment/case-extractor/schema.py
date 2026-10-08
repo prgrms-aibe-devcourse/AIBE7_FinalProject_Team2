@@ -14,7 +14,7 @@ sys.path.insert(0, str(PARENT_DIR))
 from common import NO_TERM_PENALTIES, PENALTY_TYPES, REDUCIBLE_TO, format_months, format_won  # noqa: E402
 
 # 프롬프트나 스키마를 고치면 올린다. 보고서(report.json)에 기록된다.
-EXTRACT_PROMPT_VERSION = "extract-v2"
+EXTRACT_PROMPT_VERSION = "extract-v3"  # v3: Claude 외 공급자 요청에 JSON 스키마 안내를 붙임 (BE-35)
 
 CRIME_TYPES = ("MURDER", "FRAUD", "INJURY")  # ERD legal_case.crime_type
 REVEAL_STAGES = ("OVERVIEW", "DETAIL", "ARGUMENT", "LAW")  # ERD factor.reveal_stage
@@ -109,6 +109,62 @@ TEXT_SECTIONS = [
     ("prosecutor", "ARGUMENT", "PROSECUTOR", "검사 측 (불리한 사정)"),
     ("defense", "ARGUMENT", "DEFENSE", "피고인 · 변호인 측 (유리한 사정 · 변호인 주장)"),
 ]
+
+
+def validate_against_schema(value, schema, path="$"):
+    """모델 응답이 OUTPUT_SCHEMA를 따르는지 검사해 오류 목록을 돌려준다 (BE-35).
+
+    Claude는 구조화 출력으로 스키마를 강제하지만 다른 공급자는 그렇지 않아, 타입이 어긋난 값(문자열이어야 할 곳의 배열 등)이
+    조용히 통과하지 않게 직접 검사한다. 이 스키마가 쓰는 부분(type · enum · properties · required ·
+    additionalProperties · items · anyOf)만 지원한다.
+    오류에는 스키마 경로와 위반 종류만 남기고 **응답 값 · 모델이 만든 항목 이름은 넣지 않는다**. 오류는 재요청 메시지 ·
+    ExtractError · 파이프라인 state.json으로 이어지는데, 모델이 판결문 속 실명 등을 엉뚱한 칸에 넣었을 때 그대로 남지 않게 한다.
+    """
+    if "anyOf" in schema:
+        if any(not validate_against_schema(value, option, path) for option in schema["anyOf"]):
+            return []
+        return [f"{path}: 허용되는 형식이 아닙니다"]
+    errors = []
+    types = schema.get("type")
+    if types is not None:
+        types = [types] if isinstance(types, str) else types
+        if not any(_matches_type(value, t) for t in types):
+            return [f"{path}: {'/'.join(types)} 형식이어야 합니다 (받은 값: {type(value).__name__})"]
+    if "enum" in schema and value not in schema["enum"]:
+        errors.append(f"{path}: 허용되는 값이 아닙니다")
+    if isinstance(value, dict):
+        for key in schema.get("required", []):
+            if key not in value:
+                errors.append(f"{path}.{key}: 필수 항목이 없습니다")
+        properties = schema.get("properties", {})
+        extra = 0
+        for key, child in value.items():
+            if key in properties:
+                errors += validate_against_schema(child, properties[key], f"{path}.{key}")
+            elif schema.get("additionalProperties") is False:
+                extra += 1
+        if extra:
+            errors.append(f"{path}: 스키마에 없는 항목이 {extra}개 있습니다")
+    if isinstance(value, list) and "items" in schema:
+        for i, child in enumerate(value):
+            errors += validate_against_schema(child, schema["items"], f"{path}[{i}]")
+    return errors
+
+
+def _matches_type(value, name):
+    if name == "string":
+        return isinstance(value, str)
+    if name == "integer":
+        return isinstance(value, int) and not isinstance(value, bool)
+    if name == "boolean":
+        return isinstance(value, bool)
+    if name == "array":
+        return isinstance(value, list)
+    if name == "object":
+        return isinstance(value, dict)
+    if name == "null":
+        return value is None
+    return True
 
 
 class OutputError(Exception):

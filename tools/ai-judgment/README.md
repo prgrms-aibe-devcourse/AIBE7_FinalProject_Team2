@@ -218,7 +218,7 @@ cd tools/ai-judgment
 cp pipeline.example.json cases/my-case.pipeline.json    # cases/는 git 제외. 판결문도 cases/raw/ 등에 둔다
 # 설정에서 name · sources · stages.generate.models를 고친다
 
-export ANTHROPIC_API_KEY=...   # extract (비식별화)
+export ANTHROPIC_API_KEY=...   # extract (비식별화) — Claude를 쓸 때만. Gemini · OpenAI로 하려면 stages.extract.model에 gemini:모델ID · openai:모델ID
 export OPENAI_API_KEY=...      # generate · contamination에 쓰는 공급자 키
 
 python3 pipeline.py run cases/my-case.pipeline.json
@@ -229,7 +229,7 @@ python3 pipeline.py status cases/my-case.pipeline.json
 
 | 단계 | 하는 일 | 끄기 · 멈춤 조건 |
 | --- | --- | --- |
-| `extract` | `case-extractor`로 판결문(여러 개면 1심 · 항소심 함께)을 비식별화 · 구조화한다. 사건번호 · 법원명 · 선고일은 **마스킹 전에 로컬에서** 꺼내 내부 파일에만 둔다. 목록 카드 칸(소개 · 키워드 · 난이도 · 예상 시간)도 함께 만든다 | 모델이 서비스 대상이 아니라고 판정하면 멈춘다(`requireEligible: false`로 무시). 판정 기준은 `docs/cases/README.md` 1장 선정 조건 |
+| `extract` | `case-extractor`로 판결문(여러 개면 1심 · 항소심 함께)을 비식별화 · 구조화한다. 모델은 `stages.extract.model`로 고른다(Claude 모델 ID, `openai:모델ID`, `gemini:모델ID` — BE-35, `maxTokens`는 Claude 외 출력 상한). 사건번호 · 법원명 · 선고일은 **마스킹 전에 로컬에서** 꺼내 내부 파일에만 둔다. 목록 카드 칸(소개 · 키워드 · 난이도 · 예상 시간)도 함께 만든다 | 모델이 서비스 대상이 아니라고 판정하면 멈춘다(`requireEligible: false`로 무시). 판정 기준은 `docs/cases/README.md` 1장 선정 조건 |
 | `contamination` | 모델마다 사전 학습 점검을 `runs`회(기본 10) 자동으로 묻고 판정한다(REQ-102). 판정은 가장 나쁜 결과 | **기본 꺼짐**(`enabled: true`로 켬). `onContaminated`: `stop`(기본) · `exclude`(그 모델만 생성에서 뺌). `onSuspect`: `continue`(기본) · `exclude` · `stop` |
 | `generate` | 모델마다 `runs`회 생성 · 검증한다(`generate.py`와 같음). 검증 통과 회차가 없으면 한 번씩 더 생성한다(최대 `maxRetries`회) | 모든 모델에서 통과 회차가 없으면 멈춘다 |
 | `select` | 검증을 통과한 회차 중 하나를 고른다 | 아래 "회차 선택" |
@@ -272,7 +272,7 @@ python3 pipeline.py status cases/my-case.pipeline.json
 
 | 항목 | 처리 |
 | --- | --- |
-| 외부 전송 | `extract`는 정규식 마스킹을 거친 판결문을 Anthropic으로, `contamination` · `generate`는 비식별화한 사건 내용을 설정한 공급자로 보낸다. 실행할 때 전송 대상을 먼저 출력한다 |
+| 외부 전송 | `extract`는 정규식 마스킹을 거친 판결문을 설정한 비식별화 모델의 공급자(기본 Anthropic)로, `contamination` · `generate`는 비식별화한 사건 내용을 설정한 공급자로 보낸다. 실행할 때 전송 대상을 먼저 출력한다 |
 | 원본 판결문 정보 | 사건번호 · 법원명 · 선고일 · 원문은 마스킹 전에 로컬에서 꺼내 `cases/<name>.source_internal.json`(git 제외) → DB `case_source`(API는 `source_org`만 노출)에만 둔다. 모델에 보내지 않는다 |
 | 비식별화 검수 | 사람 검수 없이 적재하므로 비식별화 누락이 있을 수 있다. **사건은 항상 DRAFT로만 넣고 자동으로 공개하지 않는다.** 관리자 페이지(BE-33 · FE-16)의 공개 승인이 비식별화 검수(REQ-075)를 겸한다 |
 | 운영 DB | 파이프라인은 운영 DB에 접속하지 않는다. 운영 계정을 개발 PC에 두지 않는다 |

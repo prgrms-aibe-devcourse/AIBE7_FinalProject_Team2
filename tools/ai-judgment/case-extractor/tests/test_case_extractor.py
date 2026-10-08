@@ -5,17 +5,23 @@
 
 import copy
 import json
+import os
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest import mock
 
 EXTRACTOR_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(EXTRACTOR_DIR))
 
 from deidentify import extract_source_info, premask, residual_check  # noqa: E402
-from extract_case import ExtractError, parse_response_text, process_output, read_judgment, run  # noqa: E402
+from extract_case import (  # noqa: E402
+    ExtractError, call_llm, parse_response_text, process_output, read_judgment, run, schema_instruction,
+    split_model,
+)
+from schema import OUTPUT_SCHEMA, validate_against_schema  # noqa: E402
 
 # 설명용 가상 판결문 (tools/ai-judgment/examples의 가상 살인 사건). 개인정보 값은 모두 지어낸 것이다.
 FAKE_JUDGMENT = """
@@ -455,6 +461,145 @@ class ListingEligibilitySourceTest(unittest.TestCase):
         self.assertIn("===== 판결문 2 =====", fake_call.last_user)
         self.assertNotIn("2099노45", fake_call.last_user)
         self.assertNotIn("2099고합123", fake_call.last_user)
+
+
+class OtherProviderTest(unittest.TestCase):
+    """BE-35: Claude 외 공급자(OpenAI · Gemini)로 비식별화"""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self.tmp.name)
+        self.input = self.dir / "judgment.txt"
+        self.input.write_text(FAKE_JUDGMENT, encoding="utf-8")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    @staticmethod
+    def fake_llm(texts, stop_reason="stop"):
+        """llm.call 흉내: 호출마다 texts에서 하나씩 돌려주고 받은 요청을 기록한다."""
+        queue, calls = list(texts), []
+
+        def caller(spec, system, user, **kwargs):
+            calls.append({"spec": spec, "system": system, "user": user, **kwargs})
+            return SimpleNamespace(text=queue.pop(0), served_model=spec.split(":")[1] + "-served", stop_reason=stop_reason)
+
+        return caller, calls
+
+    def test_validateAgainstSchema(self):
+        self.assertEqual(validate_against_schema(copy.deepcopy(FAKE_OUTPUT), OUTPUT_SCHEMA), [])
+        errors = validate_against_schema(output_with(keywords="가", difficulty="EASY", extra=1, estimatedMinutes=True,
+                                                     recommended={"minMonths": 1}), OUTPUT_SCHEMA)
+        text = " | ".join(errors)
+        for part in ("$.keywords", "$.difficulty", "$: 스키마에 없는 항목이 1개", "$.estimatedMinutes", "$.recommended"):
+            self.assertIn(part, text)
+
+    def test_validateAgainstSchema_errorsHaveNoValues(self):
+        # 모델이 판결문 속 실명을 엉뚱한 칸 · 항목 이름에 넣어도 오류 메시지에는 남지 않는다
+        output = output_with(difficulty="홍길동", **{"홍길동씨": "x"})
+        output["factors"] = [dict(FAKE_OUTPUT["factors"][0], revealStage="김철수")]
+        text = " | ".join(validate_against_schema(output, OUTPUT_SCHEMA))
+        self.assertTrue(text)
+        for name in ("홍길동", "김철수"):
+            self.assertNotIn(name, text)
+        missing = {k: v for k, v in FAKE_OUTPUT.items() if k != "title"}
+        self.assertIn("$.title: 필수 항목이 없습니다", validate_against_schema(missing, OUTPUT_SCHEMA))
+
+    def test_splitModel_andProvider(self):
+        self.assertEqual(split_model("claude-opus-5-5"), ("claude", "claude-opus-5-5"))
+        self.assertEqual(split_model("anthropic:claude-opus-5-5"), ("claude", "claude-opus-5-5"))
+        self.assertEqual(split_model("openai:gpt-x"), ("openai", "gpt-x"))
+        from llm import model_provider
+        self.assertEqual(model_provider("gemini:gem-x"), "gemini")
+        self.assertEqual(model_provider("claude-opus-5-5"), "anthropic")
+        self.assertEqual(model_provider("anthropic:claude-x"), "anthropic")
+        for bad in ("manual:x", "unknown:x"):
+            with self.assertRaises(ExtractError):
+                split_model(bad)
+
+    def test_callLlm_fencedJson_isAccepted(self):
+        caller, calls = self.fake_llm(["```json\n" + json.dumps(FAKE_OUTPUT, ensure_ascii=False) + "\n```"])
+        output, served = call_llm("SYS", "USER", "openai:gpt-x", "high", caller=caller)
+        self.assertEqual(output["title"], FAKE_OUTPUT["title"])
+        self.assertEqual(served, "gpt-x-served")
+        self.assertEqual((len(calls), calls[0]["json_output"]), (1, True))
+
+    def test_callLlm_retriesOnBadFormat_thenSucceeds(self):
+        bad_type = json.dumps(output_with(keywords="가"), ensure_ascii=False)
+        caller, calls = self.fake_llm(["설명만 있음", bad_type, json.dumps(FAKE_OUTPUT, ensure_ascii=False)])
+        output, _ = call_llm("S", "U", "gemini:gem-x", "high", caller=caller)
+        self.assertEqual(len(calls), 3)
+        self.assertEqual(output["keywords"], FAKE_OUTPUT["keywords"])
+        self.assertIn("형식 오류", calls[1]["user"])  # 이전 오류를 알려 준다
+        self.assertIn("$.keywords", calls[2]["user"])
+
+    def test_callLlm_failsAfterRetries_andTruncated(self):
+        caller, calls = self.fake_llm(["x", "y", "z"])
+        with self.assertRaises(ExtractError) as ctx:
+            call_llm("S", "U", "openai:gpt-x", "high", caller=caller)
+        self.assertIn("3번 모두", str(ctx.exception))
+        caller, _ = self.fake_llm(["{"], stop_reason="length")
+        with self.assertRaises(ExtractError) as ctx:
+            call_llm("S", "U", "openai:gpt-x", "high", max_tokens=1234, caller=caller)
+        self.assertIn("1234", str(ctx.exception))
+
+    def test_callLlm_blockedStop_notRetried(self):
+        for reason in ("SAFETY", "RECITATION", "content_filter"):
+            caller, calls = self.fake_llm(["", "", ""], stop_reason=reason)
+            with self.assertRaises(ExtractError) as ctx:
+                call_llm("S", "U", "gemini:gem-x", "high", caller=caller)
+            self.assertEqual(len(calls), 1, reason)  # 같은 판결문을 다시 보내지 않는다
+            self.assertIn(reason, str(ctx.exception))
+        for reason in ("stop", "STOP", "end_turn", None):
+            caller, _ = self.fake_llm([json.dumps(FAKE_OUTPUT, ensure_ascii=False)], stop_reason=reason)
+            self.assertEqual(call_llm("S", "U", "openai:gpt-x", "high", caller=caller)[0]["title"], FAKE_OUTPUT["title"])
+
+    def test_cli_maxTokens_mustBePositive(self):
+        from extract_case import main as extract_main
+        for bad in ("0", "-5", "abc"):
+            with mock.patch.object(sys, "argv", ["extract_case.py", str(self.input), "--name", "x", "--max-tokens", bad]), \
+                    mock.patch("sys.stderr"):
+                with self.assertRaises(SystemExit):
+                    extract_main()
+
+    def test_dryRun_nonClaude_includesSchema(self):
+        paths = run(self.input, "sample-case", out_dir=self.dir / "out", model="openai:gpt-x", dry_run=True)
+        request = paths[0].read_text(encoding="utf-8")
+        self.assertIn("<json_schema>", request)
+        self.assertNotIn("990101-1234567", request)  # 마스킹 후 내용
+        claude = run(self.input, "claude-case", out_dir=self.dir / "out", dry_run=True)
+        self.assertNotIn("<json_schema>", claude[0].read_text(encoding="utf-8"))
+
+    def test_run_openai_usesLlm_andRecordsModel(self):
+        sent = {}
+
+        def fake_call_llm(system, user, model, effort, max_tokens=None):
+            sent.update(user=user, model=model, max_tokens=max_tokens)
+            return copy.deepcopy(FAKE_OUTPUT), "gpt-x-2026"
+
+        with mock.patch.dict(os.environ, {"OPENAI_API_KEY": "k"}), mock.patch("extract_case.call_llm", fake_call_llm):
+            paths = run(self.input, "sample-case", out_dir=self.dir / "out", model="openai:gpt-x", max_tokens=777)
+        report = json.loads(paths[2].read_text(encoding="utf-8"))
+        self.assertEqual((report["model"], report["requestedModel"]), ("gpt-x-2026", "openai:gpt-x"))
+        self.assertEqual((sent["model"], sent["max_tokens"]), ("openai:gpt-x", 777))
+        self.assertIn("<json_schema>", sent["user"])
+        self.assertNotIn("990101-1234567", sent["user"])  # API로 가는 내용에 마스킹 전 값이 없다
+
+    def test_run_missingKey_stopsBeforeCall(self):
+        with mock.patch.dict(os.environ, {}, clear=True), mock.patch("extract_case.call_llm") as called:
+            with self.assertRaises(ExtractError) as ctx:
+                run(self.input, "sample-case", out_dir=self.dir / "out", model="gemini:gem-x")
+        self.assertIn("GEMINI_API_KEY", str(ctx.exception))
+        called.assert_not_called()
+
+    def test_run_badModelSpec_failsBeforeReading(self):
+        with self.assertRaises(ExtractError):
+            run(self.dir / "missing.txt", "sample-case", out_dir=self.dir / "out", model="manual:x")
+
+    def test_schemaInstruction_containsAllFields(self):
+        text = schema_instruction()
+        for key in OUTPUT_SCHEMA["properties"]:
+            self.assertIn(f'"{key}"', text)
 
 
 if __name__ == "__main__":
