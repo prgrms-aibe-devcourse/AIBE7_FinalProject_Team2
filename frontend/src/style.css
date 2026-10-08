@@ -7,20 +7,118 @@
 
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+  font-family: var(--font-body);
+  color: var(--color-text);
+  background: var(--color-bg);
 }
 
-/* 공통 디자인 변수. 화면 CSS도 같은 이름 · 같은 값을 쓴다 (와이어프레임 v2.2 기준).
-   새 화면은 색상 · 간격을 여기 변수로 쓰고, 값을 바꿀 때는 이 한 곳만 고친다. */
+/* ===== 디자인 토큰 (FE-17) =====
+   색 · 글꼴은 언제든 바뀔 수 있다. 바꿀 때는 이 :root 한 곳만 고친다.
+   ① 팔레트(--palette-*): 색 값(hex)은 여기에만 쓴다. 테마를 바꾸면 이 값만 바꾼다.
+   ② 역할(--color-*): 화면 CSS는 이 이름만 쓴다. 특정 역할만 다른 색으로 바꾸려면 그 줄만 고친다.
+   ③ 글꼴 · 크기(--font-* · --text-*): 글꼴을 바꾸면 여기만 고친다.
+   화면 CSS(pages/*)에 색 값(#..., rgb())을 직접 쓰지 않는다. 확인: grep -rnE "#[0-9a-fA-F]{3,8}\b|rgba?\(" src/pages --include=*.css
+   기준: 색상 · 글꼴 확정안 2026-10-07 (네이비 · 브론즈) */
 :root {
-  --color-primary: #e8391e;   /* 강조 색 (선택된 형벌, 경고) */
-  --color-text: #1a1a1a;
-  --color-muted: #66615e;
-  --color-border: #dfd9d5;
-  --color-surface: #faf8f6;
+  /* ① 팔레트 */
+  --palette-navy-900: #101d39;
+  --palette-navy-700: #1f3563;
+  --palette-navy-200: #c9d1e3;
+  --palette-navy-100: #e3e8f2;
+  --palette-navy-50: #eef1f7;
+  --palette-bronze-500: #ba854b;
+  --palette-bronze-700: #86581f;
+  --palette-bronze-200: #e6d2b5;
+  --palette-paper-0: #fdfcfa;
+  --palette-paper-50: #f7f3ee;
+  --palette-paper-100: #f4efe4;
+  --palette-paper-150: #f1ebe4;
+  --palette-paper-200: #ebe5dc;
+  --palette-paper-300: #e2dad0;
+  --palette-paper-600: #8b8174;
+  --palette-ink-900: #151a24;
+  --palette-ink-600: #5d5952;
+  --palette-white: #ffffff;
+  --palette-red-700: #b3261e;
+  --palette-red-200: #efb8b3;
+  --palette-red-50: #fcecea;
+  --palette-orange-800: #9a3d0a;
+  --palette-orange-500: #d4692a;
+  --palette-orange-50: #fff1e7;
+  --palette-blue-focus: #2f6fdb;
+  --palette-up: #9c3a1d;
+  --palette-down: #235a9c;
+  --palette-case-murder: #5b3a40;
+  --palette-case-fraud: #2f4b66;
+  --palette-case-injury: #4d5838;
+  --palette-judge-me: #61538b;
+  --palette-judge-ai: #0b6762;
+  --palette-judge-court: #4f6526;
+
+  /* ② 역할 — 바탕 · 면 */
+  --color-bg: var(--palette-paper-0);              /* 페이지 바탕 */
+  --color-card: var(--palette-white);              /* 카드 · 입력칸 · 떠 있는 상자 */
+  --color-surface: var(--palette-paper-50);        /* 옅은 면: 안내 박스 · 푸터 */
+  --color-surface-strong: var(--palette-paper-150);/* 한 단계 진한 면: 사이드바 · 잠긴 섹션 · 비활성 입력 */
+  --color-paper: var(--palette-paper-100);         /* 신문지 */
+  --color-track: var(--palette-paper-200);         /* 막대 · 진행 표시 바탕 */
+  /* ② 역할 — 선 */
+  --color-border: var(--palette-paper-300);        /* 기본 테두리 · 구분선 */
+  --color-border-strong: var(--palette-paper-600); /* 입력칸 · 버튼 테두리 · 강조 괘선 */
+  /* ② 역할 — 글자 */
+  --color-text: var(--palette-ink-900);
+  --color-muted: var(--palette-ink-600);
+  --color-heading: var(--palette-navy-900);        /* 로고 · 큰 제목 · 강조 값(형량 등) */
+  --color-label: var(--palette-bronze-700);        /* 섹션 머리 작은 라벨 (신문 kicker) */
+  /* ② 역할 — 조작 · 선택 */
+  --color-accent: var(--palette-navy-700);         /* 주 버튼 · 선택 표시 · 링크 */
+  --color-accent-hover: var(--palette-navy-900);
+  --color-on-accent: var(--palette-white);         /* 주 버튼 위 글자 */
+  --color-accent-tint: var(--palette-navy-50);     /* 선택된 칩 · 항목 바탕 */
+  --color-accent-text: var(--palette-navy-700);    /* 선택된 항목 글자 */
+  --color-primary: var(--color-accent);            /* 이전 이름(FE-2). 새 코드는 --color-accent를 쓴다 */
+  --color-decor: var(--palette-bronze-500);        /* 장식 선 · 로고 "Law" (작은 글자 금지) */
+  --color-range-fill: var(--palette-bronze-200);   /* 권고 범위 막대 */
+  --color-focus: var(--palette-blue-focus);        /* 키보드 포커스 링 */
+  /* ② 역할 — 상태 (빨강은 오류에만) */
+  --color-danger: var(--palette-red-700);
+  --color-danger-border: var(--palette-red-200);
+  --color-danger-tint: var(--palette-red-50);
+  --color-caution: var(--palette-orange-800);      /* 되돌릴 수 없음 · 권고 범위 밖 안내 */
+  --color-caution-border: var(--palette-orange-500);
+  --color-caution-tint: var(--palette-orange-50);
+  /* ② 역할 — 의미 색 (항상 기호 · 문장과 함께) */
+  --color-up: var(--palette-up);                   /* 가중 ↑ */
+  --color-down: var(--palette-down);               /* 감경 ↓ */
+  --color-case-murder: var(--palette-case-murder);
+  --color-case-fraud: var(--palette-case-fraud);
+  --color-case-injury: var(--palette-case-injury);
+  --color-on-case: var(--palette-white);
+  --color-judge-me: var(--palette-judge-me);       /* 세 판결은 밝기가 같다. 선 · 라벨에만 쓰고 바탕을 칠하지 않는다 */
+  --color-judge-ai: var(--palette-judge-ai);
+  --color-judge-court: var(--palette-judge-court);
+  --color-banner-bg: var(--palette-navy-900);      /* 결과 화면 배너 */
+  --color-banner-text: var(--palette-white);
+  --color-banner-muted: var(--palette-navy-200);
+
+  /* ③ 글꼴 · 크기 */
+  --font-heading: "Noto Serif KR", AppleMyungjo, Batang, serif;
+  --font-body: Pretendard, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --text-display: 34px;
+  --text-title-1: 28px;
+  --text-title-2: 22px;
+  --text-title-3: 18px;
+  --text-body: 15px;
+  --text-small: 13px;
+  --text-caption: 12px;
+
+  /* 간격 · 폭 */
   --space-md: 16px;
   --content-width: 1180px;
 }
+
+/* 화면 제목(h1)은 제목 글꼴(명조). 섹션 · 카드 제목은 본문 글꼴 그대로 둔다 */
+h1 { font-family: var(--font-heading); color: var(--color-heading); letter-spacing: -.02em; }
 
 /* 공통 버튼. 화면 CSS에도 같은 값으로 정의돼 있다(화면마다 일부러 중복). 여기 정의는
    라우터 · 404 화면처럼 특정 화면 CSS를 빌리지 않는 곳에서 쓴다 (리뷰 반영, router.js 참고). */
@@ -34,17 +132,17 @@ body {
   font-weight: 700;
   cursor: pointer;
 }
-.primary-button { background: #c83019; border-color: #c83019; color: #fff; }
-.primary-button:hover:not(:disabled) { background: #a92612; }
+.primary-button { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-on-accent); }
+.primary-button:hover:not(:disabled) { background: var(--color-accent-hover); border-color: var(--color-accent-hover); }
 .primary-button:disabled { opacity: .6; }
-.secondary-button { color: var(--color-text); background: #fff; }
+.secondary-button { color: var(--color-text); background: var(--color-card); border-color: var(--color-border-strong); }
 .secondary-button:hover { background: var(--color-surface); }
 
 /* 불러오는 중 · 오류 안내. 화면 CSS는 각자 .message-panel에 padding을 더 얹어 쓴다(review.css 등). */
 .message-panel {
   padding: 44px 28px;
   color: var(--color-text);
-  font: 15px/1.75 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+  font: var(--text-body)/1.75 var(--font-body);
 }
 .message-panel button { margin-top: 20px; }
 
@@ -53,7 +151,8 @@ body {
    특정 화면만 다르게 해야 하면 그 화면 CSS에 .landing-page .site-header처럼 화면 클래스로 감싸서 추가한다. */
 .site-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 28px; border-bottom: 1px solid var(--color-border); }
 .site-nav { display: flex; gap: 8px; }
-.logo-button { border: 0; background: transparent; padding: 6px 0; font-size: 18px; font-weight: 800; color: var(--color-text); }
+/* 화면 CSS의 button { font: inherit } 보다 우선하도록 .site-header를 붙인다 */
+.site-header .logo-button { border: 0; background: transparent; padding: 6px 0; font-family: var(--font-heading); font-size: 20px; font-weight: 900; letter-spacing: -.04em; color: var(--color-heading); }
 .nav-button { border: 0; background: transparent; padding: 10px 12px; min-height: 44px; color: var(--color-muted); }
 .nav-button:hover { color: var(--color-text); }
 .site-footer { padding: 24px 28px; border-top: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-muted); font-size: 13px; }
@@ -69,9 +168,9 @@ body {
   max-width: var(--content-width);
   margin: 0 auto;
   border: 1px solid var(--color-border);
-  background: #fff;
+  background: var(--color-bg);
   color: var(--color-text);
-  font: 15px/1.75 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+  font: var(--text-body)/1.75 var(--font-body);
   overflow-wrap: anywhere;
   word-break: keep-all;
 }
