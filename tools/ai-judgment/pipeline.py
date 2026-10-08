@@ -347,15 +347,14 @@ def stage_contamination(config, state, log, caller=call):
                 except ValueError as e:  # JSONDecodeError 포함 — 읽을 수 없는 응답은 형식 오류로 센다
                     category, reason = "INVALID", f"응답을 읽을 수 없음: {e}"
             except LLMError as e:
-                category, reason = None, f"호출 실패: {e}"	# 응답 수에 넣지 않는다 (표본 부족 판정으로 이어짐)
+                category, reason = None, f"호출 실패: {e}"  # 응답 수에 넣지 않는다 (표본 부족 판정으로 이어짐)
             record.update(category=category, reason=reason)
             write_json(out_dir / model_slug(spec) / f"run-{i:03d}.json", record)
             if category:
                 categories.append(category)
             if cfg["delay"]:
                 time.sleep(cfg["delay"])
-        if not categories:
-            raise PipelineError(f"{spec}: 사전 학습 점검 호출이 모두 실패했습니다")
+        # 호출이 모두 실패해도(응답 0개) INSUFFICIENT로 판정해 onInsufficient를 따른다
         final, reason, counts = aggregate(categories, criteria)
         results[spec] = {"verdict": final, "reason": reason, "counts": counts, "answered": len(categories),
                          "runs": cfg["runs"], "criteria": criteria}

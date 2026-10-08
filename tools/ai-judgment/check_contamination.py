@@ -18,8 +18,8 @@
 
 묶음 판정 (위에서부터 먼저 맞는 것)
 - CONTAMINATED: KNOWS가 하나라도 있음
-- INSUFFICIENT: 응답 수가 minAnswered보다 적음 (호출 실패 · 한도로 일부만 돌아온 경우 판정을 확정하지 않는다)
-- CONTAMINATED: EXACT 비율 ≥ exactRatio
+- CONTAMINATED: EXACT 비율 ≥ exactRatio (응답이 minAnswered보다 적으면 분모를 minAnswered로 — 빠진 응답을 FAR로 쳐도 기준 이상)
+- INSUFFICIENT: 응답 수가 minAnswered보다 적음 (호출 실패 · 한도로 일부만 돌아온 경우 판정을 확정하지 않는다, 0개 포함)
 - SUSPECT: EXACT가 하나라도 있음, (EXACT + CLOSE + SAME_TYPE) 비율 ≥ suspectRatio, 또는 INVALID가 있음
 - CLEAN: 그 밖
 짧은 형량은 흔한 값이라 한두 번 정확히 맞혀도 우연일 수 있어 비율로 본다. 예전 기준(징역 ±2개월, 가장 나쁜 1건)은
@@ -135,12 +135,14 @@ def aggregate(categories, criteria=None):
     summary = {c: counts[c] for c in CATEGORIES if counts[c]}
     if counts["KNOWS"]:
         return "CONTAMINATED", f"사건을 안다고 답한 응답 {counts['KNOWS']}개", summary
-    if answered < criteria["minAnswered"]:
+    # 응답이 모자라도 돌아오지 않은 응답을 모두 FAR로 쳐서 EXACT 비율이 기준 이상이면 확정한다
+    # (응답 부족이 분명한 오염 신호를 가리지 않게)
+    if counts["EXACT"] / max(answered, criteria["minAnswered"], 1) >= criteria["exactRatio"]:
+        short = " (응답이 최소 개수보다 적어도 기준 이상)" if answered < criteria["minAnswered"] else ""
+        return "CONTAMINATED", f"정확히 맞힌 응답 {counts['EXACT']}/{answered}{short}", summary
+    if answered == 0 or answered < criteria["minAnswered"]:
         return "INSUFFICIENT", f"응답 {answered}개 < 최소 {criteria['minAnswered']}개 — 판정을 확정하지 않음", summary
-    exact_ratio = counts["EXACT"] / answered
     near_ratio = (counts["EXACT"] + counts["CLOSE"] + counts["SAME_TYPE"]) / answered
-    if exact_ratio >= criteria["exactRatio"]:
-        return "CONTAMINATED", f"정확히 맞힌 응답 {counts['EXACT']}/{answered}", summary
     if counts["EXACT"]:
         return "SUSPECT", f"정확히 맞힌 응답 {counts['EXACT']}/{answered} (비율 기준 미만, 우연일 수 있음)", summary
     if near_ratio >= criteria["suspectRatio"]:

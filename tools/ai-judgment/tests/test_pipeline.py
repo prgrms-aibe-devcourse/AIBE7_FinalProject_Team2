@@ -344,6 +344,25 @@ class PipelineTest(unittest.TestCase):
         state = self.run_with(config, {"contamination:openai:a": failing, "openai:a": [self.output]}, rerun=True)
         self.assertEqual(state["stages"]["generate"]["status"], "done")
 
+    def test_contamination_all_calls_failed(self):
+        clean = {"knowsCase": False, "penaltyType": "LIFE"}
+        quota = [llm.LLMError("API 오류 (429): quota")] * 2
+        # 호출이 모두 실패해도 INSUFFICIENT로 판정하고, 다른 모델까지 점검한 뒤 기본(stop)대로 멈춘다
+        config = self.config(contamination={"enabled": True, "runs": 2, "criteria": {"minAnswered": 2}})
+        with self.assertRaises(pipeline.PipelineError) as ctx:
+            self.run_with(config, {"contamination:openai:a": quota, "contamination:gemini:b": [clean] * 2})
+        self.assertIn("openai:a: INSUFFICIENT", str(ctx.exception))
+        results = pipeline.load_state(config)["stages"]["contamination"]["outputs"]["results"]
+        self.assertEqual((results["openai:a"]["verdict"], results["openai:a"]["answered"]), ("INSUFFICIENT", 0))
+        self.assertIn("gemini:b", results)
+        # onInsufficient: exclude면 그 모델만 빼고 진행한다
+        config = self.config(contamination={"enabled": True, "runs": 2, "onInsufficient": "exclude",
+                                            "criteria": {"minAnswered": 2}})
+        state = self.run_with(config, {"contamination:openai:a": quota, "contamination:gemini:b": [clean] * 2,
+                                       "gemini:b": [self.output, self.output]}, rerun=True)
+        self.assertEqual(state["stages"]["contamination"]["outputs"]["excluded"], ["openai:a"])
+        self.assertEqual(list(state["stages"]["generate"]["outputs"]["models"]), ["gemini:b"])
+
     def test_contamination_criteria_validation(self):
         for criteria, part in (({"minAnswered": 0}, "minAnswered"), ({"closeRatio": 1.5}, "closeRatio"),
                                ({"exactRatio": "0.5"}, "exactRatio"), ({"unknown": 1}, "알 수 없는"),

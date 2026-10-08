@@ -78,8 +78,8 @@ python3 check_contamination.py judge court_judgment_internal.json out/run*.json 
 | 판정 (위에서부터) | 조건 | 조치 |
 | --- | --- | --- |
 | `CONTAMINATED` | `KNOWS`가 하나라도 있음 | 사건을 빼거나 다시 가공한다 |
-| `INSUFFICIENT` | 응답이 최소 개수(기본 5)보다 적음 — 호출 실패 · 무료 한도로 일부만 돌아온 경우 판정을 확정하지 않는다 | 점검을 다시 한다 |
-| `CONTAMINATED` | `EXACT` 비율 ≥ 50% | 사건을 빼거나 다시 가공한다 |
+| `CONTAMINATED` | `EXACT` 비율 ≥ 50%. 응답이 최소 개수보다 적으면 최소 개수로 나눈다(빠진 응답을 `FAR`로 쳐도 기준 이상이면 확정, 예: 응답 3개 모두 `EXACT` → 3/5) | 사건을 빼거나 다시 가공한다 |
+| `INSUFFICIENT` | 응답이 최소 개수(기본 5)보다 적음(0개 포함) — 호출 실패 · 무료 한도로 일부만 돌아온 경우 판정을 확정하지 않는다 | 점검을 다시 한다 |
 | `SUSPECT` | `EXACT`가 하나라도 있음, (`EXACT` + `CLOSE` + `SAME_TYPE`) 비율 ≥ 50%, 또는 `INVALID`가 있음 | 팀이 검토해 판단한다 |
 | `CLEAN` | 그 밖 | 3단계로 간다 |
 
@@ -247,7 +247,7 @@ python3 pipeline.py status cases/my-case.pipeline.json
 | --- | --- | --- |
 | `extract` | `case-extractor`로 판결문(여러 개면 1심 · 항소심 함께)을 비식별화 · 구조화한다. 모델은 `stages.extract.model`로 고른다(Claude 모델 ID, `openai:모델ID`, `gemini:모델ID` — BE-35, `maxTokens`는 Claude 외 출력 상한). 사건번호 · 법원명 · 선고일은 **마스킹 전에 로컬에서** 꺼내 내부 파일에만 둔다. 목록 카드 칸(소개 · 키워드 · 난이도 · 예상 시간)도 함께 만든다 | 모델이 서비스 대상이 아니라고 판정하면 멈춘다(`requireEligible: false`로 무시). 판정 기준은 `docs/cases/README.md` 1장 선정 조건 |
 | `court` | 재판부 판결(COURT) 초안을 만든다(`case-extractor/court_draft.py`, BE-38). 마스킹한 원문을 모델에 보내 요약 · 이유 · 쉬운 설명 · 발췌 · 요소별 방향과 근거를 받고, **발췌 · 근거가 원문을 글자 그대로 인용했는지**(바꾼 식별 정보만 `⟦ ⟧`) · **형량이 최종 판결문 주문과 맞는지** · 개인정보 잔존을 자동으로 검사한다. 모델은 `stages.court.model`(없으면 extract 모델) | 검사를 통과하지 못하면 **파이프라인이 멈춘다**(오류를 알려 주며 최대 2번 다시 요청한 뒤). 재판부 판결 없이 이어 가려면 `stages.court.enabled: false`로 끄거나 사람이 쓴 BE-14 JSON을 `inputs.courtDraft`로 넣고 `--from contamination`(또는 다음 단계)으로 다시 실행한다 |
-| `contamination` | 모델마다 사전 학습 점검을 `runs`회(기본 10) 자동으로 묻고 판정한다(REQ-102). 응답을 분류해 **비율로** 판정한다(위 "2. 사전 학습 점검", BE-37). 호출 실패는 응답 수에 넣지 않는다 | **기본 꺼짐**(`enabled: true`로 켬). `onContaminated`: `stop`(기본) · `exclude`(그 모델만 생성에서 뺌). `onSuspect`: `continue`(기본) · `exclude` · `stop`. `onInsufficient`(응답 부족): `stop`(기본) · `continue` · `exclude`. 기준 값은 `criteria`(예: `{"minAnswered": 5, "closeRatio": 0.15, "closeMinMonths": 1, "closeMaxMonths": 6, "closeFineRatio": 0.1, "exactRatio": 0.5, "suspectRatio": 0.5}`, 빈 값은 기본값). `minAnswered`가 `runs`보다 크면 설정 오류 |
+| `contamination` | 모델마다 사전 학습 점검을 `runs`회(기본 10) 자동으로 묻고 판정한다(REQ-102). 응답을 분류해 **비율로** 판정한다(위 "2. 사전 학습 점검", BE-37). 호출 실패는 응답 수에 넣지 않는다(모두 실패해도 `INSUFFICIENT`로 판정해 `onInsufficient`를 따르고, 멈출 때도 다른 모델까지 점검한 뒤 멈춘다) | **기본 꺼짐**(`enabled: true`로 켬). `onContaminated`: `stop`(기본) · `exclude`(그 모델만 생성에서 뺌). `onSuspect`: `continue`(기본) · `exclude` · `stop`. `onInsufficient`(응답 부족): `stop`(기본) · `continue` · `exclude`. 기준 값은 `criteria`(예: `{"minAnswered": 5, "closeRatio": 0.15, "closeMinMonths": 1, "closeMaxMonths": 6, "closeFineRatio": 0.1, "exactRatio": 0.5, "suspectRatio": 0.5}`, 빈 값은 기본값). `minAnswered`가 `runs`보다 크면 설정 오류 |
 | `generate` | 모델마다 `runs`회 생성 · 검증한다(`generate.py`와 같음). 검증 통과 회차가 없으면 한 번씩 더 생성한다(최대 `maxRetries`회) | 모든 모델에서 통과 회차가 없으면 멈춘다 |
 | `select` | 검증을 통과한 회차 중 하나를 고른다 | 아래 "회차 선택" |
 | `load` | 사건(DRAFT) + AI 판결(비공개 · PENDING) 적재 SQL을 만들어 보관하고 로컬 DB에 적재한다 | `case: false`면 사건은 빼고 AI 판결만(사건이 이미 DB에 있을 때). `applyToDb: false`면 SQL만 만든다 |

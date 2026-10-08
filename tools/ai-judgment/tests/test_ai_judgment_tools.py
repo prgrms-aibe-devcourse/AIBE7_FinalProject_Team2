@@ -345,7 +345,10 @@ class ContaminationTest(Fixtures):
     def test_aggregate_rules(self):
         cases = [
             (["KNOWS"], "CONTAMINATED"),                                         # 안다고 답하면 적어도 확정
-            (["EXACT", "EXACT"], "INSUFFICIENT"),                               # 응답 2개 < 최소 5개
+            (["EXACT", "EXACT"], "INSUFFICIENT"),                               # 응답 2개 < 최소 5개, 2/5 < 50%
+            (["EXACT"] * 3, "CONTAMINATED"),                                    # 응답이 모자라도 3/5 ≥ 50%
+            (["EXACT"] * 4, "CONTAMINATED"),                                    # 응답 부족이 오염 신호를 가리지 않는다
+            ([], "INSUFFICIENT"),                                               # 응답 0개 (호출이 모두 실패)
             (["EXACT"] * 3 + ["FAR"] * 2, "CONTAMINATED"),                      # 정확히 맞힘 60%
             (["EXACT"] + ["FAR"] * 4, "SUSPECT"),                               # 정확히 맞힘 1개 (우연 가능)
             (["CLOSE"] * 3 + ["FAR"] * 2, "SUSPECT"),                           # 가까움 60%
@@ -361,6 +364,7 @@ class ContaminationTest(Fixtures):
 
     def test_aggregate_criteria_override(self):
         self.assertEqual(aggregate(["EXACT"] * 2, {"minAnswered": 2})[0], "CONTAMINATED")
+        self.assertEqual(aggregate([], {"minAnswered": 0})[0], "INSUFFICIENT")  # 0으로 나누지 않는다
         self.assertEqual(aggregate(["CLOSE"] * 2 + ["FAR"] * 3, {"suspectRatio": 0.4})[0], "SUSPECT")
 
     def test_judge_reason_has_no_predicted_values(self):
