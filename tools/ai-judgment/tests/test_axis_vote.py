@@ -101,12 +101,14 @@ class AxisVoteTest(unittest.TestCase):
         # 5회 중 1개만 유효하면 표가 갈리지 않아도 근거가 약하므로 확인 필요 (과반은 요청 횟수 기준, 리뷰 반영)
         one = [parse_axis_answer(answer("FAULT_STANDARD", None, None), IDS)]
         votes = aggregate_votes(one, IDS, requested_runs=5)
-        self.assertEqual(votes[1]["valueAxisVotes"], {"runs": 1, "counts": {"FAULT_STANDARD": 1}, "needsReview": True})
+        self.assertEqual(votes[1]["valueAxisVotes"],
+                         {"runs": 1, "counts": {"FAULT_STANDARD": 1}, "needsReview": True, "requestedRuns": 5})
         # 5회 중 3개가 유효하고 3표가 모이면 과반 (3 > 5 / 2)
         three = one * 3
         self.assertFalse(aggregate_votes(three, IDS, requested_runs=5)[1]["valueAxisVotes"]["needsReview"])
-        # 요청 횟수를 주지 않으면 유효 응답 수 기준
+        # 요청 횟수를 주지 않으면 유효 응답 수 기준이고 requestedRuns를 남기지 않는다
         self.assertFalse(aggregate_votes(one, IDS)[1]["valueAxisVotes"]["needsReview"])
+        self.assertNotIn("requestedRuns", aggregate_votes(one, IDS)[1]["valueAxisVotes"])
 
     def test_aggregate_votes_emptyIsError(self):
         with self.assertRaises(AxisVoteError):

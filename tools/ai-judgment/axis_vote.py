@@ -7,8 +7,9 @@
 - 최다표가 요청 횟수의 과반(절반 초과)이 아니면 needsReview = true → 관리자가 후검수에서 확인한다 (BE-43 · FE-16)
   표가 갈린 경우(동률 포함)와 유효 응답이 모자라 근거가 약한 경우(예: 5회 중 1개만 유효)를 함께 잡는다
 - 결과는 보고서 factorExtras[].valueAxis · valueAxisVotes 형식이다. 적재 SQL이 value_axis · value_axis_votes로 넣는다 (BE-48)
-  {"runs": 5, "counts": {"FAULT_STANDARD": 3, "NONE": 2}, "needsReview": false}
-  counts는 표를 받은 축만, "어느 축에도 맞지 않음(null)" 표는 "NONE" 키로 센다. runs는 집계에 들어간 유효 응답 수다
+  {"runs": 5, "counts": {"FAULT_STANDARD": 3, "NONE": 2}, "needsReview": false, "requestedRuns": 5}
+  counts는 표를 받은 축만, "어느 축에도 맞지 않음(null)" 표는 "NONE" 키로 센다. runs는 집계에 들어간 유효 응답 수,
+  requestedRuns는 요청한 횟수다(기록만으로 needsReview를 다시 계산할 수 있게 남긴다, BE-48 검사)
 """
 
 import copy
@@ -94,11 +95,11 @@ def aggregate_votes(answers, factor_ids, preferred=None, requested_runs=None):
         winners = [key for key in AXIS_KEYS if counts.get(key) == top]
         wanted = preferred.get(factor_id) or NONE_KEY
         chosen = wanted if wanted in winners else winners[0]
-        result[factor_id] = {
-            "valueAxis": None if chosen == NONE_KEY else chosen,
-            "valueAxisVotes": {"runs": runs, "counts": {key: counts[key] for key in AXIS_KEYS if key in counts},
-                               "needsReview": top * 2 <= quorum},
-        }
+        votes = {"runs": runs, "counts": {key: counts[key] for key in AXIS_KEYS if key in counts},
+                 "needsReview": top * 2 <= quorum}
+        if requested_runs:
+            votes["requestedRuns"] = quorum  # 요청 횟수 (유효 응답이 더 많을 수는 없지만 같은 기준을 쓴다)
+        result[factor_id] = {"valueAxis": None if chosen == NONE_KEY else chosen, "valueAxisVotes": votes}
     return result
 
 

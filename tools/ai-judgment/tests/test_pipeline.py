@@ -706,11 +706,11 @@ class PipelineTest(unittest.TestCase):
         votes = load_json(axis["votesFile"])
         self.assertEqual(votes["promptVersion"], "axis-v1")
         self.assertEqual(votes["factors"][1]["valueAxisVotes"],
-                         {"runs": 5, "counts": {"APOLOGY_SINCERITY": 3, "NONE": 2}, "needsReview": False})
+                         {"runs": 5, "counts": {"APOLOGY_SINCERITY": 3, "NONE": 2}, "needsReview": False, "requestedRuns": 5})
         # 적재 SQL은 투표 결과 축과 투표 기록(value_axis_votes, BE-48)을 쓴다 (추출기 값 위에 덮어씀). 추출기 보고서 파일은 바뀌지 않는다
         sql = Path(state["stages"]["load"]["outputs"]["sqlFile"]).read_text(encoding="utf-8")
-        self.assertIn("""'분류', 'APOLOGY_SINCERITY', '{"runs": 5, "counts": {"APOLOGY_SINCERITY": 3, "NONE": 2}, "needsReview": false}'::jsonb, 2);""", sql)
-        self.assertIn("""'분류', 'ORDER_OPPORTUNITY', '{"runs": 5, "counts": {"PRINCIPLE_RELATION": 2, "ORDER_OPPORTUNITY": 3}, "needsReview": false}'::jsonb, 3);""", sql)
+        self.assertIn("""'분류', 'APOLOGY_SINCERITY', '{"runs": 5, "counts": {"APOLOGY_SINCERITY": 3, "NONE": 2}, "needsReview": false, "requestedRuns": 5}'::jsonb, 2);""", sql)
+        self.assertIn("""'분류', 'ORDER_OPPORTUNITY', '{"runs": 5, "counts": {"PRINCIPLE_RELATION": 2, "ORDER_OPPORTUNITY": 3}, "needsReview": false, "requestedRuns": 5}'::jsonb, 3);""", sql)
         self.assertIsNone(load_json(self.raw_config["inputs"]["report"])["factorExtras"][1]["valueAxis"])
         self.assertTrue(any("가치관 축 분류 단계" in line and "openai" in line for line in self.logs))  # 외부 전송 안내
 
