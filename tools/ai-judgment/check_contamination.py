@@ -3,19 +3,35 @@
 1) 점검 프롬프트 만들기 — 개요와 죄명만 넣는다.
     python3 check_contamination.py prompt examples/case_input.json > out/contamination_prompt.md
 
-2) 모델 응답을 여러 번(3회 이상 권장, 새 대화에서) 받아 파일로 저장한 뒤 판정한다.
-    python3 check_contamination.py judge examples/court_judgment_internal.json out/run1.json out/run2.json out/run3.json
+2) 모델 응답을 여러 번(기본 최소 5개, 새 대화에서) 받아 파일로 저장한 뒤 판정한다.
+    python3 check_contamination.py judge examples/court_judgment_internal.json out/run1.json ... out/run10.json
 
-판정 (가장 나쁜 결과를 최종 판정으로 쓴다)
-- CONTAMINATED: 사건을 안다고 답했거나, 형벌 · 형량 · 집행유예를 정확히 맞혔다 → 사건을 빼거나 다시 가공한다
-- SUSPECT: 형벌 종류와 집행유예 여부가 같고 형량이 매우 가깝다, 또는 실제 판결이 사형 · 무기인데 형벌 종류를 맞혔다 → 팀이 검토한다
-- CLEAN: 문제없음
+응답 하나를 먼저 분류하고(classify), 회차 묶음을 **비율로** 판정한다(aggregate, BE-37).
+응답 분류
+- KNOWS: 사건을 안다고 답함
+- EXACT: 형벌 · 형량 · 집행유예를 정확히 맞힘
+- CLOSE: 형벌 종류 · 집행유예 여부가 같고 형량이 허용 오차 안
+  (징역: max(closeMinMonths, min(closeMaxMonths, closeRatio × 실제 형량)) 개월, 벌금: closeFineRatio)
+- SAME_TYPE: 실제 판결이 사형 · 무기이고 형벌 종류를 맞힘 (형량 값이 없어 우연히 맞을 수 있음)
+- INVALID: 응답 형식이 어긋남 (knowsCase가 true / false가 아님, 읽을 수 없음)
+- FAR: 그 밖 (형벌 종류 · 집행유예 여부가 다르거나 형량이 멂, 예측 없음)
+
+묶음 판정 (위에서부터 먼저 맞는 것)
+- CONTAMINATED: KNOWS가 하나라도 있음
+- INSUFFICIENT: 응답 수가 minAnswered보다 적음 (호출 실패 · 한도로 일부만 돌아온 경우 판정을 확정하지 않는다)
+- CONTAMINATED: EXACT 비율 ≥ exactRatio
+- SUSPECT: EXACT가 하나라도 있음, (EXACT + CLOSE + SAME_TYPE) 비율 ≥ suspectRatio, 또는 INVALID가 있음
+- CLEAN: 그 밖
+짧은 형량은 흔한 값이라 한두 번 정확히 맞혀도 우연일 수 있어 비율로 본다. 예전 기준(징역 ±2개월, 가장 나쁜 1건)은
+짧은 형량에서 거의 항상 SUSPECT가 나와 변별력이 없었다.
 
 실제 판결 파일(court_judgment_internal.json)은 내부 전용이다. 이 점검에만 쓰고, AI 판결 생성 프롬프트에는 넣지 않는다.
+판정 근거(reason)에는 예측 형량 값을 쓰지 않는다 (생성 기록 generation_report로 이어진다).
 """
 
 import argparse
 import sys
+from collections import Counter
 from string import Template
 
 from common import (
@@ -28,9 +44,17 @@ from common import (
 )
 from validate_output import parse_output
 
-VERDICT_ORDER = ("CLEAN", "SUSPECT", "CONTAMINATED")
-CLOSE_PRISON_MONTHS = 2  # 징역 ±2개월 이내면 "가깝다"
-CLOSE_FINE_RATIO = 0.1  # 벌금 ±10% 이내면 "가깝다"
+VERDICTS = ("CLEAN", "SUSPECT", "INSUFFICIENT", "CONTAMINATED")
+CATEGORIES = ("KNOWS", "EXACT", "CLOSE", "SAME_TYPE", "INVALID", "FAR")
+DEFAULT_CRITERIA = {
+    "minAnswered": 5,        # 이보다 응답이 적으면 INSUFFICIENT
+    "closeRatio": 0.15,      # 징역 "가깝다": 실제 형량의 15%
+    "closeMinMonths": 1,     # … 단 1개월보다 좁히지 않는다
+    "closeMaxMonths": 6,     # … 단 6개월보다 넓히지 않는다 (긴 형량에서 느슨해지지 않게)
+    "closeFineRatio": 0.1,   # 벌금 "가깝다": 실제 금액의 10%
+    "exactRatio": 0.5,       # 정확히 맞힌 응답이 이 비율 이상이면 CONTAMINATED
+    "suspectRatio": 0.5,     # 정확히 맞힘 · 가까움 · 종류만 같음이 이 비율 이상이면 SUSPECT
+}
 
 
 def build_contamination_prompt(case):
@@ -40,55 +64,98 @@ def build_contamination_prompt(case):
     )
 
 
+def criteria_with(overrides=None):
+    """기본 임계값에 설정 값을 덮어쓴다 (None인 값은 기본값 유지)."""
+    merged = dict(DEFAULT_CRITERIA)
+    merged.update({k: v for k, v in (overrides or {}).items() if k in DEFAULT_CRITERIA and v is not None})
+    return merged
+
+
+def prison_tolerance(actual_months, criteria):
+    """징역 "가깝다" 허용 오차(개월): 실제 형량의 closeRatio, closeMinMonths ~ closeMaxMonths로 제한."""
+    return max(criteria["closeMinMonths"], min(criteria["closeMaxMonths"], criteria["closeRatio"] * actual_months))
+
+
 def _has_suspension(judgment):
     return judgment.get("suspensionMonths") is not None
 
 
-def judge_one(court, prediction):
-    """응답 하나를 판정하고 (판정, 이유)를 돌려준다.
+def _knows(value):
+    """knowsCase → True / False / None(형식 오류)."""
+    if value is True or (isinstance(value, str) and value.strip().lower() == "true"):
+        return True
+    if value is False or (isinstance(value, str) and value.strip().lower() == "false"):
+        return False
+    return None
+
+
+def classify(court, prediction, criteria=None):
+    """응답 하나를 분류하고 (분류, 이유)를 돌려준다. 이유는 응답별 기록(내부)에만 남는다.
 
     형벌은 최종 선고 형벌로 비교한다. 실제 판결 파일은 reducedTo가 있으면 그 값, 모델 응답의
     penaltyType은 "실제로 선고된 형벌"을 묻는 것이라 그대로 최종 선고 형벌로 본다.
     """
-    knows_case = prediction.get("knowsCase")
-    if knows_case is True or (isinstance(knows_case, str) and knows_case.strip().lower() == "true"):
-        return "CONTAMINATED", f"사건을 안다고 답함: {prediction.get('note', '')}"
-    if not (knows_case is False or (isinstance(knows_case, str) and knows_case.strip().lower() == "false")):
-        # 형식이 어긋난 응답은 "모른다"로 넘기지 않고 팀이 본다
-        return "SUSPECT", f"knowsCase가 true / false가 아님: {knows_case!r}"
+    criteria = criteria_with(criteria)
+    if not isinstance(prediction, dict):
+        return "INVALID", "JSON 객체가 아님"
+    knows = _knows(prediction.get("knowsCase"))
+    if knows is True:
+        return "KNOWS", "사건을 안다고 답함"
+    if knows is None:
+        return "INVALID", "knowsCase가 true / false가 아님"
 
     actual_penalty = final_penalty(court)
     if prediction.get("penaltyType") != actual_penalty:
-        return "CLEAN", "형벌 종류가 다름"
+        return "FAR", "형벌 종류가 다름"
     if actual_penalty in NO_TERM_PENALTIES:
-        # 사형 · 무기는 형량 값이 없어 형벌 종류만 같아도 맞힌 것처럼 보인다. 선택지가 적어 우연히 맞을 수 있으므로 팀이 본다.
-        return "SUSPECT", f"형벌 종류({PENALTY_NAMES[actual_penalty]})가 같음 — 형량 값이 없는 형벌이라 팀이 검토"
+        return "SAME_TYPE", f"형벌 종류({PENALTY_NAMES[actual_penalty]})가 같음 — 형량 값이 없는 형벌"
     if _has_suspension(prediction) != _has_suspension(court):
-        return "CLEAN", "집행유예 여부가 다름"
+        return "FAR", "집행유예 여부가 다름"
 
     key = "prisonMonths" if actual_penalty == "PRISON" else "fineAmount"
     predicted, actual = prediction.get(key), court.get(key)
-    if not isinstance(predicted, int) or actual is None:
-        return "CLEAN", f"{key} 예측 없음"
-
-    same_value = predicted == actual
-    same_suspension = prediction.get("suspensionMonths") == court.get("suspensionMonths")
-    if same_value and same_suspension:
-        return "CONTAMINATED", "형벌 · 형량 · 집행유예를 정확히 맞힘"
-
+    if not isinstance(predicted, int) or isinstance(predicted, bool) or actual is None:
+        return "FAR", f"{key} 예측 없음"
+    if predicted == actual and prediction.get("suspensionMonths") == court.get("suspensionMonths"):
+        return "EXACT", "형벌 · 형량 · 집행유예를 정확히 맞힘"
     if key == "prisonMonths":
-        close = abs(predicted - actual) <= CLOSE_PRISON_MONTHS
+        tolerance = prison_tolerance(actual, criteria)
     else:
-        close = abs(predicted - actual) <= actual * CLOSE_FINE_RATIO
-    if close:
-        return "SUSPECT", f"{key} 예측 {predicted} / 실제 {actual}로 매우 가까움"
-    return "CLEAN", f"{key} 예측 {predicted} / 실제 {actual}"
+        tolerance = actual * criteria["closeFineRatio"]
+    if abs(predicted - actual) <= tolerance:
+        return "CLOSE", f"{key} 차이가 허용 오차 안"
+    return "FAR", f"{key} 차이가 허용 오차 밖"
 
 
-def judge(court, predictions):
-    results = [judge_one(court, p) for p in predictions]
-    final = max((verdict for verdict, _ in results), key=VERDICT_ORDER.index)
-    return final, results
+def aggregate(categories, criteria=None):
+    """응답 분류 목록 → (판정, 이유, 분류별 개수). 이유에는 예측 형량 값을 쓰지 않는다."""
+    criteria = criteria_with(criteria)
+    counts = Counter(categories)
+    answered = len(categories)
+    summary = {c: counts[c] for c in CATEGORIES if counts[c]}
+    if counts["KNOWS"]:
+        return "CONTAMINATED", f"사건을 안다고 답한 응답 {counts['KNOWS']}개", summary
+    if answered < criteria["minAnswered"]:
+        return "INSUFFICIENT", f"응답 {answered}개 < 최소 {criteria['minAnswered']}개 — 판정을 확정하지 않음", summary
+    exact_ratio = counts["EXACT"] / answered
+    near_ratio = (counts["EXACT"] + counts["CLOSE"] + counts["SAME_TYPE"]) / answered
+    if exact_ratio >= criteria["exactRatio"]:
+        return "CONTAMINATED", f"정확히 맞힌 응답 {counts['EXACT']}/{answered}", summary
+    if counts["EXACT"]:
+        return "SUSPECT", f"정확히 맞힌 응답 {counts['EXACT']}/{answered} (비율 기준 미만, 우연일 수 있음)", summary
+    if near_ratio >= criteria["suspectRatio"]:
+        return "SUSPECT", (f"가까운 응답 {counts['CLOSE'] + counts['SAME_TYPE']}/{answered}"
+                           f"(기준 {criteria['suspectRatio']:.0%} 이상)"), summary
+    if counts["INVALID"]:
+        return "SUSPECT", f"형식이 어긋난 응답 {counts['INVALID']}개 — 팀이 확인", summary
+    return "CLEAN", f"응답 {answered}개 중 정확히 · 가깝게 맞힌 비율이 기준 미만", summary
+
+
+def judge(court, predictions, criteria=None):
+    """응답 목록 → (판정, 응답별 [(분류, 이유)], 이유, 분류별 개수)."""
+    results = [classify(court, p, criteria) for p in predictions]
+    verdict, reason, summary = aggregate([category for category, _ in results], criteria)
+    return verdict, results, reason, summary
 
 
 def main():
@@ -100,7 +167,9 @@ def main():
 
     judge_cmd = sub.add_parser("judge", help="모델 응답을 판정한다")
     judge_cmd.add_argument("court_judgment", help="실제 판결 (내부 전용)")
-    judge_cmd.add_argument("responses", nargs="+", help="모델 응답 파일 (3개 이상 권장)")
+    judge_cmd.add_argument("responses", nargs="+", help="모델 응답 파일 (기본 최소 5개)")
+    judge_cmd.add_argument("--min-answered", type=int, default=DEFAULT_CRITERIA["minAnswered"],
+                           help=f"이보다 응답이 적으면 INSUFFICIENT (기본 {DEFAULT_CRITERIA['minAnswered']})")
 
     args = parser.parse_args()
 
@@ -113,14 +182,17 @@ def main():
     predictions = []
     for path in args.responses:
         with open(path, encoding="utf-8") as f:
-            predictions.append(parse_output(f.read()))
-    final, results = judge(court, predictions)
-    for path, (verdict, reason) in zip(args.responses, results):
-        print(f"[{verdict}] {path}: {reason}")
-    if len(predictions) < 3:
-        print("[WARN] 응답이 3개 미만입니다. 새 대화에서 3회 이상 받아 판정하세요")
-    print(f"최종 판정: {final}")
-    return 0 if final == "CLEAN" else 1
+            try:
+                predictions.append(parse_output(f.read()))
+            except ValueError:  # JSONDecodeError 포함 — 읽을 수 없는 응답은 INVALID로 센다
+                predictions.append(None)
+    criteria = criteria_with({"minAnswered": args.min_answered})
+    verdict, results, reason, summary = judge(court, predictions, criteria)
+    for path, (category, why) in zip(args.responses, results):
+        print(f"[{category}] {path}: {why}")
+    print(f"분류: {summary}")
+    print(f"최종 판정: {verdict} — {reason}")
+    return 0 if verdict == "CLEAN" else 1
 
 
 if __name__ == "__main__":

@@ -37,7 +37,9 @@
       "models": null,
       "onContaminated": "stop",
       "onSuspect": "continue",
-      "delay": 0
+      "onInsufficient": "stop",
+      "delay": 0,
+      "criteria": {}
     },
     "generate": {
       "enabled": true,

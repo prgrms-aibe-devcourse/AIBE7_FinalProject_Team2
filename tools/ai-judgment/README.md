@@ -60,16 +60,31 @@ mkdir -p out cases   # out/ · cases/는 git에 올리지 않는다
 
 ```bash
 python3 check_contamination.py prompt case.json > out/contamination_prompt.md
-# LLM에 새 대화로 3회 이상 넣고, 응답을 out/run1.json, run2.json, run3.json으로 저장
-python3 check_contamination.py judge court_judgment_internal.json out/run1.json out/run2.json out/run3.json
+# LLM에 새 대화로 5회 이상(권장 10회) 넣고, 응답을 out/run1.json ... 으로 저장
+python3 check_contamination.py judge court_judgment_internal.json out/run*.json [--min-answered 5]
 ```
 
-| 판정 | 뜻 | 조치 |
-| --- | --- | --- |
-| `CONTAMINATED` | 사건을 안다고 답했거나 형벌 · 형량 · 집행유예를 정확히 맞힘 | 사건을 빼거나 다시 가공한다 |
-| `SUSPECT` | 형벌 종류 · 집행유예 여부가 같고 형량이 매우 가까움 (징역 ±2개월, 벌금 ±10%), 또는 실제 판결이 사형 · 무기인데 형벌 종류를 맞힘 (형량 값이 없어 우연히 맞을 수 있음) | 팀이 검토해 판단한다 |
-| `CLEAN` | 문제없음 | 3단계로 간다 |
+응답 하나를 먼저 **분류**하고, 회차 묶음을 **비율로 판정**한다(BE-37). 예전 기준(징역 ±2개월, 가장 나쁜 1건)은 형량이 짧은 사건에서 흔한 형량만 말해도 거의 항상 `SUSPECT`가 나와 변별력이 없었다.
 
+| 응답 분류 | 뜻 |
+| --- | --- |
+| `KNOWS` | 사건을 안다고 답함 |
+| `EXACT` | 형벌 · 형량 · 집행유예를 정확히 맞힘 |
+| `CLOSE` | 형벌 종류 · 집행유예 여부가 같고 형량이 허용 오차 안. 징역 허용 오차는 **실제 형량의 15%, 단 1 ~ 6개월로 제한**(4개월 → 1개월, 20개월 → 3개월, 40개월 이상 → 6개월), 벌금은 10% |
+| `SAME_TYPE` | 실제 판결이 사형 · 무기이고 형벌 종류를 맞힘 (형량 값이 없어 우연히 맞을 수 있음) |
+| `INVALID` | 응답 형식이 어긋남 (`knowsCase`가 true / false가 아님, 읽을 수 없음) |
+| `FAR` | 그 밖 (형벌 종류 · 집행유예 여부가 다르거나 형량이 멂, 예측 없음) |
+
+| 판정 (위에서부터) | 조건 | 조치 |
+| --- | --- | --- |
+| `CONTAMINATED` | `KNOWS`가 하나라도 있음 | 사건을 빼거나 다시 가공한다 |
+| `INSUFFICIENT` | 응답이 최소 개수(기본 5)보다 적음 — 호출 실패 · 무료 한도로 일부만 돌아온 경우 판정을 확정하지 않는다 | 점검을 다시 한다 |
+| `CONTAMINATED` | `EXACT` 비율 ≥ 50% | 사건을 빼거나 다시 가공한다 |
+| `SUSPECT` | `EXACT`가 하나라도 있음, (`EXACT` + `CLOSE` + `SAME_TYPE`) 비율 ≥ 50%, 또는 `INVALID`가 있음 | 팀이 검토해 판단한다 |
+| `CLEAN` | 그 밖 | 3단계로 간다 |
+
+- 기준 값(최소 응답 수 · 허용 오차 비율 · 최소 · 최대 개월 · 벌금 비율 · 판정 비율)은 파이프라인 설정 `stages.contamination.criteria`로 바꾼다(아래 "파이프라인").
+- 판정 근거에는 예측 형량 값을 쓰지 않는다(생성 기록 `generation_report`로 이어진다). 응답별 기록(내부 파일)에만 분류 이유가 남는다.
 - 형벌은 **최종 선고 형벌**로 비교한다. 실제 판결 파일은 `reducedTo`가 있으면 그 값으로 본다(예: 무기징역을 감경해 징역 15년이면 `PRISON` 180).
 - 실제 판결 파일은 **이 점검에만** 쓰는 내부 자료다. 3단계 프롬프트에는 절대 넣지 않는다.
 
@@ -232,7 +247,7 @@ python3 pipeline.py status cases/my-case.pipeline.json
 | --- | --- | --- |
 | `extract` | `case-extractor`로 판결문(여러 개면 1심 · 항소심 함께)을 비식별화 · 구조화한다. 모델은 `stages.extract.model`로 고른다(Claude 모델 ID, `openai:모델ID`, `gemini:모델ID` — BE-35, `maxTokens`는 Claude 외 출력 상한). 사건번호 · 법원명 · 선고일은 **마스킹 전에 로컬에서** 꺼내 내부 파일에만 둔다. 목록 카드 칸(소개 · 키워드 · 난이도 · 예상 시간)도 함께 만든다 | 모델이 서비스 대상이 아니라고 판정하면 멈춘다(`requireEligible: false`로 무시). 판정 기준은 `docs/cases/README.md` 1장 선정 조건 |
 | `court` | 재판부 판결(COURT) 초안을 만든다(`case-extractor/court_draft.py`, BE-38). 마스킹한 원문을 모델에 보내 요약 · 이유 · 쉬운 설명 · 발췌 · 요소별 방향과 근거를 받고, **발췌 · 근거가 원문을 글자 그대로 인용했는지**(바꾼 식별 정보만 `⟦ ⟧`) · **형량이 최종 판결문 주문과 맞는지** · 개인정보 잔존을 자동으로 검사한다. 모델은 `stages.court.model`(없으면 extract 모델) | 검사를 통과하지 못하면 **파이프라인이 멈춘다**(오류를 알려 주며 최대 2번 다시 요청한 뒤). 재판부 판결 없이 이어 가려면 `stages.court.enabled: false`로 끄거나 사람이 쓴 BE-14 JSON을 `inputs.courtDraft`로 넣고 `--from contamination`(또는 다음 단계)으로 다시 실행한다 |
-| `contamination` | 모델마다 사전 학습 점검을 `runs`회(기본 10) 자동으로 묻고 판정한다(REQ-102). 판정은 가장 나쁜 결과 | **기본 꺼짐**(`enabled: true`로 켬). `onContaminated`: `stop`(기본) · `exclude`(그 모델만 생성에서 뺌). `onSuspect`: `continue`(기본) · `exclude` · `stop` |
+| `contamination` | 모델마다 사전 학습 점검을 `runs`회(기본 10) 자동으로 묻고 판정한다(REQ-102). 응답을 분류해 **비율로** 판정한다(위 "2. 사전 학습 점검", BE-37). 호출 실패는 응답 수에 넣지 않는다 | **기본 꺼짐**(`enabled: true`로 켬). `onContaminated`: `stop`(기본) · `exclude`(그 모델만 생성에서 뺌). `onSuspect`: `continue`(기본) · `exclude` · `stop`. `onInsufficient`(응답 부족): `stop`(기본) · `continue` · `exclude`. 기준 값은 `criteria`(예: `{"minAnswered": 5, "closeRatio": 0.15, "closeMinMonths": 1, "closeMaxMonths": 6, "closeFineRatio": 0.1, "exactRatio": 0.5, "suspectRatio": 0.5}`, 빈 값은 기본값). `minAnswered`가 `runs`보다 크면 설정 오류 |
 | `generate` | 모델마다 `runs`회 생성 · 검증한다(`generate.py`와 같음). 검증 통과 회차가 없으면 한 번씩 더 생성한다(최대 `maxRetries`회) | 모든 모델에서 통과 회차가 없으면 멈춘다 |
 | `select` | 검증을 통과한 회차 중 하나를 고른다 | 아래 "회차 선택" |
 | `load` | 사건(DRAFT) + AI 판결(비공개 · PENDING) 적재 SQL을 만들어 보관하고 로컬 DB에 적재한다 | `case: false`면 사건은 빼고 AI 판결만(사건이 이미 DB에 있을 때). `applyToDb: false`면 SQL만 만든다 |
