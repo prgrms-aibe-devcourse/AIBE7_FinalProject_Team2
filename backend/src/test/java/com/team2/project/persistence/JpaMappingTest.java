@@ -32,6 +32,9 @@ import com.team2.project.legalcase.domain.PenaltyType;
 import com.team2.project.legalcase.domain.RangeKind;
 import com.team2.project.legalcase.domain.RevealStage;
 import com.team2.project.legalcase.domain.SentenceRangeOption;
+import com.team2.project.legalcase.domain.ValueAxis;
+import com.team2.project.legalcase.domain.ValueAxisStatus;
+import com.team2.project.legalcase.domain.ValueAxisVotes;
 import com.team2.project.legalcase.repository.CaseSectionRepository;
 import com.team2.project.legalcase.repository.CaseSourceRepository;
 import com.team2.project.legalcase.repository.FactorRepository;
@@ -134,6 +137,26 @@ class JpaMappingTest {
 			.isWithinAllowedRange(180)).isTrue();
 		assertThat(factorRepository.findAllByCaseIdAndRevealStage(caseId, RevealStage.OVERVIEW))
 			.extracting(Factor::getId).containsExactly(overviewFactorId);
+	}
+
+	@Test
+	@DisplayName("판단 요소의 가치관 축 · 후검수 상태 · 투표 기록을 읽는다 (BE-48)")
+	void findById_factorValueAxis_readsStatusAndVotes() {
+		jdbc.update("""
+			UPDATE factor SET value_axis = 'FAULT_STANDARD',
+			    value_axis_votes = '{"runs": 4, "counts": {"FAULT_STANDARD": 3, "NONE": 1}, "needsReview": false, "requestedRuns": 5}'::jsonb
+			WHERE id = ?""", overviewFactorId);
+		jdbc.update("UPDATE factor SET value_axis_status = 'CONFIRMED' WHERE id = ?", detailFactorId);	// NULL로 확정
+
+		Factor voted = factorRepository.findById(overviewFactorId).orElseThrow();
+		Factor confirmed = factorRepository.findById(detailFactorId).orElseThrow();
+
+		assertThat(voted.getValueAxis()).isEqualTo(ValueAxis.FAULT_STANDARD);
+		assertThat(voted.getValueAxisStatus()).isEqualTo(ValueAxisStatus.AUTO);	// 기본값
+		assertThat(voted.getValueAxisVotes()).isEqualTo(new ValueAxisVotes(4, Map.of("FAULT_STANDARD", 3, "NONE", 1), false, 5));
+		assertThat(confirmed.getValueAxis()).isNull();
+		assertThat(confirmed.getValueAxisStatus()).isEqualTo(ValueAxisStatus.CONFIRMED);
+		assertThat(confirmed.getValueAxisVotes()).isNull();
 	}
 
 	@Test

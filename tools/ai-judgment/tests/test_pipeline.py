@@ -71,8 +71,11 @@ class CaseSeedSqlTest(unittest.TestCase):
         self.assertIn("RAISE EXCEPTION '같은 제목의 공개 · 검토 중 사건", sql)
         self.assertIn("'원문 ''따옴표'''", sql)  # 작은따옴표 이스케이프
         self.assertEqual(sql.count("INSERT INTO factor"), len(case["factors"]))
-        self.assertEqual(sql.count("summary_tag, value_axis, display_order"), len(case["factors"]))
-        self.assertEqual(sql.count("'FAULT_STANDARD'"), 1)  # 첫 요소만 축이 있고 나머지는 NULL (어느 축에도 맞지 않는 요소)
+        self.assertEqual(sql.count("summary_tag, value_axis, value_axis_votes,"), len(case["factors"]))
+        self.assertNotIn("::jsonb, 1);", sql)  # 투표 기록이 없는 보고서는 value_axis_votes가 NULL
+        self.assertNotIn("summary_tag, value_axis, value_axis_votes, value_axis_status", sql)  # INSERT는 후검수 상태를 DB 기본값 AUTO로 둔다
+        inserted = sql.split("RETURNING id INTO v_case_id")[1]  # 새 사건 INSERT 부분 (앞은 이미 적재된 사건의 축 갱신)
+        self.assertEqual(inserted.count("'FAULT_STANDARD'"), 1)  # 첫 요소만 축이 있고 나머지는 NULL (어느 축에도 맞지 않는 요소)
         self.assertEqual(sql.count("INSERT INTO case_source"), 2)
         self.assertIn("'2099-05-01'::date", sql)
         self.assertIn("'법원 공개 판결문'", sql)
@@ -84,6 +87,95 @@ class CaseSeedSqlTest(unittest.TestCase):
         with self.assertRaises(CaseSeedError) as ctx:
             build_case_sql(case, report, resolve_sources(SOURCES, [{}, {"caseNumber": "2099노2"}]))
         self.assertIn("valueAxis", str(ctx.exception))
+
+    def test_build_case_sql_valueAxisVotes_insertsJsonb(self):
+        # 축 분류 투표 기록(BE-49)은 value_axis_votes에 jsonb로 넣는다 (BE-48)
+        case = listing_case()
+        report = report_for(case)
+        report["factorExtras"][0]["valueAxisVotes"] = {
+            "runs": 5, "counts": {"FAULT_STANDARD": 3, "NONE": 2}, "needsReview": False}
+        report["factorExtras"][1]["valueAxisVotes"] = {
+            "runs": 4, "counts": {"NONE": 2, "ORDER_OPPORTUNITY": 2}, "needsReview": True}  # 동률, 축은 NULL을 고름
+        sql = build_case_sql(case, report, resolve_sources(SOURCES, [{}, {"caseNumber": "2099노2"}]))
+        self.assertIn("""'FAULT_STANDARD', '{"runs": 5, "counts": {"FAULT_STANDARD": 3, "NONE": 2}, "needsReview": false}'::jsonb, 1);""", sql)
+        self.assertIn(""", NULL, '{"runs": 4, "counts": {"NONE": 2, "ORDER_OPPORTUNITY": 2}, "needsReview": true}'::jsonb, 2);""", sql)
+
+    def test_build_case_sql_existingDraft_updatesAutoAxesOnly(self):
+        # 이미 적재된 DRAFT 사건이면 사건은 건너뛰고, 확정 전(AUTO) 요소의 축 · 투표 기록만 맞춘다 (리뷰 반영)
+        case = listing_case()
+        report = report_for(case)
+        report["factorExtras"][0]["valueAxisVotes"] = {
+            "runs": 5, "counts": {"FAULT_STANDARD": 3, "NONE": 2}, "needsReview": False}
+        sql = build_case_sql(case, report, resolve_sources(SOURCES, [{}, {"caseNumber": "2099노2"}]))
+        skip = sql.split("사건 적재 건너뜀")[1].split("RETURN;")[0]
+        self.assertIn("UPDATE factor f", skip)
+        self.assertIn("f.value_axis_status = 'AUTO'", skip)
+        self.assertIn("v.value_axis_votes IS NOT NULL", skip)  # 투표 없이 정한 값으로 투표 결과를 덮지 않는다 (셀프 리뷰 반영)
+        self.assertIn("AND f.label = v.label", skip)  # 다시 추출해 요소가 달라졌으면 바꾸지 않는다
+        first = case["factors"][0]["label"].replace("'", "''")
+        self.assertIn(f"""(1, '{first}', 'FAULT_STANDARD'::varchar, '{{"runs": 5, "counts": {{"FAULT_STANDARD": 3, "NONE": 2}}, "needsReview": false}}'::jsonb)""", skip)
+        self.assertIn("(2, ", skip)
+        self.assertIn("NULL::varchar, NULL::jsonb)", skip)  # 축 없음 · 투표 기록 없음
+        self.assertIn("RAISE WARNING '가치관 축: 번호 · 라벨이 DB와 다른 요소", skip)
+        self.assertEqual(skip.count(f"(1, '{first}'"), 1)  # 요소 목록은 CTE 한 곳에만 둔다 (리뷰 반영)
+        unmatched = skip.split("SELECT (SELECT count(*) FROM updated)")[1]
+        self.assertIn("v.value_axis_votes IS NOT NULL", unmatched)  # 불일치 경고는 갱신 대상(투표 기록 있음)만 센다
+
+    def test_build_case_sql_valueAxisVotes_needsReviewConsistent_passes(self):
+        # requestedRuns가 있으면 그 기준으로, 없으면 runs 기준으로 needsReview를 확인한다
+        for votes in ({"runs": 2, "counts": {"FAULT_STANDARD": 2}, "needsReview": True, "requestedRuns": 5},  # 2개만 유효
+                      {"runs": 3, "counts": {"FAULT_STANDARD": 3}, "needsReview": False, "requestedRuns": 5},
+                      {"runs": 3, "counts": {"FAULT_STANDARD": 3}, "needsReview": True}):  # 예전 기록: true는 막지 않음
+            with self.subTest(votes):
+                case = listing_case()
+                report = report_for(case)
+                report["factorExtras"][0]["valueAxisVotes"] = votes
+                build_case_sql(case, report, resolve_sources(SOURCES, [{}, {"caseNumber": "2099노2"}]))
+
+    def test_build_case_sql_invalidValueAxisVotes_isError(self):
+        cases = [
+            ("객체", "votes"),
+            ("runs", {"runs": 0, "counts": {"FAULT_STANDARD": 1}, "needsReview": False}),
+            ("needsReview", {"runs": 1, "counts": {"FAULT_STANDARD": 1}, "needsReview": "no"}),
+            ("counts는 비어", {"runs": 1, "counts": {}, "needsReview": False}),
+            ("키는", {"runs": 1, "counts": {"EMBEDDING": 1}, "needsReview": False}),
+            ("합계", {"runs": 5, "counts": {"FAULT_STANDARD": 3}, "needsReview": False}),
+            ("최다표", {"runs": 5, "counts": {"FAULT_STANDARD": 2, "NONE": 3}, "needsReview": False}),
+            # needsReview가 표 수와 맞지 않음 (리뷰 반영): 동률인데 false / 요청 횟수 기준 과반이 아닌데 false / 과반인데 true
+            ("과반이 아닙니다", {"runs": 4, "counts": {"FAULT_STANDARD": 2, "NONE": 2}, "needsReview": False}),
+            ("맞지 않습니다", {"runs": 2, "counts": {"FAULT_STANDARD": 2}, "needsReview": False, "requestedRuns": 5}),
+            ("맞지 않습니다", {"runs": 5, "counts": {"FAULT_STANDARD": 4, "NONE": 1}, "needsReview": True, "requestedRuns": 5}),
+            ("requestedRuns", {"runs": 5, "counts": {"FAULT_STANDARD": 5}, "needsReview": False, "requestedRuns": 3}),
+        ]
+        for message, votes in cases:
+            with self.subTest(message):
+                case = listing_case()
+                report = report_for(case)
+                report["factorExtras"][0]["valueAxisVotes"] = votes  # 첫 요소의 축은 FAULT_STANDARD
+                with self.assertRaises(CaseSeedError) as ctx:
+                    build_case_sql(case, report, resolve_sources(SOURCES, [{}, {"caseNumber": "2099노2"}]))
+                self.assertIn(message, str(ctx.exception))
+
+    def test_build_case_sql_malformedValueAxisWithVotes_isCaseSeedError(self):
+        # 축 값 형식이 틀리면 투표 기록 검사로 넘어가지 않고 CaseSeedError로 알린다 (TypeError 아님, CodeRabbit 리뷰 반영)
+        for bad in ([], ["FAULT_STANDARD"], {"x": 1}):  # 비어 있지 않은 목록 · 객체는 예전에 TypeError였다
+            with self.subTest(bad):
+                case = listing_case()
+                report = report_for(case)
+                report["factorExtras"][0]["valueAxis"] = bad
+                report["factorExtras"][0]["valueAxisVotes"] = {"runs": 1, "counts": {"FAULT_STANDARD": 1},
+                                                              "needsReview": False}
+                with self.assertRaises(CaseSeedError) as ctx:
+                    build_case_sql(case, report, resolve_sources(SOURCES, [{}, {"caseNumber": "2099노2"}]))
+                self.assertIn("valueAxis", str(ctx.exception))
+
+    def test_build_case_sql_noFactors_isError(self):
+        # 판단 요소가 없으면 적재 SQL을 만들지 않는다 (이미 적재된 사건의 축 갱신 SQL이 빈 VALUES가 되지 않게)
+        case = listing_case()
+        case["factors"] = []
+        with self.assertRaises(CaseSeedError) as ctx:
+            build_case_sql(case, report_for(case), resolve_sources(SOURCES, [{}, {"caseNumber": "2099노2"}]))
+        self.assertIn("판단 요소(factors)가 없습니다", str(ctx.exception))
 
     def test_build_case_sql_reportWithoutValueAxis_insertsNull(self):
         # extract-v5 이전 보고서(valueAxis 키 없음)도 적재된다
