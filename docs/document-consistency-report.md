@@ -483,8 +483,10 @@
 
 문서 점검 중 확인한 것이라 참고로 남긴다. 이번 점검 대상은 아니다.
 
-| 기술 스택 서술 | 현재 코드 |
-| --- | --- |
-| Flyway로 스키마 관리, 운영은 `ddl-auto: validate` (`tech-stack.md:63`, `:78`) | `backend/build.gradle`에 Flyway 의존성 없음, `application.yml` 기본값 `ddl-auto: update` |
-| Docker Compose로 PostgreSQL + Redis 구성 (`tech-stack.md:323-328`) | `backend/docker-compose.yml`에 Redis 서비스 없음 (PostgreSQL은 `pgvector/pgvector:pg17` 이미지로 일치) |
-| Spring Boot 4, PostgreSQL, `open-in-view` 끔 | `4.1.1`, `org.postgresql:postgresql`, `open-in-view: false`로 일치 |
+**(2026-10-10, COMMON-22 갱신)** 아래 표는 2026-09-29 점검 당시 기준이다. Flyway · `ddl-auto` 항목은 이후 BE-2 등에서 코드가 반영되어 해소되었다(`tech-stack.md` v1.2 참고). Redis 항목은 그 뒤로도 코드에 반영되지 않아 여전히 유효하며, `tech-stack.md` v1.12에서 "계획, 미구현"으로 표기를 정정했다.
+
+| 기술 스택 서술 | 2026-09-29 당시 코드 | 2026-10-10 현재 코드 |
+| --- | --- | --- |
+| Flyway로 스키마 관리, 운영은 `ddl-auto: validate` (`tech-stack.md:63`, `:78`) | `backend/build.gradle`에 Flyway 의존성 없음, `application.yml` 기본값 `ddl-auto: update` | ✅ 해소 — Flyway 의존성 추가됨, `ddl-auto: validate` 적용됨 |
+| Docker Compose로 PostgreSQL + Redis 구성 (`tech-stack.md:323-328`) | `backend/docker-compose.yml`에 Redis 서비스 없음 (PostgreSQL은 `pgvector/pgvector:pg17` 이미지로 일치) | ⏸ 미해소 — 여전히 Redis 의존성 · Docker Compose 서비스 · 코드 사용처 모두 없음. 문서는 "계획, 미구현"으로 정정(`tech-stack.md` v1.12) |
+| Spring Boot 4, PostgreSQL, `open-in-view` 끔 | `4.1.1`, `org.postgresql:postgresql`, `open-in-view: false`로 일치 | ✅ 계속 일치 |

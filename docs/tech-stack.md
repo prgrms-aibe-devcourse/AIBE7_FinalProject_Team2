@@ -16,6 +16,8 @@
 | v1.9 | 2026-10-06 | BE-28 반영 — 2장 `FLYWAY_LOCATIONS` 표: 로컬 `./gradlew bootRun`은 가상 시드 + (서브모듈에 SQL이 있으면) 실제 사건 위치를 `build.gradle`이 자동으로 정함. 환경변수를 주면 그 값 우선, 운영 · 테스트 · CI는 변경 없음 |
 | v1.10 | 2026-10-08 | COMMON-19 반영 (AI 판결 파이프라인 BE-30 ~ BE-45) — 2장 마이그레이션 목록에 V7(사건 제목 · 판단 요소 번호 유니크) · V8(`ai_generation.generation_report`) 추가, 6장에 오프라인 생성 도구(`tools/ai-judgment`)의 LLM 공급자 · 호출 안정성(재시도 · 교차 호출 · 대체 체인) · 무료 등급 데이터 정책 · 퓨샷 · RAG 구현 상태 추가, "LLM 제공사는 구현 단계에서 결정" 문구를 오프라인 도구(결정됨)와 서비스 안 파이프라인(미결정)으로 구분 |
 | v1.11 | 2026-10-08 | 11 · 12차 회의 반영 (COMMON-20) — 3장 카카오 로그인(OAuth2 · JWT) 검토 표기, 6장 세 판결 AI 비교 분석 제외(REQ-062 · 063) · 임베딩 API 행 추가(모델 미정) · 퓨샷 · RAG · 임베딩 적용 위치가 12차 회의 결정임을 명시 |
+| v1.12 | 2026-10-10 | COMMON-22 반영 — Redis가 의존성·`docker-compose.yml`·코드 어디에도 없는 미구현 상태임을 2 · 7 · 8장에 명시(현재는 PostgreSQL 단일 구성, Redis 캐시는 계획 단계) |
+| v1.13 | 2026-10-10 | COMMON-22 반영 — 2장 마이그레이션 목록에 V9(`factor.value_axis`, BE-47) · V10(`factor.value_axis_status` · `value_axis_votes`, BE-48) 누락분 추가 |
 
 
 ## **1. Backend**
@@ -79,7 +81,7 @@ JPA 사용 시 Lazy Loading을 기본으로 하며, `open-in-view`는 끄고 �
 | --- | --- |
 | PostgreSQL | 사건, 판단 요소, 체험 기록, 판결 등 서비스 주요 데이터 저장 |
 | **Flyway** | DB 스키마 변경 이력 및 Migration 관리 |
-| Redis | 참여자 수, 공개 판결, 사건 목록 등 자주 조회되는 데이터 캐시 |
+| Redis (계획, 미구현) | 참여자 수, 공개 판결, 사건 목록 등 자주 조회되는 데이터 캐시. 현재 의존성 · `docker-compose.yml` · 코드 어디에도 없음 |
 | pgvector | 유사 판례·양형기준 임베딩 저장 및 유사도 검색. RAG 전환 시 활용 |
 
 사건 정보의 피해 결과 카드, 부가 처분, AI 입력·출력 기록처럼 구조가 사건마다 다른 데이터는 `jsonb` 컬럼에 저장한다.
@@ -104,7 +106,9 @@ backend/src/main/resources/db/migration
  ├─ V5__create_extension_tables.sql   -- (확장) AI 판결 생성 기록, 세 판결 비교 분석
  ├─ V6__add_case_source_final_unique.sql   -- 사건마다 최종 확정 판결 1건 (부분 유니크)
  ├─ V7__add_legal_case_title_factor_display_order_unique.sql   -- 사건 제목 · (사건, 판단 요소 번호) 유일 (적재 SQL의 조회 키, BE-15)
- └─ V8__add_ai_generation_generation_report.sql   -- ai_generation.generation_report (자동 생성 정보, BE-31)
+ ├─ V8__add_ai_generation_generation_report.sql   -- ai_generation.generation_report (자동 생성 정보, BE-31)
+ ├─ V9__add_factor_value_axis.sql   -- factor.value_axis (가치관 축 4종 또는 NULL, BE-47)
+ └─ V10__add_factor_value_axis_review.sql   -- factor.value_axis_status(AUTO/CONFIRMED) · value_axis_votes(jsonb) (후검수, BE-48)
 
 backend/src/main/resources/db/seed          -- 로컬 · CI 전용 (운영에는 넣지 않음)
  └─ R__seed_sample_case.sql           -- 개발용 임시 시드: 가상 살인 사건 1건 (ERD 6장 예시)
@@ -143,6 +147,8 @@ MVP에는 관리자 화면이 없으므로 대표 사건 데이터와 검수된 
 
 - 접속 정보는 `DB_URL` · `DB_USERNAME` · `DB_PASSWORD` 환경변수로 받고, 값이 없으면 로컬 Docker 기본값을 쓴다(`application.yml`). 단계를 옮겨도 코드는 바꾸지 않고 환경변수만 바꾼다.
 - 운영 계정 · 비밀번호는 저장소 어디에도 적지 않는다.
+
+**(계획, 미구현)** 아래 Redis 캐시 설계는 현재 코드에 반영되지 않았다. `backend/docker-compose.yml`은 PostgreSQL만 구성하고 있고, `build.gradle`에도 Redis 의존성이 없다. 도입 시점은 아직 정해지지 않았다.
 
 Redis는 캐시 용도로만 사용한다. 체험 진행 상태나 판결 같은 원본 데이터는 모두 PostgreSQL에 저장하고, Redis가 없어도 서비스가 동작하도록 한다.
 
@@ -387,7 +393,7 @@ AI 판결 생성 파이프라인은 **RAG를 기본으로** 한다. 별도 벡�
 | **기술** | **사용 목적** |
 | --- | --- |
 | Docker | 백엔드 애플리케이션 이미지 생성 |
-| Docker Compose | PostgreSQL, Redis 등 로컬 개발 환경을 컨테이너로 구성 |
+| Docker Compose | PostgreSQL 로컬 개발 환경을 컨테이너로 구성 (Redis는 계획 단계, 아직 구성에 없음) |
 | GitHub Actions | 테스트, 빌드 등의 CI 자동화 |
 | JUnit 5 / Mockito | 단위 테스트 |
 | Spring Boot Test | DB 연동 통합 테스트 |
@@ -403,8 +409,9 @@ Docker Compose에서는 우선 다음 서비스를 관리한다.
 
 ```
 PostgreSQL (pgvector 포함 이미지)
-Redis
 ```
+
+Redis는 계획 단계로, 아직 Docker Compose 구성에 없다.
 
 DB 접속 정보 등 비밀값은 코드에 적지 않고 환경변수로 주입한다.
 
@@ -447,7 +454,7 @@ Docker 이미지 빌드
 AWS EC2에서 컨테이너 실행 (환경변수로 접속 정보 주입)
 
 ↓
-PostgreSQL / Redis 연결
+PostgreSQL 연결 (Redis는 계획 단계, 아직 연결 없음)
 ```
 
 프론트엔드와 API는 **같은 도메인**으로 배포한다. 프론트엔드는 `npm run build` 결과물을 Nginx가 서빙하고, `/api`로 시작하는 요청은 Nginx가 백엔드 컨테이너로 넘긴다. 로컬의 Vite 프록시와 같은 구조라 익명 ID 쿠키를 `SameSite=Lax`로 쓸 수 있고 CORS 설정이 필요 없다(API 명세서 1-2 · 6장 #2).
