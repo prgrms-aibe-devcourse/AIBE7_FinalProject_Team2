@@ -812,7 +812,10 @@ class PipelineTest(unittest.TestCase):
 
     def test_axis_config_validation(self):
         for changes, message in (({"model": "free:gemini"}, "stages.axis.model"), ({"model": "manual:x"}, "manual"),
-                                 ({"runs": 0}, "stages.axis.runs"), ({"maxRetries": -1}, "stages.axis.maxRetries")):
+                                 ({"runs": 0}, "stages.axis.runs"), ({"maxRetries": -1}, "stages.axis.maxRetries"),
+                                 ({"delay": "1"}, "stages.axis.delay"), ({"delay": -1}, "stages.axis.delay"),
+                                 ({"temperature": "0.2"}, "stages.axis.temperature"),
+                                 ({"temperature": True}, "stages.axis.temperature")):
             with self.subTest(changes):
                 with self.assertRaises(pipeline.PipelineError) as ctx:
                     self.config(axis=changes)

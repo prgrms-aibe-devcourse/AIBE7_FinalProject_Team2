@@ -461,6 +461,13 @@ def axis_errors(config):
         value = cfg.get(key)
         if not isinstance(value, int) or isinstance(value, bool) or value < minimum:
             errors.append(f"stages.axis.{key}는 {minimum} 이상 정수다")
+    delay = cfg.get("delay")
+    if not isinstance(delay, (int, float)) or isinstance(delay, bool) or delay < 0:
+        errors.append("stages.axis.delay는 0 이상 숫자다 (초)")
+    temperature = cfg.get("temperature")
+    if temperature is not None and (not isinstance(temperature, (int, float)) or isinstance(temperature, bool)
+                                    or temperature < 0):
+        errors.append("stages.axis.temperature는 null 또는 0 이상 숫자다")
     return errors
 
 
