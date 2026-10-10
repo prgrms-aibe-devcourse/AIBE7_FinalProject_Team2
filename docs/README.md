@@ -27,6 +27,7 @@
 | [sequence-diagram.md](sequence-diagram.md) | 시퀀스 다이어그램. 사건 등록 · 체험 · 판결 · 비교 흐름 |
 | [tech-stack.md](tech-stack.md) | 기술 스택 정리 |
 | [ai-judgment-pipeline.md](ai-judgment-pipeline.md) | AI 판결 오프라인 파이프라인. 판결문 → 비식별화 → 재판부 초안 → 사전 학습 점검 → 생성 → 선택 → 적재 흐름, 모델 · 재시도 · 무료 등급 정책, 구현 상태 (`tools/ai-judgment`) |
+| [rag-precedent-sources.md](rag-precedent-sources.md) | AI 판결 RAG 판례 수집처 조사. 수집처별 약관 · 자동 수집 가능 여부, 살인 판례 건수 · 중복 확인 결과 (BE-50) |
 
 ### 일정 · 협업
 
