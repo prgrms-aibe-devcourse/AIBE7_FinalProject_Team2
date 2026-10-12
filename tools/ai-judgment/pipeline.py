@@ -24,6 +24,7 @@ import copy
 import datetime
 import hashlib
 import json
+import math
 import os
 import shutil
 import subprocess
@@ -441,6 +442,11 @@ def validate_config(config):
         raise PipelineError("설정 오류:\n- " + "\n- ".join(errors))
 
 
+def is_finite_number(value):
+    """bool이 아닌 int · float이고 NaN · ±Infinity가 아님 (설정 JSON은 NaN · Infinity를 숫자로 읽는다)."""
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
 def axis_errors(config):
     """가치관 축 분류 투표 설정(stages.axis) 검사 (BE-49)."""
     cfg = config["stages"]["axis"]
@@ -462,12 +468,11 @@ def axis_errors(config):
         if not isinstance(value, int) or isinstance(value, bool) or value < minimum:
             errors.append(f"stages.axis.{key}는 {minimum} 이상 정수다")
     delay = cfg.get("delay")
-    if not isinstance(delay, (int, float)) or isinstance(delay, bool) or delay < 0:
-        errors.append("stages.axis.delay는 0 이상 숫자다 (초)")
+    if not is_finite_number(delay) or delay < 0:  # JSON의 NaN · Infinity는 time.sleep에서 터진다
+        errors.append("stages.axis.delay는 0 이상 유한한 숫자다 (초)")
     temperature = cfg.get("temperature")
-    if temperature is not None and (not isinstance(temperature, (int, float)) or isinstance(temperature, bool)
-                                    or temperature < 0):
-        errors.append("stages.axis.temperature는 null 또는 0 이상 숫자다")
+    if temperature is not None and (not is_finite_number(temperature) or temperature < 0):
+        errors.append("stages.axis.temperature는 null 또는 0 이상 유한한 숫자다")
     return errors
 
 

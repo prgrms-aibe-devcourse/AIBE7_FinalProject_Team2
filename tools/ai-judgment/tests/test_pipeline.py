@@ -815,7 +815,11 @@ class PipelineTest(unittest.TestCase):
                                  ({"runs": 0}, "stages.axis.runs"), ({"maxRetries": -1}, "stages.axis.maxRetries"),
                                  ({"delay": "1"}, "stages.axis.delay"), ({"delay": -1}, "stages.axis.delay"),
                                  ({"temperature": "0.2"}, "stages.axis.temperature"),
-                                 ({"temperature": True}, "stages.axis.temperature")):
+                                 ({"temperature": True}, "stages.axis.temperature"),
+                                 ({"delay": float("nan")}, "stages.axis.delay"),
+                                 ({"delay": float("inf")}, "stages.axis.delay"),
+                                 ({"temperature": float("nan")}, "stages.axis.temperature"),
+                                 ({"temperature": float("-inf")}, "stages.axis.temperature")):
             with self.subTest(changes):
                 with self.assertRaises(pipeline.PipelineError) as ctx:
                     self.config(axis=changes)
