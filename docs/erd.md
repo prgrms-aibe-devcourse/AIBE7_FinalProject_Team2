@@ -21,6 +21,7 @@
 | v1.14 | 2026-10-08 | 11 · 12차 회의 반영 (COMMON-20)<br>• `comparison_analysis`: AI 비교 분석(REQ-063) 제외로 보류. V5 마이그레이션의 테이블은 그대로 두고 쓰지 않는다(삭제 여부 미정)<br>• 8장 신설: 판결 성향 테스트 테이블 제안(미확정) — 문항 · 선택지 · 유형 · 결과 · 체험별 성향 기여. 판단 요소별 가치관 축은 새로 만들지 않고 `factor.value_axis`(v1.13, BE-47)를 쓴다 |
 | v1.15 | 2026-10-08 | 판단 요소 가치관 축 후검수 반영 (BE-48)<br>• `factor.value_axis_status` 추가(V10 마이그레이션, 기본 `AUTO`): `AUTO`(AI 투표 · 사람 초안 기본값) / `CONFIRMED`(관리자 확정, NULL 확정 포함). 시드 · 적재 SQL은 `CONFIRMED` 행을 덮어쓰지 않는다<br>• `factor.value_axis_votes`(jsonb) 추가: 축 분류 투표 기록(BE-49). 최다표가 요청 횟수의 과반이 아니면(동률 · 유효 응답 부족 포함) `needsReview` |
 | v1.16 | 2026-10-10 | AI 판결 RAG 판례 저장소 추가 (BE-51)<br>• `rag_precedent` 추가(V11 마이그레이션, pgvector `vector(3072)`): 비식별화한 사실관계 요약(검색 기준 · 임베딩 입력) · 양형 이유 · 법조문 · 주문 형량 · 양형인자 · 사건 그룹 · 사건번호 해시(병합 사건은 번호마다). 판결문 원문 · 사건번호 · 법원명은 넣지 않는다<br>• 검색 함수 `rag_precedent_search`: 자기 사건(사건번호 해시가 있는 사건 그룹 전체) 제외, 사건 그룹당 1건, 점수 하한 · 개수 제한<br>• 검색어 임베딩 · 검색은 백엔드 `RagSearchService`(Java), 판례 적재는 오프라인 `rag_store.py`(Python)<br>• 사용 보류 `on_hold` · `hold_reason`: LBox 판례는 라이선스 확인 전까지 보류(검색 제외)<br>• 사용자 API에서 조회하지 않는 오프라인 파이프라인 전용 테이블. 행은 비공개 시드 `R__40`이 넣는다 |
+| v1.17 | 2026-10-13 | 관리자 계정 추가 (**확장 단계**, BE-39 — 닫힌 #79를 최신 develop에 다시 적용)<br>• `admin_account`(V12 마이그레이션): 관리자 후검수 API 로그인 계정. 사용자(익명 ID)와 관계없음 |
 
 ---
 
@@ -426,6 +427,20 @@ AI 판결 1건을 어떤 조건으로 만들었는지 남긴다(REQ-047, 079). M
 - 자동 파이프라인(BE-31)은 재판부 판결(COURT)도 비공개(`judgment.is_published=false`)로 넣는다(BE-38). 기존 공개 판결은 건드리지 않고, 파이프라인을 다시 돌리면 같은 사건에 비공개 COURT 후보가 하나 더 쌓일 수 있다(기존 행은 지우지 않음, REQ-079와 같은 원칙). 공개할 후보를 고르는 일은 후검수(BE-33 이후, 미구현)가 한다. COURT 판결에는 검수 상태 컬럼이 아직 없다.
 - 자동 파이프라인(BE-31)은 AI 판결을 비공개(`judgment.is_published=false`) · `review_status='PENDING'`으로 넣는다. 관리자가 검수해 `APPROVED`로 바꾸고 공개 판단을 교체한다(후검수). `REJECTED`는 공개하지 않는다.
 - 모델·프롬프트가 바뀌면 새 `judgment` + 새 `ai_generation`을 만들고, 검수 후 공개 판단을 교체한다. 기존 행은 지우지 않는다(REQ-079).
+
+#### `admin_account` — 관리자 계정 (확장 단계, v1.17)
+
+관리자 후검수 API(`/api/v1/admin/**`, BE-33)에 로그인하는 관리자(BE-39). 사용자는 익명 ID로만 구분하므로 이 테이블과 관계가 없다.
+
+| 컬럼 | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| id | bigint PK | ✓ |  |
+| email | varchar(254) | ✓ | 로그인 아이디. 소문자로 정규화해 저장(CHECK `email = lower(email)`), 유니크 |
+| password_hash | varchar(100) |  | BCrypt 해시(`{bcrypt}` 접두어). OAuth로만 로그인하는 관리자(BE-40)는 NULL |
+| display_name | varchar(50) | ✓ | 화면 · 검수 기록에 쓰는 이름 |
+| enabled | boolean | ✓ | 비활성이면 로그인할 수 없다 |
+| created_at | timestamptz | ✓ |  |
+| last_login_at | timestamptz |  | 마지막 로그인 시각 |
 
 #### `comparison_analysis` — 세 판결 비교 분석 (확장 단계, v1.1)
 

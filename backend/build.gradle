@@ -21,6 +21,8 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+	// 관리자 인증 · 권한 (확장 단계, BE-39). 사용자 API는 인증 없이 그대로 동작하고 /api/v1/admin/**만 보호한다
+	implementation 'org.springframework.boot:spring-boot-starter-security'
 	// DB 스키마 마이그레이션 (Spring Boot 4는 Flyway 자동 설정이 별도 스타터로 분리됨)
 	implementation 'org.springframework.boot:spring-boot-starter-flyway'
 	// Flyway 10 이상은 PostgreSQL 지원 모듈이 따로 필요
@@ -33,6 +35,7 @@ dependencies {
 	testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-validation-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+	testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
 	testCompileOnly 'org.projectlombok:lombok'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 	testAnnotationProcessor 'org.projectlombok:lombok'

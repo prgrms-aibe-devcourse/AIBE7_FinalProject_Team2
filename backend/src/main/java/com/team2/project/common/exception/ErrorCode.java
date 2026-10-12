@@ -24,6 +24,10 @@ public enum ErrorCode {
 	INVALID_PENALTY_TYPE(HttpStatus.UNPROCESSABLE_CONTENT, "선택할 수 없는 형벌입니다."),
 	OUT_OF_ALLOWED_RANGE(HttpStatus.UNPROCESSABLE_CONTENT, "선고할 수 있는 범위를 벗어났습니다."),
 	INVALID_SUSPENSION(HttpStatus.UNPROCESSABLE_CONTENT, "집행유예를 적용할 수 없습니다."),
+	// 관리자 API (확장 단계, BE-39). 로그인 실패는 계정이 있는지 드러내지 않도록 한 코드로 응답한다
+	UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "로그인이 필요합니다."),
+	INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "아이디 또는 비밀번호가 올바르지 않습니다."),
+	FORBIDDEN(HttpStatus.FORBIDDEN, "권한이 없거나 요청을 확인할 수 없습니다."),
 	INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "서버 오류가 발생했습니다.");
 
 	private final HttpStatus status;
