@@ -1,13 +1,7 @@
 :is(.landing-page, .case-list-page) {
-  --color-primary: #e8391e;
-  --color-text: #1a1a1a;
-  --color-muted: #66615e;
-  --color-border: #dfd9d5;
-  --color-surface: #faf8f6;
-  --content-width: 1180px;
   color: var(--color-text);
-  background: #fff;
-  font: 15px/1.75 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+  background: var(--color-bg);
+  font: var(--text-body)/1.75 var(--font-body);
   max-width: var(--content-width);
   margin: 0 auto;
   border: 1px solid var(--color-border);
@@ -19,13 +13,13 @@
 :is(.landing-page, .case-list-page) :is(ul, ol) { list-style: none; }
 :is(.landing-page, .case-list-page) button { font: inherit; cursor: pointer; }
 :is(.landing-page, .case-list-page) button:disabled { cursor: default; }
-:is(.landing-page, .case-list-page) button:focus-visible { outline: 3px solid #224d8a; outline-offset: 4px; }
+:is(.landing-page, .case-list-page) button:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 4px; }
 :is(.landing-page, .case-list-page) .primary-button,
 :is(.landing-page, .case-list-page) .secondary-button { min-height: 44px; padding: 10px 18px; border: 1px solid var(--color-border); border-radius: 4px; font-weight: 700; }
-:is(.landing-page, .case-list-page) .primary-button { background: #c83019; border-color: #c83019; color: #fff; }
-:is(.landing-page, .case-list-page) .primary-button:hover:not(:disabled) { background: #a92612; }
+:is(.landing-page, .case-list-page) .primary-button { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-on-accent); }
+:is(.landing-page, .case-list-page) .primary-button:hover:not(:disabled) { background: var(--color-accent-hover); border-color: var(--color-accent-hover); }
 :is(.landing-page, .case-list-page) .primary-button:disabled { opacity: .6; }
-:is(.landing-page, .case-list-page) .secondary-button { color: var(--color-text); background: #fff; }
+:is(.landing-page, .case-list-page) .secondary-button { color: var(--color-text); background: var(--color-card); border-color: var(--color-border-strong); }
 :is(.landing-page, .case-list-page) .secondary-button:hover { background: var(--color-surface); }
 :is(.landing-page, .case-list-page) .muted { color: var(--color-muted); font-size: 13px; }
 :is(.landing-page, .case-list-page) .message-panel { padding: 44px 28px; }
@@ -41,7 +35,7 @@
 .landing-page .feature-section { padding: 56px 28px 72px; background: var(--color-surface); border-top: 1px solid var(--color-border); scroll-margin-top: 0; }
 .landing-page .feature-section h2 { font-size: 22px; text-align: center; margin-bottom: 28px; }
 .landing-page .feature-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
-.landing-page .feature-card { padding: 24px; background: #fff; border: 1px solid var(--color-border); border-top: 3px solid var(--color-primary); border-radius: 4px; }
+.landing-page .feature-card { padding: 24px; background: var(--color-card); border: 1px solid var(--color-border); border-top: 3px solid var(--color-primary); border-radius: 4px; }
 .landing-page .feature-step { display: inline-block; margin-bottom: 10px; color: var(--color-primary); font-weight: 800; }
 .landing-page .feature-card h3 { font-size: 17px; margin-bottom: 8px; }
 .landing-page .feature-card p { color: var(--color-muted); font-size: 14px; }
