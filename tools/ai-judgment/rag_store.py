@@ -237,6 +237,7 @@ def run_build(args, caller=llm.call):
             if free_tier:
                 built["usedFreeTier"] = True  # 무료 등급이 있는 모델로 만들었음 (키가 실제로 무료인지는 알 수 없다)
             write_json(path, built)
+            discard_embedding(Path(args.out), target["key"])
             print(f"[{n}/{len(items)}] {target['key']} 완료", file=sys.stderr)
         except (RagStoreError, llm.LLMError) as e:
             failed.append(str(e))
@@ -303,8 +304,16 @@ def run_import(args):
         write_json(out / "precedents" / f"{key}.json",
                    {**by_key[key], "result": output, "model": args.model, "servedModel": None,
                     "privacyWarnings": warnings, "attempts": 1})
+        discard_embedding(out, key)
         print(f"{key}: 통과" + (f" (경고 {len(warnings)}건)" if warnings else ""), file=sys.stderr)
     return failed
+
+
+def discard_embedding(out, key):
+    """요약을 새로 썼으면 예전 임베딩을 지운다. 남겨 두면 embed가 건너뛰어 새 요약과 옛 벡터가 한 행에 들어간다."""
+    path = Path(out) / "embeddings" / f"{key}.json"
+    if path.exists():
+        path.unlink()
 
 
 # ---------- embed ----------

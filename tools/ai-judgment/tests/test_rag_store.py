@@ -191,6 +191,23 @@ class BuildTest(unittest.TestCase):
             self.assertTrue(rag_store.load_json(tmp / "out" / "precedents" / "LBOX-2.json")["usedFreeTier"])
 
 
+class ImportTest(unittest.TestCase):
+    def test_run_import_discardsStaleEmbedding(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            target = rag_store.targets([candidate()])[0]
+            rag_store.write_json(out / "embeddings" / f"{target['key']}.json", {"model": "m", "dim": 3, "values": [1, 2, 3]})
+            (out / "manual" / "outputs").mkdir(parents=True)
+            (out / "manual" / "outputs" / f"{target['key']}.json").write_text(json.dumps(good_output(), ensure_ascii=False),
+                                                                             encoding="utf-8")
+            (out / "c.json").write_text(json.dumps([candidate()]), encoding="utf-8")
+            failed = rag_store.run_import(SimpleNamespace(out=out, candidates=out / "c.json", keys=None,
+                                                          model=rag_store.MANUAL_MODEL))
+            self.assertEqual(failed, [])
+            self.assertTrue((out / "precedents" / f"{target['key']}.json").exists())
+            self.assertFalse((out / "embeddings" / f"{target['key']}.json").exists())
+
+
 class EmbedTest(unittest.TestCase):
     def make_precedents(self, out, count=2):
         target = rag_store.targets([candidate()])[0]

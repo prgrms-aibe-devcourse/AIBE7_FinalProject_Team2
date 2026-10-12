@@ -58,7 +58,8 @@ CREATE INDEX idx_rag_precedent_case_number_hash ON rag_precedent (case_number_ha
 
 -- 유사 판례 검색 (자기 사건 제외). 코사인 유사도 = 1 - 코사인 거리(<=>)
 --   exclude_hashes: 판결하려는 사건의 사건번호 해시들(1심 · 항소심). 그 해시가 있는 사건 그룹 전체를 뺀다
---   exclude_groups: 직접 뺄 사건 그룹 (같은 사건의 다른 심급 · 공범 별도 판결 · 병합 사건을 알고 있을 때)
+--   exclude_groups: 직접 뺄 사건 그룹 (같은 사건의 다른 심급 · 공범 별도 판결 · 병합 사건을 알고 있을 때). NULL 원소는 무시한다
+--   (NOT IN에 NULL이 섞이면 모든 행이 빠져 결과가 조용히 비므로 NOT EXISTS로 비교한다)
 --   같은 사건 그룹은 가장 비슷한 판례 1건만 돌려준다 (검색 결과에 같은 사건이 두 번 나오지 않게)
 --   사용 보류(on_hold) 판례는 결과에서 뺀다. 자기 사건 제외는 보류 판례의 사건번호 해시도 그대로 본다
 CREATE FUNCTION rag_precedent_search(
@@ -73,13 +74,13 @@ LANGUAGE sql STABLE AS $$
     WITH excluded AS (
         SELECT p.case_group FROM rag_precedent p WHERE p.case_number_hash = ANY (coalesce(exclude_hashes, '{}'))
         UNION
-        SELECT g FROM unnest(coalesce(exclude_groups, '{}')) AS g
+        SELECT g FROM unnest(coalesce(exclude_groups, '{}')) AS g WHERE g IS NOT NULL
     ), scored AS (
         SELECT DISTINCT ON (p.case_group) p.id, p.case_group, 1 - (p.embedding <=> query) AS score
         FROM rag_precedent p
         WHERE p.crime_type = crime
           AND NOT p.on_hold
-          AND p.case_group NOT IN (SELECT e.case_group FROM excluded e)
+          AND NOT EXISTS (SELECT 1 FROM excluded e WHERE e.case_group = p.case_group)
         ORDER BY p.case_group, p.embedding <=> query, p.id
     )
     SELECT s.id, s.case_group, s.score FROM scored s

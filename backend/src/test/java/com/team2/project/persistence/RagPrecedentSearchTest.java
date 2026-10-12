@@ -76,6 +76,15 @@ class RagPrecedentSearchTest {
 	}
 
 	@Test
+	@DisplayName("제외 그룹 목록에 NULL 원소가 섞여도 결과가 비지 않는다 (NOT IN + NULL 함정)")
+	void search_nullInExcludeGroups_isIgnored() {
+		long kept = insert("LAW_GO_KR", "50", "G-N1", hash('8'), "MURDER", vector(0, 1.0, 1, 0.1));
+		insert("LAW_GO_KR", "51", "G-N2", hash('9'), "MURDER", vector(0, 1.0));
+
+		assertThat(search(vector(0, 1.0), "MURDER", null, new String[] {"G-N2", null}, 5, 0.0)).containsExactly(kept);
+	}
+
+	@Test
 	@DisplayName("top_k만큼만 돌려준다")
 	void search_limitsToTopK() {
 		IntStream.range(0, 4).forEach(i -> insert("LBOX", "3" + i, "G-K" + i, null, "MURDER", vector(0, 1.0, 1, 0.1 * (i + 1))));
