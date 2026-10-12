@@ -130,15 +130,16 @@ class RagPrecedentSearchTest {
 	void caseNumberHash_plainCaseNumber_isRejected() {
 		assertThatThrownBy(() -> insert("LAW_GO_KR", "98", "G-Y", "2020고합123", "MURDER", vector(0, 1.0)))
 			.isInstanceOf(DataIntegrityViolationException.class)
-			.hasMessageContaining("chk_rag_precedent_case_number_hash");
+			.hasMessageContaining("chk_rag_precedent_case_number_hashes");
 	}
 
 	private long insert(String source, String ref, String group, String caseNumberHash, String crime, String embedding) {
 		return jdbc.queryForObject("""
-			INSERT INTO rag_precedent (source, source_ref, case_number_hash, case_group, crime_type, court_level,
+			INSERT INTO rag_precedent (source, source_ref, case_number_hashes, case_group, crime_type, court_level,
 			    facts_summary, sentencing_reason, embedding, embedding_model, embedding_dim)
-			VALUES (?, ?, ?, ?, ?, 'FIRST', '사실관계 요약', '양형 이유', ?::vector, 'gemini-embedding-001', 3072)
-			RETURNING id""", Long.class, source, ref, caseNumberHash, group, crime, embedding);
+			VALUES (?, ?, ?::text[], ?, ?, 'FIRST', '사실관계 요약', '양형 이유', ?::vector, 'gemini-embedding-001', 3072)
+			RETURNING id""", Long.class, source, ref, caseNumberHash == null ? null : new String[] {caseNumberHash}, group,
+			crime, embedding);
 	}
 
 	private List<Long> search(String query, String crime, String[] hashes, String[] groups, int topK, double minScore) {

@@ -21,7 +21,7 @@ import org.springframework.stereotype.Service;
  * 사건 하나에 대한 유사 판례 검색 (BE-51). AI 판결 생성(generate, BE-54) · 관리자 검색 확인(BE-39 이후)이 쓴다.
  *
  * - 검색어는 비식별화한 사건 개요(legal_case.overview)다. 원문 · 사건번호는 임베딩 API로 보내지 않는다
- * - 사건의 원본 판결문(case_source) 사건번호를 해시로 바꿔, 그 해시가 있는 사건 그룹(다른 심급 포함)을 통째로 뺀다.
+ * - 사건의 원본 판결문(case_source) 사건번호를 번호마다 해시로 바꿔, 그 해시가 하나라도 있는 사건 그룹(다른 심급 포함)을 통째로 뺀다.
  *   그래야 실제 판결 결과가 AI에게 노출되지 않는다
  * - 판례 임베딩 모델 · 차원이 검색어와 다르면 비교할 수 없으므로 멈춘다
  * - 서비스 트랜잭션을 두지 않는다. 임베딩 HTTP 호출(시간 제한 · 재시도 대기)이 DB 연결을 붙잡지 않게, 조회는 저장소마다
@@ -56,7 +56,8 @@ public class RagSearchService {
 		}
 		checkEmbeddingSpec();
 		List<String> excludeHashes = caseSourceRepository.findCaseNumbersByCaseId(caseId).stream()
-			.map(CaseNumberHash::of)
+			.flatMap(number -> CaseNumberHash.ofAll(number).stream())
+			.distinct()
 			.toList();
 		if (excludeHashes.isEmpty()) {
 			// 사건번호 값은 로그에 남기지 않는다 (case_source는 내부 전용)

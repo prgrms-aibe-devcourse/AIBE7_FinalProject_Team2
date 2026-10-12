@@ -74,9 +74,26 @@ def precedent_key(source, ref):
     return f"{source}-{ref}"
 
 
+# 사건번호 하나 (예: 2014고13, 2008재고합1, 2016 고합 79). 병합 표기 "2014고13, 2014고14(병합)"에서 하나씩 뽑는다
+CASE_NUMBER_TOKEN = re.compile(r"(?:19|20)\d{2}\s*[가-힣]{1,3}\s*\d+")
+
+
 def case_number_hash(number):
-    """사건번호(공백 제거) SHA-256 hex. 원문 사건번호는 저장하지 않는다 (자기 사건 제외 검색에만 쓴다)."""
+    """사건번호 하나(공백 제거)의 SHA-256 hex. 원문 사건번호는 저장하지 않는다 (자기 사건 제외 검색에만 쓴다)."""
     return hashlib.sha256(re.sub(r"\s", "", number).encode("utf-8")).hexdigest() if number else None
+
+
+def case_number_hashes(number):
+    """사건번호 칸 → 사건번호마다의 해시 목록 (정렬 · 중복 제거). 형식에 맞는 번호가 없으면 칸 전체를 하나로 해시한다.
+
+    병합 사건은 law.go.kr 칸에 "2014고13, 2014고14(병합)"처럼 여러 번호가 오지만, 대상 사건의 case_source에는 번호가
+    하나만 들어갈 수 있다. 칸 전체를 해시하면 두 쪽이 달라 자기 사건 제외가 조용히 실패하므로 번호마다 해시한다.
+    백엔드 CaseNumberHash.ofAll과 같은 규칙이어야 한다 (CaseNumberHashTest가 이 함수의 값과 비교).
+    """
+    if not number or not number.strip():
+        return []
+    tokens = {re.sub(r"\s", "", t) for t in CASE_NUMBER_TOKEN.findall(number)} or {re.sub(r"\s", "", number)}
+    return sorted(case_number_hash(t) for t in tokens)
 
 
 def targets(candidates):
@@ -96,7 +113,7 @@ def targets(candidates):
             "key": row["key"],
             "source": SOURCES[row["source"]],
             "sourceRef": row["sourceId"],
-            "caseNumberHash": case_number_hash(row.get("caseNumber")),
+            "caseNumberHashes": case_number_hashes(row.get("caseNumber")),
             "caseGroup": min(groups[row["caseGroup"]]),
             "crimeType": "MURDER",
             "chargeName": CHARGE_NAMES.get(row["type"], row["type"]),
@@ -350,6 +367,17 @@ def sql_int(value):
     return "NULL" if value is None else str(int(value))
 
 
+def sql_text_array(values):
+    return "NULL" if not values else "ARRAY[" + ", ".join(sql_text(v) for v in values) + "]::text[]"
+
+
+def number_hashes(precedent):
+    """사건번호 해시 목록. 예전 형식(caseNumberHash 하나)으로 저장된 판례도 받는다 (--candidates로 다시 맞추면 새 형식)."""
+    if "caseNumberHashes" in precedent:
+        return precedent["caseNumberHashes"]
+    return [precedent["caseNumberHash"]] if precedent.get("caseNumberHash") else []
+
+
 def sql_jsonb(value):
     return "NULL" if value is None else sql_text(json.dumps(value, ensure_ascii=False)) + "::jsonb"
 
@@ -366,7 +394,7 @@ def guideline_sql(name):
             f"AND version_name = {sql_text(name)} ORDER BY id LIMIT 1)")
 
 
-COLUMNS = ("source, source_ref, case_number_hash, case_group, crime_type, charge_name, statutes, court_level, "
+COLUMNS = ("source, source_ref, case_number_hashes, case_group, crime_type, charge_name, statutes, court_level, "
            "decided_at, incident_date, guideline_id, penalty_type, prison_months, suspension_months, fine_amount, "
            "recommended_range, sentencing_factors, facts_summary, sentencing_reason, embedding, embedding_model, "
            "embedding_dim, on_hold, hold_reason, flags")
@@ -394,7 +422,7 @@ def insert_sql(precedent, embedding):
         # 팀 결정(2026-10-10): 빼지 않고 확인 필요로만 표시한다 (판례 조건 8-1의 대상 죄명이 아님)
         flags["checks"] = [*flags.get("checks", []), f"유죄 죄명이 살인 계열이 아님 ({charge})"]
     values = [
-        sql_text(precedent["source"]), sql_text(precedent["sourceRef"]), sql_text(precedent["caseNumberHash"]),
+        sql_text(precedent["source"]), sql_text(precedent["sourceRef"]), sql_text_array(number_hashes(precedent)),
         sql_text(precedent["caseGroup"]), sql_text(precedent["crimeType"]),
         sql_text((result.get("chargeName") or "").strip() or precedent["chargeName"]),
         sql_jsonb(result.get("statutes")), sql_text(precedent["courtLevel"]),

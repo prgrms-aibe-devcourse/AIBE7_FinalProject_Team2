@@ -336,7 +336,7 @@ python3 rag_store.py sql --candidates $P/work/BE-50-precedent-candidates.json --
 - 팀 결정(2026-10-10)으로 사람 확인 없이 후보를 전부 넣는다. 행의 `flags.verified`는 false이고, 발생일이 의심스러운 판례는 `flags.checks`에 이유가 남는다.
 - 사건 그룹 ID는 그룹에서 가장 앞선 판례 키다(예: `LAW_GO_KR-143304`). 후보 목록을 다시 만들어도 같은 그룹이면 같은 ID다.
 - **검색은 백엔드가 한다** (`backend` `rag/service/RagSearchService`). 이 도구는 판례를 적재만 한다. 백엔드는 사건 개요를 `RETRIEVAL_QUERY`로 임베딩하고(`GEMINI_API_KEY`가 없으면 RAG만 꺼짐), `case_source` 사건번호 해시로 자기 사건 그룹을 뺀 뒤 DB 함수 `rag_precedent_search`를 부른다. 설정은 `application.yml`의 `rag.*`(top-k 5 · 점수 하한 0.6).
-- 사건번호 해시 규칙(공백 제거 후 SHA-256 hex)은 `rag_store.case_number_hash`와 백엔드 `CaseNumberHash`가 같아야 한다(`CaseNumberHashTest`가 Python 값과 비교). 임베딩 모델 · 차원도 같아야 하며, 다르면 백엔드 검색이 멈춘다.
+- 사건번호 해시 규칙은 `rag_store.case_number_hashes`와 백엔드 `CaseNumberHash.ofAll`이 같아야 한다(`CaseNumberHashTest`가 Python 값과 비교): 사건번호 칸에서 번호(`2014고13` 형식)를 하나씩 뽑아 유니코드 공백을 지우고 SHA-256 hex. 병합 사건(`2014고13, 2014고14(병합)`)은 번호마다 해시하므로 대상 사건 쪽 번호가 하나여도 자기 사건으로 빠진다. 번호 형식이 없으면 칸 전체를 하나로 해시한다. 임베딩 모델 · 차원도 같아야 하며, 다르면 백엔드 검색이 멈춘다.
 
 ## 외부 LLM으로 생성할 때
 

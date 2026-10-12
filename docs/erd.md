@@ -20,7 +20,7 @@
 | v1.13 | 2026-10-08 | 판단 요소 가치관 축 추가 (BE-47)<br>• `factor.value_axis` 추가(V9 마이그레이션, nullable): 판결 체험에서 고르는 판단 요소를 사용자 성향과 매칭하는 가치관 축 4개(`APOLOGY_SINCERITY` · `FAULT_STANDARD` · `PRINCIPLE_RELATION` · `ORDER_OPPORTUNITY`) 또는 NULL<br>• 사전 판단(`OVERVIEW`)과 형량 선택은 성향 계산에 쓰지 않는다(계산하는 쪽에서 제외) |
 | v1.14 | 2026-10-08 | 11 · 12차 회의 반영 (COMMON-20)<br>• `comparison_analysis`: AI 비교 분석(REQ-063) 제외로 보류. V5 마이그레이션의 테이블은 그대로 두고 쓰지 않는다(삭제 여부 미정)<br>• 8장 신설: 판결 성향 테스트 테이블 제안(미확정) — 문항 · 선택지 · 유형 · 결과 · 체험별 성향 기여. 판단 요소별 가치관 축은 새로 만들지 않고 `factor.value_axis`(v1.13, BE-47)를 쓴다 |
 | v1.15 | 2026-10-08 | 판단 요소 가치관 축 후검수 반영 (BE-48)<br>• `factor.value_axis_status` 추가(V10 마이그레이션, 기본 `AUTO`): `AUTO`(AI 투표 · 사람 초안 기본값) / `CONFIRMED`(관리자 확정, NULL 확정 포함). 시드 · 적재 SQL은 `CONFIRMED` 행을 덮어쓰지 않는다<br>• `factor.value_axis_votes`(jsonb) 추가: 축 분류 투표 기록(BE-49). 최다표가 요청 횟수의 과반이 아니면(동률 · 유효 응답 부족 포함) `needsReview` |
-| v1.16 | 2026-10-10 | AI 판결 RAG 판례 저장소 추가 (BE-51)<br>• `rag_precedent` 추가(V11 마이그레이션, pgvector `vector(3072)`): 비식별화한 사실관계 요약(검색 기준 · 임베딩 입력) · 양형 이유 · 법조문 · 주문 형량 · 양형인자 · 사건 그룹 · 사건번호 해시. 판결문 원문 · 사건번호 · 법원명은 넣지 않는다<br>• 검색 함수 `rag_precedent_search`: 자기 사건(사건번호 해시가 있는 사건 그룹 전체) 제외, 사건 그룹당 1건, 점수 하한 · 개수 제한<br>• 검색어 임베딩 · 검색은 백엔드 `RagSearchService`(Java), 판례 적재는 오프라인 `rag_store.py`(Python)<br>• 사용 보류 `on_hold` · `hold_reason`: LBox 판례는 라이선스 확인 전까지 보류(검색 제외)<br>• 사용자 API에서 조회하지 않는 오프라인 파이프라인 전용 테이블. 행은 비공개 시드 `R__40`이 넣는다 |
+| v1.16 | 2026-10-10 | AI 판결 RAG 판례 저장소 추가 (BE-51)<br>• `rag_precedent` 추가(V11 마이그레이션, pgvector `vector(3072)`): 비식별화한 사실관계 요약(검색 기준 · 임베딩 입력) · 양형 이유 · 법조문 · 주문 형량 · 양형인자 · 사건 그룹 · 사건번호 해시(병합 사건은 번호마다). 판결문 원문 · 사건번호 · 법원명은 넣지 않는다<br>• 검색 함수 `rag_precedent_search`: 자기 사건(사건번호 해시가 있는 사건 그룹 전체) 제외, 사건 그룹당 1건, 점수 하한 · 개수 제한<br>• 검색어 임베딩 · 검색은 백엔드 `RagSearchService`(Java), 판례 적재는 오프라인 `rag_store.py`(Python)<br>• 사용 보류 `on_hold` · `hold_reason`: LBox 판례는 라이선스 확인 전까지 보류(검색 제외)<br>• 사용자 API에서 조회하지 않는 오프라인 파이프라인 전용 테이블. 행은 비공개 시드 `R__40`이 넣는다 |
 
 ---
 
@@ -131,7 +131,7 @@ erDiagram
     RAG_PRECEDENT {
         bigint id PK
         varchar source "LAW_GO_KR LBOX"
-        char case_number_hash "사건번호 SHA-256"
+        text_array case_number_hashes "사건번호마다 SHA-256"
         varchar case_group "같은 사건 묶음"
         text facts_summary "검색 기준 (비식별)"
         text sentencing_reason "프롬프트 본문 (비식별)"
@@ -463,7 +463,7 @@ AI 판결 생성(generate, BE-54)이 검색하는 유사 판례다. 오프라인
 | id | bigint PK | ✓ |  |
 | source | varchar(20) | ✓ | `LAW_GO_KR`(법제처 국가법령정보센터) / `LBOX`(LBox Open, CC BY-NC) |
 | source_ref | varchar(50) | ✓ | 출처 안의 ID(판례일련번호 · LBox id). (`source`, `source_ref`) 유니크 |
-| case_number_hash | char(64) |  | 사건번호(공백 제거) SHA-256 hex. 자기 사건 제외에만 쓴다. LBox는 사건번호가 없어 NULL. CHECK로 64자 hex만 받는다 |
+| case_number_hashes | text[] |  | 사건번호마다(공백 제거) SHA-256 hex. 병합 사건(`2014고13, 2014고14(병합)`)은 번호마다 하나씩 넣는다 — 대상 사건 `case_source`에는 번호가 하나만 있을 수 있어 칸 전체를 해시하면 자기 사건 제외가 빗나간다. 자기 사건 제외에만 쓴다. LBox는 사건번호가 없어 NULL. CHECK로 원소마다 64자 hex(빈 배열 불가), GIN 인덱스 |
 | case_group | varchar(50) | ✓ | 같은 사건(1심 · 항소심 · 공범 별도 판결 · 병합) 묶음 ID. 그룹에서 가장 앞선 판례 키(예: `LAW_GO_KR-143304`) |
 | crime_type | varchar(20) | ✓ | `legal_case.crime_type`과 같은 값 |
 | charge_name | varchar(200) |  | 죄명 (살인 · 살인미수 · 존속살해 · 강도살인 등) |
@@ -485,9 +485,9 @@ AI 판결 생성(generate, BE-54)이 검색하는 유사 판례다. 오프라인
 
 - **판결문 원문 · 사건번호 · 법원명은 넣지 않는다.** 원문은 비공개 저장소 `raw/`(git 제외)에만 둔다.
 - 판례가 수백 건인 동안 벡터 인덱스 없이 전체를 비교한다. 수만 건이면 `halfvec(3072)` + HNSW로 바꾼다(8-1).
-- **검색은 백엔드 `RagSearchService`가 한다**(BE-51): 사건 개요(`legal_case.overview`)를 `RETRIEVAL_QUERY`로 임베딩하고, 그 사건 `case_source`의 사건번호 해시를 `exclude_hashes`로 넘긴다. 판례 임베딩 모델 · 차원이 검색어와 다르면 멈춘다. 설정 `rag.*`(top-k 5 · 점수 하한 0.6), `GEMINI_API_KEY`가 없으면 RAG만 꺼진다
+- **검색은 백엔드 `RagSearchService`가 한다**(BE-51): 사건 개요(`legal_case.overview`)를 `RETRIEVAL_QUERY`로 임베딩하고, 그 사건 `case_source`의 사건번호를 번호마다 해시해 `exclude_hashes`로 넘긴다. 판례 임베딩 모델 · 차원이 검색어와 다르면 멈춘다. 설정 `rag.*`(top-k 5 · 점수 하한 0.6), `GEMINI_API_KEY`가 없으면 RAG만 꺼진다
 - **검색 함수** `rag_precedent_search(query, crime, exclude_hashes, exclude_groups, top_k, min_score)` → (`precedent_id`, `case_group`, `score`)
-  - `exclude_hashes`(판결하려는 사건의 사건번호 해시)가 있는 **사건 그룹 전체**와 `exclude_groups`를 뺀다. 실제 판결이 AI에게 노출되지 않게 한다
+  - `exclude_hashes`(판결하려는 사건의 사건번호 해시, 병합이면 번호마다)와 하나라도 겹치는 판례의 **사건 그룹 전체**와 `exclude_groups`를 뺀다. 실제 판결이 AI에게 노출되지 않게 한다
   - 같은 사건 그룹은 가장 비슷한 판례 1건만 돌려준다. 점수 = 1 − 코사인 거리, `min_score` 미만은 뺀다
   - 사용 보류(`on_hold`) 판례는 결과에서 빼지만, 자기 사건 제외에는 보류 판례의 사건번호 해시도 쓴다
 - V11은 `CREATE EXTENSION IF NOT EXISTS vector`를 실행한다. 확장을 만들 권한이 없는 DB면 관리자가 먼저 만들어 둔다.

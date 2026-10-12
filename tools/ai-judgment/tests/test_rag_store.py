@@ -82,15 +82,25 @@ class TargetsTest(unittest.TestCase):
         self.assertEqual([t["key"] for t in items], ["LAW_GO_KR-20", "LBOX-5"])
         # 그룹 ID는 실행마다 바뀌는 G007이 아니라 그룹에서 가장 앞선 판례 키다
         self.assertEqual({t["caseGroup"] for t in items}, {"LAW_GO_KR-20"})
-        self.assertEqual(items[0]["caseNumberHash"], rag_store.case_number_hash(CASE_NUMBER))
-        self.assertRegex(items[0]["caseNumberHash"], r"^[0-9a-f]{64}$")
-        self.assertIsNone(items[1]["caseNumberHash"])
+        self.assertEqual(items[0]["caseNumberHashes"], [rag_store.case_number_hash(CASE_NUMBER)])
+        self.assertRegex(items[0]["caseNumberHashes"][0], r"^[0-9a-f]{64}$")
+        self.assertEqual(items[1]["caseNumberHashes"], [])
         self.assertEqual(items[0]["decidedAt"], "2019-09-10")
         self.assertEqual(items[0]["courtLevel"], "FIRST")
         self.assertFalse(items[0]["flags"]["verified"])
         # 원래 사건번호 · 법원명은 적재 대상에 남지 않는다
         self.assertNotIn(CASE_NUMBER, json.dumps(items, ensure_ascii=False))
         self.assertNotIn("서울중앙지방법원", json.dumps(items, ensure_ascii=False))
+
+    def test_case_number_hashes_splitsMergedCaseNumbers(self):
+        merged = rag_store.case_number_hashes("2014고13, 2014고14(병합)")
+        self.assertEqual(merged, sorted([rag_store.case_number_hash("2014고13"), rag_store.case_number_hash("2014고14")]))
+        # 대상 사건 case_source에 번호가 하나만 있어도 같은 해시가 들어 있어야 자기 사건으로 빠진다
+        self.assertIn(rag_store.case_number_hash("2014고13"), merged)
+        self.assertEqual(rag_store.case_number_hashes(" 2016 고합 79 "), [rag_store.case_number_hash("2016고합79")])
+        self.assertEqual(rag_store.case_number_hashes("2008재고합1"), [rag_store.case_number_hash("2008재고합1")])
+        self.assertEqual(rag_store.case_number_hashes("특수번호-1"), [rag_store.case_number_hash("특수번호-1")])  # 형식 밖
+        self.assertEqual(rag_store.case_number_hashes(None), [])
 
     def test_targets_keepsCheckFlags(self):
         items = rag_store.targets([candidate(checks=["발생일과 선고일이 3년 넘게 차이 남"])])

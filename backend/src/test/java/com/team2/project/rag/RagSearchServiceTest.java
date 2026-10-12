@@ -60,10 +60,10 @@ class RagSearchServiceTest {
 	@Test
 	@DisplayName("자기 사건(1심 · 항소심 사건번호 해시가 있는 사건 그룹)을 통째로 빼고 비슷한 순으로 돌려준다")
 	void searchSimilar_excludesOwnCaseGroup() {
-		insertPrecedent("1", "G-SELF", CaseNumberHash.of("2019고합123"), vector(0, 1.0));  // 대상 사건 1심
+		insertPrecedent("1", "G-SELF", "2019고합123", vector(0, 1.0));                     // 대상 사건 1심
 		insertPrecedent("2", "G-SELF", null, vector(0, 1.0, 1, 0.01));                    // 같은 사건 다른 출처
-		insertPrecedent("3", "G-APPEAL", CaseNumberHash.of("2020 노 45"), vector(0, 1.0)); // 대상 사건 항소심 (공백 무시)
-		insertPrecedent("4", "G-NEAR", CaseNumberHash.of("2018고합9"), vector(0, 1.0, 1, 0.2));
+		insertPrecedent("3", "G-APPEAL", "2020 노 45", vector(0, 1.0));                    // 대상 사건 항소심 (공백 무시)
+		insertPrecedent("4", "G-NEAR", "2018고합9", vector(0, 1.0, 1, 0.2));
 		insertPrecedent("5", "G-FAR", null, vector(0, 1.0, 1, 1.0));
 		embedding.next = vector(0, 1.0);
 
@@ -75,6 +75,17 @@ class RagSearchServiceTest {
 		assertThat(result.precedents().get(0).factsSummary()).isEqualTo("사실관계 요약 4");
 		// 검색어는 비식별화한 사건 개요뿐이다 (사건번호 · 원문은 보내지 않는다)
 		assertThat(embedding.queries).containsExactly("비식별화한 사건 개요");
+	}
+
+	@Test
+	@DisplayName("판례 쪽 사건번호가 병합 표기여도 대상 사건 번호 하나와 겹치면 뺀다 (#97 리뷰)")
+	void searchSimilar_excludesMergedCaseNumberPrecedent() {
+		insertPrecedent("1", "G-MERGED", "2019고합123, 2019고합777(병합)", vector(0, 1.0));  // 대상 사건 1심이 병합된 판결
+		insertPrecedent("2", "G-OTHER", "2017고합5", vector(0, 1.0, 1, 0.3));
+		embedding.next = vector(0, 1.0);
+
+		assertThat(service.searchSimilar(caseId).precedents()).extracting(RagPrecedentHit::caseGroup)
+			.containsExactly("G-OTHER");
 	}
 
 	@Test
@@ -141,10 +152,11 @@ class RagSearchServiceTest {
 
 	private void insertPrecedent(String ref, String group, String caseNumberHash, float[] embeddingVector) {
 		jdbc.update("""
-			INSERT INTO rag_precedent (source, source_ref, case_number_hash, case_group, crime_type, court_level,
+			INSERT INTO rag_precedent (source, source_ref, case_number_hashes, case_group, crime_type, court_level,
 			    facts_summary, sentencing_reason, embedding, embedding_model, embedding_dim)
-			VALUES ('LAW_GO_KR', ?, ?, ?, 'MURDER', 'FIRST', ?, '양형 이유', ?::vector, 'gemini-embedding-001', 3072)""",
-			ref, caseNumberHash, group, "사실관계 요약 " + ref, literal(embeddingVector));
+			VALUES ('LAW_GO_KR', ?, ?::text[], ?, 'MURDER', 'FIRST', ?, '양형 이유', ?::vector, 'gemini-embedding-001', 3072)""",
+			ref, caseNumberHash == null ? null : CaseNumberHash.ofAll(caseNumberHash).toArray(String[]::new), group,
+			"사실관계 요약 " + ref, literal(embeddingVector));
 	}
 
 	/** (축 번호, 값) 쌍으로 만든 3072차원 벡터. 나머지 축은 0 */
