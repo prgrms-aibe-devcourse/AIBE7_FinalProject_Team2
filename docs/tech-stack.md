@@ -18,6 +18,7 @@
 | v1.11 | 2026-10-08 | 11 · 12차 회의 반영 (COMMON-20) — 3장 카카오 로그인(OAuth2 · JWT) 검토 표기, 6장 세 판결 AI 비교 분석 제외(REQ-062 · 063) · 임베딩 API 행 추가(모델 미정) · 퓨샷 · RAG · 임베딩 적용 위치가 12차 회의 결정임을 명시 |
 | **v1.12** | **2026-10-09** | **COMMON-21 반영** — 6장 퓨샷 · RAG · 임베딩 구현 현황에서 임베딩 모델 · 판례 저장소 범위 확정 표기, 선행 작업을 BE-50 ~ BE-52로 정정 |
 | v1.13 | 2026-10-13 | BE-39 반영 (**확장 단계**, 닫힌 #79를 최신 develop에 다시 적용) — 3장에 관리자 인증 추가: Spring Security, 관리자 계정(V12 `admin_account`) · 세션 로그인, `/api/v1/admin/**`만 보호하고 사용자 API는 그대로(인증 · CSRF · 세션 없음), 관리자 상태 변경 요청 CSRF. 2장 마이그레이션 목록에 V9 ~ V12 추가 |
+| v1.14 | 2026-10-13 | BE-57 반영 (**확장 단계**, WBS 7.4.1) — 3장 "사용자 인증 기반" 신설: 필터 체인을 관리자(세션 · CSRF) / 사용자(무상태 · Bearer 토큰)로 분리, 토큰 계약(`TokenIssuer` · `AccessTokenVerifier` · `MemberPrincipal` · `IssuedTokens`), 토큰 오류 401(`TOKEN_INVALID` · `TOKEN_EXPIRED`), CORS 미설정 근거, 보안 헤더(Referrer-Policy · HSTS · CSP 담당), 리프레시 쿠키 · OAuth 임시 상태 결정 위임(C · D) |
 
 
 ## **1. Backend**
@@ -170,7 +171,7 @@ PostgreSQL 조회 → Redis 저장 → 반환
 | --- | --- |
 | 익명 ID (UUID 쿠키) | 로그인 없이 사용자의 체험 기록과 진행 상태 식별 |
 | HttpOnly Cookie | 브라우저 스크립트에서 익명 ID를 읽지 못하도록 보호 |
-| Spring Security | (확장, BE-39) 관리자 인증 · 관리자 API 접근 제어(세션). 사용자 인증은 카카오 로그인 · JWT(WBS 7.4.2 · 7.4.3)에서 더한다 |
+| Spring Security | (확장) 필터 체인 두 개 — 관리자(세션 · CSRF, BE-39) / 사용자(무상태 · Bearer 토큰, BE-57). 실제 토큰 발급 · 검증은 카카오 로그인 · JWT(WBS 7.4.2 · 7.4.3)에서 더한다 |
 | 카카오 로그인 (OAuth2) · JWT | (이후 · 검토, v1.11) 11차 회의 제안. 로그인 시 익명 ID를 회원에 연결(`anonymous_user.member_id`). 관리자 화면(S-19) 인증 방식과 함께 정한다 |
 
 MVP는 회원가입 없이 핵심 체험이 끝까지 동작해야 한다. 사용자를 익명 ID로 구분하고, 같은 브라우저에서는 이어서 체험할 수 있도록 한다.
@@ -212,6 +213,25 @@ MVP는 회원가입 없이 핵심 체험이 끝까지 동작해야 한다. 사�
 | 오류 응답 | 필터에서 막힌 요청도 공통 에러 형식: 로그인 안 함 401 `UNAUTHORIZED`, 권한 없음 · CSRF 실패 403 `FORBIDDEN`, 로그인 실패 401 `INVALID_CREDENTIALS` |
 
 원본 판결문 등 내부 정보는 관리자 API(BE-41)에서만 보여 주고, 사용자 API에는 지금처럼 넣지 않는다.
+
+### 사용자 인증 기반 (확장 단계, BE-57 · WBS 7.4.1)
+
+카카오 로그인(7.4.2, D) · JWT(7.4.3, C)가 올라탈 자리를 먼저 만든다. **지금 사용자 API의 동작은 바뀌지 않는다**(토큰을 보내지 않으면 지금처럼 익명 ID 쿠키로 동작).
+
+| 항목 | 내용 |
+| --- | --- |
+| 필터 체인 | `SecurityConfig`가 체인 두 개를 둔다. ① `/api/v1/admin/**` 관리자 체인(먼저 검사): 세션 · CSRF · `ROLE_ADMIN`, Bearer 토큰은 보지 않는다. ② 그 밖의 모든 요청 사용자 체인: **세션을 만들지도 읽지도 않는다**(`STATELESS` + 요청 안에서만 쓰는 SecurityContext 저장소). 그래서 브라우저에 관리자 세션 쿠키가 있어도 사용자 API에서는 관리자로 보지 않는다 |
+| Bearer 토큰 | 사용자 체인의 `BearerTokenAuthenticationFilter`. `Authorization` 헤더가 없으면 익명. 있으면 반드시 검증한다: `Bearer` 형식이 아니거나 비었거나 검증기 빈이 없거나 검증에 실패하면 **401**. 잘못된 토큰을 익명으로 바꾸지 않는다. 사용자 체인 경로라면 `permitAll`이어도 같다(관리자 체인은 Bearer를 보지 않는다). `Authorization` 헤더가 여러 개이거나 토큰에 RFC 6750 밖의 글자(공백 · 쉼표 등)가 있으면 검증기를 부르지 않고 401 |
+| 토큰 오류 | 401 `TOKEN_EXPIRED`(만료, 화면은 재발급 시도) · 401 `TOKEN_INVALID`(그 밖). Redis 장애 등 인프라 오류는 토큰 오류로 바꾸지 않는다(500 `INTERNAL_ERROR`, 원인은 서버 로그에만) |
+| 토큰 계약 | `common.security.token` 패키지. `AccessTokenVerifier`(토큰 → `MemberPrincipal`, C 구현) · `TokenIssuer`(회원 → `IssuedTokens` 액세스 · 리프레시 토큰과 만료 시각, C 구현 · D 호출) · `MemberPrincipal`(회원 ID · 접두어 없는 권한 `USER`, 바꿀 수 없음) · `TokenException`(INVALID · EXPIRED). 재발급 · 폐기 · 재사용 탐지 계약은 C가 7.4.3에서 정한다 |
+| 담당 경계 (R14) | B: HTTP 헤더 처리 · 체인 연결(`SecurityConfig` · Bearer 필터) / C: 검증 · 발급 · 재발급 · 폐기 로직 / D: 카카오 로그인 성공 후 발급 호출. WBS 7-2-1의 "JWT 검증 필터(C)"와의 조정은 C 확인 후 정정한다 |
+| 회원 전용 API | 지금은 사용자 체인 전체가 `permitAll`이다. 회원만 쓸 API를 만들면 그 경로에 `authenticated()`를 추가한다(없으면 401 `UNAUTHORIZED`) |
+| 재발급 요청 | 화면은 재발급 요청에 `Authorization` 헤더를 붙이지 않는다(만료된 토큰이 붙으면 401로 막힌다) |
+| 리프레시 토큰 쿠키 (C 결정) | 쿠키에 두면 브라우저가 자동으로 보내므로 재발급 · 로그아웃 요청에 CSRF 대책(CSRF 토큰 또는 Origin 검증)과 `HttpOnly` · `Secure` · `SameSite`가 필요하다. 무상태 · 같은 출처라는 이유만으로 CSRF가 해결되지는 않는다 |
+| 익명 ID 쿠키와 CSRF | 익명 ID 쿠키도 브라우저가 자동으로 보낸다. 사용자 API에 CSRF 토큰을 두지 않는 것은 `SameSite=Lax` · 같은 출처 배포 · 익명 체험이라는 피해 범위를 보고 **받아들인 위험**이다 |
+| OAuth 왕복 임시 상태 (D 결정) | `STATELESS`는 일반 API 기준이다. 카카오 로그인 왕복의 `state` 저장(세션 또는 쿠키) · 콜백 경로 · 성공 · 실패 후 정리는 D가 7.4.2에서 정한다 |
+| CORS | 설정하지 않는다. 프론트와 API가 같은 출처다(운영 Nginx `/api` 프록시, 로컬 Vite 프록시, API 명세 6장 #2). 다른 출처에서 부를 일이 생기면 그때 허용 목록으로 연다 |
+| 보안 헤더 | Spring Security 기본값(`X-Content-Type-Options` · `X-Frame-Options: DENY` · `Cache-Control: no-store` 등) + 두 체인 모두 `Referrer-Policy: strict-origin-when-cross-origin`. HSTS는 HTTPS 요청에만 붙으므로 TLS를 끝내는 Nginx가 맡는다(중복 없음). CSP · HTML 응답의 Referrer-Policy도 정적 파일을 서빙하는 Nginx에서 정한다(7.1.1, D) |
 
 ---
 

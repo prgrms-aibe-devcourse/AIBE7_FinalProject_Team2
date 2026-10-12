@@ -28,6 +28,8 @@ public enum ErrorCode {
 	UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "로그인이 필요합니다."),
 	INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "아이디 또는 비밀번호가 올바르지 않습니다."),
 	FORBIDDEN(HttpStatus.FORBIDDEN, "권한이 없거나 요청을 확인할 수 없습니다."),
+	TOKEN_INVALID(HttpStatus.UNAUTHORIZED, "로그인 정보를 확인할 수 없습니다. 다시 로그인해 주세요."),
+	TOKEN_EXPIRED(HttpStatus.UNAUTHORIZED, "로그인이 만료되었습니다."),
 	INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "서버 오류가 발생했습니다.");
 
 	private final HttpStatus status;
