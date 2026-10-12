@@ -4,7 +4,7 @@
 
     python3 rag_store.py build --candidates <후보.json> --raw <raw/BE-50> --model <공급자:모델ID>
     python3 rag_store.py embed
-    python3 rag_store.py sql --candidates <후보.json> --output ../../backend/private-seed/seed/R__40_rag_precedent.sql
+    python3 rag_store.py sql --candidates <후보.json> --holds <보류.json> --output ../../backend/private-seed/seed/R__40_rag_precedent.sql
 
 - build: 판결문을 로컬에서 마스킹(premask)한 뒤 모델에 보내 비식별화한 사실관계 요약(검색 기준) · 양형 이유(프롬프트 본문) ·
   법조문 · 주문 형량 · 양형인자로 나눈다. 결과는 남은 개인정보 검사(residual_check)를 통과해야 저장한다.
@@ -47,17 +47,9 @@ TEXT_LIMITS = {"factsSummary": 2000, "sentencingReason": 4000}
 SOURCE_HOLDS = {
     "LBOX": "LBox Open 라이선스 확인 전 (데이터셋 카드 CC BY-NC 4.0 · 논문 CC BY-NC-ND 4.0, 2026-10-12 팀 결정)",
 }
-# 판례별 사용 보류. 살인 관련 공소사실이 무죄이고 다른 죄만 유죄인 판결은 형량 · 양형 이유가 살인 기준이 아니다.
-# 사실관계 요약은 살인 사건과 비슷해 유사도로 걸러지지 않으므로(상위 5건에 듦) 넣되 검색에서 뺀다 (팀 결정 2026-10-12)
-ACQUITTED_MURDER = "살인 관련 공소사실 무죄 (다른 죄만 유죄, 형량 · 양형 이유가 살인 기준이 아님)"
-PRECEDENT_HOLDS = {
-    "LAW_GO_KR-161166": ACQUITTED_MURDER,  # 사체은닉
-    "LAW_GO_KR-173650": ACQUITTED_MURDER,  # 유기치사 (예비적 공소사실)
-    "LAW_GO_KR-184805": ACQUITTED_MURDER,  # 재물손괴
-    "LAW_GO_KR-190236": ACQUITTED_MURDER,  # 협박
-    "LAW_GO_KR-206273": ACQUITTED_MURDER,  # 특수상해
-    "LAW_GO_KR-623093": ACQUITTED_MURDER,  # 협박
-}
+# 판례별 사용 보류 {키: 사유}. 어떤 판례가 있는지는 비공개 저장소에만 두므로 공개 코드에 목록을 적지 않는다.
+# 비공개 저장소 work/rag-precedent-holds.json을 sql --holds로 읽는다 (예: 살인 관련 공소사실 무죄 판결, 2026-10-12 팀 결정)
+PRECEDENT_HOLDS = {}
 MURDER_CHARGE = re.compile(r"살인|살해")  # 유죄 죄명이 이 계열이 아니면 flags.checks에 확인 필요 (예: 유기치사)
 # 요약 임베딩 코사인 유사도가 이 이상이면 같은 사건으로 묶는다. 판례 38건 분포(2026-10-12): 같은 사건(1심 · 항소심,
 # 출처만 다른 같은 판결) 0.97 ~ 0.98, 다른 사건 최고 0.93, 전체 중앙값 0.82. 판례가 늘면 다시 본다
@@ -525,6 +517,16 @@ def build_sql(out_dir, merge_threshold=GROUP_MERGE_SCORE, candidates=None):
     return "\n".join(header) + "\n\n".join(rows) + "\n"
 
 
+def load_holds(path):
+    """판례별 사용 보류 파일 {판례 키: 사유}. 형식이 틀리면 RagStoreError."""
+    holds = load_json(path)
+    if not isinstance(holds, dict) or not all(
+            isinstance(k, str) and re.match(r"^(LAW_GO_KR|LBOX)-\S+$", k) and isinstance(v, str) and v.strip()
+            for k, v in holds.items()):
+        raise RagStoreError("--holds는 {판례 키(LAW_GO_KR-… · LBOX-…): 보류 사유} 객체다")
+    return holds
+
+
 def run_sql(args):
     from pipeline import PipelineError, check_sql_dir  # 비공개 저장소 체크아웃 안에만 쓴다 (BE-31과 같은 검사)
     output = Path(args.output).resolve()
@@ -532,6 +534,9 @@ def run_sql(args):
         check_sql_dir(output.parent)
     except PipelineError as e:
         raise RagStoreError(str(e))
+    if args.holds:
+        PRECEDENT_HOLDS.clear()
+        PRECEDENT_HOLDS.update(load_holds(args.holds))
     candidates = load_json(args.candidates) if args.candidates else None
     if candidates is None:
         print("주의: --candidates 없이 만들면 정리할 때 저장한 메타데이터(사건 그룹 · 양형기준 등)를 그대로 쓴다", file=sys.stderr)
@@ -568,6 +573,7 @@ def main(argv=None):
     sql = sub.add_parser("sql", help="R__40 시드 SQL 만들기")
     sql.add_argument("--output", required=True, help="비공개 저장소 seed/R__40_rag_precedent.sql")
     sql.add_argument("--candidates", help="최신 후보 목록 (work/BE-50-precedent-candidates.json). 주면 메타데이터를 다시 맞춘다")
+    sql.add_argument("--holds", help="판례별 사용 보류 {키: 사유} (비공개 저장소 work/rag-precedent-holds.json)")
     sql.add_argument("--merge-threshold", type=float, default=GROUP_MERGE_SCORE,
                      help=f"요약 유사도가 이 이상이면 같은 사건 그룹으로 묶는다 (기본 {GROUP_MERGE_SCORE})")
     for command in (build, prepare, importer, embed, sql):

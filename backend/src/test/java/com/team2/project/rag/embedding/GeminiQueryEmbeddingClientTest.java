@@ -6,6 +6,7 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.jsonPath;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withRawStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
@@ -18,6 +19,7 @@ import java.util.stream.IntStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -91,6 +93,43 @@ class GeminiQueryEmbeddingClientTest {
 	}
 
 	@Test
+	@DisplayName("429의 Retry-After(초)만큼 기다리고, 30초를 넘으면 기다리지 않고 실패한다")
+	void embedQuery_honorsRetryAfter() {
+		HttpHeaders shortWait = new HttpHeaders();
+		shortWait.add(HttpHeaders.RETRY_AFTER, "2");
+		server.expect(ExpectedCount.once(), requestTo(URL)).andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS).headers(shortWait));
+		server.expect(ExpectedCount.once(), requestTo(URL))
+			.andRespond(withSuccess(embeddingJson(3), MediaType.APPLICATION_JSON));
+
+		assertThat(client("k", 3, 3).embedQuery("개요")).hasSize(3);
+		assertThat(waits).containsExactly(Duration.ofSeconds(2));
+		server.verify();
+	}
+
+	@Test
+	@DisplayName("Retry-After가 30초를 넘으면(일 한도 등) 기다리지 않고 실패한다")
+	void embedQuery_longRetryAfter_failsFast() {
+		HttpHeaders longWait = new HttpHeaders();
+		longWait.add(HttpHeaders.RETRY_AFTER, "3600");
+		server.expect(ExpectedCount.once(), requestTo(URL)).andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS).headers(longWait));
+
+		assertThatThrownBy(() -> client("k", 3, 3).embedQuery("개요")).isInstanceOf(EmbeddingException.class)
+			.hasMessageContaining("3600초");
+		assertThat(waits).isEmpty();
+		server.verify();
+	}
+
+	@Test
+	@DisplayName("비표준 상태 코드도 상태 코드로 알린다 (응답을 읽을 수 없음으로 뭉개지 않는다)")
+	void embedQuery_unknownStatus_reportsStatus() {
+		server.expect(ExpectedCount.once(), requestTo(URL)).andRespond(withRawStatus(499));
+
+		assertThatThrownBy(() -> client("k", 3, 3).embedQuery("개요")).isInstanceOf(EmbeddingException.class)
+			.hasMessageContaining("499");
+		server.verify();
+	}
+
+	@Test
 	@DisplayName("400 · 403은 다시 보내지 않는다")
 	void embedQuery_clientError_isNotRetried() {
 		server.expect(ExpectedCount.once(), requestTo(URL)).andRespond(withStatus(HttpStatus.FORBIDDEN));
@@ -128,14 +167,14 @@ class GeminiQueryEmbeddingClientTest {
 			Duration.ofSeconds(1), 3, Duration.ofMillis(100));
 
 		assertThat(embedding.toString()).doesNotContain("secret-key").contains("apiKey=****");
-		assertThat(new RagProperties(embedding, new RagProperties.Search(5, 0.6)).toString()).doesNotContain("secret-key");
+		assertThat(new RagProperties(embedding, new RagProperties.Search(5, 0.6, 0.95)).toString()).doesNotContain("secret-key");
 	}
 
 	private GeminiQueryEmbeddingClient client(String apiKey, int dimensions, int maxAttempts) {
 		RagProperties properties = new RagProperties(
 			new RagProperties.Embedding(apiKey, BASE, "gemini-embedding-001", dimensions, Duration.ofSeconds(1),
 				maxAttempts, Duration.ofMillis(100)),
-			new RagProperties.Search(5, 0.6));
+			new RagProperties.Search(5, 0.6, 0.95));
 		return new GeminiQueryEmbeddingClient(restClient, properties, waits::add);
 	}
 

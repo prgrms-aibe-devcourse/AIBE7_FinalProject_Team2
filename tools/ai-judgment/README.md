@@ -321,7 +321,7 @@ AI 판결 생성(generate, BE-54)이 검색할 유사 판례를 `rag_precedent`(
 # tools/ai-judgment에서. P = 비공개 저장소 체크아웃 (../../backend/private-seed)
 python3 rag_store.py build --candidates $P/work/BE-50-precedent-candidates.json --raw $P/raw/BE-50 --model <공급자:모델ID>
 python3 rag_store.py embed
-python3 rag_store.py sql --candidates $P/work/BE-50-precedent-candidates.json --output $P/seed/R__40_rag_precedent.sql
+python3 rag_store.py sql --candidates $P/work/BE-50-precedent-candidates.json --holds $P/work/rag-precedent-holds.json --output $P/seed/R__40_rag_precedent.sql
 ```
 
 | 단계 | 하는 일 | 외부 전송 |
@@ -331,7 +331,7 @@ python3 rag_store.py sql --candidates $P/work/BE-50-precedent-candidates.json --
 | `sql` | `R__40` 시드를 만든다. `--candidates`(최신 후보 목록)를 주면 사건 그룹 · 발생일 · 양형기준 · 표시를 그 값으로 다시 맞추고, 후보에서 빠진 판례(사본 판정 등)는 넣지 않는다. `rag_precedent`를 통째로 지우고 다시 넣는다. 양형기준은 버전 이름으로 찾고 없으면 NULL. **비공개 저장소 체크아웃 안에만** 쓴다(BE-31 `check_sql_dir`) | 없음 |
 
 - 중간 결과는 `out/rag/precedents/` · `out/rag/embeddings/`(git 제외)에 판례마다 파일로 남는다. 이미 끝난 판례는 다시 부르지 않으므로 끊겨도 같은 명령으로 이어 간다. 다시 만들려면 그 판례 파일을 지운다.
-- **살인 관련 공소사실이 무죄**이고 다른 죄만 유죄인 판결(6건)도 `PRECEDENT_HOLDS`로 사용 보류한다. 형량 · 양형 이유가 살인 기준이 아닌데 사실관계는 살인 사건과 비슷해 유사도로 걸러지지 않는다(시험에서 상위 5건에 9번 듦, 팀 결정 2026-10-12).
+- **살인 관련 공소사실이 무죄**이고 다른 죄만 유죄인 판결(6건)도 사용 보류한다. 어떤 판례인지는 공개 코드에 적지 않고 비공개 저장소 `work/rag-precedent-holds.json`(`{판례 키: 사유}`)에 두어 `sql --holds`로 읽는다. 형량 · 양형 이유가 살인 기준이 아닌데 사실관계는 살인 사건과 비슷해 유사도로 걸러지지 않는다(시험에서 상위 5건에 9번 듦, 팀 결정 2026-10-12).
 - **LBox 판례는 사용 보류**로 넣는다(`on_hold = true`, 검색에서 빠짐, 팀 결정 2026-10-12). 라이선스(데이터셋 카드 CC BY-NC · 논문 CC BY-NC-ND)가 확인되면 `rag_store.py`의 `SOURCE_HOLDS`에서 지우고 `sql`을 다시 만든다.
 - 팀 결정(2026-10-10)으로 사람 확인 없이 후보를 전부 넣는다. 행의 `flags.verified`는 false이고, 발생일이 의심스러운 판례는 `flags.checks`에 이유가 남는다.
 - 사건 그룹 ID는 그룹에서 가장 앞선 판례 키다(예: `LAW_GO_KR-143304`). 후보 목록을 다시 만들어도 같은 그룹이면 같은 ID다.

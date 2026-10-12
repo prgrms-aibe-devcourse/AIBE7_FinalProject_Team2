@@ -368,6 +368,16 @@ class SqlTest(unittest.TestCase):
         self.assertNotIn("sentencing_guideline", sql)  # 양형기준 미상 → guideline_id NULL
         self.assertIn('"guidelineByIncidentDate": "2013 수정 (2013. 4. 22. 의결)"', sql)
 
+    def test_load_holds_validatesFormat(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            good, bad = Path(tmp) / "good.json", Path(tmp) / "bad.json"
+            good.write_text(json.dumps({"LAW_GO_KR-1": "살인 관련 공소사실 무죄"}, ensure_ascii=False), encoding="utf-8")
+            bad.write_text(json.dumps({"LAW_GO_KR-1": ""}), encoding="utf-8")
+            self.assertEqual(rag_store.load_holds(good), {"LAW_GO_KR-1": "살인 관련 공소사실 무죄"})
+            with self.assertRaisesRegex(RagStoreError, "--holds"):
+                rag_store.load_holds(bad)
+        self.assertEqual(rag_store.PRECEDENT_HOLDS, {})  # 공개 코드에는 판례 목록이 없다
+
     def test_sql_text_escapesQuotes(self):
         self.assertEqual(rag_store.sql_text("피고인의 '사과'"), "'피고인의 ''사과'''")
 

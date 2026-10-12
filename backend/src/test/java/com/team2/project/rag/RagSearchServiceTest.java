@@ -63,7 +63,7 @@ class RagSearchServiceTest {
 		insertPrecedent("1", "G-SELF", "2019고합123", vector(0, 1.0));                     // 대상 사건 1심
 		insertPrecedent("2", "G-SELF", null, vector(0, 1.0, 1, 0.01));                    // 같은 사건 다른 출처
 		insertPrecedent("3", "G-APPEAL", "2020 노 45", vector(0, 1.0));                    // 대상 사건 항소심 (공백 무시)
-		insertPrecedent("4", "G-NEAR", "2018고합9", vector(0, 1.0, 1, 0.2));
+		insertPrecedent("4", "G-NEAR", "2018고합9", vector(0, 1.0, 1, 0.5));                // 0.894 (max-score 0.95 아래)
 		insertPrecedent("5", "G-FAR", null, vector(0, 1.0, 1, 1.0));
 		embedding.next = vector(0, 1.0);
 
@@ -81,7 +81,7 @@ class RagSearchServiceTest {
 	@DisplayName("판례 쪽 사건번호가 병합 표기여도 대상 사건 번호 하나와 겹치면 뺀다 (#97 리뷰)")
 	void searchSimilar_excludesMergedCaseNumberPrecedent() {
 		insertPrecedent("1", "G-MERGED", "2019고합123, 2019고합777(병합)", vector(0, 1.0));  // 대상 사건 1심이 병합된 판결
-		insertPrecedent("2", "G-OTHER", "2017고합5", vector(0, 1.0, 1, 0.3));
+		insertPrecedent("2", "G-OTHER", "2017고합5", vector(0, 1.0, 1, 0.5));
 		embedding.next = vector(0, 1.0);
 
 		assertThat(service.searchSimilar(caseId).precedents()).extracting(RagPrecedentHit::caseGroup)
@@ -102,7 +102,8 @@ class RagSearchServiceTest {
 	@Test
 	@DisplayName("점수 하한(0.6) 아래 판례는 빼고, top-k(5)까지만 돌려준다")
 	void searchSimilar_appliesMinScoreAndTopK() {
-		IntStream.range(0, 7).forEach(i -> insertPrecedent("1" + i, "G-K" + i, null, vector(0, 1.0, 1, 0.1 * (i + 1))));
+		// 점수 0.928 ~ 0.707 (max-score 0.95 아래, min-score 0.6 위)
+		IntStream.range(0, 7).forEach(i -> insertPrecedent("1" + i, "G-K" + i, null, vector(0, 1.0, 1, 0.4 + 0.1 * i)));
 		insertPrecedent("99", "G-ORTHOGONAL", null, vector(1, 1.0));  // 점수 0
 		embedding.next = vector(0, 1.0);
 
@@ -110,6 +111,26 @@ class RagSearchServiceTest {
 
 		assertThat(hits).hasSize(5);
 		assertThat(hits).allSatisfy(hit -> assertThat(hit.score()).isGreaterThanOrEqualTo(0.6));
+	}
+
+	@Test
+	@DisplayName("max-score(0.95) 이상으로 비슷한 판례는 해시로 못 잡은 자기 사건일 수 있어 빼고, top-k는 나머지로 채운다")
+	void searchSimilar_excludesNearDuplicate() {
+		insertPrecedent("1", "G-DUP", null, vector(0, 1.0, 1, 0.1));   // 0.995: 사건번호 없는 같은 사건 사본 같은 판례
+		insertPrecedent("2", "G-OK", null, vector(0, 1.0, 1, 0.5));    // 0.894
+		embedding.next = vector(0, 1.0);
+
+		assertThat(service.searchSimilar(caseId).precedents()).extracting(RagPrecedentHit::caseGroup)
+			.containsExactly("G-OK");
+	}
+
+	@Test
+	@DisplayName("판례 저장소가 비어 있으면(시드 미적재) '비슷한 판례 없음'이 아니라 RAG 꺼짐으로 알리고 임베딩을 부르지 않는다")
+	void searchSimilar_emptyStore_isDisabled() {
+		RagSearchResult result = service.searchSimilar(caseId);
+
+		assertThat(result.enabled()).isFalse();
+		assertThat(embedding.queries).isEmpty();
 	}
 
 	@Test

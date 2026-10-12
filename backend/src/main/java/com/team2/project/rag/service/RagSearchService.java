@@ -23,7 +23,8 @@ import org.springframework.stereotype.Service;
  * - 검색어는 비식별화한 사건 개요(legal_case.overview)다. 원문 · 사건번호는 임베딩 API로 보내지 않는다
  * - 사건의 원본 판결문(case_source) 사건번호를 번호마다 해시로 바꿔, 그 해시가 하나라도 있는 사건 그룹(다른 심급 포함)을 통째로 뺀다.
  *   그래야 실제 판결 결과가 AI에게 노출되지 않는다
- * - 판례 임베딩 모델 · 차원이 검색어와 다르면 비교할 수 없으므로 멈춘다
+ * - 판례 임베딩 모델 · 차원이 검색어와 다르면 비교할 수 없으므로 멈춘다. 판례 저장소가 비어 있으면 RAG 꺼짐으로 알린다
+ * - 점수가 rag.search.max-score 이상인 판례는 해시로 못 잡은 자기 사건일 수 있어 빼고 경고한다
  * - 서비스 트랜잭션을 두지 않는다. 임베딩 HTTP 호출(시간 제한 · 재시도 대기)이 DB 연결을 붙잡지 않게, 조회는 저장소마다
  *   짧게 끝낸다 (legal_case는 개요 · 범죄 유형 같은 기본 칼럼만 읽는다)
  */
@@ -31,6 +32,9 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class RagSearchService {
+
+	/** 같은 사건 의심(max-score 이상)으로 뺄 판례를 대비해 top-k보다 더 받는 수 */
+	private static final int NEAR_DUPLICATE_SLACK = 3;
 
 	private final LegalCaseRepository legalCaseRepository;
 	private final CaseSourceRepository caseSourceRepository;
@@ -54,7 +58,11 @@ public class RagSearchService {
 		if (legalCase.getOverview() == null || legalCase.getOverview().isBlank()) {
 			throw new EmbeddingException("사건 개요가 비어 있어 유사 판례를 찾을 수 없습니다 (caseId=" + caseId + ")");
 		}
-		checkEmbeddingSpec();
+		if (!checkEmbeddingSpec()) {
+			// 판례 저장소가 비어 있으면(시드 미적재) "비슷한 판례 없음"과 구분해 RAG를 쓸 수 없는 상태로 알린다 → 호출하는 쪽이 퓨샷으로 대체
+			log.warn("rag_precedent가 비어 있어 RAG를 쓰지 않습니다 (R__40 시드 적재 확인, caseId={})", caseId);
+			return RagSearchResult.disabled();
+		}
 		List<String> excludeHashes = caseSourceRepository.findCaseNumbersByCaseId(caseId).stream()
 			.flatMap(number -> CaseNumberHash.ofAll(number).stream())
 			.distinct()
@@ -66,17 +74,33 @@ public class RagSearchService {
 		}
 		float[] query = embeddingClient.embedQuery(legalCase.getOverview());
 		RagProperties.Search search = properties.search();
+		// 같은 사건 의심으로 빠질 판례가 있어도 top-k를 채우게 조금 더 받는다
 		List<RagPrecedentHit> hits = ragPrecedentRepository.search(query, legalCase.getCrimeType().name(),
-			excludeHashes, excludeGroups, search.topK(), search.minScore());
-		return new RagSearchResult(true, hits);
+			excludeHashes, excludeGroups, search.topK() + NEAR_DUPLICATE_SLACK, search.minScore());
+		List<RagPrecedentHit> safe = hits.stream()
+			.filter(hit -> {
+				boolean nearDuplicate = hit.score() >= search.maxScore();
+				if (nearDuplicate) {
+					log.warn("자기 사건 의심 판례 제외 (caseId={}, precedentId={}, score={})", caseId, hit.id(), hit.score());
+				}
+				return !nearDuplicate;
+			})
+			.limit(search.topK())
+			.toList();
+		return new RagSearchResult(true, safe);
 	}
 
-	private void checkEmbeddingSpec() {
+	/** 판례가 있으면 true. 판례 임베딩 모델 · 차원이 검색어와 다르면 멈춘다 */
+	private boolean checkEmbeddingSpec() {
 		String expected = embeddingClient.model() + ":" + properties.embedding().dimensions();
 		List<String> stored = ragPrecedentRepository.findEmbeddingSpecs();
+		if (stored.isEmpty()) {
+			return false;
+		}
 		if (stored.stream().anyMatch(spec -> !spec.equals(expected))) {
 			throw new EmbeddingException("판례 임베딩(" + String.join(", ", stored) + ")이 검색어 임베딩(" + expected
 				+ ")과 다릅니다. 같은 모델 · 차원으로 다시 적재한다");
 		}
+		return true;
 	}
 }

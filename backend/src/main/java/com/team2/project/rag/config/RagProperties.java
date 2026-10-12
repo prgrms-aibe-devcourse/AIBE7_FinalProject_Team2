@@ -47,10 +47,14 @@ public record RagProperties(
 	/**
 	 * @param topK 돌려줄 최대 판례 수 (사건 그룹당 1건)
 	 * @param minScore 코사인 유사도 하한. 예시값 0.6으로 시작해 샘플 사건 10건의 상위 점수를 보고 확정한다 (8-1)
+	 * @param maxScore 이 이상이면 같은 사건으로 보고 뺀다(사건번호 해시로 못 잡은 자기 사건 · 공범 별도 판결 대비).
+	 *                 판례끼리 요약 유사도는 같은 사건 0.97 ~ 0.98 · 다른 사건 최고 0.93이었다. 검색어(사건 개요)와 판례의
+	 *                 점수는 이보다 낮게 나오므로 샘플 사건으로 다시 맞춘다
 	 */
 	public record Search(
 		@DefaultValue("5") int topK,
-		@DefaultValue("0.6") double minScore
+		@DefaultValue("0.6") double minScore,
+		@DefaultValue("0.95") double maxScore
 	) {
 	}
 }
