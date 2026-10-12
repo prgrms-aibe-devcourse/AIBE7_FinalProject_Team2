@@ -132,7 +132,7 @@ export function renderLandingPage(container, { api, navigate, section }) {
   const index = span('news-index');
   news.append(info, brand, date, banner, front, recs, index);
 
-  // 노트북 화면의 말풍선은 커뮤니티 예시 문구(실제 글 아님)
+  // 노트북 화면의 말풍선은 커뮤니티 예시 문구(실제 글 아님). 메인은 처음 판단 전 화면이라 특정 사건 · 판결 결과를 떠올리게 하는 말은 쓰지 않는다
   const laptop = span('laptop-art');
   laptop.setAttribute('aria-hidden', 'true');
   const screen = span('laptop-screen');
@@ -143,7 +143,7 @@ export function renderLandingPage(container, { api, navigate, section }) {
     node.append(text);
     return node;
   };
-  display.append(bubble('정황이 이렇게 많은데 감경이라니…', '익명 · 사건 1'), bubble('저는 석 달간의 다툼을 더 무겁게 봤어요', '', true));
+  display.append(bubble('같은 기록을 읽었는데 생각이 이렇게 다르네요', '익명'), bubble('저는 처음 생각과 판결이 달라졌어요', '', true));
   screen.append(display);
   const body = span('laptop-body');
   body.append(span('laptop-keys'), span('laptop-trackpad'));

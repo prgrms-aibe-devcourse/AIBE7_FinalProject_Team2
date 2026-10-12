@@ -2,7 +2,8 @@ import { button, element, renderSiteFooter } from '../../components/siteLayout.j
 import { screenByStatus } from '../../utils/screenByStatus.js';
 
 // S-02 사건 목록 — 신문 1면 (FE-18, 시안 v12 + 배치 조정). 체험 시작 · 유형 필터 · 오류 처리 로직은 FE-4 · FE-11과 같다.
-// 목록은 처음 판단(S-03) 전 화면이라 사건 정보는 제목 · 짧은 소개 · 키워드 · 분류 · 참여 수만 쓴다.
+// 목록은 처음 판단(S-03) 전 화면이라 사건 정보는 S-03 개요 범위를 넘지 않는다: 제목 · 짧은 소개 · 키워드 · 분류 · 참여 수와,
+// 개요 범위 안에서 쓴 기사(headline · deck · article). S-04 이후에 공개되는 사실(다툼 기간 · 횟수 · 양형 요소 등)은 기사에도 쓰지 않는다.
 // 기사 제목 · 부제 · 본문은 headline · deck · article(API 1에 아직 없는 제안 필드, S-03 개요 수준)을 쓰고, 없으면 사건 제목 · 짧은 소개와
 // 사건과 무관한 고정 문구(머리기사 안내 · 알아두기)로 채운다. (논의기록 2026-10-08 S02 v11 시안 기준)
 const tabs = [
