@@ -17,9 +17,9 @@
 | v1.10 | 2026-10-08 | COMMON-19 반영 (AI 판결 파이프라인 BE-30 ~ BE-45) — 2장 마이그레이션 목록에 V7(사건 제목 · 판단 요소 번호 유니크) · V8(`ai_generation.generation_report`) 추가, 6장에 오프라인 생성 도구(`tools/ai-judgment`)의 LLM 공급자 · 호출 안정성(재시도 · 교차 호출 · 대체 체인) · 무료 등급 데이터 정책 · 퓨샷 · RAG 구현 상태 추가, "LLM 제공사는 구현 단계에서 결정" 문구를 오프라인 도구(결정됨)와 서비스 안 파이프라인(미결정)으로 구분 |
 | v1.11 | 2026-10-08 | 11 · 12차 회의 반영 (COMMON-20) — 3장 카카오 로그인(OAuth2 · JWT) 검토 표기, 6장 세 판결 AI 비교 분석 제외(REQ-062 · 063) · 임베딩 API 행 추가(모델 미정) · 퓨샷 · RAG · 임베딩 적용 위치가 12차 회의 결정임을 명시 |
 | **v1.12** | **2026-10-09** | **COMMON-21 반영** — 6장 퓨샷 · RAG · 임베딩 구현 현황에서 임베딩 모델 · 판례 저장소 범위 확정 표기, 선행 작업을 BE-50 ~ BE-52로 정정 |
-| v1.13 | 2026-10-13 | BE-39 반영 (**확장 단계**, 닫힌 #79를 최신 develop에 다시 적용) — 3장에 관리자 인증 추가: Spring Security, 관리자 계정(V12 `admin_account`) · 세션 로그인, `/api/v1/admin/**`만 보호하고 사용자 API는 그대로(인증 · CSRF · 세션 없음), 관리자 상태 변경 요청 CSRF. 2장 마이그레이션 목록에 V9 ~ V12 추가 |
+| v1.13 | 2026-10-12 | BE-39 반영 (**확장 단계**, 닫힌 #79를 최신 develop에 다시 적용) — 3장에 관리자 인증 추가: Spring Security, 관리자 계정(V12 `admin_account`) · 세션 로그인, `/api/v1/admin/**`만 보호하고 사용자 API는 그대로(인증 · CSRF · 세션 없음), 관리자 상태 변경 요청 CSRF. 2장 마이그레이션 목록에 V9 ~ V12 추가 |
 | v1.14 | 2026-10-12 | BE-52 반영 — 2장 마이그레이션 목록에 V13(`rag_guideline` · 양형기준 버전 함수) 추가, 6장 구현 현황에 양형기준 RAG 저장소 표기 |
-| v1.15 | 2026-10-13 | BE-57 반영 (**확장 단계**, WBS 7.4.1) — 3장 "사용자 인증 기반" 신설: 필터 체인을 관리자(세션 · CSRF) / 사용자(무상태 · Bearer 토큰)로 분리, 토큰 계약(`TokenIssuer` · `AccessTokenVerifier` · `MemberPrincipal` · `IssuedTokens`), 토큰 오류 401(`TOKEN_INVALID` · `TOKEN_EXPIRED`), CORS 미설정 근거, 보안 헤더(Referrer-Policy · HSTS · CSP 담당), 리프레시 쿠키 · OAuth 임시 상태 결정 위임(C · D) |
+| v1.15 | 2026-10-12 | BE-57 반영 (**확장 단계**, WBS 7.4.1) — 3장 "사용자 인증 기반" 신설: 필터 체인을 관리자(세션 · CSRF) / 사용자(무상태 · Bearer 토큰)로 분리, 토큰 계약(`TokenIssuer` · `AccessTokenVerifier` · `MemberPrincipal` · `IssuedTokens`), 토큰 오류 401(`TOKEN_INVALID` · `TOKEN_EXPIRED`), CORS 미설정 근거, 보안 헤더(Referrer-Policy · HSTS · CSP 담당), 리프레시 쿠키 · OAuth 임시 상태 결정 위임(C · D). 리뷰 반영: `Bearer`가 아닌 스킴은 검증하지 않고 익명으로 통과 |
 
 
 ## **1. Backend**
@@ -223,7 +223,7 @@ MVP는 회원가입 없이 핵심 체험이 끝까지 동작해야 한다. 사�
 | 항목 | 내용 |
 | --- | --- |
 | 필터 체인 | `SecurityConfig`가 체인 두 개를 둔다. ① `/api/v1/admin/**` 관리자 체인(먼저 검사): 세션 · CSRF · `ROLE_ADMIN`, Bearer 토큰은 보지 않는다. ② 그 밖의 모든 요청 사용자 체인: **세션을 만들지도 읽지도 않는다**(`STATELESS` + 요청 안에서만 쓰는 SecurityContext 저장소). 그래서 브라우저에 관리자 세션 쿠키가 있어도 사용자 API에서는 관리자로 보지 않는다 |
-| Bearer 토큰 | 사용자 체인의 `BearerTokenAuthenticationFilter`. `Authorization` 헤더가 없으면 익명. 있으면 반드시 검증한다: `Bearer` 형식이 아니거나 비었거나 검증기 빈이 없거나 검증에 실패하면 **401**. 잘못된 토큰을 익명으로 바꾸지 않는다. 사용자 체인 경로라면 `permitAll`이어도 같다(관리자 체인은 Bearer를 보지 않는다). `Authorization` 헤더가 여러 개이거나 토큰에 RFC 6750 밖의 글자(공백 · 쉼표 등)가 있으면 검증기를 부르지 않고 401 |
+| Bearer 토큰 | 사용자 체인의 `BearerTokenAuthenticationFilter`. `Authorization` 헤더가 없거나 `Bearer`가 아닌 스킴(`Basic` 등 — 앞단 Nginx 인증 · 모니터링 scrape가 붙일 수 있다)이면 익명. **`Bearer` 헤더는 반드시 검증한다**: 토큰이 비었거나 검증기 빈이 없거나 검증에 실패하면 **401**. 잘못된 토큰을 익명으로 바꾸지 않는다. 사용자 체인 경로라면 `permitAll`이어도 같다(관리자 체인은 Bearer를 보지 않는다). `Authorization` 헤더가 여러 개이거나(스킴과 관계없이) `Bearer` 토큰에 RFC 6750 밖의 글자(공백 · 쉼표 등)가 있으면 검증기를 부르지 않고 401 |
 | 토큰 오류 | 401 `TOKEN_EXPIRED`(만료, 화면은 재발급 시도) · 401 `TOKEN_INVALID`(그 밖). Redis 장애 등 인프라 오류는 토큰 오류로 바꾸지 않는다(500 `INTERNAL_ERROR`, 원인은 서버 로그에만) |
 | 토큰 계약 | `common.security.token` 패키지. `AccessTokenVerifier`(토큰 → `MemberPrincipal`, C 구현) · `TokenIssuer`(회원 → `IssuedTokens` 액세스 · 리프레시 토큰과 만료 시각, C 구현 · D 호출) · `MemberPrincipal`(회원 ID · 접두어 없는 권한 `USER`, 바꿀 수 없음) · `TokenException`(INVALID · EXPIRED). 재발급 · 폐기 · 재사용 탐지 계약은 C가 7.4.3에서 정한다 |
 | 담당 경계 (R14) | B: HTTP 헤더 처리 · 체인 연결(`SecurityConfig` · Bearer 필터) / C: 검증 · 발급 · 재발급 · 폐기 로직 / D: 카카오 로그인 성공 후 발급 호출. WBS 7-2-1의 "JWT 검증 필터(C)"와의 조정은 C 확인 후 정정한다 |

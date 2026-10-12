@@ -146,12 +146,26 @@ class UserSecurityChainTest extends ApiIntegrationTest {
 
 	@Test
 	void badTokens_401TokenInvalid() throws Exception {
-		String[] headers = {bearer("unknown"), "Basic dXNlcjpwYXNz", "Bearer ", "Bearer    ", "Bearer", "token-without-scheme",
+		String[] headers = {bearer("unknown"), "Bearer ", "Bearer    ", "Bearer", "BEARER ",
 			"Bearer member-7, Bearer unknown", "Bearer member 7", "Bearer member-7;x"};
 		for (String value : headers) {
 			mockMvc.perform(get("/api/v1/cases").header(HttpHeaders.AUTHORIZATION, value))
 				.andExpect(status().isUnauthorized())
 				.andExpect(jsonPath("$.code").value("TOKEN_INVALID"));
+		}
+	}
+
+	/** Bearer가 아닌 스킴은 검증하지 않고 익명으로 통과 (앞단 Basic 인증 · 모니터링 scrape 대비, PR #106 리뷰) */
+	@Test
+	void nonBearerScheme_passesThroughAsAnonymous() throws Exception {
+		String[] headers = {"Basic dXNlcjpwYXNz", "token-without-scheme", "Bearerx member-7", "Digest username=\"x\""};
+		for (String value : headers) {
+			MvcResult result = mockMvc.perform(get(WHOAMI).header(HttpHeaders.AUTHORIZATION, value))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.member").value(false))
+				.andReturn();
+			assertThat(result.getRequest().getSession(false)).isNull();
+			assertThat(result.getResponse().getHeaders(HttpHeaders.SET_COOKIE)).isEmpty();
 		}
 	}
 

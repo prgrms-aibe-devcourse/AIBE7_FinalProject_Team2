@@ -25,11 +25,12 @@ import org.springframework.web.filter.OncePerRequestFilter;
 /**
  * 사용자 체인의 Bearer 토큰 확인 (확장 단계, BE-57 · WBS 7.4.1)
  *
- * - Authorization 헤더가 없으면 아무것도 하지 않는다 → 익명(익명 ID 쿠키)으로 지금처럼 동작
- * - 헤더가 있으면 반드시 검증한다. Bearer 형식이 아니거나 비었거나, 검증기(AccessTokenVerifier 빈)가 아직 없거나,
+ * - Authorization 헤더가 없거나 Bearer가 아닌 스킴(Basic 등)이면 아무것도 하지 않는다 → 익명(익명 ID 쿠키)으로 지금처럼 동작.
+ *   다른 스킴은 앞단(Nginx Basic 인증 · 모니터링 scrape 등)이 붙인 것일 수 있고, 사용자 체인에는 그 스킴의 인증 방식이 없다(PR #106 리뷰)
+ * - Bearer 헤더는 반드시 검증한다. 토큰이 비었거나, 검증기(AccessTokenVerifier 빈)가 아직 없거나,
  *   검증기가 TokenException을 던지면 401(TOKEN_INVALID · TOKEN_EXPIRED)로 끝낸다. 잘못된 토큰을 익명으로 바꾸지 않는다
  * - 검증 성공이면 MemberPrincipal로 인증해 SecurityContext에 넣는다(이 요청 동안만, 세션에 저장하지 않음)
- * - Authorization 헤더가 여러 개이거나, 토큰에 RFC 6750 문자(영숫자 - . _ ~ + / 와 끝의 =) 밖의 글자(공백 · 쉼표 등)가 있으면
+ * - Authorization 헤더가 여러 개이거나(스킴과 관계없이), Bearer 토큰에 RFC 6750 문자(영숫자 - . _ ~ + / 와 끝의 =) 밖의 글자(공백 · 쉼표 등)가 있으면
  *   검증기를 부르지 않고 401 TOKEN_INVALID (프록시가 헤더를 합친 값 · 첫 값만 보는 우회를 막는다)
  * - 인프라 오류(TokenException이 아닌 예외)는 토큰 오류 401로 바꾸지 않는다 → 500 INTERNAL_ERROR(공통 에러 형식)
  *
@@ -40,7 +41,8 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @Slf4j
 public class BearerTokenAuthenticationFilter extends OncePerRequestFilter {
 
-	private static final String BEARER = "Bearer ";
+	private static final String BEARER_SCHEME = "Bearer";
+	private static final String BEARER = BEARER_SCHEME + " ";
 	/** RFC 6750 b64token: 영숫자 - . _ ~ + / 뒤에 = 패딩 */
 	private static final Pattern TOKEN_CHARS = Pattern.compile("[A-Za-z0-9\\-._~+/]+=*");
 
@@ -68,9 +70,14 @@ public class BearerTokenAuthenticationFilter extends OncePerRequestFilter {
 			reject(request, response, ErrorCode.TOKEN_INVALID, "Authorization 헤더가 여러 개");
 			return;
 		}
-		String token = bearerToken(headers.get(0));
+		String header = headers.get(0);
+		if (!isBearerScheme(header)) {	// Basic 등 다른 스킴은 이 필터가 다루지 않는다 → 익명
+			chain.doFilter(request, response);
+			return;
+		}
+		String token = bearerToken(header);
 		if (token == null) {
-			reject(request, response, ErrorCode.TOKEN_INVALID, "Bearer 형식이 아님");
+			reject(request, response, ErrorCode.TOKEN_INVALID, "Bearer 토큰 형식 오류");
 			return;
 		}
 		AccessTokenVerifier verifier = verifiers.getIfAvailable();
@@ -99,7 +106,13 @@ public class BearerTokenAuthenticationFilter extends OncePerRequestFilter {
 		chain.doFilter(request, response);
 	}
 
-	/** "Bearer {토큰}"의 토큰. 다른 형식이거나 비었으면 null */
+	/** 스킴이 Bearer인가(대소문자 무시). "Bearer" 한 단어 또는 "Bearer " 뒤에 무엇이든 */
+	private static boolean isBearerScheme(String header) {
+		return header.regionMatches(true, 0, BEARER_SCHEME, 0, BEARER_SCHEME.length())
+			&& (header.length() == BEARER_SCHEME.length() || header.charAt(BEARER_SCHEME.length()) == ' ');
+	}
+
+	/** "Bearer {토큰}"의 토큰. 비었거나 RFC 6750 문자 밖이면 null */
 	private static String bearerToken(String header) {
 		if (header.length() <= BEARER.length() || !header.regionMatches(true, 0, BEARER, 0, BEARER.length())) {
 			return null;
