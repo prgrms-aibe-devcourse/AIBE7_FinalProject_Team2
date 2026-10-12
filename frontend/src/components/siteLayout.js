@@ -15,8 +15,11 @@ export function button(text, action, className = 'secondary-button') {
 
 export function renderSiteHeader({ navigate, onIntro }) {
   const header = element('header', 'site-header');
+  // 로고는 "Law"만 따로 감싸 둔다. 색은 화면 CSS가 정한다(S-01은 브론즈, 나머지 화면은 글자색 그대로)
+  const logo = button('', () => navigate('landing'), 'logo-button');
+  logo.append('내', element('span', 'law', 'Law'), '남불');
   header.append(
-    button('내Law남불', () => navigate('landing'), 'logo-button'),
+    logo,
     (() => {
       const nav = element('nav', 'site-nav');
       nav.setAttribute('aria-label', '주요 메뉴');

@@ -1,13 +1,32 @@
 # landing
 
-**S-01 랜딩 · 홈** 화면이다.
+**S-01 메인 — 판사의 책상** 화면이다 (FE-18, 시안 "B안 일러스트 · C안 구도", 2D 평면).
 
 | 파일 | 내용 |
 | --- | --- |
-| `landingPage.js` | `renderLandingPage(container, { navigate, section })` — 화면을 그린다 |
-| `landing.css` | 랜딩 화면 스타일 |
+| `landingPage.js` | `renderLandingPage(container, { api, navigate, section })` — 화면을 그린다 |
+| `landing.css` | 메인 화면 스타일 (책상 일러스트 · 메뉴 카드 · 서비스 소개) |
 
-- "사건 목록 보기" 버튼은 `navigate('list')`로 사건 목록(S-02)으로 이동한다.
-- `section` 값(예: `'intro'`)을 받으면 해당 구역(서비스 소개)을 보여 준다. 공통 헤더의 "서비스 소개"가 `navigate('landing', { section: 'intro' })`로 이 값을 넘긴다.
-- 공통 헤더 · 푸터는 [`components/siteLayout.js`](../../components/siteLayout.js)를 쓴다.
-- 화면 구성과 문구는 [정보 구조](../../../../docs/information-architecture.md)와 [와이어프레임](../../../../docs/wireframe.pdf)을 기준으로 한다.
+## 구성
+
+- **책상 위 물건이 메뉴다.** 물건마다 메모지(포스트잇)가 이름표로 붙는다.
+
+  | 물건 | 메뉴 | 이동 | 상태 |
+  | --- | --- | --- | --- |
+  | 신문 | 실제 사건 판결 체험 | `navigate('list')` → S-02 | 동작 |
+  | 서류철 | 판결 성향 테스트 | S-15 (예정) | 곧 열려요 |
+  | 휴대폰 | 마이페이지 | S-17 (예정) | 곧 열려요 |
+  | 노트북 | 커뮤니티 | 범위 밖 | 곧 열려요 |
+
+  화면이 생기면 `landingPage.js`의 `OBJECTS`에서 그 물건의 `route`에 화면 이름(`routes.js`의 `name`)만 넣는다. 메모지 문구(`readyNote`)와 누르기 가능 여부가 함께 바뀐다.
+- **신문 지면은 사건 목록 API(API 1)로 채운다.** 참여 많은 순 첫 사건이 머리기사(제목 · 부제 · 첫 문단 · 사진), 다음 2건이 아래 기사, 그다음 3건이 제목 줄이다. S-02와 같은 기준이다. 불러오기 전 · 실패 시에는 사건과 무관한 기본 문구를 둔다(책상은 그대로 동작).
+- **그림은 CSS · 인라인 SVG로만 그린다** (이미지 파일 없음, 신문 사진만 사건 썸네일). 기준 좌표계 1672 × 941 안에 px로 놓고 화면 너비에 맞춰 통째로 줄인다(`--desk-scale`).
+- **2D 평면 일러스트**라 물건이 들리거나 기우는 효과는 넣지 않는다(팀 결정). 마우스를 올리면 메모지 제목에 밑줄만 생긴다.
+- **720px 이하**에서는 책상 대신 메뉴 카드(신문 → 서류철 · 휴대폰 → 노트북)를 보여 준다.
+- 아래에 **서비스 소개**(`#intro`)가 있다. `section: 'intro'`를 받으면 그 구역으로 스크롤한다. 공통 헤더의 "서비스 소개"와 S-02의 "서비스 소개"가 이 값을 넘긴다.
+
+## 색 · 글꼴
+
+- 색은 `src/style.css` ④의 `--color-desk-*` 역할 토큰과 공통 역할 토큰만 쓴다. 이 CSS에 색 값(hex · rgb)을 쓰지 않는다. 그림자 · 투명도는 `color-mix()`로 만든다.
+- 메모지 손글씨는 `--font-hand`(나눔펜). `index.html` · `preview.html`의 글꼴 링크에 함께 있다.
+- 공통 헤더 · 푸터는 [`components/siteLayout.js`](../../components/siteLayout.js)를 쓰고, 메인에서만 네이비 헤더 · 어두운 푸터로 바꾼다(`.landing-page .site-header` 등).

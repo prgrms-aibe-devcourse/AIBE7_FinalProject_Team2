@@ -97,13 +97,113 @@ body {
   --color-judge-me: var(--palette-judge-me);       /* 세 판결은 밝기가 같다. 선 · 라벨에만 쓰고 바탕을 칠하지 않는다 */
   --color-judge-ai: var(--palette-judge-ai);
   --color-judge-court: var(--palette-judge-court);
+  --photo-filter: grayscale(1) contrast(1.05);     /* 지면 사진 색보정 (테마마다 톤을 바꿀 수 있다) */
   --color-banner-bg: var(--palette-navy-900);      /* 결과 화면 배너 */
   --color-banner-text: var(--palette-white);
   --color-banner-muted: var(--palette-navy-200);
 
+  /* ④ S-01 메인 책상 일러스트 (FE-18). 책상 그림 전용 색이다. 다른 화면에서는 쓰지 않는다 */
+  --palette-wood-300: #b06d36;
+  --palette-wood-500: #a8652f;
+  --palette-wood-700: #8a4f22;
+  --palette-wood-950: #3a2414;
+  --palette-wood-glow: #ffd696;
+  --palette-felt-700: #1c2b4f;
+  --palette-felt-900: #14213f;
+  --palette-felt-glow: #7896d2;
+  --palette-kraft-300: #d6a468;
+  --palette-kraft-500: #bf8a50;
+  --palette-kraft-600: #b78049;
+  --palette-sheet: #f6f3ec;
+  --palette-sheet-line: #c9c3b8;
+  --palette-label: #f7f2e8;
+  --palette-metal-200: #d6d8dd;
+  --palette-metal-300: #c9cbd1;
+  --palette-metal-400: #bfc2c9;
+  --palette-metal-450: #b4b7be;
+  --palette-metal-500: #a9adb6;
+  --palette-keys: #24272d;
+  --palette-bezel: #1a1f2b;
+  --palette-screen-300: #a6afc2;
+  --palette-screen-400: #8f99ad;
+  --palette-screen-500: #7c869b;
+  --palette-phone-900: #11151d;
+  --palette-phone-700: #262c3a;
+  --palette-phone-800: #1a1f2a;
+  --palette-phone-edge: #3a3f4a;
+  --palette-mug: #f4efe7;
+  --palette-mug-rim: #e6dfd4;
+  --palette-coffee-300: #7a5038;
+  --palette-coffee-600: #4a2c1c;
+  --palette-coffee-900: #2f1b10;
+  --palette-pen-gold: #d9b46a;
+  --palette-pen-body: #151515;
+  --palette-pen-cap: #cfc6b4;
+  --palette-note: #f3e3b3;
+  --palette-note-ink: #2b2414;
+  --palette-note-pen: #5b4210;
+  --palette-note-soon: #ddd6c6;
+  --palette-news: #ece2d4;
+  --palette-news-sheet-1: #d9ccba;
+  --palette-news-sheet-2: #e4d8c8;
+  --palette-news-ink: #3b3833;
+  --palette-news-ink-soft: #55514a;
+  --palette-shadow: #0f0a19;
+  --palette-desk-text: #ead9c6;
+
+  --color-desk-floor: var(--palette-wood-950);     /* 책상 밖 바탕 · 푸터 */
+  --color-desk-wood: var(--palette-wood-500);
+  --color-desk-wood-light: var(--palette-wood-300);
+  --color-desk-wood-dark: var(--palette-wood-700);
+  --color-desk-wood-glow: var(--palette-wood-glow);
+  --color-desk-pad: var(--palette-felt-700);       /* 데스크 패드 (펠트) */
+  --color-desk-pad-edge: var(--palette-felt-900);
+  --color-desk-pad-glow: var(--palette-felt-glow);
+  --color-desk-kraft: var(--palette-kraft-300);    /* 서류철 */
+  --color-desk-kraft-back: var(--palette-kraft-500);
+  --color-desk-kraft-shade: var(--palette-kraft-600);
+  --color-desk-sheet: var(--palette-sheet);
+  --color-desk-sheet-line: var(--palette-sheet-line);
+  --color-desk-label: var(--palette-label);
+  --color-desk-metal-light: var(--palette-metal-200); /* 노트북 몸체 */
+  --color-desk-metal: var(--palette-metal-300);
+  --color-desk-metal-pad: var(--palette-metal-400);
+  --color-desk-metal-line: var(--palette-metal-450);
+  --color-desk-metal-dark: var(--palette-metal-500);
+  --color-desk-keys: var(--palette-keys);
+  --color-desk-bezel: var(--palette-bezel);
+  --color-desk-screen-light: var(--palette-screen-300);
+  --color-desk-screen: var(--palette-screen-400);
+  --color-desk-screen-dark: var(--palette-screen-500);
+  --color-desk-phone: var(--palette-phone-900);
+  --color-desk-phone-glass: var(--palette-phone-700);
+  --color-desk-phone-glass-dark: var(--palette-phone-800);
+  --color-desk-phone-edge: var(--palette-phone-edge);
+  --color-desk-mug: var(--palette-mug);
+  --color-desk-mug-rim: var(--palette-mug-rim);
+  --color-desk-coffee-light: var(--palette-coffee-300);
+  --color-desk-coffee: var(--palette-coffee-600);
+  --color-desk-coffee-dark: var(--palette-coffee-900);
+  --color-desk-pen-gold: var(--palette-pen-gold);
+  --color-desk-pen: var(--palette-pen-body);
+  --color-desk-pen-cap: var(--palette-pen-cap);
+  --color-desk-note: var(--palette-note);          /* 메모지(포스트잇) */
+  --color-desk-note-ink: var(--palette-note-ink);
+  --color-desk-note-pen: var(--palette-note-pen);
+  --color-desk-note-soon: var(--palette-note-soon);/* 준비 중 메모지 */
+  --color-desk-news: var(--palette-news);          /* 책상 위 신문 */
+  --color-desk-news-sheet-1: var(--palette-news-sheet-1);
+  --color-desk-news-sheet-2: var(--palette-news-sheet-2);
+  --color-desk-news-ink: var(--palette-news-ink);
+  --color-desk-news-ink-soft: var(--palette-news-ink-soft);
+  --color-desk-shadow: var(--palette-shadow);      /* 물건 그림자 (투명도는 color-mix로) */
+  --color-desk-text: var(--palette-desk-text);     /* 책상 위 · 푸터 글자 */
+
   /* ③ 글꼴 · 크기 */
   --font-heading: "Noto Serif KR", AppleMyungjo, Batang, serif;
   --font-body: Pretendard, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --font-article: "Nanum Myeongjo", "Noto Serif KR", AppleMyungjo, Batang, serif; /* 신문 기사 본문 (S-02 지면) */
+  --font-hand: "Nanum Pen Script", cursive;          /* 손글씨 (S-01 메모지) */
   --text-display: 34px;
   --text-title-1: 28px;
   --text-title-2: 22px;

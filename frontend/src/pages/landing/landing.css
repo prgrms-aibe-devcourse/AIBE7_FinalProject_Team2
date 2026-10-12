@@ -28,21 +28,204 @@
 /* 사이트 헤더 · 푸터(.site-header · .site-nav · .logo-button · .nav-button · .site-footer)는 공통 컴포넌트라
    src/style.css에만 정의한다. S-01만 다르게 해야 하면 여기에 .landing-page .site-header처럼 화면 클래스로 감싸서 추가한다. */
 
-.landing-page .hero { padding: 88px 28px 72px; text-align: center; }
-.landing-page .hero h1 { font-size: 34px; line-height: 1.4; }
-.landing-page .hero-copy { margin: 18px auto 32px; max-width: 560px; color: var(--color-muted); font-size: 17px; }
-.landing-page .hero-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 12px; }
-.landing-page .feature-section { padding: 56px 28px 72px; background: var(--color-surface); border-top: 1px solid var(--color-border); scroll-margin-top: 0; }
-.landing-page .feature-section h2 { font-size: 22px; text-align: center; margin-bottom: 28px; }
+/* ===== S-01 메인 — 판사의 책상 (FE-18, 시안 "B안 일러스트 · C안 구도") =====
+   기준 좌표계 1672 × 941 안에 물건을 px로 놓고, 통째로 화면 너비에 맞춰 줄인다(--desk-scale, landingPage.js).
+   2D 평면 일러스트: 물건이 들리거나 기울지 않는다(팀 결정). 색은 style.css ④의 --color-desk-* 만 쓴다. */
+.landing-page { max-width: none; border: 0; background: var(--color-desk-floor); }
+/* 그림 안의 span 등은 블록으로 쓴다. :where로 우선순위를 0으로 둬서 아래 개별 규칙(flex · grid · inline)이 항상 이긴다 */
+.landing-page :where(.desk-world, .desk-menu) :where(span, strong, em, b, small) { display: block; }
+
+/* 헤더: 책상 위에서는 네이비 띠 */
+.landing-page .site-header { background: var(--color-banner-bg); border-bottom: 0; padding: 4px 32px; }
+.landing-page .site-header .logo-button { color: var(--color-banner-text); font-size: 22px; }
+.landing-page .site-header .logo-button .law { display: inline; color: var(--color-range-fill); }
+.landing-page .nav-button { color: var(--color-banner-muted); font-size: var(--text-small); }
+.landing-page .nav-button:hover { color: var(--color-banner-text); text-decoration: underline; text-underline-offset: 4px; }
+.landing-page .site-header button:focus-visible { outline-color: var(--color-range-fill); }
+
+/* ── 무대 ── */
+.landing-page .desk-scene { position: relative; aspect-ratio: 1672 / 941; max-width: 1672px; margin: 0 auto; overflow: hidden; }
+.landing-page .desk-world {
+  --shadow-rest: drop-shadow(9px 11px 7px color-mix(in srgb, var(--color-desk-shadow) 42%, transparent));
+  position: absolute; left: 0; top: 0; width: 1672px; height: 941px;
+  transform: scale(var(--desk-scale, 1)); transform-origin: 0 0;
+  color: var(--color-desk-text);
+}
+.landing-page .desk-wood {
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(ellipse at 8% 0%, color-mix(in srgb, var(--color-desk-wood-glow) 38%, transparent), transparent 55%),
+    repeating-linear-gradient(176deg, color-mix(in srgb, var(--color-desk-shadow) 6%, transparent) 0 2px, transparent 2px 9px),
+    repeating-linear-gradient(178deg, color-mix(in srgb, var(--color-desk-wood-glow) 6%, transparent) 0 1px, transparent 1px 23px),
+    linear-gradient(180deg, var(--color-desk-wood-light), var(--color-desk-wood) 40%, var(--color-desk-wood-dark));
+}
+.landing-page .desk-pad {
+  position: absolute; left: 57px; top: 154px; width: 1549px; height: 692px; border-radius: 28px;
+  background: radial-gradient(ellipse at 10% 0%, color-mix(in srgb, var(--color-desk-pad-glow) 16%, transparent), transparent 50%), var(--color-desk-pad);
+  box-shadow: inset 0 0 0 3px var(--color-desk-pad-edge), 2px 4px 6px color-mix(in srgb, var(--color-desk-shadow) 35%, transparent);
+}
+/* 종이 질감 노이즈 (SVG 필터, 색 없음) */
+.landing-page .desk-grain {
+  position: absolute; inset: 0; pointer-events: none; opacity: .22; mix-blend-mode: overlay;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .5 0 0 0 0 .5 0 0 0 1 0'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+.landing-page .desk-mug {
+  position: absolute; left: 115px; top: 25px; width: 120px; height: 120px; border-radius: 50%; background: var(--color-desk-mug);
+  box-shadow: inset 0 0 0 9px var(--color-desk-mug-rim), 9px 11px 9px color-mix(in srgb, var(--color-desk-shadow) 40%, transparent);
+}
+.landing-page .desk-mug::before {
+  content: ''; position: absolute; inset: 20px; border-radius: 50%;
+  background: radial-gradient(circle at 38% 34%, var(--color-desk-coffee-light) 0 8%, var(--color-desk-coffee) 30%, var(--color-desk-coffee-dark));
+}
+.landing-page .desk-mug::after {
+  content: ''; position: absolute; left: -30px; top: 62px; width: 40px; height: 30px;
+  border: 9px solid var(--color-desk-mug); border-right: 0; border-radius: 18px 0 0 18px; transform: rotate(-24deg);
+}
+.landing-page .desk-pen {
+  position: absolute; left: 1630px; top: 660px; width: 11px; height: 172px; border-radius: 5px; transform: rotate(14deg); filter: var(--shadow-rest);
+  background: linear-gradient(180deg, var(--color-desk-pen-gold) 0 5%, var(--color-desk-pen) 5% 46%, var(--color-desk-pen-gold) 46% 49%, var(--color-desk-pen) 49% 92%, var(--color-desk-pen-cap) 92%);
+}
+
+.landing-page .desk-headline { position: absolute; left: 368px; right: 368px; top: 43px; text-align: center; text-shadow: 0 2px 10px color-mix(in srgb, var(--color-desk-floor) 70%, transparent); }
+.landing-page .desk-headline h1 { margin: 0; font: 900 36px/1.2 var(--font-heading); letter-spacing: -.04em; color: var(--color-banner-text); }
+.landing-page .desk-headline p { margin-top: 6px; font-size: 16px; color: var(--color-banner-text); opacity: .95; }
+
+/* ── 물건 = 버튼 ── */
+.landing-page .desk-object {
+  position: absolute; display: block; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer;
+}
+.landing-page .desk-object.is-soon { cursor: default; }
+.landing-page .desk-object:focus-visible { outline: 3px solid var(--color-range-fill); outline-offset: 8px; border-radius: 6px; }
+.landing-page .desk-object > :not(.desk-note) { filter: var(--shadow-rest); }
+
+/* 메모지(포스트잇): 물건의 이름표. 평면 일러스트라 마우스를 올리면 밑줄만 생긴다 */
+.landing-page .desk-note {
+  position: absolute; z-index: 3; padding: 12px 15px 13px; white-space: nowrap; transform: rotate(var(--note-angle, 3deg));
+  background: var(--color-desk-note); color: var(--color-desk-note-ink);
+  box-shadow: -4px 6px 10px color-mix(in srgb, var(--color-desk-shadow) 35%, transparent);
+}
+.landing-page .desk-note strong { font: 700 16px/1.3 var(--font-body); color: var(--color-heading); }
+.landing-page .desk-note em { margin-top: 2px; font: 400 24px/1.05 var(--font-hand); font-style: normal; color: var(--color-desk-note-pen); }
+.landing-page .desk-note.is-soon { background: var(--color-desk-note-soon); }
+.landing-page .desk-note.is-soon em { color: var(--color-border-strong); }
+.landing-page .desk-object:not(.is-soon):is(:hover, :focus-visible) .desk-note strong { text-decoration: underline; text-underline-offset: 4px; }
+
+/* 서류철 → 판결 성향 테스트 */
+.landing-page .obj-folder { left: 60px; top: 282px; width: 443px; height: 521px; }
+.landing-page .folder-art { position: absolute; inset: 0; }
+.landing-page .folder-art svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.landing-page .folder-back { fill: var(--color-desk-kraft-back); }
+.landing-page .folder-shade { fill: var(--color-desk-kraft-shade); }
+.landing-page .folder-sheet { fill: var(--color-desk-sheet); }
+.landing-page .folder-lines { stroke: var(--color-desk-sheet-line); stroke-width: 3; stroke-linecap: round; fill: none; }
+.landing-page .folder-front { fill: var(--color-desk-kraft); }
+.landing-page .folder-gloss { fill: var(--color-card); opacity: .07; }
+.landing-page .folder-edge { fill: var(--color-desk-kraft-shade); opacity: .7; }
+.landing-page .folder-label {
+  position: absolute; left: 68px; top: 118px; width: 250px; padding: 13px 16px; transform: rotate(-14deg); text-align: center;
+  background: var(--color-desk-label); color: var(--color-heading); font: 400 27px/1.1 var(--font-hand);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--color-desk-shadow) 25%, transparent);
+}
+.landing-page .note-folder { left: 18px; bottom: -21px; --note-angle: -4deg; }
+
+/* 신문 → 사건 목록 (S-02 머리기사로 채운다) */
+.landing-page .obj-news { left: 547px; top: 184px; width: 596px; height: 616px; }
+.landing-page .news-sheets { position: absolute; inset: 0; }
+.landing-page .news-sheets span { position: absolute; inset: 0; border-radius: 2px; }
+.landing-page .news-sheets span:nth-child(1) { transform: translate(6px, 5px) rotate(.6deg); background: var(--color-desk-news-sheet-1); }
+.landing-page .news-sheets span:nth-child(2) { transform: translate(3px, 2px) rotate(-.4deg); background: var(--color-desk-news-sheet-2); }
+.landing-page .news-art {
+  position: absolute; inset: 0; overflow: hidden; padding: 22px 26px; font-size: 9.4px; color: var(--color-text);
+  background:
+    linear-gradient(90deg, transparent 48.6%, color-mix(in srgb, var(--color-desk-coffee) 16%, transparent) 50%, transparent 51.4%),
+    linear-gradient(180deg, transparent 46%, color-mix(in srgb, var(--color-desk-coffee) 8%, transparent) 47%, transparent 48.5%),
+    var(--color-desk-news);
+}
+.landing-page .news-info { display: flex; justify-content: space-between; padding-bottom: .4em; border-bottom: 1px solid var(--color-border-strong); font-size: .9em; color: var(--color-muted); }
+.landing-page .news-brand { margin: .25em 0 .15em; text-align: center; font: 900 3.8em/1.1 var(--font-heading); letter-spacing: -.04em; color: var(--color-heading); }
+.landing-page .news-brand .law { display: inline; color: var(--color-label); }
+.landing-page .news-date { display: flex; justify-content: center; gap: 1.4em; padding: .35em 0; border-top: 2px solid var(--color-text); border-bottom: 1px solid var(--color-text); color: var(--color-muted); }
+.landing-page .news-banner { margin: .6em 0 .55em; text-align: center; font: 900 2.5em/1.25 var(--font-heading); letter-spacing: -.04em; word-break: keep-all; }
+.landing-page .news-front { display: grid; grid-template-columns: 1.6fr 1fr; gap: 1.2em; padding-top: .8em; border-top: 1px solid var(--color-border-strong); }
+.landing-page .news-photo { display: block; width: 100%; aspect-ratio: 3 / 2; object-fit: cover; filter: var(--photo-filter); mix-blend-mode: multiply; }
+.landing-page .news-deck { margin-bottom: .4em; font: 700 1.25em/1.45 var(--font-heading); color: var(--color-heading); word-break: keep-all; }
+.landing-page .news-lead { font: 400 1.1em/1.5 var(--font-article); text-align: justify; text-indent: 1em; word-break: break-all; color: var(--color-desk-news-ink); }
+.landing-page .news-recs { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2em; margin-top: 1em; padding-top: .8em; border-top: 1px solid var(--color-text); }
+.landing-page .news-recs:empty, .landing-page .news-index:empty { display: none; }
+.landing-page .news-rec b { margin-bottom: .35em; font: 700 1.3em/1.35 var(--font-heading); word-break: keep-all; }
+.landing-page .news-rec span { font: 400 1.05em/1.5 var(--font-article); text-align: justify; word-break: break-all; color: var(--color-desk-news-ink-soft);
+  display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.landing-page .news-index { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1em; margin-top: .9em; padding-top: .7em; border-top: 1px solid var(--color-border-strong); font: 700 1.05em/1.35 var(--font-heading); word-break: keep-all; }
+.landing-page .note-news { right: -24px; bottom: -18px; --note-angle: 3deg; }
+
+/* 노트북 → 커뮤니티 (바닥 왼쪽 아래 모서리를 기준으로 29도 돌려 놓는다) */
+.landing-page .obj-laptop { left: 1181px; top: 13px; width: 491px; height: 580px; }
+.landing-page .laptop-art { position: absolute; left: 4px; top: -38px; width: 410px; height: 410px; transform: rotate(29deg); transform-origin: 0 100%; }
+.landing-page .laptop-screen { position: absolute; left: 6px; right: 6px; top: 0; height: 162px; padding: 12px 14px 10px; border-radius: 14px 14px 3px 3px; background: var(--color-desk-bezel); }
+.landing-page .laptop-display {
+  display: flex; flex-direction: column; gap: 9px; height: 100%; overflow: hidden; padding: 12px 14px; border-radius: 4px;
+  background: linear-gradient(160deg, var(--color-desk-screen-light), var(--color-desk-screen) 55%, var(--color-desk-screen-dark));
+  font-size: 12px; line-height: 1.35; color: var(--color-text); word-break: keep-all;
+}
+.landing-page .bubble { max-width: 82%; padding: 6px 10px; border-radius: 10px; background: var(--color-surface); }
+.landing-page .bubble.mine { align-self: flex-end; background: var(--color-range-fill); }
+.landing-page .bubble small { font-size: 10px; color: var(--color-border-strong); }
+.landing-page .laptop-body {
+  position: absolute; left: 0; right: 0; top: 160px; bottom: 0; border-radius: 4px 4px 22px 22px;
+  background: linear-gradient(170deg, var(--color-desk-metal-light), var(--color-desk-metal) 50%, var(--color-desk-metal-dark));
+  box-shadow: inset 0 2px 0 color-mix(in srgb, var(--color-desk-shadow) 25%, transparent), inset 0 -3px 0 color-mix(in srgb, var(--color-desk-shadow) 12%, transparent);
+}
+.landing-page .laptop-keys {
+  position: absolute; left: 30px; right: 30px; top: 22px; height: 128px; border-radius: 6px;
+  background:
+    repeating-linear-gradient(90deg, var(--color-desk-metal-line) 0 3px, transparent 3px 29.2px),
+    repeating-linear-gradient(0deg, var(--color-desk-metal-line) 0 3px, transparent 3px 25.6px),
+    var(--color-desk-keys);
+  box-shadow: inset 0 0 0 3px var(--color-desk-metal-line);
+}
+.landing-page .laptop-trackpad { position: absolute; left: 115px; right: 115px; bottom: 16px; height: 72px; border-radius: 9px; background: var(--color-desk-metal-pad); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-desk-shadow) 12%, transparent); }
+.landing-page .note-laptop { left: 10px; top: 429px; --note-angle: -3deg; }
+
+/* 휴대폰 → 마이페이지 */
+.landing-page .obj-phone { left: 1279px; top: 547px; width: 189px; height: 250px; }
+.landing-page .phone-art { position: absolute; left: 46px; top: 12px; width: 100px; height: 222px; padding: 5px; border-radius: 17px; transform: rotate(18deg); background: var(--color-desk-phone); box-shadow: inset 0 0 0 1px var(--color-desk-phone-edge); }
+.landing-page .phone-glass { height: 100%; border-radius: 13px; background: linear-gradient(125deg, var(--color-desk-phone-glass) 0 38%, var(--color-desk-phone-glass-dark) 38% 100%); }
+.landing-page .note-phone { left: 142px; top: 200px; --note-angle: -5deg; }
+
+/* ── 좁은 화면: 책상 대신 메뉴 카드 ── */
+.landing-page .desk-menu { display: none; }
+
+/* ── 서비스 소개 ── */
+.landing-page .feature-section { padding: 56px 28px 64px; background: var(--color-surface); scroll-margin-top: 0; }
+.landing-page .feature-section > * { max-width: var(--content-width); margin-left: auto; margin-right: auto; }
+.landing-page .feature-section h2 { font: 700 var(--text-title-2)/1.4 var(--font-heading); color: var(--color-heading); text-align: center; margin-bottom: 28px; }
 .landing-page .feature-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
-.landing-page .feature-card { padding: 24px; background: var(--color-card); border: 1px solid var(--color-border); border-top: 3px solid var(--color-primary); border-radius: 4px; }
-.landing-page .feature-step { display: inline-block; margin-bottom: 10px; color: var(--color-primary); font-weight: 800; }
+.landing-page .feature-card { padding: 24px; background: var(--color-card); border: 1px solid var(--color-border); border-top: 3px solid var(--color-accent); border-radius: 4px; }
+.landing-page .feature-step { display: inline-block; margin-bottom: 10px; color: var(--color-label); font-weight: 800; }
 .landing-page .feature-card h3 { font-size: 17px; margin-bottom: 8px; }
 .landing-page .feature-card p { color: var(--color-muted); font-size: 14px; }
+.landing-page .feature-actions { display: flex; justify-content: center; margin-top: 28px; }
+
+/* 푸터: 책상 밖 어두운 바닥 위 */
+.landing-page .site-footer { background: var(--color-desk-floor); border-top: 0; color: var(--color-desk-text); }
 
 @media (max-width: 720px) {
-  .landing-page .hero { padding: 56px 20px 48px; }
-  .landing-page .hero h1 { font-size: 26px; }
+  .landing-page .site-header { padding: 12px 16px; }
+  .landing-page .desk-scene { display: none; }
+  .landing-page .desk-menu { display: block; padding: 24px 16px 28px; background: var(--color-banner-bg); }
+  .landing-page .desk-menu-title { font: 900 26px/1.3 var(--font-heading); letter-spacing: -.04em; color: var(--color-banner-text); }
+  .landing-page .desk-menu-head p:not(.desk-menu-title) { margin-top: 8px; font-size: 14px; color: var(--color-banner-muted); }
+  .landing-page .desk-menu-list { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px; }
+  .landing-page .desk-menu-item {
+    min-height: 72px; padding: 14px; text-align: left; border-radius: 4px;
+    border: 1px solid color-mix(in srgb, var(--color-banner-text) 15%, transparent);
+    background: color-mix(in srgb, var(--color-banner-text) 6%, transparent); color: var(--color-banner-text);
+  }
+  .landing-page .desk-menu-item.item-news { grid-column: 1 / -1; background: var(--color-surface); color: var(--color-text); }
+  .landing-page .desk-menu-item strong { font: 700 15px/1.3 var(--font-heading); }
+  .landing-page .desk-menu-item span { margin-top: 4px; font-size: var(--text-caption); opacity: .8; }
+  .landing-page .desk-menu-item.is-soon { opacity: .55; cursor: default; }
+  .landing-page .desk-menu-item:focus-visible { outline-color: var(--color-range-fill); }
   .landing-page .feature-section { padding: 40px 20px 48px; }
   .landing-page .feature-cards { grid-template-columns: 1fr; }
 }
