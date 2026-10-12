@@ -50,7 +50,7 @@
 | --- | --- |
 | S-01 · S-02 사건 이미지 | ERD `legal_case.thumbnail_url` 추가, API 1 `thumbnailUrl`. 없으면 범죄 유형별 기본 이미지 |
 | S-03 · S-05 범죄 분류명 ("사기 / 재산범죄") | 컬럼 대신 `crime_type`별 코드 상수, API 1 · 4 `crimeCategoryLabel` |
-| S-09 판결 카드 한 줄 요약 | 기능 명세 **REQ-109(MVP)** 신설. AI · 재판부는 ERD `judgment.summary`(팀 입력). **내 판결은 MVP에서 판단 요소의 요약 태그(`factor.summary_tag`)를 방향별로 모은 규칙 문장**(예: "피해 규모 · 범행 방식을 무겁게 보고 반성을 감안한 판단"), **확장 단계에서 AI가 사용자 입력으로 실시간 요약**(API 15 `perspectives.USER`, REQ-062)을 만들어 교체 |
+| S-09 판결 카드 한 줄 요약 | 기능 명세 **REQ-109(MVP)** 신설. AI · 재판부는 ERD `judgment.summary`(팀 입력). **내 판결은 MVP에서 판단 요소마다 붙인 요약어(`factor.summary_tag`, BE-26 확정)를 방향별로 모은 규칙 문장**(예: "흉기 사용을 무겁게 보고 범행 인정 · 반성을 감안한 판단"), **확장 단계에서 AI가 사용자 입력으로 실시간 요약**(API 15 `perspectives.USER`, REQ-062)을 만들어 교체 |
 | (확장) S-08 비식별화 정보 태그 | ERD `legal_case.deidentified_items`, API 12 `deidentifiedItems` (항목 종류만, 원래 값은 넣지 않음) |
 | (확장) S-08 출처 기관 예시 | API 12 예시를 와이어프레임과 같은 "법원 판결서 인터넷열람 서비스"로 통일 |
 

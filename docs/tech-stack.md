@@ -10,6 +10,13 @@
 | v1.3 | 2026-09-30 | BE-16 반영 — 2장에 개발용 임시 시드(가상 살인 사건, `db/seed/R__seed_sample_case.sql`, 로컬 · CI 전용 · `FLYWAY_LOCATIONS`로 켬) 추가, 실제 사건 데이터는 저장소 밖에서 넣는다는 원칙, DB 운영 단계(개발 Docker PostgreSQL → 최종 AWS RDS, 비용 사유) 신설 |
 | v1.4 | 2026-10-01 | BE-3 반영 — 2장에 시드를 켰던 DB에서 꺼도 기동되는 Flyway 설정(`ignore-migration-patterns`) 설명 추가 |
 | v1.5 | 2026-10-01 | BE-3 리뷰 반영 — 2장 마이그레이션 파일 목록에 V6(원본 판결문 최종 확정 판결 유니크) 추가, `ignore-migration-patterns` 운영 적용 시 재검토 조건 명시 |
+| v1.6 | 2026-10-02 | FE-2 리뷰 반영 — 8장에 Nginx SPA fallback(`try_files $uri $uri/ /index.html`) 요구사항 추가. History API 하위 경로(`/cases/1/review` 등) 새로고침 시 404 방지용 |
+| v1.7 | 2026-10-02 | COMMON-15 반영 — 9장 `CLAUDE.md`(규칙 원본) · `AGENTS.md`(다른 에이전트용 안내) 역할 구분 |
+| v1.8 | 2026-10-02 | BE-17 반영 — 2장에 실제 사건 데이터 주입 방식 추가(비공개 저장소 `backend/private-seed` 서브모듈 + Flyway `filesystem:` 위치), `FLYWAY_LOCATIONS` 표에 실제 사건 행 추가, `repeatable:missing` 재검토 결과 |
+| v1.9 | 2026-10-06 | BE-28 반영 — 2장 `FLYWAY_LOCATIONS` 표: 로컬 `./gradlew bootRun`은 가상 시드 + (서브모듈에 SQL이 있으면) 실제 사건 위치를 `build.gradle`이 자동으로 정함. 환경변수를 주면 그 값 우선, 운영 · 테스트 · CI는 변경 없음 |
+| v1.10 | 2026-10-08 | COMMON-19 반영 (AI 판결 파이프라인 BE-30 ~ BE-45) — 2장 마이그레이션 목록에 V7(사건 제목 · 판단 요소 번호 유니크) · V8(`ai_generation.generation_report`) 추가, 6장에 오프라인 생성 도구(`tools/ai-judgment`)의 LLM 공급자 · 호출 안정성(재시도 · 교차 호출 · 대체 체인) · 무료 등급 데이터 정책 · 퓨샷 · RAG 구현 상태 추가, "LLM 제공사는 구현 단계에서 결정" 문구를 오프라인 도구(결정됨)와 서비스 안 파이프라인(미결정)으로 구분 |
+| v1.11 | 2026-10-08 | 11 · 12차 회의 반영 (COMMON-20) — 3장 카카오 로그인(OAuth2 · JWT) 검토 표기, 6장 세 판결 AI 비교 분석 제외(REQ-062 · 063) · 임베딩 API 행 추가(모델 미정) · 퓨샷 · RAG · 임베딩 적용 위치가 12차 회의 결정임을 명시 |
+| **v1.12** | **2026-10-09** | **COMMON-21 반영** — 6장 퓨샷 · RAG · 임베딩 구현 현황에서 임베딩 모델 · 판례 저장소 범위 확정 표기, 선행 작업을 BE-50 ~ BE-52로 정정 |
 
 
 ## **1. Backend**
@@ -96,7 +103,9 @@ backend/src/main/resources/db/migration
  ├─ V3__create_experience.sql         -- 익명 사용자, 체험
  ├─ V4__create_judgment.sql           -- 판단, 판단 요소 평가 (+ CHECK · 부분 유니크 인덱스)
  ├─ V5__create_extension_tables.sql   -- (확장) AI 판결 생성 기록, 세 판결 비교 분석
- └─ V6__add_case_source_final_unique.sql   -- 사건마다 최종 확정 판결 1건 (부분 유니크)
+ ├─ V6__add_case_source_final_unique.sql   -- 사건마다 최종 확정 판결 1건 (부분 유니크)
+ ├─ V7__add_legal_case_title_factor_display_order_unique.sql   -- 사건 제목 · (사건, 판단 요소 번호) 유일 (적재 SQL의 조회 키, BE-15)
+ └─ V8__add_ai_generation_generation_report.sql   -- ai_generation.generation_report (자동 생성 정보, BE-31)
 
 backend/src/main/resources/db/seed          -- 로컬 · CI 전용 (운영에는 넣지 않음)
  └─ R__seed_sample_case.sql           -- 개발용 임시 시드: 가상 살인 사건 1건 (ERD 6장 예시)
@@ -109,12 +118,19 @@ MVP에는 관리자 화면이 없으므로 대표 사건 데이터와 검수된 
   | 환경 | `FLYWAY_LOCATIONS` | 결과 |
   | --- | --- | --- |
   | 운영 (기본값) | 지정하지 않음 → `classpath:db/migration` | 스키마만 |
-  | 로컬 · CI | `classpath:db/migration,classpath:db/seed` | 스키마 + 가상 사건 1건 |
+  | 로컬 (`./gradlew bootRun`) | 지정하지 않음 → `build.gradle`이 자동으로 정함: `classpath:db/migration,classpath:db/seed` + 서브모듈에 SQL이 있으면 `,filesystem:<backend/private-seed/seed 절대 경로>` (BE-28) | 스키마 + 가상 사건 (+ 실제 사건, 비공개 저장소 권한 필요) |
+  | CI | `classpath:db/migration,classpath:db/seed` | 스키마 + 가상 사건 1건 |
+  | 운영 (최종) | `classpath:db/migration,filesystem:<서버의 실제 데이터 경로>` | 스키마 + 실제 사건 (가상 사건 제외) |
 
-  기본값을 스키마만으로 둬서, 운영에서 환경변수를 빠뜨려도 시드가 들어가지 않는다. CI(`backend-ci.yml`)는 시드까지 켜서 시드가 스키마 제약을 깨지 않는지 매번 확인한다.
+  기본값을 스키마만으로 둬서, 운영에서 환경변수를 빠뜨려도 시드가 들어가지 않는다. 로컬 `bootRun`만 자동 설정을 쓰는 이유는 셸 환경변수가 다른 터미널 · IDE 실행에서 빠지기 쉽고, 빠져도 오류 없이 시드 없이 떠서 알아채기 어렵기 때문이다(BE-28). `FLYWAY_LOCATIONS`를 주면 자동 설정보다 우선하고, 기동 로그에 `[bootRun] Flyway 위치(...)` · `[bootRun] 실제 사건 시드: 포함 / 없음`이 찍힌다. CI(`backend-ci.yml`)는 시드까지 켜서 시드가 스키마 제약을 깨지 않는지 매번 확인한다.
 - 시드는 **반복 마이그레이션(`R__`)**이다. 버전 번호가 없어 `db/migration`의 새 버전 파일과 번호가 겹치지 않고, 모든 버전 마이그레이션 다음에 실행된다. 이미 사건이 있으면 아무것도 하지 않는다. 시드 값을 바꿔 다시 넣으려면 로컬 DB를 비운다(`docker compose down -v` 후 다시 `up`).
-- 한 번 시드를 켠 DB에서 시드 위치를 빼고 실행해도 기동된다. `spring.flyway.ignore-migration-patterns: "*:future,repeatable:missing"`로 적용된 반복 마이그레이션이 없어도 검증을 통과시킨다 (없으면 `Detected applied migration not resolved locally`로 기동 실패). 운영에도 적용되는 설정이라, 시드 외의 `R__` 파일을 추가할 때는 이 설정을 재검토한다.
-- **실제 사건 데이터는 시드로 커밋하지 않는다.** 저장소가 공개라 실제 형량 · 재판부 판단 요소 · 판결문 발췌가 그대로 공개되기 때문이다. 실제 사건은 저장소 밖에서 넣으며, 방법은 BE-17에서 정한다(MVP 정의서 11장).
+- 한 번 시드를 켠 DB에서 시드 위치를 빼고 실행해도 기동된다. `spring.flyway.ignore-migration-patterns: "*:future,repeatable:missing"`로 적용된 반복 마이그레이션이 없어도 검증을 통과시킨다 (없으면 `Detected applied migration not resolved locally`로 기동 실패). 운영에도 적용되는 설정이라, 시드 외의 `R__` 파일을 추가할 때는 이 설정을 재검토한다. (BE-17 재검토: 실제 사건 데이터도 위치에 따라 있을 수도 없을 수도 있는 반복 마이그레이션이라 이 설정을 그대로 둔다)
+- **실제 사건 데이터는 공개 저장소에 커밋하지 않는다.** 저장소가 공개라 실제 형량 · 재판부 판단 요소 · 판결문 발췌가 그대로 공개되기 때문이다. 실제 사건은 **비공개 저장소를 `backend/private-seed` 서브모듈로 연결**해 넣는다(BE-17).
+  - 비공개 저장소 `seed/`의 반복 마이그레이션(`R__10` 콘텐츠, 이후 `R__20` 재판부 판결 · `R__30` AI 판결)을 Flyway `filesystem:` 위치로 읽는다. 여러 위치의 반복 마이그레이션은 이름 순서로 실행된다(`10 ...` → `seed sample case`, 검증함).
+  - SQL은 환경마다 다른 숫자 ID 대신 사건 제목 · 표시 순서로 행을 찾고, 같은 제목의 사건이 있으면 건너뛴다.
+  - 서브모듈은 `src/main/resources` 밖이라 jar에 들어가지 않고, `backend/.dockerignore`로 Docker 빌드 컨텍스트에서도 뺀다. CI는 서브모듈을 받지 않는다.
+  - 운영(EC2)에서는 실제 데이터 폴더를 컨테이너에 읽기 전용으로 붙이고 위 표의 "운영 (최종)" 값으로 실행한다. `classpath:db/seed`는 넣지 않는다.
+  - 판결문 원본 보관 원칙은 [`docs/cases/README.md`](cases/README.md)를 따른다.
 - 이미 적용된 버전 마이그레이션(`V*`) 파일은 고치지 않는다(Flyway 체크섬). 스키마를 바꿀 때는 새 버전 파일을 추가한다.
 
 ### DB 운영 단계
@@ -150,6 +166,7 @@ PostgreSQL 조회 → Redis 저장 → 반환
 | 익명 ID (UUID 쿠키) | 로그인 없이 사용자의 체험 기록과 진행 상태 식별 |
 | HttpOnly Cookie | 브라우저 스크립트에서 익명 ID를 읽지 못하도록 보호 |
 | Spring Security | (이후) 회원 기능 도입 시 인증 및 API 접근 제어 |
+| 카카오 로그인 (OAuth2) · JWT | (이후 · 검토, v1.11) 11차 회의 제안. 로그인 시 익명 ID를 회원에 연결(`anonymous_user.member_id`). 관리자 화면(S-19) 인증 방식과 함께 정한다 |
 
 MVP는 회원가입 없이 핵심 체험이 끝까지 동작해야 한다. 사용자를 익명 ID로 구분하고, 같은 브라우저에서는 이어서 체험할 수 있도록 한다.
 
@@ -294,11 +311,13 @@ HTML·CSS·JavaScript 작성 규칙, 파일 이름 규칙, 포맷터 설정은 �
 
 | **기술** | **사용 목적** |
 | --- | --- |
-| LLM API | AI 판결 생성 및 세 판결 비교 분석 |
+| LLM API | AI 판결 생성 (세 판결 비교 분석은 v1.11에서 제외) |
+| 임베딩 API | (확장, v1.11) 요약어 후보 · 유사 판례 · 양형기준 검색 · 회차 선택 유사도. 모델은 미정이며, 바꾸면 저장한 벡터를 모두 다시 만든다 |
 | RAG | 유사 판례와 양형기준을 검색해 AI 판결 근거로 활용 (기본 방식) |
 | pgvector | RAG용 임베딩 저장 및 Vector 유사도 검색 |
 | 퓨샷 프롬프트 | RAG를 적용할 수 없을 때, 유사 판례 · 양형기준 자료를 프롬프트에 직접 넣어 판결 생성 (대체 방식) |
 | 구조화 출력 (JSON) | AI 결과를 형벌, 형량, 판단 요소, 방향 형태로 받아 검증 |
+| `tools/ai-judgment` (Python 3) | **오프라인** 생성 · 적재 도구. 판결문 → 비식별화 → 재판부 초안 → 사전 학습 점검 → 생성 → 선택 → 적재 SQL. 각 공급자의 HTTP API를 표준 라이브러리로 직접 불러 설치 없이 실행한다 (구현됨, BE-30 ~ BE-45) |
 
 AI 판결은 사용자가 요청할 때 만들지 않는다. 사건을 등록할 때 미리 생성하고 팀이 검수한 결과만 저장해, 모든 사용자에게 같은 AI 판결을 보여 준다. **MVP에서는 오프라인에서 생성 · 검수한 결과를 DB에 적재**하고(REQ-046), 서비스 안의 생성 파이프라인은 확장 단계(REQ-040 ~ 045)에서 만든다.
 
@@ -325,6 +344,8 @@ DB 저장 → 서비스 공개
 
 AI는 반드시 사건별 판단 요소 목록 안에서만 판단 요소를 선택하도록 하고, 목록에 없는 요소가 나오면 결과를 사용하지 않는다. 또한 AI가 사건 개요만 보고 실제 형량을 맞히는 유명 사건은 서비스에서 제외하거나 다시 가공한다.
 
+> **(v1.11) 아래 세 판결 비교 분석은 11차 회의에서 확장 범위에서 제외했다(REQ-062 · 063).** S-09는 규칙 기반 문장과 요약 태그 규칙 문장을 계속 쓴다. 아래는 결정 기록이다.
+
 세 판결 비교 분석(확장 단계)은 사용자 판결마다 달라지므로 체험별로 실시간 생성한다. 사용자를 기다리게 하지 않도록 실제 판결을 읽는 동안 비동기로 만든다. MVP에서는 AI 없이 규칙 기반 문장으로 공통점·차이점을 보여 주고, S-09 "내 판결" 카드의 한 줄 요약도 판단 요소의 요약 태그로 만든 규칙 문장을 쓴다. 확장 단계에서는 같은 비교 분석 호출이 사용자 입력을 바탕으로 "내 판결" 요약도 만들어 규칙 문장을 바꾼다.
 
 ```
@@ -342,7 +363,23 @@ LLM → 결과 검증 (판단 요소 ID, 금지 표현, 형식)
 
 AI 판결 생성 파이프라인은 **RAG를 기본으로** 한다. 별도 벡터 DB 없이 PostgreSQL의 pgvector로 유사 판례와 양형기준을 검색한다. 이때 대상 사건 자체는 검색 결과에서 제외하고, 양형기준은 사건 발생 시점의 버전만 검색한다. 판례 수가 적거나 검색 품질이 부족해 **RAG를 적용할 수 없으면**, 필요한 자료를 프롬프트에 직접 넣는 퓨샷 방식으로 생성한다(요구사항 FR-4-2).
 
-LLM 제공사는 AI 기능 구현 단계에서 결정한다. API 키는 DB 접속 정보와 같이 환경변수로 주입한다.
+**LLM 제공사**: 오프라인 생성 도구(`tools/ai-judgment`)는 Claude(Anthropic) · Gemini · OpenAI를 `공급자:모델ID`로 골라 쓴다(구현됨). 서비스 안의 생성 파이프라인(확장 단계, 비교 분석은 v1.11 제외)의 제공사는 AI 기능 구현 단계에서 결정한다. API 키는 DB 접속 정보와 같이 환경변수로만 주입하고 코드 · 출력 · 오류 메시지에 남기지 않는다.
+
+### 오프라인 생성 도구의 호출 정책 (BE-30 ~ BE-45)
+
+전체 흐름과 단계별 설명은 [AI 판결 오프라인 파이프라인](ai-judgment-pipeline.md), 명령 · 옵션은 [`tools/ai-judgment/README.md`](../tools/ai-judgment/README.md)를 본다. 이 장에는 기술 선택만 적는다.
+
+| 항목 | 내용 |
+| --- | --- |
+| 재시도 (BE-36) | 과부하(503 · 529)는 지수 백오프 + 지터, 429는 `Retry-After` · 본문 `retryDelay`를 따르고, 일 한도 · 크레딧 소진은 다시 보내지 않는다. 최종 실패는 원인(과부하 / 분당 한도 / 일 한도)을 구분해 알린다 |
+| 교차 호출 (BE-44) | 사전 학습 점검 · 생성은 모델을 번갈아 가며 회차 순서로 불러 한 모델의 분당 한도에 연속으로 걸리지 않게 한다. 모델은 독립 투표자라 서로 대신 생성하지 않는다 |
+| 대체 체인 (BE-45) | 결과 하나를 내는 비식별화 · 재판부 초안은 모델 목록을 받아, 호출이 막혔을 때만(품질 실패는 제외) 다음 모델로 같은 입력을 처음부터 다시 보낸다 |
+| 무료 모델 (BE-45) | `free_models.json`의 무료 등급 모델을 점검 · 생성에서 자동으로 쓰고(동시 `max`개, 일 한도로 막히면 대기 모델이 자리를 채움), 판결문 원문 단계는 유료 키만 쓴다. 팀이 공개 판결문에 한해 허용하면 `allowFreeTierForJudgment`로 마지막 백업에만 쓸 수 있다 |
+| HTTPS (BE-34) | 인증서 검증은 항상 켜고, 기본 위치에 인증서가 없으면 시스템 CA 묶음을 찾아 쓴다 |
+
+**무료 등급 데이터 정책**: 무료 등급은 입력을 제품 개선에 쓰고 사람이 검토할 수 있다(Gemini 약관). 정규식 마스킹만 거친 판결문 원문은 결제를 연결한 유료 키로만 보낸다(팀이 "이미 공개된 판결문에 한해" 허용한 `allowFreeTierForJudgment`의 마지막 백업만 예외, [ai-judgment-pipeline.md](ai-judgment-pipeline.md) 5-5). 정규식 마스킹은 법조인 실명 등을 지우지 못하므로 예외 설정은 공개 판결문에만 쓴다.
+
+**퓨샷 · RAG · 임베딩은 아직 구현하지 않았다.** 위 RAG · pgvector · 퓨샷 설명은 서비스 설계(FR-4-2)이고, 오프라인 도구의 참고 자료 중 유사 판례는 비어 있다(BE-25). 적용 위치(비식별화 · 재판부 초안 · 생성 · 회차 선택)만 정해 두었고(12차 회의, v1.11 — 단계별 표는 [ai-judgment-pipeline.md](ai-judgment-pipeline.md) 8장 · [user-flow.md](user-flow.md) 3-6), 임베딩 모델 · 판례 저장소 범위는 COMMON-21에서 정했고(`gemini-embedding-001` 3072차원, 상세는 [ai-judgment-pipeline.md](ai-judgment-pipeline.md) 8-1), 판례 수집 · 저장소 구축 · 양형기준 데이터화(BE-50 ~ BE-52)가 선행 작업이다. 기능마다 설정으로 끌 수 있고, 끄면 지금과 같은 결과가 나와야 한다(비교 기준선).
 
 ---
 
@@ -422,6 +459,17 @@ PostgreSQL / Redis 연결
     └─ /api/**  → Nginx → 백엔드 컨테이너 (Spring Boot)
 ```
 
+프론트는 History API로 `/cases/1/review` 같은 하위 경로를 직접 연다(FE-2). 이런 주소를 새로고침하거나 바로 열면
+그 경로의 실제 파일이 없으므로, Nginx가 `index.html`로 넘겨야 한다(SPA fallback). 로컬 `npm run dev`(Vite)는
+이 처리를 자동으로 해 주지만 Nginx는 직접 설정해야 한다(FE-2 PR #55 리뷰 반영).
+
+```nginx
+location / {
+    root /var/www/frontend;        # 프론트엔드 빌드 산출물(dist) 경로
+    try_files $uri $uri/ /index.html;
+}
+```
+
 배포 자동화(CD)는 개발이 어느 정도 완료된 이후 추가한다.
 
 ---
@@ -436,7 +484,8 @@ PostgreSQL / Redis 연결
 | Notion | 회의록 · 논의 기록 · 조사 자료 보관 (저장소에 없는 참고 문서) |
 | Claude Code | 코드 작성, 분석, 수정 및 테스트 지원 |
 | Atlassian MCP | Claude Code에서 Jira 이슈 생성·상태 전환 연동 |
-| `CLAUDE.md` / `AGENTS.md` | AI 코딩 도구가 따를 프로젝트 개발 규칙 관리 |
+| `CLAUDE.md` | AI 코딩 도구가 따를 프로젝트 개발 규칙의 원본. 브랜치 · 커밋 · PR 규칙의 기준 문서 (Jira · Branch · Commit · PR 규칙) |
+| `AGENTS.md` | Claude Code 외 에이전트용 안내. 규칙을 복제하지 않고 `CLAUDE.md`를 따르게 하며, 해당 에이전트에만 적용하는 예외만 담는다 |
 
 작업은 Jira 이슈를 기준으로 진행하고, 브랜치·커밋·PR에 이슈 키를 포함해 연결한다.
 
@@ -447,9 +496,15 @@ Jira 이슈 생성
 feature/BE-15-experience-start-api (Branch 생성) → Jira: 진행 중
 
 ↓
+
+개발 · 문서 작업 → 결과 보고 (Commit 여부를 확인받는다)
+
+↓ "커밋해줘" (사용자가 명시적으로 요청할 때만)
+
 feat : BE-15 체험 시작 API 구현 (Commit)
 
-↓
+↓ "PR 올려줘" (사용자가 명시적으로 요청할 때만)
+
 [BE-15] 체험 시작 API 구현 (Pull Request) → Jira: 검토 중
 
 ↓
@@ -461,4 +516,4 @@ Jira: 완료
 
 AI 코딩 도구는 사람의 코드 리뷰를 대체하지 않고 개발 보조 역할로 사용한다.
 
-구체적인 브랜치, 커밋, PR 규칙은 `docs/conventions/GIT_CONVENTIONS.md`, 코드 규칙은 `docs/conventions/CODE_CONVENTIONS.md`에서 관리한다.
+브랜치, 커밋, PR 규칙의 기준은 `CLAUDE.md`이며, `docs/conventions/GIT_CONVENTIONS.md`는 이를 사람이 읽기 쉽게 정리한 참고 문서다. 코드 규칙은 `docs/conventions/CODE_CONVENTIONS.md`에서 관리한다.

@@ -1,5 +1,4 @@
 import { formatPenalty, formatDispositions } from '../../utils/judgmentFormat.js';
-import { screenByStatus } from '../../utils/screenByStatus.js';
 
 const directionLabels = { UP: '재판부 가중 요소', DOWN: '재판부 감경 요소' };
 
@@ -29,14 +28,6 @@ export async function renderCourtPage(container, { caseId, caseHeader, api, navi
     panel.append(element('p', '', text));
     if (action) panel.append(action);
     root.replaceChildren(panel);
-  }
-
-  // 이미 지나왔거나 아직 이르지 않은 단계(INVALID_STATE)면 현재 상태의 화면으로 보낸다.
-  // AI 판결 미확인(VERDICT_CONFIRMED)이면 S-07로 이동한다(IA 9장, REQ-050 순서 유지).
-  function redirectByState(error) {
-    const screen = screenByStatus[error.currentStatus];
-    if (screen && screen !== 'court') navigate(screen, { caseId });
-    return Boolean(screen);
   }
 
   function factorGroup(direction, factors) {
@@ -97,7 +88,9 @@ export async function renderCourtPage(container, { caseId, caseHeader, api, navi
         if (active()) navigate('comparison');
       } catch (error) {
         if (!active()) return;
-        if (error?.code === 'INVALID_STATE' && redirectByState(error)) return;
+        // 보통은 withErrorRedirect가 currentStatus에 맞는 화면으로 먼저 이동시킨다(app/errorRedirect.js).
+        // 여기 오는 것은 래퍼가 이동하지 못한 경우다 — 화면 표(screenByStatus)에 없는 상태값이거나,
+        // 이미 이 화면이라 라우터가 이동을 건너뛴 경우(예: 이 화면에서 보낸 요청이 지금 상태를 그대로 돌려줌).
         if (error?.code === 'INVALID_STATE') {
           message(`지금 단계에서는 이 화면을 볼 수 없어요. (현재 상태: ${error.currentStatus})`);
           console.info('현재 상태:', error.currentStatus);
@@ -122,7 +115,9 @@ export async function renderCourtPage(container, { caseId, caseHeader, api, navi
       if (active()) draw(data);
     } catch (error) {
       if (!active()) return;
-      if (error?.code === 'INVALID_STATE' && redirectByState(error)) return;
+      // 보통은 withErrorRedirect가 currentStatus에 맞는 화면으로 먼저 이동시킨다(app/errorRedirect.js).
+      // 여기 오는 것은 래퍼가 이동하지 못한 경우다 — 화면 표(screenByStatus)에 없는 상태값이거나,
+      // 이미 이 화면이라 라우터가 이동을 건너뛴 경우(예: 이 화면에서 보낸 요청이 지금 상태를 그대로 돌려줌).
       if (error?.code === 'INVALID_STATE') {
         message(`지금 단계에서는 이 화면을 볼 수 없어요. (현재 상태: ${error.currentStatus})`);
         console.info('현재 상태:', error.currentStatus);

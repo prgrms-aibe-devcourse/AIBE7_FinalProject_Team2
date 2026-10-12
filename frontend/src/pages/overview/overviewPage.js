@@ -1,5 +1,4 @@
 import { renderProgressSidebar } from '../review/progressSidebar.js';
-import { screenByStatus } from '../../utils/screenByStatus.js';
 
 // S-03 사건 개요 · 사전 판단
 export async function renderOverviewPage(container, { caseId, api, navigate }) {
@@ -23,19 +22,19 @@ export async function renderOverviewPage(container, { caseId, api, navigate }) {
     node.addEventListener('click', action);
     return node;
   }
-  // 이미 제출했다면(INVALID_STATE) 현재 상태의 화면으로 보낸다. (API 명세 1-6, REQ-103)
-  function redirectByState(error) {
-    const screen = screenByStatus[error.currentStatus];
-    if (screen && screen !== 'overview') navigate(screen, { caseId });
-    return Boolean(screen);
-  }
+  // 상태 불일치(INVALID_STATE, 예: 이미 제출함)는 withErrorRedirect가 현재 상태의 화면으로 먼저 이동시킨다
+  // (app/errorRedirect.js, API 명세 1-6 · REQ-103). 이동한 뒤에는 active()가 false라 아래 안내를 그리지 않는다.
   function showError(error) {
     if (!active()) return;
-    if (error?.code === 'INVALID_STATE' && redirectByState(error)) return;
     const box = element('section', 'message-panel');
     box.setAttribute('role', 'alert');
     if (error?.code === 'CASE_NOT_FOUND') {
       box.append(element('p', '', '사건을 찾을 수 없어요.'), button('사건 목록으로', () => navigate('list')));
+    } else if (error?.code === 'INVALID_STATE') {
+      // 여기 오는 것은 래퍼가 이동하지 못한 경우다 — 화면 표(screenByStatus)에 없는 상태값이거나,
+      // 이미 이 화면이라 라우터가 이동을 건너뛴 경우. 다시 시도해도 같은 에러라 S-06 ~ S-09처럼 안내만 둔다.
+      box.append(element('p', '', `지금 단계에서는 이 화면을 볼 수 없어요. (현재 상태: ${error.currentStatus})`), button('사건 목록으로', () => navigate('list')));
+      console.info('현재 상태:', error.currentStatus);
     } else {
       box.append(element('p', '', '정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.'), button('다시 시도', load));
     }
@@ -53,7 +52,6 @@ export async function renderOverviewPage(container, { caseId, api, navigate }) {
       if (active()) navigate('review', { caseId });
     } catch (error) {
       if (!active()) return;
-      if (error?.code === 'INVALID_STATE' && redirectByState(error)) return;
       trigger.disabled = false;
       trigger.removeAttribute('aria-busy');
       notice.textContent = '제출하지 못했어요. 잠시 후 다시 시도해 주세요.';

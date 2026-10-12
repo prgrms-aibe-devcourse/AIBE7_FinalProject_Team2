@@ -9,3 +9,93 @@ body {
   margin: 0;
   font-family: system-ui, -apple-system, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
 }
+
+/* 공통 디자인 변수. 화면 CSS도 같은 이름 · 같은 값을 쓴다 (와이어프레임 v2.2 기준).
+   새 화면은 색상 · 간격을 여기 변수로 쓰고, 값을 바꿀 때는 이 한 곳만 고친다. */
+:root {
+  --color-primary: #e8391e;   /* 강조 색 (선택된 형벌, 경고) */
+  --color-text: #1a1a1a;
+  --color-muted: #66615e;
+  --color-border: #dfd9d5;
+  --color-surface: #faf8f6;
+  --space-md: 16px;
+  --content-width: 1180px;
+}
+
+/* 공통 버튼. 화면 CSS에도 같은 값으로 정의돼 있다(화면마다 일부러 중복). 여기 정의는
+   라우터 · 404 화면처럼 특정 화면 CSS를 빌리지 않는 곳에서 쓴다 (리뷰 반영, router.js 참고). */
+.primary-button,
+.secondary-button {
+  min-height: 44px;
+  padding: 10px 18px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.primary-button { background: #c83019; border-color: #c83019; color: #fff; }
+.primary-button:hover:not(:disabled) { background: #a92612; }
+.primary-button:disabled { opacity: .6; }
+.secondary-button { color: var(--color-text); background: #fff; }
+.secondary-button:hover { background: var(--color-surface); }
+
+/* 불러오는 중 · 오류 안내. 화면 CSS는 각자 .message-panel에 padding을 더 얹어 쓴다(review.css 등). */
+.message-panel {
+  padding: 44px 28px;
+  color: var(--color-text);
+  font: 15px/1.75 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+}
+.message-panel button { margin-top: 20px; }
+
+/* 공통 사이트 헤더 · 푸터 (siteLayout.js의 renderSiteHeader · renderSiteFooter).
+   S-01 · S-02 · S-14 · 라우터 푸터(S-03 ~ S-09)가 모두 쓰는 유일한 정의다. 화면 CSS에 같은 규칙을 다시 두지 않는다.
+   특정 화면만 다르게 해야 하면 그 화면 CSS에 .landing-page .site-header처럼 화면 클래스로 감싸서 추가한다. */
+.site-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 28px; border-bottom: 1px solid var(--color-border); }
+.site-nav { display: flex; gap: 8px; }
+.logo-button { border: 0; background: transparent; padding: 6px 0; font-size: 18px; font-weight: 800; color: var(--color-text); }
+.nav-button { border: 0; background: transparent; padding: 10px 12px; min-height: 44px; color: var(--color-muted); }
+.nav-button:hover { color: var(--color-text); }
+.site-footer { padding: 24px 28px; border-top: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-muted); font-size: 13px; }
+@media (max-width: 720px) {
+  .site-header { padding: 12px 16px; }
+}
+
+/* S-14 404 · 오류 화면 (FE-3) */
+/* 페이지 틀은 사이트 헤더를 쓰는 S-01 · S-02(landing.css의 :is(.landing-page, .case-list-page))와 같게 맞춘다.
+   헤더 버튼은 브라우저 기본 버튼 글꼴(13.3px Arial)이 아니라 페이지 글꼴을 따르게 한다(S-01 · S-02와 같은 크기 · 글꼴).
+   이동 버튼(.primary-button 등)의 굵기는 유지해야 하므로 font: inherit는 헤더 안 버튼에만 둔다 */
+.not-found-page {
+  max-width: var(--content-width);
+  margin: 0 auto;
+  border: 1px solid var(--color-border);
+  background: #fff;
+  color: var(--color-text);
+  font: 15px/1.75 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+}
+.not-found-page .site-header button { font: inherit; cursor: pointer; }
+.not-found-panel {
+  max-width: 480px;
+  margin: 48px auto;
+  padding: 48px 28px;
+  text-align: center;
+}
+.not-found-panel h1 { margin: 0 0 10px; font-size: 22px; }
+.not-found-panel p { margin: 0; color: var(--color-muted); }
+.not-found-actions {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 24px;
+}
+/* .message-panel button의 위 여백(20px)이 gap과 겹치지 않게 지운다 (버튼 간격은 gap만 쓴다).
+   .message-panel button과 우선순위가 같으면 선언 순서에 기대게 되므로, 부모 클래스를 붙여 확실히 이기게 한다 */
+.not-found-panel .not-found-actions button { margin-top: 0; }
+
+/* 섹션 본문 점 목록 (FE-14). utils/contentLines.js의 renderContent가 만든다.
+   여러 화면(S-04 · S-05, 이후 다른 화면)이 함께 쓰므로 화면 클래스 없이 여기 둔다 */
+.content-lines { margin: 0; padding-left: 20px; }
+.content-lines li + li { margin-top: 6px; }

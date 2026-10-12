@@ -50,7 +50,11 @@ jobs:
         run: npm run test --if-present
 
       # 빌드 시 필요한 환경변수는 여기에 넣는다. 비밀값이면 GitHub Secrets 사용
+      # VITE_API_MODE가 없으면 config.js 기본값(mock)이 그대로 빌드에 들어간다 → 배포 빌드가 실제
+      # 백엔드를 한 번도 호출하지 않는 목 데이터 앱이 된다 (리뷰 반영). 배포 전 실제 연동 빌드로 확인하려면
+      # 지금은 real로 둔다.
       - name: Build
         run: npm run build
         env:
           VITE_API_BASE_URL: /api/v1
+          VITE_API_MODE: real

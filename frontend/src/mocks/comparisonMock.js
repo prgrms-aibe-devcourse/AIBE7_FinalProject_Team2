@@ -1,10 +1,12 @@
 // API 14(세 판결 비교) 응답을 조립하는 순수 함수 모음. comparisonMockApi.js에서만 쓴다.
 import { formatPenalty, formatDispositions } from '../utils/judgmentFormat.js';
+import { objectParticle } from '../utils/koreanParticle.js';
 import { rangeBuckets } from './comparisonMockData.js';
 
+// 백엔드 ComparisonService.summaryText와 같은 문구 (BE-11)
 const directionTexts = {
   HEAVIER: '사건을 모두 확인한 뒤, 처음 생각보다 무거운 판결을 내렸어요.',
-  SAME: '사건을 모두 확인한 뒤, 처음 생각과 비슷한 판결을 내렸어요.',
+  SAME: '사건을 모두 확인한 뒤, 처음 생각한 정도로 판결을 내렸어요.',
   LIGHTER: '사건을 모두 확인한 뒤, 처음 생각보다 가벼운 판결을 내렸어요.',
 };
 
@@ -44,16 +46,27 @@ export function buildPreToFinal(myJudgment, preJudgment, rangeOptions) {
   };
 }
 
-// REQ-109 MVP 규칙: 사용자가 고른 요소의 요약 태그를 방향별로 모아 문장을 만든다(ERD `factor.summary_tag`).
+// REQ-109 MVP 규칙: 사용자가 고른 요소마다 붙인 요약어를 방향별로 모아 문장을 만든다(`factor.summary_tag`, BE-26 확정).
 // factorLabels(화면 표시용 완전한 문장)를 그대로 쓰면 "~다을" 같은 비문이 되므로 짧은 명사구(factorTags)를 쓴다.
+// 백엔드 UserSummarySentence와 같은 규칙: 같은 요약어는 한 번만 쓰고(먼저 나온 방향을 따른다), 조사는 받침에 따라 자동 선택한다.
 export function buildUserSummary(factors, factorTags) {
   const tag = (factorId) => factorTags[factorId] ?? `요소 ${factorId}`;
-  const up = factors.filter((factor) => factor.direction === 'UP').map((factor) => tag(factor.factorId));
-  const down = factors.filter((factor) => factor.direction === 'DOWN').map((factor) => tag(factor.factorId));
+  const up = [];
+  const down = [];
+  const seen = new Set();
+  for (const factor of factors) {
+    const label = tag(factor.factorId);
+    if (!label || seen.has(label)) continue;
+    seen.add(label);
+    if (factor.direction === 'UP') up.push(label);
+    else if (factor.direction === 'DOWN') down.push(label);
+  }
   if (!up.length && !down.length) return '판단 요소를 고르지 않은 판단';
-  if (!down.length) return `${up.join(' · ')}을 무겁게 본 판단`;
-  if (!up.length) return `${down.join(' · ')}을 감안한 판단`;
-  return `${up.join(' · ')}을 무겁게 보고 ${down.join(' · ')}을 감안한 판단`;
+  const upText = up.join(' · ');
+  const downText = down.join(' · ');
+  if (!down.length) return `${upText}${objectParticle(upText)} 무겁게 본 판단`;
+  if (!up.length) return `${downText}${objectParticle(downText)} 감안한 판단`;
+  return `${upText}${objectParticle(upText)} 무겁게 보고 ${downText}${objectParticle(downText)} 감안한 판단`;
 }
 
 // REQ-060 · 061: 셋 중 누구도 고려하지 않은 요소는 뺀다(API 14 명세).
@@ -76,28 +89,45 @@ export function buildMatrix(userFactors, aiFactors, courtFactors, factorLabels, 
   });
 }
 
+// 요약어가 중복되면 한 번만 쓴다(같은 요약어를 가진 두 요소가 같은 분류에 있을 수 있다, BE-26 리뷰).
+function joinUniqueTags(rows, tag) {
+  const seen = new Set();
+  const tags = [];
+  for (const row of rows) {
+    const label = tag(row);
+    if (label && !seen.has(label)) {
+      seen.add(label);
+      tags.push(label);
+    }
+  }
+  return tags.join(' · ');
+}
+
 // 매트릭스 분류를 그대로 규칙 문장으로 바꾼다(AI를 부르지 않는다, FR-6-3).
-// 문장에는 라벨(완전한 문장)이 아니라 요약 태그(짧은 명사구)를 써서 "~다 점을" 같은 비문을 피한다.
+// 문장에는 라벨(완전한 문장)이 아니라 요약어(짧은 명사구)를 써서 "~다 점을" 같은 비문을 피한다.
+// 백엔드 RuleSentences와 같은 문장 틀 · 조사 규칙을 쓴다(BE-11 · BE-26, API 명세 6장 #4).
 export function buildRuleSentences(matrix, factorTags) {
   const tag = (row) => factorTags[row.factorId] ?? row.label;
   const allSame = matrix.filter((row) => row.category === 'ALL_SAME');
-  const upTags = allSame.filter((row) => row.user === 'UP').map(tag);
-  const downTags = allSame.filter((row) => row.user === 'DOWN').map(tag);
+  const upTags = joinUniqueTags(allSame.filter((row) => row.user === 'UP'), tag);
+  const downTags = joinUniqueTags(allSame.filter((row) => row.user === 'DOWN'), tag);
   const common = [];
-  if (upTags.length || downTags.length) {
+  if (upTags || downTags) {
     const parts = [];
-    if (upTags.length) parts.push(`${upTags.join(' · ')}을 형량을 높이는 요소로`);
-    if (downTags.length) parts.push(`${downTags.join(' · ')}을 형량을 낮추는 요소로`);
-    common.push(`세 판결 모두 ${parts.join(', ')} 보았어요.`);
+    if (upTags) parts.push(`${upTags}${objectParticle(upTags)} 형량을 높이는 요소로`);
+    if (downTags) parts.push(`${downTags}${objectParticle(downTags)} 형량을 낮추는 요소로`);
+    common.push(`세 판결 모두 ${parts.join(', ')} 봤어요.`);
   } else {
     common.push('세 판결이 똑같이 본 판단 요소는 없어요.');
   }
 
   const differences = [];
-  const onlyMeMissed = matrix.filter((row) => row.category === 'ONLY_ME_MISSED').map(tag);
-  if (onlyMeMissed.length) differences.push(`AI와 재판부는 ${onlyMeMissed.join(' · ')}을 고려했지만, 내 판결에서는 고려하지 않았어요.`);
-  const diverged = matrix.filter((row) => row.category === 'DIVERGED').map(tag);
-  if (diverged.length) differences.push(`${diverged.join(' · ')}에 대한 판단은 세 판결이 서로 달랐어요.`);
+  const onlyMeMissed = joinUniqueTags(matrix.filter((row) => row.category === 'ONLY_ME_MISSED'), tag);
+  if (onlyMeMissed) {
+    differences.push(`AI와 재판부는 ${onlyMeMissed}${objectParticle(onlyMeMissed)} 고려했지만, 내 판결에서는 고려하지 않았어요.`);
+  }
+  const diverged = joinUniqueTags(matrix.filter((row) => row.category === 'DIVERGED'), tag);
+  if (diverged) differences.push(`${diverged}에 대한 판단이 세 판결 사이에서 엇갈렸어요.`);
   if (!differences.length) differences.push('세 판결 사이에 판단이 엇갈린 점은 없어요.');
 
   return { common, differences };

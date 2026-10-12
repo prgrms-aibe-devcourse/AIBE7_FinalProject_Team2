@@ -40,14 +40,35 @@ JDK 17이 필요하다. 기본 JDK가 17이 아니면 `JAVA_HOME`을 17로 지�
 ```bash
 cd backend
 docker compose up -d      # PostgreSQL 컨테이너(lawnambul-postgres, 5432) 실행
-./gradlew bootRun         # 서버 실행 (기본 8080, 시작할 때 Flyway가 스키마를 만든다)
+./gradlew bootRun         # 서버 실행 (기본 8080, 시작할 때 Flyway가 스키마 · 시드를 넣는다)
 ```
 
-개발용 가상 사건 시드까지 넣으려면 아래처럼 실행한다. ([시드 설명](backend/src/main/resources/db/seed/README.md))
+`./gradlew bootRun`은 **시드 위치를 자동으로 정한다**(BE-28, `backend/build.gradle`). 환경변수를 따로 줄 필요가 없다.
+
+- 기본 `bootRun` 설정에서는 개발용 가상 사건 시드(`db/seed`)를 함께 넣는다. `FLYWAY_LOCATIONS`를 직접 지정하면 지정한 위치만 사용하므로, 가상 사건 시드도 사용하려면 `classpath:db/seed`를 포함한다. ([시드 설명](backend/src/main/resources/db/seed/README.md))
+- 실제 대표 사건은 **비공개 저장소 서브모듈(`backend/private-seed`)에 SQL이 있으면** 자동으로 넣는다(BE-17). 접근 권한이 없으면 빈 폴더로 남고, 가상 사건만으로 그대로 개발할 수 있다.
+- 시작할 때 `[bootRun] Flyway 위치(...)` · `[bootRun] 실제 사건 시드: 포함 / 없음` 두 줄이 찍힌다. 실제 사건이 안 보이면 이 줄부터 확인한다. (`FLYWAY_LOCATIONS`를 직접 지정했으면 포함 여부를 판정하지 않고 지정한 위치를 그대로 쓴다고만 찍힌다.)
+- 위치를 직접 정하고 싶으면 `FLYWAY_LOCATIONS`를 주면 그 값을 그대로 쓴다. (예: 스키마만 `FLYWAY_LOCATIONS=classpath:db/migration ./gradlew bootRun`)
 
 ```bash
-FLYWAY_LOCATIONS=classpath:db/migration,classpath:db/seed ./gradlew bootRun
+# 실제 사건을 보려면 저장소 루트에서 처음 한 번 (권한 필요)
+git submodule update --init backend/private-seed
 ```
+
+⚠️ `git pull`은 서브모듈을 갱신하지 않는다. 공개 저장소가 서브모듈 커밋을 올렸다면(예: `R__20` 재판부 판결 · `R__30` AI 판결 추가) pull 뒤에 `git submodule update --init backend/private-seed`를 다시 실행해야 한다. 그렇지 않으면 예전 커밋의 시드만 들어가고, `bootRun`은 SQL이 하나라도 있으면 "포함"으로 찍어 오류 없이 뜬다. 이때 실제 사건에서 `GET /api/v1/cases/{id}/experience/judgments/ai` · `/judgments/court`가 500(`IllegalStateException`, 공개 사건인데 AI · 재판부 판결 row가 없음)을 낸다. 아래로 확인한다. (BE-29)
+
+```bash
+git submodule status backend/private-seed   # 맨 앞이 '-'(미초기화) 또는 '+'(커밋 불일치)이면 위 update 명령 실행
+ls backend/private-seed/seed                # R__10 · R__20 · R__30 세 파일이 있어야 한다
+```
+
+서브모듈을 맞춘 뒤 `bootRun`을 다시 띄우면 Flyway가 새 시드를 반복 마이그레이션(`R__`)으로 적용한다. DB를 비울 필요는 없다.
+
+이 자동 설정은 로컬 실행(`bootRun`)에만 적용된다. 운영(jar · Docker) · 테스트는 `application.yml` 기본값(스키마만)을 그대로 쓴다.
+
+⚠️ IDE에서 실행할 때는 `BackendApplication`의 ▶ 버튼(main 클래스 실행) 대신 Gradle 창의 `Tasks > application > bootRun`을 쓴다. main 클래스로 실행하면 Gradle을 거치지 않아 자동 설정이 적용되지 않고 `application.yml` 기본값(스키마만)으로 떠서, 새 DB라면 사건이 하나도 없다. 꼭 main 클래스로 실행해야 하면 실행 구성의 환경변수에 `FLYWAY_LOCATIONS`를 직접 넣는다.
+- 서브모듈 안의 파일을 공개 저장소의 다른 위치(`db/seed` 등)로 **복사하지 않는다.** 공개 저장소의 커밋 메시지 · PR · Jira 댓글에도 사건 내용(형량 · 판단 요소 · 사실관계)을 쓰지 않는다.
+- 서브모듈은 `src/main/resources` 밖에 있어 jar에 들어가지 않고, `backend/.dockerignore`로 Docker 빌드에서도 뺀다.
 
 로컬 DB를 비우고 처음부터 다시 만들려면 `docker compose down -v && docker compose up -d`를 실행한다. (볼륨이 삭제된다)
 
@@ -65,7 +86,7 @@ FLYWAY_LOCATIONS=classpath:db/migration,classpath:db/seed ./gradlew bootRun
 | `DB_USERNAME` | `lawnambul` | DB 계정 (로컬 전용 값) |
 | `DB_PASSWORD` | `lawnambul` | DB 비밀번호 (로컬 전용 값) |
 | `DDL_AUTO` | `validate` | Hibernate 스키마 처리 방식 (스키마는 Flyway로만 바꾼다) |
-| `FLYWAY_LOCATIONS` | `classpath:db/migration` | 마이그레이션 위치. 시드는 `,classpath:db/seed`를 덧붙여 켠다 |
+| `FLYWAY_LOCATIONS` | `classpath:db/migration` (`bootRun`은 자동: 가상 시드 + 실제 사건이 있으면 포함) | 마이그레이션 위치. 주면 `bootRun` 자동 설정보다 우선한다. 가상 시드는 `classpath:db/seed`, 실제 사건은 `filesystem:./private-seed/seed` |
 | `SWAGGER_ENABLED` | `false` | Swagger UI · OpenAPI 문서 노출. 로컬 · 개발에서만 `true`로 켠다 (`/swagger-ui/index.html`, `/v3/api-docs`) |
 
 운영 DB 계정은 이 저장소에 적지 않고 실행할 때 환경변수로만 넘긴다. 시드는 운영에 넣지 않는다.
@@ -88,6 +109,7 @@ API 없이 화면만 확인하려면 개발 서버를 켠 뒤 `http://localhost:
 | [API 명세서](docs/api-specification.md) | 경로 · 요청 · 응답 · 에러 코드 |
 | [ERD](docs/erd.md) | 테이블 · 제약 · 예시 데이터 |
 | [정보 구조](docs/information-architecture.md) | 화면 목록과 흐름 |
+| [유저 흐름도](docs/user-flow.md) | MVP · 확장 단계 사용자 흐름 |
 
 ## 협업 규칙
 

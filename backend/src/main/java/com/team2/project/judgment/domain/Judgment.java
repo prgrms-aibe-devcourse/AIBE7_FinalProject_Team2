@@ -130,6 +130,21 @@ public class Judgment {
 		return reducedTo != null ? reducedTo : penaltyType;
 	}
 
+	/** 집행유예 선고 여부. 형량 비교에서 실형과 다른 단계로 본다 (PenaltyDifference) */
+	public boolean isSuspended() {
+		return suspensionMonths != null;
+	}
+
+	/** jsonb 배열 컬럼은 비어 있으면 NULL로 들어온다. 응답에서 []로 내려가도록 여기서 한 번만 맞춘다 */
+	public List<ExtraDisposition> getExtraDispositions() {
+		return extraDispositions == null ? List.of() : extraDispositions;
+	}
+
+	/** 참고 자료 태그 (AI). 값이 없으면 빈 배열 (API 10 references) */
+	public List<String> getReferenceTags() {
+		return referenceTags == null ? List.of() : referenceTags;
+	}
+
 	/** DB CHECK(chk_judgment_reduced_to · penalty_values · death_life_no_suspension · positive_values)와 같은 규칙 */
 	private static void validateFinalValues(PenaltyType penaltyType, PenaltyType reducedTo,
 		Integer prisonMonths, Long fineAmount, Integer suspensionMonths) {

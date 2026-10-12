@@ -13,6 +13,13 @@
 | v1.5 | 2026-09-30 | BE-2 마이그레이션 반영<br>• `penalty_rule` 유니크 (`case_id`, `penalty_type`), `DEATH` · `LIFE` 행 CHECK(법정형 NULL, 집행유예 불가)<br>• `experience` CHECK(`last_reviewed_step` 0 ~ 4, `attempt_no` 1 이상), `comparison_analysis.fail_reason` CHECK 명시<br>• `judgment` CHECK: 형량 값 양수(`prison_months` · `fine_amount` · `suspension_months` > 0), 사용자 판단은 항상 공개(PR #26 리뷰 반영)<br>• 7장에 마이그레이션 공통 규칙 추가<br>• `penalty_rule` 컬럼 표 중간의 `DEATH` · `LIFE` 설명을 표 아래로 옮김(표가 끊겨 마지막 3개 컬럼이 표로 보이지 않던 문제) |
 | v1.7 | 2026-10-01 | BE-3 엔티티 반영 — 7장 마이그레이션 공통 규칙에 jsonb 형식(배열 컬럼, `case_section.data` 원소 형식, 부가 처분 `type` 값) 추가 |
 | v1.8 | 2026-10-01 | BE-3 리뷰 반영 — `case_source` 최종 확정 판결 부분 유니크(V6 마이그레이션) 추가, `comparison_analysis`는 `PENDING`일 때만 `DONE` · `FAILED`로 바뀜(엔티티 규칙) |
+| v1.9 | 2026-10-02 | 사건 정보 섹션 표시 방식 팀 결정 반영 (BE-17)<br>• `case_section.content`는 항목 하나를 한 줄로 쓰고 줄바꿈(`\n`)으로 나눈다. 화면은 줄바꿈을 그대로 보여 준다(7장 규칙 추가)<br>• 양측 주장(`PROSECUTOR` · `DEFENSE`) 섹션 위 안내 문구는 DB에 두지 않고 화면 고정 문구로 둔다. 컬럼을 추가하지 않는다<br>• `penalty_rule.display_order` 규칙 추가: 법조문 표기 순서대로 무거운 형벌부터(사형 → 무기 → 징역 → 벌금). 예시 · 가상 시드는 이미 이 순서이고 실제 사건 시드(비공개)를 맞춤 |
+| v1.10 | 2026-10-06 | 판단 요소별 요약어 기준 확정 반영 (BE-26)<br>• `factor.summary_tag` 설명을 "요소를 묶는 분류명"에서 "요소마다 붙이는 요약어"로 정정<br>• 6장 `factor` 예시의 `summary_tag` 11개 값을 요소별 요약어로 교체(가상 시드 · 프론트 목과 같은 값) |
+| v1.11 | 2026-10-07 | AI 판결 자동 파이프라인 · 후검수 반영 (BE-31)<br>• `ai_generation.generation_report`(jsonb) 추가(V8 마이그레이션): 자동 생성 정보(검증 경고 · 사전 학습 점검 판정 · 회차 선택 · 실행 식별자 `runKey`)<br>• 자동 적재는 AI 판결을 비공개(`is_published=false`) · `PENDING`으로, 사건을 `DRAFT`로 넣고 관리자가 검수 후 공개한다 |
+| v1.12 | 2026-10-08 | COMMON-19 반영 (AI 판결 파이프라인 BE-31 ~ BE-45)<br>• `legal_case.title` · `factor(case_id, display_order)` 유일 제약 설명 추가(V7, 적재 SQL의 조회 키)<br>• `legal_case.incident_date`: 자동 파이프라인이 원문 · 선고일과 대조해 확인한 값을 넣는다(BE-38)<br>• 자동 적재는 재판부 판결(COURT)도 비공개(`is_published=false`)로 넣고, 다시 돌리면 비공개 후보가 쌓일 수 있음을 명시(BE-38)<br>• `generation_report` 내용 구체화: 점검 판정 · 분류별 개수 · 기준(`criteria`) 등. 코드 변경 없음, 설명만 정정 |
+| v1.13 | 2026-10-08 | 판단 요소 가치관 축 추가 (BE-47)<br>• `factor.value_axis` 추가(V9 마이그레이션, nullable): 판결 체험에서 고르는 판단 요소를 사용자 성향과 매칭하는 가치관 축 4개(`APOLOGY_SINCERITY` · `FAULT_STANDARD` · `PRINCIPLE_RELATION` · `ORDER_OPPORTUNITY`) 또는 NULL<br>• 사전 판단(`OVERVIEW`)과 형량 선택은 성향 계산에 쓰지 않는다(계산하는 쪽에서 제외) |
+| v1.14 | 2026-10-08 | 11 · 12차 회의 반영 (COMMON-20)<br>• `comparison_analysis`: AI 비교 분석(REQ-063) 제외로 보류. V5 마이그레이션의 테이블은 그대로 두고 쓰지 않는다(삭제 여부 미정)<br>• 8장 신설: 판결 성향 테스트 테이블 제안(미확정) — 문항 · 선택지 · 유형 · 결과 · 체험별 성향 기여. 판단 요소별 가치관 축은 새로 만들지 않고 `factor.value_axis`(v1.13, BE-47)를 쓴다 |
+| v1.15 | 2026-10-08 | 판단 요소 가치관 축 후검수 반영 (BE-48)<br>• `factor.value_axis_status` 추가(V10 마이그레이션, 기본 `AUTO`): `AUTO`(AI 투표 · 사람 초안 기본값) / `CONFIRMED`(관리자 확정, NULL 확정 포함). 시드 · 적재 SQL은 `CONFIRMED` 행을 덮어쓰지 않는다<br>• `factor.value_axis_votes`(jsonb) 추가: 축 분류 투표 기록(BE-49). 최다표가 요청 횟수의 과반이 아니면(동률 · 유효 응답 부족 포함) `needsReview` |
 
 ---
 
@@ -71,6 +78,9 @@ erDiagram
         varchar label "판단 요소 문구"
         varchar reveal_stage "OVERVIEW DETAIL ARGUMENT LAW"
         varchar summary_tag "요약 태그"
+        varchar value_axis "가치관 축 (nullable)"
+        varchar value_axis_status "AUTO CONFIRMED"
+        jsonb value_axis_votes "축 분류 투표 기록 (nullable)"
         int display_order
     }
     ANONYMOUS_USER {
@@ -148,11 +158,12 @@ erDiagram
 | recommended_max_months | int |  | 권고 형량 상한 (개월) | REQ-034 |
 | recommended_basis | text |  | 권고 범위 산출 근거 문구 | REQ-035 |
 | guideline_id | bigint FK |  | 적용 양형기준 버전 | REQ-080 |
-| incident_date | date |  | 사건 발생일 (양형기준 버전 판단 근거) | FR-3-5-1 |
+| incident_date | date |  | 사건 발생일 (양형기준 버전 판단 근거). 자동 파이프라인은 모델이 찾은 날짜를 판결문 원문 · 선고일과 대조해 확인된 값만 넣고, 원문에 날짜가 없으면 비운다(v1.12, BE-38) | FR-3-5-1 |
 | status | varchar(20) | ✓ | `DRAFT` / `REVIEW` / `PUBLISHED`. `PUBLISHED`만 사용자에게 노출 | REQ-047, 075 |
 | published_at | timestamptz |  |  |  |
 | created_at, updated_at | timestamptz | ✓ |  |  |
 - 권고 범위는 MVP에서 팀이 계산해 입력한 값을 그대로 쓴다. 자동 계산 로직은 확장 단계(결정 #4).
+- `title`은 유일하다(`uk_legal_case_title`, V7 · BE-15, v1.12). 적재 SQL이 제목으로 사건을 찾아 환경마다 id가 달라도 같은 SQL을 쓰기 위해서다. 모델이 만든 중립 제목이 다른 공개 · 검토 중 사건과 겹치면 자동 적재가 멈춘다(BE-31).
 - 화면에 보이는 범죄 분류명(예: "사기 / **재산범죄**")은 컬럼으로 두지 않고 `crime_type`별 코드 상수로 둔다(`MURDER` → 생명범죄, `FRAUD` → 재산범죄, `INJURY` → 신체범죄). API는 `crimeCategoryLabel`로 내려준다(v1.3).
 
 #### `case_section` — 사건 정보 섹션
@@ -166,7 +177,7 @@ S-04 · S-05에 보여 줄 사건 정보를 섹션 단위로 저장한다(결정
 | stage | varchar(20) | ✓ | 화면 단계: `DETAIL` / `ARGUMENT` / `LAW` / `SUMMARY`(S-05 전용) |
 | section_type | varchar(30) | ✓ | 섹션 종류 (아래 표) |
 | title | varchar(100) |  | 섹션 라벨 (예: 주요 사실관계) |
-| content | text |  | 본문 |
+| content | text |  | 본문. 항목이 여럿이면 한 줄에 하나씩 쓰고 줄바꿈(`\n`)으로 나눈다(v1.9) |
 | data | jsonb |  | 구조화 데이터 (피해 결과 카드 값, 용어 설명 목록 등) |
 | display_order | int | ✓ | 같은 단계 안에서의 순서 |
 
@@ -182,6 +193,7 @@ S-04 · S-05에 보여 줄 사건 정보를 섹션 단위로 저장한다(결정
 | `SUMMARY` | SUMMARY | S-05 핵심 사실 요약 | `["집으로 찾아온 지인 1명을 살해", "다투던 중 집에 있던 흉기를 사용", ...]` |
 - 적용 법률 · 법정형 · 권고 범위는 `legal_case` 컬럼에서, 선고 가능 범위는 `penalty_rule`에서 꺼내 LAW 단계에 함께 보여 준다.
 - 범죄 유형마다 섹션 종류가 달라지면 `section_type` 값만 추가한다.
+- `PROSECUTOR` · `DEFENSE` 섹션 위의 안내 문구(판결문의 양형 이유에서 정리한 내용이라는 안내)는 이 테이블에 두지 않는다. 화면이 섹션 종류별 고정 문구로 보여 준다(v1.9, [정보 구조](information-architecture.md) S-04). 사건마다 문구가 달라져야 하면 그때 칸을 추가한다.
 
 #### `penalty_rule` — 형벌별 법정형과 선고 가능 범위
 
@@ -198,7 +210,7 @@ S-06에서 보여 줄 형벌 선택지, 그리고 **선고 가능 범위 밖 판
 | allowed_max | bigint |  | **선고 가능 상한** — 법정형 상한. 누범 등 사실관계로 정해지는 가중이 있으면 반영한 값 |
 | allowed_basis | varchar(300) |  | 선고 가능 범위 산출 근거 (예: 작량감경 시 하한 1/2) |
 | suspension_allowed | boolean | ✓ | 이 형벌에 집행유예 입력을 보여 줄지 |
-| display_order | int | ✓ |  |
+| display_order | int | ✓ | 형벌 표시 순서. **법조문 표기 순서대로 무거운 형벌부터** `DEATH` → `LIFE` → `PRISON` → `FINE`(v1.9). API 8 · S-06 형벌 버튼이 이 순서를 그대로 쓴다 |
 
 > **`DEATH` · `LIFE` 행 (v1.4)**: `allowed_min` ~ `allowed_max`는 그 형벌을 고른 뒤 **작량감경해 징역으로 선고할 때의 범위**(개월)다. 무기징역은 10년 ~ 50년(120 ~ 600, 형법 제55조 제1항 제2호), 사형은 20년 ~ 50년(240 ~ 600, 같은 항 제1호). 법률상 감경 사유도 있으면 그만큼 더 넓힌다. 사형을 감경해 무기징역으로 선고하는 경우는 형법 규정이라 코드 상수로 판단한다. 두 행 모두 `suspension_allowed = false`(감경해도 징역 10년 이상).
 
@@ -225,9 +237,16 @@ S-06에서 보여 줄 형벌 선택지, 그리고 **선고 가능 범위 밖 판
 | label | varchar(100) | ✓ | 판단 요소 문구 (예: 다투던 중 집에 있던 흉기를 집어 들었다) | REQ-076 |
 | pre_label | varchar(100) |  | 사전 판단용 짧은 문구 (예: 피해 금액이 수천만 원이다). `OVERVIEW` 요소만 | REQ-093 |
 | reveal_stage | varchar(20) | ✓ | 처음 알게 되는 단계: `OVERVIEW` / `DETAIL` / `ARGUMENT` / `LAW` | REQ-095 |
-| summary_tag | varchar(20) | ✓ | 요약 태그 (v1.3). 요소를 묶는 짧은 분류명 (예: `피해 규모`, `범행 방식`, `피해 회복`, `피해자 의사`, `반성`, `전력`). S-09 "내 판결" 한 줄 요약의 규칙 문장에 쓴다 | REQ-060 |
+| summary_tag | varchar(20) | ✓ | 요약 태그 (v1.3 추가, v1.10 확정). 여러 요소를 묶는 분류명이 아니라 **요소마다 붙이는 짧은 요약어**다(예: 요소 "다투던 중 집에 있던 흉기를 집어 들었다" → `흉기 사용`). S-09 "내 판결" 한 줄 요약과 세 판결 비교 규칙 문장(API 14 `ruleSentences`)에 쓴다 | REQ-060 |
+| value_axis | varchar(20) |  | 가치관 축 (v1.13 추가, BE-47). 사용자가 이 요소를 고르는 것으로 드러나는 성향을 매칭하는 축: `APOLOGY_SINCERITY`(사과와 진정성: 반성 · 자수 · 수사 협조 · 사후 정황) / `FAULT_STANDARD`(잘잘못의 기준: 범행 동기 · 수단 · 방법 · 계획성 · 결과의 중대성) / `PRINCIPLE_RELATION`(원칙과 관계: 피해 회복 · 합의 · 처벌불원 · 피해자 과실) / `ORDER_OPPORTUNITY`(질서와 기회: 전과 · 연령 · 가족 · 부양 · 직업 · 사회적 유대). 어느 축에도 맞지 않으면 NULL | |
+| value_axis_status | varchar(20) | ✓ | 가치관 축 후검수 상태 (v1.15 추가, BE-48): `AUTO`(기본값. AI 투표 · 사람 초안, 아직 관리자가 확정하지 않음) / `CONFIRMED`(관리자 확정, NULL로 확정한 것 포함). 기본 `AUTO` | |
+| value_axis_votes | jsonb |  | 축 분류 투표 기록 (v1.15 추가, BE-49). 예: `{"runs": 5, "counts": {"FAULT_STANDARD": 3, "NONE": 2}, "needsReview": false}`. `counts`는 표를 받은 축만, NULL 표는 `NONE` 키. `requestedRuns`(선택)는 요청한 횟수로, `runs`(유효 응답 수)와 다를 수 있다. `needsReview`는 최다표가 요청 횟수의 과반이 아니면(동률 · 유효 응답 부족 포함) true. 사람 초안 · 투표 없이 정한 값은 NULL | |
 | display_order | int | ✓ |  |  |
-- `summary_tag`는 사건별로 팀이 붙인다. 같은 사건 안에서 여러 요소가 같은 태그를 가질 수 있다. 태그 문구도 판단 요소와 같이 중립적으로 쓴다(FR-3-4).
+- `(case_id, display_order)`는 유일하다(`uk_factor_case_display_order`, V7 · BE-15, v1.12). 적재 SQL이 요소를 번호와 문구로 찾기 때문이다.
+- `value_axis`는 AI(사건 추출기 · 파이프라인 축 분류 투표) 또는 사람 초안(비공개 시드)이 기본값을 정하고, 관리자가 후검수로 확정한다(CHECK는 네 값 또는 NULL). 값이 NULL인 요소는 성향 계산에서 빠진다. 사전 판단(`OVERVIEW`)과 형량 선택은 성향 계산에 쓰지 않는다.
+- 값만으로는 "관리자가 일부러 NULL로 둔 요소"와 "아직 채우지 않은 요소"를 구분할 수 없어서 `value_axis_status`를 둔다. 시드(R__15)와 파이프라인 적재 SQL(이미 적재된 사건이면 번호 · 라벨이 같은 요소의 축 · 투표 기록만 갱신)은 `AUTO` 행만 바꾸고, 관리자가 고치거나 그대로 승인하면 `CONFIRMED`가 된다(BE-43).
+- **`AUTO` 행의 우선순위: 투표 기록이 있는 값이 우선이다.** 시드(R__15)는 투표 기록이 없는 행만 사람 초안으로 맞추고, 적재 SQL은 투표 기록이 있는 값만 이미 적재된 사건에 반영한다. 그래서 축 단계를 건너뛴 적재나 시드 재실행이 투표 결과를 되돌리지 않는다. 사람이 값을 바꾸는 경로는 관리자 확정 하나다.
+- `summary_tag`는 사건별로 팀이 붙인다. 요소마다 다른 요약어를 붙이는 것이 기본이지만, 같은 사건 안에 뜻이 겹치는 요소가 있으면 같은 태그를 쓸 수도 있다(그때는 UserSummarySentence · RuleSentences가 중복을 한 번만 쓴다). 태그 문구도 판단 요소와 같이 중립적으로 쓴다(FR-3-4).
 
 #### `case_source` — 원본 판결문 (내부 전용)
 
@@ -389,10 +408,16 @@ AI 판결 1건을 어떤 조건으로 만들었는지 남긴다(REQ-047, 079). M
 | review_status | varchar(20) | ✓ | `PENDING` / `APPROVED` / `REJECTED` |
 | reviewed_by | varchar(50) |  | 검수자 |
 | reviewed_at | timestamptz |  |  |
+| generation_report | jsonb |  | 자동 생성 정보 (v1.11, BE-31): 검증 경고 · 사전 학습 점검(판정 · 근거 · 분류별 개수 · 기준 `criteria`, 점검을 안 했으면 `SKIPPED`, BE-37) · 회차 선택(전략 · 이유 · 점수) · 모델(요청 모델 · 실제 응답 모델) · 토큰 · 실행 식별자(`runKey`, 같은 적재 SQL 중복 실행 방지, 부분 유니크 인덱스 `ux_ai_generation_run_key`). 예측 형량 · 실제 판결 값은 넣지 않는다. 사람이 검수해 넣은 행은 NULL |
 | created_at | timestamptz | ✓ |  |
+
+- 자동 파이프라인(BE-31)은 재판부 판결(COURT)도 비공개(`judgment.is_published=false`)로 넣는다(BE-38). 기존 공개 판결은 건드리지 않고, 파이프라인을 다시 돌리면 같은 사건에 비공개 COURT 후보가 하나 더 쌓일 수 있다(기존 행은 지우지 않음, REQ-079와 같은 원칙). 공개할 후보를 고르는 일은 후검수(BE-33 이후, 미구현)가 한다. COURT 판결에는 검수 상태 컬럼이 아직 없다.
+- 자동 파이프라인(BE-31)은 AI 판결을 비공개(`judgment.is_published=false`) · `review_status='PENDING'`으로 넣는다. 관리자가 검수해 `APPROVED`로 바꾸고 공개 판단을 교체한다(후검수). `REJECTED`는 공개하지 않는다.
 - 모델·프롬프트가 바뀌면 새 `judgment` + 새 `ai_generation`을 만들고, 검수 후 공개 판단을 교체한다. 기존 행은 지우지 않는다(REQ-079).
 
 #### `comparison_analysis` — 세 판결 비교 분석 (확장 단계, v1.1)
+
+> **(v1.13) 보류** — AI 비교 분석(REQ-062 · 063)을 11차 회의에서 확장 범위에서 제외했다. V5 마이그레이션으로 만든 테이블은 그대로 두고 쓰지 않는다. 아래 정의는 결정 기록으로 남긴다.
 
 체험 1건의 세 판결을 AI가 비교한 결과를 저장한다(FR-6-3). 사용자 판결이 체험마다 다르므로 **체험별로 실시간 생성**한다(시퀀스 8장). AI 판결(`ai_generation`)과 달리 공개 전 검수가 없으므로, 서버 검증을 통과한 결과만 `DONE`으로 저장한다.
 
@@ -512,17 +537,17 @@ IA 9장의 규칙을 어느 테이블·제약이 책임지는지 정리한다.
 
 | id | label | reveal_stage | summary_tag |
 | --- | --- | --- | --- |
-| 1 | 빌린 돈을 갚지 못해 오래 다툼이 있었다 | OVERVIEW | 범행 경위 |
-| 2 | 다투던 중 집에 있던 흉기를 집어 들었다 | OVERVIEW | 범행 방식 |
-| 3 | 범행 뒤 구호 조치 없이 현장을 떠났다 | OVERVIEW | 범행 후 정황 |
-| 4 | 사건 3개월 전부터 변제 문제로 여러 차례 다퉜다 | DETAIL | 범행 경위 |
-| 5 | 유족이 엄벌을 원한다 | DETAIL | 피해자 의사 |
-| 6 | 피해자에게는 부양하던 어린 자녀 2명이 있다 | DETAIL | 피해 결과 |
-| 7 | 수사 초기부터 범행을 인정하고 반성하고 있다 | DETAIL | 반성 |
-| 8 | 형사처벌 전력이 없다 | DETAIL | 전력 |
-| 9 | 피해 회복을 위해 5,000만 원을 공탁했다 | DETAIL | 피해 회복 |
-| 10 | 피고인은 우발적 범행이라고 주장한다 | ARGUMENT | 범행 경위 |
-| 11 | 피고인은 오랜 채무로 정신적으로 지쳐 있었다고 주장한다 | ARGUMENT | 피고인 사정 |
+| 1 | 빌린 돈을 갚지 못해 오래 다툼이 있었다 | OVERVIEW | 채무 다툼 |
+| 2 | 다투던 중 집에 있던 흉기를 집어 들었다 | OVERVIEW | 흉기 사용 |
+| 3 | 범행 뒤 구호 조치 없이 현장을 떠났다 | OVERVIEW | 구호 조치 없음 |
+| 4 | 사건 3개월 전부터 변제 문제로 여러 차례 다퉜다 | DETAIL | 반복된 다툼 |
+| 5 | 유족이 엄벌을 원한다 | DETAIL | 유족의 엄벌 의사 |
+| 6 | 피해자에게는 부양하던 어린 자녀 2명이 있다 | DETAIL | 피해자의 부양 가족 |
+| 7 | 수사 초기부터 범행을 인정하고 반성하고 있다 | DETAIL | 범행 인정 · 반성 |
+| 8 | 형사처벌 전력이 없다 | DETAIL | 전과 없음 |
+| 9 | 피해 회복을 위해 5,000만 원을 공탁했다 | DETAIL | 피해 회복 공탁 |
+| 10 | 피고인은 우발적 범행이라고 주장한다 | ARGUMENT | 우발적 범행 주장 |
+| 11 | 피고인은 오랜 채무로 정신적으로 지쳐 있었다고 주장한다 | ARGUMENT | 정신적 피로 주장 |
 
 - 피해자의 사망은 살인죄의 구성요건 결과라 판단 요소로 두지 않는다(이중평가 방지).
 
@@ -568,7 +593,7 @@ IA 9장의 규칙을 어느 테이블·제약이 책임지는지 정리한다.
 | 9 | — | ↓ | ↓ | `ONLY_ME_MISSED` |
 | 10, 11 | — | — | — | 매트릭스에서 뺌 |
 
-→ 내 판결 한 줄 요약(MVP 규칙 문장): ↑ 요소 2 · 6의 태그 `범행 방식` · `피해 결과`, ↓ 요소 7의 태그 `반성` → "범행 방식 · 피해 결과를 무겁게 보고 반성을 감안한 판단". 확장 단계에서는 AI 비교 분석의 `perspectives.USER`로 바꾼다.
+→ 내 판결 한 줄 요약(MVP 규칙 문장, 요소별 요약어 기준 v1.10): ↑ 요소 2 · 6의 요약어 `흉기 사용` · `피해자의 부양 가족`, ↓ 요소 7의 요약어 `범행 인정 · 반성` → "흉기 사용 · 피해자의 부양 가족을 무겁게 보고 범행 인정 · 반성을 감안한 판단". 확장 단계에서는 AI 비교 분석의 `perspectives.USER`로 바꾼다.
 → 판단 이유 변화(REQ-096, 확장): `PRE`의 요소(1, 2 — 모두 OVERVIEW)와 `FINAL`의 요소(2, 6, 7)를 비교한다. 2는 양쪽에 있으므로 "처음부터 알던 요소"(API `KEPT`), 1은 `PRE`에만 있으므로 "이미 알던 요소의 무게가 바뀜"(API `WEIGHT_CHANGED` — 사전 판단에서는 골랐지만 최종 판결에서는 고르지 않았다는 뜻이다. `PRE` 기록에는 방향이 없어 처음 판단의 강도는 알 수 없다), 6 · 7은 `reveal_stage = DETAIL`이고 `FINAL`에만 있으므로 "새로 알게 된 요소"(API `NEWLY_LEARNED`)다. 요소 1처럼 매트릭스에서 빠지는 요소도 사전 판단에서 골랐다면 변화 유형은 보여 준다(API 14 `matrix` 규칙).
 → 사전 판단 구간 11(60 ~ 120)과 최종 판결 180개월을 비교하면 `preToFinal.direction`은 `HEAVIER`다.
 
@@ -591,6 +616,7 @@ IA 9장의 규칙을 어느 테이블·제약이 책임지는지 정리한다.
 | FK 인덱스 | FK 컬럼마다 인덱스를 만든다. 유니크 제약의 첫 컬럼과 겹치면 생략한다 |
 | FK 삭제 동작 | 기본값(`NO ACTION`) |
 | jsonb 형식 (v1.7) | 아래 컬럼은 반드시 **배열**로 넣는다. 엔티티가 배열 타입으로 읽어서, 형식이 다르면 그 사건의 조회 전체가 실패한다<br>• `legal_case.keywords` · `deidentified_items`, `judgment.reference_tags`: 문자열 배열<br>• `case_section.data`: 배열. 원소는 섹션마다 다르다 — DAMAGE `{label, value}` · LAW_TERM `{term, desc}` 객체, SUMMARY 문자열<br>• `judgment.extra_dispositions`: 객체 배열 `{type, value}`, `type`은 `COMMUNITY_SERVICE` · `CONFISCATION`만 |
+| 본문 줄바꿈 (v1.9) | `case_section.content`의 항목은 줄바꿈(`\n`)으로 나눈다. PostgreSQL에서는 `E'첫 항목\n둘째 항목'`처럼 쓴다. 문장 끝에 마침표를 두어 줄바꿈을 그리지 않는 곳에서도 한 문단으로 읽히게 한다 |
 | 적용 방식 | SQL 파일을 직접 실행하지 않고 서버 기동 시 Flyway가 적용한다. `ddl-auto`는 모든 환경에서 `validate` |
 | 수정 규칙 | develop에 Merge된 파일은 수정하지 않는다. 오픈 전 불가피하면 팀 합의 후 DB 초기화하고 수정, 오픈 후에는 새 마이그레이션만 추가한다 |
 
@@ -609,3 +635,33 @@ IA 9장의 규칙을 어느 테이블·제약이 책임지는지 정리한다.
 1. 익명 ID가 없으면 발급한다.
 2. (`anonymous_user_id`, `case_id`)의 체험이 있으면 그 체험을 돌려준다. 없으면 `attempt_no = 1`로 새로 만든다.
 3. 화면은 돌려받은 `status`에 맞는 화면으로 이동한다(IA 5장).
+
+---
+
+## 8. (확장 · 제안) 판결 성향 테스트 테이블 (v1.14)
+
+> **미확정 제안이다.** 12차 회의 "DB에 성향 테스트 관련 내용 추가"를 위한 초안으로, 문항 산식 · 매핑 로직(요구사항 15장)이 정해지면 확정한다. 요구사항 DR-11, 기능 명세 REQ-112 ~ 119 · 127.
+>
+> **판단 요소 ↔ 가치관 축은 이 장에서 새로 만들지 않는다.** 요소가 어느 축에 속하는지는 이미 있는 `factor.value_axis`(v1.13, BE-47)를 그대로 쓴다. 값은 파이프라인의 AI 분류(BE-49)와 관리자 후검수(BE-48 · BE-43)로 정해진다. 축 이름도 같은 키(`APOLOGY_SINCERITY` · `FAULT_STANDARD` · `PRINCIPLE_RELATION` · `ORDER_OPPORTUNITY`)를 쓰므로 성향 테스트 점수와 체험 기여분을 같은 키로 합칠 수 있다.
+>
+> 형량 ↑ / ↓로 고른 것이 어느 글자(E/I 등)로 가는지는 가치관 축마다 정하는 규칙이므로 테이블 없이 산식 문서(WBS 6.1.4)로 정한다. 요소마다 글자 · 가중치가 달라야 한다는 결론이 나오면 그때 `factor` 옆에 보조 테이블을 추가한다.
+
+```mermaid
+erDiagram
+    anonymous_user ||--o{ personality_result : "응시"
+    personality_type ||--o{ personality_result : "결과 유형"
+    personality_question ||--|{ personality_choice : "선택지"
+    experience ||--o| experience_personality : "체험별 성향 기여"
+```
+
+| 테이블 | 주요 컬럼 (제안) | 설명 |
+| --- | --- | --- |
+| `personality_question` | id, axis(`APOLOGY_SINCERITY` / `FAULT_STANDARD` / `PRINCIPLE_RELATION` / `ORDER_OPPORTUNITY`, `factor.value_axis`와 같은 값), scenario(`FRIEND` / `FAMILY` / `WORK` / `NEIGHBOR`), content, display_order, is_active | 일상 시나리오 문항. 축당 3 ~ 4개. 법률 용어 금지 |
+| `personality_choice` | id, question_id FK, content, letter(`E`·`I` / `S`·`N` / `T`·`F` / `J`·`P`), score, display_order | 선택지가 어느 글자 쪽에 몇 점을 주는지 |
+| `personality_type` | code PK(char(4), 예: `INFP`), name(예: 너그러운 판다형), animal, one_liner, tolerance(0 ~ 4), description, image_url | 16유형 콘텐츠. 코드 상수로 둘 수도 있다 |
+| `personality_result` | id, anonymous_user_id FK, type_code FK, axis_scores jsonb(키는 위 4개 축 이름), answers jsonb, is_current, created_at | 응시 결과. 재응시 시 새 행 + 이전 행 `is_current=false`(제안). 회원 연결은 `anonymous_user.member_id`로 따라간다 |
+| `experience_personality` | id, experience_id FK unique, axis_scores jsonb(키는 위 4개 축 이름), type_code, created_at | 판결 체험이 `COMPLETED`가 될 때 계산한 성향 기여분. 성향 변화 흐름 · 종합 성향(평균) 계산에 쓴다. 성향 테스트 전에 한 체험도 남겨 둔다 |
+
+- 사용자 응답에 원본 판결문 정보가 섞이지 않는다는 원칙(5장)은 그대로다. 성향 기여는 사용자의 `USER` · `FINAL` 판단 요소 기록(`judgment_factor`)에서만 계산한다.
+- 공유 링크는 `personality_type`만 읽는다. `personality_result`의 응답 · 점수는 공유 응답에 넣지 않는다.
+- `factor.value_axis`가 `NULL`인 판단 요소는 성향 계산에서 빠진다(4장 규칙과 동일).

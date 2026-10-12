@@ -90,4 +90,9 @@ public class LegalCase {
 	public boolean isPublished() {
 		return status == CaseStatus.PUBLISHED;
 	}
+
+	/** jsonb 배열 컬럼은 비어 있으면 NULL로 들어온다. 응답에서 []로 내려가도록 여기서 한 번만 맞춘다 (API 12) */
+	public List<String> getDeidentifiedItems() {
+		return deidentifiedItems == null ? List.of() : deidentifiedItems;
+	}
 }

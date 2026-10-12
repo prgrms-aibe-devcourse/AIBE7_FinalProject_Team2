@@ -12,6 +12,7 @@ PROMPT_DIR = TOOL_DIR / "prompts"
 # 프롬프트를 고치면 버전을 올린다. ai_generation.prompt_version에 그대로 기록된다.
 PROMPT_VERSION = "judgment-v2"
 CONTAMINATION_PROMPT_VERSION = "contamination-v2"
+AXIS_PROMPT_VERSION = "axis-v1"  # 판단 요소 가치관 축 분류 투표 (BE-49)
 
 # 법정형에서 고르는 형벌 (ERD v1.4 penalty_type). 무죄는 MVP에서 뺐다.
 PENALTY_TYPES = ("DEATH", "LIFE", "PRISON", "FINE")
@@ -25,6 +26,10 @@ REDUCIBLE_TO = {"DEATH": ("LIFE", "PRISON"), "LIFE": ("PRISON",), "PRISON": (), 
 NO_TERM_PENALTIES = ("DEATH", "LIFE")
 
 DIRECTIONS = ("UP", "DOWN")
+
+# 판단 요소 가치관 축 (ERD factor.value_axis, BE-47). null = 어느 축에도 맞지 않음(성향 계산 제외).
+# 축이 바뀌면 함께 고친다: Java ValueAxis · V9 CHECK(chk_factor_value_axis) · 추출기 프롬프트(extract_system.md)
+VALUE_AXES = ("APOLOGY_SINCERITY", "FAULT_STANDARD", "PRINCIPLE_RELATION", "ORDER_OPPORTUNITY")
 
 # 집행유예 가능 조건 (형법 제62조, ERD penalty_rule 비고 · API 8 suspensionRule)
 SUSPENSION_MAX_PRISON_MONTHS = 36
@@ -53,6 +58,13 @@ FORBIDDEN_INPUT_KEYS = {
 def load_json(path):
     with open(path, encoding="utf-8") as f:
         return json.load(f)
+
+
+def write_json(path, value):
+    """JSON 파일 쓰기 (한글 그대로, 들여쓰기 2칸, 끝 줄바꿈). 폴더가 없으면 만든다."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 def read_prompt(name):

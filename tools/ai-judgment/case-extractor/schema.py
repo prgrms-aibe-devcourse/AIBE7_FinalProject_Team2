@@ -11,17 +11,37 @@ from pathlib import Path
 PARENT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PARENT_DIR))
 
-from common import NO_TERM_PENALTIES, PENALTY_TYPES, REDUCIBLE_TO, format_months, format_won  # noqa: E402
+from common import NO_TERM_PENALTIES, PENALTY_TYPES, REDUCIBLE_TO, VALUE_AXES, format_months, format_won  # noqa: E402
 
 # 프롬프트나 스키마를 고치면 올린다. 보고서(report.json)에 기록된다.
-EXTRACT_PROMPT_VERSION = "extract-v1"
+EXTRACT_PROMPT_VERSION = "extract-v5"  # v3: Claude 외 공급자 스키마 안내 (BE-35), v4: 사건 발생일 incidentDate (BE-38), v5: 판단 요소 가치관 축 valueAxis (BE-47)
 
 CRIME_TYPES = ("MURDER", "FRAUD", "INJURY")  # ERD legal_case.crime_type
 REVEAL_STAGES = ("OVERVIEW", "DETAIL", "ARGUMENT", "LAW")  # ERD factor.reveal_stage
+# 가치관 축 값(VALUE_AXES)은 common.py 한 곳에 둔다 (ERD factor.value_axis, BE-47). 판결 체험에서 고르는 판단 요소를 사용자 성향과 매칭한다
+VALUE_AXIS_NAMES = {
+    "APOLOGY_SINCERITY": "① 사과와 진정성",
+    "FAULT_STANDARD": "② 잘잘못의 기준",
+    "PRINCIPLE_RELATION": "③ 원칙과 관계",
+    "ORDER_OPPORTUNITY": "④ 질서와 기회",
+}
+# summaryTag에 이 말이 들어 있으면 해당 축일 가능성이 높다. 모델이 고른 축과 다르면 경고만 낸다(관리자가 확인). 판단은 모델이 한다
+VALUE_AXIS_KEYWORDS = {
+    "APOLOGY_SINCERITY": ("반성", "자수", "자백", "수사 협조", "사과", "사죄", "뉘우"),
+    "FAULT_STANDARD": ("동기", "계획", "수단", "범행 방식", "범행 내용", "흉기", "피해 규모", "피해 결과", "결과의 중대"),
+    "PRINCIPLE_RELATION": ("피해 회복", "합의", "처벌불원", "처벌 의사", "공탁", "피해자 의사", "피해자 책임", "피해자 과실"),
+    "ORDER_OPPORTUNITY": ("전력", "전과", "재범", "연령", "고령", "부양", "가족", "직업", "생계"),
+}
 
 LABEL_MAX_LENGTH = 100  # ERD factor.label · pre_label varchar(100)
 SUMMARY_TAG_MAX_LENGTH = 20  # ERD factor.summary_tag varchar(20)
 TITLE_MAX_LENGTH = 100  # ERD legal_case.title varchar(100)
+SHORT_INTRO_MAX_LENGTH = 200  # ERD legal_case.short_intro varchar(200)
+DIFFICULTIES = ("LOW", "MID", "HIGH")  # ERD legal_case.difficulty
+KEYWORD_COUNT = (2, 6)  # 목록 카드 키워드 개수 (권장)
+ESTIMATED_MINUTES = (3, 60)  # 예상 소요 시간(분) 상식 범위 (권장)
+FACTOR_COUNT = (8, 15)  # 판단 요소 개수 (권장, extract 프롬프트 factors와 맞춘다)
+OVERVIEW_FACTOR_COUNT = (2, 4)  # OVERVIEW 판단 요소 개수 (권장, extract 프롬프트 revealStage와 맞춘다)
 
 _STRING = {"type": "string"}
 _NULLABLE_STRING = {"type": ["string", "null"]}
@@ -39,6 +59,13 @@ def _object(properties):
 
 OUTPUT_SCHEMA = _object({
     "title": _STRING,
+    # 목록 카드 (ERD legal_case short_intro · keywords · difficulty · estimated_minutes, BE-31)
+    "shortIntro": _STRING,
+    "keywords": {"type": "array", "items": _STRING},
+    "difficulty": {"type": "string", "enum": list(DIFFICULTIES)},
+    "estimatedMinutes": {"type": "integer"},
+    # 서비스 대상 판결인지 (docs/cases/README.md 1장 선정 조건). 파이프라인(BE-31)이 적재 전에 본다
+    "eligibility": _object({"eligible": {"type": "boolean"}, "reasons": {"type": "array", "items": _STRING}}),
     "crimeType": {"type": "string", "enum": list(CRIME_TYPES)},
     "chargeName": _STRING,
     "appliedLaw": _STRING,
@@ -77,6 +104,8 @@ OUTPUT_SCHEMA = _object({
             "preLabel": _NULLABLE_STRING,
             "revealStage": {"type": "string", "enum": list(REVEAL_STAGES)},
             "summaryTag": _STRING,
+            # 어느 축에도 맞지 않을 때만 null (BE-47). 사전 판단(OVERVIEW) 요소도 값은 붙이지만 성향 계산에는 쓰지 않는다
+            "valueAxis": {"anyOf": [{"type": "string", "enum": list(VALUE_AXES)}, {"type": "null"}]},
         }),
     },
     "courtJudgment": _object({
@@ -86,6 +115,8 @@ OUTPUT_SCHEMA = _object({
         "fineAmount": _NULLABLE_INT,
         "suspensionMonths": _NULLABLE_INT,
     }),
+    # 사건 발생일 YYYY-MM-DD (내부 전용, BE-38). case.json · 사용자 화면에는 넣지 않고 source_internal.json · legal_case.incident_date에만 둔다
+    "incidentDate": _NULLABLE_STRING,
     "deidentifiedItems": {"type": "array", "items": _STRING},
     "reviewNotes": {"type": "array", "items": _STRING},
 })
@@ -98,6 +129,62 @@ TEXT_SECTIONS = [
     ("prosecutor", "ARGUMENT", "PROSECUTOR", "검사 측 (불리한 사정)"),
     ("defense", "ARGUMENT", "DEFENSE", "피고인 · 변호인 측 (유리한 사정 · 변호인 주장)"),
 ]
+
+
+def validate_against_schema(value, schema, path="$"):
+    """모델 응답이 OUTPUT_SCHEMA를 따르는지 검사해 오류 목록을 돌려준다 (BE-35).
+
+    Claude는 구조화 출력으로 스키마를 강제하지만 다른 공급자는 그렇지 않아, 타입이 어긋난 값(문자열이어야 할 곳의 배열 등)이
+    조용히 통과하지 않게 직접 검사한다. 이 스키마가 쓰는 부분(type · enum · properties · required ·
+    additionalProperties · items · anyOf)만 지원한다.
+    오류에는 스키마 경로와 위반 종류만 남기고 **응답 값 · 모델이 만든 항목 이름은 넣지 않는다**. 오류는 재요청 메시지 ·
+    ExtractError · 파이프라인 state.json으로 이어지는데, 모델이 판결문 속 실명 등을 엉뚱한 칸에 넣었을 때 그대로 남지 않게 한다.
+    """
+    if "anyOf" in schema:
+        if any(not validate_against_schema(value, option, path) for option in schema["anyOf"]):
+            return []
+        return [f"{path}: 허용되는 형식이 아닙니다"]
+    errors = []
+    types = schema.get("type")
+    if types is not None:
+        types = [types] if isinstance(types, str) else types
+        if not any(_matches_type(value, t) for t in types):
+            return [f"{path}: {'/'.join(types)} 형식이어야 합니다 (받은 값: {type(value).__name__})"]
+    if "enum" in schema and value not in schema["enum"]:
+        errors.append(f"{path}: 허용되는 값이 아닙니다")
+    if isinstance(value, dict):
+        for key in schema.get("required", []):
+            if key not in value:
+                errors.append(f"{path}.{key}: 필수 항목이 없습니다")
+        properties = schema.get("properties", {})
+        extra = 0
+        for key, child in value.items():
+            if key in properties:
+                errors += validate_against_schema(child, properties[key], f"{path}.{key}")
+            elif schema.get("additionalProperties") is False:
+                extra += 1
+        if extra:
+            errors.append(f"{path}: 스키마에 없는 항목이 {extra}개 있습니다")
+    if isinstance(value, list) and "items" in schema:
+        for i, child in enumerate(value):
+            errors += validate_against_schema(child, schema["items"], f"{path}[{i}]")
+    return errors
+
+
+def _matches_type(value, name):
+    if name == "string":
+        return isinstance(value, str)
+    if name == "integer":
+        return isinstance(value, int) and not isinstance(value, bool)
+    if name == "boolean":
+        return isinstance(value, bool)
+    if name == "array":
+        return isinstance(value, list)
+    if name == "object":
+        return isinstance(value, dict)
+    if name == "null":
+        return value is None
+    return True
 
 
 class OutputError(Exception):
@@ -119,19 +206,23 @@ def build_sections(output):
 
 
 def build_case_input(output):
-    """모델 응답 → case.json. caseId · factorId는 시드 적재 전이라 임시값이다(README 참고)."""
+    """모델 응답 → case.json. factorId는 1부터 붙여 시드 SQL의 factor.display_order와 맞춘다(README 참고).
+    caseId는 파일 구분용일 뿐 DB와 맞출 필요가 없다."""
     factors = [
         {"factorId": i, "label": f["label"], "revealStage": f["revealStage"]}
         for i, f in enumerate(output["factors"], start=1)
     ]
+    # 형벌 표시 순서(penalty_rule.display_order): 법조문 표기 순서대로 무거운 형벌부터 DEATH → LIFE → PRISON → FINE (ERD v1.9).
+    # 모델이 다른 순서로 줘도 PENALTY_TYPES 순서로 맞춘다
     penalty_rules = [
         {key: rule[key] for key in
          ("penaltyType", "statutoryMin", "statutoryMax", "allowedMin", "allowedMax", "suspensionAllowed")}
-        for rule in output["penaltyRules"]
+        for rule in sorted(output["penaltyRules"], key=lambda rule: PENALTY_TYPES.index(rule["penaltyType"]))
     ]
     return {
-        "_comment": "판결문 가공 스크립트(case-extractor)가 만든 초안. 팀 검수 전이다. caseId는 null, factorId는 "
-                    "1부터 붙인 임시값이라 적재 SQL을 만들기 전에 DB 값으로 바꾼다. git에 올리지 않는다.",
+        "_comment": "판결문 가공 스크립트(case-extractor)가 만든 초안. 팀 검수 전이다. caseId는 null(파일 구분용일 "
+                    "뿐 DB와 맞출 필요 없음), factorId는 1부터 붙여 시드 SQL의 display_order와 맞춘다. "
+                    "git에 올리지 않는다.",
         "caseId": None,
         "title": output["title"],
         "crimeType": output["crimeType"],
@@ -143,6 +234,13 @@ def build_case_input(output):
         "penaltyRules": penalty_rules,
         "recommended": output.get("recommended"),
         "factors": factors,
+        # 목록 카드 값. AI 판결 프롬프트에는 들어가지 않는다(build_prompt.py가 허용 항목만 고른다). 사건 적재 SQL이 쓴다
+        "listing": {
+            "shortIntro": output["shortIntro"],
+            "keywords": output["keywords"],
+            "difficulty": output["difficulty"],
+            "estimatedMinutes": output["estimatedMinutes"],
+        },
         "references": {
             "sentencingGuideline": output.get("sentencingGuideline"),
             # 유사 판례는 대상 사건 판결문만으로 만들 수 없다. 팀이 대상 사건을 뺀 판례로 채운다 (FR-4-2)
@@ -155,6 +253,8 @@ def build_court_judgment(output):
     court = output["courtJudgment"]
     return {
         "_comment": "내부 전용. 사전 학습 점검(check_contamination.py)에서만 쓴다. AI 판결 생성 프롬프트에 절대 넣지 않는다.",
+        # compare.py --court가 결과 묶음(batch.json)의 사건과 같은 사건인지 대조하는 값. case.json의 title과 같다
+        "caseTitle": output["title"],
         "caseId": None,
         **court,
     }
@@ -163,9 +263,22 @@ def build_court_judgment(output):
 def build_factor_extras(output):
     """case.json 형식에는 없지만 시드(factor 테이블)에 필요한 값. 보고서에 남긴다."""
     return [
-        {"factorId": i, "preLabel": f.get("preLabel"), "summaryTag": f["summaryTag"]}
+        {"factorId": i, "preLabel": f.get("preLabel"), "summaryTag": f["summaryTag"], "valueAxis": f.get("valueAxis")}
         for i, f in enumerate(output["factors"], start=1)
     ]
+
+
+def check_value_axis(index, factor):
+    """판단 요소의 가치관 축을 summaryTag 키워드와 교차 확인한다 (BE-47). 경고만 낸다 — 최종 값은 관리자가 고칠 수 있다."""
+    axis = factor.get("valueAxis")
+    if axis is None:
+        return [f"판단 요소 {index}: 가치관 축이 없습니다(null). 어느 축에도 맞지 않는 요소는 성향 계산에서 빠집니다"]
+    tag = factor["summaryTag"]
+    matched = [name for name, words in VALUE_AXIS_KEYWORDS.items() if any(word in tag for word in words)]
+    if len(matched) == 1 and matched[0] != axis:
+        return [f"판단 요소 {index}: 요약 태그가 {VALUE_AXIS_NAMES[matched[0]]} 쪽으로 보이는데 "
+                f"가치관 축은 {VALUE_AXIS_NAMES[axis]}입니다. 확인하세요"]
+    return []
 
 
 def check_output(output):
@@ -173,10 +286,26 @@ def check_output(output):
     errors, warnings = [], []
     if len(output["title"]) > TITLE_MAX_LENGTH:
         errors.append(f"사건 제목이 {TITLE_MAX_LENGTH}자를 넘습니다")
+    if not output["shortIntro"].strip() or len(output["shortIntro"]) > SHORT_INTRO_MAX_LENGTH:
+        errors.append(f"목록 카드 소개(shortIntro)는 1 ~ {SHORT_INTRO_MAX_LENGTH}자여야 합니다")
+    if not KEYWORD_COUNT[0] <= len(output["keywords"]) <= KEYWORD_COUNT[1]:
+        warnings.append(f"키워드가 {len(output['keywords'])}개입니다 (권장 {KEYWORD_COUNT[0]} ~ {KEYWORD_COUNT[1]}개)")
+    if not ESTIMATED_MINUTES[0] <= output["estimatedMinutes"] <= ESTIMATED_MINUTES[1]:
+        warnings.append(f"예상 소요 시간 {output['estimatedMinutes']}분이 상식 범위"
+                        f"({ESTIMATED_MINUTES[0]} ~ {ESTIMATED_MINUTES[1]}분) 밖입니다")
+    if not output["eligibility"]["eligible"]:
+        warnings.append("모델이 서비스 대상이 아닌 판결로 판정했습니다: " + " / ".join(output["eligibility"]["reasons"]))
     if not output["factors"]:
         errors.append("판단 요소가 없습니다")
-    if not any(f["revealStage"] == "OVERVIEW" for f in output["factors"]):
+    overview_count = sum(1 for f in output["factors"] if f["revealStage"] == "OVERVIEW")
+    if overview_count == 0:
         errors.append("사전 판단에 쓸 OVERVIEW 판단 요소가 없습니다")
+    # 0개는 위에서 이미 오류다. 개수가 있을 때만 권장 범위를 본다
+    if output["factors"] and not FACTOR_COUNT[0] <= len(output["factors"]) <= FACTOR_COUNT[1]:
+        warnings.append(f"판단 요소가 {len(output['factors'])}개입니다 (권장 {FACTOR_COUNT[0]} ~ {FACTOR_COUNT[1]}개)")
+    if overview_count and not OVERVIEW_FACTOR_COUNT[0] <= overview_count <= OVERVIEW_FACTOR_COUNT[1]:
+        warnings.append(f"OVERVIEW 판단 요소가 {overview_count}개입니다 "
+                        f"(권장 {OVERVIEW_FACTOR_COUNT[0]} ~ {OVERVIEW_FACTOR_COUNT[1]}개)")
     for i, f in enumerate(output["factors"], start=1):
         if len(f["label"]) > LABEL_MAX_LENGTH:
             errors.append(f"판단 요소 {i}: 문구가 {LABEL_MAX_LENGTH}자를 넘습니다")
@@ -186,6 +315,7 @@ def check_output(output):
             warnings.append(f"판단 요소 {i}: preLabel은 OVERVIEW 요소에만 씁니다")
         if f["revealStage"] == "OVERVIEW" and not f.get("preLabel"):
             warnings.append(f"판단 요소 {i}: OVERVIEW 요소에 사전 판단용 짧은 문구(preLabel)가 없습니다")
+        warnings += check_value_axis(i, f)
 
     types = [rule["penaltyType"] for rule in output["penaltyRules"]]
     if len(types) != len(set(types)):
@@ -208,6 +338,11 @@ def check_output(output):
 def visible_texts(case_input):
     """사용자에게 보일 수 있는 문자열 [(위치, 문자열)]. 비식별화 · 판결 누출 검사 대상이다."""
     texts = [("title", case_input["title"]), ("overview", case_input["overview"])]
+    listing = case_input.get("listing") or {}
+    if listing.get("shortIntro"):
+        texts.append(("listing.shortIntro", listing["shortIntro"]))
+    for i, keyword in enumerate(listing.get("keywords") or []):
+        texts.append((f"listing.keywords[{i}]", keyword))
     for i, section in enumerate(case_input["sections"]):
         where = f"sections[{i}]({section['sectionType']})"
         if section.get("content"):
@@ -274,3 +409,45 @@ def sentence_leak_check(case_input, court):
         if "선고" in text:
             warnings.append(f"{where}: '선고'라는 말이 있음 — 재판부 판단이 드러나지 않는지 확인")
     return errors, warnings
+
+
+# 판결문 양형 이유에서 재판부가 평가 · 결론을 말할 때 쓰는 표현 (공백을 뺀 문장에서 찾는다).
+# 사실("범행을 인정했다", "유족이 엄벌을 원한다")은 걸리지 않도록 평가에만 쓰이는 말로 좁힌다.
+_MITIGATING_LABEL = "유리한 · 불리한 정상"
+_COURT_EVALUATION_PATTERNS = [
+    ("죄책", re.compile("죄책")),
+    ("죄질", re.compile("죄질")),
+    ("엄중", re.compile("엄중")),
+    ("참작한다", re.compile("참작(?:할만한|한다|하였|하기로)")),
+    ("용서 · 용납 · 정당화될 수 없다", re.compile("(?:용서|용납|정당화)(?:될|할)수없")),
+    ("반인륜", re.compile("반인륜")),
+    ("~함이 마땅 · 상당하다", re.compile("(?:함이|봄이|보는것이)(?:마땅|상당)")),
+    (_MITIGATING_LABEL, re.compile("(?:유리|불리)한정상")),
+    ("재판부 · 원심", re.compile("재판부|원심")),
+]
+
+
+def court_evaluation_check(case_input):
+    """재판부의 평가 · 결론 문장이 사용자 화면과 AI 입력에 남았는지 본다 (프롬프트 2절, FR-4-1).
+
+    판결문 양형 이유를 옮기다 "죄책이 무거워 엄중한 처벌이 필요하다"처럼 재판부 결론이 섞이면
+    판결 공개 전에 재판부 판단이 드러나고 AI 판결도 그 결론을 보고 만들게 된다. 사실과 섞여 있을 수 있어 경고로만 남긴다.
+    검사 · 피고인 측 섹션(PROSECUTOR · DEFENSE)은 각 측의 주장이라 같은 표현이 정상일 수 있어, 재판부를 명시하지 않았다면
+    "재판부 평가" 대신 "양형 이유 표현일 수 있음"으로 안내한다.
+    """
+    warnings = []
+    for where, text in visible_texts(case_input):
+        if where.startswith("sections") and "LAW_TERM" in where:
+            continue  # 용어 설명은 "참작" 같은 법률 용어를 쓴다
+        compact = re.sub(r"\s+", "", text)
+        # 검사 · 피고인 측 섹션은 각 측의 주장이라 "엄중한 처벌이 필요하다" 같은 말이 흔하다.
+        # "재판부" · "원심"이 함께 없으면 재판부 평가라고 단정하지 않고, 판결문 양형 이유 표현일 수 있다는 안내만 낸다
+        party_section = ("(PROSECUTOR)" in where or "(DEFENSE)" in where) and not re.search("재판부|원심", compact)
+        for label, pattern in _COURT_EVALUATION_PATTERNS:
+            if not pattern.search(compact):
+                continue
+            if party_section:
+                warnings.append(f"{where}: 판결문 양형 이유의 표현일 수 있음 \"{label}\" — 재판부의 평가 · 결론을 옮긴 문장이면 빼고 각 측의 사정 · 주장으로 바꿔 쓴다 (프롬프트 2절)")
+                continue
+            warnings.append(f"{where}: 재판부 평가로 보이는 표현 \"{label}\" — 사실만 남기고 평가 · 결론은 뺀다 (프롬프트 2절)")
+    return warnings

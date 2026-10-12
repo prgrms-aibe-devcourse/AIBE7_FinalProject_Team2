@@ -1,0 +1,25 @@
+{
+  "_comment": "무료 등급이 있는 모델 목록 (BE-45). '무료 등급이 있다'는 뜻이지, 지금 쓰는 키가 무료라는 뜻이 아니다 (결제를 연결한 프로젝트의 키는 같은 모델도 유료). 목록은 자주 바뀌므로 쓰기 전에 source에서 다시 확인하고 checkedAt을 고친다. llm.py(has_free_tier)와 pipeline.py의 전송 안내가 읽는다. 한도(분당 · 일당)는 공식 문서에 표가 없고 계정마다 다르다 — limitsSource(AI Studio 화면)에서 확인한다.",
+  "checkedAt": "2026-10-08",
+  "gemini": {
+    "source": "https://ai.google.dev/gemini-api/docs/pricing",
+    "limitsSource": "https://aistudio.google.com/rate-limit",
+    "termsSource": "https://ai.google.dev/gemini-api/terms",
+    "models": [
+      "gemini-3.8-flash",
+      "gemini-3.7-flash",
+      "gemini-3.6-flash",
+      "gemini-3.5-flash",
+      "gemini-3.5-flash-lite",
+      "gemini-3.1-flash-lite",
+      "gemini-3-flash-preview",
+      "gemini-2.5-pro",
+      "gemini-2.5-flash",
+      "gemini-2.5-flash-lite"
+    ],
+    "embeddingModels": ["gemini-embedding-2"],
+    "notWithFreeTier": ["gemini-3.1-pro-preview", "gemini-omni-1.1-flash"],
+    "limits": "분당 · 일당 한도는 문서에 없다. 한도는 프로젝트 단위(API 키 단위 아님)로 걸리고, 일 한도는 태평양 시간 자정에 초기화된다",
+    "dataUse": "무료 등급은 입력 · 응답을 제품 개선에 쓰고 사람이 검토할 수 있다. 유료 등급은 쓰지 않는다 (약관)"
+  }
+}

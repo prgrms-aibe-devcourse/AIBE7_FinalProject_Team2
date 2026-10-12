@@ -11,6 +11,11 @@
 | v0.7 | 2026-09-30 | API 4 · 5 구현 반영 (BE-7) — API 4 형량 구간 개수를 범죄 유형별로 명시(살인 8개, 사기 · 상해 7개), 두 API의 404 · 400 거절 조건 추가, API 5 검사 순서 · 거절 시 저장 없음 · `factorIds` 규칙 순서 명시 |
 | v0.8 | 2026-10-01 | BE-8 리뷰 반영 — API 6의 선고 가능 범위는 하한·상한이 모두 있는 규칙만 포함, 범위 표시 문구를 API 8 형식으로 통일, LAW_TERM은 law.terms로만 전달하도록 명시 |
 | v0.9 | 2026-10-01 | 후속 정리 (COMMON-14) — 1-1에 숫자 입력 규칙 추가(정수 필드의 소수는 `VALIDATION_ERROR`, 문자열 숫자는 허용, BE-22), API 9에 열거값에 없는 `penaltyType`도 `INVALID_PENALTY_TYPE`으로 거절한다고 명시(1-5 열거값 규칙보다 우선, BE-9) |
+| v0.10 | 2026-10-02 | API 10 ~ 13 구현 · 리뷰 반영 (BE-10) — `diffFromMine`은 최종 선고 형벌에 해당하는 값만 내려가고 **집행유예 여부가 다르면 다른 형벌로 본다**고 명시하고 유예 기간 차이 `suspensionMonthsDiff` 추가(API 10), 내 판결 한 줄 요약에서 같은 태그가 ↑ · ↓ 양쪽에 있으면 먼저 고른 방향에만 남기고 조사는 끝의 한글 · 숫자 기준으로 `을` · `를`을 고른다고 명시(판결 응답 공통 형식), 공개 요청(API 11 · 13)은 상태를 옮기기 전에 검수한 AI · 재판부 판결이 등록돼 있는지 먼저 확인한다고 명시, 공개 사건에 그 판결이 없으면 `500 INTERNAL_ERROR`로 둔다고 명시(API 10 · 12) |
+| v0.11 | 2026-10-02 | 사건 정보 섹션 표시 방식 팀 결정 반영 (BE-17) — API 6 `content`에는 항목마다 줄바꿈(`\n`)이 들어갈 수 있고 화면은 그대로 보여 준다고 명시, 양측 주장 섹션 위 안내 문구는 응답에 없고 화면 고정 문구라고 명시 (ERD v1.9 · 정보 구조 v1.10) |
+| v0.12 | 2026-10-06 | 기획 단계 리뷰 준비 회의 결정 반영 (COMMON-16) — 내 판결 한 줄 요약 문장 틀을 확정(6장 #7, 판결 응답 공통 형식) |
+| v0.13 | 2026-10-06 | 판단 요소별 요약어 기준 확정 반영 (BE-26, 구현 BE-11) — `preToFinal.direction` 세부 규칙 확정(6장 #3), `ruleSentences` 문장 틀을 요소별 요약어 기준으로 확정(6장 #4), 내 판결 한 줄 요약 방향별 태그 수 제한 없음으로 정정(6장 #7), API 14 예시 응답의 `judgments.USER.summary` · `matrix`(요소 7 ALL_SAME 추가) · `ruleSentences`를 요약어 기준 · 서로 일치하도록 갱신, 판결 응답 공통 형식의 USER(MVP) 예시 문구도 요약어 기준으로 정정(PR #67 리뷰) |
+| v0.14 | 2026-10-08 | 11 · 12차 회의 반영 (COMMON-20) — API 15(AI 비교 분석)를 보류로 표시(REQ-063 확장 범위 제외, 4 · 5장 · 6장 #6), 판결 성향 테스트 · 마이페이지 · 관리자 API는 설계 전이라 7장에 후보만 기록 |
 
 ---
 
@@ -268,6 +273,8 @@ json
 - **열린 섹션(`lastReviewedStep + 1`)까지만** 본문을 넣는다. 잠긴 섹션은 번호만 `lockedSteps`에 넣는다(개발자 도구로 미리 보기 방지).
 - `law`: 섹션 ④가 열리면 채운다.
 - 용어 설명(`case_section` `LAW_TERM`)은 섹션 ④ `items`에 넣지 않고 `law.terms`로만 보낸다.
+- `content`에는 항목마다 줄바꿈(`\n`)이 들어갈 수 있다. 화면은 줄바꿈을 그대로 보여 준다(v0.11, ERD v1.9).
+- 양측 주장(`PROSECUTOR` · `DEFENSE`) 섹션 위 안내 문구는 응답에 넣지 않는다. 화면 고정 문구다(정보 구조 S-04).
 
 json
 
@@ -416,7 +423,7 @@ json
 | `factors[].evidence` | `null` | `null` | 판결문 근거 문장 |
 - `factors`에는 **고려한 요소만** 들어간다. 없는 요소는 "—"(ERD 결정 #1).
 - `summary`는 S-09 판결 카드의 한 줄 요약이다.
-  - **USER (MVP)**: 사용자가 고른 요소의 요약 태그(`factor.summary_tag`)를 방향별로 모아 서버가 규칙 문장으로 만든다. AI를 부르지 않는다. 문장 틀(제안): "`{↑ 태그들}`을 무겁게 보고 `{↓ 태그들}`을 감안한 판단". ↑만 있으면 "`{↑ 태그들}`을 무겁게 본 판단", ↓만 있으면 "`{↓ 태그들}`을 감안한 판단", 고른 요소가 없으면 "판단 요소를 고르지 않은 판단". 같은 태그는 한 번만 쓴다. 예: 요소 1(`피해 규모`, ↑) · 3(`범행 방식`, ↑) · 6(`반성`, ↓) → "피해 규모 · 범행 방식을 무겁게 보고 반성을 감안한 판단"
+  - **USER (MVP)**: 사용자가 고른 요소의 요약 태그(`factor.summary_tag`)를 방향별로 모아 서버가 규칙 문장으로 만든다. AI를 부르지 않는다. 문장 틀 **확정 (COMMON-16, 2026-10-06)**: "`{↑ 태그들}`을 무겁게 보고 `{↓ 태그들}`을 감안한 판단". ↑만 있으면 "`{↑ 태그들}`을 무겁게 본 판단", ↓만 있으면 "`{↓ 태그들}`을 감안한 판단", 고른 요소가 없으면 "판단 요소를 고르지 않은 판단". 같은 태그는 한 번만 쓴다. 같은 태그를 가진 요소를 하나는 ↑, 다른 하나는 ↓로 골랐으면 **먼저 고른(표시 순서가 앞선) 방향에만** 남긴다 — 한 사건 안의 여러 요소가 같은 태그를 가질 수 있어(ERD) 그대로 두면 "A를 무겁게 보고 A를 감안한 판단"처럼 스스로 모순되는 문장이 된다 (BE-10). 태그 뒤 조사는 받침에 따라 `을` · `를`을 고른다. 태그가 괄호 · 문장부호로 끝날 수 있으므로(`반성(자백)`) 끝에서부터 거슬러 올라가 처음 만나는 한글 또는 숫자로 판정한다(숫자는 한글로 읽은 소리 기준, `전과 3` → `을`) (BE-10). 예: 요소 2(`흉기 사용`, ↑) · 6(`피해자의 부양 가족`, ↑) · 7(`범행 인정 · 반성`, ↓) → "흉기 사용 · 피해자의 부양 가족을 무겁게 보고 범행 인정 · 반성을 감안한 판단"
   - **USER (확장, REQ-062)**: AI 비교 분석이 `DONE`이면 `perspectives.USER.text`(API 15)로 교체해 보여 준다. 실패하거나 생성 중이면 MVP 규칙 문장을 그대로 쓴다.
   - **AI · COURT**: 판결을 등록할 때 팀이 입력한 값. 없으면 `null`이고 카드에서 한 줄 요약을 숨긴다.
 
@@ -429,12 +436,13 @@ json
 json
 
 ```json
-{  "judgment": { "subjectType": "AI", "penaltyType": "PRISON", "prisonMonths": 144, "suspensionMonths": null, "…": "…" },  "myJudgment": { "subjectType": "USER", "penaltyType": "PRISON", "prisonMonths": 180, "suspensionMonths": null, "…": "…" },  "diffFromMine": { "samePenaltyType": true, "prisonMonthsDiff": -36, "fineAmountDiff": null },  "references": ["형법 제250조", "살인범죄 양형기준", "유사 판례 5건"]}
+{  "judgment": { "subjectType": "AI", "penaltyType": "PRISON", "prisonMonths": 144, "suspensionMonths": null, "…": "…" },  "myJudgment": { "subjectType": "USER", "penaltyType": "PRISON", "prisonMonths": 180, "suspensionMonths": null, "…": "…" },  "diffFromMine": { "samePenaltyType": true, "prisonMonthsDiff": -36, "fineAmountDiff": null, "suspensionMonthsDiff": null },  "references": ["형법 제250조", "살인범죄 양형기준", "유사 판례 5건"]}
 ```
 
 - 공개 AI 판결(`AI`, `is_published = true`)을 DB에서 읽기만 한다. **AI를 호출하지 않는다**(시퀀스 6장).
-- `diffFromMine`: MVP는 숫자 차이만. 형벌 종류는 **최종 선고 형벌**(`reducedTo`가 있으면 그 값, v0.4)로 비교한다. 형벌 종류가 다르면 `prisonMonthsDiff` · `fineAmountDiff` 모두 `null`이고 `samePenaltyType: false`다. 화면이 "내 판결보다 6개월 짧음"으로 표시한다. 문구 규칙은 미정(요구사항 15장).
+- `diffFromMine`: MVP는 숫자 차이만. 형벌 종류는 **최종 선고 형벌**(`reducedTo`가 있으면 그 값, v0.4)로 비교한다. 형벌 종류가 같아도 그 종류에 해당하는 값만 내려간다 — `PRISON`은 `prisonMonthsDiff`, `FINE`은 `fineAmountDiff`, `DEATH` · `LIFE`는 형량 값이 없어 둘 다 `null`이다(BE-10). **집행유예 여부가 다르면 같은 형벌로 보지 않는다** — 징역 2년 집행유예 3년과 징역 2년 실형은 개월 수가 같아도 같은 판결이 아니다(API 14 형벌 무게 순서 `SUSPENDED` < `PRISON`, BE-10). **둘 다 집행유예면 유예 기간도 `suspensionMonthsDiff`로 비교한다** — 징역 2년 집행유예 1년과 징역 2년 집행유예 3년은 징역 개월 수가 같아도 같은 판결이 아니다. 둘 다 집행유예가 아니면 `null`이다 (BE-10). 형벌 종류가 다르면 `prisonMonthsDiff` · `fineAmountDiff` 모두 `null`이고 `samePenaltyType: false`다. 화면이 "내 판결보다 6개월 짧음"으로 표시한다. 문구 규칙은 미정(요구사항 15장).
 - `references`: 참고 자료 태그. `judgment.reference_tags`(AI 판결 등록 시 팀이 입력, ERD v1.3)에서 읽는다. 값이 없으면 빈 배열. (컬럼명은 SQL 예약어 `REFERENCES`를 피해 `reference_tags`로 두고, 응답 필드명은 `references` 그대로 쓴다.)
+- 공개 사건인데 검수한 AI 판결(`AI`, `is_published = true`)이 등록돼 있지 않으면 `500 INTERNAL_ERROR`다. 사용자가 고칠 수 없는 데이터 문제라 거절 조건으로 두지 않는다 (BE-10).
 
 | 거절 | 조건 |
 | --- | --- |
@@ -448,6 +456,7 @@ json
 
 - `VERDICT_CONFIRMED`면 `AI_REVEALED`로 바꾼다. 이미 `AI_REVEALED` · `COMPLETED`면 상태를 그대로 두고 현재 상태를 돌려준다.
 - (확장) 처음 공개할 때 `comparison_analysis`를 `PENDING`으로 만들고 AI 비교 분석 생성을 비동기로 시작한다(시퀀스 8장). 응답은 생성을 기다리지 않는다.
+- 상태를 옮기기 전에 **그다음 화면이 읽을 판결(공개 AI · 재판부 판결)이 등록돼 있는지 먼저 확인한다.** 확인하지 않으면 판결이 없는 사건에서 상태만 넘어가고 그 뒤 조회가 매번 500이 되어 되돌릴 방법 없이 결과 화면에 갇힌다 (BE-10).
 
 | 거절 | 조건 |
 | --- | --- |
@@ -467,6 +476,7 @@ json
 
 - `source`는 확장(REQ-055). `case_source` 중 `is_final = true`인 행의 `source_org`. 사건번호 · 법원명 · 선고일은 **절대 넣지 않는다**(FR-5-3).
 - `deidentifiedItems`는 확장(FR-5-2 "이 사건에 대하여"). `legal_case.deidentified_items`에서 읽는다. 비식별화한 **항목 종류**만 내려가고 원래 값은 넣지 않는다. 값이 없으면 빈 배열.
+- 공개 사건인데 검수한 재판부 · AI 판결이 등록돼 있지 않으면 `500 INTERNAL_ERROR`다 (API 10과 같은 이유, BE-10).
 
 | 거절 | 조건 |
 | --- | --- |
@@ -479,6 +489,7 @@ json
 **요청**: 본문 없음. **응답 200**: `{ "status": "COMPLETED" }`
 
 - `AI_REVEALED`면 `COMPLETED`로 바꾼다. 이미 `COMPLETED`면 그대로 돌려준다.
+- 상태를 옮기기 전에 **그다음 화면이 읽을 판결(공개 AI · 재판부 판결)이 등록돼 있는지 먼저 확인한다.** 확인하지 않으면 판결이 없는 사건에서 상태만 넘어가고 그 뒤 조회가 매번 500이 되어 되돌릴 방법 없이 결과 화면에 갇힌다 (BE-10).
 
 | 거절 | 조건 |
 | --- | --- |
@@ -493,17 +504,17 @@ json
 json
 
 ```json
-{  "preToFinal": {    "preJudgment": { "rangeOptionId": 11, "label": "실형 5년 이상 ~ 10년 미만", "factorIds": [1, 2] },    "finalJudgmentText": "징역 15년",    "direction": "HEAVIER",    "summaryText": "사건을 모두 확인한 뒤, 처음 생각보다 무거운 판결을 내렸어요."  },  "judgments": {    "USER": { "subjectType": "USER", "summary": "범행 방식 · 피해 결과를 무겁게 보고 반성을 감안한 판단", "…": "…" },    "AI": { "subjectType": "AI", "summary": "다투다 벌어진 범행과 공탁 · 반성을 함께 저울질한 판단", "…": "…" },    "COURT": { "subjectType": "COURT", "summary": "유족의 처벌 의사를 무겁게 보면서도 공탁과 반성을 감안한 판단", "…": "…" }  },  "matrix": [    { "factorId": 2, "label": "다투던 중 집에 있던 흉기를 집어 들었다", "revealStage": "OVERVIEW",      "user": "UP", "ai": "UP", "court": "UP", "category": "ALL_SAME" },    { "factorId": 6, "label": "피해자에게는 부양하던 어린 자녀 2명이 있다", "revealStage": "DETAIL",      "user": "UP", "ai": null, "court": "UP", "category": "DIVERGED" },    { "factorId": 9, "label": "피해 회복을 위해 5,000만 원을 공탁했다", "revealStage": "DETAIL",      "user": null, "ai": "DOWN", "court": "DOWN", "category": "ONLY_ME_MISSED" }  ],  "ruleSentences": {    "common": ["세 판결 모두 다투던 중 집에 있던 흉기를 집어 든 점을 형량을 높이는 요소로 봤어요."],    "differences": ["AI와 재판부는 5,000만 원을 공탁한 점을 고려했지만, 내 판결에서는 고려하지 않았어요."]  },  "analysisAvailable": false}
+{  "preToFinal": {    "preJudgment": { "rangeOptionId": 11, "label": "실형 5년 이상 ~ 10년 미만", "factorIds": [1, 2] },    "finalJudgmentText": "징역 15년",    "direction": "HEAVIER",    "summaryText": "사건을 모두 확인한 뒤, 처음 생각보다 무거운 판결을 내렸어요."  },  "judgments": {    "USER": { "subjectType": "USER", "summary": "흉기 사용 · 피해자의 부양 가족을 무겁게 보고 범행 인정 · 반성을 감안한 판단", "…": "…" },    "AI": { "subjectType": "AI", "summary": "다투다 벌어진 범행과 공탁 · 반성을 함께 저울질한 판단", "…": "…" },    "COURT": { "subjectType": "COURT", "summary": "유족의 처벌 의사를 무겁게 보면서도 공탁과 반성을 감안한 판단", "…": "…" }  },  "matrix": [    { "factorId": 2, "label": "다투던 중 집에 있던 흉기를 집어 들었다", "revealStage": "OVERVIEW",      "user": "UP", "ai": "UP", "court": "UP", "category": "ALL_SAME" },    { "factorId": 6, "label": "피해자에게는 부양하던 어린 자녀 2명이 있다", "revealStage": "DETAIL",      "user": "UP", "ai": null, "court": "UP", "category": "DIVERGED" },    { "factorId": 7, "label": "수사 초기부터 범행을 인정하고 반성하고 있다", "revealStage": "DETAIL",      "user": "DOWN", "ai": "DOWN", "court": "DOWN", "category": "ALL_SAME" },    { "factorId": 9, "label": "피해 회복을 위해 5,000만 원을 공탁했다", "revealStage": "DETAIL",      "user": null, "ai": "DOWN", "court": "DOWN", "category": "ONLY_ME_MISSED" }  ],  "ruleSentences": {    "common": ["세 판결 모두 흉기 사용을 형량을 높이는 요소로, 범행 인정 · 반성을 형량을 낮추는 요소로 봤어요."],    "differences": ["AI와 재판부는 피해 회복 공탁을 고려했지만, 내 판결에서는 고려하지 않았어요.", "피해자의 부양 가족에 대한 판단이 세 판결 사이에서 엇갈렸어요."]  },  "analysisAvailable": false}
 ```
 
-**`preToFinal.direction`** — 사전 판단 구간과 최종 판결을 비교한다(`sentence_range_option.kind` · 개월 범위 사용).
+**`preToFinal.direction`** — 사전 판단 구간과 최종 판결을 비교한다(`sentence_range_option.kind` · 개월 범위 사용). **확정 (BE-11, 2026-10-06)**
 
-| 값 | 기준 (제안) |
+| 값 | 기준 |
 | --- | --- |
 | `HEAVIER` | 최종 판결이 구간보다 무거움 (예: 구간은 집행유예인데 실형, 실형 구간 상한보다 긺) |
 | `SAME` | 최종 판결이 구간 안 |
 | `LIGHTER` | 최종 판결이 구간보다 가벼움 (예: 구간은 실형인데 집행유예) |
-- 형벌 종류의 무게는 `FINE`(벌금, 벌금 집행유예 포함) < `SUSPENDED`(징역 집행유예) < `PRISON`(실형) < `LIFE`(무기징역) < `DEATH`(사형) 순으로 먼저 비교하고, 같은 종류면 개월로 비교한다. 최종 판결은 `reducedTo`가 있으면 그 값(최종 선고 형벌)으로 비교한다(ERD `sentence_range_option` 무겁기 순서와 같다). 무죄는 MVP에서 뺐으므로 비교 대상이 아니다(v0.3). 세부 규칙은 구현 때 테스트 케이스로 확정한다.
+- 형벌 종류의 무게는 `FINE`(벌금, 벌금 집행유예 포함) < `SUSPENDED`(징역 집행유예) < `PRISON`(실형) < `LIFE`(무기징역) < `DEATH`(사형) 순으로 먼저 비교하고(`sentence_range_option.kind` 선언 순서), 같은 종류가 `PRISON`이면 구간의 `min_months`(이상) · `max_months`(미만)로 더 비교한다(하한 미만은 `LIGHTER`, 상한 이상은 `HEAVIER`). 그 외 같은 종류(`FINE` · `SUSPENDED` · `LIFE` · `DEATH`)는 더 세분하지 않고 `SAME`이다. 최종 판결은 `reducedTo`가 있으면 그 값(최종 선고 형벌)으로 비교한다(ERD `sentence_range_option` 무겁기 순서와 같다). 무죄는 MVP에서 뺐으므로 비교 대상이 아니다(v0.3).
 
 **`matrix[].category`** — 와이어프레임 S-09의 분류 태그(FR-6-4).
 
@@ -512,7 +523,7 @@ json
 | `ALL_SAME` | 셋 모두 같게 본 요소 | 세 값이 모두 같음 (셋 다 `null`, 즉 아무도 고려하지 않은 요소는 매트릭스에서 뺀다. ERD 6장과 같음. 단, (확장, REQ-096) 사전 판단에서 고른 요소는 `changeType`을 보여 주기 위해 남기고 `category`는 `null`로 둔다) |
 | `ONLY_ME_MISSED` | 나만 고려하지 않은 요소 | 나는 `null`, AI와 재판부는 같은 방향 |
 | `DIVERGED` | 판단이 엇갈린 요소 | 그 밖 |
-- `ruleSentences`: MVP의 공통점 · 차이점. 매트릭스로 만드는 **규칙 문장**이며 AI를 부르지 않는다. 문장 틀은 구현 때 정한다. "정답 · 틀렸다 · 이중 잣대" 표현은 쓰지 않는다(요구사항 11장 톤 원칙 · FR-6-3).
+- `ruleSentences`: MVP의 공통점 · 차이점. 매트릭스로 만드는 **규칙 문장**이며 AI를 부르지 않는다. 문장은 `matrix[].label`(완전한 서술문)이 아니라 `factor.summary_tag`(요소별 요약어)로 만든다 — 라벨을 그대로 쓰면 "~다"로 끝나는 서술문 뒤에 조사가 붙어 비문이 되기 때문이다. 문장 틀은 6장 #4 **확정 (BE-26 · BE-11, 2026-10-06)** 참고. "정답 · 틀렸다 · 이중 잣대" 표현은 쓰지 않는다(요구사항 11장 톤 원칙 · FR-6-3).
 - `judgments.*.summary`: 판결 카드의 한 줄 요약(판결 응답 공통 형식 참고). `USER`는 MVP 규칙 문장이다.
 - `analysisAvailable`: (확장) AI 비교 분석을 API 15로 불러올 수 있는지. MVP에서는 항상 `false`.
 - (확장, REQ-096) `matrix[].changeType`에 판단 이유 변화 유형(`NEWLY_LEARNED` 새로 알게 된 요소 / `KEPT` 처음부터 알던 요소 · 판단에 그대로 반영 / `WEIGHT_CHANGED` 이미 알던 요소의 무게가 바뀜 / `null`)을 넣는다. 판별 기준은 요구사항 FR-6-6: `OVERVIEW` 이후 요소가 최종 판결에만 있으면 `NEWLY_LEARNED`, `OVERVIEW` 요소가 사전 · 최종 양쪽에 있으면 `KEPT`, 한쪽에만 있으면 `WEIGHT_CHANGED`. 사전 판단 작용 요소가 있을 때만.
@@ -525,6 +536,8 @@ json
 ---
 
 ### API 15. (확장) AI 비교 분석 — `GET /cases/{caseId}/experience/comparison/analysis`
+
+> **(v0.14) 보류** — AI 비교 분석(REQ-062 · 063)을 11차 회의에서 확장 범위에서 제외했다. 구현하지 않으며, 아래 정의는 결정 기록으로 남긴다. S-09는 API 14의 규칙 문장 · 한 줄 요약을 계속 쓴다.
 
 **응답 200**
 
@@ -561,7 +574,7 @@ json
 | `REVIEWED` | 3, 6, 8 | 7 (그대로 통과), 9 |
 | `VERDICT_CONFIRMED` | 3, 10 | 11 |
 | `AI_REVEALED` | 3, 10, 12 | 11 (그대로 통과), 13 |
-| `COMPLETED` | 3, 10, 12, 14, 15 | 11 · 13 (그대로 통과) |
+| `COMPLETED` | 3, 10, 12, 14 (15 보류) | 11 · 13 (그대로 통과) |
 
 API 1 · 2는 상태와 관계없이 부를 수 있다. 표에 없는 조합은 `409 INVALID_STATE`다.
 
@@ -578,7 +591,8 @@ API 1 · 2는 상태와 관계없이 부를 수 있다. 표에 없는 조합은 
 | S-06 | 8 | `확정하기` → 9 → S-07 |
 | S-07 | 10 | `실제 판결 확인하기` → 11 → S-08 |
 | S-08 | 12 | `세 판결 비교 보기` → 13 → S-09 |
-| S-09 | 14 (→ 15, 확장) | `다른 사건 체험` → S-02 |
+| S-09 | 14 (15는 v0.14 보류) | `다른 사건 체험` → S-02 |
+
 - 모든 화면은 진입 API가 `409 INVALID_STATE`를 돌려주면 `currentStatus`로 1-6 표의 "보낼 화면"으로 이동한다. `404 EXPERIENCE_NOT_FOUND`면 S-02, `404 CASE_NOT_FOUND`면 S-14로 간다. 진입 전에 API 3을 따로 부르지 않는다(6장 #1 확정, 요청 1회 절약).
 - S-04 · S-05는 같은 API 6을 쓰므로, `PRE_JUDGED` · `REVIEWING`에서 S-05에 들어오면 API 6이 성공한다. 이때는 응답의 `status`가 `REVIEWED`가 아니면 화면이 S-04로 보낸다.
 
@@ -590,8 +604,25 @@ API 1 · 2는 상태와 관계없이 부를 수 있다. 표에 없는 조합은 
 | --- | --- | --- | --- |
 | 1 | 체험 상태 확인을 API 3으로 먼저 할지, 각 API의 `INVALID_STATE`로 처리할지 | **확정 (v0.3)**: 각 API의 `INVALID_STATE`로 처리 (요청 수 절약, 1-6 · 5장) | 프론트 라우팅 구조 (기술 스택 5장) |
 | 2 | 쿠키 이름 · 기간, 프론트 · API 도메인 구조 | 도메인 구조 **확정 (v0.3)**: 같은 도메인, Nginx `/api` 프록시(기술 스택 8장). 쿠키 `NLNB_AID` · 1년은 제안 유지(요구사항 15장) | CORS · SameSite 설정 |
-| 3 | `preToFinal.direction` 세부 비교 규칙 | 형벌 종류 → 개월 순 비교 | S-09 한 줄 요약 문구 |
-| 4 | 규칙 문장(`ruleSentences`) 문장 틀 | 분류 태그별 1개 틀 | S-09 공통점 · 차이점 |
+| 3 | `preToFinal.direction` 세부 비교 규칙 | **확정 (BE-11, 2026-10-06)**: 형벌 종류를 `FINE < SUSPENDED < PRISON < LIFE < DEATH` 순(`sentence_range_option.kind` 선언 순서)으로 먼저 비교한다. 종류가 다르면 그 순서로 `HEAVIER`/`LIGHTER`, 같은 종류가 `PRISON`이면 구간의 `min_months`/`max_months`(상한 미만 기준)로 더 비교하고, 그 외 종류는 세분하지 않고 `SAME`이다. 감경이 있으면 최종 선고 형벌(`reducedTo`)로 비교한다 | S-09 한 줄 요약 문구 |
+| 4 | 규칙 문장(`ruleSentences`) 문장 틀 | **확정 (BE-26 · BE-11, 2026-10-06)**: 요소 라벨(완전한 서술문)이 아니라 요약어(`factor.summary_tag`)로 만든다. `ALL_SAME`은 방향별로 요약어를 모아 "세 판결 모두 {↑ 요약어들}을 형량을 높이는 요소로[, {↓ 요약어들}을 형량을 낮추는 요소로] 봤어요.", `ONLY_ME_MISSED`는 "AI와 재판부는 {요약어들}을 고려했지만, 내 판결에서는 고려하지 않았어요.", `DIVERGED`는 "{요약어들}에 대한 판단이 세 판결 사이에서 엇갈렸어요."로 한 문장씩 만든다. 해당 분류가 없으면 각각 "세 판결이 똑같이 본 판단 요소는 없어요." / "세 판결 사이에 판단이 엇갈린 점은 없어요."를 넣는다 | S-09 공통점 · 차이점 |
 | 5 | 무죄 선택 처리 (요구사항 15장) | **확정 (v0.3)**: MVP에서 무죄 선택지를 뺀다. 이후 도입 여부는 추후 검토 | API 8 · 9 · 14 |
-| 6 | API 15 재조회 간격 · 최대 횟수, AI 생성 시간 초과 기준 | 3초 간격, 최대 10회 / 30초 | 확장 단계 |
-| 7 | 내 판결 한 줄 요약(`summary`) 규칙 문장 틀 · 태그 수 제한 | 방향별 태그 나열 1개 틀, 방향별 태그 최대 3개 | S-09 판결 카드 |
+| 6 | API 15 재조회 간격 · 최대 횟수, AI 생성 시간 초과 기준 | ~~3초 간격, 최대 10회 / 30초~~ — v0.14: API 15 보류로 대상 없음 | 확장 단계 |
+| 7 | 내 판결 한 줄 요약(`summary`) 규칙 문장 틀 · 태그 수 제한 | **확정 (COMMON-16 · BE-26, 2026-10-06)**: 423줄 문장 틀(`{↑ 태그들}을 무겁게 보고 {↓ 태그들}을 감안한 판단` 등)을 확정. 방향별 태그 수는 **제한하지 않는다**(BE-26) — 요소마다 서로 다른 요약어가 붙어 많이 고르면 문장이 길어질 수 있지만, S-09에서 실제로 문제가 되면 상한(예: 최대 3개 + "외 N개")을 다시 검토한다 | S-09 판결 카드 |
+
+---
+
+## 7. (확장) 추가될 API 후보 (v0.14)
+
+11 · 12차 회의에서 나온 확장 기능에 필요한 API 후보다. **경로 · 요청 · 응답은 아직 설계하지 않았다.** 흐름은 `user-flow.md` 3장, 데이터는 ERD 8장(제안)을 따른다.
+
+| 후보 | 용도 | 화면 | 관련 REQ |
+| --- | --- | --- | --- |
+| 성향 테스트 문항 조회 | 문항 · 선택지 목록 | S-15 | 112 |
+| 성향 테스트 응답 제출 | 응답 저장 → 4글자 코드 계산 · 결과 저장(익명 ID) | S-15 → S-16 | 112 · 113 · 117 |
+| 내 성향 결과 조회 | 현재 결과 · 축별 점수 | S-16 · S-17 | 113 · 127 |
+| 유형 설명 조회 (공개) | 공유 링크용. 개인 응답 · 점수 없음 | S-16 공유 | 116 |
+| 마이페이지 조회 | 성향 · 성향 변화 흐름 · 종합 성향 · 체험한 사건 목록 | S-17 | 119 · 127 |
+| 관리자 검수 | 사건(DRAFT) · AI 판결(PENDING) 목록 · 상세 · 승인 · 반려 · 공개 | S-19 | 047 · 133 (BE-33) |
+
+- 판결 체험의 성향 갱신(REQ-118)은 별도 API 없이 API 13(비교 공개)이 `COMPLETED`로 바꿀 때 서버가 함께 처리하는 안을 제안한다.

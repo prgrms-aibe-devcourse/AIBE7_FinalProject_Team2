@@ -58,10 +58,11 @@ class ExperienceServiceTest {
 		String sql = """
 			INSERT INTO legal_case (title, crime_type, charge_name, short_intro, overview, applied_law,
 			    statutory_penalty_text, status)
-			VALUES ('시험 사건', 'MURDER', '살인', '소개', '개요', '형법 제250조', '사형, 무기 또는 5년 이상의 징역', ?)
+			VALUES (?, 'MURDER', '살인', '소개', '개요', '형법 제250조', '사형, 무기 또는 5년 이상의 징역', ?)
 			RETURNING id""";
-		caseId = jdbc.queryForObject(sql, Long.class, "PUBLISHED");
-		draftCaseId = jdbc.queryForObject(sql, Long.class, "DRAFT");
+		// legal_case.title은 유니크 제약이 있어(V7) 두 행을 서로 다른 제목으로 만든다
+		caseId = jdbc.queryForObject(sql, Long.class, "시험 사건", "PUBLISHED");
+		draftCaseId = jdbc.queryForObject(sql, Long.class, "시험 사건 (초안)", "DRAFT");
 		jdbc.update("""
 			INSERT INTO penalty_rule (case_id, penalty_type, allowed_min, allowed_max, suspension_allowed, display_order)
 			VALUES (?, 'PRISON', 60, 360, true, 1)""", caseId);

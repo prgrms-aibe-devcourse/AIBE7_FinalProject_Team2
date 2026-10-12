@@ -8,3 +8,6 @@ __pycache__/
 
 # case-extractor 가상 환경
 .venv/
+
+# API 키 파일 (루트 .gitignore에도 있지만 이 폴더만 따로 쓸 때를 위해)
+.env

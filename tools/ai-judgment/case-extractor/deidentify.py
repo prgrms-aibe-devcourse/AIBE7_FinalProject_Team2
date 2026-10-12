@@ -102,3 +102,48 @@ def residual_check(texts):
                 continue
             warnings.append(f"{where}: 실명일 수 있음")
     return errors, warnings
+
+
+# 원본 판결문 정보 (case_source, BE-31). 마스킹하기 **전에** 로컬에서만 꺼내 내부 파일 · DB에만 둔다. API로 보내지 않는다
+DECIDED_AT = re.compile(r"(?:판결\s?)?선\s?고\s*((?:19|20)\d{2})\s?\.\s?(\d{1,2})\s?\.\s?(\d{1,2})\s?\.")
+# 사건번호의 사건 부호 → 심급 (ERD case_source.court_level)
+COURT_LEVELS = (
+    (re.compile(r"(?:고합|고단|고정|고약|감고|전고|초기)"), "FIRST"),
+    (re.compile(r"(?:감노|전노|노)"), "APPEAL"),
+    (re.compile(r"(?:감도|전도|도)"), "SUPREME"),
+)
+
+
+def extract_source_info(text):
+    """판결문 원문에서 사건번호 · 법원명 · 선고일 · 심급을 꺼낸다. 못 찾은 값은 None (설정 파일로 직접 넣는다).
+
+    판결문 머리(사건 · 법원 · 선고)가 앞에 오므로 각각 처음 나온 값을 쓴다.
+    """
+    case_number = CASE_NUMBER.search(text)
+    court = COURT.search(text)
+    decided = DECIDED_AT.search(text)
+    number = re.sub(r"\s", "", case_number.group(0)) if case_number else None
+    level = None
+    if number:
+        for pattern, name in COURT_LEVELS:
+            if pattern.search(number):
+                level = name
+                break
+    return {
+        "caseNumber": number,
+        "courtName": re.sub(r"\s", "", court.group(0)) if court else None,
+        "decidedAt": (f"{decided.group(1)}-{int(decided.group(2)):02d}-{int(decided.group(3)):02d}"
+                      if decided else None),
+        "courtLevel": level,
+    }
+
+
+def date_in_text(iso_date, text):
+    """YYYY-MM-DD 날짜가 원문에 실제로 나오는지 (예: 2024. 1. 10. · 2024.01.10 · 2024년 1월 10일). 사건 발생일 확인용 (BE-38)."""
+    try:
+        year, month, day = (int(x) for x in iso_date.split("-"))
+    except (AttributeError, ValueError):
+        return False
+    pattern = rf"(?<!\d){year}\s*[.년]\s*0?{month}\s*[.월]\s*0?{day}(?!\d)"  # 앞뒤가 다른 숫자에 붙지 않게
+    return re.search(pattern, text) is not None
+
