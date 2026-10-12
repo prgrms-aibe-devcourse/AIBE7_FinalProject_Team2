@@ -7,7 +7,7 @@
 | v1.0 | 2026-10-08 | 초안 (COMMON-20)<br>• MVP 구현 기준 흐름(2장): 화면 이동 · 분기 · 서버 저장 시점 · 재진입 · 예외 이동<br>• 11차 회의(MVP 이후 확장 계획) · 12차 회의(판결 성향 테스트 · 판사의 책상 메인 · AI 활용)를 반영한 확장 목표 흐름(3장)<br>• 흐름 관련 미결정 사항(4장). 성향 그래프는 4축으로 확정 |
 | **v1.1** | **2026-10-09** | **COMMON-21 반영** — 3장 AI 활용 표 주석에서 임베딩 모델 · 판례 저장소 범위 확정 표기 |
 
-**기준**: 코드 `develop` 0ac871a(MVP 구현 완료) · 정보 구조(`information-architecture.md`) v1.11 · 기능 명세(`functional-specification.md`) v3.5 · 요구사항(`requirements-specification.md`) v5.8 · API 명세(`api-specification.md`) v0.14
+**기준**: 코드 `develop` 0ac871a(MVP 구현 완료) · 정보 구조(`information-architecture.md`) v1.11 · 기능 명세(`functional-specification.md`) v3.6 · 요구사항(`requirements-specification.md`) v5.9 · API 명세(`api-specification.md`) v0.14
 
 > 이 문서는 사용자가 **무엇을 보고, 무엇을 고르고, 어디로 가는지**를 흐름으로 보여 준다. 화면 구성 · 진입 조건 · 체험 상태 규칙의 원본은 정보 구조이고, 내용이 다르면 정보 구조가 우선한다.
 > 2장은 **구현된 MVP**, 3장은 회의에서 정한 **확장 목표안**이다. 3장의 새 화면 ID(S-15 ~ S-19)와 경로는 제안이며, 상세 설계에서 바뀔 수 있다.
