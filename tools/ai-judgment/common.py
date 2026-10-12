@@ -12,6 +12,7 @@ PROMPT_DIR = TOOL_DIR / "prompts"
 # 프롬프트를 고치면 버전을 올린다. ai_generation.prompt_version에 그대로 기록된다.
 PROMPT_VERSION = "judgment-v2"
 CONTAMINATION_PROMPT_VERSION = "contamination-v2"
+AXIS_PROMPT_VERSION = "axis-v1"  # 판단 요소 가치관 축 분류 투표 (BE-49)
 
 # 법정형에서 고르는 형벌 (ERD v1.4 penalty_type). 무죄는 MVP에서 뺐다.
 PENALTY_TYPES = ("DEATH", "LIFE", "PRISON", "FINE")
