@@ -5,6 +5,7 @@
 | 버전 | 날짜 | 내용 |
 | --- | --- | --- |
 | v1 | 2026-10-12 | 초안 — WBS v1.5(COMMON-23) 업무 재조정으로 RAG 본류를 넘기며 작성. 작성 김해송 → 인수 B 김현중(BE-52 · BE-54), 관련 D 정민석(BE-53) · C 백승호(BE-55) |
+| v1.2 | 2026-10-12 | 정리 결과 공유 반영(비공개 #16 `work/rag-store/`) — 5-1은 공유본으로 바로 R__40을 다시 만드는 방법을 권장으로, 남은 개인정보 경고 12건 오탐 확인 반영 |
 | v1.1 | 2026-10-12 | #102 리뷰 반영 — #99 머지 반영, 5-1 대안 · 공통 후속 작업 분리 · `out/rag/` 없이 진행하는 방법 추가, 건수 차이(77 · 68, 28 · 27) 설명, 5장 담당 제안 |
 
 > 반대 방향 인계(7.6.8 캐릭터 · 7.7.1 메인, B 김현중 → A 김해송)는 B가 따로 넘긴다(WBS v1.6).
@@ -52,11 +53,12 @@
 | `seed/R__40_rag_precedent.sql` | 판례 68건(law.go.kr 53 · LBox 15, 보류 21). 손으로 고치지 않는다 |
 | `work/BE-50-precedent-candidates.json` · `.md` | 후보 목록(전체 240건, 조건 통과 · 중복 제외 109건). `tools/rag_precedent_candidates.py`로 만든다 |
 | `work/rag-precedent-holds.json` | 판례별 사용 보류 `{판례 키: 사유}` |
+| `work/rag-store/` (비공개 #16) | **판례 정리 결과 공유본** — law.go.kr 53건의 `precedents/`(요약 · 양형 이유 · 형량 · 메타데이터, 사건번호는 해시만) · `embeddings/`. LBox 없음, 판결문 원문 없음. `rag_store.py`의 `--out`으로 쓴다 |
 | `raw/BE-50/` (git 제외) | 판결문 원문. 각자 스크립트로 다시 받는다 |
 
 ### 3-3. 로컬에만 있는 중간 결과 (git 제외)
 
-`tools/ai-judgment/out/rag/` — `precedents/`(정리 결과 77건) · `embeddings/` · `manual/inputs`(마스킹 입력). **다른 사람 PC에는 없다.** 77건(law.go.kr 53 · LBox 24)과 R__40 68건의 차이 9건은 비공개 #14 리뷰에서 문장 조각 비교 버그를 고친 뒤 law.go.kr 사본으로 판정돼 후보에서 빠진 LBox 판례다(`sql --candidates`가 후보에 없는 판례를 적재하지 않음). R__40을 다시 만들려면 이 폴더가 필요하므로, 다시 만들 일이 생기면 김해송에게 파일을 받거나 처음부터 build · embed를 다시 돌린다.
+`tools/ai-judgment/out/rag/` — `precedents/`(정리 결과 77건) · `embeddings/` · `manual/inputs`(마스킹 입력). 김해송 PC에만 있다. **law.go.kr 53건은 비공개 `work/rag-store/`에 공유했으므로**(3-2) 인수자는 그 폴더를 쓰면 된다. 77건(law.go.kr 53 · LBox 24)과 R__40 68건의 차이 9건은 비공개 #14 리뷰에서 문장 조각 비교 버그를 고친 뒤 law.go.kr 사본으로 판정돼 후보에서 빠진 LBox 판례다(`sql --candidates`가 후보에 없는 판례를 적재하지 않음). R__40을 다시 만들려면 이 폴더가 필요하므로, 다시 만들 일이 생기면 김해송에게 파일을 받거나 처음부터 build · embed를 다시 돌린다.
 
 ## 4. 동작 요약 (넘겨받는 쪽이 알아야 할 규칙)
 
@@ -77,15 +79,21 @@ R__40에서 LBox 15건을 빼고 다시 만든다. 지금 `rag_store.py`에는 �
 
 | 방법 | 필요한 것 | 내용 |
 | --- | --- | --- |
+| **C. 공유본으로 다시 만들기 (권장)** | 비공개 `work/rag-store/` (#16 머지) | 공유본에는 LBox가 없으므로 아래 한 번이면 **LBox 행이 빠진 R__40**이 나온다. law.go.kr 53건은 지금 R__40의 행과 같다(2026-10-12 확인). 코드 수정이 필요 없다 |
 | A. 출처 제외 옵션 | `out/rag/` | `rag_store.py sql`에 출처 제외 옵션(예: `--exclude-source LBOX`)을 추가하고 R__40을 다시 만든다 |
 | B. 후보 목록에서 LBox 끄기 | `out/rag/` | 후보 스크립트(`tools/rag_precedent_candidates.py`)에서 LBox 수집을 끄고 후보 목록을 다시 만든 뒤 `sql --candidates`로 R__40을 다시 만든다(후보에 없는 판례는 적재하지 않는다) |
-| C. 공유받은 정리 결과로 다시 만들기 | 없음 (공유분 사용) | 김해송이 `out/rag/`에서 **LBox를 뺀 law.go.kr 53건의 정리 결과 · 임베딩**을 비공개 저장소(예: `work/rag-store/`)로 넘기고, B는 그 폴더를 `--out`으로 써서 A · B 중 하나로 다시 만든다. 무료 키 하루 20회 한도 때문에 정리부터 다시 하기는 어렵다 |
 
-`out/rag/`는 김해송 PC에만 있으므로 B가 혼자 진행하려면 **C의 공유가 먼저**다(공유 여부 · 위치는 팀 확인 후).
+```bash
+# 공개 저장소 tools/ai-judgment에서. P = 비공개 저장소 체크아웃 (../../backend/private-seed)
+python3 rag_store.py sql --out $P/work/rag-store --candidates $P/work/BE-50-precedent-candidates.json \
+    --holds $P/work/rag-precedent-holds.json --output $P/seed/R__40_rag_precedent.sql
+```
+
+A · B는 `out/rag/`(김해송 PC)가 필요하고, 무료 키 하루 20회 한도 때문에 정리부터 다시 하기도 어렵다. C를 쓴다.
 
 **어느 방법이든 이어서 할 일 (공통 후속)**
 
-- 비공개 저장소 `raw/BE-50/lbox/` · 로컬 `out/rag/precedents/LBOX-*` · `embeddings/LBOX-*`를 지운다
+- 비공개 저장소 `raw/BE-50/lbox/`(각자 로컬) · 후보 목록의 LBox 항목 처리(후보 스크립트에서 LBox 수집 끄기 등)를 정리한다
 - 문서(`rag-precedent-sources.md` 1 · 2 · 6장, ERD 3-4, 도구 README)의 "LBox 사용 보류"를 **"사용 불가 · 삭제"**로 고친다. 이때 `rag-precedent-sources.md`의 살인 기수 건수도 이 문서(1장)와 맞춘다
 
 ### 5-2. law.go.kr 인증키 발급 · 본문 다시 받기 (담당 제안: 키를 신청한 사람)
@@ -139,4 +147,4 @@ LBox가 빠지면서 검색 대상이 law.go.kr 47건(살인 기수 27건)뿐이
 | 발생일 | 범행 문장 앞 날짜로 추정. law.go.kr 후보 53건 중 18건은 못 찾았고, 6건은 선고일과 3년 넘게 차이 나 `flags.checks`에 표시 |
 | 주된 피고인 | 피고인이 여럿이면 살인으로 처벌된 주된 피고인 한 명 기준으로 정리했다(`notes`) |
 | 소년 형량 | 부정기형 2건은 장기를 `prison_months`로 넣었고, 소년법으로 무기징역을 완화한 1건이 있다(`notes`). 다른 판례와 형량을 바로 비교하기 어렵다 |
-| 판례 정리 품질 | 모델 · 세션마다 요약 문체가 조금 다르다(Gemini 5건 · 대화형 세션 나머지). 형식 · 남은 개인정보 검사는 모두 통과 |
+| 판례 정리 품질 | 모델 · 세션마다 요약 문체가 조금 다르다(Gemini 5건 · 대화형 세션 나머지). 형식 검사는 모두 통과. 남은 개인정보 검사 경고가 있던 12건은 사람이 확인해 **오탐**으로 판정했다(역할어 뒤 일반 명사, 실명 없음 — 공유본 `privacyWarningsReview`) |
