@@ -14,6 +14,7 @@ import com.team2.project.rag.repository.RagPrecedentRepository;
 import java.util.Collection;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 /**
@@ -26,6 +27,7 @@ import org.springframework.stereotype.Service;
  * - 서비스 트랜잭션을 두지 않는다. 임베딩 HTTP 호출(시간 제한 · 재시도 대기)이 DB 연결을 붙잡지 않게, 조회는 저장소마다
  *   짧게 끝낸다 (legal_case는 개요 · 범죄 유형 같은 기본 칼럼만 읽는다)
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class RagSearchService {
@@ -56,6 +58,11 @@ public class RagSearchService {
 		List<String> excludeHashes = caseSourceRepository.findCaseNumbersByCaseId(caseId).stream()
 			.map(CaseNumberHash::of)
 			.toList();
+		if (excludeHashes.isEmpty()) {
+			// 사건번호 값은 로그에 남기지 않는다 (case_source는 내부 전용)
+			log.warn("원본 판결문 사건번호가 없어 자기 사건 제외 없이 유사 판례를 검색합니다 (caseId={}, 직접 제외 그룹 {}개)", caseId,
+				excludeGroups.size());
+		}
 		float[] query = embeddingClient.embedQuery(legalCase.getOverview());
 		RagProperties.Search search = properties.search();
 		List<RagPrecedentHit> hits = ragPrecedentRepository.search(query, legalCase.getCrimeType().name(),

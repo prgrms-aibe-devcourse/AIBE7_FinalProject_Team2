@@ -34,6 +34,14 @@ public record RagProperties(
 		public boolean enabled() {
 			return apiKey != null && !apiKey.isBlank();
 		}
+
+		/** 기본 toString은 모든 값을 찍으므로 API 키를 가린다 (설정 객체가 로그에 남아도 키가 노출되지 않게) */
+		@Override
+		public String toString() {
+			return "Embedding[apiKey=" + (enabled() ? "****" : "(없음)") + ", baseUrl=" + baseUrl + ", model=" + model
+				+ ", dimensions=" + dimensions + ", timeout=" + timeout + ", maxAttempts=" + maxAttempts
+				+ ", backoff=" + backoff + "]";
+		}
 	}
 
 	/**

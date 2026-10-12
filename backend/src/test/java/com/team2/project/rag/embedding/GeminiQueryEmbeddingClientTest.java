@@ -121,6 +121,16 @@ class GeminiQueryEmbeddingClientTest {
 		server.verify();
 	}
 
+	@Test
+	@DisplayName("설정 객체를 문자열로 찍어도 API 키가 나오지 않는다")
+	void properties_toString_masksApiKey() {
+		RagProperties.Embedding embedding = new RagProperties.Embedding("secret-key", BASE, "gemini-embedding-001", 3,
+			Duration.ofSeconds(1), 3, Duration.ofMillis(100));
+
+		assertThat(embedding.toString()).doesNotContain("secret-key").contains("apiKey=****");
+		assertThat(new RagProperties(embedding, new RagProperties.Search(5, 0.6)).toString()).doesNotContain("secret-key");
+	}
+
 	private GeminiQueryEmbeddingClient client(String apiKey, int dimensions, int maxAttempts) {
 		RagProperties properties = new RagProperties(
 			new RagProperties.Embedding(apiKey, BASE, "gemini-embedding-001", dimensions, Duration.ofSeconds(1),

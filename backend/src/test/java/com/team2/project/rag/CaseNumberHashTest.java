@@ -20,8 +20,10 @@ class CaseNumberHashTest {
 		"2019고합123|224f0fbd872991e0ad2342b207c7f25047abd13f41f935bdc93a74483525090b",
 		"2014고13, 2014고14(병합)|ce8f9489fe72424def7fd9fbe36039b3d727074df8e08ac3fc34208db73dad57",
 		"' 2009 고합 188 '|aa7a89e6f81ab2dc48b1a37a60e657b408f91b007e2331ac0902c11c2507577f",
+		"2018고합\u00a0123|a8bd8d62083b169002e8561d7268eb0c92984e992a4d9a8474f47339636feab6",
+		"2018\u3000고합123|a8bd8d62083b169002e8561d7268eb0c92984e992a4d9a8474f47339636feab6",
 	})
-	@DisplayName("Python rag_store.case_number_hash와 같은 해시를 만든다 (공백 제거 후 SHA-256 hex)")
+	@DisplayName("Python rag_store.case_number_hash와 같은 해시를 만든다 (NBSP · 전각 공백 포함 공백 제거 후 SHA-256 hex)")
 	void sameAsPythonTool(String caseNumber, String expected) {
 		assertThat(CaseNumberHash.of(caseNumber)).isEqualTo(expected);
 	}
