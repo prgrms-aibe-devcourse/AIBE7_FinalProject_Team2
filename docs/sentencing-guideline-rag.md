@@ -5,6 +5,7 @@
 | 버전 | 날짜 | 내용 |
 | --- | --- | --- |
 | v1 | 2026-10-12 | 초안 (BE-52) — 양형기준 데이터화(살인 6개 버전), **RAG 방식 결정**, 조각 규칙, 저장 구조(`rag_guideline` · 버전 함수), 판례 후보의 버전 매핑 누락 발견, **R__41 위치 결정**(비공개 시드, 판례 R__40과 같은 경로), **버전 매칭 기준 결정**(공소제기일 → 발생일, 같은 버전 우선) |
+| v1.1 | 2026-10-12 | 머지 반영 — 8장 임베딩 · 파일 위치를 완료로(공개 #105 · 서브모듈 갱신 #107 · 비공개 #17). BE-54 인계는 [`rag-handover.md`](rag-handover.md) 5-5 |
 
 > 이 문서는 **결정 · 출처 · 구조**만 다룬다. 명령은 [`tools/sentencing-guideline/README.md`](../tools/sentencing-guideline/README.md)를 따른다.
 > 임베딩 모델 · 판례 저장소 결정은 [AI 판결 오프라인 파이프라인](ai-judgment-pipeline.md) 8-1(COMMON-21), 판례 쪽 현황은 [RAG 판례 저장소 인수인계](rag-handover.md)를 기준으로 한다.
@@ -145,8 +146,8 @@ SELECT * FROM rag_guideline_search(:질의, :버전, ARRAY['양형인자', '양�
 
 | 일 | 내용 |
 | --- | --- |
-| 임베딩 | ✅ 살인 237개 완료(2026-10-12, 무료 키). R__41은 지금 로컬 `tools/sentencing-guideline/out/`에서 만들었고, 이 PR 머지 뒤 비공개 `backend/private-seed/seed/`에 올린다 |
-| 파일 위치 | **결정 (2026-10-12)**: V13 → 공개 `backend/src/main/resources/db/migration/`(BE-52 PR에 포함. V12를 쓰는 BE-39 #104가 먼저 머지돼야 한다), R__41 → **비공개 `backend/private-seed/seed/`** (판례 R__40과 같은 경로, 아래 5-1). **V13이 먼저 들어가야 한다** — R__41만 먼저 넣으면 로컬 `bootRun`이 서브모듈 시드를 자동으로 읽어 `rag_guideline`이 없다며 Flyway가 실패한다 |
+| 임베딩 | ✅ 살인 237개 완료(2026-10-12, 무료 키). R__41은 `tools/sentencing-guideline/out/`에서 만들어 비공개 `backend/private-seed/seed/`에 올렸다(비공개 #17, 서브모듈 갱신 공개 #107) |
+| 파일 위치 | ✅ **반영 완료 (2026-10-12)**: V13 → 공개 `backend/src/main/resources/db/migration/`(#105, BE-39 #104 다음), R__41 → **비공개 `backend/private-seed/seed/`** (판례 R__40과 같은 경로, 아래 5-1). **V13이 먼저 들어가야 한다** — R__41만 먼저 넣으면 로컬 `bootRun`이 서브모듈 시드를 자동으로 읽어 `rag_guideline`이 없다며 Flyway가 실패한다 |
 | 로컬 DB | V13은 `sentencing_guideline`에 (`crime_category`, `version_name`) 유니크를 건다. 로컬 DB에 같은 이름의 버전이 이미 두 번 들어가 있으면(예: 개발용 시드를 여러 번 넣으며 "가상 예시 버전"이 쌓인 경우) V13이 실패한다. 그때는 로컬 DB를 비운다(`docker compose down -v` 후 다시 띄우기) |
 | 백엔드 | 질의 임베딩(`RETRIEVAL_QUERY`) · 검색 호출은 판례 쪽 `GeminiQueryEmbeddingClient` · `RagSearchService`를 따른다(BE-54) |
 | 버전 매칭 (BE-54) | 6장 결정대로 판례 `guideline_id` · `flags.guidelineBasis` 채우기(7장 시행일 표 수정 포함), 사건 `legal_case.guideline_id`도 같은 규칙, 검색에서 같은 버전 우선 |
