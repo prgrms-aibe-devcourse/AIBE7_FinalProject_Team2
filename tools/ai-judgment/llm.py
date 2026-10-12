@@ -520,3 +520,33 @@ PROVIDERS = {
     "anthropic": _anthropic,
     "gemini": _gemini,
 }
+
+
+EMBEDDING_BATCH = 100  # batchEmbedContents 한 번에 보낼 수 있는 최대 개수
+
+
+def embed(texts, *, model="gemini-embedding-001", task_type="RETRIEVAL_DOCUMENT", dimensions=3072,
+          timeout=DEFAULT_TIMEOUT, http=None):
+    """Gemini 임베딩 (BE-51). texts 순서대로 벡터 목록을 돌려준다. 100개씩 나눠 보낸다.
+
+    task type: 저장 RETRIEVAL_DOCUMENT · 검색어 RETRIEVAL_QUERY · 비교 SEMANTIC_SIMILARITY (docs/ai-judgment-pipeline.md 8-1).
+    3072차원이 아닌 출력은 정규화되어 있지 않다고 안내되어 있지만, 유사도는 코사인이라 그대로 둔다.
+    http는 테스트에서 네트워크 대신 넣는 함수다. 재시도 · 한도 대응은 generateContent와 같다(_post_json).
+    """
+    post = http or _post_json
+    vectors = []
+    for start in range(0, len(texts), EMBEDDING_BATCH):
+        batch = texts[start:start + EMBEDDING_BATCH]
+        body = {"requests": [{"model": f"models/{model}", "content": {"parts": [{"text": text}]},
+                              "taskType": task_type, "outputDimensionality": dimensions} for text in batch]}
+        response = post(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:batchEmbedContents",
+                        {"x-goog-api-key": api_key("gemini")}, body, timeout)
+        embeddings = response.get("embeddings") or []
+        if len(embeddings) != len(batch):
+            raise LLMError(f"임베딩 개수가 요청과 다릅니다 (요청 {len(batch)}개, 응답 {len(embeddings)}개)")
+        for item in embeddings:
+            values = item.get("values") or []
+            if len(values) != dimensions:
+                raise LLMError(f"임베딩 차원이 {dimensions}이 아닙니다 ({len(values)})")
+            vectors.append(values)
+    return vectors
