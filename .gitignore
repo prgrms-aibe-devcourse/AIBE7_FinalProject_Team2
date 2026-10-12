@@ -21,3 +21,6 @@ dist/
 docs/cases/**/*.md
 !docs/cases/README.md
 !docs/cases/sample-virtual-murder.md
+
+# ===== 양형기준 수집 원문 (다시 받을 수 있는 중간 결과, BE-52) =====
+tools/sentencing-guideline/raw/

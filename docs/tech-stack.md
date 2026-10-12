@@ -18,6 +18,7 @@
 | v1.11 | 2026-10-08 | 11 · 12차 회의 반영 (COMMON-20) — 3장 카카오 로그인(OAuth2 · JWT) 검토 표기, 6장 세 판결 AI 비교 분석 제외(REQ-062 · 063) · 임베딩 API 행 추가(모델 미정) · 퓨샷 · RAG · 임베딩 적용 위치가 12차 회의 결정임을 명시 |
 | **v1.12** | **2026-10-09** | **COMMON-21 반영** — 6장 퓨샷 · RAG · 임베딩 구현 현황에서 임베딩 모델 · 판례 저장소 범위 확정 표기, 선행 작업을 BE-50 ~ BE-52로 정정 |
 | v1.13 | 2026-10-13 | BE-39 반영 (**확장 단계**, 닫힌 #79를 최신 develop에 다시 적용) — 3장에 관리자 인증 추가: Spring Security, 관리자 계정(V12 `admin_account`) · 세션 로그인, `/api/v1/admin/**`만 보호하고 사용자 API는 그대로(인증 · CSRF · 세션 없음), 관리자 상태 변경 요청 CSRF. 2장 마이그레이션 목록에 V9 ~ V12 추가 |
+| v1.14 | 2026-10-12 | BE-52 반영 — 2장 마이그레이션 목록에 V13(`rag_guideline` · 양형기준 버전 함수) 추가, 6장 구현 현황에 양형기준 RAG 저장소 표기 |
 
 
 ## **1. Backend**
@@ -110,7 +111,8 @@ backend/src/main/resources/db/migration
  ├─ V9__add_factor_value_axis.sql      -- factor.value_axis 판단 요소 가치관 축 (BE-47)
  ├─ V10__add_factor_value_axis_review.sql   -- factor.value_axis_status · value_axis_votes (BE-48)
  ├─ V11__create_rag_precedent.sql     -- (확장) AI 판결 RAG 판례 저장소 · pgvector (BE-51)
- └─ V12__create_admin_account.sql     -- (확장) 관리자 계정 (BE-39)
+ ├─ V12__create_admin_account.sql     -- (확장) 관리자 계정 (BE-39)
+ └─ V13__create_rag_guideline.sql     -- (확장) AI 판결 RAG 양형기준 저장소 · 버전 함수 (BE-52)
 
 backend/src/main/resources/db/seed          -- 로컬 · CI 전용 (운영에는 넣지 않음)
  └─ R__seed_sample_case.sql           -- 개발용 임시 시드: 가상 살인 사건 1건 (ERD 6장 예시)
@@ -400,7 +402,7 @@ AI 판결 생성 파이프라인은 **RAG를 기본으로** 한다. 별도 벡�
 
 **무료 등급 데이터 정책**: 무료 등급은 입력을 제품 개선에 쓰고 사람이 검토할 수 있다(Gemini 약관). 정규식 마스킹만 거친 판결문 원문은 결제를 연결한 유료 키로만 보낸다(팀이 "이미 공개된 판결문에 한해" 허용한 `allowFreeTierForJudgment`의 마지막 백업만 예외, [ai-judgment-pipeline.md](ai-judgment-pipeline.md) 5-5). 정규식 마스킹은 법조인 실명 등을 지우지 못하므로 예외 설정은 공개 판결문에만 쓴다.
 
-**퓨샷 · RAG · 임베딩은 아직 구현하지 않았다.** 위 RAG · pgvector · 퓨샷 설명은 서비스 설계(FR-4-2)이고, 오프라인 도구의 참고 자료 중 유사 판례는 비어 있다(BE-25). 적용 위치(비식별화 · 재판부 초안 · 생성 · 회차 선택)만 정해 두었고(12차 회의, v1.11 — 단계별 표는 [ai-judgment-pipeline.md](ai-judgment-pipeline.md) 8장 · [user-flow.md](user-flow.md) 3-6), 임베딩 모델 · 판례 저장소 범위는 COMMON-21에서 정했고(`gemini-embedding-001` 3072차원, 상세는 [ai-judgment-pipeline.md](ai-judgment-pipeline.md) 8-1), 판례 수집 · 저장소 구축 · 양형기준 데이터화(BE-50 ~ BE-52)가 선행 작업이다. 기능마다 설정으로 끌 수 있고, 끄면 지금과 같은 결과가 나와야 한다(비교 기준선).
+**퓨샷 · RAG · 임베딩은 아직 구현하지 않았다.** 위 RAG · pgvector · 퓨샷 설명은 서비스 설계(FR-4-2)이고, 오프라인 도구의 참고 자료 중 유사 판례는 비어 있다(BE-25). 적용 위치(비식별화 · 재판부 초안 · 생성 · 회차 선택)만 정해 두었고(12차 회의, v1.11 — 단계별 표는 [ai-judgment-pipeline.md](ai-judgment-pipeline.md) 8장 · [user-flow.md](user-flow.md) 3-6), 임베딩 모델 · 판례 저장소 범위는 COMMON-21에서 정했고(`gemini-embedding-001` 3072차원, 상세는 [ai-judgment-pipeline.md](ai-judgment-pipeline.md) 8-1), 선행 작업인 판례 수집 · 저장소(BE-50 · BE-51)와 양형기준 데이터화(BE-52 — RAG로 결정, V13 `rag_guideline`, [sentencing-guideline-rag.md](sentencing-guideline-rag.md))를 마쳤다. 기능마다 설정으로 끌 수 있고, 끄면 지금과 같은 결과가 나와야 한다(비교 기준선).
 
 ---
 

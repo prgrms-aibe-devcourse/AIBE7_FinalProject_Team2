@@ -22,6 +22,7 @@
 | v1.15 | 2026-10-08 | 판단 요소 가치관 축 후검수 반영 (BE-48)<br>• `factor.value_axis_status` 추가(V10 마이그레이션, 기본 `AUTO`): `AUTO`(AI 투표 · 사람 초안 기본값) / `CONFIRMED`(관리자 확정, NULL 확정 포함). 시드 · 적재 SQL은 `CONFIRMED` 행을 덮어쓰지 않는다<br>• `factor.value_axis_votes`(jsonb) 추가: 축 분류 투표 기록(BE-49). 최다표가 요청 횟수의 과반이 아니면(동률 · 유효 응답 부족 포함) `needsReview` |
 | v1.16 | 2026-10-10 | AI 판결 RAG 판례 저장소 추가 (BE-51)<br>• `rag_precedent` 추가(V11 마이그레이션, pgvector `vector(3072)`): 비식별화한 사실관계 요약(검색 기준 · 임베딩 입력) · 양형 이유 · 법조문 · 주문 형량 · 양형인자 · 사건 그룹 · 사건번호 해시(병합 사건은 번호마다). 판결문 원문 · 사건번호 · 법원명은 넣지 않는다<br>• 검색 함수 `rag_precedent_search`: 자기 사건(사건번호 해시가 있는 사건 그룹 전체) 제외, 사건 그룹당 1건, 점수 하한 · 개수 제한<br>• 검색어 임베딩 · 검색은 백엔드 `RagSearchService`(Java), 판례 적재는 오프라인 `rag_store.py`(Python)<br>• 사용 보류 `on_hold` · `hold_reason`: LBox 판례는 라이선스 확인 전까지 보류(검색 제외)<br>• 사용자 API에서 조회하지 않는 오프라인 파이프라인 전용 테이블. 행은 비공개 시드 `R__40`이 넣는다 |
 | v1.17 | 2026-10-13 | 관리자 계정 추가 (**확장 단계**, BE-39 — 닫힌 #79를 최신 develop에 다시 적용)<br>• `admin_account`(V12 마이그레이션): 관리자 후검수 API 로그인 계정. 사용자(익명 ID)와 관계없음 |
+| v1.18 | 2026-10-12 | AI 판결 RAG 양형기준 저장소 추가 (BE-52)<br>• `rag_guideline` 추가(V13 마이그레이션, pgvector `vector(3072)`): 양형기준 한 버전 × 한 섹션 × 한 대상 조각 · 임베딩 입력(머리말 + 본문) · 구조 값 `meta`(형량범위 · 양형인자)<br>• `sentencing_guideline` (`crime_category`, `version_name`) 유니크. 살인범죄 6개 버전(2009 최초 ~ 2026 수정)을 비공개 시드 `R__41`이 넣는다<br>• 함수 `sentencing_guideline_at`(기준일 → 시행 중 버전) · `rag_guideline_search`(버전 안 검색)<br>• 버전 기준일은 공소제기일 → 없으면 발생일(결정은 [양형기준 저장소](sentencing-guideline-rag.md) 6장) |
 
 ---
 
@@ -55,6 +56,7 @@ erDiagram
     JUDGMENT ||--o| AI_GENERATION : "생성 기록"
     EXPERIENCE ||--o| COMPARISON_ANALYSIS : "비교 분석 (확장)"
     SENTENCING_GUIDELINE |o--o{ RAG_PRECEDENT : "적용 (확장)"
+    SENTENCING_GUIDELINE ||--o{ RAG_GUIDELINE : "조각 (확장)"
  
     LEGAL_CASE {
         bigint id PK
@@ -138,6 +140,16 @@ erDiagram
         text sentencing_reason "프롬프트 본문 (비식별)"
         vector embedding "3072차원"
         bigint guideline_id FK
+    }
+
+    RAG_GUIDELINE {
+        bigint id PK
+        bigint guideline_id FK
+        varchar chunk_key "조각 ID"
+        varchar section "형량범위 양형인자 등"
+        text content "프롬프트 본문"
+        jsonb meta "형량범위 양형인자 구조 값"
+        vector embedding "3072차원"
     }
 ```
 
@@ -284,9 +296,12 @@ S-06에서 보여 줄 형벌 선택지, 그리고 **선고 가능 범위 밖 판
 | --- | --- | --- | --- |
 | id | bigint PK | ✓ |  |
 | crime_category | varchar(50) | ✓ | 예: 살인범죄 |
-| version_name | varchar(50) | ✓ | 예: 2024 개정 |
+| version_name | varchar(50) | ✓ | `<의결 연도> 수정 (<의결일> 의결)` (예: `2013 수정 (2013. 4. 22. 의결)`, 최초는 `2009 최초 (2009. 4. 24. 의결)`). (`crime_category`, `version_name`) 유니크(V13) — 시드가 이름으로 찾아 넣는다 |
 | effective_date | date | ✓ | 시행일 |
 | source_url | varchar(300) |  |  |
+
+- 버전 행은 비공개 시드 `R__41`(`tools/sentencing-guideline/store.py` 출력)이 이름으로 맞춰 넣는다(있으면 시행일 · 출처만 고친다). 살인범죄는 2009 최초 · 2011 · 2013 · 2021 · 2023 · 2026 수정 6개(BE-52)
+- 기준일에 시행 중이던 버전은 `sentencing_guideline_at(crime_category, 기준일)`로 찾는다(아래 `rag_guideline`). 기준일은 공소제기일 → 없으면 발생일([양형기준 저장소](sentencing-guideline-rag.md) 6장)
 
 #### `sentence_range_option` — 사전 판단 형량 구간
 
@@ -486,7 +501,7 @@ AI 판결 생성(generate, BE-54)이 검색하는 유사 판례다. 오프라인
 | court_level | varchar(20) | ✓ | `FIRST` / `APPEAL` |
 | decided_at | date |  | 선고일. LBox는 NULL |
 | incident_date | date |  | 사건 발생일 (자동 추정, 의심 사유는 `flags.checks`) |
-| guideline_id | bigint FK |  | 적용 양형기준 버전. 양형기준 시행 전 · DB에 없는 버전(2009 최초)이면 NULL |
+| guideline_id | bigint FK |  | 적용 양형기준 버전. 양형기준 시행 전 · 기준일 미상이면 NULL. 기준일은 공소제기일 → 없으면 발생일(BE-52 결정, 채우기는 BE-54). 지금은 전부 NULL |
 | penalty_type · prison_months · suspension_months · fine_amount | varchar(20) · int · int · bigint |  | 주된 피고인의 주문 형량 (`judgment`와 같은 값) |
 | recommended_range | jsonb |  | 양형기준 권고 범위. 양형기준 데이터화 뒤 채운다 (지금은 NULL) |
 | sentencing_factors | jsonb |  | 양형인자 `{"aggravating": [...], "mitigating": [...]}` |
@@ -506,6 +521,30 @@ AI 판결 생성(generate, BE-54)이 검색하는 유사 판례다. 오프라인
   - 같은 사건 그룹은 가장 비슷한 판례 1건만 돌려준다. 점수 = 1 − 코사인 거리, `min_score` 미만은 뺀다
   - 사용 보류(`on_hold`) 판례는 결과에서 빼지만, 자기 사건 제외에는 보류 판례의 사건번호 해시도 쓴다
 - V11은 `CREATE EXTENSION IF NOT EXISTS vector`를 실행한다. 확장을 만들 권한이 없는 DB면 관리자가 먼저 만들어 둔다.
+
+#### `rag_guideline` — RAG 양형기준 조각 (내부 전용, BE-52)
+
+AI 판결 생성(generate, BE-54)이 참고하는 양형기준이다. 판례처럼 오프라인 파이프라인만 쓴다. 결정 · 조각 규칙은 [양형기준 저장소](sentencing-guideline-rag.md). 행은 비공개 시드 `R__41`(공개 저장소 `tools/sentencing-guideline/store.py` 출력)이 통째로 지우고 다시 넣는다.
+
+| 컬럼 | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| id | bigint PK | ✓ |  |
+| guideline_id | bigint FK | ✓ | 양형기준 버전 (`sentencing_guideline`) |
+| chunk_key | varchar(60) | ✓ | 조각 ID(예: `살인-2013-05-15-001`). 유니크 |
+| section | varchar(30) | ✓ | 사이트 탭 이름: 형량범위 · 형량 적용 참고 · 양형인자 · 유형의 정의 · 양형인자의 정의 · 양형인자의 평가원칙 · 공통 원칙 · 다수범죄 처리기준 · 집행유예 참작사유(정의 · 평가원칙). 범죄마다 탭이 달라질 수 있어 CHECK를 두지 않는다 |
+| subject | varchar(200) |  | 섹션 안의 대상 (예: `제2유형 보통 동기 살인`, `특별양형인자 > 행위 > 공통`) |
+| type_no | int |  | 형량범위 조각의 유형 번호 |
+| content | text | ✓ | 프롬프트에 넣는 본문 |
+| embed_text | text | ✓ | 임베딩 입력. 본문 앞에 `[범죄 · 버전(시행 기간) · 섹션 · 대상]` 머리말 |
+| meta | jsonb | ✓ | 바로 찾기용 구조 값: 형량범위 `{"typeName", "range": {"감경", "기본", "가중"}}`, 양형인자 `{"factorPath", "감경요소", "가중요소"}`, 집행유예 `{"factorPath", "부정적", "긍정적"}`, 시행 기간 |
+| embedding | vector(3072) | ✓ | `embed_text` 임베딩 (task type `RETRIEVAL_DOCUMENT`, 유사도 cosine) |
+| embedding_model · embedding_dim | varchar(50) · int | ✓ | 예: `gemini-embedding-001` · 3072. CHECK `embedding_dim = vector_dims(embedding)` |
+| source_url | varchar(300) |  | 양형위원회 페이지 |
+| created_at | timestamptz | ✓ |  |
+
+- 버전당 조각이 수십 개라(살인 6개 버전 237개) 벡터 인덱스 없이 버전으로 거른 뒤 전체를 비교한다. (`guideline_id`, `section`) 인덱스
+- **`sentencing_guideline_at(category, at)`** → 기준일에 시행 중이던 버전 id. 조각이 적재된 버전만 본다(개발용 시드의 가상 버전 제외). 기준일이 NULL이거나 최초 시행일 전이면 NULL
+- **`rag_guideline_search(query, guideline, sections, top_k, min_score)`** → (`chunk_id`, `section`, `score`). 한 버전 안의 검색. 형량범위처럼 구조가 정해진 값은 검색하지 않고 `section` · `type_no` · `meta`로 바로 읽는다
 
 ---
 
