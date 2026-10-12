@@ -45,6 +45,16 @@ public record AdminPrincipal(Long adminId, String email, String displayName, Str
 		return enabled;
 	}
 
+	/**
+	 * 비밀번호 해시는 출력하지 않는다. record 기본 toString()은 모든 필드를 찍어, 로그인 직후 principal이
+	 * 로그 · 예외 메시지에 찍히면 bcrypt 해시가 노출된다 (#104 리뷰, AdminLoginRequest와 같은 방식)
+	 */
+	@Override
+	public String toString() {
+		return "AdminPrincipal[adminId=" + adminId + ", email=" + email + ", displayName=" + displayName
+			+ ", passwordHash=" + (passwordHash == null ? "null" : "***") + ", enabled=" + enabled + "]";
+	}
+
 	/** 세션에는 비밀번호 해시를 남기지 않는다 (로그인 확인이 끝난 뒤 이 값으로 바꿔 저장) */
 	public AdminPrincipal withoutPassword() {
 		return new AdminPrincipal(adminId, email, displayName, null, enabled);

@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.team2.project.admin.domain.AdminAccount;
 import com.team2.project.admin.repository.AdminAccountRepository;
+import com.team2.project.admin.service.AdminPrincipal;
 import com.team2.project.support.ApiIntegrationTest;
 import jakarta.servlet.http.Cookie;
 import java.time.Instant;
@@ -154,9 +155,16 @@ class AdminAuthApiTest extends ApiIntegrationTest {
 			.andExpect(status().isForbidden());
 		mockMvc.perform(withCsrf(post("/api/v1/admin/auth/logout"), csrfCookie()).session(session))
 			.andExpect(status().isNoContent());
+		// 로그아웃은 세션을 무효화한다. 무효화된 세션은 다시 보낼 수 없으므로 여기서 직접 확인한다 (#104 리뷰)
 		assertThat(session.isInvalid()).isTrue();
-		mockMvc.perform(get("/api/v1/admin/auth/me"))
-			.andExpect(status().isUnauthorized());
+	}
+
+	@Test
+	void principal_toStringHidesPasswordHash() {
+		AdminPrincipal principal = new AdminPrincipal(1L, "admin@example.com", "관리자", "{bcrypt}$2a$10$secret-hash", true);
+
+		assertThat(principal.toString()).doesNotContain("secret-hash").contains("passwordHash=***");
+		assertThat(principal.withoutPassword().toString()).contains("passwordHash=null");
 	}
 
 	@Test
