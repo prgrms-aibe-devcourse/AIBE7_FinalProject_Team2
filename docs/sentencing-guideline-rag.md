@@ -145,8 +145,9 @@ SELECT * FROM rag_guideline_search(:질의, :버전, ARRAY['양형인자', '양�
 
 | 일 | 내용 |
 | --- | --- |
-| 임베딩 | ✅ 살인 237개 완료(2026-10-12, 무료 키). R__41은 `tools/sentencing-guideline/out/`에 있다 |
+| 임베딩 | ✅ 살인 237개 완료(2026-10-12, 무료 키). R__41은 지금 로컬 `tools/sentencing-guideline/out/`에서 만들었고, 이 PR 머지 뒤 비공개 `backend/private-seed/seed/`에 올린다 |
 | 파일 위치 | **결정 (2026-10-12)**: V13 → 공개 `backend/src/main/resources/db/migration/`(BE-52 PR에 포함. V12를 쓰는 BE-39 #104가 먼저 머지돼야 한다), R__41 → **비공개 `backend/private-seed/seed/`** (판례 R__40과 같은 경로, 아래 5-1). **V13이 먼저 들어가야 한다** — R__41만 먼저 넣으면 로컬 `bootRun`이 서브모듈 시드를 자동으로 읽어 `rag_guideline`이 없다며 Flyway가 실패한다 |
+| 로컬 DB | V13은 `sentencing_guideline`에 (`crime_category`, `version_name`) 유니크를 건다. 로컬 DB에 같은 이름의 버전이 이미 두 번 들어가 있으면(예: 개발용 시드를 여러 번 넣으며 "가상 예시 버전"이 쌓인 경우) V13이 실패한다. 그때는 로컬 DB를 비운다(`docker compose down -v` 후 다시 띄우기) |
 | 백엔드 | 질의 임베딩(`RETRIEVAL_QUERY`) · 검색 호출은 판례 쪽 `GeminiQueryEmbeddingClient` · `RagSearchService`를 따른다(BE-54) |
 | 버전 매칭 (BE-54) | 6장 결정대로 판례 `guideline_id` · `flags.guidelineBasis` 채우기(7장 시행일 표 수정 포함), 사건 `legal_case.guideline_id`도 같은 규칙, 검색에서 같은 버전 우선 |
 | 다른 범죄 | `fetch.py <범죄명>` → `parse.py` → `chunk.py` → `embed` → `sql`(out/ 아래 전부 합침). 탭 · 표 모양이 다르면 `chunk.py`의 표 해석을 보강한다 |
