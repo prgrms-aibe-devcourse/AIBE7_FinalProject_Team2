@@ -35,6 +35,7 @@ AI 판결 생성(3단계)은 두 가지 방법 중 하나로 한다. 외부 LLM 
 | `pipeline.example.json` | 파이프라인 설정 예시 (복사해 `cases/`에 두고 고친다) |
 | `court_seed_sql.py` | 재판부 판결(BE-14 형식) → **비공개** 적재 SQL (`judgment` COURT · `judgment_factor`) (BE-38) |
 | `case_seed_sql.py` | 비식별화한 사건 파일 → 사건 콘텐츠 적재 SQL (`legal_case` DRAFT · 섹션 · 형벌 규칙 · 판단 요소 · 원본 판결문) (BE-31) |
+| `rag_store.py` · `prompts/rag_precedent_system.md` | RAG 유사 판례 저장소 적재: 판결문 비식별화 · 사실관계 요약 / 양형 이유 분리 → 임베딩 → 비공개 시드 `R__40` (BE-51, 아래 "RAG 판례 저장소") |
 
 ## 작업 순서
 
@@ -311,6 +312,31 @@ python3 pipeline.py status cases/my-case.pipeline.json
 | 비식별화 검수 | 사람 검수 없이 적재하므로 비식별화 누락이 있을 수 있다. **사건은 항상 DRAFT로만 넣고 자동으로 공개하지 않는다.** 관리자 페이지(BE-33 · FE-16)의 공개 승인이 비식별화 검수(REQ-075)를 겸한다 |
 | 운영 DB | 파이프라인은 운영 DB에 접속하지 않는다. 운영 계정을 개발 PC에 두지 않는다 |
 | 승인 상태 | 후검수 뒤 공개 · 승인 상태는 DB에만 있다(파일에 없음). 운영 DB 백업이 원본이다 |
+
+## RAG 판례 저장소 (BE-51)
+
+AI 판결 생성(generate, BE-54)이 검색할 유사 판례를 `rag_precedent`(V11, [ERD](../../docs/erd.md) 3-4)에 넣는다. 판례 후보와 원문은 비공개 저장소에 있다(BE-50, `work/BE-50-precedent-candidates.json` · `raw/BE-50/`). 수집처 · 건수는 [`docs/rag-precedent-sources.md`](../../docs/rag-precedent-sources.md).
+
+```bash
+# tools/ai-judgment에서. P = 비공개 저장소 체크아웃 (../../backend/private-seed)
+python3 rag_store.py build --candidates $P/work/BE-50-precedent-candidates.json --raw $P/raw/BE-50 --model <공급자:모델ID>
+python3 rag_store.py embed
+python3 rag_store.py sql --candidates $P/work/BE-50-precedent-candidates.json --output $P/seed/R__40_rag_precedent.sql
+```
+
+| 단계 | 하는 일 | 외부 전송 |
+| --- | --- | --- |
+| `build` | 판결문을 로컬에서 마스킹(`premask`)한 뒤 모델이 비식별화해 사실관계 요약(`factsSummary`, 검색 기준) · 양형 이유(`sentencingReason`, 프롬프트 본문) · 법조문 · 주문 형량 · 양형인자로 나눈다. 형식 오류 · 남은 개인정보(`residual_check` 오류)가 있으면 다시 묻고(`--max-retries`, 기본 2), 끝까지 남으면 그 판례는 저장하지 않는다 | 마스킹한 판결문 본문. 무료 등급이 있는 모델은 `--allow-free-tier`를 붙여야 쓴다(아래 "판결문 단계의 무료 등급 백업"과 같은 위험, 공개 판결문에만. 판례마다 `usedFreeTier` 기록). `free:` 자동 선택은 쓰지 않는다. 사건번호 · 법원명 · 선고일 · 해시는 보내지 않는다 |
+| `embed` | `factsSummary`**만** `gemini-embedding-001`(`RETRIEVAL_DOCUMENT`, 3072차원)로 임베딩한다. 100건씩 묶어 보낸다 | 비식별화한 사실관계 요약만. 무료 등급이어도 된다(8-1) |
+| `sql` | `R__40` 시드를 만든다. `--candidates`(최신 후보 목록)를 주면 사건 그룹 · 발생일 · 양형기준 · 표시를 그 값으로 다시 맞추고, 후보에서 빠진 판례(사본 판정 등)는 넣지 않는다. `rag_precedent`를 통째로 지우고 다시 넣는다. 양형기준은 버전 이름으로 찾고 없으면 NULL. **비공개 저장소 체크아웃 안에만** 쓴다(BE-31 `check_sql_dir`) | 없음 |
+
+- 중간 결과는 `out/rag/precedents/` · `out/rag/embeddings/`(git 제외)에 판례마다 파일로 남는다. 이미 끝난 판례는 다시 부르지 않으므로 끊겨도 같은 명령으로 이어 간다. 다시 만들려면 그 판례 파일을 지운다.
+- **살인 관련 공소사실이 무죄**이고 다른 죄만 유죄인 판결(6건)도 `PRECEDENT_HOLDS`로 사용 보류한다. 형량 · 양형 이유가 살인 기준이 아닌데 사실관계는 살인 사건과 비슷해 유사도로 걸러지지 않는다(시험에서 상위 5건에 9번 듦, 팀 결정 2026-10-12).
+- **LBox 판례는 사용 보류**로 넣는다(`on_hold = true`, 검색에서 빠짐, 팀 결정 2026-10-12). 라이선스(데이터셋 카드 CC BY-NC · 논문 CC BY-NC-ND)가 확인되면 `rag_store.py`의 `SOURCE_HOLDS`에서 지우고 `sql`을 다시 만든다.
+- 팀 결정(2026-10-10)으로 사람 확인 없이 후보를 전부 넣는다. 행의 `flags.verified`는 false이고, 발생일이 의심스러운 판례는 `flags.checks`에 이유가 남는다.
+- 사건 그룹 ID는 그룹에서 가장 앞선 판례 키다(예: `LAW_GO_KR-143304`). 후보 목록을 다시 만들어도 같은 그룹이면 같은 ID다.
+- **검색은 백엔드가 한다** (`backend` `rag/service/RagSearchService`). 이 도구는 판례를 적재만 한다. 백엔드는 사건 개요를 `RETRIEVAL_QUERY`로 임베딩하고(`GEMINI_API_KEY`가 없으면 RAG만 꺼짐), `case_source` 사건번호 해시로 자기 사건 그룹을 뺀 뒤 DB 함수 `rag_precedent_search`를 부른다. 설정은 `application.yml`의 `rag.*`(top-k 5 · 점수 하한 0.6).
+- 사건번호 해시 규칙(공백 제거 후 SHA-256 hex)은 `rag_store.case_number_hash`와 백엔드 `CaseNumberHash`가 같아야 한다(`CaseNumberHashTest`가 Python 값과 비교). 임베딩 모델 · 차원도 같아야 하며, 다르면 백엔드 검색이 멈춘다.
 
 ## 외부 LLM으로 생성할 때
 

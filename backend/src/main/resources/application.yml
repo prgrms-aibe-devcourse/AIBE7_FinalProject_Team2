@@ -36,6 +36,17 @@ spring:
 
 # Swagger UI · OpenAPI 문서. 기본값은 꺼짐: 운영에서 환경변수를 빠뜨려도 API 문서가 노출되지 않도록 안전한 쪽에 둔다.
 # 로컬 · 개발에서만 SWAGGER_ENABLED=true 로 켠다.
+# AI 판결 RAG 유사 판례 검색 (BE-51). 키가 없으면 RAG만 꺼지고 서버는 정상으로 뜬다
+# 모델 · 차원은 판례 적재 도구(tools/ai-judgment/rag_store.py)와 같아야 한다
+rag:
+  embedding:
+    api-key: ${GEMINI_API_KEY:}
+    model: ${RAG_EMBEDDING_MODEL:gemini-embedding-001}
+    dimensions: 3072
+  search:
+    top-k: ${RAG_SEARCH_TOP_K:5}
+    min-score: ${RAG_SEARCH_MIN_SCORE:0.6}
+
 springdoc:
   api-docs:
     enabled: ${SWAGGER_ENABLED:false}
