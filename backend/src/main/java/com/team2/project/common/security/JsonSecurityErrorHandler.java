@@ -38,11 +38,12 @@ public class JsonSecurityErrorHandler implements AuthenticationEntryPoint, Acces
 	@Override
 	public void handle(HttpServletRequest request, HttpServletResponse response, AccessDeniedException e)
 		throws IOException {
-		log.info("관리자 API 접근 거부: {} {} ({})", request.getMethod(), request.getRequestURI(), e.getClass().getSimpleName());
+		log.info("접근 거부: {} {} ({})", request.getMethod(), request.getRequestURI(), e.getClass().getSimpleName());
 		write(response, ErrorCode.FORBIDDEN);
 	}
 
-	private void write(HttpServletResponse response, ErrorCode errorCode) throws IOException {
+	/** 공통 에러 응답을 직접 쓴다. 예외 처리 단계 밖의 필터(BearerTokenAuthenticationFilter)도 쓴다 */
+	public void write(HttpServletResponse response, ErrorCode errorCode) throws IOException {
 		response.setStatus(errorCode.getStatus().value());
 		response.setContentType(MediaType.APPLICATION_JSON_VALUE);
 		response.setCharacterEncoding(StandardCharsets.UTF_8.name());
