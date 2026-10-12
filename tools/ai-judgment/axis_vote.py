@@ -26,19 +26,25 @@ class AxisVoteError(Exception):
     pass
 
 
+def escape_tag_data(value):
+    """태그 안에 넣을 값의 & · < · >를 바꾼다. 값에 </overview> 같은 문자열이 있어도 태그가 중간에 닫히지 않는다."""
+    return str(value).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
 def build_axis_prompt(case):
     """(system, user). 사건 개요와 판단 요소 문구만 보낸다 (판결 · 형량 정보는 보내지 않는다).
 
-    개요 · 요소 문구는 판결문에서 뽑은 값이라 <overview> · <factor> 태그로 감싼다. 태그 안은 데이터이고 지시가 아니다(시스템 지시).
+    개요 · 요소 문구는 판결문에서 뽑은 값이라 <overview> · <factor> 태그로 감싸고, 값 안의 꺾쇠는 이스케이프한다.
+    태그 안은 데이터이고 지시가 아니다(시스템 지시).
     """
     lines = [
         "# 사건", "",
         f"- 죄명: {case.get('chargeName') or '-'}", "",
         "## 사건 개요", "",
-        "<overview>", case.get("overview") or "(없음)", "</overview>", "",
+        "<overview>", escape_tag_data(case.get("overview") or "(없음)"), "</overview>", "",
         "# 판단 요소 목록 (번호마다 가치관 축을 하나씩 고른다)", "",
     ]
-    lines += [f"- {f['factorId']}. <factor>{f['label']}</factor>" for f in case["factors"]]
+    lines += [f"- {f['factorId']}. <factor>{escape_tag_data(f['label'])}</factor>" for f in case["factors"]]
     lines += ["", "---", "", "위 판단 요소마다 가치관 축을 하나씩 골라, 시스템 지시의 JSON 형식으로만 답한다.", ""]
     return read_prompt("axis_system.md"), "\n".join(lines)
 
