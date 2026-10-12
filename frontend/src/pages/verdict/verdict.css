@@ -47,9 +47,9 @@
 .verdict-page .verdict-range .recommended-range { margin-top: 18px; }
 .verdict-page .range-marker { position: absolute; top: -7px; bottom: -7px; width: 3px; transform: translateX(-50%); background: var(--color-accent); }
 .verdict-page .range-marker::before { content: ''; position: absolute; top: -3px; left: -4px; border-inline: 5px solid transparent; border-top: 6px solid var(--color-accent); }
-.verdict-page .range-marker.is-warning { background: var(--color-danger); }
-.verdict-page .range-marker.is-warning::before { border-top-color: var(--color-danger); }
-.verdict-page .range-warning { border: 1px solid var(--color-danger); border-radius: 4px; background: var(--color-danger-tint); padding: 16px; margin-top: 16px; color: var(--color-danger); }
+.verdict-page .range-marker.is-warning { background: var(--color-caution); }
+.verdict-page .range-marker.is-warning::before { border-top-color: var(--color-caution); }
+.verdict-page .range-warning { border: 1px solid var(--color-caution-border); border-radius: 4px; background: var(--color-caution-tint); padding: 16px; margin-top: 16px; color: var(--color-caution); }
 .verdict-page .range-warning strong { display: block; margin-bottom: 8px; }
 .verdict-page .range-warning p { font-size: 13px; }
 .verdict-page .range-reference { padding: 12px 16px; margin-top: 16px; background: var(--color-surface); border-left: 3px solid var(--color-border-strong); font-size: 13px; }
