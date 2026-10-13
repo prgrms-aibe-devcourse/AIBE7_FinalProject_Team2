@@ -1,0 +1,70 @@
+# 운영 구성 (BE-58, WBS 7.1.1): Nginx(웹) · Spring Boot(백엔드) · PostgreSQL 한 대 구성
+# 사용법 · 환경변수는 deploy/README.md 참고. 비밀값은 deploy/.env(커밋 안 함)로만 넘긴다.
+#
+# - 이미지는 GitHub Actions(deploy-images.yml)가 빌드해 GHCR에 올리고, 서버는 pull해서 실행만 한다(서버에서 Gradle 빌드 안 함)
+# - 로컬 · CI 스모크 테스트에서는 build:로 같은 이미지를 직접 만든다 (docker compose build)
+# - 밖으로 여는 포트는 웹 80 하나뿐이다. 백엔드 8080 · DB 5432는 컨테이너 내부 네트워크에서만 쓴다 (보안 그룹도 80 · 443 · 22만)
+# - 7.1.2에서 DB를 RDS로 옮기면 postgres 서비스를 빼고 DB_URL만 RDS 주소로 바꾼다
+# - 7.1.4에서 Redis 서비스를 여기에 추가한다
+
+name: lawnambul
+
+services:
+  web:
+    image: ${IMAGE_PREFIX:-lawnambul}-web:${IMAGE_TAG:-local}
+    build:
+      context: ../frontend
+    ports:
+      - "${WEB_PORT:-80}:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  backend:
+    image: ${IMAGE_PREFIX:-lawnambul}-backend:${IMAGE_TAG:-local}
+    build:
+      context: ../backend
+    environment:
+      # application.yml이 읽는 이름과 같아야 한다
+      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-lawnambul}
+      DB_USERNAME: ${POSTGRES_USER:-lawnambul}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?deploy/.env에 POSTGRES_PASSWORD를 넣어야 한다}
+      # 기본은 스키마만. .env로 바꿀 수 없게 고정한다 — 개발용 가상 사건 시드(classpath:db/seed)는 운영에 넣지 않는다 (docs/tech-stack.md 2장)
+      # 실제 사건은 docker-compose.real-seed.yml을 겹쳐 실행할 때만 filesystem: 위치로 추가된다
+      FLYWAY_LOCATIONS: classpath:db/migration
+      # 관리자 세션 쿠키 Secure. HTTPS 적용 전에는 브라우저가 Secure 쿠키를 저장하지 않는다 (README "HTTPS 전 제한" 참고)
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-true}
+      # 없으면 RAG 유사 판례 검색만 꺼지고 서버는 뜬다
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      # 첫 관리자 계정 (BE-39). 처음 한 번만 넣고, 계정이 만들어지면 .env에서 지운다
+      ADMIN_BOOTSTRAP_EMAIL: ${ADMIN_BOOTSTRAP_EMAIL:-}
+      ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:-}
+      # 운영에서 API 문서를 열지 않는다 (application.yml 기본값과 같음, 명시만)
+      SWAGGER_ENABLED: "false"
+      # 서버 메모리(t3.small 2GB)에 맞춰 JVM 힙 상한을 컨테이너 메모리 비율로 둔다
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=60
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    mem_limit: 1g
+
+  postgres:
+    # 로컬 backend/docker-compose.yml · CI와 같은 이미지 (RDS PostgreSQL 17과 맞춘 태그)
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-lawnambul}
+      POSTGRES_USER: ${POSTGRES_USER:-lawnambul}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?deploy/.env에 POSTGRES_PASSWORD를 넣어야 한다}
+    volumes:
+      - pgdata:/var/lib/postgresql/data   # 컨테이너를 다시 만들어도 데이터 유지
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+    mem_limit: 512m
+
+volumes:
+  pgdata:
