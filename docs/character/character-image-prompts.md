@@ -713,7 +713,7 @@ DEFORMATION — Japanese-made Western-cartoon-inspired deformation (graphic and 
 
 ## 8. 확정 이미지와 다른 점 (10/14 기준)
 
-확정 이미지(`~/Documents/NaeLawNamBul/`의 `character-sheet_*` · `standing_*`, 아키텍처 2-1)와 이 문서의 프롬프트를 비교했다. 이미지 생성 결과가 프롬프트와 다르게 나온 부분이고, **기준은 확정 이미지**다. 다시 뽑을 때는 프롬프트를 확정 이미지 쪽으로 고치거나, 확정 이미지를 참조 이미지로 첨부한다(1-3).
+확정 이미지(`~/Documents/NaeLawNamBul/character/`의 `sheets/character-sheet_*` · `standing/standing_*`, 아키텍처 2-1)와 이 문서의 프롬프트를 비교했다. 이미지 생성 결과가 프롬프트와 다르게 나온 부분이고, **기준은 확정 이미지**다. 다시 뽑을 때는 프롬프트를 확정 이미지 쪽으로 고치거나, 확정 이미지를 참조 이미지로 첨부한다(1-3).
 
 ### 8-1. 비율 · 키
 

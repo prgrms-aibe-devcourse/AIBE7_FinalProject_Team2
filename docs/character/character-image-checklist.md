@@ -12,7 +12,7 @@
 > 형식 · 이름 규칙 · 검수 기준은 [캐릭터 에셋 아키텍처](character-asset-architecture.md)가 기준이다(시트 2-2 · 장면 · 감정 코드 3-2 · 상황 4-1 · 크기 6-5 · 검수 7-2). 이 문서는 **무엇을 몇 장 만들고 어디까지 했는지**만 적는다.
 > 캐릭터 설정은 [캐릭터 프로필 · 세계관](character-profile-worldview.md), 성향 이미지 번호는 [성향 이미지 번호표](personality-image-numbers.md)가 기준이다.
 > 프롬프트는 [이미지 생성 프롬프트 모음](character-image-prompts.md) 9장(v2)을 쓴다. 항목별 예시는 이 문서 5장.
-> 원본 PNG는 레포 밖 `~/Documents/NaeLawNamBul/`에 둔다. 웹용 webp만 `frontend/public/images/characters/`에 넣는다.
+> 원본 PNG는 레포 밖 `~/Documents/NaeLawNamBul/character/`(시트는 `sheets/`, 스탠딩은 `standing/`)에 둔다. 웹용 webp만 `frontend/public/images/characters/`에 넣는다.
 
 **상태 표기**: ⬜ 대기 · 🟨 생성 중 · 🟦 검수 중 · ✅ 완료
 
@@ -128,7 +128,7 @@
 
 [이미지 생성 프롬프트 모음](character-image-prompts.md) 9장(v2) 기준이다. **확정 이미지를 참조로 첨부하고 바꿀 내용만 쓰는 짧은 프롬프트**를 기본으로 했다. 블록 전문이 필요하면 9장의 블록을 이어 붙인다.
 
-- **첨부**: 각 예시의 "첨부" 줄에 적은 확정 이미지를 같이 올린다(`~/Documents/NaeLawNamBul/`).
+- **첨부**: 각 예시의 "첨부" 줄에 적은 확정 이미지를 같이 올린다(`~/Documents/NaeLawNamBul/character/`(시트는 `sheets/`, 스탠딩은 `standing/`)).
 - **{ }** 안은 바꿔 쓴다.
 - 모든 예시 끝에 **공통 AVOID**를 붙인다.
 

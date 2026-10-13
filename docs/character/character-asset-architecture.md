@@ -16,7 +16,7 @@
 
 > 캐릭터 **결정**은 [캐릭터 인수인계](character-main-handover.md) 2-1절(10/13 변경)과 [성향 테스트 콘텐츠](../personality-test-content.md) 6장이 기준이다. 이 문서는 그 결정을 **어떤 단위로 나눠 만들고, 어떻게 조합하고, 어디에 두는지**만 정한다.
 > 기획 원문은 `Claude outputs/character-law-ai-judge-plan.md` v0.3(커밋 안 함, 이하 "기획")이다. 이 문서에 필요한 내용은 옮겨 적었다. 프롬프트 원문은 `Claude outputs/naero_nambul_main_image_prompts.md`(메인 이미지 최종) · `naero_nambul_sheet_prompts_deformation11.md`(데포르메 11종)다.
-> **기준 시트가 나왔다(10/13).** 생김새 설명(IDENTITY 블록, 5-1)은 2-1의 기준 시트 · 스탠딩 일러스트를 기준으로 한다. 원본 PNG는 레포 밖(`~/Documents/NaeLawNamBul/`)에 둔다.
+> **기준 시트가 나왔다(10/13).** 생김새 설명(IDENTITY 블록, 5-1)은 2-1의 기준 시트 · 스탠딩 일러스트를 기준으로 한다. 원본 PNG는 레포 밖(`~/Documents/NaeLawNamBul/character/`(시트는 `sheets/`, 스탠딩은 `standing/`))에 둔다.
 > ⚠️ 표시는 팀 확인이 필요한 항목이다(7-3에 모음).
 
 ---
@@ -63,7 +63,7 @@
 
 모든 바리에이션이 따르는 원본이다. 내로 · 남불은 **기본 스타일(`editorial`) × 기본 데포르메(`mascot`, 약 3.5등신)**, 로는 **`authority` × `adult`**(2-3)로 만든다.
 
-**확정된 기준 이미지 (10/13)** — 원본은 레포 밖 `~/Documents/NaeLawNamBul/`
+**확정된 기준 이미지 (10/13)** — 원본은 레포 밖 `~/Documents/NaeLawNamBul/character/`(시트는 `sheets/`, 스탠딩은 `standing/`)
 
 | 파일 | 내용 | 비고 |
 | --- | --- | --- |
