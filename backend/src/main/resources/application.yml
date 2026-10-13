@@ -56,6 +56,12 @@ management:
         # 7.3.1의 "p95 지연" 경보는 히스토그램 버킷이 있어야 Prometheus에서 histogram_quantile()로 계산할 수 있다.
         # http.server.requests 하나만 켠다 — 전체(Global)로 켜면 HikariCP 등 다른 타이머까지 버킷이 늘어난다 (WBS 7-13)
         http.server.requests: true
+      # 버킷 범위를 API 응답 시간대로 좁힌다 (기본은 1ms ~ 30s 전체라 라우트당 버킷이 69개나 생긴다, #120 리뷰).
+      # p95 계산에는 지장 없이 시계열 수를 줄여서, 7.3.3 Grafana Cloud remote_write 비용(R9)도 함께 줄어든다
+      minimum-expected-value:
+        http.server.requests: 10ms
+      maximum-expected-value:
+        http.server.requests: 5s
 
 # AI 판결 RAG 유사 판례 검색 (BE-51). 키가 없으면 RAG만 꺼지고 서버는 정상으로 뜬다
 # 모델 · 차원은 판례 적재 도구(tools/ai-judgment/rag_store.py)와 같아야 한다

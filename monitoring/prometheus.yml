@@ -1,4 +1,4 @@
-# Prometheus 스크레이프 설정 (BE-66, WBS 7.2.2)
+# Prometheus 스크레이프 설정 (BE-70, WBS 7.2.2)
 # "scrape 대상 · 간격 · 보존 기간" 중 간격은 여기, 보존 기간은 docker-compose.yml(--storage.tsdb.retention.time)에 있다.
 global:
   scrape_interval: 15s      # Actuator 응답은 가벼워서(지금은 메트릭 몇십 개) 15s도 부담 없다. 기본값 1m보다 촘촘해 대시보드 반응이 빠르다
