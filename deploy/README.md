@@ -35,6 +35,7 @@ cp .env.example .env
 # .env에서 POSTGRES_PASSWORD를 아무 값으로 채운다. 80번 포트가 쓰이고 있으면 WEB_PORT=8081
 docker compose -f docker-compose.prod.yml build
 docker compose -f docker-compose.prod.yml up -d
+# 백엔드가 뜰 때까지 10 ~ 20초 정도 걸린다. 바로 실행해 /api가 실패하면 잠시 뒤 다시 실행한다
 ./smoke-test.sh http://localhost          # 기본 WEB_PORT=80
 # ./smoke-test.sh http://localhost:8081   # .env에서 WEB_PORT=8081로 바꾼 경우
 docker compose -f docker-compose.prod.yml down      # 데이터까지 지우려면 down -v
@@ -59,6 +60,12 @@ chmod 600 .env
 
 docker compose -f docker-compose.prod.yml pull
 docker compose -f docker-compose.prod.yml up -d --no-build
+
+# 백엔드 기동(Flyway 마이그레이션 포함)을 기다린 뒤 스모크 테스트한다 (CI와 같은 방식, 최대 2분)
+for i in $(seq 1 60); do
+  [ "$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' http://localhost/api/v1/cases)" = "200" ] && echo "ready after $((i * 2))s" && break
+  sleep 2
+done
 ./smoke-test.sh http://localhost
 ```
 
