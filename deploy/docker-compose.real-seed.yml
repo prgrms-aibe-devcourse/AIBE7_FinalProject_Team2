@@ -1,0 +1,15 @@
+# 실제 사건 데이터 연결 (서버 전용, docs/tech-stack.md 2장 "운영 (최종)")
+# docker-compose.prod.yml 위에 겹쳐서 실행한다:
+#   docker compose -f docker-compose.prod.yml -f docker-compose.real-seed.yml up -d --no-build
+#
+# - 실제 사건 SQL(비공개 저장소 seed/)을 서버에 따로 받아 두고, 그 폴더를 백엔드 컨테이너에 읽기 전용으로 붙인다
+# - 공개 저장소 · 이미지 · CI에는 실제 데이터가 들어가지 않는다 (BE-17). 그래서 이 파일은 서버에서만 쓴다
+# - 개발용 가상 사건 시드(classpath:db/seed)는 넣지 않는다
+
+services:
+  backend:
+    environment:
+      FLYWAY_LOCATIONS: classpath:db/migration,filesystem:/real-seed
+    volumes:
+      # REAL_SEED_DIR: 서버에 받아 둔 비공개 저장소의 seed 폴더 절대 경로 (deploy/.env)
+      - ${REAL_SEED_DIR:?deploy/.env에 REAL_SEED_DIR(실제 사건 seed 폴더 절대 경로)를 넣어야 한다}:/real-seed:ro

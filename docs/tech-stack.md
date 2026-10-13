@@ -21,6 +21,7 @@
 | v1.14 | 2026-10-12 | BE-52 반영 — 2장 마이그레이션 목록에 V13(`rag_guideline` · 양형기준 버전 함수) 추가, 6장 구현 현황에 양형기준 RAG 저장소 표기 |
 | v1.15 | 2026-10-12 | BE-57 반영 (**확장 단계**, WBS 7.4.1) — 3장 "사용자 인증 기반" 신설: 필터 체인을 관리자(세션 · CSRF) / 사용자(무상태 · Bearer 토큰)로 분리, 토큰 계약(`TokenIssuer` · `AccessTokenVerifier` · `MemberPrincipal` · `IssuedTokens`), 토큰 오류 401(`TOKEN_INVALID` · `TOKEN_EXPIRED`), CORS 미설정 근거, 보안 헤더(Referrer-Policy · HSTS · CSP 담당), 리프레시 쿠키 · OAuth 임시 상태 결정 위임(C · D). 리뷰 반영: `Bearer`가 아닌 스킴은 검증하지 않고 익명으로 통과 |
 | v1.16 | 2026-10-13 | 관리자 로그인 보강 (**확장 단계**, BE-67 · WBS 7.4.5) — 3장 관리자 인증: 세션 중 계정 확인(비활성 · 삭제면 CSRF 검사 전에 401) 추가, 로그인 실패 응답 시간 맞춤(비활성 계정도 계정 없음과 같은 경로, 해시는 앱 인코더로만), 로그인 성공 시 CSRF 토큰 교체 · 로그아웃 시 삭제, 비밀번호 확인을 트랜잭션 밖으로 |
+| v1.17 | 2026-10-13 | BE-58 반영 (**확장 단계**, WBS 7.1.1) — 8장 배포 흐름을 실제 구성으로 정정: 웹(Nginx) · 백엔드 · DB 컨테이너(`deploy/docker-compose.prod.yml`), GitHub Actions(`deploy-images.yml`)가 이미지 빌드 → 운영 구성 스모크 테스트 → develop 머지 시 GHCR 업로드, 서버는 받아서 실행만. Nginx 예시 경로를 웹 이미지 기준(`/usr/share/nginx/html`)으로 바꾸고 `/api` 프록시 규칙 추가. 실제 사건 연결은 2장 "운영 (최종)"대로 서버 전용 덧붙임 파일(`docker-compose.real-seed.yml`) |
 
 
 ## **1. Backend**
@@ -480,21 +481,23 @@ CI가 실패한 PR은 Merge하지 않는 것을 기본 원칙으로 한다.
 | **기술** | **사용 목적** |
 | --- | --- |
 | AWS EC2 | 백엔드 · 프론트엔드 서버 운영 |
-| Docker | EC2에서 백엔드 컨테이너 실행 |
-| Nginx | 프론트엔드 빌드 파일(정적 파일) 서빙, `/api` 요청을 백엔드 컨테이너로 프록시 |
+| Docker · Docker Compose | EC2에서 웹(Nginx) · 백엔드 · DB 컨테이너 실행 (`deploy/docker-compose.prod.yml`) |
+| Nginx | 웹 이미지 안에서 프론트엔드 빌드 파일(정적 파일) 서빙, `/api` 요청을 백엔드 컨테이너로 프록시 (`frontend/nginx/default.conf`) |
+| GHCR (GitHub Container Registry) | 운영 이미지 저장소. 서버는 받아서 실행만 한다 (서버에서 빌드하지 않음) |
 
 ```
-PR Merge
+PR → GitHub Actions(deploy-images.yml): 이미지 빌드 → 운영 구성으로 실행 → 스모크 테스트 (업로드 안 함)
 
+PR Merge (develop)
 ↓
-Docker 이미지 빌드
-
+GitHub Actions: 이미지 빌드 → 스모크 테스트 통과 시 GHCR 업로드 (태그 develop · sha-커밋7자리)
 ↓
-AWS EC2에서 컨테이너 실행 (환경변수로 접속 정보 주입)
-
+AWS EC2: 이미지 받기 → 컨테이너 실행 (환경변수로 접속 정보 주입) → deploy/smoke-test.sh
 ↓
 PostgreSQL / Redis 연결
 ```
+
+자세한 실행 방법 · 환경변수는 [`deploy/README.md`](../deploy/README.md)에 둔다 (BE-58).
 
 프론트엔드와 API는 **같은 도메인**으로 배포한다. 프론트엔드는 `npm run build` 결과물을 Nginx가 서빙하고, `/api`로 시작하는 요청은 Nginx가 백엔드 컨테이너로 넘긴다. 로컬의 Vite 프록시와 같은 구조라 익명 ID 쿠키를 `SameSite=Lax`로 쓸 수 있고 CORS 설정이 필요 없다(API 명세서 1-2 · 6장 #2).
 
@@ -509,13 +512,17 @@ PostgreSQL / Redis 연결
 이 처리를 자동으로 해 주지만 Nginx는 직접 설정해야 한다(FE-2 PR #55 리뷰 반영).
 
 ```nginx
+# frontend/nginx/default.conf 요약 — 웹 이미지 안에서는 빌드 산출물을 /usr/share/nginx/html에 둔다
+location ^~ /api/ {
+    proxy_pass http://backend:8080;   # /api는 index.html로 떨어지면 안 된다 (200 + HTML → 프론트가 응답을 해석하지 못함)
+}
 location / {
-    root /var/www/frontend;        # 프론트엔드 빌드 산출물(dist) 경로
+    root /usr/share/nginx/html;       # 프론트엔드 빌드 산출물(dist) 경로
     try_files $uri $uri/ /index.html;
 }
 ```
 
-배포 자동화(CD)는 개발이 어느 정도 완료된 이후 추가한다.
+배포 자동화(CD)는 단계로 나눠 붙인다. 이미지 빌드 · 스모크 테스트 · GHCR 업로드는 BE-58에서 먼저 붙였고, EC2에 자동으로 반영하는 단계는 7.1.3(BE-60)에서 붙인다.
 
 ---
 
