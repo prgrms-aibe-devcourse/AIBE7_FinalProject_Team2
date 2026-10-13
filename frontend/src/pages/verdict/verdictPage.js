@@ -1,6 +1,7 @@
 import { renderLawInfoBox } from '../../components/lawInfoBox.js';
 import { renderRecommendedRangeBar, formatMonths } from '../../components/recommendedRangeBar.js';
 import { getDraft, saveDraft, clearDraft } from './verdictDraft.js';
+import { markAiRevealIntro } from '../ai/aiRevealIntro.js';
 
 const penaltyLabels = { DEATH: '사형', LIFE: '무기징역', PRISON: '징역', FINE: '벌금' };
 
@@ -315,6 +316,7 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       try {
         await api.postVerdict(caseId, payload);
         clearDraft(caseId);
+        markAiRevealIntro(caseId); // S-07에서 로딩 · 안내를 한 번 보여 준다 (7.7.4)
         if (active()) navigate('ai');
       } catch (error) {
         if (!active()) return;
