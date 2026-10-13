@@ -7,6 +7,7 @@
 | v0.1 | 2026-10-12 | 초안 (BE-65, WBS 7.6.2 · 6.1.4) — 성향 테스트 채점(4칸 선택지 · 축 점수 · 동점 처리 · 관용 지수), 판결 체험 → 성향 변환(가중 · 감경 → 글자), 체험별 · 종합 성향 계산, 저장 형식, 팀 확인 항목 |
 | v0.2 | 2026-10-13 | PR #109 리뷰 반영 (김해송) — 선택지 **5칸**(보통 = 0점, 글자 없음), 동점은 테스트 · 체험 · 종합 모두 **관대 글자**(편향은 알고 감수), 빈 축을 테스트 글자로 채우지 않고 **네 축 모두 값이 있을 때만 종합 유형**, 대표 캐릭터는 **테스트 유형 고정**, 글자 판정은 정확한 분수(종합 포함), 체험별 `type_code` 저장 안 함, 선택지 글자 검사는 **복합 FK + CHECK**, `subject_type` 컬럼명 · 동점 설명 정정 |
 | v0.3 | 2026-10-13 | PR #109 CodeRabbit 리뷰 반영 — 체험 성향은 축 점수(소수) 대신 **축별 감경 · 가중 개수**(`axis_counts`)를 고정 저장하고 점수 · 판정은 개수로 계산, 이미 `COMPLETED`인 요청은 기존 기록 유지(API 13 본문은 7.6.7에서 갱신), 선택지 CHECK에 `letter IS NOT NULL` · `score NOT NULL` 추가 |
+| v0.4 | 2026-10-13 | 마이그레이션 번호 표기 정리 — V14는 관리자 감사 로그(BE-68)가 써서, 성향 DB(7.6.3)는 머지 직전 develop의 다음 번호를 쓴다(WBS R17) |
 
 > 요구사항 [18장](requirements-specification.md) FR-8-1 ~ FR-8-8, 15장 "성향 테스트 (v5.8)" 미정 항목 중 **산식 · 매핑 · 종합 · 재응시 · 테스트 없이 체험만 한 사용자**를 이 문서에서 정한다.
 > 테이블은 [ERD 8장](erd.md) 제안을 따른다. 판단 요소가 어느 축에 속하는지는 `factor.value_axis`(BE-47)가 정하고, 이 문서는 **고른 방향이 어느 글자로 가는지**만 정한다(ERD 8장 "산식 문서로 정한다").
@@ -212,9 +213,9 @@
 
 - 체험 성향은 개수만 저장하고 축 점수(0 ~ 1)는 조회할 때 계산한다. 테스트 결과의 `axis_scores`는 화면 표시용이고(3문항 축은 ÷ 12라 소수가 잘릴 수 있다), 글자는 제출 때 정수로 판정해 `type_code`에 저장하므로 다시 판정하지 않는다. 화면에는 정수 %로 반올림해 보여 준다.
 - 4글자 순서는 축 순서(사과 · 잘잘못 · 원칙 · 질서) 그대로다.
-- ERD 8장 제안의 `experience_personality.type_code`는 빼고 `axis_scores`는 `axis_counts`로 바꾸며, `personality_choice`에 `axis`를 더한다. ERD 반영은 7.6.3(V14)에서 한다.
+- ERD 8장 제안의 `experience_personality.type_code`는 빼고 `axis_scores`는 `axis_counts`로 바꾸며, `personality_choice`에 `axis`를 더한다. ERD 반영은 7.6.3 마이그레이션에서 한다.
 
-**선택지 글자 검사 (V14).** PostgreSQL CHECK는 다른 테이블을 참조할 수 없으므로 복합 FK로 축을 끌어와 같은 행 안에서 검사한다. 트리거 · 앱 검증보다 DB가 직접 막고, 시드를 잘못 넣어도 실패한다. CHECK는 결과가 NULL이면 통과시키므로 `letter IS NOT NULL` · `score NOT NULL`을 따로 적는다(`letter = NULL, score = 1` 같은 행 차단).
+**선택지 글자 검사 (7.6.3 마이그레이션).** PostgreSQL CHECK는 다른 테이블을 참조할 수 없으므로 복합 FK로 축을 끌어와 같은 행 안에서 검사한다. 트리거 · 앱 검증보다 DB가 직접 막고, 시드를 잘못 넣어도 실패한다. CHECK는 결과가 NULL이면 통과시키므로 `letter IS NOT NULL` · `score NOT NULL`을 따로 적는다(`letter = NULL, score = 1` 같은 행 차단).
 
 ```sql
 ALTER TABLE personality_question ADD CONSTRAINT uk_personality_question_id_axis UNIQUE (id, axis);
