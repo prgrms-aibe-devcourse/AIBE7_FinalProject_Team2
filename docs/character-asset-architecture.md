@@ -627,6 +627,8 @@ frontend/public/images/characters/
 
 ### 7-1. 제작 순서
 
+> 만들 이미지 하나하나의 목록 · 상태는 [캐릭터 이미지 제작 목록](character-image-checklist.md)에서 관리한다.
+
 | 단계 | 할 일 | 결과물 | 먼저 필요한 것 |
 | --- | --- | --- | --- |
 | 0 | 기존 프롬프트를 문구 그대로 블록으로 나누고(5-1), 조합기 작성 | `tools/character-assets/prompts/` · `compose_prompt.py` | 블록 저장 위치 |
