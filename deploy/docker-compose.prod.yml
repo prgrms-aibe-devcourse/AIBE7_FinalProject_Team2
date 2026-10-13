@@ -16,6 +16,10 @@ services:
       context: ../frontend
     ports:
       - "${WEB_PORT:-80}:80"
+    # 백엔드가 "준비될 때"까지 기다리지 않는다(service_started). 일부러 그렇게 둔다:
+    # - Nginx는 백엔드 주소를 요청마다 다시 조회하므로(default.conf resolver) 백엔드가 늦게 떠도 그 뒤 요청부터 정상 전달된다
+    # - 백엔드가 뜨기 전 /api 요청은 502(HTML)지만 프론트는 5xx를 "서버에 연결할 수 없어요"로 안내한다(api/client.js)
+    # - 백엔드에 상태 확인 엔드포인트(Actuator, BE-66)가 생기면 healthcheck + service_healthy로 바꾸는 것을 검토한다
     depends_on:
       - backend
     restart: unless-stopped

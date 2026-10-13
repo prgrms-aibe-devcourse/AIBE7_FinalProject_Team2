@@ -34,6 +34,8 @@ permissions:
 
 env:
   # GHCR 이미지 이름 앞부분 (소문자만 허용). 서버의 deploy/.env IMAGE_PREFIX와 같아야 한다
+  # 지금 조직명(prgrms-aibe-devcourse)은 소문자라 그대로 쓴다. fork · 조직 이전으로 대문자가 섞이면
+  # 이 줄을 소문자 고정 문자열로 바꾼다 (Actions 식에는 소문자 변환 함수가 없다)
   IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/lawnambul
   # 이 실행에서만 쓰는 태그. 스모크 테스트를 통과하면 publish job이 develop · sha 태그를 붙여 올린다
   IMAGE_TAG: ci-${{ github.sha }}
