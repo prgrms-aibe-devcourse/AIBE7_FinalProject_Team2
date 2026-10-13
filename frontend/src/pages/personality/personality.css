@@ -1,0 +1,76 @@
+/* S-15 판결 성향 테스트 · S-16 성향 결과. 색은 역할 토큰만 쓴다(FE-17). 페이지 틀은 S-14 · S-01과 같다 */
+.personality-page {
+  max-width: var(--content-width);
+  margin: 0 auto;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font: var(--text-body)/1.75 var(--font-body);
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+}
+.personality-page .site-header button { font: inherit; cursor: pointer; }
+.personality-page .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+.personality-main { max-width: 760px; margin: 0 auto; padding: 40px 28px 56px; }
+.personality-main h1 { margin: 0 0 12px; font-size: var(--text-title-1); line-height: 1.35; }
+.personality-main h2 { margin: 0 0 12px; color: var(--color-label); font-size: 14px; }
+.personality-kicker { margin: 0 0 8px; color: var(--color-label); font-size: var(--text-small); font-weight: 700; }
+.personality-lead { margin: 0 0 20px; color: var(--color-muted); }
+.personality-notes { margin: 0 0 28px; padding-left: 20px; }
+.personality-notes li + li { margin-top: 6px; }
+.personality-main .message-panel button { margin-top: 20px; }
+
+/* S-15 문항 */
+.personality-progress { display: flex; align-items: center; gap: 12px; margin-bottom: 28px; color: var(--color-muted); font-size: var(--text-small); }
+.personality-progress-track { flex: 1; height: 6px; background: var(--color-track); border-radius: 3px; overflow: hidden; }
+.personality-progress-track span { display: block; height: 100%; background: var(--color-accent); }
+.personality-fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
+.personality-scenario { padding: 0; margin-bottom: 28px; font: 700 var(--text-title-3)/1.6 var(--font-body); color: var(--color-heading); }
+.personality-chip { display: inline-block; margin-right: 10px; padding: 2px 10px; border: 1px solid var(--color-border-strong); border-radius: 12px; color: var(--color-muted); font-size: var(--text-caption); font-weight: 700; vertical-align: 2px; }
+.personality-ends { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.personality-ends p { margin: 0; padding: 14px 16px; border: 1px solid var(--color-border); border-radius: 4px; background: var(--color-surface); }
+.personality-ends p:last-child { text-align: right; }
+.personality-scale { display: flex; justify-content: space-between; align-items: center; margin: 24px 8% 8px; }
+.personality-option { display: flex; align-items: center; justify-content: center; position: relative; cursor: pointer; }
+.personality-option input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.personality-dot { display: block; border: 2px solid var(--color-border-strong); border-radius: 50%; background: var(--color-card); }
+.personality-option.step-0 .personality-dot, .personality-option.step-4 .personality-dot { width: 40px; height: 40px; }
+.personality-option.step-1 .personality-dot, .personality-option.step-3 .personality-dot { width: 32px; height: 32px; }
+.personality-option.step-2 .personality-dot { width: 24px; height: 24px; }
+.personality-option:hover .personality-dot { border-color: var(--color-accent); }
+.personality-option input:checked + .personality-dot { border-color: var(--color-accent); background: var(--color-accent); }
+.personality-option input:focus-visible + .personality-dot { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+.personality-actions { display: flex; justify-content: space-between; gap: 12px; margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--color-border); }
+
+/* S-16 결과 */
+.result-card { display: grid; grid-template-columns: 220px 1fr; gap: 28px; align-items: center; padding-bottom: 28px; margin-bottom: 28px; border-bottom: 1px solid var(--color-border); }
+.result-portrait { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; aspect-ratio: 4 / 5; padding: 16px; border: 1px dashed var(--color-border-strong); border-radius: 8px; background: var(--color-surface); text-align: center; }
+.result-portrait strong { font: 900 var(--text-title-2)/1 var(--font-heading); color: var(--color-heading); }
+.result-portrait span { color: var(--color-muted); font-size: var(--text-small); }
+.result-code { margin: 0; font: 900 var(--text-display)/1.1 var(--font-heading); letter-spacing: .08em; color: var(--color-accent); }
+.result-oneliner { margin: 0; color: var(--color-muted); }
+.result-section { padding-bottom: 24px; margin-bottom: 24px; border-bottom: 1px solid var(--color-border); }
+.result-section p { margin: 0; }
+.axis-list { margin: 0 0 24px; padding: 0; list-style: none; display: grid; gap: 18px; }
+.axis-label { margin: 0 0 4px; font-weight: 700; }
+.axis-ends { display: flex; justify-content: space-between; gap: 12px; color: var(--color-muted); font-size: var(--text-small); }
+.axis-ends .is-major { color: var(--color-heading); font-weight: 700; }
+.axis-bar { height: 10px; margin-top: 6px; background: var(--color-track); border-radius: 5px; overflow: hidden; }
+.axis-bar span { display: block; height: 100%; background: var(--color-accent); }
+.tolerance-title { margin: 0 0 4px; font-weight: 700; }
+.tolerance-note { margin-top: 10px; color: var(--color-muted); font-size: var(--text-small); }
+.result-notice { margin-bottom: 8px; padding: 16px 18px; border-radius: 4px; background: var(--color-surface); color: var(--color-muted); font-size: var(--text-small); }
+.result-notice p { margin: 0; }
+.result-notice p + p { margin-top: 6px; }
+.result-actions { flex-wrap: wrap; justify-content: flex-start; }
+
+@media (max-width: 720px) {
+  .personality-main { padding: 28px 16px 40px; }
+  .personality-main h1 { font-size: var(--text-title-2); }
+  .personality-ends { grid-template-columns: 1fr; }
+  .personality-ends p:last-child { text-align: left; }
+  .personality-scale { margin: 20px 0 8px; }
+  .result-card { grid-template-columns: 1fr; }
+  .result-portrait { max-width: 220px; justify-self: center; width: 100%; }
+  .personality-actions { flex-direction: column; }
+}

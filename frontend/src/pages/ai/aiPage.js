@@ -1,4 +1,5 @@
 import { formatMonths } from '../../components/recommendedRangeBar.js';
+import { renderAiRevealIntro, takeAiRevealIntro } from './aiRevealIntro.js';
 import { formatPenalty, diffPhrase } from '../../utils/judgmentFormat.js';
 
 const directionLabels = { UP: '가중 요소', DOWN: '감경 요소' };
@@ -117,12 +118,22 @@ export async function renderAiPage(container, { caseId, caseHeader, api, navigat
     root.replaceChildren(header, tabs, main, footer);
   }
 
-  async function load() {
+  async function load(intro = false) {
     if (loading || !active()) return;
     loading = true;
-    message('AI 판결 정보를 불러오는 중…');
+    // 판결을 막 확정하고 온 경우(S-06 → S-07)에는 로딩 · 안내를 먼저 보여 준다 (7.7.4)
+    if (!intro) message('AI 판결 정보를 불러오는 중…');
     try {
-      const data = await api.getAiJudgment(caseId);
+      const request = api.getAiJudgment(caseId);
+      if (intro) {
+        renderAiRevealIntro(root, {
+          ready: request,
+          onContinue: () => request.then((data) => { if (active()) draw(data); }),
+        });
+        await request; // 실패하면 아래 catch가 안내를 바꾼다
+        return;
+      }
+      const data = await request;
       if (active()) draw(data);
     } catch (error) {
       if (!active()) return;
@@ -137,5 +148,5 @@ export async function renderAiPage(container, { caseId, caseHeader, api, navigat
       }
     } finally { loading = false; }
   }
-  await load();
+  await load(takeAiRevealIntro(caseId));
 }

@@ -1,4 +1,5 @@
 import { button, element, renderSiteFooter } from '../../components/siteLayout.js';
+import { fallbackImages, todayLabel } from '../../utils/newspaper.js';
 import { screenByStatus } from '../../utils/screenByStatus.js';
 
 // S-02 사건 목록 — 신문 1면 (FE-18, 시안 v12 + 배치 조정). 체험 시작 · 유형 필터 · 오류 처리 로직은 FE-4 · FE-11과 같다.
@@ -12,12 +13,6 @@ const tabs = [
   { crimeType: 'FRAUD', label: '사기' },
   { crimeType: 'INJURY', label: '상해' },
 ];
-// thumbnailUrl이 없을 때 쓰는 유형별 연출 이미지 (frontend/public/images)
-const fallbackImages = {
-  MURDER: '/images/case-murder.svg',
-  FRAUD: '/images/case-fraud.svg',
-  INJURY: '/images/case-injury.svg',
-};
 const RECOMMENDED_COUNT = 2; // 머리기사 옆 추천 사건 수. 나머지는 "이번 호 다른 사건"으로 간다
 
 // 머리기사 단 안내 (모든 사건 공통)
@@ -36,13 +31,6 @@ const TYPE_NOTES = {
 };
 const RECORD_NOTE = '사건에 어떤 사정이 있었는지는 체험을 시작하면 사건 기록에서 한 단계씩 확인할 수 있습니다.';
 const headlineOf = (item) => item.headline || item.title;
-const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
-
-function todayLabel() {
-  const now = new Date();
-  return `${now.getFullYear()}년 ${now.getMonth() + 1}월 ${now.getDate()}일 ${WEEKDAYS[now.getDay()]}요일`;
-}
-
 function dense(paragraphs) {
   const node = element('div', 'dense');
   paragraphs.forEach((text) => node.append(element('p', '', text)));

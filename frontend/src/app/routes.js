@@ -11,7 +11,10 @@ import { renderCaseListPage } from '../pages/caseList/caseListPage.js';
 import { renderComparisonPage } from '../pages/comparison/comparisonPage.js';
 import { renderCourtPage } from '../pages/court/courtPage.js';
 import { renderLandingPage } from '../pages/landing/landingPage.js';
+import { renderMyPage } from '../pages/myPage/myPage.js';
 import { renderOverviewPage } from '../pages/overview/overviewPage.js';
+import { renderPersonalityPage } from '../pages/personality/personalityPage.js';
+import { renderPersonalityResultPage } from '../pages/personality/personalityResultPage.js';
 import { renderReviewPage } from '../pages/review/reviewPage.js';
 import { renderSummaryPage } from '../pages/summary/summaryPage.js';
 import { renderVerdictPage } from '../pages/verdict/verdictPage.js';
@@ -27,6 +30,14 @@ export const routes = [
   { name: 'ai', path: '/cases/:caseId/result/ai', render: renderAiPage, needsHeader: true, title: 'AI 판결' },
   { name: 'court', path: '/cases/:caseId/result/court', render: renderCourtPage, needsHeader: true, title: '실제 판결' },
   { name: 'comparison', path: '/cases/:caseId/result/compare', render: renderComparisonPage, needsHeader: true, title: '세 판결 비교' },
+  // 확장: 판결 성향 테스트 · 마이페이지 (S-15 ~ S-17). 공유된 결과(/test/types/{code})는 공유 API 계약 뒤에 추가한다
+  { name: 'test', path: '/test', render: renderPersonalityPage, title: '판결 성향 테스트' },
+  { name: 'testResult', path: '/test/result', render: renderPersonalityResultPage, title: '성향 결과' },
+  { name: 'me', path: '/me', render: renderMyPage, title: '마이페이지' },
+  // 확장: S-19 관리자 검수 (FE-16). 관리자 코드는 사용자 화면 번들에 넣지 않으려고 필요할 때만 불러온다.
+  // 관리자 화면은 관리자 api를 따로 쓰고(pages/admin/adminApi.js), 사용자 사이트 푸터 대신 자기 틀을 그린다
+  { name: 'admin', path: '/admin', render: (container, options) => import('../pages/admin/adminListPage.js').then((m) => m.renderAdminListPage(container, options)), ownsFooter: true, title: '관리자' },
+  { name: 'adminCase', path: '/admin/cases/:caseId', render: (container, options) => import('../pages/admin/adminCasePage.js').then((m) => m.renderAdminCasePage(container, options)), ownsFooter: true, title: '관리자' },
   // S-14: 주소가 없다. 맞는 화면이 없는 주소거나 없는 사건일 때 보여 준다 (라우터 showNotFound · errorRedirect CASE_NOT_FOUND)
   { name: 'notFound', path: null, render: renderNotFoundPage, title: '찾을 수 없어요' },
 ];
