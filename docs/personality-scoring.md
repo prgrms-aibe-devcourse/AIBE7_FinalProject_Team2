@@ -6,6 +6,7 @@
 | --- | --- | --- |
 | v0.1 | 2026-10-12 | 초안 (BE-65, WBS 7.6.2 · 6.1.4) — 성향 테스트 채점(4칸 선택지 · 축 점수 · 동점 처리 · 관용 지수), 판결 체험 → 성향 변환(가중 · 감경 → 글자), 체험별 · 종합 성향 계산, 저장 형식, 팀 확인 항목 |
 | v0.2 | 2026-10-13 | PR #109 리뷰 반영 (김해송) — 선택지 **5칸**(보통 = 0점, 글자 없음), 동점은 테스트 · 체험 · 종합 모두 **관대 글자**(편향은 알고 감수), 빈 축을 테스트 글자로 채우지 않고 **네 축 모두 값이 있을 때만 종합 유형**, 대표 캐릭터는 **테스트 유형 고정**, 글자 판정은 정확한 분수(종합 포함), 체험별 `type_code` 저장 안 함, 선택지 글자 검사는 **복합 FK + CHECK**, `subject_type` 컬럼명 · 동점 설명 정정 |
+| v0.3 | 2026-10-13 | PR #109 CodeRabbit 리뷰 반영 — 체험 성향은 축 점수(소수) 대신 **축별 감경 · 가중 개수**(`axis_counts`)를 고정 저장하고 점수 · 판정은 개수로 계산, 이미 `COMPLETED`인 요청은 기존 기록 유지(API 13 본문은 7.6.7에서 갱신), 선택지 CHECK에 `letter IS NOT NULL` · `score NOT NULL` 추가 |
 
 > 요구사항 [18장](requirements-specification.md) FR-8-1 ~ FR-8-8, 15장 "성향 테스트 (v5.8)" 미정 항목 중 **산식 · 매핑 · 종합 · 재응시 · 테스트 없이 체험만 한 사용자**를 이 문서에서 정한다.
 > 테이블은 [ERD 8장](erd.md) 제안을 따른다. 판단 요소가 어느 축에 속하는지는 `factor.value_axis`(BE-47)가 정하고, 이 문서는 **고른 방향이 어느 글자로 가는지**만 정한다(ERD 8장 "산식 문서로 정한다").
@@ -26,7 +27,7 @@
 | 체험 축 점수 | 감경 개수 ÷ (가중 + 감경). 그 축에 고른 요소가 없으면 `null` |
 | 종합 성향 | 체험별 축 점수의 **평균**(체험마다 같은 무게). 테스트 결과는 섞지 않는다 ⚠️. **네 축 모두 값이 있을 때만** 종합 유형을 보여 준다 |
 | 대표 캐릭터 | **테스트 유형으로 고정.** 종합은 "판결에서는 ○○○○"처럼 비교로 보여 준다 |
-| 저장 시점 | 체험이 `COMPLETED`가 될 때 계산해 `experience_personality`에 **고정 저장**(7.6.7) |
+| 저장 시점 | 체험이 처음 `COMPLETED`가 될 때 축별 **감경 · 가중 개수**를 `experience_personality`에 **고정 저장**(7.6.7). 점수 · 글자는 이 개수로 계산한다 |
 
 ---
 
@@ -122,15 +123,19 @@
 - **축 점수 = 감경 개수 ÷ (가중 개수 + 감경 개수)**
 - 그 축에 해당하는 요소를 하나도 고르지 않았으면 `null`(자료 없음)
 - 글자: 0.5보다 크면 관대, 작으면 엄격, **0.5면 관대**(2-3과 같은 규칙)
-- 체험 유형 코드는 저장하지 않는다. 동점 규칙이 고정이라 축 점수만으로 언제나 같은 글자가 나오므로, 필요할 때 계산한다. 네 축 모두 값이 있을 때만 4글자 코드가 있다
+- 체험 유형 코드는 저장하지 않는다. 동점 규칙이 고정이라 개수만으로 언제나 같은 글자가 나오므로, 필요할 때 계산한다. 네 축 모두 값이 있을 때만 4글자 코드가 있다
+- 저장하는 것은 축별 **감경 · 가중 개수**다(6장 `axis_counts`). 소수로 저장하면 1/3 같은 값이 잘려 종합 동점 판정이 흔들리고, 그렇다고 지금의 `factor` · `judgment_factor`로 다시 계산하면 3-4의 고정 저장이 깨진다
 
 ### 3-4. 저장 시점
 
-체험이 `COMPLETED`가 될 때(API 13 비교 공개, api-specification 7장 제안) 서버가 같은 트랜잭션에서 계산해 `experience_personality`에 저장한다(7.6.7).
+체험이 **처음** `COMPLETED`가 될 때(API 13 비교 공개, `AI_REVEALED` → `COMPLETED`) 서버가 상태 변경과 **같은 트랜잭션**에서 개수를 세어 `experience_personality`에 저장한다(7.6.7).
+
+- **이미 `COMPLETED`인 체험에 API 13이 다시 오면** 상태와 함께 기존 기록을 그대로 둔다(다시 세지 않는다). `experience_id` 유니크라 행이 둘 생기지 않는다.
+- API 13 본문(api-specification 3장)에는 아직 이 저장이 없다. 구현 전에 명세에 "저장한다"고 쓰면 코드와 어긋나므로, **7.6.7 PR에서 구현과 함께 API 13 본문을 고친다**(PR #109 리뷰).
 
 - **고정 저장.** 나중에 관리자가 `value_axis`를 고쳐도 지난 체험의 성향은 바뀌지 않는다. 성향 변화 흐름이 저절로 바뀌면 사용자가 혼란스럽기 때문이다.
 - 성향 테스트를 하기 전에 끝낸 체험도 저장한다(ERD 8장). 나중에 테스트를 하면 바로 종합 성향에 들어간다.
-- 판단 요소를 하나도 고르지 않은 체험도 행은 남긴다(네 축 모두 `null`).
+- 판단 요소를 하나도 고르지 않은 체험도 행은 남긴다(네 축 모두 `{"down": 0, "up": 0}` = 자료 없음).
 
 ### 3-5. 계산 예시
 
@@ -203,24 +208,25 @@
 | `personality_result.axis_scores` | `{"APOLOGY_SINCERITY": 0.5, "FAULT_STANDARD": 0.75, "PRINCIPLE_RELATION": 0.25, "ORDER_OPPORTUNITY": 0.6875}` — 관대 쪽 비중 |
 | `personality_result.type_code` | 4글자(축 점수에서 계산한 값과 같아야 한다). `personality_type` FK · 공유 조회용으로 저장한다 |
 | `personality_result.answers` | `[{"questionId": 1, "choiceId": 3}, …]` |
-| `experience_personality.axis_scores` | 같은 키, 값은 0 ~ 1 또는 `null` |
+| `experience_personality.axis_counts` | `{"APOLOGY_SINCERITY": {"down": 1, "up": 0}, "FAULT_STANDARD": {"down": 0, "up": 2}, …}` — 축마다 감경 · 가중 개수. 네 키를 모두 두고, 고른 요소가 없으면 `{"down": 0, "up": 0}`(= 자료 없음). 축 점수 = down ÷ (down + up) |
 
-- 축 점수는 계산할 때 반올림하지 않고 저장하고, 화면에 보여 줄 때만 정수 %로 반올림한다.
+- 체험 성향은 개수만 저장하고 축 점수(0 ~ 1)는 조회할 때 계산한다. 테스트 결과의 `axis_scores`는 화면 표시용이고(3문항 축은 ÷ 12라 소수가 잘릴 수 있다), 글자는 제출 때 정수로 판정해 `type_code`에 저장하므로 다시 판정하지 않는다. 화면에는 정수 %로 반올림해 보여 준다.
 - 4글자 순서는 축 순서(사과 · 잘잘못 · 원칙 · 질서) 그대로다.
-- ERD 8장 제안의 `experience_personality.type_code`는 빼고, `personality_choice`에 `axis`를 더한다. ERD 반영은 7.6.3(V14)에서 한다.
+- ERD 8장 제안의 `experience_personality.type_code`는 빼고 `axis_scores`는 `axis_counts`로 바꾸며, `personality_choice`에 `axis`를 더한다. ERD 반영은 7.6.3(V14)에서 한다.
 
-**선택지 글자 검사 (V14).** PostgreSQL CHECK는 다른 테이블을 참조할 수 없으므로 복합 FK로 축을 끌어와 같은 행 안에서 검사한다. 트리거 · 앱 검증보다 DB가 직접 막고, 시드를 잘못 넣어도 실패한다.
+**선택지 글자 검사 (V14).** PostgreSQL CHECK는 다른 테이블을 참조할 수 없으므로 복합 FK로 축을 끌어와 같은 행 안에서 검사한다. 트리거 · 앱 검증보다 DB가 직접 막고, 시드를 잘못 넣어도 실패한다. CHECK는 결과가 NULL이면 통과시키므로 `letter IS NOT NULL` · `score NOT NULL`을 따로 적는다(`letter = NULL, score = 1` 같은 행 차단).
 
 ```sql
 ALTER TABLE personality_question ADD CONSTRAINT uk_personality_question_id_axis UNIQUE (id, axis);
 
 -- personality_choice
 axis varchar(20) NOT NULL,
+score smallint NOT NULL,
 CONSTRAINT fk_personality_choice_question_axis
     FOREIGN KEY (question_id, axis) REFERENCES personality_question (id, axis),
 CONSTRAINT chk_personality_choice_letter CHECK (
     (letter IS NULL AND score = 0)
-    OR (score IN (1, 2) AND (
+    OR (letter IS NOT NULL AND score IN (1, 2) AND (
            (axis = 'APOLOGY_SINCERITY'  AND letter IN ('E', 'I'))
         OR (axis = 'FAULT_STANDARD'     AND letter IN ('S', 'N'))
         OR (axis = 'PRINCIPLE_RELATION' AND letter IN ('T', 'F'))
@@ -239,11 +245,14 @@ testScore(axis):
   S = Σ score (letter가 엄격 글자인 답)
   return (L - S + 2n) / (4n)
 
-experienceScore(experienceId, axis):
+countAxis(experienceId, axis):          # COMPLETED 때 한 번만, axis_counts로 저장
   rows = USER · FINAL judgment_factor ⨝ factor
          where factor.value_axis = axis and direction in (UP, DOWN)
-  if rows 비어 있음: return null
-  return count(DOWN) / count(rows)
+  return {down: count(DOWN), up: count(UP)}
+
+experienceScore(counts):                 # 조회할 때 (저장한 개수로)
+  if down + up = 0: return null
+  return down / (down + up)
 
 letter(axis, sign):            # sign = 아래 판정값의 부호
   sign >= 0 → 관대 글자 (0 = 동점 → 관대) / sign < 0 → 엄격 글자
@@ -251,12 +260,12 @@ letter(axis, sign):            # sign = 아래 판정값의 부호
 판정값 (저장한 소수가 아니라 원래 개수로 계산):
   테스트: L - S
   체험:   감경 - 가중                        (= 2 × 감경 - 전체)
-  종합:   Σ (감경ᵢ - 가중ᵢ) / 전체ᵢ          (축 값이 있는 체험 i만, 정확한 분수)
+  종합:   Σ (downᵢ - upᵢ) / (downᵢ + upᵢ)    (저장한 axis_counts에서, 값이 있는 체험 i만, 정확한 분수)
 ```
 
 - 축 · 글자 대응은 백엔드 enum 하나에 둔다(예: `ValueAxis.APOLOGY_SINCERITY(strict='E', lenient='I')`). `factor.value_axis`와 같은 키를 쓴다.
 - 글자 판정은 저장한 소수(`axis_scores`)로 하지 않는다. 0.5 근처에서 실수 오차로 글자가 바뀌지 않도록 테스트 · 체험은 정수, 종합은 정확한 분수(공통 분모, `BigInteger` 또는 분자 · 분모 정수 쌍)로 부호만 본다. 종합의 판정값은 축 점수를 −1 ~ +1로 옮긴 값의 합과 같다(PR #109 리뷰 제안).
-- 저장 · 화면용 축 점수는 0 ~ 1(관대 쪽 비중)을 그대로 쓴다. 그대로 백분율이 되어 화면 변환이 없다.
+- 화면용 축 점수는 0 ~ 1(관대 쪽 비중)을 그대로 쓴다. 그대로 백분율이 되어 화면 변환이 없다.
 
 ---
 
