@@ -28,7 +28,7 @@
 | 글자 | 이미지 안에 글자 · 숫자 · 로고를 넣지 않는다(말풍선 · 이름표는 웹 UI) |
 | 판결 전 화면 | 로는 저울 1인 · 수평(`neutral`)만 |
 | 표정 | 화난 표정(`angry`)은 만들지 않는다 |
-| 키 | 내로 120 · 남불 120 · 로 230(같은 바닥선, 아키텍처 2-5) |
+| 키 | 내로 120 · 남불 120 · 로 저울 230 · 법봉 190 · 법전 210(같은 바닥선, 아키텍처 2-5) |
 
 ---
 
@@ -41,7 +41,7 @@
 | A0 | 내로 · 남불 기준 시트, 로(저울 · 법봉) 기준 시트, 스탠딩 4장 | 6 | 시트 · 투명 PNG | `character-sheet_*` · `standing_*`(아키텍처 2-1) | ✅ |
 | A1 | 로(법전) 기준 시트 | 1 | 시트 | 저울 · 법봉 시트와 같은 칸(정면 · 3/4 · 측면 · 뒷면 · 자세 6종 · 색 견본). 머리는 세운 두꺼운 법전, 손에는 법전을 들지 않는다 | ⬜ |
 | A2 | 로(법전) 스탠딩 | 1 | 투명 PNG | 다른 로와 같은 자세(봉투를 들고 한 손을 펴 안내). 파일 `standing_law-book.png` | ⬜ |
-| A3 | 키 비교 시트 | 1 | 시트 | 내로 120 · 남불 120 · 로 230, 같은 바닥선. 로 셋을 모두 넣을지는 선택. 기존 내로 · 남불 시트의 키 칸(남불 1.5배)은 쓰지 않는다 | ⬜ |
+| A3 | 키 비교 시트 | 1 | 시트 | 내로 120 · 남불 120 · 저울 230 · 법봉 190 · 법전 210, 같은 바닥선. 기존 내로 · 남불 시트의 키 칸(남불 1.5배)은 쓰지 않는다 | ⬜ |
 
 - A1 · A2가 끝나면 아키텍처 2-4(색) · 2-5(프로필) · 5-1(IDENTITY)에 법전을 추가한다.
 
@@ -179,10 +179,10 @@ SCENE — face only, the head filling about 70% of a 1:1 square, centered, reada
 
 ```
 Use the attached reference images as the exact models of the three versions of Law (Scale, Gavel, Book): copy their heads, robes, colors, proportions and art style exactly.
-SCENE — {idle: the three stand side by side on the same ground line, Gavel on the left, Scale in the center, Book on the right, all the same size and height, calm | think: the three lean their heads slightly toward each other in a quiet discussion, one hand on the chin}. Nobody stands in front of the others. No disagreement, no pointing at each other.
+SCENE — {idle: the three stand side by side on the same ground line, Gavel on the left, Scale in the center, Book on the right, each at its own height (Scale tallest, Book medium, Gavel shortest and broadest), calm | think: the three lean their heads slightly toward each other in a quiet discussion, one hand on the chin}. Nobody stands in front of the others. No disagreement, no pointing at each other.
 The scale is level, the gavel is level, the book is closed.
 Background: perfectly flat solid green #00B140, full bodies visible, 10% margin, {4:5 | 16:9}. No green on the characters.
-AVOID (add): faces, necks, one Law larger than the others, arguing poses.
+AVOID (add): faces, necks, one Law stepping in front of the others, arguing poses.
 ```
 
 **C2 로(법봉) · 로(법전) `deliver-neutral`** — 첨부 해당 스탠딩
@@ -198,7 +198,7 @@ AVOID (add): faces, swinging the gavel, an open book.
 
 ```
 Use the attached reference images as the exact models of Naero, Law (Scale) and Nambul. Keep each character's own art style (Naero and Nambul flat mascots, Law refined painterly).
-SCENE — Naero on the left, Law (Scale) in the center, Nambul on the right, standing on the same ground line, all thinking (one hand on the chin, heads tilted slightly). Naero and Nambul are the same height; Law is about 1.9 times taller. Nobody stands in front; nobody is emphasized. The scale is level.
+SCENE — Naero on the left, Law (Scale) in the center, Nambul on the right, standing on the same ground line, all thinking (one hand on the chin, heads tilted slightly). Naero and Nambul are the same height; Law (Scale) is about 1.9 times taller. Nobody stands in front; nobody is emphasized. The scale is level.
 Background: perfectly flat solid green #00B140, full bodies visible, 10% margin, 16:9. No green on the characters.
 ```
 

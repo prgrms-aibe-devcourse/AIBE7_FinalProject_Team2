@@ -7,6 +7,7 @@
 | v1 | 2026-10-14 | 지금까지 만든 캐릭터 시트 · 스탠딩 · 데포르메 프롬프트를 한 문서로 정리 |
 | v1.1 | 2026-10-14 | 레포 문서로 옮김(COMMON-28). 확정 이미지와 다른 점(8장) 추가 |
 | v2 | 2026-10-14 | **신규 프롬프트 v2(9장)** — 확정 설정 기준 블록(STYLE · DEFORM · IDENTITY 5종 · POSE · SCENE · AVOID), 법전 로 시트 · 스탠딩 · 키 비교 완성 프롬프트. 1 ~ 7장 원문은 그대로 둠 |
+| v2.1 | 2026-10-14 | 로 키 · 체형 반영(저울 230 · 법봉 190 · 법전 210) |
 
 > 기준 결정: `character-main-handover.md` v2의 10/13 변경 절 (기본 = 마스코트형 약 3.5등신 · 란마풍 등은 변형 · 모든 캐릭터 무성 · 소품 제한 해제 · 화난 표정 금지)
 > 이 문서는 **복사해서 바로 쓰는 프롬프트 모음**이다. 설계 배경은 `character-law-ai-judge-plan.md` v0.3을 본다(`Claude outputs/`, 커밋 안 함).
@@ -719,7 +720,7 @@ DEFORMATION — Japanese-made Western-cartoon-inspired deformation (graphic and 
 | 내로 · 남불 등신 | 약 3.5등신, 머리 28%, 가는 몸통 · 긴 다리(2장 · 4-1 · 4-2) | **약 2등신**, 머리 약 50%(남불은 불꽃 포함 약 60%), 짧은 몸통 · 짧은 다리 | 아키텍처 2-5 · 7-3 #14 ⚠️ |
 | 내로 : 남불 키 | 남불이 불꽃만큼 조금 더 큼(2장 · 4-2) | 시트 키 칸은 남불 약 1.5배. **확정값은 둘 다 120** | 아키텍처 2-5 |
 | 로 그림체 · 비율 | 기본은 마스코트(3장 · 4-3 · 4-4: 3 ~ 3.5등신, 머리 30 ~ 33%, 평면 색 면, 주름 없음, 손가락 없음) · 5장은 "대체 시안" | **확정 로는 5장 쪽**(사실 질감 · 주름 · 손가락 있는 장갑). 시트 · 스탠딩 모두 약 4 ~ 5등신, 머리 약 21 ~ 25% | 아키텍처 2-3 (`authority` × `adult`) |
-| 로 키 | 4장 메모 "같은 높이로 서 보이게" | **230**(내로 · 남불의 약 1.9배) | 아키텍처 2-5 |
+| 로 키 | 4장 메모 "같은 높이로 서 보이게" | **저울 230 · 법봉 190 · 법전 210**(내로 · 남불 120 대비 약 1.9 · 1.6 · 1.75배) | 아키텍처 2-5 |
 
 ### 8-2. 로 시트 · 자세
 
@@ -779,7 +780,7 @@ Match the face, colors, design and proportions of the attached reference exactly
 
 ## 9. 신규 프롬프트 v2 (확정 설정 기준)
 
-1 ~ 7장 원문은 그대로 두고, **10/13 ~ 10/14 확정 설정**(확정 이미지 · 무성 · 법의 정령 · 로 3인 합의부 · 키 120 · 120 · 230 · 색 2-4)에 맞춘 프롬프트를 새로 쓴다. 이후 생성은 이 장을 기본으로 한다.
+1 ~ 7장 원문은 그대로 두고, **10/13 ~ 10/14 확정 설정**(확정 이미지 · 무성 · 법의 정령 · 로 3인 합의부 · 키 내로 · 남불 120 / 저울 230 · 법봉 190 · 법전 210 · 색 2-4)에 맞춘 프롬프트를 새로 쓴다. 이후 생성은 이 장을 기본으로 한다.
 
 | 원문(1 ~ 7장)과 다른 점 | v2 |
 | --- | --- |
@@ -787,7 +788,7 @@ Match the face, colors, design and proportions of the attached reference exactly
 | 로 그림체 | 마스코트 → **권위형 사실 질감(`authority` × `adult`)**, 저울 · 법봉 · **법전** 3종 |
 | 색 | 원문 팔레트 → **확정 이미지 색(아키텍처 2-4)** |
 | 설정 문구 | `actor` · `male build` 빼고 **genderless** · "법의 정령"은 이미지에 필요 없으므로 넣지 않음 |
-| 키 | 내로 = 남불(120), 로 230 |
+| 키 | 내로 = 남불(120), 저울 230 · 법봉 190 · 법전 210(체형 반영) |
 | 참조 이미지 | 확정 이미지를 첨부하고 **비율까지 그대로 따르게** 한다(8-5) |
 
 ### 9-1. 쓰는 법
@@ -850,9 +851,9 @@ DEFORMATION — chunky, cute mascot, about 2 heads tall (match the reference):
 ```
 DEFORMATION — upright adult figure, about 4.5 heads tall counting the head object as one head:
 - The head object is about 21 to 25% of the total height and sits directly on the collar or on a short post.
-- A calm, upright, average adult build hidden by a broad ankle-length robe; no gendered body features.
+- A calm, upright adult build hidden by a broad ankle-length robe; the build differs by version (see CHARACTER); no gendered body features.
 - White gloves with clearly drawn fingers; plain dark leather shoes.
-- Law is about 1.9 times as tall as Naero and Nambul when they stand together on the same ground line.
+- Height relative to Naero and Nambul on the same ground line: Law (Scale) about 1.9 times (tall, straight, average build), Law (Book) about 1.75 times (medium height, average build), Law (Gavel) about 1.6 times (the shortest, with broad shoulders and a wide, sturdy chest).
 ```
 
 ### 9-5. IDENTITY 블록
@@ -875,21 +876,21 @@ The head IS a flame: deep red outer flame (#CB1E0E), orange middle flame (#F4651
 
 ```
 CHARACTER — "Law", a genderless AI judge with a brass balance scale as its head:
-No face, no eyes, no mouth, no neck, no human head. The head is a brass scale of justice (light #D29C5E, mid #B58A59, dark #956331): a tall central post with a round finial, a gently curved beam and two shallow pans on thin chains; the post rises straight out of the collar. Outfit: a deep navy judge's robe (#253048, folds #171F30, light #38445C) with a deep V neckline, two vertical front bands, wide bell sleeves and an ankle-length hem; a warm-white shirt collar and white gloves (#F2E4D0); dark shoes. The scale is level.
+No face, no eyes, no mouth, no neck, no human head. The head is a brass scale of justice (light #D29C5E, mid #B58A59, dark #956331): a tall central post with a round finial, a gently curved beam and two shallow pans on thin chains; the post rises straight out of the collar. Outfit: a deep navy judge's robe (#253048, folds #171F30, light #38445C) with a deep V neckline, two vertical front bands, wide bell sleeves and an ankle-length hem; a warm-white shirt collar and white gloves (#F2E4D0); dark shoes. Build: tall and straight, average width. The scale is level.
 ```
 
 **`law-gavel`** — 엄벌
 
 ```
 CHARACTER — "Law", a genderless AI judge with a judge's gavel as its head:
-No face, no eyes, no mouth, no human head. The head is a polished mahogany gavel (dark #5A220B, mid #95562C, highlight #CA9654): a horizontal barrel with ringed collars and rounded end caps, on a short turned handle that works as the neck and goes straight into the collar. Nothing sticks out of the top. Same robe, collar, gloves and shoes as the scale version. The gavel is level and is never swung or struck.
+No face, no eyes, no mouth, no human head. The head is a polished mahogany gavel (dark #5A220B, mid #95562C, highlight #CA9654): a horizontal barrel with ringed collars and rounded end caps, on a short turned handle that works as the neck and goes straight into the collar. Nothing sticks out of the top. Same robe, collar, gloves and shoes as the scale version. Build: the shortest of the three Laws, with broad shoulders and a wide, sturdy chest (solid and dependable, never aggressive). The gavel is level and is never swung or struck.
 ```
 
 **`law-book`** — 자비 (새로 만듦, 색은 제안 ⚠️)
 
 ```
 CHARACTER — "Law", a genderless AI judge with a thick law book as its head:
-No face, no eyes, no mouth, no human head. The head is a thick, closed law book standing upright, spine facing the viewer at a slight angle so it clearly reads as a book: deep oxblood leather cover (#5E1F2B, shadow #3F141D), gilded spine bands and corner guards in brass (#D29C5E), cream page edges (#F2E4D0) visible on the side. No letters or symbols on the cover or spine. The book sits on a short brass post that goes straight into the collar. Same robe, collar, gloves and shoes as the other Law versions. The book stays closed and upright when calm. Law does not hold another book in its hands.
+No face, no eyes, no mouth, no human head. The head is a thick, closed law book standing upright, spine facing the viewer at a slight angle so it clearly reads as a book: deep oxblood leather cover (#5E1F2B, shadow #3F141D), gilded spine bands and corner guards in brass (#D29C5E), cream page edges (#F2E4D0) visible on the side. No letters or symbols on the cover or spine. The book sits on a short brass post that goes straight into the collar. Same robe, collar, gloves and shoes as the other Law versions. Build: medium height, average build with slightly rounded shoulders. The book stays closed and upright when calm. Law does not hold another book in its hands.
 ```
 
 - 법전 색(옥스블러드 가죽 + 황동 장식)은 법봉의 마호가니 · 판사복 네이비와 구분되도록 고른 **제안**이다. 결과를 보고 정한다.
@@ -919,7 +920,7 @@ SCENE — a single character, centered, full body from head to feet fully visibl
 **`group`** — 2 ~ 3인 컷 (4:5 또는 16:9)
 
 ```
-SCENE — {characters} standing side by side on the same ground line, {left-to-right order}, the same scale relation as the references (Naero and Nambul the same height, Law about 1.9 times taller), nobody in front of the others. Background: perfectly flat solid green #00B140. Full bodies visible with 10% margin. Do not use green on any character.
+SCENE — {characters} standing side by side on the same ground line, {left-to-right order}, the same scale relation as the references (Naero and Nambul the same height; Law (Scale) about 1.9 times, Law (Book) about 1.75 times, Law (Gavel) about 1.6 times their height), nobody in front of the others. Background: perfectly flat solid green #00B140. Full bodies visible with 10% margin. Do not use green on any character.
 ```
 
 **`icon`** — 아이콘 (1:1)
@@ -1012,8 +1013,8 @@ AVOID: text, letters, numbers, logos, angry or threatening poses, gendered body 
 ```
 Use the attached reference images as the exact models of Naero, Nambul and the three versions of Law. Copy their designs, colors and art styles exactly (Naero and Nambul keep their flat mascot style; Law keeps its refined painterly style).
 
-Draw a height comparison sheet: all characters standing in a row on one shared ground line, front view, neutral calm poses, left to right — Naero, Nambul, Law (Scale), Law (Gavel), Law (Book). Heights: Naero and Nambul are exactly the same height (Naero to the ear tips, Nambul to the flame tip). Every Law is about 1.9 times as tall as Naero (measured to the top of the head object). All three Laws are the same height. Faint, thin horizontal guide lines at the top of Naero and at the top of Law are allowed; no numbers or labels.
+Draw a height comparison sheet: all characters standing in a row on one shared ground line, front view, neutral calm poses, left to right — Naero, Nambul, Law (Scale), Law (Gavel), Law (Book). Heights: Naero and Nambul are exactly the same height (Naero to the ear tips, Nambul to the flame tip). Measured to the top of the head object: Law (Scale) about 1.9 times Naero's height, Law (Book) about 1.75 times, Law (Gavel) about 1.6 times. Law (Gavel) is the shortest but has the broadest shoulders and sturdiest build; Law (Scale) is tall and straight; Law (Book) is in between. Faint, thin horizontal guide lines at the top of Naero and at the top of Law are allowed; no numbers or labels.
 
 SCENE — plain newsprint background #ECE2D4, generous spacing, landscape 16:9.
 
-AVOID: text, letters, numbers, logos, labels, angry faces or poses, gendered body features, cropped limbs, extra characters, black outlines, drop shadows, ground shadows, 3D render, photo realism, Nambul taller than Naero, Laws of different heights.
+AVOID: text, letters, numbers, logos, labels, angry faces or poses, gendered body features, cropped limbs, extra characters, black outlines, drop shadows, ground shadows, 3D render, photo realism, Nambul taller than Naero, all Laws the same height.
