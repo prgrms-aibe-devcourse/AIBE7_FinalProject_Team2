@@ -39,7 +39,7 @@
 | # | 이미지 | 수량 | 형식 | 비고 | 상태 |
 | --- | --- | --- | --- | --- | --- |
 | A0 | 내로 · 남불 기준 시트, 로(저울 · 법봉) 기준 시트, 스탠딩 4장 | 6 | 시트 · 투명 PNG | `character-sheet_*` · `standing_*`(아키텍처 2-1) | ✅ |
-| A1 | 로(법전) 기준 시트 | 1 | 시트 | 저울 · 법봉 시트와 같은 칸(정면 · 3/4 · 측면 · 뒷면 · 자세 6종 · 색 견본). 머리는 세운 두꺼운 법전, 손에는 법전을 들지 않는다 | ⬜ |
+| A1 | 로(법전) 기준 시트 | 1 | 시트 | 저울 · 법봉 시트와 같은 칸(정면 · 3/4 · 측면 · 뒷면 · 자세 6종 · 색 견본). 머리는 **목 · 기둥 없이 옷깃 위 공중에 떠 있는** 두꺼운 법전, 기본은 표지 정면. 손에는 법전을 들지 않는다 | ⬜ |
 | A2 | 로(법전) 스탠딩 | 1 | 투명 PNG | 다른 로와 같은 자세(봉투를 들고 한 손을 펴 안내). 파일 `standing_law-book.png` | ⬜ |
 | A3 | 키 비교 시트 | 1 | 시트 | 내로 120 · 남불 120 · 저울 230 · 법봉 190 · 법전 210, 같은 바닥선. 기존 내로 · 남불 시트의 키 칸(남불 1.5배)은 쓰지 않는다 | ⬜ |
 
@@ -180,7 +180,7 @@ SCENE — face only, the head filling about 70% of a 1:1 square, centered, reada
 ```
 Use the attached reference images as the exact models of the three versions of Law (Scale, Gavel, Book): copy their heads, robes, colors, proportions and art style exactly.
 SCENE — {idle: the three stand side by side on the same ground line, Gavel on the left, Scale in the center, Book on the right, each at its own height (Scale tallest, Book medium, Gavel shortest and broadest), calm | think: the three lean their heads slightly toward each other in a quiet discussion, one hand on the chin}. Nobody stands in front of the others. No disagreement, no pointing at each other.
-The scale is level, the gavel is level, the book is closed.
+The scale is level, the gavel is level, the book floats above the collar with no neck, front cover facing the viewer, closed.
 Background: perfectly flat solid green #00B140, full bodies visible, 10% margin, {4:5 | 16:9}. No green on the characters.
 AVOID (add): faces, necks, one Law stepping in front of the others, arguing poses.
 ```
@@ -189,9 +189,9 @@ AVOID (add): faces, necks, one Law stepping in front of the others, arguing pose
 
 ```
 Use the attached reference image as the exact model of Law ({Gavel | Book}). Change only the pose.
-POSE — stepping half a step forward and holding the sealed kraft verdict envelope out with both hands toward the viewer, calm and polite. The {gavel is level | book is closed and upright}.
+POSE — stepping half a step forward and holding the sealed kraft verdict envelope out with both hands toward the viewer, calm and polite. The {gavel is level | book floats above the collar with no neck, front cover facing the viewer, closed and level}.
 SCENE — a single character, centered, full body visible, 4:5 vertical, 15% margin, flat solid green #00B140 background.
-AVOID (add): faces, swinging the gavel, an open book.
+AVOID (add): faces, swinging the gavel, a neck or post under the book, an open book.
 ```
 
 **C3 S-09 비교 `trio-thinking`** — 첨부 `standing_naero.png` · `standing_law-scale.png` · `standing_nambul.png`

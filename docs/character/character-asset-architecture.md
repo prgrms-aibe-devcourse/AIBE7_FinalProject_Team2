@@ -11,6 +11,7 @@
 | v0.5 | 2026-10-13 | 로 **3인 합의부**(저울 · 법봉 · 법전) — 3-7 재작성, 법전 머리 표정 · IDENTITY 초안, S-07 합의 · 발표 연출(4-1), 성향별 머리 스킨 계획 대체 |
 | v0.6 | 2026-10-13 | 로 성향 이름(법봉 = 엄벌 · 저울 = 중도 · 법전 = 자비), 기본 대표 = 저울, `trio`의 로 = 저울(3-2 · 3-7) |
 | v0.7 | 2026-10-14 | #121 리뷰 반영(로 머리 = 캐릭터별 IDENTITY, `heads/` 제거 · `trio` 키 비율), 로 키를 체형별로(저울 230 · 법봉 190 · 법전 210, 2-5) |
+| v0.8 | 2026-10-14 | 로(법전): 목 · 기둥 없이 공중에 떠 있는 법전, 기본 표지 정면 · 자유 회전(3-2 · 3-7 · 5-1) |
 
 > 캐릭터 **결정**은 [캐릭터 인수인계](character-main-handover.md) 2-1절(10/13 변경)과 [성향 테스트 콘텐츠](../personality-test-content.md) 6장이 기준이다. 이 문서는 그 결정을 **어떤 단위로 나눠 만들고, 어떻게 조합하고, 어디에 두는지**만 정한다.
 > 기획 원문은 `Claude outputs/character-law-ai-judge-plan.md` v0.3(커밋 안 함, 이하 "기획")이다. 이 문서에 필요한 내용은 옮겨 적었다. 프롬프트 원문은 `Claude outputs/naero_nambul_main_image_prompts.md`(메인 이미지 최종) · `naero_nambul_sheet_prompts_deformation11.md`(데포르메 11종)다.
@@ -239,11 +240,11 @@
 
 | 코드 | 내로 · 남불 | 로 · 저울 머리 | 로 · 법봉 머리 | 로 · 법전 머리 |
 | --- | --- | --- | --- | --- |
-| `neutral` | 편안한 얼굴 | 저울 수평 | 법봉 곧게(수평) | 덮인 채 곧게 |
-| `happy` | 웃음(입 벌리면 입속 = 내로 반다나 색 / 남불 벽돌 빨강) | 저울판 살짝 위로 | 머리를 살짝 들어 올림 | 살짝 펼쳐짐 |
-| `surprised` | 눈 크게, 입 동그랗게 | 저울판 흔들림 | 머리가 살짝 흔들림(시트의 흔들림 표시) | 책장이 펄럭임 |
-| `thinking` | 눈썹 살짝 모음, 입 다묾 | 한쪽 저울판 내려감 | 머리를 한쪽으로 갸웃 + 턱 괴기 | 반쯤 펼쳐 기울임 + 턱 괴기 |
-| `sorry` | 눈썹 처짐, 작은 입 | 수평 + 사슬 늘어짐 + 어깨 처짐 | 머리를 살짝 숙임 + 어깨 처짐 | 덮고 살짝 숙임 + 어깨 처짐 |
+| `neutral` | 편안한 얼굴 | 저울 수평 | 법봉 곧게(수평) | 표지 정면 · 덮인 채 수평으로 떠 있음 |
+| `happy` | 웃음(입 벌리면 입속 = 내로 반다나 색 / 남불 벽돌 빨강) | 저울판 살짝 위로 | 머리를 살짝 들어 올림 | 조금 더 떠오르며 살짝 펼쳐짐 |
+| `surprised` | 눈 크게, 입 동그랗게 | 저울판 흔들림 | 머리가 살짝 흔들림(시트의 흔들림 표시) | 반 바퀴 돌며 책장이 펄럭임 |
+| `thinking` | 눈썹 살짝 모음, 입 다묾 | 한쪽 저울판 내려감 | 머리를 한쪽으로 갸웃 + 턱 괴기 | 비스듬히(3/4) 돌아 반쯤 펼쳐 기울임 + 턱 괴기 |
+| `sorry` | 눈썹 처짐, 작은 입 | 수평 + 사슬 늘어짐 + 어깨 처짐 | 머리를 살짝 숙임 + 어깨 처짐 | 덮인 채 조금 내려앉아 앞으로 기울어짐 + 어깨 처짐 |
 | `cheer` | 밝게 웃으며 힘줌 | (쓰지 않음) | (쓰지 않음) | (쓰지 않음) |
 
 - **`angry`는 만들지 않는다.** 엄격한 장면도 단호함까지만 쓴다(인수인계 2-1 #3).
@@ -320,12 +321,12 @@
 | --- | --- | --- | --- |
 | `law-scale` | 황동 저울(양쪽 접시 · 사슬) | **중도** | **기본 대표** — 판결 확정 전 화면, S-01 · S-02 신문 지면, 로딩 · 전달(`deliver` · `idle`), S-09 `trio`. 중도에 맞는 결과면 발표 |
 | `law-gavel` | 마호가니 법봉 | **엄벌** | 엄벌에 맞는 결과면 발표 |
-| `law-book` | 법전(두꺼운 책, 표지 · 책등이 보이게) | **자비** | 자비에 맞는 결과면 발표. **새로 만듦** |
+| `law-book` | 법전(두꺼운 책). **목 · 기둥 없이 옷깃 위 공중에 떠 있다.** 기본은 표지가 정면, 감정에 따라 자유롭게 회전 | **자비** | 자비에 맞는 결과면 발표. **새로 만듦** |
 
 - **S-07 합의 연출**: 셋이 나란히 서서 양형 인자를 **순서대로 돌아가며** 나눠 정하고(성향 축별로 나누지 않음), 합의한 뒤 **판결 결과에 맞는 성향(엄벌 · 중도 · 자비)의 로**가 발표한다. 발표자 기준 · 연출 규칙은 프로필 · 세계관 5-3.
 - 판결 확정 전 화면에는 **저울 1인만** 나온다(수평). 법봉 · 법전은 판결 확정 뒤에만 나온다 — 발표자가 결론의 방향을 드러내기 때문이다.
 - 셋은 서열이 없다. 3인 컷에서 크기 · 높이를 같게 하고, 발표자만 반 걸음 앞으로 나온다.
-- 법전 머리는 **책으로 읽혀야 한다**(서류철 · 상자로 보이지 않게). 소품 `lawbook`(3-3)과 헷갈리지 않게, 법전 로는 손에 법전을 들지 않는다.
+- 법전 머리는 **책으로 읽혀야 한다**(서류철 · 상자로 보이지 않게, 옆면에 책장 두께가 보이게). **목 · 기둥이 없고 옷깃 위 공중에 떠 있어** 옷깃과 책 사이에 빈 틈이 보인다. 기본은 표지 정면 · 수평이고, 감정 표현 때만 돌거나 기울거나 펼쳐진다(3-2). 소품 `lawbook`(3-3)과 헷갈리지 않게, 법전 로는 손에 법전을 들지 않는다.
 - 원래 계획(로 1인 + 성향별 머리 스킨)은 이 3인 구성으로 **대체**했다. 로 셋은 머리별 IDENTITY(`law-scale` · `law-gavel` · `law-book`)를 가진 **별개 캐릭터**라서, 머리를 레이어로 갈아 끼우지 않는다(`heads/` 폴더 없음).
 
 
@@ -411,7 +412,7 @@ S-02 기사 사진 · 사건 디테일 사진은 **실제 사건**을 바탕으�
 | `nambul` | 불꽃 머리(바깥 진한 빨강 · 안쪽 주황 · 얼굴 면 노랑), **얼굴은 불꽃 중심에 바로**(별도 얼굴 면 없음), 코 없음, 검은 동공 + 흰자 큰 눈, 몸은 벽돌 빨강 단색, 둥근 손발. 무성 | `"Nambul", a genderless fire-headed sprite: a flame-shaped head (deep red outer flame, orange middle flame, pale yellow center) with the face placed directly in the center of the flame, large black eyes with cream whites, small open mouth, no nose; a simple brick-red body with rounded hands and feet. Hot-headed, honest, expressive.` | 코, 별도 얼굴 윤곽, 모자 · 가발, 불꽃이 몸으로 번짐 |
 | `law-scale` | 머리 = 황동 저울(윗 장식 · 가로대 · 사슬 · 양쪽 접시), **목 없이 기둥이 판사복 깃에 연결**, 얼굴 없음, 네이비 판사복(깊은 V넥 · 앞단 두 줄 · 발목 기장 · 나팔 소매 · 흰 셔츠 깃), 흰 장갑, 검은 구두, 소품 = 봉인(붉은 밀랍)된 크래프트 판결문 봉투. 무성 | `"Law", a genderless AI judge with a brass scale of justice as its head, no face and no neck (the scale post joins the white shirt collar directly), wearing a deep navy judge's robe with a deep V neckline, two vertical front bands, ankle length and wide flared sleeves, white gloves, black leather shoes; holds a sealed kraft envelope with a red wax seal. Calm, formal, authoritative.` | 얼굴 · 눈 · 입, 목, 저울이 기울어진 상태(판결 전), 법복 장식 추가 |
 | `law-gavel` | 머리 = 마호가니 법봉(양쪽 띠 장식 · 손잡이 기둥), 나머지는 `law-scale`과 같음 | 위와 같되 `a polished mahogany gavel as its head (ribbed head, turned handle post)` | 위와 같음 + 법봉을 손에 든 모습(머리가 법봉이므로 손에는 봉투) |
-| `law-book` | 머리 = 두꺼운 법전(가죽 표지 · 금박 책등, 세워서 머리 위치), 나머지는 `law-scale`과 같음. **시트 없음 — 만들 때 확정** | 위와 같되 `a thick closed law book standing upright as its head (dark leather cover, gilded spine)` | 위와 같음 + 손에 법전 들기, 서류철 · 상자로 보이는 모양 |
+| `law-book` | 머리 = 두꺼운 법전(옥스블러드 가죽 · 황동 모서리). **목 · 기둥 없이 옷깃 위 공중에 떠 있음**, 기본은 표지 정면 · 수평, 감정에 따라 자유 회전. 나머지는 `law-scale`과 같음. **시트 없음 — 만들 때 확정** | 프롬프트 모음 9-5 `law-book` (`a thick, closed law book that floats freely in the air above the collar … front cover faces the viewer`) | 목 · 기둥 · 받침, 책이 옷깃에 닿음, 기본 상태에서 책등이 정면, 펼친 책의 글자, 표지 글자, 상자 · 서류철 모양, 손에 다른 법전 |
 
 - 내로 · 남불 IDENTITY에는 **비율 문장을 넣지 않는다**(`mascot` 등 DEFORM에 둔다). 로 IDENTITY는 `adult` · `authority`(2-3)와 함께 쓴다.
 - 스탠딩 일러스트의 포즈(내로 · 남불 = 두 손 허리, 로 = 봉투를 들고 한 손을 펴 안내)는 IDENTITY가 아니라 POSE(`idle` · `guide`)에 둔다.

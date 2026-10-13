@@ -8,6 +8,7 @@
 | v1.1 | 2026-10-14 | 레포 문서로 옮김(COMMON-28). 확정 이미지와 다른 점(8장) 추가 |
 | v2 | 2026-10-14 | **신규 프롬프트 v2(9장)** — 확정 설정 기준 블록(STYLE · DEFORM · IDENTITY 5종 · POSE · SCENE · AVOID), 법전 로 시트 · 스탠딩 · 키 비교 완성 프롬프트. 1 ~ 7장 원문은 그대로 둠 |
 | v2.1 | 2026-10-14 | 로 키 · 체형 반영(저울 230 · 법봉 190 · 법전 210) |
+| v2.2 | 2026-10-14 | 로(법전): **목 · 기둥 없이 공중에 떠 있는 법전**, 기본은 표지 정면 · 자유 회전(9-4 · 9-5 · 9-6 · 9-8 · 9-9 · 9-10) |
 
 > 기준 결정: `character-main-handover.md` v2의 10/13 변경 절 (기본 = 마스코트형 약 3.5등신 · 란마풍 등은 변형 · 모든 캐릭터 무성 · 소품 제한 해제 · 화난 표정 금지)
 > 이 문서는 **복사해서 바로 쓰는 프롬프트 모음**이다. 설계 배경은 `character-law-ai-judge-plan.md` v0.3을 본다(`Claude outputs/`, 커밋 안 함).
@@ -850,7 +851,7 @@ DEFORMATION — chunky, cute mascot, about 2 heads tall (match the reference):
 
 ```
 DEFORMATION — upright adult figure, about 4.5 heads tall counting the head object as one head:
-- The head object is about 21 to 25% of the total height and sits directly on the collar or on a short post.
+- The head object is about 21 to 25% of the total height and sits directly on the collar or on a short post (Law (Book) is the exception: its book floats above the collar with a clear gap and no neck or post).
 - A calm, upright adult build hidden by a broad ankle-length robe; the build differs by version (see CHARACTER); no gendered body features.
 - White gloves with clearly drawn fingers; plain dark leather shoes.
 - Height relative to Naero and Nambul on the same ground line: Law (Scale) about 1.9 times (tall, straight, average build), Law (Book) about 1.75 times (medium height, average build), Law (Gavel) about 1.6 times (the shortest, with broad shoulders and a wide, sturdy chest).
@@ -886,11 +887,11 @@ CHARACTER — "Law", a genderless AI judge with a judge's gavel as its head:
 No face, no eyes, no mouth, no human head. The head is a polished mahogany gavel (dark #5A220B, mid #95562C, highlight #CA9654): a horizontal barrel with ringed collars and rounded end caps, on a short turned handle that works as the neck and goes straight into the collar. Nothing sticks out of the top. Same robe, collar, gloves and shoes as the scale version. Build: the shortest of the three Laws, with broad shoulders and a wide, sturdy chest (solid and dependable, never aggressive). The gavel is level and is never swung or struck.
 ```
 
-**`law-book`** — 자비 (새로 만듦, 색은 제안 ⚠️)
+**`law-book`** — 자비 (새로 만듦, 색은 제안 ⚠️) · **목 없이 공중에 떠 있는 법전, 기본은 표지 정면**
 
 ```
-CHARACTER — "Law", a genderless AI judge with a thick law book as its head:
-No face, no eyes, no mouth, no human head. The head is a thick, closed law book standing upright, spine facing the viewer at a slight angle so it clearly reads as a book: deep oxblood leather cover (#5E1F2B, shadow #3F141D), gilded spine bands and corner guards in brass (#D29C5E), cream page edges (#F2E4D0) visible on the side. No letters or symbols on the cover or spine. The book sits on a short brass post that goes straight into the collar. Same robe, collar, gloves and shoes as the other Law versions. Build: medium height, average build with slightly rounded shoulders. The book stays closed and upright when calm. Law does not hold another book in its hands.
+CHARACTER — "Law", a genderless AI judge with a floating law book as its head:
+No face, no eyes, no mouth, no neck, no human head. The head is a thick, closed law book that FLOATS freely in the air above the collar: there is no neck, no post and no stand, and a clear empty gap separates the book from the collar (the collar is empty and open at the top). By default the FRONT COVER faces the viewer squarely, and the book is upright and level. The book can rotate freely in the air (turn, tilt, spin) to show emotion, but its default is front cover forward. Deep oxblood leather cover (#5E1F2B, shadow #3F141D) with brass corner guards and a thin brass border frame (#D29C5E); the thickness of the cream page edges (#F2E4D0) is visible at the sides so it clearly reads as a thick book. No letters, numbers or symbols on the cover or spine. Same robe, collar, gloves and shoes as the other Law versions. Build: medium height, average build with slightly rounded shoulders. Law does not hold another book in its hands.
 ```
 
 - 법전 색(옥스블러드 가죽 + 황동 장식)은 법봉의 마호가니 · 판사복 네이비와 구분되도록 고른 **제안**이다. 결과를 보고 정한다.
@@ -907,7 +908,7 @@ No face, no eyes, no mouth, no human head. The head is a thick, closed law book 
 | `think` | `POSE — one hand on the chin, head tilted slightly, thoughtful.` |
 | `cheer` | `POSE — both fists up in front of the chest, cheering brightly.` |
 
-로의 감정은 머리 물체로만 보인다: 저울 = 접시 기울기, 법봉 = 머리 각도, 법전 = 책이 펼쳐지는 정도(아키텍처 3-2). **판결 전 화면용 로는 언제나 저울 · 수평.**
+로의 감정은 머리 물체로만 보인다: 저울 = 접시 기울기, 법봉 = 머리 각도, 법전 = 공중에서의 회전 · 펼쳐지는 정도(기본은 표지 정면, 아키텍처 3-2). **판결 전 화면용 로는 언제나 저울 · 수평.**
 
 ### 9-7. SCENE 블록
 
@@ -957,7 +958,7 @@ AVOID: text, letters, numbers, logos, watermarks, speech bubbles, angry or hosti
 | `nambul` | `a nose, blank eyes without pupils, a separate face mask, flames anywhere below the head, sparks, embers` |
 | 로 공통 | `faces, eyes, mouths, a human head, a neck, swinging or striking anything, a tilted scale before the verdict` |
 | `law-gavel` | `a sound block or base, anything sticking out of the top of the gavel` |
-| `law-book` | `an open book with readable pages, letters or symbols on the cover, a box or folder shape, holding another book` |
+| `law-book` | `a neck, a post or stand under the book, the book touching or resting on the collar, the spine facing the viewer by default, an open book with readable pages, letters or symbols on the cover, a box or folder shape, holding another book` |
 
 > `authority` 프롬프트에서는 공통 AVOID의 `3D render, CGI, photo realism`을 그대로 둔다(사실 질감이지만 사진 · 3D는 아니다).
 
@@ -976,18 +977,18 @@ ART STYLE — refined, warm 2D editorial illustration with soft painterly shadin
 
 DEFORMATION — upright adult figure, about 4.5 heads tall counting the head object as one head; the head object is about 21 to 25% of the total height; a calm, upright, average adult build hidden by a broad ankle-length robe; no gendered body features; white gloves with fingers; plain dark shoes.
 
-CHARACTER — "Law", a genderless AI judge with a thick law book as its head:
-No face, no eyes, no mouth, no human head. The head is a thick, closed law book standing upright, spine facing the viewer at a slight angle so it clearly reads as a book: deep oxblood leather cover (#5E1F2B, shadow #3F141D), gilded spine bands and corner guards in brass (#D29C5E), cream page edges (#F2E4D0) visible on the side. No letters or symbols. The book sits on a short brass post that goes straight into the collar. Deep navy judge's robe (#253048) with a deep V neckline, two vertical front bands, wide bell sleeves and an ankle-length hem; warm-white collar and gloves (#F2E4D0); dark shoes. Signature prop: a sealed kraft verdict envelope (#CF995A) with a red-brown wax seal.
+CHARACTER — "Law", a genderless AI judge with a floating law book as its head:
+No face, no eyes, no mouth, no neck, no human head. The head is a thick, closed law book that FLOATS freely in the air above the collar: there is no neck, no post and no stand, and a clear empty gap separates the book from the collar (the collar is empty and open at the top). By default the FRONT COVER faces the viewer squarely, and the book is upright and level. The book can rotate freely in the air (turn, tilt, spin) to show emotion, but its default is front cover forward. Deep oxblood leather cover (#5E1F2B, shadow #3F141D) with brass corner guards and a thin brass border frame (#D29C5E); the thickness of the cream page edges (#F2E4D0) is visible at the sides so it clearly reads as a thick book. No letters, numbers or symbols on the cover or spine. Deep navy judge's robe (#253048) with a deep V neckline, two vertical front bands, wide bell sleeves and an ankle-length hem; warm-white collar and gloves (#F2E4D0); dark shoes. Signature prop: a sealed kraft verdict envelope (#CF995A) with a red-brown wax seal.
 
 SHEET LAYOUT (same as the reference sheet):
 - Top: front full body holding the envelope.
-- Middle: turnaround — front, three-quarter, side and back views. In the back view the brass post goes straight into the collar.
-- Bottom: six poses — standing, one fist raised gently, walking, hand on chin thinking, holding the envelope, holding the envelope out. Emotion is shown only by the book: closed and upright = calm, slightly opened = happy, pages fluttering = surprised, half open and tilted = thinking, closed and drooping = sorry.
+- Middle: turnaround — front, three-quarter, side and back views. The book keeps floating above the empty collar in every view; in the side view the gap under the book is clearly visible, and in the back view the back cover faces the viewer.
+- Bottom: six poses — standing, one fist raised gently, walking, hand on chin thinking, holding the envelope, holding the envelope out. Emotion is shown only by the floating book: front cover forward, closed and level = calm; floating slightly higher and opening a little = happy; spinning half a turn with pages fluttering = surprised; turned to a three-quarter angle, half open and tilted = thinking; closed, sinking slightly lower and tilting down = sorry.
 - Side panel: flat round color swatches of the main colors.
 
 SCENE — plain newsprint background #ECE2D4, panels separated by space only (no frame lines, no labels), landscape 16:9.
 
-AVOID: text, letters, numbers, logos, watermarks, angry or threatening poses, sexualized depiction, gendered body features, cropped limbs, extra characters, black outlines, line art, drop shadows, ground shadows, 3D render, CGI, photo realism, faces, eyes, mouths, a human head, a neck, an open book with readable pages, letters or symbols on the cover, a box or folder shape, holding another book.
+AVOID: text, letters, numbers, logos, watermarks, angry or threatening poses, sexualized depiction, gendered body features, cropped limbs, extra characters, black outlines, line art, drop shadows, ground shadows, 3D render, CGI, photo realism, faces, eyes, mouths, a human head, a neck, a post or stand under the book, the book touching the collar, the spine facing the viewer by default, an open book with readable pages, letters or symbols on the cover, a box or folder shape, holding another book.
 ```
 
 ### 9-10. 완성 프롬프트 — 로(법전) 스탠딩 (제작 목록 A2)
@@ -997,13 +998,13 @@ AVOID: text, letters, numbers, logos, watermarks, angry or threatening poses, se
 ```
 Use the attached reference images of Law (Scale) and Law (Gavel) as the exact model for the body, robe, gloves, shoes, proportions, pose and art style. Draw Law (Book) in exactly the same standing pose. Change only the head.
 
-CHARACTER — "Law", a genderless AI judge with a thick, closed law book standing upright as its head (spine facing the viewer at a slight angle, deep oxblood leather #5E1F2B, gilded brass spine bands and corner guards #D29C5E, cream page edges #F2E4D0 on the side, no letters or symbols), on a short brass post going straight into the collar. No face, no neck, no human head. Deep navy judge's robe #253048, warm-white collar and gloves #F2E4D0, dark shoes.
+CHARACTER — "Law", a genderless AI judge with a floating law book as its head. No face, no neck, no human head. The head is a thick, closed law book that FLOATS freely in the air above the collar: there is no neck, no post and no stand, and a clear empty gap separates the book from the collar (the collar is empty and open at the top). By default the FRONT COVER faces the viewer squarely, and the book is upright and level. The book can rotate freely in the air (turn, tilt, spin) to show emotion, but its default is front cover forward. Deep oxblood leather cover (#5E1F2B, shadow #3F141D) with brass corner guards and a thin brass border frame (#D29C5E); the thickness of the cream page edges (#F2E4D0) is visible at the sides so it clearly reads as a thick book. No letters, numbers or symbols on the cover or spine. Deep navy judge's robe #253048, warm-white collar and gloves #F2E4D0, dark shoes.
 
-POSE — standing upright, front to slight three-quarter view; the right hand holds a sealed kraft verdict envelope (#CF995A, red-brown wax seal) at the hip; the left hand is open, palm up, presenting calmly. The book is closed and upright (calm).
+POSE — standing upright, front to slight three-quarter view; the right hand holds a sealed kraft verdict envelope (#CF995A, red-brown wax seal) at the hip; the left hand is open, palm up, presenting calmly. The book floats above the collar, front cover facing the viewer, closed and level (calm).
 
 SCENE — a single character, centered, full body from head to feet fully visible, 4:5 vertical composition with 15% empty margin on every side. Background: perfectly flat uniform solid green #00B140, no gradient, no floor, no shadow. Do not use green anywhere on the character.
 
-AVOID: text, letters, numbers, logos, angry or threatening poses, gendered body features, cropped limbs, extra characters, black outlines, line art, drop shadows, ground shadows, 3D render, CGI, photo realism, faces, eyes, mouths, a human head, a neck, an open book with readable pages, letters or symbols on the cover, a box or folder shape, holding another book.
+AVOID: text, letters, numbers, logos, angry or threatening poses, gendered body features, cropped limbs, extra characters, black outlines, line art, drop shadows, ground shadows, 3D render, CGI, photo realism, faces, eyes, mouths, a human head, a neck, a post or stand under the book, the book touching the collar, the spine facing the viewer by default, an open book with readable pages, letters or symbols on the cover, a box or folder shape, holding another book.
 ```
 
 ### 9-11. 완성 프롬프트 — 키 비교 시트 (제작 목록 A3)
