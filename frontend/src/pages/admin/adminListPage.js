@@ -82,15 +82,17 @@ export function renderAdminListPage(container, { navigate }) {
         body.replaceChildren(wrap, pager);
       }
 
+      let seq = 0; // 탭 · 쪽을 빠르게 바꿀 때 늦게 온 이전 응답이 지금 표를 덮지 않게 한다
       async function load() {
+        const mine = ++seq;
         const loading = element('p', 'admin-message', '불러오는 중이에요.');
         loading.setAttribute('role', 'status');
         body.replaceChildren(loading);
         try {
           const data = await api.getCases({ status: filter.status, pending: filter.pending, page, size: SIZE });
-          if (active()) drawTable(data);
+          if (active() && mine === seq) drawTable(data);
         } catch (failure) {
-          if (!active()) return;
+          if (!active() || mine !== seq) return;
           if (failure?.code === 'UNAUTHORIZED') { unauthorized(); return; }
           const panel = element('div', 'admin-message');
           panel.setAttribute('role', 'alert');

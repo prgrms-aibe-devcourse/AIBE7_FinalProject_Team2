@@ -54,7 +54,9 @@ async function send(method, endpoint, body) {
   if (data && typeof data.code === 'string') {
     throw { code: data.code, message: data.message, currentStatus: data.currentStatus ?? null, details: data.details ?? null, status: response.status };
   }
-  if (response.status >= 500) throw fallbackError('NETWORK_ERROR', '서버에 연결할 수 없어요. 잠시 뒤 다시 시도해 주세요.', response.status);
+  // 코드 없는 5xx: 502 · 503 · 504는 프록시가 백엔드에 닿지 못한 경우라 연결 오류, 그 밖은 서버 오류로 본다
+  if ([502, 503, 504].includes(response.status)) throw fallbackError('NETWORK_ERROR', '서버에 연결할 수 없어요. 잠시 뒤 다시 시도해 주세요.', response.status);
+  if (response.status >= 500) throw fallbackError('INTERNAL_ERROR', '서버 오류가 발생했어요.', response.status);
   if (response.status === 403) throw fallbackError('FORBIDDEN', '권한이 없어요.', 403);
   throw fallbackError('INTERNAL_ERROR', '서버 오류가 발생했어요.', response.status);
 }

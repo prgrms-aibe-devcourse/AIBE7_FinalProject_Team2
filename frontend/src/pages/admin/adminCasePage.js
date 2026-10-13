@@ -275,6 +275,7 @@ export function renderAdminCasePage(container, { caseId, navigate }) {
       // ── 사건 내용 (A-11)
       function contentSection(data) {
         const { content } = data;
+        const keywords = content.keywords ?? []; // ERD상 NULL 가능 (키워드 없이 적재된 사건)
         const readOnly = definitionList([
           ['범죄 유형 · 죄명', `${CRIME_TYPE[content.crimeType] ?? content.crimeType} · ${content.chargeName}`],
           ['적용 법조문', content.appliedLaw],
@@ -286,7 +287,7 @@ export function renderAdminCasePage(container, { caseId, navigate }) {
         const note = element('p', 'admin-sub', '죄명 · 적용 법조문 · 법정형 · 판단 요소 구성 · 형벌 규칙은 여기서 바꾸지 않아요(파이프라인 · SQL 경로).');
         if (data.status === 'PUBLISHED') {
           return section('사건 내용', readOnly, definitionList([
-            ['제목', content.title], ['짧은 소개', content.shortIntro], ['개요', content.overview], ['키워드', content.keywords.join(', ')],
+            ['제목', content.title], ['짧은 소개', content.shortIntro], ['개요', content.overview], ['키워드', keywords.join(', ')],
             ['난이도', DIFFICULTY[content.difficulty]], ['예상 시간(분)', content.estimatedMinutes], ['썸네일 주소', content.thumbnailUrl],
             ['권고 형량(개월)', `${content.recommendedMinMonths ?? '—'} ~ ${content.recommendedMaxMonths ?? '—'}`], ['권고 근거', content.recommendedBasis],
           ]), element('p', 'admin-sub', '공개한 사건이라 수정할 수 없어요.'));
@@ -315,7 +316,7 @@ export function renderAdminCasePage(container, { caseId, navigate }) {
         field('title', '제목 (필수, 100자 이하)', input('text', content.title, { maxLength: 100 }));
         field('shortIntro', '짧은 소개 (필수, 200자 이하)', input('text', content.shortIntro, { maxLength: 200 }));
         field('overview', '개요 (필수)', textarea(content.overview, 5));
-        field('keywords', '키워드', input('text', content.keywords.join(', ')), '쉼표로 나눠요. 비우면 키워드를 모두 지워요');
+        field('keywords', '키워드', input('text', keywords.join(', ')), '쉼표로 나눠요. 비우면 키워드를 모두 지워요');
         const difficulty = element('select');
         [['', '정하지 않음'], ...Object.entries(DIFFICULTY)].forEach(([value, label]) => {
           const option = element('option', '', label);
@@ -353,8 +354,9 @@ export function renderAdminCasePage(container, { caseId, navigate }) {
             recommendedMaxMonths: optionalNumber('recommendedMaxMonths'),
             recommendedBasis: optionalText('recommendedBasis'),
           };
+          const before = { ...content, keywords }; // 키워드 NULL은 []와 같다고 보고 비교한다
           Object.entries(next).forEach(([key, value]) => {
-            if (JSON.stringify(value) !== JSON.stringify(content[key] ?? null)) out[key] = value;
+            if (JSON.stringify(value) !== JSON.stringify(before[key] ?? null)) out[key] = value;
           });
           return out;
         }
@@ -391,8 +393,8 @@ export function renderAdminCasePage(container, { caseId, navigate }) {
           const item = element('li');
           item.append(definitionList([
             ['심급', COURT_LEVEL[source.courtLevel] ?? source.courtLevel],
-            ['법원 · 사건번호', `${source.courtName} ${source.caseNumber}`],
-            ['선고일', `${source.decidedAt}${source.isFinal ? ' (확정)' : ''}`],
+            ['법원 · 사건번호', [source.courtName, source.caseNumber].filter(Boolean).join(' ')],
+            ['선고일', [source.decidedAt, source.isFinal ? '(확정)' : null].filter(Boolean).join(' ')],
             ['출처', source.sourceOrg],
             ['메모', source.note],
           ]));

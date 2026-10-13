@@ -83,10 +83,25 @@ export async function renderAdminShell(container, { navigate, title, draw }) {
     email.focus();
   }
 
-  async function logout() {
+  // 성공하거나 401(이미 끝난 세션 · 비활성 계정, BE-67)이면 로그아웃된 것으로 본다.
+  // 그 밖의 실패(연결 오류 등)는 서버 세션이 남아 있을 수 있으므로 로그인 폼으로 보내지 않고 알린다
+  async function logout(event) {
+    const trigger = event?.currentTarget;
+    if (trigger) trigger.disabled = true;
     try {
       await api.logout();
-    } catch { /* 이미 끝난 세션이어도 로그인 폼으로 보낸다 */ }
+    } catch (failure) {
+      if (!active()) return;
+      if (failure?.code !== 'UNAUTHORIZED') {
+        const alert = element('p', 'admin-error', `로그아웃하지 못했어요. ${errorText(failure, '잠시 뒤 다시 시도해 주세요.')}`);
+        alert.setAttribute('role', 'alert');
+        main.querySelector(':scope > .admin-logout-error')?.remove();
+        alert.classList.add('admin-logout-error');
+        main.prepend(alert);
+        if (trigger) trigger.disabled = false;
+        return;
+      }
+    }
     if (active()) showLogin('로그아웃했어요.');
   }
 
