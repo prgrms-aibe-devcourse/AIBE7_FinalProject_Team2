@@ -8,6 +8,8 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -58,7 +60,8 @@ public class AdminAuditLog {
 		log.actorEmail = actorEmail;
 		log.targetType = targetType;
 		log.targetId = targetId;
-		log.detail = detail == null || detail.isEmpty() ? null : Map.copyOf(detail);
+		// null 값을 허용한다(A-11 "null = 지움"을 그대로 남기기 위해, #118 리뷰). Map.copyOf는 null 값에서 NPE
+		log.detail = detail == null || detail.isEmpty() ? null : Collections.unmodifiableMap(new LinkedHashMap<>(detail));
 		log.ipAddress = ipAddress;
 		return log;
 	}

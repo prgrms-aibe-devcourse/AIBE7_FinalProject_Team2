@@ -48,6 +48,8 @@ class AdminAuthApiTest extends ApiIntegrationTest {
 
 	@AfterEach
 	void deleteAdmins() {
+		// 이 테스트가 남긴 감사 로그도 지운다(BE-68, #118 리뷰). 계정을 지우기 전에 admin_id로 찾는다
+		createdAdmins.forEach(id -> jdbcTemplate.update("DELETE FROM admin_audit_log WHERE admin_id = ?", id));
 		accountRepository.deleteAllById(createdAdmins);
 		createdAdmins.clear();
 	}

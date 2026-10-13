@@ -19,11 +19,14 @@ import com.team2.project.admin.repository.AdminAccountRepository;
 import com.team2.project.admin.service.AdminPrincipal;
 import com.team2.project.support.ApiIntegrationTest;
 import jakarta.servlet.http.Cookie;
+import java.sql.Timestamp;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -59,10 +62,18 @@ class AdminAuditLogTest extends ApiIntegrationTest {
 
 	private final List<Long> createdAdmins = new ArrayList<>();
 	private final List<String> usedEmails = new ArrayList<>();
+	private Timestamp startedAt;
+
+	@BeforeEach
+	void markStart() {
+		startedAt = jdbcTemplate.queryForObject("SELECT clock_timestamp() - interval '1 second'", Timestamp.class);
+	}
 
 	@AfterEach
 	void cleanUp() {
 		usedEmails.forEach(email -> jdbcTemplate.update("DELETE FROM admin_audit_log WHERE actor_email = ?", email));
+		// 누구인지 없는 기록(모르는 입력 · 이메일 칸 비밀번호)도 이 테스트가 만든 것은 지운다 (#118 리뷰)
+		jdbcTemplate.update("DELETE FROM admin_audit_log WHERE actor_email IS NULL AND created_at >= ?", startedAt);
 		usedEmails.clear();
 		accountRepository.deleteAllById(createdAdmins);
 		createdAdmins.clear();
@@ -208,6 +219,50 @@ class AdminAuditLogTest extends ApiIntegrationTest {
 		});
 
 		assertThat(logsOf(admin.getEmail())).extracting(row -> row.get("action")).containsExactly("LOGOUT");
+	}
+
+	/** 읽기 행동(A-7)은 readOnly 트랜잭션 안에서 불러도 따로 저장되고, 바깥 롤백과 관계없이 남는다 (#118 리뷰) */
+	@Test
+	void recordRead_insideReadOnlyTransaction_savedSeparately() {
+		AdminAccount admin = createAdmin();
+		AdminPrincipal principal = AdminPrincipal.from(admin);
+		TransactionTemplate readOnly = new TransactionTemplate(transactionManager);
+		readOnly.setReadOnly(true);
+
+		readOnly.executeWithoutResult(status -> {
+			auditLogger.recordRead(principal, AdminAuditAction.SOURCE_VIEW, AuditTargetType.CASE_SOURCE, 999_003L, null);
+			status.setRollbackOnly();
+		});
+
+		assertThat(logsOf(admin.getEmail())).singleElement().satisfies(row -> {
+			assertThat(row.get("action")).isEqualTo("SOURCE_VIEW");
+			assertThat(row.get("target_type")).isEqualTo("CASE_SOURCE");
+			assertThat(((Number) row.get("target_id")).longValue()).isEqualTo(999_003L);
+		});
+	}
+
+	/** 읽기 행동 기록을 저장하지 못하면 예외를 던진다(기록 없는 열람을 막는다) */
+	@Test
+	void recordRead_storageFailure_throws() {
+		AdminPrincipal principal = new AdminPrincipal(999_004L, "y".repeat(300) + "@example.com", "없는 관리자", null, true);
+
+		assertThatThrownBy(() -> auditLogger.recordRead(principal, AdminAuditAction.SOURCE_VIEW,
+			AuditTargetType.CASE_SOURCE, 1L, null)).isInstanceOf(RuntimeException.class);
+	}
+
+	/** detail의 null 값(A-11 "null = 지움")도 그대로 저장된다 — Map.copyOf였다면 NPE (#118 리뷰) */
+	@Test
+	void record_detailWithNullValue_saved() {
+		AdminAccount admin = createAdmin();
+		Map<String, Object> detail = new HashMap<>();
+		detail.put("changedFields", List.of("keywords"));
+		detail.put("keywords", null);
+
+		auditLogger.record(AdminPrincipal.from(admin), AdminAuditAction.CASE_UPDATE, AuditTargetType.CASE, 999_005L,
+			detail, null);
+
+		assertThat(logsOf(admin.getEmail())).singleElement()
+			.satisfies(row -> assertThat((String) row.get("detail")).contains("\"keywords\": null"));
 	}
 
 	/** 조용한 기록은 저장이 실패해도 예외를 던지지 않는다(로그인 실패 · 로그아웃 응답이 500으로 바뀌지 않게) */
