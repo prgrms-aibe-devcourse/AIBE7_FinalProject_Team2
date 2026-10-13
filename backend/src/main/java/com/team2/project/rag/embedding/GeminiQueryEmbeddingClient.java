@@ -110,7 +110,14 @@ public class GeminiQueryEmbeddingClient implements QueryEmbeddingClient {
 				metrics.recordAiCallFailure();
 				throw new EmbeddingException("임베딩 API 응답을 읽을 수 없습니다", e);
 			}
-			sleeper.sleep(wait);
+			try {
+				sleeper.sleep(wait);
+			} catch (EmbeddingException e) {
+				// 재시도 대기 중 중단(스레드 인터럽트 등)도 이 호출의 최종 결과는 실패다.
+				// 여기서 세지 않으면 성공 · 실패 어디에도 잡히지 않아 성공률의 분모에서 빠진다 (#110 리뷰)
+				metrics.recordAiCallFailure();
+				throw e;
+			}
 			wait = wait.multipliedBy(2);
 		}
 	}
