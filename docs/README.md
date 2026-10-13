@@ -40,6 +40,7 @@
 | [conventions/CODE_CONVENTIONS.md](conventions/CODE_CONVENTIONS.md) | 코드 컨벤션 |
 | [personality-test-content.md](personality-test-content.md) | 판결 성향 테스트 콘텐츠(7.6.1). 가치관 4축 · 문항 16개(축 4 × 친구 · 가족 · 직장 · 이웃, 5칸 선택지 · −1 ~ 1점 · 동점 관대 글자) · 16유형 밈형 이름 · 내로 / 남불 캐릭터 배정 · 유형별 상세 설명 2단(일상 가치관 + 판결 연계) · 결과 화면 공통 문구 |
 | [character-main-handover.md](character-main-handover.md) | 판결 성향 캐릭터 · S-01 메인 인수인계(7.6.8 · 7.7.1). 결정 사항 · 디자인 가이드 요약 · 16종 표(대표색 · 이미지 · 상태) · 다시 그릴 3종 · 생성 방법 · 화면 연결 · 검수 체크리스트. 미리보기 이미지는 [assets/characters/](assets/characters/) |
+| [character-profile-worldview.md](character-profile-worldview.md) | 캐릭터 프로필 · 세계관. 캐릭터를 쓰는 목적 · 법의 정령 내로 · 남불과 상위 정령 로 · 유저 흐름 × 세계관 · 캐릭터 프로필 3종 · 모습 바꾸기 · 역할 순환(중립) · 컬렉션 · IP 확장 방향 |
 | [character-asset-architecture.md](character-asset-architecture.md) | 캐릭터 에셋 아키텍처. 정체성 → 외형 변형 → 연기 → 장착 → 장면 → 출력 6층 구조 · 캐릭터 시트 체계 · 바리에이션(데포르메 · 자세 · 표정 · 소품 · 역할 의상 · 스킨) · 상황 → 캐릭터 매핑 · 이미지 / 말투 프롬프트 블록 · 파일 · 데이터 구조 · 제작 순서 · 검수 |
 | [personality-image-numbers.md](personality-image-numbers.md) | 성향 이미지 번호표. 이미지 파일 이름 `01` ~ `16`과 유형(코드 · 캐릭터 · 유형명) 연결, 번호 규칙, 기존 동물 이미지 처리 |
 | [personality-scoring.md](personality-scoring.md) | 판결 성향 산식(BE-65, 7.6.2). 테스트 채점(5칸 선택지 · 축 점수 · 동점 = 관대 · 관용 지수) · 체험 → 성향(감경 → 관대 글자) · 종합 성향(체험 평균) · 저장 형식 · 팀 확인 항목 |
