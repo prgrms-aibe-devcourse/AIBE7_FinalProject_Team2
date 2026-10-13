@@ -9,3 +9,5 @@ import '../pages/verdict/verdict.css';
 import '../pages/ai/ai.css';
 import '../pages/court/court.css';
 import '../pages/comparison/comparison.css';
+import '../pages/personality/personality.css';
+import '../pages/myPage/myPage.css';

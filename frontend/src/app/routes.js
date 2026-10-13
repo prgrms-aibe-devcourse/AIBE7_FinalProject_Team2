@@ -11,7 +11,10 @@ import { renderCaseListPage } from '../pages/caseList/caseListPage.js';
 import { renderComparisonPage } from '../pages/comparison/comparisonPage.js';
 import { renderCourtPage } from '../pages/court/courtPage.js';
 import { renderLandingPage } from '../pages/landing/landingPage.js';
+import { renderMyPage } from '../pages/myPage/myPage.js';
 import { renderOverviewPage } from '../pages/overview/overviewPage.js';
+import { renderPersonalityPage } from '../pages/personality/personalityPage.js';
+import { renderPersonalityResultPage } from '../pages/personality/personalityResultPage.js';
 import { renderReviewPage } from '../pages/review/reviewPage.js';
 import { renderSummaryPage } from '../pages/summary/summaryPage.js';
 import { renderVerdictPage } from '../pages/verdict/verdictPage.js';
@@ -27,6 +30,10 @@ export const routes = [
   { name: 'ai', path: '/cases/:caseId/result/ai', render: renderAiPage, needsHeader: true, title: 'AI 판결' },
   { name: 'court', path: '/cases/:caseId/result/court', render: renderCourtPage, needsHeader: true, title: '실제 판결' },
   { name: 'comparison', path: '/cases/:caseId/result/compare', render: renderComparisonPage, needsHeader: true, title: '세 판결 비교' },
+  // 확장: 판결 성향 테스트 · 마이페이지 (S-15 ~ S-17). 공유된 결과(/test/types/{code})는 공유 API 계약 뒤에 추가한다
+  { name: 'test', path: '/test', render: renderPersonalityPage, title: '판결 성향 테스트' },
+  { name: 'testResult', path: '/test/result', render: renderPersonalityResultPage, title: '성향 결과' },
+  { name: 'me', path: '/me', render: renderMyPage, title: '마이페이지' },
   // S-14: 주소가 없다. 맞는 화면이 없는 주소거나 없는 사건일 때 보여 준다 (라우터 showNotFound · errorRedirect CASE_NOT_FOUND)
   { name: 'notFound', path: null, render: renderNotFoundPage, title: '찾을 수 없어요' },
 ];

@@ -17,6 +17,7 @@ export async function loadApi() {
     import('../mocks/aiMockApi.js'),
     import('../mocks/courtMockApi.js'),
     import('../mocks/comparisonMockApi.js'),
+    import('../mocks/personalityMockApi.js'),
   ]);
   return Object.assign({}, ...modules);
 }

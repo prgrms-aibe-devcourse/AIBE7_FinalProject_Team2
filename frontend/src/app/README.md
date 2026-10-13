@@ -36,6 +36,8 @@ export async function renderXxxPage(container, { caseId, caseHeader, api, naviga
 | `summary` | `/cases/{caseId}/summary` | S-05 |
 | `verdict` | `/cases/{caseId}/verdict` | S-06 |
 | `ai` · `court` · `comparison` | `/cases/{caseId}/result/ai` · `court` · `compare` | S-07 · S-08 · S-09 |
+| `test` · `testResult` | `/test` · `/test/result` | S-15 판결 성향 테스트 · S-16 성향 결과(내 결과). 공유된 결과 `/test/types/{code}`는 공유 API 계약 뒤에 추가 |
+| `me` | `/me` | S-17 마이페이지 |
 | `notFound` | 주소 없음 | S-14 |
 
 ## 에러 코드와 이동

@@ -1,4 +1,5 @@
 import { button, element, renderSiteFooter, renderSiteHeader } from '../../components/siteLayout.js';
+import { fallbackImages, todayLabel } from '../../utils/newspaper.js';
 
 // S-01 메인 — 판사의 책상 (FE-18, 시안 "B안 일러스트 · C안 구도", 논의기록 2026-10-12 S01 메인 책상 시안 결정)
 // 책상 위 물건이 곧 메뉴다: 신문 = 사건 목록(S-02), 서류철 = 판결 성향 테스트(S-15), 휴대폰 = 마이페이지(S-17), 노트북 = 커뮤니티.
@@ -11,9 +12,9 @@ const SCENE_WIDTH = 1672;
 // 물건(메뉴) 목록. route가 없으면 "곧 열려요"로 표시하고 누를 수 없다.
 // S-15 · S-17이 생기면 route에 화면 이름(routes.js의 name)만 넣으면 된다.
 const OBJECTS = {
-  folder: { label: '판결 성향 테스트', readyNote: '3분이면 끝 →', route: null, mobileText: '나의 판결 성향 알아보기' },
+  folder: { label: '판결 성향 테스트', readyNote: '3분이면 끝 →', route: 'test', mobileText: '나의 판결 성향 알아보기' },
   news: { label: '실제 사건 판결 체험', readyNote: '오늘의 사건', route: 'list', mobileText: '오늘의 사건' },
-  phone: { label: '마이페이지', readyNote: '내 판결 기록', route: null, mobileText: '내 판결 기록' },
+  phone: { label: '마이페이지', readyNote: '내 판결 기록', route: 'me', mobileText: '내 판결 기록' },
   laptop: { label: '커뮤니티', readyNote: '', route: null, mobileText: '다른 사람의 생각' },
 };
 const SOON = '곧 열려요';
@@ -23,15 +24,6 @@ const features = [
   { title: '직접 판결하기', text: '사건 기록과 법률 정보를 확인하고 판결을 내립니다.' },
   { title: '세 판결 비교', text: '내 판결, AI 판결, 실제 판결을 나란히 비교합니다.' },
 ];
-
-const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
-function todayLabel() {
-  const now = new Date();
-  return `${now.getFullYear()}년 ${now.getMonth() + 1}월 ${now.getDate()}일 ${WEEKDAYS[now.getDay()]}요일`;
-}
-
-// 사건 목록(S-02)과 같은 대체 이미지
-const fallbackImages = { MURDER: '/images/case-murder.svg', FRAUD: '/images/case-fraud.svg', INJURY: '/images/case-injury.svg' };
 
 // 서류철 그림 (장식). 색은 클래스로 landing.css에서 칠한다
 const FOLDER_SVG = `
