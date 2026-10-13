@@ -1,0 +1,135 @@
+name: deploy images
+
+# 운영 이미지 빌드 · 스모크 테스트 · GHCR 업로드 (BE-58, WBS 7.1.1 · 7.1.3의 빌드 단계)
+# - PR: 이미지를 빌드해 운영 구성(deploy/docker-compose.prod.yml)으로 띄우고 스모크 테스트만 한다 (업로드 안 함)
+# - develop push: 스모크 테스트를 통과한 이미지만 GHCR에 올린다 (태그: develop, sha-커밋7자리)
+# - 서버(EC2)에 반영하는 배포 단계는 7.1.3 CD에서 이 워크플로 뒤에 붙인다
+on:
+  pull_request:
+    branches: [develop]
+    paths:
+      - frontend/**
+      - backend/**
+      - deploy/**
+      - .github/workflows/deploy-images.yml
+  push:
+    branches: [develop]
+    paths:
+      - frontend/**
+      - backend/**
+      - deploy/**
+      - .github/workflows/deploy-images.yml
+  workflow_dispatch:
+
+# PR 검증은 새 push가 오면 이전 실행을 취소하고, 이미지 업로드(develop)는 중간에 끊지 않는다
+concurrency:
+  group: deploy-images-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  # GHCR 이미지 이름 앞부분 (소문자만 허용). 서버의 deploy/.env IMAGE_PREFIX와 같아야 한다
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/lawnambul
+  # 이 실행에서만 쓰는 태그. 스모크 테스트를 통과하면 develop · sha 태그를 붙여 올린다
+  IMAGE_TAG: ci-${{ github.sha }}
+
+jobs:
+  images:
+    name: Build, smoke test, push
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      packages: write   # develop push에서만 실제로 업로드한다 (PR은 쓰지 않음)
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      # 패키지 페이지에서 저장소로 연결되도록 출처 라벨을 붙인다
+      - name: Build web image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          load: true
+          push: false
+          tags: ${{ env.IMAGE_PREFIX }}-web:${{ env.IMAGE_TAG }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,scope=web,mode=max
+
+      - name: Build backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          load: true
+          push: false
+          tags: ${{ env.IMAGE_PREFIX }}-backend:${{ env.IMAGE_TAG }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,scope=backend,mode=max
+
+      # 운영과 같은 구성으로 띄운다. DB 비밀번호는 이 실행에서만 쓰는 무작위 값 (로그에 남지 않게 마스킹)
+      - name: Start stack (production compose)
+        working-directory: deploy
+        run: |
+          DB_PASSWORD_CI="$(openssl rand -hex 16)"
+          echo "::add-mask::$DB_PASSWORD_CI"
+          {
+            echo "IMAGE_PREFIX=$IMAGE_PREFIX"
+            echo "IMAGE_TAG=$IMAGE_TAG"
+            echo "WEB_PORT=80"
+            echo "POSTGRES_PASSWORD=$DB_PASSWORD_CI"
+          } > .env
+          docker compose -f docker-compose.prod.yml up -d --no-build
+
+      # 백엔드 기동(Flyway 마이그레이션 포함)을 기다린다. 최대 2분
+      - name: Wait for backend
+        run: |
+          for i in $(seq 1 60); do
+            if [ "$(curl -s -o /dev/null -w '%{http_code}' http://localhost/api/v1/cases)" = "200" ]; then
+              echo "ready after $((i * 2))s"; exit 0
+            fi
+            sleep 2
+          done
+          echo "백엔드가 2분 안에 뜨지 않았다"; exit 1
+
+      - name: Smoke test
+        run: ./deploy/smoke-test.sh http://localhost
+
+      # 실패 원인을 바로 볼 수 있게 컨테이너 상태 · 로그를 남긴다 (비밀값은 로그에 출력되지 않는다)
+      - name: Show logs on failure
+        if: failure()
+        working-directory: deploy
+        run: |
+          docker compose -f docker-compose.prod.yml ps
+          docker compose -f docker-compose.prod.yml logs --no-color --tail=200
+
+      - name: Stop stack
+        if: always()
+        working-directory: deploy
+        run: docker compose -f docker-compose.prod.yml down -v
+
+      # ---------- 여기부터 develop push에서만: 스모크 테스트를 통과한 이미지만 올린다 ----------
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/develop'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push images (develop, sha-xxxxxxx)
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/develop'
+        run: |
+          SHORT_SHA="${GITHUB_SHA::7}"
+          for name in web backend; do
+            source="$IMAGE_PREFIX-$name:$IMAGE_TAG"
+            for tag in develop "sha-$SHORT_SHA"; do
+              docker tag "$source" "$IMAGE_PREFIX-$name:$tag"
+              docker push "$IMAGE_PREFIX-$name:$tag"
+            done
+          done
