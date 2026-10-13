@@ -1,9 +1,11 @@
 name: deploy images
 
 # 운영 이미지 빌드 · 스모크 테스트 · GHCR 업로드 (BE-58, WBS 7.1.1 · 7.1.3의 빌드 단계)
-# - PR: 이미지를 빌드해 운영 구성(deploy/docker-compose.prod.yml)으로 띄우고 스모크 테스트만 한다 (업로드 안 함)
-# - develop push: 스모크 테스트를 통과한 이미지만 GHCR에 올린다 (태그: develop, sha-커밋7자리)
-# - 서버(EC2)에 반영하는 배포 단계는 7.1.3 CD에서 이 워크플로 뒤에 붙인다
+# - PR: build job만 실행한다. 이미지를 빌드해 운영 구성(deploy/docker-compose.prod.yml)으로 띄우고 스모크 테스트 (업로드 안 함)
+# - develop push: build job이 스모크 테스트를 통과한 이미지를 파일로 넘기고, publish job이 그 이미지를 GHCR에 올린다
+#   (태그: develop, sha-커밋7자리). 다시 빌드하지 않으므로 올라가는 이미지 = 테스트한 이미지
+# - 권한 분리: GHCR 쓰기 권한(packages: write)은 publish job에만 있다. PR에서 도는 build job은 읽기 권한뿐이다 (CodeRabbit 리뷰 반영)
+# - 서버(EC2)에 반영하는 배포 단계는 7.1.3 CD에서 publish 뒤에 붙인다
 on:
   pull_request:
     branches: [develop]
@@ -26,26 +28,29 @@ concurrency:
   group: deploy-images-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# 기본 권한은 읽기만. 쓰기 권한은 publish job에서만 따로 준다
 permissions:
   contents: read
 
 env:
   # GHCR 이미지 이름 앞부분 (소문자만 허용). 서버의 deploy/.env IMAGE_PREFIX와 같아야 한다
   IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/lawnambul
-  # 이 실행에서만 쓰는 태그. 스모크 테스트를 통과하면 develop · sha 태그를 붙여 올린다
+  # 이 실행에서만 쓰는 태그. 스모크 테스트를 통과하면 publish job이 develop · sha 태그를 붙여 올린다
   IMAGE_TAG: ci-${{ github.sha }}
 
 jobs:
-  images:
-    name: Build, smoke test, push
+  build:
+    name: Build and smoke test
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
       contents: read
-      packages: write   # develop push에서만 실제로 업로드한다 (PR은 쓰지 않음)
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # 토큰을 로컬 git 설정에 남기지 않는다 (이 job은 git push를 하지 않는다)
+          persist-credentials: false
 
       - uses: docker/setup-buildx-action@v3
 
@@ -86,11 +91,11 @@ jobs:
           } > .env
           docker compose -f docker-compose.prod.yml up -d --no-build
 
-      # 백엔드 기동(Flyway 마이그레이션 포함)을 기다린다. 최대 2분
+      # 백엔드 기동(Flyway 마이그레이션 포함)을 기다린다. 최대 2분, 요청 하나는 5초 안에 끝낸다
       - name: Wait for backend
         run: |
           for i in $(seq 1 60); do
-            if [ "$(curl -s -o /dev/null -w '%{http_code}' http://localhost/api/v1/cases)" = "200" ]; then
+            if [ "$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' http://localhost/api/v1/cases)" = "200" ]; then
               echo "ready after $((i * 2))s"; exit 0
             fi
             sleep 2
@@ -113,9 +118,41 @@ jobs:
         working-directory: deploy
         run: docker compose -f docker-compose.prod.yml down -v
 
-      # ---------- 여기부터 develop push에서만: 스모크 테스트를 통과한 이미지만 올린다 ----------
-      - name: Log in to GHCR
+      # ---------- develop push에서만: 테스트한 이미지를 publish job으로 넘긴다 ----------
+      # 이미지에는 비밀값이 없다(비밀값은 실행 시 .env로 주입). 하루 뒤 자동 삭제
+      - name: Save tested images
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/develop'
+        run: docker save "$IMAGE_PREFIX-web:$IMAGE_TAG" "$IMAGE_PREFIX-backend:$IMAGE_TAG" | gzip > images.tar.gz
+
+      - name: Upload tested images
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/develop'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tested-images
+          path: images.tar.gz
+          retention-days: 1
+          if-no-files-found: error
+
+  publish:
+    name: Push to GHCR
+    needs: build
+    # develop에 머지(push)됐을 때만. PR에서는 이 job 자체가 실행되지 않는다
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      packages: write   # GHCR 업로드에만 쓴다. 코드는 checkout하지 않는다
+
+    steps:
+      - name: Download tested images
+        uses: actions/download-artifact@v4
+        with:
+          name: tested-images
+
+      - name: Load tested images
+        run: gunzip -c images.tar.gz | docker load
+
+      - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -123,7 +160,6 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Push images (develop, sha-xxxxxxx)
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/develop'
         run: |
           SHORT_SHA="${GITHUB_SHA::7}"
           for name in web backend; do
