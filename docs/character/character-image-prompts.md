@@ -1018,3 +1018,4 @@ Draw a height comparison sheet: all characters standing in a row on one shared g
 SCENE — plain newsprint background #ECE2D4, generous spacing, landscape 16:9.
 
 AVOID: text, letters, numbers, logos, labels, angry faces or poses, gendered body features, cropped limbs, extra characters, black outlines, drop shadows, ground shadows, 3D render, photo realism, Nambul taller than Naero, all Laws the same height.
+```

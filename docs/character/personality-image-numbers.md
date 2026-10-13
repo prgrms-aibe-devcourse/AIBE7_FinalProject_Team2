@@ -7,7 +7,7 @@
 | v0.1 | 2026-10-13 | 초안 (COMMON-28) — 성향 16유형 이미지를 번호 파일 이름으로 두고 번호와 유형을 연결 |
 
 > 성향 이미지는 `frontend/public/images/characters/personality/{번호}.webp`로 둔다([캐릭터 에셋 아키텍처](character-asset-architecture.md) 6-4). 이미지 주소에 4글자 코드가 보이지 않게(성향 콘텐츠 6장 #8) 파일 이름은 번호로 한다.
-> 이 표는 **번호 ↔ 유형** 연결만 적는다. 유형 설명 · 밈 문구는 [성향 테스트 콘텐츠](personality-test-content.md) 4장이 기준이다.
+> 이 표는 **번호 ↔ 유형** 연결만 적는다. 유형 설명 · 밈 문구는 [성향 테스트 콘텐츠](../personality-test-content.md) 4장이 기준이다.
 > 코드는 이 문서 · 내부 데이터에만 쓰고 화면에는 보이지 않는다.
 
 ## 번호 규칙
@@ -39,4 +39,4 @@
 
 ## 기존 동물 이미지
 
-[`assets/characters/`](assets/characters/)의 동물 16종(`ENFJ_penguin.webp` 등)은 폐기된 동물 기획의 기록이다. 이번엔 그대로 두고 **추후 삭제**한다. 이 번호표와 관계없다.
+[`assets/characters/`](../assets/characters/)의 동물 16종(`ENFJ_penguin.webp` 등)은 폐기된 동물 기획의 기록이다. 이번엔 그대로 두고 **추후 삭제**한다. 이 번호표와 관계없다.
