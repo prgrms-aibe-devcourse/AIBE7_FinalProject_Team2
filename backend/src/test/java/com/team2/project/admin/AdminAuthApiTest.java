@@ -243,6 +243,34 @@ class AdminAuthApiTest extends ApiIntegrationTest {
 		assertThat(session.isInvalid()).isTrue();
 	}
 
+	/** 비활성 계정이 CSRF 토큰 없이 상태 변경 요청을 보내도 403이 아니라 401로 끝나고 세션이 남지 않는다 (#116 리뷰) */
+	@Test
+	void session_accountDisabled_postWithoutCsrf_unauthorizedNotForbidden() throws Exception {
+		String email = createAdmin(true);
+		MockHttpSession session = login(email);
+
+		jdbcTemplate.update("UPDATE admin_account SET enabled = false WHERE email = ?", email);
+
+		mockMvc.perform(post("/api/v1/admin/auth/logout").session(session))
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+		assertThat(session.isInvalid()).isTrue();
+	}
+
+	/** 로그아웃하면 CSRF 쿠키도 지운다 (#116 리뷰) */
+	@Test
+	void logout_clearsCsrfCookie() throws Exception {
+		MvcResult login = mockMvc.perform(loginRequest(createAdmin(true), PASSWORD, csrfCookie()))
+			.andExpect(status().isOk())
+			.andReturn();
+		Cookie csrf = login.getResponse().getCookie(CSRF_COOKIE);
+		MockHttpSession session = (MockHttpSession) login.getRequest().getSession(false);
+
+		mockMvc.perform(withCsrf(post("/api/v1/admin/auth/logout"), csrf).session(session))
+			.andExpect(status().isNoContent())
+			.andExpect(cookie().maxAge(CSRF_COOKIE, 0));
+	}
+
 	/** 로그인한 뒤 계정이 지워져도 다음 요청부터 401 */
 	@Test
 	void session_accountDeletedAfterLogin_unauthorized() throws Exception {

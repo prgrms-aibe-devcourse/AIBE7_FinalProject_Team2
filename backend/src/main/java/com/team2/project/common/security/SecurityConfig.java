@@ -21,12 +21,12 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.authentication.AnonymousAuthenticationFilter;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.RequestAttributeSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.web.csrf.CsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy;
@@ -90,8 +90,9 @@ public class SecurityConfig {
 			.requestCache(AbstractHttpConfigurer::disable)
 			.exceptionHandling(e -> e.authenticationEntryPoint(errors).accessDeniedHandler(errors))
 			.sessionManagement(session -> session.sessionFixation(fixation -> fixation.changeSessionId()))
-			// 세션을 불러온 뒤 · 권한 검사 전에 계정 상태를 확인한다. 비활성이면 인증을 지워 권한 검사가 401로 막는다
-			.addFilterBefore(new AdminAccountStatusFilter(adminAccounts), AuthorizationFilter.class);
+			// 세션을 불러온 뒤 · CSRF 검사 전에 계정 상태를 확인한다. 비활성 · 삭제면 세션을 끝내고 바로 401 (#116 리뷰)
+			.addFilterBefore(new AdminAccountStatusFilter(adminAccounts, errors, Set.of(LOGIN_PATH, CSRF_PATH)),
+				CsrfFilter.class);
 		return http.build();
 	}
 

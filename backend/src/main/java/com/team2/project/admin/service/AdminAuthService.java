@@ -61,12 +61,13 @@ public class AdminAuthService {
 		return AdminMeResponse.from(sessionPrincipal);
 	}
 
-	public void logout(HttpServletRequest request) {
+	public void logout(HttpServletRequest request, HttpServletResponse response) {
 		HttpSession session = request.getSession(false);
 		if (session != null) {
 			session.invalidate();
 		}
 		contextHolder.clearContext();
+		adminCsrfTokenRepository.saveToken(null, request, response);	// CSRF 쿠키도 지운다 (스프링 기본 로그아웃과 같게, #116 리뷰)
 	}
 
 	private AdminPrincipal authenticate(AdminLoginRequest login) {
