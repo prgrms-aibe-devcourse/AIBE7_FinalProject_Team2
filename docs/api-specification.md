@@ -18,7 +18,7 @@
 | v0.14 | 2026-10-08 | 11 · 12차 회의 반영 (COMMON-20) — API 15(AI 비교 분석)를 보류로 표시(REQ-063 확장 범위 제외, 4 · 5장 · 6장 #6), 판결 성향 테스트 · 마이페이지 · 관리자 API는 설계 전이라 7장에 후보만 기록 |
 | v0.15 | 2026-10-12 | 관리자 인증 API 추가 (**확장 단계**, BE-39 — 닫힌 #79를 최신 develop에 다시 적용) — 8장 관리자 API(CSRF 토큰 · 로그인 · 로그아웃 · 내 정보), 1-5에 `UNAUTHORIZED` · `INVALID_CREDENTIALS` · `FORBIDDEN` 추가. 7장 후보의 관리자 검수 중 인증 부분 확정. 사용자 API(1 ~ 15)는 변경 없음 |
 | v0.16 | 2026-10-12 | 회원 토큰 공통 규칙 추가 (**확장 단계**, BE-57 · WBS 7.4.1) — 1-2에 `Authorization: Bearer` 규칙(없거나 `Bearer`가 아닌 스킴이면 익명, 잘못 · 만료면 401, 재발급 요청에는 붙이지 않음), 1-5에 `TOKEN_INVALID` · `TOKEN_EXPIRED` 추가. 토큰 발급 · 재발급 API는 카카오 로그인 · JWT(7.4.2 · 7.4.3)에서 추가. 지금 사용자 API의 동작은 변경 없음 |
-| v0.17 | 2026-10-13 | 관리자 검수 API 계약 초안 (**확장 단계**, WBS 7.4.7 · BE-33 · BE-41 ~ BE-43, R16) — 8-2에 A-5 ~ A-13(검수 사건 목록 · 상세 · 원문, 판결 후보 상세 · 승인 · 반려, 사건 내용 수정, 가치관 축 확정, 사건 공개)과 검수 흐름 · 공개 조건, 8-3 팀 확인 항목, 1-5에 `JUDGMENT_NOT_FOUND` · `FACTOR_NOT_FOUND` · `DUPLICATE_TITLE` · `PUBLISH_NOT_READY` 추가. 경로 · 요청 · 응답 형태만 먼저 정하고 세부 필드는 구현(10/21 ~ 23)하며 맞춘다. 사용자 API는 변경 없음 |
+| v0.17 | 2026-10-13 | 관리자 검수 API 계약 초안 (**확장 단계**, WBS 7.4.7 · BE-33 · BE-41 ~ BE-43, R16) — 8-2에 A-5 ~ A-13(검수 사건 목록 · 상세 · 원문, 판결 후보 상세 · 승인 · 반려, 사건 내용 수정, 가치관 축 확정, 사건 공개)과 검수 흐름 · 공개 조건, 8-3 팀 확인 항목, 1-5에 `JUDGMENT_NOT_FOUND` · `FACTOR_NOT_FOUND` · `DUPLICATE_TITLE` · `PUBLISH_NOT_READY` 추가. 경로 · 요청 · 응답 형태만 먼저 정하고 세부 필드는 구현(10/21 ~ 23)하며 맞춘다. 사용자 API는 변경 없음. #111 리뷰 반영(김해송): 상태 변경 시 사건 행 잠금, 승인 순서(해제 먼저 flush) · 유니크 위반 409, 공개한 사건에서도 반려 허용 · `pending` 필터, 검수 정보 최상위, `INVALID_STATE` 사유 코드, PATCH `null` 규칙, 최근 활동 순, 원문 열람 감사 로그 |
 
 ---
 
@@ -704,10 +704,12 @@ API 1 · 2는 상태와 관계없이 부를 수 있다. 표에 없는 조합은 
 ```
 
 - **승인 = 그 사건의 공개 판결로 정한다.** 사건마다 공개 AI 판결 1개 · 공개 재판부 판결 1개(`uk_judgment_published`)라서, 승인하면 같은 주체의 기존 공개 판결은 비공개로 바뀐다(행은 지우지 않는다, REQ-079).
-- **공개한 사건은 판결 교체 · 내용 수정을 막는다** ⚠️. 이미 체험한 사용자의 비교 결과(S-09)가 바뀌지 않게 하기 위해서다(REQ-046 "모든 사용자에게 같은 AI 판결"). 판단 요소의 가치관 축(A-11)은 체험 완료 시점에 고정 저장되므로(성향 산식 3-4) 공개 뒤에도 고칠 수 있다.
+- **공개한 사건은 판결 교체(승인) · 내용 수정을 막는다** ⚠️. 반려는 사용자 화면에 영향이 없으므로 공개한 사건에서도 허용한다(공개 중인 후보만 막는다, A-10). 이미 체험한 사용자의 비교 결과(S-09)가 바뀌지 않게 하기 위해서다(REQ-046 "모든 사용자에게 같은 AI 판결"). 판단 요소의 가치관 축(A-12)은 체험 완료 시점에 고정 저장되므로(성향 산식 3-4) 공개 뒤에도 고칠 수 있다.
 - 공개 취소(PUBLISHED → 비공개)는 이번 단계에 두지 않는다 ⚠️.
 - 원본 판결문 정보(`case_source`)는 이 API에서만 내려 준다(ERD 5장 원칙, 기술 스택 3장).
-- 상태를 바꾸는 요청(A-9 ~ A-13)은 감사 로그를 남긴다(7.4.5).
+- **동시 요청**: 상태를 바꾸는 요청(A-9 ~ A-13)은 트랜잭션을 시작하면 먼저 그 사건의 `legal_case` 행을 잠근다(`SELECT … FOR UPDATE`). 그 뒤에 사건 상태 · 후보 상태를 확인한다. 한 관리자가 "아직 공개 전"을 확인한 사이 다른 관리자가 공개해 버리는 경합을 막는다(사용자 API의 조건부 갱신 원칙과 같은 수준).
+- **`INVALID_STATE` 사유**: 관리자 API의 `INVALID_STATE`는 `currentStatus`에 **사건 상태**만 담고, 이유는 `details`의 사유 코드로 구분한다 — `[{ "field": "case", "reason": "CASE_PUBLISHED" }]`. 사유 코드: `CASE_PUBLISHED`(공개한 사건) · `CANDIDATE_REJECTED`(이미 반려한 후보) · `CANDIDATE_PUBLISHED`(공개 중인 후보).
+- 상태를 바꾸는 요청(A-9 ~ A-13)과 원문 열람(A-7)은 감사 로그를 남긴다(7.4.5). 원문은 원본 판결문이라 읽기도 남긴다.
 - 이 절의 모든 경로는 8-1 공통 규칙(세션 · CSRF)을 따른다.
 
 **API 목록**
@@ -729,10 +731,11 @@ API 1 · 2는 상태와 관계없이 부를 수 있다. 표에 없는 조합은 
 | 쿼리 | 기본값 | 설명 |
 | --- | --- | --- |
 | `status` | `DRAFT,REVIEW` | 쉼표로 여러 개. `DRAFT` · `REVIEW` · `PUBLISHED` |
+| `pending` | (없음) | `true`면 검수 대기 후보(`PENDING`)가 있는 사건만. 공개한 사건에 새로 쌓인 후보를 찾을 때 `status=PUBLISHED&pending=true`로 쓴다 |
 | `page` | 0 | 0부터 |
 | `size` | 20 | 1 ~ 100 |
 
-사용자 API 1과 달리 쪽 나눔을 둔다(파이프라인이 사건을 계속 쌓기 때문). 최근 수정 순.
+사용자 API 1과 달리 쪽 나눔을 둔다(파이프라인이 사건을 계속 쌓기 때문). **최근 활동 순** — 사건 수정 시각(`legal_case.updated_at`)과 그 사건 AI · 재판부 후보의 적재 · 검수 시각 중 가장 늦은 값(`lastActivityAt`). 파이프라인이 새 후보만 쌓아도 목록 위로 올라온다. 범죄 유형 필터 · 제목 검색은 사건 수가 적어 두지 않고, 필요하면 추가한다.
 
 ```json
 {
@@ -746,7 +749,8 @@ API 1 · 2는 상태와 관계없이 부를 수 있다. 표에 없는 조합은 
       "hasPublishedAi": false,
       "hasPublishedCourt": false,
       "createdAt": "2026-10-20T09:00:00+09:00",
-      "updatedAt": "2026-10-20T09:00:00+09:00"
+      "updatedAt": "2026-10-20T09:00:00+09:00",
+      "lastActivityAt": "2026-10-20T09:00:00+09:00"
     }
   ],
   "page": 0,
@@ -760,7 +764,7 @@ API 1 · 2는 상태와 관계없이 부를 수 있다. 표에 없는 조합은 
 
 | 거절 | 조건 |
 | --- | --- |
-| 400 `VALIDATION_ERROR` | 모르는 `status` 값, `page` 음수, `size` 범위 밖 |
+| 400 `VALIDATION_ERROR` | 모르는 `status` 값, `pending`이 `true` · `false`가 아님, `page` 음수, `size` 범위 밖 |
 
 ### A-6. 사건 검수 상세 — `GET /admin/cases/{caseId}`
 
@@ -828,7 +832,7 @@ API 1 · 2는 상태와 관계없이 부를 수 있다. 표에 없는 조합은 
 - 예시의 사건번호 · 법원명은 가상 값이다. 실제 값은 저장소 문서에 적지 않는다.
 - `content`는 A-11에서 고칠 수 있는 필드와 읽기 전용 필드를 함께 담는다(고칠 수 있는 필드는 A-11 표).
 - `candidates`는 최신 순. 반려(`REJECTED`)된 후보도 이력으로 함께 내려 준다.
-- `penaltyLabel`은 판결 응답 공통 형식의 형량 표시 문구와 같은 규칙으로 만든다.
+- `penaltyLabel`은 API 14 `preToFinal.finalJudgmentText`(예: "징역 15년")와 같은 규칙으로 만든다.
 - `publishReadiness.reasons`는 A-13의 공개 조건 코드(A-13 표)다. 비어 있으면 `ready = true`.
 - 원문(`original_text`)은 크기가 커서 A-7로 따로 받는다.
 
@@ -841,6 +845,8 @@ API 1 · 2는 상태와 관계없이 부를 수 있다. 표에 없는 조합은 
 ```json
 { "sourceId": 30, "originalText": "…" }
 ```
+
+- 원본 판결문이므로 열람할 때마다 감사 로그(누가 · 언제 · 어느 원문)를 남긴다.
 
 | 거절 | 조건 |
 | --- | --- |
@@ -857,23 +863,21 @@ API 1 · 2는 상태와 관계없이 부를 수 있다. 표에 없는 조합은 
   "subjectType": "AI",
   "reviewStatus": "PENDING",
   "isPublished": false,
+  "reviewedBy": null,
+  "reviewedAt": null,
+  "reviewNote": null,
   "judgment": { "…": "판결 응답 공통 형식과 같은 필드 (penaltyType · reducedTo · prisonMonths · summary · reasoning · referenceTags · factors 등)" },
-  "factorEvidence": [
-    { "factorId": 101, "direction": "UP", "evidence": null }
-  ],
   "generation": {
     "modelName": "(모델 이름)",
     "promptVersion": "(프롬프트 버전)",
     "inputSnapshot": { "…": "AI에 넣은 입력 (참고 판례 · 양형기준 포함)" },
-    "generationReport": { "…": "검증 경고 · 사전 학습 점검 · 회차 선택 근거" },
-    "reviewedBy": null,
-    "reviewedAt": null,
-    "reviewNote": null
+    "generationReport": { "…": "검증 경고 · 사전 학습 점검 · 회차 선택 근거" }
   }
 }
 ```
 
-- `generation`은 AI 후보일 때만 있고 재판부 후보는 `null`.
+- 검수 정보(`reviewStatus` · `reviewedBy` · `reviewedAt` · `reviewNote`)는 AI · 재판부 후보 모두 최상위에 둔다. `generation`(생성 조건)은 AI 후보일 때만 있고 재판부 후보는 `null`.
+- 판단 요소별 방향 · 근거는 `judgment.factors[]`(`direction` · `evidence`)에 있다.
 - `raw_output`(모델 원본 출력)은 크기가 커서 내려 주지 않는다 ⚠️.
 - `reviewNote`는 반려 사유(A-10). 저장 위치는 BE-42 마이그레이션에서 정한다(8-3).
 
@@ -887,8 +891,12 @@ API 1 · 2는 상태와 관계없이 부를 수 있다. 표에 없는 조합은 
 
 한 트랜잭션에서:
 
+0. 사건 행을 잠그고(8-2 동시 요청) 사건 · 후보 상태를 확인한다.
 1. 같은 사건 · 같은 주체의 기존 공개 판결을 비공개로 바꾼다(검수 상태는 그대로 둔다).
 2. 이 후보를 `APPROVED` · 공개로 바꾸고 검수자 · 검수 시각을 남긴다.
+
+- **1이 2보다 먼저 DB에 반영돼야 한다.** `uk_judgment_published`는 부분 유니크 인덱스라 문장마다 검사하므로, 2가 먼저 실행되면 공개 판결이 잠깐 둘이 되어 위반이 난다. 1은 벌크 UPDATE로 하거나 명시적으로 `flush`한 뒤 2를 실행한다(JPA 변경 감지 순서에 맡기지 않는다).
+- 그래도 유니크 위반이 나면(잠금 밖 경로 등) 500이 아니라 409 `INVALID_STATE`로 바꿔 돌려준다.
 
 - 이미 승인돼 공개 중인 후보를 다시 승인하면 아무것도 바꾸지 않고 200(중복 클릭 대비).
 - 사건이 `DRAFT`면 `REVIEW`로 바꾼다 ⚠️.
@@ -896,7 +904,7 @@ API 1 · 2는 상태와 관계없이 부를 수 있다. 표에 없는 조합은 
 | 거절 | 조건 |
 | --- | --- |
 | 404 `JUDGMENT_NOT_FOUND` | 판결이 없거나 `USER` |
-| 409 `INVALID_STATE` | 사건이 이미 `PUBLISHED`(공개 뒤 교체 금지 ⚠️), 후보가 `REJECTED`. `currentStatus`에 사건 상태 또는 후보의 검수 상태를 담는다 |
+| 409 `INVALID_STATE` | 사건이 이미 `PUBLISHED`(`CASE_PUBLISHED`, 공개 뒤 교체 금지 ⚠️), 후보가 `REJECTED`(`CANDIDATE_REJECTED`), 동시 승인으로 유니크 위반 |
 | 403 `FORBIDDEN` | CSRF 토큰 없음 · 불일치 |
 
 ### A-10. 판결 후보 반려 — `POST /admin/judgments/{judgmentId}/reject`
@@ -909,17 +917,21 @@ API 1 · 2는 상태와 관계없이 부를 수 있다. 표에 없는 조합은 
 
 - `reason`은 필수, 1 ~ 500자.
 - 반려는 되돌리지 않는다. 다시 쓰려면 파이프라인으로 새 후보를 만든다(REQ-079, user-flow 3-6).
+- **공개한 사건에서도 반려할 수 있다.** 파이프라인을 다시 돌리면 공개한 사건에도 비공개 후보가 쌓이는데(ERD `ai_generation` 아래 설명), 반려까지 막으면 이 후보들이 계속 `PENDING`으로 남는다. 반려는 사용자 화면에 영향이 없다. 공개 중인 후보만 막는다.
 - 사건이 `DRAFT`면 `REVIEW`로 바꾼다 ⚠️.
 
 | 거절 | 조건 |
 | --- | --- |
 | 400 `VALIDATION_ERROR` | `reason`이 비었거나 500자 초과 |
 | 404 `JUDGMENT_NOT_FOUND` | 판결이 없거나 `USER` |
-| 409 `INVALID_STATE` | 후보가 공개 중(먼저 다른 후보를 승인해 교체한다), 이미 `REJECTED`, 사건이 `PUBLISHED` |
+| 409 `INVALID_STATE` | 후보가 공개 중(`CANDIDATE_PUBLISHED`, 공개 전 사건이면 먼저 다른 후보를 승인해 교체한다), 이미 `REJECTED`(`CANDIDATE_REJECTED`) |
 
 ### A-11. 사건 내용 수정 — `PATCH /admin/cases/{caseId}`
 
 보낸 필드만 바꾼다. 성공 200, A-6과 같은 형식.
+
+- **필드 없음과 `null`을 구분한다.** 본문에 없는 필드는 그대로 두고, `null`을 보낸 필드는 지운다(필수 컬럼은 `null` 불가). 구현은 `JsonNullable` 등으로 "보내지 않음"과 "`null`"을 나눈다.
+- 권고 하한 · 상한 중 하나만 보내면 **저장된 다른 값과** 비교한다(하한 ≤ 상한).
 
 ```json
 { "shortIntro": "고친 소개 문구", "keywords": ["금전 갈등", "지인", "말다툼"] }
@@ -930,11 +942,11 @@ API 1 · 2는 상태와 관계없이 부를 수 있다. 표에 없는 조합은 
 | `title` | 1 ~ 100자, 다른 사건과 겹치면 안 된다(`uk_legal_case_title`) |
 | `shortIntro` | 1 ~ 200자 |
 | `overview` | 1자 이상 |
-| `keywords` | 문자열 배열, `null`이면 지움 |
+| `keywords` | 문자열 배열. 지울 때는 `[]`(jsonb는 배열로 넣는다, ERD 7장). `null`은 거절 |
 | `difficulty` | `LOW` · `MID` · `HIGH` · `null` |
 | `estimatedMinutes` | 1 이상 · `null` |
 | `thumbnailUrl` | 300자 이하 · `null` |
-| `recommendedMinMonths` · `recommendedMaxMonths` | 1 이상 · `null`, 둘 다 있으면 하한 ≤ 상한 |
+| `recommendedMinMonths` · `recommendedMaxMonths` | 1 이상 · `null`. 바꾼 뒤의 하한 · 상한이 둘 다 있으면 하한 ≤ 상한 |
 | `recommendedBasis` | 문자열 · `null` |
 
 - 죄명 · 적용 법조문 · 법정형 · 판단 요소 구성 · 형벌 규칙은 이 API로 바꾸지 않는다(파이프라인 · SQL 경로, WBS 7-5 8순위).
@@ -942,9 +954,9 @@ API 1 · 2는 상태와 관계없이 부를 수 있다. 표에 없는 조합은 
 
 | 거절 | 조건 |
 | --- | --- |
-| 400 `VALIDATION_ERROR` | 위 규칙 위반, 모르는 필드, 빈 본문 |
+| 400 `VALIDATION_ERROR` | 위 규칙 위반(필수 필드 · `keywords`에 `null` 포함), 모르는 필드, 빈 본문 |
 | 404 `CASE_NOT_FOUND` | 사건이 없음 |
-| 409 `INVALID_STATE` | 사건이 `PUBLISHED`(공개 뒤 수정 금지 ⚠️) |
+| 409 `INVALID_STATE` | 사건이 `PUBLISHED`(`CASE_PUBLISHED`, 공개 뒤 수정 금지 ⚠️) |
 | 409 `DUPLICATE_TITLE` | 제목이 다른 사건과 겹침 |
 
 ### A-12. 판단 요소 가치관 축 확정 — `PUT /admin/factors/{factorId}/value-axis`
@@ -986,7 +998,7 @@ API 1 · 2는 상태와 관계없이 부를 수 있다. 표에 없는 조합은 
 | 거절 | 조건 |
 | --- | --- |
 | 404 `CASE_NOT_FOUND` | 사건이 없음 |
-| 409 `INVALID_STATE` | 이미 `PUBLISHED` |
+| 409 `INVALID_STATE` | 이미 `PUBLISHED`(`CASE_PUBLISHED`) |
 | 409 `PUBLISH_NOT_READY` | 공개 조건 미충족. `details`에 `[{ "field": "case", "reason": "NO_PUBLISHED_AI" }, …]` |
 
 **에러 코드**: 1-5의 `JUDGMENT_NOT_FOUND` · `FACTOR_NOT_FOUND` · `DUPLICATE_TITLE` · `PUBLISH_NOT_READY`(v0.17 추가)와 공통 코드를 쓴다.
@@ -999,9 +1011,9 @@ API 1 · 2는 상태와 관계없이 부를 수 있다. 표에 없는 조합은 
 | --- | --- | --- | --- |
 | 1 | 공개 뒤 판결 교체 · 내용 수정 | 막는다(409). 바꿔야 하면 새 사건으로 적재 | 팀 |
 | 2 | 공개 취소 | 이번 단계에 두지 않는다 | 팀 |
-| 3 | `REVIEW` 상태 | 관리자가 처음 바꾸는 순간(A-9 ~ A-12) 자동으로 `DRAFT → REVIEW`. "누가 손대기 시작한 사건"을 목록에서 구분하는 용도 | A 김해송 (S-19 목록) |
-| 4 | 재판부 후보 검수 상태 · 반려 사유 저장 | 재판부 판결에는 검수 상태 컬럼이 없고(`ai_generation.review_status`는 AI만), 반려 사유 컬럼도 없다. BE-42 마이그레이션(V15 예정, WBS R17)에서 정한다. 응답 필드(`reviewStatus` · `reviewNote`)는 저장 방식과 관계없이 이대로 둔다 | B (BE-42) |
+| 3 | `REVIEW` 상태 | ✅ 관리자가 처음 바꾸는 순간(A-9 ~ A-12) 자동으로 `DRAFT → REVIEW`. "누가 손대기 시작한 사건"을 목록에서 구분하는 용도. `REVIEW → DRAFT`로 되돌리는 경로는 두지 않는다 (#111 리뷰, A 동의) | A 김해송 (S-19 목록) |
+| 4 | 재판부 후보 검수 상태 · 반려 사유 저장 | 재판부 판결에는 검수 상태 컬럼이 없고(`ai_generation.review_status`는 AI만), 반려 사유 컬럼도 없다. BE-42 마이그레이션(V15 예정, WBS R17)에서 정한다. 응답 필드(최상위 `reviewStatus` · `reviewedBy` · `reviewedAt` · `reviewNote`)는 저장 방식과 관계없이 이대로 둔다 | B (BE-42) |
 | 5 | 검수자 기록 | `ai_generation.reviewed_by`(varchar 50)에 관리자 이메일을 넣으면 길이가 모자랄 수 있다. BE-42에서 관리자 ID로 바꿀지 정한다 | B (BE-42) |
-| 6 | 모델 원본 출력(`raw_output`) | 내려 주지 않는다. 필요하면 A-8에 쿼리 옵션으로 추가 | A 김해송 (S-19 상세) |
-| 7 | 관리자 OAuth(BE-40, D)와 체인 | 관리자 체인에 `oauth2Login` 자리 연결은 B, 성공 처리 · 허용 목록은 D (#108 코멘트) | D 정민석 |
+| 6 | 모델 원본 출력(`raw_output`) | ✅ 내려 주지 않는다. 필요하면 A-8에 쿼리 옵션으로 추가 (#111 리뷰, A 동의) | A 김해송 (S-19 상세) |
+| 7 | 관리자 OAuth(BE-40, D)와 체인 | 관리자 체인에 `oauth2Login` 자리 연결은 B, 성공 처리 · 허용 목록은 D (#108, WBS v1.9 7-2-1) | D 정민석 |
 
