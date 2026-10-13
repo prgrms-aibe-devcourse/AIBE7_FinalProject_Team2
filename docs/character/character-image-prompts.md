@@ -10,6 +10,7 @@
 | v2.1 | 2026-10-14 | 로 키 · 체형 반영(저울 230 · 법봉 190 · 법전 210) |
 | v2.2 | 2026-10-14 | 로(법전): **목 · 기둥 없이 공중에 떠 있는 법전**, 기본은 표지 정면 · 자유 회전(9-4 · 9-5 · 9-6 · 9-8 · 9-9 · 9-10) |
 | v2.3 | 2026-10-14 | 로 스탠딩 · `idle`은 빈손(봉투는 `deliver`만) — 9-6 · 9-9 · 9-10 수정, 9-12 빈손 스탠딩 추가 |
+| v2.4 | 2026-10-14 | 로 셋 이름(로울 · 로봉 · 로북)을 IDENTITY 제목에 표기. 프롬프트 본문은 "Law (Scale)" 등 영어 이름 그대로 |
 
 > 기준 결정: `character-main-handover.md` v2의 10/13 변경 절 (기본 = 마스코트형 약 3.5등신 · 란마풍 등은 변형 · 모든 캐릭터 무성 · 소품 제한 해제 · 화난 표정 금지)
 > 이 문서는 **복사해서 바로 쓰는 프롬프트 모음**이다. 설계 배경은 `character-law-ai-judge-plan.md` v0.3을 본다(`Claude outputs/`, 커밋 안 함).
@@ -874,21 +875,21 @@ CHARACTER — "Nambul", a genderless fire sprite mascot:
 The head IS a flame: deep red outer flame (#CB1E0E), orange middle flame (#F46517), warm yellow center (#FDBA51). The eyes and mouth sit directly on the yellow center; there is no separate face shape or mask. Large round eyes with cream whites (#FCF3E3) and dark pupils (#18181B) that are always visible. A small open mouth with a red inside (#E74F32). No nose. Below the head: a plain brick-red body and limbs (#A92407, shadow #771708) with no fire anywhere below the head.
 ```
 
-**`law-scale`** — 중도 · 기본 대표
+**`law-scale`** — **로울** · 중도 · 기본 대표
 
 ```
 CHARACTER — "Law", a genderless AI judge with a brass balance scale as its head:
 No face, no eyes, no mouth, no neck, no human head. The head is a brass scale of justice (light #D29C5E, mid #B58A59, dark #956331): a tall central post with a round finial, a gently curved beam and two shallow pans on thin chains; the post rises straight out of the collar. Outfit: a deep navy judge's robe (#253048, folds #171F30, light #38445C) with a deep V neckline, two vertical front bands, wide bell sleeves and an ankle-length hem; a warm-white shirt collar and white gloves (#F2E4D0); dark shoes. Build: tall and straight, average width. The scale is level.
 ```
 
-**`law-gavel`** — 엄벌
+**`law-gavel`** — **로봉** · 엄벌
 
 ```
 CHARACTER — "Law", a genderless AI judge with a judge's gavel as its head:
 No face, no eyes, no mouth, no human head. The head is a polished mahogany gavel (dark #5A220B, mid #95562C, highlight #CA9654): a horizontal barrel with ringed collars and rounded end caps, on a short turned handle that works as the neck and goes straight into the collar. Nothing sticks out of the top. Same robe, collar, gloves and shoes as the scale version. Build: the shortest of the three Laws, with broad shoulders and a wide, sturdy chest (solid and dependable, never aggressive). The gavel is level and is never swung or struck.
 ```
 
-**`law-book`** — 자비 (새로 만듦, 색은 제안 ⚠️) · **목 없이 공중에 떠 있는 법전, 기본은 표지 정면**
+**`law-book`** — **로북** · 자비 (새로 만듦, 색은 제안 ⚠️) · **목 없이 공중에 떠 있는 법전, 기본은 표지 정면**
 
 ```
 CHARACTER — "Law", a genderless AI judge with a floating law book as its head:
