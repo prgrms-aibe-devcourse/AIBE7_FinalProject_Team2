@@ -22,6 +22,7 @@
 | v1.15 | 2026-10-12 | BE-57 반영 (**확장 단계**, WBS 7.4.1) — 3장 "사용자 인증 기반" 신설: 필터 체인을 관리자(세션 · CSRF) / 사용자(무상태 · Bearer 토큰)로 분리, 토큰 계약(`TokenIssuer` · `AccessTokenVerifier` · `MemberPrincipal` · `IssuedTokens`), 토큰 오류 401(`TOKEN_INVALID` · `TOKEN_EXPIRED`), CORS 미설정 근거, 보안 헤더(Referrer-Policy · HSTS · CSP 담당), 리프레시 쿠키 · OAuth 임시 상태 결정 위임(C · D). 리뷰 반영: `Bearer`가 아닌 스킴은 검증하지 않고 익명으로 통과 |
 | v1.16 | 2026-10-13 | 관리자 로그인 보강 (**확장 단계**, BE-67 · WBS 7.4.5) — 3장 관리자 인증: 세션 중 계정 확인(비활성 · 삭제면 CSRF 검사 전에 401) 추가, 로그인 실패 응답 시간 맞춤(비활성 계정도 계정 없음과 같은 경로, 해시는 앱 인코더로만), 로그인 성공 시 CSRF 토큰 교체 · 로그아웃 시 삭제, 비밀번호 확인을 트랜잭션 밖으로 |
 | v1.17 | 2026-10-13 | BE-58 반영 (**확장 단계**, WBS 7.1.1) — 8장 배포 흐름을 실제 구성으로 정정: 웹(Nginx) · 백엔드 · DB 컨테이너(`deploy/docker-compose.prod.yml`), GitHub Actions(`deploy-images.yml`)가 이미지 빌드 → 운영 구성 스모크 테스트 → develop 머지 시 GHCR 업로드, 서버는 받아서 실행만. Nginx 예시 경로를 웹 이미지 기준(`/usr/share/nginx/html`)으로 바꾸고 `/api` 프록시 규칙 추가. 실제 사건 연결은 2장 "운영 (최종)"대로 서버 전용 덧붙임 파일(`docker-compose.real-seed.yml`) |
+| v1.18 | 2026-10-13 | 관리자 감사 로그 (**확장 단계**, BE-68 · WBS 7.4.5) — 3장 관리자 인증에 감사 로그 행 추가: 기록 대상 · 저장 실패 처리(같은 트랜잭션 / 별도 트랜잭션) · IP 수집과 forward 헤더 |
 
 
 ## **1. Backend**
@@ -215,6 +216,7 @@ MVP는 회원가입 없이 핵심 체험이 끝까지 동작해야 한다. 사�
 | CSRF | 관리자 API의 상태 변경 요청(로그인 포함)은 CSRF 토큰을 요구한다. `GET /api/v1/admin/auth/csrf`가 쿠키 `XSRF-TOKEN`을 내려 주고, 화면이 그 값을 헤더 `X-XSRF-TOKEN`에 담는다. **로그인에 성공하면 토큰을 새로 바꾸고, 로그아웃하면 지운다**(BE-67) — 쿠키 방식(서버는 쿠키 값과 헤더 값이 같은지만 본다)이라 바뀐 쿠키와 맞지 않는 로그인 전 토큰은 막힌다. 화면은 요청할 때마다 쿠키를 다시 읽는다 |
 | 첫 계정 | 환경변수 `ADMIN_BOOTSTRAP_EMAIL` · `ADMIN_BOOTSTRAP_PASSWORD`(12자 이상)가 있고 그 이메일의 계정이 없을 때만 기동 시 한 번 만든다. 이미 있는 계정의 비밀번호는 바꾸지 않는다. 만든 뒤 환경변수를 지운다 |
 | OAuth (BE-40, 예정) | OAuth 2.0 / OIDC 로그인. 허용 목록(등록된 관리자 이메일)에 있을 때만 관리자 권한. 같은 세션 · 권한 경계를 쓴다 |
+| 감사 로그 | `admin_audit_log`(V14, BE-68): 로그인 성공 · 실패 · 로그아웃, 원본 판결문 열람(A-7), 검수 API(A-9 ~ A-13)를 남긴다. 비밀번호 · 원문 내용은 넣지 않고, 로그인 실패 때 입력값도 원문으로 남기지 않는다(실제 계정과 일치할 때만 그 계정). 검수 API · 원문 열람은 같은 트랜잭션(기록이 실패하면 그 일도 되돌림), 로그인 성공은 세션 발급 직전에 저장(실패하면 세션 없이 로그인 실패), 로그인 실패 · 로그아웃은 별도 트랜잭션(실패해도 응답 그대로, 서버 로그에는 예외 종류만). 원문 열람(A-7)은 `recordRead`(별도 트랜잭션, 실패하면 열람도 실패)로 readOnly 서비스에서도 남긴다. 보관 1년(예정). IP는 `request.getRemoteAddr()` — 운영에서 Nginx 뒤 실제 IP를 받으려면 **`server.forward-headers-strategy=native`**(Tomcat `RemoteIpValve`, 오른쪽부터 신뢰 프록시를 건너뛰며 읽어 Nginx의 `$proxy_add_x_forwarded_for`와 함께 써도 안전)를 쓴다. `framework`(`ForwardedHeaderFilter`)는 맨 왼쪽 값을 써서 위조될 수 있다(#118 리뷰, 7.1 D) |
 | 오류 응답 | 필터에서 막힌 요청도 공통 에러 형식: 로그인 안 함 401 `UNAUTHORIZED`, 권한 없음 · CSRF 실패 403 `FORBIDDEN`, 로그인 실패 401 `INVALID_CREDENTIALS` |
 
 원본 판결문 등 내부 정보는 관리자 API(BE-41)에서만 보여 주고, 사용자 API에는 지금처럼 넣지 않는다.

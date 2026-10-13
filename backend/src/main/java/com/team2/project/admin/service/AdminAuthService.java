@@ -1,5 +1,7 @@
 package com.team2.project.admin.service;
 
+import com.team2.project.admin.audit.AdminAuditAction;
+import com.team2.project.admin.audit.AdminAuditLogger;
 import com.team2.project.admin.dto.AdminLoginRequest;
 import com.team2.project.admin.dto.AdminMeResponse;
 import com.team2.project.admin.repository.AdminAccountRepository;
@@ -27,6 +29,10 @@ import org.springframework.stereotype.Service;
  *
  * 트랜잭션으로 묶지 않는다 (BE-67): 비밀번호 확인(bcrypt)은 일부러 느려서, 그동안 DB 연결을 붙잡지 않게 한다.
  * 계정 조회(AdminUserDetailsService)와 마지막 로그인 시각 갱신은 각자 짧은 트랜잭션이다.
+ *
+ * 감사 로그 (BE-68): LOGIN_SUCCESS는 "비밀번호 확인 성공 · 세션 발급 직전"에 남긴다. 저장이 실패하면 세션을 만들지 않고
+ * 로그인도 실패한다(기록 없는 로그인을 만들지 않는다). 로그인 실패 · 로그아웃은 되돌릴 일이 없어 따로 남기고,
+ * 저장이 실패해도 응답은 그대로다. 로그인 실패는 입력 이메일 원문을 남기지 않는다(AdminAuditLogger.recordLoginFailure).
  */
 @Slf4j
 @Service
@@ -37,11 +43,13 @@ public class AdminAuthService {
 	private final SecurityContextRepository securityContextRepository;
 	private final CsrfTokenRepository adminCsrfTokenRepository;
 	private final AdminAccountRepository accountRepository;
+	private final AdminAuditLogger auditLogger;
 	private final Clock clock;
 	private final SecurityContextHolderStrategy contextHolder = SecurityContextHolder.getContextHolderStrategy();
 
 	public AdminMeResponse login(AdminLoginRequest login, HttpServletRequest request, HttpServletResponse response) {
-		AdminPrincipal principal = authenticate(login);
+		AdminPrincipal principal = authenticate(login, request);
+		auditLogger.record(principal, AdminAuditAction.LOGIN_SUCCESS, null, null, null, request);
 		accountRepository.updateLastLoginAt(principal.adminId(), clock.instant());
 
 		// 로그인 전에 받은 세션이 있으면 ID를 바꿔 세션 고정 공격을 막는다
@@ -62,6 +70,10 @@ public class AdminAuthService {
 	}
 
 	public void logout(HttpServletRequest request, HttpServletResponse response) {
+		if (contextHolder.getContext().getAuthentication() != null
+			&& contextHolder.getContext().getAuthentication().getPrincipal() instanceof AdminPrincipal admin) {
+			auditLogger.recordQuietly(admin, AdminAuditAction.LOGOUT, request);
+		}
 		HttpSession session = request.getSession(false);
 		if (session != null) {
 			session.invalidate();
@@ -70,12 +82,13 @@ public class AdminAuthService {
 		adminCsrfTokenRepository.saveToken(null, request, response);	// CSRF 쿠키도 지운다 (스프링 기본 로그아웃과 같게, #116 리뷰)
 	}
 
-	private AdminPrincipal authenticate(AdminLoginRequest login) {
+	private AdminPrincipal authenticate(AdminLoginRequest login, HttpServletRequest request) {
 		try {
 			return (AdminPrincipal) authenticationManager.authenticate(
 				UsernamePasswordAuthenticationToken.unauthenticated(login.email(), login.password())).getPrincipal();
 		} catch (AuthenticationException e) {
 			log.info("관리자 로그인 실패 ({})", e.getClass().getSimpleName());
+			auditLogger.recordLoginFailure(login.email(), request);	// 입력값 원문은 남기지 않는다
 			throw new BusinessException(ErrorCode.INVALID_CREDENTIALS);
 		}
 	}
