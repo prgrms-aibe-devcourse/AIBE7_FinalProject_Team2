@@ -51,10 +51,6 @@ public class AdminAccount {
 		return new AdminAccount(email, passwordHash, displayName);
 	}
 
-	public void recordLogin(Instant at) {
-		this.lastLoginAt = at;
-	}
-
 	/** 로그인 · 조회에 쓰는 이메일 형태 (앞뒤 공백 제거 · 소문자) */
 	public static String normalizeEmail(String email) {
 		return email == null ? null : email.strip().toLowerCase(Locale.ROOT);

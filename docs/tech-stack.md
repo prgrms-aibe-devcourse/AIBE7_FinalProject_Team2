@@ -20,6 +20,9 @@
 | v1.13 | 2026-10-12 | BE-39 반영 (**확장 단계**, 닫힌 #79를 최신 develop에 다시 적용) — 3장에 관리자 인증 추가: Spring Security, 관리자 계정(V12 `admin_account`) · 세션 로그인, `/api/v1/admin/**`만 보호하고 사용자 API는 그대로(인증 · CSRF · 세션 없음), 관리자 상태 변경 요청 CSRF. 2장 마이그레이션 목록에 V9 ~ V12 추가 |
 | v1.14 | 2026-10-12 | BE-52 반영 — 2장 마이그레이션 목록에 V13(`rag_guideline` · 양형기준 버전 함수) 추가, 6장 구현 현황에 양형기준 RAG 저장소 표기 |
 | v1.15 | 2026-10-12 | BE-57 반영 (**확장 단계**, WBS 7.4.1) — 3장 "사용자 인증 기반" 신설: 필터 체인을 관리자(세션 · CSRF) / 사용자(무상태 · Bearer 토큰)로 분리, 토큰 계약(`TokenIssuer` · `AccessTokenVerifier` · `MemberPrincipal` · `IssuedTokens`), 토큰 오류 401(`TOKEN_INVALID` · `TOKEN_EXPIRED`), CORS 미설정 근거, 보안 헤더(Referrer-Policy · HSTS · CSP 담당), 리프레시 쿠키 · OAuth 임시 상태 결정 위임(C · D). 리뷰 반영: `Bearer`가 아닌 스킴은 검증하지 않고 익명으로 통과 |
+| v1.16 | 2026-10-13 | 관리자 로그인 보강 (**확장 단계**, BE-67 · WBS 7.4.5) — 3장 관리자 인증: 세션 중 계정 확인(비활성 · 삭제면 CSRF 검사 전에 401) 추가, 로그인 실패 응답 시간 맞춤(비활성 계정도 계정 없음과 같은 경로, 해시는 앱 인코더로만), 로그인 성공 시 CSRF 토큰 교체 · 로그아웃 시 삭제, 비밀번호 확인을 트랜잭션 밖으로 |
+| v1.17 | 2026-10-13 | BE-58 반영 (**확장 단계**, WBS 7.1.1) — 8장 배포 흐름을 실제 구성으로 정정: 웹(Nginx) · 백엔드 · DB 컨테이너(`deploy/docker-compose.prod.yml`), GitHub Actions(`deploy-images.yml`)가 이미지 빌드 → 운영 구성 스모크 테스트 → develop 머지 시 GHCR 업로드, 서버는 받아서 실행만. Nginx 예시 경로를 웹 이미지 기준(`/usr/share/nginx/html`)으로 바꾸고 `/api` 프록시 규칙 추가. 실제 사건 연결은 2장 "운영 (최종)"대로 서버 전용 덧붙임 파일(`docker-compose.real-seed.yml`) |
+| v1.18 | 2026-10-13 | 관리자 감사 로그 (**확장 단계**, BE-68 · WBS 7.4.5) — 3장 관리자 인증에 감사 로그 행 추가: 기록 대상 · 저장 실패 처리(같은 트랜잭션 / 별도 트랜잭션) · IP 수집과 forward 헤더 |
 
 
 ## **1. Backend**
@@ -208,10 +211,12 @@ MVP는 회원가입 없이 핵심 체험이 끝까지 동작해야 한다. 사�
 | --- | --- |
 | 보호 범위 | `/api/v1/admin/**`만 관리자(`ROLE_ADMIN`)를 요구한다. **사용자 API는 지금처럼 인증 없이 동작**하고 세션 · CSRF 쿠키도 만들지 않는다 |
 | 계정 | `admin_account`(V12): 이메일(소문자 정규화, 유일) · 비밀번호 해시(BCrypt, `{bcrypt}` 접두어) · 표시 이름 · 활성 여부 · 마지막 로그인 시각 |
-| 로그인 | 세션 기반. `POST /api/v1/admin/auth/login`(JSON) → 세션 쿠키 `NLNB_ADMIN_SESSION`(HttpOnly · Secure · SameSite=Lax, 기본 30분). 로그인 시 세션 ID를 바꿔 세션 고정을 막는다. 실패는 계정 없음 · 비활성 · 비밀번호 불일치를 구분하지 않는다 |
-| CSRF | 관리자 API의 상태 변경 요청(로그인 포함)은 CSRF 토큰을 요구한다. `GET /api/v1/admin/auth/csrf`가 쿠키 `XSRF-TOKEN`을 내려 주고, 화면이 그 값을 헤더 `X-XSRF-TOKEN`에 담는다 |
+| 로그인 | 세션 기반. `POST /api/v1/admin/auth/login`(JSON) → 세션 쿠키 `NLNB_ADMIN_SESSION`(HttpOnly · Secure · SameSite=Lax, 기본 30분). 로그인 시 세션 ID를 바꿔 세션 고정을 막는다. 실패는 계정 없음 · 비활성 · 비밀번호 불일치를 구분하지 않고, **응답 시간도 같게** 한다(비활성 계정도 계정 없음과 같은 가짜 비밀번호 확인을 거친다, BE-67). 이 전제를 지키려면 **관리자 비밀번호 해시는 앱의 인코더(`PasswordEncoder`, 첫 계정 · 관리 도구)로만 만든다** — SQL로 다른 bcrypt 비용(예: `$2a$12$`)의 해시를 넣으면 시간 차이가 다시 생긴다. 비밀번호 확인(bcrypt)은 트랜잭션 밖에서 하고 마지막 로그인 시각만 짧게 갱신한다 |
+| 세션 중 계정 확인 | 관리자 요청마다 세션의 계정이 아직 있고 활성인지 확인한다(`AdminAccountStatusFilter`, BE-67). **CSRF 검사보다 먼저** 돌아, 비활성 · 삭제면 세션을 끝내고 바로 401 `UNAUTHORIZED`(CSRF 토큰이 없어도 403이 아니라 401). 로그인 · CSRF 발급 경로는 세션만 끝내고 그대로 통과. 요청마다 기본 키 조회 한 번이 더 들지만 관리자 요청은 적다 |
+| CSRF | 관리자 API의 상태 변경 요청(로그인 포함)은 CSRF 토큰을 요구한다. `GET /api/v1/admin/auth/csrf`가 쿠키 `XSRF-TOKEN`을 내려 주고, 화면이 그 값을 헤더 `X-XSRF-TOKEN`에 담는다. **로그인에 성공하면 토큰을 새로 바꾸고, 로그아웃하면 지운다**(BE-67) — 쿠키 방식(서버는 쿠키 값과 헤더 값이 같은지만 본다)이라 바뀐 쿠키와 맞지 않는 로그인 전 토큰은 막힌다. 화면은 요청할 때마다 쿠키를 다시 읽는다 |
 | 첫 계정 | 환경변수 `ADMIN_BOOTSTRAP_EMAIL` · `ADMIN_BOOTSTRAP_PASSWORD`(12자 이상)가 있고 그 이메일의 계정이 없을 때만 기동 시 한 번 만든다. 이미 있는 계정의 비밀번호는 바꾸지 않는다. 만든 뒤 환경변수를 지운다 |
 | OAuth (BE-40, 예정) | OAuth 2.0 / OIDC 로그인. 허용 목록(등록된 관리자 이메일)에 있을 때만 관리자 권한. 같은 세션 · 권한 경계를 쓴다 |
+| 감사 로그 | `admin_audit_log`(V14, BE-68): 로그인 성공 · 실패 · 로그아웃, 원본 판결문 열람(A-7), 검수 API(A-9 ~ A-13)를 남긴다. 비밀번호 · 원문 내용은 넣지 않고, 로그인 실패 때 입력값도 원문으로 남기지 않는다(실제 계정과 일치할 때만 그 계정). 검수 API · 원문 열람은 같은 트랜잭션(기록이 실패하면 그 일도 되돌림), 로그인 성공은 세션 발급 직전에 저장(실패하면 세션 없이 로그인 실패), 로그인 실패 · 로그아웃은 별도 트랜잭션(실패해도 응답 그대로, 서버 로그에는 예외 종류만). 원문 열람(A-7)은 `recordRead`(별도 트랜잭션, 실패하면 열람도 실패)로 readOnly 서비스에서도 남긴다. 보관 1년(예정). IP는 `request.getRemoteAddr()` — 운영에서 Nginx 뒤 실제 IP를 받으려면 **`server.forward-headers-strategy=native`**(Tomcat `RemoteIpValve`, 오른쪽부터 신뢰 프록시를 건너뛰며 읽어 Nginx의 `$proxy_add_x_forwarded_for`와 함께 써도 안전)를 쓴다. `framework`(`ForwardedHeaderFilter`)는 맨 왼쪽 값을 써서 위조될 수 있다(#118 리뷰, 7.1 D) |
 | 오류 응답 | 필터에서 막힌 요청도 공통 에러 형식: 로그인 안 함 401 `UNAUTHORIZED`, 권한 없음 · CSRF 실패 403 `FORBIDDEN`, 로그인 실패 401 `INVALID_CREDENTIALS` |
 
 원본 판결문 등 내부 정보는 관리자 API(BE-41)에서만 보여 주고, 사용자 API에는 지금처럼 넣지 않는다.
@@ -478,21 +483,23 @@ CI가 실패한 PR은 Merge하지 않는 것을 기본 원칙으로 한다.
 | **기술** | **사용 목적** |
 | --- | --- |
 | AWS EC2 | 백엔드 · 프론트엔드 서버 운영 |
-| Docker | EC2에서 백엔드 컨테이너 실행 |
-| Nginx | 프론트엔드 빌드 파일(정적 파일) 서빙, `/api` 요청을 백엔드 컨테이너로 프록시 |
+| Docker · Docker Compose | EC2에서 웹(Nginx) · 백엔드 · DB 컨테이너 실행 (`deploy/docker-compose.prod.yml`) |
+| Nginx | 웹 이미지 안에서 프론트엔드 빌드 파일(정적 파일) 서빙, `/api` 요청을 백엔드 컨테이너로 프록시 (`frontend/nginx/default.conf`) |
+| GHCR (GitHub Container Registry) | 운영 이미지 저장소. 서버는 받아서 실행만 한다 (서버에서 빌드하지 않음) |
 
 ```
-PR Merge
+PR → GitHub Actions(deploy-images.yml): 이미지 빌드 → 운영 구성으로 실행 → 스모크 테스트 (업로드 안 함)
 
+PR Merge (develop)
 ↓
-Docker 이미지 빌드
-
+GitHub Actions: 이미지 빌드 → 스모크 테스트 통과 시 GHCR 업로드 (태그 develop · sha-커밋7자리)
 ↓
-AWS EC2에서 컨테이너 실행 (환경변수로 접속 정보 주입)
-
+AWS EC2: 이미지 받기 → 컨테이너 실행 (환경변수로 접속 정보 주입) → deploy/smoke-test.sh
 ↓
 PostgreSQL / Redis 연결
 ```
+
+자세한 실행 방법 · 환경변수는 [`deploy/README.md`](../deploy/README.md)에 둔다 (BE-58).
 
 프론트엔드와 API는 **같은 도메인**으로 배포한다. 프론트엔드는 `npm run build` 결과물을 Nginx가 서빙하고, `/api`로 시작하는 요청은 Nginx가 백엔드 컨테이너로 넘긴다. 로컬의 Vite 프록시와 같은 구조라 익명 ID 쿠키를 `SameSite=Lax`로 쓸 수 있고 CORS 설정이 필요 없다(API 명세서 1-2 · 6장 #2).
 
@@ -507,13 +514,17 @@ PostgreSQL / Redis 연결
 이 처리를 자동으로 해 주지만 Nginx는 직접 설정해야 한다(FE-2 PR #55 리뷰 반영).
 
 ```nginx
+# frontend/nginx/default.conf 요약 — 웹 이미지 안에서는 빌드 산출물을 /usr/share/nginx/html에 둔다
+location ^~ /api/ {
+    proxy_pass http://backend:8080;   # /api는 index.html로 떨어지면 안 된다 (200 + HTML → 프론트가 응답을 해석하지 못함)
+}
 location / {
-    root /var/www/frontend;        # 프론트엔드 빌드 산출물(dist) 경로
+    root /usr/share/nginx/html;       # 프론트엔드 빌드 산출물(dist) 경로
     try_files $uri $uri/ /index.html;
 }
 ```
 
-배포 자동화(CD)는 개발이 어느 정도 완료된 이후 추가한다.
+배포 자동화(CD)는 단계로 나눠 붙인다. 이미지 빌드 · 스모크 테스트 · GHCR 업로드는 BE-58에서 먼저 붙였고, EC2에 자동으로 반영하는 단계는 7.1.3(BE-60)에서 붙인다.
 
 ---
 

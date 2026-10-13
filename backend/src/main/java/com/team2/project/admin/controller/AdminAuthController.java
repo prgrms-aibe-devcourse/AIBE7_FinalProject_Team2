@@ -43,8 +43,8 @@ public class AdminAuthController {
 
 	@PostMapping("/logout")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
-	public void logout(HttpServletRequest request) {
-		authService.logout(request);
+	public void logout(HttpServletRequest request, HttpServletResponse response) {
+		authService.logout(request, response);
 	}
 
 	/** 로그인한 관리자 정보. 로그인하지 않았으면 401 UNAUTHORIZED */
