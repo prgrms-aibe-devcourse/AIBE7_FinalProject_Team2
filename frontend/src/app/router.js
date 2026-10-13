@@ -10,13 +10,14 @@ import { loadCaseHeader } from './caseHeader.js';
 
 const SITE_TITLE = '내Law남불';
 
+// 주소 자리표시자: :caseId(사건 번호) · :code(성향 유형 4글자, S-16 공유 주소)
 function toMatcher(path) {
-  const pattern = path.replace(':caseId', '([0-9]+)');
+  const pattern = path.replace(':caseId', '(?<caseId>[0-9]+)').replace(':code', '(?<code>[A-Za-z]{4})');
   return new RegExp(`^${pattern}/?$`);
 }
 
-function buildPath(path, caseId) {
-  return path.replace(':caseId', String(caseId));
+function buildPath(path, caseId, code) {
+  return path.replace(':caseId', String(caseId)).replace(':code', String(code).toUpperCase());
 }
 
 function sameExtras(a, b) {
@@ -55,9 +56,10 @@ export function createRouter({ view, footerHost, routes }) {
     for (const { route, regex } of matchers) {
       const found = regex.exec(pathname);
       if (!found) continue;
-      const caseId = found[1] === undefined ? undefined : Number(found[1]);
+      const rawCaseId = found.groups?.caseId;
+      const caseId = rawCaseId === undefined ? undefined : Number(rawCaseId);
       if (caseId !== undefined && !(Number.isSafeInteger(caseId) && caseId > 0)) return null;
-      return { route, caseId };
+      return { route, caseId, code: found.groups?.code?.toUpperCase() };
     }
     return null;
   }
@@ -111,7 +113,10 @@ export function createRouter({ view, footerHost, routes }) {
     if (needsCaseId(route) && caseId === undefined) {
       return showNotFound();
     }
-    const path = buildPath(route.path, caseId);
+    if (route.path.includes(':code') && !/^[A-Za-z]{4}$/.test(String(extras.code))) {
+      return showNotFound();
+    }
+    const path = buildPath(route.path, caseId, extras.code);
     if (path === current.path && sameExtras(extras, current.extras)) {
       return undefined;
     }
@@ -133,11 +138,13 @@ export function createRouter({ view, footerHost, routes }) {
     const raw = window.location.pathname.replace(/(.)\/$/, '$1');
     // /cases/01/review처럼 정규화되지 않은 사건 번호로 들어오면, navigate()가 만드는 경로(/cases/1/review)와
     // 달라져서 "같은 화면으로의 이동 무시"가 깨진다. 주소창도 정규화된 경로로 맞춰 둔다 (리뷰 반영)
-    const path = found.caseId === undefined ? raw : buildPath(found.route.path, found.caseId);
+    const path = found.caseId === undefined && found.code === undefined ? raw : buildPath(found.route.path, found.caseId, found.code);
     if (path !== raw) {
       history.replaceState(history.state, '', path); // state(순번 포함)는 그대로 유지한다
     }
-    return show(found.route, found.caseId, history.state?.extras ?? {}, path, navKind);
+    // 주소의 :code는 화면에 extras.code로 넘긴다 (직접 입력 · 새로고침해도 같은 값)
+    const extras = { ...(history.state?.extras ?? {}), ...(found.code === undefined ? {} : { code: found.code }) };
+    return show(found.route, found.caseId, extras, path, navKind);
   }
 
   return {

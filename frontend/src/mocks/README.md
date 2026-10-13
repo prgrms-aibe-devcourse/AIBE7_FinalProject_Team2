@@ -10,7 +10,7 @@
 | `overviewMockApi.js` · `overviewMockData.js` | API 4 · 5 | 사건 개요 · 형량 구간, 사전 판단 제출 |
 | `reviewMockApi.js` · `reviewMockData.js` | API 6 · 7 | 사건 정보 섹션, 섹션 확인 기록 |
 | `verdictMockApi.js` · `verdictMockData.js` | API 8 · 9 | 판결 입력 정보, 판결 제출 (감경 `reducedTo` 검증 포함) |
-| `personalityMockApi.js` · `personalityMockData.js` | 성향 API(명세 전, 7.6.4) | 문항 조회 · 응답 제출(채점은 personality-scoring.md 2장) · 내 결과 · 마이페이지. 문항 16개 · 유형 16개는 personality-test-content.md에서 옮긴 값이다. 결과는 `localStorage`(`nlnb-mock-personality`)에 둔다 |
+| `personalityMockApi.js` · `personalityMockData.js` | 성향 API(명세 전, 7.6.4) | 문항 조회 · 응답 제출(채점은 personality-scoring.md 2장) · 내 결과 · 공유용 유형 설명 · 마이페이지. 문항 16개 · 유형 16개는 personality-test-content.md에서 옮긴 값이다. 결과는 `localStorage`(`nlnb-mock-personality`)에 둔다 |
 | `mockExperienceStore.js` | — | 체험 상태를 브라우저 `localStorage`(`nlnb-mock-review`)에 저장하는 목 전용 저장소 |
 
 `reviewMockApi.js`의 `resetMock()` · `setMockStatus(status)`는 `preview.html`에서 체험 상태를 강제로 바꿔 화면을 확인할 때 쓴다. 실제 API에는 없는 목 전용 함수다.

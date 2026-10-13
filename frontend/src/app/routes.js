@@ -15,6 +15,7 @@ import { renderMyPage } from '../pages/myPage/myPage.js';
 import { renderOverviewPage } from '../pages/overview/overviewPage.js';
 import { renderPersonalityPage } from '../pages/personality/personalityPage.js';
 import { renderPersonalityResultPage } from '../pages/personality/personalityResultPage.js';
+import { renderPersonalitySharedPage } from '../pages/personality/personalitySharedPage.js';
 import { renderReviewPage } from '../pages/review/reviewPage.js';
 import { renderSummaryPage } from '../pages/summary/summaryPage.js';
 import { renderVerdictPage } from '../pages/verdict/verdictPage.js';
@@ -30,9 +31,10 @@ export const routes = [
   { name: 'ai', path: '/cases/:caseId/result/ai', render: renderAiPage, needsHeader: true, title: 'AI 판결' },
   { name: 'court', path: '/cases/:caseId/result/court', render: renderCourtPage, needsHeader: true, title: '실제 판결' },
   { name: 'comparison', path: '/cases/:caseId/result/compare', render: renderComparisonPage, needsHeader: true, title: '세 판결 비교' },
-  // 확장: 판결 성향 테스트 · 마이페이지 (S-15 ~ S-17). 공유된 결과(/test/types/{code})는 공유 API 계약 뒤에 추가한다
+  // 확장: 판결 성향 테스트 · 마이페이지 (S-15 ~ S-17). 공유된 결과(/test/types/{code})는 유형 설명만 보여 준다(FR-8-6)
   { name: 'test', path: '/test', render: renderPersonalityPage, title: '판결 성향 테스트' },
   { name: 'testResult', path: '/test/result', render: renderPersonalityResultPage, title: '성향 결과' },
+  { name: 'testType', path: '/test/types/:code', render: renderPersonalitySharedPage, title: '판결 성향 유형' },
   { name: 'me', path: '/me', render: renderMyPage, title: '마이페이지' },
   // 확장: S-19 관리자 검수 (FE-16). 관리자 코드는 사용자 화면 번들에 넣지 않으려고 필요할 때만 불러온다.
   // 관리자 화면은 관리자 api를 따로 쓰고(pages/admin/adminApi.js), 사용자 사이트 푸터 대신 자기 틀을 그린다

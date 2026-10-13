@@ -1,5 +1,6 @@
 import { button, element, renderSiteHeader } from '../../components/siteLayout.js';
 import { renderToleranceScale } from '../../components/toleranceScale.js';
+import { descriptionSections, noticeBlock, typeCard } from './personalityParts.js';
 import { AXES } from '../../utils/personalityAxes.js';
 
 // S-16 성향 결과 — 내 결과 (WBS 7.6.5). 공유된 결과(/test/types/{code})와 공유 버튼은 공유 API 계약(FR-8-6) 뒤에 붙인다.
@@ -25,6 +26,27 @@ function axisRow(axis, lenientRatio) {
   bar.append(fill);
   row.append(labels, bar);
   return row;
+}
+
+// 공유 주소는 유형 설명만 열린다(개인 응답 · 점수 없음, FR-8-6). 이미지 공유는 캐릭터 이미지(7.6.8) 뒤에 붙인다
+async function share(typeCode, type, note) {
+  const url = `${window.location.origin}/test/types/${typeCode}`;
+  note.textContent = '';
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: `나의 판결 성향은 ${typeCode} ${type.name}`, text: type.oneLiner, url });
+      return;
+    } catch (error) {
+      if (error?.name === 'AbortError') return; // 공유 창을 닫은 경우
+      // 공유 창을 못 열면(권한 · 미지원 환경) 링크 복사로 넘어간다
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(url);
+    note.textContent = '링크를 복사했어요. 친구에게 붙여 넣어 보내 보세요.';
+  } catch {
+    note.textContent = `링크를 복사하지 못했어요. 주소를 직접 복사해 주세요: ${url}`;
+  }
 }
 
 function toleranceGauge(level) {
@@ -68,19 +90,7 @@ export async function renderPersonalityResultPage(container, { api, navigate }) 
 
   function draw(result) {
     const { type, typeCode, axisScores } = result;
-    const card = element('section', 'result-card');
-    const portrait = element('div', 'result-portrait');
-    portrait.append(element('strong', '', type.character), element('span', '', type.meme));
-    portrait.setAttribute('aria-label', `${type.character} 캐릭터 (이미지 준비 중)`);
-
-    const head = element('div', 'result-head');
-    head.append(
-      element('p', 'personality-kicker', '나의 판결 성향'),
-      element('p', 'result-code', typeCode),
-      element('h1', '', type.name),
-      element('p', 'result-oneliner', type.oneLiner),
-    );
-    card.append(portrait, head);
+    const card = typeCard(type, typeCode, '나의 판결 성향');
 
     const graph = element('section', 'result-section');
     graph.append(element('h2', '', '가치관 4축'));
@@ -88,25 +98,17 @@ export async function renderPersonalityResultPage(container, { api, navigate }) 
     AXES.forEach((axis) => list.append(axisRow(axis, axisScores[axis.key])));
     graph.append(list, toleranceGauge(type.tolerance));
 
-    const daily = element('section', 'result-section');
-    daily.append(element('h2', '', '일상에서는'), element('p', '', type.daily));
-    const verdict = element('section', 'result-section');
-    verdict.append(element('h2', '', '판결을 볼 때는'), element('p', '', type.verdict));
-
-    const notice = element('section', 'result-notice');
-    [
-      '이 결과는 일상 가치관을 기준으로 한 비교이며, 실제 법적 판단과는 다를 수 있어요.',
-      '4글자 판결 성향 유형은 성격 유형 검사와 별개예요. 알고 있는 성격 유형과 다르게 나올 수 있어요.',
-    ].forEach((text) => notice.append(element('p', '', text)));
-
     const actions = element('div', 'personality-actions result-actions');
     actions.append(
       button('실제 사건으로 판결하러 가기', () => navigate('list'), 'primary-button'),
       button('마이페이지에서 보기', () => navigate('me'), 'secondary-button'),
       button('다시 하기', () => navigate('test'), 'secondary-button'),
     );
+    const shareNote = element('p', 'share-note');
+    shareNote.setAttribute('role', 'status');
+    actions.append(button('공유하기', () => share(typeCode, type, shareNote), 'secondary-button'));
 
-    main.replaceChildren(card, graph, daily, verdict, notice, actions);
+    main.replaceChildren(card, graph, ...descriptionSections(type), noticeBlock(), actions, shareNote);
   }
 
   await load();

@@ -81,6 +81,13 @@ export async function getMyPersonality() {
   return saved && TYPES[saved.typeCode] ? toResult(saved) : null;
 }
 
+// 공유된 결과용 유형 설명 조회 (개인 응답 · 점수 없음). 모르는 코드면 null
+export async function getPersonalityType(code) {
+  await delay();
+  const type = TYPES[String(code).toUpperCase()];
+  return type ? structuredClone(type) : null;
+}
+
 // 마이페이지 조회 (테스트 결과 + 체험한 사건). 성향 변화 흐름 · 종합 성향은 아직 없다
 export async function getMyPage() {
   await delay();

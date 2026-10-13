@@ -36,7 +36,8 @@ export async function renderXxxPage(container, { caseId, caseHeader, api, naviga
 | `summary` | `/cases/{caseId}/summary` | S-05 |
 | `verdict` | `/cases/{caseId}/verdict` | S-06 |
 | `ai` · `court` · `comparison` | `/cases/{caseId}/result/ai` · `court` · `compare` | S-07 · S-08 · S-09 |
-| `test` · `testResult` | `/test` · `/test/result` | S-15 판결 성향 테스트 · S-16 성향 결과(내 결과). 공유된 결과 `/test/types/{code}`는 공유 API 계약 뒤에 추가 |
+| `test` · `testResult` | `/test` · `/test/result` | S-15 판결 성향 테스트 · S-16 성향 결과(내 결과, 공유하기 버튼) |
+| `testType` | `/test/types/{code}` | S-16 공유된 결과 — 유형 설명만(응답 · 점수 없음, FR-8-6). `{code}`는 영문 4글자(대소문자 무관, 주소는 대문자로 맞춤) |
 | `me` | `/me` | S-17 마이페이지 |
 | `admin` · `adminCase` | `/admin` · `/admin/cases/{caseId}` | S-19 관리자 검수 목록 · 상세 (FE-16). 관리자 코드는 이 주소로 들어올 때만 불러온다(동적 import), 관리자 api는 `pages/admin/adminApi.js`가 따로 고른다 |
 | `notFound` | 주소 없음 | S-14 |
