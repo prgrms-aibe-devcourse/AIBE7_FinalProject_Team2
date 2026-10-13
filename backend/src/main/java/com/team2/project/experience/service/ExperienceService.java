@@ -7,6 +7,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.team2.project.common.metrics.BusinessMetrics;
 import com.team2.project.experience.domain.Experience;
 import com.team2.project.experience.dto.ExperienceResponse;
 import com.team2.project.experience.repository.ExperienceRepository;
@@ -29,6 +30,7 @@ public class ExperienceService {
 	private final MyExperienceService myExperienceService;
 	private final ExperienceWriter experienceWriter;
 	private final ExperienceRepository experienceRepository;
+	private final BusinessMetrics metrics;
 
 	/** API 2. 체험 시작. 이미 있으면 새로 만들지 않고 기존 체험을 돌려준다. */
 	public StartResult start(Long caseId, Optional<UUID> anonymousId) {
@@ -43,6 +45,7 @@ public class ExperienceService {
 		}
 		try {
 			Experience created = experienceWriter.create(userId, caseId);
+			metrics.recordExperienceStarted();
 			return new StartResult(ExperienceResponse.from(created), true, issuedCookieId);
 		} catch (DataIntegrityViolationException e) {
 			// 동시에 시작한 다른 요청이 먼저 만들었다: 기존 체험을 다시 읽어 그대로 돌려준다

@@ -10,7 +10,9 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+import com.team2.project.common.metrics.BusinessMetrics;
 import com.team2.project.rag.config.RagProperties;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -38,6 +40,8 @@ class GeminiQueryEmbeddingClientTest {
 	private MockRestServiceServer server;
 	private RestClient restClient;
 	private final List<Duration> waits = new ArrayList<>();
+	private SimpleMeterRegistry meterRegistry;
+	private BusinessMetrics metrics;
 
 	@BeforeEach
 	void setUp() {
@@ -45,6 +49,12 @@ class GeminiQueryEmbeddingClientTest {
 		server = MockRestServiceServer.bindTo(builder).build();
 		restClient = builder.build();
 		waits.clear();
+		meterRegistry = new SimpleMeterRegistry();
+		metrics = new BusinessMetrics(meterRegistry);
+	}
+
+	private double aiCallCount(String result) {
+		return meterRegistry.get("lawnambul.ai.call").tag("result", result).counter().count();
 	}
 
 	@Test
@@ -63,6 +73,8 @@ class GeminiQueryEmbeddingClientTest {
 		float[] vector = client("test-key", 3, 3).embedQuery("비식별화한 사건 개요");
 
 		assertThat(vector).containsExactly(0.001f, 0.002f, 0.003f);
+		assertThat(aiCallCount("success")).isEqualTo(1);
+		assertThat(aiCallCount("failure")).isEqualTo(0);
 		server.verify();
 	}
 
@@ -76,6 +88,9 @@ class GeminiQueryEmbeddingClientTest {
 
 		assertThat(client("k", 3, 3).embedQuery("개요")).hasSize(3);
 		assertThat(waits).containsExactly(Duration.ofMillis(100), Duration.ofMillis(200));
+		// 재시도 두 번은 "아직 포기하지 않은 중간 단계"라 실패로 세지 않는다. 최종 성공만 1건 기록된다
+		assertThat(aiCallCount("success")).isEqualTo(1);
+		assertThat(aiCallCount("failure")).isEqualTo(0);
 		server.verify();
 	}
 
@@ -89,6 +104,8 @@ class GeminiQueryEmbeddingClientTest {
 			.hasMessageContaining("503")
 			.hasMessageNotContaining("secret-key")
 			.hasMessageNotContaining("피고인 개요 원문");
+		assertThat(aiCallCount("failure")).isEqualTo(1);
+		assertThat(aiCallCount("success")).isEqualTo(0);
 		server.verify();
 	}
 
@@ -175,7 +192,7 @@ class GeminiQueryEmbeddingClientTest {
 			new RagProperties.Embedding(apiKey, BASE, "gemini-embedding-001", dimensions, Duration.ofSeconds(1),
 				maxAttempts, Duration.ofMillis(100)),
 			new RagProperties.Search(5, 0.6, 0.95));
-		return new GeminiQueryEmbeddingClient(restClient, properties, waits::add);
+		return new GeminiQueryEmbeddingClient(restClient, properties, waits::add, metrics);
 	}
 
 	private static String embeddingJson(int dimensions) {

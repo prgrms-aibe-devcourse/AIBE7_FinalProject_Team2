@@ -1,5 +1,6 @@
 package com.team2.project.judgment.service;
 
+import com.team2.project.common.metrics.BusinessMetrics;
 import com.team2.project.experience.domain.Experience;
 import com.team2.project.experience.domain.ExperienceStatus;
 import com.team2.project.experience.service.ExperienceTransitionService;
@@ -41,6 +42,7 @@ public class VerdictService {
 	private final JudgmentFactorRepository judgmentFactorRepository;
 	private final VerdictValidator validator;
 	private final Clock clock;
+	private final BusinessMetrics metrics;
 
 	/** Bean Validation(@Valid)을 통과한 요청을 받는다. REVIEWED가 아니면 INVALID_STATE (이미 확정 포함) */
 	@Transactional
@@ -60,6 +62,7 @@ public class VerdictService {
 					.map(factor -> JudgmentFactor.forFinal(judgment, factors.get(factor.factorId()), factor.direction())).toList());
 			},
 			target -> target.markVerdictConfirmed(now));
+		metrics.recordVerdictConfirmed();
 		return new VerdictResponse(ExperienceStatus.VERDICT_CONFIRMED);
 	}
 }

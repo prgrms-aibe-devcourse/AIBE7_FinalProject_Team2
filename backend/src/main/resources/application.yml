@@ -34,6 +34,20 @@ spring:
       # 36.7 → 36처럼 사용자가 보낸 값과 다른 값이 조용히 저장되는 것을 막는다. "36" 같은 문자열 숫자는 허용한다
       accept-float-as-int: false
 
+# Actuator · Micrometer 메트릭 노출 (BE-66, WBS 7.2.1). 애플리케이션 포트(8080)와 분리된 별도 포트로만 연다.
+# Nginx는 /api/만 backend:8080으로 프록시하므로, 이 포트는 Nginx 설정을 바꾸지 않는 한 외부에서 닿지 않는다.
+# health · prometheus 두 엔드포인트만 연다 (env · beans · threaddump 등은 운영 정보 노출이라 기본값대로 닫아 둔다)
+management:
+  server:
+    port: ${MANAGEMENT_PORT:8081}
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  endpoint:
+    health:
+      show-details: never
+
 # AI 판결 RAG 유사 판례 검색 (BE-51). 키가 없으면 RAG만 꺼지고 서버는 정상으로 뜬다
 # 모델 · 차원은 판례 적재 도구(tools/ai-judgment/rag_store.py)와 같아야 한다
 rag:
