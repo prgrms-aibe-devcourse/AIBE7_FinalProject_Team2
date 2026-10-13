@@ -2,9 +2,9 @@ import { button, element, renderSiteHeader } from '../../components/siteLayout.j
 import { renderToleranceScale } from '../../components/toleranceScale.js';
 import { descriptionSections, noticeBlock, typeCard } from './personalityParts.js';
 
-// 공유된 성향 결과 /test/types/{code} (S-16, FR-8-6). 친구가 링크를 열면 **유형 설명만** 보인다 —
+// 공유된 성향 결과 /test/types/{shareId} (S-16, FR-8-6). 주소는 유형 코드가 아니라 서버가 정한 해시 값이다. 친구가 링크를 열면 **유형 설명만** 보인다 —
 // 공유한 사람의 응답 · 축 점수 · 체험 기록은 이 화면의 데이터에 없다. "나도 해 보기"로 S-15에 보낸다.
-export async function renderPersonalitySharedPage(container, { code, api, navigate }) {
+export async function renderPersonalitySharedPage(container, { shareId, api, navigate }) {
   const root = element('div', 'personality-page');
   container.replaceChildren(root);
   const active = () => container.contains(root);
@@ -19,7 +19,7 @@ export async function renderPersonalitySharedPage(container, { code, api, naviga
 
     let type;
     try {
-      type = await api.getPersonalityType(code);
+      type = await api.getPersonalityType(shareId);
     } catch {
       if (!active()) return;
       const panel = element('div', 'message-panel');
@@ -45,7 +45,7 @@ export async function renderPersonalitySharedPage(container, { code, api, naviga
     );
     const actions = element('div', 'personality-actions result-actions');
     actions.append(button('나도 해 보기', () => navigate('test'), 'primary-button'));
-    main.replaceChildren(typeCard(type, type.code, '친구가 공유한 판결 성향'), gauge, ...descriptionSections(type), noticeBlock(), actions);
+    main.replaceChildren(typeCard(type, '친구가 공유한 판결 성향'), gauge, ...descriptionSections(type), noticeBlock(), actions);
   }
 
   await load();

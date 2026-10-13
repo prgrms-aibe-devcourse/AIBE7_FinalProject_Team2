@@ -50,8 +50,19 @@ function score(answers) {
   return { typeCode: letters.join(''), axisScores };
 }
 
+// 공유 주소용 해시. 실제로는 서버가 정한다(유형 코드를 주소에 드러내지 않는 값, 7.6.4). 목은 코드에서 결정적으로 만든다
+function shareIdOf(code) {
+  let hash = 2166136261; // FNV-1a
+  for (const char of `nlnb-share:${code}`) {
+    hash ^= char.charCodeAt(0);
+    hash = Math.imul(hash, 16777619) >>> 0;
+  }
+  return hash.toString(36).padStart(7, '0') + (hash % 36).toString(36); // 8자
+}
+const SHARE_IDS = Object.fromEntries(Object.keys(TYPES).map((code) => [shareIdOf(code), code]));
+
 function toResult({ typeCode, axisScores }) {
-  return { typeCode, axisScores, type: TYPES[typeCode] };
+  return { typeCode, shareId: shareIdOf(typeCode), axisScores, type: TYPES[typeCode] };
 }
 
 // 문항 조회
@@ -81,11 +92,14 @@ export async function getMyPersonality() {
   return saved && TYPES[saved.typeCode] ? toResult(saved) : null;
 }
 
-// 공유된 결과용 유형 설명 조회 (개인 응답 · 점수 없음). 모르는 코드면 null
-export async function getPersonalityType(code) {
+// 공유된 결과용 유형 설명 조회 (개인 응답 · 점수 없음, 응답에 유형 코드도 넣지 않는다). 모르는 해시면 null
+export async function getPersonalityType(shareId) {
   await delay();
-  const type = TYPES[String(code).toUpperCase()];
-  return type ? structuredClone(type) : null;
+  const type = TYPES[SHARE_IDS[String(shareId)]];
+  if (!type) return null;
+  const { code, ...rest } = structuredClone(type);
+  void code;
+  return rest;
 }
 
 // 마이페이지 조회 (테스트 결과 + 체험한 사건). 성향 변화 흐름 · 종합 성향은 아직 없다

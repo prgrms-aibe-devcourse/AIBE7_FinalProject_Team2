@@ -1,9 +1,10 @@
 import { element } from '../../components/siteLayout.js';
 
 // S-16(내 결과)과 공유된 결과(/test/types/{code})가 함께 쓰는 조각. 공유 화면에는 개인 응답 · 축 점수를 넣지 않는다(FR-8-6).
+// 4글자 코드(INTP 등)와 축 글자(E · I 등)는 화면에 보이지 않는다(상표 우려, 10/13). 내부 데이터 · 공유 주소의 {code}로만 쓴다.
 // 캐릭터 이미지는 아직 없어서(7.6.8) 이름표 자리만 둔다.
 
-export function typeCard(type, typeCode, kicker) {
+export function typeCard(type, kicker) {
   const card = element('section', 'result-card');
   const portrait = element('div', 'result-portrait');
   portrait.append(element('strong', '', type.character), element('span', '', type.meme));
@@ -11,7 +12,6 @@ export function typeCard(type, typeCode, kicker) {
   const head = element('div', 'result-head');
   head.append(
     element('p', 'personality-kicker', kicker),
-    element('p', 'result-code', typeCode),
     element('h1', '', type.name),
     element('p', 'result-oneliner', type.oneLiner),
   );
@@ -31,7 +31,7 @@ export function noticeBlock() {
   const notice = element('section', 'result-notice');
   [
     '이 결과는 일상 가치관을 기준으로 한 비교이며, 실제 법적 판단과는 다를 수 있어요.',
-    '4글자 판결 성향 유형은 성격 유형 검사와 별개예요. 알고 있는 성격 유형과 다르게 나올 수 있어요.',
+    '이 판결 성향 유형은 성격 유형 검사와 별개예요. 알고 있는 성격 유형과 다르게 나올 수 있어요.',
   ].forEach((text) => notice.append(element('p', '', text)));
   return notice;
 }

@@ -15,8 +15,8 @@ function axisRow(axis, lenientRatio) {
   row.append(element('p', 'axis-label', axis.label));
   const labels = element('div', 'axis-ends');
   labels.append(
-    element('span', strict > lenient ? 'is-major' : '', `${axis.strict.letter} ${axis.strict.name} ${strict}%`),
-    element('span', lenient > strict ? 'is-major' : '', `${lenient}% ${axis.lenient.name} ${axis.lenient.letter}`),
+    element('span', strict > lenient ? 'is-major' : '', `${axis.strict.name} ${strict}%`),
+    element('span', lenient > strict ? 'is-major' : '', `${lenient}% ${axis.lenient.name}`),
   );
   const bar = element('div', 'axis-bar');
   bar.setAttribute('role', 'img');
@@ -29,12 +29,13 @@ function axisRow(axis, lenientRatio) {
 }
 
 // 공유 주소는 유형 설명만 열린다(개인 응답 · 점수 없음, FR-8-6). 이미지 공유는 캐릭터 이미지(7.6.8) 뒤에 붙인다
-async function share(typeCode, type, note) {
-  const url = `${window.location.origin}/test/types/${typeCode}`;
+// 공유 주소는 서버가 준 해시 값(shareId)이다. 유형 코드는 주소에도 드러나지 않는다
+async function share(shareId, type, note) {
+  const url = `${window.location.origin}/test/types/${shareId}`;
   note.textContent = '';
   if (navigator.share) {
     try {
-      await navigator.share({ title: `나의 판결 성향은 ${typeCode} ${type.name}`, text: type.oneLiner, url });
+      await navigator.share({ title: `나의 판결 성향은 ${type.name}`, text: type.oneLiner, url });
       return;
     } catch (error) {
       if (error?.name === 'AbortError') return; // 공유 창을 닫은 경우
@@ -89,8 +90,8 @@ export async function renderPersonalityResultPage(container, { api, navigate }) 
   }
 
   function draw(result) {
-    const { type, typeCode, axisScores } = result;
-    const card = typeCard(type, typeCode, '나의 판결 성향');
+    const { type, shareId, axisScores } = result;
+    const card = typeCard(type, '나의 판결 성향');
 
     const graph = element('section', 'result-section');
     graph.append(element('h2', '', '가치관 4축'));
@@ -106,7 +107,7 @@ export async function renderPersonalityResultPage(container, { api, navigate }) 
     );
     const shareNote = element('p', 'share-note');
     shareNote.setAttribute('role', 'status');
-    actions.append(button('공유하기', () => share(typeCode, type, shareNote), 'secondary-button'));
+    actions.append(button('공유하기', () => share(shareId, type, shareNote), 'secondary-button'));
 
     main.replaceChildren(card, graph, ...descriptionSections(type), noticeBlock(), actions, shareNote);
   }

@@ -47,7 +47,6 @@
 .result-portrait { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; aspect-ratio: 4 / 5; padding: 16px; border: 1px dashed var(--color-border-strong); border-radius: 8px; background: var(--color-surface); text-align: center; }
 .result-portrait strong { font: 900 var(--text-title-2)/1 var(--font-heading); color: var(--color-heading); }
 .result-portrait span { color: var(--color-muted); font-size: var(--text-small); }
-.result-code { margin: 0; font: 900 var(--text-display)/1.1 var(--font-heading); letter-spacing: .08em; color: var(--color-accent); }
 .result-oneliner { margin: 0; color: var(--color-muted); }
 .result-section { padding-bottom: 24px; margin-bottom: 24px; border-bottom: 1px solid var(--color-border); }
 .result-section p { margin: 0; }
