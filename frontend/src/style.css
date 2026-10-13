@@ -298,3 +298,9 @@ h1 { font-family: var(--font-heading); color: var(--color-heading); letter-spaci
    여러 화면(S-04 · S-05, 이후 다른 화면)이 함께 쓰므로 화면 클래스 없이 여기 둔다 */
 .content-lines { margin: 0; padding-left: 20px; }
 .content-lines li + li { margin-top: 6px; }
+
+/* 관용 지수 눈금 (components/toleranceScale.js). S-16 · S-17이 함께 쓴다 */
+.tolerance-scale { width: 100%; max-width: 360px; }
+.tolerance-track { position: relative; height: 4px; margin: 10px 8px 8px; border-radius: 2px; background: var(--color-border-strong); }
+.tolerance-marker { position: absolute; top: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px; border: 3px solid var(--color-card); border-radius: 50%; background: var(--color-accent); box-shadow: 0 0 0 1px var(--color-accent); }
+.tolerance-ends { display: flex; justify-content: space-between; color: var(--color-muted); font-size: var(--text-caption); }

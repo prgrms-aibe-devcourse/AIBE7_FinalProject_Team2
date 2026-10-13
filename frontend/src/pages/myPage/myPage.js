@@ -1,4 +1,5 @@
 import { button, element, renderSiteHeader } from '../../components/siteLayout.js';
+import { renderToleranceScale } from '../../components/toleranceScale.js';
 import { screenByStatus } from '../../utils/screenByStatus.js';
 
 // S-17 마이페이지 (WBS 7.6.6). 지금은 내 성향(테스트 결과)과 체험한 사건 목록만 둔다.
@@ -43,7 +44,8 @@ export async function renderMyPage(container, { api, navigate }) {
       element('p', 'my-type-code', typeCode),
       element('p', 'my-type-name', `${type.name} · ${type.character}`),
       element('p', 'my-type-oneliner', type.oneLiner),
-      element('p', 'my-type-tolerance', `관용 지수 ${type.tolerance} / 4`),
+      element('p', 'my-type-tolerance', '관용 지수'),
+      renderToleranceScale(type.tolerance),
     );
     const actions = element('div', 'my-actions');
     actions.append(

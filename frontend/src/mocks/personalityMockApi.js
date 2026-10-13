@@ -68,7 +68,9 @@ export async function submitPersonality(answers) {
   const complete = QUESTIONS.every((question) => Number.isInteger(byId[question.id]) && byId[question.id] >= 0 && byId[question.id] <= 4);
   if (!complete) fail('VALIDATION_ERROR', '모든 문항에 답해 주세요.');
   const result = score(byId);
-  localStorage.setItem(storageKey, JSON.stringify(result));
+  try {
+    localStorage.setItem(storageKey, JSON.stringify(result));
+  } catch { /* 사생활 보호 모드 등에서 저장하지 못해도 제출 결과는 돌려준다 */ }
   return toResult(result);
 }
 

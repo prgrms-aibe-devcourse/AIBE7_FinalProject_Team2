@@ -3,12 +3,13 @@ import { button, element, renderSiteHeader } from '../../components/siteLayout.j
 // S-15 판결 성향 테스트 — 시작 안내 + 문항 (WBS 7.6.1 콘텐츠 · 7.6.5 화면). 한 화면에 한 문항, 5칸 선택지.
 // 결과 전까지는 이전 문항으로 돌아가 답을 바꿀 수 있다(user-flow 3-2). 문항 문구에는 법률 용어를 쓰지 않는다.
 // 칸 값은 0 ~ 4 (매우 A · 조금 A · 보통 · 조금 B · 매우 B). 점수 계산은 서버가 한다.
+// 낭독기에서도 어떤 행동인지 알 수 있게, 라벨에 그 칸이 가리키는 행동 문장을 잇는다 (side: 'a' · 'b')
 const SCALE = [
-  { value: 0, label: '매우 왼쪽' },
-  { value: 1, label: '조금 왼쪽' },
-  { value: 2, label: '보통' },
-  { value: 3, label: '조금 오른쪽' },
-  { value: 4, label: '매우 오른쪽' },
+  { value: 0, degree: '매우', side: 'a' },
+  { value: 1, degree: '조금', side: 'a' },
+  { value: 2, degree: '보통', side: null },
+  { value: 3, degree: '조금', side: 'b' },
+  { value: 4, degree: '매우', side: 'b' },
 ];
 const SCENARIO_LABELS = { FRIEND: '친구', FAMILY: '가족', WORK: '직장', NEIGHBOR: '이웃' };
 
@@ -86,7 +87,8 @@ export async function renderPersonalityPage(container, { api, navigate }) {
     ends.append(element('p', '', question.a.text), element('p', '', question.b.text));
     const scale = element('div', 'personality-scale');
     scale.setAttribute('role', 'presentation');
-    SCALE.forEach(({ value, label }) => {
+    SCALE.forEach(({ value, degree, side }) => {
+      const label = side ? `${degree}: ${question[side].text}` : `${degree}: 어느 쪽도 아니에요`;
       const option = element('label', `personality-option step-${value}`);
       const input = element('input');
       input.type = 'radio';
