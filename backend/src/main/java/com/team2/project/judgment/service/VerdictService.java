@@ -24,6 +24,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * 판결 제출 (API 9). 검사 순서: 형식(@Valid) → 사건 · 체험 → 상태 → 형벌 → 범위 → 집행유예 → 요소
@@ -62,7 +64,13 @@ public class VerdictService {
 					.map(factor -> JudgmentFactor.forFinal(judgment, factors.get(factor.factorId()), factor.direction())).toList());
 			},
 			target -> target.markVerdictConfirmed(now));
-		metrics.recordVerdictConfirmed();
+		// 커밋이 끝난 뒤에만 센다 (커밋 실패 · 호출자의 바깥 트랜잭션 롤백으로 되돌아간 판결은 세지 않는다, #110 리뷰)
+		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+			@Override
+			public void afterCommit() {
+				metrics.recordVerdictConfirmed();
+			}
+		});
 		return new VerdictResponse(ExperienceStatus.VERDICT_CONFIRMED);
 	}
 }

@@ -80,6 +80,10 @@ public class GeminiQueryEmbeddingClient implements QueryEmbeddingClient {
 				float[] vector = toVector(call(body));
 				metrics.recordAiCallSuccess();
 				return vector;
+			} catch (EmbeddingException e) {
+				// 응답은 받았지만 차원이 설정과 달라 toVector가 거절한 경우도 호출 실패다 (재시도하지 않는다)
+				metrics.recordAiCallFailure();
+				throw e;
 			} catch (RestClientResponseException e) {  // HttpStatusCodeException · UnknownHttpStatusCodeException(비표준 코드) 모두
 				int status = e.getStatusCode().value();
 				if (!retryable(e.getStatusCode()) || attempt >= properties.maxAttempts()) {

@@ -47,6 +47,10 @@ management:
   endpoint:
     health:
       show-details: never
+  metrics:
+    tags:
+      # 지금은 서비스가 하나뿐이지만, Grafana에서 환경 · 다른 서비스와 섞이지 않게 공통 태그로 미리 붙여 둔다 (#110 리뷰)
+      application: ${spring.application.name}
 
 # AI 판결 RAG 유사 판례 검색 (BE-51). 키가 없으면 RAG만 꺼지고 서버는 정상으로 뜬다
 # 모델 · 차원은 판례 적재 도구(tools/ai-judgment/rag_store.py)와 같아야 한다

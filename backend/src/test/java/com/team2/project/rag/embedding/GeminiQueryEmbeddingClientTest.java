@@ -164,6 +164,8 @@ class GeminiQueryEmbeddingClientTest {
 
 		assertThatThrownBy(() -> client("k", 3072, 3).embedQuery("개요")).isInstanceOf(EmbeddingException.class)
 			.hasMessageContaining("차원");
+		assertThat(aiCallCount("failure")).isEqualTo(1);	// 응답은 받았지만 차원 검증에서 거절된 경우도 실패로 센다
+		assertThat(aiCallCount("success")).isEqualTo(0);
 	}
 
 	@Test
