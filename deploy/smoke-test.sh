@@ -25,9 +25,13 @@ pass() { echo "  ✅ $1"; }
 fail() { echo "  ❌ $1"; FAILED=1; }
 
 # 요청 한 번으로 상태 코드 · Content-Type · Cache-Control · 본문을 받는다 (이전 요청 결과는 덮어쓴다)
+# 연결 5초 · 전체 15초 제한. 넘으면 curl이 상태 코드 000을 돌려주고, 그 검사만 실패로 기록한 뒤 다음 검사를 계속한다
 request() {
   local target="$1"
-  STATUS="$(curl -s -o "$BODY_FILE" -D "$HEADER_FILE" -w '%{http_code}' "$BASE_URL$target")"
+  # 시간 초과 · 연결 실패면 curl이 파일을 새로 쓰지 않을 수 있어, 이전 요청 결과가 남지 않게 먼저 비운다
+  : > "$BODY_FILE"
+  : > "$HEADER_FILE"
+  STATUS="$(curl -s --connect-timeout 5 --max-time 15 -o "$BODY_FILE" -D "$HEADER_FILE" -w '%{http_code}' "$BASE_URL$target")"
   CONTENT_TYPE="$(grep -i '^content-type:' "$HEADER_FILE" | tail -1 | cut -d' ' -f2- | tr -d '\r')"
   CACHE_CONTROL="$(grep -i '^cache-control:' "$HEADER_FILE" | tail -1 | cut -d' ' -f2- | tr -d '\r')"
 }

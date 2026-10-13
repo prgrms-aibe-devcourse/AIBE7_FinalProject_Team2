@@ -35,7 +35,8 @@ cp .env.example .env
 # .env에서 POSTGRES_PASSWORD를 아무 값으로 채운다. 80번 포트가 쓰이고 있으면 WEB_PORT=8081
 docker compose -f docker-compose.prod.yml build
 docker compose -f docker-compose.prod.yml up -d
-./smoke-test.sh http://localhost:8081   # WEB_PORT에 맞춘다
+./smoke-test.sh http://localhost          # 기본 WEB_PORT=80
+# ./smoke-test.sh http://localhost:8081   # .env에서 WEB_PORT=8081로 바꾼 경우
 docker compose -f docker-compose.prod.yml down      # 데이터까지 지우려면 down -v
 ```
 
