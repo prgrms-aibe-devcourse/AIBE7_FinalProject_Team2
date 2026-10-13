@@ -1,5 +1,6 @@
 package com.team2.project.common.security;
 
+import com.team2.project.admin.repository.AdminAccountRepository;
 import com.team2.project.admin.service.AdminPrincipal;
 import com.team2.project.admin.service.AdminUserDetailsService;
 import com.team2.project.common.security.token.AccessTokenVerifier;
@@ -20,11 +21,13 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.authentication.AnonymousAuthenticationFilter;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.RequestAttributeSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy;
 import org.springframework.security.web.util.matcher.RequestMatcher;
@@ -37,6 +40,7 @@ import org.springframework.security.web.util.matcher.RequestMatcher;
  * - 로그인은 세션(쿠키 NLNB_ADMIN_SESSION). 폼 로그인 · HTTP Basic · 기본 로그아웃은 쓰지 않고 JSON API로 한다
  * - 상태 변경 요청(POST 등, 로그인 포함)은 CSRF 토큰(쿠키 XSRF-TOKEN → 헤더 X-XSRF-TOKEN)을 요구한다
  * - Bearer 토큰은 보지 않는다(회원 토큰으로 관리자 API에 들어올 수 없다)
+ * - 요청마다 세션의 관리자 계정이 아직 있고 활성인지 확인한다(AdminAccountStatusFilter, BE-67). 로그인하면 CSRF 토큰을 바꾼다
  *
  * ② 사용자 체인 (그 밖의 모든 요청) — 무상태 + Bearer 토큰 (BE-57)
  * - 세션을 만들지도 읽지도 않는다. 브라우저에 관리자 세션 쿠키가 있어도 사용자 API에서는 관리자로 보지 않는다
@@ -65,7 +69,8 @@ public class SecurityConfig {
 	@Bean
 	@Order(1)
 	public SecurityFilterChain adminSecurityFilterChain(HttpSecurity http, JsonSecurityErrorHandler errors,
-		SecurityContextRepository adminContextRepository) throws Exception {
+		SecurityContextRepository adminContextRepository, CsrfTokenRepository adminCsrfTokenRepository,
+		AdminAccountRepository adminAccounts) throws Exception {
 		http
 			.securityMatcher(ADMIN_PATTERN)
 			.authorizeHttpRequests(auth -> auth
@@ -75,7 +80,7 @@ public class SecurityConfig {
 			// csrf.spa()는 모든 응답에 토큰 쿠키를 심는다. 토큰은 지연 생성해 관리자 CSRF 발급 API(/csrf)를 부르거나
 			// 관리자 상태 변경 요청을 확인할 때만 쿠키를 다룬다
 			.csrf(csrf -> csrf
-				.csrfTokenRepository(csrfTokenRepository())
+				.csrfTokenRepository(adminCsrfTokenRepository)
 				.csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
 				.requireCsrfProtectionMatcher(stateChanging()))
 			.headers(headers -> headers.referrerPolicy(referrer -> referrer.policy(REFERRER_POLICY)))
@@ -84,7 +89,9 @@ public class SecurityConfig {
 			.logout(AbstractHttpConfigurer::disable)
 			.requestCache(AbstractHttpConfigurer::disable)
 			.exceptionHandling(e -> e.authenticationEntryPoint(errors).accessDeniedHandler(errors))
-			.sessionManagement(session -> session.sessionFixation(fixation -> fixation.changeSessionId()));
+			.sessionManagement(session -> session.sessionFixation(fixation -> fixation.changeSessionId()))
+			// 세션을 불러온 뒤 · 권한 검사 전에 계정 상태를 확인한다. 비활성이면 인증을 지워 권한 검사가 401로 막는다
+			.addFilterBefore(new AdminAccountStatusFilter(adminAccounts), AuthorizationFilter.class);
 		return http.build();
 	}
 
@@ -111,8 +118,12 @@ public class SecurityConfig {
 		return http.build();
 	}
 
-	/** 쿠키 XSRF-TOKEN(화면 JS가 읽어 헤더 X-XSRF-TOKEN에 담는다). 관리자 세션 쿠키와 같은 Secure 설정을 따른다 */
-	private CookieCsrfTokenRepository csrfTokenRepository() {
+	/**
+	 * 쿠키 XSRF-TOKEN(화면 JS가 읽어 헤더 X-XSRF-TOKEN에 담는다). 관리자 세션 쿠키와 같은 Secure 설정을 따른다.
+	 * 로그인 서비스가 로그인 성공 때 토큰을 바꾸려고 같은 저장소를 쓰므로 빈으로 둔다 (BE-67)
+	 */
+	@Bean
+	public CsrfTokenRepository adminCsrfTokenRepository() {
 		CookieCsrfTokenRepository repository = CookieCsrfTokenRepository.withHttpOnlyFalse();
 		repository.setCookieCustomizer(cookie -> cookie.secure(secureCookie).sameSite("Lax"));
 		return repository;

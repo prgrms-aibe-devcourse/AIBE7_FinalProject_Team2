@@ -1,6 +1,7 @@
 package com.team2.project.admin;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
@@ -10,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.team2.project.admin.domain.AdminAccount;
 import com.team2.project.admin.repository.AdminAccountRepository;
 import com.team2.project.admin.service.AdminPrincipal;
+import com.team2.project.admin.service.AdminUserDetailsService;
 import com.team2.project.support.ApiIntegrationTest;
 import jakarta.servlet.http.Cookie;
 import java.time.Instant;
@@ -21,11 +23,12 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
-/** 관리자 로그인 · 권한 경계 · CSRF (BE-39). 실제 보안 필터 체인을 거친다 */
+/** 관리자 로그인 · 권한 경계 · CSRF (BE-39, 보강 BE-67). 실제 보안 필터 체인을 거친다 */
 class AdminAuthApiTest extends ApiIntegrationTest {
 
 	private static final String PASSWORD = "correct-horse-battery";
@@ -37,6 +40,9 @@ class AdminAuthApiTest extends ApiIntegrationTest {
 
 	@Autowired
 	private PasswordEncoder passwordEncoder;
+
+	@Autowired
+	private AdminUserDetailsService userDetailsService;
 
 	private final List<Long> createdAdmins = new ArrayList<>();
 
@@ -192,5 +198,74 @@ class AdminAuthApiTest extends ApiIntegrationTest {
 		assertThat(result.getResponse().getHeaders("Set-Cookie")).singleElement()
 			.satisfies(value -> assertThat(value).startsWith(COOKIE + "="));
 		mockMvc.perform(get("/api/v1/cases")).andExpect(status().isOk());
+	}
+
+	// ---- BE-67 로그인 보강 ----
+
+	/**
+	 * 로그인하면 CSRF 토큰이 바뀐다. 쿠키 방식(double submit)이라 서버는 "쿠키 값 = 헤더 값"만 확인하므로,
+	 * 바뀐 뒤 브라우저 쿠키는 새 값이 되어 로그인 전 토큰을 헤더에 담으면 막히고, 새 토큰으로는 된다
+	 */
+	@Test
+	void login_rotatesCsrfToken() throws Exception {
+		String email = createAdmin(true);
+		Cookie before = csrfCookie();
+
+		MvcResult result = mockMvc.perform(loginRequest(email, PASSWORD, before))
+			.andExpect(status().isOk())
+			.andExpect(cookie().exists(CSRF_COOKIE))
+			.andReturn();
+		Cookie after = result.getResponse().getCookie(CSRF_COOKIE);
+		MockHttpSession session = (MockHttpSession) result.getRequest().getSession(false);
+		assertThat(after.getValue()).isNotBlank().isNotEqualTo(before.getValue());
+
+		// 브라우저에는 새 쿠키가 있고, 헤더에만 로그인 전 토큰을 담은 경우
+		mockMvc.perform(post("/api/v1/admin/auth/logout").session(session)
+				.cookie(after).header(CSRF_HEADER, before.getValue()))
+			.andExpect(status().isForbidden())
+			.andExpect(jsonPath("$.code").value("FORBIDDEN"));
+		mockMvc.perform(withCsrf(post("/api/v1/admin/auth/logout"), after).session(session))
+			.andExpect(status().isNoContent());
+	}
+
+	/** 로그인한 뒤 계정이 비활성이 되면 다음 요청부터 401이고 세션도 끝난다 */
+	@Test
+	void session_accountDisabledAfterLogin_unauthorized() throws Exception {
+		String email = createAdmin(true);
+		MockHttpSession session = login(email);
+		mockMvc.perform(get("/api/v1/admin/auth/me").session(session)).andExpect(status().isOk());
+
+		jdbcTemplate.update("UPDATE admin_account SET enabled = false WHERE email = ?", email);
+
+		mockMvc.perform(get("/api/v1/admin/auth/me").session(session))
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+		assertThat(session.isInvalid()).isTrue();
+	}
+
+	/** 로그인한 뒤 계정이 지워져도 다음 요청부터 401 */
+	@Test
+	void session_accountDeletedAfterLogin_unauthorized() throws Exception {
+		String email = createAdmin(true);
+		MockHttpSession session = login(email);
+
+		jdbcTemplate.update("DELETE FROM admin_account WHERE email = ?", email);
+
+		mockMvc.perform(get("/api/v1/admin/auth/me").session(session))
+			.andExpect(status().isUnauthorized());
+		assertThat(session.isInvalid()).isTrue();
+	}
+
+	/**
+	 * 비활성 계정은 조회 단계에서 "계정 없음"과 같게 처리한다. 그래야 DaoAuthenticationProvider가 계정 없음과 같은
+	 * 경로(가짜 해시로 비밀번호 확인)를 타서 응답 시간 차이로 가입된 이메일을 알아낼 수 없다
+	 */
+	@Test
+	void userDetails_disabledAccount_treatedAsNotFound() {
+		String disabled = createAdmin(false);
+
+		assertThatThrownBy(() -> userDetailsService.loadUserByUsername(disabled))
+			.isInstanceOf(UsernameNotFoundException.class);
+		assertThat(userDetailsService.loadUserByUsername(createAdmin(true)).isEnabled()).isTrue();
 	}
 }
