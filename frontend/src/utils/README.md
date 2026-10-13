@@ -6,6 +6,8 @@
 | --- | --- |
 | `contentLines.js` | 섹션 본문을 그린다. 줄바꿈이 있으면 줄마다 점 목록, 없으면 문단 하나 (FE-14, S-04 · S-05) |
 | `screenByStatus.js` | 체험 상태(`status`)에 따라 **이어서 볼 화면**을 정하는 표. API 명세서 1-6 "체험 상태 → 화면"과 같은 값이다 |
+| `newspaper.js` | 신문 콘셉트 화면(S-01 · S-02)이 함께 쓰는 지면 날짜 줄 `todayLabel`과 유형별 대체 이미지 `fallbackImages` (7.7.1) |
+| `personalityAxes.js` | 가치관 4축(키 · 라벨 · 엄격 / 관대 글자). S-15 ~ S-17 화면과 성향 목 채점이 쓴다 |
 | `koreanParticle.js` | 한글 단어 뒤 목적격 조사(을 · 를) 판정. 백엔드 `KoreanParticle`과 같은 규칙 (FE-15, S-09) |
 
 ## screenByStatus

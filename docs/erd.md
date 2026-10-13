@@ -23,6 +23,7 @@
 | v1.16 | 2026-10-10 | AI 판결 RAG 판례 저장소 추가 (BE-51)<br>• `rag_precedent` 추가(V11 마이그레이션, pgvector `vector(3072)`): 비식별화한 사실관계 요약(검색 기준 · 임베딩 입력) · 양형 이유 · 법조문 · 주문 형량 · 양형인자 · 사건 그룹 · 사건번호 해시(병합 사건은 번호마다). 판결문 원문 · 사건번호 · 법원명은 넣지 않는다<br>• 검색 함수 `rag_precedent_search`: 자기 사건(사건번호 해시가 있는 사건 그룹 전체) 제외, 사건 그룹당 1건, 점수 하한 · 개수 제한<br>• 검색어 임베딩 · 검색은 백엔드 `RagSearchService`(Java), 판례 적재는 오프라인 `rag_store.py`(Python)<br>• 사용 보류 `on_hold` · `hold_reason`: LBox 판례는 라이선스 확인 전까지 보류(검색 제외)<br>• 사용자 API에서 조회하지 않는 오프라인 파이프라인 전용 테이블. 행은 비공개 시드 `R__40`이 넣는다 |
 | v1.17 | 2026-10-13 | 관리자 계정 추가 (**확장 단계**, BE-39 — 닫힌 #79를 최신 develop에 다시 적용)<br>• `admin_account`(V12 마이그레이션): 관리자 후검수 API 로그인 계정. 사용자(익명 ID)와 관계없음 |
 | v1.18 | 2026-10-12 | AI 판결 RAG 양형기준 저장소 추가 (BE-52)<br>• `rag_guideline` 추가(V13 마이그레이션, pgvector `vector(3072)`): 양형기준 한 버전 × 한 섹션 × 한 대상 조각 · 임베딩 입력(머리말 + 본문) · 구조 값 `meta`(형량범위 · 양형인자)<br>• `sentencing_guideline` (`crime_category`, `version_name`) 유니크. 살인범죄 6개 버전(2009 최초 ~ 2026 수정)을 비공개 시드 `R__41`이 넣는다<br>• 함수 `sentencing_guideline_at`(기준일 → 시행 중 버전) · `rag_guideline_search`(버전 안 검색)<br>• 버전 기준일은 공소제기일 → 없으면 발생일(결정은 [양형기준 저장소](sentencing-guideline-rag.md) 6장) |
+| v1.19 | 2026-10-13 | 관리자 감사 로그 추가 (**확장 단계**, BE-68 · WBS 7.4.5) — `admin_audit_log`(V14): 누가(`admin_id` · `actor_email`) · 무엇을(`action` 9종) · 어디에(`target_type` · `target_id`) · 상세(`detail` jsonb, 비밀번호 · 원문 제외) · IP · 시각. 계정이 지워져도 기록은 남는다(`ON DELETE SET NULL`). 성향 DB는 다음 번호(V15)를 쓴다 |
 
 ---
 
@@ -456,6 +457,26 @@ AI 판결 1건을 어떤 조건으로 만들었는지 남긴다(REQ-047, 079). M
 | enabled | boolean | ✓ | 비활성이면 로그인할 수 없다 |
 | created_at | timestamptz | ✓ |  |
 | last_login_at | timestamptz |  | 마지막 로그인 시각 |
+
+#### `admin_audit_log` — 관리자 감사 로그 (확장 단계, v1.19)
+
+관리자가 "누가 · 언제 · 무엇을" 했는지 남긴다(BE-68 · WBS 7.4.5). 로그인 성공 · 실패 · 로그아웃, 원본 판결문 열람(A-7), 검수 API(A-9 ~ A-13)가 쓴다. 한 번 쓰면 고치지 않는다(수정 · 삭제 API 없음).
+
+| 컬럼 | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| id | bigint PK | ✓ |  |
+| admin_id | bigint FK |  | `admin_account.id`. 로그인 실패는 입력이 실제 계정과 일치할 때만 그 계정, 아니면 NULL. 계정이 지워지면 NULL이 된다(`ON DELETE SET NULL`) |
+| actor_email | varchar(254) |  | 그때의 계정 이메일(소문자, CHECK). 계정이 지워져도 누구였는지 남긴다. **로그인 실패 때 입력한 값은 원문으로 남기지 않는다** — 이메일 칸에 비밀번호를 잘못 넣으면 평문으로 남기 때문이다. 입력이 실제 계정과 일치할 때만 그 계정 이메일, 아니면 NULL(`detail`에 `{"knownAccount": false}`) |
+| action | varchar(30) | ✓ | `LOGIN_SUCCESS` · `LOGIN_FAILURE` · `LOGOUT` · `SOURCE_VIEW` · `JUDGMENT_APPROVE` · `JUDGMENT_REJECT` · `CASE_UPDATE` · `VALUE_AXIS_CONFIRM` · `CASE_PUBLISH` (CHECK) |
+| target_type | varchar(20) |  | `CASE` · `JUDGMENT` · `FACTOR` · `CASE_SOURCE`. `target_id`와 둘 다 있거나 둘 다 없다(CHECK) |
+| target_id | bigint |  | 대상 행 ID (FK 없음 — 대상이 지워져도 기록은 남긴다) |
+| detail | jsonb |  | 판단에 필요한 값만(반려 사유 · 바꾼 필드 이름 등). **비밀번호 · 원문 내용 · 토큰은 넣지 않는다** |
+| ip_address | varchar(45) |  | 요청 IP(IPv6까지). Nginx 뒤에서는 forward 헤더 설정이 있어야 실제 사용자 IP다 |
+| created_at | timestamptz | ✓ |  |
+
+- 보관: 이메일 · IP가 들어 있어 **1년**까지 둔다(예정). 오래된 행을 지우는 정리 작업은 운영 단계에서 추가한다.
+- 인덱스: (`admin_id`, `created_at` 내림차순) · (`target_type`, `target_id`, `created_at` 내림차순) · (`created_at` 내림차순)
+- 저장 실패 처리(`AdminAuditLogger`): 검수 API(A-9 ~ A-13)는 부르는 쪽 트랜잭션에 함께 들어가(`record`) 기록이 실패하면 그 일도 되돌린다. 그래서 **성공한 변경만 남는다**(변경이 409 등으로 실패하면 기록도 함께 롤백). `record`는 읽기 전용 트랜잭션 안에서 부르지 않는다(INSERT가 거절된다). 원문 열람(A-7)은 `recordRead`로 별도 트랜잭션에 저장해 readOnly 서비스에서도 쓸 수 있고, 저장이 실패하면 열람도 실패한다. `LOGIN_SUCCESS`는 "비밀번호 확인 성공 · 세션 발급 직전"에 따로 저장하고, 실패하면 세션을 만들지 않고 로그인도 실패한다(로그인 전체는 bcrypt 때문에 트랜잭션으로 묶지 않는다, BE-67). 로그인 실패 · 로그아웃은 별도 트랜잭션이고 실패해도 응답은 그대로이며, 서버 로그에는 예외 종류만 남긴다(DB 오류 메시지에 값이 들어 있어서).
 
 #### `comparison_analysis` — 세 판결 비교 분석 (확장 단계, v1.1)
 

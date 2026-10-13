@@ -1,0 +1,8 @@
+# 이미지 빌드에 보내지 않을 파일 (빌드 속도 · 로컬 설정 유출 방지)
+node_modules
+dist
+.env
+.env.*
+!.env.example
+npm-debug.log*
+.DS_Store
