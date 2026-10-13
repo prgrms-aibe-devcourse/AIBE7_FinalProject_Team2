@@ -6,6 +6,8 @@
 | --- | --- | --- |
 | v0.1 | 2026-10-14 | 초안 (COMMON-28, WBS 7.6.8 관련) — 만들어야 할 캐릭터 이미지를 종류 · 우선순위 · 수량 · 형식 · 상태로 정리 |
 | v0.2 | 2026-10-14 | 항목별 **예시 프롬프트**(5장, 프롬프트 모음 9장 v2 기준 · 참조 이미지 첨부형) 추가 |
+| v0.3 | 2026-10-14 | A1 · A2 · A3 1차 생성 결과 · 후속 보완점 기록 |
+| v0.4 | 2026-10-14 | 로 스탠딩 빈손(A4 추가, 봉투는 `deliver`만), B1 `idle`은 A4 변환만 |
 
 > 형식 · 이름 규칙 · 검수 기준은 [캐릭터 에셋 아키텍처](character-asset-architecture.md)가 기준이다(시트 2-2 · 장면 · 감정 코드 3-2 · 상황 4-1 · 크기 6-5 · 검수 7-2). 이 문서는 **무엇을 몇 장 만들고 어디까지 했는지**만 적는다.
 > 캐릭터 설정은 [캐릭터 프로필 · 세계관](character-profile-worldview.md), 성향 이미지 번호는 [성향 이미지 번호표](personality-image-numbers.md)가 기준이다.
@@ -27,6 +29,7 @@
 | 생성 배경 | 장면 컷 · 아이콘은 크로마 그린 `#00B140`으로 만들고 배경을 지운다. 캐릭터 · 소품에 초록을 쓰지 않는다 |
 | 글자 | 이미지 안에 글자 · 숫자 · 로고를 넣지 않는다(말풍선 · 이름표는 웹 UI) |
 | 판결 전 화면 | 로는 저울 1인 · 수평(`neutral`)만 |
+| 봉투 | 로는 **빈손이 기본**. 판결문 봉투는 `deliver`(발표 · 로딩 끝)에서만 든다(10/14) |
 | 표정 | 화난 표정(`angry`)은 만들지 않는다 |
 | 키 | 내로 120 · 남불 120 · 로 저울 230 · 법봉 190 · 법전 210(같은 바닥선, 아키텍처 2-5) |
 
@@ -39,17 +42,19 @@
 | # | 이미지 | 수량 | 형식 | 비고 | 상태 |
 | --- | --- | --- | --- | --- | --- |
 | A0 | 내로 · 남불 기준 시트, 로(저울 · 법봉) 기준 시트, 스탠딩 4장 | 6 | 시트 · 투명 PNG | `character-sheet_*` · `standing_*`(아키텍처 2-1) | ✅ |
-| A1 | 로(법전) 기준 시트 | 1 | 시트 | 저울 · 법봉 시트와 같은 칸(정면 · 3/4 · 측면 · 뒷면 · 자세 6종 · 색 견본). 머리는 **목 · 기둥 없이 옷깃 위 공중에 떠 있는** 두꺼운 법전, 기본은 표지 정면. 손에는 법전을 들지 않는다 | ⬜ |
-| A2 | 로(법전) 스탠딩 | 1 | 투명 PNG | 다른 로와 같은 자세(봉투를 들고 한 손을 펴 안내). 파일 `standing_law-book.png` | ⬜ |
-| A3 | 키 비교 시트 | 1 | 시트 | 내로 120 · 남불 120 · 저울 230 · 법봉 190 · 법전 210, 같은 바닥선. 기존 내로 · 남불 시트의 키 칸(남불 1.5배)은 쓰지 않는다 | ⬜ |
+| A1 | 로(법전) 기준 시트 | 1 | 시트 | 저울 · 법봉 시트와 같은 칸(정면 · 3/4 · 측면 · 뒷면 · 자세 6종 · 색 견본). 머리는 **목 · 기둥 없이 옷깃 위 공중에 떠 있는** 두꺼운 법전, 기본은 표지 정면. 손에는 법전을 들지 않는다. **10/14 생성** `character-sheet_law-book.png` — 후속: 아쉬움 포즈 칸에서 책이 어깨에 얹힘(옷깃에 닿음), 옷깃 안 마네킹 목, 턴어라운드 · 포즈 줄 중복 | 🟦 검수 중 |
+| A2 | 로(법전) 스탠딩 | 1 | 투명 PNG | (1차는 봉투를 든 자세로 생성 → A4에서 빈손으로 다시). 파일 `standing_law-book.png`. **10/14 생성**(971 × 1619) — 떠 있는 법전 · 표지 정면 OK. 후속: 옷깃 안 회갈색 마네킹 목(`#8B7457`) 정리, 구두가 갈색 | 🟦 검수 중 |
+| A3 | 키 비교 시트 | 1 | 시트 | 내로 120 · 남불 120 · 저울 230 · 법봉 190 · 법전 210, 같은 바닥선. 기존 내로 · 남불 시트의 키 칸(남불 1.5배)은 쓰지 않는다. **10/14 v1** `character-sheet_height_v1.png` — 로 셋 상대 비율 · 법봉 떡대 OK. 후속: 로가 내로 · 남불 대비 약 8 ~ 10% 큼(저울 약 2.07배 · 목표 1.92), 법전이 옷깃에 얹힘(떠 있지 않음), 숫자 라벨이 이미지에 들어감 | 🟨 재생성 |
+| A4 | 로 스탠딩 **빈손 버전** (저울 · 법봉 · 법전) | 3 | 투명 PNG | 10/14 결정: 스탠딩에서 봉투 제외. 지금 `standing_law-*.png`를 첨부하고 봉투만 뺀다(프롬프트 모음 9-12). 완성되면 기존 파일은 `_envelope`를 붙여 보관하고 새 파일이 `standing_law-*.png` | ⬜ |
 
-- A1 · A2가 끝나면 아키텍처 2-4(색) · 2-5(프로필) · 5-1(IDENTITY)에 법전을 추가한다.
+- A1 · A2가 끝나면 아키텍처 2-4(색) · 2-5(프로필) · 5-1(IDENTITY)에 법전을 추가한다. 10/14 A2 실측: 표지 `#722C30` ~ `#621E25`(제안 `#5E1F2B`보다 밝은 와인색), 황동 모서리 `#CFAA75` 근처.
+- A3 다시 뽑을 때 추가 문장: `Law (Book) floats above the collar with a clear gap; it never rests on the shoulders.` · `Make Naero and Nambul about 8% larger so the ratios match exactly.` · 숫자 라벨 없이 뽑고 나중에 얹는다.
 
 ### B. 우선 컷 (화면에 바로 쓰는 것)
 
 | # | 캐릭터 | 컷 | 수량 | 쓰는 곳 | 상태 |
 | --- | --- | --- | --- | --- | --- |
-| B1 | 로(저울) | `idle-neutral` · `deliver-neutral` | 2 | S-01 메인 · S-02 신문 지면 · 로딩 | ⬜ |
+| B1 | 로(저울) | `idle-neutral`(**A4 빈손 스탠딩을 webp로 변환만**) · `deliver-neutral`(새로 생성, 봉투) | 2 | S-01 메인 · S-02 신문 지면 · 로딩 끝 전달 | ⬜ |
 | B2 | 내로 (`mascot`) | `guide-neutral` · `guide-happy` · `react-surprised` · `react-happy` · `react-sorry` | 5 | 안내 · 리액션 | ⬜ |
 | B3 | 남불 (`mascot`) | B2와 같은 5종 | 5 | 안내 · 리액션 | ⬜ |
 | B4 | 내로 · 남불 (`cheek`) | `idle-sorry` · `idle-thinking` | 2 ~ 4 | 로딩 · 빈 상태 · 오류 | ⬜ |
@@ -136,6 +141,7 @@ AVOID: text, letters, numbers, logos, watermarks, speech bubbles, angry or hosti
 - **A1 로(법전) 기준 시트**: 프롬프트 모음 9-9(완성본). 첨부 `character-sheet_law-scale_law-gavel.png`
 - **A2 로(법전) 스탠딩**: 프롬프트 모음 9-10(완성본). 첨부 `standing_law-scale.png` · `standing_law-gavel.png`
 - **A3 키 비교 시트**: 프롬프트 모음 9-11(완성본). 첨부 `standing_*` 전부
+- **A4 로 스탠딩 빈손 버전**: 프롬프트 모음 9-12(완성본). 첨부 해당 `standing_law-*.png`
 
 ### B. 우선 컷
 
@@ -143,7 +149,7 @@ AVOID: text, letters, numbers, logos, watermarks, speech bubbles, angry or hosti
 
 ```
 Use the attached reference image as the exact model of Law (Scale): copy the head, robe, colors, proportions and art style exactly. Change only the pose.
-POSE — {idle: standing upright, holding the sealed kraft verdict envelope at the hip, the other hand open, presenting calmly | deliver: stepping half a step forward and holding the sealed verdict envelope out with both hands toward the viewer, calm and polite}. The scale is perfectly level.
+POSE — {idle: (A4 빈손 스탠딩을 쓰면 생성할 필요 없음) standing upright, front to slight three-quarter view, empty-handed: one hand open, palm up and slightly out to the side, presenting calmly; the other hand resting at the side. No envelope or other prop. | deliver: stepping half a step forward and holding the sealed verdict envelope out with both hands toward the viewer, calm and polite}. The scale is perfectly level.
 SCENE — a single character, centered, full body visible, 4:5 vertical, 15% margin, perfectly flat solid green #00B140 background. No green on the character.
 AVOID (add): faces, a neck, a tilted scale.
 ```
