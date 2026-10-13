@@ -1,0 +1,19 @@
+# Prometheus 스크레이프 설정 (BE-66, WBS 7.2.2)
+# "scrape 대상 · 간격 · 보존 기간" 중 간격은 여기, 보존 기간은 docker-compose.yml(--storage.tsdb.retention.time)에 있다.
+global:
+  scrape_interval: 15s      # Actuator 응답은 가벼워서(지금은 메트릭 몇십 개) 15s도 부담 없다. 기본값 1m보다 촘촘해 대시보드 반응이 빠르다
+  evaluation_interval: 15s  # 7.3.1 경보 규칙도 이 주기로 평가된다
+  # rate() · irate()는 표본이 최소 4~5개는 있어야 값이 튀지 않는다. scrape_interval=15s면 7.3.1 경보의 rate(...[1m])
+  # 이상(15s * 4)을 쓴다 — [1m] 미만 창은 쓰지 않는다
+
+scrape_configs:
+  # Prometheus 자기 자신. 공식 기본 설정에도 들어 있는 항목으로, 수집 파이프라인 자체가 멈추지 않았는지 확인하는 용도다
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # 백엔드 Actuator (BE-66 · 7.2.1). 애플리케이션 포트(8080)가 아니라 관리 포트(8081)만 스크레이프한다
+  - job_name: backend
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["host.docker.internal:8081"]
