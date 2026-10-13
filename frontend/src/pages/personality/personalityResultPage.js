@@ -3,7 +3,7 @@ import { renderToleranceScale } from '../../components/toleranceScale.js';
 import { descriptionSections, noticeBlock, typeCard } from './personalityParts.js';
 import { AXES } from '../../utils/personalityAxes.js';
 
-// S-16 성향 결과 — 내 결과 (WBS 7.6.5). 공유된 결과(/test/types/{code})와 공유 버튼은 공유 API 계약(FR-8-6) 뒤에 붙인다.
+// S-16 성향 결과 — 내 결과 (WBS 7.6.5). 공유 버튼은 해시 주소(/test/types/{shareId})를 공유한다(FR-8-6). 이미지 공유는 캐릭터 이미지(7.6.8) 뒤에 붙인다.
 // 캐릭터 이미지는 아직 없어서(7.6.8) 이름표 자리만 둔다. 문구는 docs/personality-test-content.md 4 · 5장.
 // 4축 그래프: 축마다 양쪽 성향의 비중(관대 쪽 비중 = axisScores). 관용 지수 게이지: 0 ~ 4칸.
 const pct = (ratio) => Math.round(ratio * 100);
