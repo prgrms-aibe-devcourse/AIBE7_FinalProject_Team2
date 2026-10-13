@@ -13,11 +13,13 @@ import com.team2.project.experience.repository.ExperienceRepository;
 import com.team2.project.legalcase.service.LegalCaseService;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * API 2(체험 시작)의 트랜잭션은 각 협력 빈(AnonymousUserService, ExperienceWriter, Repository)이 따로 잡는다.
  * 체험 생성이 유니크 제약에 걸려도 그 트랜잭션만 롤백되고, 여기서 새 트랜잭션으로 기존 체험을 읽을 수 있다.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ExperienceService {

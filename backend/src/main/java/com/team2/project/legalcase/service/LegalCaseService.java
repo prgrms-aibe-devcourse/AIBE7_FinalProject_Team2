@@ -21,7 +21,9 @@ import com.team2.project.legalcase.dto.CaseListResponse.Summary;
 import com.team2.project.legalcase.repository.LegalCaseRepository;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class LegalCaseService {

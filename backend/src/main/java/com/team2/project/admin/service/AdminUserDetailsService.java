@@ -3,6 +3,7 @@ package com.team2.project.admin.service;
 import com.team2.project.admin.domain.AdminAccount;
 import com.team2.project.admin.repository.AdminAccountRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
@@ -15,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 가짜 해시로 비밀번호 확인을 한 번 해서 응답 시간을 맞추는데, 비활성 계정을 그대로 돌려주면 비밀번호 확인 전에
  * "비활성"으로 바로 거절돼 응답이 빨라진다. 그 시간 차이로 "가입된 이메일"을 알아낼 수 없게 한다.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AdminUserDetailsService implements UserDetailsService {

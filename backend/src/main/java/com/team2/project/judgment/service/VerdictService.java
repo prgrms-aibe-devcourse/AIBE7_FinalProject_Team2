@@ -20,6 +20,7 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 판단 저장과 상태 이동은 ExperienceTransitionService.apply 한 번으로 묶는다 (BE-4).
  * 동시 중복 제출로 유니크 제약(uk_judgment_experience_timing)을 만나면 apply가 현재 상태로 INVALID_STATE를 던진다.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class VerdictService {

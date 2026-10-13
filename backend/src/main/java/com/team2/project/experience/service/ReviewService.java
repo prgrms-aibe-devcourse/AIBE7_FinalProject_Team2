@@ -13,6 +13,7 @@ import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 사건 정보 조회 · 섹션 확인 (API 6 · 7)
  * 내 체험 찾기 · 상태 범위 확인은 MyExperienceService, 상태 이동은 ExperienceTransitionService를 쓴다 (BE-4)
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ReviewService {

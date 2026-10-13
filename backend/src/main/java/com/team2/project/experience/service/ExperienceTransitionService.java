@@ -12,6 +12,7 @@ import jakarta.persistence.EntityManager;
 import java.time.Clock;
 import java.util.function.Consumer;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 넘긴 체험 엔티티는 영속성 컨텍스트에서 분리되므로, 호출 뒤에는 그 체험의 지연 로딩(getLegalCase() 등)을 쓰지 않는다.
  * (다른 엔티티는 그대로 관리된다)
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ExperienceTransitionService {

@@ -17,6 +17,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 응답은 엔티티가 아니라 TransitionResult의 상태로 만든다 — 동시 요청이 먼저 진행시킨 경우
  * 엔티티에는 이번 요청이 만들려던 값이 들어 있을 뿐 실제 현재 상태가 아니다 (ExperienceTransitionService).
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class RevealService {
