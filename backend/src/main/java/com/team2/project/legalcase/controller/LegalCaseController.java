@@ -10,7 +10,9 @@ import com.team2.project.legalcase.dto.CaseListResponse;
 import com.team2.project.legalcase.service.LegalCaseService;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/v1/cases")
 @RequiredArgsConstructor

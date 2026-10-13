@@ -26,8 +26,10 @@ import com.team2.project.legalcase.repository.FactorRepository;
 import com.team2.project.legalcase.repository.SentenceRangeOptionRepository;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /** S-03: 사건 개요 조회(API 4)와 사전 판단 제출(API 5). */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class PreJudgmentService {

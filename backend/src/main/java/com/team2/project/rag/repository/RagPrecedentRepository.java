@@ -7,6 +7,7 @@ import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Repository;
  * rag_precedent 조회 (V11). 벡터 타입은 JPA로 다루지 않고 JdbcTemplate으로 검색 함수 rag_precedent_search를 부른다.
  * 행은 비공개 시드(R__40)가 넣으므로 쓰기 메서드는 두지 않는다.
  */
+@Slf4j
 @Repository
 @RequiredArgsConstructor
 public class RagPrecedentRepository {

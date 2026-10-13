@@ -1,5 +1,6 @@
 package com.team2.project.rag.embedding;
 
+import com.team2.project.common.metrics.BusinessMetrics;
 import com.team2.project.rag.config.RagProperties;
 import java.time.Duration;
 import java.util.List;
@@ -35,16 +36,19 @@ public class GeminiQueryEmbeddingClient implements QueryEmbeddingClient {
 	private final RestClient restClient;
 	private final RagProperties.Embedding properties;
 	private final Sleeper sleeper;
+	private final BusinessMetrics metrics;
 
 	@Autowired
-	public GeminiQueryEmbeddingClient(@Qualifier("geminiRestClient") RestClient restClient, RagProperties properties) {
-		this(restClient, properties, Sleeper.THREAD);
+	public GeminiQueryEmbeddingClient(@Qualifier("geminiRestClient") RestClient restClient, RagProperties properties,
+			BusinessMetrics metrics) {
+		this(restClient, properties, Sleeper.THREAD, metrics);
 	}
 
-	GeminiQueryEmbeddingClient(RestClient restClient, RagProperties properties, Sleeper sleeper) {
+	GeminiQueryEmbeddingClient(RestClient restClient, RagProperties properties, Sleeper sleeper, BusinessMetrics metrics) {
 		this.restClient = restClient;
 		this.properties = properties.embedding();
 		this.sleeper = sleeper;
+		this.metrics = metrics;
 	}
 
 	@Override
@@ -73,15 +77,23 @@ public class GeminiQueryEmbeddingClient implements QueryEmbeddingClient {
 		Duration wait = properties.backoff();
 		for (int attempt = 1; ; attempt++) {
 			try {
-				return toVector(call(body));
+				float[] vector = toVector(call(body));
+				metrics.recordAiCallSuccess();
+				return vector;
+			} catch (EmbeddingException e) {
+				// 응답은 받았지만 차원이 설정과 달라 toVector가 거절한 경우도 호출 실패다 (재시도하지 않는다)
+				metrics.recordAiCallFailure();
+				throw e;
 			} catch (RestClientResponseException e) {  // HttpStatusCodeException · UnknownHttpStatusCodeException(비표준 코드) 모두
 				int status = e.getStatusCode().value();
 				if (!retryable(e.getStatusCode()) || attempt >= properties.maxAttempts()) {
+					metrics.recordAiCallFailure();
 					throw new EmbeddingException("임베딩 API 오류 (" + status + ", " + attempt + "번 시도)", e);
 				}
 				Duration retryAfter = retryAfter(e);
 				if (retryAfter != null && retryAfter.compareTo(MAX_RETRY_AFTER) > 0) {
 					// 일 한도처럼 오래 기다려야 풀리는 한도는 기다리지 않는다 (요청 스레드를 붙잡지 않게)
+					metrics.recordAiCallFailure();
 					throw new EmbeddingException("임베딩 API 한도 (" + status + "), " + retryAfter.toSeconds() + "초 뒤에 풀린다고 안내함", e);
 				}
 				if (retryAfter != null && retryAfter.compareTo(wait) > 0) {
@@ -90,10 +102,12 @@ public class GeminiQueryEmbeddingClient implements QueryEmbeddingClient {
 				log.warn("임베딩 API {} 응답, {}ms 뒤 다시 보냄 ({}/{})", status, wait.toMillis(), attempt, properties.maxAttempts());
 			} catch (ResourceAccessException e) {
 				if (attempt >= properties.maxAttempts()) {
+					metrics.recordAiCallFailure();
 					throw new EmbeddingException("임베딩 API에 연결하지 못했습니다 (" + attempt + "번 시도)", e);
 				}
 				log.warn("임베딩 API 연결 실패, {}ms 뒤 다시 보냄 ({}/{})", wait.toMillis(), attempt, properties.maxAttempts());
 			} catch (RestClientException e) {
+				metrics.recordAiCallFailure();
 				throw new EmbeddingException("임베딩 API 응답을 읽을 수 없습니다", e);
 			}
 			sleeper.sleep(wait);

@@ -26,6 +26,7 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,6 +36,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 공개 사건에 검수한 AI · 재판부 판결이 없으면 RevealService가 상태를 옮기기 전에 막으므로,
  * 여기서 조회에 실패하면 데이터 문제다 (JudgmentResultService와 같은 불변식).
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ComparisonService {

@@ -13,6 +13,7 @@ import com.team2.project.judgment.dto.VerdictRequest.FactorItem;
 import com.team2.project.judgment.service.VerdictFormService;
 import com.team2.project.judgment.service.VerdictService;
 import com.team2.project.legalcase.domain.PenaltyType;
+import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.validation.Validator;
 import java.sql.Timestamp;
 import java.util.List;
@@ -47,6 +48,7 @@ class VerdictServiceTest {
 	@Autowired ExperienceRepository experiences;
 	@Autowired PlatformTransactionManager transactionManager;
 	@Autowired Validator beanValidator;
+	@Autowired MeterRegistry meterRegistry;
 	private Long caseId;
 	private Long experienceId;
 	private Long factorId;
@@ -133,8 +135,10 @@ class VerdictServiceTest {
 	@Test
 	@Transactional(propagation = Propagation.NOT_SUPPORTED)
 	void submit_validRequest_commitsJudgmentFactorsAndState() {
+		double before = meterRegistry.get("lawnambul.verdict.confirmed").counter().count();
 		// 서비스 자체 트랜잭션이 끝난 뒤 새 트랜잭션에서 DB 저장 결과를 확인한다.
 		assertThat(service.submit(caseId, Optional.of(userId), validRequest()).status()).isEqualTo(ExperienceStatus.VERDICT_CONFIRMED);
+		assertThat(meterRegistry.get("lawnambul.verdict.confirmed").counter().count()).isEqualTo(before + 1);
 		new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
 			var rows = jdbc.queryForList("SELECT subject_type, timing, penalty_type, reduced_to, prison_months FROM judgment WHERE experience_id = ?", experienceId);
 			assertThat(rows).hasSize(1);
@@ -146,6 +150,7 @@ class VerdictServiceTest {
 			assertThat(found.getVerdictConfirmedAt()).isNotNull();
 		});
 		assertThatThrownBy(() -> service.submit(caseId, Optional.of(userId), validRequest())).isInstanceOf(InvalidExperienceStateException.class);
+		assertThat(meterRegistry.get("lawnambul.verdict.confirmed").counter().count()).isEqualTo(before + 1);	// 이미 확정된 뒤 재제출은 세지 않는다
 	}
 
 	@Test

@@ -22,6 +22,7 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,6 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 조회는 몇 번을 불러도 상태를 바꾸지 않는다. 상태를 옮기는 것은 공개 요청(API 11 · 13)뿐이다 (API 명세 2장).
  * 공개 단계에 이르지 않았으면 MyExperienceService가 현재 상태를 담은 INVALID_STATE로 거절한다 (API 명세 1-6).
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class JudgmentResultService {
