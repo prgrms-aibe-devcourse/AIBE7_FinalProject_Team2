@@ -47,7 +47,7 @@ export async function renderPersonalityPage(container, { api, navigate }) {
     card.append(
       element('p', 'personality-kicker', '판결 성향 테스트'),
       element('h1', '', '잘잘못을 따질 때, 나는 무엇을 먼저 볼까?'),
-      element('p', 'personality-lead', `일상에서 마주칠 만한 ${questions.length}가지 상황에 답하면, 내가 중요하게 보는 가치가 4글자 유형으로 나와요.`),
+      element('p', 'personality-lead', `일상에서 마주칠 만한 ${questions.length}가지 상황에 답하면, 내가 중요하게 보는 가치에 맞는 판결 성향 유형이 나와요.`),
     );
     const notes = element('ul', 'personality-notes');
     [

@@ -37,12 +37,12 @@ export async function renderMyPage(container, { api, navigate }) {
   const tendency = element('section', 'my-section');
   tendency.append(element('h2', '', '내 판결 성향'));
   if (data.personality) {
-    const { type, typeCode } = data.personality;
+    const { type } = data.personality;
     const card = element('div', 'my-type');
     const text = element('div');
     text.append(
-      element('p', 'my-type-code', typeCode),
-      element('p', 'my-type-name', `${type.name} · ${type.character}`),
+      element('p', 'my-type-name', type.name),
+      element('p', 'my-type-character', type.character),
       element('p', 'my-type-oneliner', type.oneLiner),
       element('p', 'my-type-tolerance', '관용 지수'),
       renderToleranceScale(type.tolerance),

@@ -10,13 +10,14 @@ import { loadCaseHeader } from './caseHeader.js';
 
 const SITE_TITLE = '내Law남불';
 
+// 주소 자리표시자: :caseId(사건 번호) · :shareId(성향 유형 공유 주소의 해시 값, S-16 공유 — 유형 코드를 주소에 드러내지 않는다)
 function toMatcher(path) {
-  const pattern = path.replace(':caseId', '([0-9]+)');
+  const pattern = path.replace(':caseId', '(?<caseId>[0-9]+)').replace(':shareId', '(?<shareId>[A-Za-z0-9]{6,16})');
   return new RegExp(`^${pattern}/?$`);
 }
 
-function buildPath(path, caseId) {
-  return path.replace(':caseId', String(caseId));
+function buildPath(path, caseId, shareId) {
+  return path.replace(':caseId', String(caseId)).replace(':shareId', String(shareId)); // 해시는 대소문자를 구분한다(그대로 둔다)
 }
 
 function sameExtras(a, b) {
@@ -55,9 +56,10 @@ export function createRouter({ view, footerHost, routes }) {
     for (const { route, regex } of matchers) {
       const found = regex.exec(pathname);
       if (!found) continue;
-      const caseId = found[1] === undefined ? undefined : Number(found[1]);
+      const rawCaseId = found.groups?.caseId;
+      const caseId = rawCaseId === undefined ? undefined : Number(rawCaseId);
       if (caseId !== undefined && !(Number.isSafeInteger(caseId) && caseId > 0)) return null;
-      return { route, caseId };
+      return { route, caseId, shareId: found.groups?.shareId };
     }
     return null;
   }
@@ -111,7 +113,10 @@ export function createRouter({ view, footerHost, routes }) {
     if (needsCaseId(route) && caseId === undefined) {
       return showNotFound();
     }
-    const path = buildPath(route.path, caseId);
+    if (route.path.includes(':shareId') && !/^[A-Za-z0-9]{6,16}$/.test(String(extras.shareId))) {
+      return showNotFound();
+    }
+    const path = buildPath(route.path, caseId, extras.shareId);
     if (path === current.path && sameExtras(extras, current.extras)) {
       return undefined;
     }
@@ -133,11 +138,13 @@ export function createRouter({ view, footerHost, routes }) {
     const raw = window.location.pathname.replace(/(.)\/$/, '$1');
     // /cases/01/review처럼 정규화되지 않은 사건 번호로 들어오면, navigate()가 만드는 경로(/cases/1/review)와
     // 달라져서 "같은 화면으로의 이동 무시"가 깨진다. 주소창도 정규화된 경로로 맞춰 둔다 (리뷰 반영)
-    const path = found.caseId === undefined ? raw : buildPath(found.route.path, found.caseId);
+    const path = found.caseId === undefined && found.shareId === undefined ? raw : buildPath(found.route.path, found.caseId, found.shareId);
     if (path !== raw) {
       history.replaceState(history.state, '', path); // state(순번 포함)는 그대로 유지한다
     }
-    return show(found.route, found.caseId, history.state?.extras ?? {}, path, navKind);
+    // 주소의 :shareId는 화면에 extras.shareId로 넘긴다 (직접 입력 · 새로고침해도 같은 값)
+    const extras = { ...(history.state?.extras ?? {}), ...(found.shareId === undefined ? {} : { shareId: found.shareId }) };
+    return show(found.route, found.caseId, extras, path, navKind);
   }
 
   return {
