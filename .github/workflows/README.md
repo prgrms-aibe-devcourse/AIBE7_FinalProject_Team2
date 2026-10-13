@@ -4,6 +4,7 @@
 | --- | --- | --- |
 | `backend-ci.yml` | `backend/` | backend CI |
 | `frontend-ci.yml` | `frontend/` | frontend CI |
+| `deploy-images.yml` | `frontend/` · `backend/` · `deploy/` | deploy images (운영 이미지 빌드 · 스모크 테스트 · GHCR 업로드) |
 
 ## 실행 조건 (공통)
 
@@ -28,6 +29,18 @@
 1. Node 24로 `frontend`에서 `npm ci`로 의존성을 설치한다. (`package-lock.json`이 커밋돼 있어야 한다)
 2. `npm run test --if-present`: `package.json`에 `test` 스크립트가 있을 때만 실행한다.
 3. `npm run build`: `VITE_API_BASE_URL=/api/v1`을 주입해 빌드한다.
+
+## deploy images
+
+운영 이미지를 만들고, 운영 구성 그대로 띄워 확인한 뒤에만 올린다 (BE-58). 자세한 내용은 [`deploy/README.md`](../../deploy/README.md).
+
+1. **`build` job (읽기 권한만):** `frontend/Dockerfile`(Vite 실제 모드 빌드 → Nginx) · `backend/Dockerfile`로 이미지를 빌드한다.
+2. `deploy/docker-compose.prod.yml`로 web · backend · postgres를 띄운다. DB 비밀번호는 실행마다 무작위 값을 만들고 로그에서 가린다.
+3. `deploy/smoke-test.sh`로 `/` · 화면 주소(SPA fallback) · `/api`(없는 주소도 JSON) · 캐시 정책을 확인한다.
+4. **`develop` push일 때만** 통과한 이미지를 파일로 저장해 넘기고(아티팩트, 하루 뒤 삭제), **`publish` job**이 그 이미지를 그대로 GHCR(`ghcr.io/prgrms-aibe-devcourse/lawnambul-web` · `-backend`)에 `develop` · `sha-커밋7자리` 태그로 올린다. 다시 빌드하지 않으므로 올라가는 이미지는 테스트한 이미지와 같다. PR에서는 `publish` job이 실행되지 않는다.
+
+- 공통 규칙의 예외: 업로드 때문에 **`publish` job만** `packages: write` 권한을 쓴다. PR에서 도는 `build` job은 읽기 권한뿐이고, checkout 토큰도 git 설정에 남기지 않는다(`persist-credentials: false`). 이미지 업로드는 중간에 끊기지 않도록 `develop` 실행은 취소하지 않는다(PR 실행만 취소).
+- 서버 반영(배포 단계)은 7.1.3 CD에서 이 워크플로 뒤에 붙인다.
 
 ## 수정할 때
 
