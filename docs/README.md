@@ -39,7 +39,7 @@
 | [conventions/GIT_CONVENTIONS.md](conventions/GIT_CONVENTIONS.md) | Git 컨벤션. 브랜치 · 커밋 · PR |
 | [conventions/CODE_CONVENTIONS.md](conventions/CODE_CONVENTIONS.md) | 코드 컨벤션 |
 | [character-main-handover.md](character-main-handover.md) | 판결 성향 캐릭터 · S-01 메인 인수인계(7.6.8 · 7.7.1). 결정 사항 · 디자인 가이드 요약 · 16종 표(대표색 · 이미지 · 상태) · 다시 그릴 3종 · 생성 방법 · 화면 연결 · 검수 체크리스트. 미리보기 이미지는 [assets/characters/](assets/characters/) |
-| [personality-scoring.md](personality-scoring.md) | 판결 성향 산식(BE-65, 7.6.2). 테스트 채점(4칸 선택지 · 축 점수 · 동점 · 관용 지수) · 체험 → 성향(감경 → 관대 글자) · 종합 성향(체험 평균) · 저장 형식 · 팀 확인 항목 |
+| [personality-scoring.md](personality-scoring.md) | 판결 성향 산식(BE-65, 7.6.2). 테스트 채점(5칸 선택지 · 축 점수 · 동점 = 관대 · 관용 지수) · 체험 → 성향(감경 → 관대 글자) · 종합 성향(체험 평균) · 저장 형식 · 팀 확인 항목 |
 
 ### 점검 기록 · 사건 자료
 
