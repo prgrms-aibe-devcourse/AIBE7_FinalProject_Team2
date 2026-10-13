@@ -38,6 +38,7 @@
 | [wbs.md](wbs.md) | WBS. 작업 분해, 일정, 업무 분장 |
 | [conventions/GIT_CONVENTIONS.md](conventions/GIT_CONVENTIONS.md) | Git 컨벤션. 브랜치 · 커밋 · PR |
 | [conventions/CODE_CONVENTIONS.md](conventions/CODE_CONVENTIONS.md) | 코드 컨벤션 |
+| [personality-test-content.md](personality-test-content.md) | 판결 성향 테스트 콘텐츠(7.6.1). 가치관 4축 · 문항 16개(축 4 × 친구 · 가족 · 직장 · 이웃, 5칸 선택지 · −1 ~ 1점 · 동점 관대 글자) · 16유형 밈형 이름 · 내로 / 남불 캐릭터 배정 · 유형별 상세 설명 2단(일상 가치관 + 판결 연계) · 결과 화면 공통 문구 |
 | [character-main-handover.md](character-main-handover.md) | 판결 성향 캐릭터 · S-01 메인 인수인계(7.6.8 · 7.7.1). 결정 사항 · 디자인 가이드 요약 · 16종 표(대표색 · 이미지 · 상태) · 다시 그릴 3종 · 생성 방법 · 화면 연결 · 검수 체크리스트. 미리보기 이미지는 [assets/characters/](assets/characters/) |
 | [personality-scoring.md](personality-scoring.md) | 판결 성향 산식(BE-65, 7.6.2). 테스트 채점(5칸 선택지 · 축 점수 · 동점 = 관대 · 관용 지수) · 체험 → 성향(감경 → 관대 글자) · 종합 성향(체험 평균) · 저장 형식 · 팀 확인 항목 |
 
