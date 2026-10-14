@@ -65,11 +65,7 @@ class PersonalityPersistenceTest {
 
 	@BeforeEach
 	void setUp() {
-		jdbc.update("""
-			INSERT INTO personality_type (code, share_id, name, character_code, one_liner, meme,
-			    daily_description, verdict_description, tolerance)
-			VALUES ('INTP', 'tst0intp', '시험 분석형', 'NAMBUL', '한 줄', '밈', '일상', '판결', 3),
-			       ('ESTJ', 'tst0estj', '시험 원칙형', 'NAERO', '한 줄', '밈', '일상', '판결', 0)""");
+		// 유형 16개는 콘텐츠 시드(R__personality_content)가 넣어 둔다. 여기서는 INTP · ESTJ를 쓴다
 		questionId = jdbc.queryForObject("""
 			INSERT INTO personality_question (axis, scenario, content, option_a, option_b, display_order)
 			VALUES ('APOLOGY_SINCERITY', 'FRIEND', '약속을 어긴 친구가 사과한다', '행동을 보고 풀겠다', '말을 믿겠다', 9001)
@@ -94,6 +90,14 @@ class PersonalityPersistenceTest {
 			INSERT INTO personality_question (axis, scenario, content, option_a, option_b, display_order)
 			VALUES ('APOLOGY_SINCERITY', 'WORK', '선택지 없는 시험 문항', 'A 행동', 'B 행동', 9002)
 			RETURNING id""", Long.class);
+	}
+
+	private static String swapCase(String value) {
+		StringBuilder swapped = new StringBuilder(value.length());
+		for (char c : value.toCharArray()) {
+			swapped.append(Character.isUpperCase(c) ? Character.toLowerCase(c) : Character.toUpperCase(c));
+		}
+		return swapped.toString();
 	}
 
 	private Experience startExperience() {
@@ -173,33 +177,30 @@ class PersonalityPersistenceTest {
 	@Test
 	@DisplayName("유형은 공유 주소(shareId)로 찾고, 캐릭터 · 설명 칸이 매핑된다")
 	void type_findByShareId() {
-		PersonalityType type = typeRepository.findByShareId("tst0intp").orElseThrow();
+		String shareId = jdbc.queryForObject("SELECT share_id FROM personality_type WHERE code = 'INTP'", String.class);
+		PersonalityType type = typeRepository.findByShareId(shareId).orElseThrow();
 		assertThat(type.getCode()).isEqualTo("INTP");
+		assertThat(type.getName()).isEqualTo("사연 분석러형");
 		assertThat(type.getCharacter()).isEqualTo(PersonalityCharacter.NAMBUL);
 		assertThat(type.getTolerance()).isEqualTo(3);
-		assertThat(type.getMeme()).isEqualTo("밈");
-		assertThat(type.getDailyDescription()).isEqualTo("일상");
-		assertThat(type.getVerdictDescription()).isEqualTo("판결");
-		assertThat(typeRepository.findByShareId("TST0INTP")).isEmpty();	// 대소문자 구분
+		assertThat(type.getMeme()).isNotBlank();
+		assertThat(type.getDailyDescription()).isNotBlank();
+		assertThat(type.getVerdictDescription()).isNotBlank();
+		assertThat(type.getImageUrl()).isNull();	// 이미지가 들어오기 전
+		assertThat(typeRepository.findByShareId(swapCase(shareId))).isEmpty();	// 대소문자 구분
 	}
 
 	@Test
 	@DisplayName("관용 지수는 코드의 I · N · F · P 개수와 같아야 한다")
 	void type_wrongTolerance_rejected() {
-		assertThatThrownBy(() -> jdbc.update("""
-			INSERT INTO personality_type (code, share_id, name, character_code, one_liner, meme,
-			    daily_description, verdict_description, tolerance)
-			VALUES ('INFP', 'tst0infp', '시험', 'NAERO', '한 줄', '밈', '일상', '판결', 2)"""))
+		assertThatThrownBy(() -> jdbc.update("UPDATE personality_type SET tolerance = 2 WHERE code = 'INFP'"))
 			.isInstanceOf(DataIntegrityViolationException.class).hasMessageContaining("chk_personality_type_tolerance");
 	}
 
 	@Test
 	@DisplayName("공유 주소는 영숫자 6 ~ 16자만")
 	void type_badShareId_rejected() {
-		assertThatThrownBy(() -> jdbc.update("""
-			INSERT INTO personality_type (code, share_id, name, character_code, one_liner, meme,
-			    daily_description, verdict_description, tolerance)
-			VALUES ('INFP', 'a-b', '시험', 'NAERO', '한 줄', '밈', '일상', '판결', 4)"""))
+		assertThatThrownBy(() -> jdbc.update("UPDATE personality_type SET share_id = 'a-b' WHERE code = 'INFP'"))
 			.isInstanceOf(DataIntegrityViolationException.class).hasMessageContaining("chk_personality_type_share_id");
 	}
 
