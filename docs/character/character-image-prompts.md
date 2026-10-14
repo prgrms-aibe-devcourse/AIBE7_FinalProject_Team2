@@ -729,7 +729,7 @@ DEFORMATION — Japanese-made Western-cartoon-inspired deformation (graphic and 
 
 ### 8-2. 로 시트 · 자세
 
-| 대상 | 프롬프트 (3장) | 확정 시트 (`discard_law-scale-and-law-gavel_sheet_reference_two-person.png`) |
+| 대상 | 프롬프트 (3장) | 폐기한 옛 2인 시트 (`discard_law-scale-and-law-gavel_sheet_reference_two-person.png`, 지금은 1인 시트 `law-scale_sheet_reference.png` · `law-gavel_sheet_reference.png`로 대체) |
 | --- | --- | --- |
 | 위 칸 | 둘이 나란히, 두 손 허리 | 둘이 나란히, **봉투를 들고 섬** |
 | 아래 칸 | 감정 포즈 6종(calm · happy · surprised · thinking · sorry · sleepy) | **자세 6종**(서기 · 주먹 · 걷기 · 턱 괴기 · 봉투 들기 · 봉투 내밀기) |
@@ -1058,7 +1058,7 @@ AVOID: text, letters, numbers, logos, an envelope, any prop in the hands, a mann
 
 ### 9-14. 수정 프롬프트 — 로북 기준 시트 (R2, 제작 목록 A1 다시)
 
-1차 시트(`law-book_sheet_reference.png`)와 R1 결과(있으면)를 첨부한다. 시트 전체를 한 벌로 다시 뽑는다.
+1차 시트(폐기본 `discard_law-book_sheet_reference_v1.png`)와 R1 결과(있으면)를 첨부한다. 10/14 R2 통과본이 `law-book_sheet_reference.png`이므로 그 파일은 첨부하지 않는다. 시트 전체를 한 벌로 다시 뽑는다.
 
 ```
 Use the attached images as the exact model of Law (Book): keep the floating law book, robe, gloves, colors, proportions and art style exactly. Redraw the whole character sheet cleanly, fixing these problems of the first attached sheet:
