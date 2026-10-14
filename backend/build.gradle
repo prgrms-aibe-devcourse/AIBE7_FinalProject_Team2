@@ -32,6 +32,8 @@ dependencies {
 	runtimeOnly 'org.flywaydb:flyway-database-postgresql'
 	// Swagger UI + OpenAPI 문서 (Spring Boot 4는 springdoc-openapi 3.x 필요)
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.1'
+	// Redis 캐시(DB 0) · 토큰 저장소(DB 1) (확장 단계, BE-61 · WBS 7.1.4). 접속 설정은 common.redis.RedisConfig
+	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 	compileOnly 'org.projectlombok:lombok'
 	runtimeOnly 'org.postgresql:postgresql'
 	annotationProcessor 'org.projectlombok:lombok'

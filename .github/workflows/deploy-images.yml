@@ -79,17 +79,20 @@ jobs:
           cache-from: type=gha,scope=backend
           cache-to: type=gha,scope=backend,mode=max
 
-      # 운영과 같은 구성으로 띄운다. DB 비밀번호는 이 실행에서만 쓰는 무작위 값 (로그에 남지 않게 마스킹)
+      # 운영과 같은 구성으로 띄운다. DB · Redis 비밀번호는 이 실행에서만 쓰는 무작위 값 (로그에 남지 않게 마스킹)
       - name: Start stack (production compose)
         working-directory: deploy
         run: |
           DB_PASSWORD_CI="$(openssl rand -hex 16)"
+          REDIS_PASSWORD_CI="$(openssl rand -hex 16)"
           echo "::add-mask::$DB_PASSWORD_CI"
+          echo "::add-mask::$REDIS_PASSWORD_CI"
           {
             echo "IMAGE_PREFIX=$IMAGE_PREFIX"
             echo "IMAGE_TAG=$IMAGE_TAG"
             echo "WEB_PORT=80"
             echo "POSTGRES_PASSWORD=$DB_PASSWORD_CI"
+            echo "REDIS_PASSWORD=$REDIS_PASSWORD_CI"
           } > .env
           docker compose -f docker-compose.prod.yml up -d --no-build
 

@@ -1,11 +1,11 @@
-# 운영 구성 (BE-58, WBS 7.1.1): Nginx(웹) · Spring Boot(백엔드) · PostgreSQL 한 대 구성
+# 운영 구성 (BE-58, WBS 7.1.1): Nginx(웹) · Spring Boot(백엔드) · PostgreSQL · Redis(BE-61, WBS 7.1.4) 한 대 구성
 # 사용법 · 환경변수는 deploy/README.md 참고. 비밀값은 deploy/.env(커밋 안 함)로만 넘긴다.
 #
 # - 이미지는 GitHub Actions(deploy-images.yml)가 빌드해 GHCR에 올리고, 서버는 pull해서 실행만 한다(서버에서 Gradle 빌드 안 함)
 # - 로컬 · CI 스모크 테스트에서는 build:로 같은 이미지를 직접 만든다 (docker compose build)
-# - 밖으로 여는 포트는 웹 80 하나뿐이다. 백엔드 8080 · DB 5432는 컨테이너 내부 네트워크에서만 쓴다 (보안 그룹도 80 · 443 · 22만)
+# - 밖으로 여는 포트는 웹 80 하나뿐이다. 백엔드 8080 · DB 5432 · Redis 6379는 컨테이너 내부 네트워크에서만 쓴다 (보안 그룹도 80 · 443 · 22만)
 # - 7.1.2에서 DB를 RDS로 옮기면 postgres 서비스를 빼고 DB_URL만 RDS 주소로 바꾼다
-# - 7.1.4에서 Redis 서비스를 여기에 추가한다
+# - Redis는 캐시(DB 0) · 토큰 저장소(DB 1)로 나눠 쓴다. 정책은 docs/tech-stack.md 2장 "Redis 운영 구성"
 
 name: lawnambul
 
@@ -20,6 +20,7 @@ services:
     # - Nginx는 백엔드 주소를 요청마다 다시 조회하므로(default.conf resolver) 백엔드가 늦게 떠도 그 뒤 요청부터 정상 전달된다
     # - 백엔드가 뜨기 전 /api 요청은 502(HTML)지만 프론트는 5xx를 "서버에 연결할 수 없어요"로 안내한다(api/client.js)
     # - 백엔드에 상태 확인 엔드포인트(Actuator, BE-66)가 생기면 healthcheck + service_healthy로 바꾸는 것을 검토한다
+    #   이때 /actuator/health가 아니라 /actuator/health/liveness(관리 포트 8081)를 쓴다 — 전체 상태는 Redis 장애 때 DOWN이 된다 (BE-61 실측, deploy/README.md)
     depends_on:
       - backend
     restart: unless-stopped
@@ -36,6 +37,9 @@ services:
       # 기본은 스키마만. .env로 바꿀 수 없게 고정한다 — 개발용 가상 사건 시드(classpath:db/seed)는 운영에 넣지 않는다 (docs/tech-stack.md 2장)
       # 실제 사건은 docker-compose.real-seed.yml을 겹쳐 실행할 때만 filesystem: 위치로 추가된다
       FLYWAY_LOCATIONS: classpath:db/migration
+      # Redis (BE-61). 호스트는 Compose 서비스 이름. 비밀번호는 redis 서비스와 같은 값
+      REDIS_HOST: redis
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?deploy/.env에 REDIS_PASSWORD를 넣어야 한다}
       # 관리자 세션 쿠키 Secure. HTTPS 적용 전에는 브라우저가 Secure 쿠키를 저장하지 않는다 (README "HTTPS 전 제한" 참고)
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-true}
       # 없으면 RAG 유사 판례 검색만 꺼지고 서버는 뜬다
@@ -49,6 +53,9 @@ services:
       JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=60
     depends_on:
       postgres:
+        condition: service_healthy
+      # 토큰 저장소가 준비된 뒤에 뜬다 (캐시만이라면 없어도 뜨지만, 로그인 기능이 Redis를 원본처럼 쓴다)
+      redis:
         condition: service_healthy
     restart: unless-stopped
     mem_limit: 1g
@@ -70,5 +77,42 @@ services:
     restart: unless-stopped
     mem_limit: 512m
 
+  redis:
+    # 로컬 backend/docker-compose.yml · CI와 같은 이미지. 정책은 로컬과 같고 비밀번호만 더한다
+    image: redis:7.4-alpine
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?deploy/.env에 REDIS_PASSWORD를 넣어야 한다}
+      # redis-cli(헬스체크 · 운영자 접속)가 이 값으로 인증한다. 명령줄에 비밀번호를 쓰지 않아도 된다
+      REDISCLI_AUTH: ${REDIS_PASSWORD}
+    # 비밀번호를 컨테이너 안에서 환경변수로 읽는다($$ = Compose가 치환하지 않음). 그래서 실행 명령(docker inspect의 Cmd)에는
+    # 변수 이름만 남고, 서버의 ps에도 Redis가 실행 인자를 지워 "redis-server *:6379"로만 보인다.
+    # 단, 환경변수(docker inspect의 Env)로는 값이 보인다 — PostgreSQL 비밀번호와 같다. docker 명령을 쓸 수 있으면 root와 같으므로
+    # 보호선은 서버 접근 자체다: .env는 chmod 600, docker 그룹에는 배포 담당만 넣는다 (deploy/README.md)
+    command:
+      - sh
+      - -c
+      - >-
+        exec redis-server
+        --requirepass "$$REDIS_PASSWORD"
+        --appendonly yes
+        --appendfsync everysec
+        --maxmemory 200mb
+        --maxmemory-policy noeviction
+    # appendonly · appendfsync: AOF로 1초마다 기록 → 재시작 · 배포 후에도 토큰(DB 1)이 남는다
+    # maxmemory-policy noeviction: 꽉 차도 키를 지우지 않는다(토큰 보호). 대신 모든 키에 TTL 필수
+    volumes:
+      - redisdata:/data   # 컨테이너를 다시 만들어도 AOF 유지
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+    # t3.small 2GB: 백엔드 1g · PostgreSQL 512m · Redis 256m. maxmemory(200mb)와 컨테이너 상한 사이의 56MB는 Redis 자체 사용분과
+    # AOF 재작성(fork) 때 바뀐 페이지 복사분이다. 데이터가 작을 때(지금은 수 MB)는 넉넉하지만, 사용량이 150MB를 넘으면
+    # 재작성 중 컨테이너가 메모리 초과로 죽을 수 있으니 점검한다 (deploy/README.md "Redis")
+    mem_limit: 256m
+
 volumes:
   pgdata:
+  redisdata:

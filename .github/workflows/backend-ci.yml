@@ -43,11 +43,26 @@ jobs:
           --health-timeout 5s
           --health-retries 10
 
+      redis:
+        # 캐시(DB 0) · 토큰(DB 1) 분리 통합 테스트용 (BE-61). 로컬 docker-compose.yml과 같은 이미지를 쓴다
+        # 서비스 컨테이너는 command를 받지 못해 정책(AOF · noeviction)은 적용하지 않는다. 정책 확인은 로컬 · 운영 Compose에서 한다
+        image: redis:7.4-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
     # application.yml이 읽는 환경변수 이름과 반드시 일치해야 한다
     env:
       DB_URL: jdbc:postgresql://localhost:5432/lawnambul
       DB_USERNAME: lawnambul
       DB_PASSWORD: lawnambul
+      # Redis 서비스 컨테이너 (비밀번호 없음, BE-61). 값이 없어도 application.yml 기본값(localhost:6379)과 같지만 명시한다
+      REDIS_HOST: localhost
+      REDIS_PORT: 6379
       # 개발용 가상 사건 시드(db/seed)도 함께 적용해, 시드가 스키마 제약을 깨지 않는지 CI에서 확인한다 (운영에는 넣지 않음)
       FLYWAY_LOCATIONS: classpath:db/migration,classpath:db/seed
 
