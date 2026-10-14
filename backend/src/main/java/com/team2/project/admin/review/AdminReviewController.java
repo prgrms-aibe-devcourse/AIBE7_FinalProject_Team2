@@ -3,12 +3,14 @@ package com.team2.project.admin.review;
 import com.team2.project.admin.review.dto.AdminCaseDetailResponse;
 import com.team2.project.admin.review.dto.AdminCaseListResponse;
 import com.team2.project.admin.review.dto.AdminJudgmentResponse;
+import com.team2.project.admin.review.dto.AdminRejectRequest;
 import com.team2.project.admin.review.dto.AdminSourceTextResponse;
 import com.team2.project.admin.service.AdminPrincipal;
 import com.team2.project.common.exception.BusinessException;
 import com.team2.project.common.exception.ErrorCode;
 import com.team2.project.legalcase.domain.CaseStatus;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.Set;
@@ -16,6 +18,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -32,6 +36,7 @@ public class AdminReviewController {
 	private static final int MAX_SIZE = 100;
 
 	private final AdminReviewQueryService queryService;
+	private final AdminReviewDecisionService decisionService;
 
 	/** A-5 검수 사건 목록 */
 	@GetMapping("/cases")
@@ -68,6 +73,20 @@ public class AdminReviewController {
 	@GetMapping("/judgments/{judgmentId}")
 	public AdminJudgmentResponse getJudgment(@PathVariable Long judgmentId) {
 		return queryService.getJudgment(judgmentId);
+	}
+
+	/** A-9 판결 후보 승인 (= 공개 판결로 정함) */
+	@PostMapping("/judgments/{judgmentId}/approve")
+	public AdminJudgmentResponse approve(@PathVariable Long judgmentId, @AuthenticationPrincipal AdminPrincipal admin,
+		HttpServletRequest request) {
+		return decisionService.approve(judgmentId, admin, request);
+	}
+
+	/** A-10 판결 후보 반려 */
+	@PostMapping("/judgments/{judgmentId}/reject")
+	public AdminJudgmentResponse reject(@PathVariable Long judgmentId, @Valid @RequestBody AdminRejectRequest body,
+		@AuthenticationPrincipal AdminPrincipal admin, HttpServletRequest request) {
+		return decisionService.reject(judgmentId, body.reason(), admin, request);
 	}
 
 	private static Set<CaseStatus> statuses(String value) {

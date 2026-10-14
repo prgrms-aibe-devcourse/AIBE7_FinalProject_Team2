@@ -86,6 +86,16 @@ public class LegalCase {
 	@UpdateTimestamp
 	private Instant updatedAt;
 
+	/**
+	 * 관리자가 처음 손대면 DRAFT → REVIEW (API 명세 8-2, 8-3 #3). 이미 REVIEW · PUBLISHED면 그대로 둔다.
+	 * 되돌리는 경로(REVIEW → DRAFT)는 두지 않는다
+	 */
+	public void startReview() {
+		if (status == CaseStatus.DRAFT) {
+			status = CaseStatus.REVIEW;
+		}
+	}
+
 	/** 사용자에게 노출되는 사건인지 */
 	public boolean isPublished() {
 		return status == CaseStatus.PUBLISHED;

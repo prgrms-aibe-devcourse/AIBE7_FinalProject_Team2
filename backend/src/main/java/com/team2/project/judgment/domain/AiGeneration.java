@@ -59,4 +59,13 @@ public class AiGeneration {
 
 	@CreationTimestamp
 	private Instant createdAt;
+
+	/**
+	 * 관리자 검수 결과를 기존 도구가 읽는 칸에도 맞춘다 (V16 이후 원본은 judgment.review_status).
+	 * reviewed_by(varchar 50)는 관리자 이메일이 들어가지 않을 수 있어 건드리지 않는다(API 명세 8-3 #5)
+	 */
+	public void syncReview(ReviewStatus status, Instant at) {
+		this.reviewStatus = status;
+		this.reviewedAt = at;
+	}
 }
