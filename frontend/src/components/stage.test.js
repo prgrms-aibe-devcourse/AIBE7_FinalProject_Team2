@@ -15,7 +15,7 @@ test('장면은 앞 장면의 모습 · 이름표를 이어받는다', () => {
 });
 
 test('건너뛰기는 같은 막의 다음 카드 · 막 끝에서 멈추고 다음 막으로 넘어가지 않는다', () => {
-  assert.equal(steps[skipTarget(steps, 0)].card, 'overview');
+  assert.equal(steps[skipTarget(steps, 0)].card, 'news');
   const lastOfAct1 = steps.findLastIndex((s) => s.actId === '1');
   assert.equal(skipTarget(steps, 3), lastOfAct1);
   assert.equal(steps[skipTarget(steps, lastOfAct1 + 1)].card, 'preJudgment');

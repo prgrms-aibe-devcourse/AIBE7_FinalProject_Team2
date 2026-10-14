@@ -123,23 +123,44 @@ export async function renderOverviewPage(container, { caseId, api, navigate }) {
 
     const script = SCRIPTS[caseId];
     if (script) {
-      if (script.photo) {
-        const photo = element('img', 'overview-photo');
-        photo.src = script.photo;
-        photo.alt = '사건 이해를 돕기 위한 재연 일러스트';
-        photo.addEventListener('error', () => photo.remove(), { once: true });
-        overview.prepend(photo);
-      }
+      // 무대가 주인공이다: 진행 표시는 막 칩이 맡고, 제목은 읽기 도구용으로만 남긴다
+      root.classList.add('has-stage');
+      main.firstChild.classList.add('visually-hidden');
       const preJudgment = element('div', 'stage-input');
       preJudgment.append(guide, form);
-      main.append(renderStage({ script, order: ['1', '2'], cards: { overview, preJudgment }, inputCards: ['preJudgment'] }));
-    } else {
-      main.append(overview, guide, form);
+      main.append(renderStage({ script, order: ['1', '2'], cards: { news: newsCard(script, info), preJudgment }, inputCards: ['preJudgment'] }));
+      const layout = element('main', 'review-layout');
+      layout.append(main);
+      root.replaceChildren(header, layout);
+      return;
     }
+    main.append(overview, guide, form);
     const layout = element('main', 'review-layout');
     layout.append(main);
     renderProgressSidebar(layout, { lastReviewedStep: 0, openStep: 1 });
     root.replaceChildren(header, layout);
+  }
+  // 1막 카드: 신문 기사 모양(지면 제목 · 부제 · 재연 일러스트 · 첫 단락 + 죄명 · 범죄 분류)
+  function newsCard({ news, photo }, info) {
+    const card = element('article', 'news-card');
+    card.append(element('p', 'news-desk', news.desk), element('h2', '', news.headline), element('p', 'news-deck', news.deck));
+    if (photo) {
+      const figure = element('figure');
+      const image = element('img');
+      image.src = photo;
+      image.alt = '';
+      image.addEventListener('error', () => figure.remove(), { once: true });
+      figure.append(image, element('figcaption', '', '사건 이해를 돕기 위한 재연 일러스트'));
+      card.append(figure);
+    }
+    const facts = element('dl');
+    [['죄명', info.chargeName], ['범죄 분류', info.crimeCategoryLabel]].forEach(([label, value]) => {
+      const row = element('div');
+      row.append(element('dt', '', label), element('dd', '', value));
+      facts.append(row);
+    });
+    card.append(element('p', 'news-lead', news.lead), facts);
+    return card;
   }
   async function load() {
     if (loading || !active()) return;

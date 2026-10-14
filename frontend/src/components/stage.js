@@ -21,7 +21,7 @@ export function flatten(acts, order) {
     act.steps.forEach((step) => {
       look = { ...look, ...step.look };
       tags = { ...tags, ...step.tags };
-      steps.push({ ...step, actId, look, tags });
+      steps.push({ ...step, actId, scene: act.scene ?? 'news', look, tags });
     });
   });
   return steps;
@@ -154,12 +154,9 @@ export function renderStage({ script, order, cards, inputCards = [] }) {
     live.textContent = text || (step.blackout ?? step.system ?? '');
     type(text);
 
+    scene.dataset.scene = step.scene;
     const card = step.card ? cards[step.card] : null;
     cardSlot.replaceChildren(...(card ? [card] : []));
-    // 넓은 화면의 읽기 카드는 장면 위에 띄우고, 입력 카드 · 좁은 화면에서는 대사창 아래에 둔다
-    const overlay = card && !input && !window.matchMedia('(max-width: 760px)').matches;
-    (overlay ? scene : stage).append(cardSlot);
-    cardSlot.classList.toggle('is-overlay', Boolean(overlay));
     cardSlot.hidden = !card;
     prev.disabled = index === 0;
     next.disabled = input || index === steps.length - 1;
