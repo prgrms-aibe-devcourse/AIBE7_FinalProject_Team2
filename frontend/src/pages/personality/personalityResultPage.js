@@ -73,8 +73,12 @@ export async function renderPersonalityResultPage(container, { api, navigate }) 
     let result;
     try {
       result = await api.getMyPersonality();
-    } catch {
+    } catch (error) {
       if (!active()) return;
+      if (error?.code === 'PERSONALITY_RESULT_NOT_FOUND') {
+        navigate('test', {}, { replace: true }); // 아직 테스트를 하지 않았으면(404) 테스트로 보낸다
+        return;
+      }
       const panel = element('div', 'message-panel');
       panel.setAttribute('role', 'alert');
       panel.append(element('p', '', '결과를 불러오지 못했어요.'), button('다시 시도', load, 'primary-button')); // 같은 화면이라 이동 대신 다시 불러온다
@@ -82,15 +86,11 @@ export async function renderPersonalityResultPage(container, { api, navigate }) 
       return;
     }
     if (!active()) return;
-    if (!result) {
-      navigate('test', {}, { replace: true }); // 아직 테스트를 하지 않았으면 테스트로 보낸다
-      return;
-    }
     draw(result);
   }
 
   function draw(result) {
-    const { type, shareId, axisScores } = result;
+    const { type, axisScores } = result;
     const card = typeCard(type, '나의 판결 성향');
 
     const graph = element('section', 'result-section');
@@ -107,7 +107,7 @@ export async function renderPersonalityResultPage(container, { api, navigate }) 
     );
     const shareNote = element('p', 'share-note');
     shareNote.setAttribute('role', 'status');
-    actions.append(button('공유하기', () => share(shareId, type, shareNote), 'secondary-button'));
+    actions.append(button('공유하기', () => share(type.shareId, type, shareNote), 'secondary-button'));
 
     main.replaceChildren(card, graph, ...descriptionSections(type), noticeBlock(), actions, shareNote);
   }
