@@ -1,18 +1,16 @@
 package com.team2.project.admin.review;
 
-import com.team2.project.admin.review.dto.AdminRejectRequest;
-import jakarta.validation.Valid;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.PostMapping;
 import com.team2.project.admin.review.dto.AdminCaseDetailResponse;
 import com.team2.project.admin.review.dto.AdminCaseListResponse;
 import com.team2.project.admin.review.dto.AdminJudgmentResponse;
+import com.team2.project.admin.review.dto.AdminRejectRequest;
 import com.team2.project.admin.review.dto.AdminSourceTextResponse;
 import com.team2.project.admin.service.AdminPrincipal;
 import com.team2.project.common.exception.BusinessException;
 import com.team2.project.common.exception.ErrorCode;
 import com.team2.project.legalcase.domain.CaseStatus;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.Set;
@@ -20,6 +18,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -69,6 +69,12 @@ public class AdminReviewController {
 		return queryService.getSourceText(caseId, sourceId, admin, request);
 	}
 
+	/** A-8 판결 후보 상세 */
+	@GetMapping("/judgments/{judgmentId}")
+	public AdminJudgmentResponse getJudgment(@PathVariable Long judgmentId) {
+		return queryService.getJudgment(judgmentId);
+	}
+
 	/** A-9 판결 후보 승인 (= 공개 판결로 정함) */
 	@PostMapping("/judgments/{judgmentId}/approve")
 	public AdminJudgmentResponse approve(@PathVariable Long judgmentId, @AuthenticationPrincipal AdminPrincipal admin,
@@ -81,12 +87,6 @@ public class AdminReviewController {
 	public AdminJudgmentResponse reject(@PathVariable Long judgmentId, @Valid @RequestBody AdminRejectRequest body,
 		@AuthenticationPrincipal AdminPrincipal admin, HttpServletRequest request) {
 		return decisionService.reject(judgmentId, body.reason(), admin, request);
-	}
-
-	/** A-8 판결 후보 상세 */
-	@GetMapping("/judgments/{judgmentId}")
-	public AdminJudgmentResponse getJudgment(@PathVariable Long judgmentId) {
-		return queryService.getJudgment(judgmentId);
 	}
 
 	private static Set<CaseStatus> statuses(String value) {
