@@ -24,3 +24,7 @@ docs/cases/**/*.md
 
 # ===== 양형기준 수집 원문 (다시 받을 수 있는 중간 결과, BE-52) =====
 tools/sentencing-guideline/raw/
+
+# ===== 로컬 구조화 로그 파일 (BE-71). Grafana Alloy가 읽는 런타임 산출물, 커밋 대상 아님 =====
+backend/logs/
+monitoring/loki-data/
