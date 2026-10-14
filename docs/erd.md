@@ -26,6 +26,7 @@
 | v1.19 | 2026-10-13 | 관리자 감사 로그 추가 (**확장 단계**, BE-68 · WBS 7.4.5) — `admin_audit_log`(V14): 누가(`admin_id` · `actor_email`) · 무엇을(`action` 9종) · 어디에(`target_type` · `target_id`) · 상세(`detail` jsonb, 비밀번호 · 원문 제외) · IP · 시각. 계정이 지워져도 기록은 남는다(`ON DELETE SET NULL`). 성향 DB는 다음 번호(V15)를 쓴다 |
 | v1.20 | 2026-10-14 | 판결 성향 테스트 테이블 확정 (**확장 단계**, BE-69 · WBS 7.6.3) — 8장 제안을 V15 마이그레이션으로 확정<br>• `personality_question`에 두 행동 문장 `option_a` · `option_b` 추가. 선택지는 5칸 고정이고 "매우 · 조금 · 보통"은 화면이 붙이므로 `personality_choice.content` 삭제(글자 · 점수 · 순서만)<br>• 선택지 축은 복합 FK(`question_id`, `axis`)로 문항 축과 같게 묶고, 글자는 그 축의 두 글자만 · 보통은 글자 없음 0점(CHECK)<br>• `personality_type`: 공유 주소 `share_id` 추가(#119, 코드는 화면 · 주소에 안 씀), `animal` → `character_code`(NAERO · NAMBUL), `description` → `meme` · `daily_description` · `verdict_description`, `tolerance`는 코드의 I · N · F · P 개수(CHECK)<br>• `personality_result`: 현재 결과는 사용자당 1건(부분 유니크 인덱스)<br>• `experience_personality`: `axis_scores` · `type_code` → 축별 고른 개수 `axis_counts`(`{down, up}`, 산식 문서 v0.4) |
 | v1.21 | 2026-10-14 | 성향 콘텐츠 시드 추가 (**확장 단계**, BE-72 · WBS 7.6.4) — `db/migration/R__personality_content.sql`(반복 마이그레이션, **운영에도 적용**): 유형 16 · 문항 16 · 선택지 80. upsert라 다시 실행해도 선택지 id · `share_id`는 바뀌지 않는다(응답 기록 · 공유 링크 보존). `image_url`은 이미지가 들어오기 전까지 NULL. 스키마 변경 없음 |
+| v1.22 | 2026-10-14 | 판결 후보 검수 기록 (**확장 단계**, BE-41 · WBS 7.4.7, V16) — `judgment`에 `review_status`(APPROVED · REJECTED, NULL = 기록 없음) · `reviewed_by_admin_id` · `reviewed_at` · `review_note` 추가. AI · 재판부 후보를 같은 방식으로 검수한다(재판부는 지금까지 반려를 둘 곳이 없었다, API 명세 8-3 #4). 제약: 사용자 판단은 검수 값 없음, 반려 후보는 공개 불가, 사유는 반려에만. 기존 데이터는 `ai_generation`의 검수 결과와 공개 중 판결(승인)을 옮겼다. `ai_generation.review_status` · `reviewed_by`는 기존 도구용으로 남긴다(승인 · 반려 때 함께 맞춤, BE-42) |
 
 ---
 
@@ -393,6 +394,10 @@ IA 9장의 진행 상태를 저장한다.
 | free_opinion | text |  | 자유 의견 (USER, 비교 대상 아님) |
 | reference_tags | jsonb |  | 참고 자료 태그 (AI, 예: `["형법 제250조", "살인범죄 양형기준", "유사 판례 5건"]`). S-07에 표시 (v1.2 추가, v1.3에서 `references` → `reference_tags`: `REFERENCES`는 SQL 예약어) |
 | is_published | boolean | ✓ | AI · COURT는 검수 후 `true`만 노출. USER는 항상 `true` |
+| review_status | varchar(20) |  | (v1.22, V16) 검수 결과 `APPROVED` / `REJECTED`. **NULL = 검수 기록 없음** — 화면에는 공개 중이면 승인, 아니면 대기로 보인다(파이프라인 · 시드는 채우지 않는다). AI · COURT만 |
+| reviewed_by_admin_id | bigint FK |  | (v1.22) 검수한 관리자(`admin_account`, 계정을 지워도 기록은 남김 `ON DELETE SET NULL`) |
+| reviewed_at | timestamptz |  | (v1.22) 검수 시각 |
+| review_note | varchar(500) |  | (v1.22) 반려 사유. `REJECTED`일 때만 |
 | created_at | timestamptz | ✓ |  |
 
 **제약 조건**
