@@ -1,5 +1,5 @@
 import { AXES } from '../utils/personalityAxes.js';
-import { IMAGE_NUMBERS, QUESTIONS, TYPES } from './personalityMockData.js';
+import { imageNumberOf, QUESTIONS, TYPES } from './personalityMockData.js';
 
 // 판결 성향 테스트 · 마이페이지 목 API. 응답 모양은 API 명세 9장(성향 API, v0.20)의 P-1 ~ P-5를 따른다.
 // 채점은 docs/personality-scoring.md 2장을 따른다. 문항의 글자 · 축은 서버 쪽 정보라 응답에 넣지 않는다.
@@ -72,7 +72,7 @@ const SHARE_IDS = Object.fromEntries(Object.keys(TYPES).map((code) => [shareIdOf
 // 유형 공통 형식(명세 9-1). 4글자 코드 · 밈 장면 설명(scene)은 응답에 넣지 않는다
 function toType(code) {
   const { name, character, tolerance, oneLiner, meme, daily, verdict } = TYPES[code];
-  const number = String(IMAGE_NUMBERS[code]).padStart(2, '0');
+  const number = String(imageNumberOf(code)).padStart(2, '0');
   return {
     shareId: shareIdOf(code),
     name,
