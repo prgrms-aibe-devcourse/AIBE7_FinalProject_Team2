@@ -716,7 +716,7 @@ DEFORMATION — Japanese-made Western-cartoon-inspired deformation (graphic and 
 
 ## 8. 확정 이미지와 다른 점 (10/14 기준)
 
-확정 이미지(`~/Documents/NaeLawNamBul/character/`의 `sheets/character-sheet_*` · `standing/standing_*`, 아키텍처 2-1)와 이 문서의 프롬프트를 비교했다. 이미지 생성 결과가 프롬프트와 다르게 나온 부분이고, **기준은 확정 이미지**다. 다시 뽑을 때는 프롬프트를 확정 이미지 쪽으로 고치거나, 확정 이미지를 참조 이미지로 첨부한다(1-3).
+확정 이미지(`~/Documents/NaeLawNamBul/character/`의 `sheets/*_sheet_reference` · `standing/*_standing`, 아키텍처 2-1)와 이 문서의 프롬프트를 비교했다. 이미지 생성 결과가 프롬프트와 다르게 나온 부분이고, **기준은 확정 이미지**다. 다시 뽑을 때는 프롬프트를 확정 이미지 쪽으로 고치거나, 확정 이미지를 참조 이미지로 첨부한다(1-3).
 
 ### 8-1. 비율 · 키
 
@@ -729,7 +729,7 @@ DEFORMATION — Japanese-made Western-cartoon-inspired deformation (graphic and 
 
 ### 8-2. 로 시트 · 자세
 
-| 대상 | 프롬프트 (3장) | 확정 시트 (`character-sheet_law-scale_law-gavel.png`) |
+| 대상 | 프롬프트 (3장) | 폐기한 옛 2인 시트 (`discard_law-scale-and-law-gavel_sheet_reference_two-person.png`, 지금은 1인 시트 `law-scale_sheet_reference.png` · `law-gavel_sheet_reference.png`로 대체) |
 | --- | --- | --- |
 | 위 칸 | 둘이 나란히, 두 손 허리 | 둘이 나란히, **봉투를 들고 섬** |
 | 아래 칸 | 감정 포즈 6종(calm · happy · surprised · thinking · sorry · sleepy) | **자세 6종**(서기 · 주먹 · 걷기 · 턱 괴기 · 봉투 들기 · 봉투 내밀기) |
@@ -772,7 +772,7 @@ DEFORMATION — Japanese-made Western-cartoon-inspired deformation (graphic and 
 
 ### 8-5. 다시 뽑을 때 권장
 
-1. **참조 이미지 첨부를 기본으로 한다.** 내로 · 남불은 `standing_naero.png` · `standing_nambul.png`, 로는 `standing_law-scale.png` · `standing_law-gavel.png`를 붙이고 1-3의 한 줄을 맨 위에 둔다. 단, "follow the proportions described below"는 프롬프트 비율(3.5등신)을 따르게 하므로, 확정 비율을 지키려면 다음 문장으로 바꾼다.
+1. **참조 이미지 첨부를 기본으로 한다.** 내로 · 남불은 `naero_standing.png` · `nambul_standing.png`, 로는 `law-scale_standing.png` · `law-gavel_standing.png`를 붙이고 1-3의 한 줄을 맨 위에 둔다. 단, "follow the proportions described below"는 프롬프트 비율(3.5등신)을 따르게 하므로, 확정 비율을 지키려면 다음 문장으로 바꾼다.
 
 ```
 Match the face, colors, design and proportions of the attached reference exactly.
@@ -997,7 +997,7 @@ AVOID: text, letters, numbers, logos, watermarks, angry or threatening poses, se
 
 ### 9-10. 완성 프롬프트 — 로(법전) 스탠딩 (제작 목록 A2)
 
-`standing_law-scale.png` · `standing_law-gavel.png`(그리고 A1 결과가 있으면 그 시트)를 첨부한다.
+`law-scale_standing.png` · `law-gavel_standing.png`(그리고 A1 결과가 있으면 그 시트)를 첨부한다.
 
 ```
 Use the attached reference images of Law (Scale) and Law (Gavel) as the exact model for the body, robe, gloves, shoes, proportions and art style. Draw Law (Book) standing in the empty-handed pose below (no envelope).
@@ -1041,7 +1041,7 @@ AVOID: text, letters, numbers, logos, angry or threatening poses, gendered body 
 
 ### 9-13. 수정 프롬프트 — 로북 스탠딩 (R1, 제작 목록 A2 · A4-3 대체)
 
-1차 결과(`standing_law-book.png`)를 첨부한다. 봉투 · 옷깃 안 마네킹 목 · 구두 색을 함께 고친다. `standing_law-scale.png`도 함께 첨부하면 구두 · 옷깃 처리를 맞추기 쉽다.
+1차 결과(`law-book_standing.png`)를 첨부한다. 봉투 · 옷깃 안 마네킹 목 · 구두 색을 함께 고친다. `law-scale_standing.png`도 함께 첨부하면 구두 · 옷깃 처리를 맞추기 쉽다.
 
 ```
 Use the first attached image as the exact model of Law (Book): keep the floating law book, the robe, gloves, colors, proportions, height and art style exactly. Use the second attached image (Law (Scale)) only as a reference for the shoes and the collar. Fix only these three things:
@@ -1058,7 +1058,7 @@ AVOID: text, letters, numbers, logos, an envelope, any prop in the hands, a mann
 
 ### 9-14. 수정 프롬프트 — 로북 기준 시트 (R2, 제작 목록 A1 다시)
 
-1차 시트(`character-sheet_law-book.png`)와 R1 결과(있으면)를 첨부한다. 시트 전체를 한 벌로 다시 뽑는다.
+1차 시트(폐기본 `discard_law-book_sheet_reference_v1.png`)와 R1 결과(있으면)를 첨부한다. 10/14 R2 통과본이 `law-book_sheet_reference.png`이므로 그 파일은 첨부하지 않는다. 시트 전체를 한 벌로 다시 뽑는다.
 
 ```
 Use the attached images as the exact model of Law (Book): keep the floating law book, robe, gloves, colors, proportions and art style exactly. Redraw the whole character sheet cleanly, fixing these problems of the first attached sheet:
@@ -1079,7 +1079,7 @@ AVOID: repeated rows or duplicate panels, empty panels, text, letters, numbers, 
 
 ### 9-15. 수정 프롬프트 — 키 비교 시트 v2 (R3, 제작 목록 A3 다시)
 
-1차 시트(`character-sheet_height_v1.png`)와 스탠딩 전부를 첨부한다.
+1차 시트(`discard_all_sheet_height-compare_v1.png`)와 스탠딩 전부를 첨부한다.
 
 ```
 Use the attached standing images as the exact models of Naero, Nambul, Law (Scale), Law (Gavel) and Law (Book). Use the attached first height sheet (v1) as a layout reference only. Copy each character's design, colors and art style exactly (Naero and Nambul keep their flat mascot style; the three Laws keep their refined painterly style).
