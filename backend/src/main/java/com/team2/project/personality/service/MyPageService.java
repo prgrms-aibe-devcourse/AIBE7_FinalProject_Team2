@@ -57,7 +57,7 @@ public class MyPageService {
 			.map(score -> new JudgmentPersonality(score.axisScores(),
 				score.typeCode() == null ? null
 					: typeRepository.findById(score.typeCode()).map(PersonalityTypeResponse::from).orElse(null),
-				contributions.size()))
+				contributions.size()))	// 평균을 낸 체험과 같은 집합(기여가 저장된 첫 회차). API 명세 P-5, #128 리뷰
 			.orElse(null);
 
 		List<ExperienceItem> experiences = experienceRepository.findLatestPerCase(userId).stream()
