@@ -1,5 +1,9 @@
 package com.team2.project.admin.review;
 
+import com.team2.project.admin.review.dto.AdminRejectRequest;
+import jakarta.validation.Valid;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.PostMapping;
 import com.team2.project.admin.review.dto.AdminCaseDetailResponse;
 import com.team2.project.admin.review.dto.AdminCaseListResponse;
 import com.team2.project.admin.review.dto.AdminJudgmentResponse;
@@ -32,6 +36,7 @@ public class AdminReviewController {
 	private static final int MAX_SIZE = 100;
 
 	private final AdminReviewQueryService queryService;
+	private final AdminReviewDecisionService decisionService;
 
 	/** A-5 검수 사건 목록 */
 	@GetMapping("/cases")
@@ -62,6 +67,20 @@ public class AdminReviewController {
 	public AdminSourceTextResponse getSourceText(@PathVariable Long caseId, @PathVariable Long sourceId,
 		@AuthenticationPrincipal AdminPrincipal admin, HttpServletRequest request) {
 		return queryService.getSourceText(caseId, sourceId, admin, request);
+	}
+
+	/** A-9 판결 후보 승인 (= 공개 판결로 정함) */
+	@PostMapping("/judgments/{judgmentId}/approve")
+	public AdminJudgmentResponse approve(@PathVariable Long judgmentId, @AuthenticationPrincipal AdminPrincipal admin,
+		HttpServletRequest request) {
+		return decisionService.approve(judgmentId, admin, request);
+	}
+
+	/** A-10 판결 후보 반려 */
+	@PostMapping("/judgments/{judgmentId}/reject")
+	public AdminJudgmentResponse reject(@PathVariable Long judgmentId, @Valid @RequestBody AdminRejectRequest body,
+		@AuthenticationPrincipal AdminPrincipal admin, HttpServletRequest request) {
+		return decisionService.reject(judgmentId, body.reason(), admin, request);
 	}
 
 	/** A-8 판결 후보 상세 */

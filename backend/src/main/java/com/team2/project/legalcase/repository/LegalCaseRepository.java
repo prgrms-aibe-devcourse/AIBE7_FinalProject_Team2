@@ -1,5 +1,7 @@
 package com.team2.project.legalcase.repository;
 
+import org.springframework.data.jpa.repository.Lock;
+import jakarta.persistence.LockModeType;
 import com.team2.project.legalcase.domain.CaseStatus;
 import com.team2.project.legalcase.domain.CrimeType;
 import com.team2.project.legalcase.domain.LegalCase;
@@ -30,6 +32,14 @@ public interface LegalCaseRepository extends JpaRepository<LegalCase, Long> {
 	}
 
 	Optional<LegalCase> findByIdAndStatus(Long id, CaseStatus status);
+
+	/**
+	 * 관리자 상태 변경(A-9 ~ A-13)은 사건 행을 먼저 잠그고(SELECT ... FOR UPDATE) 상태를 확인한다 (API 명세 8-2 "동시 요청").
+	 * "아직 공개 전"을 확인한 사이 다른 관리자가 공개 · 승인하는 경합을 막는다
+	 */
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	@Query("select c from LegalCase c where c.id = :id")
+	Optional<LegalCase> findByIdForUpdate(@Param("id") Long id);
 
 	/** 공개 사건인지만 확인 (엔티티를 읽지 않는다) */
 	default boolean existsPublishedById(Long caseId) {

@@ -115,6 +115,34 @@ public class Judgment {
 		return isPublished ? ReviewStatus.APPROVED : ReviewStatus.PENDING;
 	}
 
+	/** 승인 = 이 사건의 공개 판결로 정한다 (A-9). 같은 주체의 기존 공개 판결은 호출 전에 내려 둬야 한다(uk_judgment_published) */
+	public void approve(Long adminId, Instant at) {
+		requireCandidate();
+		this.reviewStatus = ReviewStatus.APPROVED;
+		this.isPublished = true;
+		this.reviewedByAdminId = adminId;
+		this.reviewedAt = at;
+		this.reviewNote = null;
+	}
+
+	/** 반려 (A-10). 공개 중인 후보는 반려할 수 없다(chk_judgment_review_rejected). 되돌리지 않는다 */
+	public void reject(Long adminId, Instant at, String note) {
+		requireCandidate();
+		if (isPublished) {
+			throw new IllegalStateException("공개 중인 후보는 반려할 수 없다");
+		}
+		this.reviewStatus = ReviewStatus.REJECTED;
+		this.reviewedByAdminId = adminId;
+		this.reviewedAt = at;
+		this.reviewNote = note;
+	}
+
+	private void requireCandidate() {
+		if (subjectType == SubjectType.USER) {
+			throw new IllegalStateException("사용자 판단은 검수 대상이 아니다");
+		}
+	}
+
 	/** 사용자 사전 판단 (형량 구간만, 형벌 값 없음) */
 	public static Judgment userPre(Experience experience, SentenceRangeOption rangeOption) {
 		Judgment judgment = new Judgment();
