@@ -32,14 +32,14 @@
 > 형식 · 이름 규칙 · 검수 기준은 [캐릭터 에셋 아키텍처](character-asset-architecture.md)가 기준이다(시트 2-2 · 장면 · 감정 코드 3-2 · 상황 4-1 · 크기 6-5 · 검수 7-2). 이 문서는 **무엇을 몇 장 만들고 어디까지 했는지**만 적는다.
 > 캐릭터 설정은 [캐릭터 프로필 · 세계관](character-profile-worldview.md), 성향 이미지 번호는 [성향 이미지 번호표](personality-image-numbers.md)가 기준이다.
 > 프롬프트는 [이미지 생성 프롬프트 모음](character-image-prompts.md) 9장(v2)을 쓴다. 항목별 예시는 이 문서 5장.
-> 원본 PNG는 레포 밖 `~/Documents/NaeLawNamBul/character/`에 둔다. 웹용 webp만 `frontend/public/images/characters/`에 넣는다. 원본은 나중에 팀원 확인용 프라이빗 레포에 올린다(에셋 아키텍처 7-3 #5). 폴더 구조는 아래와 같다(10/14).
+> 원본 PNG는 레포 밖 `~/Documents/NaeLawNamBul/character/`에 둔다. 웹용 webp만 `frontend/public/images/characters/`에 넣는다. 원본은 팀원 확인용 공개 레포 `NaeLawNamBul_Images`에 올렸다(에셋 아키텍처 7-3 #5, 갤러리 페이지가 이 레포를 읽는다). 폴더 구조는 아래와 같다(10/14).
 >
 > - `sheets/` 시트(현재 사용). 기준 시트는 **캐릭터마다 1장** `{naero · nambul · law-scale · law-gavel · law-book}_sheet_reference.png`(A5, 아키텍처 2-1) — 5장 모두 10/14 정리 완료(로북은 R2 수정본 통과). 두 캐릭터가 함께 든 옛 2인 시트는 `discard/sheets/`로 옮겼다
 > - `staging/` 새로 뽑았거나 고칠 이미지를 두는 **임시 폴더**(검수 뒤에 정식 위치로 옮기고 이름을 규칙대로 바꾼다). 지금은 비어 있다
 > - `standing/` 스탠딩 5장(기준)
 > - `discard/` 폐기한 이전 시안(`discard/sheets/` 옛 시트 · 합성본, `discard/standing/` 봉투를 든 옛 스탠딩 · 탈락 후보, `discard/cuts/` · `discard/icons/` · `discard/personality/` 옛 컷, `discard/attempts/` 실패한 재생성 시도). 파일 이름은 `discard_` 접두사 + 실패 이유. 쓰지 않고 `NaeLawNamBul_Images` 레포에도 올리지 않는다
 > - `cuts/{캐릭터}/base/{캐릭터}_cut_{장면}-{감정}.png` · `cuts/{캐릭터}/icon/{캐릭터}_icon_face-{감정}.png` — 아키텍처 6-4와 같은 구조(웹 변환 전 PNG). 로 합의 컷은 `cuts/trio/`, 내로 · 남불 · 로 비교 컷은 `cuts/compare/` 성향 결과 컷은 `cuts/personality/personality-{01 ~ 16}_{캐릭터}_{밈}.png`(기본 · 반대편 캐릭터가 각각 한 장씩, 번호 · 밈은 번호표 기준) 사건 재연 컷은 `cuts/reenact/case-{caseId}/`(아키텍처 6-4), **사건 이미지가 없을 때 대신 쓰는 공용 컷**은 `cuts/reenact/common/{headline · sub-1 · detail-1}.png`. 연기 시트는 `sheets/acting/{naero · nambul · law-scale · law-gavel · law-book}_sheet_acting.png`, 역할 의상 시트는 `sheets/role-outfits/{naero · nambul}.png` 데포르메 대표 시트는 `sheets/deform/{naero · nambul}-{ranma · cheek · ppg}.png`
-> - `_original/`(`character/` 바로 아래) 생성 직후 원본 114장 보관(`original_` 접두사, 재생성 이력은 `_v1` `_v2`). 다른 폴더에 둔 정식 파일의 사본이다. 원본 백업은 프라이빗 레포 `NaeLawNamBul_Images`에도 올렸다(10/14, 이름 변경 전 상태라 다음 반영 때 맞춘다). 컷 PNG는 4:5(1122 × 1402)로 캔버스를 맞췄다(그림은 늘리거나 줄이지 않고 투명 여백만 추가)
+> - `_original/`(`character/` 바로 아래) 생성 직후 원본 114장 보관(`original_` 접두사, 재생성 이력은 `_v1` `_v2`). 다른 폴더에 둔 정식 파일의 사본이다. 원본 백업은 공개 레포 `NaeLawNamBul_Images`에도 올렸다(10/14, 새 이름 구조로 반영 완료). 컷 PNG는 4:5(1122 × 1402)로 캔버스를 맞췄다(그림은 늘리거나 줄이지 않고 투명 여백만 추가)
 
 > **파일 이름 규칙 (10/14, 폴더 없이 파일 이름만으로 역할을 알 수 있게)**: `{대상}_{종류}_{세부}.png` — 대상 `naero` · `nambul` · `law-scale` · `law-gavel` · `law-book` · `trio` · `compare` · `reenact-common` · `personality-{번호}`, 종류 `standing` · `sheet`(`reference` · `acting` · `role-outfits` · `deform-{ranma|cheek|ppg}`) · `cut` · `cut-cheek` · `icon`. 예: `naero_standing.png`, `law-gavel_sheet_reference.png`, `nambul_cut_guide-neutral.png`, `naero_icon_face-cheer.png`, `personality-06_naero_pinky-promise.png`, `trio_cut_idle.png`. 폐기는 `discard_` 접두사 + `_v1` · `_tryN-이유`, 원본은 `original_` 접두사. 옛 이름 → 새 이름은 `rename-map`(`Claude outputs/character/rename-map_2026-10-14.csv`). 웹용 webp 이름 규칙(`{장면}-{감정}.webp` · `01.webp`)은 바뀌지 않았다.
 
@@ -264,7 +264,7 @@ AVOID: text, letters, numbers, logos, watermarks, speech bubbles, angry or hosti
 - **A3 키 비교 시트**: 프롬프트 모음 9-11(완성본). 첨부 `*_standing` 전부
 - **A4 로 스탠딩 빈손 버전**: 프롬프트 모음 9-12(완성본). 첨부 해당 `law-*_standing.png`. 로북은 A4-3 대신 R1을 쓴다
 - **R1 로북 스탠딩 수정**: 9-13. 첨부 `law-book_standing.png` · `law-scale_standing.png`
-- **R2 로북 기준 시트 수정**: 9-14. 첨부 `law-book_sheet_reference.png` (+ R1 결과)
+- **R2 로북 기준 시트 수정**: 9-14. 첨부 `discard_law-book_sheet_reference_v1.png` (+ R1 결과) — 10/14 R2 통과, 지금 `law-book_sheet_reference.png`는 통과본
 - **R3 키 비교 v2**: 9-15. 첨부 `discard_all_sheet_height-compare_v1.png` + 스탠딩 전부
 
 **A5 캐릭터별 기준 시트 — 내로 · 남불** — 첨부 `discard_naero-and-nambul_sheet_reference_two-person.png`(그림체 · 색 참고) · 해당 `*_standing.png`
@@ -296,7 +296,7 @@ SCENE — plain newsprint background #ECE2D4, panels separated by space only, no
 AVOID (add): a second Law, envelopes in more than one pose, faces, a neck, {a tilted scale in the front view | swinging the gavel}, another character's colors in the swatches.
 ```
 
-- 로북은 R2(9-14)로 1인 시트를 고친다. 나오면 다섯 장을 나란히 놓고 칸 배치 · 크기가 같은지 확인한다.
+- 로북 R2(9-14)는 10/14 통과했다. 다섯 장을 나란히 놓고 칸 배치 · 크기가 같은지 확인한다.
 
 ### B. 우선 컷
 
