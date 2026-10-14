@@ -237,7 +237,8 @@ flowchart TD
 ```mermaid
 flowchart TD
     CD["S-20 사건 디테일"] --> D1{"이 사건의 체험 상태"}
-    D1 -->|처음| A1
+    D1 -->|처음| ST["체험 시작 호출<br/>POST /cases/{caseId}/experience (API 2)<br/>→ 상태 STARTED"]
+    ST --> A1
     D1 -->|진행 중| P(["현재 막(화면)"])
     D1 -->|완료| A8
     A1["1막 신문 속 사건 · 재연 (S-03)"] --> A2["2막 첫인상 판단 (S-03)<br/>제출 · 수정 불가"]
