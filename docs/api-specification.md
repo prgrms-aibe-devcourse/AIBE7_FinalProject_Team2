@@ -1171,5 +1171,5 @@ json
 | 1 | 목 API와 달라지는 점 | 응답에서 `typeCode` 제거(`type.shareId`로 구분), 문항의 `a` · `b`(글자 포함) → `optionA` · `optionB`(문장만), 유형의 `daily` · `verdict` → `dailyDescription` · `verdictDescription`, `character`는 `NAERO` · `NAMBUL` 코드, 결과에 `testedAt` 추가, 내 결과 없음은 `null` 대신 404 | A 김해송 (목 → 실제 API 전환) |
 | 2 | 마이페이지 경로 | `GET /my-page` 하나로 묶는다(화면 한 번 진입에 한 번 호출) | A |
 | 3 | `experiences` 범위 | 사건마다 최근 회차 하나. 회차별 전체 이력이 필요하면 추가 | A |
-| 4 | 이미지 경로 | `/images/characters/personality/{번호}.webp`, 번호는 성향 이미지 번호표 기준. **번호는 유형에 고정**(공유 미리보기 · 캐시가 깨지지 않게, #121 리뷰) | A |
+| 4 | 이미지 경로 | `/images/characters/personality/{이미지 번호}.webp`, 이미지 번호(`01 ~ 32`)는 성향 이미지 번호표 기준으로 **유형마다 화면에 보이는 이미지 하나**(기본 캐릭터, 예: ISTJ는 남불 `18.webp`). **한 번 정한 번호는 바꾸지 않는다**(공유 미리보기 · 캐시가 깨지지 않게, #121 리뷰) | A |
 | 5 | `shareId` 값 | 16개를 시드에 고정값으로 넣는다(바꾸면 공유한 링크가 깨진다). 목 API의 해시 값과는 다르다 | B (시드) |
