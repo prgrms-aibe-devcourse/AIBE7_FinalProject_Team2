@@ -91,9 +91,10 @@ function toResult({ typeCode, axisScores, testedAt }) {
   return { type: toType(typeCode), axisScores, testedAt };
 }
 
+// 저장된 결과가 유효할 때만 돌려준다. testedAt이 없는 이전 버전 저장값은 없는 것으로 보고 다시 응시하게 한다
 function savedResult() {
   const saved = load();
-  return saved && TYPES[saved.typeCode] ? saved : null;
+  return saved && TYPES[saved.typeCode] && typeof saved.testedAt === 'string' ? saved : null;
 }
 
 // P-1 문항 조회. 축 · 글자는 내려 주지 않는다(채점은 서버)
@@ -129,9 +130,9 @@ export async function getMyPersonality() {
 // P-4 공유된 결과용 유형 설명 조회 (개인 응답 · 점수 없음). 모르는 해시면 404 PERSONALITY_TYPE_NOT_FOUND
 export async function getPersonalityType(shareId) {
   await delay();
-  const code = SHARE_IDS[String(shareId)];
-  if (!code) fail('PERSONALITY_TYPE_NOT_FOUND');
-  return toType(code);
+  const key = String(shareId);
+  if (!Object.hasOwn(SHARE_IDS, key)) fail('PERSONALITY_TYPE_NOT_FOUND'); // constructor · __proto__ 같은 상속 속성은 없는 유형이다
+  return toType(SHARE_IDS[key]);
 }
 
 // P-5 마이페이지 조회. 기록이 없어도 404가 아니라 빈 200이다. 종합 판결 성향 · 성향 변화 흐름은

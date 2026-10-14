@@ -9,14 +9,18 @@ export function typeCard(type, kicker) {
   const card = element('section', 'result-card');
   const characterName = CHARACTER_NAMES[type.character] ?? type.character;
   const portrait = element('div', 'result-portrait');
+  const showNameplate = () => {
+    portrait.replaceChildren(element('strong', '', characterName), element('span', '', type.meme));
+    portrait.setAttribute('aria-label', `${characterName} 캐릭터 (이미지 준비 중)`);
+  };
   if (type.imageUrl) {
     const image = element('img');
-    image.src = type.imageUrl;
     image.alt = `${characterName} 캐릭터`;
+    image.addEventListener('error', showNameplate, { once: true }); // 파일이 없거나 불러오지 못하면 깨진 이미지 대신 이름표
+    image.src = type.imageUrl;
     portrait.append(image, element('span', '', type.meme));
   } else {
-    portrait.append(element('strong', '', characterName), element('span', '', type.meme));
-    portrait.setAttribute('aria-label', `${characterName} 캐릭터 (이미지 준비 중)`);
+    showNameplate();
   }
   const head = element('div', 'result-head');
   head.append(
