@@ -23,6 +23,7 @@ from build_prompt import build_prompt  # noqa: E402
 from case_seed_sql import CaseSeedError, build_case_sql, resolve_sources  # noqa: E402
 from common import load_json, write_json  # noqa: E402
 from court_seed_sql import CourtSeedError, build_court_sql, check_court  # noqa: E402
+from rag_store import case_number_hash  # noqa: E402
 from to_seed_sql import build_sql  # noqa: E402
 
 EXAMPLES = TOOL_DIR / "examples"
@@ -373,11 +374,19 @@ class PipelineTest(unittest.TestCase):
 
         functions["court"] = lambda c, s, log: pipeline.stage_court(c, s, log, caller=court_caller)
         functions["contamination"] = lambda c, s, log: pipeline.stage_contamination(c, s, log, caller=caller)
+        # 참고 자료 RAG (BE-54): 실제 임베딩 · DB 대신 가짜. rag_db를 주지 않으면 DB 접속 실패로 대체 동작
+        functions["rag"] = lambda c, s, log: pipeline.stage_rag(
+            c, s, log, embedder=lambda texts, task_type: [[0.001] * 3072 for _ in texts],
+            runner=getattr(self, "rag_db", None) or self.rag_unavailable)
         functions["generate"] = lambda c, s, log: pipeline.stage_generate(c, s, log, caller=caller)
         functions["axis"] = lambda c, s, log: pipeline.stage_axis(c, s, log, caller=axis_caller_for(c, s))
         functions["load"] = lambda c, s, log: pipeline.stage_load(
             c, s, log, apply=lambda path, db: (applied.append((path, db)) if applied is not None else None) or [])
         return pipeline.run_pipeline(config, functions=functions, log=self.logs.append, **kwargs)
+
+    @staticmethod
+    def rag_unavailable(sql):
+        raise pipeline.RagUnavailable("connection refused")
 
     def variant(self, **changes):
         return {**self.output, **changes}
@@ -456,6 +465,66 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(report["contamination"]["verdict"], contamination[selection["modelSpec"]]["verdict"])
         self.assertNotIn("120", json.dumps(report["contamination"]))
         self.assertTrue(load["runKey"])
+
+    def test_rag_references_go_into_prompt_and_report(self):
+        # BE-54: rag 단계가 찾은 참고 자료로 생성 프롬프트를 만들고, 생성 정보에는 id · 점수 · 버전 이름만 남긴다
+        applied, queries = [], []
+        result = {"guideline": {"id": 7, "versionName": "2차 수정 2013", "effectiveDate": "2013-05-15"},
+                  "ranges": [{"id": 1, "subject": "제2유형", "typeNo": 2, "content": "기본 10 ~ 16년"}],
+                  "factors": [],
+                  "precedents": [{"id": 31, "caseGroup": "g31", "score": 0.81, "guidelineId": 7, "chargeName": "살인",
+                                  "courtLevel": "FIRST", "penaltyType": "PRISON", "prisonMonths": 144,
+                                  "suspensionMonths": None, "fineAmount": None, "sentencingFactors": None,
+                                  "factsSummary": "검색된 판례 사실관계", "sentencingReason": "검색된 판례 양형 이유"}]}
+        self.rag_db = lambda sql: queries.append(sql) or json.dumps(result, ensure_ascii=False)
+        config = self.config({"incidentDate": "2014-03-01"}, rag={"enabled": True},
+                             generate={"models": ["openai:a"], "runs": 1, "maxRetries": 0})
+        state = self.run_with(config, {"openai:a": [self.output]}, applied)
+        rag = state["stages"]["rag"]["outputs"]
+        self.assertEqual(rag["report"]["status"], "OK")
+        self.assertIn(case_number_hash("2099노2"), queries[0])  # 설정 sources의 사건번호도 자기 사건 제외에 쓴다
+        self.assertNotIn("2099노2", queries[0])
+        prompt = (Path(state["stages"]["generate"]["outputs"]["batchDir"]) / "prompt.md").read_text(encoding="utf-8")
+        self.assertIn("검색된 판례 사실관계", prompt)
+        self.assertIn("2차 수정 2013", prompt)
+        self.assertNotIn("유사 판례 A (예시)", prompt)
+        self.assertEqual(load_json(pipeline.input_file(config, state, "case"))["references"], self.case["references"])
+        sql = Path(state["stages"]["load"]["outputs"]["sqlFile"]).read_text(encoding="utf-8")
+        self.assertIn("검색된 판례 사실관계", sql)  # ai_generation 입력 프롬프트도 실제로 보낸 것
+        report = json.loads(sql.split("'PENDING', NULL, NULL, '")[1].split("'::jsonb")[0].replace("''", "'"))
+        self.assertEqual(report["rag"]["precedents"], [{"id": 31, "score": 0.81, "sameGuideline": True}])
+        self.assertEqual(report["rag"]["guideline"], "2차 수정 2013")
+        self.assertNotIn("검색된 판례", json.dumps(report, ensure_ascii=False))
+
+    def test_rag_fallback_and_disabled(self):
+        config = self.config(rag={"enabled": True}, generate={"models": ["openai:a"], "runs": 1, "maxRetries": 0})
+        state = self.run_with(config, {"openai:a": [self.output]})  # DB 접속 실패 → 사건 입력의 참고 자료로 진행
+        self.assertEqual(state["stages"]["rag"]["outputs"]["report"]["status"], "FALLBACK")
+        prompt = (Path(state["stages"]["generate"]["outputs"]["batchDir"]) / "prompt.md").read_text(encoding="utf-8")
+        self.assertIn("유사 판례 A (예시)", prompt)
+        self.assertTrue(any("RAG 대체" in line for line in self.logs))
+
+        required = self.config(rag={"enabled": True, "required": True},
+                               generate={"models": ["openai:a"], "runs": 1, "maxRetries": 0})
+        with self.assertRaises(pipeline.PipelineError):
+            self.run_with(required, {"openai:a": [self.output]}, start="rag")
+
+        off = self.config(generate={"models": ["openai:a"], "runs": 1, "maxRetries": 0})  # 기본은 꺼짐
+        self.assertNotIn("rag", pipeline.plan(off, {"stages": {}}))
+        state = self.run_with(off, {"openai:a": [self.output]}, start="generate")
+        sql = Path(state["stages"]["load"]["outputs"]["sqlFile"]).read_text(encoding="utf-8")
+        report = json.loads(sql.split("'PENDING', NULL, NULL, '")[1].split("'::jsonb")[0].replace("''", "'"))
+        self.assertEqual(report["rag"], {"status": "SKIPPED"})
+
+    def test_rag_config_validation(self):
+        bad = copy.deepcopy(self.raw_config)
+        bad["indictmentDate"] = "2014/03/01"
+        bad["stages"]["rag"] = {"precedent": {"topK": 0}}
+        write_json(self.dir / "bad.json", bad)
+        with self.assertRaises(pipeline.PipelineError) as ctx:
+            pipeline.load_config(self.dir / "bad.json")
+        self.assertIn("indictmentDate", str(ctx.exception))
+        self.assertIn("stages.rag.precedent.topK", str(ctx.exception))
 
     def test_contamination_insufficient_and_criteria(self):
         clean = {"knowsCase": False, "penaltyType": "PRISON", "prisonMonths": 60, "fineAmount": None,
