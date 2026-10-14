@@ -132,6 +132,28 @@ class VerdictServiceTest {
 			exception -> assertThat(exception.getExperienceStatus()).isEqualTo(ExperienceStatus.PRE_JUDGED));
 	}
 
+	private double verdictConfirmedCount() {
+		return meterRegistry.get("lawnambul.verdict.confirmed").counter().count();
+	}
+
+	@Test
+	@Transactional(propagation = Propagation.NOT_SUPPORTED)
+	void submit_outerTransactionRolledBack_doesNotCountVerdict() {
+		double before = verdictConfirmedCount();
+		// submit()의 @Transactional은 바깥 트랜잭션에 참여한다. 바깥이 롤백되면 판결도 함께 사라지므로 세면 안 된다 (#110 리뷰)
+		new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+			assertThat(service.submit(caseId, Optional.of(userId), validRequest()).status()).isEqualTo(ExperienceStatus.VERDICT_CONFIRMED);
+			assertThat(verdictConfirmedCount()).isEqualTo(before);	// 커밋 전이라 아직 세지 않았다
+			status.setRollbackOnly();
+		});
+		assertThat(verdictConfirmedCount()).isEqualTo(before);	// 롤백이라 afterCommit이 불리지 않았다
+		// DB도 확정 전 그대로다 (카운터와 DB가 같은 이야기를 한다)
+		new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+			assertThat(jdbc.queryForObject("SELECT count(*) FROM judgment WHERE experience_id = ?", Integer.class, experienceId)).isZero();
+			assertThat(jdbc.queryForObject("SELECT status FROM experience WHERE id = ?", String.class, experienceId)).isEqualTo("REVIEWED");
+		});
+	}
+
 	@Test
 	@Transactional(propagation = Propagation.NOT_SUPPORTED)
 	void submit_validRequest_commitsJudgmentFactorsAndState() {

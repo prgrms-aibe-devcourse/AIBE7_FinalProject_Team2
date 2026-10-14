@@ -169,6 +169,26 @@ class GeminiQueryEmbeddingClientTest {
 	}
 
 	@Test
+	@DisplayName("재시도 대기 중 중단(인터럽트)되면 실패로 세고, 다음 시도는 보내지 않는다 (#110 리뷰)")
+	void embedQuery_interruptedWhileWaiting_countsFailure() {
+		server.expect(ExpectedCount.once(), requestTo(URL)).andRespond(withStatus(HttpStatus.SERVICE_UNAVAILABLE));
+		// 실제 대기(Thread.sleep)를 쓰는 Sleeper.THREAD에 인터럽트를 미리 걸어 두면, 첫 503 뒤 대기에서 바로 중단된다
+		GeminiQueryEmbeddingClient client = client("k", 3, 3, GeminiQueryEmbeddingClient.Sleeper.THREAD);
+		Thread.currentThread().interrupt();
+		try {
+			assertThatThrownBy(() -> client.embedQuery("개요")).isInstanceOf(EmbeddingException.class)
+				.hasMessageContaining("중단");
+			// 인터럽트 표시를 삼키지 않고 되살려 둔다 (호출한 쪽이 중단 요청을 알 수 있게)
+			assertThat(Thread.currentThread().isInterrupted()).isTrue();
+		} finally {
+			Thread.interrupted();	// 다음 테스트로 인터럽트 표시가 새지 않게 지운다
+		}
+		assertThat(aiCallCount("failure")).isEqualTo(1);
+		assertThat(aiCallCount("success")).isEqualTo(0);
+		server.verify();
+	}
+
+	@Test
 	@DisplayName("API 키가 없으면 꺼져 있고, 호출하지 않는다")
 	void noApiKey_isDisabled() {
 		GeminiQueryEmbeddingClient client = client("", 3, 3);
@@ -190,11 +210,16 @@ class GeminiQueryEmbeddingClientTest {
 	}
 
 	private GeminiQueryEmbeddingClient client(String apiKey, int dimensions, int maxAttempts) {
+		return client(apiKey, dimensions, maxAttempts, waits::add);
+	}
+
+	private GeminiQueryEmbeddingClient client(String apiKey, int dimensions, int maxAttempts,
+		GeminiQueryEmbeddingClient.Sleeper sleeper) {
 		RagProperties properties = new RagProperties(
 			new RagProperties.Embedding(apiKey, BASE, "gemini-embedding-001", dimensions, Duration.ofSeconds(1),
 				maxAttempts, Duration.ofMillis(100)),
 			new RagProperties.Search(5, 0.6, 0.95));
-		return new GeminiQueryEmbeddingClient(restClient, properties, waits::add, metrics);
+		return new GeminiQueryEmbeddingClient(restClient, properties, sleeper, metrics);
 	}
 
 	private static String embeddingJson(int dimensions) {
