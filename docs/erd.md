@@ -24,6 +24,7 @@
 | v1.17 | 2026-10-13 | 관리자 계정 추가 (**확장 단계**, BE-39 — 닫힌 #79를 최신 develop에 다시 적용)<br>• `admin_account`(V12 마이그레이션): 관리자 후검수 API 로그인 계정. 사용자(익명 ID)와 관계없음 |
 | v1.18 | 2026-10-12 | AI 판결 RAG 양형기준 저장소 추가 (BE-52)<br>• `rag_guideline` 추가(V13 마이그레이션, pgvector `vector(3072)`): 양형기준 한 버전 × 한 섹션 × 한 대상 조각 · 임베딩 입력(머리말 + 본문) · 구조 값 `meta`(형량범위 · 양형인자)<br>• `sentencing_guideline` (`crime_category`, `version_name`) 유니크. 살인범죄 6개 버전(2009 최초 ~ 2026 수정)을 비공개 시드 `R__41`이 넣는다<br>• 함수 `sentencing_guideline_at`(기준일 → 시행 중 버전) · `rag_guideline_search`(버전 안 검색)<br>• 버전 기준일은 공소제기일 → 없으면 발생일(결정은 [양형기준 저장소](sentencing-guideline-rag.md) 6장) |
 | v1.19 | 2026-10-13 | 관리자 감사 로그 추가 (**확장 단계**, BE-68 · WBS 7.4.5) — `admin_audit_log`(V14): 누가(`admin_id` · `actor_email`) · 무엇을(`action` 9종) · 어디에(`target_type` · `target_id`) · 상세(`detail` jsonb, 비밀번호 · 원문 제외) · IP · 시각. 계정이 지워져도 기록은 남는다(`ON DELETE SET NULL`). 성향 DB는 다음 번호(V15)를 쓴다 |
+| v1.20 | 2026-10-14 | 판결 성향 테스트 테이블 확정 (**확장 단계**, BE-69 · WBS 7.6.3) — 8장 제안을 V15 마이그레이션으로 확정<br>• `personality_question`에 두 행동 문장 `option_a` · `option_b` 추가. 선택지는 5칸 고정이고 "매우 · 조금 · 보통"은 화면이 붙이므로 `personality_choice.content` 삭제(글자 · 점수 · 순서만)<br>• 선택지 축은 복합 FK(`question_id`, `axis`)로 문항 축과 같게 묶고, 글자는 그 축의 두 글자만 · 보통은 글자 없음 0점(CHECK)<br>• `personality_type`: 공유 주소 `share_id` 추가(#119, 코드는 화면 · 주소에 안 씀), `animal` → `character_code`(NAERO · NAMBUL), `description` → `meme` · `daily_description` · `verdict_description`, `tolerance`는 코드의 I · N · F · P 개수(CHECK)<br>• `personality_result`: 현재 결과는 사용자당 1건(부분 유니크 인덱스)<br>• `experience_personality`: `axis_scores` · `type_code` → 축별 고른 개수 `axis_counts`(`{down, up}`, 산식 문서 v0.4) |
 
 ---
 
@@ -765,9 +766,9 @@ IA 9장의 규칙을 어느 테이블·제약이 책임지는지 정리한다.
 
 ---
 
-## 8. (확장 · 제안) 판결 성향 테스트 테이블 (v1.14)
+## 8. (확장 단계) 판결 성향 테스트 테이블 (v1.14 제안 → v1.20 확정)
 
-> **미확정 제안이다.** 12차 회의 "DB에 성향 테스트 관련 내용 추가"를 위한 초안으로, 문항 산식 · 매핑 로직(요구사항 15장)이 정해지면 확정한다. 요구사항 DR-11, 기능 명세 REQ-112 ~ 119 · 127.
+> **V15 마이그레이션으로 확정했다 (v1.20, BE-69).** 산식은 [성향 산식](personality-scoring.md) v0.4, 문항 · 유형 문구는 [성향 테스트 콘텐츠](personality-test-content.md)를 따른다. 문항 · 유형 시드는 별도로 넣는다. 요구사항 DR-11, 기능 명세 REQ-112 ~ 119 · 127.
 >
 > **판단 요소 ↔ 가치관 축은 이 장에서 새로 만들지 않는다.** 요소가 어느 축에 속하는지는 이미 있는 `factor.value_axis`(v1.13, BE-47)를 그대로 쓴다. 값은 파이프라인의 AI 분류(BE-49)와 관리자 후검수(BE-48 · BE-43)로 정해진다. 축 이름도 같은 키(`APOLOGY_SINCERITY` · `FAULT_STANDARD` · `PRINCIPLE_RELATION` · `ORDER_OPPORTUNITY`)를 쓰므로 성향 테스트 점수와 체험 기여분을 같은 키로 합칠 수 있다.
 >
@@ -781,13 +782,13 @@ erDiagram
     experience ||--o| experience_personality : "체험별 성향 기여"
 ```
 
-| 테이블 | 주요 컬럼 (제안) | 설명 |
+| 테이블 | 주요 컬럼 | 설명 |
 | --- | --- | --- |
-| `personality_question` | id, axis(`APOLOGY_SINCERITY` / `FAULT_STANDARD` / `PRINCIPLE_RELATION` / `ORDER_OPPORTUNITY`, `factor.value_axis`와 같은 값), scenario(`FRIEND` / `FAMILY` / `WORK` / `NEIGHBOR`), content, display_order, is_active | 일상 시나리오 문항. 축당 3 ~ 4개. 법률 용어 금지 |
-| `personality_choice` | id, question_id FK, content, letter(`E`·`I` / `S`·`N` / `T`·`F` / `J`·`P`), score, display_order | 선택지가 어느 글자 쪽에 몇 점을 주는지 |
-| `personality_type` | code PK(char(4), 예: `INFP`), name(예: 너그러운 판다형), animal, one_liner, tolerance(0 ~ 4), description, image_url | 16유형 콘텐츠. 코드 상수로 둘 수도 있다 |
-| `personality_result` | id, anonymous_user_id FK, type_code FK, axis_scores jsonb(키는 위 4개 축 이름), answers jsonb, is_current, created_at | 응시 결과. 재응시 시 새 행 + 이전 행 `is_current=false`(제안). 회원 연결은 `anonymous_user.member_id`로 따라간다 |
-| `experience_personality` | id, experience_id FK unique, axis_scores jsonb(키는 위 4개 축 이름), type_code, created_at | 판결 체험이 `COMPLETED`가 될 때 계산한 성향 기여분. 성향 변화 흐름 · 종합 성향(평균) 계산에 쓴다. 성향 테스트 전에 한 체험도 남겨 둔다 |
+| `personality_question` | id, axis(`APOLOGY_SINCERITY` / `FAULT_STANDARD` / `PRINCIPLE_RELATION` / `ORDER_OPPORTUNITY`, `factor.value_axis`와 같은 값), scenario(`FRIEND` / `FAMILY` / `WORK` / `NEIGHBOR`), content(상황 문장), option_a · option_b(두 끝 행동 문장), display_order(unique), is_active | 일상 시나리오 문항. 법률 용어 금지. (id, axis) 유니크는 선택지 복합 FK용 |
+| `personality_choice` | id, (question_id, axis) 복합 FK, letter(varchar(1), 보통은 NULL), score(int), display_order(1 ~ 5) | 5칸(매우 A · 조금 A · 보통 · 조금 B · 매우 B) 중 한 칸. 문구는 없고 글자 · 점수만. 글자 있으면 1 · 2점이고 그 축의 두 글자만(E·I / S·N / T·F / J·P), 글자 없으면 0점. (question_id, display_order) 유니크 |
+| `personality_type` | code PK(varchar(4), 내부용), share_id(unique, 영숫자 6 ~ 16자), name, character_code(`NAERO` / `NAMBUL`), one_liner, meme, daily_description, verdict_description, tolerance, image_url | 16유형 콘텐츠. 코드는 화면 · 공유 주소에 쓰지 않고(#119) 공유 주소는 `/test/types/{share_id}`. share_id는 시드로 고정하고 바꾸지 않는다. tolerance = 코드의 I · N · F · P 개수(CHECK) |
+| `personality_result` | id, anonymous_user_id FK, type_code FK, axis_scores jsonb(네 축 키, 값 0 ~ 1), answers jsonb(배열, `{questionId, choiceId}`), is_current, created_at | 응시 결과. 재응시는 이전 행 `is_current=false` 후 새 행. 사용자당 현재 결과 1건(부분 유니크 인덱스). 이력은 남는다 |
+| `experience_personality` | id, experience_id FK unique, axis_counts jsonb(네 축 키, 각 `{down, up}` 0 이상 정수), created_at | 판결 체험이 끝날 때 남기는 축별 형량 ↓ / ↑ 선택 개수. 고르지 않은 축도 `{0, 0}`으로 키를 둔다. 유형 코드는 저장하지 않고 산식(v0.4)이 합산해서 계산한다. 종합 성향은 각 사건 첫 회차만 쓴다 |
 
 - 사용자 응답에 원본 판결문 정보가 섞이지 않는다는 원칙(5장)은 그대로다. 성향 기여는 사용자의 `USER` · `FINAL` 판단 요소 기록(`judgment_factor`)에서만 계산한다.
 - 공유 링크는 `personality_type`만 읽는다. `personality_result`의 응답 · 점수는 공유 응답에 넣지 않는다.
