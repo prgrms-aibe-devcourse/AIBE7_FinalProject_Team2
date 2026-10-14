@@ -42,6 +42,7 @@
 | [character-main-handover.md](character/character-main-handover.md) | 판결 성향 캐릭터 · S-01 메인 인수인계(7.6.8 · 7.7.1). 결정 사항 · 디자인 가이드 요약 · 16종 표(대표색 · 이미지 · 상태) · 다시 그릴 3종 · 생성 방법 · 화면 연결 · 검수 체크리스트. 미리보기 이미지는 [assets/characters/](assets/characters/) |
 | [character-image-prompts.md](character/character-image-prompts.md) | 내로 · 남불 · 로 이미지 생성 프롬프트 모음(작업본). 시트 · 스탠딩 · 로 시안 · 데포르메 11종 블록, 문제와 대응 · 검수, **확정 이미지와 다른 점**(비율 · 로 그림체 · 색 · 설정 문구) |
 | [character-image-checklist.md](character/character-image-checklist.md) | 캐릭터 이미지 제작 목록. 기준 · 우선 컷 · 판결 결과 · 성향 · 재연 · 시트 · 후순위별 수량 · 형식 · 상태, 추천 순서 |
+| [character-image-gallery.html](character/character-image-gallery.html) | 캐릭터 원본 이미지 214장을 이미지 저장소에서 불러와 보는 갤러리 페이지. 캐릭터 · 종류 필터, 검색, 크기 조절, 원본 열기 · URL 복사. 브라우저로 직접 열어서 본다 |
 | [character-profile-worldview.md](character/character-profile-worldview.md) | 캐릭터 프로필 · 세계관. 캐릭터를 쓰는 목적 · 법의 정령 내로 · 남불과 상위 정령 로 · 유저 흐름 × 세계관 · 캐릭터 프로필 3종 · 모습 바꾸기 · 역할 순환(중립) · 컬렉션 · IP 확장 방향 |
 | [character-asset-architecture.md](character/character-asset-architecture.md) | 캐릭터 에셋 아키텍처. 정체성 → 외형 변형 → 연기 → 장착 → 장면 → 출력 6층 구조 · 캐릭터 시트 체계 · 바리에이션(데포르메 · 자세 · 표정 · 소품 · 역할 의상 · 스킨) · 상황 → 캐릭터 매핑 · 이미지 / 말투 프롬프트 블록 · 파일 · 데이터 구조 · 제작 순서 · 검수 |
 | [personality-image-numbers.md](character/personality-image-numbers.md) | 성향 이미지 번호표. 이미지 파일 이름 `01` ~ `16`과 유형(코드 · 캐릭터 · 유형명) 연결, 번호 규칙, 기존 동물 이미지 처리 |
