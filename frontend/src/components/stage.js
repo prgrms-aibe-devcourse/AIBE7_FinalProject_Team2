@@ -141,7 +141,10 @@ export function renderStage({ script, order, cards, inputCards = [] }) {
     caption.hidden = !caption.textContent;
 
     const text = step.text ?? '';
-    dialog.hidden = input || !text;
+    // 글이 없는 장면(암전 · 시스템 캡션)에도 이전 · 다음 버튼은 남긴다 — 버튼이 없으면 장면 클릭 · 키보드 말고는 넘길 방법이 없다
+    dialog.hidden = input;
+    dialog.classList.toggle('is-bare', !text);
+    line.hidden = !text;
     if (step.say) {
       speaker.replaceChildren();
       const icon = element('img');

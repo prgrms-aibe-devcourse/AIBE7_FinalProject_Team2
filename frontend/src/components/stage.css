@@ -36,6 +36,7 @@
 
 /* 대사창: 장면 아래쪽에 겹친다 */
 .stage-dialog { grid-area: scene; align-self: end; z-index: 2; margin: 0 2.5% 2.5%; padding: 12px 18px 8px; border: 2px solid var(--color-heading); border-radius: 12px; background: color-mix(in srgb, var(--color-card) 96%, transparent); box-shadow: 0 6px 16px -10px color-mix(in srgb, var(--color-heading) 45%, transparent); }
+.stage-dialog.is-bare { padding: 0; border: 0; background: none; box-shadow: none; }
 .stage-speaker { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; font-size: var(--text-small); }
 .stage-speaker img { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; object-position: top; background: var(--color-surface); }
 .stage-speaker strong { color: var(--color-heading); }
