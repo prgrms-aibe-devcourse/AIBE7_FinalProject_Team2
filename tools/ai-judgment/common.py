@@ -10,7 +10,7 @@ TOOL_DIR = Path(__file__).resolve().parent
 PROMPT_DIR = TOOL_DIR / "prompts"
 
 # 프롬프트를 고치면 버전을 올린다. ai_generation.prompt_version에 그대로 기록된다.
-PROMPT_VERSION = "judgment-v2"
+PROMPT_VERSION = "judgment-v3"  # v3: 유사 판례 · 양형기준 RAG 참고 자료 형식, 형식 예시(퓨샷) (BE-54)
 CONTAMINATION_PROMPT_VERSION = "contamination-v2"
 AXIS_PROMPT_VERSION = "axis-v1"  # 판단 요소 가치관 축 분류 투표 (BE-49)
 

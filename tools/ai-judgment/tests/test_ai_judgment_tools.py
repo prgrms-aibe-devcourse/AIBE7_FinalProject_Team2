@@ -3,6 +3,7 @@
 import copy
 import io
 import json
+import re
 import sys
 import tempfile
 import unittest
@@ -80,7 +81,7 @@ class BuildPromptTest(Fixtures):
         self.assertIn("형법 제250조 제1항 살인 (고정값)", prompt["user"])
         self.assertIn("징역 2년 6개월 ~ 30년", prompt["user"])
         self.assertIn("11. 피고인은 오랜 채무로 정신적으로 지쳐 있었다고 주장한다", prompt["user"])
-        self.assertEqual(prompt["promptVersion"], "judgment-v2")
+        self.assertEqual(prompt["promptVersion"], "judgment-v3")
 
     def test_prompt_explains_death_and_life(self):
         prompt = build_prompt(self.case)
@@ -88,6 +89,31 @@ class BuildPromptTest(Fixtures):
                       prompt["user"])
         self.assertIn("감경하면 `LIFE`(무기징역) · `PRISON`(징역)로 선고 가능", prompt["user"])
         self.assertIn("reducedTo", prompt["system"])
+
+    def test_prompt_has_masked_fewshot(self):
+        # 퓨샷(BE-54): 다른 죄종의 가상 예시, 형량은 가린다. 예시 사건이 이 사건 정보와 섞이지 않는다
+        system = build_prompt(self.case)["system"]
+        fewshot = system.split("# 예시 (형식 참고용)")[1]
+        self.assertIn("⟨형량⟩", fewshot)
+        self.assertIn("사기", fewshot)
+        self.assertNotIn("살인", fewshot)
+        self.assertIsNone(re.search(r'"prisonMonths": \d', fewshot))
+        self.assertIn("유사 판례는 다른 사건이다", system)
+
+    def test_prompt_renders_rag_similar_cases(self):
+        case = copy.deepcopy(self.case)
+        case["references"]["similarCases"] = [{
+            "title": "유사 판례 1 (살인, 1심)", "summary": "검색된 사실관계", "sentence": "징역 12년",
+            "sentencingReason": "가" * 700, "sentencingFactors": {"aggravating": ["계획적 범행"], "mitigating": []},
+            "sameGuideline": True}]
+        user = build_prompt(case)["user"]
+        self.assertIn("### 유사 판례 1 (살인, 1심) — 이 사건과 같은 양형기준 버전", user)
+        self.assertIn("- 선고: 징역 12년", user)
+        self.assertIn("- 양형인자: 가중: 계획적 범행", user)
+        self.assertIn("가" * 600 + "…", user)
+        self.assertNotIn("가" * 601, user)
+        # 예전 형식(제목 · 요약 · 형량)은 한 줄로 그대로
+        self.assertIn("- 유사 판례 A (예시): ", build_prompt(self.case)["user"])
 
     def test_prompt_uses_only_whitelisted_fields(self):
         # 입력 파일에 정의되지 않은 항목을 추가해도 프롬프트에 들어가지 않는다 (화이트리스트)
@@ -387,7 +413,7 @@ class SeedSqlTest(Fixtures):
         self.assertIn("INSERT INTO judgment_factor", sql)
         self.assertIn("(2, 'UP')", sql)
         self.assertIn("'APPROVED', '백승호'", sql)
-        self.assertIn("'judgment-v2'", sql)
+        self.assertIn("'judgment-v3'", sql)
         # 기본 출력은 psql에 바로 붙여 넣을 수 있게 BEGIN/COMMIT으로 감싼다
         self.assertTrue(sql.startswith("BEGIN;\n"))
         self.assertIn("\nCOMMIT;\n", sql)
