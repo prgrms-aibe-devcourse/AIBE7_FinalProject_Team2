@@ -103,7 +103,9 @@ class AdminCaseEditApiTest extends ApiIntegrationTest {
 		for (String body : List.of("{}", "{\"title\": null}", "{\"title\": \"  \"}", "{\"title\": \"" + "가".repeat(101) + "\"}",
 			"{\"shortIntro\": \"" + "가".repeat(201) + "\"}", "{\"overview\": null}", "{\"keywords\": null}",
 			"{\"keywords\": [\"a\", null]}", "{\"difficulty\": \"HARD\"}", "{\"estimatedMinutes\": 0}",
-			"{\"estimatedMinutes\": 1.5}", "{\"chargeName\": \"상해\"}", "{\"thumbnailUrl\": \"" + "a".repeat(301) + "\"}")) {
+			"{\"estimatedMinutes\": 1.5}", "{\"chargeName\": \"상해\"}", "{\"thumbnailUrl\": \"/" + "a".repeat(300) + "\"}",
+			"{\"thumbnailUrl\": \"javascript:alert(1)\"}", "{\"thumbnailUrl\": \"//evil.example/x.webp\"}",
+			"{\"thumbnailUrl\": \"data:image/png;base64,AAAA\"}", "{\"thumbnailUrl\": \"images/a.webp\"}")) {
 			perform(patch(caseUrl()).contentType(MediaType.APPLICATION_JSON).content(body))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
@@ -112,13 +114,30 @@ class AdminCaseEditApiTest extends ApiIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("A-11: 문자열은 앞뒤 공백을 잘라 저장하고, 썸네일은 http(s) 주소 · 서비스 경로를 받는다")
+	void edit_stripsAndThumbnail() throws Exception {
+		perform(patch(caseUrl()).contentType(MediaType.APPLICATION_JSON).content("""
+				{"shortIntro": "  고친 소개  ", "keywords": [" 지인 "], "thumbnailUrl": " /images/cases/a.webp "}"""))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.content.shortIntro").value("고친 소개"))
+			.andExpect(jsonPath("$.content.keywords[0]").value("지인"))
+			.andExpect(jsonPath("$.content.thumbnailUrl").value("/images/cases/a.webp"));
+		perform(patch(caseUrl()).contentType(MediaType.APPLICATION_JSON).content("""
+				{"thumbnailUrl": "https://cdn.example.com/cases/a.webp"}"""))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.content.thumbnailUrl").value("https://cdn.example.com/cases/a.webp"));
+	}
+
+	@Test
 	@DisplayName("A-11: 다른 사건과 제목이 겹치면 409 DUPLICATE_TITLE, 공개한 사건은 409 CASE_PUBLISHED, 없는 사건은 404")
 	void edit_conflicts() throws Exception {
 		String otherTitle = jdbcTemplate.queryForObject("SELECT title FROM legal_case WHERE id = ?", String.class,
 			insertCase("FRAUD", "DRAFT"));
-		perform(patch(caseUrl()).contentType(MediaType.APPLICATION_JSON).content("{\"title\": \"" + otherTitle + "\"}"))
-			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.code").value("DUPLICATE_TITLE"));
+		for (String title : List.of(otherTitle, " " + otherTitle + " ")) {	// 앞뒤 공백으로 중복 검사를 피하지 못한다
+			perform(patch(caseUrl()).contentType(MediaType.APPLICATION_JSON).content("{\"title\": \"" + title + "\"}"))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.code").value("DUPLICATE_TITLE"));
+		}
 
 		jdbcTemplate.update("UPDATE legal_case SET status = 'PUBLISHED', published_at = now() WHERE id = ?", caseId);
 		perform(patch(caseUrl()).contentType(MediaType.APPLICATION_JSON).content("{\"shortIntro\": \"고침\"}"))
