@@ -21,6 +21,7 @@
 | v0.17 | 2026-10-13 | 관리자 검수 API 계약 초안 (**확장 단계**, WBS 7.4.7 · BE-33 · BE-41 ~ BE-43, R16) — 8-2에 A-5 ~ A-13(검수 사건 목록 · 상세 · 원문, 판결 후보 상세 · 승인 · 반려, 사건 내용 수정, 가치관 축 확정, 사건 공개)과 검수 흐름 · 공개 조건, 8-3 팀 확인 항목, 1-5에 `JUDGMENT_NOT_FOUND` · `FACTOR_NOT_FOUND` · `DUPLICATE_TITLE` · `PUBLISH_NOT_READY` 추가. 경로 · 요청 · 응답 형태만 먼저 정하고 세부 필드는 구현(10/21 ~ 23)하며 맞춘다. 사용자 API는 변경 없음. #111 리뷰 반영(김해송): 상태 변경 시 사건 행 잠금, 승인 순서(해제 먼저 flush) · 유니크 위반 409, 공개한 사건에서도 반려 허용 · `pending` 필터, 검수 정보 최상위, `INVALID_STATE` 사유 코드, PATCH `null` 규칙, 최근 활동 순, 원문 열람 감사 로그 |
 | v0.18 | 2026-10-13 | 관리자 로그인 보강 (**확장 단계**, BE-67) — 8-1 · A-2 · A-3: 로그인 성공 시 CSRF 토큰 교체 · 로그아웃 시 삭제(화면은 요청마다 쿠키를 읽는다), 로그인한 뒤 계정이 비활성 · 삭제되면 다음 요청부터 401(CSRF 토큰이 없어도 401). 응답 형식 변경 없음 |
 | v0.19 | 2026-10-13 | 8-3 #4 마이그레이션 번호 표기 정리 — V14는 관리자 감사 로그(BE-68)가 써서 BE-42는 머지 직전의 다음 번호를 쓴다. API 변경 없음 |
+| v0.20 | 2026-10-14 | **성향 API 계약 (확장 단계, 7.6.4)** — 7장 후보 5개를 9장 P-1 ~ P-5로 확정: 문항 조회 · 응답 제출 · 내 결과 · 공유용 유형(공개) · 마이페이지. 4글자 코드 · 축 글자는 응답에 넣지 않고 유형은 `shareId`로 구분한다(#119). 응답은 5칸 `value`(0 ~ 4)로 받는다. 에러 코드 `PERSONALITY_RESULT_NOT_FOUND` · `PERSONALITY_TYPE_NOT_FOUND` 추가(1-5). 테이블은 ERD 8장(V15, #124) |
 
 ---
 
@@ -45,7 +46,7 @@
 | --- | --- |
 | 이름 | `NLNB_AID` |
 | 값 | `anonymous_user.id` (UUID) |
-| 발급 시점 | 체험 시작(`POST /cases/{caseId}/experience`) 때 쿠키가 없거나 DB에 없는 값이면 새로 발급 |
+| 발급 시점 | 체험 시작(`POST /cases/{caseId}/experience`) · (확장) 성향 테스트 제출(P-2) 때 쿠키가 없거나 DB에 없는 값이면 새로 발급 |
 | 속성 | `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/` |
 | 유효 기간 | 1년 (요구사항 15장 "익명 ID 유지 방식 · 기간" 결정 시 확정) |
 - **프론트와 API는 같은 도메인으로 배포한다**(6장 #2 확정, 기술 스택 8장). EC2의 Nginx가 프론트 빌드 파일을 서빙하고 `/api` 요청을 백엔드 컨테이너로 프록시하므로 `SameSite=Lax` 그대로 쓰고 CORS 설정은 필요 없다.
@@ -105,6 +106,8 @@ json
 | 404 | `FACTOR_NOT_FOUND` | (확장, 관리자 API) 판단 요소가 없음 | 상세 다시 불러오기 |
 | 409 | `DUPLICATE_TITLE` | (확장, 관리자 API) 사건 제목이 다른 사건과 겹침 | 입력 안내 |
 | 409 | `PUBLISH_NOT_READY` | (확장, 관리자 API) 공개 조건 미충족. `details`에 조건 코드 | 남은 조건 안내 (A-13) |
+| 404 | `PERSONALITY_RESULT_NOT_FOUND` | (확장, 성향 API) 성향 테스트 결과가 없음 (쿠키 없음 포함) | S-15 테스트 안내 |
+| 404 | `PERSONALITY_TYPE_NOT_FOUND` | (확장, 성향 API) 공유 주소의 유형이 없음 | 공유 결과 없음 안내 · 테스트 권유 |
 | 500 | `INTERNAL_ERROR` | 서버 오류 | 일반 오류 안내 |
 - "이미 제출함"과 "순서가 맞지 않음"을 따로 나누지 않고 `INVALID_STATE` 하나로 둔다. 화면이 할 일은 둘 다 "`currentStatus`의 화면으로 이동"으로 같기 때문이다.
 
@@ -633,11 +636,11 @@ API 1 · 2는 상태와 관계없이 부를 수 있다. 표에 없는 조합은 
 
 | 후보 | 용도 | 화면 | 관련 REQ |
 | --- | --- | --- | --- |
-| 성향 테스트 문항 조회 | 문항 · 선택지 목록 | S-15 | 112 |
-| 성향 테스트 응답 제출 | 응답 저장 → 4글자 코드 계산 · 결과 저장(익명 ID) | S-15 → S-16 | 112 · 113 · 117 |
-| 내 성향 결과 조회 | 현재 결과 · 축별 점수 | S-16 · S-17 | 113 · 127 |
-| 유형 설명 조회 (공개) | 공유 링크용. 개인 응답 · 점수 없음 | S-16 공유 | 116 |
-| 마이페이지 조회 | 성향 · 성향 변화 흐름 · 종합 성향 · 체험한 사건 목록 | S-17 | 119 · 127 |
+| ~~성향 테스트 문항 조회~~ | 9장 P-1로 확정 (v0.20) | S-15 | 112 |
+| ~~성향 테스트 응답 제출~~ | 9장 P-2로 확정 (v0.20) | S-15 → S-16 | 112 · 113 · 117 |
+| ~~내 성향 결과 조회~~ | 9장 P-3으로 확정 (v0.20) | S-16 · S-17 | 113 · 127 |
+| ~~유형 설명 조회 (공개)~~ | 9장 P-4로 확정 (v0.20) | S-16 공유 | 116 |
+| ~~마이페이지 조회~~ | 9장 P-5로 확정 (v0.20) | S-17 | 119 · 127 |
 | ~~관리자 검수~~ | 8-2로 옮김 (v0.17) | S-19 | 047 · 133 (BE-33) |
 
 - 판결 체험의 성향 갱신(REQ-118)은 별도 API 없이 API 13(비교 공개)이 `COMPLETED`로 바꿀 때 서버가 함께 처리하는 안을 제안한다.
@@ -1019,3 +1022,141 @@ API 1 · 2는 상태와 관계없이 부를 수 있다. 표에 없는 조합은 
 | 6 | 모델 원본 출력(`raw_output`) | ✅ 내려 주지 않는다. 필요하면 A-8에 쿼리 옵션으로 추가 (#111 리뷰, A 동의) | A 김해송 (S-19 상세) |
 | 7 | 관리자 OAuth(BE-40, D)와 체인 | 관리자 체인에 `oauth2Login` 자리 연결은 B, 성공 처리 · 허용 목록은 D (#108, WBS v1.9 7-2-1) | D 정민석 |
 
+---
+
+## 9. (확장) 성향 API (7.6.4)
+
+> 판결 성향 테스트(S-15 · S-16) · 공유 결과 · 마이페이지(S-17)용 API다. 테이블은 [ERD 8장](erd.md)(V15, #124), 채점 · 체험 성향 · 종합은 [성향 산식](personality-scoring.md), 문구는 [성향 테스트 콘텐츠](personality-test-content.md)를 따른다. 9-2 확인 항목은 구현 전에 A와 맞춘다.
+
+### 9-1. 공통
+
+- **익명 ID 기준**(1-2). 응답 제출(P-2)만 쿠키가 없으면 익명 ID를 새로 발급한다. 조회(P-3 · P-5)는 쿠키가 없으면 "결과 없음"으로 답한다.
+- **4글자 코드(INTP 등) · 축 글자(E · I 등)는 어떤 응답에도 넣지 않는다**(상표 우려, #119). 유형은 `shareId`(영숫자 6 ~ 16자, 대소문자 구분, 시드로 고정)로 구분한다. 공유 주소는 `/test/types/{shareId}`.
+- 축 키는 `factor.value_axis`와 같은 네 값(`APOLOGY_SINCERITY` · `FAULT_STANDARD` · `PRINCIPLE_RELATION` · `ORDER_OPPORTUNITY`)이다. 축 이름 · 양쪽 성향 이름(행동증명형 · 마음신뢰형 등)은 화면 상수로 둔다.
+- `axisScores` 값은 **0 ~ 1의 관대 쪽 비중**이다(성향 산식 2-3 · 3-3). 엄격 쪽 비중은 `1 − 값`.
+
+**유형 공통 형식** (P-2 ~ P-5의 `type`)
+
+json
+
+```json
+{  "shareId": "Qm7xK2pa",  "name": "그럴 수도 있지형",  "character": "NAERO",  "tolerance": 4,  "oneLiner": "…",  "meme": "\"그럴 수도 있지\"",  "dailyDescription": "…",  "verdictDescription": "…",  "imageUrl": "/images/characters/personality/16.webp"}
+```
+
+| 필드 | 설명 |
+| --- | --- |
+| `character` | `NAERO`(내로) · `NAMBUL`(남불). 화면 이름은 화면 상수 |
+| `tolerance` | 관용 지수 0 ~ 4 (높을수록 좋은 것이 아니다, FR-8-4) |
+| `dailyDescription` · `verdictDescription` | ① 일상 가치관 · ② 판결 연계 설명 |
+| `imageUrl` | 캐릭터 이미지 경로. 아직 없으면 `null` (화면은 대체 이미지) |
+
+**결과 공통 형식** (P-2 · P-3 · P-5의 내 결과)
+
+json
+
+```json
+{  "type": { "shareId": "Qm7xK2pa", "name": "그럴 수도 있지형", "…": "…" },  "axisScores": { "APOLOGY_SINCERITY": 0.75, "FAULT_STANDARD": 0.625, "PRINCIPLE_RELATION": 1.0, "ORDER_OPPORTUNITY": 0.5 },  "testedAt": "2026-10-14T14:00:00+09:00"}
+```
+
+| # | 메서드 | 경로 | 설명 | 화면 |
+| --- | --- | --- | --- | --- |
+| P-1 | GET | `/personality/questions` | 문항 목록 | S-15 |
+| P-2 | POST | `/personality/results` | 응답 제출 → 결과 저장 | S-15 → S-16 |
+| P-3 | GET | `/personality/results/me` | 내 현재 결과 | S-16 |
+| P-4 | GET | `/personality/types/{shareId}` | 공유용 유형 설명 (공개) | 공유 결과 |
+| P-5 | GET | `/my-page` | 마이페이지 (테스트 결과 · 판결 성향 · 체험 목록) | S-17 |
+
+---
+
+### P-1. 문항 목록 — `GET /personality/questions`
+
+**응답 200**
+
+json
+
+```json
+{  "questions": [    { "id": 1, "scenario": "FRIEND", "content": "약속을 세 번이나 어긴 친구가 이번엔 진심으로 미안하다며 고개를 숙인다.", "optionA": "다음 약속을 지키는 걸 보고 나서 마음을 풀겠다", "optionB": "진심이 느껴지니 그 말을 믿고 넘어가겠다" }  ]}
+```
+
+- 활성 문항(`is_active`)만, 출제 순서(`display_order`)대로 준다.
+- 문항마다 5칸(매우 A · 조금 A · 보통 · 조금 B · 매우 B)이고 "매우 · 조금 · 보통"은 화면이 붙인다. **축 · 글자 · 점수는 내려 주지 않는다**(채점은 서버, 9-1).
+- `scenario`: `FRIEND` · `FAMILY` · `WORK` · `NEIGHBOR` (화면 칩 표시용).
+
+---
+
+### P-2. 응답 제출 — `POST /personality/results`
+
+**요청**
+
+json
+
+```json
+{  "answers": [    { "questionId": 1, "value": 0 },    { "questionId": 2, "value": 3 }  ]}
+```
+
+- `value`: 0 매우 A · 1 조금 A · 2 보통 · 3 조금 B · 4 매우 B. 서버는 그 문항의 `display_order = value + 1`인 선택지로 바꿔 채점한다(성향 산식 2장).
+
+**응답 201**: 결과 공통 형식(9-1).
+
+- 쿠키가 없거나 DB에 없는 익명 ID면 `anonymous_user`를 만들고 `Set-Cookie`로 내려준다(API 2와 같음).
+- **재응시**: 이전 현재 결과는 이력으로 남기고 새 결과가 현재 결과가 된다(성향 산식 5장). 같은 사용자의 제출이 동시에 와도 차례로 처리되고, 나중에 처리된 것이 현재 결과다.
+- 저장하는 것은 유형 · 축 점수 · 답(`questionId` · 선택지 ID)이다. 응답에는 답을 다시 넣지 않는다.
+
+| 거절 | 조건 |
+| --- | --- |
+| 400 `VALIDATION_ERROR` | `answers` 없음, 활성 문항 중 빠진 문항 · 같은 문항 두 번, 없거나 비활성인 `questionId`, `value`가 0 ~ 4 정수가 아님(소수는 1-1 숫자 규칙대로 거절) |
+
+---
+
+### P-3. 내 현재 결과 — `GET /personality/results/me`
+
+**응답 200**: 결과 공통 형식(9-1).
+
+| 거절 | 조건 |
+| --- | --- |
+| 404 `PERSONALITY_RESULT_NOT_FOUND` | 테스트한 적 없음 (쿠키 없음 포함) → 화면은 S-15 안내 |
+
+---
+
+### P-4. 공유용 유형 설명 — `GET /personality/types/{shareId}`
+
+**응답 200**: 유형 공통 형식(9-1)만. **개인 응답 · 축 점수 · 체험 기록은 넣지 않는다**(FR-8-6, REQ-116). 쿠키를 읽지 않는다.
+
+| 거절 | 조건 |
+| --- | --- |
+| 404 `PERSONALITY_TYPE_NOT_FOUND` | 없는 `shareId`. 형식이 맞지 않는 값(영숫자 6 ~ 16자가 아님)도 400이 아니라 404로 같게 답한다 |
+
+---
+
+### P-5. 마이페이지 — `GET /my-page`
+
+**응답 200**
+
+json
+
+```json
+{  "personality": { "type": { "shareId": "Qm7xK2pa", "…": "…" }, "axisScores": { "…": "…" }, "testedAt": "2026-10-14T14:00:00+09:00" },  "judgmentPersonality": {    "axisScores": { "APOLOGY_SINCERITY": 0.75, "FAULT_STANDARD": 0.11, "PRINCIPLE_RELATION": 0.83, "ORDER_OPPORTUNITY": null },    "type": null,    "experienceCount": 3  },  "history": [    { "caseId": 1, "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건", "completedAt": "2026-10-14T15:00:00+09:00", "axisScores": { "APOLOGY_SINCERITY": 1.0, "FAULT_STANDARD": 0.0, "PRINCIPLE_RELATION": 1.0, "ORDER_OPPORTUNITY": null } }  ],  "experiences": [    { "caseId": 1, "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건", "crimeType": "MURDER", "status": "COMPLETED", "attemptNo": 1, "updatedAt": "2026-10-14T15:00:00+09:00" }  ]}
+```
+
+| 필드 | 설명 |
+| --- | --- |
+| `personality` | 테스트 현재 결과(결과 공통 형식). 테스트 전이면 `null` → 화면은 테스트 안내. **대표 캐릭터는 이 유형**(성향 산식 4장) |
+| `judgmentPersonality` | 종합 판결 성향(성향 산식 4장). 각 사건의 **첫 회차**만, 축마다 체험별 축 점수 평균. 값이 없는 축은 `null`("체험 자료 없음"). `type`은 **네 축 모두 값이 있을 때만** 있고 아니면 `null`. 완료한 체험이 없거나 네 축 모두 `null`이면 `judgmentPersonality` 자체가 `null`("종합 없음") |
+| `history` | 성향 변화 흐름. 각 사건의 첫 회차 체험별 축 점수(값이 없는 축은 `null`), 완료 순 |
+| `experiences` | 체험한 사건. 사건마다 최근 회차 하나, 최근 순. `status`로 결과 다시 보기(`COMPLETED`) · 이어 하기를 나눈다(1-6) |
+
+- 쿠키가 없거나 기록이 없으면 `404`가 아니라 **빈 마이페이지**(`personality`·`judgmentPersonality` `null`, 목록 빈 배열)를 `200`으로 준다. 마이페이지는 "아직 없음"을 안내하는 화면이기 때문이다.
+- `judgmentPersonality` · `history`는 체험 성향 저장(7.6.7, BE-64)이 붙은 뒤부터 채워진다. 그 전에는 각각 `null` · 빈 배열이다.
+- 판결 체험 중(S-03 ~ S-08)에 성향을 보여 주지 않는 규칙(FR-8-5)은 화면이 지킨다. 이 API는 마이페이지에서만 부른다.
+
+---
+
+### 9-2. 성향 API 확인 항목
+
+| # | 항목 | 이 계약의 제안 | 확인할 사람 |
+| --- | --- | --- | --- |
+| 1 | 목 API와 달라지는 점 | 응답에서 `typeCode` 제거(`type.shareId`로 구분), 문항의 `a` · `b`(글자 포함) → `optionA` · `optionB`(문장만), 유형의 `daily` · `verdict` → `dailyDescription` · `verdictDescription`, `character`는 `NAERO` · `NAMBUL` 코드, 결과에 `testedAt` 추가, 내 결과 없음은 `null` 대신 404 | A 김해송 (목 → 실제 API 전환) |
+| 2 | 마이페이지 경로 | `GET /my-page` 하나로 묶는다(화면 한 번 진입에 한 번 호출) | A |
+| 3 | `experiences` 범위 | 사건마다 최근 회차 하나. 회차별 전체 이력이 필요하면 추가 | A |
+| 4 | 이미지 경로 | `/images/characters/personality/{번호}.webp`, 번호는 성향 이미지 번호표 기준. **번호는 유형에 고정**(공유 미리보기 · 캐시가 깨지지 않게, #121 리뷰) | A |
+| 5 | `shareId` 값 | 16개를 시드에 고정값으로 넣는다(바꾸면 공유한 링크가 깨진다). 목 API의 해시 값과는 다르다 | B (시드) |
