@@ -1,11 +1,11 @@
 package com.team2.project.judgment.repository;
 
-import org.springframework.data.jpa.repository.Modifying;
 import com.team2.project.judgment.domain.Judgment;
 import com.team2.project.judgment.domain.SubjectType;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 

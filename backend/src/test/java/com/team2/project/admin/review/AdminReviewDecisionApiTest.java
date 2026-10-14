@@ -174,6 +174,32 @@ class AdminReviewDecisionApiTest extends ApiIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("A-10: 교체로 내려간 승인 후보도 반려할 수 있다(감사 로그에 승인 이력), 사유는 앞뒤 공백을 자른 값으로 검증 · 저장")
+	void reject_replacedApproved_andStripsReason() throws Exception {
+		long first = candidate("AI", false);
+		long second = candidate("AI", false);
+		perform(post(judgmentUrl(first) + "/approve")).andExpect(status().isOk());
+		perform(post(judgmentUrl(second) + "/approve")).andExpect(status().isOk());
+		assertThat(reviewStatusOf(first)).isEqualTo("APPROVED");
+
+		perform(post(judgmentUrl(first) + "/reject").contentType(MediaType.APPLICATION_JSON)
+				.content("{\"reason\":\"  다시 보니 양형 근거 부족  \"}"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.reviewStatus").value("REJECTED"))
+			.andExpect(jsonPath("$.isPublished").value(false))
+			.andExpect(jsonPath("$.reviewNote").value("다시 보니 양형 근거 부족"));
+		assertThat(publishedAiIds()).containsExactly(second);
+		assertThat(auditActions()).containsExactly("JUDGMENT_APPROVE", "JUDGMENT_APPROVE", "JUDGMENT_REJECT");
+
+		long padded = candidate("COURT", false);	// 앞뒤 공백 포함 504자 → 자르면 500자라 통과
+		perform(post(judgmentUrl(padded) + "/reject").contentType(MediaType.APPLICATION_JSON)
+				.content("{\"reason\":\"  " + "가".repeat(500) + "  \"}"))
+			.andExpect(status().isOk());
+		assertThat(jdbcTemplate.queryForObject("SELECT length(review_note) FROM judgment WHERE id = ?", Integer.class, padded))
+			.isEqualTo(500);
+	}
+
+	@Test
 	@DisplayName("A-10: 공개 중 후보는 409 CANDIDATE_PUBLISHED, 이미 반려한 후보는 409 CANDIDATE_REJECTED, 사유 빈 값 · 500자 초과는 400")
 	void reject_rejectedStates() throws Exception {
 		long published = candidate("AI", true);
