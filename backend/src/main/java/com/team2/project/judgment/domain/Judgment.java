@@ -88,8 +88,32 @@ public class Judgment {
 
 	private boolean isPublished;				// USER는 항상 true, AI · COURT는 검수 후 true
 
+	// 검수 기록 (V16, AI · COURT만). NULL이면 검수 기록 없음 — 화면 상태는 reviewState()로 본다
+	@Enumerated(EnumType.STRING)
+	private ReviewStatus reviewStatus;		// APPROVED · REJECTED만 저장한다
+
+	private Long reviewedByAdminId;
+
+	private Instant reviewedAt;
+
+	private String reviewNote;				// 반려 사유 (REJECTED일 때만)
+
 	@CreationTimestamp
 	private Instant createdAt;
+
+	/**
+	 * 검수 화면의 후보 상태 (API 명세 8-2). 검수 기록이 있으면 그 값, 없으면 공개 중이면 승인 · 아니면 대기.
+	 * 시드 · 파이프라인은 검수 칸을 채우지 않으므로, 시드로 공개한 판결도 승인으로 보인다. USER는 null
+	 */
+	public ReviewStatus reviewState() {
+		if (subjectType == SubjectType.USER) {
+			return null;
+		}
+		if (reviewStatus != null) {
+			return reviewStatus;
+		}
+		return isPublished ? ReviewStatus.APPROVED : ReviewStatus.PENDING;
+	}
 
 	/** 사용자 사전 판단 (형량 구간만, 형벌 값 없음) */
 	public static Judgment userPre(Experience experience, SentenceRangeOption rangeOption) {

@@ -13,6 +13,12 @@ import org.springframework.data.repository.query.Param;
  */
 public interface JudgmentRepository extends JpaRepository<Judgment, Long> {
 
+	/** 관리자 검수(A-6): 사건의 AI · 재판부 판결 후보 전부, 최신 순 (반려 이력 포함) */
+	@Query("select j from Judgment j where j.legalCase.id = :caseId "
+		+ "and j.subjectType in (com.team2.project.judgment.domain.SubjectType.AI, com.team2.project.judgment.domain.SubjectType.COURT) "
+		+ "order by j.createdAt desc, j.id desc")
+	List<Judgment> findCandidatesByCaseId(@Param("caseId") Long caseId);
+
 	/** 내 사전 판단 (API 14에서 처음 응답) */
 	@Query("select j from Judgment j where j.experience.id = :experienceId "
 		+ "and j.subjectType = com.team2.project.judgment.domain.SubjectType.USER "

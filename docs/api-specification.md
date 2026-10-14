@@ -24,6 +24,7 @@
 | v0.20 | 2026-10-14 | **성향 API 계약 (확장 단계, 7.6.4)** — 7장 후보 5개를 9장 P-1 ~ P-5로 확정: 문항 조회 · 응답 제출 · 내 결과 · 공유용 유형(공개) · 마이페이지. 4글자 코드 · 축 글자는 응답에 넣지 않고 유형은 `shareId`로 구분한다(#119). 응답은 5칸 `value`(0 ~ 4)로 받는다. 에러 코드 `PERSONALITY_RESULT_NOT_FOUND` · `PERSONALITY_TYPE_NOT_FOUND` 추가(1-5). 테이블은 ERD 8장(V15, #124) |
 | v0.21 | 2026-10-14 | #126 리뷰 반영 — P-5 `judgmentPersonality.type`이 값이 있을 때 유형 공통 형식(9-1)임을 명시, P-2 익명 ID는 요청 검증 통과 뒤에만 발급, 1-5 성향 404 두 행을 `FACTOR_NOT_FOUND` 아래로 이동 |
 | v0.22 | 2026-10-14 | #128 리뷰 반영 — P-5 `judgmentPersonality.experienceCount`는 **성향 기여가 저장된 첫 회차 체험 수**(평균을 낸 체험과 같은 집합, 축 자료가 모두 비어도 센다)임을 명시. 형식 변경 없음 |
+| v0.23 | 2026-10-14 | 검수 조회 API 구현 반영 (BE-41, V16) — A-8 `reviewStatus` · `reviewedBy` · `reviewedAt` · `reviewNote`의 출처 명시(검수 기록이 없으면 공개 = 승인, 아니면 대기), 8-3 #4 · #5 확정(검수 칸은 `judgment`, 검수자는 관리자 ID). 형식 변경 없음 |
 
 ---
 
@@ -886,7 +887,9 @@ API 1 · 2는 상태와 관계없이 부를 수 있다. 표에 없는 조합은 
 - 검수 정보(`reviewStatus` · `reviewedBy` · `reviewedAt` · `reviewNote`)는 AI · 재판부 후보 모두 최상위에 둔다. `generation`(생성 조건)은 AI 후보일 때만 있고 재판부 후보는 `null`.
 - 판단 요소별 방향 · 근거는 `judgment.factors[]`(`direction` · `evidence`)에 있다.
 - `raw_output`(모델 원본 출력)은 크기가 커서 내려 주지 않는다 ⚠️.
-- `reviewNote`는 반려 사유(A-10). 저장 위치는 BE-42 마이그레이션에서 정한다(8-3).
+- `reviewNote`는 반려 사유(A-10). `judgment.review_note`(V16, ERD v1.22)에 둔다.
+- `reviewStatus`는 `judgment.review_status`가 있으면 그 값, 없으면 공개 중이면 `APPROVED` · 아니면 `PENDING`이다(시드 · 파이프라인은 검수 칸을 채우지 않는다). A-5 대기 수 · A-6 후보 목록도 같은 규칙이다.
+- `reviewedBy`는 관리자 화면에서 검수했으면 그 관리자 이메일, 그 전 시드 · 오프라인 검수는 `ai_generation.reviewed_by`(이름)다. `reviewedAt`도 같은 순서로 고른다.
 
 | 거절 | 조건 |
 | --- | --- |
@@ -1019,8 +1022,8 @@ API 1 · 2는 상태와 관계없이 부를 수 있다. 표에 없는 조합은 
 | 1 | 공개 뒤 판결 교체 · 내용 수정 | 막는다(409). 바꿔야 하면 새 사건으로 적재 | 팀 |
 | 2 | 공개 취소 | 이번 단계에 두지 않는다 | 팀 |
 | 3 | `REVIEW` 상태 | ✅ 관리자가 처음 바꾸는 순간(A-9 ~ A-12) 자동으로 `DRAFT → REVIEW`. "누가 손대기 시작한 사건"을 목록에서 구분하는 용도. `REVIEW → DRAFT`로 되돌리는 경로는 두지 않는다 (#111 리뷰, A 동의) | A 김해송 (S-19 목록) |
-| 4 | 재판부 후보 검수 상태 · 반려 사유 저장 | 재판부 판결에는 검수 상태 컬럼이 없고(`ai_generation.review_status`는 AI만), 반려 사유 컬럼도 없다. BE-42 마이그레이션(번호는 머지 직전 develop의 다음 번호, WBS R17)에서 정한다. 응답 필드(최상위 `reviewStatus` · `reviewedBy` · `reviewedAt` · `reviewNote`)는 저장 방식과 관계없이 이대로 둔다 | B (BE-42) |
-| 5 | 검수자 기록 | `ai_generation.reviewed_by`(varchar 50)에 관리자 이메일을 넣으면 길이가 모자랄 수 있다. BE-42에서 관리자 ID로 바꿀지 정한다 | B (BE-42) |
+| 4 | 재판부 후보 검수 상태 · 반려 사유 저장 | ✅ V16(BE-41)에서 `judgment`에 `review_status` · `reviewed_by_admin_id` · `reviewed_at` · `review_note`를 두어 AI · 재판부를 같은 방식으로 검수한다(ERD v1.22). 응답 필드는 그대로 | B |
+| 5 | 검수자 기록 | ✅ 관리자 ID(`judgment.reviewed_by_admin_id`)로 남긴다. `ai_generation.reviewed_by`(이름)는 예전 기록용으로 둔다 | B |
 | 6 | 모델 원본 출력(`raw_output`) | ✅ 내려 주지 않는다. 필요하면 A-8에 쿼리 옵션으로 추가 (#111 리뷰, A 동의) | A 김해송 (S-19 상세) |
 | 7 | 관리자 OAuth(BE-40, D)와 체인 | 관리자 체인에 `oauth2Login` 자리 연결은 B, 성공 처리 · 허용 목록은 D (#108, WBS v1.9 7-2-1) | D 정민석 |
 
