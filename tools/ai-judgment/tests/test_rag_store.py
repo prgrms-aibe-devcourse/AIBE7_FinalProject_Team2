@@ -344,7 +344,7 @@ class SqlTest(unittest.TestCase):
             sql = rag_store.build_sql(out)
         law, lbox = [r for r in sql.split("INSERT INTO")[1:]]
         self.assertIn("false, NULL, ", law)
-        self.assertIn("true, 'LBox Open 라이선스 확인 전", lbox)
+        self.assertIn("true, 'LBox Open 사용 불가", lbox)
         self.assertIn("사용 보류 1건: 출처 LBOX", sql)
 
     def test_hold_reason_precedentAndSourceHoldsCombine(self):
@@ -366,7 +366,9 @@ class SqlTest(unittest.TestCase):
             sql = rag_store.build_sql(out, candidates=latest)
         self.assertEqual(sql.count("INSERT INTO rag_precedent"), 1)
         self.assertNotIn("sentencing_guideline", sql)  # 양형기준 미상 → guideline_id NULL
-        self.assertIn('"guidelineByIncidentDate": "2013 수정 (2013. 4. 22. 의결)"', sql)
+        # 버전은 검색할 때 발생일로 정한다(BE-54). 옛 참고 값은 빼고 기준 종류만 남긴다
+        self.assertNotIn("guidelineByIncidentDate", sql)
+        self.assertIn('"guidelineBasis": "INCIDENT_DATE"', sql)
 
     def test_load_holds_validatesFormat(self):
         with tempfile.TemporaryDirectory() as tmp:

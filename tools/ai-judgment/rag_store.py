@@ -44,8 +44,10 @@ EMBEDDING_MODEL = "gemini-embedding-001"
 EMBEDDING_DIM = 3072
 TEXT_LIMITS = {"factsSummary": 2000, "sentencingReason": 4000}
 # 출처별 사용 보류 (on_hold). 행은 넣되 검색에서 뺀다. 확인되면 여기서 지우고 sql을 다시 만든다
+# LBox Open은 라이선스 문의 결과 사용 불가(2026-10-12)라 R__40에 넣지 않는다(공유본 work/rag-store에는 law.go.kr만 있다, BE-54).
+# 옛 정리 결과(out/rag)로 다시 만들어도 검색에 쓰이지 않게 보류로 남겨 둔다
 SOURCE_HOLDS = {
-    "LBOX": "LBox Open 라이선스 확인 전 (데이터셋 카드 CC BY-NC 4.0 · 논문 CC BY-NC-ND 4.0, 2026-10-12 팀 결정)",
+    "LBOX": "LBox Open 사용 불가 (라이선스 문의 결과, 2026-10-12 팀 결정)",
 }
 # 판례별 사용 보류 {키: 사유}. 어떤 판례가 있는지는 비공개 저장소에만 두므로 공개 코드에 목록을 적지 않는다.
 # 비공개 저장소 work/rag-precedent-holds.json을 sql --holds로 읽는다 (예: 살인 관련 공소사실 무죄 판결, 2026-10-12 팀 결정)
@@ -409,6 +411,10 @@ def insert_sql(precedent, embedding):
         flags["notes"] = result["notes"]
     if precedent.get("usedFreeTier"):
         flags["usedFreeTier"] = True
+    # 양형기준 버전 기준일 (docs/sentencing-guideline-rag.md 6장). 판결문에 공소제기일이 거의 없어 발생일로 대신한다.
+    # 버전 자체(guideline_id)는 비워 두고 검색할 때 이 날짜로 정한다 — R__40이 R__41(양형기준 버전)보다 먼저 실행되기 때문이다 (BE-54)
+    flags.pop("guidelineByIncidentDate", None)  # 옛 후보 스크립트의 참고 값(시행일 표 3개뿐이라 일부 틀림, 7장)
+    flags["guidelineBasis"] = "INCIDENT_DATE" if precedent.get("incidentDate") else None
     charge = (result.get("chargeName") or "").strip()
     if charge and not MURDER_CHARGE.search(charge):
         # 팀 결정(2026-10-10): 빼지 않고 확인 필요로만 표시한다 (판례 조건 8-1의 대상 죄명이 아님)

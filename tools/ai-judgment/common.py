@@ -27,6 +27,9 @@ NO_TERM_PENALTIES = ("DEATH", "LIFE")
 
 DIRECTIONS = ("UP", "DOWN")
 
+# legal_case.crime_type → sentencing_guideline.crime_category (양형기준 버전 고르기, BE-54). 범죄 유형을 넓힐 때 함께 늘린다
+GUIDELINE_CATEGORIES = {"MURDER": "살인범죄"}
+
 # 판단 요소 가치관 축 (ERD factor.value_axis, BE-47). null = 어느 축에도 맞지 않음(성향 계산 제외).
 # 축이 바뀌면 함께 고친다: Java ValueAxis · V9 CHECK(chk_factor_value_axis) · 추출기 프롬프트(extract_system.md)
 VALUE_AXES = ("APOLOGY_SINCERITY", "FAULT_STANDARD", "PRINCIPLE_RELATION", "ORDER_OPPORTUNITY")

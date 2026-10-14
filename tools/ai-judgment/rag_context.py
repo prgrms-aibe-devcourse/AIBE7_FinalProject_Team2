@@ -20,7 +20,7 @@ import copy
 import json
 import math
 
-from common import PENALTY_NAMES, format_months, format_won
+from common import GUIDELINE_CATEGORIES, PENALTY_NAMES, format_months, format_won
 from llm import LLMError, embed
 from rag_store import case_number_hashes
 
@@ -28,8 +28,6 @@ EMBEDDING_MODEL = "gemini-embedding-001"
 EMBEDDING_DIM = 3072
 QUERY_MAX_CHARS = 6000  # gemini-embedding-001 입력 한도(2,048 토큰) 안으로 자른다
 
-# legal_case.crime_type → sentencing_guideline.crime_category. 범죄 유형을 넓힐 때 함께 늘린다(WBS 7.5.3은 살인만)
-GUIDELINE_CATEGORIES = {"MURDER": "살인범죄"}
 GUIDELINE_RANGE_SECTION = "형량범위"
 GUIDELINE_SEARCH_SECTIONS = ("양형인자", "양형인자의 정의", "유형의 정의")
 
@@ -140,6 +138,11 @@ def build_query_sql(vector, crime_type, category, at, hashes, options):
     sections = "ARRAY[" + ",".join(sql_text(s) for s in GUIDELINE_SEARCH_SECTIONS) + "]::varchar[]"
     version_sql = (f"sentencing_guideline_at({sql_text(category)}, {sql_text(at)}::date)" if category and at
                    else "NULL::bigint")
+    # 판례의 양형기준 버전은 검색할 때 판례 발생일로 정한다. 시드 실행 순서(R__40 판례 → R__41 양형기준)상 판례를 넣을 때는
+    # 버전 행이 아직 없을 수 있어 rag_precedent.guideline_id를 비워 두기 때문이다(값이 있으면 그것을 쓴다)
+    precedent_version_sql = (f"coalesce(p.guideline_id, CASE WHEN p.incident_date IS NULL THEN NULL "
+                             f"ELSE sentencing_guideline_at({sql_text(category)}, p.incident_date) END)" if category
+                             else "p.guideline_id")
     return f"""WITH q AS (SELECT {sql_vector(vector)} AS v),
 g AS (SELECT {version_sql} AS id)
 SELECT json_build_object(
@@ -154,7 +157,7 @@ SELECT json_build_object(
                                         {float(guideline['minScore'])}) f
               JOIN rag_guideline r ON r.id = f.chunk_id),
   'precedents', (SELECT coalesce(json_agg(json_build_object('id', p.id, 'caseGroup', p.case_group, 'score', s.score,
-                   'guidelineId', p.guideline_id, 'chargeName', p.charge_name, 'courtLevel', p.court_level,
+                   'guidelineId', {precedent_version_sql}, 'chargeName', p.charge_name, 'courtLevel', p.court_level,
                    'penaltyType', p.penalty_type, 'prisonMonths', p.prison_months, 'suspensionMonths', p.suspension_months,
                    'fineAmount', p.fine_amount, 'sentencingFactors', p.sentencing_factors, 'factsSummary', p.facts_summary,
                    'sentencingReason', p.sentencing_reason) ORDER BY s.score DESC, p.id), '[]'::json)

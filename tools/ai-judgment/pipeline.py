@@ -1074,7 +1074,7 @@ def stage_load(config, state, log, apply=None):
             sources = resolve_sources(source["sources"], overrides, config["finalSourceIndex"])
             incident_date = config.get("incidentDate") or source.get("incidentDate")
             parts.append(build_case_sql(case, report, sources, source_org=cfg["sourceOrg"], source_note=cfg["sourceNote"],
-                                        incident_date=incident_date))
+                                        incident_date=incident_date, indictment_date=config.get("indictmentDate")))
         except CaseSeedError as e:
             raise PipelineError(str(e))
 

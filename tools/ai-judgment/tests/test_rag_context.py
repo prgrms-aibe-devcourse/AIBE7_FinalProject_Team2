@@ -91,11 +91,16 @@ class RagContextTest(unittest.TestCase):
         self.assertIn("rag_precedent_search(", sql)
         self.assertIn("'MURDER'", sql)
         self.assertIn("::vector(3072)", sql)
+        # 판례 버전은 검색할 때 판례 발생일로 정한다 (시드 순서상 rag_precedent.guideline_id가 비어 있을 수 있다)
+        self.assertIn("coalesce(p.guideline_id, CASE WHEN p.incident_date IS NULL THEN NULL "
+                      "ELSE sentencing_guideline_at('살인범죄', p.incident_date) END)", sql)
 
     def test_query_sql_without_date_skips_guideline(self):
         sql = build_query_sql(VECTOR, "MURDER", "살인범죄", None, [], options_with(None))
         self.assertIn("SELECT NULL::bigint AS id", sql)
         self.assertIn("ARRAY[]::text[]", sql)
+        sql = build_query_sql(VECTOR, "FRAUD", None, "2014-03-01", [], options_with(None))  # 양형기준 분류가 없는 유형
+        self.assertIn("'guidelineId', p.guideline_id,", sql)
 
     def test_query_text_is_facts_only(self):
         text = query_text(self.case)

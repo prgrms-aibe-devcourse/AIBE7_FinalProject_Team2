@@ -190,7 +190,12 @@ class CaseSeedSqlTest(unittest.TestCase):
     def test_build_case_sql_incident_date(self):
         case = listing_case()
         sources = resolve_sources(SOURCES, [{}, {"caseNumber": "2099노2"}])
-        self.assertIn("NULL, '2099-01-10'::date,", build_case_sql(case, report_for(case), sources, incident_date="2099-01-10"))
+        # 양형기준 버전은 기준일(공소제기일 → 없으면 발생일)로 DB 함수가 고른다 (BE-54)
+        self.assertIn("sentencing_guideline_at('살인범죄', '2099-01-10'::date), '2099-01-10'::date,",
+                      build_case_sql(case, report_for(case), sources, incident_date="2099-01-10"))
+        self.assertIn("sentencing_guideline_at('살인범죄', '2099-02-01'::date), '2099-01-10'::date,",
+                      build_case_sql(case, report_for(case), sources, incident_date="2099-01-10",
+                                     indictment_date="2099-02-01"))
         self.assertIn("NULL, NULL,", build_case_sql(case, report_for(case), sources))
         with self.assertRaises(CaseSeedError):
             build_case_sql(case, report_for(case), sources, incident_date="2099/01/10")
