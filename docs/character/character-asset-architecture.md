@@ -18,7 +18,7 @@
 | v0.12 | 2026-10-14 | REQ-128 팀 결정 반영 — 로딩 연출은 하고 문구는 중의적으로("AI 판결을 기다리는 중"), 4-1 · 4-2 · 5-2 GUARDRAILS · 7-3 #15 ✅. 로딩 시간 초안(최소 1초, 늦으면 반복) |
 
 > 캐릭터 **결정**은 [캐릭터 인수인계](character-main-handover.md) 2-1절(10/13 변경)과 [성향 테스트 콘텐츠](../personality-test-content.md) 6장이 기준이다. 이 문서는 그 결정을 **어떤 단위로 나눠 만들고, 어떻게 조합하고, 어디에 두는지**만 정한다.
-> 기획 원문은 `Claude outputs/character-law-ai-judge-plan.md` v0.3(커밋 안 함, 이하 "기획")이다. 이 문서에 필요한 내용은 옮겨 적었다. 프롬프트 원문은 `Claude outputs/naero_nambul_main_image_prompts.md`(메인 이미지 최종) · `naero_nambul_sheet_prompts_deformation11.md`(데포르메 11종)다.
+> 기획 원문은 `Claude outputs/character/plan/character-law-ai-judge-plan.md` v0.3(커밋 안 함, 이하 "기획")이다. 이 문서에 필요한 내용은 옮겨 적었다. 프롬프트 원문은 `Claude outputs/character/prompts/naero_nambul_main_image_prompts.md`(메인 이미지 최종) · `naero_nambul_sheet_prompts_deformation11.md`(데포르메 11종)다.
 > **기준 시트가 나왔다(10/13).** 생김새 설명(IDENTITY 블록, 5-1)은 2-1의 기준 시트 · 스탠딩 일러스트를 기준으로 한다. 원본 PNG는 레포 밖(`~/Documents/NaeLawNamBul/character/`(시트는 `sheets/`, 스탠딩은 `standing/`))에 둔다.
 > ⚠️ 표시는 팀 확인이 필요한 항목이다(7-3에 모음).
 

@@ -8,6 +8,7 @@
 | v0.2 | 2026-10-14 | 항목별 **예시 프롬프트**(5장, 프롬프트 모음 9장 v2 기준 · 참조 이미지 첨부형) 추가 |
 | v0.3 | 2026-10-14 | A1 · A2 · A3 1차 생성 결과 · 후속 보완점 기록 |
 | v0.4 | 2026-10-14 | 로 스탠딩 빈손(A4 추가, 봉투는 `deliver`만), B1 `idle`은 A4 변환만 |
+| v0.5 | 2026-10-14 | 수정 항목 R1 ~ R3 추가, 지금 이미지는 샘플(모델 교체 후 재생성) |
 
 > 형식 · 이름 규칙 · 검수 기준은 [캐릭터 에셋 아키텍처](character-asset-architecture.md)가 기준이다(시트 2-2 · 장면 · 감정 코드 3-2 · 상황 4-1 · 크기 6-5 · 검수 7-2). 이 문서는 **무엇을 몇 장 만들고 어디까지 했는지**만 적는다.
 > 캐릭터 설정은 [캐릭터 프로필 · 세계관](character-profile-worldview.md), 성향 이미지 번호는 [성향 이미지 번호표](personality-image-numbers.md)가 기준이다.
@@ -15,6 +16,8 @@
 > 원본 PNG는 레포 밖 `~/Documents/NaeLawNamBul/character/`(시트는 `sheets/`, 스탠딩은 `standing/`)에 둔다. 웹용 webp만 `frontend/public/images/characters/`에 넣는다.
 
 **상태 표기**: ⬜ 대기 · 🟨 생성 중 · 🟦 검수 중 · ✅ 완료
+
+> **지금 만드는 이미지는 샘플이다.** 현재 생성 모델이 프롬프트를 그대로 살리지 못하는 경우가 많아 화면 · 흐름 확인용 샘플로 쓰고, 더 좋은 모델로 바꾸면 같은 프롬프트로 다시 만든다. ✅도 "샘플 기준 완료"라는 뜻이다.
 
 ---
 
@@ -47,6 +50,9 @@
 | A2 | 로(법전) 스탠딩 | 1 | 투명 PNG | (1차는 봉투를 든 자세로 생성 → A4에서 빈손으로 다시). 파일 `standing_law-book.png`. **10/14 생성**(971 × 1619) — 떠 있는 법전 · 표지 정면 OK. 후속: 옷깃 안 회갈색 마네킹 목(`#8B7457`) 정리, 구두가 갈색 | 🟦 검수 중 |
 | A3 | 키 비교 시트 | 1 | 시트 | 내로 120 · 남불 120 · 저울 230 · 법봉 190 · 법전 210, 같은 바닥선. 기존 내로 · 남불 시트의 키 칸(남불 1.5배)은 쓰지 않는다. **10/14 v1** `character-sheet_height_v1.png` — 로 셋 상대 비율 · 법봉 떡대 OK. 후속: 로가 내로 · 남불 대비 약 8 ~ 10% 큼(저울 약 2.07배 · 목표 1.92), 법전이 옷깃에 얹힘(떠 있지 않음), 숫자 라벨이 이미지에 들어감 | 🟨 재생성 |
 | A4 | 로 스탠딩 **빈손 버전** (저울 · 법봉 · 법전) | 3 | 투명 PNG | 10/14 결정: 스탠딩에서 봉투 제외. 지금 `standing_law-*.png`를 첨부하고 봉투만 뺀다(프롬프트 모음 9-12). 완성되면 기존 파일은 `_envelope`를 붙여 보관하고 새 파일이 `standing_law-*.png` | ⬜ |
+| R1 | 로북 스탠딩 수정 | 1 | 투명 PNG | A2 1차 결과를 고침: 봉투 빼기 · 옷깃 안 마네킹 목 없애기 · 구두 검정. **A4-3 대신 이것을 쓴다**(프롬프트 모음 9-13) | ⬜ |
+| R2 | 로북 기준 시트 수정 | 1 | 시트 | A1 1차 결과를 고침: 줄 반복 없이 한 벌, 위 칸 빈손, 아쉬움 칸도 책이 떠 있게, 마네킹 목 없음(9-14) | ⬜ |
+| R3 | 키 비교 v2 | 1 | 시트 | A3 v1을 고침: 비율 보정(로울 1.92 · 로북 1.75 · 로봉 1.58배), 로북 떠 있게, 숫자 없이, 전원 빈손(9-15). 파일 `character-sheet_height_v2.png` | ⬜ |
 
 - A1 · A2가 끝나면 아키텍처 2-4(색) · 2-5(프로필) · 5-1(IDENTITY)에 법전을 추가한다. 10/14 A2 실측: 표지 `#722C30` ~ `#621E25`(제안 `#5E1F2B`보다 밝은 와인색), 황동 모서리 `#CFAA75` 근처.
 - A3 다시 뽑을 때 추가 문장: `Law (Book) floats above the collar with a clear gap; it never rests on the shoulders.` · `Make Naero and Nambul about 8% larger so the ratios match exactly.` · 숫자 라벨 없이 뽑고 나중에 얹는다.
@@ -142,7 +148,10 @@ AVOID: text, letters, numbers, logos, watermarks, speech bubbles, angry or hosti
 - **A1 로(법전) 기준 시트**: 프롬프트 모음 9-9(완성본). 첨부 `character-sheet_law-scale_law-gavel.png`
 - **A2 로(법전) 스탠딩**: 프롬프트 모음 9-10(완성본). 첨부 `standing_law-scale.png` · `standing_law-gavel.png`
 - **A3 키 비교 시트**: 프롬프트 모음 9-11(완성본). 첨부 `standing_*` 전부
-- **A4 로 스탠딩 빈손 버전**: 프롬프트 모음 9-12(완성본). 첨부 해당 `standing_law-*.png`
+- **A4 로 스탠딩 빈손 버전**: 프롬프트 모음 9-12(완성본). 첨부 해당 `standing_law-*.png`. 로북은 A4-3 대신 R1을 쓴다
+- **R1 로북 스탠딩 수정**: 9-13. 첨부 `standing_law-book.png` · `standing_law-scale.png`
+- **R2 로북 기준 시트 수정**: 9-14. 첨부 `character-sheet_law-book.png` (+ R1 결과)
+- **R3 키 비교 v2**: 9-15. 첨부 `character-sheet_height_v1.png` + 스탠딩 전부
 
 ### B. 우선 컷
 

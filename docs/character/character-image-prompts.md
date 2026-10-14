@@ -11,10 +11,12 @@
 | v2.2 | 2026-10-14 | 로(법전): **목 · 기둥 없이 공중에 떠 있는 법전**, 기본은 표지 정면 · 자유 회전(9-4 · 9-5 · 9-6 · 9-8 · 9-9 · 9-10) |
 | v2.3 | 2026-10-14 | 로 스탠딩 · `idle`은 빈손(봉투는 `deliver`만) — 9-6 · 9-9 · 9-10 수정, 9-12 빈손 스탠딩 추가 |
 | v2.4 | 2026-10-14 | 로 셋 이름(로울 · 로봉 · 로북)을 IDENTITY 제목에 표기. 프롬프트 본문은 "Law (Scale)" 등 영어 이름 그대로 |
+| v2.5 | 2026-10-14 | 수정 프롬프트 추가 — R1 로북 스탠딩(봉투 · 마네킹 목 · 구두), R2 로북 시트(중복 줄 · 아쉬움 칸 · 마네킹 목), R3 키 비교 v2(비율 · 떠 있는 법전 · 숫자). 지금 이미지는 샘플(모델 교체 후 재생성) |
 
 > 기준 결정: `character-main-handover.md` v2의 10/13 변경 절 (기본 = 마스코트형 약 3.5등신 · 란마풍 등은 변형 · 모든 캐릭터 무성 · 소품 제한 해제 · 화난 표정 금지)
-> 이 문서는 **복사해서 바로 쓰는 프롬프트 모음**이다. 설계 배경은 `character-law-ai-judge-plan.md` v0.3을 본다(`Claude outputs/`, 커밋 안 함).
+> 이 문서는 **복사해서 바로 쓰는 프롬프트 모음**이다. 설계 배경은 `character-law-ai-judge-plan.md` v0.3을 본다(`Claude outputs/character/plan/`, 커밋 안 함).
 > **이후 생성은 9장(신규 프롬프트 v2)을 기본으로 한다.** 1 ~ 7장은 원문 기록이다.
+> **지금 이미지는 샘플이다.** 현재 쓰는 생성 모델은 프롬프트를 그대로 살리지 못하는 경우가 많아, 지금 만드는 이미지는 화면 · 흐름 확인용 샘플로 쓴다. 더 좋은 모델로 바꾸면 같은 프롬프트로 다시 만든다(제작 목록 1장).
 > **작업본이다.** 이미지 생성 결과가 프롬프트와 다르게 나오는 경우가 있다. **확정 이미지가 기준**이고([캐릭터 에셋 아키텍처](character-asset-architecture.md) 2-1 기준 이미지 · 2-4 색 · 2-5 키), 프롬프트와 다른 점은 8장에 모았다. 프롬프트 문구는 이미지를 뽑으며 계속 고친다(아키텍처 5-1 "작업본" 원칙). 캐릭터 설정은 프롬프트 문구와 따로 [캐릭터 프로필 · 세계관](character-profile-worldview.md)이 기준이다.
 > 만들 이미지 목록은 [캐릭터 이미지 제작 목록](character-image-checklist.md)이다.
 
@@ -315,7 +317,7 @@ AVOID: faces, eyes, noses, mouths, human heads, outlines, line art, contour line
 ```
 
 - 4종의 머리 비율은 내로 · 남불 약 28%(3.5등신), 로 약 30 ~ 33%(3 ~ 3.5등신, 머리 오브젝트가 크다)다. 같은 높이로 서 보이게 하려면 로의 비율 문장을 `about 3.5 heads`로 맞춘다.
-- 배경 제거 · 파일 형식(PNG 마스터 · WebP 웹용)은 `naero_nambul_main_image_prompts.md` 1장을 따른다(`Claude outputs/`).
+- 배경 제거 · 파일 형식(PNG 마스터 · WebP 웹용)은 `naero_nambul_main_image_prompts.md` 1장을 따른다(`Claude outputs/character/prompts/`).
 
 ---
 
@@ -1035,4 +1037,60 @@ POSE — standing upright, front to slight three-quarter view, empty-handed: one
 SCENE — a single character, centered, full body from head to feet fully visible, 4:5 vertical composition with 15% empty margin on every side. Background: perfectly flat uniform solid green #00B140, no gradient, no floor, no shadow. Do not use green anywhere on the character.
 
 AVOID: text, letters, numbers, logos, angry or threatening poses, gendered body features, cropped limbs, extra characters, black outlines, line art, drop shadows, ground shadows, 3D render, CGI, photo realism, faces, eyes, mouths, a human head, an envelope, any prop in the hands{ | | , a neck or post under the book}.
+```
+
+### 9-13. 수정 프롬프트 — 로북 스탠딩 (R1, 제작 목록 A2 · A4-3 대체)
+
+1차 결과(`standing_law-book.png`)를 첨부한다. 봉투 · 옷깃 안 마네킹 목 · 구두 색을 함께 고친다. `standing_law-scale.png`도 함께 첨부하면 구두 · 옷깃 처리를 맞추기 쉽다.
+
+```
+Use the first attached image as the exact model of Law (Book): keep the floating law book, the robe, gloves, colors, proportions, height and art style exactly. Use the second attached image (Law (Scale)) only as a reference for the shoes and the collar. Fix only these three things:
+1. Remove the envelope. Pose: standing upright, front to slight three-quarter view, empty-handed: one hand open, palm up and slightly out to the side, presenting calmly; the other hand resting at the side.
+2. The collar opening is EMPTY: no mannequin neck, no skin, no neck stump, no grey or beige form inside the collar. Inside the collar there is only the dark navy inner lining of the robe and the white shirt collar edge. The book floats above with a clear empty gap.
+3. Shoes are the same near-black leather shoes as Law (Scale), not brown.
+
+The book floats above the collar, front cover facing the viewer, closed and level (calm).
+
+SCENE — a single character, centered, full body from head to feet fully visible, 4:5 vertical composition with 15% empty margin on every side. Background: perfectly flat uniform solid green #00B140, no gradient, no floor, no shadow. Do not use green anywhere on the character.
+
+AVOID: text, letters, numbers, logos, an envelope, any prop in the hands, a mannequin neck, a neck stump, skin inside the collar, a post or stand under the book, the book touching the collar, brown shoes, faces, eyes, mouths, a human head, gendered body features, cropped limbs, extra characters, black outlines, drop shadows, ground shadows, 3D render, CGI, photo realism.
+```
+
+### 9-14. 수정 프롬프트 — 로북 기준 시트 (R2, 제작 목록 A1 다시)
+
+1차 시트(`character-sheet_law-book.png`)와 R1 결과(있으면)를 첨부한다. 시트 전체를 한 벌로 다시 뽑는다.
+
+```
+Use the attached images as the exact model of Law (Book): keep the floating law book, robe, gloves, colors, proportions and art style exactly. Redraw the whole character sheet cleanly, fixing these problems of the first attached sheet:
+1. Draw every panel ONCE. No repeated rows: one front full body, one turnaround row, one row of six poses.
+2. The front full body is empty-handed (one hand open, presenting calmly). The envelope appears ONLY in the last pose, held out with both hands.
+3. The collar opening is EMPTY in every panel: no mannequin neck, no skin, no neck stump; only the dark navy robe lining and the white shirt collar edge. The book always floats above the collar with a clear empty gap and never touches the shoulders or collar, even when sad.
+
+SHEET LAYOUT:
+- Top: one front full body, empty-handed.
+- Middle: turnaround — front, three-quarter, side and back views. The book keeps floating above the empty collar in every view; in the side view the gap under the book is clearly visible; in the back view the back cover faces the viewer.
+- Bottom: six poses — standing calm (book closed, front cover forward), happy (book floating slightly higher and opening a little), surprised (book spinning half a turn, pages fluttering), thinking (book turned to a three-quarter angle, half open and tilted, hand on chin), sorry (book closed, sinking slightly lower and tilting down but still floating above the collar with a gap, shoulders slumped), holding a sealed kraft envelope out with both hands.
+- Side panel: flat round color swatches of the main colors only (oxblood leather, brass, cream pages, navy robe, white collar, kraft envelope).
+
+SCENE — plain newsprint background #ECE2D4, panels separated by space only (no frame lines, no labels), landscape 16:9.
+
+AVOID: repeated rows or duplicate panels, empty panels, text, letters, numbers, labels, a mannequin neck, a neck stump, skin inside the collar, the book resting on the shoulders, the book touching the collar, a post or stand under the book, an envelope in any pose except the last, faces, eyes, mouths, a human head, gendered body features, cropped limbs, extra characters, black outlines, drop shadows, ground shadows, 3D render, CGI, photo realism.
+```
+
+### 9-15. 수정 프롬프트 — 키 비교 시트 v2 (R3, 제작 목록 A3 다시)
+
+1차 시트(`character-sheet_height_v1.png`)와 스탠딩 전부를 첨부한다.
+
+```
+Use the attached standing images as the exact models of Naero, Nambul, Law (Scale), Law (Gavel) and Law (Book). Use the attached first height sheet (v1) as a layout reference only. Copy each character's design, colors and art style exactly (Naero and Nambul keep their flat mascot style; the three Laws keep their refined painterly style).
+
+Redraw the height comparison sheet with these fixes to v1:
+1. Correct ratios. In v1 the Laws are about 8 to 10% too tall compared with Naero and Nambul; make Naero and Nambul about 8% larger (or the Laws smaller) so that, measured on one shared ground line: Naero and Nambul are exactly the same height (Naero to the ear tips, Nambul to the flame tip); Law (Scale) is 1.92 times Naero's height; Law (Book) is 1.75 times; Law (Gavel) is 1.58 times.
+2. Law (Book)'s book floats above an empty collar with a clear gap; it does not rest on the shoulders. No mannequin neck.
+3. No numbers, no labels, no text. Thin horizontal guide lines at the top of each height are allowed.
+4. Order from left to right: Naero, Nambul, Law (Scale), Law (Gavel), Law (Book). Front view, calm neutral poses, all empty-handed.
+
+SCENE — plain newsprint background #ECE2D4, generous spacing, landscape 16:9.
+
+AVOID: text, letters, numbers, labels, envelopes, a mannequin neck, the book touching the collar, Nambul taller than Naero, all Laws the same height, Laws taller than the given ratios, angry faces or poses, gendered body features, cropped limbs, extra characters, black outlines, drop shadows, ground shadows, 3D render, photo realism.
 ```

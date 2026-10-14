@@ -14,7 +14,7 @@
 
 > 이 문서는 캐릭터가 **누구이고 왜 나오는지**를 정한다. 외형 · 에셋을 어떻게 만들고 조합하는지는 [캐릭터 에셋 아키텍처](character-asset-architecture.md)가 기준이다(색 2-4 · 키 2-5 · 프롬프트 5장).
 > 결정 기록은 [캐릭터 인수인계](character-main-handover.md) 2-1절, 성향 테스트 배정은 [성향 테스트 콘텐츠](../personality-test-content.md) 4-1이 기준이다.
-> 기획 원문 `Claude outputs/character-law-ai-judge-plan.md` v0.3(커밋 안 함)의 2장 "세계관 (제안)"은 이 문서로 대체한다. 그 문서의 "신문사 전속 배우" 설정은 쓰지 않는다(2-4).
+> 기획 원문 `Claude outputs/character/plan/character-law-ai-judge-plan.md` v0.3(커밋 안 함)의 2장 "세계관 (제안)"은 이 문서로 대체한다. 그 문서의 "신문사 전속 배우" 설정은 쓰지 않는다(2-4).
 > ⚠️ 표시는 팀 확인이 필요한 항목이다(7장에 모음).
 
 ---
