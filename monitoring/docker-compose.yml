@@ -1,0 +1,36 @@
+# 로컬 Prometheus (BE-70, WBS 7.2.2). backend/docker-compose.yml(DB)와는 별개로 띄운다 —
+# 모니터링 스택을 껐다 켜도 앱 · DB 동작에는 영향이 없어야 한다.
+# `./gradlew bootRun`으로 호스트에서 띄운 백엔드의 관리 포트(8081, 7.2.1)를 스크레이프한다.
+#
+# 사용법:
+#   cd monitoring && docker compose up -d
+#   http://localhost:9090/targets 에서 backend job이 UP인지 확인
+name: lawnambul-monitoring
+
+services:
+  prometheus:
+    # v3.13은 LTS(Long Term Support) 라인이다 — GitHub 릴리스 노트(v3.13.0, 2026-07-01)에 "Long Term Support
+    # release"로 명시돼 있고, 1년 지원 윈도(prometheus.io/docs/introduction/release-cycle)와도 맞는다(#120 리뷰 확인).
+    # 버그 · 보안 패치만 받고 마이너 기능 변경이 없어서, 작은 팀이 설정(prometheus.yml)을 오래 그대로 둘 수 있다
+    image: prom/prometheus:v3.13.3
+    container_name: lawnambul-prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      # 로컬 전용 보존 기간 (기본값 15d와 같다 — 운영은 디스크 용량에 맞춰 D와 따로 정한다, PR 본문 참고).
+      # 환경변수로 뺀 이유는 로컬 · 운영의 값이 달라질 걸 알고 있어서다(override 없이 .env 한 줄로 바꾸게)
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION_TIME:-15d}
+    ports:
+      # 루프백에만 바인딩한다 — 그냥 "9090:9090"이면 같은 네트워크(같은 와이파이)의 다른 기기에서도 메트릭을 볼 수 있다(#120 리뷰)
+      - "127.0.0.1:9090:9090"
+    # host.docker.internal은 Mac · Windows Docker Desktop이 기본 제공한다 (실측: 이 저장소 Docker Desktop 29.6.2에서
+    # extra_hosts 없이 정상 동작). Linux(Docker Engine)는 이 매핑이 없어서 extra_hosts가 있어야 하는데, 같은 설정을
+    # Docker Desktop에 그대로 추가하면 내장 DNS 대신 172.17.0.1(브리지 게이트웨이)로 바뀌어 연결이 끊긴다(직접 재현 확인).
+    # 그래서 기본값은 Mac · Windows 기준으로 비워 두고, Linux는 README에서 안내한다
+    restart: unless-stopped
+
+volumes:
+  prometheus-data:
