@@ -20,22 +20,20 @@ export async function renderPersonalitySharedPage(container, { shareId, api, nav
     let type;
     try {
       type = await api.getPersonalityType(shareId);
-    } catch {
+    } catch (error) {
       if (!active()) return;
       const panel = element('div', 'message-panel');
       panel.setAttribute('role', 'alert');
+      if (error?.code === 'PERSONALITY_TYPE_NOT_FOUND') { // 없는 shareId(404)
+        panel.append(element('p', '', '찾을 수 없는 유형이에요. 링크를 다시 확인해 주세요.'), button('나도 해 보기', () => navigate('test'), 'primary-button'));
+        main.replaceChildren(panel);
+        return;
+      }
       panel.append(element('p', '', '유형을 불러오지 못했어요.'), button('다시 시도', load, 'primary-button'));
       main.replaceChildren(panel);
       return;
     }
     if (!active()) return;
-    if (!type) {
-      const panel = element('div', 'message-panel');
-      panel.setAttribute('role', 'alert');
-      panel.append(element('p', '', '찾을 수 없는 유형이에요. 링크를 다시 확인해 주세요.'), button('나도 해 보기', () => navigate('test'), 'primary-button'));
-      main.replaceChildren(panel);
-      return;
-    }
 
     const gauge = element('section', 'result-section');
     gauge.append(

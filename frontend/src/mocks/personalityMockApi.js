@@ -1,21 +1,29 @@
 import { AXES } from '../utils/personalityAxes.js';
-import { QUESTIONS, TYPES } from './personalityMockData.js';
+import { IMAGE_NUMBERS, QUESTIONS, TYPES } from './personalityMockData.js';
 
-// 판결 성향 테스트 · 마이페이지 목 API. 성향 API 명세는 7.6.3 DB 스키마 시점(10/19)에 정해지므로,
-// 응답 모양은 화면에 필요한 것만 임시로 정했다. 채점은 docs/personality-scoring.md 2장을 따른다.
+// 판결 성향 테스트 · 마이페이지 목 API. 응답 모양은 API 명세 9장(성향 API, v0.20)의 P-1 ~ P-5를 따른다.
+// 채점은 docs/personality-scoring.md 2장을 따른다. 문항의 글자 · 축은 서버 쪽 정보라 응답에 넣지 않는다.
 // 결과는 목 전용으로 브라우저 localStorage에 둔다 (실제로는 서버가 익명 ID 기준으로 저장).
 
 const delay = () => new Promise((resolve) => setTimeout(resolve, 250));
 const storageKey = 'nlnb-mock-personality';
 const WEIGHTS = [2, 1, 0, 1, 2]; // 매우 A · 조금 A · 보통 · 조금 B · 매우 B
+// 캐릭터 이미지 파일(7.6.8)이 들어오면 true로 바꾼다. 그 전에는 imageUrl이 null이고 화면은 대체 이미지를 쓴다(명세 9-1)
+const IMAGES_READY = false;
 
-// 체험한 사건 목록 목. 실제로는 마이페이지 API가 체험 기록에서 만든다
+// 체험한 사건 목록 목. 실제로는 마이페이지 API가 체험 기록에서 만든다 (사건마다 최근 회차 하나, 명세 P-5)
 const mockExperiences = [
-  { caseId: 1, title: '가상 살인 사건', status: 'COMPLETED' },
+  { caseId: 1, title: '가상 살인 사건', crimeType: 'MURDER', status: 'COMPLETED', attemptNo: 1, updatedAt: '2026-10-14T15:00:00+09:00' },
 ];
 
-function fail(code, message) {
-  throw { code, message };
+const MESSAGES = {
+  VALIDATION_ERROR: '모든 문항에 답해 주세요.',
+  PERSONALITY_RESULT_NOT_FOUND: '성향 테스트 결과가 없어요.',
+  PERSONALITY_TYPE_NOT_FOUND: '찾을 수 없는 유형이에요.',
+};
+
+function fail(code) {
+  throw { code, message: MESSAGES[code], currentStatus: null, details: null };
 }
 
 function load() {
@@ -50,7 +58,7 @@ function score(answers) {
   return { typeCode: letters.join(''), axisScores };
 }
 
-// 공유 주소용 해시. 실제로는 서버가 정한다(유형 코드를 주소에 드러내지 않는 값, 7.6.4). 목은 코드에서 결정적으로 만든다
+// 공유 주소용 해시. 실제로는 서버가 시드로 고정한다(유형 코드를 주소에 드러내지 않는 값, 명세 9-1). 목은 코드에서 결정적으로 만든다
 function shareIdOf(code) {
   let hash = 2166136261; // FNV-1a
   for (const char of `nlnb-share:${code}`) {
@@ -61,53 +69,81 @@ function shareIdOf(code) {
 }
 const SHARE_IDS = Object.fromEntries(Object.keys(TYPES).map((code) => [shareIdOf(code), code]));
 
-function toResult({ typeCode, axisScores }) {
-  return { typeCode, shareId: shareIdOf(typeCode), axisScores, type: TYPES[typeCode] };
+// 유형 공통 형식(명세 9-1). 4글자 코드 · 밈 장면 설명(scene)은 응답에 넣지 않는다
+function toType(code) {
+  const { name, character, tolerance, oneLiner, meme, daily, verdict } = TYPES[code];
+  const number = String(IMAGE_NUMBERS[code]).padStart(2, '0');
+  return {
+    shareId: shareIdOf(code),
+    name,
+    character,
+    tolerance,
+    oneLiner,
+    meme,
+    dailyDescription: daily,
+    verdictDescription: verdict,
+    imageUrl: IMAGES_READY ? `/images/characters/personality/${number}.webp` : null,
+  };
 }
 
-// 문항 조회
+// 결과 공통 형식(명세 9-1)
+function toResult({ typeCode, axisScores, testedAt }) {
+  return { type: toType(typeCode), axisScores, testedAt };
+}
+
+// 저장된 결과가 유효할 때만 돌려준다. testedAt이 없는 이전 버전 저장값은 없는 것으로 보고 다시 응시하게 한다
+function savedResult() {
+  const saved = load();
+  return saved && TYPES[saved.typeCode] && typeof saved.testedAt === 'string' ? saved : null;
+}
+
+// P-1 문항 조회. 축 · 글자는 내려 주지 않는다(채점은 서버)
 export async function getPersonalityQuestions() {
   await delay();
-  return structuredClone({ questions: QUESTIONS });
+  return structuredClone({
+    questions: QUESTIONS.map(({ id, scenario, content, a, b }) => ({ id, scenario, content, optionA: a.text, optionB: b.text })),
+  });
 }
 
-// 응답 제출. answers = [{ questionId, value }] (value 0 ~ 4: 매우 A · 조금 A · 보통 · 조금 B · 매우 B)
+// P-2 응답 제출. answers = [{ questionId, value }] (value 0 ~ 4: 매우 A · 조금 A · 보통 · 조금 B · 매우 B)
 export async function submitPersonality(answers) {
   await delay();
   const byId = {};
   (Array.isArray(answers) ? answers : []).forEach((answer) => { byId[answer.questionId] = answer.value; });
   const complete = QUESTIONS.every((question) => Number.isInteger(byId[question.id]) && byId[question.id] >= 0 && byId[question.id] <= 4);
-  if (!complete) fail('VALIDATION_ERROR', '모든 문항에 답해 주세요.');
-  const result = score(byId);
+  if (!complete) fail('VALIDATION_ERROR');
+  const result = { ...score(byId), testedAt: new Date().toISOString() };
   try {
     localStorage.setItem(storageKey, JSON.stringify(result));
   } catch { /* 사생활 보호 모드 등에서 저장하지 못해도 제출 결과는 돌려준다 */ }
   return toResult(result);
 }
 
-// 내 성향 결과 조회. 아직 테스트를 하지 않았으면 null
+// P-3 내 성향 결과 조회. 아직 테스트를 하지 않았으면 404 PERSONALITY_RESULT_NOT_FOUND
 export async function getMyPersonality() {
   await delay();
-  const saved = load();
-  return saved && TYPES[saved.typeCode] ? toResult(saved) : null;
+  const saved = savedResult();
+  if (!saved) fail('PERSONALITY_RESULT_NOT_FOUND');
+  return toResult(saved);
 }
 
-// 공유된 결과용 유형 설명 조회 (개인 응답 · 점수 없음, 응답에 유형 코드도 넣지 않는다). 모르는 해시면 null
+// P-4 공유된 결과용 유형 설명 조회 (개인 응답 · 점수 없음). 모르는 해시면 404 PERSONALITY_TYPE_NOT_FOUND
 export async function getPersonalityType(shareId) {
   await delay();
-  const type = TYPES[SHARE_IDS[String(shareId)]];
-  if (!type) return null;
-  const { code, ...rest } = structuredClone(type);
-  void code;
-  return rest;
+  const key = String(shareId);
+  if (!Object.hasOwn(SHARE_IDS, key)) fail('PERSONALITY_TYPE_NOT_FOUND'); // constructor · __proto__ 같은 상속 속성은 없는 유형이다
+  return toType(SHARE_IDS[key]);
 }
 
-// 마이페이지 조회 (테스트 결과 + 체험한 사건). 성향 변화 흐름 · 종합 성향은 아직 없다
+// P-5 마이페이지 조회. 기록이 없어도 404가 아니라 빈 200이다. 종합 판결 성향 · 성향 변화 흐름은
+// 체험 → 성향 저장(7.6.7)이 붙은 뒤부터 채워지므로 지금은 각각 null · 빈 배열이다
 export async function getMyPage() {
   await delay();
-  const saved = load();
+  const saved = savedResult();
   return structuredClone({
-    personality: saved && TYPES[saved.typeCode] ? toResult(saved) : null,
+    personality: saved ? toResult(saved) : null,
+    judgmentPersonality: null,
+    history: [],
     experiences: mockExperiences,
   });
 }
