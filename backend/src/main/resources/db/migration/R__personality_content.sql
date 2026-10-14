@@ -4,10 +4,13 @@
 -- 개발용 시드(db/seed)와 달리 운영에도 들어가는 서비스 콘텐츠라 db/migration에 둔다.
 --
 -- 반복 마이그레이션(R__): 이 파일이 바뀌면 다음 기동 때 다시 실행된다. 그래서 모든 INSERT는 upsert다.
--- - 이미 있는 행은 문구만 갱신하고 id는 그대로 둔다. 응답 기록(personality_result.answers)이 선택지 id를 가리키기 때문이다.
+-- - 이미 있는 행은 문구만 갱신하고 id는 그대로 둔다. 응답 기록(personality_result.answers)이 문항 · 선택지 id를 가리키기 때문이다.
 -- - share_id는 갱신하지 않는다. 공유된 링크(/test/types/{share_id})가 깨지기 때문이다. 처음 넣은 값이 영구 값이다.
--- - 문항 · 선택지의 축(axis)도 갱신하지 않는다(선택지가 복합 FK로 문항 축을 가리킨다). 축을 바꾸려면 버전 마이그레이션으로 한다.
--- - 이 파일에서 문항을 지워도 DB에서 지워지지 않는다. 내리려면 is_active = false로 바꾼다.
+-- - 문항의 고정 키는 출제 순서(display_order)다. 순서를 바꾸거나 중간에 끼우면 기존 id 위로 다른 문장이 덮여
+--   과거 응답이 다른 문항을 가리키게 되므로 순서는 바꾸지 않는다. 새 문항은 뒤 번호(17 ~)로 붙인다(#128 리뷰).
+-- - 문항 · 선택지의 축(axis)과 선택지의 글자 · 점수는 갱신하지 않는다. 바꾸면 과거 응답의 선택지 id가 다른 뜻이 된다.
+--   바꿔야 하면 버전 마이그레이션으로 한다(#128 리뷰). 그래서 선택지는 처음 한 번만 넣는다(ON CONFLICT DO NOTHING).
+-- - 이 파일에서 문항을 지워도 DB에서 지워지지 않는다. 내리려면 그 행의 is_active를 false로 바꾼다(파일 값이 다시 실행 때도 유지된다).
 -- image_url은 이미지가 레포에 들어오기 전까지 NULL이다(화면은 대체 이미지, API 9-1). 들어오면 각 행 위 주석의 번호로
 -- '/images/characters/personality/{번호}.webp'를 넣는다. 번호는 docs/character/personality-image-numbers.md(4-2 표 순서)이고 유형에 고정한다(#121 리뷰).
 
@@ -137,78 +140,78 @@ ON CONFLICT (code) DO UPDATE SET
     image_url = EXCLUDED.image_url;
 
 -- 문항: display_order(출제 순서)가 문항의 고정 키다
-INSERT INTO personality_question (axis, scenario, content, option_a, option_b, display_order)
+INSERT INTO personality_question (axis, scenario, content, option_a, option_b, display_order, is_active)
 VALUES
     ('APOLOGY_SINCERITY', 'FRIEND',
      '약속을 세 번이나 어긴 친구가 이번엔 진심으로 미안하다며 고개를 숙인다.',
      '다음 약속을 지키는 걸 보고 나서 마음을 풀겠다',
-     '진심이 느껴지니 그 말을 믿고 넘어가겠다', 1),
+     '진심이 느껴지니 그 말을 믿고 넘어가겠다', 1, true),
     ('FAULT_STANDARD', 'WORK',
      '동료가 내 일을 도와주려다 실수로 공유 폴더를 덮어써서 이틀 치 작업이 사라졌다.',
      '도우려던 마음이었으니 크게 탓할 일은 아니다',
-     '마음은 고맙지만 이틀 치가 날아간 건 큰 잘못이다', 2),
+     '마음은 고맙지만 이틀 치가 날아간 건 큰 잘못이다', 2, true),
     ('PRINCIPLE_RELATION', 'FAMILY',
      '사촌이 할머니 댁 물건을 허락 없이 팔았다가, 할머니께 사과하고 용서를 받았다. 다른 친척들은 아직 모른다.',
      '다른 사람이 그랬어도 짚었을 테니, 친척들에게도 알리고 짚고 넘어가야 한다',
-     '할머니가 용서하셨으면 그걸로 됐다. 굳이 꺼내지 않는다', 3),
+     '할머니가 용서하셨으면 그걸로 됐다. 굳이 꺼내지 않는다', 3, true),
     ('ORDER_OPPORTUNITY', 'NEIGHBOR',
      '층간소음으로 여러 번 다툰 윗집이 이번에는 꼭 고치겠다고 한다.',
      '관리사무소와 함께 조용히 할 시간 같은 규칙부터 정해 둔다',
-     '고치겠다고 했으니 규칙 없이 한 번 더 지켜본다', 4),
+     '고치겠다고 했으니 규칙 없이 한 번 더 지켜본다', 4, true),
     ('APOLOGY_SINCERITY', 'FAMILY',
      '동생이 내 아끼는 옷을 말없이 입고 나갔다가 얼룩을 묻혀 왔다. 울먹이며 미안하다고 한다.',
      '이렇게까지 미안해하니 그 마음이면 충분하다',
-     '다음엔 먼저 물어보고 입는지 지켜본 뒤에 사과를 받아 준다', 5),
+     '다음엔 먼저 물어보고 입는지 지켜본 뒤에 사과를 받아 준다', 5, true),
     ('FAULT_STANDARD', 'NEIGHBOR',
      '이웃이 우리 집 고양이가 배고파 보여 간식을 챙겨 줬는데, 알레르기가 있는 간식이라 고양이가 병원에 다녀왔다.',
      '고양이가 아팠고 병원비도 나왔으니, 그만큼 잘못한 일이다',
-     '몰랐던 일이고 챙겨 주려던 마음이니 탓하기 어렵다', 6),
+     '몰랐던 일이고 챙겨 주려던 마음이니 탓하기 어렵다', 6, true),
     ('PRINCIPLE_RELATION', 'WORK',
      '팀 규칙상 마감을 넘기면 팀장에게 알려야 한다. 친한 입사 동기가 마감을 넘겼는데, 피해를 본 팀원은 괜찮다며 둘이 이미 풀었다.',
      '규칙은 누구에게나 같으니 팀장에게 알린다',
-     '당사자끼리 풀었으니 따로 알리지 않는다', 7),
+     '당사자끼리 풀었으니 따로 알리지 않는다', 7, true),
     ('ORDER_OPPORTUNITY', 'FRIEND',
      '여행 모임에서 매번 늦어 일정을 꼬이게 한 친구가 다음 여행에도 꼭 가고 싶다고 한다.',
      '이번엔 다를 수도 있으니 그냥 같이 간다',
-     '같이 가되, 늦으면 먼저 출발한다는 규칙을 미리 정한다', 8),
+     '같이 가되, 늦으면 먼저 출발한다는 규칙을 미리 정한다', 8, true),
     ('APOLOGY_SINCERITY', 'WORK',
      '회의에서 내 아이디어를 자기 것처럼 말한 동료가 회의가 끝나고 따로 찾아와 사과했다.',
      '다음 회의에서 사람들 앞에서 바로잡는지 보고 판단한다',
-     '따로 찾아와 사과한 것만으로도 진심이라고 본다', 9),
+     '따로 찾아와 사과한 것만으로도 진심이라고 본다', 9, true),
     ('FAULT_STANDARD', 'FRIEND',
      '친구가 장난으로 내 휴대폰을 숨겼는데, 찾는 사이 기다리던 면접 연락을 놓쳤다.',
      '장난이었어도 결과가 이렇게 됐으니 크게 잘못한 일이다',
-     '이런 일이 생길 줄 몰랐으니 장난 이상으로 탓하긴 어렵다', 10),
+     '이런 일이 생길 줄 몰랐으니 장난 이상으로 탓하긴 어렵다', 10, true),
     ('PRINCIPLE_RELATION', 'NEIGHBOR',
      '친한 이웃이 아파트 복도에 짐을 쌓아 뒀다가, 불편했던 옆집과 웃으며 정리했다. 관리 규칙으로는 경고를 받는 일이다.',
      '둘이 잘 풀었으니 경고까지 할 필요는 없다',
-     '다른 집이었어도 경고했을 테니 똑같이 경고해야 한다', 11),
+     '다른 집이었어도 경고했을 테니 똑같이 경고해야 한다', 11, true),
     ('ORDER_OPPORTUNITY', 'FAMILY',
      '고등학생 동생이 몰래 늦게 들어오다 들켰다. 처음 있는 일이다.',
      '처음일 때 귀가 시간을 확실히 정해 둬야 반복되지 않는다',
-     '처음이니 이번은 넘어가고 믿어 본다', 12),
+     '처음이니 이번은 넘어가고 믿어 본다', 12, true),
     ('APOLOGY_SINCERITY', 'NEIGHBOR',
      '우리 집 주차 자리에 몇 번 차를 댄 이웃이 현관문에 사과 쪽지를 붙여 놓았다.',
      '쪽지까지 남겼으니 믿고 넘어간다',
-     '다음 주에도 자리를 비워 두는지 보고 판단한다', 13),
+     '다음 주에도 자리를 비워 두는지 보고 판단한다', 13, true),
     ('FAULT_STANDARD', 'FAMILY',
      '형제가 깜짝 생일 파티를 준비하려고 내 일정을 몰래 바꿔 놓았다가, 나는 미리 잡아 둔 중요한 약속에 못 갔다.',
      '나를 위한 마음이었으니 서운해도 넘어간다',
-     '좋은 뜻이어도 약속을 못 가게 된 건 분명한 잘못이다', 14),
+     '좋은 뜻이어도 약속을 못 가게 된 건 분명한 잘못이다', 14, true),
     ('PRINCIPLE_RELATION', 'FRIEND',
      '동아리 총무를 맡은 친한 친구가 회비 일부를 잠깐 개인 용도로 썼다가 다시 채워 놓았고, 눈치챈 회원들과도 이미 화해했다.',
      '다들 풀었으니 굳이 다시 꺼내지 않는다',
-     '그래도 총무로서 한 잘못은 모두에게 알리고 짚어야 한다', 15),
+     '그래도 총무로서 한 잘못은 모두에게 알리고 짚어야 한다', 15, true),
     ('ORDER_OPPORTUNITY', 'WORK',
      '함께 일하는 신입이 같은 실수를 두 번 해서, 거래처에 사과 메일을 보냈다.',
      '아직 배우는 중이니 확인 절차 없이 한 번 더 맡겨 본다',
-     '다시 생기지 않게 확인 절차부터 만든다', 16)
+     '다시 생기지 않게 확인 절차부터 만든다', 16, true)
 ON CONFLICT (display_order) DO UPDATE SET
     scenario = EXCLUDED.scenario,
     content = EXCLUDED.content,
     option_a = EXCLUDED.option_a,
     option_b = EXCLUDED.option_b,
-    is_active = true;
+    is_active = EXCLUDED.is_active;
 
 -- 선택지: 문항마다 5칸. 1 · 2칸은 A 글자(2 · 1점), 3칸은 보통(글자 없음 0점), 4 · 5칸은 B 글자(1 · 2점)
 INSERT INTO personality_choice (question_id, axis, letter, score, display_order)
@@ -232,6 +235,4 @@ JOIN (VALUES
     (15, 'F', 2, 1), (15, 'F', 1, 2), (15, NULL, 0, 3), (15, 'T', 1, 4), (15, 'T', 2, 5),
     (16, 'P', 2, 1), (16, 'P', 1, 2), (16, NULL, 0, 3), (16, 'J', 1, 4), (16, 'J', 2, 5)
 ) AS c (question_order, letter, score, display_order) ON c.question_order = q.display_order
-ON CONFLICT (question_id, display_order) DO UPDATE SET
-    letter = EXCLUDED.letter,
-    score = EXCLUDED.score;
+ON CONFLICT (question_id, display_order) DO NOTHING;

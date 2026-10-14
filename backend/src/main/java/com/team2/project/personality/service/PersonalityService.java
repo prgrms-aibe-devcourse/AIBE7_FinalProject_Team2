@@ -127,7 +127,11 @@ public class PersonalityService {
 			}
 		}
 		Set<Long> activeIds = questions.stream().map(PersonalityQuestion::getId).collect(Collectors.toSet());
-		if (activeIds.isEmpty() || !values.keySet().equals(activeIds)) {
+		if (activeIds.isEmpty()) {
+			// 사용자 잘못이 아니라 콘텐츠 시드 문제다 → 400이 아니라 500 (#128 리뷰)
+			throw new IllegalStateException("활성 성향 문항이 없다");
+		}
+		if (!values.keySet().equals(activeIds)) {
 			throw BusinessException.ofField(ErrorCode.VALIDATION_ERROR, "answers");
 		}
 		return values;

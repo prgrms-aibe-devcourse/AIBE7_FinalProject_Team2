@@ -769,7 +769,7 @@ IA 9장의 규칙을 어느 테이블·제약이 책임지는지 정리한다.
 
 ## 8. (확장 단계) 판결 성향 테스트 테이블 (v1.14 제안 → v1.20 확정)
 
-> **V15 마이그레이션으로 확정했다 (v1.20, BE-69).** 산식은 [성향 산식](personality-scoring.md) v0.4, 문항 · 유형 문구는 [성향 테스트 콘텐츠](personality-test-content.md)를 따른다. 문항 · 유형 콘텐츠는 `db/migration/R__personality_content.sql`(v1.21, 운영에도 적용)이 넣는다. 이 파일은 upsert라 문구를 고쳐 다시 실행해도 선택지 id와 `share_id`가 그대로이고, 축을 바꾸거나 문항을 지우는 일은 하지 않는다(내릴 때는 `is_active = false`). 요구사항 DR-11, 기능 명세 REQ-112 ~ 119 · 127.
+> **V15 마이그레이션으로 확정했다 (v1.20, BE-69).** 산식은 [성향 산식](personality-scoring.md) v0.4, 문항 · 유형 문구는 [성향 테스트 콘텐츠](personality-test-content.md)를 따른다. 문항 · 유형 콘텐츠는 `db/migration/R__personality_content.sql`(v1.21, 운영에도 적용)이 넣는다. 이 파일은 upsert라 문구를 고쳐 다시 실행해도 선택지 id와 `share_id`가 그대로이고, 축 · 선택지 글자 · 점수를 바꾸거나 문항을 지우는 일은 하지 않는다(내릴 때는 그 행의 `is_active`를 `false`로). **문항 출제 순서(`display_order`)는 문항의 고정 키라 바꾸지 않는다** — 바꾸면 과거 응답(`answers`)이 다른 문장을 가리킨다. 새 문항은 뒤 번호로 붙인다(#128 리뷰). 요구사항 DR-11, 기능 명세 REQ-112 ~ 119 · 127.
 >
 > **판단 요소 ↔ 가치관 축은 이 장에서 새로 만들지 않는다.** 요소가 어느 축에 속하는지는 이미 있는 `factor.value_axis`(v1.13, BE-47)를 그대로 쓴다. 값은 파이프라인의 AI 분류(BE-49)와 관리자 후검수(BE-48 · BE-43)로 정해진다. 축 이름도 같은 키(`APOLOGY_SINCERITY` · `FAULT_STANDARD` · `PRINCIPLE_RELATION` · `ORDER_OPPORTUNITY`)를 쓰므로 성향 테스트 점수와 체험 기여분을 같은 키로 합칠 수 있다.
 >

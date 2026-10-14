@@ -174,6 +174,19 @@ class PersonalityApiTest extends ApiIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("P-2: 쿠키 없이 낸 요청이 400이면 익명 사용자를 만들지 않고 쿠키도 내려 주지 않는다 (#128 리뷰)")
+	void submit_invalidWithoutCookie_issuesNothing() throws Exception {
+		int usersBefore = jdbcTemplate.queryForObject("SELECT count(*) FROM anonymous_user", Integer.class);
+		MockHttpServletResponse response = mockMvc.perform(post(RESULTS).contentType(MediaType.APPLICATION_JSON)
+				.content(answersJson(questionIds().subList(1, 16), 2)))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+			.andReturn().getResponse();
+		assertThat(response.getHeader(HttpHeaders.SET_COOKIE)).isNull();
+		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM anonymous_user", Integer.class)).isEqualTo(usersBefore);
+	}
+
+	@Test
 	@DisplayName("P-3: 쿠키가 없거나 테스트한 적 없으면 404 PERSONALITY_RESULT_NOT_FOUND")
 	void getMine_noResult_notFound() throws Exception {
 		mockMvc.perform(get(MY_RESULT))
