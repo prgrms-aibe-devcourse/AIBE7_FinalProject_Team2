@@ -13,6 +13,7 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.EnumMap;
 import java.util.Map;
+import java.util.Objects;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -47,9 +48,11 @@ public class ExperiencePersonality {
 
 	/** 네 축 모두 키를 둔다. 고른 요소가 없는 축은 AxisCount.EMPTY */
 	public static ExperiencePersonality of(Experience experience, Map<ValueAxis, AxisCount> counts) {
+		Objects.requireNonNull(counts, "counts");
 		EnumMap<ValueAxis, AxisCount> all = new EnumMap<>(ValueAxis.class);
 		for (ValueAxis axis : ValueAxis.values()) {
-			all.put(axis, counts.getOrDefault(axis, AxisCount.EMPTY));
+			AxisCount count = counts.get(axis);	// 키가 없거나 값이 null이면 0 · 0 (getOrDefault는 null 값을 그대로 둔다)
+			all.put(axis, count == null ? AxisCount.EMPTY : count);
 		}
 		ExperiencePersonality contribution = new ExperiencePersonality();
 		contribution.experience = experience;

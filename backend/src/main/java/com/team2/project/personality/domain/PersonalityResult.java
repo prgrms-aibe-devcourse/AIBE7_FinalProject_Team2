@@ -13,6 +13,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import lombok.AccessLevel;
@@ -60,8 +61,10 @@ public class PersonalityResult {
 	/** 새 현재 결과. 같은 사용자의 이전 현재 결과는 저장 전에 내려 둬야 한다(PersonalityResultRepository.clearCurrent) */
 	public static PersonalityResult create(AnonymousUser anonymousUser, PersonalityType type,
 		Map<ValueAxis, Double> axisScores, List<PersonalityAnswer> answers) {
-		if (axisScores.size() != ValueAxis.values().length || axisScores.values().stream().anyMatch(
-			score -> score == null || score < 0 || score > 1)) {
+		// 키는 개수가 아니라 집합으로 본다(null 키 + 세 축도 크기는 4). NaN · 무한대는 범위 비교를 빠져나가므로 따로 막는다
+		if (axisScores == null || !axisScores.keySet().equals(EnumSet.allOf(ValueAxis.class))
+			|| axisScores.values().stream().anyMatch(
+				score -> score == null || !Double.isFinite(score) || score < 0 || score > 1)) {
 			throw new IllegalArgumentException("네 축 모두 0 ~ 1 점수가 있어야 한다");
 		}
 		PersonalityResult result = new PersonalityResult();

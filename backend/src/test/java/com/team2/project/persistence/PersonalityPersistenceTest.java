@@ -25,6 +25,7 @@ import com.team2.project.personality.repository.PersonalityResultRepository;
 import com.team2.project.personality.repository.PersonalityTypeRepository;
 import jakarta.persistence.EntityManager;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -152,6 +153,24 @@ class PersonalityPersistenceTest {
 	}
 
 	@Test
+	@DisplayName("칸 순서와 점수가 어긋나면 막는다 (매우 칸에 1점)")
+	void choice_orderScoreMismatch_rejected() {
+		assertThatThrownBy(() -> jdbc.update("""
+			INSERT INTO personality_choice (question_id, axis, letter, score, display_order)
+			VALUES (?, 'APOLOGY_SINCERITY', 'E', 1, 1)""", emptyQuestion()))
+			.isInstanceOf(DataIntegrityViolationException.class).hasMessageContaining("chk_personality_choice_order_score");
+	}
+
+	@Test
+	@DisplayName("보통 칸(3)이 아닌 곳에 글자 없는 선택지는 막는다")
+	void choice_neutralOutsideMiddle_rejected() {
+		assertThatThrownBy(() -> jdbc.update("""
+			INSERT INTO personality_choice (question_id, axis, letter, score, display_order)
+			VALUES (?, 'APOLOGY_SINCERITY', NULL, 0, 1)""", emptyQuestion()))
+			.isInstanceOf(DataIntegrityViolationException.class).hasMessageContaining("chk_personality_choice_order_score");
+	}
+
+	@Test
 	@DisplayName("유형은 공유 주소(shareId)로 찾고, 캐릭터 · 설명 칸이 매핑된다")
 	void type_findByShareId() {
 		PersonalityType type = typeRepository.findByShareId("tst0intp").orElseThrow();
@@ -229,6 +248,21 @@ class PersonalityPersistenceTest {
 	void result_missingAxis_rejectedByEntity() {
 		assertThatThrownBy(() -> PersonalityResult.create(user, null,
 			Map.of(ValueAxis.APOLOGY_SINCERITY, 0.5), List.of())).isInstanceOf(IllegalArgumentException.class);
+		assertThatThrownBy(() -> PersonalityResult.create(user, null, null, List.of()))
+			.isInstanceOf(IllegalArgumentException.class);
+		// NaN은 0 ~ 1 비교를 둘 다 빠져나가므로 따로 막아야 한다 (#124 리뷰)
+		assertThatThrownBy(() -> PersonalityResult.create(user, null, Map.of(
+			ValueAxis.APOLOGY_SINCERITY, Double.NaN, ValueAxis.FAULT_STANDARD, 0.5,
+			ValueAxis.PRINCIPLE_RELATION, 0.5, ValueAxis.ORDER_OPPORTUNITY, 0.5), List.of()))
+			.isInstanceOf(IllegalArgumentException.class);
+		// 키 개수가 4여도 네 축이 아니면 막는다 (null 키 + 세 축)
+		Map<ValueAxis, Double> nullKey = new HashMap<>();
+		nullKey.put(null, 0.5);
+		nullKey.put(ValueAxis.FAULT_STANDARD, 0.5);
+		nullKey.put(ValueAxis.PRINCIPLE_RELATION, 0.5);
+		nullKey.put(ValueAxis.ORDER_OPPORTUNITY, 0.5);
+		assertThatThrownBy(() -> PersonalityResult.create(user, null, nullKey, List.of()))
+			.isInstanceOf(IllegalArgumentException.class);
 	}
 
 	@Test
@@ -244,8 +278,20 @@ class PersonalityPersistenceTest {
 		assertThat(read.countOf(ValueAxis.FAULT_STANDARD)).isEqualTo(new AxisCount(0, 2));
 		assertThat(read.countOf(ValueAxis.ORDER_OPPORTUNITY).hasData()).isFalse();
 		assertThat(read.getAxisCounts()).hasSize(4);
+		assertThat(read.getAxisCounts().values()).doesNotContainNull();
 		assertThat(contributionRepository.findFirstAttemptsByAnonymousUser(user.getId()))
 			.extracting(p -> p.getExperience().getId()).containsExactly(experience.getId());
+	}
+
+	@Test
+	@DisplayName("기여 개수에 null 값이 들어와도 0 · 0으로 채운다 (getOrDefault는 null 값을 그대로 둔다)")
+	void contribution_nullValue_filledEmpty() {
+		Map<ValueAxis, AxisCount> counts = new HashMap<>();
+		counts.put(ValueAxis.APOLOGY_SINCERITY, null);
+		counts.put(ValueAxis.FAULT_STANDARD, new AxisCount(1, 1));
+		ExperiencePersonality contribution = ExperiencePersonality.of(startExperience(), counts);
+		assertThat(contribution.getAxisCounts().get(ValueAxis.APOLOGY_SINCERITY)).isEqualTo(AxisCount.EMPTY);
+		assertThat(contribution.getAxisCounts().get(ValueAxis.FAULT_STANDARD)).isEqualTo(new AxisCount(1, 1));
 	}
 
 	@Test

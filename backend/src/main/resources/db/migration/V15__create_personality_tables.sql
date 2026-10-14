@@ -46,6 +46,13 @@ CREATE TABLE personality_choice (
             OR (axis = 'FAULT_STANDARD'     AND letter IN ('S', 'N'))
             OR (axis = 'PRINCIPLE_RELATION' AND letter IN ('T', 'F'))
             OR (axis = 'ORDER_OPPORTUNITY'  AND letter IN ('J', 'P'))))
+    ),
+    -- 칸 순서와 글자 · 점수를 묶는다: 1 · 5는 매우(2점), 2 · 4는 조금(1점), 3은 보통(글자 없음 0점).
+    -- 문항당 5칸이 다 있는지는 DB로 막기 어려워 시드 테스트(7.6.4)에서 본다
+    CONSTRAINT chk_personality_choice_order_score CHECK (
+        (display_order = 3 AND letter IS NULL AND score = 0)
+        OR (display_order IN (1, 5) AND letter IS NOT NULL AND score = 2)
+        OR (display_order IN (2, 4) AND letter IS NOT NULL AND score = 1)
     )
 );
 CREATE INDEX ix_personality_choice_question_id ON personality_choice (question_id);
