@@ -16,6 +16,8 @@
   python3 tools/graphify/link_docs_code.py --stats    # 연결 통계만 출력 (그래프는 쓰지 않음)
 
 선행 조건: graphify 설치 + `/graphify .` 로 문서(semantic) 추출이 한 번 끝나 graphify-out/graph.json 이 있을 것.
+확인한 버전: graphifyy 0.9.90. 이 스크립트는 graphify 내부 함수(`graphify.watch._read_build_excludes` 등 `_` 시작 함수)를 직접 불러 쓰므로,
+graphify를 올린 뒤 import 오류가 나면 이 호출부를 먼저 확인한다.
 """
 import argparse
 import collections
