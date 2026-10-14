@@ -229,12 +229,18 @@ export const QUESTIONS = [
   }
 ];
 
-// 16유형. tolerance = 관용 지수(I · N · F · P 글자 수), meme = 결과 카드 문구, scene = 밈 장면(이미지 생성용 설명)
+// 이미지 번호(`personality/{번호}.webp`)는 유형에 고정한다. 순서가 바뀌어도 번호는 바꾸지 않는다 (docs/character/personality-image-numbers.md)
+export const IMAGE_NUMBERS = {
+  ESTJ: 1, ISTJ: 2, ESTP: 3, ENTJ: 4, ESFJ: 5, ISFJ: 6, INTJ: 7, ISTP: 8,
+  ENTP: 9, ESFP: 10, ENFJ: 11, INFJ: 12, INTP: 13, ISFP: 14, ENFP: 15, INFP: 16,
+};
+
+// 16유형. character = NAERO(내로) · NAMBUL(남불) 코드값(화면 이름은 utils/personalityAxes.js). tolerance = 관용 지수(I · N · F · P 글자 수), meme = 결과 카드 문구, scene = 밈 장면(이미지 생성용 설명)
 export const TYPES = {
   "ESTJ": {
     "code": "ESTJ",
     "name": "국룰 수호자형",
-    "character": "내로",
+    "character": "NAERO",
     "tolerance": 0,
     "oneLiner": "결과 · 원칙 · 질서를 모두 엄격히 보고, 사과는 행동으로만 인정한다",
     "meme": "\"국룰입니다\"",
@@ -245,7 +251,7 @@ export const TYPES = {
   "ISTJ": {
     "code": "ISTJ",
     "name": "사과 접수, 규칙 추가형",
-    "character": "남불",
+    "character": "NAMBUL",
     "tolerance": 1,
     "oneLiner": "결과와 원칙대로 판단하되 진심 어린 사과는 받아 주고, 반복되지 않게 선을 분명히 긋는다",
     "meme": "\"사과는 받았고, 규칙은 추가했어\"",
@@ -256,7 +262,7 @@ export const TYPES = {
   "ESTP": {
     "code": "ESTP",
     "name": "증명하면 인정형",
-    "character": "내로",
+    "character": "NAERO",
     "tolerance": 1,
     "oneLiner": "결과와 원칙은 칼같이, 행동으로 증명하면 기회를 준다",
     "meme": "\"말 말고 보여 줘\"",
@@ -267,7 +273,7 @@ export const TYPES = {
   "ENTJ": {
     "code": "ENTJ",
     "name": "끝까지 확인형",
-    "character": "내로",
+    "character": "NAERO",
     "tolerance": 1,
     "oneLiner": "의도까지 직접 확인하고, 원칙과 질서는 엄정하게 세운다",
     "meme": "\"확인하고 넘어갈게\"",
@@ -278,7 +284,7 @@ export const TYPES = {
   "ESFJ": {
     "code": "ESFJ",
     "name": "단톡방 반장형",
-    "character": "남불",
+    "character": "NAMBUL",
     "tolerance": 1,
     "oneLiner": "관계를 조율하되 결과는 분명히 짚고, 재발 방지를 요구한다",
     "meme": "\"다들 앞으로는 이러지 말자~\"",
@@ -289,7 +295,7 @@ export const TYPES = {
   "ISFJ": {
     "code": "ISFJ",
     "name": "새끼손가락 도장형",
-    "character": "내로",
+    "character": "NAERO",
     "tolerance": 2,
     "oneLiner": "일어난 일을 가볍게 넘기지 않지만 관계 회복에 공을 들이고, 재발 방지 약속은 꼭 받아 둔다",
     "meme": "\"약속! 도장 찍고 복사까지\"",
@@ -300,7 +306,7 @@ export const TYPES = {
   "INTJ": {
     "code": "INTJ",
     "name": "다 보인다형",
-    "character": "남불",
+    "character": "NAMBUL",
     "tolerance": 2,
     "oneLiner": "속내와 의도를 꿰뚫어 보되, 원칙과 질서는 타협하지 않는다",
     "meme": "\"다 계획이 있었구나?\"",
@@ -311,7 +317,7 @@ export const TYPES = {
   "ISTP": {
     "code": "ISTP",
     "name": "뒤끝 없는 쿨거래형",
-    "character": "남불",
+    "character": "NAMBUL",
     "tolerance": 2,
     "oneLiner": "결과에는 단호하지만, 사과하면 믿어 주고 뒤끝 없이 넘어간다",
     "meme": "\"ㅇㅋ 끝. 다음\"",
@@ -322,7 +328,7 @@ export const TYPES = {
   "ENTP": {
     "code": "ENTP",
     "name": "근데 왜 그랬어형",
-    "character": "내로",
+    "character": "NAERO",
     "tolerance": 2,
     "oneLiner": "의도를 뒤집어 보며 따지되, 원칙은 지키고 기회는 열어 둔다",
     "meme": "\"잠깐, 근데 왜?\"",
@@ -333,7 +339,7 @@ export const TYPES = {
   "ESFP": {
     "code": "ESFP",
     "name": "보여 주면 다시 친구형",
-    "character": "남불",
+    "character": "NAMBUL",
     "tolerance": 2,
     "oneLiner": "관계 회복이 먼저고, 행동으로 보여 주면 다시 믿어 준다",
     "meme": "\"행동으로 보여 주면 어깨동무 가능\"",
@@ -344,7 +350,7 @@ export const TYPES = {
   "ENFJ": {
     "code": "ENFJ",
     "name": "화해 주선러형",
-    "character": "남불",
+    "character": "NAMBUL",
     "tolerance": 2,
     "oneLiner": "사정을 헤아려 화해를 돕고, 행동을 확인한 뒤 규칙으로 재발을 막는다",
     "meme": "\"자, 둘이 악수하고 규칙 하나만 정하자\"",
@@ -355,7 +361,7 @@ export const TYPES = {
   "INFJ": {
     "code": "INFJ",
     "name": "다 이해해, 선은 지켜형",
-    "character": "내로",
+    "character": "NAERO",
     "tolerance": 3,
     "oneLiner": "사정을 깊이 헤아리고 화해를 중시하되, 서로 지킬 선은 분명히 정한다",
     "meme": "\"다 이해해. 근데 여기까지\"",
@@ -366,7 +372,7 @@ export const TYPES = {
   "INTP": {
     "code": "INTP",
     "name": "사연 분석러형",
-    "character": "남불",
+    "character": "NAMBUL",
     "tolerance": 3,
     "oneLiner": "왜 그랬는지 논리적으로 따지고 원칙은 지키되, 다음 기회는 열어 둔다",
     "meme": "\"흠, 그럴 만한 이유가 있었군\"",
@@ -377,7 +383,7 @@ export const TYPES = {
   "ISFP": {
     "code": "ISFP",
     "name": "속상해도 한 번 더형",
-    "character": "내로",
+    "character": "NAERO",
     "tolerance": 3,
     "oneLiner": "결과는 인정하되 관계를 먼저 챙기고, 다시 기회를 준다",
     "meme": "\"속상하지만… 한 번 더\"",
@@ -388,7 +394,7 @@ export const TYPES = {
   "ENFP": {
     "code": "ENFP",
     "name": "변하면 응원단장형",
-    "character": "남불",
+    "character": "NAMBUL",
     "tolerance": 3,
     "oneLiner": "의도와 관계를 살피고, 변화가 보이면 적극적으로 응원한다",
     "meme": "\"오 달라졌는데?! 가보자고\"",
@@ -399,7 +405,7 @@ export const TYPES = {
   "INFP": {
     "code": "INFP",
     "name": "그럴 수도 있지형",
-    "character": "내로",
+    "character": "NAERO",
     "tolerance": 4,
     "oneLiner": "진심을 믿고 사연을 헤아리며, 화해와 두 번째 기회를 폭넓게 준다",
     "meme": "\"그럴 수도 있지~\"",

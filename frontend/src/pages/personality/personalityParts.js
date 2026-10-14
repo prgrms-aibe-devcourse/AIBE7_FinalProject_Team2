@@ -1,14 +1,23 @@
 import { element } from '../../components/siteLayout.js';
+import { CHARACTER_NAMES } from '../../utils/personalityAxes.js';
 
 // S-16(내 결과)과 공유된 결과(/test/types/{shareId})가 함께 쓰는 조각. 공유 화면에는 개인 응답 · 축 점수를 넣지 않는다(FR-8-6).
 // 4글자 코드(INTP 등)와 축 글자(E · I 등)는 화면에 보이지 않는다(상표 우려, 10/13). 내부 데이터에만 쓰고, 공유 주소는 해시 값({shareId})이다.
-// 캐릭터 이미지는 아직 없어서(7.6.8) 이름표 자리만 둔다.
+// 캐릭터 이미지(imageUrl)가 아직 없으면(null, 7.6.8) 이름표 자리를 대체 이미지로 둔다.
 
 export function typeCard(type, kicker) {
   const card = element('section', 'result-card');
+  const characterName = CHARACTER_NAMES[type.character] ?? type.character;
   const portrait = element('div', 'result-portrait');
-  portrait.append(element('strong', '', type.character), element('span', '', type.meme));
-  portrait.setAttribute('aria-label', `${type.character} 캐릭터 (이미지 준비 중)`);
+  if (type.imageUrl) {
+    const image = element('img');
+    image.src = type.imageUrl;
+    image.alt = `${characterName} 캐릭터`;
+    portrait.append(image, element('span', '', type.meme));
+  } else {
+    portrait.append(element('strong', '', characterName), element('span', '', type.meme));
+    portrait.setAttribute('aria-label', `${characterName} 캐릭터 (이미지 준비 중)`);
+  }
   const head = element('div', 'result-head');
   head.append(
     element('p', 'personality-kicker', kicker),
@@ -21,9 +30,9 @@ export function typeCard(type, kicker) {
 
 export function descriptionSections(type) {
   const daily = element('section', 'result-section');
-  daily.append(element('h2', '', '일상에서는'), element('p', '', type.daily));
+  daily.append(element('h2', '', '일상에서는'), element('p', '', type.dailyDescription));
   const verdict = element('section', 'result-section');
-  verdict.append(element('h2', '', '판결을 볼 때는'), element('p', '', type.verdict));
+  verdict.append(element('h2', '', '판결을 볼 때는'), element('p', '', type.verdictDescription));
   return [daily, verdict];
 }
 

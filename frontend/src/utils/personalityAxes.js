@@ -1,3 +1,6 @@
+// 유형의 character 코드값(API 명세 9-1)에 대응하는 화면 이름
+export const CHARACTER_NAMES = { NAERO: '내로', NAMBUL: '남불' };
+
 // 가치관 4축 (FR-8-1). key는 factor.value_axis와 같은 값, strict = 엄격 글자, lenient = 관대 글자(I · N · F · P).
 // 성향 테스트 · 결과 · 마이페이지 화면과 목 채점이 함께 쓴다.
 export const AXES = [
