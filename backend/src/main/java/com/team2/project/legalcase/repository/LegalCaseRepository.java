@@ -33,6 +33,9 @@ public interface LegalCaseRepository extends JpaRepository<LegalCase, Long> {
 
 	Optional<LegalCase> findByIdAndStatus(Long id, CaseStatus status);
 
+	/** 관리자 사건 수정(A-11): 다른 사건이 이미 쓰는 제목인지 (uk_legal_case_title) */
+	boolean existsByTitleAndIdNot(String title, Long id);
+
 	/**
 	 * 관리자 상태 변경(A-9 ~ A-13)은 사건 행을 먼저 잠그고(SELECT ... FOR UPDATE) 상태를 확인한다 (API 명세 8-2 "동시 요청").
 	 * "아직 공개 전"을 확인한 사이 다른 관리자가 공개 · 승인하는 경합을 막는다

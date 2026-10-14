@@ -55,6 +55,12 @@ public class Factor {
 
 	private int displayOrder;
 
+	/** 관리자가 가치관 축을 확정한다 (A-12). null = 어느 축에도 맞지 않음으로 확정. 투표 기록은 그대로 둔다 */
+	public void confirmValueAxis(ValueAxis valueAxis) {
+		this.valueAxis = valueAxis;
+		this.valueAxisStatus = ValueAxisStatus.CONFIRMED;
+	}
+
 	/** 사전 판단 작용 요소로 고를 수 있는지 (개요 단계 요소만) */
 	public boolean isSelectableInPreJudgment() {
 		return revealStage == RevealStage.OVERVIEW;

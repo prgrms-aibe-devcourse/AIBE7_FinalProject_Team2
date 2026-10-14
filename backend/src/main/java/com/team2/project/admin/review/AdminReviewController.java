@@ -5,6 +5,7 @@ import com.team2.project.admin.review.dto.AdminCaseListResponse;
 import com.team2.project.admin.review.dto.AdminJudgmentResponse;
 import com.team2.project.admin.review.dto.AdminRejectRequest;
 import com.team2.project.admin.review.dto.AdminSourceTextResponse;
+import com.team2.project.admin.review.dto.AdminValueAxisResponse;
 import com.team2.project.admin.service.AdminPrincipal;
 import com.team2.project.common.exception.BusinessException;
 import com.team2.project.common.exception.ErrorCode;
@@ -13,19 +14,22 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.Arrays;
 import java.util.EnumSet;
+import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 관리자 검수 조회 API (API 명세 8-2 A-5 ~ A-8, BE-41). 관리자 체인(세션 · ADMIN 역할)이 지킨다(8-1).
+ * 관리자 검수 API (API 명세 8-2 A-5 ~ A-13, BE-41 ~ BE-43). 관리자 체인(세션 · ADMIN 역할)이 지킨다(8-1).
  * 쿼리 값은 문자열로 받아 명세대로 엄격히 검사한다(예: pending은 true · false만)
  */
 @RestController
@@ -37,6 +41,7 @@ public class AdminReviewController {
 
 	private final AdminReviewQueryService queryService;
 	private final AdminReviewDecisionService decisionService;
+	private final AdminCaseEditService caseEditService;
 
 	/** A-5 검수 사건 목록 */
 	@GetMapping("/cases")
@@ -87,6 +92,28 @@ public class AdminReviewController {
 	public AdminJudgmentResponse reject(@PathVariable Long judgmentId, @Valid @RequestBody AdminRejectRequest body,
 		@AuthenticationPrincipal AdminPrincipal admin, HttpServletRequest request) {
 		return decisionService.reject(judgmentId, body.reason(), admin, request);
+	}
+
+	/** A-11 사건 내용 수정 (보낸 필드만, null = 지움) */
+	@PatchMapping("/cases/{caseId}")
+	public AdminCaseDetailResponse editCase(@PathVariable Long caseId, @RequestBody(required = false) Map<String, Object> body,
+		@AuthenticationPrincipal AdminPrincipal admin, HttpServletRequest request) {
+		return caseEditService.edit(caseId, body, admin, request);
+	}
+
+	/** A-12 판단 요소 가치관 축 확정 */
+	@PutMapping("/factors/{factorId}/value-axis")
+	public AdminValueAxisResponse confirmValueAxis(@PathVariable Long factorId,
+		@RequestBody(required = false) Map<String, Object> body, @AuthenticationPrincipal AdminPrincipal admin,
+		HttpServletRequest request) {
+		return caseEditService.confirmValueAxis(factorId, body, admin, request);
+	}
+
+	/** A-13 사건 공개 */
+	@PostMapping("/cases/{caseId}/publish")
+	public AdminCaseDetailResponse publish(@PathVariable Long caseId, @AuthenticationPrincipal AdminPrincipal admin,
+		HttpServletRequest request) {
+		return caseEditService.publish(caseId, admin, request);
 	}
 
 	private static Set<CaseStatus> statuses(String value) {
