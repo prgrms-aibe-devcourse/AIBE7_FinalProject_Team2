@@ -9,11 +9,12 @@
 | v0.3 | 2026-10-14 | A1 · A2 · A3 1차 생성 결과 · 후속 보완점 기록 |
 | v0.4 | 2026-10-14 | 로 스탠딩 빈손(A4 추가, 봉투는 `deliver`만), B1 `idle`은 A4 변환만 |
 | v0.5 | 2026-10-14 | 수정 항목 R1 ~ R3 추가, 지금 이미지는 샘플(모델 교체 후 재생성) |
+| v0.6 | 2026-10-14 | 원본은 팀원 확인용 프라이빗 레포에 올릴 예정(#121 리뷰) |
 
 > 형식 · 이름 규칙 · 검수 기준은 [캐릭터 에셋 아키텍처](character-asset-architecture.md)가 기준이다(시트 2-2 · 장면 · 감정 코드 3-2 · 상황 4-1 · 크기 6-5 · 검수 7-2). 이 문서는 **무엇을 몇 장 만들고 어디까지 했는지**만 적는다.
 > 캐릭터 설정은 [캐릭터 프로필 · 세계관](character-profile-worldview.md), 성향 이미지 번호는 [성향 이미지 번호표](personality-image-numbers.md)가 기준이다.
 > 프롬프트는 [이미지 생성 프롬프트 모음](character-image-prompts.md) 9장(v2)을 쓴다. 항목별 예시는 이 문서 5장.
-> 원본 PNG는 레포 밖 `~/Documents/NaeLawNamBul/character/`(시트는 `sheets/`, 스탠딩은 `standing/`)에 둔다. 웹용 webp만 `frontend/public/images/characters/`에 넣는다.
+> 원본 PNG는 레포 밖 `~/Documents/NaeLawNamBul/character/`(시트는 `sheets/`, 스탠딩은 `standing/`)에 둔다. 웹용 webp만 `frontend/public/images/characters/`에 넣는다. 원본은 나중에 팀원 확인용 프라이빗 레포에 올린다(에셋 아키텍처 7-3 #5).
 
 **상태 표기**: ⬜ 대기 · 🟨 생성 중 · 🟦 검수 중 · ✅ 완료
 

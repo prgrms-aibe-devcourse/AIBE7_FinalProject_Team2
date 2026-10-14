@@ -16,6 +16,7 @@
 | v0.10 | 2026-10-14 | 로 셋 이름 — 로울(`law-scale`) · 로봉(`law-gavel`) · 로북(`law-book`) |
 | v0.11 | 2026-10-14 | #121 리뷰 반영 — 3인 컷 키는 체형대로(3-7), IDENTITY 5개(5-1), S-06 → S-07 고민 연출을 **팀 승인 전 제안**으로 낮춤(4-1 · 4-2 · 7-3 #15) |
 | v0.12 | 2026-10-14 | REQ-128 팀 결정 반영 — 로딩 연출은 하고 문구는 중의적으로("AI 판결을 기다리는 중"), 4-1 · 4-2 · 5-2 GUARDRAILS · 7-3 #15 ✅. 로딩 시간 초안(최소 1초, 늦으면 반복) |
+| v0.13 | 2026-10-14 | #121 리뷰 반영 — 원본 PNG · 프롬프트 원문은 팀원 확인용 프라이빗 레포에 올릴 예정(7-3 #5), 성향 이미지 번호는 유형에 고정(6-4 · 번호표) |
 
 > 캐릭터 **결정**은 [캐릭터 인수인계](character-main-handover.md) 2-1절(10/13 변경)과 [성향 테스트 콘텐츠](../personality-test-content.md) 6장이 기준이다. 이 문서는 그 결정을 **어떤 단위로 나눠 만들고, 어떻게 조합하고, 어디에 두는지**만 정한다.
 > 기획 원문은 `Claude outputs/character/plan/character-law-ai-judge-plan.md` v0.3(커밋 안 함, 이하 "기획")이다. 이 문서에 필요한 내용은 옮겨 적었다. 프롬프트 원문은 `Claude outputs/character/prompts/naero_nambul_main_image_prompts.md`(메인 이미지 최종) · `naero_nambul_sheet_prompts_deformation11.md`(데포르메 11종)다.
@@ -599,7 +600,7 @@ frontend/public/images/characters/
 │   ├── layers/{style}-{deform}/{kind}-{item}-{direction}.webp
 │   └── icon/{style}-{deform}/face-{emotion}.webp
 ├── reenact/case-{caseId}/{headline | sub-1 | detail-1}.webp   ← 사건 재연 컷 ⚠️
-└── personality/{01 ~ 16}.webp                                 ← 성향 16유형(번호, 번호 설명은 personality-image-numbers.md)
+└── personality/{01 ~ 16}.webp                                 ← 성향 16유형(번호는 유형에 고정, 번호표는 personality-image-numbers.md)
 ```
 
 - 이름은 모두 영어 소문자 · 하이픈.
@@ -678,7 +679,7 @@ frontend/public/images/characters/
 | 2 | 역할 의상 구분 색 | 판사 = 로와 같은 판사복, 검사 · 변호인 = 같은 형태 법복 + 청동 · 크래프트 띠(3-4) | 기록해 두고 **다른 방법도 고민**(소품으로 구분 등) |
 | 3 | 사건 화면에서 쓰지 않는 데포르메 | 전부 허용(3-1) | ✅ 확정(10/13). 이미지 생성까지 자동화하면 일부를 뺄 수 있음 |
 | 4 | 감정 코드 세트 | 6종, `angry` 없음(3-2) | 확인 필요 |
-| 5 | 원본 PNG 보관 위치 | 레포 밖(공유 드라이브 등) | 확인 필요 |
+| 5 | 원본 PNG 보관 위치 | 레포 밖. 원본 PNG(`~/Documents/NaeLawNamBul/`) · 프롬프트 원문(`Claude outputs/`)을 **팀원 확인용 프라이빗 레포**에 올릴 예정 | 방향 확정(10/14), 레포 만든 뒤 주소 기록 |
 | 6 | 성향 이미지 파일 이름 | 번호 `01` ~ `16`(6-4) + 번호표 문서 | ✅ 확정(10/13) |
 | 7 | 대사 생성 시점 · 담당 · 저장 · API | 6-6 | AI 판결 파이프라인 담당과 결정(기획 11장 #11) |
 | 8 | 챗봇에서 스킨 말투 사용 | 3-5 | 챗봇 범위 결정 후 |
