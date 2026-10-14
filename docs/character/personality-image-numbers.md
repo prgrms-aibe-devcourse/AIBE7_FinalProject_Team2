@@ -49,7 +49,7 @@
 | B | 백엔드가 크롤러 요청에만 메타태그 HTML을 응답한다 | 데이터가 한곳에 있다 | 백엔드 작업이 늘고, 크롤러 판별 · 배포 구성이 필요하다 |
 | C | 프리렌더(SSG) 플러그인을 도입한다 | 다른 정적 페이지에도 쓸 수 있다 | 빌드 구성이 커진다 |
 
-- Nginx 예시: `location ~ ^/test/types/([a-z0-9]+)$ { try_files /og/$1.html /index.html; }` (해당 파일이 없으면 기존 SPA `index.html`로 돌아간다).
+- Nginx 예시: `location ~ ^/test/types/([A-Za-z0-9]{6,16})$ { try_files /og/$1.html /index.html; }` (해당 파일이 없으면 기존 SPA `index.html`로 돌아간다). shareId는 대소문자가 섞인 영문 · 숫자 6 ~ 16자(`[A-Za-z0-9]{6,16}`, 서버 `PersonalityService`와 같은 형식)라서 소문자만 받으면 대문자 shareId가 OG 파일을 못 찾는다.
 - 메타태그 내용: `og:title` = "나의 판결 성향은 {유형명}", `og:description` = 한 줄 설명(`oneLiner`), `og:url` = 공유 주소(shareId), `og:image` = 아래 OG 이미지의 **절대 주소(https)**, `og:type` = website, `twitter:card` = summary_large_image. 4글자 코드와 "MBTI"라는 말은 쓰지 않는다(FR-8-4). 코드는 메타태그 · 주소 어디에도 보이지 않는다.
 
 **OG 이미지 (새로 그리지 않고 합성한다)**
