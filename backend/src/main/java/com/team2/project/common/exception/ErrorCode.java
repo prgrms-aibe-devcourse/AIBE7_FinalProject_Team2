@@ -32,6 +32,9 @@ public enum ErrorCode {
 	TOKEN_EXPIRED(HttpStatus.UNAUTHORIZED, "로그인이 만료되었습니다."),
 	// 관리자 검수 API (확장 단계, 7.4.7)
 	JUDGMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "판결을 찾을 수 없습니다."),
+	FACTOR_NOT_FOUND(HttpStatus.NOT_FOUND, "판단 요소를 찾을 수 없습니다."),
+	DUPLICATE_TITLE(HttpStatus.CONFLICT, "다른 사건과 제목이 겹칩니다."),
+	PUBLISH_NOT_READY(HttpStatus.CONFLICT, "공개 조건을 채우지 않았습니다."),
 	// 성향 API (확장 단계, BE-72)
 	PERSONALITY_RESULT_NOT_FOUND(HttpStatus.NOT_FOUND, "성향 테스트 결과가 없습니다."),
 	PERSONALITY_TYPE_NOT_FOUND(HttpStatus.NOT_FOUND, "성향 유형을 찾을 수 없습니다."),

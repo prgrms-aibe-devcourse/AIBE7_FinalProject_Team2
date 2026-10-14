@@ -1,5 +1,9 @@
 package com.team2.project.admin.review;
 
+import com.team2.project.admin.review.dto.AdminValueAxisResponse;
+import java.util.Map;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import com.team2.project.admin.review.dto.AdminRejectRequest;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -37,6 +41,7 @@ public class AdminReviewController {
 
 	private final AdminReviewQueryService queryService;
 	private final AdminReviewDecisionService decisionService;
+	private final AdminCaseEditService caseEditService;
 
 	/** A-5 검수 사건 목록 */
 	@GetMapping("/cases")
@@ -81,6 +86,28 @@ public class AdminReviewController {
 	public AdminJudgmentResponse reject(@PathVariable Long judgmentId, @Valid @RequestBody AdminRejectRequest body,
 		@AuthenticationPrincipal AdminPrincipal admin, HttpServletRequest request) {
 		return decisionService.reject(judgmentId, body.reason(), admin, request);
+	}
+
+	/** A-11 사건 내용 수정 (보낸 필드만, null = 지움) */
+	@PatchMapping("/cases/{caseId}")
+	public AdminCaseDetailResponse editCase(@PathVariable Long caseId, @RequestBody(required = false) Map<String, Object> body,
+		@AuthenticationPrincipal AdminPrincipal admin, HttpServletRequest request) {
+		return caseEditService.edit(caseId, body, admin, request);
+	}
+
+	/** A-12 판단 요소 가치관 축 확정 */
+	@PutMapping("/factors/{factorId}/value-axis")
+	public AdminValueAxisResponse confirmValueAxis(@PathVariable Long factorId,
+		@RequestBody(required = false) Map<String, Object> body, @AuthenticationPrincipal AdminPrincipal admin,
+		HttpServletRequest request) {
+		return caseEditService.confirmValueAxis(factorId, body, admin, request);
+	}
+
+	/** A-13 사건 공개 */
+	@PostMapping("/cases/{caseId}/publish")
+	public AdminCaseDetailResponse publish(@PathVariable Long caseId, @AuthenticationPrincipal AdminPrincipal admin,
+		HttpServletRequest request) {
+		return caseEditService.publish(caseId, admin, request);
 	}
 
 	/** A-8 판결 후보 상세 */

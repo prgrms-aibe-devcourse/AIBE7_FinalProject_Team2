@@ -129,7 +129,7 @@ public class AdminReviewDecisionService {
 	}
 
 	/** 관리자 API의 INVALID_STATE: currentStatus는 사건 상태, 이유는 details 사유 코드 (API 명세 8-2) */
-	private static BusinessException invalidState(LegalCase legalCase, String reason) {
+	static BusinessException invalidState(LegalCase legalCase, String reason) {
 		return new BusinessException(ErrorCode.INVALID_STATE, ErrorCode.INVALID_STATE.getMessage(),
 			legalCase.getStatus().name(), List.of(new FieldErrorDetail("case", reason)));
 	}

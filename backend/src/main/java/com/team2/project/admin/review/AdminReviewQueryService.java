@@ -93,12 +93,7 @@ public class AdminReviewQueryService {
 		byKind.put(SubjectType.AI.name(), candidates(candidates, SubjectType.AI, generations));
 		byKind.put(SubjectType.COURT.name(), candidates(candidates, SubjectType.COURT, generations));
 
-		PublishReadiness readiness = PublishReadiness.of(
-			candidates.stream().anyMatch(j -> j.getSubjectType() == SubjectType.AI && j.isPublished()),
-			candidates.stream().anyMatch(j -> j.getSubjectType() == SubjectType.COURT && j.isPublished()),
-			factors.size(),
-			(int) factors.stream().filter(factor -> factor.getRevealStage() == RevealStage.OVERVIEW).count(),
-			penaltyRuleRepository.findAllByCaseId(caseId).size());
+		PublishReadiness readiness = readiness(caseId, candidates, factors);
 
 		return new AdminCaseDetailResponse(
 			legalCase.getId(),
@@ -151,6 +146,20 @@ public class AdminReviewQueryService {
 				judgment.getReferenceTags()),
 			generation == null ? null : new AdminJudgmentResponse.Generation(generation.getModelName(),
 				generation.getPromptVersion(), generation.getInputSnapshot(), generation.getGenerationReport()));
+	}
+
+	/** 공개 조건 (A-6 표시 · A-13 확인이 같은 판정을 쓴다) */
+	public PublishReadiness readinessOf(Long caseId) {
+		return readiness(caseId, judgmentRepository.findCandidatesByCaseId(caseId), factorRepository.findAllByCaseId(caseId));
+	}
+
+	private PublishReadiness readiness(Long caseId, List<Judgment> candidates, List<Factor> factors) {
+		return PublishReadiness.of(
+			candidates.stream().anyMatch(j -> j.getSubjectType() == SubjectType.AI && j.isPublished()),
+			candidates.stream().anyMatch(j -> j.getSubjectType() == SubjectType.COURT && j.isPublished()),
+			factors.size(),
+			(int) factors.stream().filter(factor -> factor.getRevealStage() == RevealStage.OVERVIEW).count(),
+			penaltyRuleRepository.findAllByCaseId(caseId).size());
 	}
 
 	private LegalCase findCase(Long caseId) {
