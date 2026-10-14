@@ -18,8 +18,9 @@ WORKDIR /app
 # root가 아닌 사용자로 실행
 RUN useradd --system --uid 10001 spring
 # logs/는 구조화 로그(JSON) 파일을 쓰는 디렉터리다 (BE-71, WBS 7.2.3). /app은 root가 만들어서 spring이 쓸 수 없으니,
-# 미리 만들고 소유자를 바꿔 둔다. 안 하면 RollingFileAppender가 디렉터리를 못 만들어 기동 자체가 실패한다
-RUN mkdir -p /app/logs && chown -R spring:spring /app
+# logs/만 미리 만들고 소유자를 바꿔 둔다 — /app 전체를 spring 소유로 바꾸면 app.jar까지 쓸 수 있게 되어,
+# 침해된 프로세스가 실행 파일을 바꿔치기해 재시작 뒤에도 남아 있게 할 수 있다(#129 리뷰). app.jar는 root 소유로 남긴다
+RUN mkdir -p /app/logs && chown spring:spring /app/logs
 USER spring
 
 COPY --from=build /app/build/libs/*.jar app.jar

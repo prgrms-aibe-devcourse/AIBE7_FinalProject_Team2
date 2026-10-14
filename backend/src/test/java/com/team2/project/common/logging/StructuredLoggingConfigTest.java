@@ -2,10 +2,16 @@ package com.team2.project.common.logging;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.LoggerContext;
 import ch.qos.logback.classic.joran.JoranConfigurator;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.classic.spi.LoggingEvent;
+import ch.qos.logback.core.ConsoleAppender;
+import ch.qos.logback.core.encoder.Encoder;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.List;
 import net.logstash.logback.argument.StructuredArguments;
@@ -84,6 +90,37 @@ class StructuredLoggingConfigTest {
 
 		var entry = onlyLogEntry();
 		assertThat(entry.get("password").asString()).isEqualTo("****");
+	}
+
+	@Test
+	void basicAuthAndRawJwtAndQuotedSecret_areMaskedInFile() throws IOException {
+		Logger logger = context.getLogger("test.masking.more");
+		logger.warn("Authorization=Basic dXNlcjpwYXNz, jwt=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dQw4w9WgXcQ, "
+			+ "body={\"password\":\"hunter2\"}");
+		context.stop();
+
+		var entry = onlyLogEntry();
+		String message = entry.get("message").asString();
+		assertThat(message).doesNotContain("dXNlcjpwYXNz", "eyJhbGciOiJIUzI1NiJ9", "hunter2").contains("****");
+	}
+
+	@Test
+	void consoleAppender_masksSameAsFileAppender() throws Exception {
+		Logger root = context.getLogger(Logger.ROOT_LOGGER_NAME);
+		@SuppressWarnings("unchecked")
+		ConsoleAppender<ILoggingEvent> console = (ConsoleAppender<ILoggingEvent>) root.getAppender("CONSOLE");
+		Encoder<ILoggingEvent> encoder = console.getEncoder();
+		Logger logger = context.getLogger("test.masking.console");
+		ILoggingEvent event = new LoggingEvent(Logger.class.getName(), logger, Level.WARN,
+			"Authorization=Bearer abcDEF123.xyz-789_token, Basic dXNlcjpwYXNz, "
+				+ "jwt=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dQw4w9WgXcQ, mail=user@example.com, "
+				+ "body={\"password\":\"hunter2\"}",
+			null, null);
+
+		String rendered = new String(encoder.encode(event), StandardCharsets.UTF_8);
+
+		assertThat(rendered).doesNotContain("abcDEF123.xyz-789_token", "dXNlcjpwYXNz", "eyJhbGciOiJIUzI1NiJ9",
+			"user@example.com", "hunter2");
 	}
 
 	private JsonNode onlyLogEntry() throws IOException {
