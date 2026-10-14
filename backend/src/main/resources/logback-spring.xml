@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  구조화 로그 (BE-71, WBS 7.2.3).
+
+  콘솔(사람이 읽는 패턴)과 파일(JSON) 두 군데에 같은 로그를 쓴다.
+  - 콘솔: 로컬 개발에서 ./gradlew bootRun 콘솔을 그대로 읽을 때 쓴다. 사람이 보기 편한 형식 그대로 둔다.
+  - 파일(logs/app.log): Grafana Alloy가 이 파일을 tail해서 Loki로 보낸다(monitoring/alloy-config.alloy).
+    JSON 한 줄 = 로그 한 건이라 Loki · Grafana에서 필드별로 검색 · 파싱하기 쉽다.
+  traceId는 MDC에 넣어 두면(TraceIdFilter) LogstashEncoder가 자동으로 JSON 필드에 포함시킨다 — 따로 설정할 게 없다.
+-->
+<configuration>
+	<include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+	<springProperty name="appName" source="spring.application.name" defaultValue="backend"/>
+	<!-- 테스트에서 -DLOG_PATH=... 로 다른 폴더에 쓰도록 재정의할 수 있다. 운영에서도 바꿀 일이 생기면 여기서 바꾼다 -->
+	<property name="LOG_PATH" value="${LOG_PATH:-logs}"/>
+
+	<appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+		<encoder>
+			<!-- traceId를 사람이 읽는 콘솔에도 같이 보여준다 (없으면 빈칸) -->
+			<pattern>%d{HH:mm:ss.SSS} %-5level [traceId=%X{traceId:-}] %logger{36} - %msg%n</pattern>
+		</encoder>
+	</appender>
+
+	<appender name="FILE_JSON" class="ch.qos.logback.core.rolling.RollingFileAppender">
+		<file>${LOG_PATH}/app.log</file>
+		<rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+			<fileNamePattern>${LOG_PATH}/app.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+			<maxFileSize>100MB</maxFileSize>
+			<!-- Loki 보존 기간(monitoring/loki-config.yml, 15d)과 맞춘다 — 그 이상 디스크에 남겨 둘 이유가 없다 -->
+			<maxHistory>15</maxHistory>
+			<totalSizeCap>2GB</totalSizeCap>
+		</rollingPolicy>
+		<encoder class="net.logstash.logback.encoder.LogstashEncoder">
+			<customFields>{"application":"${appName}"}</customFields>
+			<!--
+			  민감정보 마스킹(WBS 7.2.3). 두 가지 방식을 같이 쓴다.
+			  - path: 필드 이름으로 가린다. 앞으로 누군가 구조화 인자(kv(...))로 password · token 같은 키를 실수로 남겨도 값이 막힌다.
+			  - value: 로그 메시지 문자열 안에 패턴이 보이면 가린다. Authorization 헤더 값 · 이메일이 평문 메시지에 섞여 들어가는 경우를 막는다.
+			  지금 코드는 이미 비밀번호 · API 키를 로그에 남기지 않지만(AdminAuthService · GeminiQueryEmbeddingClient),
+			  이 필터는 "그 규칙이 지켜지지 않았을 때"의 마지막 안전망이다.
+			-->
+			<decorator class="net.logstash.logback.mask.MaskingJsonGeneratorDecorator">
+				<defaultMask>****</defaultMask>
+				<paths>password, token, accessToken, refreshToken, apiKey</paths>
+				<value>Bearer\s+[A-Za-z0-9\-_.]+</value>
+				<value>[\w.+-]+@[\w-]+\.[\w.-]+</value>
+			</decorator>
+		</encoder>
+	</appender>
+
+	<root level="INFO">
+		<appender-ref ref="CONSOLE"/>
+		<appender-ref ref="FILE_JSON"/>
+	</root>
+</configuration>

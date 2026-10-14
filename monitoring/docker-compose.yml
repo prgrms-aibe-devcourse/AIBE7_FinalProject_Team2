@@ -1,10 +1,12 @@
-# 로컬 Prometheus (BE-70, WBS 7.2.2). backend/docker-compose.yml(DB)와는 별개로 띄운다 —
-# 모니터링 스택을 껐다 켜도 앱 · DB 동작에는 영향이 없어야 한다.
-# `./gradlew bootRun`으로 호스트에서 띄운 백엔드의 관리 포트(8081, 7.2.1)를 스크레이프한다.
+# 로컬 모니터링 스택 (Prometheus BE-70 WBS 7.2.2 · Loki/Alloy BE-71 WBS 7.2.3).
+# backend/docker-compose.yml(DB)와는 별개로 띄운다 — 모니터링 스택을 껐다 켜도 앱 · DB 동작에는 영향이 없어야 한다.
+# `./gradlew bootRun`으로 호스트에서 띄운 백엔드의 관리 포트(8081, 7.2.1)를 스크레이프하고,
+# backend/logs의 JSON 로그 파일(7.2.3)을 Alloy가 읽어 Loki로 보낸다.
 #
 # 사용법:
 #   cd monitoring && docker compose up -d
-#   http://localhost:9090/targets 에서 backend job이 UP인지 확인
+#   http://localhost:9090/targets 에서 backend job이 UP인지 확인 (Prometheus)
+#   http://localhost:3100/ready 로 Loki 기동 확인, LogQL은 Grafana(7.2.4)에서 조회
 name: lawnambul-monitoring
 
 services:
@@ -32,5 +34,30 @@ services:
     # 그래서 기본값은 Mac · Windows 기준으로 비워 두고, Linux는 README에서 안내한다
     restart: unless-stopped
 
+  loki:
+    image: grafana/loki:3.7.4
+    container_name: lawnambul-loki
+    command: -config.file=/etc/loki/loki-config.yml
+    volumes:
+      - ./loki-config.yml:/etc/loki/loki-config.yml:ro
+      - loki-data:/loki
+    ports:
+      - "127.0.0.1:3100:3100"
+    restart: unless-stopped
+
+  alloy:
+    # Promtail은 2026-03-02 EOL이라 쓰지 않는다 (README 참고). v1.14는 그 뒤에 나온 안정 버전 라인이다
+    image: grafana/alloy:v1.14.1
+    container_name: lawnambul-alloy
+    volumes:
+      - ./alloy-config.alloy:/etc/alloy/config.alloy:ro
+      # backend/logs(JSON 파일, logback-spring.xml)를 읽기 전용으로 붙인다 — 쓰기 권한은 필요 없다
+      - ../backend/logs:/var/log/backend:ro
+    command: ["run", "--server.http.listen-addr=0.0.0.0:12345", "--storage.path=/var/lib/alloy/data", "/etc/alloy/config.alloy"]
+    depends_on:
+      - loki
+    restart: unless-stopped
+
 volumes:
   prometheus-data:
+  loki-data:

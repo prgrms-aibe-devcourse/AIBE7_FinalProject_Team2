@@ -1,0 +1,39 @@
+# Loki 로컬 단일 바이너리 구성 (BE-71, WBS 7.2.3). 파일시스템에만 저장한다 — 분산 저장소(S3 등)는 아직 필요 없다.
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+
+common:
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+schema_config:
+  configs:
+    - from: 2026-01-01
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+compactor:
+  working_directory: /loki/compactor
+  # 보존 기간을 실제로 지우려면(그냥 limits_config만으로는 삭제되지 않는다) compactor가 지워야 한다
+  retention_enabled: true
+  delete_request_store: filesystem
+
+limits_config:
+  # Prometheus 보존 기간(monitoring/docker-compose.yml, 15d)과 맞춘다 — 메트릭 · 로그를 같은 기간만큼만 로컬에 쌓아 둔다
+  retention_period: 15d
+  # 라벨(스트림)은 job · level처럼 값의 종류가 적은 것만 쓴다 (monitoring/alloy-config.alloy 참고).
+  # traceId 같은 요청마다 다른 값을 실수로 라벨에 넣으면 스트림이 폭발하므로, 스트림 하나의 라벨 개수를 낮게 막아 둔다
+  max_label_names_per_series: 10
