@@ -30,6 +30,8 @@ public enum ErrorCode {
 	FORBIDDEN(HttpStatus.FORBIDDEN, "권한이 없거나 요청을 확인할 수 없습니다."),
 	TOKEN_INVALID(HttpStatus.UNAUTHORIZED, "로그인 정보를 확인할 수 없습니다. 다시 로그인해 주세요."),
 	TOKEN_EXPIRED(HttpStatus.UNAUTHORIZED, "로그인이 만료되었습니다."),
+	// 관리자 검수 API (확장 단계, 7.4.7)
+	JUDGMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "판결을 찾을 수 없습니다."),
 	// 성향 API (확장 단계, BE-72)
 	PERSONALITY_RESULT_NOT_FOUND(HttpStatus.NOT_FOUND, "성향 테스트 결과가 없습니다."),
 	PERSONALITY_TYPE_NOT_FOUND(HttpStatus.NOT_FOUND, "성향 유형을 찾을 수 없습니다."),
