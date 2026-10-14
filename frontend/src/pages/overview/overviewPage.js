@@ -1,4 +1,9 @@
 import { renderProgressSidebar } from '../review/progressSidebar.js';
+import { renderStage } from '../../components/stage.js';
+import case1Script from '../../content/case-1/script.json';
+
+// 대본이 있는 사건은 1 · 2막 무대로 진행한다(REQ-089). 대본이 없으면 MVP 화면 그대로
+const SCRIPTS = { 1: case1Script };
 
 // S-03 사건 개요 · 사전 판단
 export async function renderOverviewPage(container, { caseId, api, navigate }) {
@@ -116,7 +121,21 @@ export async function renderOverviewPage(container, { caseId, api, navigate }) {
       if (checked) submit(Number(checked.value), submitButton, notice);
     });
 
-    main.append(overview, guide, form);
+    const script = SCRIPTS[caseId];
+    if (script) {
+      if (script.photo) {
+        const photo = element('img', 'overview-photo');
+        photo.src = script.photo;
+        photo.alt = '사건 이해를 돕기 위한 재연 일러스트';
+        photo.addEventListener('error', () => photo.remove(), { once: true });
+        overview.prepend(photo);
+      }
+      const preJudgment = element('div', 'stage-input');
+      preJudgment.append(guide, form);
+      main.append(renderStage({ script, order: ['1', '2'], cards: { overview, preJudgment }, inputCards: ['preJudgment'] }));
+    } else {
+      main.append(overview, guide, form);
+    }
     const layout = element('main', 'review-layout');
     layout.append(main);
     renderProgressSidebar(layout, { lastReviewedStep: 0, openStep: 1 });

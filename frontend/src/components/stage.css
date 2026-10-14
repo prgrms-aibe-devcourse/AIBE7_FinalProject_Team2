@@ -1,0 +1,62 @@
+/* 판결 체험 무대 (components/stage.js, FE-27). 신문 세계 톤: 종이 · 네이비 · 브론즈. 색은 역할 토큰(--color-*)만 쓴다. */
+.stage { display: grid; gap: 14px; }
+.stage .visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+.stage-acts { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; font-size: var(--text-caption); color: var(--color-muted); }
+.stage-acts li { padding: 3px 10px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-card); }
+.stage-acts li.is-current { border-color: var(--color-accent); background: var(--color-accent); color: var(--color-on-accent); font-weight: 700; }
+
+/* 장면: 신문 지면 위의 장면 사진(흑백 지면 보정) + 캐릭터. 장면 톤은 여기 한 곳에서만 정한다(신문 사진 속 세계는 검토 중) */
+.stage-scene { position: relative; aspect-ratio: 16 / 9; max-height: 52vh; width: 100%; overflow: hidden; border: 1px solid var(--color-border); border-radius: 12px; background: linear-gradient(var(--color-paper), var(--color-surface-strong)); cursor: pointer; }
+.stage-figure { position: absolute; bottom: 4%; height: 78%; width: auto; transition: opacity .2s ease-out, scale .2s ease-out, filter .2s ease-out; transform-origin: bottom center; }
+.stage-figure.is-role { height: 66%; }
+.stage-figure.is-naero { left: 6%; }
+.stage-figure.is-nambul { right: 6%; }
+.stage-figure.is-quiet { filter: saturate(.7) brightness(.92); scale: .97; }
+.stage-tag { position: absolute; bottom: 3%; padding: 2px 10px; border-radius: 999px; background: var(--color-heading); color: var(--color-on-accent); font-size: var(--text-caption); font-weight: 700; }
+.stage-tag.is-naero { left: 6%; }
+.stage-tag.is-nambul { right: 6%; }
+.stage-caption { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: 0 12%; text-align: center; font: 700 var(--text-title-3)/1.6 var(--font-heading); color: var(--color-heading); text-wrap: balance; }
+.stage.is-system .stage-figure { opacity: .2; }
+.stage.is-dark .stage-scene { background: var(--color-heading); }
+.stage.is-dark .stage-figure, .stage.is-dark .stage-tag { opacity: 0; }
+.stage.is-dark .stage-caption { color: var(--color-on-accent); }
+.stage-flash { position: absolute; inset: 0; background: var(--color-card); opacity: 0; pointer-events: none; }
+.stage-flash.is-on { animation: stage-flash .35s ease-out; }
+@keyframes stage-flash { from { opacity: .8; } to { opacity: 0; } }
+
+/* 대사창 */
+.stage-dialog { padding: 14px 18px 12px; border: 1px solid var(--color-border-strong); border-radius: 12px; background: var(--color-card); }
+.stage-speaker { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; font-size: var(--text-small); }
+.stage-speaker img { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; object-position: top; background: var(--color-surface); }
+.stage-speaker strong { color: var(--color-heading); }
+.stage-speaker span { color: var(--color-label); font-weight: 700; }
+.stage-line { min-height: 3.4em; margin: 0; font-size: 17px; line-height: 1.7; text-wrap: pretty; }
+.stage-controls { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+.stage-controls .primary-button, .stage-controls .secondary-button { min-height: 44px; }
+.stage-skip { margin-right: auto; min-height: 44px; padding: 0 4px; border: 0; background: none; color: var(--color-muted); font-size: var(--text-small); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.stage-skip:hover { color: var(--color-text); }
+.stage :is(button, .stage-card):focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+
+/* 카드: 판단에 필요한 내용. 연출 장면에서는 장면 아래, 입력 카드(is-input)에서는 장면을 접고 카드만 */
+.stage-card { outline: none; }
+.stage-card.is-overlay { position: absolute; top: 5%; left: 50%; translate: -50% 0; width: min(560px, 64%); max-height: 78%; overflow: auto; border-radius: 12px; background: var(--color-card); box-shadow: 0 8px 24px -8px color-mix(in srgb, var(--color-heading) 35%, transparent); cursor: auto; animation: stage-card-in .25s ease-out; }
+@keyframes stage-card-in { from { opacity: 0; translate: -50% 8px; } }
+.stage .stage-card .overview-box { margin: 0; border: 0; }
+.stage-card .overview-photo { display: block; width: 100%; aspect-ratio: 16 / 9; max-height: 180px; object-fit: cover; filter: var(--photo-filter); border-radius: 4px; margin-bottom: 14px; outline: 1px solid oklch(0 0 0 / .1); outline-offset: -1px; }
+.stage.is-input .stage-scene { aspect-ratio: auto; height: 120px; }
+.stage.is-input .stage-figure { height: 92%; bottom: 0; }
+
+@media (max-width: 760px) {
+  .stage-acts li:not(.is-current) { display: none; }
+  .stage-scene { aspect-ratio: 4 / 3; }
+  .stage-figure { height: 70%; }
+  .stage-figure.is-quiet { opacity: .55; scale: .85; }
+  .stage-line { font-size: 16px; }
+  .stage.is-input .stage-scene { height: 96px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stage-figure { transition: none; }
+  .stage-flash.is-on, .stage-card.is-overlay { animation: none; }
+}

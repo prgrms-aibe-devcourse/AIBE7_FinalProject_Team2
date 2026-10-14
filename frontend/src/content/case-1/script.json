@@ -1,0 +1,30 @@
+{
+  "caseId": 1,
+  "photo": "https://raw.githubusercontent.com/peanutboi710/NaeLawNamBul_Images/main/character/cuts/reenact/case-1/reenact-case-1_cut_headline_sample.png",
+  "acts": {
+    "1": {
+      "title": "1막 신문 속 사건",
+      "look": { "naero": "guide-neutral", "nambul": "idle-neutral" },
+      "steps": [
+        { "system": "오늘의 사건" },
+        { "say": "naero", "role": "안내", "card": "overview", "text": "오늘 신문 1면에 실린 사건이에요. 기사에 나온 내용만 가지고 먼저 따라가 볼게요." },
+        { "say": "nambul", "role": "안내", "card": "overview", "look": { "nambul": "guide-neutral" }, "text": "제가 A씨, 내로가 B씨 자리에 서 볼게요. 기사에 없는 말은 지어내지 않을게요." },
+        { "say": "nambul", "role": "A씨 역", "look": { "naero": "role:actor", "nambul": "role:actor" }, "tags": { "naero": "B씨 역", "nambul": "A씨 역" }, "text": "B씨에게 빌린 돈을 제때 갚지 못했어요. 그 뒤로 돈 문제로 자주 다퉜고요." },
+        { "say": "naero", "role": "B씨 역", "text": "그날 저는 돈 이야기를 하려고 A씨 집을 찾아갔어요." },
+        { "say": "nambul", "role": "A씨 역", "text": "이야기는 금방 말다툼이 됐어요. 목소리가 점점 커졌고요." },
+        { "blackout": "이 뒤의 장면은 보여 드리지 않아요. 기사에 실린 결과만 전할게요." },
+        { "say": "naero", "role": "안내", "look": { "naero": "react-sorry", "nambul": "idle-neutral" }, "tags": { "naero": "", "nambul": "" }, "text": "A씨는 집에 있던 흉기를 휘둘렀고, B씨는 그 자리에서 숨졌어요. A씨는 구호 조치 없이 집을 나갔다고 해요." },
+        { "say": "nambul", "role": "안내", "look": { "nambul": "react-sorry" }, "text": "기사로 알 수 있는 건 여기까지예요. 무거운 사건이니까, 서두르지 말고 생각해 봐요." }
+      ]
+    },
+    "2": {
+      "title": "2막 첫인상 판단",
+      "look": { "naero": "guide-neutral", "nambul": "idle-neutral" },
+      "steps": [
+        { "say": "naero", "role": "안내", "text": "기록을 펼치기 전에, 지금 드는 생각을 먼저 남겨 둘게요. 이 사람은 어느 정도의 벌을 받아야 할까요?" },
+        { "say": "nambul", "role": "안내", "look": { "nambul": "guide-neutral", "naero": "read-thinking" }, "text": "정답은 없어요! 법정형은 사형 · 무기징역 · 5년 이상의 징역이에요. 그 안에서 감 가는 대로 골라 봐요." },
+        { "card": "preJudgment", "look": { "naero": "read-thinking", "nambul": "read-thinking" } }
+      ]
+    }
+  }
+}
