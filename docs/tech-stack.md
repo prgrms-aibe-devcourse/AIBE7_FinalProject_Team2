@@ -23,6 +23,7 @@
 | v1.16 | 2026-10-13 | 관리자 로그인 보강 (**확장 단계**, BE-67 · WBS 7.4.5) — 3장 관리자 인증: 세션 중 계정 확인(비활성 · 삭제면 CSRF 검사 전에 401) 추가, 로그인 실패 응답 시간 맞춤(비활성 계정도 계정 없음과 같은 경로, 해시는 앱 인코더로만), 로그인 성공 시 CSRF 토큰 교체 · 로그아웃 시 삭제, 비밀번호 확인을 트랜잭션 밖으로 |
 | v1.17 | 2026-10-13 | BE-58 반영 (**확장 단계**, WBS 7.1.1) — 8장 배포 흐름을 실제 구성으로 정정: 웹(Nginx) · 백엔드 · DB 컨테이너(`deploy/docker-compose.prod.yml`), GitHub Actions(`deploy-images.yml`)가 이미지 빌드 → 운영 구성 스모크 테스트 → develop 머지 시 GHCR 업로드, 서버는 받아서 실행만. Nginx 예시 경로를 웹 이미지 기준(`/usr/share/nginx/html`)으로 바꾸고 `/api` 프록시 규칙 추가. 실제 사건 연결은 2장 "운영 (최종)"대로 서버 전용 덧붙임 파일(`docker-compose.real-seed.yml`) |
 | v1.18 | 2026-10-13 | 관리자 감사 로그 (**확장 단계**, BE-68 · WBS 7.4.5) — 3장 관리자 인증에 감사 로그 행 추가: 기록 대상 · 저장 실패 처리(같은 트랜잭션 / 별도 트랜잭션) · IP 수집과 forward 헤더 |
+| v1.19 | 2026-10-13 | BE-61 반영 (**확장 단계**, WBS 7.1.4) — 2장 Redis를 캐시(DB 0) · 토큰 저장소(DB 1)로 분리, "Redis가 없어도 서비스가 동작"은 캐시에만 해당하도록 정정, "Redis 운영 구성" 신설: AOF `everysec` 영속화, `noeviction` + 모든 키 TTL 필수, 메모리 상한, 사용자별 값 캐시 제외, 비밀번호 · 네트워크 접근. 8장 운영 컨테이너에 Redis 추가. 리뷰 반영: 캐시 장애 시 원본 조회는 아직 구현 전인 규칙(6.5.3, `CacheErrorHandler`)임을 명시, 7장에 로컬 테스트 전 Redis 기동 안내 |
 
 
 ## **1. Backend**
@@ -86,7 +87,7 @@ JPA 사용 시 Lazy Loading을 기본으로 하며, `open-in-view`는 끄고 �
 | --- | --- |
 | PostgreSQL | 사건, 판단 요소, 체험 기록, 판결 등 서비스 주요 데이터 저장 |
 | **Flyway** | DB 스키마 변경 이력 및 Migration 관리 |
-| Redis | 참여자 수, 공개 판결, 사건 목록 등 자주 조회되는 데이터 캐시 |
+| Redis | DB 0: 참여자 수, 공개 판결, 사건 목록 등 자주 조회되는 데이터 캐시 / DB 1: (확장) 로그인 토큰 저장소 (BE-61 · WBS 7.1.4) |
 | pgvector | 유사 판례·양형기준 임베딩 저장 및 유사도 검색. RAG 전환 시 활용 |
 
 사건 정보의 피해 결과 카드, 부가 처분, AI 입력·출력 기록처럼 구조가 사건마다 다른 데이터는 `jsonb` 컬럼에 저장한다.
@@ -156,7 +157,7 @@ MVP에는 관리자 화면이 없으므로 대표 사건 데이터와 검수된 
 - 접속 정보는 `DB_URL` · `DB_USERNAME` · `DB_PASSWORD` 환경변수로 받고, 값이 없으면 로컬 Docker 기본값을 쓴다(`application.yml`). 단계를 옮겨도 코드는 바꾸지 않고 환경변수만 바꾼다.
 - 운영 계정 · 비밀번호는 저장소 어디에도 적지 않는다.
 
-Redis는 캐시 용도로만 사용한다. 체험 진행 상태나 판결 같은 원본 데이터는 모두 PostgreSQL에 저장하고, Redis가 없어도 서비스가 동작하도록 한다.
+Redis의 **캐시(DB 0)** 에는 원본 데이터를 두지 않는다. 체험 진행 상태나 판결 같은 원본 데이터는 모두 PostgreSQL에 저장하고, Redis가 없어도 캐시를 건너뛰고 PostgreSQL에서 읽어 서비스가 동작하도록 한다. 토큰 저장소(DB 1)는 이 원칙의 예외다(아래 "Redis 운영 구성").
 
 ```
 사건 목록 / 공개 판결 조회
@@ -167,6 +168,21 @@ PostgreSQL 조회 → Redis 저장 → 반환
 ```
 
 캐시는 사건 공개나 AI 판결 교체 시점에 삭제한다.
+
+### Redis 운영 구성 (확장 단계, BE-61 · WBS 7.1.4)
+
+Redis 한 인스턴스를 **논리 DB 두 개**로 나눠 쓴다. 캐시는 지워져도 되고 토큰은 지워지면 안 되는, 성격이 반대인 데이터라 섞지 않는다(캐시를 비우다 토큰까지 지우는 사고를 막는다).
+
+| 항목 | 내용 |
+| --- | --- |
+| DB 0 — 캐시 | 사건 목록 · 참여자 수 · 공개 판결 등. 원본은 PostgreSQL에 있어 지워져도 다시 만든다. **Redis 장애면 캐시를 건너뛰고 PostgreSQL에서 읽어야 한다 — 이건 아직 구현되지 않은 규칙이다**(BE-61은 연결만 만들었다). 캐시를 붙이는 작업(6.5.3)에서 Redis 예외를 잡아 원본 조회로 넘긴다. Spring Cache(`@Cacheable`)를 쓰면 기본 동작이 예외를 그대로 던져 500이 되므로 `CacheErrorHandler`로 기록만 하고 넘긴다 |
+| DB 1 — 토큰 | 리프레시 토큰 · 폐기 목록(7.4.3, C). 지워지면 로그인이 풀리고 폐기한 토큰이 다시 통하므로 **원본처럼 다룬다**. Redis 장애는 토큰 오류로 바꾸지 않고 500(3장 "사용자 인증 기반") |
+| 영속화 | AOF, `appendfsync everysec`(최대 1초 유실). 재시작 · 배포 때 토큰이 사라지지 않게 한다. AOF는 인스턴스 전체에 적용돼 캐시도 기록되지만 문제없다(WBS R11). 데이터는 볼륨 `redisdata` |
+| 메모리 · 축출 | `maxmemory 200mb` · **`maxmemory-policy noeviction`**, 컨테이너 `mem_limit 256m`(t3.small 2GB를 백엔드 1g · PostgreSQL 512m과 나눔). `allkeys-lru` 같은 축출 정책은 DB를 구분하지 않아 오래 안 쓴 토큰을 지울 수 있어 쓰지 않는다. 메모리가 차면 **쓰기가 실패**한다(OOM 오류) |
+| TTL 필수 | `noeviction`이라 자동으로 비워지지 않는다. **모든 키에 TTL을 단다** — 캐시는 기능마다 정하고, 토큰은 만료 시각과 같게 둔다. TTL 없는 키는 리뷰에서 막는다 |
+| 사용자별 값 | 사용자마다 다른 값(사건 목록의 `myStatus` 등, 7.7.2)은 공통 캐시에 넣지 않고 요청마다 붙인다 |
+| 접근 | 비밀번호(`requirepass`, 환경변수 `REDIS_PASSWORD`). 운영에서는 포트를 호스트에 열지 않고 Compose 네트워크 안에서만 쓴다 |
+| 코드 | 설정 접두어는 `redis.*`(`application.yml`, `AppRedisProperties`). Spring Boot 기본 설정(`spring.data.redis.*`)은 DB 번호를 하나만 받아 쓰지 않는다. `RedisConfig`가 DB별 커넥션 팩토리를 따로 둔다. 캐시는 기본(`@Primary`) 템플릿, 토큰은 `@Qualifier(RedisConfig.TOKEN)` 템플릿 |
 
 ---
 
@@ -476,6 +492,8 @@ CI가 실패한 PR은 Merge하지 않는 것을 기본 원칙으로 한다.
 
 상태 전이, 선고 가능 범위 검증, 판결 비교 분류 등 핵심 로직은 반드시 테스트한다. 부분 유니크 인덱스 같은 PostgreSQL 전용 제약은 H2 같은 인메모리 DB로 확인할 수 없으므로, 통합 테스트는 CI에서도 실제 PostgreSQL 컨테이너로 실행한다.
 
+Redis도 같다(BE-61). `RedisConfigTest`가 실제 Redis에 붙으므로 **로컬에서 `./gradlew test`를 돌리기 전에 `backend`에서 `docker compose up -d`로 PostgreSQL과 Redis를 함께 띄운다.** 예전에 `postgres`만 띄워 둔 경우에도 `docker compose up -d`를 한 번 더 실행하면 Redis만 추가로 뜬다. CI는 `backend-ci.yml`의 Redis 서비스 컨테이너를 쓴다.
+
 ---
 
 ## **8. Deployment**
@@ -483,7 +501,7 @@ CI가 실패한 PR은 Merge하지 않는 것을 기본 원칙으로 한다.
 | **기술** | **사용 목적** |
 | --- | --- |
 | AWS EC2 | 백엔드 · 프론트엔드 서버 운영 |
-| Docker · Docker Compose | EC2에서 웹(Nginx) · 백엔드 · DB 컨테이너 실행 (`deploy/docker-compose.prod.yml`) |
+| Docker · Docker Compose | EC2에서 웹(Nginx) · 백엔드 · DB · Redis 컨테이너 실행 (`deploy/docker-compose.prod.yml`) |
 | Nginx | 웹 이미지 안에서 프론트엔드 빌드 파일(정적 파일) 서빙, `/api` 요청을 백엔드 컨테이너로 프록시 (`frontend/nginx/default.conf`) |
 | GHCR (GitHub Container Registry) | 운영 이미지 저장소. 서버는 받아서 실행만 한다 (서버에서 빌드하지 않음) |
 

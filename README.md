@@ -39,7 +39,7 @@ JDK 17이 필요하다. 기본 JDK가 17이 아니면 `JAVA_HOME`을 17로 지�
 
 ```bash
 cd backend
-docker compose up -d      # PostgreSQL 컨테이너(lawnambul-postgres, 5432) 실행
+docker compose up -d      # PostgreSQL(lawnambul-postgres, 5432) · Redis(lawnambul-redis, 127.0.0.1:6379) 컨테이너 실행
 ./gradlew bootRun         # 서버 실행 (기본 8080, 시작할 때 Flyway가 스키마 · 시드를 넣는다)
 ```
 
@@ -70,9 +70,9 @@ ls backend/private-seed/seed                # R__10 · R__20 · R__30 세 파일
 - 서브모듈 안의 파일을 공개 저장소의 다른 위치(`db/seed` 등)로 **복사하지 않는다.** 공개 저장소의 커밋 메시지 · PR · Jira 댓글에도 사건 내용(형량 · 판단 요소 · 사실관계)을 쓰지 않는다.
 - 서브모듈은 `src/main/resources` 밖에 있어 jar에 들어가지 않고, `backend/.dockerignore`로 Docker 빌드에서도 뺀다.
 
-로컬 DB를 비우고 처음부터 다시 만들려면 `docker compose down -v && docker compose up -d`를 실행한다. (볼륨이 삭제된다)
+로컬 DB를 비우고 처음부터 다시 만들려면 `docker compose down -v && docker compose up -d`를 실행한다. (볼륨이 삭제된다 — 로컬 Redis 데이터도 함께 지워진다)
 
-테스트는 실제 PostgreSQL에 연결하므로 DB를 먼저 띄운 뒤 실행한다.
+테스트는 실제 PostgreSQL · Redis에 연결하므로 `docker compose up -d`로 둘 다 띄운 뒤 실행한다. (Redis는 BE-61에서 추가됐다. 전에 PostgreSQL만 띄워 뒀다면 `docker compose up -d`를 한 번 더 실행한다)
 
 ```bash
 ./gradlew test
