@@ -18,7 +18,8 @@
 | v1.13 | 2026-10-13 | **7.2.2 Prometheus 로컬 구성 완료 (BE-70)** — `monitoring/`에 Prometheus(LTS v3.13) · scrape 설정(backend 8081 · 자기 자신, 15s) · 보존 기간(기본 15d, 환경변수로 덮어쓰기 가능) 추가. `management.metrics.distribution.percentiles-histogram.http.server.requests`를 켜 7.3.1 p95 경보 선행 조건을 만족시켰다(실측: 라우트당 시계열 약 +69, PR 본문에 전체 수치). 운영 적용(배치 방식 · 메모리 · 디스크 · 9090 접근 · 설정 반영 방법)은 D와 협의가 필요해 이번 범위에서 뺐다 |
 | v1.14 | 2026-10-13 | 7.1.4 Redis 운영 구성 반영 (BE-61) — **7.1.4 작업 완료**(남은 0, PR 머지 시 확정): 캐시 DB 0 · 토큰 DB 1 분리, AOF `everysec`, `noeviction` + 모든 키 TTL 필수, 로컬(`backend/docker-compose.yml`) · CI(`backend-ci.yml` 서비스 컨테이너, 스모크 `deploy-images.yml`) · 운영(`deploy/docker-compose.prod.yml`) 반영, 7.4.3(C)은 `@Qualifier(RedisConfig.TOKEN)` 템플릿을 쓴다. **R10 갱신** — 도메인 · HTTPS를 추후 함께 정하기로 해 7.1.1의 도메인 확보 · 카카오 운영 앱 등록을 보류하고, 테스트 앱(`localhost`)으로 먼저 등록. **7-12 Jira 표**: 7.1.1 ~ 7.1.4 묶음 행을 BE-58 · BE-60 · BE-61 · 미생성 1건으로 나눔 |
 | v1.15 | 2026-10-14 | **7.6.3 성향 DB 완료 (BE-69, #124)** — V15(문항 · 선택지 · 유형 · 결과 · 체험 기여), 엔티티 · 리포지토리, ERD v1.20. 일정(10/16 ~ 19)보다 앞당겨 끝냈다. R12대로 **7.6.4 성향 API 계약을 `api-specification.md` 9장(v0.20)에 먼저 고정**했다(P-1 ~ P-5, 유형은 `shareId`로 구분). A는 이 계약으로 목 API를 맞춘다. |
-| v1.17 | 2026-10-14 | 7.4.7 진행 (BE-41) — **V16 판결 검수 기록**(`judgment` 검수 칸)을 BE-42가 아니라 BE-41(조회 API A-5 ~ A-8)에서 먼저 썼다. 조회가 처음부터 실제 검수 상태를 읽게 하려는 것(R17 정정, 다음 번호 V17). 성향 API(7.6.4, #128)는 머지. v1.16은 #129(BE-71)가 쓰는 번호라 건너뛴다 |
+| v1.16 | 2026-10-14 | **7.2.3 구조화 로그 · traceId · Loki 로컬 구성 완료 (BE-71)** — Logback JSON 파일 로그(logstash-logback-encoder) · `TraceIdFilter`(요청마다 traceId를 MDC에 전파, 두 보안 체인보다 먼저 실행) · `MaskingJsonGeneratorDecorator`(필드 이름 · 메시지 패턴 마스킹) 추가. **Promtail은 2026-03 EOL이라 Grafana Alloy로 대체**해 `monitoring/`에 Loki · Alloy 추가. traceId는 Prometheus 라벨과 같은 이유로 Loki 라벨에 두지 않고 로그 내용(JSON 필드)으로만 남긴다. 운영 적용은 D와 협의 후 별도 진행. (v1.15는 #124가 develop에 먼저 merge하며 쓴 번호라 이 항목은 v1.16으로 밀렸다) |
+| v1.17 | 2026-10-14 | 7.4.7 진행 (BE-41) — **V16 판결 검수 기록**(`judgment` 검수 칸)을 BE-42가 아니라 BE-41(조회 API A-5 ~ A-8)에서 먼저 썼다. 조회가 처음부터 실제 검수 상태를 읽게 하려는 것(R17 정정, 다음 번호 V17). 성향 API(7.6.4, #128)는 머지. |
 
 **기준 문서**: 요구사항 명세서(`requirements-specification.md` v5.9) · 기능 명세서(`functional-specification.md` v3.6) · 정보 구조도(`information-architecture.md` v1.11) · ERD(`erd.md` v1.15) · API 명세서(`api-specification.md` v0.14) · 시퀀스 다이어그램(`sequence-diagram.md` v0.7) · 기술 스택(`tech-stack.md` v1.12) · 유저 흐름도(`user-flow.md` v1.1) · AI 판결 파이프라인(`ai-judgment-pipeline.md` v2) · 와이어프레임(`wireframe.pdf`)
 
@@ -428,7 +429,7 @@ MVP(1 ~ 5장)는 2026-10-08 기준 구현을 마쳤다. 아래는 11 · 12차 �
 | **7.2** | **로그 · 메트릭 수집 — PLG · Prometheus (C)** |  |  |  |  |  |  |
 | 7.2.1 | Actuator · Micrometer 메트릭 노출 — JVM · HTTP · HikariCP · 커스텀(체험 시작 · 판결 확정 · AI 호출 성공률), 라벨 카디널리티 규칙. **Actuator는 별도 포트(`management.server.port`)로 분리하고 Nginx로 외부에 노출하지 않는다**(#106 리뷰 합의 — 메트릭을 공개 경로에 두지 않기 위해) | 신규 | — | 1.0 | 10/12 | C | D |
 | 7.2.2 | **Prometheus** 수집 구성 — scrape 대상 · 간격 · 보존 기간. **로컬 Compose(`monitoring/`) 완료**(BE-70), 운영 적용은 D와 협의 후 별도 진행(PR 본문 참고) | 신규 | 7.2.1 | 1.0 | 10/13 | C | D |
-| 7.2.3 | 구조화 로그(JSON) · `traceId` MDC 전파 · **Promtail**(또는 Grafana Alloy) → **Loki** 적재, 민감정보 마스킹 | 신규 | 7.2.1 | 1.5 | 10/14 ~ 15 | C | B |
+| 7.2.3 | 구조화 로그(JSON) · `traceId` MDC 전파 · **Grafana Alloy**(Promtail은 2026-03 EOL이라 대체) → **Loki** 적재, 민감정보 마스킹. **로컬 Compose(`monitoring/`) 완료**(BE-71), 운영 적용은 D와 협의 후 별도 진행 | 신규 | 7.2.1 | 1.5 | 10/14 ~ 15 | C | B |
 | 7.2.4 | **Grafana** 대시보드 4종 — 서비스 · AI 파이프라인 · DB · 인프라 | 신규 | 7.2.2 · 7.2.3 | 1.5 | 10/16 · 10/19 | C | A |
 | **7.3** | **경보 자동화 · 클라우드 모니터링 (C)** |  |  |  |  |  |  |
 | 7.3.1 | Prometheus 경보 규칙 — 5xx 비율 · p95 지연 · DB 커넥션 고갈 · LLM 호출 실패율 · 배치 지연 | 신규 | 7.2.2 | 1.0 | 10/22 | C | D |
@@ -480,7 +481,7 @@ MVP(1 ~ 5장)는 2026-10-08 기준 구현을 마쳤다. 아래는 11 · 12차 �
 | --- | --- | --- | --- | --- | --- |
 | **A** 성향 콘텐츠 · 화면 | 7.6.1 축별 문항 · 유형 설명 | 7.7.1 판사의 책상 마무리 · 공통 컴포넌트 | 7.6.8 캐릭터 16종 마무리 | 7.7.3 재판장 테마 | 7.7.3 마무리 · 7.7.4 로딩 · 안내 |
 | **B** 보안 ① · 성향 백엔드 · RAG | 7.5.2 PR #97 리뷰 반영 · 머지 · 적재 | 7.4.1 Security 필터 체인 · 확장 지점 | 7.4.1 인가 정책 · 체인 결정 · 7.4.5 관리자 세션 로그인 | 7.4.5 권한 경계 · 감사 로그 · 7.6.2 산식 | 7.6.2 마무리 · 7.6.3 성향 DB |
-| **C** 모니터링 · 보안 ③ | 7.2.1 Actuator · Micrometer | 7.2.2 Prometheus 수집 | 7.2.3 구조화 로그 · `traceId` | 7.2.3 Promtail → Loki | 7.2.4 Grafana 대시보드 |
+| **C** 모니터링 · 보안 ③ | 7.2.1 Actuator · Micrometer | 7.2.2 Prometheus 수집 | 7.2.3 구조화 로그 · `traceId` | 7.2.3 Alloy → Loki | 7.2.4 Grafana 대시보드 |
 | **D** 배포 · 운영 · 보안 ② | 7.1.1 EC2 · Docker 배포 | 7.1.1 Nginx · SPA fallback · 도메인 | 7.1.4 Redis 운영 구성 · 카카오 앱 등록 신청 | 7.7.2 신문형 사건 목록 S-02 | 7.7.2 진행 상태 배지 · 7.4.6 Nginx `limit_req` |
 
 > 10/12는 전원 7.0.1 킥오프(각 0.25인일)를 먼저 한다. **중간 결과물 발표 · 제출**이 있는 트랙은 이날 작업을 10/13로 미루고 그 주 안에서 하루씩 당겨 잡는다.

@@ -116,9 +116,10 @@ class AdminReviewQueryApiTest extends ApiIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("A-5: 모르는 status · pending이 true/false가 아님 · page 음수 · size 범위 밖은 400")
+	@DisplayName("A-5: 모르는 status · 빈 status 토큰 · pending이 true/false가 아님 · page 음수 · size 범위 밖은 400")
 	void listCases_invalidQuery() throws Exception {
-		for (String[] query : List.of(new String[] {"status", "DONE"}, new String[] {"pending", "yes"},
+		for (String[] query : List.of(new String[] {"status", "DONE"}, new String[] {"status", ","},
+			new String[] {"status", "DRAFT,"}, new String[] {"status", ""}, new String[] {"pending", "yes"},
 			new String[] {"page", "-1"}, new String[] {"size", "0"}, new String[] {"size", "101"},
 			new String[] {"size", "abc"})) {
 			mockMvc.perform(get("/api/v1/admin/cases").param(query[0], query[1]).session(session))

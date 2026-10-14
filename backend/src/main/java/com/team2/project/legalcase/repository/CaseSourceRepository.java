@@ -9,11 +9,11 @@ import org.springframework.data.repository.query.Param;
 
 public interface CaseSourceRepository extends JpaRepository<CaseSource, Long> {
 
-	/** 최종 확정 판결 1건 (API 12 출처 기관, 확장). 사건번호 등은 응답에 쓰지 않는다 */
 	/** 관리자 검수(A-6): 사건의 원본 판결문 정보 전부 (원문은 A-7에서 따로) */
 	@Query("select s from CaseSource s where s.legalCase.id = :caseId order by s.id")
 	List<CaseSource> findAllByCaseId(@Param("caseId") Long caseId);
 
+	/** 최종 확정 판결 1건 (API 12 출처 기관, 확장). 사건번호 등은 응답에 쓰지 않는다 */
 	@Query("select s from CaseSource s where s.legalCase.id = :caseId and s.isFinal = true")
 	Optional<CaseSource> findFinalByCaseId(@Param("caseId") Long caseId);
 

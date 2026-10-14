@@ -26,6 +26,8 @@ dependencies {
 	// Actuator 헬스체크/메트릭 엔드포인트, Micrometer Prometheus 레지스트리 (BE-66)
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
 	implementation 'io.micrometer:micrometer-registry-prometheus'
+	// 구조화(JSON) 로그 + 민감정보 마스킹 (BE-71, WBS 7.2.3). logback-classic은 Spring Boot가 이미 전이 의존성으로 가져온다
+	implementation 'net.logstash.logback:logstash-logback-encoder:9.0'
 	// DB 스키마 마이그레이션 (Spring Boot 4는 Flyway 자동 설정이 별도 스타터로 분리됨)
 	implementation 'org.springframework.boot:spring-boot-starter-flyway'
 	// Flyway 10 이상은 PostgreSQL 지원 모듈이 따로 필요

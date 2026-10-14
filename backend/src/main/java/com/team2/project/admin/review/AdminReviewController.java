@@ -75,12 +75,16 @@ public class AdminReviewController {
 			return AdminReviewQueryService.DEFAULT_STATUSES;
 		}
 		Set<CaseStatus> statuses = EnumSet.noneOf(CaseStatus.class);
-		for (String token : value.split(",")) {
+		// limit -1: 빈 토큰("DRAFT," · ",")도 남겨 거절한다. 그냥 split이면 빈 배열이 되어 SQL IN ()으로 500이 난다 (#131 리뷰)
+		for (String token : value.split(",", -1)) {
 			try {
 				statuses.add(CaseStatus.valueOf(token.trim()));
 			} catch (IllegalArgumentException e) {
 				throw BusinessException.ofField(ErrorCode.VALIDATION_ERROR, "status");
 			}
+		}
+		if (statuses.isEmpty()) {
+			throw BusinessException.ofField(ErrorCode.VALIDATION_ERROR, "status");
 		}
 		return statuses;
 	}
