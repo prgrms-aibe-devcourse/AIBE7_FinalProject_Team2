@@ -4,12 +4,13 @@
 // 앱 쪽에서 바꾼 것은 연결뿐이다 — 막은 화면(S-03 · S-04 …)이 고르고, 입력은 화면의 폼, 서버 "읽었습니다"는 onConfirm.
 
 import { scrollArea } from './scrollArea.js';
+import { sheetCamera } from './sheetCamera.js';
 
 export const ACT_NAMES = ['신문 속 사건', '첫인상 판단', '재판', '판결 전 정리', '당신이 판사', 'AI 판사의 합의', '실제 판결', '세 판결 비교'];
 // 로 합의부는 판결 화면에서 이름 대신 "AI 판사"로 부른다(직책 재판장 · 배석판사는 이름표 옆에 단다)
 const NAMES = { naero: '내로', nambul: '남불', 'law-scale': 'AI 판사', 'law-gavel': 'AI 판사', 'law-book': 'AI 판사' };
-const ROLE_LABEL = { actor: '사건 속 인물', prosecutor: '검사', defense: '변호인', judge: '법률 안내' };
-const ROLE_COLOR = { '법정 진행': 'narrator', 판사: 'law', 'A씨 역': 'actor', 'B씨 역': 'actor', '사건 속 인물': 'actor', 검사: 'prosecutor', 변호인: 'defense', '법률 안내': 'law', 재판장: 'law', 배석판사: 'law' };
+const ROLE_LABEL = { actor: '사건 속 인물', prosecutor: '검사', defense: '변호인', judge: '판사' };
+const ROLE_COLOR = { '법정 진행': 'narrator', 판사: 'law', 'A씨 역': 'actor', 'B씨 역': 'actor', '사건 속 인물': 'actor', 검사: 'prosecutor', 변호인: 'defense', 재판장: 'law', 배석판사: 'law' };
 // 로 합의부(6막 AI 판사): 로울(저울) · 로봉(법봉) · 로북(법전). LAWS는 판단 요소를 맡는 순서(저울 → 법봉 → 법전),
 // 서는 자리는 로울이 가운데, 로봉 · 로북이 좌우(LAW_SPOTS). 직책은 로울 재판장, 로봉 · 로북 배석판사.
 // 셋은 대등하지만 로울이 합의를 이끄는 일종의 리더(재판장) 역할을 한다(10/15 결정). 캐릭터 문서 4-3("서열을 두지 않는다")은 추후 이 결정에 맞춰 고친다
@@ -22,7 +23,7 @@ const LAW_FADE_MS = 350; // 판사 페이드 시간 하나로: 첫 등장 · 자
 const lawImage = (who, pose) => `/images/characters/law/${who}_${pose}.webp`;
 // shortcut: 캐릭터 컷은 원본 이미지 레포 PNG를 직접 읽는다, 웹 webp 변환(WBS 7.6.8) 때 public 경로로 옮긴다
 const CUTS = 'https://raw.githubusercontent.com/peanutboi710/NaeLawNamBul_Images/main/character/cuts/';
-const imageOf = (who, look) => (look.startsWith('role:') ? `/images/characters/roles/${who}_${look.slice(5)}.webp`
+export const imageOf = (who, look) => (look.startsWith('role:') ? `/images/characters/roles/${who}_${look.slice(5)}.webp`
   : look.startsWith('cheek:') ? `${CUTS}${who}/base/${who}_cut-cheek_${look.slice(6)}.png` // 볼따구(기다림)
     : `${CUTS}${who}/base/${who}_cut_${look}.png`);
 const FACES = ['neutral', 'happy', 'surprised', 'thinking', 'sorry', 'cheer'];
@@ -38,7 +39,7 @@ const chipText = (look, role) => {
   return role && (role === label || role.endsWith('역')) ? role : label;
 };
 
-// 대본의 막들을 한 줄로 편다. 각 장면은 앞 장면의 모습(look) · 자리(spots) · 이름표(tags) · 재판 순서(proc)를 이어받는다.
+// 대본의 막들을 한 줄로 편다. 각 장면은 앞 장면의 모습(look) · 자리(spots) · 이름표(tags) · 재판 순서(proc) · 지면 기사(focus)를 이어받는다.
 export function flatten(acts, order) {
   const steps = [];
   order.forEach((actId) => {
@@ -47,17 +48,17 @@ export function flatten(acts, order) {
     let spots = { ...act.spots };
     let tags = { naero: '', nambul: '' };
     let proc = null;
+    let focus = 'all';
     const said = { naero: '', nambul: '' };
     act.steps.forEach((step) => {
       look = { ...look, ...step.look };
       spots = { ...spots, ...step.spots };
       tags = { ...tags, ...step.tags };
       proc = step.proc ?? proc;
+      focus = step.focus ?? focus;
       if (said[step.say] !== undefined && step.role) said[step.say] = step.role;
-      // 대본 hideChips: 이 막은 캐릭터 머리 위 역할 이름표를 달지 않는다(역할은 대사창 이름표로 충분 — 7막)
-      const chips = act.hideChips ? { naero: '', nambul: '' }
-        : { naero: tags.naero || chipText(look.naero, said.naero), nambul: tags.nambul || chipText(look.nambul, said.nambul) };
-      steps.push({ ...step, actId, scene: act.scene ?? 'news', procedures: act.procedures, cast: act.cast, proc, look, spots, chips });
+      const chips = { naero: tags.naero || chipText(look.naero, said.naero), nambul: tags.nambul || chipText(look.nambul, said.nambul) };
+      steps.push({ ...step, actId, scene: act.scene ?? 'news', procedures: act.procedures, cast: act.cast, proc, look, spots, chips, focus });
     });
   });
   return steps;
@@ -101,30 +102,35 @@ function picture(src, className, alt = '') {
   return image;
 }
 
-// 1 · 2막 장면: 메인 책상의 신문과 같은 짜임(정보 줄 · 제호 · 날짜 띠 · 큰 제목 · 사진 + 부제 · 본문 두 단)
-function paperPage(paper) {
-  const page = element('article', 'paper');
-  const info = element('div', 'paper-info');
+// 1 · 2막 사건 기사 지면(카메라로 읽는다): 정보 줄 · 제호 · 날짜 띠 / 큰 제목 · 부제 / 사진 / 본문 두 단.
+// 카메라가 맞추는 기사(data-focus): head(제목 · 부제) · photo(사진, 2 → 3막 "사진 속으로"도 여기서) · body(본문)
+function caseSheet(paper) {
+  const sheet = element('article', 'sheet sheet-case');
+  sheet.setAttribute('aria-label', '신문 기사');
+  const mast = element('header', 'sheet-mast');
+  const info = element('div', 'sheet-info');
   info.append(element('span', '', '판결 체험 신문'), element('span', '', paper.desk));
-  const brand = element('div', 'paper-brand');
+  const brand = element('div', 'sheet-brand');
   brand.append('내', element('span', 'law', 'Law'), '남불');
-  const date = element('div', 'paper-date');
+  const date = element('div', 'sheet-date');
   date.append(element('span', '', new Intl.DateTimeFormat('ko-KR', { dateStyle: 'full' }).format(new Date())), element('span', '', '참여 무료'));
-  const front = element('div', 'paper-front');
-  const left = element('div', 'paper-col');
-  const figure = element('figure', 'paper-figure');
-  figure.append(picture(paper.photo, 'paper-photo'), element('figcaption', '', paper.caption));
-  left.append(figure, element('p', 'paper-deck', paper.deck));
-  const right = element('div', 'paper-col paper-body');
-  paper.article.forEach((line) => right.append(element('p', '', line)));
-  front.append(left, right);
-  page.append(info, brand, date, element('h2', 'paper-headline', paper.headline), front);
-  return page;
+  mast.append(info, brand, date);
+  const head = element('section', 'sheet-story sheet-head-block');
+  head.dataset.focus = 'head';
+  head.append(element('h2', 'sheet-headline', paper.headline), element('p', 'sheet-deck', paper.deck));
+  const figure = element('figure', 'sheet-figure sheet-story');
+  figure.dataset.focus = 'photo';
+  figure.append(picture(paper.photo, 'sheet-case-photo'), element('figcaption', '', paper.caption));
+  const body = element('section', 'sheet-story sheet-body');
+  body.dataset.focus = 'body';
+  paper.article.forEach((line) => body.append(element('p', 'sheet-text', line)));
+  sheet.append(mast, head, figure, body);
+  return sheet;
 }
 
 // 3막 법정(재판장 시점): 사용자가 판사석에 앉아 법정을 내려다본다. 판사석은 그리지 않는다 — 앉은 사람이 사용자다.
-// 벽 · 방청석 난간 · 피고인석 · 검사석 · 변호인석을 캐릭터 뒤에 둔다
-function courtSet() {
+// 벽 · 방청석 난간 · 피고인석 · 검사석 · 변호인석을 캐릭터 뒤에 둔다(8막 신문 사진도 이 법정을 쓴다)
+export function courtSet() {
   const court = element('div', 'court');
   court.setAttribute('aria-hidden', 'true');
   court.append(element('div', 'court-wall'), element('div', 'court-rail'), element('div', 'court-stand'),
@@ -185,8 +191,11 @@ function evidenceBoard(script, at) {
 // inputCards: 입력 카드 이름(보드를 넓게 띄우고 화면의 제출로만 넘어간다), start(step): 재진입 장면,
 // onConfirm(n): confirm 장면을 떠날 때 화면이 서버에 "읽었습니다"를 보낸다(false면 넘어가지 않는다),
 // onRestart: 있으면 "처음부터 다시" 버튼을 단다(목 데이터 전용), onJump(막 번호): 있으면 막 칩을 눌러 그 막으로 바로 간다
-// (테스트 기간 · 목 데이터 전용, 이 화면에 없는 막은 화면이 넘겨 준다). 반환한 요소의 enterPhoto()는 신문 사진 속으로 들어가는 연출
-export function renderStage({ script, order, cards = {}, inputCards = [], start, onConfirm, onRestart, onJump }) {
+// (테스트 기간 · 목 데이터 전용, 이 화면에 없는 막은 화면이 넘겨 준다). 반환한 요소의 enterPhoto()는 신문 사진 속으로 들어가는 연출.
+// choices: 대사창 안 선택지 { 이름: [{ label, action(note), primary }] } — 대본 step.choices로 고른다(타이핑이 끝나면 뜬다, note는 결과 안내 줄).
+// sheet: 대본 scene "sheet"에서 쓰는 큰 지면(8막은 화면이 넘겨 주고, 없으면 대본 paper로 1 · 2막 사건 기사를 만든다).
+// 장면의 focus 기사로 카메라가 옮겨 가고, 첫 장면의 from 요소가 무대를 채운 데서 빠져나온다
+export function renderStage({ script, order, cards = {}, inputCards = [], choices = {}, start, onConfirm, onRestart, onJump, sheet: given }) {
   const steps = flatten(script.acts, order);
   let index = Math.max(0, start ? steps.findIndex(start) : 0);
   const jumpAct = takeJump();
@@ -198,6 +207,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], start,
   let lastLaw = '';
   let lastDelta = 1;
   let autoTimer = null;
+  let lastFocus = null;
 
   const wrap = element('section', 'stage-wrap');
   wrap.setAttribute('aria-label', '판결 체험');
@@ -218,15 +228,19 @@ export function renderStage({ script, order, cards = {}, inputCards = [], start,
   const stage = element('div', 'stage');
   const scene = element('div', 'scene');
   const bg = element('div', 'bg');
-  const page = script.paper ? paperPage(script.paper) : null;
+  const sheet = given ?? (script.paper && order.some((actId) => script.acts[actId]?.scene === 'sheet') ? caseSheet(script.paper) : null);
+  // 캐릭터: 그림 + 발밑 역할 이름표를 한 묶음으로 움직인다(자리 이동 · 점프에 이름표가 함께 따라간다).
+  // 그림을 못 불러오면 그림만 숨기고 이름표는 남긴다
   const figures = {};
+  const sprites = {};
   const chips = {};
   ['naero', 'nambul'].forEach((who) => {
-    const short = who === 'naero' ? 'n' : 'b';
-    figures[who] = element('img', `spr ${short}`);
-    figures[who].alt = NAMES[who];
-    figures[who].addEventListener('error', () => { figures[who].hidden = true; });
-    chips[who] = element('div', `chip ${short}`);
+    figures[who] = element('div', `spr ${who === 'naero' ? 'n' : 'b'}`);
+    sprites[who] = element('img', 'spr-img');
+    sprites[who].alt = NAMES[who];
+    sprites[who].addEventListener('error', () => { sprites[who].hidden = true; });
+    chips[who] = element('div', 'chip');
+    figures[who].append(sprites[who], chips[who]);
   });
   const procs = element('div', 'proc');
   procs.setAttribute('aria-label', '재판 순서');
@@ -255,7 +269,11 @@ export function renderStage({ script, order, cards = {}, inputCards = [], start,
     void lawCast.offsetWidth; // 같은 애니메이션을 다시 시작하려고 다시 그리게 한다
     lawCast.classList.add('entering');
   }
-  scene.append(bg, court, ...(page ? [page] : []), figures.naero, figures.nambul, lawCast, chips.naero, chips.nambul, procs, sys, flash);
+  // 신문 지면: 틀(frame)은 기사를 맞출 자리만 정하는 빈 요소(CSS가 위치를 정한다)
+  const frame = sheet ? element('div', 'sheet-frame') : null;
+  const camera = sheet ? sheetCamera(sheet, frame) : null;
+  if (frame) frame.setAttribute('aria-hidden', 'true');
+  scene.append(bg, court, ...(sheet ? [sheet, frame] : []), figures.naero, figures.nambul, lawCast, procs, sys, flash);
 
   const board = element('div', 'board');
   board.tabIndex = -1;
@@ -265,7 +283,10 @@ export function renderStage({ script, order, cards = {}, inputCards = [], start,
   text.setAttribute('aria-hidden', 'true'); // 타이핑 중인 글자는 읽지 않고, 아래 live 영역이 문장 전체를 한 번 읽는다
   const hint = element('div', 'nxt', '▶ 클릭 · Space');
   hint.setAttribute('aria-hidden', 'true');
-  dialog.append(name, text, hint);
+  const choiceRow = element('div', 'dlg-choices');
+  choiceRow.hidden = true;
+  choiceRow.addEventListener('click', (event) => event.stopPropagation()); // 선택지를 눌러도 대사창 클릭(다음 장면)으로 번지지 않게
+  dialog.append(name, text, choiceRow, hint);
   stage.append(scene, board, dialog);
 
   const live = element('p', 'visually-hidden');
@@ -299,6 +320,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], start,
     clearInterval(typing);
     typing = null;
     text.textContent = steps[index].text ?? '';
+    choiceRow.hidden = !steps[index].choices; // 선택지는 대사를 다 읽은 뒤에 뜬다
   }
   function type(line) {
     clearInterval(typing);
@@ -322,8 +344,19 @@ export function renderStage({ script, order, cards = {}, inputCards = [], start,
 
     stage.dataset.scene = step.scene;
     bg.className = `bg ${dark ? 'dark' : step.scene}`;
-    if (page) page.hidden = step.scene !== 'paper';
     court.hidden = step.scene !== 'court' || dark;
+    const onSheet = Boolean(sheet) && step.scene === 'sheet';
+    if (sheet) sheet.hidden = !onSheet;
+    if (onSheet) {
+      // 첫 장면(앞 막에서 넘어옴)은 from 요소가 무대를 채운 데서 시작한다. 캐릭터는 카메라가 빠져나온 뒤 지면에 뛰어든다
+      const from = lastFocus === null && index === 0 ? step.from : undefined;
+      camera.go(step.focus, { from, onStart: from ? () => stage.classList.add('arrive-sheet') : undefined });
+      // 기사가 바뀌면 둘 다 다음 기사 옆으로 뛰어간다(작은 점프 두 번)
+      if (lastFocus !== null && lastFocus !== step.focus && !reducedMotion()) {
+        ['naero', 'nambul'].forEach((who) => { figures[who].classList.remove('hop'); void figures[who].offsetWidth; figures[who].classList.add('hop'); });
+      }
+      lastFocus = step.focus;
+    }
     [...acts.children].forEach((item, i) => {
       const current = String(i + 1) === step.actId;
       item.classList.toggle('on', current);
@@ -337,17 +370,17 @@ export function renderStage({ script, order, cards = {}, inputCards = [], start,
     stage.classList.toggle('hasproc', Boolean(step.procedures));
     ['naero', 'nambul'].forEach((who) => {
       const look = step.look[who];
-      figures[who].hidden = false;
-      figures[who].src = imageOf(who, look);
+      sprites[who].hidden = false;
+      sprites[who].src = imageOf(who, look);
       figures[who].classList.toggle('role', look.startsWith('role:'));
       figures[who].classList.toggle('dim', Boolean(step.say) && step.say !== who);
+      figures[who].classList.toggle('near', onSheet && step.say === who); // 지면에서는 말하는 쪽이 기사에 다가선다
       const offCast = Boolean(step.cast) && !step.cast.includes(who); // 대본 cast: 이 막에 나오는 캐릭터만(7막은 남불만)
       figures[who].classList.toggle('hide', dark || Boolean(step.law) || offCast);
       if (step.spots[who]) figures[who].dataset.spot = step.spots[who]; else delete figures[who].dataset.spot;
       chips[who].textContent = step.chips[who];
       chips[who].dataset.role = ROLE_COLOR[step.chips[who]] ?? 'actor';
-      if (step.spots[who]) chips[who].dataset.spot = step.spots[who]; else delete chips[who].dataset.spot;
-      chips[who].classList.toggle('hide', dark || !step.chips[who] || Boolean(step.law) || offCast);
+      chips[who].hidden = !step.chips[who];
     });
     lawCast.hidden = !step.law;
     lawCast.classList.toggle('resolving', lastLaw === 'think' && step.law === 'deliver');
@@ -418,6 +451,17 @@ export function renderStage({ script, order, cards = {}, inputCards = [], start,
       if (role) name.append(element('i', '', ` ${role}`));
     }
     live.textContent = line || caption;
+    const options = choices[step.choices] ?? [];
+    const note = element('p', 'dlg-note');
+    note.setAttribute('role', 'status');
+    choiceRow.replaceChildren(...options.map(({ label, action, primary }) => {
+      const choice = element('button', primary ? 'primary-button' : 'secondary-button', label);
+      choice.type = 'button';
+      choice.addEventListener('click', () => action(note));
+      return choice;
+    }), ...(options.length ? [note] : []));
+    choiceRow.hidden = true;
+    dialog.classList.toggle('has-choices', options.length > 0);
     type(line);
 
     prev.disabled = index === 0;
@@ -483,7 +527,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], start,
 
   // 2막 → 3막: 보드를 걷고 신문 사진이 무대를 가득 채울 때까지 확대한다(사진 속으로 들어가 재판이 시작된다)
   wrap.enterPhoto = () => new Promise((resolve) => {
-    const photo = page?.querySelector('.paper-photo');
+    const photo = sheet?.querySelector('.sheet-case-photo');
     if (!photo || reducedMotion()) { resolve(); return; }
     stage.classList.add('entering');
     board.hidden = true;

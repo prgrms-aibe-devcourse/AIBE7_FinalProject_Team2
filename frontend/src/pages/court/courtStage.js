@@ -1,6 +1,6 @@
 // 7막 실제 판결 무대(흐름 목업). 법정에서 판사(남불)가 피고인 역(내로)에게 판결을 선고하고, 판결문을 한 장씩 넘기며 읽는다.
-// S-07(6막)에서 실제 판결을 공개한 뒤 주소를 바꾸지 않고 이어 가고, 재진입(S-08 주소)에서도 같은 무대를 연다.
-// 마지막 장면을 떠나면 세 판결 비교를 공개(API 13)하고 8막(S-09)으로 간다
+// S-07(6막)에서 실제 판결을 공개한 뒤 무대를 이어 받고(주소만 S-08로), 재진입(S-08 주소)에서도 같은 무대를 연다.
+// 마지막 장면을 떠나면 세 판결 비교를 공개(API 13) · 조회(API 14)해 8막으로 이어 간다(onCompared, 주소만 S-09로)
 import { formatPenalty, formatDispositions } from '../../utils/judgmentFormat.js';
 import { formatMonths } from '../../components/recommendedRangeBar.js';
 import { renderStage } from '../../components/stage.js';
@@ -52,7 +52,7 @@ function courtPages(data) {
 /**
  * @returns {{ stage: HTMLElement, error: HTMLElement }} 무대와 그 아래 오류 안내(세 판결 비교 공개 실패)
  */
-export function renderCourtStage({ script, data, caseId, api, navigate, active, onInvalid }) {
+export function renderCourtStage({ script, data, caseId, api, navigate, active, onInvalid, onCompared }) {
   const { judgment } = data;
   // 주문 문장(판결문 말투): "피고인을 징역 10년에 처한다." 집행유예면 유예 문장을 잇는다
   const order = `피고인을 ${formatPenalty(judgment)}에 처한다.${judgment.suspensionMonths
@@ -74,7 +74,8 @@ export function renderCourtStage({ script, data, caseId, api, navigate, active, 
       error.textContent = '';
       try {
         await api.postComparisonReveal(caseId);
-        if (active()) navigate('comparison');
+        const comparison = await api.getComparison(caseId);
+        if (active()) onCompared(comparison);
       } catch (failure) {
         if (!active()) return false;
         if (failure?.code === 'INVALID_STATE') onInvalid(failure);

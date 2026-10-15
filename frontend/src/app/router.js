@@ -98,8 +98,9 @@ export function createRouter({ view, footerHost, routes }) {
     await show(notFound, undefined, {}, null, 'navigate');
   }
 
-  /** 화면 이동. 반환값은 화면을 그리는 작업의 완료 시점이다 (기다리지 않아도 된다) */
-  async function navigate(name, params = {}, { replace = false } = {}) {
+  /** 화면 이동. 반환값은 화면을 그리는 작업의 완료 시점이다 (기다리지 않아도 된다)
+   *  keepView: 화면은 다시 그리지 않고 주소 · 탭 제목만 바꾼다(판결 체험 6 → 7 → 8막처럼 한 무대에서 이어 갈 때) */
+  async function navigate(name, params = {}, { replace = false, keepView = false } = {}) {
     const route = byName.get(name);
     if (!route) {
       console.warn(`알 수 없는 화면 이름: ${name}`);
@@ -124,6 +125,12 @@ export function createRouter({ view, footerHost, routes }) {
     const seq = replace ? (history.state?.seq ?? ++historySeq) : ++historySeq;
     history[replace ? 'replaceState' : 'pushState']({ extras, seq }, '', path);
     lastKnownSeq = seq; // 코드로 만든 이동이니 바로 갱신해 둔다 (다음 popstate 비교 기준)
+    if (keepView) {
+      // 지금 화면이 그대로 이어지므로 token은 올리지 않는다(진행 중인 요청을 오래된 것으로 버리지 않게)
+      current = { ...current, name: route.name, path, caseId, extras };
+      document.title = `${route.title} · ${SITE_TITLE}`;
+      return undefined;
+    }
     window.scrollTo(0, 0);
     return show(route, caseId, extras, path, 'navigate'); // 코드로 호출한 이동은 뒤로 · 앞으로 가기가 아니다
   }
