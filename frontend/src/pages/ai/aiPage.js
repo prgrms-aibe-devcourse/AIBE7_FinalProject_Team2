@@ -5,6 +5,7 @@ import { renderStage, LAWS, LAW_TITLES } from '../../components/stage.js';
 import { SCRIPTS } from '../../content/scripts.js';
 import { restartMock, jumpActMock } from '../overview/overviewPage.js';
 import { API_MODE } from '../../api/config.js';
+import { renderCourtStage } from '../court/courtStage.js';
 
 const directionLabels = { UP: '가중 요소', DOWN: '감경 요소' };
 
@@ -121,7 +122,7 @@ export async function renderAiPage(container, { caseId, caseHeader, api, navigat
     return paper;
   }
   // 6막 AI 판사의 합의(흐름 목업). 처음에 아이캐치(AI 판결을 기다리는 중 + 안내)를 띄우고,
-  // 마지막 장면을 떠나면 실제 판결을 공개(API 11)하고 7막(S-08)으로 간다
+  // 마지막 장면을 떠나면 실제 판결을 공개(API 11) · 조회(API 12)해 주소를 바꾸지 않고 같은 법정에서 7막으로 이어 간다
   // test: { speaker, fromThink } — 발표 판사 테스트(목 데이터 전용): 고른 판사로 발표하게 하고 합의 장면부터 다시 본다
   function drawStage(data, test = {}) {
     root.classList.add('has-stage');
@@ -143,7 +144,8 @@ export async function renderAiPage(container, { caseId, caseHeader, api, navigat
         revealError.textContent = '';
         try {
           await api.postCourtReveal(caseId);
-          if (active()) navigate('court');
+          const court = await api.getCourtJudgment(caseId);
+          if (active()) drawCourt(court);
         } catch (error) {
           if (!active()) return false;
           if (error?.code === 'INVALID_STATE') message(`지금 단계에서는 이 화면을 볼 수 없어요. (현재 상태: ${error.currentStatus})`);
@@ -176,6 +178,21 @@ export async function renderAiPage(container, { caseId, caseHeader, api, navigat
       cast: [['naero', 'cheek:idle-thinking'], ['nambul', 'cheek:idle-thinking']],
       ms: 4200,
     });
+  }
+
+  // 7막 실제 판결: 6막과 같은 화면(주소 그대로)에서 판사(남불)가 판결문을 넘기며 읽는다
+  function drawCourt(court) {
+    const header = element('header', 'case-topbar');
+    header.append(element('strong', 'case-title', caseHeader.title), element('span', 'case-badge', '실제 판결'));
+    const { stage, error } = renderCourtStage({
+      script, data: court, caseId, api, navigate, active,
+      onInvalid: (failure) => message(`지금 단계에서는 이 화면을 볼 수 없어요. (현재 상태: ${failure.currentStatus})`),
+    });
+    const main = element('div', 'review-main');
+    main.append(element('h1', 'page-heading visually-hidden', '실제 판결'), stage, error);
+    const layout = element('main', 'review-layout');
+    layout.append(main);
+    root.replaceChildren(header, layout);
   }
 
   function draw(data) {

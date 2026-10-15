@@ -200,6 +200,25 @@
 .stage-wrap .verdict-paper .vp-refs { margin-top: 1em; color: var(--muted); font-size: max(10px, .95cqw); }
 .stage-wrap .verdict-paper .vp-sign { display: flex; justify-content: flex-end; gap: 1.4em; margin-top: 1.2em; font: 700 max(11px, 1.05cqw) var(--font-heading); color: var(--color-heading); }
 
+/* 7막 실제 판결문(읽기 카드): 왼쪽 피고인 역(내로)과 오른쪽 판사(남불) 사이 가운데. 6막 판결문(흰 종이 · 가는 테두리)과 다른 질감 —
+   누렇게 바랜 공문서 종이, 안쪽 이중 테두리, 접힌 귀퉁이. 장마다 한 섹션, 장을 넘길 때 0.35초 넘김 */
+.stage-wrap .stage .board.small.reading { left: 29%; right: 29%; top: 5%; bottom: 29%; height: auto; padding: 0; border: 0; border-radius: 2px; background: none; box-shadow: none; overflow: visible; }
+.stage-wrap .board.reading > .scroll-area { height: 100%; }
+.stage-wrap .board .court-paper { position: relative; min-height: 100%; padding: 2.4cqw 3cqw 2cqw; background: radial-gradient(ellipse at 30% 20%, color-mix(in srgb, var(--color-card) 70%, transparent), transparent 70%), color-mix(in srgb, var(--color-desk-kraft) 22%, var(--color-card)); outline: 1px solid color-mix(in srgb, var(--color-label) 35%, transparent); outline-offset: -.8cqw; box-shadow: 0 10px 24px -10px color-mix(in srgb, var(--color-desk-shadow) 50%, transparent); color: var(--color-desk-news-ink); font-family: var(--font-article); transform-origin: left center; animation: paper-turn .35s ease-out; }
+.stage-wrap .court-paper::after { content: ''; position: absolute; right: 0; bottom: 0; width: 2.4cqw; height: 2.4cqw; background: linear-gradient(135deg, color-mix(in srgb, var(--color-desk-kraft) 45%, var(--color-card)) 50%, var(--color-stage-bench-dark) 50%); opacity: .55; }
+@keyframes paper-turn { from { opacity: 0; transform: perspective(1200px) rotateY(-14deg) translateX(2%); } }
+.stage-wrap .board .court-paper .cp-page { position: absolute; top: 1.4cqw; right: 2cqw; margin: 0; color: var(--muted); font: 700 max(10px, .95cqw) var(--font-body); }
+.stage-wrap .board .court-paper .cp-title { margin: 0 0 1em; text-align: center; letter-spacing: .5em; font: 900 max(16px, 1.9cqw) / 1.2 var(--font-heading); color: var(--color-heading); }
+.stage-wrap .board .court-paper p { font-size: max(13px, 1.35cqw); line-height: 1.8; }
+.stage-wrap .board .court-paper .cp-penalty { margin: .2em 0 .4em; text-align: center; font: 900 max(22px, 3cqw) / 1.2 var(--font-heading); color: var(--color-heading); }
+.stage-wrap .board .court-paper .cp-sub { text-align: center; color: var(--muted); }
+.stage-wrap .board .court-paper .cp-summary { margin-top: 1em; padding-top: .8em; border-top: 1px solid color-mix(in srgb, var(--color-label) 30%, transparent); text-align: center; }
+.stage-wrap .board .court-paper blockquote { margin: 0; padding-left: 1.2em; border-left: 1px solid color-mix(in srgb, var(--color-label) 40%, transparent); }
+.stage-wrap .board .court-paper .cp-factors { margin: 0; padding: 0; list-style: none; }
+.stage-wrap .board .court-paper .cp-factors li { display: flex; align-items: center; gap: .8cqw; margin: 0; padding: .45em 0; border-top: 1px dashed color-mix(in srgb, var(--color-label) 30%, transparent); font-family: var(--font-body); font-size: max(12px, 1.2cqw); }
+.stage-wrap .board .court-paper .cp-factors li span:first-child { flex: 1; }
+.stage-wrap .board .court-paper .cp-source { margin-top: 1em; color: var(--muted); font: max(10px, .95cqw) var(--font-body); }
+
 /* 2막 입력 보드: 화면의 사전 판단 폼을 목업 선택지 모양으로 */
 .stage-wrap .board .guide-box { margin: 0 0 1cqw; padding: .8cqw 1.2cqw; border: 0; border-radius: 8px; background: var(--color-surface); font-size: max(12px, 1.25cqw); }
 .stage-wrap .board fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
@@ -315,10 +334,10 @@
 .stage-wrap .stage-restart { min-height: 36px; margin-left: 12px; padding: 0 10px; border: 1px dashed var(--color-border-strong); border-radius: 6px; background: none; color: var(--muted); font-size: var(--text-caption); cursor: pointer; }
 .stage-wrap :is(button, .board):focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
 
-/* 무대가 있는 화면(S-03 ~ S-07): 사이드바 없이 무대를 가운데 넓게, 제목은 읽기 도구용 */
-:is(.review-page, .summary-page, .verdict-page, .ai-page).has-stage .review-layout { display: block; }
-:is(.review-page, .summary-page, .verdict-page, .ai-page).has-stage .review-main { max-width: 1120px; margin: 0 auto; padding: 18px 20px 40px; }
-:is(.review-page, .summary-page, .verdict-page, .ai-page).has-stage .visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+/* 무대가 있는 화면(S-03 ~ S-08): 사이드바 없이 무대를 가운데 넓게, 제목은 읽기 도구용 */
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page).has-stage .review-layout { display: block; }
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page).has-stage .review-main { max-width: 1120px; margin: 0 auto; padding: 18px 20px 40px; }
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page).has-stage .visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 /* 좁은 화면: 장면 → 보드 → 대사창 세로 배치 */
 @media (max-width: 680px) {
@@ -368,5 +387,5 @@
 @media (prefers-reduced-motion: reduce) {
   .stage-wrap .law-slot, .stage-wrap .law-slot .pose, .stage-wrap .laws, .stage-wrap .laws.entering,
   .stage-wrap .spr, .stage-wrap .chip, .stage-wrap .zoom { transition: none; }
-  .stage-wrap .laws.entering, .stage-wrap .dlg.fade-in, .stage-wrap .flash.on, .stage-wrap .board, .stage-wrap .eyecatch, .stage-wrap .nxt, .stage-wrap .evd-list li, .stage-wrap .stage.arrive .scene { animation: none; }
+  .stage-wrap .court-paper, .stage-wrap .laws.entering, .stage-wrap .dlg.fade-in, .stage-wrap .flash.on, .stage-wrap .board, .stage-wrap .eyecatch, .stage-wrap .nxt, .stage-wrap .evd-list li, .stage-wrap .stage.arrive .scene { animation: none; }
 }

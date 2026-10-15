@@ -9,7 +9,7 @@ export const ACT_NAMES = ['신문 속 사건', '첫인상 판단', '재판', '�
 // 로 합의부는 판결 화면에서 이름 대신 "AI 판사"로 부른다(직책 재판장 · 배석판사는 이름표 옆에 단다)
 const NAMES = { naero: '내로', nambul: '남불', 'law-scale': 'AI 판사', 'law-gavel': 'AI 판사', 'law-book': 'AI 판사' };
 const ROLE_LABEL = { actor: '사건 속 인물', prosecutor: '검사', defense: '변호인', judge: '법률 안내' };
-const ROLE_COLOR = { '법정 진행': 'narrator', 'A씨 역': 'actor', 'B씨 역': 'actor', '사건 속 인물': 'actor', 검사: 'prosecutor', 변호인: 'defense', '법률 안내': 'law', 재판장: 'law', 배석판사: 'law' };
+const ROLE_COLOR = { '법정 진행': 'narrator', 판사: 'law', 'A씨 역': 'actor', 'B씨 역': 'actor', '사건 속 인물': 'actor', 검사: 'prosecutor', 변호인: 'defense', '법률 안내': 'law', 재판장: 'law', 배석판사: 'law' };
 // 로 합의부(6막 AI 판사): 로울(저울) · 로봉(법봉) · 로북(법전). LAWS는 판단 요소를 맡는 순서(저울 → 법봉 → 법전),
 // 서는 자리는 로울이 가운데, 로봉 · 로북이 좌우(LAW_SPOTS). 직책은 로울 재판장, 로봉 · 로북 배석판사.
 // 셋은 대등하지만 로울이 합의를 이끄는 일종의 리더(재판장) 역할을 한다(10/15 결정). 캐릭터 문서 4-3("서열을 두지 않는다")은 추후 이 결정에 맞춰 고친다
@@ -54,8 +54,10 @@ export function flatten(acts, order) {
       tags = { ...tags, ...step.tags };
       proc = step.proc ?? proc;
       if (said[step.say] !== undefined && step.role) said[step.say] = step.role;
-      const chips = { naero: tags.naero || chipText(look.naero, said.naero), nambul: tags.nambul || chipText(look.nambul, said.nambul) };
-      steps.push({ ...step, actId, scene: act.scene ?? 'news', procedures: act.procedures, proc, look, spots, chips });
+      // 대본 hideChips: 이 막은 캐릭터 머리 위 역할 이름표를 달지 않는다(역할은 대사창 이름표로 충분 — 7막)
+      const chips = act.hideChips ? { naero: '', nambul: '' }
+        : { naero: tags.naero || chipText(look.naero, said.naero), nambul: tags.nambul || chipText(look.nambul, said.nambul) };
+      steps.push({ ...step, actId, scene: act.scene ?? 'news', procedures: act.procedures, cast: act.cast, proc, look, spots, chips });
     });
   });
   return steps;
@@ -339,12 +341,13 @@ export function renderStage({ script, order, cards = {}, inputCards = [], start,
       figures[who].src = imageOf(who, look);
       figures[who].classList.toggle('role', look.startsWith('role:'));
       figures[who].classList.toggle('dim', Boolean(step.say) && step.say !== who);
-      figures[who].classList.toggle('hide', dark || Boolean(step.law));
+      const offCast = Boolean(step.cast) && !step.cast.includes(who); // 대본 cast: 이 막에 나오는 캐릭터만(7막은 남불만)
+      figures[who].classList.toggle('hide', dark || Boolean(step.law) || offCast);
       if (step.spots[who]) figures[who].dataset.spot = step.spots[who]; else delete figures[who].dataset.spot;
       chips[who].textContent = step.chips[who];
       chips[who].dataset.role = ROLE_COLOR[step.chips[who]] ?? 'actor';
       if (step.spots[who]) chips[who].dataset.spot = step.spots[who]; else delete chips[who].dataset.spot;
-      chips[who].classList.toggle('hide', dark || !step.chips[who] || Boolean(step.law));
+      chips[who].classList.toggle('hide', dark || !step.chips[who] || Boolean(step.law) || offCast);
     });
     lawCast.hidden = !step.law;
     lawCast.classList.toggle('resolving', lastLaw === 'think' && step.law === 'deliver');
@@ -389,6 +392,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], start,
     board.hidden = !entry;
     board.classList.toggle('wide', input);
     board.classList.toggle('fill', step.card === 'evidence'); // 증거판은 보드를 꽉 채운다(가운데 정렬 없음)
+    board.classList.toggle('reading', step.board === 'reading'); // 읽기 카드(7막 판결문): 두 캐릭터 사이 가운데
     const full = step.board === 'full';
     board.classList.toggle('full', full);
     wrap.classList.toggle('peeking', full);
@@ -407,7 +411,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], start,
     const settle = step.law && !reducedMotion() ? LAW_FADE_MS : 0;
     if (step.auto && lastDelta > 0) autoTimer = setTimeout(() => { if (steps[index] === step && wrap.isConnected) go(1); }, settle + step.auto);
     if (line) {
-      const role = step.say === 'narrator' ? '법정 진행' : step.role ?? '';
+      const role = step.say === 'narrator' ? step.role ?? '법정 진행' : step.role ?? ''; // 해설은 역할 이름만(예: 실제 판결)
       name.replaceChildren();
       name.dataset.role = ROLE_COLOR[role] ?? 'guide';
       if (NAMES[step.say]) name.append(picture(iconOf(step.say, step.look[step.say])), NAMES[step.say]); // AI 판사는 이름 · 얼굴 없이 역할만

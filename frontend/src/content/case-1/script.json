@@ -595,6 +595,67 @@
           "text": "이건 AI 판사의 판결이에요. 다음은 실제 재판부가 내린 판결이에요."
         }
       ]
+    },
+    "7": {
+      "title": "실제 판결",
+      "scene": "court",
+      "hideChips": true,
+      "look": {
+        "naero": "role:actor",
+        "nambul": "role:judge"
+      },
+      "steps": [
+        {
+          "system": "실제 재판부의 판결"
+        },
+        {
+          "say": "nambul",
+          "role": "판사",
+          "text": "지금부터 판결을 선고하겠습니다. 피고인은 일어서 주시기 바랍니다."
+        },
+        {
+          "say": "naero",
+          "role": "A씨 역",
+          "text": "…네."
+        },
+        {
+          "say": "nambul",
+          "role": "판사",
+          "card": "court-penalty",
+          "board": "reading",
+          "text": "주문. {order}"
+        },
+        {
+          "say": "nambul",
+          "role": "판사",
+          "card": "court-reasoning",
+          "board": "reading",
+          "text": "판결 이유를 말씀드리겠습니다."
+        },
+        {
+          "say": "nambul",
+          "role": "판사",
+          "card": "court-excerpt",
+          "board": "reading",
+          "text": "판결문에는 이렇게 적었습니다."
+        },
+        {
+          "say": "nambul",
+          "role": "판사",
+          "card": "court-plain",
+          "board": "reading",
+          "text": "쉽게 풀면 이런 뜻입니다."
+        },
+        {
+          "say": "nambul",
+          "role": "판사",
+          "card": "court-factors",
+          "board": "reading",
+          "confirm": "compare",
+          "next": "세 판결 비교하기",
+          "text": "재판부가 무겁게, 가볍게 본 요소입니다. 이제 세 판결을 나란히 놓고 보겠습니다."
+        }
+      ]
     }
   }
 }

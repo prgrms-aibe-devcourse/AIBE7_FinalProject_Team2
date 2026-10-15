@@ -1,4 +1,6 @@
 import { formatPenalty, formatDispositions } from '../../utils/judgmentFormat.js';
+import { SCRIPTS } from '../../content/scripts.js';
+import { renderCourtStage } from './courtStage.js';
 
 const directionLabels = { UP: '재판부 가중 요소', DOWN: '재판부 감경 요소' };
 
@@ -46,7 +48,28 @@ export async function renderCourtPage(container, { caseId, caseHeader, api, navi
     return group;
   }
 
+  // 대본의 제목이 사건 제목과 같을 때만 무대를 쓴다(S-03 ~ S-07과 같은 규칙)
+  const candidate = SCRIPTS[caseId];
+  const script = candidate?.title === caseHeader.title ? candidate : undefined;
+
+  // 7막 실제 판결(재진입 · 바로 들어온 경우). 보통은 S-07 6막에서 주소를 바꾸지 않고 이어진다(courtStage.js)
+  function drawStage(data) {
+    root.classList.add('has-stage');
+    const header = element('header', 'case-topbar');
+    header.append(element('strong', 'case-title', caseHeader.title), element('span', 'case-badge', '실제 판결'));
+    const { stage, error } = renderCourtStage({
+      script, data, caseId, api, navigate, active,
+      onInvalid: (failure) => message(`지금 단계에서는 이 화면을 볼 수 없어요. (현재 상태: ${failure.currentStatus})`),
+    });
+    const main = element('div', 'review-main');
+    main.append(element('h1', 'page-heading visually-hidden', '실제 판결'), stage, error);
+    const layout = element('main', 'review-layout');
+    layout.append(main);
+    root.replaceChildren(header, layout);
+  }
+
   function draw(data) {
+    if (script) { drawStage(data); return; }
     const { judgment, myJudgment, aiJudgment } = data;
 
     const header = element('header', 'case-topbar');
