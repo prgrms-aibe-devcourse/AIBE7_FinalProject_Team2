@@ -18,13 +18,8 @@
 .overview-page .submit-error:empty { display: none; }
 .overview-page .section-actions { padding-top: 16px; }
 
-/* 무대가 있는 사건(FE-27): 사이드바 없이 무대를 전체 폭으로 */
-.overview-page.has-stage .review-layout { display: block; }
-.overview-page.has-stage .review-main { max-width: 1180px; margin: 0 auto; padding: 20px 28px 36px; }
-.overview-page.has-stage .visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 @media (max-width: 760px) {
-  .overview-page.has-stage .review-main { padding: 14px 16px 28px; }
   .overview-page .overview-box { margin: 0 16px 16px; }
   .overview-page .guide-box { margin: 0 16px 20px; }
   .overview-page .pre-judgment-form { padding: 0 16px 24px; }
