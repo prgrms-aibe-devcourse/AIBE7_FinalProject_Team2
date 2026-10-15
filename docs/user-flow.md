@@ -9,7 +9,7 @@
 | **v1.2** | **2026-10-14** | **REQ-128 팀 결정 반영 (COMMON-28)** — 3장 AI 판결 공개 전 연출 · S-06 → S-07에 결정 표기, 4장 #7 확정 |
 | **v1.3** | **2026-10-15** | **웹 흐름 갱신 (COMMON-33)** — 3장을 흐름 목업(메인 책상 → 신문 → 사건 디테일 → 게임식 판결 체험 8막) 기준으로 갱신: 3-1 지도에 사건 디테일(S-20), 3-3 판결 체험을 8막(막 ↔ 화면 대응)으로, 3-7 화면 대응에 S-20과 S-16 경로(`{shareId}`), 4장 #9 추가(3막 절차 ↔ 서버 진행 상태) |
 
-**기준**: 코드 `develop` 0ac871a(MVP 구현 완료) · 정보 구조(`information-architecture.md`) v1.12 · 기능 명세(`functional-specification.md`) v3.8 · 요구사항(`requirements-specification.md`) v5.9 · API 명세(`api-specification.md`) v0.14
+**기준**: 코드 `develop` 0ac871a(MVP 구현 완료) · 정보 구조(`information-architecture.md`) v1.12 · 기능 명세(`functional-specification.md`) v3.8 · 요구사항(`requirements-specification.md`) v5.10 · API 명세(`api-specification.md`) v0.26
 
 > 이 문서는 사용자가 **무엇을 보고, 무엇을 고르고, 어디로 가는지**를 흐름으로 보여 준다. 화면 구성 · 진입 조건 · 체험 상태 규칙의 원본은 정보 구조이고, 내용이 다르면 정보 구조가 우선한다.
 > 2장은 **구현된 MVP**, 3장은 회의에서 정한 **확장 목표안**이다. 3장의 새 화면 ID(S-15 ~ S-19)와 경로는 제안이며, 상세 설계에서 바뀔 수 있다.
