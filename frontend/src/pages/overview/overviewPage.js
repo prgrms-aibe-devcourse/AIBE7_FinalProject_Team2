@@ -123,7 +123,9 @@ export async function renderOverviewPage(container, { caseId, api, navigate }) {
       if (checked) submit(Number(checked.value), submitButton, notice);
     });
 
-    const script = SCRIPTS[caseId];
+    // 사건 번호(legal_case.id)는 DB마다 다를 수 있어 번호만으로 고르지 않는다. 대본의 제목이 API 4 제목과 같을 때만 무대를 쓴다
+    const candidate = SCRIPTS[caseId];
+    const script = candidate?.title === info.title ? candidate : undefined;
     if (script) {
       // 1 · 2막 무대(흐름 목업). 진행 표시는 막 칩이 맡고, 제목은 읽기 도구용으로만 남긴다. 2막 보드는 이 화면의 사전 판단 폼이다
       root.classList.add('has-stage');

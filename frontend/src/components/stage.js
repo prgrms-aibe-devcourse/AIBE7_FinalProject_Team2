@@ -160,7 +160,7 @@ function evidenceBoard(script, at) {
       if (i === at) row.setAttribute('aria-current', 'true');
       list.append(row);
     });
-    column.append(scrollArea(list));
+    column.append(scrollArea(list, `${side} 측 증거`));
     board.append(column);
   });
   board.append(element('p', 'evd-count', `증거조사 ${at + 1} / ${script.evidence.length}`));
@@ -332,7 +332,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], start,
     sys.classList.toggle('on-dark', dark);
 
     // 증거판은 칸마다 따로 스크롤하고, 나머지 카드는 카드 전체가 스크롤된다
-    board.replaceChildren(...(entry ? [step.card === 'evidence' ? entry : scrollArea(entry)] : []));
+    board.replaceChildren(...(entry ? [step.card === 'evidence' ? entry : scrollArea(entry, '카드 내용')] : []));
     board.hidden = !entry;
     board.classList.toggle('wide', input);
     board.classList.toggle('fill', step.card === 'evidence'); // 증거판은 보드를 꽉 채운다(가운데 정렬 없음)
@@ -401,7 +401,9 @@ export function renderStage({ script, order, cards = {}, inputCards = [], start,
 
   function onKey(event) {
     if (!wrap.isConnected) { document.removeEventListener('keydown', onKey); return; }
-    if (event.target.closest('input, textarea, select, .board')) return;
+    if (event.target.closest('input, textarea, select')) return;
+    // 보드를 클릭하면 보드가 포커스를 받는다. 입력 카드는 제출로만 넘어가니 이전(←)만 받고, 다른 보드에서는 Space만 스크롤에 양보한다
+    if (event.target.closest('.board') && ((stage.classList.contains('bmode') && event.key !== 'ArrowLeft') || event.key === ' ')) return;
     if (event.key === 'ArrowRight' || event.key === ' ' || event.key === 'Enter') {
       if (event.target.closest('button') && event.key !== 'ArrowRight') return; // 버튼 위의 Space · Enter는 버튼이 처리한다
       event.preventDefault();
