@@ -317,7 +317,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
   const name = element('div', 'name');
   const text = element('div', 'txt');
   text.setAttribute('aria-hidden', 'true'); // 타이핑 중인 글자는 읽지 않고, 아래 live 영역이 문장 전체를 한 번 읽는다
-  const hint = element('div', 'nxt', '▶ 클릭 · Space');
+  const hint = element('div', 'nxt', window.matchMedia('(hover: none)').matches ? '▶ 탭' : '▶ 클릭 · Space'); // 터치 기기는 Space가 없다
   hint.setAttribute('aria-hidden', 'true');
   const choiceRow = element('div', 'dlg-choices');
   choiceRow.hidden = true;
@@ -564,7 +564,8 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
   skip.addEventListener('click', () => { if (busy) return; finishTyping(); index = skipTarget(steps, index); render(); });
   dialog.addEventListener('click', () => go(1));
   // 장면 클릭 = 다음. 지면 안의 버튼 · 링크 · 카드(신문 지면 무대의 막 칩 · 메뉴 · 독자 의견 칸)는 제 동작만 한다
-  scene.addEventListener('click', (event) => { if (!event.target.closest('button, a, input, label, .board')) go(1); });
+  // 신문 지면 무대(paperMode)에서는 지면을 눌러도 넘어가지 않는다(글을 읽다 누르는 경우가 많다). 대사창 · 다음 버튼 · Space로만 진행
+  scene.addEventListener('click', (event) => { if (!paperMode && !event.target.closest('button, a, input, label, .board')) go(1); });
 
   function onKey(event) {
     if (!wrap.isConnected) { document.removeEventListener('keydown', onKey); return; }

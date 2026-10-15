@@ -478,7 +478,8 @@
 /* ── 신문 지면 무대 (layout 'paper', FE-32): S-20 · 1 · 2막 ──
    화면 전체가 S-02와 같은 신문 지면이다(지면 스타일은 caseList.css .case-list-page). 막 칩은 지면 탭 줄, 2막 카드는 지면 안 "독자 의견" 칸.
    캐릭터 · 대사창 · 조작 줄은 화면 아래에 고정되고, 지면은 그 위로 굴러간다(stage.js paperCamera) */
-.case-paper-page .paper { margin-bottom: 300px; }
+.case-list-page.case-paper-page { padding-bottom: calc(300px + var(--safe-bottom)); } /* 아래 고정 대사창 높이만큼 비워 맨 아래 문구까지 읽힌다(여백이 합쳐져 사라지지 않게 margin 대신 padding) */
+.case-list-page.case-paper-page .paper { margin-bottom: 0; }
 #app:has(.case-paper-page) > #route-footer { display: none; } /* 법적 고지는 지면 안 맨 아래 줄에 있다 */
 .stage-wrap.paper-mode .stage { position: relative; aspect-ratio: auto; overflow: visible; border: 0; border-radius: 0; background: none; user-select: auto; }
 .stage-wrap.paper-mode .scene { position: static; inset: auto; aspect-ratio: auto; overflow: visible; border: 0; cursor: pointer; }
@@ -486,7 +487,7 @@
 .stage-wrap.paper-mode .stage.bmode .scene { display: block; }
 /* 지금 읽는 기사만 또렷하게 */
 .stage-wrap.paper-mode .paper [data-focus] { transition: opacity .5s ease-out; }
-.stage-wrap.paper-mode .paper.spot [data-focus]:not(.is-on) { opacity: .5; } /* 다른 기사도 읽을 수 있게 */
+.stage-wrap.paper-mode .paper.spot [data-focus]:not(.is-on) { opacity: .72; } /* 다른 기사도 읽을 수 있게(본문 글자 대비 4.5:1 안팎) */
 :root { --safe-bottom: env(safe-area-inset-bottom, 0px); } /* 아이폰 홈 바 높이(index.html viewport-fit=cover) */
 :root:has(.stage-wrap.paper-mode) { scroll-padding-bottom: calc(300px + var(--safe-bottom)); } /* 아래 고정 대사창이 포커스를 가리지 않게 */
 /* 탭 줄 = 막 칩(S-02 유형 탭과 같은 모양) */
@@ -566,7 +567,7 @@
   .stage-wrap.paper-mode .board .postcard-head h2 { font-size: 18px; }
   .stage-wrap.paper-mode .board .postcard-stamp { width: 50px; height: 60px; font-size: 11px; }
   .case-paper-page .tabs-zone .case-count { display: none; }
-  .case-paper-page .paper { margin-bottom: 320px; }
+  .case-list-page.case-paper-page { padding-bottom: calc(320px + var(--safe-bottom)); }
 }
 @media (prefers-reduced-motion: reduce) {
   .stage-wrap.paper-mode .paper [data-focus] { transition: none; }
@@ -593,7 +594,7 @@
 
 /* 체험 시작 전(S-20): 지면만 보이고 캐릭터 · 대사창 · 조작 줄은 숨는다. 우하단 "시작하기"로 시작 */
 .stage-wrap.paper-mode.parked :is(.spr, .dlg, .ctrl) { display: none; }
-.case-paper-page:has(.paper-start) .paper { margin-bottom: 120px; }
+.case-list-page.case-paper-page:has(.paper-start) { padding-bottom: calc(120px + var(--safe-bottom)); }
 .case-paper-page .paper-start { position: fixed; z-index: 20; right: 28px; bottom: calc(24px + var(--safe-bottom)); display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
 .case-paper-page .paper-start .primary-button { min-height: 56px; padding: 0 28px; border-radius: 999px; font-size: 17px; box-shadow: 0 10px 24px -8px color-mix(in srgb, var(--color-desk-shadow) 70%, transparent); }
 .case-paper-page .paper-start-notice { max-width: 280px; margin: 0; padding: 6px 12px; border-radius: 8px; background: var(--color-card); color: var(--color-caution); font-size: var(--text-small); }
@@ -655,3 +656,20 @@
 .stage-wrap.paper-mode .board .postcard-sent { margin-bottom: 14px; padding: 6px 4px 12px; border-bottom: 1px dashed var(--color-border-strong); }
 .stage-wrap.paper-mode .board .postcard-sent-q { margin: 0 0 6px; font: 400 20px/1.4 var(--font-hand); color: var(--color-muted); }
 .stage-wrap.paper-mode .board .postcard-sent-a { margin: 0; font: 400 30px/1.3 var(--font-hand); color: var(--color-desk-note-pen); }
+
+/* 모바일 읽기 보정(FE-32 디자인 점검): 대사창 · 조작 줄은 뒤 본문이 비치지 않게 불투명, 제출 줄은 엽서 아래에 고정 */
+@media (max-width: 680px) {
+  .stage-wrap.paper-mode .dlg { background: var(--paper); }
+  .stage-wrap.paper-mode .ctrl { background: var(--color-card); }
+  .stage-wrap.paper-mode .board .section-actions { position: sticky; bottom: -18px; z-index: 1; margin: 0 -16px -18px; padding: 12px 16px; background: color-mix(in srgb, var(--color-desk-kraft) 10%, var(--color-card)); border-top: 1px dashed var(--color-border-strong); }
+  .stage-wrap.paper-mode .board .section-actions .primary-button { width: 100%; }
+}
+
+/* 엽서 접수 도장(소인): 보낸 순간 엽서 위에 찍힌다 */
+.stage-wrap.paper-mode .board .postcard { position: relative; }
+.stage-wrap.paper-mode .board .postcard-postmark { position: absolute; right: 8%; top: 34%; display: grid; place-items: center; width: 150px; height: 150px; border: 4px double var(--color-accent); border-radius: 50%; color: var(--color-accent); text-align: center; background: color-mix(in srgb, var(--color-card) 60%, transparent); transform: rotate(-14deg); animation: postmark-in .35s cubic-bezier(.2, .8, .2, 1) backwards; pointer-events: none; }
+.stage-wrap.paper-mode .board .postcard-postmark b { font: 900 22px/1.1 var(--font-heading); letter-spacing: .06em; }
+.stage-wrap.paper-mode .board .postcard-postmark small { font-size: 11px; font-weight: 700; }
+.stage-wrap.paper-mode .board .postcard.is-sent :is(.section-actions, .guide-box, .submit-error) { opacity: .35; }
+@keyframes postmark-in { from { opacity: 0; transform: rotate(-4deg) scale(1.9); } }
+@media (prefers-reduced-motion: reduce) { .stage-wrap.paper-mode .board .postcard-postmark { animation: none; } }

@@ -92,7 +92,7 @@ export function caseNewspaper({ paper, info, navigate, earRight = caseInfoEar(in
   const square = element('span', `type-square type-${info.crimeType}`);
   square.setAttribute('aria-hidden', 'true');
   kicker.append(square, element('span', '', info.crimeCategoryLabel ?? ''), element('span', '', '·'), element('span', '', '사건 ' + String(info.caseId).padStart(2, '0')));
-  head.append(kicker, element('h2', 'story-title', paper.headline), element('p', 'story-deck', paper.deck));
+  head.append(kicker, element('h1', 'story-title', paper.headline), element('p', 'story-deck', paper.deck));
   const byline = element('p', 'story-byline');
   byline.append(element('b', '', `${paper.desk ?? '사회부'} 기자`), element('span', '', todayLabel()));
 

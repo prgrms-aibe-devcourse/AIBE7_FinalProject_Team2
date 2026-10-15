@@ -84,6 +84,7 @@ export function caseStage({ caseId, api, navigate, script, info, paper = script.
       // MVP는 작용 요소(factorIds)를 보내지 않는다. (REQ-093 확장)
       await api.postPreJudgment(caseId, { rangeOptionId });
       if (labels[rangeOptionId]) rememberSent(caseId, labels[rangeOptionId]);
+      await postmark(); // 접수 도장을 찍고 잠깐 보여 준 뒤 넘어간다(보낸 순간이 남게)
       // 제출 뒤 사진 속으로 들어가는 연출을 보여 주고 S-04로 간다
       if (stage.isConnected) await stage.enterPhoto();
       if (stage.isConnected) await stage.interlude(courtFacts);
@@ -96,6 +97,18 @@ export function caseStage({ caseId, api, navigate, script, info, paper = script.
     } finally {
       submitting = false;
     }
+  }
+
+  // 보낸 엽서에 접수 도장(소인)을 찍는다. 움직임 줄이기면 도장만 바로 찍히고 기다리지 않는다
+  let sendingCard = null;
+  async function postmark() {
+    if (!sendingCard) return;
+    const mark = element('div', 'postcard-postmark');
+    mark.setAttribute('aria-hidden', 'true');
+    mark.append(element('b', '', '접수 완료'), element('small', '', '내Law남불 신문 편집부'));
+    sendingCard.append(mark);
+    sendingCard.classList.add('is-sent');
+    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) await new Promise((resolve) => setTimeout(resolve, 900));
   }
 
   // 독자 의견 엽서 머리(제목 · 받는 곳 · 우표)
@@ -129,9 +142,30 @@ export function caseStage({ caseId, api, navigate, script, info, paper = script.
 
   function setOverview({ rangeOptions }) {
     labels = Object.fromEntries(rangeOptions.map(({ rangeOptionId, label }) => [rangeOptionId, label]));
-    // 독자 의견 엽서(신문 지면 무대의 팝업): 엽서 머리(제목 · 받는 곳 · 우표) + 안내 + 형량 고르기
+    // 독자 의견 엽서(신문 지면 무대의 팝업): 엽서 머리(제목 · 받는 곳 · 우표) + 안내 + 형량 고르기.
+    // 되돌릴 수 없는 판단이라 두 박자: 고르기 → 엽서 안 확인("보낼까요?") → 보내기(접수 도장)
     const card = element('div', 'postcard');
-    card.append(postcardHead(), preJudgmentGuide(), preJudgmentForm(rangeOptions, submit));
+    sendingCard = card;
+    const drawForm = (selectedId) => {
+      card.replaceChildren(postcardHead(), preJudgmentGuide(), preJudgmentForm(rangeOptions, confirm, { submitLabel: '이 판단으로 정하기 ▶', selectedId }));
+    };
+    function confirm(rangeOptionId) {
+      const written = element('div', 'postcard-sent');
+      written.append(element('p', 'postcard-sent-q', '이 사건, 어느 정도의 형량이 맞다고 생각하나요?'), element('p', 'postcard-sent-a', labels[rangeOptionId]));
+      const notice = element('p', 'submit-error');
+      notice.setAttribute('role', 'alert');
+      const back = element('button', 'secondary-button', '다시 고르기');
+      back.type = 'button';
+      back.addEventListener('click', () => { drawForm(rangeOptionId); card.querySelector('input:checked')?.focus(); });
+      const send = element('button', 'primary-button', '엽서 보내고 재판 보러 가기 ▶');
+      send.type = 'button';
+      send.addEventListener('click', () => submit(rangeOptionId, send, notice).then(() => { back.disabled = send.disabled; }));
+      const actions = element('div', 'section-actions');
+      actions.append(back, send);
+      card.replaceChildren(postcardHead(), written, element('p', 'guide-box', '이 판단으로 보낼까요? 보내면 바꿀 수 없어요.'), notice, actions);
+      send.focus();
+    }
+    drawForm();
     cards.preJudgment = card;
     stage.refresh('preJudgment');
   }
@@ -140,7 +174,7 @@ export function caseStage({ caseId, api, navigate, script, info, paper = script.
 
 const preJudgmentGuide = () => element('p', 'guide-box', '지금은 뉴스에서 볼 수 있는 정도의 정보만 있어요. 기사로 이 사건을 접했다고 생각하고 판단해 보세요.');
 
-function preJudgmentForm(rangeOptions, submit) {
+function preJudgmentForm(rangeOptions, submit, { submitLabel = '판단 제출하고 사건 자세히 보기', selectedId } = {}) {
   const form = element('form', 'pre-judgment-form');
   form.noValidate = true;
   const fieldset = element('fieldset');
@@ -149,7 +183,7 @@ function preJudgmentForm(rangeOptions, submit) {
   const warning = element('p', 'submit-warning', '제출하면 이 판단은 바꿀 수 없어요.');
   const notice = element('p', 'submit-error');
   notice.setAttribute('role', 'alert');
-  const submitButton = element('button', 'primary-button', '판단 제출하고 사건 자세히 보기');
+  const submitButton = element('button', 'primary-button', submitLabel);
   submitButton.type = 'submit';
   submitButton.disabled = true;
   rangeOptions.forEach(({ rangeOptionId, label }) => {
@@ -159,6 +193,7 @@ function preJudgmentForm(rangeOptions, submit) {
     input.name = 'rangeOptionId';
     input.value = String(rangeOptionId);
     input.addEventListener('change', () => { submitButton.disabled = false; });
+    if (rangeOptionId === selectedId) { input.checked = true; submitButton.disabled = false; }
     item.append(input, element('span', '', label));
     options.append(item);
   });
