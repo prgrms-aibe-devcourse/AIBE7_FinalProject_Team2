@@ -61,6 +61,16 @@ export function skipTarget(steps, index) {
   return steps.length - 1;
 }
 
+// 막 버튼으로 바로 가기(테스트 기간): 화면이 넘어갈 때 가려던 막을 sessionStorage에 한 번 남긴다
+export const ACT_JUMP_KEY = 'nlnb-act-jump';
+function takeJump() {
+  try {
+    const act = sessionStorage.getItem(ACT_JUMP_KEY);
+    sessionStorage.removeItem(ACT_JUMP_KEY);
+    return act;
+  } catch { return null; }
+}
+
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 function element(tag, className, text) {
@@ -160,10 +170,14 @@ function evidenceBoard(script, at) {
 // script: 사건 대본, order: 이 화면이 보여 줄 막, cards: 화면이 주는 카드 { 이름: 요소 },
 // inputCards: 입력 카드 이름(보드를 넓게 띄우고 화면의 제출로만 넘어간다), start(step): 재진입 장면,
 // onConfirm(n): confirm 장면을 떠날 때 화면이 서버에 "읽었습니다"를 보낸다(false면 넘어가지 않는다),
-// onRestart: 있으면 "처음부터 다시" 버튼을 단다(목 데이터 전용). 반환한 요소의 enterPhoto()는 신문 사진 속으로 들어가는 연출
-export function renderStage({ script, order, cards = {}, inputCards = [], start, onConfirm, onRestart }) {
+// onRestart: 있으면 "처음부터 다시" 버튼을 단다(목 데이터 전용), onJump(막 번호): 있으면 막 칩을 눌러 그 막으로 바로 간다
+// (테스트 기간 · 목 데이터 전용, 이 화면에 없는 막은 화면이 넘겨 준다). 반환한 요소의 enterPhoto()는 신문 사진 속으로 들어가는 연출
+export function renderStage({ script, order, cards = {}, inputCards = [], start, onConfirm, onRestart, onJump }) {
   const steps = flatten(script.acts, order);
   let index = Math.max(0, start ? steps.findIndex(start) : 0);
+  const jumpAct = takeJump();
+  const jumped = steps.findIndex((step) => step.actId === jumpAct);
+  if (jumped >= 0) index = jumped;
   let typing = null;
   let busy = false;
   let lastLook = '';
@@ -171,7 +185,18 @@ export function renderStage({ script, order, cards = {}, inputCards = [], start,
   const wrap = element('section', 'stage-wrap');
   wrap.setAttribute('aria-label', '판결 체험');
   const acts = element('ol', 'acts');
-  ACT_NAMES.forEach((name, i) => acts.append(element('li', 'act', `${i + 1}막 ${name}`)));
+  ACT_NAMES.forEach((name, i) => {
+    const label = `${i + 1}막 ${name}`;
+    const item = element('li', 'act', onJump ? undefined : label);
+    if (onJump) {
+      const jump = element('button', 'act-jump', label);
+      jump.type = 'button';
+      jump.title = '테스트용: 이 막으로 바로 가기';
+      jump.addEventListener('click', () => jumpTo(String(i + 1)));
+      item.append(jump);
+    }
+    acts.append(item);
+  });
 
   const stage = element('div', 'stage');
   const scene = element('div', 'scene');
@@ -219,6 +244,16 @@ export function renderStage({ script, order, cards = {}, inputCards = [], start,
     restart.addEventListener('click', onRestart);
     controls.append(restart);
   }
+  // 카드가 무대 전체를 덮는 장면(대본 board: "full", 5막 판결)에서는 캐릭터가 카드 밖으로 나온다:
+  // 남불은 위 막 버튼 줄 끝, 내로는 아래 이전 · 다음 버튼 옆
+  const peeks = { nambul: element('img', 'peek b'), naero: element('img', 'peek n') };
+  Object.values(peeks).forEach((image) => { image.alt = ''; });
+  const peekSlot = element('li', 'peek-slot');
+  peekSlot.setAttribute('aria-hidden', 'true');
+  peekSlot.append(peeks.nambul);
+  acts.append(peekSlot);
+  peeks.naero.setAttribute('aria-hidden', 'true');
+  controls.insertBefore(peeks.naero, prev);
   wrap.append(acts, stage, controls, live);
 
   function finishTyping() {
@@ -258,7 +293,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], start,
     });
 
     stage.classList.toggle('bmode', input);
-    const small = Boolean(entry) && !input && step.card !== 'evidence' && !cards[step.card]; // 대본 카드: 칠판보다 조금 크게
+    const small = Boolean(entry) && !input && step.card !== 'evidence'; // 읽기 카드(대본 · 4막 정리): 칠판보다 조금 크게
     stage.classList.toggle('card', Boolean(entry) && !input && !small); // 큰 판일 때만 캐릭터가 양 끝으로 비켜 선다
     stage.classList.toggle('hasproc', Boolean(step.procedures));
     ['naero', 'nambul'].forEach((who) => {
@@ -282,7 +317,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], start,
     }
     lastLook = looks;
 
-    procs.hidden = !step.procedures;
+    procs.hidden = !step.procedures || step.board === 'full'; // 무대를 덮는 카드 위에는 재판 순서를 띄우지 않는다
     if (step.procedures) {
       procs.replaceChildren(...step.procedures.map((label, i) => {
         const item = element('span', i === step.proc ? 'on' : i < step.proc ? 'done' : '', `${i + 1} ${label}`);
@@ -301,6 +336,10 @@ export function renderStage({ script, order, cards = {}, inputCards = [], start,
     board.hidden = !entry;
     board.classList.toggle('wide', input);
     board.classList.toggle('fill', step.card === 'evidence'); // 증거판은 보드를 꽉 채운다(가운데 정렬 없음)
+    const full = step.board === 'full';
+    board.classList.toggle('full', full);
+    wrap.classList.toggle('peeking', full);
+    if (full) ['naero', 'nambul'].forEach((who) => { peeks[who].src = imageOf(who, step.look[who]); });
     board.classList.toggle('small', small);
     const latest = board.querySelector('.evd-list li.now');
     if (latest) { const list = latest.closest('.scroll-body'); list.scrollTop = list.scrollHeight; }
@@ -345,6 +384,15 @@ export function renderStage({ script, order, cards = {}, inputCards = [], start,
     index = target;
     render();
   }
+  // 이 화면의 막이면 그 막 첫 장면으로, 아니면 화면에 맡긴다(서버 확인 없이 건너뛰므로 테스트 기간 · 목 데이터 전용)
+  function jumpTo(actId) {
+    if (busy) return;
+    const first = steps.findIndex((step) => step.actId === actId);
+    if (first < 0) { onJump(Number(actId)); return; }
+    finishTyping();
+    index = first;
+    render();
+  }
   prev.addEventListener('click', () => go(-1));
   next.addEventListener('click', () => go(1));
   skip.addEventListener('click', () => { if (busy) return; finishTyping(); index = skipTarget(steps, index); render(); });
@@ -353,7 +401,8 @@ export function renderStage({ script, order, cards = {}, inputCards = [], start,
 
   function onKey(event) {
     if (!wrap.isConnected) { document.removeEventListener('keydown', onKey); return; }
-    if (event.target.closest('input, textarea, select')) return;
+    // 다른 곳(판결 카드의 형량 막대 등)이 이미 처리한 키, 입력칸 · 슬라이더 위의 키는 무대가 받지 않는다
+    if (event.defaultPrevented || event.target.closest('input, textarea, select, [role="slider"]')) return;
     // 보드를 클릭하면 보드가 포커스를 받는다. 입력 카드는 제출로만 넘어가니 이전(←)만 받고, 다른 보드에서는 Space만 스크롤에 양보한다
     if (event.target.closest('.board') && ((stage.classList.contains('bmode') && event.key !== 'ArrowLeft') || event.key === ' ')) return;
     if (event.key === 'ArrowRight' || event.key === ' ' || event.key === 'Enter') {

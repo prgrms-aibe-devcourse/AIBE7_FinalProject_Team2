@@ -24,6 +24,36 @@
 .verdict-page .verdict-main { padding: 28px; min-width: 0; }
 .verdict-page h1 { font-size: 28px; }
 .verdict-page .verdict-intro { margin: 6px 0 28px; }
+/* 형량 칸(공통): 범위 상자 안 "선고할 수 있는 범위" 설명과 같은 줄 오른쪽. 징역 · 벌금에 따라 내용이 바뀐다 */
+.verdict-page .sentence-entry { float: right; display: inline-flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 10px 16px; padding: 6px 12px; border: 1px solid var(--color-range-fill); border-radius: 8px; background: var(--color-surface-strong); }
+.verdict-page .recommended-range .range-track { clear: both; }
+.verdict-page .sentence-entry .number-fields { gap: 8px; }
+/* 형량 칸 입력은 두 자리(년 · 개월)라 좁게, 벌금(만원)은 조금 넓게 */
+.verdict-page .sentence-entry .number-field input { width: 44px; min-height: 30px; padding: 3px 6px; text-align: right; }
+.verdict-page .sentence-entry .number-field input[name='fineAmount'] { width: 70px; }
+.verdict-page .sentence-entry-type { color: var(--color-heading); }
+/* 범위 막대 = 형량 조절 막대(징역). 막대 위 입력값 글자는 우상단 입력칸이 대신한다 */
+.verdict-page .range-slider.is-sliding .range-track { cursor: pointer; touch-action: none; }
+.verdict-page .range-track[role='slider']:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 4px; }
+.verdict-page .range-slider.is-sliding .range-track { height: 26px; }
+/* 벌금 막대 눈금(아래에서 위로): 100만 원 0.2 · 500만 원 0.5 · 1,000만 원 막대 높이만큼 */
+.verdict-page .fine-tick { position: absolute; bottom: 0; width: 1px; transform: translateX(-50%); background: var(--color-border-strong); pointer-events: none; }
+.verdict-page .fine-tick.minor { height: 20%; }
+.verdict-page .fine-tick.mid { height: 50%; }
+.verdict-page .fine-tick.major { height: 100%; }
+.verdict-page .fine-labels { position: relative; height: 1.4em; margin: 6px 0 4px; font-size: 11px; color: var(--color-muted); }
+.verdict-page .fine-labels span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+.verdict-page .fine-labels span:first-child { transform: none; }
+.verdict-page .fine-labels span:last-child { transform: translateX(-100%); }
+.verdict-page .slider-hint { margin-bottom: 6px; }
+.verdict-page .sentence-slider { display: block; margin: 8px 0; }
+.verdict-page .sentence-slider input { width: 100%; }
+.verdict-page .suspension-years { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
+/* 집행유예 줄: 체크박스 + 조건(같은 줄). 붙일 수 없으면 회색 */
+.verdict-page .suspension-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-bottom: 8px; }
+.verdict-page .suspension-row .suspension-toggle { margin-bottom: 0; }
+.verdict-page .suspension-toggle.is-disabled { color: var(--color-muted); font-weight: 600; }
+.verdict-page .suspension-toggle.is-disabled input { cursor: default; }
 .verdict-page .verdict-controls,
 .verdict-page .verdict-group { border: 0; padding: 0; margin: 0; min-width: 0; }
 .verdict-page .verdict-group { margin-bottom: 28px; }
@@ -63,6 +93,8 @@
 .verdict-page .factor-actions { display: flex; gap: 6px; flex-shrink: 0; }
 .verdict-page .factor-button { background: var(--color-card); border: 1px solid var(--color-border-strong); border-radius: 4px; padding: 8px 10px; min-height: 44px; color: var(--color-muted); font-size: 12px; }
 .verdict-page .factor-button[aria-pressed='true'] { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-on-accent); }
+.verdict-page .factor-button[data-direction='UP'][aria-pressed='true'] { background: var(--color-factor-heavy-tint); border-color: var(--color-factor-heavy); color: var(--color-factor-heavy); }
+.verdict-page .factor-button[data-direction='DOWN'][aria-pressed='true'] { background: var(--color-factor-light-tint); border-color: var(--color-factor-light); color: var(--color-factor-light); }
 .verdict-page .verdict-submit { border-top: 1px solid var(--color-border); padding-top: 22px; display: flex; align-items: center; justify-content: flex-end; gap: 16px; }
 .verdict-page .confirmation-box { margin-top: 22px; padding: 22px; border: 1px solid var(--color-border-strong); border-radius: 4px; background: var(--color-surface); }
 .verdict-page .confirmation-box h2 { font-size: 18px; margin-bottom: 8px; }
@@ -83,6 +115,7 @@
   .verdict-page .verdict-sidebar { border-left: 0; border-top: 1px solid var(--color-border); }
 }
 @media (max-width: 600px) {
+  .verdict-page .sentence-entry { float: none; display: flex; margin: 0 0 10px; }
   .verdict-page .verdict-main { padding: 24px 16px; }
   .verdict-page h1 { font-size: 24px; }
   .verdict-page .factor-row { flex-direction: column; align-items: stretch; gap: 10px; }

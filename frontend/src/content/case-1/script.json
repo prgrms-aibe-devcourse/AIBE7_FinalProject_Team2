@@ -429,6 +429,130 @@
           "text": "권고 범위는 정답이 아니라 참고예요. 범위를 벗어난 판결도 있어요."
         }
       ]
+    },
+    "4": {
+      "title": "판결 전 정리",
+      "scene": "court",
+      "look": {
+        "naero": "read-thinking",
+        "nambul": "idle-neutral"
+      },
+      "steps": [
+        {
+          "say": "naero",
+          "role": "안내",
+          "card": "summary",
+          "text": "지금까지 읽은 내용을 한 장에 모았어요."
+        },
+        {
+          "say": "nambul",
+          "role": "안내",
+          "card": "summary",
+          "look": {
+            "nambul": "guide-neutral",
+            "naero": "idle-neutral"
+          },
+          "text": "검사 측은 구호 조치 없이 현장을 떠난 점과 유족의 엄벌 의사를 강조했어요."
+        },
+        {
+          "say": "naero",
+          "role": "안내",
+          "card": "summary",
+          "look": {
+            "naero": "guide-neutral",
+            "nambul": "idle-neutral"
+          },
+          "text": "변호인 측은 우발적인 범행이라는 점, 그리고 범행 인정 · 반성 · 공탁을 강조했어요."
+        },
+        {
+          "say": "nambul",
+          "role": "안내",
+          "look": {
+            "nambul": "react-surprised",
+            "naero": "read-thinking"
+          },
+          "text": "잠깐, 반대로 보면요? 내가 유족이라면, 내가 피고인이라면. 양쪽 자리에 한 번씩 서 보고 정해요."
+        },
+        {
+          "say": "naero",
+          "role": "안내",
+          "look": {
+            "naero": "guide-happy",
+            "nambul": "idle-neutral"
+          },
+          "confirm": "verdict",
+          "next": "판결 내리러 가기",
+          "text": "준비되면 판결로 넘어가요. 여기서부터는 당신이 판사예요."
+        }
+      ]
+    },
+    "5": {
+      "title": "당신이 판사",
+      "scene": "court",
+      "procedures": [
+        "검사 의견",
+        "최종변론",
+        "최후진술",
+        "판결"
+      ],
+      "look": {
+        "naero": "role:prosecutor",
+        "nambul": "role:defense"
+      },
+      "steps": [
+        {
+          "say": "naero",
+          "role": "검사",
+          "proc": 0,
+          "text": "검사 측 의견입니다. 피고인은 구호 조치 없이 현장을 떠났고, 유족은 엄벌을 원합니다. 엄한 처벌을 구합니다."
+        },
+        {
+          "say": "nambul",
+          "role": "변호인",
+          "proc": 1,
+          "text": "변호인 측 최종변론입니다. 우발적인 범행이었고, 피고인은 범행을 인정하며 5,000만 원을 공탁했습니다. 이 점을 살펴 주십시오."
+        },
+        {
+          "say": "nambul",
+          "role": "A씨 역",
+          "proc": 2,
+          "look": {
+            "nambul": "role:actor"
+          },
+          "tags": {
+            "nambul": "A씨 역"
+          },
+          "spots": {
+            "nambul": "stand"
+          },
+          "text": "제가 한 일을 깊이 반성하고 있습니다."
+        },
+        {
+          "say": "naero",
+          "role": "안내",
+          "proc": 3,
+          "look": {
+            "naero": "guide-neutral",
+            "nambul": "idle-neutral"
+          },
+          "tags": {
+            "nambul": ""
+          },
+          "spots": {
+            "nambul": ""
+          },
+          "text": "이제 재판장인 당신이 판결할 차례예요. 형벌과 형량, 그리고 무엇을 무겁게 봤는지 골라 주세요."
+        },
+        {
+          "proc": 3,
+          "card": "verdict",
+          "look": {
+            "naero": "read-thinking",
+            "nambul": "read-thinking"
+          },
+          "board": "full"
+        }
+      ]
     }
   }
 }
