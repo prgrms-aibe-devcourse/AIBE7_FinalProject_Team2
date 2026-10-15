@@ -15,6 +15,7 @@
 | v2.6 | 2026-10-15 | **10/15 이관 결정**(COMMON-35) — 생성은 GPT Pro 팀원(gpt image 2.0, 기본 품질 medium)이 맡고 지금 이미지는 유지(재생성은 최종 디테일 때). **모든 생성 배경을 투명으로**(시트 · 재연 컷 포함, 신문 느낌은 후보정, 크로마 그린은 대안) — 1-3 · 9-1 · 9-7. 9-16 마스코트 로(2등신, 키 로울 180 · 로북 170 · 로봉 160) · 9-17 극적 재연 블록 추가 |
 | v2.7 | 2026-10-15 | 추가 생성 목록 H(제작 목록) 블록 — 데포르메 묶음 시트 · 의상 시트 · 역할 의상 정식 컷 · 마스코트 로 컷(v2.8에서 10장으로 옮김) |
 | v2.8 | 2026-10-15 | **10장 이관 묶음 완성 프롬프트** — 1차 · 2차 지시서(`items.js`)와 같은 문장으로 정리(10-1 ~ 10-10), 9-16에 마스코트 로 IDENTITY 3종 추가 |
+| v2.9 | 2026-10-15 | 9-17 · 10-4 CASE RULES에서 "양쪽 감정을 같은 무게로" 문장 삭제(PR #149 리뷰 결정), 10장 지시서(`items.js`)는 쓰지 않는 것으로 정정 |
 
 > 기준 결정: `character-main-handover.md` v2의 10/13 변경 절 (기본 = 마스코트형 약 3.5등신 · 란마풍 등은 변형 · 모든 캐릭터 무성 · 소품 제한 해제 · 화난 표정 금지)
 > 이 문서는 **복사해서 바로 쓰는 프롬프트 모음**이다. 설계 배경은 `character-law-ai-judge-plan.md` v0.3을 본다(`Claude outputs/character/plan/`, 커밋 안 함).
@@ -1169,7 +1170,7 @@ No face, no eyes, no mouth, no neck, no human head. The head is a chunky, thick,
 사건 재연 컷은 **드라마 한 장면처럼 극적인 표정 · 상황**을 쓸 수 있다(아키텍처 4-3). 9-7 `reenact` 뒤에 붙인다. 화난 · 적대적인 표정과 폭력은 여전히 쓰지 않는다.
 
 ```
-CASE RULES — a dramatic, tense, newspaper-photo-like moment that shows the situation and the relationship. Strong emotions through faces and body language (frustration, desperation, shock, pressure), like a still from a TV drama, but never violent, never hostile or snarling, and no comedy. Show both sides' emotions with equal weight: neither looks like a villain or a pitiful victim, and nothing hints at the verdict.
+CASE RULES — a dramatic, tense, newspaper-photo-like moment that shows the situation and the relationship. Strong emotions through faces and body language (frustration, desperation, shock, pressure), like a still from a TV drama, but never violent, never hostile or snarling, and no comedy. Nothing hints at the verdict.
 ```
 
 - STYLE `editorial`의 Mood 줄은 `Mood: dramatic and tense like a TV drama still, while the drawing stays warm, flat and slightly vintage.`로 바꾼다.
@@ -1179,7 +1180,7 @@ CASE RULES — a dramatic, tense, newspaper-photo-like moment that shows the sit
 
 ## 10. 이관 묶음 완성 프롬프트 (10/15)
 
-김현중(GPT Pro)에게 넘긴 지시서의 **완성 프롬프트**다. 지시서 폴더(레포 밖, 커밋 안 함)의 `items.js`와 같은 문장이고, 이 장이 레포 쪽 기준이다. 프롬프트를 고치면 두 곳을 함께 고친다.
+김현중(GPT Pro)이 쓸 **완성 프롬프트**다. 처음 만든 지시서(`items.js`, 레포 밖, 커밋 안 함)는 **쓰지 않기로 했고**(10/15, 수작업 `작업-가이드.md`로 진행), 이 장이 프롬프트의 기준이다. 아래 표의 지시서 폴더는 묶음 이름을 알아보기 위한 기록이다.
 
 | 지시서 | 폴더 | 묶음 → 제작 목록 |
 | --- | --- | --- |
@@ -1366,7 +1367,7 @@ OUTFITS (new for this case, not the plain shirt-and-jeans) —
 - Nambul (the borrower at home): a worn, stretched grey hoodie, loose track pants and house slippers.
 Their faces, fur and flame colors stay exactly the same; only the clothes change.
 
-CASE RULES — a dramatic, tense, newspaper-photo-like moment that shows the situation and the relationship. Strong emotions through faces and body language (frustration, desperation, shock, pressure), like a still from a TV drama, but never violent, never hostile or snarling, and no comedy. Show both sides' emotions with equal weight: neither looks like a villain or a pitiful victim, and nothing hints at the verdict. Draw only the characters and the few props listed: no room, no walls, no floor, no scenery.
+CASE RULES — a dramatic, tense, newspaper-photo-like moment that shows the situation and the relationship. Strong emotions through faces and body language (frustration, desperation, shock, pressure), like a still from a TV drama, but never violent, never hostile or snarling, and no comedy. Nothing hints at the verdict. Draw only the characters and the few props listed: no room, no walls, no floor, no scenery.
 
 SCENE — the argument about borrowed money peaks. Naero (the lender) on the left leans forward over a small low wooden table and slaps a plain sheet of paper like an IOU (completely blank, no text) down on it, pointing at it, eyes wide with frustration. Nambul (the borrower) on the right steps back with both palms raised at chest height, eyes wide, a sweat drop, desperate to explain. On the table an empty mug has been knocked onto its side (nothing spilled). Dynamic diagonal composition. Full bodies visible, 10% margin.
 
