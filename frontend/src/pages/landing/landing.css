@@ -17,10 +17,10 @@
 :is(.landing-page, .case-list-page) .primary-button,
 :is(.landing-page, .case-list-page) .secondary-button { min-height: 44px; padding: 10px 18px; border: 1px solid var(--color-border); border-radius: 4px; font-weight: 700; }
 :is(.landing-page, .case-list-page) .primary-button { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-on-accent); }
-:is(.landing-page, .case-list-page) .primary-button:hover:not(:disabled) { background: var(--color-accent-hover); border-color: var(--color-accent-hover); }
+@media (hover: hover) and (pointer: fine) { :is(.landing-page, .case-list-page) .primary-button:hover:not(:disabled) { background: var(--color-accent-hover); border-color: var(--color-accent-hover); } }
 :is(.landing-page, .case-list-page) .primary-button:disabled { opacity: .6; }
 :is(.landing-page, .case-list-page) .secondary-button { color: var(--color-text); background: var(--color-card); border-color: var(--color-border-strong); }
-:is(.landing-page, .case-list-page) .secondary-button:hover { background: var(--color-surface); }
+@media (hover: hover) and (pointer: fine) { :is(.landing-page, .case-list-page) .secondary-button:hover { background: var(--color-surface); } }
 :is(.landing-page, .case-list-page) .muted { color: var(--color-muted); font-size: 13px; }
 :is(.landing-page, .case-list-page) .message-panel { padding: 44px 28px; }
 :is(.landing-page, .case-list-page) .message-panel button { margin-top: 20px; }
@@ -40,7 +40,7 @@
 .landing-page .site-header .logo-button { color: var(--color-banner-text); font-size: 22px; }
 .landing-page .site-header .logo-button .law { display: inline; color: var(--color-range-fill); }
 .landing-page .nav-button { color: var(--color-banner-muted); font-size: var(--text-small); }
-.landing-page .nav-button:hover { color: var(--color-banner-text); text-decoration: underline; text-underline-offset: 4px; }
+@media (hover: hover) and (pointer: fine) { .landing-page .nav-button:hover { color: var(--color-banner-text); text-decoration: underline; text-underline-offset: 4px; } }
 .landing-page .site-header button:focus-visible { outline-color: var(--color-range-fill); }
 
 /* ── 무대 ── */
@@ -53,6 +53,8 @@
 .landing-page .desk-object.obj-news > :not(.desk-note) { transition: filter .38s ease-out; }
 .landing-page .desk-object.obj-news .desk-note { transition: opacity .2s ease-out; }
 .landing-page .obj-news.is-held { transform: translateY(-36px) scale(1.05) rotate(-1.4deg); }
+/* 점검 메모(성능, FE-32): 이 큰 그림자(drop-shadow) 전환은 신문이 클 때(약 600px) 전환 중 매 프레임 다시 그려서 저사양 폰에서 끊길 수 있다.
+   아직 실제 폰으로 확인하지 못했다. 끊기면 그림자는 전환하지 말고 처음부터 두거나, 그림자 층을 따로 두고 opacity만 올린다 */
 .landing-page .obj-news.is-held > :not(.desk-note) { filter: drop-shadow(0 34px 26px color-mix(in srgb, var(--color-desk-shadow) 55%, transparent)); }
 .landing-page .obj-news.is-held .desk-note { opacity: 0; }
 /* 책상 위 내로 · 남불(장식, 볼을 괴고 엎드림) */

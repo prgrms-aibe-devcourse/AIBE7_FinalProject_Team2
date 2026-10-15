@@ -68,41 +68,50 @@ export function caseInfoEar(info) {
 export function caseNewspaper({ paper, info, navigate, earRight = caseInfoEar(info) }) {
   const sheet = element('div', 'paper case-paper');
   const earLeft = earButton('← 다른 사건 보기', '오늘의 지면으로 돌아가요', () => navigate('list'), 'ear-left');
-  const front = element('main', 'front');
+
+  // 안쪽 면 머리글: 1면 제호(큰 글씨) 대신 작은 제호 + 면 이름 · 날짜 · 쪽수. 양 끝은 귀 버튼. 지면이 넘어갔다는 게 한눈에 보이게 한다
+  const runner = element('header', 'page-head');
+  const title = element('div', 'page-head-title');
+  const wordmark = element('p', 'page-head-brand');
+  wordmark.setAttribute('aria-label', '내Law남불');
+  wordmark.append(element('span', '', '내'), element('span', 'law', 'Law'), element('span', '', '남불'));
+  title.append(wordmark, element('p', 'page-head-meta', `사회면 · ${todayLabel()} · 3면`));
+  runner.append(earLeft, title, earRight);
 
   const tabsZone = element('div', 'tabs-zone');
   const actSlot = element('div', 'paper-acts');
   actSlot.dataset.slot = 'acts';
-  tabsZone.append(actSlot, element('p', 'case-count', `${info.title}`));
+  tabsZone.append(actSlot);
 
-  const banner = element('div', 'banner');
-  banner.dataset.focus = 'head';
-  banner.append(element('h2', '', paper.headline));
+  // 기사: 큰 제목 → 부제 → 기자 줄 → 사진 → 본문(여러 단, 첫 글자 크게)
+  const article = element('article', 'story');
+  article.setAttribute('aria-label', paper.headline);
+  const head = element('div', 'story-head');
+  head.dataset.focus = 'head';
+  const kicker = element('div', 'kicker');
+  const square = element('span', `type-square type-${info.crimeType}`);
+  square.setAttribute('aria-hidden', 'true');
+  kicker.append(square, element('span', '', info.crimeCategoryLabel ?? ''), element('span', '', '·'), element('span', '', '사건 ' + String(info.caseId).padStart(2, '0')));
+  head.append(kicker, element('h2', 'story-title', paper.headline), element('p', 'story-deck', paper.deck));
+  const byline = element('p', 'story-byline');
+  byline.append(element('b', '', `${paper.desk ?? '사회부'} 기자`), element('span', '', todayLabel()));
 
-  const figure = element('figure', 'lead-photo');
+  const figure = element('figure', 'story-photo');
   figure.dataset.focus = 'photo';
   const photo = element('img', 'photo sheet-case-photo');
   photo.src = paper.photo;
   photo.alt = '';
   figure.append(photo, element('figcaption', 'caption', paper.caption));
 
-  const lead = element('article', 'article lead-col');
-  lead.dataset.focus = 'body';
-  const kicker = element('div', 'kicker');
-  const square = element('span', `type-square type-${info.crimeType}`);
-  square.setAttribute('aria-hidden', 'true');
-  kicker.append(element('span', '', '머리기사'), element('span', '', '·'), square, element('span', '', info.crimeCategoryLabel ?? ''));
-  const dense = element('div', 'dense');
-  paper.article.forEach((line) => dense.append(element('p', '', line)));
-  lead.append(kicker, element('p', 'lead-intro', paper.deck), element('p', 'byline', paper.desk ?? '사회부'), dense);
+  const body = element('div', 'story-body');
+  body.dataset.focus = 'body';
+  paper.article.forEach((line) => body.append(element('p', '', line)));
+  article.append(head, byline, figure, body);
 
-  const grid = element('section', 'front-grid');
-  grid.setAttribute('aria-label', '머리기사');
-  grid.append(figure, lead);
-
-  front.append(tabsZone, banner, grid);
+  const front = element('main', 'front');
+  front.append(tabsZone, article);
   const note = element('p', 'paper-note', '이 지면의 사건과 기사는 판결 체험을 위해 재구성한 것이며, 사진은 AI로 생성한 연출 이미지입니다.');
   // 법적 고지는 S-02처럼 지면 맨 아래 줄로 둔다(화면 아래 공통 푸터는 stage.css에서 숨긴다)
-  sheet.append(newspaperMasthead({ navigate, earLeft, earRight, title: `내Law남불 — ${info.title}` }), front, note, renderSiteFooter());
+  sheet.append(runner, front, note, renderSiteFooter());
   return sheet;
 }

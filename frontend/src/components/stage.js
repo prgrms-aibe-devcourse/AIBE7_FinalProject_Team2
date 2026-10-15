@@ -226,6 +226,9 @@ function evidenceBoard(script, at) {
 export function renderStage({ script, order, cards = {}, inputCards = [], choices = {}, start, onConfirm, onRestart, onJump, sheet: given, layout = 'box', parked: parkedAtStart = false }) {
   const paperMode = layout === 'paper' && Boolean(given);
   let parked = parkedAtStart;
+  let again = false; // 이미 지나온 체험을 다시 보는 중(S-20 "시작하기"): 대본 textAgain이 있으면 그 문장을 쓴다
+  const lineOf = (step) => (again && step.textAgain) || step.text || '';
+  const asks = (step) => Boolean(step.choices && choices[step.choices]); // 선택지로만 넘어가는 장면
   const steps = flatten(script.acts, order);
   let index = Math.max(0, start ? steps.findIndex(start) : 0);
   const jumpAct = takeJump();
@@ -363,7 +366,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
   function finishTyping() {
     clearInterval(typing);
     typing = null;
-    text.textContent = steps[index].text ?? '';
+    text.textContent = lineOf(steps[index]);
     choiceRow.hidden = !steps[index].choices; // 선택지는 대사를 다 읽은 뒤에 뜬다
   }
   function type(line) {
@@ -467,6 +470,12 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
     // 증거판은 칸마다 따로 스크롤하고, 나머지 카드는 카드 전체가 스크롤된다
     board.replaceChildren(...(entry ? [step.card === 'evidence' ? entry : scrollArea(entry, '카드 내용')] : []));
     board.hidden = !entry;
+    // 신문 지면 무대의 엽서(입력 카드)는 대화창이다: 열려 있는 동안 뒤 지면은 비활성(포커스 · 읽기 제외)
+    if (paperMode) {
+      if (input) { board.setAttribute('role', 'dialog'); board.setAttribute('aria-modal', 'true'); board.setAttribute('aria-label', '독자 의견 엽서'); }
+      else { board.removeAttribute('role'); board.removeAttribute('aria-modal'); board.removeAttribute('aria-label'); }
+      sheet.inert = Boolean(input);
+    }
     board.classList.toggle('wide', input);
     board.classList.toggle('fill', step.card === 'evidence'); // 증거판은 보드를 꽉 채운다(가운데 정렬 없음)
     board.classList.toggle('reading', step.board === 'reading'); // 읽기 카드(7막 판결문): 두 캐릭터 사이 가운데
@@ -480,7 +489,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
     if (paperMode && entry && !hadCard) deliver();
     hadCard = Boolean(entry);
 
-    const line = step.text ?? '';
+    const line = lineOf(step);
     dialog.hidden = input || !line;
     dialog.classList.toggle('fade-in', lastLaw === 'think' && step.law === 'deliver');
     lastLaw = step.law ?? '';
@@ -512,9 +521,9 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
 
     prev.disabled = index === 0;
     next.textContent = step.next ? `${step.next} ▶` : '다음 ▶';
-    next.disabled = input || (index === steps.length - 1 && !step.confirm); // 마지막 장면의 confirm은 화면이 다음 화면으로 보낸다
-    skip.hidden = input || skipTarget(steps, index) === index;
-    status.textContent = input ? '선택하고 제출하면 다음으로 넘어가요' : '';
+    next.disabled = input || asks(step) || (index === steps.length - 1 && !step.confirm); // 마지막 장면의 confirm은 화면이 다음 화면으로 보낸다
+    skip.hidden = input || asks(step) || skipTarget(steps, index) === index;
+    status.textContent = input ? (again ? '엽서를 확인하고 "이어서 하기"를 눌러요' : '선택하고 제출하면 다음으로 넘어가요') : '';
     if (input) board.focus();
   }
 
@@ -525,6 +534,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
     const target = index + delta;
     if (target < 0 || (target >= steps.length && !(delta > 0 && steps[index].confirm))) return;
     if (delta > 0 && inputCards.includes(steps[index].card)) return; // 입력 카드는 화면의 제출로만 넘어간다
+    if (delta > 0 && asks(steps[index])) return; // 선택지가 있는 장면은 선택지로만 넘어간다
     if (delta > 0 && steps[index].confirm && onConfirm) {
       busy = true;
       next.disabled = true;
@@ -641,6 +651,21 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
     wrap.classList.remove('parked');
     if (!reducedMotion()) wrap.classList.add('entering');
     render();
+    // 시작 버튼이 사라지므로 포커스를 옮긴다: 선택지 장면이면 첫 선택지(대사를 바로 다 보여 준다), 아니면 대사 진행
+    if (asks(steps[index])) { finishTyping(); choiceRow.querySelector('button')?.focus({ preventScroll: true }); }
+    else next.focus({ preventScroll: true });
+  };
+  // 다시 보기로 바꾼다(대본 textAgain 문장 · 엽서 안내). release 전에 부른다
+  wrap.replay = () => { again = true; };
+  // 선택지 장면 등을 건너 다음 장면으로(화면이 선택지 처리 뒤에 부른다).
+  // dropCurrent: 지금 장면을 대사 목록에서 뺀다 — 한 번 고른 질문(S-20 "이어서 할래요?")이 ◀ 이전으로 다시 나오지 않게
+  wrap.advance = ({ dropCurrent = false } = {}) => {
+    if (index >= steps.length - 1) return;
+    finishTyping();
+    if (dropCurrent) steps.splice(index, 1);
+    else index += 1;
+    render();
+    next.focus({ preventScroll: true });
   };
   // 화면이 카드(cards)를 나중에 채웠을 때, 지금 그 카드 장면이면 다시 그린다(예: S-20에서 체험을 시작한 뒤 받아 온 2막 사전 판단 폼)
   wrap.refresh = (card) => { if (wrap.isConnected && steps[index].card === card) render(); };

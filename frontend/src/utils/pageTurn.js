@@ -4,7 +4,7 @@
 // 움직임은 transform · opacity 하나라 레이아웃을 다시 계산하지 않는다. 움직임 줄이기면 아무것도 하지 않고 바로 끝난다.
 // 본뜬 지면은 장식이다(inert · aria-hidden, 눌러도 아무 일도 없다).
 
-const TURN_MS = 1000;
+const TURN_MS = 1000; // 기사 → 상세처럼 한 번 가는 이동. 자주 누르는 탭 바꾸기는 호출하는 쪽이 duration을 짧게 준다(0.5초)
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 function div(className) {
@@ -15,10 +15,10 @@ function div(className) {
 
 /**
  * @param {HTMLElement} page 넘길 지면(보이는 그대로 복제한다)
- * @param {{ scopeClass: string }} options scopeClass: 지면 스타일이 걸려 있는 화면 클래스(예: 'case-list-page')
+ * @param {{ scopeClass: string, duration?: number }} options scopeClass: 지면 스타일이 걸려 있는 화면 클래스(예: 'case-list-page'), duration: 넘기는 시간(ms)
  * @returns {Promise<void>} 한 장이 다 넘어가 사라진 시점
  */
-export function turnPage(page, { scopeClass }) {
+export function turnPage(page, { scopeClass, duration = TURN_MS }) {
   if (reducedMotion()) return Promise.resolve();
   const box = page.getBoundingClientRect();
 
@@ -45,7 +45,7 @@ export function turnPage(page, { scopeClass }) {
   overlay.append(dim, leaf);
   document.body.append(overlay);
 
-  const timing = { duration: TURN_MS, fill: 'forwards' };
+  const timing = { duration, fill: 'forwards' };
   const shots = [
     leaf.animate([{ transform: 'rotateY(0deg)' }, { transform: 'rotateY(-180deg)' }], { ...timing, easing: 'cubic-bezier(.55, .05, .3, 1)' }),
     leaf.animate([{ opacity: 1 }, { opacity: 1, offset: 0.82 }, { opacity: 0 }], timing), // 다 넘어간 뒤 화면 왼쪽 끝에 남는 뒷면 자락을 지운다

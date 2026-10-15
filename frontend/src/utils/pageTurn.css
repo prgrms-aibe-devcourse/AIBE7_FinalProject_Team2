@@ -1,7 +1,7 @@
 /* 신문 한 장 넘기기 (utils/pageTurn.js). 화면 전체를 덮는 장식 층이라 눌러도 아래 화면이 받는다 */
 .page-turn { position: fixed; inset: 0; z-index: 1000; overflow: hidden; pointer-events: none; perspective: 2600px; perspective-origin: 50% 40%; }
 .page-turn-dim { position: absolute; inset: 0; background: color-mix(in srgb, var(--color-desk-shadow) 60%, transparent); opacity: 0; }
-.page-turn-leaf { position: absolute; top: 0; height: 100vh; transform-origin: left center; transform-style: preserve-3d; will-change: transform; }
+.page-turn-leaf { position: absolute; top: 0; height: 100dvh; transform-origin: left center; transform-style: preserve-3d; will-change: transform; }
 .page-turn-face {
   position: absolute; inset: 0; overflow: hidden; background: var(--color-paper); backface-visibility: hidden;
   box-shadow: 16px 0 36px -8px color-mix(in srgb, var(--color-desk-shadow) 55%, transparent);

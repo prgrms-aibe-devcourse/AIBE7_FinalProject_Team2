@@ -161,19 +161,47 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
     // 오른쪽 귀: 하던 체험이 있으면 "이어서 하기" · "결과 다시 보기", 처음 보는 사건이면 사건 번호 · 분류 그대로
     const resume = ACTIONS[data.myStatus]
       ? earButton(`${label} ▶`, `사건 ${String(data.caseId).padStart(2, '0')} · ${data.crimeCategoryLabel}`, () => begin(resume), 'ear-right ear-go') : null;
-    const { stage, setOverview } = caseStage({ caseId, api, navigate, script, info, paper: paperFromCase(data, script.paper), parked: true, ...(resume ? { earRight: resume } : {}) });
-    // 우하단 "시작하기": 누르면 내로 · 남불이 들어오며 1막 대사가 시작된다
+    // 진행 중인 체험을 "시작하기"로 열면 내로가 먼저 묻는다: 이어서 할지, 1막부터 새로 볼지(완료한 사건은 묻지 않고 다시 보기)
+    const prompt = data.myStatus === 'IN_PROGRESS' ? {
+      text: '진행 중인 체험이 있어요. 이어서 할래요?',
+      choices: [
+        { label: '이어서 하기', primary: true, action: () => chosen?.('resume') },
+        { label: '새로 하기', action: () => chosen?.('again') },
+      ],
+    } : undefined;
+    let chosen = null;
+    const { stage, setOverview, setAlreadySent } = caseStage({
+      caseId, api, navigate, script, info, paper: paperFromCase(data, script.paper), parked: true, prompt, ...(resume ? { earRight: resume } : {}),
+    });
+    // 우하단 "시작하기": 누르면 내로 · 남불이 들어오며 1막이 처음부터 시작된다(진행 중이면 내로가 먼저 묻는다). 바로 이어 보기는 오른쪽 귀
     const dock = element('div', 'paper-start');
     const notice = element('p', 'paper-start-notice');
     notice.setAttribute('role', 'alert');
-    const go = button('시작하기 ▶', () => begin(go), 'primary-button');
-    go.setAttribute('aria-label', `${data.title} ${label}`);
+    const go = button('시작하기 ▶', () => begin(go, { fromStart: true }), 'primary-button');
+    go.setAttribute('aria-label', `시작하기, ${data.title}`); // 화면 글자("시작하기")로 시작해야 음성 입력으로 누를 수 있다(WCAG 2.5.3)
     dock.append(notice, go);
     mountStagePage(root, { stage });
     root.append(dock);
     unfold(stage);
 
-    async function begin(trigger) {
+    // 이 지면에서 1막을 잇는다(사전 판단 전, STARTED). 묻는 장면이 맨 앞에 있으면 건너뛴다
+    async function playFresh() {
+      navigate('overview', { caseId }, { keepView: true });
+      resume?.replaceWith(caseInfoEar(info)); // 이제 S-03과 같은 지면
+      if (prompt) stage.advance({ dropCurrent: true }); // 묻는 장면은 빼서 ◀ 이전으로 다시 나오지 않게
+      setOverview(await loadOverview());
+    }
+    // 이미 사전 판단을 낸 사건을 1막부터 다시 본다. 판단은 바꿀 수 없으니 엽서 차례에 보낸 판단을 보여 주고 저장된 단계로 잇는다(주소는 S-20 그대로)
+    async function playAgain(experience, saved) {
+      stage.replay();
+      if (prompt) stage.advance({ dropCurrent: true }); // 묻는 장면은 빼서 ◀ 이전으로 다시 나오지 않게
+      // 완료한 사건은 세 판결 비교(API 14)에서 보낸 판단을 읽는다. 진행 중이면 이 브라우저에 적어 둔 것을 쓴다
+      let sent;
+      if (experience.status === 'COMPLETED') sent = await api.getComparison(caseId).then((r) => r?.preToFinal?.preJudgment?.label).catch(() => undefined);
+      if (active()) setAlreadySent(saved, sent ?? undefined);
+    }
+
+    async function begin(trigger, { fromStart = false } = {}) {
       if (starting) return;
       starting = true;
       trigger.setAttribute('aria-busy', 'true');
@@ -181,14 +209,26 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
       try {
         const experience = await api.startExperience(caseId);
         if (!active()) return;
-        // 사전 판단 전(STARTED)이면 이 지면에서 1막을 잇는다. 그 뒤 단계면 그 화면으로 간다(API 명세 1-6)
-        if (experience.status !== 'STARTED') { navigate(screenByStatus[experience.status] ?? 'overview', { caseId }); return; }
+        // 이동은 API 2 응답 상태로 정한다(API 명세 1-6)
+        const saved = () => navigate(screenByStatus[experience.status] ?? 'overview', { caseId });
+        const fresh = experience.status === 'STARTED';
+        if (!fromStart && !fresh) { saved(); return; } // 오른쪽 귀 "이어서 하기": 저장된 단계로 바로
         started = true;
-        navigate('overview', { caseId }, { keepView: true });
         dock.remove();
-        resume?.replaceWith(caseInfoEar(info)); // 이제 S-03과 같은 지면
+        if (fromStart && prompt) {
+          // 진행 중: 내로가 먼저 묻는다 → "이어서 하기"는 저장된 단계로, "새로 하기"는 1막부터(사전 판단 전이면 둘 다 1막부터)
+          chosen = (pick) => {
+            chosen = null;
+            if (pick === 'resume' && !fresh) saved();
+            else if (fresh) playFresh();
+            else playAgain(experience, saved);
+          };
+          stage.release();
+          return;
+        }
+        if (!fresh) stage.replay(); // 완료한 사건을 "시작하기": 묻지 않고 1막부터 다시 보기
         stage.release();
-        setOverview(await loadOverview());
+        if (fresh) await playFresh(); else await playAgain(experience, saved);
       } catch (error) {
         if (!active() || started) return;
         notice.textContent = error?.code === 'CASE_NOT_FOUND' ? '사건을 찾을 수 없어요. 신문으로 돌아가 다시 골라 주세요.' : failText;

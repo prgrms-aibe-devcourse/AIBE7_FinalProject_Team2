@@ -16,6 +16,7 @@ const tabs = [
   { crimeType: 'FRAUD', label: '사기' },
   { crimeType: 'INJURY', label: '상해' },
 ];
+const TAB_TURN_MS = 500; // 탭은 훑어보며 자주 누르므로 기사 → 상세(1초)보다 짧게
 const RECOMMENDED_COUNT = 2; // 머리기사 옆 추천 사건 수. 나머지는 "이번 호 다른 사건"으로 간다
 
 // 머리기사 단 안내 (모든 사건 공통)
@@ -283,7 +284,7 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
       result = null;
     }
     if (!active() || mine !== switching) return;
-    turnPage(paper, { scopeClass: 'case-list-page' });
+    turnPage(paper, { scopeClass: 'case-list-page', duration: TAB_TURN_MS });
     if (result) draw(result);
     else showError(() => load(crimeType));
   }

@@ -7,7 +7,7 @@ export const mockCases = [
     headline: '빌린 돈 갚으라며 찾아온 지인, 자택서 숨져',
     deck: '오래 이어진 변제 갈등…말다툼 끝 흉기 휘두른 뒤 현장 떠나',
     article: ['돈 문제로 오래 다퉈 온 지인 사이의 갈등이 끝내 한 사람의 죽음으로 이어졌다. A씨는 빌린 돈 문제를 이야기하려고 자신의 집을 찾아온 지인 B씨를 집 안에 있던 흉기로 살해한 것으로 조사됐다.', '두 사람은 A씨가 B씨에게 빌린 돈을 제때 갚지 못하면서 사이가 틀어졌다. 그동안 상환 문제로 다툼이 이어졌고, 이날도 B씨가 직접 A씨의 집을 찾아가 이야기를 꺼낸 것이 발단이 됐다.', '대화는 곧 말다툼으로 번졌다. 다툼이 격해지자 A씨는 집 안에 있던 흉기를 집어 들었고, B씨는 그 자리에서 숨졌다. A씨는 쓰러진 B씨에게 별다른 구호 조치를 하지 않은 채 집을 나선 것으로 전해졌다.'],
-    keywords: ['돈 문제', '집으로 찾아옴'], difficulty: 'HIGH', estimatedMinutes: 15, participantCount: 1284, thumbnailUrl: 'https://raw.githubusercontent.com/peanutboi710/NaeLawNamBul_Images/main/character/cuts/reenact/case-1/reenact-case-1_cut_headline_sample.png' }, // shortcut: 재연 일러스트(1막 신문 사진과 같은 컷) 원본 레포 PNG, 웹 webp 변환(WBS 7.6.8) 때 public 경로로
+    keywords: ['돈 문제', '집으로 찾아옴'], difficulty: 'HIGH', estimatedMinutes: 15, participantCount: 1284, thumbnailUrl: '/images/cases/case-1-reenact.webp' }, // 재연 일러스트(1막 신문 사진과 같은 컷). 원본 레포 PNG(2.2MB)를 1200px webp로 줄여 둠
   { caseId: 2, title: '중고 거래 대금 편취 사건', crimeType: 'FRAUD', crimeCategoryLabel: '재산범죄',
     shortIntro: '온라인 중고 거래에서 물건을 보내지 않고 대금만 받은 사건입니다.',
     headline: '입금 확인 뒤 연락 끊겨…중고거래 대금만 챙겼다',

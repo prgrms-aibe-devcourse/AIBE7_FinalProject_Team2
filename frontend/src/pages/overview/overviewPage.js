@@ -47,21 +47,32 @@ export function mountStagePage(root, { stage }) {
   root.replaceChildren(desk, stage);
 }
 
+// 보낸 사전 판단(형량 구간 이름)을 이 브라우저에 적어 둔다. 진행 중인 체험은 서버에서 다시 읽을 API가 없어서(API 14는 완료 뒤에만),
+// S-20에서 1막부터 다시 볼 때 "이미 보낸 엽서"에 적는 데 쓴다. 없으면 이름 없이 안내만 한다
+const SENT_KEY = 'nlnb-sent-pre-judgment';
+function readSent() { try { return JSON.parse(localStorage.getItem(SENT_KEY)) ?? {}; } catch { return {}; } }
+export const sentPreJudgment = (caseId) => readSent()[caseId] ?? null;
+function rememberSent(caseId, label) { try { localStorage.setItem(SENT_KEY, JSON.stringify({ ...readSent(), [caseId]: label })); } catch { /* 저장소를 못 쓰면 엽서에 이름만 빠진다 */ } }
+
 // 모든 사건 1막의 첫 대사(내로가 말을 건다). 사건마다의 다음 대사는 대본이 잇는다
 const INTRO_STEP = { say: 'naero', text: '이 사건, 궁금해요? 우리가 차근차근 설명해 줄게요!', focus: 'head' };
 
 // 1 · 2막 무대(흐름 목업). 2막 보드는 사전 판단 폼이고, 폼은 API 4 응답(형량 구간)이 오면 setOverview로 채운다.
 // parked: S-20(체험 전) — 지면만 보이고 캐릭터 · 대사는 stage.release()로 시작한다. earRight: 지면 오른쪽 귀(S-20 "이어서 하기")
 // paper: 지면에 실을 기사(paperFromCase — 메인 · S-02와 같은 사건 데이터). 없으면 대본 지면
-export function caseStage({ caseId, api, navigate, script, info, paper = script.paper, parked = false, earRight }) {
+// prompt: S-20에서 진행 중인 체험을 "시작하기"로 열 때 맨 앞에서 내로가 묻는 장면 { text, choices }
+export function caseStage({ caseId, api, navigate, script, info, paper = script.paper, parked = false, earRight, prompt }) {
   const cards = {};
-  const acts = { ...script.acts, 1: { ...script.acts[1], steps: [INTRO_STEP, ...script.acts[1].steps] } };
+  const first = prompt ? [{ say: 'naero', text: prompt.text, choices: 'prompt', focus: 'all' }, INTRO_STEP] : [INTRO_STEP];
+  const acts = { ...script.acts, 1: { ...script.acts[1], steps: [...first, ...script.acts[1].steps] } };
   const sheet = caseNewspaper({ paper, info, navigate, ...(earRight ? { earRight } : {}) });
   const stage = renderStage({
     script: { ...script, acts }, order: ['1', '2'], cards, inputCards: ['preJudgment'], sheet, layout: 'paper', parked,
+    choices: prompt ? { prompt: prompt.choices } : {},
     onRestart: restartMock(caseId), onJump: jumpActMock(caseId),
   });
   let submitting = false;
+  let labels = {};
 
   async function submit(rangeOptionId, trigger, notice) {
     if (submitting) return;
@@ -72,6 +83,7 @@ export function caseStage({ caseId, api, navigate, script, info, paper = script.
     try {
       // MVP는 작용 요소(factorIds)를 보내지 않는다. (REQ-093 확장)
       await api.postPreJudgment(caseId, { rangeOptionId });
+      if (labels[rangeOptionId]) rememberSent(caseId, labels[rangeOptionId]);
       // 제출 뒤 사진 속으로 들어가는 연출을 보여 주고 S-04로 간다
       if (stage.isConnected) await stage.enterPhoto();
       if (stage.isConnected) await stage.interlude(courtFacts);
@@ -86,9 +98,8 @@ export function caseStage({ caseId, api, navigate, script, info, paper = script.
     }
   }
 
-  function setOverview({ rangeOptions }) {
-    // 독자 의견 엽서(신문 지면 무대의 팝업): 엽서 머리(제목 · 받는 곳 · 우표) + 안내 + 형량 고르기
-    const card = element('div', 'postcard');
+  // 독자 의견 엽서 머리(제목 · 받는 곳 · 우표)
+  function postcardHead() {
     const head = element('div', 'postcard-head');
     const title = element('div');
     title.append(element('h2', '', '독자 의견 엽서'), element('p', '', '받는 곳: 내Law남불 신문 편집부 · 기사만 읽고 남기는 첫인상'));
@@ -96,11 +107,35 @@ export function caseStage({ caseId, api, navigate, script, info, paper = script.
     stamp.setAttribute('aria-hidden', 'true');
     stamp.style.whiteSpace = 'pre-line';
     head.append(title, stamp);
-    card.append(head, preJudgmentGuide(), preJudgmentForm(rangeOptions, submit));
+    return head;
+  }
+
+  // 이미 사전 판단을 낸 사건을 1막부터 다시 볼 때(S-20 "시작하기"): 엽서 차례에 "이미 보낸 엽서"를 보여 주고 저장된 단계로 잇는다.
+  // MVP는 사건당 1회 체험 · 판단 수정 불가(IA 결정 5)라 다시 고르게 하지 않는다
+  function setAlreadySent(onContinue, sent = sentPreJudgment(caseId)) {
+    const card = element('div', 'postcard');
+    const go = element('button', 'primary-button', '이어서 하기 ▶');
+    go.type = 'button';
+    go.addEventListener('click', onContinue);
+    const actions = element('div', 'section-actions');
+    actions.append(go);
+    const written = element('div', 'postcard-sent');
+    written.append(element('p', 'postcard-sent-q', '이 사건, 어느 정도의 형량이 맞다고 생각하나요?'),
+      element('p', 'postcard-sent-a', sent ?? '(이 브라우저에는 보낸 판단이 적혀 있지 않아요)'));
+    card.append(postcardHead(), written, element('p', 'guide-box', '이 엽서는 이미 보냈어요. 보낸 판단은 바꿀 수 없어요. 남긴 단계부터 이어서 볼게요.'), actions);
     cards.preJudgment = card;
     stage.refresh('preJudgment');
   }
-  return { stage, setOverview };
+
+  function setOverview({ rangeOptions }) {
+    labels = Object.fromEntries(rangeOptions.map(({ rangeOptionId, label }) => [rangeOptionId, label]));
+    // 독자 의견 엽서(신문 지면 무대의 팝업): 엽서 머리(제목 · 받는 곳 · 우표) + 안내 + 형량 고르기
+    const card = element('div', 'postcard');
+    card.append(postcardHead(), preJudgmentGuide(), preJudgmentForm(rangeOptions, submit));
+    cards.preJudgment = card;
+    stage.refresh('preJudgment');
+  }
+  return { stage, setOverview, setAlreadySent };
 }
 
 const preJudgmentGuide = () => element('p', 'guide-box', '지금은 뉴스에서 볼 수 있는 정도의 정보만 있어요. 기사로 이 사건을 접했다고 생각하고 판단해 보세요.');
