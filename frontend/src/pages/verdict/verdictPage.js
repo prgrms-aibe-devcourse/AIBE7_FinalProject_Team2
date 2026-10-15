@@ -227,8 +227,9 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
     function option() {
       return form.penaltyOptions.find((item) => item.penaltyType === draft.penaltyType);
     }
-    // 범위 막대 = 형량 조절 막대(누르기 · 끌기 · 방향키). 막대는 형벌 종류가 바뀔 때만 다시 그려지므로
-    // 조작은 다시 그려지지 않는 바깥 상자(rangeSlider)가 받고, 위치는 그때그때 막대(.range-track)에서 잰다.
+    // 범위 막대 = 형량 조절 막대(누르기 · 끌기 · 방향키). 슬라이더 역할(role="slider")은 막대(.range-track)에만 준다 —
+    // 같은 상자 안의 형량 칸(입력)이 슬라이더의 일부로 읽히거나 방향키를 빼앗기지 않게.
+    // 막대는 형벌 종류가 바뀔 때만 다시 그려지므로 누르기 · 끌기는 다시 그려지지 않는 바깥 상자(rangeSlider)가 받는다.
     // 징역은 개월 단위, 벌금은 원 단위(막대 10만 원 단위 · 500만 원 눈금에 잘 붙음 · 칸에는 1만 원 단위로 직접 입력)
     const FINE_TRACK_MAX = 30000000; // 벌금은 상한이 없어 막대를 3,000만 원까지만 그리고, 넘는 금액은 칸에 직접 입력한다
     const FINE_STEP = 100000;
@@ -281,12 +282,14 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       const rect = rangeSlider.querySelector('.range-track').getBoundingClientRect();
       return (clientX - rect.left) / rect.width * scale().trackMax;
     }
+    const sliderTrack = () => rangeSlider.querySelector('.range-track[role="slider"]');
     rangeSlider.addEventListener('pointerdown', (event) => {
-      if (rangeSlider.getAttribute('role') !== 'slider' || controls.disabled) return;
-      const rect = rangeSlider.querySelector('.range-track')?.getBoundingClientRect();
-      if (!rect || event.clientY < rect.top - 14 || event.clientY > rect.bottom + 14) return; // 막대 근처를 누를 때만
+      const track = sliderTrack();
+      if (!track || controls.disabled || event.target.closest('input, button')) return;
+      const rect = track.getBoundingClientRect();
+      if (event.clientY < rect.top - 14 || event.clientY > rect.bottom + 14) return; // 막대 근처를 누를 때만
       event.preventDefault();
-      rangeSlider.focus();
+      track.focus();
       rangeSlider.setPointerCapture(event.pointerId);
       setValue(valueAt(event.clientX), true);
     });
@@ -294,7 +297,7 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       if (rangeSlider.hasPointerCapture(event.pointerId)) setValue(valueAt(event.clientX), true);
     });
     rangeSlider.addEventListener('keydown', (event) => {
-      if (rangeSlider.getAttribute('role') !== 'slider' || controls.disabled) return;
+      if (event.target !== sliderTrack() || controls.disabled) return; // 막대에 포커스가 있을 때만(형량 칸의 방향키는 칸이 쓴다)
       const range = scale();
       const now = currentValue() ?? range.min;
       const step = { ArrowRight: range.step, ArrowUp: range.step, ArrowLeft: -range.step, ArrowDown: -range.step, PageUp: range.page, PageDown: -range.page }[event.key];
@@ -465,7 +468,7 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
           if (serverError) {
             const type = finalPenalty();
             const target = serverError === 'INVALID_SUSPENSION' && !suspensionFields.hidden && !suspensionArea.hidden
-              ? yearButtons[0].yearButton : type === 'PRISON' ? inputs.prisonYears : type === 'FINE' ? inputs.fineAmount
+              ? yearButtons[0]?.yearButton ?? checkbox : type === 'PRISON' ? inputs.prisonYears : type === 'FINE' ? inputs.fineAmount
                 : radios.querySelector('input:checked') ?? radios.querySelector('input');
             target.focus();
           } else if (confirming) submit.focus();
@@ -541,18 +544,6 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       const sliding = (prison || fine) && !pendingReduction;
       const trackMax = prison ? option?.allowedMax : FINE_TRACK_MAX;
       sliderHint.hidden = !sliding;
-      if (sliding) {
-        const shown = present ? sentence.value : option.allowedMin;
-        rangeSlider.setAttribute('role', 'slider');
-        rangeSlider.tabIndex = 0;
-        rangeSlider.setAttribute('aria-label', prison ? '형량 조절 막대' : '벌금 조절 막대');
-        rangeSlider.setAttribute('aria-valuemin', String(option.allowedMin));
-        rangeSlider.setAttribute('aria-valuemax', String(prison ? option.allowedMax : FINE_TRACK_MAX));
-        rangeSlider.setAttribute('aria-valuenow', String(Math.min(shown, trackMax)));
-        rangeSlider.setAttribute('aria-valuetext', present ? (prison ? `징역 ${formatMonths(sentence.value)}` : `벌금 ${formatMoney(sentence.value)}`) : '입력 전');
-      } else {
-        ['role', 'tabindex', 'aria-label', 'aria-valuemin', 'aria-valuemax', 'aria-valuenow', 'aria-valuetext'].forEach((name) => rangeSlider.removeAttribute(name));
-      }
       fixedPenalty.hidden = !fixed;
       fixedPenalty.replaceChildren();
       if (fixed) fixedPenalty.append(element('strong', 'fixed-penalty-name', penaltyLabels[finalType]),
@@ -578,6 +569,23 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
         // 형량 칸: "선고할 수 있는 범위" 설명과 같은 줄 오른쪽
         // "선고할 수 있는 범위" 아래 두 줄(범위 · 권고 범위)과 같은 높이 오른쪽에
         rangeBox.querySelector('.recommended-range h3')?.after(entry);
+      }
+      // 막대를 새로 그린 뒤에 슬라이더 역할 · 값을 단다(형벌을 바꾼 직후에도 막대가 바로 조작되게)
+      if (sliding) {
+        const shown = present ? sentence.value : option.allowedMin;
+        rangeSlider.classList.add('is-sliding');
+        const track = rangeSlider.querySelector('.range-track');
+        if (track) {
+          track.setAttribute('role', 'slider');
+          track.tabIndex = 0;
+          track.setAttribute('aria-label', prison ? '형량 조절 막대' : '벌금 조절 막대');
+          track.setAttribute('aria-valuemin', String(option.allowedMin));
+          track.setAttribute('aria-valuemax', String(prison ? option.allowedMax : FINE_TRACK_MAX));
+          track.setAttribute('aria-valuenow', String(Math.min(shown, trackMax)));
+          track.setAttribute('aria-valuetext', present ? (prison ? `징역 ${formatMonths(sentence.value)}` : `벌금 ${formatMoney(sentence.value)}`) : '입력 전');
+        }
+      } else {
+        rangeSlider.classList.remove('is-sliding');
       }
       entry.hidden = !sliding;
       if (sliding) {
