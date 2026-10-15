@@ -12,11 +12,12 @@
 | v2.3 | 2026-10-14 | 로 스탠딩 · `idle`은 빈손(봉투는 `deliver`만) — 9-6 · 9-9 · 9-10 수정, 9-12 빈손 스탠딩 추가 |
 | v2.4 | 2026-10-14 | 로 셋 이름(로울 · 로봉 · 로북)을 IDENTITY 제목에 표기. 프롬프트 본문은 "Law (Scale)" 등 영어 이름 그대로 |
 | v2.5 | 2026-10-14 | 수정 프롬프트 추가 — R1 로북 스탠딩(봉투 · 마네킹 목 · 구두), R2 로북 시트(중복 줄 · 아쉬움 칸 · 마네킹 목), R3 키 비교 v2(비율 · 떠 있는 법전 · 숫자). 지금 이미지는 샘플(모델 교체 후 재생성) |
+| v2.6 | 2026-10-15 | **10/15 이관 결정**(COMMON-35) — 생성은 GPT Pro 팀원(gpt image 2.0, 기본 품질 medium)이 맡고 지금 이미지는 유지(재생성은 최종 디테일 때). **모든 생성 배경을 투명으로**(시트 · 재연 컷 포함, 신문 느낌은 후보정, 크로마 그린은 대안) — 1-3 · 9-1 · 9-7. 9-16 마스코트 로(2등신, 키 로울 180 · 로북 170 · 로봉 160) · 9-17 극적 재연 블록 추가 |
 
 > 기준 결정: `character-main-handover.md` v2의 10/13 변경 절 (기본 = 마스코트형 약 3.5등신 · 란마풍 등은 변형 · 모든 캐릭터 무성 · 소품 제한 해제 · 화난 표정 금지)
 > 이 문서는 **복사해서 바로 쓰는 프롬프트 모음**이다. 설계 배경은 `character-law-ai-judge-plan.md` v0.3을 본다(`Claude outputs/character/plan/`, 커밋 안 함).
 > **이후 생성은 9장(신규 프롬프트 v2)을 기본으로 한다.** 1 ~ 7장은 원문 기록이다.
-> **지금 이미지는 샘플이다.** 현재 쓰는 생성 모델은 프롬프트를 그대로 살리지 못하는 경우가 많아, 지금 만드는 이미지는 화면 · 흐름 확인용 샘플로 쓴다. 더 좋은 모델로 바꾸면 같은 프롬프트로 다시 만든다(제작 목록 1장).
+> **지금 이미지는 그대로 쓴다(10/15).** 지금까지 만든 이미지도 gpt image 2.0으로 뽑은 것이라 품질이 충분하다. 다시 뽑는 것은 최종 디테일을 잡을 때 하고, 그 전까지는 **없는 이미지만** 새로 만든다. 생성은 GPT Pro 팀원(김현중)이 맡는다(9-1 #4, 제작 목록 1장).
 > **작업본이다.** 이미지 생성 결과가 프롬프트와 다르게 나오는 경우가 있다. **확정 이미지가 기준**이고([캐릭터 에셋 아키텍처](character-asset-architecture.md) 2-1 기준 이미지 · 2-4 색 · 2-5 키), 프롬프트와 다른 점은 8장에 모았다. 프롬프트 문구는 이미지를 뽑으며 계속 고친다(아키텍처 5-1 "작업본" 원칙). 캐릭터 설정은 프롬프트 문구와 따로 [캐릭터 프로필 · 세계관](character-profile-worldview.md)이 기준이다.
 > 만들 이미지 목록은 [캐릭터 이미지 제작 목록](character-image-checklist.md)이다.
 
@@ -62,7 +63,8 @@
 
 ### 1-3. 생성 요령
 
-- 시트는 신문지색 배경(16:9), 스탠딩은 **크로마 그린 `#00B140` 단색 배경**으로 뽑아 배경을 지우고 투명 PNG(2048 × 2560)와 웹용 WebP(800 × 1000)로 쓴다. 캐릭터에 초록을 쓰지 않는다.
+- **10/15부터 모든 이미지를 투명 배경으로 뽑는다**(시트 · 재연 컷 포함, 9-7 `BG` 블록). 신문지색 · 신문 느낌은 후보정으로 넣는다. 투명 출력이 안 되는 환경에서만 **크로마 그린 `#00B140` 단색 배경**으로 뽑아 배경을 지운다(그때는 캐릭터에 초록을 쓰지 않는다). 아래 2 ~ 5장 원문의 신문지색 · 크로마 그린 문장은 기록이다.
+- 장면 컷은 투명 PNG(2048 × 2560)와 웹용 WebP(800 × 1000)로 쓴다.
 - 기존 시트나 메인 이미지를 **참조 이미지로 같이 첨부**하면 일관성이 크게 좋아진다. 첨부 시 맨 위에 한 줄을 붙인다.
 
 ```
@@ -801,6 +803,7 @@ Match the face, colors, design and proportions of the attached reference exactly
 1. **참조 이미지가 있으면 9-2의 [REF] 한 줄 + 바꿀 내용만** 쓴다(짧은 프롬프트). Max 생성기는 참조 이미지를 잘 따르므로 이 방식이 기본이다. 예시는 [제작 목록](character-image-checklist.md) 5장.
 2. 참조 이미지가 없거나 새 캐릭터(법전 로 등)를 처음 만들 때는 **블록을 순서대로 이어 붙인다**: `[REF]`(있으면) → `STYLE` → `DEFORM` → `IDENTITY`(캐릭터 수만큼) → `POSE` → `SCENE` → `AVOID`(공통 + 캐릭터별).
 3. 괜찮은 예시 사진이 있으면 [REF-STYLE] 줄로 "구도 · 분위기만 따라 하고 캐릭터는 바꾸지 말 것"을 붙인다.
+4. **생성 설정(10/15)**: 모델은 gpt image 2.0, 품질은 기본 **medium**이고 토큰 사용량에 맞춰 조절한다. 다른 이미지의 기준이 되는 이미지(기준 시트 · 스탠딩, 9-16 마스코트 로)는 **high**. 프롬프트 1개당 **1장**만 뽑고, 다시 뽑는 것은 검수 지시가 있을 때마다 1회씩이다(수정 프롬프트는 원래 프롬프트 + 지시로 만든다). 첨부 이미지는 공개 레포 `NaeLawNamBul_Images`의 정식 파일만 쓰고 **폐기 자료(`discard_`)는 첨부하지 않는다**. 비율은 프롬프트에 적고, 다르게 나오면 캔버스를 맞춘다.
 
 ### 9-2. 참조 문장
 
@@ -916,35 +919,50 @@ No face, no eyes, no mouth, no neck, no human head. The head is a thick, closed 
 
 ### 9-7. SCENE 블록
 
+**10/15부터 배경은 모두 투명이다.** SCENE 블록 뒤에 `BG` 블록을 붙인다. 신문지색 · 신문 느낌은 후보정으로 넣는다.
+
+**`BG`** — 배경 (모든 이미지 공통)
+
+```
+BACKGROUND — fully transparent background (PNG with alpha). No background color, no floor, no ground line, no shadow, no frame, no border. Aspect ratio {4:5 vertical | 16:9 landscape | 1:1}.
+```
+
+- 투명 출력이 안 되는 환경에서만 `Background: perfectly flat uniform solid green #00B140, no gradient, no floor, no shadow. Do not use green anywhere on the character or props.`로 바꾸고 배경을 지운다.
+
 **`scene-cut`** — 장면 컷 · 스탠딩 (4:5)
 
 ```
-SCENE — a single character, centered, full body from head to feet fully visible, 4:5 vertical composition with 15% empty margin on every side. Background: perfectly flat uniform solid green #00B140, no gradient, no floor, no shadow, no props in the background. Do not use green anywhere on the character or props.
+SCENE — a single character, centered, full body from head to feet fully visible, 15% empty margin on every side.
 ```
 
 **`group`** — 2 ~ 3인 컷 (4:5 또는 16:9)
 
 ```
-SCENE — {characters} standing side by side on the same ground line, {left-to-right order}, the same scale relation as the references (Naero and Nambul the same height; Law (Scale) about 1.9 times, Law (Book) about 1.75 times, Law (Gavel) about 1.6 times their height), nobody in front of the others. Background: perfectly flat solid green #00B140. Full bodies visible with 10% margin. Do not use green on any character.
+SCENE — {characters} standing side by side on the same ground line, {left-to-right order}, the same scale relation as the references (Naero and Nambul the same height; Law (Scale) about 1.9 times, Law (Book) about 1.75 times, Law (Gavel) about 1.6 times their height), nobody in front of the others. Full bodies visible with 10% margin.
 ```
+
+- 마스코트 로(9-16)와 함께 설 때는 키를 로울 1.5배 · 로북 약 1.42배 · 로봉 약 1.33배로 바꾼다.
 
 **`icon`** — 아이콘 (1:1)
 
 ```
-SCENE — a face-only icon of {character}, the head filling about 70% of a 1:1 square, centered, simple and readable at 64 px. Background: flat solid green #00B140. Do not use green on the character.
+SCENE — a face-only icon of {character}, the head filling about 70% of a 1:1 square, centered, simple and readable at 64 px.
 ```
 
 **`sheet`** — 시트 (16:9)
 
 ```
-SCENE — a clean character sheet on a plain newsprint background #ECE2D4, panels separated by space only (no frame lines, no labels), landscape 16:9.
+SCENE — a clean character sheet: panels separated by empty space only (no frame lines, no labels, no text), landscape 16:9.
 ```
 
-**`reenact`** — 사건 재연 컷 (4:3 · 16:9)
+**`reenact`** — 사건 재연 컷 (16:9)
 
 ```
-SCENE — a calm newspaper-photo-like scene that shows only the situation and relationship of a real case: {situation}. Naero plays {role A} and Nambul plays {role B}, shown only through simple role outfits and props; their faces and colors stay the same. Plain newsprint background #ECE2D4 with a few simple props, {4:3 | 16:9} landscape. No victims' injuries, no weapons, no crime in progress, no blood, no bodies; nothing that hints at the verdict.
+SCENE — a newspaper-photo-like moment that shows only the situation and relationship of a real case: {situation}. Naero plays {role A} and Nambul plays {role B}, shown through role outfits and props; their faces and colors stay the same. Draw only the characters and the few props listed: no room, no walls, no floor, no scenery. No victims' injuries, no weapons, no crime in progress, no blood, no bodies; nothing that hints at the verdict.
 ```
+
+- 극적인 연출은 9-17을 붙인다.
+- 9-9 ~ 9-15 완성 프롬프트와 제작 목록 5장 예시는 10/14 기록이라 옛 배경 문장(신문지색 · 크로마 그린)이 들어 있다. 다시 쓸 때는 배경 문장을 `BG` 블록으로 바꾼다.
 
 ### 9-8. AVOID 블록
 
@@ -1094,3 +1112,43 @@ SCENE — plain newsprint background #ECE2D4, generous spacing, landscape 16:9.
 
 AVOID: text, letters, numbers, labels, envelopes, a mannequin neck, the book touching the collar, Nambul taller than Naero, all Laws the same height, Laws taller than the given ratios, angry faces or poses, gendered body features, cropped limbs, extra characters, black outlines, drop shadows, ground shadows, 3D render, photo realism.
 ```
+
+### 9-16. 마스코트 로 블록 (10/15, 제작 목록 A6)
+
+로울 · 로봉 · 로북을 **내로 · 남불과 같은 2등신 마스코트 그림체**로 만든 버전이다. 기본 로(`authority` × `adult`, 9-3 · 9-4)는 그대로 두고 **추가**한다. STYLE은 `editorial`(9-3)을 쓰고, 소재는 평면으로 그린다(3장 MATERIAL RULES를 줄인 것). 이 버전 시트가 로 데포르메 시트(제작 목록 G6)의 첨부 기준이다.
+
+**키 (마스코트끼리, 같은 바닥선)**: 내로 · 남불 120, **로울 180 · 로북 170 · 로봉 160**. 기본 로의 키(230 · 210 · 190)와 따로 쓴다(아키텍처 2-5).
+
+**첨부**: 해당 로의 `standing/law-*_standing.png`(정체성만, 비율 · 사실 질감은 따르지 않음) + `standing/naero_standing.png` · `standing/nambul_standing.png`(그림체 · 비율). 시트를 만들 때는 그 로의 마스코트 스탠딩 결과 + `sheets/law-*_sheet_reference.png`(칸 배치만) + `sheets/naero_sheet_reference.png`(마스코트 시트 그림체).
+
+**`law-mascot` DEFORM 블록**
+
+```
+DEFORMATION — chunky, cute mascot in the same family as Naero and Nambul (match their attached references), about 2 heads tall counting the head object as one head:
+- The head object is big and chunky, about 45 to 50% of the total height and clearly wider than the shoulders, built from simple rounded shapes.
+- A short, soft, rounded body hidden by a simple bell-shaped navy robe: deep V neckline, two flat slightly darker front bands, short wide bell sleeves, a hem just above the shoes. No fold lines, no pleats, no wrinkles.
+- Short sturdy legs, small rounded white-gloved hands with simple short fingers (as simple as Naero's hands), small rounded near-black shoes.
+- Heights on the same ground line, where Naero and Nambul are 120: Law (Scale) 180 (1.5 times), Law (Book) 170 (about 1.42 times), Law (Gavel) 160 (about 1.33 times). The build differences between the three Laws stay readable even in this small size.
+- No face anywhere: emotion only by the head object and the body posture.
+
+MATERIAL — brass, wood and leather are flat color fills: a base color, one flat shadow shape on the lower right and one or two small crisp highlight shapes. No realistic metal or wood texture, no reflections, no glossy rendering, no painterly shading.
+```
+
+**IDENTITY**: 9-5의 `law-scale` · `law-gavel` · `law-book`을 그대로 쓰되 머리 물체를 `chunky, simplified`(법봉은 `toy-like`, 어깨보다 넓게)로 고쳐 쓴다. 체형 차이(로울 가장 크고 곧음 · 로봉 가장 작고 어깨가 넓음 · 로북 중간)는 유지한다.
+
+**AVOID (덧붙임)**: `tall or slim adult proportions, robe folds, painterly shading`
+
+- 완성 프롬프트(스탠딩 3 · 시트 3)와 로 데포르메 시트(G6) 프롬프트는 이관 작업판 `Claude outputs/character/gpt-handover_2026-10-15/items.js`(커밋 안 함)에 있다.
+
+### 9-17. 극적 재연 블록 (10/15)
+
+사건 재연 컷은 **드라마 한 장면처럼 극적인 표정 · 상황**을 쓸 수 있다(아키텍처 4-3). 9-7 `reenact` 뒤에 붙인다. 화난 · 적대적인 표정과 폭력은 여전히 쓰지 않는다.
+
+```
+CASE RULES — a dramatic, tense, newspaper-photo-like moment that shows the situation and the relationship. Strong emotions through faces and body language (frustration, desperation, shock, pressure), like a still from a TV drama, but never violent, never hostile or snarling, and no comedy. Show both sides' emotions with equal weight: neither looks like a villain or a pitiful victim, and nothing hints at the verdict.
+```
+
+- STYLE `editorial`의 Mood 줄은 `Mood: dramatic and tense like a TV drama still, while the drawing stays warm, flat and slightly vintage.`로 바꾼다.
+- 의상은 사건마다 정한다(셔츠 + 청바지 고정이 아님). 내로의 반다나는 역할 의상에서 계속 뺀다.
+- AVOID 덧붙임: `injuries, weapons, knives, kitchen tools, blood, bodies, a crime in progress, grabbing, pushing, hitting, raising a fist at a person, tears, mocking anyone`
+- 사건 1 예시(배역 · 의상 · 장면 3컷)는 이관 작업판 `items.js` 3묶음에 있다.
