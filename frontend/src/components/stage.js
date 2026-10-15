@@ -503,6 +503,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
       const role = step.say === 'narrator' ? step.role ?? '법정 진행' : step.role ?? ''; // 해설은 역할 이름만(예: 실제 판결)
       name.replaceChildren();
       name.dataset.role = ROLE_COLOR[role] ?? 'guide';
+      dialog.dataset.speaker = NAMES[step.say] ? step.say : 'none'; // 말풍선 꼬리 방향(신문 지면 무대: 말하는 캐릭터 쪽)
       if (NAMES[step.say]) name.append(picture(iconOf(step.say, step.look[step.say])), NAMES[step.say]); // AI 판사는 이름 · 얼굴 없이 역할만
       if (role) name.append(element('i', '', ` ${role}`));
     }

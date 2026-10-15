@@ -40,14 +40,19 @@
 .stage-wrap.paper-mode .board .postcard-head h2 { margin: 0 0 4px; font: 900 22px/1.3 var(--font-heading); letter-spacing: .08em; color: var(--color-heading); }
 .stage-wrap.paper-mode .board .postcard-head p { margin: 0; color: var(--color-muted); font-size: 13px; }
 .stage-wrap.paper-mode .board .postcard-stamp { position: relative; flex: none; display: grid; place-items: center; width: 64px; height: 76px; border: 3px dotted var(--color-label); background: var(--color-paper); color: var(--color-label); font: 900 13px/1.15 var(--font-heading); text-align: center; transform: rotate(3deg); }
-.stage-wrap.paper-mode .board .postcard-stamp { isolation: isolate; }
-.stage-wrap.paper-mode .board .postcard-stamp::after { content: ''; position: absolute; z-index: -1; left: -34px; top: 22px; width: 58px; height: 58px; border: 2px solid color-mix(in srgb, var(--color-accent) 45%, transparent); border-radius: 50%; } /* 소인 원은 우표 글자 뒤로, 왼쪽 가장자리에만 걸친다 */
 .stage-wrap.paper-mode .board :is(.guide-box, .pre-judgment-form) { margin: 0; padding-left: 0; padding-right: 0; }
-.stage-wrap.paper-mode .board .guide-box { margin-bottom: 14px; padding: 10px 14px; border-left: 0; font-size: 14px; } /* 엽서 안에서는 옆 띠 없이 */
+.stage-wrap.paper-mode .board .guide-box { margin-bottom: 12px; padding: 0; border: 0; background: none; font: 400 19px/1.4 var(--font-hand); color: var(--color-muted); } /* 엽서 안 안내는 회색 상자 대신 엽서에 적힌 메모 한 줄 */
 .stage-wrap.paper-mode .board .pre-judgment-form { padding-bottom: 0; }
 .stage-wrap.paper-mode .board .section-actions { display: flex; justify-content: flex-end; } /* 제출 버튼은 엽서 오른쪽 아래 */
 .stage-wrap.paper-mode .board legend { font-family: var(--font-hand); font-size: 24px; font-weight: 400; color: var(--color-desk-note-pen); }
-.stage-wrap.paper-mode .board .range-options { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.stage-wrap.paper-mode .board .range-options { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(var(--rows, 4), auto); grid-auto-flow: column; gap: 8px 12px; counter-reset: range; }
+/* 형량은 가벼운 → 무거운 순서: 왼쪽 열 위 → 아래, 이어서 오른쪽 열. 번호로 순서를 보여 준다 */
+.stage-wrap.paper-mode .board .range-option { counter-increment: range; }
+.stage-wrap.paper-mode .board .range-option span::before { content: counter(range); display: inline-block; min-width: 1.6em; margin-right: 4px; color: var(--color-muted); font: 700 12px/1 var(--font-body); font-variant-numeric: tabular-nums; }
+.stage-wrap.paper-mode .board fieldset::after { content: '번호가 클수록 무거운 형량이에요'; display: block; margin-top: 8px; color: var(--color-muted); font-size: 12px; }
+.stage-wrap.paper-mode .board .range-option:has(input:checked) { border-style: solid; border-color: var(--color-heading); background: color-mix(in srgb, var(--color-desk-note) 45%, transparent); }
+/* 아직 고르지 않은 버튼: 회청색 비활성 대신 점선 안내 */
+.stage-wrap.paper-mode .board .section-actions .primary-button:disabled { opacity: 1; border: 1px dashed var(--color-border-strong); background: transparent; color: var(--color-muted); cursor: default; }
 .stage-wrap.paper-mode .board .range-option { display: flex; align-items: center; min-height: 44px; padding: 8px 14px; background: transparent; border-style: dashed; font-size: 15px; line-height: 1.4; }
 /* 엽서가 떠 있으면 캐릭터 · 조작 줄(이전)은 가림막 위에 */
 .stage-wrap.paper-mode .stage.bmode .spr { z-index: 27; }
@@ -60,7 +65,7 @@
 /* 화면 아래 고정: 대사창 · 조작 줄, 그 양옆에 내로 · 남불(발이 화면 아래 끝). 읽는 공간(대사창 위)을 가리지 않는다. 좁은 화면은 대사창 위 양 끝 */
 .stage-wrap.paper-mode { --dock-w: min(860px, calc(100vw - 340px)); } /* 양옆에 캐릭터 자리(170px씩)를 남긴다 */
 .stage-wrap.paper-mode .dlg { position: fixed; z-index: 20; left: 50%; right: auto; bottom: calc(66px + var(--safe-bottom)); translate: -50% 0; width: var(--dock-w); height: auto; min-height: 118px; padding: 26px 28px 18px;
-  box-shadow: 0 5px 0 color-mix(in srgb, var(--color-text) 18%, transparent), 0 18px 40px -12px color-mix(in srgb, var(--color-desk-shadow) 60%, transparent); }
+  box-shadow: 0 18px 36px -16px color-mix(in srgb, var(--color-desk-shadow) 65%, transparent); }
 .stage-wrap.paper-mode .name { left: 18px; top: -16px; gap: 6px; padding: 2px 14px 2px 4px; font-size: 14px; }
 .stage-wrap.paper-mode .name img { width: 26px; height: 26px; }
 .stage-wrap.paper-mode .txt { font-size: 17px; }
@@ -69,7 +74,7 @@
 .stage-wrap.paper-mode .dlg-choices :is(.primary-button, .secondary-button) { min-height: 40px; padding: 0 16px; font-size: 14px; }
 .stage-wrap.paper-mode .dlg-note { font-size: 13px; }
 .stage-wrap.paper-mode .ctrl { position: fixed; z-index: 20; left: 50%; bottom: calc(10px + var(--safe-bottom)); translate: -50% 0; width: var(--dock-w); margin: 0; padding: 4px 10px; border-radius: 999px; background: color-mix(in srgb, var(--color-card) 92%, transparent);
-  box-shadow: 0 6px 18px -8px color-mix(in srgb, var(--color-desk-shadow) 60%, transparent); }
+  box-shadow: 0 8px 20px -10px color-mix(in srgb, var(--color-desk-shadow) 55%, transparent); }
 .stage-wrap.paper-mode .ctrl :is(.primary-button, .secondary-button) { min-height: 40px; }
 .stage-wrap.paper-mode .ctrl .stage-restart { margin-left: 4px; }
 .stage-wrap.paper-mode .stage[data-scene] .spr { --l: calc(50% - var(--dock-w) / 2 - 84px); --r: calc(50% + var(--dock-w) / 2 + 84px); position: fixed; z-index: 19; bottom: calc(4px + var(--safe-bottom)); height: min(210px, 27vh); }
@@ -87,7 +92,7 @@
   .stage-wrap.paper-mode .ctrl { flex-wrap: nowrap; bottom: calc(6px + var(--safe-bottom)); padding: 2px 8px; min-height: 44px; }
   .stage-wrap.paper-mode .ctrl :is(.primary-button, .secondary-button) { min-height: 44px; }
   .stage-wrap.paper-mode .ctrl .stage-restart { display: none; }
-  .stage-wrap.paper-mode .board .range-options { grid-template-columns: 1fr; }
+  .stage-wrap.paper-mode .board .range-options { grid-template-columns: 1fr; grid-template-rows: none; grid-auto-flow: row; }
   .stage-wrap.paper-mode .board .scroll-body { padding: 18px 16px; }
   .stage-wrap.paper-mode .board .postcard-head h2 { font-size: 18px; }
   .stage-wrap.paper-mode .board .postcard-stamp { width: 50px; height: 60px; font-size: 11px; }
@@ -221,4 +226,44 @@
 /* 귀 버튼이 하나뿐일 때(처음 보는 사건은 오른쪽 귀가 모바일에서 숨는다) 반쪽 폭으로 남지 않게 */
 @media (max-width: 768px) {
   .case-paper-page .page-head:not(:has(.ear-right.ear-button)) .ear-left { grid-column: 1 / -1; }
+}
+
+/* ── 대사 = 신문 만평 말풍선 (FE-32 디자인 A안) ──
+   잉크 선 테두리 · 종이색 · 말하는 캐릭터 쪽으로 꼬리(대사 dataset.speaker). 이름은 손글씨 이름 딱지.
+   캐릭터는 화면 아래 모서리에서 허리까지만 올라와 엿보고, 말하는 쪽이 앞으로 나오고 다른 쪽은 물러난다 */
+.stage-wrap.paper-mode .dlg { background: var(--color-paper); border: 2px solid var(--color-text); border-radius: 26px; padding: 26px 30px 20px; }
+/* 꼬리: 말풍선 옆(아래쪽)에서 말하는 캐릭터 쪽으로. 바깥 잉크(::before) 위에 종이색(::after)을 겹쳐 선 굵기를 만든다 */
+.stage-wrap.paper-mode .dlg::before, .stage-wrap.paper-mode .dlg::after { content: ''; position: absolute; bottom: 22px; width: 30px; height: 30px; pointer-events: none; }
+.stage-wrap.paper-mode .dlg::before { background: var(--color-text); clip-path: polygon(100% 0, 100% 100%, 0 78%); }
+.stage-wrap.paper-mode .dlg::after { width: 27px; height: 24px; bottom: 25px; background: var(--color-paper); clip-path: polygon(100% 0, 100% 100%, 0 80%); }
+.stage-wrap.paper-mode .dlg[data-speaker="naero"]::before { left: -30px; }
+.stage-wrap.paper-mode .dlg[data-speaker="naero"]::after { left: -25px; }
+.stage-wrap.paper-mode .dlg[data-speaker="nambul"]::before { right: -30px; scale: -1 1; }
+.stage-wrap.paper-mode .dlg[data-speaker="nambul"]::after { right: -25px; scale: -1 1; }
+.stage-wrap.paper-mode .dlg[data-speaker="none"]::before, .stage-wrap.paper-mode .dlg[data-speaker="none"]::after, .stage-wrap.paper-mode .dlg:not([data-speaker])::before, .stage-wrap.paper-mode .dlg:not([data-speaker])::after { display: none; }
+.stage-wrap.paper-mode .dlg[data-speaker="nambul"] .name { left: auto; right: 22px; }
+.stage-wrap.paper-mode .name { top: -18px; left: 22px; gap: 6px; padding: 2px 14px 2px 3px; border: 2px solid var(--color-text); background: var(--color-paper); color: var(--color-heading); box-shadow: none; font: 400 22px/1.15 var(--font-hand); }
+.stage-wrap.paper-mode .name img { width: 28px; height: 28px; }
+.stage-wrap.paper-mode .name i { font: 700 12px/1 var(--font-body); color: var(--color-muted); }
+.stage-wrap.paper-mode .txt { font: 500 17px/1.65 var(--font-body); color: var(--color-text); letter-spacing: -.01em; }
+/* 캐릭터: 아래 모서리에서 엿보기(허리 아래는 화면 밖) · 말하는 쪽 앞으로 */
+.stage-wrap.paper-mode .stage[data-scene] .spr, .stage-wrap.paper-mode .stage[data-scene] .spr.role { bottom: calc(-56px + var(--safe-bottom)); height: min(300px, 38vh); transition: translate .35s cubic-bezier(.2, .8, .2, 1), opacity .3s; }
+.stage-wrap.paper-mode .stage[data-scene] .spr .spr-img { filter: drop-shadow(0 6px 10px color-mix(in srgb, var(--color-desk-shadow) 35%, transparent)); transition: filter .3s ease-out; }
+.stage-wrap.paper-mode .stage[data-scene] .spr.dim { translate: -50% 26px; }
+.stage-wrap.paper-mode .stage[data-scene] .spr.dim .spr-img { filter: brightness(.72) saturate(.55); transform: none; }
+.stage-wrap.paper-mode .stage[data-scene] .spr:not(.dim) { translate: -50% -6px; }
+/* 조작 줄: 알약 대신 종이 띠 */
+.stage-wrap.paper-mode .ctrl { border-radius: 10px; border: 1px solid color-mix(in srgb, var(--color-text) 25%, transparent); background: var(--color-paper); }
+@media (max-width: 680px) {
+  /* 좁은 화면: 캐릭터는 말풍선 위 양 끝에서 머리만 내밀고(아래는 말풍선 뒤), 꼬리는 위쪽 말하는 쪽으로 */
+  .stage-wrap.paper-mode .stage[data-scene] .spr, .stage-wrap.paper-mode .stage[data-scene] .spr.role { --l: 52px; --r: calc(100% - 52px); bottom: calc(146px + var(--safe-bottom)); height: 116px; }
+  .stage-wrap.paper-mode .stage[data-scene] .spr.dim { translate: -50% 18px; }
+  .stage-wrap.paper-mode .dlg { border-radius: 20px; padding: 22px 18px 14px; }
+  /* 좁은 화면은 꼬리 대신 이름 딱지 위치(말하는 쪽 위)와 앞으로 나온 캐릭터가 화자를 가리킨다 */
+  .stage-wrap.paper-mode .dlg::before, .stage-wrap.paper-mode .dlg::after { display: none; }
+  .stage-wrap.paper-mode .name { font-size: 20px; }
+  .stage-wrap.paper-mode .txt { font-size: 15.5px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .stage-wrap.paper-mode .stage[data-scene] .spr { transition: none; }
 }
