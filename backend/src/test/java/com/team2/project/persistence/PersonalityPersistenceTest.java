@@ -186,7 +186,7 @@ class PersonalityPersistenceTest {
 		assertThat(type.getMeme()).isNotBlank();
 		assertThat(type.getDailyDescription()).isNotBlank();
 		assertThat(type.getVerdictDescription()).isNotBlank();
-		assertThat(type.getImageUrl()).isNull();	// 이미지가 들어오기 전
+		assertThat(type.getImageUrl()).isEqualTo("/images/characters/personality/29.webp");	// 유형 13 + 남불 16 (BE-73, 번호표)
 		assertThat(typeRepository.findByShareId(swapCase(shareId))).isEmpty();	// 대소문자 구분
 	}
 
