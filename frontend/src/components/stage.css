@@ -57,6 +57,9 @@
 .stage.is-input .stage-figure.is-nambul { right: 1%; }
 .stage.is-input .stage-tag { display: none; }
 
+/* 입력 단계의 이전 버튼: 장면 왼쪽 아래(좁은 화면에서는 카드 아래 줄) */
+.stage-back { grid-area: scene; align-self: end; justify-self: start; z-index: 4; min-height: 44px; margin: 0 0 2.5% 2.5%; }
+
 /* 신문 기사 카드(1막) */
 .stage .news-card h2 { margin: 2px 0 6px; font: 900 var(--text-title-2)/1.35 var(--font-heading); color: var(--color-heading); text-wrap: balance; }
 .stage .news-card .news-desk { margin: 0; color: var(--color-label); font-size: var(--text-caption); font-weight: 800; }
@@ -77,7 +80,8 @@
 @media (max-width: 760px) {
   .stage { --scene-h: auto; grid-template-areas: none; }
   .stage-acts li:not(.is-current) { display: none; }
-  .stage-acts, .stage-scene, .stage-dialog, .stage-card { grid-area: auto; }
+  .stage-acts, .stage-scene, .stage-dialog, .stage-card, .stage-back { grid-area: auto; }
+  .stage-back { justify-self: start; margin: 0; }
   .stage-scene { height: auto; aspect-ratio: 4 / 3; }
   .stage-figure { bottom: 6%; height: 72%; }
   .stage-figure.is-role { height: 64%; }

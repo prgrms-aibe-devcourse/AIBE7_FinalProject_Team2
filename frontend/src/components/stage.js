@@ -89,7 +89,10 @@ export function renderStage({ script, order, cards, inputCards = [] }) {
 
   const cardSlot = element('div', 'stage-card');
   cardSlot.tabIndex = -1;
-  stage.append(acts, scene, dialog, cardSlot);
+  // 입력 카드가 뜨면 대사창이 숨어 이전 버튼도 사라지므로, 입력 단계에서만 따로 보이는 이전 버튼을 둔다(앞으로는 제출로만 간다)
+  const back = element('button', 'secondary-button stage-back', '이전 장면으로');
+  back.type = 'button';
+  stage.append(acts, scene, dialog, cardSlot, back);
 
   function finishTyping() {
     clearInterval(typing);
@@ -162,6 +165,7 @@ export function renderStage({ script, order, cards, inputCards = [] }) {
     cardSlot.replaceChildren(...(card ? [card] : []));
     cardSlot.hidden = !card;
     prev.disabled = index === 0;
+    back.hidden = !input || index === 0;
     next.disabled = input || index === steps.length - 1;
     skip.hidden = input || Boolean(steps[index].card) || skipTarget(steps, index) === index;
     if (input) cardSlot.focus();
@@ -176,13 +180,16 @@ export function renderStage({ script, order, cards, inputCards = [] }) {
     render();
   }
   prev.addEventListener('click', () => go(-1));
+  back.addEventListener('click', () => go(-1));
   next.addEventListener('click', () => go(1));
   skip.addEventListener('click', () => { finishTyping(); index = skipTarget(steps, index); render(); });
   scene.addEventListener('click', (event) => { if (!event.target.closest('.stage-card')) go(1); });
 
   function onKey(event) {
     if (!stage.isConnected) { document.removeEventListener('keydown', onKey); return; }
-    if (event.target.closest('input, textarea, select, .stage-card')) return;
+    if (event.target.closest('input, textarea, select')) return;
+    // 카드 안에서는 이전(←)만 받는다. Space · Enter · →는 카드 스크롤과 버튼이 쓴다
+    if (event.target.closest('.stage-card') && event.key !== 'ArrowLeft') return;
     if (event.key === 'ArrowRight' || event.key === ' ' || event.key === 'Enter') {
       if (event.target.closest('button') && event.key !== 'ArrowRight') return; // 버튼 위의 Space · Enter는 버튼이 처리한다
       event.preventDefault();
