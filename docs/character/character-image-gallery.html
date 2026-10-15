@@ -112,7 +112,7 @@ render();
 // 최신 목록 읽기
 (async()=>{
   const note=$("#src");
-  note.textContent="저장된 목록으로 표시 중(최신 목록을 확인하는 중)";
+  note.textContent="저장된 목록(10/14 기준)으로 표시 중(최신 목록을 확인하는 중)";
   try{
     const r=await fetch(TREE_API,{headers:{Accept:"application/vnd.github+json"},signal:AbortSignal.timeout(8000)});
     if(!r.ok)throw new Error(r.status);
@@ -120,11 +120,14 @@ render();
     const paths=(t.tree||[]).filter(f=>f.type==="blob"&&/^character\/.+\.png$/.test(f.path)).map(f=>f.path).sort();
     if(!paths.length)throw new Error("empty");
     items=paths.map(info);
+    closeViewer(); // 목록이 바뀌면 열린 뷰어의 위치(cur)가 어긋나므로 닫는다
+    if(st.ch&&!items.some(i=>i.ch===st.ch))st.ch=""; // 새 목록에 없는 필터는 풀어 빈 화면을 막는다
+    if(st.cat&&!items.some(i=>i.cat===st.cat))st.cat="";
     note.textContent="레포 최신 목록";
     if(t.truncated)note.textContent+=" (일부 생략됨)";
     render();
   }catch(e){
-    note.textContent="저장된 목록으로 표시 중(최신 목록을 읽지 못함)";
+    note.textContent="저장된 목록(10/14 기준)으로 표시 중(최신 목록을 읽지 못함)";
   }
 })();
 </script>
