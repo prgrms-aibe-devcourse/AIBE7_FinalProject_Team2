@@ -13,6 +13,7 @@
 | v2.4 | 2026-10-14 | 로 셋 이름(로울 · 로봉 · 로북)을 IDENTITY 제목에 표기. 프롬프트 본문은 "Law (Scale)" 등 영어 이름 그대로 |
 | v2.5 | 2026-10-14 | 수정 프롬프트 추가 — R1 로북 스탠딩(봉투 · 마네킹 목 · 구두), R2 로북 시트(중복 줄 · 아쉬움 칸 · 마네킹 목), R3 키 비교 v2(비율 · 떠 있는 법전 · 숫자). 지금 이미지는 샘플(모델 교체 후 재생성) |
 | v2.6 | 2026-10-15 | **10/15 이관 결정**(COMMON-35) — 생성은 GPT Pro 팀원(gpt image 2.0, 기본 품질 medium)이 맡고 지금 이미지는 유지(재생성은 최종 디테일 때). **모든 생성 배경을 투명으로**(시트 · 재연 컷 포함, 신문 느낌은 후보정, 크로마 그린은 대안) — 1-3 · 9-1 · 9-7. 9-16 마스코트 로(2등신, 키 로울 180 · 로북 170 · 로봉 160) · 9-17 극적 재연 블록 추가 |
+| v2.7 | 2026-10-15 | 추가 생성 목록 H(제작 목록) 블록 — 9-18 데포르메 묶음 시트 · 9-19 의상 시트 · 9-20 역할 의상 정식 컷 · 9-21 마스코트 로 컷 |
 
 > 기준 결정: `character-main-handover.md` v2의 10/13 변경 절 (기본 = 마스코트형 약 3.5등신 · 란마풍 등은 변형 · 모든 캐릭터 무성 · 소품 제한 해제 · 화난 표정 금지)
 > 이 문서는 **복사해서 바로 쓰는 프롬프트 모음**이다. 설계 배경은 `character-law-ai-judge-plan.md` v0.3을 본다(`Claude outputs/character/plan/`, 커밋 안 함).
@@ -1152,3 +1153,74 @@ CASE RULES — a dramatic, tense, newspaper-photo-like moment that shows the sit
 - 의상은 사건마다 정한다(셔츠 + 청바지 고정이 아님). 내로의 반다나는 역할 의상에서 계속 뺀다.
 - AVOID 덧붙임: `injuries, weapons, knives, kitchen tools, blood, bodies, a crime in progress, grabbing, pushing, hitting, raising a fist at a person, tears, mocking anyone`
 - 사건 1 예시(배역 · 의상 · 장면 3컷)는 이관 작업판 `items.js` 3묶음에 있다.
+
+### 9-18. 데포르메 묶음 시트 (제작 목록 H0)
+
+한 캐릭터를 **기본 + 데포르메 11종**으로 한 장에 그려 느낌을 비교한다. 렌더링(`editorial`, 외곽선 없음 · 평면 색)은 그대로 두고 **비율 · 형태 · 연기만** 바꾼다(아키텍처 3-1 · 3-6). 작가 · 작품 이름은 넣지 않는다.
+
+**첨부**: 내로 · 남불은 해당 `standing/*_standing.png` + `sheets/*_sheet_reference.png`. 로는 마스코트 스탠딩(A6) + `standing/law-*_standing.png`(정체성).
+
+```
+Use the attached reference images as the exact model of {Naero | Nambul | Law (Scale) | Law (Gavel) | Law (Book)}: keep {the face, navy fur, yellow eyes, pointed ears and red bandana | the three-color flame head, visible pupils and no nose | the head object, navy robe, white gloves and dark shoes; no face, no neck} in every panel.
+Create a DEFORMATION LINEUP sheet: the same character drawn twelve times, six per row in two rows, every one in the same calm standing pose (front to slight three-quarter view, empty-handed), standing on one shared ground line per row. Keep the same flat, outline-free rendering and the same colors in all twelve; only the proportions, shapes and acting change:
+1 base mascot, exactly like the attached reference
+2 classic Japanese cartoon: about 2.5 to 3 heads tall, big round head and eyes, rubber-hose limbs
+3 dramatic Korean comic: about 5 to 6 heads tall, solid build, angular face, bold flat shadow shapes, serious look
+4 boys' action manga: about 5 to 6 heads tall, sleek athletic build, confident stance
+5 1980s–90s TV anime: about 5 heads tall, soft rounded body, slightly long legs, retro cel feel
+6 cute webtoon: about 4 to 5 heads tall, small body, large glossy eyes, shy acting (never sexualized)
+7 polished gacha illustration: about 5 to 6 heads tall, refined proportions, detailed glossy eyes
+8 cheek-squish mochi chibi: about 2 heads tall, huge wide head, mochi cheeks, tiny dumpling body
+9 sports anime: about 6 to 7 heads tall, long limbs, sharp features, clean silhouette
+10 quirky Western TV cartoon: about 3 to 4 heads tall, dot pupils, noodle limbs, slight asymmetry
+11 late-1990s minimalist cartoon: about 2 heads tall, giant oval eyes, no fingers, bold simple shapes
+12 Japanese punk-pop cartoon: about 4 to 5 heads tall, thin long limbs, bold graphic shapes
+{Law only: there are no eyes or faces in any panel; each style changes the body proportions and simplifies or stretches the head object instead.}
+SCENE — a clean character sheet: panels separated by empty space only (no frame lines, no labels, no numbers, no text), landscape 16:9.
+BACKGROUND — fully transparent background (PNG with alpha). No background color, no floor, no shadow, no frame.
+AVOID: text, letters, numbers, labels, a second character, different colors between panels, black outlines, line art, drop shadows, sexualized or revealing depiction, gendered body features, angry faces, cropped limbs, duplicate panels.
+```
+
+- 12칸이 빽빽해 형태가 무너지면 1 ~ 6 · 7 ~ 12로 나눠 두 장으로 뽑는다(파일 `_a` · `_b`).
+
+### 9-19. 의상 시트 (제작 목록 H1)
+
+사건 재연에서 돌려 쓸 **일상 의상 8벌**. 역할 의상 시트(F2)와 별개다. 첨부: 해당 `standing/*_standing.png` + `sheets/role-outfits/*_sheet_role-outfits.png`(옷을 입은 모습 참고).
+
+```
+Use the attached reference images as the exact model of {Naero | Nambul}: copy the face, colors, proportions and flat style exactly. The role-outfit sheet shows only how the character looks when wearing clothes; do not copy those outfits.
+Create a WARDROBE sheet for this ONE character: eight everyday outfits for acting in case re-enactments, front view, calm neutral pose with a small smile, two rows of four:
+1 a dark office suit with a plain tie, 2 a camel trench coat over a dark knit sweater, 3 a worn grey hoodie with loose track pants and slippers, 4 a cream knit sweater with beige chinos, 5 a work jacket with cargo pants and work boots, 6 a plain shop apron over a shirt, 7 a padded winter jacket with jeans, 8 striped pajamas.
+{Naero: no bandana in any outfit, the ears stay visible | Nambul: the flame head stays fully visible, no hats}. Outfit colors are muted and never match the character's own fixed colors; no green.
+SCENE — panels separated by empty space only (no labels, no text), landscape 16:9.
+BACKGROUND — fully transparent background (PNG with alpha).
+AVOID: text, letters, logos on clothes, a bandana, hats, uniforms of police, doctors or judges, a second character, black outlines, drop shadows, gendered body features.
+```
+
+### 9-20. 역할 의상 정식 컷 (제작 목록 H3)
+
+지금 무대가 시트에서 잘라 쓰는 역할 의상 컷을 정식으로 만든다. 첨부: 해당 `sheets/role-outfits/*_sheet_role-outfits.png`(의상 기준) + `standing/*_standing.png`(캐릭터 기준).
+
+```
+Use the attached standing image as the exact model of {Naero | Nambul} and the attached role-outfit sheet as the exact model of the {judge | prosecutor | defense lawyer | case-role} outfit: copy that outfit exactly as drawn in the sheet{Nambul judge: the white wig fully covers the flame top}. Draw ONE full-body cut.
+POSE — standing calmly, front to slight three-quarter view, both hands relaxed at the sides, a small calm smile, looking at the viewer. The prosecutor and the defense lawyer use exactly the same pose and expression.
+SCENE — a single character, centered, full body from head to feet fully visible, 15% empty margin on every side.
+BACKGROUND — fully transparent background (PNG with alpha). Aspect ratio 4:5 vertical.
+AVOID: text, letters, name tags, logos, a bandana, props in the hands, a second character, angry faces, black outlines, drop shadows, gendered body features, cropped limbs.
+```
+
+- 사건 배역 컷(H4)은 같은 형식에서 의상 줄만 H1 의상 시트의 해당 벌로 바꾼다.
+
+### 9-21. 마스코트 로 컷 (제작 목록 H2)
+
+9-16 블록(STYLE `editorial` + `law-mascot` DEFORM + MATERIAL + IDENTITY)에 9-6 POSE를 붙인다. 첨부는 해당 로의 마스코트 스탠딩 · 시트(A6).
+
+| 컷 | POSE | SCENE · 비율 |
+| --- | --- | --- |
+| `idle-neutral` | 9-6 `idle`(로) | `scene-cut` · 4:5 |
+| `deliver-neutral` | 9-6 `deliver`(봉투는 이 컷만) | `scene-cut` · 4:5 |
+| `think-thinking` | `POSE — standing, one hand on the chin, the head object showing "thinking" (9-6 감정 규칙).` | `scene-cut` · 4:5 |
+| `trio_cut-mascot_idle` · `_think` | 로 셋이 나란히 / 서로를 향해 기울여 고민 | `group` · 16:9, 키 로울 180 · 로북 170 · 로봉 160, 서열 없음 |
+| `compare_cut-mascot_trio-thinking` | 내로 왼쪽 · 로울 가운데 · 남불 오른쪽, 셋 다 고민 | `group` · 16:9, 내로 · 남불 120 · 로울 180, 같은 바닥선, 누구도 앞에 서지 않음 |
+
+- 판결 전 화면에 쓸 컷(`idle` · 로울)은 저울 수평이다.
