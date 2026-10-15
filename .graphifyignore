@@ -13,6 +13,7 @@ Claude outputs/
 graphify-out/
 # 설정 파일(환경변수·비밀 값 참조 가능성)은 문서 추출 대상에서 제외
 .mcp.json
+.env*
 application*.yml
 docker-compose*.yml
 loki-config.yml
