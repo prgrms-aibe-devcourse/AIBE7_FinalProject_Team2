@@ -510,6 +510,25 @@ class PipelineTest(unittest.TestCase):
             self.run_with(config, {"openai:a": [self.output]}, applied, start="load")
         self.assertIn("--from generate", str(ctx.exception))
 
+        # 고른 회차의 묶음 정보(batch.json)가 없으면 확인할 수 없으므로 멈춘다 (#143 리뷰)
+        saved["references"]["similarCases"][0]["summary"] = "검색된 판례 사실관계"
+        references_file.write_text(json.dumps(saved, ensure_ascii=False), encoding="utf-8")
+        batch_file = Path(state["stages"]["generate"]["outputs"]["batchDir"]) / "batch.json"
+        batch_file.rename(batch_file.with_name("batch.moved.json"))
+        with self.assertRaises(pipeline.PipelineError) as ctx:
+            self.run_with(config, {"openai:a": [self.output]}, applied, start="load")
+        self.assertIn("묶음 정보가 없어", str(ctx.exception))
+        batch_file.with_name("batch.moved.json").rename(batch_file)
+
+        # 참고 자료를 만든 뒤 기준일 · 사건 입력이 바뀌면 --from generate만으로는 예전 참고 자료를 쓰므로 멈춘다 (#143 리뷰)
+        changed = {**config, "indictmentDate": "2014-04-01"}
+        with self.assertRaises(pipeline.PipelineError) as ctx:
+            self.run_with(changed, {"openai:a": [self.output]}, applied, start="generate")
+        self.assertIn("--from rag", str(ctx.exception))
+        state = self.run_with(changed, {"openai:a": [self.output]}, applied, start="rag")  # rag부터 다시 돌리면 통과
+        self.assertEqual(state["stages"]["rag"]["outputs"]["report"]["guidelineBasis"], "INDICTMENT_DATE")
+        self.assertNotIn("2014-04-01", json.dumps(state["stages"]["rag"]["outputs"], ensure_ascii=False))  # 지문에 날짜를 그대로 남기지 않는다
+
     def test_rag_fallback_and_disabled(self):
         config = self.config(rag={"enabled": True}, generate={"models": ["openai:a"], "runs": 1, "maxRetries": 0})
         state = self.run_with(config, {"openai:a": [self.output]})  # DB 접속 실패 → 사건 입력의 참고 자료로 진행

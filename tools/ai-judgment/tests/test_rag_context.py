@@ -173,6 +173,28 @@ class RagContextTest(unittest.TestCase):
             build_references(self.case, [], incident_date="2014-03-01", embedder=fake_embedder, runner=db,
                              options={"required": True}, log=self.logs.append)
 
+    def test_empty_ranges_is_missing_guideline(self):
+        # 버전 행만 있고 형량범위 조각이 없으면 제목뿐인 양형기준을 쓰지 않는다 (#143 리뷰)
+        result = db_result(precedents=[precedent(1, 0.8)])
+        result["ranges"] = []
+        references, report = self.build(FakeDb(result))
+        self.assertEqual(report["status"], "PARTIAL")
+        self.assertIsNone(report["guideline"])
+        self.assertEqual(references["sentencingGuideline"], self.case["references"]["sentencingGuideline"])
+        self.assertTrue(any("형량범위 조각이 없습니다" in w for w in report["warnings"]))
+        with self.assertRaises(RagContextError):
+            self.build(FakeDb(result), options={"required": True})
+
+    def test_input_key_changes_with_inputs(self):
+        key = rag_context.input_key(self.case, SOURCES, incident_date="2014-03-01")
+        self.assertEqual(key, rag_context.input_key(self.case, SOURCES, incident_date="2014-03-01"))
+        self.assertNotEqual(key, rag_context.input_key(self.case, SOURCES, indictment_date="2014-04-01", incident_date="2014-03-01"))
+        self.assertNotEqual(key, rag_context.input_key(self.case, SOURCES[:1], incident_date="2014-03-01"))
+        self.assertNotEqual(key, rag_context.input_key({**self.case, "overview": "다른 개요"}, SOURCES, incident_date="2014-03-01"))
+        self.assertNotEqual(key, rag_context.input_key(self.case, SOURCES, incident_date="2014-03-01",
+                                                       options={"precedent": {"minScore": 0.72}}))
+        self.assertNotIn("2099", key)
+
     def test_required_stops_on_partial(self):
         # required면 한쪽만 못 찾아도(PARTIAL) 멈춘다 (#143 리뷰)
         with self.assertRaises(RagContextError):

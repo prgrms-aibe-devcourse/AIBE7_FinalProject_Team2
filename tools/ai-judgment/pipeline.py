@@ -35,7 +35,7 @@ from pathlib import Path
 
 from build_prompt import InputError, build_prompt
 from case_seed_sql import DEFAULT_SOURCE_ORG, CaseSeedError, build_case_sql, resolve_sources
-from rag_context import RagContextError, RagUnavailable, build_references
+from rag_context import RagContextError, RagUnavailable, build_references, input_key
 from rag_context import option_errors as rag_option_errors
 from court_seed_sql import CourtSeedError, build_court_sql
 from check_contamination import DEFAULT_CRITERIA, aggregate, build_contamination_prompt, classify, criteria_with
@@ -570,12 +570,34 @@ def references_path(config):
     return PIPELINE_DIR / config["name"] / "references.json"
 
 
+def rag_inputs(config, state):
+    """rag 단계의 입력: (사건 입력, 원본 판결문 정보, 공소제기일, 발생일, rag 설정)."""
+    case = load_json(input_file(config, state, "case"))
+    source = load_json(input_file(config, state, "source"))
+    overrides = [{k: v for k, v in s.items() if k != "path"} for s in config["sources"]]
+    try:
+        sources = resolve_sources(source.get("sources") or [], overrides, config["finalSourceIndex"])
+    except CaseSeedError as e:
+        raise PipelineError(str(e))
+    options = {k: v for k, v in config["stages"]["rag"].items() if k != "enabled"}
+    return case, sources, config.get("indictmentDate"), config.get("incidentDate") or source.get("incidentDate"), options
+
+
+def rag_input_key(config, state):
+    case, sources, indictment_date, incident_date, options = rag_inputs(config, state)
+    return input_key(case, sources, indictment_date=indictment_date, incident_date=incident_date, options=options)
+
+
 def generation_case(config, state):
     """생성 · 선택 · 적재에 쓰는 사건 입력: rag 단계 결과가 있으면 references를 그것으로 바꾼다 (BE-54).
-    사건 입력 파일 자체는 바꾸지 않는다. rag를 끄면(enabled: false) 예전 결과가 남아 있어도 쓰지 않는다."""
+    사건 입력 파일 자체는 바꾸지 않는다. rag를 끄면(enabled: false) 예전 결과가 남아 있어도 쓰지 않는다.
+    rag 결과가 지금 입력(사건 입력 · 기준일 · 사건번호 · 설정)으로 만든 것이 아니면 멈춘다(--from rag, #143 리뷰)."""
     case = load_json(input_file(config, state, "case"))
     rag = stage_output(state, "rag") if config["stages"]["rag"]["enabled"] else {}
     if rag.get("referencesFile") and Path(rag["referencesFile"]).exists():
+        if rag.get("inputKey") and rag["inputKey"] != rag_input_key(config, state):
+            raise PipelineError("참고 자료(rag)를 만든 뒤 사건 입력 · 공소제기일 · 발생일 · 원본 판결문 정보 · rag 설정이 바뀌었습니다. "
+                                "--from rag로 참고 자료부터 다시 만드세요")
         case["references"] = load_json(rag["referencesFile"])["references"]
     return case
 
@@ -798,28 +820,20 @@ def vet_replacement(config, state, spec, log, caller):
 
 def stage_rag(config, state, log, embedder=None, runner=None):
     """생성 참고 자료(양형기준 · 유사 판례)를 RAG로 찾아 references.json에 둔다 (BE-54). 사건 입력 파일은 바꾸지 않는다."""
-    cfg = config["stages"]["rag"]
-    case = load_json(input_file(config, state, "case"))
-    source = load_json(input_file(config, state, "source"))
-    overrides = [{k: v for k, v in s.items() if k != "path"} for s in config["sources"]]
-    try:
-        sources = resolve_sources(source.get("sources") or [], overrides, config["finalSourceIndex"])
-    except CaseSeedError as e:
-        raise PipelineError(str(e))
+    case, sources, indictment_date, incident_date, options = rag_inputs(config, state)
     db = config["stages"]["load"]["db"]
     try:
         references, report = build_references(
-            case, sources, indictment_date=config.get("indictmentDate"),
-            incident_date=config.get("incidentDate") or source.get("incidentDate"),
-            options={k: v for k, v in cfg.items() if k != "enabled"}, embedder=embedder,
-            runner=runner or (lambda sql: query_db(sql, db)), log=log)
+            case, sources, indictment_date=indictment_date, incident_date=incident_date, options=options,
+            embedder=embedder, runner=runner or (lambda sql: query_db(sql, db)), log=log)
     except RagContextError as e:
         raise PipelineError(f"RAG 참고 자료 실패: {e}")
     path = references_path(config)
     write_json(path, {"_comment": "생성 프롬프트에 넣는 참고 자료 (BE-54). 비식별화한 판례 · 공개 양형기준만 담는다. 사건번호 없음.",
                       "references": references, "report": report})
     log(f"참고 자료: {path}")
-    return {"referencesFile": str(path), "report": report}
+    key = input_key(case, sources, indictment_date=indictment_date, incident_date=incident_date, options=options)
+    return {"referencesFile": str(path), "report": report, "inputKey": key}
 
 
 def stage_generate(config, state, log, caller=call):
@@ -1061,9 +1075,11 @@ def stage_load(config, state, log, apply=None):
     # 다시 만든 프롬프트가 고른 회차를 생성한 프롬프트와 같은지 확인한다. 생성 뒤에 사건 입력 · 참고 자료(references.json)가
     # 바뀌었으면 실제로 보낸 것과 다른 프롬프트가 기록되므로 멈춘다 (#143 리뷰)
     batch_file = Path(selection["runFile"]).parent.parent / "batch.json"
-    if batch_file.exists() and load_json(batch_file).get("promptSha256") != prompt_digest(prompt):
+    if not batch_file.exists():
+        raise PipelineError(f"고른 회차의 묶음 정보가 없어 프롬프트를 확인할 수 없습니다: {batch_file}. --from generate로 다시 생성하세요")
+    if load_json(batch_file).get("promptSha256") != prompt_digest(prompt):
         raise PipelineError("생성 뒤에 사건 입력 또는 참고 자료가 바뀌어 고른 회차의 프롬프트와 다릅니다. "
-                            "--from generate로 다시 생성하세요")
+                            "--from generate로 다시 생성하세요(사건 입력 · 기준일을 바꿨으면 --from rag)")
 
     parts = []
     if cfg["case"]:

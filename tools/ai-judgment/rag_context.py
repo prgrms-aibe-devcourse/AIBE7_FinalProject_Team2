@@ -19,6 +19,7 @@ required=True면 하나라도 못 만들었을 때(PARTIAL 포함) RagContextErr
 """
 
 import copy
+import hashlib
 import json
 import math
 
@@ -109,6 +110,14 @@ def query_text(case):
                 parts.append(f"{item['label']}: {item['value']}")
     text = "\n".join(p.strip() for p in parts if p and p.strip())
     return text[:QUERY_MAX_CHARS]
+
+
+def input_key(case, sources, *, indictment_date=None, incident_date=None, options=None):
+    """검색 입력의 지문(SHA-256). 검색어 · 범죄 유형 · 기준일 · 자기 사건 해시 · 설정이 같으면 같다.
+    파이프라인이 rag 결과가 지금 사건 입력에 맞는지 확인하는 데 쓴다(#143 리뷰). 사건번호는 해시로만 들어간다."""
+    at, basis = base_date(indictment_date, incident_date)
+    payload = [query_text(case), case.get("crimeType"), at, basis, sorted(own_case_hashes(sources)), options_with(options)]
+    return hashlib.sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
 
 
 def base_date(indictment_date=None, incident_date=None):
@@ -332,6 +341,10 @@ def build_references(case, sources, *, indictment_date=None, incident_date=None,
 
     references = copy.deepcopy(original)
     guideline = result.get("guideline")
+    if guideline and not result["ranges"]:
+        # 버전 행만 있고 형량범위 조각이 없으면 제목뿐인 양형기준이 된다. 못 찾은 것으로 본다 (#143 리뷰)
+        warnings.append(f"양형기준 버전 {guideline['versionName']}에 형량범위 조각이 없습니다 (R__41 적재 확인)")
+        guideline = None
     guideline_id = guideline["id"] if guideline else None
     if guideline:
         references["sentencingGuideline"] = guideline_text(category, guideline, result["ranges"], result["factors"])

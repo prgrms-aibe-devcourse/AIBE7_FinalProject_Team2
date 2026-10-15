@@ -163,7 +163,7 @@ def cmd_self(args):
     scores = []
     rows = json_row("""SELECT coalesce(json_agg(t ORDER BY t.case_group, t.id), '[]'::json) FROM (
   SELECT id, case_group, facts_summary FROM rag_precedent WHERE crime_type = 'MURDER' AND case_group IN (
-    SELECT case_group FROM rag_precedent GROUP BY case_group HAVING count(*) > 1)) t;""", db)
+    SELECT case_group FROM rag_precedent WHERE crime_type = 'MURDER' GROUP BY case_group HAVING count(*) > 1)) t;""", db)
     print(f"1) 같은 사건의 다른 판결 (그룹 안 판례 {len(rows)}건):")
     vectors = query_embedder([r["facts_summary"] for r in rows], task_type="RETRIEVAL_QUERY") if rows else []
     for row, vector in zip(rows, vectors):
