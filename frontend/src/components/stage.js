@@ -354,8 +354,8 @@ export function renderStage({ script, order, cards = {}, inputCards = [], start,
   function onKey(event) {
     if (!wrap.isConnected) { document.removeEventListener('keydown', onKey); return; }
     if (event.target.closest('input, textarea, select')) return;
-    // 보드를 클릭하면 보드가 포커스를 받는다. 입력 카드는 제출로만 넘어가니 키를 받지 않고, 다른 보드에서는 Space만 스크롤에 양보한다
-    if (event.target.closest('.board') && (stage.classList.contains('bmode') || event.key === ' ')) return;
+    // 보드를 클릭하면 보드가 포커스를 받는다. 입력 카드는 제출로만 넘어가니 이전(←)만 받고, 다른 보드에서는 Space만 스크롤에 양보한다
+    if (event.target.closest('.board') && ((stage.classList.contains('bmode') && event.key !== 'ArrowLeft') || event.key === ' ')) return;
     if (event.key === 'ArrowRight' || event.key === ' ' || event.key === 'Enter') {
       if (event.target.closest('button') && event.key !== 'ArrowRight') return; // 버튼 위의 Space · Enter는 버튼이 처리한다
       event.preventDefault();

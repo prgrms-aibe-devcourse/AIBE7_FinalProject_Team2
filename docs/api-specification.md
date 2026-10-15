@@ -27,6 +27,8 @@
 | v0.23 | 2026-10-14 | 검수 조회 API 구현 반영 (BE-41, V16) — A-8 `reviewStatus` · `reviewedBy` · `reviewedAt` · `reviewNote`의 출처 명시(검수 기록이 없으면 공개 = 승인, 아니면 대기), 8-3 #4 · #5 확정(검수 칸은 `judgment`, 검수자는 관리자 ID). 형식 변경 없음 |
 | v0.24 | 2026-10-14 | 승인 · 반려 구현 반영 (BE-42) — A-9: 검수 기록 없이 공개돼 있던 판결은 내릴 때 `APPROVED`로 채운다, AI 후보는 `ai_generation` 검수 칸도 함께 맞춘다. A-10: `reason` 앞뒤 공백 제거, 교체로 내려간 승인 후보도 반려 가능. 형식 변경 없음 |
 | v0.25 | 2026-10-14 | 사건 수정 · 축 확정 · 공개 구현 반영 (BE-43) — A-11 본문은 필드 맵으로 받아 "보내지 않음" · `null`을 나눈다, 제목 유니크 위반은 DB에서 나도 `DUPLICATE_TITLE`, A-11 ~ A-13 감사 로그 내용 명시, A-13 공개 조건은 A-6 `publishReadiness`와 같은 판정. #133 리뷰: A-11 문자열 앞뒤 공백 제거, `thumbnailUrl`은 http(s) · 서비스 경로만. 형식 변경 없음 |
+| v0.26 | 2026-10-15 | 성향 이미지 번호 01 ~ 32 통일 반영 (COMMON-31) — 9-2 #4: `imageUrl`의 번호는 유형 번호가 아니라 성향 이미지 번호표의 **이미지 번호**(내로 `01 ~ 16` · 남불 `17 ~ 32`, 유형마다 화면에 보이는 기본 캐릭터 하나)다. 기본이 남불인 8개 유형(02 · 05 · 07 · 08 · 10 · 11 · 13 · 15)은 값이 `{유형 번호 + 16}.webp`로 바뀐다(예: ISTJ `02.webp` → `18.webp`). 아직 이미지 · 시드 `image_url`이 없어 공유된 주소는 없다. 형식 변경 없음 |
+| v0.27 | 2026-10-15 | 사건 목록 진행 상태 배지 반영 (FE-19, REQ-010 · FR-1-6) — API 1 카드에 **`myStatus`**(`null` / `IN_PROGRESS` / `COMPLETED`)를 제안에서 정식 필드로 올림. 기준은 API 2 · 3과 같은 최신 회차, 쿠키는 읽기만 함(발급 안 함), 캐시 시 제외. 필드 추가만이라 기존 클라이언트와 호환. 리뷰 반영: **HTTP 캐시 규칙** 추가(사용자마다 다른 응답이라 `public` 금지, 켤 때는 `private` + `Vary: Cookie`, 지금은 Spring Security 기본 `no-store`를 테스트로 고정) |
 
 ---
 
@@ -170,7 +172,7 @@ json
 json
 
 ```json
-{  "summary": { "total": 9, "byCrimeType": { "MURDER": 3, "FRAUD": 3, "INJURY": 3 } },  "cases": [    {      "caseId": 1,      "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",      "crimeType": "MURDER",      "crimeCategoryLabel": "생명범죄",      "shortIntro": "빌린 돈 문제로 찾아온 지인과 다투다 흉기로 살해한 사건입니다.",      "keywords": ["돈 문제", "집으로 찾아옴"],      "difficulty": "HIGH",      "estimatedMinutes": 15,      "participantCount": 1284,      "thumbnailUrl": null    }  ]}
+{  "summary": { "total": 9, "byCrimeType": { "MURDER": 3, "FRAUD": 3, "INJURY": 3 } },  "cases": [    {      "caseId": 1,      "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",      "crimeType": "MURDER",      "crimeCategoryLabel": "생명범죄",      "shortIntro": "빌린 돈 문제로 찾아온 지인과 다투다 흉기로 살해한 사건입니다.",      "keywords": ["돈 문제", "집으로 찾아옴"],      "difficulty": "HIGH",      "estimatedMinutes": 15,      "participantCount": 1284,      "thumbnailUrl": null,      "myStatus": "IN_PROGRESS"    }  ]}
 ```
 
 - `PUBLISHED` 사건만. `summary`는 필터와 관계없이 전체 기준(칩 옆 건수 표시용).
@@ -178,7 +180,18 @@ json
 - `thumbnailUrl`: `legal_case.thumbnail_url`. 없으면 `null`이고, 화면은 범죄 유형별 기본 이미지를 쓴다.
 - `participantCount`: `attempt_no = 1`이고 `COMPLETED`인 체험 수.
 - 정렬: `published_at` 최신순 고정 (정렬 선택은 이후 단계, REQ-009).
-- (확장, REQ-010) 쿠키가 있으면 카드마다 `myStatus`(`null` / `IN_PROGRESS` / `COMPLETED`)를 넣어 배지를 표시할 수 있다.
+- (v0.27, FE-19 · REQ-010) `myStatus`: 이 사건에 대한 **내 최신 회차** 체험 상태를 목록 배지용 두 값으로 묶은 것.
+
+  | 값 | 언제 | 화면 (S-02) |
+  | --- | --- | --- |
+  | `null` | 익명 ID 쿠키가 없음, 쿠키 값이 UUID 형식이 아님(조작 · 손상), DB에 없는 익명 ID, 이 사건 체험 전 | 배지 없음 · "체험 시작" |
+  | `IN_PROGRESS` | `STARTED` ~ `AI_REVEALED` | "진행 중" · "이어서 하기" |
+  | `COMPLETED` | `COMPLETED` | "완료" · "결과 다시 보기" |
+
+  - 회차 기준은 API 2 · 3과 같은 "사건마다 가장 최근 회차"다. 그래서 배지와, 버튼을 눌러 API 2가 돌려주는 상태로 이동하는 화면(1-6)이 어긋나지 않는다. 세부 상태(7단계)는 목록에 내보내지 않는다.
+  - API 1은 쿠키를 **읽기만** 하고 새로 발급하지 않는다(발급은 API 2 · P-2, 1-2).
+  - 사용자마다 다른 값이라, 사건 목록을 캐시할 때(6.5.3)는 이 필드를 빼고 공통 부분만 캐시한 뒤 요청마다 붙인다(기술 스택 2장 "Redis 운영 구성").
+  - **HTTP 캐시도 같다.** 지금은 Spring Security 기본 헤더(`Cache-Control: no-cache, no-store, max-age=0, must-revalidate`)라 브라우저 · Nginx · CDN 어디에도 저장되지 않는다(`CaseListApiTest`가 고정). API 1에 HTTP 캐시를 켜려면 `public`이 아니라 **`Cache-Control: private` + `Vary: Cookie`**로 두고, Nginx · CDN에서 이 경로를 공유 캐시하지 않는다.
 
 ---
 
@@ -1171,5 +1184,5 @@ json
 | 1 | 목 API와 달라지는 점 | 응답에서 `typeCode` 제거(`type.shareId`로 구분), 문항의 `a` · `b`(글자 포함) → `optionA` · `optionB`(문장만), 유형의 `daily` · `verdict` → `dailyDescription` · `verdictDescription`, `character`는 `NAERO` · `NAMBUL` 코드, 결과에 `testedAt` 추가, 내 결과 없음은 `null` 대신 404 | A 김해송 (목 → 실제 API 전환) |
 | 2 | 마이페이지 경로 | `GET /my-page` 하나로 묶는다(화면 한 번 진입에 한 번 호출) | A |
 | 3 | `experiences` 범위 | 사건마다 최근 회차 하나. 회차별 전체 이력이 필요하면 추가 | A |
-| 4 | 이미지 경로 | `/images/characters/personality/{번호}.webp`, 번호는 성향 이미지 번호표 기준. **번호는 유형에 고정**(공유 미리보기 · 캐시가 깨지지 않게, #121 리뷰) | A |
+| 4 | 이미지 경로 | `/images/characters/personality/{이미지 번호}.webp`, 이미지 번호(`01 ~ 32`)는 성향 이미지 번호표 기준으로 **유형마다 화면에 보이는 이미지 하나**(기본 캐릭터, 예: ISTJ는 남불 `18.webp`). **한 번 정한 번호는 바꾸지 않는다**(공유 미리보기 · 캐시가 깨지지 않게, #121 리뷰) | A |
 | 5 | `shareId` 값 | 16개를 시드에 고정값으로 넣는다(바꾸면 공유한 링크가 깨진다). 목 API의 해시 값과는 다르다 | B (시드) |

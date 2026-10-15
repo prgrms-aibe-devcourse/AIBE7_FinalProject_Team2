@@ -128,7 +128,9 @@ export async function renderReviewPage(container, { caseId, caseHeader, api, nav
     root.replaceChildren(header, layout);
   }
   function draw(data, moveFocus = false) {
-    const script = SCRIPTS[caseId];
+    // 사건 번호는 DB마다 다를 수 있어 번호만으로 고르지 않는다. 대본의 제목이 사건 제목과 같을 때만 무대를 쓴다(S-03과 같은 규칙)
+    const candidate = SCRIPTS[caseId];
+    const script = candidate?.title === caseHeader.title ? candidate : undefined;
     if (script) { drawStage(data, script); return; }
     const current = data.openStep ?? 4;
     const header = element('header', 'case-topbar');
