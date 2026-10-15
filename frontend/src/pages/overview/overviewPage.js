@@ -55,7 +55,7 @@ export const sentPreJudgment = (caseId) => readSent()[caseId] ?? null;
 function rememberSent(caseId, label) { try { localStorage.setItem(SENT_KEY, JSON.stringify({ ...readSent(), [caseId]: label })); } catch { /* 저장소를 못 쓰면 엽서에 이름만 빠진다 */ } }
 
 // 모든 사건 1막의 첫 대사(내로가 말을 건다). 사건마다의 다음 대사는 대본이 잇는다
-const INTRO_STEP = { say: 'naero', text: '이 사건, 궁금해요? 우리가 차근차근 설명해 줄게요!', focus: 'head' };
+const INTRO_STEP = { say: 'naero', text: '오늘 신문에 실린 사건이에요. 기사에 나온 내용만 같이 읽어 볼게요.', focus: 'head' };
 
 // 1 · 2막 무대(흐름 목업). 2막 보드는 사전 판단 폼이고, 폼은 API 4 응답(형량 구간)이 오면 setOverview로 채운다.
 // parked: S-20(체험 전) — 지면만 보이고 캐릭터 · 대사는 stage.release()로 시작한다. earRight: 지면 오른쪽 귀(S-20 "이어서 하기")
@@ -134,7 +134,7 @@ export function caseStage({ caseId, api, navigate, script, info, paper = script.
     actions.append(go);
     const written = element('div', 'postcard-sent');
     written.append(element('p', 'postcard-sent-q', '이 사건, 어느 정도의 형량이 맞다고 생각하나요?'),
-      element('p', 'postcard-sent-a', sent ?? '(이 브라우저에는 보낸 판단이 적혀 있지 않아요)'));
+      element('p', sent ? 'postcard-sent-a' : 'postcard-sent-none', sent ?? '이 브라우저에는 보낸 판단이 적혀 있지 않아요.'));
     card.append(postcardHead(), written, element('p', 'guide-box', '이 엽서는 이미 보냈어요. 보낸 판단은 바꿀 수 없어요. 남긴 단계부터 이어서 볼게요.'), actions);
     cards.preJudgment = card;
     stage.refresh('preJudgment');

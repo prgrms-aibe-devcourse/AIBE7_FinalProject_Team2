@@ -515,7 +515,8 @@
 .stage-wrap.paper-mode .board .postcard-head h2 { margin: 0 0 4px; font: 900 22px/1.3 var(--font-heading); letter-spacing: .08em; color: var(--color-heading); }
 .stage-wrap.paper-mode .board .postcard-head p { margin: 0; color: var(--color-muted); font-size: 13px; }
 .stage-wrap.paper-mode .board .postcard-stamp { position: relative; flex: none; display: grid; place-items: center; width: 64px; height: 76px; border: 3px dotted var(--color-label); background: var(--color-paper); color: var(--color-label); font: 900 13px/1.15 var(--font-heading); text-align: center; transform: rotate(3deg); }
-.stage-wrap.paper-mode .board .postcard-stamp::after { content: ''; position: absolute; left: -26px; top: 18px; width: 58px; height: 58px; border: 2px solid color-mix(in srgb, var(--color-accent) 55%, transparent); border-radius: 50%; }
+.stage-wrap.paper-mode .board .postcard-stamp { isolation: isolate; }
+.stage-wrap.paper-mode .board .postcard-stamp::after { content: ''; position: absolute; z-index: -1; left: -34px; top: 22px; width: 58px; height: 58px; border: 2px solid color-mix(in srgb, var(--color-accent) 45%, transparent); border-radius: 50%; } /* 소인 원은 우표 글자 뒤로, 왼쪽 가장자리에만 걸친다 */
 .stage-wrap.paper-mode .board :is(.guide-box, .pre-judgment-form) { margin: 0; padding-left: 0; padding-right: 0; }
 .stage-wrap.paper-mode .board .guide-box { margin-bottom: 14px; padding: 10px 14px; border-left: 0; font-size: 14px; } /* 엽서 안에서는 옆 띠 없이 */
 .stage-wrap.paper-mode .board .pre-judgment-form { padding-bottom: 0; }
@@ -655,6 +656,7 @@
 /* 이미 보낸 엽서: 질문과 보낸 판단을 손글씨로 */
 .stage-wrap.paper-mode .board .postcard-sent { margin-bottom: 14px; padding: 6px 4px 12px; border-bottom: 1px dashed var(--color-border-strong); }
 .stage-wrap.paper-mode .board .postcard-sent-q { margin: 0 0 6px; font: 400 20px/1.4 var(--font-hand); color: var(--color-muted); }
+.stage-wrap.paper-mode .board .postcard-sent-none { margin: 0; color: var(--color-muted); font-size: 14px; } /* 시스템 안내는 손글씨(사용자 답) 대신 본문체로 */
 .stage-wrap.paper-mode .board .postcard-sent-a { margin: 0; font: 400 30px/1.3 var(--font-hand); color: var(--color-desk-note-pen); }
 
 /* 모바일 읽기 보정(FE-32 디자인 점검): 대사창 · 조작 줄은 뒤 본문이 비치지 않게 불투명, 제출 줄은 엽서 아래에 고정 */

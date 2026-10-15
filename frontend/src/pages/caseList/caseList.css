@@ -26,7 +26,7 @@
 /* ── 제호 ── */
 .case-list-page .info-row { min-height: 40px; display: flex; align-items: center; justify-content: space-between; gap: 16px; font-size: var(--text-caption); color: var(--color-muted); }
 .case-list-page .info-links { display: flex; gap: 20px; }
-.case-list-page .paper-link { min-height: 40px; padding: 0; border: 0; background: transparent; color: inherit; font-size: inherit; }
+.case-list-page .paper-link { min-height: 44px; min-width: 44px; padding: 0; border: 0; background: transparent; color: inherit; font-size: inherit; }
 @media (hover: hover) and (pointer: fine) { .case-list-page .paper-link:hover { text-decoration: underline; text-underline-offset: 4px; } }
 .case-list-page .mast { display: grid; grid-template-columns: 190px minmax(0, 1fr) 190px; align-items: center; gap: 24px; padding: 10px 0 18px; }
 .case-list-page .ear { padding: 10px 12px; border: 1px solid var(--color-border-strong); font-size: var(--text-caption); line-height: 1.55; color: var(--color-muted); }
@@ -137,7 +137,7 @@
 /* ── 모바일: 사진 → 머리기사 → 추천 사건 → 다른 사건 ── */
 @media (max-width: 768px) {
   .case-list-page .paper { width: 100%; margin: 0; padding: 0 18px; box-shadow: none; }
-  .case-list-page .info-row { flex-wrap: wrap; gap: 0 10px; font-size: 11px; }
+  .case-list-page .info-row { flex-wrap: wrap; gap: 0 10px; font-size: 12px; }
   .case-list-page .info-links { margin-left: auto; gap: 12px; }
   .case-list-page .mast { grid-template-columns: 1fr; padding: 6px 0 14px; }
   .case-list-page .ear { display: none; }
@@ -177,7 +177,7 @@
 .case-list-page .paper-tip img { width: 40px; height: 40px; flex: none; border-radius: 50%; background: var(--color-stage-face); object-fit: cover; object-position: top; }
 .case-list-page .paper-tip-text { flex: 1; margin: 0; font-size: var(--text-small); font-weight: 600; line-height: 1.5; word-break: keep-all; }
 .case-list-page .paper-tip-text b { display: block; color: var(--color-label); font-size: var(--text-caption); }
-.case-list-page .paper-tip-back { min-height: 40px; flex: none; padding: 0 14px; border: 1px solid var(--color-border-strong); border-radius: 999px; background: var(--color-paper); color: var(--color-text); font-size: var(--text-caption); font-weight: 700; white-space: nowrap; cursor: pointer; }
+.case-list-page .paper-tip-back { min-height: 44px; flex: none; padding: 0 14px; border: 1px solid var(--color-border-strong); border-radius: 999px; background: var(--color-paper); color: var(--color-text); font-size: var(--text-caption); font-weight: 700; white-space: nowrap; cursor: pointer; }
 @media (hover: hover) and (pointer: fine) { .case-list-page .paper-tip-back:hover { border-color: var(--color-text); } }
 
 /* 기사 고르기: 마우스를 올리면 기사가 살짝 밝아지고 "이 사건 펼쳐 보기"가 뜬다. 고르면 지면이 한 장 넘어간다(utils/pageTurn.js) */

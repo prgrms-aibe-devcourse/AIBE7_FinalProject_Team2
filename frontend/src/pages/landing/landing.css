@@ -36,7 +36,8 @@
 .landing-page :where(.desk-world, .desk-menu) :where(span, strong, em, b, small) { display: block; }
 
 /* 헤더: 책상 위에서는 네이비 띠 */
-.landing-page .site-header { background: var(--color-banner-bg); border-bottom: 0; padding: 4px 32px; }
+.landing-page .site-header { background: var(--color-banner-bg); border-bottom: 0; padding: 4px 32px; transition: opacity .3s ease-out; }
+.landing-page:has(.is-lifting) .site-header { opacity: 0; } /* 신문을 집어 들어 확대될 때 사이트 헤더는 먼저 사라진다(화면이 신문으로 가득 차게) */
 .landing-page .site-header .logo-button { color: var(--color-banner-text); font-size: 22px; }
 .landing-page .site-header .logo-button .law { display: inline; color: var(--color-range-fill); }
 .landing-page .nav-button { color: var(--color-banner-muted); font-size: var(--text-small); }

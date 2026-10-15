@@ -163,10 +163,10 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
       ? earButton(`${label} ▶`, `사건 ${String(data.caseId).padStart(2, '0')} · ${data.crimeCategoryLabel}`, () => begin(resume), 'ear-right ear-go') : null;
     // 진행 중인 체험을 "시작하기"로 열면 내로가 먼저 묻는다: 이어서 할지, 1막부터 새로 볼지(완료한 사건은 묻지 않고 다시 보기)
     const prompt = data.myStatus === 'IN_PROGRESS' ? {
-      text: '진행 중인 체험이 있어요. 이어서 할래요?',
+      text: '진행 중인 체험이 있어요. 이어서 할래요? 1막부터 다시 봐도 보낸 판단은 그대로예요.',
       choices: [
         { label: '이어서 하기', primary: true, action: () => chosen?.('resume') },
-        { label: '새로 하기', action: () => chosen?.('again') },
+        { label: '1막부터 다시 보기', action: () => chosen?.('again') },
       ],
     } : undefined;
     let chosen = null;
