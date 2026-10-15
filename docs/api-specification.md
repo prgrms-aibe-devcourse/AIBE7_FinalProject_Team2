@@ -27,6 +27,7 @@
 | v0.23 | 2026-10-14 | 검수 조회 API 구현 반영 (BE-41, V16) — A-8 `reviewStatus` · `reviewedBy` · `reviewedAt` · `reviewNote`의 출처 명시(검수 기록이 없으면 공개 = 승인, 아니면 대기), 8-3 #4 · #5 확정(검수 칸은 `judgment`, 검수자는 관리자 ID). 형식 변경 없음 |
 | v0.24 | 2026-10-14 | 승인 · 반려 구현 반영 (BE-42) — A-9: 검수 기록 없이 공개돼 있던 판결은 내릴 때 `APPROVED`로 채운다, AI 후보는 `ai_generation` 검수 칸도 함께 맞춘다. A-10: `reason` 앞뒤 공백 제거, 교체로 내려간 승인 후보도 반려 가능. 형식 변경 없음 |
 | v0.25 | 2026-10-14 | 사건 수정 · 축 확정 · 공개 구현 반영 (BE-43) — A-11 본문은 필드 맵으로 받아 "보내지 않음" · `null`을 나눈다, 제목 유니크 위반은 DB에서 나도 `DUPLICATE_TITLE`, A-11 ~ A-13 감사 로그 내용 명시, A-13 공개 조건은 A-6 `publishReadiness`와 같은 판정. #133 리뷰: A-11 문자열 앞뒤 공백 제거, `thumbnailUrl`은 http(s) · 서비스 경로만. 형식 변경 없음 |
+| v0.26 | 2026-10-14 | 사건 목록 진행 상태 배지 반영 (FE-19, REQ-010 · FR-1-6) — API 1 카드에 **`myStatus`**(`null` / `IN_PROGRESS` / `COMPLETED`)를 제안에서 정식 필드로 올림. 기준은 API 2 · 3과 같은 최신 회차, 쿠키는 읽기만 함(발급 안 함), 캐시 시 제외. 필드 추가만이라 기존 클라이언트와 호환 |
 
 ---
 
@@ -170,7 +171,7 @@ json
 json
 
 ```json
-{  "summary": { "total": 9, "byCrimeType": { "MURDER": 3, "FRAUD": 3, "INJURY": 3 } },  "cases": [    {      "caseId": 1,      "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",      "crimeType": "MURDER",      "crimeCategoryLabel": "생명범죄",      "shortIntro": "빌린 돈 문제로 찾아온 지인과 다투다 흉기로 살해한 사건입니다.",      "keywords": ["돈 문제", "집으로 찾아옴"],      "difficulty": "HIGH",      "estimatedMinutes": 15,      "participantCount": 1284,      "thumbnailUrl": null    }  ]}
+{  "summary": { "total": 9, "byCrimeType": { "MURDER": 3, "FRAUD": 3, "INJURY": 3 } },  "cases": [    {      "caseId": 1,      "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",      "crimeType": "MURDER",      "crimeCategoryLabel": "생명범죄",      "shortIntro": "빌린 돈 문제로 찾아온 지인과 다투다 흉기로 살해한 사건입니다.",      "keywords": ["돈 문제", "집으로 찾아옴"],      "difficulty": "HIGH",      "estimatedMinutes": 15,      "participantCount": 1284,      "thumbnailUrl": null,      "myStatus": "IN_PROGRESS"    }  ]}
 ```
 
 - `PUBLISHED` 사건만. `summary`는 필터와 관계없이 전체 기준(칩 옆 건수 표시용).
@@ -178,7 +179,17 @@ json
 - `thumbnailUrl`: `legal_case.thumbnail_url`. 없으면 `null`이고, 화면은 범죄 유형별 기본 이미지를 쓴다.
 - `participantCount`: `attempt_no = 1`이고 `COMPLETED`인 체험 수.
 - 정렬: `published_at` 최신순 고정 (정렬 선택은 이후 단계, REQ-009).
-- (확장, REQ-010) 쿠키가 있으면 카드마다 `myStatus`(`null` / `IN_PROGRESS` / `COMPLETED`)를 넣어 배지를 표시할 수 있다.
+- (v0.26, FE-19 · REQ-010) `myStatus`: 이 사건에 대한 **내 최신 회차** 체험 상태를 목록 배지용 두 값으로 묶은 것.
+
+  | 값 | 언제 | 화면 (S-02) |
+  | --- | --- | --- |
+  | `null` | 익명 ID 쿠키가 없음, 쿠키 값이 UUID 형식이 아님(조작 · 손상), DB에 없는 익명 ID, 이 사건 체험 전 | 배지 없음 · "체험 시작" |
+  | `IN_PROGRESS` | `STARTED` ~ `AI_REVEALED` | "진행 중" · "이어서 하기" |
+  | `COMPLETED` | `COMPLETED` | "완료" · "결과 다시 보기" |
+
+  - 회차 기준은 API 2 · 3과 같은 "사건마다 가장 최근 회차"다. 그래서 배지와, 버튼을 눌러 API 2가 돌려주는 상태로 이동하는 화면(1-6)이 어긋나지 않는다. 세부 상태(7단계)는 목록에 내보내지 않는다.
+  - API 1은 쿠키를 **읽기만** 하고 새로 발급하지 않는다(발급은 API 2 · P-2, 1-2).
+  - 사용자마다 다른 값이라, 사건 목록을 캐시할 때(6.5.3)는 이 필드를 빼고 공통 부분만 캐시한 뒤 요청마다 붙인다(기술 스택 2장 "Redis 운영 구성").
 
 ---
 
