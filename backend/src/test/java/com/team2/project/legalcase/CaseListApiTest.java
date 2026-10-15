@@ -1,5 +1,6 @@
 package com.team2.project.legalcase;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -173,6 +174,20 @@ class CaseListApiTest extends ApiIntegrationTest {
 		mockMvc.perform(get("/api/v1/cases").cookie(new Cookie(COOKIE, "not-a-uuid")))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath(CASE_BY_ID.formatted(caseId) + ".myStatus").value((Object) null));
+	}
+
+	@Test
+	void getCases_isNotCacheableBecauseMyStatusDiffersPerUser() throws Exception {
+		// myStatus가 사용자마다 달라 응답을 브라우저 · Nginx · CDN이 저장하면 다른 사람의 배지가 보일 수 있다.
+		// 지금은 Spring Security 기본 헤더(no-store)가 막는다. 6.5.3에서 HTTP 캐시를 켜려면 이 테스트를 바꾸기 전에
+		// private + Vary: Cookie로 바꾸고, 서버 캐시는 myStatus를 뺀 공통 부분만 둔다 (API 명세 API 1, FE-19 리뷰)
+		UUID me = UUID.randomUUID();
+		long caseId = insertCase("MURDER", "PUBLISHED");
+		insertExperience(me, caseId, 1, "REVIEWING");
+
+		mockMvc.perform(get("/api/v1/cases").cookie(new Cookie(COOKIE, me.toString())))
+				.andExpect(status().isOk())
+				.andExpect(header().string(HttpHeaders.CACHE_CONTROL, containsString("no-store")));
 	}
 
 	@Test

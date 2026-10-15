@@ -30,7 +30,8 @@ public record CaseListResponse(Summary summary, List<CaseItem> cases) {
 
 	/**
 	 * @param myStatus 이 사건에 대한 내 최신 회차 상태. 익명 ID 쿠키가 없거나 체험 전이면 null.
-	 *                 사용자마다 다른 값이라 사건 목록을 캐시할 때(6.5.3)는 이 필드를 빼고 요청마다 붙인다 (기술 스택 2장)
+	 *                 사용자마다 다른 값이라 사건 목록을 캐시할 때(6.5.3)는 이 필드를 빼고 요청마다 붙인다 (기술 스택 2장).
+	 *                 HTTP 캐시를 켤 때도 public 금지 — private + Vary: Cookie (API 명세 API 1, CaseListApiTest가 no-store를 고정)
 	 */
 	public record CaseItem(
 			Long caseId,
