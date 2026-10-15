@@ -259,6 +259,7 @@ h1 { font-family: var(--font-heading); color: var(--color-heading); letter-spaci
 .scroll-area { position: relative; display: flex; flex-direction: column; min-height: 0; }
 .scroll-body { flex: 1; min-height: 0; overflow: auto; scrollbar-width: none; overscroll-behavior: contain; }
 .scroll-body::-webkit-scrollbar { display: none; }
+.scroll-body:focus-visible { outline: 3px solid var(--color-focus); outline-offset: -3px; border-radius: 4px; }
 .scroll-thumb { position: absolute; top: 0; right: 2px; width: 5px; border-radius: 3px; background: color-mix(in srgb, var(--color-text) 38%, transparent); opacity: 0; pointer-events: none; transition: opacity .4s ease-out; }
 .scroll-area.scrolling .scroll-thumb { opacity: 1; transition-duration: .1s; }
 
