@@ -345,7 +345,7 @@ class SqlTest(unittest.TestCase):
         law, lbox = [r for r in sql.split("INSERT INTO")[1:]]
         self.assertIn("false, NULL, ", law)
         self.assertIn("true, 'LBox Open 사용 불가", lbox)
-        self.assertIn("사용 보류 1건: 출처 LBOX", sql)
+        self.assertIn("사용 보류 1건: 출처별 LBOX · 판례별 0건", sql)
 
     def test_hold_reason_precedentAndSourceHoldsCombine(self):
         with mock.patch.dict(rag_store.PRECEDENT_HOLDS, {"LAW_GO_KR-1": "무죄", "LBOX-2": "무죄"}, clear=True):
@@ -368,6 +368,8 @@ class SqlTest(unittest.TestCase):
         self.assertNotIn("sentencing_guideline", sql)  # 양형기준 미상 → guideline_id NULL
         # 버전은 검색할 때 발생일로 정한다(BE-54). 옛 참고 값은 빼고 기준 종류만 남긴다
         self.assertNotIn("guidelineByIncidentDate", sql)
+        # 머리말은 실제 행 기준: LBox 행이 없으면 출처 보류도 없다 (비공개 #18 리뷰)
+        self.assertIn("사용 보류 0건: 출처별 없음 · 판례별 0건", sql)
         self.assertIn('"guidelineBasis": "INCIDENT_DATE"', sql)
 
     def test_load_holds_validatesFormat(self):

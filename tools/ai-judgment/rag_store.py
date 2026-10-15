@@ -510,11 +510,14 @@ def build_sql(out_dir, merge_threshold=GROUP_MERGE_SCORE, candidates=None):
         print(f"같은 사건으로 묶음 (요약 유사도 {score}): {a} · {b}", file=sys.stderr)
     rows = [insert_sql(precedent, embedding) for precedent, embedding in pairs]
     held = sum(1 for precedent, _ in pairs if hold_reason(precedent))
+    # 머리말에는 설정값이 아니라 실제로 보류된 행을 센다 (LBox 행이 없는데 "출처 LBOX"로 찍히지 않게, 비공개 #18 리뷰)
+    held_sources = sorted({p["source"] for p, _ in pairs if SOURCE_HOLDS.get(p["source"])})
+    held_each = sum(1 for p, _ in pairs if PRECEDENT_HOLDS.get(p["key"]))
     header = [
         "-- R__40_rag_precedent.sql — AI 판결 RAG 판례 저장소 (BE-51). 공개 저장소 tools/ai-judgment/rag_store.py sql 출력",
         "-- 손으로 고치지 않는다. 판례를 바꾸려면 build · embed · sql을 다시 실행한다",
         "-- 파일이 바뀌면 Flyway가 다시 실행해 rag_precedent를 통째로 바꾼다 (다른 테이블은 이 표를 참조하지 않는다)",
-        f"-- 판례 {len(rows)}건 (사용 보류 {held}건: 출처 {', '.join(sorted(SOURCE_HOLDS)) or '없음'} · 판례별 {len(PRECEDENT_HOLDS)}건). "
+        f"-- 판례 {len(rows)}건 (사용 보류 {held}건: 출처별 {', '.join(held_sources) or '없음'} · 판례별 {held_each}건). "
         "사람 확인 없이 전부 넣었다(팀 결정 2026-10-10, flags.verified = false)",
         "",
         "DELETE FROM rag_precedent;",
