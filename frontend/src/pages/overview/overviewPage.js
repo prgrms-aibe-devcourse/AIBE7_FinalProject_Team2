@@ -1,4 +1,9 @@
 import { renderProgressSidebar } from '../review/progressSidebar.js';
+import { renderStage } from '../../components/stage.js';
+import case1Script from '../../content/case-1/script.json';
+
+// 대본이 있는 사건은 1 · 2막 무대로 진행한다(REQ-089). 대본이 없으면 MVP 화면 그대로
+const SCRIPTS = { 1: case1Script };
 
 // S-03 사건 개요 · 사전 판단
 export async function renderOverviewPage(container, { caseId, api, navigate }) {
@@ -116,11 +121,48 @@ export async function renderOverviewPage(container, { caseId, api, navigate }) {
       if (checked) submit(Number(checked.value), submitButton, notice);
     });
 
+    // 사건 번호(legal_case.id)는 DB마다 다를 수 있어 번호만으로 고르지 않는다. 대본의 제목이 API 4 제목과 같을 때만 무대를 쓴다
+    const candidate = SCRIPTS[caseId];
+    const script = candidate?.title === info.title ? candidate : undefined;
+    if (script) {
+      // 무대가 주인공이다: 진행 표시는 막 칩이 맡고, 제목은 읽기 도구용으로만 남긴다
+      root.classList.add('has-stage');
+      main.firstChild.classList.add('visually-hidden');
+      const preJudgment = element('div', 'stage-input');
+      preJudgment.append(guide, form);
+      main.append(renderStage({ script, order: ['1', '2'], cards: { news: newsCard(script, info), preJudgment }, inputCards: ['preJudgment'] }));
+      const layout = element('main', 'review-layout');
+      layout.append(main);
+      root.replaceChildren(header, layout);
+      return;
+    }
     main.append(overview, guide, form);
     const layout = element('main', 'review-layout');
     layout.append(main);
     renderProgressSidebar(layout, { lastReviewedStep: 0, openStep: 1 });
     root.replaceChildren(header, layout);
+  }
+  // 1막 카드: 신문 기사 모양(지면 제목 · 부제 · 재연 일러스트 · 첫 단락 + 죄명 · 범죄 분류)
+  function newsCard({ news, photo }, info) {
+    const card = element('article', 'news-card');
+    card.append(element('p', 'news-desk', news.desk), element('h2', '', news.headline), element('p', 'news-deck', news.deck));
+    if (photo) {
+      const figure = element('figure');
+      const image = element('img');
+      image.src = photo;
+      image.alt = '';
+      image.addEventListener('error', () => figure.remove(), { once: true });
+      figure.append(image, element('figcaption', '', '사건 이해를 돕기 위한 재연 일러스트'));
+      card.append(figure);
+    }
+    const facts = element('dl');
+    [['죄명', info.chargeName], ['범죄 분류', info.crimeCategoryLabel]].forEach(([label, value]) => {
+      const row = element('div');
+      row.append(element('dt', '', label), element('dd', '', value));
+      facts.append(row);
+    });
+    card.append(element('p', 'news-lead', news.lead), facts);
+    return card;
   }
   async function load() {
     if (loading || !active()) return;
