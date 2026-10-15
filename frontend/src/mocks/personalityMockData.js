@@ -229,11 +229,18 @@ export const QUESTIONS = [
   }
 ];
 
-// 이미지 번호(`personality/{번호}.webp`)는 유형에 고정한다. 순서가 바뀌어도 번호는 바꾸지 않는다 (docs/character/personality-image-numbers.md)
-export const IMAGE_NUMBERS = {
+// 유형 번호(01 ~ 16). 순서가 바뀌어도 번호는 바꾸지 않는다 (docs/character/personality-image-numbers.md)
+export const TYPE_NUMBERS = {
   ESTJ: 1, ISTJ: 2, ESTP: 3, ENTJ: 4, ESFJ: 5, ISFJ: 6, INTJ: 7, ISTP: 8,
   ENTP: 9, ESFP: 10, ENFJ: 11, INFJ: 12, INTP: 13, ISFP: 14, ENFP: 15, INFP: 16,
 };
+
+// 이미지 번호(`personality/{번호}.webp`, 01 ~ 32)는 캐릭터별 대역이다. 내로 01 ~ 16 · 남불 17 ~ 32, 이미지 번호 = 유형 번호 + 16 × (내로 0 · 남불 1).
+// 한 유형에는 이미지 하나만 보여 준다. 지금은 유형의 기본 캐릭터(TYPES의 character)를 하드코딩으로 쓴다. 선택 방식(사용자 선택 · 무작위)이 생기면 이 함수만 바꾼다
+const IMAGE_BAND = { NAERO: 0, NAMBUL: 16 };
+export function imageNumberOf(code) {
+  return TYPE_NUMBERS[code] + IMAGE_BAND[TYPES[code].character];
+}
 
 // 16유형. character = NAERO(내로) · NAMBUL(남불) 코드값(화면 이름은 utils/personalityAxes.js). tolerance = 관용 지수(I · N · F · P 글자 수), meme = 결과 카드 문구, scene = 밈 장면(이미지 생성용 설명)
 export const TYPES = {
