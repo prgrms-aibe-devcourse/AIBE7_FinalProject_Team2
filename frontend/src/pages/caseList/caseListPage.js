@@ -30,6 +30,14 @@ const TYPE_NOTES = {
   INJURY: '[알아두기] 폭행은 사람의 몸에 힘을 가하는 것만으로 성립하고, 그로 인해 건강을 해친 결과가 생기면 상해가 문제 됩니다. 어떤 죄가 적용되는지는 사건 기록의 적용 법률 단계에서 공개됩니다.',
 };
 const RECORD_NOTE = '사건에 어떤 사정이 있었는지는 체험을 시작하면 사건 기록에서 한 단계씩 확인할 수 있습니다.';
+// 진행 상태 배지 · 버튼 문구 (FE-19, REQ-010 · FR-1-6). API 1의 myStatus 기준, 체험 전(null)이면 배지 없이 "체험 시작".
+// 버튼을 누르면 어느 경우든 API 2를 부르고, 응답 상태(screenByStatus)로 이어서 볼 화면이 정해진다 — 문구만 상태에 맞춘다.
+const STATUS_VIEW = {
+  IN_PROGRESS: { badge: '진행 중', tone: 'active', action: '이어서 하기', failText: '사건을 열지 못했어요. 잠시 후 다시 시도해 주세요.' },
+  COMPLETED: { badge: '완료', tone: 'done', action: '결과 다시 보기', failText: '결과를 열지 못했어요. 잠시 후 다시 시도해 주세요.' },
+};
+const NOT_STARTED = { badge: null, tone: null, action: '체험 시작', failText: '체험을 시작하지 못했어요. 잠시 후 다시 시도해 주세요.' };
+const statusViewOf = (item) => STATUS_VIEW[item.myStatus] ?? NOT_STARTED;
 const headlineOf = (item) => item.headline || item.title;
 function dense(paragraphs) {
   const node = element('div', 'dense');
@@ -89,7 +97,7 @@ export async function renderCaseListPage(container, { api, navigate }) {
     main.replaceChildren(box);
   }
 
-  async function start(caseId, trigger) {
+  async function start(caseId, trigger, failText = NOT_STARTED.failText) {
     if (starting) return;
     starting = true;
     trigger.disabled = true;
@@ -103,9 +111,10 @@ export async function renderCaseListPage(container, { api, navigate }) {
       trigger.removeAttribute('aria-busy');
       const notice = main.querySelector('.start-error') ?? element('p', 'start-error');
       notice.setAttribute('role', 'alert');
+      // 누른 버튼과 같은 말로 알린다 (이어서 하기를 눌렀는데 "시작하지 못했어요"가 나오지 않게)
       notice.textContent = error?.code === 'CASE_NOT_FOUND'
         ? '사건을 찾을 수 없어요. 목록을 새로 불러와 주세요.'
-        : '체험을 시작하지 못했어요. 잠시 후 다시 시도해 주세요.';
+        : failText;
       main.querySelector('.tabs-zone')?.after(notice);
     } finally {
       starting = false;
@@ -119,6 +128,9 @@ export async function renderCaseListPage(container, { api, navigate }) {
     const square = element('span', `type-square type-${item.crimeType}`);
     square.setAttribute('aria-hidden', 'true');
     node.append(square, element('span', '', item.crimeCategoryLabel));
+    const { badge, tone } = statusViewOf(item);
+    // 진행 상태 배지는 분류명 줄 오른쪽 끝에 둔다. 화면 낭독기에는 "진행 중" · "완료" 글자 그대로 읽힌다
+    if (badge) node.append(element('span', `status-badge status-${tone}`, badge));
     return node;
   }
 
@@ -138,8 +150,9 @@ export async function renderCaseListPage(container, { api, navigate }) {
   }
 
   function startButton(item, className = 'start') {
-    const node = button('체험 시작', () => start(item.caseId, node), className);
-    node.setAttribute('aria-label', `${item.title} 체험 시작`);
+    const { action, failText } = statusViewOf(item);
+    const node = button(action, () => start(item.caseId, node, failText), className);
+    node.setAttribute('aria-label', `${item.title} ${action}`);
     return node;
   }
 

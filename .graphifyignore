@@ -1,0 +1,20 @@
+# graphify 제외 목록 (루트 단일 그래프용)
+# 비공개 데이터 서브모듈 · 대용량 도구 · 빌드 산출물 · 로그
+backend/private-seed/
+tools/
+logs/
+node_modules/
+dist/
+build/
+monitoring/loki-data/
+Claude outputs/
+.claude/
+.agents/
+graphify-out/
+# 설정 파일(환경변수·비밀 값 참조 가능성)은 문서 추출 대상에서 제외
+.mcp.json
+.env*
+application*.yml
+docker-compose*.yml
+loki-config.yml
+prometheus.yml
