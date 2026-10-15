@@ -219,7 +219,7 @@ function evidenceBoard(script, at) {
 // sheet: 대본 scene "sheet"에서 쓰는 큰 지면(8막은 화면이 넘겨 주고, 없으면 대본 paper로 1 · 2막 사건 기사를 만든다).
 // 장면의 focus 기사로 카메라가 옮겨 가고, 첫 장면의 from 요소가 무대를 채운 데서 빠져나온다.
 // layout 'paper': 무대 상자 없이 지면(sheet)이 화면 전체가 된다(S-20 · 1 · 2막, S-02 신문과 같은 짜임). 막 칩 · 보드는 지면의
-// 빈 자리(data-slot acts)에 들어가고, 카드(2막 사전 판단)는 지면 위에 독자 의견 엽서 팝업으로 뜬다 — 남불이 가져와 건네는 연출.
+// 막 칩은 숨기고(지면 탭 줄은 신문 목차), 카드(2막 사전 판단)는 지면 위에 독자 의견 엽서 팝업으로 뜬다 — 남불이 가져와 건네는 연출.
 // 캐릭터 · 대사창 · 조작 줄은 화면 아래에 고정된다. 카메라는 화면을 굴린다(paperCamera)
 // parked: 지면만 보여 주고 캐릭터 · 대사창 · 조작 줄은 숨긴 채 기다린다(S-20 사건 정보 — 체험 시작 전). 화면이 wrap.release()로 풀면
 // 내로 · 남불이 들어오며 첫 대사가 시작된다.
@@ -353,7 +353,8 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
   controls.insertBefore(peeks.naero, prev);
   wrap.append(acts, stage, controls, live);
   // 신문 지면 무대: 막 칩은 지면의 탭 줄로 옮긴다
-  if (paperMode) sheet.querySelector('[data-slot="acts"]')?.append(acts);
+  // 신문 지면 무대에는 막 칩이 없다(지면 탭 줄은 신문의 다른 면 목차, newspaperFront.js). 막 칩은 상자 무대(3 ~ 8막)에서만 보인다
+  if (paperMode) acts.hidden = true;
   // 신문 지면 무대의 카드(엽서): 남불이 앞으로 나서며 건네고, 엽서가 남불 손에서 화면 가운데로 날아와 펼쳐진다
   function deliver() {
     const from = sprites.nambul.getBoundingClientRect();

@@ -144,12 +144,11 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
     return image;
   }
 
-  // 사진이 없는 작은 기사: 회색 임시 그림 대신 인쇄 망점 위에 키워드를 크게 얹은 칸(유형 색으로 망점을 물들인다)
-  function keywordPanel(item) {
-    const panel = element('div', `photo keyword-panel type-${item.crimeType}`);
-    panel.setAttribute('aria-hidden', 'true'); // 키워드는 기사 아래 줄에서 읽힌다
-    panel.append(element('span', 'keyword-panel-word', item.keywords?.[0] ?? item.crimeCategoryLabel));
-    return panel;
+  // 사진이 없는 작은 기사: 공용 재연 컷에 인쇄 망점 필터를 씌운다(옛 신문 사진처럼). 추천 기사의 같은 컷과 겹쳐도 다른 사진처럼 보인다
+  function halftonePhoto(item) {
+    const frame = element('div', 'halftone');
+    frame.append(photo(item));
+    return frame;
   }
 
   function meta(item, withTags) {
@@ -204,8 +203,8 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
 
   function indexArticle(item) {
     const article = element('article', 'article');
-    // 사진이 있으면 사진, 없으면 키워드 망점 칸(작은 기사 6건에 같은 공용 사진이 되풀이되지 않게)
-    article.append(item.thumbnailUrl ? photo(item) : keywordPanel(item), kicker(item), element('h3', '', headlineOf(item)), dense([item.article?.[0] ?? item.shortIntro]), meta(item),
+    // 사진이 있으면 사진, 없으면 공용 재연 컷에 망점 필터(작은 기사 6건에 같은 사진이 그대로 되풀이되지 않게)
+    article.append(item.thumbnailUrl ? photo(item) : halftonePhoto(item), kicker(item), element('h3', '', headlineOf(item)), dense([item.article?.[0] ?? item.shortIntro]), meta(item),
       startButton(item));
     return pickable(article, item);
   }
@@ -233,8 +232,7 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
 
   function draw({ summary, cases }) {
     tipLine.textContent = `오늘 지면에 사건이 ${summary.total}건 실렸어요. 마음이 가는 기사를 눌러 보세요!`;
-    earRight.replaceChildren(element('b', '', '오늘의 지면'),
-      `법정에 오른 사건 ${summary.total}건. ${byTypeText(summary)}. 형량은 체험을 마친 뒤 공개됩니다.`);
+    earRight.replaceChildren(element('b', '', `오늘의 사건 ${summary.total}건`), element('span', '', byTypeText(summary)));
 
     const parts = [renderTabs(summary)];
     if (!cases.length) {

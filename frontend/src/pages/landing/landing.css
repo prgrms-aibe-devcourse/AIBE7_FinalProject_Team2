@@ -159,7 +159,8 @@
 /* S-02 지면(caseList.css)과 같은 짜임을 줄인 것 */
 .landing-page .news-info { display: flex; justify-content: space-between; align-items: center; min-height: 2.6em; font-size: .9em; color: var(--color-muted); }
 .landing-page .news-mast { display: grid; grid-template-columns: 1fr 2.1fr 1fr; align-items: center; gap: 1.4em; padding: .2em 0 .9em; }
-.landing-page .news-ear { padding: .5em .6em; border: 1px solid var(--color-border-strong); font-size: .82em; line-height: 1.45; color: var(--color-muted); text-align: center; }
+.landing-page .news-mast .news-ear { align-self: stretch; display: flex; flex-direction: column; justify-content: center; } /* 양 귀 같은 높이 */
+.landing-page .news-ear { padding: .5em .6em; border: 3px double var(--color-border-strong); background: color-mix(in srgb, var(--color-desk-kraft) 9%, var(--color-paper)); font-size: .82em; line-height: 1.45; color: var(--color-muted); text-align: center; }
 .landing-page .news-ear b { margin-bottom: .2em; font: 700 1.1em/1.35 var(--font-heading); color: var(--color-text); }
 .landing-page .news-brand { text-align: center; font: 900 4.6em/1 var(--font-heading); letter-spacing: -.1em; white-space: nowrap; color: var(--color-heading); }
 .landing-page .news-brand .law { display: inline; color: var(--color-label); }

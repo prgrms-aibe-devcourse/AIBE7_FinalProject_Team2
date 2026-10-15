@@ -17,7 +17,7 @@ export function newspaperMasthead({ navigate, earRight, earLeft: givenLeft, titl
   infoRow.append(element('span', '', '판결 체험 신문'), links);
 
   const earLeft = givenLeft ?? element('div', 'ear ear-left');
-  if (!givenLeft) earLeft.append('“모든 판결에는', element('br'), '이유가 있다”', element('small', '', '사건을 읽다. 판단을 묻다.'));
+  if (!givenLeft) earLeft.append('“모든 판결에는', element('br'), '이유가 있다”');
   const brand = element('div', 'brand');
   const heading = element('h1');
   heading.setAttribute('aria-label', title);
@@ -81,8 +81,27 @@ function pullQuote(paragraph) {
   quote.textContent = `“${first}”`;
   return quote;
 }
-// 사건 메모: 제목 옆 상자(죄명 · 범죄 분류 · 예상 소요 · 참여 · 키워드). 받은 값만 줄로 그린다(형량 · 판결 정보는 없다)
-const DIFFICULTY = { LOW: '쉬움', MID: '보통', HIGH: '어려움' };
+// 지면 목차: 신문의 다른 면으로 간다. 앱 기능을 신문의 면에 빗댄다 — 1면 = 오늘의 사건 목록, 3면 사회 = 지금 이 사건,
+// 오피니언 = 판결 성향 테스트, 독자 = 내 판결 기록(마이페이지). 지금 면은 aria-current로 표시하고 누르지 않는다
+const PAGES = [
+  { page: '1면', name: '오늘의 지면', route: 'list' },
+  { page: '3면', name: '사회', current: true },
+  { page: '8면', name: '오피니언 · 판결 성향 테스트', route: 'test' },
+  { page: '10면', name: '독자 · 내 판결 기록', route: 'me' },
+];
+function pageIndex(navigate) {
+  const nav = element('nav', 'page-index');
+  nav.setAttribute('aria-label', '신문 목차');
+  PAGES.forEach(({ page, name, route, current }) => {
+    const item = route ? button('', () => navigate(route), 'page-index-item') : element('span', 'page-index-item is-current');
+    if (current) item.setAttribute('aria-current', 'page');
+    item.append(element('b', '', page), element('span', '', name));
+    nav.append(item);
+  });
+  return nav;
+}
+
+// 사건 메모: 제목 옆 상자(죄명 · 범죄 분류 · 참여 · 키워드). 받은 값만 줄로 그린다(형량 · 판결 정보는 없다)
 function caseMemo(info) {
   const memo = element('aside', 'story-memo');
   memo.setAttribute('aria-label', '사건 메모');
@@ -91,7 +110,6 @@ function caseMemo(info) {
   [
     ['죄명', info.chargeName],
     ['범죄 분류', info.crimeCategoryLabel],
-    ['예상 소요', info.estimatedMinutes ? `약 ${info.estimatedMinutes}분${DIFFICULTY[info.difficulty] ? ` · ${DIFFICULTY[info.difficulty]}` : ''}` : null],
     ['참여', Number.isFinite(info.participantCount) ? `${info.participantCount.toLocaleString('ko-KR')}명` : null],
   ].forEach(([term, value]) => { if (value) list.append(element('dt', '', term), element('dd', '', value)); });
   memo.append(list);
@@ -103,7 +121,7 @@ function caseMemo(info) {
 /**
  * 사건 기사 지면(S-20 · 1 · 2막 무대의 장면). S-02 1면과 같은 짜임에 이 사건 기사 하나를 머리기사로 싣는다.
  * 무대 카메라가 맞추는 자리(data-focus): head(배너 제목) · photo(사진) · body(기사 단).
- * 빈 자리(data-slot): acts(탭 줄 — 막 칩). 2막 사전 판단 등 무대 카드는 지면 위에 엽서 팝업으로 뜬다(stage.css)
+ * 탭 줄은 신문의 다른 면(1면 · 3면 사회 · 오피니언 · 독자)으로 가는 목차다(막 칩은 쓰지 않는다). 2막 사전 판단 등 무대 카드는 지면 위에 엽서 팝업으로 뜬다
  * @param {{ paper: object, info: object, navigate: Function, earRight?: HTMLElement }} options paper: 대본의 지면(headline · deck · photo · caption · article),
  *   info: 사건(title · crimeType · crimeCategoryLabel · caseId), earRight: 오른쪽 귀를 바꿔 끼울 때(S-20 "이어서 하기")
  */
@@ -121,9 +139,7 @@ export function caseNewspaper({ paper, info, navigate, earRight = caseInfoEar(in
   runner.append(earLeft, title, earRight);
 
   const tabsZone = element('div', 'tabs-zone');
-  const actSlot = element('div', 'paper-acts');
-  actSlot.dataset.slot = 'acts';
-  tabsZone.append(actSlot);
+  tabsZone.append(pageIndex(navigate));
 
   // 기사(A안, 실제 신문 기사 면): [제목 · 부제 · 기자 줄 | 사건 메모] → [사진 · 작은 사진 | 본문 두 단(첫 글자 크게 · 인용구 · 작은 사진)]
   const article = element('article', 'story');

@@ -119,9 +119,9 @@ export function renderLandingPage(container, { api, navigate, section }) {
   const info = span('news-info');
   info.append(span('', '판결 체험 신문'), span('', '← 처음으로 · 서비스 소개'));
   const earLeft = span('news-ear');
-  earLeft.append(element('b', '', '“모든 판결에는 이유가 있다”'), span('', '사건을 읽다. 판단을 묻다.'));
+  earLeft.append(element('b', '', '“모든 판결에는 이유가 있다”'));
   const earRight = span('news-ear');
-  const earCount = span('', '법정에 오른 사건들. 형량은 체험을 마친 뒤 공개됩니다.');
+  const earCount = span('', '법정에 오른 사건들');
   earRight.append(element('b', '', '오늘의 지면'), earCount);
   const brand = element('b', 'news-brand');
   brand.append('내', span('law', 'Law'), '남불');
@@ -281,7 +281,7 @@ export function renderLandingPage(container, { api, navigate, section }) {
       banner.textContent = top.headline || top.title;
       deck.textContent = top.deck || top.shortIntro;
       kicker.textContent = `머리기사 · ${top.crimeCategoryLabel}`;
-      earCount.textContent = `법정에 오른 사건 ${summary.total}건. 형량은 체험을 마친 뒤 공개됩니다.`;
+      earCount.textContent = `법정에 오른 사건 ${summary.total}건`;
       tabCount.textContent = `총 ${summary.total}건`;
       lead.textContent = top.article?.[0] || top.shortIntro;
       photo.src = casePhoto(top);

@@ -13,7 +13,6 @@ import { caseInfoEar, earButton, paperFromCase } from '../../components/newspape
 // 데이터는 API 16 하나(체험 없이 열린다). 버튼은 내 진행 상태(myStatus)로 나누고, 누르면 API 2 응답 상태로 이어서 볼 화면을 정한다(1-6).
 // S-02에서 기사를 골라 오면(from: 'paper') S-02의 신문 한 장이 넘어가며(utils/pageTurn.js) 이 면이 그 밑에서 드러난다.
 
-const DIFFICULTY = { LOW: '쉬움', MID: '보통', HIGH: '어려움' };
 // 진행 상태별 버튼 문구 · 실패 안내 (S-02와 같은 말)
 const ACTIONS = {
   IN_PROGRESS: { label: '이어서 하기', failText: '사건을 열지 못했어요. 잠시 후 다시 시도해 주세요.' },
@@ -80,7 +79,6 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
       ['사건명', data.title],
       ['죄명', data.chargeName],
       ['범죄 분류', data.crimeCategoryLabel],
-      ['예상 소요', `약 ${data.estimatedMinutes}분${DIFFICULTY[data.difficulty] ? ` · ${DIFFICULTY[data.difficulty]}` : ''}`],
       ['참여', `${data.participantCount.toLocaleString('ko-KR')}명`],
     ].forEach(([term, value]) => {
       if (value) list.append(element('dt', '', term), element('dd', '', value));

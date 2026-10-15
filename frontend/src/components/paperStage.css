@@ -17,16 +17,15 @@
 .stage-wrap.paper-mode .paper.spot [data-focus]:not(.is-on) { opacity: .72; } /* 다른 기사도 읽을 수 있게(본문 글자 대비 4.5:1 안팎) */
 :root { --safe-bottom: env(safe-area-inset-bottom, 0px); } /* 아이폰 홈 바 높이(index.html viewport-fit=cover) */
 :root:has(.stage-wrap.paper-mode) { scroll-padding-bottom: calc(300px + var(--safe-bottom)); } /* 아래 고정 대사창이 포커스를 가리지 않게 */
-/* 탭 줄 = 막 칩(S-02 유형 탭과 같은 모양) */
-.stage-wrap.paper-mode .paper-acts { align-self: stretch; display: flex; min-width: 0; }
-.stage-wrap.paper-mode .acts { align-items: stretch; flex-wrap: nowrap; gap: 0; margin: 0; overflow-x: auto; scrollbar-width: none; }
-.stage-wrap.paper-mode .act, .stage-wrap.paper-mode .act:has(.act-jump) { position: relative; display: flex; align-items: center; min-height: 44px; padding: 0 12px; border: 0; border-radius: 0; background: transparent; color: var(--color-muted); font-size: 14px; white-space: nowrap; }
-.stage-wrap.paper-mode .act:has(.act-jump) { padding: 0; }
-.stage-wrap.paper-mode .act-jump { align-self: stretch; padding: 0 12px; border-radius: 0; }
-.stage-wrap.paper-mode .act.done { color: var(--color-text); }
-.stage-wrap.paper-mode .act.on { background: transparent; color: var(--color-accent); }
-.stage-wrap.paper-mode .act.on::after { content: ''; position: absolute; left: 10px; right: 10px; bottom: 0; height: 2px; background: var(--color-accent); }
-@media (hover: hover) and (pointer: fine) { .stage-wrap.paper-mode .act:not(.on):has(.act-jump):hover { color: var(--color-text); } }
+.stage-wrap.paper-mode > .acts { display: none; } /* 막 칩은 상자 무대(3 ~ 8막)에서만. hidden 속성만으로는 .stage-wrap .acts의 display에 진다 */
+/* 탭 줄 = 신문 목차(1면 · 3면 사회 · 오피니언 · 독자). S-02 유형 탭과 같은 모양 */
+.case-paper-page .page-index { display: flex; align-items: stretch; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+.case-paper-page .page-index-item { position: relative; display: flex; align-items: baseline; gap: 6px; min-height: 44px; padding: 12px 14px 10px; border: 0; background: transparent; color: var(--color-muted); font: 700 14px/1.2 var(--font-body); white-space: nowrap; cursor: pointer; }
+.case-paper-page .page-index-item b { font: 900 12px/1 var(--font-heading); color: var(--color-label); }
+.case-paper-page .page-index-item.is-current { color: var(--color-accent); cursor: default; }
+.case-paper-page .page-index-item.is-current::after { content: ''; position: absolute; left: 12px; right: 12px; bottom: 0; height: 2px; background: var(--color-accent); }
+@media (hover: hover) and (pointer: fine) { .case-paper-page .page-index-item:not(.is-current):hover { color: var(--color-text); } }
+.case-paper-page .page-index-item:focus-visible { outline: 3px solid var(--color-focus); outline-offset: -3px; }
 /* 독자 의견 칸(2막 카드). 카드가 없으면 칸째 숨는다 */
 /* 독자 의견 엽서(2막 사전 판단): 지면 위 팝업. 가장자리는 항공우편 줄무늬, 오른쪽 위에 우표 · 소인. 뒤 지면은 어둡게 가린다 */
 .stage-wrap.paper-mode .stage:has(> .board:not([hidden]))::after { content: ''; position: fixed; inset: 0; z-index: 25; background: color-mix(in srgb, var(--color-desk-shadow) 45%, transparent); animation: dlg-in .3s ease-out; }
@@ -88,7 +87,6 @@
   .stage-wrap.paper-mode .ctrl { flex-wrap: nowrap; bottom: calc(6px + var(--safe-bottom)); padding: 2px 8px; min-height: 44px; }
   .stage-wrap.paper-mode .ctrl :is(.primary-button, .secondary-button) { min-height: 44px; }
   .stage-wrap.paper-mode .ctrl .stage-restart { display: none; }
-  .stage-wrap.paper-mode .acts .act:not(.on) { display: flex; }
   .stage-wrap.paper-mode .board .range-options { grid-template-columns: 1fr; }
   .stage-wrap.paper-mode .board .scroll-body { padding: 18px 16px; }
   .stage-wrap.paper-mode .board .postcard-head h2 { font-size: 18px; }
@@ -105,7 +103,7 @@
 .case-paper-page .ear-button small { display: block; font-size: var(--text-caption); color: var(--color-muted); }
 @media (hover: hover) and (pointer: fine) { .case-paper-page .ear-button:hover { border-color: var(--color-text); background: color-mix(in srgb, var(--color-desk-kraft) 12%, transparent); } }
 /* 양 귀: 같은 굵기(2px) 테두리, 지면과 살짝 다른 종이색 */
-.case-paper-page .page-head .ear { border: 3px double var(--color-border-strong); background: color-mix(in srgb, var(--color-desk-kraft) 9%, var(--color-paper)); } /* 신문 귀퉁이 상자처럼 이중 선 */
+.case-paper-page .page-head .ear { display: flex; flex-direction: column; justify-content: center; min-height: 64px; border: 3px double var(--color-border-strong); background: color-mix(in srgb, var(--color-desk-kraft) 9%, var(--color-paper)); } /* 신문 귀퉁이 상자처럼 이중 선 */
 @media (hover: hover) and (pointer: fine) { .case-paper-page .page-head .ear-button:hover { background: color-mix(in srgb, var(--color-desk-kraft) 28%, var(--color-paper)); } }
 .case-paper-page .page-head .ear-go { border-color: var(--color-accent); }
 .case-paper-page .ear-go b { color: var(--color-accent); }
@@ -184,7 +182,8 @@
   .case-paper-page .page-head-brand { font-size: 28px; }
   .case-paper-page .page-head .ear-button { display: flex; align-items: center; justify-content: center; min-height: 44px; padding: 6px 8px; }
   .case-paper-page .page-head .ear-button small { display: none; }
-  .case-paper-page .page-head .ear:not(.ear-button) { grid-column: auto; }
+  .case-paper-page .page-head .ear:not(.ear-button) { display: none; } /* 좁은 화면: 사건 번호 귀는 숨기고(기자 줄에 같은 정보) 버튼 귀만 */
+  .case-paper-page .page-head .ear { min-height: 44px; }
   .case-paper-page .story { padding-top: 18px; }
   .case-paper-page .story-top { grid-template-columns: minmax(0, 1fr); gap: 18px; }
   .case-paper-page .story-media { grid-template-columns: minmax(0, 1fr); }
