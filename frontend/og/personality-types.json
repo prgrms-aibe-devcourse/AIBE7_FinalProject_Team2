@@ -1,0 +1,118 @@
+{
+  "_comment": "성향 공유 링크 OG 미리보기 빌드 입력 (BE-73). 값의 기준은 서버 시드 backend/src/main/resources/db/migration/R__personality_content.sql이고, 백엔드 테스트 PersonalityContentSeedTest가 시드와 같은지 확인한다. shareId는 공유 주소라 한 번 정하면 바꾸지 않는다. 유형 코드(4글자)는 화면 · 주소 · 메타태그에 쓰지 않으므로 이 파일에도 넣지 않는다. 이미지 번호 규칙은 docs/character/personality-image-numbers.md",
+  "imagePath": "/images/characters/personality/{imageNumber}.webp",
+  "types": [
+    {
+      "typeNumber": 1,
+      "shareId": "ouovjmU4",
+      "imageNumber": 1,
+      "name": "국룰 수호자형",
+      "oneLiner": "결과 · 원칙 · 질서를 모두 엄격히 보고, 사과는 행동으로만 인정한다"
+    },
+    {
+      "typeNumber": 2,
+      "shareId": "Zrkca36u",
+      "imageNumber": 18,
+      "name": "사과 접수, 규칙 추가형",
+      "oneLiner": "결과와 원칙대로 판단하되 진심 어린 사과는 받아 주고, 반복되지 않게 선을 분명히 긋는다"
+    },
+    {
+      "typeNumber": 3,
+      "shareId": "8TUoKjuj",
+      "imageNumber": 3,
+      "name": "증명하면 인정형",
+      "oneLiner": "결과와 원칙은 칼같이, 행동으로 증명하면 기회를 준다"
+    },
+    {
+      "typeNumber": 4,
+      "shareId": "NiQi15ci",
+      "imageNumber": 4,
+      "name": "끝까지 확인형",
+      "oneLiner": "의도까지 직접 확인하고, 원칙과 질서는 엄정하게 세운다"
+    },
+    {
+      "typeNumber": 5,
+      "shareId": "XxDhIXW6",
+      "imageNumber": 21,
+      "name": "단톡방 반장형",
+      "oneLiner": "관계를 조율하되 결과는 분명히 짚고, 재발 방지를 요구한다"
+    },
+    {
+      "typeNumber": 6,
+      "shareId": "j2DpVKAD",
+      "imageNumber": 6,
+      "name": "새끼손가락 도장형",
+      "oneLiner": "일어난 일을 가볍게 넘기지 않지만 관계 회복에 공을 들이고, 재발 방지 약속은 꼭 받아 둔다"
+    },
+    {
+      "typeNumber": 7,
+      "shareId": "Lha25wnb",
+      "imageNumber": 23,
+      "name": "다 보인다형",
+      "oneLiner": "속내와 의도를 꿰뚫어 보되, 원칙과 질서는 타협하지 않는다"
+    },
+    {
+      "typeNumber": 8,
+      "shareId": "j3pXkrw6",
+      "imageNumber": 24,
+      "name": "뒤끝 없는 쿨거래형",
+      "oneLiner": "결과에는 단호하지만, 사과하면 믿어 주고 뒤끝 없이 넘어간다"
+    },
+    {
+      "typeNumber": 9,
+      "shareId": "bOiiR3Cp",
+      "imageNumber": 9,
+      "name": "근데 왜 그랬어형",
+      "oneLiner": "의도를 뒤집어 보며 따지되, 원칙은 지키고 기회는 열어 둔다"
+    },
+    {
+      "typeNumber": 10,
+      "shareId": "9xXVknVu",
+      "imageNumber": 26,
+      "name": "보여 주면 다시 친구형",
+      "oneLiner": "관계 회복이 먼저고, 행동으로 보여 주면 다시 믿어 준다"
+    },
+    {
+      "typeNumber": 11,
+      "shareId": "jSgQNLs0",
+      "imageNumber": 27,
+      "name": "화해 주선러형",
+      "oneLiner": "사정을 헤아려 화해를 돕고, 행동을 확인한 뒤 규칙으로 재발을 막는다"
+    },
+    {
+      "typeNumber": 12,
+      "shareId": "1rzSV9s7",
+      "imageNumber": 12,
+      "name": "다 이해해, 선은 지켜형",
+      "oneLiner": "사정을 깊이 헤아리고 화해를 중시하되, 서로 지킬 선은 분명히 정한다"
+    },
+    {
+      "typeNumber": 13,
+      "shareId": "4FLOEmuD",
+      "imageNumber": 29,
+      "name": "사연 분석러형",
+      "oneLiner": "왜 그랬는지 논리적으로 따지고 원칙은 지키되, 다음 기회는 열어 둔다"
+    },
+    {
+      "typeNumber": 14,
+      "shareId": "mJrZ7UBV",
+      "imageNumber": 14,
+      "name": "속상해도 한 번 더형",
+      "oneLiner": "결과는 인정하되 관계를 먼저 챙기고, 다시 기회를 준다"
+    },
+    {
+      "typeNumber": 15,
+      "shareId": "9y0hfAtY",
+      "imageNumber": 31,
+      "name": "변하면 응원단장형",
+      "oneLiner": "의도와 관계를 살피고, 변화가 보이면 적극적으로 응원한다"
+    },
+    {
+      "typeNumber": 16,
+      "shareId": "VROIPs2D",
+      "imageNumber": 16,
+      "name": "그럴 수도 있지형",
+      "oneLiner": "진심을 믿고 사연을 헤아리며, 화해와 두 번째 기회를 폭넓게 준다"
+    }
+  ]
+}

@@ -2,7 +2,7 @@
 
 | 파일 | 대상 | 이름 |
 | --- | --- | --- |
-| `backend-ci.yml` | `backend/` | backend CI |
+| `backend-ci.yml` | `backend/` · `frontend/og/` | backend CI (`frontend/og/`는 성향 OG 빌드 입력. 시드와 같은지 백엔드 테스트가 확인, BE-73) |
 | `frontend-ci.yml` | `frontend/` | frontend CI |
 | `deploy-images.yml` | `frontend/` · `backend/` · `deploy/` | deploy images (운영 이미지 빌드 · 스모크 테스트 · GHCR 업로드) |
 
