@@ -34,11 +34,19 @@ GUIDELINE_SEARCH_SECTIONS = ("양형인자", "양형인자의 정의", "유형�
 DEFAULT_OPTIONS = {
     "required": False,
     # 유사 판례: 상위 topK건을 쓴다. 같은 버전 우선 정렬을 위해 candidates건까지 받아 둔다.
-    # minScore 미만은 빼고, maxScore 이상은 자기 사건 의심으로 뺀다 (rag-handover 5-4: 둘 다 임시값)
-    "precedent": {"topK": 5, "candidates": 10, "minScore": 0.6, "maxScore": 0.95},
+    # minScore 미만은 빼고, maxScore 이상은 자기 사건 의심으로 뺀다 (rag-handover 5-4).
+    # 10/15 실측(rag_check.py, 판례 53건): 다른 사건끼리 1위 0.725 ~ 0.811 · 5위 0.676 ~ 0.777, 실제 사건 개요 → 판례 0.72 ~ 0.81.
+    # 점수가 좁게 몰려 있어 하한은 "관계없는 사건만 거르는" 0.70, 상한은 다른 사건 최고(0.81)보다 충분히 위인 0.88로 둔다.
+    # 자기 사건은 사건번호 해시로 먼저 빼고, 상한은 해시가 없을 때의 두 번째 방어선이다. 판례가 늘면 다시 잰다
+    "precedent": {"topK": 5, "candidates": 10, "minScore": 0.70, "maxScore": 0.88},
     # 양형인자 · 정의 검색 (sentencing-guideline-rag 5장: 임시값)
-    "guideline": {"topK": 8, "minScore": 0.5},
+    # 10/15 실측: 양형인자 · 정의 조각 점수 0.645 ~ 0.705. 프롬프트가 길어지지 않게 6개만 넣는다
+    "guideline": {"topK": 6, "minScore": 0.6},
 }
+
+# 같은 양형기준 버전 판례에 더하는 점수 (정렬에만 쓴다). 실측 점수가 0.72 ~ 0.81에 몰려 있어 버전으로 통째 앞세우면
+# 덜 비슷한 판례가 더 비슷한 판례를 밀어낸다(10/15 확인). 비슷한 점수 사이에서만 같은 버전을 앞에 둔다
+SAME_GUIDELINE_BONUS = 0.01
 
 BASIS_INDICTMENT = "INDICTMENT_DATE"
 BASIS_INCIDENT = "INCIDENT_DATE"
@@ -168,14 +176,19 @@ SELECT json_build_object(
 """
 
 
-def parse_query_result(text):
-    lines = [line for line in (text or "").splitlines() if line.strip()]
-    if not lines:
+def parse_json_output(text):
+    """psql -At 출력(JSON 값 하나)을 읽는다. json_agg는 원소 사이에 줄바꿈을 넣으므로 줄 단위가 아니라 출력 전체를 읽는다."""
+    body = (text or "").strip()
+    if not body:
         raise RagUnavailable("검색 결과가 비었습니다")
     try:
-        result = json.loads(lines[-1])
+        return json.loads(body)
     except json.JSONDecodeError as e:
         raise RagUnavailable(f"검색 결과를 읽지 못했습니다: {e}")
+
+
+def parse_query_result(text):
+    result = parse_json_output(text)
     if not isinstance(result, dict):
         raise RagUnavailable("검색 결과 형식이 다릅니다")
     for key in ("ranges", "factors", "precedents"):
@@ -198,7 +211,7 @@ def penalty_text(item):
 
 
 def pick_precedents(candidates, guideline_id, options, warnings):
-    """상한 이상(자기 사건 의심)을 빼고, 같은 버전 판례를 앞에 둔 뒤 topK건."""
+    """상한 이상(자기 사건 의심)을 빼고, 점수순(같은 버전이면 작은 가산)으로 topK건."""
     precedent = options["precedent"]
     kept = []
     for item in candidates:
@@ -207,9 +220,10 @@ def pick_precedents(candidates, guideline_id, options, warnings):
                             f"(판례 id {item['id']})")
             continue
         kept.append(item)
-    same = [p for p in kept if guideline_id is not None and p.get("guidelineId") == guideline_id]
-    other = [p for p in kept if p not in same]
-    return (same + other)[:precedent["topK"]]
+    def rank(item):
+        same = guideline_id is not None and item.get("guidelineId") == guideline_id
+        return -(item["score"] + (SAME_GUIDELINE_BONUS if same else 0)), item["id"]
+    return sorted(kept, key=rank)[:precedent["topK"]]
 
 
 def precedent_reference(index, item, guideline_id):
@@ -230,11 +244,31 @@ def guideline_text(category, guideline, ranges, factors):
     lines = [f"{category} 양형기준 · {guideline['versionName']} (이 사건에 적용되는 버전)"]
     if ranges:
         lines.append("\n[형량범위] 유형을 먼저 정하고 그 유형의 감경 · 기본 · 가중 영역을 본다.")
-        lines += [f"- {r['subject'] or '유형'}: {r['content']}" for r in ranges]
+        lines += [f"- {chunk_line(r['subject'] or '유형', r['content'])}" for r in ranges]
     if factors:
         lines.append("\n[이 사건과 관련 있을 수 있는 양형인자 · 정의 (검색 결과)]")
-        lines += [f"- [{f['section']}] {f['subject'] or ''}: {f['content']}".replace("] :", "]:") for f in factors]
+        lines += [f"- [{f['section']}] {chunk_line(f['subject'], f['content'])}" for f in factors]
     return "\n".join(lines)
+
+
+def chunk_line(subject, content):
+    """조각 본문이 제목으로 시작하면 제목을 한 번만 쓰고, 여러 줄 본문은 들여 써서 목록 항목 안에 둔다."""
+    content = (content or "").rstrip()
+    subject = (subject or "").strip()
+    if subject and content.strip().startswith(subject):
+        rest = content.strip()[len(subject):]
+        first, _, more = rest.partition("\n")
+        first = first.strip().lstrip(":—").strip()
+        lines = ([first] if first else []) + [line.rstrip() for line in more.splitlines() if line.strip()]
+    else:
+        lines = [line.rstrip() for line in content.strip().splitlines() if line.strip()]
+    if not subject:
+        return "\n".join(lines)
+    if not lines:
+        return subject
+    if len(lines) == 1 and not lines[0].startswith(" "):
+        return f"{subject}: {lines[0]}"
+    return subject + "".join("\n" + (line if line.startswith("  ") else "  " + line.lstrip()) for line in lines)
 
 
 # ---------------------------------------------------------------- 진입점

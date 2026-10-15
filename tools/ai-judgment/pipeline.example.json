@@ -46,8 +46,8 @@
       "_comment": "생성 참고 자료 RAG (BE-54). 로컬 DB(stages.load.db)의 판례 · 양형기준 저장소와 GEMINI_API_KEY(검색어 임베딩)가 필요하다. 못 찾으면 사건 입력의 references로 진행하고, required면 멈춘다. 점수 값은 임시값(rag-handover 5-4)",
       "enabled": false,
       "required": false,
-      "precedent": {"topK": 5, "candidates": 10, "minScore": 0.6, "maxScore": 0.95},
-      "guideline": {"topK": 8, "minScore": 0.5}
+      "precedent": {"topK": 5, "candidates": 10, "minScore": 0.70, "maxScore": 0.88},
+      "guideline": {"topK": 6, "minScore": 0.6}
     },
     "generate": {
       "enabled": true,

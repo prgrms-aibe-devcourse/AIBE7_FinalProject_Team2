@@ -97,8 +97,8 @@ DEFAULT_CONFIG = {
         # 생성에 넣을 참고 자료를 RAG로 찾는다 (BE-54, rag_context.py). 로컬 DB(stages.load.db)의 판례 · 양형기준 저장소와
         # GEMINI_API_KEY(검색어 임베딩)가 필요하다. 못 찾으면 사건 입력의 references를 그대로 쓰고, required면 멈춘다
         "rag": {"enabled": False, "required": False,
-                "precedent": {"topK": 5, "candidates": 10, "minScore": 0.6, "maxScore": 0.95},
-                "guideline": {"topK": 8, "minScore": 0.5}},
+                "precedent": {"topK": 5, "candidates": 10, "minScore": 0.70, "maxScore": 0.88},
+                "guideline": {"topK": 6, "minScore": 0.6}},
         "generate": {
             "enabled": True, "models": [], "runs": 3, "maxRetries": 3,
             "temperature": None, "maxTokens": 16000, "timeout": 300, "delay": 0.0,

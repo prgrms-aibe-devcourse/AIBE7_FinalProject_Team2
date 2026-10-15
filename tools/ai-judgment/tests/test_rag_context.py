@@ -114,8 +114,8 @@ class RagContextTest(unittest.TestCase):
                                           precedent(4, 0.7, penaltyType="LIFE", prisonMonths=None)]))
         references, report = self.build(db)
         self.assertEqual(report["status"], "OK")
-        # 상한(0.95) 이상은 자기 사건 의심으로 빼고, 같은 양형기준 버전(7) 판례를 앞에 둔다
-        self.assertEqual([p["id"] for p in report["precedents"]], [3, 2, 4])
+        # 상한(0.88) 이상은 자기 사건 의심으로 빼고, 점수순으로 둔다. 같은 버전(7)은 작은 가산만 받아 더 비슷한 판례를 밀어내지 않는다
+        self.assertEqual([p["id"] for p in report["precedents"]], [2, 3, 4])
         self.assertEqual(report["excludedSuspects"], 1)
         self.assertTrue(any("자기 사건 의심" in w for w in report["warnings"]))
         self.assertEqual(report["guideline"], "2차 수정 2013")
@@ -123,11 +123,22 @@ class RagContextTest(unittest.TestCase):
         cases = references["similarCases"]
         self.assertEqual(cases[0]["title"], "유사 판례 1 (살인, 1심)")
         self.assertEqual(cases[0]["sentence"], "징역 12년 6개월")
-        self.assertTrue(cases[0]["sameGuideline"])
+        self.assertTrue(cases[1]["sameGuideline"])
         self.assertEqual(cases[2]["sentence"], "무기징역")
         self.assertIn("[형량범위]", references["sentencingGuideline"])
         self.assertIn("계획적 살인 범행", references["sentencingGuideline"])
         self.assertNotIn("2014-03-01", references["sentencingGuideline"])  # 기준일은 프롬프트에 넣지 않는다
+
+    def test_same_guideline_bonus_breaks_close_scores_only(self):
+        _, report = self.build(FakeDb(db_result(precedents=[precedent(1, 0.800), precedent(2, 0.795, guideline_id=7),
+                                                            precedent(3, 0.760, guideline_id=7)])))
+        self.assertEqual([p["id"] for p in report["precedents"]], [2, 1, 3])  # 0.005 차이는 같은 버전이 앞, 0.04 차이는 점수대로
+
+    def test_chunk_line_drops_repeated_subject(self):
+        self.assertEqual(rag_context.chunk_line("제2유형", "제2유형 권고 형량범위 — 기본 10 ~ 16년"), "제2유형: 권고 형량범위 — 기본 10 ~ 16년")
+        self.assertEqual(rag_context.chunk_line("2. 피해자 유발", "2. 피해자 유발\n  - 귀책사유\n  - 과잉방위 제외"),
+                         "2. 피해자 유발\n  - 귀책사유\n  - 과잉방위 제외")
+        self.assertEqual(rag_context.chunk_line(None, "본문"), "본문")
 
     def test_references_pass_prompt_checks(self):
         references, report = self.build(FakeDb(db_result(precedents=[precedent(1, 0.8)])))
@@ -179,6 +190,14 @@ class RagContextTest(unittest.TestCase):
     def test_bad_embedding_dimension_falls_back(self):
         _, report = self.build(FakeDb(db_result()), embedder=lambda texts, task_type: [[0.1] * 10])
         self.assertEqual(report["status"], "FALLBACK")
+
+    def test_multiline_json_from_psql(self):
+        # 실제 psql 출력: json_agg가 원소 사이에 줄바꿈을 넣는다 (rag_check 실행에서 발견)
+        text = json.dumps(db_result(precedents=[precedent(1, 0.8), precedent(2, 0.7)]), ensure_ascii=False)
+        text = text.replace('}, {', '}, \n {')
+        self.assertIn("\n", text)
+        _, report = self.build(lambda sql: text + "\n")
+        self.assertEqual([p["id"] for p in report["precedents"]], [1, 2])
 
     def test_unreadable_db_output_falls_back(self):
         _, report = self.build(lambda sql: "ERROR")
