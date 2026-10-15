@@ -1185,7 +1185,7 @@ AVOID: text, letters, numbers, labels, a second character, different colors betw
 
 ### 9-19. 의상 시트 (제작 목록 H1)
 
-사건 재연에서 돌려 쓸 **일상 의상 8벌**. 역할 의상 시트(F2)와 별개다. 첨부: 해당 `standing/*_standing.png` + `sheets/role-outfits/*_sheet_role-outfits.png`(옷을 입은 모습 참고).
+**일상 의상 8벌**. 역할 의상 시트(F2)와 별개다. 내로 · 남불은 사건 재연에서 돌려 쓰고, 로는 법복을 벗은 모습(컬렉션 · 카드용)이다. 첨부: 해당 `standing/*_standing.png` + 내로 · 남불은 `sheets/role-outfits/*_sheet_role-outfits.png`(옷을 입은 모습 참고), 로는 `sheets/law-*_sheet_reference.png`.
 
 ```
 Use the attached reference images as the exact model of {Naero | Nambul}: copy the face, colors, proportions and flat style exactly. The role-outfit sheet shows only how the character looks when wearing clothes; do not copy those outfits.
@@ -1208,6 +1208,14 @@ SCENE — a single character, centered, full body from head to feet fully visibl
 BACKGROUND — fully transparent background (PNG with alpha). Aspect ratio 4:5 vertical.
 AVOID: text, letters, name tags, logos, a bandana, props in the hands, a second character, angry faces, black outlines, drop shadows, gendered body features, cropped limbs.
 ```
+
+**로 버전** — 위 프롬프트에서 첫 두 문장과 캐릭터별 줄을 바꾼다.
+
+```
+Use the attached reference images as the exact model of Law ({Scale | Gavel | Book}): copy the head object, white gloves, proportions, build and refined painterly style exactly. No face, no neck{Book: the book floats above the collar with a clear gap}. This sheet shows Law off duty: the judge's robe is replaced by the everyday outfits below; the head object and the white gloves stay.
+```
+
+- AVOID에 `faces, eyes, mouths, a judge's robe, swinging the gavel`을 더하고 `a bandana`는 뺀다.
 
 - 사건 배역 컷(H4)은 같은 형식에서 의상 줄만 H1 의상 시트의 해당 벌로 바꾼다.
 

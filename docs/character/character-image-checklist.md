@@ -30,7 +30,7 @@
 | v0.24 | 2026-10-14 | **폴더 · 파일 이름 변경**: `discard/` → `discard/`, `staging/` → `staging/`, 모든 원본 파일(정식 · 폐기 · `_original`)을 폴더 없이 역할을 알 수 있는 이름으로 변경(263개, 해시 확인), 문서 경로 갱신 |
 | v0.25 | 2026-10-14 | **성향 이미지 번호를 `01 ~ 32`로 통일**(번호표 v0.4) — 변형 접미사 `-2` 폐지, 내로 `01 ~ 16` · 남불 `17 ~ 32`. D1 · D2 이름 · 설명 갱신. 화면에는 유형마다 기본 캐릭터 하나만 보여 주고(하드코딩), OG는 유형별 그 이미지로 고정 |
 | v0.26 | 2026-10-15 | **10/15 이관 결정**(COMMON-35) — 생성은 GPT Pro 팀원(김현중, gpt image 2.0)이 맡고 지금 이미지는 유지(재생성은 최종 디테일 때), 1장 생성 방식 · 배경(모두 투명, 신문 느낌은 후보정) 갱신. A6 마스코트 로 6장 추가, G2 · G6을 이관 묶음으로 당김, G7 · G8(데포르메별 자세 · 표정, 캐릭터 카드) 추가. 사건 1 첫 샘플은 E1-공용 세트 2로 옮기고 E1 사건 1은 새 의상 · 극적 연출로 새로 생성 |
-| v0.27 | 2026-10-15 | **추가 생성 목록 H** 정리(COMMON-35) — 1순위: H0 데포르메 묶음 시트(11종을 한 장에, 느낌 보고 결정) · H1 의상 시트 · H2 마스코트 로 컷 · H3 역할 의상 정식 컷(지금은 시트에서 잘라 씀), 2순위: H4 사건별 재연 + 사건 배역 컷, 3순위: H5 ~ H9(G1 · G7 · G8 등을 옮김). 파일 이름 규칙에 `cut-mascot` · `cut-role-{역할}` · `sheet_deform-lineup` · `sheet_wardrobe` 추가 |
+| v0.27 | 2026-10-15 | **추가 생성 목록 H** 정리(COMMON-35) — 1순위: H0 데포르메 묶음 시트(11종을 한 장에, 느낌 보고 결정) · H1 의상 시트(로 포함 5장) · H2 마스코트 로 컷 · H3 역할 의상 정식 컷(지금은 시트에서 잘라 씀), 2순위: H4 사건별 재연 + 사건 배역 컷, 3순위: H5 ~ H9(G1 · G7 · G8 등을 옮김). 파일 이름 규칙에 `cut-mascot` · `cut-role-{역할}` · `sheet_deform-lineup` · `sheet_wardrobe` 추가 |
 
 > 형식 · 이름 규칙 · 검수 기준은 [캐릭터 에셋 아키텍처](character-asset-architecture.md)가 기준이다(시트 2-2 · 장면 · 감정 코드 3-2 · 상황 4-1 · 크기 6-5 · 검수 7-2). 이 문서는 **무엇을 몇 장 만들고 어디까지 했는지**만 적는다.
 > 캐릭터 설정은 [캐릭터 프로필 · 세계관](character-profile-worldview.md), 성향 이미지 번호는 [성향 이미지 번호표](personality-image-numbers.md)가 기준이다.
@@ -44,7 +44,7 @@
 > - `cuts/{캐릭터}/base/{캐릭터}_cut_{장면}-{감정}.png` · `cuts/{캐릭터}/icon/{캐릭터}_icon_face-{감정}.png` — 아키텍처 6-4와 같은 구조(웹 변환 전 PNG). 로 합의 컷은 `cuts/trio/`, 내로 · 남불 · 로 비교 컷은 `cuts/compare/` 성향 결과 컷은 `cuts/personality/personality-{01 ~ 16}_{캐릭터}_{밈}.png`(기본 · 반대편 캐릭터가 각각 한 장씩, 번호 · 밈은 번호표 기준) 사건 재연 컷은 `cuts/reenact/case-{caseId}/`(아키텍처 6-4), **사건 이미지가 없을 때 대신 쓰는 공용 컷**은 `cuts/reenact/common/{headline · sub-1 · detail-1}.png`. 연기 시트는 `sheets/acting/{naero · nambul · law-scale · law-gavel · law-book}_sheet_acting.png`, 역할 의상 시트는 `sheets/role-outfits/{naero · nambul}.png` 데포르메 대표 시트는 `sheets/deform/{naero · nambul}-{ranma · cheek · ppg}.png`
 > - `_original/`(`character/` 바로 아래) 생성 직후 원본 114장 보관(`original_` 접두사, 재생성 이력은 `_v1` `_v2`). 다른 폴더에 둔 정식 파일의 사본이다. 원본 백업은 공개 레포 `NaeLawNamBul_Images`에도 올렸다(10/14, 새 이름 구조로 반영 완료). 컷 PNG는 4:5(1122 × 1402)로 캔버스를 맞췄다(그림은 늘리거나 줄이지 않고 투명 여백만 추가)
 
-> **파일 이름 규칙 (10/14, 폴더 없이 파일 이름만으로 역할을 알 수 있게)**: `{대상}_{종류}_{세부}.png` — 대상 `naero` · `nambul` · `law-scale` · `law-gavel` · `law-book` · `trio` · `compare` · `reenact-common` · `personality-{번호}`, 종류 `standing` · `sheet`(`reference` · `acting` · `role-outfits` · `deform-{ranma|cheek|ppg}`) · `cut` · `cut-cheek` · `icon`. 예: `naero_standing.png`, `law-gavel_sheet_reference.png`, `nambul_cut_guide-neutral.png`, `naero_icon_face-cheer.png`, `personality-06_naero_pinky-promise.png`, `trio_cut_idle.png`. 폐기는 `discard_` 접두사 + `_v1` · `_tryN-이유`, 원본은 `original_` 접두사. 옛 이름 → 새 이름은 `rename-map`(`Claude outputs/character/rename-map_2026-10-14.csv`). 웹용 webp 이름 규칙(`{장면}-{감정}.webp` · `01.webp`)은 바뀌지 않았다. **10/15 추가**: 마스코트 로 컷 `{law-*}_cut-mascot_{장면}-{감정}.png`(로 셋 함께는 `trio_cut-mascot_{장면}.png`), 역할 의상 컷 `{naero · nambul}_cut-role-{judge · prosecutor · defense · actor}_{장면}-{감정}.png`, 사건 배역 컷 `{naero · nambul}_cut-role-case-{caseId}_{장면}-{감정}.png`, 데포르메 묶음 시트 `{캐릭터}_sheet_deform-lineup.png`, 의상 시트 `{naero · nambul}_sheet_wardrobe.png`.
+> **파일 이름 규칙 (10/14, 폴더 없이 파일 이름만으로 역할을 알 수 있게)**: `{대상}_{종류}_{세부}.png` — 대상 `naero` · `nambul` · `law-scale` · `law-gavel` · `law-book` · `trio` · `compare` · `reenact-common` · `personality-{번호}`, 종류 `standing` · `sheet`(`reference` · `acting` · `role-outfits` · `deform-{ranma|cheek|ppg}`) · `cut` · `cut-cheek` · `icon`. 예: `naero_standing.png`, `law-gavel_sheet_reference.png`, `nambul_cut_guide-neutral.png`, `naero_icon_face-cheer.png`, `personality-06_naero_pinky-promise.png`, `trio_cut_idle.png`. 폐기는 `discard_` 접두사 + `_v1` · `_tryN-이유`, 원본은 `original_` 접두사. 옛 이름 → 새 이름은 `rename-map`(`Claude outputs/character/rename-map_2026-10-14.csv`). 웹용 webp 이름 규칙(`{장면}-{감정}.webp` · `01.webp`)은 바뀌지 않았다. **10/15 추가**: 마스코트 로 컷 `{law-*}_cut-mascot_{장면}-{감정}.png`(로 셋 함께는 `trio_cut-mascot_{장면}.png`), 역할 의상 컷 `{naero · nambul}_cut-role-{judge · prosecutor · defense · actor}_{장면}-{감정}.png`, 사건 배역 컷 `{naero · nambul}_cut-role-case-{caseId}_{장면}-{감정}.png`, 데포르메 묶음 시트 `{캐릭터}_sheet_deform-lineup.png`, 의상 시트 `{캐릭터}_sheet_wardrobe.png`.
 
 **상태 표기**: ⬜ 대기 · 🟨 생성 중 · 🟦 검수 중 · ✅ 완료
 
@@ -159,7 +159,7 @@
 | # | 이미지 | 수량 | 형식 | 비고 | 상태 |
 | --- | --- | --- | --- | --- | --- |
 | H0 | **데포르메 묶음 시트** — 한 캐릭터를 기본 + 데포르메 11종, 12칸에 같은 자세로 | 5 (내로 · 남불 · 로울 · 로봉 · 로북) | 시트 16:9 | **느낌을 보는 용도**. 11종(아키텍처 3-1) 전부를 한 장에 넣어 비교하고, 본격적으로 만들 데포르메를 고른다. 로는 기본 칸에 마스코트 로(A6)를 쓰므로 A6 뒤. 12칸이 너무 빽빽하게 나오면 6칸씩 두 장으로 나눈다. 렌더링(외곽선 없음 · 평면 색)은 같게 두고 비율 · 형태 · 연기만 바꾼다 | ⬜ |
-| H1 | **의상 시트** — 사건 재연에 돌려 쓸 일상 의상 8벌 | 2 (내로 · 남불) | 시트 16:9 | 기존 역할 의상 시트(F2: 판사 · 검사 · 변호인 · 사건 역할)와 별개. 정장 · 트렌치코트 · 후드티 · 니트 · 작업복 · 앞치마 · 패딩 · 잠옷. 사건 재연(H4)의 의상을 여기서 고르면 사건마다 의상이 흔들리지 않는다. 반다나 없음, 초록 · 캐릭터 고정색 피함 | ⬜ |
+| H1 | **의상 시트** — 일상 의상 8벌 | 5 (내로 · 남불 · 로울 · 로봉 · 로북) | 시트 16:9 | 기존 역할 의상 시트(F2: 판사 · 검사 · 변호인 · 사건 역할)와 별개. 정장 · 트렌치코트 · 후드티 · 니트 · 작업복 · 앞치마 · 패딩 · 잠옷(제복은 법정 역할과 헷갈려 뺌). 내로 · 남불은 사건 재연(H4)의 의상을 여기서 고르고, 로는 법복을 벗은 모습(컬렉션 · 카드용, 기본 로 `authority` × `adult`, 머리 물체 · 흰 장갑 유지). 반다나 없음, 초록 · 캐릭터 고정색 피함 | ⬜ |
 | H2 | **마스코트 로 컷** | 12 | 장면 컷 4:5 · 16:9 | 로 셋 × `idle-neutral` · `deliver-neutral` · `think-thinking`(9) + `trio_cut-mascot_idle` · `trio_cut-mascot_think`(2, 16:9) + 내로 · 로울 · 남불 비교 `compare_cut-mascot_trio-thinking`(1, 16:9). 키 로울 180 · 로북 170 · 로봉 160(내로 · 남불 120). A6 통과 뒤 | ⬜ |
 | H3 | **역할 의상 정식 컷** | 8 | 장면 컷 4:5 | 지금 판결 체험 무대(`frontend/public/images/characters/roles/*.webp`, FE-27 · 28)는 **역할 의상 시트에서 잘라 낸 컷**(높이 560 px)을 쓰고, **남불 변호인 컷은 없다**. 내로 · 남불 × 판사 · 검사 · 변호인 · 사건 역할 = 8장을 `idle-neutral`로 정식 생성한다. **검사 · 변호인은 같은 자세 · 같은 표정**(한쪽이 옳아 보이지 않게). 파일 `{naero · nambul}_cut-role-{역할}_idle-neutral.png` | ⬜ |
 
@@ -224,7 +224,7 @@
 | F 시트 | 13 (F1 5 · F2 2 · F3 6) |
 | **합계 (A ~ D, F)** | **약 91** |
 | 10/15 이관 묶음 | 19 (A6 6 · G6 9 · E1 사건 1 3 · G2 1) |
-| H 1순위 | 27 (H0 5 · H1 2 · H2 12 · H3 8) |
+| H 1순위 | 30 (H0 5 · H1 5 · H2 12 · H3 8) |
 | H 2순위 | 사건마다 5 (사건 1은 2) |
 | E 재연 | 사건 수 × 3 (별도), 공용 6(세트 1 · 2) |
 
