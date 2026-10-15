@@ -4,7 +4,7 @@
 
 | 파일 | 내용 |
 | --- | --- |
-| `caseListPage.js` | `renderCaseListPage(container, { api, navigate })` — 목록을 그리고 체험 시작을 처리한다 |
+| `caseListPage.js` | `renderCaseListPage(container, { api, navigate, from })` — 목록을 그리고, 고른 기사를 사건 정보(S-20)로 펼친다 |
 | `caseList.css` | 사건 목록 화면 스타일 |
 
 ## 사용하는 API
@@ -14,13 +14,13 @@
 | 호출 | API | 동작 |
 | --- | --- | --- |
 | `api.getCases(crimeType)` | API 1 `GET /cases` | 사건 목록. 범죄 유형 탭(`MURDER` · `FRAUD` · `INJURY`)으로 필터 |
-| `api.startExperience(caseId)` | API 2 `POST /cases/{caseId}/experience` | 체험 시작. 응답의 `status`로 이어서 볼 화면을 정해 이동 |
 
-- 체험 시작 뒤 이동할 화면은 [`utils/screenByStatus.js`](../../utils/README.md)로 정한다. 이미 체험이 있는 사건이면 그 상태의 화면으로 간다.
-- **진행 상태 배지 (FE-19, REQ-010 · FR-1-6)**: API 1의 `myStatus`로 분류명 줄 오른쪽에 배지를 달고 버튼 문구를 바꾼다. `null`(체험 전)이면 배지 없이 "체험 시작", `IN_PROGRESS`면 "진행 중" 배지와 "이어서 하기", `COMPLETED`면 "완료" 배지와 "결과 다시 보기". 버튼은 어느 경우든 API 2를 부르고 응답 상태로 화면이 정해지므로, 이동 로직은 그대로이고 문구 · 오류 문구만 상태에 맞춘다(`STATUS_VIEW`). 세부 상태(7단계)는 목록에 보이지 않는다.
+- **기사 고르기 (FE-32, 흐름 목업 ②)**: 책상(S-01)에서 집어 든 신문이다. 위에 남불의 안내(오늘 지면의 사건 수)와 "신문 내려놓기"(S-01)가 붙어 있다. 기사(머리기사 제목 · 사진 · 머리기사 단 · 추천 · 다른 사건)를 누르면 그 기사만 남기고 지면이 물러난 뒤 S-20 사건 정보로 간다(`navigate('caseDetail', { caseId, from: 고른 기사 위치 })`). 키보드 · 화면 낭독기는 기사 안의 "사건 펼쳐 보기" 버튼으로 고른다. **체험 시작 · 이어서 하기는 S-20에서 한다**(API 명세 5장 S-02 확장). Esc는 책상으로.
+- 책상에서 왔으면(`from: 'desk'`) 지면이 한 번 다가오며 나타난다. 새로고침 · 뒤로 가기로는 되풀이하지 않는다. 움직임 줄이기면 연출 없이 바로 바뀐다.
+- **진행 상태 배지 (FE-19, REQ-010 · FR-1-6)**: API 1의 `myStatus`로 분류명 줄 오른쪽에 배지를 단다. `null`(체험 전)이면 배지 없음, `IN_PROGRESS`면 "진행 중", `COMPLETED`면 "완료". 세부 상태(7단계)는 목록에 보이지 않는다.
 - 신문 1면 구성(FE-18, 시안 v12): 참여 많은 순으로 첫 사건이 머리기사(배너 제목 · 메인 사진 · 오른쪽 머리기사 단), 다음 2건이 추천 사건, 나머지는 "이번 호 다른 사건" 띠로 간다. 사건 수가 적거나 유형 탭으로 거르면 있는 만큼만 그린다.
 - **공개 범위**: 목록은 처음 판단(S-03) 전 화면이라 사건 정보는 제목 · `shortIntro` · `keywords` · `crimeCategoryLabel` · `participantCount`만 쓴다. 상세 사실 · 판단 요소 · 양측 주장 · 형량은 쓰지 않는다. 머리기사 안내 글과 추천 사건의 [알아두기]는 사건과 무관한 고정 문구(`LEAD_GUIDE` · `TYPE_NOTES`).
 - 기사 제목 · 부제 · 본문은 `headline` · `deck` · `article`(문자열 배열)을 쓴다. **API 1에 아직 없는 제안 필드**라 지금은 목 데이터에만 있고, 값이 없으면 사건 제목 · `shortIntro`와 고정 문구로 채운다. 본문은 S-03 사건 개요 수준의 사실만 쓴다.
 - 이미지가 없으면(`thumbnailUrl`이 `null`) 유형별 연출 이미지(`public/images/case-*.svg`)를 쓴다. 난이도 · 예상 시간은 표시하지 않는다.
 - 공통 헤더 대신 신문 제호를 그리고, 법적 고지는 공통 푸터([`components/siteLayout.js`](../../components/siteLayout.js))를 지면 맨 아래에 붙인다.
-- 요청 · 응답 형식은 [API 명세서](../../../../docs/api-specification.md) API 1 · 2를 따른다.
+- 요청 · 응답 형식은 [API 명세서](../../../../docs/api-specification.md) API 1을 따른다.

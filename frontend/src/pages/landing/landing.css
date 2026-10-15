@@ -45,6 +45,11 @@
 
 /* ── 무대 ── */
 .landing-page .desk-scene { position: relative; aspect-ratio: 1672 / 941; max-width: 1672px; margin: 0 auto; overflow: hidden; }
+/* 신문 집어 들기(FE-32): 신문 가운데를 기준으로 책상이 다가오며 사라진다(transform-origin은 landingPage.js가 정한다) */
+.landing-page .desk-scene { transition: transform .72s cubic-bezier(.5, 0, .3, 1), opacity .6s ease-in .15s; }
+.landing-page .desk-scene.is-lifting { transform: scale(2.6); opacity: 0; pointer-events: none; }
+/* 책상 위 내로 · 남불(장식, 볼을 괴고 엎드림) */
+.landing-page .desk-cheek { position: absolute; z-index: 3; width: auto; pointer-events: none; filter: var(--shadow-rest); }
 .landing-page .desk-world {
   --shadow-rest: drop-shadow(9px 11px 7px color-mix(in srgb, var(--color-desk-shadow) 42%, transparent));
   position: absolute; left: 0; top: 0; width: 1672px; height: 941px;
@@ -208,6 +213,10 @@
 
 /* 푸터: 책상 밖 어두운 바닥 위 */
 .landing-page .site-footer { background: var(--color-desk-floor); border-top: 0; color: var(--color-desk-text); }
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-page .desk-scene { transition: none; }
+}
 
 @media (max-width: 720px) {
   .landing-page .site-header { padding: 12px 16px; }

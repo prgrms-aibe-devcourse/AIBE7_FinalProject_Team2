@@ -1,4 +1,5 @@
 import { mockCases } from './caseListMockData.js';
+import { mockOverview } from './overviewMockData.js';
 import { read, storageKey, validState } from './mockExperienceStore.js';
 
 const delay = () => new Promise((resolve) => setTimeout(resolve, 250));
@@ -43,6 +44,22 @@ export async function getCases(crimeType) {
     cases: mockCases
       .filter((item) => !crimeType || item.crimeType === crimeType)
       .map((item) => ({ ...item, myStatus: myStatusOf(item.caseId) })),
+  });
+}
+
+// API 16 — GET /cases/{caseId} (S-20 사건 디테일). API 1 카드 값 + 죄명 · 사건 개요 · 내 상태.
+// 사건 1은 S-03 개요 목(API 4)과 같은 죄명 · 개요를 쓰고, 나머지 사건은 유형별 죄명 · 짧은 소개로 채운다(임의 데이터)
+const CHARGE_NAMES = { MURDER: '살인', FRAUD: '사기', INJURY: '상해' };
+export async function getCaseDetail(caseId) {
+  await delay();
+  const item = mockCases.find((entry) => entry.caseId === caseId);
+  if (!item) fail('CASE_NOT_FOUND', '사건을 찾을 수 없습니다.');
+  const known = caseId === mockOverview.case.caseId ? mockOverview.case : null;
+  return structuredClone({
+    ...item,
+    chargeName: known?.chargeName ?? CHARGE_NAMES[item.crimeType],
+    overview: known?.overview ?? item.shortIntro,
+    myStatus: myStatusOf(caseId),
   });
 }
 

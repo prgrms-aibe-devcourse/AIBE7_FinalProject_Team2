@@ -5,6 +5,8 @@ import { fallbackImages, todayLabel } from '../../utils/newspaper.js';
 // 책상 위 물건이 곧 메뉴다: 신문 = 사건 목록(S-02), 서류철 = 판결 성향 테스트(S-15), 휴대폰 = 마이페이지(S-17), 노트북 = 커뮤니티.
 // 그림은 CSS · 인라인 SVG로만 그린다(이미지 파일 없음). 색은 style.css의 --color-desk-* 역할 토큰만 쓴다.
 // 2D 평면 일러스트라 물건이 들리거나 기우는 효과는 넣지 않는다(팀 결정). 720px 이하에서는 책상 대신 메뉴 카드를 보여 준다.
+// 흐름 목업 ①(FE-32): 신문을 누르면 책상이 신문 쪽으로 다가가며 사라지고 신문 지면(S-02)이 이어진다(신문을 집어 든다).
+// 책상에는 내로(커피잔 옆) · 남불(휴대폰 아래)이 볼을 괴고 엎드려 있다(장식).
 
 // 책상 그림의 기준 좌표계. 화면 너비에 맞춰 통째로 줄인다(--desk-scale)
 const SCENE_WIDTH = 1672;
@@ -18,6 +20,14 @@ const OBJECTS = {
   laptop: { label: '커뮤니티', readyNote: '', route: null, mobileText: '다른 사람의 생각' },
 };
 const SOON = '곧 열려요';
+// 책상 위 내로 · 남불(기준 좌표계 px). shortcut: 원본 이미지 레포 PNG를 직접 읽는다, 웹 webp 변환(WBS 7.6.8) 때 public 경로로 옮긴다
+const CUTS = 'https://raw.githubusercontent.com/peanutboi710/NaeLawNamBul_Images/main/character/cuts/';
+const CHEEKS = [
+  { who: 'naero', look: 'idle-sorry', left: 250, top: 2, height: 170 },
+  { who: 'nambul', look: 'idle-thinking', left: 1300, top: 782, height: 158 },
+];
+const LIFT_MS = 720; // 신문을 집어 드는 시간(landing.css .is-lifting과 같게)
+const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const features = [
   { title: '먼저 판단하기', text: '사건 정보를 보기 전에 내 생각을 먼저 고릅니다.' },
@@ -87,7 +97,7 @@ export function renderLandingPage(container, { api, navigate, section }) {
     const node = element('button', `desk-object obj-${key}${route ? '' : ' is-soon'}`);
     node.type = 'button';
     node.setAttribute('aria-label', route ? label : `${label} — 준비 중`);
-    if (route) node.addEventListener('click', () => navigate(route));
+    if (route) node.addEventListener('click', () => (key === 'news' ? lift(node) : navigate(route)));
     else node.setAttribute('aria-disabled', 'true');
     node.append(...art, note(key));
     return node;
@@ -145,6 +155,16 @@ export function renderLandingPage(container, { api, navigate, section }) {
   phone.setAttribute('aria-hidden', 'true');
   phone.append(span('phone-glass'));
 
+  const cheeks = CHEEKS.map(({ who, look, left, top, height }) => {
+    const image = element('img', `desk-cheek cheek-${who}`);
+    image.src = `${CUTS}${who}/base/${who}_cut-cheek_${look}.png`;
+    image.alt = '';
+    image.setAttribute('aria-hidden', 'true');
+    Object.assign(image.style, { left: `${left}px`, top: `${top}px`, height: `${height}px` });
+    image.addEventListener('error', () => image.remove(), { once: true });
+    return image;
+  });
+
   world.append(
     deco('desk-wood'), deco('desk-pad'), deco('desk-mug'), deco('desk-pen'),
     headline,
@@ -152,8 +172,22 @@ export function renderLandingPage(container, { api, navigate, section }) {
     deskObject('news', newsSheets, news),
     deskObject('laptop', laptop),
     deskObject('phone', phone),
+    ...cheeks,
     deco('desk-grain'),
   );
+
+  // 신문 집어 들기: 책상이 신문 가운데를 기준으로 커지며 사라진 뒤 지면(S-02)으로 간다. 움직임 줄이기면 바로 간다
+  let lifting = false;
+  function lift(target) {
+    if (lifting) return;
+    if (reducedMotion()) { navigate('list', { from: 'desk' }); return; }
+    lifting = true;
+    const box = scene.getBoundingClientRect();
+    const spot = target.getBoundingClientRect();
+    scene.style.transformOrigin = `${((spot.left + spot.width / 2 - box.left) / box.width) * 100}% ${((spot.top + spot.height / 2 - box.top) / box.height) * 100}%`;
+    scene.classList.add('is-lifting');
+    setTimeout(() => { if (root.isConnected) navigate('list', { from: 'desk' }); }, LIFT_MS);
+  }
 
   // 기준 좌표계(1672px)를 화면 너비에 맞춘다
   const fit = () => world.style.setProperty('--desk-scale', String(scene.clientWidth / SCENE_WIDTH));
@@ -177,7 +211,7 @@ export function renderLandingPage(container, { api, navigate, section }) {
     item.type = 'button';
     const text = span('', route ? mobileText : SOON);
     item.append(element('strong', '', label), text);
-    if (route) item.addEventListener('click', () => navigate(route));
+    if (route) item.addEventListener('click', () => navigate(route, key === 'news' ? { from: 'desk' } : {}));
     else item.setAttribute('aria-disabled', 'true');
     mobileCounts[key] = text;
     mobileList.append(item);

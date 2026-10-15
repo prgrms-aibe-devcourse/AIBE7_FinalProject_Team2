@@ -8,6 +8,9 @@ const experience = (caseId) => `/cases/${encodeURIComponent(caseId)}/experience`
 export const getCases = (crimeType) =>
   get(crimeType === undefined ? '/cases' : `/cases?crimeType=${encodeURIComponent(crimeType)}`);
 
+// API 16 — 공개 사건 상세 (S-20 사건 디테일. 체험 없이 부를 수 있고, 쿠키는 읽기만 한다)
+export const getCaseDetail = (caseId) => get(`/cases/${encodeURIComponent(caseId)}`);
+
 // API 2 — 체험 시작 (있으면 기존 체험, 쿠키가 없으면 익명 ID 쿠키를 내려준다)
 export const startExperience = (caseId) => post(experience(caseId));
 
