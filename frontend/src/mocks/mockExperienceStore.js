@@ -59,3 +59,10 @@ const preJudgmentStore = jsonStore('nlnb-mock-pre-judgment');
 export const savePreJudgment = preJudgmentStore.save;
 export const readPreJudgment = preJudgmentStore.read;
 export const clearPreJudgment = preJudgmentStore.clear;
+
+// 무대의 "처음부터 다시"(목 전용): 사건 시작 전 상태로 되돌리고 저장한 판단을 지운다
+export function restart() {
+  clearJudgment();
+  clearPreJudgment();
+  return save({ status: 'STARTED', lastReviewedStep: 0 });
+}

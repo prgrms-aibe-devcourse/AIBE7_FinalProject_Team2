@@ -1,9 +1,8 @@
 import { renderProgressSidebar } from '../review/progressSidebar.js';
 import { renderStage } from '../../components/stage.js';
-import case1Script from '../../content/case-1/script.json';
-
-// 대본이 있는 사건은 1 · 2막 무대로 진행한다(REQ-089). 대본이 없으면 MVP 화면 그대로
-const SCRIPTS = { 1: case1Script };
+import { SCRIPTS } from '../../content/scripts.js';
+import { API_MODE } from '../../api/config.js';
+import courtFacts from '../../content/courtFacts.json';
 
 // S-03 사건 개요 · 사전 판단
 export async function renderOverviewPage(container, { caseId, api, navigate }) {
@@ -14,6 +13,7 @@ export async function renderOverviewPage(container, { caseId, api, navigate }) {
   const active = () => container.contains(root);
   let loading = false;
   let submitting = false;
+  let stage = null; // 무대가 있으면 제출 뒤 사진 속으로 들어가는 연출을 보여 주고 S-04로 간다
 
   function element(tag, className, text) {
     const node = document.createElement(tag);
@@ -54,6 +54,8 @@ export async function renderOverviewPage(container, { caseId, api, navigate }) {
     try {
       // MVP는 작용 요소(factorIds)를 보내지 않는다. (REQ-093 확장)
       await api.postPreJudgment(caseId, { rangeOptionId });
+      if (stage && active()) await stage.enterPhoto();
+      if (stage && active()) await stage.interlude(courtFacts);
       if (active()) navigate('review', { caseId });
     } catch (error) {
       if (!active()) return;
@@ -123,12 +125,13 @@ export async function renderOverviewPage(container, { caseId, api, navigate }) {
 
     const script = SCRIPTS[caseId];
     if (script) {
-      // 무대가 주인공이다: 진행 표시는 막 칩이 맡고, 제목은 읽기 도구용으로만 남긴다
+      // 1 · 2막 무대(흐름 목업). 진행 표시는 막 칩이 맡고, 제목은 읽기 도구용으로만 남긴다. 2막 보드는 이 화면의 사전 판단 폼이다
       root.classList.add('has-stage');
       main.firstChild.classList.add('visually-hidden');
-      const preJudgment = element('div', 'stage-input');
-      preJudgment.append(guide, form);
-      main.append(renderStage({ script, order: ['1', '2'], cards: { news: newsCard(script, info), preJudgment }, inputCards: ['preJudgment'] }));
+      const card = element('div');
+      card.append(guide, form);
+      stage = renderStage({ script, order: ['1', '2'], cards: { preJudgment: card }, inputCards: ['preJudgment'], onRestart: restartMock(caseId) });
+      main.append(stage);
       const layout = element('main', 'review-layout');
       layout.append(main);
       root.replaceChildren(header, layout);
@@ -139,28 +142,6 @@ export async function renderOverviewPage(container, { caseId, api, navigate }) {
     layout.append(main);
     renderProgressSidebar(layout, { lastReviewedStep: 0, openStep: 1 });
     root.replaceChildren(header, layout);
-  }
-  // 1막 카드: 신문 기사 모양(지면 제목 · 부제 · 재연 일러스트 · 첫 단락 + 죄명 · 범죄 분류)
-  function newsCard({ news, photo }, info) {
-    const card = element('article', 'news-card');
-    card.append(element('p', 'news-desk', news.desk), element('h2', '', news.headline), element('p', 'news-deck', news.deck));
-    if (photo) {
-      const figure = element('figure');
-      const image = element('img');
-      image.src = photo;
-      image.alt = '';
-      image.addEventListener('error', () => figure.remove(), { once: true });
-      figure.append(image, element('figcaption', '', '사건 이해를 돕기 위한 재연 일러스트'));
-      card.append(figure);
-    }
-    const facts = element('dl');
-    [['죄명', info.chargeName], ['범죄 분류', info.crimeCategoryLabel]].forEach(([label, value]) => {
-      const row = element('div');
-      row.append(element('dt', '', label), element('dd', '', value));
-      facts.append(row);
-    });
-    card.append(element('p', 'news-lead', news.lead), facts);
-    return card;
   }
   async function load() {
     if (loading || !active()) return;
@@ -175,4 +156,14 @@ export async function renderOverviewPage(container, { caseId, api, navigate }) {
     finally { loading = false; }
   }
   await load();
+}
+
+// 무대의 "처음부터 다시"(목 데이터 전용): 목 저장소를 사건 시작 전으로 되돌리고 S-03을 새로 연다. 실제 API에서는 버튼을 달지 않는다
+export function restartMock(caseId) {
+  if (API_MODE !== 'mock') return undefined;
+  return async () => {
+    const { restart } = await import('../../mocks/mockExperienceStore.js');
+    restart();
+    window.location.assign(`/cases/${caseId}/start`);
+  };
 }

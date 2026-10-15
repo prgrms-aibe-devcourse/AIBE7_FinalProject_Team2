@@ -1,36 +1,136 @@
 {
   "caseId": 1,
-  "photo": "https://raw.githubusercontent.com/peanutboi710/NaeLawNamBul_Images/main/character/cuts/reenact/case-1/reenact-case-1_cut_headline_sample.png",
-  "news": {
-    "desk": "사회부",
+  "paper": {
+    "desk": "사회면",
     "headline": "빌린 돈 갚으라며 찾아온 지인, 자택서 숨져",
     "deck": "오래 이어진 변제 갈등…말다툼 끝 흉기 휘두른 뒤 현장 떠나",
-    "lead": "돈 문제로 오래 다퉈 온 지인 사이의 갈등이 끝내 한 사람의 죽음으로 이어졌다. A씨는 빌린 돈 문제를 이야기하려고 자신의 집을 찾아온 지인 B씨를 집 안에 있던 흉기로 살해한 것으로 조사됐다."
+    "photo": "https://raw.githubusercontent.com/peanutboi710/NaeLawNamBul_Images/main/character/cuts/reenact/case-1/reenact-case-1_cut_headline_sample.png",
+    "caption": "사건 이해를 돕기 위한 재연 일러스트(샘플)",
+    "article": [
+      "돈 문제로 오래 다퉈 온 지인 사이의 갈등이 끝내 한 사람의 죽음으로 이어졌다. A씨는 빌린 돈 문제를 이야기하려고 자신의 집을 찾아온 지인 B씨를 집 안에 있던 흉기로 살해한 것으로 조사됐다.",
+      "두 사람은 A씨가 B씨에게 빌린 돈을 제때 갚지 못하면서 사이가 틀어졌다. 그동안 상환 문제로 다툼이 이어졌고, 이날도 B씨가 직접 A씨의 집을 찾아가 이야기를 꺼낸 것이 발단이 됐다.",
+      "대화는 곧 말다툼으로 번졌다. 다툼이 격해지자 A씨는 집 안에 있던 흉기를 집어 들었고, B씨는 그 자리에서 숨졌다. A씨는 쓰러진 B씨에게 별다른 구호 조치를 하지 않은 채 집을 나선 것으로 전해졌다."
+    ]
+  },
+  "cards": {
+    "indict": {
+      "k": "공소사실 · 검사",
+      "ul": [
+        "피고인은 피해자에게 빌린 돈을 갚지 못해 오래 다퉈 왔다.",
+        "사건 당일 집을 찾아온 피해자와 말다툼을 하다가 집 안에 있던 흉기로 피해자를 살해했다."
+      ],
+      "p": [
+        {
+          "b": "적용 법조",
+          "t": "형법 제250조 제1항 살인"
+        }
+      ]
+    },
+    "plea": {
+      "k": "피고인 측 모두진술 · 변호인",
+      "p": [
+        {
+          "b": "공소사실을 인정한다."
+        }
+      ],
+      "ul": [
+        "미리 계획한 범행이 아니라 말다툼 중 우발적으로 벌어진 일이다."
+      ]
+    },
+    "issues": {
+      "k": "쟁점 정리",
+      "p": [
+        "피고인이 범행을 인정해 사실관계 다툼은 없다. 남은 쟁점은 형량이다."
+      ],
+      "ul": [
+        "범행 경위 — 계획했나, 우발적이었나",
+        "범행 뒤의 행동 — 구호 조치 없이 떠남",
+        "피해 회복 노력 — 반성 · 공탁"
+      ]
+    },
+    "law": {
+      "k": "적용 법률 · 법정형",
+      "p": [
+        "형법 제250조 제1항 살인",
+        {
+          "b": "법정형",
+          "t": "사형, 무기 또는 5년 이상의 징역"
+        },
+        {
+          "t": "감경 · 가중 사유를 반영해 법률상 선고할 수 있는 범위는",
+          "b": "징역 2년 6개월 ~ 30년"
+        }
+      ]
+    },
+    "guide": {
+      "k": "양형기준 권고 범위",
+      "big": "징역 7년 ~ 12년",
+      "p": [
+        "살인범죄 제2유형(보통 동기 살인). 특별감경인자 1개(실질적 피해 회복)가 있고 특별가중인자는 없어 감경영역을 적용한다.",
+        {
+          "b": "권고 범위는 정답이 아니라 참고 기준이다."
+        }
+      ]
+    }
+  },
+  "evidence": [
+    {
+      "side": "검사",
+      "text": "두 사람 사이에 빌린 돈 문제로 오래 이어진 다툼이 있었다"
+    },
+    {
+      "side": "검사",
+      "text": "사건 당일 피해자가 돈 이야기를 하려고 피고인의 집을 찾아갔다"
+    },
+    {
+      "side": "검사",
+      "text": "말다툼 중 집 안에 있던 흉기가 사용됐고, 피고인은 구호 조치 없이 집을 나갔다"
+    },
+    {
+      "side": "검사",
+      "text": "피해자에게는 부양하던 어린 자녀 2명이 있고, 유족은 엄벌을 원한다"
+    },
+    {
+      "side": "변호인",
+      "text": "피고인은 수사 초기부터 범행을 인정했다"
+    },
+    {
+      "side": "변호인",
+      "text": "피해 회복을 위해 5,000만 원을 공탁했다"
+    },
+    {
+      "side": "변호인",
+      "text": "피고인에게 형사처벌 전력이 없다"
+    }
+  ],
+  "evidencePhotos": {
+    "검사": "https://raw.githubusercontent.com/peanutboi710/NaeLawNamBul_Images/main/character/cuts/reenact/case-1/reenact-case-1_cut_headline_sample.png",
+    "변호인": "https://raw.githubusercontent.com/peanutboi710/NaeLawNamBul_Images/main/character/cuts/reenact/case-1/reenact-case-1_cut_sub-1_sample.png"
   },
   "acts": {
     "1": {
       "title": "1막 신문 속 사건",
-      "scene": "news",
+      "scene": "paper",
       "look": {
         "naero": "guide-neutral",
         "nambul": "idle-neutral"
       },
+      "spots": {
+        "naero": "headline",
+        "nambul": "article"
+      },
       "steps": [
         {
-          "system": "오늘의 사건"
-        },
-        {
           "say": "naero",
-          "role": "안내",
-          "card": "news",
           "text": "오늘 신문 1면에 실린 사건이에요. 기사에 나온 내용만 가지고 먼저 따라가 볼게요."
         },
         {
           "say": "nambul",
-          "role": "안내",
-          "card": "news",
           "look": {
             "nambul": "guide-neutral"
+          },
+          "spots": {
+            "nambul": "photo-r"
           },
           "text": "제가 A씨, 내로가 B씨 자리에 서 볼게요. 기사에 없는 말은 지어내지 않을게요."
         },
@@ -40,6 +140,10 @@
           "look": {
             "naero": "role:actor",
             "nambul": "role:actor"
+          },
+          "spots": {
+            "naero": "photo-l",
+            "nambul": "photo-r"
           },
           "tags": {
             "naero": "B씨 역",
@@ -58,14 +162,14 @@
           "text": "이야기는 금방 말다툼이 됐어요. 목소리가 점점 커졌고요."
         },
         {
-          "blackout": "이 뒤의 장면은 보여 드리지 않아요. 기사에 실린 결과만 전할게요."
-        },
-        {
           "say": "naero",
-          "role": "안내",
           "look": {
             "naero": "react-sorry",
             "nambul": "idle-neutral"
+          },
+          "spots": {
+            "naero": "article",
+            "nambul": "photo-r"
           },
           "tags": {
             "naero": "",
@@ -75,7 +179,6 @@
         },
         {
           "say": "nambul",
-          "role": "안내",
           "look": {
             "nambul": "react-sorry"
           },
@@ -85,7 +188,7 @@
     },
     "2": {
       "title": "2막 첫인상 판단",
-      "scene": "news",
+      "scene": "paper",
       "look": {
         "naero": "guide-neutral",
         "nambul": "idle-neutral"
@@ -93,12 +196,10 @@
       "steps": [
         {
           "say": "naero",
-          "role": "안내",
           "text": "기록을 펼치기 전에, 지금 드는 생각을 먼저 남겨 둘게요. 이 사람은 어느 정도의 벌을 받아야 할까요?"
         },
         {
           "say": "nambul",
-          "role": "안내",
           "look": {
             "nambul": "guide-neutral",
             "naero": "read-thinking"
@@ -111,6 +212,214 @@
             "naero": "read-thinking",
             "nambul": "read-thinking"
           }
+        }
+      ],
+      "spots": {
+        "naero": "photo-l",
+        "nambul": "article"
+      }
+    },
+    "3": {
+      "title": "3막 재판",
+      "scene": "court",
+      "procedures": [
+        "인정신문",
+        "모두진술",
+        "쟁점 정리",
+        "증거조사",
+        "피고인신문",
+        "법률 안내"
+      ],
+      "look": {
+        "naero": "role:defense",
+        "nambul": "role:prosecutor"
+      },
+      "steps": [
+        {
+          "say": "narrator",
+          "proc": 0,
+          "section": 2,
+          "text": "재판을 시작합니다. 재판장은 당신이에요. 먼저 피고인 A씨가 본인이 맞는지 확인합니다."
+        },
+        {
+          "say": "nambul",
+          "role": "검사",
+          "text": "이번 재판에서 저는 검사 자리를 맡을게요."
+        },
+        {
+          "say": "naero",
+          "role": "변호인",
+          "text": "저는 변호인 자리예요. 둘 다 맡은 쪽의 주장만 전해요."
+        },
+        {
+          "say": "nambul",
+          "role": "검사",
+          "proc": 1,
+          "card": "indict",
+          "text": "공소사실을 말씀드리겠습니다. 피고인은 피해자에게 빌린 돈을 갚지 못해 오래 다퉈 왔습니다."
+        },
+        {
+          "say": "nambul",
+          "role": "검사",
+          "card": "indict",
+          "text": "사건 당일, 집을 찾아온 피해자와 말다툼을 하다가 집 안에 있던 흉기로 피해자를 살해했습니다. 적용 법조는 형법 제250조 제1항, 살인입니다."
+        },
+        {
+          "say": "naero",
+          "role": "변호인",
+          "card": "plea",
+          "text": "피고인은 공소사실을 모두 인정합니다."
+        },
+        {
+          "say": "naero",
+          "role": "변호인",
+          "card": "plea",
+          "text": "다만 미리 계획한 일이 아니라, 말다툼 중에 우발적으로 벌어진 일이라는 점을 살펴 주시기 바랍니다."
+        },
+        {
+          "say": "narrator",
+          "proc": 2,
+          "card": "issues",
+          "text": "피고인이 범행을 인정했으니, 남은 쟁점은 얼마나 무겁게 벌할지예요."
+        },
+        {
+          "say": "narrator",
+          "card": "issues",
+          "text": "범행 경위, 범행 뒤의 행동, 피해 회복 노력. 이 세 가지를 눈여겨보세요."
+        },
+        {
+          "say": "nambul",
+          "role": "검사",
+          "proc": 3,
+          "card": "evidence",
+          "ev": 0,
+          "text": "검사 측 증거입니다. 두 사람 사이에 빌린 돈 문제로 오래 이어진 다툼을 보여 주는 기록입니다."
+        },
+        {
+          "say": "nambul",
+          "role": "검사",
+          "card": "evidence",
+          "ev": 1,
+          "text": "사건 당일, 피해자가 돈 이야기를 하려고 피고인의 집을 찾아간 사실입니다."
+        },
+        {
+          "say": "nambul",
+          "role": "검사",
+          "card": "evidence",
+          "ev": 2,
+          "text": "말다툼 끝에 집 안에 있던 흉기가 사용됐고, 피고인은 구호 조치 없이 집을 나갔습니다."
+        },
+        {
+          "say": "nambul",
+          "role": "검사",
+          "card": "evidence",
+          "ev": 3,
+          "text": "피해자에게는 부양하던 어린 자녀 둘이 있고, 유족은 엄벌을 원한다는 진술입니다."
+        },
+        {
+          "say": "naero",
+          "role": "변호인",
+          "card": "evidence",
+          "ev": 4,
+          "text": "변호인 측 증거입니다. 피고인이 수사 초기부터 범행을 인정했다는 진술 기록입니다."
+        },
+        {
+          "say": "naero",
+          "role": "변호인",
+          "card": "evidence",
+          "ev": 5,
+          "text": "피해 회복을 위해 5,000만 원을 공탁한 자료입니다."
+        },
+        {
+          "say": "naero",
+          "role": "변호인",
+          "card": "evidence",
+          "ev": 6,
+          "confirm": 2,
+          "text": "피고인에게 형사처벌 전력이 없다는 기록도 함께 제출합니다."
+        },
+        {
+          "say": "narrator",
+          "proc": 4,
+          "section": 3,
+          "look": {
+            "naero": "role:prosecutor",
+            "nambul": "role:actor"
+          },
+          "tags": {
+            "nambul": "A씨 역"
+          },
+          "text": "이제 피고인에게 직접 묻습니다. 이번엔 내로가 검사석에 앉고, 남불이 A씨 자리에 서요."
+        },
+        {
+          "say": "naero",
+          "role": "검사",
+          "text": "피고인은 그날 피해자를 만나기 전부터 해칠 생각이 있었습니까?"
+        },
+        {
+          "say": "nambul",
+          "role": "A씨 역",
+          "text": "아닙니다. 돈 이야기를 하다가 말다툼이 커졌고, 그러다 그렇게 됐습니다."
+        },
+        {
+          "say": "naero",
+          "role": "검사",
+          "text": "범행 뒤 피해자를 두고 집을 나간 것은 사실입니까?"
+        },
+        {
+          "say": "nambul",
+          "role": "A씨 역",
+          "text": "…네, 사실입니다."
+        },
+        {
+          "say": "naero",
+          "role": "검사",
+          "text": "지금 그 일을 어떻게 생각합니까?"
+        },
+        {
+          "say": "nambul",
+          "role": "A씨 역",
+          "confirm": 3,
+          "text": "제가 한 일을 모두 인정합니다. 깊이 반성하고 있습니다."
+        },
+        {
+          "say": "naero",
+          "role": "법률 안내",
+          "proc": 5,
+          "section": 4,
+          "card": "law",
+          "look": {
+            "naero": "role:judge",
+            "nambul": "idle-neutral"
+          },
+          "tags": {
+            "nambul": ""
+          },
+          "text": "재판 절차는 아니지만, 판결 전에 알아 둘 법을 정리할게요. 이 사건에 적용되는 법 조항이에요."
+        },
+        {
+          "say": "naero",
+          "role": "법률 안내",
+          "card": "law",
+          "text": "법정형은 법이 정해 둔 형의 범위예요. 감경 · 가중 사유를 반영하면 실제로 선고할 수 있는 범위가 정해져요."
+        },
+        {
+          "say": "nambul",
+          "role": "법률 안내",
+          "card": "guide",
+          "look": {
+            "nambul": "role:judge",
+            "naero": "idle-neutral"
+          },
+          "text": "양형기준은 판사들이 형을 정할 때 참고하는 기준이에요."
+        },
+        {
+          "say": "nambul",
+          "role": "법률 안내",
+          "card": "guide",
+          "confirm": 4,
+          "next": "판결 전 최종 정리로",
+          "text": "권고 범위는 정답이 아니라 참고예요. 범위를 벗어난 판결도 있어요."
         }
       ]
     }
