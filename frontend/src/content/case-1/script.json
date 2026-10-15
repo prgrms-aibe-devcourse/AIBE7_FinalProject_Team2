@@ -553,6 +553,47 @@
           "board": "full"
         }
       ]
+    },
+    "6": {
+      "title": "AI 판사의 합의",
+      "scene": "court",
+      "look": {
+        "naero": "guide-neutral",
+        "nambul": "idle-neutral"
+      },
+      "steps": [
+        {
+          "say": "law",
+          "law": "trio",
+          "text": "양쪽을 함께 보겠습니다. 판단 요소를 하나씩 짚어 보겠습니다."
+        },
+        {
+          "factors": true
+        },
+        {
+          "system": "AI 판사들이 의견을 맞추고 있어요",
+          "law": "think",
+          "auto": 300
+        },
+        {
+          "say": "law",
+          "law": "deliver",
+          "text": "합의 결과를 말씀드리겠습니다."
+        },
+        {
+          "say": "law",
+          "law": "deliver",
+          "card": "ai",
+          "text": "{penalty}입니다.\n{summary}"
+        },
+        {
+          "say": "naero",
+          "role": "안내",
+          "confirm": "court",
+          "next": "실제 판결 확인하기",
+          "text": "이건 AI 판사의 판결이에요. 다음은 실제 재판부가 내린 판결이에요."
+        }
+      ]
     }
   }
 }

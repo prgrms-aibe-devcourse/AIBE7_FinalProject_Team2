@@ -6,16 +6,27 @@
 import { scrollArea } from './scrollArea.js';
 
 export const ACT_NAMES = ['신문 속 사건', '첫인상 판단', '재판', '판결 전 정리', '당신이 판사', 'AI 판사의 합의', '실제 판결', '세 판결 비교'];
-const NAMES = { naero: '내로', nambul: '남불' };
+// 로 합의부는 판결 화면에서 이름 대신 "AI 판사"로 부른다(직책 재판장 · 배석판사는 이름표 옆에 단다)
+const NAMES = { naero: '내로', nambul: '남불', 'law-scale': 'AI 판사', 'law-gavel': 'AI 판사', 'law-book': 'AI 판사' };
 const ROLE_LABEL = { actor: '사건 속 인물', prosecutor: '검사', defense: '변호인', judge: '법률 안내' };
-const ROLE_COLOR = { '법정 진행': 'narrator', 'A씨 역': 'actor', 'B씨 역': 'actor', '사건 속 인물': 'actor', 검사: 'prosecutor', 변호인: 'defense', '법률 안내': 'law' };
+const ROLE_COLOR = { '법정 진행': 'narrator', 'A씨 역': 'actor', 'B씨 역': 'actor', '사건 속 인물': 'actor', 검사: 'prosecutor', 변호인: 'defense', '법률 안내': 'law', 재판장: 'law', 배석판사: 'law' };
+// 로 합의부(6막 AI 판사): 로울(저울) · 로봉(법봉) · 로북(법전). LAWS는 판단 요소를 맡는 순서(저울 → 법봉 → 법전),
+// 서는 자리는 로울이 가운데, 로봉 · 로북이 좌우(LAW_SPOTS). 직책은 로울 재판장, 로봉 · 로북 배석판사
+export const LAWS = ['law-scale', 'law-gavel', 'law-book'];
+const LAW_SPOTS = ['law-gavel', 'law-scale', 'law-book'];
+export const LAW_TITLES = { 'law-scale': '재판장', 'law-gavel': '배석판사', 'law-book': '배석판사' };
+// 로 이미지: 대기 · 생각(합의) · 발표 세 자세와 얼굴 아이콘. 원본 레포 컷 · 연기 시트에서 잘라 키(발 위치)를 맞춰 public에 둔다
+const LAW_POSES = ['idle', 'think', 'deliver'];
+const LAW_FADE_MS = 350; // 판사 페이드 시간 하나로: 첫 등장 · 자세 바뀜 · 사라짐(stage.css --law-fade와 같게)
+const lawImage = (who, pose) => `/images/characters/law/${who}_${pose}.webp`;
 // shortcut: 캐릭터 컷은 원본 이미지 레포 PNG를 직접 읽는다, 웹 webp 변환(WBS 7.6.8) 때 public 경로로 옮긴다
 const CUTS = 'https://raw.githubusercontent.com/peanutboi710/NaeLawNamBul_Images/main/character/cuts/';
-const imageOf = (who, look) => (look.startsWith('role:')
-  ? `/images/characters/roles/${who}_${look.slice(5)}.webp`
-  : `${CUTS}${who}/base/${who}_cut_${look}.png`);
+const imageOf = (who, look) => (look.startsWith('role:') ? `/images/characters/roles/${who}_${look.slice(5)}.webp`
+  : look.startsWith('cheek:') ? `${CUTS}${who}/base/${who}_cut-cheek_${look.slice(6)}.png` // 볼따구(기다림)
+    : `${CUTS}${who}/base/${who}_cut_${look}.png`);
 const FACES = ['neutral', 'happy', 'surprised', 'thinking', 'sorry', 'cheer'];
 const iconOf = (who, look) => {
+  if (who.startsWith('law-')) return `/images/characters/law/${who}_icon.webp`;
   const face = look.startsWith('role:') ? 'neutral' : look.split('-')[1];
   return `${CUTS}${who}/icon/${who}_icon_face-${FACES.includes(face) ? face : 'neutral'}.png`;
 };
@@ -181,6 +192,9 @@ export function renderStage({ script, order, cards = {}, inputCards = [], start,
   let typing = null;
   let busy = false;
   let lastLook = '';
+  let lastLaw = '';
+  let lastDelta = 1;
+  let autoTimer = null;
 
   const wrap = element('section', 'stage-wrap');
   wrap.setAttribute('aria-label', '판결 체험');
@@ -216,7 +230,29 @@ export function renderStage({ script, order, cards = {}, inputCards = [], start,
   const sys = element('div', 'sysline');
   const flash = element('div', 'flash');
   const court = courtSet();
-  scene.append(bg, court, ...(page ? [page] : []), figures.naero, figures.nambul, chips.naero, chips.nambul, procs, sys, flash);
+  // 6막 AI 판사 셋: 자리는 고정(로봉 · 로울 · 로북). 자리마다 세 자세 그림을 겹쳐 두고 보일 그림만 켠다(0.3초 겹쳐 바뀜).
+  // 대본 law: trio(셋 다 대기) · three(말하는 판사 강조) · think(합의, 셋 다 생각) ·
+  // deliver(발표하는 판사만 남는다 — 나머지는 자리를 지킨 채 사라지고, 발표자는 가운데로, 발표 카드가 뜨면 왼쪽으로)
+  const lawCast = element('div', 'laws');
+  lawCast.setAttribute('aria-hidden', 'true');
+  const lawSlots = Object.fromEntries(LAW_SPOTS.map((who) => {
+    const slot = element('div', `law-slot ${who}`);
+    LAW_POSES.forEach((pose) => {
+      const image = element('img', `pose ${pose}`);
+      image.alt = '';
+      image.src = lawImage(who, pose);
+      slot.append(image);
+    });
+    lawCast.append(slot);
+    return [who, slot];
+  }));
+  function lawsEnter() { // 처음 등장할 때 페이드인
+    if (reducedMotion()) return;
+    lawCast.classList.remove('entering');
+    void lawCast.offsetWidth; // 같은 애니메이션을 다시 시작하려고 다시 그리게 한다
+    lawCast.classList.add('entering');
+  }
+  scene.append(bg, court, ...(page ? [page] : []), figures.naero, figures.nambul, lawCast, chips.naero, chips.nambul, procs, sys, flash);
 
   const board = element('div', 'board');
   board.tabIndex = -1;
@@ -302,12 +338,28 @@ export function renderStage({ script, order, cards = {}, inputCards = [], start,
       figures[who].src = imageOf(who, look);
       figures[who].classList.toggle('role', look.startsWith('role:'));
       figures[who].classList.toggle('dim', Boolean(step.say) && step.say !== who);
-      figures[who].classList.toggle('hide', dark);
+      figures[who].classList.toggle('hide', dark || Boolean(step.law));
       if (step.spots[who]) figures[who].dataset.spot = step.spots[who]; else delete figures[who].dataset.spot;
       chips[who].textContent = step.chips[who];
       chips[who].dataset.role = ROLE_COLOR[step.chips[who]] ?? 'actor';
       if (step.spots[who]) chips[who].dataset.spot = step.spots[who]; else delete chips[who].dataset.spot;
-      chips[who].classList.toggle('hide', dark || !step.chips[who]);
+      chips[who].classList.toggle('hide', dark || !step.chips[who] || Boolean(step.law));
+    });
+    lawCast.hidden = !step.law;
+    lawCast.classList.toggle('resolving', lastLaw === 'think' && step.law === 'deliver');
+    if (step.law && !lastLaw) lawsEnter();
+    stage.classList.toggle('lawcard', Boolean(step.law) && Boolean(entry));
+    stage.classList.toggle('lawdeliver', step.law === 'deliver');
+    if (step.law) LAW_SPOTS.forEach((who) => {
+      const slot = lawSlots[who];
+      const lead = step.say === who;
+      const deliver = step.law === 'deliver';
+      const pose = deliver ? (lead ? 'deliver' : 'think') : step.law === 'think' ? 'think' : 'idle';
+      slot.querySelectorAll('.pose').forEach((image) => image.classList.toggle('on', image.classList.contains(pose)));
+      slot.classList.toggle('gone', deliver && !lead);
+      slot.classList.toggle('lead', step.law === 'three' && lead);
+      slot.classList.toggle('dim', step.law === 'three' && !lead);
+      slot.dataset.place = deliver && lead ? (entry ? 'side' : 'center') : 'home';
     });
     const looks = `${step.look.naero}|${step.look.nambul}`;
     if (lastLook && looks !== lastLook && (looks.includes('role:') || lastLook.includes('role:')) && !reducedMotion()) {
@@ -341,16 +393,23 @@ export function renderStage({ script, order, cards = {}, inputCards = [], start,
     wrap.classList.toggle('peeking', full);
     if (full) ['naero', 'nambul'].forEach((who) => { peeks[who].src = imageOf(who, step.look[who]); });
     board.classList.toggle('small', small);
-    const latest = board.querySelector('.evd-list li.now');
+    const latest = board.querySelector('li.now'); // 쌓이는 목록(증거조사 · 판단 요소)은 지금 줄이 보이게 끝까지 내린다
     if (latest) { const list = latest.closest('.scroll-body'); list.scrollTop = list.scrollHeight; }
 
     const line = step.text ?? '';
     dialog.hidden = input || !line;
+    dialog.classList.toggle('fade-in', lastLaw === 'think' && step.law === 'deliver');
+    lastLaw = step.law ?? '';
+    // 대본 auto(ms): 앞으로 넘어와 이 장면에 닿으면 저절로 다음 장면(6막 합의 → 발표).
+    // 판사 자세가 바뀌는 장면은 바뀜(0.3초)이 다 끝난 뒤부터 센다
+    clearTimeout(autoTimer);
+    const settle = step.law && !reducedMotion() ? LAW_FADE_MS : 0;
+    if (step.auto && lastDelta > 0) autoTimer = setTimeout(() => { if (steps[index] === step && wrap.isConnected) go(1); }, settle + step.auto);
     if (line) {
       const role = step.say === 'narrator' ? '법정 진행' : step.role ?? '';
       name.replaceChildren();
       name.dataset.role = ROLE_COLOR[role] ?? 'guide';
-      if (step.say !== 'narrator') name.append(picture(iconOf(step.say, step.look[step.say])), NAMES[step.say]);
+      if (NAMES[step.say]) name.append(picture(iconOf(step.say, step.look[step.say])), NAMES[step.say]); // AI 판사는 이름 · 얼굴 없이 역할만
       if (role) name.append(element('i', '', ` ${role}`));
     }
     live.textContent = line || caption;
@@ -365,7 +424,8 @@ export function renderStage({ script, order, cards = {}, inputCards = [], start,
   }
 
   async function go(delta) {
-    if (busy) return;
+    if (busy || stage.querySelector('.eyecatch')) return; // 아이캐치가 떠 있는 동안은 장면을 넘기지 않는다
+    lastDelta = delta;
     if (delta > 0 && typing) { finishTyping(); return; }
     const target = index + delta;
     if (target < 0 || (target >= steps.length && !(delta > 0 && steps[index].confirm))) return;
@@ -433,32 +493,43 @@ export function renderStage({ script, order, cards = {}, inputCards = [], start,
     }));
     setTimeout(resolve, 750);
   });
-  // 사진 → 재판 사이의 아이캐치: 사진은 사건 당시, 재판은 그 뒤라서 시간이 흐른 것을 한 장면 보여 준다.
-  // 법정 상식 하나를 무작위로 띄우고, 정해진 시간이 지나거나 클릭 · Space · Enter면 끝난다
-  wrap.interlude = (facts = []) => new Promise((resolve) => {
+  // 아이캐치: 장면 사이에 한 장면을 덮어 보여 주고, 정해진 시간이 지나거나 클릭 · Space · Enter면 끝난다.
+  // 기본(배열을 넘기면)은 사진 → 재판 사이(시간이 흐른 것 + 무작위 법정 상식 하나).
+  // 객체를 넘기면 { title, sub, k, lines(모두 보여 줌), cast: [[who, look], [who, look]], ms }로 바꿔 쓴다(6막 AI 판결 기다림)
+  wrap.interlude = (options = []) => new Promise((resolve) => {
+    const facts = Array.isArray(options) ? options : [];
+    const {
+      title = '그로부터 몇 달 뒤, 법정', sub = '기사 속 사건은 지나갔고, 이제 그 사건의 재판이 열려요.', k = '법정 상식',
+      lines = facts.length ? [facts[Math.floor(Math.random() * facts.length)]] : [],
+      cast: people = [['naero', 'role:defense'], ['nambul', 'role:prosecutor']], ms = 3600,
+    } = Array.isArray(options) ? {} : options;
     const card = element('div', 'eyecatch');
     card.setAttribute('role', 'status');
+    card.style.setProperty('--ec-ms', `${ms}ms`);
     const brand = element('p', 'ec-brand');
     brand.append('내', element('span', 'law', 'Law'), '남불');
     const fact = element('div', 'ec-fact');
-    if (facts.length) fact.append(element('p', 'ec-k', '법정 상식'), element('p', '', facts[Math.floor(Math.random() * facts.length)]));
+    if (lines.length) fact.append(element('p', 'ec-k', k), ...lines.map((line) => element('p', '', line)));
     const bar = element('div', 'ec-bar');
     bar.append(element('i'));
     const cast = element('div', 'ec-cast');
-    cast.append(picture(imageOf('naero', 'role:defense'), 'ec-n'), picture(imageOf('nambul', 'role:prosecutor'), 'ec-b'));
-    card.append(cast, brand, element('p', 'ec-title', '그로부터 몇 달 뒤, 법정'), element('p', 'ec-sub', '기사 속 사건은 지나갔고, 이제 그 사건의 재판이 열려요.'), fact, bar, element('p', 'ec-skip', '클릭하면 바로 넘어가요'));
+    cast.append(picture(imageOf(...people[0]), 'ec-n'), picture(imageOf(...people[1]), 'ec-b'));
+    card.append(cast, brand, element('p', 'ec-title', title), element('p', 'ec-sub', sub), fact, bar, element('p', 'ec-skip', '클릭하면 바로 넘어가요'));
     stage.append(card);
     let timer = null;
     const done = () => {
       clearTimeout(timer);
       card.removeEventListener('click', done);
-      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('keydown', onKey, true);
+      card.remove();
+      if (steps[index].law) lawsEnter(); // 아이캐치에 가려 있던 판사 등장(페이드인)을 걷힌 뒤에 보여 준다
       resolve();
     };
-    const onKey = (event) => { if (event.key === ' ' || event.key === 'Enter') { event.preventDefault(); done(); } };
+    // 캡처 단계에서 먼저 받아 무대의 키 처리(장면 넘기기)까지 가지 않게 한다
+    const onKey = (event) => { if (event.key === ' ' || event.key === 'Enter') { event.preventDefault(); event.stopPropagation(); done(); } };
     card.addEventListener('click', done);
-    document.addEventListener('keydown', onKey);
-    timer = setTimeout(done, 3600);
+    document.addEventListener('keydown', onKey, true);
+    timer = setTimeout(done, ms);
   });
   // 재판(3막)을 처음부터 시작할 때: 사진 속에서 법정이 나타나는 느낌으로 한 번 들어온다
   if (index === 0 && steps[0].scene === 'court' && !reducedMotion()) stage.classList.add('arrive');

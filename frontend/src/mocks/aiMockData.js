@@ -8,7 +8,8 @@ export const mockAiJudgment = {
     fineAmount: null,
     suspensionMonths: null,
     extraDispositions: [],
-    summary: '다투다 벌어진 범행과 공탁 · 반성을 함께 저울질한 판단',
+    // 판결 이유 한 줄 요약: 6막 발표 대사로 쓴다(25자 이내, 재판 말투 경어)
+    summary: '공탁·반성을 참작해도 흉기 사용이 무겁습니다.',
     reasoning: '흉기를 집어 들어 피해자를 공격하고 구호 조치 없이 자리를 떠난 점은 무겁지만, 공탁으로 피해 회복을 시도했고 범행을 인정하며 전력이 없는 점을 고려했다.',
     factors: [
       { factorId: 2, label: '다투던 중 집에 있던 흉기를 집어 들었다', direction: 'UP', evidence: null },
