@@ -9,6 +9,7 @@
 | v1.1 | 2026-10-12 | #102 리뷰 반영 — #99 머지 반영, 5-1 대안 · 공통 후속 작업 분리 · `out/rag/` 없이 진행하는 방법 추가, 건수 차이(77 · 68, 28 · 27) 설명, 5장 담당 제안 |
 | v1.3 | 2026-10-12 | 5-5 BE-52 처리 결과 반영 — 양형기준 6개 버전 저장소, 버전 기준일(공소제기일 → 발생일) 결정 (BE-52) |
 | v1.4 | 2026-10-12 | **BE-52 완료 · 양형기준 인계** (공개 #105 · #107, 비공개 #17) — 1 · 2 · 3 · 4장에 양형기준 저장소(V13 · R__41 · 함수 2개) 추가, 10/12 "공소제기일만" 결정을 바뀐 기준으로 표시, 5-5를 BE-54 할 일 목록으로 정리, 6장 배포 체크리스트에 R__41 추가. 작성 A 김해송 → 인수 B 김현중(BE-54) |
+| v1.5 | 2026-10-15 | **BE-54 반영** (B 김현중, 비공개 #18) — 5-1 LBox 삭제 · 5-4 점수 기준 · 5-5 generate RAG를 완료로 정리, 2장에 BE-54 결정 4건(검색은 Python · 판례 버전은 검색 때 · 점수 기준 · 같은 버전 가산점) 추가, 3장에 `rag_context.py` · `rag_check.py` 추가, 4장 점수를 Python(생성) · Java(서비스) 값으로 나눔, 6장 LBox 항목 완료 |
 
 > 반대 방향 인계(7.6.8 캐릭터 · 7.7.1 메인, B 김현중 → A 김해송)는 B가 따로 넘긴다(WBS v1.6).
 > 이 문서는 **사건 내용을 담지 않는다**(사건번호 · 사실관계 · 형량 없음). 판례 목록 · 원문은 비공개 저장소(`backend/private-seed`)에 있다.
@@ -20,9 +21,9 @@
 
 | 항목 | 상태 |
 | --- | --- |
-| 완료 | BE-50 판례 수집(공개 #94 · 비공개 #14), BE-51 판례 저장소(공개 #97 · 비공개 #15), **BE-52 양형기준 저장소**(공개 #105 · 비공개 #17), 비공개 시드 서브모듈 갱신(공개 #99 → #107, 지금 `e032348`) — develop 기준으로 서브모듈을 받으면 R__40 · R__41이 들어간다. V11 · V13이 없는 오래된 브랜치에서 갱신하면 Flyway가 실패하므로 develop을 먼저 합친다 |
+| 완료 | BE-50 판례 수집(공개 #94 · 비공개 #14), BE-51 판례 저장소(공개 #97 · 비공개 #15), **BE-52 양형기준 저장소**(공개 #105 · 비공개 #17), 비공개 시드 서브모듈 갱신(공개 #99 → #107 → BE-54, 지금 `b219836`) — develop 기준으로 서브모듈을 받으면 R__40 · R__41이 들어간다. **BE-54**에서 LBox 행 삭제(비공개 #18) · generate RAG 연결을 마쳤다. V11 · V13이 없는 오래된 브랜치에서 갱신하면 Flyway가 실패하므로 develop을 먼저 합친다 |
 | 양형기준 | **살인범죄 6개 버전**(2009 최초 · 2011 · 2013 · 2021 · 2023 · 2026 수정) · **237개 조각** 임베딩 완료. 버전은 기준일로 고르고(바로 찾기), 버전 안에서만 벡터 검색(RAG) |
-| 검색 대상 판례 | **law.go.kr 47건 · 사건 그룹 38개** (살인 27 · 살인미수 16 · 강도살인 3 · 촉탁 · 승낙 1 / 1심 27 · 항소심 20 / 선고 2013~ 27 · 2009~12 12 · ~2008 8) |
+| 검색 대상 판례 | R__40 **law.go.kr 53건(LBox 없음) 중 사용 보류 6건을 뺀 47건 · 사건 그룹 38개** (살인 27 · 살인미수 16 · 강도살인 3 · 촉탁 · 승낙 1 / 1심 27 · 항소심 20 / 선고 2013~ 27 · 2009~12 12 · ~2008 8) |
 | 목표 대비 | 8-1의 "살인 100건 안팎"에 크게 못 미친다(검색 대상 기준 살인 기수 27건. 후보 기준으로는 28건이며 1건이 무죄 보류로 빠짐 — `rag-precedent-sources.md`의 "28건 안팎"은 후보 기준). **확충 방안을 새로 찾아야 한다**(5-3) |
 | 운영 DB | **아직 없다.** 로컬 · 임시 DB와 SQL 파일만 있다. RDS는 비용 문제로 나중(7.1.2) |
 
@@ -31,14 +32,18 @@
 | 날짜 | 결정 | 근거 · 영향 |
 | --- | --- | --- |
 | 10/10 | 사람 확인 없이 자동 판정으로 적재 | 행마다 `flags.verified = false`, 의심 사유는 `flags.checks` |
-| 10/12 | **LBox Open 사용 불가** (라이선스 문의 결과) | 이미 넣은 LBox 15건은 `on_hold`(검색 제외)로 남아 있다. **배포 전에 삭제해야 한다**(5-1). 남은 LBox 후보 41건은 정리하지 않는다 |
+| 10/12 | **LBox Open 사용 불가** (라이선스 문의 결과) | 넣었던 LBox 15건은 BE-54에서 R__40에서 뺐다(5-1, 비공개 #18). 남은 LBox 후보 41건은 정리하지 않는다 |
 | 10/12 | 살인 관련 공소사실 무죄 판결(다른 죄만 유죄) 6건 보류 | 형량 · 양형 이유가 살인 기준이 아닌데, 사실관계는 살인 사건과 비슷해 유사도로 걸러지지 않는다(시험에서 상위 5건에 9번 듦). 목록은 비공개 `work/rag-precedent-holds.json` |
-| 10/12 | ~~양형기준 버전은 **공소제기일** 기준, 확인 못 하면 미상~~ → 아래 BE-52 결정으로 바뀜 | 판결문에 공소제기일이 거의 없어 지금 `guideline_id`는 **전부 NULL**. 발생일 기준 값은 `flags.guidelineByIncidentDate`에 참고로만 둠(값 일부가 틀림 — 5-5) |
+| 10/12 | ~~양형기준 버전은 **공소제기일** 기준, 확인 못 하면 미상~~ → 아래 BE-52 결정으로 바뀜 | 판결문에 공소제기일이 거의 없어 지금 `guideline_id`는 **전부 NULL**. 발생일 기준 참고 값 `flags.guidelineByIncidentDate`는 일부가 틀려 BE-54에서 R__40에서 뺐다(5-5) |
 | 10/12 | 양형기준은 **RAG** (BE-52) | 범죄 유형이 늘어도 행만 는다. 판례와 같은 스택(pgvector · `gemini-embedding-001` 3072). 형량범위 같은 구조 값은 같은 테이블 `meta`로 바로 읽는다 |
 | 10/12 | 버전 기준일은 **공소제기일 → 없으면 발생일**(대신했으면 표시), 판례 검색은 같은 버전 **우선**(거르지 않음) (BE-52) | 개정 시행일 직전 1 ~ 2개월 발생 사건만 한 버전 어긋날 수 있고 감수한다. BE-54에서 바꿔도 된다(기준일 고르는 규칙만 바꾸면 됨) — [양형기준 저장소](sentencing-guideline-rag.md) 6장 |
 | 10/12 | 양형기준 행(R__41)도 **비공개 시드** | 공개 자료지만 운영 반영 문제가 R__40과 같아 경로를 맞춘다. 구조(V13)는 공개 |
 | 10/12 | 병합 사건번호는 **번호마다** 해시 (`case_number_hashes text[]`) | 칸 전체를 해시하면 대상 사건(번호 하나)과 달라 자기 사건 제외가 빗나간다. law.go.kr 53건 중 12건이 병합 표기 |
 | 10/12 | 검색어 임베딩 · 검색은 백엔드(Java), 판례 적재는 오프라인(Python) | 관리자 페이지 연동 · Java 전환은 BE-56(범위 밖) |
+| 10/14 | **오프라인 생성의 검색은 Python**이 DB 함수를 직접 부른다 (BE-54) | BE-56 1단계 결정(생성은 Python에 두고 Java는 서비스 요청용 검색만). `rag_context.py`가 `rag_precedent_search` · `sentencing_guideline_at` · `rag_guideline_search`를 `psql`로 부른다. Java `RagSearchService`와 같은 함수를 쓴다 |
+| 10/14 | **판례 버전은 검색 때** 발생일로 정한다. 사건 버전은 적재 때 정한다 (BE-54) | Flyway 반복 마이그레이션은 설명 순서로 돌아 R__40이 R__41(버전 행)보다 먼저 실행된다. 그래서 R__40의 `guideline_id`는 NULL로 두고(`flags.guidelineBasis`만 표시), 검색 SQL이 `coalesce(guideline_id, sentencing_guideline_at(범주, incident_date))`로 고른다. 사건은 적재 SQL이 `legal_case.guideline_id`를 기준일(공소제기일 → 발생일)로 채운다 |
+| 10/15 | 점수 기준: 판례 하한 **0.70** · 상한 **0.88**, 양형기준 **6개 · 0.6** (BE-54, 5-4) | 판례 53건 실측. 인계 때 제안한 하한 0.85는 모든 판례를 거른다 |
+| 10/15 | 같은 버전 **우선 → 가산점 0.01** (BE-54) | 버전으로 통째 앞세우면 덜 비슷한 판례가 가장 비슷한 판례(0.81)를 밀어냈다. 점수가 비슷할 때만 같은 버전을 앞에 둔다 |
 
 ## 3. 무엇이 어디에 있나
 
@@ -51,6 +56,9 @@
 | `tools/ai-judgment/rag_store.py` | `build`(모델로 비식별화 · 요약) · `prepare` / `import`(대화형 세션이 정리할 때) · `embed`(`RETRIEVAL_DOCUMENT`) · `sql`(R__40 생성) |
 | `tools/ai-judgment/prompts/rag_precedent_system.md` | 판례 정리(비식별화 · 요약 · 양형 이유 · 형량 · 양형인자) 프롬프트 |
 | `tools/ai-judgment/llm.py` `embed()` | Gemini 배치 임베딩(100건 묶음). BE-53 · BE-55도 그대로 쓸 수 있다 |
+| `tools/ai-judgment/rag_context.py` (BE-54) | 파이프라인 `rag` 단계: 사건 개요 임베딩 → 양형기준 버전 · 형량범위 · 양형인자 검색 · 유사 판례 검색 → 생성 프롬프트 참고 자료. 실패하면 기존 참고 자료로 대체 |
+| `tools/ai-judgment/rag_check.py` (BE-54) | 검색 결과 · 점수 확인 도구(`case` · `db-case` · `sample`). 점수 기준을 다시 잴 때 쓴다 |
+| `tools/ai-judgment/prompts/judgment_fewshot.md` (BE-54) | 생성 프롬프트의 판결 형식 예시(가상 사기 사건, 형량은 가림) |
 | `backend/src/main/resources/db/migration/V13__create_rag_guideline.sql` | `rag_guideline` 테이블(`vector(3072)`) · `sentencing_guideline (crime_category, version_name)` 유니크 · 함수 `sentencing_guideline_at` · `rag_guideline_search` |
 | `tools/sentencing-guideline/` | 양형위원회 수집 `fetch.py` → 구조화 `parse.py` → 조각 `chunk.py` → 임베딩 · R__41 생성 `store.py`. 명령은 그 폴더 README |
 | `docs/sentencing-guideline-rag.md` | 양형기준 결정 · 출처 · 버전 시행일 · 조각 규칙 · 저장 구조 · generate에서 쓰는 순서(SQL 예시) |
@@ -59,7 +67,7 @@
 
 | 위치 | 역할 |
 | --- | --- |
-| `seed/R__40_rag_precedent.sql` | 판례 68건(law.go.kr 53 · LBox 15, 보류 21). 손으로 고치지 않는다 |
+| `seed/R__40_rag_precedent.sql` | 판례 53건(law.go.kr만, 보류 6). BE-54에서 `work/rag-store/`로 다시 만들었다(비공개 #18). 손으로 고치지 않는다 |
 | `seed/R__41_rag_guideline.sql` (비공개 #17) | 양형기준 버전(살인 6개) · 조각 237개 · 임베딩(약 9.7MB). `store.py sql` 출력이라 손으로 고치지 않는다. R__10이 넣은 2013 · 2026 버전 행은 id를 유지한 채 시행일 · 출처만 맞춘다 |
 | `work/BE-50-precedent-candidates.json` · `.md` | 후보 목록(전체 240건, 조건 통과 · 중복 제외 109건). `tools/rag_precedent_candidates.py`로 만든다 |
 | `work/rag-precedent-holds.json` | 판례별 사용 보류 `{판례 키: 사유}` |
@@ -74,8 +82,10 @@
 
 - **자기 사건 제외**: 대상 사건 `case_source`의 사건번호를 번호마다 해시해 넘기면, 그 해시가 하나라도 있는 판례의 **사건 그룹 전체**(다른 심급 · 사본)를 뺀다. 해시 규칙은 Python `rag_store.case_number_hashes` = Java `CaseNumberHash.ofAll`(교차 테스트 있음). 바꾸면 두 곳을 함께 바꾸고 판례를 다시 적재한다
 - **사건 그룹**: 본문 50% 이상 겹침(사본) · 원심 사건번호 인용 · 요약 임베딩 유사도 0.95 이상으로 묶는다
-- **점수**: 하한 `rag.search.min-score` 0.6, 상한 `rag.search.max-score` 0.95(이상이면 자기 사건 의심으로 빼고 경고). **둘 다 임시값**(5-4)
-- **RAG 꺼짐**: `GEMINI_API_KEY`가 없거나 판례 저장소가 비면 `RagSearchResult.disabled()` → 호출하는 쪽이 퓨샷으로 대체(8-1)
+- **점수**: 상한 이상이면 자기 사건 의심으로 빼고 경고한다. 자기 사건은 사건번호 해시로 먼저 빼고, 상한은 해시가 없을 때의 두 번째 방어선이다
+  - 오프라인 생성(Python, `stages.rag`): 판례 하한 **0.70** · 상한 **0.88** · 상위 5건, 양형기준 **6개 · 0.6**. 정한 근거는 5-4
+  - 서비스 검색(Java, `rag.search.*`): 아직 하한 0.6 · 상한 0.95. 서비스 안 생성(BE-56)을 만들 때 위 값으로 맞춘다
+- **RAG 꺼짐**: `GEMINI_API_KEY`가 없거나 판례 저장소가 비면 `RagSearchResult.disabled()` → 호출하는 쪽이 퓨샷으로 대체(8-1). 오프라인 생성은 사건 입력의 기존 참고 자료를 그대로 쓰고 사유를 `generation_report.rag`에 남긴다(`required: true`면 멈춘다). 판결 형식 예시(퓨샷)는 RAG와 관계없이 항상 시스템 프롬프트에 붙는다
 - **양형기준 버전**: `sentencing_guideline_at('살인범죄', 기준일)` → 버전 id. **조각이 적재된 버전만** 본다(개발용 "가상 예시 버전" 무시). 기준일이 NULL이거나 최초 시행일(2009. 7. 1.) 전이면 NULL
 - **양형기준 검색**: 형량범위는 검색 없이 `rag_guideline`에서 `section = '형량범위'`로 버전의 유형을 모두 읽고, 양형인자 · 정의만 `rag_guideline_search(질의, 버전, 섹션 배열, top_k, min_score)`로 찾는다(버전 안에서만). 질의 임베딩은 판례와 같은 `RETRIEVAL_QUERY`
 - **임베딩 입력**: 비식별화한 사실관계 요약만. 원문 · 사건번호 · 양형 이유는 보내지 않는다(테스트로 확인)
@@ -83,30 +93,20 @@
 
 ## 5. 남은 일 (인계)
 
-### 5-1. 배포 전 LBox 행 삭제 — **필수** (담당 제안: B, 아래 준비가 된 뒤)
+### 5-1. 배포 전 LBox 행 삭제 — ✅ 완료 (BE-54, 비공개 #18)
 
-R__40에서 LBox 15건을 빼고 다시 만든다. 지금 `rag_store.py`에는 출처를 빼는 옵션이 없다.
-
-**방법 (하나를 고른다)**
-
-| 방법 | 필요한 것 | 내용 |
-| --- | --- | --- |
-| **C. 공유본으로 다시 만들기 (권장)** | 비공개 `work/rag-store/` (#16 머지) | 공유본에는 LBox가 없으므로 아래 한 번이면 **LBox 행이 빠진 R__40**이 나온다. law.go.kr 53건은 지금 R__40의 행과 같다(2026-10-12 확인). 코드 수정이 필요 없다 |
-| A. 출처 제외 옵션 | `out/rag/` | `rag_store.py sql`에 출처 제외 옵션(예: `--exclude-source LBOX`)을 추가하고 R__40을 다시 만든다 |
-| B. 후보 목록에서 LBox 끄기 | `out/rag/` | 후보 스크립트(`tools/rag_precedent_candidates.py`)에서 LBox 수집을 끄고 후보 목록을 다시 만든 뒤 `sql --candidates`로 R__40을 다시 만든다(후보에 없는 판례는 적재하지 않는다) |
+- 공유본 `work/rag-store/`(law.go.kr 53건)로 R__40을 다시 만들었다(아래 명령, 방법 C). 코드 수정 없이 LBox 15건이 빠졌다. 로컬 `bootRun`으로 `LAW_GO_KR` 53건 · 보류 6건, `LBOX` 0건을 확인했다
+- `rag_store.py`의 `SOURCE_HOLDS`는 LBox를 "사용 불가"로 표시해 두었다. 실수로 LBox 판례가 들어와도 검색에서 빠진다
+- R__40 머리말은 실제로 보류한 행 수를 출처별 · 판례별로 적는다
+- 후보 스크립트(`tools/rag_precedent_candidates.py`)의 시행일 표를 6개 버전으로 고치고 후보 파일을 다시 만들었다(5-5)
+- 문서의 "LBox 사용 보류"는 "사용 불가 · 삭제"로 고쳤다(`rag-precedent-sources.md` · ERD 3-4 · 도구 README)
+- 남은 것: 각자 로컬의 `raw/BE-50/lbox/`는 필요 없으면 지운다. 후보 목록의 LBox 항목은 기록으로 남긴다
 
 ```bash
 # 공개 저장소 tools/ai-judgment에서. P = 비공개 저장소 체크아웃 (../../backend/private-seed)
 python3 rag_store.py sql --out $P/work/rag-store --candidates $P/work/BE-50-precedent-candidates.json \
     --holds $P/work/rag-precedent-holds.json --output $P/seed/R__40_rag_precedent.sql
 ```
-
-A · B는 `out/rag/`(김해송 PC)가 필요하고, 무료 키 하루 20회 한도 때문에 정리부터 다시 하기도 어렵다. C를 쓴다.
-
-**어느 방법이든 이어서 할 일 (공통 후속)**
-
-- 비공개 저장소 `raw/BE-50/lbox/`(각자 로컬) · 후보 목록의 LBox 항목 처리(후보 스크립트에서 LBox 수집 끄기 등)를 정리한다
-- 문서(`rag-precedent-sources.md` 1 · 2 · 6장, ERD 3-4, 도구 README)의 "LBox 사용 보류"를 **"사용 불가 · 삭제"**로 고친다. 이때 `rag-precedent-sources.md`의 살인 기수 건수도 이 문서(1장)와 맞춘다
 
 ### 5-2. law.go.kr 인증키 발급 · 본문 다시 받기 (담당 제안: 키를 신청한 사람)
 
@@ -127,23 +127,38 @@ LBox가 빠지면서 검색 대상이 law.go.kr 47건(살인 기수 27건)뿐이
 | AI Hub 판결서 데이터 | 가공 데이터 · 출처 불명확 · "학습용으로만" 조항 때문에 제외했다 |
 | 목표 조정 | 판례가 적으면 8-1대로 RAG 대신 퓨샷으로 대체하는 범위를 정한다 |
 
-### 5-4. 점수 하한 · 상한 확정 (담당 제안: B, BE-54에서 샘플 10건으로)
+### 5-4. 점수 하한 · 상한 확정 — ✅ 완료 (BE-54, 2026-10-15)
 
-- 지금 검색 점수는 0.7 ~ 0.85에 몰려 있어 하한 0.6은 거르는 효과가 없다. 상한 0.95는 판례끼리(문서 ↔ 문서) 분포에서 나온 값이라, 실제 검색(사건 개요 ↔ 판례)에서는 거의 걸리지 않는다
-- 실제 서비스 사건 10건(8-1 샘플)으로 상위 5건을 확인해 하한(0.85 근처부터) · 상한을 정하고, 같은 사건 쌍의 질의 점수로 상한을 맞춘다
+`rag_check.py`로 판례 53건 저장소에서 쟀다. 서비스용 실제 사건은 아직 1건이라, 판례 요약을 검색어로 다른 판례를 찾는 방법(`sample`)으로 분포를 함께 봤다.
 
-### 5-5. BE-54 generate + RAG (B 김현중) — BE-52 결과 포함
+| 측정 | 점수 |
+| --- | --- |
+| 판례 → 다른 사건 판례 (`sample`, 자기 사건 그룹 제외) | 1위 0.725 ~ 0.811, 5위 0.676 ~ 0.777 |
+| 실제 사건 개요 → 판례 (`db-case`) | 0.72 ~ 0.81 (상위 10건) |
+| 실제 사건 개요 → 양형인자 · 정의 조각 | 0.645 ~ 0.705 |
 
-**BE-52 양형기준은 완료**(A 김해송 진행, 10/12, 공개 #105 · #107 · 비공개 #17). 데이터 · 함수는 develop에 있고, 남은 것은 generate에서 쓰는 일이다. 자세한 규칙 · SQL 예시는 [양형기준 저장소](sentencing-guideline-rag.md) 5 · 6 · 8장.
+| 값 | 결정 | 이유 |
+| --- | --- | --- |
+| 판례 하한 | **0.70** | 점수가 좁게 몰려 있어 관계없는 사건만 거른다. 인계 때 제안한 0.85는 판례를 모두 거른다 |
+| 판례 상한 (자기 사건 의심) | **0.88** | 다른 사건 최고점(0.81)보다 충분히 위. 0.95는 실제 검색에서 걸리지 않는다 |
+| 같은 버전 | **가산점 0.01** (정렬에만) | 버전으로 통째 앞세우면 가장 비슷한 판례(0.81)가 덜 비슷한 같은 버전 판례 뒤로 밀렸다 |
+| 양형기준 `top_k` · `min_score` | **6 · 0.6** | 조각 점수가 0.645 ~ 0.705라 0.65면 절반이 빠진다. 프롬프트 길이를 생각해 6개 |
 
-- **검색 호출 방법**: 생성은 오프라인 Python 파이프라인이다. 검색을 부르는 방법을 정한다
-  - (권장) Python에서 `llm.embed(..., task_type="RETRIEVAL_QUERY")`로 검색어를 만들고 DB 함수 `rag_precedent_search` · `rag_guideline_search`를 직접 부른다. `exclude_hashes`는 `rag_store.case_number_hashes`로 만든다
-  - 또는 백엔드 `RagSearchService`를 쓴다(서비스 안 생성 단계, BE-56). **양형기준 쪽 Java 검색 코드는 아직 없다**(판례 쪽 `RagPrecedentRepository`를 본떠 만든다)
-  - RAG가 꺼졌거나 판례가 부족하면 퓨샷 대체. 사건번호가 없는 대상 사건은 해시 제외가 안 되므로 `exclude_groups`나 상한으로 막는다
-- **양형기준 버전 채우기**: 판례 `rag_precedent.guideline_id` · `flags.guidelineBasis`(`INDICTMENT_DATE` / `INCIDENT_DATE`)를 기준일 규칙(공소제기일 → 발생일)대로 채우고, 사건 `legal_case.guideline_id`도 같은 규칙으로 맞춘다. 판례 검색은 같은 버전을 **우선**한다(거르지 않음 — 판례가 47건뿐)
-- **후보 스크립트 시행일 표 수정**: 비공개 `tools/rag_precedent_candidates.py`의 살인 시행일 표에 2009 · 2013 · 2026만 있어, law.go.kr 10건(2011 수정 5 · 2021 수정 2 · 2023 수정 3)의 `flags.guidelineByIncidentDate`가 앞 버전으로 잘못 들어가 있다. 위 버전 채우기 때 표를 `sentencing_guideline`(또는 `sentencing_guideline_at`)으로 바꾼다 — [양형기준 저장소](sentencing-guideline-rag.md) 7장
-- **`top_k` · `min_score` 확정**: 양형기준 검색은 예시로 8 · 0.5를 적었지만 임시값이다(시험 상위 점수 0.63 ~ 0.70). 판례 쪽(5-4)과 같이 샘플 사건으로 정한다
-- **다른 범죄로 넓힐 때**: `tools/sentencing-guideline`에서 범죄명만 바꿔 `fetch` → `parse` → `chunk` → `embed` → `sql`. 표 모양이 다르면 `chunk.py` 표 해석을 보강한다(WBS 7.5.3은 살인 단일 죄명까지)
+- 판례가 늘거나 범죄 유형이 늘면 `rag_check.py sample` · `db-case`로 다시 잰다
+- Java 서비스 검색(`rag.search.*`)은 아직 0.6 · 0.95다. BE-56에서 맞춘다(4장)
+
+### 5-5. BE-54 generate + RAG — ✅ 완료 (B 김현중)
+
+| 일 | 결과 |
+| --- | --- |
+| 검색 호출 방법 | 파이프라인에 `rag` 단계를 넣었다(contamination 다음, generate 앞, **기본 꺼짐**). Python이 검색어를 `RETRIEVAL_QUERY`로 임베딩하고 DB 함수 셋을 SQL 한 번으로 부른다. 결과는 `out/pipeline/<name>/references.json`, 사건 입력 파일은 바꾸지 않는다. 사건번호가 없는 사건은 상한(0.88)으로 막는다 |
+| 대체 동작 | 키 없음 · DB 접속 실패 · 버전 없음 · 판례 없음이면 사건 입력의 기존 참고 자료를 쓰고 사유를 보고에 남긴다(`OK` · `PARTIAL` · `FALLBACK`). `required: true`면 멈춘다 |
+| 양형기준 버전 | 사건: 적재 SQL이 `legal_case.guideline_id`를 `sentencing_guideline_at(범주, 기준일)`로 채운다(설정 `indictmentDate` → 없으면 발생일). 판례: 검색 때 발생일로 정한다(2장 10/14). R__40에는 `flags.guidelineBasis`(`INCIDENT_DATE` 또는 없음)만 남긴다 |
+| 후보 스크립트 시행일 표 | 비공개 `tools/rag_precedent_candidates.py`의 표를 6개 버전으로 고치고 후보 파일을 다시 만들었다(비공개 #18). 틀린 참고 값 `flags.guidelineByIncidentDate`는 R__40에서 뺐다 |
+| 프롬프트 (`judgment-v3`) | 유사 판례를 사실관계 · 선고 · 양형 이유 요지(600자) · 양형인자로 보여 주고, 같은 버전 판례에 "이 사건과 같은 양형기준 버전"을 붙인다. 양형기준은 버전 이름 · 형량범위 전체 · 검색한 양형인자 · 정의. 시스템 프롬프트에 판결 형식 예시(퓨샷, 가상 사기 사건, 형량은 가림)와 원칙 8 · 9(판례는 공통점 · 차이점으로만, 형량을 그대로 옮기지 않음)를 더했다 |
+| 기록 | `generation_report.rag`에 상태 · 버전 이름 · 기준 종류 · 판례 id · 점수만 남긴다. 사건번호 · 기준일 · 판례 본문은 넣지 않는다 |
+| 점수 기준 | 5-4 |
+| 다른 범죄로 넓힐 때 | `tools/sentencing-guideline`에서 범죄명만 바꿔 `fetch` → `parse` → `chunk` → `embed` → `sql`. 표 모양이 다르면 `chunk.py` 표 해석을 보강한다. `common.GUIDELINE_CATEGORIES`에 범죄 유형 → 양형기준 범주를 더한다(WBS 7.5.3은 살인 단일 죄명까지) |
 
 ### 5-6. BE-53 (D 정민석) · BE-55 (C 백승호)
 
@@ -151,7 +166,7 @@ LBox가 빠지면서 검색 대상이 law.go.kr 47건(살인 기수 27건)뿐이
 
 ## 6. 배포 체크리스트 (운영 DB를 만들 때, 7.1.2)
 
-- [ ] LBox 행 삭제(5-1) 후 R__40 반영
+- [x] LBox 행 삭제(5-1, BE-54) — 운영 DB에는 지금 R__40(53건)을 반영한다
 - [ ] 양형기준 R__41 반영 — **V13 다음에** 들어가야 한다. 같은 (`crime_category`, `version_name`) 버전이 이미 두 번 있는 DB면 V13 유니크 추가가 실패하므로 먼저 정리한다
 - [ ] pgvector 확장: Docker면 `pgvector/pgvector:pg17` 이미지, RDS면 확장 허용 · 앱 계정 `rds_superuser`(없으면 마스터 계정으로 `CREATE EXTENSION IF NOT EXISTS vector;` 먼저)
 - [ ] 비공개 시드 적용 여부와 방식(COMMON-17)

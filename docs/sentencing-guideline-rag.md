@@ -6,6 +6,7 @@
 | --- | --- | --- |
 | v1 | 2026-10-12 | 초안 (BE-52) — 양형기준 데이터화(살인 6개 버전), **RAG 방식 결정**, 조각 규칙, 저장 구조(`rag_guideline` · 버전 함수), 판례 후보의 버전 매핑 누락 발견, **R__41 위치 결정**(비공개 시드, 판례 R__40과 같은 경로), **버전 매칭 기준 결정**(공소제기일 → 발생일, 같은 버전 우선) |
 | v1.1 | 2026-10-12 | 머지 반영 — 8장 임베딩 · 파일 위치를 완료로(공개 #105 · 서브모듈 갱신 #107 · 비공개 #17). BE-54 인계는 [`rag-handover.md`](rag-handover.md) 5-5 |
+| v1.2 | 2026-10-15 | BE-54 반영 — 5장 generate 순서를 구현으로(`rag_context.py`) · `top_k` 6 · `min_score` 0.6 확정, 6장 판례 버전은 검색 때 정하고 같은 버전은 가산점 0.01, 7장 시행일 표 수정 완료, 8장 BE-54 항목 완료 |
 
 > 이 문서는 **결정 · 출처 · 구조**만 다룬다. 명령은 [`tools/sentencing-guideline/README.md`](../tools/sentencing-guideline/README.md)를 따른다.
 > 임베딩 모델 · 판례 저장소 결정은 [AI 판결 오프라인 파이프라인](ai-judgment-pipeline.md) 8-1(COMMON-21), 판례 쪽 현황은 [RAG 판례 저장소 인수인계](rag-handover.md)를 기준으로 한다.
@@ -83,7 +84,7 @@
 | `sentencing_guideline_at(category, at date)` | 기준일에 시행 중이던 버전 id. **조각이 적재된 버전만** 본다(개발용 시드의 "가상 예시 버전"이 끼어들지 않게). 기준일이 NULL이거나 최초 시행일 전이면 NULL |
 | `rag_guideline_search(query, guideline, sections, top_k, min_score)` | 한 버전 안의 코사인 유사도 검색. `sections`가 NULL이면 전체 |
 
-**generate(BE-54)에서 쓰는 순서 (제안)**
+**generate(BE-54)에서 쓰는 순서** — 구현: `tools/ai-judgment/rag_context.py`(파이프라인 `rag` 단계). 아래 셋과 유사 판례 검색을 SQL 한 번으로 부른다
 
 ```sql
 -- 1) 버전: 기준일은 6장 결정에 따른다
@@ -91,10 +92,10 @@ SELECT sentencing_guideline_at('살인범죄', :기준일);
 -- 2) 바로 찾기: 형량범위 전체 (유형 판단은 모델 몫이므로 버전의 유형을 모두 넣는다)
 SELECT subject, content, meta FROM rag_guideline WHERE guideline_id = :버전 AND section = '형량범위' ORDER BY type_no;
 -- 3) RAG: 사건 사실(RETRIEVAL_QUERY 임베딩)과 가까운 양형인자 · 정의
-SELECT * FROM rag_guideline_search(:질의, :버전, ARRAY['양형인자', '양형인자의 정의', '유형의 정의'], 8, 0.5);
+SELECT * FROM rag_guideline_search(:질의, :버전, ARRAY['양형인자', '양형인자의 정의', '유형의 정의'], 6, 0.6);
 ```
 
-`top_k` · `min_score`는 임시값이다. 아래 시험에서 상위 5건의 점수는 0.63 ~ 0.70이었다. 샘플 사건으로 검색 결과를 보고 정한다(판례 저장소 5-4와 같은 방식).
+`top_k` · `min_score`는 **6 · 0.6**으로 정했다(BE-54, 2026-10-15). 실제 사건 개요로 잰 조각 점수가 0.645 ~ 0.705라 0.65면 절반이 빠지고, 프롬프트가 길어지지 않게 6개만 넣는다. 다시 잴 때는 `tools/ai-judgment/rag_check.py`를 쓴다([인수인계](rag-handover.md) 5-4).
 
 **검증 (2026-10-12)**: pgvector `pg17` 임시 DB에 V1 ~ V11 → V13 → R__41(가짜 임베딩)을 적용하고 R__41을 두 번 실행해 통과. 기준일별 버전 선택(2009. 6. 30. → NULL, 2012. 1. 1. → 2011 수정, 2022. 2. 28. → 2013 수정, 2024. 6. 1. → 2023 수정, "가상 예시 버전"이 있어도 무시), 형량범위 바로 찾기, 버전 안 검색이 기대대로 동작했다.
 
@@ -121,13 +122,14 @@ SELECT * FROM rag_guideline_search(:질의, :버전, ARRAY['양형인자', '양�
 | 항목 | 내용 |
 | --- | --- |
 | 결정 | **공소제기일 → 없으면 발생일로 대신**한다. 대신했으면 표시한다(판례 `flags.guidelineBasis = "INCIDENT_DATE"`, 공소제기일이면 `"INDICTMENT_DATE"`). 둘 다 없으면 미상(NULL) |
-| 판례 검색 | 대상 사건과 **같은 버전의 판례를 우선**한다. 거르지는 않는다(판례가 47건뿐이라 버전으로 거르면 결과가 빈다) |
+| 판례 검색 | 대상 사건과 **같은 버전의 판례를 우선**한다. 거르지는 않는다(판례가 47건뿐이라 버전으로 거르면 결과가 빈다). **BE-54**: 우선은 점수에 0.01을 더하는 방식이다(정렬에만). 점수가 0.72 ~ 0.81에 몰려 있어 통째로 앞세우면 덜 비슷한 판례가 가장 비슷한 판례를 밀어냈다 |
+| 적용 시점 (BE-54) | **사건**: 적재 SQL이 `legal_case.guideline_id`를 `sentencing_guideline_at(범주, 기준일)`로 채운다(파이프라인 설정 `indictmentDate` → 없으면 발생일). **판례**: 검색 때 `coalesce(guideline_id, sentencing_guideline_at(범주, incident_date))`로 정한다. Flyway 반복 마이그레이션은 설명 순서로 돌아 R__40이 R__41(버전 행)보다 먼저 실행되므로, 시드에서 버전 id를 찾을 수 없다. R__40은 `guideline_id`를 NULL로 두고 `flags.guidelineBasis`만 남긴다 |
 | 바꾼 이유 | 지금까지의 결정(공소제기일만, 확인 못 하면 미상 — COMMON-21 · #94)은 판결문에 공소제기일이 거의 없어 판례 `guideline_id`가 **전부 NULL**이 되고, 사건(`legal_case`)에는 공소제기일 칸 자체가 없다. 이대로면 "발생 시점 양형기준 검색"(BE-54)이 동작하지 않는다 |
 | 감수하는 오차 | 양형기준은 **시행일 이후 공소제기된 사건**에 적용된다. 발생일과 공소제기일 사이에 개정 시행일이 끼면 발생일 기준은 **한 버전 앞**을 고른다(예: 2023. 6. 20. 발생 · 7. 10. 기소 → 실제 2023 수정, 발생일 기준 2021 수정). 살인은 대개 발생 후 1 ~ 2개월 안에 기소되므로(구속기간 최대 30일) **개정 시행일 직전 1 ~ 2개월에 발생한 사건만** 해당한다. 개정이 수년에 한 번(2011 · 2013 · 2022 · 2023 · 2026)이라 건수가 적고, 바로 앞 버전과 형량 차이도 대부분 작다 |
 | 하지 않은 것 | 경계 사건 표시(시행일 직전 발생), 판결문의 권고형 표기("권고형의 범위 …")로 버전을 거꾸로 찾기(원문 92건 중 23건에만 있음), 선고일 대체(항소심은 1년 넘게 늦어 오차가 더 큼). **사소한 차이에 비해 품이 많이 들어 하지 않았다** |
-| 바꾸려면 | BE-54 담당(B)이 판단해 바꿔도 된다. 저장소 함수 `sentencing_guideline_at(범죄, 기준일)`는 기준일만 받으므로, 기준일을 고르는 규칙만 바꾸면 되고 테이블 · R__41은 그대로다 |
+| 바꾸려면 | BE-54에서 이 기준을 그대로 썼다. 저장소 함수 `sentencing_guideline_at(범죄, 기준일)`는 기준일만 받으므로, 기준일을 고르는 규칙만 바꾸면 되고 테이블 · R__41은 그대로다 |
 
-## 7. 발견한 문제 — 판례 후보의 버전 매핑 누락
+## 7. 발견한 문제 — 판례 후보의 버전 매핑 누락 (✅ BE-54에서 수정, 비공개 #18)
 
 비공개 `tools/rag_precedent_candidates.py`의 살인범죄 시행일 표에 **2009 · 2013 · 2026 세 버전만** 있어, 2011 · 2021(2022 시행) · 2023 버전에 해당하는 판례가 앞 버전으로 매핑된다. 참고 값(`flags.guidelineByIncidentDate`)에만 쓰여 지금 적재 결과(`guideline_id` 전부 NULL)에는 영향이 없다.
 
@@ -140,7 +142,7 @@ SELECT * FROM rag_guideline_search(:질의, :버전, ARRAY['양형인자', '양�
 
 (조건 통과 · 중복 아님 · 발생일 있는 후보 72건 중. 발생일 기준 단순 비교)
 
-→ 판례 쪽 버전을 채울 때(6장, BE-54) 시행일 표를 `sentencing_guideline`(R__41이 넣은 6개 버전)이나 `sentencing_guideline_at`으로 바꾼다.
+→ **수정함 (BE-54)**: 후보 스크립트의 시행일 표를 R__41의 6개 버전으로 고치고 후보 파일을 다시 만들었다. 틀린 참고 값 `flags.guidelineByIncidentDate`는 R__40에서 뺐다. 검색은 이 값을 쓰지 않고 DB 함수로 버전을 고른다(6장 적용 시점). LBox 행은 R__40에서 삭제했다.
 
 ## 8. 남은 일
 
@@ -149,6 +151,6 @@ SELECT * FROM rag_guideline_search(:질의, :버전, ARRAY['양형인자', '양�
 | 임베딩 | ✅ 살인 237개 완료(2026-10-12, 무료 키). R__41은 `tools/sentencing-guideline/out/`에서 만들어 비공개 `backend/private-seed/seed/`에 올렸다(비공개 #17, 서브모듈 갱신 공개 #107) |
 | 파일 위치 | ✅ **반영 완료 (2026-10-12)**: V13 → 공개 `backend/src/main/resources/db/migration/`(#105, BE-39 #104 다음), R__41 → **비공개 `backend/private-seed/seed/`** (판례 R__40과 같은 경로, 아래 5-1). **V13이 먼저 들어가야 한다** — R__41만 먼저 넣으면 로컬 `bootRun`이 서브모듈 시드를 자동으로 읽어 `rag_guideline`이 없다며 Flyway가 실패한다 |
 | 로컬 DB | V13은 `sentencing_guideline`에 (`crime_category`, `version_name`) 유니크를 건다. 로컬 DB에 같은 이름의 버전이 이미 두 번 들어가 있으면(예: 개발용 시드를 여러 번 넣으며 "가상 예시 버전"이 쌓인 경우) V13이 실패한다. 그때는 로컬 DB를 비운다(`docker compose down -v` 후 다시 띄우기) |
-| 백엔드 | 질의 임베딩(`RETRIEVAL_QUERY`) · 검색 호출은 판례 쪽 `GeminiQueryEmbeddingClient` · `RagSearchService`를 따른다(BE-54) |
-| 버전 매칭 (BE-54) | 6장 결정대로 판례 `guideline_id` · `flags.guidelineBasis` 채우기(7장 시행일 표 수정 포함), 사건 `legal_case.guideline_id`도 같은 규칙, 검색에서 같은 버전 우선 |
+| 검색 호출 | ✅ 오프라인 생성은 Python `rag_context.py`가 DB 함수를 직접 부른다(BE-54, BE-56 1단계 결정). **Java 양형기준 검색 코드는 아직 없다** — 서비스 안 생성(BE-56)에서 판례 쪽 `RagPrecedentRepository`를 본떠 만든다 |
+| 버전 매칭 (BE-54) | ✅ 사건은 적재 때, 판례는 검색 때 정한다(6장 적용 시점). 7장 시행일 표 수정 완료. 같은 버전은 가산점 0.01 |
 | 다른 범죄 | `fetch.py <범죄명>` → `parse.py` → `chunk.py` → `embed` → `sql`(out/ 아래 전부 합침). 탭 · 표 모양이 다르면 `chunk.py`의 표 해석을 보강한다 |
