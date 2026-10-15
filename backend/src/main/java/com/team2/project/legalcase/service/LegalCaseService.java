@@ -17,6 +17,7 @@ import com.team2.project.experience.repository.CaseParticipantCount;
 import com.team2.project.experience.repository.ExperienceRepository;
 import com.team2.project.legalcase.domain.CrimeType;
 import com.team2.project.legalcase.domain.LegalCase;
+import com.team2.project.legalcase.dto.CaseDetailResponse;
 import com.team2.project.legalcase.dto.CaseListResponse;
 import com.team2.project.legalcase.dto.CaseListResponse.CaseItem;
 import com.team2.project.legalcase.dto.CaseListResponse.MyStatus;
@@ -53,6 +54,24 @@ public class LegalCaseService {
 						myStatuses.get(legalCase.getId())))
 				.toList();
 		return new CaseListResponse(summarize(published), items);
+	}
+
+	/**
+	 * API 16. 공개 사건 상세 (S-20 사건 디테일, BE-74). 체험 없이 부를 수 있다.
+	 * 진행 상태(myStatus)는 API 1과 같은 기준(최신 회차)이고, 쿠키는 읽기만 한다(발급은 API 2).
+	 * 화면은 "이어서 하기"에서 API 2를 불러 정확한 단계로 간다(세부 상태는 내보내지 않는다).
+	 *
+	 * @throws BusinessException CASE_NOT_FOUND — 사건 없음 · 비공개(구분하지 않는다)
+	 */
+	@Transactional(readOnly = true)
+	public CaseDetailResponse getCase(Long caseId, Optional<UUID> anonymousUserId) {
+		LegalCase legalCase = legalCaseRepository.findPublishedById(caseId)
+				.orElseThrow(() -> new BusinessException(ErrorCode.CASE_NOT_FOUND));
+		MyStatus myStatus = anonymousUserId
+				.flatMap(id -> experienceRepository.findLatest(id, caseId))
+				.map(experience -> MyStatus.from(experience.getStatus()))
+				.orElse(null);
+		return CaseDetailResponse.of(legalCase, experienceRepository.countCompletedFirstAttempts(caseId), myStatus);
 	}
 
 	/**
