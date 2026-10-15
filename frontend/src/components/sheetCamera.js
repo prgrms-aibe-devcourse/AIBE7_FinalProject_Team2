@@ -88,5 +88,7 @@ export function sheetCamera(sheet, frame) {
     if (at && shot?.playState !== 'running') sheet.style.transform = css(place(box(find(at))));
   });
   observer.observe(frame);
+  // 틀이 한 번도 그려지지 않은 채 무대가 사라지면 위 콜백이 오지 않아 관찰이 남는다 — 일정 시간 뒤에도 못 봤으면 끊는다
+  setTimeout(() => { if (!seen) observer.disconnect(); }, 5000);
   return { go };
 }

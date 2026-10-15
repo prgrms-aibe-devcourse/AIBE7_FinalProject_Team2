@@ -135,7 +135,7 @@ function newspaper(data, script, caseTitle) {
   const cast = element('ul', 'sheet-cast-grid');
   seen.forEach(([who, role]) => {
     const item = element('li');
-    item.append(picture(`/images/characters/roles/${who}_${role}.webp`, ''), element('span', '', `${NAMES[who]} · ${ROLE_NAMES[role] ?? role}`));
+    item.append(picture(imageOf(who, `role:${role}`), ''), element('span', '', `${NAMES[who]} · ${ROLE_NAMES[role] ?? role}`));
     cast.append(item);
   });
 
