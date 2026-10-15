@@ -58,7 +58,9 @@ export async function renderAiPage(container, { caseId, caseHeader, api, navigat
     'law-book': (label, how) => `기록을 한 번 더 보겠습니다. '${label}', ${how} 살피겠습니다.`,
   };
   // 6막 대본을 AI 판결로 채운다: {"factors": true}는 판단 요소마다 한 장면(저울 → 법봉 → 법전 순서로 돌아가며),
-  // say "law"는 판사(셋이 함께 서면 로울, 발표는 발표하는 판사), {penalty}는 형량, {summary}는 판결 이유 한 줄 요약(25자 이내). 이름표는 내로처럼 아이콘 · 이름(AI 판사) · 직책(재판장 · 배석판사).
+  // say "law"는 판사(셋이 함께 서면 로울, 발표는 발표하는 판사), {penalty}는 형량, {summary}는 AI 판결 한 줄 요약.
+  // summary는 생성 계약대로 "~한 판단"(S-09 판결 카드와 같은 문장)이라 대사에서 "입니다"를 붙이고, 없으면(null) 그 줄을 뺀다.
+  // 판단 요소가 하나도 없으면 "하나씩 짚어 보겠습니다" 대신 textNoFactors를 쓴다. 이름표는 내로처럼 아이콘 · 이름(AI 판사) · 직책(재판장 · 배석판사).
   // 발표하는 판사(캐릭터 프로필 5-3): 감경 비율이 1/3 미만이면 로봉, 2/3 초과면 로북, 그 사이(또는 요소 없음)면 로울
   function act6Script(data, speakerOverride) {
     const { judgment } = data;
@@ -79,7 +81,11 @@ export async function renderAiPage(container, { caseId, caseHeader, api, navigat
       }
       if (step.say !== 'law') return [step];
       const who = step.law === 'deliver' ? speaker : LAWS[0];
-      return [{ ...step, say: who, role: LAW_TITLES[who], text: step.text.replace('{penalty}', penalty).replace('{summary}', judgment.summary) }];
+      const text = (!factors.length && step.textNoFactors ? step.textNoFactors : step.text).split('\n')
+        .filter((line) => !line.includes('{summary}') || judgment.summary)
+        .map((line) => line.replace('{penalty}', penalty).replace('{summary}', judgment.summary))
+        .join('\n');
+      return [{ ...step, say: who, role: LAW_TITLES[who], text }];
     });
     return { script: { ...script, acts: { ...script.acts, 6: { ...script.acts['6'], steps } } }, factors };
   }

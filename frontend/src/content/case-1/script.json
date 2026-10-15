@@ -565,7 +565,8 @@
         {
           "say": "law",
           "law": "trio",
-          "text": "양쪽을 함께 보겠습니다. 판단 요소를 하나씩 짚어 보겠습니다."
+          "text": "양쪽을 함께 보겠습니다. 판단 요소를 하나씩 짚어 보겠습니다.",
+          "textNoFactors": "양쪽을 함께 보겠습니다."
         },
         {
           "factors": true
@@ -584,7 +585,7 @@
           "say": "law",
           "law": "deliver",
           "card": "ai",
-          "text": "{penalty}입니다.\n{summary}"
+          "text": "{penalty}입니다.\n{summary}입니다."
         },
         {
           "say": "naero",

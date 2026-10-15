@@ -11,7 +11,8 @@ const NAMES = { naero: '내로', nambul: '남불', 'law-scale': 'AI 판사', 'la
 const ROLE_LABEL = { actor: '사건 속 인물', prosecutor: '검사', defense: '변호인', judge: '법률 안내' };
 const ROLE_COLOR = { '법정 진행': 'narrator', 'A씨 역': 'actor', 'B씨 역': 'actor', '사건 속 인물': 'actor', 검사: 'prosecutor', 변호인: 'defense', '법률 안내': 'law', 재판장: 'law', 배석판사: 'law' };
 // 로 합의부(6막 AI 판사): 로울(저울) · 로봉(법봉) · 로북(법전). LAWS는 판단 요소를 맡는 순서(저울 → 법봉 → 법전),
-// 서는 자리는 로울이 가운데, 로봉 · 로북이 좌우(LAW_SPOTS). 직책은 로울 재판장, 로봉 · 로북 배석판사
+// 서는 자리는 로울이 가운데, 로봉 · 로북이 좌우(LAW_SPOTS). 직책은 로울 재판장, 로봉 · 로북 배석판사.
+// 셋은 대등하지만 로울이 합의를 이끄는 일종의 리더(재판장) 역할을 한다(10/15 결정). 캐릭터 문서 4-3("서열을 두지 않는다")은 추후 이 결정에 맞춰 고친다
 export const LAWS = ['law-scale', 'law-gavel', 'law-book'];
 const LAW_SPOTS = ['law-gavel', 'law-scale', 'law-book'];
 export const LAW_TITLES = { 'law-scale': '재판장', 'law-gavel': '배석판사', 'law-book': '배석판사' };
@@ -527,7 +528,10 @@ export function renderStage({ script, order, cards = {}, inputCards = [], start,
       resolve();
     };
     // 캡처 단계에서 먼저 받아 무대의 키 처리(장면 넘기기)까지 가지 않게 한다
-    const onKey = (event) => { if (event.key === ' ' || event.key === 'Enter') { event.preventDefault(); event.stopPropagation(); done(); } };
+    const onKey = (event) => {
+      if (!card.isConnected || !wrap.isConnected) { done(); return; } // 아이캐치 도중 화면을 떠났으면 키를 가로채지 않고 정리만
+      if (event.key === ' ' || event.key === 'Enter') { event.preventDefault(); event.stopPropagation(); done(); }
+    };
     card.addEventListener('click', done);
     document.addEventListener('keydown', onKey, true);
     timer = setTimeout(done, ms);
