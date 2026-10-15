@@ -244,6 +244,16 @@ export function renderStage({ script, order, cards = {}, inputCards = [], start,
     restart.addEventListener('click', onRestart);
     controls.append(restart);
   }
+  // 카드가 무대 전체를 덮는 장면(대본 board: "full", 5막 판결)에서는 캐릭터가 카드 밖으로 나온다:
+  // 남불은 위 막 버튼 줄 끝, 내로는 아래 이전 · 다음 버튼 옆
+  const peeks = { nambul: element('img', 'peek b'), naero: element('img', 'peek n') };
+  Object.values(peeks).forEach((image) => { image.alt = ''; });
+  const peekSlot = element('li', 'peek-slot');
+  peekSlot.setAttribute('aria-hidden', 'true');
+  peekSlot.append(peeks.nambul);
+  acts.append(peekSlot);
+  peeks.naero.setAttribute('aria-hidden', 'true');
+  controls.insertBefore(peeks.naero, prev);
   wrap.append(acts, stage, controls, live);
 
   function finishTyping() {
@@ -307,7 +317,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], start,
     }
     lastLook = looks;
 
-    procs.hidden = !step.procedures;
+    procs.hidden = !step.procedures || step.board === 'full'; // 무대를 덮는 카드 위에는 재판 순서를 띄우지 않는다
     if (step.procedures) {
       procs.replaceChildren(...step.procedures.map((label, i) => {
         const item = element('span', i === step.proc ? 'on' : i < step.proc ? 'done' : '', `${i + 1} ${label}`);
@@ -326,6 +336,10 @@ export function renderStage({ script, order, cards = {}, inputCards = [], start,
     board.hidden = !entry;
     board.classList.toggle('wide', input);
     board.classList.toggle('fill', step.card === 'evidence'); // 증거판은 보드를 꽉 채운다(가운데 정렬 없음)
+    const full = step.board === 'full';
+    board.classList.toggle('full', full);
+    wrap.classList.toggle('peeking', full);
+    if (full) ['naero', 'nambul'].forEach((who) => { peeks[who].src = imageOf(who, step.look[who]); });
     board.classList.toggle('small', small);
     const latest = board.querySelector('.evd-list li.now');
     if (latest) { const list = latest.closest('.scroll-body'); list.scrollTop = list.scrollHeight; }

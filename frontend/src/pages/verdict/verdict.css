@@ -24,6 +24,24 @@
 .verdict-page .verdict-main { padding: 28px; min-width: 0; }
 .verdict-page h1 { font-size: 28px; }
 .verdict-page .verdict-intro { margin: 6px 0 28px; }
+/* 형량 칸(공통): 범위 상자 안 "선고할 수 있는 범위" 설명과 같은 줄 오른쪽. 징역 · 벌금에 따라 내용이 바뀐다 */
+.verdict-page .sentence-entry { float: right; display: inline-flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 10px 16px; padding: 6px 12px; border: 1px solid var(--color-range-fill); border-radius: 8px; background: var(--color-surface-strong); }
+.verdict-page .recommended-range .range-track { clear: both; }
+.verdict-page .sentence-entry .number-fields { gap: 8px; }
+.verdict-page .sentence-entry-type { color: var(--color-heading); }
+/* 범위 막대 = 형량 조절 막대(징역). 막대 위 입력값 글자는 우상단 입력칸이 대신한다 */
+.verdict-page .range-slider[role='slider'] .range-track { cursor: pointer; touch-action: none; }
+.verdict-page .range-slider[role='slider']:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 4px; border-radius: 4px; }
+.verdict-page .range-slider[role='slider'] .range-marker::after { content: ''; position: absolute; top: 50%; left: 50%; width: 14px; height: 14px; border: 2px solid var(--color-card); border-radius: 50%; background: var(--color-accent); transform: translate(-50%, -50%); box-shadow: 0 1px 3px color-mix(in srgb, var(--color-text) 30%, transparent); }
+.verdict-page .slider-hint { margin-bottom: 6px; }
+.verdict-page .sentence-slider { display: block; margin: 8px 0; }
+.verdict-page .sentence-slider input { width: 100%; }
+.verdict-page .suspension-years { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
+/* 집행유예 줄: 체크박스 + 조건(같은 줄). 붙일 수 없으면 회색 */
+.verdict-page .suspension-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-bottom: 8px; }
+.verdict-page .suspension-row .suspension-toggle { margin-bottom: 0; }
+.verdict-page .suspension-toggle.is-disabled { color: var(--color-muted); font-weight: 600; }
+.verdict-page .suspension-toggle.is-disabled input { cursor: default; }
 .verdict-page .verdict-controls,
 .verdict-page .verdict-group { border: 0; padding: 0; margin: 0; min-width: 0; }
 .verdict-page .verdict-group { margin-bottom: 28px; }
@@ -83,6 +101,7 @@
   .verdict-page .verdict-sidebar { border-left: 0; border-top: 1px solid var(--color-border); }
 }
 @media (max-width: 600px) {
+  .verdict-page .sentence-entry { float: none; display: flex; margin: 0 0 10px; }
   .verdict-page .verdict-main { padding: 24px 16px; }
   .verdict-page h1 { font-size: 24px; }
   .verdict-page .factor-row { flex-direction: column; align-items: stretch; gap: 10px; }

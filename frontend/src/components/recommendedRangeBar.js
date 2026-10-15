@@ -40,7 +40,8 @@ function observeTicks(labels, track) {
   resizeObserver.observe(labels);
 }
 
-export function renderRecommendedRangeBar(container, { law, markerMonths = null, showTrack = true, trackMaxMonths = null, allowedMinMonths = null, penaltyType = 'PRISON' }) {
+// showInputLabel: 막대 위에 입력한 형량 글자를 단다(판결 입력처럼 형량을 다른 곳에 크게 보여 주면 false)
+export function renderRecommendedRangeBar(container, { law, markerMonths = null, showTrack = true, trackMaxMonths = null, allowedMinMonths = null, penaltyType = 'PRISON', showInputLabel = true }) {
   const box = document.createElement('section');
   box.className = 'recommended-range';
   const heading = document.createElement('h3');
@@ -127,7 +128,7 @@ export function renderRecommendedRangeBar(container, { law, markerMonths = null,
           track.append(label);
         } else labels.append(label);
       };
-      if (markerLabel) tick(markerMonths, 3, 'range-input-label');
+      if (markerLabel && showInputLabel) tick(markerMonths, 3, 'range-input-label');
       // 끝점은 유지하되 입력값과 충돌하면 입력값을 우선한다.
       tick(0, 2.5);
       tick(max, 2.5);
