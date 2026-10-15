@@ -20,9 +20,22 @@
   repeating-linear-gradient(var(--color-desk-news-sheet-2) 0 2px, transparent 2px 16px) 94% 26% / 41% 46% no-repeat,
   var(--color-stage-news); }
 .stage-wrap .bg.paper { background: var(--color-desk-news-sheet-1); }
-.stage-wrap .bg.court { background:
-  linear-gradient(var(--color-stage-bench), var(--color-stage-bench-dark)) 50% 22% / 38% 26% no-repeat,
-  linear-gradient(var(--color-paper) 0 64%, var(--color-desk-wood-light) 64%); }
+/* 3막 법정(재판장 시점): 판사석에서 내려다본 법정. 색 · 모양은 여기서만 정한다(장면 테마) */
+.stage-wrap .bg.court { background: var(--color-surface-strong); }
+/* 원근: 뒤일수록 나무색을 종이색에 섞어 옅게 */
+.stage-wrap .court { --wood-far: color-mix(in srgb, var(--color-stage-bench) 38%, var(--color-paper)); --wood-mid: color-mix(in srgb, var(--color-stage-bench) 68%, var(--color-paper)); position: absolute; inset: 0; pointer-events: none; }
+/* 뒤 벽: 가운데(피고인석 뒤)에 한 단 짙은 판을 둬 법정의 축을 만든다 */
+.stage-wrap .court-wall { position: absolute; left: 0; right: 0; top: 0; height: 42%; background: linear-gradient(var(--color-surface-strong), var(--color-surface-strong)) 50% 0 / 30% 100% no-repeat, var(--color-paper); }
+/* 방청석 난간: 얇은 손잡이 + 낮은 판 */
+.stage-wrap .court-rail { position: absolute; left: 0; right: 0; top: 38%; height: 8%; background: var(--wood-far); border-top: .6cqw solid var(--wood-mid); }
+/* 피고인석(증언대): 가운데 뒤. 피고인신문 때 피고인 역이 그 앞에 서고, 카드가 뜨면 가려진다 */
+.stage-wrap .court-stand { position: absolute; left: 45%; width: 10%; top: 33%; height: 22%; border-radius: .3cqw .3cqw 0 0; background: var(--wood-mid); border-top: .8cqw solid var(--color-stage-bench); box-shadow: 0 .5cqw 1cqw -.4cqw color-mix(in srgb, var(--color-desk-shadow) 35%, transparent); }
+/* 검사석 · 변호인석: 양옆에서 가운데를 향해 비스듬히 놓인 책상 */
+.stage-wrap .court-desk { position: absolute; top: 50%; width: 26%; height: 15%; background: var(--wood-mid); border-top: .8cqw solid var(--color-stage-bench); }
+.stage-wrap .court-desk.p { left: 0; clip-path: polygon(0 0, 100% 24%, 100% 100%, 0 100%); }
+.stage-wrap .court-desk.d { right: 0; clip-path: polygon(0 24%, 100% 0, 100% 100%, 0 100%); }
+/* 피고인신문: 피고인 역 캐릭터는 가운데 피고인석 앞에 선다(대본 spots: "stand") */
+.stage-wrap .stage .spr[data-spot="stand"], .stage-wrap .stage .chip[data-spot="stand"] { left: 50%; right: auto; margin: 0; translate: -50% 0; }
 .stage-wrap .bg.dark { background: var(--color-heading); }
 
 /* 1 · 2막 신문 지면 (메인 책상의 신문과 같은 짜임) */

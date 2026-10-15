@@ -98,6 +98,16 @@ function paperPage(paper) {
   return page;
 }
 
+// 3막 법정(재판장 시점): 사용자가 판사석에 앉아 법정을 내려다본다. 판사석은 그리지 않는다 — 앉은 사람이 사용자다.
+// 벽 · 방청석 난간 · 피고인석 · 검사석 · 변호인석을 캐릭터 뒤에 둔다
+function courtSet() {
+  const court = element('div', 'court');
+  court.setAttribute('aria-hidden', 'true');
+  court.append(element('div', 'court-wall'), element('div', 'court-rail'), element('div', 'court-stand'),
+    element('div', 'court-desk p'), element('div', 'court-desk d'));
+  return court;
+}
+
 // 대본 카드(목업의 CARDS): { k, h3, big, p: [문장 | { b: 굵게, t: 보통 }], ul: [문장], note } — 적은 순서대로 그린다
 function scriptCard(spec) {
   const card = element('div', 'card-body');
@@ -180,7 +190,8 @@ export function renderStage({ script, order, cards = {}, inputCards = [], start,
   procs.setAttribute('aria-label', '재판 순서');
   const sys = element('div', 'sysline');
   const flash = element('div', 'flash');
-  scene.append(bg, ...(page ? [page] : []), figures.naero, figures.nambul, chips.naero, chips.nambul, procs, sys, flash);
+  const court = courtSet();
+  scene.append(bg, court, ...(page ? [page] : []), figures.naero, figures.nambul, chips.naero, chips.nambul, procs, sys, flash);
 
   const board = element('div', 'board');
   board.tabIndex = -1;
@@ -238,6 +249,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], start,
     stage.dataset.scene = step.scene;
     bg.className = `bg ${dark ? 'dark' : step.scene}`;
     if (page) page.hidden = step.scene !== 'paper';
+    court.hidden = step.scene !== 'court' || dark;
     [...acts.children].forEach((item, i) => {
       const current = String(i + 1) === step.actId;
       item.classList.toggle('on', current);
