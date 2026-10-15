@@ -101,6 +101,8 @@ export function caseNewspaper({ paper, info, navigate, earRight = caseInfoEar(in
   const photo = element('img', 'photo sheet-case-photo');
   photo.src = paper.photo;
   photo.alt = '';
+  photo.width = 1200; // 크기 힌트(CSS가 가로 폭 · 비율을 정한다) — 사진이 늦게 떠도 화면이 밀리지 않게
+  photo.height = 514;
   figure.append(photo, element('figcaption', 'caption', paper.caption));
 
   const body = element('div', 'story-body');

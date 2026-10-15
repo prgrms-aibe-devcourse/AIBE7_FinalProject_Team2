@@ -147,9 +147,9 @@ export function caseStage({ caseId, api, navigate, script, info, paper = script.
     const card = element('div', 'postcard');
     sendingCard = card;
     const drawForm = (selectedId) => {
-      card.replaceChildren(postcardHead(), preJudgmentGuide(), preJudgmentForm(rangeOptions, confirm, { submitLabel: '이 판단으로 정하기 ▶', selectedId }));
+      card.replaceChildren(postcardHead(), preJudgmentGuide(), preJudgmentForm(rangeOptions, askConfirm, { submitLabel: '이 판단으로 정하기 ▶', selectedId }));
     };
-    function confirm(rangeOptionId) {
+    function askConfirm(rangeOptionId) {
       const written = element('div', 'postcard-sent');
       written.append(element('p', 'postcard-sent-q', '이 사건, 어느 정도의 형량이 맞다고 생각하나요?'), element('p', 'postcard-sent-a', labels[rangeOptionId]));
       const notice = element('p', 'submit-error');

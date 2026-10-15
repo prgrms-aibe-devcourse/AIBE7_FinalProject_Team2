@@ -151,7 +151,7 @@
 .case-paper-page .story-byline { display: flex; gap: 14px; margin: 20px 0 20px; padding: 8px 0; border-top: 1px solid var(--color-text); border-bottom: 1px solid var(--color-border-strong); font-size: var(--text-caption); color: var(--color-muted); }
 .case-paper-page .story-byline b { color: var(--color-text); }
 .case-paper-page .story-photo { margin: 0 0 22px; }
-.case-paper-page .story-photo .photo { aspect-ratio: 21 / 9; max-height: 440px; }
+.case-paper-page .story-photo .photo { height: auto; aspect-ratio: 21 / 9; max-height: 440px; } /* img의 height 속성은 크기 힌트일 뿐, 높이는 비율이 정한다 */
 .case-paper-page .story-body { column-count: 3; column-gap: 32px; column-rule: 1px solid var(--color-border); }
 .case-paper-page .story-body p { margin: 0 0 .8em; font: 16px / 1.85 var(--font-article); letter-spacing: -.015em; text-align: justify; word-break: keep-all; hyphens: auto; }
 .case-paper-page .story-body p + p { text-indent: 1em; }

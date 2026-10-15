@@ -487,3 +487,9 @@
   .stage-wrap .sheet-letter-edit { font-size: 15px; }
   .stage-wrap .sheet-letter-mark { position: static; width: 64px; height: 64px; margin: 8px 0 0 auto; font-size: 13px; }
 }
+
+/* 목 데이터 기간 전용 버튼(막 바로 가기 · 처음부터 다시)도 터치 기기에서는 44px */
+@media (pointer: coarse) {
+  .stage-wrap .act-jump { min-height: 44px; }
+  .stage-wrap .stage-restart { min-height: 44px; }
+}

@@ -136,6 +136,8 @@ export function renderLandingPage(container, { api, navigate, section }) {
   const banner = span('news-banner', '오늘의 지면을 펼쳐 보세요');
   const photo = element('img', 'news-photo');
   photo.alt = '';
+  photo.width = 3; // 비율 힌트(3:2). 크기는 CSS가 정한다
+  photo.height = 2;
   photo.src = fallbackImages.MURDER;
   const kicker = span('news-kicker', '머리기사');
   const deck = span('news-deck', '실제 판결을 바탕으로 재구성한 사건이 기다리고 있습니다.');
@@ -236,6 +238,8 @@ export function renderLandingPage(container, { api, navigate, section }) {
       mobileNews.headline = span('mn-headline', '오늘의 지면을 펼쳐 보세요');
       mobileNews.photo = element('img', 'mn-photo');
       mobileNews.photo.alt = '';
+      mobileNews.photo.width = 84; // 크기 힌트(늦게 떠도 카드가 밀리지 않게)
+      mobileNews.photo.height = 84;
       mobileNews.photo.src = fallbackImages.MURDER;
       const body = span('mn-body');
       body.append(mobileNews.headline, mobileNews.photo);

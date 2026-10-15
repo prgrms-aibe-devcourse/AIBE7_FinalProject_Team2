@@ -263,7 +263,7 @@
   .landing-page .desk-menu-item .mn-brand { display: flex; justify-content: space-between; align-items: baseline; padding-bottom: 6px; border-bottom: 3px double var(--color-border-strong); opacity: 1; }
   .landing-page .desk-menu-item .mn-brand b { font: 900 22px/1 var(--font-heading); letter-spacing: -.08em; color: var(--color-heading); }
   .landing-page .desk-menu-item .mn-brand b .law { display: inline; color: var(--color-label); }
-  .landing-page .desk-menu-item .mn-brand .mn-date { margin: 0; font-size: 11px; opacity: 1; color: var(--color-muted); }
+  .landing-page .desk-menu-item .mn-brand .mn-date { margin: 0; font-size: 12px; opacity: 1; color: var(--color-muted); }
   .landing-page .desk-menu-item .mn-body { display: grid; opacity: 1; grid-template-columns: minmax(0, 1fr) 84px; gap: 12px; align-items: start; margin: 10px 0 8px; }
   .landing-page .desk-menu-item .mn-headline { margin: 0; font: 900 19px/1.3 var(--font-heading); letter-spacing: -.04em; color: var(--color-heading); word-break: keep-all; opacity: 1; text-wrap: balance; }
   .landing-page .mn-photo { display: block; width: 84px; height: 84px; object-fit: cover; filter: var(--photo-filter); }
