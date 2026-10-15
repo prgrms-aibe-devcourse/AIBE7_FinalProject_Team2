@@ -219,9 +219,9 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
           // 진행 중: 내로가 먼저 묻는다 → "이어서 하기"는 저장된 단계로, "새로 하기"는 1막부터(사전 판단 전이면 둘 다 1막부터)
           chosen = (pick) => {
             chosen = null;
-            if (pick === 'resume' && !fresh) saved();
-            else if (fresh) playFresh();
-            else playAgain(experience, saved);
+            if (pick === 'resume' && !fresh) { saved(); return; }
+            // 비동기 처리 중 오류(형량 데이터를 끝내 못 받음 등)는 loadOverview가 S-03을 새로 열어 안내한다. 여기서는 콘솔로 새지 않게만 막는다
+            (fresh ? playFresh() : playAgain(experience, saved)).catch((error) => console.warn('1막 이어 보기 중 오류:', error));
           };
           stage.release();
           return;

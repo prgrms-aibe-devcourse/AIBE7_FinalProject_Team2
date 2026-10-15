@@ -122,34 +122,28 @@
           "look": {
             "nambul": "guide-neutral"
           },
-          "text": "제가 A씨, 내로가 B씨 자리에 서 볼게요. 기사에 없는 말은 지어내지 않을게요.",
-          "focus": "photo"
-        },
-        {
-          "say": "nambul",
-          "role": "A씨 역",
-          "look": {
-            "naero": "role:actor",
-            "nambul": "role:actor"
-          },
-          "tags": {
-            "naero": "B씨 역",
-            "nambul": "A씨 역"
-          },
-          "text": "사실 A씨는 B씨, 그러니까 내로한테 빌린 돈을 제때 갚지 못했어요. 그 뒤로 돈 문제로 자주 다퉜고요.",
-          "focus": "photo"
+          "text": "기사 제목부터 같이 봐요. 돈을 갚으라며 찾아온 지인이 자택에서 숨졌다는 내용이에요.",
+          "focus": "head"
         },
         {
           "say": "naero",
-          "role": "B씨 역",
-          "text": "그날 저는 돈 이야기를 하려고 A씨 집을 찾아갔어요.",
+          "text": "사진은 사건을 이해하도록 만든 연출 이미지예요. 실제 현장 사진이 아니에요.",
           "focus": "photo"
         },
         {
           "say": "nambul",
-          "role": "A씨 역",
-          "text": "이야기는 금방 말다툼이 됐어요. 목소리가 점점 커졌고요.",
-          "focus": "photo"
+          "text": "기사에 따르면 A씨는 B씨에게 빌린 돈을 제때 갚지 못했어요. 그 문제로 두 사람은 오래 다퉈 왔다고 해요.",
+          "focus": "body"
+        },
+        {
+          "say": "naero",
+          "text": "그날 B씨는 돈 이야기를 하려고 A씨의 집을 찾아갔어요. 이야기는 곧 말다툼이 됐다고 해요.",
+          "focus": "body"
+        },
+        {
+          "say": "nambul",
+          "text": "다툼이 격해지자 A씨는 집에 있던 흉기를 집어 들었고, B씨는 그 자리에서 숨졌어요. A씨는 구호 조치 없이 집을 나갔다고 전해져요.",
+          "focus": "body"
         },
         {
           "say": "naero",
@@ -157,11 +151,7 @@
             "naero": "react-sorry",
             "nambul": "idle-neutral"
           },
-          "tags": {
-            "naero": "",
-            "nambul": ""
-          },
-          "text": "A씨는 집에 있던 흉기를 휘둘렀고, B씨는 그 자리에서 숨졌어요. A씨는 구호 조치 없이 집을 나갔다고 해요.",
+          "text": "기사로 알 수 있는 건 여기까지예요. 기사에 없는 이야기는 지어내지 않을게요.",
           "focus": "body"
         },
         {
@@ -169,7 +159,7 @@
           "look": {
             "nambul": "react-sorry"
           },
-          "text": "기사로 알 수 있는 건 여기까지예요. 무거운 사건이니까, 서두르지 말고 생각해 봐요.",
+          "text": "무거운 사건이니까, 서두르지 말고 생각해 봐요.",
           "focus": "body"
         }
       ]
@@ -696,13 +686,31 @@
           "text": "{vsAi}"
         },
         {
-          "focus": "change",
+          "focus": "letters",
+          "say": "nambul",
+          "look": {
+            "naero": "idle-neutral",
+            "nambul": "react-surprised"
+          },
+          "text": "어, 이 엽서는…! 우리가 처음에 받았던 독자 의견이에요. 기사만 읽고 보낸 첫인상이 신문에 실렸어요."
+        },
+        {
+          "focus": "letters",
           "say": "naero",
           "look": {
             "naero": "guide-neutral",
             "nambul": "idle-neutral"
           },
-          "text": "뉴스만 봤을 때와 모두 보고 난 뒤, 내 판단은 이렇게 움직였어요."
+          "text": "그때는 「{pre}」이라고 적었어요. 지금의 판결과 나란히 놓고 볼 뿐, 맞고 틀리는 건 아니에요."
+        },
+        {
+          "focus": "letters",
+          "say": "nambul",
+          "look": {
+            "naero": "idle-neutral",
+            "nambul": "guide-neutral"
+          },
+          "text": "편집부가 한 줄 달아 뒀어요. “{editor}”"
         },
         {
           "focus": "factors",

@@ -220,12 +220,27 @@ export function renderLandingPage(container, { api, navigate, section }) {
     element('p', '', '뉴스만 본 나와 모든 사실을 본 나. 하나를 골라 보세요.'));
   const mobileList = element('div', 'desk-menu-list');
   const mobileCounts = {};
+  const mobileNews = {};
   ['news', 'folder', 'phone', 'laptop'].forEach((key) => {
     const { label, route, mobileText } = OBJECTS[key];
     const item = element('button', `desk-menu-item item-${key}${route ? '' : ' is-soon'}`);
     item.type = 'button';
     const text = span('', route ? mobileText : SOON);
-    item.append(element('strong', '', label), text);
+    if (key === 'news') {
+      // 모바일에서도 책상 위 신문 한 장: 작은 제호 + 머리기사 제목 + 사진(사건 목록으로 채운다)
+      item.classList.add('is-paper');
+      const brandRow = span('mn-brand');
+      const wordmark = element('b', '', '');
+      wordmark.append('내', span('law', 'Law'), '남불');
+      brandRow.append(wordmark, span('mn-date', todayLabel()));
+      mobileNews.headline = span('mn-headline', '오늘의 지면을 펼쳐 보세요');
+      mobileNews.photo = element('img', 'mn-photo');
+      mobileNews.photo.alt = '';
+      mobileNews.photo.src = fallbackImages.MURDER;
+      const body = span('mn-body');
+      body.append(mobileNews.headline, mobileNews.photo);
+      item.append(brandRow, body, element('strong', '', label), text);
+    } else item.append(element('strong', '', label), text);
     if (route) item.addEventListener('click', () => navigate(route, key === 'news' ? { from: 'desk' } : {}));
     else item.setAttribute('aria-disabled', 'true');
     mobileCounts[key] = text;
@@ -274,6 +289,8 @@ export function renderLandingPage(container, { api, navigate, section }) {
       index.replaceChildren(...others.slice(2, 5).map((item) => span('', item.headline || item.title)));
       notes.news.textContent = `오늘의 사건 ${summary.total}건!`;
       mobileCounts.news.textContent = `오늘의 사건 ${summary.total}건`;
+      mobileNews.headline.textContent = top.headline || top.title;
+      mobileNews.photo.src = top.thumbnailUrl || fallbackImages[top.crimeType] || fallbackImages.MURDER;
     } catch (error) {
       console.warn('메인 신문 지면을 채우지 못했어요:', error);
     }

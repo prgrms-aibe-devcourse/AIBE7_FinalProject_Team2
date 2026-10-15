@@ -9,6 +9,7 @@ import { formatPenalty, formatDispositions } from '../../utils/judgmentFormat.js
 import { formatMonths } from '../../components/recommendedRangeBar.js';
 import { renderStage, courtSet, imageOf } from '../../components/stage.js';
 import { restartMock, jumpActMock } from '../overview/overviewPage.js';
+import { editorNote } from '../../utils/preJudgmentCompare.js';
 
 const SUBJECTS = [['USER', '내 판결'], ['AI', 'AI 판결'], ['COURT', '실제 판결']];
 const DIRECTIONS = { UP: ['무겁게', 'up'], DOWN: ['가볍게', 'down'] };
@@ -113,13 +114,6 @@ function newspaper(data, script, caseTitle) {
   });
   table.append(thead, tbody);
 
-  const change = element('div', 'sheet-change-row');
-  const from = element('div');
-  from.append(element('p', 'sheet-who', '뉴스로 봤을 때'), element('p', 'sheet-penalty', preToFinal.preJudgment.label));
-  const to = element('div');
-  to.append(element('p', 'sheet-who', '모두 보고 판결했을 때'), element('p', 'sheet-penalty', preToFinal.finalJudgmentText));
-  change.append(from, to);
-
   const rules = [['공통점', ruleSentences.common], ['차이점', ruleSentences.differences]].map(([title, lines]) => {
     const part = element('div', 'sheet-rule');
     part.append(element('h4', '', title), ...lines.map((line) => element('p', 'sheet-text', line)));
@@ -139,8 +133,25 @@ function newspaper(data, script, caseTitle) {
     cast.append(item);
   });
 
+  // 독자 의견란: 2막에서 보낸 엽서가 다음 날 신문 독자란에 실려 돌아온다. 처음 보낸 첫인상만 다시 싣는다(API 14의 preToFinal.preJudgment).
+  // 아래 편집부 의견은 그 첫인상을 실제 판결과 견줘 한 줄로 적는다(어느 쪽이 맞는지는 말하지 않는다).
+  // 추후 확장(우선도 낮음): 사용자 데이터가 쌓이면 이 칸에 다른 독자들의 첫인상 분포를 함께 보여 줄 수 있다 — 지금은 데이터가 없어 보여 주지 않는다.
+  const letter = element('div', 'sheet-letter');
+  const letterMark = element('span', 'sheet-letter-mark');
+  letterMark.setAttribute('aria-hidden', 'true');
+  letterMark.append('접수', element('br'), '완료');
+  letter.append(element('p', 'sheet-letter-q', '이 사건, 어느 정도의 형량이 맞다고 생각하나요?'),
+    element('p', 'sheet-letter-a', preToFinal.preJudgment.label),
+    element('p', 'sheet-letter-by', '— 기사만 읽고 보낸 첫인상, 독자 엽서'), letterMark);
+  const note = editorNote(preToFinal.preJudgment.label, judgments.COURT);
+  if (note) {
+    const edit = element('p', 'sheet-letter-edit');
+    edit.append(element('b', '', '편집부 의견'), note);
+    letter.append(edit);
+  }
+
   sheet.append(mast, front,
-    story('change', '뉴스로 봤을 때, 모두 보고 난 뒤', change, element('p', 'sheet-text', preToFinal.summaryText)),
+    story('letters', '독자 의견', letter),
     story('verdicts', '세 판결, 나란히', verdicts),
     story('cast', '이번 사건에서 만난 모습', cast),
     story('factors', '판단 요소, 어디서 갈렸나', table),
@@ -181,7 +192,10 @@ export function renderComparisonStage({ script, data, caseId, caseTitle, navigat
   const vsAi = diffLine(judgments.USER, judgments.AI, 'AI 판결',
     'AI 판결과 형량이 같아요! 그래도 이유까지 같은지는 따로 봐야 해요.', (head) => `${head} 다른 자리에서 보면 다르게 보이기도 해요!`);
   const act = script.acts['8'];
-  const steps = act.steps.map((step) => (step.text ? { ...step, text: step.text.replace('{vsCourt}', vsCourt).replace('{vsAi}', vsAi) } : step));
+  const pre = data.preToFinal.preJudgment.label;
+  const editor = editorNote(pre, judgments.COURT); // 편집부 의견을 못 만들면(구간 이름을 못 읽음) 그 대사는 건너뛴다
+  const steps = act.steps.filter((step) => editor || !step.text?.includes('{editor}'))
+    .map((step) => (step.text ? { ...step, text: step.text.replace('{vsCourt}', vsCourt).replace('{vsAi}', vsAi).replace('{pre}', pre).replace('{editor}', editor ?? '') } : step));
   return renderStage({
     script: { ...script, acts: { ...script.acts, 8: { ...act, steps } } },
     order: ['8'],

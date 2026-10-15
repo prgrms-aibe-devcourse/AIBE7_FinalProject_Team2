@@ -54,7 +54,7 @@ export function earButton(title, sub, action, className = '') {
 }
 export function caseInfoEar(info) {
   const ear = element('div', 'ear ear-right');
-  ear.append(element('b', '', `사건 ${String(info.caseId).padStart(2, '0')}`), `${info.crimeCategoryLabel ?? ''} · 형량은 체험을 마친 뒤 공개됩니다.`);
+  ear.append(element('b', '', `사건 ${String(info.caseId).padStart(2, '0')}`), `${info.crimeCategoryLabel ?? ''} · 형량 비공개`);
   return ear;
 }
 

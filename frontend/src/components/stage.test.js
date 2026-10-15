@@ -9,11 +9,13 @@ const steps = flatten(script.acts, ['1', '2']);
 const trial = flatten(script.acts, ['3']);
 
 test('장면은 앞 장면의 모습 · 이름표를 이어받는다', () => {
-  const actor = steps.findIndex((s) => s.look.nambul === 'role:actor');
-  assert.equal(steps[actor + 1].look.naero, 'role:actor');
-  assert.equal(steps[actor + 1].chips.nambul, 'A씨 역');
-  assert.equal(steps.at(-1).chips.nambul, '', '평상복으로 돌아오면 이름표가 없다');
+  // 1 · 2막은 평상복으로 사건을 설명한다(피해자 · 가해자를 연기하지 않는다, 10/16 결정): 역할 의상 · 이름표가 없다
+  assert.ok(steps.every((s) => !s.look.naero.startsWith('role:') && !s.look.nambul.startsWith('role:')));
+  assert.ok(steps.every((s) => s.chips.naero === '' && s.chips.nambul === ''));
+  // 3막은 앞 장면의 모습을 이어받는다: 역할 의상이면 의상 이름이 이름표가 되고, 다음 장면도 같은 의상 · 이름표를 유지한다
   assert.equal(trial[0].chips.naero, '변호인', '역할 의상이면 의상 이름이 이름표가 된다');
+  assert.equal(trial[1].look.naero, trial[0].look.naero, '장면은 앞 장면의 모습을 이어받는다');
+  assert.equal(trial[1].chips.nambul, '검사');
 });
 
 test('건너뛰기는 같은 막의 다음 보드 · 막 끝에서 멈추고 다음 막으로 넘어가지 않는다', () => {

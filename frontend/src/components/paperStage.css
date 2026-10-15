@@ -1,0 +1,203 @@
+/* 신문 지면 무대 (layout 'paper', FE-32): S-20 · S-03의 1 · 2막이 S-02 신문 지면(caseList.css) 위에 얹히는 화면의 스타일.
+   components/stage.css(상자 무대)에서 분리했다 — styles.js에서 stage.css · caseList.css 뒤에 불러, 선택자를 길게 덧붙이지 않고 파일 순서로 이긴다.
+   구성: 지면 아래 여백 → 막 칩(탭 줄) → 귀 버튼 · 머리글 → 기사(story) → 화면 아래 고정 대사창 · 캐릭터 · 조작 줄 → 엽서 팝업 → 모바일 보정 */
+
+/* ── 신문 지면 무대 (layout 'paper', FE-32): S-20 · 1 · 2막 ──
+   화면 전체가 S-02와 같은 신문 지면이다(지면 스타일은 caseList.css .case-list-page). 막 칩은 지면 탭 줄, 2막 카드는 지면 안 "독자 의견" 칸.
+   캐릭터 · 대사창 · 조작 줄은 화면 아래에 고정되고, 지면은 그 위로 굴러간다(stage.js paperCamera) */
+.case-paper-page { padding-bottom: calc(300px + var(--safe-bottom)); padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); } /* 아래 고정 대사창 높이만큼 비워 맨 아래 문구까지 읽힌다(여백이 합쳐져 사라지지 않게 margin 대신 padding) */
+.case-paper-page .paper { margin-bottom: 0; }
+#app:has(.case-paper-page) > #route-footer { display: none; } /* 법적 고지는 지면 안 맨 아래 줄에 있다 */
+.stage-wrap.paper-mode .stage { position: relative; aspect-ratio: auto; overflow: visible; border: 0; border-radius: 0; background: none; user-select: auto; }
+.stage-wrap.paper-mode .scene { position: static; inset: auto; aspect-ratio: auto; overflow: visible; border: 0; cursor: pointer; }
+.stage-wrap.paper-mode .bg { display: none; }
+.stage-wrap.paper-mode .stage.bmode .scene { display: block; }
+/* 지금 읽는 기사만 또렷하게 */
+.stage-wrap.paper-mode .paper [data-focus] { transition: opacity .5s ease-out; }
+.stage-wrap.paper-mode .paper.spot [data-focus]:not(.is-on) { opacity: .72; } /* 다른 기사도 읽을 수 있게(본문 글자 대비 4.5:1 안팎) */
+:root { --safe-bottom: env(safe-area-inset-bottom, 0px); } /* 아이폰 홈 바 높이(index.html viewport-fit=cover) */
+:root:has(.stage-wrap.paper-mode) { scroll-padding-bottom: calc(300px + var(--safe-bottom)); } /* 아래 고정 대사창이 포커스를 가리지 않게 */
+/* 탭 줄 = 막 칩(S-02 유형 탭과 같은 모양) */
+.stage-wrap.paper-mode .paper-acts { align-self: stretch; display: flex; min-width: 0; }
+.stage-wrap.paper-mode .acts { align-items: stretch; flex-wrap: nowrap; gap: 0; margin: 0; overflow-x: auto; scrollbar-width: none; }
+.stage-wrap.paper-mode .act, .stage-wrap.paper-mode .act:has(.act-jump) { position: relative; display: flex; align-items: center; min-height: 44px; padding: 0 12px; border: 0; border-radius: 0; background: transparent; color: var(--color-muted); font-size: 14px; white-space: nowrap; }
+.stage-wrap.paper-mode .act:has(.act-jump) { padding: 0; }
+.stage-wrap.paper-mode .act-jump { align-self: stretch; padding: 0 12px; border-radius: 0; }
+.stage-wrap.paper-mode .act.done { color: var(--color-text); }
+.stage-wrap.paper-mode .act.on { background: transparent; color: var(--color-accent); }
+.stage-wrap.paper-mode .act.on::after { content: ''; position: absolute; left: 10px; right: 10px; bottom: 0; height: 2px; background: var(--color-accent); }
+@media (hover: hover) and (pointer: fine) { .stage-wrap.paper-mode .act:not(.on):has(.act-jump):hover { color: var(--color-text); } }
+/* 독자 의견 칸(2막 카드). 카드가 없으면 칸째 숨는다 */
+/* 독자 의견 엽서(2막 사전 판단): 지면 위 팝업. 가장자리는 항공우편 줄무늬, 오른쪽 위에 우표 · 소인. 뒤 지면은 어둡게 가린다 */
+.stage-wrap.paper-mode .stage:has(> .board:not([hidden]))::after { content: ''; position: fixed; inset: 0; z-index: 25; background: color-mix(in srgb, var(--color-desk-shadow) 45%, transparent); animation: dlg-in .3s ease-out; }
+.stage-wrap.paper-mode .board, .stage-wrap.paper-mode .board.wide { position: fixed; z-index: 26; left: 50%; top: 46%; right: auto; bottom: auto; translate: -50% -50%; display: block; width: min(700px, calc(100vw - 32px)); height: auto; max-height: calc(100dvh - 150px);
+  padding: 9px; border: 0; border-radius: 4px; overflow: hidden; animation: none; transform: rotate(-.6deg);
+  background: repeating-linear-gradient(-45deg, var(--color-caution) 0 14px, var(--color-card) 14px 22px, var(--color-accent) 22px 36px, var(--color-card) 36px 44px);
+  box-shadow: 0 24px 48px -16px color-mix(in srgb, var(--color-desk-shadow) 70%, transparent); }
+.stage-wrap.paper-mode .board[hidden] { display: none; }
+.stage-wrap.paper-mode .board > .scroll-area { max-height: calc(100dvh - 168px); background: color-mix(in srgb, var(--color-desk-kraft) 10%, var(--color-card)); }
+.stage-wrap.paper-mode .board .scroll-body { padding: 26px 30px 24px; }
+.stage-wrap.paper-mode .board .postcard-head { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px dashed var(--color-border-strong); }
+.stage-wrap.paper-mode .board .postcard-head h2 { margin: 0 0 4px; font: 900 22px/1.3 var(--font-heading); letter-spacing: .08em; color: var(--color-heading); }
+.stage-wrap.paper-mode .board .postcard-head p { margin: 0; color: var(--color-muted); font-size: 13px; }
+.stage-wrap.paper-mode .board .postcard-stamp { position: relative; flex: none; display: grid; place-items: center; width: 64px; height: 76px; border: 3px dotted var(--color-label); background: var(--color-paper); color: var(--color-label); font: 900 13px/1.15 var(--font-heading); text-align: center; transform: rotate(3deg); }
+.stage-wrap.paper-mode .board .postcard-stamp { isolation: isolate; }
+.stage-wrap.paper-mode .board .postcard-stamp::after { content: ''; position: absolute; z-index: -1; left: -34px; top: 22px; width: 58px; height: 58px; border: 2px solid color-mix(in srgb, var(--color-accent) 45%, transparent); border-radius: 50%; } /* 소인 원은 우표 글자 뒤로, 왼쪽 가장자리에만 걸친다 */
+.stage-wrap.paper-mode .board :is(.guide-box, .pre-judgment-form) { margin: 0; padding-left: 0; padding-right: 0; }
+.stage-wrap.paper-mode .board .guide-box { margin-bottom: 14px; padding: 10px 14px; border-left: 0; font-size: 14px; } /* 엽서 안에서는 옆 띠 없이 */
+.stage-wrap.paper-mode .board .pre-judgment-form { padding-bottom: 0; }
+.stage-wrap.paper-mode .board .section-actions { display: flex; justify-content: flex-end; } /* 제출 버튼은 엽서 오른쪽 아래 */
+.stage-wrap.paper-mode .board legend { font-family: var(--font-hand); font-size: 24px; font-weight: 400; color: var(--color-desk-note-pen); }
+.stage-wrap.paper-mode .board .range-options { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.stage-wrap.paper-mode .board .range-option { display: flex; align-items: center; min-height: 44px; padding: 8px 14px; background: transparent; border-style: dashed; font-size: 15px; line-height: 1.4; }
+/* 엽서가 떠 있으면 캐릭터 · 조작 줄(이전)은 가림막 위에 */
+.stage-wrap.paper-mode .stage.bmode .spr { z-index: 27; }
+.stage-wrap.paper-mode:has(.stage.bmode) .ctrl { z-index: 27; }
+/* 건네기: 남불이 앞으로 나서며 엽서를 내밀고(0.7초), 엽서는 남불 손에서 날아와 가운데에서 펼쳐진다 */
+.stage-wrap.paper-mode .spr.b.delivering { animation: nambul-hand .75s cubic-bezier(.3, .7, .2, 1); }
+@keyframes nambul-hand { 35% { transform: translate(-46%, -10%) rotate(-7deg); } 60% { transform: translate(-40%, -6%) rotate(-4deg); } }
+.stage-wrap.paper-mode .board.delivering { animation: postcard-in .7s cubic-bezier(.25, .8, .25, 1) .22s backwards; }
+@keyframes postcard-in { from { opacity: 0; transform: translate(var(--from-x), var(--from-y)) scale(.12) rotate(-14deg); } 25% { opacity: 1; } }
+/* 화면 아래 고정: 대사창 · 조작 줄, 그 양옆에 내로 · 남불(발이 화면 아래 끝). 읽는 공간(대사창 위)을 가리지 않는다. 좁은 화면은 대사창 위 양 끝 */
+.stage-wrap.paper-mode { --dock-w: min(860px, calc(100vw - 340px)); } /* 양옆에 캐릭터 자리(170px씩)를 남긴다 */
+.stage-wrap.paper-mode .dlg { position: fixed; z-index: 20; left: 50%; right: auto; bottom: calc(66px + var(--safe-bottom)); translate: -50% 0; width: var(--dock-w); height: auto; min-height: 118px; padding: 26px 28px 18px;
+  box-shadow: 0 5px 0 color-mix(in srgb, var(--color-text) 18%, transparent), 0 18px 40px -12px color-mix(in srgb, var(--color-desk-shadow) 60%, transparent); }
+.stage-wrap.paper-mode .name { left: 18px; top: -16px; gap: 6px; padding: 2px 14px 2px 4px; font-size: 14px; }
+.stage-wrap.paper-mode .name img { width: 26px; height: 26px; }
+.stage-wrap.paper-mode .txt { font-size: 17px; }
+.stage-wrap.paper-mode .nxt { right: 18px; bottom: 8px; font-size: 12px; }
+.stage-wrap.paper-mode .dlg-choices { gap: 8px; margin-top: 12px; }
+.stage-wrap.paper-mode .dlg-choices :is(.primary-button, .secondary-button) { min-height: 40px; padding: 0 16px; font-size: 14px; }
+.stage-wrap.paper-mode .dlg-note { font-size: 13px; }
+.stage-wrap.paper-mode .ctrl { position: fixed; z-index: 20; left: 50%; bottom: calc(10px + var(--safe-bottom)); translate: -50% 0; width: var(--dock-w); margin: 0; padding: 4px 10px; border-radius: 999px; background: color-mix(in srgb, var(--color-card) 92%, transparent);
+  box-shadow: 0 6px 18px -8px color-mix(in srgb, var(--color-desk-shadow) 60%, transparent); }
+.stage-wrap.paper-mode .ctrl :is(.primary-button, .secondary-button) { min-height: 40px; }
+.stage-wrap.paper-mode .ctrl .stage-restart { margin-left: 4px; }
+.stage-wrap.paper-mode .stage[data-scene] .spr { --l: calc(50% - var(--dock-w) / 2 - 84px); --r: calc(50% + var(--dock-w) / 2 + 84px); position: fixed; z-index: 19; bottom: calc(4px + var(--safe-bottom)); height: min(210px, 27vh); }
+.stage-wrap.paper-mode .stage[data-scene] .spr.role { height: min(190px, 24vh); }
+.stage-wrap.paper-mode .stage[data-scene] .spr.near { translate: -50% 0; }
+.stage-wrap.paper-mode .spr .chip { font-size: 12px; }
+.stage-wrap.paper-mode .flash { position: fixed; z-index: 18; }
+.stage-wrap.paper-mode .zoom.fixed { position: fixed; z-index: 30; }
+.stage-wrap.paper-mode .eyecatch { position: fixed; z-index: 40; }
+@media (max-width: 680px) {
+  .stage-wrap.paper-mode { --dock-w: calc(100vw - 20px); }
+  .stage-wrap.paper-mode .stage[data-scene] .spr, .stage-wrap.paper-mode .stage[data-scene] .spr.role { --l: 46px; --r: calc(100% - 46px); bottom: calc(172px + var(--safe-bottom)); height: 92px; }
+  .stage-wrap.paper-mode .dlg { bottom: calc(58px + var(--safe-bottom)); min-height: 108px; margin: 0; padding: 22px 16px 14px; }
+  .stage-wrap.paper-mode .txt { font-size: 15px; }
+  .stage-wrap.paper-mode .ctrl { flex-wrap: nowrap; bottom: calc(6px + var(--safe-bottom)); padding: 2px 8px; min-height: 44px; }
+  .stage-wrap.paper-mode .ctrl :is(.primary-button, .secondary-button) { min-height: 44px; }
+  .stage-wrap.paper-mode .ctrl .stage-restart { display: none; }
+  .stage-wrap.paper-mode .acts .act:not(.on) { display: flex; }
+  .stage-wrap.paper-mode .board .range-options { grid-template-columns: 1fr; }
+  .stage-wrap.paper-mode .board .scroll-body { padding: 18px 16px; }
+  .stage-wrap.paper-mode .board .postcard-head h2 { font-size: 18px; }
+  .stage-wrap.paper-mode .board .postcard-stamp { width: 50px; height: 60px; font-size: 11px; }
+  .case-paper-page { padding-bottom: calc(320px + var(--safe-bottom)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .stage-wrap.paper-mode .paper [data-focus] { transition: none; }
+}
+
+/* 사건 기사 지면의 귀 버튼(FE-32): 왼쪽 "다른 사건 보기", 오른쪽 "이어서 하기"(S-20, 하던 체험이 있을 때) */
+.case-paper-page .ear-button { display: block; width: 100%; background: transparent; font: inherit; text-align: center; cursor: pointer; transition: scale .12s cubic-bezier(.2, .8, .2, 1), border-color .15s ease-out, background-color .15s ease-out; }
+.case-paper-page .ear-button b { display: block; margin-bottom: 2px; font: 700 14px/1.4 var(--font-heading); color: var(--color-heading); }
+.case-paper-page .ear-button small { display: block; font-size: var(--text-caption); color: var(--color-muted); }
+@media (hover: hover) and (pointer: fine) { .case-paper-page .ear-button:hover { border-color: var(--color-text); background: color-mix(in srgb, var(--color-desk-kraft) 12%, transparent); } }
+/* 양 귀: 같은 굵기(2px) 테두리, 지면과 살짝 다른 종이색 */
+.case-paper-page .page-head .ear { border-width: 2px; background: color-mix(in srgb, var(--color-desk-kraft) 16%, var(--color-paper)); }
+@media (hover: hover) and (pointer: fine) { .case-paper-page .page-head .ear-button:hover { background: color-mix(in srgb, var(--color-desk-kraft) 28%, var(--color-paper)); } }
+.case-paper-page .ear-go { border-color: var(--color-accent); }
+.case-paper-page .ear-go b { color: var(--color-accent); }
+.case-paper-page .ear-button:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+@media (max-width: 768px) {
+  .case-paper-page .ear-button small { display: none; }
+}
+
+/* 체험 시작 전(S-20): 지면만 보이고 캐릭터 · 대사창 · 조작 줄은 숨는다. 우하단 "시작하기"로 시작 */
+.stage-wrap.paper-mode.parked :is(.spr, .dlg, .ctrl) { display: none; }
+.case-paper-page:has(.paper-start) { padding-bottom: calc(120px + var(--safe-bottom)); }
+.case-paper-page .paper-start { position: fixed; z-index: 20; right: calc(28px + env(safe-area-inset-right, 0px)); bottom: calc(24px + var(--safe-bottom)); display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.case-paper-page .paper-start .primary-button { min-height: 56px; padding: 0 28px; border-radius: 999px; font-size: 17px; box-shadow: 0 10px 24px -8px color-mix(in srgb, var(--color-desk-shadow) 70%, transparent); }
+.case-paper-page .paper-start-notice { max-width: 280px; margin: 0; padding: 6px 12px; border-radius: 8px; background: var(--color-card); color: var(--color-caution); font-size: var(--text-small); }
+.case-paper-page .paper-start-notice:empty { display: none; }
+/* 시작하면 내로 · 남불이 아래에서 뛰어 들어오고, 대사창이 뒤따라 뜬다 */
+.stage-wrap.paper-mode.entering .stage[data-scene] .spr { animation: paper-enter .55s cubic-bezier(.2, .8, .2, 1) backwards; }
+.stage-wrap.paper-mode.entering .stage[data-scene] .spr.b { animation-delay: .12s; }
+.stage-wrap.paper-mode.entering :is(.dlg, .ctrl) { animation: dlg-in .3s ease-out .35s backwards; }
+@keyframes paper-enter { from { opacity: 0; transform: translateY(60%); } }
+@media (max-width: 680px) {
+  .case-paper-page .paper-start { right: calc(12px + env(safe-area-inset-right, 0px)); bottom: calc(14px + var(--safe-bottom)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .stage-wrap.paper-mode.entering .stage[data-scene] .spr, .stage-wrap.paper-mode.entering :is(.dlg, .ctrl),
+  .stage-wrap.paper-mode .spr.b.delivering, .stage-wrap.paper-mode .board.delivering { animation: none; }
+}
+
+/* ── 사건 기사 지면(S-20 · 1 · 2막): 1면이 아니라 안쪽 기사 면 (FE-32) ──
+   S-02 1면과 같은 신문이되 짜임이 달라서, 신문이 넘어갔다는 게 보인다: 작은 제호 머리글 · 큰 기사 제목 · 기자 줄 · 사진 · 여러 단 본문 */
+.case-paper-page .page-head { display: grid; grid-template-columns: minmax(150px, 190px) minmax(0, 1fr) minmax(150px, 190px); align-items: center; gap: 16px; padding: 22px 0 14px; border-bottom: 3px double var(--color-border-strong); }
+.case-paper-page .page-head .ear { border-width: 2px; }
+.case-paper-page .page-head-title { text-align: center; }
+.case-paper-page .page-head-brand { margin: 0; font: 900 34px/1 var(--font-heading); letter-spacing: -.08em; color: var(--color-heading); white-space: nowrap; }
+.case-paper-page .page-head-brand .law { color: var(--color-label); }
+.case-paper-page .page-head-meta { margin: 6px 0 0; color: var(--color-muted); font-size: var(--text-caption); font-weight: 700; }
+.case-paper-page .tabs-zone { border-bottom: 1px solid var(--color-border-strong); }
+.case-paper-page .story { padding: 26px 0 28px; }
+.case-paper-page .story-head { max-width: 920px; }
+.case-paper-page .story .kicker { margin-bottom: 12px; }
+.case-paper-page .story-title { margin: 0 0 12px; font: 900 clamp(34px, 4.6vw, 60px) / 1.2 var(--font-heading); letter-spacing: -.045em; color: var(--color-heading); text-wrap: balance; word-break: keep-all; }
+.case-paper-page .story-deck { margin: 0; font: 600 clamp(17px, 1.7vw, 22px) / 1.55 var(--font-heading); color: var(--color-muted); word-break: keep-all; text-wrap: pretty; }
+.case-paper-page .story-byline { display: flex; gap: 14px; margin: 20px 0 20px; padding: 8px 0; border-top: 1px solid var(--color-text); border-bottom: 1px solid var(--color-border-strong); font-size: var(--text-caption); color: var(--color-muted); }
+.case-paper-page .story-byline b { color: var(--color-text); }
+.case-paper-page .story-photo { margin: 0 0 22px; }
+.case-paper-page .story-photo .photo { aspect-ratio: 21 / 9; max-height: 440px; }
+.case-paper-page .story-body { column-count: 3; column-gap: 32px; column-rule: 1px solid var(--color-border); }
+.case-paper-page .story-body p { margin: 0 0 .8em; font: 16px / 1.85 var(--font-article); letter-spacing: -.015em; text-align: justify; word-break: keep-all; hyphens: auto; }
+.case-paper-page .story-body p + p { text-indent: 1em; }
+.case-paper-page .story-body p:first-child::first-letter { float: left; margin: .06em .1em 0 0; font: 900 3.4em/.85 var(--font-heading); color: var(--color-heading); }
+@media (max-width: 1100px) {
+  .case-paper-page .story-body { column-count: 2; }
+}
+@media (max-width: 768px) {
+  .case-paper-page .page-head { grid-template-columns: 1fr 1fr; padding-top: 14px; gap: 8px; }
+  .case-paper-page .page-head-title { grid-column: 1 / -1; order: -1; }
+  .case-paper-page .page-head-brand { font-size: 28px; }
+  .case-paper-page .page-head .ear-button { display: flex; align-items: center; justify-content: center; min-height: 44px; padding: 6px 8px; }
+  .case-paper-page .page-head .ear-button small { display: none; }
+  .case-paper-page .page-head .ear:not(.ear-button) { grid-column: auto; }
+  .case-paper-page .story { padding-top: 18px; }
+  .case-paper-page .story-photo .photo { aspect-ratio: 16 / 10; }
+  .case-paper-page .story-body { column-count: 1; }
+  .case-paper-page .story-body p { font-size: 16px; }
+}
+
+/* 신문 지면 무대의 대사창 선택지는 오른쪽으로(S-20 "진행 중인 체험이 있어요" → 이어서 하기 · 새로 하기) */
+.stage-wrap.paper-mode .dlg-choices { justify-content: flex-end; }
+/* 이미 보낸 엽서: 질문과 보낸 판단을 손글씨로 */
+.stage-wrap.paper-mode .board .postcard-sent { margin-bottom: 14px; padding: 6px 4px 12px; border-bottom: 1px dashed var(--color-border-strong); }
+.stage-wrap.paper-mode .board .postcard-sent-q { margin: 0 0 6px; font: 400 20px/1.4 var(--font-hand); color: var(--color-muted); }
+.stage-wrap.paper-mode .board .postcard-sent-none { margin: 0; color: var(--color-muted); font-size: 14px; } /* 시스템 안내는 손글씨(사용자 답) 대신 본문체로 */
+.stage-wrap.paper-mode .board .postcard-sent-a { margin: 0; font: 400 30px/1.3 var(--font-hand); color: var(--color-desk-note-pen); }
+
+/* 모바일 읽기 보정(FE-32 디자인 점검): 대사창 · 조작 줄은 뒤 본문이 비치지 않게 불투명, 제출 줄은 엽서 아래에 고정 */
+@media (max-width: 680px) {
+  .stage-wrap.paper-mode .dlg { background: var(--paper); }
+  .stage-wrap.paper-mode .ctrl { background: var(--color-card); }
+  .stage-wrap.paper-mode .board .section-actions { position: sticky; bottom: -18px; z-index: 1; margin: 0 -16px -18px; padding: 12px 16px; background: color-mix(in srgb, var(--color-desk-kraft) 10%, var(--color-card)); border-top: 1px dashed var(--color-border-strong); }
+  .stage-wrap.paper-mode .board .section-actions .primary-button { width: 100%; }
+}
+
+/* 엽서 접수 도장(소인): 보낸 순간 엽서 위에 찍힌다 */
+.stage-wrap.paper-mode .board .postcard { position: relative; }
+.stage-wrap.paper-mode .board .postcard-postmark { position: absolute; right: 8%; top: 34%; display: grid; place-items: center; width: 150px; height: 150px; border: 4px double var(--color-accent); border-radius: 50%; color: var(--color-accent); text-align: center; background: color-mix(in srgb, var(--color-card) 60%, transparent); transform: rotate(-14deg); animation: postmark-in .35s cubic-bezier(.2, .8, .2, 1) backwards; pointer-events: none; }
+.stage-wrap.paper-mode .board .postcard-postmark b { font: 900 22px/1.1 var(--font-heading); letter-spacing: .06em; }
+.stage-wrap.paper-mode .board .postcard-postmark small { font-size: 11px; font-weight: 700; }
+.stage-wrap.paper-mode .board .postcard.is-sent :is(.section-actions, .guide-box, .submit-error) { opacity: .35; }
+@keyframes postmark-in { from { opacity: 0; transform: rotate(-4deg) scale(1.9); } }
+@media (prefers-reduced-motion: reduce) { .stage-wrap.paper-mode .board .postcard-postmark { animation: none; } }
+
+/* 귀 버튼이 하나뿐일 때(처음 보는 사건은 오른쪽 귀가 모바일에서 숨는다) 반쪽 폭으로 남지 않게 */
+@media (max-width: 768px) {
+  .case-paper-page .page-head:not(:has(.ear-right.ear-button)) .ear-left { grid-column: 1 / -1; }
+}
