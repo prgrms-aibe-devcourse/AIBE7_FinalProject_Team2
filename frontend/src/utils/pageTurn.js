@@ -1,7 +1,7 @@
 // 신문 한 장 넘기기 연출 (FE-32, 2.5D). 지금 보이는 지면을 그대로 본뜬 한 장(leaf)이 지면 왼쪽 가장자리를 축으로 넘어간다.
 // 오른쪽 끝이 화면 쪽으로 들려 올라와 왼쪽으로 지나가고(앞면 → 뒷면), 그 밑에 다음 면이 이미 놓여 있다.
 // 쓰는 곳: S-02 기사 클릭(→ S-20), S-02 유형 탭 바꾸기. 호출하는 쪽이 "다음 면"을 바로 그려 두면, 이 한 장이 걷히며 드러난다.
-// 움직임은 transform · opacity 하나라 레이아웃을 다시 계산하지 않는다. 움직임 줄이기면 아무것도 하지 않고 바로 끝난다.
+// 움직임은 transform · opacity 하나라 레이아웃을 다시 계산하지 않는다. 움직임 줄이기면 넘어가는 대신 이전 면이 0.2초 동안 흐려지며 다음 면이 드러난다(바뀌었다는 단서는 남긴다).
 // 본뜬 지면은 장식이다(inert · aria-hidden, 눌러도 아무 일도 없다).
 
 const TURN_MS = 1000; // 기사 → 상세처럼 한 번 가는 이동. 자주 누르는 탭 바꾸기는 호출하는 쪽이 duration을 짧게 준다(0.5초)
@@ -19,7 +19,6 @@ function div(className) {
  * @returns {Promise<void>} 한 장이 다 넘어가 사라진 시점
  */
 export function turnPage(page, { scopeClass, duration = TURN_MS }) {
-  if (reducedMotion()) return Promise.resolve();
   const box = page.getBoundingClientRect();
 
   const copy = page.cloneNode(true);
@@ -45,6 +44,9 @@ export function turnPage(page, { scopeClass, duration = TURN_MS }) {
   overlay.append(dim, leaf);
   document.body.append(overlay);
 
+  if (reducedMotion()) {
+    return overlay.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200, easing: 'ease-out', fill: 'forwards' }).finished.catch(() => {}).then(() => overlay.remove());
+  }
   const timing = { duration, fill: 'forwards' };
   const shots = [
     leaf.animate([{ transform: 'rotateY(0deg)' }, { transform: 'rotateY(-180deg)' }], { ...timing, easing: 'cubic-bezier(.55, .05, .3, 1)' }),

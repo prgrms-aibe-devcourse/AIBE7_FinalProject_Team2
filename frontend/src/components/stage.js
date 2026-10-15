@@ -356,7 +356,6 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
   if (paperMode) sheet.querySelector('[data-slot="acts"]')?.append(acts);
   // 신문 지면 무대의 카드(엽서): 남불이 앞으로 나서며 건네고, 엽서가 남불 손에서 화면 가운데로 날아와 펼쳐진다
   function deliver() {
-    if (reducedMotion()) return;
     const from = sprites.nambul.getBoundingClientRect();
     const to = board.getBoundingClientRect();
     board.style.setProperty('--from-x', `${from.left + from.width * 0.3 - (to.left + to.width / 2)}px`);
@@ -654,7 +653,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
     if (!parked) return;
     parked = false;
     wrap.classList.remove('parked');
-    if (!reducedMotion()) wrap.classList.add('entering');
+    wrap.classList.add('entering'); // 움직임 줄이기에서는 CSS가 움직임 없이 페이드만 건다(paperStage.css)
     render();
     // 시작 버튼이 사라지므로 포커스를 옮긴다: 선택지 장면이면 첫 선택지(대사를 바로 다 보여 준다), 아니면 대사 진행
     if (asks(steps[index])) { finishTyping(); choiceRow.querySelector('button')?.focus({ preventScroll: true }); }

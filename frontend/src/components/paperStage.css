@@ -96,7 +96,7 @@
   .case-paper-page { padding-bottom: calc(320px + var(--safe-bottom)); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .stage-wrap.paper-mode .paper [data-focus] { transition: none; }
+  .stage-wrap.paper-mode .paper [data-focus] { transition: opacity .2s ease-out; } /* 움직임은 없애고 흐려지는 단서만 남긴다 */
 }
 
 /* 사건 기사 지면의 귀 버튼(FE-32): 왼쪽 "다른 사건 보기", 오른쪽 "이어서 하기"(S-20, 하던 체험이 있을 때) */
@@ -129,9 +129,12 @@
 @media (max-width: 680px) {
   .case-paper-page .paper-start { right: calc(12px + env(safe-area-inset-right, 0px)); bottom: calc(14px + var(--safe-bottom)); }
 }
+/* 움직임 줄이기: 움직임(뛰어 들어옴 · 날아옴 · 내미는 팔)은 없애고, 나타났다는 단서(0.2초 투명도 페이드)는 남긴다 */
+@keyframes paper-fade { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
   .stage-wrap.paper-mode.entering .stage[data-scene] .spr, .stage-wrap.paper-mode.entering :is(.dlg, .ctrl),
-  .stage-wrap.paper-mode .spr.b.delivering, .stage-wrap.paper-mode .board.delivering { animation: none; }
+  .stage-wrap.paper-mode .board.delivering { animation: paper-fade .2s ease-out backwards; }
+  .stage-wrap.paper-mode .spr.b.delivering { animation: none; }
 }
 
 /* ── 사건 기사 지면(S-20 · 1 · 2막): 1면이 아니라 안쪽 기사 면 (FE-32) ──
@@ -195,7 +198,7 @@
 .stage-wrap.paper-mode .board .postcard-postmark small { font-size: 11px; font-weight: 700; }
 .stage-wrap.paper-mode .board .postcard.is-sent :is(.section-actions, .guide-box, .submit-error) { opacity: .35; }
 @keyframes postmark-in { from { opacity: 0; transform: rotate(-4deg) scale(1.9); } }
-@media (prefers-reduced-motion: reduce) { .stage-wrap.paper-mode .board .postcard-postmark { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .stage-wrap.paper-mode .board .postcard-postmark { animation: paper-fade .2s ease-out backwards; } }
 
 /* 귀 버튼이 하나뿐일 때(처음 보는 사건은 오른쪽 귀가 모바일에서 숨는다) 반쪽 폭으로 남지 않게 */
 @media (max-width: 768px) {
