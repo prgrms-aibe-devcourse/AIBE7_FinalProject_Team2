@@ -61,6 +61,16 @@ export function skipTarget(steps, index) {
   return steps.length - 1;
 }
 
+// 막 버튼으로 바로 가기(테스트 기간): 화면이 넘어갈 때 가려던 막을 sessionStorage에 한 번 남긴다
+export const ACT_JUMP_KEY = 'nlnb-act-jump';
+function takeJump() {
+  try {
+    const act = sessionStorage.getItem(ACT_JUMP_KEY);
+    sessionStorage.removeItem(ACT_JUMP_KEY);
+    return act;
+  } catch { return null; }
+}
+
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 function element(tag, className, text) {
@@ -160,10 +170,14 @@ function evidenceBoard(script, at) {
 // script: 사건 대본, order: 이 화면이 보여 줄 막, cards: 화면이 주는 카드 { 이름: 요소 },
 // inputCards: 입력 카드 이름(보드를 넓게 띄우고 화면의 제출로만 넘어간다), start(step): 재진입 장면,
 // onConfirm(n): confirm 장면을 떠날 때 화면이 서버에 "읽었습니다"를 보낸다(false면 넘어가지 않는다),
-// onRestart: 있으면 "처음부터 다시" 버튼을 단다(목 데이터 전용). 반환한 요소의 enterPhoto()는 신문 사진 속으로 들어가는 연출
-export function renderStage({ script, order, cards = {}, inputCards = [], start, onConfirm, onRestart }) {
+// onRestart: 있으면 "처음부터 다시" 버튼을 단다(목 데이터 전용), onJump(막 번호): 있으면 막 칩을 눌러 그 막으로 바로 간다
+// (테스트 기간 · 목 데이터 전용, 이 화면에 없는 막은 화면이 넘겨 준다). 반환한 요소의 enterPhoto()는 신문 사진 속으로 들어가는 연출
+export function renderStage({ script, order, cards = {}, inputCards = [], start, onConfirm, onRestart, onJump }) {
   const steps = flatten(script.acts, order);
   let index = Math.max(0, start ? steps.findIndex(start) : 0);
+  const jumpAct = takeJump();
+  const jumped = steps.findIndex((step) => step.actId === jumpAct);
+  if (jumped >= 0) index = jumped;
   let typing = null;
   let busy = false;
   let lastLook = '';
@@ -171,7 +185,18 @@ export function renderStage({ script, order, cards = {}, inputCards = [], start,
   const wrap = element('section', 'stage-wrap');
   wrap.setAttribute('aria-label', '판결 체험');
   const acts = element('ol', 'acts');
-  ACT_NAMES.forEach((name, i) => acts.append(element('li', 'act', `${i + 1}막 ${name}`)));
+  ACT_NAMES.forEach((name, i) => {
+    const label = `${i + 1}막 ${name}`;
+    const item = element('li', 'act', onJump ? undefined : label);
+    if (onJump) {
+      const jump = element('button', 'act-jump', label);
+      jump.type = 'button';
+      jump.title = '테스트용: 이 막으로 바로 가기';
+      jump.addEventListener('click', () => jumpTo(String(i + 1)));
+      item.append(jump);
+    }
+    acts.append(item);
+  });
 
   const stage = element('div', 'stage');
   const scene = element('div', 'scene');
@@ -258,7 +283,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], start,
     });
 
     stage.classList.toggle('bmode', input);
-    const small = Boolean(entry) && !input && step.card !== 'evidence' && !cards[step.card]; // 대본 카드: 칠판보다 조금 크게
+    const small = Boolean(entry) && !input && step.card !== 'evidence'; // 읽기 카드(대본 · 4막 정리): 칠판보다 조금 크게
     stage.classList.toggle('card', Boolean(entry) && !input && !small); // 큰 판일 때만 캐릭터가 양 끝으로 비켜 선다
     stage.classList.toggle('hasproc', Boolean(step.procedures));
     ['naero', 'nambul'].forEach((who) => {
@@ -343,6 +368,15 @@ export function renderStage({ script, order, cards = {}, inputCards = [], start,
     }
     if (target >= steps.length) return;
     index = target;
+    render();
+  }
+  // 이 화면의 막이면 그 막 첫 장면으로, 아니면 화면에 맡긴다(서버 확인 없이 건너뛰므로 테스트 기간 · 목 데이터 전용)
+  function jumpTo(actId) {
+    if (busy) return;
+    const first = steps.findIndex((step) => step.actId === actId);
+    if (first < 0) { onJump(Number(actId)); return; }
+    finishTyping();
+    index = first;
     render();
   }
   prev.addEventListener('click', () => go(-1));

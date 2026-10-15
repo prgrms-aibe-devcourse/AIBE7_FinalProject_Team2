@@ -66,3 +66,11 @@ export function restart() {
   clearPreJudgment();
   return save({ status: 'STARTED', lastReviewedStep: 0 });
 }
+
+// 막 버튼으로 바로 가기(목 전용, 테스트 기간): 그 막의 화면을 볼 수 있는 상태로 맞춘다
+const ACT_STATUS = { 1: 'STARTED', 2: 'STARTED', 3: 'PRE_JUDGED', 4: 'REVIEWED', 5: 'REVIEWED', 6: 'VERDICT_CONFIRMED', 7: 'AI_REVEALED', 8: 'COMPLETED' };
+export function jumpToAct(act) {
+  const status = ACT_STATUS[act];
+  if (status === 'STARTED') return restart();
+  return save({ status, lastReviewedStep: defaultSteps[status] });
+}

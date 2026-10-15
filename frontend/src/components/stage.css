@@ -9,6 +9,10 @@
 .stage-wrap .act { border: 1px solid var(--line); background: var(--paper); color: var(--muted); padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
 .stage-wrap .act.on { background: var(--navy); color: var(--color-on-accent); border-color: var(--navy); }
 .stage-wrap .act.done { color: var(--ink); border-color: var(--kraft); }
+/* 막 버튼(테스트 기간 · 목 데이터 전용): 칩 모양 그대로 누를 수 있게 */
+.stage-wrap .act:has(.act-jump) { padding: 0; }
+.stage-wrap .act-jump { padding: 4px 10px; border: 0; border-radius: inherit; background: none; color: inherit; font: inherit; cursor: pointer; }
+.stage-wrap .act:not(.on):has(.act-jump):hover { border-color: var(--navy); color: var(--ink); }
 
 /* 무대 · 장면 */
 .stage-wrap .stage { position: relative; aspect-ratio: 16 / 9; width: 100%; overflow: hidden; border-radius: 10px; border: 1px solid var(--line); background: var(--color-stage-news); user-select: none; container-type: inline-size; }
@@ -87,6 +91,11 @@
 .stage-wrap .stage.bmode .spr.role { height: 29%; }
 .stage-wrap .stage.bmode .spr.n { left: 1.5%; }
 .stage-wrap .stage.bmode .spr.b { left: auto; right: 1.5%; }
+/* 법정의 평상복 캐릭터(4막 등)는 역할 의상보다 그림이 커서 같은 자리면 가운데로 쏠린다 — 바깥으로 물려 역할 의상과 자리를 맞춘다 */
+@media (min-width: 681px) {
+  .stage-wrap .stage[data-scene="court"] .spr.n:not(.role):not([data-spot]) { left: 1%; }
+  .stage-wrap .stage[data-scene="court"] .spr.b:not(.role):not([data-spot]) { right: 1%; }
+}
 .stage-wrap .stage.card .spr { height: 50%; }
 .stage-wrap .stage.card .spr.role { height: 42%; }
 .stage-wrap .stage.card .spr.n { left: 1%; }
@@ -136,6 +145,10 @@
 .stage-wrap .evd-list li { padding: .4cqw .5cqw; border-top: 1px dashed var(--line); animation: stage-pop .3s; }
 .stage-wrap .evd-list li.now { background: color-mix(in srgb, var(--kraft) 20%, transparent); font-weight: 700; }
 .stage-wrap .evd-count { grid-column: 1 / -1; margin: 0; color: var(--muted); font-size: max(10px, 1cqw); text-align: right; }
+
+/* 4막 정리 카드(S-05가 주는 카드, 흐름 목업): 핵심 사실만 */
+.stage-wrap .summary-card h3 { margin: .3em 0 .5em; }
+.stage-wrap .summary-card .summary-list { margin: 0; padding-left: 1.2em; }
 
 /* 2막 입력 보드: 화면의 사전 판단 폼을 목업 선택지 모양으로 */
 .stage-wrap .board .guide-box { margin: 0 0 1cqw; padding: .8cqw 1.2cqw; border: 0; border-radius: 8px; background: var(--color-surface); font-size: max(12px, 1.25cqw); }
@@ -192,14 +205,15 @@
 .stage-wrap .stage-restart { min-height: 36px; margin-left: 12px; padding: 0 10px; border: 1px dashed var(--color-border-strong); border-radius: 6px; background: none; color: var(--muted); font-size: var(--text-caption); cursor: pointer; }
 .stage-wrap :is(button, .board):focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
 
-/* 무대가 있는 화면(S-03 · S-04): 사이드바 없이 무대를 가운데 넓게, 제목은 읽기 도구용 */
-.review-page.has-stage .review-layout { display: block; }
-.review-page.has-stage .review-main { max-width: 1120px; margin: 0 auto; padding: 18px 20px 40px; }
-.review-page.has-stage .visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+/* 무대가 있는 화면(S-03 · S-04 · S-05): 사이드바 없이 무대를 가운데 넓게, 제목은 읽기 도구용 */
+:is(.review-page, .summary-page).has-stage .review-layout { display: block; }
+:is(.review-page, .summary-page).has-stage .review-main { max-width: 1120px; margin: 0 auto; padding: 18px 20px 40px; }
+:is(.review-page, .summary-page).has-stage .visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 /* 좁은 화면: 장면 → 보드 → 대사창 세로 배치 */
 @media (max-width: 680px) {
   .stage-wrap .acts .act:not(.on) { display: none; }
+  .stage-wrap .acts:has(.act-jump) .act:not(.on) { display: block; } /* 테스트 기간: 막 버튼은 모바일에서도 다 보인다 */
   .stage-wrap .stage { aspect-ratio: auto; overflow: visible; border: 0; background: none; }
   .stage-wrap .scene { position: relative; inset: auto; aspect-ratio: 4 / 3; overflow: hidden; border: 1px solid var(--line); border-radius: 10px; }
   .stage-wrap .stage[data-scene="paper"] .scene { aspect-ratio: auto; padding-bottom: 34vw; background: var(--color-desk-news-sheet-1); }

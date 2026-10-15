@@ -1,6 +1,9 @@
 import { renderLawInfoBox } from '../../components/lawInfoBox.js';
 import { renderRecommendedRangeBar } from '../../components/recommendedRangeBar.js';
 import { renderContent } from '../../utils/contentLines.js';
+import { renderStage } from '../../components/stage.js';
+import { SCRIPTS } from '../../content/scripts.js';
+import { restartMock, jumpActMock } from '../overview/overviewPage.js';
 
 export async function renderSummaryPage(container, { caseId, caseHeader, api, navigate }) {
   const root = document.createElement('div');
@@ -27,11 +30,44 @@ export async function renderSummaryPage(container, { caseId, caseHeader, api, na
     if (action) panel.append(action);
     root.replaceChildren(panel);
   }
+  // 4막 무대의 정리 카드(흐름 목업): 핵심 사실만. 적용 법률 · 법정형 · 권고 범위는 5막(S-06)이 보여 주고,
+  // 양측 주장은 3막에서 이미 봤으므로 다시 싣지 않는다
+  function summaryCard(data) {
+    const card = element('div', 'card-body summary-card');
+    const facts = element('ul', 'summary-list');
+    data.summary.forEach((item) => facts.append(element('li', '', item)));
+    card.append(element('p', 'k', '판결 전 최종 정리'), element('h3', '', '핵심 사실'), facts);
+    return card;
+  }
+  // 4막 판결 전 정리(흐름 목업). 마지막 장면을 떠나면 판결 입력(S-06)으로 간다
+  function drawStage(data, script) {
+    root.classList.add('has-stage');
+    const header = element('header', 'case-topbar');
+    header.append(button('← 이전 단계', () => navigate('review'), 'back-button'),
+      element('strong', 'case-title', caseHeader.title), element('span', 'case-badge', '최종 정리'));
+    const main = element('div', 'review-main');
+    main.append(element('h1', 'page-heading visually-hidden', '판결 전 최종 정리'), renderStage({
+      script,
+      order: ['4'],
+      cards: { summary: summaryCard(data) },
+      onRestart: restartMock(caseId),
+      onJump: jumpActMock(caseId),
+      onConfirm: async () => {
+        navigate('verdict');
+        return false;
+      },
+    }));
+    const layout = element('main', 'review-layout');
+    layout.append(main);
+    root.replaceChildren(header, layout);
+  }
   function draw(data) {
     if (data.status !== 'REVIEWED') {
       message('사건 정보를 모두 확인한 뒤 볼 수 있어요.', button('사건 정보 확인으로', () => navigate('review')));
       return;
     }
+    const script = SCRIPTS[caseId];
+    if (script) { drawStage(data, script); return; }
     const header = element('header', 'case-topbar');
     header.append(button('← 이전 단계', () => navigate('review'), 'back-button'), element('strong', 'case-title', caseHeader.title), element('span', 'case-badge', '최종 정리'));
     const progress = element('div', 'top-progress');
