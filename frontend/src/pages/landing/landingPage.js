@@ -1,5 +1,5 @@
 import { button, element, renderSiteFooter, renderSiteHeader } from '../../components/siteLayout.js';
-import { fallbackImages, todayLabel } from '../../utils/newspaper.js';
+import { casePhoto, fallbackImages, todayLabel } from '../../utils/newspaper.js';
 
 // S-01 메인 — 판사의 책상 (FE-18, 시안 "B안 일러스트 · C안 구도", 논의기록 2026-10-12 S01 메인 책상 시안 결정)
 // 책상 위 물건이 곧 메뉴다: 신문 = 사건 목록(S-02), 서류철 = 판결 성향 테스트(S-15), 휴대폰 = 마이페이지(S-17), 노트북 = 커뮤니티.
@@ -284,7 +284,7 @@ export function renderLandingPage(container, { api, navigate, section }) {
       earCount.textContent = `법정에 오른 사건 ${summary.total}건. 형량은 체험을 마친 뒤 공개됩니다.`;
       tabCount.textContent = `총 ${summary.total}건`;
       lead.textContent = top.article?.[0] || top.shortIntro;
-      photo.src = top.thumbnailUrl || fallbackImages[top.crimeType] || fallbackImages.MURDER;
+      photo.src = casePhoto(top);
       recs.replaceChildren(...others.slice(0, 2).map((item) => {
         const node = span('news-rec');
         node.append(element('b', '', item.headline || item.title), span('', item.article?.[0] || item.shortIntro));
@@ -294,7 +294,7 @@ export function renderLandingPage(container, { api, navigate, section }) {
       notes.news.textContent = `오늘의 사건 ${summary.total}건!`;
       mobileCounts.news.textContent = `오늘의 사건 ${summary.total}건`;
       mobileNews.headline.textContent = top.headline || top.title;
-      mobileNews.photo.src = top.thumbnailUrl || fallbackImages[top.crimeType] || fallbackImages.MURDER;
+      mobileNews.photo.src = casePhoto(top);
     } catch (error) {
       console.warn('메인 신문 지면을 채우지 못했어요:', error);
     }

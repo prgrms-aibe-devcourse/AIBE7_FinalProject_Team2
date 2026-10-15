@@ -1,5 +1,5 @@
 import { button, element } from '../../components/siteLayout.js';
-import { fallbackImages } from '../../utils/newspaper.js';
+import { casePhoto } from '../../utils/newspaper.js';
 import { screenByStatus } from '../../utils/screenByStatus.js';
 import { caseStage, mountStagePage, scriptFor } from '../overview/overviewPage.js';
 import { caseInfoEar, earButton, paperFromCase } from '../../components/newspaperFront.js';
@@ -103,7 +103,7 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
 
     const figure = element('figure', 'detail-photo');
     const photo = element('img');
-    photo.src = data.thumbnailUrl || fallbackImages[data.crimeType] || fallbackImages.MURDER;
+    photo.src = casePhoto(data);
     photo.alt = ''; // 연출 이미지라 읽지 않는다 (사건 정보는 개요 · 사건 정보에 있다)
     figure.append(photo, element('figcaption', '', '사건 이해를 돕기 위한 연출 이미지'));
 

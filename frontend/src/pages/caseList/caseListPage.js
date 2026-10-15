@@ -1,5 +1,5 @@
 import { button, element, renderSiteFooter } from '../../components/siteLayout.js';
-import { fallbackImages } from '../../utils/newspaper.js';
+import { casePhoto } from '../../utils/newspaper.js';
 import { newspaperMasthead } from '../../components/newspaperFront.js';
 import { turnPage } from '../../utils/pageTurn.js';
 
@@ -42,6 +42,7 @@ const STATUS_VIEW = {
 const NOT_STARTED = { badge: null, tone: null };
 const statusViewOf = (item) => STATUS_VIEW[item.myStatus] ?? NOT_STARTED;
 const PICK_LABEL = '사건 펼쳐 보기';
+const JUMP_LABEL = '3면에 계속'; // 신문의 이어 읽기 줄(jump line). 누르면 사건 지면(S-20, 3면)으로 간다
 // shortcut: 캐릭터 얼굴은 원본 이미지 레포 PNG를 직접 읽는다(무대와 같음), 웹 webp 변환(WBS 7.6.8) 때 public 경로로 옮긴다
 const NAMBUL_FACE = 'https://raw.githubusercontent.com/peanutboi710/NaeLawNamBul_Images/main/character/cuts/nambul/icon/nambul_icon_face-happy.png';
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -74,7 +75,7 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
   const paperNote = element('p', 'paper-note', '이 지면의 사건과 기사는 판결 체험을 위해 재구성한 것이며, 사진은 AI로 생성한 연출 이미지입니다.');
   paper.append(newspaperMasthead({ navigate, earRight }), main, paperNote, renderSiteFooter());
 
-  // 남불의 안내 + 신문 내려놓기(책상으로). 지면 위에 붙어 따라 내려온다
+  // 남불의 안내 + 신문 내려놓기(책상으로). 지면 위쪽 가장자리에 붙인 메모지
   const tip = element('div', 'paper-tip');
   const face = element('img');
   face.src = NAMBUL_FACE;
@@ -84,7 +85,8 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
   const tipLine = element('span', '', '마음이 가는 기사를 눌러 보세요!');
   tipText.append(element('b', '', '남불'), tipLine);
   tip.append(face, tipText, button('신문 내려놓기', () => navigate('landing'), 'paper-tip-back'));
-  root.append(desk, tip, paper);
+  paper.prepend(tip); // 남불의 안내는 지면 위쪽에 붙인 메모(지면과 함께 움직인다)
+  root.append(desk, paper);
 
   // Esc: 신문을 내려놓고 책상으로(목업과 같은 한 단계 뒤로)
   function onKey(event) {
@@ -134,10 +136,20 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
 
   function photo(item) {
     const image = element('img', 'photo');
-    image.src = item.thumbnailUrl || fallbackImages[item.crimeType] || fallbackImages.MURDER;
+    image.src = casePhoto(item); // 썸네일이 없으면 공용 재연 컷(샘플)
     image.alt = ''; // 연출 이미지라 읽지 않는다 (사건 정보는 제목 · 소개문에 있다)
+    image.width = 3; // 비율 힌트(3:2). 크기는 CSS가 정한다
+    image.height = 2;
     image.loading = 'lazy';
     return image;
+  }
+
+  // 사진이 없는 작은 기사: 회색 임시 그림 대신 인쇄 망점 위에 키워드를 크게 얹은 칸(유형 색으로 망점을 물들인다)
+  function keywordPanel(item) {
+    const panel = element('div', `photo keyword-panel type-${item.crimeType}`);
+    panel.setAttribute('aria-hidden', 'true'); // 키워드는 기사 아래 줄에서 읽힌다
+    panel.append(element('span', 'keyword-panel-word', item.keywords?.[0] ?? item.crimeCategoryLabel));
+    return panel;
   }
 
   function meta(item, withTags) {
@@ -147,9 +159,10 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
     return node;
   }
 
+  // 이어 읽기 줄: 웹 버튼 대신 신문의 "(3면에 계속)". 이름은 화면 글자로 시작한다(WCAG 2.5.3)
   function startButton(item, className = 'start') {
-    const node = button(PICK_LABEL, () => pick(item, node.closest('.article') ?? node), className);
-    node.setAttribute('aria-label', `${item.title} ${PICK_LABEL}`);
+    const node = button(`(${JUMP_LABEL})`, () => pick(item, node.closest('.article') ?? node), className);
+    node.setAttribute('aria-label', `${JUMP_LABEL}, ${item.title} ${PICK_LABEL}`);
     return node;
   }
 
@@ -191,7 +204,8 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
 
   function indexArticle(item) {
     const article = element('article', 'article');
-    article.append(photo(item), kicker(item), element('h3', '', headlineOf(item)), dense([item.article?.[0] ?? item.shortIntro]), meta(item),
+    // 사진이 있으면 사진, 없으면 키워드 망점 칸(작은 기사 6건에 같은 공용 사진이 되풀이되지 않게)
+    article.append(item.thumbnailUrl ? photo(item) : keywordPanel(item), kicker(item), element('h3', '', headlineOf(item)), dense([item.article?.[0] ?? item.shortIntro]), meta(item),
       startButton(item));
     return pickable(article, item);
   }

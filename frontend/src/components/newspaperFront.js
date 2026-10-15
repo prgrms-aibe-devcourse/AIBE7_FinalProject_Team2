@@ -1,5 +1,5 @@
 import { button, element, renderSiteFooter } from './siteLayout.js';
-import { fallbackImages, todayLabel } from '../utils/newspaper.js';
+import { casePhoto, todayLabel } from '../utils/newspaper.js';
 
 // 신문 지면 공통 짜임 (FE-32). S-02 사건 목록(신문 1면)과, 사건을 고른 뒤 이어지는 사건 기사 지면(S-20 · 1 · 2막)이
 // 같은 제호 · 날짜 띠 · 탭 줄 · 배너 · [사진 | 기사 단]을 쓴다. 스타일은 caseList.css(.case-list-page)를 그대로 쓴다.
@@ -40,7 +40,8 @@ export function paperFromCase(data, fallback = {}) {
     headline: data.headline || data.title,
     deck: data.deck || data.shortIntro,
     article: data.article?.length ? data.article : [data.shortIntro].filter(Boolean),
-    photo: data.thumbnailUrl || fallbackImages[data.crimeType] || fallbackImages.MURDER,
+    photo: casePhoto(data),
+    extraPhotos: fallback.extraPhotos ?? [], // 기사 속 작은 사진(대본 지면에만 있다, 사건 1의 재연 컷)
     caption: '사건 이해를 돕기 위한 연출 이미지',
     desk: '사회부', // S-02 기사와 같은 기자 줄
   };
@@ -56,6 +57,47 @@ export function caseInfoEar(info) {
   const ear = element('div', 'ear ear-right');
   ear.append(element('b', '', `사건 ${String(info.caseId).padStart(2, '0')}`), `${info.crimeCategoryLabel ?? ''} · 형량 비공개`);
   return ear;
+}
+
+function newsPhoto(src, width, height) {
+  const photo = element('img', 'photo sheet-case-photo');
+  photo.src = src;
+  photo.alt = ''; // 연출 이미지라 읽지 않는다(사건 내용은 기사 본문에 있다)
+  photo.width = width; // 크기 힌트(CSS가 폭 · 비율을 정한다) — 사진이 늦게 떠도 화면이 밀리지 않게
+  photo.height = height;
+  photo.loading = 'lazy';
+  return photo;
+}
+function smallFigure({ src, caption }) {
+  const figure = element('figure', 'story-photo is-small');
+  figure.append(newsPhoto(src, 1000, 563), element('figcaption', 'caption', caption ?? '사건 이해를 돕기 위한 연출 이미지'));
+  return figure;
+}
+// 인용구: 기사 첫 문장(없는 말을 지어내지 않는다)
+function pullQuote(paragraph) {
+  const first = (paragraph ?? '').split(/(?<=다\.)\s*/)[0].trim();
+  const quote = element('blockquote', 'story-quote');
+  quote.setAttribute('aria-hidden', 'true'); // 본문 첫 문장을 되풀이한 것이라 읽지 않는다
+  quote.textContent = `“${first}”`;
+  return quote;
+}
+// 사건 메모: 제목 옆 상자(죄명 · 범죄 분류 · 예상 소요 · 참여 · 키워드). 받은 값만 줄로 그린다(형량 · 판결 정보는 없다)
+const DIFFICULTY = { LOW: '쉬움', MID: '보통', HIGH: '어려움' };
+function caseMemo(info) {
+  const memo = element('aside', 'story-memo');
+  memo.setAttribute('aria-label', '사건 메모');
+  memo.append(element('h2', 'story-memo-title', '사건 메모'));
+  const list = element('dl', '');
+  [
+    ['죄명', info.chargeName],
+    ['범죄 분류', info.crimeCategoryLabel],
+    ['예상 소요', info.estimatedMinutes ? `약 ${info.estimatedMinutes}분${DIFFICULTY[info.difficulty] ? ` · ${DIFFICULTY[info.difficulty]}` : ''}` : null],
+    ['참여', Number.isFinite(info.participantCount) ? `${info.participantCount.toLocaleString('ko-KR')}명` : null],
+  ].forEach(([term, value]) => { if (value) list.append(element('dt', '', term), element('dd', '', value)); });
+  memo.append(list);
+  if (info.keywords?.length) memo.append(element('p', 'story-memo-tags', info.keywords.map((word) => `#${word}`).join('  ')));
+  memo.append(element('p', 'story-memo-note', '형량은 체험을 마친 뒤 공개돼요.'));
+  return memo;
 }
 
 /**
@@ -83,32 +125,37 @@ export function caseNewspaper({ paper, info, navigate, earRight = caseInfoEar(in
   actSlot.dataset.slot = 'acts';
   tabsZone.append(actSlot);
 
-  // 기사: 큰 제목 → 부제 → 기자 줄 → 사진 → 본문(여러 단, 첫 글자 크게)
+  // 기사(A안, 실제 신문 기사 면): [제목 · 부제 · 기자 줄 | 사건 메모] → [사진 · 작은 사진 | 본문 두 단(첫 글자 크게 · 인용구 · 작은 사진)]
   const article = element('article', 'story');
   article.setAttribute('aria-label', paper.headline);
   const head = element('div', 'story-head');
   head.dataset.focus = 'head';
-  const kicker = element('div', 'kicker');
-  const square = element('span', `type-square type-${info.crimeType}`);
-  square.setAttribute('aria-hidden', 'true');
-  kicker.append(square, element('span', '', info.crimeCategoryLabel ?? ''), element('span', '', '·'), element('span', '', '사건 ' + String(info.caseId).padStart(2, '0')));
-  head.append(kicker, element('h1', 'story-title', paper.headline), element('p', 'story-deck', paper.deck));
   const byline = element('p', 'story-byline');
-  byline.append(element('b', '', `${paper.desk ?? '사회부'} 기자`), element('span', '', todayLabel()));
+  byline.append(element('b', '', `${paper.desk ?? '사회부'} 기자`), element('span', '', todayLabel()),
+    element('span', '', `${info.crimeCategoryLabel ?? ''} · 사건 ${String(info.caseId).padStart(2, '0')}`));
+  head.append(element('h1', 'story-title', paper.headline), element('p', 'story-deck', paper.deck), byline);
+  const top = element('div', 'story-top');
+  top.append(head, caseMemo(info));
 
   const figure = element('figure', 'story-photo');
   figure.dataset.focus = 'photo';
-  const photo = element('img', 'photo sheet-case-photo');
-  photo.src = paper.photo;
-  photo.alt = '';
-  photo.width = 1200; // 크기 힌트(CSS가 가로 폭 · 비율을 정한다) — 사진이 늦게 떠도 화면이 밀리지 않게
-  photo.height = 514;
-  figure.append(photo, element('figcaption', 'caption', paper.caption));
+  figure.append(newsPhoto(paper.photo, 1200, 675), element('figcaption', 'caption', paper.caption));
+  const [sidePhoto, inlinePhoto] = paper.extraPhotos ?? [];
+  const media = element('div', 'story-media');
+  media.append(figure);
+  if (sidePhoto) media.append(smallFigure(sidePhoto));
 
   const body = element('div', 'story-body');
   body.dataset.focus = 'body';
-  paper.article.forEach((line) => body.append(element('p', '', line)));
-  article.append(head, byline, figure, body);
+  paper.article.forEach((line, i) => {
+    body.append(element('p', '', line));
+    // 첫 단락 뒤에 인용구(기사 첫 문장), 둘째 단락 뒤에 작은 사진 — 신문 기사 면처럼 본문 사이에 쉼을 둔다
+    if (i === 0) body.append(pullQuote(paper.article[0]));
+    if (i === 1 && inlinePhoto) body.append(smallFigure(inlinePhoto));
+  });
+  const main = element('div', 'story-main');
+  main.append(media, body);
+  article.append(top, main);
 
   const front = element('main', 'front');
   front.append(tabsZone, article);
