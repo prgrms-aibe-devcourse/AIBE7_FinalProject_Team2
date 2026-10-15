@@ -1,6 +1,6 @@
 import { mockCases } from './caseListMockData.js';
 import { mockOverview } from './overviewMockData.js';
-import { read, storageKey, validState } from './mockExperienceStore.js';
+import { read, restart, storageKey, validState } from './mockExperienceStore.js';
 
 const delay = () => new Promise((resolve) => setTimeout(resolve, 250));
 const crimeTypes = ['MURDER', 'FRAUD', 'INJURY'];
@@ -70,7 +70,9 @@ export async function startExperience(caseId) {
     fail('CASE_NOT_FOUND', '사건을 찾을 수 없습니다.');
   }
   if (caseId === 1) {
-    const { status, lastReviewedStep } = read();
+    // 체험 기록이 없으면(myStatus null) 실제 API처럼 새 체험(STARTED, 1막)으로 시작한다. 목 저장소의 초기값(PRE_JUDGED)은
+    // 주소로 S-04 이후 화면을 바로 열 때만 쓴다(FE-32 — S-20 "체험 시작"이 3막으로 건너뛰던 문제)
+    const { status, lastReviewedStep } = myStatusOf(caseId) === null ? restart() : read();
     return { caseId, attemptNo: 1, status, lastReviewedStep, startedAt: new Date().toISOString() };
   }
   if (!startedCases.has(caseId)) {

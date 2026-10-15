@@ -4,6 +4,7 @@ import '../components/stage.css';
 import '../pages/landing/landing.css';
 import '../pages/caseList/caseList.css';
 import '../pages/caseDetail/caseDetail.css';
+import '../utils/pageTurn.css';
 import '../pages/review/review.css';
 import '../pages/overview/overview.css';
 import '../pages/summary/summary.css';

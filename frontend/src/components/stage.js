@@ -88,6 +88,29 @@ function takeJump() {
 
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+// 신문 지면 무대(layout 'paper')의 카메라: 지면이 곧 화면이라 옮기지 않고, 고른 기사만 또렷하게 두고 그 기사가 보이게 화면을 굴린다.
+// 아래쪽에 고정된 대사창(dock)이 가리는 부분을 빼고 그 위 공간 가운데에 맞춘다(기사가 그 공간보다 길면 기사 위쪽에 맞춘다)
+function paperCamera(sheet, dockTop) {
+  let at = null;
+  function show(target) {
+    requestAnimationFrame(() => {
+      const box = target.getBoundingClientRect();
+      const room = dockTop() - 24;
+      const top = box.height < room ? box.top - (room - box.height) / 2 : box.top - 24;
+      window.scrollTo({ top: Math.max(0, window.scrollY + top), behavior: reducedMotion() ? 'auto' : 'smooth' });
+    });
+  }
+  function go(name) {
+    sheet.querySelectorAll('.is-on').forEach((node) => node.classList.remove('is-on'));
+    const target = sheet.querySelector(`[data-focus="${name}"]`);
+    sheet.classList.toggle('spot', Boolean(target));
+    if (target) target.classList.add('is-on');
+    if (target && at !== name) show(target);
+    at = name;
+  }
+  return { go, show };
+}
+
 function element(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;
@@ -194,8 +217,15 @@ function evidenceBoard(script, at) {
 // (테스트 기간 · 목 데이터 전용, 이 화면에 없는 막은 화면이 넘겨 준다). 반환한 요소의 enterPhoto()는 신문 사진 속으로 들어가는 연출.
 // choices: 대사창 안 선택지 { 이름: [{ label, action(note), primary }] } — 대본 step.choices로 고른다(타이핑이 끝나면 뜬다, note는 결과 안내 줄).
 // sheet: 대본 scene "sheet"에서 쓰는 큰 지면(8막은 화면이 넘겨 주고, 없으면 대본 paper로 1 · 2막 사건 기사를 만든다).
-// 장면의 focus 기사로 카메라가 옮겨 가고, 첫 장면의 from 요소가 무대를 채운 데서 빠져나온다
-export function renderStage({ script, order, cards = {}, inputCards = [], choices = {}, start, onConfirm, onRestart, onJump, sheet: given }) {
+// 장면의 focus 기사로 카메라가 옮겨 가고, 첫 장면의 from 요소가 무대를 채운 데서 빠져나온다.
+// layout 'paper': 무대 상자 없이 지면(sheet)이 화면 전체가 된다(S-20 · 1 · 2막, S-02 신문과 같은 짜임). 막 칩 · 보드는 지면의
+// 빈 자리(data-slot acts)에 들어가고, 카드(2막 사전 판단)는 지면 위에 독자 의견 엽서 팝업으로 뜬다 — 남불이 가져와 건네는 연출.
+// 캐릭터 · 대사창 · 조작 줄은 화면 아래에 고정된다. 카메라는 화면을 굴린다(paperCamera)
+// parked: 지면만 보여 주고 캐릭터 · 대사창 · 조작 줄은 숨긴 채 기다린다(S-20 사건 정보 — 체험 시작 전). 화면이 wrap.release()로 풀면
+// 내로 · 남불이 들어오며 첫 대사가 시작된다.
+export function renderStage({ script, order, cards = {}, inputCards = [], choices = {}, start, onConfirm, onRestart, onJump, sheet: given, layout = 'box', parked: parkedAtStart = false }) {
+  const paperMode = layout === 'paper' && Boolean(given);
+  let parked = parkedAtStart;
   const steps = flatten(script.acts, order);
   let index = Math.max(0, start ? steps.findIndex(start) : 0);
   const jumpAct = takeJump();
@@ -208,8 +238,10 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
   let lastDelta = 1;
   let autoTimer = null;
   let lastFocus = null;
+  let hadCard = false; // 앞 장면에도 카드가 있었는지(엽서 건네기는 카드가 처음 뜰 때만)
 
-  const wrap = element('section', 'stage-wrap');
+  const wrap = element('section', paperMode ? 'stage-wrap paper-mode' : 'stage-wrap');
+  wrap.classList.toggle('parked', parked);
   wrap.setAttribute('aria-label', '판결 체험');
   const acts = element('ol', 'acts');
   ACT_NAMES.forEach((name, i) => {
@@ -270,10 +302,11 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
     lawCast.classList.add('entering');
   }
   // 신문 지면: 틀(frame)은 기사를 맞출 자리만 정하는 빈 요소(CSS가 위치를 정한다)
-  const frame = sheet ? element('div', 'sheet-frame') : null;
-  const camera = sheet ? sheetCamera(sheet, frame) : null;
+  const frame = sheet && !paperMode ? element('div', 'sheet-frame') : null;
+  const camera = paperMode ? paperCamera(sheet, () => (dialog.hidden ? controls.getBoundingClientRect().top : dialog.getBoundingClientRect().top))
+    : sheet ? sheetCamera(sheet, frame) : null;
   if (frame) frame.setAttribute('aria-hidden', 'true');
-  scene.append(bg, court, ...(sheet ? [sheet, frame] : []), figures.naero, figures.nambul, lawCast, procs, sys, flash);
+  scene.append(bg, court, ...(sheet ? [sheet] : []), ...(frame ? [frame] : []), figures.naero, figures.nambul, lawCast, procs, sys, flash);
 
   const board = element('div', 'board');
   board.tabIndex = -1;
@@ -315,6 +348,17 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
   peeks.naero.setAttribute('aria-hidden', 'true');
   controls.insertBefore(peeks.naero, prev);
   wrap.append(acts, stage, controls, live);
+  // 신문 지면 무대: 막 칩은 지면의 탭 줄로 옮긴다
+  if (paperMode) sheet.querySelector('[data-slot="acts"]')?.append(acts);
+  // 신문 지면 무대의 카드(엽서): 남불이 앞으로 나서며 건네고, 엽서가 남불 손에서 화면 가운데로 날아와 펼쳐진다
+  function deliver() {
+    if (reducedMotion()) return;
+    const from = sprites.nambul.getBoundingClientRect();
+    const to = board.getBoundingClientRect();
+    board.style.setProperty('--from-x', `${from.left + from.width * 0.3 - (to.left + to.width / 2)}px`);
+    board.style.setProperty('--from-y', `${from.top + from.height * 0.45 - (to.top + to.height / 2)}px`);
+    [board, figures.nambul].forEach((node) => { node.classList.remove('delivering'); void node.offsetWidth; node.classList.add('delivering'); });
+  }
 
   function finishTyping() {
     clearInterval(typing);
@@ -347,7 +391,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
     court.hidden = step.scene !== 'court' || dark;
     const onSheet = Boolean(sheet) && step.scene === 'sheet';
     if (sheet) sheet.hidden = !onSheet;
-    if (onSheet) {
+    if (onSheet && !parked) { // 기다리는 동안은 지면 전체를 그대로 둔다
       // 첫 장면(앞 막에서 넘어옴)은 from 요소가 무대를 채운 데서 시작한다. 캐릭터는 카메라가 빠져나온 뒤 지면에 뛰어든다
       const from = lastFocus === null && index === 0 ? step.from : undefined;
       camera.go(step.focus, { from, onStart: from ? () => stage.classList.add('arrive-sheet') : undefined });
@@ -433,6 +477,8 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
     board.classList.toggle('small', small);
     const latest = board.querySelector('li.now'); // 쌓이는 목록(증거조사 · 판단 요소)은 지금 줄이 보이게 끝까지 내린다
     if (latest) { const list = latest.closest('.scroll-body'); list.scrollTop = list.scrollHeight; }
+    if (paperMode && entry && !hadCard) deliver();
+    hadCard = Boolean(entry);
 
     const line = step.text ?? '';
     dialog.hidden = input || !line;
@@ -450,7 +496,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
       if (NAMES[step.say]) name.append(picture(iconOf(step.say, step.look[step.say])), NAMES[step.say]); // AI 판사는 이름 · 얼굴 없이 역할만
       if (role) name.append(element('i', '', ` ${role}`));
     }
-    live.textContent = line || caption;
+    live.textContent = parked ? '' : line || caption;
     const options = choices[step.choices] ?? [];
     const note = element('p', 'dlg-note');
     note.setAttribute('role', 'status');
@@ -462,7 +508,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
     }), ...(options.length ? [note] : []));
     choiceRow.hidden = true;
     dialog.classList.toggle('has-choices', options.length > 0);
-    type(line);
+    if (parked) text.textContent = ''; else type(line);
 
     prev.disabled = index === 0;
     next.textContent = step.next ? `${step.next} ▶` : '다음 ▶';
@@ -473,7 +519,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
   }
 
   async function go(delta) {
-    if (busy || stage.querySelector('.eyecatch')) return; // 아이캐치가 떠 있는 동안은 장면을 넘기지 않는다
+    if (parked || busy || stage.querySelector('.eyecatch')) return; // 기다리는 동안 · 아이캐치가 떠 있는 동안은 장면을 넘기지 않는다
     lastDelta = delta;
     if (delta > 0 && typing) { finishTyping(); return; }
     const target = index + delta;
@@ -496,6 +542,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
   // 이 화면의 막이면 그 막 첫 장면으로, 아니면 화면에 맡긴다(서버 확인 없이 건너뛰므로 테스트 기간 · 목 데이터 전용)
   function jumpTo(actId) {
     if (busy) return;
+    if (parked) { onJump(Number(actId)); return; } // 기다리는 중에는 그 막의 화면을 새로 연다
     const first = steps.findIndex((step) => step.actId === actId);
     if (first < 0) { onJump(Number(actId)); return; }
     finishTyping();
@@ -506,7 +553,8 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
   next.addEventListener('click', () => go(1));
   skip.addEventListener('click', () => { if (busy) return; finishTyping(); index = skipTarget(steps, index); render(); });
   dialog.addEventListener('click', () => go(1));
-  scene.addEventListener('click', () => go(1));
+  // 장면 클릭 = 다음. 지면 안의 버튼 · 링크 · 카드(신문 지면 무대의 막 칩 · 메뉴 · 독자 의견 칸)는 제 동작만 한다
+  scene.addEventListener('click', (event) => { if (!event.target.closest('button, a, input, label, .board')) go(1); });
 
   function onKey(event) {
     if (!wrap.isConnected) { document.removeEventListener('keydown', onKey); return; }
@@ -533,8 +581,10 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
     board.hidden = true;
     dialog.hidden = true;
     const from = photo.getBoundingClientRect();
-    const box = stage.getBoundingClientRect();
+    // 신문 지면 무대는 무대 상자가 없으니 사진이 화면 전체를 채운다
+    const box = paperMode ? { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight } : stage.getBoundingClientRect();
     const zoom = picture(photo.src, 'zoom');
+    if (paperMode) zoom.classList.add('fixed');
     Object.assign(zoom.style, { left: `${from.left - box.left}px`, top: `${from.top - box.top}px`, width: `${from.width}px`, height: `${from.height}px` });
     stage.append(zoom);
     requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -584,6 +634,16 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
     document.addEventListener('keydown', onKey, true);
     timer = setTimeout(done, ms);
   });
+  // 기다림(parked)을 풀고 첫 장면을 시작한다: 내로 · 남불이 들어오고 대사가 시작된다
+  wrap.release = () => {
+    if (!parked) return;
+    parked = false;
+    wrap.classList.remove('parked');
+    if (!reducedMotion()) wrap.classList.add('entering');
+    render();
+  };
+  // 화면이 카드(cards)를 나중에 채웠을 때, 지금 그 카드 장면이면 다시 그린다(예: S-20에서 체험을 시작한 뒤 받아 온 2막 사전 판단 폼)
+  wrap.refresh = (card) => { if (wrap.isConnected && steps[index].card === card) render(); };
   // 재판(3막)을 처음부터 시작할 때: 사진 속에서 법정이 나타나는 느낌으로 한 번 들어온다
   if (index === 0 && steps[0].scene === 'court' && !reducedMotion()) stage.classList.add('arrive');
 

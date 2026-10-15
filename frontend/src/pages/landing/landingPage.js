@@ -4,8 +4,9 @@ import { fallbackImages, todayLabel } from '../../utils/newspaper.js';
 // S-01 메인 — 판사의 책상 (FE-18, 시안 "B안 일러스트 · C안 구도", 논의기록 2026-10-12 S01 메인 책상 시안 결정)
 // 책상 위 물건이 곧 메뉴다: 신문 = 사건 목록(S-02), 서류철 = 판결 성향 테스트(S-15), 휴대폰 = 마이페이지(S-17), 노트북 = 커뮤니티.
 // 그림은 CSS · 인라인 SVG로만 그린다(이미지 파일 없음). 색은 style.css의 --color-desk-* 역할 토큰만 쓴다.
-// 2D 평면 일러스트라 물건이 들리거나 기우는 효과는 넣지 않는다(팀 결정). 720px 이하에서는 책상 대신 메뉴 카드를 보여 준다.
-// 흐름 목업 ①(FE-32): 신문을 누르면 책상이 신문 쪽으로 다가가며 사라지고 신문 지면(S-02)이 이어진다(신문을 집어 든다).
+// 2D 평면 일러스트라 물건은 평소에 들리거나 기울지 않는다(팀 결정). 720px 이하에서는 책상 대신 메뉴 카드를 보여 준다.
+// 흐름 목업 ①(FE-32): 신문을 누르면 신문만 책상에서 들려 올라오고(그림자가 길어진다), 이어서 책상이 신문 쪽으로 다가가며 사라진 뒤
+// 신문 지면(S-02)이 이어진다(신문을 집어 든다). 신문 들기는 이 연출에만 쓰는 예외다.
 // 책상에는 내로(커피잔 옆) · 남불(휴대폰 아래)이 볼을 괴고 엎드려 있다(장식).
 
 // 책상 그림의 기준 좌표계. 화면 너비에 맞춰 통째로 줄인다(--desk-scale)
@@ -26,7 +27,7 @@ const CHEEKS = [
   { who: 'naero', look: 'idle-sorry', left: 250, top: 2, height: 170 },
   { who: 'nambul', look: 'idle-thinking', left: 1300, top: 782, height: 158 },
 ];
-const LIFT_MS = 720; // 신문을 집어 드는 시간(landing.css .is-lifting과 같게)
+const LIFT_MS = 1000; // 신문을 집어 드는 시간 = 신문 들림 .38초 + 책상 다가옴 .72초(landing.css .is-lifting · .is-held와 같게, 일부 겹침)
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const features = [
@@ -109,30 +110,43 @@ export function renderLandingPage(container, { api, navigate, section }) {
   folderArt.append(deco('folder-label'));
   folderArt.lastChild.textContent = '판결 성향 검사지';
 
-  // 신문 — 사건 목록의 머리기사로 채운다(불러오기 전 · 실패 시 기본 문구)
+  // 신문 — 집어 들면 펼쳐지는 S-02 지면을 줄여 놓은 모습(FE-32): 정보 줄 → [귀 | 제호 | 귀] → 날짜 띠 → 유형 탭 줄 →
+  // 배너 제목 → [사진 | 머리기사 단] → 추천 2건 → 다른 사건 제목 줄. 사건 목록의 머리기사로 채운다(불러오기 전 · 실패 시 기본 문구)
   const news = span('news-art');
   news.setAttribute('aria-hidden', 'true');
   const newsSheets = span('news-sheets');
   newsSheets.append(span(''), span(''));
   const info = span('news-info');
-  info.append(span('', '판결 체험 신문'), span('', '처음으로 · 서비스 소개'));
+  info.append(span('', '판결 체험 신문'), span('', '← 처음으로 · 서비스 소개'));
+  const earLeft = span('news-ear');
+  earLeft.append(element('b', '', '“모든 판결에는 이유가 있다”'), span('', '사건을 읽다. 판단을 묻다.'));
+  const earRight = span('news-ear');
+  const earCount = span('', '법정에 오른 사건들. 형량은 체험을 마친 뒤 공개됩니다.');
+  earRight.append(element('b', '', '오늘의 지면'), earCount);
   const brand = element('b', 'news-brand');
   brand.append('내', span('law', 'Law'), '남불');
+  const mast = span('news-mast');
+  mast.append(earLeft, brand, earRight);
   const date = span('news-date');
-  date.append(span('', todayLabel()), span('', '참여 무료'));
+  date.append(span('', '내Law남불'), span('', todayLabel()), span('', '참여 무료'));
+  const tabs = span('news-tabs');
+  const tabCount = span('news-count', '');
+  ['전체', '살인', '사기', '상해'].forEach((label, i) => tabs.append(span(i === 0 ? 'on' : '', label)));
+  tabs.append(tabCount);
   const banner = span('news-banner', '오늘의 지면을 펼쳐 보세요');
   const photo = element('img', 'news-photo');
   photo.alt = '';
   photo.src = fallbackImages.MURDER;
+  const kicker = span('news-kicker', '머리기사');
   const deck = span('news-deck', '실제 판결을 바탕으로 재구성한 사건이 기다리고 있습니다.');
   const lead = span('news-lead', '기사 제목만 보고 결론을 내리기는 이릅니다. 사건 기록을 한 단계씩 읽고, 판사석에서 직접 판결해 보세요.');
   const leadCol = span('news-lead-col');
-  leadCol.append(deck, lead);
+  leadCol.append(kicker, deck, span('news-byline', '사회부'), lead);
   const front = span('news-front');
   front.append(photo, leadCol);
   const recs = span('news-recs');
   const index = span('news-index');
-  news.append(info, brand, date, banner, front, recs, index);
+  news.append(info, mast, date, tabs, banner, front, recs, index);
 
   // 노트북 화면의 말풍선은 커뮤니티 예시 문구(실제 글 아님). 메인은 처음 판단 전 화면이라 특정 사건 · 판결 결과를 떠올리게 하는 말은 쓰지 않는다
   const laptop = span('laptop-art');
@@ -185,6 +199,7 @@ export function renderLandingPage(container, { api, navigate, section }) {
     const box = scene.getBoundingClientRect();
     const spot = target.getBoundingClientRect();
     scene.style.transformOrigin = `${((spot.left + spot.width / 2 - box.left) / box.width) * 100}% ${((spot.top + spot.height / 2 - box.top) / box.height) * 100}%`;
+    target.classList.add('is-held');
     scene.classList.add('is-lifting');
     setTimeout(() => { if (root.isConnected) navigate('list', { from: 'desk' }); }, LIFT_MS);
   }
@@ -246,6 +261,9 @@ export function renderLandingPage(container, { api, navigate, section }) {
       const [top, ...others] = ordered;
       banner.textContent = top.headline || top.title;
       deck.textContent = top.deck || top.shortIntro;
+      kicker.textContent = `머리기사 · ${top.crimeCategoryLabel}`;
+      earCount.textContent = `법정에 오른 사건 ${summary.total}건. 형량은 체험을 마친 뒤 공개됩니다.`;
+      tabCount.textContent = `총 ${summary.total}건`;
       lead.textContent = top.article?.[0] || top.shortIntro;
       photo.src = top.thumbnailUrl || fallbackImages[top.crimeType] || fallbackImages.MURDER;
       recs.replaceChildren(...others.slice(0, 2).map((item) => {

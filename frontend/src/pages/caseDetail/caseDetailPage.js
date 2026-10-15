@@ -1,11 +1,17 @@
 import { button, element } from '../../components/siteLayout.js';
 import { fallbackImages } from '../../utils/newspaper.js';
 import { screenByStatus } from '../../utils/screenByStatus.js';
+import { caseStage, mountStagePage, scriptFor } from '../overview/overviewPage.js';
+import { caseInfoEar, earButton, paperFromCase } from '../../components/newspaperFront.js';
 
 // S-20 사건 디테일 (확장, IA v1.12 · FE-32). 신문 지면(S-02)에서 고른 기사를 오려 책상 위에 펼쳐 놓은 모습이다
-// (흐름 목업 ③ "사건 정보를 읽는다"). 재연 사진 · 사건 개요 · 사건 정보 · 지면 기사를 보여 주고, 형량 · 판결 정보는 없다.
+// (흐름 목업 ③ "사건 정보를 읽는다"). 형량 · 판결 정보는 없다.
+// 대본이 있는 사건은 이 화면이 곧 판결 체험 1막이다 — S-03과 같은 신문 지면 무대를 캐릭터 · 대사 없이 기다리게 두고(parked),
+// 우하단 "시작하기"(하던 체험이 있으면 오른쪽 귀 "이어서 하기"도)를 누르면 화면을 다시 그리지 않고 주소만 S-03(/start)으로 바꾼 채
+// 내로 · 남불이 들어오며 1막이 시작된다(drawStage). 왼쪽 귀는 "다른 사건 보기".
+// 대본이 없는 사건은 오려 낸 기사(재연 사진 · 사건 개요 · 사건 정보)를 보여 준다(draw). 모든 사건 대본 제작은 FE-33.
 // 데이터는 API 16 하나(체험 없이 열린다). 버튼은 내 진행 상태(myStatus)로 나누고, 누르면 API 2 응답 상태로 이어서 볼 화면을 정한다(1-6).
-// S-02에서 기사를 골라 오면(from: 고른 기사의 화면 위치) 오려 낸 기사가 그 자리에서 날아와 펼쳐진다.
+// S-02에서 기사를 골라 오면(from: 'paper') S-02의 신문 한 장이 넘어가며(utils/pageTurn.js) 이 면이 그 밑에서 드러난다.
 
 const DIFFICULTY = { LOW: '쉬움', MID: '보통', HIGH: '어려움' };
 // 진행 상태별 버튼 문구 · 실패 안내 (S-02와 같은 말)
@@ -24,6 +30,7 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
   desk.setAttribute('aria-hidden', 'true');
   const clip = element('article', 'detail-clip');
   root.append(desk, clip);
+  if (from) clip.style.visibility = 'hidden'; // 불러오는 동안 빈 종이가 먼저 보이지 않게 한다(다음 면은 내려앉으며 나타난다)
   container.replaceChildren(root);
   const active = () => container.contains(root);
   let starting = false;
@@ -31,9 +38,10 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
   // 새로고침 · 뒤로 가기로 다시 들어왔을 때 펼침 연출을 되풀이하지 않게, 주소 기록에 남은 출발 위치를 지운다
   if (from) history.replaceState({ ...history.state, extras: {} }, '');
 
-  // Esc: 신문으로 돌아간다(목업과 같은 한 단계 뒤로)
+  // Esc: 신문으로 돌아간다(목업과 같은 한 단계 뒤로). 무대에서 체험을 시작한 뒤에는 받지 않는다(이제 S-03이다)
+  let started = false;
   function onKey(event) {
-    if (!active()) { document.removeEventListener('keydown', onKey); return; }
+    if (!active() || started) { document.removeEventListener('keydown', onKey); return; }
     if (event.key === 'Escape' && !event.defaultPrevented) navigate('list');
   }
   document.addEventListener('keydown', onKey);
@@ -43,6 +51,7 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
     panel.setAttribute('role', 'status');
     panel.append(element('p', '', text));
     if (action) panel.append(action);
+    if (action) clip.style.visibility = ''; // 오류 안내는 바로 보인다(불러오는 중은 숨겨 둔 채 다음 면이 내려앉기를 기다린다)
     clip.replaceChildren(panel);
   }
 
@@ -113,13 +122,6 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
     grid.append(figure, side);
 
     const parts = [top, head, element('p', 'detail-deck', data.deck || data.shortIntro), grid];
-    // 지면 기사 본문(API 1의 제안 필드 article, S-03 개요 범위). 없으면 이 칸을 그리지 않는다
-    if (data.article?.length) {
-      const article = element('section', 'detail-article');
-      article.append(element('h2', '', '지면 기사'), ...data.article.map((text) => element('p', '', text)));
-      parts.push(article);
-    }
-
     const { label, failText } = ACTIONS[data.myStatus] ?? NOT_STARTED;
     const cta = element('div', 'detail-cta');
     const duo = element('span', 'detail-duo');
@@ -146,18 +148,65 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
     unfold();
   }
 
-  // 오려 낸 기사가 S-02에서 고른 자리에서 날아와 책상 위에 펼쳐진다(목업 ③). 움직임 줄이기면 바로 놓인다
-  function unfold() {
-    if (!from || reducedMotion()) return;
-    const box = clip.getBoundingClientRect();
-    const scale = Math.max(0.22, Math.min(0.8, from.width / box.width));
-    const dx = from.left + from.width / 2 - (box.left + box.width / 2);
-    const dy = from.top + from.height / 2 - (box.top + box.height / 2);
-    clip.animate([
-      { transform: `translate(${dx}px, ${dy}px) scale(${scale}) rotate(-3deg)`, opacity: 0 },
-      { opacity: 1, offset: 0.55 },
-      { transform: 'rotate(-.4deg)', opacity: 1 },
-    ], { duration: 600, easing: 'cubic-bezier(.2, .8, .2, 1)' });
+  // 신문 한 장이 넘어가는 동안 이 면은 그 밑에 놓여 있다(넘기는 연출은 S-02가 시작). 자료가 늦게 와도 부드럽게 나타난다
+  function unfold(node = clip) {
+    clip.style.visibility = '';
+    if (from && !reducedMotion()) node.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 220, easing: 'ease-out' });
+  }
+
+  // 대본이 있는 사건: 1막 무대를 첫 장면 앞에서 멈춰 둔다. 선택지로 체험을 시작하면 그 자리에서 1막이 이어진다
+  function drawStage(data, script) {
+    const { label, failText } = ACTIONS[data.myStatus] ?? NOT_STARTED;
+    const info = { ...data };
+    // 오른쪽 귀: 하던 체험이 있으면 "이어서 하기" · "결과 다시 보기", 처음 보는 사건이면 사건 번호 · 분류 그대로
+    const resume = ACTIONS[data.myStatus]
+      ? earButton(`${label} ▶`, `사건 ${String(data.caseId).padStart(2, '0')} · ${data.crimeCategoryLabel}`, () => begin(resume), 'ear-right ear-go') : null;
+    const { stage, setOverview } = caseStage({ caseId, api, navigate, script, info, paper: paperFromCase(data, script.paper), parked: true, ...(resume ? { earRight: resume } : {}) });
+    // 우하단 "시작하기": 누르면 내로 · 남불이 들어오며 1막 대사가 시작된다
+    const dock = element('div', 'paper-start');
+    const notice = element('p', 'paper-start-notice');
+    notice.setAttribute('role', 'alert');
+    const go = button('시작하기 ▶', () => begin(go), 'primary-button');
+    go.setAttribute('aria-label', `${data.title} ${label}`);
+    dock.append(notice, go);
+    mountStagePage(root, { stage });
+    root.append(dock);
+    unfold(stage);
+
+    async function begin(trigger) {
+      if (starting) return;
+      starting = true;
+      trigger.setAttribute('aria-busy', 'true');
+      notice.textContent = '';
+      try {
+        const experience = await api.startExperience(caseId);
+        if (!active()) return;
+        // 사전 판단 전(STARTED)이면 이 지면에서 1막을 잇는다. 그 뒤 단계면 그 화면으로 간다(API 명세 1-6)
+        if (experience.status !== 'STARTED') { navigate(screenByStatus[experience.status] ?? 'overview', { caseId }); return; }
+        started = true;
+        navigate('overview', { caseId }, { keepView: true });
+        dock.remove();
+        resume?.replaceWith(caseInfoEar(info)); // 이제 S-03과 같은 지면
+        stage.release();
+        setOverview(await loadOverview());
+      } catch (error) {
+        if (!active() || started) return;
+        notice.textContent = error?.code === 'CASE_NOT_FOUND' ? '사건을 찾을 수 없어요. 신문으로 돌아가 다시 골라 주세요.' : failText;
+      } finally {
+        starting = false;
+        trigger.removeAttribute('aria-busy');
+      }
+    }
+    // 2막 사전 판단 폼에 쓸 형량 구간(API 4). 1막을 보는 동안 받아 오고, 끝내 못 받으면 S-03을 새로 열어 그 화면의 오류 안내에 맡긴다
+    async function loadOverview(tries = 2) {
+      try {
+        return await api.getOverview(caseId);
+      } catch (error) {
+        if (tries > 1 && active()) { await new Promise((resolve) => setTimeout(resolve, 800)); return loadOverview(tries - 1); }
+        if (active()) window.location.reload();
+        throw error;
+      }
+    }
   }
 
   async function load() {
@@ -165,7 +214,10 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
     message('사건 정보를 불러오는 중…');
     try {
       const data = await api.getCaseDetail(caseId);
-      if (active()) draw(data);
+      if (!active()) return;
+      const script = scriptFor(caseId, data.title);
+      if (script) drawStage(data, script);
+      else draw(data);
     } catch (error) {
       if (!active()) return;
       // CASE_NOT_FOUND는 withErrorRedirect가 S-14로 먼저 보낸다(app/errorRedirect.js). 여기 오는 것은 그 밖의 오류다

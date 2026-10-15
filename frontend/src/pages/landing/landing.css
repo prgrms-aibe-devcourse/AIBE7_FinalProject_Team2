@@ -47,7 +47,14 @@
 .landing-page .desk-scene { position: relative; aspect-ratio: 1672 / 941; max-width: 1672px; margin: 0 auto; overflow: hidden; }
 /* 신문 집어 들기(FE-32): 신문 가운데를 기준으로 책상이 다가오며 사라진다(transform-origin은 landingPage.js가 정한다) */
 .landing-page .desk-scene { transition: transform .72s cubic-bezier(.5, 0, .3, 1), opacity .6s ease-in .15s; }
-.landing-page .desk-scene.is-lifting { transform: scale(2.6); opacity: 0; pointer-events: none; }
+.landing-page .desk-scene.is-lifting { transform: scale(2.6); opacity: 0; pointer-events: none; transition-delay: .28s; }
+/* 신문 들기: 신문이 책상에서 떠올라 살짝 기울고, 그림자는 길고 흐려진다. 메모지는 먼저 사라진다 */
+.landing-page .desk-object.obj-news { transition: transform .38s cubic-bezier(.2, .8, .2, 1); }
+.landing-page .desk-object.obj-news > :not(.desk-note) { transition: filter .38s ease-out; }
+.landing-page .desk-object.obj-news .desk-note { transition: opacity .2s ease-out; }
+.landing-page .obj-news.is-held { transform: translateY(-36px) scale(1.05) rotate(-1.4deg); }
+.landing-page .obj-news.is-held > :not(.desk-note) { filter: drop-shadow(0 34px 26px color-mix(in srgb, var(--color-desk-shadow) 55%, transparent)); }
+.landing-page .obj-news.is-held .desk-note { opacity: 0; }
 /* 책상 위 내로 · 남불(장식, 볼을 괴고 엎드림) */
 .landing-page .desk-cheek { position: absolute; z-index: 3; width: auto; pointer-events: none; filter: var(--shadow-rest); }
 .landing-page .desk-world {
@@ -140,27 +147,42 @@
 .landing-page .news-sheets span:nth-child(1) { transform: translate(6px, 5px) rotate(.6deg); background: var(--color-desk-news-sheet-1); }
 .landing-page .news-sheets span:nth-child(2) { transform: translate(3px, 2px) rotate(-.4deg); background: var(--color-desk-news-sheet-2); }
 .landing-page .news-art {
-  position: absolute; inset: 0; overflow: hidden; padding: 22px 26px; font-size: 9.4px; color: var(--color-text);
+  position: absolute; inset: 0; overflow: hidden; padding: 4px 22px 18px; font-size: 9.4px; color: var(--color-text);
   background:
-    linear-gradient(90deg, transparent 48.6%, color-mix(in srgb, var(--color-desk-coffee) 16%, transparent) 50%, transparent 51.4%),
-    linear-gradient(180deg, transparent 46%, color-mix(in srgb, var(--color-desk-coffee) 8%, transparent) 47%, transparent 48.5%),
-    var(--color-desk-news);
+    linear-gradient(90deg, transparent 48.6%, color-mix(in srgb, var(--color-desk-coffee) 14%, transparent) 50%, transparent 51.4%),
+    linear-gradient(180deg, transparent 46%, color-mix(in srgb, var(--color-desk-coffee) 7%, transparent) 47%, transparent 48.5%),
+    var(--color-paper); /* 집어 들면 펼쳐지는 S-02 지면과 같은 종이색 */
 }
-.landing-page .news-info { display: flex; justify-content: space-between; padding-bottom: .4em; border-bottom: 1px solid var(--color-border-strong); font-size: .9em; color: var(--color-muted); }
-.landing-page .news-brand { margin: .25em 0 .15em; text-align: center; font: 900 3.8em/1.1 var(--font-heading); letter-spacing: -.04em; color: var(--color-heading); }
+/* S-02 지면(caseList.css)과 같은 짜임을 줄인 것 */
+.landing-page .news-info { display: flex; justify-content: space-between; align-items: center; min-height: 2.6em; font-size: .9em; color: var(--color-muted); }
+.landing-page .news-mast { display: grid; grid-template-columns: 1fr 2.1fr 1fr; align-items: center; gap: 1.4em; padding: .2em 0 .9em; }
+.landing-page .news-ear { padding: .5em .6em; border: 1px solid var(--color-border-strong); font-size: .82em; line-height: 1.45; color: var(--color-muted); text-align: center; }
+.landing-page .news-ear b { margin-bottom: .2em; font: 700 1.1em/1.35 var(--font-heading); color: var(--color-text); }
+.landing-page .news-brand { text-align: center; font: 900 4.6em/1 var(--font-heading); letter-spacing: -.1em; white-space: nowrap; color: var(--color-heading); }
 .landing-page .news-brand .law { display: inline; color: var(--color-label); }
-.landing-page .news-date { display: flex; justify-content: center; gap: 1.4em; padding: .35em 0; border-top: 2px solid var(--color-text); border-bottom: 1px solid var(--color-text); color: var(--color-muted); }
-.landing-page .news-banner { margin: .6em 0 .55em; text-align: center; font: 900 2.5em/1.25 var(--font-heading); letter-spacing: -.04em; word-break: keep-all; }
-.landing-page .news-front { display: grid; grid-template-columns: 1.6fr 1fr; gap: 1.2em; padding-top: .8em; border-top: 1px solid var(--color-border-strong); }
-.landing-page .news-photo { display: block; width: 100%; aspect-ratio: 3 / 2; object-fit: cover; filter: var(--photo-filter); mix-blend-mode: multiply; }
-.landing-page .news-deck { margin-bottom: .4em; font: 700 1.25em/1.45 var(--font-heading); color: var(--color-heading); word-break: keep-all; }
-.landing-page .news-lead { font: 400 1.1em/1.5 var(--font-article); text-align: justify; text-indent: 1em; word-break: break-all; color: var(--color-desk-news-ink); }
-.landing-page .news-recs { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2em; margin-top: 1em; padding-top: .8em; border-top: 1px solid var(--color-text); }
+.landing-page .news-date { display: flex; justify-content: space-between; padding: .35em 0; border-top: 1px solid var(--color-border-strong); border-bottom: 1px solid var(--color-border-strong); font-size: .9em; font-weight: 700; }
+.landing-page .news-date span:nth-child(2) { font-weight: 400; color: var(--color-muted); }
+.landing-page .news-tabs { display: flex; align-items: center; gap: 1.6em; min-height: 2.8em; border-bottom: 3px double var(--color-border-strong); font-size: 1em; font-weight: 700; }
+.landing-page .news-tabs span { display: inline; padding: .4em .2em; }
+.landing-page .news-tabs .on { color: var(--color-accent); box-shadow: inset 0 -2px 0 var(--color-accent); }
+.landing-page .news-tabs .news-count { margin-left: auto; font-size: .82em; font-weight: 400; color: var(--color-muted); }
+.landing-page .news-banner { padding: .55em 0 .5em; border-bottom: 1px solid var(--color-border-strong); text-align: center; font: 900 2.7em/1.22 var(--font-heading); letter-spacing: -.045em; color: var(--color-heading); text-wrap: balance; word-break: keep-all; }
+.landing-page .news-front { display: grid; grid-template-columns: 2.1fr 1fr; padding: .9em 0 1em; }
+.landing-page .news-photo { display: block; width: 100%; height: 100%; min-height: 13em; padding-right: 1.2em; object-fit: cover; filter: var(--photo-filter); }
+.landing-page .news-lead-col { padding-left: 1.2em; border-left: 1px solid var(--color-border); }
+.landing-page .news-kicker { margin-bottom: .5em; font-size: .85em; font-weight: 700; color: var(--color-label); }
+.landing-page .news-deck { margin-bottom: .5em; font: 700 1.2em/1.45 var(--font-heading); color: var(--color-heading); word-break: keep-all; }
+.landing-page .news-byline { margin-bottom: .5em; padding-top: .4em; border-top: 1px solid var(--color-border-strong); width: 3em; font-size: .8em; font-weight: 700; color: var(--color-muted); }
+.landing-page .news-lead { font: 400 1em/1.5 var(--font-article); text-align: justify; text-indent: 1em; word-break: break-all; color: var(--color-desk-news-ink);
+  display: -webkit-box; -webkit-line-clamp: 9; -webkit-box-orient: vertical; overflow: hidden; }
+.landing-page .news-recs { display: grid; grid-template-columns: 1fr 1fr; padding-top: .8em; border-top: 1px solid var(--color-border-strong); }
 .landing-page .news-recs:empty, .landing-page .news-index:empty { display: none; }
-.landing-page .news-rec b { margin-bottom: .35em; font: 700 1.3em/1.35 var(--font-heading); word-break: keep-all; }
-.landing-page .news-rec span { font: 400 1.05em/1.5 var(--font-article); text-align: justify; word-break: break-all; color: var(--color-desk-news-ink-soft);
-  display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
-.landing-page .news-index { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1em; margin-top: .9em; padding-top: .7em; border-top: 1px solid var(--color-border-strong); font: 700 1.05em/1.35 var(--font-heading); word-break: keep-all; }
+.landing-page .news-rec:first-child { padding-right: 1.2em; }
+.landing-page .news-rec + .news-rec { padding-left: 1.2em; border-left: 1px solid var(--color-border); }
+.landing-page .news-rec b { margin-bottom: .35em; font: 700 1.3em/1.35 var(--font-heading); color: var(--color-heading); word-break: keep-all; }
+.landing-page .news-rec span { font: 400 1em/1.5 var(--font-article); text-align: justify; word-break: break-all; color: var(--color-desk-news-ink-soft);
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.landing-page .news-index { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1em; margin-top: .9em; padding-top: .7em; border-top: 3px double var(--color-border-strong); font: 700 1em/1.35 var(--font-heading); color: var(--color-heading); word-break: keep-all; }
 .landing-page .note-news { right: -24px; bottom: -18px; --note-angle: 3deg; }
 
 /* 노트북 → 커뮤니티 (바닥 왼쪽 아래 모서리를 기준으로 29도 돌려 놓는다) */
@@ -215,7 +237,7 @@
 .landing-page .site-footer { background: var(--color-desk-floor); border-top: 0; color: var(--color-desk-text); }
 
 @media (prefers-reduced-motion: reduce) {
-  .landing-page .desk-scene { transition: none; }
+  .landing-page .desk-scene, .landing-page .desk-object.obj-news, .landing-page .desk-object.obj-news > :not(.desk-note), .landing-page .desk-object.obj-news .desk-note { transition: none; }
 }
 
 @media (max-width: 720px) {

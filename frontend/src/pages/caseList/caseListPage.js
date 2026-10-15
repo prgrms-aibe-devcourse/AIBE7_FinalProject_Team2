@@ -1,9 +1,11 @@
 import { button, element, renderSiteFooter } from '../../components/siteLayout.js';
-import { fallbackImages, todayLabel } from '../../utils/newspaper.js';
+import { fallbackImages } from '../../utils/newspaper.js';
+import { newspaperMasthead } from '../../components/newspaperFront.js';
+import { turnPage } from '../../utils/pageTurn.js';
 
 // S-02 사건 목록 — 신문 1면 (FE-18, 시안 v12 + 배치 조정). 유형 필터 · 오류 처리 로직은 FE-4 · FE-11과 같다.
 // 흐름 목업 ②(FE-32): 책상에서 집어 든 신문이다. 위에 남불의 안내와 "신문 내려놓기"(S-01)가 있고, 기사를 누르면
-// 그 기사를 오려 사건 정보(S-20)로 펼친다 — 체험 시작 · 이어서 하기는 S-20에서 한다(API 명세 5장 S-02 확장). Esc는 책상으로.
+// 신문 한 장이 넘어가며(2.5D, utils/pageTurn.js) 그 밑에서 사건 정보(S-20)가 드러난다. 유형 탭을 누르면 같은 방식으로 한 장이 넘어가 다른 유형의 기사가 드러난다 — 체험 시작 · 이어서 하기는 S-20에서 한다(API 명세 5장 S-02 확장). Esc는 책상으로.
 // 목록은 처음 판단(S-03) 전 화면이라 사건 정보는 S-03 개요 범위를 넘지 않는다: 제목 · 짧은 소개 · 키워드 · 분류 · 참여 수와,
 // 개요 범위 안에서 쓴 기사(headline · deck · article). S-04 이후에 공개되는 사실(다툼 기간 · 횟수 · 양형 요소 등)은 기사에도 쓰지 않는다.
 // 기사 제목 · 부제 · 본문은 headline · deck · article(API 1에 아직 없는 제안 필드, S-03 개요 수준)을 쓰고, 없으면 사건 제목 · 짧은 소개와
@@ -69,7 +71,7 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
   const earRight = element('div', 'ear ear-right');
   const main = element('main', 'front');
   const paperNote = element('p', 'paper-note', '이 지면의 사건과 기사는 판결 체험을 위해 재구성한 것이며, 사진은 AI로 생성한 연출 이미지입니다.');
-  paper.append(renderMasthead(), main, paperNote, renderSiteFooter());
+  paper.append(newspaperMasthead({ navigate, earRight }), main, paperNote, renderSiteFooter());
 
   // 남불의 안내 + 신문 내려놓기(책상으로). 지면 위에 붙어 따라 내려온다
   const tip = element('div', 'paper-tip');
@@ -90,33 +92,6 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
   }
   document.addEventListener('keydown', onKey);
 
-  function renderMasthead() {
-    const header = element('header', 'masthead');
-    const infoRow = element('div', 'info-row');
-    const links = element('nav', 'info-links');
-    links.setAttribute('aria-label', '보조 메뉴');
-    links.append(
-      button('← 처음으로', () => navigate('landing'), 'paper-link'),
-      button('서비스 소개', () => navigate('landing', { section: 'intro' }), 'paper-link'),
-    );
-    infoRow.append(element('span', '', '판결 체험 신문'), links);
-
-    const earLeft = element('div', 'ear ear-left');
-    earLeft.append('“모든 판결에는', element('br'), '이유가 있다”', element('small', '', '사건을 읽다. 판단을 묻다.'));
-    const brand = element('div', 'brand');
-    const title = element('h1');
-    title.setAttribute('aria-label', '내Law남불 사건 목록');
-    title.append(element('span', '', '내'), element('span', 'law', 'Law'), element('span', '', '남불'));
-    brand.append(title);
-    const mast = element('div', 'mast');
-    mast.append(earLeft, brand, earRight);
-
-    const dateline = element('div', 'dateline');
-    dateline.append(element('span', '', '내Law남불'), element('span', '', todayLabel()), element('span', '', '참여 무료'));
-    header.append(infoRow, mast, dateline);
-    return header;
-  }
-
   function showError(retry) {
     const box = element('section', 'message-panel');
     box.setAttribute('role', 'alert');
@@ -124,16 +99,14 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
     main.replaceChildren(box);
   }
 
-  // 기사 고르기: 고른 기사를 표시하고 나머지 지면은 물러난 뒤, 그 자리에서 오려 낸 기사가 S-20으로 펼쳐진다
+  // 기사 고르기: 지금 지면이 한 장 넘어가기 시작하고, 그 밑에 사건 정보(S-20)가 바로 놓인다
   function pick(item, target) {
     if (picking) return;
     picking = true;
-    const { left, top, width, height } = target.getBoundingClientRect();
     target.classList.add('is-picked');
     root.classList.add('is-picking');
-    setTimeout(() => {
-      if (active()) navigate('caseDetail', { caseId: item.caseId, from: { left, top, width, height } });
-    }, reducedMotion() ? 0 : 380);
+    turnPage(paper, { scopeClass: 'case-list-page' });
+    navigate('caseDetail', { caseId: item.caseId, from: 'paper' });
   }
   // 기사 전체를 누를 수 있게 한다(마우스). 키보드 · 화면 낭독기는 기사 안의 "사건 펼쳐 보기" 버튼으로 고른다
   function pickable(node, item) {
@@ -230,7 +203,7 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
     bar.setAttribute('aria-label', '범죄 유형');
     tabs.forEach(({ crimeType, label }) => {
       const count = crimeType ? summary.byCrimeType[crimeType] : summary.total;
-      const tab = button(label, () => load(crimeType), 'tab');
+      const tab = button(label, () => switchTab(crimeType), 'tab');
       tab.setAttribute('aria-pressed', String(crimeType === selected));
       tab.setAttribute('aria-label', `${label} ${count}건`);
       bar.append(tab);
@@ -295,6 +268,24 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
     } catch (error) {
       if (active()) showError(() => load(crimeType));
     }
+  }
+
+  // 탭 바꾸기: 새 목록을 받으면 지금 지면을 한 장으로 떼어 넘기고, 그 밑에 새 목록을 바로 그린다(빠르게 연달아 눌러도 마지막 것만 남는다)
+  let switching = 0;
+  async function switchTab(crimeType) {
+    if (picking || crimeType === selected) return;
+    const mine = ++switching;
+    selected = crimeType;
+    let result = null;
+    try {
+      result = await api.getCases(crimeType);
+    } catch (error) {
+      result = null;
+    }
+    if (!active() || mine !== switching) return;
+    turnPage(paper, { scopeClass: 'case-list-page' });
+    if (result) draw(result);
+    else showError(() => load(crimeType));
   }
 
   await load(undefined);

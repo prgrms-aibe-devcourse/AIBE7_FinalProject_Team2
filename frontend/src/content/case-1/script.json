@@ -118,8 +118,19 @@
       },
       "steps": [
         {
+          "say": "nambul",
+          "look": {
+            "nambul": "react-sorry"
+          },
+          "text": "사실 이건… 제가 내로한테 빌린 돈을 제때 갚지 못해서 생긴 일이에요.",
+          "focus": "photo"
+        },
+        {
           "say": "naero",
-          "text": "오늘 신문 1면에 실린 사건이에요. 기사에 나온 내용만 가지고 먼저 따라가 볼게요.",
+          "look": {
+            "nambul": "idle-neutral"
+          },
+          "text": "남불 말처럼 돈 문제에서 시작된 사건이에요. 오늘 신문 1면에 실렸고, 기사에 나온 내용만 가지고 먼저 따라가 볼게요.",
           "focus": "head"
         },
         {
@@ -199,6 +210,13 @@
             "naero": "read-thinking"
           },
           "text": "정답은 없어요! 법정형은 사형 · 무기징역 · 5년 이상의 징역이에요. 그 안에서 감 가는 대로 골라 봐요."
+        },
+        {
+          "say": "nambul",
+          "look": {
+            "nambul": "guide-happy"
+          },
+          "text": "그래서 신문사 독자 의견 엽서를 가져왔어요! 여기에 첫인상을 적어 보내 주세요."
         },
         {
           "card": "preJudgment",
