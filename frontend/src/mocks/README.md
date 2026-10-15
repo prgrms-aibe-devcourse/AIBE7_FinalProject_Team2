@@ -6,7 +6,7 @@
 
 | 파일 | 대응 API | 내용 |
 | --- | --- | --- |
-| `caseListMockApi.js` · `caseListMockData.js` | API 1 · 2 | 사건 목록, 체험 시작. `caseId` 1이 가상 살인 사건이고 2 ~ 9는 임의 데이터 |
+| `caseListMockApi.js` · `caseListMockData.js` | API 1 · 2 | 사건 목록, 체험 시작. `caseId` 1이 가상 살인 사건이고 2 ~ 9는 임의 데이터. 목록의 `myStatus`(FE-19 배지)는 체험 시작과 같은 저장소에서 계산한다: 실제 API처럼 체험 기록이 없으면 `null`("체험 시작"). `caseId` 1은 `mockExperienceStore`에 값이 생기면(체험 시작 · 다른 목 화면 진입 시 저장) 진행 중, `setMockStatus('COMPLETED')`면 완료. 나머지는 이번 세션에 시작한 사건만 진행 중 |
 | `overviewMockApi.js` · `overviewMockData.js` | API 4 · 5 | 사건 개요 · 형량 구간, 사전 판단 제출 |
 | `reviewMockApi.js` · `reviewMockData.js` | API 6 · 7 | 사건 정보 섹션, 섹션 확인 기록 |
 | `verdictMockApi.js` · `verdictMockData.js` | API 8 · 9 | 판결 입력 정보, 판결 제출 (감경 `reducedTo` 검증 포함) |
