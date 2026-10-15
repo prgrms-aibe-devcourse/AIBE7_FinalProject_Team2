@@ -463,7 +463,9 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
     sidebar.insertBefore(lawBox, sidebar.children[1]);
     sidebar.append(records);
     layout.append(main, sidebar);
-    const script = SCRIPTS[caseId];
+    // 대본의 제목이 사건 제목과 같을 때만 무대를 쓴다(S-03 · S-04와 같은 규칙, 사건 번호는 DB마다 다를 수 있다)
+    const candidate = SCRIPTS[caseId];
+    const script = candidate?.title === caseHeader.title ? candidate : undefined;
     if (script) {
       // 5막 당신이 판사(흐름 목업): 검사 의견 → 최종변론 → 최후진술을 지나 판결 장면에서 이 화면(입력 · 참고 정보)을
       // 무대 입력 카드로 띄운다. 입력 · 확정 · 오류 처리는 아래 그대로이고, 확정하면 AI 판결(S-07)로 간다

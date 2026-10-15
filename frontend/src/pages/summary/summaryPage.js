@@ -66,7 +66,9 @@ export async function renderSummaryPage(container, { caseId, caseHeader, api, na
       message('사건 정보를 모두 확인한 뒤 볼 수 있어요.', button('사건 정보 확인으로', () => navigate('review')));
       return;
     }
-    const script = SCRIPTS[caseId];
+    // 대본의 제목이 사건 제목과 같을 때만 무대를 쓴다(S-03 · S-04와 같은 규칙, 사건 번호는 DB마다 다를 수 있다)
+    const candidate = SCRIPTS[caseId];
+    const script = candidate?.title === caseHeader.title ? candidate : undefined;
     if (script) { drawStage(data, script); return; }
     const header = element('header', 'case-topbar');
     header.append(button('← 이전 단계', () => navigate('review'), 'back-button'), element('strong', 'case-title', caseHeader.title), element('span', 'case-badge', '최종 정리'));
