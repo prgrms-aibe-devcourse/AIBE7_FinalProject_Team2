@@ -90,14 +90,14 @@ const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)'
 
 // 신문 지면 무대(layout 'paper')의 카메라: 지면이 곧 화면이라 옮기지 않고, 고른 기사만 또렷하게 두고 그 기사가 보이게 화면을 굴린다.
 // 아래쪽에 고정된 대사창(dock)이 가리는 부분을 빼고 그 위 공간 가운데에 맞춘다(기사가 그 공간보다 길면 기사 위쪽에 맞춘다)
-function paperCamera(sheet, dockTop) {
+function paperCamera(sheet, dockTop, byKeyboard = () => false) {
   let at = null;
   function show(target) {
     requestAnimationFrame(() => {
       const box = target.getBoundingClientRect();
       const room = dockTop() - 24;
       const top = box.height < room ? box.top - (room - box.height) / 2 : box.top - 24;
-      window.scrollTo({ top: Math.max(0, window.scrollY + top), behavior: reducedMotion() ? 'auto' : 'smooth' });
+      window.scrollTo({ top: Math.max(0, window.scrollY + top), behavior: reducedMotion() || byKeyboard() ? 'auto' : 'smooth' }); // 키보드로 넘길 때는 즉시(연달아 눌러도 화면이 따라오느라 느려지지 않게)
     });
   }
   function go(name) {
@@ -306,7 +306,8 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
   }
   // 신문 지면: 틀(frame)은 기사를 맞출 자리만 정하는 빈 요소(CSS가 위치를 정한다)
   const frame = sheet && !paperMode ? element('div', 'sheet-frame') : null;
-  const camera = paperMode ? paperCamera(sheet, () => (dialog.hidden ? controls.getBoundingClientRect().top : dialog.getBoundingClientRect().top))
+  let byKeyboard = false; // 지금 넘기는 입력이 키보드인가(Space · → · Enter, 키보드로 누른 버튼)
+  const camera = paperMode ? paperCamera(sheet, () => (dialog.hidden ? controls.getBoundingClientRect().top : dialog.getBoundingClientRect().top), () => byKeyboard)
     : sheet ? sheetCamera(sheet, frame) : null;
   if (frame) frame.setAttribute('aria-hidden', 'true');
   scene.append(bg, court, ...(sheet ? [sheet] : []), ...(frame ? [frame] : []), figures.naero, figures.nambul, lawCast, procs, sys, flash);
@@ -559,10 +560,11 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
     index = first;
     render();
   }
-  prev.addEventListener('click', () => go(-1));
-  next.addEventListener('click', () => go(1));
+  // 버튼의 click은 키보드(Space · Enter)로 눌러도 오지만 detail이 0이다
+  prev.addEventListener('click', (event) => { byKeyboard = event.detail === 0; go(-1); });
+  next.addEventListener('click', (event) => { byKeyboard = event.detail === 0; go(1); });
   skip.addEventListener('click', () => { if (busy) return; finishTyping(); index = skipTarget(steps, index); render(); });
-  dialog.addEventListener('click', () => go(1));
+  dialog.addEventListener('click', () => { byKeyboard = false; go(1); });
   // 장면 클릭 = 다음. 지면 안의 버튼 · 링크 · 카드(신문 지면 무대의 막 칩 · 메뉴 · 독자 의견 칸)는 제 동작만 한다
   // 신문 지면 무대(paperMode)에서는 지면을 눌러도 넘어가지 않는다(글을 읽다 누르는 경우가 많다). 대사창 · 다음 버튼 · Space로만 진행
   scene.addEventListener('click', (event) => { if (!paperMode && !event.target.closest('button, a, input, label, .board')) go(1); });
@@ -576,9 +578,11 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
     if (event.key === 'ArrowRight' || event.key === ' ' || event.key === 'Enter') {
       if (event.target.closest('button') && event.key !== 'ArrowRight') return; // 버튼 위의 Space · Enter는 버튼이 처리한다
       event.preventDefault();
+      byKeyboard = true;
       go(1);
     } else if (event.key === 'ArrowLeft') {
       event.preventDefault();
+      byKeyboard = true;
       go(-1);
     }
   }

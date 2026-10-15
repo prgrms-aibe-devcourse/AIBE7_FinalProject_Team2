@@ -31,11 +31,11 @@
 /* 독자 의견 엽서(2막 사전 판단): 지면 위 팝업. 가장자리는 항공우편 줄무늬, 오른쪽 위에 우표 · 소인. 뒤 지면은 어둡게 가린다 */
 .stage-wrap.paper-mode .stage:has(> .board:not([hidden]))::after { content: ''; position: fixed; inset: 0; z-index: 25; background: color-mix(in srgb, var(--color-desk-shadow) 45%, transparent); animation: dlg-in .3s ease-out; }
 .stage-wrap.paper-mode .board, .stage-wrap.paper-mode .board.wide { position: fixed; z-index: 26; left: 50%; top: 46%; right: auto; bottom: auto; translate: -50% -50%; display: block; width: min(700px, calc(100vw - 32px)); height: auto; max-height: calc(100dvh - 150px);
-  padding: 9px; border: 0; border-radius: 4px; overflow: hidden; animation: none; transform: rotate(-.6deg);
+  padding: 9px; border: 0; border-radius: 12px; overflow: hidden; animation: none; transform: rotate(-.6deg);
   background: repeating-linear-gradient(-45deg, var(--color-caution) 0 14px, var(--color-card) 14px 22px, var(--color-accent) 22px 36px, var(--color-card) 36px 44px);
   box-shadow: 0 24px 48px -16px color-mix(in srgb, var(--color-desk-shadow) 70%, transparent); }
 .stage-wrap.paper-mode .board[hidden] { display: none; }
-.stage-wrap.paper-mode .board > .scroll-area { max-height: calc(100dvh - 168px); background: color-mix(in srgb, var(--color-desk-kraft) 10%, var(--color-card)); }
+.stage-wrap.paper-mode .board > .scroll-area { border-radius: 3px; max-height: calc(100dvh - 168px); background: color-mix(in srgb, var(--color-desk-kraft) 10%, var(--color-card)); }
 .stage-wrap.paper-mode .board .scroll-body { padding: 26px 30px 24px; }
 .stage-wrap.paper-mode .board .postcard-head { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px dashed var(--color-border-strong); }
 .stage-wrap.paper-mode .board .postcard-head h2 { margin: 0 0 4px; font: 900 22px/1.3 var(--font-heading); letter-spacing: .08em; color: var(--color-heading); }
@@ -57,7 +57,7 @@
 .stage-wrap.paper-mode .spr.b.delivering { animation: nambul-hand .75s cubic-bezier(.3, .7, .2, 1); }
 @keyframes nambul-hand { 35% { transform: translate(-46%, -10%) rotate(-7deg); } 60% { transform: translate(-40%, -6%) rotate(-4deg); } }
 .stage-wrap.paper-mode .board.delivering { animation: postcard-in .7s cubic-bezier(.25, .8, .25, 1) .22s backwards; }
-@keyframes postcard-in { from { opacity: 0; transform: translate(var(--from-x), var(--from-y)) scale(.12) rotate(-14deg); } 25% { opacity: 1; } }
+@keyframes postcard-in { from { opacity: 0; transform: translate(var(--from-x), var(--from-y)) scale(.3) rotate(-14deg); } 25% { opacity: 1; } }
 /* 화면 아래 고정: 대사창 · 조작 줄, 그 양옆에 내로 · 남불(발이 화면 아래 끝). 읽는 공간(대사창 위)을 가리지 않는다. 좁은 화면은 대사창 위 양 끝 */
 .stage-wrap.paper-mode { --dock-w: min(860px, calc(100vw - 340px)); } /* 양옆에 캐릭터 자리(170px씩)를 남긴다 */
 .stage-wrap.paper-mode .dlg { position: fixed; z-index: 20; left: 50%; right: auto; bottom: calc(66px + var(--safe-bottom)); translate: -50% 0; width: var(--dock-w); height: auto; min-height: 118px; padding: 26px 28px 18px;
@@ -153,7 +153,7 @@
 .case-paper-page .story-photo { margin: 0 0 22px; }
 .case-paper-page .story-photo .photo { height: auto; aspect-ratio: 21 / 9; max-height: 440px; } /* img의 height 속성은 크기 힌트일 뿐, 높이는 비율이 정한다 */
 .case-paper-page .story-body { column-count: 3; column-gap: 32px; column-rule: 1px solid var(--color-border); }
-.case-paper-page .story-body p { margin: 0 0 .8em; font: 16px / 1.85 var(--font-article); letter-spacing: -.015em; text-align: justify; word-break: keep-all; hyphens: auto; }
+.case-paper-page .story-body p { text-wrap: pretty; margin: 0 0 .8em; font: 16px / 1.85 var(--font-article); letter-spacing: -.015em; text-align: justify; word-break: keep-all; hyphens: auto; }
 .case-paper-page .story-body p + p { text-indent: 1em; }
 .case-paper-page .story-body p:first-child::first-letter { float: left; margin: .06em .1em 0 0; font: 900 3.4em/.85 var(--font-heading); color: var(--color-heading); }
 @media (max-width: 1100px) {
