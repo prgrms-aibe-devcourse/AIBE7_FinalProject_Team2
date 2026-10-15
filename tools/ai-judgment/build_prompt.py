@@ -110,12 +110,48 @@ def render_factors(factors):
     return "\n".join(f"- {factor['factorId']}. {factor['label']}" for factor in factors)
 
 
+SIMILAR_REASON_MAX_CHARS = 600  # 판례 양형 이유는 길어서 앞부분만 넣는다 (프롬프트 크기)
+
+
+def render_factor_list(factors):
+    """판례 양형인자 {"aggravating": [...], "mitigating": [...]} → 한 줄. 없으면 빈 문자열."""
+    if not isinstance(factors, dict):
+        return ""
+    parts = []
+    for key, name in (("aggravating", "가중"), ("mitigating", "감경")):
+        items = [str(item) for item in factors.get(key) or [] if item]
+        if items:
+            parts.append(f"{name}: {', '.join(items)}")
+    return " / ".join(parts)
+
+
+def shorten(text, limit):
+    text = " ".join(str(text).split())
+    return text if len(text) <= limit else text[:limit].rstrip() + "…"
+
+
 def render_similar_cases(cases):
+    """유사 판례. RAG 결과(BE-54)는 양형 이유 요지 · 양형인자까지, 예전 형식(title · summary · sentence)은 한 줄로 쓴다."""
     if not cases:
         return "(제공되지 않음)"
-    return "\n".join(
-        f"- {case['title']}: {case['summary']} → {case['sentence']}" for case in cases
-    )
+    if not any(case.get("sentencingReason") or case.get("sentencingFactors") for case in cases):
+        return "\n".join(f"- {case['title']}: {case['summary']} → {case['sentence']}" for case in cases)
+    blocks = []
+    for case in cases:
+        title = case["title"] + (" — 이 사건과 같은 양형기준 버전" if case.get("sameGuideline") else "")
+        lines = [f"### {title}", f"- 사실관계: {case['summary']}", f"- 선고: {case['sentence']}"]
+        if case.get("sentencingReason"):
+            lines.append(f"- 양형 이유 요지: {shorten(case['sentencingReason'], SIMILAR_REASON_MAX_CHARS)}")
+        factor_line = render_factor_list(case.get("sentencingFactors"))
+        if factor_line:
+            lines.append(f"- 양형인자: {factor_line}")
+        blocks.append("\n".join(lines))
+    return "\n\n".join(blocks)
+
+
+def system_prompt():
+    """판결 원칙 · 출력 형식 + 형식 예시(퓨샷, BE-54). 예시는 다른 죄종 · 가린 형량의 가상 사건이다."""
+    return read_prompt("judgment_system.md").rstrip() + "\n\n" + read_prompt("judgment_fewshot.md")
 
 
 def build_prompt(case):
@@ -134,7 +170,7 @@ def build_prompt(case):
         sentencing_guideline=references.get("sentencingGuideline") or "(제공되지 않음)",
         similar_cases=render_similar_cases(references.get("similarCases")),
     )
-    return {"promptVersion": PROMPT_VERSION, "system": read_prompt("judgment_system.md"), "user": user}
+    return {"promptVersion": PROMPT_VERSION, "system": system_prompt(), "user": user}
 
 
 def main():

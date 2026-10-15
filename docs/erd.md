@@ -26,6 +26,7 @@
 | v1.19 | 2026-10-13 | 관리자 감사 로그 추가 (**확장 단계**, BE-68 · WBS 7.4.5) — `admin_audit_log`(V14): 누가(`admin_id` · `actor_email`) · 무엇을(`action` 9종) · 어디에(`target_type` · `target_id`) · 상세(`detail` jsonb, 비밀번호 · 원문 제외) · IP · 시각. 계정이 지워져도 기록은 남는다(`ON DELETE SET NULL`). 성향 DB는 다음 번호(V15)를 쓴다 |
 | v1.20 | 2026-10-14 | 판결 성향 테스트 테이블 확정 (**확장 단계**, BE-69 · WBS 7.6.3) — 8장 제안을 V15 마이그레이션으로 확정<br>• `personality_question`에 두 행동 문장 `option_a` · `option_b` 추가. 선택지는 5칸 고정이고 "매우 · 조금 · 보통"은 화면이 붙이므로 `personality_choice.content` 삭제(글자 · 점수 · 순서만)<br>• 선택지 축은 복합 FK(`question_id`, `axis`)로 문항 축과 같게 묶고, 글자는 그 축의 두 글자만 · 보통은 글자 없음 0점(CHECK)<br>• `personality_type`: 공유 주소 `share_id` 추가(#119, 코드는 화면 · 주소에 안 씀), `animal` → `character_code`(NAERO · NAMBUL), `description` → `meme` · `daily_description` · `verdict_description`, `tolerance`는 코드의 I · N · F · P 개수(CHECK)<br>• `personality_result`: 현재 결과는 사용자당 1건(부분 유니크 인덱스)<br>• `experience_personality`: `axis_scores` · `type_code` → 축별 고른 개수 `axis_counts`(`{down, up}`, 산식 문서 v0.4) |
 | v1.21 | 2026-10-14 | 성향 콘텐츠 시드 추가 (**확장 단계**, BE-72 · WBS 7.6.4) — `db/migration/R__personality_content.sql`(반복 마이그레이션, **운영에도 적용**): 유형 16 · 문항 16 · 선택지 80. upsert라 다시 실행해도 선택지 id · `share_id`는 바뀌지 않는다(응답 기록 · 공유 링크 보존). `image_url`은 이미지가 들어오기 전까지 NULL. 스키마 변경 없음 |
+| v1.23 | 2026-10-15 | RAG 판례 · 양형기준 설명 갱신 (BE-54, **스키마 변경 없음**) — `rag_precedent`: LBox 행 삭제(사용 불가) · `guideline_id`는 NULL로 두고 검색 때 발생일로 버전을 고름 · `flags.guidelineBasis` · 오프라인 생성 검색은 Python(`rag_context.py`) · 점수 기준(하한 0.70 · 상한 0.88). `legal_case.guideline_id`는 적재 때 기준일(공소제기일 → 발생일)로 채움 |
 | v1.22 | 2026-10-14 | 판결 후보 검수 기록 (**확장 단계**, BE-41 · WBS 7.4.7, V16) — `judgment`에 `review_status`(APPROVED · REJECTED, NULL = 기록 없음) · `reviewed_by_admin_id` · `reviewed_at` · `review_note` 추가. AI · 재판부 후보를 같은 방식으로 검수한다(재판부는 지금까지 반려를 둘 곳이 없었다, API 명세 8-3 #4). 제약: 사용자 판단은 검수 값 없음, 반려 후보는 공개 불가, 사유는 반려에만. 기존 데이터는 `ai_generation`의 검수 결과와 공개 중 판결(승인)을 옮겼다. `ai_generation.review_status` · `reviewed_by`는 기존 도구용으로 남긴다(승인 · 반려 때 함께 맞춤, BE-42) |
 
 ---
@@ -519,7 +520,7 @@ AI 판결 생성(generate, BE-54)이 검색하는 유사 판례다. 오프라인
 | 컬럼 | 타입 | 필수 | 설명 |
 | --- | --- | --- | --- |
 | id | bigint PK | ✓ |  |
-| source | varchar(20) | ✓ | `LAW_GO_KR`(법제처 국가법령정보센터) / `LBOX`(LBox Open, CC BY-NC) |
+| source | varchar(20) | ✓ | `LAW_GO_KR`(법제처 국가법령정보센터) / `LBOX`(LBox Open — 사용 불가, 2026-10-12. BE-54에서 행 삭제, 지금은 없음) |
 | source_ref | varchar(50) | ✓ | 출처 안의 ID(판례일련번호 · LBox id). (`source`, `source_ref`) 유니크 |
 | case_number_hashes | text[] |  | 사건번호마다(공백 제거) SHA-256 hex. 병합 사건(`2014고13, 2014고14(병합)`)은 번호마다 하나씩 넣는다 — 대상 사건 `case_source`에는 번호가 하나만 있을 수 있어 칸 전체를 해시하면 자기 사건 제외가 빗나간다. 자기 사건 제외에만 쓴다. LBox는 사건번호가 없어 NULL. CHECK로 원소마다 64자 hex(빈 배열 불가), GIN 인덱스 |
 | case_group | varchar(50) | ✓ | 같은 사건(1심 · 항소심 · 공범 별도 판결 · 병합) 묶음 ID. 그룹에서 가장 앞선 판례 키(예: `LAW_GO_KR-143304`) |
@@ -529,7 +530,7 @@ AI 판결 생성(generate, BE-54)이 검색하는 유사 판례다. 오프라인
 | court_level | varchar(20) | ✓ | `FIRST` / `APPEAL` |
 | decided_at | date |  | 선고일. LBox는 NULL |
 | incident_date | date |  | 사건 발생일 (자동 추정, 의심 사유는 `flags.checks`) |
-| guideline_id | bigint FK |  | 적용 양형기준 버전. 양형기준 시행 전 · 기준일 미상이면 NULL. 기준일은 공소제기일 → 없으면 발생일(BE-52 결정, 채우기는 BE-54). 지금은 전부 NULL |
+| guideline_id | bigint FK |  | 적용 양형기준 버전. 공소제기일을 아는 판례만 채운다. **지금은 전부 NULL**이고, 검색 때 `coalesce(guideline_id, sentencing_guideline_at(범주, incident_date))`로 발생일 기준 버전을 고른다(BE-54). 반복 마이그레이션 순서상 R__40이 R__41(버전 행)보다 먼저 돌아 시드에서 버전 id를 찾을 수 없다 |
 | penalty_type · prison_months · suspension_months · fine_amount | varchar(20) · int · int · bigint |  | 주된 피고인의 주문 형량 (`judgment`와 같은 값) |
 | recommended_range | jsonb |  | 양형기준 권고 범위. 양형기준 데이터화 뒤 채운다 (지금은 NULL) |
 | sentencing_factors | jsonb |  | 양형인자 `{"aggravating": [...], "mitigating": [...]}` |
@@ -537,13 +538,15 @@ AI 판결 생성(generate, BE-54)이 검색하는 유사 판례다. 오프라인
 | sentencing_reason | text | ✓ | 비식별화한 양형 이유 (프롬프트 본문) |
 | embedding | vector(3072) | ✓ | `facts_summary` 임베딩 (task type `RETRIEVAL_DOCUMENT`, 유사도 cosine) |
 | embedding_model · embedding_dim | varchar(50) · int | ✓ | 예: `gemini-embedding-001` · 3072. CHECK `embedding_dim = vector_dims(embedding)` |
-| on_hold · hold_reason | boolean · text | ✓ · | 사용 보류. `true`면 검색에서 뺀다(행은 남긴다). 보류면 사유가 있어야 하고 아니면 비어야 한다(CHECK). LBox 판례는 라이선스(CC BY-NC / BY-NC-ND) 확인 전까지 보류(팀 결정 2026-10-12) |
-| flags | jsonb | ✓ | 자동 판정 표시: `verified`(사람 확인 여부, 지금은 모두 false — 팀 결정 2026-10-10), `checks`(확인 필요 사유), `partlyAcquitted` · `concurrent` · `beforePenaltyRevision`(2010. 4. 15. 법정형 개정 전), `notes` · `privacyWarnings`(개수) |
+| on_hold · hold_reason | boolean · text | ✓ · | 사용 보류. `true`면 검색에서 뺀다(행은 남긴다). 보류면 사유가 있어야 하고 아니면 비어야 한다(CHECK). 지금은 살인 관련 공소사실 무죄 6건 |
+| flags | jsonb | ✓ | 자동 판정 표시: `verified`(사람 확인 여부, 지금은 모두 false — 팀 결정 2026-10-10), `checks`(확인 필요 사유), `partlyAcquitted` · `concurrent` · `beforePenaltyRevision`(2010. 4. 15. 법정형 개정 전), `guidelineBasis`(버전 기준일 종류: `INCIDENT_DATE` · 없으면 null, BE-54), `notes` · `privacyWarnings`(개수) |
 | created_at | timestamptz | ✓ |  |
 
 - **판결문 원문 · 사건번호 · 법원명은 넣지 않는다.** 원문은 비공개 저장소 `raw/`(git 제외)에만 둔다.
 - 판례가 수백 건인 동안 벡터 인덱스 없이 전체를 비교한다. 수만 건이면 `halfvec(3072)` + HNSW로 바꾼다(8-1).
-- **검색은 백엔드 `RagSearchService`가 한다**(BE-51): 사건 개요(`legal_case.overview`)를 `RETRIEVAL_QUERY`로 임베딩하고, 그 사건 `case_source`의 사건번호를 번호마다 해시해 `exclude_hashes`로 넘긴다. 판례 임베딩 모델 · 차원이 검색어와 다르면 멈춘다. 설정 `rag.*`(top-k 5 · 점수 하한 0.6), `GEMINI_API_KEY`가 없으면 RAG만 꺼진다
+- **검색하는 곳은 둘이다.** 둘 다 사건 개요를 `RETRIEVAL_QUERY`로 임베딩하고, 그 사건 `case_source`의 사건번호를 번호마다 해시해 `exclude_hashes`로 넘긴다. `GEMINI_API_KEY`가 없으면 RAG만 꺼진다
+  - 오프라인 생성(BE-54): Python `tools/ai-judgment/rag_context.py`가 DB 함수를 직접 부른다. 상위 5건 · 하한 0.70 · 상한 0.88(이상이면 자기 사건 의심으로 뺌) · 같은 양형기준 버전은 점수에 0.01을 더해 정렬
+  - 서비스 요청(BE-51): 백엔드 `RagSearchService`. 판례 임베딩 모델 · 차원이 검색어와 다르면 멈춘다. 설정 `rag.*`(top-k 5 · 하한 0.6 · 상한 0.95, 서비스 안 생성 BE-56에서 위 값으로 맞춘다)
 - **검색 함수** `rag_precedent_search(query, crime, exclude_hashes, exclude_groups, top_k, min_score)` → (`precedent_id`, `case_group`, `score`)
   - `exclude_hashes`(판결하려는 사건의 사건번호 해시, 병합이면 번호마다)와 하나라도 겹치는 판례의 **사건 그룹 전체**와 `exclude_groups`를 뺀다. 실제 판결이 AI에게 노출되지 않게 한다
   - 같은 사건 그룹은 가장 비슷한 판례 1건만 돌려준다. 점수 = 1 − 코사인 거리, `min_score` 미만은 뺀다
