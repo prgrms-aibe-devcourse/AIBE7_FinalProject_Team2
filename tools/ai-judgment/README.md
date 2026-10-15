@@ -39,6 +39,7 @@ AI 판결 생성(3단계)은 두 가지 방법 중 하나로 한다. 외부 LLM 
 | `rag_store.py` · `prompts/rag_precedent_system.md` | RAG 유사 판례 저장소 적재: 판결문 비식별화 · 사실관계 요약 / 양형 이유 분리 → 임베딩 → 비공개 시드 `R__40` (BE-51, 아래 "RAG 판례 저장소") |
 | `rag_context.py` | 파이프라인 `rag` 단계: 양형기준 버전 · 형량범위 · 양형인자 · 유사 판례를 로컬 DB에서 찾아 생성 참고 자료로 만든다 (BE-54, 아래 "생성 참고 자료 RAG") |
 | `rag_check.py` | RAG 검색 결과 · 점수 확인 도구 (BE-54, 아래 "생성 참고 자료 RAG") |
+| `db_case_input.py` | 로컬 DB에 적재된 사건 → 생성용 사건 입력 JSON · 원본 판결문 정보(+ RAG 끔 · 켬 파이프라인 설정). LLM 호출 없음, 결과는 `cases/`에만 (BE-76, 아래 "RAG 끔 · 켬 생성 비교") |
 
 ## 작업 순서
 
@@ -380,6 +381,25 @@ python3 rag_check.py self                          # 자기 사건 점수(같은
 ```
 
 공통 옵션: `--explore`(하한 0 · 후보 20건), `--indictment-date` · `--incident-date`, DB 옵션(`--db-mode` · `--container` · `--db-user` · `--database` · `--db-url`).
+
+### RAG 끔 · 켬 생성 비교 (BE-76)
+
+이미 DB에 있는 사건으로 참고 자료 없이(끔) · RAG로(켬) 생성해 비교한다. 사건 입력은 DB에서 뽑는다(사건 입력 파일이 없는 실제 사건도 시험할 수 있다).
+
+```bash
+# 1) 사건 입력 · 원본 판결문 정보 · 파이프라인 설정 두 개를 cases/에 만든다 (LLM 호출 없음)
+python3 db_case_input.py <사건 id> --name my-case --pipeline --model <공급자:모델ID> --runs 3
+# 2) 끔 · 켬을 각각 회차 선택까지만 (DB에 적재하지 않는다). 켬은 GEMINI_API_KEY(검색어 임베딩)도 필요하다
+python3 pipeline.py run cases/my-case-rag-off.pipeline.json --until select
+python3 pipeline.py run cases/my-case-rag-on.pipeline.json --until select
+# 3) 묶음별 비교표 (묶음 경로는 status의 batchDir)
+python3 compare.py <끔 batchDir>
+python3 compare.py <켬 batchDir>
+```
+
+- `--name`은 사건을 특정할 수 없는 이름으로 짓는다(파일 이름에 쓴다). 결과 파일에는 실제 사건 내용 · 사건번호가 들어 있어 `cases/` · `out/`(git 제외)에만 둔다.
+- 사건 입력에는 용어 설명(`LAW_TERM`) · 핵심 정리(`SUMMARY`) 섹션과 원문을 넣지 않는다. 참고 자료는 비워 둔다(끔 = 참고 자료 없음).
+- 결과 요약은 사건 내용 없이 [RAG 인수인계](../../docs/rag-handover.md) 5-7에 적는다.
 
 ## 외부 LLM으로 생성할 때
 
