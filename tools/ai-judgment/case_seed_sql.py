@@ -9,8 +9,10 @@ case-extractor 결과 세 파일을 합쳐 legal_case · case_section · penalty
   관리자가 확정하지 않은(AUTO) 요소에 맞춘다(축만 다시 투표한 결과 반영, BE-48 · BE-49). 투표 기록이 있는 값만 반영하고
   (추출기가 한 번 정한 값으로 투표 결과를 덮지 않는다), 번호 · 라벨이 다른 요소는 바꾸지 않는다. 같은 제목의 사건이 DRAFT가 아니면
   다른 사건일 수 있으므로 멈춘다(전체 취소). 이미 공개된 사건에 AI 판결만 넣을 때는 파이프라인 load.case=false로 사건 SQL을 뺀다
-- 양형기준 연결(guideline_id)은 비워 둔다(이후 RAG로 연결). 사건 발생일(incident_date)은 source_internal.json의
-  incidentDate(원문 · 선고일과 대조해 확인한 값, BE-38) 또는 파이프라인 설정 incidentDate로 넣고, 없으면 비워 둔다
+- 사건 발생일(incident_date)은 source_internal.json의 incidentDate(원문 · 선고일과 대조해 확인한 값, BE-38) 또는
+  파이프라인 설정 incidentDate로 넣고, 없으면 비워 둔다
+- 양형기준 버전(guideline_id)은 기준일(공소제기일 → 없으면 발생일)에 시행 중이던 버전을 DB 함수 sentencing_guideline_at으로
+  고른다(BE-54, docs/sentencing-guideline-rag.md 6장). 기준일이 없거나 양형기준이 없는 범죄 유형이면 비워 둔다
 - 재판부 판결(COURT)은 넣지 않는다. 지금처럼 따로 작성해 넣는다(private-seed R__20 방식)
 - 공개(PUBLISHED)는 관리자가 검수 후 한다. 이 SQL은 공개하지 않는다
 
@@ -21,7 +23,7 @@ import argparse
 import datetime
 import sys
 
-from common import VALUE_AXES, load_json
+from common import GUIDELINE_CATEGORIES, VALUE_AXES, load_json
 from to_seed_sql import dollar_quote_tag, sql_int, sql_jsonb, sql_text
 
 DEFAULT_SOURCE_ORG = "법원 공개 판결문"  # 사용자에게 보일 수 있는 유일한 출처 칸. 법원명 · 서비스명을 쓰지 않는다
@@ -191,10 +193,21 @@ def sql_date(value):
     return sql_text(value) + "::date"
 
 
-def build_case_sql(case, report, sources, *, source_org=DEFAULT_SOURCE_ORG, source_note=None, incident_date=None):
-    """사건 콘텐츠 INSERT를 담은 DO 블록 (BEGIN/COMMIT 없음). sources는 resolve_sources를 거친 값."""
+def guideline_version_sql(crime_type, base_date):
+    """legal_case.guideline_id 값: 기준일에 시행 중이던 양형기준 버전 (조각이 적재된 버전만 본다, V13)."""
+    category = GUIDELINE_CATEGORIES.get(crime_type)
+    if not category or not base_date:
+        return "NULL"
+    return f"sentencing_guideline_at({sql_text(category)}, {sql_date(base_date)})"
+
+
+def build_case_sql(case, report, sources, *, source_org=DEFAULT_SOURCE_ORG, source_note=None, incident_date=None,
+                   indictment_date=None):
+    """사건 콘텐츠 INSERT를 담은 DO 블록 (BEGIN/COMMIT 없음). sources는 resolve_sources를 거친 값.
+    indictment_date(공소제기일)가 있으면 양형기준 버전 기준일로 발생일보다 우선한다."""
     check_inputs(case, report, sources, source_org)
     incident_sql = sql_date(incident_date)
+    guideline_sql = guideline_version_sql(case["crimeType"], indictment_date or incident_date)
     listing = case["listing"]
     recommended = case.get("recommended") or {}
     extras = {e["factorId"]: e for e in report["factorExtras"]}
@@ -297,7 +310,7 @@ BEGIN
         {sql_jsonb(listing.get('keywords') or [])}, {sql_text(listing.get('difficulty'))}, {sql_int(listing.get('estimatedMinutes'))},
         {sql_text(case['overview'])},
         NULL, {sql_jsonb(report.get('deidentifiedItems') or [])}, {sql_text(case['appliedLaw'])}, {sql_text(case['statutoryPenaltyText'])},
-        {sql_int(recommended.get('minMonths'))}, {sql_int(recommended.get('maxMonths'))}, {sql_text(recommended.get('basis'))}, NULL, {incident_sql},
+        {sql_int(recommended.get('minMonths'))}, {sql_int(recommended.get('maxMonths'))}, {sql_text(recommended.get('basis'))}, {guideline_sql}, {incident_sql},
         'DRAFT', NULL
     )
     RETURNING id INTO v_case_id;
@@ -326,6 +339,7 @@ def main():
     parser.add_argument("--source-org", default=DEFAULT_SOURCE_ORG)
     parser.add_argument("--source-note", help="case_source.note (받은 경로 등)")
     parser.add_argument("--incident-date", help="사건 발생일 YYYY-MM-DD (주면 source_internal.json 값보다 우선)")
+    parser.add_argument("--indictment-date", help="공소제기일 YYYY-MM-DD (양형기준 버전 기준일, 발생일보다 우선)")
     parser.add_argument("--final-index", type=int, help="최종 확정 판결 번호(0부터). 없으면 심급이 가장 높은 판결")
     args = parser.parse_args()
     try:
@@ -333,7 +347,8 @@ def main():
         sources = resolve_sources(source["sources"], final_index=args.final_index)
         sql = build_case_sql(load_json(args.case_input), load_json(args.report), sources,
                              source_org=args.source_org, source_note=args.source_note,
-                             incident_date=args.incident_date or source.get("incidentDate"))
+                             incident_date=args.incident_date or source.get("incidentDate"),
+                             indictment_date=args.indictment_date)
     except CaseSeedError as e:
         print(f"[오류] {e}", file=sys.stderr)
         return 1

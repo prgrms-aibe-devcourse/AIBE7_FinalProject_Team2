@@ -29,6 +29,8 @@
 | v0.25 | 2026-10-14 | 사건 수정 · 축 확정 · 공개 구현 반영 (BE-43) — A-11 본문은 필드 맵으로 받아 "보내지 않음" · `null`을 나눈다, 제목 유니크 위반은 DB에서 나도 `DUPLICATE_TITLE`, A-11 ~ A-13 감사 로그 내용 명시, A-13 공개 조건은 A-6 `publishReadiness`와 같은 판정. #133 리뷰: A-11 문자열 앞뒤 공백 제거, `thumbnailUrl`은 http(s) · 서비스 경로만. 형식 변경 없음 |
 | v0.26 | 2026-10-15 | 성향 이미지 번호 01 ~ 32 통일 반영 (COMMON-31) — 9-2 #4: `imageUrl`의 번호는 유형 번호가 아니라 성향 이미지 번호표의 **이미지 번호**(내로 `01 ~ 16` · 남불 `17 ~ 32`, 유형마다 화면에 보이는 기본 캐릭터 하나)다. 기본이 남불인 8개 유형(02 · 05 · 07 · 08 · 10 · 11 · 13 · 15)은 값이 `{유형 번호 + 16}.webp`로 바뀐다(예: ISTJ `02.webp` → `18.webp`). 아직 이미지 · 시드 `image_url`이 없어 공유된 주소는 없다. 형식 변경 없음 |
 | v0.27 | 2026-10-15 | 사건 목록 진행 상태 배지 반영 (FE-19, REQ-010 · FR-1-6) — API 1 카드에 **`myStatus`**(`null` / `IN_PROGRESS` / `COMPLETED`)를 제안에서 정식 필드로 올림. 기준은 API 2 · 3과 같은 최신 회차, 쿠키는 읽기만 함(발급 안 함), 캐시 시 제외. 필드 추가만이라 기존 클라이언트와 호환. 리뷰 반영: **HTTP 캐시 규칙** 추가(사용자마다 다른 응답이라 `public` 금지, 켤 때는 `private` + `Vary: Cookie`, 지금은 Spring Security 기본 `no-store`를 테스트로 고정) |
+| v0.28 | 2026-10-15 | 성향 이미지 시드 반영 (BE-73) — 9-1 `imageUrl`: 시드가 16유형 모두 `/images/characters/personality/{이미지 번호}.webp`를 넣는다(`null`은 이제 없음). 파일이 아직 없으면 화면이 이름표로 대신한다. 9-2 #5: OG 빌드용 shareId · 이미지 번호 등은 `frontend/og/personality-types.json`에 두고 시드와 같은지 백엔드 테스트가 확인한다. 형식 변경 없음 |
+| v0.29 | 2026-10-15 | **API 16 공개 사건 상세 추가** (BE-74, S-20 사건 디테일 · 정보 구조 v1.12, #137 합의) — `GET /cases/{caseId}`: 체험 없이 API 1 카드 값 + `chargeName` · `overview` · `myStatus`. 법정형 · 권고 범위 · 판결 · 섹션 본문은 넣지 않는다(FR-2-8). 쿠키는 읽기만. 2장 목록 · 4장 · 5장 S-20 추가 |
 
 ---
 
@@ -152,6 +154,7 @@ json
 | 13 | POST | `/cases/{caseId}/experience/comparison-reveal` | 비교 공개 | `AI_REVEALED` 이상 | 처음이면 → `COMPLETED` | S-08 | MVP |
 | 14 | GET | `/cases/{caseId}/experience/comparison` | 세 판결 비교 | `COMPLETED` | — | S-09 | MVP |
 | 15 | GET | `/cases/{caseId}/experience/comparison/analysis` | AI 비교 분석 | `COMPLETED` | — | S-09 | 확장 |
+| 16 | GET | `/cases/{caseId}` | 공개 사건 상세 (체험 없이) | — | — | S-20 | 확장 (v0.29) |
 
 **공개(11, 13)와 조회(12, 14)를 나눈 이유**: 상태를 바꾸는 요청은 POST로 두고, 조회는 몇 번을 불러도 상태가 바뀌지 않게 한다. 결과 화면을 새로고침하면 조회만 다시 부르면 된다. 공개 요청은 이미 공개된 상태에서 다시 와도 거절하지 않고 성공으로 돌려준다(시퀀스 7장).
 
@@ -600,6 +603,32 @@ json
 
 ---
 
+### API 16. (확장) 공개 사건 상세 — `GET /cases/{caseId}`
+
+S-20 사건 디테일(정보 구조 v1.12)이 체험을 만들기 전에 부르는 API다(v0.29, BE-74). 신문 지면에서 기사를 고르거나 링크 · 새로고침으로 `/cases/{caseId}`에 바로 들어와도 이 API 하나로 화면을 그리고 버튼을 나눈다.
+
+**요청**: 본문 없음. 쿠키가 있으면 함께 보낸다.
+
+**응답 200**
+
+```json
+{  "caseId": 1,  "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",  "crimeType": "MURDER",  "crimeCategoryLabel": "생명범죄",  "chargeName": "살인",  "shortIntro": "빌린 돈 문제로 찾아온 지인과 다투다 흉기로 살해한 사건입니다.",  "keywords": ["돈 문제", "지인", "흉기"],  "difficulty": "MID",  "estimatedMinutes": 15,  "participantCount": 42,  "thumbnailUrl": null,  "overview": "피고인이 빌린 돈을 갚지 못해 오래 다투던 지인이 집으로 찾아오자, …",  "myStatus": null}
+```
+
+- 필드는 API 1 카드와 같고, `chargeName`(죄명) · `overview`(사건 개요, API 4의 `case.overview`와 같은 값)를 더한다. `participantCount` · `myStatus` 기준도 API 1과 같다.
+- **법정형 · 선고 가능 범위 · 권고 범위 · 판결 · 섹션 본문은 넣지 않는다**(FR-2-8, API 4와 같은 기준). 섹션은 체험 중 API 6이 단계별로 연다.
+- 쿠키는 **읽기만** 하고 발급하지 않는다(발급은 API 2 · P-2, 1-2). 쿠키가 없거나 형식이 틀리거나 체험 전이면 `myStatus`는 `null`이다.
+- 버튼 분기(정보 구조 S-20): `myStatus`가 `null`이면 **체험 시작**(API 2로 체험을 만든 뒤 S-03), `IN_PROGRESS`면 **이어서 하기**, `COMPLETED`면 **결과 다시 보기**. 이어서 하기 · 결과 다시 보기도 API 2를 불러 응답 `status`로 이동한다(1-6). 세부 상태(7단계)는 이 API에 내보내지 않는다.
+- 캐시: `myStatus`가 사용자마다 달라 API 1과 같은 규칙이다(지금은 `no-store`, HTTP 캐시를 켤 때는 `private` + `Vary: Cookie`).
+- 대본(판결 체험 무대, REQ-089)은 이 API에 넣지 않는다. 서버에서 내려줄지는 별도로 정한다(#138 · #141).
+
+| 거절 | 조건 |
+| --- | --- |
+| 404 `CASE_NOT_FOUND` | 사건 없음 · 비공개 → 화면은 S-14 |
+| 400 `VALIDATION_ERROR` | `caseId`가 숫자가 아님 |
+
+---
+
 ## 4. 상태별 호출 가능 API
 
 | status | 호출 가능 (조회) | 호출 가능 (변경) |
@@ -612,7 +641,7 @@ json
 | `AI_REVEALED` | 3, 10, 12 | 11 (그대로 통과), 13 |
 | `COMPLETED` | 3, 10, 12, 14 (15 보류) | 11 · 13 (그대로 통과) |
 
-API 1 · 2는 상태와 관계없이 부를 수 있다. 표에 없는 조합은 `409 INVALID_STATE`다.
+API 1 · 2 · 16은 상태와 관계없이 부를 수 있다. 표에 없는 조합은 `409 INVALID_STATE`다.
 
 ---
 
@@ -620,7 +649,8 @@ API 1 · 2는 상태와 관계없이 부를 수 있다. 표에 없는 조합은 
 
 | 화면 | 진입 시 | 버튼 |
 | --- | --- | --- |
-| S-02 | 1 | `체험 시작` → 2 → 응답 status로 이동 (1-6) |
+| S-02 | 1 | `체험 시작` → 2 → 응답 status로 이동 (1-6). 신문 지면(확장)에서는 기사를 고르면 S-20 |
+| S-20 (확장) | 16 | `체험 시작` · `이어서 하기` · `결과 다시 보기` → 2 → 응답 status로 이동 (1-6) |
 | S-03 | 4 | `판단 제출` → 5 → S-04 |
 | S-04 | 6 | `읽었습니다` → 7 → 6 다시 조회. 마지막 섹션 후 S-05 |
 | S-05 | 6 (summary 포함) | `판결 내리러 가기` → S-06 |
@@ -1074,7 +1104,7 @@ json
 | `character` | `NAERO`(내로) · `NAMBUL`(남불). 화면 이름은 화면 상수 |
 | `tolerance` | 관용 지수 0 ~ 4 (높을수록 좋은 것이 아니다, FR-8-4) |
 | `dailyDescription` · `verdictDescription` | ① 일상 가치관 · ② 판결 연계 설명 |
-| `imageUrl` | 캐릭터 이미지 경로. 아직 없으면 `null` (화면은 대체 이미지) |
+| `imageUrl` | 캐릭터 이미지 경로 `/images/characters/personality/{이미지 번호}.webp`(9-2 #4). 시드가 16유형 모두 채운다(v0.28). 파일을 불러오지 못하면 화면은 대체 이미지 |
 
 **결과 공통 형식** (P-2 · P-3 · P-5의 내 결과)
 
@@ -1185,4 +1215,4 @@ json
 | 2 | 마이페이지 경로 | `GET /my-page` 하나로 묶는다(화면 한 번 진입에 한 번 호출) | A |
 | 3 | `experiences` 범위 | 사건마다 최근 회차 하나. 회차별 전체 이력이 필요하면 추가 | A |
 | 4 | 이미지 경로 | `/images/characters/personality/{이미지 번호}.webp`, 이미지 번호(`01 ~ 32`)는 성향 이미지 번호표 기준으로 **유형마다 화면에 보이는 이미지 하나**(기본 캐릭터, 예: ISTJ는 남불 `18.webp`). **한 번 정한 번호는 바꾸지 않는다**(공유 미리보기 · 캐시가 깨지지 않게, #121 리뷰) | A |
-| 5 | `shareId` 값 | 16개를 시드에 고정값으로 넣는다(바꾸면 공유한 링크가 깨진다). 목 API의 해시 값과는 다르다 | B (시드) |
+| 5 | `shareId` 값 | 16개를 시드에 고정값으로 넣는다(바꾸면 공유한 링크가 깨진다). 목 API의 해시 값과는 다르다. v0.28: OG 빌드용 값(shareId · 유형 번호 · 이미지 번호 · 유형명 · `oneLiner`)은 `frontend/og/personality-types.json`에 두고, 시드와 같은지 백엔드 테스트(`PersonalityContentSeedTest`)가 확인한다(BE-73) | B (시드) |

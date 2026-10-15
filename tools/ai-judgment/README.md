@@ -7,7 +7,7 @@ AI 판결 생성(3단계)은 두 가지 방법 중 하나로 한다. 외부 LLM 
 - **API로 생성 (BE-30)**: `generate.py`가 공급자(OpenAI · Anthropic · Gemini) API를 직접 불러 여러 모델 · 여러 회차로 생성하고 검증까지 기록한다. 모델은 옵션으로 갈아끼우고, `compare.py`가 모델별 비교표를 만든다. 이것도 표준 라이브러리만 쓴다.
 - **채팅 화면에서 생성**: `build_prompt.py`로 프롬프트를 만들어 LLM 서비스에 붙여 넣고 응답을 파일로 저장한다. 저장한 응답은 `generate.py import`로 같은 기록에 넣어 비교할 수 있다.
 
-**전체 자동 실행 (BE-31)**: `pipeline.py`가 판결문 → 비식별화 → (사전 학습 점검) → 생성 → 회차 선택 → 적재를 한 명령으로 이어서 실행한다. 사람 검수 없이 **비공개로 적재하고, 관리자가 나중에 검수 · 공개한다(후검수)**. 아래 "파이프라인 (BE-31)". 아래 "작업 순서" 1 ~ 6단계는 단계별로 직접 돌릴 때의 방법이다.
+**전체 자동 실행 (BE-31)**: `pipeline.py`가 판결문 → 비식별화 → (사전 학습 점검) → (참고 자료 RAG) → 생성 → 회차 선택 → 적재를 한 명령으로 이어서 실행한다. 사람 검수 없이 **비공개로 적재하고, 관리자가 나중에 검수 · 공개한다(후검수)**. 아래 "파이프라인 (BE-31)". 아래 "작업 순서" 1 ~ 6단계는 단계별로 직접 돌릴 때의 방법이다.
 
 **형벌 종류**: 사형(`DEATH`) · 무기징역(`LIFE`) · 징역(`PRISON`) · 벌금(`FINE`)과, 사형 · 무기를 감경해 다른 형벌로 선고하는 경우(`reducedTo`)를 다룬다(ERD v1.4 · API 명세 9). 무죄는 MVP에서 뺐다.
 
@@ -17,6 +17,7 @@ AI 판결 생성(3단계)은 두 가지 방법 중 하나로 한다. 외부 LLM 
 | --- | --- |
 | `prompts/judgment_system.md` | AI 판결 생성 시스템 프롬프트 (원칙 · 판단 순서 · 출력 JSON 형식) |
 | `prompts/judgment_user.md` | 사건별 사용자 프롬프트 틀 |
+| `prompts/judgment_fewshot.md` | 판결 형식 예시(퓨샷). 가상 사기 사건이고 형량은 `⟨형량⟩`으로 가렸다. 시스템 프롬프트 뒤에 항상 붙는다 (BE-54) |
 | `prompts/contamination_check.md` | 사전 학습 점검 프롬프트 틀 (개요 · 죄명만) |
 | `prompts/axis_system.md` | 판단 요소 가치관 축 분류 프롬프트 (축 정의 · 출력 JSON 형식, BE-49) |
 | `build_prompt.py` | 사건 입력 JSON → AI 판결 생성 프롬프트 |
@@ -36,6 +37,8 @@ AI 판결 생성(3단계)은 두 가지 방법 중 하나로 한다. 외부 LLM 
 | `court_seed_sql.py` | 재판부 판결(BE-14 형식) → **비공개** 적재 SQL (`judgment` COURT · `judgment_factor`) (BE-38) |
 | `case_seed_sql.py` | 비식별화한 사건 파일 → 사건 콘텐츠 적재 SQL (`legal_case` DRAFT · 섹션 · 형벌 규칙 · 판단 요소 · 원본 판결문) (BE-31) |
 | `rag_store.py` · `prompts/rag_precedent_system.md` | RAG 유사 판례 저장소 적재: 판결문 비식별화 · 사실관계 요약 / 양형 이유 분리 → 임베딩 → 비공개 시드 `R__40` (BE-51, 아래 "RAG 판례 저장소") |
+| `rag_context.py` | 파이프라인 `rag` 단계: 양형기준 버전 · 형량범위 · 양형인자 · 유사 판례를 로컬 DB에서 찾아 생성 참고 자료로 만든다 (BE-54, 아래 "생성 참고 자료 RAG") |
+| `rag_check.py` | RAG 검색 결과 · 점수 확인 도구 (BE-54, 아래 "생성 참고 자료 RAG") |
 
 ## 작업 순서
 
@@ -251,7 +254,8 @@ python3 pipeline.py status cases/my-case.pipeline.json
 | `extract` | `case-extractor`로 판결문(여러 개면 1심 · 항소심 함께)을 비식별화 · 구조화한다. 모델은 `stages.extract.model`로 고른다(Claude 모델 ID, `openai:모델ID`, `gemini:모델ID` — BE-35, `maxTokens`는 Claude 외 출력 상한). 목록으로 주면 앞 모델이 과부하 · 한도로 막혔을 때 다음 모델로 넘어간다(BE-45, "무료 등급 한도 대응"). 사건번호 · 법원명 · 선고일은 **마스킹 전에 로컬에서** 꺼내 내부 파일에만 둔다. 목록 카드 칸(소개 · 키워드 · 난이도 · 예상 시간)도 함께 만든다 | 모델이 서비스 대상이 아니라고 판정하면 멈춘다(`requireEligible: false`로 무시). 판정 기준은 `docs/cases/README.md` 1장 선정 조건 |
 | `court` | 재판부 판결(COURT) 초안을 만든다(`case-extractor/court_draft.py`, BE-38). 마스킹한 원문을 모델에 보내 요약 · 이유 · 쉬운 설명 · 발췌 · 요소별 방향과 근거를 받고, **발췌 · 근거가 원문을 글자 그대로 인용했는지**(바꾼 식별 정보만 `⟦ ⟧`) · **형량이 최종 판결문 주문과 맞는지** · 개인정보 잔존을 자동으로 검사한다. 모델은 `stages.court.model`(없으면 extract 모델, 목록 가능) | 검사를 통과하지 못하면 **파이프라인이 멈춘다**(오류를 알려 주며 최대 2번 다시 요청한 뒤). 재판부 판결 없이 이어 가려면 `stages.court.enabled: false`로 끄거나 사람이 쓴 BE-14 JSON을 `inputs.courtDraft`로 넣고 `--from contamination`(또는 다음 단계)으로 다시 실행한다 |
 | `contamination` | 모델마다 사전 학습 점검을 `runs`회(기본 10) 자동으로 묻고 판정한다(REQ-102). 응답을 분류해 **비율로** 판정한다(위 "2. 사전 학습 점검", BE-37). 호출 실패는 응답 수에 넣지 않는다(모두 실패해도 `INSUFFICIENT`로 판정해 `onInsufficient`를 따르고, 멈출 때도 다른 모델까지 점검한 뒤 멈춘다) | **기본 꺼짐**(`enabled: true`로 켬). `onContaminated`: `stop`(기본) · `exclude`(그 모델만 생성에서 뺌). `onSuspect`: `continue`(기본) · `exclude` · `stop`. `onInsufficient`(응답 부족): `stop`(기본) · `continue` · `exclude`. 기준 값은 `criteria`(예: `{"minAnswered": 5, "closeRatio": 0.15, "closeMinMonths": 1, "closeMaxMonths": 6, "closeFineRatio": 0.1, "exactRatio": 0.5, "suspectRatio": 0.5}`, 빈 값은 기본값). `minAnswered`가 `runs`보다 크면 설정 오류 |
-| `generate` | 모델마다 `runs`회 생성 · 검증한다(`generate.py`와 같음). 검증 통과 회차가 없으면 한 번씩 더 생성한다(최대 `maxRetries`회) | 모든 모델에서 통과 회차가 없으면 멈춘다 |
+| `rag` | 생성 참고 자료(양형기준 · 유사 판례)를 로컬 DB에서 찾아 `out/pipeline/<name>/references.json`에 둔다(BE-54, 아래 "생성 참고 자료 RAG"). 사건 입력 파일은 바꾸지 않는다 | **기본 꺼짐**(`enabled: true`로 켬). 참고 자료를 못 만들면 사건 입력의 기존 값으로 대체한다. `required: true`면 멈춘다 |
+| `generate` | 모델마다 `runs`회 생성 · 검증한다(`generate.py`와 같음). `rag` 단계를 켰으면 그 참고 자료로 프롬프트를 만든다. 검증 통과 회차가 없으면 한 번씩 더 생성한다(최대 `maxRetries`회) | 모든 모델에서 통과 회차가 없으면 멈춘다 |
 | `select` | 검증을 통과한 회차 중 하나를 고른다 | 아래 "회차 선택" |
 | `axis` | 판단 요소의 가치관 축만 같은 모델에 `runs`회(기본 5) 묻고 요소별로 표를 센다(BE-49, 아래 "가치관 축 투표") | 유효 응답이 하나도 없으면 멈춘다. `enabled: false`면 추출기가 한 번 정한 값으로 적재한다(예전 투표 결과가 있어도 쓰지 않음). `--skip axis`는 다른 단계처럼 이번에 다시 투표하지 않을 뿐이라, 끝난 투표 결과가 있으면 그것을 쓰고 없으면 추출기 값을 쓴다 |
 | `load` | 사건(DRAFT) + AI 판결(비공개 · PENDING) 적재 SQL을 만들어 보관하고 로컬 DB에 적재한다 | `case: false`면 사건은 빼고 AI 판결만(사건이 이미 DB에 있을 때). `applyToDb: false`면 SQL만 만든다 |
@@ -293,9 +297,9 @@ python3 pipeline.py status cases/my-case.pipeline.json
 
 ### 적재 (`stages.load`)
 
-- **사건**: `legal_case.status='DRAFT'` → 사용자 목록 · 체험에서 보이지 않는다(서버가 `PUBLISHED`만 조회). 섹션 · 형벌 규칙 · 판단 요소 · 원본 판결문(`case_source`)을 함께 넣는다. 사건 발생일은 비식별화 단계가 원문 · 선고일과 대조해 확인한 값(또는 설정 `incidentDate`)을 넣는다(BE-38). 재판부 판결은 아래 "재판부 판결"대로 비공개로 넣는다(BE-38). 양형기준 연결은 넣지 않는다.
+- **사건**: `legal_case.status='DRAFT'` → 사용자 목록 · 체험에서 보이지 않는다(서버가 `PUBLISHED`만 조회). 섹션 · 형벌 규칙 · 판단 요소 · 원본 판결문(`case_source`)을 함께 넣는다. 사건 발생일은 비식별화 단계가 원문 · 선고일과 대조해 확인한 값(또는 설정 `incidentDate`)을 넣는다(BE-38). 재판부 판결은 아래 "재판부 판결"대로 비공개로 넣는다(BE-38). 양형기준 버전(`guideline_id`)은 기준일(설정 `indictmentDate` → 없으면 발생일)에 시행 중이던 버전을 DB 함수 `sentencing_guideline_at`으로 넣는다(BE-54, 단독 실행은 `case_seed_sql.py --indictment-date`). 기준일 · 버전이 없으면 NULL.
 - **재판부 판결 (BE-38)**: `court` 단계 초안(또는 `inputs.courtDraft`)이 있으면 `judgment`(COURT · FINAL) · `judgment_factor`를 **비공개**(`is_published=false`)로 넣는다. 기존 공개 재판부 판결은 건드리지 않고, 같은 내용이 이미 있으면 건너뛴다. `load.court: false`면 뺀다. **court 단계를 다시 돌리면** 모델이 다른 글을 만들어 내용이 달라지므로 같은 사건에 비공개 재판부 판결 후보가 하나 더 쌓인다(기존 행은 지우지 않음, REQ-079와 같은 원칙). 관리자 후검수(BE-33)에서 후보 중 하나를 골라 공개한다. 초안은 **실제 판결이 들어 있는 내부 파일**이라 AI 판결 단계(contamination · generate)는 읽지 않는다. 사실 기록이므로 공개 전에 원 판결문과 대조해 검수한다(REQ-075 · 077).
-- **공개에 필요한 것**: 사건 `PUBLISHED` + 공개 재판부 판결 + 공개 AI 판결. 셋이 갖춰지면 체험 흐름 전체(사전 판단 → 판결 → AI 판결 → 실제 판결 → 세 판결 비교)가 동작한다(임시 DB로 확인). 양형기준 연결(`guideline_id`)은 서비스 코드가 읽지 않아 비어 있어도 된다(이후 RAG로 연결).
+- **공개에 필요한 것**: 사건 `PUBLISHED` + 공개 재판부 판결 + 공개 AI 판결. 셋이 갖춰지면 체험 흐름 전체(사전 판단 → 판결 → AI 판결 → 실제 판결 → 세 판결 비교)가 동작한다(임시 DB로 확인). 양형기준 연결(`guideline_id`)은 서비스 코드가 읽지 않아 비어 있어도 된다.
 - **AI 판결**: `judgment.is_published=false`, `ai_generation.review_status='PENDING'`(검수자 · 검수 시각 없음). 기존 공개 AI 판결은 그대로 둔다. `ai_generation.generation_report`(V8)에 검증 경고 · 사전 학습 점검 판정 · 회차 선택 이유 · 모델 · 토큰을 남겨 관리자가 검수할 때 본다(실제 판결 값은 넣지 않는다).
 - **같은 SQL을 두 번 실행해도 안전하다**: 같은 제목의 DRAFT 사건이 있으면 사건 적재를 건너뛰고, 같은 실행(`runKey`)의 AI 판결이 있으면 건너뛴다(`runKey`는 DB 부분 유니크 인덱스로도 막는다). 판단 요소가 다르면 전체가 취소된다.
 - **같은 제목의 공개 · 검토 중 사건이 있으면 멈춘다**(전체 취소). 모델이 만든 중립 제목은 다른 사건과 겹칠 수 있어서다. 이미 공개된 사건에 AI 판결만 넣으려면 `load.case: false`로 사건 SQL을 뺀다.
@@ -306,7 +310,7 @@ python3 pipeline.py status cases/my-case.pipeline.json
 
 | 항목 | 처리 |
 | --- | --- |
-| 외부 전송 | `extract`는 정규식 마스킹을 거친 판결문을 설정한 비식별화 모델의 공급자(기본 Anthropic)로, `contamination` · `generate`는 비식별화한 사건 내용을, `axis`는 비식별화한 사건 개요 · 판단 요소를 설정한 공급자로 보낸다. 실행할 때 전송 대상을 먼저 출력한다 |
+| 외부 전송 | `extract`는 정규식 마스킹을 거친 판결문을 설정한 비식별화 모델의 공급자(기본 Anthropic)로, `contamination` · `generate`는 비식별화한 사건 내용을, `axis`는 비식별화한 사건 개요 · 판단 요소를 설정한 공급자로 보낸다. `rag`는 비식별화한 사건 개요 · 섹션을 검색어 임베딩용으로 Gemini에 보낸다(사건번호 · 판결 정보 없음). 실행할 때 전송 대상을 먼저 출력한다 |
 | 재판부 판결 초안 | 실제 판결(형량 · 재판부 판단)이 들어 있다. `cases/<name>.court_draft.json`(git 제외) → DB 비공개 행에만 둔다. AI 판결 입력과 분리돼 있다(테스트로 확인) |
 | 원본 판결문 정보 | 사건번호 · 법원명 · 선고일 · 원문은 마스킹 전에 로컬에서 꺼내 `cases/<name>.source_internal.json`(git 제외) → DB `case_source`(API는 `source_org`만 노출)에만 둔다. 모델에 보내지 않는다 |
 | 비식별화 검수 | 사람 검수 없이 적재하므로 비식별화 누락이 있을 수 있다. **사건은 항상 DRAFT로만 넣고 자동으로 공개하지 않는다.** 관리자 페이지(BE-33 · FE-16)의 공개 승인이 비식별화 검수(REQ-075)를 겸한다 |
@@ -332,11 +336,50 @@ python3 rag_store.py sql --candidates $P/work/BE-50-precedent-candidates.json --
 
 - 중간 결과는 `out/rag/precedents/` · `out/rag/embeddings/`(git 제외)에 판례마다 파일로 남는다. 이미 끝난 판례는 다시 부르지 않으므로 끊겨도 같은 명령으로 이어 간다. 다시 만들려면 그 판례 파일을 지운다.
 - **살인 관련 공소사실이 무죄**이고 다른 죄만 유죄인 판결(6건)도 사용 보류한다. 어떤 판례인지는 공개 코드에 적지 않고 비공개 저장소 `work/rag-precedent-holds.json`(`{판례 키: 사유}`)에 두어 `sql --holds`로 읽는다. 형량 · 양형 이유가 살인 기준이 아닌데 사실관계는 살인 사건과 비슷해 유사도로 걸러지지 않는다(시험에서 상위 5건에 9번 듦, 팀 결정 2026-10-12).
-- **LBox 판례는 사용 보류**로 넣는다(`on_hold = true`, 검색에서 빠짐, 팀 결정 2026-10-12). 라이선스(데이터셋 카드 CC BY-NC · 논문 CC BY-NC-ND)가 확인되면 `rag_store.py`의 `SOURCE_HOLDS`에서 지우고 `sql`을 다시 만든다.
+- **LBox 판례는 쓰지 않는다**(라이선스 문의 결과 사용 불가, 2026-10-12). 넣었던 15건은 BE-54에서 R__40에서 지웠다. 지금은 공유본 `$P/work/rag-store`(law.go.kr 53건)로 R__40을 만든다: `python3 rag_store.py sql --out $P/work/rag-store --candidates … --holds … --output $P/seed/R__40_rag_precedent.sql`. 실수로 LBox 판례가 들어와도 `SOURCE_HOLDS`로 사용 보류(검색 제외)가 된다.
+- 판례 `guideline_id`는 NULL로 두고 `flags.guidelineBasis`(`INCIDENT_DATE` · 발생일이 없으면 null)만 남긴다. 버전은 검색 때 발생일로 고른다(R__40이 R__41보다 먼저 돌아 시드에서 버전 id를 찾을 수 없다, BE-54).
 - 팀 결정(2026-10-10)으로 사람 확인 없이 후보를 전부 넣는다. 행의 `flags.verified`는 false이고, 발생일이 의심스러운 판례는 `flags.checks`에 이유가 남는다.
 - 사건 그룹 ID는 그룹에서 가장 앞선 판례 키다(예: `LAW_GO_KR-143304`). 후보 목록을 다시 만들어도 같은 그룹이면 같은 ID다.
-- **검색은 백엔드가 한다** (`backend` `rag/service/RagSearchService`). 이 도구는 판례를 적재만 한다. 백엔드는 사건 개요를 `RETRIEVAL_QUERY`로 임베딩하고(`GEMINI_API_KEY`가 없으면 RAG만 꺼짐), `case_source` 사건번호 해시로 자기 사건 그룹을 뺀 뒤 DB 함수 `rag_precedent_search`를 부른다. 설정은 `application.yml`의 `rag.*`(top-k 5 · 점수 하한 0.6).
+- **서비스 요청의 검색은 백엔드가 한다** (`backend` `rag/service/RagSearchService`). 사건 개요를 `RETRIEVAL_QUERY`로 임베딩하고(`GEMINI_API_KEY`가 없으면 RAG만 꺼짐), `case_source` 사건번호 해시로 자기 사건 그룹을 뺀 뒤 DB 함수 `rag_precedent_search`를 부른다. 설정은 `application.yml`의 `rag.*`(top-k 5 · 하한 0.6 · 상한 0.95). 오프라인 생성의 검색은 아래 "생성 참고 자료 RAG"(Python)가 같은 DB 함수를 부른다.
 - 사건번호 해시 규칙은 `rag_store.case_number_hashes`와 백엔드 `CaseNumberHash.ofAll`이 같아야 한다(`CaseNumberHashTest`가 Python 값과 비교): 사건번호 칸에서 번호(`2014고13` 형식)를 하나씩 뽑아 유니코드 공백을 지우고 SHA-256 hex. 병합 사건(`2014고13, 2014고14(병합)`)은 번호마다 해시하므로 대상 사건 쪽 번호가 하나여도 자기 사건으로 빠진다. 번호 형식이 없으면 칸 전체를 하나로 해시한다. 임베딩 모델 · 차원도 같아야 하며, 다르면 백엔드 검색이 멈춘다.
+
+## 생성 참고 자료 RAG (BE-54)
+
+파이프라인 `rag` 단계(`stages.rag`, 기본 꺼짐)가 생성 프롬프트의 참고 자료를 로컬 DB에서 찾는다. 판례 저장소(R__40)와 양형기준 저장소(R__41)가 들어간 로컬 DB가 필요하다(`bootRun` 한 번이면 들어간다). 키는 `GEMINI_API_KEY`(검색어 임베딩). DB 접속은 `stages.load.db`와 같다(로컬만).
+
+```json
+"indictmentDate": null,
+"stages": {"rag": {"enabled": true, "required": false,
+                   "precedent": {"topK": 5, "candidates": 10, "minScore": 0.70, "maxScore": 0.88},
+                   "guideline": {"topK": 6, "minScore": 0.6}}}
+```
+
+| 순서 | 하는 일 |
+| --- | --- |
+| 검색어 | 비식별화한 사건 개요 + 섹션 본문(최대 6,000자)을 `gemini-embedding-001` `RETRIEVAL_QUERY`로 임베딩. 죄명 · 형벌 범위 · 판단 요소는 넣지 않는다 |
+| 양형기준 버전 | 기준일 = `indictmentDate`(공소제기일) → 없으면 발생일. `sentencing_guideline_at(범주, 기준일)`. 범주는 `common.GUIDELINE_CATEGORIES`(`MURDER` → 살인범죄) |
+| 형량범위 | 그 버전의 `형량범위` 조각 전부 (유형 판단은 모델 몫이라 검색하지 않는다) |
+| 양형인자 · 정의 | `rag_guideline_search`로 그 버전 안에서 `guideline.topK`개 · `minScore` 이상 |
+| 유사 판례 | 대상 사건의 사건번호가 없으면 붙이지 않는다(자기 사건을 뺄 수 없음). `rag_precedent_search`로 `candidates`건(자기 사건 그룹 제외) → `maxScore` 이상은 자기 사건 의심으로 빼고 경고 → 같은 버전 판례는 점수에 0.01을 더해 정렬 → 상위 `topK`건 |
+| 결과 | `out/pipeline/<name>/references.json`. `generate` · `select` · `load`가 이 참고 자료로 프롬프트를 만든다. 보고는 `generation_report.rag`(상태 `OK` · `PARTIAL` · `FALLBACK`, 버전 이름 · 기준 종류 · 판례 id · 점수 · 대체 사유) |
+
+- **대체**: 키 없음 · DB 접속 실패면 사건 입력의 기존 참고 자료를 통째로 쓴다. 버전 · 형량범위가 없으면(기준일 없음 포함) 양형기준만 기존 값을 쓰고, 판례를 못 찾으면(사건번호 없음 포함) 예시 판례를 남기지 않고 비운다. `required: true`면 하나라도 못 찾을 때(`PARTIAL` 포함) 대신 멈춘다.
+- **입력 지문**: `rag`는 검색 입력(검색어 · 기준일 · 사건번호 해시 · 설정)의 지문을 상태에 남긴다. 사건 입력 · `indictmentDate` · `incidentDate` · `sources` · rag 설정을 바꾼 뒤 `--from generate`만 돌리면 예전 참고 자료를 쓰게 되므로 멈추고 `--from rag`를 안내한다.
+- **적재 확인**: `load`는 프롬프트를 다시 만들어 고른 회차의 프롬프트(`batch.json`의 해시)와 비교하고, 다르거나 `batch.json`이 없으면 멈춘다(`--from generate`로 다시 생성).
+- **DB 접속**: `rag` · `load` 모두 로컬 DB만 쓴다. `service` 접속(URL의 `service` · 환경변수 `PGSERVICE`)은 서비스 파일의 원격 host로 갈 수 있어 거부한다.
+- **점수 기준**은 판례 53건으로 잰 값이다(2026-10-15, [RAG 인수인계](../../docs/rag-handover.md) 5-4). 판례 · 범죄 유형이 늘면 아래 도구로 다시 잰다.
+- 프롬프트에는 사건번호 · 기준일 · 점수를 넣지 않는다. 같은 버전 판례에는 "이 사건과 같은 양형기준 버전"을 붙인다.
+
+**확인 도구 `rag_check.py`** — 검색 결과와 점수를 화면에만 출력한다(저장 안 함, 사건번호 출력 안 함).
+
+```bash
+python3 rag_check.py db-case <사건 id> --prompt     # DB에 있는 사건으로 검색, 프롬프트에 들어갈 참고 자료까지
+python3 rag_check.py case cases/x.case.json --source cases/x.source_internal.json
+python3 rag_check.py sample --count 10             # 판례끼리 검색해 1위 · 5위 점수 분포 보기
+python3 rag_check.py self                          # 자기 사건 점수(같은 사건의 다른 판결 · DB 사건 → 자기 판례)가 상한보다 높은지
+```
+
+공통 옵션: `--explore`(하한 0 · 후보 20건), `--indictment-date` · `--incident-date`, DB 옵션(`--db-mode` · `--container` · `--db-user` · `--database` · `--db-url`).
 
 ## 외부 LLM으로 생성할 때
 

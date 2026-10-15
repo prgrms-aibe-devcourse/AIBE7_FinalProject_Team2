@@ -42,5 +42,5 @@ public class PersonalityType {
 
 	private int tolerance;				// 관용 지수 0 ~ 4 (I · N · F · P 개수, DB CHECK)
 
-	private String imageUrl;			// 캐릭터 이미지 (7.6.8 전에는 null)
+	private String imageUrl;			// 캐릭터 이미지 /images/characters/personality/{01 ~ 32}.webp (BE-73, 번호표)
 }

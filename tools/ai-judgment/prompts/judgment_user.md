@@ -31,7 +31,7 @@ $factors
 
 $sentencing_guideline
 
-## 유사 판례 (이 사건 자신은 포함하지 않음)
+## 유사 판례 (다른 사건이다. 이 사건 자신은 포함하지 않음)
 
 $similar_cases
 

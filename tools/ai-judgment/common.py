@@ -10,7 +10,7 @@ TOOL_DIR = Path(__file__).resolve().parent
 PROMPT_DIR = TOOL_DIR / "prompts"
 
 # 프롬프트를 고치면 버전을 올린다. ai_generation.prompt_version에 그대로 기록된다.
-PROMPT_VERSION = "judgment-v2"
+PROMPT_VERSION = "judgment-v3"  # v3: 유사 판례 · 양형기준 RAG 참고 자료 형식, 형식 예시(퓨샷) (BE-54)
 CONTAMINATION_PROMPT_VERSION = "contamination-v2"
 AXIS_PROMPT_VERSION = "axis-v1"  # 판단 요소 가치관 축 분류 투표 (BE-49)
 
@@ -26,6 +26,9 @@ REDUCIBLE_TO = {"DEATH": ("LIFE", "PRISON"), "LIFE": ("PRISON",), "PRISON": (), 
 NO_TERM_PENALTIES = ("DEATH", "LIFE")
 
 DIRECTIONS = ("UP", "DOWN")
+
+# legal_case.crime_type → sentencing_guideline.crime_category (양형기준 버전 고르기, BE-54). 범죄 유형을 넓힐 때 함께 늘린다
+GUIDELINE_CATEGORIES = {"MURDER": "살인범죄"}
 
 # 판단 요소 가치관 축 (ERD factor.value_axis, BE-47). null = 어느 축에도 맞지 않음(성향 계산 제외).
 # 축이 바뀌면 함께 고친다: Java ValueAxis · V9 CHECK(chk_factor_value_axis) · 추출기 프롬프트(extract_system.md)
