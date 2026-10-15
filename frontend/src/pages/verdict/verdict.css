@@ -33,9 +33,9 @@
 .verdict-page .sentence-entry .number-field input[name='fineAmount'] { width: 70px; }
 .verdict-page .sentence-entry-type { color: var(--color-heading); }
 /* 범위 막대 = 형량 조절 막대(징역). 막대 위 입력값 글자는 우상단 입력칸이 대신한다 */
-.verdict-page .range-slider[role='slider'] .range-track { cursor: pointer; touch-action: none; }
-.verdict-page .range-slider[role='slider']:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 4px; border-radius: 4px; }
-.verdict-page .range-slider[role='slider'] .range-track { height: 26px; }
+.verdict-page .range-slider.is-sliding .range-track { cursor: pointer; touch-action: none; }
+.verdict-page .range-track[role='slider']:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 4px; }
+.verdict-page .range-slider.is-sliding .range-track { height: 26px; }
 /* 벌금 막대 눈금(아래에서 위로): 100만 원 0.2 · 500만 원 0.5 · 1,000만 원 막대 높이만큼 */
 .verdict-page .fine-tick { position: absolute; bottom: 0; width: 1px; transform: translateX(-50%); background: var(--color-border-strong); pointer-events: none; }
 .verdict-page .fine-tick.minor { height: 20%; }

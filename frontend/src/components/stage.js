@@ -461,7 +461,8 @@ export function renderStage({ script, order, cards = {}, inputCards = [], start,
 
   function onKey(event) {
     if (!wrap.isConnected) { document.removeEventListener('keydown', onKey); return; }
-    if (event.target.closest('input, textarea, select')) return;
+    // 다른 곳(판결 카드의 형량 막대 등)이 이미 처리한 키, 입력칸 · 슬라이더 위의 키는 무대가 받지 않는다
+    if (event.defaultPrevented || event.target.closest('input, textarea, select, [role="slider"]')) return;
     // 보드를 클릭하면 보드가 포커스를 받는다. 입력 카드는 제출로만 넘어가니 이전(←)만 받고, 다른 보드에서는 Space만 스크롤에 양보한다
     if (event.target.closest('.board') && ((stage.classList.contains('bmode') && event.key !== 'ArrowLeft') || event.key === ' ')) return;
     if (event.key === 'ArrowRight' || event.key === ' ' || event.key === 'Enter') {
