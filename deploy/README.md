@@ -79,6 +79,39 @@ done
 - 그래서 IP · http로 열면 `/`와 조회 API(사건 목록 등)는 동작하지만, **체험 시작 이후 흐름(익명 ID가 필요한 API)은 동작하지 않는다.** 관리자 세션 쿠키(`SESSION_COOKIE_SECURE`)도 같다.
 - 도메인을 정하면 인증서(Let's Encrypt)를 붙여 HTTPS로 연다. 그 전까지 체험 흐름 확인은 로컬(`localhost`)에서 한다.
 
+## Rate limit (BE-63, WBS 7.4.6 1차)
+
+한 IP가 `/api`를 짧은 시간에 너무 많이 부르면 **Nginx가 백엔드 앞에서 막는다**(t3.small 한 대 보호). 설정은 `../frontend/nginx/default.conf`에 있고 웹 이미지에 함께 들어간다.
+
+| 설정 | 값 | 이유 |
+| --- | --- | --- |
+| 범위 | `/api`만 | 화면 · 정적 파일은 Nginx가 바로 주는 거라 부담이 거의 없다 |
+| 기준 | IP (`$binary_remote_addr`) | 로그인 전 서비스라 사용자를 구분할 다른 값이 없다 |
+| 속도 | 평균 초당 20번, 순간 40번까지 기다림 없이 처리 | 혼자 쓰면 초당 1 ~ 3번(동시 호출 · 폴링 없음). 발표장처럼 여러 명이 같은 와이파이(같은 IP)를 써도 막히지 않게 넉넉히 |
+| 넘으면 | 429 + JSON `{"code":"TOO_MANY_REQUESTS", ...}` + `Retry-After: 1` | API 명세 1-4 형식. Nginx 기본 429(HTML)는 프론트가 "서버 오류"로 잘못 보여 준다 |
+
+```bash
+# 막힌 기록 보기 (zone api_per_ip, client가 막힌 IP)
+docker compose -f docker-compose.prod.yml logs web 2>&1 | grep "limiting requests" | tail
+```
+
+- **값 조정**: 정상 사용자가 막히는 기록이 보이면 `default.conf`의 `rate` · `burst`를 고쳐 PR → 새 웹 이미지로 반영한다. 서버에서 컨테이너 안 파일을 직접 고치지 않는다(다음 배포 때 사라진다).
+- 백엔드 지표(Prometheus)에는 429가 잡히지 않는다. 백엔드까지 가지 않고 Nginx에서 끝나기 때문이다. 확인은 위 로그로 한다. 로그 수집(`monitoring/alloy-config.alloy`)도 지금은 **백엔드 로그만** 모아서 Loki · Grafana에서는 보이지 않는다 — 막히는 빈도를 대시보드 · 경보로 보려면 웹 컨테이너 로그도 수집하도록 추가한다(C 후속 검토).
+
+### 서버에서 꼭 확인: Nginx가 사용자 IP를 보는가
+
+Rate limit은 Nginx가 **실제 사용자 IP**를 본다는 전제로 동작한다. 서버 구성에 따라 모든 요청이 Docker 내부 IP(`172.x`) 하나로 보이면, **모든 사용자가 초당 20번을 나눠 쓰게** 된다. 배포한 서버에서 한 번 확인한다.
+
+```bash
+# 내 PC에서 서버로 요청을 하나 보낸 뒤, 서버에서 마지막 접속 기록의 첫 칸(IP)을 본다
+docker compose -f docker-compose.prod.yml logs --tail 3 web
+# 첫 칸이 내 PC의 공인 IP(내 PC에서 curl ifconfig.me 결과)와 같으면 정상, 172.x면 문제 → 이 문서 담당(D)에게 알린다
+```
+
+- 앞에 로드 밸런서 · CDN을 두면 그 장비의 IP로 묶인다. 그때는 `set_real_ip_from`(그 장비 대역) + `real_ip_header X-Forwarded-For`를 같이 설정한다.
+- HTTPS(443 server 블록)를 추가할 때도 `/api` location에 같은 `limit_req` · `error_page 429`를 넣는다. 빠뜨리면 https로는 제한이 걸리지 않는다.
+- **백엔드가 보는 IP(관리자 감사 로그)**는 아직 Nginx 컨테이너 IP다. 위 확인이 끝나면 `server.forward-headers-strategy=native`를 켠다(기술 스택 3장 "감사 로그", D). Nginx가 사용자 IP를 못 보는 상태에서 켜면 위조된 `X-Forwarded-For`가 그대로 기록될 수 있어 순서를 지킨다.
+
 ## Redis (BE-61, docs/tech-stack.md 2장 "Redis 운영 구성")
 
 한 인스턴스를 논리 DB 두 개로 나눠 쓴다. **DB 0은 캐시**(지워져도 다시 만든다), **DB 1은 토큰 저장소**(지워지면 로그인이 풀린다).
@@ -129,5 +162,6 @@ docker compose -f docker-compose.prod.yml -f docker-compose.real-seed.yml up -d 
 | 7.1.3 CD | `deploy-images.yml` 뒤에 서버 반영 단계 추가 (`pull` → `up -d --no-build` → `smoke-test.sh`) |
 | 7.4.3 JWT (C) | 토큰은 `@Qualifier(RedisConfig.TOKEN)` 템플릿(DB 1)에 TTL과 함께 저장 |
 | 백엔드 healthcheck 추가 (BE-66 이후) | Actuator(관리 포트 8081)에는 Redis 헬스체크가 자동으로 붙고, 커넥션 팩토리 두 개가 `redis` 아래 묶인다. **실측(BE-61, Boot 4.1.1)**: Redis를 끄면 `/actuator/health`는 **DOWN(503)**, `/actuator/health/liveness` · `/readiness`는 **UP**, API는 정상. liveness · readiness는 추가 설정 없이 이미 열려 있다. 그래서 컨테이너 healthcheck · 재시작 조건에는 **`/actuator/health`가 아니라 `/actuator/health/liveness`** 를 쓴다(전체 상태를 쓰면 Redis 장애 때 백엔드까지 재시작된다) |
-| 7.4.6 Rate limit | `../frontend/nginx/default.conf`에 `limit_req` 추가 |
+| 7.4.6 Rate limit 2차 (10/23) | 로그인 · 토큰 재발급 엔드포인트에 더 엄격한 zone을 `default.conf`에 추가 (1차는 위 "Rate limit") |
+| 서버 IP 확인 후 (D) | `server.forward-headers-strategy=native`로 백엔드가 사용자 IP를 받게 함 (위 "서버에서 꼭 확인" 다음에) |
 | 도메인 확보 후 | `default.conf`에 443 · 인증서 · http → https 이동 추가 |
