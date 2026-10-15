@@ -11,7 +11,9 @@
 서비스 요청용이고, 오프라인 생성은 여기서 같은 DB 함수를 부른다(BE-56 1단계).
 
 참고 자료를 못 만들면(키 없음 · DB 접속 실패 · 버전 없음 · 판례 없음) 사건 입력의 기존 references를 그대로 쓰고 사유를 보고에 남긴다.
-required=True면 대신 RagContextError로 멈춘다.
+required=True면 하나라도 못 만들었을 때(PARTIAL 포함) RagContextError로 멈춘다(#143 리뷰).
+대상 사건의 사건번호가 없으면(해시 없음) 유사 판례를 붙이지 않는다. 점수 상한만으로는 자기 사건 판결을 확실히 막는다고
+보장할 수 없어서다(#143 리뷰. 자기 사건 점수는 rag_check.py self로 잰다).
 
 보고(report)에는 버전 이름 · 기준 종류 · 판례 id · 점수만 남긴다. 사건번호 · 기준일 · 판례 본문은 넣지 않는다.
 """
@@ -37,9 +39,11 @@ DEFAULT_OPTIONS = {
     # minScore 미만은 빼고, maxScore 이상은 자기 사건 의심으로 뺀다 (rag-handover 5-4).
     # 10/15 실측(rag_check.py, 판례 53건): 다른 사건끼리 1위 0.725 ~ 0.811 · 5위 0.676 ~ 0.777, 실제 사건 개요 → 판례 0.72 ~ 0.81.
     # 점수가 좁게 몰려 있어 하한은 "관계없는 사건만 거르는" 0.70, 상한은 다른 사건 최고(0.81)보다 충분히 위인 0.88로 둔다.
-    # 자기 사건은 사건번호 해시로 먼저 빼고, 상한은 해시가 없을 때의 두 번째 방어선이다. 판례가 늘면 다시 잰다
+    # 자기 사건은 사건번호 해시로 빼고(해시가 없으면 판례를 붙이지 않는다), 상한은 해시가 놓친 사본에 대한 두 번째 방어선이다.
+    # 같은 사건의 다른 판결끼리는 0.816 ~ 0.935(10/15 self, 20쌍 중 7쌍이 0.88 미만)라 상한은 확실한 방어선이 아니고 경고에 가깝다.
+    # 다른 사건 최고(0.811)와 겹쳐 상한을 낮춰도 풀리지 않는다. 판례가 늘면 다시 잰다
     "precedent": {"topK": 5, "candidates": 10, "minScore": 0.70, "maxScore": 0.88},
-    # 양형인자 · 정의 검색 (sentencing-guideline-rag 5장: 임시값)
+    # 양형인자 · 정의 검색 (확정 10/15, sentencing-guideline-rag 5장)
     # 10/15 실측: 양형인자 · 정의 조각 점수 0.645 ~ 0.705. 프롬프트가 길어지지 않게 6개만 넣는다
     "guideline": {"topK": 6, "minScore": 0.6},
 }
@@ -305,7 +309,7 @@ def build_references(case, sources, *, indictment_date=None, incident_date=None,
         return original, report
 
     if not hashes:
-        warnings.append("대상 사건의 사건번호가 없어 해시로 자기 사건을 뺄 수 없습니다 (상한으로만 거릅니다)")
+        warnings.append("대상 사건의 사건번호가 없어 자기 사건을 뺄 수 없으므로 유사 판례를 붙이지 않습니다")
     if category is None:
         warnings.append(f"범죄 유형 {crime_type}의 양형기준 분류가 없어 양형기준은 찾지 않습니다")
     elif at is None:
@@ -339,7 +343,7 @@ def build_references(case, sources, *, indictment_date=None, incident_date=None,
         report["fallbackReasons"].append("양형기준: 사건 입력의 값을 그대로 씀")
 
     candidates = result["precedents"]
-    picked = pick_precedents(candidates, guideline_id, options, warnings)
+    picked = pick_precedents(candidates, guideline_id, options, warnings) if hashes else []
     report["excludedSuspects"] = sum(1 for p in candidates if p["score"] >= options["precedent"]["maxScore"])
     if picked:
         references["similarCases"] = [precedent_reference(i, p, guideline_id) for i, p in enumerate(picked, 1)]
@@ -348,11 +352,13 @@ def build_references(case, sources, *, indictment_date=None, incident_date=None,
                                 for p in picked]
     else:
         references["similarCases"] = []
-        report["fallbackReasons"].append(f"유사 판례: 점수 {options['precedent']['minScore']} 이상 판례 없음")
+        report["fallbackReasons"].append(
+            f"유사 판례: 점수 {options['precedent']['minScore']} 이상 판례 없음" if hashes
+            else "유사 판례: 사건번호가 없어 자기 사건을 뺄 수 없으므로 붙이지 않음")
     if report["fallbackReasons"]:
         report["status"] = "PARTIAL" if (guideline or picked) else "FALLBACK"
-        if options["required"] and report["status"] == "FALLBACK":
-            raise RagContextError("참고 자료를 찾지 못했습니다: " + "; ".join(report["fallbackReasons"]))
+        if options["required"]:  # 일부만 못 찾아도(PARTIAL) 멈춘다
+            raise RagContextError("참고 자료를 다 찾지 못했습니다: " + "; ".join(report["fallbackReasons"]))
     for warning in warnings:
         log(f"⚠ {warning}")
     log(f"RAG: 양형기준 {report['guideline'] or '없음'}, 양형인자 {len(report['guidelineFactors'])}개, "

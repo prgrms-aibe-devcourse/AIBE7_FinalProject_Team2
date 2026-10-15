@@ -159,6 +159,30 @@ class RagContextTest(unittest.TestCase):
         self.assertTrue(any("버전을 고르지 못합니다" in w for w in report["warnings"]))
         self.assertEqual(len(references["similarCases"]), 1)
 
+    def test_no_case_number_skips_precedents(self):
+        # 사건번호가 없으면 자기 사건을 뺄 수 없어 상한만 남는다. 유사 판례를 붙이지 않는다 (#143 리뷰)
+        db = FakeDb(db_result(precedents=[precedent(1, 0.8), precedent(2, 0.75)]))
+        references, report = build_references(self.case, [], incident_date="2014-03-01", embedder=fake_embedder,
+                                              runner=db, log=self.logs.append)
+        self.assertEqual(report["status"], "PARTIAL")
+        self.assertEqual(references["similarCases"], [])
+        self.assertEqual(report["precedents"], [])
+        self.assertTrue(any("사건번호가 없어" in r for r in report["fallbackReasons"]))
+        self.assertEqual(report["guideline"], "2차 수정 2013")  # 양형기준은 그대로 쓴다
+        with self.assertRaises(RagContextError):
+            build_references(self.case, [], incident_date="2014-03-01", embedder=fake_embedder, runner=db,
+                             options={"required": True}, log=self.logs.append)
+
+    def test_required_stops_on_partial(self):
+        # required면 한쪽만 못 찾아도(PARTIAL) 멈춘다 (#143 리뷰)
+        with self.assertRaises(RagContextError):
+            self.build(FakeDb(db_result(precedents=[])), options={"required": True})
+        with self.assertRaises(RagContextError):
+            self.build(FakeDb(db_result(guideline=False, precedents=[precedent(1, 0.8)])), incident_date=None,
+                       options={"required": True})
+        _, report = self.build(FakeDb(db_result(precedents=[precedent(1, 0.8)])), options={"required": True})
+        self.assertEqual(report["status"], "OK")
+
     def test_no_precedents_clears_examples(self):
         references, report = self.build(FakeDb(db_result(precedents=[])))
         self.assertEqual(report["status"], "PARTIAL")

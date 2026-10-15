@@ -7,6 +7,7 @@
     python3 rag_check.py case examples/case_input.json [--source x.source_internal.json] [--incident-date 2014-03-01]
     python3 rag_check.py db-case 1            # DB에 있는 사건으로 검색 (자기 사건은 case_source 사건번호 해시로 뺀다)
     python3 rag_check.py sample --count 10    # 판례 요약을 검색어로 다른 판례를 찾아 점수 분포를 본다 (자기 사건 그룹 제외)
+    python3 rag_check.py self                 # 자기 사건 점수: 상한(maxScore)이 자기 사건 판결을 막는지 본다 (#143 리뷰)
 공통 옵션: --explore(하한 0 · 후보 20건으로 넓게 보기), --prompt(프롬프트에 들어갈 참고 자료 출력),
           --db-mode docker|psql, --container, --db-user, --database, --db-url (기본은 파이프라인 stages.load.db 기본값)
 """
@@ -92,16 +93,20 @@ def cmd_case(args):
              incident_date=args.incident_date or source.get("incidentDate"))
 
 
-def cmd_db_case(args):
-    db = db_config(args)
-    row = json_row(f"""SELECT json_build_object(
+def db_case_sql(case_id):
+    return f"""SELECT json_build_object(
   'title', c.title, 'crimeType', c.crime_type, 'overview', c.overview, 'incidentDate', c.incident_date,
   'sections', (SELECT coalesce(json_agg(json_build_object('title', s.title, 'content', s.content, 'data', s.data)
                                         ORDER BY s.display_order), '[]'::json)
                FROM case_section s WHERE s.case_id = c.id AND s.section_type NOT IN ('LAW_TERM', 'SUMMARY')),
   'sources', (SELECT coalesce(json_agg(json_build_object('caseNumber', cs.case_number)), '[]'::json)
               FROM case_source cs WHERE cs.case_id = c.id))
-FROM legal_case c WHERE c.id = {int(args.case_id)};""", db)
+FROM legal_case c WHERE c.id = {int(case_id)};"""
+
+
+def cmd_db_case(args):
+    db = db_config(args)
+    row = json_row(db_case_sql(args.case_id), db)
     print(f"사건 {args.case_id}: {row['title']}")
     run_case(row, row["sources"], args, indictment_date=args.indictment_date,
              incident_date=args.incident_date or row.get("incidentDate"))
@@ -141,6 +146,64 @@ FROM rag_precedent_search({rag_context.sql_vector(vector)}, 'MURDER', NULL,
     return 0
 
 
+def self_scores(vector, where_sql, db):
+    """검색어 벡터와 조건에 맞는 판례(자기 사건)의 점수. 검색 함수의 자기 사건 제외를 거치지 않고 직접 잰다."""
+    return json_row(f"""SELECT coalesce(json_agg(json_build_object('id', t.id, 'score', t.score) ORDER BY t.score DESC), '[]'::json)
+FROM (SELECT p.id, 1 - (p.embedding <=> {rag_context.sql_vector(vector)}) AS score FROM rag_precedent p WHERE {where_sql}) t;""", db)
+
+
+def cmd_self(args):
+    """자기 사건 점수를 잰다 (#143 리뷰). 사건번호 해시가 없으면 점수 상한(maxScore)만 자기 사건 판결을 막으므로, 상한이 그 점수보다
+    낮은지 본다. 두 가지를 잰다.
+      1) 같은 사건의 다른 판결: 사건 그룹이 2건 이상인 판례끼리(1심 ↔ 항소심 · 사본). 한 판결의 요약을 검색어로 같은 그룹 판례 점수
+      2) DB 사건 → 자기 판례: case_source 사건번호 해시가 판례와 겹치는 사건이 있으면 사건 개요(검색어)로 자기 판례 점수
+    사건번호 · 본문은 출력하지 않는다."""
+    db = db_config(args)
+    max_score = options(args)["precedent"]["maxScore"]
+    scores = []
+    rows = json_row("""SELECT coalesce(json_agg(t ORDER BY t.case_group, t.id), '[]'::json) FROM (
+  SELECT id, case_group, facts_summary FROM rag_precedent WHERE crime_type = 'MURDER' AND case_group IN (
+    SELECT case_group FROM rag_precedent GROUP BY case_group HAVING count(*) > 1)) t;""", db)
+    print(f"1) 같은 사건의 다른 판결 (그룹 안 판례 {len(rows)}건):")
+    vectors = query_embedder([r["facts_summary"] for r in rows], task_type="RETRIEVAL_QUERY") if rows else []
+    for row, vector in zip(rows, vectors):
+        found = self_scores(vector, f"p.case_group = {rag_context.sql_text(row['case_group'])} AND p.id <> {int(row['id'])}", db)
+        scores += [f["score"] for f in found]
+        print(f"  판례 {row['id']:>5} → 같은 그룹 {[(f['id'], round(f['score'], 4)) for f in found]}")
+
+    cases = json_row("""SELECT coalesce(json_agg(c.id ORDER BY c.id), '[]'::json) FROM legal_case c
+WHERE EXISTS (SELECT 1 FROM case_source cs WHERE cs.case_id = c.id);""", db)
+    print(f"\n2) DB 사건 → 자기 판례 (원본 판결문이 있는 사건 {len(cases)}건):")
+    matched = 0
+    for case_id in cases:
+        case = json_row(db_case_sql(case_id), db)
+        hashes = rag_context.own_case_hashes(case["sources"])
+        if not hashes:
+            continue
+        hash_sql = rag_context.sql_text_array(hashes)
+        where = f"p.case_group IN (SELECT case_group FROM rag_precedent WHERE case_number_hashes && {hash_sql})"
+        if not json_row(f"SELECT json_build_array(count(*)) FROM rag_precedent p WHERE {where};", db)[0]:
+            continue
+        matched += 1
+        vector = query_embedder([rag_context.query_text(case)], task_type="RETRIEVAL_QUERY")[0]
+        found = self_scores(vector, where, db)
+        scores += [f["score"] for f in found]
+        print(f"  사건 {case_id:>5} → 자기 판례 {[(f['id'], round(f['score'], 4)) for f in found]}")
+    if not matched:
+        print("  자기 판례가 저장소에 있는 사건이 없습니다")
+
+    print()
+    if not scores:
+        print("잴 수 있는 자기 사건 점수가 없습니다")
+        return 0
+    lowest = min(scores)
+    print(f"자기 사건 점수: 최소 {lowest:.4f} · 중앙 {statistics.median(scores):.4f} · 최대 {max(scores):.4f} ({len(scores)}개)")
+    blocked = sum(1 for s in scores if s >= max_score)
+    print(f"상한 {max_score} 이상(상한이 막음) {blocked}개 / 미만(상한으로는 못 막음) {len(scores) - blocked}개")
+    print("참고: 상한 아래 자기 사건이 있으면 상한은 두 번째 방어선이 되지 못한다. 그래서 사건번호가 없으면 유사 판례를 붙이지 않는다")
+    return 0
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="생성 참고 자료 RAG 확인 (BE-54)")
     common = argparse.ArgumentParser(add_help=False)
@@ -161,9 +224,10 @@ def main(argv=None):
     db_case.add_argument("case_id", type=int)
     sample = sub.add_parser("sample", parents=[common], help="판례끼리 검색해 점수 분포 보기")
     sample.add_argument("--count", type=int, default=10)
+    sub.add_parser("self", parents=[common], help="자기 사건 점수 (상한 근거)")
     args = parser.parse_args(argv)
     try:
-        return {"case": cmd_case, "db-case": cmd_db_case, "sample": cmd_sample}[args.command](args) or 0
+        return {"case": cmd_case, "db-case": cmd_db_case, "sample": cmd_sample, "self": cmd_self}[args.command](args) or 0
     except (LLMError, rag_context.RagUnavailable, rag_context.RagContextError, pipeline.PipelineError) as e:
         print(f"[오류] {e}", file=sys.stderr)
         return 1

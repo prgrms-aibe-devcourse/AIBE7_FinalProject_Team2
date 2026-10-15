@@ -501,6 +501,15 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(report["rag"]["guideline"], "2차 수정 2013")
         self.assertNotIn("검색된 판례", json.dumps(report, ensure_ascii=False))
 
+        # 생성 뒤에 참고 자료가 바뀌면 실제로 보낸 것과 다른 프롬프트가 기록되므로 적재를 멈춘다 (#143 리뷰)
+        references_file = Path(state["stages"]["rag"]["outputs"]["referencesFile"])
+        saved = load_json(references_file)
+        saved["references"]["similarCases"][0]["summary"] = "생성 뒤에 바뀐 사실관계"
+        references_file.write_text(json.dumps(saved, ensure_ascii=False), encoding="utf-8")
+        with self.assertRaises(pipeline.PipelineError) as ctx:
+            self.run_with(config, {"openai:a": [self.output]}, applied, start="load")
+        self.assertIn("--from generate", str(ctx.exception))
+
     def test_rag_fallback_and_disabled(self):
         config = self.config(rag={"enabled": True}, generate={"models": ["openai:a"], "runs": 1, "maxRetries": 0})
         state = self.run_with(config, {"openai:a": [self.output]})  # DB 접속 실패 → 사건 입력의 참고 자료로 진행
@@ -931,6 +940,18 @@ class PipelineTest(unittest.TestCase):
                     "postgresql://localhost/db?host=localhost,prod.example.com"):
             with self.assertRaises(pipeline.PipelineError, msg=url):
                 pipeline.apply_sql(self.dir / "x.sql", {"mode": "psql", "url": url})
+
+    def test_apply_sql_rejects_service(self):
+        # service 접속은 서비스 파일의 host를 써서 호스트 검사를 우회한다 (#143 리뷰)
+        with mock.patch.dict(os.environ, {}, clear=True):
+            with self.assertRaises(pipeline.PipelineError) as ctx:
+                pipeline.apply_sql(self.dir / "x.sql", {"mode": "psql", "url": "postgresql:///lawnambul?service=remote"})
+        self.assertIn("service", str(ctx.exception))
+        with mock.patch.dict(os.environ, {"PGSERVICE": "remote"}, clear=True):
+            with self.assertRaises(pipeline.PipelineError):
+                pipeline.apply_sql(self.dir / "x.sql", {"mode": "psql", "url": "postgresql:///lawnambul"})
+            with self.assertRaises(pipeline.RagUnavailable):  # RAG 검색도 같은 검사
+                pipeline.query_db("SELECT 1;", {"mode": "psql", "url": "postgresql://localhost/lawnambul"})
 
     def test_apply_sql_unix_socket_and_pghost(self):
         socket_url = {"mode": "psql", "url": "postgresql:///lawnambul"}

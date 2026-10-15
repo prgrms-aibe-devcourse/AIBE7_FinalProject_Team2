@@ -3,6 +3,7 @@
 import io
 import json
 import sys
+import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -40,8 +41,12 @@ class RagCheckTest(unittest.TestCase):
 
     def test_case_prints_scores_and_prompt_without_case_numbers(self):
         examples = str(rag_check.pipeline.TOOL_DIR / "examples" / "case_input.json")
-        code, out = self.run_main(["case", examples, "--incident-date", "2014-03-01", "--prompt"],
-                                  lambda sql: json.dumps(RESULT, ensure_ascii=False))
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "x.source_internal.json"
+            source.write_text(json.dumps({"sources": [{"caseNumber": "2099고합1"}]}), encoding="utf-8")
+            code, out = self.run_main(["case", examples, "--source", str(source), "--incident-date", "2014-03-01",
+                                       "--prompt"], lambda sql: json.dumps(RESULT, ensure_ascii=False))
+        self.assertNotIn("2099고합1", out)
         self.assertEqual(code, 0)
         self.assertIn("양형기준 버전: 2차 수정 2013", out)
         self.assertIn("0.9700", out)
@@ -79,6 +84,42 @@ class RagCheckTest(unittest.TestCase):
         self.assertIn("ARRAY['G1']::text[]", sqls[1])
         self.assertIn("1위 점수: 최소 0.8800", out)
         self.assertIn("5위 점수: 최소 0.7500", out)
+
+    def test_case_without_case_number_skips_precedents(self):
+        examples = str(rag_check.pipeline.TOOL_DIR / "examples" / "case_input.json")
+        code, out = self.run_main(["case", examples, "--incident-date", "2014-03-01", "--prompt"],
+                                  lambda sql: json.dumps(RESULT, ensure_ascii=False))
+        self.assertEqual(code, 0)
+        self.assertIn("사건번호가 없어", out)
+        self.assertNotIn("사실2", out)
+
+    def test_self_scores_against_max(self):
+        sqls = []
+        case_row = {"title": "가상 사건", "crimeType": "MURDER", "overview": "개요", "incidentDate": None,
+                    "sections": [], "sources": [{"caseNumber": "2099고합1"}]}
+
+        def db(sql):
+            sqls.append(sql)
+            if "HAVING count(*) > 1" in sql:
+                return json.dumps([{"id": 1, "case_group": "G1", "facts_summary": "요약1"},
+                                   {"id": 2, "case_group": "G1", "facts_summary": "요약2"}], ensure_ascii=False)
+            if "FROM legal_case c\nWHERE EXISTS" in sql:
+                return json.dumps([5])
+            if "WHERE c.id = 5" in sql:
+                return json.dumps(case_row, ensure_ascii=False)
+            if "json_build_array(count(*))" in sql:
+                return json.dumps([1])
+            if "p.case_group = 'G1' AND p.id <> 1" in sql:
+                return json.dumps([{"id": 2, "score": 0.93}])
+            if "p.case_group = 'G1' AND p.id <> 2" in sql:
+                return json.dumps([{"id": 1, "score": 0.91}])
+            return json.dumps([{"id": 1, "score": 0.86}])  # DB 사건 → 자기 판례
+
+        code, out = self.run_main(["self"], db)
+        self.assertEqual(code, 0)
+        self.assertIn("최소 0.8600", out)
+        self.assertIn("상한 0.88 이상(상한이 막음) 2개 / 미만(상한으로는 못 막음) 1개", out)
+        self.assertNotIn("2099고합1", out + "".join(sqls))
 
     def test_db_failure_is_error(self):
         def db(sql):

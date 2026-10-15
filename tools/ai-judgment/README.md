@@ -360,10 +360,12 @@ python3 rag_store.py sql --candidates $P/work/BE-50-precedent-candidates.json --
 | 양형기준 버전 | 기준일 = `indictmentDate`(공소제기일) → 없으면 발생일. `sentencing_guideline_at(범주, 기준일)`. 범주는 `common.GUIDELINE_CATEGORIES`(`MURDER` → 살인범죄) |
 | 형량범위 | 그 버전의 `형량범위` 조각 전부 (유형 판단은 모델 몫이라 검색하지 않는다) |
 | 양형인자 · 정의 | `rag_guideline_search`로 그 버전 안에서 `guideline.topK`개 · `minScore` 이상 |
-| 유사 판례 | `rag_precedent_search`로 `candidates`건(자기 사건 그룹 제외) → `maxScore` 이상은 자기 사건 의심으로 빼고 경고 → 같은 버전 판례는 점수에 0.01을 더해 정렬 → 상위 `topK`건 |
+| 유사 판례 | 대상 사건의 사건번호가 없으면 붙이지 않는다(자기 사건을 뺄 수 없음). `rag_precedent_search`로 `candidates`건(자기 사건 그룹 제외) → `maxScore` 이상은 자기 사건 의심으로 빼고 경고 → 같은 버전 판례는 점수에 0.01을 더해 정렬 → 상위 `topK`건 |
 | 결과 | `out/pipeline/<name>/references.json`. `generate` · `select` · `load`가 이 참고 자료로 프롬프트를 만든다. 보고는 `generation_report.rag`(상태 `OK` · `PARTIAL` · `FALLBACK`, 버전 이름 · 기준 종류 · 판례 id · 점수 · 대체 사유) |
 
-- **대체**: 키 없음 · DB 접속 실패 · 버전 없음(기준일 없음 포함) · 판례 없음이면 그 부분은 사건 입력의 기존 값을 쓴다. 판례만 못 찾으면 예시 판례를 남기지 않고 비운다. `required: true`면 대신 멈춘다.
+- **대체**: 키 없음 · DB 접속 실패 · 버전 없음(기준일 없음 포함) · 판례 없음이면 그 부분은 사건 입력의 기존 값을 쓴다. 판례만 못 찾으면 예시 판례를 남기지 않고 비운다. `required: true`면 하나라도 못 찾을 때(`PARTIAL` 포함) 대신 멈춘다.
+- **적재 확인**: `load`는 프롬프트를 다시 만들어 고른 회차의 프롬프트(`batch.json`의 해시)와 비교하고, 다르면 멈춘다. 생성 뒤에 사건 입력이나 `references.json`이 바뀐 경우다(`--from generate`로 다시 생성).
+- **DB 접속**: `rag` · `load` 모두 로컬 DB만 쓴다. `service` 접속(URL의 `service` · 환경변수 `PGSERVICE`)은 서비스 파일의 원격 host로 갈 수 있어 거부한다.
 - **점수 기준**은 판례 53건으로 잰 값이다(2026-10-15, [RAG 인수인계](../../docs/rag-handover.md) 5-4). 판례 · 범죄 유형이 늘면 아래 도구로 다시 잰다.
 - 프롬프트에는 사건번호 · 기준일 · 점수를 넣지 않는다. 같은 버전 판례에는 "이 사건과 같은 양형기준 버전"을 붙인다.
 
@@ -373,6 +375,7 @@ python3 rag_store.py sql --candidates $P/work/BE-50-precedent-candidates.json --
 python3 rag_check.py db-case <사건 id> --prompt     # DB에 있는 사건으로 검색, 프롬프트에 들어갈 참고 자료까지
 python3 rag_check.py case cases/x.case.json --source cases/x.source_internal.json
 python3 rag_check.py sample --count 10             # 판례끼리 검색해 1위 · 5위 점수 분포 보기
+python3 rag_check.py self                          # 자기 사건 점수(같은 사건의 다른 판결 · DB 사건 → 자기 판례)가 상한보다 높은지
 ```
 
 공통 옵션: `--explore`(하한 0 · 후보 20건), `--indictment-date` · `--incident-date`, DB 옵션(`--db-mode` · `--container` · `--db-user` · `--database` · `--db-url`).

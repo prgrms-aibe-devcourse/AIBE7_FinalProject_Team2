@@ -1058,6 +1058,12 @@ def stage_load(config, state, log, apply=None):
         prompt = build_prompt(generation_case(config, state))  # 생성 때 실제로 보낸 프롬프트 (rag 참고 자료 포함)
     except InputError as e:
         raise PipelineError(str(e))
+    # 다시 만든 프롬프트가 고른 회차를 생성한 프롬프트와 같은지 확인한다. 생성 뒤에 사건 입력 · 참고 자료(references.json)가
+    # 바뀌었으면 실제로 보낸 것과 다른 프롬프트가 기록되므로 멈춘다 (#143 리뷰)
+    batch_file = Path(selection["runFile"]).parent.parent / "batch.json"
+    if batch_file.exists() and load_json(batch_file).get("promptSha256") != prompt_digest(prompt):
+        raise PipelineError("생성 뒤에 사건 입력 또는 참고 자료가 바뀌어 고른 회차의 프롬프트와 다릅니다. "
+                            "--from generate로 다시 생성하세요")
 
     parts = []
     if cfg["case"]:
@@ -1185,6 +1191,10 @@ def psql_command(db):
         parsed = urllib.parse.urlparse(url)
         # libpq는 쿼리의 host · hostaddr를 URL 호스트보다 우선해 쓰고, 쉼표로 여러 호스트를 받는다. 모두 로컬이어야 한다
         query = urllib.parse.parse_qs(parsed.query)
+        # service 접속은 서비스 파일(pg_service.conf)의 host를 쓰므로 아래 호스트 검사를 거치지 않는다. 쓰지 않는다 (#143 리뷰)
+        if query.get("service") or os.environ.get("PGSERVICE"):
+            raise PipelineError("service 접속(URL의 service · 환경변수 PGSERVICE)은 쓰지 않습니다. 서비스 파일의 원격 host로 "
+                                "접속할 수 있어서입니다. stages.load.db.url에 로컬 호스트를 직접 적고 PGSERVICE를 비우세요")
         hosts = [h for key in ("host", "hostaddr") for value in query.get(key, []) for h in value.split(",")]
         if parsed.hostname:
             hosts.append(parsed.hostname)
