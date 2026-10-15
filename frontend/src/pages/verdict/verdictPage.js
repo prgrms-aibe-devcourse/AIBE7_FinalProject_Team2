@@ -223,8 +223,6 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
     input(prisonFields, 'prisonMonths', '징역 개월', '개월', sentenceError.id);
     // 벌금은 만원 단위로 입력한다(draft.fineAmount = 만원 수, 서버에는 원으로 보낸다)
     input(fineFields, 'fineAmount', '벌금 금액(만원)', '만원', sentenceError.id);
-    const money = element('output', 'money-readable');
-    fineFields.append(money);
     entry.append(prisonFields, fineFields);
     function option() {
       return form.penaltyOptions.find((item) => item.penaltyType === draft.penaltyType);
@@ -235,7 +233,12 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
     const FINE_TRACK_MAX = 30000000; // 벌금은 상한이 없어 막대를 3,000만 원까지만 그리고, 넘는 금액은 칸에 직접 입력한다
     const FINE_STEP = 100000;
     const FINE_SNAP = 5000000;
-    const FINE_SNAP_RANGE = 400000;
+    const FINE_SNAP_RANGE = 300000;
+    const FINE_REARM = 1000000;
+    // 500만 원 붙임(자석): 붙은 자리(예 1,000만)에서 붙임 범위를 벗어나면(960만) 그 자리의 붙임을 끈다 —
+    // 970 · 980 · … · 1,090만처럼 그 자리를 지나가도 붙지 않는다. 끈 자리에서 100만 원 이상 멀어지면(1,100만) 다시 켠다
+    let snapAt = null; // 지금 붙어 있는 자리
+    let snapOff = null; // 붙임을 잠시 끈 자리
     const rangeSlider = element('div', 'range-slider');
     function scale() {
       const { allowedMin, allowedMax } = option();
@@ -252,8 +255,14 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       const range = scale();
       let value = Math.round(raw / range.step) * range.step;
       if (snap && !range.prison) {
+        if (snapOff !== null && Math.abs(raw - snapOff) >= FINE_REARM) snapOff = null;
         const near = Math.round(raw / FINE_SNAP) * FINE_SNAP;
-        if (Math.abs(raw - near) <= FINE_SNAP_RANGE) value = near; // 500만 원 단위는 더 잘 잡히게
+        if (Math.abs(raw - near) < FINE_SNAP_RANGE) {
+          if (near !== snapOff) { value = near; snapAt = near; snapOff = null; } // 500만 원 단위는 더 잘 잡히게
+        } else if (snapAt !== null) {
+          snapOff = snapAt;
+          snapAt = null;
+        }
       }
       value = Math.max(range.min, Math.min(range.max, range.trackMax, value));
       if (range.prison) {
@@ -294,13 +303,25 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       event.preventDefault();
       setValue(target);
     });
-    // 벌금 막대: 선고할 수 있는 범위 상자(징역의 범위 막대와 같은 모양)
+    // 벌금 막대: 선고할 수 있는 범위 상자(징역의 범위 막대와 같은 모양). 눈금은 100만 원 작게 · 500만 원 중간 · 1,000만 원 크게
     function renderFineRange(container, min) {
       const box = element('section', 'recommended-range');
-      const track = element('div', 'range-track');
-      const labels = element('div', 'range-labels');
+      const track = element('div', 'range-track fine-track');
+      for (let amount = 1000000; amount < FINE_TRACK_MAX; amount += 1000000) {
+        const size = amount % 10000000 === 0 ? 'major' : amount % 5000000 === 0 ? 'mid' : 'minor';
+        const tick = element('span', `fine-tick ${size}`);
+        tick.style.left = `${amount / FINE_TRACK_MAX * 100}%`;
+        tick.setAttribute('aria-hidden', 'true');
+        track.append(tick);
+      }
+      // 아래 글자는 1,000만 원 눈금 자리에 맞춘다
+      const labels = element('div', 'fine-labels');
       labels.setAttribute('aria-hidden', 'true');
-      labels.append(...['0', '1,000만 원', '2,000만 원', '3,000만 원 이상'].map((text) => element('span', '', text)));
+      ['0', '1,000만', '2,000만', '3,000만 원 이상'].forEach((text, i) => {
+        const label = element('span', '', text);
+        label.style.left = `${i / 3 * 100}%`;
+        labels.append(label);
+      });
       box.append(element('h3', '', '선고할 수 있는 범위'), element('p', 'range-value', `벌금 ${formatMoney(min)} 이상`),
         track, labels, element('p', 'range-lower-label', '막대는 3,000만 원까지예요. 더 큰 금액은 칸에 직접 입력해 주세요.'));
       container.append(box);
@@ -369,6 +390,7 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
           else draft.factors[factor.factorId] = direction;
           changed('factors');
         }, 'factor-button');
+        toggle.dataset.direction = direction; // 무겁게 · 가볍게를 고르면 색으로도 구분한다
         factorButtons.push({ toggle, factorId: factor.factorId, direction, row });
         actions.append(toggle);
       }
@@ -539,7 +561,6 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       sentenceError.textContent = sentence.invalid
         ? prison ? '숫자로 입력해 주세요. 개월은 0 ~ 11입니다.' : '금액은 만원 단위 정수로 입력해 주세요.' : '';
       for (const key of ['prisonYears', 'prisonMonths', 'fineAmount']) inputs[key].setAttribute('aria-invalid', String(sentence.invalid));
-      money.textContent = !prison && present ? formatMoney(sentence.value) : '';
       const key = option && !fixed ? [draft.penaltyType, draft.reducing, draft.reducedTo, pendingReduction, prison].join('|') : '';
       if (key !== rangeKey) {
         rangeKey = key;
@@ -555,7 +576,8 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
         });
         rangeBox.querySelector('.range-track')?.append(marker);
         // 형량 칸: "선고할 수 있는 범위" 설명과 같은 줄 오른쪽
-        rangeBox.querySelector('.recommended-range')?.prepend(entry);
+        // "선고할 수 있는 범위" 아래 두 줄(범위 · 권고 범위)과 같은 높이 오른쪽에
+        rangeBox.querySelector('.recommended-range h3')?.after(entry);
       }
       entry.hidden = !sliding;
       if (sliding) {
