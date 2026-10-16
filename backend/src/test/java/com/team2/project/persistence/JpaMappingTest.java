@@ -161,6 +161,17 @@ class JpaMappingTest {
 	}
 
 	@Test
+	@DisplayName("투표 기록에 모르는 키가 있어도 요소를 읽는다 (BE-81 — 파이프라인 키 추가 · 배포 되돌림 대비)")
+	void findById_factorValueAxisVotes_ignoresUnknownKeys() {
+		jdbc.update("""
+			UPDATE factor SET value_axis_votes = '{"runs": 3, "counts": {"NONE": 3}, "needsReview": false, "futureKey": "x"}'::jsonb
+			WHERE id = ?""", overviewFactorId);
+
+		assertThat(factorRepository.findById(overviewFactorId).orElseThrow().getValueAxisVotes())
+			.isEqualTo(new ValueAxisVotes(3, Map.of("NONE", 3), false, null));
+	}
+
+	@Test
 	@DisplayName("판단 요소의 요약어 후보를 읽는다, 없으면 null (BE-80)")
 	void findById_factorSummaryTagCandidates_readsJson() {
 		jdbc.update("""
