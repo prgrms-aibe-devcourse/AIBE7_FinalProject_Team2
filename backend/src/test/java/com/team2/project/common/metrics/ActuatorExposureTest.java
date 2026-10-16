@@ -34,4 +34,16 @@ class ActuatorExposureTest {
 		assertThat(rest.getForEntity("http://localhost:" + appPort + "/actuator/prometheus", String.class)
 			.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
 	}
+
+	/**
+	 * 운영 Compose의 백엔드 healthcheck와 deploy.sh가 쓰는 readiness · liveness가 관리 포트에서 열린다 (BE-60, #161 리뷰).
+	 * 404로 바뀌면 서버는 새 이미지를 항상 unhealthy로 보고 되돌리므로, 설정이 바뀌면 여기서 먼저 잡는다.
+	 */
+	@Test
+	void probes_onManagementPort() {
+		for (String probe : new String[] {"readiness", "liveness"}) {
+			assertThat(rest.getForEntity("http://localhost:" + managementPort + "/actuator/health/" + probe, String.class)
+				.getStatusCode()).as(probe).isEqualTo(HttpStatus.OK);
+		}
+	}
 }
