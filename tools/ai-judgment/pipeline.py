@@ -47,6 +47,8 @@ from llm import (DEFAULT_MAX_ATTEMPTS, DEFAULT_MAX_WAIT, LLMError, LLMQuotaExhau
                  check_retry, configure_retry, free_tier_model_list, has_free_tier, model_provider,
                  parse_model_spec)
 from to_seed_sql import NAME_MAX_LENGTH, build_sql
+from summary_tags import DEFAULT_MIN_SCORE, DEFAULT_TOP_K, SummaryTagError, annotate_report, load_vocabulary, skipped_report
+from summary_tags import option_errors as summary_tag_option_errors
 from validate_output import parse_output
 
 STAGES = ("extract", "court", "contamination", "rag", "generate", "select", "axis", "load")
@@ -84,7 +86,10 @@ DEFAULT_CONFIG = {
         # model: Claude는 모델 ID(또는 anthropic:모델ID), 다른 공급자는 openai:모델ID · gemini:모델ID (BE-35). maxTokens는 Claude 외 공급자의 출력 상한
         # 목록으로 주면 앞 모델이 과부하 · 한도로 막혔을 때(재시도를 다 쓴 뒤) 다음 모델로 넘어간다 (BE-45)
         "extract": {"enabled": True, "model": "claude-opus-5-5", "effort": "high", "requireEligible": True,
-                    "maxTokens": None},
+                    "maxTokens": None,
+                    # 요약어 후보 (BE-53, summary_tags.py): 요약어를 기준 목록(summary_tags.json)과 비교해 비슷한 기존 요약어를
+                    # 제안한다(바꾸지 않음). GEMINI_API_KEY(임베딩)가 없으면 건너뛰고 extract는 계속한다. 기본은 꺼짐
+                    "summaryTags": {"enabled": False, "topK": DEFAULT_TOP_K, "minScore": DEFAULT_MIN_SCORE}},
         # 재판부 판결(COURT) 초안 자동 생성 (BE-38). model이 null이면 extract 모델을 쓴다. 결과는 비공개로 적재된다
         "court": {"enabled": True, "model": None, "maxTokens": 16000},
         "contamination": {
@@ -416,6 +421,10 @@ def validate_config(config):
                                            or extract_max_tokens <= 0):
         errors.append("stages.extract.maxTokens는 null 또는 양의 정수다")
     errors += chain_errors("stages.extract.model", extract_model, "모델 이름 문자열 · 목록 (예: claude-opus-5-5, openai:모델ID)")
+    summary_tags = stages["extract"].get("summaryTags") or {}
+    if not isinstance(summary_tags.get("enabled", False), bool):
+        errors.append("stages.extract.summaryTags.enabled는 true · false다")
+    errors += summary_tag_option_errors({k: v for k, v in summary_tags.items() if k != "enabled"})
     errors += free_models_errors(config)
     for spec in stages["generate"]["models"] + (stages["contamination"]["models"] or []):
         if is_free_token(spec):
@@ -644,6 +653,9 @@ def stage_extract(config, state, log):
         raise PipelineError(f"비식별화 실패: {e}")
     outputs = {"case": str(case_path), "court": str(court_path), "report": str(report_path), "source": str(source_path)}
     report = load_json(report_path)
+    if (cfg.get("summaryTags") or {}).get("enabled"):
+        report = attach_summary_tags(report_path, report, cfg["summaryTags"], log)
+        outputs["summaryTags"] = report["summaryTagCandidates"]["status"]
     eligibility = report.get("eligibility") or {}
     outputs["eligible"] = eligibility.get("eligible")
     outputs["warnings"] = len(report.get("warnings", []))
@@ -657,6 +669,35 @@ def stage_extract(config, state, log):
         raise PipelineError("서비스 대상이 아닌 판결로 판정됐습니다 (stages.extract.requireEligible=false로 무시 가능): "
                             + " / ".join(eligibility.get("reasons", [])), outputs)
     return outputs
+
+
+def attach_summary_tags(report_path, report, options, log, embed_fn=None):
+    """extract 보고서에 요약어 후보를 더해 다시 쓴다 (BE-53). 고친 보고서를 돌려준다.
+
+    키가 없거나 임베딩 호출이 실패하면 상태만 SKIPPED로 남기고 extract는 계속한다(RAG 단계와 같은 정책).
+    기준 목록 파일이 잘못된 것은 저장소 오류라 멈춘다(조용히 빈 목록으로 비교하지 않는다).
+    embed_fn은 테스트에서 네트워크 대신 넣는 함수다.
+    """
+    try:
+        vocabulary = load_vocabulary()
+    except SummaryTagError as e:
+        raise PipelineError(f"요약어 후보 기준 목록 오류 (summary_tags.json): {e}")
+    options_kw = {"top_k": options.get("topK", DEFAULT_TOP_K), "min_score": options.get("minScore", DEFAULT_MIN_SCORE)}
+    try:
+        if embed_fn is None:
+            api_key("gemini")  # 없으면 LLMError → 건너뜀. 판결문은 보내지 않고 요약어만 임베딩한다
+        else:
+            options_kw["embed_fn"] = embed_fn
+        updated = annotate_report(report, vocabulary, **options_kw)
+        summary = updated["summaryTagCandidates"]
+        log(f"요약어 후보: 기준 목록 {summary['vocabularySize']}개와 비교 — 비슷한 기존 요약어가 있는 요소 "
+            f"{summary['suggested']}개 ({summary['minScore']} 이상), 1 · 2순위가 붙어 애매한 요소 {summary['ambiguous']}개 "
+            f"(제안 안 함) — 요약어는 바꾸지 않고 제안만")
+    except LLMError as e:
+        updated = skipped_report(report, str(e)[:200])
+        log(f"⚠ 요약어 후보를 만들지 못했습니다 (extract는 계속): {str(e)[:200]}")
+    write_json(report_path, updated)
+    return updated
 
 
 def court_model(config):

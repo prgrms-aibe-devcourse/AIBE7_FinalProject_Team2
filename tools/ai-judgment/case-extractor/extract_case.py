@@ -26,6 +26,7 @@ from schema import (
     build_factor_extras,
     check_output,
     court_evaluation_check,
+    factor_extra_texts,
     sentence_leak_check,
     validate_against_schema,
     visible_texts,
@@ -199,7 +200,10 @@ def resolve_incident_date(value, judgments, sources):
 
 
 def build_messages(masked_text):
-    system = (EXTRACTOR_DIR / "prompts" / "extract_system.md").read_text(encoding="utf-8")
+    # 시스템 프롬프트 뒤에 판단 요소 작성 예시(퓨샷, 가상 상해 사건)를 붙인다 (BE-53, extract-v6). generate의 judgment_fewshot.md와 같은 방식
+    prompts = EXTRACTOR_DIR / "prompts"
+    system = (prompts / "extract_system.md").read_text(encoding="utf-8").rstrip() + "\n\n" + \
+        (prompts / "extract_fewshot.md").read_text(encoding="utf-8")
     user = "다음 판결문을 가공해 줘.\n\n<judgment>\n" + masked_text + "\n</judgment>"
     return system, user
 
@@ -353,9 +357,11 @@ def process_output(output):
     except InputError as e:
         errors.append(f"사건 입력 형식 오류 (build_prompt.py 기준): {e}")
 
-    texts = visible_texts(case_input)
+    # 요약어 · 사전 판단 선택지 문구도 사용자에게 보이므로 같은 검사를 한다 (BE-53)
+    extras = factor_extra_texts(output)
+    texts = visible_texts(case_input) + extras
     pii_errors, pii_warnings = residual_check(texts)
-    leak_errors, leak_warnings = sentence_leak_check(case_input, court)
+    leak_errors, leak_warnings = sentence_leak_check(case_input, court, extras)
     report_errors, report_warnings = residual_check(report_texts(output))
     errors += pii_errors + report_errors + leak_errors
     warnings += pii_warnings + report_warnings + leak_warnings + court_evaluation_check(case_input)

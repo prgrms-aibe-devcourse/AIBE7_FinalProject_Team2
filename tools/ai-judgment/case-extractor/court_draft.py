@@ -29,7 +29,7 @@ import re
 import sys
 from pathlib import Path
 
-from deidentify import premask, residual_check, scrub
+from deidentify import MASK_RULES, premask, residual_check, scrub
 from schema import _STRING, _object, validate_against_schema
 
 EXTRACTOR_DIR = Path(__file__).resolve().parent
@@ -44,7 +44,9 @@ from extract_case import (  # noqa: E402
 from llm import LLMError, api_key, call as llm_call, model_provider  # noqa: E402
 from validate_output import FORBIDDEN_EXPRESSIONS, parse_output  # noqa: E402
 
-COURT_PROMPT_VERSION = "court-v1"
+COURT_PROMPT_VERSION = "court-v2"  # v2: 인용 · 요소 선택 예시 퓨샷 court_draft_fewshot.md (BE-53)
+# 비식별화가 미리 가린 표시 ([주소] · [사건번호] 등, deidentify.MASK_RULES). 인용에 그대로 남으면 오류다 (BE-53)
+MASK_TOKENS = frozenset(token for _, _, token in MASK_RULES)
 DEFAULT_MODEL = "anthropic:claude-opus-5-5"
 MAX_TOKENS = 16000
 RETRIES = 2  # 형식 · 대조 오류가 있으면 오류 내용을 알려 주며 다시 요청하는 횟수
@@ -248,6 +250,9 @@ def check_draft(draft, case, source_text):
         ok, reason = quote_matches(quote, source_text)
         if not ok:
             errors.append(f"{where}: 원문 인용이 아닙니다 — {reason}")
+        # 미리 가린 표시([주소] 등)는 원문 글자와 같아 위 대조를 통과한다. 규칙(⟦ ⟧로 일반화)을 여기서 지킨다 (BE-53)
+        elif any(token in text for is_literal, text in split_quote(quote) if is_literal for token in MASK_TOKENS):
+            errors.append(f"{where}: 가린 표시가 인용에 남았습니다 — 일반적인 말로 바꿔 ⟦ ⟧로 감쌉니다")
 
     if len(draft["summary"]) > SUMMARY_MAX_LENGTH:
         errors.append(f"summary가 {SUMMARY_MAX_LENGTH}자를 넘습니다")
@@ -307,7 +312,10 @@ def build_court_draft(draft, case, court, model):
 # ---------------------------------------------------------------- 호출
 
 def build_messages(case, court, masked_text):
-    system = (EXTRACTOR_DIR / "prompts" / "court_draft_system.md").read_text(encoding="utf-8")
+    # 시스템 프롬프트 뒤에 인용 · 요소 선택 예시(퓨샷, 가상 상해 사건)를 붙인다 (BE-53, court-v2)
+    prompts = EXTRACTOR_DIR / "prompts"
+    system = (prompts / "court_draft_system.md").read_text(encoding="utf-8").rstrip() + "\n\n" + \
+        (prompts / "court_draft_fewshot.md").read_text(encoding="utf-8")
     factors = "\n".join(f"- {f['factorId']}. {f['label']}" for f in case["factors"])
     final = court.get("reducedTo") or court.get("penaltyType")
     user = (f"# 판단 요소 목록 (이 목록에서만 고른다)\n\n{factors}\n\n"
