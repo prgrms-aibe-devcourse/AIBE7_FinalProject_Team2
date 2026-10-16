@@ -2,7 +2,7 @@
 
 case-extractor 결과 세 파일을 합쳐 legal_case · case_section · penalty_rule · factor · case_source 행을 만든다.
 - <name>.case.json: 사건 · 섹션 · 형벌 규칙 · 판단 요소 · 목록 카드(listing)
-- <name>.report.json: 판단 요소 preLabel · summaryTag · valueAxis(· 투표 기록 valueAxisVotes, BE-49), 형벌 규칙 근거, 비식별화 항목
+- <name>.report.json: 판단 요소 preLabel · summaryTag · valueAxis(· 투표 기록 valueAxisVotes, BE-49 · 요약어 후보 summaryTagCandidates, BE-80), 형벌 규칙 근거, 비식별화 항목
 - <name>.source_internal.json: 원본 판결문 정보(사건번호 · 법원명 · 선고일 · 원문, 로컬에서 꺼낸 내부 전용 값)
 
 - 같은 제목의 DRAFT 사건이 이미 있으면 건너뛴다 (같은 SQL을 두 번 실행해도 안전). 이때 판단 요소의 가치관 축 · 투표 기록만
@@ -116,6 +116,40 @@ def check_value_axis_votes(axis, votes):
     return errors
 
 
+def check_summary_tag_candidates(candidates):
+    """요약어 후보 형식 검사 (ERD factor.summary_tag_candidates, BE-80). 오류 문구 목록을 돌려준다.
+
+    {"candidates": [{"tag": "흉기 사용", "score": 0.9312}], "inVocabulary": false, "ambiguous": false, "suggested": "흉기 사용"}
+    summary_tags.py(BE-53)가 만든 그대로다. suggested는 후보 중 하나이고, 목록에 있거나(inVocabulary) 애매하면(ambiguous) 비어 있다
+    """
+    if not isinstance(candidates, dict):
+        return ["summaryTagCandidates는 객체입니다"]
+    errors = []
+    items = candidates.get("candidates")
+    if not isinstance(items, list):
+        return ["summaryTagCandidates.candidates는 배열입니다"]
+    tags = []
+    for i, item in enumerate(items):
+        tag = item.get("tag") if isinstance(item, dict) else None
+        score = item.get("score") if isinstance(item, dict) else None
+        if not isinstance(tag, str) or not tag.strip() or len(tag) > MAX_LENGTHS["factor.summary_tag"]:
+            errors.append(f"summaryTagCandidates.candidates[{i}].tag는 {MAX_LENGTHS['factor.summary_tag']}자 이내 문자열입니다")
+        else:
+            tags.append(tag)
+        if isinstance(score, bool) or not isinstance(score, (int, float)) or not -1 <= score <= 1:
+            errors.append(f"summaryTagCandidates.candidates[{i}].score는 -1 ~ 1 숫자입니다")
+    for key in ("inVocabulary", "ambiguous"):
+        if not isinstance(candidates.get(key), bool):
+            errors.append(f"summaryTagCandidates.{key}는 true · false입니다")
+    suggested = candidates.get("suggested")
+    if suggested is not None:
+        if suggested not in tags:
+            errors.append("summaryTagCandidates.suggested는 candidates의 tag 중 하나이거나 null입니다")
+        elif candidates.get("inVocabulary") is True or candidates.get("ambiguous") is True:
+            errors.append("summaryTagCandidates.suggested는 inVocabulary · ambiguous가 false일 때만 있습니다")
+    return errors
+
+
 def check_inputs(case, report, sources, source_org):
     errors = []
     listing = case.get("listing") or {}
@@ -154,6 +188,10 @@ def check_inputs(case, report, sources, source_org):
         elif extra.get("valueAxisVotes") is not None:
             errors += [f"판단 요소 {factor['factorId']}: {e}"
                        for e in check_value_axis_votes(extra.get("valueAxis"), extra["valueAxisVotes"])]
+        # summaryTagCandidates(요약어 후보, BE-53 · BE-80)는 후보 계산을 켰을 때만 있다
+        if extra.get("summaryTagCandidates") is not None:
+            errors += [f"판단 요소 {factor['factorId']}: {e}"
+                       for e in check_summary_tag_candidates(extra["summaryTagCandidates"])]
     for basis in (report.get("penaltyRuleBasis") or {}).values():
         _check_length(errors, "penalty_rule.allowed_basis", basis)
 
@@ -230,11 +268,11 @@ def build_case_sql(case, report, sources, *, source_org=DEFAULT_SOURCE_ORG, sour
     )
     factors = "\n".join(
         f"""    INSERT INTO factor (case_id, label, pre_label, reveal_stage, summary_tag, value_axis, value_axis_votes,
-                        display_order)
+                        summary_tag_candidates, display_order)
     VALUES (v_case_id, {sql_text(f['label'])}, {sql_text(extras[f['factorId']].get('preLabel'))}, """
         f"""{sql_text(f['revealStage'])}, {sql_text(extras[f['factorId']]['summaryTag'])}, """
         f"""{sql_text(extras[f['factorId']].get('valueAxis'))}, {sql_votes(extras[f['factorId']].get('valueAxisVotes'))}, """
-        f"""{sql_int(f['factorId'])});"""
+        f"""{sql_votes(extras[f['factorId']].get('summaryTagCandidates'))}, {sql_int(f['factorId'])});"""
         for f in case["factors"]
     )
     # 이미 적재된 사건의 가치관 축 갱신용 (BE-48 · BE-49). 요소마다 (번호, 라벨, 축, 투표 기록). 축만 다시 투표하면 이 값이 바뀐다

@@ -6,6 +6,7 @@ import com.team2.project.legalcase.domain.CourtLevel;
 import com.team2.project.legalcase.domain.CrimeType;
 import com.team2.project.legalcase.domain.Difficulty;
 import com.team2.project.legalcase.domain.RevealStage;
+import com.team2.project.legalcase.domain.SummaryTagCandidates;
 import com.team2.project.legalcase.domain.ValueAxis;
 import com.team2.project.legalcase.domain.ValueAxisStatus;
 import com.team2.project.legalcase.domain.ValueAxisVotes;
@@ -71,7 +72,8 @@ public record AdminCaseDetailResponse(
 		String summaryTag,
 		ValueAxis valueAxis,
 		ValueAxisStatus valueAxisStatus,
-		ValueAxisVotes valueAxisVotes) {
+		ValueAxisVotes valueAxisVotes,
+		SummaryTagCandidates summaryTagCandidates) {
 	}
 
 	public record Candidate(

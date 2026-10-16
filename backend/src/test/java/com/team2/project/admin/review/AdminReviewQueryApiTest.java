@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.endsWith;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -131,6 +132,10 @@ class AdminReviewQueryApiTest extends ApiIntegrationTest {
 	@Test
 	@DisplayName("A-6: 내용 · 원본 정보(원문 제외) · 요소 · 후보 · 공개 가능 여부")
 	void getCase_detail() throws Exception {
+		jdbcTemplate.update("""
+			UPDATE factor SET summary_tag_candidates = '{"candidates": [{"tag": "반복된 다툼", "score": 0.9421}],
+			    "inVocabulary": false, "ambiguous": false, "suggested": "반복된 다툼"}'::jsonb
+			WHERE id = ?""", overviewFactorId);
 		mockMvc.perform(get("/api/v1/admin/cases/" + caseId).session(session))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.status").value("DRAFT"))
@@ -141,6 +146,11 @@ class AdminReviewQueryApiTest extends ApiIntegrationTest {
 			.andExpect(jsonPath("$.sources[0].originalText").doesNotExist())
 			.andExpect(jsonPath("$.factors.length()").value(2))
 			.andExpect(jsonPath("$.factors[0].valueAxisStatus").value("AUTO"))
+			.andExpect(jsonPath("$.factors[0].summaryTagCandidates.candidates[0].tag").value("반복된 다툼"))
+			.andExpect(jsonPath("$.factors[0].summaryTagCandidates.candidates[0].score").value(0.9421))
+			.andExpect(jsonPath("$.factors[0].summaryTagCandidates.suggested").value("반복된 다툼"))
+			.andExpect(jsonPath("$.factors[0].summaryTagCandidates.ambiguous").value(false))
+			.andExpect(jsonPath("$.factors[1].summaryTagCandidates").value(nullValue()))	// 후보 없는 요소
 			.andExpect(jsonPath("$.candidates.AI[0].judgmentId").value(aiCandidateId))
 			.andExpect(jsonPath("$.candidates.AI[0].reviewStatus").value("PENDING"))
 			.andExpect(jsonPath("$.candidates.AI[0].penaltyLabel").value("징역 15년"))

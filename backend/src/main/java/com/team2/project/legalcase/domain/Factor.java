@@ -53,6 +53,9 @@ public class Factor {
 	@JdbcTypeCode(SqlTypes.JSON)
 	private ValueAxisVotes valueAxisVotes;	// 자동 분류 투표 기록 (사람 초안 · 투표 없이 정한 값은 null)
 
+	@JdbcTypeCode(SqlTypes.JSON)
+	private SummaryTagCandidates summaryTagCandidates;	// 요약어 후보 (BE-80). 후보 계산을 켜지 않은 적재 · 사람 초안은 null
+
 	private int displayOrder;
 
 	/** 관리자가 가치관 축을 확정한다 (A-12). null = 어느 축에도 맞지 않음으로 확정. 투표 기록은 그대로 둔다 */

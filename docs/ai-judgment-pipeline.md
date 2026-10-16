@@ -12,6 +12,7 @@
 | v2.4 | 2026-10-16 | 자동화 파이프라인 회의 결정 반영 (COMMON-40) — ④ generate 모델 호출 범위 축소(여러 모델 생성 → 테스트로 검증한 모델 하나로 고정 예정) 방침을 3장 · 8장에 추가 |
 | v2.5 | 2026-10-16 | 자동화 파이프라인 회의 결정 반영 (COMMON-41) — 확장 생성 파이프라인(REQ-040 ~ 045)에서 신문 지면 콘텐츠 · 사건 스크립트 생성을 추가 고려하고, 사건 사진은 AI가 직접 생성하지 않고 생성용 프롬프트만 제공하기로 한 결정을 1장에 추가 |
 | v2.6 | 2026-10-16 | 6장 무료 등급: 점검 · 생성은 무료 등급을 기본으로 쓴다(팀 결정 10/15, 근거 Jira BE-76 댓글). 판결문 원문 단계는 그대로 유료 키만 |
+| v2.7 | 2026-10-16 | 3장 ① 요약어 후보 DB 적재 · A-6 반영 (BE-80) — `factor.summary_tag_candidates`(V17), 화면 표시는 후속 |
 
 > 이 문서는 **개요**다. 명령 · 옵션 · 설정 값의 정확한 기준은 [`tools/ai-judgment/README.md`](../tools/ai-judgment/README.md)와 [`case-extractor/README.md`](../tools/ai-judgment/case-extractor/README.md)다. 문서와 코드가 다르면 도구 README와 코드를 따른다.
 > 이 문서는 사건 내용을 담지 않는다. 예시는 모두 설명용이다.
@@ -78,7 +79,7 @@ MVP는 AI 판결을 **오프라인에서 생성 · 검수한 결과를 DB에 적
 - 사건 발생일(`incidentDate`)은 모델이 예외적으로 정확한 날짜로 답하고 원문 · 선고일과 대조해 확인한 값만 내부 파일에 둔다. 이 값이 `legal_case.incident_date`에 들어간다(BE-38). 판결문에 날짜가 없으면 비운다.
 - 오류(개인정보 잔존 · 실제 형량 누출 등)가 있으면 사건 입력을 만들지 않고 멈춘다. 요약어(`summaryTag`, 판결 카드 한 줄 요약) · 사전 판단 선택지(`preLabel`)도 사용자에게 보이므로 같은 검사를 한다(BE-53).
 - **퓨샷 (BE-53, `extract-v6`)**: 시스템 프롬프트 뒤에 판단 요소 작성 예시(`extract_fewshot.md`)를 붙인다. 지어낸 상해 사건으로 사실 한 문장 · 공개 단계 · 요약어 · 가치관 축 쓰는 법만 보이고, 예시 값을 옮기지 말라고 적는다. 예시가 실제 검사 코드(스키마 · 개인정보 · 가치관 축)를 통과하는지 테스트로 지킨다.
-- **요약어 후보 (BE-53, `stages.extract.summaryTags`, 기본 꺼짐)**: 요소마다 요약어를 공개 기준 목록(`summary_tags.json`)과 `SEMANTIC_SIMILARITY` 임베딩으로 비교해 상위 3개와 점수, 기준(0.90, 실제 사건 요약어로 다시 정할 값) 이상인 기존 요약어를 `report.json`의 `factorExtras[].summaryTagCandidates`에 남긴다. **요약어는 바꾸지 않고 제안만** 한다. 1 · 2순위 점수 차가 0.01 미만이면 `ambiguous`로 표시하고 제안하지 않는다. 보내는 값은 요약어뿐이다. 키가 없거나 임베딩이 실패하면 상태만 `SKIPPED`로 남기고 계속한다. DB 적재 · 관리자 화면 표시는 후속(가치관 축 투표 `value_axis_votes`와 같은 방식)이다.
+- **요약어 후보 (BE-53, `stages.extract.summaryTags`, 기본 꺼짐)**: 요소마다 요약어를 공개 기준 목록(`summary_tags.json`)과 `SEMANTIC_SIMILARITY` 임베딩으로 비교해 상위 3개와 점수, 기준(0.90, 실제 사건 요약어로 다시 정할 값) 이상인 기존 요약어를 `report.json`의 `factorExtras[].summaryTagCandidates`에 남긴다. **요약어는 바꾸지 않고 제안만** 한다. 1 · 2순위 점수 차가 0.01 미만이면 `ambiguous`로 표시하고 제안하지 않는다. 보내는 값은 요약어뿐이다. 키가 없거나 임베딩이 실패하면 상태만 `SKIPPED`로 남기고 계속한다. 적재 SQL이 새 사건의 `factor.summary_tag_candidates`에 넣고 관리자 상세(A-6)에 내려 준다(BE-80, 가치관 축 투표 `value_axis_votes`와 같은 방식). 관리자 화면(S-19) 표시는 후속이다.
 
 ### ② court — 재판부 판결(COURT) 초안 (BE-38)
 
