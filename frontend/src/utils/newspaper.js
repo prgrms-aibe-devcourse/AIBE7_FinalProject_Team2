@@ -13,3 +13,14 @@ export const fallbackImages = {
   FRAUD: '/images/case-fraud.svg',
   INJURY: '/images/case-injury.svg',
 };
+
+// 공용 재연 컷(FE-32): 사건 사진이 없을 때 쓰는 샘플 연출 사진. 내로 · 남불이 기록을 읽는 장면이라 특정 사건 내용을 드러내지 않는다.
+// 원본은 이미지 레포 character/cuts/reenact/common(PNG 약 2MB) → 1000px webp로 줄여 public에 둔다. 사건 번호로 돌려 쓴다
+export const commonPhotos = ['/images/cases/common-1.webp', '/images/cases/common-2.webp', '/images/cases/common-3.webp'];
+
+/** 사건 사진: 썸네일이 있으면 그것, 없으면 공용 재연 컷(사건 번호로 고정 — 새로고침해도 같은 사진) */
+export function casePhoto(item) {
+  if (item?.thumbnailUrl) return item.thumbnailUrl;
+  const id = Number(item?.caseId) || 0;
+  return commonPhotos[id % commonPhotos.length];
+}

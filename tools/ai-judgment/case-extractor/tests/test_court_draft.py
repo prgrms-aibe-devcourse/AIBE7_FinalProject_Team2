@@ -195,6 +195,17 @@ class CheckDraftTest(unittest.TestCase):
         errors, _ = check_draft(draft, CASE, JUDGMENT)
         self.assertTrue(any("정확한 날짜" in e for e in errors))
 
+    def test_quoteWithMaskToken_mustBeReplaced(self):
+        # 미리 가린 표시([주소] 등)는 원문 글자와 같아 인용 대조를 통과한다 → 따로 막는다 (BE-53)
+        masked = JUDGMENT.replace("가상시 가상구 소재", "[주소]")
+        kept = "[주소] 별빛주점에서 술값을 지급할 의사나 능력이 없음에도"
+        replaced = "⟦한 동네⟧ 별빛주점에서 술값을 지급할 의사나 능력이 없음에도"
+        for evidence, rejected in ((kept, True), (replaced, False)):
+            draft = draft_with(factors=[{"factorId": 3, "direction": "UP", "evidence": evidence}])
+            errors, _ = check_draft(draft, CASE, masked)
+            self.assertEqual(any("가린 표시가 인용에 남았습니다" in e for e in errors), rejected, (evidence, errors))
+            self.assertFalse(any("원문 인용이 아닙니다" in e for e in errors), errors)  # 원문 대조 자체는 둘 다 통과
+
     def test_buildCourtDraft_be14Format(self):
         result = build_court_draft(draft_with(excerpt="피고인은 ⟦사건 당일⟧ 술값을 지급할 의사나 능력이 없음에도"), CASE, COURT, "m")
         j = result["judgment"]

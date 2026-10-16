@@ -339,3 +339,12 @@ h1 { font-family: var(--font-heading); color: var(--color-heading); letter-spaci
 .tolerance-track { position: relative; height: 4px; margin: 10px 8px 8px; border-radius: 2px; background: var(--color-border-strong); }
 .tolerance-marker { position: absolute; top: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px; border: 3px solid var(--color-card); border-radius: 50%; background: var(--color-accent); box-shadow: 0 0 0 1px var(--color-accent); }
 .tolerance-ends { display: flex; justify-content: space-between; color: var(--color-muted); font-size: var(--text-caption); }
+
+/* 터치 기기 공통(FE-32 점검, mobile-native): 탭 번쩍임 제거 · 즉시 반응 · 컨트롤 글자 선택 막기 · 누르는 순간의 눌림 피드백 */
+html { -webkit-tap-highlight-color: transparent; }
+button, [role="button"], a, label.range-option, summary { touch-action: manipulation; }
+button, [role="button"] { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+@media (prefers-reduced-motion: no-preference) {
+  :is(.primary-button, .secondary-button, .ear-button, .paper-start button, .dlg-choices button):not(:disabled) { transition: scale .12s cubic-bezier(.2, .8, .2, 1); }
+  :is(.primary-button, .secondary-button, .ear-button, .paper-start button, .dlg-choices button):not(:disabled):active { scale: .96; }
+}

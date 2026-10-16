@@ -8,6 +8,7 @@
 //   title       브라우저 탭 제목
 import { renderAiPage } from '../pages/ai/aiPage.js';
 import { renderCaseListPage } from '../pages/caseList/caseListPage.js';
+import { renderCaseDetailPage } from '../pages/caseDetail/caseDetailPage.js';
 import { renderComparisonPage } from '../pages/comparison/comparisonPage.js';
 import { renderCourtPage } from '../pages/court/courtPage.js';
 import { renderLandingPage } from '../pages/landing/landingPage.js';
@@ -24,6 +25,8 @@ import { renderNotFoundPage } from './notFoundPage.js';
 export const routes = [
   { name: 'landing', path: '/', render: renderLandingPage, ownsFooter: true, title: '내Law남불' },
   { name: 'list', path: '/cases', render: renderCaseListPage, ownsFooter: true, title: '사건 목록' },
+  // S-20 사건 디테일(확장, IA v1.12): 신문에서 고른 기사를 펼쳐 놓은 화면. 체험 전에도 열린다(API 16)
+  { name: 'caseDetail', path: '/cases/:caseId', render: renderCaseDetailPage, title: '사건 정보' },
   { name: 'overview', path: '/cases/:caseId/start', render: renderOverviewPage, title: '사건 개요' },
   { name: 'review', path: '/cases/:caseId/review', render: renderReviewPage, needsHeader: true, title: '사건 정보 확인' },
   { name: 'summary', path: '/cases/:caseId/summary', render: renderSummaryPage, needsHeader: true, title: '판결 전 최종 정리' },
