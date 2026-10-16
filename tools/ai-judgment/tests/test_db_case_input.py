@@ -83,7 +83,7 @@ class DbCaseInputTest(unittest.TestCase):
                 self.assertFalse(config["stages"]["extract"]["enabled"])
 
     def test_main_rejects_bad_options(self):
-        for argv in (["7", "--name", "Bad_Name"], ["7", "--name", "ok", "--pipeline"], ["7", "--name", "ok", "--runs", "0"]):
+        for argv in (["7", "--name", "Bad_Name"], ["7", "--name", "caf\u00e9"], ["7", "--name", "ok", "--pipeline"], ["7", "--name", "ok", "--runs", "0"]):
             err = io.StringIO()
             with redirect_stderr(err), mock.patch.object(db_case_input.rag_check, "json_row", return_value=ROW):
                 self.assertEqual(db_case_input.main(argv), 1, argv)

@@ -116,7 +116,7 @@ def pipeline_config(name, rag, model, runs):
 
 
 def check_name(name):
-    if not name or not all(ch.islower() or ch.isdigit() or ch == "-" for ch in name) or not name[0].isalnum():
+    if not name or not name.isascii() or not all(ch.islower() or ch.isdigit() or ch == "-" for ch in name) or not name[0].isalnum():
         raise CaseInputError(f"--name은 {NAME_PATTERN_HELP}")
 
 
