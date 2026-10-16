@@ -1,11 +1,69 @@
 import { button, element, renderSiteHeader } from '../../components/siteLayout.js';
 import { renderToleranceScale } from '../../components/toleranceScale.js';
 import { screenByStatus } from '../../utils/screenByStatus.js';
-import { CHARACTER_NAMES } from '../../utils/personalityAxes.js';
+import { renderAxisRow } from '../../components/axisRow.js';
+import { AXES, CHARACTER_NAMES } from '../../utils/personalityAxes.js';
+import { axisSeries, trailLeft, trailSummary } from '../../utils/myPageView.js';
 
-// S-17 마이페이지 (WBS 7.6.6). GET /my-page 한 번 호출로 받고, 기록이 없어도 404가 아니라 빈 200이다(명세 P-5). 지금은 내 성향(테스트 결과)과 체험한 사건 목록만 둔다.
-// 성향 변화 흐름 · 종합 4축 그래프는 체험 → 성향 저장(7.6.7) 뒤에 붙인다. 로그인 전에는 익명 ID 기준이다(REQ-108).
+// S-17 마이페이지 (WBS 7.6.6). GET /my-page 한 번 호출로 받고, 기록이 없어도 404가 아니라 빈 200이다(명세 P-5).
+// 내 성향(테스트 결과) · 종합 판결 성향(체험 평균 4축) · 성향 변화 흐름(체험별 4축 위치) · 체험한 사건 목록을 둔다.
+// 종합 · 변화 흐름은 체험 → 성향 저장(7.6.7, BE-64) 뒤부터 채워지므로 그 전에는 null · 빈 배열로 와서 안내만 보인다.
+// 로그인 전에는 익명 ID 기준이다(REQ-108).
 const STATUS_LABELS = { COMPLETED: '체험 완료' };
+
+// 종합 판결 성향 — 체험 평균. 네 축이 모두 차면 유형 이름도 함께 보여 준다
+function renderJudgment(judgment) {
+  const section = element('section', 'my-section');
+  section.append(element('h2', '', '판결에서 드러난 성향'));
+  if (!judgment) {
+    section.append(element('p', 'my-hint', '사건을 체험하면 판결에서 무엇을 무겁게 봤는지 여기에 쌓여요.'));
+    return section;
+  }
+  if (judgment.type) section.append(element('p', 'my-judgment-type', judgment.type.name));
+  section.append(element('p', 'my-hint', `첫 회차 체험 ${judgment.experienceCount}건의 평균이에요.`));
+  const list = element('ul', 'axis-list');
+  AXES.forEach((axis) => list.append(renderAxisRow(axis, judgment.axisScores?.[axis.key])));
+  section.append(list);
+  return section;
+}
+
+// 성향 변화 흐름 — 축마다 체험 번호가 붙은 점이 엄격 ↔ 관대 막대 위를 옮겨 간다
+function trailRow(axis, points) {
+  const row = element('li', 'axis-row trail-row');
+  row.append(element('p', 'axis-label', axis.label));
+  if (points.length === 0) {
+    row.append(element('p', 'axis-empty', '체험 자료가 아직 없어요'));
+    return row;
+  }
+  const ends = element('div', 'axis-ends');
+  ends.append(element('span', '', axis.strict.name), element('span', '', axis.lenient.name));
+  const track = element('div', 'trail-track');
+  track.setAttribute('role', 'img');
+  track.setAttribute('aria-label', points.map((point) => `${point.order}번째 체험 ${trailLeft(point.ratio)}%`).join(', ') + ` (0%는 ${axis.strict.name}, 100%는 ${axis.lenient.name})`);
+  points.forEach((point, index) => {
+    const dot = element('span', index === points.length - 1 ? 'trail-dot is-latest' : 'trail-dot', String(point.order));
+    dot.style.left = `${trailLeft(point.ratio)}%`;
+    track.append(dot);
+  });
+  row.append(ends, track);
+  const summary = trailSummary(points, axis);
+  if (summary) row.append(element('p', 'trail-summary', summary));
+  return row;
+}
+
+function renderTrail(history) {
+  const section = element('section', 'my-section');
+  section.append(element('h2', '', '성향 변화 흐름'));
+  if (history.length === 0) {
+    section.append(element('p', 'my-hint', '사건을 하나 마치면 첫 점이 찍혀요.'));
+    return section;
+  }
+  section.append(element('p', 'my-hint', history.length === 1 ? '한 건을 더 체험하면 움직임이 보여요. 번호는 체험한 순서예요.' : '번호는 체험한 순서이고, 가장 최근 점이 진하게 보여요.'));
+  const list = element('ul', 'axis-list');
+  AXES.forEach((axis) => list.append(trailRow(axis, axisSeries(history, axis.key))));
+  section.append(list);
+  return section;
+}
 
 export async function renderMyPage(container, { api, navigate }) {
   const root = element('div', 'my-page');
@@ -67,7 +125,7 @@ export async function renderMyPage(container, { api, navigate }) {
   // 체험한 사건 — 테스트 여부와 무관하게 보여 준다
   const experiences = element('section', 'my-section');
   experiences.append(element('h2', '', '체험한 사건'));
-  if (data.experiences.length === 0) {
+  if ((data.experiences ?? []).length === 0) {
     const empty = element('div', 'my-empty');
     empty.append(element('p', '', '아직 체험한 사건이 없어요.'), button('사건 목록 보기', () => navigate('list'), 'secondary-button'));
     experiences.append(empty);
@@ -86,5 +144,5 @@ export async function renderMyPage(container, { api, navigate }) {
   }
 
   const note = element('p', 'my-note', '로그인하기 전에는 이 브라우저(익명 ID)를 기준으로 기록해요. 쿠키를 지우면 기록을 찾을 수 없어요.');
-  main.replaceChildren(title, tendency, experiences, note);
+  main.replaceChildren(title, tendency, renderJudgment(data.judgmentPersonality), renderTrail(data.history ?? []), experiences, note);
 }

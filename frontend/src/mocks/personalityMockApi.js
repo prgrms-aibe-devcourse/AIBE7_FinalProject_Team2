@@ -135,15 +135,34 @@ export async function getPersonalityType(shareId) {
   return toType(SHARE_IDS[key]);
 }
 
-// P-5 마이페이지 조회. 기록이 없어도 404가 아니라 빈 200이다. 종합 판결 성향 · 성향 변화 흐름은
-// 체험 → 성향 저장(7.6.7)이 붙은 뒤부터 채워지므로 지금은 각각 null · 빈 배열이다
+// 체험별 4축 점수 목 (명세 P-5 예시와 같은 모양). 실제로는 체험 → 성향 저장(7.6.7)이 만든다. 완료한 사건 1건 + 아래 두 건으로 화면을 확인한다
+const mockHistory = [
+  { caseId: 1, title: '가상 살인 사건', completedAt: '2026-10-14T15:00:00+09:00', axisScores: { APOLOGY_SINCERITY: 1.0, FAULT_STANDARD: 0.0, PRINCIPLE_RELATION: 1.0, ORDER_OPPORTUNITY: null } },
+  { caseId: 2, title: '가상 사기 사건', completedAt: '2026-10-15T11:00:00+09:00', axisScores: { APOLOGY_SINCERITY: 0.5, FAULT_STANDARD: 0.25, PRINCIPLE_RELATION: 0.75, ORDER_OPPORTUNITY: 0.5 } },
+  { caseId: 3, title: '가상 상해 사건', completedAt: '2026-10-16T09:00:00+09:00', axisScores: { APOLOGY_SINCERITY: 0.25, FAULT_STANDARD: 0.25, PRINCIPLE_RELATION: 0.9, ORDER_OPPORTUNITY: 0.75 } },
+];
+
+// 축마다 값이 있는 체험의 평균. 값이 하나도 없는 축은 null (명세 P-5)
+function averageAxes(history) {
+  const axisScores = {};
+  AXES.forEach((axis) => {
+    const values = history.map((entry) => entry.axisScores[axis.key]).filter((value) => typeof value === 'number');
+    axisScores[axis.key] = values.length === 0 ? null : values.reduce((sum, value) => sum + value, 0) / values.length;
+  });
+  return axisScores;
+}
+
+// P-5 마이페이지 조회. 기록이 없어도 404가 아니라 빈 200이다. 종합 판결 성향 · 성향 변화 흐름은 체험 → 성향 저장(7.6.7) 전에는
+// 실제로 null · 빈 배열이다. 목은 화면 확인용으로 체험 기록 목을 채워 둔다. 기록이 없는 상태는 `?empty=history`로 볼 수 있다
 export async function getMyPage() {
   await delay();
   const saved = savedResult();
+  const noHistory = new URLSearchParams(globalThis.location?.search ?? '').get('empty') === 'history';
+  const history = noHistory ? [] : mockHistory;
   return structuredClone({
     personality: saved ? toResult(saved) : null,
-    judgmentPersonality: null,
-    history: [],
+    judgmentPersonality: history.length === 0 ? null : { axisScores: averageAxes(history), type: null, experienceCount: history.length },
+    history: history.map(({ caseId, title, completedAt, axisScores }) => ({ caseId, title, completedAt, axisScores })),
     experiences: mockExperiences,
   });
 }

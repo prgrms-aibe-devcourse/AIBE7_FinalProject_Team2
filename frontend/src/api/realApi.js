@@ -26,7 +26,15 @@ export const postReviewStep = (caseId, step) => post(`${experience(caseId)}/revi
 export const getVerdictForm = (caseId) => get(`${experience(caseId)}/verdict-form`);
 export const postVerdict = (caseId, body) => post(`${experience(caseId)}/verdict`, body);
 
-// API 10 ~ 14 — AI 판결, 실제 판결 공개 · 조회, 비교 공개 · 조회
+// 성향 API P-1 ~ P-5 (명세 9장) — 문항 · 응답 제출 · 내 결과 · 공유용 유형 · 마이페이지
+// 내 결과가 없으면 P-3은 404 PERSONALITY_RESULT_NOT_FOUND이고, 마이페이지(P-5)는 기록이 없어도 빈 200이다
+export const getPersonalityQuestions = () => get('/personality/questions');
+export const submitPersonality = (answers) => post('/personality/results', { answers });
+export const getMyPersonality = () => get('/personality/results/me');
+export const getPersonalityType = (shareId) => get(`/personality/types/${encodeURIComponent(shareId)}`);
+export const getMyPage = () => get('/my-page');
+
+// API 10 ~ 14— AI 판결, 실제 판결 공개 · 조회, 비교 공개 · 조회
 // (백엔드 구현 전에는 404가 온다. 구현되면 이 함수들이 그대로 동작한다)
 export const getAiJudgment = (caseId) => get(`${experience(caseId)}/judgments/ai`);
 export const postCourtReveal = (caseId) => post(`${experience(caseId)}/court-reveal`);

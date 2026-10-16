@@ -1,33 +1,12 @@
 import { button, element, renderSiteHeader } from '../../components/siteLayout.js';
 import { renderToleranceScale } from '../../components/toleranceScale.js';
 import { descriptionSections, noticeBlock, typeCard } from './personalityParts.js';
+import { renderAxisRow } from '../../components/axisRow.js';
 import { AXES } from '../../utils/personalityAxes.js';
 
 // S-16 성향 결과 — 내 결과 (WBS 7.6.5). 공유 버튼은 해시 주소(/test/types/{shareId})를 공유한다(FR-8-6). 이미지 공유는 캐릭터 이미지(7.6.8) 뒤에 붙인다.
 // 캐릭터 이미지는 아직 없어서(7.6.8) 이름표 자리만 둔다. 문구는 docs/personality-test-content.md 4 · 5장.
 // 4축 그래프: 축마다 양쪽 성향의 비중(관대 쪽 비중 = axisScores). 관용 지수 게이지: 0 ~ 4칸.
-const pct = (ratio) => Math.round(ratio * 100);
-
-function axisRow(axis, lenientRatio) {
-  const strict = pct(1 - lenientRatio);
-  const lenient = 100 - strict;
-  const row = element('li', 'axis-row');
-  row.append(element('p', 'axis-label', axis.label));
-  const labels = element('div', 'axis-ends');
-  labels.append(
-    element('span', strict > lenient ? 'is-major' : '', `${axis.strict.name} ${strict}%`),
-    element('span', lenient > strict ? 'is-major' : '', `${lenient}% ${axis.lenient.name}`),
-  );
-  const bar = element('div', 'axis-bar');
-  bar.setAttribute('role', 'img');
-  bar.setAttribute('aria-label', `${axis.strict.name} ${strict}%, ${axis.lenient.name} ${lenient}%`);
-  const fill = element('span');
-  fill.style.width = `${strict}%`; // 왼쪽 = 엄격 쪽 비중
-  bar.append(fill);
-  row.append(labels, bar);
-  return row;
-}
-
 // 공유 주소는 유형 설명만 열린다(개인 응답 · 점수 없음, FR-8-6). 이미지 공유는 캐릭터 이미지(7.6.8) 뒤에 붙인다
 // 공유 주소는 서버가 준 해시 값(shareId)이다. 유형 코드는 주소에도 드러나지 않는다
 async function share(shareId, type, note) {
@@ -96,7 +75,7 @@ export async function renderPersonalityResultPage(container, { api, navigate }) 
     const graph = element('section', 'result-section');
     graph.append(element('h2', '', '가치관 4축'));
     const list = element('ul', 'axis-list');
-    AXES.forEach((axis) => list.append(axisRow(axis, axisScores[axis.key])));
+    AXES.forEach((axis) => list.append(renderAxisRow(axis, axisScores[axis.key])));
     graph.append(list, toleranceGauge(type.tolerance));
 
     const actions = element('div', 'personality-actions result-actions');
