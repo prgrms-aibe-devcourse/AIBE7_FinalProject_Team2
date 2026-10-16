@@ -8,6 +8,7 @@ function preWeight(label) {
   if (label.includes('사형')) return { tier: 4 };
   if (label.includes('무기')) return { tier: 3 };
   if (label.includes('집행유예')) return { tier: 1 };
+  if (label.includes('벌금')) return { tier: 0 }; // 법원 쪽 FINE(tier 0)과 같은 층
   if (!label.includes('실형')) return null;
   const min = label.match(/(\d+)년 이상/);
   const max = label.match(/(\d+)년 미만/);

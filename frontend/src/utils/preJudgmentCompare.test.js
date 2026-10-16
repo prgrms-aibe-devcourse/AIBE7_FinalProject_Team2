@@ -27,3 +27,10 @@ test('읽을 수 없는 이름이면 의견 줄을 만들지 않는다', () => {
   assert.equal(editorNote('알 수 없는 구간', prison(60)), null);
   assert.equal(editorNote('실형 5년 이상 ~ 10년 미만', prison(60)), '실제 사건과 비슷하게 판단했어요.');
 });
+
+test('벌금 구간은 법원 쪽 벌금(가장 가벼운 층)과 맞춘다', () => {
+  const fine = { penaltyType: 'FINE', prisonMonths: null, suspensionMonths: null, reducedTo: null };
+  assert.equal(comparePreToCourt('벌금', fine), 'SAME');
+  assert.equal(comparePreToCourt('벌금', prison(18)), 'PRE_LIGHTER');
+  assert.equal(comparePreToCourt('실형 3년 미만', fine), 'PRE_HEAVIER');
+});

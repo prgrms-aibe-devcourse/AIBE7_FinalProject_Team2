@@ -203,6 +203,7 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
       if (starting) return;
       starting = true;
       trigger.setAttribute('aria-busy', 'true');
+      trigger.disabled = true; // 요청 중에는 눌러도 무시되므로 비활성으로 보이게
       notice.textContent = '';
       try {
         const experience = await api.startExperience(caseId);
@@ -233,6 +234,7 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
       } finally {
         starting = false;
         trigger.removeAttribute('aria-busy');
+        trigger.disabled = false;
       }
     }
     // 2막 사전 판단 폼에 쓸 형량 구간(API 4). 1막을 보는 동안 받아 오고, 끝내 못 받으면 S-03을 새로 열어 그 화면의 오류 안내에 맡긴다

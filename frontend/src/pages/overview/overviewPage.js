@@ -50,7 +50,12 @@ export function mountStagePage(root, { stage }) {
 // 보낸 사전 판단(형량 구간 이름)을 이 브라우저에 적어 둔다. 진행 중인 체험은 서버에서 다시 읽을 API가 없어서(API 14는 완료 뒤에만),
 // S-20에서 1막부터 다시 볼 때 "이미 보낸 엽서"에 적는 데 쓴다. 없으면 이름 없이 안내만 한다
 const SENT_KEY = 'nlnb-sent-pre-judgment';
-function readSent() { try { return JSON.parse(localStorage.getItem(SENT_KEY)) ?? {}; } catch { return {}; } }
+function readSent() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SENT_KEY));
+    return saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {}; // 손상 · 직접 수정한 값(문자열 · 숫자 · 배열)은 버린다
+  } catch { return {}; }
+}
 export const sentPreJudgment = (caseId) => readSent()[caseId] ?? null;
 function rememberSent(caseId, label) { try { localStorage.setItem(SENT_KEY, JSON.stringify({ ...readSent(), [caseId]: label })); } catch { /* 저장소를 못 쓰면 엽서에 이름만 빠진다 */ } }
 
