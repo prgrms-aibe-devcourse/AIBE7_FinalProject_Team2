@@ -1,0 +1,45 @@
+// Grafana Alloy — 메인 EC2에서 백엔드 로그를 모니터링 EC2의 Loki로 보낸다 (COMMON-43, WBS 7.2.4).
+//
+// 로컬용(monitoring/alloy-config.alloy)과 두 가지가 다르다.
+//   1. 보낼 곳이 같은 Compose 안의 loki:3100이 아니라, 모니터링 EC2의 사설 IP다 → 환경변수로 받는다
+//   2. 읽을 파일이 호스트의 backend/logs가 아니라, 백엔드 컨테이너와 공유하는 볼륨이다
+//
+// 이 파일이 monitoring/이 아니라 deploy/에 있는 이유: 메인 서버에는 "저장소에서 deploy 폴더만" 두기 때문이다
+// (deploy/README.md "서버(EC2)에서 실행"). monitoring/을 참조하면 서버에 없는 경로를 가리키게 된다.
+// 로그 라벨 규칙(level만 승격, traceId는 라벨 금지)은 로컬과 같아야 하므로, 한쪽을 고치면 다른 쪽도 같이 고친다.
+
+local.file_match "backend_logs" {
+	// docker-compose.monitoring-agent.yml이 백엔드의 /app/logs를 이 경로로 읽기 전용 마운트한다.
+	// 회전된 파일(app.2026-10-16.0.log.gz)은 *.log에 걸리지 않는다 — 이미 보낸 내용을 다시 보내지 않기 위해서다
+	path_targets = [{"__path__" = "/var/log/backend/*.log", "job" = "backend"}]
+}
+
+loki.source.file "backend" {
+	targets    = local.file_match.backend_logs.targets
+	forward_to = [loki.process.backend.receiver]
+}
+
+loki.process "backend" {
+	forward_to = [loki.write.default.receiver]
+
+	// level만 라벨로 승격한다. traceId 같은 요청별 고유값은 라벨로 올리지 않는다 —
+	// Loki는 라벨 조합마다 스트림을 하나씩 만들어서 금방 못 버틴다 (BE-71, 7.2.1 카디널리티 규칙과 같은 이유)
+	stage.json {
+		expressions = {level = "level"}
+	}
+	stage.labels {
+		values = {level = "level"}
+	}
+}
+
+loki.write "default" {
+	endpoint {
+		// 예: http://10.0.1.23:3100/loki/api/v1/push — .env의 LOKI_URL로 넘긴다.
+		// 사설 IP는 커밋하지 않는다(CLAUDE.md 3-1 보안). 기본값을 두지 않아서, 값이 없으면 바로 드러난다
+		url = sys.env("LOKI_URL")
+
+		// 모니터링 EC2가 잠깐 내려가도 그 사이 로그를 잃지 않게 재시도한다. 더 긴 장애라도 메인 서버의
+		// 로그 파일 자체는 15일 남아 있으므로(logback-spring.xml), Alloy를 다시 띄우면 읽던 위치부터 따라잡는다
+		retry_on_http_429 = true
+	}
+}

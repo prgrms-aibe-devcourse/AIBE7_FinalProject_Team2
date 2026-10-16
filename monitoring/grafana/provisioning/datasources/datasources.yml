@@ -1,0 +1,29 @@
+# Grafana 데이터소스 (COMMON-43, WBS 7.2.4)
+# 화면에서 손으로 추가하지 않고 파일로 둔다 — 컨테이너를 지웠다 만들어도 같은 상태로 돌아오고,
+# 대시보드 JSON이 참조하는 uid가 바뀌지 않는다(uid가 바뀌면 모든 패널이 "데이터소스 없음"이 된다).
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    # 대시보드 JSON이 이 uid로 패널을 묶는다. 자동 생성에 맡기면 환경마다 값이 달라지므로 고정한다
+    uid: prometheus
+    access: proxy
+    # Compose 서비스 이름. 별도 EC2로 분리해도 Grafana와 Prometheus는 같은 호스트에 두므로 이 값 그대로다
+    url: http://prometheus:9090
+    isDefault: true
+    jsonData:
+      # prometheus.yml의 scrape_interval과 맞춘다. Grafana가 $__rate_interval을 계산할 때 쓰는 값이라,
+      # 틀리면 rate() 창이 스크레이프 간격보다 짧아져 그래프가 비는 구간이 생긴다
+      timeInterval: 15s
+      httpMethod: POST
+
+  - name: Loki
+    type: loki
+    uid: loki
+    access: proxy
+    url: http://loki:3100
+    jsonData:
+      # 로그의 traceId를 눌러 메트릭 쪽으로 넘어가는 연결은 두지 않는다 — traceId는 라벨이 아니라
+      # 로그 내용(JSON 필드)이라(BE-71) 메트릭 라벨과 이어지지 않는다. 조회는 `| json | traceId="..."`로 한다
+      maxLines: 1000

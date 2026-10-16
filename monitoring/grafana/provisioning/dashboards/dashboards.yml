@@ -1,0 +1,18 @@
+# Grafana 대시보드 프로비저닝 (COMMON-43, WBS 7.2.4)
+# 대시보드를 화면에서 그리면 그 서버의 Grafana DB에만 남는다. 파일로 두면 Git에 남아 리뷰가 되고,
+# 7.3.3 Grafana Cloud에도 같은 JSON을 그대로 가져갈 수 있다.
+apiVersion: 1
+
+providers:
+  - name: lawnambul
+    orgId: 1
+    folder: 남불법정
+    type: file
+    # 화면에서 고친 내용이 파일을 덮어쓰지 않게 막는다. 반대로 파일이 원본이고 화면은 보기 전용에 가깝다 —
+    # 고칠 때는 JSON을 고쳐 커밋한다(대시보드가 코드와 어긋나는 상태를 만들지 않는다)
+    disableDeletion: false
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards
+      # 하위 폴더 이름을 Grafana 폴더로 쓰지 않는다 — 지금은 대시보드가 4개뿐이라 한 폴더로 충분하다
+      foldersFromFilesStructure: false

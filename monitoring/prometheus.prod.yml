@@ -1,0 +1,35 @@
+# Prometheus 스크레이프 설정 — 운영(모니터링 전용 EC2) (COMMON-43, WBS 7.2.4)
+#
+# 로컬(prometheus.yml)과 다른 점은 "대상이 같은 호스트가 아니다"는 것 하나다.
+# 로컬: host.docker.internal:8081 · node-exporter:9100 (같은 머신 · 같은 Compose 네트워크)
+# 운영: 메인 EC2의 사설 IP:8081 · :9100 (같은 VPC 안, 인터넷을 타지 않는다)
+#
+# 대상 주소를 이 파일에 직접 적지 않고 file_sd로 뺀 이유:
+#   1. 사설 IP는 서버 접속 정보라 공개 저장소에 커밋하지 않는다 (CLAUDE.md 3-1 보안)
+#   2. 인스턴스를 중지했다 켜면 사설 IP가 바뀔 수 있는데, file_sd 파일은 Prometheus가 알아서 다시 읽는다 —
+#      이 파일을 고칠 때와 달리 재시작도, 설정 리로드도 필요 없다
+#
+# targets/ 파일은 서버에서 만든다 (monitoring/README.md "운영(별도 EC2) 적용" 참고).
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  # 서비스가 하나뿐이라 지금은 쓸 일이 적지만, 7.3.3에서 Grafana Cloud로 remote_write하면
+  # 다른 소스와 섞이므로 어느 환경에서 온 메트릭인지 구분할 라벨이 필요하다
+  external_labels:
+    env: prod
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # 백엔드 Actuator (7.2.1). 메인 EC2의 관리 포트 8081 — 보안 그룹에서 모니터링 EC2의 사설 IP에만 연다
+  - job_name: backend
+    metrics_path: /actuator/prometheus
+    file_sd_configs:
+      - files: ["/etc/prometheus/targets/backend.json"]
+
+  # 메인 EC2의 호스트 자원 (인프라 대시보드). 모니터링 호스트 자신이 아니라 서비스가 도는 쪽을 본다
+  - job_name: node
+    file_sd_configs:
+      - files: ["/etc/prometheus/targets/node.json"]

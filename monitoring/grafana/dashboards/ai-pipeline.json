@@ -1,0 +1,250 @@
+{
+  "uid": "lawnambul-ai-pipeline",
+  "title": "AI 파이프라인",
+  "description": "7.2.1 커스텀 메트릭(체험 시작 · 판결 확정 · AI 호출)을 본다. 주의: lawnambul_ai_call_total이 지금 재는 것은 RAG 유사 판례 검색의 임베딩 호출(GeminiQueryEmbeddingClient)뿐이다. 판결문 생성은 오프라인 파이프라인(tools/ai-judgment)에서 돌아 서버 메트릭에 잡히지 않는다 — 생성 단계 계측은 COMMON-40과 함께 따로 본다.",
+  "tags": ["lawnambul", "7.2.4"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "refresh": "1m",
+  "time": { "from": "now-24h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "AI 호출 성공률",
+      "description": "선택한 시간 구간 전체의 성공 비율. increase()로 계산해서 서버가 재시작돼 카운터가 0으로 돌아가도 값이 튀지 않는다. 호출이 한 건도 없으면 값이 빈다 — GEMINI_API_KEY가 없으면 RAG만 꺼진 채 서버는 정상이므로(application.yml), 빈 값이 곧 장애는 아니다.",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 2,
+          "min": 0,
+          "max": 1,
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 0.9 },
+              { "color": "green", "value": 0.99 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(lawnambul_ai_call_total{job=\"backend\", result=\"success\"}[$__range])) / sum(increase(lawnambul_ai_call_total{job=\"backend\"}[$__range]))",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "AI 호출 실패",
+      "description": "선택 구간의 실패 건수. 실패해도 사용자에게는 '유사 판례 없음'으로만 보이고 체험은 계속 진행되므로(RAG는 선택 기능), 화면 오류 없이 조용히 늘어난다 — 그래서 수치로 따로 띄운다.",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "red", "value": 10 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(lawnambul_ai_call_total{job=\"backend\", result=\"failure\"}[$__range]))",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "체험 시작",
+      "description": "선택 구간에 새로 시작된 체험 수. 이미 있던 체험을 다시 돌려준 경우는 세지 않는다(BusinessMetrics).",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "color": { "mode": "fixed", "fixedColor": "blue" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(lawnambul_experience_started_total{job=\"backend\"}[$__range]))",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "체험 → 판결 확정 전환율",
+      "description": "시작한 체험 중 판결까지 간 비율. 같은 구간에 시작한 체험이 그 구간 안에 끝난다는 보장이 없으므로(사용자가 중간에 멈췄다 나중에 이어서 할 수 있다) 정확한 코호트 비율이 아니라 추세 지표로만 읽는다. 1을 넘는 값도 그래서 나올 수 있다.",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 1,
+          "min": 0,
+          "color": { "mode": "fixed", "fixedColor": "purple" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(lawnambul_verdict_confirmed_total{job=\"backend\"}[$__range])) / sum(increase(lawnambul_experience_started_total{job=\"backend\"}[$__range]))",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "AI 호출 추이 (성공 · 실패)",
+      "description": "실패가 특정 시각에 몰리는지, 꾸준한지 본다. 몰려 있으면 외부 API 장애나 한도 초과, 꾸준하면 코드나 설정 쪽을 본다.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 60,
+            "showPoints": "never",
+            "stacking": { "mode": "normal", "group": "A" }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "실패" },
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "성공" },
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }]
+          }
+        ]
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": [] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(lawnambul_ai_call_total{job=\"backend\", result=\"success\"}[$__interval]))",
+          "legendFormat": "성공"
+        },
+        {
+          "refId": "B",
+          "expr": "sum(increase(lawnambul_ai_call_total{job=\"backend\", result=\"failure\"}[$__interval]))",
+          "legendFormat": "실패"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "체험 시작 · 판결 확정 추이",
+      "description": "두 선의 간격이 벌어지면 체험을 시작하고 판결까지 가지 않는 사용자가 늘었다는 뜻이다. 어느 막에서 이탈하는지는 이 메트릭으로 알 수 없다 — 막별 계측은 지금 없다.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "showPoints": "auto"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": [] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(lawnambul_experience_started_total{job=\"backend\"}[$__interval]))",
+          "legendFormat": "체험 시작"
+        },
+        {
+          "refId": "B",
+          "expr": "sum(increase(lawnambul_verdict_confirmed_total{job=\"backend\"}[$__interval]))",
+          "legendFormat": "판결 확정"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "logs",
+      "title": "RAG · 임베딩 관련 오류 로그",
+      "description": "메트릭은 '몇 건 실패했나'만 알려주고 이유는 모른다. 이유는 여기서 본다. level은 Alloy가 승격해 둔 라벨이라 스트림 선택자에서 먼저 거르고(스캔량이 줄어든다), 패키지 필터는 LogstashEncoder가 넣는 logger_name 필드로 한다 — rag 패키지 밖으로 로거가 늘어나면 이 쿼리도 함께 고친다.",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 12 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "enableLogDetails": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{job=\"backend\", level=~\"WARN|ERROR\"} | json | logger_name =~ \".*rag.*\"",
+          "queryType": "range"
+        }
+      ]
+    }
+  ]
+}

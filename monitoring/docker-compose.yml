@@ -1,12 +1,13 @@
-# 로컬 모니터링 스택 (Prometheus BE-70 WBS 7.2.2 · Loki/Alloy BE-71 WBS 7.2.3).
+# 로컬 모니터링 스택 (Prometheus BE-70 WBS 7.2.2 · Loki/Alloy BE-71 WBS 7.2.3 · Grafana COMMON-43 WBS 7.2.4).
 # backend/docker-compose.yml(DB)와는 별개로 띄운다 — 모니터링 스택을 껐다 켜도 앱 · DB 동작에는 영향이 없어야 한다.
 # `./gradlew bootRun`으로 호스트에서 띄운 백엔드의 관리 포트(8081, 7.2.1)를 스크레이프하고,
 # backend/logs의 JSON 로그 파일(7.2.3)을 Alloy가 읽어 Loki로 보낸다.
 #
 # 사용법:
 #   cd monitoring && docker compose up -d
+#   http://localhost:3000 에서 대시보드 4종 확인 (Grafana, 초기 계정은 README 참고)
 #   http://localhost:9090/targets 에서 backend job이 UP인지 확인 (Prometheus)
-#   http://localhost:3100/ready 로 Loki 기동 확인, LogQL은 Grafana(7.2.4)에서 조회
+#   http://localhost:3100/ready 로 Loki 기동 확인
 name: lawnambul-monitoring
 
 services:
@@ -58,6 +59,59 @@ services:
       - loki
     restart: unless-stopped
 
+  grafana:
+    # 13.2는 패치가 네 번 나온 안정된 라인이다. Grafana OSS에는 Prometheus 같은 LTS 라인이 없어서,
+    # "최신 마이너 중 패치가 충분히 쌓인 것"을 고르는 게 사실상의 안정 선택이다
+    image: grafana/grafana:13.2.4
+    container_name: lawnambul-grafana
+    volumes:
+      # 데이터소스 · 대시보드를 파일로 넣는다(프로비저닝). 화면에서 손으로 만들면 이 컨테이너 안에만 남는다
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      # 대시보드 자체는 파일이라 날아가도 되지만, 사용자 · 환경설정은 여기 남는다
+      - grafana-data:/var/lib/grafana
+    environment:
+      # 로컬 전용 계정이다. 운영(별도 EC2)에서는 반드시 .env로 덮어쓴다 — README "운영(별도 EC2) 적용" 참고
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      # 익명 접근은 끈다. 7.3.3에서 Grafana Cloud 권한을 "팀원 4명 계정만, 익명 공개 없음"으로 정했고 자체 Grafana도 같은 기준이다
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      # 새 버전 알림 · 사용 통계 전송을 끈다. 모니터링 호스트에서 바깥으로 나가는 연결을 만들지 않는다
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+    ports:
+      # Prometheus · Loki와 같이 루프백에만 바인딩한다. 운영에서도 퍼블릭에 열지 않고 SSH 터널로 붙는다(README)
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - prometheus
+      - loki
+    restart: unless-stopped
+
+  node-exporter:
+    # 인프라 대시보드(7.2.4)가 쓰는 호스트 자원 지표. 운영에서는 이 컨테이너만 메인 EC2에서 돌린다
+    # (deploy/docker-compose.monitoring-agent.yml) — 봐야 할 자원이 모니터링 호스트가 아니라 서비스 호스트의 것이기 때문이다.
+    # 로컬에서는 Docker Desktop VM의 수치가 잡힌다(Mac 호스트 자체가 아니다) — 대시보드가 그려지는지 확인하는 용도로만 본다
+    image: prom/node-exporter:v1.12.1
+    container_name: lawnambul-node-exporter
+    # 컨테이너 안이 아니라 호스트의 /proc · /sys · 파일시스템을 읽어야 의미가 있다
+    pid: host
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --path.rootfs=/rootfs
+      # 컨테이너 · 가상 인터페이스의 마운트까지 세면 디스크 패널이 의미 없는 줄로 가득 찬다
+      - --collector.filesystem.mount-points-exclude=^/(rootfs/)?(dev|proc|sys|var/lib/docker/.+|var/lib/kubelet/.+)($$|/)
+      - --collector.filesystem.fs-types-exclude=^(autofs|binfmt_misc|cgroup.?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs)$$
+    ports:
+      - "127.0.0.1:9100:9100"
+    restart: unless-stopped
+
 volumes:
   prometheus-data:
   loki-data:
+  grafana-data:
