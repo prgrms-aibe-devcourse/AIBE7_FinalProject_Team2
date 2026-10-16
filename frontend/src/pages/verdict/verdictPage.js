@@ -480,8 +480,15 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       signed = true;
       submitting = true;
       submitError.textContent = '';
+      // 서명하는 동안 카드 안쪽 스크롤을 지금 자리에 묶어 둔다(정한 내용을 다시 그리거나 상태가 바뀌어도 위로 튀지 않게)
+      const scroller = layout.closest('.scroll-body');
+      const keep = scroller?.scrollTop ?? 0;
+      const hold = () => { if (scroller && submitting && Math.abs(scroller.scrollTop - keep) > 1) scroller.scrollTop = keep; };
+      scroller?.addEventListener('scroll', hold);
       signRow.classList.add('is-signed');
       update();
+      hold();
+      requestAnimationFrame(hold);
       // 서명이 다 그려진 뒤에 확정을 보낸다(되돌릴 수 없는 일이라 서명하는 순간을 눈으로 보게 한다)
       if (!reducedMotion()) await new Promise((resolve) => { setTimeout(resolve, SIGN_MS); });
       try {
@@ -502,6 +509,7 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
         }
       } finally {
         submitting = false;
+        scroller?.removeEventListener('scroll', hold);
         if (active() && main.isConnected) {
           update();
           if (serverError) {
@@ -528,6 +536,10 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       const labels = (direction) => form.factors.filter((factor) => draft.factors[factor.factorId] === direction).map((factor) => factor.label);
       const rows = [['형벌 · 형량', penalty], ...(reduced ? [['감경', reduced]] : []), ['집행유예', suspension],
         ['무겁게 본 요소', labels('UP')], ['가볍게 본 요소', labels('DOWN')]];
+      // 내용이 그대로면 다시 그리지 않는다(통째로 갈아끼우면 브라우저의 스크롤 기준점이 사라져 카드가 튈 수 있다)
+      const key = JSON.stringify(rows);
+      if (signSummary.dataset.key === key) return;
+      signSummary.dataset.key = key;
       signSummary.replaceChildren(...rows.flatMap(([term, detail]) => {
         const dd = element('dd');
         if (Array.isArray(detail)) {

@@ -72,11 +72,11 @@
 .stage-wrap:not(.paper-mode) .stage.card .dlg[data-speaker="nambul"]::after { right: calc(21% + 3px); }
 
 /* 볼따구(해설): 작은 내로 · 남불이 무대 가운데에서 조금 왼쪽 아래, 대사창 위에 볼을 괴고 걸친다(꼬리 없음).
-   둘은 대칭으로 두지 않는다 — 남불이 조금 더 오른쪽 · 더 아래. 이름표는 다른 대사와 같은 자리 */
+   내로는 가운데에서 조금 왼쪽, 남불은 가운데에서 오른쪽 · 조금 더 아래(대칭으로 두지 않는다). 이름표는 다른 대사와 같은 자리 */
 .stage-wrap .cameo { position: absolute; z-index: 30; height: 47.5%; width: auto; translate: -50% 0; transform-origin: 50% 100%; pointer-events: none; /* FE-48: 2.5배, 발밑에서 뿅 */
   filter: drop-shadow(0 4px 6px color-mix(in srgb, var(--color-desk-shadow) 30%, transparent)); }
 .stage-wrap .cameo-naero { left: 40%; bottom: calc(3% + 21% - 3.4cqw); }
-.stage-wrap .cameo-nambul { left: 44%; bottom: calc(3% + 21% - 4.6cqw); }
+.stage-wrap .cameo-nambul { left: 62%; bottom: calc(3% + 21% - 4.6cqw); } /* 가운데에서 오른쪽(가운데 피고인석 A씨 역과 겹치지 않게) */
 .stage-wrap .cameo[hidden] { display: none; }
 /* 가운데 피고인석(stand)에 선 캐릭터가 말하면 꼬리도 가운데 */
 .stage-wrap:not(.paper-mode) .dlg[data-spot="stand"]::before { left: calc(50% - 13px); right: auto; scale: 1 1; }
