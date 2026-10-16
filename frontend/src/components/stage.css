@@ -313,17 +313,27 @@
 /* 5막 판결 입력 카드: S-06 화면(입력 · 참고 정보)을 그대로 싣고, 무대 전체를 덮는다(대본 board: "full").
    글씨 · 버튼은 흐름 목업 크기(본문 12 ~ 13px)로 줄인다. 위의 2막 폼 규칙(fieldset · legend · p)도 여기서 되돌린다 */
 .stage-wrap .stage .board.full { left: 0; right: 0; top: 0; bottom: 0; border-radius: 10px; }
-.stage-wrap .board.wide:has(.verdict-layout) { padding: 0; }
+/* 판결 파일철(FE-43)은 판사 책상의 남색 매트 위에 놓인다(메인 책상과 같은 재료) */
+.stage-wrap .board.wide:has(.verdict-layout) { padding: 14px 18px 18px; border-color: var(--color-desk-pad-edge); background: var(--color-desk-pad); justify-content: flex-start; } /* 탭을 넘겨도 철이 위아래로 움직이지 않게 위에 붙인다 */
+@media (max-width: 600px) {
+  .stage-wrap .board.wide:has(.verdict-layout) { padding: 8px 6px 10px; }
+  .stage-wrap .board .folder-sheet { padding: 18px 14px 20px 32px; }
+  .stage-wrap .board .folder-sheet::before { left: 10px; }
+  .stage-wrap .board .folder-tabs { gap: 3px; padding-left: 6px; }
+  .stage-wrap .board .folder-tab { gap: 5px; padding: 8px 6px 7px; font-size: 13px; white-space: nowrap; }
+}
 .stage-wrap .board .verdict-layout { font-size: 13px; }
 .stage-wrap .board .verdict-layout p { margin: 0; font-size: inherit; line-height: 1.55; }
-.stage-wrap .board .verdict-main { padding: 18px 22px; }
-.stage-wrap .board .verdict-layout h1 { font-size: 20px; }
+.stage-wrap .board .folder-sheet { min-height: 0; padding: 18px 24px 20px 44px; }
+.stage-wrap .board .folder-sheet::before { left: 15px; top: 56px; width: 10px; height: 10px; }
+.stage-wrap .board .folder-tab { min-height: 38px; padding: 8px 18px 7px; font-size: 14px; }
+.stage-wrap .board .verdict-layout :is(h1, .folder-title) { font-size: 22px; }
 .stage-wrap .board .verdict-layout .verdict-intro { margin: 4px 0 16px; font-size: 12px; }
 .stage-wrap .board .verdict-group { margin-bottom: 16px; }
-.stage-wrap .board .verdict-group > legend { margin-bottom: 8px; font-size: 13px; color: var(--color-label); }
+.stage-wrap .board .verdict-group > legend { margin-bottom: 8px; font: 800 14px/1.4 var(--font-heading); color: var(--color-heading); }
 .stage-wrap .board .verdict-layout .muted { font-size: 12px; }
 .stage-wrap .board .penalty-options { display: flex; flex-wrap: wrap; gap: 8px; }
-.stage-wrap .board .penalty-option { padding: 5px 14px; gap: 6px; border-radius: 999px; font-size: 13px; }
+.stage-wrap .board .penalty-option { min-height: 36px; padding: 5px 16px; gap: 6px; border-radius: 3px; font-size: 13px; }
 .stage-wrap .board .verdict-layout input[type='radio'],
 .stage-wrap .board .verdict-layout input[type='checkbox'] { width: 14px; height: 14px; }
 .stage-wrap .board .reduction-area, .stage-wrap .board .suspension-area { margin-top: 10px; }
@@ -343,20 +353,24 @@
 .stage-wrap .board .factor-row.is-selected { background: none; }
 .stage-wrap .board .factor-label { font-size: 12.5px; }
 .stage-wrap .board .factor-actions { gap: 4px; }
-.stage-wrap .board .factor-button { min-height: 26px; padding: 2px 8px; border-radius: 6px; font-size: 11.5px; font-weight: 700; }
+.stage-wrap .board .factor-button { min-height: 32px; padding: 2px 10px; border-radius: 3px; font-size: 12px; font-weight: 700; }
+/* 터치 화면: 버튼은 44px, 형량 칸은 16px 글자(iOS가 확대하지 않게) · 44px 높이 */
+@media (pointer: coarse) {
+  .stage-wrap .board .factor-button, .stage-wrap .board .penalty-option, .stage-wrap .board .folder-tab { min-height: 44px; }
+  .stage-wrap .board .number-field input { width: 56px; min-height: 44px; font-size: 16px; }
+  .stage-wrap .board .number-field input[name='fineAmount'] { width: 88px; }
+}
 .stage-wrap .board .verdict-submit { padding-top: 12px; gap: 12px; }
 .stage-wrap .board .verdict-layout :is(.primary-button, .secondary-button) { min-height: 34px; padding: 6px 16px; font-size: 13px; }
 .stage-wrap .board .confirmation-box { margin-top: 12px; padding: 14px 16px; }
 .stage-wrap .board .confirmation-box h2 { font-size: 15px; margin-bottom: 4px; }
 .stage-wrap .board .confirmation-actions { margin-top: 10px; gap: 8px; }
-.stage-wrap .board .verdict-sidebar { padding: 18px 16px; font-size: 12px; }
-.stage-wrap .board .verdict-sidebar > h2 { margin-bottom: 10px; font-size: 13px; }
-.stage-wrap .board .verdict-sidebar .law-info-box { padding: 12px 14px; }
+.stage-wrap .board .verdict-sidebar { font-size: 13px; }
+.stage-wrap .board .verdict-sidebar .law-info-box { padding: 0 0 14px; }
 .stage-wrap .board .verdict-sidebar .law-info-box dd { margin-bottom: 6px; font-size: 13px; }
-.stage-wrap .board .verdict-sidebar .recommended-range { margin-top: 12px; padding: 12px 14px; }
+.stage-wrap .board .verdict-sidebar .recommended-range { margin-top: 12px; padding: 12px 0 14px; }
 .stage-wrap .board .verdict-sidebar .range-value { font-size: 15px; }
-.stage-wrap .board .verdict-sidebar > button { margin-top: 12px; }
-.stage-wrap .board .verdict-layout :is(.law-info-box, .recommended-range) h3 { font-size: 12px; margin-bottom: 8px; }
+.stage-wrap .board .verdict-layout :is(.law-info-box, .recommended-range) h3 { font-size: 13px; margin-bottom: 8px; }
 
 /* 카드 밖 캐릭터(무대 전체를 덮는 장면): 남불은 위 막 버튼 줄 끝, 내로는 아래 이전 · 다음 버튼 옆 */
 .stage-wrap .peek-slot, .stage-wrap .peek { display: none; }
