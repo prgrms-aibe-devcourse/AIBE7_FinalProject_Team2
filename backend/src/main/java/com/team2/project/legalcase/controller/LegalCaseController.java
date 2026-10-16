@@ -1,12 +1,14 @@
 package com.team2.project.legalcase.controller;
 
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.team2.project.common.web.AnonymousIdCookie;
 import com.team2.project.legalcase.domain.CrimeType;
+import com.team2.project.legalcase.dto.CaseDetailResponse;
 import com.team2.project.legalcase.dto.CaseListResponse;
 import com.team2.project.legalcase.service.LegalCaseService;
 
@@ -30,5 +32,14 @@ public class LegalCaseController {
 	@GetMapping
 	public CaseListResponse getCases(@RequestParam(required = false) CrimeType crimeType, HttpServletRequest request) {
 		return legalCaseService.getCases(crimeType, anonymousIdCookie.read(request));
+	}
+
+	/**
+	 * API 16. 공개 사건 상세 (S-20 사건 디테일, BE-74). 체험 없이 개요 · 죄명 · 카드 값 · 내 진행 상태를 준다.
+	 * 법정형 · 권고 범위 · 판결은 넣지 않는다(FR-2-8). 쿠키는 읽기만 하고 발급하지 않는다(API 1과 같음).
+	 */
+	@GetMapping("/{caseId}")
+	public CaseDetailResponse getCase(@PathVariable Long caseId, HttpServletRequest request) {
+		return legalCaseService.getCase(caseId, anonymousIdCookie.read(request));
 	}
 }

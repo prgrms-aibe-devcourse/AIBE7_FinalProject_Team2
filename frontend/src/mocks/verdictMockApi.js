@@ -63,7 +63,7 @@ export async function postVerdict(caseId, body) {
   const numeric = ['PRISON', 'FINE'].includes(finalType);
   const field = finalType === 'PRISON' ? 'prisonMonths' : 'fineAmount';
   const value = finalType === 'PRISON' ? prisonMonths : fineAmount;
-  if (numeric && (value < option.allowedMin || value > option.allowedMax)) {
+  if (numeric && (value < option.allowedMin || (option.allowedMax !== null && value > option.allowedMax))) { // 상한 없음(null)
     fail('OUT_OF_ALLOWED_RANGE', status, [{ field, reason: 'OUT_OF_ALLOWED_RANGE' }]);
   }
   const rule = mockVerdictForm.suspensionRule;

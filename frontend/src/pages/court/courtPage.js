@@ -1,4 +1,7 @@
 import { formatPenalty, formatDispositions } from '../../utils/judgmentFormat.js';
+import { SCRIPTS } from '../../content/scripts.js';
+import { renderCourtStage } from './courtStage.js';
+import { renderComparisonStage, mountStage } from '../comparison/comparisonStage.js';
 
 const directionLabels = { UP: '재판부 가중 요소', DOWN: '재판부 감경 요소' };
 
@@ -46,7 +49,27 @@ export async function renderCourtPage(container, { caseId, caseHeader, api, navi
     return group;
   }
 
+  // 대본의 제목이 사건 제목과 같을 때만 무대를 쓴다(S-03 ~ S-07과 같은 규칙)
+  const candidate = SCRIPTS[caseId];
+  const script = candidate?.title === caseHeader.title ? candidate : undefined;
+
+  // 7막 실제 판결(재진입 · 바로 들어온 경우). 보통은 S-07 6막에서 무대를 이어 받고 주소만 바뀐다(courtStage.js)
+  function drawStage(data) {
+    const { stage, error } = renderCourtStage({
+      script, data, caseId, api, navigate, active,
+      onInvalid: (failure) => message(`지금 단계에서는 이 화면을 볼 수 없어요. (현재 상태: ${failure.currentStatus})`),
+      // 8막은 같은 화면에서 이어 가고 주소만 S-09로 바꾼다
+      onCompared: (comparison) => {
+        mountStage(root, { caseHeader, badge: '세 판결 비교', heading: '세 판결 비교',
+          stage: renderComparisonStage({ script, data: comparison, caseId, caseTitle: caseHeader.title, navigate }) });
+        navigate('comparison', {}, { replace: true, keepView: true });
+      },
+    });
+    mountStage(root, { caseHeader, badge: '실제 판결', heading: '실제 판결', stage, extra: [error] });
+  }
+
   function draw(data) {
+    if (script) { drawStage(data); return; }
     const { judgment, myJudgment, aiJudgment } = data;
 
     const header = element('header', 'case-topbar');
