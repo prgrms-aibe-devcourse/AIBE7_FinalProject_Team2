@@ -49,7 +49,9 @@ export function flatten(acts, order) {
     let tags = { naero: '', nambul: '' };
     let proc = null;
     let focus = 'all';
-    const said = { naero: '', nambul: '' };
+    // 이름표는 막에서 처음 맡는 배역으로 시작한다(대사 전에 "사건 속 인물"이 떴다가 "A씨 역"으로 바뀌지 않게)
+    const firstRole = (who) => act.steps.find((step) => step.say === who && step.role)?.role ?? '';
+    const said = { naero: firstRole('naero'), nambul: firstRole('nambul') };
     act.steps.forEach((step) => {
       look = { ...look, ...step.look };
       spots = { ...spots, ...step.spots };

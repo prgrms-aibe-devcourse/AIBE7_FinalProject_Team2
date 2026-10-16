@@ -18,6 +18,12 @@ test('장면은 앞 장면의 모습 · 이름표를 이어받는다', () => {
   assert.equal(trial[1].chips.nambul, '변호인');
 });
 
+test('이름표는 막에서 처음 맡는 배역으로 시작한다(7막 첫 화면부터 "A씨 역", FE-41)', () => {
+  const court = flatten(script.acts, ['7']);
+  assert.equal(court[0].chips.nambul, 'A씨 역', '대사 전 첫 장면에서 "사건 속 인물"로 뜨지 않는다');
+  assert.ok(court.every((s) => s.chips.nambul === 'A씨 역'));
+});
+
 test('한 사건 안에서 같은 배역(검사 · 변호인 · 판사 · 사건 속 인물)은 한 캐릭터만 맡는다(10/16 결정)', () => {
   const all = flatten(script.acts, Object.keys(script.acts));
   const byRole = new Map();
