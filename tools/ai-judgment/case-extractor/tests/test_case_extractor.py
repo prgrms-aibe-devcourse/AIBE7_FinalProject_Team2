@@ -262,6 +262,20 @@ class ProcessOutputTest(unittest.TestCase):
 
                 self.assertFalse(any("실제 선고 형량" in e for e in errors))
 
+    def test_processOutput_summaryTagAndPreLabel_areChecked(self):
+        # 요약어(판결 카드 한 줄 요약) · preLabel(사전 판단 선택지)은 case.json 밖이지만 사용자에게 보인다 (BE-53)
+        for field, index, value, expected in (
+            ("summaryTag", 1, "징역 10년 선고", "실제 선고 형량"),   # FAKE_OUTPUT 실제 형량 120개월
+            ("summaryTag", 1, "010-1234-5678", "factors[2].summaryTag"),
+            ("preLabel", 0, "2099. 1. 10. 다퉜다", "factors[1].preLabel"),
+        ):
+            with self.subTest(field=field, value=value):
+                factors = copy.deepcopy(FAKE_OUTPUT["factors"])
+                factors[index][field] = value
+                _, _, errors, _ = process_output(output_with(factors=factors))
+
+                self.assertTrue(any(expected in e for e in errors), errors)
+
     def test_processOutput_valueAxis_isKeptInFactorExtras(self):
         _, _, errors, warnings = process_output(output_with())
         self.assertEqual(errors, [])
