@@ -95,20 +95,41 @@
   background:
     linear-gradient(90deg, transparent calc(50% - 1px), color-mix(in srgb, var(--color-desk-shadow) 12%, transparent) 50%, transparent calc(50% + 1px)),
     linear-gradient(90deg, transparent 46%, color-mix(in srgb, var(--color-desk-shadow) 4%, transparent) 49.6%, transparent 50.4%, transparent 54%); }
-@media (min-width: 681px) {
-  .comparison-full .stage-wrap .stage { position: fixed; inset: 0 0 64px 0; z-index: 1; aspect-ratio: auto; width: auto; border: 0; border-radius: 0; }
-  .comparison-full .stage-wrap .ctrl { position: fixed; left: 0; right: 0; bottom: 0; z-index: 2; height: 64px; margin: 0; padding: 0 max(24px, calc(50% - 560px)); background: var(--color-paper); border-top: 1px solid color-mix(in srgb, var(--color-text) 25%, transparent); }
-  /* 말풍선 · 캐릭터는 7막 상자 무대와 같은 크기로(화면이 커져도 커지지 않게) */
-  .comparison-full .stage-wrap .dlg { left: 50%; right: auto; bottom: 18px; translate: -50% 0; width: min(1000px, 92%); height: auto; min-height: 112px; padding: 22px 26px 14px; }
-  .comparison-full .stage-wrap .txt { font-size: 17px; }
-  .comparison-full .stage-wrap .name { top: -17px; font-size: 20px; }
-  .comparison-full .stage-wrap .name img { width: 26px; height: 26px; min-width: 0; min-height: 0; }
-  .comparison-full .stage-wrap .nxt { font-size: 12px; }
-  .comparison-full .stage-wrap .dlg-choices :is(.primary-button, .secondary-button) { min-height: 40px; font-size: 14px; }
-  .comparison-full .stage-wrap .stage[data-scene="sheet"] .spr, .comparison-full .stage-wrap .stage[data-scene="sheet"] .spr.role { height: min(230px, 32%); bottom: 150px; }
-}
+/* 무대(카메라 틀)가 화면 전체 — 넓은 화면 · 좁은 화면 모두. 조작 줄은 아래 띠, 말풍선은 그 위 가운데, 캐릭터는 양옆에서 엿보기(1막과 같은 자세) */
+.comparison-full .stage-wrap { --ctrl-h: 64px; --dock-w: min(860px, calc(100vw - 340px)); }
+.comparison-full .stage-wrap .stage { position: fixed; inset: 0 0 var(--ctrl-h) 0; z-index: 1; aspect-ratio: auto; width: auto; overflow: hidden; border: 0; border-radius: 0; }
+.comparison-full .stage-wrap .scene, .comparison-full .stage-wrap .stage[data-scene] .scene { position: absolute; inset: 0; aspect-ratio: auto; border: 0; border-radius: 0; overflow: hidden; }
+.comparison-full .stage-wrap .ctrl { position: fixed; left: 0; right: 0; bottom: 0; z-index: 2; height: var(--ctrl-h); margin: 0; padding: 0 max(24px, calc(50% - 560px)) var(--safe-bottom, 0px); background: var(--color-paper); border-top: 1px solid color-mix(in srgb, var(--color-text) 25%, transparent); }
+.comparison-full .stage-wrap .dlg { position: absolute; left: 50%; right: auto; bottom: 18px; translate: -50% 0; width: var(--dock-w); height: auto; min-height: 112px; margin: 0; padding: 22px 26px 14px; }
+.comparison-full .stage-wrap .txt { font-size: 17px; }
+.comparison-full .stage-wrap .name { top: -17px; font-size: 20px; }
+.comparison-full .stage-wrap .name img { width: 26px; height: 26px; min-width: 0; min-height: 0; }
+.comparison-full .stage-wrap .nxt { font-size: 12px; }
+.comparison-full .stage-wrap .dlg-choices :is(.primary-button, .secondary-button) { min-height: 40px; font-size: 14px; }
+.comparison-full .stage-wrap .stage[data-scene="sheet"] .spr, .comparison-full .stage-wrap .stage[data-scene="sheet"] .spr.role {
+  --l: calc(50% - var(--dock-w) / 2 - 84px); --r: calc(50% + var(--dock-w) / 2 + 84px); bottom: -56px; height: min(300px, 38vh); }
+.comparison-full .stage-wrap .stage[data-scene="sheet"] .spr.near { translate: -50% 0; }
 @media (max-width: 680px) {
-  .comparison-full { padding: 12px 12px 24px; }
-  .comparison-full .stage-wrap .sheet-frame { left: 12%; right: 12%; top: 6%; bottom: 30%; } /* 좁은 화면은 더 멀리서(지면 가장자리까지) 보이게 */
-  .comparison-full .stage-wrap { padding: 0 0 8px; background: var(--color-paper); }
+  .comparison-full .stage-wrap { --ctrl-h: 56px; --dock-w: calc(100vw - 20px); }
+  .comparison-full .stage-wrap .ctrl { padding: 0 8px var(--safe-bottom, 0px); flex-wrap: nowrap; }
+  .comparison-full .stage-wrap .ctrl .stage-restart { display: none; }
+  .comparison-full .stage-wrap .sheet-frame { left: 4%; right: 4%; top: 2%; bottom: 128px; } /* 카메라 틀 = 말풍선 위 */
+  .comparison-full .stage-wrap .dlg { bottom: 8px; min-height: 100px; padding: 20px 16px 12px; }
+  .comparison-full .stage-wrap .txt { font-size: 15px; }
+  .comparison-full .stage-wrap .stage[data-scene="sheet"] .spr, .comparison-full .stage-wrap .stage[data-scene="sheet"] .spr.role { --l: 46px; --r: calc(100% - 46px); bottom: 118px; height: 96px; }
+}
+
+/* 여기 남아있기: 카메라를 멈추고 지면을 펼친 채 스크롤해 읽는다. 맨 아래 "신문 덮기" */
+.stage-wrap .sheet-close { display: none; }
+.comparison-full .stage-wrap.reading-paper .stage { position: relative; inset: auto; height: auto; overflow: visible; }
+.comparison-full .stage-wrap.reading-paper .scene, .comparison-full .stage-wrap.reading-paper .stage[data-scene] .scene { position: relative; inset: auto; overflow: visible; cursor: default; }
+.comparison-full .stage-wrap.reading-paper .ctrl, .comparison-full .stage-wrap.reading-paper .stage > :not(.scene), .comparison-full .stage-wrap.reading-paper .scene > :is(.bg, :not(.sheet)) { display: none !important; } /* 지면 안 사진(법정 그림)은 그대로 */
+.comparison-full .stage-wrap.reading-paper .sheet { --u: min(10px, calc((100vw - 32px) / 118)); position: relative; left: auto; top: auto; margin: 28px auto 40px; transform: none !important; }
+.comparison-full .stage-wrap.reading-paper .sheet:focus { outline: none; }
+.comparison-full .stage-wrap.reading-paper .sheet-close { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; gap: 10px; padding-top: calc(var(--u) * 2.4); border-top: 3px double var(--color-border-strong); }
+.comparison-full .stage-wrap.reading-paper .sheet-close-note { margin: 0; color: var(--muted); font-size: 14px; }
+.comparison-full .stage-wrap.reading-paper .sheet-fold { min-height: 48px; padding: 0 28px; font-size: 16px; }
+@media (max-width: 680px) {
+  .comparison-full .stage-wrap.reading-paper .sheet { width: calc(100vw - 16px); margin: 8px auto 24px; }
+  .comparison-full .stage-wrap.reading-paper .sheet-close { padding-top: 16px; }
 }

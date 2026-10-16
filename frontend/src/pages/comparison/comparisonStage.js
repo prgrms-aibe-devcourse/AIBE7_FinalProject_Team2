@@ -10,6 +10,7 @@ import { formatMonths } from '../../components/recommendedRangeBar.js';
 import { renderStage, courtSet, imageOf } from '../../components/stage.js';
 import { restartMock, jumpActMock } from '../overview/overviewPage.js';
 import { editorNote } from '../../utils/preJudgmentCompare.js';
+import { foldPaper } from '../../utils/pageTurn.js';
 
 const SUBJECTS = [['USER', '내 판결'], ['AI', 'AI 판결'], ['COURT', '실제 판결']];
 const DIRECTIONS = { UP: ['무겁게', 'up'], DOWN: ['가볍게', 'down'] };
@@ -156,6 +157,12 @@ function newspaper(data, script, caseTitle) {
     story('cast', '이번 사건에서 만난 모습', cast),
     story('factors', '판단 요소, 어디서 갈렸나', table),
     story('rules', '같게 본 것, 다르게 본 것', ...rules));
+  // 신문 맨 아래: "여기 남아있기"로 지면을 다 읽은 뒤 신문을 접어 내려놓는다(메인 책상으로). 읽는 동안에만 보인다(courtSketch.css)
+  const close = element('footer', 'sheet-close');
+  const fold = element('button', 'primary-button sheet-fold', '신문 덮기');
+  fold.type = 'button';
+  close.append(element('p', 'sheet-close-note', '다 읽었으면 신문을 접어 책상에 내려놓아요.'), fold);
+  sheet.append(close);
   return sheet;
 }
 
@@ -185,7 +192,8 @@ async function share(note, caseId) {
 /**
  * @returns {HTMLElement} 8막 무대. 마지막 대사창의 선택지로 다른 사건 · 메인 · 공유를 고른다
  */
-export function renderComparisonStage({ script, data, caseId, caseTitle, navigate }) {
+// fromRect: 7막 무대 장면이 있던 화면 사각형(이어 받을 때). 그 자리 그대로에서 신문으로 빠져나온다
+export function renderComparisonStage({ script, data, caseId, caseTitle, navigate, fromRect }) {
   const { judgments } = data;
   const vsCourt = diffLine(judgments.USER, judgments.COURT, '실제 판결',
     '실제 판결과 형량이 같았네요. 그런데 무겁게 본 요소도 같았을까요?', (head) => `${head} 어떤 요소를 다르게 봤을까요?`);
@@ -196,22 +204,46 @@ export function renderComparisonStage({ script, data, caseId, caseTitle, navigat
   const editor = editorNote(pre, judgments.COURT); // 편집부 의견을 못 만들면(구간 이름을 못 읽음) 그 대사는 건너뛴다
   const steps = act.steps.filter((step) => editor || !step.text?.includes('{editor}'))
     .map((step) => (step.text ? { ...step, text: step.text.replace('{vsCourt}', vsCourt).replace('{vsAi}', vsAi).replace('{pre}', pre).replace('{editor}', editor ?? '') } : step));
-  return renderStage({
+  const narrow = window.matchMedia('(max-width: 680px)').matches;
+  const sheet = newspaper(data, script, caseTitle);
+  const stage = renderStage({
     script: { ...script, acts: { ...script.acts, 8: { ...act, steps } } },
     order: ['8'],
-    sheet: newspaper(data, script, caseTitle),
-    cameraFill: window.matchMedia('(min-width: 681px)').matches, // 넓은 화면: 책상 없이 신문만 화면 가득(1막 지면처럼)
+    sheet,
+    fromRect,
+    cameraFill: true, // 책상 없이 신문만 화면 가득(1막 지면처럼)
+    cameraMinScale: narrow ? 1.3 : 0, // 좁은 화면도 기사 일부를 크게(왼쪽 위부터)
     choices: { end: [
       { label: '다른 사건 보기', action: () => navigate('list'), primary: true },
+      { label: '여기 남아있기', action: () => stay() },
       { label: '메인으로', action: () => navigate('landing') },
       { label: '공유하기', action: (note) => share(note, caseId) },
     ] },
     onRestart: restartMock(caseId),
     onJump: jumpActMock(caseId),
   });
+  // 여기 남아있기: 무대를 멈추고(말풍선 · 캐릭터 · 조작 줄을 걷고) 신문을 스크롤해 읽는다
+  function stay() {
+    stage.freeze();
+    stage.classList.add('reading-paper');
+    window.scrollTo(0, 0);
+    sheet.setAttribute('tabindex', '-1');
+    sheet.focus({ preventScroll: true });
+  }
+  // 신문 덮기: 접어서 내려놓은 뒤 메인 책상으로(책상 위 신문이 내려앉는 연출로 이어진다)
+  let closing = false;
+  sheet.querySelector('.sheet-fold').addEventListener('click', async () => {
+    if (closing) return;
+    closing = true;
+    await foldPaper(sheet, { scopeClasses: ['comparison-full', 'stage-wrap reading-paper'] });
+    navigate('landing', { from: 'paper' });
+  });
+  return stage;
 }
 
 // 8막 화면 틀: 무대(카메라 틀)가 화면 전체를 채운다 — 판사의 책상 위 다음 날 신문을 화면 가득 들여다본다(FE-32, comparison.css)
+// 7막에서 이어 받을 때는 renderComparisonStage를 부르기 전에 sceneRect(root)로 7막 장면 자리를 재 둔다
+export const sceneRect = (root) => root.querySelector('.stage-wrap .scene')?.getBoundingClientRect();
 export function mountNewspaperStage(root, { stage }) {
   root.className = 'comparison-page comparison-full'; // comparison-page: 화면 공통 글꼴 · [hidden] 규칙(review.css)
   const desk = element('div', 'desk');

@@ -6,7 +6,7 @@ import { SCRIPTS } from '../../content/scripts.js';
 import { restartMock, jumpActMock } from '../overview/overviewPage.js';
 import { API_MODE } from '../../api/config.js';
 import { renderCourtStage } from '../court/courtStage.js';
-import { renderComparisonStage, mountStage, mountNewspaperStage } from '../comparison/comparisonStage.js';
+import { renderComparisonStage, mountStage, mountNewspaperStage, sceneRect } from '../comparison/comparisonStage.js';
 
 const directionLabels = { UP: '가중 요소', DOWN: '감경 요소' };
 
@@ -188,7 +188,8 @@ export async function renderAiPage(container, { caseId, caseHeader, api, navigat
       onInvalid: (failure) => message(`지금 단계에서는 이 화면을 볼 수 없어요. (현재 상태: ${failure.currentStatus})`),
       // 8막도 같은 방식으로 이어 가고 주소만 S-09로 바꾼다
       onCompared: (comparison) => {
-        mountNewspaperStage(root, { stage: renderComparisonStage({ script, data: comparison, caseId, caseTitle: caseHeader.title, navigate }) });
+        const fromRect = sceneRect(root); // 7막 장면 자리(이 자리 그대로에서 신문으로 빠져나온다)
+        mountNewspaperStage(root, { stage: renderComparisonStage({ script, data: comparison, caseId, caseTitle: caseHeader.title, navigate, fromRect }) });
         navigate('comparison', {}, { replace: true, keepView: true });
       },
     });

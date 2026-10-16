@@ -18,3 +18,10 @@
 /* 넘어가며 접히는 쪽(오른쪽 끝)이 어두워진다 */
 .page-turn-shade { position: absolute; inset: 0; opacity: 0; background: linear-gradient(90deg, transparent 15%, color-mix(in srgb, var(--color-desk-shadow) 75%, transparent) 100%); }
 .page-turn-shade.is-back { background: linear-gradient(270deg, transparent 15%, color-mix(in srgb, var(--color-desk-shadow) 75%, transparent) 100%); }
+
+/* 신문 접어 내려놓기 (foldPaper) */
+.page-fold { position: fixed; inset: 0; z-index: 1000; overflow: hidden; pointer-events: none; perspective: 2400px; perspective-origin: 50% 45%; }
+.page-fold .fold-group { position: absolute; inset: 0; transform-origin: 50% 40%; }
+.page-fold .fold-face { position: absolute; inset: 0; overflow: hidden; backface-visibility: hidden; }
+.page-fold .fold-face.is-back { transform: rotateY(180deg); background: color-mix(in srgb, var(--color-desk-news) 90%, var(--color-text));
+  box-shadow: inset -24px 0 30px -18px color-mix(in srgb, var(--color-desk-shadow) 45%, transparent); }

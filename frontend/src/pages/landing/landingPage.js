@@ -28,6 +28,7 @@ const CHEEKS = [
   { who: 'nambul', look: 'idle-thinking', left: 1300, top: 782, height: 158 },
 ];
 const LIFT_MS = 1000; // 신문을 집어 드는 시간 = 신문 들림 .38초 + 책상 다가옴 .72초(landing.css .is-lifting · .is-held와 같게, 일부 겹침)
+const PUT_DOWN_MS = 560; // 책상이 멀어지는 동안 신문은 들린 채 있다가 끝 무렵 내려앉는다(.desk-scene 전환 .72초)
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const features = [
@@ -56,7 +57,7 @@ function span(className, text) {
 }
 
 // S-01 메인
-export function renderLandingPage(container, { api, navigate, section }) {
+export function renderLandingPage(container, { api, navigate, section, from }) {
   const root = element('div', 'landing-page');
   const intro = element('section', 'feature-section');
   intro.id = 'intro';
@@ -194,13 +195,16 @@ export function renderLandingPage(container, { api, navigate, section }) {
 
   // 신문 집어 들기: 책상이 신문 가운데를 기준으로 커지며 사라진 뒤 지면(S-02)으로 간다. 움직임 줄이기면 바로 간다
   let lifting = false;
+  const aimAt = (target) => {
+    const box = scene.getBoundingClientRect();
+    const spot = target.getBoundingClientRect();
+    scene.style.transformOrigin = `${((spot.left + spot.width / 2 - box.left) / box.width) * 100}% ${((spot.top + spot.height / 2 - box.top) / box.height) * 100}%`;
+  };
   function lift(target) {
     if (lifting) return;
     if (reducedMotion()) { navigate('list', { from: 'desk' }); return; }
     lifting = true;
-    const box = scene.getBoundingClientRect();
-    const spot = target.getBoundingClientRect();
-    scene.style.transformOrigin = `${((spot.left + spot.width / 2 - box.left) / box.width) * 100}% ${((spot.top + spot.height / 2 - box.top) / box.height) * 100}%`;
+    aimAt(target);
     target.classList.add('is-held');
     scene.classList.add('is-lifting');
     setTimeout(() => { if (root.isConnected) navigate('list', { from: 'desk' }); }, LIFT_MS);
@@ -270,6 +274,25 @@ export function renderLandingPage(container, { api, navigate, section }) {
   container.replaceChildren(root);
   fit();
   if (section === 'intro') showIntro();
+
+  // 신문 덮기(8막)에서 왔으면 거꾸로: 들고 있던 신문에서 책상이 멀어지고, 신문이 책상에 내려앉는다.
+  // 새로고침 · 뒤로 가기로는 되풀이하지 않는다. 움직임 줄이기면 연출 없이 바로 책상
+  if (from === 'paper') {
+    history.replaceState({ ...history.state, extras: {} }, '');
+    if (!reducedMotion()) putDown(world.querySelector('.obj-news'));
+  }
+  function putDown(news) {
+    if (!news) return;
+    aimAt(news);
+    root.classList.add('is-returning');
+    news.classList.add('is-held');
+    scene.classList.add('is-lifting');
+    void scene.offsetWidth; // 들린 상태를 먼저 그려 두고 거기서 되돌린다
+    root.classList.remove('is-returning');
+    scene.classList.remove('is-lifting');
+    setTimeout(() => news.classList.remove('is-held'), PUT_DOWN_MS);
+    mobile.classList.add('is-returning'); // 좁은 화면: 메뉴의 신문 카드가 위에서 내려앉는다(CSS 애니메이션)
+  }
 
   // ---- 신문 지면 채우기 (사건 목록 API 1). 실패해도 책상은 그대로 쓴다 ----
   async function fillNews() {

@@ -189,12 +189,13 @@
 
 /* 8막 다음 날 신문(현실로 돌아옴): 판사의 책상 위에 놓인, 화면보다 큰 지면. 카메라(sheetCamera.js)가 transform으로 기사 하나를
    틀(.sheet-frame) 가운데에 맞춘다. 크기 단위 --u는 무대 폭 기준(1cqw)이고, 좁은 화면에서는 한 단으로 쌓고 글자를 px로 바꾼다.
-   기사 배치: 제호 / 1면(제목 · 법정 사진) | 칼럼(처음 → 직접) / 세 판결 | 만난 모습 / 판단 요소 | 공통점 · 차이점 */
+   기사 배치(FE-32, 두 단 · 세로로 긴 지면): 제호 / 1면(제목 · 법정 사진 · 리드) | 독자 의견 / 세 판결 | 판단 요소 / 공통점 · 차이점 | 만난 모습.
+   두 단 사이 여백이 지면 가운데 접힌 선(courtSketch.css)에 오도록 단 폭을 같게 둔다 */
 .stage-wrap .bg.sheet { background: var(--color-desk-wood); }
 .stage-wrap .sheet-frame { position: absolute; left: 19%; right: 19%; top: 4%; bottom: 27%; pointer-events: none; }
-.stage-wrap .sheet { --u: 1cqw; position: absolute; left: 0; top: 0; width: calc(var(--u) * 118); display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-template-areas: "mast mast mast" "front front letters" "verdicts verdicts cast" "factors factors rules";
-  gap: calc(var(--u) * 2.2) calc(var(--u) * 2.4); padding: calc(var(--u) * 2.6) calc(var(--u) * 3) calc(var(--u) * 3.4);
+.stage-wrap .sheet { --u: 1cqw; position: absolute; left: 0; top: 0; width: calc(var(--u) * 118); display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-areas: "mast mast" "front letters" "verdicts factors" "rules cast";
+  gap: calc(var(--u) * 3.2) calc(var(--u) * 7); padding: calc(var(--u) * 2.6) calc(var(--u) * 3) calc(var(--u) * 3.4);
   background: var(--color-desk-news); color: var(--color-text); transform-origin: 0 0;
   box-shadow: 0 1cqw 2.6cqw -.8cqw color-mix(in srgb, var(--color-desk-shadow) 60%, transparent); }
 /* 카메라가 기사 하나를 볼 때 나머지 지면은 물러난다(주변 기사가 캐릭터 뒤에서 읽히지 않게) */
@@ -217,7 +218,6 @@
 .stage-wrap .sheet-date { display: flex; justify-content: center; gap: 1.4em; padding: calc(var(--u) * .35) 0; border-top: 2px solid var(--color-text); border-bottom: 1px solid var(--color-text); color: var(--muted); font-size: calc(var(--u) * 1.1); }
 .stage-wrap .sheet-story { min-width: 0; padding-top: calc(var(--u) * 1.3); border-top: 1px solid var(--color-text); }
 .stage-wrap :is(.sheet-front, .sheet-letters) { padding-top: calc(var(--u) * .4); border-top: 0; }
-.stage-wrap :is(.sheet-letters, .sheet-cast, .sheet-rules) { padding-left: calc(var(--u) * 2.4); border-left: 1px solid var(--color-border-strong); }
 .stage-wrap .sheet-front { grid-area: front; }
 .stage-wrap .sheet-verdicts { grid-area: verdicts; }
 .stage-wrap .sheet-cast { grid-area: cast; }
@@ -226,7 +226,7 @@
 .stage-wrap .sheet-letters { grid-area: letters; }
 .stage-wrap .sheet-headline { margin: 0 0 calc(var(--u) * 1.2); font: 900 calc(var(--u) * 4.6) / 1.15 var(--font-heading); letter-spacing: -.03em; text-wrap: balance; word-break: keep-all; color: var(--color-text); }
 .stage-wrap .sheet-head { margin: 0 0 calc(var(--u) * 1.1); font: 900 calc(var(--u) * 2.7) / 1.2 var(--font-heading); letter-spacing: -.02em; text-wrap: balance; word-break: keep-all; color: var(--color-text); }
-.stage-wrap .sheet-front-body { display: grid; grid-template-columns: 46fr 25fr; gap: calc(var(--u) * 2); }
+.stage-wrap .sheet-front-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: calc(var(--u) * 1.4); }
 .stage-wrap .sheet-deck { margin: 0 0 calc(var(--u) * 1); font: 700 calc(var(--u) * 1.9) / 1.45 var(--font-heading); color: var(--color-heading); word-break: keep-all; }
 .stage-wrap .sheet-text { margin: 0 0 calc(var(--u) * .6); font: 400 calc(var(--u) * 1.6) / 1.65 var(--font-article); color: var(--color-desk-news-ink); word-break: keep-all; text-wrap: pretty; }
 /* 1면 사진: 7막 마지막 법정과 같은 구도(배경 · 판사 남불 · 피고인 역 내로). 지면에서는 흑백, 시작 장면(data-live)에서만 색이 남아 있다가 바랜다 */
@@ -239,7 +239,11 @@
 .stage-wrap .sheet-photo .sheet-photo-n { left: 16%; translate: -50% 0; }
 .stage-wrap .sheet-photo .sheet-photo-b { left: 84%; translate: -50% 0; }
 /* 세 판결: 같은 크기 · 같은 무게. 판결마다 색은 위 선 · 이름에만 */
-.stage-wrap .sheet-verdict-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: calc(var(--u) * 2); }
+.stage-wrap .sheet-verdict-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: calc(var(--u) * 1.6); }
+/* 세 판결은 위아래로: 왼쪽에 누구 · 형량, 오른쪽에 한 줄 요약 */
+.stage-wrap .sheet-verdict { display: grid; grid-template-columns: calc(var(--u) * 17) minmax(0, 1fr); column-gap: calc(var(--u) * 2); align-items: start; }
+.stage-wrap .sheet-verdict > :not(.sheet-who, .sheet-penalty) { grid-column: 2; grid-row: 1 / span 3; }
+.stage-wrap .sheet-verdict > .sheet-sub { grid-row: auto; grid-column: 1; }
 .stage-wrap .sheet-verdict { padding-top: calc(var(--u) * .9); border-top: 3px solid var(--tone); }
 .stage-wrap .sheet-verdict.is-user { --tone: var(--color-judge-me); }
 .stage-wrap .sheet-verdict.is-ai { --tone: var(--color-judge-ai); }
@@ -431,7 +435,12 @@
   .stage-wrap .sheet-case .sheet-headline { font-size: 24px; }
   .stage-wrap .sheet-body { column-count: 1; }
   .stage-wrap .sheet { width: 100cqw; grid-template-columns: minmax(0, 1fr); grid-template-areas: "mast" "front" "verdicts" "letters" "factors" "rules" "cast"; gap: 18px; padding: 14px 14px 20px; }
-  .stage-wrap :is(.sheet-letters, .sheet-cast, .sheet-rules) { padding-left: 0; border-left: 0; }
+  .stage-wrap .sheet-verdict { display: block; }
+  /* 좁은 화면: 1면 사진을 7막 무대(4:3)와 같은 구도로 — 8막이 이 사진에서 빠져나올 때 이어 보이게 */
+  .stage-wrap .sheet-photo { aspect-ratio: 4 / 3; }
+  .stage-wrap .sheet-photo img { bottom: 4%; height: 62%; }
+  .stage-wrap .sheet-photo .sheet-photo-n { left: 25%; }
+  .stage-wrap .sheet-photo .sheet-photo-b { left: 75%; }
   .stage-wrap .sheet-letters { padding-top: 12px; border-top: 1px solid var(--color-text); }
   .stage-wrap :is(.sheet-info, .sheet-date) { font-size: 10px; }
   .stage-wrap .sheet-brand { font-size: 34px; }

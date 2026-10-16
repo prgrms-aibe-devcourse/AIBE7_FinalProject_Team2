@@ -244,12 +244,13 @@ function evidenceBoard(script, at) {
 // choices: 대사창 안 선택지 { 이름: [{ label, action(note), primary }] } — 대본 step.choices로 고른다(타이핑이 끝나면 뜬다, note는 결과 안내 줄).
 // sheet: 대본 scene "sheet"에서 쓰는 큰 지면(8막은 화면이 넘겨 주고, 없으면 대본 paper로 1 · 2막 사건 기사를 만든다).
 // 장면의 focus 기사로 카메라가 옮겨 가고, 첫 장면의 from 요소가 무대를 채운 데서 빠져나온다.
+// fromRect: 첫 장면의 from 요소를 이 화면 사각형(앞 막 무대 자리)에서 시작한다(8막). cameraFill · cameraMinScale은 sheetCamera 옵션.
 // layout 'paper': 무대 상자 없이 지면(sheet)이 화면 전체가 된다(S-20 · 1 · 2막, S-02 신문과 같은 짜임). 막 칩 · 보드는 지면의
 // 막 칩은 숨기고(지면 탭 줄은 신문 목차), 카드(2막 사전 판단)는 지면 위에 독자 의견 엽서 팝업으로 뜬다 — 남불이 가져와 건네는 연출.
 // 캐릭터 · 대사창 · 조작 줄은 화면 아래에 고정된다. 카메라는 화면을 굴린다(paperCamera)
 // parked: 지면만 보여 주고 캐릭터 · 대사창 · 조작 줄은 숨긴 채 기다린다(S-20 사건 정보 — 체험 시작 전). 화면이 wrap.release()로 풀면
 // 내로 · 남불이 들어오며 첫 대사가 시작된다.
-export function renderStage({ script, order, cards = {}, inputCards = [], choices = {}, start, onConfirm, onRestart, onJump, sheet: given, layout = 'box', parked: parkedAtStart = false, cameraFill = false }) {
+export function renderStage({ script, order, cards = {}, inputCards = [], choices = {}, start, onConfirm, onRestart, onJump, sheet: given, layout = 'box', parked: parkedAtStart = false, cameraFill = false, cameraMinScale = 0, fromRect }) {
   const paperMode = layout === 'paper' && Boolean(given);
   let parked = parkedAtStart;
   let again = false; // 이미 지나온 체험을 다시 보는 중(S-20 "시작하기"): 대본 textAgain이 있으면 그 문장을 쓴다
@@ -334,7 +335,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
   const frame = sheet && !paperMode ? element('div', 'sheet-frame') : null;
   let byKeyboard = false; // 지금 넘기는 입력이 키보드인가(Space · → · Enter, 키보드로 누른 버튼)
   const camera = paperMode ? paperCamera(sheet, () => (dialog.hidden ? controls.getBoundingClientRect().top : dialog.getBoundingClientRect().top), () => byKeyboard)
-    : sheet ? sheetCamera(sheet, frame, { fill: cameraFill }) : null; // cameraFill: 지면이 언제나 장면을 빈틈없이 덮는다(8막 화면 가득)
+    : sheet ? sheetCamera(sheet, frame, { fill: cameraFill, minScale: cameraMinScale }) : null; // cameraFill: 지면이 언제나 장면을 빈틈없이 덮는다(8막 화면 가득)
   if (frame) frame.setAttribute('aria-hidden', 'true');
   scene.append(bg, court, ...(sheet ? [sheet] : []), ...(frame ? [frame] : []), figures.naero, figures.nambul, lawCast, procs, sys, flash);
 
@@ -424,7 +425,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
     if (onSheet && !parked) { // 기다리는 동안은 지면 전체를 그대로 둔다
       // 첫 장면(앞 막에서 넘어옴)은 from 요소가 무대를 채운 데서 시작한다. 캐릭터는 카메라가 빠져나온 뒤 지면에 뛰어든다
       const from = lastFocus === null && index === 0 ? step.from : undefined;
-      camera.go(step.focus, { from, onStart: from ? () => stage.classList.add('arrive-sheet') : undefined });
+      camera.go(step.focus, { from, fromRect: from ? fromRect : undefined, onStart: from ? () => stage.classList.add('arrive-sheet') : undefined });
       // 기사가 바뀌면 둘 다 다음 기사 옆으로 뛰어간다(작은 점프 두 번)
       if (lastFocus !== null && lastFocus !== step.focus && !reducedMotion()) {
         ['naero', 'nambul'].forEach((who) => { figures[who].classList.remove('hop'); void figures[who].offsetWidth; figures[who].classList.add('hop'); });
@@ -698,6 +699,14 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
     else index += 1;
     render();
     next.focus({ preventScroll: true });
+  };
+  // 무대를 멈추고 지면만 남긴다(8막 "여기 남아있기"): 장면 넘기기 · 키 입력을 받지 않고, 기사 흐림을 걷는다
+  wrap.freeze = () => {
+    parked = true;
+    clearTimeout(autoTimer);
+    clearInterval(typing);
+    sheet?.classList.remove('spot');
+    sheet?.querySelectorAll('.is-on').forEach((node) => node.classList.remove('is-on'));
   };
   // 화면이 카드(cards)를 나중에 채웠을 때, 지금 그 카드 장면이면 다시 그린다(예: S-20에서 체험을 시작한 뒤 받아 온 2막 사전 판단 폼)
   wrap.refresh = (card) => { if (wrap.isConnected && steps[index].card === card) render(); };
