@@ -98,8 +98,57 @@ class CaseSeedSqlTest(unittest.TestCase):
         report["factorExtras"][1]["valueAxisVotes"] = {
             "runs": 4, "counts": {"NONE": 2, "ORDER_OPPORTUNITY": 2}, "needsReview": True}  # 동률, 축은 NULL을 고름
         sql = build_case_sql(case, report, resolve_sources(SOURCES, [{}, {"caseNumber": "2099노2"}]))
-        self.assertIn("""'FAULT_STANDARD', '{"runs": 5, "counts": {"FAULT_STANDARD": 3, "NONE": 2}, "needsReview": false}'::jsonb, 1);""", sql)
-        self.assertIn(""", NULL, '{"runs": 4, "counts": {"NONE": 2, "ORDER_OPPORTUNITY": 2}, "needsReview": true}'::jsonb, 2);""", sql)
+        self.assertIn("""'FAULT_STANDARD', '{"runs": 5, "counts": {"FAULT_STANDARD": 3, "NONE": 2}, "needsReview": false}'::jsonb, NULL, 1);""", sql)
+        self.assertIn(""", NULL, '{"runs": 4, "counts": {"NONE": 2, "ORDER_OPPORTUNITY": 2}, "needsReview": true}'::jsonb, NULL, 2);""", sql)
+
+    def test_build_case_sql_summaryTagCandidates_insertsJsonb(self):
+        # 요약어 후보(BE-53)는 summary_tag_candidates에 jsonb로 넣는다 (BE-80). 후보가 없는 요소는 NULL
+        case = listing_case()
+        report = report_for(case)
+        report["factorExtras"][0]["summaryTagCandidates"] = {
+            "candidates": [{"tag": "흉기 사용", "score": 0.9312}, {"tag": "범행 동기", "score": 0.8123}],
+            "inVocabulary": False, "ambiguous": False, "suggested": "흉기 사용"}
+        sql = build_case_sql(case, report, resolve_sources(SOURCES, [{}, {"caseNumber": "2099노2"}]))
+        self.assertEqual(sql.count("summary_tag_candidates, display_order)"), len(case["factors"]))
+        self.assertIn("""'{"candidates": [{"tag": "흉기 사용", "score": 0.9312}, {"tag": "범행 동기", "score": 0.8123}], """
+                      """"inVocabulary": false, "ambiguous": false, "suggested": "흉기 사용"}'::jsonb, 1);""", sql)
+        self.assertIn("NULL, NULL, NULL, 2);", sql)  # 두 번째 요소: 축 · 투표 기록 · 후보 모두 없음
+        existing = sql.split("RETURNING id INTO v_case_id")[0]
+        self.assertNotIn("summary_tag_candidates", existing)  # 이미 적재된 사건은 후보를 바꾸지 않는다(축만 맞춤)
+
+    def test_build_case_sql_invalidSummaryTagCandidates_isError(self):
+        ok = {"tag": "흉기 사용", "score": 0.93}
+        cases = [
+            ("객체", "candidates"),
+            ("배열", {"candidates": "흉기 사용", "inVocabulary": False, "ambiguous": False, "suggested": None}),
+            ("tag는", {"candidates": [{"tag": "", "score": 0.9}], "inVocabulary": False, "ambiguous": False, "suggested": None}),
+            ("tag는", {"candidates": [{"tag": "가" * 21, "score": 0.9}], "inVocabulary": False, "ambiguous": False, "suggested": None}),
+            ("score는", {"candidates": [{"tag": "흉기 사용", "score": 1.5}], "inVocabulary": False, "ambiguous": False, "suggested": None}),
+            ("score는", {"candidates": [{"tag": "흉기 사용", "score": True}], "inVocabulary": False, "ambiguous": False, "suggested": None}),
+            ("inVocabulary", {"candidates": [ok], "inVocabulary": "no", "ambiguous": False, "suggested": None}),
+            ("ambiguous", {"candidates": [ok], "inVocabulary": False, "suggested": None}),
+            ("tag 중 하나", {"candidates": [ok], "inVocabulary": False, "ambiguous": False, "suggested": "반성"}),
+            ("false일 때만", {"candidates": [ok], "inVocabulary": False, "ambiguous": True, "suggested": "흉기 사용"}),
+            ("모르는 키", {"candidates": [ok], "inVocabulary": False, "ambiguous": False, "suggested": None, "futureKey": 1}),
+            ("모르는 키", {"candidates": [{**ok, "rank": 1}], "inVocabulary": False, "ambiguous": False, "suggested": None}),
+        ]
+        for message, candidates in cases:
+            with self.subTest(message):
+                case = listing_case()
+                report = report_for(case)
+                report["factorExtras"][0]["summaryTagCandidates"] = candidates
+                with self.assertRaises(CaseSeedError) as ctx:
+                    build_case_sql(case, report, resolve_sources(SOURCES, [{}, {"caseNumber": "2099노2"}]))
+                self.assertIn(message, str(ctx.exception))
+
+    def test_build_case_sql_emptySummaryTagCandidates_passes(self):
+        # 요약어가 비어 후보 계산에서 빠진 요소(summary_tags._empty_result)도 형식은 맞다
+        case = listing_case()
+        report = report_for(case)
+        report["factorExtras"][0]["summaryTagCandidates"] = {
+            "candidates": [], "inVocabulary": False, "ambiguous": False, "suggested": None}
+        self.assertIn("""'{"candidates": [], "inVocabulary": false, "ambiguous": false, "suggested": null}'::jsonb""",
+                      build_case_sql(case, report, resolve_sources(SOURCES, [{}, {"caseNumber": "2099노2"}])))
 
     def test_build_case_sql_existingDraft_updatesAutoAxesOnly(self):
         # 이미 적재된 DRAFT 사건이면 사건은 건너뛰고, 확정 전(AUTO) 요소의 축 · 투표 기록만 맞춘다 (리뷰 반영)
@@ -832,8 +881,8 @@ class PipelineTest(unittest.TestCase):
                          {"runs": 5, "counts": {"APOLOGY_SINCERITY": 3, "NONE": 2}, "needsReview": False, "requestedRuns": 5})
         # 적재 SQL은 투표 결과 축과 투표 기록(value_axis_votes, BE-48)을 쓴다 (추출기 값 위에 덮어씀). 추출기 보고서 파일은 바뀌지 않는다
         sql = Path(state["stages"]["load"]["outputs"]["sqlFile"]).read_text(encoding="utf-8")
-        self.assertIn("""'분류', 'APOLOGY_SINCERITY', '{"runs": 5, "counts": {"APOLOGY_SINCERITY": 3, "NONE": 2}, "needsReview": false, "requestedRuns": 5}'::jsonb, 2);""", sql)
-        self.assertIn("""'분류', 'ORDER_OPPORTUNITY', '{"runs": 5, "counts": {"PRINCIPLE_RELATION": 2, "ORDER_OPPORTUNITY": 3}, "needsReview": false, "requestedRuns": 5}'::jsonb, 3);""", sql)
+        self.assertIn("""'분류', 'APOLOGY_SINCERITY', '{"runs": 5, "counts": {"APOLOGY_SINCERITY": 3, "NONE": 2}, "needsReview": false, "requestedRuns": 5}'::jsonb, NULL, 2);""", sql)
+        self.assertIn("""'분류', 'ORDER_OPPORTUNITY', '{"runs": 5, "counts": {"PRINCIPLE_RELATION": 2, "ORDER_OPPORTUNITY": 3}, "needsReview": false, "requestedRuns": 5}'::jsonb, NULL, 3);""", sql)
         self.assertIsNone(load_json(self.raw_config["inputs"]["report"])["factorExtras"][1]["valueAxis"])
         self.assertTrue(any("가치관 축 분류 단계" in line and "openai" in line for line in self.logs))  # 외부 전송 안내
 
@@ -878,8 +927,8 @@ class PipelineTest(unittest.TestCase):
         # 축 단계를 건너뛰면 추출기 값 그대로 적재한다
         state = self.run_with(config, {}, skip=["axis"])
         sql = Path(state["stages"]["load"]["outputs"]["sqlFile"]).read_text(encoding="utf-8")
-        self.assertIn("'분류', 'FAULT_STANDARD', NULL, 1);", sql)  # 투표 기록 없음 (value_axis_votes NULL)
-        self.assertIn("'분류', NULL, NULL, 2);", sql)
+        self.assertIn("'분류', 'FAULT_STANDARD', NULL, NULL, 1);", sql)  # 투표 기록 · 요약어 후보 없음 (NULL)
+        self.assertIn("'분류', NULL, NULL, NULL, 2);", sql)
         self.assertEqual(state["stages"]["axis"]["status"], "failed")  # 실패한 투표 결과는 쓰지 않는다
 
     def test_axis_disabled_ignoresPreviousVotes_skipKeepsThem(self):
@@ -893,7 +942,7 @@ class PipelineTest(unittest.TestCase):
         state = self.run_with(disabled, {}, start="load")
         inserted = Path(state["stages"]["load"]["outputs"]["sqlFile"]).read_text(encoding="utf-8").split("RETURNING id INTO v_case_id")[1]
         self.assertNotIn("APOLOGY_SINCERITY", inserted)
-        self.assertIn("'분류', NULL, NULL, 2);", inserted)  # 추출기 값(null) · 투표 기록 없음
+        self.assertIn("'분류', NULL, NULL, NULL, 2);", inserted)  # 추출기 값(null) · 투표 기록 · 요약어 후보 없음
         self.assertFalse(any("투표 결과 사용" in line for line in self.logs[-5:]))
 
     def test_axis_rerun_from_axis_keepsGeneration(self):

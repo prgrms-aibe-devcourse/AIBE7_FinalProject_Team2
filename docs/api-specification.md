@@ -32,6 +32,7 @@
 | v0.28 | 2026-10-15 | 성향 이미지 시드 반영 (BE-73) — 9-1 `imageUrl`: 시드가 16유형 모두 `/images/characters/personality/{이미지 번호}.webp`를 넣는다(`null`은 이제 없음). 파일이 아직 없으면 화면이 이름표로 대신한다. 9-2 #5: OG 빌드용 shareId · 이미지 번호 등은 `frontend/og/personality-types.json`에 두고 시드와 같은지 백엔드 테스트가 확인한다. 형식 변경 없음 |
 | v0.29 | 2026-10-15 | **API 16 공개 사건 상세 추가** (BE-74, S-20 사건 디테일 · 정보 구조 v1.12, #137 합의) — `GET /cases/{caseId}`: 체험 없이 API 1 카드 값 + `chargeName` · `overview` · `myStatus`. 법정형 · 권고 범위 · 판결 · 섹션 본문은 넣지 않는다(FR-2-8). 쿠키는 읽기만. 2장 목록 · 4장 · 5장 S-20 추가 |
 | v0.30 | 2026-10-15 | Rate limit 1차 반영 (BE-63, WBS 7.4.6) — 1-5에 **429 `TOO_MANY_REQUESTS`** 추가. 운영 Nginx가 `/api`의 IP별 요청 속도를 제한하고, 넘으면 1-4와 같은 형식의 JSON과 `Retry-After: 1`을 돌려준다(백엔드는 이 응답을 만들지 않음). 로그인 · 재발급 엔드포인트 제한은 2차(7.4.2 이후) |
+| v0.31 | 2026-10-16 | 관리자 사건 상세 A-6 `factors[].summaryTagCandidates` 추가 (BE-80, ERD v1.24) — 요약어 후보(제안만, 없으면 null) |
 
 ---
 
@@ -869,7 +870,8 @@ API 1 · 2 · 16은 상태와 관계없이 부를 수 있다. 표에 없는 조�
       "summaryTag": "금전 갈등",
       "valueAxis": "FAULT_STANDARD",
       "valueAxisStatus": "AUTO",
-      "valueAxisVotes": { "runs": 5, "counts": { "FAULT_STANDARD": 3, "NONE": 2 }, "needsReview": false }
+      "valueAxisVotes": { "runs": 5, "counts": { "FAULT_STANDARD": 3, "NONE": 2 }, "needsReview": false },
+      "summaryTagCandidates": { "candidates": [{ "tag": "채무 다툼", "score": 0.9211 }, { "tag": "반복된 다툼", "score": 0.8735 }], "inVocabulary": false, "ambiguous": false, "suggested": "채무 다툼" }
     }
   ],
   "candidates": {
@@ -888,6 +890,7 @@ API 1 · 2 · 16은 상태와 관계없이 부를 수 있다. 표에 없는 조�
 - `content`는 A-11에서 고칠 수 있는 필드와 읽기 전용 필드를 함께 담는다(고칠 수 있는 필드는 A-11 표).
 - `candidates`는 최신 순. 반려(`REJECTED`)된 후보도 이력으로 함께 내려 준다.
 - `penaltyLabel`은 API 14 `preToFinal.finalJudgmentText`(예: "징역 15년")와 같은 규칙으로 만든다.
+- `factors[].summaryTagCandidates`(BE-80): 요약어 후보(ERD `factor.summary_tag_candidates`). 후보 계산을 켜지 않고 적재한 요소는 `null`. **제안일 뿐 요약어(`summaryTag`)를 바꾸지 않는다** — `suggested`가 있으면 관리자가 요약어를 그 값으로 맞출지 판단한다(요약어 수정 API는 아직 없음). `ambiguous: true`면 1 · 2순위가 붙어 제안하지 않은 것이다.
 - `publishReadiness.reasons`는 A-13의 공개 조건 코드(A-13 표)다. 비어 있으면 `ready = true`.
 - 원문(`original_text`)은 크기가 커서 A-7로 따로 받는다.
 
