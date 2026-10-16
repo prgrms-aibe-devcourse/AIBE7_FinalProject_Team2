@@ -691,7 +691,8 @@ def attach_summary_tags(report_path, report, options, log, embed_fn=None):
         updated = annotate_report(report, vocabulary, **options_kw)
         summary = updated["summaryTagCandidates"]
         log(f"요약어 후보: 기준 목록 {summary['vocabularySize']}개와 비교 — 비슷한 기존 요약어가 있는 요소 "
-            f"{summary['suggested']}개 ({summary['minScore']} 이상, 요약어는 바꾸지 않고 제안만)")
+            f"{summary['suggested']}개 ({summary['minScore']} 이상), 1 · 2순위가 붙어 애매한 요소 {summary['ambiguous']}개 "
+            f"(제안 안 함) — 요약어는 바꾸지 않고 제안만")
     except LLMError as e:
         updated = skipped_report(report, str(e)[:200])
         log(f"⚠ 요약어 후보를 만들지 못했습니다 (extract는 계속): {str(e)[:200]}")

@@ -44,6 +44,9 @@ TABLE = {
     "범행 인정 · 반성": [0.0, 0.0, 1.0],
     "흉기를 씀": [0.98, 0.2, 0.0],         # 흉기 사용과 매우 비슷 (0.85 이상)
     "300만 원 공탁": [0.5, 0.7, 0.4],       # 피해 회복 공탁이 가장 비슷하지만 0.74로 0.85 미만
+    "공탁하고 반성": [0.0, 0.7, 0.7],       # 피해 회복 공탁 · 범행 인정 · 반성과 똑같이 비슷 (1 · 2순위 차 0)
+    "거의 공탁": [0.0, 0.7, 0.695],         # 1 · 2순위 차 약 0.005 (0.01 미만)
+    "공탁 쪽": [0.0, 0.7, 0.6],             # 1 · 2순위 차 약 0.10 (애매하지 않음)
 }
 
 
@@ -125,6 +128,68 @@ class FindCandidatesTest(unittest.TestCase):
         self.assertEqual(fake.calls, [])
 
 
+class ReviewDecisionTest(unittest.TestCase):
+    """BE-53 리뷰 결정: minScore 0.90, 1 · 2순위 차 0.01 미만은 애매함(제안 안 함), 빈 요약어는 계산에서 뺀다."""
+
+    def test_default_min_score_is_090_and_example_matches(self):
+        self.assertEqual(summary_tags.DEFAULT_MIN_SCORE, 0.90)
+        self.assertEqual(summary_tags.AMBIGUOUS_MARGIN, 0.01)
+        example = load_json(TOOL_DIR / "pipeline.example.json")
+        self.assertEqual(example["stages"]["extract"]["summaryTags"]["minScore"], summary_tags.DEFAULT_MIN_SCORE)
+        self.assertEqual(pipeline.DEFAULT_CONFIG["stages"]["extract"]["summaryTags"]["minScore"], 0.90)
+
+    def test_tie_is_ambiguous_and_not_suggested(self):
+        # 점수 기준은 넘지만(0.7071 ≥ 0.5) 1 · 2순위가 같으면 관리자가 직접 고르게 제안하지 않는다
+        tie, = find_candidates(["공탁하고 반성"], VOCAB, FakeEmbed(TABLE), top_k=3, min_score=0.5)
+        self.assertTrue(tie["ambiguous"])
+        self.assertIsNone(tie["suggested"])
+        self.assertEqual(len(tie["candidates"]), 3)  # 후보 · 점수는 그대로 남긴다
+
+    def test_margin_boundary(self):
+        near, clear = find_candidates(["거의 공탁", "공탁 쪽"], VOCAB, FakeEmbed(TABLE), top_k=3, min_score=0.5)
+        self.assertTrue(near["ambiguous"])            # 차 약 0.005 < 0.01
+        self.assertIsNone(near["suggested"])
+        self.assertFalse(clear["ambiguous"])          # 차 약 0.10
+        self.assertEqual(clear["suggested"], "피해 회복 공탁")
+
+    def test_ambiguity_ignores_top_k(self):
+        # 후보를 1개만 남겨도 1 · 2순위 비교는 전체 목록 기준이다
+        tie, = find_candidates(["공탁하고 반성"], VOCAB, FakeEmbed(TABLE), top_k=1, min_score=0.5)
+        self.assertEqual(len(tie["candidates"]), 1)
+        self.assertTrue(tie["ambiguous"])
+        self.assertIsNone(tie["suggested"])
+
+    def test_clear_match_is_not_ambiguous(self):
+        near, exact = find_candidates(["흉기를 씀", "흉기 사용"], VOCAB, FakeEmbed(TABLE))
+        self.assertFalse(near["ambiguous"])
+        self.assertEqual(near["suggested"], "흉기 사용")  # 0.98 ≥ 0.90 (기본값)
+        self.assertFalse(exact["ambiguous"])
+
+    def test_missing_or_empty_summary_tag_does_not_stop(self):
+        report = {"factorExtras": [{"factorId": 1, "summaryTag": "흉기를 씀"}, {"factorId": 2, "summaryTag": ""},
+                                   {"factorId": 3}, {"factorId": 4, "summaryTag": None}]}
+        fake = FakeEmbed(TABLE)
+        annotated = annotate_report(report, VOCAB, fake)
+        extras = annotated["factorExtras"]
+        self.assertEqual(extras[0]["summaryTagCandidates"]["suggested"], "흉기 사용")
+        for extra in extras[1:]:
+            self.assertEqual(extra["summaryTagCandidates"],
+                             {"candidates": [], "inVocabulary": False, "ambiguous": False, "suggested": None})
+        self.assertEqual(fake.calls[0][0], VOCAB + ["흉기를 씀"])  # 빈 값은 보내지 않는다
+        self.assertNotIn("summaryTag", report["factorExtras"][2])  # 원본은 그대로
+
+    def test_all_empty_tags_no_embedding_call(self):
+        fake = FakeEmbed(TABLE)
+        results = find_candidates(["", None], VOCAB, fake)
+        self.assertEqual([r["candidates"] for r in results], [[], []])
+        self.assertEqual(fake.calls, [])
+
+    def test_summary_counts_ambiguous(self):
+        annotated = annotate_report(report_with(["흉기를 씀", "공탁하고 반성"]), VOCAB, FakeEmbed(TABLE))
+        summary = annotated["summaryTagCandidates"]
+        self.assertEqual((summary["suggested"], summary["ambiguous"], summary["ambiguousMargin"]), (1, 1, 0.01))
+
+
 class AnnotateReportTest(unittest.TestCase):
     def test_annotate_adds_candidates_without_changing_tags(self):
         report = report_with(["흉기를 씀", "300만 원 공탁"])
@@ -157,7 +222,7 @@ class OptionErrorsTest(unittest.TestCase):
     def test_pipeline_validation_uses_options(self):
         # 실제로 쓰는 경로처럼 예시 설정을 기본값과 합쳐 검사한다 (load_config와 같은 _merge)
         config = pipeline._merge(pipeline.DEFAULT_CONFIG, load_json(TOOL_DIR / "pipeline.example.json"))
-        pipeline.validate_config(config)  # 예시 설정(켜짐 · topK 3 · minScore 0.85)은 통과
+        pipeline.validate_config(config)  # 예시 설정(켜짐 · topK 3 · minScore 0.9)은 통과
         config["stages"]["extract"]["summaryTags"] = {"enabled": "yes", "topK": 0}
         with self.assertRaises(pipeline.PipelineError) as raised:
             pipeline.validate_config(config)

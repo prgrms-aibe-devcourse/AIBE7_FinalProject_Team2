@@ -6,7 +6,8 @@
 - 임베딩: llm.embed (gemini-embedding-001, 3072차원), task type SEMANTIC_SIMILARITY, 유사도는 cosine (ai-judgment-pipeline.md 8-1)
 - 보내는 값: 요약어만(판단 요소 문장 · 판결문은 보내지 않는다). 기준 목록은 공개 값만 쓴다(summary_tags.json 설명)
 - 결과: 보고서 factorExtras[].summaryTagCandidates · 맨 위 summaryTagCandidates(상태). 적재 · 관리자 화면 표시는 후속 이슈
-- 기준 점수 minScore 0.85는 문서의 예시값이다(8-1 "점수 하한"). 실제 사건이 쌓이면 분포를 보고 정한다
+- 기준 점수 minScore 0.90 (BE-53 리뷰, 샘플 실측: 0.85는 무관한 쌍 0.81 ~ 0.86과 구분이 안 됨). 실제 사건 요약어로 다시 정할 값이다(8-1 "점수 하한")
+- 1 · 2순위 점수 차가 AMBIGUOUS_MARGIN 미만이면 ambiguous로 표시하고 제안하지 않는다(부정어 구분이 약함: 초범 → 전과 없음 / 동종 전과)
 """
 
 import copy
@@ -20,7 +21,8 @@ VOCABULARY_PATH = Path(__file__).resolve().parent / "summary_tags.json"
 TASK_TYPE = "SEMANTIC_SIMILARITY"
 EMBEDDING_MODEL = "gemini-embedding-001"
 DEFAULT_TOP_K = 3
-DEFAULT_MIN_SCORE = 0.85  # 예시값 (ai-judgment-pipeline.md 8-1). 확정 전
+DEFAULT_MIN_SCORE = 0.90  # BE-53 리뷰 결정 (샘플 실측). 실제 사건 요약어로 다시 정한다 (ai-judgment-pipeline.md 8-1)
+AMBIGUOUS_MARGIN = 0.01  # 1 · 2순위 점수 차가 이보다 작으면 애매함 (예시값, 설정으로 빼지 않음 — BE-53 리뷰)
 TAG_MAX_LENGTH = 20  # ERD factor.summary_tag varchar(20)
 TOP_K_RANGE = (1, 10)
 
@@ -75,22 +77,37 @@ def find_candidates(tags, vocabulary, embed_fn=default_embed, top_k=DEFAULT_TOP_
     tags: 판단 요소 순서의 요약어 목록. 돌려주는 값도 같은 순서다.
       candidates: [{tag, score}] 점수 높은 순 (소수 넷째 자리)
       inVocabulary: 요약어가 목록에 글자 그대로 있음
-      suggested: 목록에 없는데 min_score 이상으로 비슷한 기준 요약어(관리자가 바꿀지 판단). 없으면 None
-    임베딩은 한 번만 부른다(목록 + 요약어, 같은 글자는 한 번만 보냄). 요약어가 없으면 부르지 않는다.
+      ambiguous: 1 · 2순위 점수 차가 AMBIGUOUS_MARGIN 미만 (top_k와 관계없이 전체 목록 기준). 이때는 제안하지 않는다
+      suggested: 목록에 없고, 애매하지 않고, min_score 이상으로 비슷한 기준 요약어(관리자가 바꿀지 판단). 없으면 None
+    빈 요약어("" · None)는 보내지 않고 빈 결과를 둔다. 임베딩은 한 번만 부른다(목록 + 요약어, 같은 글자는 한 번만 보냄).
+    보낼 요약어가 없으면 부르지 않는다.
     """
-    if not tags:
-        return []
-    texts = list(dict.fromkeys(list(vocabulary) + list(tags)))
+    present = [tag for tag in tags if tag]
+    if not present:
+        return [_empty_result() for _ in tags]
+    texts = list(dict.fromkeys(list(vocabulary) + present))
     vectors = dict(zip(texts, embed_fn(texts, task_type=TASK_TYPE)))
     results = []
     for tag in tags:
+        if not tag:
+            results.append(_empty_result())  # 요약어가 빠진 요소: 후보 계산에서 뺀다 (BE-53 리뷰)
+            continue
         scored = sorted(((cosine(vectors[tag], vectors[v]), v) for v in vocabulary), key=lambda x: (-x[0], x[1]))
         candidates = [{"tag": v, "score": round(score, 4)} for score, v in scored[:top_k]]
         in_vocabulary = tag in vocabulary
+        # 애매함은 반올림 전 점수로, 화면에 남기는 후보 수(top_k)와 관계없이 1 · 2순위를 비교한다
+        ambiguous = len(scored) >= 2 and scored[0][0] - scored[1][0] < AMBIGUOUS_MARGIN
         best = candidates[0] if candidates else None
-        suggested = best["tag"] if best and not in_vocabulary and best["score"] >= min_score else None
-        results.append({"candidates": candidates, "inVocabulary": in_vocabulary, "suggested": suggested})
+        suggested = (best["tag"] if best and not in_vocabulary and not ambiguous and best["score"] >= min_score
+                     else None)
+        results.append({"candidates": candidates, "inVocabulary": in_vocabulary, "ambiguous": ambiguous,
+                        "suggested": suggested})
     return results
+
+
+def _empty_result():
+    """요약어가 없는 요소의 결과 (후보 없음)."""
+    return {"candidates": [], "inVocabulary": False, "ambiguous": False, "suggested": None}
 
 
 def annotate_report(report, vocabulary, embed_fn=default_embed, top_k=DEFAULT_TOP_K, min_score=DEFAULT_MIN_SCORE):
@@ -101,12 +118,13 @@ def annotate_report(report, vocabulary, embed_fn=default_embed, top_k=DEFAULT_TO
     """
     annotated = copy.deepcopy(report)
     extras = annotated.get("factorExtras") or []
-    results = find_candidates([e["summaryTag"] for e in extras], vocabulary, embed_fn, top_k, min_score)
+    results = find_candidates([e.get("summaryTag") or "" for e in extras], vocabulary, embed_fn, top_k, min_score)
     for extra, result in zip(extras, results):
         extra["summaryTagCandidates"] = result
     annotated["summaryTagCandidates"] = {
         "status": "OK", "model": EMBEDDING_MODEL, "taskType": TASK_TYPE, "topK": top_k, "minScore": min_score,
-        "vocabularySize": len(vocabulary), "suggested": sum(1 for r in results if r["suggested"]),
+        "ambiguousMargin": AMBIGUOUS_MARGIN, "vocabularySize": len(vocabulary),
+        "suggested": sum(1 for r in results if r["suggested"]), "ambiguous": sum(1 for r in results if r["ambiguous"]),
     }
     return annotated
 
