@@ -12,11 +12,15 @@
 | v2.3 | 2026-10-14 | 로 스탠딩 · `idle`은 빈손(봉투는 `deliver`만) — 9-6 · 9-9 · 9-10 수정, 9-12 빈손 스탠딩 추가 |
 | v2.4 | 2026-10-14 | 로 셋 이름(로울 · 로봉 · 로북)을 IDENTITY 제목에 표기. 프롬프트 본문은 "Law (Scale)" 등 영어 이름 그대로 |
 | v2.5 | 2026-10-14 | 수정 프롬프트 추가 — R1 로북 스탠딩(봉투 · 마네킹 목 · 구두), R2 로북 시트(중복 줄 · 아쉬움 칸 · 마네킹 목), R3 키 비교 v2(비율 · 떠 있는 법전 · 숫자). 지금 이미지는 샘플(모델 교체 후 재생성) |
+| v2.6 | 2026-10-15 | **10/15 이관 결정**(COMMON-35) — 생성은 GPT Pro 팀원(gpt image 2.0, 기본 품질 medium)이 맡고 지금 이미지는 유지(재생성은 최종 디테일 때). **모든 생성 배경을 투명으로**(시트 · 재연 컷 포함, 신문 느낌은 후보정, 크로마 그린은 대안) — 1-3 · 9-1 · 9-7. 9-16 마스코트 로(2등신, 키 로울 180 · 로북 170 · 로봉 160) · 9-17 극적 재연 블록 추가 |
+| v2.7 | 2026-10-15 | 추가 생성 목록 H(제작 목록) 블록 — 데포르메 묶음 시트 · 의상 시트 · 역할 의상 정식 컷 · 마스코트 로 컷(v2.8에서 10장으로 옮김) |
+| v2.8 | 2026-10-15 | **10장 이관 묶음 완성 프롬프트** — 1차 · 2차 지시서(`items.js`)와 같은 문장으로 정리(10-1 ~ 10-10), 9-16에 마스코트 로 IDENTITY 3종 추가 |
+| v2.9 | 2026-10-15 | 9-17 · 10-4 CASE RULES에서 "양쪽 감정을 같은 무게로" 문장 삭제(PR #149 리뷰 결정), 10장 지시서(`items.js`)는 쓰지 않는 것으로 정정 |
 
 > 기준 결정: `character-main-handover.md` v2의 10/13 변경 절 (기본 = 마스코트형 약 3.5등신 · 란마풍 등은 변형 · 모든 캐릭터 무성 · 소품 제한 해제 · 화난 표정 금지)
 > 이 문서는 **복사해서 바로 쓰는 프롬프트 모음**이다. 설계 배경은 `character-law-ai-judge-plan.md` v0.3을 본다(`Claude outputs/character/plan/`, 커밋 안 함).
 > **이후 생성은 9장(신규 프롬프트 v2)을 기본으로 한다.** 1 ~ 7장은 원문 기록이다.
-> **지금 이미지는 샘플이다.** 현재 쓰는 생성 모델은 프롬프트를 그대로 살리지 못하는 경우가 많아, 지금 만드는 이미지는 화면 · 흐름 확인용 샘플로 쓴다. 더 좋은 모델로 바꾸면 같은 프롬프트로 다시 만든다(제작 목록 1장).
+> **지금 이미지는 그대로 쓴다(10/15).** 지금까지 만든 이미지도 gpt image 2.0으로 뽑은 것이라 품질이 충분하다. 다시 뽑는 것은 최종 디테일을 잡을 때 하고, 그 전까지는 **없는 이미지만** 새로 만든다. 생성은 GPT Pro 팀원(김현중)이 맡는다(9-1 #4, 제작 목록 1장).
 > **작업본이다.** 이미지 생성 결과가 프롬프트와 다르게 나오는 경우가 있다. **확정 이미지가 기준**이고([캐릭터 에셋 아키텍처](character-asset-architecture.md) 2-1 기준 이미지 · 2-4 색 · 2-5 키), 프롬프트와 다른 점은 8장에 모았다. 프롬프트 문구는 이미지를 뽑으며 계속 고친다(아키텍처 5-1 "작업본" 원칙). 캐릭터 설정은 프롬프트 문구와 따로 [캐릭터 프로필 · 세계관](character-profile-worldview.md)이 기준이다.
 > 만들 이미지 목록은 [캐릭터 이미지 제작 목록](character-image-checklist.md)이다.
 
@@ -35,6 +39,7 @@
 | 7 | 문제와 대응 · 검수 | - | - |
 | 8 | 확정 이미지와 다른 점 | - | - |
 | 9 | **신규 프롬프트 v2** (확정 설정 기준, 이후 기본) | 용도별 | 내로 · 남불 `editorial` × `mascot`, 로 `authority` × `adult` |
+| 10 | **이관 묶음 완성 프롬프트** (10/15, 1차 · 2차 지시서와 같은 문장) | 투명 배경, 용도별 | 9장 블록 조합 |
 
 ---
 
@@ -62,7 +67,8 @@
 
 ### 1-3. 생성 요령
 
-- 시트는 신문지색 배경(16:9), 스탠딩은 **크로마 그린 `#00B140` 단색 배경**으로 뽑아 배경을 지우고 투명 PNG(2048 × 2560)와 웹용 WebP(800 × 1000)로 쓴다. 캐릭터에 초록을 쓰지 않는다.
+- **10/15부터 모든 이미지를 투명 배경으로 뽑는다**(시트 · 재연 컷 포함, 9-7 `BG` 블록). 신문지색 · 신문 느낌은 후보정으로 넣는다. 투명 출력이 안 되는 환경에서만 **크로마 그린 `#00B140` 단색 배경**으로 뽑아 배경을 지운다(그때는 캐릭터에 초록을 쓰지 않는다). 아래 2 ~ 5장 원문의 신문지색 · 크로마 그린 문장은 기록이다.
+- 장면 컷은 투명 PNG(2048 × 2560)와 웹용 WebP(800 × 1000)로 쓴다.
 - 기존 시트나 메인 이미지를 **참조 이미지로 같이 첨부**하면 일관성이 크게 좋아진다. 첨부 시 맨 위에 한 줄을 붙인다.
 
 ```
@@ -801,6 +807,7 @@ Match the face, colors, design and proportions of the attached reference exactly
 1. **참조 이미지가 있으면 9-2의 [REF] 한 줄 + 바꿀 내용만** 쓴다(짧은 프롬프트). Max 생성기는 참조 이미지를 잘 따르므로 이 방식이 기본이다. 예시는 [제작 목록](character-image-checklist.md) 5장.
 2. 참조 이미지가 없거나 새 캐릭터(법전 로 등)를 처음 만들 때는 **블록을 순서대로 이어 붙인다**: `[REF]`(있으면) → `STYLE` → `DEFORM` → `IDENTITY`(캐릭터 수만큼) → `POSE` → `SCENE` → `AVOID`(공통 + 캐릭터별).
 3. 괜찮은 예시 사진이 있으면 [REF-STYLE] 줄로 "구도 · 분위기만 따라 하고 캐릭터는 바꾸지 말 것"을 붙인다.
+4. **생성 설정(10/15)**: 모델은 gpt image 2.0, 품질은 기본 **medium**이고 토큰 사용량에 맞춰 조절한다. 다른 이미지의 기준이 되는 이미지(기준 시트 · 스탠딩, 9-16 마스코트 로)는 **high**. 프롬프트 1개당 **1장**만 뽑고, 다시 뽑는 것은 검수 지시가 있을 때마다 1회씩이다(수정 프롬프트는 원래 프롬프트 + 지시로 만든다). 첨부 이미지는 공개 레포 `NaeLawNamBul_Images`의 정식 파일만 쓰고 **폐기 자료(`discard_`)는 첨부하지 않는다**. 비율은 프롬프트에 적고, 다르게 나오면 캔버스를 맞춘다.
 
 ### 9-2. 참조 문장
 
@@ -916,35 +923,50 @@ No face, no eyes, no mouth, no neck, no human head. The head is a thick, closed 
 
 ### 9-7. SCENE 블록
 
+**10/15부터 배경은 모두 투명이다.** SCENE 블록 뒤에 `BG` 블록을 붙인다. 신문지색 · 신문 느낌은 후보정으로 넣는다.
+
+**`BG`** — 배경 (모든 이미지 공통)
+
+```
+BACKGROUND — fully transparent background (PNG with alpha). No background color, no floor, no ground line, no shadow, no frame, no border. Aspect ratio {4:5 vertical | 16:9 landscape | 1:1}.
+```
+
+- 투명 출력이 안 되는 환경에서만 `Background: perfectly flat uniform solid green #00B140, no gradient, no floor, no shadow. Do not use green anywhere on the character or props.`로 바꾸고 배경을 지운다.
+
 **`scene-cut`** — 장면 컷 · 스탠딩 (4:5)
 
 ```
-SCENE — a single character, centered, full body from head to feet fully visible, 4:5 vertical composition with 15% empty margin on every side. Background: perfectly flat uniform solid green #00B140, no gradient, no floor, no shadow, no props in the background. Do not use green anywhere on the character or props.
+SCENE — a single character, centered, full body from head to feet fully visible, 15% empty margin on every side.
 ```
 
 **`group`** — 2 ~ 3인 컷 (4:5 또는 16:9)
 
 ```
-SCENE — {characters} standing side by side on the same ground line, {left-to-right order}, the same scale relation as the references (Naero and Nambul the same height; Law (Scale) about 1.9 times, Law (Book) about 1.75 times, Law (Gavel) about 1.6 times their height), nobody in front of the others. Background: perfectly flat solid green #00B140. Full bodies visible with 10% margin. Do not use green on any character.
+SCENE — {characters} standing side by side on the same ground line, {left-to-right order}, the same scale relation as the references (Naero and Nambul the same height; Law (Scale) about 1.9 times, Law (Book) about 1.75 times, Law (Gavel) about 1.6 times their height), nobody in front of the others. Full bodies visible with 10% margin.
 ```
+
+- 마스코트 로(9-16)와 함께 설 때는 키를 로울 1.5배 · 로북 약 1.42배 · 로봉 약 1.33배로 바꾼다.
 
 **`icon`** — 아이콘 (1:1)
 
 ```
-SCENE — a face-only icon of {character}, the head filling about 70% of a 1:1 square, centered, simple and readable at 64 px. Background: flat solid green #00B140. Do not use green on the character.
+SCENE — a face-only icon of {character}, the head filling about 70% of a 1:1 square, centered, simple and readable at 64 px.
 ```
 
 **`sheet`** — 시트 (16:9)
 
 ```
-SCENE — a clean character sheet on a plain newsprint background #ECE2D4, panels separated by space only (no frame lines, no labels), landscape 16:9.
+SCENE — a clean character sheet: panels separated by empty space only (no frame lines, no labels, no text), landscape 16:9.
 ```
 
-**`reenact`** — 사건 재연 컷 (4:3 · 16:9)
+**`reenact`** — 사건 재연 컷 (16:9)
 
 ```
-SCENE — a calm newspaper-photo-like scene that shows only the situation and relationship of a real case: {situation}. Naero plays {role A} and Nambul plays {role B}, shown only through simple role outfits and props; their faces and colors stay the same. Plain newsprint background #ECE2D4 with a few simple props, {4:3 | 16:9} landscape. No victims' injuries, no weapons, no crime in progress, no blood, no bodies; nothing that hints at the verdict.
+SCENE — a newspaper-photo-like moment that shows only the situation and relationship of a real case: {situation}. Naero plays {role A} and Nambul plays {role B}, shown through role outfits and props; their faces and colors stay the same. Draw only the characters and the few props listed: no room, no walls, no floor, no scenery. No victims' injuries, no weapons, no crime in progress, no blood, no bodies; nothing that hints at the verdict.
 ```
+
+- 극적인 연출은 9-17을 붙인다.
+- 9-9 ~ 9-15 완성 프롬프트와 제작 목록 5장 예시는 10/14 기록이라 옛 배경 문장(신문지색 · 크로마 그린)이 들어 있다. 다시 쓸 때는 배경 문장을 `BG` 블록으로 바꾼다.
 
 ### 9-8. AVOID 블록
 
@@ -1094,3 +1116,529 @@ SCENE — plain newsprint background #ECE2D4, generous spacing, landscape 16:9.
 
 AVOID: text, letters, numbers, labels, envelopes, a mannequin neck, the book touching the collar, Nambul taller than Naero, all Laws the same height, Laws taller than the given ratios, angry faces or poses, gendered body features, cropped limbs, extra characters, black outlines, drop shadows, ground shadows, 3D render, photo realism.
 ```
+
+### 9-16. 마스코트 로 블록 (10/15, 제작 목록 A6)
+
+로울 · 로봉 · 로북을 **내로 · 남불과 같은 2등신 마스코트 그림체**로 만든 버전이다. 기본 로(`authority` × `adult`, 9-3 · 9-4)는 그대로 두고 **추가**한다. STYLE은 `editorial`(9-3)을 쓰고, 소재는 평면으로 그린다(3장 MATERIAL RULES를 줄인 것). 이 버전 시트가 로 데포르메 시트(제작 목록 G6)의 첨부 기준이다.
+
+**키 (마스코트끼리, 같은 바닥선)**: 내로 · 남불 120, **로울 180 · 로북 170 · 로봉 160**. 기본 로의 키(230 · 210 · 190)와 따로 쓴다(아키텍처 2-5).
+
+**첨부**: 해당 로의 `standing/law-*_standing.png`(정체성만, 비율 · 사실 질감은 따르지 않음) + `standing/naero_standing.png` · `standing/nambul_standing.png`(그림체 · 비율). 시트를 만들 때는 그 로의 마스코트 스탠딩 결과 + `sheets/law-*_sheet_reference.png`(칸 배치만) + `sheets/naero_sheet_reference.png`(마스코트 시트 그림체).
+
+**`law-mascot` DEFORM 블록**
+
+```
+DEFORMATION — chunky, cute mascot in the same family as Naero and Nambul (match their attached references), about 2 heads tall counting the head object as one head:
+- The head object is big and chunky, about 45 to 50% of the total height and clearly wider than the shoulders, built from simple rounded shapes.
+- A short, soft, rounded body hidden by a simple bell-shaped navy robe: deep V neckline, two flat slightly darker front bands, short wide bell sleeves, a hem just above the shoes. No fold lines, no pleats, no wrinkles.
+- Short sturdy legs, small rounded white-gloved hands with simple short fingers (as simple as Naero's hands), small rounded near-black shoes.
+- Heights on the same ground line, where Naero and Nambul are 120: Law (Scale) 180 (1.5 times), Law (Book) 170 (about 1.42 times), Law (Gavel) 160 (about 1.33 times). The build differences between the three Laws stay readable even in this small size.
+- No face anywhere: emotion only by the head object and the body posture.
+
+MATERIAL — brass, wood and leather are flat color fills: a base color, one flat shadow shape on the lower right and one or two small crisp highlight shapes. No realistic metal or wood texture, no reflections, no glossy rendering, no painterly shading.
+```
+
+**마스코트 IDENTITY** — 9-5를 마스코트에 맞게 고친 것(머리 물체를 `chunky, simplified`, 법봉은 `toy-like`로 어깨보다 넓게). 체형 차이(로울 가장 크고 곧음 · 로봉 가장 작고 어깨가 넓음 · 로북 중간)는 유지한다.
+
+**`law-scale` (마스코트)**
+
+```
+CHARACTER — "Law (Scale)", a genderless AI judge mascot with a brass balance scale as its head:
+No face, no eyes, no mouth, no neck, no human head. The head is a chunky, simplified brass scale (light #D29C5E, mid #B58A59, dark #956331): a thick short central post with a round finial rising straight out of the collar, a thick gently curved beam and two wide shallow round pans on short thick chains. The scale is level. Outfit: deep navy judge's robe (#253048, front bands #171F30), warm-white shirt collar and white gloves (#F2E4D0), near-black shoes. Build: the tallest of the three Laws, straight and average width.
+```
+
+**`law-gavel` (마스코트)**
+
+```
+CHARACTER — "Law (Gavel)", a genderless AI judge mascot with a judge's gavel as its head:
+No face, no eyes, no mouth, no human head. The head is a chunky, toy-like mahogany gavel (dark #5A220B, mid #95562C, highlight #CA9654): a big rounded horizontal barrel with flared ringed collars and rounded end caps, clearly wider than the shoulders, on a short thick handle that works as the neck and goes straight into the collar. Nothing sticks out of the top. The gavel is level and is never swung or struck. Same robe, collar, gloves and shoes as the other Laws. Build: the shortest of the three Laws, with a wider, chunkier body and broad round shoulders (solid and dependable, never aggressive).
+```
+
+**`law-book` (마스코트)**
+
+```
+CHARACTER — "Law (Book)", a genderless AI judge mascot with a floating law book as its head:
+No face, no eyes, no mouth, no neck, no human head. The head is a chunky, thick, closed law book that FLOATS above the collar: no neck, no post, no stand, and a clear empty gap between the book and the collar (the collar is empty and open at the top). By default the FRONT COVER faces the viewer, upright and level. Deep oxblood leather cover (#5E1F2B, shadow #3F141D) with brass corner guards and a thin brass border (#D29C5E); thick cream page edges (#F2E4D0) visible at the sides so it clearly reads as a thick book. No letters, numbers or symbols on the cover or spine. Same robe, collar, gloves and shoes as the other Laws. Build: medium height between the other two, average build with slightly rounded shoulders. Law does not hold another book.
+```
+
+**AVOID (덧붙임)**: `tall or slim adult proportions, robe folds, painterly shading`
+
+- 완성 프롬프트: 스탠딩 10-1 · 시트 10-2 · 로 데포르메 시트(G6) 10-3 · 마스코트 로 컷(H2) 10-8.
+
+### 9-17. 극적 재연 블록 (10/15)
+
+사건 재연 컷은 **드라마 한 장면처럼 극적인 표정 · 상황**을 쓸 수 있다(아키텍처 4-3). 9-7 `reenact` 뒤에 붙인다. 화난 · 적대적인 표정과 폭력은 여전히 쓰지 않는다.
+
+```
+CASE RULES — a dramatic, tense, newspaper-photo-like moment that shows the situation and the relationship. Strong emotions through faces and body language (frustration, desperation, shock, pressure), like a still from a TV drama, but never violent, never hostile or snarling, and no comedy. Nothing hints at the verdict.
+```
+
+- STYLE `editorial`의 Mood 줄은 `Mood: dramatic and tense like a TV drama still, while the drawing stays warm, flat and slightly vintage.`로 바꾼다.
+- 의상은 사건마다 정한다(셔츠 + 청바지 고정이 아님). 내로의 반다나는 역할 의상에서 계속 뺀다.
+- AVOID 덧붙임: `injuries, weapons, knives, kitchen tools, blood, bodies, a crime in progress, grabbing, pushing, hitting, raising a fist at a person, tears, mocking anyone`
+- 사건 1 완성 프롬프트(재연 컷 3장)는 10-4, 같은 의상의 배역 컷은 10-10.
+
+## 10. 이관 묶음 완성 프롬프트 (10/15)
+
+김현중(GPT Pro)이 쓸 **완성 프롬프트**다. 처음 만든 지시서(`items.js`, 레포 밖, 커밋 안 함)는 **쓰지 않기로 했고**(10/15, 수작업 `작업-가이드.md`로 진행), 이 장이 프롬프트의 기준이다. 아래 표의 지시서 폴더는 묶음 이름을 알아보기 위한 기록이다.
+
+| 지시서 | 폴더 | 묶음 → 제작 목록 |
+| --- | --- | --- |
+| 1차 | `Claude outputs/character/gpt-handover_2026-10-15/` | 1묶음 → A6 · 2묶음 → G6 · 3묶음 → E1 사건 1 · 4묶음 → G2 |
+| 2차 | `Claude outputs/character/gpt-handover_2026-10-15_2/` | H0 · H1 · H2 · H3 · H4(사건 1 배역 컷) |
+
+- 대표 항목 하나의 프롬프트를 그대로 싣고, 다른 항목에서 바뀌는 부분은 표로 적는다. `{ }`는 바꿔 쓰는 자리다.
+
+- 공통 설정: gpt image 2.0, 기본 품질 medium(1차 1묶음만 high), 투명 배경, 프롬프트 1개당 1장(9-1 #4).
+
+- 첨부 경로는 공개 레포 `NaeLawNamBul_Images/character/` 기준이다. `←`는 앞 항목의 결과물이다.
+
+### 10-1. 마스코트 로 스탠딩 (1차 1묶음 1-1 ~ 1-3, 제작 목록 A6)
+
+대표: 로울 `law-scale_standing_deform-mascot.png` · 품질 high · 첨부 `standing/law-scale_standing.png` · `standing/naero_standing.png` · `standing/nambul_standing.png`
+
+```
+ATTACHMENTS —
+1) law-scale_standing.png: the exact design of Law (Scale) (head object shape and colors, robe, gloves, shoes). Keep this identity, but do NOT copy its tall adult proportions or its painterly shading.
+2) naero_standing.png and nambul_standing.png: the exact art style and proportions to match (flat 2D mascot, about 2 heads tall, big head, short body). Do not draw Naero or Nambul.
+Draw Law (Scale) as a new member of the same mascot family as Naero and Nambul.
+
+ART STYLE — clean, warm 2D flat mascot illustration:
+- No black outlines and no line art; shapes are separated only by flat color areas.
+- Facial features (if any) are filled shapes, not strokes.
+- One soft shadow tone per surface on the lower-right side; at most a very subtle gradient on large areas.
+- Warm light from the upper left. Matte finish. No cast shadow, no ground shadow, no drop shadow, no glow.
+- Mood: friendly, cheerful, slightly vintage.
+
+DEFORMATION — chunky, cute mascot in the same family as Naero and Nambul (match their attached references), about 2 heads tall counting the head object as one head:
+- The head object is big and chunky, about 45 to 50% of the total height and clearly wider than the shoulders, built from simple rounded shapes.
+- A short, soft, rounded body hidden by a simple bell-shaped navy robe: deep V neckline, two flat slightly darker front bands, short wide bell sleeves, a hem just above the shoes. No fold lines, no pleats, no wrinkles.
+- Short sturdy legs, small rounded white-gloved hands with simple short fingers (as simple as Naero's hands), small rounded near-black shoes.
+- Heights on the same ground line, where Naero and Nambul are 120: Law (Scale) 180 (1.5 times), Law (Book) 170 (about 1.42 times), Law (Gavel) 160 (about 1.33 times). The build differences between the three Laws stay readable even in this small size.
+- No face anywhere: emotion only by the head object and the body posture.
+
+MATERIAL — brass, wood and leather are flat color fills: a base color, one flat shadow shape on the lower right and one or two small crisp highlight shapes. No realistic metal or wood texture, no reflections, no glossy rendering, no painterly shading.
+
+CHARACTER — "Law (Scale)", a genderless AI judge mascot with a brass balance scale as its head:
+No face, no eyes, no mouth, no neck, no human head. The head is a chunky, simplified brass scale (light #D29C5E, mid #B58A59, dark #956331): a thick short central post with a round finial rising straight out of the collar, a thick gently curved beam and two wide shallow round pans on short thick chains. The scale is level. Outfit: deep navy judge's robe (#253048, front bands #171F30), warm-white shirt collar and white gloves (#F2E4D0), near-black shoes. Build: the tallest of the three Laws, straight and average width.
+
+POSE — standing upright, front to slight three-quarter view, empty-handed: one hand open, palm up and slightly out to the side, presenting calmly; the other hand resting at the side. No envelope or other prop. The head object is calm and level.
+
+SCENE — a single character, centered, full body from head to feet fully visible, 15% empty margin on every side.
+
+BACKGROUND — fully transparent background (PNG with alpha). No background color, no floor, no ground line, no shadow, no frame, no border. Aspect ratio 4:5 vertical.
+
+AVOID: text, letters, numbers, logos, watermarks, labels, speech bubbles, angry or hostile faces or poses, sexualized or revealing depiction, gendered body features, cropped limbs, extra characters, black outlines, line art, drop shadows, ground shadows, background colors or scenery, 3D render, CGI, photo realism, faces, eyes, mouths, a human head, swinging or striking anything, a neck, a tilted scale in the front view, delicate thin chains, tall or slim adult proportions, robe folds, painterly shading.
+```
+
+| 항목 | 바꾸는 곳 |
+| --- | --- |
+| 1-2 로봉 · 1-3 로북 | 파일 · 첨부 이름의 `law-scale`, CHARACTER 블록(9-16 마스코트 IDENTITY), AVOID 끝의 캐릭터별 줄(9-8) |
+
+### 10-2. 마스코트 로 기준 시트 (1차 1묶음 1-4 ~ 1-6, 제작 목록 A6)
+
+대표: 로울 `law-scale_sheet_deform-mascot.png` · 품질 high · 첨부 `← law-scale_standing_deform-mascot.png` · `sheets/law-scale_sheet_reference.png` · `sheets/naero_sheet_reference.png`
+
+```
+ATTACHMENTS —
+1) law-scale_standing_deform-mascot.png: the exact model of mascot Law (Scale). Copy its head object, colors, proportions (about 2 heads tall) and flat style exactly.
+2) law-scale_sheet_reference.png: use ONLY as the sheet layout reference. Do not copy its tall proportions or painterly shading.
+3) naero_sheet_reference.png: the flat mascot sheet style to match. Do not draw Naero.
+Create a character sheet for this ONE character only.
+
+ART STYLE — clean, warm 2D flat mascot illustration:
+- No black outlines and no line art; shapes are separated only by flat color areas.
+- Facial features (if any) are filled shapes, not strokes.
+- One soft shadow tone per surface on the lower-right side; at most a very subtle gradient on large areas.
+- Warm light from the upper left. Matte finish. No cast shadow, no ground shadow, no drop shadow, no glow.
+- Mood: friendly, cheerful, slightly vintage.
+
+DEFORMATION — chunky, cute mascot in the same family as Naero and Nambul (match their attached references), about 2 heads tall counting the head object as one head:
+- The head object is big and chunky, about 45 to 50% of the total height and clearly wider than the shoulders, built from simple rounded shapes.
+- A short, soft, rounded body hidden by a simple bell-shaped navy robe: deep V neckline, two flat slightly darker front bands, short wide bell sleeves, a hem just above the shoes. No fold lines, no pleats, no wrinkles.
+- Short sturdy legs, small rounded white-gloved hands with simple short fingers (as simple as Naero's hands), small rounded near-black shoes.
+- Heights on the same ground line, where Naero and Nambul are 120: Law (Scale) 180 (1.5 times), Law (Book) 170 (about 1.42 times), Law (Gavel) 160 (about 1.33 times). The build differences between the three Laws stay readable even in this small size.
+- No face anywhere: emotion only by the head object and the body posture.
+
+MATERIAL — brass, wood and leather are flat color fills: a base color, one flat shadow shape on the lower right and one or two small crisp highlight shapes. No realistic metal or wood texture, no reflections, no glossy rendering, no painterly shading.
+
+CHARACTER — "Law (Scale)", a genderless AI judge mascot with a brass balance scale as its head:
+No face, no eyes, no mouth, no neck, no human head. The head is a chunky, simplified brass scale (light #D29C5E, mid #B58A59, dark #956331): a thick short central post with a round finial rising straight out of the collar, a thick gently curved beam and two wide shallow round pans on short thick chains. The scale is level. Outfit: deep navy judge's robe (#253048, front bands #171F30), warm-white shirt collar and white gloves (#F2E4D0), near-black shoes. Build: the tallest of the three Laws, straight and average width.
+
+SHEET LAYOUT —
+- Top: one front full body, empty-handed (one hand open, presenting calmly).
+- Middle: turnaround — exactly four views: front, three-quarter, side, back, all empty-handed.
+- Bottom: six poses — standing empty-handed, one fist raised gently, walking, hand on chin thinking, presenting with an open palm, holding a sealed kraft verdict envelope (#CF995A, red-brown wax seal) out with both hands (the ONLY pose with the envelope).
+- Emotion only by the head object: level = calm; pans lifted slightly = happy; pans swinging = surprised; one pan lower with a hand on the chin = thinking; level with slack chains and dropped shoulders = sorry.
+- Side panel: flat round color swatches of THIS character's colors only.
+- No height chart and no other character.
+
+SCENE — a clean character sheet: panels separated by empty space only (no frame lines, no labels, no text), landscape 16:9.
+
+BACKGROUND — fully transparent background (PNG with alpha). No background color, no floor, no ground line, no shadow, no frame, no border. Aspect ratio 16:9 landscape.
+
+AVOID: text, letters, numbers, logos, watermarks, labels, speech bubbles, angry or hostile faces or poses, sexualized or revealing depiction, gendered body features, cropped limbs, extra characters, black outlines, line art, drop shadows, ground shadows, background colors or scenery, 3D render, CGI, photo realism, faces, eyes, mouths, a human head, swinging or striking anything, a neck, a tilted scale in the front view, delicate thin chains, a second Law, envelopes in more than one pose, duplicate views, another character's colors in the swatches, tall adult proportions, robe folds.
+```
+
+| 항목 | 바꾸는 곳 |
+| --- | --- |
+| 1-5 로봉 · 1-6 로북 | 10-1과 같고, 감정 줄을 해당 로의 머리 규칙(9-6 · 아키텍처 3-2)으로 바꾼다. 로북은 턴어라운드 줄 끝에 `The book keeps floating above the empty collar in every view; in the side view the gap is clearly visible; in the back view the back cover faces the viewer.`를 더한다 |
+
+### 10-3. 로 데포르메 시트 — cheek · ranma · ppg (1차 2묶음, 제작 목록 G6)
+
+대표: 로울 cheek `law-scale_sheet_deform-cheek.png` · 첨부 `← law-scale_sheet_deform-mascot.png` · `sheets/deform/naero_sheet_deform-cheek.png`
+
+```
+ATTACHMENTS —
+1) law-scale_sheet_deform-mascot.png: the identity of Law (Scale) (head object, colors, robe, gloves, shoes).
+2) naero_sheet_deform-cheek.png: an example of this deformation style only. Do not draw Naero and do not use Naero's colors.
+Redraw this ONE character in the deformation below. Do not draw any other character.
+
+ART STYLE — clean, warm 2D flat mascot illustration:
+- No black outlines and no line art; shapes are separated only by flat color areas.
+- Facial features (if any) are filled shapes, not strokes.
+- One soft shadow tone per surface on the lower-right side; at most a very subtle gradient on large areas.
+- Warm light from the upper left. Matte finish. No cast shadow, no ground shadow, no drop shadow, no glow.
+- Mood: friendly, cheerful, slightly vintage.
+
+DEFORMATION — 'cheek-squish' mochi chibi deformation:
+- About 2 heads tall; the head object is huge and wide (about 50% of the body height) and soft and plump: a plump round scale with big round pans, a fat round gavel barrel, or a plump, thick closed book floating above the collar with a clear gap.
+- A tiny round dumpling body with nub limbs; the overall shape is a soft dumpling silhouette; very bouncy, cute and silly.
+- Acting: wobbling, squishing poses; pouty feelings are shown by one pan drooping, the gavel head sagging to one side, or the book sagging forward.
+- Whatever the deformation, the identity rules never change.
+
+MATERIAL — brass, wood and leather are flat color fills: a base color, one flat shadow shape on the lower right and one or two small crisp highlight shapes. No realistic metal or wood texture, no reflections, no glossy rendering, no painterly shading.
+
+CHARACTER — "Law (Scale)", a genderless AI judge mascot with a brass balance scale as its head:
+No face, no eyes, no mouth, no neck, no human head. The head is a chunky, simplified brass scale (light #D29C5E, mid #B58A59, dark #956331): a thick short central post with a round finial rising straight out of the collar, a thick gently curved beam and two wide shallow round pans on short thick chains. The scale is level. Outfit: deep navy judge's robe (#253048, front bands #171F30), warm-white shirt collar and white gloves (#F2E4D0), near-black shoes. Build: the tallest of the three Laws, straight and average width.
+
+SHEET LAYOUT —
+- Top: one front full body, empty-handed, calm.
+- Middle: turnaround — exactly four views: front, three-quarter, side, back.
+- Bottom: six panels — five emotions shown only by the head object and posture (level = calm; pans lifted slightly = happy; pans swinging = surprised; one pan lower with a hand on the chin = thinking; level with slack chains and dropped shoulders = sorry), plus one pose holding a sealed kraft verdict envelope out with both hands (the ONLY panel with the envelope).
+- Side panel: flat round color swatches of THIS character's colors only.
+
+SCENE — a clean character sheet: panels separated by empty space only (no frame lines, no labels, no text), landscape 16:9.
+
+BACKGROUND — fully transparent background (PNG with alpha). No background color, no floor, no ground line, no shadow, no frame, no border. Aspect ratio 16:9 landscape.
+
+AVOID: text, letters, numbers, logos, watermarks, labels, speech bubbles, angry or hostile faces or poses, sexualized or revealing depiction, gendered body features, cropped limbs, extra characters, black outlines, line art, drop shadows, ground shadows, background colors or scenery, 3D render, CGI, photo realism, faces, eyes, mouths, a human head, swinging or striking anything, a neck, a tilted scale in the front view, delicate thin chains, a second character, envelopes in more than one panel, duplicate views, another character's colors in the swatches.
+```
+
+DEFORMATION 블록은 데포르메마다 아래로 바꾼다(6-5 · 6-8 · 6-11의 로용 블록에 법전 머리와 ranma 비율 고정을 더한 것). ranma는 ATTACHMENTS 1)에 `Do NOT copy its 2-head proportions.`를 더하고, AVOID 끝에 `a 2-head chibi proportion, a huge head object, the same proportions as the attached mascot`을 더한다. ppg는 AVOID 끝에 `fingers`.
+
+**ranma**
+
+```
+DEFORMATION — 1980s–90s Japanese TV anime deformation:
+- About 5 heads tall; a soft, rounded body with slightly long legs; the head object is only about 20% of the body height, with gently rounded edges.
+- Colors feel like retro anime cels: flat fills with one crisp shadow tone, slightly softer saturation.
+- Acting: comedic, energetic poses, big reactions (surprise jumps, a sweat-drop gag mark beside the head); emotion only by the head object's movement and the body posture.
+- Whatever the deformation, the identity rules never change.
+FIX — the proportions must be clearly different from the attached 2-head mascot: about 5 heads tall, the head object only about 20% of the total height, the body from collar to feet clearly longer than the head object. Do NOT copy the attached mascot's proportions.
+```
+
+**ppg**
+
+```
+DEFORMATION — late-1990s minimalist Western TV cartoon deformation:
+- About 2 heads tall; a huge head object (about 50% of the body height), a tiny body, very short stubby limbs, no fingers (round nub hands), small oval feet.
+- Shapes are extremely simple and graphic: bold color blocks, minimal details, a strong silhouette; the scale, gavel and book are drawn as simple bold shapes.
+- Acting: punchy, heroic, cute poses; never aggressive.
+- Whatever the deformation, the identity rules never change.
+```
+
+### 10-4. 사건 1 재연 컷 (1차 3묶음, 제작 목록 E1)
+
+대표: `reenact-case-1_cut_headline.png` · 첨부 `standing/naero_standing.png` · `standing/nambul_standing.png` · `sheets/role-outfits/naero_sheet_role-outfits.png` · `sheets/role-outfits/nambul_sheet_role-outfits.png`
+
+```
+ATTACHMENTS — naero_standing.png and nambul_standing.png are the exact models of Naero and Nambul: copy their faces, colors, proportions and flat style exactly. The two role-outfit sheets show only how they look when wearing clothes (Naero without the bandana); do not copy those outfits. They are acting out a case as roles; only their outfits, expressions and props change.
+
+ART STYLE — clean, warm 2D flat mascot illustration:
+- No black outlines and no line art; shapes are separated only by flat color areas.
+- Facial features (if any) are filled shapes, not strokes.
+- One soft shadow tone per surface on the lower-right side; at most a very subtle gradient on large areas.
+- Warm light from the upper left. Matte finish. No cast shadow, no ground shadow, no drop shadow, no glow.
+- Mood: dramatic and tense like a TV drama still, while the drawing stays warm, flat and slightly vintage.
+
+OUTFITS (new for this case, not the plain shirt-and-jeans) —
+- Naero (the lender who came to collect): a camel trench coat over a dark knit sweater, dark trousers, a small crossbody bag. NO bandana.
+- Nambul (the borrower at home): a worn, stretched grey hoodie, loose track pants and house slippers.
+Their faces, fur and flame colors stay exactly the same; only the clothes change.
+
+CASE RULES — a dramatic, tense, newspaper-photo-like moment that shows the situation and the relationship. Strong emotions through faces and body language (frustration, desperation, shock, pressure), like a still from a TV drama, but never violent, never hostile or snarling, and no comedy. Nothing hints at the verdict. Draw only the characters and the few props listed: no room, no walls, no floor, no scenery.
+
+SCENE — the argument about borrowed money peaks. Naero (the lender) on the left leans forward over a small low wooden table and slaps a plain sheet of paper like an IOU (completely blank, no text) down on it, pointing at it, eyes wide with frustration. Nambul (the borrower) on the right steps back with both palms raised at chest height, eyes wide, a sweat drop, desperate to explain. On the table an empty mug has been knocked onto its side (nothing spilled). Dynamic diagonal composition. Full bodies visible, 10% margin.
+
+BACKGROUND — fully transparent background (PNG with alpha). No background color, no floor, no ground line, no shadow, no frame, no border. Aspect ratio 16:9 landscape.
+
+AVOID: text, letters, numbers, logos, watermarks, labels, speech bubbles, angry or hostile faces or poses, sexualized or revealing depiction, gendered body features, cropped limbs, any third character, black outlines, line art, drop shadows, ground shadows, background colors or scenery, 3D render, CGI, photo realism, injuries, weapons, knives, kitchen tools, blood, bodies, a crime in progress, grabbing, pushing, hitting, raising a fist at a person, tears, mocking anyone, a bandana on Naero, a nose on Nambul, flames below Nambul's head.
+```
+
+`sub-1` · `detail-1`은 SCENE 블록만 바꾼다.
+
+**sub-1** `reenact-case-1_cut_sub-1.png`
+
+```
+SCENE — the visit. A single freestanding closed front door with its frame (just the door, no walls) in the middle. Naero (the lender) on the outside, left of the door, knocks hard on the door with the side of a fist (at the door, not at a person), a folded bundle of blank papers under the other arm, a tense, determined face. Nambul (the borrower) on the inside, right of the door, presses their back flat against the door, eyes squeezed shut, holding their breath. Small motion marks near the knocking hand. Full bodies visible, 10% margin.
+```
+
+**detail-1** `reenact-case-1_cut_detail-1.png`
+
+```
+SCENE — a long-running money dispute. Nambul (the borrower) sits slumped on a floor cushion holding their head with both hands, surrounded by scattered blank envelopes and papers like unpaid bills (no text). Naero (the lender) stands beside the papers holding out a smartphone with a blank screen toward Nambul, demanding an answer, eyebrows pressed together, worn out by waiting. Full bodies visible, 10% margin.
+```
+
+### 10-5. 소품 시트 (1차 4묶음, 제작 목록 G2)
+
+`props_sheet_catalog.png` · 첨부 `standing/naero_standing.png` · `cuts/law-scale/base/law-scale_cut_deliver-neutral.png` · `standing/law-gavel_standing.png`
+
+```
+ATTACHMENTS — naero_standing.png: the art style to match and the size reference. law-scale_cut_deliver-neutral.png: the look of the sealed verdict envelope. law-gavel_standing.png: the look of the gavel, to be drawn as a small hand-held prop (not a head).
+Create a prop sheet in the same flat 2D mascot style as Naero.
+
+ART STYLE — clean, warm 2D flat mascot illustration:
+- No black outlines and no line art; shapes are separated only by flat color areas.
+- Facial features (if any) are filled shapes, not strokes.
+- One soft shadow tone per surface on the lower-right side; at most a very subtle gradient on large areas.
+- Warm light from the upper left. Matte finish. No cast shadow, no ground shadow, no drop shadow, no glow.
+- Mood: friendly, cheerful, slightly vintage.
+
+MATERIAL — brass, wood and leather are flat color fills: a base color, one flat shadow shape on the lower right and one or two small crisp highlight shapes. No realistic metal or wood texture, no reflections, no glossy rendering, no painterly shading.
+
+SHEET — ten props in a neat grid with generous spacing, each drawn once, front or slight three-quarter view, at the size it would be held in Naero's hand. A small Naero standing at the far left only as a size reference.
+1 a folded newspaper (columns shown only as plain gray bars, no readable text), 2 a magnifying glass, 3 a memo pad, 4 a pen, 5 a document folder, 6 a clipboard with blank paper, 7 a sealed kraft verdict envelope (#CF995A, red-brown wax seal), 8 a thick law book (oxblood leather #5E1F2B, brass corners, no letters), 9 a small mahogany gavel (#5A220B, no sound block), 10 a small brass balance scale (#D29C5E), level.
+Colors stay in the warm muted palette (kraft, wood, brass, cream paper, ink). Do not paint props in Naero's navy or bandana red or in Nambul's flame colors.
+
+SCENE — a clean character sheet: panels separated by empty space only (no frame lines, no labels, no text), landscape 16:9.
+
+BACKGROUND — fully transparent background (PNG with alpha). No background color, no floor, no ground line, no shadow, no frame, no border. Aspect ratio 16:9 landscape.
+
+AVOID: text, letters, numbers, logos, watermarks, labels, speech bubbles, angry or hostile faces or poses, sexualized or revealing depiction, gendered body features, cropped limbs, any character other than the small Naero, black outlines, line art, drop shadows, ground shadows, background colors or scenery, 3D render, CGI, photo realism, readable text on the newspaper or papers, a sound block, a tilted scale.
+```
+
+### 10-6. 데포르메 묶음 시트 (2차 H0, 제작 목록 H0)
+
+대표: 내로 `naero_sheet_deform-lineup.png` · 첨부 `standing/naero_standing.png` · `sheets/naero_sheet_reference.png`
+
+```
+ATTACHMENTS — naero_standing.png is the main reference (panel 1); naero_sheet_reference.png shows the same character from more angles.
+Use them as the exact model of Naero: keep the face, navy fur, big golden-yellow eyes, coral nose, pointed ears with plum inner ears, curled tail and red bandana in every panel.
+
+Create a DEFORMATION LINEUP sheet: the same character drawn twelve times, six per row in two rows, every one in the same calm standing pose (front to slight three-quarter view, empty-handed), standing on one shared ground line per row. Keep the same flat, outline-free rendering and the same colors in all twelve; only the proportions, shapes and acting change:
+1 base, exactly like the attached main reference
+2 classic Japanese cartoon: about 2.5 to 3 heads tall, big round head, rubber-hose limbs
+3 dramatic Korean comic: about 5 to 6 heads tall, solid build, bold flat shadow shapes, serious look
+4 boys' action manga: about 5 to 6 heads tall, sleek athletic build, confident stance
+5 1980s–90s TV anime: about 5 heads tall, soft rounded body, slightly long legs, retro cel feel
+6 cute webtoon: about 4 to 5 heads tall, small body, shy acting (never sexualized)
+7 polished gacha illustration: about 5 to 6 heads tall, refined proportions, detailed finish
+8 cheek-squish mochi chibi: about 2 heads tall, huge wide head, tiny dumpling body
+9 sports anime: about 6 to 7 heads tall, long limbs, sharp clean silhouette
+10 quirky Western TV cartoon: about 3 to 4 heads tall, noodle limbs, slight asymmetry
+11 late-1990s minimalist cartoon: about 2 heads tall, no fingers, bold simple shapes
+12 Japanese punk-pop cartoon: about 4 to 5 heads tall, thin long limbs, bold graphic shapes
+Eyes follow each style (large round eyes, glossy gradient eyes, dot pupils, giant oval eyes and so on) but keep the character's eye color.
+
+ART STYLE — clean, warm 2D flat mascot illustration:
+- No black outlines and no line art; shapes are separated only by flat color areas.
+- Facial features (if any) are filled shapes, not strokes.
+- One soft shadow tone per surface on the lower-right side; at most a very subtle gradient on large areas.
+- Warm light from the upper left. Matte finish. No cast shadow, no ground shadow, no drop shadow, no glow.
+- Mood: friendly, cheerful, slightly vintage.
+
+SCENE — a clean character sheet: panels separated by empty space only (no frame lines, no labels, no numbers, no text), landscape 16:9.
+
+BACKGROUND — fully transparent background (PNG with alpha). No background color, no floor, no ground line, no shadow, no frame, no border. Aspect ratio 16:9 landscape.
+
+AVOID: text, letters, numbers, logos, watermarks, labels, speech bubbles, angry or hostile faces or poses, sexualized or revealing depiction, gendered body features, cropped limbs, black outlines, line art, drop shadows, ground shadows, background colors or scenery, 3D render, CGI, photo realism, a second character, different colors between panels, duplicate panels, a different fur color, a human face, whisker lines.
+```
+
+| 항목 | 바꾸는 곳 |
+| --- | --- |
+| H0-2 남불 | 이름, keep 줄(불꽃 머리 · 동공 · 코 없음), AVOID 끝(9-8 남불) |
+| H0-3 ~ 5 로 셋 | 1차 1묶음(마스코트 로) 통과 뒤. 첨부 `standing/law-scale_standing_deform-mascot.png` · `standing/law-scale_standing.png`. 첫 문단을 마스코트 스탠딩이 1번 칸이라는 문장으로, 눈 줄을 `There are no eyes or faces in any panel; each style changes the body proportions and simplifies or stretches the head object instead.`로, AVOID 끝을 로 공통 + 해당 로(9-8)로 바꾼다 |
+
+- 12칸이 빽빽하면 1 ~ 6 · 7 ~ 12로 나눠 두 장(`_a` · `_b`).
+
+### 10-7. 의상 시트 (2차 H1, 제작 목록 H1)
+
+**내로 · 남불** — 대표: 내로 `naero_sheet_wardrobe.png` · 첨부 `standing/naero_standing.png` · `sheets/role-outfits/naero_sheet_role-outfits.png`
+
+```
+ATTACHMENTS — naero_standing.png is the exact model of Naero: copy the face, navy fur, big golden-yellow eyes, coral nose, pointed ears with plum inner ears, curled tail and the flat style exactly. The role-outfit sheet shows only how the character looks when wearing clothes; do not copy those outfits.
+
+ART STYLE — clean, warm 2D flat mascot illustration:
+- No black outlines and no line art; shapes are separated only by flat color areas.
+- Facial features (if any) are filled shapes, not strokes.
+- One soft shadow tone per surface on the lower-right side; at most a very subtle gradient on large areas.
+- Warm light from the upper left. Matte finish. No cast shadow, no ground shadow, no drop shadow, no glow.
+- Mood: friendly, cheerful, slightly vintage.
+
+Create a WARDROBE sheet for this ONE character: eight everyday outfits for acting in case re-enactments, front view, calm neutral pose with a small smile, two rows of four:
+1 a dark office suit with a plain tie, 2 a camel trench coat over a dark knit sweater, 3 a worn grey hoodie with loose track pants and slippers, 4 a cream knit sweater with beige chinos, 5 a work jacket with cargo pants and work boots, 6 a plain shop apron over a shirt, 7 a padded winter jacket with jeans, 8 striped pajamas.
+No bandana in any outfit; the ears stay visible. Outfit colors are muted and never match the character's own fixed colors; no green.
+
+SCENE — a clean character sheet: panels separated by empty space only (no frame lines, no labels, no numbers, no text), landscape 16:9.
+
+BACKGROUND — fully transparent background (PNG with alpha). No background color, no floor, no ground line, no shadow, no frame, no border. Aspect ratio 16:9 landscape.
+
+AVOID: text, letters, numbers, logos, watermarks, labels, speech bubbles, angry or hostile faces or poses, sexualized or revealing depiction, gendered body features, cropped limbs, black outlines, line art, drop shadows, ground shadows, background colors or scenery, 3D render, CGI, photo realism, a second character, logos on clothes, hats, uniforms of police, doctors or judges, a bandana, a different fur color, a human face, whisker lines.
+```
+
+남불은 이름 · keep 줄 · `The flame head stays fully visible; no hats.` · AVOID 끝(9-8 남불)을 바꾼다.
+
+**로 셋** (기본 로 `authority` 그림체, 법복을 벗은 모습) — 대표: 로울 `law-scale_sheet_wardrobe.png` · 첨부 `standing/law-scale_standing.png` · `sheets/law-scale_sheet_reference.png`
+
+```
+ATTACHMENTS — use the attached images as the exact model of Law (Scale): copy the head object, white gloves, proportions, build and refined painterly style exactly.
+
+ART STYLE — refined, warm 2D editorial illustration with soft painterly shading and believable materials:
+- No black outlines and no line art; forms are defined by color and soft shading.
+- Fabric is matte with gentle folds; brass has a warm satin sheen; wood is polished mahogany; leather is smooth with soft highlights.
+- Warm light from the upper left, a subtle lower-right shadow side on every form. No cast shadow, no ground shadow, no drop shadow, no glow.
+- Mood: calm, dignified and trustworthy; never cold or threatening.
+
+CHARACTER — "Law (Scale)", a genderless AI judge. Its head is a brass balance scale (light #D29C5E, mid #B58A59, dark #956331): a tall central post with a round finial rising straight out of the collar, a gently curved beam and two shallow pans on thin chains, level. No face, no eyes, no mouth, no neck. White gloves (#F2E4D0). Build: tall and straight, average width. About 4.5 heads tall counting the head object as one head.
+
+Create a WARDROBE sheet: Law off duty. The judge's robe is replaced by eight everyday outfits; the head object and the white gloves stay. Front view, calm standing pose, two rows of four:
+1 a dark office suit with a plain tie, 2 a camel trench coat over a dark knit sweater, 3 a worn grey hoodie with loose track pants and slippers, 4 a cream knit sweater with beige chinos, 5 a work jacket with cargo pants and work boots, 6 a plain shop apron over a shirt, 7 a padded winter jacket with jeans, 8 striped pajamas.
+Outfit colors are muted and never match the head object's colors; no green.
+
+SCENE — a clean character sheet: panels separated by empty space only (no frame lines, no labels, no numbers, no text), landscape 16:9.
+
+BACKGROUND — fully transparent background (PNG with alpha). No background color, no floor, no ground line, no shadow, no frame, no border. Aspect ratio 16:9 landscape.
+
+AVOID: text, letters, numbers, logos, watermarks, labels, speech bubbles, angry or hostile faces or poses, sexualized or revealing depiction, gendered body features, cropped limbs, black outlines, line art, drop shadows, ground shadows, background colors or scenery, 3D render, CGI, photo realism, a judge's robe, logos on clothes, hats, uniforms of police or doctors, a second character, faces, eyes, mouths, a human head, swinging or striking anything, a neck, a tilted scale in the front view, delicate thin chains.
+```
+
+로봉 · 로북은 CHARACTER 블록의 머리 · 체형(9-5)과 AVOID 끝(9-8)을 바꾼다.
+
+### 10-8. 마스코트 로 컷 (2차 H2, 제작 목록 H2)
+
+1차 1묶음(마스코트 로) 통과 뒤. 대표: 로울 `law-scale_cut-mascot_idle-neutral.png` · 첨부 `standing/law-scale_standing_deform-mascot.png` · `sheets/deform/law-scale_sheet_deform-mascot.png`
+
+```
+ATTACHMENTS — law-scale_standing_deform-mascot.png and law-scale_sheet_deform-mascot.png are the exact model of mascot Law (Scale): copy the head object, colors, proportions (about 2 heads tall) and flat style exactly. Change only the pose below.
+
+ART STYLE — clean, warm 2D flat mascot illustration:
+- No black outlines and no line art; shapes are separated only by flat color areas.
+- Facial features (if any) are filled shapes, not strokes.
+- One soft shadow tone per surface on the lower-right side; at most a very subtle gradient on large areas.
+- Warm light from the upper left. Matte finish. No cast shadow, no ground shadow, no drop shadow, no glow.
+- Mood: friendly, cheerful, slightly vintage.
+
+DEFORMATION — chunky, cute mascot in the same family as Naero and Nambul, about 2 heads tall counting the head object as one head:
+- The head object is big and chunky, about 45 to 50% of the total height and clearly wider than the shoulders, built from simple rounded shapes.
+- A short, soft, rounded body hidden by a simple bell-shaped navy robe: deep V neckline, two flat slightly darker front bands, short wide bell sleeves, a hem just above the shoes. No fold lines, no pleats, no wrinkles.
+- Short sturdy legs, small rounded white-gloved hands with simple short fingers (as simple as Naero's hands), small rounded near-black shoes.
+- Heights on the same ground line, where Naero and Nambul are 120: Law (Scale) 180 (1.5 times), Law (Book) 170 (about 1.42 times), Law (Gavel) 160 (about 1.33 times). The build differences between the three Laws stay readable even in this small size.
+- No face anywhere: emotion only by the head object and the body posture.
+
+MATERIAL — brass, wood and leather are flat color fills: a base color, one flat shadow shape on the lower right and one or two small crisp highlight shapes. No realistic metal or wood texture, no reflections, no glossy rendering, no painterly shading.
+
+POSE — standing upright, front to slight three-quarter view, empty-handed: one hand open, palm up and slightly out to the side, presenting calmly; the other hand resting at the side. No envelope or other prop. The scale is level.
+
+SCENE — a single character, centered, full body from head to feet fully visible, 15% empty margin on every side.
+
+BACKGROUND — fully transparent background (PNG with alpha). No background color, no floor, no ground line, no shadow, no frame, no border. Aspect ratio 4:5 vertical.
+
+AVOID: text, letters, numbers, logos, watermarks, labels, speech bubbles, angry or hostile faces or poses, sexualized or revealing depiction, gendered body features, cropped limbs, black outlines, line art, drop shadows, ground shadows, background colors or scenery, 3D render, CGI, photo realism, extra characters, faces, eyes, mouths, a human head, swinging or striking anything, a neck, a tilted scale in the front view, delicate thin chains, tall adult proportions, robe folds, an envelope.
+```
+
+| 컷 | POSE 블록 |
+| --- | --- |
+| `{law-*}_cut-mascot_idle-neutral.png` | `POSE — standing upright, front to slight three-quarter view, empty-handed: one hand open, palm up and slightly out to the side, presenting calmly; the other hand resting at the side. No envelope or other prop. The scale is level.` |
+| `{law-*}_cut-mascot_deliver-neutral.png` | `POSE — stepping half a step forward and holding a sealed kraft verdict envelope (#CF995A, red-brown wax seal) out with both hands toward the viewer, calm and polite. The scale is level.` |
+| `{law-*}_cut-mascot_think-thinking.png` | `POSE — standing, one hand on the chin, the other arm folded under it, thoughtful; the head object shows thinking: one pan lower.` |
+
+- H2 프롬프트에는 CHARACTER 블록이 없다(첨부한 마스코트 로가 기준이고, 키는 DEFORM 블록이 정한다). 로봉 · 로북은 파일 · 첨부 이름, POSE의 머리 상태 문장(`The gavel head is level` · `The book floats above the collar, front cover facing the viewer, closed and level`, 고민은 `the gavel head tilted to one side` · `the book turned to a three-quarter angle, half open and tilted`), AVOID 끝(9-8)만 바꾼다. `deliver`가 아닌 컷은 AVOID에 `an envelope`.
+
+**로 셋 함께 · 비교 컷** (16:9) — 대표: `trio_cut-mascot_think.png` · 첨부 `standing/law-scale_standing_deform-mascot.png` · `standing/law-gavel_standing_deform-mascot.png` · `standing/law-book_standing_deform-mascot.png`
+
+```
+ATTACHMENTS — the attached standing images are the exact models of the three mascot Laws: copy each character's design, colors, proportions and flat style exactly.
+
+ART STYLE — clean, warm 2D flat mascot illustration:
+- No black outlines and no line art; shapes are separated only by flat color areas.
+- Facial features (if any) are filled shapes, not strokes.
+- One soft shadow tone per surface on the lower-right side; at most a very subtle gradient on large areas.
+- Warm light from the upper left. Matte finish. No cast shadow, no ground shadow, no drop shadow, no glow.
+- Mood: friendly, cheerful, slightly vintage.
+
+DEFORMATION — chunky, cute mascot in the same family as Naero and Nambul, about 2 heads tall counting the head object as one head:
+- The head object is big and chunky, about 45 to 50% of the total height and clearly wider than the shoulders, built from simple rounded shapes.
+- A short, soft, rounded body hidden by a simple bell-shaped navy robe: deep V neckline, two flat slightly darker front bands, short wide bell sleeves, a hem just above the shoes. No fold lines, no pleats, no wrinkles.
+- Short sturdy legs, small rounded white-gloved hands with simple short fingers (as simple as Naero's hands), small rounded near-black shoes.
+- Heights on the same ground line, where Naero and Nambul are 120: Law (Scale) 180 (1.5 times), Law (Book) 170 (about 1.42 times), Law (Gavel) 160 (about 1.33 times). The build differences between the three Laws stay readable even in this small size.
+- No face anywhere: emotion only by the head object and the body posture.
+
+MATERIAL — brass, wood and leather are flat color fills: a base color, one flat shadow shape on the lower right and one or two small crisp highlight shapes. No realistic metal or wood texture, no reflections, no glossy rendering, no painterly shading.
+
+SCENE — Law (Scale), Law (Gavel) and Law (Book) standing close together on the same ground line, leaning slightly toward each other and thinking together, each with a hand on the chin; their head objects show thinking (one pan lower, the gavel tilted, the book half open). It must read as one team deliberating, never as two against one. Heights: Law (Scale) 180, Law (Book) 170, Law (Gavel) 160. Full bodies visible with 10% margin.
+
+BACKGROUND — fully transparent background (PNG with alpha). No background color, no floor, no ground line, no shadow, no frame, no border. Aspect ratio 16:9 landscape.
+
+AVOID: text, letters, numbers, logos, watermarks, labels, speech bubbles, angry or hostile faces or poses, sexualized or revealing depiction, gendered body features, cropped limbs, black outlines, line art, drop shadows, ground shadows, background colors or scenery, 3D render, CGI, photo realism, any extra character, faces, eyes, mouths, a human head, swinging or striking anything, an envelope, two Laws facing against the third.
+```
+
+| 컷 | SCENE 블록 |
+| --- | --- |
+| `trio_cut-mascot_idle.png` | `SCENE — Law (Scale), Law (Gavel) and Law (Book) standing side by side on the same ground line, in a calm idle pose, empty-handed, all three heads calm and level. Heights exactly: Law (Scale) 180, Law (Book) 170, Law (Gavel) 160 (relative). Nobody stands in front of the others; no leader. Full bodies visible with 10% margin.` |
+| `compare_cut-mascot_trio-thinking.png` | `SCENE — Naero on the left, Law (Scale) in the middle, Nambul on the right, standing on the same ground line, each with a hand on the chin, thinking. Heights: Naero 120, Nambul 120, Law (Scale) 180. Nobody stands in front of the others and nobody looks bigger in importance. The scale is level. Full bodies visible with 10% margin.` |
+
+### 10-9. 역할 의상 정식 컷 (2차 H3, 제작 목록 H3)
+
+대표: 내로 검사 `naero_cut-role-prosecutor_idle-neutral.png` · 첨부 `standing/naero_standing.png` · `sheets/role-outfits/naero_sheet_role-outfits.png`
+
+```
+ATTACHMENTS — naero_standing.png is the exact model of Naero; naero_sheet_role-outfits.png is the exact model of the prosecutor outfit: copy that outfit exactly as drawn in the sheet. Draw ONE full-body cut.
+
+ART STYLE — clean, warm 2D flat mascot illustration:
+- No black outlines and no line art; shapes are separated only by flat color areas.
+- Facial features (if any) are filled shapes, not strokes.
+- One soft shadow tone per surface on the lower-right side; at most a very subtle gradient on large areas.
+- Warm light from the upper left. Matte finish. No cast shadow, no ground shadow, no drop shadow, no glow.
+- Mood: friendly, cheerful, slightly vintage.
+
+POSE — standing calmly, front to slight three-quarter view, both hands relaxed at the sides, a small calm smile, looking at the viewer. (The prosecutor and the defense lawyer versions use exactly the same pose and expression.)
+
+SCENE — a single character, centered, full body from head to feet fully visible, 15% empty margin on every side.
+
+BACKGROUND — fully transparent background (PNG with alpha). No background color, no floor, no ground line, no shadow, no frame, no border. Aspect ratio 4:5 vertical.
+
+AVOID: text, letters, numbers, logos, watermarks, labels, speech bubbles, angry or hostile faces or poses, sexualized or revealing depiction, gendered body features, cropped limbs, black outlines, line art, drop shadows, ground shadows, background colors or scenery, 3D render, CGI, photo realism, extra characters, name tags, props in the hands, a bandana, a different fur color, a human face, whisker lines.
+```
+
+| 항목 | 바꾸는 곳 |
+| --- | --- |
+| 역할 | `prosecutor` → `judge` · `defense lawyer` · `case-role` (파일은 `judge` · `defense` · `actor`). 검사 · 변호인은 같은 자세 · 같은 표정 |
+| 남불 | 이름 · 첨부, AVOID 끝(9-8 남불). 판사는 `(the white wig fully covers the top and back of the flame head; only the flame-colored face shows below the wig)`를 더한다 |
+
+### 10-10. 사건 1 배역 컷 (2차 H4, 제작 목록 H4)
+
+대표: 내로 `naero_cut-role-case-1_idle-neutral.png` · 첨부 `standing/naero_standing.png` · `sheets/role-outfits/naero_sheet_role-outfits.png`
+
+```
+ATTACHMENTS — naero_standing.png is the exact model of Naero: copy the face, colors, proportions and flat style exactly. The role-outfit sheet shows only how the character looks when wearing clothes; do not copy those outfits.
+
+ART STYLE — clean, warm 2D flat mascot illustration:
+- No black outlines and no line art; shapes are separated only by flat color areas.
+- Facial features (if any) are filled shapes, not strokes.
+- One soft shadow tone per surface on the lower-right side; at most a very subtle gradient on large areas.
+- Warm light from the upper left. Matte finish. No cast shadow, no ground shadow, no drop shadow, no glow.
+- Mood: friendly, cheerful, slightly vintage.
+
+OUTFIT — a camel trench coat over a dark knit sweater, dark trousers and a small crossbody bag; no bandana.
+
+POSE — standing calmly, front to slight three-quarter view, both hands relaxed at the sides, a calm, serious expression, looking at the viewer. Neither a villain nor a pitiful look.
+
+SCENE — a single character, centered, full body from head to feet fully visible, 15% empty margin on every side.
+
+BACKGROUND — fully transparent background (PNG with alpha). No background color, no floor, no ground line, no shadow, no frame, no border. Aspect ratio 4:5 vertical.
+
+AVOID: text, letters, numbers, logos, watermarks, labels, speech bubbles, angry or hostile faces or poses, sexualized or revealing depiction, gendered body features, cropped limbs, black outlines, line art, drop shadows, ground shadows, background colors or scenery, 3D render, CGI, photo realism, extra characters, logos on clothes, props in the hands, a bandana, a different fur color, a human face, whisker lines.
+```
+
+남불 `nambul_cut-role-case-1_idle-neutral.png`은 이름 · 첨부, OUTFIT 줄(`OUTFIT — a worn, stretched grey hoodie, loose track pants and house slippers.`), AVOID 끝(9-8 남불)을 바꾼다.
