@@ -46,7 +46,7 @@
 }
 /* 철 안 종이: 왼쪽 여백에 철끈 구멍 두 개(구멍으로 서류철이 비친다) */
 .verdict-page .folder-sheet {
-  position: relative; min-height: 420px; padding: 28px 32px 28px 52px; border: 1px solid var(--color-desk-sheet-line); border-radius: 2px;
+  position: relative; min-height: 420px; padding: 34px 32px 28px 52px; /* 위 여백: 책갈피 끝이 제목에 아주 살짝 닿게 */ border: 1px solid var(--color-desk-sheet-line); border-radius: 2px;
   background: var(--color-desk-sheet); color: var(--color-desk-news-ink);
 }
 .verdict-page .folder-sheet::before {
@@ -65,10 +65,12 @@
 .verdict-page .is-flash { border-radius: 4px; animation: field-flash .7s ease-out 2; }
 @keyframes field-flash { 0%, 100% { background-color: transparent; box-shadow: 0 0 0 0 transparent; } 40% { background-color: color-mix(in srgb, var(--color-label) 16%, transparent); box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-label) 16%, transparent); } }
 
-/* 해금 책갈피: 새로 열린 장의 탭 앞에 끼운 작은 리본 + 내로 얼굴. 탭 줄보다 살짝 위로 솟는다 */
+/* 진행 책갈피: 펼쳐 본 장의 탭 뒤에 끼운 리본 + 내로 얼굴. 탭 줄보다 살짝 솟고, 아래는 서류철 가장자리를 넘어 종이 위까지 걸친다
+   (탭 줄을 서류철보다 위에 그려야 걸친 부분이 보인다) */
+.verdict-page .folder-tabs { position: relative; z-index: 2; }
 .verdict-page .folder-bookmark {
-  position: relative; z-index: 3; flex: none; align-self: flex-end; width: 22px; height: 38px; margin: 0 -6px -2px; pointer-events: none;
-  background: var(--color-desk-label); clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 82%, 0 100%);
+  position: relative; z-index: 3; flex: none; align-self: flex-end; width: 22px; height: 60px; margin: 0 -6px -34px; pointer-events: none;
+  background: var(--color-label); clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 88%, 0 100%);
   filter: drop-shadow(0 2px 2px color-mix(in srgb, var(--color-desk-shadow) 35%, transparent));
 }
 .verdict-page .folder-bookmark img { position: absolute; left: 50%; top: 3px; width: 18px; height: 18px; translate: -50% 0; border-radius: 50%; background: var(--color-card); object-fit: cover; object-position: top; }

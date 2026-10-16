@@ -325,7 +325,7 @@
 .stage-wrap .board .verdict-layout { font-size: 13px; }
 .stage-wrap .board .verdict-layout p { margin: 0; font-size: inherit; line-height: 1.55; }
 .stage-wrap .board .verdict-layout .summary-block p { margin: 0 0 .6em; font-size: 15px; line-height: 1.8; } /* 사건 요약 장 본문은 핵심 사실 목록과 같은 크기 */
-.stage-wrap .board .folder-sheet { min-height: 0; padding: 18px 24px 20px 44px; }
+.stage-wrap .board .folder-sheet { min-height: 0; padding: 26px 24px 20px 44px; } /* 위 여백: 책갈피 끝이 제목에 아주 살짝 닿게 */
 .stage-wrap .board .folder-sheet:has(> .folder-curl) { padding-bottom: 72px; }
 .stage-wrap .board .folder-sheet::before { left: 15px; top: 56px; width: 10px; height: 10px; }
 .stage-wrap .board .folder-tab { min-height: 38px; padding: 8px 18px 7px; font-size: 14px; }

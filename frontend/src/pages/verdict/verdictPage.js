@@ -488,7 +488,7 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
         await api.postVerdict(caseId, payload);
         clearDraft(caseId);
         markAiRevealIntro(caseId); // S-07에서 로딩 · 안내를 한 번 보여 준다 (7.7.4)
-        if (active()) navigate('ai');
+        if (active()) navigate('ai', {}, { keepScroll: true }); // 서명한 자리 그대로 AI 판결 무대로(맨 위로 튀지 않게)
       } catch (error) {
         if (!active()) return;
         signed = false;
@@ -573,7 +573,8 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
     let missing = null; // 확정을 막는 칸(반짝일 곳)
     let missingReason = '';
     const LAST = 4;
-    // 해금 책갈피: 새로 열린 장의 탭 바로 앞에 끼워 둔 내로 얼굴 책갈피(장식). 캐릭터 고르기는 마이페이지 후속
+    // 진행 책갈피: 펼쳐 본 가장 뒤 장(reached)의 탭 바로 뒤에 끼워 둔 내로 얼굴 책갈피(장식). 잠금이 아니라 진행을 표시하므로
+    // 늘 보이고, 뒤로 넘겨도 자리를 지킨다(마지막 장까지 오면 탭 줄 끝). 캐릭터 고르기는 마이페이지 후속
     const bookmark = element('span', 'folder-bookmark');
     bookmark.setAttribute('aria-hidden', 'true');
     bookmark.append(picture(BOOKMARK_FACE));
@@ -623,14 +624,12 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
     // 탭 잠금 · 책갈피를 지금 상태에 맞춘다(장을 넘길 때 · 판결 값이 바뀔 때)
     function refreshTabs() {
       pages.forEach(({ tab }, i) => tab.setAttribute('aria-disabled', String(!canOpen(i))));
-      const far = frontier();
-      if (far > reached) {
-        const before = pages[far].tab;
-        if (bookmark.nextSibling !== before) {
-          tabList.insertBefore(bookmark, before);
-          if (!reducedMotion()) bookmark.animate([{ translate: '0 -60%', opacity: 0 }, { translate: '0 0', opacity: 1 }], { duration: 260, easing: 'cubic-bezier(.2, .8, .2, 1)' });
-        }
-      } else bookmark.remove();
+      const before = pages[reached + 1]?.tab ?? null; // 마지막 장이면 탭 줄 끝
+      if (bookmark.parentNode !== tabList || bookmark.nextSibling !== before) {
+        const moved = bookmark.parentNode === tabList;
+        tabList.insertBefore(bookmark, before);
+        if (moved && !reducedMotion()) bookmark.animate([{ translate: '0 -40%', opacity: 0 }, { translate: '0 0', opacity: 1 }], { duration: 240, easing: 'cubic-bezier(.2, .8, .2, 1)' });
+      }
     }
     // 움찔: 안 되는 동작(아직 안 본 장 · 확정할 수 없는 서명)을 짧게 흔들어 알린다
     function nudge(node) {
@@ -646,6 +645,7 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       pages.forEach(({ tab, panel }, i) => {
         tab.setAttribute('aria-selected', String(i === index));
         tab.tabIndex = i === index ? 0 : -1;
+        tab.toggleAttribute('data-autofocus', i === index); // 무대가 판결 카드를 열 때 이 탭에 포커스를 준다(←→ · Space가 바로 먹게)
         panel.hidden = i !== index;
       });
       refreshTabs();

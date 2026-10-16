@@ -208,6 +208,8 @@
         {
           "say": "narrator",
           "cameo": "naero",
+          "hideCast": true,
+          "delay": 500,
           "proc": 0,
           "section": 2,
           "text": "재판을 시작합니다. 재판장은 당신이에요. 먼저 피고인 A씨가 본인이 맞는지 확인합니다."
@@ -485,11 +487,7 @@
           "role": "판사",
           "proc": 3,
           "look": {
-            "naero": "role:judge",
-            "nambul": "idle-neutral"
-          },
-          "tags": {
-            "nambul": ""
+            "naero": "role:judge"
           },
           "spots": {
             "nambul": ""
@@ -500,8 +498,7 @@
           "proc": 3,
           "card": "verdict",
           "look": {
-            "naero": "read-thinking",
-            "nambul": "read-thinking"
+            "naero": "read-thinking"
           },
           "board": "full"
         }
@@ -517,7 +514,10 @@
       "steps": [
         {
           "say": "nambul",
-          "role": "안내",
+          "look": {
+            "naero": "deform:ranma",
+            "nambul": "deform:ranma"
+          },
           "text": "이제 AI 판사의 판결을 확인해 볼게요."
         },
         {

@@ -19,7 +19,8 @@ export const ACT_GROUPS = [
 // 로 합의부는 판결 화면에서 이름 대신 "AI 판사"로 부른다(직책 재판장 · 배석판사는 이름표 옆에 단다)
 const NAMES = { naero: '내로', nambul: '남불', 'law-scale': 'AI 판사', 'law-gavel': 'AI 판사', 'law-book': 'AI 판사' };
 const CAMEO_LABEL = '볼따구'; // 해설을 맡는 작은 내로 · 남불(배역이 아니라 데포르메 모습)
-const CAMEO_LOOK = 'cheek:idle-thinking'; // 볼따구 컷은 지금 idle-thinking · idle-sorry 두 표정만 있다
+const CAMEO_LOOK = 'cheek:idle-thinking';
+const DEFORM_LABEL = { ranma: '란마' }; // 데포르메 모습 이름(look "deform:ranma" → 이름표 "남불 란마") // 볼따구 컷은 지금 idle-thinking · idle-sorry 두 표정만 있다
 const ROLE_LABEL = { actor: '사건 속 인물', prosecutor: '검사', defense: '변호인', judge: '판사' };
 const ROLE_COLOR = { '법정 진행': 'narrator', 볼따구: 'narrator', 판사: 'law', 'A씨 역': 'actor', 'B씨 역': 'actor', '사건 속 인물': 'actor', 검사: 'prosecutor', 변호인: 'defense', 재판장: 'law', 배석판사: 'law' };
 // 로 합의부(6막 AI 판사): 로울(저울) · 로봉(법봉) · 로북(법전). LAWS는 판단 요소를 맡는 순서(저울 → 법봉 → 법전),
@@ -36,6 +37,7 @@ const lawImage = (who, pose) => `/images/characters/law/${who}_${pose}.webp`;
 const CUTS = 'https://raw.githubusercontent.com/peanutboi710/NaeLawNamBul_Images/main/character/cuts/';
 export const imageOf = (who, look) => (look.startsWith('role:') ? `/images/characters/roles/${who}_${look.slice(5)}.webp`
   : look.startsWith('cheek:') ? `${CUTS}${who}/base/${who}_cut-cheek_${look.slice(6)}.png` // 볼따구(기다림)
+    : look.startsWith('deform:') ? `/images/characters/deform/${who}_${look.slice(7)}.webp` // 데포르메(란마 등, 시트에서 잘라 public에 둔다)
     : `${CUTS}${who}/base/${who}_cut_${look}.png`);
 const FACES = ['neutral', 'happy', 'surprised', 'thinking', 'sorry', 'cheer'];
 const iconOf = (who, look) => {
@@ -284,6 +286,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
   let lastLaw = '';
   let lastDelta = 1;
   let autoTimer = null;
+  let enterTimer = null;
   let lastFocus = null;
   let hadCard = false; // 앞 장면에도 카드가 있었는지(엽서 건네기는 카드가 처음 뜰 때만)
 
@@ -374,6 +377,20 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
   cameo.alt = '';
   cameo.hidden = true;
   cameo.addEventListener('error', () => { cameo.hidden = true; });
+  // 볼따구 등장 · 퇴장: 빠른 뿅(커졌다 자리 잡기 0.22초 · 작아지며 사라지기 0.16초)
+  function popCameo(who) {
+    cameo.getAnimations().forEach((animation) => animation.cancel());
+    cameo.src = imageOf(who, CAMEO_LOOK);
+    cameo.className = `cameo cameo-${who}`;
+    cameo.hidden = false;
+    if (!reducedMotion()) cameo.animate([{ scale: '0' }, { scale: '1.12', offset: .7 }, { scale: '1' }], { duration: 220, easing: 'cubic-bezier(.2, .8, .2, 1)' }); // 0 크기에서 뿅
+  }
+  function hideCameo() {
+    if (cameo.hidden) return;
+    if (reducedMotion()) { cameo.hidden = true; return; }
+    cameo.animate([{ scale: '1' }, { scale: '0' }], { duration: 160, easing: 'cubic-bezier(.4, 0, 1, 1)' })
+      .finished.then(() => { if (!cameo.dataset.who) cameo.hidden = true; }).catch(() => {});
+  }
   stage.append(scene, board, cameo, dialog);
 
   const live = element('p', 'visually-hidden');
@@ -475,7 +492,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
       figures[who].classList.toggle('dim', Boolean(step.say) && step.say !== who);
       figures[who].classList.toggle('near', onSheet && step.say === who); // 지면에서는 말하는 쪽이 기사에 다가선다
       const offCast = Boolean(step.cast) && !step.cast.includes(who); // 대본 cast: 이 막에 나오는 캐릭터만(7막은 남불만)
-      figures[who].classList.toggle('hide', dark || Boolean(step.law) || offCast);
+      figures[who].classList.toggle('hide', dark || Boolean(step.law) || offCast || Boolean(step.hideCast)); // 대본 hideCast: 빈 무대(2막 시작)
       if (step.spots[who]) figures[who].dataset.spot = step.spots[who]; else delete figures[who].dataset.spot;
       chips[who].textContent = step.chips[who];
       chips[who].dataset.role = ROLE_COLOR[step.chips[who]] ?? 'actor';
@@ -558,20 +575,20 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
       name.dataset.role = ROLE_COLOR[role] ?? 'guide';
       // 말풍선 꼬리 방향(말하는 캐릭터 쪽). 볼따구는 대사창 모서리에 나온 작은 캐릭터 쪽
       dialog.dataset.speaker = cameoWho ? `cameo-${cameoWho}` : step.say === 'naero' || step.say === 'nambul' ? step.say : 'none';
+      // 말하는 캐릭터가 가운데 피고인석(stand)에 서 있으면 꼬리도 가운데로
+      dialog.dataset.spot = !cameoWho && (step.say === 'naero' || step.say === 'nambul') ? step.spots[step.say] ?? '' : '';
       const who = cameoWho || step.say;
+      const deform = !cameoWho && DEFORM_LABEL[step.look[who]?.split(':')[1]] && step.look[who].startsWith('deform:') ? DEFORM_LABEL[step.look[who].split(':')[1]] : '';
       if (NAMES[who]) name.append(picture(iconOf(who, cameoWho ? 'idle-thinking' : step.look[who])), NAMES[who]); // AI 판사는 이름 · 얼굴 없이 역할만
-      if (role) name.append(element('i', '', ` ${role}`));
+      // 데포르메(란마 등)는 배역이 아니라 모습이라 역할 대신 모습 이름을 단다(예: 남불 란마)
+      const label = deform && (!role || role === '안내') ? deform : role;
+      if (label) name.append(element('i', '', ` ${label}`));
     }
-    // 볼따구가 바뀌거나 처음 나올 때만 뿅(같은 볼따구가 이어 말하면 그대로 둔다)
+    const enterDelay = step.delay && lastDelta > 0 && !reducedMotion() ? step.delay : 0; // 대본 delay(ms): 빈 무대에서 잠깐 뒤 등장(2막 시작)
+    clearTimeout(enterTimer);
     if (cameoWho !== (cameo.dataset.who ?? '')) {
       cameo.dataset.who = cameoWho;
-      cameo.hidden = !cameoWho;
-      if (cameoWho) {
-        cameo.src = imageOf(cameoWho, CAMEO_LOOK);
-        cameo.className = `cameo cameo-${cameoWho}`;
-        if (!reducedMotion()) cameo.animate([{ opacity: 0, scale: '.4', translate: '0 30%' }, { opacity: 1, scale: '1.08', translate: '0 -4%', offset: .7 }, { opacity: 1, scale: '1', translate: '0 0' }],
-          { duration: 320, easing: 'cubic-bezier(.2, .8, .2, 1)' });
-      }
+      if (cameoWho) { if (enterDelay) cameo.hidden = true; else popCameo(cameoWho); } else hideCameo();
     }
     live.textContent = parked ? '' : line || caption;
     const options = choices[step.choices] ?? [];
@@ -585,14 +602,24 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
     }), ...(options.length ? [note] : []));
     choiceRow.hidden = true;
     dialog.classList.toggle('has-choices', options.length > 0);
-    if (parked) text.textContent = ''; else type(line);
+    if (parked) text.textContent = '';
+    else if (enterDelay) {
+      dialog.style.visibility = 'hidden';
+      text.textContent = '';
+      enterTimer = setTimeout(() => {
+        if (steps[index] !== step || !wrap.isConnected) return;
+        dialog.style.visibility = '';
+        if (cameoWho) popCameo(cameoWho);
+        type(line);
+      }, enterDelay);
+    } else { dialog.style.visibility = ''; type(line); }
 
     prev.disabled = index === 0;
     next.textContent = step.next ? `${step.next} ▶` : '다음 ▶';
     next.disabled = input || asks(step) || (index === steps.length - 1 && !step.confirm); // 마지막 장면의 confirm은 화면이 다음 화면으로 보낸다
     skip.hidden = input || asks(step) || skipTarget(steps, index) === index;
     status.textContent = input ? (again ? '엽서를 확인하고 "이어서 하기"를 눌러요' : '선택하고 제출하면 다음으로 넘어가요') : '';
-    if (input) board.focus();
+    if (input) (board.querySelector('[data-autofocus]') ?? board).focus(); // 입력 카드가 정한 첫 포커스(판결 파일철: 지금 장의 탭)
   }
 
   async function go(delta) {
@@ -743,6 +770,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
   wrap.freeze = () => {
     parked = true;
     clearTimeout(autoTimer);
+    clearTimeout(enterTimer);
     clearInterval(typing);
     sheet?.classList.remove('spot');
     sheet?.querySelectorAll('.is-on').forEach((node) => node.classList.remove('is-on'));
