@@ -1,7 +1,11 @@
 /* S-15 판결 성향 테스트 · S-16 성향 결과 · 공유된 결과 (FE-42). 색은 역할 토큰만 쓴다(FE-17).
-   메인 책상의 서류철(성향 테스트)을 펼쳐 놓은 모습: S-20과 같은 펠트 위에 크라프트 철 한 권, 색인 탭 "판결 성향 검사지", 철 안에 검사지 한 장.
+   메인 책상의 서류철(성향 테스트)을 들어 올려 펼친 모습: S-20과 같은 펠트 위에 크라프트 철 한 권, 철 안에 종이 한 장.
+   철에는 위아래가 있다 — 이름표 탭("판결 성향 검사지")이 붙은 모서리가 철의 위쪽이다.
+   검사지(.is-landscape) = 철을 왼쪽으로 눕혀 가로로 놓았다: 탭이 왼쪽 모서리, 글씨는 아래에서 위로. 한 화면에 한 문항.
+   결과지(.is-portrait) = 철을 세웠다: 탭이 위쪽, 그 옆에 결과지 색인 탭(결과 · 풀이). 제출 직후에는 눕힌 철을 돌려 세운다(.is-turning).
+   데스크톱 철 크기는 실제 서류철 비율로 고정(1040 × 840 ↔ 840 × 1040, 아래는 빈 종이). 안쪽 스크롤은 없다 — 넘치면 철이 길어진다.
    재료는 메인 책상 · 5막 파일철(FE-43)과 같다(--color-desk-kraft · -sheet). 흐름 목업 FE-26을 따른다.
-   구성: 펠트 → 철(뒤표지 · 탭) → 종이 머리 칸 → 표지 · 문항(답안 칸 · 안내 캐릭터 · 문항 · 다섯 칸) · 결과(카드 · 4축 · 관용 지수 · 설명 · 버튼) → 모바일 보정 */
+   구성: 펠트 → 철(이름표 탭 · 뒤표지) · 결과지 탭 → 종이 머리 칸 → 표지 · 문항(답안 칸 · 안내 캐릭터 · 문항 · 다섯 칸) · 결과(카드 · 4축 · 관용 지수 / 풀이) → 움직임 → 모바일 보정 */
 
 .personality-page { position: relative; min-height: 100vh; padding: 64px 24px 56px; color: var(--color-text); font: var(--text-body)/1.75 var(--font-body); word-break: keep-all; overflow-wrap: anywhere; }
 .personality-page .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
@@ -11,17 +15,49 @@
 /* 공통 푸터(법적 고지)는 펠트 위에 그대로 */
 #app:has(.personality-page) > #route-footer .site-footer { border-top: 0; background: transparent; color: var(--color-desk-text); }
 
-/* ── 서류철: 크라프트 앞표지가 종이를 받치고, 뒤표지는 한 겹 아래 살짝 어긋나 있다. 탭은 철 왼쪽 위로 튀어나온다 ── */
-.test-folder { position: relative; width: min(980px, 100%); margin: 0 auto; padding: 14px; border: 1px solid var(--color-desk-kraft-shade); border-radius: 4px 12px 12px 12px; background: var(--color-desk-kraft);
-  box-shadow: 0 22px 34px -14px color-mix(in srgb, var(--color-desk-shadow) 70%, transparent); }
-.test-folder::before { content: ''; position: absolute; inset: 6px -6px -8px 8px; z-index: -1; border-radius: 4px 12px 12px 12px; background: var(--color-desk-kraft-back); transform: rotate(.6deg);
+/* ── 서류철: 크라프트 앞표지가 종이를 받치고, 뒤표지는 한 겹 아래 살짝 어긋나 있다 ── */
+.test-binder { position: relative; width: min(980px, 100%); margin: 0 auto; }
+.test-folder { position: relative; padding: 14px; border: 1px solid var(--color-desk-kraft-shade); border-radius: 12px; background: var(--color-desk-kraft);
+  box-shadow: 0 26px 40px -16px color-mix(in srgb, var(--color-desk-shadow) 72%, transparent); }
+.test-folder::before { content: ''; position: absolute; inset: 6px -6px -8px 8px; z-index: -1; border-radius: 12px; background: var(--color-desk-kraft-back); transform: rotate(.6deg);
   box-shadow: 0 16px 28px -14px color-mix(in srgb, var(--color-desk-shadow) 60%, transparent); }
-.test-folder-tab { position: absolute; left: -1px; bottom: 100%; margin: 0; padding: 7px 16px 6px; border: 1px solid var(--color-desk-kraft-shade); border-bottom: 0; border-radius: 10px 10px 0 0; background: var(--color-desk-kraft); }
-.test-folder-tab span { display: block; padding: 0 12px; background: var(--color-desk-label); color: var(--color-desk-note-pen); font: 400 23px/1.25 var(--font-hand); transform: rotate(-1deg);
+
+/* 이름표 탭 = 철의 위쪽. 세운 철(결과지)은 위 모서리 오른쪽 끝, 눕힌 철(검사지)은 그 모서리가 왼쪽으로 돌아가 왼쪽 모서리 위(글씨가 아래에서 위로 읽힌다).
+   같은 탭이 돌기 전 · 후 자리로 이어진다(시계 방향 90°: 왼쪽 위 → 위 오른쪽) */
+.test-folder-label { position: absolute; z-index: 1; margin: 0; padding: 7px 14px 6px; border: 1px solid var(--color-desk-kraft-shade); background: var(--color-desk-kraft); }
+.test-folder-label span { display: block; padding: 0 12px; background: var(--color-desk-label); color: var(--color-desk-note-pen); font: 400 22px/1.25 var(--font-hand); white-space: nowrap;
   box-shadow: 0 1px 2px color-mix(in srgb, var(--color-desk-shadow) 25%, transparent); }
+.is-portrait .test-folder-label { right: 22px; bottom: calc(100% - 1px); border-bottom: 0; border-radius: 10px 10px 0 0; }
+.is-portrait .test-folder-label span { transform: rotate(-1deg); }
+.is-landscape .test-folder-label { right: calc(100% - 1px); top: 22px; padding: 14px 6px 14px 7px; border-right: 0; border-radius: 10px 0 0 10px; }
+.is-landscape .test-folder-label span { padding: 12px 0; writing-mode: vertical-rl; text-orientation: sideways; transform: rotate(180deg); } /* 글줄째 눕힌다(글자를 세워 쌓지 않는다) */
+.is-landscape .test-binder { padding-left: 52px; } /* 왼쪽 탭 자리 */
+
+/* 결과지 색인 탭(결과 · 풀이): 위 모서리 왼쪽(이름표 탭은 오른쪽 끝). 지금 탭은 철과 같은 색으로 이어지고 나머지는 한 겹 뒤(어둡고 낮게) */
+.test-folder-tabs { position: relative; z-index: 1; min-height: 46px; margin-bottom: -1px; padding-left: 22px; }
+.is-landscape .test-folder-tabs { display: none; }
+.folder-tablist { display: flex; align-items: flex-end; gap: 3px; margin: 0; padding: 0; list-style: none; }
+.folder-tab { position: relative; display: inline-flex; align-items: center; justify-content: center; min-width: 40px; min-height: 40px; padding: 8px 18px 7px;
+  border: 1px solid var(--color-desk-kraft-shade); border-bottom: 0; border-radius: 9px 9px 0 0; background: var(--color-desk-kraft-back); color: var(--color-heading);
+  font: 700 14px/1.2 var(--font-heading); cursor: pointer; transform: translateY(4px); transition: transform .16s cubic-bezier(.2, .8, .2, 1), background-color .16s ease-out; }
+.folder-tab[aria-selected='true'] { z-index: 2; background: var(--color-desk-kraft); transform: none; cursor: default; }
+@media (hover: hover) and (pointer: fine) { .folder-tab[aria-selected='false']:hover { transform: translateY(1px); } }
+.folder-tab:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
 
 /* 검사지 한 장. 머리 칸은 서식처럼 두 줄 괘선 */
 .test-sheet { position: relative; border: 1px solid var(--color-desk-sheet-line); border-radius: 3px; background: var(--color-desk-sheet); box-shadow: 0 2px 5px color-mix(in srgb, var(--color-desk-shadow) 22%, transparent); }
+/* 데스크톱: 실제 서류철처럼 크기 고정(같은 철을 눕히거나 세운다), 내용 아래는 빈 종이. 안쪽 스크롤 없이 넘치면 철이 길어진다 */
+@media (min-width: 721px) {
+  .personality-page { padding-bottom: 120px; }
+  .is-portrait .test-binder { width: 840px; max-width: 100%; }
+  .is-landscape .test-binder { width: 1092px; max-width: 100%; }
+  .is-landscape.personality-page { padding-top: 40px; }
+  .test-folder { display: flex; }
+  .is-portrait .test-folder { min-height: 1040px; }
+  .is-landscape .test-folder { min-height: 840px; }
+  .test-sheet { flex: 1; display: flex; flex-direction: column; }
+  .test-sheet-body { flex: 1; }
+}
 .test-sheet-head { display: flex; align-items: center; gap: 12px; padding: 14px 28px 12px; border-bottom: 3px double var(--color-heading); }
 .test-sheet-title { margin: 0; color: var(--color-heading); font: 900 18px/1.3 var(--font-heading); letter-spacing: .06em; }
 .test-sheet-label { margin: 0 auto 0 0; padding: 1px 10px; border: 1px solid var(--color-label); color: var(--color-label); font: 700 var(--text-caption)/1.6 var(--font-body); letter-spacing: .04em; }
@@ -113,7 +149,7 @@
 .personality-page .test-actions .primary-button:disabled { opacity: 1; border: 1px dashed var(--color-border-strong); background: transparent; color: var(--color-muted); cursor: default; }
 
 /* ── S-16 결과 ── */
-.result-card { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 36px; align-items: center; padding: 10px 0 30px; border-bottom: 1px dashed var(--color-desk-sheet-line); }
+.result-card { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 36px; align-items: center; padding: 6px 0 18px; border-bottom: 1px dashed var(--color-desk-sheet-line); }
 /* 캐릭터 카드: 결과지에 종이 클립으로 끼워 두었다 */
 .result-portrait { position: relative; margin: 0; padding: 14px 14px 10px; border: 1px solid var(--color-desk-sheet-line); background: var(--color-paper); transform: rotate(-1.5deg);
   box-shadow: 0 12px 20px -10px color-mix(in srgb, var(--color-desk-shadow) 50%, transparent); }
@@ -124,22 +160,26 @@
 .result-portrait.is-nameplate strong { color: var(--color-heading); font: 900 var(--text-title-2)/1 var(--font-heading); }
 .result-head h1 { margin: 0 0 10px; color: var(--color-heading); font: 900 var(--text-display)/1.25 var(--font-heading); letter-spacing: -.02em; text-wrap: balance; }
 .result-oneliner { margin: 0; color: var(--color-text); font-size: 17px; line-height: 1.65; text-wrap: pretty; }
-.result-greeting { display: inline-block; order: 0; margin: 22px 0 0; max-width: 360px; }
-.result-greeting::after { left: 28px; }
 
 .result-section { padding: 24px 0; border-bottom: 1px dashed var(--color-desk-sheet-line); }
+.result-card + .result-section { padding-top: 18px; }
 .result-section h2 { margin: 0 0 12px; color: var(--color-heading); font: 700 var(--text-title-3)/1.4 var(--font-heading); }
 .result-section p { margin: 0; text-wrap: pretty; }
-.axis-list { display: grid; gap: 18px; margin: 0; padding: 0; list-style: none; }
+.axis-list { display: grid; gap: 14px; margin: 0; padding: 0; list-style: none; }
 .axis-label { margin: 0 0 2px; font-weight: 700; }
 .axis-ends { display: flex; justify-content: space-between; gap: 12px; color: var(--color-muted); font-size: var(--text-small); font-variant-numeric: tabular-nums; }
-.axis-ends .is-major { color: var(--color-heading); font-weight: 700; }
-/* 양쪽 비중을 같은 재료로 나눠 칠하고, 큰 쪽만 진하게. 가운데 눈금 = 반반 */
-.axis-bar { position: relative; display: flex; gap: 3px; height: 10px; margin-top: 6px; }
-.axis-bar span { min-width: 3px; border-radius: 2px; background: color-mix(in srgb, var(--color-heading) 16%, transparent); }
-.axis-bar span.is-major { background: var(--color-heading); }
-.axis-bar::after { content: ''; position: absolute; left: 50%; top: -4px; bottom: -4px; width: 1px; background: var(--color-border-strong); }
-.tolerance { margin-top: 28px; }
+.axis-ends .is-strict { color: var(--color-heading); }
+.axis-ends .is-lenient { color: var(--color-label); }
+.axis-ends .is-major { font-weight: 700; }
+/* 엄격 쪽 남색 · 관대 쪽 갈색, 둘 다 진하게 막대를 가득 채운다(반반이어도 비우지 않는다). 사이는 종이색 줄 하나, 가운데 눈금 = 반반 */
+.axis-bar { position: relative; display: flex; height: 10px; margin-top: 6px; border-radius: 3px; overflow: hidden; }
+.axis-bar span { flex-basis: 0; min-width: 0; }
+.axis-bar .is-strict { background: var(--color-heading); }
+.axis-bar .is-lenient { background: var(--color-label); }
+.axis-bar.has-split .is-lenient { box-shadow: inset 2px 0 0 var(--color-desk-sheet); }
+.axis-row { position: relative; }
+.axis-row::after { content: ''; position: absolute; left: 50%; bottom: -4px; width: 1px; height: 18px; background: var(--color-border-strong); }
+.tolerance { margin-top: 22px; }
 .tolerance-title { margin: 0 0 4px; color: var(--color-heading); font: 700 15px/1.4 var(--font-body); }
 .result-section h2.tolerance-title { font: 700 var(--text-title-3)/1.4 var(--font-heading); }
 .tolerance-note { margin-top: 10px; color: var(--color-muted); font-size: var(--text-small); }
@@ -151,13 +191,34 @@
 .result-more { display: flex; flex-wrap: wrap; gap: 8px; }
 .share-note { margin: 12px 0 0; color: var(--color-muted); font-size: var(--text-small); overflow-wrap: anywhere; }
 .share-note:empty { display: none; }
+/* 결과지 1장 맨 아래: 풀이 장으로 넘기기 */
+.result-turn { display: flex; justify-content: flex-end; padding-top: 4px; }
+.result-turn-button { min-height: 44px; padding: 8px 4px; border: 0; background: none; color: var(--color-heading); font: 700 15px/1 var(--font-heading); cursor: pointer;
+  text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--color-heading) 30%, transparent); text-underline-offset: 5px; transition: text-decoration-color .15s ease-out; }
+.result-turn-button::after { content: ' →'; }
+@media (hover: hover) and (pointer: fine) { .result-turn-button:hover { text-decoration-color: currentColor; } }
+.result-turn-button:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; border-radius: 2px; }
+.result-page:focus { outline: none; }
+.result-section:has(+ .result-turn) { border-bottom: 0; }
 
-/* ── 움직임: 문항이 넘어가는 순간과 결과 카드가 놓이는 순간만 ── */
+/* ── 움직임: 검사지 서류철을 책상에서 들어 올리는 순간 · 문항이 넘어가는 순간 · 철을 돌려 세우는 순간 · 결과 카드가 놓이는 순간만 ── */
 @media (prefers-reduced-motion: no-preference) {
+  .is-test .test-binder { transform-origin: 50% 100%; animation: folder-lift .85s cubic-bezier(.16, 1, .3, 1) backwards; }
+  .is-test .test-folder { animation: folder-shadow .85s cubic-bezier(.16, 1, .3, 1) backwards; }
   .test-question-main { animation: test-turn .3s cubic-bezier(.2, .8, .2, 1); }
   .answer-cell.is-fresh svg path { stroke-dasharray: 24; animation: test-check .28s ease-out both; } /* 방금 답한 칸만 펜으로 긋는다 */
   .is-result .result-portrait { animation: result-place .7s cubic-bezier(.16, 1, .3, 1) both; }
+  /* 결과지로 넘어올 때: 눕혀 둔 철(검사지와 같은 자리 · 크기, 이름표 탭이 왼쪽)을 시계 방향으로 돌려 세운다. 도는 동안 종이는 비어 있고, 다 서면 글자 · 탭이 나타난다 */
+  .is-turning .test-binder { animation: folder-turn 1s cubic-bezier(.65, 0, .35, 1) both; }
+  .is-turning :is(.test-sheet > *, .test-folder-tabs) { animation: folder-content-in 1.35s ease-out both; }
+  .is-turning .result-portrait { animation-delay: .95s; }
 }
+/* 시작 = 검사지의 눕힌 철 자리(세운 철 가운데가 147px 아래라 그만큼 올려 둔다). 잠깐 들었다가(30%) 돌린다 */
+@keyframes folder-turn { from { transform: translateY(-147px) rotate(-90deg); } 30% { transform: translateY(-147px) rotate(-90deg) scale(1.02); } }
+@keyframes folder-content-in { 0%, 72% { opacity: 0; } 100% { opacity: 1; } }
+/* 책상에 눕혀 놓인 철(살짝 기울고 낮게, 그림자 짧게)이 들려 올라와 반듯해진다 */
+@keyframes folder-lift { from { opacity: .6; transform: translateY(64px) rotate(-3deg) scale(.92); } }
+@keyframes folder-shadow { from { box-shadow: 0 3px 5px -2px color-mix(in srgb, var(--color-desk-shadow) 60%, transparent); } }
 @keyframes test-turn { from { opacity: .35; translate: var(--enter-x, 14px) 0; filter: blur(2px); } }
 @keyframes test-check { from { stroke-dashoffset: 24; } to { stroke-dashoffset: 0; } }
 @keyframes result-place { from { opacity: .3; transform: translateY(-18px) rotate(-6deg); } }
@@ -167,8 +228,6 @@
   .personality-page { padding: 52px max(10px, env(safe-area-inset-right, 0px)) 32px max(10px, env(safe-area-inset-left, 0px)); }
   .test-folder { padding: 8px; }
   .test-folder::before { inset: 4px -3px -5px 4px; }
-  .test-folder-tab { padding: 5px 12px 4px; }
-  .test-folder-tab span { font-size: 20px; }
   .test-sheet-head { gap: 8px; padding: 6px 16px 6px; }
   .test-sheet-title { font-size: 15px; letter-spacing: .03em; }
   .test-sheet-body { padding: 20px 16px 24px; }
@@ -198,6 +257,5 @@
   .result-card { grid-template-columns: minmax(0, 1fr); gap: 24px; justify-items: center; text-align: center; }
   .result-portrait { width: min(230px, 72%); }
   .result-head h1 { font-size: var(--text-title-1); }
-  .result-greeting::after { left: 50%; }
   .result-actions, .result-more { flex-direction: column; align-items: stretch; width: 100%; }
 }

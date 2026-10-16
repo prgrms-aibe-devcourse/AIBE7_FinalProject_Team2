@@ -1,6 +1,7 @@
 import { button, element } from '../../components/siteLayout.js';
 import { imageOf } from '../../components/stage.js';
-import { guide, renderFolder, sheetMessage } from './personalityParts.js';
+import { PERSONALITY_LINES } from '../../content/personalityLines.js';
+import { guide, markFolderTurn, renderFolder, sheetMessage } from './personalityParts.js';
 
 // S-15 판결 성향 테스트 — 시작 안내 + 문항 (WBS 7.6.1 콘텐츠 · 7.6.5 화면, FE-42 디자인). 한 화면에 한 문항, 5칸 선택지.
 // 결과 전까지는 이전 문항으로 돌아가 답을 바꿀 수 있다(user-flow 3-2). 문항 문구에는 법률 용어를 쓰지 않는다.
@@ -20,19 +21,23 @@ const ADVANCE_MS = 260; // 고른 칸이 칠해지는 것을 보고 넘어가도
 const MIN_LOADING_MS = 900; // 결과 분석 연출(user-flow 3-2)이 깜빡이고 사라지지 않도록
 const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
-// 안내 대사는 시작 · 절반 · 마지막에만. 판단 방향을 암시하지 않는다(PRODUCT 원칙 1)
-function guideFor(index, total) {
-  if (index === 0) return guide('naero', 'guide-neutral', '정답은 없어요. 먼저 떠오른 쪽을 골라 주세요.');
-  if (index === total - 1) return guide('naero', 'guide-happy', '마지막 문항이에요. 다 고르면 결과를 볼 수 있어요.');
-  if (index === Math.floor(total / 2)) return guide('nambul', 'cheer-cheer', '벌써 절반이에요! 이대로 쭉 가요!');
-  return index < total / 2 ? guide('naero', 'idle-neutral') : guide('nambul', 'idle-neutral');
+// 안내 캐릭터 + 문항별 한 줄 대사(content/personalityLines.js). 앞 절반은 내로, 뒤 절반은 남불(대사에 적힌 캐릭터가 우선).
+// 시작 · 절반 · 마지막만 자세가 바뀐다
+function guideFor(question, index, total) {
+  const { who = index < total / 2 ? 'naero' : 'nambul', line } = PERSONALITY_LINES[question.id] ?? {};
+  const look = index === 0 ? 'guide-neutral'
+    : index === total - 1 ? 'guide-happy'
+      : index === Math.floor(total / 2) ? 'cheer-cheer'
+        : 'idle-neutral';
+  return guide(who, look, line);
 }
 
 // 답안 칸의 펜 체크 표시
 const CHECK_SVG = '<svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M4 10.5 L8.2 14.5 L16 5.5"/></svg>';
 
 export async function renderPersonalityPage(container, { api, navigate }) {
-  const { root, label, body } = renderFolder(container, { navigate, sheetLabel: '문항지' });
+  // 검사지는 철을 가로로 눕혀 둔다(탭이 왼쪽). 책상에서 서류철을 들어 올리는 연출은 검사지에만(personality.css)
+  const { root, label, body } = renderFolder(container, { navigate, sheetLabel: '문항지', orientation: 'landscape' });
   root.classList.add('is-test');
   const active = () => container.contains(root);
   const keys = new AbortController(); // 숫자 키 단축키. 화면을 떠나면 뗀다
@@ -48,7 +53,7 @@ export async function renderPersonalityPage(container, { api, navigate }) {
     }
     if (active()) renderIntro();
     // 문항 · 답안 정리에서 쓸 안내 컷을 미리 받아 둔다(원본 레포 PNG라 처음 뜰 때 늦다)
-    [['naero', 'guide-neutral'], ['naero', 'idle-neutral'], ['nambul', 'idle-neutral'], ['nambul', 'cheer-cheer'], ['naero', 'read-thinking'], ['nambul', 'read-thinking']]
+    [['naero', 'guide-neutral'], ['naero', 'idle-neutral'], ['nambul', 'idle-neutral'], ['nambul', 'cheer-cheer'], ['nambul', 'guide-happy'], ['naero', 'read-thinking'], ['nambul', 'read-thinking']]
       .forEach(([who, look]) => { new Image().src = imageOf(who, look); });
   }
 
@@ -85,7 +90,7 @@ export async function renderPersonalityPage(container, { api, navigate }) {
   let pickedByPointer = false;
   let advanceTimer = 0;
 
-  // 답안 칸: 답한 문항 · 지금 문항만 눌러서 갈 수 있다(아직 안 온 문항은 건너뛸 수 없다)
+  // 답안 칸: 답한 문항 · 지금 문항 · 앞 문항을 모두 답한 다음 문항만 눌러서 갈 수 있다(건너뛰기 없음)
   // fresh = 방금 처음 답한 문항 id(그 칸만 체크를 긋는다)
   function answerGrid(index, fresh) {
     const nav = element('nav', 'answer-grid');
@@ -93,11 +98,11 @@ export async function renderPersonalityPage(container, { api, navigate }) {
     const count = element('p', 'answer-count');
     count.append(element('b', '', String(index + 1)), ` / ${questions.length}`);
     const cells = element('ol', 'answer-cells');
-    const reachable = (i) => i <= index || questions.slice(0, i).every((q) => answers.has(q.id)); // 앞 문항을 모두 답했으면 갈 수 있다
+    const reachable = (i) => i <= index || questions.slice(0, i).every((q) => answers.has(q.id));
     questions.forEach((question, i) => {
       const item = element('li');
       const done = answers.has(question.id);
-      const cell = button('', () => renderQuestion(i), `answer-cell${done ? ' is-done' : ''}${question.id === fresh ? ' is-fresh' : ''}${i === index ? ' is-current' : ''}`);
+      const cell = button('', () => renderQuestion(i, { direction: i < index ? -1 : 1 }), `answer-cell${done ? ' is-done' : ''}${question.id === fresh ? ' is-fresh' : ''}${i === index ? ' is-current' : ''}`);
       cell.append(element('span', 'answer-no', String(i + 1)));
       if (done) cell.insertAdjacentHTML('beforeend', CHECK_SVG);
       cell.setAttribute('aria-label', `${i + 1}번 문항${done ? ', 답함' : ''}`);
@@ -163,7 +168,7 @@ export async function renderPersonalityPage(container, { api, navigate }) {
 
     const main = element('div', 'test-question-main');
     main.append(fieldset, actions);
-    panel.append(guideFor(index, questions.length), main);
+    panel.append(guideFor(question, index, questions.length), main);
     body.replaceChildren(answerGrid(index), panel);
     legend.focus({ preventScroll: true });
 
@@ -228,6 +233,7 @@ export async function renderPersonalityPage(container, { api, navigate }) {
     if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
     if (active()) {
       keys.abort();
+      markFolderTurn(); // 결과지는 눕힌 철을 돌려 세우며 보여 준다
       navigate('testResult');
     }
   }

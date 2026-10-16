@@ -3,19 +3,27 @@ import { imageOf } from '../../components/stage.js';
 import { CHARACTER_NAMES } from '../../utils/personalityAxes.js';
 
 // S-15 · S-16 · 공유된 결과(/test/types/{shareId})가 함께 쓰는 조각 (FE-42).
-// 화면 = 메인 책상의 서류철(성향 테스트)을 펼쳐 놓은 모습: 펠트 위 크라프트 철, 색인 탭 "판결 성향 검사지", 철 안에 종이 한 장.
+// 화면 = 메인 책상의 서류철(성향 테스트)을 들어 올려 펼친 모습: 펠트 위 크라프트 철, 철 안에 종이 한 장.
+// 철에는 위아래가 있다 — 이름표 탭("판결 성향 검사지")이 붙은 모서리가 철의 위쪽이다.
+//   검사지(표지 · 문항, orientation 'landscape') = 철을 왼쪽으로 눕혀 가로로 놓았다: 탭이 왼쪽 모서리, 탭 글씨는 아래에서 위로 읽힌다.
+//   결과지(orientation 'portrait') = 철을 세워 세로로 놓았다: 탭이 위쪽 모서리. 제출 직후에는 눕힌 철을 돌려 세운다(personality.css folder-turn).
+// 결과지의 색인 탭(결과 · 풀이)은 위쪽 모서리, 이름표 탭 옆에 붙는다(tabs).
 // 재료는 메인 책상 · 5막 파일철(FE-43)과 같다(--color-desk-kraft · -sheet). 흐름 목업 FE-26(판결성향검사지_흐름_목업)을 따른다.
 // 공유 화면에는 개인 응답 · 축 점수를 넣지 않는다(FR-8-6).
 // 4글자 코드(INTP 등)와 축 글자(E · I 등)는 화면에 보이지 않는다(상표 우려, 10/13). 공유 주소는 해시 값({shareId})이다.
 
-// 서류철 틀. sheetLabel = 종이 머리 칸 오른쪽(문항지 · 결과지 등). 반환: { root, sheet, body }
-export function renderFolder(container, { navigate, sheetLabel }) {
-  const root = element('div', 'personality-page');
+// 서류철 틀. sheetLabel = 종이 머리 칸의 서식 이름(문항지 · 결과지 등). 반환: { root, tabs, label, body }
+export function renderFolder(container, { navigate, sheetLabel, orientation = 'portrait' }) {
+  const root = element('div', `personality-page is-${orientation}`);
   const desk = element('div', 'personality-desk');
   desk.setAttribute('aria-hidden', 'true');
+  const binder = element('div', 'test-binder');
+  const tabs = element('div', 'test-folder-tabs');
   const folder = element('div', 'test-folder');
-  const tab = element('p', 'test-folder-tab');
-  tab.append(element('span', '', '판결 성향 검사지'));
+  const nameTab = element('p', 'test-folder-label');
+  nameTab.setAttribute('aria-hidden', 'true'); // 종이 머리 칸 제목과 같은 말이라 낭독하지 않는다
+  nameTab.append(element('span', '', '판결 성향 검사지'));
+  folder.append(nameTab);
   const sheet = element('section', 'test-sheet');
   const head = element('header', 'test-sheet-head');
   const title = element('p', 'test-sheet-title', '판결 성향 검사지');
@@ -23,10 +31,27 @@ export function renderFolder(container, { navigate, sheetLabel }) {
   head.append(title, label, button('책상으로', () => navigate('landing'), 'test-back'));
   const body = element('main', 'test-sheet-body');
   sheet.append(head, body);
-  folder.append(tab, sheet);
-  root.append(desk, folder);
+  folder.append(sheet);
+  binder.append(tabs, folder);
+  root.append(desk, binder);
   container.replaceChildren(root);
-  return { root, sheet, label, body };
+  return { root, tabs, label, body };
+}
+
+// 철 돌리기: 검사지를 제출하고 결과로 넘어갈 때만 눕힌 철을 세운다(결과 주소로 바로 오거나 마이페이지에서 오면 바로 세로).
+// 화면 사이 한 번만 전하는 값이라 sessionStorage에 두고, 쓸 수 없으면 연출 없이 간다
+const TURN_KEY = 'nlnb-personality-turn';
+export function markFolderTurn() {
+  try { sessionStorage.setItem(TURN_KEY, '1'); } catch { /* 연출만 빠진다 */ }
+}
+export function takeFolderTurn() {
+  try {
+    const turn = sessionStorage.getItem(TURN_KEY) === '1';
+    sessionStorage.removeItem(TURN_KEY);
+    return turn;
+  } catch {
+    return false;
+  }
 }
 
 // 종이 안 상태 문구(불러오는 중 · 실패). retry가 있으면 다시 시도 버튼, action = { label, run }이면 다른 버튼
@@ -39,7 +64,7 @@ export function sheetMessage(body, text, { retry, action, alert = false } = {}) 
   body.replaceChildren(panel);
 }
 
-// 내로 · 남불 안내. look = 컷 이름(guide-neutral 등), line이 있으면 말풍선. 이미지는 장식이라 낭독하지 않고 말풍선만 읽는다
+// 내로 · 남불 안내 컷(look = guide-neutral 등), line이 있으면 말풍선. 그림은 장식이라 낭독하지 않고 말풍선만 읽는다
 export function guide(who, look, line) {
   const box = element('div', `test-guide is-${who}`);
   const figure = element('img', 'test-guide-cut');
@@ -52,14 +77,67 @@ export function guide(who, look, line) {
   box.append(figure);
   if (line) {
     const bubble = element('p', 'test-bubble');
-    bubble.append(element('b', '', who === 'naero' ? '내로' : '남불'), line);
+    bubble.append(element('b', '', CHARACTER_NAMES[who.toUpperCase()]), line);
     box.append(bubble);
   }
   return box;
 }
 
-// 결과 카드: 캐릭터 그림(종이 클립으로 결과지에 끼운 카드) + 유형명 · 한 줄 성향 · 밈 · 캐릭터 한마디
-export function typeCard(type, { greeting } = {}) {
+// 결과지 두 장(탭 · 패널). pages = [{ label, nodes }]. 철 위 탭을 누르거나 ← → 키로 넘긴다(WAI-ARIA tabs)
+export function resultPages(tabs, body, pages) {
+  const list = element('div', 'folder-tablist');
+  list.setAttribute('role', 'tablist');
+  list.setAttribute('aria-label', '결과지');
+  const panels = pages.map(({ nodes }, i) => {
+    const panel = element('div', 'result-page');
+    panel.id = `result-page-${i}`;
+    panel.setAttribute('role', 'tabpanel');
+    panel.setAttribute('aria-labelledby', `result-tab-${i}`);
+    panel.tabIndex = -1;
+    panel.append(...nodes);
+    return panel;
+  });
+  const buttons = pages.map(({ label }, i) => {
+    const tab = element('button', 'folder-tab', label);
+    tab.type = 'button';
+    tab.id = `result-tab-${i}`;
+    tab.setAttribute('role', 'tab');
+    tab.setAttribute('aria-controls', panels[i].id);
+    tab.addEventListener('click', () => show(i));
+    tab.addEventListener('keydown', (event) => {
+      const step = { ArrowRight: 1, ArrowLeft: -1 }[event.key];
+      if (!step) return;
+      event.preventDefault();
+      const next = (i + step + pages.length) % pages.length;
+      show(next);
+      buttons[next].focus();
+    });
+    return tab;
+  });
+  function show(index, { focusPanel = false } = {}) {
+    buttons.forEach((tab, i) => {
+      tab.setAttribute('aria-selected', String(i === index));
+      tab.tabIndex = i === index ? 0 : -1;
+      panels[i].hidden = i !== index;
+    });
+    if (focusPanel) panels[index].focus({ preventScroll: true });
+  }
+  list.append(...buttons);
+  tabs.replaceChildren(list);
+  body.replaceChildren(...panels);
+  show(0);
+  return { show };
+}
+
+// 다음 장으로 넘기는 줄(결과지 1장 맨 아래)
+export function turnPage(label, run) {
+  const row = element('div', 'result-turn');
+  row.append(button(label, run, 'result-turn-button'));
+  return row;
+}
+
+// 결과 카드: 캐릭터 그림(종이 클립으로 결과지에 끼운 카드) + 유형명 · 한 줄 성향 · 밈
+export function typeCard(type) {
   const card = element('section', 'result-card');
   const characterName = CHARACTER_NAMES[type.character] ?? type.character;
   const portrait = element('figure', 'result-portrait');
@@ -81,11 +159,6 @@ export function typeCard(type, { greeting } = {}) {
   }
   const head = element('div', 'result-head');
   head.append(element('h1', '', type.name), element('p', 'result-oneliner', type.oneLiner));
-  if (greeting) {
-    const bubble = element('p', 'test-bubble result-greeting');
-    bubble.append(element('b', '', characterName), greeting);
-    head.append(bubble);
-  }
   card.append(portrait, head);
   return card;
 }

@@ -1,13 +1,14 @@
 import { button, element } from '../../components/siteLayout.js';
 import { renderToleranceScale } from '../../components/toleranceScale.js';
-import { descriptionSections, noticeBlock, renderFolder, sheetMessage, TOLERANCE_NOTE, typeCard } from './personalityParts.js';
+import { descriptionSections, noticeBlock, renderFolder, resultPages, sheetMessage, takeFolderTurn, TOLERANCE_NOTE, turnPage, typeCard } from './personalityParts.js';
 import { AXES } from '../../utils/personalityAxes.js';
 
 // S-16 성향 결과 — 내 결과 (WBS 7.6.5, FE-42 디자인). 공유 버튼은 해시 주소(/test/types/{shareId})를 공유한다(FR-8-6).
 // 문구는 docs/personality-test-content.md 4 · 5장. 캐릭터 이미지는 유형마다 하나(personality-image-numbers.md, 01 ~ 32).
-// 4축 그래프: 축마다 양쪽 성향의 비중(관대 쪽 비중 = axisScores). 양쪽을 같은 무게로 칠하고 더 큰 쪽만 진하게 — 어느 쪽이 좋다는 색이 아니다.
+// 결과지 두 장(탭): 결과 = 유형 카드 · 가치관 4축 · 관용 지수 / 풀이 = 일상 · 판결 설명 · 안내 · 다음 행동.
+// 4축 그래프: 축마다 양쪽 성향의 비중(관대 쪽 비중 = axisScores). 엄격 쪽 남색 · 관대 쪽 갈색, 둘 다 진하게 막대를 가득 채운다.
+// 두 색은 어느 쪽이 좋다는 뜻이 아니라 양쪽을 구분할 뿐이다(관용 지수는 높을수록 좋은 게 아님, FR-8-4).
 const pct = (ratio) => Math.round(ratio * 100);
-const GREETINGS = { NAERO: '이런 모습으로 만났네요. 저랑 같이 봐요.', NAMBUL: '오, 이렇게 나왔네요! 같이 봐요!' };
 
 function axisRow(axis, lenientRatio) {
   const strict = pct(1 - lenientRatio);
@@ -16,16 +17,16 @@ function axisRow(axis, lenientRatio) {
   row.append(element('p', 'axis-label', axis.label));
   const labels = element('div', 'axis-ends');
   labels.append(
-    element('span', strict > lenient ? 'is-major' : '', `${axis.strict.name} ${strict}%`),
-    element('span', lenient > strict ? 'is-major' : '', `${lenient}% ${axis.lenient.name}`),
+    element('span', `is-strict${strict > lenient ? ' is-major' : ''}`, `${axis.strict.name} ${strict}%`),
+    element('span', `is-lenient${lenient > strict ? ' is-major' : ''}`, `${lenient}% ${axis.lenient.name}`),
   );
-  const bar = element('div', 'axis-bar');
+  const bar = element('div', `axis-bar${strict > 0 && lenient > 0 ? ' has-split' : ''}`); // 양쪽이 다 있을 때만 사이 줄
   bar.setAttribute('role', 'img');
   bar.setAttribute('aria-label', `${axis.strict.name} ${strict}%, ${axis.lenient.name} ${lenient}%`);
-  const left = element('span', strict > lenient ? 'is-major' : '');
-  const right = element('span', lenient > strict ? 'is-major' : '');
-  left.style.flexBasis = `${strict}%`;
-  right.style.flexBasis = `${lenient}%`;
+  const left = element('span', 'is-strict');
+  const right = element('span', 'is-lenient');
+  left.style.flexGrow = String(strict); // 0%인 쪽은 막대에서 빠지고 다른 쪽이 가득 채운다
+  right.style.flexGrow = String(lenient);
   bar.append(left, right);
   row.append(labels, bar);
   return row;
@@ -61,8 +62,15 @@ export function toleranceBlock(level, heading = 'h3') {
 }
 
 export async function renderPersonalityResultPage(container, { api, navigate }) {
-  const { root, body } = renderFolder(container, { navigate, sheetLabel: '결과지' });
+  const { root, tabs, body } = renderFolder(container, { navigate, sheetLabel: '결과지' });
   root.classList.add('is-result');
+  // 검사지를 막 제출했으면 가로로 눕힌 철을 돌려 세운다. 다 돌면 결과지 글자 · 탭이 나타난다(personality.css folder-turn)
+  if (takeFolderTurn() && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+    root.classList.add('is-turning');
+    root.addEventListener('animationend', (event) => {
+      if (event.animationName === 'folder-content-in') root.classList.remove('is-turning'); // 마지막 연출(글자 나타남)이 끝나면
+    });
+  }
   const active = () => container.contains(root);
 
   async function load() {
@@ -83,7 +91,7 @@ export async function renderPersonalityResultPage(container, { api, navigate }) 
   }
 
   function draw({ type, axisScores }) {
-    const card = typeCard(type, { greeting: GREETINGS[type.character] });
+    const card = typeCard(type);
 
     const graph = element('section', 'result-section');
     graph.append(element('h2', '', '가치관 4축'));
@@ -102,7 +110,10 @@ export async function renderPersonalityResultPage(container, { api, navigate }) 
     );
     actions.append(button('실제 사건으로 판결하러 가기', () => navigate('list'), 'primary-button'), more);
 
-    body.replaceChildren(card, graph, ...descriptionSections(type), noticeBlock(), actions, shareNote);
+    const pages = resultPages(tabs, body, [
+      { label: '결과', nodes: [card, graph, turnPage('풀이 보기', () => pages.show(1, { focusPanel: true }))] },
+      { label: '풀이', nodes: [...descriptionSections(type), noticeBlock(), actions, shareNote] },
+    ]);
   }
 
   await load();
