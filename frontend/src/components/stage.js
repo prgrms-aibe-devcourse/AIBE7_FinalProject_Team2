@@ -97,7 +97,9 @@ function paperCamera(sheet, dockTop, byKeyboard = () => false) {
       const box = target.getBoundingClientRect();
       const room = dockTop() - 24;
       const top = box.height < room ? box.top - (room - box.height) / 2 : box.top - 24;
-      window.scrollTo({ top: Math.max(0, window.scrollY + top), behavior: reducedMotion() || byKeyboard() ? 'auto' : 'smooth' }); // 키보드로 넘길 때는 즉시(연달아 눌러도 화면이 따라오느라 느려지지 않게)
+      const y = window.scrollY + top;
+      window.scrollTo({ top: y < 200 ? 0 : y, // 지면 맨 위 근처 기사는 머리글(제호)까지 보이게 맨 위로
+        behavior: reducedMotion() || byKeyboard() ? 'auto' : 'smooth' }); // 키보드로 넘길 때는 즉시(연달아 눌러도 화면이 따라오느라 느려지지 않게)
     });
   }
   function go(name) {

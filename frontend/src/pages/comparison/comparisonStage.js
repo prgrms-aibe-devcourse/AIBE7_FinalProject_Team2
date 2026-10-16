@@ -1,7 +1,8 @@
 // 8막 세 판결 비교 무대. 재판(신문 속 사건)이 끝나고 현실의 신문으로 돌아온다 — 판사의 책상 위 "다음 날 신문"에
-// 내 체험 결과가 녹아들어 내 판결 · AI 판결 · 실제 판결이 기사로 실렸다. 지면은 화면보다 크고, 장면마다 카메라가
-// 기사 하나(대본 focus)로 옮겨 간다. 내로 · 남불은 지면 앞을 뛰어다니며 설명한다.
-// 7막 법정이 지면의 1면 사진 속으로 빠져나오며 시작한다(대본 from: "photo" — 2 → 3막 "사진 속으로"의 반대).
+// 내 체험 결과가 녹아들어 내 판결 · AI 판결 · 실제 판결이 기사로 실렸다.
+// FE-32: 1 · 2막 사건 지면처럼 상자 없이 신문 한 장이 화면을 채운다(무대 layout 'paper', mountNewspaperStage).
+// 장면마다 대사가 짚는 기사(대본 focus)로 화면이 굴러가고, 나머지 기사는 살짝 흐려진다. 내로 · 남불은 화면 아래 말풍선과 함께 있다.
+// (예전 상자 무대의 카메라 줌 · 7막 법정에서 빠져나오는 연출은 이 방식으로 바꾸며 뺐다)
 // 세 판결은 같은 크기 · 같은 무게로 싣고 어느 쪽이 맞았는지 말하지 않는다(PRODUCT.md 원칙 1).
 // 마지막 장면에서 다음 행동을 고른다: 다른 사건 보기 · 메인으로 · 공유하기.
 // S-08(7막)에서 비교를 공개한 뒤 무대를 이어 받고(주소만 S-09로), 재진입(S-09 주소)에서도 같은 무대를 연다
@@ -199,7 +200,7 @@ export function renderComparisonStage({ script, data, caseId, caseTitle, navigat
   return renderStage({
     script: { ...script, acts: { ...script.acts, 8: { ...act, steps } } },
     order: ['8'],
-    sheet: newspaper(data, script, caseTitle),
+    sheet: newspaper(data, script, caseTitle), layout: 'paper', // 상자 없이 신문 한 장이 화면을 채운다(1 · 2막 사건 지면과 같은 방식, 화면이 기사로 굴러간다)
     choices: { end: [
       { label: '다른 사건 보기', action: () => navigate('list'), primary: true },
       { label: '메인으로', action: () => navigate('landing') },
@@ -208,6 +209,15 @@ export function renderComparisonStage({ script, data, caseId, caseTitle, navigat
     onRestart: restartMock(caseId),
     onJump: jumpActMock(caseId),
   });
+}
+
+// 8막 화면 틀: 1 · 2막 사건 지면처럼 책상(펠트) 위에 다음 날 신문 한 장을 펼친다(캐릭터 · 말풍선은 화면 아래 고정, FE-32)
+export function mountNewspaperStage(root, { stage }) {
+  root.className = 'case-list-page case-paper-page comparison-paper';
+  const desk = element('div', 'desk');
+  desk.setAttribute('aria-hidden', 'true');
+  root.replaceChildren(desk, element('h1', 'visually-hidden', '세 판결 비교'), stage);
+  window.scrollTo(0, 0);
 }
 
 // 무대 화면 틀(6 ~ 8막이 같은 화면에서 이어질 때도 쓴다): 사건 제목 줄 + 가운데 넓은 무대

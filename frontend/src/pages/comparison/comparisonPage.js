@@ -1,6 +1,6 @@
 import { formatPenalty, formatDispositions } from '../../utils/judgmentFormat.js';
 import { SCRIPTS } from '../../content/scripts.js';
-import { renderComparisonStage, mountStage } from './comparisonStage.js';
+import { renderComparisonStage, mountNewspaperStage } from './comparisonStage.js';
 
 const directionSymbols = { UP: '↑', DOWN: '↓' };
 const categoryLabels = { ALL_SAME: '셋 모두 같게 본 요소', ONLY_ME_MISSED: '나만 고려하지 않은 요소', DIVERGED: '판단이 엇갈린 요소' };
@@ -53,8 +53,7 @@ export async function renderComparisonPage(container, { caseId, caseHeader, api,
 
   function draw(data) {
     if (script) {
-      mountStage(root, { caseHeader, badge: '세 판결 비교', heading: '세 판결 비교',
-        stage: renderComparisonStage({ script, data, caseId, caseTitle: caseHeader.title, navigate }) });
+      mountNewspaperStage(root, { stage: renderComparisonStage({ script, data, caseId, caseTitle: caseHeader.title, navigate }) });
       return;
     }
     const { preToFinal, judgments, matrix, ruleSentences } = data;
