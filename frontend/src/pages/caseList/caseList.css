@@ -14,8 +14,19 @@
   width: min(1280px, calc(100vw - 48px));
   margin: 32px auto 56px;
   padding: 0 40px;
-  background: var(--color-paper);
-  box-shadow: 0 30px 80px color-mix(in srgb, var(--color-banner-bg) 60%, transparent);
+  /* 신문지(FE-32): 가장자리로 갈수록 살짝 누렇게 바랜 종이. 가운데 접힌 자국은 ::after로 사진 · 글자 위에 겹친다(질감 노이즈는 쓰지 않는다) */
+  background:
+    radial-gradient(ellipse 85% 70% at 50% 45%, transparent 55%, color-mix(in srgb, var(--color-desk-kraft) 16%, transparent) 100%),
+    var(--color-paper);
+  box-shadow: 0 1px 1px color-mix(in srgb, var(--color-desk-shadow) 18%, transparent), 0 30px 80px color-mix(in srgb, var(--color-banner-bg) 60%, transparent);
+}
+
+/* 가운데 접힌 자국: 지면 위에 겹치는 층(사진에도 접힌 선이 지나간다). 곱하기 혼합이라 글자를 가리지 않고, 누르는 것도 막지 않는다 */
+.case-list-page .paper::after {
+  content: ''; position: absolute; inset: 0; z-index: 6; pointer-events: none; mix-blend-mode: multiply;
+  background:
+    linear-gradient(90deg, transparent calc(50% - 1px), color-mix(in srgb, var(--color-desk-shadow) 12%, transparent) 50%, transparent calc(50% + 1px)),
+    linear-gradient(90deg, transparent 46%, color-mix(in srgb, var(--color-desk-shadow) 4%, transparent) 49.6%, transparent 50.4%, transparent 54%);
 }
 
 /* 지면 본문 글자: 기사 명조(--font-article), 양쪽 맞춤 · 글자 단위 줄바꿈, 모든 문단 첫 줄 들여쓰기 (신문 조판) */
@@ -26,13 +37,16 @@
 /* ── 제호 ── */
 .case-list-page .info-row { min-height: 40px; display: flex; align-items: center; justify-content: space-between; gap: 16px; font-size: var(--text-caption); color: var(--color-muted); }
 .case-list-page .info-links { display: flex; gap: 20px; }
-.case-list-page .paper-link { min-height: 40px; padding: 0; border: 0; background: transparent; color: inherit; font-size: inherit; }
-.case-list-page .paper-link:hover { text-decoration: underline; text-underline-offset: 4px; }
+.case-list-page .paper-link { min-height: 44px; min-width: 44px; padding: 0; border: 0; background: transparent; color: inherit; font-size: inherit; }
+@media (hover: hover) and (pointer: fine) { .case-list-page .paper-link:hover { text-decoration: underline; text-underline-offset: 4px; } }
 .case-list-page .mast { display: grid; grid-template-columns: 190px minmax(0, 1fr) 190px; align-items: center; gap: 24px; padding: 10px 0 18px; }
-.case-list-page .ear { padding: 10px 12px; border: 1px solid var(--color-border-strong); font-size: var(--text-caption); line-height: 1.55; color: var(--color-muted); }
+/* 양 귀는 같은 폭(위 열 너비) · 같은 높이(더 긴 쪽에 맞춰 늘이고 내용은 가운데) */
+.case-list-page .mast .ear { align-self: center; display: flex; flex-direction: column; justify-content: center; min-height: 64px; } /* 사건 지면 귀(약 64px)와 같은 높이 */
+.case-list-page .ear { padding: 6px 12px; border: 3px double var(--color-border-strong); background: color-mix(in srgb, var(--color-desk-kraft) 9%, var(--color-paper)); font-size: var(--text-caption); line-height: 1.55; color: var(--color-muted); }
 .case-list-page .ear-left { text-align: center; font: 700 14px/1.5 var(--font-heading); color: var(--color-text); }
-.case-list-page .ear-left small { display: block; margin-top: 4px; font: 400 var(--text-caption)/1.4 var(--font-body); color: var(--color-muted); }
-.case-list-page .ear-right b { display: block; margin-bottom: 2px; font: 700 13px/1.4 var(--font-heading); color: var(--color-heading); }
+.case-list-page .ear-right { text-align: center; }
+.case-list-page .ear-right b { display: block; margin-bottom: 2px; font: 700 14px/1.5 var(--font-heading); color: var(--color-heading); }
+.case-list-page .ear-right span { display: block; color: var(--color-text); }
 .case-list-page .brand { text-align: center; }
 .case-list-page .brand h1 { font: 900 92px/1 var(--font-heading); letter-spacing: -.1em; color: var(--color-heading); white-space: nowrap; }
 .case-list-page .brand h1 .law { color: var(--color-label); }
@@ -50,7 +64,6 @@
 .case-list-page .tab[aria-pressed="true"] { color: var(--color-accent); }
 .case-list-page .tab[aria-pressed="true"]::after { content: ''; position: absolute; left: 12px; right: 12px; bottom: 0; height: 2px; background: var(--color-accent); }
 .case-list-page .case-count { font-size: var(--text-caption); color: var(--color-muted); }
-.case-list-page .start-error { margin: 16px 0 0; padding: 12px 16px; border: 1px solid var(--color-danger-border); border-radius: 4px; background: var(--color-danger-tint); color: var(--color-danger); }
 .case-list-page .empty { padding: 56px 0; text-align: center; color: var(--color-muted); }
 
 /* ── 머리기사 제목 (배너) ── */
@@ -69,18 +82,22 @@
 .case-list-page .type-MURDER { background: var(--color-case-murder); }
 .case-list-page .type-FRAUD { background: var(--color-case-fraud); }
 .case-list-page .type-INJURY { background: var(--color-case-injury); }
-.case-list-page .photo { display: block; width: 100%; object-fit: cover; filter: var(--photo-filter); background: var(--color-border); }
+.case-list-page .photo { display: block; width: 100%; height: auto; object-fit: cover; filter: var(--photo-filter); background: var(--color-border); }
+/* 사진 없는 작은 기사: 공용 재연 컷에 인쇄 망점 필터 — 흑백 · 강한 대비 + 망점 무늬를 곱해 옛 신문 사진처럼 */
+.case-list-page .halftone { position: relative; overflow: hidden; margin-bottom: 8px; }
+.case-list-page .halftone .photo { margin: 0; filter: grayscale(1) contrast(1.35) brightness(1.08); }
+.case-list-page .halftone::after { content: ''; position: absolute; inset: 0; pointer-events: none; mix-blend-mode: multiply;
+  background: radial-gradient(circle, color-mix(in srgb, var(--color-text) 55%, transparent) .9px, transparent 1.35px) 0 0 / 3.5px 3.5px; }
 .case-list-page .caption { margin-top: 6px; font-size: var(--text-caption); line-height: 1.5; color: var(--color-muted); }
 .case-list-page .meta { margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--color-border); font-size: var(--text-caption); color: var(--color-muted); }
 .case-list-page .tags { display: block; margin-bottom: 2px; color: var(--color-label); font-weight: 700; }
 .case-list-page .start {
-  align-self: flex-start; display: inline-flex; align-items: center; min-height: 44px; margin-top: 4px; padding: 0;
-  border: 0; border-bottom: 1px solid var(--color-accent); background: transparent; color: var(--color-accent); font-weight: 700; font-size: 14px;
+  /* 이어 읽기 줄(jump line): 웹 버튼 대신 신문의 "(3면에 계속)" — 오른쪽 끝, 기사체, 밑줄은 마우스를 올렸을 때만 */
+  align-self: flex-end; display: inline-flex; align-items: center; min-height: 44px; margin-top: 2px; padding: 0;
+  border: 0; background: transparent; color: var(--color-label); font: 700 13px/1.4 var(--font-article); letter-spacing: -.01em; cursor: pointer;
 }
-.case-list-page .start::before { content: '▶'; margin-right: 8px; font-size: 10px; }
-.case-list-page .start:hover:not(:disabled) { color: var(--color-accent-hover); border-color: var(--color-accent-hover); }
-.case-list-page .start-filled { align-self: stretch; justify-content: center; margin-top: 12px; padding: 0 16px; border: 0; background: var(--color-accent); color: var(--color-on-accent); }
-.case-list-page .start-filled:hover:not(:disabled) { background: var(--color-accent-hover); color: var(--color-on-accent); }
+@media (hover: hover) and (pointer: fine) { .case-list-page .is-pickable:hover .start:not(:disabled), .case-list-page .start:hover:not(:disabled) { color: var(--color-heading); text-decoration: underline; text-underline-offset: 3px; } }
+.case-list-page .start-filled { margin-top: 8px; font-size: 15px; }
 .case-list-page .start:disabled { opacity: .6; }
 
 /* ── 1행: [메인 사진 | 머리기사] — 사진은 머리기사 단 높이에 맞춰 채운다 ── */
@@ -138,10 +155,10 @@
 /* ── 모바일: 사진 → 머리기사 → 추천 사건 → 다른 사건 ── */
 @media (max-width: 768px) {
   .case-list-page .paper { width: 100%; margin: 0; padding: 0 18px; box-shadow: none; }
-  .case-list-page .info-row { flex-wrap: wrap; gap: 0 10px; font-size: 11px; }
+  .case-list-page .info-row { flex-wrap: wrap; gap: 0 10px; font-size: 12px; }
   .case-list-page .info-links { margin-left: auto; gap: 12px; }
   .case-list-page .mast { grid-template-columns: 1fr; padding: 6px 0 14px; }
-  .case-list-page .ear { display: none; }
+  .case-list-page .ear, .case-list-page .mast .ear { display: none; }
   .case-list-page .brand h1 { font-size: 50px; }
   .case-list-page .dateline { font-size: 11px; }
   .case-list-page .dateline span:nth-child(3) { display: none; }
@@ -165,4 +182,46 @@
   .case-list-page .index-grid .article:nth-child(3n) { padding: 0 0 0 12px; border-left: 1px dashed var(--color-border-strong); }
   .case-list-page .index-grid .article:nth-child(odd) { padding: 0 12px 0 0; border-left: 0; }
   .case-list-page .index-grid .dense p { font-size: 14px; }
+}
+
+/* ── 흐름 목업 ② (FE-32): 책상에서 집어 든 신문 ── */
+/* 남불의 안내 + 신문 내려놓기. 지면 위에 붙어 스크롤을 따라온다 */
+.case-list-page .paper-tip {
+  /* 남불의 안내: 지면 위쪽 가장자리에 비스듬히 붙인 메모지(지면과 함께 움직인다). 정보 줄 가운데의 빈 곳에 걸친다 */
+  position: absolute; z-index: 5; top: -18px; left: 50%; translate: -50% 0; rotate: -1.2deg; display: flex; align-items: center; gap: 10px;
+  width: min(500px, 60%); padding: 8px 10px 8px 12px; border-radius: 2px; background: var(--color-desk-note); color: var(--color-desk-note-ink);
+  box-shadow: 0 8px 14px -8px color-mix(in srgb, var(--color-desk-shadow) 60%, transparent);
+}
+.case-list-page .paper-tip::before { content: ''; position: absolute; top: -7px; left: 50%; width: 64px; height: 16px; translate: -50% 0; rotate: 2deg; background: color-mix(in srgb, var(--color-card) 55%, transparent); box-shadow: 0 1px 2px color-mix(in srgb, var(--color-desk-shadow) 20%, transparent); }
+.case-list-page .paper-tip img { width: 36px; height: 36px; flex: none; border-radius: 50%; background: var(--color-stage-face); object-fit: cover; object-position: top; }
+.case-list-page .paper-tip-text { flex: 1; margin: 0; font: 400 19px/1.25 var(--font-hand); word-break: keep-all; }
+.case-list-page .paper-tip-text b { display: block; font: 700 12px/1.4 var(--font-body); color: var(--color-desk-note-pen); }
+.case-list-page .paper-tip-back { min-height: 44px; flex: none; padding: 0 6px; border: 0; background: transparent; color: var(--color-desk-note-pen); font-size: var(--text-caption); font-weight: 700; white-space: nowrap; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+@media (hover: hover) and (pointer: fine) { .case-list-page .paper-tip-back:hover { color: var(--color-desk-note-ink); } }
+.case-list-page .masthead { padding-top: 34px; } /* 메모지가 걸치는 자리 */
+
+/* 기사 고르기: 마우스를 올리면 기사가 살짝 밝아지고 이어 읽기 줄에 밑줄이 생긴다. 고르면 지면이 한 장 넘어간다(utils/pageTurn.js) */
+.case-list-page .is-pickable { position: relative; cursor: pointer; transition: background-color .18s ease-out, outline-color .18s ease-out; }
+@media (hover: hover) and (pointer: fine) { .case-list-page .is-pickable:hover { background-color: color-mix(in srgb, var(--color-desk-kraft) 14%, transparent); outline: 2px solid var(--color-desk-kraft); outline-offset: 4px; } } /* outline은 사진보다 위에 그려진다(inset 그림자는 사진에 가려졌다) */
+.case-list-page .paper-tip { transition: opacity .25s ease-out; }
+.case-list-page.is-picking .paper-tip { opacity: 0; pointer-events: none; }
+.case-list-page .is-picked { outline: 3px solid var(--color-heading); outline-offset: 4px; }
+
+/* 책상에서 집어 들고 오면 지면이 한 번 다가오며 나타난다(S-01 신문 확대의 이어짐) */
+.case-list-page.is-arriving .paper { animation: paper-arrive .5s cubic-bezier(.2, .8, .2, 1); }
+@keyframes paper-arrive { from { opacity: 0; transform: scale(.94); } }
+
+@media (hover: none) {
+  .case-list-page .is-pickable:hover { background-color: transparent; outline: 0; }
+}
+@media (max-width: 720px) {
+  .case-list-page .paper-tip { position: relative; top: auto; left: auto; translate: none; rotate: -.6deg; width: auto; margin: 10px 0 0; }
+  .case-list-page .paper-tip::before { display: none; }
+  .case-list-page .masthead { padding-top: 0; }
+  .case-list-page .paper { background: var(--color-paper); }
+  .case-list-page .paper::after { display: none; } /* 좁은 화면은 접힌 자국 없이(본문 한가운데를 지나간다) */
+}
+@media (prefers-reduced-motion: reduce) {
+  .case-list-page .is-pickable, .case-list-page .paper-tip { transition: none; }
+  .case-list-page.is-arriving .paper { animation: none; }
 }

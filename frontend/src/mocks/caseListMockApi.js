@@ -1,5 +1,6 @@
 import { mockCases } from './caseListMockData.js';
-import { read, storageKey, validState } from './mockExperienceStore.js';
+import { mockOverview } from './overviewMockData.js';
+import { read, restart, storageKey, validState } from './mockExperienceStore.js';
 
 const delay = () => new Promise((resolve) => setTimeout(resolve, 250));
 const crimeTypes = ['MURDER', 'FRAUD', 'INJURY'];
@@ -46,6 +47,22 @@ export async function getCases(crimeType) {
   });
 }
 
+// API 16 — GET /cases/{caseId} (S-20 사건 디테일). API 1 카드 값 + 죄명 · 사건 개요 · 내 상태.
+// 사건 1은 S-03 개요 목(API 4)과 같은 죄명 · 개요를 쓰고, 나머지 사건은 유형별 죄명 · 짧은 소개로 채운다(임의 데이터)
+const CHARGE_NAMES = { MURDER: '살인', FRAUD: '사기', INJURY: '상해' };
+export async function getCaseDetail(caseId) {
+  await delay();
+  const item = mockCases.find((entry) => entry.caseId === caseId);
+  if (!item) fail('CASE_NOT_FOUND', '사건을 찾을 수 없습니다.');
+  const known = caseId === mockOverview.case.caseId ? mockOverview.case : null;
+  return structuredClone({
+    ...item,
+    chargeName: known?.chargeName ?? CHARGE_NAMES[item.crimeType],
+    overview: known?.overview ?? item.shortIntro,
+    myStatus: myStatusOf(caseId),
+  });
+}
+
 // API 2 — POST /cases/{caseId}/experience (있으면 기존 체험을 돌려준다)
 export async function startExperience(caseId) {
   await delay();
@@ -53,7 +70,9 @@ export async function startExperience(caseId) {
     fail('CASE_NOT_FOUND', '사건을 찾을 수 없습니다.');
   }
   if (caseId === 1) {
-    const { status, lastReviewedStep } = read();
+    // 체험 기록이 없으면(myStatus null) 실제 API처럼 새 체험(STARTED, 1막)으로 시작한다. 목 저장소의 초기값(PRE_JUDGED)은
+    // 주소로 S-04 이후 화면을 바로 열 때만 쓴다(FE-32 — S-20 "체험 시작"이 3막으로 건너뛰던 문제)
+    const { status, lastReviewedStep } = myStatusOf(caseId) === null ? restart() : read();
     return { caseId, attemptNo: 1, status, lastReviewedStep, startedAt: new Date().toISOString() };
   }
   if (!startedCases.has(caseId)) {

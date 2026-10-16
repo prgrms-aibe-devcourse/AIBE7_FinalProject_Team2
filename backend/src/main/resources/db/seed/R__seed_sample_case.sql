@@ -43,6 +43,14 @@ BEGIN
         RAISE NOTICE '요약어 UPDATE: % 행 변경', v_updated_rows;
     END IF;
 
+    -- 사건 1 썸네일(BE-78): 재연 일러스트(frontend/public/images/cases/case-1-reenact.webp, FE-32)를 쓴다.
+    -- 위 요약어와 같은 이유로 이미 사건이 들어간 로컬 DB에도 반영한다. 비어 있을 때만 채워
+    -- 관리자 화면(A-11)에서 바꾼 값은 덮어쓰지 않는다.
+    UPDATE legal_case
+    SET thumbnail_url = '/images/cases/case-1-reenact.webp'
+    WHERE title = '빌린 돈 문제로 찾아온 지인을 살해한 사건'
+      AND thumbnail_url IS NULL;
+
     -- 이미 넣었으면 건너뛴다 (반복 실행 대비)
     IF EXISTS (SELECT 1 FROM legal_case WHERE title = '빌린 돈 문제로 찾아온 지인을 살해한 사건') THEN
         RETURN;
@@ -68,7 +76,7 @@ BEGIN
         'HIGH',
         15,
         '피고인이 빌린 돈을 갚지 못해 오래 다투던 지인이 집으로 찾아오자, 말다툼 끝에 집에 있던 흉기로 피해자를 살해하고 구호 조치 없이 집을 나간 사건이다.',
-        NULL,
+        '/images/cases/case-1-reenact.webp',
         NULL,
         '형법 제250조 제1항',
         '사형, 무기 또는 5년 이상의 징역',

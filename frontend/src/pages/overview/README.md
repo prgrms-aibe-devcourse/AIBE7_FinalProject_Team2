@@ -4,7 +4,7 @@
 
 | 파일 | 내용 |
 | --- | --- |
-| `overviewPage.js` | `renderOverviewPage(container, { caseId, api, navigate })` — 화면을 그린다 |
+| `overviewPage.js` | `renderOverviewPage(container, { caseId, api, navigate })` — 화면을 그린다. 1 · 2막 무대 `caseStage` · `mountStagePage` · `scriptFor`는 S-20(사건 정보)도 같이 쓴다(FE-32 — 두 화면이 똑같이 보인다). 대본이 있는 사건의 1 · 2막은 화면 전체가 S-02와 같은 신문 지면이다(무대 `layout: 'paper'`) |
 | `overview.css` | 개요 · 사전 판단 화면 스타일 |
 
 ## 사용하는 API
