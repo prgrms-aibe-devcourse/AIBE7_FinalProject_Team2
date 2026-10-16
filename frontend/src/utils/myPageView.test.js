@@ -1,7 +1,7 @@
 // npm test : 마이페이지 변화 흐름 계산
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { axisSeries, collectionOf, trailLeft, trailSummary } from './myPageView.js';
+import { axisSeries, biggestMove, castOf, collectionOf, trailLeft, trailSummary } from './myPageView.js';
 
 const AXIS = { key: 'APOLOGY_SINCERITY', strict: { name: '행동증명형' }, lenient: { name: '마음신뢰형' } };
 const entry = (value) => ({ axisScores: { APOLOGY_SINCERITY: value } });
@@ -48,4 +48,29 @@ test('collectionOf: 체험을 마친 사건의 일러스트만 모으고 같은 
   assert.equal(rest.length, 0);
   assert.deepEqual(group.items.map((item) => item.src), ['a.png', 'b.webp', 'c.png']);
   assert.deepEqual(collectionOf([], scripts), []);
+});
+
+test('castOf: 대본의 역할 의상을 등장 순서대로 한 번씩 모으고, 역할 의상이 아닌 모습은 뺀다', () => {
+  const script = {
+    acts: {
+      1: { look: { naero: 'idle', nambul: 'role:actor' }, steps: [{ look: { naero: 'role:judge' } }] },
+      2: { steps: [{ look: { nambul: 'role:actor', law: 'role:judge' } }, { look: { naero: 'role:prosecutor' } }] },
+    },
+  };
+  assert.deepEqual(castOf(script).map((item) => item.label), ['남불 · A씨 역', '내로 · 판사', '내로 · 검사']);
+  assert.deepEqual(castOf(undefined), []);
+});
+
+test('collectionOf: 일러스트가 없어도 만난 모습이 있으면 묶음을 만든다', () => {
+  const scripts = { 1: { acts: { 1: { look: { naero: 'role:defense' }, steps: [] } } } };
+  const [group] = collectionOf([{ caseId: 1, title: '사건', status: 'COMPLETED' }], scripts);
+  assert.deepEqual(group.cast.map((item) => item.role), ['defense']);
+  assert.deepEqual(group.items, []);
+});
+
+test('biggestMove: 처음과 마지막 차이가 가장 큰 축을 고르고, 값이 둘 이상인 축이 없으면 null', () => {
+  const axes = [{ key: 'A' }, { key: 'B' }];
+  const history = [{ axisScores: { A: 0.5, B: 0.1 } }, { axisScores: { A: 0.6, B: 0.9 } }];
+  assert.equal(biggestMove(history, axes).axis.key, 'B');
+  assert.equal(biggestMove([history[0]], axes), null);
 });

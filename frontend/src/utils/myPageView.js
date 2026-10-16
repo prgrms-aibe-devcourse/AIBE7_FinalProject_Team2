@@ -28,13 +28,30 @@ export function trailLeft(ratio) {
   return Math.round((1 - ratio) * 100);
 }
 
-// 컬렉션 — 체험을 마친 사건의 대본에 나온 일러스트를 모은다. 같은 그림은 한 장으로 센다.
-// 대본이 없는 사건은 모을 그림이 없으므로 건너뛴다.
+// 이번 사건에서 만난 모습 — 대본에 나온 역할 의상(look "role:…")을 등장 순서대로 모은다. 8막 신문 사진란과 마이페이지가 함께 쓴다
+const CAST_NAMES = { naero: '내로', nambul: '남불' };
+const ROLE_NAMES = { actor: 'A씨 역', prosecutor: '검사', defense: '변호인', judge: '판사' };
+export function castOf(script) {
+  const seen = new Map();
+  Object.values(script?.acts ?? {}).forEach((act) => {
+    [act.look, ...(act.steps ?? []).map((step) => step.look)].forEach((look) => Object.entries(look ?? {}).forEach(([who, value]) => {
+      if (CAST_NAMES[who] && typeof value === 'string' && value.startsWith('role:')) {
+        const role = value.slice(5);
+        seen.set(`${who}:${role}`, { who, role, label: `${CAST_NAMES[who]} · ${ROLE_NAMES[role] ?? role}` });
+      }
+    }));
+  });
+  return [...seen.values()];
+}
+
+// 컬렉션 — 체험을 마친 사건마다 만난 모습(역할 의상)과 대본에 나온 일러스트를 모은다. 같은 그림은 한 장으로 센다.
+// 대본이 없는 사건은 모을 것이 없으므로 건너뛴다.
 export function collectionOf(experiences, scripts) {
   return (experiences ?? [])
     .filter((item) => item.status === 'COMPLETED' && scripts?.[item.caseId])
     .map((item) => {
-      const { paper, evidencePhotos } = scripts[item.caseId];
+      const script = scripts[item.caseId];
+      const { paper, evidencePhotos } = script;
       const seen = new Set();
       const items = [];
       const add = (src, label) => {
@@ -45,7 +62,19 @@ export function collectionOf(experiences, scripts) {
       add(paper?.photo, '신문 1면');
       (paper?.extraPhotos ?? []).forEach((photo, index) => add(photo.src, `연출 컷 ${index + 1}`));
       Object.entries(evidencePhotos ?? {}).forEach(([side, src]) => add(src, `${side} 재연`));
-      return { caseId: item.caseId, title: item.title, items };
+      return { caseId: item.caseId, title: item.title, cast: castOf(script), items };
     })
-    .filter((group) => group.items.length > 0);
+    .filter((group) => group.items.length > 0 || group.cast.length > 0);
+}
+
+// 성향 변화 흐름 미리보기 — 처음과 마지막의 차이가 가장 큰 축(값이 둘 이상인 축만). 없으면 null
+export function biggestMove(history, axes) {
+  let best = null;
+  axes.forEach((axis) => {
+    const points = axisSeries(history, axis.key);
+    if (points.length < 2) return;
+    const moved = Math.abs(points[points.length - 1].ratio - points[0].ratio);
+    if (!best || moved > best.moved) best = { axis, points, moved };
+  });
+  return best;
 }

@@ -98,6 +98,8 @@ body {
   --color-judge-ai: var(--palette-judge-ai);
   --color-judge-court: var(--palette-judge-court);
   --photo-filter: grayscale(1) contrast(1.05);     /* 지면 사진 색보정 (테마마다 톤을 바꿀 수 있다) */
+  --color-cup: var(--palette-mug);                 /* 마이페이지 프로필의 잔 테두리 링(메인 책상 커피잔과 같은 색, FE-44) */
+  --color-cup-rim: var(--palette-mug-rim);
   --color-banner-bg: var(--palette-navy-900);      /* 결과 화면 배너 */
   --color-banner-text: var(--palette-white);
   --color-banner-muted: var(--palette-navy-200);

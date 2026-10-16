@@ -19,6 +19,31 @@
 .page-turn-shade { position: absolute; inset: 0; opacity: 0; background: linear-gradient(90deg, transparent 15%, color-mix(in srgb, var(--color-desk-shadow) 75%, transparent) 100%); }
 .page-turn-shade.is-back { background: linear-gradient(270deg, transparent 15%, color-mix(in srgb, var(--color-desk-shadow) 75%, transparent) 100%); }
 
+/* 메인 책상 커피잔 → 마이페이지 (utils/coffeeDive.js). 잔 · 커피 색은 책상 그림과 같다. 커피 표면은 물결 고리가 아주 천천히 번지고,
+   빛 반사가 조금 흔들린다(일렁임). 고리는 바깥으로만 번지며 흐려진다(되돌아오는 맥동 · 과녁 무늬가 되지 않게 고리는 성기고 옅게). 움직임 줄이기면 연출 자체를 하지 않는다(landingPage.js) */
+.coffee-dive-layer { position: fixed; inset: 0; z-index: 1000; overflow: hidden; pointer-events: none; }
+.coffee-dive-mug {
+  position: absolute; border-radius: 50%; transform-origin: 50% 50%; will-change: transform;
+  background: var(--color-desk-mug); box-shadow: inset 0 0 0 var(--rim) var(--color-desk-mug-rim); /* --rim: 잔 지름의 7.5%(책상 잔 120px에 9px), coffeeDive.js가 넣는다 */
+}
+.coffee-dive-surface {
+  position: absolute; overflow: hidden; border-radius: 50%;
+  background: radial-gradient(circle at 50% 50%, var(--color-desk-coffee) 0 45%, var(--color-desk-coffee-dark));
+}
+.coffee-dive-surface::before, .coffee-dive-surface::after { content: ''; position: absolute; border-radius: 50%; }
+.coffee-dive-surface::before {
+  inset: -12%; opacity: 0;
+  background: repeating-radial-gradient(circle at 50% 50%, transparent 0 20%, color-mix(in srgb, var(--color-desk-coffee-light) 14%, transparent) 22%, transparent 25%);
+  animation: coffee-ripple 1.8s ease-out infinite;
+}
+.coffee-dive-surface::after {
+  left: 22%; top: 18%; width: 30%; height: 26%;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--color-desk-coffee-light) 75%, transparent), transparent);
+  animation: coffee-glint 1.3s ease-in-out infinite alternate;
+}
+@keyframes coffee-ripple { 0% { transform: scale(.9); opacity: 0; } 30% { opacity: .8; } 100% { transform: scale(1.25); opacity: 0; } }
+@keyframes coffee-glint { from { transform: translate(0, 0) scale(1, 1); } to { transform: translate(4%, 3%) scale(1.08, .94); } }
+
 /* 8막 신문 → 메인 책상 (utils/paperHandoff.js · landingPage.js). 지금 보던 지면을 본뜬 한 장이 책상 위 신문 자리로 물러난 뒤 뒤집힌다 */
 .paper-hand-layer { position: fixed; inset: 0; z-index: 1000; overflow: hidden; pointer-events: none; perspective: 1800px; }
 .paper-hand-shade { position: absolute; inset: 0; }
