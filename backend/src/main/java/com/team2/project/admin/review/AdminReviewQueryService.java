@@ -211,7 +211,7 @@ public class AdminReviewQueryService {
 	private static FactorItem factor(Factor factor) {
 		return new FactorItem(factor.getId(), factor.getDisplayOrder(), factor.getLabel(), factor.getPreLabel(),
 			factor.getRevealStage(), factor.getSummaryTag(), factor.getValueAxis(), factor.getValueAxisStatus(),
-			factor.getValueAxisVotes());
+			factor.getValueAxisVotes(), factor.getSummaryTagCandidates());
 	}
 
 	private static OffsetDateTime kst(Instant instant) {

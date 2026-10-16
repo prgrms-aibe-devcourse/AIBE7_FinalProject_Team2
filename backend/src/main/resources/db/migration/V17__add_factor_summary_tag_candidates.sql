@@ -1,0 +1,12 @@
+-- V17__add_factor_summary_tag_candidates.sql
+-- 판단 요소 요약어 후보 (BE-80, BE-53 후속). 관리자 후검수 화면(A-6)에서 요약어를 정리할 때 근거로 보여 준다.
+-- 파이프라인 extract가 요약어를 공개 기준 목록(tools/ai-judgment/summary_tags.json)과 임베딩으로 비교한 결과다.
+-- 요약어(summary_tag)는 바꾸지 않고 제안만 한다 — 최종 판단은 관리자가 한다.
+--   예: {"candidates": [{"tag": "흉기 사용", "score": 0.9312}], "inVocabulary": false, "ambiguous": false, "suggested": "흉기 사용"}
+--   candidates: 비슷한 기준 요약어 상위 N개(점수 높은 순, cosine)
+--   inVocabulary: 요약어가 기준 목록에 글자 그대로 있음
+--   ambiguous: 1 · 2순위 점수 차가 작아(0.01 미만) 제안하지 않음
+--   suggested: 목록에 없고 애매하지 않고 기준 점수 이상인 기준 요약어(없으면 null)
+-- 후보 계산을 켜지 않은 적재 · 사람 초안 · 기존 행은 NULL이다.
+-- 추가만 하는 변경이라 이전 앱으로 되돌려도 뜬다(BE-60 자동 배포 되돌림).
+ALTER TABLE factor ADD COLUMN summary_tag_candidates jsonb;
