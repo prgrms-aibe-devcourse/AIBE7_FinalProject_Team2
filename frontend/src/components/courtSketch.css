@@ -145,6 +145,14 @@ html:has(.comparison-full .stage-wrap:not(.reading-paper)) { overflow: hidden; }
 .stage-wrap .sheet-close { display: none; }
 .comparison-full .stage-wrap.reading-paper .stage { position: relative; inset: auto; height: auto; overflow: visible; }
 .comparison-full .stage-wrap.reading-paper .scene, .comparison-full .stage-wrap.reading-paper .stage[data-scene] .scene { position: relative; inset: auto; overflow: visible; cursor: default; }
+/* 8막 조작 줄(FE-48): 1 · 2막 신문 무대와 같이 화면 맨 아래 가로 전체 종이 띠, 캐릭터보다 위. 버튼은 대사창 폭에 맞춘다 */
+.comparison-full .stage-wrap .ctrl {
+  left: 0; right: 0; bottom: 0; translate: none; width: auto;
+  padding: 6px max(12px, calc((100vw - var(--dock-w)) / 2)) calc(6px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid color-mix(in srgb, var(--color-text) 22%, transparent); border-radius: 0; background: var(--color-paper);
+  box-shadow: 0 -10px 24px -18px color-mix(in srgb, var(--color-desk-shadow) 70%, transparent);
+}
+@media (max-width: 680px) { .comparison-full .stage-wrap .ctrl { padding: 6px 10px calc(6px + env(safe-area-inset-bottom, 0px)); } }
 .comparison-full .stage-wrap.reading-paper .ctrl, .comparison-full .stage-wrap.reading-paper .stage > :not(.scene), .comparison-full .stage-wrap.reading-paper .scene > :is(.bg, :not(.sheet)) { display: none !important; } /* 지면 안 사진(법정 그림)은 그대로 */
 .comparison-full .stage-wrap.reading-paper .sheet { --u: min(10px, calc((100vw - 32px) / 118)); position: relative; left: auto; top: auto; margin: 28px auto 40px; transform: none !important; }
 .comparison-full .stage-wrap.reading-paper .sheet:focus { outline: none; }

@@ -78,7 +78,7 @@ export async function renderReviewPage(container, { caseId, caseHeader, api, nav
       await api.postReviewStep(caseId, step);
       if (!active()) return;
       if (step === 4) {
-        navigate('summary');
+        navigate('verdict'); // 4막(판결 전 정리)은 5막 파일철의 "사건 요약" 장으로 옮겨 건너뛴다(FE-48)
       } else {
         const data = await api.getReview(caseId);
         if (active()) draw(data, true);
@@ -115,7 +115,7 @@ export async function renderReviewPage(container, { caseId, caseHeader, api, nav
         try {
           await api.postReviewStep(caseId, step);
           if (step !== 4) return true;
-          if (active()) navigate('summary');
+          if (active()) navigate('verdict'); // 4막은 건너뛴다(FE-48)
           return false;
         } catch (error) {
           if (error?.code === 'STEP_OUT_OF_ORDER') await load();
@@ -199,7 +199,7 @@ export async function renderReviewPage(container, { caseId, caseHeader, api, nav
     main.append(accordion);
     if (data.status === 'REVIEWED') {
       const actions = element('div', 'section-actions');
-      actions.append(button('판결 전 최종 정리로', () => navigate('summary'), 'primary-button'));
+      actions.append(button('판결로', () => navigate('verdict'), 'primary-button'));
       main.append(actions);
     }
     layout.append(main);

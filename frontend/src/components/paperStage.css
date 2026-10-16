@@ -252,8 +252,19 @@
 .stage-wrap.paper-mode .stage[data-scene] .spr.dim { translate: -50% 26px; }
 .stage-wrap.paper-mode .stage[data-scene] .spr.dim .spr-img { filter: brightness(.72) saturate(.55); transform: none; }
 .stage-wrap.paper-mode .stage[data-scene] .spr:not(.dim) { translate: -50% -6px; }
-/* 조작 줄: 알약 대신 종이 띠 */
-.stage-wrap.paper-mode .ctrl { border-radius: 10px; border: 1px solid color-mix(in srgb, var(--color-text) 25%, transparent); background: var(--color-paper); }
+/* 조작 줄(FE-48): 화면 맨 아래 가로 전체를 차지하는 종이 띠. 캐릭터보다 위에 겹치고(캐릭터 발은 띠 뒤로 들어간다),
+   안의 버튼은 대사창 폭에 맞춰 놓는다(양옆 여백 = 화면 폭 - 대사창 폭의 절반). 아이폰 홈 바 높이만큼 아래를 더 띄운다 */
+.stage-wrap.paper-mode .ctrl {
+  left: 0; right: 0; bottom: 0; translate: none; width: auto; min-height: 0;
+  padding: 6px max(12px, calc((100vw - var(--dock-w)) / 2)) calc(6px + var(--safe-bottom));
+  border: 0; border-top: 1px solid color-mix(in srgb, var(--color-text) 22%, transparent); border-radius: 0; background: var(--color-paper);
+  box-shadow: 0 -10px 24px -18px color-mix(in srgb, var(--color-desk-shadow) 70%, transparent);
+}
+.stage-wrap.paper-mode:has(.stage.bmode) .ctrl { z-index: 28; } /* 판결 보드를 띄운 장면에서도 캐릭터(27)보다 위 */
+@media (max-width: 680px) {
+  .stage-wrap.paper-mode .ctrl { padding: 6px 10px calc(6px + var(--safe-bottom)); }
+  .stage-wrap.paper-mode .dlg { bottom: calc(64px + var(--safe-bottom)); }
+}
 @media (max-width: 680px) {
   /* 좁은 화면: 캐릭터는 말풍선 위 양 끝에서 머리만 내밀고(아래는 말풍선 뒤), 꼬리는 위쪽 말하는 쪽으로 */
   .stage-wrap.paper-mode .stage[data-scene] .spr, .stage-wrap.paper-mode .stage[data-scene] .spr.role { --l: 52px; --r: calc(100% - 52px); bottom: calc(146px + var(--safe-bottom)); height: 116px; }

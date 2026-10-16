@@ -54,9 +54,63 @@
   background: var(--color-desk-kraft); box-shadow: inset 0 1px 2px color-mix(in srgb, var(--color-desk-shadow) 45%, transparent), 0 96px 0 var(--color-desk-kraft);
 }
 .verdict-page .folder-sheet[hidden] { display: none; }
+.verdict-page .folder-sheet:has(> .folder-curl) { padding-bottom: 72px; } /* 오른쪽 아래 말린 모서리 자리 */
+
+/* 아직 안 본 장의 탭 · 확정할 수 없는 서명란: 짧게 움찔(좌우 흔들림, 0.32초) */
+.verdict-page .is-denied { animation: folder-deny .32s cubic-bezier(.36, .07, .19, .97); }
+@keyframes folder-deny { 20% { translate: -4px 0; } 40% { translate: 4px 0; } 60% { translate: -3px 0; } 80% { translate: 2px 0; } }
+.verdict-page .folder-tab[aria-disabled='true'] { color: color-mix(in srgb, var(--color-heading) 55%, transparent); cursor: not-allowed; }
+
+/* 말린 모서리(다음 장으로 넘기기): 종이 오른쪽 아래가 대각선으로 접혀 들려 있다. 접힌 자리에는 아래 서류철(크라프트)이 보이고,
+   들린 자락은 종이 뒷면(조금 어둡게)이다. 마우스를 올리면 자락이 바람에 날리듯 넘실거린다 */
+.verdict-page .folder-curl {
+  position: absolute; right: -1px; bottom: -1px; width: 64px; height: 64px; padding: 0; border: 0; background: none; cursor: pointer;
+  transform-origin: 100% 100%; transition: scale .18s cubic-bezier(.2, .8, .2, 1);
+}
+.verdict-page .folder-curl::before { content: ''; position: absolute; inset: 0; background: var(--color-desk-kraft); clip-path: polygon(100% 0, 100% 100%, 0 100%); }
+.verdict-page .folder-curl::after {
+  content: ''; position: absolute; inset: 0; clip-path: polygon(0 0, 100% 0, 0 100%);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--color-desk-sheet) 82%, var(--color-desk-shadow)) 10%, var(--color-desk-sheet) 46%, color-mix(in srgb, var(--color-desk-sheet) 72%, var(--color-desk-shadow)) 50%);
+}
+.verdict-page .folder-curl:active { scale: .96; }
+.verdict-page .folder-curl:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+@media (hover: hover) and (pointer: fine) {
+  .verdict-page .folder-curl:hover { animation: folder-curl-wave 1.4s ease-in-out infinite; }
+}
+@keyframes folder-curl-wave { 0%, 100% { scale: 1.06; rotate: 0deg; } 35% { scale: 1.16; rotate: -2deg; } 70% { scale: 1.1; rotate: 1deg; } }
+
+/* 첫 장: 사건 요약(사건 개요 · 핵심 사실) */
+.verdict-page .summary-block { margin-top: 18px; }
+.verdict-page .summary-block p { margin: 0 0 .6em; font: 400 15px/1.8 var(--font-article); text-wrap: pretty; }
+.verdict-page .summary-facts { margin: 0; padding-left: 1.2em; }
+.verdict-page .summary-facts li { margin: .3em 0; font: 400 15px/1.7 var(--font-article); }
+.verdict-page .sign-subtitle { margin: 0 0 8px; font: 800 16px/1.4 var(--font-heading); color: var(--color-heading); }
+
+/* 마지막 장: 판결 확정(정한 내용 · 주의사항 · 서명) */
+.verdict-page .sign-summary { display: grid; grid-template-columns: minmax(96px, max-content) minmax(0, 1fr); gap: 8px 20px; margin: 16px 0 20px; padding: 14px 0; border-block: 3px double var(--color-desk-sheet-line); }
+.verdict-page .sign-summary dt { color: var(--color-muted); font-size: 14px; }
+.verdict-page .sign-summary dd { margin: 0; font: 700 15px/1.5 var(--font-heading); color: var(--color-heading); }
+.verdict-page .sign-summary ul { margin: 0; padding-left: 1.1em; font-weight: 600; }
+.verdict-page .sign-cautions { margin: 0 0 16px; padding-left: 1.2em; font-size: 14px; }
+.verdict-page .sign-reason { margin: 0 0 10px; color: var(--color-caution); font-size: 14px; font-weight: 700; }
+.verdict-page .sign-reason:empty { display: none; }
+.verdict-page .sign-row { display: flex; align-items: flex-end; justify-content: flex-end; gap: 12px; margin-top: 8px; }
+.verdict-page .sign-role, .verdict-page .sign-seal { flex: none; padding-bottom: 8px; white-space: nowrap; font: 700 15px/1 var(--font-heading); color: var(--color-heading); }
+.verdict-page .sign-seal { color: var(--color-muted); font-weight: 400; }
+/* 서명란: 밑줄 위를 누르면 서명 획이 그려진다 */
+.verdict-page .sign-line {
+  position: relative; flex: 0 1 260px; min-width: 0; min-height: 64px; padding: 0; border: 0; border-bottom: 1.5px solid var(--color-heading);
+  background: none; cursor: pointer;
+}
+.verdict-page .sign-line:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 4px; }
+.verdict-page .sign-hint { position: absolute; left: 0; right: 0; bottom: 10px; text-align: center; font: 400 20px/1 var(--font-hand); color: var(--color-muted); transition: opacity .2s ease-out; }
+@media (hover: hover) and (pointer: fine) { .verdict-page .sign-line:not(:disabled):hover .sign-hint { color: var(--color-heading); } }
+.verdict-page .sign-ink { position: absolute; inset: 0 0 4px; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.verdict-page .sign-ink path { fill: none; stroke: var(--color-desk-note-pen); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; stroke-dashoffset: 1; }
+.verdict-page .sign-row.is-signed .sign-ink path { stroke-dashoffset: 0; transition: stroke-dashoffset .9s cubic-bezier(.45, .05, .55, .95); }
+.verdict-page .sign-row.is-signed .sign-hint { opacity: 0; }
+.verdict-page .sign-line:disabled { cursor: progress; opacity: 1; }
 .verdict-page .folder-title { margin: 0 0 6px; font: 900 24px/1.25 var(--font-heading); letter-spacing: -.02em; color: var(--color-heading); }
-/* 앞의 두 장 맨 아래: 다음 장으로 넘기기 */
-.verdict-page .folder-next { display: flex; justify-content: flex-end; margin-top: 20px; padding-top: 14px; border-top: 1px dashed var(--color-desk-sheet-line); }
 /* 지금 고를 수 없는 것(감경 · 감경 후 형벌 · 형량 막대)은 회색으로 두고 누르지 않는다 */
 .verdict-page :is(.reduction-toggle, .reduction-option).is-disabled { color: var(--color-muted); font-weight: 600; cursor: not-allowed; }
 .verdict-page .range-slider.is-off .recommended-range { opacity: .55; filter: grayscale(1); cursor: not-allowed; user-select: none; }
@@ -133,11 +187,6 @@
 .verdict-page .factor-button[aria-pressed='true'] { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-on-accent); }
 .verdict-page .factor-button[data-direction='UP'][aria-pressed='true'] { background: var(--color-factor-heavy-tint); border-color: var(--color-factor-heavy); color: var(--color-factor-heavy); }
 .verdict-page .factor-button[data-direction='DOWN'][aria-pressed='true'] { background: var(--color-factor-light-tint); border-color: var(--color-factor-light); color: var(--color-factor-light); }
-.verdict-page .verdict-submit { border-top: 1px solid var(--color-border); padding-top: 22px; display: flex; align-items: center; justify-content: flex-end; gap: 16px; }
-.verdict-page .confirmation-box { margin-top: 22px; padding: 18px 0 0; border-top: 3px double var(--color-heading); }
-.verdict-page .confirmation-box h2 { margin-bottom: 8px; font: 800 18px/1.4 var(--font-heading); color: var(--color-heading); }
-.verdict-page .confirmation-box p { font-size: 14px; }
-.verdict-page .confirmation-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
 .verdict-page .verdict-sidebar { min-width: 0; }
 /* 2페이지 참고 정보: 상자 없이 종이 위 조판(겹줄 · 괘선으로 구분) */
 .verdict-page .verdict-sidebar :is(.law-info-box, .recommended-range) { padding: 0 0 18px; border: 0; border-radius: 0; background: none; }
@@ -152,11 +201,18 @@
 .verdict-page .folder-tab:disabled { opacity: 1; }
 /* 터치 화면: 판단 요소 · 집행유예 년 버튼도 44px */
 @media (pointer: coarse) { .verdict-page .factor-button { min-height: 44px; } }
-@media (prefers-reduced-motion: reduce) { .verdict-page .folder-tab { transition: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .verdict-page :is(.folder-tab, .folder-curl, .sign-hint) { transition: none; }
+  .verdict-page .folder-curl:hover { animation: none; }
+  .verdict-page .sign-row.is-signed .sign-ink path { transition: none; }
+}
 @media (max-width: 600px) {
   .verdict-page .sentence-entry { float: none; display: flex; margin: 0 0 10px; }
   .verdict-page .folder-tabs { padding-left: 10px; }
   .verdict-page .folder-tab { flex: 1; justify-content: center; padding: 10px 6px 9px; white-space: nowrap; }
+  /* 탭 다섯 장이 한 줄에 들어가게: 고른 장만 번호 + 이름, 나머지는 번호만(이름은 화면 읽기 프로그램용으로 남긴다) */
+  .verdict-page .folder-tab[aria-selected='false'] { flex: 0 0 44px; }
+  .verdict-page .folder-tab[aria-selected='false'] > span:not(.folder-tab-no) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .verdict-page .folder-body { padding: 6px; border-radius: 8px; }
   .verdict-page .folder-sheet { min-height: 0; padding: 20px 16px 22px 34px; }
   .verdict-page .folder-sheet::before { left: 11px; top: 56px; width: 10px; height: 10px; }
@@ -165,7 +221,4 @@
   .verdict-page .factor-row { flex-direction: column; align-items: stretch; gap: 10px; }
   .verdict-page .factor-actions { justify-content: flex-end; }
   .verdict-page .number-field input { width: 88px; }
-  .verdict-page .verdict-submit { flex-direction: column; align-items: stretch; gap: 10px; }
-  .verdict-page .confirmation-box { padding: 18px; }
-  .verdict-page .confirmation-actions { flex-direction: column; }
 }
