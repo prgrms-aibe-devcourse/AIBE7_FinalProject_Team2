@@ -29,6 +29,10 @@
 | v0.23 | 2026-10-14 | C3 `trio-thinking` 후처리 완료(마스코트를 줄여 로울 1.92배 · 같은 바닥선). 남은 후처리 · 변환 없음 |
 | v0.24 | 2026-10-14 | **폴더 · 파일 이름 변경**: `discard/` → `discard/`, `staging/` → `staging/`, 모든 원본 파일(정식 · 폐기 · `_original`)을 폴더 없이 역할을 알 수 있는 이름으로 변경(263개, 해시 확인), 문서 경로 갱신 |
 | v0.25 | 2026-10-14 | **성향 이미지 번호를 `01 ~ 32`로 통일**(번호표 v0.4) — 변형 접미사 `-2` 폐지, 내로 `01 ~ 16` · 남불 `17 ~ 32`. D1 · D2 이름 · 설명 갱신. 화면에는 유형마다 기본 캐릭터 하나만 보여 주고(하드코딩), OG는 유형별 그 이미지로 고정 |
+| v0.26 | 2026-10-15 | **10/15 이관 결정**(COMMON-35) — 생성은 GPT Pro 팀원(김현중, gpt image 2.0)이 맡고 지금 이미지는 유지(재생성은 최종 디테일 때), 1장 생성 방식 · 배경(모두 투명, 신문 느낌은 후보정) 갱신. A6 마스코트 로 6장 추가, G2 · G6을 이관 묶음으로 당김, G7 · G8(데포르메별 자세 · 표정, 캐릭터 카드) 추가. 사건 1 첫 샘플은 E1-공용 세트 2로 옮기고 E1 사건 1은 새 의상 · 극적 연출로 새로 생성 |
+| v0.27 | 2026-10-15 | **추가 생성 목록 H** 정리(COMMON-35) — 1순위: H0 데포르메 묶음 시트(11종을 한 장에, 느낌 보고 결정) · H1 의상 시트(로 포함 5장) · H2 마스코트 로 컷 · H3 역할 의상 정식 컷(지금은 시트에서 잘라 씀), 2순위: H4 사건별 재연 + 사건 배역 컷, 3순위: H5 ~ H9(G1 · G7 · G8 등을 옮김). 파일 이름 규칙에 `cut-mascot` · `cut-role-{역할}` · `sheet_deform-lineup` · `sheet_wardrobe` 추가 |
+| v0.28 | 2026-10-15 | 1차 · 2차 지시서와 맞춤 — 항목마다 지시서 묶음 · 완성 프롬프트(프롬프트 모음 10장) · 결과를 올릴 공개 레포 경로를 적고, H0 ~ H3 · H4(사건 1 배역 컷)를 🟨 이관으로 |
+| v0.29 | 2026-10-15 | PR #149 리뷰 결정(COMMON-35): 재연 컷 "양쪽 감정을 같은 무게로" 규칙 철회(이미지가 판결에 미칠 영향은 추후 필요 시 조절), 공용 컷 세트 2는 오차를 감수하고 공용으로 유지(추후 백엔드: 파일명에 상황 설명 + 사건별 자동 매칭), 지시서 · HTML 보고서 대신 수작업(`작업-가이드.md`)으로 진행 |
 
 > 형식 · 이름 규칙 · 검수 기준은 [캐릭터 에셋 아키텍처](character-asset-architecture.md)가 기준이다(시트 2-2 · 장면 · 감정 코드 3-2 · 상황 4-1 · 크기 6-5 · 검수 7-2). 이 문서는 **무엇을 몇 장 만들고 어디까지 했는지**만 적는다.
 > 캐릭터 설정은 [캐릭터 프로필 · 세계관](character-profile-worldview.md), 성향 이미지 번호는 [성향 이미지 번호표](personality-image-numbers.md)가 기준이다.
@@ -42,11 +46,13 @@
 > - `cuts/{캐릭터}/base/{캐릭터}_cut_{장면}-{감정}.png` · `cuts/{캐릭터}/icon/{캐릭터}_icon_face-{감정}.png` — 아키텍처 6-4와 같은 구조(웹 변환 전 PNG). 로 합의 컷은 `cuts/trio/`, 내로 · 남불 · 로 비교 컷은 `cuts/compare/` 성향 결과 컷은 `cuts/personality/personality-{01 ~ 16}_{캐릭터}_{밈}.png`(기본 · 반대편 캐릭터가 각각 한 장씩, 번호 · 밈은 번호표 기준) 사건 재연 컷은 `cuts/reenact/case-{caseId}/`(아키텍처 6-4), **사건 이미지가 없을 때 대신 쓰는 공용 컷**은 `cuts/reenact/common/{headline · sub-1 · detail-1}.png`. 연기 시트는 `sheets/acting/{naero · nambul · law-scale · law-gavel · law-book}_sheet_acting.png`, 역할 의상 시트는 `sheets/role-outfits/{naero · nambul}.png` 데포르메 대표 시트는 `sheets/deform/{naero · nambul}-{ranma · cheek · ppg}.png`
 > - `_original/`(`character/` 바로 아래) 생성 직후 원본 114장 보관(`original_` 접두사, 재생성 이력은 `_v1` `_v2`). 다른 폴더에 둔 정식 파일의 사본이다. 원본 백업은 공개 레포 `NaeLawNamBul_Images`에도 올렸다(10/14, 새 이름 구조로 반영 완료). 컷 PNG는 4:5(1122 × 1402)로 캔버스를 맞췄다(그림은 늘리거나 줄이지 않고 투명 여백만 추가)
 
-> **파일 이름 규칙 (10/14, 폴더 없이 파일 이름만으로 역할을 알 수 있게)**: `{대상}_{종류}_{세부}.png` — 대상 `naero` · `nambul` · `law-scale` · `law-gavel` · `law-book` · `trio` · `compare` · `reenact-common` · `personality-{번호}`, 종류 `standing` · `sheet`(`reference` · `acting` · `role-outfits` · `deform-{ranma|cheek|ppg}`) · `cut` · `cut-cheek` · `icon`. 예: `naero_standing.png`, `law-gavel_sheet_reference.png`, `nambul_cut_guide-neutral.png`, `naero_icon_face-cheer.png`, `personality-06_naero_pinky-promise.png`, `trio_cut_idle.png`. 폐기는 `discard_` 접두사 + `_v1` · `_tryN-이유`, 원본은 `original_` 접두사. 옛 이름 → 새 이름은 `rename-map`(`Claude outputs/character/rename-map_2026-10-14.csv`). 웹용 webp 이름 규칙(`{장면}-{감정}.webp` · `01.webp`)은 바뀌지 않았다.
+> **파일 이름 규칙 (10/14, 폴더 없이 파일 이름만으로 역할을 알 수 있게)**: `{대상}_{종류}_{세부}.png` — 대상 `naero` · `nambul` · `law-scale` · `law-gavel` · `law-book` · `trio` · `compare` · `reenact-common` · `personality-{번호}`, 종류 `standing` · `sheet`(`reference` · `acting` · `role-outfits` · `deform-{ranma|cheek|ppg}`) · `cut` · `cut-cheek` · `icon`. 예: `naero_standing.png`, `law-gavel_sheet_reference.png`, `nambul_cut_guide-neutral.png`, `naero_icon_face-cheer.png`, `personality-06_naero_pinky-promise.png`, `trio_cut_idle.png`. 폐기는 `discard_` 접두사 + `_v1` · `_tryN-이유`, 원본은 `original_` 접두사. 옛 이름 → 새 이름은 `rename-map`(`Claude outputs/character/rename-map_2026-10-14.csv`). 웹용 webp 이름 규칙(`{장면}-{감정}.webp` · `01.webp`)은 바뀌지 않았다. **10/15 추가**: 마스코트 로 컷 `{law-*}_cut-mascot_{장면}-{감정}.png`(로 셋 함께는 `trio_cut-mascot_{장면}.png`), 역할 의상 컷 `{naero · nambul}_cut-role-{judge · prosecutor · defense · actor}_{장면}-{감정}.png`, 사건 배역 컷 `{naero · nambul}_cut-role-case-{caseId}_{장면}-{감정}.png`, 데포르메 묶음 시트 `{캐릭터}_sheet_deform-lineup.png`, 의상 시트 `{캐릭터}_sheet_wardrobe.png`.
 
 **상태 표기**: ⬜ 대기 · 🟨 생성 중 · 🟦 검수 중 · ✅ 완료
 
-> **지금 만드는 이미지는 샘플이다.** 현재 생성 모델이 프롬프트를 그대로 살리지 못하는 경우가 많아 화면 · 흐름 확인용 샘플로 쓰고, 더 좋은 모델로 바꾸면 같은 프롬프트로 다시 만든다. ✅도 "샘플 기준 완료"라는 뜻이다.
+> **지금 이미지는 그대로 쓴다(10/15).** 지금까지 만든 이미지도 gpt image 2.0으로 뽑아 품질이 충분하므로 다시 뽑지 않고, **없는 이미지만** 새로 만든다. 다시 뽑는 것은 최종 디테일을 잡을 때 한다(그때 시트 · 스탠딩 몇 장을 품질별로 뽑아 비교해 품질을 정한다). ✅는 "지금 이미지 기준 완료"라는 뜻이다.
+> **생성은 GPT Pro 팀원(김현중)이 맡는다(10/15).** **수작업으로 진행한다**(`Claude outputs/character/manual-run-sheet_2026-10-15/작업-가이드.md`, 김현중 후순위 작업). 처음 만든 1차(19장) · 2차(32장) 지시서(`gpt-handover_2026-10-15/` · `_2/`, 커밋 안 함)와 묶음별 HTML 보고서는 **쓰지 않는다**. 완성 프롬프트는 [프롬프트 모음](character-image-prompts.md) 10장에 있다. 생성 설정은 1장 "생성" 행.
+> **검수를 통과한 결과는 공개 레포 `NaeLawNamBul_Images`에 올린다.** 마스코트 로(A6)는 2차 지시서가 그 경로를 첨부하므로 통과하면 바로 올린다(각 행의 "올릴 곳").
 
 ---
 
@@ -56,14 +62,15 @@
 | --- | --- |
 | 장면 컷 | 4:5, 투명 webp 800 × 1000(품질 85), 원본 투명 PNG 2048 × 2560. 파일 이름 `{장면}-{감정}.webp` |
 | 아이콘 | 1:1, 투명 webp 128 × 128(64 px로 줄여서 확인), 원본 512 × 512. 파일 이름 `face-{감정}.webp` |
-| 재연 컷 | 4:3 · 16:9, webp 1200 × 900 · 1600 × 900. 신문지색 배경 그대로, 흑백 필터로 확인 |
-| 시트 | 16:9, 신문지색 `#ECE2D4` 배경. 웹에는 넣지 않는다 |
-| 생성 배경 | 장면 컷 · 아이콘은 크로마 그린 `#00B140`으로 만들고 배경을 지운다. 캐릭터 · 소품에 초록을 쓰지 않는다 |
+| 재연 컷 | 16:9(필요하면 4:3), webp 1600 × 900 · 1200 × 900. **투명 배경**에 캐릭터와 필요한 소품만, 신문 느낌은 후보정, 흑백 필터로 확인. 10/14 이전 컷은 신문지색 배경 |
+| 시트 | 16:9, **투명 배경**(10/14 이전 시트는 신문지색 `#ECE2D4`). 웹에는 넣지 않는다 |
+| 생성 배경 | **모든 이미지를 투명 배경으로 바로 뽑는다**(10/15, 프롬프트 모음 9-7 `BG`). 투명 출력이 안 되면 크로마 그린 `#00B140`으로 뽑아 배경을 지운다(그때는 캐릭터 · 소품에 초록을 쓰지 않는다) |
+| 생성 (10/15) | gpt image 2.0, 품질은 기본 medium(토큰 사용량에 맞춰 조절), 다른 이미지의 기준이 되는 이미지는 high. 프롬프트 1개당 1장, 다시 뽑는 것은 검수 지시마다 1회(파일 이름 뒤 `_r1` · `_r2`). 첨부는 공개 레포 `NaeLawNamBul_Images`의 정식 파일만(폐기 자료 금지). 비율이 다르게 나오면 캔버스를 맞춘다 |
 | 글자 | 이미지 안에 글자 · 숫자 · 로고를 넣지 않는다(말풍선 · 이름표는 웹 UI) |
 | 판결 전 화면 | 로는 저울 1인 · 수평(`neutral`)만 |
 | 봉투 | 로는 **빈손이 기본**. 판결문 봉투는 `deliver`(발표 · 로딩 끝)에서만 든다(10/14) |
 | 표정 | 화난 표정(`angry`)은 만들지 않는다 |
-| 키 | 내로 120 · 남불 120 · 로 저울 230 · 법봉 190 · 법전 210(같은 바닥선, 아키텍처 2-5) |
+| 키 | 내로 120 · 남불 120 · 로 저울 230 · 법봉 190 · 법전 210(같은 바닥선, 아키텍처 2-5). **마스코트 로**(A6)는 로울 180 · 로북 170 · 로봉 160 |
 | 로 이름 | 로울 = 저울(`law-scale`) · 로봉 = 법봉(`law-gavel`) · 로북 = 법전(`law-book`). 파일 · 폴더에는 코드를 쓴다. 판결 화면에서는 이름 대신 "AI 판사"(이미지에는 원래 글자를 넣지 않는다) |
 
 ---
@@ -84,6 +91,7 @@
 | A5 | **캐릭터별 기준 시트** (내로 · 남불 · 로울 · 로봉) | 4 | 시트 | 10/14 결정: 기준 시트는 **한 장에 한 캐릭터**(아키텍처 2-1 "캐릭터마다 1장"). 로북은 이미 1인 시트(A1 · R2). 칸은 정면 전신 · 턴어라운드 4칸(앞 · 3/4 · 옆 · 뒤) · 표정 6종(마스코트) 또는 자세 6종(로) · 그 캐릭터 색만 있는 색 견본, **키 비교 칸 없음**, 로는 빈손 기본 + 봉투는 한 칸만. **10/14 검수**: **내로 · 남불 · 로울 3장 통과** → `sheets/{naero · nambul · law-scale}_sheet_reference.png`로 정리, 옛 2인 시트(`discard_naero-and-nambul_sheet_reference_two-person.png` · `discard_law-scale-and-law-gavel_sheet_reference_two-person.png`)는 `discard/sheets/`. 사소한 점: 내로 · 남불 `thinking` 표정의 눈썹이 짜증 나 보임(화난 표정 금지 규칙의 경계선), 내로 `sorry`가 눈 감은 표정, 로울 3/4 뷰가 정면과 비슷. **로봉**: 1차본은 떡대 체형이 안 나와(폭/높이 0.44 · 로울 0.48과 같음) 수정했고, **수정본 통과**(0.62 · 로울 대비 +29%, 어깨 · 가슴 · 소매 두꺼움, 4칸 · 6칸 · 봉투 한 칸 OK) → `sheets/law-gavel_sheet_reference.png`, 1차본은 `discard/sheets/discard_law-gavel_sheet_reference_v1-slim-body.png`. 사소: 색 견본 5개(봉투 · 밀랍색 없음), 걷는 칸 다리 비율 | ✅ 4장 |
 | R3 | 키 비교 v2 | 1 | 시트 | 비율 보정(로울 1.92 · 로북 1.75 · 로봉 1.58배), 로북 떠 있게, 숫자 없이, 전원 빈손. **합성 `all_sheet_height-compare.png`로 대체**(내로 · 남불 · 로 셋이 목표 비율 그대로, 같은 바닥선, 글자 없음 · 가이드선만). 한계: 머리 끝 높이에 맞춰 줄여서 로봉의 떡대(어깨 폭) 체형은 덜 드러남. 체형까지 살리려면 모델로 다시 생성 | ✅ (합성) |
 | R4 | 로봉 스탠딩 재작업 | 1 | 투명 PNG | 10/14 로봉 1인 시트 수정본에서 떡대 체형이 확정되어 지금 스탠딩을 넓혀 다시 뽑음. 프롬프트는 문장형 지시를 잘 못 따르는 생성 AI에 맞춰 **수치를 직접 넣는 방식**(10%로 쓰고 사용자가 20%로 조정, 작업 목록 문서 R4 이력). **검수 통과**: 어깨 +19% · 로브 아래 +15% · 중간 +10%(지금 대비 실측), 전체 약 10 ~ 19% — 머리 크기 · 포즈 · 구두(검정) · 로브 형태 유지, 초록 잔여 0. 사용자 판단: "실사체에서는 이 정도가 적당". 새 파일이 `standing/law-gavel_standing.png`, 옛 슬림본은 `discard/standing/discard_law-gavel_standing_slim-body.png`. **연쇄**: 아래 C1 · C2 · A3 · B6 · F1 로봉이 새 체형 기준으로 바뀜 | ✅ |
+| A6 | **마스코트 로** 스탠딩 3 · 기준 시트 3 (로울 · 로봉 · 로북) | 6 | 투명 PNG · 시트 | 10/15 추가: 로를 내로 · 남불과 같은 **2등신 마스코트 그림체**로(기본 `adult` 로는 그대로). 키 로울 180 · 로북 170 · 로봉 160(내로 · 남불 120), 체형 차이 유지. 품질 high. 스탠딩 → 그 스탠딩을 첨부해 시트. 파일 `{law-*}_standing_deform-mascot.png` · `{law-*}_sheet_deform-mascot.png`. 프롬프트 모음 9-16. G6의 첨부 기준. **1차 지시서 1묶음**, 완성 프롬프트 10-1 · 10-2. 올릴 곳: `standing/{law-*}_standing_deform-mascot.png` · `sheets/deform/{law-*}_sheet_deform-mascot.png`(2차 지시서 H0 로 셋 · H2의 첨부) | 🟨 이관 |
 
 - A1 · A2가 끝나면 아키텍처 2-4(색) · 2-5(프로필) · 5-1(IDENTITY)에 법전을 추가한다. 10/14 A2 실측: 표지 `#722C30` ~ `#621E25`(제안 `#5E1F2B`보다 밝은 와인색), 황동 모서리 `#CFAA75` 근처.
 - A3 다시 뽑을 때 추가 문장: `Law (Book) floats above the collar with a clear gap; it never rests on the shoulders.` · `Make Naero and Nambul about 8% larger so the ratios match exactly.` · 숫자 라벨 없이 뽑고 나중에 얹는다.
@@ -120,8 +128,9 @@
 
 | # | 이미지 | 수량 | 비고 | 상태 |
 | --- | --- | --- | --- | --- |
-| E1 | 사건별 재연 컷 | 사건 수 × 3 (`headline` · `sub-1` · `detail-1`) | 내로 · 남불이 **피해자 · 가해자를 번갈아** 맡는다(프로필 · 세계관 5-2). 흉기 · 상처 · 범행 순간 · 시신은 그리지 않는다(아키텍처 4-3). 누가 어떤 역할을 맡았는지 기록한다 | ⬜ |
+| E1 | 사건별 재연 컷 | 사건 수 × 3 (`headline` · `sub-1` · `detail-1`) | 내로 · 남불이 **피해자 · 가해자를 번갈아** 맡는다(프로필 · 세계관 5-2). 흉기 · 상처 · 범행 순간 · 시신은 그리지 않는다(아키텍처 4-3). 누가 어떤 역할을 맡았는지 기록한다. **10/15**: 연기는 드라마처럼 극적이어도 된다(화난 · 적대 표정 · 폭력은 금지, "양쪽 감정을 같은 무게로"는 10/15 철회 — 사건 이미지가 판결에 영향을 줄 수 있으니 필요하면 추후 감정 무게를 조절, 아키텍처 4-3 · 프롬프트 모음 9-17), 배경은 투명, 의상은 사건마다 정한다. **사건 1**(가상 샘플): 내로 = 돈을 빌려준 지인(트렌치코트), 남불 = 빌린 집주인 · 피고인(늘어난 후드티). `cuts/reenact/case-1/reenact-case-1_cut_{headline · sub-1 · detail-1}.png`(**생성 예정 파일명**, 지금 쓰는 샘플 경로가 아니다). 10/14 첫 샘플(셔츠 · 청바지, 방 배경)은 E1-공용 세트 2로 옮겼다. 사건 1 완성 프롬프트는 10-4. 올릴 곳: `cuts/reenact/case-1/`(옛 `_sample` 임시 사본은 COMMON-35 머지 후 삭제) | 🟨 사건 1 이관 |
 | E1-공용 | 공용 사건 재연 컷 | 3 (`headline` · `sub-1` · `detail-1`) | **생성되지 않은 사건의 이미지를 대신하는 공용 컷**(사건 id가 없는 대체용, 어떤 사건에도 갈 수 있다). `cuts/reenact/common/`, 16:9 1672 × 941. 흉기 · 상처 · 피해자 · 시신 없음, 정체성 · 글자 없음 OK. **10/14 재생성본 통과**(소방관 의상 · 도장 · 서명 제거, 차분한 표정, 불꽃 · 귀 잘림 없음, 옛 버전은 `discard/cuts/`). 사소: 소품이 많은 편, `detail`은 흑백에서 내로 카디건이 털과 붙음. 이전 후속: **표정**(3장 모두 입을 크게 벌린 활짝 웃음 — 어떤 사건에도 쓰이므로 차분한 표정이 안전), `headline`의 **소방관 의상**(화재 사건 연상, 공용에는 부적절) · 배경이 복잡함, `detail-1`은 남불 불꽃 끝이 위쪽에서 잘리고 도장 · 서명 장면이 판결을 연상시킬 수 있음. 역할은 직업 예시(기자 · 소방관 / 탐정 · 기록 / 서명)라 피해자 · 가해자 번갈아 기록 대상이 아님 | ✅ 10/14 재생성본 통과 |
+| E1-공용 2 | 공용 사건 재연 컷 **세트 2** | 3 (`headline` · `sub-1` · `detail-1`) | 10/14 사건 1 샘플로 만든 컷(실내에서 두 사람이 돈 문제로 마주한 장면, 셔츠 · 청바지, 방 배경 · 16:9)을 10/15 공용으로 옮겼다. `cuts/reenact/common/reenact-common-2_cut_{headline · sub-1 · detail-1}.png`. **10/15 결정(PR #149 리뷰)**: 사건 1의 돈 문제 · 실내 장면이라 다른 사건의 대체 컷으로는 사건을 잘못 암시할 수 있지만, **그 정도 오차는 감수하고 공용 컷으로 둔다.** **추후(백엔드)**: 사건 컷 파일명에 상황 설명을 넣고(예: `reenact-{상황}_cut_…`), 사건 데이터와 자동으로 어울리는 컷을 골라 주는 매칭 시스템을 만든다. 지금은 사건 id가 없는 사건에 고정으로 쓴다 | ✅ (옮김) |
 
 ### F. 시트 (P1, 컷을 만들기 전 참고용)
 
@@ -135,12 +144,44 @@
 
 | # | 이미지 | 비고 |
 | --- | --- | --- |
-| G1 | 나머지 데포르메 8종 시트 | 아키텍처 3-1 |
-| G2 | 소품 시트 | 3-3 카탈로그를 물건만 따로 |
+| G1 | 나머지 데포르메 8종 시트 | 아키텍처 3-1. **→ H5로 옮김**(H0을 보고 고른 데포르메만) |
+| G2 | 소품 시트 | 3-3 카탈로그를 물건만 따로. **10/15 이관 묶음에 포함**(🟨): 10종(신문 · 돋보기 · 메모장 · 펜 · 서류철 · 클립보드 · 봉투 · 법전 · 법봉 · 작은 저울) + 크기 기준용 작은 내로, `props_sheet_catalog.png`. **1차 지시서 4묶음**, 완성 프롬프트 10-5. 올릴 곳: `sheets/props_sheet_catalog.png` |
 | G3 | 스타일 변형 시트 | `riso` · `flat25` 등(3-6) |
 | G4 | 꾸미기 레이어 | `layers/`, 저장 방식이 정해진 뒤 |
 | G5 | 이벤트 · 굿즈용 | IP 확장(프로필 · 세계관 6장) |
-| G6 | 로 데포르메 시트 (로울 · 로봉 · 로북 × `cheek` · `ranma` · `ppg`) | 아키텍처 2-2 "데포르메 시트 — 대표"의 로 몫. 로 쪽 DEFORMATION 블록은 프롬프트 모음 6-5 · 6-8 · 6-11에 이미 있음. 지금 로딩은 로 셋 `adult` 합의 연출이라 급하지 않음. **만들 때는 셋을 같이**(로울만 만들지 않는다), STYLE은 `editorial`로 바꾼다(2-3) |
+| G6 | 로 데포르메 시트 (로울 · 로봉 · 로북 × `cheek` · `ranma` · `ppg`) | 아키텍처 2-2 "데포르메 시트 — 대표"의 로 몫. 로 쪽 DEFORMATION 블록은 프롬프트 모음 6-5 · 6-8 · 6-11에 이미 있음. 지금 로딩은 로 셋 `adult` 합의 연출이라 급하지 않음. **만들 때는 셋을 같이**(로울만 만들지 않는다), STYLE은 `editorial`로 바꾼다(2-3). **10/15 이관 묶음에 포함**(🟨, A6 검수 통과 뒤): A6 마스코트 시트 + 내로의 같은 데포르메 시트를 첨부, 법전 머리 한 줄 추가, `ranma`는 마스코트 비율을 따라 하지 않게 못 박음. 파일 `{law-*}_sheet_deform-{cheek · ranma · ppg}.png`. **1차 지시서 2묶음**, 완성 프롬프트 10-3. 올릴 곳: `sheets/deform/` |
+| G7 | 데포르메별 자세 · 표정 | 10/15 추가. 데포르메마다 연기 시트 · 컷. **범위 정의 필요**(어느 데포르메 · 몇 장). **→ H6 · H7로 옮김** |
+| G8 | 캐릭터 카드 | 10/15 추가. 컬렉션 등에 쓸 카드. **정의 필요**(구성 · 비율 · 글자를 웹에서 얹을지). **→ H8로 옮김** |
+
+### H. 추가 생성 목록 (10/15 정리)
+
+> 우선순위는 **1순위 → 2순위 → 3순위**. 1순위의 H0을 보고 어느 데포르메를 본격적으로 만들지 정한다(H5 ~ H7). 1순위 전부와 H4의 사건 1 배역 컷은 **2차 지시서**(`Claude outputs/character/gpt-handover_2026-10-15_2/`)로 넘겼고, 완성 프롬프트는 [프롬프트 모음](character-image-prompts.md) 10-6 ~ 10-10. 배경은 모두 투명(1장).
+
+**1순위**
+
+| # | 이미지 | 수량 | 형식 | 비고 | 상태 |
+| --- | --- | --- | --- | --- | --- |
+| H0 | **데포르메 묶음 시트** — 한 캐릭터를 기본 + 데포르메 11종, 12칸에 같은 자세로 | 5 (내로 · 남불 · 로울 · 로봉 · 로북) | 시트 16:9 | **느낌을 보는 용도**. 11종(아키텍처 3-1) 전부를 한 장에 넣어 비교하고, 본격적으로 만들 데포르메를 고른다. 로는 기본 칸에 마스코트 로(A6)를 쓰므로 A6 뒤. 12칸이 너무 빽빽하게 나오면 6칸씩 두 장으로 나눈다. 렌더링(외곽선 없음 · 평면 색)은 같게 두고 비율 · 형태 · 연기만 바꾼다. 2차 지시서 H0, 10-6. 올릴 곳: `sheets/deform/` | 🟨 이관 |
+| H1 | **의상 시트** — 일상 의상 8벌 | 5 (내로 · 남불 · 로울 · 로봉 · 로북) | 시트 16:9 | 기존 역할 의상 시트(F2: 판사 · 검사 · 변호인 · 사건 역할)와 별개. 정장 · 트렌치코트 · 후드티 · 니트 · 작업복 · 앞치마 · 패딩 · 잠옷(제복은 법정 역할과 헷갈려 뺌). 내로 · 남불은 사건 재연(H4)의 의상을 여기서 고르고, 로는 법복을 벗은 모습(컬렉션 · 카드용, 기본 로 `authority` × `adult`, 머리 물체 · 흰 장갑 유지). 반다나 없음, 초록 · 캐릭터 고정색 피함. 2차 지시서 H1, 10-7. 올릴 곳: `sheets/wardrobe/` | 🟨 이관 |
+| H2 | **마스코트 로 컷** | 12 | 장면 컷 4:5 · 16:9 | 로 셋 × `idle-neutral` · `deliver-neutral` · `think-thinking`(9) + `trio_cut-mascot_idle` · `trio_cut-mascot_think`(2, 16:9) + 내로 · 로울 · 남불 비교 `compare_cut-mascot_trio-thinking`(1, 16:9). 키 로울 180 · 로북 170 · 로봉 160(내로 · 남불 120). A6 통과 뒤. 2차 지시서 H2, 10-8(1차 1묶음 통과 뒤). 올릴 곳: `cuts/{law-*}/base/` · `cuts/trio/` · `cuts/compare/` | 🟨 이관 |
+| H3 | **역할 의상 정식 컷** | 8 | 장면 컷 4:5 | 지금 판결 체험 무대(`frontend/public/images/characters/roles/*.webp`, FE-27 · 28)는 **역할 의상 시트에서 잘라 낸 컷**(높이 560 px)을 쓰고, **남불 변호인 컷은 없다**. 내로 · 남불 × 판사 · 검사 · 변호인 · 사건 역할 = 8장을 `idle-neutral`로 정식 생성한다. **검사 · 변호인은 같은 자세 · 같은 표정**(한쪽이 옳아 보이지 않게). 파일 `{naero · nambul}_cut-role-{역할}_idle-neutral.png`. 2차 지시서 H3, 10-9. 올릴 곳: `cuts/{naero · nambul}/role/`. 통과하면 웹 webp로 바꿔 `frontend/public/images/characters/roles/`를 교체한다 | 🟨 이관 |
+
+**2순위**
+
+| # | 이미지 | 수량 | 형식 | 비고 | 상태 |
+| --- | --- | --- | --- | --- | --- |
+| H4 | **사건별 재연** — 재연 컷 3 + 사건 배역 컷 2 | 사건마다 5 | 16:9 · 4:5 | 재연 컷(E1, `headline` · `sub-1` · `detail-1`)에 더해, 무대(3막 등)에서 그 사건 의상을 입은 내로 · 남불 컷(`{naero · nambul}_cut-role-case-{caseId}_idle-neutral.png`)을 함께 만든다. 의상은 H1에서 고른다. 배역은 사건마다 번갈아(세계관 5-2). 사건 1은 재연 컷 3장이 이관 묶음에 있으므로 배역 컷 2장만 남음. 2 ~ 9번 사건은 확정되는 대로. 사건 1 배역 컷 2장은 2차 지시서 H4, 10-10. 올릴 곳: `cuts/{naero · nambul}/role/` | 🟨 사건 1 배역 컷 이관 |
+
+**3순위** (H0을 보고 범위를 정한다)
+
+| # | 이미지 | 비고 |
+| --- | --- | --- |
+| H5 | 고른 데포르메의 **기준 시트** | 옛 G1. 데포르메 × 캐릭터마다 1장(정면 · 턴어라운드 · 표정 · 색 견본). 로는 G6(3종) 다음 |
+| H6 | 데포르메별 **연기 · 표정 시트** | 옛 G7. 장면 코드 8 + 감정 6 |
+| H7 | 데포르메 **쓰임 컷** | 옛 G7. 아키텍처 3-1 "주 쓰임" 화면에 넣을 컷(예: `tezuka` 튜토리얼 안내, `gekiga` S-07 공개 직전, `sports` S-09 대결 구도, `gravity` S-04 기록 확인) |
+| H8 | **캐릭터(수집) 카드** | 옛 G8. 8막 S-09에서 보여 주는 수집 카드(유저 흐름 8막, 세계관 6장). 카드 단위 · 비율 · 배경 일러스트 여부 정의 필요. 일러스트만 이미지로, 프레임 · 글자는 웹 |
+| H9 | **최종 재생성** | 시트 · 스탠딩 몇 장을 품질(low · medium · high)별로 뽑아 비교한 뒤 전체 디테일 정리 |
+
 
 ### 2-1. 전체 목록 점검 (10/14)
 
@@ -175,7 +216,7 @@
 
 ## 3. 순서 · 합계
 
-**추천 순서**: A1 → A2 → A3 → B1 → B2 · B3 → D1 → C → B4 · B5 → F → E(사건이 정해지는 대로). **10/14 추가분**: A5(1인 시트 — 이후 생성의 첨부 기준이 되므로 먼저) → B6(변환만) → D2 · D1 재생성 7장 → B7 · B8 → F1 로봉 → G6
+**추천 순서**: A1 → A2 → A3 → B1 → B2 · B3 → D1 → C → B4 · B5 → F → E(사건이 정해지는 대로). **10/14 추가분**: A5(1인 시트 — 이후 생성의 첨부 기준이 되므로 먼저) → B6(변환만) → D2 · D1 재생성 7장 → B7 · B8 → F1 로봉 → G6. **10/15 이관 묶음**: A6(마스코트 로) → G6(A6 통과 뒤), E1 사건 1 · G2는 아무 때나. **다음 생성 목록(H, 10/15)**: 1순위 H0 · H1 · H2 · H3 → 2순위 H4(사건별 재연) → 3순위 H5 ~ H9(H0을 보고 범위 결정)
 
 | 묶음 | 수량 |
 | --- | --- |
@@ -185,7 +226,10 @@
 | D 성향 | 32 (D1 16 + D2 16) |
 | F 시트 | 13 (F1 5 · F2 2 · F3 6) |
 | **합계 (A ~ D, F)** | **약 91** |
-| E 재연 | 사건 수 × 3 (별도) |
+| 10/15 이관 묶음 | 19 (A6 6 · G6 9 · E1 사건 1 3 · G2 1) |
+| H 1순위 | 30 (H0 5 · H1 5 · H2 12 · H3 8) |
+| H 2순위 | 사건마다 5 (사건 1은 2) |
+| E 재연 | 사건 수 × 3 (별도), 공용 6(세트 1 · 2) |
 
 ---
 
@@ -248,7 +292,7 @@
 
 ## 5. 예시 프롬프트
 
-[이미지 생성 프롬프트 모음](character-image-prompts.md) 9장(v2) 기준이다. **확정 이미지를 참조로 첨부하고 바꿀 내용만 쓰는 짧은 프롬프트**를 기본으로 했다. 블록 전문이 필요하면 9장의 블록을 이어 붙인다.
+[이미지 생성 프롬프트 모음](character-image-prompts.md) 9장(v2) 기준이다. **10/15 이관 항목(A6 · G2 · G6 · E1 사건 1 · H0 ~ H4)의 완성 프롬프트는 프롬프트 모음 10장**이고 아래 예시보다 우선한다. **확정 이미지를 참조로 첨부하고 바꿀 내용만 쓰는 짧은 프롬프트**를 기본으로 했다. 블록 전문이 필요하면 9장의 블록을 이어 붙인다.
 
 - **첨부**: 각 예시의 "첨부" 줄에 적은 확정 이미지를 같이 올린다(`~/Documents/NaeLawNamBul/character/`(시트는 `sheets/`, 스탠딩은 `standing/`)).
 - **{ }** 안은 바꿔 쓴다.
@@ -425,11 +469,12 @@ AVOID (add): text on props, the letters of personality codes.
 
 ```
 Use the attached reference images as the exact models of Naero and Nambul (faces, colors, proportions, flat style). They are acting out a real case as roles; only their outfits and props change.
-SCENE — a calm newspaper-photo-like scene: {situation in English, e.g. "two neighbors facing each other in an apartment hallway after a noise complaint"}. Naero plays {role A, e.g. "the downstairs neighbor in a cardigan"} and Nambul plays {role B, e.g. "the upstairs neighbor in a hoodie"}. Show only the situation and relationship.
-Plain newsprint background #ECE2D4 with a few simple props, {4:3 | 16:9} landscape.
+SCENE — a newspaper-photo-like scene: {situation in English, e.g. "two neighbors facing each other in an apartment hallway after a noise complaint"}. Naero plays {role A, e.g. "the downstairs neighbor in a cardigan"} and Nambul plays {role B, e.g. "the upstairs neighbor in a hoodie"}. Show only the situation and relationship.
+Draw only the characters and the few props listed: no room, no walls, no floor, no scenery. Fully transparent background, 16:9 landscape.
 AVOID (add): injuries, weapons, blood, bodies, a crime in progress, anything hinting at the verdict, mocking the victim.
 ```
 
+- 10/15: 배경은 투명(위 예시 반영), 극적인 연출은 프롬프트 모음 9-17 CASE RULES를 붙인다. 의상은 사건마다 정한다.
 - 역할은 사건마다 **번갈아** 정한다(이번 사건에서 내로가 가해자 역할이면 다음 사건은 남불). 정한 배정을 이 표 비고나 recipe에 남긴다.
 
 ### F. 시트
