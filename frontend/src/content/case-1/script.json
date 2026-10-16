@@ -111,29 +111,24 @@
   "acts": {
     "1": {
       "title": "1막 신문 속 사건",
-      "scene": "paper",
+      "scene": "sheet",
       "look": {
         "naero": "guide-neutral",
         "nambul": "idle-neutral"
       },
-      "spots": {
-        "naero": "headline",
-        "nambul": "article"
-      },
       "steps": [
         {
           "say": "naero",
-          "text": "오늘 신문 1면에 실린 사건이에요. 기사에 나온 내용만 가지고 먼저 따라가 볼게요."
+          "text": "오늘 신문 1면에 실린 사건이에요. 기사에 나온 내용만 가지고 먼저 따라가 볼게요.",
+          "focus": "head"
         },
         {
           "say": "nambul",
           "look": {
             "nambul": "guide-neutral"
           },
-          "spots": {
-            "nambul": "photo-r"
-          },
-          "text": "제가 A씨, 내로가 B씨 자리에 서 볼게요. 기사에 없는 말은 지어내지 않을게요."
+          "text": "제가 A씨, 내로가 B씨 자리에 서 볼게요. 기사에 없는 말은 지어내지 않을게요.",
+          "focus": "photo"
         },
         {
           "say": "nambul",
@@ -142,25 +137,24 @@
             "naero": "role:actor",
             "nambul": "role:actor"
           },
-          "spots": {
-            "naero": "photo-l",
-            "nambul": "photo-r"
-          },
           "tags": {
             "naero": "B씨 역",
             "nambul": "A씨 역"
           },
-          "text": "B씨에게 빌린 돈을 제때 갚지 못했어요. 그 뒤로 돈 문제로 자주 다퉜고요."
+          "text": "B씨에게 빌린 돈을 제때 갚지 못했어요. 그 뒤로 돈 문제로 자주 다퉜고요.",
+          "focus": "photo"
         },
         {
           "say": "naero",
           "role": "B씨 역",
-          "text": "그날 저는 돈 이야기를 하려고 A씨 집을 찾아갔어요."
+          "text": "그날 저는 돈 이야기를 하려고 A씨 집을 찾아갔어요.",
+          "focus": "photo"
         },
         {
           "say": "nambul",
           "role": "A씨 역",
-          "text": "이야기는 금방 말다툼이 됐어요. 목소리가 점점 커졌고요."
+          "text": "이야기는 금방 말다툼이 됐어요. 목소리가 점점 커졌고요.",
+          "focus": "photo"
         },
         {
           "say": "naero",
@@ -168,28 +162,26 @@
             "naero": "react-sorry",
             "nambul": "idle-neutral"
           },
-          "spots": {
-            "naero": "article",
-            "nambul": "photo-r"
-          },
           "tags": {
             "naero": "",
             "nambul": ""
           },
-          "text": "A씨는 집에 있던 흉기를 휘둘렀고, B씨는 그 자리에서 숨졌어요. A씨는 구호 조치 없이 집을 나갔다고 해요."
+          "text": "A씨는 집에 있던 흉기를 휘둘렀고, B씨는 그 자리에서 숨졌어요. A씨는 구호 조치 없이 집을 나갔다고 해요.",
+          "focus": "body"
         },
         {
           "say": "nambul",
           "look": {
             "nambul": "react-sorry"
           },
-          "text": "기사로 알 수 있는 건 여기까지예요. 무거운 사건이니까, 서두르지 말고 생각해 봐요."
+          "text": "기사로 알 수 있는 건 여기까지예요. 무거운 사건이니까, 서두르지 말고 생각해 봐요.",
+          "focus": "body"
         }
       ]
     },
     "2": {
       "title": "2막 첫인상 판단",
-      "scene": "paper",
+      "scene": "sheet",
       "look": {
         "naero": "guide-neutral",
         "nambul": "idle-neutral"
@@ -197,7 +189,8 @@
       "steps": [
         {
           "say": "naero",
-          "text": "기록을 펼치기 전에, 지금 드는 생각을 먼저 남겨 둘게요. 이 사람은 어느 정도의 벌을 받아야 할까요?"
+          "text": "기록을 펼치기 전에, 지금 드는 생각을 먼저 남겨 둘게요. 이 사람은 어느 정도의 벌을 받아야 할까요?",
+          "focus": "photo"
         },
         {
           "say": "nambul",
@@ -214,11 +207,7 @@
             "nambul": "read-thinking"
           }
         }
-      ],
-      "spots": {
-        "naero": "photo-l",
-        "nambul": "article"
-      }
+      ]
     },
     "3": {
       "title": "3막 재판",
@@ -388,7 +377,7 @@
         },
         {
           "say": "naero",
-          "role": "법률 안내",
+          "role": "판사",
           "proc": 5,
           "section": 4,
           "card": "law",
@@ -406,13 +395,13 @@
         },
         {
           "say": "naero",
-          "role": "법률 안내",
+          "role": "판사",
           "card": "law",
           "text": "법정형은 법이 정해 둔 형의 범위예요. 감경 · 가중 사유를 반영하면 실제로 선고할 수 있는 범위가 정해져요."
         },
         {
           "say": "nambul",
-          "role": "법률 안내",
+          "role": "판사",
           "card": "guide",
           "look": {
             "nambul": "role:judge",
@@ -422,7 +411,7 @@
         },
         {
           "say": "nambul",
-          "role": "법률 안내",
+          "role": "판사",
           "card": "guide",
           "confirm": 4,
           "next": "판결 전 최종 정리로",
@@ -593,6 +582,159 @@
           "confirm": "court",
           "next": "실제 판결 확인하기",
           "text": "이건 AI 판사의 판결이에요. 다음은 실제 재판부가 내린 판결이에요."
+        }
+      ]
+    },
+    "7": {
+      "title": "실제 판결",
+      "scene": "court",
+      "look": {
+        "naero": "role:actor",
+        "nambul": "role:judge"
+      },
+      "steps": [
+        {
+          "system": "실제 재판부의 판결"
+        },
+        {
+          "say": "nambul",
+          "role": "판사",
+          "text": "지금부터 판결을 선고하겠습니다. 피고인은 일어서 주시기 바랍니다."
+        },
+        {
+          "say": "naero",
+          "role": "A씨 역",
+          "text": "…네."
+        },
+        {
+          "say": "nambul",
+          "role": "판사",
+          "card": "court-penalty",
+          "board": "reading",
+          "text": "주문. {order}"
+        },
+        {
+          "say": "nambul",
+          "role": "판사",
+          "card": "court-reasoning",
+          "board": "reading",
+          "text": "판결 이유를 말씀드리겠습니다."
+        },
+        {
+          "say": "nambul",
+          "role": "판사",
+          "card": "court-excerpt",
+          "board": "reading",
+          "text": "판결문에는 이렇게 적었습니다."
+        },
+        {
+          "say": "nambul",
+          "role": "판사",
+          "card": "court-plain",
+          "board": "reading",
+          "text": "쉽게 풀면 이런 뜻입니다."
+        },
+        {
+          "say": "nambul",
+          "role": "판사",
+          "card": "court-factors",
+          "board": "reading",
+          "confirm": "compare",
+          "next": "세 판결 비교하기",
+          "text": "재판부가 무겁게, 가볍게 본 요소입니다. 이제 세 판결을 나란히 놓고 보겠습니다."
+        }
+      ]
+    },
+    "8": {
+      "title": "세 판결 비교",
+      "scene": "sheet",
+      "look": {
+        "naero": "idle-neutral",
+        "nambul": "idle-neutral"
+      },
+      "steps": [
+        {
+          "focus": "front",
+          "from": "photo",
+          "say": "nambul",
+          "look": {
+            "naero": "idle-neutral",
+            "nambul": "react-surprised"
+          },
+          "text": "앗, 신문이에요! 우리가 본 사건이 다음 날 신문에 실렸어요."
+        },
+        {
+          "focus": "front",
+          "say": "naero",
+          "look": {
+            "naero": "guide-neutral",
+            "nambul": "idle-neutral"
+          },
+          "text": "제목이 '같은 사건, 세 개의 판결'이에요. 그중 하나는 내가 내린 판결이고요."
+        },
+        {
+          "focus": "verdicts",
+          "say": "naero",
+          "look": {
+            "naero": "read-thinking",
+            "nambul": "idle-neutral"
+          },
+          "text": "{vsCourt}"
+        },
+        {
+          "focus": "verdicts",
+          "say": "nambul",
+          "look": {
+            "naero": "idle-neutral",
+            "nambul": "guide-neutral"
+          },
+          "text": "{vsAi}"
+        },
+        {
+          "focus": "change",
+          "say": "naero",
+          "look": {
+            "naero": "guide-neutral",
+            "nambul": "idle-neutral"
+          },
+          "text": "뉴스만 봤을 때와 모두 보고 난 뒤, 내 판단은 이렇게 움직였어요."
+        },
+        {
+          "focus": "factors",
+          "say": "nambul",
+          "look": {
+            "naero": "read-thinking",
+            "nambul": "read-thinking"
+          },
+          "text": "요소마다 셋이 어떻게 봤는지 나란히 실렸어요. 어디서 갈렸는지 한눈에 보여요!"
+        },
+        {
+          "focus": "rules",
+          "say": "naero",
+          "look": {
+            "naero": "guide-neutral",
+            "nambul": "idle-neutral"
+          },
+          "text": "같게 본 것도, 다르게 본 것도 있어요. 정답을 고르는 게 아니라, 나는 무엇을 무겁게 봤는지 보는 거예요."
+        },
+        {
+          "focus": "cast",
+          "say": "nambul",
+          "look": {
+            "naero": "guide-happy",
+            "nambul": "guide-happy"
+          },
+          "text": "이번 사건에서 우리가 맡았던 모습이에요. 함께 봐 줘서 고마워요!"
+        },
+        {
+          "focus": "front",
+          "say": "naero",
+          "look": {
+            "naero": "guide-happy",
+            "nambul": "guide-happy"
+          },
+          "text": "이번 사건은 여기까지예요. 다음엔 무엇을 해 볼까요?",
+          "choices": "end"
         }
       ]
     }
