@@ -178,12 +178,12 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(increase(lawnambul_ai_call_total{job=\"backend\", result=\"success\"}[$__interval]))",
+          "expr": "sum(increase(lawnambul_ai_call_total{job=\"backend\", result=\"success\"}[$__rate_interval]))",
           "legendFormat": "성공"
         },
         {
           "refId": "B",
-          "expr": "sum(increase(lawnambul_ai_call_total{job=\"backend\", result=\"failure\"}[$__interval]))",
+          "expr": "sum(increase(lawnambul_ai_call_total{job=\"backend\", result=\"failure\"}[$__rate_interval]))",
           "legendFormat": "실패"
         }
       ]
@@ -215,12 +215,12 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(increase(lawnambul_experience_started_total{job=\"backend\"}[$__interval]))",
+          "expr": "sum(increase(lawnambul_experience_started_total{job=\"backend\"}[$__rate_interval]))",
           "legendFormat": "체험 시작"
         },
         {
           "refId": "B",
-          "expr": "sum(increase(lawnambul_verdict_confirmed_total{job=\"backend\"}[$__interval]))",
+          "expr": "sum(increase(lawnambul_verdict_confirmed_total{job=\"backend\"}[$__rate_interval]))",
           "legendFormat": "판결 확정"
         }
       ]

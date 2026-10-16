@@ -38,8 +38,28 @@ loki.write "default" {
 		// 사설 IP는 커밋하지 않는다(CLAUDE.md 3-1 보안). 기본값을 두지 않아서, 값이 없으면 바로 드러난다
 		url = sys.env("LOKI_URL")
 
-		// 모니터링 EC2가 잠깐 내려가도 그 사이 로그를 잃지 않게 재시도한다. 더 긴 장애라도 메인 서버의
-		// 로그 파일 자체는 15일 남아 있으므로(logback-spring.xml), Alloy를 다시 띄우면 읽던 위치부터 따라잡는다
-		retry_on_http_429 = true
+		// 모니터링 EC2가 내려가 있는 동안 보내지 못한 배치를 버리지 않게 재시도 한도를 늘린다.
+		// 기본값(500ms ~ 5m, 10회)은 다 합쳐 약 8분 30초밖에 버티지 못하고, 그 뒤 배치는 **폐기된다**.
+		// 아래 설정이면 1s → 2 → 4 … → 5m 상한으로 20회, 약 1시간이다 (PR #168 리뷰 반영).
+		//
+		// 로그 파일이 15일 남는다는 것(logback-spring.xml)은 복구 수단이 아니다 — loki.source.file은
+		// 읽은 위치를 기록해 두고 그 뒤부터만 읽으므로, 한 번 폐기된 구간을 파일에서 다시 긁어오지 않는다.
+		// 그래서 "허용 장애 시간 = 아래 재시도 한도"로 보고, 그보다 긴 장애의 로그는 모니터링에서 빠진다고 본다
+		// (서버 파일에는 남아 있으므로 사후 조사는 가능하다).
+		retry_on_http_429  = true
+		min_backoff_period = "1s"
+		max_backoff_period = "5m"
+
+		// 1시간을 넘기는 장애까지 받으려면 이 값을 올린다. 다만 재시도 중인 배치는 메모리에 쌓이므로
+		// mem_limit 192m(docker-compose.monitoring-agent.yml)과 함께 본다
+		max_backoff_retries = 20
+	}
+
+	// Alloy 컨테이너가 재시작·재생성돼도 아직 못 보낸 배치를 잃지 않게 디스크에 먼저 적는다.
+	// 저장 위치는 --storage.path 아래이고, 그 경로에 영구 볼륨이 붙어 있어야 의미가 있다
+	// (docker-compose.monitoring-agent.yml의 alloy-data 볼륨). 둘은 같이 고친다
+	wal {
+		enabled         = true
+		max_segment_age = "4h"
 	}
 }

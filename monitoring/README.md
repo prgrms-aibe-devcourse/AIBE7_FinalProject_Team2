@@ -208,15 +208,25 @@ base 파일만으로 backend를 다시 올리면 **8081 포트와 로그 볼륨�
 
 **BE-60 CD가 들어온 지금은 상시 위험이다** — `deploy/cd-agent.sh`가 2분마다 GHCR `main` 이미지를 확인해
 `deploy.sh`로 자동 배포하므로, 수동으로 오버레이를 붙여 올려 두어도 다음 배포 한 번이면 원래대로 돌아간다.
-`deploy.sh`의 `COMPOSE` 배열이 `.env`의 `MONITORING_AGENT=1`을 보고 이 오버레이를 포함해야 하며(끼울 자리는
-real-seed 오버레이 바로 뒤), **`deploy.sh` 수정은 D 담당**이라 이 작업에서는 건드리지 않았다.
+**(PR #168 리뷰 반영) 이 분기를 넣었다** — `deploy.sh`의 `COMPOSE` 배열이 `.env`의 `MONITORING_AGENT=1`을 보고
+이 오버레이를 포함한다(real-seed 오버레이 바로 뒤). 에이전트를 쓰는 서버의 `.env`에 아래 세 값을 넣는다.
+
+```bash
+MONITORING_AGENT=1
+MAIN_PRIVATE_IP=<메인 EC2 사설 IP>
+LOKI_URL=http://<모니터링 EC2 사설 IP>:3100/loki/api/v1/push
+```
+
+`MONITORING_AGENT`가 비어 있는 서버는 분기를 타지 않으므로 **기존 배포 동작이 그대로다.** `1`인데 나머지 둘이
+없으면 배포를 시작하기 전에 멈춘다(exit 4) — 자동 배포가 "이미지를 받지 못했다"처럼 엉뚱한 원인으로 보이지 않게
+하기 위해서다. 원래 **`deploy.sh`는 D 소유 영역**이라(7-2-1) 머지 전에 D 확인이 필요하다.
 
 ### 아직 남은 것
 
 - **Cloud 세 번째 좌석** — 무료 등급은 시각화 사용자 3명이다. C · D는 확정이고 남은 한 자리를 A · B 중 누구에게 줄지
   팀에서 정한다. 계정 공유는 하지 않는다.
-- **`deploy.sh`에 `MONITORING_AGENT` 플래그 추가** — D 담당. BE-60(7.1.3 CD)로 `deploy.sh` · `cd-agent.sh`가
-  들어오면서 대상 파일이 확정됐다. **이게 되기 전까지는 오버레이를 수동으로 올려도 2분 안에 날아간다.**
+- ~~**`deploy.sh`에 `MONITORING_AGENT` 플래그 추가**~~ → PR #168 리뷰에서 반영했다(위 ⚠️ 절). **D 소유 파일을
+  대신 고친 것이라 머지 전 확인만 받으면 된다.**
 - **Grafana Cloud 실제 연동은 7.3.3 범위다** — 계정 생성 · `remote_write` · Alloy를 내부 네트워크 스크레이프 방식으로
   전환. 이번 작업은 전용 EC2 전제의 구성까지이고, 대시보드 JSON은 양쪽에서 그대로 쓴다.
 - **전용 EC2로 갈 경우에만**: 실제 EC2 생성 · 보안 그룹 변경(D), Prometheus 보존 30일/8GB 디스크 여유 확인(D),

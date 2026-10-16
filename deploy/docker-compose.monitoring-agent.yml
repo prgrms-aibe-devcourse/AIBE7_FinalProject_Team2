@@ -8,14 +8,16 @@
 # D가 COMMON-43 협의에서 짚은 위험이고, BE-60 CD가 들어온 지금은 가설이 아니라 상시 위험이다 —
 # `cd-agent.sh`가 2분마다 GHCR `main` 이미지를 확인해 `deploy.sh`로 자동 배포하기 때문이다.
 #
-# 그래서 `deploy.sh`의 COMPOSE 배열이 `.env`의 MONITORING_AGENT=1을 보고 이 파일을 포함해야 한다.
-# 끼울 자리는 real-seed 오버레이 바로 뒤다(deploy.sh):
+# 그래서 `deploy.sh`의 COMPOSE 배열이 `.env`의 MONITORING_AGENT=1을 보고 이 파일을 포함하게 해 두었다
+# (real-seed 오버레이 바로 뒤, PR #168 리뷰 반영). 이 서버에서 에이전트를 쓰려면 `.env`에 세 값이 필요하다.
 #
-#   if [[ "$(env_value MONITORING_AGENT)" == "1" ]]; then
-#     COMPOSE+=(-f "$DEPLOY_DIR/docker-compose.monitoring-agent.yml")
-#   fi
+#   MONITORING_AGENT=1
+#   MAIN_PRIVATE_IP=<메인 EC2 사설 IP>
+#   LOKI_URL=http://<모니터링 EC2 사설 IP>:3100/loki/api/v1/push
 #
-# `deploy.sh` 수정은 D 담당이라(COMMON-43 협의) 이 PR에서는 건드리지 않았다.
+# MONITORING_AGENT=1인데 나머지 둘이 없으면 deploy.sh가 배포를 시작하기 전에 멈춘다 — 자동 배포가
+# 애먼 이유로 실패한 것처럼 보이지 않게 하기 위해서다. 값을 넣지 않은 서버에서는 분기 자체가 타지 않으므로
+# 기존 배포 동작은 그대로다(= 이 PR이 다른 서버의 배포를 바꾸지 않는다).
 #
 # 수집·저장(Prometheus · Loki · Grafana)은 모니터링 전용 EC2에 있고(monitoring/docker-compose.prod.yml),
 # 여기에는 "메인 서버에 있어야만 되는 것" 둘만 둔다.
@@ -53,6 +55,10 @@ services:
       - ./alloy-agent.alloy:/etc/alloy/config.alloy:ro
       # 백엔드가 쓰고 Alloy는 읽기만 한다
       - backend-logs:/var/log/backend:ro
+      # --storage.path 자리. 여기에 loki.source.file의 읽은 위치와 loki.write WAL이 쌓인다.
+      # 볼륨이 없으면 이미지 교체 등으로 컨테이너가 재생성될 때마다 위치 기록이 사라져,
+      # 기본 동작대로 로그 파일을 처음부터 다시 읽어 Loki에 같은 로그가 또 들어간다 (PR #168 리뷰 반영)
+      - alloy-data:/var/lib/alloy/data
     environment:
       # 모니터링 EC2의 사설 IP. 예: http://10.0.1.23:3100/loki/api/v1/push
       LOKI_URL: ${LOKI_URL:?deploy/.env에 LOKI_URL을 넣어야 한다 (모니터링 EC2 사설 IP)}
@@ -93,3 +99,5 @@ services:
 
 volumes:
   backend-logs:
+  # Alloy의 읽은 위치 · WAL (alloy-agent.alloy의 wal 블록). 지우면 로그가 중복 적재된다
+  alloy-data:
