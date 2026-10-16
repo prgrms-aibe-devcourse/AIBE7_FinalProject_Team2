@@ -166,7 +166,7 @@ LBox가 빠지면서 검색 대상이 law.go.kr 47건(살인 기수 27건)뿐이
 ### 5-6. BE-53 (D 정민석) · BE-55 (C 백승호)
 
 - 판례 저장소는 develop에 있다. 임베딩은 `llm.embed`(배치 100, 차원 검사)를 그대로 쓰면 된다. task type은 비교 용도면 `SEMANTIC_SIMILARITY`(8-1)
-- **BE-53 (D) 구현** (2026-10-15): extract · court 퓨샷(`extract-v6` · `court-v2`), 요약어 후보(`summary_tags.py`, `stages.extract.summaryTags`, 기본 꺼짐). 요약어를 공개 기준 목록(`summary_tags.json`)과 `SEMANTIC_SIMILARITY`로 비교해 `report.json` `factorExtras[].summaryTagCandidates`에 남기고 요약어는 바꾸지 않는다. **기준 목록은 공개 값만**: 사건들이 함께 쓰는 목록이 문서 · BE-51(PR #97) · 비공개 시드 어디에도 없었다. 실제 사건 요약어(R__10)는 공개 저장소에 두지 않는 원칙(BE-17) 때문에 공개 목록에 넣지 않았다. 임베딩은 판례(R__40)와 같은 기준으로 가능하므로, 비공개 시드에 추가 목록을 두고 함께 비교할지는 B가 정한다. 기준 점수 0.85는 예시값 그대로(실제 분포 미확인). **남은 것**: 요약어 후보 DB 적재 · 관리자 화면 표시(가치관 축 투표 V10 `value_axis_votes`처럼 factor jsonb + A-6 필드, 후속 이슈)
+- **BE-53 (D) 구현** (2026-10-15): extract · court 퓨샷(`extract-v6` · `court-v2`), 요약어 후보(`summary_tags.py`, `stages.extract.summaryTags`, 기본 꺼짐). 요약어를 공개 기준 목록(`summary_tags.json`)과 `SEMANTIC_SIMILARITY`로 비교해 `report.json` `factorExtras[].summaryTagCandidates`에 남기고 요약어는 바꾸지 않는다. **기준 목록은 공개 값만**: 사건들이 함께 쓰는 목록이 문서 · BE-51(PR #97) · 비공개 시드 어디에도 없었다. 실제 사건 요약어(R__10)는 공개 저장소에 두지 않는 원칙(BE-17) 때문에 공개 목록에 넣지 않았다. 임베딩은 판례(R__40)와 같은 기준으로 가능하므로, 비공개 시드 추가 목록은 지금 두지 않는다(BE-53 리뷰 결정, 10/16: 실제 사건이 아직 몇 건뿐이고 비공개 시드 · 공개 도구를 함께 읽는 경로가 하나 더 생김). 실제 사건 적재가 쌓이면(관리자 후검수 연결 뒤) 다시 정한다. 기준 점수는 샘플 실측으로 0.90, 1 · 2순위 차 0.01 미만은 `ambiguous`로 제안하지 않는다(리뷰 결정, 실제 사건 요약어로 다시 정함). **남은 것**: 요약어 후보 DB 적재 · 관리자 화면 표시(가치관 축 투표 V10 `value_axis_votes`처럼 factor jsonb + A-6 필드, 후속 이슈)
 - BE-55 (C): select 판결 이유 임베딩은 그대로 남아 있다
 
 ## 6. 배포 체크리스트 (운영 DB를 만들 때, 7.1.2)
