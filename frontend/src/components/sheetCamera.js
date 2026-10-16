@@ -12,9 +12,10 @@ const css = ({ s, x, y }) => `translate(${x}px, ${y}px) scale(${s})`;
 /**
  * @param {HTMLElement} sheet 지면(무대 장면 안에 절대 위치, transform-origin 0 0)
  * @param {HTMLElement} frame 기사를 맞출 틀(장면 안의 빈 요소, 위치는 CSS가 정한다)
+ * @param {{ fill?: boolean }} [options] fill: 지면이 장면 가장자리 밖을 보이지 않게(배율 · 위치를 지면 안으로 묶는다, 8막 화면 가득)
  * @returns {{ go(name: string, options?: { from?: string, onStart?: () => void }): void }}
  */
-export function sheetCamera(sheet, frame) {
+export function sheetCamera(sheet, frame, { fill = false } = {}) {
   let at = null; // 지금 맞춰 둔 기사
   let pending = null; // 무대가 아직 그려지지 않아 크기를 모를 때 미뤄 둔 이동
   let shot = null; // 진행 중인 카메라 이동(WAAPI)
@@ -32,9 +33,24 @@ export function sheetCamera(sheet, frame) {
   // 기사를 틀 가운데에, 틀에 들어오는 배율로. 아주 긴 기사(틀 높이의 1.6배 넘게)는 너무 작아지지 않게 폭에 맞추고 제목이 보이게 위를 맞춘다
   function place(b) {
     const f = area();
-    const s = Math.min(f.w / b.w, b.h > b.w * (f.h / f.w) * 1.6 ? Infinity : f.h / b.h, MAX_SCALE);
-    const y = b.h * s <= f.h ? f.y + (f.h - b.h * s) / 2 - b.y * s : f.y - b.y * s;
-    return { s, x: f.x + (f.w - b.w * s) / 2 - b.x * s, y };
+    let s = Math.min(f.w / b.w, b.h > b.w * (f.h / f.w) * 1.6 ? Infinity : f.h / b.h, MAX_SCALE);
+    let y = b.h * s <= f.h ? f.y + (f.h - b.h * s) / 2 - b.y * s : f.y - b.y * s;
+    let x = f.x + (f.w - b.w * s) / 2 - b.x * s;
+    if (fill) {
+      // 지면(sheet 전체)이 장면을 덮도록 배율 하한을 두고, 지면 가장자리가 장면 안으로 들어오지 않게 위치를 묶는다
+      const scene = sheet.parentElement;
+      const W = sheet.offsetWidth;
+      const H = sheet.offsetHeight;
+      const min = Math.max(scene.clientWidth / W, scene.clientHeight / H);
+      if (s < min) {
+        s = min;
+        x = f.x + (f.w - b.w * s) / 2 - b.x * s;
+        y = f.y - b.y * s;
+      }
+      x = Math.min(0, Math.max(scene.clientWidth - W * s, x));
+      y = Math.min(0, Math.max(scene.clientHeight - H * s, y));
+    }
+    return { s, x, y };
   }
   // 시작 장면: 요소가 장면 전체를 빈틈없이 채운다
   function cover(b) {

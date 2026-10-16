@@ -235,8 +235,9 @@
 .stage-wrap .sheet-photo { position: relative; aspect-ratio: 16 / 9; overflow: hidden; background: var(--color-surface-strong); filter: var(--photo-filter); transition: filter .9s ease-out .4s; }
 .stage-wrap .sheet-photo[data-live] { filter: none; transition: none; }
 .stage-wrap .sheet-photo img { position: absolute; bottom: 25%; height: 52%; width: auto; }
-.stage-wrap .sheet-photo .sheet-photo-n { left: 7%; }
-.stage-wrap .sheet-photo .sheet-photo-b { right: 7%; }
+/* 사진 속 인물 자리는 7막 무대의 자리(왼쪽 16% · 오른쪽 84%, 역할 의상 키 52%)와 같다 — 8막이 이 사진을 가득 채운 데서 시작하면 7막 화면 그대로 보인다 */
+.stage-wrap .sheet-photo .sheet-photo-n { left: 16%; translate: -50% 0; }
+.stage-wrap .sheet-photo .sheet-photo-b { left: 84%; translate: -50% 0; }
 /* 세 판결: 같은 크기 · 같은 무게. 판결마다 색은 위 선 · 이름에만 */
 .stage-wrap .sheet-verdict-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: calc(var(--u) * 2); }
 .stage-wrap .sheet-verdict { padding-top: calc(var(--u) * .9); border-top: 3px solid var(--tone); }

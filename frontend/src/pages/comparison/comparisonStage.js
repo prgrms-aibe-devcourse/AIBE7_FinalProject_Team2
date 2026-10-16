@@ -1,8 +1,7 @@
 // 8막 세 판결 비교 무대. 재판(신문 속 사건)이 끝나고 현실의 신문으로 돌아온다 — 판사의 책상 위 "다음 날 신문"에
 // 내 체험 결과가 녹아들어 내 판결 · AI 판결 · 실제 판결이 기사로 실렸다.
-// FE-32: 1 · 2막 사건 지면처럼 상자 없이 신문 한 장이 화면을 채운다(무대 layout 'paper', mountNewspaperStage).
-// 장면마다 대사가 짚는 기사(대본 focus)로 화면이 굴러가고, 나머지 기사는 살짝 흐려진다. 내로 · 남불은 화면 아래 말풍선과 함께 있다.
-// (예전 상자 무대의 카메라 줌 · 7막 법정에서 빠져나오는 연출은 이 방식으로 바꾸며 뺐다)
+// 지면은 화면보다 크고, 장면마다 카메라가 기사 하나(대본 focus)로 옮겨 간다. 7막 법정이 1면 사진 속으로 빠져나오며 시작한다(대본 from: "photo").
+// FE-32: 무대 상자 없이 화면 전체가 카메라 틀이다(mountNewspaperStage — 넓은 화면은 무대가 화면을 가득 채우고, 좁은 화면은 지면 안 무대)
 // 세 판결은 같은 크기 · 같은 무게로 싣고 어느 쪽이 맞았는지 말하지 않는다(PRODUCT.md 원칙 1).
 // 마지막 장면에서 다음 행동을 고른다: 다른 사건 보기 · 메인으로 · 공유하기.
 // S-08(7막)에서 비교를 공개한 뒤 무대를 이어 받고(주소만 S-09로), 재진입(S-09 주소)에서도 같은 무대를 연다
@@ -49,14 +48,14 @@ function diffLine(mine, other, name, same, differ) {
   return differ(`${name}과는 형벌이 달라요.`);
 }
 
-// 1면 사진: 7막 마지막 법정 그대로(판사 남불 · 피고인 역 내로). 지면에서는 흑백 사진이고, 시작 장면에서만 색이 남아 있다
+// 1면 사진: 7막 마지막 법정 그대로(판사 역 내로 · 피고인 역 남불). 지면에서는 흑백 사진이고, 시작 장면에서만 색이 남아 있다
 function courtPhoto() {
   const figure = element('figure', 'sheet-figure');
   const photo = element('div', 'sheet-photo');
   photo.dataset.focus = 'photo';
-  photo.append(courtSet(), picture(imageOf('naero', 'role:actor'), 'sheet-photo-n'), picture(imageOf('nambul', 'role:judge'), 'sheet-photo-b'));
+  photo.append(courtSet(), picture(imageOf('naero', 'role:judge'), 'sheet-photo-n'), picture(imageOf('nambul', 'role:actor'), 'sheet-photo-b'));
   photo.setAttribute('role', 'img');
-  photo.setAttribute('aria-label', '선고가 열린 법정. 판사 역의 남불과 피고인 역의 내로');
+  photo.setAttribute('aria-label', '선고가 열린 법정. 판사 역의 내로와 피고인 역의 남불');
   figure.append(photo, element('figcaption', '', '선고가 열린 법정(판결 체험 재연)'));
   return figure;
 }
@@ -160,10 +159,10 @@ function newspaper(data, script, caseTitle) {
   return sheet;
 }
 
-// 공유: 받는 사람이 체험 전에 판결을 보지 않게 형량 없이 사건 목록 주소만 보낸다(앵커링 방지).
-// shortcut: 사건 디테일(S-20, /cases/{caseId})이 생기면 그 주소로 바꾼다 — 지금 /cases/{caseId}/start는 체험이 없으면 목록으로 돌아간다
-async function share(note) {
-  const url = `${window.location.origin}/cases`;
+// 공유: 받는 사람이 체험 전에 판결을 보지 않게 형량 없이 이 사건의 사건 디테일(S-20, /cases/{caseId}) 주소를 보낸다(앵커링 방지, FE-38).
+// 받은 사람은 시작 전 지면(캐릭터 없음)에서 "시작하기"로 1막부터 체험한다
+async function share(note, caseId) {
+  const url = `${window.location.origin}/cases/${caseId}`;
   const text = '같은 사건, 당신이라면 어떻게 판결할까요?';
   note.textContent = '';
   if (navigator.share) {
@@ -200,20 +199,21 @@ export function renderComparisonStage({ script, data, caseId, caseTitle, navigat
   return renderStage({
     script: { ...script, acts: { ...script.acts, 8: { ...act, steps } } },
     order: ['8'],
-    sheet: newspaper(data, script, caseTitle), layout: 'paper', // 상자 없이 신문 한 장이 화면을 채운다(1 · 2막 사건 지면과 같은 방식, 화면이 기사로 굴러간다)
+    sheet: newspaper(data, script, caseTitle),
+    cameraFill: window.matchMedia('(min-width: 681px)').matches, // 넓은 화면: 책상 없이 신문만 화면 가득(1막 지면처럼)
     choices: { end: [
       { label: '다른 사건 보기', action: () => navigate('list'), primary: true },
       { label: '메인으로', action: () => navigate('landing') },
-      { label: '공유하기', action: (note) => share(note) },
+      { label: '공유하기', action: (note) => share(note, caseId) },
     ] },
     onRestart: restartMock(caseId),
     onJump: jumpActMock(caseId),
   });
 }
 
-// 8막 화면 틀: 1 · 2막 사건 지면처럼 책상(펠트) 위에 다음 날 신문 한 장을 펼친다(캐릭터 · 말풍선은 화면 아래 고정, FE-32)
+// 8막 화면 틀: 무대(카메라 틀)가 화면 전체를 채운다 — 판사의 책상 위 다음 날 신문을 화면 가득 들여다본다(FE-32, comparison.css)
 export function mountNewspaperStage(root, { stage }) {
-  root.className = 'case-list-page case-paper-page comparison-paper';
+  root.className = 'comparison-page comparison-full'; // comparison-page: 화면 공통 글꼴 · [hidden] 규칙(review.css)
   const desk = element('div', 'desk');
   desk.setAttribute('aria-hidden', 'true');
   root.replaceChildren(desk, element('h1', 'visually-hidden', '세 판결 비교'), stage);

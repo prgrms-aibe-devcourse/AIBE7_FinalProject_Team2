@@ -268,13 +268,4 @@
   .stage-wrap.paper-mode .stage[data-scene] .spr { transition: none; }
 }
 
-/* 8막 다음 날 신문(FE-32): 상자 없이 신문 한 장이 화면을 채운다. 크기 단위 --u는 화면 폭 기준(상자 무대의 1cqw 대신) */
-.comparison-paper .stage-wrap.paper-mode .sheet { --u: min(10.4px, calc((100vw - 48px) / 118)); position: relative; left: auto; top: auto; margin: 32px auto 0; transform: none !important; box-shadow: 0 30px 80px color-mix(in srgb, var(--color-banner-bg) 60%, transparent); }
-.comparison-paper .stage-wrap.paper-mode .sheet.spot > :not(.is-on, .sheet-mast) { opacity: .5; } /* 제호는 흐리지 않는다 */
-.comparison-paper .stage-wrap.paper-mode .sheet.spot > .sheet-mast { opacity: 1; }
-.comparison-paper .stage-wrap.paper-mode .sheet-photo .court { filter: none; }
-@media (max-width: 680px) {
-  .comparison-paper .stage-wrap.paper-mode .sheet { --u: 3.2px; width: 100%; margin-top: 0; box-shadow: none; }
-}
-.comparison-paper > .visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .stage-wrap.paper-mode .proc:empty, .stage-wrap.paper-mode .proc[hidden] { display: none; } /* 신문 지면에는 재판 순서가 없다(빈 틀이 남지 않게) */

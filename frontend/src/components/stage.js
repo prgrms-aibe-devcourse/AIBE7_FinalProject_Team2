@@ -13,7 +13,7 @@ const ROLE_LABEL = { actor: '사건 속 인물', prosecutor: '검사', defense: 
 const ROLE_COLOR = { '법정 진행': 'narrator', 판사: 'law', 'A씨 역': 'actor', 'B씨 역': 'actor', '사건 속 인물': 'actor', 검사: 'prosecutor', 변호인: 'defense', 재판장: 'law', 배석판사: 'law' };
 // 로 합의부(6막 AI 판사): 로울(저울) · 로봉(법봉) · 로북(법전). LAWS는 판단 요소를 맡는 순서(저울 → 법봉 → 법전),
 // 서는 자리는 로울이 가운데, 로봉 · 로북이 좌우(LAW_SPOTS). 직책은 로울 재판장, 로봉 · 로북 배석판사.
-// 셋은 대등하지만 로울이 합의를 이끄는 일종의 리더(재판장) 역할을 한다(10/15 결정). 캐릭터 문서 4-3("서열을 두지 않는다")은 추후 이 결정에 맞춰 고친다
+// 셋은 대등하지만 로울이 합의를 이끄는 일종의 리더(재판장) 역할을 한다(10/15 결정). 캐릭터 문서 4-3에도 반영됨(COMMON-37)
 export const LAWS = ['law-scale', 'law-gavel', 'law-book'];
 const LAW_SPOTS = ['law-gavel', 'law-scale', 'law-book'];
 export const LAW_TITLES = { 'law-scale': '재판장', 'law-gavel': '배석판사', 'law-book': '배석판사' };
@@ -249,7 +249,7 @@ function evidenceBoard(script, at) {
 // 캐릭터 · 대사창 · 조작 줄은 화면 아래에 고정된다. 카메라는 화면을 굴린다(paperCamera)
 // parked: 지면만 보여 주고 캐릭터 · 대사창 · 조작 줄은 숨긴 채 기다린다(S-20 사건 정보 — 체험 시작 전). 화면이 wrap.release()로 풀면
 // 내로 · 남불이 들어오며 첫 대사가 시작된다.
-export function renderStage({ script, order, cards = {}, inputCards = [], choices = {}, start, onConfirm, onRestart, onJump, sheet: given, layout = 'box', parked: parkedAtStart = false }) {
+export function renderStage({ script, order, cards = {}, inputCards = [], choices = {}, start, onConfirm, onRestart, onJump, sheet: given, layout = 'box', parked: parkedAtStart = false, cameraFill = false }) {
   const paperMode = layout === 'paper' && Boolean(given);
   let parked = parkedAtStart;
   let again = false; // 이미 지나온 체험을 다시 보는 중(S-20 "시작하기"): 대본 textAgain이 있으면 그 문장을 쓴다
@@ -334,7 +334,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
   const frame = sheet && !paperMode ? element('div', 'sheet-frame') : null;
   let byKeyboard = false; // 지금 넘기는 입력이 키보드인가(Space · → · Enter, 키보드로 누른 버튼)
   const camera = paperMode ? paperCamera(sheet, () => (dialog.hidden ? controls.getBoundingClientRect().top : dialog.getBoundingClientRect().top), () => byKeyboard)
-    : sheet ? sheetCamera(sheet, frame) : null;
+    : sheet ? sheetCamera(sheet, frame, { fill: cameraFill }) : null; // cameraFill: 지면이 언제나 장면을 빈틈없이 덮는다(8막 화면 가득)
   if (frame) frame.setAttribute('aria-hidden', 'true');
   scene.append(bg, court, ...(sheet ? [sheet] : []), ...(frame ? [frame] : []), figures.naero, figures.nambul, lawCast, procs, sys, flash);
 
