@@ -16,7 +16,7 @@ const SCENE_WIDTH = 1672;
 // 물건(메뉴) 목록. route가 없으면 "곧 열려요"로 표시하고 누를 수 없다.
 // S-15 · S-17이 생기면 route에 화면 이름(routes.js의 name)만 넣으면 된다.
 const OBJECTS = {
-  folder: { label: '판결 성향 테스트', readyNote: '3분이면 끝 →', route: 'test', mobileText: '나의 판결 성향 알아보기' },
+  folder: { label: '판결 성향 테스트', readyNote: '3분이면 끝', route: 'test', mobileText: '나의 판결 성향 알아보기' },
   news: { label: '실제 사건 판결 체험', readyNote: '오늘의 사건', route: 'list', mobileText: '오늘의 사건' },
   phone: { label: '마이페이지', readyNote: '내 판결 기록', route: 'me', mobileText: '내 판결 기록' },
   laptop: { label: '커뮤니티', readyNote: '', route: null, mobileText: '다른 사람의 생각' },
@@ -121,7 +121,9 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
   const newsSheets = span('news-sheets');
   newsSheets.append(span(''), span(''));
   const info = span('news-info');
-  info.append(span('', '판결 체험 신문'), span('', '← 처음으로 · 서비스 소개'));
+  const infoLinks = span('news-info-links');
+  infoLinks.append(span('', '← 처음으로'), span('', '서비스 소개')); // S-02 정보 줄의 보조 메뉴 두 개(newspaperFront.js)와 같게
+  info.append(span('', '판결 체험 신문'), infoLinks);
   const earLeft = span('news-ear');
   earLeft.append(element('b', '', '“모든 판결에는 이유가 있다”'));
   const earRight = span('news-ear');
@@ -193,7 +195,6 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
     deskObject('laptop', laptop),
     deskObject('phone', phone),
     ...cheeks,
-    deco('desk-grain'),
   );
 
   // 신문 집어 들기: 책상이 신문 가운데를 기준으로 커지며 사라진 뒤 지면(S-02)으로 간다. 움직임 줄이기면 바로 간다
@@ -260,18 +261,24 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
   mobile.append(mobileHead, mobileList);
 
   // ---- 서비스 소개 ----
+  // 책상 밖 바닥에 펼쳐 둔 신문 한 단: 겹줄 아래 세 단을 단 사이 괘선으로 나눈다(S-02 지면 짜임).
+  // 순서가 곧 체험 흐름이라 번호를 둔다(1 먼저 판단 → 2 판결 → 3 비교)
   const heading = element('h2', '', '이렇게 체험해요');
   heading.id = 'feature-heading';
-  const cards = element('ol', 'feature-cards');
+  const steps = element('ol', 'feature-steps');
   features.forEach(({ title, text }, i) => {
-    const card = element('li', 'feature-card');
-    card.append(span('feature-step', String(i + 1)), element('h3', '', title), element('p', '', text));
-    cards.append(card);
+    const step = element('li', 'feature-step');
+    const number = span('feature-number', String(i + 1));
+    number.setAttribute('aria-hidden', 'true'); // ol이 순서를 읽어 준다
+    step.append(number, element('h3', '', title), element('p', '', text));
+    steps.append(step);
   });
   const start = button('사건 목록 보기', () => navigate('list'), 'primary-button');
   const introActions = element('div', 'feature-actions');
   introActions.append(start);
-  intro.append(heading, cards, introActions);
+  const sheet = element('div', 'feature-sheet');
+  sheet.append(heading, steps, introActions);
+  intro.append(sheet);
 
   root.append(renderSiteHeader({ navigate, onIntro: showIntro }), scene, mobile, intro, renderSiteFooter());
   container.replaceChildren(root);
