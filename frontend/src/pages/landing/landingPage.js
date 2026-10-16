@@ -28,10 +28,10 @@ const CHEEKS = [
   { who: 'naero', look: 'idle-sorry', left: 250, top: 2, height: 170 },
   { who: 'nambul', look: 'idle-thinking', left: 1300, top: 782, height: 158 },
 ];
+let newsCache = null; // 사건 목록(API 1) 마지막 응답
 const LIFT_MS = 1000; // 신문을 집어 드는 시간 = 신문 들림 .38초 + 책상 다가옴 .72초(landing.css .is-lifting · .is-held와 같게, 일부 겹침)
-// 8막에서 "메인으로" 올 때: 보던 지면이 줌아웃하며 책상 위 신문 자리로 줄어들고, 그 자리의 신문으로 바뀐다
-const BACK_OFF_MS = 720;
-const EASE = 'cubic-bezier(.45, 0, .2, 1)';
+// 8막에서 "메인으로" 올 때: 보던 지면이 줌아웃(제자리에서 .82배)과 페이드아웃을 함께 하며 책상이 드러난다
+const FADE_MS = 800;
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const features = [
@@ -279,7 +279,7 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
   if (section === 'intro') showIntro();
 
   // 8막에서 왔으면(from: 'paper') 넘겨받은 지면이 화면을 덮은 채로 시작한다.
-  // 줌아웃하며 책상이 드러나고, 지면이 책상 위 신문 자리로 줄어든 뒤 그 신문으로 바뀌며 내려놓인다.
+  // 지면이 페이드아웃되며 책상이 드러난다.
   // 좁은 화면은 메뉴의 신문 카드로 같은 연출. 새로고침 · 뒤로 가기로는 되풀이하지 않고, 움직임 줄이기면 연출 없이 바로 책상이다
   if (from === 'paper') {
     history.replaceState({ ...history.state, extras: {} }, '');
@@ -287,64 +287,49 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
     if (handed && !reducedMotion()) turnOver(handed);
     else handed?.layer.remove();
   }
-  async function turnOver({ layer, shade, card, copy, view, start }) {
-    const onDesk = getComputedStyle(scene).display !== 'none';
-    const news = onDesk ? world.querySelector('.obj-news') : mobile.querySelector('.item-news');
-    if (!news) { layer.remove(); return; }
-    // 끝 자리: 넓은 화면은 들고 있는 신문, 좁은 화면은 메뉴의 신문 카드. 책상은 신문 쪽으로 다가간 데서 시작한다
-    root.classList.add('is-returning');
-    if (onDesk) { aimAt(news); news.classList.add('is-held'); }
-    const to = news.getBoundingClientRect();
-    if (onDesk) scene.classList.add('is-near');
-    void scene.offsetWidth; // 다가간 상태를 전환 없이 먼저 그려 두고 거기서 물러난다
-    root.classList.remove('is-returning');
-    news.style.visibility = 'hidden';
-
-    if (onDesk) scene.classList.remove('is-near');
-    const timing = { duration: BACK_OFF_MS, easing: EASE, fill: 'forwards' };
-    shade.animate([{ opacity: 1 }, { opacity: 0 }], { ...timing, easing: 'ease-out' });
-    card.animate([
-      { left: `${view.left}px`, top: `${view.top}px`, width: `${view.width}px`, height: `${view.height}px` },
-      { left: `${to.left}px`, top: `${to.top}px`, width: `${to.width}px`, height: `${to.height}px` },
-    ], timing);
-    // 보던 부분을 그대로 줄인다(카메라가 물러나듯 — 지면이 미끄러지지 않게, 신문 자리에 맞춰 위 · 왼쪽 기준)
-    const k = to.width / view.width;
-    await copy.animate([
-      { transform: `translate(${start.x}px, ${start.y}px) scale(${start.scale})` },
-      { transform: `translate(${start.x * k}px, ${start.y * k}px) scale(${start.scale * k})` },
-    ], timing).finished.catch(() => {});
+  // 넘겨받은 지면은 제자리에서 줄어들며(줌아웃) 페이드아웃하고, 아래의 책상이 드러난다
+  async function turnOver({ layer }) {
+    layer.style.transformOrigin = '50% 50%';
+    await layer.animate([{ opacity: 1, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(.82)' }], { duration: FADE_MS, easing: 'cubic-bezier(.4, 0, .2, 1)', fill: 'forwards' }).finished.catch(() => {});
     layer.remove();
-    news.style.visibility = '';
-    news.classList.remove('is-held'); // 책상에 내려놓는다(.obj-news 전환)
   }
 
   // ---- 신문 지면 채우기 (사건 목록 API 1). 실패해도 책상은 그대로 쓴다 ----
+  // 한 번 받은 목록은 모듈에 두고 다시 올 때 처음부터 채운다(8막 "메인으로" 등에서 책상이 드러날 때 기본 사진이 사건 사진으로 튀지 않게).
+  // 새 응답이 같으면(JSON 비교) 다시 그리지 않는다
   async function fillNews() {
     try {
-      const { summary, cases } = await api.getCases();
-      if (!root.isConnected || !cases?.length) return;
-      const ordered = [...cases].sort((a, b) => b.participantCount - a.participantCount);
-      const [top, ...others] = ordered;
-      banner.textContent = top.headline || top.title;
-      deck.textContent = top.deck || top.shortIntro;
-      kicker.textContent = `머리기사 · ${top.crimeCategoryLabel}`;
-      earCount.textContent = `법정에 오른 사건 ${summary.total}건`;
-      tabCount.textContent = `총 ${summary.total}건`;
-      lead.textContent = top.article?.[0] || top.shortIntro;
-      photo.src = casePhoto(top);
-      recs.replaceChildren(...others.slice(0, 2).map((item) => {
-        const node = span('news-rec');
-        node.append(element('b', '', item.headline || item.title), span('', item.article?.[0] || item.shortIntro));
-        return node;
-      }));
-      index.replaceChildren(...others.slice(2, 5).map((item) => span('', item.headline || item.title)));
-      notes.news.textContent = `오늘의 사건 ${summary.total}건!`;
-      mobileCounts.news.textContent = `오늘의 사건 ${summary.total}건`;
-      mobileNews.headline.textContent = top.headline || top.title;
-      mobileNews.photo.src = casePhoto(top);
+      if (newsCache) paintNews(newsCache);
+      const fresh = await api.getCases();
+      if (!root.isConnected) return;
+      if (newsCache && JSON.stringify(newsCache) === JSON.stringify(fresh)) return;
+      newsCache = fresh;
+      paintNews(fresh);
     } catch (error) {
       console.warn('메인 신문 지면을 채우지 못했어요:', error);
     }
+  }
+  function paintNews({ summary, cases }) {
+    if (!cases?.length) return;
+    const ordered = [...cases].sort((a, b) => b.participantCount - a.participantCount);
+    const [top, ...others] = ordered;
+    banner.textContent = top.headline || top.title;
+    deck.textContent = top.deck || top.shortIntro;
+    kicker.textContent = `머리기사 · ${top.crimeCategoryLabel}`;
+    earCount.textContent = `법정에 오른 사건 ${summary.total}건`;
+    tabCount.textContent = `총 ${summary.total}건`;
+    lead.textContent = top.article?.[0] || top.shortIntro;
+    photo.src = casePhoto(top);
+    recs.replaceChildren(...others.slice(0, 2).map((item) => {
+      const node = span('news-rec');
+      node.append(element('b', '', item.headline || item.title), span('', item.article?.[0] || item.shortIntro));
+      return node;
+    }));
+    index.replaceChildren(...others.slice(2, 5).map((item) => span('', item.headline || item.title)));
+    notes.news.textContent = `오늘의 사건 ${summary.total}건!`;
+    mobileCounts.news.textContent = `오늘의 사건 ${summary.total}건`;
+    mobileNews.headline.textContent = top.headline || top.title;
+    mobileNews.photo.src = casePhoto(top);
   }
   if (api?.getCases) fillNews();
 }
