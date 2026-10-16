@@ -1,0 +1,32 @@
+/* 신문 한 장 넘기기 (utils/pageTurn.js). 화면 전체를 덮는 장식 층이라 눌러도 아래 화면이 받는다 */
+.page-turn { position: fixed; inset: 0; z-index: 1000; overflow: hidden; pointer-events: none; perspective: 2600px; perspective-origin: 50% 40%; }
+.page-turn-dim { position: absolute; inset: 0; background: color-mix(in srgb, var(--color-desk-shadow) 60%, transparent); opacity: 0; }
+.page-turn-leaf { position: absolute; top: 0; height: 100dvh; transform-origin: left center; transform-style: preserve-3d; will-change: transform; }
+.page-turn-face {
+  position: absolute; inset: 0; overflow: hidden; background: var(--color-paper); backface-visibility: hidden;
+  box-shadow: 16px 0 36px -8px color-mix(in srgb, var(--color-desk-shadow) 55%, transparent);
+}
+.page-turn-scope { position: absolute; inset: 0; min-height: 0; }
+/* 뒷면: 반대편 지면이 비쳐 보이는 종이(글줄만 흐리게) */
+.page-turn-face.is-back { transform: rotateY(180deg); background: color-mix(in srgb, var(--color-paper) 88%, var(--color-text)); }
+.page-turn-back-lines {
+  position: absolute; inset: 7% 6%; opacity: .16;
+  background: repeating-linear-gradient(0deg, var(--color-text) 0 2px, transparent 2px 16px);
+  -webkit-mask-image: repeating-linear-gradient(90deg, #000 0 23%, transparent 23% 25%);
+  mask-image: repeating-linear-gradient(90deg, #000 0 23%, transparent 23% 25%);
+}
+/* 넘어가며 접히는 쪽(오른쪽 끝)이 어두워진다 */
+.page-turn-shade { position: absolute; inset: 0; opacity: 0; background: linear-gradient(90deg, transparent 15%, color-mix(in srgb, var(--color-desk-shadow) 75%, transparent) 100%); }
+.page-turn-shade.is-back { background: linear-gradient(270deg, transparent 15%, color-mix(in srgb, var(--color-desk-shadow) 75%, transparent) 100%); }
+
+/* 8막 신문 → 메인 책상 (utils/paperHandoff.js · landingPage.js). 지금 보던 지면을 본뜬 한 장이 책상 위 신문 자리로 물러난 뒤 뒤집힌다 */
+.paper-hand-layer { position: fixed; inset: 0; z-index: 1000; overflow: hidden; pointer-events: none; perspective: 1800px; }
+.paper-hand-shade { position: absolute; inset: 0; }
+.paper-hand-shade.is-desk { background:
+    radial-gradient(ellipse at 8% 0%, color-mix(in srgb, var(--color-desk-wood-glow) 38%, transparent), transparent 55%),
+    repeating-linear-gradient(176deg, color-mix(in srgb, var(--color-desk-shadow) 6%, transparent) 0 2px, transparent 2px 9px),
+    repeating-linear-gradient(178deg, color-mix(in srgb, var(--color-desk-wood-glow) 6%, transparent) 0 1px, transparent 1px 23px),
+    linear-gradient(180deg, var(--color-desk-wood-light), var(--color-desk-wood) 40%, var(--color-desk-wood-dark)); }
+.paper-hand { position: absolute; overflow: hidden; background: var(--color-desk-news); transform-origin: 50% 50%; backface-visibility: hidden;
+  box-shadow: 0 24px 40px -18px color-mix(in srgb, var(--color-desk-shadow) 60%, transparent); }
+.paper-hand .sheet { position: absolute; transform-origin: 0 0; box-shadow: none; }

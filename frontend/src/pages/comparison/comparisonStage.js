@@ -1,14 +1,16 @@
 // 8막 세 판결 비교 무대. 재판(신문 속 사건)이 끝나고 현실의 신문으로 돌아온다 — 판사의 책상 위 "다음 날 신문"에
-// 내 체험 결과가 녹아들어 내 판결 · AI 판결 · 실제 판결이 기사로 실렸다. 지면은 화면보다 크고, 장면마다 카메라가
-// 기사 하나(대본 focus)로 옮겨 간다. 내로 · 남불은 지면 앞을 뛰어다니며 설명한다.
-// 7막 법정이 지면의 1면 사진 속으로 빠져나오며 시작한다(대본 from: "photo" — 2 → 3막 "사진 속으로"의 반대).
+// 내 체험 결과가 녹아들어 내 판결 · AI 판결 · 실제 판결이 기사로 실렸다.
+// 지면은 화면보다 크고, 장면마다 카메라가 기사 하나(대본 focus)로 옮겨 간다. 7막 법정이 1면 사진 속으로 빠져나오며 시작한다(대본 from: "photo").
+// FE-32: 무대 상자 없이 화면 전체가 카메라 틀이다(mountNewspaperStage — 넓은 화면은 무대가 화면을 가득 채우고, 좁은 화면은 지면 안 무대)
 // 세 판결은 같은 크기 · 같은 무게로 싣고 어느 쪽이 맞았는지 말하지 않는다(PRODUCT.md 원칙 1).
-// 마지막 장면에서 다음 행동을 고른다: 다른 사건 보기 · 메인으로 · 공유하기.
+// 마지막 장면에서 다음 행동을 고른다: 다른 사건 보기 · 여기 남아있기(지면 읽기 → 메인으로) · 메인으로 · 공유하기.
 // S-08(7막)에서 비교를 공개한 뒤 무대를 이어 받고(주소만 S-09로), 재진입(S-09 주소)에서도 같은 무대를 연다
 import { formatPenalty, formatDispositions } from '../../utils/judgmentFormat.js';
 import { formatMonths } from '../../components/recommendedRangeBar.js';
 import { renderStage, courtSet, imageOf } from '../../components/stage.js';
 import { restartMock, jumpActMock } from '../overview/overviewPage.js';
+import { editorNote } from '../../utils/preJudgmentCompare.js';
+import { handPaper } from '../../utils/paperHandoff.js';
 
 const SUBJECTS = [['USER', '내 판결'], ['AI', 'AI 판결'], ['COURT', '실제 판결']];
 const DIRECTIONS = { UP: ['무겁게', 'up'], DOWN: ['가볍게', 'down'] };
@@ -47,14 +49,14 @@ function diffLine(mine, other, name, same, differ) {
   return differ(`${name}과는 형벌이 달라요.`);
 }
 
-// 1면 사진: 7막 마지막 법정 그대로(판사 남불 · 피고인 역 내로). 지면에서는 흑백 사진이고, 시작 장면에서만 색이 남아 있다
+// 1면 사진: 7막 마지막 법정 그대로(판사 역 내로 · 피고인 역 남불). 지면에서는 흑백 사진이고, 시작 장면에서만 색이 남아 있다
 function courtPhoto() {
   const figure = element('figure', 'sheet-figure');
   const photo = element('div', 'sheet-photo');
   photo.dataset.focus = 'photo';
-  photo.append(courtSet(), picture(imageOf('naero', 'role:actor'), 'sheet-photo-n'), picture(imageOf('nambul', 'role:judge'), 'sheet-photo-b'));
+  photo.append(courtSet(), picture(imageOf('naero', 'role:judge'), 'sheet-photo-n'), picture(imageOf('nambul', 'role:actor'), 'sheet-photo-b'));
   photo.setAttribute('role', 'img');
-  photo.setAttribute('aria-label', '선고가 열린 법정. 판사 역의 남불과 피고인 역의 내로');
+  photo.setAttribute('aria-label', '선고가 열린 법정. 판사 역의 내로와 피고인 역의 남불');
   figure.append(photo, element('figcaption', '', '선고가 열린 법정(판결 체험 재연)'));
   return figure;
 }
@@ -113,13 +115,6 @@ function newspaper(data, script, caseTitle) {
   });
   table.append(thead, tbody);
 
-  const change = element('div', 'sheet-change-row');
-  const from = element('div');
-  from.append(element('p', 'sheet-who', '뉴스로 봤을 때'), element('p', 'sheet-penalty', preToFinal.preJudgment.label));
-  const to = element('div');
-  to.append(element('p', 'sheet-who', '모두 보고 판결했을 때'), element('p', 'sheet-penalty', preToFinal.finalJudgmentText));
-  change.append(from, to);
-
   const rules = [['공통점', ruleSentences.common], ['차이점', ruleSentences.differences]].map(([title, lines]) => {
     const part = element('div', 'sheet-rule');
     part.append(element('h4', '', title), ...lines.map((line) => element('p', 'sheet-text', line)));
@@ -139,19 +134,62 @@ function newspaper(data, script, caseTitle) {
     cast.append(item);
   });
 
+  // 독자 의견란: 2막에서 보낸 엽서가 다음 날 신문 독자란에 실려 돌아온다. 처음 보낸 첫인상만 다시 싣는다(API 14의 preToFinal.preJudgment).
+  // 아래 편집부 의견은 그 첫인상을 실제 판결과 견줘 한 줄로 적는다(어느 쪽이 맞는지는 말하지 않는다).
+  // 추후 확장(우선도 낮음): 사용자 데이터가 쌓이면 이 칸에 다른 독자들의 첫인상 분포를 함께 보여 줄 수 있다 — 지금은 데이터가 없어 보여 주지 않는다.
+  const letter = element('div', 'sheet-letter');
+  const letterMark = element('span', 'sheet-letter-mark');
+  letterMark.setAttribute('aria-hidden', 'true');
+  letterMark.append('접수', element('br'), '완료');
+  letter.append(element('p', 'sheet-letter-q', '이 사건, 어느 정도의 형량이 맞다고 생각하나요?'),
+    element('p', 'sheet-letter-a', preToFinal.preJudgment.label),
+    element('p', 'sheet-letter-by', '— 기사만 읽고 보낸 첫인상, 독자 엽서'), element('div', 'sheet-letter-lines'), letterMark);
+  const note = editorNote(preToFinal.preJudgment.label, judgments.COURT);
+  if (note) {
+    const edit = element('p', 'sheet-letter-edit');
+    edit.append(element('b', '', '편집부 의견'), note);
+    letter.append(edit);
+  }
+
   sheet.append(mast, front,
-    story('change', '뉴스로 봤을 때, 모두 보고 난 뒤', change, element('p', 'sheet-text', preToFinal.summaryText)),
+    story('letters', '독자 의견', letter),
     story('verdicts', '세 판결, 나란히', verdicts),
     story('cast', '이번 사건에서 만난 모습', cast),
     story('factors', '판단 요소, 어디서 갈렸나', table),
-    story('rules', '같게 본 것, 다르게 본 것', ...rules));
+    story('rules', '같게 본 것, 다르게 본 것', ...rules),
+    advertisements());
+  // 신문 맨 아래: "여기 남아있기"로 지면을 다 읽은 뒤 메인 책상으로. 읽는 동안에만 보인다(courtSketch.css)
+  const close = element('footer', 'sheet-close');
+  const fold = element('button', 'primary-button sheet-fold', '메인으로');
+  fold.type = 'button';
+  close.append(element('p', 'sheet-close-note', '다 읽었으면 신문을 책상에 내려놓아요.'), fold);
+  sheet.append(close);
   return sheet;
 }
 
-// 공유: 받는 사람이 체험 전에 판결을 보지 않게 형량 없이 사건 목록 주소만 보낸다(앵커링 방지).
-// shortcut: 사건 디테일(S-20, /cases/{caseId})이 생기면 그 주소로 바꾼다 — 지금 /cases/{caseId}/start는 체험이 없으면 목록으로 돌아간다
-async function share(note) {
-  const url = `${window.location.origin}/cases`;
+// 지면 맨 아래 광고 · 알림 단: 서비스 안의 다른 메뉴를 신문 광고처럼 싣는다(누르지 않는 장식, 메인 책상의 물건과 같은 이름).
+// 마지막 기사(공통점 · 차이점, 만난 모습)가 지면 끝에 붙지 않게 해서, 카메라가 그 기사를 화면 가운데로 당길 수 있다
+function advertisements() {
+  const ads = element('aside', 'sheet-ads');
+  ads.setAttribute('aria-label', '광고 · 알림');
+  const ad = (kind, tag, title, text) => {
+    const box = element('div', `sheet-ad ${kind}`);
+    box.append(element('p', 'sheet-ad-tag', tag), element('p', 'sheet-ad-title', title), element('p', 'sheet-ad-text', text));
+    return box;
+  };
+  ads.append(
+    ad('is-lead', '광고', '판결 성향 테스트', '나는 엄하게 보는 편일까, 사정을 살피는 편일까? 3분이면 끝나는 판결 성향 검사.'),
+    ad('', '알림', '오늘의 지면', '다른 사건도 판결을 기다리고 있어요. 신문을 펼쳐 다음 사건을 골라 보세요.'),
+    ad('is-notice', '독자 엽서 모집', '첫인상을 보내 주세요', '기사만 읽고 보낸 엽서는 다음 날 독자 의견란에 실립니다.'),
+    element('p', 'sheet-ads-note', '이 지면의 사건과 기사는 판결 체험을 위해 재구성한 것이며, 사진은 AI로 생성한 연출 이미지입니다.'),
+  );
+  return ads;
+}
+
+// 공유: 받는 사람이 체험 전에 판결을 보지 않게 형량 없이 이 사건의 사건 디테일(S-20, /cases/{caseId}) 주소를 보낸다(앵커링 방지, FE-38).
+// 받은 사람은 시작 전 지면(캐릭터 없음)에서 "시작하기"로 1막부터 체험한다
+async function share(note, caseId) {
+  const url = `${window.location.origin}/cases/${caseId}`;
   const text = '같은 사건, 당신이라면 어떻게 판결할까요?';
   note.textContent = '';
   if (navigator.share) {
@@ -174,26 +212,67 @@ async function share(note) {
 /**
  * @returns {HTMLElement} 8막 무대. 마지막 대사창의 선택지로 다른 사건 · 메인 · 공유를 고른다
  */
-export function renderComparisonStage({ script, data, caseId, caseTitle, navigate }) {
+// fromRect: 7막 무대 장면이 있던 화면 사각형(이어 받을 때). 그 자리 그대로에서 신문으로 빠져나온다
+export function renderComparisonStage({ script, data, caseId, caseTitle, navigate, fromRect }) {
   const { judgments } = data;
   const vsCourt = diffLine(judgments.USER, judgments.COURT, '실제 판결',
     '실제 판결과 형량이 같았네요. 그런데 무겁게 본 요소도 같았을까요?', (head) => `${head} 어떤 요소를 다르게 봤을까요?`);
   const vsAi = diffLine(judgments.USER, judgments.AI, 'AI 판결',
     'AI 판결과 형량이 같아요! 그래도 이유까지 같은지는 따로 봐야 해요.', (head) => `${head} 다른 자리에서 보면 다르게 보이기도 해요!`);
   const act = script.acts['8'];
-  const steps = act.steps.map((step) => (step.text ? { ...step, text: step.text.replace('{vsCourt}', vsCourt).replace('{vsAi}', vsAi) } : step));
-  return renderStage({
+  const pre = data.preToFinal.preJudgment.label;
+  const editor = editorNote(pre, judgments.COURT); // 편집부 의견을 못 만들면(구간 이름을 못 읽음) 그 대사는 건너뛴다
+  const steps = act.steps.filter((step) => editor || !step.text?.includes('{editor}'))
+    .map((step) => (step.text ? { ...step, text: step.text.replace('{vsCourt}', vsCourt).replace('{vsAi}', vsAi).replace('{pre}', pre).replace('{editor}', editor ?? '') } : step));
+  const narrow = window.matchMedia('(max-width: 680px)').matches;
+  const sheet = newspaper(data, script, caseTitle);
+  const stage = renderStage({
     script: { ...script, acts: { ...script.acts, 8: { ...act, steps } } },
     order: ['8'],
-    sheet: newspaper(data, script, caseTitle),
+    sheet,
+    fromRect,
+    cameraFill: true, // 책상 없이 신문만 화면 가득(1막 지면처럼)
+    cameraMinScale: narrow ? 1.3 : 0, // 좁은 화면도 기사 일부를 크게(왼쪽 위부터)
+    cameraMaxUnit: narrow ? 0 : 9.5, // 큰 화면: 본문 약 15px · 제목 약 26px 이상으로 키우지 않는다
     choices: { end: [
       { label: '다른 사건 보기', action: () => navigate('list'), primary: true },
-      { label: '메인으로', action: () => navigate('landing') },
-      { label: '공유하기', action: (note) => share(note) },
+      { label: '여기 남아있기', action: () => stay() },
+      { label: '메인으로', action: () => toDesk() },
+      { label: '공유하기', action: (note) => share(note, caseId) },
     ] },
     onRestart: restartMock(caseId),
     onJump: jumpActMock(caseId),
   });
+  // 여기 남아있기: 무대를 멈추고(말풍선 · 캐릭터 · 조작 줄을 걷고) 신문을 스크롤해 읽는다
+  function stay() {
+    stage.freeze();
+    stage.classList.add('reading-paper');
+    window.scrollTo(0, 0);
+    sheet.setAttribute('tabindex', '-1');
+    sheet.focus({ preventScroll: true });
+  }
+  // 메인으로: 지금 보던 지면을 메인에 넘기고 간다. 메인에서 줌아웃하며 책상 위 신문 자리로 줄어든다(landingPage.js)
+  let closing = false;
+  function toDesk() {
+    if (closing) return;
+    closing = true;
+    stage.freeze();
+    handPaper(sheet, { backdrop: 'desk' }); // 지면 양옆은 책상
+    navigate('landing', { from: 'paper' });
+  }
+  sheet.querySelector('.sheet-fold').addEventListener('click', toDesk);
+  return stage;
+}
+
+// 8막 화면 틀: 무대(카메라 틀)가 화면 전체를 채운다 — 판사의 책상 위 다음 날 신문을 화면 가득 들여다본다(FE-32, comparison.css)
+// 7막에서 이어 받을 때는 renderComparisonStage를 부르기 전에 sceneRect(root)로 7막 장면 자리를 재 둔다
+export const sceneRect = (root) => root.querySelector('.stage-wrap .scene')?.getBoundingClientRect();
+export function mountNewspaperStage(root, { stage }) {
+  root.className = 'comparison-page comparison-full'; // comparison-page: 화면 공통 글꼴 · [hidden] 규칙(review.css)
+  const desk = element('div', 'desk');
+  desk.setAttribute('aria-hidden', 'true');
+  root.replaceChildren(desk, element('h1', 'visually-hidden', '세 판결 비교'), stage);
+  window.scrollTo(0, 0);
 }
 
 // 무대 화면 틀(6 ~ 8막이 같은 화면에서 이어질 때도 쓴다): 사건 제목 줄 + 가운데 넓은 무대

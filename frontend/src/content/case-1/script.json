@@ -11,6 +11,16 @@
       "돈 문제로 오래 다퉈 온 지인 사이의 갈등이 끝내 한 사람의 죽음으로 이어졌다. A씨는 빌린 돈 문제를 이야기하려고 자신의 집을 찾아온 지인 B씨를 집 안에 있던 흉기로 살해한 것으로 조사됐다.",
       "두 사람은 A씨가 B씨에게 빌린 돈을 제때 갚지 못하면서 사이가 틀어졌다. 그동안 상환 문제로 다툼이 이어졌고, 이날도 B씨가 직접 A씨의 집을 찾아가 이야기를 꺼낸 것이 발단이 됐다.",
       "대화는 곧 말다툼으로 번졌다. 다툼이 격해지자 A씨는 집 안에 있던 흉기를 집어 들었고, B씨는 그 자리에서 숨졌다. A씨는 쓰러진 B씨에게 별다른 구호 조치를 하지 않은 채 집을 나선 것으로 전해졌다."
+    ],
+    "extraPhotos": [
+      {
+        "src": "/images/cases/case-1-sub.webp",
+        "caption": "사건 이해를 돕기 위한 연출 이미지"
+      },
+      {
+        "src": "/images/cases/case-1-detail.webp",
+        "caption": "사건 이해를 돕기 위한 연출 이미지"
+      }
     ]
   },
   "cards": {
@@ -118,43 +128,32 @@
       },
       "steps": [
         {
-          "say": "naero",
-          "text": "오늘 신문 1면에 실린 사건이에요. 기사에 나온 내용만 가지고 먼저 따라가 볼게요.",
-          "focus": "head"
-        },
-        {
           "say": "nambul",
           "look": {
             "nambul": "guide-neutral"
           },
-          "text": "제가 A씨, 내로가 B씨 자리에 서 볼게요. 기사에 없는 말은 지어내지 않을게요.",
-          "focus": "photo"
-        },
-        {
-          "say": "nambul",
-          "role": "A씨 역",
-          "look": {
-            "naero": "role:actor",
-            "nambul": "role:actor"
-          },
-          "tags": {
-            "naero": "B씨 역",
-            "nambul": "A씨 역"
-          },
-          "text": "B씨에게 빌린 돈을 제때 갚지 못했어요. 그 뒤로 돈 문제로 자주 다퉜고요.",
-          "focus": "photo"
+          "text": "기사 제목부터 같이 봐요. 돈을 갚으라며 찾아온 지인이 자택에서 숨졌다는 내용이에요.",
+          "focus": "head"
         },
         {
           "say": "naero",
-          "role": "B씨 역",
-          "text": "그날 저는 돈 이야기를 하려고 A씨 집을 찾아갔어요.",
+          "text": "사진은 사건을 이해하도록 만든 연출 이미지예요. 실제 현장 사진이 아니에요.",
           "focus": "photo"
         },
         {
           "say": "nambul",
-          "role": "A씨 역",
-          "text": "이야기는 금방 말다툼이 됐어요. 목소리가 점점 커졌고요.",
-          "focus": "photo"
+          "text": "기사에 따르면 A씨는 B씨에게 빌린 돈을 제때 갚지 못했어요. 그 문제로 두 사람은 오래 다퉈 왔다고 해요.",
+          "focus": "body"
+        },
+        {
+          "say": "naero",
+          "text": "그날 B씨는 돈 이야기를 하려고 A씨의 집을 찾아갔어요. 이야기는 곧 말다툼이 됐다고 해요.",
+          "focus": "body"
+        },
+        {
+          "say": "nambul",
+          "text": "다툼이 격해지자 A씨는 집에 있던 흉기를 집어 들었고, B씨는 그 자리에서 숨졌어요. A씨는 구호 조치 없이 집을 나갔다고 전해져요.",
+          "focus": "body"
         },
         {
           "say": "naero",
@@ -162,11 +161,7 @@
             "naero": "react-sorry",
             "nambul": "idle-neutral"
           },
-          "tags": {
-            "naero": "",
-            "nambul": ""
-          },
-          "text": "A씨는 집에 있던 흉기를 휘둘렀고, B씨는 그 자리에서 숨졌어요. A씨는 구호 조치 없이 집을 나갔다고 해요.",
+          "text": "기사로 알 수 있는 건 여기까지예요. 기사에 없는 이야기는 지어내지 않을게요.",
           "focus": "body"
         },
         {
@@ -174,7 +169,7 @@
           "look": {
             "nambul": "react-sorry"
           },
-          "text": "기사로 알 수 있는 건 여기까지예요. 무거운 사건이니까, 서두르지 말고 생각해 봐요.",
+          "text": "무거운 사건이니까, 서두르지 말고 생각해 봐요.",
           "focus": "body"
         }
       ]
@@ -190,6 +185,7 @@
         {
           "say": "naero",
           "text": "기록을 펼치기 전에, 지금 드는 생각을 먼저 남겨 둘게요. 이 사람은 어느 정도의 벌을 받아야 할까요?",
+          "textAgain": "기록을 펼치기 전에 남겨 둔 첫인상이 있었죠. 그때 이 사람에게 어느 정도의 벌이 맞다고 봤는지 다시 볼게요.",
           "focus": "photo"
         },
         {
@@ -198,7 +194,16 @@
             "nambul": "guide-neutral",
             "naero": "read-thinking"
           },
-          "text": "정답은 없어요! 법정형은 사형 · 무기징역 · 5년 이상의 징역이에요. 그 안에서 감 가는 대로 골라 봐요."
+          "text": "정답은 없어요. 기사만 읽고 떠오르는 대로 골라 봐요.",
+          "textAgain": "그때는 기사만 읽고 떠오르는 대로 하나를 골랐었어요."
+        },
+        {
+          "say": "nambul",
+          "look": {
+            "nambul": "guide-happy"
+          },
+          "text": "그래서 신문사 독자 의견 엽서를 가져왔어요. 여기에 첫인상을 적어 보내 주세요.",
+          "textAgain": "그때 보낸 독자 의견 엽서를 다시 가져왔어요. 어떤 첫인상이었는지 볼까요?"
         },
         {
           "card": "preJudgment",
@@ -221,8 +226,8 @@
         "법률 안내"
       ],
       "look": {
-        "naero": "role:defense",
-        "nambul": "role:prosecutor"
+        "naero": "role:prosecutor",
+        "nambul": "role:defense"
       },
       "steps": [
         {
@@ -232,36 +237,36 @@
           "text": "재판을 시작합니다. 재판장은 당신이에요. 먼저 피고인 A씨가 본인이 맞는지 확인합니다."
         },
         {
-          "say": "nambul",
+          "say": "naero",
           "role": "검사",
           "text": "이번 재판에서 저는 검사 자리를 맡을게요."
         },
         {
-          "say": "naero",
+          "say": "nambul",
           "role": "변호인",
           "text": "저는 변호인 자리예요. 둘 다 맡은 쪽의 주장만 전해요."
         },
         {
-          "say": "nambul",
+          "say": "naero",
           "role": "검사",
           "proc": 1,
           "card": "indict",
           "text": "공소사실을 말씀드리겠습니다. 피고인은 피해자에게 빌린 돈을 갚지 못해 오래 다퉈 왔습니다."
         },
         {
-          "say": "nambul",
+          "say": "naero",
           "role": "검사",
           "card": "indict",
           "text": "사건 당일, 집을 찾아온 피해자와 말다툼을 하다가 집 안에 있던 흉기로 피해자를 살해했습니다. 적용 법조는 형법 제250조 제1항, 살인입니다."
         },
         {
-          "say": "naero",
+          "say": "nambul",
           "role": "변호인",
           "card": "plea",
           "text": "피고인은 공소사실을 모두 인정합니다."
         },
         {
-          "say": "naero",
+          "say": "nambul",
           "role": "변호인",
           "card": "plea",
           "text": "다만 미리 계획한 일이 아니라, 말다툼 중에 우발적으로 벌어진 일이라는 점을 살펴 주시기 바랍니다."
@@ -278,7 +283,7 @@
           "text": "범행 경위, 범행 뒤의 행동, 피해 회복 노력. 이 세 가지를 눈여겨보세요."
         },
         {
-          "say": "nambul",
+          "say": "naero",
           "role": "검사",
           "proc": 3,
           "card": "evidence",
@@ -286,42 +291,42 @@
           "text": "검사 측 증거입니다. 두 사람 사이에 빌린 돈 문제로 오래 이어진 다툼을 보여 주는 기록입니다."
         },
         {
-          "say": "nambul",
+          "say": "naero",
           "role": "검사",
           "card": "evidence",
           "ev": 1,
           "text": "사건 당일, 피해자가 돈 이야기를 하려고 피고인의 집을 찾아간 사실입니다."
         },
         {
-          "say": "nambul",
+          "say": "naero",
           "role": "검사",
           "card": "evidence",
           "ev": 2,
           "text": "말다툼 끝에 집 안에 있던 흉기가 사용됐고, 피고인은 구호 조치 없이 집을 나갔습니다."
         },
         {
-          "say": "nambul",
+          "say": "naero",
           "role": "검사",
           "card": "evidence",
           "ev": 3,
           "text": "피해자에게는 부양하던 어린 자녀 둘이 있고, 유족은 엄벌을 원한다는 진술입니다."
         },
         {
-          "say": "naero",
+          "say": "nambul",
           "role": "변호인",
           "card": "evidence",
           "ev": 4,
           "text": "변호인 측 증거입니다. 피고인이 수사 초기부터 범행을 인정했다는 진술 기록입니다."
         },
         {
-          "say": "naero",
+          "say": "nambul",
           "role": "변호인",
           "card": "evidence",
           "ev": 5,
           "text": "피해 회복을 위해 5,000만 원을 공탁한 자료입니다."
         },
         {
-          "say": "naero",
+          "say": "nambul",
           "role": "변호인",
           "card": "evidence",
           "ev": 6,
@@ -342,7 +347,7 @@
           "spots": {
             "nambul": "stand"
           },
-          "text": "이제 피고인에게 직접 묻습니다. 이번엔 내로가 검사석에 앉고, 남불이 A씨 자리에 서요."
+          "text": "이제 피고인에게 직접 묻습니다. 남불이 변호인석에서 일어나 A씨 자리에 서고, 검사 내로가 물어요."
         },
         {
           "say": "naero",
@@ -400,17 +405,13 @@
           "text": "법정형은 법이 정해 둔 형의 범위예요. 감경 · 가중 사유를 반영하면 실제로 선고할 수 있는 범위가 정해져요."
         },
         {
-          "say": "nambul",
+          "say": "naero",
           "role": "판사",
           "card": "guide",
-          "look": {
-            "nambul": "role:judge",
-            "naero": "idle-neutral"
-          },
           "text": "양형기준은 판사들이 형을 정할 때 참고하는 기준이에요."
         },
         {
-          "say": "nambul",
+          "say": "naero",
           "role": "판사",
           "card": "guide",
           "confirm": 4,
@@ -589,53 +590,53 @@
       "title": "실제 판결",
       "scene": "court",
       "look": {
-        "naero": "role:actor",
-        "nambul": "role:judge"
+        "naero": "role:judge",
+        "nambul": "role:actor"
       },
       "steps": [
         {
           "system": "실제 재판부의 판결"
         },
         {
-          "say": "nambul",
+          "say": "naero",
           "role": "판사",
           "text": "지금부터 판결을 선고하겠습니다. 피고인은 일어서 주시기 바랍니다."
         },
         {
-          "say": "naero",
+          "say": "nambul",
           "role": "A씨 역",
           "text": "…네."
         },
         {
-          "say": "nambul",
+          "say": "naero",
           "role": "판사",
           "card": "court-penalty",
           "board": "reading",
           "text": "주문. {order}"
         },
         {
-          "say": "nambul",
+          "say": "naero",
           "role": "판사",
           "card": "court-reasoning",
           "board": "reading",
           "text": "판결 이유를 말씀드리겠습니다."
         },
         {
-          "say": "nambul",
+          "say": "naero",
           "role": "판사",
           "card": "court-excerpt",
           "board": "reading",
           "text": "판결문에는 이렇게 적었습니다."
         },
         {
-          "say": "nambul",
+          "say": "naero",
           "role": "판사",
           "card": "court-plain",
           "board": "reading",
           "text": "쉽게 풀면 이런 뜻입니다."
         },
         {
-          "say": "nambul",
+          "say": "naero",
           "role": "판사",
           "card": "court-factors",
           "board": "reading",
@@ -691,13 +692,31 @@
           "text": "{vsAi}"
         },
         {
-          "focus": "change",
+          "focus": "letters",
+          "say": "nambul",
+          "look": {
+            "naero": "idle-neutral",
+            "nambul": "react-surprised"
+          },
+          "text": "어, 이 엽서는…! 우리가 처음에 받았던 독자 의견이에요. 기사만 읽고 보낸 첫인상이 신문에 실렸어요."
+        },
+        {
+          "focus": "letters",
           "say": "naero",
           "look": {
             "naero": "guide-neutral",
             "nambul": "idle-neutral"
           },
-          "text": "뉴스만 봤을 때와 모두 보고 난 뒤, 내 판단은 이렇게 움직였어요."
+          "text": "그때는 「{pre}」이라고 적었어요. 지금의 판결과 나란히 놓고 볼 뿐, 맞고 틀리는 건 아니에요."
+        },
+        {
+          "focus": "letters",
+          "say": "nambul",
+          "look": {
+            "naero": "idle-neutral",
+            "nambul": "guide-neutral"
+          },
+          "text": "편집부가 한 줄 달아 뒀어요. “{editor}”"
         },
         {
           "focus": "factors",
