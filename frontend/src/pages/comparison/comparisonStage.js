@@ -17,6 +17,8 @@ const DIRECTIONS = { UP: ['무겁게', 'up'], DOWN: ['가볍게', 'down'] };
 // 이번 사건에서 만난 모습: 대본에 나온 역할 의상(look "role:…")을 모은다
 const ROLE_NAMES = { actor: 'A씨 역', prosecutor: '검사', defense: '변호인', judge: '판사' };
 const NAMES = { naero: '내로', nambul: '남불' };
+const STAY_ZOOM_MS = 700; // 여기 남아있기: 당겨 보던 지면이 전체 지면으로 줄어드는 시간
+const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 function element(tag, className, text) {
   const node = document.createElement(tag);
@@ -243,13 +245,28 @@ export function renderComparisonStage({ script, data, caseId, caseTitle, navigat
     onRestart: restartMock(caseId),
     onJump: jumpActMock(caseId),
   });
-  // 여기 남아있기: 무대를 멈추고(말풍선 · 캐릭터 · 조작 줄을 걷고) 신문을 스크롤해 읽는다
+  // 여기 남아있기: 무대를 멈추고(말풍선 · 캐릭터 · 조작 줄을 걷고) 신문을 스크롤해 읽는다.
+  // 카메라가 당겨 보던 지면이 그 자리에서 지면 전체 크기로 줄어든다(줌아웃). 읽기 모드의 지면은 transform을 !important로 끄므로
+  // 개별 속성(translate · scale)으로 움직인다. 움직임 줄이기면 바로 바뀐다
   function stay() {
+    const from = sheet.getBoundingClientRect();
     stage.freeze();
     stage.classList.add('reading-paper');
     window.scrollTo(0, 0);
     sheet.setAttribute('tabindex', '-1');
     sheet.focus({ preventScroll: true });
+    if (reducedMotion()) return;
+    const to = sheet.getBoundingClientRect();
+    if (!to.width) return;
+    sheet.style.transformOrigin = '0 0';
+    // 확대된 지면이 문서 스크롤 영역을 넓히지 않게(좁은 화면에서 가로 스크롤바 · 높이 튐) 무대 밖으로 삐져나온 부분을 애니메이션 동안만 잘라 둔다
+    stage.style.overflow = 'clip';
+    sheet.animate([
+      { translate: `${from.left - to.left}px ${from.top - to.top}px`, scale: String(from.width / to.width) },
+      { translate: '0 0', scale: '1' },
+    ], { duration: STAY_ZOOM_MS, easing: 'cubic-bezier(.2, .8, .2, 1)' }).finished
+      .catch(() => {})
+      .then(() => { sheet.style.transformOrigin = ''; stage.style.overflow = ''; });
   }
   // 메인으로: 지금 보던 지면을 메인에 넘기고 간다. 메인에서 줌아웃하며 책상 위 신문 자리로 줄어든다(landingPage.js)
   let closing = false;

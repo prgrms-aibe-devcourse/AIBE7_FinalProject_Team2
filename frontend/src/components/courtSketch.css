@@ -90,11 +90,6 @@
 .comparison-full { max-width: none; border: 0; min-height: 100dvh; background: var(--color-banner-bg) url('/images/desk-felt.webp') center / cover fixed; }
 .comparison-full > .visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .comparison-full .stage-wrap > .acts { display: none; }
-/* 지면에도 1막 신문처럼 가운데 접힌 자국(카메라와 함께 움직인다) */
-.stage-wrap .sheet:not(.sheet-case)::after { content: ''; position: absolute; inset: 0; pointer-events: none; mix-blend-mode: multiply;
-  background:
-    linear-gradient(90deg, transparent calc(50% - 1px), color-mix(in srgb, var(--color-desk-shadow) 12%, transparent) 50%, transparent calc(50% + 1px)),
-    linear-gradient(90deg, transparent 46%, color-mix(in srgb, var(--color-desk-shadow) 4%, transparent) 49.6%, transparent 50.4%, transparent 54%); }
 /* 무대(카메라 틀)가 화면 전체 — 넓은 화면 · 좁은 화면 모두. 아래 받침(말풍선 · 조작 줄 · 양옆 캐릭터)은 1막 신문 지면과 같다(paperStage.css):
    조작 줄은 화면 아래 끝에서 띄운 알약 모양(모바일 브라우저 아래 바 · 아이폰 홈 바에 가리지 않게 안전 영역만큼 더 띄운다) */
 /* 모바일 브라우저 아래 바에 가리지 않게 안전 영역에 여유 16px를 더한다(받침 전체가 같이 올라간다) */
@@ -112,6 +107,8 @@
 .comparison-full .stage-wrap .name img { width: 26px; height: 26px; min-width: 0; min-height: 0; }
 .comparison-full .stage-wrap .nxt { font-size: 12px; }
 .comparison-full .stage-wrap .dlg-choices :is(.primary-button, .secondary-button) { min-height: 40px; font-size: 14px; }
+/* 8막 마지막 선택지(다른 사건 보기 · 여기 남아있기 …)는 넓은 화면에서 오른쪽으로(지면 무대 선택지와 같게, paperStage.css) */
+@media (min-width: 681px) { .comparison-full .stage-wrap .dlg-choices { justify-content: flex-end; } }
 .comparison-full .stage-wrap .stage[data-scene="sheet"] .spr, .comparison-full .stage-wrap .stage[data-scene="sheet"] .spr.role {
   --l: calc(50% - var(--dock-w) / 2 - 84px); --r: calc(50% + var(--dock-w) / 2 + 84px); bottom: calc(4px + var(--safe-bottom)); height: min(210px, 27vh); }
 .comparison-full .stage-wrap .stage[data-scene="sheet"] .spr.near { translate: -50% 0; }

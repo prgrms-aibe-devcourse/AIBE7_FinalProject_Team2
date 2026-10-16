@@ -20,9 +20,11 @@ function parseInteger(raw) {
 function parsePeriod(years, months) {
   const year = parseInteger(years);
   const month = parseInteger(months);
-  if (year.invalid || month.invalid || month.value > 11) return { value: null, invalid: true };
+  if (year.invalid || month.invalid) return { value: null, invalid: true };
   if (year.value === null && month.value === null) return { value: null, invalid: false };
-  const value = (year.value ?? 0) * 12 + (month.value ?? 0);
+  // 개월 칸에 12 이상을 적으면 그 값이 형량 전체다(예: 년 1 · 개월 15 → 15개월 = 1년 3개월). 이미 적힌 년 칸은 더하지 않는다.
+  // 칸을 벗어나면 년 · 개월로 나눠 다시 적는다(input의 change)
+  const value = month.value >= 12 ? month.value : (year.value ?? 0) * 12 + (month.value ?? 0);
   return Number.isSafeInteger(value) ? { value, invalid: false } : { value: null, invalid: true };
 }
 
@@ -125,9 +127,20 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
         draft[key] = field.value;
         changed(key);
       });
+      if (key === 'prisonMonths') field.addEventListener('change', carryMonths);
       wrapper.append(name, field, element('span', '', unit));
       parent.append(wrapper);
       inputs[key] = field;
+    }
+    // 징역 개월 칸에 12개월 이상을 적으면 년 칸 값은 버리고 개월 값만으로 년 · 개월을 다시 적는다(입력 중에는 그대로 두고 칸을 벗어날 때)
+    function carryMonths() {
+      const period = parsePeriod(draft.prisonYears, draft.prisonMonths);
+      if (period.invalid || period.value === null || parseInteger(draft.prisonMonths).value < 12) return;
+      draft.prisonYears = String(Math.floor(period.value / 12));
+      draft.prisonMonths = String(period.value % 12);
+      inputs.prisonYears.value = draft.prisonYears;
+      inputs.prisonMonths.value = draft.prisonMonths;
+      changed('prisonMonths');
     }
     function clearSuspension() {
       draft.suspended = false;
@@ -550,7 +563,7 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
         element('p', 'muted', `형량 입력 없이 ${penaltyLabels[finalType]}으로 선고해요.`),
         element('p', 'muted', `양형기준 권고 범위(징역 ${formatMonths(form.recommended.minMonths)} ~ ${formatMonths(form.recommended.maxMonths)})는 유기징역 기준이라 ${penaltyLabels[finalType]}에는 적용되지 않아요.`));
       sentenceError.textContent = sentence.invalid
-        ? prison ? '숫자로 입력해 주세요. 개월은 0 ~ 11입니다.' : '금액은 만원 단위 정수로 입력해 주세요.' : '';
+        ? prison ? '년 · 개월은 숫자로 입력해 주세요.' : '금액은 만원 단위 정수로 입력해 주세요.' : '';
       for (const key of ['prisonYears', 'prisonMonths', 'fineAmount']) inputs[key].setAttribute('aria-invalid', String(sentence.invalid));
       const key = option && !fixed ? [draft.penaltyType, draft.reducing, draft.reducedTo, pendingReduction, prison].join('|') : '';
       if (key !== rangeKey) {

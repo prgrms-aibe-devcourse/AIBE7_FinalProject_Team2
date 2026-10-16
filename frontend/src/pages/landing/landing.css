@@ -147,7 +147,6 @@
 .landing-page .news-art {
   position: absolute; inset: 0; overflow: hidden; padding: 4px 22px 18px; font-size: 9.4px; color: var(--color-text);
   background:
-    linear-gradient(90deg, transparent 48.6%, color-mix(in srgb, var(--color-desk-coffee) 14%, transparent) 50%, transparent 51.4%),
     linear-gradient(180deg, transparent 46%, color-mix(in srgb, var(--color-desk-coffee) 7%, transparent) 47%, transparent 48.5%),
     var(--color-paper); /* 집어 들면 펼쳐지는 S-02 지면과 같은 종이색 */
 }
