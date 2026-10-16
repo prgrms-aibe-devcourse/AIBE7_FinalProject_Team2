@@ -1,4 +1,4 @@
-# 배포 (BE-58, WBS 7.1.1 · Redis BE-61, WBS 7.1.4)
+# 배포 (BE-58, WBS 7.1.1 · Redis BE-61, WBS 7.1.4 · 자동 배포 BE-60, WBS 7.1.3)
 
 운영은 서버 한 대에 컨테이너 네 개를 띄운다. 밖으로 여는 포트는 웹 80 하나뿐이다.
 
@@ -15,18 +15,22 @@
 | `docker-compose.real-seed.yml` | 서버 전용 덧붙임 파일. 실제 사건 seed 폴더를 백엔드에 읽기 전용으로 연결 |
 | `.env.example` | 환경변수 예시. `.env`로 복사해 쓴다 (`.env`는 커밋하지 않음) |
 | `smoke-test.sh` | `/` · 화면 주소 · `/api` · 캐시 정책 확인. CI와 서버에서 같은 스크립트를 쓴다 |
-| `../frontend/Dockerfile` | 웹 이미지 (Vite 빌드 → Nginx) |
-| `../frontend/nginx/default.conf` | Nginx 설정 (`/api` 프록시 · SPA fallback · 캐시) |
-| `../.github/workflows/deploy-images.yml` | 이미지 빌드 → 스모크 테스트 → GHCR 업로드 |
+| `deploy.sh` | 서버 배포 한 번: sha 이미지로 교체 → 준비 대기 → 스모크 테스트 → 실패하면 직전 이미지로 되돌림 (BE-60) |
+| `cd-agent.sh` | 자동 배포 확인: GHCR의 `main` 이미지가 바뀌었으면 `deploy.sh` 실행 (BE-60) |
+| `cd/lawnambul-cd.service` · `.timer` | `cd-agent.sh`를 2분마다 부르는 systemd 설정 (서버에 한 번 설치) |
+| `../frontend/Dockerfile` | 웹 이미지 (Vite 빌드 → Nginx). 커밋 해시를 `/version.json`에 넣는다 |
+| `../frontend/nginx/default.conf` | Nginx 설정 (`/api` 프록시 · SPA fallback · 캐시 · `/version.json`) |
+| `../.github/workflows/deploy-images.yml` | 이미지 빌드 → 스모크 테스트 → GHCR 업로드 → (main) 운영 배포 확인 |
 
 ## 이미지가 만들어지는 흐름
 
-1. `develop`으로 가는 PR: Actions가 이미지를 빌드해 이 구성으로 띄우고 `smoke-test.sh`를 실행한다. **업로드하지 않는다.**
-2. `develop` push(머지): 스모크 테스트를 통과한 이미지만 GHCR에 올린다.
+1. `develop` · `main`으로 가는 PR: Actions가 이미지를 빌드해 이 구성으로 띄우고 `smoke-test.sh`를 실행한다. **업로드하지 않는다.**
+2. `develop` push(머지): 스모크 테스트를 통과한 이미지를 GHCR에 올린다. **운영에는 배포하지 않는다.**
+3. `main` push(`develop → main` PR 머지): 같은 방식으로 올리고, **운영 서버가 2분 안에 스스로 받아 배포한다** (아래 "자동 배포(CD)").
    - `ghcr.io/prgrms-aibe-devcourse/lawnambul-web` · `ghcr.io/prgrms-aibe-devcourse/lawnambul-backend`
-   - 태그: `develop`(최신), `sha-커밋7자리`(되돌릴 때)
-3. 서버는 이미지를 받아서 실행만 한다. 서버에서 Gradle · npm 빌드를 하지 않는다 (메모리 절약).
-4. 서버 자동 반영은 7.1.3 CD에서 붙인다. 그 전까지는 아래 "서버에서 실행"을 손으로 한다.
+   - 태그: `sha-커밋7자리`(배포 · 되돌릴 때 쓰는 고정 태그) + 브랜치 이름 `develop` · `main`(그 브랜치의 최신)
+   - 이미지 라벨 `org.opencontainers.image.revision`에 커밋 전체 해시가 붙는다 (서버가 배포할 sha 태그를 이걸로 정한다)
+4. 서버는 이미지를 받아서 실행만 한다. 서버에서 Gradle · npm 빌드를 하지 않는다 (메모리 절약).
 
 ## 로컬에서 운영 구성 확인
 
@@ -71,7 +75,74 @@ done
 ./smoke-test.sh http://localhost
 ```
 
-되돌리기: `.env`의 `IMAGE_TAG`를 이전 `sha-xxxxxxx`로 바꾸고 `pull` → `up -d --no-build`.
+되돌리기: `./deploy.sh --rollback` (직전 배포 이미지로, 자동 배포가 켜져 있으면 타이머를 먼저 멈춘다 — 아래 "운영 중 쓰는 명령"). 자동 배포를 켠 뒤에는 `.env`의 `IMAGE_TAG`를 손으로 고치지 않는다 — `deploy.sh`가 관리한다.
+
+## 자동 배포(CD) (BE-60, WBS 7.1.3)
+
+운영 서버는 **`main`에 머지된 것만** 배포한다. GitHub Actions가 서버에 들어가지 않고, **서버가 2분마다 GHCR을 확인**해 스스로 배포한다.
+22번(SSH)은 배포 담당 IP만 열려 있고 IAM(Session Manager)을 만들 권한이 없어서, 새로 여는 포트 · AWS 권한 없이 하는 방식을 골랐다 ([결정 기록](../docs/decisions/BE-60.md)).
+
+```text
+develop → main PR 머지
+  └▶ Actions: 빌드 · 스모크 테스트 → GHCR (sha-xxxxxxx, main)
+       └▶ 서버 cd-agent.sh (2분마다): web:main의 커밋 라벨이 지금 배포(.env IMAGE_TAG)와 다르면
+            1) 서버 저장소 사본을 그 커밋으로 옮김 (Compose · 스크립트도 같은 버전)
+            2) deploy.sh sha-xxxxxxx: 이미지 받기 → 교체 → 백엔드 준비 대기 → 스모크 테스트
+            3) 실패하면 직전 이미지로 되돌리고, 그 커밋은 다시 시도하지 않는다 (고친 커밋이 올라오면 그때 배포)
+  └▶ Actions verify-deploy: 운영 /version.json이 이 커밋이 될 때까지 기다림(최대 15분) → 운영 주소로 스모크 테스트
+```
+
+### 처음 한 번: 서버에 설치
+
+BE-60이 `develop`에 머지된 뒤 서버에서 한다. 설치해도 `main` 이미지가 생기기 전까지는 아무것도 바꾸지 않는다.
+
+```bash
+cd /opt/lawnambul/app && git pull -q          # BE-60 파일(deploy.sh · cd-agent.sh · cd/) 받기
+sudo cp deploy/cd/lawnambul-cd.service deploy/cd/lawnambul-cd.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now lawnambul-cd.timer
+systemctl list-timers lawnambul-cd.timer      # 다음 확인 시각이 보이면 정상
+
+# 바로 한 번 확인 (main 이미지가 아직 없으면 출력 없이 끝난다)
+sudo systemctl start lawnambul-cd.service; journalctl -u lawnambul-cd -n 20 --no-pager
+```
+
+- Actions 쪽 확인을 켜려면 저장소 **Settings → Secrets and variables → Actions → Variables**에 `DEPLOY_URL`(예: `http://<탄력적 IP>`)을 넣는다(저장소 관리자). 없으면 확인 job이 건너뛰기만 하고, 배포는 서버가 그대로 한다.
+
+### 운영 중 쓰는 명령
+
+```bash
+journalctl -u lawnambul-cd -n 50 --no-pager   # 자동 배포 기록 (배포한 때만 남는다. 바뀐 게 없으면 출력 없음)
+curl -s http://localhost/version.json         # 지금 떠 있는 커밋
+cd /opt/lawnambul/app/deploy
+sudo systemctl stop lawnambul-cd.timer        # 자동 배포 잠시 멈춤 (점검 · 장애 대응 중). 다시 켜기: start
+./deploy.sh --rollback                        # 직전 이미지로 되돌리기 — 먼저 위처럼 타이머를 멈춘다
+./deploy.sh sha-1a2b3c4                       # 특정 커밋 이미지로 (develop 이미지를 시험 삼아 올릴 때도) — 역시 타이머를 먼저 멈춘다
+rm .deploy/failed_rev                         # 실패해서 건너뛰는 커밋을 다시 시도하게 할 때
+```
+
+- **손으로 되돌리거나 다른 sha를 올릴 때는 타이머를 먼저 멈춘다.** 켜 둔 채면 2분 뒤 `cd-agent.sh`가 "지금 배포가 `main`과 다르다"고 보고 다시 `main`으로 배포한다. 원인을 고친 커밋이 `main`에 올라가면 타이머를 다시 켠다(`start`).
+- 예외: `main` 이미지가 아직 없을 때(첫 `develop → main` PR 전)는 `cd-agent.sh`가 아무것도 하지 않으므로 타이머를 켜 둔 채 시험해도 된다.
+
+### 실패했을 때
+
+| 기록 (`journalctl`) | 뜻 · 할 일 |
+| --- | --- |
+| `↩ 되돌림 성공` | 새 이미지가 준비 · 스모크 테스트를 통과하지 못해 직전 이미지로 돌아왔다. 서비스는 정상. 위에 찍힌 backend · web 로그로 원인을 보고, 고친 커밋을 `main`에 올린다 |
+| `⚠ … DB 마이그레이션을 적용했다` | 앱은 되돌렸지만 **스키마는 새 버전 그대로**다. 이전 앱은 모르는 새 마이그레이션을 무시하고 뜬다(Flyway 기본값). 스키마를 되돌릴지는 사람이 판단한다 (데이터 손상 위험) |
+| `❌ 되돌림도 실패` | 서비스가 내려가 있을 수 있다. 바로 `docker compose -f docker-compose.prod.yml ps` · `logs`로 확인 |
+| `❌ … 받지 못했다 … 토큰 만료` | GHCR 로그인 토큰이 만료됐다(지금 토큰은 **11/14경**, 최종 제출 11/04 이후). `docker login ghcr.io`를 새 토큰으로 다시 한다. 다음 확인 때 자동으로 다시 시도한다 |
+| Actions `verify-deploy` 실패 (15분) | 서버가 배포하지 못했다는 뜻. 위 기록을 본다 |
+
+주의
+- **배포 중 API가 20 ~ 40초 끊긴다** (서버 한 대라 무중단이 아니다). 화면은 기존 웹이 계속 내주지만, 그동안 API를 부르면 502라 프론트는 "서버에 연결할 수 없어요"를 보여 준다(`api/client.js`의 5xx 안내). 시연 · 발표 중에는 `main`에 머지하지 않는다.
+- **되돌릴 때 Compose · 스크립트는 새 커밋 것을 그대로 쓴다** (이미지 태그만 되돌린다). Compose를 크게 바꾸는 PR(예: RDS 전환)은 머지 직후 한 번 지켜본다.
+- 서버는 이미지 라벨의 커밋이 **지금 `main`의 최신 커밋일 때만** 배포한다(그 커밋의 스크립트를 서버가 실행하므로). `main`이 더 앞서 있으면 새 이미지가 올라올 때까지 건너뛴다 — 연달아 머지하면 마지막 커밋만 배포될 수 있다.
+- 배포에 성공하면 지금 · 직전 sha 이미지만 남기고 옛 이미지를 지운다(디스크 30GB). 더 옛날로 되돌리려면 `./deploy.sh sha-xxxxxxx`가 GHCR에서 다시 받는다.
+- 배포 실패는 서버 로그(journald)와 Actions `verify-deploy` 실패(커밋한 사람에게 GitHub 알림)로만 보인다. Grafana · Loki에는 아직 안 잡힌다(Alloy가 백엔드 로그만 수집, 필요하면 C 후속).
+- `develop` 머지는 운영에 나가지 않는다. 운영에 올리려면 `develop → main` PR을 올린다.
+- 켠 뒤에는 서버에서 `git pull` · 파일 직접 수정을 하지 않는다. 저장소 사본은 `cd-agent.sh`가 배포하는 커밋으로 옮긴다(브랜치가 아니라 커밋에 고정, detached). 고칠 게 있으면 PR로 `main`에 올린다.
+- 반영까지 최대 2 ~ 3분(확인 주기) + 기동 시간이 걸린다.
 
 ## HTTPS 전 제한 (도메인 확보 후 해결)
 
@@ -158,8 +229,7 @@ docker compose -f docker-compose.prod.yml -f docker-compose.real-seed.yml up -d 
 
 | 작업 | 바꿀 곳 |
 | --- | --- |
-| 7.1.2 RDS 전환 · 시크릿 | `postgres` 서비스를 빼고 `DB_URL`을 RDS 주소로. 비밀값은 서버 환경변수 · 시크릿 저장소로 |
-| 7.1.3 CD | `deploy-images.yml` 뒤에 서버 반영 단계 추가 (`pull` → `up -d --no-build` → `smoke-test.sh`) |
+| 7.1.2 RDS 전환 · 시크릿 | `postgres` 서비스를 빼고 `DB_URL`을 RDS 주소로. 비밀값은 서버 환경변수 · 시크릿 저장소로. `backend`의 `depends_on: postgres`도 함께 뺀다. `deploy.sh`의 마이그레이션 비교는 `postgres` 서비스가 없으면 건너뛴다(RDS면 비교 방법을 다시 정한다). 자동 배포가 켜져 있으니 머지 직후 `journalctl -u lawnambul-cd`로 지켜본다 |
 | 7.4.3 JWT (C) | 토큰은 `@Qualifier(RedisConfig.TOKEN)` 템플릿(DB 1)에 TTL과 함께 저장 |
 | 백엔드 healthcheck 추가 (BE-66 이후) | Actuator(관리 포트 8081)에는 Redis 헬스체크가 자동으로 붙고, 커넥션 팩토리 두 개가 `redis` 아래 묶인다. **실측(BE-61, Boot 4.1.1)**: Redis를 끄면 `/actuator/health`는 **DOWN(503)**, `/actuator/health/liveness` · `/readiness`는 **UP**, API는 정상. liveness · readiness는 추가 설정 없이 이미 열려 있다. 그래서 컨테이너 healthcheck · 재시작 조건에는 **`/actuator/health`가 아니라 `/actuator/health/liveness`** 를 쓴다(전체 상태를 쓰면 Redis 장애 때 백엔드까지 재시작된다) |
 | 7.4.6 Rate limit 2차 (10/23) | 로그인 · 토큰 재발급 엔드포인트에 더 엄격한 zone을 `default.conf`에 추가 (1차는 위 "Rate limit") |
