@@ -189,12 +189,16 @@
 
 /* 8막 다음 날 신문(현실로 돌아옴): 판사의 책상 위에 놓인, 화면보다 큰 지면. 카메라(sheetCamera.js)가 transform으로 기사 하나를
    틀(.sheet-frame) 가운데에 맞춘다. 크기 단위 --u는 무대 폭 기준(1cqw)이고, 좁은 화면에서는 한 단으로 쌓고 글자를 px로 바꾼다.
-   기사 배치(FE-32, 두 단 · 세로로 긴 지면): 제호 / 1면(제목 · 법정 사진 · 리드) | 독자 의견 / 세 판결 | 판단 요소 / 공통점 · 차이점 | 만난 모습.
-   두 단 사이 여백이 지면 가운데 접힌 선(courtSketch.css)에 오도록 단 폭을 같게 둔다 */
-.stage-wrap .bg.sheet { background: var(--color-desk-wood); }
+   기사 배치(FE-32, 두 단 · 세로로 긴 지면): 제호 / 1면(제목 · 법정 사진 · 리드) | 독자 의견 / 세 판결 | 판단 요소 / 공통점 · 차이점 | 만난 모습 / 광고 · 알림.
+   두 단 사이 여백이 지면 가운데 접힌 선(courtSketch.css)에 오도록 단 폭을 같게 둔다. 맨 아래 광고 · 알림 단은 마지막 기사들도 카메라가 화면 가운데로 당길 수 있게 지면을 아래로 늘린다 */
+.stage-wrap .bg.sheet { background:
+    radial-gradient(ellipse at 8% 0%, color-mix(in srgb, var(--color-desk-wood-glow) 38%, transparent), transparent 55%),
+    repeating-linear-gradient(176deg, color-mix(in srgb, var(--color-desk-shadow) 6%, transparent) 0 2px, transparent 2px 9px),
+    repeating-linear-gradient(178deg, color-mix(in srgb, var(--color-desk-wood-glow) 6%, transparent) 0 1px, transparent 1px 23px),
+    linear-gradient(180deg, var(--color-desk-wood-light), var(--color-desk-wood) 40%, var(--color-desk-wood-dark)); } /* 메인 책상(landing.css .desk-wood)과 같은 나뭇결 */
 .stage-wrap .sheet-frame { position: absolute; left: 19%; right: 19%; top: 4%; bottom: 27%; pointer-events: none; }
 .stage-wrap .sheet { --u: 1cqw; position: absolute; left: 0; top: 0; width: calc(var(--u) * 118); display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-template-areas: "mast mast" "front letters" "verdicts factors" "rules cast";
+  grid-template-areas: "mast mast" "front letters" "verdicts factors" "rules cast" "ads ads";
   gap: calc(var(--u) * 3.2) calc(var(--u) * 7); padding: calc(var(--u) * 2.6) calc(var(--u) * 3) calc(var(--u) * 3.4);
   background: var(--color-desk-news); color: var(--color-text); transform-origin: 0 0;
   box-shadow: 0 1cqw 2.6cqw -.8cqw color-mix(in srgb, var(--color-desk-shadow) 60%, transparent); }
@@ -223,7 +227,8 @@
 .stage-wrap .sheet-cast { grid-area: cast; }
 .stage-wrap .sheet-factors { grid-area: factors; }
 .stage-wrap .sheet-rules { grid-area: rules; }
-.stage-wrap .sheet-letters { grid-area: letters; }
+.stage-wrap .sheet-letters { grid-area: letters; display: flex; flex-direction: column; }
+.stage-wrap .sheet-ads { grid-area: ads; }
 .stage-wrap .sheet-headline { margin: 0 0 calc(var(--u) * 1.2); font: 900 calc(var(--u) * 4.6) / 1.15 var(--font-heading); letter-spacing: -.03em; text-wrap: balance; word-break: keep-all; color: var(--color-text); }
 .stage-wrap .sheet-head { margin: 0 0 calc(var(--u) * 1.1); font: 900 calc(var(--u) * 2.7) / 1.2 var(--font-heading); letter-spacing: -.02em; text-wrap: balance; word-break: keep-all; color: var(--color-text); }
 .stage-wrap .sheet-front-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: calc(var(--u) * 1.4); }
@@ -267,6 +272,17 @@
 .stage-wrap .sheet-cast-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: calc(var(--u) * 1) calc(var(--u) * .6); margin: 0; padding: 0; list-style: none; }
 .stage-wrap .sheet-cast-grid li { display: flex; flex-direction: column; align-items: center; gap: calc(var(--u) * .3); margin: 0; color: var(--muted); font-size: calc(var(--u) * 1.15); text-align: center; word-break: keep-all; }
 .stage-wrap .sheet-cast-grid img { height: calc(var(--u) * 8); width: auto; }
+/* 광고 · 알림 단: 지면 맨 아래 띠. 서비스 안의 다른 메뉴를 신문 광고처럼 싣는다(누르지 않는 지면 장식) */
+.stage-wrap .sheet-ads { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: calc(var(--u) * 2); padding-top: calc(var(--u) * 1.6); border-top: 3px double var(--color-text); }
+.stage-wrap .sheet-ad { display: flex; flex-direction: column; gap: calc(var(--u) * .5); min-height: calc(var(--u) * 15); padding: calc(var(--u) * 1.6) calc(var(--u) * 1.8); border: 1px solid var(--color-text); text-align: center; justify-content: center; }
+.stage-wrap .sheet-ad-tag { margin: 0; color: var(--muted); font: 700 calc(var(--u) * 1) / 1.3 var(--font-body); letter-spacing: .2em; }
+.stage-wrap .sheet-ad-title { margin: 0; font: 900 calc(var(--u) * 2.4) / 1.2 var(--font-heading); letter-spacing: -.02em; color: var(--color-heading); word-break: keep-all; }
+.stage-wrap .sheet-ad-text { margin: 0; font: 400 calc(var(--u) * 1.3) / 1.5 var(--font-article); color: var(--color-desk-news-ink); word-break: keep-all; }
+.stage-wrap .sheet-ad.is-lead { border-width: 3px; background: color-mix(in srgb, var(--color-paper) 60%, transparent); }
+.stage-wrap .sheet-ad.is-lead .sheet-ad-title { font-size: calc(var(--u) * 3.2); }
+.stage-wrap .sheet-ad.is-notice { border-style: dashed; }
+.stage-wrap .sheet-ads-note { grid-column: 1 / -1; margin: 0; color: var(--muted); font-size: calc(var(--u) * 1.05); text-align: center; }
+
 /* 지면 앞의 내로 · 남불: 양 끝에 서고, 말하는 쪽이 기사에 다가선다. 기사가 바뀌면 작은 점프 두 번으로 따라간다 */
 .stage-wrap .stage[data-scene="sheet"] .spr { --l: 8%; --r: 92%; height: 40%; bottom: 25%; transition: left .7s ease-in-out, translate .45s cubic-bezier(.3, .7, .2, 1), opacity .3s; }
 .stage-wrap .stage[data-scene="sheet"] .spr.role { height: 36%; }
@@ -434,7 +450,7 @@
   .stage-wrap .sheet.sheet-case { width: 100cqw; }
   .stage-wrap .sheet-case .sheet-headline { font-size: 24px; }
   .stage-wrap .sheet-body { column-count: 1; }
-  .stage-wrap .sheet { width: 100cqw; grid-template-columns: minmax(0, 1fr); grid-template-areas: "mast" "front" "verdicts" "letters" "factors" "rules" "cast"; gap: 18px; padding: 14px 14px 20px; }
+  .stage-wrap .sheet { width: 100cqw; grid-template-columns: minmax(0, 1fr); grid-template-areas: "mast" "front" "verdicts" "letters" "factors" "rules" "cast" "ads"; gap: 18px; padding: 14px 14px 20px; }
   .stage-wrap .sheet-verdict { display: block; }
   /* 좁은 화면: 1면 사진을 7막 무대(4:3)와 같은 구도로 — 8막이 이 사진에서 빠져나올 때 이어 보이게 */
   .stage-wrap .sheet-photo { aspect-ratio: 4 / 3; }
@@ -460,6 +476,12 @@
   .stage-wrap .sheet-rule h4 { font-size: 13px; }
   .stage-wrap .sheet-cast-grid li { font-size: 11px; }
   .stage-wrap .sheet-cast-grid img { height: 64px; }
+  .stage-wrap .sheet-ads { grid-template-columns: minmax(0, 1fr); gap: 10px; padding-top: 12px; }
+  .stage-wrap .sheet-ad { min-height: 0; padding: 14px; }
+  .stage-wrap .sheet-ad-tag { font-size: 10px; }
+  .stage-wrap .sheet-ad-title, .stage-wrap .sheet-ad.is-lead .sheet-ad-title { font-size: 19px; }
+  .stage-wrap .sheet-ad-text { font-size: 13px; }
+  .stage-wrap .sheet-ads-note { font-size: 10px; }
   .stage-wrap .stage[data-scene="sheet"] .spr, .stage-wrap .stage[data-scene="sheet"] .spr.role { --l: 12%; --r: 88%; height: 24%; bottom: 2%; }
   .stage-wrap .stage[data-scene="sheet"] .spr.near { translate: calc(-50% + 8px) 0; }
   .stage-wrap .stage[data-scene="sheet"] .spr.b.near { translate: calc(-50% - 8px) 0; }
@@ -482,9 +504,11 @@
 }
 
 /* 8막 독자 의견란("뉴스로 봤을 때, 모두 보고 난 뒤" 칸을 대신한다): 2막에서 보낸 첫인상만 엽서로 다시 싣고 편집부 의견 한 줄을 단다(항공우편 줄무늬 테두리 + 접수 도장) */
-.stage-wrap .sheet-letter { position: relative; padding: calc(var(--u) * 2.4) calc(var(--u) * 3); border: calc(var(--u) * .7) solid transparent; border-image: repeating-linear-gradient(-45deg, var(--color-caution) 0 8px, var(--color-paper) 8px 14px, var(--color-accent) 14px 22px, var(--color-paper) 22px 28px) 8; background: var(--color-paper); }
+.stage-wrap .sheet-letter { flex: 1; display: flex; flex-direction: column; position: relative; padding: calc(var(--u) * 2.4) calc(var(--u) * 3); border: calc(var(--u) * .7) solid transparent; border-image: repeating-linear-gradient(-45deg, var(--color-caution) 0 8px, var(--color-paper) 8px 14px, var(--color-accent) 14px 22px, var(--color-paper) 22px 28px) 8; background: var(--color-paper); }
 .stage-wrap .sheet-letter-q { margin: 0 0 calc(var(--u) * .6); font: 400 calc(var(--u) * 1.6) / 1.4 var(--font-hand); color: var(--color-muted); }
 .stage-wrap .sheet-letter-a { margin: 0; font: 400 calc(var(--u) * 2.8) / 1.3 var(--font-hand); color: var(--color-desk-note-pen); }
+/* 엽서 빈 줄: 1면 높이만큼 엽서를 늘린 자리를 손글씨 줄로 채운다 */
+.stage-wrap .sheet-letter-lines { flex: 1; min-height: calc(var(--u) * 4); margin: calc(var(--u) * 1) 0 0; background: repeating-linear-gradient(transparent 0 calc(var(--u) * 3.2 - 1px), color-mix(in srgb, var(--color-border-strong) 55%, transparent) calc(var(--u) * 3.2 - 1px) calc(var(--u) * 3.2)); }
 .stage-wrap .sheet-letter-edit { margin: calc(var(--u) * 1.2) 0 0; padding-top: calc(var(--u) * .8); border-top: 1px dashed var(--color-border-strong); font: 700 calc(var(--u) * 1.3) / 1.5 var(--font-heading); color: var(--color-heading); word-break: keep-all; }
 .stage-wrap .sheet-letter-edit b { margin-right: .4em; color: var(--color-label); }
 .stage-wrap .sheet-letter-by { margin: calc(var(--u) * 1) 0 0; font-size: calc(var(--u) * 1.1); color: var(--color-muted); }
@@ -495,6 +519,7 @@
   .stage-wrap .sheet-letter-a { font-size: 26px; }
   .stage-wrap .sheet-letter-by { font-size: 12px; }
   .stage-wrap .sheet-letter-edit { font-size: 15px; }
+  .stage-wrap .sheet-letter-lines { display: none; }
   .stage-wrap .sheet-letter-mark { position: static; width: 64px; height: 64px; margin: 8px 0 0 auto; font-size: 13px; }
 }
 

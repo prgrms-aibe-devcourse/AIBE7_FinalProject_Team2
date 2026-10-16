@@ -58,10 +58,10 @@
    아직 실제 폰으로 확인하지 못했다. 끊기면 그림자는 전환하지 말고 처음부터 두거나, 그림자 층을 따로 두고 opacity만 올린다 */
 .landing-page .obj-news.is-held > :not(.desk-note) { filter: drop-shadow(0 34px 26px color-mix(in srgb, var(--color-desk-shadow) 55%, transparent)); }
 .landing-page .obj-news.is-held .desk-note { opacity: 0; }
-/* 신문 덮기(8막)에서 돌아올 때: 들린 상태를 전환 없이 먼저 그리고(.is-returning), 그다음 책상이 멀어지며 신문이 내려앉는다 */
+/* 8막에서 돌아올 때: 다가간 책상 · 들린 신문을 전환 없이 먼저 그리고(.is-returning), 그다음 책상이 물러난다(landingPage.js turnOver) */
 .landing-page.is-returning :is(.desk-scene, .desk-object.obj-news, .desk-object.obj-news > *, .site-header) { transition: none !important; }
-.landing-page .desk-menu.is-returning .item-news { animation: paper-put-down .6s cubic-bezier(.2, .8, .2, 1) both; }
-@keyframes paper-put-down { from { transform: translateY(-28px) scale(1.06) rotate(-1.4deg); opacity: 0; } }
+.landing-page .desk-scene.is-near { transform: scale(2.6); pointer-events: none; } /* 신문 쪽으로 다가간 책상(보이는 채로). 빠지면 물러난다 */
+.landing-page:has(.is-near) .site-header { opacity: 0; }
 /* 책상 위 내로 · 남불(장식, 볼을 괴고 엎드림) */
 .landing-page .desk-cheek { position: absolute; z-index: 3; width: auto; pointer-events: none; filter: var(--shadow-rest); }
 .landing-page .desk-world {
@@ -246,7 +246,6 @@
 
 @media (prefers-reduced-motion: reduce) {
   .landing-page .desk-scene, .landing-page .desk-object.obj-news, .landing-page .desk-object.obj-news > :not(.desk-note), .landing-page .desk-object.obj-news .desk-note { transition: none; }
-  .landing-page .desk-menu.is-returning .item-news { animation: none; }
 }
 
 @media (max-width: 720px) {

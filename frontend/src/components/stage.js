@@ -244,13 +244,13 @@ function evidenceBoard(script, at) {
 // choices: 대사창 안 선택지 { 이름: [{ label, action(note), primary }] } — 대본 step.choices로 고른다(타이핑이 끝나면 뜬다, note는 결과 안내 줄).
 // sheet: 대본 scene "sheet"에서 쓰는 큰 지면(8막은 화면이 넘겨 주고, 없으면 대본 paper로 1 · 2막 사건 기사를 만든다).
 // 장면의 focus 기사로 카메라가 옮겨 가고, 첫 장면의 from 요소가 무대를 채운 데서 빠져나온다.
-// fromRect: 첫 장면의 from 요소를 이 화면 사각형(앞 막 무대 자리)에서 시작한다(8막). cameraFill · cameraMinScale은 sheetCamera 옵션.
+// fromRect: 첫 장면의 from 요소를 이 화면 사각형(앞 막 무대 자리)에서 시작한다(8막). cameraFill · cameraMinScale · cameraMaxUnit은 sheetCamera 옵션.
 // layout 'paper': 무대 상자 없이 지면(sheet)이 화면 전체가 된다(S-20 · 1 · 2막, S-02 신문과 같은 짜임). 막 칩 · 보드는 지면의
 // 막 칩은 숨기고(지면 탭 줄은 신문 목차), 카드(2막 사전 판단)는 지면 위에 독자 의견 엽서 팝업으로 뜬다 — 남불이 가져와 건네는 연출.
 // 캐릭터 · 대사창 · 조작 줄은 화면 아래에 고정된다. 카메라는 화면을 굴린다(paperCamera)
 // parked: 지면만 보여 주고 캐릭터 · 대사창 · 조작 줄은 숨긴 채 기다린다(S-20 사건 정보 — 체험 시작 전). 화면이 wrap.release()로 풀면
 // 내로 · 남불이 들어오며 첫 대사가 시작된다.
-export function renderStage({ script, order, cards = {}, inputCards = [], choices = {}, start, onConfirm, onRestart, onJump, sheet: given, layout = 'box', parked: parkedAtStart = false, cameraFill = false, cameraMinScale = 0, fromRect }) {
+export function renderStage({ script, order, cards = {}, inputCards = [], choices = {}, start, onConfirm, onRestart, onJump, sheet: given, layout = 'box', parked: parkedAtStart = false, cameraFill = false, cameraMinScale = 0, cameraMaxUnit = 0, fromRect }) {
   const paperMode = layout === 'paper' && Boolean(given);
   let parked = parkedAtStart;
   let again = false; // 이미 지나온 체험을 다시 보는 중(S-20 "시작하기"): 대본 textAgain이 있으면 그 문장을 쓴다
@@ -335,7 +335,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
   const frame = sheet && !paperMode ? element('div', 'sheet-frame') : null;
   let byKeyboard = false; // 지금 넘기는 입력이 키보드인가(Space · → · Enter, 키보드로 누른 버튼)
   const camera = paperMode ? paperCamera(sheet, () => (dialog.hidden ? controls.getBoundingClientRect().top : dialog.getBoundingClientRect().top), () => byKeyboard)
-    : sheet ? sheetCamera(sheet, frame, { fill: cameraFill, minScale: cameraMinScale }) : null; // cameraFill: 지면이 언제나 장면을 빈틈없이 덮는다(8막 화면 가득)
+    : sheet ? sheetCamera(sheet, frame, { fill: cameraFill, minScale: cameraMinScale, maxUnit: cameraMaxUnit }) : null; // cameraFill: 지면이 언제나 장면을 빈틈없이 덮는다(8막 화면 가득)
   if (frame) frame.setAttribute('aria-hidden', 'true');
   scene.append(bg, court, ...(sheet ? [sheet] : []), ...(frame ? [frame] : []), figures.naero, figures.nambul, lawCast, procs, sys, flash);
 

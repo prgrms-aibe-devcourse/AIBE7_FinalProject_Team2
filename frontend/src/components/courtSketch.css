@@ -95,31 +95,56 @@
   background:
     linear-gradient(90deg, transparent calc(50% - 1px), color-mix(in srgb, var(--color-desk-shadow) 12%, transparent) 50%, transparent calc(50% + 1px)),
     linear-gradient(90deg, transparent 46%, color-mix(in srgb, var(--color-desk-shadow) 4%, transparent) 49.6%, transparent 50.4%, transparent 54%); }
-/* 무대(카메라 틀)가 화면 전체 — 넓은 화면 · 좁은 화면 모두. 조작 줄은 아래 띠, 말풍선은 그 위 가운데, 캐릭터는 양옆에서 엿보기(1막과 같은 자세) */
-.comparison-full .stage-wrap { --ctrl-h: 64px; --dock-w: min(860px, calc(100vw - 340px)); }
-.comparison-full .stage-wrap .stage { position: fixed; inset: 0 0 var(--ctrl-h) 0; z-index: 1; aspect-ratio: auto; width: auto; overflow: hidden; border: 0; border-radius: 0; }
+/* 무대(카메라 틀)가 화면 전체 — 넓은 화면 · 좁은 화면 모두. 아래 받침(말풍선 · 조작 줄 · 양옆 캐릭터)은 1막 신문 지면과 같다(paperStage.css):
+   조작 줄은 화면 아래 끝에서 띄운 알약 모양(모바일 브라우저 아래 바 · 아이폰 홈 바에 가리지 않게 안전 영역만큼 더 띄운다) */
+/* 모바일 브라우저 아래 바에 가리지 않게 안전 영역에 여유 16px를 더한다(받침 전체가 같이 올라간다) */
+.comparison-full { --safe-bottom: calc(env(safe-area-inset-bottom, 0px) + 16px); }
+.comparison-full .stage-wrap { --dock-w: min(860px, calc(100vw - 340px)); }
+.comparison-full .stage-wrap .stage { position: fixed; inset: 0; z-index: 1; aspect-ratio: auto; width: auto; overflow: hidden; border: 0; border-radius: 0; }
 .comparison-full .stage-wrap .scene, .comparison-full .stage-wrap .stage[data-scene] .scene { position: absolute; inset: 0; aspect-ratio: auto; border: 0; border-radius: 0; overflow: hidden; }
-.comparison-full .stage-wrap .ctrl { position: fixed; left: 0; right: 0; bottom: 0; z-index: 2; height: var(--ctrl-h); margin: 0; padding: 0 max(24px, calc(50% - 560px)) var(--safe-bottom, 0px); background: var(--color-paper); border-top: 1px solid color-mix(in srgb, var(--color-text) 25%, transparent); }
-.comparison-full .stage-wrap .dlg { position: absolute; left: 50%; right: auto; bottom: 18px; translate: -50% 0; width: var(--dock-w); height: auto; min-height: 112px; margin: 0; padding: 22px 26px 14px; }
+.comparison-full .stage-wrap .sheet-frame { bottom: calc(230px + var(--safe-bottom)); } /* 카메라 틀 = 말풍선 위 */
+.comparison-full .stage-wrap .ctrl { position: fixed; z-index: 2; left: 50%; right: auto; bottom: calc(10px + var(--safe-bottom)); translate: -50% 0; width: var(--dock-w); margin: 0; padding: 4px 10px; border: 0; border-radius: 999px;
+  background: color-mix(in srgb, var(--color-card) 92%, transparent); box-shadow: 0 8px 20px -10px color-mix(in srgb, var(--color-desk-shadow) 55%, transparent); }
+.comparison-full .stage-wrap .ctrl :is(.primary-button, .secondary-button) { min-height: 40px; }
+.comparison-full .stage-wrap .dlg { position: fixed; z-index: 2; left: 50%; right: auto; bottom: calc(66px + var(--safe-bottom)); translate: -50% 0; width: var(--dock-w); height: auto; min-height: 118px; margin: 0; padding: 26px 28px 18px; }
 .comparison-full .stage-wrap .txt { font-size: 17px; }
 .comparison-full .stage-wrap .name { top: -17px; font-size: 20px; }
 .comparison-full .stage-wrap .name img { width: 26px; height: 26px; min-width: 0; min-height: 0; }
 .comparison-full .stage-wrap .nxt { font-size: 12px; }
 .comparison-full .stage-wrap .dlg-choices :is(.primary-button, .secondary-button) { min-height: 40px; font-size: 14px; }
 .comparison-full .stage-wrap .stage[data-scene="sheet"] .spr, .comparison-full .stage-wrap .stage[data-scene="sheet"] .spr.role {
-  --l: calc(50% - var(--dock-w) / 2 - 84px); --r: calc(50% + var(--dock-w) / 2 + 84px); bottom: -56px; height: min(300px, 38vh); }
+  --l: calc(50% - var(--dock-w) / 2 - 84px); --r: calc(50% + var(--dock-w) / 2 + 84px); bottom: calc(4px + var(--safe-bottom)); height: min(210px, 27vh); }
 .comparison-full .stage-wrap .stage[data-scene="sheet"] .spr.near { translate: -50% 0; }
+/* 말풍선 꼬리: 1막처럼 옆으로 — 말하는 캐릭터(말풍선 양옆 아래)를 가리킨다 */
+.comparison-full .stage-wrap .dlg:is([data-speaker="naero"], [data-speaker="nambul"])::before { top: auto; bottom: 22px; width: 30px; height: 30px; clip-path: polygon(100% 0, 100% 100%, 0 78%); }
+.comparison-full .stage-wrap .dlg:is([data-speaker="naero"], [data-speaker="nambul"])::after { top: auto; bottom: 25px; width: 27px; height: 24px; clip-path: polygon(100% 0, 100% 100%, 0 80%); }
+.comparison-full .stage-wrap .dlg[data-speaker="naero"]::before { left: -30px; right: auto; }
+.comparison-full .stage-wrap .dlg[data-speaker="naero"]::after { left: -25px; right: auto; }
+.comparison-full .stage-wrap .dlg[data-speaker="nambul"]::before { left: auto; right: -30px; }
+.comparison-full .stage-wrap .dlg[data-speaker="nambul"]::after { left: auto; right: -25px; }
 @media (max-width: 680px) {
-  .comparison-full .stage-wrap { --ctrl-h: 56px; --dock-w: calc(100vw - 20px); }
-  .comparison-full .stage-wrap .ctrl { padding: 0 8px var(--safe-bottom, 0px); flex-wrap: nowrap; }
+  .comparison-full .stage-wrap { --dock-w: calc(100vw - 20px); }
+  .comparison-full .stage-wrap .ctrl { flex-wrap: nowrap; bottom: calc(6px + var(--safe-bottom)); padding: 2px 8px; min-height: 44px; }
+  .comparison-full .stage-wrap .ctrl :is(.primary-button, .secondary-button) { min-height: 44px; }
   .comparison-full .stage-wrap .ctrl .stage-restart { display: none; }
-  .comparison-full .stage-wrap .sheet-frame { left: 4%; right: 4%; top: 2%; bottom: 128px; } /* 카메라 틀 = 말풍선 위 */
-  .comparison-full .stage-wrap .dlg { bottom: 8px; min-height: 100px; padding: 20px 16px 12px; }
+  .comparison-full .stage-wrap .sheet-frame { left: 4%; right: 4%; top: 2%; bottom: calc(282px + var(--safe-bottom)); }
+  .comparison-full .stage-wrap .dlg { bottom: calc(58px + var(--safe-bottom)); min-height: 108px; padding: 22px 16px 14px; }
   .comparison-full .stage-wrap .txt { font-size: 15px; }
-  .comparison-full .stage-wrap .stage[data-scene="sheet"] .spr, .comparison-full .stage-wrap .stage[data-scene="sheet"] .spr.role { --l: 46px; --r: calc(100% - 46px); bottom: 118px; height: 96px; }
+  .comparison-full .stage-wrap .stage[data-scene="sheet"] .spr, .comparison-full .stage-wrap .stage[data-scene="sheet"] .spr.role { --l: 46px; --r: calc(100% - 46px); bottom: calc(172px + var(--safe-bottom)); height: 92px; }
+  /* 좁은 화면: 캐릭터가 말풍선 위 양 끝에 서므로 꼬리는 위로, 말하는 쪽 이름표 바로 옆에서 */
+  .comparison-full .stage-wrap:not(.paper-mode) .dlg:is([data-speaker="naero"], [data-speaker="nambul"])::before,
+  .comparison-full .stage-wrap:not(.paper-mode) .dlg:is([data-speaker="naero"], [data-speaker="nambul"])::after { display: block !important; }
+  .comparison-full .stage-wrap .dlg:is([data-speaker="naero"], [data-speaker="nambul"])::before { top: -22px; bottom: auto; width: 26px; height: 22px; clip-path: polygon(0 100%, 100% 100%, 20% 0); }
+  .comparison-full .stage-wrap .dlg:is([data-speaker="naero"], [data-speaker="nambul"])::after { top: -17px; bottom: auto; width: 21px; height: 19px; clip-path: polygon(0 100%, 100% 100%, 22% 0); }
+  .comparison-full .stage-wrap .dlg[data-speaker="naero"]::before { left: 84px; }
+  .comparison-full .stage-wrap .dlg[data-speaker="naero"]::after { left: 87px; }
+  .comparison-full .stage-wrap .dlg[data-speaker="nambul"]::before { right: 84px; }
+  .comparison-full .stage-wrap .dlg[data-speaker="nambul"]::after { right: 87px; }
 }
+/* 무대를 보는 동안 화면 자체는 스크롤하지 않는다(모바일 브라우저 바가 들락날락하며 아래 받침을 가리지 않게) */
+html:has(.comparison-full .stage-wrap:not(.reading-paper)) { overflow: hidden; }
 
-/* 여기 남아있기: 카메라를 멈추고 지면을 펼친 채 스크롤해 읽는다. 맨 아래 "신문 덮기" */
+/* 여기 남아있기: 카메라를 멈추고 지면을 펼친 채 스크롤해 읽는다. 맨 아래 "메인으로" */
 .stage-wrap .sheet-close { display: none; }
 .comparison-full .stage-wrap.reading-paper .stage { position: relative; inset: auto; height: auto; overflow: visible; }
 .comparison-full .stage-wrap.reading-paper .scene, .comparison-full .stage-wrap.reading-paper .stage[data-scene] .scene { position: relative; inset: auto; overflow: visible; cursor: default; }

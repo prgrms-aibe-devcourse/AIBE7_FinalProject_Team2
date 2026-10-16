@@ -1,5 +1,6 @@
 import { button, element, renderSiteFooter, renderSiteHeader } from '../../components/siteLayout.js';
 import { casePhoto, fallbackImages, todayLabel } from '../../utils/newspaper.js';
+import { takePaper } from '../../utils/paperHandoff.js';
 
 // S-01 메인 — 판사의 책상 (FE-18, 시안 "B안 일러스트 · C안 구도", 논의기록 2026-10-12 S01 메인 책상 시안 결정)
 // 책상 위 물건이 곧 메뉴다: 신문 = 사건 목록(S-02), 서류철 = 판결 성향 테스트(S-15), 휴대폰 = 마이페이지(S-17), 노트북 = 커뮤니티.
@@ -28,7 +29,9 @@ const CHEEKS = [
   { who: 'nambul', look: 'idle-thinking', left: 1300, top: 782, height: 158 },
 ];
 const LIFT_MS = 1000; // 신문을 집어 드는 시간 = 신문 들림 .38초 + 책상 다가옴 .72초(landing.css .is-lifting · .is-held와 같게, 일부 겹침)
-const PUT_DOWN_MS = 560; // 책상이 멀어지는 동안 신문은 들린 채 있다가 끝 무렵 내려앉는다(.desk-scene 전환 .72초)
+// 8막에서 "메인으로" 올 때: 보던 지면이 줌아웃하며 책상 위 신문 자리로 줄어들고, 그 자리의 신문으로 바뀐다
+const BACK_OFF_MS = 720;
+const EASE = 'cubic-bezier(.45, 0, .2, 1)';
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const features = [
@@ -275,23 +278,44 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
   fit();
   if (section === 'intro') showIntro();
 
-  // 신문 덮기(8막)에서 왔으면 거꾸로: 들고 있던 신문에서 책상이 멀어지고, 신문이 책상에 내려앉는다.
-  // 새로고침 · 뒤로 가기로는 되풀이하지 않는다. 움직임 줄이기면 연출 없이 바로 책상
+  // 8막에서 왔으면(from: 'paper') 넘겨받은 지면이 화면을 덮은 채로 시작한다.
+  // 줌아웃하며 책상이 드러나고, 지면이 책상 위 신문 자리로 줄어든 뒤 그 신문으로 바뀌며 내려놓인다.
+  // 좁은 화면은 메뉴의 신문 카드로 같은 연출. 새로고침 · 뒤로 가기로는 되풀이하지 않고, 움직임 줄이기면 연출 없이 바로 책상이다
   if (from === 'paper') {
     history.replaceState({ ...history.state, extras: {} }, '');
-    if (!reducedMotion()) putDown(world.querySelector('.obj-news'));
+    const handed = takePaper();
+    if (handed && !reducedMotion()) turnOver(handed);
+    else handed?.layer.remove();
   }
-  function putDown(news) {
-    if (!news) return;
-    aimAt(news);
+  async function turnOver({ layer, shade, card, copy, view, start }) {
+    const onDesk = getComputedStyle(scene).display !== 'none';
+    const news = onDesk ? world.querySelector('.obj-news') : mobile.querySelector('.item-news');
+    if (!news) { layer.remove(); return; }
+    // 끝 자리: 넓은 화면은 들고 있는 신문, 좁은 화면은 메뉴의 신문 카드. 책상은 신문 쪽으로 다가간 데서 시작한다
     root.classList.add('is-returning');
-    news.classList.add('is-held');
-    scene.classList.add('is-lifting');
-    void scene.offsetWidth; // 들린 상태를 먼저 그려 두고 거기서 되돌린다
+    if (onDesk) { aimAt(news); news.classList.add('is-held'); }
+    const to = news.getBoundingClientRect();
+    if (onDesk) scene.classList.add('is-near');
+    void scene.offsetWidth; // 다가간 상태를 전환 없이 먼저 그려 두고 거기서 물러난다
     root.classList.remove('is-returning');
-    scene.classList.remove('is-lifting');
-    setTimeout(() => news.classList.remove('is-held'), PUT_DOWN_MS);
-    mobile.classList.add('is-returning'); // 좁은 화면: 메뉴의 신문 카드가 위에서 내려앉는다(CSS 애니메이션)
+    news.style.visibility = 'hidden';
+
+    if (onDesk) scene.classList.remove('is-near');
+    const timing = { duration: BACK_OFF_MS, easing: EASE, fill: 'forwards' };
+    shade.animate([{ opacity: 1 }, { opacity: 0 }], { ...timing, easing: 'ease-out' });
+    card.animate([
+      { left: `${view.left}px`, top: `${view.top}px`, width: `${view.width}px`, height: `${view.height}px` },
+      { left: `${to.left}px`, top: `${to.top}px`, width: `${to.width}px`, height: `${to.height}px` },
+    ], timing);
+    // 보던 부분을 그대로 줄인다(카메라가 물러나듯 — 지면이 미끄러지지 않게, 신문 자리에 맞춰 위 · 왼쪽 기준)
+    const k = to.width / view.width;
+    await copy.animate([
+      { transform: `translate(${start.x}px, ${start.y}px) scale(${start.scale})` },
+      { transform: `translate(${start.x * k}px, ${start.y * k}px) scale(${start.scale * k})` },
+    ], timing).finished.catch(() => {});
+    layer.remove();
+    news.style.visibility = '';
+    news.classList.remove('is-held'); // 책상에 내려놓는다(.obj-news 전환)
   }
 
   // ---- 신문 지면 채우기 (사건 목록 API 1). 실패해도 책상은 그대로 쓴다 ----

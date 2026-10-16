@@ -3,14 +3,14 @@
 // 지면은 화면보다 크고, 장면마다 카메라가 기사 하나(대본 focus)로 옮겨 간다. 7막 법정이 1면 사진 속으로 빠져나오며 시작한다(대본 from: "photo").
 // FE-32: 무대 상자 없이 화면 전체가 카메라 틀이다(mountNewspaperStage — 넓은 화면은 무대가 화면을 가득 채우고, 좁은 화면은 지면 안 무대)
 // 세 판결은 같은 크기 · 같은 무게로 싣고 어느 쪽이 맞았는지 말하지 않는다(PRODUCT.md 원칙 1).
-// 마지막 장면에서 다음 행동을 고른다: 다른 사건 보기 · 메인으로 · 공유하기.
+// 마지막 장면에서 다음 행동을 고른다: 다른 사건 보기 · 여기 남아있기(지면 읽기 → 메인으로) · 메인으로 · 공유하기.
 // S-08(7막)에서 비교를 공개한 뒤 무대를 이어 받고(주소만 S-09로), 재진입(S-09 주소)에서도 같은 무대를 연다
 import { formatPenalty, formatDispositions } from '../../utils/judgmentFormat.js';
 import { formatMonths } from '../../components/recommendedRangeBar.js';
 import { renderStage, courtSet, imageOf } from '../../components/stage.js';
 import { restartMock, jumpActMock } from '../overview/overviewPage.js';
 import { editorNote } from '../../utils/preJudgmentCompare.js';
-import { foldPaper } from '../../utils/pageTurn.js';
+import { handPaper } from '../../utils/paperHandoff.js';
 
 const SUBJECTS = [['USER', '내 판결'], ['AI', 'AI 판결'], ['COURT', '실제 판결']];
 const DIRECTIONS = { UP: ['무겁게', 'up'], DOWN: ['가볍게', 'down'] };
@@ -143,7 +143,7 @@ function newspaper(data, script, caseTitle) {
   letterMark.append('접수', element('br'), '완료');
   letter.append(element('p', 'sheet-letter-q', '이 사건, 어느 정도의 형량이 맞다고 생각하나요?'),
     element('p', 'sheet-letter-a', preToFinal.preJudgment.label),
-    element('p', 'sheet-letter-by', '— 기사만 읽고 보낸 첫인상, 독자 엽서'), letterMark);
+    element('p', 'sheet-letter-by', '— 기사만 읽고 보낸 첫인상, 독자 엽서'), element('div', 'sheet-letter-lines'), letterMark);
   const note = editorNote(preToFinal.preJudgment.label, judgments.COURT);
   if (note) {
     const edit = element('p', 'sheet-letter-edit');
@@ -156,14 +156,34 @@ function newspaper(data, script, caseTitle) {
     story('verdicts', '세 판결, 나란히', verdicts),
     story('cast', '이번 사건에서 만난 모습', cast),
     story('factors', '판단 요소, 어디서 갈렸나', table),
-    story('rules', '같게 본 것, 다르게 본 것', ...rules));
-  // 신문 맨 아래: "여기 남아있기"로 지면을 다 읽은 뒤 신문을 접어 내려놓는다(메인 책상으로). 읽는 동안에만 보인다(courtSketch.css)
+    story('rules', '같게 본 것, 다르게 본 것', ...rules),
+    advertisements());
+  // 신문 맨 아래: "여기 남아있기"로 지면을 다 읽은 뒤 메인 책상으로. 읽는 동안에만 보인다(courtSketch.css)
   const close = element('footer', 'sheet-close');
-  const fold = element('button', 'primary-button sheet-fold', '신문 덮기');
+  const fold = element('button', 'primary-button sheet-fold', '메인으로');
   fold.type = 'button';
-  close.append(element('p', 'sheet-close-note', '다 읽었으면 신문을 접어 책상에 내려놓아요.'), fold);
+  close.append(element('p', 'sheet-close-note', '다 읽었으면 신문을 책상에 내려놓아요.'), fold);
   sheet.append(close);
   return sheet;
+}
+
+// 지면 맨 아래 광고 · 알림 단: 서비스 안의 다른 메뉴를 신문 광고처럼 싣는다(누르지 않는 장식, 메인 책상의 물건과 같은 이름).
+// 마지막 기사(공통점 · 차이점, 만난 모습)가 지면 끝에 붙지 않게 해서, 카메라가 그 기사를 화면 가운데로 당길 수 있다
+function advertisements() {
+  const ads = element('aside', 'sheet-ads');
+  ads.setAttribute('aria-label', '광고 · 알림');
+  const ad = (kind, tag, title, text) => {
+    const box = element('div', `sheet-ad ${kind}`);
+    box.append(element('p', 'sheet-ad-tag', tag), element('p', 'sheet-ad-title', title), element('p', 'sheet-ad-text', text));
+    return box;
+  };
+  ads.append(
+    ad('is-lead', '광고', '판결 성향 테스트', '나는 엄하게 보는 편일까, 사정을 살피는 편일까? 3분이면 끝나는 판결 성향 검사.'),
+    ad('', '알림', '오늘의 지면', '다른 사건도 판결을 기다리고 있어요. 신문을 펼쳐 다음 사건을 골라 보세요.'),
+    ad('is-notice', '독자 엽서 모집', '첫인상을 보내 주세요', '기사만 읽고 보낸 엽서는 다음 날 독자 의견란에 실립니다.'),
+    element('p', 'sheet-ads-note', '이 지면의 사건과 기사는 판결 체험을 위해 재구성한 것이며, 사진은 AI로 생성한 연출 이미지입니다.'),
+  );
+  return ads;
 }
 
 // 공유: 받는 사람이 체험 전에 판결을 보지 않게 형량 없이 이 사건의 사건 디테일(S-20, /cases/{caseId}) 주소를 보낸다(앵커링 방지, FE-38).
@@ -213,10 +233,11 @@ export function renderComparisonStage({ script, data, caseId, caseTitle, navigat
     fromRect,
     cameraFill: true, // 책상 없이 신문만 화면 가득(1막 지면처럼)
     cameraMinScale: narrow ? 1.3 : 0, // 좁은 화면도 기사 일부를 크게(왼쪽 위부터)
+    cameraMaxUnit: narrow ? 0 : 9.5, // 큰 화면: 본문 약 15px · 제목 약 26px 이상으로 키우지 않는다
     choices: { end: [
       { label: '다른 사건 보기', action: () => navigate('list'), primary: true },
       { label: '여기 남아있기', action: () => stay() },
-      { label: '메인으로', action: () => navigate('landing') },
+      { label: '메인으로', action: () => toDesk() },
       { label: '공유하기', action: (note) => share(note, caseId) },
     ] },
     onRestart: restartMock(caseId),
@@ -230,14 +251,16 @@ export function renderComparisonStage({ script, data, caseId, caseTitle, navigat
     sheet.setAttribute('tabindex', '-1');
     sheet.focus({ preventScroll: true });
   }
-  // 신문 덮기: 접어서 내려놓은 뒤 메인 책상으로(책상 위 신문이 내려앉는 연출로 이어진다)
+  // 메인으로: 지금 보던 지면을 메인에 넘기고 간다. 메인에서 줌아웃하며 책상 위 신문 자리로 줄어든다(landingPage.js)
   let closing = false;
-  sheet.querySelector('.sheet-fold').addEventListener('click', async () => {
+  function toDesk() {
     if (closing) return;
     closing = true;
-    await foldPaper(sheet, { scopeClasses: ['comparison-full', 'stage-wrap reading-paper'] });
+    stage.freeze();
+    handPaper(sheet, { backdrop: 'desk' }); // 지면 양옆은 책상
     navigate('landing', { from: 'paper' });
-  });
+  }
+  sheet.querySelector('.sheet-fold').addEventListener('click', toDesk);
   return stage;
 }
 

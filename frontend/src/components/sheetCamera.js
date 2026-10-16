@@ -12,12 +12,14 @@ const css = ({ s, x, y }) => `translate(${x}px, ${y}px) scale(${s})`;
 /**
  * @param {HTMLElement} sheet 지면(무대 장면 안에 절대 위치, transform-origin 0 0)
  * @param {HTMLElement} frame 기사를 맞출 틀(장면 안의 빈 요소, 위치는 CSS가 정한다)
- * @param {{ fill?: boolean, minScale?: number }} [options] fill: 지면이 장면 가장자리 밖을 보이지 않게(배율 · 위치를 지면 안으로 묶는다, 8막 화면 가득)
+ * @param {{ fill?: boolean, minScale?: number, maxUnit?: number }} [options] fill: 지면이 장면 가장자리 밖을 보이지 않게(배율 · 위치를 지면 안으로 묶는다, 8막 화면 가득)
  *   minScale: 기사를 이 배율보다 작게 보이지 않는다(좁은 화면에서 기사 일부만 크게, 왼쪽 위부터)
+ *   maxUnit: 화면에 보이는 지면 단위(--u, 지면 폭의 1/118)를 이 px보다 크게 키우지 않는다(큰 화면에서 글씨가 지나치게 커지지 않게).
+ *     fill보다 앞선다 — 지면이 화면보다 좁아지면 가운데에 두고 양옆에 책상이 보인다
  * @returns {{ go(name: string, options?: { from?: string, fromRect?: DOMRect, onStart?: () => void }): void }}
  *   fromRect: 시작 장면의 요소(from)를 이 화면 사각형에 맞춘 데서 시작한다(앞 막 무대가 있던 자리 그대로 이어 보이게)
  */
-export function sheetCamera(sheet, frame, { fill = false, minScale = 0 } = {}) {
+export function sheetCamera(sheet, frame, { fill = false, minScale = 0, maxUnit = 0 } = {}) {
   let at = null; // 지금 맞춰 둔 기사
   let pending = null; // 무대가 아직 그려지지 않아 크기를 모를 때 미뤄 둔 이동
   let shot = null; // 진행 중인 카메라 이동(WAAPI)
@@ -35,7 +37,8 @@ export function sheetCamera(sheet, frame, { fill = false, minScale = 0 } = {}) {
   // 기사를 틀 가운데에, 틀에 들어오는 배율로. 아주 긴 기사(틀 높이의 1.6배 넘게)는 너무 작아지지 않게 폭에 맞추고 제목이 보이게 위를 맞춘다
   function place(b) {
     const f = area();
-    let s = Math.max(minScale, Math.min(f.w / b.w, b.h > b.w * (f.h / f.w) * 1.6 ? Infinity : f.h / b.h, MAX_SCALE));
+    const cap = maxUnit ? Math.min(MAX_SCALE, maxUnit / (sheet.offsetWidth / 118)) : MAX_SCALE;
+    let s = Math.max(minScale, Math.min(f.w / b.w, b.h > b.w * (f.h / f.w) * 1.6 ? Infinity : f.h / b.h, cap));
     let y = b.h * s <= f.h ? f.y + (f.h - b.h * s) / 2 - b.y * s : f.y - b.y * s;
     // 기사가 틀보다 넓으면(minScale로 크게 볼 때) 왼쪽부터 보인다 — 글줄의 시작이 잘리지 않게
     let x = b.w * s <= f.w ? f.x + (f.w - b.w * s) / 2 - b.x * s : f.x - b.x * s;
@@ -44,14 +47,15 @@ export function sheetCamera(sheet, frame, { fill = false, minScale = 0 } = {}) {
       const scene = sheet.parentElement;
       const W = sheet.offsetWidth;
       const H = sheet.offsetHeight;
-      const min = Math.max(scene.clientWidth / W, scene.clientHeight / H);
+      const min = Math.min(cap, Math.max(scene.clientWidth / W, scene.clientHeight / H));
       if (s < min) {
         s = min;
         x = f.x + (f.w - b.w * s) / 2 - b.x * s;
         y = f.y - b.y * s;
       }
-      x = Math.min(0, Math.max(scene.clientWidth - W * s, x));
-      y = Math.min(0, Math.max(scene.clientHeight - H * s, y));
+      // 지면이 장면보다 넓으면 가장자리가 안으로 들어오지 않게 묶고, 좁으면(maxUnit) 가운데에 둔다
+      x = W * s >= scene.clientWidth ? Math.min(0, Math.max(scene.clientWidth - W * s, x)) : (scene.clientWidth - W * s) / 2;
+      y = H * s >= scene.clientHeight ? Math.min(0, Math.max(scene.clientHeight - H * s, y)) : (scene.clientHeight - H * s) / 2;
     }
     return { s, x, y };
   }
