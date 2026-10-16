@@ -39,6 +39,7 @@ AI 판결 생성(3단계)은 두 가지 방법 중 하나로 한다. 외부 LLM 
 | `rag_store.py` · `prompts/rag_precedent_system.md` | RAG 유사 판례 저장소 적재: 판결문 비식별화 · 사실관계 요약 / 양형 이유 분리 → 임베딩 → 비공개 시드 `R__40` (BE-51, 아래 "RAG 판례 저장소") |
 | `rag_context.py` | 파이프라인 `rag` 단계: 양형기준 버전 · 형량범위 · 양형인자 · 유사 판례를 로컬 DB에서 찾아 생성 참고 자료로 만든다 (BE-54, 아래 "생성 참고 자료 RAG") |
 | `rag_check.py` | RAG 검색 결과 · 점수 확인 도구 (BE-54, 아래 "생성 참고 자료 RAG") |
+| `summary_tags.py` · `summary_tags.json` | 요약어 후보: extract 요약어를 공개 기준 목록과 임베딩으로 비교해 비슷한 기존 요약어 제안 (BE-53, 아래 "요약어 후보") |
 
 ## 작업 순서
 
@@ -271,6 +272,20 @@ python3 pipeline.py status cases/my-case.pipeline.json
 
 설정 파일의 `retry`(`maxAttempts` · `maxWait`)는 모든 단계의 LLM 호출 재시도에 적용된다("무료 등급 한도 대응"). `stages.<단계>.enabled: false`는 항상 끈다. `extract`를 끄면 `inputs`(case · court · report · source)에 이미 만든 파일을 넣는다.
 
+### 요약어 후보 (`stages.extract.summaryTags`, BE-53)
+
+extract가 끝나면 요소마다 요약어(`summaryTag`)를 기준 목록 [`summary_tags.json`](summary_tags.json)과 비교해 비슷한 기존 요약어를 제안한다. 사건마다 같은 뜻의 요약어가 제각각("흉기 사용" / "흉기를 씀")으로 나오지 않게, 관리자가 고를 수 있는 후보를 남기는 것이다. **요약어는 바꾸지 않는다.**
+
+| 설정 | 기본 | 뜻 |
+| --- | --- | --- |
+| `enabled` | `false` (예시 설정은 `true`) | 켜면 `GEMINI_API_KEY`(임베딩)가 필요하다. 없거나 임베딩이 실패하면 경고만 남기고 extract는 계속한다 |
+| `topK` | 3 | 요소마다 남길 후보 수 (1 ~ 10) |
+| `minScore` | 0.85 | 이 점수 이상이고 목록에 없는 요약어면 `suggested`로 표시한다. **예시값**(실제 분포를 보고 정한다) |
+
+- 임베딩은 `llm.embed`, task type `SEMANTIC_SIMILARITY`, cosine 유사도다. **요약어만 보내고** 판단 요소 문장 · 판결문은 보내지 않는다. 요약어는 extract 검사(개인정보 · 실제 형량)를 통과한 값이다.
+- 결과는 `out/cases/<name>.report.json`의 `factorExtras[].summaryTagCandidates`(`candidates` · `inVocabulary` · `suggested`)와 맨 위 `summaryTagCandidates`(상태 · 기준)에 남는다. 가치관 축 투표(`valueAxisVotes`)와 같은 자리다. **DB 적재 · 관리자 화면 표시는 아직 없다**(후속).
+- `summary_tags.json`에는 **공개해도 되는 일반 요약어만** 넣는다. 실제 사건(비공개 시드 R__10)의 요약어는 공개 저장소에 실제 사건 정보를 두지 않는 원칙(BE-17) 때문에 넣지 않는다. 임베딩 자체는 판례 저장소(R__40)처럼 가능해서, 비공개 시드에 추가 목록을 두고 함께 비교하는 것은 나중에 더할 수 있다(이번에는 하지 않음). 목록 형식이 틀리면 파이프라인이 멈춘다(조용히 빈 목록으로 비교하지 않는다).
+
 ### 회차 선택 (`stages.select`)
 
 | `strategy` | 고르는 방법 |
@@ -286,7 +301,7 @@ python3 pipeline.py status cases/my-case.pipeline.json
 
 ### 가치관 축 투표 (`stages.axis`, BE-49)
 
-추출기(extract-v5)는 요소마다 축을 한 번 정한다. 한 번 정한 값은 흔들릴 수 있어서 요소가 확정된 뒤 **축만** 여러 번 물어 투표한다(추출을 여러 번 돌리면 회차마다 요소 문구 · 개수가 달라져 비교할 수 없다). 결과는 기본값이고, 관리자가 후검수로 확정한다(BE-43 · FE-16).
+추출기(extract-v5부터)는 요소마다 축을 한 번 정한다. 한 번 정한 값은 흔들릴 수 있어서 요소가 확정된 뒤 **축만** 여러 번 물어 투표한다(추출을 여러 번 돌리면 회차마다 요소 문구 · 개수가 달라져 비교할 수 없다). 결과는 기본값이고, 관리자가 후검수로 확정한다(BE-43 · FE-16).
 
 - **모델**: `model`(없으면 생성에 쓰는 첫 모델, `free:`는 지금 쓰는 무료 모델로 펼친 뒤). **한 모델로만** `runs`회 묻는다. 보내는 내용은 죄명 · 사건 개요 · 판단 요소 문구뿐이다(형량 · 판결 정보 없음, `prompts/axis_system.md`)
 - **집계**: 기본값 = 최다표 축. 동률이면 추출기 값이 최다표 안에 있으면 그것, 아니면 축 순서(① ~ ④, 없음)상 앞의 것
