@@ -15,3 +15,4 @@ import '../pages/court/court.css';
 import '../pages/comparison/comparison.css';
 import '../pages/personality/personality.css';
 import '../pages/myPage/myPage.css';
+import '../components/courtSketch.css'; // 3 ~ 8막 상자 무대를 신문 세계에 맞춘다: 화면별 CSS 뒤에 와야 한다
