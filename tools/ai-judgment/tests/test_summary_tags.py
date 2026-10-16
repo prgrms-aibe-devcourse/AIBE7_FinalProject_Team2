@@ -165,6 +165,18 @@ class ReviewDecisionTest(unittest.TestCase):
         self.assertEqual(near["suggested"], "흉기 사용")  # 0.98 ≥ 0.90 (기본값)
         self.assertFalse(exact["ambiguous"])
 
+    def test_min_score_uses_unrounded_score(self):
+        # CodeRabbit #153: 0.89996은 표시가 0.9지만 기준 0.90 미만이라 제안하지 않는다. 0.90004는 표시 0.9 · 제안한다
+        import math
+        table = {"흉기 사용": [1.0, 0.0, 0.0], "피해 회복 공탁": [0.0, 1.0, 0.0], "범행 인정 · 반성": [0.0, 0.0, 1.0]}
+        for raw, expected in ((0.89996, None), (0.90004, "흉기 사용")):
+            table[f"tag-{raw}"] = [raw, math.sqrt(1 - raw * raw), 0.0]
+        below, above = find_candidates(["tag-0.89996", "tag-0.90004"], VOCAB, FakeEmbed(table), min_score=0.90)
+        self.assertEqual(below["candidates"][0]["score"], 0.9)    # 표시는 반올림 그대로
+        self.assertIsNone(below["suggested"])
+        self.assertEqual(above["candidates"][0]["score"], 0.9)
+        self.assertEqual(above["suggested"], "흉기 사용")
+
     def test_missing_or_empty_summary_tag_does_not_stop(self):
         report = {"factorExtras": [{"factorId": 1, "summaryTag": "흉기를 씀"}, {"factorId": 2, "summaryTag": ""},
                                    {"factorId": 3}, {"factorId": 4, "summaryTag": None}]}

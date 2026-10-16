@@ -75,7 +75,7 @@ def find_candidates(tags, vocabulary, embed_fn=default_embed, top_k=DEFAULT_TOP_
     """요약어마다 비슷한 기준 요약어 상위 top_k개와 점수.
 
     tags: 판단 요소 순서의 요약어 목록. 돌려주는 값도 같은 순서다.
-      candidates: [{tag, score}] 점수 높은 순 (소수 넷째 자리)
+      candidates: [{tag, score}] 점수 높은 순 (표시용, 소수 넷째 자리. 판정은 반올림 전 점수로 한다)
       inVocabulary: 요약어가 목록에 글자 그대로 있음
       ambiguous: 1 · 2순위 점수 차가 AMBIGUOUS_MARGIN 미만 (top_k와 관계없이 전체 목록 기준). 이때는 제안하지 않는다
       suggested: 목록에 없고, 애매하지 않고, min_score 이상으로 비슷한 기준 요약어(관리자가 바꿀지 판단). 없으면 None
@@ -97,8 +97,9 @@ def find_candidates(tags, vocabulary, embed_fn=default_embed, top_k=DEFAULT_TOP_
         in_vocabulary = tag in vocabulary
         # 애매함은 반올림 전 점수로, 화면에 남기는 후보 수(top_k)와 관계없이 1 · 2순위를 비교한다
         ambiguous = len(scored) >= 2 and scored[0][0] - scored[1][0] < AMBIGUOUS_MARGIN
-        best = candidates[0] if candidates else None
-        suggested = (best["tag"] if best and not in_vocabulary and not ambiguous and best["score"] >= min_score
+        # 기준 점수 비교도 반올림 전 점수로 한다(0.89996은 0.9000으로 보이지만 0.90 미만). 표시 점수만 반올림한다
+        best_score, best_tag = scored[0] if scored else (None, None)
+        suggested = (best_tag if best_tag and not in_vocabulary and not ambiguous and best_score >= min_score
                      else None)
         results.append({"candidates": candidates, "inVocabulary": in_vocabulary, "ambiguous": ambiguous,
                         "suggested": suggested})
