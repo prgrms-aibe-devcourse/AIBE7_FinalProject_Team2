@@ -663,7 +663,13 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       }
       rangeSlider.classList.toggle('is-off', !sliding);
       entry.classList.toggle('is-off', !sliding);
-      for (const key of ['prisonYears', 'prisonMonths', 'fineAmount']) inputs[key].disabled = !sliding;
+      for (const key of ['prisonYears', 'prisonMonths', 'fineAmount']) {
+        inputs[key].disabled = !sliding;
+        // 잠긴 칸에는 앞서 넣은 숫자를 보이지 않게 비운다(draft 값은 그대로라 다시 고르면 되살아난다)
+        inputs[key].placeholder = sliding ? '' : '—';
+        const shownValue = sliding ? draft[key] : '';
+        if (inputs[key].value !== shownValue) inputs[key].value = shownValue;
+      }
       if (sliding) {
         const shown = present ? sentence.value : option.allowedMin;
         marker.style.left = `${Math.max(0, Math.min(100, shown / trackMax * 100))}%`;
