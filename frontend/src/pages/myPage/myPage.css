@@ -36,6 +36,12 @@
 .trail-dot { position: absolute; top: 50%; display: grid; place-items: center; width: 24px; height: 24px; transform: translate(-50%, -50%); border: 2px solid var(--color-accent); border-radius: 50%; background: var(--color-card); color: var(--color-accent); font-size: 12px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
 .trail-dot.is-latest { background: var(--color-accent); color: var(--color-card); }
 .trail-summary { margin: 0; color: var(--color-muted); font-size: var(--text-small); }
+.collection-group + .collection-group { margin-top: 20px; }
+.collection-title { margin: 0 0 10px; font-size: var(--text-body); font-weight: 700; }
+.collection-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
+.collection-card { margin: 0; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-card); overflow: hidden; }
+.collection-card img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; background: var(--color-surface); }
+.collection-label { margin: 0; padding: 8px 10px; color: var(--color-muted); font-size: var(--text-small); }
 .my-note { margin: 0; color: var(--color-muted); font-size: var(--text-small); }
 @media (max-width: 720px) {
   .my-main { padding: 28px 16px 40px; }

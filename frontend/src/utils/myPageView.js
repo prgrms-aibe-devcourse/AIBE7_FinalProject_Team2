@@ -27,3 +27,25 @@ export function trailSummary(points, axis) {
 export function trailLeft(ratio) {
   return Math.round((1 - ratio) * 100);
 }
+
+// 컬렉션 — 체험을 마친 사건의 대본에 나온 일러스트를 모은다. 같은 그림은 한 장으로 센다.
+// 대본이 없는 사건은 모을 그림이 없으므로 건너뛴다.
+export function collectionOf(experiences, scripts) {
+  return (experiences ?? [])
+    .filter((item) => item.status === 'COMPLETED' && scripts?.[item.caseId])
+    .map((item) => {
+      const { paper, evidencePhotos } = scripts[item.caseId];
+      const seen = new Set();
+      const items = [];
+      const add = (src, label) => {
+        if (!src || seen.has(src)) return;
+        seen.add(src);
+        items.push({ src, label });
+      };
+      add(paper?.photo, '신문 1면');
+      (paper?.extraPhotos ?? []).forEach((photo, index) => add(photo.src, `연출 컷 ${index + 1}`));
+      Object.entries(evidencePhotos ?? {}).forEach(([side, src]) => add(src, `${side} 재연`));
+      return { caseId: item.caseId, title: item.title, items };
+    })
+    .filter((group) => group.items.length > 0);
+}

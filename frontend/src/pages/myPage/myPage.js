@@ -3,7 +3,8 @@ import { renderToleranceScale } from '../../components/toleranceScale.js';
 import { screenByStatus } from '../../utils/screenByStatus.js';
 import { renderAxisRow } from '../../components/axisRow.js';
 import { AXES, CHARACTER_NAMES } from '../../utils/personalityAxes.js';
-import { axisSeries, trailLeft, trailSummary } from '../../utils/myPageView.js';
+import { axisSeries, collectionOf, trailLeft, trailSummary } from '../../utils/myPageView.js';
+import { SCRIPTS } from '../../content/scripts.js';
 
 // S-17 마이페이지 (WBS 7.6.6). GET /my-page 한 번 호출로 받고, 기록이 없어도 404가 아니라 빈 200이다(명세 P-5).
 // 내 성향(테스트 결과) · 종합 판결 성향(체험 평균 4축) · 성향 변화 흐름(체험별 4축 위치) · 체험한 사건 목록을 둔다.
@@ -62,6 +63,36 @@ function renderTrail(history) {
   const list = element('ul', 'axis-list');
   AXES.forEach((axis) => list.append(trailRow(axis, axisSeries(history, axis.key))));
   section.append(list);
+  return section;
+}
+
+// 컬렉션 — 체험을 마친 사건의 일러스트. 사건마다 한 묶음이고, 체험하지 않은 사건은 나오지 않는다
+function renderCollection(experiences) {
+  const section = element('section', 'my-section');
+  section.append(element('h2', '', '일러스트 컬렉션'));
+  const groups = collectionOf(experiences, SCRIPTS);
+  if (groups.length === 0) {
+    section.append(element('p', 'my-hint', '사건 체험을 마치면 그 사건에 나온 일러스트가 여기에 모여요.'));
+    return section;
+  }
+  const total = groups.reduce((sum, group) => sum + group.items.length, 0);
+  section.append(element('p', 'my-hint', `지금까지 ${total}장을 모았어요.`));
+  groups.forEach((group) => {
+    const box = element('div', 'collection-group');
+    box.append(element('h3', 'collection-title', group.title));
+    const grid = element('ul', 'collection-grid');
+    group.items.forEach((item) => {
+      const card = element('li', 'collection-card');
+      const img = element('img');
+      img.src = item.src;
+      img.alt = `${group.title} ${item.label} 일러스트`;
+      img.loading = 'lazy';
+      card.append(img, element('p', 'collection-label', item.label));
+      grid.append(card);
+    });
+    box.append(grid);
+    section.append(box);
+  });
   return section;
 }
 
@@ -144,5 +175,5 @@ export async function renderMyPage(container, { api, navigate }) {
   }
 
   const note = element('p', 'my-note', '로그인하기 전에는 이 브라우저(익명 ID)를 기준으로 기록해요. 쿠키를 지우면 기록을 찾을 수 없어요.');
-  main.replaceChildren(title, tendency, renderJudgment(data.judgmentPersonality), renderTrail(data.history ?? []), experiences, note);
+  main.replaceChildren(title, tendency, renderJudgment(data.judgmentPersonality), renderTrail(data.history ?? []), renderCollection(data.experiences), experiences, note);
 }
