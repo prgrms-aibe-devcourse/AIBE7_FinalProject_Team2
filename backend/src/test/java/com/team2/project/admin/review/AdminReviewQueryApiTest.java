@@ -150,6 +150,7 @@ class AdminReviewQueryApiTest extends ApiIntegrationTest {
 			.andExpect(jsonPath("$.factors[0].summaryTagCandidates.candidates[0].score").value(0.9421))
 			.andExpect(jsonPath("$.factors[0].summaryTagCandidates.suggested").value("반복된 다툼"))
 			.andExpect(jsonPath("$.factors[0].summaryTagCandidates.ambiguous").value(false))
+			.andExpect(jsonPath("$.factors[0].summaryTagCandidates.inVocabulary").value(false))
 			.andExpect(jsonPath("$.factors[1].summaryTagCandidates").value(nullValue()))	// 후보 없는 요소
 			.andExpect(jsonPath("$.candidates.AI[0].judgmentId").value(aiCandidateId))
 			.andExpect(jsonPath("$.candidates.AI[0].reviewStatus").value("PENDING"))

@@ -125,11 +125,17 @@ def check_summary_tag_candidates(candidates):
     if not isinstance(candidates, dict):
         return ["summaryTagCandidates는 객체입니다"]
     errors = []
+    # 모르는 키는 막는다(#166 리뷰): summary_tags.py가 키를 더하면 이 검사 · ERD · 백엔드 record를 함께 고친다
+    unknown = sorted(set(candidates) - {"candidates", "inVocabulary", "ambiguous", "suggested"})
+    if unknown:
+        errors.append(f"summaryTagCandidates에 모르는 키가 있습니다: {', '.join(unknown)}")
     items = candidates.get("candidates")
     if not isinstance(items, list):
         return ["summaryTagCandidates.candidates는 배열입니다"]
     tags = []
     for i, item in enumerate(items):
+        if isinstance(item, dict) and set(item) - {"tag", "score"}:
+            errors.append(f"summaryTagCandidates.candidates[{i}]에 모르는 키가 있습니다: {', '.join(sorted(set(item) - {'tag', 'score'}))}")
         tag = item.get("tag") if isinstance(item, dict) else None
         score = item.get("score") if isinstance(item, dict) else None
         if not isinstance(tag, str) or not tag.strip() or len(tag) > MAX_LENGTHS["factor.summary_tag"]:
@@ -212,12 +218,13 @@ def check_inputs(case, report, sources, source_org):
         raise CaseSeedError("사건 적재 SQL을 만들 수 없습니다:\n- " + "\n- ".join(errors))
 
 
-def sql_votes(votes, typed_null=False):
-    """축 분류 투표 기록 → jsonb (없으면 NULL). 후검수 상태(value_axis_status)는 DB 기본값 AUTO로 둔다.
+def sql_nullable_jsonb(value, typed_null=False):
+    """jsonb 칸 값 (없으면 NULL): 축 분류 투표 기록(value_axis_votes) · 요약어 후보(summary_tag_candidates).
+    축의 후검수 상태(value_axis_status)는 DB 기본값 AUTO로 둔다.
     typed_null: VALUES 목록처럼 타입을 정해야 하는 자리에서는 NULL::jsonb로 쓴다"""
-    if votes is None:
+    if value is None:
         return "NULL::jsonb" if typed_null else "NULL"
-    return sql_jsonb(votes)
+    return sql_jsonb(value)
 
 
 def sql_date(value):
@@ -271,15 +278,15 @@ def build_case_sql(case, report, sources, *, source_org=DEFAULT_SOURCE_ORG, sour
                         summary_tag_candidates, display_order)
     VALUES (v_case_id, {sql_text(f['label'])}, {sql_text(extras[f['factorId']].get('preLabel'))}, """
         f"""{sql_text(f['revealStage'])}, {sql_text(extras[f['factorId']]['summaryTag'])}, """
-        f"""{sql_text(extras[f['factorId']].get('valueAxis'))}, {sql_votes(extras[f['factorId']].get('valueAxisVotes'))}, """
-        f"""{sql_votes(extras[f['factorId']].get('summaryTagCandidates'))}, {sql_int(f['factorId'])});"""
+        f"""{sql_text(extras[f['factorId']].get('valueAxis'))}, {sql_nullable_jsonb(extras[f['factorId']].get('valueAxisVotes'))}, """
+        f"""{sql_nullable_jsonb(extras[f['factorId']].get('summaryTagCandidates'))}, {sql_int(f['factorId'])});"""
         for f in case["factors"]
     )
     # 이미 적재된 사건의 가치관 축 갱신용 (BE-48 · BE-49). 요소마다 (번호, 라벨, 축, 투표 기록). 축만 다시 투표하면 이 값이 바뀐다
     axis_rows = ",\n".join(
         f"""            ({sql_int(f['factorId'])}, {sql_text(f['label'])}, """
         f"""{sql_text(extras[f['factorId']].get('valueAxis'))}::varchar, """
-        f"""{sql_votes(extras[f['factorId']].get('valueAxisVotes'), typed_null=True)})"""
+        f"""{sql_nullable_jsonb(extras[f['factorId']].get('valueAxisVotes'), typed_null=True)})"""
         for f in case["factors"]
     )
     source_rows = "\n".join(

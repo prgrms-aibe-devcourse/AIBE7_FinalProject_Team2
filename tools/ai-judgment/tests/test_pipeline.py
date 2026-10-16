@@ -129,6 +129,8 @@ class CaseSeedSqlTest(unittest.TestCase):
             ("ambiguous", {"candidates": [ok], "inVocabulary": False, "suggested": None}),
             ("tag 중 하나", {"candidates": [ok], "inVocabulary": False, "ambiguous": False, "suggested": "반성"}),
             ("false일 때만", {"candidates": [ok], "inVocabulary": False, "ambiguous": True, "suggested": "흉기 사용"}),
+            ("모르는 키", {"candidates": [ok], "inVocabulary": False, "ambiguous": False, "suggested": None, "futureKey": 1}),
+            ("모르는 키", {"candidates": [{**ok, "rank": 1}], "inVocabulary": False, "ambiguous": False, "suggested": None}),
         ]
         for message, candidates in cases:
             with self.subTest(message):
