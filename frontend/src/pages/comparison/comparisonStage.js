@@ -259,12 +259,14 @@ export function renderComparisonStage({ script, data, caseId, caseTitle, navigat
     const to = sheet.getBoundingClientRect();
     if (!to.width) return;
     sheet.style.transformOrigin = '0 0';
+    // 확대된 지면이 문서 스크롤 영역을 넓히지 않게(좁은 화면에서 가로 스크롤바 · 높이 튐) 무대 밖으로 삐져나온 부분을 애니메이션 동안만 잘라 둔다
+    stage.style.overflow = 'clip';
     sheet.animate([
       { translate: `${from.left - to.left}px ${from.top - to.top}px`, scale: String(from.width / to.width) },
       { translate: '0 0', scale: '1' },
     ], { duration: STAY_ZOOM_MS, easing: 'cubic-bezier(.2, .8, .2, 1)' }).finished
       .catch(() => {})
-      .then(() => { sheet.style.transformOrigin = ''; });
+      .then(() => { sheet.style.transformOrigin = ''; stage.style.overflow = ''; });
   }
   // 메인으로: 지금 보던 지면을 메인에 넘기고 간다. 메인에서 줌아웃하며 책상 위 신문 자리로 줄어든다(landingPage.js)
   let closing = false;
