@@ -24,6 +24,7 @@
 | v1.17 | 2026-10-13 | BE-58 반영 (**확장 단계**, WBS 7.1.1) — 8장 배포 흐름을 실제 구성으로 정정: 웹(Nginx) · 백엔드 · DB 컨테이너(`deploy/docker-compose.prod.yml`), GitHub Actions(`deploy-images.yml`)가 이미지 빌드 → 운영 구성 스모크 테스트 → develop 머지 시 GHCR 업로드, 서버는 받아서 실행만. Nginx 예시 경로를 웹 이미지 기준(`/usr/share/nginx/html`)으로 바꾸고 `/api` 프록시 규칙 추가. 실제 사건 연결은 2장 "운영 (최종)"대로 서버 전용 덧붙임 파일(`docker-compose.real-seed.yml`) |
 | v1.18 | 2026-10-13 | 관리자 감사 로그 (**확장 단계**, BE-68 · WBS 7.4.5) — 3장 관리자 인증에 감사 로그 행 추가: 기록 대상 · 저장 실패 처리(같은 트랜잭션 / 별도 트랜잭션) · IP 수집과 forward 헤더 |
 | v1.19 | 2026-10-13 | BE-61 반영 (**확장 단계**, WBS 7.1.4) — 2장 Redis를 캐시(DB 0) · 토큰 저장소(DB 1)로 분리, "Redis가 없어도 서비스가 동작"은 캐시에만 해당하도록 정정, "Redis 운영 구성" 신설: AOF `everysec` 영속화, `noeviction` + 모든 키 TTL 필수, 메모리 상한, 사용자별 값 캐시 제외, 비밀번호 · 네트워크 접근. 8장 운영 컨테이너에 Redis 추가. 리뷰 반영: 캐시 장애 시 원본 조회는 아직 구현 전인 규칙(6.5.3, `CacheErrorHandler`)임을 명시, 7장에 로컬 테스트 전 Redis 기동 안내 |
+| v1.20 | 2026-10-15 | BE-63 반영 (**확장 단계**, WBS 7.4.6 1차) — 3장 사용자 인증 기반에 **Rate limit** 행 추가: 운영 Nginx `/api` IP별 제한(평균 초당 20 · 순간 40), JSON 429 `TOO_MANY_REQUESTS`, 정적 파일 제외, 백엔드 지표에 잡히지 않음, 사용자 IP 전제와 서버 확인 · 로드 밸런서 시 `real_ip`. 2차(로그인 · 재발급)는 7.4.2 이후 |
 
 
 ## **1. Backend**
@@ -255,6 +256,7 @@ MVP는 회원가입 없이 핵심 체험이 끝까지 동작해야 한다. 사�
 | OAuth 왕복 임시 상태 (D 결정) | `STATELESS`는 일반 API 기준이다. 카카오 로그인 왕복의 `state` 저장(세션 또는 쿠키) · 콜백 경로 · 성공 · 실패 후 정리는 D가 7.4.2에서 정한다 |
 | CORS | 설정하지 않는다. 프론트와 API가 같은 출처다(운영 Nginx `/api` 프록시, 로컬 Vite 프록시, API 명세 6장 #2). 다른 출처에서 부를 일이 생기면 그때 허용 목록으로 연다 |
 | 보안 헤더 | Spring Security 기본값(`X-Content-Type-Options` · `X-Frame-Options: DENY` · `Cache-Control: no-store` 등) + 두 체인 모두 `Referrer-Policy: strict-origin-when-cross-origin`. HSTS는 HTTPS 요청에만 붙으므로 TLS를 끝내는 Nginx가 맡는다(중복 없음). CSP · HTML 응답의 Referrer-Policy도 정적 파일을 서빙하는 Nginx에서 정한다(7.1.1, D) |
+| Rate limit (BE-63, 7.4.6, D) | **1차**: 운영 Nginx가 `/api`를 IP별 평균 초당 20번 · 순간 40번으로 제한하고, 넘으면 API 명세 1-4 형식의 JSON 429(`TOO_MANY_REQUESTS`, `Retry-After: 1`)를 돌려준다. 화면 · 정적 파일은 제한하지 않는다. 백엔드에는 닿지 않으므로 백엔드 지표에는 잡히지 않는다(Nginx 로그로 확인). **2차**(7.4.2 이후): 로그인 · 토큰 재발급 엔드포인트를 더 엄격하게. IP 기준이라 Nginx가 사용자 IP를 본다는 전제가 필요하다 — 배포 서버에서 확인하고(deploy/README.md "Rate limit"), 앞에 로드 밸런서 · CDN을 두면 `real_ip` 설정을 함께 바꾼다 |
 
 ---
 
