@@ -23,6 +23,15 @@ from common import load_json
 from llm import LLMError, embed
 
 
+def add_db_arguments(parser):
+    """로컬 DB 접속 옵션 (기본은 파이프라인 stages.load.db 기본값). db_case_input.py도 같이 쓴다."""
+    parser.add_argument("--db-mode", choices=("docker", "psql"))
+    parser.add_argument("--container")
+    parser.add_argument("--db-user")
+    parser.add_argument("--database")
+    parser.add_argument("--db-url")
+
+
 def db_config(args):
     db = dict(pipeline.DEFAULT_CONFIG["stages"]["load"]["db"])
     for key, value in (("mode", args.db_mode), ("container", args.container), ("user", args.db_user),
@@ -211,11 +220,7 @@ def main(argv=None):
     common.add_argument("--prompt", action="store_true", help="프롬프트에 들어갈 참고 자료를 출력한다")
     common.add_argument("--indictment-date")
     common.add_argument("--incident-date")
-    common.add_argument("--db-mode", choices=("docker", "psql"))
-    common.add_argument("--container")
-    common.add_argument("--db-user")
-    common.add_argument("--database")
-    common.add_argument("--db-url")
+    add_db_arguments(common)
     sub = parser.add_subparsers(dest="command", required=True)
     case = sub.add_parser("case", parents=[common], help="사건 입력 파일로 검색")
     case.add_argument("case_input")

@@ -193,10 +193,21 @@ base 파일만으로 backend를 다시 올리면 **8081 포트와 로그 볼륨�
 **D 담당**이고, 이 PR 전후로 타이밍을 맞춘다. 이번에는 `deploy/docker-compose.monitoring-agent.yml` 상단에
 경고 주석으로만 남겼다.
 
-> **사실 확인**: D가 언급한 `deploy.sh`는 이 저장소에 없다(`deploy/`에는 `docker-compose.*.yml` · `README.md` ·
-> `smoke-test.sh`뿐이고, `.github/workflows/deploy-images.yml`은 이미지 빌드 · CI 스모크 테스트까지만 한다).
-> 서버에만 있는 스크립트이거나 7.1.3(BE-60, CD) 작업을 염두에 둔 것으로 보인다. **지적 자체는 배포 경로가
-> 무엇이든 유효하므로** 그대로 받아들이되, 어느 파일을 고칠지는 D에게 확인이 필요하다.
+> **사실 확인 (최초 작성 시점)**: 협의 당시 `deploy.sh`는 이 저장소에 없었다. 그래서 "서버에만 있는 스크립트이거나
+> 7.1.3(BE-60) 작업을 염두에 둔 것"으로 보고 D에게 확인을 요청했다.
+>
+> **확인 결과 (develop 머지 후)**: **BE-60(7.1.3 CD, WBS v1.28)으로 `deploy/deploy.sh` · `deploy/cd-agent.sh`가
+> 실제로 들어왔다.** 그래서 이 위험은 가설이 아니라 **상시 위험이다** — `cd-agent.sh`가 2분마다 GHCR `main` 이미지를
+> 확인해 `deploy.sh`로 자동 배포하므로, 오버레이를 수동으로 붙여 올려도 **다음 배포 한 번(최대 2분)이면 날아간다.**
+> 끼울 자리도 확정됐다 — `deploy.sh`의 `COMPOSE` 배열에서 real-seed 오버레이를 붙이는 블록 바로 뒤다.
+>
+> ```bash
+> if [[ "$(env_value MONITORING_AGENT)" == "1" ]]; then
+>   COMPOSE+=(-f "$DEPLOY_DIR/docker-compose.monitoring-agent.yml")
+> fi
+> ```
+>
+> `deploy.sh` 수정은 D 담당이라 이 PR에서는 건드리지 않고, 위 패치 위치만 오버레이 파일 주석과 README에 적어 뒀다.
 
 ### (2) SSH 터널 안은 사실상 불가능하다
 
@@ -227,6 +238,7 @@ D의 요청 중 이 저장소 파일로 처리할 수 있는 것은 모두 반�
 ## 아직 열려 있는 것
 
 - **Cloud 세 번째 좌석을 A · B 중 누구에게 줄지** — 팀에서 정한다.
-- **배포 경로에 `MONITORING_AGENT` 플래그 추가** — D 담당. 어느 파일인지 확인 필요(위 사실 확인 참고).
+- **`deploy.sh`에 `MONITORING_AGENT` 플래그 추가** — D 담당. 대상 파일과 패치 위치는 확정됐다(위 사실 확인 참고).
+  **이게 반영되기 전에는 에이전트를 올려도 2분 안에 날아가므로, 실제 적용은 이 수정 이후에 한다.**
 - **Cloud 실제 연동**(계정 생성 · `remote_write` · Alloy를 내부 네트워크 스크레이프 방식으로 전환)은 7.3.3 범위다.
   이번 PR은 전용 EC2 전제의 구성까지이고, Cloud 전환은 7.3.3에서 이어서 한다. 대시보드 JSON은 양쪽에서 그대로 쓴다.

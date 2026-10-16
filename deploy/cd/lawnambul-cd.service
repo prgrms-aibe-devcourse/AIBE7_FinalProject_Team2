@@ -1,0 +1,21 @@
+# 자동 배포 확인 한 번 (BE-60). lawnambul-cd.timer가 부른다. 설치 방법: deploy/README.md "자동 배포(CD)"
+[Unit]
+Description=lawnambul 자동 배포 확인 (GHCR main 이미지 → deploy.sh)
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+# docker 그룹에 있는 배포 계정으로 실행한다 (root로 돌리지 않는다). GHCR 로그인 정보는 이 계정의 ~/.docker/config.json
+User=ubuntu
+Group=ubuntu
+Environment=HOME=/home/ubuntu
+WorkingDirectory=/opt/lawnambul/app/deploy
+ExecStart=/opt/lawnambul/app/deploy/cd-agent.sh
+# 이미지 받기 + 기동 대기(최대 180초) + 되돌림까지 넉넉히
+TimeoutStartSec=900
+# 기본 보호 (리뷰 반영): 권한 상승 금지, /tmp는 이 서비스 전용. docker · git 동작에는 영향이 없다
+# (docker 그룹은 root와 같은 권한이라 보호선은 서버 접근 자체다 — deploy/README.md)
+NoNewPrivileges=yes
+PrivateTmp=yes
+# 종료 코드 1(실패 → 되돌림 성공) · 2(이미지 받기 실패)는 실패로 표시만 하고 타이머는 계속 돈다

@@ -1,0 +1,11 @@
+# 자동 배포 확인 주기 (BE-60). 이전 확인이 끝나고 2분 뒤에 다시 확인한다(배포가 길어져도 겹치지 않음)
+[Unit]
+Description=lawnambul 자동 배포 확인 (2분마다)
+
+[Timer]
+OnBootSec=3min
+OnUnitInactiveSec=2min
+AccuracySec=15s
+
+[Install]
+WantedBy=timers.target

@@ -18,6 +18,24 @@ test('장면은 앞 장면의 모습 · 이름표를 이어받는다', () => {
   assert.equal(trial[1].chips.nambul, '변호인');
 });
 
+test('이름표는 막에서 처음 맡는 배역으로 시작한다(7막 첫 화면부터 "A씨 역", FE-41)', () => {
+  const court = flatten(script.acts, ['7']);
+  assert.equal(court[0].chips.nambul, 'A씨 역', '대사 전 첫 장면에서 "사건 속 인물"로 뜨지 않는다');
+  assert.ok(court.every((s) => s.chips.nambul === 'A씨 역'));
+});
+
+test('시작 의상과 다른 배역의 대사가 뒤에 나와도, 그 대사 전 장면의 이름표는 의상 이름이다(리뷰 반영)', () => {
+  const acts = { x: { look: { naero: 'role:defense', nambul: 'role:actor' }, steps: [
+    { system: '막 시작' }, // 대사 전 장면: 변호인 의상은 "변호인", 사건 속 인물 의상은 처음 맡는 "A씨 역"
+    { say: 'naero', role: 'A씨 역', text: '…' }, // 변호인 의상으로 서 있는데 대사의 배역이 다름 → 이 장면부터 대본대로 "A씨 역"
+    { say: 'nambul', role: 'A씨 역', text: '…' },
+  ] } };
+  const [before, spoken] = flatten(acts, ['x']);
+  assert.equal(before.chips.naero, '변호인', '맞지 않는 "A씨 역"을 대사 전 장면부터 달지 않는다');
+  assert.equal(before.chips.nambul, 'A씨 역');
+  assert.equal(spoken.chips.naero, 'A씨 역');
+});
+
 test('한 사건 안에서 같은 배역(검사 · 변호인 · 판사 · 사건 속 인물)은 한 캐릭터만 맡는다(10/16 결정)', () => {
   const all = flatten(script.acts, Object.keys(script.acts));
   const byRole = new Map();

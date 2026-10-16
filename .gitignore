@@ -3,6 +3,9 @@
 .env.*
 !.env.example
 
+# ===== 서버 배포 상태 (BE-60: deploy.sh · cd-agent.sh가 서버에 남기는 직전 태그 · 잠금 파일) =====
+deploy/.deploy/
+
 # ===== 개인 설정 =====
 .claude/settings.local.json
 .idea/

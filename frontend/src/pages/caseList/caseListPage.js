@@ -271,6 +271,7 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
       }
     }
     main.replaceChildren(...parts);
+    paper.classList.toggle('inner-page', selected !== undefined); // 전체 탭만 1면, 유형 탭(살인 · 사기 · 상해)은 안쪽 면(오른쪽 면)
   }
 
   async function load(crimeType) {

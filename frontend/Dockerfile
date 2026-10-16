@@ -30,4 +30,10 @@ COPY nginx/default.conf /etc/nginx/conf.d/default.conf
 # 빌드 결과만 복사한다. preview.html · sample.html은 vite build 입력이 아니라 운영 이미지에 들어가지 않는다
 COPY --from=build /app/dist /usr/share/nginx/html
 
+# 배포 확인용 버전 파일 (BE-60): 어떤 커밋의 이미지가 떠 있는지 /version.json으로 알린다.
+# GitHub Actions가 main 배포 뒤 이 값이 새 커밋이 될 때까지 기다려 배포 성공 · 실패를 판단한다. 내용은 커밋 해시뿐이다
+# 마지막 단계에 둔다: 값이 커밋마다 바뀌므로 앞 단계(npm ci · build) 캐시를 깨지 않게
+ARG GIT_SHA=local
+RUN printf '{"revision":"%s"}\n' "$GIT_SHA" > /usr/share/nginx/html/version.json
+
 EXPOSE 80

@@ -25,6 +25,7 @@
 | v1.18 | 2026-10-13 | 관리자 감사 로그 (**확장 단계**, BE-68 · WBS 7.4.5) — 3장 관리자 인증에 감사 로그 행 추가: 기록 대상 · 저장 실패 처리(같은 트랜잭션 / 별도 트랜잭션) · IP 수집과 forward 헤더 |
 | v1.19 | 2026-10-13 | BE-61 반영 (**확장 단계**, WBS 7.1.4) — 2장 Redis를 캐시(DB 0) · 토큰 저장소(DB 1)로 분리, "Redis가 없어도 서비스가 동작"은 캐시에만 해당하도록 정정, "Redis 운영 구성" 신설: AOF `everysec` 영속화, `noeviction` + 모든 키 TTL 필수, 메모리 상한, 사용자별 값 캐시 제외, 비밀번호 · 네트워크 접근. 8장 운영 컨테이너에 Redis 추가. 리뷰 반영: 캐시 장애 시 원본 조회는 아직 구현 전인 규칙(6.5.3, `CacheErrorHandler`)임을 명시, 7장에 로컬 테스트 전 Redis 기동 안내 |
 | v1.20 | 2026-10-15 | BE-63 반영 (**확장 단계**, WBS 7.4.6 1차) — 3장 사용자 인증 기반에 **Rate limit** 행 추가: 운영 Nginx `/api` IP별 제한(평균 초당 20 · 순간 40), JSON 429 `TOO_MANY_REQUESTS`, 정적 파일 제외, 백엔드 지표에 잡히지 않음, 사용자 IP 전제와 서버 확인 · 로드 밸런서 시 `real_ip`. 2차(로그인 · 재발급)는 7.4.2 이후 |
+| v1.21 | 2026-10-16 | BE-60 반영 (**확장 단계**, WBS 7.1.3) — 8장 배포 흐름에 자동 배포(CD) 추가: 운영은 `main`만, 서버가 2분마다 GHCR `main` 이미지를 확인해 배포(실패 시 자동 되돌림), Actions는 `/version.json`으로 결과 확인. IAM 권한 없이 하는 방식을 고른 이유는 `docs/decisions/BE-60.md` |
 
 
 ## **1. Backend**
@@ -508,15 +509,18 @@ Redis도 같다(BE-61). `RedisConfigTest`가 실제 Redis에 붙으므로 **로�
 | GHCR (GitHub Container Registry) | 운영 이미지 저장소. 서버는 받아서 실행만 한다 (서버에서 빌드하지 않음) |
 
 ```
-PR → GitHub Actions(deploy-images.yml): 이미지 빌드 → 운영 구성으로 실행 → 스모크 테스트 (업로드 안 함)
+PR (develop · main 대상) → GitHub Actions(deploy-images.yml): 이미지 빌드 → 운영 구성으로 실행 → 스모크 테스트 (업로드 안 함)
 
-PR Merge (develop)
+PR Merge (develop) → 빌드 · 스모크 테스트 → GHCR 업로드 (태그 sha-커밋7자리 · develop). 운영에는 배포하지 않는다
+
+PR Merge (develop → main)
 ↓
-GitHub Actions: 이미지 빌드 → 스모크 테스트 통과 시 GHCR 업로드 (태그 develop · sha-커밋7자리)
+GitHub Actions: 빌드 · 스모크 테스트 → GHCR 업로드 (태그 sha-커밋7자리 · main, 이미지 라벨에 커밋 해시)
 ↓
-AWS EC2: 이미지 받기 → 컨테이너 실행 (환경변수로 접속 정보 주입) → deploy/smoke-test.sh
+AWS EC2 (cd-agent.sh, systemd 타이머 2분마다): main 이미지가 바뀌었으면 deploy.sh
+  → 백엔드 교체 → healthy 확인 → 웹 교체 → deploy/smoke-test.sh → 실패하면 직전 sha로 되돌림
 ↓
-PostgreSQL / Redis 연결
+GitHub Actions (verify-deploy): 운영 /version.json이 이 커밋이 될 때까지 대기 → 운영 주소로 스모크 테스트
 ```
 
 자세한 실행 방법 · 환경변수는 [`deploy/README.md`](../deploy/README.md)에 둔다 (BE-58).
@@ -544,7 +548,9 @@ location / {
 }
 ```
 
-배포 자동화(CD)는 단계로 나눠 붙인다. 이미지 빌드 · 스모크 테스트 · GHCR 업로드는 BE-58에서 먼저 붙였고, EC2에 자동으로 반영하는 단계는 7.1.3(BE-60)에서 붙인다.
+배포 자동화(CD)는 단계로 나눠 붙였다. 이미지 빌드 · 스모크 테스트 · GHCR 업로드는 BE-58, EC2 자동 반영은 7.1.3(BE-60)이다.
+
+**자동 배포 방식 (BE-60)**: 운영은 `main`만 배포한다(서버 한 대라 스테이징 없음, WBS 7-5 범위 조정안 6번). GitHub Actions가 서버에 들어가지 않고 **서버가 2분마다 GHCR을 확인**해 스스로 배포한다 — SSH(22)는 배포 담당 IP만 열려 있고 IAM(Session Manager) 생성 권한이 없어, 새 포트 · AWS 권한 없이 하는 방식을 골랐다. 배포 결과는 web 이미지의 `/version.json`(커밋 해시)으로 Actions가 확인한다. 실패하면 직전 이미지로 자동 되돌리고 DB 스키마는 되돌리지 않는다. 근거 · 대안은 [의사결정 기록](decisions/BE-60.md), 설치 · 운영 명령은 [`deploy/README.md`](../deploy/README.md) "자동 배포(CD)".
 
 ---
 

@@ -20,9 +20,11 @@ function parseInteger(raw) {
 function parsePeriod(years, months) {
   const year = parseInteger(years);
   const month = parseInteger(months);
-  if (year.invalid || month.invalid || month.value > 11) return { value: null, invalid: true };
+  if (year.invalid || month.invalid) return { value: null, invalid: true };
   if (year.value === null && month.value === null) return { value: null, invalid: false };
-  const value = (year.value ?? 0) * 12 + (month.value ?? 0);
+  // 개월 칸에 12 이상을 적으면 그 값이 형량 전체다(예: 년 1 · 개월 15 → 15개월 = 1년 3개월). 이미 적힌 년 칸은 더하지 않는다.
+  // 칸을 벗어나면 년 · 개월로 나눠 다시 적는다(input의 change)
+  const value = month.value >= 12 ? month.value : (year.value ?? 0) * 12 + (month.value ?? 0);
   return Number.isSafeInteger(value) ? { value, invalid: false } : { value: null, invalid: true };
 }
 
@@ -94,8 +96,9 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
     const header = element('header', 'case-topbar');
     const back = button('사건 기록 다시 보기', () => navigate('review'), 'back-button');
     header.append(element('strong', 'case-title', `판결 입력 · ${caseHeader.title}`), back);
-    const layout = element('main', 'verdict-layout');
-    const main = element('div', 'verdict-main');
+    // 파일철(FE-43): 위로 튀어나온 색인 탭으로 1페이지(판결) · 2페이지(참고 정보)를 넘긴다. 한 번에 한 장만 보인다
+    const layout = element('main', 'verdict-layout verdict-folder');
+    const main = element('section', 'verdict-main folder-sheet');
     main.append(element('h1', '', '당신의 판결'), element('p', 'verdict-intro muted', '지금까지 확인한 사건 정보와 양형기준을 참고해 판결해 주세요.'));
     // 형량 칸(공통): 징역이면 "징역 [ ]년 [ ]개월", 벌금이면 "벌금 [ ]만원"으로 바뀐다. 징역은 범위 막대 바로 위, 벌금은 벌금 슬라이더 위에 둔다
     const entry = element('div', 'sentence-entry');
@@ -125,9 +128,20 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
         draft[key] = field.value;
         changed(key);
       });
+      if (key === 'prisonMonths') field.addEventListener('change', carryMonths);
       wrapper.append(name, field, element('span', '', unit));
       parent.append(wrapper);
       inputs[key] = field;
+    }
+    // 징역 개월 칸에 12개월 이상을 적으면 년 칸 값은 버리고 개월 값만으로 년 · 개월을 다시 적는다(입력 중에는 그대로 두고 칸을 벗어날 때)
+    function carryMonths() {
+      const period = parsePeriod(draft.prisonYears, draft.prisonMonths);
+      if (period.invalid || period.value === null || parseInteger(draft.prisonMonths).value < 12) return;
+      draft.prisonYears = String(Math.floor(period.value / 12));
+      draft.prisonMonths = String(period.value % 12);
+      inputs.prisonYears.value = draft.prisonYears;
+      inputs.prisonMonths.value = draft.prisonMonths;
+      changed('prisonMonths');
     }
     function clearSuspension() {
       draft.suspended = false;
@@ -208,12 +222,11 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       reductionChoices.append(label);
       reductionRadios.push({ type, label, radio });
     }
-    const reductionAuto = element('p', 'reduction-auto');
-    reductionArea.append(reductionLabel, element('p', 'muted', '판사는 참작할 사정이 있으면 형을 줄여서 선고할 수 있어요(작량감경).'), reductionChoices, reductionAuto);
+    // 감경 줄은 늘 보인다: 감경할 수 없는 형벌(징역 · 벌금 · 고르기 전)이면 체크박스 · 감경 후 형벌이 회색으로 눌리지 않는다
+    reductionArea.append(reductionLabel, element('p', 'muted', '판사는 참작할 사정이 있으면 형을 줄여서 선고할 수 있어요(작량감경).'), reductionChoices);
     penaltyGroup.append(reductionArea);
 
     const sentenceGroup = group('2. 형량 · 금액');
-    const chooseHint = element('p', 'muted', '먼저 형벌 종류를 선택해 주세요.');
     const prisonFields = element('div', 'number-fields');
     const fineFields = element('div', 'number-fields');
     const sentenceError = element('p', 'field-error');
@@ -227,6 +240,7 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
     function option() {
       return form.penaltyOptions.find((item) => item.penaltyType === draft.penaltyType);
     }
+    const prisonOption = form.penaltyOptions.find((item) => item.penaltyType === 'PRISON'); // 형량을 고를 수 없을 때 회색으로 보여 줄 막대
     // 범위 막대 = 형량 조절 막대(누르기 · 끌기 · 방향키). 슬라이더 역할(role="slider")은 막대(.range-track)에만 준다 —
     // 같은 상자 안의 형량 칸(입력)이 슬라이더의 일부로 읽히거나 방향키를 빼앗기지 않게.
     // 막대는 형벌 종류가 바뀔 때만 다시 그려지므로 누르기 · 끌기는 다시 그려지지 않는 바깥 상자(rangeSlider)가 받는다.
@@ -252,7 +266,9 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       const manwon = parseInteger(draft.fineAmount).value;
       return manwon === null ? null : manwon * 10000;
     }
-    function setValue(raw, snap = false) {
+    // beyond: 벌금 막대를 끌다가 막대 끝(3,000만 원)을 넘어가면, 표시선은 끝에 두고 넘어간 거리만큼 금액을 계속 올린다.
+    // 막대를 다시 누르면 누른 자리 금액으로 처음부터 다시 정한다(누를 때마다 새로 계산)
+    function setValue(raw, snap = false, beyond = false) {
       const range = scale();
       let value = Math.round(raw / range.step) * range.step;
       if (snap && !range.prison) {
@@ -265,7 +281,7 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
           snapAt = null;
         }
       }
-      value = Math.max(range.min, Math.min(range.max, range.trackMax, value));
+      value = Math.max(range.min, Math.min(range.max, beyond && !range.prison ? Infinity : range.trackMax, value));
       if (range.prison) {
         draft.prisonYears = String(Math.floor(value / 12));
         draft.prisonMonths = String(value % 12);
@@ -291,10 +307,10 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       event.preventDefault();
       track.focus();
       rangeSlider.setPointerCapture(event.pointerId);
-      setValue(valueAt(event.clientX), true);
+      setValue(valueAt(event.clientX), true, true);
     });
     rangeSlider.addEventListener('pointermove', (event) => {
-      if (rangeSlider.hasPointerCapture(event.pointerId)) setValue(valueAt(event.clientX), true);
+      if (rangeSlider.hasPointerCapture(event.pointerId)) setValue(valueAt(event.clientX), true, true);
     });
     rangeSlider.addEventListener('keydown', (event) => {
       if (event.target !== sliderTrack() || controls.disabled) return; // 막대에 포커스가 있을 때만(형량 칸의 방향키는 칸이 쓴다)
@@ -320,21 +336,24 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       // 아래 글자는 1,000만 원 눈금 자리에 맞춘다
       const labels = element('div', 'fine-labels');
       labels.setAttribute('aria-hidden', 'true');
-      ['0', '1,000만', '2,000만', '3,000만 원 이상'].forEach((text, i) => {
+      ['0', '1,000만', '2,000만', '3,000만'].forEach((text, i) => {
         const label = element('span', '', text);
         label.style.left = `${i / 3 * 100}%`;
         labels.append(label);
       });
+      // 징역 막대 상자와 같은 짜임(제목 · 범위 · 권고 범위 줄 · 눈금 막대 · 아래 안내)이라 상자 크기 · 막대 위치가 같다
+      track.classList.add('range-track-with-ticks');
       box.append(element('h3', '', '선고할 수 있는 범위'), element('p', 'range-value', `벌금 ${formatMoney(min)} 이상`),
-        track, labels, element('p', 'range-lower-label', '막대는 3,000만 원까지예요. 더 큰 금액은 칸에 직접 입력해 주세요.'));
+        element('p', 'range-recommendation', '양형기준 권고 범위는 징역에만 해당해요'),
+        track, labels, element('p', 'range-lower-label', '막대는 3,000만 원까지'));
       container.append(box);
     }
     const rangeBox = element('div', 'verdict-range');
     const feedback = element('div', 'sentence-feedback');
-    const fixedPenalty = element('div', 'fixed-penalty');
-    const sliderHint = element('p', 'muted slider-hint', '막대를 누르거나 끌어서 형량을 고를 수 있어요. 칸에 직접 입력해도 돼요.');
+    // 형량 칸 머리: 고른 형벌 이름 + 안내 두 줄. 형벌마다(고르기 전 · 사형 · 무기징역 · 징역 · 벌금) 같은 자리 · 같은 높이라 아래 막대가 움직이지 않는다
+    const fixedPenalty = element('div', 'fixed-penalty penalty-head');
     rangeSlider.append(rangeBox);
-    sentenceGroup.append(chooseHint, fixedPenalty, sentenceError, sliderHint, rangeSlider, feedback);
+    sentenceGroup.append(fixedPenalty, sentenceError, rangeSlider, feedback);
     // 범위 막대는 형벌 종류가 바뀔 때만 다시 그린다(입력할 때마다 그리면 막대 안 형량 칸의 입력 커서가 빠진다).
     // 입력값 표시선(손잡이)은 여기서 직접 옮긴다. 형량이 없으면(처음 진입) 최소값 자리에 둔다
     let rangeKey = null;
@@ -376,8 +395,12 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
     suspensionArea.append(suspensionRow, suspensionFields, suspensionError);
     sentenceGroup.append(suspensionArea);
 
-    const factorGroup = group('3. 판단 요소');
-    factorGroup.append(element('p', 'muted', '요소마다 형량을 무겁게 했으면 ↑, 가볍게 했으면 ↓를 눌러 주세요. 처음에는 모두 "고려 안 함"이에요.'));
+    // 판단 요소는 따로 한 장(2페이지). 확정 확인 중에는 이 장의 버튼도 잠근다
+    const factorPage = element('section', 'verdict-factors folder-sheet');
+    const factorGroup = element('fieldset', 'verdict-controls verdict-group');
+    factorGroup.append(element('legend', 'visually-hidden', '판단 요소'));
+    factorPage.append(element('h2', 'folder-title', '판단 요소'), factorGroup);
+    factorGroup.append(element('p', 'muted', '요소마다 형량을 무겁게 했으면 "무겁게", 가볍게 했으면 "가볍게"를 눌러 주세요. 처음에는 모두 "고려 안 함"이에요.'));
     const factorList = element('ul', 'factor-list');
     for (const factor of form.factors) {
       const row = element('li', 'factor-row');
@@ -387,7 +410,7 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       actions.setAttribute('role', 'group');
       actions.setAttribute('aria-labelledby', label.id);
       // 무겁게 · 고려 안 함 · 가볍게 중 하나. 고려 안 함(NONE)은 서버에 보내지 않는다(요소를 고르지 않은 것)
-      for (const [direction, text] of [['UP', '↑ 무겁게'], ['NONE', '— 고려 안 함'], ['DOWN', '↓ 가볍게']]) {
+      for (const [direction, text] of [['UP', '무겁게'], ['NONE', '고려 안 함'], ['DOWN', '가볍게']]) {
         const toggle = button(text, () => {
           if (direction === 'NONE') delete draft.factors[factor.factorId];
           else draft.factors[factor.factorId] = direction;
@@ -466,6 +489,7 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
         if (active() && main.isConnected) {
           update();
           if (serverError) {
+            showPage(2);
             const type = finalPenalty();
             const target = serverError === 'INVALID_SUSPENSION' && !suspensionFields.hidden && !suspensionArea.hidden
               ? yearButtons[0]?.yearButton ?? checkbox : type === 'PRISON' ? inputs.prisonYears : type === 'FINE' ? inputs.fineAmount
@@ -479,15 +503,61 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
     confirmation.append(confirmationHeading, element('p', '', '확정하면 판결을 바꿀 수 없고, AI 판결과 실제 판결이 차례로 공개돼요.'), submitError, confirmationActions);
     main.append(controls, footer, confirmation);
 
-    const sidebar = element('aside', 'verdict-sidebar');
-    sidebar.setAttribute('aria-label', '판결 참고 정보');
-    sidebar.append(element('h2', '', '참고 정보'));
+    const sidebar = element('section', 'verdict-sidebar folder-sheet');
+    sidebar.append(element('h2', 'visually-hidden', '참고 정보'));
     const lawBox = element('div');
     renderRecommendedRangeBar(sidebar, { law, showTrack: false });
-    const records = button('사건 기록 바로가기', () => navigate('review'));
     sidebar.insertBefore(lawBox, sidebar.children[1]);
-    sidebar.append(records);
-    layout.append(main, sidebar);
+    // 색인 탭(ARIA 탭): 누르거나 ←→ · Home · End로 장을 넘긴다. 확정 확인 중에도 참고 정보는 볼 수 있다
+    const tabList = element('div', 'folder-tabs');
+    tabList.setAttribute('role', 'tablist');
+    tabList.setAttribute('aria-label', '판결 파일철');
+    // 장 순서: 1 참고 정보 → 2 판단 요소 → 3 최종 판결. 앞의 두 장 맨 아래에 다음 장으로 넘기는 버튼을 둔다
+    const pages = [[sidebar, '참고 정보'], [factorPage, '판단 요소'], [main, '최종 판결']].map(([panel, title], i) => {
+      const tab = element('button', 'folder-tab');
+      tab.type = 'button';
+      tab.id = `verdict-${caseId}-tab-${i + 1}`;
+      panel.id = `verdict-${caseId}-page-${i + 1}`;
+      tab.setAttribute('role', 'tab');
+      tab.setAttribute('aria-controls', panel.id);
+      panel.setAttribute('role', 'tabpanel');
+      panel.setAttribute('aria-labelledby', tab.id);
+      tab.append(element('span', 'folder-tab-no', String(i + 1)), element('span', '', title));
+      tab.addEventListener('click', () => showPage(i));
+      tabList.append(tab);
+      return { tab, panel };
+    });
+    tabList.addEventListener('keydown', (event) => {
+      const now = pages.findIndex(({ tab }) => tab === document.activeElement);
+      const next = { ArrowRight: now + 1, ArrowLeft: now - 1, Home: 0, End: pages.length - 1 }[event.key];
+      if (now < 0 || next === undefined) return;
+      event.preventDefault();
+      showPage((next + pages.length) % pages.length, true);
+    });
+    function showPage(index, focus = false) {
+      const moving = pages[index].panel.hidden && pages.some(({ panel }) => !panel.hidden);
+      pages.forEach(({ tab, panel }, i) => {
+        tab.setAttribute('aria-selected', String(i === index));
+        tab.tabIndex = i === index ? 0 : -1;
+        panel.hidden = i !== index;
+      });
+      if (focus) pages[index].tab.focus({ preventScroll: true });
+      // 장을 넘기면 새 장의 맨 위부터 보인다: 무대 카드 안 스크롤을 처음으로 올리고, 파일철 머리가 화면 위로 지나갔으면 화면도 올린다
+      if (moving) {
+        const scroller = layout.closest('.scroll-body');
+        if (scroller) scroller.scrollTop = 0;
+        if (layout.getBoundingClientRect().top < 0) layout.scrollIntoView({ block: 'start' });
+      }
+    }
+    [[sidebar, '판단 요소로 넘기기', 1], [factorPage, '최종 판결로 넘기기', 2]].forEach(([panel, label, to]) => {
+      const row = element('div', 'folder-next');
+      row.append(button(label, () => showPage(to, true)));
+      panel.append(row);
+    });
+    showPage(0);
+    const folderBody = element('div', 'folder-body');
+    folderBody.append(sidebar, factorPage, main);
+    layout.append(tabList, folderBody);
     // 대본의 제목이 사건 제목과 같을 때만 무대를 쓴다(S-03 · S-04와 같은 규칙, 사건 번호는 DB마다 다를 수 있다)
     const candidate = SCRIPTS[caseId];
     const script = candidate?.title === caseHeader.title ? candidate : undefined;
@@ -528,44 +598,48 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       const suspension = parsePeriod(draft.suspensionYears, draft.suspensionMonths);
       const suspensionInvalid = draft.suspended && (suspension.invalid || suspension.value === null
         || suspension.value < rule.minMonths || suspension.value > rule.maxMonths);
-      chooseHint.hidden = Boolean(option);
-      reductionArea.hidden = !choices.length;
       reductionCheck.checked = draft.reducing;
-      reductionChoices.hidden = !draft.reducing || choices.length < 2;
-      reductionAuto.hidden = !draft.reducing || choices.length !== 1;
-      reductionAuto.textContent = choices.length === 1 ? `${penaltyLabels[choices[0]]}으로 감경해요` : '';
+      reductionCheck.disabled = !choices.length;
+      reductionLabel.classList.toggle('is-disabled', !choices.length);
       for (const { type, label, radio } of reductionRadios) {
-        label.hidden = !choices.includes(type);
+        radio.disabled = !draft.reducing || !choices.includes(type); // 감경 후 형벌이 하나뿐이면 체크할 때 자동으로 골라진다
         radio.checked = draft.reducedTo === type;
+        label.classList.toggle('is-disabled', radio.disabled);
       }
-      prisonFields.hidden = !prison;
-      fineFields.hidden = !fine;
-      entryType.textContent = prison ? '징역' : fine ? '벌금' : '';
+      // 형량 칸은 늘 보인다(상자 크기를 같게): 고를 수 없을 때는 징역 칸을 회색으로 잠근다
+      const fineEntry = fine && !pendingReduction;
+      prisonFields.hidden = fineEntry;
+      fineFields.hidden = !fineEntry;
+      entryType.textContent = fineEntry ? '벌금' : '징역';
       const sliding = (prison || fine) && !pendingReduction;
       const trackMax = prison ? option?.allowedMax : FINE_TRACK_MAX;
-      sliderHint.hidden = !sliding;
-      fixedPenalty.hidden = !fixed;
-      fixedPenalty.replaceChildren();
-      if (fixed) fixedPenalty.append(element('strong', 'fixed-penalty-name', penaltyLabels[finalType]),
-        element('p', 'muted', `형량 입력 없이 ${penaltyLabels[finalType]}으로 선고해요.`),
-        element('p', 'muted', `양형기준 권고 범위(징역 ${formatMonths(form.recommended.minMonths)} ~ ${formatMonths(form.recommended.maxMonths)})는 유기징역 기준이라 ${penaltyLabels[finalType]}에는 적용되지 않아요.`));
+      const [headName, ...headLines] = !option ? ['선택 전', '먼저 형벌 종류를 선택해 주세요.', '형벌을 고르면 형량 · 금액을 정할 수 있어요.']
+        : pendingReduction ? ['감경', '감경 후 형벌을 골라 주세요.', '고르면 그 형벌의 형량을 정할 수 있어요.']
+          : fixed ? [penaltyLabels[finalType], `형량 입력 없이 ${penaltyLabels[finalType]}으로 선고해요.`,
+            `양형기준 권고 범위는 징역 기준이라 ${penaltyLabels[finalType]}에는 해당하지 않아요.`]
+            : prison ? ['징역', '막대를 누르거나 끌어서 형량을 고를 수 있어요.', '칸에 년 · 개월을 직접 입력해도 돼요.']
+              : ['벌금', '막대를 누르거나 끌어서 금액을 고를 수 있어요.', '3,000만 원이 넘으면 칸에 만원 단위로 입력해 주세요.'];
+      fixedPenalty.classList.toggle('is-empty', !option || pendingReduction);
+      fixedPenalty.replaceChildren(element('strong', 'fixed-penalty-name', headName), ...headLines.map((line) => element('p', 'muted', line)));
       sentenceError.textContent = sentence.invalid
-        ? prison ? '숫자로 입력해 주세요. 개월은 0 ~ 11입니다.' : '금액은 만원 단위 정수로 입력해 주세요.' : '';
+        ? prison ? '년 · 개월은 숫자로 입력해 주세요.' : '금액은 만원 단위 정수로 입력해 주세요.' : '';
       for (const key of ['prisonYears', 'prisonMonths', 'fineAmount']) inputs[key].setAttribute('aria-invalid', String(sentence.invalid));
-      const key = option && !fixed ? [draft.penaltyType, draft.reducing, draft.reducedTo, pendingReduction, prison].join('|') : '';
+      // 막대는 늘 보인다. 형량을 고를 수 없을 때(형벌 고르기 전 · 사형 · 무기징역 · 감경 후 형벌 고르기 전)는 징역 막대를 회색으로 눌리지 않게 둔다
+      const key = sliding ? [draft.penaltyType, draft.reducing, draft.reducedTo, prison].join('|') : 'off';
       if (key !== rangeKey) {
         rangeKey = key;
         rangeBox.replaceChildren();
-        if (key && fine) renderFineRange(rangeBox, option.allowedMin);
-        else if (key) renderRecommendedRangeBar(rangeBox, {
+        const bar = sliding ? option : prisonOption;
+        if (sliding && fine) renderFineRange(rangeBox, option.allowedMin);
+        else if (bar) renderRecommendedRangeBar(rangeBox, {
           law,
-          showTrack: !pendingReduction,
-          trackMaxMonths: option.allowedMax,
-          allowedMinMonths: option.allowedMin,
-          penaltyType: draft.penaltyType,
+          trackMaxMonths: bar.allowedMax,
+          allowedMinMonths: bar.allowedMin,
+          penaltyType: sliding ? draft.penaltyType : 'PRISON',
           showInputLabel: false, // 형량은 막대 위 형량 칸이 보여 준다
+          showBasis: false, // 권고 범위 근거는 참고 정보 탭에 있다
         });
-        rangeBox.querySelector('.range-track')?.append(marker);
+        if (sliding) rangeBox.querySelector('.range-track')?.append(marker);
         // 형량 칸: "선고할 수 있는 범위" 설명과 같은 줄 오른쪽
         // "선고할 수 있는 범위" 아래 두 줄(범위 · 권고 범위)과 같은 높이 오른쪽에
         rangeBox.querySelector('.recommended-range h3')?.after(entry);
@@ -587,7 +661,9 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       } else {
         rangeSlider.classList.remove('is-sliding');
       }
-      entry.hidden = !sliding;
+      rangeSlider.classList.toggle('is-off', !sliding);
+      entry.classList.toggle('is-off', !sliding);
+      for (const key of ['prisonYears', 'prisonMonths', 'fineAmount']) inputs[key].disabled = !sliding;
       if (sliding) {
         const shown = present ? sentence.value : option.allowedMin;
         marker.style.left = `${Math.max(0, Math.min(100, shown / trackMax * 100))}%`;
@@ -603,7 +679,7 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
             .find((item) => item && (item.reducibleTo ?? []).includes('PRISON')
               && sentence.value >= item.allowedMin && sentence.value <= item.allowedMax) : null;
         const help = alternative ? ` 징역 ${formatMonths(option.allowedMax)}을 넘기려면 ${penaltyLabels[alternative.penaltyType]}을 고른 뒤 감경해서 선고할 수 있어요.` : '';
-        warning.append(element('strong', '', '! 선고할 수 있는 범위를 벗어났습니다.'),
+        warning.append(element('strong', '', '선고할 수 있는 범위를 벗어났습니다.'),
           element('p', '', `이 사건에서 선고할 수 있는 형량은 ${rangeText}입니다. 범위 안으로 형량을 조정해야 판결을 확정할 수 있어요.${help}`));
         feedback.append(warning);
       }
@@ -611,6 +687,7 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       const noSuspension = ['DEATH', 'LIFE'].includes(draft.penaltyType);
       checkbox.disabled = !eligible;
       suspensionLabel.classList.toggle('is-disabled', !eligible);
+      suspensionArea.classList.toggle('is-off', !eligible); // 붙일 수 없으면 줄 전체를 회색으로 잠근다(감경 · 형량 막대와 같은 표시)
       suspensionHint.textContent = noSuspension ? '사형 · 무기징역을 고르면 감경해도 집행유예를 붙일 수 없어요.'
         : `징역 ${formatMonths(rule.maxPrisonMonths)} 이하 또는 벌금 ${formatMoney(rule.maxFineAmount)} 이하일 때 붙일 수 있어요.`;
       checkbox.checked = draft.suspended;
@@ -630,8 +707,8 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       reason.textContent = disabledReason;
       openConfirmation.disabled = Boolean(disabledReason) || confirming;
       controls.disabled = confirming;
+      factorGroup.disabled = confirming;
       back.disabled = confirming;
-      records.disabled = confirming;
       confirmation.hidden = !confirming;
       cancel.disabled = submitting;
       submit.disabled = submitting;

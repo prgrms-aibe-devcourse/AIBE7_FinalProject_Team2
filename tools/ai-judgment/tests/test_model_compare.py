@@ -573,8 +573,9 @@ class GenerateCompareTest(unittest.TestCase):
 
     def test_on_exhausted_none_or_duplicate_adds_nothing(self):
         for replacement in (None, "openai:gpt-x"):
+            # 폴더 이름에 콜론을 쓰지 않는다(윈도우는 폴더 이름에 ":"를 쓸 수 없다)
             caller = fake_caller({"openai:gpt-x": [llm.LLMQuotaExhaustedError("한도 소진")]})
-            records = generate_runs(self.case, ["openai:gpt-x"], 3, self.batch_dir / str(replacement), caller=caller,
+            records = generate_runs(self.case, ["openai:gpt-x"], 3, self.batch_dir / str(replacement).replace(":", "_"), caller=caller,
                                     on_exhausted=lambda spec, r=replacement: r, log=lambda *_: None)
             self.assertEqual(len(records), 1, msg=str(replacement))
 

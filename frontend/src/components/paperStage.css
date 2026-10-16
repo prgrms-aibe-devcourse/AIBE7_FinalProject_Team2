@@ -43,7 +43,7 @@
 .stage-wrap.paper-mode .board :is(.guide-box, .pre-judgment-form) { margin: 0; padding-left: 0; padding-right: 0; }
 .stage-wrap.paper-mode .board .guide-box { margin-bottom: 12px; padding: 0; border: 0; background: none; font: 400 19px/1.4 var(--font-hand); color: var(--color-muted); } /* 엽서 안 안내는 회색 상자 대신 엽서에 적힌 메모 한 줄 */
 .stage-wrap.paper-mode .board .pre-judgment-form { padding-bottom: 0; }
-.stage-wrap.paper-mode .board .section-actions { display: flex; justify-content: flex-end; } /* 제출 버튼은 엽서 오른쪽 아래 */
+.stage-wrap.paper-mode .board .section-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; } /* 제출 버튼은 엽서 오른쪽 아래. 보내기 확인(다시 고르기 · 보내기) 두 버튼 사이는 띄운다 */
 .stage-wrap.paper-mode .board legend { font-family: var(--font-hand); font-size: 24px; font-weight: 400; color: var(--color-desk-note-pen); }
 .stage-wrap.paper-mode .board .range-options { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(var(--rows, 4), auto); grid-auto-flow: column; gap: 8px 12px; counter-reset: range; }
 /* 형량은 가벼운 → 무거운 순서: 왼쪽 열 위 → 아래, 이어서 오른쪽 열. 번호로 순서를 보여 준다 */
@@ -211,7 +211,7 @@
   .stage-wrap.paper-mode .dlg { background: var(--paper); }
   .stage-wrap.paper-mode .ctrl { background: var(--color-card); }
   .stage-wrap.paper-mode .board .section-actions { position: sticky; bottom: -18px; z-index: 1; margin: 0 -16px -18px; padding: 12px 16px; background: color-mix(in srgb, var(--color-desk-kraft) 10%, var(--color-card)); border-top: 1px dashed var(--color-border-strong); }
-  .stage-wrap.paper-mode .board .section-actions .primary-button { width: 100%; }
+  .stage-wrap.paper-mode .board .section-actions :is(.primary-button, .secondary-button) { width: 100%; }
 }
 
 /* 엽서 접수 도장(소인): 보낸 순간 엽서 위에 찍힌다 */

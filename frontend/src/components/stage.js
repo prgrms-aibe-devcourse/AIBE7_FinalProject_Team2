@@ -39,6 +39,9 @@ const chipText = (look, role) => {
   return role && (role === label || role.endsWith('역')) ? role : label;
 };
 
+// 배역이 의상(look "role:…")과 맞는지: 이름이 의상 이름과 같거나, 사건 속 인물 의상에서 "A씨 역" · "B씨 역"처럼 역으로 끝나는 배역
+const fitsLook = (look, role) => Boolean(look?.startsWith('role:')) && (role === ROLE_LABEL[look.slice(5)] || (look === 'role:actor' && role.endsWith('역')));
+
 // 대본의 막들을 한 줄로 편다. 각 장면은 앞 장면의 모습(look) · 자리(spots) · 이름표(tags) · 재판 순서(proc) · 지면 기사(focus)를 이어받는다.
 export function flatten(acts, order) {
   const steps = [];
@@ -49,7 +52,10 @@ export function flatten(acts, order) {
     let tags = { naero: '', nambul: '' };
     let proc = null;
     let focus = 'all';
-    const said = { naero: '', nambul: '' };
+    // 이름표는 막 시작 의상에 맞는 첫 배역으로 시작한다(대사 전에 "사건 속 인물"이 떴다가 "A씨 역"으로 바뀌지 않게).
+    // 시작 의상과 다른 배역의 대사가 먼저 나오면(예: 변호인 의상으로 서 있다가 첫 대사가 "A씨 역") 그 배역은 건너뛴다
+    const firstRole = (who) => act.steps.find((step) => step.say === who && step.role && fitsLook(act.look?.[who], step.role))?.role ?? '';
+    const said = { naero: firstRole('naero'), nambul: firstRole('nambul') };
     act.steps.forEach((step) => {
       look = { ...look, ...step.look };
       spots = { ...spots, ...step.spots };

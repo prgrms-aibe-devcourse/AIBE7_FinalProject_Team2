@@ -5,8 +5,17 @@
 #
 # ⚠️ 이 오버레이는 "붙여서 올릴 때만" 적용된다. base 파일만으로 backend를 다시 올리면 8081 포트와 로그 볼륨이
 # 빠진 채로 컨테이너가 재생성되고, **모니터링이 조용히 끊긴다**(에이전트 컨테이너만 연결 없이 남는다).
-# D가 COMMON-43 협의에서 짚은 위험이다. 그래서 배포 스크립트 · CD(7.1.3 BE-60)가 `.env`의 MONITORING_AGENT=1을
-# 보고 이 파일을 자동으로 포함하게 해야 한다 — 배포 경로 수정은 D 담당이라 이 저장소에는 아직 없다.
+# D가 COMMON-43 협의에서 짚은 위험이고, BE-60 CD가 들어온 지금은 가설이 아니라 상시 위험이다 —
+# `cd-agent.sh`가 2분마다 GHCR `main` 이미지를 확인해 `deploy.sh`로 자동 배포하기 때문이다.
+#
+# 그래서 `deploy.sh`의 COMPOSE 배열이 `.env`의 MONITORING_AGENT=1을 보고 이 파일을 포함해야 한다.
+# 끼울 자리는 real-seed 오버레이 바로 뒤다(deploy.sh):
+#
+#   if [[ "$(env_value MONITORING_AGENT)" == "1" ]]; then
+#     COMPOSE+=(-f "$DEPLOY_DIR/docker-compose.monitoring-agent.yml")
+#   fi
+#
+# `deploy.sh` 수정은 D 담당이라(COMMON-43 협의) 이 PR에서는 건드리지 않았다.
 #
 # 수집·저장(Prometheus · Loki · Grafana)은 모니터링 전용 EC2에 있고(monitoring/docker-compose.prod.yml),
 # 여기에는 "메인 서버에 있어야만 되는 것" 둘만 둔다.
