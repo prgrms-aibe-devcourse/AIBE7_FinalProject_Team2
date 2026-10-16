@@ -96,7 +96,7 @@
   },
   "acts": {
     "1": {
-      "title": "1막 신문 속 사건",
+      "title": "1막 첫인상 (기사)",
       "scene": "sheet",
       "look": {
         "naero": "guide-neutral",
@@ -151,7 +151,7 @@
       ]
     },
     "2": {
-      "title": "2막 첫인상 판단",
+      "title": "1막 첫인상 (엽서)",
       "scene": "sheet",
       "look": {
         "naero": "guide-neutral",
@@ -191,7 +191,7 @@
       ]
     },
     "3": {
-      "title": "3막 재판",
+      "title": "2막 재판",
       "scene": "court",
       "procedures": [
         "인정신문",
@@ -207,6 +207,7 @@
       "steps": [
         {
           "say": "narrator",
+          "cameo": "naero",
           "proc": 0,
           "section": 2,
           "text": "재판을 시작합니다. 재판장은 당신이에요. 먼저 피고인 A씨가 본인이 맞는지 확인합니다."
@@ -248,12 +249,14 @@
         },
         {
           "say": "narrator",
+          "cameo": "naero",
           "proc": 2,
           "card": "issues",
           "text": "피고인이 범행을 인정했으니, 남은 쟁점은 얼마나 무겁게 벌할지예요."
         },
         {
           "say": "narrator",
+          "cameo": "naero",
           "card": "issues",
           "text": "범행 경위, 범행 뒤의 행동, 피해 회복 노력. 이 세 가지를 눈여겨보세요."
         },
@@ -310,6 +313,7 @@
         },
         {
           "say": "narrator",
+          "cameo": "nambul",
           "proc": 4,
           "section": 3,
           "look": {
@@ -380,7 +384,7 @@
       ]
     },
     "4": {
-      "title": "판결 전 정리",
+      "title": "(건너뜀) 판결 전 정리 — 3막 사건 요약 장으로 옮김",
       "scene": "court",
       "look": {
         "naero": "read-thinking",
@@ -436,7 +440,7 @@
       ]
     },
     "5": {
-      "title": "당신이 판사",
+      "title": "3막 내 판결",
       "scene": "court",
       "procedures": [
         "검사 의견",
@@ -478,20 +482,19 @@
         },
         {
           "say": "naero",
-          "role": "법정 진행",
+          "role": "판사",
           "proc": 3,
           "look": {
-            "naero": "guide-neutral",
+            "naero": "role:judge",
             "nambul": "idle-neutral"
           },
           "tags": {
-            "naero": "법정 진행",
             "nambul": ""
           },
           "spots": {
             "nambul": ""
           },
-          "text": "이제 재판장께서 판결해 주시기 바랍니다. 형벌의 종류와 형량, 그리고 양형에 고려한 요소를 정해 주십시오."
+          "text": "이제 판결을 내려 주십시오. 형벌의 종류와 형량, 그리고 양형에 고려한 요소를 정해 주십시오."
         },
         {
           "proc": 3,
@@ -505,13 +508,18 @@
       ]
     },
     "6": {
-      "title": "AI 판사의 합의",
+      "title": "4막 AI 판결",
       "scene": "court",
       "look": {
         "naero": "guide-neutral",
         "nambul": "idle-neutral"
       },
       "steps": [
+        {
+          "say": "nambul",
+          "role": "안내",
+          "text": "이제 AI 판사의 판결을 확인해 볼게요."
+        },
         {
           "say": "law",
           "law": "trio",
@@ -540,14 +548,19 @@
         {
           "say": "naero",
           "role": "안내",
+          "text": "AI 판사는 {penalty을} 선고했어요."
+        },
+        {
+          "say": "nambul",
+          "role": "안내",
           "confirm": "court",
           "next": "실제 판결 확인하기",
-          "text": "이건 AI 판사의 판결이에요. 다음은 실제 재판부가 내린 판결이에요."
+          "text": "그렇다면 실제 판결은 어떨까요?"
         }
       ]
     },
     "7": {
-      "title": "실제 판결",
+      "title": "5막 실제 판결",
       "scene": "court",
       "look": {
         "naero": "role:judge",
@@ -609,7 +622,7 @@
       ]
     },
     "8": {
-      "title": "세 판결 비교",
+      "title": "6막 세 판결 비교",
       "scene": "sheet",
       "look": {
         "naero": "idle-neutral",

@@ -61,6 +61,18 @@
 @keyframes folder-deny { 20% { translate: -4px 0; } 40% { translate: 4px 0; } 60% { translate: -3px 0; } 80% { translate: 2px 0; } }
 .verdict-page .folder-tab[aria-disabled='true'] { color: color-mix(in srgb, var(--color-heading) 55%, transparent); cursor: not-allowed; }
 
+/* 빠진 칸 반짝임(확정 장을 열 수 없을 때): 두 번 밝아졌다 사라진다 */
+.verdict-page .is-flash { border-radius: 4px; animation: field-flash .7s ease-out 2; }
+@keyframes field-flash { 0%, 100% { background-color: transparent; box-shadow: 0 0 0 0 transparent; } 40% { background-color: color-mix(in srgb, var(--color-label) 16%, transparent); box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-label) 16%, transparent); } }
+
+/* 해금 책갈피: 새로 열린 장의 탭 앞에 끼운 작은 리본 + 내로 얼굴. 탭 줄보다 살짝 위로 솟는다 */
+.verdict-page .folder-bookmark {
+  position: relative; z-index: 3; flex: none; align-self: flex-end; width: 22px; height: 38px; margin: 0 -6px -2px; pointer-events: none;
+  background: var(--color-desk-label); clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 82%, 0 100%);
+  filter: drop-shadow(0 2px 2px color-mix(in srgb, var(--color-desk-shadow) 35%, transparent));
+}
+.verdict-page .folder-bookmark img { position: absolute; left: 50%; top: 3px; width: 18px; height: 18px; translate: -50% 0; border-radius: 50%; background: var(--color-card); object-fit: cover; object-position: top; }
+
 /* 말린 모서리(다음 장으로 넘기기): 종이 오른쪽 아래가 대각선으로 접혀 들려 있다. 접힌 자리에는 아래 서류철(크라프트)이 보이고,
    들린 자락은 종이 뒷면(조금 어둡게)이다. 마우스를 올리면 자락이 바람에 날리듯 넘실거린다 */
 .verdict-page .folder-curl {
@@ -104,12 +116,12 @@
 }
 .verdict-page .sign-line:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 4px; }
 .verdict-page .sign-hint { position: absolute; left: 0; right: 0; bottom: 10px; text-align: center; font: 400 20px/1 var(--font-hand); color: var(--color-muted); transition: opacity .2s ease-out; }
-@media (hover: hover) and (pointer: fine) { .verdict-page .sign-line:not(:disabled):hover .sign-hint { color: var(--color-heading); } }
+@media (hover: hover) and (pointer: fine) { .verdict-page .sign-line:not([aria-disabled='true']):hover .sign-hint { color: var(--color-heading); } }
 .verdict-page .sign-ink { position: absolute; inset: 0 0 4px; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
 .verdict-page .sign-ink path { fill: none; stroke: var(--color-desk-note-pen); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; stroke-dashoffset: 1; }
 .verdict-page .sign-row.is-signed .sign-ink path { stroke-dashoffset: 0; transition: stroke-dashoffset .9s cubic-bezier(.45, .05, .55, .95); }
 .verdict-page .sign-row.is-signed .sign-hint { opacity: 0; }
-.verdict-page .sign-line:disabled { cursor: progress; opacity: 1; }
+.verdict-page .sign-line[aria-disabled='true'] { cursor: progress; }
 .verdict-page .folder-title { margin: 0 0 6px; font: 900 24px/1.25 var(--font-heading); letter-spacing: -.02em; color: var(--color-heading); }
 /* 지금 고를 수 없는 것(감경 · 감경 후 형벌 · 형량 막대)은 회색으로 두고 누르지 않는다 */
 .verdict-page :is(.reduction-toggle, .reduction-option).is-disabled { color: var(--color-muted); font-weight: 600; cursor: not-allowed; }
@@ -203,6 +215,7 @@
 @media (pointer: coarse) { .verdict-page .factor-button { min-height: 44px; } }
 @media (prefers-reduced-motion: reduce) {
   .verdict-page :is(.folder-tab, .folder-curl, .sign-hint) { transition: none; }
+  .verdict-page .is-flash { animation: none; outline: 3px solid var(--color-label); outline-offset: 4px; }
   .verdict-page .folder-curl:hover { animation: none; }
   .verdict-page .sign-row.is-signed .sign-ink path { transition: none; }
 }

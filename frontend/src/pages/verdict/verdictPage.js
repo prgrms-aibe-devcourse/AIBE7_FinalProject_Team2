@@ -7,6 +7,8 @@ import { getDraft, saveDraft, clearDraft } from './verdictDraft.js';
 import { markAiRevealIntro } from '../ai/aiRevealIntro.js';
 
 const penaltyLabels = { DEATH: '사형', LIFE: '무기징역', PRISON: '징역', FINE: '벌금' };
+// 해금 책갈피의 얼굴(내로). shortcut: 원본 이미지 레포 PNG를 직접 읽는다(무대와 같음), 웹 webp 변환(WBS 7.6.8) 때 public 경로로 옮긴다
+const BOOKMARK_FACE = 'https://raw.githubusercontent.com/peanutboi710/NaeLawNamBul_Images/main/character/cuts/naero/icon/naero_icon_face-happy.png';
 const SIGN_MS = 900; // 서명 획이 다 그려지는 시간(verdict.css .sign-ink와 같게). 그다음 확정을 보낸다
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -48,6 +50,14 @@ function element(tag, className, text) {
   if (className) node.className = className;
   if (text !== undefined) node.textContent = text;
   return node;
+}
+
+function picture(src) {
+  const image = element('img');
+  image.src = src;
+  image.alt = '';
+  image.addEventListener('error', () => image.remove(), { once: true });
+  return image;
 }
 
 function button(text, action, className = 'secondary-button') {
@@ -551,13 +561,22 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
     const lawBox = element('div');
     renderRecommendedRangeBar(sidebar, { law, showTrack: false });
     sidebar.insertBefore(lawBox, sidebar.children[1]);
-    // 색인 탭(ARIA 탭): 누르거나 ←→ · Home · End로 장을 고른다. 이미 펼쳐 본 장(reached)까지만 가고, 아직 안 본 장은 탭이 움찔하며 열리지 않는다
+    // 색인 탭(ARIA 탭): 누르거나 ←→ · Home · End로 장을 고른다. 펼쳐 본 장(reached)과 그 바로 다음 장까지 열린다.
+    // 마지막 확정 장은 판결이 다 정해졌을 때(ready)만 열리고, 안 되면 탭이 움찔하며 빠진 칸이 반짝인다
     const tabList = element('div', 'folder-tabs');
     tabList.setAttribute('role', 'tablist');
     tabList.setAttribute('aria-label', '판결 파일철');
     const denied = element('p', 'visually-hidden');
     denied.setAttribute('aria-live', 'polite');
-    let reached = 0;
+    let reached = 0; // 펼쳐 본 가장 뒤 장
+    let ready = false; // 확정 장을 열 수 있는지: 형벌 · 형량(범위 안) · 감경 후 형벌 · 집행유예 기간이 다 정해졌는지(update가 정한다)
+    let missing = null; // 확정을 막는 칸(반짝일 곳)
+    let missingReason = '';
+    const LAST = 4;
+    // 해금 책갈피: 새로 열린 장의 탭 바로 앞에 끼워 둔 내로 얼굴 책갈피(장식). 캐릭터 고르기는 마이페이지 후속
+    const bookmark = element('span', 'folder-bookmark');
+    bookmark.setAttribute('aria-hidden', 'true');
+    bookmark.append(picture(BOOKMARK_FACE));
     const pages = [[summaryPage, '사건 요약'], [sidebar, '참고 정보'], [factorPage, '판단 요소'], [main, '최종 판결'], [signPage, '확정']].map(([panel, title], i) => {
       const tab = element('button', 'folder-tab');
       tab.type = 'button';
@@ -574,18 +593,44 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
     });
     tabList.addEventListener('keydown', (event) => {
       const now = pages.findIndex(({ tab }) => tab === document.activeElement);
-      const next = { ArrowRight: now + 1, ArrowLeft: now - 1, Home: 0, End: reached }[event.key];
+      const next = { ArrowRight: now + 1, ArrowLeft: now - 1, Home: 0, End: frontier() }[event.key];
       if (now < 0 || next === undefined) return;
       event.preventDefault();
       goTo(Math.max(0, Math.min(pages.length - 1, next)), true);
     });
+    const canOpen = (i) => (i === LAST ? ready && reached >= LAST - 1 : i <= reached + 1);
+    const frontier = () => pages.reduce((far, page, i) => (canOpen(i) ? i : far), 0); // 지금 열 수 있는 가장 뒤 장
     function goTo(index, focus = false) {
-      if (index > reached) {
+      if (!canOpen(index)) {
         nudge(pages[index].tab);
-        denied.textContent = `${pages[index].title} 장은 아직 열 수 없어요. 지금 장 오른쪽 아래 모서리를 넘겨 주세요.`;
+        if (index === LAST && reached >= LAST - 1) {
+          flash(missing);
+          denied.textContent = `확정 장은 아직 열 수 없어요. ${missingReason}`;
+        } else denied.textContent = `${pages[index].title} 장은 아직 열 수 없어요. 앞 장을 먼저 펼쳐 주세요.`;
         return;
       }
       showPage(index, focus);
+    }
+    // 반짝임: 확정을 막는 칸(예: 1. 형벌 종류)을 두 번 밝혀 어디를 채워야 하는지 보여 준다
+    function flash(node) {
+      if (!node) return;
+      node.classList.remove('is-flash');
+      void node.offsetWidth;
+      node.classList.add('is-flash');
+      if (reducedMotion()) setTimeout(() => node.classList.remove('is-flash'), 1400); // 움직임 줄이기: 반짝임 대신 테두리만 잠시
+      else node.addEventListener('animationend', () => node.classList.remove('is-flash'), { once: true });
+    }
+    // 탭 잠금 · 책갈피를 지금 상태에 맞춘다(장을 넘길 때 · 판결 값이 바뀔 때)
+    function refreshTabs() {
+      pages.forEach(({ tab }, i) => tab.setAttribute('aria-disabled', String(!canOpen(i))));
+      const far = frontier();
+      if (far > reached) {
+        const before = pages[far].tab;
+        if (bookmark.nextSibling !== before) {
+          tabList.insertBefore(bookmark, before);
+          if (!reducedMotion()) bookmark.animate([{ translate: '0 -60%', opacity: 0 }, { translate: '0 0', opacity: 1 }], { duration: 260, easing: 'cubic-bezier(.2, .8, .2, 1)' });
+        }
+      } else bookmark.remove();
     }
     // 움찔: 안 되는 동작(아직 안 본 장 · 확정할 수 없는 서명)을 짧게 흔들어 알린다
     function nudge(node) {
@@ -600,10 +645,10 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       const moving = pages[index].panel.hidden && pages.some(({ panel }) => !panel.hidden);
       pages.forEach(({ tab, panel }, i) => {
         tab.setAttribute('aria-selected', String(i === index));
-        tab.setAttribute('aria-disabled', String(i > reached));
         tab.tabIndex = i === index ? 0 : -1;
         panel.hidden = i !== index;
       });
+      refreshTabs();
       denied.textContent = '';
       if (focus) pages[index].tab.focus({ preventScroll: true });
       // 장을 넘기면 새 장의 맨 위부터 보인다: 무대 카드 안 스크롤을 처음으로 올리고, 파일철 머리가 화면 위로 지나갔으면 화면도 올린다
@@ -618,7 +663,7 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       const curl = element('button', 'folder-curl');
       curl.type = 'button';
       curl.setAttribute('aria-label', `다음 장으로 넘기기: ${pages[i + 1].title}`);
-      curl.addEventListener('click', () => showPage(i + 1, true));
+      curl.addEventListener('click', () => goTo(i + 1, true)); // 최종 판결 → 확정도 판결이 다 정해져야 넘어간다
       panel.append(curl);
     });
     showPage(0);
@@ -781,11 +826,17 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       controls.disabled = submitting;
       factorGroup.disabled = submitting;
       back.disabled = submitting;
-      signature.disabled = submitting;
+      // disabled로 바꾸면 눌린 서명란이 포커스를 잃고 카드가 맨 위로 튄다 — 누름은 sign()이 막고, 상태만 알린다
+      signature.setAttribute('aria-disabled', String(submitting));
       signHint.textContent = submitting ? '확정하는 중…' : '여기를 눌러 서명';
       signPage.setAttribute('aria-busy', String(submitting));
       lawBox.replaceChildren();
       renderLawInfoBox(lawBox, { law, penaltyType: draft.penaltyType || 'PRISON' });
+      ready = !disabledReason;
+      missingReason = disabledReason;
+      missing = !option ? penaltyGroup : pendingReduction ? reductionArea
+        : (!fixed && (!present || !inRange)) || serverError === 'OUT_OF_ALLOWED_RANGE' ? sentenceGroup : disabledReason ? suspensionArea : null;
+      refreshTabs();
       const value = { sentence, suspension, reason: disabledReason };
       renderSignSummary(value);
       return value;

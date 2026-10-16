@@ -247,7 +247,8 @@
 .stage-wrap.paper-mode .name i { font: 700 12px/1 var(--font-body); color: var(--color-muted); }
 .stage-wrap.paper-mode .txt { font: 500 17px/1.65 var(--font-body); color: var(--color-text); letter-spacing: -.01em; }
 /* 캐릭터: 아래 모서리에서 엿보기(허리 아래는 화면 밖) · 말하는 쪽 앞으로 */
-.stage-wrap.paper-mode .stage[data-scene] .spr, .stage-wrap.paper-mode .stage[data-scene] .spr.role { bottom: calc(-56px + var(--safe-bottom)); height: min(300px, 38vh); transition: translate .35s cubic-bezier(.2, .8, .2, 1), opacity .3s; }
+/* 캐릭터 크기 · 높이(FE-48): 6막 세 판결 비교와 같게(키 250px, 발은 하단 조작 줄 뒤로 조금) */
+.stage-wrap.paper-mode .stage[data-scene] .spr, .stage-wrap.paper-mode .stage[data-scene] .spr.role { bottom: calc(-16px + var(--safe-bottom)); height: min(250px, 32vh); transition: translate .35s cubic-bezier(.2, .8, .2, 1), opacity .3s; }
 .stage-wrap.paper-mode .stage[data-scene] .spr .spr-img { filter: drop-shadow(0 6px 10px color-mix(in srgb, var(--color-desk-shadow) 35%, transparent)); transition: filter .3s ease-out; }
 .stage-wrap.paper-mode .stage[data-scene] .spr.dim { translate: -50% 26px; }
 .stage-wrap.paper-mode .stage[data-scene] .spr.dim .spr-img { filter: brightness(.72) saturate(.55); transform: none; }

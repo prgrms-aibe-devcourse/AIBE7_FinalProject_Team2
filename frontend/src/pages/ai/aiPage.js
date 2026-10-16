@@ -1,4 +1,5 @@
 import { formatMonths } from '../../components/recommendedRangeBar.js';
+import { objectParticle } from '../../utils/koreanParticle.js';
 import { renderAiRevealIntro, takeAiRevealIntro } from './aiRevealIntro.js';
 import { formatPenalty, diffPhrase } from '../../utils/judgmentFormat.js';
 import { renderStage, LAWS, LAW_TITLES } from '../../components/stage.js';
@@ -81,7 +82,8 @@ export async function renderAiPage(container, { caseId, caseHeader, api, navigat
           };
         });
       }
-      if (step.say !== 'law') return [step];
+      // 내로 · 남불 대사의 {penalty을}: AI 판결 형량 + 목적격 조사(을 · 를)
+      if (step.say !== 'law') return [step.text?.includes('{penalty') ? { ...step, text: step.text.replace('{penalty을}', `${penalty}${objectParticle(penalty)}`).replace('{penalty}', penalty) } : step];
       const who = step.law === 'deliver' ? speaker : LAWS[0];
       const text = (!factors.length && step.textNoFactors ? step.textNoFactors : step.text).split('\n')
         .filter((line) => !line.includes('{summary}') || judgment.summary)

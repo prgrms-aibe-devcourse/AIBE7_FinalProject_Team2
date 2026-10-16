@@ -61,14 +61,24 @@
 .stage-wrap:not(.paper-mode) .dlg:is([data-speaker="naero"], [data-speaker="nambul"])::after { display: block; }
 .stage-wrap:not(.paper-mode) .dlg::before { top: -22px; width: 26px; height: 22px; background: var(--color-text); clip-path: polygon(0 100%, 100% 100%, 20% 0); }
 .stage-wrap:not(.paper-mode) .dlg::after { top: -17px; width: 21px; height: 19px; background: var(--color-paper); clip-path: polygon(0 100%, 100% 100%, 22% 0); }
-.stage-wrap:not(.paper-mode) .dlg[data-speaker="naero"]::before { left: 15%; }
-.stage-wrap:not(.paper-mode) .dlg[data-speaker="naero"]::after { left: calc(15% + 3px); }
-.stage-wrap:not(.paper-mode) .dlg[data-speaker="nambul"]::before { right: 15%; scale: -1 1; }
-.stage-wrap:not(.paper-mode) .dlg[data-speaker="nambul"]::after { right: calc(15% + 3px); scale: -1 1; }
-.stage-wrap:not(.paper-mode) .stage.card .dlg[data-speaker="naero"]::before { left: 7%; }
-.stage-wrap:not(.paper-mode) .stage.card .dlg[data-speaker="naero"]::after { left: calc(7% + 3px); }
-.stage-wrap:not(.paper-mode) .stage.card .dlg[data-speaker="nambul"]::before { right: 7%; }
-.stage-wrap:not(.paper-mode) .stage.card .dlg[data-speaker="nambul"]::after { right: calc(7% + 3px); }
+/* 꼬리는 이름표(대사창 위 가장자리) 바로 안쪽에 두어 겹치지 않게 한다(FE-48: 이름표가 "남불 A씨 역"처럼 길어지면 15% 자리와 겹쳤다) */
+.stage-wrap:not(.paper-mode) .dlg[data-speaker="naero"]::before { left: 23%; }
+.stage-wrap:not(.paper-mode) .dlg[data-speaker="naero"]::after { left: calc(23% + 3px); }
+.stage-wrap:not(.paper-mode) .dlg[data-speaker="nambul"]::before { right: 23%; scale: -1 1; }
+.stage-wrap:not(.paper-mode) .dlg[data-speaker="nambul"]::after { right: calc(23% + 3px); scale: -1 1; }
+.stage-wrap:not(.paper-mode) .stage.card .dlg[data-speaker="naero"]::before { left: 21%; }
+.stage-wrap:not(.paper-mode) .stage.card .dlg[data-speaker="naero"]::after { left: calc(21% + 3px); }
+.stage-wrap:not(.paper-mode) .stage.card .dlg[data-speaker="nambul"]::before { right: 21%; }
+.stage-wrap:not(.paper-mode) .stage.card .dlg[data-speaker="nambul"]::after { right: calc(21% + 3px); }
+
+/* 볼따구(해설): 작은 내로 · 남불이 대사창 위 모서리에 볼을 괴고 걸쳐 있다(꼬리 없이). 이름표는 그 옆으로 비킨다 */
+.stage-wrap .cameo { position: absolute; z-index: 30; bottom: calc(3% + 21% - 3.2cqw); height: 19%; width: auto; pointer-events: none;
+  filter: drop-shadow(0 4px 6px color-mix(in srgb, var(--color-desk-shadow) 30%, transparent)); }
+.stage-wrap .cameo-naero { left: 5%; }
+.stage-wrap .cameo-nambul { right: 5%; }
+.stage-wrap .cameo[hidden] { display: none; }
+.stage-wrap:not(.paper-mode) .dlg[data-speaker="cameo-naero"] .name { left: 17%; }
+.stage-wrap:not(.paper-mode) .dlg[data-speaker="cameo-nambul"] .name { left: auto; right: 17%; }
 .stage-wrap:not(.paper-mode) .dlg[data-speaker="nambul"] .name { left: auto; right: 2cqw; }
 .stage-wrap:not(.paper-mode) .name { border: 2px solid var(--color-text); background: var(--color-paper); color: var(--color-heading); box-shadow: none; font-family: var(--font-hand); font-weight: 400; font-size: max(18px, 1.9cqw); line-height: 1.1; }
 .stage-wrap:not(.paper-mode) .name i { font: 700 max(11px, .95cqw)/1 var(--font-body); color: var(--role, var(--color-muted)); opacity: 1; }
@@ -110,7 +120,7 @@
 /* 8막 마지막 선택지(다른 사건 보기 · 여기 남아있기 …)는 넓은 화면에서 오른쪽으로(지면 무대 선택지와 같게, paperStage.css) */
 @media (min-width: 681px) { .comparison-full .stage-wrap .dlg-choices { justify-content: flex-end; } }
 .comparison-full .stage-wrap .stage[data-scene="sheet"] .spr, .comparison-full .stage-wrap .stage[data-scene="sheet"] .spr.role {
-  --l: calc(50% - var(--dock-w) / 2 - 84px); --r: calc(50% + var(--dock-w) / 2 + 84px); bottom: calc(4px + var(--safe-bottom)); height: min(210px, 27vh); }
+  --l: calc(50% - var(--dock-w) / 2 - 84px); --r: calc(50% + var(--dock-w) / 2 + 84px); bottom: calc(-32px + var(--safe-bottom)); height: min(250px, 32vh); } /* 1막 신문 무대와 같은 크기 · 높이(FE-48) */
 .comparison-full .stage-wrap .stage[data-scene="sheet"] .spr.near { translate: -50% 0; }
 /* 말풍선 꼬리: 1막처럼 옆으로 — 말하는 캐릭터(말풍선 양옆 아래)를 가리킨다 */
 .comparison-full .stage-wrap .dlg:is([data-speaker="naero"], [data-speaker="nambul"])::before { top: auto; bottom: 22px; width: 30px; height: 30px; clip-path: polygon(100% 0, 100% 100%, 0 78%); }
