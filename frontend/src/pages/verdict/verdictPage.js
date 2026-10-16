@@ -20,10 +20,11 @@ function parseInteger(raw) {
 function parsePeriod(years, months) {
   const year = parseInteger(years);
   const month = parseInteger(months);
-  // 개월은 12 이상도 받는다(예: 30개월 = 2년 6개월). 칸을 벗어나면 년 · 개월로 나눠 다시 적는다(input의 change)
   if (year.invalid || month.invalid) return { value: null, invalid: true };
   if (year.value === null && month.value === null) return { value: null, invalid: false };
-  const value = (year.value ?? 0) * 12 + (month.value ?? 0);
+  // 개월 칸에 12 이상을 적으면 그 값이 형량 전체다(예: 년 1 · 개월 15 → 15개월 = 1년 3개월). 이미 적힌 년 칸은 더하지 않는다.
+  // 칸을 벗어나면 년 · 개월로 나눠 다시 적는다(input의 change)
+  const value = month.value >= 12 ? month.value : (year.value ?? 0) * 12 + (month.value ?? 0);
   return Number.isSafeInteger(value) ? { value, invalid: false } : { value: null, invalid: true };
 }
 
@@ -131,7 +132,7 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       parent.append(wrapper);
       inputs[key] = field;
     }
-    // 징역 개월 칸에 12개월 이상을 적으면 남는 개월만 두고 나머지는 년 칸으로 올린다(입력 중에는 그대로 두고 칸을 벗어날 때)
+    // 징역 개월 칸에 12개월 이상을 적으면 년 칸 값은 버리고 개월 값만으로 년 · 개월을 다시 적는다(입력 중에는 그대로 두고 칸을 벗어날 때)
     function carryMonths() {
       const period = parsePeriod(draft.prisonYears, draft.prisonMonths);
       if (period.invalid || period.value === null || parseInteger(draft.prisonMonths).value < 12) return;
