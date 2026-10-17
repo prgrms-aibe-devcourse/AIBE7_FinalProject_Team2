@@ -15,7 +15,7 @@
   | --- | --- | --- | --- |
   | 신문 | 실제 사건 판결 체험 | 신문 집어 들기 → `navigate('list', { from: 'desk' })` → S-02 | 동작 |
   | 서류철 | 판결 성향 테스트 | `navigate('test')` → S-15 | 동작 |
-  | 커피잔 | 마이페이지 | 커피잔 들기(`utils/coffeeDive.js`) → `navigate('me', { from: 'mug' })` → S-17 | 동작 |
+  | 커피잔 | 마이페이지 | 커다란 잔이 우상단에서 날아와 섰다가 오른쪽으로 빠져나감(`utils/coffeeDive.js`) → `navigate('me', { from: 'mug' })` → S-17 | 동작 |
   | 휴대폰 | — (장식) | — | — |
   | 노트북 | 커뮤니티 | 범위 밖 | 곧 열려요 |
 

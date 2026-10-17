@@ -1,13 +1,14 @@
-// 메인 책상 커피잔 → 마이페이지 (FE-44). 커피잔이 살짝 들린 뒤 화면 가운데로 다가오며 커지고, 커피 표면이 화면을 가득 채우면
-// 마이페이지로 간다. 마이페이지(myPage.js)가 그 커피 층을 받아 페이드아웃한다. 다가오는 동안 커피 표면이 살짝 일렁인다(pageTurn.css).
-// 잔을 화면 크기로 미리 그려 두고 작게 줄여 시작한다 — 작게 그린 잔을 키우면 화면을 채울 때 흐려진다.
-// 주소 이동 한 번에만 쓰고 버린다(새로고침 · 뒤로 가기에는 없다). 마이페이지가 받지 않으면 잠시 뒤 스스로 걷힌다.
+// 메인 책상 커피잔 → 마이페이지 (FE-44). 커피잔을 누르면 커다란 커피잔이 화면 우상단에서 빠르게 날아와 가운데에 선다.
+// 잔이 날아오는 동안 책상이 마이페이지로 바뀌고(아래 층 페이드아웃), 다 바뀌면 잔이 오른쪽으로 빠져나간다.
+// 잔은 처음부터 화면 크기로 그려 두고 transform만 움직인다(크게 그린 잔을 줄여 쓰는 쪽이 흐려지지 않는다).
+// 연출 층은 body에 얹어 두므로 화면이 바뀌어도 끝까지 재생되고, 끝나면 스스로 걷힌다.
+// 잔 아래의 책상은 이동 직전 모습을 본뜬 층이 덮고 있다가, 마이페이지로 넘어간 뒤 페이드아웃해 마이페이지로 부드럽게 바뀐다.
 
-const LIFT_MS = 320; // 잔 들기
-const DIVE_MS = 900; // 잔이 다가와 커피가 화면을 채우기까지
-const FADE_MS = 450; // 마이페이지에서 커피 층이 걷히는 시간
-const UNCLAIMED_MS = 3000;
-let pending = null;
+const FLY_IN_MS = 820; // 잔이 우상단에서 날아와 가운데에 서기까지(이 동안 책상이 마이페이지로 바뀐다)
+const FLY_OUT_MS = 500; // 책상이 다 바뀐 뒤 잔이 오른쪽으로 빠져나가기까지
+const NAVIGATE_AT_MS = 200; // 이 시점에 마이페이지로 이동한다(잔이 가운데로 오는 동안 아래에 마이페이지가 그려진다)
+const TABLE_FADE_DELAY_MS = 60; // 이동한 마이페이지가 그려질 틈을 주고 본뜬 책상을 걷는다(책상이 바뀌기 시작: 0.26초)
+const TABLE_GONE_MS = 720; // 본뜬 책상이 다 사라지는 시점(잔이 가운데에 서기 전)
 
 function div(className) {
   const node = document.createElement('div');
@@ -16,64 +17,44 @@ function div(className) {
 }
 
 /**
- * 커피잔으로 들어가는 연출. 끝나면(커피가 화면을 덮으면) resolve한다. 그다음 호출한 쪽이 마이페이지로 이동한다.
- * @param {HTMLElement} cup 잔 그림(테두리까지 원) @param {HTMLElement} coffee 잔 안의 커피 원. 둘 다 지금 보이는 자리 그대로 본뜬다
+ * 커다란 커피잔이 우상단에서 날아와 서고, 책상이 마이페이지로 바뀐 뒤 오른쪽으로 빠져나간다. 이동 시점(NAVIGATE_AT_MS)에 onNavigate를 부른다.
+ * @param {() => void} onNavigate 마이페이지로 이동하는 함수 @param {HTMLElement} page 지금 보이는 메인 화면(잔 아래 책상으로 본뜬다)
  */
-export async function diveIntoCoffee(cup, coffee) {
-  takeCoffee()?.remove();
-  const cupBox = cup.getBoundingClientRect();
-  const coffeeBox = coffee.getBoundingClientRect();
+export function flyCoffee(onNavigate, page) {
   const width = window.innerWidth;
   const height = window.innerHeight;
-  // 끝 모습: 커피 원이 화면 가운데에서 네 모서리를 모두 덮는다
-  const ratio = cupBox.width / coffeeBox.width;
-  const size = Math.hypot(width, height) * 1.04 * ratio;
+  const size = Math.min(width, height) * 0.95; // 커다란 잔: 짧은 변에 가깝게
 
-  const layer = div('coffee-dive-layer');
+  const layer = div('coffee-fly-layer');
   layer.setAttribute('aria-hidden', 'true');
   layer.inert = true;
-  const mug = div('coffee-dive-mug');
-  const surface = div('coffee-dive-surface');
-  surface.style.inset = `${((1 - 1 / ratio) / 2) * 100}%`;
-  mug.append(surface);
+  // 책상 본뜨기: 화면이 바뀌어도 잠시 그대로 남겨 두었다가 페이드아웃한다(같은 id가 겹치지 않게 id는 뗀다)
+  const table = div('coffee-fly-table');
+  const copy = page.cloneNode(true);
+  copy.removeAttribute('id');
+  copy.querySelectorAll('[id]').forEach((node) => node.removeAttribute('id'));
+  const box = page.getBoundingClientRect();
+  Object.assign(table.style, { left: `${box.left}px`, top: `${box.top}px`, width: `${box.width}px` });
+  table.append(copy);
+  layer.append(table);
+  const mug = div('coffee-fly-mug');
+  mug.append(div('coffee-fly-coffee'));
   Object.assign(mug.style, { width: `${size}px`, height: `${size}px`, left: `${(width - size) / 2}px`, top: `${(height - size) / 2}px` });
   mug.style.setProperty('--rim', `${size * 0.075}px`);
   layer.append(mug);
   document.body.append(layer);
 
-  const scale = cupBox.width / size;
-  const x = cupBox.left + cupBox.width / 2 - width / 2;
-  const y = cupBox.top + cupBox.height / 2 - height / 2;
-  const at = (dx, dy, s) => `translate(${dx}px, ${dy}px) scale(${s})`;
-  const resting = at(x, y, scale);
-  const lifted = at(x, y - 12, scale * 1.08);
-  cup.style.visibility = 'hidden'; // 본뜬 잔이 그 자리를 대신한다
-  mug.style.transform = resting;
-  // 들리면 그림자가 길고 흐려진다(신문 들기와 같은 문법). 다가오기 시작하면 앞 1/4 동안 그림자를 걷는다 — 화면만 한 잔에 그림자를 매 프레임 그리지 않게
-  const shadow = (y, blur, alpha) => `drop-shadow(0 ${y}px ${blur}px color-mix(in srgb, var(--color-desk-shadow) ${alpha}%, transparent))`;
-  await mug.animate([{ transform: resting, filter: shadow(4, 6, 40) }, { transform: lifted, filter: shadow(26, 22, 45) }],
-    { duration: LIFT_MS, easing: 'cubic-bezier(.2, .8, .2, 1)', fill: 'forwards' }).finished.catch(() => {});
-  // 가까워질수록 빨라진다(얼굴로 가져가듯). 끝에서는 커피만 보인다
-  await mug.animate([{ transform: lifted, filter: shadow(26, 22, 45) }, { offset: 0.25, filter: shadow(0, 0, 0) }, { transform: at(0, 0, 1), filter: 'none' }],
-    { duration: DIVE_MS, easing: 'cubic-bezier(.55, 0, .45, 1)', fill: 'forwards' }).finished.catch(() => {});
-
-  pending = layer;
-  setTimeout(() => {
-    if (pending !== layer) return;
-    pending = null;
-    layer.remove();
-  }, UNCLAIMED_MS);
-}
-
-/** @returns {HTMLElement | null} 넘겨받은 커피 층(한 번만 받는다) */
-export function takeCoffee() {
-  const layer = pending;
-  pending = null;
-  return layer;
-}
-
-/** 넘겨받은 커피 층을 제자리에서 페이드아웃하고 걷는다 */
-export async function fadeCoffee(layer) {
-  await layer.animate([{ opacity: 1 }, { opacity: 0 }], { duration: FADE_MS, easing: 'ease-out', fill: 'forwards' }).finished.catch(() => {});
-  layer.remove();
+  // 1) 우상단 화면 밖에서 조금 돌아간 채로 날아와 화면 가운데에 선다(페이드 없음)
+  const from = `translate(${width * 0.62}px, ${-height * 0.62}px) rotate(14deg) scale(.92)`;
+  const center = 'translate(0, 0) rotate(0deg) scale(1.08)';
+  const flightIn = mug.animate([{ transform: from }, { transform: center }],
+    { duration: FLY_IN_MS, easing: 'cubic-bezier(.35, .45, .75, 1)', fill: 'forwards' });
+  // 2) 잔이 가운데에 서면(FLY_IN_MS) 오른쪽으로 빠져나간다. 책상은 그보다 먼저 마이페이지로 다 바뀌어 있다
+  const away = `translate(${(width + size) / 2 + 40}px, 0) rotate(-8deg) scale(1.08)`;
+  const flightOut = mug.animate([{ transform: center }, { transform: away }],
+    { duration: FLY_OUT_MS, delay: FLY_IN_MS, easing: 'cubic-bezier(.6, 0, .9, .5)', fill: 'forwards' });
+  const tableFade = table.animate([{ opacity: 1 }, { opacity: 0 }],
+    { duration: TABLE_GONE_MS - NAVIGATE_AT_MS - TABLE_FADE_DELAY_MS, delay: NAVIGATE_AT_MS + TABLE_FADE_DELAY_MS, easing: 'ease-in-out', fill: 'both' });
+  setTimeout(onNavigate, NAVIGATE_AT_MS);
+  Promise.all([flightIn.finished, flightOut.finished, tableFade.finished]).catch(() => {}).then(() => layer.remove());
 }

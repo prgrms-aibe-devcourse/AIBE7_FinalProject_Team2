@@ -6,11 +6,10 @@ import { imageOf } from '../../components/stage.js';
 import { AXES } from '../../utils/personalityAxes.js';
 import { axisSeries, biggestMove, collectionOf, trailLeft, trailSummary } from '../../utils/myPageView.js';
 import { BOOKMARK_CHARACTERS, BOOKMARK_NAMES, bookmarkFace, getBookmarkCharacter, setBookmarkCharacter } from '../../utils/bookmarkCharacter.js';
-import { fadeCoffee, takeCoffee } from '../../utils/coffeeDive.js';
 import { SCRIPTS } from '../../content/scripts.js';
 
 // S-17 마이페이지 (WBS 7.6.6). GET /my-page 한 번 호출로 받고, 기록이 없어도 404가 아니라 빈 200이다(명세 P-5).
-// 메인 책상의 커피잔으로 들어온다(FE-44): 커피가 화면을 채운 채로 넘어오면(from: 'mug') 그 커피 층을 걷으며 이 화면이 드러난다.
+// 메인 책상의 커피잔으로 들어온다(FE-44): 커다란 커피잔이 날아와 페이드아웃하는 사이(utils/coffeeDive.js) 이 화면(from: 'mug')으로 넘어온다.
 // 첫 화면은 프로필(책갈피 캐릭터 · 내 성향) + 네 줄(판결 성향 · 변화 흐름 · 만난 모습 · 체험한 사건)이고, 줄을 누르면 그 항목 화면(view)으로 들어간다.
 // 항목 화면은 주소가 같고 view만 다르다(뒤로 가기로 첫 화면에 돌아온다).
 // 종합 · 변화 흐름은 체험 → 성향 저장(7.6.7, BE-64) 뒤부터 채워지므로 그 전에는 null · 빈 배열로 와서 안내만 보인다.
@@ -22,7 +21,6 @@ const VIEWS = {
   collection: '만난 모습',
   cases: '체험한 사건',
 };
-const COFFEE_WAIT_MS = 1200; // 커피 층은 화면이 그려진 뒤 걷는다. 응답이 늦어도 이만큼만 기다린다
 let cache = null; // 마지막 응답. 항목 화면을 오갈 때 바로 그리고 뒤에서 새로 받는다
 
 const svg = (path, className) => {
@@ -307,17 +305,15 @@ export async function renderMyPage(container, { api, navigate, view, from }) {
   const shown = VIEWS[view] ? view : null;
   const go = (next) => navigate('me', next ? { view: next } : {});
 
-  // 커피잔에서 왔으면 커피 층을 받아 둔다. 새로고침 · 뒤로 가기로는 되풀이하지 않는다
-  let coffee = null;
+  // 커피잔에서 왔으면 표시를 지운다(새로고침 · 뒤로 가기로는 되풀이하지 않는다). 눌렀던 커피잔이 사라졌으니 화면이 그려진 뒤 포커스를 제목으로 옮긴다
+  let arrived = false;
   if (from === 'mug') {
     history.replaceState({ ...history.state, extras: shown ? { view: shown } : {} }, '');
-    coffee = takeCoffee();
+    arrived = true;
   }
-  // 커피 층을 걷고, 눌렀던 커피잔이 사라졌으니 포커스를 이 화면 제목으로 옮긴다
   const reveal = () => {
-    if (!coffee) return;
-    fadeCoffee(coffee);
-    coffee = null;
+    if (!arrived) return;
+    arrived = false;
     main.querySelector('h1')?.focus({ preventScroll: true });
   };
 
@@ -342,7 +338,6 @@ export async function renderMyPage(container, { api, navigate, view, from }) {
     window.scrollTo(0, 0);
     main.querySelector('h1')?.focus({ preventScroll: true });
   }
-  if (coffee) setTimeout(reveal, COFFEE_WAIT_MS);
 
   let data;
   try {

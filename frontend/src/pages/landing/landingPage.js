@@ -1,7 +1,7 @@
 import { button, element, renderSiteFooter, renderSiteHeader } from '../../components/siteLayout.js';
 import { casePhoto, fallbackImages, todayLabel } from '../../utils/newspaper.js';
 import { takePaper } from '../../utils/paperHandoff.js';
-import { diveIntoCoffee } from '../../utils/coffeeDive.js';
+import { flyCoffee } from '../../utils/coffeeDive.js';
 
 // S-01 메인 — 판사의 책상 (FE-18, 시안 "B안 일러스트 · C안 구도", 논의기록 2026-10-12 S01 메인 책상 시안 결정)
 // 책상 위 물건이 곧 메뉴다: 신문 = 사건 목록(S-02), 서류철 = 판결 성향 테스트(S-15), 커피잔 = 마이페이지(S-17), 노트북 = 커뮤니티.
@@ -10,7 +10,7 @@ import { diveIntoCoffee } from '../../utils/coffeeDive.js';
 // 2D 평면 일러스트라 물건은 평소에 들리거나 기울지 않는다(팀 결정). 720px 이하에서는 책상 대신 메뉴 카드를 보여 준다.
 // 흐름 목업 ①(FE-32): 신문을 누르면 신문만 책상에서 들려 올라오고(그림자가 길어진다), 이어서 책상이 신문 쪽으로 다가가며 사라진 뒤
 // 신문 지면(S-02)이 이어진다(신문을 집어 든다). 신문 들기는 이 연출에만 쓰는 예외다.
-// 커피잔을 누르면(FE-44) 잔이 들려 화면 가운데로 다가오고, 커피가 화면을 채운 뒤 마이페이지가 드러난다(utils/coffeeDive.js).
+// 커피잔을 누르면(FE-44) 커다란 커피잔이 우상단에서 빠르게 날아와 서는 동안 책상이 마이페이지로 바뀌고, 다 바뀌면 잔이 오른쪽으로 빠져나간다(utils/coffeeDive.js).
 // 책상에는 내로(커피잔 옆) · 남불(휴대폰 아래)이 볼을 괴고 엎드려 있다(장식).
 
 // 책상 그림의 기준 좌표계. 화면 너비에 맞춰 통째로 줄인다(--desk-scale)
@@ -222,19 +222,14 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
     scene.classList.add('is-lifting');
     setTimeout(() => { if (root.isConnected) navigate('list', { from: 'desk' }); }, LIFT_MS);
   }
-  // 커피잔 들기: 잔은 본뜬 층(coffeeDive)이 맡고, 책상은 신문 때처럼 잔 쪽으로 다가가며 사라진다
-  async function sip(cup) {
+  // 커피잔: 커다란 잔이 우상단에서 날아와 서고(coffeeDive), 날아오는 도중 마이페이지로 넘어간다. 책상이 다 바뀌면 잔이 오른쪽으로 빠져나간다. 움직임 줄이기면 바로 간다
+  function sip() {
     if (lifting) return;
     if (reducedMotion()) { navigate('me'); return; }
     lifting = true;
-    if (cup.closest('.desk-scene')) {
-      aimAt(cup);
-      scene.classList.add('is-lifting', 'is-sipping');
-    }
-    await diveIntoCoffee(cup, cup.querySelector('.mug-coffee'));
-    if (root.isConnected) navigate('me', { from: 'mug' });
+    flyCoffee(() => { if (root.isConnected) navigate('me', { from: 'mug' }); }, root);
   }
-  const ACTIONS = { news: lift, mug: (node) => sip(node.querySelector('.mug-art')) };
+  const ACTIONS = { news: lift, mug: sip };
 
   // 기준 좌표계(1672px)를 화면 너비에 맞춘다
   const fit = () => world.style.setProperty('--desk-scale', String(scene.clientWidth / SCENE_WIDTH));
@@ -275,13 +270,13 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
       body.append(mobileNews.headline, mobileNews.photo);
       item.append(brandRow, body, element('strong', '', label), text);
     } else if (key === 'mug') {
-      // 모바일에서도 위에서 본 커피잔 하나. 누르면 이 잔에서 같은 연출로 들어간다
+      // 모바일에서도 위에서 본 커피잔 하나. 누르면 같은 연출로 들어간다
       const cup = span('mug-art');
       cup.setAttribute('aria-hidden', 'true');
       cup.append(span('mug-coffee'));
       item.append(cup, element('strong', '', label), text);
     } else item.append(element('strong', '', label), text);
-    if (key === 'mug') item.addEventListener('click', () => sip(item.querySelector('.mug-art')));
+    if (key === 'mug') item.addEventListener('click', sip);
     else if (route) item.addEventListener('click', () => navigate(route, key === 'news' ? { from: 'desk' } : {}));
     else item.setAttribute('aria-disabled', 'true');
     mobileCounts[key] = text;
