@@ -8,6 +8,11 @@
 
 공급자를 추가하려면 `_call_<공급자>` 함수를 만들고 PROVIDERS에 등록한다.
 함수는 (system, user, model, options) → LLMResult를 돌려준다.
+
+API 키는 환경변수뿐 아니라 `.env` 파일로도 줄 수 있다 (BE-86, `env_file.py`). 이 모듈을 불러오는 시점에
+`tools/ai-judgment/.env` → 저장소 루트 `.env` 순으로 읽어 **아직 설정되지 않은** 환경변수만 채운다
+(이미 설정된 값이 우선한다). Claude SDK는 `ANTHROPIC_API_KEY`를 직접 읽어 이 파일의 api_key()를 거치지
+않으므로, api_key() 안이 아니라 **모듈을 불러오는 시점**에 적용해야 그 경로도 빠짐없이 덮는다.
 """
 
 import functools
@@ -20,6 +25,10 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+
+import env_file
+
+env_file.ensure_loaded()
 
 DEFAULT_TIMEOUT = 300  # 초. 사고(reasoning) 모델은 응답이 오래 걸린다
 DEFAULT_MAX_TOKENS = 16000
