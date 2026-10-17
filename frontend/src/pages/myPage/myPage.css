@@ -1,6 +1,19 @@
 /* S-17 마이페이지. 색은 역할 토큰만 쓴다(FE-17). 페이지 틀은 S-14 · S-15와 같다.
    FE-44: 첫 화면 = 프로필(잔 테두리 링 안 책갈피 캐릭터 + 내 성향) + 항목 네 줄. 커피 요소는 잔 테두리 링 하나만 둔다 */
 .my-page {
+  /* 메인 컬러 = 커피색: 이 화면 안에서만 역할 토큰을 덮어쓴다(다른 화면은 네이비 그대로) */
+  --color-bg: var(--palette-coffee-25);
+  --color-surface: var(--palette-coffee-50);
+  --color-surface-strong: var(--palette-coffee-100);
+  --color-track: var(--palette-coffee-200);
+  --color-border: var(--palette-coffee-200);
+  --color-border-strong: var(--palette-coffee-400);
+  --color-muted: var(--palette-coffee-500);
+  --color-heading: var(--palette-coffee-900);
+  --color-accent: var(--palette-coffee-600);
+  --color-accent-hover: var(--palette-coffee-900);
+  --color-accent-tint: var(--palette-coffee-50);
+  --color-accent-text: var(--palette-coffee-600);
   max-width: var(--content-width);
   margin: 0 auto;
   border: 1px solid var(--color-border);

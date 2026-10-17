@@ -135,7 +135,13 @@ body {
   --palette-phone-edge: #3a3f4a;
   --palette-mug: #f4efe7;
   --palette-mug-rim: #e6dfd4;
+  --palette-coffee-25: #fbf8f5;
+  --palette-coffee-50: #f5eee8;
+  --palette-coffee-100: #ebe0d6;
+  --palette-coffee-200: #dccbbc;
   --palette-coffee-300: #7a5038;
+  --palette-coffee-400: #8a6a55;
+  --palette-coffee-500: #66544a;
   --palette-coffee-600: #4a2c1c;
   --palette-coffee-900: #2f1b10;
   --palette-pen-gold: #d9b46a;
