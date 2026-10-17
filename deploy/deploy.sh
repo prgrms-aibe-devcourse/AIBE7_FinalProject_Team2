@@ -83,16 +83,23 @@ fi
 # 모니터링 에이전트를 올린 서버면 그 오버레이도 함께 쓴다 (COMMON-43, PR #168 리뷰 반영).
 # 빼먹으면 자동 배포가 backend를 다시 만들 때 로그 볼륨과 8081 포트가 사라져 **수집이 조용히 끊긴다**
 # — 에이전트 컨테이너는 그대로 떠 있어서 알아차리기 어렵다 (docker-compose.monitoring-agent.yml 머리말)
-if [[ "$(env_value MONITORING_AGENT)" == "1" ]]; then
-  # 오버레이가 요구하는 두 값(사설 IP · Loki 주소)이 없으면 compose가 뒤늦게 다른 이유처럼 실패하므로 먼저 막는다
-  for required in MAIN_PRIVATE_IP LOKI_URL; do
-    [[ -n "$(env_value "$required")" ]] || {
-      log "❌ MONITORING_AGENT=1인데 .env에 $required 가 없다 (deploy/docker-compose.monitoring-agent.yml)"
-      exit 4
-    }
-  done
-  COMPOSE+=(-f "$DEPLOY_DIR/docker-compose.monitoring-agent.yml")
-fi
+# 따옴표 · 캐리지리턴 · 공백을 지우고 판정한다: .env에 MONITORING_AGENT="1"처럼 따옴표를 쓰면
+# env_value가 "1"을 그대로 돌려줘 == "1" 비교에 걸리지 않고, 이 분기가 막으려던 "조용히 빠짐"이 재발한다 (PR #168 리뷰 반영)
+MONITORING_AGENT_VALUE="$(env_value MONITORING_AGENT | tr -d "\"' \r")"
+case "$MONITORING_AGENT_VALUE" in
+  1)
+    # 오버레이가 요구하는 두 값(사설 IP · Loki 주소)이 없으면 compose가 뒤늦게 다른 이유처럼 실패하므로 먼저 막는다
+    for required in MAIN_PRIVATE_IP LOKI_URL; do
+      [[ -n "$(env_value "$required")" ]] || {
+        log "❌ MONITORING_AGENT=1인데 .env에 $required 가 없다 (deploy/docker-compose.monitoring-agent.yml)"
+        exit 4
+      }
+    done
+    COMPOSE+=(-f "$DEPLOY_DIR/docker-compose.monitoring-agent.yml")
+    ;;
+  ""|0) ;;
+  *) log "❌ MONITORING_AGENT는 1 또는 빈 값이어야 한다: $MONITORING_AGENT_VALUE"; exit 4 ;;
+esac
 WEB_PORT="$(env_value WEB_PORT)"; WEB_PORT="${WEB_PORT:-80}"
 BASE_URL="http://localhost:$WEB_PORT"
 

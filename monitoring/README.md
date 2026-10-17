@@ -189,13 +189,23 @@ cat > targets/node.json <<'EOF'
 [{"targets": ["<메인 EC2 사설 IP>:9100"], "labels": {"instance": "main"}}]
 EOF
 
-docker compose -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.prod.yml up -d --no-build
 
 # --- 메인 EC2 ---
 cd deploy
-# .env에 LOKI_URL=http://<모니터링 EC2 사설 IP>:3100/loki/api/v1/push 추가
-docker compose -f docker-compose.prod.yml -f docker-compose.monitoring-agent.yml up -d
+# .env에 아래 세 값 추가 (LOKI_URL만 넣으면 다음 자동 배포 때 오버레이가 빠진다 — 아래 ⚠️ 절 참고)
+#   MONITORING_AGENT=1
+#   MAIN_PRIVATE_IP=<메인 EC2 사설 IP>
+#   LOKI_URL=http://<모니터링 EC2 사설 IP>:3100/loki/api/v1/push
+
+# 수동 up은 deploy.sh의 잠금을 잡지 않아 cd-agent.sh의 자동 배포와 겹칠 수 있다. 적용 전후로 타이머를 멈췄다 켠다
+sudo systemctl stop lawnambul-cd.timer
+docker compose -f docker-compose.prod.yml -f docker-compose.monitoring-agent.yml up -d --no-build
+sudo systemctl start lawnambul-cd.timer
 ```
+
+운영 compose 파일에는 `build:`가 있어서, 이미지가 없으면 서버가 직접 빌드를 시도한다. `deploy.sh`와 같은 기준으로
+`--no-build`를 붙여 서버에서는 항상 GHCR에서 받은 이미지만 쓰게 한다 (PR #168 리뷰 반영).
 
 `targets/*.json`은 Prometheus가 알아서 다시 읽는다 — 인스턴스를 중지했다 켜서 사설 IP가 바뀌어도 이 파일만 고치면
 되고, 재시작도 설정 리로드도 필요 없다. 설정 파일(`prometheus.prod.yml`)을 고쳤을 때만 리로드가 필요하다
