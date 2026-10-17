@@ -13,6 +13,8 @@
 | --- | --- |
 | `docker-compose.prod.yml` | 운영 구성 (web · backend · postgres · redis). 기본은 스키마만 |
 | `docker-compose.real-seed.yml` | 서버 전용 덧붙임 파일. 실제 사건 seed 폴더를 백엔드에 읽기 전용으로 연결 |
+| `docker-compose.monitoring-agent.yml` | 서버 전용 덧붙임 파일. 모니터링 에이전트(Alloy · node_exporter)와 backend의 로그 볼륨 · 8081 포트 (COMMON-43). `.env`의 `MONITORING_AGENT=1`이면 `deploy.sh`가 자동으로 함께 쓴다 |
+| `alloy-agent.alloy` | 위 Alloy 설정. 백엔드 로그를 모니터링 호스트의 Loki로 보낸다 (COMMON-43) |
 | `.env.example` | 환경변수 예시. `.env`로 복사해 쓴다 (`.env`는 커밋하지 않음) |
 | `smoke-test.sh` | `/` · 화면 주소 · `/api` · 캐시 정책 확인. CI와 서버에서 같은 스크립트를 쓴다 |
 | `deploy.sh` | 서버 배포 한 번: sha 이미지로 교체 → 준비 대기 → 스모크 테스트 → 실패하면 직전 이미지로 되돌림 (BE-60) |

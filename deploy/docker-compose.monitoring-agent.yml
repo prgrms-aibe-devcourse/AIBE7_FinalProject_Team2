@@ -1,0 +1,104 @@
+# 메인 EC2에서 돌리는 모니터링 에이전트 (COMMON-43, WBS 7.2.4).
+# docker-compose.prod.yml 위에 겹쳐 쓴다 — docker-compose.real-seed.yml과 같은 방식이다.
+#
+#   docker compose -f docker-compose.prod.yml -f docker-compose.monitoring-agent.yml up -d
+#
+# ⚠️ 이 오버레이는 "붙여서 올릴 때만" 적용된다. base 파일만으로 backend를 다시 올리면 8081 포트와 로그 볼륨이
+# 빠진 채로 컨테이너가 재생성되고, **모니터링이 조용히 끊긴다**(에이전트 컨테이너만 연결 없이 남는다).
+# D가 COMMON-43 협의에서 짚은 위험이고, BE-60 CD가 들어온 지금은 가설이 아니라 상시 위험이다 —
+# `cd-agent.sh`가 2분마다 GHCR `main` 이미지를 확인해 `deploy.sh`로 자동 배포하기 때문이다.
+#
+# 그래서 `deploy.sh`의 COMPOSE 배열이 `.env`의 MONITORING_AGENT=1을 보고 이 파일을 포함하게 해 두었다
+# (real-seed 오버레이 바로 뒤, PR #168 리뷰 반영). 이 서버에서 에이전트를 쓰려면 `.env`에 세 값이 필요하다.
+#
+#   MONITORING_AGENT=1
+#   MAIN_PRIVATE_IP=<메인 EC2 사설 IP>
+#   LOKI_URL=http://<모니터링 EC2 사설 IP>:3100/loki/api/v1/push
+#
+# MONITORING_AGENT=1인데 나머지 둘이 없으면 deploy.sh가 배포를 시작하기 전에 멈춘다 — 자동 배포가
+# 애먼 이유로 실패한 것처럼 보이지 않게 하기 위해서다. 값을 넣지 않은 서버에서는 분기 자체가 타지 않으므로
+# 기존 배포 동작은 그대로다(= 이 PR이 다른 서버의 배포를 바꾸지 않는다).
+#
+# 수집·저장(Prometheus · Loki · Grafana)은 모니터링 전용 EC2에 있고(monitoring/docker-compose.prod.yml),
+# 여기에는 "메인 서버에 있어야만 되는 것" 둘만 둔다.
+#   - alloy: 로그 파일은 네트워크 너머에서 가져올 수 없어서, 로그를 만든 쪽이 보내야 한다(push)
+#   - node-exporter: 봐야 할 자원이 모니터링 호스트가 아니라 이 서버의 CPU · 메모리 · 디스크다
+# 메트릭은 반대로 모니터링 쪽 Prometheus가 가져간다(pull) — 그래서 여기에 Prometheus는 없다.
+#
+# 메모리: 둘 다 에이전트라 가볍다(합쳐서 100MB 남짓). 저장·인덱싱을 하는 쪽이 전부 빠졌기 때문에,
+# t3.small에서 실측 사용량 기준 여유(약 250MB) 안에서 돈다. mem_limit은 예약이 아니라 상한이라
+# (백엔드 1.75GB + 두 에이전트 192m + 64m을 더하면 2GB를 넘는다), 상한을 걸어 백엔드를 밀어내지 못하게 하는 용도다.
+
+services:
+  # base 파일(docker-compose.prod.yml)의 backend에 두 가지만 더한다. 나머지 설정은 그대로다.
+  backend:
+    volumes:
+      # 백엔드가 로그를 쓰는 /app/logs를 Alloy와 공유한다
+      - backend-logs:/app/logs
+    ports:
+      # 관리 포트(8081, 7.2.1)를 호스트에 연다. base 파일은 "밖으로 여는 포트는 웹 80 하나뿐"이라
+      # 백엔드 포트를 아예 내보내지 않는데, 그러면 다른 호스트의 Prometheus가 Actuator에 닿을 수 없다.
+      # 모니터링을 분리하면서 생기는 유일한 추가 노출이라 base가 아니라 이 오버레이에 둔다 —
+      # 에이전트 구성을 쓰지 않으면 8081도 닫힌 채로 남는다.
+      #
+      # 애플리케이션 포트(8080)는 계속 열지 않는다. 8081에는 health · prometheus만 노출돼 있고
+      # (management.endpoints.web.exposure.include), Nginx도 이 포트를 중계하지 않는다(7.2.1 #106 리뷰 합의).
+      #
+      # 반드시 사설 IP에만 바인딩한다(D 요청, COMMON-43 협의). Docker가 연 포트는 서버 방화벽(ufw)을
+      # 우회하므로 0.0.0.0에 바인딩하면 보안 그룹 하나만 잘못 열려도 메트릭이 인터넷에 그대로 공개된다.
+      # 기본값을 두지 않아서, 값이 없으면 컨테이너가 아예 뜨지 않는다
+      - "${MAIN_PRIVATE_IP:?deploy/.env에 MAIN_PRIVATE_IP(메인 EC2 사설 IP)를 넣어야 한다 — 0.0.0.0에 바인딩하지 않는다}:8081:8081"
+
+  alloy:
+    image: grafana/alloy:v1.14.1
+    container_name: lawnambul-alloy
+    volumes:
+      - ./alloy-agent.alloy:/etc/alloy/config.alloy:ro
+      # 백엔드가 쓰고 Alloy는 읽기만 한다
+      - backend-logs:/var/log/backend:ro
+      # --storage.path 자리. 여기에 loki.source.file의 읽은 위치와 loki.write WAL이 쌓인다.
+      # 볼륨이 없으면 이미지 교체 등으로 컨테이너가 재생성될 때마다 위치 기록이 사라져,
+      # 기본 동작대로 로그 파일을 처음부터 다시 읽어 Loki에 같은 로그가 또 들어간다 (PR #168 리뷰 반영)
+      - alloy-data:/var/lib/alloy/data
+    environment:
+      # 모니터링 EC2의 사설 IP. 예: http://10.0.1.23:3100/loki/api/v1/push
+      LOKI_URL: ${LOKI_URL:?deploy/.env에 LOKI_URL을 넣어야 한다 (모니터링 EC2 사설 IP)}
+    command:
+      - run
+      # Alloy 자체 UI(12345)는 컨테이너 안에서만 연다 — 포트를 밖으로 내보내지 않는다.
+      # 확인이 필요하면 docker exec로 들어가거나 docker logs를 본다
+      - --server.http.listen-addr=127.0.0.1:12345
+      - --storage.path=/var/lib/alloy/data
+      # Alloy는 기본으로 Grafana에 사용 통계를 보낸다("running usage stats reporter"). 서비스 호스트에서
+      # 바깥으로 나가는 연결을 만들지 않는다 — Grafana 쪽 GF_ANALYTICS_* 를 끈 것과 같은 기준이다
+      - --disable-reporting
+      - /etc/alloy/config.alloy
+    restart: unless-stopped
+    # 192m는 D 요청값이다(COMMON-43 협의) — Alloy · node_exporter 합쳐 150MB 정도로 보고,
+    # 메인 서버 여유 메모리를 넘지 않도록 상한을 반드시 건다
+    mem_limit: 192m
+
+  node-exporter:
+    image: prom/node-exporter:v1.12.1
+    container_name: lawnambul-node-exporter
+    pid: host
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --path.rootfs=/rootfs
+      - --collector.filesystem.mount-points-exclude=^/(rootfs/)?(dev|proc|sys|var/lib/docker/.+|var/lib/kubelet/.+)($$|/)
+      - --collector.filesystem.fs-types-exclude=^(autofs|binfmt_misc|cgroup.?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs)$$
+    ports:
+      # 8081과 같은 이유로 사설 IP에만 바인딩한다(D 요청)
+      - "${MAIN_PRIVATE_IP:?deploy/.env에 MAIN_PRIVATE_IP(메인 EC2 사설 IP)를 넣어야 한다 — 0.0.0.0에 바인딩하지 않는다}:9100:9100"
+    restart: unless-stopped
+    mem_limit: 64m
+
+volumes:
+  backend-logs:
+  # Alloy의 읽은 위치 · WAL (alloy-agent.alloy의 wal 블록). 지우면 로그가 중복 적재된다
+  alloy-data:

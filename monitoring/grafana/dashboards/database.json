@@ -1,0 +1,286 @@
+{
+  "uid": "lawnambul-database",
+  "title": "DB",
+  "description": "애플리케이션에서 본 DB 상태(HikariCP 커넥션 풀)를 본다. PostgreSQL 서버 내부 지표(캐시 히트율 · vacuum · 복제 지연 등)는 postgres_exporter가 있어야 하는데, 7.1.2에서 RDS로 옮기면(10/28 예정) 연결 대상이 바뀌므로 전환 후에 붙인다. 7.3.1 경보의 'DB 커넥션 고갈'이 실제로 쓸 지표는 이 대시보드 쪽이다.",
+  "tags": ["lawnambul", "7.2.4"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "커넥션 사용률",
+      "description": "활성 커넥션 ÷ 풀 최대치. 7.3.1 '커넥션 고갈' 경보가 보는 값이다. 70%를 넘으면 동시 요청이 늘었을 때 대기가 생기기 시작하므로 주의 색으로 바뀐다.",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 1,
+          "min": 0,
+          "max": 1,
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.7 },
+              { "color": "red", "value": 0.9 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "graphMode": "area",
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max(hikaricp_connections_active{job=\"backend\"}) / max(hikaricp_connections_max{job=\"backend\"})"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "커넥션 대기 중인 스레드",
+      "description": "풀에서 커넥션을 받으려고 멈춰 선 스레드 수. 0이 정상이고, 0이 아니라는 건 이미 요청이 그만큼 지연되고 있다는 뜻이라 1부터 주의로 본다.",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "red", "value": 5 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "graphMode": "area",
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max(hikaricp_connections_pending{job=\"backend\"})"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "커넥션 획득 실패",
+      "description": "선택 구간에 커넥션을 제한 시간 안에 못 받아 실패한 횟수. 사용률이 100%에 닿지 않아도 짧은 폭주에서 발생할 수 있어 따로 센다. 1건이라도 나오면 사용자에게는 500으로 보였다는 뜻이다.",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(hikaricp_connections_timeout_total{job=\"backend\"}[$__range]))",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "커넥션 획득 대기 (평균)",
+      "description": "커넥션을 받기까지 걸린 평균 시간. p95가 아니라 평균인 이유는 이 타이머에 히스토그램 버킷을 켜지 않았기 때문이다 — percentiles-histogram은 시계열 수 때문에 http.server.requests 하나만 켰다(application.yml). 분위수가 필요해지면 그때 이 타이머도 켠다.",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 4,
+          "min": 0,
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.01 },
+              { "color": "red", "value": 0.1 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "graphMode": "area",
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(hikaricp_connections_acquire_seconds_sum{job=\"backend\"}[$__rate_interval])) / sum(rate(hikaricp_connections_acquire_seconds_count{job=\"backend\"}[$__rate_interval]))"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "커넥션 풀 상태",
+      "description": "활성 · 유휴 · 대기가 최대치(점선) 대비 어디쯤인지. 활성이 최대치에 붙은 채 대기가 올라오면 고갈이다. 유휴가 늘 많은데 느리다면 원인은 풀이 아니라 쿼리나 외부 호출 쪽이다.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "decimals": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "최대" },
+            "properties": [
+              { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 10] } },
+              { "id": "custom.fillOpacity", "value": 0 },
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "text" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "대기" },
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }]
+          }
+        ]
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max(hikaricp_connections_active{job=\"backend\"})",
+          "legendFormat": "활성"
+        },
+        {
+          "refId": "B",
+          "expr": "max(hikaricp_connections_idle{job=\"backend\"})",
+          "legendFormat": "유휴"
+        },
+        {
+          "refId": "C",
+          "expr": "max(hikaricp_connections_pending{job=\"backend\"})",
+          "legendFormat": "대기"
+        },
+        {
+          "refId": "D",
+          "expr": "max(hikaricp_connections_max{job=\"backend\"})",
+          "legendFormat": "최대"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "커넥션 획득 · 사용 시간",
+      "description": "획득 시간이 오르면 풀이 모자란 것이고, 사용 시간이 오르면 커넥션을 오래 쥐고 있는 것(느린 쿼리 · 긴 트랜잭션)이다. 원인이 다르니 같이 본다. max는 구간 내 최악값이라 평균과 크게 벌어지면 간헐적 지연을 의심한다.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(hikaricp_connections_acquire_seconds_sum{job=\"backend\"}[$__rate_interval])) / sum(rate(hikaricp_connections_acquire_seconds_count{job=\"backend\"}[$__rate_interval]))",
+          "legendFormat": "획득 평균"
+        },
+        {
+          "refId": "B",
+          "expr": "max(hikaricp_connections_acquire_seconds_max{job=\"backend\"})",
+          "legendFormat": "획득 최대"
+        },
+        {
+          "refId": "C",
+          "expr": "sum(rate(hikaricp_connections_usage_seconds_sum{job=\"backend\"}[$__rate_interval])) / sum(rate(hikaricp_connections_usage_seconds_count{job=\"backend\"}[$__rate_interval]))",
+          "legendFormat": "사용 평균"
+        },
+        {
+          "refId": "D",
+          "expr": "max(hikaricp_connections_usage_seconds_max{job=\"backend\"})",
+          "legendFormat": "사용 최대"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "logs",
+      "title": "DB 관련 오류 로그",
+      "description": "SQL · 커넥션 · 트랜잭션 관련 오류만 추린다. 메시지 본문으로 거르는 방식이라 완전하지 않다 — 빠진 게 보이면 패턴을 늘린다.",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 12 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "enableLogDetails": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{job=\"backend\", level=~\"WARN|ERROR\"} |~ \"(?i)(sql|hikari|jdbc|connection|transaction|deadlock)\"",
+          "queryType": "range"
+        }
+      ]
+    }
+  ]
+}
