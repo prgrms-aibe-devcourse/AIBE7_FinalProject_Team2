@@ -135,10 +135,11 @@ body {
   --palette-phone-edge: #3a3f4a;
   --palette-mug: #f4efe7;
   --palette-mug-rim: #e6dfd4;
-  --palette-coffee-25: #fbf8f5;
-  --palette-coffee-50: #f5eee8;
-  --palette-coffee-100: #ebe0d6;
-  --palette-coffee-200: #dccbbc;
+  --palette-coffee-cream: #faf3e8;
+  --palette-coffee-25: #ead8c0;
+  --palette-coffee-50: #f3e6d3;
+  --palette-coffee-100: #dfc8aa;
+  --palette-coffee-200: #cdb18f;
   --palette-coffee-300: #7a5038;
   --palette-coffee-400: #8a6a55;
   --palette-coffee-500: #66544a;
