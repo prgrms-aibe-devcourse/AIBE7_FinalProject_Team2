@@ -58,30 +58,6 @@
         "범행 뒤의 행동 — 구호 조치 없이 떠남",
         "피해 회복 노력 — 반성 · 공탁"
       ]
-    },
-    "law": {
-      "k": "적용 법률 · 법정형",
-      "p": [
-        "형법 제250조 제1항 살인",
-        {
-          "b": "법정형",
-          "t": "사형, 무기 또는 5년 이상의 징역"
-        },
-        {
-          "t": "감경 · 가중 사유를 반영해 법률상 선고할 수 있는 범위는",
-          "b": "징역 2년 6개월 ~ 30년"
-        }
-      ]
-    },
-    "guide": {
-      "k": "양형기준 권고 범위",
-      "big": "징역 7년 ~ 12년",
-      "p": [
-        "살인범죄 제2유형(보통 동기 살인). 특별감경인자 1개(실질적 피해 회복)가 있고 특별가중인자는 없어 감경영역을 적용한다.",
-        {
-          "b": "권고 범위는 정답이 아니라 참고 기준이다."
-        }
-      ]
     }
   },
   "evidence": [
@@ -120,7 +96,7 @@
   },
   "acts": {
     "1": {
-      "title": "1막 신문 속 사건",
+      "title": "1막 첫인상 (기사)",
       "scene": "sheet",
       "look": {
         "naero": "guide-neutral",
@@ -175,7 +151,7 @@
       ]
     },
     "2": {
-      "title": "2막 첫인상 판단",
+      "title": "1막 첫인상 (엽서)",
       "scene": "sheet",
       "look": {
         "naero": "guide-neutral",
@@ -215,15 +191,14 @@
       ]
     },
     "3": {
-      "title": "3막 재판",
+      "title": "2막 재판",
       "scene": "court",
       "procedures": [
         "인정신문",
         "모두진술",
         "쟁점 정리",
         "증거조사",
-        "피고인신문",
-        "법률 안내"
+        "피고인신문"
       ],
       "look": {
         "naero": "role:prosecutor",
@@ -232,6 +207,9 @@
       "steps": [
         {
           "say": "narrator",
+          "cameo": "naero",
+          "hideCast": true,
+          "delay": 500,
           "proc": 0,
           "section": 2,
           "text": "재판을 시작합니다. 재판장은 당신이에요. 먼저 피고인 A씨가 본인이 맞는지 확인합니다."
@@ -273,12 +251,14 @@
         },
         {
           "say": "narrator",
+          "cameo": "naero",
           "proc": 2,
           "card": "issues",
           "text": "피고인이 범행을 인정했으니, 남은 쟁점은 얼마나 무겁게 벌할지예요."
         },
         {
           "say": "narrator",
+          "cameo": "naero",
           "card": "issues",
           "text": "범행 경위, 범행 뒤의 행동, 피해 회복 노력. 이 세 가지를 눈여겨보세요."
         },
@@ -335,6 +315,7 @@
         },
         {
           "say": "narrator",
+          "cameo": "nambul",
           "proc": 4,
           "section": 3,
           "look": {
@@ -382,13 +363,15 @@
         },
         {
           "say": "naero",
-          "role": "판사",
-          "proc": 5,
+          "role": "검사",
           "section": 4,
-          "card": "law",
+          "text": "이상으로 피고인 신문을 마치겠습니다."
+        },
+        {
+          "say": "nambul",
+          "role": "변호인",
           "look": {
-            "naero": "role:judge",
-            "nambul": "idle-neutral"
+            "nambul": "role:defense"
           },
           "tags": {
             "nambul": ""
@@ -396,32 +379,14 @@
           "spots": {
             "nambul": ""
           },
-          "text": "재판 절차는 아니지만, 판결 전에 알아 둘 법을 정리할게요. 이 사건에 적용되는 법 조항이에요."
-        },
-        {
-          "say": "naero",
-          "role": "판사",
-          "card": "law",
-          "text": "법정형은 법이 정해 둔 형의 범위예요. 감경 · 가중 사유를 반영하면 실제로 선고할 수 있는 범위가 정해져요."
-        },
-        {
-          "say": "naero",
-          "role": "판사",
-          "card": "guide",
-          "text": "양형기준은 판사들이 형을 정할 때 참고하는 기준이에요."
-        },
-        {
-          "say": "naero",
-          "role": "판사",
-          "card": "guide",
           "confirm": 4,
-          "next": "판결 전 최종 정리로",
-          "text": "권고 범위는 정답이 아니라 참고예요. 범위를 벗어난 판결도 있어요."
+          "next": "판결로",
+          "text": "변호인도 추가 질문 없습니다."
         }
       ]
     },
     "4": {
-      "title": "판결 전 정리",
+      "title": "(건너뜀) 판결 전 정리 — 3막 사건 요약 장으로 옮김",
       "scene": "court",
       "look": {
         "naero": "read-thinking",
@@ -477,7 +442,7 @@
       ]
     },
     "5": {
-      "title": "당신이 판사",
+      "title": "3막 내 판결",
       "scene": "court",
       "procedures": [
         "검사 의견",
@@ -519,39 +484,42 @@
         },
         {
           "say": "naero",
-          "role": "안내",
+          "role": "판사",
           "proc": 3,
           "look": {
-            "naero": "guide-neutral",
-            "nambul": "idle-neutral"
-          },
-          "tags": {
-            "nambul": ""
+            "naero": "role:judge"
           },
           "spots": {
             "nambul": ""
           },
-          "text": "이제 재판장인 당신이 판결할 차례예요. 형벌과 형량, 그리고 무엇을 무겁게 봤는지 골라 주세요."
+          "text": "이제 판결을 내려 주십시오. 형벌의 종류와 형량, 그리고 양형에 고려한 요소를 정해 주십시오."
         },
         {
           "proc": 3,
           "card": "verdict",
           "look": {
-            "naero": "read-thinking",
-            "nambul": "read-thinking"
+            "naero": "read-thinking"
           },
           "board": "full"
         }
       ]
     },
     "6": {
-      "title": "AI 판사의 합의",
+      "title": "4막 AI 판결",
       "scene": "court",
       "look": {
         "naero": "guide-neutral",
         "nambul": "idle-neutral"
       },
       "steps": [
+        {
+          "say": "nambul",
+          "look": {
+            "naero": "deform:ranma",
+            "nambul": "deform:ranma"
+          },
+          "text": "이제 AI 판사의 판결을 확인해 볼게요."
+        },
         {
           "say": "law",
           "law": "trio",
@@ -580,23 +548,25 @@
         {
           "say": "naero",
           "role": "안내",
+          "text": "AI 판사는 {penalty을} 선고했어요."
+        },
+        {
+          "say": "nambul",
+          "role": "안내",
           "confirm": "court",
           "next": "실제 판결 확인하기",
-          "text": "이건 AI 판사의 판결이에요. 다음은 실제 재판부가 내린 판결이에요."
+          "text": "그렇다면 실제 판결은 어떨까요?"
         }
       ]
     },
     "7": {
-      "title": "실제 판결",
+      "title": "5막 실제 판결",
       "scene": "court",
       "look": {
         "naero": "role:judge",
         "nambul": "role:actor"
       },
       "steps": [
-        {
-          "system": "실제 재판부의 판결"
-        },
         {
           "say": "naero",
           "role": "판사",
@@ -652,7 +622,7 @@
       ]
     },
     "8": {
-      "title": "세 판결 비교",
+      "title": "6막 세 판결 비교",
       "scene": "sheet",
       "look": {
         "naero": "idle-neutral",

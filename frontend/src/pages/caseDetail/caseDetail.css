@@ -1,7 +1,5 @@
-/* S-20 사건 디테일 (FE-32, 흐름 목업 ③). 신문에서 오려 낸 기사를 책상(S-02와 같은 펠트) 위에 펼쳐 놓은 모습.
-   구성: 분류 · 사건 번호 · 돌아가기 → 제목 → 부제 → [재연 사진 | 사건 개요 · 사건 정보] → 내로 · 남불 + 버튼.
-   대본이 있는 사건은 이 짜임 대신 1막 무대(S-03과 같은 화면)를 그린다
-   색은 style.css 역할 토큰만 쓴다. 형량 · 판결 정보는 이 화면에 없다 */
+/* S-20 사건 디테일: 모든 사건이 신문 안쪽 면(components/newspaperFront.js · paperStage.css · caseList.css)으로 그려진다.
+   이 파일은 자료를 불러오는 동안 · 오류일 때 책상 위에 놓이는 종이 한 장(.detail-clip)만 꾸민다. 색은 style.css 역할 토큰만 쓴다 */
 
 .case-detail-page { min-height: 100vh; padding: 48px 24px 64px; }
 .case-detail-page .detail-desk {
@@ -25,47 +23,7 @@
 .case-detail-page .detail-clip::before { left: 36px; transform: rotate(-5deg); }
 .case-detail-page .detail-clip::after { right: 36px; transform: rotate(4deg); }
 
-.case-detail-page .detail-top { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-bottom: 6px; color: var(--color-muted); font-size: var(--text-caption); font-weight: 700; }
-.case-detail-page .detail-kind { display: inline-flex; align-items: center; gap: 7px; color: var(--color-label); }
-.case-detail-page .type-square { width: 9px; height: 9px; flex: none; }
-.case-detail-page .type-MURDER { background: var(--color-case-murder); }
-.case-detail-page .type-FRAUD { background: var(--color-case-fraud); }
-.case-detail-page .type-INJURY { background: var(--color-case-injury); }
-.case-detail-page .detail-back { min-height: 40px; margin-left: auto; padding: 0 14px; border: 1px solid var(--color-border-strong); border-radius: 999px; background: var(--color-card); color: var(--color-text); font-size: var(--text-caption); font-weight: 700; cursor: pointer; }
-.case-detail-page .detail-back:hover { border-color: var(--color-text); }
-
-.case-detail-page .detail-headline { margin: 6px 0 4px; font: 900 clamp(24px, 3.6vw, 38px) / 1.3 var(--font-heading); letter-spacing: -.03em; color: var(--color-heading); word-break: keep-all; text-wrap: balance; }
-.case-detail-page .detail-deck { margin: 0 0 20px; padding-bottom: 14px; border-bottom: 2px solid var(--color-heading); font: 600 17px / 1.6 var(--font-body); color: var(--color-muted); word-break: keep-all; }
-
-.case-detail-page .detail-grid { display: grid; grid-template-columns: 1.25fr 1fr; gap: 28px; }
-.case-detail-page .detail-photo { margin: 0; }
-.case-detail-page .detail-photo img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; filter: var(--photo-filter); background: var(--color-border); }
-.case-detail-page .detail-photo figcaption { margin-top: 6px; color: var(--color-muted); font-size: var(--text-caption); }
-.case-detail-page .detail-box { margin-bottom: 14px; padding: 14px 16px; border-top: 2px solid var(--color-text); background: var(--color-surface); }
-.case-detail-page .detail-box h2 { margin: 0 0 6px; color: var(--color-label); font-size: 14px; font-weight: 800; }
-.case-detail-page .detail-box p { margin: 0; font-size: 16px; line-height: 1.75; word-break: keep-all; }
-.case-detail-page .detail-facts { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0; font-size: 14px; line-height: 1.5; }
-.case-detail-page .detail-facts dt { color: var(--color-muted); font-weight: 600; }
-.case-detail-page .detail-facts dd { margin: 0; font-weight: 700; word-break: keep-all; font-variant-numeric: tabular-nums; }
-.case-detail-page .detail-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-.case-detail-page .detail-chips span { padding: 1px 10px; border: 1px solid var(--color-border-strong); border-radius: 999px; background: var(--color-card); color: var(--color-label); font-size: var(--text-caption); font-weight: 700; }
-
-/* 내로 · 남불의 한마디 + 버튼 */
-.case-detail-page .detail-cta { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--color-border-strong); }
-.case-detail-page .detail-duo { display: flex; flex: none; }
-.case-detail-page .detail-duo img { width: 44px; height: 44px; border-radius: 50%; background: var(--color-stage-face); object-fit: cover; object-position: top; }
-.case-detail-page .detail-duo img + img { margin-left: -10px; }
-.case-detail-page .detail-say { flex: 1 1 260px; margin: 0; font-weight: 700; word-break: keep-all; }
-.case-detail-page .detail-say b { margin-right: .5em; color: var(--color-label); }
-.case-detail-page .detail-say small { display: block; margin-top: 2px; color: var(--color-muted); font-size: var(--text-caption); font-weight: 500; }
-.case-detail-page .detail-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
-.case-detail-page .detail-notice { flex-basis: 100%; margin: 0; color: var(--color-caution); font-size: var(--text-small); }
-.case-detail-page .detail-notice:empty { display: none; }
-
 @media (max-width: 720px) {
   .case-detail-page { padding: 32px 12px 48px; }
   .case-detail-page .detail-clip { padding: 26px 18px 22px; transform: none; }
-  .case-detail-page .detail-grid { grid-template-columns: 1fr; gap: 16px; }
-  .case-detail-page .detail-actions { width: 100%; margin-left: 0; }
-  .case-detail-page .detail-actions > button { flex: 1; }
 }
