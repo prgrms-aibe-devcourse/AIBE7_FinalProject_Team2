@@ -13,6 +13,7 @@
 | v2.5 | 2026-10-16 | 자동화 파이프라인 회의 결정 반영 (COMMON-41) — 확장 생성 파이프라인(REQ-040 ~ 045)에서 신문 지면 콘텐츠 · 사건 스크립트 생성을 추가 고려하고, 사건 사진은 AI가 직접 생성하지 않고 생성용 프롬프트만 제공하기로 한 결정을 1장에 추가 |
 | v2.6 | 2026-10-16 | 6장 무료 등급: 점검 · 생성은 무료 등급을 기본으로 쓴다(팀 결정 10/15, 근거 Jira BE-76 댓글). 판결문 원문 단계는 그대로 유료 키만 |
 | v2.7 | 2026-10-16 | 3장 ① 요약어 후보 DB 적재 · A-6 반영 (BE-80) — `factor.summary_tag_candidates`(V17), 화면 표시는 후속 |
+| v2.8 | 2026-10-17 | API 키 `.env` 파일 지원 (BE-86) — 4장에 `.env` 안내 추가. COMMON-40 모델 비교 테스트의 선행 작업 |
 
 > 이 문서는 **개요**다. 명령 · 옵션 · 설정 값의 정확한 기준은 [`tools/ai-judgment/README.md`](../tools/ai-judgment/README.md)와 [`case-extractor/README.md`](../tools/ai-judgment/case-extractor/README.md)다. 문서와 코드가 다르면 도구 README와 코드를 따른다.
 > 이 문서는 사건 내용을 담지 않는다. 예시는 모두 설명용이다.
@@ -139,7 +140,7 @@ MVP는 AI 판결을 **오프라인에서 생성 · 검수한 결과를 DB에 적
 | 항목 | 내용 |
 | --- | --- |
 | 모델 지정 | `공급자:모델ID` (예: `gemini:<모델ID>`). 공급자: `openai` · `anthropic` · `gemini`. 비식별화는 공급자 없는 이름(`claude-…`)도 Claude로 본다 |
-| API 키 | 환경변수로만 읽는다(`OPENAI_API_KEY` · `ANTHROPIC_API_KEY` · `GEMINI_API_KEY`/`GOOGLE_API_KEY`). 코드 · 출력 · 오류 메시지에 남기지 않는다 |
+| API 키 | 환경변수로만 읽는다(`OPENAI_API_KEY` · `ANTHROPIC_API_KEY` · `GEMINI_API_KEY`/`GOOGLE_API_KEY`). 코드 · 출력 · 오류 메시지에 남기지 않는다. 매번 `export`하는 대신 `.env` 파일(`tools/ai-judgment/.env.example` 참고, 커밋하지 않음)로 줄 수 있다(BE-86). 이미 설정된 환경변수가 `.env`보다 우선한다 |
 | 단계별 모델 | extract · court는 `stages.extract.model` · `stages.court.model`, contamination · generate는 `models` 목록. 단계마다 다른 공급자를 쓸 수 있다 |
 | 도구 | 웹 검색 · 그라운딩을 붙이지 않는다(실제 판결을 찾아보면 독립 판단 · 사전 학습 점검이 무의미해진다) |
 | manual | API를 부르지 않고 채팅 화면의 응답 파일을 같은 흐름에 넣는 방식(`generate.py import`) |
