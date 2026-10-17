@@ -1,26 +1,31 @@
 import { button, element, renderSiteHeader } from '../../components/siteLayout.js';
-import { renderToleranceScale } from '../../components/toleranceScale.js';
 import { screenByStatus } from '../../utils/screenByStatus.js';
 import { renderAxisRow } from '../../components/axisRow.js';
 import { imageOf } from '../../components/stage.js';
-import { AXES } from '../../utils/personalityAxes.js';
-import { axisSeries, biggestMove, collectionOf, trailLeft, trailSummary } from '../../utils/myPageView.js';
+import { AXES, CHARACTER_NAMES } from '../../utils/personalityAxes.js';
+import { axisSeries, collectionOf, trailLeft, trailSummary } from '../../utils/myPageView.js';
 import { BOOKMARK_CHARACTERS, BOOKMARK_NAMES, bookmarkFace, getBookmarkCharacter, setBookmarkCharacter } from '../../utils/bookmarkCharacter.js';
 import { SCRIPTS } from '../../content/scripts.js';
 
 // S-17 마이페이지 (WBS 7.6.6). GET /my-page 한 번 호출로 받고, 기록이 없어도 404가 아니라 빈 200이다(명세 P-5).
 // 메인 책상의 커피잔으로 들어온다(FE-44): 커다란 커피잔이 날아와 페이드아웃하는 사이(utils/coffeeDive.js) 이 화면(from: 'mug')으로 넘어온다.
-// 첫 화면은 프로필(책갈피 캐릭터 · 내 성향) + 네 줄(판결 성향 · 변화 흐름 · 만난 모습 · 체험한 사건)이고, 줄을 누르면 그 항목 화면(view)으로 들어간다.
+// 첫 화면은 [프로필카드 | 닉네임 | 성향카드] + 하단 항목 줄(만난 모습 · 내 데이터베이스 · 내 정보 수정 · 환경 설정)이고, 카드나 줄을 누르면 그 화면(view)으로 들어간다.
+// 프로필카드 · 내 정보 수정 · 환경 설정은 껍데기만 있다(추가 예정). 성향카드 화면에는 판결에서 드러난 성향 · 성향 변화 흐름이 들어 있다.
 // 항목 화면은 주소가 같고 view만 다르다(뒤로 가기로 첫 화면에 돌아온다).
 // 종합 · 변화 흐름은 체험 → 성향 저장(7.6.7, BE-64) 뒤부터 채워지므로 그 전에는 null · 빈 배열로 와서 안내만 보인다.
 // 로그인 전에는 익명 ID 기준이다(REQ-108).
 const STATUS_LABELS = { COMPLETED: '체험 완료' };
 const VIEWS = {
-  judgment: '판결에서 드러난 성향',
-  trail: '성향 변화 흐름',
+  profile: '프로필카드',
+  type: '성향카드',
   collection: '만난 모습',
-  cases: '체험한 사건',
+  cases: '내 데이터베이스',
+  edit: '내 정보 수정',
+  settings: '환경 설정',
 };
+const DEFAULT_NICKNAME = '익명의 판사'; // 로그인 · 닉네임 API 전까지 임시 문구
+// 닉네임 아래 프로필 수치. 레벨 · 직업 · 출석 일수는 목 데이터(API 전, data.profile이 오면 그 값을 쓴다). 완료한 사건 · 모은 일러스트는 지금 기록에서 센다
+const MOCK_PROFILE = { level: 7, job: '수습 판사', attendanceDays: 12 };
 let cache = null; // 마지막 응답. 항목 화면을 오갈 때 바로 그리고 뒤에서 새로 받는다
 
 const svg = (path, className) => {
@@ -48,54 +53,81 @@ function picture(src, alt, className = '') {
 
 // ── 첫 화면 ──
 
-// 프로필: 잔 테두리 안의 책갈피 캐릭터 + 내 성향(테스트 결과). 결과가 없으면 테스트를 권한다
-function renderProfile(data, navigate, go) {
-  const section = element('section', 'my-profile');
-  const who = getBookmarkCharacter();
-  const cup = element('div', 'my-cup');
-  cup.append(picture(bookmarkFace(who), `책갈피 캐릭터 ${BOOKMARK_NAMES[who]}`, 'my-cup-face'));
-  const change = button('책갈피 바꾸기', () => go('collection'), 'my-cup-change');
-  const side = element('div', 'my-cup-wrap');
-  side.append(cup, change);
-
-  const text = element('div', 'my-profile-text');
-  if (data.personality) {
-    const { type } = data.personality;
-    text.append(
-      element('h2', 'my-type-name', type.name),
-      element('p', 'my-type-oneliner', type.oneLiner),
-      element('p', 'my-type-tolerance', '관용 지수'),
-      renderToleranceScale(type.tolerance),
-    );
-    const actions = element('div', 'my-actions');
-    actions.append(
-      button('결과 자세히 보기', () => navigate('testResult'), 'primary-button'),
-      button('다시 하기', () => navigate('test'), 'secondary-button'),
-    );
-    text.append(actions);
-  } else {
-    text.append(
-      element('h2', 'my-type-name', '아직 내 판결 성향을 몰라요'),
-      element('p', 'my-type-oneliner', '성향 테스트는 3분이면 끝나요. 잘잘못을 따질 때 내가 무엇을 중요하게 보는지 알려 줘요.'),
-    );
-    const actions = element('div', 'my-actions');
-    actions.append(button('성향 테스트 하러 가기', () => navigate('test'), 'primary-button'));
-    text.append(actions);
-  }
-  section.append(side, text);
-  return section;
+// 성향 이미지: 이미지(imageUrl)가 아직 없거나 불러오지 못하면 캐릭터 이름을 대신 둔다(personalityParts.js와 같은 규칙)
+function typePortrait(type) {
+  const portrait = element('div', 'my-type-portrait');
+  const characterName = CHARACTER_NAMES[type.character] ?? type.character;
+  const showName = () => {
+    portrait.replaceChildren(element('strong', '', characterName));
+    portrait.setAttribute('aria-label', `${characterName} 캐릭터 (이미지 준비 중)`);
+  };
+  if (type.imageUrl) {
+    const image = element('img');
+    image.alt = `${characterName} 캐릭터`;
+    image.addEventListener('error', showName, { once: true });
+    image.src = type.imageUrl;
+    portrait.append(image);
+  } else showName();
+  return portrait;
 }
 
-// 미리보기용 작은 막대 한 줄(점 하나 또는 번호 점 여러 개)
-function miniTrack(points, numbered) {
-  const track = element('span', 'my-mini-track');
-  points.forEach((point, index) => {
-    const dot = element('span', numbered && index === points.length - 1 ? 'my-mini-dot is-latest' : 'my-mini-dot', numbered ? String(point.order) : undefined);
-    if (numbered) dot.classList.add('is-numbered');
-    dot.style.left = `${trailLeft(point.ratio)}%`;
-    track.append(dot);
+// 카드 버튼 하나: 네모난 박스. 누르면 해당 화면으로 간다
+function cardButton(className, label, ...children) {
+  const card = element('button', `my-card ${className}`);
+  card.type = 'button';
+  card.setAttribute('aria-label', label);
+  card.append(...children);
+  return card;
+}
+
+// 성향을 모를 때 타로카드의 빈 그림 창("?")
+function emptyWindow() {
+  const window_ = element('div', 'my-type-portrait');
+  window_.append(element('strong', '', '?'));
+  window_.setAttribute('aria-hidden', 'true');
+  return window_;
+}
+
+// 닉네임 아래 프로필 수치(레벨 · 직업 · 출석 일수 · 완료한 사건 수 · 모은 일러스트 수)
+function renderStats(data) {
+  const profile = { ...MOCK_PROFILE, ...data.profile };
+  const experiences = data.experiences ?? [];
+  const completed = experiences.filter((item) => item.status === 'COMPLETED').length;
+  const groups = collectionOf(experiences, SCRIPTS);
+  const collected = groups.reduce((sum, group) => sum + group.cast.length + group.items.length, 0);
+  const list = element('dl', 'my-stats');
+  [
+    ['레벨', `Lv.${profile.level}`],
+    ['직업', profile.job],
+    ['출석 일수', `${profile.attendanceDays}일`],
+    ['완료한 사건', `${completed}건`],
+    ['모은 일러스트', `${collected}장`],
+  ].forEach(([label, value]) => {
+    const item = element('div', 'my-stat');
+    item.append(element('dt', '', label), element('dd', '', value));
+    list.append(item);
   });
-  return track;
+  return list;
+}
+
+// 첫 화면 위쪽: [프로필카드(현재 책갈피 캐릭터 전신) | 닉네임 · 수치 | 성향카드(타로카드: 이름 · 성향 이미지 · 대사 한 줄)]
+function renderTop(data, go) {
+  const section = element('section', 'my-top');
+  const who = getBookmarkCharacter();
+  const profile = cardButton('is-profile', '프로필카드 열기', picture(imageOf(who, 'role:judge'), `${BOOKMARK_NAMES[who]} 전신`, 'my-profile-face'));
+  profile.addEventListener('click', () => go('profile'));
+
+  const middle = element('div', 'my-top-middle');
+  middle.append(element('h2', 'my-nickname', data.nickname || DEFAULT_NICKNAME), renderStats(data));
+
+  const type = data.personality?.type;
+  const typeCardNode = type
+    ? cardButton('is-type', `성향카드 열기: ${type.name}`, element('p', 'my-type-name', type.name), typePortrait(type), element('p', 'my-type-quote', type.meme))
+    : cardButton('is-type is-empty', '성향카드 열기: 아직 성향을 몰라요', element('p', 'my-type-name', '아직 몰라요'), emptyWindow(), element('p', 'my-type-quote', '"성향 테스트로 카드를 뽑아 봐요"'));
+  typeCardNode.addEventListener('click', () => go('type'));
+
+  section.append(profile, middle, typeCardNode);
+  return section;
 }
 
 // spoken: 미리보기에만 보이는 값(건수 등)을 스크린리더에도 읽어 준다(미리보기는 aria-hidden)
@@ -115,26 +147,10 @@ function row(view, sub, preview, go, spoken) {
   return item;
 }
 
+// 하단 항목 줄(순서: 만난 모습 · 내 데이터베이스 · 내 정보 수정 · 환경 설정)
 function renderRows(data, go) {
   const list = element('ul', 'my-rows');
-  const judgment = data.judgmentPersonality;
-  const history = data.history ?? [];
   const experiences = data.experiences ?? [];
-
-  let judgmentPreview = null;
-  if (judgment) {
-    judgmentPreview = element('span', 'my-mini-bars');
-    AXES.forEach((axis) => {
-      const ratio = judgment.axisScores?.[axis.key];
-      judgmentPreview.append(miniTrack(typeof ratio === 'number' ? [{ ratio }] : [], false));
-    });
-  }
-  list.append(row('judgment', judgment ? `체험 ${judgment.experienceCount}건의 평균` : '사건을 체험하면 판결에서 무엇을 무겁게 봤는지 쌓여요', judgmentPreview, go));
-
-  const move = biggestMove(history, AXES);
-  const trailSub = move ? `${move.axis.label}: ${trailSummary(move.points, move.axis)}`
-    : history.length === 0 ? '사건을 하나 마치면 첫 점이 찍혀요' : '한 건을 더 체험하면 움직임이 보여요';
-  list.append(row('trail', trailSub, move ? miniTrack(move.points, true) : null, go));
 
   const groups = collectionOf(experiences, SCRIPTS);
   const total = groups.reduce((sum, group) => sum + group.cast.length + group.items.length, 0);
@@ -151,6 +167,9 @@ function renderRows(data, go) {
 
   const latest = [...experiences].sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')))[0];
   list.append(row('cases', latest ? `최근: ${latest.title}` : '아직 체험한 사건이 없어요', element('span', 'my-count', `${experiences.length}건`), go, `${experiences.length}건`));
+
+  list.append(row('edit', '닉네임 · 프로필을 바꿔요 (추가 예정)', null, go));
+  list.append(row('settings', '알림 · 화면 설정 (추가 예정)', null, go));
   return list;
 }
 
@@ -277,6 +296,38 @@ function renderCases(experiences, navigate) {
   return box;
 }
 
+// 성향카드 화면 — 성향 이미지 · 이름 · 설명, 그 아래에 판결에서 드러난 성향 · 성향 변화 흐름
+function renderTypePage(data, navigate) {
+  const box = element('div', 'my-detail');
+  const type = data.personality?.type;
+  if (type) {
+    const hero = element('section', 'my-type-hero');
+    const text = element('div');
+    text.append(element('h2', 'my-type-hero-name', type.name), element('p', 'my-type-hero-text', type.oneLiner));
+    hero.append(typePortrait(type), text);
+    box.append(hero);
+  } else {
+    const empty = element('div', 'my-empty');
+    empty.append(element('p', '', '아직 내 판결 성향을 몰라요. 성향 테스트는 3분이면 끝나요.'), button('성향 테스트 하러 가기', () => navigate('test'), 'primary-button'));
+    box.append(empty);
+  }
+  const judgment = element('section', 'my-type-section');
+  judgment.append(element('h2', 'my-section-title', '판결에서 드러난 성향'), renderJudgment(data.judgmentPersonality));
+  const trail = element('section', 'my-type-section');
+  trail.append(element('h2', 'my-section-title', '성향 변화 흐름'), renderTrail(data.history ?? []));
+  box.append(judgment, trail);
+  return box;
+}
+
+// 아직 내용이 없는 화면(껍데기)
+function renderShell(text) {
+  const box = element('div', 'my-detail');
+  const empty = element('div', 'my-empty');
+  empty.append(element('p', '', text));
+  box.append(empty);
+  return box;
+}
+
 function renderView(view, data, navigate, go) {
   const head = element('div', 'my-view-head');
   const back = element('button', 'my-back');
@@ -287,10 +338,12 @@ function renderView(view, data, navigate, go) {
   title.tabIndex = -1;
   head.append(back, title);
   const body = {
-    judgment: () => renderJudgment(data.judgmentPersonality),
-    trail: () => renderTrail(data.history ?? []),
+    profile: () => renderShell('프로필카드 화면은 곧 열려요.'),
+    type: () => renderTypePage(data, navigate),
     collection: () => renderCollection(data.experiences),
     cases: () => renderCases(data.experiences ?? [], navigate),
+    edit: () => renderShell('내 정보 수정은 곧 열려요.'),
+    settings: () => renderShell('환경 설정은 곧 열려요.'),
   }[view]();
   return [head, body];
 }
@@ -325,7 +378,7 @@ export async function renderMyPage(container, { api, navigate, view, from }) {
     const title = element('h1', 'visually-hidden', '마이페이지');
     title.tabIndex = -1;
     const note = element('p', 'my-note', '로그인하기 전에는 이 브라우저(익명 ID)를 기준으로 기록해요. 쿠키를 지우면 기록을 찾을 수 없어요.');
-    main.replaceChildren(title, renderProfile(data, navigate, go), renderRows(data, go), note);
+    main.replaceChildren(title, renderTop(data, go), renderRows(data, go), note);
   };
 
   if (cache) paint(cache);

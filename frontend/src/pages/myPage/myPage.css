@@ -34,27 +34,46 @@ body:has(.my-page) .site-footer { background: var(--palette-coffee-50); border-t
 .my-main .message-panel button { margin-top: 20px; }
 .my-page button { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 
-/* ── 프로필 ── */
-.my-profile { display: grid; grid-template-columns: 148px minmax(0, 1fr); gap: 32px; align-items: start; padding-bottom: 32px; }
-.my-cup-wrap { display: grid; justify-items: center; gap: 10px; }
-.my-cup {
-  display: grid; place-items: center; width: 148px; height: 148px; border-radius: 50%;
-  background: var(--color-cup); box-shadow: inset 0 0 0 11px var(--color-cup-rim);
+/* ── 위쪽: 프로필카드 | 닉네임 · 수치 | 성향카드 (좌우 대칭, 같은 크기의 세로로 긴 카드) ── */
+.my-top { display: grid; grid-template-columns: 200px minmax(0, 1fr) 200px; gap: 28px; align-items: start; padding-bottom: 36px; }
+.my-card {
+  position: relative; display: grid; width: 200px; aspect-ratio: 7 / 12; padding: 12px; border: 1px solid var(--color-border-strong); border-radius: 14px;
+  background: var(--color-card); color: inherit; font: inherit; text-align: center; cursor: pointer; user-select: none;
+  box-shadow: 0 1px 0 var(--color-border), 0 10px 20px color-mix(in srgb, var(--color-heading) 14%, transparent);
+  transition: transform .15s ease-out, box-shadow .15s ease-out;
 }
-.my-cup-face { width: 104px; height: 104px; border-radius: 50%; object-fit: cover; object-position: top; background: var(--color-card); }
-.my-cup-face.is-missing { visibility: hidden; }
-.my-cup-change {
-  padding: 4px 12px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-card);
-  color: var(--color-muted); font: inherit; font-size: var(--text-caption); cursor: pointer; user-select: none;
+.my-card:active { transform: translateY(1px); }
+.my-card:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 3px; }
+@media (hover: hover) and (pointer: fine) { .my-card:hover { transform: translateY(-3px); } }
+.my-card.is-profile { place-items: end center; background: linear-gradient(180deg, var(--color-card), var(--color-surface)); }
+.my-profile-face { width: 100%; height: 100%; object-fit: contain; object-position: bottom; }
+.my-profile-face.is-missing { visibility: hidden; }
+
+/* 성향카드: 타로카드 모티브 — 어두운 바탕 · 이중 테두리 · 위 이름 띠 · 아치형 그림 창 · 아래 대사 띠 · 모서리 별 */
+.my-card.is-type {
+  grid-template-rows: auto minmax(0, 1fr) auto; gap: 10px; padding: 16px 14px 14px;
+  background: radial-gradient(ellipse at 50% 30%, color-mix(in srgb, var(--color-accent) 70%, var(--color-heading)), var(--color-heading) 75%);
+  color: var(--color-card); border-color: var(--color-heading);
 }
-.my-cup-change:active { background: var(--color-surface-strong); }
-.my-profile-text { padding-top: 14px; }
-.my-profile-text p { margin: 0; }
-.my-type-name { margin: 0 0 6px; font: 900 var(--text-display)/1.25 var(--font-heading); letter-spacing: -.03em; color: var(--color-heading); text-wrap: balance; }
-.my-type-oneliner { max-width: 46ch; color: var(--color-muted); text-wrap: pretty; }
-.my-profile-text .my-type-tolerance { margin-top: 16px; color: var(--color-muted); font-size: var(--text-small); }
-.my-profile .tolerance-scale { margin-top: 4px; }
-.my-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 22px; }
+.my-card.is-type::before { /* 안쪽 이중 테두리 */
+  content: ''; position: absolute; inset: 6px; border: 3px double color-mix(in srgb, var(--color-card) 55%, transparent); border-radius: 10px; pointer-events: none;
+}
+.my-card.is-type::after { /* 위 · 아래 별 장식 */
+  content: '✦'; position: absolute; left: 50%; top: 8px; transform: translateX(-50%); font-size: 10px; line-height: 1; color: color-mix(in srgb, var(--color-card) 70%, transparent);
+  background: var(--color-heading); padding: 0 6px;
+}
+.my-top-middle { align-self: stretch; display: flex; flex-direction: column; justify-content: flex-start; gap: 20px; padding-top: 6px; min-width: 0; }
+.my-nickname { margin: 0; font: 900 var(--text-display)/1.25 var(--font-heading); letter-spacing: -.03em; color: var(--color-heading); text-wrap: balance; }
+.my-stats { display: grid; gap: 0; margin: 0; padding: 0; border-top: 1px solid var(--color-border-strong); }
+.my-stat { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 9px 2px; border-bottom: 1px solid var(--color-border); }
+.my-stat dt { color: var(--color-muted); font-size: var(--text-small); }
+.my-stat dd { margin: 0; font: 700 var(--text-body)/1.4 var(--font-heading); color: var(--color-heading); font-variant-numeric: tabular-nums; }
+.my-type-name { margin: 8px 0 0; font: 900 var(--text-title-3)/1.3 var(--font-heading); letter-spacing: -.02em; text-wrap: balance; color: inherit; }
+.my-type-portrait { display: grid; place-items: center; min-height: 0; border-radius: 999px 999px 8px 8px; background: var(--color-surface); border: 1px solid color-mix(in srgb, var(--color-card) 60%, transparent); overflow: hidden; }
+.my-type-portrait img { width: 100%; height: 100%; object-fit: contain; }
+.my-type-portrait strong { font: 900 var(--text-title-2)/1 var(--font-heading); color: var(--color-heading); }
+.my-type-quote { margin: 0 0 4px; padding: 6px 4px 4px; font: 400 var(--text-caption)/1.45 var(--font-article); text-wrap: balance; color: inherit; border-top: 1px solid color-mix(in srgb, var(--color-card) 40%, transparent); }
+.my-card.is-type.is-empty { grid-template-rows: auto minmax(0, 1fr) auto; }
 
 /* ── 항목 네 줄: 줄 전체가 버튼이다 ── */
 .my-rows { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--color-border-strong); }
@@ -106,6 +125,15 @@ body:has(.my-page) .site-footer { background: var(--palette-coffee-50); border-t
 .trail-dot.is-latest { background: var(--color-accent); color: var(--color-card); }
 .trail-summary { margin: 0; color: var(--color-muted); font-size: var(--text-small); }
 
+/* 성향카드 화면 */
+.my-type-hero { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 24px; align-items: center; margin: 0 0 36px; }
+.my-type-hero .my-type-portrait { aspect-ratio: 7 / 12; border-radius: 999px 999px 12px 12px; border: 1px solid var(--color-border-strong); border-radius: 12px; background: var(--color-card); }
+.my-type-hero-name { margin: 0 0 8px; font: 900 var(--text-title-1)/1.25 var(--font-heading); letter-spacing: -.03em; color: var(--color-heading); text-wrap: balance; }
+.my-type-hero-text { margin: 0; color: var(--color-muted); text-wrap: pretty; }
+.my-type-section + .my-type-section { margin-top: 36px; }
+.my-section-title { margin: 0 0 12px; font: 700 var(--text-title-3)/1.4 var(--font-heading); color: var(--color-heading); }
+.my-type-section .my-detail > .my-hint:first-child { margin-top: 0; }
+
 /* 책갈피 캐릭터 고르기 */
 .my-bookmark { margin: 0 0 32px; padding: 0 0 28px; border: 0; border-bottom: 1px solid var(--color-border); }
 .my-bookmark legend { margin-bottom: 12px; padding: 0; font: 700 var(--text-title-3)/1.4 var(--font-heading); color: var(--color-heading); }
@@ -146,11 +174,11 @@ body:has(.my-page) .site-footer { background: var(--palette-coffee-50); border-t
 
 @media (max-width: 720px) {
   .my-main { padding: 28px 16px 40px; }
-  .my-profile { grid-template-columns: 96px minmax(0, 1fr); gap: 18px; padding-bottom: 24px; }
-  .my-cup { width: 96px; height: 96px; box-shadow: inset 0 0 0 7px var(--color-cup-rim); }
-  .my-cup-face { width: 68px; height: 68px; }
-  .my-profile-text { padding-top: 4px; }
-  .my-type-name { font-size: var(--text-title-2); }
+  .my-top { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; padding-bottom: 28px; }
+  .my-card { width: 100%; }
+  .my-top-middle { order: -1; grid-column: 1 / -1; padding-top: 0; }
+  .my-nickname { font-size: var(--text-title-2); }
+  .my-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 16px; }
   .my-row { grid-template-columns: minmax(0, 1fr) 104px 14px; gap: 12px; padding: 16px 4px; }
   .my-thumbs img:nth-child(n + 3) { display: none; }
   .my-thumbs img { width: 40px; height: 50px; }
@@ -158,4 +186,5 @@ body:has(.my-page) .site-footer { background: var(--palette-coffee-50); border-t
   .my-view-head h1 { font-size: var(--text-title-2); }
   .my-case { flex-direction: column; align-items: flex-start; }
   .collection-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .my-type-hero { grid-template-columns: 120px minmax(0, 1fr); gap: 16px; }
 }
