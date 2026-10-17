@@ -130,7 +130,7 @@ python3 compare.py out/runs/case --case case.json --out out/runs/case/comparison
 | `manual` | 부르지 않음 (`import` 전용) | — | — |
 
 - 모델 ID는 공급자가 정한 정확한 ID를 그대로 쓴다. 도구에 기본 모델은 없다(모델이 자주 바뀌므로 매번 명시한다).
-- **`groq` · `nim` (BE-84)**: 둘 다 OpenAI Chat Completions 형식이라 같은 코드로 부른다. 차이는 세 가지다. ① `nim`의 모델 ID에는 `nvidia/nemotron-3-super-120b-a12b`처럼 `/`가 들어간다(공급자는 첫 `:`에서만 나누므로 그대로 적는다). ② `nim`은 `max_tokens`만 받는다(OpenAI · Groq는 `max_completion_tokens`). ③ `nim`은 JSON 모드를 지원하지 않는 모델이 있어 400이 올 수 있고, 그때는 오류에 안내를 붙인다 — `--json-output` 없이 쓰거나 지원하는 모델로 바꾼다.
+- **`groq` · `nim` (BE-84)**: 둘 다 OpenAI Chat Completions 형식이라 같은 코드로 부른다. 차이는 세 가지다. ① `nim`의 모델 ID에는 `nvidia/nemotron-3-super-120b-a12b`처럼 `/`가 들어간다(공급자는 첫 `:`에서만 나누므로 그대로 적는다). ② `nim`은 `max_tokens`만 받는다(OpenAI · Groq는 `max_completion_tokens`). ③ `nim`은 JSON 모드를 지원하지 않는 모델이 있어 400이 올 수 있고, 그때는 오류에 안내를 붙인다 — JSON 모드를 지원하는 모델로 바꾸거나 다른 공급자를 쓴다(`generate.py`는 JSON 모드를 끄는 옵션이 없다).
 - **쓸 수 있는 모델 확인**: `python3 list_models.py groq`(또는 `nim`)이 공급자에게 직접 물어 모델 ID를 보여 준다(`--grep`으로 거르고 `--json`으로 원본). 공급자가 모델을 자주 바꾸므로 `free_models.json`을 고치기 전에 이것으로 확인한다. **조회만 하고 자동으로 넣지는 않는다** — 응답에는 임베딩 · 음성 · 코드 · 비전 · 안전 분류 모델이 섞여 있어, 그대로 넣으면 `free:<공급자>` 자동 선택이 판결 생성에 쓸 수 없는 모델을 고른다.
 - 검색 · 그라운딩 같은 도구는 붙이지 않는다. 매 회차가 독립 요청이라 이전 회차 응답이 섞이지 않는다("외부 LLM으로 생성할 때" 원칙과 같다).
 - 옵션: `--temperature`(주지 않으면 공급자 기본값. 사고 모델 중에는 받지 않는 것이 있다), `--max-tokens`(기본 16000), `--timeout`(초, 기본 300), `--delay`(요청 사이 쉬는 초, 무료 등급 분당 한도용), `--max-attempts`(요청 한 건을 보내는 최대 횟수, 첫 시도 포함, 기본 5) · `--max-wait`(재시도 사이 한 번에 기다릴 최대 초, 기본 120) — "무료 등급 한도 대응", `--batch`(묶음 이름, 기본은 사건 파일 이름).
