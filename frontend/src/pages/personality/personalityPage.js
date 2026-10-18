@@ -32,29 +32,56 @@ function guideFor(question, index, total) {
   return guide(who, look, line);
 }
 
+// 그림을 받아 둔다. 늦거나 실패해도 연출을 막지 않게 한도를 둔다
+const PRELOAD_LIMIT_MS = 1500;
+function preload(src) {
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = image.onerror = () => resolve();
+    image.src = src;
+    window.setTimeout(resolve, PRELOAD_LIMIT_MS);
+  });
+}
+
 // 답안 칸의 펜 체크 표시
 const CHECK_SVG = '<svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M4 10.5 L8.2 14.5 L16 5.5"/></svg>';
 
 export async function renderPersonalityPage(container, { api, navigate }) {
-  // 검사지는 철을 가로로 눕혀 둔다(탭이 왼쪽). 책상에서 서류철을 들어 올리는 연출은 검사지에만(personality.css)
-  const { root, label, body } = renderFolder(container, { navigate, sheetLabel: '문항지', orientation: 'landscape' });
-  root.classList.add('is-test');
+  // 검사지는 철을 가로로 눕혀 둔다. 문항과 표지 그림을 먼저 받아 두고 철을 그려, 올라오는 동안 시작 화면이 이미 보이게 한다(personality.css)
+  let root, label, body;
   const active = () => container.contains(root);
   const keys = new AbortController(); // 숫자 키 단축키. 화면을 떠나면 뗀다
+  const openFolder = () => {
+    ({ root, label, body } = renderFolder(container, { navigate, sheetLabel: '문항지', orientation: 'landscape' }));
+    root.classList.add('is-test');
+  };
+  const fetchQuestions = async () => {
+    const [{ questions: list }] = await Promise.all([
+      api.getPersonalityQuestions(),
+      ...[['naero', 'guide-happy'], ['nambul', 'guide-neutral']].map(([who, look]) => preload(imageOf(who, look))),
+    ]);
+    return list;
+  };
 
   let questions;
   async function load() {
-    sheetMessage(body, '문항을 불러오는 중이에요.');
     try {
-      ({ questions } = await api.getPersonalityQuestions());
+      questions = await fetchQuestions();
     } catch {
-      if (active()) sheetMessage(body, '문항을 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요.', { retry: load, alert: true });
+      if (!root) openFolder();
+      if (active()) sheetMessage(body, '문항을 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요.', { retry: retryLoad, alert: true });
       return;
     }
+    if (!root) openFolder();
     if (active()) renderIntro();
     // 문항 · 답안 정리에서 쓸 안내 컷을 미리 받아 둔다(원본 레포 PNG라 처음 뜰 때 늦다)
-    [['naero', 'guide-neutral'], ['naero', 'idle-neutral'], ['nambul', 'idle-neutral'], ['nambul', 'cheer-cheer'], ['nambul', 'guide-happy'], ['naero', 'read-thinking'], ['nambul', 'read-thinking']]
+    [['naero', 'idle-neutral'], ['nambul', 'idle-neutral'], ['nambul', 'cheer-cheer'], ['nambul', 'guide-happy'], ['naero', 'read-thinking'], ['nambul', 'read-thinking']]
       .forEach(([who, look]) => { new Image().src = imageOf(who, look); });
+  }
+
+  async function retryLoad() {
+    sheetMessage(body, '문항을 불러오는 중이에요.');
+    await load();
   }
 
   function renderIntro() {
@@ -71,7 +98,6 @@ export async function renderPersonalityPage(container, { api, navigate }) {
       `일상에서 마주칠 만한 ${questions.length}가지 상황이에요. 약 3분, 법을 몰라도 괜찮아요.`,
       '두 행동 가운데 내 마음이 더 가까운 쪽을 다섯 칸 중에 골라 주세요.',
       '정답은 없어요. 어느 유형이 옳다는 뜻도 아니에요.',
-      '결과가 나오기 전까지는 이전 문항으로 돌아가 답을 바꿀 수 있어요.',
     ].forEach((text) => list.append(element('li', '', text)));
     notes.append(notesTitle, list);
     const start = button('시작하기', () => renderQuestion(0), 'primary-button test-start');

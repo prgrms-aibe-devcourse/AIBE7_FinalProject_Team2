@@ -4,10 +4,9 @@ import { CHARACTER_NAMES } from '../../utils/personalityAxes.js';
 
 // S-15 · S-16 · 공유된 결과(/test/types/{shareId})가 함께 쓰는 조각 (FE-42).
 // 화면 = 메인 책상의 서류철(성향 테스트)을 들어 올려 펼친 모습: 펠트 위 크라프트 철, 철 안에 종이 한 장.
-// 철에는 위아래가 있다 — 이름표 탭("판결 성향 검사지")이 붙은 모서리가 철의 위쪽이다.
 //   검사지(표지 · 문항, orientation 'landscape') = 철을 왼쪽으로 눕혀 가로로 놓았다: 탭이 왼쪽 모서리, 탭 글씨는 아래에서 위로 읽힌다.
 //   결과지(orientation 'portrait') = 철을 세워 세로로 놓았다: 탭이 위쪽 모서리. 제출 직후에는 눕힌 철을 돌려 세운다(personality.css folder-turn).
-// 결과지의 색인 탭(결과 · 풀이)은 위쪽 모서리, 이름표 탭 옆에 붙는다(tabs).
+// 결과지의 색인 탭(결과 · 풀이)은 위쪽 모서리에 붙는다(tabs).
 // 재료는 메인 책상 · 5막 파일철(FE-43)과 같다(--color-desk-kraft · -sheet). 흐름 목업 FE-26(판결성향검사지_흐름_목업)을 따른다.
 // 공유 화면에는 개인 응답 · 축 점수를 넣지 않는다(FR-8-6).
 // 4글자 코드(INTP 등)와 축 글자(E · I 등)는 화면에 보이지 않는다(상표 우려, 10/13). 공유 주소는 해시 값({shareId})이다.
@@ -20,20 +19,25 @@ export function renderFolder(container, { navigate, sheetLabel, orientation = 'p
   const binder = element('div', 'test-binder');
   const tabs = element('div', 'test-folder-tabs');
   const folder = element('div', 'test-folder');
-  const nameTab = element('p', 'test-folder-label');
-  nameTab.setAttribute('aria-hidden', 'true'); // 종이 머리 칸 제목과 같은 말이라 낭독하지 않는다
-  nameTab.append(element('span', '', '판결 성향 검사지'));
-  folder.append(nameTab);
   const sheet = element('section', 'test-sheet');
-  const head = element('header', 'test-sheet-head');
-  const title = element('p', 'test-sheet-title', '판결 성향 검사지');
-  const label = element('p', 'test-sheet-label', sheetLabel);
-  head.append(title, label, button('책상으로', () => navigate('landing'), 'test-back'));
+  const label = element('p', 'visually-hidden', sheetLabel); // 머리 칸은 없애고, 지금 어느 장인지는 낭독기용으로만 남긴다
   const body = element('main', 'test-sheet-body');
-  sheet.append(head, body);
+  sheet.append(label, body);
   folder.append(sheet);
   binder.append(tabs, folder);
   root.append(desk, binder);
+  // 책상(메인)에서 검사지를 들고 온 경우: 책상 화면을 뒤에 남겨 두었다가 철이 올라오는 동안 흐려지며 걷는다
+  const ghost = orientation === 'landscape' && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches && container.querySelector('.landing-page')
+    ? element('div', 'personality-ghost') : null;
+  if (ghost) {
+    ghost.setAttribute('aria-hidden', 'true');
+    ghost.inert = true;
+    ghost.append(...container.childNodes);
+    root.insertBefore(ghost, binder);
+    const drop = () => ghost.remove();
+    ghost.addEventListener('animationend', drop);
+    window.setTimeout(drop, 2000); // animationend가 오지 않아도 걷는다
+  }
   container.replaceChildren(root);
   return { root, tabs, label, body };
 }
