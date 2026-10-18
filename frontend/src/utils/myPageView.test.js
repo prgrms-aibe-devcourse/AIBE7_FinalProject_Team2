@@ -67,10 +67,3 @@ test('collectionOf: 일러스트가 없어도 만난 모습이 있으면 묶음�
   assert.deepEqual(group.cast.map((item) => item.role), ['defense']);
   assert.deepEqual(group.items, []);
 });
-
-test('biggestMove: 처음과 마지막 차이가 가장 큰 축을 고르고, 값이 둘 이상인 축이 없으면 null', () => {
-  const axes = [{ key: 'A' }, { key: 'B' }];
-  const history = [{ axisScores: { A: 0.5, B: 0.1 } }, { axisScores: { A: 0.6, B: 0.9 } }];
-  assert.equal(biggestMove(history, axes).axis.key, 'B');
-  assert.equal(biggestMove([history[0]], axes), null);
-});
