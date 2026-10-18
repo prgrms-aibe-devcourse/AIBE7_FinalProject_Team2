@@ -17,7 +17,8 @@ const DIRECTIONS = { UP: ['무겁게', 'up'], DOWN: ['가볍게', 'down'] };
 // 이번 사건에서 만난 모습: 대본에 나온 역할 의상(look "role:…")을 모은다
 const ROLE_NAMES = { actor: 'A씨 역', prosecutor: '검사', defense: '변호인', judge: '판사' };
 const NAMES = { naero: '내로', nambul: '남불' };
-const STAY_ZOOM_MS = 700; // 여기 남아있기: 당겨 보던 지면이 전체 지면으로 줄어드는 시간
+const STAY_ZOOM_MS = 700;
+const FOLD_MS = 450; // 다른 사건 보기: 신문을 위로 접어 넘기는 시간 // 여기 남아있기: 당겨 보던 지면이 전체 지면으로 줄어드는 시간
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 function element(tag, className, text) {
@@ -77,7 +78,16 @@ function newspaper(data, script, caseTitle) {
   const date = element('div', 'sheet-date');
   const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
   date.append(element('span', '', new Intl.DateTimeFormat('ko-KR', { dateStyle: 'full' }).format(tomorrow)), element('span', '', '참여 무료'));
-  mast.append(info, brand, date);
+  // 귀(제호 양옆): "여기 남아있기"로 지면을 읽을 때만 보인다(courtSketch.css). 왼쪽은 다른 사건 보기(신문을 접고 1면으로),
+  // 오른쪽은 아직 정하지 않은 자리라 메모만 붙여 둔다
+  const earLeft = element('button', 'sheet-ear sheet-ear-left is-clickable');
+  earLeft.type = 'button';
+  earLeft.append(element('b', '', '← 다른 사건 보기'), element('small', '', '신문을 접고 오늘의 지면으로'));
+  const earRight = element('div', 'sheet-ear sheet-ear-right');
+  earRight.append(element('span', 'sheet-ear-memo', '고민 중'));
+  const brandRow = element('div', 'sheet-brand-row');
+  brandRow.append(earLeft, brand, earRight);
+  mast.append(info, brandRow, date);
 
   const front = element('section', 'sheet-story sheet-front');
   front.dataset.focus = 'front';
@@ -160,12 +170,6 @@ function newspaper(data, script, caseTitle) {
     story('factors', '판단 요소, 어디서 갈렸나', table),
     story('rules', '같게 본 것, 다르게 본 것', ...rules),
     advertisements());
-  // 신문 맨 아래: "여기 남아있기"로 지면을 다 읽은 뒤 메인 책상으로. 읽는 동안에만 보인다(courtSketch.css)
-  const close = element('footer', 'sheet-close');
-  const fold = element('button', 'primary-button sheet-fold', '메인으로');
-  fold.type = 'button';
-  close.append(element('p', 'sheet-close-note', '다 읽었으면 신문을 책상에 내려놓아요.'), fold);
-  sheet.append(close);
   return sheet;
 }
 
@@ -237,9 +241,9 @@ export function renderComparisonStage({ script, data, caseId, caseTitle, navigat
     cameraMinScale: narrow ? 1.3 : 0, // 좁은 화면도 기사 일부를 크게(왼쪽 위부터)
     cameraMaxUnit: narrow ? 0 : 9.5, // 큰 화면: 본문 약 15px · 제목 약 26px 이상으로 키우지 않는다
     choices: { end: [
-      { label: '다른 사건 보기', action: () => navigate('list'), primary: true },
+      { label: '메인으로', action: () => toDesk(), primary: true }, // 판사의 책상(데스크톱 메인)
       { label: '여기 남아있기', action: () => stay() },
-      { label: '메인으로', action: () => toDesk() },
+      { label: '리뷰하기', action: () => openReview() },
       { label: '공유하기', action: (note) => share(note, caseId) },
     ] },
     onRestart: restartMock(caseId),
@@ -277,7 +281,52 @@ export function renderComparisonStage({ script, data, caseId, caseTitle, navigat
     handPaper(sheet, { backdrop: 'desk' }); // 지면 양옆은 책상
     navigate('landing', { from: 'paper' });
   }
-  sheet.querySelector('.sheet-fold').addEventListener('click', toDesk);
+  // 읽기 화면: 우하단 "메인으로"(신문을 책상에 내려놓기), 왼쪽 귀 "다른 사건 보기"(신문을 접어 1면으로)
+  const toMain = element('button', 'primary-button paper-to-main is-clickable', '메인으로');
+  toMain.type = 'button';
+  toMain.addEventListener('click', toDesk);
+  stage.append(toMain);
+  sheet.querySelector('.sheet-ear-left').addEventListener('click', foldToList);
+  let folding = false;
+  function foldToList() {
+    if (folding) return;
+    folding = true;
+    if (reducedMotion()) { navigate('list'); return; }
+    sheet.style.transformOrigin = '50% 0';
+    sheet.animate([{ scale: '1 1', opacity: 1 }, { scale: '1 .5', opacity: .9, offset: .5 }, { scale: '1 .04', opacity: 0 }],
+      { duration: FOLD_MS, easing: 'cubic-bezier(.5, 0, .75, 0)', fill: 'forwards' }).finished
+      .catch(() => {}).then(() => { if (!closing) navigate('list', { from: 'desk' }); }); // 접는 사이 메인으로 갔다면(closing) 목록으로 되돌리지 않는다
+  }
+  // 리뷰하기(임시, BE-82 · 후속 이슈): 엽서 한 장이 떠오른다. 사건별 후기 페이지가 생기면 그 화면으로 바꾼다
+  function openReview() {
+    const layer = element('div', 'review-layer');
+    const card = element('section', 'review-postcard');
+    card.setAttribute('role', 'dialog');
+    card.setAttribute('aria-modal', 'true');
+    card.setAttribute('aria-labelledby', `review-title-${caseId}`);
+    const title = element('h2', 'review-title', '독자 엽서');
+    title.id = `review-title-${caseId}`;
+    const close = element('button', 'secondary-button', '닫기');
+    close.type = 'button';
+    const opener = document.activeElement; // 닫으면 포커스를 여기(리뷰하기 버튼)로 돌려준다
+    const shut = () => {
+      layer.remove();
+      document.removeEventListener('keydown', onKey);
+      if (opener?.isConnected) opener.focus({ preventScroll: true });
+    };
+    // 대화상자 안에 누를 수 있는 건 닫기 하나뿐이라, Tab은 그 자리에 머물게 해 뒤 무대로 빠지지 않게 한다
+    const onKey = (event) => {
+      if (event.key === 'Escape') shut();
+      else if (event.key === 'Tab') { event.preventDefault(); close.focus(); }
+    };
+    close.addEventListener('click', shut);
+    layer.addEventListener('click', (event) => { if (event.target === layer) shut(); });
+    document.addEventListener('keydown', onKey);
+    card.append(title, element('p', 'review-text', '이 사건을 체험한 소감을 엽서로 남기는 곳이에요. 곧 열려요.'), close);
+    layer.append(card);
+    document.body.append(layer);
+    close.focus();
+  }
   return stage;
 }
 

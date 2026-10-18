@@ -7,6 +7,10 @@ import { getDraft, saveDraft, clearDraft } from './verdictDraft.js';
 import { markAiRevealIntro } from '../ai/aiRevealIntro.js';
 
 const penaltyLabels = { DEATH: '사형', LIFE: '무기징역', PRISON: '징역', FINE: '벌금' };
+// 해금 책갈피의 얼굴(내로). shortcut: 원본 이미지 레포 PNG를 직접 읽는다(무대와 같음), 웹 webp 변환(WBS 7.6.8) 때 public 경로로 옮긴다
+const BOOKMARK_FACE = 'https://raw.githubusercontent.com/peanutboi710/NaeLawNamBul_Images/main/character/cuts/naero/icon/naero_icon_face-happy.png';
+const SIGN_MS = 900; // 서명 획이 다 그려지는 시간(verdict.css .sign-ink와 같게). 그다음 확정을 보낸다
+const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 // 원문을 유지해 빈 칸, 0, 잘못 입력한 값을 구별한다.
 function parseInteger(raw) {
@@ -48,6 +52,14 @@ function element(tag, className, text) {
   return node;
 }
 
+function picture(src) {
+  const image = element('img');
+  image.src = src;
+  image.alt = '';
+  image.addEventListener('error', () => image.remove(), { once: true });
+  return image;
+}
+
 function button(text, action, className = 'secondary-button') {
   const node = element('button', className, text);
   node.type = 'button';
@@ -77,7 +89,7 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
     root.replaceChildren(panel);
   }
 
-  function draw(form) {
+  function draw(form, review) {
     const draft = { reducing: false, reducedTo: null, ...(getDraft(caseId) ?? {
       penaltyType: '', prisonYears: '', prisonMonths: '', fineAmount: '',
       suspended: false, suspensionYears: '', suspensionMonths: '', factors: {},
@@ -88,15 +100,14 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
     };
     const rule = form.suspensionRule;
     let serverError = null;
-    let confirming = false;
-    let submitting = false;
-    let payload = null;
+    let submitting = false; // 서명 뒤 확정 요청 중: 모든 입력을 잠근다
     const inputs = {};
     const factorButtons = [];
     const header = element('header', 'case-topbar');
     const back = button('사건 기록 다시 보기', () => navigate('review'), 'back-button');
     header.append(element('strong', 'case-title', `판결 입력 · ${caseHeader.title}`), back);
-    // 파일철(FE-43): 위로 튀어나온 색인 탭으로 1페이지(판결) · 2페이지(참고 정보)를 넘긴다. 한 번에 한 장만 보인다
+    // 파일철(FE-43 · FE-48): 위로 튀어나온 색인 탭 다섯 장(사건 요약 → 참고 정보 → 판단 요소 → 최종 판결 → 확정). 한 번에 한 장만 보인다.
+    // 다음 장은 종이 오른쪽 아래 말린 모서리로만 넘기고, 탭으로는 이미 펼쳐 본 장까지만 돌아갈 수 있다. 확정은 마지막 장의 서명으로 한다
     const layout = element('main', 'verdict-layout verdict-folder');
     const main = element('section', 'verdict-main folder-sheet');
     main.append(element('h1', '', '당신의 판결'), element('p', 'verdict-intro muted', '지금까지 확인한 사건 정보와 양형기준을 참고해 판결해 주세요.'));
@@ -425,14 +436,39 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
     }
     factorGroup.append(factorList);
 
-    const footer = element('div', 'verdict-submit');
-    const reason = element('p', 'muted');
-    reason.id = `verdict-${caseId}-submit-reason`;
+    main.append(controls);
+
+    // ---- 마지막 장: 판결 확정(서명) ----
+    // 정한 내용을 한 번 더 보여 주고, 서명란을 누르면 서명이 그려진 뒤 확정한다(되돌릴 수 없다). 확정할 수 없으면 사유를 보여 주고 서명란이 움찔한다
+    const signPage = element('section', 'verdict-sign folder-sheet');
+    const signSummary = element('dl', 'sign-summary');
+    const cautions = element('ul', 'sign-cautions');
+    ['서명하면 판결을 바꿀 수 없어요.', '서명하면 AI 판결과 실제 판결이 차례로 공개돼요.', '양형기준 권고 범위는 정답이 아니라 참고 기준이에요.']
+      .forEach((text) => cautions.append(element('li', '', text)));
+    const reason = element('p', 'sign-reason');
+    reason.id = `verdict-${caseId}-sign-reason`;
     reason.setAttribute('aria-live', 'polite');
-    const openConfirmation = button('판결 확정하기', () => {
+    const submitError = element('p', 'field-error');
+    submitError.setAttribute('role', 'alert');
+    const signature = element('button', 'sign-line');
+    signature.type = 'button';
+    signature.setAttribute('aria-describedby', reason.id);
+    const signHint = element('span', 'sign-hint', '여기를 눌러 서명');
+    // 서명 획(장식): 손으로 흘려 쓴 한 줄. 눌렀을 때 획이 그려진다(움직임 줄이기면 바로 나타난다)
+    signature.insertAdjacentHTML('beforeend', `<svg class="sign-ink" viewBox="0 0 240 64" aria-hidden="true" focusable="false"><path pathLength="1" d="M8 44 C 22 14, 34 10, 36 30 S 30 58, 46 40 S 70 12, 74 30 S 72 52, 92 36 C 104 26, 110 22, 116 34 S 128 50, 140 30 C 150 16, 160 18, 158 34 S 170 52, 190 30 C 200 20, 214 22, 232 26"/></svg>`);
+    signature.prepend(signHint);
+    const signRow = element('div', 'sign-row');
+    signRow.append(element('span', 'sign-role', '재판장'), signature, element('span', 'sign-seal', '(서명)'));
+    signPage.append(element('h2', 'folder-title', '판결 확정'),
+      element('p', 'muted', '정한 내용을 확인하고 서명해 주세요.'), signSummary,
+      element('h3', 'sign-subtitle', '주의사항'), cautions, reason, signRow, submitError);
+    signature.addEventListener('click', sign);
+    let signed = false;
+    async function sign() {
+      if (submitting || signed || !active()) return;
       const value = update();
-      if (value.reason || confirming || submitting) return;
-      payload = {
+      if (value.reason) { nudge(signRow); signature.focus(); return; }
+      const payload = {
         penaltyType: draft.penaltyType,
         reducedTo: draft.reducing ? draft.reducedTo : null,
         prisonMonths: finalPenalty() === 'PRISON' ? value.sentence.value : null,
@@ -441,79 +477,120 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
         factors: Object.entries(draft.factors).map(([factorId, direction]) => ({ factorId: Number(factorId), direction })),
         freeOpinion: null,
       };
-      confirming = true;
-      submitError.textContent = '';
-      update();
-      cancel.focus();
-    }, 'primary-button');
-    openConfirmation.setAttribute('aria-describedby', reason.id);
-    footer.append(reason, openConfirmation);
-
-    const confirmation = element('section', 'confirmation-box');
-    const confirmationHeading = element('h2', '', '판결을 확정할까요?');
-    confirmationHeading.id = `verdict-${caseId}-confirmation-title`;
-    confirmation.setAttribute('aria-labelledby', confirmationHeading.id);
-    const submitError = element('p', 'field-error');
-    submitError.setAttribute('role', 'alert');
-    const confirmationActions = element('div', 'confirmation-actions');
-    const cancel = button('다시 검토하기', () => {
-      if (submitting) return;
-      confirming = false;
-      payload = null;
-      update();
-      openConfirmation.focus();
-    });
-    const submit = button('확정하기', async () => {
-      if (submitting || !confirming || !payload || !active()) return;
+      signed = true;
       submitting = true;
       submitError.textContent = '';
+      // 서명하는 동안 카드 안쪽 스크롤을 지금 자리에 묶어 둔다(정한 내용을 다시 그리거나 상태가 바뀌어도 위로 튀지 않게)
+      const scroller = layout.closest('.scroll-body');
+      const keep = scroller?.scrollTop ?? 0;
+      const hold = () => { if (scroller && submitting && Math.abs(scroller.scrollTop - keep) > 1) scroller.scrollTop = keep; };
+      scroller?.addEventListener('scroll', hold);
+      signRow.classList.add('is-signed');
       update();
+      hold();
+      requestAnimationFrame(hold);
+      // 서명이 다 그려진 뒤에 확정을 보낸다(되돌릴 수 없는 일이라 서명하는 순간을 눈으로 보게 한다)
+      if (!reducedMotion()) await new Promise((resolve) => { setTimeout(resolve, SIGN_MS); });
       try {
         await api.postVerdict(caseId, payload);
         clearDraft(caseId);
         markAiRevealIntro(caseId); // S-07에서 로딩 · 안내를 한 번 보여 준다 (7.7.4)
-        if (active()) navigate('ai');
+        if (active()) navigate('ai', {}, { keepScroll: true }); // 서명한 자리 그대로 AI 판결 무대로(맨 위로 튀지 않게)
       } catch (error) {
         if (!active()) return;
+        signed = false;
+        signRow.classList.remove('is-signed'); // 확정하지 못했으면 서명을 지운다
         if (error?.code === 'INVALID_STATE') {
           showError(error);
         } else if (['OUT_OF_ALLOWED_RANGE', 'INVALID_SUSPENSION'].includes(error?.code)) {
           serverError = error.code;
-          confirming = false;
-          payload = null;
         } else {
           submitError.textContent = '판결을 확정하지 못했어요. 잠시 후 다시 시도해 주세요.';
         }
       } finally {
         submitting = false;
+        scroller?.removeEventListener('scroll', hold);
         if (active() && main.isConnected) {
           update();
           if (serverError) {
-            showPage(2);
+            showPage(3);
             const type = finalPenalty();
             const target = serverError === 'INVALID_SUSPENSION' && !suspensionFields.hidden && !suspensionArea.hidden
               ? yearButtons[0]?.yearButton ?? checkbox : type === 'PRISON' ? inputs.prisonYears : type === 'FINE' ? inputs.fineAmount
                 : radios.querySelector('input:checked') ?? radios.querySelector('input');
             target.focus();
-          } else if (confirming) submit.focus();
+          } else if (!signed) signature.focus();
         }
       }
-    }, 'primary-button');
-    confirmationActions.append(cancel, submit);
-    confirmation.append(confirmationHeading, element('p', '', '확정하면 판결을 바꿀 수 없고, AI 판결과 실제 판결이 차례로 공개돼요.'), submitError, confirmationActions);
-    main.append(controls, footer, confirmation);
+    }
+    // 정한 내용 정리(서명 장): 형벌 · 형량 · 집행유예 · 무겁게 / 가볍게 본 요소
+    function renderSignSummary(value) {
+      const type = finalPenalty();
+      const sentence = value.sentence.value;
+      const penalty = !draft.penaltyType ? '아직 정하지 않았어요'
+        : ['DEATH', 'LIFE'].includes(type) ? penaltyLabels[type]
+          : sentence === null || value.sentence.invalid ? `${penaltyLabels[type] ?? penaltyLabels[draft.penaltyType]} (형량을 아직 정하지 않았어요)`
+            : type === 'PRISON' ? `징역 ${formatMonths(sentence)}` : `벌금 ${formatMoney(sentence)}`;
+      const reduced = draft.reducing && draft.reducedTo ? `${penaltyLabels[draft.penaltyType]}에서 감경` : '';
+      const suspension = draft.suspended && value.suspension.value ? `${formatMonths(value.suspension.value)}` : '붙이지 않음';
+      const labels = (direction) => form.factors.filter((factor) => draft.factors[factor.factorId] === direction).map((factor) => factor.label);
+      const rows = [['형벌 · 형량', penalty], ...(reduced ? [['감경', reduced]] : []), ['집행유예', suspension],
+        ['무겁게 본 요소', labels('UP')], ['가볍게 본 요소', labels('DOWN')]];
+      // 내용이 그대로면 다시 그리지 않는다(통째로 갈아끼우면 브라우저의 스크롤 기준점이 사라져 카드가 튈 수 있다)
+      const key = JSON.stringify(rows);
+      if (signSummary.dataset.key === key) return;
+      signSummary.dataset.key = key;
+      signSummary.replaceChildren(...rows.flatMap(([term, detail]) => {
+        const dd = element('dd');
+        if (Array.isArray(detail)) {
+          if (detail.length) { const list = element('ul'); detail.forEach((text) => list.append(element('li', '', text))); dd.append(list); } else dd.textContent = '없음';
+        } else dd.textContent = detail;
+        return [element('dt', '', term), dd];
+      }));
+    }
+
+    // ---- 첫 장: 사건 요약(4막 판결 전 정리를 옮김) — 사건 개요 · 핵심 사실(API 6). 못 받으면 이 장만 안내하고 나머지는 그대로 쓴다 ----
+    const summaryPage = element('section', 'verdict-summary folder-sheet');
+    summaryPage.append(element('h2', 'folder-title', '사건 요약'));
+    const overview = review?.sections?.find(({ step }) => step === 1)?.items ?? [];
+    if (overview.length || review?.summary?.length) {
+      if (overview.length) {
+        const block = element('section', 'summary-block');
+        block.append(element('h3', 'sign-subtitle', '사건 개요'), ...overview.map((item) => element('p', '', item.content)));
+        summaryPage.append(block);
+      }
+      if (review?.summary?.length) {
+        const block = element('section', 'summary-block');
+        const list = element('ul', 'summary-facts');
+        review.summary.forEach((item) => list.append(element('li', '', item)));
+        block.append(element('h3', 'sign-subtitle', '핵심 사실'), list);
+        summaryPage.append(block);
+      }
+    } else summaryPage.append(element('p', 'muted', '사건 요약을 불러오지 못했어요. 참고 정보와 사건 기록 다시 보기로 이어서 판결할 수 있어요.'));
 
     const sidebar = element('section', 'verdict-sidebar folder-sheet');
     sidebar.append(element('h2', 'visually-hidden', '참고 정보'));
     const lawBox = element('div');
     renderRecommendedRangeBar(sidebar, { law, showTrack: false });
     sidebar.insertBefore(lawBox, sidebar.children[1]);
-    // 색인 탭(ARIA 탭): 누르거나 ←→ · Home · End로 장을 넘긴다. 확정 확인 중에도 참고 정보는 볼 수 있다
+    // 색인 탭(ARIA 탭): 누르거나 ←→ · Home · End로 장을 고른다. 펼쳐 본 장(reached)과 그 바로 다음 장까지 열린다.
+    // 마지막 확정 장은 판결이 다 정해졌을 때(ready)만 열리고, 안 되면 탭이 움찔하며 빠진 칸이 반짝인다
     const tabList = element('div', 'folder-tabs');
     tabList.setAttribute('role', 'tablist');
     tabList.setAttribute('aria-label', '판결 파일철');
-    // 장 순서: 1 참고 정보 → 2 판단 요소 → 3 최종 판결. 앞의 두 장 맨 아래에 다음 장으로 넘기는 버튼을 둔다
-    const pages = [[sidebar, '참고 정보'], [factorPage, '판단 요소'], [main, '최종 판결']].map(([panel, title], i) => {
+    const denied = element('p', 'visually-hidden');
+    denied.setAttribute('aria-live', 'polite');
+    let reached = 0; // 펼쳐 본 가장 뒤 장
+    let ready = false; // 확정 장을 열 수 있는지: 형벌 · 형량(범위 안) · 감경 후 형벌 · 집행유예 기간이 다 정해졌는지(update가 정한다)
+    let missing = null; // 확정을 막는 칸(반짝일 곳)
+    let missingReason = '';
+    const LAST = 4;
+    // 진행 책갈피: 펼쳐 본 가장 뒤 장(reached)의 탭 바로 뒤에 끼워 둔 내로 얼굴 책갈피(장식). 잠금이 아니라 진행을 표시하므로
+    // 늘 보이고, 뒤로 넘겨도 자리를 지킨다(마지막 장까지 오면 탭 줄 끝). 캐릭터 고르기는 마이페이지 후속
+    const bookmark = element('span', 'folder-bookmark');
+    bookmark.setAttribute('aria-hidden', 'true');
+    bookmark.append(picture(BOOKMARK_FACE));
+    const pages = [[summaryPage, '사건 요약'], [sidebar, '참고 정보'], [factorPage, '판단 요소'], [main, '최종 판결'], [signPage, '확정']].map(([panel, title], i) => {
       const tab = element('button', 'folder-tab');
       tab.type = 'button';
       tab.id = `verdict-${caseId}-tab-${i + 1}`;
@@ -523,24 +600,68 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       panel.setAttribute('role', 'tabpanel');
       panel.setAttribute('aria-labelledby', tab.id);
       tab.append(element('span', 'folder-tab-no', String(i + 1)), element('span', '', title));
-      tab.addEventListener('click', () => showPage(i));
+      tab.addEventListener('click', () => goTo(i));
       tabList.append(tab);
-      return { tab, panel };
+      return { tab, panel, title };
     });
     tabList.addEventListener('keydown', (event) => {
       const now = pages.findIndex(({ tab }) => tab === document.activeElement);
-      const next = { ArrowRight: now + 1, ArrowLeft: now - 1, Home: 0, End: pages.length - 1 }[event.key];
+      const next = { ArrowRight: now + 1, ArrowLeft: now - 1, Home: 0, End: frontier() }[event.key];
       if (now < 0 || next === undefined) return;
       event.preventDefault();
-      showPage((next + pages.length) % pages.length, true);
+      goTo(Math.max(0, Math.min(pages.length - 1, next)), true);
     });
+    const canOpen = (i) => (i === LAST ? ready && reached >= LAST - 1 : i <= reached + 1);
+    const frontier = () => pages.reduce((far, page, i) => (canOpen(i) ? i : far), 0); // 지금 열 수 있는 가장 뒤 장
+    function goTo(index, focus = false) {
+      if (!canOpen(index)) {
+        nudge(pages[index].tab);
+        if (index === LAST && reached >= LAST - 1) {
+          flash(missing);
+          denied.textContent = `확정 장은 아직 열 수 없어요. ${missingReason}`;
+        } else denied.textContent = `${pages[index].title} 장은 아직 열 수 없어요. 앞 장을 먼저 펼쳐 주세요.`;
+        return;
+      }
+      showPage(index, focus);
+    }
+    // 반짝임: 확정을 막는 칸(예: 1. 형벌 종류)을 두 번 밝혀 어디를 채워야 하는지 보여 준다
+    function flash(node) {
+      if (!node) return;
+      node.classList.remove('is-flash');
+      void node.offsetWidth;
+      node.classList.add('is-flash');
+      if (reducedMotion()) setTimeout(() => node.classList.remove('is-flash'), 1400); // 움직임 줄이기: 반짝임 대신 테두리만 잠시
+      else node.addEventListener('animationend', () => node.classList.remove('is-flash'), { once: true });
+    }
+    // 탭 잠금 · 책갈피를 지금 상태에 맞춘다(장을 넘길 때 · 판결 값이 바뀔 때)
+    function refreshTabs() {
+      pages.forEach(({ tab }, i) => tab.setAttribute('aria-disabled', String(!canOpen(i))));
+      const before = pages[reached + 1]?.tab ?? null; // 마지막 장이면 탭 줄 끝
+      if (bookmark.parentNode !== tabList || bookmark.nextSibling !== before) {
+        const moved = bookmark.parentNode === tabList;
+        tabList.insertBefore(bookmark, before);
+        if (moved && !reducedMotion()) bookmark.animate([{ translate: '0 -40%', opacity: 0 }, { translate: '0 0', opacity: 1 }], { duration: 240, easing: 'cubic-bezier(.2, .8, .2, 1)' });
+      }
+    }
+    // 움찔: 안 되는 동작(아직 안 본 장 · 확정할 수 없는 서명)을 짧게 흔들어 알린다
+    function nudge(node) {
+      if (reducedMotion()) return;
+      node.classList.remove('is-denied');
+      void node.offsetWidth; // 연달아 눌러도 다시 흔들리게
+      node.classList.add('is-denied');
+      node.addEventListener('animationend', () => node.classList.remove('is-denied'), { once: true });
+    }
     function showPage(index, focus = false) {
+      reached = Math.max(reached, index);
       const moving = pages[index].panel.hidden && pages.some(({ panel }) => !panel.hidden);
       pages.forEach(({ tab, panel }, i) => {
         tab.setAttribute('aria-selected', String(i === index));
         tab.tabIndex = i === index ? 0 : -1;
+        tab.toggleAttribute('data-autofocus', i === index); // 무대가 판결 카드를 열 때 이 탭에 포커스를 준다(←→ · Space가 바로 먹게)
         panel.hidden = i !== index;
       });
+      refreshTabs();
+      denied.textContent = '';
       if (focus) pages[index].tab.focus({ preventScroll: true });
       // 장을 넘기면 새 장의 맨 위부터 보인다: 무대 카드 안 스크롤을 처음으로 올리고, 파일철 머리가 화면 위로 지나갔으면 화면도 올린다
       if (moving) {
@@ -549,15 +670,18 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
         if (layout.getBoundingClientRect().top < 0) layout.scrollIntoView({ block: 'start' });
       }
     }
-    [[sidebar, '판단 요소로 넘기기', 1], [factorPage, '최종 판결로 넘기기', 2]].forEach(([panel, label, to]) => {
-      const row = element('div', 'folder-next');
-      row.append(button(label, () => showPage(to, true)));
-      panel.append(row);
+    // 말린 모서리: 마지막 장을 뺀 모든 장의 오른쪽 아래. 눌러서 다음 장으로 넘긴다(다음 장을 여는 유일한 방법)
+    pages.slice(0, -1).forEach(({ panel }, i) => {
+      const curl = element('button', 'folder-curl');
+      curl.type = 'button';
+      curl.setAttribute('aria-label', `다음 장으로 넘기기: ${pages[i + 1].title}`);
+      curl.addEventListener('click', () => goTo(i + 1, true)); // 최종 판결 → 확정도 판결이 다 정해져야 넘어간다
+      panel.append(curl);
     });
     showPage(0);
     const folderBody = element('div', 'folder-body');
-    folderBody.append(sidebar, factorPage, main);
-    layout.append(tabList, folderBody);
+    folderBody.append(...pages.map(({ panel }) => panel));
+    layout.append(tabList, denied, folderBody);
     // 대본의 제목이 사건 제목과 같을 때만 무대를 쓴다(S-03 · S-04와 같은 규칙, 사건 번호는 DB마다 다를 수 있다)
     const candidate = SCRIPTS[caseId];
     const script = candidate?.title === caseHeader.title ? candidate : undefined;
@@ -663,7 +787,13 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       }
       rangeSlider.classList.toggle('is-off', !sliding);
       entry.classList.toggle('is-off', !sliding);
-      for (const key of ['prisonYears', 'prisonMonths', 'fineAmount']) inputs[key].disabled = !sliding;
+      for (const key of ['prisonYears', 'prisonMonths', 'fineAmount']) {
+        inputs[key].disabled = !sliding;
+        // 잠긴 칸에는 앞서 넣은 숫자를 보이지 않게 비운다(draft 값은 그대로라 다시 고르면 되살아난다)
+        inputs[key].placeholder = sliding ? '' : '—';
+        const shownValue = sliding ? draft[key] : '';
+        if (inputs[key].value !== shownValue) inputs[key].value = shownValue;
+      }
       if (sliding) {
         const shown = present ? sentence.value : option.allowedMin;
         marker.style.left = `${Math.max(0, Math.min(100, shown / trackMax * 100))}%`;
@@ -700,23 +830,28 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
         toggle.setAttribute('aria-pressed', String((draft.factors[factorId] ?? 'NONE') === direction));
         row.classList.toggle('is-selected', Boolean(draft.factors[factorId]));
       }
-      const disabledReason = pendingReduction ? '감경 후 형벌을 골라 주세요.'
+      const disabledReason = !option ? '형벌 종류를 골라 주세요.' : pendingReduction ? '감경 후 형벌을 골라 주세요.'
         : !fixed && !present ? '형량을 입력해 주세요.'
         : (!fixed && !inRange) || serverError === 'OUT_OF_ALLOWED_RANGE' ? '선고할 수 있는 범위 안으로 형량을 조정해 주세요.'
           : suspensionInvalid || serverError === 'INVALID_SUSPENSION' ? '집행유예 기간을 골라 주세요.' : '';
-      reason.textContent = disabledReason;
-      openConfirmation.disabled = Boolean(disabledReason) || confirming;
-      controls.disabled = confirming;
-      factorGroup.disabled = confirming;
-      back.disabled = confirming;
-      confirmation.hidden = !confirming;
-      cancel.disabled = submitting;
-      submit.disabled = submitting;
-      submit.textContent = submitting ? '확정 중…' : '확정하기';
-      confirmation.setAttribute('aria-busy', String(submitting));
+      reason.textContent = disabledReason ? `확정할 수 없어요. ${disabledReason}` : '';
+      controls.disabled = submitting;
+      factorGroup.disabled = submitting;
+      back.disabled = submitting;
+      // disabled로 바꾸면 눌린 서명란이 포커스를 잃고 카드가 맨 위로 튄다 — 누름은 sign()이 막고, 상태만 알린다
+      signature.setAttribute('aria-disabled', String(submitting));
+      signHint.textContent = submitting ? '확정하는 중…' : '여기를 눌러 서명';
+      signPage.setAttribute('aria-busy', String(submitting));
       lawBox.replaceChildren();
       renderLawInfoBox(lawBox, { law, penaltyType: draft.penaltyType || 'PRISON' });
-      return { sentence, suspension, reason: disabledReason };
+      ready = !disabledReason;
+      missingReason = disabledReason;
+      missing = !option ? penaltyGroup : pendingReduction ? reductionArea
+        : (!fixed && (!present || !inRange)) || serverError === 'OUT_OF_ALLOWED_RANGE' ? sentenceGroup : disabledReason ? suspensionArea : null;
+      refreshTabs();
+      const value = { sentence, suspension, reason: disabledReason };
+      renderSignSummary(value);
+      return value;
     }
     update();
   }
@@ -728,8 +863,9 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
     message.setAttribute('role', 'status');
     root.replaceChildren(message);
     try {
-      const form = await api.getVerdictForm(caseId);
-      if (active()) draw(form);
+      // 사건 요약 장(API 6)은 못 받아도 판결은 할 수 있게 따로 받는다
+      const [form, review] = await Promise.all([api.getVerdictForm(caseId), api.getReview(caseId).catch(() => null)]);
+      if (active()) draw(form, review);
     } catch (error) { showError(error); }
     finally { loading = false; }
   }

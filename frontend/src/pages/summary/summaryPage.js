@@ -1,26 +1,15 @@
-import { renderLawInfoBox } from '../../components/lawInfoBox.js';
-import { renderRecommendedRangeBar } from '../../components/recommendedRangeBar.js';
-import { renderContent } from '../../utils/contentLines.js';
-import { renderStage } from '../../components/stage.js';
-import { SCRIPTS } from '../../content/scripts.js';
-import { restartMock, jumpActMock } from '../overview/overviewPage.js';
-
-export async function renderSummaryPage(container, { caseId, caseHeader, api, navigate }) {
+// S-05 판결 전 최종 정리(4막). FE-48: 내용(사건 개요 · 핵심 사실)은 5막 파일철 첫 장 "사건 요약"으로 옮겼다.
+// 서버 진행 상태(REVIEWED → S-05)와 주소는 그대로 두고, 이 화면에 오면 기록을 바꿔 판결 입력(S-06)으로 바로 넘긴다.
+// 막 칩 줄의 "4막"도 남겨 둔다(주소 이름을 바꾸고 막을 다시 묶는 방식은 추후 검토).
+export async function renderSummaryPage(container, { caseId, api, navigate }) {
   const root = document.createElement('div');
   root.className = 'summary-page';
   container.replaceChildren(root);
   const active = () => container.contains(root);
-  let loading = false;
   function element(tag, className, text) {
     const node = document.createElement(tag);
     if (className) node.className = className;
     if (text !== undefined) node.textContent = text;
-    return node;
-  }
-  function button(text, action, className = 'secondary-button') {
-    const node = element('button', className, text);
-    node.type = 'button';
-    node.addEventListener('click', action);
     return node;
   }
   function message(text, action) {
@@ -30,105 +19,33 @@ export async function renderSummaryPage(container, { caseId, caseHeader, api, na
     if (action) panel.append(action);
     root.replaceChildren(panel);
   }
-  // 4막 무대의 정리 카드(흐름 목업): 핵심 사실만. 적용 법률 · 법정형 · 권고 범위는 5막(S-06)이 보여 주고,
-  // 양측 주장은 3막에서 이미 봤으므로 다시 싣지 않는다
-  function summaryCard(data) {
-    const card = element('div', 'card-body summary-card');
-    const facts = element('ul', 'summary-list');
-    data.summary.forEach((item) => facts.append(element('li', '', item)));
-    card.append(element('p', 'k', '판결 전 최종 정리'), element('h3', '', '핵심 사실'), facts);
-    return card;
-  }
-  // 4막 판결 전 정리(흐름 목업). 마지막 장면을 떠나면 판결 입력(S-06)으로 간다
-  function drawStage(data, script) {
-    root.classList.add('has-stage');
-    const header = element('header', 'case-topbar');
-    header.append(button('← 이전 단계', () => navigate('review'), 'back-button'),
-      element('strong', 'case-title', caseHeader.title), element('span', 'case-badge', '최종 정리'));
-    const main = element('div', 'review-main');
-    main.append(element('h1', 'page-heading visually-hidden', '판결 전 최종 정리'), renderStage({
-      script,
-      order: ['4'],
-      cards: { summary: summaryCard(data) },
-      onRestart: restartMock(caseId),
-      onJump: jumpActMock(caseId),
-      onConfirm: async () => {
-        navigate('verdict');
-        return false;
-      },
-    }));
-    const layout = element('main', 'review-layout');
-    layout.append(main);
-    root.replaceChildren(header, layout);
-  }
-  function draw(data) {
-    if (data.status !== 'REVIEWED') {
-      message('사건 정보를 모두 확인한 뒤 볼 수 있어요.', button('사건 정보 확인으로', () => navigate('review')));
-      return;
-    }
-    // 대본의 제목이 사건 제목과 같을 때만 무대를 쓴다(S-03 · S-04와 같은 규칙, 사건 번호는 DB마다 다를 수 있다)
-    const candidate = SCRIPTS[caseId];
-    const script = candidate?.title === caseHeader.title ? candidate : undefined;
-    if (script) { drawStage(data, script); return; }
-    const header = element('header', 'case-topbar');
-    header.append(button('← 이전 단계', () => navigate('review'), 'back-button'), element('strong', 'case-title', caseHeader.title), element('span', 'case-badge', '최종 정리'));
-    const progress = element('div', 'top-progress');
-    const meter = element('progress');
-    meter.max = 6;
-    meter.value = 5;
-    meter.setAttribute('aria-label', '최종 정리 진행');
-    progress.append(meter, element('span', '', '5 / 6'));
-    header.append(progress);
-    const main = element('main', 'summary-main');
-    const intro = element('div', 'summary-intro');
-    intro.append(element('h1', '', '판결 전 최종 정리'), element('p', 'muted', '지금까지 확인한 내용을 한 번에 다시 검토한 뒤 판결로 넘어갑니다.'));
-    const layout = element('div', 'summary-layout');
-    const facts = element('div', 'summary-facts');
-    const overview = element('section', 'summary-block');
-    overview.append(element('h2', '', '사건 개요'));
-    data.sections.find(({ step }) => step === 1)?.items.forEach((item) => overview.append(element('p', '', item.content)));
-    const summary = element('section', 'summary-block');
-    summary.append(element('h2', '', '핵심 사실 요약'));
-    const list = element('ul', 'summary-list');
-    data.summary.forEach((item) => list.append(element('li', '', item)));
-    summary.append(list);
-    const argumentsBox = element('section', 'summary-block');
-    argumentsBox.append(element('h2', '', '양측 주장'));
-    const grid = element('div', 'argument-grid');
-    data.sections.find(({ step }) => step === 3)?.items.forEach((item) => {
-      const card = element('section', 'argument-card');
-      card.append(element('h3', '', item.title));
-      if (item.content) card.append(renderContent(item.content));
-      grid.append(card);
-    });
-    argumentsBox.append(grid);
-    facts.append(overview, summary, argumentsBox);
-    const law = element('aside', 'summary-law');
-    law.setAttribute('aria-label', '법률 및 양형기준 참고');
-    renderLawInfoBox(law, { law: data.law });
-    renderRecommendedRangeBar(law, { law: data.law });
-    layout.append(facts, law);
-    const actions = element('div', 'summary-actions');
-    actions.append(button('전체 기록 다시 보기', () => navigate('review')), button('판결 내리러 가기', () => navigate('verdict'), 'primary-button'));
-    main.append(intro, layout, actions);
-    root.replaceChildren(header, main);
-  }
+  let loading = false;
   async function load() {
     if (loading || !active()) return;
     loading = true;
-    message('사건 정보를 불러오는 중…');
+    message('판결 입력으로 넘어가는 중…');
     try {
       const data = await api.getReview(caseId);
-      if (active()) draw(data);
+      if (!active()) return;
+      if (data.status === 'REVIEWED') { navigate('verdict', {}, { replace: true }); return; }
+      const back = element('button', 'secondary-button', '사건 정보 확인으로');
+      back.type = 'button';
+      back.addEventListener('click', () => navigate('review'));
+      message('사건 정보를 모두 확인한 뒤 볼 수 있어요.', back);
     } catch (error) {
       if (!active()) return;
       if (error?.code === 'INVALID_STATE') {
         message(`지금 단계에서는 이 화면을 볼 수 없어요. (현재 상태: ${error.currentStatus})`);
         console.info('현재 상태:', error.currentStatus);
       } else {
-        message('정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.', button('다시 시도', load));
+        const retry = element('button', 'secondary-button', '다시 시도');
+        retry.type = 'button';
+        retry.addEventListener('click', load);
+        message('정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.', retry);
       }
-    } finally { loading = false; }
+    } finally {
+      loading = false;
+    }
   }
   await load();
 }

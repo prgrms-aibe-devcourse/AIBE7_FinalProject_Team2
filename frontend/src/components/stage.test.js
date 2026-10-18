@@ -36,6 +36,13 @@ test('시작 의상과 다른 배역의 대사가 뒤에 나와도, 그 대사 �
   assert.equal(spoken.chips.naero, 'A씨 역');
 });
 
+test('대사 · 이유 없이 의상을 바꾸지 않는다: 3막(대본 5막) 최후진술에서 입은 A씨 역 의상을 판결 장면까지 유지(FE-48)', () => {
+  const verdict = flatten(script.acts, ['5']);
+  const from = verdict.findIndex((s) => s.say === 'nambul' && s.role === 'A씨 역');
+  assert.ok(from >= 0);
+  verdict.slice(from).forEach((s) => assert.equal(s.look.nambul, 'role:actor', `${s.text ?? s.card} 장면에서 갈아입었다`));
+});
+
 test('한 사건 안에서 같은 배역(검사 · 변호인 · 판사 · 사건 속 인물)은 한 캐릭터만 맡는다(10/16 결정)', () => {
   const all = flatten(script.acts, Object.keys(script.acts));
   const byRole = new Map();
