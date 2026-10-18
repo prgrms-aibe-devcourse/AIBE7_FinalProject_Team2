@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { PdfReadError, extractPdfText, joinItems } from './adminPdf.js';
@@ -60,4 +61,29 @@ test('parseJudgmentText: 날짜 글을 사건번호로 읽지 않고, 못 찾은
 test('parseJudgmentText: 글자를 띄운 첫머리와 날짜가 앞에 오는 서식도 읽는다', () => {
   const text = '서 울 중 앙 지 방 법 원\n제 2 7 형 사 부\n판 결\n사 건 2023고합123 살인\n피 고 인 김 모 씨\n2025. 3. 14. 선고';
   assert.deepEqual(parseJudgmentText(text), { caseNumber: '2023고합123', crimeType: 'MURDER', courtName: '서울중앙지방법원', decidedAt: '2025-03-14', courtLevel: 'FIRST' });
+});
+
+// 회귀: 한글 글꼴을 PDF에 넣지 않은 문서(국내 판결문 PDF에 흔함)는 글자표(cMap) 없이는 "글자를 읽지 못했어요"가 됐다
+const cmapUrl = fileURLToPath(new URL('../../../public/pdfjs/cmaps/', import.meta.url));
+const cmapFixture = () => readFileSync(new URL('./samples/fixture-cmap-font.pdf', import.meta.url));
+
+test('글꼴이 PDF 안에 없는 한글 문서: 글자표가 없으면 못 읽고, 있으면 읽는다', async () => {
+  assert.equal(await errorCode(extractPdfText(cmapFixture(), pdfjs)), 'NO_TEXT');
+  const { text } = await extractPdfText(cmapFixture(), pdfjs, { cMapUrl: cmapUrl });
+  assert.match(text, /서울중앙지방법원/);
+  assert.deepEqual(parseJudgmentText(text), { caseNumber: '2023고합123', crimeType: 'FRAUD', courtName: '서울중앙지방법원', decidedAt: '2025-03-14', courtLevel: 'FIRST' });
+});
+
+// 회귀: 사파리는 ReadableStream의 async iterator가 없어 getTextContent가 TypeError로 죽었다. 그 조건을 흉내 내서 확인한다
+test('ReadableStream async iterator가 없는 브라우저(사파리)에서도 글자를 뽑는다', async () => {
+  const key = Symbol.asyncIterator;
+  const saved = Object.getOwnPropertyDescriptor(ReadableStream.prototype, key);
+  delete ReadableStream.prototype[key];
+  try {
+    assert.equal(ReadableStream.prototype[key], undefined);
+    const { text } = await extractPdfText(sample(), pdfjs);
+    assert.match(text, /가상지방법원/);
+  } finally {
+    if (saved) Object.defineProperty(ReadableStream.prototype, key, saved);
+  }
 });
