@@ -10,6 +10,8 @@ const NAVIGATE_AT_MS = 200; // 이 시점에 마이페이지로 이동한다(잔
 const TABLE_FADE_DELAY_MS = 60; // 이동한 마이페이지가 그려질 틈을 주고 본뜬 책상을 걷는다(책상이 바뀌기 시작: 0.26초)
 const TABLE_GONE_MS = 720; // 본뜬 책상이 다 사라지는 시점(잔이 가운데에 서기 전)
 
+const BELOW_FOLD = '.feature-section, .site-footer'; // 메인 화면에서 첫 화면 아래에 있는 구역
+
 function div(className) {
   const node = document.createElement('div');
   node.className = className;
@@ -30,7 +32,9 @@ export function flyCoffee(onNavigate, page) {
   layer.inert = true;
   // 책상 본뜨기: 화면이 바뀌어도 잠시 그대로 남겨 두었다가 페이드아웃한다(같은 id가 겹치지 않게 id는 뗀다)
   const table = div('coffee-fly-table');
-  const copy = page.cloneNode(true);
+  // 루트는 얕게(클래스만 따라오게) 복제하고, 화면 아래 서비스 소개 · 푸터는 빼서 클릭마다 큰 트리를 복제하지 않는다
+  const copy = page.cloneNode(false);
+  copy.append(...[...page.children].filter((child) => !child.matches(BELOW_FOLD)).map((child) => child.cloneNode(true)));
   copy.removeAttribute('id');
   copy.querySelectorAll('[id]').forEach((node) => node.removeAttribute('id'));
   const box = page.getBoundingClientRect();
