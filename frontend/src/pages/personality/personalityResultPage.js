@@ -1,36 +1,13 @@
 import { button, element } from '../../components/siteLayout.js';
 import { renderToleranceScale } from '../../components/toleranceScale.js';
 import { descriptionSections, noticeBlock, renderFolder, resultPages, setFolderTurnFrom, sheetMessage, takeFolderTurn, TOLERANCE_NOTE, turnPage, typeCard } from './personalityParts.js';
+import { renderAxisRow } from '../../components/axisRow.js';
 import { AXES } from '../../utils/personalityAxes.js';
 
 // S-16 성향 결과 — 내 결과 (WBS 7.6.5, FE-42 디자인). 공유 버튼은 해시 주소(/test/types/{shareId})를 공유한다(FR-8-6).
 // 문구는 docs/personality-test-content.md 4 · 5장. 캐릭터 이미지는 유형마다 하나(personality-image-numbers.md, 01 ~ 32).
 // 결과지 두 장(탭): 결과 = 유형 카드 · 가치관 4축 · 관용 지수 / 풀이 = 일상 · 판결 설명 · 안내 · 다음 행동.
-// 4축 그래프: 축마다 양쪽 성향의 비중(관대 쪽 비중 = axisScores). 엄격 쪽 남색 · 관대 쪽 갈색, 둘 다 진하게 막대를 가득 채운다.
-// 두 색은 어느 쪽이 좋다는 뜻이 아니라 양쪽을 구분할 뿐이다(관용 지수는 높을수록 좋은 게 아님, FR-8-4).
-const pct = (ratio) => Math.round(ratio * 100);
-
-function axisRow(axis, lenientRatio) {
-  const strict = pct(1 - lenientRatio);
-  const lenient = 100 - strict;
-  const row = element('li', 'axis-row');
-  row.append(element('p', 'axis-label', axis.label));
-  const labels = element('div', 'axis-ends');
-  labels.append(
-    element('span', `is-strict${strict > lenient ? ' is-major' : ''}`, `${axis.strict.name} ${strict}%`),
-    element('span', `is-lenient${lenient > strict ? ' is-major' : ''}`, `${lenient}% ${axis.lenient.name}`),
-  );
-  const bar = element('div', `axis-bar${strict > 0 && lenient > 0 ? ' has-split' : ''}`); // 양쪽이 다 있을 때만 사이 줄
-  bar.setAttribute('role', 'img');
-  bar.setAttribute('aria-label', `${axis.strict.name} ${strict}%, ${axis.lenient.name} ${lenient}%`);
-  const left = element('span', 'is-strict');
-  const right = element('span', 'is-lenient');
-  left.style.flexGrow = String(strict); // 0%인 쪽은 막대에서 빠지고 다른 쪽이 가득 채운다
-  right.style.flexGrow = String(lenient);
-  bar.append(left, right);
-  row.append(labels, bar);
-  return row;
-}
+// 4축 그래프: components/axisRow.js(마이페이지와 같이 쓴다). 엄격 쪽 남색 · 관대 쪽 갈색, 둘 다 진하게 막대를 가득 채운다.
 
 // 공유 주소는 유형 설명만 열린다(개인 응답 · 점수 없음, FR-8-6). 이미지 공유(링크 미리보기)는 OG(COMMON-32)가 맡는다
 // 공유 주소는 서버가 준 해시 값(shareId)이다. 유형 코드는 주소에도 드러나지 않는다
@@ -98,7 +75,7 @@ export async function renderPersonalityResultPage(container, { api, navigate }) 
     const graph = element('section', 'result-section');
     graph.append(element('h2', '', '가치관 4축'));
     const list = element('ul', 'axis-list');
-    AXES.forEach((axis) => list.append(axisRow(axis, axisScores[axis.key])));
+    AXES.forEach((axis) => list.append(renderAxisRow(axis, axisScores[axis.key])));
     graph.append(list, toleranceBlock(type.tolerance));
 
     const actions = element('div', 'result-actions');

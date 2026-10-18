@@ -79,18 +79,6 @@
   background: radial-gradient(ellipse at 10% 0%, color-mix(in srgb, var(--color-desk-pad-glow) 16%, transparent), transparent 50%), var(--color-desk-pad);
   box-shadow: inset 0 0 0 3px var(--color-desk-pad-edge), 2px 4px 6px color-mix(in srgb, var(--color-desk-shadow) 35%, transparent);
 }
-.landing-page .desk-mug {
-  position: absolute; left: 115px; top: 25px; width: 120px; height: 120px; border-radius: 50%; background: var(--color-desk-mug);
-  box-shadow: inset 0 0 0 9px var(--color-desk-mug-rim), 9px 11px 9px color-mix(in srgb, var(--color-desk-shadow) 40%, transparent);
-}
-.landing-page .desk-mug::before {
-  content: ''; position: absolute; inset: 20px; border-radius: 50%;
-  background: radial-gradient(circle at 38% 34%, var(--color-desk-coffee-light) 0 8%, var(--color-desk-coffee) 30%, var(--color-desk-coffee-dark));
-}
-.landing-page .desk-mug::after {
-  content: ''; position: absolute; left: -30px; top: 62px; width: 40px; height: 30px;
-  border: 9px solid var(--color-desk-mug); border-right: 0; border-radius: 18px 0 0 18px; transform: rotate(-24deg);
-}
 .landing-page .desk-pen {
   position: absolute; left: 1630px; top: 660px; width: 11px; height: 172px; border-radius: 5px; transform: rotate(14deg); filter: var(--shadow-rest);
   background: linear-gradient(180deg, var(--color-desk-pen-gold) 0 5%, var(--color-desk-pen) 5% 46%, var(--color-desk-pen-gold) 46% 49%, var(--color-desk-pen) 49% 92%, var(--color-desk-pen-cap) 92%);
@@ -212,11 +200,27 @@
 .landing-page .laptop-trackpad { position: absolute; left: 115px; right: 115px; bottom: 16px; height: 72px; border-radius: 9px; background: var(--color-desk-metal-pad); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-desk-shadow) 12%, transparent); }
 .landing-page .note-laptop { left: 10px; top: 429px; --note-angle: -3deg; }
 
-/* 휴대폰 → 마이페이지 */
-.landing-page .obj-phone { left: 1279px; top: 547px; width: 189px; height: 250px; }
+/* 커피잔 → 마이페이지 (FE-44). 위에서 내려다본 잔. 누르면 utils/coffeeDive.js의 커다란 잔이 날아온다 */
+.landing-page .obj-mug { left: 115px; top: 25px; width: 120px; height: 120px; border-radius: 50%; }
+.landing-page .mug-art {
+  position: absolute; inset: 0; border-radius: 50%; background: var(--color-desk-mug);
+  box-shadow: inset 0 0 0 9px var(--color-desk-mug-rim);
+}
+.landing-page .desk-object > .mug-art { filter: drop-shadow(9px 11px 9px color-mix(in srgb, var(--color-desk-shadow) 40%, transparent)); }
+.landing-page .mug-coffee {
+  position: absolute; inset: 16.7%; border-radius: 50%;
+  background: radial-gradient(circle at 38% 34%, var(--color-desk-coffee-light) 0 8%, var(--color-desk-coffee) 30%, var(--color-desk-coffee-dark));
+}
+.landing-page .mug-art::after {
+  content: ''; position: absolute; left: -25%; top: 51.7%; width: 33.3%; height: 25%;
+  border: 9px solid var(--color-desk-mug); border-right: 0; border-radius: 18px 0 0 18px; transform: rotate(-24deg);
+}
+.landing-page .note-mug { left: -52px; top: 132px; --note-angle: -4deg; }
+
+/* 휴대폰 (장식) */
+.landing-page .desk-phone { position: absolute; left: 1279px; top: 547px; width: 189px; height: 250px; filter: var(--shadow-rest); }
 .landing-page .phone-art { position: absolute; left: 46px; top: 12px; width: 100px; height: 222px; padding: 5px; border-radius: 17px; transform: rotate(18deg); background: var(--color-desk-phone); box-shadow: inset 0 0 0 1px var(--color-desk-phone-edge); }
 .landing-page .phone-glass { height: 100%; border-radius: 13px; background: linear-gradient(125deg, var(--color-desk-phone-glass) 0 38%, var(--color-desk-phone-glass-dark) 38% 100%); }
-.landing-page .note-phone { left: 142px; top: 200px; --note-angle: -5deg; }
 
 /* ── 좁은 화면: 책상 대신 메뉴 카드 ── */
 .landing-page .desk-menu { display: none; }
@@ -276,6 +280,11 @@
   .landing-page .mn-photo { display: block; width: 84px; height: 84px; object-fit: cover; filter: var(--photo-filter); }
   .landing-page .desk-menu-item.is-paper > strong { color: var(--color-label); font-size: 13px; }
   .landing-page .desk-menu-item.is-paper > span:last-child { font-size: 13px; display: inline; margin-left: 8px; opacity: 1; color: var(--color-muted); }
+  /* 모바일 "내 판결 기록"은 위에서 본 작은 커피잔 하나 */
+  .landing-page .desk-menu-item.item-mug { position: relative; padding-right: 66px; }
+  .landing-page .desk-menu-item .mug-art { position: absolute; inset: auto; right: 12px; top: 14px; width: 40px; height: 40px; margin: 0; opacity: 1; box-shadow: inset 0 0 0 4px var(--color-desk-mug-rim); }
+  .landing-page .desk-menu-item .mug-art::after { border-width: 4px; border-radius: 8px 0 0 8px; }
+  .landing-page .desk-menu-item .mug-coffee { margin: 0; opacity: 1; }
   .landing-page .desk-menu-item.is-soon { opacity: .55; cursor: default; }
   .landing-page .desk-menu-item:focus-visible { outline-color: var(--color-range-fill); }
   .landing-page .feature-section { padding: 32px 16px 48px; }

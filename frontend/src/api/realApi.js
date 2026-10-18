@@ -34,7 +34,8 @@ export const getCourtJudgment = (caseId) => get(`${experience(caseId)}/judgments
 export const postComparisonReveal = (caseId) => post(`${experience(caseId)}/comparison-reveal`);
 export const getComparison = (caseId) => get(`${experience(caseId)}/comparison`);
 
-// 성향 API P-1 ~ P-5 (명세 9장). 응답 제출(P-2)만 익명 ID 쿠키를 새로 발급한다
+// 성향 API P-1 ~ P-5 (명세 9장) — 문항 · 응답 제출 · 내 결과 · 공유용 유형 · 마이페이지. 응답 제출(P-2)만 익명 ID 쿠키를 새로 발급한다
+// 내 결과가 없으면 P-3은 404 PERSONALITY_RESULT_NOT_FOUND이고, 마이페이지(P-5)는 기록이 없어도 빈 200이다
 export const getPersonalityQuestions = () => get('/personality/questions');
 export const submitPersonality = (answers) => post('/personality/results', { answers });
 export const getMyPersonality = () => get('/personality/results/me');

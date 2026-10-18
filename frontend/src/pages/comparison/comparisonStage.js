@@ -11,12 +11,10 @@ import { renderStage, courtSet, imageOf } from '../../components/stage.js';
 import { restartMock, jumpActMock } from '../overview/overviewPage.js';
 import { editorNote } from '../../utils/preJudgmentCompare.js';
 import { handPaper } from '../../utils/paperHandoff.js';
+import { castOf } from '../../utils/myPageView.js';
 
 const SUBJECTS = [['USER', '내 판결'], ['AI', 'AI 판결'], ['COURT', '실제 판결']];
 const DIRECTIONS = { UP: ['무겁게', 'up'], DOWN: ['가볍게', 'down'] };
-// 이번 사건에서 만난 모습: 대본에 나온 역할 의상(look "role:…")을 모은다
-const ROLE_NAMES = { actor: 'A씨 역', prosecutor: '검사', defense: '변호인', judge: '판사' };
-const NAMES = { naero: '내로', nambul: '남불' };
 const STAY_ZOOM_MS = 700;
 const FOLD_MS = 450; // 다른 사건 보기: 신문을 위로 접어 넘기는 시간 // 여기 남아있기: 당겨 보던 지면이 전체 지면으로 줄어드는 시간
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -65,7 +63,7 @@ function courtPhoto() {
 }
 
 // 다음 날 신문 한 장: 제호 · 1면(제목 · 사진) · 세 판결 · 판단 요소 · 칼럼(처음 → 직접) · 분석(공통점 · 차이점) · 사진란(만난 모습)
-function newspaper(data, script, caseTitle) {
+function newspaper(data, script, caseTitle, navigate) {
   const { preToFinal, judgments, matrix, ruleSentences } = data;
   const sheet = element('article', 'sheet');
   sheet.setAttribute('aria-label', '다음 날 신문');
@@ -133,16 +131,16 @@ function newspaper(data, script, caseTitle) {
     return part;
   });
 
-  const seen = new Map();
-  Object.values(script.acts).forEach((act) => {
-    [act.look, ...act.steps.map((step) => step.look)].forEach((look) => Object.entries(look ?? {}).forEach(([who, value]) => {
-      if (NAMES[who] && value.startsWith('role:')) seen.set(`${who}:${value.slice(5)}`, [who, value.slice(5)]);
-    }));
-  });
+  // 이번 사건에서 만난 모습(대본의 역할 의상). 누르면 마이페이지 컬렉션으로 간다(FE-44)
   const cast = element('ul', 'sheet-cast-grid');
-  seen.forEach(([who, role]) => {
+  castOf(script).forEach(({ who, role, label }) => {
     const item = element('li');
-    item.append(picture(imageOf(who, `role:${role}`), ''), element('span', '', `${NAMES[who]} · ${ROLE_NAMES[role] ?? role}`));
+    const open = element('button', 'sheet-cast-link');
+    open.type = 'button';
+    open.setAttribute('aria-label', `${label} — 마이페이지 컬렉션에서 보기`);
+    open.append(picture(imageOf(who, `role:${role}`), ''), element('span', '', label));
+    open.addEventListener('click', () => navigate('me', { view: 'collection' }));
+    item.append(open);
     cast.append(item);
   });
 
@@ -231,7 +229,7 @@ export function renderComparisonStage({ script, data, caseId, caseTitle, navigat
   const steps = act.steps.filter((step) => editor || !step.text?.includes('{editor}'))
     .map((step) => (step.text ? { ...step, text: step.text.replace('{vsCourt}', vsCourt).replace('{vsAi}', vsAi).replace('{pre}', pre).replace('{editor}', editor ?? '') } : step));
   const narrow = window.matchMedia('(max-width: 680px)').matches;
-  const sheet = newspaper(data, script, caseTitle);
+  const sheet = newspaper(data, script, caseTitle, navigate);
   const stage = renderStage({
     script: { ...script, acts: { ...script.acts, 8: { ...act, steps } } },
     order: ['8'],

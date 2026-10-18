@@ -19,6 +19,23 @@
 .page-turn-shade { position: absolute; inset: 0; opacity: 0; background: linear-gradient(90deg, transparent 15%, color-mix(in srgb, var(--color-desk-shadow) 75%, transparent) 100%); }
 .page-turn-shade.is-back { background: linear-gradient(270deg, transparent 15%, color-mix(in srgb, var(--color-desk-shadow) 75%, transparent) 100%); }
 
+/* 메인 책상 커피잔 → 마이페이지 (utils/coffeeDive.js). 커다란 잔이 우상단에서 날아와 서고, 책상이 마이페이지로 바뀐 뒤 오른쪽으로 빠져나간다. 잔 · 커피 색은 책상 그림과 같다.
+   움직임 줄이기면 연출 자체를 하지 않는다(landingPage.js) */
+.coffee-fly-layer { position: fixed; inset: 0; z-index: 1000; overflow: hidden; pointer-events: none; }
+.coffee-fly-table { position: absolute; }
+.coffee-fly-mug {
+  position: absolute; border-radius: 50%; transform-origin: 50% 50%; will-change: transform;
+  background: var(--color-desk-mug); box-shadow: inset 0 0 0 var(--rim) var(--color-desk-mug-rim); /* --rim: 잔 지름의 7.5%(책상 잔 120px에 9px), coffeeDive.js가 넣는다 */
+}
+.coffee-fly-coffee {
+  position: absolute; inset: 16.7%; border-radius: 50%;
+  background: radial-gradient(circle at 38% 34%, var(--color-desk-coffee-light) 0 8%, var(--color-desk-coffee) 30%, var(--color-desk-coffee-dark));
+}
+.coffee-fly-mug::after { /* 손잡이: 날아오는 잔은 오른쪽(책상 잔의 좌우 반전) */
+  content: ''; position: absolute; right: -25%; top: 51.7%; width: 33.3%; height: 25%;
+  border: var(--rim) solid var(--color-desk-mug); border-left: 0; border-radius: 0 15% 15% 0 / 0 25% 25% 0; transform: rotate(24deg);
+}
+
 /* 8막 신문 → 메인 책상 (utils/paperHandoff.js · landingPage.js). 지금 보던 지면을 본뜬 한 장이 책상 위 신문 자리로 물러난 뒤 뒤집힌다 */
 .paper-hand-layer { position: fixed; inset: 0; z-index: 1000; overflow: hidden; pointer-events: none; perspective: 1800px; }
 .paper-hand-shade { position: absolute; inset: 0; }
