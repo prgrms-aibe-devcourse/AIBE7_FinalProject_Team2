@@ -38,6 +38,7 @@ export function flyCoffee(onNavigate, page) {
   copy.removeAttribute('id');
   copy.querySelectorAll('[id]').forEach((node) => node.removeAttribute('id'));
   const box = page.getBoundingClientRect();
+  copy.style.minHeight = `${box.height}px`; // 빼낸 구역만큼 복제본이 짧아져 아래 띠가 비치지 않게, 원래 루트 높이를 그대로 유지한다
   Object.assign(table.style, { left: `${box.left}px`, top: `${box.top}px`, width: `${box.width}px` });
   table.append(copy);
   layer.append(table);
