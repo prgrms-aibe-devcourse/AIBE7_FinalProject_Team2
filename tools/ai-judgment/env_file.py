@@ -9,11 +9,19 @@
 
 빈 줄과 '='가 없는 줄은 건너뛴다(그 줄만 경고하고 나머지는 계속 읽는다).
 
+**값 뒤 인라인 주석은 지원하지 않는다.** `KEY=abc # 메모`처럼 쓰면 `#` 이후도 값에 그대로 포함되어
+`abc # 메모`가 값이 된다(python-dotenv와 다르다). 주석은 반드시 별도 줄에 쓴다.
+
 **우선순위**: 이미 설정된 환경변수는 .env 값으로 **덮지 않는다**. `GROQ_API_KEY=... python3 ...`처럼
 한 번만 다른 키로 돌릴 때 그 값이 이기게 하기 위해서다.
 
 **찾는 위치** (둘 다 있으면 둘 다 읽되, 같은 키는 먼저 읽은 쪽이 이긴다): `tools/ai-judgment/.env` →
 저장소 루트 `.env`. 도구만 따로 옮겨 쓸 때와 저장소 전체를 쓸 때를 모두 맞춘다.
+
+**저장소 루트 `.env`는 키 이름을 가리지 않고 전부 읽는다.** 백엔드 · 배포용으로 루트 `.env`에
+DB 접속 정보 · JWT 시크릿 등을 함께 두는 경우, 그 값도 (이미 설정돼 있지 않다면) 이 프로세스의
+`os.environ`에 들어가고 이 도구가 띄우는 자식 프로세스에도 그대로 전달된다. 허용 목록으로 범위를
+좁히지 않은 의도된 동작이다(AI 판결 생성 도구 로컬 실행 기준).
 
 **값은 어디에도 남기지 않는다.** 불러온 변수는 안내에 **이름만** 적는다(llm.py의 "코드 · 출력 파일 · 오류
 메시지에 키를 남기지 않는다" 원칙과 같다).
@@ -39,6 +47,26 @@ def _notice(message, log):
     (log or (lambda m: print(m, file=sys.stderr)))(message)
 
 
+def _parse_line(raw_line):
+    """줄 하나를 (키, 값)으로. 주석 · 빈 줄 · '='가 없는 줄은 None.
+
+    값 뒤 인라인 주석(`KEY=value # 메모`)은 지원하지 않는다 — `#`도 값의 일부로 본다(python-dotenv와 다르다).
+    """
+    line = raw_line.strip()
+    if not line or line.startswith("#"):
+        return None
+    if line.startswith("export "):
+        line = line[len("export "):].strip()
+    key, sep, value = line.partition("=")
+    key = key.strip()
+    if not sep or not key:
+        return None
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+        value = value[1:-1]
+    return key, value
+
+
 def parse_env_text(text):
     """.env 파일 내용(문자열) → {키: 값} dict. 잘못된 줄은 건너뛴다(경고 없이, 순수 파싱용).
 
@@ -46,19 +74,9 @@ def parse_env_text(text):
     """
     values = {}
     for raw_line in text.splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#"):
-            continue
-        if line.startswith("export "):
-            line = line[len("export "):].strip()
-        key, sep, value = line.partition("=")
-        key = key.strip()
-        if not sep or not key:
-            continue
-        value = value.strip()
-        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
-            value = value[1:-1]
-        values[key] = value
+        parsed = _parse_line(raw_line)
+        if parsed is not None:
+            values[parsed[0]] = parsed[1]
     return values
 
 
@@ -76,9 +94,13 @@ def _check_permissions(path, log):
 
 
 def parse_env_file(path, log=None):
-    """파일 하나를 읽어 dict로 돌려준다. 없으면 빈 dict. 읽기 오류 · 잘못된 줄은 경고만 남기고 계속한다."""
+    """파일 하나를 읽어 dict로 돌려준다. 없으면 빈 dict. 읽기 오류 · 잘못된 줄은 경고만 남기고 계속한다.
+
+    인코딩은 utf-8-sig를 쓴다 — 메모장 등으로 저장한 .env에 붙는 BOM을 벗겨야 첫 줄 키(예:
+    `OPENAI_API_KEY`)가 BOM이 섞인 채로 읽혀 조용히 무시되는 것을 막는다.
+    """
     try:
-        text = path.read_text(encoding="utf-8")
+        text = path.read_text(encoding="utf-8-sig")
     except FileNotFoundError:
         return {}
     except OSError as e:
@@ -87,20 +109,13 @@ def parse_env_file(path, log=None):
     _check_permissions(path, log)
     values = {}
     for lineno, raw_line in enumerate(text.splitlines(), start=1):
-        line = raw_line.strip()
-        if not line or line.startswith("#"):
+        parsed = _parse_line(raw_line)
+        if parsed is None:
+            stripped = raw_line.strip()
+            if stripped and not stripped.startswith("#"):
+                _notice(f"⚠️  {path}:{lineno}: 올바른 KEY=VALUE 줄이 아닙니다, 건너뜁니다: {stripped!r}", log)
             continue
-        if line.startswith("export "):
-            line = line[len("export "):].strip()
-        key, sep, value = line.partition("=")
-        key = key.strip()
-        if not sep or not key:
-            _notice(f"⚠️  {path}:{lineno}: 올바른 KEY=VALUE 줄이 아닙니다, 건너뜁니다: {line!r}", log)
-            continue
-        value = value.strip()
-        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
-            value = value[1:-1]
-        values[key] = value
+        values[parsed[0]] = parsed[1]
     return values
 
 

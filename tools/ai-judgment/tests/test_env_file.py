@@ -65,6 +65,13 @@ class ParseEnvFileTest(unittest.TestCase):
             path.write_text("OPENAI_API_KEY=sk-test\n", encoding="utf-8")
             self.assertEqual(env_file.parse_env_file(path), {"OPENAI_API_KEY": "sk-test"})
 
+    def test_utf8_bom_is_stripped(self):
+        """메모장 등으로 저장한 .env의 BOM이 첫 줄 키에 섞여 읽히지 않아야 한다."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / ".env"
+            path.write_text("OPENAI_API_KEY=sk-test\n", encoding="utf-8-sig")
+            self.assertEqual(env_file.parse_env_file(path), {"OPENAI_API_KEY": "sk-test"})
+
     def test_bad_line_warns_but_keeps_reading(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / ".env"
