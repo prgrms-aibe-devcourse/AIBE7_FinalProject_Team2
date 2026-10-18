@@ -12,8 +12,10 @@
 | `adminJudgmentParse.js` | 원문에서 사건번호 · 법원명 · 선고일 · 심급 · 범죄 유형을 읽어 폼을 채운다 |
 | `samples/sample-judgment.pdf` | 가상 판결문 예시 PDF(2쪽). 등록 화면의 "예시 PDF 내려받기"와 PDF 읽기 테스트가 쓴다. 실제 판결문이 아니다 |
 | `adminFormat.js` | 요약어 후보(A-6)와 생성 정보(A-8 `generation`)를 화면용으로 푸는 순수 함수. 테스트 있음 |
+| `adminMenu.js` · `adminKit.js` | 왼쪽 메뉴 목록 · 운영 메뉴 화면이 함께 쓰는 부품(검색줄 · 표 · 쪽 나누기 · 사유 폼 · 목록 불러오기) |
+| `adminDashboardPage.js` · `adminMembersPage.js` · `adminPostsPage.js` · `adminReportsPage.js` · `adminAccountsPage.js` · `adminNoticesPage.js` | 운영 메뉴(A-16 ~ A-41 초안): 대시보드 · 회원 · 게시글 · 댓글 · 신고 · 관리자 계정 · 감사 로그 · 공지 · 금칙어. **서버 API가 없어 목으로만 동작** |
 | `adminClient.js` | 관리자 API 전용 fetch. 세션 쿠키 · CSRF 헤더(`X-XSRF-TOKEN`) · 403이면 토큰을 새로 받아 한 번 재시도. 공용 `src/api/client.js`는 쓰지 않는다 |
-| `adminRealApi.js` · `adminMockApi.js` | 실제 · 목 API (함수 이름 · 응답 형식 같음). `adminApi.js`가 `VITE_API_MODE`로 고른다 |
+| `adminRealApi.js` · `adminMockApi.js` (운영 메뉴는 `adminOps*Api.js`를 다시 내보낸다) | 실제 · 목 API (함수 이름 · 응답 형식 같음). `adminApi.js`가 `VITE_API_MODE`로 고른다 |
 | `adminLabels.js` | 상태 · 사유 코드 → 화면 문구, 에러 문구 |
 | `admin.css` | 관리자 화면 스타일. `adminShell.js`가 불러와 관리자 청크에만 들어간다 |
 
@@ -32,4 +34,4 @@
 
 ## 실제 API
 
-A-1 ~ A-13은 BE-39 · BE-41 ~ BE-43으로 구현돼 있다. `VITE_API_MODE=real`로 연결해 확인한다. **A-14 · A-15(사건 등록)는 초안 계약이라 서버 구현 전에는 목으로만 동작한다.**
+A-1 ~ A-13은 BE-39 · BE-41 ~ BE-43으로 구현돼 있다. `VITE_API_MODE=real`로 연결해 확인한다. **A-14 · A-15(사건 등록)와 A-16 ~ A-41(운영 메뉴)은 초안 계약이라 서버 구현 전에는 목으로만 동작한다.** 서버를 만드는 쪽은 [API 명세 8-4](../../../../docs/api-specification.md)를 기준으로 한다.

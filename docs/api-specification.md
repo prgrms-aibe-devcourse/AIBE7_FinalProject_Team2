@@ -1157,6 +1157,46 @@ API 1 · 2 · 16은 상태와 관계없이 부를 수 있다. 표에 없는 조�
 
 ---
 
+### 8-4. 운영 메뉴 API (초안, A-16 ~ A-41)
+
+> **초안이다.** 관리자 화면(FE-45)의 운영 메뉴(대시보드 · 회원 · 게시글 · 신고 · 관리자 계정 · 공지)를 목으로 먼저 만들면서 정한 계약이다. 회원 · 게시글 · 신고 기능은 서버에 아직 없다(마이그레이션 · 엔티티 포함). 서버를 구현하는 쪽이 이 절을 기준으로 하되, 바꾸면 이 절과 `frontend/src/pages/admin/adminOpsMockApi.js` · `adminOpsRealApi.js`를 함께 고친다.
+>
+> 공통: 8-1(인증 · CSRF · 401)을 따른다. 목록은 `?page=0&size=20`(size 1 ~ 100)을 받고 `{ items, page, size, totalElements }`로 답한다. 상태를 바꾸는 요청은 감사 로그를 남긴다(`AdminAuditAction`에 행동 추가 필요). 사용자가 쓴 글 · 닉네임은 화면이 `textContent`로만 그리지만 서버도 HTML을 걸러서 저장한다.
+
+| # | 메서드 · 경로 | 용도 |
+| --- | --- | --- |
+| A-16 | `GET /admin/dashboard` | 대시보드 (처리할 일 건수 · 최근 7일 일별 가입 · 체험 · 최근 관리자 활동 5건) |
+| A-17 | `GET /admin/members?keyword&status` | 회원 목록 (닉네임 · 이메일 검색, `status`: `ACTIVE` · `SUSPENDED` · `WITHDRAWN`) |
+| A-18 | `GET /admin/members/{memberId}` | 회원 상세 (가입 경로 · 체험 수 · 신고 받은 횟수 · 정지 정보 · 최근 게시글) |
+| A-19 | `POST /admin/members/{memberId}/suspend` | 회원 정지. 본문 `{ "reason": "…(1~200자)", "days": 7 }`, `days`가 null이면 직접 해제할 때까지 |
+| A-20 | `POST /admin/members/{memberId}/restore` | 정지 해제 |
+| A-21 | `GET /admin/posts?keyword&status&reported` | 게시글 목록 (`status`: `VISIBLE` · `HIDDEN` · `DELETED`, `reported=true`면 신고된 글만) |
+| A-22 | `GET /admin/posts/{postId}` | 게시글 상세 (본문 · 댓글 포함) |
+| A-23 | `POST /admin/posts/{postId}/hide` | 숨김 `{ "reason" }` |
+| A-24 | `POST /admin/posts/{postId}/restore` | 숨김 복구 |
+| A-25 | `POST /admin/posts/{postId}/delete` | 삭제(소프트 삭제, 되돌릴 수 없음) `{ "reason" }` |
+| A-26 | `POST /admin/comments/{commentId}/hide` | 댓글 숨김 |
+| A-27 | `POST /admin/comments/{commentId}/restore` | 댓글 숨김 복구 |
+| A-28 | `GET /admin/reports?status&targetType` | 신고 목록 (`status`: `PENDING` · `RESOLVED` · `REJECTED`, `targetType`: `POST` · `COMMENT` · `MEMBER`) |
+| A-29 | `POST /admin/reports/{reportId}/resolve` | 신고 처리 `{ "action": "HIDE" \| "SUSPEND" \| "WARN", "note": "…(1~300자)" }`. `HIDE`는 게시글 · 댓글, `SUSPEND`는 회원 신고에만. 대상에도 반영한다 |
+| A-30 | `POST /admin/reports/{reportId}/reject` | 신고 기각 `{ "note" }` |
+| A-31 | `GET /admin/accounts` | 관리자 계정 목록 (`role`: `SUPER` · `REVIEWER`) |
+| A-32 | `POST /admin/accounts` | 관리자 추가 `{ "email", "displayName", "role" }`. 비밀번호는 받지 않는다(초대 절차는 서버가 정한다) |
+| A-33 | `POST /admin/accounts/{adminId}/activate` | 계정 다시 사용 |
+| A-34 | `POST /admin/accounts/{adminId}/deactivate` | 계정 비활성화 (로그인 중이면 다음 요청부터 401, BE-67과 같은 규칙) |
+| A-35 | `GET /admin/audit-logs?action` | 감사 로그 열람 (기존 `admin_audit_log`) |
+| A-36 | `GET /admin/notices` | 공지 목록 (고정 → 최신 순) |
+| A-37 | `POST /admin/notices` | 공지 등록 `{ "title", "body", "pinned", "published" }` |
+| A-38 | `PATCH /admin/notices/{noticeId}` | 공지 수정 (바뀐 필드만: `title` · `body` · `pinned` · `published`) |
+| A-39 | `GET /admin/banned-words` | 금칙어 목록 |
+| A-40 | `POST /admin/banned-words` | 금칙어 추가 `{ "word" }` (30자 이하) |
+| A-41 | `DELETE /admin/banned-words/{word}` | 금칙어 삭제 |
+
+- **상태 충돌(409 `INVALID_STATE`)**: `details[0].reason`에 `ALREADY_SUSPENDED` · `MEMBER_WITHDRAWN` · `NOT_SUSPENDED` · `NOT_VISIBLE` · `NOT_HIDDEN` · `ALREADY_DELETED` · `ALREADY_HANDLED` · `SELF_DEACTIVATE`(자기 계정 비활성화 금지)를 쓴다.
+- **그 밖 에러**: 404 `MEMBER_NOT_FOUND` · `POST_NOT_FOUND` · `COMMENT_NOT_FOUND` · `REPORT_NOT_FOUND` · `ADMIN_NOT_FOUND` · `NOTICE_NOT_FOUND` · `WORD_NOT_FOUND`, 409 `DUPLICATE_EMAIL` · `DUPLICATE_WORD`, 400 `VALIDATION_ERROR`.
+- **권한(미정)**: 화면은 `SUPER` · `REVIEWER`를 구분해 보여 주기만 한다. 메뉴별 접근 제한(예: 관리자 계정은 `SUPER`만)은 서버 구현 때 정하고, 정하면 `GET /admin/auth/me`가 `role`을 내려 줘야 한다.
+- 회원 이메일은 화면에 그대로 보인다. 서버가 마스킹해서 내릴지는 개인정보 방침과 함께 정한다.
+
 ## 9. (확장) 성향 API (7.6.4)
 
 > 판결 성향 테스트(S-15 · S-16) · 공유 결과 · 마이페이지(S-17)용 API다. 테이블은 [ERD 8장](erd.md)(V15, #124), 채점 · 체험 성향 · 종합은 [성향 산식](personality-scoring.md), 문구는 [성향 테스트 콘텐츠](personality-test-content.md)를 따른다. 9-2 확인 항목은 구현 전에 A와 맞춘다.

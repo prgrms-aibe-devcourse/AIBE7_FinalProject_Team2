@@ -40,6 +40,28 @@ export const STATE_REASON = {
   CASE_PUBLISHED: '이미 공개한 사건이라 바꿀 수 없어요.',
   CANDIDATE_REJECTED: '이미 반려한 후보예요.',
   CANDIDATE_PUBLISHED: '공개 중인 후보는 반려할 수 없어요. 먼저 다른 후보를 승인해 교체해 주세요.',
+  // 운영 메뉴
+  ALREADY_SUSPENDED: '이미 정지된 회원이에요.',
+  MEMBER_WITHDRAWN: '탈퇴한 회원은 정지할 수 없어요.',
+  NOT_SUSPENDED: '정지 상태가 아닌 회원이에요.',
+  NOT_VISIBLE: '공개 중이 아니에요.',
+  NOT_HIDDEN: '숨김 상태가 아니에요.',
+  ALREADY_DELETED: '이미 삭제했어요.',
+  ALREADY_HANDLED: '이미 처리한 신고예요.',
+  SELF_DEACTIVATE: '자기 자신의 계정은 비활성화할 수 없어요.',
+};
+
+// 운영 메뉴(회원 · 게시글 · 신고 · 관리자 계정 · 공지) 문구
+export const MEMBER_STATUS = { ACTIVE: '정상', SUSPENDED: '정지', WITHDRAWN: '탈퇴' };
+export const POST_STATUS = { VISIBLE: '공개', HIDDEN: '숨김', DELETED: '삭제' };
+export const REPORT_STATUS = { PENDING: '처리 대기', RESOLVED: '처리 완료', REJECTED: '기각' };
+export const REPORT_REASON = { SPAM: '광고 · 도배', ABUSE: '욕설 · 비방', ADULT: '선정적 내용', OTHER: '기타' };
+export const TARGET_TYPE = { POST: '게시글', COMMENT: '댓글', MEMBER: '회원' };
+export const REPORT_ACTION = { HIDE: '숨김 처리', SUSPEND: '회원 정지 (7일)', WARN: '경고' };
+export const ADMIN_ROLE = { SUPER: '총괄', REVIEWER: '검수' };
+export const AUDIT_ACTION = {
+  LOGIN_SUCCESS: '로그인', LOGIN_FAILURE: '로그인 실패', LOGOUT: '로그아웃', SOURCE_VIEW: '원본 판결문 열람', JUDGMENT_APPROVE: '판결 후보 승인',
+  JUDGMENT_REJECT: '판결 후보 반려', CASE_UPDATE: '사건 내용 수정', VALUE_AXIS_CONFIRM: '가치관 축 확정', CASE_PUBLISH: '사건 공개',
 };
 
 export const AXIS_LABEL = Object.fromEntries(AXES.map((axis) => [axis.key, axis.label]));
@@ -51,6 +73,9 @@ export function errorText(error, fallback = '요청을 처리하지 못했어요
   if (code === 'INVALID_STATE') return STATE_REASON[error.details?.[0]?.reason] ?? '지금 상태에서는 할 수 없어요.';
   if (code === 'PUBLISH_NOT_READY') return (error.details ?? []).map((item) => PUBLISH_REASON[item.reason] ?? item.reason).join(' ') || '공개 조건을 채우지 못했어요.';
   if (code === 'DUPLICATE_TITLE') return '다른 사건과 제목이 겹쳐요.';
+  if (code === 'DUPLICATE_EMAIL') return '이미 등록된 이메일이에요.';
+  if (code === 'DUPLICATE_WORD') return '이미 있는 금칙어예요.';
+  if (code?.endsWith('_NOT_FOUND') && error.message) return error.message;
   if (code === 'DUPLICATE_SOURCE') return '이미 등록한 사건번호예요.';
   if (code === 'IMPORT_IN_PROGRESS') return '다른 사건을 등록하는 중이에요. 끝난 뒤 다시 시도해 주세요.';
   if (code === 'IMPORT_NOT_FOUND') return '등록 작업을 찾을 수 없어요.';

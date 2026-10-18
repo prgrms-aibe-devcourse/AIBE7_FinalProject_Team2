@@ -1,22 +1,9 @@
 // 관리자 API 목 (API 명세 8장 A-1 ~ A-15). 7.4.7 구현 전에 S-19 화면을 만들고 확인하는 용도다.
 // 사건 · 원문은 모두 가상 값이다. 상태는 메모리에만 두고(새로고침하면 처음으로), 로그인 여부만 sessionStorage에 둔다.
 // 원본 판결문 같은 내부 정보를 브라우저 저장소에 남기지 않기 위해서다.
-const delay = () => new Promise((resolve) => setTimeout(resolve, 200));
-const SESSION_KEY = 'nlnb-mock-admin-session';
-const ADMIN = { adminId: 1, email: 'admin@example.com', displayName: '관리자' };
+import { ADMIN, SESSION_KEY, delay, fail, now, requireLogin } from './adminMockBase.js';
 
-function fail(code, message, extra = {}) {
-  throw { code, message, currentStatus: null, details: null, ...extra };
-}
-
-function loggedIn() {
-  try { return sessionStorage.getItem(SESSION_KEY) === '1'; } catch { return false; }
-}
-function requireLogin() {
-  if (!loggedIn()) fail('UNAUTHORIZED', '로그인이 필요해요.', { status: 401 });
-}
-
-const now = () => new Date().toISOString();
+export * from './adminOpsMockApi.js'; // 운영 메뉴(대시보드 · 회원 · 게시글 · 신고 · 관리자 계정 · 공지) 목
 
 function baseFactors(prefix) {
   return [

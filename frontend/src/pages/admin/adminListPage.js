@@ -13,6 +13,7 @@ const SIZE = 20;
 export function renderAdminListPage(container, { navigate }) {
   return renderAdminShell(container, {
     navigate,
+    section: 'cases',
     title: '검수 사건 목록',
     draw: async ({ api, main, active, unauthorized }) => {
       let filter = FILTERS[0];

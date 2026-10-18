@@ -455,4 +455,5 @@ stateDiagram-v2
 - 자동 적재된 사건(DRAFT) · AI 판결 후보(PENDING) 목록 → 상세 확인 → 승인 · 반려 · 공개
 - 파이프라인이 남긴 요약어 후보 · 참고 자료(`input_snapshot`) · 회차 선택 근거 · 사전 학습 점검 판정 표시
 - 사건 등록(FE-45): 원본 판결문(심급별 최대 3건) 입력 → 서버 파이프라인 실행 → 단계별 진행 표시 → 완료되면 `DRAFT` 사건으로 검수 (`/admin/register`, API A-14 · A-15 초안)
+- 운영 메뉴(FE-45, 틀만 · 서버 API는 이후): 대시보드 `/admin/dashboard` · 회원 관리 `/admin/members` · 게시글 · 댓글 `/admin/posts` · 신고 `/admin/reports` · 관리자 계정 · 감사 로그 `/admin/accounts` · 공지 · 금칙어 `/admin/notices`. 왼쪽 메뉴로 이동 (API A-16 ~ A-41 초안)
 - **진입 조건**: 관리자 인증 (방식 미정)

@@ -94,6 +94,7 @@ function summaryTagView(raw, summaryTag) {
 export function renderAdminCasePage(container, { caseId, navigate }) {
   return renderAdminShell(container, {
     navigate,
+    section: 'cases',
     title: `사건 #${caseId} 검수`,
     draw: async ({ api, main, active, unauthorized, setTitle }) => {
       let flash = null; // { text, kind: 'ok' | 'error' } — 다시 그린 뒤 맨 위에 보여 준다

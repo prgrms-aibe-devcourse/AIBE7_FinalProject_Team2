@@ -19,6 +19,7 @@ const POLL_ERROR_LIMIT = 3; // 연속으로 이만큼 실패하면 멈추고 다
 export function renderAdminRegisterPage(container, { navigate }) {
   return renderAdminShell(container, {
     navigate,
+    section: 'register',
     title: '사건 등록',
     draw: async ({ api, main, active, unauthorized }) => {
       const top = element('div', 'admin-case-top');

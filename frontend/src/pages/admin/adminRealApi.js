@@ -2,6 +2,8 @@
 // A-1 ~ A-13은 BE-39 · BE-41 ~ BE-43으로 구현돼 있다. A-14 · A-15(사건 등록)는 초안 계약이라 서버가 구현되기 전에는 404가 온다.
 import { adminGet, adminPatch, adminPost, adminPut, fetchCsrf } from './adminClient.js';
 
+export * from './adminOpsRealApi.js'; // 운영 메뉴(대시보드 · 회원 · 게시글 · 신고 · 관리자 계정 · 공지)
+
 const id = (value) => encodeURIComponent(value);
 
 // A-1 ~ A-4 인증
