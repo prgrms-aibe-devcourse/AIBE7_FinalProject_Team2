@@ -225,7 +225,7 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
   // 커피잔: 커다란 잔이 우상단에서 날아와 서고(coffeeDive), 날아오는 도중 마이페이지로 넘어간다. 책상이 다 바뀌면 잔이 오른쪽으로 빠져나간다. 움직임 줄이기면 바로 간다
   function sip() {
     if (lifting) return;
-    if (reducedMotion()) { navigate('me'); return; }
+    if (reducedMotion()) { navigate('me', { from: 'mug' }); return; }
     lifting = true;
     flyCoffee(() => { if (root.isConnected) navigate('me', { from: 'mug' }); }, root);
   }

@@ -23,9 +23,9 @@ export function trailSummary(points, axis) {
   return `처음보다 ${side} 쪽으로 ${Math.abs(moved)}%p 움직였어요`;
 }
 
-// 점의 가로 위치(%). 막대와 같이 왼쪽 = 엄격 쪽이다
+// 점의 가로 위치(%). 왼쪽 = 엄격 쪽, 오른쪽 = 관대 쪽이다(ratio는 관대 쪽 비중)
 export function trailLeft(ratio) {
-  return Math.round((1 - ratio) * 100);
+  return Math.round(ratio * 100);
 }
 
 // 이번 사건에서 만난 모습 — 대본에 나온 역할 의상(look "role:…")을 등장 순서대로 모은다. 8막 신문 사진란과 마이페이지가 함께 쓴다
@@ -65,16 +65,4 @@ export function collectionOf(experiences, scripts) {
       return { caseId: item.caseId, title: item.title, cast: castOf(script), items };
     })
     .filter((group) => group.items.length > 0 || group.cast.length > 0);
-}
-
-// 성향 변화 흐름 미리보기 — 처음과 마지막의 차이가 가장 큰 축(값이 둘 이상인 축만). 없으면 null
-export function biggestMove(history, axes) {
-  let best = null;
-  axes.forEach((axis) => {
-    const points = axisSeries(history, axis.key);
-    if (points.length < 2) return;
-    const moved = Math.abs(points[points.length - 1].ratio - points[0].ratio);
-    if (!best || moved > best.moved) best = { axis, points, moved };
-  });
-  return best;
 }

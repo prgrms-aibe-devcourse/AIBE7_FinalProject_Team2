@@ -1,7 +1,7 @@
 // npm test : 마이페이지 변화 흐름 계산
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { axisSeries, biggestMove, castOf, collectionOf, trailLeft, trailSummary } from './myPageView.js';
+import { axisSeries, castOf, collectionOf, trailLeft, trailSummary } from './myPageView.js';
 
 const AXIS = { key: 'APOLOGY_SINCERITY', strict: { name: '행동증명형' }, lenient: { name: '마음신뢰형' } };
 const entry = (value) => ({ axisScores: { APOLOGY_SINCERITY: value } });
@@ -26,10 +26,10 @@ test('5%p보다 작게 움직이면 거의 같다고 하고, 값이 하나뿐이
   assert.equal(trailSummary(axisSeries([entry(0.5)], AXIS.key), AXIS), null);
 });
 
-test('점 위치는 막대처럼 왼쪽이 엄격 쪽이다', () => {
-  assert.equal(trailLeft(0), 100);
-  assert.equal(trailLeft(1), 0);
-  assert.equal(trailLeft(0.25), 75);
+test('점 위치는 왼쪽이 엄격 쪽, 오른쪽이 관대 쪽이다', () => {
+  assert.equal(trailLeft(0), 0);
+  assert.equal(trailLeft(1), 100);
+  assert.equal(trailLeft(0.25), 25);
 });
 
 test('collectionOf: 체험을 마친 사건의 일러스트만 모으고 같은 그림은 한 장으로 센다', () => {

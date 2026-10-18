@@ -91,15 +91,7 @@ body:has(.my-page) .site-footer { background: var(--palette-coffee-50); border-t
 .my-row-preview { display: flex; justify-content: flex-end; }
 .my-chevron { width: 16px; height: 16px; fill: none; stroke: var(--color-border-strong); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
-/* 미리보기: 막대 · 점 · 썸네일 · 건수 */
-.my-mini-bars { display: grid; gap: 7px; width: 100%; }
-.my-mini-track { position: relative; display: block; width: 100%; height: 5px; border-radius: 3px; background: var(--color-track); }
-.my-mini-dot { position: absolute; top: 50%; width: 11px; height: 11px; border-radius: 50%; background: var(--color-accent); transform: translate(-50%, -50%); }
-.my-mini-dot.is-numbered {
-  display: grid; place-items: center; width: 20px; height: 20px; border: 2px solid var(--color-accent); background: var(--color-card);
-  color: var(--color-accent); font-size: 10px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums;
-}
-.my-mini-dot.is-numbered.is-latest { background: var(--color-accent); color: var(--color-on-accent); }
+/* 미리보기: 썸네일 · 건수 */
 .my-thumbs { display: flex; gap: 6px; }
 .my-thumbs img { width: 46px; height: 58px; border-radius: 6px; object-fit: cover; background: var(--color-surface); }
 .my-thumbs img.is-cast { object-fit: contain; object-position: bottom; }
@@ -127,7 +119,7 @@ body:has(.my-page) .site-footer { background: var(--palette-coffee-50); border-t
 
 /* 성향카드 화면 */
 .my-type-hero { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 24px; align-items: center; margin: 0 0 36px; }
-.my-type-hero .my-card-window { aspect-ratio: 7 / 12; border-radius: 999px 999px 12px 12px; border: 1px solid var(--color-border-strong); border-radius: 12px; background: var(--color-card); }
+.my-type-hero .my-card-window { aspect-ratio: 7 / 12; border-radius: 999px 999px 12px 12px; border: 1px solid var(--color-border-strong); background: var(--color-card); }
 .my-type-hero-name { margin: 0 0 8px; font: 900 var(--text-title-1)/1.25 var(--font-heading); letter-spacing: -.03em; color: var(--color-heading); text-wrap: balance; }
 .my-type-hero-text { margin: 0; color: var(--color-muted); text-wrap: pretty; }
 .my-type-section + .my-type-section { margin-top: 36px; }
