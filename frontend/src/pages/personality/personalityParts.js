@@ -1,4 +1,4 @@
-import { button, element } from '../../components/siteLayout.js';
+import { button, element, renderSiteHeader } from '../../components/siteLayout.js';
 import { imageOf } from '../../components/stage.js';
 import { CHARACTER_NAMES } from '../../utils/personalityAxes.js';
 
@@ -25,7 +25,7 @@ export function renderFolder(container, { navigate, sheetLabel, orientation = 'p
   sheet.append(label, body);
   folder.append(sheet);
   binder.append(tabs, folder);
-  root.append(desk, binder);
+  root.append(desk, renderSiteHeader({ navigate, onIntro: () => navigate('landing', { section: 'intro' }) }), binder);
   // 책상(메인)에서 검사지를 들고 온 경우: 책상 화면을 뒤에 남겨 두었다가 철이 올라오는 동안 흐려지며 걷는다
   const ghost = orientation === 'landscape' && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches && container.querySelector('.landing-page')
     ? element('div', 'personality-ghost') : null;
