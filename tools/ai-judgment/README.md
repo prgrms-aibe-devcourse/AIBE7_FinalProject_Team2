@@ -4,7 +4,7 @@ MVP의 AI 판결은 서비스 안에서 만들지 않고, **팀이 오프라인�
 
 AI 판결 생성(3단계)은 두 가지 방법 중 하나로 한다. 외부 LLM 서비스에서 할 때의 주의 사항은 아래 "외부 LLM으로 생성할 때"를 따른다.
 
-- **API로 생성 (BE-30)**: `generate.py`가 공급자(OpenAI · Anthropic · Gemini) API를 직접 불러 여러 모델 · 여러 회차로 생성하고 검증까지 기록한다. 모델은 옵션으로 갈아끼우고, `compare.py`가 모델별 비교표를 만든다. 이것도 표준 라이브러리만 쓴다.
+- **API로 생성 (BE-30)**: `generate.py`가 공급자(OpenAI · Anthropic · Gemini · Groq · NVIDIA NIM) API를 직접 불러 여러 모델 · 여러 회차로 생성하고 검증까지 기록한다. 모델은 옵션으로 갈아끼우고, `compare.py`가 모델별 비교표를 만든다. 이것도 표준 라이브러리만 쓴다.
 - **채팅 화면에서 생성**: `build_prompt.py`로 프롬프트를 만들어 LLM 서비스에 붙여 넣고 응답을 파일로 저장한다. 저장한 응답은 `generate.py import`로 같은 기록에 넣어 비교할 수 있다.
 
 **전체 자동 실행 (BE-31)**: `pipeline.py`가 판결문 → 비식별화 → (사전 학습 점검) → (참고 자료 RAG) → 생성 → 회차 선택 → 적재를 한 명령으로 이어서 실행한다. 사람 검수 없이 **비공개로 적재하고, 관리자가 나중에 검수 · 공개한다(후검수)**. 아래 "파이프라인 (BE-31)". 아래 "작업 순서" 1 ~ 6단계는 단계별로 직접 돌릴 때의 방법이다.
@@ -24,7 +24,9 @@ AI 판결 생성(3단계)은 두 가지 방법 중 하나로 한다. 외부 LLM 
 | `validate_output.py` | 모델 응답 JSON 검증 (오류 · 경고) |
 | `check_contamination.py` | 사전 학습 점검 프롬프트 생성 · 응답 판정 (REQ-102) |
 | `to_seed_sql.py` | 검수 통과본 → 적재 SQL (`judgment` · `judgment_factor` · `ai_generation`) |
-| `llm.py` | LLM 공급자 공통 호출 (OpenAI · Anthropic · Gemini, 표준 라이브러리 HTTP). API 키는 환경변수로만 읽는다 (BE-30) |
+| `llm.py` | LLM 공급자 공통 호출 (OpenAI · Anthropic · Gemini · Groq · NVIDIA NIM, 표준 라이브러리 HTTP). API 키는 환경변수(`.env` 포함)로만 읽는다 (BE-30, 공급자 추가 BE-84) |
+| `env_file.py` | `.env` 파일을 읽어 아직 설정되지 않은 환경변수만 채운다. `llm.py`를 불러오는 시점에 자동으로 적용된다 (BE-86) |
+| `list_models.py` | 공급자에게 지금 쓸 수 있는 모델 ID를 물어본다 (OpenAI 호환 공급자만). `free_models.json`을 고치기 전에 확인하는 용도 (BE-84) |
 | `generate.py` | 여러 모델 · 여러 회차 AI 판결 생성 → 검증 → 실행 기록 (`out/runs/`). 채팅 응답 파일 넣기(`import`) (BE-30) |
 | `compare.py` | 실행 기록 → 모델별 비교표 (Markdown · CSV) (BE-30) |
 | `examples/` | 예시 사건(ERD 6장 가상 살인 사건 "빌린 돈 문제로 찾아온 지인을 살해한 사건") 입력 · AI 출력 · 실제 판결(내부 전용) |
@@ -107,7 +109,8 @@ python3 build_prompt.py case.json > out/prompt.md
 #### API로 생성하고 모델끼리 비교하기 (BE-30)
 
 ```bash
-export OPENAI_API_KEY=...        # 쓰는 공급자의 키만 설정한다 (ANTHROPIC_API_KEY, GEMINI_API_KEY 또는 GOOGLE_API_KEY)
+export OPENAI_API_KEY=...        # 쓰는 공급자의 키만 설정한다 (ANTHROPIC_API_KEY, GEMINI_API_KEY 또는 GOOGLE_API_KEY, GROQ_API_KEY, NVIDIA_API_KEY)
+# 매번 export하지 않고 .env 파일에 적어 둘 수도 있다 (아래 "API 키를 .env 파일로 주기")
 
 # 모델은 '공급자:모델ID'. --model을 여러 번 주면 모델마다 --runs회씩 생성한다
 python3 generate.py run case.json --model openai:<모델ID> --model gemini:<모델ID> --runs 5
@@ -124,14 +127,35 @@ python3 compare.py out/runs/case --case case.json --out out/runs/case/comparison
 | `openai` | Chat Completions (`OPENAI_BASE_URL`로 호환 엔드포인트 지정 가능) | `OPENAI_API_KEY` | `response_format: json_object` |
 | `anthropic` | Messages | `ANTHROPIC_API_KEY` | 프롬프트로만 (응답이 코드 블록이어도 받아 준다) |
 | `gemini` | `generateContent` | `GEMINI_API_KEY` 또는 `GOOGLE_API_KEY` | `responseMimeType: application/json` |
+| `groq` | Chat Completions (`GROQ_BASE_URL`) | `GROQ_API_KEY` | `response_format: json_object` |
+| `nim` | Chat Completions — NVIDIA NIM (`NVIDIA_BASE_URL`) | `NVIDIA_API_KEY` 또는 `NVIDIA_NIM_API_KEY` | `response_format: json_object` (**모델마다 지원이 다르다**) |
 | `manual` | 부르지 않음 (`import` 전용) | — | — |
 
 - 모델 ID는 공급자가 정한 정확한 ID를 그대로 쓴다. 도구에 기본 모델은 없다(모델이 자주 바뀌므로 매번 명시한다).
+- **`groq` · `nim` (BE-84)**: 둘 다 OpenAI Chat Completions 형식이라 같은 코드로 부른다. 차이는 세 가지다. ① `nim`의 모델 ID에는 `nvidia/nemotron-3-super-120b-a12b`처럼 `/`가 들어간다(공급자는 첫 `:`에서만 나누므로 그대로 적는다). ② `nim`은 `max_tokens`만 받는다(OpenAI · Groq는 `max_completion_tokens`). ③ `nim`은 JSON 모드를 지원하지 않는 모델이 있어 400이 올 수 있고, 그때는 오류에 안내를 붙인다 — JSON 모드를 지원하는 모델로 바꾸거나 다른 공급자를 쓴다(`generate.py`는 JSON 모드를 끄는 옵션이 없다).
+- **쓸 수 있는 모델 확인**: `python3 list_models.py groq`(또는 `nim`)이 공급자에게 직접 물어 모델 ID를 보여 준다(`--grep`으로 거르고 `--json`으로 원본). 공급자가 모델을 자주 바꾸므로 `free_models.json`을 고치기 전에 이것으로 확인한다. **조회만 하고 자동으로 넣지는 않는다** — 응답에는 임베딩 · 음성 · 코드 · 비전 · 안전 분류 모델이 섞여 있어, 그대로 넣으면 `free:<공급자>` 자동 선택이 판결 생성에 쓸 수 없는 모델을 고른다.
 - 검색 · 그라운딩 같은 도구는 붙이지 않는다. 매 회차가 독립 요청이라 이전 회차 응답이 섞이지 않는다("외부 LLM으로 생성할 때" 원칙과 같다).
 - 옵션: `--temperature`(주지 않으면 공급자 기본값. 사고 모델 중에는 받지 않는 것이 있다), `--max-tokens`(기본 16000), `--timeout`(초, 기본 300), `--delay`(요청 사이 쉬는 초, 무료 등급 분당 한도용), `--max-attempts`(요청 한 건을 보내는 최대 횟수, 첫 시도 포함, 기본 5) · `--max-wait`(재시도 사이 한 번에 기다릴 최대 초, 기본 120) — "무료 등급 한도 대응", `--batch`(묶음 이름, 기본은 사건 파일 이름).
 - **HTTPS 인증서(BE-34)**: 인증서 검증은 항상 켜 둔다. 기본 인증서 위치에 인증서가 없으면(예: macOS python.org Python) `/etc/ssl/cert.pem` 같은 시스템 CA 묶음을 자동으로 찾아 쓴다. 그래도 `CERTIFICATE_VERIFY_FAILED`가 나면 `SSL_CERT_FILE`에 인증서 묶음 경로를 지정하거나(macOS: `/etc/ssl/cert.pem`) python.org Python의 `Install Certificates.command`를 한 번 실행한다. 인증서 오류는 다시 보내지 않고 바로 해결 방법을 안내한다. 검증을 끄는 옵션은 없다.
 - 과부하(503 · 529) · 한도 초과(429) · 서버 오류(5xx)는 원인에 맞게 기다렸다가 자동으로 다시 보낸다(기본 최대 5번, "무료 등급 한도 대응"). 그래도 실패하면 그 회차는 원인(과부하 / 분당 한도 / 일 한도)을 적어 "호출 실패"로 기록하고 다음 회차로 넘어간다. 일 한도 · 크레딧 소진이면 그 모델의 남은 회차는 부르지 않고 건너뛴다. API 키가 없으면 아무것도 기록하지 않고 바로 멈춘다.
-- 공급자를 추가하려면 `llm.py`에 `_call_<공급자>` 형태의 함수를 만들고 `PROVIDERS` · `API_KEY_ENVS`에 등록한다.
+- 공급자를 추가하려면 `llm.py`에 `_call_<공급자>` 형태의 함수를 만들고 `PROVIDERS` · `API_KEY_ENVS`에 등록한다. OpenAI Chat Completions 형식을 그대로 쓰는 공급자라면 함수 없이 `OPENAI_COMPATIBLE`에 한 줄(기본 주소 · 주소를 바꾸는 환경변수 · 생성 토큰 상한 필드 · JSON 모드 지원 여부)만 더하면 된다(BE-84).
+
+#### API 키를 `.env` 파일로 주기 (BE-86)
+
+매번 `export`하는 대신 `.env` 파일에 적어 두면 `llm.py`를 쓰는 모든 도구(`generate.py` · `pipeline.py` · `case-extractor/*.py` 등)가 자동으로 읽는다.
+
+```bash
+cp .env.example .env    # tools/ai-judgment에서
+# .env를 열어 쓰는 공급자의 키만 채운다
+```
+
+- **찾는 위치**: `tools/ai-judgment/.env` → 저장소 루트 `.env` 순. 둘 다 있으면 먼저 찾은 쪽(도구 폴더)이 이긴다.
+- **우선순위**: 이미 셸에 설정된 환경변수가 있으면 **그 값이 `.env`보다 우선한다.** `GROQ_API_KEY=... python3 generate.py ...`처럼 한 번만 다른 키로 돌리는 걸 막지 않기 위해서다.
+- **`.env`는 커밋하지 않는다** (`.gitignore`). 커밋하는 건 값이 빈 `.env.example`뿐이다.
+- 문법은 `KEY=VALUE`, `export KEY=VALUE`(접두어 무시), `#`으로 시작하는 주석, 큰따옴표 · 작은따옴표로 감싼 값(이스케이프 처리는 하지 않는다)을 지원한다. `python-dotenv` 같은 패키지는 쓰지 않는다("설치 없이 실행" 원칙).
+- **로드한 변수는 이름만 안내하고 값은 어디에도 남기지 않는다.** 파일 권한이 느슨하면(다른 사용자도 읽을 수 있으면) 경고한다.
+- LLM API 키뿐 아니라 파이프라인 적재(`stages.load`)가 읽는 DB 접속 값(`DB_URL` · `DB_USERNAME` · `DB_PASSWORD`)도 같은 방식으로 `.env`에 넣을 수 있다. 다만 이 파일은 **API 키 · DB 접속 정보만** 두고 다른 비밀값을 섞지 않는다 — 파이프라인이 띄우는 자식 프로세스(`psql` 등)에도 전체 환경변수가 그대로 전달되기 때문이다.
+- 구현: `env_file.py`(`llm.py`를 불러오는 시점에 한 번 적용된다). 직접 쓸 일은 거의 없지만, `env_file.apply_env_files(paths=[...])`로 다른 위치의 파일을 적용할 수 있다.
 
 **결과 폴더** (`out/runs/<batch>/`, git 제외)
 
@@ -450,7 +474,7 @@ python3 compare.py <켬 batchDir>
 | --- | --- | --- |
 | 서비스 과부하 | 503 · 529 | 5 · 10 · 20 · 40초…로 늘려 가며(±25% 지터) 다시 보낸다. 한 번에 `maxWait`초를 넘게 기다리지 않는다 |
 | 분당 한도 | 429 | 응답이 알려 준 시간(`Retry-After` 헤더, Gemini는 본문 `retryDelay`) + 1초를 기다린다. 안내가 없으면 1분(분당 한도가 풀릴 시간)을 기다린다. 안내가 `maxWait`보다 길면 기다려도 소용없으므로 바로 끝낸다 |
-| 일 한도 · 크레딧 소진 | 429 (Gemini `...PerDay...`, OpenAI `insufficient_quota`) | **다시 보내지 않는다.** 그 모델의 남은 회차 · 재생성도 건너뛴다 |
+| 일 한도 · 크레딧 소진 | 429 (Gemini `...PerDay...`, OpenAI `insufficient_quota`, Groq `on requests per day (RPD)`, 크레딧 소진 문구 — BE-84) | **다시 보내지 않는다.** 그 모델의 남은 회차 · 재생성도 건너뛴다 |
 | 그 밖의 서버 오류 · 연결 실패 | 500 · 502 · 504 등 | 2 · 4 · 8초…로 다시 보낸다 |
 
 - 최종 실패 시 오류 메시지가 원인(과부하 / 분당 한도 / 일 한도)과 다음에 할 일을 알려 준다. 실행 기록(`run-NNN.json`)의 `callErrorKind`에도 `overloaded` · `rate_limit` · `daily_quota`로 남는다.
@@ -463,7 +487,9 @@ python3 compare.py <켬 batchDir>
 
 ### 무료 등급이 있는 모델 목록 (BE-45)
 
-목록은 `free_models.json`(확인일 2026-10-08)에 있고, `llm.py`(`has_free_tier`)와 파이프라인 전송 안내가 읽는다. **"무료 등급이 있는 모델"이지 "지금 키가 무료"라는 뜻이 아니다** — 결제를 연결한 프로젝트의 키는 같은 모델도 유료다. 그래서 호출을 막지는 않고 안내만 한다.
+목록은 `free_models.json`(확인일 2026-10-16)에 있고, `llm.py`(`has_free_tier`)와 파이프라인 전송 안내가 읽는다. **"무료 등급이 있는 모델"이지 "지금 키가 무료"라는 뜻이 아니다** — 결제를 연결한 프로젝트의 키는 같은 모델도 유료다. 그래서 호출을 막지는 않고 안내만 한다.
+
+- **목록 밖 모델은 경고되지 않는다.** `has_free_tier`는 `models`에 **정확히 등록된 모델명**만 본다. 예를 들어 NVIDIA API Trial 키는 키 자체가 체험 약관 대상이라 `nim:` 모델이면 목록에 없어도 같은 약관(입력을 제품 개선에 사용)이 적용되지만, extract·court에 목록 밖 NIM 모델이나 Groq `previewModels`를 직접 지정하면 "원문이 외부로 나간다"는 경고가 뜨지 않는다. `free_models.json`에 모델을 추가하지 않은 채 쓰는 경우 이 경고에 의존하지 말 것.
 
 **Gemini API** (출처: [가격 문서](https://ai.google.dev/gemini-api/docs/pricing), 확인일 2026-10-08)
 
@@ -476,6 +502,27 @@ python3 compare.py <켬 batchDir>
 - **데이터 사용**: 무료 등급은 입력 · 응답을 제품 개선에 쓰고 사람이 검토할 수 있다. 유료 등급은 쓰지 않는다([약관](https://ai.google.dev/gemini-api/terms)).
 - **자동 사용**: 아래 "무료 모델 자동 사용"을 켜면 이 목록의 모델을 파이프라인이 알아서 돌려가며 쓴다.
 - **쓰임**: 무료 등급이 있는 모델은 비식별화한 사건 데이터를 보내는 **점검 · 생성**(`stages.contamination.models` · `stages.generate.models`, 교차 호출 BE-44)에서만 무료 키로 쓴다. **판결문 원문을 보내는 비식별화(`extract`) · 재판부 초안(`court`)에는 기본으로 무료 키를 쓰지 않는다**(위 원칙, 모델 대체 체인에 넣는 모델도 마찬가지). 유료 모델이 모두 막혔을 때의 마지막 백업으로만 `allowFreeTierForJudgment`로 켤 수 있다(아래 "판결문 단계의 무료 등급 백업"). 파이프라인은 시작할 때 이 단계에 무료 등급이 있는 모델이 들어 있으면 경고 안내를 출력한다.
+**Groq** (출처: [모델 문서](https://console.groq.com/docs/models), 확인일 2026-10-16, BE-84)
+
+| 자동 선택에 넣은 모델 | preview (자동 선택 제외) |
+| --- | --- |
+| `llama-3.3-70b-versatile` · `openai/gpt-oss-120b` · `openai/gpt-oss-20b` · `llama-3.1-8b-instant` | `qwen/qwen3.8-27b` · `minimaxai/minimax-m2.7` · `meta-models/muse-spark-open` |
+
+- **한도**: 문서의 표는 개발자 요금제 기준이라 무료 등급과 다르다. [콘솔 Settings → Limits](https://console.groq.com/settings/limits)에서 계정별로 확인한다. 한도는 **조직 단위**라 API 키를 더 만들어도 늘지 않는다. 429에 `retry-after` 헤더(초)가 오고, 본문 문구로 분당 한도(`per minute (RPM · TPM)`)와 일 한도(`per day (RPD · TPD)`)를 구분한다.
+- **데이터 사용**: Groq는 추론 입력 · 응답을 기본으로 보관하지 않고(사용 메타데이터만 남는다), 서비스 계약상 고객 데이터를 학습에 쓰지 않는다고 적고 있다([데이터 문서](https://console.groq.com/docs/your-data) · [서비스 계약](https://console.groq.com/docs/legal/services-agreement)). **다만 무료 등급을 따로 떼어 규정한 조항은 확인하지 못했다.** 판결문 원문 단계는 다른 무료 등급과 똑같이 다룬다(유료 키만, 아래 "판결문 단계의 무료 등급 백업" 예외만).
+- preview 모델은 공급자가 예고 없이 내릴 수 있다고 안내한 모델이라 `free:groq` 자동 선택에서 뺐다. 직접 지정(`groq:qwen/qwen3.8-27b`)은 된다.
+
+**NVIDIA NIM** (출처: [모델 카탈로그](https://build.nvidia.com/models) · 목록 API `https://integrate.api.nvidia.com/v1/models`, 확인일 2026-10-16, BE-84)
+
+| 자동 선택에 넣은 모델 |
+| --- |
+| `nvidia/nemotron-3-super-120b-a12b` · `nvidia/nemotron-3.5-lightning-30b-a3b` · `nvidia/nemotron-nano-3-30b-a3b` · `z-ai/glm-5.3` · `google/gemma-4-31b-it` · `openai/gpt-oss-20b` · `deepseek-ai/deepseek-v4.1-flash` · `moonshotai/kimi-k2.6` · `mistralai/mistral-large-2-instruct` |
+
+- 카탈로그에는 임베딩 · 음성 · 코드 · 비전 · 안전 분류 모델이 함께 있다. 위 목록은 그중 **판결 생성에 쓸 수 있는 범용 텍스트 모델만** 고른 것이다. 전체는 `python3 list_models.py nim`으로 본다.
+- **한도**: 분당 요청 수와 체험 크레딧으로 제한되고 계정마다 다르다. 공식 표가 없으므로 계정 설정에서 확인한다.
+- ⚠️ **데이터 사용**: [NVIDIA API Trial 약관](https://assets.ngc.nvidia.com/products/api-catalog/legal/NVIDIA%20API%20Trial%20Terms%20of%20Service.pdf)은 입력(User Content) · 응답(Generated Content)을 **AI 모델을 포함한 제품 · 서비스 개선에 쓸 수 있다**고 적고 있다. Gemini 무료 등급과 같은 기준으로 다룬다 — 비식별화한 사건 내용(점검 · 생성)만 보내고 판결문 원문 단계에는 쓰지 않는다.
+- JSON 모드(`response_format`)를 지원하지 않는 모델이 있다. 400이 오면 오류에 안내가 붙는다.
+
 - **다른 공급자(OpenAI · Anthropic)**: 이번에 공식 문서로 확인하지 않았다. 목록이 비어 있다는 것이지 무료 등급이 없다는 보증이 아니다. 확인하면 `free_models.json`에 `"<공급자>": {"source": …, "models": […]}`를 추가한다(공급자 이름은 `llm.py`의 `PROVIDERS`와 같게).
 - **목록은 자주 바뀐다.** 쓰기 전에 `source`에서 다시 확인하고 `checkedAt`을 고친다. 이 목록은 공식 문서 요약 도구로 가져온 값이므로, 팀이 쓸 모델은 가격 문서에서 직접 한 번 더 확인한다. 같은 주제를 다룬 블로그 중에는 "Pro 모델은 2026-04-01부터 무료 등급에서 빠졌다"는 글이 있으나, 공식 가격 문서에는 `gemini-2.5-pro`가 무료로 표시되어 있어 공식 문서를 따랐다.
 

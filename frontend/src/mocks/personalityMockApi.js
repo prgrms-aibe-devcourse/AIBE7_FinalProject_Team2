@@ -8,8 +8,6 @@ import { imageNumberOf, QUESTIONS, TYPES } from './personalityMockData.js';
 const delay = () => new Promise((resolve) => setTimeout(resolve, 250));
 const storageKey = 'nlnb-mock-personality';
 const WEIGHTS = [2, 1, 0, 1, 2]; // 매우 A · 조금 A · 보통 · 조금 B · 매우 B
-// 캐릭터 이미지 파일(7.6.8)이 들어오면 true로 바꾼다. 그 전에는 imageUrl이 null이고 화면은 대체 이미지를 쓴다(명세 9-1)
-const IMAGES_READY = true;
 
 // 체험한 사건 목록 목. 실제로는 마이페이지 API가 체험 기록에서 만든다 (사건마다 최근 회차 하나, 명세 P-5)
 const mockExperiences = [
@@ -82,7 +80,7 @@ function toType(code) {
     meme,
     dailyDescription: daily,
     verdictDescription: verdict,
-    imageUrl: IMAGES_READY ? `/images/characters/personality/${number}.webp` : null,
+    imageUrl: `/images/characters/personality/${number}.webp`,
   };
 }
 

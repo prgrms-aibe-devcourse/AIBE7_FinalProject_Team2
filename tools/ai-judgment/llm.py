@@ -1,6 +1,7 @@
 """LLM 공급자 공통 호출 (BE-30).
 
-모델은 `공급자:모델ID` 형식으로 지정한다. 예: `openai:gpt-5`, `anthropic:claude-opus-5-5`, `gemini:gemini-3.7-flash`
+모델은 `공급자:모델ID` 형식으로 지정한다. 예: `openai:gpt-5`, `anthropic:claude-opus-5-5`, `gemini:gemini-3.7-flash`,
+`groq:llama-3.3-70b-versatile`, `nim:nvidia/nemotron-3-super-120b-a12b` (groq · nim은 BE-84)
 - 표준 라이브러리(urllib)로 각 공급자의 HTTP API를 직접 부른다. 이 폴더의 "설치 없이 실행" 원칙을 지킨다.
 - API 키는 환경변수로만 읽는다. 코드 · 출력 파일 · 오류 메시지에 키를 남기지 않는다.
 - 웹 검색 · 그라운딩 같은 도구는 붙이지 않는다 (실제 판결을 찾아보면 독립 판단 · 사전 학습 점검이 의미 없어진다).
@@ -8,6 +9,12 @@
 
 공급자를 추가하려면 `_call_<공급자>` 함수를 만들고 PROVIDERS에 등록한다.
 함수는 (system, user, model, options) → LLMResult를 돌려준다.
+OpenAI Chat Completions 형식을 그대로 쓰는 공급자라면 함수 대신 OPENAI_COMPATIBLE에 한 줄 더하면 된다.
+
+API 키는 환경변수뿐 아니라 `.env` 파일로도 줄 수 있다 (BE-86, `env_file.py`). 이 모듈을 불러오는 시점에
+`tools/ai-judgment/.env` → 저장소 루트 `.env` 순으로 읽어 **아직 설정되지 않은** 환경변수만 채운다
+(이미 설정된 값이 우선한다). Claude SDK는 `ANTHROPIC_API_KEY`를 직접 읽어 이 파일의 api_key()를 거치지
+않으므로, api_key() 안이 아니라 **모듈을 불러오는 시점**에 적용해야 그 경로도 빠짐없이 덮는다.
 """
 
 import functools
@@ -20,6 +27,10 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+
+import env_file
+
+env_file.ensure_loaded()
 
 DEFAULT_TIMEOUT = 300  # 초. 사고(reasoning) 모델은 응답이 오래 걸린다
 DEFAULT_MAX_TOKENS = 16000
@@ -50,6 +61,21 @@ API_KEY_ENVS = {
     "openai": ("OPENAI_API_KEY",),
     "anthropic": ("ANTHROPIC_API_KEY",),
     "gemini": ("GEMINI_API_KEY", "GOOGLE_API_KEY"),
+    "groq": ("GROQ_API_KEY",),
+    "nim": ("NVIDIA_API_KEY", "NVIDIA_NIM_API_KEY"),
+}
+
+# OpenAI Chat Completions 형식을 쓰는 공급자 (BE-84). 같은 요청 · 응답 모양이라 _openai_compatible 하나로 부른다
+# - baseUrlEnv: 사내 프록시 · 호환 게이트웨이를 쓸 때 기본 주소를 바꾸는 환경변수
+# - maxTokensField: OpenAI · Groq는 max_tokens가 deprecated라 max_completion_tokens를 쓴다. NIM은 max_tokens만 받는다
+# - jsonModeByModel: JSON 모드(response_format) 지원이 모델마다 다른 공급자. 400이 나면 안내를 덧붙인다
+OPENAI_COMPATIBLE = {
+    "openai": {"baseUrl": "https://api.openai.com/v1", "baseUrlEnv": "OPENAI_BASE_URL",
+               "maxTokensField": "max_completion_tokens", "jsonModeByModel": False},
+    "groq": {"baseUrl": "https://api.groq.com/openai/v1", "baseUrlEnv": "GROQ_BASE_URL",
+             "maxTokensField": "max_completion_tokens", "jsonModeByModel": False},
+    "nim": {"baseUrl": "https://integrate.api.nvidia.com/v1", "baseUrlEnv": "NVIDIA_BASE_URL",
+            "maxTokensField": "max_tokens", "jsonModeByModel": True},
 }
 
 
@@ -58,6 +84,10 @@ FREE_MODELS_FILE = Path(__file__).with_name("free_models.json")  # 무료 등급
 
 class LLMError(Exception):
     kind = None  # 실패 원인 구분. 아래 하위 클래스가 채운다 (BE-36)
+
+    def __init__(self, message, status=None):
+        super().__init__(message)
+        self.status = status  # HTTP 상태 코드 (응답을 받은 오류일 때만, BE-84)
 
 
 class LLMOverloadedError(LLMError):
@@ -245,18 +275,31 @@ def call(spec, system, user, *, temperature=None, max_tokens=DEFAULT_MAX_TOKENS,
 
 
 def _post_json(url, headers, body, timeout):
-    """JSON POST. 재시도할 만한 오류(과부하 · 한도 · 서버 오류)는 원인에 맞게 기다렸다가 다시 보낸다 (BE-36).
+    """JSON POST. 재시도 · 한도 대응은 _request_json과 같다. 공급자 호출은 모두 이 함수를 거친다."""
+    return _request_json(url, headers, body, timeout)
+
+
+def _get_json(url, headers, timeout):
+    """JSON GET (모델 목록 조회 등, BE-84). 재시도 · 한도 대응은 POST와 같다."""
+    return _request_json(url, headers, None, timeout, method="GET")
+
+
+def _request_json(url, headers, body, timeout, method="POST"):
+    """JSON 요청. 재시도할 만한 오류(과부하 · 한도 · 서버 오류)는 원인에 맞게 기다렸다가 다시 보낸다 (BE-36).
 
     - 503 · 529(과부하): 지수 백오프(5 · 10 · 20 · 40초…) + 지터. 최대 대기 시간을 넘지 않는다
     - 429(한도): 응답이 안내한 시간(Retry-After 헤더 · 본문 retryDelay)만큼, 안내가 없으면 1분 기다린다.
       일 한도 · 크레딧 소진이면 기다려도 풀리지 않으므로 바로 멈추고, 안내가 최대 대기보다 길어도 멈춘다
     - 그 밖의 5xx · 연결 실패: 2 · 4 · 8초 백오프
+
+    body가 None이면 요청 본문 없이 보낸다(GET).
     """
-    data = json.dumps(body).encode("utf-8")
+    data = json.dumps(body).encode("utf-8") if body is not None else None
+    content_type = {"Content-Type": "application/json"} if data is not None else {}
     max_attempts, max_wait = _retry_policy["max_attempts"], _retry_policy["max_wait"]
     for attempt in range(1, max_attempts + 1):
-        request = urllib.request.Request(url, data=data, method="POST",
-                                         headers={"Content-Type": "application/json", **headers})
+        request = urllib.request.Request(url, data=data, method=method,
+                                         headers={**content_type, **headers})
         try:
             with urllib.request.urlopen(request, timeout=timeout, context=ssl_context()) as response:
                 raw = response.read()
@@ -264,15 +307,15 @@ def _post_json(url, headers, body, timeout):
             info = _error_info(e)
             kind = _failure_kind(e.code, info)
             if kind == "daily_quota":
-                raise LLMQuotaExhaustedError(_final_message(kind, e.code, info, attempt, max_wait)) from None
+                raise LLMQuotaExhaustedError(_final_message(kind, e.code, info, attempt, max_wait), e.code) from None
             if kind is None:
-                raise LLMError(f"API 오류 ({e.code}): {info['detail']}") from None
+                raise LLMError(f"API 오류 ({e.code}): {info['detail']}", e.code) from None
             wait = _retry_wait(kind, info, attempt, max_wait)
             if attempt < max_attempts and wait is not None:
                 time.sleep(wait)
                 continue
             message = _final_message(kind, e.code, info, attempt, max_wait, hint_too_long=wait is None)
-            raise _FAILURE_ERRORS.get(kind, LLMError)(message) from None
+            raise _FAILURE_ERRORS.get(kind, LLMError)(message, e.code) from None
         except urllib.error.URLError as e:
             if isinstance(e.reason, ssl.SSLCertVerificationError):
                 raise LLMError(f"{SSL_HELP} ({e.reason})") from None  # 다시 보내도 같으므로 재시도하지 않는다
@@ -353,15 +396,25 @@ def _error_info(error):
     details = message.get("details") if isinstance(message, dict) else None
     details = [d for d in details if isinstance(d, dict)] if isinstance(details, list) else []
     if isinstance(message, dict):
-        text = message.get("message", message)
+        # OpenAI · Groq는 error.message, NIM은 detail · title에 사유를 담는다 (BE-84)
+        text = next((message[key] for key in ERROR_TEXT_KEYS if isinstance(message.get(key), str)), message)
     else:
         text = message
     detail = str(text)[:500] if text else str(error.reason)
     return {
         "detail": detail,
         "retry_after": _header_retry_after(error) or _body_retry_delay(details),
-        "exhausted": _quota_exhausted(message, details),
+        "exhausted": _quota_exhausted(message, details, detail),
     }
+
+
+ERROR_TEXT_KEYS = ("message", "detail", "title")
+
+# 429가 일 한도 · 크레딧 소진이라고 알려 주는 본문 문구 (소문자 비교, BE-84).
+# Groq는 "... on requests per day (RPD): Limit 1000, Used 1000"처럼 창(窓)을 문장에 적는다. 분당 한도는
+# "per minute (RPM)"이라 걸리지 않는다. 기다려도 풀리지 않는 경우만 넣는다 (다시 보내지 않고 모델을 바꾸게 되므로)
+DAILY_QUOTA_TEXTS = ("per day", "(rpd)", "(tpd)", "daily limit", "daily quota",
+                     "out of credits", "insufficient credits", "credit balance", "credits exhausted")
 
 
 def _header_retry_after(error):
@@ -385,34 +438,43 @@ def _body_retry_delay(details):
     return None
 
 
-def _quota_exhausted(message, details):
-    """429가 일 한도(Gemini QuotaFailure ...PerDay...) · 크레딧 소진(OpenAI insufficient_quota)인지."""
+def _quota_exhausted(message, details, detail=""):
+    """429가 일 한도(Gemini QuotaFailure ...PerDay... · Groq RPD) · 크레딧 소진(OpenAI insufficient_quota)인지."""
     if isinstance(message, dict) and message.get("code") == "insufficient_quota":
         return True
     for item in details:
         for violation in item.get("violations") or []:
             if isinstance(violation, dict) and "perday" in f"{violation.get('quotaId', '')}".lower():
                 return True
-    return False
+    lowered = detail.lower()
+    return any(text in lowered for text in DAILY_QUOTA_TEXTS)
 
 
-def _openai(system, user, model, options):
-    """OpenAI Chat Completions. OPENAI_BASE_URL로 호환 엔드포인트를 쓸 수 있다."""
-    base_url = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
+def _openai_compatible(system, user, model, options, provider="openai"):
+    """OpenAI Chat Completions 형식을 쓰는 공급자 (openai · groq · nim, BE-84).
+
+    공급자마다 다른 것은 OPENAI_COMPATIBLE에만 둔다: 기본 주소(와 그것을 바꾸는 환경변수), 생성 토큰 상한 필드,
+    JSON 모드 지원 여부. 응답 · 토큰 사용량 모양은 세 공급자가 같다.
+    """
+    config = OPENAI_COMPATIBLE[provider]
+    base_url = os.environ.get(config["baseUrlEnv"], config["baseUrl"]).rstrip("/")
     body = {
         "model": model,
         # system이 비었으면(사전 학습 점검처럼 사용자 메시지 하나만 보낼 때) 시스템 메시지를 넣지 않는다
         "messages": ([{"role": "system", "content": system}] if system else []) + [{"role": "user", "content": user}],
-        # 사고 모델은 max_tokens 대신 max_completion_tokens만 받는다
-        "max_completion_tokens": options["max_tokens"],
+        # 사고 모델은 max_tokens 대신 max_completion_tokens만 받는다 (NIM은 반대로 max_tokens만 받는다)
+        config["maxTokensField"]: options["max_tokens"],
     }
     if options["json_output"]:
         body["response_format"] = {"type": "json_object"}
     if options["temperature"] is not None:
         # 사고 모델 중에는 temperature를 받지 않는 것이 있어 지정했을 때만 보낸다
         body["temperature"] = options["temperature"]
-    response = options["http"](f"{base_url}/chat/completions", {"Authorization": f"Bearer {api_key('openai')}"},
-                               body, options["timeout"])
+    try:
+        response = options["http"](f"{base_url}/chat/completions",
+                                   {"Authorization": f"Bearer {api_key(provider)}"}, body, options["timeout"])
+    except LLMError as e:
+        raise _json_mode_hint(e, config, options["json_output"]) from None
     choice = (response.get("choices") or [{}])[0]
     message = choice.get("message") or {}
     if message.get("refusal"):
@@ -421,7 +483,7 @@ def _openai(system, user, model, options):
     details = usage.get("completion_tokens_details") or {}
     return LLMResult(
         text=message.get("content") or "",
-        provider="openai",
+        provider=provider,
         model=model,
         served_model=response.get("model"),
         usage={
@@ -433,6 +495,18 @@ def _openai(system, user, model, options):
         },
         stop_reason=choice.get("finish_reason"),
     )
+
+
+def _json_mode_hint(error, config, json_output):
+    """JSON 모드 지원이 모델마다 다른 공급자(NIM)의 400 오류에 안내를 덧붙인다 (BE-84).
+
+    지원하지 않는 모델에 response_format을 보내면 400이 온다. 원인을 모른 채 모델을 의심하지 않도록 알려 준다.
+    한도 · 과부하 오류는 그대로 돌려줘서 대체 체인 · 재시도 판단(kind)이 바뀌지 않게 한다.
+    """
+    if config["jsonModeByModel"] and json_output and error.status == 400:
+        return LLMError(f"{error}\n→ 이 모델이 JSON 모드(response_format)를 지원하지 않을 수 있습니다. "
+                        "지원하는 모델로 바꾸거나 다른 공급자를 쓰세요", error.status)
+    return error
 
 
 def _anthropic(system, user, model, options):
@@ -516,10 +590,34 @@ def _gemini(system, user, model, options):
 
 
 PROVIDERS = {
-    "openai": _openai,
     "anthropic": _anthropic,
     "gemini": _gemini,
+    # OpenAI 호환 공급자는 같은 함수를 공급자 이름만 바꿔 쓴다 (BE-84)
+    **{name: functools.partial(_openai_compatible, provider=name) for name in OPENAI_COMPATIBLE},
 }
+
+
+def list_models(provider, *, raw=False, timeout=DEFAULT_TIMEOUT, http=None):
+    """OpenAI 호환 공급자의 `/models`로 지금 쓸 수 있는 모델 ID 목록을 받는다 (BE-84).
+
+    free_models.json의 목록은 자주 바뀌므로, 이 함수(= list_models.py)로 공급자에게 직접 확인하고 고쳐 넣는다.
+    목록을 그대로 free_models.json에 넣지는 않는다. 임베딩 · 음성 · 안전 분류 모델이 섞여 있어
+    `free:<공급자>` 자동 선택이 판결 생성에 쓸 수 없는 모델을 고를 수 있다.
+
+    raw=True면 공급자 응답을 그대로 돌려준다 (owned_by 등 모델 ID 밖의 값까지 볼 때).
+    """
+    if provider not in OPENAI_COMPATIBLE:
+        raise LLMError(f"모델 목록 조회는 OpenAI 호환 공급자만 됩니다: {provider!r} "
+                       f"(가능: {', '.join(sorted(OPENAI_COMPATIBLE))})")
+    config = OPENAI_COMPATIBLE[provider]
+    base_url = os.environ.get(config["baseUrlEnv"], config["baseUrl"]).rstrip("/")
+    response = (http or _get_json)(f"{base_url}/models", {"Authorization": f"Bearer {api_key(provider)}"}, timeout)
+    if raw:
+        return response
+    data = response.get("data")
+    if not isinstance(data, list):
+        raise LLMError("모델 목록 응답에 data 배열이 없습니다")
+    return [item["id"] for item in data if isinstance(item, dict) and isinstance(item.get("id"), str)]
 
 
 EMBEDDING_BATCH = 100  # batchEmbedContents 한 번에 보낼 수 있는 최대 개수

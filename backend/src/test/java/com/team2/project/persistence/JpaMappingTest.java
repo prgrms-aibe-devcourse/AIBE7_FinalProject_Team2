@@ -32,6 +32,7 @@ import com.team2.project.legalcase.domain.PenaltyType;
 import com.team2.project.legalcase.domain.RangeKind;
 import com.team2.project.legalcase.domain.RevealStage;
 import com.team2.project.legalcase.domain.SentenceRangeOption;
+import com.team2.project.legalcase.domain.SummaryTagCandidates;
 import com.team2.project.legalcase.domain.ValueAxis;
 import com.team2.project.legalcase.domain.ValueAxisStatus;
 import com.team2.project.legalcase.domain.ValueAxisVotes;
@@ -157,6 +158,35 @@ class JpaMappingTest {
 		assertThat(confirmed.getValueAxis()).isNull();
 		assertThat(confirmed.getValueAxisStatus()).isEqualTo(ValueAxisStatus.CONFIRMED);
 		assertThat(confirmed.getValueAxisVotes()).isNull();
+	}
+
+	@Test
+	@DisplayName("판단 요소의 요약어 후보를 읽는다, 없으면 null (BE-80)")
+	void findById_factorSummaryTagCandidates_readsJson() {
+		jdbc.update("""
+			UPDATE factor SET summary_tag_candidates = '{"candidates": [{"tag": "흉기 사용", "score": 0.9312},
+			    {"tag": "범행 동기", "score": 0.8123}], "inVocabulary": false, "ambiguous": false, "suggested": "흉기 사용"}'::jsonb
+			WHERE id = ?""", overviewFactorId);
+
+		Factor withCandidates = factorRepository.findById(overviewFactorId).orElseThrow();
+		Factor without = factorRepository.findById(detailFactorId).orElseThrow();
+
+		assertThat(withCandidates.getSummaryTagCandidates()).isEqualTo(new SummaryTagCandidates(
+			List.of(new SummaryTagCandidates.Candidate("흉기 사용", 0.9312), new SummaryTagCandidates.Candidate("범행 동기", 0.8123)),
+			false, false, "흉기 사용"));
+		assertThat(without.getSummaryTagCandidates()).isNull();
+	}
+
+	@Test
+	@DisplayName("요약어 후보에 모르는 키가 있어도 요소를 읽는다 (#166 리뷰 — 파이프라인 키 추가 · 배포 되돌림 대비)")
+	void findById_factorSummaryTagCandidates_ignoresUnknownKeys() {
+		jdbc.update("""
+			UPDATE factor SET summary_tag_candidates = '{"candidates": [{"tag": "흉기 사용", "score": 0.93, "rank": 1}],
+			    "inVocabulary": true, "ambiguous": false, "suggested": null, "futureKey": 1}'::jsonb
+			WHERE id = ?""", overviewFactorId);
+
+		assertThat(factorRepository.findById(overviewFactorId).orElseThrow().getSummaryTagCandidates()).isEqualTo(
+			new SummaryTagCandidates(List.of(new SummaryTagCandidates.Candidate("흉기 사용", 0.93)), true, false, null));
 	}
 
 	@Test

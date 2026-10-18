@@ -1,0 +1,89 @@
+# 모니터링 전용 EC2에서 돌리는 구성 (COMMON-43, WBS 7.2.4).
+#
+# 왜 메인 서버가 아니라 별도 호스트인가 (docs/decisions/COMMON-43.md에 자세히):
+#   1. 메인은 t3.small 2GB에 backend 1g · postgres 512m · redis 256m이 이미 할당돼 있다 — 올릴 자리가 없다
+#   2. 감시 대상과 감시자가 같은 호스트면, 그 호스트가 죽는 순간 원인을 볼 수단도 같이 죽는다
+#   3. Grafana는 사람이 붙는 UI다. 메인 보안 그룹(22 · 80 · 443)에 노출을 더 만들지 않는다
+#
+# 여기서 도는 것: Prometheus(수집 · 저장) · Loki(로그 저장) · Grafana(조회)
+# 메인 EC2에서 도는 것: Alloy(로그 전송) · node_exporter — deploy/docker-compose.monitoring-agent.yml
+#   메트릭은 Prometheus가 가져오고(pull), 로그는 Alloy가 보낸다(push). 지나간 로그 줄은 가져올 수 없어서 방향이 반대다.
+#
+# 사용법:
+#   cd monitoring
+#   cp .env.example .env         # GRAFANA_ADMIN_PASSWORD 등
+#   mkdir -p targets && vi targets/backend.json   # 메인 EC2 사설 IP (README 참고)
+#   docker compose -f docker-compose.prod.yml up -d
+#   ssh -N -L 3000:localhost:3000 <모니터링 EC2>  로 터널을 열고 http://localhost:3000
+
+name: lawnambul-monitoring
+
+services:
+  prometheus:
+    image: prom/prometheus:v3.13.3
+    container_name: lawnambul-prometheus
+    volumes:
+      - ./prometheus.prod.yml:/etc/prometheus/prometheus.yml:ro
+      # 스크레이프 대상(사설 IP)은 서버에서 만드는 파일이다 — 커밋하지 않는다(.gitignore)
+      - ./targets:/etc/prometheus/targets:ro
+      - prometheus-data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      # 로컬 기본값(15d)보다 길게 둔다. 분리된 호스트라 디스크를 백엔드와 나눠 쓰지 않아 여유가 있고,
+      # 지난주와 비교해야 알 수 있는 변화(메모리가 서서히 차는 것 등)가 모니터링의 주 용도다
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION_TIME:-30d}
+      # 디스크가 먼저 차서 수집이 멈추는 걸 막는다. 둘 중 먼저 닿는 조건이 적용된다
+      - --storage.tsdb.retention.size=${PROMETHEUS_RETENTION_SIZE:-8GB}
+      # 7.3.1 경보 규칙을 올리고 나면 파일을 다시 읽어야 하는데, 재시작하면 그 사이 데이터가 빈다
+      - --web.enable-lifecycle
+    ports:
+      # 사람은 Grafana로만 본다. Prometheus UI는 호스트 안에서만 연다(SSH 터널로 9090을 따로 열 수는 있다)
+      - "127.0.0.1:9090:9090"
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:3.7.4
+    container_name: lawnambul-loki
+    command: -config.file=/etc/loki/loki-config.yml
+    volumes:
+      - ./loki-config.yml:/etc/loki/loki-config.yml:ro
+      - loki-data:/loki
+    ports:
+      # 로컬과 달리 루프백이 아니다 — 메인 EC2의 Alloy가 여기로 로그를 밀어 넣어야 한다.
+      # 8081 · 9100과 같은 이유로 사설 IP에만 바인딩한다(D 요청, COMMON-43 협의): Docker가 연 포트는
+      # 서버 방화벽(ufw)을 우회하고, Loki에는 인증이 없어 보안 그룹이 유일한 보호선이기 때문이다
+      - "${MONITORING_PRIVATE_IP:?monitoring/.env에 MONITORING_PRIVATE_IP(이 EC2의 사설 IP)를 넣어야 한다 — 0.0.0.0에 바인딩하지 않는다}:3100:3100"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:13.2.4
+    container_name: lawnambul-grafana
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    environment:
+      # 기본값을 두지 않는다 — .env에 없으면 아예 뜨지 않게 해서, admin/admin인 채로 운영에 올라가는 일을 막는다
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:?monitoring/.env에 GRAFANA_ADMIN_USER를 넣어야 한다}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?monitoring/.env에 GRAFANA_ADMIN_PASSWORD를 넣어야 한다}
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      # 계정 가입 · 초대를 막는다. 접근은 7.3.3 기준대로 팀원 계정만 수동으로 만든다
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_USERS_ALLOW_ORG_CREATE: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+    ports:
+      # 퍼블릭에 열지 않는다. SSH 터널로 붙는다 — 도메인 · HTTPS · 리버스 프록시는 BE-75(도메인 · HTTPS)와 묶어 뒤에 본다.
+      # HTTPS 없이 퍼블릭에 열면 Grafana 로그인 비밀번호가 평문으로 오간다
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - prometheus
+      - loki
+    restart: unless-stopped
+
+volumes:
+  prometheus-data:
+  loki-data:
+  grafana-data:

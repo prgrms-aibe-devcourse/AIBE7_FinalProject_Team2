@@ -1,9 +1,14 @@
-import { button, element, renderSiteHeader } from '../../components/siteLayout.js';
+import { button, element } from '../../components/siteLayout.js';
+import { imageOf } from '../../components/stage.js';
+import { PERSONALITY_LINES } from '../../content/personalityLines.js';
+import { guide, markFolderTurn, renderFolder, sheetMessage } from './personalityParts.js';
 
-// S-15 판결 성향 테스트 — 시작 안내 + 문항 (WBS 7.6.1 콘텐츠 · 7.6.5 화면). 한 화면에 한 문항, 5칸 선택지.
+// S-15 판결 성향 테스트 — 시작 안내 + 문항 (WBS 7.6.1 콘텐츠 · 7.6.5 화면, FE-42 디자인). 한 화면에 한 문항, 5칸 선택지.
 // 결과 전까지는 이전 문항으로 돌아가 답을 바꿀 수 있다(user-flow 3-2). 문항 문구에는 법률 용어를 쓰지 않는다.
 // 칸 값은 0 ~ 4 (매우 A · 조금 A · 보통 · 조금 B · 매우 B). 점수 계산은 서버가 한다.
 // 낭독기에서도 어떤 행동인지 알 수 있게, 라벨에 그 칸이 가리키는 행동 문장을 잇는다 (side: 'optionA' · 'optionB')
+// 고르는 방법(FE-26 목업): 칸을 누르거나 숫자 1 ~ 5를 치면 바로 다음 문항으로 넘어간다. 화살표로 칸을 옮길 때는 넘어가지 않고 "다음"을 직접 누른다.
+// 마지막 문항은 자동으로 넘기지 않는다 — 결과는 "결과 보기"를 눌러야 제출된다.
 const SCALE = [
   { value: 0, degree: '매우', side: 'optionA' },
   { value: 1, degree: '조금', side: 'optionA' },
@@ -11,124 +16,284 @@ const SCALE = [
   { value: 3, degree: '조금', side: 'optionB' },
   { value: 4, degree: '매우', side: 'optionB' },
 ];
-const SCENARIO_LABELS = { FRIEND: '친구', FAMILY: '가족', WORK: '직장', NEIGHBOR: '이웃' };
+const ADVANCE_MS = 260; // 고른 칸이 칠해지는 것을 보고 넘어가도록
+const MIN_LOADING_MS = 900; // 결과 분석 연출(user-flow 3-2)이 깜빡이고 사라지지 않도록
+const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+// 안내 캐릭터 + 문항별 한 줄 대사(content/personalityLines.js). 앞 절반은 내로, 뒤 절반은 남불(대사에 적힌 캐릭터가 우선).
+// 시작 · 절반 · 마지막만 자세가 바뀐다
+function guideFor(question, index, total) {
+  const { who = index < total / 2 ? 'naero' : 'nambul', line } = PERSONALITY_LINES[question.id] ?? {};
+  const look = index === 0 ? 'guide-neutral'
+    : index === total - 1 ? 'guide-happy'
+      : index === Math.floor(total / 2) ? 'cheer-cheer'
+        : 'idle-neutral';
+  return guide(who, look, line);
+}
+
+// 그림을 받아 둔다. 늦거나 실패해도 연출을 막지 않게 한도를 둔다
+const PRELOAD_LIMIT_MS = 1500;
+function preload(src) {
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = image.onerror = () => resolve();
+    image.src = src;
+    window.setTimeout(resolve, PRELOAD_LIMIT_MS);
+  });
+}
+
+// 답안 칸의 펜 체크 표시
+const CHECK_SVG = '<svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M4 10.5 L8.2 14.5 L16 5.5"/></svg>';
 
 export async function renderPersonalityPage(container, { api, navigate }) {
-  const root = element('div', 'personality-page');
-  container.replaceChildren(root);
+  // 검사지는 철을 가로로 눕혀 둔다. 문항과 표지 그림을 먼저 받아 두고 철을 그려, 올라오는 동안 시작 화면이 이미 보이게 한다(personality.css)
+  let root, label, body;
   const active = () => container.contains(root);
-
-  root.append(renderSiteHeader({ navigate, onIntro: () => navigate('landing', { section: 'intro' }) }));
-  const main = element('main', 'personality-main');
-  root.append(main);
-
-  function showMessage(text, retry) {
-    const panel = element('div', 'message-panel');
-    panel.setAttribute('role', 'status');
-    panel.append(element('p', '', text));
-    if (retry) panel.append(button('다시 시도', retry, 'primary-button'));
-    main.replaceChildren(panel);
-  }
+  const here = window.location.pathname;
+  const stillHere = () => window.location.pathname === here; // 문항을 받는 사이 다른 화면으로 가면 새 화면을 덮어쓰지 않는다
+  const keys = new AbortController(); // 숫자 키 단축키. 화면을 떠나면 뗀다
+  const openFolder = () => {
+    ({ root, label, body } = renderFolder(container, { navigate, sheetLabel: '문항지', orientation: 'landscape' }));
+    root.classList.add('is-test');
+  };
+  const fetchQuestions = async () => {
+    const [{ questions: list }] = await Promise.all([
+      api.getPersonalityQuestions(),
+      ...[['naero', 'guide-happy'], ['nambul', 'guide-neutral']].map(([who, look]) => preload(imageOf(who, look))),
+    ]);
+    return list;
+  };
 
   let questions;
   async function load() {
-    showMessage('문항을 불러오는 중이에요.');
     try {
-      ({ questions } = await api.getPersonalityQuestions());
+      questions = await fetchQuestions();
     } catch {
-      if (active()) showMessage('문항을 불러오지 못했어요.', load);
+      if (!stillHere()) return;
+      if (!root) openFolder();
+      if (active()) sheetMessage(body, '문항을 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요.', { retry: retryLoad, alert: true });
       return;
     }
+    if (!stillHere()) return;
+    if (!root) openFolder();
     if (active()) renderIntro();
+    // 문항 · 답안 정리에서 쓸 안내 컷을 미리 받아 둔다(원본 레포 PNG라 처음 뜰 때 늦다)
+    [['naero', 'idle-neutral'], ['nambul', 'idle-neutral'], ['nambul', 'cheer-cheer'], ['nambul', 'guide-happy'], ['naero', 'read-thinking'], ['nambul', 'read-thinking']]
+      .forEach(([who, look]) => { new Image().src = imageOf(who, look); });
+  }
+
+  async function retryLoad() {
+    sheetMessage(body, '문항을 불러오는 중이에요.');
+    await load();
   }
 
   function renderIntro() {
-    const card = element('section', 'personality-intro');
-    card.append(
-      element('p', 'personality-kicker', '판결 성향 테스트'),
-      element('h1', '', '잘잘못을 따질 때, 나는 무엇을 먼저 볼까?'),
-      element('p', 'personality-lead', `일상에서 마주칠 만한 ${questions.length}가지 상황에 답하면, 내가 중요하게 보는 가치에 맞는 판결 성향 유형이 나와요.`),
-    );
-    const notes = element('ul', 'personality-notes');
+    measureOnce();
+    label.textContent = '표지';
+    const intro = element('div', 'test-intro');
+    const duo = element('div', 'test-duo');
+    duo.append(guide('naero', 'guide-happy'), guide('nambul', 'guide-neutral'));
+    const notes = element('section', 'test-notes');
+    notes.setAttribute('aria-labelledby', 'test-notes-title');
+    const notesTitle = element('h2', '', '적는 방법');
+    notesTitle.id = 'test-notes-title';
+    const list = element('ol');
     [
-      `약 3분, ${questions.length}문항이에요. 법을 몰라도 괜찮아요.`,
+      `일상에서 마주칠 만한 ${questions.length}가지 상황이에요. 약 3분, 법을 몰라도 괜찮아요.`,
+      '두 행동 가운데 내 마음이 더 가까운 쪽을 다섯 칸 중에 골라 주세요.',
       '정답은 없어요. 어느 유형이 옳다는 뜻도 아니에요.',
-      '결과가 나오기 전까지는 이전 문항으로 돌아가 답을 바꿀 수 있어요.',
-    ].forEach((text) => notes.append(element('li', '', text)));
-    card.append(notes, button('시작하기', () => renderQuestion(0), 'primary-button'));
-    main.replaceChildren(card);
+    ].forEach((text) => list.append(element('li', '', text)));
+    notes.append(notesTitle, list);
+    const start = button('시작하기', () => renderQuestion(0), 'primary-button test-start');
+    intro.append(
+      duo,
+      element('h1', '', '잘잘못을 따질 때, 나는 무엇을 먼저 볼까?'),
+      element('p', 'test-lead', `${questions.length}가지 상황에 답하면, 내가 중요하게 보는 가치에 맞는 판결 성향 유형이 나와요.`),
+      notes,
+      start,
+    );
+    body.replaceChildren(intro);
+    fitFolder();
   }
 
   const answers = new Map(); // questionId → value
+  let current = 0;
+  let pickedByPointer = false;
+  let advanceTimer = 0;
+  // 표지와 문항지가 같은 크기의 철이 되게, 표지 · 모든 문항 중 가장 큰 높이를 철의 최소 높이로 잡아 둔다(데스크톱)
+  let folderMin = 0;
+  let measured = false;
+  const desktop = () => window.matchMedia('(min-width: 721px)').matches;
+  function fitFolder() {
+    const folder = body.closest('.test-folder');
+    if (!folder || !desktop()) return;
+    folderMin = Math.max(folderMin, folder.offsetHeight);
+    folder.style.minHeight = `${folderMin}px`;
+  }
+  // 처음 한 번 모든 문항을 그려 높이를 잰다(그리는 사이 화면은 갱신되지 않는다)
+  function measureOnce() {
+    if (measured || !desktop()) return;
+    measured = true;
+    questions.forEach((_, i) => renderQuestion(i));
+  }
 
-  function renderQuestion(index) {
+  // 답안 칸: 답한 문항 · 지금 문항 · 앞 문항을 모두 답한 다음 문항만 눌러서 갈 수 있다(건너뛰기 없음)
+  // fresh = 방금 처음 답한 문항 id(그 칸만 체크를 긋는다)
+  function answerGrid(index, fresh) {
+    const nav = element('nav', 'answer-grid');
+    nav.setAttribute('aria-label', '문항 진행');
+    const count = element('p', 'answer-count');
+    count.append(element('b', '', String(index + 1)), ` / ${questions.length}`);
+    const cells = element('ol', 'answer-cells');
+    const reachable = (i) => i <= index || questions.slice(0, i).every((q) => answers.has(q.id));
+    questions.forEach((question, i) => {
+      const item = element('li');
+      const done = answers.has(question.id);
+      const cell = button('', () => renderQuestion(i, { direction: i < index ? -1 : 1 }), `answer-cell${done ? ' is-done' : ''}${question.id === fresh ? ' is-fresh' : ''}${i === index ? ' is-current' : ''}`);
+      cell.append(element('span', 'answer-no', String(i + 1)));
+      if (done) cell.insertAdjacentHTML('beforeend', CHECK_SVG);
+      cell.setAttribute('aria-label', `${i + 1}번 문항${done ? ', 답함' : ''}`);
+      if (i === index) cell.setAttribute('aria-current', 'step');
+      cell.disabled = !reachable(i);
+      item.append(cell);
+      cells.append(item);
+    });
+    nav.append(count, cells);
+    return nav;
+  }
+
+  function renderQuestion(index, { direction = 1 } = {}) {
+    window.clearTimeout(advanceTimer);
+    pickedByPointer = false; // 이미 고른 칸을 다시 눌러 남은 표시가 다음 문항으로 넘어가지 않게
+    measureOnce();
+    current = index;
+    label.textContent = '문항지';
     const question = questions[index];
-    const panel = element('section', 'personality-question');
+    const last = index === questions.length - 1;
+    const panel = element('div', 'test-question');
+    panel.style.setProperty('--enter-x', `${direction * 14}px`);
 
-    const progress = element('div', 'personality-progress');
-    progress.append(
-      element('span', '', `${index + 1} / ${questions.length}`),
-      (() => {
-        const track = element('div', 'personality-progress-track');
-        const fill = element('span');
-        fill.style.width = `${((index + 1) / questions.length) * 100}%`;
-        track.append(fill);
-        return track;
-      })(),
-    );
+    // legend는 안에 다른 칸을 함께 묶어 가운데로 놓을 수 없어서, fieldset 대신 role=group으로 묶는다
+    const fieldset = element('div', 'test-fieldset');
+    fieldset.setAttribute('role', 'group');
+    const legend = element('div', 'test-scenario');
+    legend.id = `question-${question.id}-text`;
+    fieldset.setAttribute('aria-labelledby', legend.id);
+    legend.tabIndex = -1; // 문항이 바뀌면 여기로 포커스를 옮겨 낭독기가 새 문항을 읽는다
+    legend.append(element('span', 'test-situation', question.content));
 
-    const fieldset = element('fieldset', 'personality-fieldset');
-    const legend = element('legend', 'personality-scenario');
-    legend.append(element('span', 'personality-chip', SCENARIO_LABELS[question.scenario]), question.content);
-    fieldset.append(legend);
+    // 양 끝 행동 문장. 왼쪽 = A, 오른쪽 = B
+    const ends = element('div', 'test-ends');
+    [['A', question.optionA], ['B', question.optionB]].forEach(([mark, text]) => {
+      const end = element('p', 'test-end');
+      end.append(element('b', '', mark), element('span', '', text));
+      ends.append(end);
+    });
 
-    // 양 끝 행동 문장. 왼쪽 = 매우 A, 오른쪽 = 매우 B
-    const ends = element('div', 'personality-ends');
-    ends.append(element('p', '', question.optionA), element('p', '', question.optionB));
-    const scale = element('div', 'personality-scale');
-    scale.setAttribute('role', 'presentation');
+    const scale = element('div', 'test-scale');
+    const near = (side) => element('span', 'test-near', `${side}에 가까워요`);
+    const options = element('div', 'test-options');
     SCALE.forEach(({ value, degree, side }) => {
-      const label = side ? `${degree}: ${question[side]}` : `${degree}: 어느 쪽도 아니에요`;
-      const option = element('label', `personality-option step-${value}`);
+      const text = side ? `${degree}: ${question[side]}` : `${degree}: 어느 쪽도 아니에요`;
+      const option = element('label', `test-option step-${value}`);
       const input = element('input');
       input.type = 'radio';
       input.name = `question-${question.id}`;
       input.value = String(value);
       input.checked = answers.get(question.id) === value;
-      input.addEventListener('change', () => {
-        answers.set(question.id, value);
-        next.disabled = false; // 키보드 화살표로 칸을 옮겨도 넘어가지 않도록 "다음"은 직접 누른다
-      });
-      option.append(input, element('span', 'personality-dot'), element('span', 'visually-hidden', label));
-      scale.append(option);
+      input.addEventListener('change', () => pick(value));
+      const short = side ? `${degree} ${side === 'optionA' ? 'A' : 'B'}` : degree;
+      option.append(input, element('span', 'test-dot'), element('span', 'test-degree', short), element('span', 'visually-hidden', text));
+      options.append(option);
     });
-    fieldset.append(ends, scale);
+    options.addEventListener('pointerdown', () => { pickedByPointer = true; });
+    options.addEventListener('keydown', () => { pickedByPointer = false; }); // 화살표로 옮길 때는 넘어가지 않는다
+    scale.append(near('A'), options, near('B'));
+    const lead = element('div', 'test-lead'); // 문항 + A/B 칸. 선택 칸 위 공간의 세로 중앙
+    lead.append(legend, ends);
+    fieldset.append(lead, scale);
 
-    const actions = element('div', 'personality-actions');
-    const prev = button('이전', () => (index === 0 ? renderIntro() : renderQuestion(index - 1)), 'secondary-button');
-    const next = button(index === questions.length - 1 ? '결과 보기' : '다음', goNext, 'primary-button');
+    const actions = element('div', 'test-actions');
+    const prev = button('이전', () => (index === 0 ? renderIntro() : renderQuestion(index - 1, { direction: -1 })), 'secondary-button');
+    const hint = element('p', 'test-hint', last ? '다 고르면 결과를 볼 수 있어요' : '칸을 고르면 다음 문항으로 넘어가요');
+    if (!last) hint.append(element('span', 'test-hint-keys', ' · 키보드 1 ~ 5'));
+    const next = button(last ? '결과 보기' : '다음', goNext, 'primary-button');
     next.disabled = !answers.has(question.id);
-    actions.append(prev, next);
+    actions.append(prev, hint, next);
 
-    panel.append(progress, fieldset, actions);
-    main.replaceChildren(panel);
+
+    const main = element('div', 'test-question-main');
+    main.append(fieldset, actions);
+    panel.append(guideFor(question, index, questions.length), main);
+    body.replaceChildren(answerGrid(index), panel);
+    fitFolder();
+    legend.focus({ preventScroll: true });
+
+    function pick(value) {
+      const first = !answers.has(question.id);
+      answers.set(question.id, value);
+      next.disabled = false;
+      const pointer = pickedByPointer;
+      pickedByPointer = false;
+      // 처음 답했으면 답안 칸을 다시 그려 체크를 단다(포커스는 지금 칸에 남는다)
+      if (first) body.querySelector('.answer-grid')?.replaceWith(answerGrid(index, question.id));
+      if (pointer && !last) advanceTimer = window.setTimeout(goNext, reducedMotion() ? 0 : ADVANCE_MS);
+    }
 
     function goNext() {
-      if (!answers.has(question.id)) return;
-      if (index < questions.length - 1) renderQuestion(index + 1);
+      window.clearTimeout(advanceTimer);
+      if (!active() || current !== index || !answers.has(question.id)) return;
+      if (!last) renderQuestion(index + 1);
       else submit();
     }
+
+    panel.pickByKey = (value) => {
+      const input = options.querySelector(`input[value="${value}"]`);
+      input.checked = true;
+      input.focus({ preventScroll: true });
+      pick(value);
+      if (!last) advanceTimer = window.setTimeout(goNext, reducedMotion() ? 0 : ADVANCE_MS);
+    };
   }
 
+  // 숫자 1 ~ 5 = 왼쪽부터 다섯 칸
+  document.addEventListener('keydown', (event) => {
+    if (!root) return; // 문항을 받는 중에는 아직 철이 없다
+    if (!active()) { keys.abort(); return; }
+    if (event.altKey || event.ctrlKey || event.metaKey || event.isComposing) return;
+    const value = Number(event.key) - 1;
+    if (!Number.isInteger(value) || value < 0 || value > 4) return;
+    const panel = body.querySelector('.test-question');
+    if (!panel?.pickByKey) return;
+    event.preventDefault();
+    panel.pickByKey(value);
+  }, { signal: keys.signal });
+
   async function submit() {
-    showMessage('결과를 분석하는 중이에요.');
+    label.textContent = '답안 정리';
+    const loading = element('div', 'test-message is-scoring');
+    loading.setAttribute('role', 'status');
+    const duo = element('div', 'test-duo');
+    duo.append(guide('naero', 'read-thinking'), guide('nambul', 'read-thinking'));
+    loading.append(duo, element('p', '', '답안을 정리하는 중이에요.'));
+    body.replaceChildren(loading);
+    const started = performance.now();
     try {
       await api.submitPersonality(questions.map((question) => ({ questionId: question.id, value: answers.get(question.id) })));
     } catch {
-      if (active()) showMessage('결과를 저장하지 못했어요.', submit);
+      if (active()) {
+        sheetMessage(body, '결과를 저장하지 못했어요. 고른 답은 그대로 있어요.', { retry: submit, alert: true });
+        body.querySelector('.test-message').append(button('마지막 문항으로', () => renderQuestion(questions.length - 1), 'secondary-button'));
+      }
       return;
     }
-    if (active()) navigate('testResult');
+    const wait = reducedMotion() ? 0 : MIN_LOADING_MS - (performance.now() - started);
+    if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+    if (active()) {
+      keys.abort();
+      markFolderTurn(body.closest('.test-folder')); // 결과지는 눕힌 철을 같은 자리 · 크기에서 돌려 세우며 보여 준다
+      navigate('testResult');
+    }
   }
 
   await load();

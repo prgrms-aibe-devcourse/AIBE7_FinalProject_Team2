@@ -41,7 +41,8 @@ function observeTicks(labels, track) {
 }
 
 // showInputLabel: 막대 위에 입력한 형량 글자를 단다(판결 입력처럼 형량을 다른 곳에 크게 보여 주면 false)
-export function renderRecommendedRangeBar(container, { law, markerMonths = null, showTrack = true, trackMaxMonths = null, allowedMinMonths = null, penaltyType = 'PRISON', showInputLabel = true }) {
+// showBasis: 권고 범위 근거 · "참고 기준" 안내를 단다(판결 입력의 막대는 false — 근거는 참고 정보 탭에 있다)
+export function renderRecommendedRangeBar(container, { law, markerMonths = null, showTrack = true, trackMaxMonths = null, allowedMinMonths = null, penaltyType = 'PRISON', showInputLabel = true, showBasis = true }) {
   const box = document.createElement('section');
   box.className = 'recommended-range';
   const heading = document.createElement('h3');
@@ -150,13 +151,15 @@ export function renderRecommendedRangeBar(container, { law, markerMonths = null,
       }
     }
   }
-  const source = document.createElement('p');
-  source.className = 'muted';
-  source.textContent = basis;
-  const note = document.createElement('p');
-  note.className = 'range-note';
-  note.textContent = '권고 범위는 정답이 아니라 참고 기준입니다.';
-  box.append(source, note);
+  if (showBasis) {
+    const source = document.createElement('p');
+    source.className = 'muted';
+    source.textContent = basis;
+    const note = document.createElement('p');
+    note.className = 'range-note';
+    note.textContent = '권고 범위는 정답이 아니라 참고 기준입니다.';
+    box.append(source, note);
+  }
   container.append(box);
   return box;
 }

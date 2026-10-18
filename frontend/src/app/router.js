@@ -100,8 +100,9 @@ export function createRouter({ view, footerHost, routes }) {
 
   /** 화면 이동. 반환값은 화면을 그리는 작업의 완료 시점이다 (기다리지 않아도 된다)
    *  keepView: 화면은 다시 그리지 않고 주소 · 탭 제목만 바꾼다(판결 체험 6 → 7 → 8막처럼 한 무대에서 이어 갈 때).
+   *  keepScroll: 새 화면을 그리되 스크롤을 맨 위로 올리지 않는다(무대 자리가 같은 화면끼리, 예: 판결 서명 → AI 판결).
    *  show()를 거치지 않으므로 이전 화면의 정리(cleanup)가 돌지 않는다 — 화면별 정리 로직이 생기면 여기서 빠지지 않게 챙길 것 */
-  async function navigate(name, params = {}, { replace = false, keepView = false } = {}) {
+  async function navigate(name, params = {}, { replace = false, keepView = false, keepScroll = false } = {}) {
     const route = byName.get(name);
     if (!route) {
       console.warn(`알 수 없는 화면 이름: ${name}`);
@@ -132,8 +133,13 @@ export function createRouter({ view, footerHost, routes }) {
       document.title = `${route.title} · ${SITE_TITLE}`;
       return undefined;
     }
-    window.scrollTo(0, 0);
-    return show(route, caseId, extras, path, 'navigate'); // 코드로 호출한 이동은 뒤로 · 앞으로 가기가 아니다
+    if (!keepScroll) window.scrollTo(0, 0);
+    const y = window.scrollY;
+    const drawing = show(route, caseId, extras, path, 'navigate'); // 코드로 호출한 이동은 뒤로 · 앞으로 가기가 아니다
+    // keepScroll: 새 화면은 처음에 "불러오는 중"만 있어 문서가 짧아지며 스크롤이 0으로 깎인다 — 다 그린 뒤 원래 자리로 돌린다
+    const mine = token; // show()가 token을 올린 직후 값 — 그려지는 사이 다른 화면으로 갔다면 복원하지 않는다
+    if (keepScroll) drawing?.then?.(() => { if (token === mine) window.scrollTo(0, y); });
+    return drawing;
   }
 
   // 지금 주소에 맞는 화면을 그린다 (처음 접속 · 새로고침 · 뒤로 · 앞으로 가기)

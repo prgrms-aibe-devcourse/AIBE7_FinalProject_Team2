@@ -43,7 +43,7 @@
 .stage-wrap.paper-mode .board :is(.guide-box, .pre-judgment-form) { margin: 0; padding-left: 0; padding-right: 0; }
 .stage-wrap.paper-mode .board .guide-box { margin-bottom: 12px; padding: 0; border: 0; background: none; font: 400 19px/1.4 var(--font-hand); color: var(--color-muted); } /* 엽서 안 안내는 회색 상자 대신 엽서에 적힌 메모 한 줄 */
 .stage-wrap.paper-mode .board .pre-judgment-form { padding-bottom: 0; }
-.stage-wrap.paper-mode .board .section-actions { display: flex; justify-content: flex-end; } /* 제출 버튼은 엽서 오른쪽 아래 */
+.stage-wrap.paper-mode .board .section-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; } /* 제출 버튼은 엽서 오른쪽 아래. 보내기 확인(다시 고르기 · 보내기) 두 버튼 사이는 띄운다 */
 .stage-wrap.paper-mode .board legend { font-family: var(--font-hand); font-size: 24px; font-weight: 400; color: var(--color-desk-note-pen); }
 .stage-wrap.paper-mode .board .range-options { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(var(--rows, 4), auto); grid-auto-flow: column; gap: 8px 12px; counter-reset: range; }
 /* 형량은 가벼운 → 무거운 순서: 왼쪽 열 위 → 아래, 이어서 오른쪽 열. 번호로 순서를 보여 준다 */
@@ -211,7 +211,7 @@
   .stage-wrap.paper-mode .dlg { background: var(--paper); }
   .stage-wrap.paper-mode .ctrl { background: var(--color-card); }
   .stage-wrap.paper-mode .board .section-actions { position: sticky; bottom: -18px; z-index: 1; margin: 0 -16px -18px; padding: 12px 16px; background: color-mix(in srgb, var(--color-desk-kraft) 10%, var(--color-card)); border-top: 1px dashed var(--color-border-strong); }
-  .stage-wrap.paper-mode .board .section-actions .primary-button { width: 100%; }
+  .stage-wrap.paper-mode .board .section-actions :is(.primary-button, .secondary-button) { width: 100%; }
 }
 
 /* 엽서 접수 도장(소인): 보낸 순간 엽서 위에 찍힌다 */
@@ -247,13 +247,17 @@
 .stage-wrap.paper-mode .name i { font: 700 12px/1 var(--font-body); color: var(--color-muted); }
 .stage-wrap.paper-mode .txt { font: 500 17px/1.65 var(--font-body); color: var(--color-text); letter-spacing: -.01em; }
 /* 캐릭터: 아래 모서리에서 엿보기(허리 아래는 화면 밖) · 말하는 쪽 앞으로 */
-.stage-wrap.paper-mode .stage[data-scene] .spr, .stage-wrap.paper-mode .stage[data-scene] .spr.role { bottom: calc(-56px + var(--safe-bottom)); height: min(300px, 38vh); transition: translate .35s cubic-bezier(.2, .8, .2, 1), opacity .3s; }
+/* 캐릭터 크기 · 높이(FE-48): 6막 세 판결 비교와 같게(키 250px, 발은 하단 조작 줄 뒤로 조금) */
+.stage-wrap.paper-mode .stage[data-scene] .spr, .stage-wrap.paper-mode .stage[data-scene] .spr.role { bottom: calc(-16px + var(--safe-bottom)); height: min(250px, 32vh); transition: translate .35s cubic-bezier(.2, .8, .2, 1), opacity .3s; }
 .stage-wrap.paper-mode .stage[data-scene] .spr .spr-img { filter: drop-shadow(0 6px 10px color-mix(in srgb, var(--color-desk-shadow) 35%, transparent)); transition: filter .3s ease-out; }
 .stage-wrap.paper-mode .stage[data-scene] .spr.dim { translate: -50% 26px; }
 .stage-wrap.paper-mode .stage[data-scene] .spr.dim .spr-img { filter: brightness(.72) saturate(.55); transform: none; }
 .stage-wrap.paper-mode .stage[data-scene] .spr:not(.dim) { translate: -50% -6px; }
-/* 조작 줄: 알약 대신 종이 띠 */
-.stage-wrap.paper-mode .ctrl { border-radius: 10px; border: 1px solid color-mix(in srgb, var(--color-text) 25%, transparent); background: var(--color-paper); }
+/* 조작 줄(FE-48): 화면 맨 아래 가로 전체 종이 띠 — 1 · 2막 신문 무대와 8막은 courtSketch.css의 같은 규칙을 쓴다 */
+.stage-wrap.paper-mode:has(.stage.bmode) .ctrl { z-index: 28; } /* 판결 보드를 띄운 장면에서도 캐릭터(27)보다 위 */
+@media (max-width: 680px) {
+  .stage-wrap.paper-mode .dlg { bottom: calc(64px + var(--safe-bottom)); }
+}
 @media (max-width: 680px) {
   /* 좁은 화면: 캐릭터는 말풍선 위 양 끝에서 머리만 내밀고(아래는 말풍선 뒤), 꼬리는 위쪽 말하는 쪽으로 */
   .stage-wrap.paper-mode .stage[data-scene] .spr, .stage-wrap.paper-mode .stage[data-scene] .spr.role { --l: 52px; --r: calc(100% - 52px); bottom: calc(146px + var(--safe-bottom)); height: 116px; }
