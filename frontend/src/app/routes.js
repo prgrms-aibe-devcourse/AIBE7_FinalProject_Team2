@@ -42,6 +42,7 @@ export const routes = [
   // 확장: S-19 관리자 검수 (FE-16). 관리자 코드는 사용자 화면 번들에 넣지 않으려고 필요할 때만 불러온다.
   // 관리자 화면은 관리자 api를 따로 쓰고(pages/admin/adminApi.js), 사용자 사이트 푸터 대신 자기 틀을 그린다
   { name: 'admin', path: '/admin', render: (container, options) => import('../pages/admin/adminListPage.js').then((m) => m.renderAdminListPage(container, options)), ownsFooter: true, title: '관리자' },
+  { name: 'adminRegister', path: '/admin/register', render: (container, options) => import('../pages/admin/adminRegisterPage.js').then((m) => m.renderAdminRegisterPage(container, options)), ownsFooter: true, title: '관리자' },
   { name: 'adminCase', path: '/admin/cases/:caseId', render: (container, options) => import('../pages/admin/adminCasePage.js').then((m) => m.renderAdminCasePage(container, options)), ownsFooter: true, title: '관리자' },
   // S-14: 주소가 없다. 맞는 화면이 없는 주소거나 없는 사건일 때 보여 준다 (라우터 showNotFound · errorRedirect CASE_NOT_FOUND)
   { name: 'notFound', path: null, render: renderNotFoundPage, title: '찾을 수 없어요' },

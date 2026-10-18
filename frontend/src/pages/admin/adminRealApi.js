@@ -1,5 +1,5 @@
-// 관리자 API 실제 호출 (API 명세 8장 A-1 ~ A-13). adminMockApi.js와 함수 이름 · 인자 · 응답 형식이 같다.
-// A-1 ~ A-4는 BE-39로 구현돼 있고, A-5 ~ A-13은 7.4.7(BE-41 ~ BE-43) 구현 전이라 404가 올 수 있다.
+// 관리자 API 실제 호출 (API 명세 8장 A-1 ~ A-15). adminMockApi.js와 함수 이름 · 인자 · 응답 형식이 같다.
+// A-1 ~ A-13은 BE-39 · BE-41 ~ BE-43으로 구현돼 있다. A-14 · A-15(사건 등록)는 초안 계약이라 서버가 구현되기 전에는 404가 온다.
 import { adminGet, adminPatch, adminPost, adminPut, fetchCsrf } from './adminClient.js';
 
 const id = (value) => encodeURIComponent(value);
@@ -31,3 +31,7 @@ export const rejectJudgment = (judgmentId, reason) => adminPost(`/judgments/${id
 export const updateCase = (caseId, changes) => adminPatch(`/cases/${id(caseId)}`, changes);
 export const setValueAxis = (factorId, valueAxis) => adminPut(`/factors/${id(factorId)}/value-axis`, { valueAxis });
 export const publishCase = (caseId) => adminPost(`/cases/${id(caseId)}/publish`);
+
+// A-14 · A-15 사건 등록(원본 판결문 → 파이프라인 실행)
+export const createImport = (request) => adminPost('/case-imports', request);
+export const getImport = (importId) => adminGet(`/case-imports/${id(importId)}`);

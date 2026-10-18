@@ -781,6 +781,8 @@ API 1 · 2 · 16은 상태와 관계없이 부를 수 있다. 표에 없는 조�
 | A-11 | `PATCH /admin/cases/{caseId}` | 사건 내용 수정 | BE-43 |
 | A-12 | `PUT /admin/factors/{factorId}/value-axis` | 판단 요소 가치관 축 확정 | BE-43 · BE-48 |
 | A-13 | `POST /admin/cases/{caseId}/publish` | 사건 공개 | BE-43 |
+| A-14 | `POST /admin/case-imports` | 사건 등록 시작 (원본 판결문 → 파이프라인 실행) **초안** | 미정 (FE-45 제안) |
+| A-15 | `GET /admin/case-imports/{importId}` | 사건 등록 진행 상황 **초안** | 미정 (FE-45 제안) |
 
 ### A-5. 검수 사건 목록 — `GET /admin/cases`
 
@@ -1067,7 +1069,77 @@ API 1 · 2 · 16은 상태와 관계없이 부를 수 있다. 표에 없는 조�
 | 409 `INVALID_STATE` | 이미 `PUBLISHED`(`CASE_PUBLISHED`) |
 | 409 `PUBLISH_NOT_READY` | 공개 조건 미충족. `details`에 `[{ "field": "case", "reason": "NO_PUBLISHED_AI" }, …]` |
 
-**에러 코드**: 1-5의 `JUDGMENT_NOT_FOUND` · `FACTOR_NOT_FOUND` · `DUPLICATE_TITLE` · `PUBLISH_NOT_READY`(v0.17 추가)와 공통 코드를 쓴다.
+### A-14. 사건 등록 시작 — `POST /admin/case-imports` (초안)
+
+> **초안이다.** 파이프라인(`tools/ai-judgment`)을 자바로 옮긴 뒤 서버가 구현한다. 화면(FE-45)은 이 계약의 목으로 먼저 만들었고, 서버 구현 전에는 404가 온다. 계약이 바뀌면 이 절과 `adminMockApi.js`를 함께 고친다.
+
+원본 판결문을 받아 파이프라인(비식별화 · 구조화 → 재판부 판결 정리 → 사전 학습 점검 → 참고 자료 검색 → AI 판결 생성 → 회차 선택 → 가치관 축 분류 → 적재)을 서버에서 실행한다. 오래 걸리므로 **작업만 만들고 202로 바로 돌려준다.**
+
+```json
+{
+  "crimeType": "MURDER",
+  "sources": [
+    {
+      "courtLevel": "FIRST",
+      "caseNumber": "2099고합000",
+      "courtName": "가상지방법원",
+      "decidedAt": "2025-01-10",
+      "isFinal": true,
+      "sourceOrg": "법제처",
+      "note": null,
+      "originalText": "…"
+    }
+  ]
+}
+```
+
+| 필드 | 규칙 |
+| --- | --- |
+| `crimeType` | 필수. `MURDER` · `FRAUD` · `INJURY` |
+| `sources` | 필수. 1 ~ 3건, 심급(`courtLevel`: `FIRST` · `APPEAL` · `SUPREME`)이 서로 달라야 한다 |
+| `sources[].caseNumber` | 필수, 50자 이하. 이미 등록된 사건번호면 409 `DUPLICATE_SOURCE` |
+| `sources[].originalText` | 필수, 200,000자 이하. 원본 판결문이라 요청 본문 로그에 남기지 않는다 |
+| 그 밖 | `courtName` · `decidedAt`(YYYY-MM-DD) · `isFinal` · `sourceOrg` · `note`는 선택. 사건 원본 정보(`case_source`)에 저장한다 |
+
+응답 202: `{ "importId": 1, "status": "QUEUED" }`
+
+| 거절 | 조건 |
+| --- | --- |
+| 400 `VALIDATION_ERROR` | 위 규칙 위반. `details`에 `[{ "field": "sources[0].originalText", "reason": "INVALID" }]` |
+| 409 `DUPLICATE_SOURCE` | 이미 등록한 사건번호 |
+| 409 `IMPORT_IN_PROGRESS` | 실행 중인 등록이 있음 (한 번에 하나만. 외부 AI 호출 한도 보호) |
+
+- 감사 로그 `CASE_IMPORT`를 남긴다(원문은 남기지 않고 사건번호 · 심급만).
+
+### A-15. 사건 등록 진행 상황 — `GET /admin/case-imports/{importId}` (초안)
+
+```json
+{
+  "importId": 1,
+  "status": "RUNNING",
+  "stages": [
+    { "name": "extract", "status": "DONE" },
+    { "name": "court", "status": "RUNNING" },
+    { "name": "contamination", "status": "PENDING" }
+  ],
+  "caseId": null,
+  "errorCode": null,
+  "message": null,
+  "createdAt": "2026-10-20T09:00:00+09:00",
+  "finishedAt": null
+}
+```
+
+- `status`: `QUEUED` · `RUNNING` · `SUCCEEDED` · `FAILED`. 화면은 끝날 때까지 2초마다 묻는다.
+- `stages[].name`: `extract` · `court` · `contamination` · `rag` · `generate` · `select` · `axis` · `load`. 건너뛴 단계는 `SKIPPED`, 값은 `PENDING` · `RUNNING` · `DONE` · `SKIPPED` · `FAILED`.
+- `SUCCEEDED`이면 `caseId`가 채워지고, 사건은 `DRAFT`로 적재된다. A-5 목록 · A-6 상세로 이어서 검수한다.
+- `FAILED`이면 `errorCode` · `message`를 내려 준다. `message`에 원문 · 모델 출력을 담지 않는다.
+
+| 거절 | 조건 |
+| --- | --- |
+| 404 `IMPORT_NOT_FOUND` | 등록 작업이 없음 |
+
+**에러 코드**: 1-5의 `JUDGMENT_NOT_FOUND` · `FACTOR_NOT_FOUND` · `DUPLICATE_TITLE` · `PUBLISH_NOT_READY`(v0.17 추가)와 공통 코드를 쓴다. 사건 등록 초안(A-14 · A-15)은 `DUPLICATE_SOURCE` · `IMPORT_IN_PROGRESS` · `IMPORT_NOT_FOUND`를 더 쓴다(1-5 목록에는 서버 구현 때 추가).
 
 - `CASE_NOT_FOUND`는 관리자 API에서 "사건이 없음"만 뜻한다(사용자 API는 "없거나 `PUBLISHED`가 아님").
 

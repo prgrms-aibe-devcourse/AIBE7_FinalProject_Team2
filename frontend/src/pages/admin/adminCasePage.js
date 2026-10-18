@@ -3,6 +3,7 @@ import {
   AXIS_LABEL, AXIS_OPTIONS, CASE_STATUS, COURT_LEVEL, CRIME_TYPE, DIFFICULTY, PUBLISH_REASON, REVEAL_STAGE, REVIEW_STATUS, SUBJECT,
   errorText, formatDateTime,
 } from './adminLabels.js';
+import { SUMMARY_TAG_STATE_TEXT, describeGeneration, describeSummaryTagCandidates } from './adminFormat.js';
 import { renderAdminShell } from './adminShell.js';
 
 // S-19 사건 검수 상세 (A-6 ~ A-13).
@@ -34,6 +35,60 @@ function jsonBlock(summary, value) {
   const details = element('details', 'admin-json');
   details.append(element('summary', '', summary), element('pre', '', JSON.stringify(value ?? null, null, 2)));
   return details;
+}
+
+function textBlock(summary, text) {
+  const details = element('details', 'admin-json');
+  details.append(element('summary', '', summary), element('pre', '', text));
+  return details;
+}
+
+// A-8 generation: 모델 · 회차 선택 근거 · 사전 학습 점검 판정 · 검증 경고 · 참고 자료 검색 · AI에 넣은 입력
+function generationView(generation) {
+  const view = describeGeneration(generation);
+  const wrap = element('div', 'admin-generation');
+  wrap.append(element('h4', '', '생성 정보'), definitionList(view.model));
+  if (view.selection) wrap.append(element('h4', '', '회차 선택 근거'), definitionList(view.selection));
+
+  const verdict = element('p', `admin-verdict is-${view.contamination.level}`);
+  verdict.append(element('strong', '', '사전 학습 점검: '), view.contamination.label);
+  wrap.append(element('h4', '', '사전 학습 점검 판정'), verdict);
+  if (view.contamination.rows.length) wrap.append(definitionList(view.contamination.rows));
+
+  wrap.append(element('h4', '', `검증 경고 (${view.warnings.length})`));
+  if (view.warnings.length) {
+    const list = element('ul', 'admin-warnings');
+    view.warnings.forEach((text) => list.append(element('li', '', text)));
+    wrap.append(list);
+  } else {
+    wrap.append(element('p', 'admin-sub', '경고가 없어요.'));
+  }
+
+  wrap.append(element('h4', '', '참고 자료 검색 (RAG)'));
+  if (view.rag.rows.length) wrap.append(definitionList(view.rag.rows));
+  else wrap.append(element('p', 'admin-sub', '검색하지 않았어요. (기존 참고 자료를 그대로 썼거나 점검을 켜지 않음)'));
+
+  wrap.append(element('h4', '', 'AI에 넣은 입력 (inputSnapshot)'));
+  const { snapshot } = view;
+  if (snapshot.promptVersion) wrap.append(definitionList([['입력 프롬프트 버전', snapshot.promptVersion]]));
+  if (snapshot.system) wrap.append(textBlock('시스템 프롬프트', snapshot.system));
+  if (snapshot.user) wrap.append(textBlock('사용자 프롬프트 (사건 내용 · 참고 자료)', snapshot.user));
+  if (snapshot.other) wrap.append(jsonBlock('그 밖의 입력', snapshot.other));
+  if (!snapshot.system && !snapshot.user && !snapshot.other) wrap.append(element('p', 'admin-sub', '저장된 입력이 없어요.'));
+
+  wrap.append(jsonBlock('생성 보고서 원본 (generationReport)', generation.generationReport));
+  return wrap;
+}
+
+// A-6 summaryTagCandidates: 요약어는 바꾸지 않고 제안만 보여 준다
+function summaryTagView(raw, summaryTag) {
+  const view = describeSummaryTagCandidates(raw);
+  if (!view) return null;
+  const box = element('div', 'admin-tag-candidates');
+  box.append(element('span', `admin-sub is-${view.state.toLowerCase()}`, SUMMARY_TAG_STATE_TEXT[view.state]));
+  if (view.state === 'SUGGESTED' && view.suggested !== summaryTag) box.append(element('strong', '', `제안: ${view.suggested}`));
+  if (view.candidates.length) box.append(element('span', 'admin-sub', `후보 ${view.candidates.map((item) => `${item.tag} (${item.score})`).join(' · ')}`));
+  return box;
 }
 
 export function renderAdminCasePage(container, { caseId, navigate }) {
@@ -125,14 +180,7 @@ export function renderAdminCasePage(container, { caseId, navigate }) {
           factors.append(item);
         });
         if (factors.childElementCount) wrap.append(element('h4', '', '판단 요소별 방향'), factors);
-        if (generation) {
-          wrap.append(
-            element('h4', '', '생성 정보'),
-            definitionList([['모델', generation.modelName], ['프롬프트 버전', generation.promptVersion]]),
-            jsonBlock('검증 경고 · 사전 학습 점검 · 회차 선택 근거 (generationReport)', generation.generationReport),
-            jsonBlock('AI에 넣은 입력 (inputSnapshot)', generation.inputSnapshot),
-          );
-        }
+        if (generation) wrap.append(generationView(generation));
         return wrap;
       }
 
@@ -232,6 +280,8 @@ export function renderAdminCasePage(container, { caseId, navigate }) {
           const labelCell = element('td');
           labelCell.append(element('span', '', factor.label));
           if (factor.summaryTag) labelCell.append(element('span', 'admin-sub', `요약어: ${factor.summaryTag}`));
+          const tagView = summaryTagView(factor.summaryTagCandidates, factor.summaryTag);
+          if (tagView) labelCell.append(tagView);
           const axisCell = element('td');
           axisCell.append(
             element('span', '', factor.valueAxis ? AXIS_LABEL[factor.valueAxis] ?? factor.valueAxis : '어느 축에도 맞지 않음'),

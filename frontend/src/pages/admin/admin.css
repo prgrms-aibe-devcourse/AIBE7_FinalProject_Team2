@@ -98,6 +98,43 @@
 .admin-sources .secondary-button { margin-top: 10px; min-height: 36px; padding: 4px 12px; }
 .admin-original { max-height: 520px; }
 
+/* 목록 머리줄 · 사건 등록 */
+.admin-list-top { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
+.admin-list-top h1 { margin: 0; }
+.admin-register { max-width: 760px; }
+.admin-source-box { display: grid; gap: 12px; margin: 0; padding: 16px; border: 1px solid var(--color-border); border-radius: 4px; }
+.admin-source-box legend { padding: 0 6px; font-weight: 700; font-size: var(--text-small); }
+.admin-sources-input { display: grid; gap: 14px; }
+.admin-source-box .secondary-button, .admin-register > .secondary-button { justify-self: start; min-height: 36px; padding: 4px 12px; }
+.admin-check { display: flex; gap: 8px; align-items: center; font-size: var(--text-small); font-weight: 700; }
+.admin-stages { margin: 0 0 16px; padding: 0; list-style: none; display: grid; gap: 6px; }
+.admin-stage { display: flex; gap: 10px; align-items: baseline; color: var(--color-muted); font-size: var(--text-small); }
+.admin-stage-mark { width: 1.4em; text-align: center; font-weight: 900; }
+.admin-stage.is-done { color: var(--color-text); }
+.admin-stage.is-done .admin-stage-mark { color: var(--color-accent-text); }
+.admin-stage.is-running { color: var(--color-text); font-weight: 700; }
+.admin-stage.is-failed { color: var(--color-danger); font-weight: 700; }
+
+/* 판결문 넣는 방법 (PDF · 텍스트 전문 · 직접 입력) */
+.admin-mode-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.admin-mode-tabs .admin-tab[aria-pressed="true"] { border-color: var(--color-accent); background: var(--color-accent-tint); color: var(--color-accent-text); font-weight: 700; }
+.admin-mode-panel { display: grid; gap: 8px; justify-items: start; padding: 12px 14px; border: 1px dashed var(--color-border-strong); border-radius: 4px; }
+.admin-mode-panel .admin-sub { margin: 0; }
+.admin-mode-panel .secondary-button { min-height: 36px; padding: 4px 12px; }
+.admin-sample-link { color: var(--color-accent); font-size: var(--text-small); font-weight: 700; }
+.admin-import-status:empty { display: none; }
+.admin-register .is-auto { border-color: var(--color-accent); background: var(--color-accent-tint); }
+
+/* 생성 정보 · 요약어 후보 */
+.admin-verdict { margin: 0 0 8px; padding: 8px 12px; border-left: 3px solid var(--color-border-strong); background: var(--color-surface); font-size: var(--text-small); }
+.admin-verdict.is-ok { border-left-color: var(--color-accent); color: var(--color-accent-text); }
+.admin-verdict.is-warn { border-left-color: var(--color-caution-border); background: var(--color-caution-tint); color: var(--color-caution); }
+.admin-verdict.is-danger { border-left-color: var(--color-danger-border); background: var(--color-danger-tint); color: var(--color-danger); }
+.admin-warnings { margin: 0; padding-left: 18px; font-size: var(--text-small); color: var(--color-caution); }
+.admin-generation > .admin-dl { margin-bottom: 4px; }
+.admin-tag-candidates { display: grid; gap: 2px; margin-top: 4px; font-size: var(--text-small); }
+.admin-tag-candidates strong { color: var(--color-accent-text); }
+
 @media (max-width: 720px) {
   .admin-header { padding: 12px 16px; flex-wrap: wrap; }
   .admin-main { padding: 20px 16px; }

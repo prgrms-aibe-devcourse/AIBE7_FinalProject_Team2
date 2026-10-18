@@ -9,6 +9,23 @@ export const DIFFICULTY = { LOW: '쉬움', MID: '보통', HIGH: '어려움' };
 export const REVEAL_STAGE = { OVERVIEW: '개요(사전 판단)', DETAIL: '상세' };
 export const COURT_LEVEL = { FIRST: '1심', APPEAL: '2심', SUPREME: '대법원' };
 
+// 파이프라인 generation_report 값 (tools/ai-judgment)
+export const CONTAMINATION_VERDICT = {
+  CLEAN: '통과 (사전 학습 의심 없음)',
+  SUSPECT: '의심 (팀 확인 필요)',
+  INSUFFICIENT: '응답 부족 (판정 불가)',
+  CONTAMINATED: '사전 학습 의심 높음',
+  SKIPPED: '점검하지 않음',
+};
+export const SELECT_STRATEGY = { consensus: '합의값에 가까운 회차', 'first-valid': '처음 유효한 회차', 'fewest-warnings': '경고가 가장 적은 회차', manual: '직접 지정' };
+
+// A-14 · A-15 사건 등록(파이프라인 실행)
+export const IMPORT_STATUS = { QUEUED: '대기 중', RUNNING: '실행 중', SUCCEEDED: '완료', FAILED: '실패' };
+export const IMPORT_STAGE = {
+  extract: '비식별화 · 구조화', court: '재판부 판결 정리', contamination: '사전 학습 점검', rag: '참고 자료 검색',
+  generate: 'AI 판결 생성', select: '회차 선택', axis: '가치관 축 분류', load: 'DB 적재',
+};
+
 // A-13 공개 조건 코드
 export const PUBLISH_REASON = {
   NO_PUBLISHED_AI: '공개할 AI 판결을 승인해야 해요.',
@@ -34,6 +51,9 @@ export function errorText(error, fallback = '요청을 처리하지 못했어요
   if (code === 'INVALID_STATE') return STATE_REASON[error.details?.[0]?.reason] ?? '지금 상태에서는 할 수 없어요.';
   if (code === 'PUBLISH_NOT_READY') return (error.details ?? []).map((item) => PUBLISH_REASON[item.reason] ?? item.reason).join(' ') || '공개 조건을 채우지 못했어요.';
   if (code === 'DUPLICATE_TITLE') return '다른 사건과 제목이 겹쳐요.';
+  if (code === 'DUPLICATE_SOURCE') return '이미 등록한 사건번호예요.';
+  if (code === 'IMPORT_IN_PROGRESS') return '다른 사건을 등록하는 중이에요. 끝난 뒤 다시 시도해 주세요.';
+  if (code === 'IMPORT_NOT_FOUND') return '등록 작업을 찾을 수 없어요.';
   if (code === 'VALIDATION_ERROR') return error.message || '입력값을 확인해 주세요.';
   if (code === 'FORBIDDEN') return '권한이 없거나 보안 토큰이 만료됐어요. 새로고침 뒤 다시 시도해 주세요.';
   if (code === 'NETWORK_ERROR') return error.message;
