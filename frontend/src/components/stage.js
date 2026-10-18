@@ -22,7 +22,7 @@ const CAMEO_LABEL = '볼따구'; // 해설을 맡는 작은 내로 · 남불(배
 const CAMEO_LOOK = 'cheek:idle-thinking';
 const DEFORM_LABEL = { ranma: '란마' }; // 데포르메 모습 이름(look "deform:ranma" → 이름표 "남불 란마") // 볼따구 컷은 지금 idle-thinking · idle-sorry 두 표정만 있다
 const ROLE_LABEL = { actor: '사건 속 인물', prosecutor: '검사', defense: '변호인', judge: '판사' };
-const ROLE_COLOR = { '법정 진행': 'narrator', 볼따구: 'narrator', 판사: 'law', 'A씨 역': 'actor', 'B씨 역': 'actor', '사건 속 인물': 'actor', 검사: 'prosecutor', 변호인: 'defense', 재판장: 'law', 배석판사: 'law' };
+const ROLE_COLOR = { 'AI 판사': 'law', '법정 진행': 'narrator', 볼따구: 'narrator', 판사: 'law', 'A씨 역': 'actor', 'B씨 역': 'actor', '사건 속 인물': 'actor', 검사: 'prosecutor', 변호인: 'defense', 재판장: 'law', 배석판사: 'law' };
 // 로 합의부(6막 AI 판사): 로울(저울) · 로봉(법봉) · 로북(법전). LAWS는 판단 요소를 맡는 순서(저울 → 법봉 → 법전),
 // 서는 자리는 로울이 가운데, 로봉 · 로북이 좌우(LAW_SPOTS). 직책은 로울 재판장, 로봉 · 로북 배석판사.
 // 셋은 대등하지만 로울이 합의를 이끄는 일종의 리더(재판장) 역할을 한다(10/15 결정). 캐릭터 문서 4-3에도 반영됨(COMMON-37)
@@ -570,7 +570,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
     if (step.auto && lastDelta > 0) autoTimer = setTimeout(() => { if (steps[index] === step && wrap.isConnected) go(1); }, settle + step.auto);
     const cameoWho = line && step.say === 'narrator' && NAMES[step.cameo] ? step.cameo : '';
     if (line) {
-      const role = cameoWho ? CAMEO_LABEL : step.say === 'narrator' ? step.role ?? '법정 진행' : step.role ?? ''; // 해설은 역할 이름만(예: 실제 판결)
+      const role = cameoWho ? CAMEO_LABEL : step.say === 'narrator' ? step.role ?? '법정 진행' : step.role ?? (step.say === 'law' ? 'AI 판사' : ''); // 해설은 역할 이름만(예: 실제 판결). 합의부 발언은 AI 판사
       name.replaceChildren();
       name.dataset.role = ROLE_COLOR[role] ?? 'guide';
       // 말풍선 꼬리 방향(말하는 캐릭터 쪽). 볼따구는 대사창 모서리에 나온 작은 캐릭터 쪽

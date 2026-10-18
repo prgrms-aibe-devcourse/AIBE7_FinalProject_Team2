@@ -295,7 +295,7 @@ export function renderComparisonStage({ script, data, caseId, caseTitle, navigat
     sheet.style.transformOrigin = '50% 0';
     sheet.animate([{ scale: '1 1', opacity: 1 }, { scale: '1 .5', opacity: .9, offset: .5 }, { scale: '1 .04', opacity: 0 }],
       { duration: FOLD_MS, easing: 'cubic-bezier(.5, 0, .75, 0)', fill: 'forwards' }).finished
-      .catch(() => {}).then(() => navigate('list', { from: 'desk' }));
+      .catch(() => {}).then(() => { if (!closing) navigate('list', { from: 'desk' }); }); // 접는 사이 메인으로 갔다면(closing) 목록으로 되돌리지 않는다
   }
   // 리뷰하기(임시, BE-82 · 후속 이슈): 엽서 한 장이 떠오른다. 사건별 후기 페이지가 생기면 그 화면으로 바꾼다
   function openReview() {
@@ -308,8 +308,17 @@ export function renderComparisonStage({ script, data, caseId, caseTitle, navigat
     title.id = `review-title-${caseId}`;
     const close = element('button', 'secondary-button', '닫기');
     close.type = 'button';
-    const shut = () => { layer.remove(); document.removeEventListener('keydown', onKey); };
-    const onKey = (event) => { if (event.key === 'Escape') shut(); };
+    const opener = document.activeElement; // 닫으면 포커스를 여기(리뷰하기 버튼)로 돌려준다
+    const shut = () => {
+      layer.remove();
+      document.removeEventListener('keydown', onKey);
+      if (opener?.isConnected) opener.focus({ preventScroll: true });
+    };
+    // 대화상자 안에 누를 수 있는 건 닫기 하나뿐이라, Tab은 그 자리에 머물게 해 뒤 무대로 빠지지 않게 한다
+    const onKey = (event) => {
+      if (event.key === 'Escape') shut();
+      else if (event.key === 'Tab') { event.preventDefault(); close.focus(); }
+    };
     close.addEventListener('click', shut);
     layer.addEventListener('click', (event) => { if (event.target === layer) shut(); });
     document.addEventListener('keydown', onKey);

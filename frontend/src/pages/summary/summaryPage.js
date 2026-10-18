@@ -19,7 +19,10 @@ export async function renderSummaryPage(container, { caseId, api, navigate }) {
     if (action) panel.append(action);
     root.replaceChildren(panel);
   }
+  let loading = false;
   async function load() {
+    if (loading || !active()) return;
+    loading = true;
     message('판결 입력으로 넘어가는 중…');
     try {
       const data = await api.getReview(caseId);
@@ -40,6 +43,8 @@ export async function renderSummaryPage(container, { caseId, api, navigate }) {
         retry.addEventListener('click', load);
         message('정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.', retry);
       }
+    } finally {
+      loading = false;
     }
   }
   await load();

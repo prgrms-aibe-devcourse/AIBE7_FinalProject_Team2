@@ -137,7 +137,8 @@ export function createRouter({ view, footerHost, routes }) {
     const y = window.scrollY;
     const drawing = show(route, caseId, extras, path, 'navigate'); // 코드로 호출한 이동은 뒤로 · 앞으로 가기가 아니다
     // keepScroll: 새 화면은 처음에 "불러오는 중"만 있어 문서가 짧아지며 스크롤이 0으로 깎인다 — 다 그린 뒤 원래 자리로 돌린다
-    if (keepScroll) drawing?.then?.(() => window.scrollTo(0, y));
+    const mine = token; // show()가 token을 올린 직후 값 — 그려지는 사이 다른 화면으로 갔다면 복원하지 않는다
+    if (keepScroll) drawing?.then?.(() => { if (token === mine) window.scrollTo(0, y); });
     return drawing;
   }
 
