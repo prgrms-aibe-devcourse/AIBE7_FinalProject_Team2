@@ -32,7 +32,7 @@ from pathlib import Path
 from build_prompt import InputError, build_prompt
 from common import TOOL_DIR, factors_by_id, final_penalty, load_json, write_json
 from llm import (DEFAULT_MAX_ATTEMPTS, DEFAULT_MAX_TOKENS, DEFAULT_MAX_WAIT, DEFAULT_TIMEOUT, LLMError, LLMQuotaExhaustedError,
-                 api_key, call, configure_retry, parse_model_spec)
+                 PROVIDERS, api_key, call, configure_retry, parse_model_spec)
 from validate_output import parse_output, validate
 
 RUNS_DIR = TOOL_DIR / "out" / "runs"
@@ -265,7 +265,7 @@ def main():
 
     run_cmd = sub.add_parser("run", parents=[common_args], help="API로 생성한다")
     run_cmd.add_argument("--model", action="append", required=True, dest="models",
-                         help="'공급자:모델ID' (openai · anthropic · gemini). 여러 번 지정 가능")
+                         help=f"'공급자:모델ID' ({' · '.join(sorted(PROVIDERS))}). 여러 번 지정 가능")
     run_cmd.add_argument("--runs", type=int, default=1, help="모델마다 생성할 횟수 (기본 1)")
     run_cmd.add_argument("--temperature", type=float, help="지정하지 않으면 공급자 기본값")
     run_cmd.add_argument("--max-tokens", type=int, default=DEFAULT_MAX_TOKENS)

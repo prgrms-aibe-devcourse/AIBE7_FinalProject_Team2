@@ -1,4 +1,5 @@
-# Prometheus 스크레이프 설정 (BE-70, WBS 7.2.2)
+# Prometheus 스크레이프 설정 — 로컬 (BE-70 WBS 7.2.2 · node_exporter는 COMMON-43 WBS 7.2.4)
+# 운영(별도 EC2)은 prometheus.prod.yml을 쓴다 — 대상 주소가 사설 IP라 파일을 나눴다.
 # "scrape 대상 · 간격 · 보존 기간" 중 간격은 여기, 보존 기간은 docker-compose.yml(--storage.tsdb.retention.time)에 있다.
 global:
   scrape_interval: 15s      # Actuator 응답은 가벼워서(지금은 메트릭 몇십 개) 15s도 부담 없다. 기본값 1m보다 촘촘해 대시보드 반응이 빠르다
@@ -17,3 +18,9 @@ scrape_configs:
     metrics_path: /actuator/prometheus
     static_configs:
       - targets: ["host.docker.internal:8081"]
+
+  # 호스트 자원 — 인프라 대시보드(7.2.4)가 쓴다. job 이름 "node"는 대시보드 쿼리에 박혀 있으니 바꾸지 않는다.
+  # 운영에서는 같은 job 이름으로 메인 EC2의 node_exporter를 가리킨다(prometheus.prod.yml)
+  - job_name: node
+    static_configs:
+      - targets: ["node-exporter:9100"]
