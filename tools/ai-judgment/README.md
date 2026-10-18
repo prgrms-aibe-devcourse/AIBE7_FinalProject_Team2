@@ -470,6 +470,8 @@ python3 compare.py <켬 batchDir>
 
 목록은 `free_models.json`(확인일 2026-10-16)에 있고, `llm.py`(`has_free_tier`)와 파이프라인 전송 안내가 읽는다. **"무료 등급이 있는 모델"이지 "지금 키가 무료"라는 뜻이 아니다** — 결제를 연결한 프로젝트의 키는 같은 모델도 유료다. 그래서 호출을 막지는 않고 안내만 한다.
 
+- **목록 밖 모델은 경고되지 않는다.** `has_free_tier`는 `models`에 **정확히 등록된 모델명**만 본다. 예를 들어 NVIDIA API Trial 키는 키 자체가 체험 약관 대상이라 `nim:` 모델이면 목록에 없어도 같은 약관(입력을 제품 개선에 사용)이 적용되지만, extract·court에 목록 밖 NIM 모델이나 Groq `previewModels`를 직접 지정하면 "원문이 외부로 나간다"는 경고가 뜨지 않는다. `free_models.json`에 모델을 추가하지 않은 채 쓰는 경우 이 경고에 의존하지 말 것.
+
 **Gemini API** (출처: [가격 문서](https://ai.google.dev/gemini-api/docs/pricing), 확인일 2026-10-08)
 
 | 무료 등급 있음 | 무료 등급 없음 |
