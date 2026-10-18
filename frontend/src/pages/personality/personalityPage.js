@@ -49,6 +49,8 @@ export async function renderPersonalityPage(container, { api, navigate }) {
   // 검사지는 철을 가로로 눕혀 둔다. 문항과 표지 그림을 먼저 받아 두고 철을 그려, 올라오는 동안 시작 화면이 이미 보이게 한다(personality.css)
   let root, label, body;
   const active = () => container.contains(root);
+  const here = window.location.pathname;
+  const stillHere = () => window.location.pathname === here; // 문항을 받는 사이 다른 화면으로 가면 새 화면을 덮어쓰지 않는다
   const keys = new AbortController(); // 숫자 키 단축키. 화면을 떠나면 뗀다
   const openFolder = () => {
     ({ root, label, body } = renderFolder(container, { navigate, sheetLabel: '문항지', orientation: 'landscape' }));
@@ -67,10 +69,12 @@ export async function renderPersonalityPage(container, { api, navigate }) {
     try {
       questions = await fetchQuestions();
     } catch {
+      if (!stillHere()) return;
       if (!root) openFolder();
       if (active()) sheetMessage(body, '문항을 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요.', { retry: retryLoad, alert: true });
       return;
     }
+    if (!stillHere()) return;
     if (!root) openFolder();
     if (active()) renderIntro();
     // 문항 · 답안 정리에서 쓸 안내 컷을 미리 받아 둔다(원본 레포 PNG라 처음 뜰 때 늦다)
@@ -160,6 +164,7 @@ export async function renderPersonalityPage(container, { api, navigate }) {
 
   function renderQuestion(index, { direction = 1 } = {}) {
     window.clearTimeout(advanceTimer);
+    pickedByPointer = false; // 이미 고른 칸을 다시 눌러 남은 표시가 다음 문항으로 넘어가지 않게
     measureOnce();
     current = index;
     label.textContent = '문항지';
@@ -202,6 +207,7 @@ export async function renderPersonalityPage(container, { api, navigate }) {
       options.append(option);
     });
     options.addEventListener('pointerdown', () => { pickedByPointer = true; });
+    options.addEventListener('keydown', () => { pickedByPointer = false; }); // 화살표로 옮길 때는 넘어가지 않는다
     scale.append(near('A'), options, near('B'));
     const lead = element('div', 'test-lead'); // 문항 + A/B 칸. 선택 칸 위 공간의 세로 중앙
     lead.append(legend, ends);
@@ -252,6 +258,7 @@ export async function renderPersonalityPage(container, { api, navigate }) {
 
   // 숫자 1 ~ 5 = 왼쪽부터 다섯 칸
   document.addEventListener('keydown', (event) => {
+    if (!root) return; // 문항을 받는 중에는 아직 철이 없다
     if (!active()) { keys.abort(); return; }
     if (event.altKey || event.ctrlKey || event.metaKey || event.isComposing) return;
     const value = Number(event.key) - 1;
