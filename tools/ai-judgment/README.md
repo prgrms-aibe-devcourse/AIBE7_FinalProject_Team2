@@ -24,7 +24,8 @@ AI 판결 생성(3단계)은 두 가지 방법 중 하나로 한다. 외부 LLM 
 | `validate_output.py` | 모델 응답 JSON 검증 (오류 · 경고) |
 | `check_contamination.py` | 사전 학습 점검 프롬프트 생성 · 응답 판정 (REQ-102) |
 | `to_seed_sql.py` | 검수 통과본 → 적재 SQL (`judgment` · `judgment_factor` · `ai_generation`) |
-| `llm.py` | LLM 공급자 공통 호출 (OpenAI · Anthropic · Gemini · Groq · NVIDIA NIM, 표준 라이브러리 HTTP). API 키는 환경변수로만 읽는다 (BE-30, 공급자 추가 BE-84) |
+| `llm.py` | LLM 공급자 공통 호출 (OpenAI · Anthropic · Gemini · Groq · NVIDIA NIM, 표준 라이브러리 HTTP). API 키는 환경변수(`.env` 포함)로만 읽는다 (BE-30, 공급자 추가 BE-84) |
+| `env_file.py` | `.env` 파일을 읽어 아직 설정되지 않은 환경변수만 채운다. `llm.py`를 불러오는 시점에 자동으로 적용된다 (BE-86) |
 | `list_models.py` | 공급자에게 지금 쓸 수 있는 모델 ID를 물어본다 (OpenAI 호환 공급자만). `free_models.json`을 고치기 전에 확인하는 용도 (BE-84) |
 | `generate.py` | 여러 모델 · 여러 회차 AI 판결 생성 → 검증 → 실행 기록 (`out/runs/`). 채팅 응답 파일 넣기(`import`) (BE-30) |
 | `compare.py` | 실행 기록 → 모델별 비교표 (Markdown · CSV) (BE-30) |
@@ -109,6 +110,7 @@ python3 build_prompt.py case.json > out/prompt.md
 
 ```bash
 export OPENAI_API_KEY=...        # 쓰는 공급자의 키만 설정한다 (ANTHROPIC_API_KEY, GEMINI_API_KEY 또는 GOOGLE_API_KEY, GROQ_API_KEY, NVIDIA_API_KEY)
+# 매번 export하지 않고 .env 파일에 적어 둘 수도 있다 (아래 "API 키를 .env 파일로 주기")
 
 # 모델은 '공급자:모델ID'. --model을 여러 번 주면 모델마다 --runs회씩 생성한다
 python3 generate.py run case.json --model openai:<모델ID> --model gemini:<모델ID> --runs 5
@@ -137,6 +139,23 @@ python3 compare.py out/runs/case --case case.json --out out/runs/case/comparison
 - **HTTPS 인증서(BE-34)**: 인증서 검증은 항상 켜 둔다. 기본 인증서 위치에 인증서가 없으면(예: macOS python.org Python) `/etc/ssl/cert.pem` 같은 시스템 CA 묶음을 자동으로 찾아 쓴다. 그래도 `CERTIFICATE_VERIFY_FAILED`가 나면 `SSL_CERT_FILE`에 인증서 묶음 경로를 지정하거나(macOS: `/etc/ssl/cert.pem`) python.org Python의 `Install Certificates.command`를 한 번 실행한다. 인증서 오류는 다시 보내지 않고 바로 해결 방법을 안내한다. 검증을 끄는 옵션은 없다.
 - 과부하(503 · 529) · 한도 초과(429) · 서버 오류(5xx)는 원인에 맞게 기다렸다가 자동으로 다시 보낸다(기본 최대 5번, "무료 등급 한도 대응"). 그래도 실패하면 그 회차는 원인(과부하 / 분당 한도 / 일 한도)을 적어 "호출 실패"로 기록하고 다음 회차로 넘어간다. 일 한도 · 크레딧 소진이면 그 모델의 남은 회차는 부르지 않고 건너뛴다. API 키가 없으면 아무것도 기록하지 않고 바로 멈춘다.
 - 공급자를 추가하려면 `llm.py`에 `_call_<공급자>` 형태의 함수를 만들고 `PROVIDERS` · `API_KEY_ENVS`에 등록한다. OpenAI Chat Completions 형식을 그대로 쓰는 공급자라면 함수 없이 `OPENAI_COMPATIBLE`에 한 줄(기본 주소 · 주소를 바꾸는 환경변수 · 생성 토큰 상한 필드 · JSON 모드 지원 여부)만 더하면 된다(BE-84).
+
+#### API 키를 `.env` 파일로 주기 (BE-86)
+
+매번 `export`하는 대신 `.env` 파일에 적어 두면 `llm.py`를 쓰는 모든 도구(`generate.py` · `pipeline.py` · `case-extractor/*.py` 등)가 자동으로 읽는다.
+
+```bash
+cp .env.example .env    # tools/ai-judgment에서
+# .env를 열어 쓰는 공급자의 키만 채운다
+```
+
+- **찾는 위치**: `tools/ai-judgment/.env` → 저장소 루트 `.env` 순. 둘 다 있으면 먼저 찾은 쪽(도구 폴더)이 이긴다.
+- **우선순위**: 이미 셸에 설정된 환경변수가 있으면 **그 값이 `.env`보다 우선한다.** `GROQ_API_KEY=... python3 generate.py ...`처럼 한 번만 다른 키로 돌리는 걸 막지 않기 위해서다.
+- **`.env`는 커밋하지 않는다** (`.gitignore`). 커밋하는 건 값이 빈 `.env.example`뿐이다.
+- 문법은 `KEY=VALUE`, `export KEY=VALUE`(접두어 무시), `#`으로 시작하는 주석, 큰따옴표 · 작은따옴표로 감싼 값(이스케이프 처리는 하지 않는다)을 지원한다. `python-dotenv` 같은 패키지는 쓰지 않는다("설치 없이 실행" 원칙).
+- **로드한 변수는 이름만 안내하고 값은 어디에도 남기지 않는다.** 파일 권한이 느슨하면(다른 사용자도 읽을 수 있으면) 경고한다.
+- LLM API 키뿐 아니라 파이프라인 적재(`stages.load`)가 읽는 DB 접속 값(`DB_URL` · `DB_USERNAME` · `DB_PASSWORD`)도 같은 방식으로 `.env`에 넣을 수 있다. 다만 이 파일은 **API 키 · DB 접속 정보만** 두고 다른 비밀값을 섞지 않는다 — 파이프라인이 띄우는 자식 프로세스(`psql` 등)에도 전체 환경변수가 그대로 전달되기 때문이다.
+- 구현: `env_file.py`(`llm.py`를 불러오는 시점에 한 번 적용된다). 직접 쓸 일은 거의 없지만, `env_file.apply_env_files(paths=[...])`로 다른 위치의 파일을 적용할 수 있다.
 
 **결과 폴더** (`out/runs/<batch>/`, git 제외)
 

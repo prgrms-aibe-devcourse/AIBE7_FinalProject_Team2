@@ -14,6 +14,7 @@
 | v2.6 | 2026-10-16 | 6장 무료 등급: 점검 · 생성은 무료 등급을 기본으로 쓴다(팀 결정 10/15, 근거 Jira BE-76 댓글). 판결문 원문 단계는 그대로 유료 키만 |
 | v2.7 | 2026-10-16 | 3장 ① 요약어 후보 DB 적재 · A-6 반영 (BE-80) — `factor.summary_tag_candidates`(V17), 화면 표시는 후속 |
 | v2.8 | 2026-10-16 | Groq · NVIDIA NIM 공급자 추가 (BE-84) — 4장 공급자 · API 키 · 모델 목록 조회, 5-4 `free:groq`/`free:nim`, 6장 NIM 무료 등급 데이터 약관. COMMON-40 모델 비교 테스트의 선행 작업 |
+| v2.9 | 2026-10-17 | API 키 `.env` 파일 지원 (BE-86) — 4장에 `.env` 안내 추가. COMMON-40 모델 비교 테스트의 선행 작업 |
 
 > 이 문서는 **개요**다. 명령 · 옵션 · 설정 값의 정확한 기준은 [`tools/ai-judgment/README.md`](../tools/ai-judgment/README.md)와 [`case-extractor/README.md`](../tools/ai-judgment/case-extractor/README.md)다. 문서와 코드가 다르면 도구 README와 코드를 따른다.
 > 이 문서는 사건 내용을 담지 않는다. 예시는 모두 설명용이다.
@@ -140,7 +141,7 @@ MVP는 AI 판결을 **오프라인에서 생성 · 검수한 결과를 DB에 적
 | 항목 | 내용 |
 | --- | --- |
 | 모델 지정 | `공급자:모델ID` (예: `gemini:<모델ID>`). 공급자: `openai` · `anthropic` · `gemini` · `groq` · `nim`(NVIDIA NIM, BE-84). 비식별화는 공급자 없는 이름(`claude-…`)도 Claude로 본다. NIM 모델 ID에는 `/`가 들어간다(`nim:nvidia/nemotron-…`) |
-| API 키 | 환경변수로만 읽는다(`OPENAI_API_KEY` · `ANTHROPIC_API_KEY` · `GEMINI_API_KEY`/`GOOGLE_API_KEY` · `GROQ_API_KEY` · `NVIDIA_API_KEY`). 코드 · 출력 · 오류 메시지에 남기지 않는다 |
+| API 키 | 환경변수로만 읽는다(`OPENAI_API_KEY` · `ANTHROPIC_API_KEY` · `GEMINI_API_KEY`/`GOOGLE_API_KEY` · `GROQ_API_KEY` · `NVIDIA_API_KEY`). 코드 · 출력 · 오류 메시지에 남기지 않는다. 매번 `export`하는 대신 `.env` 파일(`tools/ai-judgment/.env.example` 참고, 커밋하지 않음)로 줄 수 있다(BE-86). 이미 설정된 환경변수가 `.env`보다 우선한다 |
 | 쓸 수 있는 모델 확인 | `list_models.py <공급자>`가 공급자에게 직접 물어본다(OpenAI 호환 공급자만). 무료 모델 목록(`free_models.json`)을 고치기 전에 확인한다 (BE-84) |
 | 단계별 모델 | extract · court는 `stages.extract.model` · `stages.court.model`, contamination · generate는 `models` 목록. 단계마다 다른 공급자를 쓸 수 있다 |
 | 도구 | 웹 검색 · 그라운딩을 붙이지 않는다(실제 판결을 찾아보면 독립 판단 · 사전 학습 점검이 무의미해진다) |
