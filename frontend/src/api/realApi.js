@@ -33,3 +33,10 @@ export const postCourtReveal = (caseId) => post(`${experience(caseId)}/court-rev
 export const getCourtJudgment = (caseId) => get(`${experience(caseId)}/judgments/court`);
 export const postComparisonReveal = (caseId) => post(`${experience(caseId)}/comparison-reveal`);
 export const getComparison = (caseId) => get(`${experience(caseId)}/comparison`);
+
+// 성향 API P-1 ~ P-5 (명세 9장). 응답 제출(P-2)만 익명 ID 쿠키를 새로 발급한다
+export const getPersonalityQuestions = () => get('/personality/questions');
+export const submitPersonality = (answers) => post('/personality/results', { answers });
+export const getMyPersonality = () => get('/personality/results/me');
+export const getPersonalityType = (shareId) => get(`/personality/types/${encodeURIComponent(shareId)}`);
+export const getMyPage = () => get('/my-page');
