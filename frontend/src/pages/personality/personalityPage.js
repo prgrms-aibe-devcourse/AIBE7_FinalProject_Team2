@@ -16,7 +16,6 @@ const SCALE = [
   { value: 3, degree: '조금', side: 'optionB' },
   { value: 4, degree: '매우', side: 'optionB' },
 ];
-const SCENARIO_LABELS = { FRIEND: '친구', FAMILY: '가족', WORK: '직장', NEIGHBOR: '이웃' };
 const ADVANCE_MS = 260; // 고른 칸이 칠해지는 것을 보고 넘어가도록
 const MIN_LOADING_MS = 900; // 결과 분석 연출(user-flow 3-2)이 깜빡이고 사라지지 않도록
 const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -85,6 +84,7 @@ export async function renderPersonalityPage(container, { api, navigate }) {
   }
 
   function renderIntro() {
+    measureOnce();
     label.textContent = '표지';
     const intro = element('div', 'test-intro');
     const duo = element('div', 'test-duo');
@@ -109,12 +109,29 @@ export async function renderPersonalityPage(container, { api, navigate }) {
       start,
     );
     body.replaceChildren(intro);
+    fitFolder();
   }
 
   const answers = new Map(); // questionId → value
   let current = 0;
   let pickedByPointer = false;
   let advanceTimer = 0;
+  // 표지와 문항지가 같은 크기의 철이 되게, 표지 · 모든 문항 중 가장 큰 높이를 철의 최소 높이로 잡아 둔다(데스크톱)
+  let folderMin = 0;
+  let measured = false;
+  const desktop = () => window.matchMedia('(min-width: 721px)').matches;
+  function fitFolder() {
+    const folder = body.closest('.test-folder');
+    if (!folder || !desktop()) return;
+    folderMin = Math.max(folderMin, folder.offsetHeight);
+    folder.style.minHeight = `${folderMin}px`;
+  }
+  // 처음 한 번 모든 문항을 그려 높이를 잰다(그리는 사이 화면은 갱신되지 않는다)
+  function measureOnce() {
+    if (measured || !desktop()) return;
+    measured = true;
+    questions.forEach((_, i) => renderQuestion(i));
+  }
 
   // 답안 칸: 답한 문항 · 지금 문항 · 앞 문항을 모두 답한 다음 문항만 눌러서 갈 수 있다(건너뛰기 없음)
   // fresh = 방금 처음 답한 문항 id(그 칸만 체크를 긋는다)
@@ -143,6 +160,7 @@ export async function renderPersonalityPage(container, { api, navigate }) {
 
   function renderQuestion(index, { direction = 1 } = {}) {
     window.clearTimeout(advanceTimer);
+    measureOnce();
     current = index;
     label.textContent = '문항지';
     const question = questions[index];
@@ -150,11 +168,14 @@ export async function renderPersonalityPage(container, { api, navigate }) {
     const panel = element('div', 'test-question');
     panel.style.setProperty('--enter-x', `${direction * 14}px`);
 
-    const fieldset = element('fieldset', 'test-fieldset');
-    const legend = element('legend', 'test-scenario');
+    // legend는 안에 다른 칸을 함께 묶어 가운데로 놓을 수 없어서, fieldset 대신 role=group으로 묶는다
+    const fieldset = element('div', 'test-fieldset');
+    fieldset.setAttribute('role', 'group');
+    const legend = element('div', 'test-scenario');
+    legend.id = `question-${question.id}-text`;
+    fieldset.setAttribute('aria-labelledby', legend.id);
     legend.tabIndex = -1; // 문항이 바뀌면 여기로 포커스를 옮겨 낭독기가 새 문항을 읽는다
-    legend.append(element('span', 'test-chip', SCENARIO_LABELS[question.scenario] ?? '일상'), element('span', 'test-situation', question.content));
-    fieldset.append(legend);
+    legend.append(element('span', 'test-situation', question.content));
 
     // 양 끝 행동 문장. 왼쪽 = A, 오른쪽 = B
     const ends = element('div', 'test-ends');
@@ -182,7 +203,9 @@ export async function renderPersonalityPage(container, { api, navigate }) {
     });
     options.addEventListener('pointerdown', () => { pickedByPointer = true; });
     scale.append(near('A'), options, near('B'));
-    fieldset.append(ends, scale);
+    const lead = element('div', 'test-lead'); // 문항 + A/B 칸. 선택 칸 위 공간의 세로 중앙
+    lead.append(legend, ends);
+    fieldset.append(lead, scale);
 
     const actions = element('div', 'test-actions');
     const prev = button('이전', () => (index === 0 ? renderIntro() : renderQuestion(index - 1, { direction: -1 })), 'secondary-button');
@@ -192,10 +215,12 @@ export async function renderPersonalityPage(container, { api, navigate }) {
     next.disabled = !answers.has(question.id);
     actions.append(prev, hint, next);
 
+
     const main = element('div', 'test-question-main');
     main.append(fieldset, actions);
     panel.append(guideFor(question, index, questions.length), main);
     body.replaceChildren(answerGrid(index), panel);
+    fitFolder();
     legend.focus({ preventScroll: true });
 
     function pick(value) {
@@ -259,7 +284,7 @@ export async function renderPersonalityPage(container, { api, navigate }) {
     if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
     if (active()) {
       keys.abort();
-      markFolderTurn(); // 결과지는 눕힌 철을 돌려 세우며 보여 준다
+      markFolderTurn(body.closest('.test-folder')); // 결과지는 눕힌 철을 같은 자리 · 크기에서 돌려 세우며 보여 준다
       navigate('testResult');
     }
   }

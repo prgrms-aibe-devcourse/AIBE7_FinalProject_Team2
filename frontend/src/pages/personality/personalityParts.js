@@ -43,19 +43,36 @@ export function renderFolder(container, { navigate, sheetLabel, orientation = 'p
 }
 
 // 철 돌리기: 검사지를 제출하고 결과로 넘어갈 때만 눕힌 철을 세운다(결과 주소로 바로 오거나 마이페이지에서 오면 바로 세로).
-// 화면 사이 한 번만 전하는 값이라 sessionStorage에 두고, 쓸 수 없으면 연출 없이 간다
+// 화면 사이 한 번만 전하는 값이라 sessionStorage에 두고, 쓸 수 없으면 연출 없이 간다.
+// 눕힌 철의 자리 · 크기(페이지 좌표)를 함께 넘겨, 결과지 철이 같은 자리 · 크기에서 돌며 커지게 한다
 const TURN_KEY = 'nlnb-personality-turn';
-export function markFolderTurn() {
-  try { sessionStorage.setItem(TURN_KEY, '1'); } catch { /* 연출만 빠진다 */ }
+export function markFolderTurn(folder) {
+  const r = folder?.getBoundingClientRect();
+  const from = r ? { x: r.left + window.scrollX, y: r.top + window.scrollY, w: r.width, h: r.height } : {};
+  try { sessionStorage.setItem(TURN_KEY, JSON.stringify(from)); } catch { /* 연출만 빠진다 */ }
 }
+// 돌릴 일이 없으면 null, 있으면 눕힌 철의 자리(없으면 빈 객체)
 export function takeFolderTurn() {
   try {
-    const turn = sessionStorage.getItem(TURN_KEY) === '1';
+    const raw = sessionStorage.getItem(TURN_KEY);
     sessionStorage.removeItem(TURN_KEY);
-    return turn;
+    return raw ? JSON.parse(raw) : null;
   } catch {
-    return false;
+    return null;
   }
+}
+
+// 세운 철(folder)이 눕힌 철 자리(from)에서 시작하도록 처음 모양을 CSS 변수로 준다(personality.css folder-turn).
+// 철을 -90도 돌리면 철의 높이가 가로, 폭이 세로가 되므로 가로 · 세로 배율을 서로 바꿔 맞춘다
+export function setFolderTurnFrom(folder, from) {
+  if (!from?.w) return; // 자리를 모르면 CSS 기본값(예전 연출)으로 돈다
+  const r = folder.getBoundingClientRect();
+  const x = r.left + window.scrollX;
+  const y = r.top + window.scrollY;
+  folder.style.setProperty('--turn-x', `${from.x + from.w / 2 - (x + r.width / 2)}px`);
+  folder.style.setProperty('--turn-y', `${from.y + from.h / 2 - (y + r.height / 2)}px`);
+  folder.style.setProperty('--turn-sx', String(from.h / r.width));
+  folder.style.setProperty('--turn-sy', String(from.w / r.height));
 }
 
 // 종이 안 상태 문구(불러오는 중 · 실패). retry가 있으면 다시 시도 버튼, action = { label, run }이면 다른 버튼

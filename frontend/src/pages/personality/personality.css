@@ -44,11 +44,27 @@
   .is-landscape.personality-page { padding-top: 40px; }
   .test-folder { display: flex; }
   .is-portrait .test-folder { min-height: 1040px; }
-  .is-landscape .test-folder { aspect-ratio: 297 / 210; } /* 가로 A4 비율. 내용이 넘치면 철이 길어진다 */
-  .test-sheet { flex: 1; display: flex; flex-direction: column; }
+  .is-landscape .test-binder { container-type: inline-size; }
+  .is-landscape .test-folder { min-height: calc(100cqw * 210 / 297); } /* 가로 A4 비율이 최소 높이. aspect-ratio는 최소 높이가 폭을 키워 옆이 잘려서 쓰지 않는다. 내용이 길면 철이 길어진다 */
+  .test-sheet { flex: 1; min-width: 0; display: flex; flex-direction: column; } /* min-width 0: 좁은 창에서 내용이 철을 밀어 오른쪽이 잘리지 않게 */
   .test-sheet-body { flex: 1; }
+  /* 문항: 선택 칸과 이전 · 다음은 문항 길이와 상관없이 종이 아래에 고정 */
+  .test-sheet-body:has(.test-question) { display: flex; flex-direction: column; }
+  .test-question { flex: 1 0 auto; }
+  .test-question-main { align-self: stretch; display: flex; flex-direction: column; }
+  .test-question-main .test-fieldset { flex: 1 0 auto; display: flex; flex-direction: column; }
+  /* 문항 + A/B 칸은 답안 칸과 선택 칸 사이 공간의 세로 중앙(남는 공간을 위아래로 반씩) */
+  .test-question-main .test-lead { margin-block: auto; }
 }
+
 @media (hover: hover) and (pointer: fine) { .test-sheet-body { padding: 28px 32px 32px; } }
+/* 폭이 좁은 데스크톱: 양 끝 문구를 칸 위로 올려 동그라미와 겹치지 않게(모바일과 같은 배치) */
+@media (min-width: 721px) and (max-width: 900px) {
+  .test-scale { grid-template-columns: 1fr 1fr; gap: 6px; }
+  .test-near { padding-top: 0; }
+  .test-near:last-child { text-align: right; }
+  .test-options { grid-column: 1 / -1; order: 3; }
+}
 
 /* 상태 문구(불러오는 중 · 실패 · 답안 정리) */
 .test-message { display: grid; justify-items: center; gap: 16px; padding: 48px 0; text-align: center; }
@@ -92,13 +108,12 @@
 .answer-cell:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
 
 /* ── S-15 문항: 안내 캐릭터 | 문항 ── */
-.test-question { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 28px; align-items: start; }
+.test-question { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 28px; align-items: center; }
 .test-question > .test-guide { position: sticky; top: 24px; padding-top: 4px; }
 .test-fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
 .test-scenario { display: block; width: 100%; margin-bottom: 18px; padding: 0; }
 .test-scenario:focus { outline: none; }
 .test-scenario:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 4px; }
-.test-chip { display: table; margin-bottom: 10px; padding: 1px 10px; border: 1.5px solid var(--color-label); border-radius: 3px; color: var(--color-label); font: 700 var(--text-caption)/1.6 var(--font-body); }
 .test-situation { display: block; color: var(--color-heading); font: 700 var(--text-title-2)/1.5 var(--font-heading); letter-spacing: -.01em; text-wrap: pretty; }
 
 /* 양 끝 행동 문장. 고른 쪽 문장에 테두리를 진하게 */
@@ -192,12 +207,16 @@
   .answer-cell.is-fresh svg path { stroke-dasharray: 24; animation: test-check .28s ease-out both; } /* 방금 답한 칸만 펜으로 긋는다 */
   .is-result .result-portrait { animation: result-place .7s cubic-bezier(.16, 1, .3, 1) both; }
   /* 결과지로 넘어올 때: 눕혀 둔 철(검사지와 같은 자리 · 크기)을 시계 방향으로 돌려 세운다. 도는 동안 종이는 비어 있고, 다 서면 글자 · 탭이 나타난다 */
-  .is-turning .test-binder { animation: folder-turn 1s cubic-bezier(.65, 0, .35, 1) both; }
+  .is-turning .test-folder { animation: folder-turn 1s cubic-bezier(.65, 0, .35, 1) both; } /* 탭은 도는 동안 숨었다가 나타난다 */
   .is-turning :is(.test-sheet > *, .test-folder-tabs) { animation: folder-content-in 1.35s ease-out both; }
   .is-turning .result-portrait { animation-delay: .95s; }
 }
 /* 시작 = 검사지의 눕힌 철 자리(세운 철 가운데가 147px 아래라 그만큼 올려 둔다). 잠깐 들었다가(30%) 돌린다 */
-@keyframes folder-turn { from { transform: translateY(-147px) rotate(-90deg); } 30% { transform: translateY(-147px) rotate(-90deg) scale(1.02); } }
+/* 눕힌 철(검사지)과 같은 자리 · 크기에서 시작해 돌면서 세운 철 크기로 커진다. --turn-*는 setFolderTurnFrom(personalityParts.js)이 넣는다 */
+@keyframes folder-turn {
+  from { transform: translate(var(--turn-x, 0px), var(--turn-y, -147px)) rotate(-90deg) scale(var(--turn-sx, 1), var(--turn-sy, 1)); }
+  30% { transform: translate(var(--turn-x, 0px), var(--turn-y, -147px)) rotate(-90deg) scale(calc(var(--turn-sx, 1) * 1.02), calc(var(--turn-sy, 1) * 1.02)); }
+}
 @keyframes folder-content-in { 0%, 72% { opacity: 0; } 100% { opacity: 1; } }
 /* 시작 화면과 같은 크기의 철(반응형 폭 그대로, 확대 없음)이 화면 아래에서 세워진 채(-90°) 올라오며 눕는다(0°). 이전 책상 화면은 그 사이 페이드아웃 */
 @keyframes folder-rise { from { transform: translateY(calc(100vh + 100%)) rotate(-90deg); } }
@@ -220,7 +239,7 @@
   .answer-cell { height: 30px; }
 
   .test-question { grid-template-columns: minmax(0, 1fr); gap: 14px; }
-  .test-question > .test-guide { position: static; flex-direction: row; align-items: flex-end; gap: 10px; padding: 0; }
+  .test-question > .test-guide { position: static; flex-direction: row; align-items: center; gap: 10px; padding: 0; }
   .test-question > .test-guide:not(:has(.test-bubble)) { display: none; } /* 대사 없는 문항에서는 문항이 먼저 보이게 */
   .test-question .test-guide-cut { height: 76px; }
   .test-question .test-bubble { order: 1; flex: 1; margin: 0 0 6px; font-size: 14px; }

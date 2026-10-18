@@ -1,6 +1,6 @@
 import { button, element } from '../../components/siteLayout.js';
 import { renderToleranceScale } from '../../components/toleranceScale.js';
-import { descriptionSections, noticeBlock, renderFolder, resultPages, sheetMessage, takeFolderTurn, TOLERANCE_NOTE, turnPage, typeCard } from './personalityParts.js';
+import { descriptionSections, noticeBlock, renderFolder, resultPages, setFolderTurnFrom, sheetMessage, takeFolderTurn, TOLERANCE_NOTE, turnPage, typeCard } from './personalityParts.js';
 import { AXES } from '../../utils/personalityAxes.js';
 
 // S-16 성향 결과 — 내 결과 (WBS 7.6.5, FE-42 디자인). 공유 버튼은 해시 주소(/test/types/{shareId})를 공유한다(FR-8-6).
@@ -65,7 +65,9 @@ export async function renderPersonalityResultPage(container, { api, navigate }) 
   const { root, tabs, body } = renderFolder(container, { navigate, sheetLabel: '결과지' });
   root.classList.add('is-result');
   // 검사지를 막 제출했으면 가로로 눕힌 철을 돌려 세운다. 다 돌면 결과지 글자 · 탭이 나타난다(personality.css folder-turn)
-  if (takeFolderTurn() && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+  const turnFrom = takeFolderTurn();
+  if (turnFrom && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+    setFolderTurnFrom(root.querySelector('.test-folder'), turnFrom);
     root.classList.add('is-turning');
     root.addEventListener('animationend', (event) => {
       if (event.animationName === 'folder-content-in') root.classList.remove('is-turning'); // 마지막 연출(글자 나타남)이 끝나면
