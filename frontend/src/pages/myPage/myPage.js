@@ -55,7 +55,7 @@ function picture(src, alt, className = '') {
 
 // 성향 이미지: 이미지(imageUrl)가 아직 없거나 불러오지 못하면 캐릭터 이름을 대신 둔다(personalityParts.js와 같은 규칙)
 function typePortrait(type) {
-  const portrait = element('div', 'my-type-portrait');
+  const portrait = element('div', 'my-card-window');
   const characterName = CHARACTER_NAMES[type.character] ?? type.character;
   const showName = () => {
     portrait.replaceChildren(element('strong', '', characterName));
@@ -82,7 +82,7 @@ function cardButton(className, label, ...children) {
 
 // 성향을 모를 때 타로카드의 빈 그림 창("?")
 function emptyWindow() {
-  const window_ = element('div', 'my-type-portrait');
+  const window_ = element('div', 'my-card-window');
   window_.append(element('strong', '', '?'));
   window_.setAttribute('aria-hidden', 'true');
   return window_;
@@ -114,7 +114,9 @@ function renderStats(data) {
 function renderTop(data, go) {
   const section = element('section', 'my-top');
   const who = getBookmarkCharacter();
-  const profile = cardButton('is-profile', '프로필카드 열기', picture(imageOf(who, 'role:judge'), `${BOOKMARK_NAMES[who]} 전신`, 'my-profile-face'));
+  const face = element('div', 'my-card-window');
+  face.append(picture(imageOf(who, 'role:judge'), `${BOOKMARK_NAMES[who]} 전신`, 'my-profile-face'));
+  const profile = cardButton('is-profile', `프로필카드 열기: 대표 이미지 ${BOOKMARK_NAMES[who]}-판사`, element('p', 'my-card-name', '대표 이미지'), face, element('p', 'my-card-note', `${BOOKMARK_NAMES[who]}-판사`));
   profile.addEventListener('click', () => go('profile'));
 
   const middle = element('div', 'my-top-middle');
@@ -122,8 +124,8 @@ function renderTop(data, go) {
 
   const type = data.personality?.type;
   const typeCardNode = type
-    ? cardButton('is-type', `성향카드 열기: ${type.name}`, element('p', 'my-type-name', type.name), typePortrait(type), element('p', 'my-type-quote', type.meme))
-    : cardButton('is-type is-empty', '성향카드 열기: 아직 성향을 몰라요', element('p', 'my-type-name', '아직 몰라요'), emptyWindow(), element('p', 'my-type-quote', '"성향 테스트로 카드를 뽑아 봐요"'));
+    ? cardButton('is-type', `성향카드 열기: ${type.name}`, element('p', 'my-card-name', type.name), typePortrait(type), element('p', 'my-card-note my-type-quote', type.meme))
+    : cardButton('is-type is-empty', '성향카드 열기: 아직 성향을 몰라요', element('p', 'my-card-name', '아직 몰라요'), emptyWindow(), element('p', 'my-card-note my-type-quote', '"성향 테스트로 카드를 뽑아 봐요"'));
   typeCardNode.addEventListener('click', () => go('type'));
 
   section.append(profile, middle, typeCardNode);
