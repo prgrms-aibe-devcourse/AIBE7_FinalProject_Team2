@@ -5,16 +5,21 @@
     python3 compare.py out/runs/case --out out/runs/case/comparison.md --csv out/runs/case/comparison.csv
     python3 compare.py out/runs/case --court cases/court_judgment_internal.json   # 실제 판결과 차이 (내부 전용)
     python3 compare.py out/runs/case --price openai:gpt-5=1.25,10                  # 100만 토큰당 입력,출력 단가(USD)
+    python3 compare.py out/runs/case1 out/runs/case2 ...       # 여러 사건을 모델별로 합산 (BE-85, --case · --court 안 됨)
 
 비교 항목
 - 실행 · 호출 실패 · 파싱 실패 · 검증 통과 수, 평균 오류 · 경고 수
-- 최종 선고 형벌 분포, 징역 개월 (최소 · 중앙값 · 최대), 집행유예 붙인 횟수, 권고 범위 안에 든 횟수
+- 최종 선고 형벌 분포, 징역 개월 (최소 · 중앙값 · 최대 · 표준편차 · IQR), 집행유예 붙인 횟수, 권고 범위 안에 든 횟수
 - 판단 요소 방향 일관성: 같은 모델의 회차끼리 요소마다 다수 의견과 같은 비율의 평균 (1에 가까울수록 매번 비슷하게 판단)
 - 전체 다수 의견 일치율: 모든 모델 · 회차의 요소별 다수 의견과 같은 비율의 평균 (다른 모델들과 얼마나 비슷한지)
 - 평균 입력 · 출력 · 합계 토큰, 평균 소요 시간, (단가를 주면) 회당 예상 비용
 - --court를 주면 실제 판결과 형벌 종류 일치율 · 징역 개월 평균 차이 (내부 전용 — 이 결과는 공유 · 커밋하지 않는다)
 
 요소 방향은 검증을 통과한 실행만으로 센다. 고르지 않은 요소는 '선택 안 함'(None)으로 센다.
+
+사건 간 집계(BE-85): 결과 폴더를 여러 개 주면 모델별로 모든 사건의 실행을 합쳐 센다. 판단 요소는 사건마다
+구성이 달라 요소 일관성 · 전체 다수 의견 칸은 만들지 않는다. 대신 "사건별 중앙값 편차"로, 모델이 사건
+난이도가 달라져도 비슷한 수준의 형량을 내는지(낮을수록 사건에 상관없이 안정적)를 본다.
 """
 
 import argparse
@@ -119,6 +124,21 @@ def _mean(values):
     return sum(values) / len(values) if values else None
 
 
+def _stdev(values):
+    """모집단 표준편차. 값이 2개 미만이면(퍼진 정도를 말할 수 없어) None."""
+    values = [v for v in values if v is not None]
+    return statistics.pstdev(values) if len(values) >= 2 else None
+
+
+def _iqr(values):
+    """사분위 범위(Q3 - Q1). 값이 2개 미만이면 None."""
+    values = [v for v in values if v is not None]
+    if len(values) < 2:
+        return None
+    q1, _, q3 = statistics.quantiles(values, n=4, method="inclusive")
+    return q3 - q1
+
+
 def summarize(case, groups, court=None, prices=None):
     """모델별 요약 행 목록과 실행별 상세 행 목록을 돌려준다."""
     factor_ids = sorted(int(f["factorId"]) for f in case.get("factors", []))
@@ -156,6 +176,8 @@ def summarize(case, groups, court=None, prices=None):
             "prisonMin": min(prison) if prison else None,
             "prisonMedian": statistics.median(prison) if prison else None,
             "prisonMax": max(prison) if prison else None,
+            "prisonStdev": _stdev(prison),
+            "prisonIqr": _iqr(prison),
             "suspended": sum(1 for r in valid if r["output"].get("suspensionMonths") is not None),
             "inRecommended": (sum(1 for m in prison if recommended["minMonths"] <= m <= recommended["maxMonths"])
                               if recommended else None),
@@ -195,6 +217,74 @@ def summarize(case, groups, court=None, prices=None):
     return rows, details, consensus
 
 
+def aggregate(cases, prices=None):
+    """여러 사건(batch_dir)의 실행을 모델별로 합쳐 모델별 요약 행 목록을 돌려준다 (BE-85).
+
+    cases는 (case 입력, 모델별 실행 목록) 목록이다. 판단 요소는 사건마다 구성이 달라
+    요소 일관성 · 전체 다수 의견 칸은 만들지 않는다.
+    """
+    prices = prices or {}
+    specs = sorted({spec for _, groups in cases for spec in groups})
+
+    rows = []
+    for spec in specs:
+        records, case_medians, in_recommended, recommended_counted = [], [], 0, False
+        case_count = 0
+        for case, groups in cases:
+            case_records = groups.get(spec)
+            if not case_records:
+                continue
+            case_count += 1
+            records.extend(case_records)
+            case_valid = [r for r in case_records if r["validation"]["ok"]]
+            case_prison = [r["output"]["prisonMonths"] for r in case_valid
+                           if r["finalPenalty"] == "PRISON" and isinstance(r["output"].get("prisonMonths"), int)]
+            if case_prison:
+                case_medians.append(statistics.median(case_prison))
+            recommended = case.get("recommended")
+            if recommended and case_prison:
+                recommended_counted = True
+                in_recommended += sum(1 for m in case_prison if recommended["minMonths"] <= m <= recommended["maxMonths"])
+
+        valid = [r for r in records if r["validation"]["ok"]]
+        parsed = [r for r in records if r["output"] is not None]
+        finals = [r["finalPenalty"] for r in valid]
+        prison = [r["output"]["prisonMonths"] for r in valid
+                  if r["finalPenalty"] == "PRISON" and isinstance(r["output"].get("prisonMonths"), int)]
+        usages = [(r.get("meta") or {}).get("usage") or {} for r in records if not r["callError"]]
+        input_tokens = _mean([u.get("inputTokens") for u in usages])
+        output_tokens = _mean([u.get("outputTokens") for u in usages])
+        row = {
+            "model": spec,
+            "cases": case_count,
+            "runs": len(records),
+            "callFailed": sum(1 for r in records if r["callError"]),
+            "parseFailed": sum(1 for r in records if r["parseError"]),
+            "valid": len(valid),
+            "avgErrors": _mean([len(r["validation"]["errors"]) for r in parsed]),
+            "avgWarnings": _mean([len(r["validation"]["warnings"]) for r in parsed]),
+            "penalties": ", ".join(f"{p}×{n}" for p, n in sorted(Counter(finals).items())) or None,
+            "prisonMin": min(prison) if prison else None,
+            "prisonMedian": statistics.median(prison) if prison else None,
+            "prisonMax": max(prison) if prison else None,
+            "prisonStdev": _stdev(prison),
+            "prisonIqr": _iqr(prison),
+            "crossCaseMedianStdev": _stdev(case_medians),
+            "suspended": sum(1 for r in valid if r["output"].get("suspensionMonths") is not None),
+            "inRecommended": in_recommended if recommended_counted else None,
+            "avgInputTokens": input_tokens,
+            "avgOutputTokens": output_tokens,
+            "avgTotalTokens": _mean([u.get("totalTokens") for u in usages]),
+            "avgLatencySeconds": _mean([(r.get("meta") or {}).get("latencySeconds") for r in records]),
+            "avgCostUsd": None,
+        }
+        if spec in prices and input_tokens is not None and output_tokens is not None:
+            input_price, output_price = prices[spec]
+            row["avgCostUsd"] = (input_tokens * input_price + output_tokens * output_price) / 1_000_000
+        rows.append(row)
+    return rows
+
+
 def check_court_case(court, batch):
     """다른 사건의 실제 판결로 비교하지 않게, 판결 파일의 caseTitle이 묶음의 사건 제목과 같은지 확인한다."""
     if not court.get("caseTitle"):
@@ -230,6 +320,8 @@ RESULT_COLUMNS = [
     ("prisonMin", "징역 최소(개월)"),
     ("prisonMedian", "징역 중앙값"),
     ("prisonMax", "징역 최대"),
+    ("prisonStdev", "징역 표준편차"),
+    ("prisonIqr", "징역 IQR"),
     ("suspended", "집행유예"),
     ("inRecommended", "권고 범위 안"),
     ("factorConsistency", "요소 방향 일관성"),
@@ -262,6 +354,25 @@ DETAIL_COLUMNS = [
     ("totalTokens", "합계 토큰"),
     ("latencySeconds", "소요(초)"),
 ]
+AGGREGATE_COLUMNS = [
+    ("model", "모델"),
+    ("cases", "사건 수"),
+    ("runs", "실행"),
+    ("callFailed", "호출 실패"),
+    ("parseFailed", "파싱 실패"),
+    ("valid", "검증 통과"),
+    ("avgErrors", "평균 오류"),
+    ("avgWarnings", "평균 경고"),
+    ("penalties", "최종 형벌 분포"),
+    ("prisonMin", "징역 최소(개월)"),
+    ("prisonMedian", "징역 중앙값"),
+    ("prisonMax", "징역 최대"),
+    ("prisonStdev", "징역 표준편차"),
+    ("prisonIqr", "징역 IQR"),
+    ("crossCaseMedianStdev", "사건별 중앙값 편차"),
+    ("suspended", "집행유예"),
+    ("inRecommended", "권고 범위 안"),
+] + COST_COLUMNS[1:]
 RATE_KEYS = {"factorConsistency", "consensusAgreement", "courtPenaltyMatch"}
 
 
@@ -316,9 +427,31 @@ def render_csv(rows, with_court):
     return buffer.getvalue()
 
 
+def render_markdown_aggregate(case_titles, rows):
+    parts = [
+        "# 모델별 AI 판결 비교 (사건 간 집계)",
+        "",
+        f"- 사건 {len(case_titles)}개: " + ", ".join(case_titles),
+        "- 판단 요소는 사건마다 구성이 달라 요소 일관성 · 전체 다수 의견 칸은 만들지 않는다(사건별 비교표 참고).",
+        "- 사건별 중앙값 편차: 모델이 사건별로 낸 징역 중앙값들의 표준편차. 낮을수록 사건이 달라져도 비슷한 수준으로 선고한다.",
+        "", "## 판결 결과", "", markdown_table(AGGREGATE_COLUMNS, rows), "",
+    ]
+    return "\n".join(parts)
+
+
+def render_csv_aggregate(rows):
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow([title for _, title in AGGREGATE_COLUMNS])
+    for row in rows:
+        writer.writerow(["" if row.get(key) is None else row.get(key) for key, _ in AGGREGATE_COLUMNS])
+    return buffer.getvalue()
+
+
 def main():
     parser = argparse.ArgumentParser(description="모델별 AI 판결 비교표를 만든다")
-    parser.add_argument("batch_dir", help="generate.py 결과 폴더 (out/runs/<batch>)")
+    parser.add_argument("batch_dir", nargs="+", help="generate.py 결과 폴더 (out/runs/<batch>). "
+                        "여러 개 주면 모델별로 합산한다 (BE-85, --case · --court와 함께 쓸 수 없다)")
     parser.add_argument("--case", help="사건 입력 JSON (기본: 첫 실행 기록의 프롬프트와 같은 사건이어야 한다)")
     parser.add_argument("--court", help="실제 판결 파일 (내부 전용). 주면 실제 판결과의 차이 칸을 넣는다")
     parser.add_argument("--price", action="append", help="'공급자:모델=입력단가,출력단가' (100만 토큰당 USD). 여러 번 지정 가능")
@@ -326,16 +459,30 @@ def main():
     parser.add_argument("--csv", help="모델별 요약 CSV 저장 경로")
     args = parser.parse_args()
     try:
-        batch, groups = load_runs(args.batch_dir)
-        case = load_json(args.case) if args.case else {}
-        if args.case and case.get("title") != batch.get("caseTitle"):
-            raise CompareError(f"--case의 사건({case.get('title')})이 묶음의 사건({batch.get('caseTitle')})과 다릅니다")
-        if not args.case:
-            case = _case_from_records(groups)
-        court = load_json(args.court) if args.court else None
-        if court is not None:
-            check_court_case(court, batch)
-        rows, details, consensus = summarize(case, groups, court, parse_prices(args.price))
+        if len(args.batch_dir) > 1:
+            if args.case or args.court:
+                raise CompareError("여러 사건을 합산할 때는 --case · --court를 쓸 수 없습니다 (사건마다 달라서 하나로 못 정합니다)")
+            cases, case_titles = [], []
+            for batch_dir in args.batch_dir:
+                batch, groups = load_runs(batch_dir)
+                case_titles.append(batch.get("caseTitle") or batch_dir)
+                cases.append((_case_from_records(groups), groups))
+            rows = aggregate(cases, parse_prices(args.price))
+            markdown = render_markdown_aggregate(case_titles, rows)
+            csv_text = render_csv_aggregate(rows)
+        else:
+            batch, groups = load_runs(args.batch_dir[0])
+            case = load_json(args.case) if args.case else {}
+            if args.case and case.get("title") != batch.get("caseTitle"):
+                raise CompareError(f"--case의 사건({case.get('title')})이 묶음의 사건({batch.get('caseTitle')})과 다릅니다")
+            if not args.case:
+                case = _case_from_records(groups)
+            court = load_json(args.court) if args.court else None
+            if court is not None:
+                check_court_case(court, batch)
+            rows, details, consensus = summarize(case, groups, court, parse_prices(args.price))
+            markdown = render_markdown(batch, rows, details, consensus, case, court is not None)
+            csv_text = render_csv(rows, court is not None)
     except CompareError as e:
         print(f"[오류] {e}", file=sys.stderr)
         return 1
@@ -345,7 +492,6 @@ def main():
     except json.JSONDecodeError as e:
         print(f"[오류] JSON이 아닌 파일이 있습니다: {e}", file=sys.stderr)
         return 1
-    markdown = render_markdown(batch, rows, details, consensus, case, court is not None)
     if args.out:
         Path(args.out).write_text(markdown, encoding="utf-8")
         print(f"Markdown: {args.out}")
@@ -353,7 +499,7 @@ def main():
         print(markdown)
     if args.csv:
         # 엑셀에서 한글이 깨지지 않게 BOM을 붙인다
-        Path(args.csv).write_text(render_csv(rows, court is not None), encoding="utf-8-sig")
+        Path(args.csv).write_text(csv_text, encoding="utf-8-sig")
         print(f"CSV: {args.csv}", file=sys.stderr if not args.out else sys.stdout)
     return 0
 
