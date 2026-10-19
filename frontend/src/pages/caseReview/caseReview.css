@@ -88,4 +88,7 @@ body.case-review-open { overflow: hidden; }
 .case-review-dialog .case-review-card.is-reader { padding: 14px 0; border-top: 1px dashed var(--color-border-strong); }
 .case-review-dialog .case-review-subtitle { margin-top: 28px; padding-top: 16px; border-top: 2px solid var(--color-border-strong); }
 .case-review-close { display: block; margin: 18px 0 0 auto; }
+/* 닫기 확인(쓰던 엽서가 있을 때): 닫기 버튼 자리에 한 줄로 */
+.case-review-confirm { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px 10px; margin-top: 18px; padding-top: 12px; border-top: 1px dashed var(--color-border-strong); }
+.case-review-confirm p { margin: 0 auto 0 0; color: var(--color-text); font-weight: 700; font-size: 14px; }
 @media (max-width: 680px) { .case-review-layer { padding: 8px; } .case-review-dialog { max-height: calc(100dvh - 16px); padding: 14px 12px; border-width: 6px; } }

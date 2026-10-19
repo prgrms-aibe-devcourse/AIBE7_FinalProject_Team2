@@ -5,7 +5,7 @@ import { reducedMotion } from '../../utils/motion.js';
 // 8막 "리뷰하기" 버튼 · 독자 의견 엽서를 누르면 날아오는 엽서 한 장(FE-55). 화면(/cases/:caseId/opinion)과 같은 내용을 쓴다.
 // 2막 사전 판단 엽서와 같은 연출(paperStage.css nambul-hand · postcard-in): 남불이 앞으로 나서며 손을 내밀고, 엽서가 그 손에서 날아와 가운데에서 펼쳐진다.
 // 읽기 화면에서 지면의 독자 의견 엽서를 눌렀으면(남불이 없다) 그 엽서가 제자리에서 떠올라 가운데로 온다.
-// 닫으면 엽서가 온 곳으로 돌아가며 사라지고, 누른 곳으로 포커스가 돌아온다. 뒤 무대는 그대로다(새 화면으로 가지 않는다)
+// 닫으면(쓰던 내용이 있으면 한 번 묻고) 엽서가 온 곳으로 돌아가며 사라지고, 누른 곳으로 포커스가 돌아온다. 뒤 무대는 그대로다(새 화면으로 가지 않는다)
 const FOCUSABLE = 'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';
 const FLY_MS = 700;
 const FLY_DELAY_MS = 220; // 남불이 손을 내미는 사이(2막과 같다)
@@ -27,13 +27,34 @@ export function openCaseReviewPopup({ caseId, api, navigate, from, hand = false 
   dialog.tabIndex = -1;
   const title = element('h2', 'visually-hidden', '독자 엽서');
   title.id = 'case-review-dialog-title';
-  const close = button('닫기', () => shut(), 'secondary-button case-review-close');
+  const close = button('닫기', () => requestShut(), 'secondary-button case-review-close');
   const body = element('div', 'case-review');
   dialog.append(title, body, close);
   layer.append(dialog);
 
   let closing = false;
   let away = null; // 엽서가 출발한 자리(돌아갈 때 쓴다)
+  // 쓰던 엽서(별점 · 의견)가 있으면 닫기 전에 한 번 묻는다. 빈 엽서 · 이미 보낸 엽서는 바로 닫힌다 (PR #190 리뷰 반영)
+  const hasDraft = () => Boolean(body.querySelector('.case-review-field textarea')?.value.trim() || body.querySelector('.case-review-stars input:checked'));
+  let asking = null;
+  function requestShut() {
+    if (closing) return;
+    if (asking) return;
+    if (!hasDraft()) { shut(); return; }
+    asking = element('div', 'case-review-confirm');
+    asking.setAttribute('role', 'group');
+    asking.setAttribute('aria-label', '닫기 확인');
+    const keep = button('계속 쓰기', () => keepWriting(), 'secondary-button');
+    asking.append(element('p', '', '쓰던 엽서가 사라져요. 닫을까요?'), keep, button('닫기', () => shut(), 'primary-button'));
+    close.replaceWith(asking);
+    asking.scrollIntoView({ block: 'nearest' }); // 닫기는 엽서 맨 아래라 스크롤 밖일 수 있다
+    keep.focus({ preventScroll: true });
+  }
+  function keepWriting() {
+    asking?.replaceWith(close);
+    asking = null;
+    (body.querySelector('.case-review-field textarea') ?? close).focus({ preventScroll: true });
+  }
   async function shut() {
     if (closing) return;
     closing = true;
@@ -51,7 +72,7 @@ export function openCaseReviewPopup({ caseId, api, navigate, from, hand = false 
   // 엽서 안의 키는 뒤 무대(← → Space로 넘기기)에 닿지 않게 여기서 끊는다. Tab은 엽서 안에서만 돈다
   layer.addEventListener('keydown', (event) => {
     event.stopPropagation();
-    if (event.key === 'Escape') { event.preventDefault(); shut(); return; }
+    if (event.key === 'Escape') { event.preventDefault(); if (asking) keepWriting(); else requestShut(); return; } // 묻는 중의 Esc는 계속 쓰기
     if (event.key !== 'Tab') return;
     const items = [...dialog.querySelectorAll(FOCUSABLE)].filter((node) => !node.closest('[hidden]'));
     if (!items.length) { event.preventDefault(); return; }
@@ -60,7 +81,7 @@ export function openCaseReviewPopup({ caseId, api, navigate, from, hand = false 
     if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog)) { event.preventDefault(); last.focus(); }
     else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
   });
-  layer.addEventListener('mousedown', (event) => { if (event.target === layer) shut(); });
+  layer.addEventListener('mousedown', (event) => { if (event.target === layer) requestShut(); });
 
   document.body.classList.add('case-review-open');
   document.body.append(layer);
