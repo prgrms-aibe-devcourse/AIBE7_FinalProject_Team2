@@ -1,7 +1,9 @@
 import { button, element } from '../../components/siteLayout.js';
 import { loadAdminApi } from './adminApi.js';
+import { labeledField } from './adminKit.js';
 import { errorText } from './adminLabels.js';
-import { ADMIN_MENU, homeRoute, isMenuReady } from './adminMenu.js';
+import { ADMIN_MENU, isMenuReady } from './adminMenu.js';
+import { clearUser, isAdmin } from '../../utils/session.js';
 import './admin.css';
 
 // S-19 관리자 화면 틀: 로그인 확인(A-4) → 없으면 로그인 폼(A-1 · A-2) → 있으면 화면을 그린다.
@@ -22,7 +24,7 @@ export async function renderAdminShell(container, { navigate, title, section, dr
   if (!active()) return;
 
   const header = element('header', 'admin-header');
-  const brand = button('', () => navigate(homeRoute()), 'admin-brand');
+  const brand = button('', () => navigate('landing'), 'admin-brand'); // 로고는 사용자 사이트 메인으로
   brand.append('내', element('span', 'law', 'Law'), '남불 ', element('small', '', '관리자'));
   const user = element('div', 'admin-user');
   header.append(brand, user);
@@ -66,6 +68,7 @@ export async function renderAdminShell(container, { navigate, title, section, dr
   }
 
   function showLogin(notice) {
+    if (isAdmin()) clearUser(); // 로그아웃 · 세션 만료로 로그인 폼이 뜨면 사용자 사이트의 관리자 표시도 거둔다
     body.dataset.locked = '1';
     user.replaceChildren();
     setTitle('로그인');
@@ -76,10 +79,8 @@ export async function renderAdminShell(container, { navigate, title, section, dr
     Object.assign(email, { type: 'email', name: 'email', autocomplete: 'username', required: true, maxLength: 100 });
     const password = element('input');
     Object.assign(password, { type: 'password', name: 'password', autocomplete: 'current-password', required: true, maxLength: 100 });
-    const emailLabel = element('label', 'admin-field');
-    emailLabel.append(element('span', '', '이메일'), email);
-    const passwordLabel = element('label', 'admin-field');
-    passwordLabel.append(element('span', '', '비밀번호'), password);
+    const emailLabel = labeledField('이메일', email);
+    const passwordLabel = labeledField('비밀번호', password);
     const error = element('p', 'admin-error');
     error.setAttribute('role', 'alert');
     if (notice) error.textContent = notice;

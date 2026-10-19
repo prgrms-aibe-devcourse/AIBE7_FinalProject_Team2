@@ -1,6 +1,8 @@
 import { button, element, renderSiteHeader } from '../../components/siteLayout.js';
 import { API_MODE } from '../../api/index.js';
-import { clearUser, currentUser, saveUser } from '../../utils/session.js';
+import { clearUser, currentUser, isAdmin, saveUser } from '../../utils/session.js';
+import { homeRoute } from '../admin/adminMenu.js';
+import { adminLogout, tryAdminLogin } from './adminLogin.js';
 
 // S-12 로그인 (FE-52, IA 4장 /login). 화면 틀: 카카오 로그인 버튼 + 아이디 · 비밀번호 폼.
 // 사용자 로그인 API가 아직 없어(카카오 로그인 검토 중) 목 모드에서는 개발용 목업 로그인(mocks/authMockApi.js)이 받는다.
@@ -20,27 +22,18 @@ export function renderLoginPage(container, { api, navigate }) {
 
   const user = currentUser();
   if (user) showSignedIn(user);
-  else if (!api.login) showNotReady();
   else showForm();
 
-  // 사용자 로그인이 없는 실제 모드(api.login 없음): 입력칸을 보여 주지 않고 처음부터 준비 중이라고 알린다
-  function showNotReady() {
-    const heading = element('h1', '', '로그인');
-    heading.id = 'login-heading';
-    const actions = element('div', 'login-actions');
-    actions.append(button('사건 목록으로', () => navigate('list'), 'primary-button'), button('처음으로', () => navigate('landing'), 'secondary-button'));
-    card.replaceChildren(heading, element('p', 'login-lead', NOT_READY), actions);
-  }
-
-  // 이미 로그인한 채로 왔을 때: 누구로 로그인했는지 + 마이페이지 · 로그아웃
+  // 이미 로그인한 채로 왔을 때: 누구로 로그인했는지 + 마이페이지(관리자는 관리자 페이지) · 로그아웃
   function showSignedIn({ nickname }) {
+    const admin = isAdmin();
     const heading = element('h1', '', '로그인했어요');
     heading.id = 'login-heading';
     const actions = element('div', 'login-actions');
     actions.append(
-      button('마이페이지로', () => navigate('me'), 'primary-button'),
+      button(admin ? '관리자 페이지로' : '마이페이지로', () => navigate(admin ? homeRoute() : 'me'), 'primary-button'),
       button('로그아웃', async () => {
-        await Promise.resolve(api.logout?.()).catch(() => {}); // 서버 쪽 로그아웃이 없거나 실패해도 이 브라우저의 표시는 지운다
+        await (admin ? adminLogout() : Promise.resolve(api.logout?.()).catch(() => {})); // 서버 쪽 로그아웃이 없거나 실패해도 이 브라우저의 표시는 지운다
         clearUser();
         navigate('landing', {}, { replace: true });
       }, 'secondary-button'),
@@ -48,13 +41,15 @@ export function renderLoginPage(container, { api, navigate }) {
     card.replaceChildren(heading, element('p', 'login-lead', `${nickname} 님으로 로그인한 상태예요.`), actions);
   }
 
+  // 사용자 로그인이 없는 실제 모드(api.login 없음)에서는 카카오 · 회원가입 없이 관리자 로그인 입력칸만 보여 주고, 일반 로그인은 준비 중이라고 알린다 (FE-53)
   function showForm() {
+    const adminOnly = !api.login;
     const heading = element('h1', '', '로그인');
     heading.id = 'login-heading';
-    const lead = element('p', 'login-lead', '로그인하지 않아도 모든 판결 체험을 할 수 있어요.');
+    const lead = element('p', 'login-lead', adminOnly ? NOT_READY : '로그인하지 않아도 모든 판결 체험을 할 수 있어요.');
     const parts = [heading, lead];
     if (API_MODE === 'mock') {
-      parts.push(element('p', 'login-mock-note', '개발용 목업 로그인이에요. 아무 아이디 · 비밀번호로 들어가지고, 입력값은 어디에도 보내거나 남기지 않아요.'));
+      parts.push(element('p', 'login-mock-note', '개발용 목업 로그인이에요. 아무 아이디 · 비밀번호로 들어가지고(admin으로 시작하는 아이디는 관리자), 입력값은 어디에도 보내거나 남기지 않아요.'));
     }
 
     const error = element('p', 'login-error');
@@ -99,7 +94,7 @@ export function renderLoginPage(container, { api, navigate }) {
     signupButton.setAttribute('aria-label', '회원가입 — 준비 중');
     signup.append(signupButton);
 
-    parts.push(kakao, divider, form, signup);
+    parts.push(...(adminOnly ? [form] : [kakao, divider, form, signup]));
     card.replaceChildren(...parts);
 
     function showError(message) {
@@ -115,8 +110,30 @@ export function renderLoginPage(container, { api, navigate }) {
       busy.forEach((node) => { node.disabled = true; });
       error.hidden = true;
       try {
-        const { nickname } = await api.login(request);
+        // 아이디 · 비밀번호는 관리자 계정인지 먼저 본다. 관리자면 마이페이지 자리가 관리자 페이지가 된다 (FE-53)
+        // 관리자 로그인이 불안정해도 일반 로그인은 막지 않는다: 일반 로그인이 있으면 관리자 쪽 오류는 넘기고, 관리자 입력칸만 있을 때(adminOnly)만 알린다
+        let admin = null;
+        if (request.method === 'password') {
+          try {
+            admin = await tryAdminLogin(request.id, request.password);
+          } catch (failure) {
+            if (adminOnly) throw failure;
+          }
+        }
         if (!container.contains(root)) return; // 기다리는 사이 다른 화면으로 갔으면 이동하지 않는다
+        if (admin) {
+          saveUser({ nickname: admin.displayName || admin.email, role: 'admin' });
+          navigate(homeRoute(), {}, { replace: true });
+          return;
+        }
+        if (!api.login) {
+          showError(request.method === 'password' ? `아이디와 비밀번호를 확인해 주세요. ${NOT_READY}` : NOT_READY);
+          busy.forEach((node) => { node.disabled = false; });
+          pending = false;
+          return;
+        }
+        const { nickname } = await api.login(request);
+        if (!container.contains(root)) return;
         saveUser({ nickname });
         navigate('landing', {}, { replace: true }); // 뒤로 가기로 로그인 화면에 돌아오지 않게
       } catch (failure) {
