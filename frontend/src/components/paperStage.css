@@ -124,6 +124,9 @@
 .case-paper-page .paper-start .primary-button { min-height: 56px; padding: 0 28px; border-radius: 999px; font-size: 17px; box-shadow: 0 10px 24px -8px color-mix(in srgb, var(--color-desk-shadow) 70%, transparent); }
 .case-paper-page .paper-start-notice { max-width: 280px; margin: 0; padding: 6px 12px; border-radius: 8px; background: var(--color-card); color: var(--color-caution); font-size: var(--text-small); }
 .case-paper-page .paper-start-notice:empty { display: none; }
+/* 준비 중(FE-56, 대본 없는 사건): 누를 수 없는 회색 알약. 안내 문구는 주의색 대신 차분한 글자색 */
+.case-paper-page .paper-start .primary-button[aria-disabled="true"] { background: var(--color-surface-strong); border-color: var(--color-border-strong); color: var(--color-muted); box-shadow: none; cursor: default; }
+.case-paper-page .paper-start:has([aria-disabled="true"]) .paper-start-notice { color: var(--color-text); }
 /* 시작하면 내로 · 남불이 아래에서 뛰어 들어오고, 대사창이 뒤따라 뜬다 */
 .stage-wrap.paper-mode.entering .stage[data-scene] .spr { animation: paper-enter .55s cubic-bezier(.2, .8, .2, 1) backwards; }
 .stage-wrap.paper-mode.entering .stage[data-scene] .spr.b { animation-delay: .12s; }

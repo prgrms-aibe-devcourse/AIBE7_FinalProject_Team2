@@ -92,6 +92,11 @@ function motionSwitch() {
   return node;
 }
 
+// 목데이터 표기(FE-56): 실제 데이터가 아직 없어 목 값으로 채운 수치 옆에 붙인다. 숨기지 않고 목이라고 밝힌다(실제 반응 · 통계를 지어내지 않는다)
+export function mockTag() {
+  return element('span', 'mock-tag', '목데이터');
+}
+
 export function renderSiteFooter() {
   const footer = element('footer', 'site-footer');
   footer.append(

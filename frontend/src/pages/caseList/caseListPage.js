@@ -1,4 +1,6 @@
-import { button, element, renderSiteFooter } from '../../components/siteLayout.js';
+import { button, element, mockTag, renderSiteFooter } from '../../components/siteLayout.js';
+import { API_MODE } from '../../api/config.js';
+import { scriptFor } from '../overview/overviewPage.js';
 import { casePhoto } from '../../utils/newspaper.js';
 import { newspaperMasthead } from '../../components/newspaperFront.js';
 import { turnPage } from '../../utils/pageTurn.js';
@@ -42,7 +44,10 @@ const STATUS_VIEW = {
   COMPLETED: { badge: '완료', tone: 'done' },
 };
 const NOT_STARTED = { badge: null, tone: null };
-const statusViewOf = (item) => STATUS_VIEW[item.myStatus] ?? NOT_STARTED;
+// 체험 대본이 없는 사건(FE-33 전)은 "준비 중"으로 표시한다(FE-56). 기사 · 사건 정보(S-20)는 읽을 수 있고, 새 체험 시작은 S-20에서 막는다.
+// 이미 하던 · 마친 체험(myStatus)이 있으면 대본과 상관없이 그 상태를 그대로 보인다(이어서 하기 · 결과 보기는 S-20에서 열린다)
+const SOON = { badge: '준비 중', tone: 'soon' };
+const statusViewOf = (item) => STATUS_VIEW[item.myStatus] ?? (scriptFor(item.caseId, item.title) ? NOT_STARTED : SOON);
 const PICK_LABEL = '사건 펼쳐 보기';
 const JUMP_LABEL = '3면에 계속'; // 신문의 이어 읽기 줄(jump line). 누르면 사건 지면(S-20, 3면)으로 간다
 // shortcut: 캐릭터 얼굴은 원본 이미지 레포 PNG를 직접 읽는다(무대와 같음), 웹 webp 변환(WBS 7.6.8) 때 public 경로로 옮긴다
@@ -81,11 +86,15 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
   const paper = element('div', 'paper');
   const earRight = element('div', 'ear ear-right');
   const main = element('main', 'front');
+  // 목록을 받기 전: 빈 지면 대신 상태 문구를 둔다(FE-56). 책상에서 들고 올 때는 다 그려진 뒤 올라오므로 주소로 바로 올 때만 보인다
+  const loading = element('p', 'paper-loading', '지면을 펼치는 중이에요');
+  loading.setAttribute('role', 'status');
+  main.append(loading);
   const paperNote = element('p', 'paper-note', '이 지면의 사건과 기사는 판결 체험을 위해 재구성한 것이며, 사진은 AI로 생성한 연출 이미지입니다.');
   paper.append(newspaperMasthead({ navigate, earRight }), main, paperNote, renderSiteFooter());
 
-  // 남불의 안내. 지면 왼쪽 위에 붙인 정사각형 포스트잇(지면과 함께 움직인다). 누르면 떼어져 날아간다(FE-50, 메인 책상의 내로 포스트잇과 같은 놀이).
-  // 책상으로 돌아가는 길은 정보 줄의 "← 처음으로"와 Esc가 맡는다
+  // 남불의 안내. 지면 오른쪽 위에 붙인 정사각형 포스트잇(FE-56, 지면과 함께 움직인다). 누르면 떼어져 날아간다(FE-50, 메인 책상의 내로 포스트잇과 같은 놀이).
+  // 책상으로 돌아가는 길은 정보 줄의 "← 메인으로"와 Esc가 맡는다
   const tip = element('button', 'paper-tip');
   tip.type = 'button';
   const face = element('img');
@@ -98,7 +107,7 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
   tip.append(face, tipText);
   tip.addEventListener('click', () => peelOff(tip, {
     from: 'none',
-    to: 'translate(-60px, -140px) rotate(-28deg)',
+    to: 'translate(60px, -140px) rotate(28deg)', // 오른쪽 위로 떼어져 날아간다
     // 목록을 아직 불러오는 중이면 첫 탭 대신 본문(main)이 포커스를 받는다
     focusTarget: () => main.querySelector('button') ?? Object.assign(main, { tabIndex: -1 }),
   }));
@@ -194,6 +203,7 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
     const node = element('p', 'meta');
     if (withTags && item.keywords?.length) node.append(element('span', 'tags', item.keywords.map((keyword) => `#${keyword}`).join(' ')));
     node.append(`참여 ${item.participantCount.toLocaleString('ko-KR')}명`);
+    if (API_MODE === 'mock') node.append(mockTag()); // 목 참여 수는 실제 반응이 아니다(FE-56)
     return node;
   }
 

@@ -1,4 +1,5 @@
-import { button, element, renderSiteHeader } from '../../components/siteLayout.js';
+import { button, element, mockTag, renderSiteHeader } from '../../components/siteLayout.js';
+import { API_MODE } from '../../api/config.js';
 import { screenByStatus } from '../../utils/screenByStatus.js';
 import { renderAxisRow } from '../../components/axisRow.js';
 import { imageOf } from '../../components/stage.js';
@@ -28,6 +29,7 @@ const VIEWS = {
 const DEFAULT_NICKNAME = '익명의 판사'; // 로그인 · 닉네임 API 전까지 임시 문구
 // 닉네임 아래 프로필 수치. 레벨 · 직업 · 출석 일수는 목 데이터(API 전, data.profile이 오면 그 값을 쓴다). 완료한 사건 · 모은 일러스트는 지금 기록에서 센다
 const MOCK_PROFILE = { level: 7, job: '수습 판사', attendanceDays: 12 };
+const IS_MOCK = API_MODE === 'mock'; // 목 모드에서는 체험 기록 · 성향 평균도 목(mocks/personalityMockApi.js)이라 함께 표기한다(FE-56)
 let cache = null; // 마지막 응답. 항목 화면을 오갈 때 바로 그리고 뒤에서 새로 받는다
 
 const svg = (path, className) => {
@@ -92,21 +94,25 @@ function emptyWindow() {
 
 // 닉네임 아래 프로필 수치(레벨 · 직업 · 출석 일수 · 완료한 사건 수 · 모은 일러스트 수)
 function renderStats(data) {
-  const profile = { ...MOCK_PROFILE, ...data.profile };
+  // 응답에 없거나 null이면 MOCK_PROFILE로 채우고 목데이터 표기를 붙인다(FE-56)
+  const mocked = (key) => data.profile?.[key] == null;
+  const profile = Object.fromEntries(Object.keys(MOCK_PROFILE).map((key) => [key, mocked(key) ? MOCK_PROFILE[key] : data.profile[key]]));
   const experiences = data.experiences ?? [];
   const completed = experiences.filter((item) => item.status === 'COMPLETED').length;
   const groups = collectionOf(experiences, SCRIPTS);
   const collected = groups.reduce((sum, group) => sum + group.cast.length + group.items.length, 0);
   const list = element('dl', 'my-stats');
   [
-    ['레벨', `Lv.${profile.level}`],
-    ['직업', profile.job],
-    ['출석 일수', `${profile.attendanceDays}일`],
-    ['완료한 사건', `${completed}건`],
-    ['모은 일러스트', `${collected}장`],
-  ].forEach(([label, value]) => {
+    ['레벨', `Lv.${profile.level}`, mocked('level')],
+    ['직업', profile.job, mocked('job')],
+    ['출석 일수', `${profile.attendanceDays}일`, mocked('attendanceDays')],
+    ['완료한 사건', `${completed}건`, IS_MOCK],
+    ['모은 일러스트', `${collected}장`, IS_MOCK],
+  ].forEach(([label, value, isMock]) => {
     const item = element('div', 'my-stat');
-    item.append(element('dt', '', label), element('dd', '', value));
+    const dd = element('dd', '', value);
+    if (isMock) dd.append(mockTag());
+    item.append(element('dt', '', label), dd);
     list.append(item);
   });
   return list;
@@ -186,7 +192,9 @@ function renderJudgment(judgment) {
     return box;
   }
   if (judgment.type) box.append(element('p', 'my-judgment-type', judgment.type.name));
-  box.append(element('p', 'my-hint', `첫 회차 체험 ${judgment.experienceCount}건의 평균이에요.`));
+  const hint = element('p', 'my-hint', `첫 회차 체험 ${judgment.experienceCount}건의 평균이에요.`);
+  if (IS_MOCK) hint.append(mockTag());
+  box.append(hint);
   const list = element('ul', 'axis-list');
   AXES.forEach((axis) => list.append(renderAxisRow(axis, judgment.axisScores?.[axis.key])));
   box.append(list);

@@ -5,7 +5,7 @@
 // - 같은 화면(주소 · 값이 같음)으로의 이동은 무시한다. 에러 이동과 화면 자체 이동이 겹쳐도 한 번만 그려진다.
 // - 새로고침 · 주소 직접 입력 · 뒤로 가기 모두 같은 화면을 다시 그린다.
 // - 오래된 이동의 결과는 버린다 (빠르게 연속 이동했을 때 마지막 이동만 그려진다).
-import { element, renderSiteFooter } from '../components/siteLayout.js';
+import { element, renderSiteFooter, renderSiteHeader } from '../components/siteLayout.js';
 import { loadCaseHeader } from './caseHeader.js';
 
 const SITE_TITLE = '내Law남불';
@@ -33,11 +33,12 @@ function messagePanel(text) {
 }
 
 /**
- * @param {{ view: HTMLElement, footerHost: HTMLElement, routes: Array }} options
+ * @param {{ view: HTMLElement, headerHost?: HTMLElement, footerHost: HTMLElement, routes: Array }} options
  *   view        화면이 그려지는 영역 (화면 진입 함수의 container)
+ *   headerHost  공통 헤더(상단 내비)를 붙이는 영역 (FE-56: 모든 화면이 같은 내비를 쓴다. ownsHeader 화면은 비운다)
  *   footerHost  공통 푸터를 붙이는 영역 (화면이 자기 푸터를 그리지 않을 때만 사용)
  */
-export function createRouter({ view, footerHost, routes }) {
+export function createRouter({ view, headerHost, footerHost, routes }) {
   const byName = new Map(routes.map((route) => [route.name, route]));
   const matchers = routes.filter((route) => route.path).map((route) => ({ route, regex: toMatcher(route.path) }));
   const notFound = byName.get('notFound');
@@ -68,6 +69,9 @@ export function createRouter({ view, footerHost, routes }) {
     const mine = ++token;
     current = { name: route.name, path, caseId, extras, navKind };
     document.title = route.name === 'landing' ? SITE_TITLE : `${route.title} · ${SITE_TITLE}`;
+    // 화면마다 새로 그린다(지금 메뉴 표시 · 로그인 상태가 바뀌므로)
+    headerHost?.replaceChildren(...(route.ownsHeader ? [] : [renderSiteHeader({ navigate })]));
+    if (headerHost) headerHost.inert = false; // 이전 화면의 대화창(엽서)이 막아 둔 헤더를 푼다(stage.js)
 
     let caseHeader;
     if (route.needsHeader) {

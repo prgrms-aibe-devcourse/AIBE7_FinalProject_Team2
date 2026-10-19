@@ -10,7 +10,7 @@ import { reducedMotion } from '../../utils/motion.js';
 // 우하단 "시작하기"(하던 체험이 있으면 오른쪽 귀 "이어서 하기"도)를 누르면 화면을 다시 그리지 않고 주소만 S-03(/start)으로 바꾼 채
 // 내로 · 남불이 들어오며 1막이 시작된다(drawStage). 왼쪽 귀는 "다른 사건 보기".
 // 대본이 없는 사건은 같은 지면을 캐릭터 · 대사 없이 보여 준다(drawPaper). 기사 본문이 없으면 짧은 소개 한 단락만 싣고,
-// "시작하기"는 API 2 응답 상태로 이어서 볼 화면으로 보낸다. 모든 사건 대본 제작은 FE-33.
+// 새 체험은 "준비 중"으로 막는다(FE-56, 하던 · 마친 체험은 이어서 볼 수 있다). 모든 사건 대본 제작은 FE-33.
 // 데이터는 API 16 하나(체험 없이 열린다). 버튼은 내 진행 상태(myStatus)로 나누고, 누르면 API 2 응답 상태로 이어서 볼 화면을 정한다(1-6).
 // S-02에서 기사를 골라 오면(from: 'paper') S-02의 신문 한 장이 넘어가며(utils/pageTurn.js) 이 면이 그 밑에서 드러난다.
 
@@ -72,16 +72,26 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
   }
 
   // 대본이 없는 사건: 대본 사건과 같은 신문 지면(안쪽 면)을 캐릭터 · 대사 없이 보여 준다. 기사 본문이 없으면 짧은 소개 한 단락만 싣는다(paperFromCase).
-  // 우하단 "시작하기"(하던 체험이 있으면 오른쪽 귀 "이어서 하기" · "결과 다시 보기")를 누르면 API 2 응답 상태로 이어서 볼 화면으로 간다
+  // FE-56: 새 체험은 시연 전까지 열지 않는다(목 · 실제 모두 이후 화면이 대본 사건 기준이라 막다른 길이 된다).
+  // 지면은 그대로 읽게 두고, "시작하기" 자리에 누를 수 없는 "준비 중"과 안내를 둔다. 대본이 생기면(FE-33) drawStage로 간다.
+  // 이미 하던 · 마친 체험(myStatus)이 있으면 막지 않는다: 오른쪽 귀 "이어서 하기" · "결과 다시 보기"와 우하단 버튼이 API 2 응답 상태로 이어서 볼 화면으로 보낸다
   function drawPaper(data) {
-    const { label, failText } = ACTIONS[data.myStatus] ?? NOT_STARTED;
-    const notice = element('p', 'paper-start-notice');
-    notice.setAttribute('role', 'alert');
-    const resume = ACTIONS[data.myStatus]
-      ? earButton(`${label} ▶`, `사건 ${String(data.caseId).padStart(2, '0')} · ${data.crimeCategoryLabel}`, () => start(resume, notice, failText), 'ear-right ear-go') : null;
+    const action = ACTIONS[data.myStatus];
+    const notice = element('p', 'paper-start-notice', action ? '' : '이 사건의 판결 체험은 준비 중이에요. 신문으로 돌아가 다른 사건을 골라 주세요.');
+    notice.setAttribute('role', action ? 'alert' : 'status');
+    const resume = action
+      ? earButton(`${action.label} ▶`, `사건 ${String(data.caseId).padStart(2, '0')} · ${data.crimeCategoryLabel}`, () => start(resume, notice, action.failText), 'ear-right ear-go') : null;
     const sheet = caseNewspaper({ paper: paperFromCase(data), info: data, navigate, ...(resume ? { earRight: resume } : {}) });
-    const go = button('시작하기 ▶', () => start(go, notice, failText), 'primary-button');
-    go.setAttribute('aria-label', `시작하기, ${data.title}`); // 화면 글자("시작하기")로 시작해야 음성 입력으로 누를 수 있다(WCAG 2.5.3)
+    let go;
+    if (action) {
+      go = button(`${action.label} ▶`, () => start(go, notice, action.failText), 'primary-button');
+      go.setAttribute('aria-label', `${action.label}, ${data.title}`); // 화면 글자로 시작해야 음성 입력으로 누를 수 있다(WCAG 2.5.3)
+    } else {
+      go = element('button', 'primary-button', '준비 중');
+      go.type = 'button';
+      go.setAttribute('aria-disabled', 'true');
+      go.setAttribute('aria-label', `준비 중, ${data.title} 체험`);
+    }
     const dock = element('div', 'paper-start');
     dock.append(notice, go);
     const deskBack = element('div', 'desk');

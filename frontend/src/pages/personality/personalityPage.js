@@ -299,5 +299,11 @@ export async function renderPersonalityPage(container, { api, navigate, from }) 
     }
   }
 
+  // 주소로 바로 들어오면 철을 먼저 펴고 불러오는 중임을 알린다(빈 화면에 푸터만 보이지 않게, FE-56).
+  // 책상에서 올라올 때는 그대로 문항을 받은 뒤 철을 그린다(그동안 책상이 보이고, 올라오는 동안 표지가 이미 보인다)
+  if (!rise) {
+    openFolder();
+    sheetMessage(body, '문항을 불러오는 중이에요.');
+  }
   await load();
 }

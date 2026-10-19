@@ -1,12 +1,10 @@
 // S-14 404 · 오류 화면 (IA 4장: 잘못된 사건 ID 등 — 와이어프레임 없음, MVP 범위에서 직접 구성)
-// 다른 화면과 달리 사건 맥락이 없는 화면이라, S-01 · S-02처럼 사이트 헤더(로고 · 메뉴)를 직접 그린다.
-// 공통 푸터는 라우터가 아래에 붙인다 (routes.js에 ownsFooter 없음). 공통 스타일(.message-panel,
+// 공통 헤더 · 푸터는 라우터가 위아래에 붙인다 (FE-56, routes.js에 ownsHeader · ownsFooter 없음). 공통 스타일(.message-panel,
 // .primary-button, .secondary-button)은 src/style.css — 화면 CSS를 빌리지 않는다 (FE-2 리뷰 반영 유지).
-import { button, element, renderSiteHeader } from '../components/siteLayout.js';
+import { button, element } from '../components/siteLayout.js';
 
 export function renderNotFoundPage(container, { navigate }) {
   const root = element('div', 'not-found-page');
-  root.append(renderSiteHeader({ navigate }));
 
   const actions = element('div', 'not-found-actions');
   actions.append(
