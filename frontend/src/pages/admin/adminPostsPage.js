@@ -1,6 +1,6 @@
 import { button, element } from '../../components/siteLayout.js';
-import { POST_STATUS, errorText } from './adminLabels.js';
-import { PAGE_SIZE, badge, createLoader, dataTable, errorLine, formatDate, pageTop, pager, reasonForm, runAction, searchBar } from './adminKit.js';
+import { POST_STATUS } from './adminLabels.js';
+import { PAGE_SIZE, badge, createLoader, dataTable, detailPanel, errorLine, formatDate, pageTop, pager, reasonForm, runAction, searchBar } from './adminKit.js';
 import { renderAdminShell } from './adminShell.js';
 
 // 게시글 · 댓글 관리 (A-21 ~ A-27). 목록 · 검색 → 제목을 누르면 아래에 본문 · 댓글 · 숨김 / 복구 / 삭제.
@@ -16,8 +16,9 @@ export function renderAdminPostsPage(container, { navigate }) {
       let query = {};
       let page = 0;
       const body = element('div', 'admin-list-body');
-      const detail = element('section', 'admin-section admin-detail');
-      detail.hidden = true;
+      const { node: detail, show: showDetail } = detailPanel({
+        fetcher: (postId) => api.getPost(postId), draw: (post) => drawDetail(post), failText: '게시글을 불러오지 못했어요.', active, unauthorized,
+      });
       const search = searchBar({
         placeholder: '제목 · 작성자 검색',
         filters: [
@@ -41,21 +42,6 @@ export function renderAdminPostsPage(container, { navigate }) {
           ], data.items, '해당하는 게시글이 없어요.');
           body.replaceChildren(table, ...(data.items.length ? [pager(data, (next) => { page = next; load(); })] : []));
         });
-      }
-
-      async function showDetail(postId) {
-        detail.hidden = false;
-        detail.replaceChildren(element('p', 'admin-message', '불러오는 중이에요.'));
-        try {
-          const post = await api.getPost(postId);
-          if (!active()) return;
-          drawDetail(post);
-          detail.scrollIntoView?.({ block: 'nearest' });
-        } catch (failure) {
-          if (!active()) return;
-          if (failure?.code === 'UNAUTHORIZED') { unauthorized(); return; }
-          detail.replaceChildren(element('p', 'admin-error', errorText(failure, '게시글을 불러오지 못했어요.')));
-        }
       }
 
       function drawDetail(post) {

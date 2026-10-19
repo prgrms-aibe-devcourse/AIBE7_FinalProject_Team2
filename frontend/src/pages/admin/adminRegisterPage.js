@@ -1,6 +1,7 @@
 import { button, element } from '../../components/siteLayout.js';
 import { parseJudgmentText } from './adminJudgmentParse.js';
 import { COURT_LEVEL, CRIME_TYPE, IMPORT_STAGE, errorText } from './adminLabels.js';
+import { checkField, labeledField } from './adminKit.js';
 import { PdfReadError } from './adminPdf.js';
 import { renderAdminShell } from './adminShell.js';
 import sampleUrl from './samples/sample-judgment.pdf?url';
@@ -36,12 +37,6 @@ export function renderAdminRegisterPage(container, { navigate }) {
       const formError = element('p', 'admin-error');
       formError.setAttribute('role', 'alert');
 
-      function labeled(text, control, hint) {
-        const label = element('label', 'admin-field');
-        label.append(element('span', '', text), control);
-        if (hint) label.append(element('small', '', hint));
-        return label;
-      }
       const textInput = (extra) => Object.assign(element('input'), { type: 'text', ...extra });
       function select(options, value) {
         const node = element('select');
@@ -72,8 +67,7 @@ export function renderAdminRegisterPage(container, { navigate }) {
         };
         const count = element('small', '', `0 / ${MAX_ORIGINAL_LENGTH.toLocaleString()}자`);
         const updateCount = () => { count.textContent = `${fields.originalText.value.length.toLocaleString()} / ${MAX_ORIGINAL_LENGTH.toLocaleString()}자`; };
-        const finalLabel = element('label', 'admin-check');
-        finalLabel.append(fields.isFinal, element('span', '', '확정된 판결'));
+        const finalLabel = checkField('확정된 판결', fields.isFinal);
         // 자동으로 채운 칸은 초록 표시. 사람이 직접 고친 칸(touched)은 다음 자동 채우기가 덮어쓰지 않는다
         const autoControls = [fields.caseNumber, fields.courtName, fields.decidedAt, fields.courtLevel];
         [...autoControls, crimeType].forEach((control) => control.addEventListener('input', () => {
@@ -161,7 +155,7 @@ export function renderAdminRegisterPage(container, { navigate }) {
           element('small', '', '파일을 올리면 원문과 사건번호 · 법원명 · 선고일을 자동으로 읽어요. 글자가 들어 있는 PDF만 읽을 수 있어요(스캔한 이미지 PDF는 불가). PDF 파일 자체는 서버로 보내지 않고, 읽은 글만 원문 칸에 들어가요.'),
           sample,
         );
-        const textLabel = labeled('판결문 원문 (필수) — 직접 입력하거나 붙여넣어도 아래 항목이 자동으로 채워져요', fields.originalText);
+        const textLabel = labeledField('판결문 원문 (필수) — 직접 입력하거나 붙여넣어도 아래 항목이 자동으로 채워져요', fields.originalText);
         textLabel.append(count);
 
         const legend = element('legend', '', `판결문 ${sourceBoxes.length + 1}`);
@@ -173,13 +167,13 @@ export function renderAdminRegisterPage(container, { navigate }) {
         box.append(
           legend,
           fileLabel, status, textLabel,
-          labeled('심급 (판결문마다 달라야 해요)', fields.courtLevel),
-          labeled('사건번호 (필수, 50자 이하)', fields.caseNumber),
-          labeled('법원명', fields.courtName),
-          labeled('선고일', fields.decidedAt),
+          labeledField('심급 (판결문마다 달라야 해요)', fields.courtLevel),
+          labeledField('사건번호 (필수, 50자 이하)', fields.caseNumber),
+          labeledField('법원명', fields.courtName),
+          labeledField('선고일', fields.decidedAt),
           finalLabel,
-          labeled('출처', fields.sourceOrg),
-          labeled('메모', fields.note),
+          labeledField('출처', fields.sourceOrg),
+          labeledField('메모', fields.note),
           remove,
         );
         fields.box = box;
@@ -229,7 +223,7 @@ export function renderAdminRegisterPage(container, { navigate }) {
       submit.type = 'submit';
       form.append(
         element('p', 'admin-sub', '원본 판결문을 넣으면 서버가 비식별화 · 구조화하고 AI 판결 후보를 만들어 "적재됨" 상태로 검수 목록에 올려요. 몇 분 걸릴 수 있어요. 원문은 이 화면을 벗어나면 남지 않아요.'),
-        labeled('범죄 유형', crimeType),
+        labeledField('범죄 유형', crimeType),
         sourcesWrap, addSource, formError, submit,
       );
       formArea.append(form);
