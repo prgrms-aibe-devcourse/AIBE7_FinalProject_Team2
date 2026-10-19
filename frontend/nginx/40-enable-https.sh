@@ -6,6 +6,7 @@
 #   1) SERVER_DOMAIN 환경변수가 있는가 (deploy/.env → docker-compose.prod.yml)
 #   2) /etc/letsencrypt/live/<도메인>/에 인증서 · 개인키가 있는가 (서버 호스트의 certbot이 발급)
 #   3) 만든 설정으로 nginx -t가 통과하는가 (쌍 불일치 · 깨진 파일이면 실패 → 생성 파일을 지운다)
+#   4) 인증서 이름(SAN)에 도메인이 있는가 (없으면 지운다). www가 없으면 켜되 경고를 남긴다
 # 모두 맞으면 https.conf.template으로 만든 /etc/nginx/conf.d/https.conf가 남는다 → 443 + 도메인 http → https 이동.
 # 하나라도 아니면 https 설정을 남기지 않는다 → 지금처럼 http(80)만 뜬다 (CI · 로컬 · 인증서 발급 전 서버 · 인증서 이상).
 #
@@ -67,4 +68,37 @@ if ! TEST_OUTPUT="$(nginx -t 2>&1)"; then
   exit 0
 fi
 
-log "✅ https 활성화: $DOMAIN, www.$DOMAIN (인증서 $CERT_DIR)"
+# ---------- 인증서가 이 도메인을 덮는지 (SAN) 확인 (PR #181 리뷰 반영) ----------
+# 파일 검사 · nginx -t는 "읽을 수 있는가"만 본다. certbot을 -d www... 없이 재발급하면 둘 다 통과하지만
+# https://www 접속 때 브라우저가 이름 불일치 경고를 띄우고, 어떤 로그에도 드러나지 않는다.
+# - 루트 도메인이 없으면: https를 켜지 않는다. 켜면 http 요청이 모두 깨진 https로 이동해 사이트 전체가 경고 화면이 된다
+# - www만 없으면: 루트 https는 켠다(http://www는 루트 https로 이동해 정상). https://www 직접 접속만 경고 → 로그로 알린다
+# - openssl이 없거나 인증서를 못 읽으면(이미지 문제) 확인을 건너뛰고 알린다. nginx -t는 이미 통과했으므로 https는 켠다
+WWW_MISSING=0
+if ! command -v openssl >/dev/null 2>&1; then
+  log "⚠ openssl이 없어 인증서 이름(SAN) 확인을 건너뛴다 — 이미지에 openssl이 있어야 한다 (frontend/Dockerfile)"
+elif ! SAN_RAW="$(openssl x509 -in "$CERT_DIR/fullchain.pem" -noout -ext subjectAltName 2>/dev/null)"; then
+  log "⚠ 인증서 이름(SAN)을 읽지 못해 확인을 건너뛴다 ($CERT_DIR/fullchain.pem)"
+else
+  # 출력 예: "X509v3 Subject Alternative Name: \n    DNS:a.com, DNS:www.a.com" → 한 줄에 하나씩 "DNS:a.com"
+  SANS="$(printf '%s\n' "$SAN_RAW" | tail -n +2 | tr ',' '\n' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+  # -F(문자 그대로) -x(줄 전체 일치): 도메인의 점이 정규식 "아무 문자"로 해석되지 않게
+  if ! printf '%s\n' "$SANS" | grep -Fxq "DNS:$DOMAIN"; then
+    rm -f "$OUTPUT"
+    log "⚠ 인증서에 $DOMAIN 이 없어 https를 켜지 않고 http만 연다 — 인증서 이름: $(printf '%s' "$SANS" | tr '\n' ' ')"
+    log "   다시 발급: certbot certonly --webroot ... -d $DOMAIN -d www.$DOMAIN (deploy/README.md \"HTTPS\")"
+    exit 0
+  fi
+  # www는 정확한 이름 또는 와일드카드(*.도메인)면 덮인다
+  if ! printf '%s\n' "$SANS" | grep -Fxq "DNS:www.$DOMAIN" && ! printf '%s\n' "$SANS" | grep -Fxq "DNS:*.$DOMAIN"; then
+    WWW_MISSING=1
+  fi
+fi
+
+if [ "$WWW_MISSING" = "1" ]; then
+  log "✅ https 활성화: $DOMAIN (인증서 $CERT_DIR)"
+  log "⚠ 인증서에 www.$DOMAIN 이 없다 — https://www.$DOMAIN 직접 접속 시 브라우저 경고 (http://www는 정상 이동)."
+  log "   다시 발급: certbot certonly --webroot ... -d $DOMAIN -d www.$DOMAIN (deploy/README.md \"HTTPS\")"
+else
+  log "✅ https 활성화: $DOMAIN, www.$DOMAIN (인증서 $CERT_DIR)"
+fi
