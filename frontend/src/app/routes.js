@@ -12,6 +12,7 @@ import { renderCaseDetailPage } from '../pages/caseDetail/caseDetailPage.js';
 import { renderComparisonPage } from '../pages/comparison/comparisonPage.js';
 import { renderCourtPage } from '../pages/court/courtPage.js';
 import { renderLandingPage } from '../pages/landing/landingPage.js';
+import { renderLoginPage } from '../pages/login/loginPage.js';
 import { renderMyPage } from '../pages/myPage/myPage.js';
 import { renderOverviewPage } from '../pages/overview/overviewPage.js';
 import { renderPersonalityPage } from '../pages/personality/personalityPage.js';
@@ -39,6 +40,8 @@ export const routes = [
   { name: 'testResult', path: '/test/result', render: renderPersonalityResultPage, title: '성향 결과' },
   { name: 'testType', path: '/test/types/:shareId', render: renderPersonalitySharedPage, title: '판결 성향 유형' },
   { name: 'me', path: '/me', render: renderMyPage, title: '마이페이지' },
+  // S-12 로그인 (FE-52): 화면 틀. 사용자 로그인 API가 없어 목 모드에서만 개발용 목업 로그인이 된다
+  { name: 'login', path: '/login', render: renderLoginPage, title: '로그인' },
   // 확장: S-19 관리자 검수 (FE-16). 관리자 코드는 사용자 화면 번들에 넣지 않으려고 필요할 때만 불러온다.
   // 관리자 화면은 관리자 api를 따로 쓰고(pages/admin/adminApi.js), 사용자 사이트 푸터 대신 자기 틀을 그린다
   { name: 'admin', path: '/admin', render: (container, options) => import('../pages/admin/adminListPage.js').then((m) => m.renderAdminListPage(container, options)), ownsFooter: true, title: '관리자' },

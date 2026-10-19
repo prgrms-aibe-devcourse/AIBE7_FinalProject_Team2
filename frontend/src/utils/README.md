@@ -9,6 +9,7 @@
 | `newspaper.js` | 신문 콘셉트 화면(S-01 · S-02)이 함께 쓰는 지면 날짜 줄 `todayLabel`과 유형별 대체 이미지 `fallbackImages` (7.7.1) |
 | `personalityAxes.js` | 가치관 4축(키 · 라벨 · 엄격 / 관대 글자). S-15 ~ S-17 화면과 성향 목 채점이 쓴다 |
 | `motion.js` | 연출 켜기 · 끄기 (FE-50). `reducedMotion()`은 헤더의 "연출" 스위치(이 브라우저에 저장)나 기기의 동작 줄이기가 켜져 있으면 참이다. 모든 JS 연출이 이것을 본다. 스위치를 끄면 `<html data-motion="off">`가 되고 `style.css`가 CSS 애니메이션 · 전환 길이를 0으로 만든다 |
+| `session.js` | 로그인한 사용자 (FE-52). 공통 헤더가 바로 읽도록 닉네임만 이 브라우저(`nlnb-session`)에 둔다. 로그인 · 로그아웃 자체는 `api.login` · `api.logout`(지금은 목업만)이 하고, 성공하면 화면이 `saveUser` · `clearUser`를 부른다 |
 | `koreanParticle.js` | 한글 단어 뒤 목적격 조사(을 · 를) 판정. 백엔드 `KoreanParticle`과 같은 규칙 (FE-15, S-09) |
 
 ## screenByStatus

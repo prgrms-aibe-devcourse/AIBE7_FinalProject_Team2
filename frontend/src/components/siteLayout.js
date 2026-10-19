@@ -1,5 +1,6 @@
 // 공통 사이트 헤더 · 푸터 (REQ-071 법적 고지). S-01 · S-02 · S-14가 헤더를 그리고, 푸터는 S-01 · S-02가 직접, 나머지 화면은 라우터가 붙인다. 스타일은 src/style.css
 import { motionSwitchOn, reducedMotion, setMotionSwitch, systemReducesMotion } from '../utils/motion.js';
+import { currentUser } from '../utils/session.js';
 
 export function element(tag, className, text) {
   const node = document.createElement(tag);
@@ -16,6 +17,7 @@ export function button(text, action, className = 'secondary-button') {
 }
 
 // 공통 헤더(FE-50): 화면 위에 고정된다(style.css). 메뉴는 사건 목록 · 성향검사 · 커뮤니티 · 연출 스위치 · 로그인(맨 오른쪽).
+// 로그인 자리(FE-52): 로그아웃 상태면 "로그인"(→ S-12), 로그인 상태면 닉네임(→ 마이페이지). 상태는 utils/session.js에서 읽는다
 // 헤더로 옮겨 갈 때는 연출 없이 바로 간다 — 연출은 책상 위 물건을 눌렀을 때만 넘기는 표시(from)로 켜지고, 헤더는 그 표시를 넘기지 않는다
 export function renderSiteHeader({ navigate }) {
   const header = element('header', 'site-header');
@@ -31,8 +33,8 @@ export function renderSiteHeader({ navigate }) {
     return node;
   };
   // 아직 화면이 없는 메뉴: 누를 수 없고 낭독기에는 "준비 중"으로 읽힌다. 화면이 생기면 tab()으로 바꾼다
-  const soon = (label, className = 'nav-button') => {
-    const node = element('button', className, label);
+  const soon = (label) => {
+    const node = element('button', 'nav-button', label);
     node.type = 'button';
     node.setAttribute('aria-disabled', 'true');
     node.setAttribute('aria-label', `${label} — 준비 중`);
@@ -43,10 +45,25 @@ export function renderSiteHeader({ navigate }) {
     tab('성향검사', 'test', '/test'),
     soon('커뮤니티'),
     motionSwitch(),
-    soon('로그인', 'nav-button login-button'), // 사용자 로그인 화면 · API가 아직 없다
   );
-  header.append(logo, nav);
+  // 로그인 자리는 메뉴 밖 맨 오른쪽. 좁은 화면에서는 로고와 같은 줄에 남고 메뉴가 아랫줄로 내려간다(style.css)
+  header.append(logo, nav, account(navigate, here));
   return header;
+}
+
+// 로그인 자리: 닉네임이 길면 줄여 보이고(…), 낭독기에는 전체 닉네임과 갈 곳을 읽는다
+function account(navigate, here) {
+  const user = currentUser();
+  if (!user) {
+    const login = button('로그인', () => navigate('login'), 'nav-button login-button');
+    if (here === '/login') login.setAttribute('aria-current', 'page');
+    return login;
+  }
+  const me = button('', () => navigate('me'), 'nav-button login-button is-user');
+  me.append(element('span', 'account-name', user.nickname));
+  me.setAttribute('aria-label', `${user.nickname} — 마이페이지`);
+  if (here === '/me') me.setAttribute('aria-current', 'page');
+  return me;
 }
 
 // 연출 스위치(utils/motion.js). 기기의 "동작 줄이기"가 켜져 있으면 꺼진 채로 누를 수 없다

@@ -98,6 +98,8 @@ body:has(.my-page) .site-footer { background: var(--palette-coffee-50); border-t
 .my-thumbs img.is-missing { visibility: hidden; }
 .my-count { font: 900 var(--text-title-1)/1 var(--font-heading); font-variant-numeric: tabular-nums; color: var(--color-heading); }
 .my-note { margin: 24px 0 0; color: var(--color-muted); font-size: var(--text-small); }
+.my-account { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; } /* 로그인했을 때(FE-52): 안내 + 로그아웃 */
+.my-account p { margin: 0; }
 
 /* ── 항목 화면 ── */
 .my-view-head { margin-bottom: 28px; }
