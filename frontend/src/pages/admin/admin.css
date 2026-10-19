@@ -32,6 +32,9 @@
 .admin-menu-title { margin: 0 0 6px 10px; color: var(--color-muted); font-size: var(--text-caption); font-weight: 700; }
 .admin-menu-item { display: block; width: 100%; padding: 8px 10px; border: 0; border-radius: 4px; background: transparent; color: var(--color-text); font-size: var(--text-small); text-align: left; }
 .admin-menu-item:hover { background: var(--color-accent-tint); }
+.admin-menu-item.is-soon { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; cursor: default; color: var(--color-muted); } /* 실제 모드에서 서버가 아직 없는 메뉴 */
+.admin-menu-item.is-soon:hover { background: transparent; }
+.admin-menu-item.is-soon small { font-size: var(--text-caption); }
 .admin-menu-item.is-active { background: var(--color-accent-tint); color: var(--color-accent-text); font-weight: 700; }
 .admin-main { padding: 28px; min-width: 0; }
 .admin-main h1 { margin: 0 0 20px; font-size: var(--text-title-2); }

@@ -21,13 +21,7 @@ export function badge(text, kind = '') {
   return element('span', `admin-badge${kind ? ` is-${kind}` : ''}`, text);
 }
 
-export function formatDate(value) {
-  if (!value) return '—';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-}
+export { formatDate } from './adminLabels.js'; // 날짜 표시는 adminLabels.js 한 곳(formatDateTime과 함께)
 
 /** 탭 줄. tabs = [{ key, label }] */
 export function tabBar(tabs, current, onSelect) {

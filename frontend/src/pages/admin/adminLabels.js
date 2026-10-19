@@ -85,10 +85,14 @@ export function errorText(error, fallback = '요청을 처리하지 못했어요
   return fallback;
 }
 
-export function formatDateTime(value) {
+// 관리자 화면의 날짜 표시는 이 한 곳에서 만든다(빈 값 "—", 읽을 수 없는 값은 그대로)
+function formatStamp(value, withTime) {
   if (!value) return '—';
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
+  if (Number.isNaN(date.getTime())) return String(value);
   const pad = (n) => String(n).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  const day = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  return withTime ? `${day} ${pad(date.getHours())}:${pad(date.getMinutes())}` : day;
 }
+export const formatDate = (value) => formatStamp(value, false);
+export const formatDateTime = (value) => formatStamp(value, true);

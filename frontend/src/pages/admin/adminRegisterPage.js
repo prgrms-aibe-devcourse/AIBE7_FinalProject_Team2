@@ -305,7 +305,13 @@ export function renderAdminRegisterPage(container, { navigate }) {
           if (data.status === 'FAILED') {
             const error = element('p', 'admin-error', data.message || '파이프라인 실행 중 오류가 났어요.');
             error.setAttribute('role', 'alert');
-            parts.push(error, button('입력으로 돌아가기', () => { progressArea.hidden = true; formArea.hidden = false; submit.disabled = false; }));
+            parts.push(error, button('입력으로 돌아가기', () => {
+              progressArea.hidden = true;
+              formArea.hidden = false;
+              submit.disabled = false;
+              // 원문은 시작할 때 화면에서 비웠다(내부 정보). 사건번호 · 법원 같은 항목 칸은 그대로 남아 있다
+              formError.textContent = '원문은 화면에 남기지 않아요. 원문을 다시 넣어 주세요. 사건번호 · 법원명 등 항목은 그대로예요.';
+            }));
           }
           progressArea.replaceChildren(...parts);
         }

@@ -1,7 +1,7 @@
 import { button, element } from '../../components/siteLayout.js';
 import { loadAdminApi } from './adminApi.js';
 import { errorText } from './adminLabels.js';
-import { ADMIN_MENU } from './adminMenu.js';
+import { ADMIN_MENU, homeRoute, isMenuReady } from './adminMenu.js';
 import './admin.css';
 
 // S-19 관리자 화면 틀: 로그인 확인(A-4) → 없으면 로그인 폼(A-1 · A-2) → 있으면 화면을 그린다.
@@ -22,7 +22,7 @@ export async function renderAdminShell(container, { navigate, title, section, dr
   if (!active()) return;
 
   const header = element('header', 'admin-header');
-  const brand = button('', () => navigate('adminDashboard'), 'admin-brand');
+  const brand = button('', () => navigate(homeRoute()), 'admin-brand');
   brand.append('내', element('span', 'law', 'Law'), '남불 ', element('small', '', '관리자'));
   const user = element('div', 'admin-user');
   header.append(brand, user);
@@ -41,6 +41,13 @@ export async function renderAdminShell(container, { navigate, title, section, dr
       group.items.forEach((item) => {
         const link = button(item.label, () => navigate(item.route), `admin-menu-item${item.key === section ? ' is-active' : ''}`);
         if (item.key === section) link.setAttribute('aria-current', 'page');
+        if (!isMenuReady(item)) {
+          link.classList.add('is-soon');
+          link.setAttribute('aria-disabled', 'true');
+          link.setAttribute('aria-label', `${item.label} — 준비 중`);
+          link.append(element('small', '', '준비 중'));
+          link.addEventListener('click', (event) => event.stopImmediatePropagation(), { capture: true });
+        }
         block.append(link);
       });
       nav.append(block);
