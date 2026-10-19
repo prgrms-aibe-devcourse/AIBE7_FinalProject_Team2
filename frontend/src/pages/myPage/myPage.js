@@ -6,7 +6,8 @@ import { AXES, CHARACTER_NAMES } from '../../utils/personalityAxes.js';
 import { axisSeries, collectionOf, trailLeft, trailSummary } from '../../utils/myPageView.js';
 import { BOOKMARK_CHARACTERS, BOOKMARK_NAMES, bookmarkFace, getBookmarkCharacter, setBookmarkCharacter } from '../../utils/bookmarkCharacter.js';
 import { SCRIPTS } from '../../content/scripts.js';
-import { clearUser, currentUser } from '../../utils/session.js';
+import { clearUser, currentUser, isAdmin } from '../../utils/session.js';
+import { homeRoute } from '../admin/adminMenu.js';
 
 // S-17 마이페이지 (WBS 7.6.6). GET /my-page 한 번 호출로 받고, 기록이 없어도 404가 아니라 빈 200이다(명세 P-5).
 // 메인 책상의 커피잔으로 들어온다(FE-44): 커다란 커피잔이 날아와 페이드아웃하는 사이(utils/coffeeDive.js) 이 화면(from: 'mug')으로 넘어온다.
@@ -368,6 +369,7 @@ function accountNote(api, navigate) {
 }
 
 export async function renderMyPage(container, { api, navigate, view, from }) {
+  if (isAdmin()) { navigate(homeRoute(), {}, { replace: true }); return; } // 관리자는 마이페이지 자리가 관리자 페이지다 (FE-53)
   const root = element('div', 'my-page');
   container.replaceChildren(root);
   const active = () => container.contains(root);

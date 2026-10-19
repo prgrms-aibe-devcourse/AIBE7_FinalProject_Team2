@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { clearUser, currentUser, saveUser } from './session.js';
+import { clearUser, currentUser, isAdmin, saveUser } from './session.js';
 
 function memoryStorage() {
   const map = new Map();
@@ -38,4 +38,15 @@ test('저장소를 못 쓰면 이번 방문 동안만 기억한다', () => {
   clearUser(broken);
   assert.equal(currentUser(broken), null);
   clearUser(memoryStorage()); // 다음 테스트에 남지 않게 되돌린다
+});
+
+test('관리자로 로그인하면 role을 함께 읽고, 일반 사용자는 role이 없다', () => {
+  const storage = memoryStorage();
+  saveUser({ nickname: '운영자', role: 'admin' }, storage);
+  assert.deepEqual(currentUser(storage), { nickname: '운영자', role: 'admin' });
+  assert.equal(isAdmin(currentUser(storage)), true);
+  saveUser({ nickname: '내로판사', role: 'judge' }, storage); // admin 말고는 저장하지 않는다
+  assert.deepEqual(currentUser(storage), { nickname: '내로판사' });
+  assert.equal(isAdmin(currentUser(storage)), false);
+  assert.equal(isAdmin(null), false);
 });

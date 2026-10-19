@@ -1,6 +1,7 @@
 // 공통 사이트 헤더 · 푸터 (REQ-071 법적 고지). S-01 · S-02 · S-14가 헤더를 그리고, 푸터는 S-01 · S-02가 직접, 나머지 화면은 라우터가 붙인다. 스타일은 src/style.css
 import { motionSwitchOn, reducedMotion, setMotionSwitch, systemReducesMotion } from '../utils/motion.js';
-import { currentUser } from '../utils/session.js';
+import { currentUser, isAdmin } from '../utils/session.js';
+import { homeRoute } from '../pages/admin/adminMenu.js';
 
 export function element(tag, className, text) {
   const node = document.createElement(tag);
@@ -59,10 +60,12 @@ function account(navigate, here) {
     if (here === '/login') login.setAttribute('aria-current', 'page');
     return login;
   }
-  const me = button('', () => navigate('me'), 'nav-button login-button is-user');
+  // 관리자는 마이페이지 자리가 관리자 페이지다 (FE-53)
+  const admin = isAdmin(user);
+  const me = button('', () => navigate(admin ? homeRoute() : 'me'), 'nav-button login-button is-user');
   me.append(element('span', 'account-name', user.nickname));
-  me.setAttribute('aria-label', `${user.nickname} — 마이페이지`);
-  if (here === '/me') me.setAttribute('aria-current', 'page');
+  me.setAttribute('aria-label', `${user.nickname} — ${admin ? '관리자 페이지' : '마이페이지'}`);
+  if (here === (admin ? '/admin' : '/me')) me.setAttribute('aria-current', 'page');
   return me;
 }
 

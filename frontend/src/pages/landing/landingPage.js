@@ -3,6 +3,8 @@ import { casePhoto, fallbackImages, todayLabel } from '../../utils/newspaper.js'
 import { takePaper } from '../../utils/paperHandoff.js';
 import { flyCoffee } from '../../utils/coffeeDive.js';
 import { reducedMotion } from '../../utils/motion.js';
+import { isAdmin } from '../../utils/session.js';
+import { homeRoute } from '../admin/adminMenu.js';
 import { peelOff } from '../../utils/peelOff.js';
 
 // S-01 메인 — 판사의 책상 (FE-18, 시안 "B안 일러스트 · C안 구도", 논의기록 2026-10-12 S01 메인 책상 시안 결정)
@@ -28,6 +30,7 @@ const OBJECTS = {
   laptop: { label: '커뮤니티', route: null, mobileText: '다른 사람의 생각' },
   pen: { label: '의견 보내기', route: null }, // FE-50: 펜 = 의견 보내기. 화면이 생기면 route만 넣는다(좁은 화면 메뉴에는 아직 없다)
 };
+const ADMIN_MUG = { label: '관리자 페이지', route: homeRoute(), mobileText: '사건 검수 · 운영' }; // 관리자로 로그인하면 마이페이지 자리 (FE-53)
 const SOON = '곧 열려요';
 // 책상 위 내로 · 남불(기준 좌표계 px, 오른쪽 끝에서 잰다 — FE-50에서 소품 배치를 좌우로 뒤집었다).
 // shortcut: 원본 이미지 레포 PNG를 직접 읽는다, 웹 webp 변환(WBS 7.6.8) 때 public 경로로 옮긴다
@@ -71,6 +74,8 @@ function span(className, text) {
 
 // S-01 메인
 export function renderLandingPage(container, { api, navigate, section, from }) {
+  const objects = isAdmin() ? { ...OBJECTS, mug: ADMIN_MUG } : OBJECTS;
+  const goMug = () => navigate(objects.mug.route, objects.mug.route === 'me' ? { from: 'mug' } : {}); // 마이페이지만 커피잔에서 왔다는 표시를 쓴다
   const root = element('div', 'landing-page');
   const intro = element('section', 'feature-section');
   intro.id = 'intro';
@@ -96,7 +101,7 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
 
   // 물건 = 버튼. 준비 중이면 aria-disabled로 두고 누르지 않는다(포커스는 받아 "준비 중"을 읽게 한다)
   function deskObject(key, ...art) {
-    const { label, route } = OBJECTS[key];
+    const { label, route } = objects[key];
     const node = element('button', `desk-object obj-${key}${route ? '' : ' is-soon'}`);
     node.type = 'button';
     node.setAttribute('aria-label', route ? label : `${label} — 준비 중`);
@@ -223,9 +228,9 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
   // 커피잔: 커다란 잔이 우상단에서 날아와 서고(coffeeDive), 날아오는 도중 마이페이지로 넘어간다. 책상이 다 바뀌면 잔이 오른쪽으로 빠져나간다. 움직임 줄이기면 바로 간다
   function sip() {
     if (lifting) return;
-    if (reducedMotion()) { navigate('me', { from: 'mug' }); return; }
+    if (reducedMotion()) { goMug(); return; }
     lifting = true;
-    flyCoffee(() => { if (root.isConnected) navigate('me', { from: 'mug' }); }, root);
+    flyCoffee(() => { if (root.isConnected) goMug(); }, root);
   }
   // 서류철: 성향 검사 철이 화면 아래에서 올라온다(personality.css folder-rise). 헤더 · 서비스 소개 버튼으로 가면 연출 없이 바로 간다
   const ACTIONS = { news: lift, mug: sip, folder: () => navigate('test', { from: 'desk' }) };
@@ -248,7 +253,7 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
   const mobileCounts = {};
   const mobileNews = {};
   ['news', 'folder', 'mug', 'laptop'].forEach((key) => {
-    const { label, route, mobileText } = OBJECTS[key];
+    const { label, route, mobileText } = objects[key];
     const item = element('button', `desk-menu-item item-${key}${route ? '' : ' is-soon'}`);
     item.type = 'button';
     const text = span('', route ? mobileText : SOON);

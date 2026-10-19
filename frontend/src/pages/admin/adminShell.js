@@ -2,6 +2,7 @@ import { button, element } from '../../components/siteLayout.js';
 import { loadAdminApi } from './adminApi.js';
 import { errorText } from './adminLabels.js';
 import { ADMIN_MENU, homeRoute, isMenuReady } from './adminMenu.js';
+import { clearUser } from '../../utils/session.js';
 import './admin.css';
 
 // S-19 관리자 화면 틀: 로그인 확인(A-4) → 없으면 로그인 폼(A-1 · A-2) → 있으면 화면을 그린다.
@@ -131,6 +132,7 @@ export async function renderAdminShell(container, { navigate, title, section, dr
         return;
       }
     }
+    clearUser(); // 사용자 사이트 헤더 · 책상이 관리자 표시를 거두게 한다 (FE-53)
     if (active()) showLogin('로그아웃했어요.');
   }
 
