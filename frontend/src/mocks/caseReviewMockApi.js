@@ -1,4 +1,5 @@
 import { currentUser } from '../utils/session.js';
+import { read as readExperience } from './mockExperienceStore.js';
 
 // 사건 리뷰(독자 엽서) 목 — FE-55. 서버 API가 아직 명세에 없어(별점 · 한 줄 의견) 화면 확인용으로만 둔다.
 // 내가 보낸 엽서는 브라우저 localStorage에, 다른 독자의 엽서는 아래 고정 값을 쓴다.
@@ -41,10 +42,13 @@ export async function getCaseReviews(caseId) {
   return structuredClone({ ...summarize(all), mine, reviews: readers });
 }
 
-// POST /cases/{caseId}/reviews { rating, comment } — 사건마다 한 장. 보낸 엽서는 바꾸지 않는다(사전 판단 엽서와 같다)
+// POST /cases/{caseId}/reviews { rating, comment } — 사건마다 한 장. 보낸 엽서는 바꾸지 않는다(사전 판단 엽서와 같다).
+// 체험을 마친 사람만 보낸다(PR #190 리뷰 6번). 오류 코드 EXPERIENCE_NOT_COMPLETED는 임시 이름 — 리뷰 API 설계 때 BE와 확정한다.
+// 목 체험 기록은 사건마다 따로 두지 않아(mockExperienceStore) 지금 기록이 끝까지(COMPLETED) 갔는지만 본다(comparisonMockApi와 같다)
 export async function postCaseReview(caseId, { rating, comment } = {}) {
   await delay();
   if (!Number.isInteger(caseId) || caseId < 1) fail('CASE_NOT_FOUND', '사건을 찾을 수 없습니다.');
+  if (readExperience().status !== 'COMPLETED') fail('EXPERIENCE_NOT_COMPLETED', '사건 체험을 마친 뒤 엽서를 보낼 수 있습니다.');
   const text = typeof comment === 'string' ? comment.trim() : '';
   const details = [];
   if (!(Number.isInteger(rating) && rating >= 1 && rating <= 5)) details.push({ field: 'rating', reason: 'MUST_BE_INTEGER_1_TO_5' });

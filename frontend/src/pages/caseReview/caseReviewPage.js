@@ -147,6 +147,11 @@ export async function mountCaseReview(main, { caseId, api, navigate }) {
         submit.disabled = false;
         submit.textContent = '엽서 보내기';
         if (failed?.code === 'ALREADY_REVIEWED') showError('이미 엽서를 보낸 사건이에요. 화면을 새로고침해 주세요.');
+        else if (failed?.code === 'EXPERIENCE_NOT_COMPLETED') {
+          // 체험을 마친 사람만 엽서를 보낸다(리뷰 API 설계 때 BE와 코드 확정). 쓰던 내용은 그대로 두고 체험하러 가는 길만 연다
+          showError('사건 체험을 마친 뒤 엽서를 보낼 수 있어요.');
+          if (!actions.querySelector('.case-review-go')) actions.prepend(button('이 사건 체험하러 가기', () => navigate('caseDetail', { caseId }), 'secondary-button case-review-go'));
+        }
         else if (failed?.code === 'VALIDATION_ERROR') showError('입력값을 확인해 주세요.');
         else showError('엽서를 보내지 못했어요. 잠시 뒤 다시 시도해 주세요.');
       }

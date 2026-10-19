@@ -4,12 +4,13 @@ import { PERSONALITY_LINES } from '../../content/personalityLines.js';
 import { sheetMessage } from './personalityParts.js';
 import { reducedMotion } from '../../utils/motion.js';
 import { canGoBackInApp } from '../../app/router.js';
+import { createTestFlow } from './personalityFlow.js';
 
 // FE-55 판결 성향 테스트 — 8막 "다음 날 신문"의 뒷면(오피니언 2면). 8막 지면의 "판결 성향 테스트" 광고를 누르면 신문을 한 장 넘겨 들어온다.
 // 지면 문법은 8막 신문(stage.css .sheet)과 같다: 제호 띠 · 이중 괘선 · 명조 기사체 · 흑백 지면 사진.
 // 문항 하나 = 찬반 토론 지면 한 판(A · B 두 단이 맞선다), 답 = 아래 독자 설문 응모권의 다섯 칸.
 // 문항 · 답 · 제출은 기존 성향 테스트(personalityPage.js, /test)와 같은 api를 쓰고, 결과는 기존 결과 화면(/test/result)으로 간다.
-// 고르는 방법도 같다: 칸을 누르거나 숫자 1 ~ 5를 치면 다음 문항으로 넘어가고, 마지막 문항은 "결과 보기"를 눌러야 제출된다.
+// 고르는 방법(진행 규칙)도 같은 personalityFlow.js를 쓴다: 칸을 누르거나 숫자 1 ~ 5를 치면 다음 문항으로 넘어가고, 마지막 문항은 "결과 보기"를 눌러야 제출된다.
 const SCALE = [
   { value: 0, degree: '매우', side: 'A' },
   { value: 1, degree: '조금', side: 'A' },
@@ -17,8 +18,6 @@ const SCALE = [
   { value: 3, degree: '조금', side: 'B' },
   { value: 4, degree: '매우', side: 'B' },
 ];
-const ADVANCE_MS = 260; // 응모권에 체크가 찍히는 것을 보고 넘어가도록
-const MIN_LOADING_MS = 900;
 
 // 지면 사진: 안내 캐릭터를 흑백 지면 사진으로 싣는다(그림은 장식, 설명은 사진 설명에)
 function photo(cuts, caption) {
@@ -67,11 +66,9 @@ export async function renderPersonalityPaperPage(container, { api, navigate, fro
   window.scrollTo(0, 0);
 
   const active = () => container.contains(root);
-  const keys = new AbortController(); // 숫자 키 단축키. 화면을 떠나면 뗀다
-  const answers = new Map(); // questionId → value
+  const flow = createTestFlow({ api, isActive: active }); // 진행 규칙(답 · 넘기기 · 숫자 키 · 제출)은 /test와 같다
+  const { answers } = flow;
   let questions;
-  let current = 0;
-  let advanceTimer = 0;
 
   async function load() {
     sheetMessage(body, '지면을 펼치는 중이에요.');
@@ -81,6 +78,7 @@ export async function renderPersonalityPaperPage(container, { api, navigate, fro
       if (active()) sheetMessage(body, '문항을 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요.', { retry: load, alert: true });
       return;
     }
+    flow.setQuestions(questions);
     if (active()) renderIntro();
   }
 
@@ -116,14 +114,13 @@ export async function renderPersonalityPaperPage(container, { api, navigate, fro
     nav.setAttribute('aria-label', '문항 진행');
     nav.append(element('span', 'tp-progress-count', `설문 ${index + 1} / ${questions.length}`));
     const cells = element('ol', 'tp-progress-cells');
-    const reachable = (i) => i <= index || questions.slice(0, i).every((q) => answers.has(q.id));
     questions.forEach((question, i) => {
       const item = element('li');
       const done = answers.has(question.id);
       const cell = button(String(i + 1), () => renderQuestion(i), `tp-progress-cell${done ? ' is-done' : ''}${i === index ? ' is-current' : ''}`);
       cell.setAttribute('aria-label', `${i + 1}번 문항${done ? ', 답함' : ''}`);
       if (i === index) cell.setAttribute('aria-current', 'step');
-      cell.disabled = !reachable(i);
+      cell.disabled = !flow.canReach(index, i);
       item.append(cell);
       cells.append(item);
     });
@@ -169,10 +166,9 @@ export async function renderPersonalityPaperPage(container, { api, navigate, fro
 
   // 찬반 토론 한 판: 제목 | 한마디 / A | B / 응모권 / 이전 · 다음
   function renderQuestion(index) {
-    window.clearTimeout(advanceTimer);
-    current = index;
+    flow.enter(index);
     const question = questions[index];
-    const last = index === questions.length - 1;
+    const last = flow.isLast(index);
 
     const story = element('section', 'tp-debate');
     const head = element('div', 'tp-debate-head');
@@ -235,40 +231,29 @@ export async function renderPersonalityPaperPage(container, { api, navigate, fro
     headline.focus({ preventScroll: true });
 
     function pick(value, byKey = false) {
-      const first = !answers.has(question.id);
-      answers.set(question.id, value);
+      const first = flow.answer(index, value, { advance: pointer || byKey, goNext });
+      pointer = false;
       next.disabled = false;
       if (first) body.querySelector('.tp-progress')?.replaceWith(progress(index));
-      const advance = (pointer || byKey) && !last;
-      pointer = false;
-      if (advance) advanceTimer = window.setTimeout(goNext, reducedMotion() ? 0 : ADVANCE_MS);
     }
 
     function goNext() {
-      window.clearTimeout(advanceTimer);
-      if (!active() || current !== index || !answers.has(question.id)) return;
-      if (!last) renderQuestion(index + 1);
-      else submit();
+      flow.next(index, { show: renderQuestion, submit });
     }
   }
 
-  // 숫자 1 ~ 5 = 왼쪽부터 다섯 칸
-  document.addEventListener('keydown', (event) => {
-    if (!active()) { keys.abort(); return; }
-    if (event.altKey || event.ctrlKey || event.metaKey || event.isComposing) return;
-    const value = Number(event.key) - 1;
-    if (!Number.isInteger(value) || value < 0 || value > 4) return;
+  // 숫자 1 ~ 5 = 왼쪽부터 다섯 칸(문항 화면에서만)
+  flow.listenKeys((value) => {
     const story = body.querySelector('.tp-debate');
-    if (!story?.pickByKey) return;
-    event.preventDefault();
+    if (!story?.pickByKey) return false;
     story.pickByKey(value);
-  }, { signal: keys.signal });
+    return true;
+  });
 
   async function submit() {
     sheetMessage(body, '응모권을 모아 정리하는 중이에요.');
-    const started = performance.now();
     try {
-      await api.submitPersonality(questions.map((question) => ({ questionId: question.id, value: answers.get(question.id) })));
+      await flow.submit();
     } catch {
       if (active()) {
         sheetMessage(body, '결과를 저장하지 못했어요. 고른 답은 그대로 있어요.', { retry: submit, alert: true });
@@ -276,10 +261,8 @@ export async function renderPersonalityPaperPage(container, { api, navigate, fro
       }
       return;
     }
-    const wait = reducedMotion() ? 0 : MIN_LOADING_MS - (performance.now() - started);
-    if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
     if (active()) {
-      keys.abort();
+      flow.stopKeys();
       navigate('testResult');
     }
   }

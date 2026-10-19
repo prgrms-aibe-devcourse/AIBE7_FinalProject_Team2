@@ -86,7 +86,9 @@ export function openCaseReviewPopup({ caseId, api, navigate, from, hand = false 
   document.body.classList.add('case-review-open');
   document.body.append(layer);
   dialog.focus({ preventScroll: true });
-  const mounted = mountCaseReview(body, { caseId, api, navigate });
+  // 엽서 안에서 다른 화면으로 가면(다른 사건 보러 가기 · 체험하러 가기) 엽서 층을 바로 걷고 간다(남겨 두면 새 화면을 덮는다)
+  const leave = (...args) => { closing = true; layer.remove(); document.body.classList.remove('case-review-open'); return navigate(...args); };
+  const mounted = mountCaseReview(body, { caseId, api, navigate: leave });
   if (!reducedMotion()) {
     // 남불은 바로 손을 내밀고, 엽서는 내용이 준비되면(늦으면 READY_WAIT_MS 뒤) 날아온다
     const handing = hand && from?.getBoundingClientRect().width;

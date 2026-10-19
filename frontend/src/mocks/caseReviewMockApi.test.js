@@ -2,12 +2,25 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { COMMENT_MAX, getCaseReviews, postCaseReview, resetCaseReviewMock } from './caseReviewMockApi.js';
+import { save as saveExperience } from './mockExperienceStore.js';
 
-beforeEach(() => resetCaseReviewMock());
+// node에는 localStorage가 없어 테스트마다 빈 저장소를 둔다. 기본은 체험을 끝까지 마친 상태
+beforeEach(async () => {
+  const data = new Map();
+  globalThis.localStorage = { getItem: (key) => data.get(key) ?? null, setItem: (key, value) => data.set(key, String(value)), removeItem: (key) => data.delete(key) };
+  await resetCaseReviewMock();
+  saveExperience({ status: 'COMPLETED', lastReviewedStep: 4 });
+});
 
 test('없는 사건 번호는 CASE_NOT_FOUND', async () => {
   await assert.rejects(getCaseReviews(0), { code: 'CASE_NOT_FOUND' });
   await assert.rejects(postCaseReview(-1, { rating: 5, comment: '좋아요' }), { code: 'CASE_NOT_FOUND' });
+});
+
+test('체험을 마치지 않았으면 EXPERIENCE_NOT_COMPLETED (코드 이름은 BE 협의 전 임시)', async () => {
+  saveExperience({ status: 'AI_REVEALED', lastReviewedStep: 4 });
+  await assert.rejects(postCaseReview(1, { rating: 5, comment: '좋아요' }), { code: 'EXPERIENCE_NOT_COMPLETED' });
+  assert.equal((await getCaseReviews(1)).mine, null); // 읽기는 체험과 상관없이 된다
 });
 
 test('별점은 1 ~ 5 정수, 의견은 공백을 뺀 1 ~ 200자', async () => {
