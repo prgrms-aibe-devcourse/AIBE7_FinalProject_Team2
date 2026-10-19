@@ -6,6 +6,7 @@ import { AXES, CHARACTER_NAMES } from '../../utils/personalityAxes.js';
 import { axisSeries, collectionOf, trailLeft, trailSummary } from '../../utils/myPageView.js';
 import { BOOKMARK_CHARACTERS, BOOKMARK_NAMES, bookmarkFace, getBookmarkCharacter, setBookmarkCharacter } from '../../utils/bookmarkCharacter.js';
 import { SCRIPTS } from '../../content/scripts.js';
+import { clearUser, currentUser } from '../../utils/session.js';
 
 // S-17 마이페이지 (WBS 7.6.6). GET /my-page 한 번 호출로 받고, 기록이 없어도 404가 아니라 빈 200이다(명세 P-5).
 // 메인 책상의 커피잔으로 들어온다(FE-44): 커다란 커피잔이 날아와 페이드아웃하는 사이(utils/coffeeDive.js) 이 화면(from: 'mug')으로 넘어온다.
@@ -350,6 +351,22 @@ function renderView(view, data, navigate, go) {
   return [head, body];
 }
 
+// 맨 아래 안내. 로그인했으면(FE-52) 누구로 로그인했는지와 로그아웃. 기록은 아직 로그인과 이어지지 않아 익명 ID 기준이다
+function accountNote(api, navigate) {
+  const user = currentUser();
+  if (!user) return element('p', 'my-note', '로그인하기 전에는 이 브라우저(익명 ID)를 기준으로 기록해요. 쿠키를 지우면 기록을 찾을 수 없어요.');
+  const note = element('div', 'my-note my-account');
+  note.append(
+    element('p', '', `${user.nickname} 님으로 로그인했어요. 기록은 아직 이 브라우저(익명 ID)를 기준으로 남아요.`),
+    button('로그아웃', async () => {
+      await Promise.resolve(api.logout?.()).catch(() => {}); // 서버 쪽 로그아웃이 없거나 실패해도 이 브라우저의 표시는 지운다
+      clearUser();
+      navigate('landing', {}, { replace: true });
+    }, 'secondary-button'),
+  );
+  return note;
+}
+
 export async function renderMyPage(container, { api, navigate, view, from }) {
   const root = element('div', 'my-page');
   container.replaceChildren(root);
@@ -379,8 +396,7 @@ export async function renderMyPage(container, { api, navigate, view, from }) {
     }
     const title = element('h1', 'visually-hidden', '마이페이지');
     title.tabIndex = -1;
-    const note = element('p', 'my-note', '로그인하기 전에는 이 브라우저(익명 ID)를 기준으로 기록해요. 쿠키를 지우면 기록을 찾을 수 없어요.');
-    main.replaceChildren(title, renderTop(data, go), renderRows(data, go), note);
+    main.replaceChildren(title, renderTop(data, go), renderRows(data, go), accountNote(api, navigate));
   };
 
   if (cache) paint(cache);

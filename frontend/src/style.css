@@ -46,6 +46,8 @@ body {
   --palette-orange-500: #d4692a;
   --palette-orange-50: #fff1e7;
   --palette-blue-focus: #2f6fdb;
+  --palette-kakao-yellow: #fee500; /* 카카오 로그인 버튼(카카오 디자인 가이드 색) */
+  --palette-kakao-ink: #000000;
   --palette-up: #9c3a1d;
   --palette-down: #235a9c;
   --palette-case-murder: #5b3a40;
@@ -103,6 +105,8 @@ body {
   --color-banner-bg: var(--palette-navy-900);      /* 결과 화면 배너 */
   --color-banner-text: var(--palette-white);
   --color-banner-muted: var(--palette-navy-200);
+  --color-kakao: var(--palette-kakao-yellow);       /* 카카오 로그인 버튼 바탕 (S-12, FE-52) */
+  --color-on-kakao: var(--palette-kakao-ink);      /* 그 위 심볼 · 글자(글자는 85% 농도로 쓴다) */
 
   /* ④ S-01 메인 책상 일러스트 (FE-18). 책상 그림 전용 색이다. 다른 화면에서는 쓰지 않는다 */
   --palette-wood-300: #b06d36;
@@ -284,17 +288,19 @@ h1 { font-family: var(--font-heading); color: var(--color-heading); letter-spaci
    S-01 · S-02 · S-14 · 라우터 푸터(S-03 ~ S-09)가 모두 쓰는 유일한 정의다. 화면 CSS에 같은 규칙을 다시 두지 않는다.
    특정 화면만 다르게 해야 하면 그 화면 CSS에 .landing-page .site-header처럼 화면 클래스로 감싸서 추가한다. */
 /* FE-50: 스크롤과 상관없이 화면 위에 고정한다(sticky — 자리는 그대로 차지해 아래 내용이 가려지지 않는다). 전환 연출 층(z-index 1000)보다는 아래 */
-.site-header { position: sticky; top: 0; z-index: 50; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 28px; border-bottom: 1px solid var(--color-border); background: var(--color-bg); }
-.site-nav { display: flex; align-items: center; gap: 8px; }
+.site-header { position: sticky; top: 0; z-index: 50; display: flex; align-items: center; gap: 16px; padding: 16px 28px; border-bottom: 1px solid var(--color-border); background: var(--color-bg); }
+.site-nav { display: flex; align-items: center; gap: 8px; margin-left: auto; } /* 로고는 왼쪽, 메뉴 · 로그인은 오른쪽 */
 .site-header .nav-button[aria-current="page"] { color: var(--color-text); box-shadow: inset 0 -2px 0 currentColor; } /* 지금 보고 있는 메뉴 */
 .site-header .nav-button[aria-disabled="true"] { cursor: default; opacity: .6; }
 .site-header .nav-button[aria-disabled="true"]:hover { text-decoration: none; }
 /* 화면 CSS의 button { font: inherit } 보다 우선하도록 .site-header를 붙인다 */
 .site-header .logo-button { border: 0; background: transparent; padding: 6px 0; font-family: var(--font-heading); font-size: 20px; font-weight: 900; letter-spacing: -.04em; color: var(--color-heading); }
-.nav-button { border: 0; background: transparent; padding: 10px 12px; min-height: 44px; color: var(--color-muted); }
+.nav-button { border: 0; background: transparent; padding: 10px 12px; min-height: 44px; color: var(--color-muted); white-space: nowrap; }
 .nav-button:hover { color: var(--color-text); }
 /* 로그인(FE-50): 메뉴 맨 오른쪽, 얇은 테두리로 계정 동작임을 구분한다. 테두리는 글자색을 따라가 네이비 · 흰 헤더 모두에 맞는다 */
-.site-header .login-button { margin-left: 4px; padding: 6px 14px; min-height: 36px; border: 1px solid color-mix(in srgb, currentColor 45%, transparent); border-radius: 6px; }
+.site-header .login-button { flex: none; margin-left: 4px; padding: 6px 14px; min-height: 36px; border: 1px solid color-mix(in srgb, currentColor 45%, transparent); border-radius: 6px; }
+.site-header .login-button[aria-current="page"] { box-shadow: none; } /* 테두리 버튼이라 밑줄 대신 테두리로 충분하다 */
+.site-header .account-name { display: block; max-width: 9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } /* 로그인한 닉네임(FE-52). 길면 줄인다 */
 /* 연출 스위치(FE-50, utils/motion.js): "연출" 글자 + 작은 스위치. 색은 글자색을 따라간다 */
 .site-header .motion-switch { display: inline-flex; align-items: center; gap: 8px; }
 .site-header .switch-track { position: relative; display: block; width: 30px; height: 18px; border: 1px solid color-mix(in srgb, currentColor 55%, transparent); border-radius: 9px; transition: background-color .15s ease-out; }
@@ -303,7 +309,11 @@ h1 { font-family: var(--font-heading); color: var(--color-heading); letter-spaci
 .site-header .motion-switch[aria-checked="true"] .switch-thumb { translate: 12px 0; }
 .site-footer { padding: 24px 28px; border-top: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-muted); font-size: 13px; }
 @media (max-width: 720px) {
-  .site-header { padding: 12px 16px; }
+  /* 좁은 화면(FE-52): 두 줄. 윗줄 = 로고 · 로그인, 아랫줄 = 메뉴(넘치면 가로로 민다) */
+  .site-header { flex-wrap: wrap; row-gap: 0; padding: 12px 16px; }
+  .site-header .login-button { order: 2; margin-left: auto; }
+  .site-nav { order: 3; width: 100%; margin: 0 -8px; gap: 0; overflow-x: auto; scrollbar-width: none; }
+  .site-nav .nav-button { padding: 8px; }
 }
 
 /* S-14 404 · 오류 화면 (FE-3) */
