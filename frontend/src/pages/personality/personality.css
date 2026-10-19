@@ -226,8 +226,8 @@
   30% { transform: translate(var(--turn-x, 0px), var(--turn-y, -147px)) rotate(-90deg) scale(calc(var(--turn-sx, 1) * 1.02), calc(var(--turn-sy, 1) * 1.02)); }
 }
 @keyframes folder-content-in { 0%, 72% { opacity: 0; } 100% { opacity: 1; } }
-/* 시작 화면과 같은 크기의 철(반응형 폭 그대로, 확대 없음)이 화면 아래에서 세워진 채(-90°) 올라오며 눕는다(0°). 이전 책상 화면은 그 사이 페이드아웃 */
-@keyframes folder-rise { from { transform: translateY(calc(100vh + 100%)) rotate(-90deg); } }
+/* 시작 화면과 같은 크기의 철(반응형 폭 그대로, 확대 없음)이 화면 아래에서 세워진 채(90°) 올라오며 눕는다(0°). FE-50에서 도는 방향을 반대로(+90°, 시계 반대 방향으로 눕는다). 이전 책상 화면은 그 사이 페이드아웃 */
+@keyframes folder-rise { from { transform: translateY(calc(100vh + 100%)) rotate(90deg); } }
 @keyframes ghost-out { to { opacity: 0; } }
 @keyframes test-turn { from { opacity: .35; translate: var(--enter-x, 14px) 0; filter: blur(2px); } }
 @keyframes test-check { from { stroke-dashoffset: 24; } to { stroke-dashoffset: 0; } }
