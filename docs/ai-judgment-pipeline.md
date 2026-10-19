@@ -16,6 +16,7 @@
 | v2.8 | 2026-10-16 | Groq · NVIDIA NIM 공급자 추가 (BE-84) — 4장 공급자 · API 키 · 모델 목록 조회, 5-4 `free:groq`/`free:nim`, 6장 NIM 무료 등급 데이터 약관. COMMON-40 모델 비교 테스트의 선행 작업 |
 | v2.9 | 2026-10-17 | API 키 `.env` 파일 지원 (BE-86) — 4장에 `.env` 안내 추가. COMMON-40 모델 비교 테스트의 선행 작업 |
 | v2.10 | 2026-10-19 | **generate 모델을 `gemini:gemini-3.7-flash`로 고정** (COMMON-40) — 가상 테스트 사건 2건 × 후보 모델 16개로 비교한 근거는 [COMMON-40 의사결정 기록](decisions/COMMON-40.md). 3장 ④ · 8장 구현 상태 갱신 |
+| v2.11 | 2026-10-19 | COMMON-40 테스트 중 찾은 Groq 호출 차단 버그(Cloudflare가 기본 User-Agent를 자동화 요청으로 차단, BE-84 후속 PR #185로 수정) 4장에 추가 |
 
 > 이 문서는 **개요**다. 명령 · 옵션 · 설정 값의 정확한 기준은 [`tools/ai-judgment/README.md`](../tools/ai-judgment/README.md)와 [`case-extractor/README.md`](../tools/ai-judgment/case-extractor/README.md)다. 문서와 코드가 다르면 도구 README와 코드를 따른다.
 > 이 문서는 사건 내용을 담지 않는다. 예시는 모두 설명용이다.
@@ -148,6 +149,7 @@ MVP는 AI 판결을 **오프라인에서 생성 · 검수한 결과를 DB에 적
 | 도구 | 웹 검색 · 그라운딩을 붙이지 않는다(실제 판결을 찾아보면 독립 판단 · 사전 학습 점검이 무의미해진다) |
 | manual | API를 부르지 않고 채팅 화면의 응답 파일을 같은 흐름에 넣는 방식(`generate.py import`) |
 | HTTPS | 인증서 검증은 항상 켠다. 기본 위치에 인증서가 없으면(예: macOS python.org Python) 시스템 CA 묶음을 찾아 쓴다(BE-34) |
+| Groq 호출 | 기본 `urllib` User-Agent(`Python-urllib/x.y`)는 Groq 앞단 Cloudflare가 자동화 요청으로 보고 차단한다(403, 본문 `error code: 1010` — Groq가 아니라 Cloudflare의 차단 코드라 API 키 문제로 착각하기 쉽다). 모든 호출에 고정 User-Agent를 붙여 해결했다(COMMON-40 모델 비교 테스트 중 발견, BE-84 후속) |
 
 ---
 
