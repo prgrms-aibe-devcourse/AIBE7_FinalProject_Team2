@@ -1,4 +1,4 @@
-# Gradle test가 자동 활성화한다. 접속 대상 검증/환경변수 우회 차단은 build.gradle에서 수행한다.
+# Gradle test가 자동 활성화한다. IDE 직접 실행도 TestEnvironmentGuard가 접속 대상을 검사한다.
 spring:
   datasource:
     url: ${TEST_DB_URL:jdbc:postgresql://127.0.0.1:55432/lawnambul_test}
@@ -25,3 +25,8 @@ admin:
   bootstrap:
     email: ""
     password: ""
+
+# 실제 임베딩 클라이언트는 비활성화한다. 가짜 클라이언트/MockRestServiceServer 테스트는 유지한다.
+rag:
+  embedding:
+    api-key: ""

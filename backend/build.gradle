@@ -50,7 +50,7 @@ dependencies {
 	testAnnotationProcessor 'org.projectlombok:lombok'
 }
 
-// 테스트는 전용 로컬 서비스만 사용한다. IDE도 Gradle에 테스트 실행을 위임해야 한다.
+// 테스트는 전용 로컬 서비스만 사용한다. IDE 직접 실행은 TestEnvironmentGuard가 추가로 검사한다.
 def testDbUrl = providers.environmentVariable('TEST_DB_URL').getOrElse('jdbc:postgresql://127.0.0.1:55432/lawnambul_test')
 def testDbUsername = providers.environmentVariable('TEST_DB_USERNAME').getOrElse('lawnambul_test')
 def testDbPassword = providers.environmentVariable('TEST_DB_PASSWORD').getOrElse('lawnambul_test')
@@ -80,18 +80,21 @@ def testRuntimeProperties = [
 	'redis.token-database': '1',
 	'admin.bootstrap.email': '',
 	'admin.bootstrap.password': '',
+	'rag.embedding.api-key': '',
 	'junit.jupiter.execution.parallel.enabled': 'false'
 ]
 
 tasks.withType(Test).configureEach {
 	useJUnitPlatform()
 	maxParallelForks = 1
+	// 설정 단계 주입: 테스트 입력으로 추적해 접속 설정 변경 시 up-to-date 판정에도 반영한다.
 	systemProperties(testRuntimeProperties)
 	// 프로필보다 우선하는 환경변수와 JVM 옵션으로 연결 설정을 우회하지 못하게 한다.
 	// PATH/JAVA_HOME 등 실행에 필요한 나머지 환경은 보존한다. 값(비밀번호 등)은 출력하지 않는다.
 	setEnvironment(environment.findAll { key, value ->
 		def name = key.toUpperCase(Locale.ROOT)
-		!['SPRING_', 'DB_', 'REDIS_', 'FLYWAY_', 'ADMIN_BOOTSTRAP_'].any { name.startsWith(it) } &&
+		!['SPRING_', 'DB_', 'REDIS_', 'FLYWAY_', 'ADMIN_BOOTSTRAP_', 'RAG_'].any { name.startsWith(it) } &&
+			!name.endsWith('_API_KEY') &&
 			!['DDL_AUTO', 'JAVA_TOOL_OPTIONS', 'JDK_JAVA_OPTIONS', '_JAVA_OPTIONS'].contains(name)
 	})
 	doFirst {
@@ -103,9 +106,10 @@ tasks.withType(Test).configureEach {
 		if (!(testRedisHost in ['127.0.0.1', 'localhost']) || testRedisPort != '56379') {
 			throw new GradleException('테스트 Redis는 localhost/127.0.0.1:56379만 허용합니다. TEST_REDIS_* 설정을 확인하세요.')
 		}
-		if (jvmArgs.any { it ==~ /(?i)-D(spring\..*|redis\..*|admin\.bootstrap\..*)/ }) {
+		if (jvmArgs.any { it ==~ /(?i)-D(spring\..*|redis\..*|admin\.bootstrap\..*|rag\..*)/ }) {
 			throw new GradleException('테스트 JVM의 연결/프로필 설정은 jvmArgs로 덮어쓸 수 없습니다.')
 		}
+		// 실행 직전 재주입: 뒤에 등록된 설정이 보호 속성을 바꿔도 검증한 값으로 되돌린다.
 		systemProperties(testRuntimeProperties)
 		logger.lifecycle('[test] 전용 PostgreSQL(:55432/lawnambul_test) · Redis(:56379), test 프로필 사용')
 	}

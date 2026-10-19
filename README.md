@@ -64,7 +64,7 @@ ls backend/private-seed/seed                # R__10 · R__20 · R__30 세 파일
 
 서브모듈을 맞춘 뒤 `bootRun`을 다시 띄우면 Flyway가 새 시드를 반복 마이그레이션(`R__`)으로 적용한다. DB를 비울 필요는 없다.
 
-이 자동 설정은 로컬 실행(`bootRun`)에만 적용된다. 운영(jar · Docker) · 테스트는 `application.yml` 기본값(스키마만)을 그대로 쓴다.
+이 자동 설정은 로컬 실행(`bootRun`)에만 적용된다. 운영(jar · Docker)은 `application.yml` 기본값(스키마만), 테스트는 별도 `test` 프로필(스키마 + 공개 가상 시드)을 쓴다(BE-87).
 
 ⚠️ IDE에서 실행할 때는 `BackendApplication`의 ▶ 버튼(main 클래스 실행) 대신 Gradle 창의 `Tasks > application > bootRun`을 쓴다. main 클래스로 실행하면 Gradle을 거치지 않아 자동 설정이 적용되지 않고 `application.yml` 기본값(스키마만)으로 떠서, 새 DB라면 사건이 하나도 없다. 꼭 main 클래스로 실행해야 하면 실행 구성의 환경변수에 `FLYWAY_LOCATIONS`를 직접 넣는다.
 - 서브모듈 안의 파일을 공개 저장소의 다른 위치(`db/seed` 등)로 **복사하지 않는다.** 공개 저장소의 커밋 메시지 · PR · Jira 댓글에도 사건 내용(형량 · 판단 요소 · 사실관계)을 쓰지 않는다.
@@ -72,13 +72,12 @@ ls backend/private-seed/seed                # R__10 · R__20 · R__30 세 파일
 
 로컬 DB를 비우고 처음부터 다시 만들려면 `docker compose down -v && docker compose up -d`를 실행한다. (볼륨이 삭제된다 — 로컬 Redis 데이터도 함께 지워진다)
 
-테스트는 실제 PostgreSQL · Redis에 연결하므로 `docker compose up -d`로 둘 다 띄운 뒤 실행한다. (Redis는 BE-61에서 추가됐다. 전에 PostgreSQL만 띄워 뒀다면 `docker compose up -d`를 한 번 더 실행한다)
+테스트는 개발 DB와 분리된 **테스트 전용 PostgreSQL(55432) · Redis(56379)** 에 연결한다(BE-87).
+컨테이너 준비·macOS/Linux 및 Windows 명령·IDE 설정·정리 절차는 [backend/TESTING.md](backend/TESTING.md)를 따른다.
+개발용 컨테이너만 실행한 상태로는 통합 테스트를 실행할 수 없다.
 
-```bash
-./gradlew test
-```
-
-접속 정보는 환경변수로 바꾼다. 값이 없으면 로컬 `docker-compose.yml` 기본값을 쓴다. (`backend/src/main/resources/application.yml`)
+다음 접속 환경변수는 **개발·운영 서버 실행용**이다. 값이 없으면 로컬 `docker-compose.yml` 기본값을 쓴다. (`backend/src/main/resources/application.yml`)
+테스트는 아래 변수를 상속하지 않고 `TEST_*` 설정과 접속 검증을 사용한다([테스트 환경 안내](backend/TESTING.md)).
 
 | 이름 | 기본값 | 설명 |
 | --- | --- | --- |

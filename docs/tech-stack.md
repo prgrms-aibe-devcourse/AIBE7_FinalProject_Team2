@@ -26,6 +26,7 @@
 | v1.19 | 2026-10-13 | BE-61 반영 (**확장 단계**, WBS 7.1.4) — 2장 Redis를 캐시(DB 0) · 토큰 저장소(DB 1)로 분리, "Redis가 없어도 서비스가 동작"은 캐시에만 해당하도록 정정, "Redis 운영 구성" 신설: AOF `everysec` 영속화, `noeviction` + 모든 키 TTL 필수, 메모리 상한, 사용자별 값 캐시 제외, 비밀번호 · 네트워크 접근. 8장 운영 컨테이너에 Redis 추가. 리뷰 반영: 캐시 장애 시 원본 조회는 아직 구현 전인 규칙(6.5.3, `CacheErrorHandler`)임을 명시, 7장에 로컬 테스트 전 Redis 기동 안내 |
 | v1.20 | 2026-10-15 | BE-63 반영 (**확장 단계**, WBS 7.4.6 1차) — 3장 사용자 인증 기반에 **Rate limit** 행 추가: 운영 Nginx `/api` IP별 제한(평균 초당 20 · 순간 40), JSON 429 `TOO_MANY_REQUESTS`, 정적 파일 제외, 백엔드 지표에 잡히지 않음, 사용자 IP 전제와 서버 확인 · 로드 밸런서 시 `real_ip`. 2차(로그인 · 재발급)는 7.4.2 이후 |
 | v1.21 | 2026-10-16 | BE-60 반영 (**확장 단계**, WBS 7.1.3) — 8장 배포 흐름에 자동 배포(CD) 추가: 운영은 `main`만, 서버가 2분마다 GHCR `main` 이미지를 확인해 배포(실패 시 자동 되돌림), Actions는 `/version.json`으로 결과 확인. IAM 권한 없이 하는 방식을 고른 이유는 `docs/decisions/BE-60.md` |
+| v1.22 | 2026-10-19 | BE-87 반영 (WBS 7.0.3) — 테스트 PostgreSQL·Redis를 개발 환경과 분리, test 프로필·Gradle/JVM 접속 검증·외부 임베딩 비활성화 적용. 실행 절차는 backend/TESTING.md로 통일 |
 
 
 ## **1. Backend**
@@ -133,7 +134,7 @@ MVP에는 관리자 화면이 없으므로 대표 사건 데이터와 검수된 
   | --- | --- | --- |
   | 운영 (기본값) | 지정하지 않음 → `classpath:db/migration` | 스키마만 |
   | 로컬 (`./gradlew bootRun`) | 지정하지 않음 → `build.gradle`이 자동으로 정함: `classpath:db/migration,classpath:db/seed` + 서브모듈에 SQL이 있으면 `,filesystem:<backend/private-seed/seed 절대 경로>` (BE-28) | 스키마 + 가상 사건 (+ 실제 사건, 비공개 저장소 권한 필요) |
-  | CI | `classpath:db/migration,classpath:db/seed` | 스키마 + 가상 사건 1건 |
+  | 테스트 (로컬 · CI, BE-87) | `test` 프로필·Gradle이 `classpath:db/migration,classpath:db/seed`로 고정 (`FLYWAY_LOCATIONS` 상속 안 함) | 테스트 전용 DB에 스키마 + 가상 사건 1건 (비공개 시드 제외) |
   | 운영 (최종) | `classpath:db/migration,filesystem:<서버의 실제 데이터 경로>` | 스키마 + 실제 사건 (가상 사건 제외) |
 
   기본값을 스키마만으로 둬서, 운영에서 환경변수를 빠뜨려도 시드가 들어가지 않는다. 로컬 `bootRun`만 자동 설정을 쓰는 이유는 셸 환경변수가 다른 터미널 · IDE 실행에서 빠지기 쉽고, 빠져도 오류 없이 시드 없이 떠서 알아채기 어렵기 때문이다(BE-28). `FLYWAY_LOCATIONS`를 주면 자동 설정보다 우선하고, 기동 로그에 `[bootRun] Flyway 위치(...)` · `[bootRun] 실제 사건 시드: 포함 / 없음`이 찍힌다. CI(`backend-ci.yml`)는 시드까지 켜서 시드가 스키마 제약을 깨지 않는지 매번 확인한다.
@@ -153,7 +154,8 @@ MVP에는 관리자 화면이 없으므로 대표 사건 데이터와 검수된 
 
 | 단계 | DB | 비고 |
 | --- | --- | --- |
-| 개발 (로컬 · CI) | Docker PostgreSQL (`pgvector/pgvector:pg17`, `backend/docker-compose.yml`) | AWS 키 없이 로컬에서 개발이 끝나도록 컨테이너로 띄운다. CI도 같은 이미지 태그를 쓴다 |
+| 개발 (로컬) | Docker PostgreSQL (`pgvector/pgvector:pg17`, `backend/docker-compose.yml`) | 개발용 DB와 Redis를 사용한다 |
+| 테스트 (로컬 · CI) | 별도 PostgreSQL·Redis (`backend/docker-compose.test.yml` / CI 서비스 컨테이너) | 같은 이미지 태그를 사용하되 개발 저장소와 분리한다. 실행 절차는 [테스트 환경 안내](../backend/TESTING.md) |
 | 최종 (운영) | AWS RDS for PostgreSQL | 이미지 태그를 RDS에서 쓸 PostgreSQL 버전과 맞춘다. 접속 정보는 EC2 실행 시 환경변수로만 넘긴다 |
 
 - 접속 정보는 `DB_URL` · `DB_USERNAME` · `DB_PASSWORD` 환경변수로 받고, 값이 없으면 로컬 Docker 기본값을 쓴다(`application.yml`). 단계를 옮겨도 코드는 바꾸지 않고 환경변수만 바꾼다.
@@ -495,7 +497,7 @@ CI가 실패한 PR은 Merge하지 않는 것을 기본 원칙으로 한다.
 
 상태 전이, 선고 가능 범위 검증, 판결 비교 분류 등 핵심 로직은 반드시 테스트한다. 부분 유니크 인덱스 같은 PostgreSQL 전용 제약은 H2 같은 인메모리 DB로 확인할 수 없으므로, 통합 테스트는 CI에서도 실제 PostgreSQL 컨테이너로 실행한다.
 
-Redis도 같다(BE-61). `RedisConfigTest`가 실제 Redis에 붙으므로 **로컬에서 `./gradlew test`를 돌리기 전에 `backend`에서 `docker compose up -d`로 PostgreSQL과 Redis를 함께 띄운다.** 예전에 `postgres`만 띄워 둔 경우에도 `docker compose up -d`를 한 번 더 실행하면 Redis만 추가로 뜬다. CI는 `backend-ci.yml`의 Redis 서비스 컨테이너를 쓴다.
+Redis도 같다(BE-61). `RedisConfigTest`가 실제 Redis에 붙으므로 **테스트 전용 PostgreSQL(55432) · Redis(56379)** 를 준비한다(BE-87). 개발용 `docker compose up -d`로 대체하지 않는다. 실행·IDE 설정·Flyway 충돌 대응은 [backend/TESTING.md](../backend/TESTING.md)를 따른다. CI는 같은 접속 계약의 서비스 컨테이너를 사용한다. Gradle은 테스트 JVM 시작 전에, 테스트 전용 초기화기는 Spring 컨텍스트의 빈 생성 전에 접속 대상을 검증한다. 실제 RAG 임베딩 키는 비활성화하며 모의 클라이언트를 쓰는 테스트는 유지한다.
 
 ---
 
