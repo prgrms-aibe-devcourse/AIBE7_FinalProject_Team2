@@ -1,0 +1,36 @@
+# 개발용 Compose와 합치지 않고 이 파일 하나로 실행한다 (TESTING.md 참고).
+name: lawnambul-test
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_DB: lawnambul_test
+      POSTGRES_USER: lawnambul_test
+      POSTGRES_PASSWORD: lawnambul_test # localhost 테스트 전용, 운영 비밀값이 아님
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - test-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lawnambul_test -d lawnambul_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7.4-alpine
+    command: [redis-server, --appendonly, "yes", --appendfsync, everysec, --maxmemory, 200mb, --maxmemory-policy, noeviction]
+    ports:
+      - "127.0.0.1:56379:6379"
+    volumes:
+      - test-redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  test-pgdata:
+  test-redisdata:

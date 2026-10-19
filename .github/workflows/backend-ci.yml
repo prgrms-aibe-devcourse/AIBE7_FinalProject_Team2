@@ -31,16 +31,16 @@ jobs:
 
     services:
       postgres:
-        # 로컬 docker-compose.yml과 같은 이미지/버전을 사용한다
+        # 로컬 docker-compose.test.yml과 같은 이미지/DB/호스트 포트를 사용한다
         image: pgvector/pgvector:pg17
         env:
-          POSTGRES_DB: lawnambul
-          POSTGRES_USER: lawnambul
-          POSTGRES_PASSWORD: lawnambul   # CI 안에서만 쓰는 임시 계정
+          POSTGRES_DB: lawnambul_test
+          POSTGRES_USER: lawnambul_test
+          POSTGRES_PASSWORD: lawnambul_test   # CI 안에서만 쓰는 임시 계정
         ports:
-          - 5432:5432
+          - 55432:5432
         options: >-
-          --health-cmd "pg_isready -U lawnambul -d lawnambul"
+          --health-cmd "pg_isready -U lawnambul_test -d lawnambul_test"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -50,23 +50,20 @@ jobs:
         # 서비스 컨테이너는 command를 받지 못해 정책(AOF · noeviction)은 적용하지 않는다. 정책 확인은 로컬 · 운영 Compose에서 한다
         image: redis:7.4-alpine
         ports:
-          - 6379:6379
+          - 56379:6379
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 5s
           --health-timeout 3s
           --health-retries 10
 
-    # application.yml이 읽는 환경변수 이름과 반드시 일치해야 한다
+    # build.gradle이 검증해 테스트 JVM에 주입하는 테스트 전용 변수만 사용한다.
     env:
-      DB_URL: jdbc:postgresql://localhost:5432/lawnambul
-      DB_USERNAME: lawnambul
-      DB_PASSWORD: lawnambul
-      # Redis 서비스 컨테이너 (비밀번호 없음, BE-61). 값이 없어도 application.yml 기본값(localhost:6379)과 같지만 명시한다
-      REDIS_HOST: localhost
-      REDIS_PORT: 6379
-      # 개발용 가상 사건 시드(db/seed)도 함께 적용해, 시드가 스키마 제약을 깨지 않는지 CI에서 확인한다 (운영에는 넣지 않음)
-      FLYWAY_LOCATIONS: classpath:db/migration,classpath:db/seed
+      TEST_DB_URL: jdbc:postgresql://127.0.0.1:55432/lawnambul_test
+      TEST_DB_USERNAME: lawnambul_test
+      TEST_DB_PASSWORD: lawnambul_test
+      TEST_REDIS_HOST: 127.0.0.1
+      TEST_REDIS_PORT: 56379
 
     steps:
       - uses: actions/checkout@v4

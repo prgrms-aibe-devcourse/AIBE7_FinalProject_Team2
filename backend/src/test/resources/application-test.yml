@@ -1,0 +1,27 @@
+# Gradle test가 자동 활성화한다. 접속 대상 검증/환경변수 우회 차단은 build.gradle에서 수행한다.
+spring:
+  datasource:
+    url: ${TEST_DB_URL:jdbc:postgresql://127.0.0.1:55432/lawnambul_test}
+    username: ${TEST_DB_USERNAME:lawnambul_test}
+    password: ${TEST_DB_PASSWORD:lawnambul_test}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+    # 기존 마이그레이션 + 공개 가상 사건 시드만. filesystem/private-seed는 사용하지 않는다.
+    locations: classpath:db/migration,classpath:db/seed
+    clean-disabled: true
+
+redis:
+  host: ${TEST_REDIS_HOST:127.0.0.1}
+  port: ${TEST_REDIS_PORT:56379}
+  password: ""
+  cache-database: 0
+  token-database: 1
+
+# AdminBootstrap은 이메일/비밀번호가 비어 있으면 계정을 만들지 않는다.
+admin:
+  bootstrap:
+    email: ""
+    password: ""
