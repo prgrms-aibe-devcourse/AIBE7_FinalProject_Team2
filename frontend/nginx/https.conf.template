@@ -1,0 +1,71 @@
+# HTTPS 설정 템플릿 (BE-75)
+# 직접 읽히지 않는다. 컨테이너 시작 때 40-enable-https.sh가 인증서를 확인한 뒤에만
+# __SERVER_DOMAIN__을 실제 도메인으로 바꿔 /etc/nginx/conf.d/https.conf로 만든다(http 블록 안에서 읽힌다).
+# - 이미지 안 위치는 /etc/nginx/lawnambul/ (공식 이미지가 자동 처리하는 /etc/nginx/templates/가 아니다.
+#   거기 두면 인증서가 없어도 무조건 만들어져 Nginx가 뜨지 않는다)
+#
+# 주소 정리: 사용자가 보는 주소는 https://__SERVER_DOMAIN__ 하나뿐이다.
+#   http://__SERVER_DOMAIN__ · http://www. · https://www.  →  301  →  https://__SERVER_DOMAIN__
+#   - www를 루트로 모으는 이유: 쿠키(익명 ID NLNB_AID · 관리자 세션)는 호스트 단위라, 두 주소를 섞어 쓰면
+#     같은 사람이 익명 ID를 두 개 갖게 된다. 카카오 로그인(BE-62) Redirect URI도 한 주소로 맞춘다
+#   - 이동 주소는 $host가 아니라 고정 도메인이다: 요청 헤더 값이 응답 Location에 들어가지 않는다
+#   localhost · 탄력적 IP의 http는 default.conf의 기본 server가 그대로 받는다(deploy.sh · CI 스모크 테스트용)
+
+# ---------- 모든 https server에 공통인 TLS 설정 (http 블록 수준) ----------
+# 서버 호스트의 certbot이 발급한 인증서(루트 · www 둘 다 들어 있다). live/ · archive/만 읽기 전용으로 붙인다
+# (docker-compose.prod.yml — certbot 계정 키가 있는 accounts/는 컨테이너에 넣지 않는다)
+ssl_certificate     /etc/letsencrypt/live/__SERVER_DOMAIN__/fullchain.pem;
+ssl_certificate_key /etc/letsencrypt/live/__SERVER_DOMAIN__/privkey.pem;
+
+# 오래된 TLS 1.0 · 1.1은 받지 않는다 (현재 브라우저는 모두 1.2 이상). 암호 목록은 Nginx 기본값(HIGH:!aNULL:!MD5)
+ssl_protocols TLSv1.2 TLSv1.3;
+# 같은 사용자의 재접속 때 TLS 협상을 줄인다 (10MB ≈ 세션 4만 개). 티켓은 키 교체가 없어 끈다
+ssl_session_cache shared:SSL:10m;
+ssl_session_timeout 1d;
+ssl_session_tickets off;
+
+# ---------- http → https 이동 (도메인 · www) ----------
+server {
+    listen 80;
+    server_name __SERVER_DOMAIN__ www.__SERVER_DOMAIN__;
+    server_tokens off;
+
+    # 인증서 갱신(90일마다)도 http로 확인하므로 이 경로는 이동시키지 않는다
+    include /etc/nginx/snippets/acme-challenge.conf;
+
+    location / {
+        return 301 https://__SERVER_DOMAIN__$request_uri;
+    }
+}
+
+# ---------- https: 모르는 이름은 TLS 연결 자체를 거절 ----------
+# 443에 server가 도메인 것 하나뿐이면, IP로 직접 오거나 남의 도메인을 우리 IP로 돌린 요청에도
+# 우리 인증서와 앱이 응답한다(스캐너가 인증서로 도메인을 알아내고, 다른 이름으로 우리 서비스를 띄울 수 있다).
+# SNI(접속하려는 이름)가 아래 두 server_name이 아니면 인증서를 보내지 않고 연결을 끊는다
+server {
+    listen 443 ssl default_server;
+    ssl_reject_handshake on;
+}
+
+# ---------- https://www → 루트 ----------
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name www.__SERVER_DOMAIN__;
+    server_tokens off;
+
+    return 301 https://__SERVER_DOMAIN__$request_uri;
+}
+
+# ---------- https 앱 ----------
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name __SERVER_DOMAIN__;
+
+    # HSTS(브라우저에 "앞으로 https만" 기억시키기)는 아직 켜지 않는다. 인증서 갱신이 한 번 이상 문제없이 도는 것을 본 뒤
+    # 짧은 max-age부터 켠다 — 켠 뒤 인증서가 깨지면 사용자가 max-age 동안 접속하지 못한다 (docs/decisions/BE-75.md)
+
+    # http server와 같은 앱 설정 (/api 프록시 · Rate limit · SPA fallback)
+    include /etc/nginx/snippets/app.conf;
+}
