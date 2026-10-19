@@ -50,8 +50,69 @@ dependencies {
 	testAnnotationProcessor 'org.projectlombok:lombok'
 }
 
-tasks.named('test') {
+// 테스트는 전용 로컬 서비스만 사용한다. IDE 직접 실행은 TestEnvironmentGuard가 추가로 검사한다.
+def testDbUrl = providers.environmentVariable('TEST_DB_URL').getOrElse('jdbc:postgresql://127.0.0.1:55432/lawnambul_test')
+def testDbUsername = providers.environmentVariable('TEST_DB_USERNAME').getOrElse('lawnambul_test')
+def testDbPassword = providers.environmentVariable('TEST_DB_PASSWORD').getOrElse('lawnambul_test')
+def testRedisHost = providers.environmentVariable('TEST_REDIS_HOST').getOrElse('127.0.0.1')
+def testRedisPort = providers.environmentVariable('TEST_REDIS_PORT').getOrElse('56379')
+
+def testRuntimeProperties = [
+	'spring.profiles.active': 'test',
+	// 작업 디렉터리의 config/ 및 외부 설정 파일을 읽지 않는다.
+	'spring.config.location': 'classpath:/application.yml,classpath:/application-test.yml',
+	'spring.config.additional-location': '',
+	'spring.config.import': '',
+	'spring.datasource.url': testDbUrl,
+	'spring.datasource.username': testDbUsername,
+	'spring.datasource.password': testDbPassword,
+	'spring.flyway.url': testDbUrl,
+	'spring.flyway.user': testDbUsername,
+	'spring.flyway.password': testDbPassword,
+	'spring.flyway.enabled': 'true',
+	'spring.flyway.locations': 'classpath:db/migration,classpath:db/seed',
+	'spring.flyway.clean-disabled': 'true',
+	'spring.jpa.hibernate.ddl-auto': 'validate',
+	'redis.host': testRedisHost,
+	'redis.port': testRedisPort,
+	'redis.password': '',
+	'redis.cache-database': '0',
+	'redis.token-database': '1',
+	'admin.bootstrap.email': '',
+	'admin.bootstrap.password': '',
+	'rag.embedding.api-key': '',
+	'junit.jupiter.execution.parallel.enabled': 'false'
+]
+
+tasks.withType(Test).configureEach {
 	useJUnitPlatform()
+	maxParallelForks = 1
+	// 설정 단계 주입: 테스트 입력으로 추적해 접속 설정 변경 시 up-to-date 판정에도 반영한다.
+	systemProperties(testRuntimeProperties)
+	// 프로필보다 우선하는 환경변수와 JVM 옵션으로 연결 설정을 우회하지 못하게 한다.
+	// PATH/JAVA_HOME 등 실행에 필요한 나머지 환경은 보존한다. 값(비밀번호 등)은 출력하지 않는다.
+	setEnvironment(environment.findAll { key, value ->
+		def name = key.toUpperCase(Locale.ROOT)
+		!['SPRING_', 'DB_', 'REDIS_', 'FLYWAY_', 'ADMIN_BOOTSTRAP_', 'RAG_'].any { name.startsWith(it) } &&
+			!name.endsWith('_API_KEY') &&
+			!['DDL_AUTO', 'JAVA_TOOL_OPTIONS', 'JDK_JAVA_OPTIONS', '_JAVA_OPTIONS'].contains(name)
+	})
+	doFirst {
+		// URL 옵션/별칭/다중 호스트도 허용하지 않는다. 잘못된 TEST_* 값이면 JVM 시작 전에 실패한다.
+		if (!(testDbUrl ==~ /jdbc:postgresql:\/\/(127\.0\.0\.1|localhost):55432\/lawnambul_test/) ||
+			testDbUsername != 'lawnambul_test' || testDbPassword.isBlank()) {
+			throw new GradleException('테스트 DB는 localhost/127.0.0.1:55432의 lawnambul_test 및 전용 계정만 허용합니다. TEST_DB_* 설정을 확인하세요.')
+		}
+		if (!(testRedisHost in ['127.0.0.1', 'localhost']) || testRedisPort != '56379') {
+			throw new GradleException('테스트 Redis는 localhost/127.0.0.1:56379만 허용합니다. TEST_REDIS_* 설정을 확인하세요.')
+		}
+		if (jvmArgs.any { it ==~ /(?i)-D(spring\..*|redis\..*|admin\.bootstrap\..*|rag\..*)/ }) {
+			throw new GradleException('테스트 JVM의 연결/프로필 설정은 jvmArgs로 덮어쓸 수 없습니다.')
+		}
+		// 실행 직전 재주입: 뒤에 등록된 설정이 보호 속성을 바꿔도 검증한 값으로 되돌린다.
+		systemProperties(testRuntimeProperties)
+		logger.lifecycle('[test] 전용 PostgreSQL(:55432/lawnambul_test) · Redis(:56379), test 프로필 사용')
+	}
 }
 
 // 로컬 실행(./gradlew bootRun) 전용: Flyway 마이그레이션 위치를 자동으로 정한다 (BE-28)
@@ -59,7 +120,7 @@ tasks.named('test') {
 // - 기본: 스키마 + 가상 사건 시드(db/seed)
 // - 비공개 서브모듈(private-seed/seed)에 SQL이 있으면 실제 사건도 넣는다 (권한이 없으면 빈 폴더라 자동으로 빠진다)
 // - FLYWAY_LOCATIONS를 직접 주면 그 값을 그대로 쓴다
-// 운영(jar · Docker) · 테스트는 이 설정을 쓰지 않는다 → application.yml 기본값(스키마만) 그대로
+// 운영(jar · Docker)은 application.yml 기본값(스키마만), 테스트는 위 test 설정(스키마 + 공개 가상 시드)을 쓴다.
 // 참고: doFirst에서 file(...) · System.getenv를 실행 시점에 읽으므로 Gradle 설정 캐시(org.gradle.configuration-cache=true)와는 맞지 않는다.
 //       나중에 설정 캐시를 켜면 providers.environmentVariable(...) · layout.projectDirectory.dir(...)로 값을 미리 잡는 방식으로 바꾼다.
 tasks.named('bootRun') {
