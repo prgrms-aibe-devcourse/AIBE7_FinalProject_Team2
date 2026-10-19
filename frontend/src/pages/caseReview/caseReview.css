@@ -75,13 +75,17 @@
   .case-review-actions .primary-button { width: 100%; }
 }
 
-/* 팝업(8막 "리뷰하기" · 독자 엽서): 뒤 무대를 어둡게 가리고 같은 내용을 띄운다 */
+/* 날아오는 엽서(8막 "리뷰하기" · 독자 엽서, caseReviewPopup.js): 흰 상자 없이 대화상자 자체가 항공우편 엽서 한 장이다.
+   뒤 무대는 어둡게 가린다. 날아오고 돌아가는 움직임은 WAAPI(transform · opacity)로 한다 */
 body.case-review-open { overflow: hidden; }
-.case-review-layer { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 16px; background: color-mix(in srgb, var(--color-desk-shadow) 55%, transparent); animation: case-review-fade .25s ease-out; }
-.case-review-dialog { position: relative; width: min(640px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior: contain; padding: 20px 20px 18px; border-radius: 10px; outline: none;
-  background: var(--color-bg); color: var(--color-text); font: var(--text-body)/1.6 var(--font-body); box-shadow: 0 24px 48px -16px color-mix(in srgb, var(--color-desk-shadow) 80%, transparent); animation: case-review-rise .35s cubic-bezier(.2, .8, .2, 1); }
+.case-review-layer { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 16px; background: color-mix(in srgb, var(--color-desk-shadow) 55%, transparent); }
+.case-review-dialog { position: relative; width: min(640px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior: contain; padding: 22px 26px 20px; border: 8px solid transparent; border-radius: 6px; outline: none;
+  background: linear-gradient(color-mix(in srgb, var(--color-desk-kraft) 10%, var(--color-card)), color-mix(in srgb, var(--color-desk-kraft) 10%, var(--color-card))) padding-box,
+    repeating-linear-gradient(135deg, var(--color-accent) 0 12px, var(--color-card) 12px 20px, var(--color-caution) 20px 32px, var(--color-card) 32px 40px) border-box;
+  color: var(--color-text); font: var(--text-body)/1.6 var(--font-body); box-shadow: 0 24px 48px -16px color-mix(in srgb, var(--color-desk-shadow) 80%, transparent); }
+/* 엽서 안의 엽서는 겹 테두리 없이: 내 엽서는 엽서 면 그대로, 다른 독자 엽서는 점선으로 나눈 줄 */
+.case-review-dialog .case-review-card { padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+.case-review-dialog .case-review-card.is-reader { padding: 14px 0; border-top: 1px dashed var(--color-border-strong); }
+.case-review-dialog .case-review-subtitle { margin-top: 28px; padding-top: 16px; border-top: 2px solid var(--color-border-strong); }
 .case-review-close { display: block; margin: 18px 0 0 auto; }
-@keyframes case-review-fade { from { opacity: 0; } }
-@keyframes case-review-rise { from { opacity: 0; translate: 0 18px; scale: .96; } }
-@media (prefers-reduced-motion: reduce) { .case-review-layer, .case-review-dialog { animation: none; } }
-@media (max-width: 680px) { .case-review-layer { padding: 8px; } .case-review-dialog { max-height: calc(100dvh - 16px); padding: 14px 12px; } }
+@media (max-width: 680px) { .case-review-layer { padding: 8px; } .case-review-dialog { max-height: calc(100dvh - 16px); padding: 14px 12px; border-width: 6px; } }

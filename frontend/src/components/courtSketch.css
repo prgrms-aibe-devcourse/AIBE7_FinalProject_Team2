@@ -211,3 +211,5 @@ html:has(.comparison-full .stage-wrap:not(.reading-paper)) { overflow: hidden; }
 @media (hover: hover) and (pointer: fine) { .comparison-full .stage-wrap.reading-paper .sheet-ad.is-clickable:hover { background: color-mix(in srgb, var(--color-desk-kraft) 16%, transparent); } }
 /* 다른 사건 보기(플립): 신문이 옆으로 선 순간부터 앞면 기사를 감춰 빈 뒷면만 보인다(comparisonStage.js foldToList) */
 .comparison-full .stage-wrap.reading-paper .sheet.is-flipped > * { visibility: hidden; }
+/* 리뷰하기(FE-55): 2막처럼 남불이 앞으로 나서며 엽서를 건넨다(paperStage.css nambul-hand) */
+.comparison-full .stage-wrap .spr.b.delivering { animation: nambul-hand .75s cubic-bezier(.3, .7, .2, 1); }

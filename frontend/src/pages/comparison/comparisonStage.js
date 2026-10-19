@@ -152,14 +152,14 @@ function newspaper(data, script, caseTitle, navigate, openReview) {
   // 아래 편집부 의견은 그 첫인상을 실제 판결과 견줘 한 줄로 적는다(어느 쪽이 맞는지는 말하지 않는다).
   // 추후 확장(우선도 낮음): 사용자 데이터가 쌓이면 이 칸에 다른 독자들의 첫인상 분포를 함께 보여 줄 수 있다 — 지금은 데이터가 없어 보여 주지 않는다.
   const letter = element('div', 'sheet-letter');
-  // 엽서를 누르면 리뷰 팝업이 뜬다("리뷰하기" 버튼과 같다). 체험 중에는 누를 수 없고(아무 표시도 없다),
+  // 엽서를 누르면 이 엽서가 떠올라 리뷰 엽서로 펼쳐진다("리뷰하기" 버튼과 같은 내용). 체험 중에는 누를 수 없고(아무 표시도 없다),
   // "여기 남아있기"로 지면을 읽는 상태가 되면 stay()가 is-clickable을 붙여 연다
-  letter.addEventListener('click', () => { if (letter.classList.contains('is-clickable')) openReview(); });
+  letter.addEventListener('click', () => { if (letter.classList.contains('is-clickable')) openReview(letter); });
   letter.addEventListener('keydown', (event) => {
     if (!letter.classList.contains('is-clickable') || (event.key !== 'Enter' && event.key !== ' ')) return;
     event.preventDefault();
     event.stopPropagation();
-    openReview();
+    openReview(letter);
   });
   const letterMark = element('span', 'sheet-letter-mark');
   letterMark.setAttribute('aria-hidden', 'true');
@@ -243,7 +243,7 @@ export function renderComparisonStage({ script, data, caseId, caseTitle, navigat
   const steps = act.steps.filter((step) => editor || !step.text?.includes('{editor}'))
     .map((step) => (step.text ? { ...step, text: step.text.replace('{vsCourt}', vsCourt).replace('{vsAi}', vsAi).replace('{pre}', pre).replace('{editor}', editor ?? '') } : step));
   const narrow = window.matchMedia('(max-width: 680px)').matches;
-  const sheet = newspaper(data, script, caseTitle, navigate, () => openCaseReviewPopup({ caseId, api, navigate }));
+  const sheet = newspaper(data, script, caseTitle, navigate, (letter) => openCaseReviewPopup({ caseId, api, navigate, from: letter }));
   const stage = renderStage({
     script: { ...script, acts: { ...script.acts, 8: { ...act, steps } } },
     order: ['8'],
@@ -255,7 +255,7 @@ export function renderComparisonStage({ script, data, caseId, caseTitle, navigat
     choices: { end: [
       { label: '메인으로', action: () => toDesk(), primary: true }, // 판사의 책상(데스크톱 메인)
       { label: '여기 남아있기', action: () => stay() },
-      { label: '리뷰하기', action: () => openCaseReviewPopup({ caseId, api, navigate }) },
+      { label: '리뷰하기', action: () => openCaseReviewPopup({ caseId, api, navigate, from: stage.querySelector('.spr.b'), hand: true }) }, // 남불이 엽서를 건넨다
       { label: '공유하기', action: (note) => share(note, caseId) },
     ] },
     onRestart: restartMock(caseId),
