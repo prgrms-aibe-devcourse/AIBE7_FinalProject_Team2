@@ -298,8 +298,10 @@ def _request_json(url, headers, body, timeout, method="POST"):
     content_type = {"Content-Type": "application/json"} if data is not None else {}
     max_attempts, max_wait = _retry_policy["max_attempts"], _retry_policy["max_wait"]
     for attempt in range(1, max_attempts + 1):
+        # urllib 기본 User-Agent("Python-urllib/x.y")는 Groq 앞단 Cloudflare가 자동화 요청으로 보고
+        # 차단한다(403, Cloudflare error 1010). 일반적인 클라이언트처럼 보이게 지정한다 (BE-84 후속)
         request = urllib.request.Request(url, data=data, method=method,
-                                         headers={**content_type, **headers})
+                                         headers={"User-Agent": "tools/ai-judgment", **content_type, **headers})
         try:
             with urllib.request.urlopen(request, timeout=timeout, context=ssl_context()) as response:
                 raw = response.read()
