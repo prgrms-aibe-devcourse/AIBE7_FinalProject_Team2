@@ -2,6 +2,7 @@ import { button, element, renderSiteFooter, renderSiteHeader } from '../../compo
 import { casePhoto, fallbackImages, todayLabel } from '../../utils/newspaper.js';
 import { takePaper } from '../../utils/paperHandoff.js';
 import { flyCoffee } from '../../utils/coffeeDive.js';
+import { reducedMotion } from '../../utils/motion.js';
 
 // S-01 메인 — 판사의 책상 (FE-18, 시안 "B안 일러스트 · C안 구도", 논의기록 2026-10-12 S01 메인 책상 시안 결정)
 // 책상 위 물건이 곧 메뉴다: 신문 = 사건 목록(S-02), 서류철 = 판결 성향 테스트(S-15), 커피잔 = 마이페이지(S-17), 노트북 = 커뮤니티.
@@ -16,9 +17,9 @@ import { flyCoffee } from '../../utils/coffeeDive.js';
 // 책상 그림의 기준 좌표계. 화면 너비에 맞춰 통째로 줄인다(--desk-scale)
 const SCENE_WIDTH = 1672;
 
-// 물건(메뉴) 목록. route가 없으면 "곧 열려요"로 표시하고 누를 수 없다.
-// S-15 · S-17이 생기면 route에 화면 이름(routes.js의 name)만 넣으면 된다.
-// 메모지에는 제목만 적는다(FE-50). 준비 중인 물건만 손글씨로 "곧 열려요"를 덧붙인다
+// 물건(메뉴) 목록. route가 없으면 준비 중이라 누를 수 없다(낭독기에는 "준비 중"으로 읽힌다).
+// 화면이 생기면 route에 화면 이름(routes.js의 name)만 넣으면 된다.
+// 책상 위 물건에는 이름표(메모지)를 붙이지 않는다(FE-50). label은 낭독기 이름과 좁은 화면 메뉴 카드에 쓴다
 const OBJECTS = {
   folder: { label: '판결 성향 테스트', route: 'test', mobileText: '나의 판결 성향 알아보기' },
   news: { label: '실제 사건 판결 체험', route: 'list', mobileText: '오늘의 사건' },
@@ -39,7 +40,6 @@ let newsCache = null; // 사건 목록(API 1) 마지막 응답
 const LIFT_MS = 380; // 신문을 집어 드는 시간(landing.css .is-held와 같게). 그 뒤 지면이 아래에서 올라온다
 // 8막에서 "메인으로" 올 때: 보던 지면이 줌아웃(제자리에서 .82배)과 페이드아웃을 함께 하며 책상이 드러난다
 const FADE_MS = 800;
-const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 // 서비스 소개(FE-50): "뉴스만 본 나 → 모든 사실을 본 나"를 잇는 한 줄. 양 끝은 상태, 가운데 두 지점은 되돌릴 수 없는 판단이다
 const TRACK = [
@@ -94,16 +94,6 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
     return node;
   };
 
-  // 메모지(포스트잇). 물건이 준비 중이면 "곧 열려요"
-  function note(key) {
-    const { label, route } = OBJECTS[key];
-    const node = span(`desk-note note-${key}${route ? '' : ' is-soon'}`);
-    node.setAttribute('aria-hidden', 'true');
-    node.append(element('strong', '', label));
-    if (!route) node.append(element('em', '', SOON));
-    return node;
-  }
-
   // 물건 = 버튼. 준비 중이면 aria-disabled로 두고 누르지 않는다(포커스는 받아 "준비 중"을 읽게 한다)
   function deskObject(key, ...art) {
     const { label, route } = OBJECTS[key];
@@ -112,7 +102,7 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
     node.setAttribute('aria-label', route ? label : `${label} — 준비 중`);
     if (route) node.addEventListener('click', () => (ACTIONS[key] ?? (() => navigate(route)))(node));
     else node.setAttribute('aria-disabled', 'true');
-    node.append(...art, note(key));
+    node.append(...art);
     return node;
   }
 
@@ -247,7 +237,8 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
     lifting = true;
     flyCoffee(() => { if (root.isConnected) navigate('me', { from: 'mug' }); }, root);
   }
-  const ACTIONS = { news: lift, mug: sip };
+  // 서류철: 성향 검사 철이 화면 아래에서 올라온다(personality.css folder-rise). 헤더 · 서비스 소개 버튼으로 가면 연출 없이 바로 간다
+  const ACTIONS = { news: lift, mug: sip, folder: () => navigate('test', { from: 'desk' }) };
 
   // 기준 좌표계(1672px)를 화면 너비에 맞춘다
   const fit = () => world.style.setProperty('--desk-scale', String(scene.clientWidth / SCENE_WIDTH));
@@ -295,7 +286,7 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
       item.append(cup, element('strong', '', label), text);
     } else item.append(element('strong', '', label), text);
     if (key === 'mug') item.addEventListener('click', sip);
-    else if (route) item.addEventListener('click', () => navigate(route, key === 'news' ? { from: 'desk' } : {}));
+    else if (route) item.addEventListener('click', () => navigate(route, key === 'news' || key === 'folder' ? { from: 'desk' } : {}));
     else item.setAttribute('aria-disabled', 'true');
     mobileCounts[key] = text;
     mobileList.append(item);
@@ -333,7 +324,7 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
   sheet.append(heading, track, verdicts, introActions);
   intro.append(sheet);
 
-  root.append(renderSiteHeader({ navigate, onIntro: showIntro }), scene, mobile, intro, renderSiteFooter());
+  root.append(renderSiteHeader({ navigate }), scene, mobile, intro, renderSiteFooter());
   container.replaceChildren(root);
   fit();
   if (section === 'intro') showIntro();

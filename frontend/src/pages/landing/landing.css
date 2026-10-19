@@ -45,21 +45,18 @@
 
 /* ── 무대 ── */
 .landing-page .desk-scene { position: relative; aspect-ratio: 1672 / 941; max-width: 1672px; margin: 0 auto; overflow: hidden; }
-/* 신문 들기(FE-32): 신문이 책상에서 떠올라 살짝 기울고, 그림자는 길고 흐려진다. 메모지는 먼저 사라진다.
+/* 신문 들기(FE-32): 신문이 책상에서 떠올라 살짝 기울고, 그림자는 길고 흐려진다.
    이어서 지면(S-02)이 화면 아래에서 올라오고 책상은 그 뒤에서 흐려진다(FE-50, caseList.css .is-rising) */
 .landing-page .desk-object.obj-news { transition: transform .38s cubic-bezier(.2, .8, .2, 1); }
-.landing-page .desk-object.obj-news > :not(.desk-note) { transition: filter .38s ease-out; }
-.landing-page .desk-object.obj-news .desk-note { transition: opacity .2s ease-out; }
+.landing-page .desk-object.obj-news > * { transition: filter .38s ease-out; }
 .landing-page .obj-news.is-held { transform: translateY(-36px) scale(1.05) rotate(-3deg); } /* 평소 -1.5도에서 조금 더 기운다 */
 /* 점검 메모(성능, FE-32): 이 큰 그림자(drop-shadow) 전환은 신문이 클 때(약 600px) 전환 중 매 프레임 다시 그려서 저사양 폰에서 끊길 수 있다.
    아직 실제 폰으로 확인하지 못했다. 끊기면 그림자는 전환하지 말고 처음부터 두거나, 그림자 층을 따로 두고 opacity만 올린다 */
-.landing-page .obj-news.is-held > :not(.desk-note) { filter: drop-shadow(0 34px 26px color-mix(in srgb, var(--color-desk-shadow) 55%, transparent)); }
-.landing-page .obj-news.is-held .desk-note { opacity: 0; }
+.landing-page .obj-news.is-held > * { filter: drop-shadow(0 34px 26px color-mix(in srgb, var(--color-desk-shadow) 55%, transparent)); }
 /* 책상 위 내로 · 남불(장식, 볼을 괴고 엎드림) */
 .landing-page .desk-cheek { position: absolute; z-index: 3; width: auto; pointer-events: none; filter: var(--shadow-rest); }
 .landing-page .desk-world {
   --postit: 168px;   /* 내로를 가린 포스트잇 한 변 */
-  --note-size: 88px; /* 메뉴 메모지 한 변 */
   --shadow-rest: drop-shadow(9px 11px 7px color-mix(in srgb, var(--color-desk-shadow) 42%, transparent));
   position: absolute; left: 0; top: 0; width: 1672px; height: 941px;
   transform: scale(var(--desk-scale, 1)); transform-origin: 0 0;
@@ -85,7 +82,6 @@
   position: absolute; left: 46px; top: -7px; width: 14px; height: 230px; border-radius: 7px; transform: rotate(-24deg);
   background: linear-gradient(180deg, var(--color-desk-pen-gold) 0 5%, var(--color-desk-pen) 5% 46%, var(--color-desk-pen-gold) 46% 49%, var(--color-desk-pen) 49% 92%, var(--color-desk-pen-cap) 92%);
 }
-.landing-page .note-pen { left: 92px; top: 112px; --note-angle: -3deg; }
 /* 엽서(FE-50, 장식): 펜 옆 빈자리를 채운다. 펜이 그 위에 걸쳐 놓인다. 뒷면(우표 · 가운데 칸막이 · 주소 줄)이 위로 오게 둔다 */
 .landing-page .desk-postcard {
   position: absolute; left: 78px; top: 616px; width: 236px; height: 156px; padding: 14px 16px;
@@ -104,18 +100,13 @@
 /* FE-50: 책상 위 헤드라인은 없앴다. 화면 제목(h1)은 낭독기용으로만 남는다 */
 .landing-page .visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
-/* 포스트잇은 두 크기의 정사각형이다(FE-50): 내로를 가린 큰 한 장(--postit)과 메뉴 메모지(--note-size, 그 절반 남짓).
-   글자는 가운데에 둔다 */
-.landing-page :is(.desk-note, .desk-rescue) {
+/* 내로를 가린 포스트잇(FE-50, 놀이). 책상 위 유일한 포스트잇이다(메뉴 이름표 메모지는 없앴다). 누르면 떼어져 날아간다(landingPage.js).
+   정사각형에 윗부분(16%)은 접착면 띠, 글자는 가운데 */
+.landing-page .desk-rescue {
   --paper: var(--color-desk-note);
   position: absolute; border: 0;
   display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
-  background: var(--paper);
   box-shadow: -4px 6px 10px color-mix(in srgb, var(--color-desk-shadow) 35%, transparent);
-}
-
-/* 내로를 가린 포스트잇(FE-50, 놀이). 누르면 떼어져 날아간다(landingPage.js). 큰 장이라 윗부분(16%)에 접착면 띠를 둔다 */
-.landing-page .desk-rescue {
   left: 875px; top: 0; z-index: 4; width: var(--postit); height: var(--postit); padding: 22px 14px 10px;
   background: linear-gradient(180deg, color-mix(in srgb, var(--color-desk-shadow) 7%, var(--paper)) 0 16%, var(--paper) 16%);
   transform: rotate(4deg); cursor: pointer;
@@ -129,17 +120,11 @@
 }
 .landing-page .desk-object.is-soon { cursor: default; }
 .landing-page .desk-object:focus-visible { outline: 3px solid var(--color-range-fill); outline-offset: 8px; border-radius: 6px; }
-.landing-page .desk-object > :not(.desk-note) { filter: var(--shadow-rest); }
-
-/* 메모지(포스트잇): 물건의 이름표. 마우스를 올려도 모양은 그대로다(FE-50에서 밑줄을 없앴다). 키보드 포커스는 물건 테두리로 보인다 */
-.landing-page .desk-note {
-  z-index: 3; width: var(--note-size); height: var(--note-size); padding: 8px; gap: 2px;
-  transform: rotate(var(--note-angle, 3deg)); color: var(--color-desk-note-ink);
+.landing-page .desk-object > * { filter: var(--shadow-rest); transition: filter .2s ease-out; }
+/* 마우스를 올리면 물건이 아주 살짝 밝아진다(FE-50). 평면 일러스트라 들리거나 움직이지 않고 밝기만 바뀐다. 키보드 포커스는 테두리로 보인다 */
+@media (hover: hover) and (pointer: fine) {
+  .landing-page .desk-object:not(.is-held):hover > * { filter: var(--shadow-rest) brightness(1.06); }
 }
-.landing-page .desk-note strong { font: 700 15px/1.25 var(--font-body); letter-spacing: -.02em; color: var(--color-heading); text-wrap: balance; word-break: keep-all; }
-.landing-page .desk-note em { font: 400 20px/1.05 var(--font-hand); font-style: normal; color: var(--color-desk-note-pen); }
-.landing-page .desk-note.is-soon { --paper: var(--color-desk-note-soon); }
-.landing-page .desk-note.is-soon em { color: var(--color-border-strong); }
 
 /* 서류철 → 판결 성향 테스트 */
 /* FE-50: 소품 배치를 좌우로 뒤집었다(left = 1672 - 옛 left - 너비, 기울기는 부호만 바꿈). 그림 안의 글자는 뒤집지 않는다 */
@@ -158,7 +143,6 @@
   background: var(--color-desk-label); color: var(--color-heading); font: 400 27px/1.1 var(--font-hand);
   box-shadow: 0 1px 2px color-mix(in srgb, var(--color-desk-shadow) 25%, transparent);
 }
-.landing-page .note-folder { right: 18px; bottom: -21px; --note-angle: 4deg; }
 
 /* 신문 → 사건 목록 (S-02 머리기사로 채운다) */
 /* 실제 신문처럼 세로로 긴 비율(FE-50, 약 1 : 1.21). 더 길게 하면 높이 800px 안팎 노트북 화면에서 신문 아래 · 메모지가 첫 화면 밖으로 나간다 */
@@ -206,7 +190,6 @@
 .landing-page .news-rec b { margin-bottom: .35em; font: 700 1.3em/1.35 var(--font-heading); color: var(--color-heading); word-break: keep-all; }
 .landing-page .news-rec span { font: 400 1em/1.5 var(--font-article); text-align: justify; word-break: break-all; color: var(--color-desk-news-ink-soft);
   display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
-.landing-page .note-news { left: -76px; bottom: 40px; --note-angle: -3deg; } /* 첫 화면 안에 들도록 신문 왼쪽 아래 모서리에 걸친다(아래 기사 제목을 가리지 않게) */
 
 /* 노트북 → 커뮤니티 (바닥 오른쪽 아래 모서리를 기준으로 -29도 돌려 놓는다).
    그대로 뒤집으면(left 0) 왼쪽 정렬된 첫 말풍선이 책상 밖으로 잘려서 30px 안쪽에 둔다 */
@@ -235,7 +218,6 @@
   box-shadow: inset 0 0 0 3px var(--color-desk-metal-line);
 }
 .landing-page .laptop-trackpad { position: absolute; left: 115px; right: 115px; bottom: 16px; height: 72px; border-radius: 9px; background: var(--color-desk-metal-pad); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-desk-shadow) 12%, transparent); }
-.landing-page .note-laptop { right: 20px; top: 352px; --note-angle: 3deg; } /* 노트북 오른쪽 아래 모서리에 붙인다 */
 
 /* 커피잔 → 마이페이지 (FE-44). 위에서 내려다본 잔. 누르면 utils/coffeeDive.js의 커다란 잔이 날아온다 */
 .landing-page .obj-mug { left: 1437px; top: 25px; width: 120px; height: 120px; border-radius: 50%; }
@@ -252,9 +234,6 @@
   content: ''; position: absolute; right: -25%; top: 51.7%; width: 33.3%; height: 25%;
   border: 9px solid var(--color-desk-mug); border-left: 0; border-radius: 0 18px 18px 0; transform: rotate(24deg);
 }
-/* 메모지는 잔 밑에 깔려 있다: 버튼이 쌓임 맥락을 만들고 메모지만 그 안에서 잔 아래로 내린다 */
-.landing-page .obj-mug { z-index: 1; }
-.landing-page .note-mug { right: -52px; top: 108px; z-index: -1; --note-angle: 4deg; }
 
 
 /* ── 좁은 화면: 책상 대신 메뉴 카드 ── */
@@ -309,7 +288,7 @@
 .landing-page .site-footer { background: var(--color-desk-floor); border-top: 0; color: var(--color-desk-text); }
 
 @media (prefers-reduced-motion: reduce) {
-  .landing-page .desk-scene, .landing-page .desk-object.obj-news, .landing-page .desk-object.obj-news > :not(.desk-note), .landing-page .desk-object.obj-news .desk-note { transition: none; }
+  .landing-page .desk-object, .landing-page .desk-object > * { transition: none; }
 }
 
 @media (max-width: 720px) {

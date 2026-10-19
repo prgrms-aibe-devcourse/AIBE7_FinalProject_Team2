@@ -5,6 +5,7 @@
 
 import { scrollArea } from './scrollArea.js';
 import { sheetCamera } from './sheetCamera.js';
+import { reducedMotion } from '../utils/motion.js';
 
 // 화면에 보이는 막(FE-48, 6막): 대본 · 코드의 막 번호(1 ~ 8)는 그대로 두고 보이는 묶음만 바꾼다.
 // 대본 1 · 2막 = 1막 첫인상, 4막(판결 전 정리)은 3막 파일철 "사건 요약" 장으로 옮겨 칩이 없다. 주소 · 막 번호 정리는 BE-82
@@ -105,7 +106,6 @@ function takeJump() {
   } catch { return null; }
 }
 
-const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 // 신문 지면 무대(layout 'paper')의 카메라: 지면이 곧 화면이라 옮기지 않고, 고른 기사만 또렷하게 두고 그 기사가 보이게 화면을 굴린다.
 // 아래쪽에 고정된 대사창(dock)이 가리는 부분을 빼고 그 위 공간 가운데에 맞춘다(기사가 그 공간보다 길면 기사 위쪽에 맞춘다)

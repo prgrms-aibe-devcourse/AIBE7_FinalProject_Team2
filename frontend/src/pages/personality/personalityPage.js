@@ -2,6 +2,7 @@ import { button, element } from '../../components/siteLayout.js';
 import { imageOf } from '../../components/stage.js';
 import { PERSONALITY_LINES } from '../../content/personalityLines.js';
 import { guide, markFolderTurn, renderFolder, sheetMessage } from './personalityParts.js';
+import { reducedMotion } from '../../utils/motion.js';
 
 // S-15 판결 성향 테스트 — 시작 안내 + 문항 (WBS 7.6.1 콘텐츠 · 7.6.5 화면, FE-42 디자인). 한 화면에 한 문항, 5칸 선택지.
 // 결과 전까지는 이전 문항으로 돌아가 답을 바꿀 수 있다(user-flow 3-2). 문항 문구에는 법률 용어를 쓰지 않는다.
@@ -18,7 +19,6 @@ const SCALE = [
 ];
 const ADVANCE_MS = 260; // 고른 칸이 칠해지는 것을 보고 넘어가도록
 const MIN_LOADING_MS = 900; // 결과 분석 연출(user-flow 3-2)이 깜빡이고 사라지지 않도록
-const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
 // 안내 캐릭터 + 문항별 한 줄 대사(content/personalityLines.js). 앞 절반은 내로, 뒤 절반은 남불(대사에 적힌 캐릭터가 우선).
 // 시작 · 절반 · 마지막만 자세가 바뀐다
@@ -45,15 +45,18 @@ function preload(src) {
 // 답안 칸의 펜 체크 표시
 const CHECK_SVG = '<svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M4 10.5 L8.2 14.5 L16 5.5"/></svg>';
 
-export async function renderPersonalityPage(container, { api, navigate }) {
+export async function renderPersonalityPage(container, { api, navigate, from }) {
   // 검사지는 철을 가로로 눕혀 둔다. 문항과 표지 그림을 먼저 받아 두고 철을 그려, 올라오는 동안 시작 화면이 이미 보이게 한다(personality.css)
   let root, label, body;
   const active = () => container.contains(root);
   const here = window.location.pathname;
   const stillHere = () => window.location.pathname === here; // 문항을 받는 사이 다른 화면으로 가면 새 화면을 덮어쓰지 않는다
   const keys = new AbortController(); // 숫자 키 단축키. 화면을 떠나면 뗀다
+  // 책상의 서류철에서 왔으면 철이 아래에서 올라온다. 표시는 바로 지워 새로고침 · 뒤로 가기로는 되풀이하지 않는다
+  const rise = from === 'desk';
+  if (rise) history.replaceState({ ...history.state, extras: {} }, '');
   const openFolder = () => {
-    ({ root, label, body } = renderFolder(container, { navigate, sheetLabel: '문항지', orientation: 'landscape' }));
+    ({ root, label, body } = renderFolder(container, { navigate, sheetLabel: '문항지', orientation: 'landscape', rise }));
     root.classList.add('is-test');
   };
   const fetchQuestions = async () => {

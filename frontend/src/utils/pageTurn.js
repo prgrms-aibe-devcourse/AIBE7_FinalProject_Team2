@@ -3,9 +3,9 @@
 // 쓰는 곳: S-02 기사 클릭(→ S-20), S-02 유형 탭 바꾸기. 호출하는 쪽이 "다음 면"을 바로 그려 두면, 이 한 장이 걷히며 드러난다.
 // 움직임은 transform · opacity 하나라 레이아웃을 다시 계산하지 않는다. 움직임 줄이기면 넘어가는 대신 이전 면이 0.2초 동안 흐려지며 다음 면이 드러난다(바뀌었다는 단서는 남긴다).
 // 본뜬 지면은 장식이다(inert · aria-hidden, 눌러도 아무 일도 없다).
+import { reducedMotion } from './motion.js';
 
 const TURN_MS = 1000; // 기사 → 상세처럼 한 번 가는 이동. 자주 누르는 탭 바꾸기는 호출하는 쪽이 duration을 짧게 준다(0.5초)
-const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 function div(className) {
   const node = document.createElement('div');

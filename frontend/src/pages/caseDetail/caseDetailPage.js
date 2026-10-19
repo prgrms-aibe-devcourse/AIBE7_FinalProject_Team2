@@ -2,6 +2,7 @@ import { button, element } from '../../components/siteLayout.js';
 import { screenByStatus } from '../../utils/screenByStatus.js';
 import { caseStage, mountStagePage, scriptFor } from '../overview/overviewPage.js';
 import { caseInfoEar, caseNewspaper, earButton, paperFromCase } from '../../components/newspaperFront.js';
+import { reducedMotion } from '../../utils/motion.js';
 
 // S-20 사건 디테일 (확장, IA v1.12 · FE-32). 신문 지면(S-02)에서 고른 기사를 한 장 넘기면 나오는 신문 안쪽 면이다
 // (흐름 목업 ③ "사건 정보를 읽는다"). 형량 · 판결 정보는 없다. 모든 사건이 같은 지면(components/newspaperFront.js caseNewspaper)을 쓴다.
@@ -19,7 +20,6 @@ const ACTIONS = {
   COMPLETED: { label: '결과 다시 보기', failText: '결과를 열지 못했어요. 잠시 후 다시 시도해 주세요.' },
 };
 const NOT_STARTED = { label: '시작하기', failText: '체험을 시작하지 못했어요. 잠시 후 다시 시도해 주세요.' };
-const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 export async function renderCaseDetailPage(container, { caseId, api, navigate, from }) {
   const root = element('div', 'case-detail-page');

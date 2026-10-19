@@ -354,7 +354,7 @@ export async function renderMyPage(container, { api, navigate, view, from }) {
   const root = element('div', 'my-page');
   container.replaceChildren(root);
   const active = () => container.contains(root);
-  root.append(renderSiteHeader({ navigate, onIntro: () => navigate('landing', { section: 'intro' }) }));
+  root.append(renderSiteHeader({ navigate }));
   const main = element('main', 'my-main');
   root.append(main);
   const shown = VIEWS[view] ? view : null;
