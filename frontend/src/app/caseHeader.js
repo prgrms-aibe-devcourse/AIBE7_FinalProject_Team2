@@ -11,7 +11,9 @@ const cache = new Map();
 /** 사건 목록 응답(API 1)에서 사건 제목과 죄명을 기억해 둔다 */
 export function rememberFromList(data) {
   for (const item of data?.cases ?? []) {
-    cache.set(item.caseId, { caseId: item.caseId, title: item.title, chargeName: item.chargeName ?? '' });
+    // 목록에 죄명이 없으면(구버전 서버 등) 이미 알고 있는 값을 지킨다
+    const chargeName = item.chargeName ?? cache.get(item.caseId)?.chargeName ?? '';
+    cache.set(item.caseId, { caseId: item.caseId, title: item.title, chargeName });
   }
 }
 
