@@ -172,6 +172,33 @@ class JpaMappingTest {
 	}
 
 	@Test
+	@DisplayName("관리자가 축을 확정해도 투표 기록 · 요약어 후보의 모르는 키를 보존한다 (BE-81)")
+	void confirmValueAxis_keepsUnknownKeysInPipelineJsonb() {
+		jdbc.update("""
+			UPDATE factor SET
+			    value_axis_votes = '{"runs": 3, "counts": {"NONE": 3}, "needsReview": false, "futureKey": "x"}'::jsonb,
+			    summary_tag_candidates = '{"candidates": [{"tag": "흉기 사용", "score": 0.93, "rank": 1}],
+			        "inVocabulary": true, "ambiguous": false, "suggested": null, "futureKey": 1}'::jsonb
+			WHERE id = ?""", overviewFactorId);
+		Map<String, Object> originalJsonb = jdbc.queryForMap("""
+			SELECT value_axis_votes::text, summary_tag_candidates::text
+			FROM factor WHERE id = ?""", overviewFactorId);
+
+		Factor factor = factorRepository.findById(overviewFactorId).orElseThrow();
+		factor.confirmValueAxis(ValueAxis.FAULT_STANDARD);
+		factorRepository.flush();
+		em.clear();
+
+		Factor confirmed = factorRepository.findById(overviewFactorId).orElseThrow();
+		assertThat(confirmed.getValueAxis()).isEqualTo(ValueAxis.FAULT_STANDARD);
+		assertThat(confirmed.getValueAxisStatus()).isEqualTo(ValueAxisStatus.CONFIRMED);
+		// 엔티티에는 없는 최상위 키와 후보 내부 rank까지 DB 원본 전체가 그대로여야 한다.
+		assertThat(jdbc.queryForMap("""
+			SELECT value_axis_votes::text, summary_tag_candidates::text
+			FROM factor WHERE id = ?""", overviewFactorId)).isEqualTo(originalJsonb);
+	}
+
+	@Test
 	@DisplayName("판단 요소의 요약어 후보를 읽는다, 없으면 null (BE-80)")
 	void findById_factorSummaryTagCandidates_readsJson() {
 		jdbc.update("""
