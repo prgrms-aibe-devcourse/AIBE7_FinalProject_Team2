@@ -17,6 +17,7 @@
 | v2.9 | 2026-10-17 | API 키 `.env` 파일 지원 (BE-86) — 4장에 `.env` 안내 추가. COMMON-40 모델 비교 테스트의 선행 작업 |
 | v2.10 | 2026-10-19 | **generate 모델을 `gemini:gemini-3.7-flash`로 고정** (COMMON-40) — 가상 테스트 사건 2건 × 후보 모델 16개로 비교한 근거는 [COMMON-40 의사결정 기록](decisions/COMMON-40.md). 3장 ④ · 8장 구현 상태 갱신 |
 | v2.11 | 2026-10-19 | COMMON-40 테스트 중 찾은 Groq 호출 차단 버그(Cloudflare가 기본 User-Agent를 자동화 요청으로 차단, BE-84 후속 PR #185로 수정) 4장에 추가 |
+| v2.12 | 2026-10-19 | 2장 전체 흐름 표의 ④ generate "모델" 칸이 "여러 모델"로만 돼 있어 v2.10의 모델 고정 결정과 어긋났다. `gemini:gemini-3.7-flash` 고정 결정(설정 반영 전)을 반영하고 Jira 칸에 COMMON-40 추가 |
 
 > 이 문서는 **개요**다. 명령 · 옵션 · 설정 값의 정확한 기준은 [`tools/ai-judgment/README.md`](../tools/ai-judgment/README.md)와 [`case-extractor/README.md`](../tools/ai-judgment/case-extractor/README.md)다. 문서와 코드가 다르면 도구 README와 코드를 따른다.
 > 이 문서는 사건 내용을 담지 않는다. 예시는 모두 설명용이다.
@@ -65,7 +66,7 @@ MVP는 AI 판결을 **오프라인에서 생성 · 검수한 결과를 DB에 적
 | ② | court | 마스킹한 원문 → 재판부 판결 초안 (요약 · 이유 · 쉬운 설명 · 발췌 · 요소별 방향과 근거) | 위와 같음 (없으면 ①의 모델) | 원문 인용 불일치 · 주문 형량 불일치 · 개인정보 잔존 | BE-38, 45 |
 | ③ | contamination | 사건 개요 · 죄명 → 모델이 사건을 아는지 판정 | 생성에 쓸 모델 | `CONTAMINATED` 등 (설정) | BE-37, 44 |
 | ③-1 | rag | 사건 개요 → 양형기준 · 유사 판례 참고 자료 | `gemini-embedding-001` (검색어 임베딩만) | `required: true`인데 참고 자료를 못 만듦 (기본은 기존 참고 자료로 대체) | BE-54 |
-| ④ | generate | 사건 입력 (+ ③-1 참고 자료) → AI 판결 JSON, 검증 | 설정한 모델 여러 개 × `runs`회 | 검증을 통과한 회차 없음 | BE-30, 44, 54 |
+| ④ | generate | 사건 입력 (+ ③-1 참고 자료) → AI 판결 JSON, 검증 | 설정한 모델(들) × `runs`회. **`gemini:gemini-3.7-flash` 하나로 고정 결정(COMMON-40), 설정 반영 전**이라 지금은 여전히 여러 모델을 줄 수 있다 | 검증을 통과한 회차 없음 | BE-30, 44, 54, COMMON-40 |
 | ⑤ | select | 통과 회차 → 한 건 | — | 통과 회차 없음 | BE-31 |
 | ⑥ | load | 선택 회차 + 사건 + 재판부 초안 → SQL | — | 제목 · 요소 불일치 등 | BE-31, 38 |
 
