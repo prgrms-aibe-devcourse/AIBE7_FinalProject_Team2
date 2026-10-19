@@ -3,8 +3,8 @@
    문항 = 찬반 토론 지면(A | B 두 단, 가운데 세로 괘선), 답 = 점선으로 둘린 독자 설문 응모권. 기존 성향 테스트 철(personality.css)과는 다른 화면이다 */
 .tp-page { min-height: 100dvh; padding: 28px 0 40px; overflow-x: clip; perspective: 2400px; background: var(--color-stage-news); } /* 8막 읽기 화면의 바탕(무대 색)과 같다 */
 /* 8막 읽기 화면의 지면(courtSketch.css .reading-paper .sheet)과 같은 폭 · 같은 자리에 놓인다 — 넘긴 뒷면이 그 자리에 그대로 이어진다.
-   세로는 8막 마지막 신문 지면과 비슷한 길이(가로의 1.4배). 내용은 위쪽에 있고 아래는 빈 지면이다 */
-.tp-sheet { --u: min(10px, calc((100vw - 32px) / 118)); width: calc(var(--u) * 118); min-height: calc(var(--u) * 165); margin: 0 auto; padding: calc(var(--u) * 2.4) calc(var(--u) * 4.6) calc(var(--u) * 4.4);
+   세로는 화면 높이의 1.2배(조금 스크롤해 아래를 볼 수 있게, 넓은 화면에서 빈 지면이 너무 길지 않게). 내용이 더 길면 내용만큼 */
+.tp-sheet { --u: min(10px, calc((100vw - 32px) / 118)); width: calc(var(--u) * 118); min-height: calc((100dvh - 28px) * 1.2); margin: 0 auto; padding: calc(var(--u) * 2.4) calc(var(--u) * 4.6) calc(var(--u) * 4.4);
   background: var(--color-desk-news); color: var(--color-text); transform-origin: 0 50%;
   box-shadow: 0 10px 26px -8px color-mix(in srgb, var(--color-desk-shadow) 60%, transparent); }
 /* 화면별 CSS가 각자 숨김 규칙을 둔다(personality.css와 같은 꼴) */
