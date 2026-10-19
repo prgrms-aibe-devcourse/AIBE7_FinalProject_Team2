@@ -2,9 +2,11 @@ import { button, element, renderSiteFooter } from '../../components/siteLayout.j
 import { casePhoto } from '../../utils/newspaper.js';
 import { newspaperMasthead } from '../../components/newspaperFront.js';
 import { turnPage } from '../../utils/pageTurn.js';
+import { reducedMotion } from '../../utils/motion.js';
+import { peelOff } from '../../utils/peelOff.js';
 
 // S-02 사건 목록 — 신문 1면 (FE-18, 시안 v12 + 배치 조정). 유형 필터 · 오류 처리 로직은 FE-4 · FE-11과 같다.
-// 흐름 목업 ②(FE-32): 책상에서 집어 든 신문이다. 위에 남불의 안내와 "신문 내려놓기"(S-01)가 있고, 기사를 누르면
+// 흐름 목업 ②(FE-32): 책상에서 집어 든 신문이다. 위에 남불의 안내 포스트잇(누르면 떼어짐, FE-50)이 있고, 기사를 누르면
 // 신문 한 장이 넘어가며(2.5D, utils/pageTurn.js) 그 밑에서 사건 정보(S-20)가 드러난다. 유형 탭을 누르면 같은 방식으로 한 장이 넘어가 다른 유형의 기사가 드러난다 — 체험 시작 · 이어서 하기는 S-20에서 한다(API 명세 5장 S-02 확장). Esc는 책상으로.
 // 목록은 처음 판단(S-03) 전 화면이라 사건 정보는 S-03 개요 범위를 넘지 않는다: 제목 · 짧은 소개 · 키워드 · 분류 · 참여 수와,
 // 개요 범위 안에서 쓴 기사(headline · deck · article). S-04 이후에 공개되는 사실(다툼 기간 · 횟수 · 양형 요소 등)은 기사에도 쓰지 않는다.
@@ -45,7 +47,7 @@ const PICK_LABEL = '사건 펼쳐 보기';
 const JUMP_LABEL = '3면에 계속'; // 신문의 이어 읽기 줄(jump line). 누르면 사건 지면(S-20, 3면)으로 간다
 // shortcut: 캐릭터 얼굴은 원본 이미지 레포 PNG를 직접 읽는다(무대와 같음), 웹 webp 변환(WBS 7.6.8) 때 public 경로로 옮긴다
 const NAMBUL_FACE = 'https://raw.githubusercontent.com/peanutboi710/NaeLawNamBul_Images/main/character/cuts/nambul/icon/nambul_icon_face-happy.png';
-const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const RISE_WAIT_MS = 1200; // 책상에서 들고 올 때 지면이 다 그려지기를 기다리는 최대 시간(그동안 책상은 신문을 든 채로 남아 있다)
 const headlineOf = (item) => item.headline || item.title;
 function dense(paragraphs) {
   const node = element('div', 'dense');
@@ -56,15 +58,22 @@ function dense(paragraphs) {
 // S-02 사건 목록
 export async function renderCaseListPage(container, { api, navigate, from }) {
   const root = element('div', 'case-list-page');
+  // 메인 책상에서 신문을 들고 온 경우(FE-50): 책상 화면을 뒤에 남겨 두었다가 지면이 아래에서 올라오는 동안 흐려지며 걷는다(성향 검사 서류철과 같은 방식)
+  const ghost = from === 'desk' && !reducedMotion() && container.querySelector('.landing-page') ? element('div', 'paper-ghost') : null;
+  if (ghost) {
+    ghost.setAttribute('aria-hidden', 'true');
+    ghost.inert = true;
+    ghost.append(...container.childNodes);
+  }
   container.replaceChildren(root);
   // 컨테이너가 다른 화면으로 바뀌면 이전 요청은 그 화면을 덮어쓰지 않는다.
   const active = () => container.contains(root);
   let selected;
   let picking = false;
-  // 책상에서 신문을 집어 들고 왔으면 지면이 한 번 다가오며 나타난다. 새로고침 · 뒤로 가기로는 되풀이하지 않는다
+  // 책상에서 왔으면 메인 책상에서는 지면이 아래에서 올라오고, 좁은 화면 메뉴 · 비교 화면에서는 한 번 다가오며 나타난다. 새로고침 · 뒤로 가기로는 되풀이하지 않는다
   if (from === 'desk') {
     history.replaceState({ ...history.state, extras: {} }, '');
-    if (!reducedMotion()) root.classList.add('is-arriving');
+    if (!reducedMotion()) root.classList.add(ghost ? 'is-rising' : 'is-arriving');
   }
 
   const desk = element('div', 'desk');
@@ -75,18 +84,48 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
   const paperNote = element('p', 'paper-note', '이 지면의 사건과 기사는 판결 체험을 위해 재구성한 것이며, 사진은 AI로 생성한 연출 이미지입니다.');
   paper.append(newspaperMasthead({ navigate, earRight }), main, paperNote, renderSiteFooter());
 
-  // 남불의 안내 + 신문 내려놓기(책상으로). 지면 위쪽 가장자리에 붙인 메모지
-  const tip = element('div', 'paper-tip');
+  // 남불의 안내. 지면 왼쪽 위에 붙인 정사각형 포스트잇(지면과 함께 움직인다). 누르면 떼어져 날아간다(FE-50, 메인 책상의 내로 포스트잇과 같은 놀이).
+  // 책상으로 돌아가는 길은 정보 줄의 "← 처음으로"와 Esc가 맡는다
+  const tip = element('button', 'paper-tip');
+  tip.type = 'button';
   const face = element('img');
   face.src = NAMBUL_FACE;
   face.alt = '';
   face.addEventListener('error', () => face.remove(), { once: true });
-  const tipText = element('p', 'paper-tip-text');
+  const tipText = element('span', 'paper-tip-text');
   const tipLine = element('span', '', '마음이 가는 기사를 눌러 보세요!');
-  tipText.append(element('b', '', '남불'), tipLine);
-  tip.append(face, tipText, button('신문 내려놓기', () => navigate('landing'), 'paper-tip-back'));
-  paper.prepend(tip); // 남불의 안내는 지면 위쪽에 붙인 메모(지면과 함께 움직인다)
+  tipText.append(element('b', '', '남불'), tipLine, element('span', 'visually-hidden', '(눌러서 떼기)'));
+  tip.append(face, tipText);
+  tip.addEventListener('click', () => peelOff(tip, {
+    from: 'none',
+    to: 'translate(-60px, -140px) rotate(-28deg)',
+    // 목록을 아직 불러오는 중이면 첫 탭 대신 본문(main)이 포커스를 받는다
+    focusTarget: () => main.querySelector('button') ?? Object.assign(main, { tabIndex: -1 }),
+  }));
+  paper.prepend(tip);
   root.append(desk, paper);
+  if (ghost) root.insertBefore(ghost, paper);
+  // 지면은 머리기사부터 다 그려지고 첫 사진들이 준비된 뒤 한 번에 올라온다(올라오는 도중 아래 기사가 채워지며 끊기지 않게).
+  // 사건 목록이 늦으면 RISE_WAIT_MS에서 기다리기를 멈추고 올린다. 다 올라오면 뒤에 남긴 책상을 걷는다
+  async function rise(loaded) {
+    const ready = loaded.then(() => Promise.all([...main.querySelectorAll('.front-grid img, .recs img')].map((image) => {
+      image.loading = 'eager';
+      return image.decode().catch(() => {});
+    })));
+    await Promise.race([ready, new Promise((done) => { window.setTimeout(done, RISE_WAIT_MS); })]);
+    if (!active()) return;
+    let timer = 0;
+    const drop = () => { // 한 번만: 올라오는 애니메이션이 끝나면 뒤에 남긴 책상과 표시를 걷는다
+      window.clearTimeout(timer);
+      paper.removeEventListener('animationend', onEnd);
+      ghost.remove();
+      root.classList.remove('is-rising', 'is-going');
+    };
+    const onEnd = (event) => { if (event.target === paper && event.animationName === 'paper-rise') drop(); };
+    paper.addEventListener('animationend', onEnd);
+    timer = window.setTimeout(drop, 2000); // animationend가 오지 않아도 걷는다
+    root.classList.add('is-going');
+  }
 
   // Esc: 신문을 내려놓고 책상으로(목업과 같은 한 단계 뒤로)
   function onKey(event) {
@@ -302,5 +341,7 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
     else showError(() => load(crimeType));
   }
 
-  await load(undefined);
+  const loaded = load(undefined);
+  if (ghost) rise(loaded);
+  await loaded;
 }

@@ -4,6 +4,7 @@ import { SCRIPTS } from '../../content/scripts.js';
 import { API_MODE } from '../../api/config.js';
 import courtFacts from '../../content/courtFacts.json';
 import { caseNewspaper, paperFromCase } from '../../components/newspaperFront.js';
+import { reducedMotion } from '../../utils/motion.js';
 
 function element(tag, className, text) {
   const node = document.createElement(tag);
@@ -114,7 +115,7 @@ export function caseStage({ caseId, api, navigate, script, info, paper = script.
     mark.append(element('b', '', '접수 완료'), element('small', '', '내Law남불 신문 편집부'));
     sendingCard.append(mark);
     sendingCard.classList.add('is-sent');
-    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) await new Promise((resolve) => setTimeout(resolve, 900));
+    if (!reducedMotion()) await new Promise((resolve) => setTimeout(resolve, 900));
   }
 
   // 독자 의견 엽서 머리(제목 · 받는 곳 · 우표)

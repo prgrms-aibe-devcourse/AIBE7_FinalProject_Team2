@@ -1,6 +1,7 @@
 import { button, element, renderSiteHeader } from '../../components/siteLayout.js';
 import { imageOf } from '../../components/stage.js';
 import { CHARACTER_NAMES } from '../../utils/personalityAxes.js';
+import { reducedMotion } from '../../utils/motion.js';
 
 // S-15 · S-16 · 공유된 결과(/test/types/{shareId})가 함께 쓰는 조각 (FE-42).
 // 화면 = 메인 책상의 서류철(성향 테스트)을 들어 올려 펼친 모습: 펠트 위 크라프트 철, 철 안에 종이 한 장.
@@ -11,8 +12,8 @@ import { CHARACTER_NAMES } from '../../utils/personalityAxes.js';
 // 공유 화면에는 개인 응답 · 축 점수를 넣지 않는다(FR-8-6).
 // 4글자 코드(INTP 등)와 축 글자(E · I 등)는 화면에 보이지 않는다(상표 우려, 10/13). 공유 주소는 해시 값({shareId})이다.
 
-// 서류철 틀. sheetLabel = 종이 머리 칸의 서식 이름(문항지 · 결과지 등). 반환: { root, tabs, label, body }
-export function renderFolder(container, { navigate, sheetLabel, orientation = 'portrait' }) {
+// 서류철 틀. sheetLabel = 종이 머리 칸의 서식 이름(문항지 · 결과지 등). rise = 메인 책상의 서류철을 눌러 들고 왔는지(철이 아래에서 올라온다, FE-50). 반환: { root, tabs, label, body }
+export function renderFolder(container, { navigate, sheetLabel, orientation = 'portrait', rise = false }) {
   const root = element('div', `personality-page is-${orientation}`);
   const desk = element('div', 'personality-desk');
   desk.setAttribute('aria-hidden', 'true');
@@ -25,15 +26,16 @@ export function renderFolder(container, { navigate, sheetLabel, orientation = 'p
   sheet.append(label, body);
   folder.append(sheet);
   binder.append(tabs, folder);
-  root.append(desk, renderSiteHeader({ navigate, onIntro: () => navigate('landing', { section: 'intro' }) }), binder);
-  // 책상(메인)에서 검사지를 들고 온 경우: 책상 화면을 뒤에 남겨 두었다가 철이 올라오는 동안 흐려지며 걷는다
-  const ghost = orientation === 'landscape' && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches && container.querySelector('.landing-page')
+  root.append(desk, renderSiteHeader({ navigate }), binder);
+  // 책상(메인)에서 검사지를 들고 온 경우: 책상 화면을 뒤에 남겨 두었다가 철이 올라오는 동안 흐려지며 걷는다. 헤더 등으로 오면(rise 없음) 연출 없이 바로 보인다
+  const ghost = rise && orientation === 'landscape' && !reducedMotion() && container.querySelector('.landing-page')
     ? element('div', 'personality-ghost') : null;
   if (ghost) {
     ghost.setAttribute('aria-hidden', 'true');
     ghost.inert = true;
     ghost.append(...container.childNodes);
     root.insertBefore(ghost, binder);
+    root.classList.add('is-rising');
     const drop = () => ghost.remove();
     ghost.addEventListener('animationend', drop);
     window.setTimeout(drop, 2000); // animationend가 오지 않아도 걷는다

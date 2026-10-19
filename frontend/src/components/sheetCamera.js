@@ -3,10 +3,10 @@
 // 옮길 때는 지금 배율에서 다음 배율로 곧장 간다 — 큰 기사로 가면 줌아웃만, 작은 기사로 가면 줌인만(중간에 물러났다 들어가지 않는다).
 // 움직임은 transform 하나라 레이아웃을 다시 계산하지 않는다.
 // 예외 하나: from을 주면 그 요소가 무대를 꽉 채운 장면에서 시작해 한 번 빠져나온다(7막 법정 → 8막 신문 사진)
+import { reducedMotion } from '../utils/motion.js';
 
 const EASE = 'cubic-bezier(.45, 0, .2, 1)';
 const MAX_SCALE = 1.15;
-const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const css = ({ s, x, y }) => `translate(${x}px, ${y}px) scale(${s})`;
 
 /**

@@ -14,11 +14,12 @@
 .personality-desk { position: fixed; inset: 0; z-index: -1; background: var(--color-banner-bg) url('/images/desk-felt.webp') center / cover no-repeat; }
 .personality-desk::after { content: ''; position: absolute; inset: 0; background: var(--color-banner-bg); opacity: .55; }
 /* 공통 헤더: 메인 책상과 같은 네이비 띠. 위에 얹어 두고(철 위치는 그대로) 철이 올라올 때 가려지지 않게 한다 */
-.personality-page .site-header { position: absolute; top: 0; left: 0; right: 0; z-index: 1; background: var(--color-banner-bg); border-bottom: 0; padding: 4px 32px; }
+.personality-page .site-header { position: fixed; top: 0; left: 0; right: 0; z-index: 50; background: var(--color-banner-bg); border-bottom: 0; padding: 4px 32px; }
 .personality-page .site-header button { font: inherit; cursor: pointer; }
 .personality-page .site-header .logo-button { color: var(--color-banner-text); font-size: 22px; }
 .personality-page .site-header .logo-button .law { display: inline; color: var(--color-range-fill); }
 .personality-page .nav-button { color: var(--color-banner-muted); font-size: var(--text-small); }
+.personality-page .site-header .nav-button[aria-current="page"] { color: var(--color-banner-text); }
 @media (hover: hover) and (pointer: fine) { .personality-page .nav-button:hover { color: var(--color-banner-text); text-decoration: underline; text-underline-offset: 4px; } }
 .personality-page .site-header button:focus-visible { outline-color: var(--color-range-fill); }
 /* 공통 푸터(법적 고지)는 펠트 위에 그대로 */
@@ -209,7 +210,7 @@
 
 /* ── 움직임: 검사지 서류철이 아래에서 올라오는 순간 · 문항이 넘어가는 순간 · 철을 돌려 세우는 순간 · 결과 카드가 놓이는 순간만 ── */
 @media (prefers-reduced-motion: no-preference) {
-  .is-test .test-binder { animation: folder-rise 1.15s cubic-bezier(.22, 1, .36, 1) backwards; }
+  .is-test.is-rising .test-binder { animation: folder-rise 1.15s cubic-bezier(.22, 1, .36, 1) backwards; }
   .personality-ghost { animation: ghost-out .95s ease-in .1s forwards; }
   .test-question-main { animation: test-turn .3s cubic-bezier(.2, .8, .2, 1); }
   .answer-cell.is-fresh svg path { stroke-dasharray: 24; animation: test-check .28s ease-out both; } /* 방금 답한 칸만 펜으로 긋는다 */
@@ -226,8 +227,8 @@
   30% { transform: translate(var(--turn-x, 0px), var(--turn-y, -147px)) rotate(-90deg) scale(calc(var(--turn-sx, 1) * 1.02), calc(var(--turn-sy, 1) * 1.02)); }
 }
 @keyframes folder-content-in { 0%, 72% { opacity: 0; } 100% { opacity: 1; } }
-/* 시작 화면과 같은 크기의 철(반응형 폭 그대로, 확대 없음)이 화면 아래에서 세워진 채(-90°) 올라오며 눕는다(0°). 이전 책상 화면은 그 사이 페이드아웃 */
-@keyframes folder-rise { from { transform: translateY(calc(100vh + 100%)) rotate(-90deg); } }
+/* 시작 화면과 같은 크기의 철(반응형 폭 그대로, 확대 없음)이 화면 아래에서 세워진 채(90°) 올라오며 눕는다(0°). FE-50에서 도는 방향을 반대로(+90°, 시계 반대 방향으로 눕는다). 이전 책상 화면은 그 사이 페이드아웃 */
+@keyframes folder-rise { from { transform: translateY(calc(100vh + 100%)) rotate(90deg); } }
 @keyframes ghost-out { to { opacity: 0; } }
 @keyframes test-turn { from { opacity: .35; translate: var(--enter-x, 14px) 0; filter: blur(2px); } }
 @keyframes test-check { from { stroke-dashoffset: 24; } to { stroke-dashoffset: 0; } }

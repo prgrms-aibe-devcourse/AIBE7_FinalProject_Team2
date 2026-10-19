@@ -12,12 +12,12 @@ import { restartMock, jumpActMock } from '../overview/overviewPage.js';
 import { editorNote } from '../../utils/preJudgmentCompare.js';
 import { handPaper } from '../../utils/paperHandoff.js';
 import { castOf } from '../../utils/myPageView.js';
+import { reducedMotion } from '../../utils/motion.js';
 
 const SUBJECTS = [['USER', '내 판결'], ['AI', 'AI 판결'], ['COURT', '실제 판결']];
 const DIRECTIONS = { UP: ['무겁게', 'up'], DOWN: ['가볍게', 'down'] };
 const STAY_ZOOM_MS = 700;
 const FOLD_MS = 450; // 다른 사건 보기: 신문을 위로 접어 넘기는 시간 // 여기 남아있기: 당겨 보던 지면이 전체 지면으로 줄어드는 시간
-const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 function element(tag, className, text) {
   const node = document.createElement(tag);

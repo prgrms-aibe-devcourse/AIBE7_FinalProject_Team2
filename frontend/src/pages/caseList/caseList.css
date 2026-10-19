@@ -189,19 +189,21 @@
 }
 
 /* ── 흐름 목업 ② (FE-32): 책상에서 집어 든 신문 ── */
-/* 남불의 안내 + 신문 내려놓기. 지면 위에 붙어 스크롤을 따라온다 */
+/* 남불의 안내: 지면 왼쪽 위(정보 줄 · 왼쪽 귀)에 비스듬히 붙인 정사각형 포스트잇(FE-50, 지면과 함께 움직인다).
+   메인 책상의 내로 포스트잇처럼 윗부분(16%)이 접착면 띠이고, 누르면 떼어져 날아간다(caseListPage.js) */
 .case-list-page .paper-tip {
-  /* 남불의 안내: 지면 위쪽 가장자리에 비스듬히 붙인 메모지(지면과 함께 움직인다). 정보 줄 가운데의 빈 곳에 걸친다 */
-  position: absolute; z-index: 5; top: -18px; left: 50%; translate: -50% 0; rotate: -1.2deg; display: flex; align-items: center; gap: 10px;
-  width: min(500px, 60%); padding: 8px 10px 8px 12px; border-radius: 2px; background: var(--color-desk-note); color: var(--color-desk-note-ink);
-  box-shadow: 0 8px 14px -8px color-mix(in srgb, var(--color-desk-shadow) 60%, transparent);
+  position: absolute; z-index: 5; top: -16px; left: 22px; rotate: -3deg;
+  display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto 1fr; align-items: center; align-content: start; gap: 6px 8px;
+  width: 184px; aspect-ratio: 1; padding: 30px 16px 12px; border: 0; text-align: left; cursor: pointer; color: var(--color-desk-note-ink);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--color-desk-shadow) 7%, var(--color-desk-note)) 0 16%, var(--color-desk-note) 16%);
+  box-shadow: -4px 6px 10px color-mix(in srgb, var(--color-desk-shadow) 35%, transparent);
 }
-.case-list-page .paper-tip::before { content: ''; position: absolute; top: -7px; left: 50%; width: 64px; height: 16px; translate: -50% 0; rotate: 2deg; background: color-mix(in srgb, var(--color-card) 55%, transparent); box-shadow: 0 1px 2px color-mix(in srgb, var(--color-desk-shadow) 20%, transparent); }
-.case-list-page .paper-tip img { width: 36px; height: 36px; flex: none; border-radius: 50%; background: var(--color-stage-face); object-fit: cover; object-position: top; }
-.case-list-page .paper-tip-text { flex: 1; margin: 0; font: 400 19px/1.25 var(--font-hand); word-break: keep-all; }
-.case-list-page .paper-tip-text b { display: block; font: 700 12px/1.4 var(--font-body); color: var(--color-desk-note-pen); }
-.case-list-page .paper-tip-back { min-height: 44px; flex: none; padding: 0 6px; border: 0; background: transparent; color: var(--color-desk-note-pen); font-size: var(--text-caption); font-weight: 700; white-space: nowrap; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
-@media (hover: hover) and (pointer: fine) { .case-list-page .paper-tip-back:hover { color: var(--color-desk-note-ink); } }
+.case-list-page .paper-tip:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 4px; }
+.case-list-page .paper-tip img { width: 34px; height: 34px; flex: none; border-radius: 50%; background: var(--color-stage-face); object-fit: cover; object-position: top; }
+.case-list-page .paper-tip-text { display: contents; } /* 이름은 얼굴 옆, 안내 문장은 그 아래 한 칸 전체 */
+.case-list-page .paper-tip-text b { font: 700 12px/1.4 var(--font-body); color: var(--color-desk-note-pen); }
+.case-list-page .paper-tip-text > span:not(.visually-hidden) { grid-column: 1 / -1; align-self: start; font: 400 21px/1.3 var(--font-hand); word-break: keep-all; }
+.case-list-page .visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .case-list-page .masthead { padding-top: 34px; } /* 메모지가 걸치는 자리 */
 
 /* 기사 고르기: 마우스를 올리면 기사가 살짝 밝아지고 이어 읽기 줄에 밑줄이 생긴다. 고르면 지면이 한 장 넘어간다(utils/pageTurn.js) */
@@ -211,16 +213,25 @@
 .case-list-page.is-picking .paper-tip { opacity: 0; pointer-events: none; }
 .case-list-page .is-picked { outline: 3px solid var(--color-heading); outline-offset: 4px; }
 
-/* 책상에서 집어 들고 오면 지면이 한 번 다가오며 나타난다(S-01 신문 확대의 이어짐) */
+/* 좁은 화면 메뉴 · 비교 화면에서 신문을 들고 오면 지면이 한 번 다가오며 나타난다 */
 .case-list-page.is-arriving .paper { animation: paper-arrive .5s cubic-bezier(.2, .8, .2, 1); }
 @keyframes paper-arrive { from { opacity: 0; transform: scale(.94); } }
+/* 메인 책상에서 들고 오면(FE-50) 지면이 화면 아래에서 들린 기울기(-3도) 그대로 올라오며 바로 서고, 뒤에 남긴 책상(.paper-ghost)은 흐려진다 */
+.case-list-page.is-rising { overflow: clip; } /* 아래에 내려가 있는 지면이 쪽을 늘리지 않게 */
+.case-list-page .paper-ghost { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.case-list-page.is-rising .paper-ghost { animation: paper-ghost-out .8s ease-in .15s forwards; }
+.case-list-page.is-rising .paper { animation: paper-rise .9s cubic-bezier(.22, 1, .36, 1) backwards; will-change: transform; }
+/* 지면이 다 그려질 때까지(.is-going 전) 지면은 화면 아래에, 책상은 그대로 멈춰 둔다 — 지면 전체가 한 번에 올라온다 */
+.case-list-page.is-rising:not(.is-going) :is(.paper, .paper-ghost) { animation-play-state: paused; }
+@keyframes paper-rise { from { transform: translateY(100vh) rotate(-3deg); } }
+@keyframes paper-ghost-out { to { opacity: 0; } }
 
 @media (hover: none) {
   .case-list-page .is-pickable:hover { background-color: transparent; outline: 0; }
 }
 @media (max-width: 720px) {
-  .case-list-page .paper-tip { position: relative; top: auto; left: auto; translate: none; rotate: -.6deg; width: auto; margin: 10px 0 0; }
-  .case-list-page .paper-tip::before { display: none; }
+  .case-list-page .paper-tip { position: relative; top: auto; left: auto; rotate: -.6deg; width: 100%; aspect-ratio: auto; margin: 10px 0 0; padding: 18px 12px 10px; }
+  .case-list-page .paper-tip-text > span:not(.visually-hidden) { grid-column: 2; } /* 좁은 화면은 가로 띠로 둔다 */
   .case-list-page .masthead { padding-top: 0; }
   .case-list-page .paper { background: var(--color-paper); }
   .case-list-page .paper:is(.case-paper, .inner-page)::after { width: 24px; } /* 좁은 화면은 제본 그늘을 얇게(본문을 덮지 않게) */

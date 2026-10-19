@@ -129,10 +129,6 @@ body {
   --palette-screen-300: #a6afc2;
   --palette-screen-400: #8f99ad;
   --palette-screen-500: #7c869b;
-  --palette-phone-900: #11151d;
-  --palette-phone-700: #262c3a;
-  --palette-phone-800: #1a1f2a;
-  --palette-phone-edge: #3a3f4a;
   --palette-mug: #f4efe7;
   --palette-mug-rim: #e6dfd4;
   --palette-coffee-cream: #faf3e8;
@@ -151,7 +147,6 @@ body {
   --palette-note: #f3e3b3;
   --palette-note-ink: #2b2414;
   --palette-note-pen: #5b4210;
-  --palette-note-soon: #ddd6c6;
   --palette-news: #ece2d4;
   --palette-news-sheet-1: #d9ccba;
   --palette-news-sheet-2: #e4d8c8;
@@ -192,10 +187,6 @@ body {
   --color-desk-screen-light: var(--palette-screen-300);
   --color-desk-screen: var(--palette-screen-400);
   --color-desk-screen-dark: var(--palette-screen-500);
-  --color-desk-phone: var(--palette-phone-900);
-  --color-desk-phone-glass: var(--palette-phone-700);
-  --color-desk-phone-glass-dark: var(--palette-phone-800);
-  --color-desk-phone-edge: var(--palette-phone-edge);
   --color-desk-mug: var(--palette-mug);
   --color-desk-mug-rim: var(--palette-mug-rim);
   --color-desk-coffee-light: var(--palette-coffee-300);
@@ -207,7 +198,6 @@ body {
   --color-desk-note: var(--palette-note);          /* 메모지(포스트잇) */
   --color-desk-note-ink: var(--palette-note-ink);
   --color-desk-note-pen: var(--palette-note-pen);
-  --color-desk-note-soon: var(--palette-note-soon);/* 준비 중 메모지 */
   --color-desk-news: var(--palette-news);          /* 책상 위 신문 */
   --color-desk-news-sheet-1: var(--palette-news-sheet-1);
   --color-desk-news-sheet-2: var(--palette-news-sheet-2);
@@ -293,12 +283,24 @@ h1 { font-family: var(--font-heading); color: var(--color-heading); letter-spaci
 /* 공통 사이트 헤더 · 푸터 (siteLayout.js의 renderSiteHeader · renderSiteFooter).
    S-01 · S-02 · S-14 · 라우터 푸터(S-03 ~ S-09)가 모두 쓰는 유일한 정의다. 화면 CSS에 같은 규칙을 다시 두지 않는다.
    특정 화면만 다르게 해야 하면 그 화면 CSS에 .landing-page .site-header처럼 화면 클래스로 감싸서 추가한다. */
-.site-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 28px; border-bottom: 1px solid var(--color-border); }
-.site-nav { display: flex; gap: 8px; }
+/* FE-50: 스크롤과 상관없이 화면 위에 고정한다(sticky — 자리는 그대로 차지해 아래 내용이 가려지지 않는다). 전환 연출 층(z-index 1000)보다는 아래 */
+.site-header { position: sticky; top: 0; z-index: 50; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 28px; border-bottom: 1px solid var(--color-border); background: var(--color-bg); }
+.site-nav { display: flex; align-items: center; gap: 8px; }
+.site-header .nav-button[aria-current="page"] { color: var(--color-text); box-shadow: inset 0 -2px 0 currentColor; } /* 지금 보고 있는 메뉴 */
+.site-header .nav-button[aria-disabled="true"] { cursor: default; opacity: .6; }
+.site-header .nav-button[aria-disabled="true"]:hover { text-decoration: none; }
 /* 화면 CSS의 button { font: inherit } 보다 우선하도록 .site-header를 붙인다 */
 .site-header .logo-button { border: 0; background: transparent; padding: 6px 0; font-family: var(--font-heading); font-size: 20px; font-weight: 900; letter-spacing: -.04em; color: var(--color-heading); }
 .nav-button { border: 0; background: transparent; padding: 10px 12px; min-height: 44px; color: var(--color-muted); }
 .nav-button:hover { color: var(--color-text); }
+/* 로그인(FE-50): 메뉴 맨 오른쪽, 얇은 테두리로 계정 동작임을 구분한다. 테두리는 글자색을 따라가 네이비 · 흰 헤더 모두에 맞는다 */
+.site-header .login-button { margin-left: 4px; padding: 6px 14px; min-height: 36px; border: 1px solid color-mix(in srgb, currentColor 45%, transparent); border-radius: 6px; }
+/* 연출 스위치(FE-50, utils/motion.js): "연출" 글자 + 작은 스위치. 색은 글자색을 따라간다 */
+.site-header .motion-switch { display: inline-flex; align-items: center; gap: 8px; }
+.site-header .switch-track { position: relative; display: block; width: 30px; height: 18px; border: 1px solid color-mix(in srgb, currentColor 55%, transparent); border-radius: 9px; transition: background-color .15s ease-out; }
+.site-header .switch-thumb { position: absolute; top: 2px; left: 2px; display: block; width: 12px; height: 12px; border-radius: 50%; background: currentColor; transition: translate .15s ease-out; }
+.site-header .motion-switch[aria-checked="true"] .switch-track { background: color-mix(in srgb, currentColor 22%, transparent); }
+.site-header .motion-switch[aria-checked="true"] .switch-thumb { translate: 12px 0; }
 .site-footer { padding: 24px 28px; border-top: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-muted); font-size: 13px; }
 @media (max-width: 720px) {
   .site-header { padding: 12px 16px; }
@@ -356,4 +358,12 @@ button, [role="button"] { -webkit-user-select: none; user-select: none; -webkit-
 @media (prefers-reduced-motion: no-preference) {
   :is(.primary-button, .secondary-button, .ear-button, .paper-start button, .dlg-choices button):not(:disabled) { transition: scale .12s cubic-bezier(.2, .8, .2, 1); }
   :is(.primary-button, .secondary-button, .ear-button, .paper-start button, .dlg-choices button):not(:disabled):active { scale: .96; }
+}
+
+/* 연출 끄기(FE-50, utils/motion.js): 헤더의 "연출" 스위치를 끄면 <html data-motion="off">가 된다.
+   CSS 애니메이션 · 전환을 지우지 않고 길이만 0으로 만들어, 끝 상태(fill)는 그대로 두고 animationend · transitionend도 바로 오게 한다.
+   JS 연출은 reducedMotion()으로 따로 건너뛴다. 기기의 "동작 줄이기"는 각 화면 CSS의 prefers-reduced-motion이 그대로 맡는다 */
+:root[data-motion="off"] *, :root[data-motion="off"] *::before, :root[data-motion="off"] *::after {
+  animation-duration: 0s !important; animation-delay: 0s !important; animation-iteration-count: 1 !important;
+  transition-duration: 0s !important; transition-delay: 0s !important; scroll-behavior: auto !important;
 }
