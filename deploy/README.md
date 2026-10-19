@@ -234,6 +234,7 @@ sudo certbot certificates                                # 서버의 인증서 �
 | --- | --- |
 | 로그 `⚠ … 인증서가 없어 http만 연다` | 발급 전이면 정상. 발급했다면 `.env`의 `LETSENCRYPT_LIVE_DIR` · `LETSENCRYPT_ARCHIVE_DIR`가 빠져 빈 볼륨이 붙은 것 → 값을 넣고 위 2) 명령 (둘 중 archive만 빠져도 링크가 끊겨 "없음"으로 보인다) |
 | 로그 `SERVER_DOMAIN이 없어 http만 연다` | `.env`에 `SERVER_DOMAIN`이 없다 |
+| 로그 `⚠ https 설정 검사(nginx -t) 실패` | 인증서는 있지만 Nginx가 읽지 못했다(인증서 · 개인키 쌍 불일치, 깨진 파일 등). **http는 정상으로 뜬다.** 바로 아래 줄의 nginx 오류 메시지를 보고 `sudo certbot certificates`로 인증서 상태를 확인한 뒤, 필요하면 다시 발급하고 `restart web` |
 | certbot `Timeout during connect` | 보안 그룹 80이 닫혀 있거나 DNS가 다른 IP를 가리킨다 (`dig +short naelawnambul.today`) |
 | certbot `unauthorized` · `404` | `CERTBOT_WEBROOT`가 빠져 확인 파일이 컨테이너에 안 보인다 → 위 2) · 3) 다시 |
 | certbot `too many failed authorizations` | 실패를 반복해 1시간 제한. 이후에는 `--dry-run`으로 먼저 확인한다 |
