@@ -53,6 +53,7 @@ public final class TestEnvironmentGuard
 			&& List.of("localhost", "127.0.0.1").contains(value(binder, "redis.host", ""))
 			&& "56379".equals(value(binder, "redis.port", ""))
 			&& "validate".equals(value(binder, "spring.jpa.hibernate.ddl-auto", ""))
+			&& "true".equals(value(binder, "spring.flyway.enabled", ""))
 			&& "true".equals(value(binder, "spring.flyway.clean-disabled", ""))
 			&& MIGRATIONS.equals(binder.bind("spring.flyway.locations", Bindable.listOf(String.class))
 				.orElse(List.of()))

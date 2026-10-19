@@ -79,6 +79,19 @@ class TestEnvironmentGuardTest {
 	}
 
 	@Test
+	void rejectsDisabledFlyway() {
+		assertBlocked(safeEnvironment().withProperty("spring.flyway.enabled", "false"));
+	}
+
+	@Test
+	void rejectsFlywayDisabledByEnvironmentVariable() {
+		MockEnvironment environment = safeEnvironment();
+		environment.getPropertySources().addFirst(new SystemEnvironmentPropertySource("systemEnvironment",
+			Map.of("SPRING_FLYWAY_ENABLED", "false")));
+		assertBlocked(environment);
+	}
+
+	@Test
 	void rejectsUnsafeMigrationDdlAndBootstrapSettings() {
 		assertBlocked(safeEnvironment().withProperty("spring.flyway.locations", "filesystem:/not-a-real-seed"));
 		assertBlocked(safeEnvironment().withProperty("spring.flyway.clean-disabled", "false"));
@@ -138,6 +151,7 @@ class TestEnvironmentGuardTest {
 			.withProperty("spring.datasource.username", "lawnambul_test")
 			.withProperty("redis.host", "127.0.0.1").withProperty("redis.port", "56379")
 			.withProperty("spring.jpa.hibernate.ddl-auto", "validate")
+			.withProperty("spring.flyway.enabled", "true")
 			.withProperty("spring.flyway.clean-disabled", "true")
 			.withProperty("spring.flyway.locations", "classpath:db/migration,classpath:db/seed");
 		environment.setActiveProfiles("test");
