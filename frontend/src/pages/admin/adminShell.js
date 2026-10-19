@@ -1,5 +1,6 @@
 import { button, element } from '../../components/siteLayout.js';
 import { loadAdminApi } from './adminApi.js';
+import { labeledField } from './adminKit.js';
 import { errorText } from './adminLabels.js';
 import { ADMIN_MENU, isMenuReady } from './adminMenu.js';
 import { clearUser, isAdmin } from '../../utils/session.js';
@@ -78,10 +79,8 @@ export async function renderAdminShell(container, { navigate, title, section, dr
     Object.assign(email, { type: 'email', name: 'email', autocomplete: 'username', required: true, maxLength: 100 });
     const password = element('input');
     Object.assign(password, { type: 'password', name: 'password', autocomplete: 'current-password', required: true, maxLength: 100 });
-    const emailLabel = element('label', 'admin-field');
-    emailLabel.append(element('span', '', '이메일'), email);
-    const passwordLabel = element('label', 'admin-field');
-    passwordLabel.append(element('span', '', '비밀번호'), password);
+    const emailLabel = labeledField('이메일', email);
+    const passwordLabel = labeledField('비밀번호', password);
     const error = element('p', 'admin-error');
     error.setAttribute('role', 'alert');
     if (notice) error.textContent = notice;
