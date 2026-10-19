@@ -18,8 +18,11 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.crypto.factory.PasswordEncoderFactories;
+import org.springframework.security.crypto.argon2.Argon2PasswordEncoder;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.DelegatingPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import java.util.Map;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.AnonymousAuthenticationFilter;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
@@ -135,10 +138,16 @@ public class SecurityConfig {
 		return (HttpServletRequest request) -> !SAFE_METHODS.contains(request.getMethod());
 	}
 
-	/** 비밀번호 해시. {bcrypt} 접두어가 붙어 나중에 알고리즘을 바꿔도 기존 해시를 읽는다 */
+	/**
+	 * 비밀번호 해시. {argon2} 접두어로 인코딩한다(OWASP 1순위 권장, BE-90 비교 선정 — docs/decisions/BE-90.md).
+	 * {bcrypt} 접두어가 붙은 기존 해시도 계속 검증할 수 있도록 함께 등록한다
+	 */
 	@Bean
 	public PasswordEncoder passwordEncoder() {
-		return PasswordEncoderFactories.createDelegatingPasswordEncoder();
+		Map<String, PasswordEncoder> encoders = Map.of(
+			"argon2", Argon2PasswordEncoder.defaultsForSpringSecurity_v5_8(),
+			"bcrypt", new BCryptPasswordEncoder());
+		return new DelegatingPasswordEncoder("argon2", encoders);
 	}
 
 	/** 관리자 비밀번호 로그인. 계정 없음 · 비활성 · 비밀번호 불일치는 모두 같은 실패로 처리한다(로그인 API) */
