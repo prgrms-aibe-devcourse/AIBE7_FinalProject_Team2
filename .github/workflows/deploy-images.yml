@@ -118,7 +118,9 @@ jobs:
           echo "백엔드가 2분 안에 뜨지 않았다"; exit 1
 
       - name: Smoke test
-        run: ./deploy/smoke-test.sh http://localhost
+        # SMOKE_REQUIRE_ACME=1: Let's Encrypt 확인 경로가 404인지 실패로 검사한다 (BE-75). 서버의 deploy.sh는 되돌림 때
+        # BE-75 이전 이미지도 검사하므로 경고만 하고, 새 이미지만 검사하는 CI에서 막는다 (deploy/smoke-test.sh)
+        run: SMOKE_REQUIRE_ACME=1 ./deploy/smoke-test.sh http://localhost
 
       # 배포 확인용 버전 파일 (BE-60): 이 커밋이 들어 있고, 캐시 금지여야 verify-deploy job이 운영 반영을 판단할 수 있다
       - name: Check version.json
@@ -201,7 +203,9 @@ jobs:
   # 1) /version.json이 이 커밋이 될 때까지 기다린다 (서버 확인 주기 2분 + 이미지 받기 + 기동 대기 + 실패 시 되돌림까지 15분)
   # 2) 바뀌면 운영 주소로 스모크 테스트
   # 시간 안에 안 바뀌면 실패로 표시한다 — 원인은 서버 로그(journalctl -u lawnambul-cd)에 있다 (배포 실패 → 되돌림, 토큰 만료 등)
-  # 운영 주소는 저장소 변수 DEPLOY_URL(예: http://<탄력적 IP>)에 둔다. 비어 있으면 확인을 건너뛴다(배포 자체는 서버가 한다)
+  # 운영 주소는 저장소 변수 DEPLOY_URL에 둔다. 비어 있으면 확인을 건너뛴다(배포 자체는 서버가 한다)
+  # HTTPS 적용 후(BE-75)에는 https://<도메인>으로 둔다. http://<도메인>은 https로 이동(301)해 확인이 실패한다
+  # (http://<탄력적 IP>는 이동하지 않아 그대로 동작하지만, 인증서 · https 경로를 확인하지 못한다)
   verify-deploy:
     name: Verify production deploy
     needs: publish

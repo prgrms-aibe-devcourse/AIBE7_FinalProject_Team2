@@ -1,6 +1,6 @@
 import { button, element } from '../../components/siteLayout.js';
 import { REPORT_ACTION, REPORT_REASON, REPORT_STATUS, TARGET_TYPE } from './adminLabels.js';
-import { PAGE_SIZE, badge, createLoader, dataTable, errorLine, formatDate, pageTop, pager, reasonForm, tabBar } from './adminKit.js';
+import { PAGE_SIZE, badge, createLoader, dataTable, errorLine, formatDate, labeledField, pageTop, pager, reasonForm, tabBar } from './adminKit.js';
 import { renderAdminShell } from './adminShell.js';
 
 // 신고 관리 (A-28 ~ A-30). 처리 대기 → 처리(숨김 · 정지 · 경고) 또는 기각. 처리한 신고는 이력으로 남는다.
@@ -44,8 +44,7 @@ export function renderAdminReportsPage(container, { navigate }) {
         Object.entries(REPORT_ACTION)
           .filter(([key]) => (key === 'SUSPEND' ? row.targetType === 'MEMBER' : key === 'HIDE' ? row.targetType !== 'MEMBER' : true))
           .forEach(([value, text]) => { const option = element('option', '', text); option.value = value; choose.append(option); });
-        const chooseField = element('label', 'admin-field');
-        chooseField.append(element('span', '', '처리 방법'), choose);
+        const chooseField = labeledField('처리 방법', choose);
         const resolve = reasonForm({ label: '처리 메모 (300자 이하)', submitText: '처리하기', maxLength: 300, extra: [{ name: 'action', node: chooseField, read: () => choose.value }], onSubmit: async (note, { action }) => { await api.resolveReport(row.reportId, { action, note }); await load(); } });
         const reject = reasonForm({ label: '기각 사유 (300자 이하)', submitText: '기각하기', maxLength: 300, onSubmit: async (note) => { await api.rejectReport(row.reportId, note); await load(); } });
         const buttons = element('div', 'admin-actions');

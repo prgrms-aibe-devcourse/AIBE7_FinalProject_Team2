@@ -1,4 +1,4 @@
-// 운영 메뉴 화면(회원 · 게시글 · 신고 · 관리자 계정 · 공지)이 함께 쓰는 작은 부품.
+// 관리자 화면(회원 · 게시글 · 신고 · 관리자 계정 · 공지 · 사건 등록 · 사건 검수)이 함께 쓰는 작은 부품.
 // 값은 모두 textContent로 넣는다(회원이 쓴 글에 HTML이 섞여도 실행되지 않게).
 import { button, element } from '../../components/siteLayout.js';
 import { errorText } from './adminLabels.js';
@@ -111,8 +111,7 @@ export function reasonForm({ label, submitText, maxLength = 200, extra = [], onS
   const form = element('form', 'admin-reject');
   form.hidden = true;
   const reason = Object.assign(element('textarea'), { rows: 2, maxLength, required: true });
-  const field = element('label', 'admin-field');
-  field.append(element('span', '', label), reason);
+  const field = labeledField(label, reason);
   const error = errorLine();
   const send = element('button', 'secondary-button', submitText);
   send.type = 'submit';
@@ -174,4 +173,52 @@ export async function runAction({ trigger, errorTarget, action, onDone, active, 
     errorTarget.textContent = errorText(failure, '요청을 처리하지 못했어요.');
     trigger.disabled = false;
   }
+}
+
+/**
+ * 목록 아래에 펼치는 상세 보기 틀: 불러오는 중 → 그리기 → 오류 문구. 열 때마다 화면 안으로 스크롤한다.
+ * @returns {{ node: HTMLElement, show: (id) => Promise<void> }}
+ */
+export function detailPanel({ fetcher, draw, failText, active, unauthorized }) {
+  const node = element('section', 'admin-section admin-detail');
+  node.hidden = true;
+  let seq = 0;
+  async function show(id) {
+    const mine = ++seq; // 나중에 연 상세가 이긴다: 먼저 연 상세의 늦은 응답은 버린다 (createLoader와 같은 방식)
+    node.hidden = false;
+    node.replaceChildren(element('p', 'admin-message', '불러오는 중이에요.'));
+    try {
+      const data = await fetcher(id);
+      if (!active() || mine !== seq) return;
+      draw(data, node);
+      node.scrollIntoView?.({ block: 'nearest' });
+    } catch (failure) {
+      if (!active() || mine !== seq) return;
+      if (failure?.code === 'UNAUTHORIZED') { unauthorized(); return; }
+      node.replaceChildren(element('p', 'admin-error', errorText(failure, failText)));
+    }
+  }
+  return { node, show };
+}
+
+let hintSeq = 0;
+
+/** 라벨 + 입력칸. hint가 있으면 입력칸의 aria-describedby로 이어 준다 */
+export function labeledField(text, control, hint) {
+  const label = element('label', 'admin-field');
+  label.append(element('span', '', text), control);
+  if (hint) {
+    const note = element('small', '', hint);
+    note.id = `admin-hint-${++hintSeq}`;
+    control.setAttribute('aria-describedby', [control.getAttribute('aria-describedby'), note.id].filter(Boolean).join(' ')); // 이미 이어 둔 설명은 지우지 않는다
+    label.append(note);
+  }
+  return label;
+}
+
+/** 체크박스 + 라벨 */
+export function checkField(text, control) {
+  const label = element('label', 'admin-check');
+  label.append(control, element('span', '', text));
+  return label;
 }

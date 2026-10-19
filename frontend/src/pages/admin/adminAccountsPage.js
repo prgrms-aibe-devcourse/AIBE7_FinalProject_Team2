@@ -1,6 +1,6 @@
 import { button, element } from '../../components/siteLayout.js';
 import { ADMIN_ROLE, AUDIT_ACTION, errorText } from './adminLabels.js';
-import { PAGE_SIZE, badge, createLoader, dataTable, errorLine, formatDate, pageTop, pager, runAction, tabBar } from './adminKit.js';
+import { PAGE_SIZE, badge, createLoader, dataTable, errorLine, formatDate, labeledField, pageTop, pager, runAction, tabBar } from './adminKit.js';
 import { renderAdminShell } from './adminShell.js';
 
 // 관리자 계정 · 감사 로그 (A-31 ~ A-35). 계정 추가 · 활성 / 비활성, 관리자 행동 기록 열람.
@@ -34,11 +34,10 @@ export function renderAdminAccountsPage(container, { navigate }) {
         const name = Object.assign(element('input'), { type: 'text', maxLength: 30 });
         const role = element('select');
         Object.entries(ADMIN_ROLE).forEach(([value, text]) => { const option = element('option', '', text); option.value = value; role.append(option); });
-        const field = (text, control) => { const label = element('label', 'admin-field'); label.append(element('span', '', text), control); return label; };
         const error = errorLine();
         const submit = element('button', 'primary-button', '계정 추가');
         submit.type = 'submit';
-        form.append(field('이메일', email), field('표시 이름', name), field('권한', role), error, submit);
+        form.append(labeledField('이메일', email), labeledField('표시 이름', name), labeledField('권한', role), error, submit);
         form.addEventListener('submit', async (event) => {
           event.preventDefault();
           if (!email.value.trim() || !name.value.trim()) { error.textContent = '이메일과 표시 이름을 입력해 주세요.'; return; }
