@@ -75,10 +75,10 @@ export function errorText(error, fallback = '요청을 처리하지 못했어요
   if (code === 'DUPLICATE_TITLE') return '다른 사건과 제목이 겹쳐요.';
   if (code === 'DUPLICATE_EMAIL') return '이미 등록된 이메일이에요.';
   if (code === 'DUPLICATE_WORD') return '이미 있는 금칙어예요.';
-  if (code?.endsWith('_NOT_FOUND') && error.message) return error.message;
   if (code === 'DUPLICATE_SOURCE') return '이미 등록한 사건번호예요.';
   if (code === 'IMPORT_IN_PROGRESS') return '다른 사건을 등록하는 중이에요. 끝난 뒤 다시 시도해 주세요.';
   if (code === 'IMPORT_NOT_FOUND') return '등록 작업을 찾을 수 없어요.';
+  if (code?.endsWith('_NOT_FOUND') && error.message) return error.message; // 구체적인 _NOT_FOUND 분기보다 뒤에 둔다
   if (code === 'VALIDATION_ERROR') return error.message || '입력값을 확인해 주세요.';
   if (code === 'FORBIDDEN') return '권한이 없거나 보안 토큰이 만료됐어요. 새로고침 뒤 다시 시도해 주세요.';
   if (code === 'NETWORK_ERROR') return error.message;

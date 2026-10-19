@@ -78,7 +78,7 @@ export function describeGeneration(generation) {
   const snapshot = isObject(generation.inputSnapshot) ? generation.inputSnapshot : {};
 
   const otherSnapshot = Object.fromEntries(Object.entries(snapshot).filter(([key]) => !['promptVersion', 'system', 'user'].includes(key)));
-  const selectionRaw =isObject(report.selection) ? report.selection : null;
+  const selectionRaw = isObject(report.selection) ? report.selection : null;
   const contaminationRaw = isObject(report.contamination) ? report.contamination : null;
   const verdict = contaminationRaw?.verdict ?? null;
   const warnings = (Array.isArray(report.validationWarnings) ? report.validationWarnings : Array.isArray(report.warnings) ? report.warnings : []).map(plain).filter(Boolean);

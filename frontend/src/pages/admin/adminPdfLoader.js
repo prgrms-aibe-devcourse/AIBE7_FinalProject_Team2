@@ -1,7 +1,8 @@
 // 브라우저용 pdf.js 불러오기. 사건 등록 화면에서 PDF를 고를 때 처음 불러온다(관리자 청크에도 미리 넣지 않는다).
 // 옛 브라우저(사파리 · 오래된 크롬)에서도 돌도록 pdf.js의 legacy 빌드를 쓴다. 워커 파일은 vite가 따로 내보내는 주소(?url)로 가리킨다. node 테스트는 이 파일을 쓰지 않는다.
-import { extractPdfText } from './adminPdf.js';
+import { MAX_PDF_BYTES, PdfReadError, extractPdfText } from './adminPdf.js';
 
+// 이 보강은 전역(ReadableStream.prototype)을 바꾼다. 사건 등록 화면에서 PDF를 처음 고를 때만 이 파일이 로드되고, 다른 코드는 이 보강에 의존하지 않는다.
 // 사파리는 ReadableStream을 `for await`로 읽는 문법을 지원하지 않는다. pdf.js 안쪽 코드가 쓸 수 있으므로 없으면 채워 둔다
 if (typeof ReadableStream !== 'undefined' && !ReadableStream.prototype[Symbol.asyncIterator]) {
   ReadableStream.prototype[Symbol.asyncIterator] = async function* streamValues() {
@@ -36,6 +37,8 @@ const CMAP_URL = `${import.meta.env.BASE_URL}pdfjs/cmaps/`;
 
 /** PDF 파일(File) → { text, pages }. 실패하면 PdfReadError */
 export async function readPdfFile(file) {
+  // 큰 파일은 메모리에 올리기 전에 막는다(txt 쪽 readTextFile과 같은 방식)
+  if (file.size > MAX_PDF_BYTES) throw new PdfReadError('TOO_BIG', 'PDF가 너무 커요. 20MB 이하만 읽을 수 있어요.');
   const [pdfjs, buffer] = await Promise.all([loadPdfjs(), file.arrayBuffer()]);
   return extractPdfText(buffer, pdfjs, { cMapUrl: CMAP_URL });
 }

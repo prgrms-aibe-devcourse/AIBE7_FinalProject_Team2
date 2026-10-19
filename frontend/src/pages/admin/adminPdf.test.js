@@ -87,3 +87,15 @@ test('ReadableStream async iterator가 없는 브라우저(사파리)에서도 �
     if (saved) Object.defineProperty(ReadableStream.prototype, key, saved);
   }
 });
+
+test('parseJudgmentText: 실제로 없는 날짜(2월 30일 등)는 선고일로 읽지 않는다', () => {
+  assert.equal(parseJudgmentText('선고 2025. 2. 30.').decidedAt, undefined);
+  assert.equal(parseJudgmentText('선고 2025. 4. 31.').decidedAt, undefined);
+  assert.equal(parseJudgmentText('선고 2025. 2. 29.').decidedAt, undefined); // 평년
+  assert.equal(parseJudgmentText('선고 2024. 2. 29.').decidedAt, '2024-02-29'); // 윤년
+});
+
+// 알려진 한계를 기록하는 테스트: 동작을 바꾸게 되면 이 테스트도 같이 고친다
+test('parseJudgmentText: 알려진 한계 - 상해치사는 상해(INJURY)로 읽는다', () => {
+  assert.equal(parseJudgmentText('서울중앙지방법원 판결\n사건 2025고합789 상해치사').crimeType, 'INJURY');
+});

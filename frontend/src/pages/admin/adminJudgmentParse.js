@@ -12,6 +12,8 @@ const DECIDED_AT_FIRST = /(\d{4})\s*[.년\-/]\s*(\d{1,2})\s*[.월\-/]\s*(\d{1,2}
 // 판결문 첫머리는 "서 울 중 앙 지 방 법 원"처럼 글자 사이를 띄운 경우가 많다. 한 글자씩 띄운 3자 이상 낱말은 붙여서 읽는다
 const SPACED_WORD = /(?:[가-힣] ){2,}[가-힣]/g;
 const joinSpaced = (text) => text.replace(SPACED_WORD, (word) => word.replace(/ /g, ''));
+// 알려진 한계: 범죄 유형은 사건번호 뒤 40자 안에 살인 · 사기 · 상해가 들어 있는지로만 정한다.
+// 그래서 "상해치사"는 INJURY로 읽히고, 여러 낱말이 함께 있으면 이 목록의 앞쪽이 이긴다. 틀리면 사람이 폼에서 고친다
 const CRIME_KEYWORD = [['살인', 'MURDER'], ['사기', 'FRAUD'], ['상해', 'INJURY']];
 
 const SUPREME_CODES = new Set(['도', '감도', '재도', '다', '두']);
@@ -49,7 +51,10 @@ export function parseJudgmentText(text) {
   const decided = DECIDED_AT.exec(head) ?? DECIDED_AT_FIRST.exec(head);
   if (decided) {
     const [year, month, day] = [Number(decided[1]), Number(decided[2]), Number(decided[3])];
-    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) found.decidedAt = `${year}-${pad(month)}-${pad(day)}`;
+    // 2월 30일 같은 없는 날짜는 Date가 다음 달로 넘겨 버리므로, 다시 조합한 년 · 월 · 일이 그대로인지 확인한다
+    const date = new Date(Date.UTC(year, month - 1, day));
+    const exists = date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+    if (exists) found.decidedAt = `${year}-${pad(month)}-${pad(day)}`;
   }
 
   if (found.caseNumber || found.courtName) found.courtLevel = courtLevelOf(number?.[2], found.courtName);
