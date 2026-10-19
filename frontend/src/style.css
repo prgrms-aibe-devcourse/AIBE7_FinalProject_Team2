@@ -293,7 +293,8 @@ h1 { font-family: var(--font-heading); color: var(--color-heading); letter-spaci
 .site-header .nav-button[aria-current="page"] { color: var(--color-text); box-shadow: inset 0 -2px 0 currentColor; } /* 지금 보고 있는 메뉴 */
 .site-header .nav-button[aria-disabled="true"] { cursor: default; opacity: .6; }
 .site-header .nav-button[aria-disabled="true"]:hover { text-decoration: none; }
-/* 화면 CSS의 button { font: inherit } 보다 우선하도록 .site-header를 붙인다 */
+/* 화면 CSS의 button { font: inherit } 보다 우선하도록 .site-header를 붙인다.
+   화면 CSS가 .xx-page .site-header button처럼 더 구체적으로 쓰면 이 규칙을 이기므로, 그때는 :not(.logo-button)으로 로고를 빼 둔다(FE-56) */
 .site-header .logo-button { border: 0; background: transparent; padding: 6px 0; font-family: var(--font-heading); font-size: 20px; font-weight: 900; letter-spacing: -.04em; color: var(--color-heading); }
 .nav-button { border: 0; background: transparent; padding: 10px 12px; min-height: 44px; color: var(--color-muted); white-space: nowrap; }
 .nav-button:hover { color: var(--color-text); }
@@ -307,6 +308,8 @@ h1 { font-family: var(--font-heading); color: var(--color-heading); letter-spaci
 .site-header .switch-thumb { position: absolute; top: 2px; left: 2px; display: block; width: 12px; height: 12px; border-radius: 50%; background: currentColor; transition: translate .15s ease-out; }
 .site-header .motion-switch[aria-checked="true"] .switch-track { background: color-mix(in srgb, currentColor 22%, transparent); }
 .site-header .motion-switch[aria-checked="true"] .switch-thumb { translate: 12px 0; }
+/* 목데이터 표기(FE-56, siteLayout.js mockTag): 목 값 옆의 작은 점선 딱지. 글자색 · 테두리는 주변 글자색을 따라간다 */
+.mock-tag { display: inline-block; margin-left: 6px; padding: 0 5px; border: 1px dashed currentColor; border-radius: 3px; font: 600 11px/1.5 var(--font-body); letter-spacing: 0; vertical-align: middle; white-space: nowrap; opacity: .85; }
 .site-footer { padding: 24px 28px; border-top: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-muted); font-size: 13px; }
 @media (max-width: 720px) {
   /* 좁은 화면(FE-52): 두 줄. 윗줄 = 로고 · 로그인, 아랫줄 = 메뉴(넘치면 가로로 민다) */
@@ -330,7 +333,8 @@ h1 { font-family: var(--font-heading); color: var(--color-heading); letter-spaci
   overflow-wrap: anywhere;
   word-break: keep-all;
 }
-.not-found-page .site-header button { font: inherit; cursor: pointer; }
+.not-found-page .site-header button { cursor: pointer; }
+.not-found-page .site-header button:not(.logo-button) { font: inherit; } /* 로고는 워드마크 글꼴을 지킨다(FE-56) */
 .not-found-panel {
   max-width: 480px;
   margin: 48px auto;

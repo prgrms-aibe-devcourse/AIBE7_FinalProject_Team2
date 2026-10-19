@@ -121,9 +121,12 @@
 .landing-page .desk-object.is-soon { cursor: default; }
 .landing-page .desk-object:focus-visible { outline: 3px solid var(--color-range-fill); outline-offset: 8px; border-radius: 6px; }
 .landing-page .desk-object > * { filter: var(--shadow-rest); transition: filter .2s ease-out; }
-/* 마우스를 올리면 물건이 아주 살짝 밝아진다(FE-50). 평면 일러스트라 들리거나 움직이지 않고 밝기만 바뀐다. 키보드 포커스는 테두리로 보인다 */
+/* 마우스를 올리면 물건이 밝아진다(FE-50). 평면 일러스트라 움직이지 않고, 밝기와 그림자로만 반응한다. 키보드 포커스는 테두리로 보인다.
+   FE-56: 누를 수 있는 물건은 더 밝아지고 그림자가 길어져 책상에서 살짝 뜬 것처럼 보인다(라벨 없이 "누를 수 있다"를 알린다). 준비 중 물건은 예전처럼 아주 살짝만 */
+.landing-page .desk-world { --shadow-hover: drop-shadow(13px 17px 11px color-mix(in srgb, var(--color-desk-shadow) 48%, transparent)); }
 @media (hover: hover) and (pointer: fine) {
   .landing-page .desk-object:not(.is-held):hover > * { filter: var(--shadow-rest) brightness(1.06); }
+  .landing-page .desk-object:not(.is-held, .is-soon):hover > * { filter: var(--shadow-hover) brightness(1.13) saturate(1.06); }
 }
 
 /* 서류철 → 판결 성향 테스트 */

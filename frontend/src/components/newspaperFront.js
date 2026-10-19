@@ -1,4 +1,5 @@
-import { button, element, renderSiteFooter } from './siteLayout.js';
+import { button, element, mockTag, renderSiteFooter } from './siteLayout.js';
+import { API_MODE } from '../api/config.js';
 import { casePhoto, todayLabel } from '../utils/newspaper.js';
 
 // 신문 지면 공통 짜임 (FE-32). S-02 사건 목록(신문 1면)과, 사건을 고른 뒤 이어지는 사건 기사 지면(S-20 · 1 · 2막)이
@@ -111,7 +112,12 @@ function caseMemo(info) {
     ['죄명', info.chargeName],
     ['범죄 분류', info.crimeCategoryLabel],
     ['참여', Number.isFinite(info.participantCount) ? `${info.participantCount.toLocaleString('ko-KR')}명` : null],
-  ].forEach(([term, value]) => { if (value) list.append(element('dt', '', term), element('dd', '', value)); });
+  ].forEach(([term, value]) => {
+    if (!value) return;
+    const dd = element('dd', '', value);
+    if (term === '참여' && API_MODE === 'mock') dd.append(mockTag()); // 목 참여 수는 실제 반응이 아니다(FE-56)
+    list.append(element('dt', '', term), dd);
+  });
   memo.append(list);
   if (info.keywords?.length) memo.append(element('p', 'story-memo-tags', info.keywords.map((word) => `#${word}`).join('  ')));
   memo.append(element('p', 'story-memo-note', '형량은 체험을 마친 뒤 공개돼요.'));

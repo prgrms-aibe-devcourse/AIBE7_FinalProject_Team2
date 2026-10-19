@@ -15,7 +15,8 @@
 .personality-desk::after { content: ''; position: absolute; inset: 0; background: var(--color-banner-bg); opacity: .55; }
 /* 공통 헤더: 메인 책상과 같은 네이비 띠. 위에 얹어 두고(철 위치는 그대로) 철이 올라올 때 가려지지 않게 한다 */
 .personality-page .site-header { position: fixed; top: 0; left: 0; right: 0; z-index: 50; background: var(--color-banner-bg); border-bottom: 0; padding: 4px 32px; }
-.personality-page .site-header button { font: inherit; cursor: pointer; }
+.personality-page .site-header button { cursor: pointer; }
+.personality-page .site-header button:not(.logo-button) { font: inherit; } /* 로고는 style.css의 워드마크 글꼴을 지킨다(FE-56) */
 .personality-page .site-header .logo-button { color: var(--color-banner-text); font-size: 22px; }
 .personality-page .site-header .logo-button .law { display: inline; color: var(--color-range-fill); }
 .personality-page .nav-button { color: var(--color-banner-muted); font-size: var(--text-small); }
@@ -66,7 +67,8 @@
   .test-question-main .test-lead { margin-block: auto; }
 }
 
-@media (hover: hover) and (pointer: fine) { .test-sheet-body { padding: 28px 32px 32px; } }
+/* 넓은 화면은 입력 장치와 상관없이 같은 여백(FE-56: 마우스 조건에 묶여 있어 태블릿에서는 여백이 0이었다) */
+@media (min-width: 721px) { .test-sheet-body { padding: 28px 32px 32px; } }
 /* 폭이 좁은 데스크톱: 양 끝 문구를 칸 위로 올려 동그라미와 겹치지 않게(모바일과 같은 배치) */
 @media (min-width: 721px) and (max-width: 900px) {
   .test-scale { grid-template-columns: 1fr 1fr; gap: 6px; }

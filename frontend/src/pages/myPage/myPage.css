@@ -27,7 +27,8 @@
 /* 화면 양옆 · 푸터도 같은 커피색으로 이어 붙인다(커피 한 잔의 여유: 흰 여백이 보이지 않게) */
 body:has(.my-page) { background: var(--palette-coffee-100); }
 body:has(.my-page) .site-footer { background: var(--palette-coffee-50); border-top-color: var(--palette-coffee-200); color: var(--palette-coffee-500); }
-.my-page .site-header button { font: inherit; cursor: pointer; }
+.my-page .site-header button { cursor: pointer; }
+.my-page .site-header button:not(.logo-button) { font: inherit; } /* 로고는 style.css의 워드마크 글꼴을 지킨다(FE-56) */
 .my-page .visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .my-page ::selection { background: var(--color-range-fill); color: var(--color-text); }
 .my-main { max-width: 760px; margin: 0 auto; padding: 48px 28px 56px; }
@@ -165,6 +166,8 @@ body:has(.my-page) .site-footer { background: var(--palette-coffee-50); border-t
 
 @media (prefers-reduced-motion: reduce) {
   .my-row { transition: none; }
+  .my-card { transition: none; }
+  .my-card:hover, .my-card:active { transform: none; }
 }
 
 @media (max-width: 720px) {
