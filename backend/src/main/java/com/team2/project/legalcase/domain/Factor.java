@@ -50,10 +50,13 @@ public class Factor {
 	@Column(nullable = false)
 	private ValueAxisStatus valueAxisStatus = ValueAxisStatus.AUTO;	// 가치관 축 후검수 상태 (AUTO · CONFIRMED). NOT NULL이라 새 행도 AUTO로 시작한다
 
+	// 파이프라인(SQL)이 관리하는 원본은 UPDATE에서 제외한다. 읽을 때 무시한 키가 지워지는 것을 막는다 (BE-81).
 	@JdbcTypeCode(SqlTypes.JSON)
+	@Column(updatable = false)
 	private ValueAxisVotes valueAxisVotes;	// 자동 분류 투표 기록 (사람 초안 · 투표 없이 정한 값은 null)
 
 	@JdbcTypeCode(SqlTypes.JSON)
+	@Column(updatable = false)
 	private SummaryTagCandidates summaryTagCandidates;	// 요약어 후보 (BE-80). 후보 계산을 켜지 않은 적재 · 사람 초안은 null
 
 	private int displayOrder;
