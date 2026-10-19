@@ -1,4 +1,5 @@
 import { button, element } from '../../components/siteLayout.js';
+import { labeledField } from './adminKit.js';
 import {
   AXIS_LABEL, AXIS_OPTIONS, CASE_STATUS, COURT_LEVEL, CRIME_TYPE, DIFFICULTY, PUBLISH_REASON, REVEAL_STAGE, REVIEW_STATUS, SUBJECT,
   errorText, formatDateTime,
@@ -235,8 +236,7 @@ export function renderAdminCasePage(container, { caseId, navigate }) {
           form.hidden = true;
           const reason = element('textarea');
           Object.assign(reason, { rows: 2, maxLength: 500, required: true });
-          const reasonLabel = element('label', 'admin-field');
-          reasonLabel.append(element('span', '', '반려 사유 (1 ~ 500자, 되돌릴 수 없어요)'), reason);
+          const reasonLabel = labeledField('반려 사유 (1 ~ 500자, 되돌릴 수 없어요)', reason);
           const send = element('button', 'secondary-button', '반려하기');
           send.type = 'submit';
           form.append(reasonLabel, send);
@@ -348,11 +348,8 @@ export function renderAdminCasePage(container, { caseId, navigate }) {
         form.noValidate = true;
         const fields = {};
         function field(name, label, control, hint) {
-          const wrap = element('label', 'admin-field');
-          wrap.append(element('span', '', label), control);
-          if (hint) wrap.append(element('small', '', hint));
           fields[name] = control;
-          form.append(wrap);
+          form.append(labeledField(label, control, hint));
         }
         function input(type, value, extra = {}) {
           const node = element('input');

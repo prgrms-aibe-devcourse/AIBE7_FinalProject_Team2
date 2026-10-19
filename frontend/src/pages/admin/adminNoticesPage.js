@@ -1,6 +1,6 @@
 import { button, element } from '../../components/siteLayout.js';
 import { errorText } from './adminLabels.js';
-import { badge, createLoader, dataTable, checkField, errorLine, formatDate, labeledField, pageTop, runAction, tabBar } from './adminKit.js';
+import { badge, checkField, createLoader, dataTable, errorLine, formatDate, labeledField, pageTop, runAction, tabBar } from './adminKit.js';
 import { renderAdminShell } from './adminShell.js';
 
 // 공지 · 설정 (A-36 ~ A-41). 공지 작성 · 공개 / 비공개 · 상단 고정, 금칙어 목록.

@@ -60,7 +60,6 @@ export function renderAdminMembersPage(container, { navigate }) {
 
         if (member.status === 'ACTIVE') {
           const duration = element('select');
-          duration.setAttribute('aria-label', '정지 기간');
           DURATIONS.forEach(([value, text]) => { const option = element('option', '', text); option.value = value; duration.append(option); });
           const durationField = labeledField('정지 기간', duration);
           const form = reasonForm({

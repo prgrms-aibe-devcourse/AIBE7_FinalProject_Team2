@@ -1,7 +1,7 @@
 import { button, element } from '../../components/siteLayout.js';
 import { parseJudgmentText } from './adminJudgmentParse.js';
 import { COURT_LEVEL, CRIME_TYPE, IMPORT_STAGE, errorText } from './adminLabels.js';
-import { labeledField } from './adminKit.js';
+import { checkField, labeledField } from './adminKit.js';
 import { PdfReadError } from './adminPdf.js';
 import { renderAdminShell } from './adminShell.js';
 import sampleUrl from './samples/sample-judgment.pdf?url';
@@ -67,8 +67,7 @@ export function renderAdminRegisterPage(container, { navigate }) {
         };
         const count = element('small', '', `0 / ${MAX_ORIGINAL_LENGTH.toLocaleString()}자`);
         const updateCount = () => { count.textContent = `${fields.originalText.value.length.toLocaleString()} / ${MAX_ORIGINAL_LENGTH.toLocaleString()}자`; };
-        const finalLabel = element('label', 'admin-check');
-        finalLabel.append(fields.isFinal, element('span', '', '확정된 판결'));
+        const finalLabel = checkField('확정된 판결', fields.isFinal);
         // 자동으로 채운 칸은 초록 표시. 사람이 직접 고친 칸(touched)은 다음 자동 채우기가 덮어쓰지 않는다
         const autoControls = [fields.caseNumber, fields.courtName, fields.decidedAt, fields.courtLevel];
         [...autoControls, crimeType].forEach((control) => control.addEventListener('input', () => {

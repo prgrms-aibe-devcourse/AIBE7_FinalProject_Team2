@@ -1,4 +1,4 @@
-// 운영 메뉴 화면(회원 · 게시글 · 신고 · 관리자 계정 · 공지)이 함께 쓰는 작은 부품.
+// 관리자 화면(회원 · 게시글 · 신고 · 관리자 계정 · 공지 · 사건 등록 · 사건 검수)이 함께 쓰는 작은 부품.
 // 값은 모두 textContent로 넣는다(회원이 쓴 글에 HTML이 섞여도 실행되지 않게).
 import { button, element } from '../../components/siteLayout.js';
 import { errorText } from './adminLabels.js';
@@ -182,16 +182,18 @@ export async function runAction({ trigger, errorTarget, action, onDone, active, 
 export function detailPanel({ fetcher, draw, failText, active, unauthorized }) {
   const node = element('section', 'admin-section admin-detail');
   node.hidden = true;
+  let seq = 0;
   async function show(id) {
+    const mine = ++seq; // 나중에 연 상세가 이긴다: 먼저 연 상세의 늦은 응답은 버린다 (createLoader와 같은 방식)
     node.hidden = false;
     node.replaceChildren(element('p', 'admin-message', '불러오는 중이에요.'));
     try {
       const data = await fetcher(id);
-      if (!active()) return;
+      if (!active() || mine !== seq) return;
       draw(data, node);
       node.scrollIntoView?.({ block: 'nearest' });
     } catch (failure) {
-      if (!active()) return;
+      if (!active() || mine !== seq) return;
       if (failure?.code === 'UNAUTHORIZED') { unauthorized(); return; }
       node.replaceChildren(element('p', 'admin-error', errorText(failure, failText)));
     }
@@ -208,7 +210,7 @@ export function labeledField(text, control, hint) {
   if (hint) {
     const note = element('small', '', hint);
     note.id = `admin-hint-${++hintSeq}`;
-    control.setAttribute('aria-describedby', note.id);
+    control.setAttribute('aria-describedby', [control.getAttribute('aria-describedby'), note.id].filter(Boolean).join(' ')); // 이미 이어 둔 설명은 지우지 않는다
     label.append(note);
   }
   return label;
