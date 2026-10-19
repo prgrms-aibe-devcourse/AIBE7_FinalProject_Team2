@@ -205,3 +205,9 @@ html:has(.comparison-full .stage-wrap:not(.reading-paper)) { overflow: hidden; }
   .stage-wrap .sheet-ear-left small { display: none; }
   .comparison-full .stage-wrap.reading-paper .paper-to-main { right: calc(12px + env(safe-area-inset-right, 0px)); bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
 }
+/* FE-55: 읽는 지면에서 "판결 성향 테스트" 광고는 눌러서 성향 테스트 면으로 넘어간다 */
+.comparison-full .stage-wrap.reading-paper .sheet-ad.is-clickable { cursor: pointer; }
+.comparison-full .stage-wrap.reading-paper .sheet-ad.is-clickable:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 3px; }
+@media (hover: hover) and (pointer: fine) { .comparison-full .stage-wrap.reading-paper .sheet-ad.is-clickable:hover { background: color-mix(in srgb, var(--color-desk-kraft) 16%, transparent); } }
+/* 다른 사건 보기(플립): 신문이 옆으로 선 순간부터 앞면 기사를 감춰 빈 뒷면만 보인다(comparisonStage.js foldToList) */
+.comparison-full .stage-wrap.reading-paper .sheet.is-flipped > * { visibility: hidden; }

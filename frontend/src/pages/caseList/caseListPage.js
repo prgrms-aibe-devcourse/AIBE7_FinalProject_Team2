@@ -4,6 +4,7 @@ import { newspaperMasthead } from '../../components/newspaperFront.js';
 import { turnPage } from '../../utils/pageTurn.js';
 import { reducedMotion } from '../../utils/motion.js';
 import { peelOff } from '../../utils/peelOff.js';
+import { takePaper } from '../../utils/paperHandoff.js';
 
 // S-02 사건 목록 — 신문 1면 (FE-18, 시안 v12 + 배치 조정). 유형 필터 · 오류 처리 로직은 FE-4 · FE-11과 같다.
 // 흐름 목업 ②(FE-32): 책상에서 집어 든 신문이다. 위에 남불의 안내 포스트잇(누르면 떼어짐, FE-50)이 있고, 기사를 누르면
@@ -47,6 +48,7 @@ const PICK_LABEL = '사건 펼쳐 보기';
 const JUMP_LABEL = '3면에 계속'; // 신문의 이어 읽기 줄(jump line). 누르면 사건 지면(S-20, 3면)으로 간다
 // shortcut: 캐릭터 얼굴은 원본 이미지 레포 PNG를 직접 읽는다(무대와 같음), 웹 webp 변환(WBS 7.6.8) 때 public 경로로 옮긴다
 const NAMBUL_FACE = 'https://raw.githubusercontent.com/peanutboi710/NaeLawNamBul_Images/main/character/cuts/nambul/icon/nambul_icon_face-happy.png';
+const UNFLIP_MS = 450; // 8막에서 뒤집고 온 빈 종이 · 바탕을 걷는 시간(그동안 기사가 페이드인한다)
 const RISE_WAIT_MS = 1200; // 책상에서 들고 올 때 지면이 다 그려지기를 기다리는 최대 시간(그동안 책상은 신문을 든 채로 남아 있다)
 const headlineOf = (item) => item.headline || item.title;
 function dense(paragraphs) {
@@ -74,6 +76,14 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
   if (from === 'desk') {
     history.replaceState({ ...history.state, extras: {} }, '');
     if (!reducedMotion()) root.classList.add(ghost ? 'is-rising' : 'is-arriving');
+  }
+  // 8막 신문을 뒤집고 왔으면(FE-55 "다른 사건 보기") 넘겨받은 빈 뒷면(paperHandoff.js)이 화면을 덮고 있다.
+  // 기사가 다 그려지면 같은 자리의 이 지면 위에 기사가 페이드인한다(unflip)
+  const handed = from === 'flip' ? takePaper() : null;
+  if (from === 'flip') {
+    history.replaceState({ ...history.state, extras: {} }, '');
+    if (!reducedMotion()) root.classList.add('is-unflipping');
+    else handed?.layer.remove();
   }
 
   const desk = element('div', 'desk');
@@ -105,14 +115,24 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
   paper.prepend(tip);
   root.append(desk, paper);
   if (ghost) root.insertBefore(ghost, paper);
+  // 뒤집고 왔으면 8막 지면과 같은 폭 · 같은 자리에 지면을 놓는다(같은 신문 한 장이 이어진다). 아래로 길어지는 부분은 화면 밖이다
+  if (handed && root.classList.contains('is-unflipping')) {
+    const top = Math.max(0, handed.rect.top);
+    Object.assign(paper.style, { width: `${handed.rect.width}px`, marginLeft: 'auto', marginRight: 'auto', marginTop: `${top}px` });
+    const off = paper.getBoundingClientRect().top - top; // 바깥 여백이 겹쳐 더 내려갔으면(좁은 화면) 그만큼 끌어올린다
+    if (off) paper.style.translate = `0 ${-off}px`;
+  }
   // 지면은 머리기사부터 다 그려지고 첫 사진들이 준비된 뒤 한 번에 올라온다(올라오는 도중 아래 기사가 채워지며 끊기지 않게).
   // 사건 목록이 늦으면 RISE_WAIT_MS에서 기다리기를 멈추고 올린다. 다 올라오면 뒤에 남긴 책상을 걷는다
-  async function rise(loaded) {
+  function drawn(loaded) {
     const ready = loaded.then(() => Promise.all([...main.querySelectorAll('.front-grid img, .recs img')].map((image) => {
       image.loading = 'eager';
       return image.decode().catch(() => {});
     })));
-    await Promise.race([ready, new Promise((done) => { window.setTimeout(done, RISE_WAIT_MS); })]);
+    return Promise.race([ready, new Promise((done) => { window.setTimeout(done, RISE_WAIT_MS); })]);
+  }
+  async function rise(loaded) {
+    await drawn(loaded);
     if (!active()) return;
     let timer = 0;
     const drop = () => { // 한 번만: 올라오는 애니메이션이 끝나면 뒤에 남긴 책상과 표시를 걷는다
@@ -125,6 +145,18 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
     paper.addEventListener('animationend', onEnd);
     timer = window.setTimeout(drop, 2000); // animationend가 오지 않아도 걷는다
     root.classList.add('is-going');
+  }
+
+  // 넘겨받은 빈 종이는 이 지면과 같은 자리 · 같은 크기로 덮여 있다. 기사가 다 그려지면 지면을 드러내 기사를 페이드인하고,
+  // 그 위의 빈 종이와 바탕(8막 화면 색)은 함께 걷는다 — 종이는 움직이지 않고 내용만 나타난다
+  async function unflip(paperHanded) {
+    if (!active()) { paperHanded?.layer.remove(); return; }
+    root.classList.add('is-revealing');
+    if (!paperHanded) return;
+    const { layer, shade, card } = paperHanded;
+    const timing = { duration: UNFLIP_MS, easing: 'ease-out', fill: 'forwards' };
+    await Promise.all([card, shade].map((node) => node.animate([{ opacity: 1 }, { opacity: 0 }], timing).finished)).catch(() => {});
+    layer.remove();
   }
 
   // Esc: 신문을 내려놓고 책상으로(목업과 같은 한 단계 뒤로)
@@ -343,5 +375,8 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
 
   const loaded = load(undefined);
   if (ghost) rise(loaded);
+  // 뒤집고 왔으면 기사와 첫 사진이 다 준비된 뒤에 한 번에 페이드인한다(늦게 온 기사가 따로 튀어나오지 않게)
+  if (root.classList.contains('is-unflipping')) drawn(loaded).then(() => unflip(handed));
+
   await loaded;
 }

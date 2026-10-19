@@ -14,6 +14,7 @@ import '../pages/ai/ai.css';
 import '../pages/court/court.css';
 import '../pages/comparison/comparison.css';
 import '../pages/personality/personality.css';
+import '../pages/personality/personalityPaper.css';
 import '../pages/myPage/myPage.css';
 import '../pages/login/login.css';
 import '../pages/caseReview/caseReview.css';

@@ -274,8 +274,9 @@
 .stage-wrap .sheet-cast-grid img { height: calc(var(--u) * 8); width: auto; }
 /* 만난 모습은 누르면 마이페이지 컬렉션으로 간다(FE-44). 사진란 모습 그대로 두고 마우스를 올리면 이름에 밑줄만 생긴다 */
 .stage-wrap .sheet-cast-link { display: flex; flex-direction: column; align-items: center; gap: inherit; width: 100%; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
+.stage-wrap .sheet-cast-link:disabled { cursor: default; }
 .stage-wrap .sheet-cast-link:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 3px; }
-@media (hover: hover) and (pointer: fine) { .stage-wrap .sheet-cast-link:hover span { text-decoration: underline; text-underline-offset: 3px; } }
+@media (hover: hover) and (pointer: fine) { .stage-wrap .sheet-cast-link:not(:disabled):hover span { text-decoration: underline; text-underline-offset: 3px; } }
 /* 광고 · 알림 단: 지면 맨 아래 띠. 서비스 안의 다른 메뉴를 신문 광고처럼 싣는다(누르지 않는 지면 장식) */
 .stage-wrap .sheet-ads { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: calc(var(--u) * 2); padding-top: calc(var(--u) * 1.6); border-top: 3px double var(--color-text); }
 .stage-wrap .sheet-ad { display: flex; flex-direction: column; gap: calc(var(--u) * .5); min-height: calc(var(--u) * 15); padding: calc(var(--u) * 1.6) calc(var(--u) * 1.8); border: 1px solid var(--color-text); text-align: center; justify-content: center; }

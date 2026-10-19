@@ -17,6 +17,7 @@ import { renderLoginPage } from '../pages/login/loginPage.js';
 import { renderMyPage } from '../pages/myPage/myPage.js';
 import { renderOverviewPage } from '../pages/overview/overviewPage.js';
 import { renderPersonalityPage } from '../pages/personality/personalityPage.js';
+import { renderPersonalityPaperPage } from '../pages/personality/personalityPaperPage.js';
 import { renderPersonalityResultPage } from '../pages/personality/personalityResultPage.js';
 import { renderPersonalitySharedPage } from '../pages/personality/personalitySharedPage.js';
 import { renderReviewPage } from '../pages/review/reviewPage.js';
@@ -40,6 +41,8 @@ export const routes = [
   { name: 'caseReview', path: '/cases/:caseId/opinion', render: renderCaseReviewPage, title: '독자 엽서' },
   // 확장: 판결 성향 테스트 · 마이페이지 (S-15 ~ S-17). 공유된 결과(/test/types/{shareId}, 해시 주소)는 유형 설명만 보여 준다(FR-8-6)
   { name: 'test', path: '/test', render: renderPersonalityPage, title: '판결 성향 테스트' },
+  // FE-55: 8막 신문의 성향 테스트 광고에서 신문을 넘겨 들어오는 오피니언 면(문항 · 결과는 /test와 같다)
+  { name: 'testPaper', path: '/test/paper', render: renderPersonalityPaperPage, title: '판결 성향 테스트' },
   { name: 'testResult', path: '/test/result', render: renderPersonalityResultPage, title: '성향 결과' },
   { name: 'testType', path: '/test/types/:shareId', render: renderPersonalitySharedPage, title: '판결 성향 유형' },
   { name: 'me', path: '/me', render: renderMyPage, title: '마이페이지' },

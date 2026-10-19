@@ -18,7 +18,8 @@ import { reducedMotion } from '../../utils/motion.js';
 const SUBJECTS = [['USER', '내 판결'], ['AI', 'AI 판결'], ['COURT', '실제 판결']];
 const DIRECTIONS = { UP: ['무겁게', 'up'], DOWN: ['가볍게', 'down'] };
 const STAY_ZOOM_MS = 700;
-const FOLD_MS = 450; // 다른 사건 보기: 신문을 위로 접어 넘기는 시간 // 여기 남아있기: 당겨 보던 지면이 전체 지면으로 줄어드는 시간
+const FLIP_MS = [300, 380]; // 다른 사건 보기: 신문을 들어 올려 옆으로 세우는 시간 · 뒷면이 보이게 마저 뒤집는 시간
+const TURN_MS = 600; // 성향 테스트: 신문을 왼쪽 가장자리를 축으로 넘겨 세우는 시간
 
 function element(tag, className, text) {
   const node = document.createElement(tag);
@@ -77,11 +78,11 @@ function newspaper(data, script, caseTitle, navigate, openReview) {
   const date = element('div', 'sheet-date');
   const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
   date.append(element('span', '', new Intl.DateTimeFormat('ko-KR', { dateStyle: 'full' }).format(tomorrow)), element('span', '', '참여 무료'));
-  // 귀(제호 양옆): "여기 남아있기"로 지면을 읽을 때만 보인다(courtSketch.css). 왼쪽은 다른 사건 보기(신문을 접고 1면으로),
+  // 귀(제호 양옆): "여기 남아있기"로 지면을 읽을 때만 보인다(courtSketch.css). 왼쪽은 다른 사건 보기(신문을 뒤집고 1면으로),
   // 오른쪽은 아직 정하지 않은 자리라 메모만 붙여 둔다
   const earLeft = element('button', 'sheet-ear sheet-ear-left is-clickable');
   earLeft.type = 'button';
-  earLeft.append(element('b', '', '← 다른 사건 보기'), element('small', '', '신문을 접고 오늘의 지면으로'));
+  earLeft.append(element('b', '', '← 다른 사건 보기'), element('small', '', '신문을 뒤집어 오늘의 지면으로'));
   const earRight = element('div', 'sheet-ear sheet-ear-right');
   earRight.append(element('span', 'sheet-ear-memo', '고민 중'));
   const brandRow = element('div', 'sheet-brand-row');
@@ -138,7 +139,9 @@ function newspaper(data, script, caseTitle, navigate, openReview) {
     const item = element('li');
     const open = element('button', 'sheet-cast-link');
     open.type = 'button';
-    open.setAttribute('aria-label', `${label} — 마이페이지 컬렉션에서 보기`);
+    // 체험 중에는 누를 수 없다("여기 남아있기"로 지면을 읽는 상태가 되면 stay()가 연다)
+    open.disabled = true;
+    open.dataset.openLabel = `${label} — 마이페이지 컬렉션에서 보기`;
     open.append(picture(imageOf(who, `role:${role}`), ''), element('span', '', label));
     open.addEventListener('click', () => navigate('me', { view: 'collection' }));
     item.append(open);
@@ -265,11 +268,27 @@ export function renderComparisonStage({ script, data, caseId, caseTitle, navigat
     const from = sheet.getBoundingClientRect();
     stage.freeze();
     stage.classList.add('reading-paper');
+    sheet.querySelectorAll('.sheet-cast-link').forEach((link) => {
+      link.disabled = false;
+      link.setAttribute('aria-label', link.dataset.openLabel);
+    });
     const letter = sheet.querySelector('.sheet-letter');
     letter.classList.add('is-clickable');
     letter.setAttribute('role', 'button');
     letter.tabIndex = 0;
     letter.setAttribute('aria-label', '독자 엽서 — 이 사건 리뷰 남기기');
+    // 지면 아래 "판결 성향 테스트" 광고: 누르면 신문을 한 장 넘겨 뒷면(오피니언 면)의 성향 테스트로 간다(FE-55)
+    const testAd = sheet.querySelector('.sheet-ad.is-lead');
+    testAd.classList.add('is-clickable');
+    testAd.setAttribute('role', 'button');
+    testAd.tabIndex = 0;
+    testAd.setAttribute('aria-label', '판결 성향 테스트 — 신문을 넘겨 시작하기');
+    testAd.addEventListener('click', turnToTest);
+    testAd.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      turnToTest();
+    });
     window.scrollTo(0, 0);
     sheet.setAttribute('tabindex', '-1');
     sheet.focus({ preventScroll: true });
@@ -295,7 +314,7 @@ export function renderComparisonStage({ script, data, caseId, caseTitle, navigat
     handPaper(sheet, { backdrop: 'desk' }); // 지면 양옆은 책상
     navigate('landing', { from: 'paper' });
   }
-  // 읽기 화면: 우하단 "메인으로"(신문을 책상에 내려놓기), 왼쪽 귀 "다른 사건 보기"(신문을 접어 1면으로)
+  // 읽기 화면: 우하단 "메인으로"(신문을 책상에 내려놓기), 왼쪽 귀 "다른 사건 보기"(신문을 뒤집어 1면으로)
   const toMain = element('button', 'primary-button paper-to-main is-clickable', '메인으로');
   toMain.type = 'button';
   toMain.addEventListener('click', toDesk);
@@ -306,12 +325,52 @@ export function renderComparisonStage({ script, data, caseId, caseTitle, navigat
     if (folding) return;
     folding = true;
     if (reducedMotion()) { navigate('list'); return; }
-    sheet.style.transformOrigin = '50% 0';
-    sheet.animate([{ scale: '1 1', opacity: 1 }, { scale: '1 .5', opacity: .9, offset: .5 }, { scale: '1 .04', opacity: 0 }],
-      { duration: FOLD_MS, easing: 'cubic-bezier(.5, 0, .75, 0)', fill: 'forwards' }).finished
-      .catch(() => {}).then(() => { if (!closing) navigate('list', { from: 'desk' }); }); // 접는 사이 메인으로 갔다면(closing) 목록으로 되돌리지 않는다
+    // 신문을 뒤집는다(플립): 살짝 들어 올리며 옆으로 세우고(앞면이 사라짐), 마저 돌려 빈 뒷면이 보이게 내려놓는다.
+    // 축은 지면의 세로 가운데, 높이는 지금 보는 화면 가운데다. 읽기 모드의 지면은 transform을 끄므로 개별 속성(rotate · scale)으로 움직인다
+    tilt('50%');
+    const [up, down] = FLIP_MS;
+    sheet.animate([{ rotate: 'y 0deg', scale: '1' }, { rotate: 'y 90deg', scale: '1.05' }],
+      { duration: up, easing: 'cubic-bezier(.45, 0, .8, .5)', fill: 'forwards' }).finished
+      .then(() => {
+        sheet.classList.add('is-flipped'); // 옆으로 선 순간 앞면 기사를 감춘다(뒷면 = 빈 지면)
+        return sheet.animate([{ rotate: 'y 90deg', scale: '1.05' }, { rotate: 'y 180deg', scale: '1' }],
+          { duration: down, easing: 'cubic-bezier(.2, .5, .3, 1)', fill: 'forwards' }).finished;
+      })
+      .catch(() => {}).then(() => {
+        if (closing) return; // 뒤집는 사이 메인으로 갔다면 목록으로 되돌리지 않는다
+        // 뒤집힌 빈 뒷면을 사건 목록에 넘긴다: 목록이 그 종이를 자기 지면 자리로 옮기고 기사를 그 위에 페이드인한다(caseListPage.js)
+        handPaper(sheet, { backdrop: pageBackdrop(sheet), blank: true });
+        navigate('list', { from: 'flip' });
+      });
+  }
+  // 성향 테스트: 신문을 왼쪽 가장자리를 축으로 넘겨 세운다. 넘어간 뒷면(오피니언 면, /test/paper)이 같은 축에서 내려앉으며 이어진다
+  function turnToTest() {
+    if (folding || closing) return;
+    folding = true;
+    if (reducedMotion()) { navigate('testPaper'); return; }
+    tilt('0');
+    sheet.animate([{ rotate: 'y 0deg' }, { rotate: 'y -88deg' }],
+      { duration: TURN_MS, easing: 'cubic-bezier(.45, 0, .7, .4)', fill: 'forwards' }).finished
+      .catch(() => {}).then(() => navigate('testPaper', { from: 'paper' }));
+  }
+  // 3D로 돌릴 준비: 원근은 지면의 부모에 건다(보는 눈은 지금 화면 가운데). 지면이 화면보다 길어서 축 높이를 화면 가운데로 맞춘다
+  function tilt(axisX) {
+    const parent = sheet.parentElement;
+    const middle = window.innerHeight / 2;
+    parent.style.perspective = '2400px';
+    parent.style.perspectiveOrigin = `50% ${middle - parent.getBoundingClientRect().top}px`;
+    sheet.style.transformOrigin = `${axisX} ${middle - sheet.getBoundingClientRect().top}px`;
   }
   return stage;
+}
+
+// 지면 바깥에 보이는 바탕색(지면에서 위로 올라가며 처음 칠해진 색). 넘겨줄 때 장식 층이 같은 색으로 화면을 덮는다
+function pageBackdrop(node) {
+  for (let parent = node.parentElement; parent; parent = parent.parentElement) {
+    const color = getComputedStyle(parent).backgroundColor;
+    if (color && color !== 'transparent' && color !== 'rgba(0, 0, 0, 0)') return color;
+  }
+  return 'transparent';
 }
 
 // 8막 화면 틀: 무대(카메라 틀)가 화면 전체를 채운다 — 판사의 책상 위 다음 날 신문을 화면 가득 들여다본다(FE-32, comparison.css)
