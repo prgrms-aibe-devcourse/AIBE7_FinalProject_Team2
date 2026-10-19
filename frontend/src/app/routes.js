@@ -9,6 +9,7 @@
 import { renderAiPage } from '../pages/ai/aiPage.js';
 import { renderCaseListPage } from '../pages/caseList/caseListPage.js';
 import { renderCaseDetailPage } from '../pages/caseDetail/caseDetailPage.js';
+import { renderCaseReviewPage } from '../pages/caseReview/caseReviewPage.js';
 import { renderComparisonPage } from '../pages/comparison/comparisonPage.js';
 import { renderCourtPage } from '../pages/court/courtPage.js';
 import { renderLandingPage } from '../pages/landing/landingPage.js';
@@ -35,6 +36,8 @@ export const routes = [
   { name: 'ai', path: '/cases/:caseId/result/ai', render: renderAiPage, needsHeader: true, title: 'AI 판결' },
   { name: 'court', path: '/cases/:caseId/result/court', render: renderCourtPage, needsHeader: true, title: '실제 판결' },
   { name: 'comparison', path: '/cases/:caseId/result/compare', render: renderComparisonPage, needsHeader: true, title: '세 판결 비교' },
+  // S-21 사건 리뷰 (FE-55): 8막 마지막 대사창의 "리뷰하기"로 들어오는 독자 엽서(별점 + 내 의견). 리뷰 API가 없어 목 모드에서만 동작한다
+  { name: 'caseReview', path: '/cases/:caseId/opinion', render: renderCaseReviewPage, title: '독자 엽서' },
   // 확장: 판결 성향 테스트 · 마이페이지 (S-15 ~ S-17). 공유된 결과(/test/types/{shareId}, 해시 주소)는 유형 설명만 보여 준다(FR-8-6)
   { name: 'test', path: '/test', render: renderPersonalityPage, title: '판결 성향 테스트' },
   { name: 'testResult', path: '/test/result', render: renderPersonalityResultPage, title: '성향 결과' },

@@ -1,0 +1,87 @@
+/* S-21 사건 리뷰 (FE-55). 색은 style.css 역할 토큰만 쓴다.
+   구성: 공통 헤더 → 제목 · 평균 별점 → 내 엽서(쓰기 / 보낸 엽서) → 다른 독자의 엽서 목록.
+   엽서 테두리는 항공우편 줄무늬(paperStage.css 독자 의견 엽서와 같은 모양) */
+
+.case-review-page { min-height: 100vh; background: var(--color-bg); color: var(--color-text); font: var(--text-body)/1.6 var(--font-body); }
+.case-review-page .site-header button { font: inherit; cursor: pointer; }
+.case-review-main { width: min(680px, 100%); margin: 0 auto; padding: 32px 16px 80px; }
+.case-review .visually-hidden, .case-review-dialog .visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.case-review-back { margin: 0 0 12px; padding: 8px 0; border: 0; background: none; color: var(--color-accent-text); font: 700 14px/1.4 var(--font-body); cursor: pointer; }
+.case-review-back:hover { text-decoration: underline; }
+.case-review-heading { margin: 0 0 6px; font: 900 28px/1.3 var(--font-heading); }
+.case-review-summary { margin: 0 0 20px; color: var(--color-muted); }
+.case-review-avg { font: 900 26px/1 var(--font-heading); color: var(--color-heading); }
+.case-review-subtitle { margin: 36px 0 12px; font: 900 18px/1.4 var(--font-heading); color: var(--color-heading); }
+.case-review-note { padding: 16px; border: 1px dashed var(--color-border-strong); border-radius: 4px; background: var(--color-surface); color: var(--color-muted); word-break: keep-all; }
+.case-review-note p { margin: 0 0 12px; }
+.case-review-empty { padding: 16px; color: var(--color-muted); list-style: none; }
+
+/* 엽서 한 장 */
+.case-review-list { display: grid; gap: 14px; margin: 0; padding: 0; list-style: none; }
+.case-review-card { position: relative; padding: 22px 24px 20px; border: 6px solid transparent; border-radius: 6px; outline-offset: 4px;
+  background: linear-gradient(color-mix(in srgb, var(--color-desk-kraft) 10%, var(--color-card)), color-mix(in srgb, var(--color-desk-kraft) 10%, var(--color-card))) padding-box,
+    repeating-linear-gradient(135deg, var(--color-accent) 0 12px, var(--color-card) 12px 20px, var(--color-caution) 20px 32px, var(--color-card) 32px 40px) border-box;
+  box-shadow: 0 14px 28px -18px color-mix(in srgb, var(--color-desk-shadow) 70%, transparent); }
+.case-review-card.is-reader { padding: 16px 20px; border-width: 4px; box-shadow: none; }
+.case-review-head { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px dashed var(--color-border-strong); }
+.case-review-head h2 { margin: 0 0 4px; font: 900 21px/1.3 var(--font-heading); letter-spacing: .06em; color: var(--color-heading); }
+.case-review-head p { margin: 0; color: var(--color-muted); font-size: var(--text-small); }
+.case-review-stamp { flex: none; display: grid; place-items: center; width: 52px; height: 62px; border: 3px dotted var(--color-label); background: var(--color-paper); color: var(--color-label); font: 900 12px/1.15 var(--font-heading); transform: rotate(3deg); }
+
+/* 별점: 라디오를 숨기고 별 글자만 보인다. 키보드 포커스는 별에 링으로 */
+.case-review-stars { margin: 0 0 14px; padding: 0; border: 0; }
+.case-review-stars legend { padding: 0; margin-bottom: 4px; font-weight: 700; font-size: 14px; }
+.case-review-stars { display: flex; align-items: center; flex-wrap: wrap; gap: 0 2px; }
+.case-review-stars legend { flex-basis: 100%; }
+.case-review-star { display: grid; place-items: center; width: 44px; height: 44px; font-size: 32px; line-height: 1; color: var(--color-border-strong); cursor: pointer; transition: color .12s, scale .12s; }
+.case-review-star.is-on { color: var(--color-decor); }
+.case-review-star:hover { scale: 1.12; }
+.case-review-star:has(input:focus-visible) { outline: 3px solid var(--color-focus); outline-offset: -3px; border-radius: 6px; }
+.case-review-stars[aria-invalid="true"] .case-review-star:not(.is-on) { color: var(--color-danger-border); }
+.case-review-star-hint { margin-left: 10px; color: var(--color-muted); font-size: 14px; }
+
+.case-review-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.case-review-field label { font-weight: 700; font-size: 14px; }
+.case-review-field textarea { min-height: 112px; padding: 10px 12px; border: 1px solid var(--color-border-strong); border-radius: 4px; background: var(--color-card); color: var(--color-text); font: 400 18px/1.5 var(--font-hand); resize: vertical; }
+.case-review-field textarea[aria-invalid="true"] { border-color: var(--color-danger); }
+.case-review-count { align-self: flex-end; color: var(--color-muted); font-size: var(--text-small); font-variant-numeric: tabular-nums; }
+.case-review-error { margin: 0 0 10px; color: var(--color-danger); font-size: 14px; }
+.case-review-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.case-review-actions .primary-button { margin-left: auto; }
+.case-review-guide { margin: 8px 0 0; color: var(--color-muted); font-size: 14px; }
+.case-review-actions .case-review-guide { margin: 0; }
+
+/* 쓴 글 · 보낸 글 */
+.case-review-rating { margin: 0 0 6px; color: var(--color-decor); font-size: 22px; letter-spacing: .08em; line-height: 1.2; }
+.case-review-comment { margin: 0; font: 400 22px/1.45 var(--font-hand); color: var(--color-desk-note-pen); word-break: keep-all; overflow-wrap: anywhere; white-space: pre-wrap; }
+.case-review-by { margin: 8px 0 0; color: var(--color-muted); font-size: var(--text-small); text-align: right; }
+
+/* 접수 도장: 보낸 순간 엽서 위에 찍힌다 */
+.case-review-postmark { position: absolute; right: 7%; top: 30%; display: grid; place-items: center; width: 112px; height: 112px; border: 4px double var(--color-accent); border-radius: 50%; color: var(--color-accent); text-align: center;
+  background: color-mix(in srgb, var(--color-card) 60%, transparent); transform: rotate(-14deg); animation: case-review-stamp .35s cubic-bezier(.2, .8, .2, 1) backwards; pointer-events: none; }
+.case-review-postmark.is-still { animation: none; }
+.case-review-postmark b { font: 900 20px/1.1 var(--font-heading); letter-spacing: .06em; }
+.case-review-postmark small { font-size: 11px; font-weight: 700; }
+@keyframes case-review-stamp { from { opacity: 0; transform: rotate(-4deg) scale(1.9); } }
+@media (prefers-reduced-motion: reduce) {
+  .case-review-postmark { animation: none; }
+  .case-review-star { transition: none; }
+}
+
+@media (max-width: 680px) {
+  .case-review-main { padding-top: 20px; }
+  .case-review-card { padding: 18px 16px 16px; }
+  .case-review-postmark { width: 88px; height: 88px; top: 24px; right: 14px; }
+  .case-review-actions .primary-button { width: 100%; }
+}
+
+/* 팝업(8막 "리뷰하기" · 독자 엽서): 뒤 무대를 어둡게 가리고 같은 내용을 띄운다 */
+body.case-review-open { overflow: hidden; }
+.case-review-layer { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 16px; background: color-mix(in srgb, var(--color-desk-shadow) 55%, transparent); animation: case-review-fade .25s ease-out; }
+.case-review-dialog { position: relative; width: min(640px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior: contain; padding: 20px 20px 18px; border-radius: 10px; outline: none;
+  background: var(--color-bg); color: var(--color-text); font: var(--text-body)/1.6 var(--font-body); box-shadow: 0 24px 48px -16px color-mix(in srgb, var(--color-desk-shadow) 80%, transparent); animation: case-review-rise .35s cubic-bezier(.2, .8, .2, 1); }
+.case-review-close { display: block; margin: 18px 0 0 auto; }
+@keyframes case-review-fade { from { opacity: 0; } }
+@keyframes case-review-rise { from { opacity: 0; translate: 0 18px; scale: .96; } }
+@media (prefers-reduced-motion: reduce) { .case-review-layer, .case-review-dialog { animation: none; } }
+@media (max-width: 680px) { .case-review-layer { padding: 8px; } .case-review-dialog { max-height: calc(100dvh - 16px); padding: 14px 12px; } }

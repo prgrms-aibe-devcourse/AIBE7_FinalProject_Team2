@@ -8,6 +8,7 @@
 import { formatPenalty, formatDispositions } from '../../utils/judgmentFormat.js';
 import { formatMonths } from '../../components/recommendedRangeBar.js';
 import { renderStage, courtSet, imageOf } from '../../components/stage.js';
+import { openCaseReviewPopup } from '../caseReview/caseReviewPopup.js';
 import { restartMock, jumpActMock } from '../overview/overviewPage.js';
 import { editorNote } from '../../utils/preJudgmentCompare.js';
 import { handPaper } from '../../utils/paperHandoff.js';
@@ -63,7 +64,7 @@ function courtPhoto() {
 }
 
 // 다음 날 신문 한 장: 제호 · 1면(제목 · 사진) · 세 판결 · 판단 요소 · 칼럼(처음 → 직접) · 분석(공통점 · 차이점) · 사진란(만난 모습)
-function newspaper(data, script, caseTitle, navigate) {
+function newspaper(data, script, caseTitle, navigate, openReview) {
   const { preToFinal, judgments, matrix, ruleSentences } = data;
   const sheet = element('article', 'sheet');
   sheet.setAttribute('aria-label', '다음 날 신문');
@@ -148,12 +149,22 @@ function newspaper(data, script, caseTitle, navigate) {
   // 아래 편집부 의견은 그 첫인상을 실제 판결과 견줘 한 줄로 적는다(어느 쪽이 맞는지는 말하지 않는다).
   // 추후 확장(우선도 낮음): 사용자 데이터가 쌓이면 이 칸에 다른 독자들의 첫인상 분포를 함께 보여 줄 수 있다 — 지금은 데이터가 없어 보여 주지 않는다.
   const letter = element('div', 'sheet-letter');
+  // 엽서를 누르면 리뷰 팝업이 뜬다("리뷰하기" 버튼과 같다). 체험 중에는 누를 수 없고(아무 표시도 없다),
+  // "여기 남아있기"로 지면을 읽는 상태가 되면 stay()가 is-clickable을 붙여 연다
+  letter.addEventListener('click', () => { if (letter.classList.contains('is-clickable')) openReview(); });
+  letter.addEventListener('keydown', (event) => {
+    if (!letter.classList.contains('is-clickable') || (event.key !== 'Enter' && event.key !== ' ')) return;
+    event.preventDefault();
+    event.stopPropagation();
+    openReview();
+  });
   const letterMark = element('span', 'sheet-letter-mark');
   letterMark.setAttribute('aria-hidden', 'true');
   letterMark.append('접수', element('br'), '완료');
   letter.append(element('p', 'sheet-letter-q', '이 사건, 어느 정도의 형량이 맞다고 생각하나요?'),
     element('p', 'sheet-letter-a', preToFinal.preJudgment.label),
     element('p', 'sheet-letter-by', '— 기사만 읽고 보낸 첫인상, 독자 엽서'), element('div', 'sheet-letter-lines'), letterMark);
+  letter.append(element('p', 'sheet-letter-hint', '엽서를 눌러 이 사건 리뷰 남기기 ✎'));
   const note = editorNote(preToFinal.preJudgment.label, judgments.COURT);
   if (note) {
     const edit = element('p', 'sheet-letter-edit');
@@ -217,7 +228,7 @@ async function share(note, caseId) {
  * @returns {HTMLElement} 8막 무대. 마지막 대사창의 선택지로 다른 사건 · 메인 · 공유를 고른다
  */
 // fromRect: 7막 무대 장면이 있던 화면 사각형(이어 받을 때). 그 자리 그대로에서 신문으로 빠져나온다
-export function renderComparisonStage({ script, data, caseId, caseTitle, navigate, fromRect }) {
+export function renderComparisonStage({ script, data, caseId, caseTitle, navigate, api, fromRect }) {
   const { judgments } = data;
   const vsCourt = diffLine(judgments.USER, judgments.COURT, '실제 판결',
     '실제 판결과 형량이 같았네요. 그런데 무겁게 본 요소도 같았을까요?', (head) => `${head} 어떤 요소를 다르게 봤을까요?`);
@@ -229,7 +240,7 @@ export function renderComparisonStage({ script, data, caseId, caseTitle, navigat
   const steps = act.steps.filter((step) => editor || !step.text?.includes('{editor}'))
     .map((step) => (step.text ? { ...step, text: step.text.replace('{vsCourt}', vsCourt).replace('{vsAi}', vsAi).replace('{pre}', pre).replace('{editor}', editor ?? '') } : step));
   const narrow = window.matchMedia('(max-width: 680px)').matches;
-  const sheet = newspaper(data, script, caseTitle, navigate);
+  const sheet = newspaper(data, script, caseTitle, navigate, () => openCaseReviewPopup({ caseId, api, navigate }));
   const stage = renderStage({
     script: { ...script, acts: { ...script.acts, 8: { ...act, steps } } },
     order: ['8'],
@@ -241,7 +252,7 @@ export function renderComparisonStage({ script, data, caseId, caseTitle, navigat
     choices: { end: [
       { label: '메인으로', action: () => toDesk(), primary: true }, // 판사의 책상(데스크톱 메인)
       { label: '여기 남아있기', action: () => stay() },
-      { label: '리뷰하기', action: () => openReview() },
+      { label: '리뷰하기', action: () => openCaseReviewPopup({ caseId, api, navigate }) },
       { label: '공유하기', action: (note) => share(note, caseId) },
     ] },
     onRestart: restartMock(caseId),
@@ -254,6 +265,11 @@ export function renderComparisonStage({ script, data, caseId, caseTitle, navigat
     const from = sheet.getBoundingClientRect();
     stage.freeze();
     stage.classList.add('reading-paper');
+    const letter = sheet.querySelector('.sheet-letter');
+    letter.classList.add('is-clickable');
+    letter.setAttribute('role', 'button');
+    letter.tabIndex = 0;
+    letter.setAttribute('aria-label', '독자 엽서 — 이 사건 리뷰 남기기');
     window.scrollTo(0, 0);
     sheet.setAttribute('tabindex', '-1');
     sheet.focus({ preventScroll: true });
@@ -294,36 +310,6 @@ export function renderComparisonStage({ script, data, caseId, caseTitle, navigat
     sheet.animate([{ scale: '1 1', opacity: 1 }, { scale: '1 .5', opacity: .9, offset: .5 }, { scale: '1 .04', opacity: 0 }],
       { duration: FOLD_MS, easing: 'cubic-bezier(.5, 0, .75, 0)', fill: 'forwards' }).finished
       .catch(() => {}).then(() => { if (!closing) navigate('list', { from: 'desk' }); }); // 접는 사이 메인으로 갔다면(closing) 목록으로 되돌리지 않는다
-  }
-  // 리뷰하기(임시, BE-82 · 후속 이슈): 엽서 한 장이 떠오른다. 사건별 후기 페이지가 생기면 그 화면으로 바꾼다
-  function openReview() {
-    const layer = element('div', 'review-layer');
-    const card = element('section', 'review-postcard');
-    card.setAttribute('role', 'dialog');
-    card.setAttribute('aria-modal', 'true');
-    card.setAttribute('aria-labelledby', `review-title-${caseId}`);
-    const title = element('h2', 'review-title', '독자 엽서');
-    title.id = `review-title-${caseId}`;
-    const close = element('button', 'secondary-button', '닫기');
-    close.type = 'button';
-    const opener = document.activeElement; // 닫으면 포커스를 여기(리뷰하기 버튼)로 돌려준다
-    const shut = () => {
-      layer.remove();
-      document.removeEventListener('keydown', onKey);
-      if (opener?.isConnected) opener.focus({ preventScroll: true });
-    };
-    // 대화상자 안에 누를 수 있는 건 닫기 하나뿐이라, Tab은 그 자리에 머물게 해 뒤 무대로 빠지지 않게 한다
-    const onKey = (event) => {
-      if (event.key === 'Escape') shut();
-      else if (event.key === 'Tab') { event.preventDefault(); close.focus(); }
-    };
-    close.addEventListener('click', shut);
-    layer.addEventListener('click', (event) => { if (event.target === layer) shut(); });
-    document.addEventListener('keydown', onKey);
-    card.append(title, element('p', 'review-text', '이 사건을 체험한 소감을 엽서로 남기는 곳이에요. 곧 열려요.'), close);
-    layer.append(card);
-    document.body.append(layer);
-    close.focus();
   }
   return stage;
 }

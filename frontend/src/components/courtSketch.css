@@ -205,14 +205,3 @@ html:has(.comparison-full .stage-wrap:not(.reading-paper)) { overflow: hidden; }
   .stage-wrap .sheet-ear-left small { display: none; }
   .comparison-full .stage-wrap.reading-paper .paper-to-main { right: calc(12px + env(safe-area-inset-right, 0px)); bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
 }
-
-/* 리뷰하기(임시): 화면을 살짝 어둡게 하고 엽서 한 장이 떠오른다 */
-.review-layer { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 16px; background: color-mix(in srgb, var(--color-desk-shadow) 45%, transparent); animation: review-fade .25s ease-out; }
-.review-postcard { width: min(460px, 100%); padding: 26px 26px 22px; border: 6px solid transparent; border-radius: 6px;
-  background: linear-gradient(var(--color-card), var(--color-card)) padding-box, repeating-linear-gradient(135deg, var(--color-accent) 0 12px, var(--color-card) 12px 20px, var(--color-caution) 20px 32px, var(--color-card) 32px 40px) border-box;
-  box-shadow: 0 24px 48px -20px color-mix(in srgb, var(--color-desk-shadow) 80%, transparent); animation: review-rise .35s cubic-bezier(.2, .8, .2, 1); }
-.review-title { margin: 0 0 8px; font: 900 22px/1.3 var(--font-heading); letter-spacing: .06em; color: var(--color-heading); }
-.review-text { margin: 0 0 18px; font: 400 20px/1.5 var(--font-hand); color: var(--color-desk-note-pen); }
-@keyframes review-fade { from { opacity: 0; } }
-@keyframes review-rise { from { opacity: 0; translate: 0 18px; scale: .96; } }
-@media (prefers-reduced-motion: reduce) { .review-layer, .review-postcard { animation: none; } }

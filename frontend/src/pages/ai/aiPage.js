@@ -191,7 +191,7 @@ export async function renderAiPage(container, { caseId, caseHeader, api, navigat
       // 8막도 같은 방식으로 이어 가고 주소만 S-09로 바꾼다
       onCompared: (comparison) => {
         const fromRect = sceneRect(root); // 7막 장면 자리(이 자리 그대로에서 신문으로 빠져나온다)
-        mountNewspaperStage(root, { stage: renderComparisonStage({ script, data: comparison, caseId, caseTitle: caseHeader.title, navigate, fromRect }) });
+        mountNewspaperStage(root, { stage: renderComparisonStage({ script, data: comparison, caseId, caseTitle: caseHeader.title, navigate, api, fromRect }) });
         navigate('comparison', {}, { replace: true, keepView: true });
       },
     });
