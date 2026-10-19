@@ -71,6 +71,7 @@ export function createRouter({ view, headerHost, footerHost, routes }) {
     document.title = route.name === 'landing' ? SITE_TITLE : `${route.title} · ${SITE_TITLE}`;
     // 화면마다 새로 그린다(지금 메뉴 표시 · 로그인 상태가 바뀌므로)
     headerHost?.replaceChildren(...(route.ownsHeader ? [] : [renderSiteHeader({ navigate })]));
+    if (headerHost) headerHost.inert = false; // 이전 화면의 대화창(엽서)이 막아 둔 헤더를 푼다(stage.js)
 
     let caseHeader;
     if (route.needsHeader) {

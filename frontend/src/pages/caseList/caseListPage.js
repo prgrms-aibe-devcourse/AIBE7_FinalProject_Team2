@@ -44,9 +44,10 @@ const STATUS_VIEW = {
   COMPLETED: { badge: '완료', tone: 'done' },
 };
 const NOT_STARTED = { badge: null, tone: null };
-// 체험 대본이 없는 사건(FE-33 전)은 "준비 중"으로 표시한다(FE-56). 기사 · 사건 정보(S-20)는 읽을 수 있고, 체험 시작은 S-20에서 막는다
+// 체험 대본이 없는 사건(FE-33 전)은 "준비 중"으로 표시한다(FE-56). 기사 · 사건 정보(S-20)는 읽을 수 있고, 새 체험 시작은 S-20에서 막는다.
+// 이미 하던 · 마친 체험(myStatus)이 있으면 대본과 상관없이 그 상태를 그대로 보인다(이어서 하기 · 결과 보기는 S-20에서 열린다)
 const SOON = { badge: '준비 중', tone: 'soon' };
-const statusViewOf = (item) => (scriptFor(item.caseId, item.title) ? STATUS_VIEW[item.myStatus] ?? NOT_STARTED : SOON);
+const statusViewOf = (item) => STATUS_VIEW[item.myStatus] ?? (scriptFor(item.caseId, item.title) ? NOT_STARTED : SOON);
 const PICK_LABEL = '사건 펼쳐 보기';
 const JUMP_LABEL = '3면에 계속'; // 신문의 이어 읽기 줄(jump line). 누르면 사건 지면(S-20, 3면)으로 간다
 // shortcut: 캐릭터 얼굴은 원본 이미지 레포 PNG를 직접 읽는다(무대와 같음), 웹 webp 변환(WBS 7.6.8) 때 public 경로로 옮긴다

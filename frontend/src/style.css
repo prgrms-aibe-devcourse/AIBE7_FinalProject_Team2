@@ -295,7 +295,9 @@ h1 { font-family: var(--font-heading); color: var(--color-heading); letter-spaci
   position: sticky; top: 0; z-index: 50; display: flex; align-items: center; gap: 16px; padding: 4px 32px;
   background: var(--color-banner-bg); color: var(--color-banner-text); font: var(--text-body)/1.5 var(--font-body);
 }
-html { scroll-padding-top: 64px; } /* 포커스로 스크롤될 때 위에 붙은 헤더에 가리지 않게 */
+/* 포커스 · scrollIntoView로 스크롤될 때 위에 붙은 헤더에 가리지 않게. 높이는 main.js가 잰 값(두 줄 헤더 · 성향검사 고정 헤더 포함) */
+html { scroll-padding-top: calc(var(--site-header-h, 64px) + 8px); }
+html:has(.my-page) { scroll-padding-top: 80px; } /* 마이페이지는 화면 안에 자기 헤더를 그린다 */
 .site-header button { font: inherit; cursor: pointer; } /* 브라우저 기본 버튼 글꼴 대신 헤더 글꼴 */
 .site-header button:focus-visible { outline-color: var(--color-range-fill); }
 .site-nav { display: flex; align-items: center; gap: 8px; margin-left: auto; } /* 로고는 왼쪽, 메뉴 · 로그인은 오른쪽 */

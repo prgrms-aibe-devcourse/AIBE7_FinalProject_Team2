@@ -115,7 +115,7 @@ function paperCamera(sheet, dockTop, byKeyboard = () => false) {
     requestAnimationFrame(() => {
       const box = target.getBoundingClientRect();
       const head = Math.max(0, document.querySelector('#route-header .site-header')?.getBoundingClientRect().bottom ?? 0); // 위에 붙은 공통 헤더(FE-56)가 가리는 만큼 뺀다
-      const room = dockTop() - head - 24;
+      const room = Math.max(0, dockTop() - head - 24); // 헤더가 두 줄로 커져도 음수가 되지 않게
       const top = box.height < room ? box.top - head - (room - box.height) / 2 : box.top - head - 24;
       const y = window.scrollY + top;
       window.scrollTo({ top: y < 200 ? 0 : y, // 지면 맨 위 근처 기사는 머리글(제호)까지 보이게 맨 위로
@@ -546,6 +546,8 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
       else { board.removeAttribute('role'); board.removeAttribute('aria-modal'); board.removeAttribute('aria-label'); }
       sheet.inert = Boolean(input);
       controls.inert = Boolean(input); // 조작부(◀ 이전 등)로 Tab 포커스가 빠져나가지 않게(aria-modal만으로는 가둬지지 않는다)
+      const siteHeader = document.getElementById('route-header'); // 무대 밖 공통 헤더(FE-56)도 같이 막는다. 화면이 바뀌면 라우터가 푼다
+      if (siteHeader) siteHeader.inert = Boolean(input);
     }
     board.classList.toggle('wide', input);
     board.classList.toggle('fill', step.card === 'evidence'); // 증거판은 보드를 꽉 채운다(가운데 정렬 없음)

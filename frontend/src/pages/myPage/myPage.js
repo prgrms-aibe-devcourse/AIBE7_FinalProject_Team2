@@ -94,13 +94,13 @@ function emptyWindow() {
 
 // 닉네임 아래 프로필 수치(레벨 · 직업 · 출석 일수 · 완료한 사건 수 · 모은 일러스트 수)
 function renderStats(data) {
-  const profile = { ...MOCK_PROFILE, ...data.profile };
+  // 응답에 없거나 null이면 MOCK_PROFILE로 채우고 목데이터 표기를 붙인다(FE-56)
+  const mocked = (key) => data.profile?.[key] == null;
+  const profile = Object.fromEntries(Object.keys(MOCK_PROFILE).map((key) => [key, mocked(key) ? MOCK_PROFILE[key] : data.profile[key]]));
   const experiences = data.experiences ?? [];
   const completed = experiences.filter((item) => item.status === 'COMPLETED').length;
   const groups = collectionOf(experiences, SCRIPTS);
   const collected = groups.reduce((sum, group) => sum + group.cast.length + group.items.length, 0);
-  // 응답에 없어 MOCK_PROFILE로 채운 값에는 목데이터 표기를 붙인다(FE-56)
-  const mocked = (key) => data.profile?.[key] === undefined;
   const list = element('dl', 'my-stats');
   [
     ['레벨', `Lv.${profile.level}`, mocked('level')],
