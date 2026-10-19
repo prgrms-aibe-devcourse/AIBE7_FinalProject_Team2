@@ -1,28 +1,17 @@
-// 관리자 API 목 (API 명세 8장 A-1 ~ A-13). 7.4.7 구현 전에 S-19 화면을 만들고 확인하는 용도다.
+// 관리자 API 목 (API 명세 8장 A-1 ~ A-15). 7.4.7 구현 전에 S-19 화면을 만들고 확인하는 용도다.
 // 사건 · 원문은 모두 가상 값이다. 상태는 메모리에만 두고(새로고침하면 처음으로), 로그인 여부만 sessionStorage에 둔다.
 // 원본 판결문 같은 내부 정보를 브라우저 저장소에 남기지 않기 위해서다.
-const delay = () => new Promise((resolve) => setTimeout(resolve, 200));
-const SESSION_KEY = 'nlnb-mock-admin-session';
-const ADMIN = { adminId: 1, email: 'admin@example.com', displayName: '관리자' };
+import { ADMIN, SESSION_KEY, delay, fail, now, requireLogin } from './adminMockBase.js';
 
-function fail(code, message, extra = {}) {
-  throw { code, message, currentStatus: null, details: null, ...extra };
-}
-
-function loggedIn() {
-  try { return sessionStorage.getItem(SESSION_KEY) === '1'; } catch { return false; }
-}
-function requireLogin() {
-  if (!loggedIn()) fail('UNAUTHORIZED', '로그인이 필요해요.', { status: 401 });
-}
-
-const now = () => new Date().toISOString();
+export * from './adminOpsMockApi.js'; // 운영 메뉴(대시보드 · 회원 · 게시글 · 신고 · 관리자 계정 · 공지) 목
 
 function baseFactors(prefix) {
   return [
-    { factorId: prefix + 1, displayOrder: 1, label: '빌린 돈을 갚으라는 말에 화가 나 다툼이 시작됐다', preLabel: '금전 문제로 다투다 일어났다', revealStage: 'OVERVIEW', summaryTag: '금전 갈등', valueAxis: 'FAULT_STANDARD', valueAxisStatus: 'AUTO', valueAxisVotes: { runs: 5, counts: { FAULT_STANDARD: 3, NONE: 2 }, needsReview: false } },
-    { factorId: prefix + 2, displayOrder: 2, label: '범행 뒤 스스로 경찰서를 찾아갔다', preLabel: null, revealStage: 'DETAIL', summaryTag: '자수', valueAxis: 'APOLOGY_SINCERITY', valueAxisStatus: 'AUTO', valueAxisVotes: { runs: 5, counts: { APOLOGY_SINCERITY: 5 }, needsReview: false } },
-    { factorId: prefix + 3, displayOrder: 3, label: '유족과 합의하지 못했다', preLabel: null, revealStage: 'DETAIL', summaryTag: '합의 없음', valueAxis: null, valueAxisStatus: 'AUTO', valueAxisVotes: { runs: 5, counts: { PRINCIPLE_RELATION: 2, NONE: 3 }, needsReview: true } },
+    // 요약어 후보(BE-80): 제안 / 목록에 있음 / 애매함 / 후보 계산을 켜지 않음(null) 네 경우를 한 사건에서 모두 볼 수 있게 섞었다
+    { factorId: prefix + 1, displayOrder: 1, label: '빌린 돈을 갚으라는 말에 화가 나 다툼이 시작됐다', preLabel: '금전 문제로 다투다 일어났다', revealStage: 'OVERVIEW', summaryTag: '금전 갈등', valueAxis: 'FAULT_STANDARD', valueAxisStatus: 'AUTO', valueAxisVotes: { runs: 5, counts: { FAULT_STANDARD: 3, NONE: 2 }, needsReview: false }, summaryTagCandidates: { candidates: [{ tag: '채무 다툼', score: 0.9211 }, { tag: '반복된 다툼', score: 0.8735 }], inVocabulary: false, ambiguous: false, suggested: '채무 다툼' } },
+    { factorId: prefix + 2, displayOrder: 2, label: '범행 뒤 스스로 경찰서를 찾아갔다', preLabel: null, revealStage: 'DETAIL', summaryTag: '자수', valueAxis: 'APOLOGY_SINCERITY', valueAxisStatus: 'AUTO', valueAxisVotes: { runs: 5, counts: { APOLOGY_SINCERITY: 5 }, needsReview: false }, summaryTagCandidates: { candidates: [{ tag: '자수', score: 1 }], inVocabulary: true, ambiguous: false, suggested: null } },
+    { factorId: prefix + 3, displayOrder: 3, label: '유족과 합의하지 못했다', preLabel: null, revealStage: 'DETAIL', summaryTag: '합의 없음', valueAxis: null, valueAxisStatus: 'AUTO', valueAxisVotes: { runs: 5, counts: { PRINCIPLE_RELATION: 2, NONE: 3 }, needsReview: true }, summaryTagCandidates: { candidates: [{ tag: '합의 불발', score: 0.8812 }, { tag: '피해 회복 없음', score: 0.8764 }], inVocabulary: false, ambiguous: true, suggested: null } },
+    { factorId: prefix + 4, displayOrder: 4, label: '범행 당시 술에 취한 상태였다', preLabel: null, revealStage: 'DETAIL', summaryTag: '음주', valueAxis: 'FAULT_STANDARD', valueAxisStatus: 'AUTO', valueAxisVotes: { runs: 5, counts: { FAULT_STANDARD: 5 }, needsReview: false }, summaryTagCandidates: null },
   ];
 }
 
@@ -40,12 +29,32 @@ function aiJudgmentBody(prisonMonths) {
   };
 }
 
+// 값 모양은 파이프라인 build_generation_report(tools/ai-judgment/pipeline.py)와 같다.
+// 회차 1은 경고 · 의심 판정이 있는 경우, 회차 2는 깨끗한 경우, 회차 3은 점검을 건너뛴 경우를 보여 준다
 function aiGeneration(round) {
+  const contamination = [
+    { verdict: 'SUSPECT', reason: '가까운 응답 3/5 (비율 기준 이상)', counts: { EXACT: 0, CLOSE: 2, SAME_TYPE: 1, FAR: 2, KNOWS: 0, INVALID: 0 }, criteria: { minAnswered: 3, exactRatio: 0.5, suspectRatio: 0.5 } },
+    { verdict: 'CLEAN', reason: '응답 5개 중 정확히 · 가깝게 맞힌 비율이 기준 미만', counts: { EXACT: 0, CLOSE: 1, SAME_TYPE: 0, FAR: 4, KNOWS: 0, INVALID: 0 }, criteria: { minAnswered: 3, exactRatio: 0.5, suspectRatio: 0.5 } },
+    { verdict: 'SKIPPED' },
+  ][round - 1];
   return {
     modelName: '(가상 모델)',
     promptVersion: 'v-mock',
-    inputSnapshot: { similarPrecedents: ['가상 판례 A', '가상 판례 B'], guideline: '살인범죄 양형기준 (가상 버전)' },
-    generationReport: { warnings: round === 1 ? ['참고 판례 1건의 죄명이 다름'] : [], contaminationCheck: '통과', selectedRound: round, selectionReason: '판단 요소 근거가 가장 구체적인 회차' },
+    inputSnapshot: {
+      promptVersion: 'v-mock',
+      system: '당신은 형사 사건의 양형을 판단하는 재판부다. (가상 시스템 프롬프트)',
+      user: '사건 개요: 빌려준 돈을 돌려받는 문제로 다투던 중 …\n참고 판례: 가상 판례 A, 가상 판례 B\n양형기준: 살인범죄 양형기준 (가상 버전)',
+    },
+    generationReport: {
+      runKey: `mock-run-${round}`, pipeline: 'mock-pipeline', modelSpec: 'gemini:gemini-mock', servedModel: 'gemini-mock-001', runIndex: round, generatedAt: '2026-10-20T09:00:00+09:00',
+      usage: { inputTokens: 5210, outputTokens: 840 },
+      validationWarnings: round === 1 ? ['참고 판례 1건의 죄명이 다름'] : [],
+      selection: { strategy: 'consensus', reason: '판단 요소 근거가 가장 구체적인 회차', score: 0.8125 },
+      contamination,
+      rag: round === 3
+        ? { status: 'SKIPPED' }
+        : { status: 'OK', fallbackReasons: [], embeddingModel: 'gemini-embedding-mock', guideline: '살인범죄 양형기준 (가상 버전)', guidelineBasis: 'CURRENT', guidelineFactors: [], precedents: [{ id: 801, score: 0.9123 }, { id: 802, score: 0.8841 }], excludedSuspects: 1, warnings: [] },
+    },
   };
 }
 
@@ -54,7 +63,7 @@ function judgment(judgmentId, caseId, subjectType, prisonMonths, extra = {}) {
     judgmentId, caseId, subjectType,
     reviewStatus: 'PENDING', isPublished: false, reviewedBy: null, reviewedAt: null, reviewNote: null,
     judgment: aiJudgmentBody(prisonMonths),
-    generation: subjectType === 'AI' ? aiGeneration(judgmentId % 2 + 1) : null,
+    generation: subjectType === 'AI' ? aiGeneration(judgmentId % 3 + 1) : null,
     createdAt: '2026-10-20T09:00:00+09:00',
     ...extra,
   };
@@ -90,6 +99,7 @@ function createState() {
         createdAt: '2026-10-18T09:00:00+09:00', updatedAt: '2026-10-19T09:00:00+09:00',
       },
     ],
+    imports: [],
     judgments: [
       judgment(501, 12, 'AI', 180),
       judgment(503, 12, 'AI', 168, { createdAt: '2026-10-20T09:05:00+09:00' }),
@@ -310,4 +320,82 @@ export async function publishCase(caseId) {
   item.status = 'PUBLISHED';
   item.updatedAt = now();
   return detail(item);
+}
+
+// A-14 · A-15 사건 등록 (원본 판결문 → 파이프라인 실행). 초안 계약 — 백엔드(파이프라인 자바화) 구현 전 목이다.
+// 목은 getImport를 부를 때마다 단계를 하나씩 진행한다. 원문 텍스트에 [실패]가 있으면 비식별화 단계에서 실패한다.
+const IMPORT_STAGES = ['extract', 'court', 'contamination', 'rag', 'generate', 'select', 'axis', 'load'];
+const COURT_LEVELS = ['FIRST', 'APPEAL', 'SUPREME'];
+const MAX_ORIGINAL_LENGTH = 200000;
+
+export async function createImport(request) {
+  await delay();
+  requireLogin();
+  const invalid = (field) => fail('VALIDATION_ERROR', '입력값을 확인해 주세요.', { status: 400, details: [{ field, reason: 'INVALID' }] });
+  const sources = request?.sources;
+  if (!['MURDER', 'FRAUD', 'INJURY'].includes(request?.crimeType)) invalid('crimeType');
+  if (!Array.isArray(sources) || sources.length < 1 || sources.length > 3) invalid('sources');
+  sources.forEach((source, index) => {
+    if (!COURT_LEVELS.includes(source?.courtLevel)) invalid(`sources[${index}].courtLevel`);
+    if (!source.caseNumber || source.caseNumber.length > 50) invalid(`sources[${index}].caseNumber`);
+    if (!source.originalText?.trim() || source.originalText.length > MAX_ORIGINAL_LENGTH) invalid(`sources[${index}].originalText`);
+    if (source.decidedAt && !/^\d{4}-\d{2}-\d{2}$/.test(source.decidedAt)) invalid(`sources[${index}].decidedAt`);
+  });
+  if (new Set(sources.map((source) => source.courtLevel)).size !== sources.length) invalid('sources');
+  if (state.imports.some((item) => item.status === 'QUEUED' || item.status === 'RUNNING')) fail('IMPORT_IN_PROGRESS', '다른 사건을 등록하는 중이에요. 끝난 뒤 다시 시도해 주세요.', { status: 409 });
+  const known = new Set(state.cases.flatMap((item) => item.sources.map((source) => source.caseNumber)));
+  if (sources.some((source) => known.has(source.caseNumber))) fail('DUPLICATE_SOURCE', '이미 등록한 사건번호예요.', { status: 409 });
+
+  const entry = {
+    importId: state.imports.length + 1, status: 'QUEUED', crimeType: request.crimeType, step: -1,
+    willFail: sources.some((source) => source.originalText.includes('[실패]')),
+    sources: sources.map(({ originalText, ...rest }) => { void originalText; return rest; }), // 원문은 목에도 남기지 않는다
+    caseId: null, errorCode: null, message: null, createdAt: now(), finishedAt: null,
+  };
+  state.imports.push(entry);
+  return { importId: entry.importId, status: entry.status };
+}
+
+function importView(entry) {
+  const stages = IMPORT_STAGES.map((name, index) => {
+    let status = 'PENDING';
+    if (index < entry.step) status = 'DONE';
+    else if (index === entry.step) status = entry.status === 'FAILED' ? 'FAILED' : entry.status === 'RUNNING' ? 'RUNNING' : 'DONE';
+    if (entry.status === 'SUCCEEDED') status = 'DONE';
+    return { name, status };
+  });
+  return structuredClone({
+    importId: entry.importId, status: entry.status, stages, caseId: entry.caseId,
+    errorCode: entry.errorCode, message: entry.message, createdAt: entry.createdAt, finishedAt: entry.finishedAt,
+  });
+}
+
+function finishImport(entry) {
+  const caseId = Math.max(...state.cases.map((item) => item.caseId)) + 1;
+  const judgmentId = Math.max(...state.judgments.map((item) => item.judgmentId)) + 1;
+  const first = entry.sources[0];
+  state.cases.push({
+    caseId, status: 'DRAFT', content: content(`새로 등록한 사건 #${caseId}`, { crimeType: entry.crimeType, incidentDate: first.decidedAt ?? null }),
+    sources: entry.sources.map((source, index) => ({ sourceId: 900 + caseId * 10 + index, ...source, isFinal: Boolean(source.isFinal), note: source.note ?? null, hasOriginalText: true })),
+    factors: baseFactors(caseId * 100), penaltyRules: 1, createdAt: now(), updatedAt: now(),
+  });
+  state.judgments.push(judgment(judgmentId, caseId, 'AI', 168, { createdAt: now() }), judgment(judgmentId + 1, caseId, 'COURT', 144, { createdAt: now() }));
+  Object.assign(entry, { status: 'SUCCEEDED', caseId, finishedAt: now() });
+}
+
+export async function getImport(importId) {
+  await delay();
+  requireLogin();
+  const entry = state.imports.find((item) => item.importId === Number(importId)) ?? fail('IMPORT_NOT_FOUND', '등록 작업을 찾을 수 없어요.', { status: 404 });
+  if (entry.status === 'QUEUED' || entry.status === 'RUNNING') {
+    entry.step += 1;
+    entry.status = 'RUNNING';
+    if (entry.willFail && entry.step === 0) {
+      Object.assign(entry, { status: 'FAILED', errorCode: 'EXTRACT_FAILED', message: '비식별화에 실패했어요. 원문을 확인한 뒤 다시 등록해 주세요.', finishedAt: now() });
+    } else if (entry.step >= IMPORT_STAGES.length) {
+      entry.step = IMPORT_STAGES.length - 1;
+      finishImport(entry);
+    }
+  }
+  return importView(entry);
 }

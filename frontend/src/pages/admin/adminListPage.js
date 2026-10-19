@@ -13,16 +13,20 @@ const SIZE = 20;
 export function renderAdminListPage(container, { navigate }) {
   return renderAdminShell(container, {
     navigate,
+    section: 'cases',
     title: '검수 사건 목록',
     draw: async ({ api, main, active, unauthorized }) => {
       let filter = FILTERS[0];
       let page = 0;
 
       const heading = element('h1', '', '검수 사건 목록');
+      const register = button('+ 사건 등록', () => navigate('adminRegister'), 'primary-button admin-register-button');
+      const top = element('div', 'admin-list-top');
+      top.append(heading, register);
       const tabs = element('div', 'admin-tabs');
       tabs.setAttribute('role', 'tablist');
       const body = element('div', 'admin-list-body');
-      main.replaceChildren(heading, tabs, body);
+      main.replaceChildren(top, tabs, body);
 
       function drawTabs() {
         tabs.replaceChildren(...FILTERS.map((item) => {

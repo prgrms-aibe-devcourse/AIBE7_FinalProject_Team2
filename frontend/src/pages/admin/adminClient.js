@@ -1,6 +1,6 @@
 // 관리자 API 전용 fetch (API 명세 8-1). 사용자 화면의 공용 src/api/client.js와 따로 둔다.
 // - 세션 쿠키(NLNB_ADMIN_SESSION)를 함께 보낸다(credentials: 'include').
-// - 상태를 바꾸는 요청(POST · PATCH · PUT)은 쿠키 XSRF-TOKEN 값을 헤더 X-XSRF-TOKEN에 담는다.
+// - 상태를 바꾸는 요청(POST · PATCH · PUT · DELETE)은 쿠키 XSRF-TOKEN 값을 헤더 X-XSRF-TOKEN에 담는다.
 //   쿠키가 없으면 A-1(GET /admin/auth/csrf)로 먼저 받는다. 403이 오면 토큰을 새로 받아 한 번만 다시 보낸다.
 // - 실패하면 사용자 API와 같은 에러 본문 { code, message, currentStatus, details, status }를 throw한다.
 import { API_BASE_URL } from '../../api/config.js';
@@ -83,3 +83,4 @@ export const adminGet = (endpoint) => send('GET', endpoint);
 export const adminPost = (endpoint, body) => mutate('POST', endpoint, body);
 export const adminPatch = (endpoint, body) => mutate('PATCH', endpoint, body);
 export const adminPut = (endpoint, body) => mutate('PUT', endpoint, body);
+export const adminDelete = (endpoint) => mutate('DELETE', endpoint);
