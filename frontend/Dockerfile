@@ -26,6 +26,14 @@ FROM nginx:1.28-alpine
 # 기본 설정을 지우고 우리 설정만 둔다 (/api 프록시 · SPA fallback)
 RUN rm /etc/nginx/conf.d/default.conf
 COPY nginx/default.conf /etc/nginx/conf.d/default.conf
+# 80 · 443 server가 함께 include하는 앱 location · Let's Encrypt 확인 경로 (BE-75)
+COPY nginx/snippets/ /etc/nginx/snippets/
+
+# HTTPS (BE-75): 인증서가 있을 때만 컨테이너 시작 시 https server를 만든다 (docs/decisions/BE-75.md)
+# - 템플릿은 /etc/nginx/templates/가 아닌 곳에 둔다. 공식 이미지가 그 폴더를 인증서 확인 없이 conf.d로 바꿔 넣기 때문이다
+# - 스크립트는 공식 이미지의 시작 단계(/docker-entrypoint.d/, 이름 순서)에서 실행된다. 실행 권한이 있어야 실행된다
+COPY nginx/https.conf.template /etc/nginx/lawnambul/https.conf.template
+COPY --chmod=755 nginx/40-enable-https.sh /docker-entrypoint.d/40-enable-https.sh
 
 # 빌드 결과만 복사한다. preview.html · sample.html은 vite build 입력이 아니라 운영 이미지에 들어가지 않는다
 COPY --from=build /app/dist /usr/share/nginx/html
@@ -36,4 +44,4 @@ COPY --from=build /app/dist /usr/share/nginx/html
 ARG GIT_SHA=local
 RUN printf '{"revision":"%s"}\n' "$GIT_SHA" > /usr/share/nginx/html/version.json
 
-EXPOSE 80
+EXPOSE 80 443

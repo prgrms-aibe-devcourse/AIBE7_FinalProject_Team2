@@ -1,6 +1,6 @@
 # 배포 (BE-58, WBS 7.1.1 · Redis BE-61, WBS 7.1.4 · 자동 배포 BE-60, WBS 7.1.3)
 
-운영은 서버 한 대에 컨테이너 네 개를 띄운다. 밖으로 여는 포트는 웹 80 하나뿐이다.
+운영은 서버 한 대에 컨테이너 네 개를 띄운다. 밖으로 여는 포트는 웹 80 · 443뿐이다 (443은 인증서가 있을 때만 열린다, 아래 "HTTPS").
 
 ```text
 브라우저 ──▶ web (Nginx :80) ──┬─ /            → 정적 파일 (Vite 빌드, 실제 모드)
@@ -16,12 +16,16 @@
 | `docker-compose.monitoring-agent.yml` | 서버 전용 덧붙임 파일. 모니터링 에이전트(Alloy · node_exporter)와 backend의 로그 볼륨 · 8081 포트 (COMMON-43). `.env`의 `MONITORING_AGENT=1`이면 `deploy.sh`가 자동으로 함께 쓴다 |
 | `alloy-agent.alloy` | 위 Alloy 설정. 백엔드 로그를 모니터링 호스트의 Loki로 보낸다 (COMMON-43) |
 | `.env.example` | 환경변수 예시. `.env`로 복사해 쓴다 (`.env`는 커밋하지 않음) |
-| `smoke-test.sh` | `/` · 화면 주소 · `/api` · 캐시 정책 확인. CI와 서버에서 같은 스크립트를 쓴다 |
+| `smoke-test.sh` | `/` · 화면 주소 · `/api` · 캐시 정책 · Let's Encrypt 확인 경로 확인. CI와 서버에서 같은 스크립트를 쓴다 |
 | `deploy.sh` | 서버 배포 한 번: sha 이미지로 교체 → 준비 대기 → 스모크 테스트 → 실패하면 직전 이미지로 되돌림 (BE-60) |
 | `cd-agent.sh` | 자동 배포 확인: GHCR의 `main` 이미지가 바뀌었으면 `deploy.sh` 실행 (BE-60) |
 | `cd/lawnambul-cd.service` · `.timer` | `cd-agent.sh`를 2분마다 부르는 systemd 설정 (서버에 한 번 설치) |
 | `../frontend/Dockerfile` | 웹 이미지 (Vite 빌드 → Nginx). 커밋 해시를 `/version.json`에 넣는다 |
-| `../frontend/nginx/default.conf` | Nginx 설정 (`/api` 프록시 · SPA fallback · 캐시 · `/version.json`) |
+| `../frontend/nginx/default.conf` | Nginx 설정: Rate limit zone · 기본 http server (localhost · IP · 발급 전 도메인) |
+| `../frontend/nginx/snippets/app.conf` | 앱 location (`/api` 프록시 · Rate limit · SPA fallback · 캐시 · `/version.json`). http · https server가 함께 include |
+| `../frontend/nginx/snippets/acme-challenge.conf` | Let's Encrypt 도메인 확인 경로 (http 전용) |
+| `../frontend/nginx/https.conf.template` · `40-enable-https.sh` | 인증서가 있을 때만 컨테이너 시작 시 https server를 만든다: 도메인 · www를 `https://<도메인>` 하나로 이동, 모르는 이름의 TLS는 거절 (BE-75) |
+| `https/reload-web.sh` | 인증서 갱신 뒤 Nginx 다시 읽기 (certbot 갱신 훅, 서버에 한 번 설치) |
 | `../.github/workflows/deploy-images.yml` | 이미지 빌드 → 스모크 테스트 → GHCR 업로드 → (main) 운영 배포 확인 |
 
 ## 이미지가 만들어지는 흐름
@@ -109,7 +113,7 @@ systemctl list-timers lawnambul-cd.timer      # 다음 확인 시각이 보이�
 sudo systemctl start lawnambul-cd.service; journalctl -u lawnambul-cd -n 20 --no-pager
 ```
 
-- Actions 쪽 확인을 켜려면 저장소 **Settings → Secrets and variables → Actions → Variables**에 `DEPLOY_URL`(예: `http://<탄력적 IP>`)을 넣는다(저장소 관리자). 없으면 확인 job이 건너뛰기만 하고, 배포는 서버가 그대로 한다.
+- Actions 쪽 확인을 켜려면 저장소 **Settings → Secrets and variables → Actions → Variables**에 `DEPLOY_URL`을 넣는다(저장소 관리자). HTTPS 적용 후에는 `https://naelawnambul.today` (`http://<도메인>`은 https로 이동해 확인이 실패한다, 아래 "HTTPS"). 없으면 확인 job이 건너뛰기만 하고, 배포는 서버가 그대로 한다.
 
 ### 운영 중 쓰는 명령
 
@@ -150,15 +154,102 @@ rm .deploy/failed_rev                         # 실패해서 건너뛰는 커밋
 - 켠 뒤에는 서버에서 `git pull` · 파일 직접 수정을 하지 않는다. 저장소 사본은 `cd-agent.sh`가 배포하는 커밋으로 옮긴다(브랜치가 아니라 커밋에 고정, detached). 고칠 게 있으면 PR로 `main`에 올린다.
 - 반영까지 최대 2 ~ 3분(확인 주기) + 기동 시간이 걸린다.
 
-## HTTPS 전 제한 (도메인 확보 후 해결)
+## HTTPS (BE-75)
 
-- 익명 ID 쿠키 `NLNB_AID`는 항상 `Secure`다(`AnonymousIdCookie.java`, API 명세 1-2). 브라우저는 **http에서 `Secure` 쿠키를 저장하지 않는다** (`localhost`만 예외).
-- 그래서 IP · http로 열면 `/`와 조회 API(사건 목록 등)는 동작하지만, **체험 시작 이후 흐름(익명 ID가 필요한 API)은 동작하지 않는다.** 관리자 세션 쿠키(`SESSION_COOKIE_SECURE`)도 같다.
-- 도메인을 정하면 인증서(Let's Encrypt)를 붙여 HTTPS로 연다. 그 전까지 체험 흐름 확인은 로컬(`localhost`)에서 한다.
+도메인 `naelawnambul.today`(www 포함)에 Let's Encrypt 인증서를 붙여 https로 연다. 왜 이렇게 나눴는지는 [결정 기록](../docs/decisions/BE-75.md).
+
+```text
+http://localhost · http://<탄력적 IP>          → 기본 http server: 그대로 응답 (deploy.sh · CI 스모크 테스트용)
+http://naelawnambul.today · http://www.       → 301 → https://naelawnambul.today (인증서가 있을 때만)
+https://www.naelawnambul.today                → 301 → https://naelawnambul.today (주소를 하나로: 쿠키가 호스트 단위)
+https://naelawnambul.today                    → 앱 (http와 같은 snippets/app.conf: /api 프록시 · Rate limit · SPA)
+https://<탄력적 IP> · 다른 이름                 → TLS 연결 거절 (인증서를 보내지 않음)
+http://<도메인>/.well-known/acme-challenge/  → 인증서 확인 파일 (이동하지 않음, 발급 · 갱신에 필요)
+```
+
+- **인증서는 서버 호스트의 certbot이 발급 · 갱신한다.** 웹 컨테이너는 `/etc/letsencrypt`의 `live/` · `archive/`만 읽기 전용으로 붙여 읽기만 한다(certbot 계정 키가 있는 `accounts/`는 넣지 않는다).
+- **https는 컨테이너가 시작할 때 켜진다.** `40-enable-https.sh`가 `.env`의 `SERVER_DOMAIN`과 인증서 파일을 확인해, 둘 다 있으면 https server를 만들고 아니면 http만 띄운다. 그래서 CI · 로컬 · 발급 전 서버는 지금과 똑같이 동작한다.
+- **인증서가 없어도 배포가 실패하지 않는다.** https만 안 켜지고, 로그에 `⚠ … 인증서가 없어 http만 연다`가 남는다.
+
+### 처음 한 번: 서버에서 발급
+
+BE-75가 `main`에 배포된 뒤 서버에서 한다. 준비: DNS A 레코드(`@` · `www` → 탄력적 IP), 보안 그룹 80 · 443 열림.
+
+```bash
+cd /opt/lawnambul/app/deploy
+
+# 1) .env에 네 값 추가 (IMAGE_TAG처럼 deploy.sh가 관리하는 값이 아니므로 손으로 넣어도 된다)
+#    SERVER_DOMAIN=naelawnambul.today
+#    LETSENCRYPT_LIVE_DIR=/etc/letsencrypt/live
+#    LETSENCRYPT_ARCHIVE_DIR=/etc/letsencrypt/archive
+#    CERTBOT_WEBROOT=/var/www/certbot
+# 폴더를 먼저 만들어 둔다 (certbot 설치 전이라 아직 없다. 없는 경로를 붙이면 Docker가 대신 만들지만, 오타를 바로 알아채도록 직접 만든다)
+sudo mkdir -p /var/www/certbot /etc/letsencrypt/live /etc/letsencrypt/archive
+
+# 2) 웹만 다시 만들어 위 폴더를 붙인다. --no-deps: backend를 건드리지 않는다
+#    (overlay 파일은 backend만 바꾸므로 웹은 base 파일만으로 다시 만들어도 같다)
+docker compose -f docker-compose.prod.yml up -d --no-build --no-deps web
+
+# 3) 확인 경로가 열렸는지: 404가 나와야 한다 (200이면 SPA로 새는 중 → 이미지가 BE-75 이전인지 /version.json 확인)
+curl -s -o /dev/null -w '%{http_code}\n' http://naelawnambul.today/.well-known/acme-challenge/check
+
+# 4) certbot 설치 → 시험 발급(횟수 제한 없음) → 실제 발급
+sudo apt-get update && sudo apt-get install -y certbot
+sudo certbot certonly --webroot -w /var/www/certbot \
+  -d naelawnambul.today -d www.naelawnambul.today \
+  --email <팀 메일> --agree-tos --no-eff-email --dry-run
+sudo certbot certonly --webroot -w /var/www/certbot \
+  -d naelawnambul.today -d www.naelawnambul.today \
+  --email <팀 메일> --agree-tos --no-eff-email
+
+# 5) 웹을 다시 시작해 https를 켠다 → 로그에 "✅ https 활성화"가 보여야 한다
+docker compose -f docker-compose.prod.yml restart web
+docker compose -f docker-compose.prod.yml logs --tail 20 web | grep 40-enable-https
+
+# 6) 갱신 훅 설치: 갱신 직후 Nginx가 새 인증서를 읽게 한다 (없으면 90일 뒤 만료 경고)
+sudo install -m 755 https/reload-web.sh /etc/letsencrypt/renewal-hooks/deploy/lawnambul-reload-web.sh
+systemctl list-timers certbot.timer          # apt의 certbot이 하루 두 번 갱신을 확인한다 (만료 30일 전부터 실제 갱신)
+sudo certbot renew --dry-run                 # 갱신 시험
+```
+
+- 저장소 변수 `DEPLOY_URL`을 `https://naelawnambul.today`로 바꾼다(저장소 관리자, 위 "자동 배포(CD)").
+
+### 확인
+
+```bash
+curl -sI http://naelawnambul.today | head -3             # 301 + Location: https://naelawnambul.today/
+curl -sI https://naelawnambul.today | head -1            # 200
+curl -sI https://www.naelawnambul.today | grep -i '^location'   # 301 → https://naelawnambul.today/
+curl -sk --max-time 5 https://<탄력적 IP>/ ; echo "exit=$?"     # 연결 거절(exit 35)이 정상: 모르는 이름은 TLS를 끊는다
+curl -s http://localhost/version.json                    # 서버 안: 이동 없이 그대로 (deploy.sh 스모크 테스트 경로)
+./smoke-test.sh https://naelawnambul.today               # https로 전체 스모크 테스트
+echo | openssl s_client -connect naelawnambul.today:443 -servername naelawnambul.today 2>/dev/null \
+  | openssl x509 -noout -issuer -subject -ext subjectAltName -dates   # 발급자 Let's Encrypt · www 포함 · 만료일
+sudo certbot certificates                                # 서버의 인증서 목록 · 남은 기간
+```
+
+### 문제가 생겼을 때
+
+| 증상 | 원인 · 할 일 |
+| --- | --- |
+| 로그 `⚠ … 인증서가 없어 http만 연다` | 발급 전이면 정상. 발급했다면 `.env`의 `LETSENCRYPT_LIVE_DIR` · `LETSENCRYPT_ARCHIVE_DIR`가 빠져 빈 볼륨이 붙은 것 → 값을 넣고 위 2) 명령 (둘 중 archive만 빠져도 링크가 끊겨 "없음"으로 보인다) |
+| 로그 `SERVER_DOMAIN이 없어 http만 연다` | `.env`에 `SERVER_DOMAIN`이 없다 |
+| certbot `Timeout during connect` | 보안 그룹 80이 닫혀 있거나 DNS가 다른 IP를 가리킨다 (`dig +short naelawnambul.today`) |
+| certbot `unauthorized` · `404` | `CERTBOT_WEBROOT`가 빠져 확인 파일이 컨테이너에 안 보인다 → 위 2) · 3) 다시 |
+| certbot `too many failed authorizations` | 실패를 반복해 1시간 제한. 이후에는 `--dry-run`으로 먼저 확인한다 |
+| https 접속 거절 · http만 됨 | 위 5) 로그 확인. 인증서를 발급한 뒤 웹을 다시 시작하지 않았거나 2) 전에 발급했다 |
+| 90일 뒤 브라우저 만료 경고 | 갱신 훅(6) 누락. `sudo certbot renew` 후 `sudo /etc/letsencrypt/renewal-hooks/deploy/lawnambul-reload-web.sh` |
+
+### HTTPS로 풀리는 것 · 남은 것
+
+- 익명 ID 쿠키 `NLNB_AID`는 항상 `Secure`다(`AnonymousIdCookie.java`, API 명세 1-2). 브라우저는 **http에서 `Secure` 쿠키를 저장하지 않는다** (`localhost`만 예외). 그래서 **https로 열어야 체험 시작 이후 흐름(익명 ID가 필요한 API)이 동작한다.** 관리자 세션 쿠키(`SESSION_COOKIE_SECURE`)도 같다.
+- IP · http(`http://<탄력적 IP>`)로는 여전히 위 흐름이 동작하지 않는다. 사용자에게는 도메인 주소만 안내한다.
+- **HSTS는 아직 켜지 않았다.** 갱신이 한 번 이상 문제없이 도는 것을 본 뒤 짧은 `max-age`부터 켠다 (결정 기록 "추후 재검토").
+- 카카오 로그인(BE-62) 운영 앱의 Redirect URI는 `https://naelawnambul.today/...`로 등록한다.
 
 ## Rate limit (BE-63, WBS 7.4.6 1차)
 
-한 IP가 `/api`를 짧은 시간에 너무 많이 부르면 **Nginx가 백엔드 앞에서 막는다**(t3.small 한 대 보호). 설정은 `../frontend/nginx/default.conf`에 있고 웹 이미지에 함께 들어간다.
+한 IP가 `/api`를 짧은 시간에 너무 많이 부르면 **Nginx가 백엔드 앞에서 막는다**(t3.small 한 대 보호). zone은 `../frontend/nginx/default.conf`, 적용(`limit_req`)은 `../frontend/nginx/snippets/app.conf`에 있고 웹 이미지에 함께 들어간다.
 
 | 설정 | 값 | 이유 |
 | --- | --- | --- |
@@ -186,7 +277,7 @@ docker compose -f docker-compose.prod.yml logs --tail 3 web
 ```
 
 - 앞에 로드 밸런서 · CDN을 두면 그 장비의 IP로 묶인다. 그때는 `set_real_ip_from`(그 장비 대역) + `real_ip_header X-Forwarded-For`를 같이 설정한다.
-- HTTPS(443 server 블록)를 추가할 때도 `/api` location에 같은 `limit_req` · `error_page 429`를 넣는다. 빠뜨리면 https로는 제한이 걸리지 않는다.
+- HTTPS(BE-75)의 443 server도 http와 같은 `snippets/app.conf`를 include하므로 `/api`에 같은 `limit_req` · `error_page 429`가 걸린다. 앱 location은 이 파일에서만 고친다. zone도 하나라 한 IP의 http · https 요청을 합쳐 센다.
 - **백엔드가 보는 IP(관리자 감사 로그)**는 아직 Nginx 컨테이너 IP다. 위 확인이 끝나면 `server.forward-headers-strategy=native`를 켠다(기술 스택 3장 "감사 로그", D). Nginx가 사용자 IP를 못 보는 상태에서 켜면 위조된 `X-Forwarded-For`가 그대로 기록될 수 있어 순서를 지킨다.
 
 ## Redis (BE-61, docs/tech-stack.md 2장 "Redis 운영 구성")
@@ -240,4 +331,4 @@ docker compose -f docker-compose.prod.yml -f docker-compose.real-seed.yml up -d 
 | 백엔드 healthcheck 추가 (BE-66 이후) | Actuator(관리 포트 8081)에는 Redis 헬스체크가 자동으로 붙고, 커넥션 팩토리 두 개가 `redis` 아래 묶인다. **실측(BE-61, Boot 4.1.1)**: Redis를 끄면 `/actuator/health`는 **DOWN(503)**, `/actuator/health/liveness` · `/readiness`는 **UP**, API는 정상. liveness · readiness는 추가 설정 없이 이미 열려 있다. 그래서 컨테이너 healthcheck · 재시작 조건에는 **`/actuator/health`가 아니라 `/actuator/health/liveness`** 를 쓴다(전체 상태를 쓰면 Redis 장애 때 백엔드까지 재시작된다) |
 | 7.4.6 Rate limit 2차 (10/23) | 로그인 · 토큰 재발급 엔드포인트에 더 엄격한 zone을 `default.conf`에 추가 (1차는 위 "Rate limit") |
 | 서버 IP 확인 후 (D) | `server.forward-headers-strategy=native`로 백엔드가 사용자 IP를 받게 함 (위 "서버에서 꼭 확인" 다음에) |
-| 도메인 확보 후 | `default.conf`에 443 · 인증서 · http → https 이동 추가 |
+| HTTPS 안정화 후 (BE-75 후속) | 갱신이 한 번 이상 정상으로 돈 뒤 `https.conf.template`에 HSTS를 짧은 `max-age`부터 추가 |

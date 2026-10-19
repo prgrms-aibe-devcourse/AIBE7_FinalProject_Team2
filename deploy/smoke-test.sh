@@ -9,6 +9,7 @@
 # 2) /api 가 백엔드 JSON을 돌려주는지 — 없는 API 주소도 HTML이 아니라 JSON이어야 한다
 #    (Nginx가 /api를 index.html로 떨어뜨리면 프론트가 "서버 응답을 해석할 수 없어요"를 띄운다, FE-2 리뷰)
 # 3) 정적 파일 캐시 정책 — assets는 오래 캐시, index.html은 캐시 안 함
+# 4) Let's Encrypt 확인 경로가 SPA fallback으로 새지 않는지 (BE-75) — index.html이 나가면 인증서 발급 · 갱신이 실패한다
 
 set -uo pipefail
 
@@ -88,6 +89,24 @@ if [[ "$CACHE_CONTROL" == *no-cache* ]]; then
   pass "index.html → 캐시 안 함 ($CACHE_CONTROL)"
 else
   fail "index.html Cache-Control: ${CACHE_CONTROL:-없음} (no-cache여야 새 배포가 바로 보인다)"
+fi
+
+echo "[HTTPS 준비]"
+# 없는 확인 파일은 404여야 한다. 200 + HTML이면 SPA fallback이 이 경로를 가로챈 것 (snippets/acme-challenge.conf)
+# - https 주소로 실행하면(도메인 server) 이 경로는 http에만 있으므로 건너뛴다
+# - 기본은 경고만 남긴다: deploy.sh는 되돌릴 때 이 새 스크립트로 BE-75 이전 이미지(이 경로가 없음)를 검사하므로,
+#   실패로 치면 되돌림까지 실패한다. CI(deploy-images.yml)는 SMOKE_REQUIRE_ACME=1로 새 이미지에 대해 실패로 친다
+if [[ "$BASE_URL" == https://* ]]; then
+  pass "https 주소라 확인 경로 검사를 건너뜀 (http 전용 경로)"
+else
+  request "/.well-known/acme-challenge/smoke-test-not-found"
+  if [[ "$STATUS" == "404" ]]; then
+    pass "/.well-known/acme-challenge/ → 404 (SPA로 새지 않음)"
+  elif [[ "${SMOKE_REQUIRE_ACME:-}" == "1" ]]; then
+    fail "/.well-known/acme-challenge/ → $STATUS ($CONTENT_TYPE), 404여야 인증서 발급이 된다"
+  else
+    echo "  ⚠ /.well-known/acme-challenge/ → $STATUS ($CONTENT_TYPE), 404가 아니다 — BE-75 이전 이미지면 정상, 아니면 인증서 발급 · 갱신이 실패한다"
+  fi
 fi
 
 if [[ "$FAILED" == "0" ]]; then
