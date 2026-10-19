@@ -22,17 +22,7 @@ export function renderLoginPage(container, { api, navigate }) {
 
   const user = currentUser();
   if (user) showSignedIn(user);
-  else if (!api.login) showNotReady();
   else showForm();
-
-  // 사용자 로그인이 없는 실제 모드(api.login 없음): 입력칸을 보여 주지 않고 처음부터 준비 중이라고 알린다
-  function showNotReady() {
-    const heading = element('h1', '', '로그인');
-    heading.id = 'login-heading';
-    const actions = element('div', 'login-actions');
-    actions.append(button('사건 목록으로', () => navigate('list'), 'primary-button'), button('처음으로', () => navigate('landing'), 'secondary-button'));
-    card.replaceChildren(heading, element('p', 'login-lead', NOT_READY), actions);
-  }
 
   // 이미 로그인한 채로 왔을 때: 누구로 로그인했는지 + 마이페이지(관리자는 관리자 페이지) · 로그아웃
   function showSignedIn({ nickname }) {
@@ -51,10 +41,12 @@ export function renderLoginPage(container, { api, navigate }) {
     card.replaceChildren(heading, element('p', 'login-lead', `${nickname} 님으로 로그인한 상태예요.`), actions);
   }
 
+  // 사용자 로그인이 없는 실제 모드(api.login 없음)에서는 카카오 · 회원가입 없이 관리자 로그인 입력칸만 보여 주고, 일반 로그인은 준비 중이라고 알린다 (FE-53)
   function showForm() {
+    const adminOnly = !api.login;
     const heading = element('h1', '', '로그인');
     heading.id = 'login-heading';
-    const lead = element('p', 'login-lead', '로그인하지 않아도 모든 판결 체험을 할 수 있어요.');
+    const lead = element('p', 'login-lead', adminOnly ? NOT_READY : '로그인하지 않아도 모든 판결 체험을 할 수 있어요.');
     const parts = [heading, lead];
     if (API_MODE === 'mock') {
       parts.push(element('p', 'login-mock-note', '개발용 목업 로그인이에요. 아무 아이디 · 비밀번호로 들어가지고(admin으로 시작하는 아이디는 관리자), 입력값은 어디에도 보내거나 남기지 않아요.'));
@@ -102,7 +94,7 @@ export function renderLoginPage(container, { api, navigate }) {
     signupButton.setAttribute('aria-label', '회원가입 — 준비 중');
     signup.append(signupButton);
 
-    parts.push(kakao, divider, form, signup);
+    parts.push(...(adminOnly ? [form] : [kakao, divider, form, signup]));
     card.replaceChildren(...parts);
 
     function showError(message) {
