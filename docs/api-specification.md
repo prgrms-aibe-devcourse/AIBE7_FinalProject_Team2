@@ -781,6 +781,8 @@ API 1 · 2 · 16은 상태와 관계없이 부를 수 있다. 표에 없는 조�
 | A-11 | `PATCH /admin/cases/{caseId}` | 사건 내용 수정 | BE-43 |
 | A-12 | `PUT /admin/factors/{factorId}/value-axis` | 판단 요소 가치관 축 확정 | BE-43 · BE-48 |
 | A-13 | `POST /admin/cases/{caseId}/publish` | 사건 공개 | BE-43 |
+| A-14 | `POST /admin/case-imports` | 사건 등록 시작 (원본 판결문 → 파이프라인 실행) **초안** | 미정 (FE-45 제안) |
+| A-15 | `GET /admin/case-imports/{importId}` | 사건 등록 진행 상황 **초안** | 미정 (FE-45 제안) |
 
 ### A-5. 검수 사건 목록 — `GET /admin/cases`
 
@@ -1067,7 +1069,77 @@ API 1 · 2 · 16은 상태와 관계없이 부를 수 있다. 표에 없는 조�
 | 409 `INVALID_STATE` | 이미 `PUBLISHED`(`CASE_PUBLISHED`) |
 | 409 `PUBLISH_NOT_READY` | 공개 조건 미충족. `details`에 `[{ "field": "case", "reason": "NO_PUBLISHED_AI" }, …]` |
 
-**에러 코드**: 1-5의 `JUDGMENT_NOT_FOUND` · `FACTOR_NOT_FOUND` · `DUPLICATE_TITLE` · `PUBLISH_NOT_READY`(v0.17 추가)와 공통 코드를 쓴다.
+### A-14. 사건 등록 시작 — `POST /admin/case-imports` (초안)
+
+> **초안이다.** 파이프라인(`tools/ai-judgment`)을 자바로 옮긴 뒤 서버가 구현한다. 화면(FE-45)은 이 계약의 목으로 먼저 만들었고, 서버 구현 전에는 404가 온다. 계약이 바뀌면 이 절과 `adminMockApi.js`를 함께 고친다.
+
+원본 판결문을 받아 파이프라인(비식별화 · 구조화 → 재판부 판결 정리 → 사전 학습 점검 → 참고 자료 검색 → AI 판결 생성 → 회차 선택 → 가치관 축 분류 → 적재)을 서버에서 실행한다. 오래 걸리므로 **작업만 만들고 202로 바로 돌려준다.**
+
+```json
+{
+  "crimeType": "MURDER",
+  "sources": [
+    {
+      "courtLevel": "FIRST",
+      "caseNumber": "2099고합000",
+      "courtName": "가상지방법원",
+      "decidedAt": "2025-01-10",
+      "isFinal": true,
+      "sourceOrg": "법제처",
+      "note": null,
+      "originalText": "…"
+    }
+  ]
+}
+```
+
+| 필드 | 규칙 |
+| --- | --- |
+| `crimeType` | 필수. `MURDER` · `FRAUD` · `INJURY` |
+| `sources` | 필수. 1 ~ 3건, 심급(`courtLevel`: `FIRST` · `APPEAL` · `SUPREME`)이 서로 달라야 한다 |
+| `sources[].caseNumber` | 필수, 50자 이하. 이미 등록된 사건번호면 409 `DUPLICATE_SOURCE` |
+| `sources[].originalText` | 필수, 200,000자 이하. 원본 판결문이라 요청 본문 로그에 남기지 않는다 |
+| 그 밖 | `courtName` · `decidedAt`(YYYY-MM-DD) · `isFinal` · `sourceOrg` · `note`는 선택. 사건 원본 정보(`case_source`)에 저장한다 |
+
+응답 202: `{ "importId": 1, "status": "QUEUED" }`
+
+| 거절 | 조건 |
+| --- | --- |
+| 400 `VALIDATION_ERROR` | 위 규칙 위반. `details`에 `[{ "field": "sources[0].originalText", "reason": "INVALID" }]` |
+| 409 `DUPLICATE_SOURCE` | 이미 등록한 사건번호 |
+| 409 `IMPORT_IN_PROGRESS` | 실행 중인 등록이 있음 (한 번에 하나만. 외부 AI 호출 한도 보호) |
+
+- 감사 로그 `CASE_IMPORT`를 남긴다(원문은 남기지 않고 사건번호 · 심급만).
+
+### A-15. 사건 등록 진행 상황 — `GET /admin/case-imports/{importId}` (초안)
+
+```json
+{
+  "importId": 1,
+  "status": "RUNNING",
+  "stages": [
+    { "name": "extract", "status": "DONE" },
+    { "name": "court", "status": "RUNNING" },
+    { "name": "contamination", "status": "PENDING" }
+  ],
+  "caseId": null,
+  "errorCode": null,
+  "message": null,
+  "createdAt": "2026-10-20T09:00:00+09:00",
+  "finishedAt": null
+}
+```
+
+- `status`: `QUEUED` · `RUNNING` · `SUCCEEDED` · `FAILED`. 화면은 끝날 때까지 2초마다 묻는다.
+- `stages[].name`: `extract` · `court` · `contamination` · `rag` · `generate` · `select` · `axis` · `load`. 건너뛴 단계는 `SKIPPED`, 값은 `PENDING` · `RUNNING` · `DONE` · `SKIPPED` · `FAILED`.
+- `SUCCEEDED`이면 `caseId`가 채워지고, 사건은 `DRAFT`로 적재된다. A-5 목록 · A-6 상세로 이어서 검수한다.
+- `FAILED`이면 `errorCode` · `message`를 내려 준다. `message`에 원문 · 모델 출력을 담지 않는다.
+
+| 거절 | 조건 |
+| --- | --- |
+| 404 `IMPORT_NOT_FOUND` | 등록 작업이 없음 |
+
+**에러 코드**: 1-5의 `JUDGMENT_NOT_FOUND` · `FACTOR_NOT_FOUND` · `DUPLICATE_TITLE` · `PUBLISH_NOT_READY`(v0.17 추가)와 공통 코드를 쓴다. 사건 등록 초안(A-14 · A-15)은 `DUPLICATE_SOURCE` · `IMPORT_IN_PROGRESS` · `IMPORT_NOT_FOUND`를 더 쓴다(1-5 목록에는 서버 구현 때 추가).
 
 - `CASE_NOT_FOUND`는 관리자 API에서 "사건이 없음"만 뜻한다(사용자 API는 "없거나 `PUBLISHED`가 아님").
 
@@ -1084,6 +1156,46 @@ API 1 · 2 · 16은 상태와 관계없이 부를 수 있다. 표에 없는 조�
 | 7 | 관리자 OAuth(BE-40, D)와 체인 | 관리자 체인에 `oauth2Login` 자리 연결은 B, 성공 처리 · 허용 목록은 D (#108, WBS v1.9 7-2-1) | D 정민석 |
 
 ---
+
+### 8-4. 운영 메뉴 API (초안, A-16 ~ A-41)
+
+> **초안이다.** 관리자 화면(FE-45)의 운영 메뉴(대시보드 · 회원 · 게시글 · 신고 · 관리자 계정 · 공지)를 목으로 먼저 만들면서 정한 계약이다. 회원 · 게시글 · 신고 기능은 서버에 아직 없다(마이그레이션 · 엔티티 포함). 서버를 구현하는 쪽이 이 절을 기준으로 하되, 바꾸면 이 절과 `frontend/src/pages/admin/adminOpsMockApi.js` · `adminOpsRealApi.js`를 함께 고친다.
+>
+> 공통: 8-1(인증 · CSRF · 401)을 따른다. 목록은 `?page=0&size=20`(size 1 ~ 100)을 받고 `{ items, page, size, totalElements }`로 답한다. 상태를 바꾸는 요청은 감사 로그를 남긴다(`AdminAuditAction`에 행동 추가 필요). 사용자가 쓴 글 · 닉네임은 화면이 `textContent`로만 그리지만 서버도 HTML을 걸러서 저장한다.
+
+| # | 메서드 · 경로 | 용도 |
+| --- | --- | --- |
+| A-16 | `GET /admin/dashboard` | 대시보드 (처리할 일 건수 · 최근 7일 일별 가입 · 체험 · 최근 관리자 활동 5건) |
+| A-17 | `GET /admin/members?keyword&status` | 회원 목록 (닉네임 · 이메일 검색, `status`: `ACTIVE` · `SUSPENDED` · `WITHDRAWN`) |
+| A-18 | `GET /admin/members/{memberId}` | 회원 상세 (가입 경로 · 체험 수 · 신고 받은 횟수 · 정지 정보 · 최근 게시글) |
+| A-19 | `POST /admin/members/{memberId}/suspend` | 회원 정지. 본문 `{ "reason": "…(1~200자)", "days": 7 }`, `days`가 null이면 직접 해제할 때까지 |
+| A-20 | `POST /admin/members/{memberId}/restore` | 정지 해제 |
+| A-21 | `GET /admin/posts?keyword&status&reported` | 게시글 목록 (`status`: `VISIBLE` · `HIDDEN` · `DELETED`, `reported=true`면 신고된 글만) |
+| A-22 | `GET /admin/posts/{postId}` | 게시글 상세 (본문 · 댓글 포함) |
+| A-23 | `POST /admin/posts/{postId}/hide` | 숨김 `{ "reason" }` |
+| A-24 | `POST /admin/posts/{postId}/restore` | 숨김 복구 |
+| A-25 | `POST /admin/posts/{postId}/delete` | 삭제(소프트 삭제, 되돌릴 수 없음) `{ "reason" }` |
+| A-26 | `POST /admin/comments/{commentId}/hide` | 댓글 숨김 |
+| A-27 | `POST /admin/comments/{commentId}/restore` | 댓글 숨김 복구 |
+| A-28 | `GET /admin/reports?status&targetType` | 신고 목록 (`status`: `PENDING` · `RESOLVED` · `REJECTED`, `targetType`: `POST` · `COMMENT` · `MEMBER`) |
+| A-29 | `POST /admin/reports/{reportId}/resolve` | 신고 처리 `{ "action": "HIDE" \| "SUSPEND" \| "WARN", "note": "…(1~300자)" }`. `HIDE`는 게시글 · 댓글, `SUSPEND`는 회원 신고에만. 대상에도 반영한다 |
+| A-30 | `POST /admin/reports/{reportId}/reject` | 신고 기각 `{ "note" }` |
+| A-31 | `GET /admin/accounts` | 관리자 계정 목록 (`role`: `SUPER` · `REVIEWER`) |
+| A-32 | `POST /admin/accounts` | 관리자 추가 `{ "email", "displayName", "role" }`. 비밀번호는 받지 않는다(초대 절차는 서버가 정한다) |
+| A-33 | `POST /admin/accounts/{adminId}/activate` | 계정 다시 사용 |
+| A-34 | `POST /admin/accounts/{adminId}/deactivate` | 계정 비활성화 (로그인 중이면 다음 요청부터 401, BE-67과 같은 규칙) |
+| A-35 | `GET /admin/audit-logs?action` | 감사 로그 열람 (기존 `admin_audit_log`) |
+| A-36 | `GET /admin/notices` | 공지 목록 (고정 → 최신 순) |
+| A-37 | `POST /admin/notices` | 공지 등록 `{ "title", "body", "pinned", "published" }` |
+| A-38 | `PATCH /admin/notices/{noticeId}` | 공지 수정 (바뀐 필드만: `title` · `body` · `pinned` · `published`) |
+| A-39 | `GET /admin/banned-words` | 금칙어 목록 |
+| A-40 | `POST /admin/banned-words` | 금칙어 추가 `{ "word" }` (30자 이하) |
+| A-41 | `DELETE /admin/banned-words/{word}` | 금칙어 삭제 |
+
+- **상태 충돌(409 `INVALID_STATE`)**: `details[0].reason`에 `ALREADY_SUSPENDED` · `MEMBER_WITHDRAWN` · `NOT_SUSPENDED` · `NOT_VISIBLE` · `NOT_HIDDEN` · `ALREADY_DELETED` · `ALREADY_HANDLED` · `SELF_DEACTIVATE`(자기 계정 비활성화 금지)를 쓴다.
+- **그 밖 에러**: 404 `MEMBER_NOT_FOUND` · `POST_NOT_FOUND` · `COMMENT_NOT_FOUND` · `REPORT_NOT_FOUND` · `ADMIN_NOT_FOUND` · `NOTICE_NOT_FOUND` · `WORD_NOT_FOUND`, 409 `DUPLICATE_EMAIL` · `DUPLICATE_WORD`, 400 `VALIDATION_ERROR`.
+- **권한(미정)**: 화면은 `SUPER` · `REVIEWER`를 구분해 보여 주기만 한다. 메뉴별 접근 제한(예: 관리자 계정은 `SUPER`만)은 서버 구현 때 정하고, 정하면 `GET /admin/auth/me`가 `role`을 내려 줘야 한다.
+- 회원 이메일은 화면에 그대로 보인다. 서버가 마스킹해서 내릴지는 개인정보 방침과 함께 정한다.
 
 ## 9. (확장) 성향 API (7.6.4)
 

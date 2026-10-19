@@ -1,6 +1,7 @@
 import { button, element } from '../../components/siteLayout.js';
 import { loadAdminApi } from './adminApi.js';
 import { errorText } from './adminLabels.js';
+import { ADMIN_MENU, homeRoute, isMenuReady } from './adminMenu.js';
 import './admin.css';
 
 // S-19 관리자 화면 틀: 로그인 확인(A-4) → 없으면 로그인 폼(A-1 · A-2) → 있으면 화면을 그린다.
@@ -9,10 +10,11 @@ import './admin.css';
 
 /**
  * @param {HTMLElement} container
- * @param {{ navigate: Function, title: string, draw: (ctx) => Promise<void> }} options
+ * @param {{ navigate: Function, title: string, section?: string, draw: (ctx) => Promise<void> }} options
+ *   section  왼쪽 메뉴에서 눌린 것으로 표시할 항목(adminMenu.js의 key)
  *   draw(ctx)  ctx = { api, admin, main, active, unauthorized, setTitle }
  */
-export async function renderAdminShell(container, { navigate, title, draw }) {
+export async function renderAdminShell(container, { navigate, title, section, draw }) {
   const root = element('div', 'admin-page');
   container.replaceChildren(root);
   const active = () => container.contains(root);
@@ -20,12 +22,38 @@ export async function renderAdminShell(container, { navigate, title, draw }) {
   if (!active()) return;
 
   const header = element('header', 'admin-header');
-  const brand = button('', () => navigate('admin'), 'admin-brand');
+  const brand = button('', () => navigate(homeRoute()), 'admin-brand');
   brand.append('내', element('span', 'law', 'Law'), '남불 ', element('small', '', '관리자'));
   const user = element('div', 'admin-user');
   header.append(brand, user);
   const main = element('main', 'admin-main');
-  root.append(header, main);
+  const body = element('div', 'admin-body');
+  body.append(drawMenu(), main);
+  root.append(header, body);
+
+  // 왼쪽 메뉴: 로그인 전에는 숨긴다(showLogin이 body.dataset.locked로 가린다)
+  function drawMenu() {
+    const nav = element('nav', 'admin-menu');
+    nav.setAttribute('aria-label', '관리자 메뉴');
+    ADMIN_MENU.forEach((group) => {
+      const block = element('div', 'admin-menu-group');
+      block.append(element('p', 'admin-menu-title', group.group));
+      group.items.forEach((item) => {
+        const link = button(item.label, () => navigate(item.route), `admin-menu-item${item.key === section ? ' is-active' : ''}`);
+        if (item.key === section) link.setAttribute('aria-current', 'page');
+        if (!isMenuReady(item)) {
+          link.classList.add('is-soon');
+          link.setAttribute('aria-disabled', 'true');
+          link.setAttribute('aria-label', `${item.label} — 준비 중`);
+          link.append(element('small', '', '준비 중'));
+          link.addEventListener('click', (event) => event.stopImmediatePropagation(), { capture: true });
+        }
+        block.append(link);
+      });
+      nav.append(block);
+    });
+    return nav;
+  }
 
   function setTitle(text) {
     document.title = `${text} · 관리자 · 내Law남불`;
@@ -38,6 +66,7 @@ export async function renderAdminShell(container, { navigate, title, draw }) {
   }
 
   function showLogin(notice) {
+    body.dataset.locked = '1';
     user.replaceChildren();
     setTitle('로그인');
     const form = element('form', 'admin-login');
@@ -106,6 +135,7 @@ export async function renderAdminShell(container, { navigate, title, draw }) {
   }
 
   async function enter(admin) {
+    delete body.dataset.locked;
     user.replaceChildren(element('span', '', admin.displayName || admin.email), button('로그아웃', logout, 'secondary-button'));
     setTitle(title);
     const ctx = {
