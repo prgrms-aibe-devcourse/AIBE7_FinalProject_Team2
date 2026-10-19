@@ -1,6 +1,3 @@
-// TODO: API 6에 사건 제목 없음, 정합성 2차 점검 D-01 결정 후 실제 제목 공급원으로 교체.
-export const mockCaseHeader = { caseId: 1, title: '빌린 돈 문제로 찾아온 지인을 살해한 사건', chargeName: '살인' };
-
 export const mockSections = {
   1: { step: 1, stage: 'OVERVIEW', items: [
     { sectionType: 'OVERVIEW', title: '사건 개요',
