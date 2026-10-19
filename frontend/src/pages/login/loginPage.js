@@ -111,7 +111,15 @@ export function renderLoginPage(container, { api, navigate }) {
       error.hidden = true;
       try {
         // 아이디 · 비밀번호는 관리자 계정인지 먼저 본다. 관리자면 마이페이지 자리가 관리자 페이지가 된다 (FE-53)
-        const admin = request.method === 'password' ? await tryAdminLogin(request.id, request.password) : null;
+        // 관리자 로그인이 불안정해도 일반 로그인은 막지 않는다: 일반 로그인이 있으면 관리자 쪽 오류는 넘기고, 관리자 입력칸만 있을 때(adminOnly)만 알린다
+        let admin = null;
+        if (request.method === 'password') {
+          try {
+            admin = await tryAdminLogin(request.id, request.password);
+          } catch (failure) {
+            if (adminOnly) throw failure;
+          }
+        }
         if (!container.contains(root)) return; // 기다리는 사이 다른 화면으로 갔으면 이동하지 않는다
         if (admin) {
           saveUser({ nickname: admin.displayName || admin.email, role: 'admin' });

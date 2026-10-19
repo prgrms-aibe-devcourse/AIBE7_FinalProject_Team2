@@ -65,7 +65,7 @@ function account(navigate, here) {
   const me = button('', () => navigate(admin ? homeRoute() : 'me'), 'nav-button login-button is-user');
   me.append(element('span', 'account-name', user.nickname));
   me.setAttribute('aria-label', `${user.nickname} — ${admin ? '관리자 페이지' : '마이페이지'}`);
-  if (here === (admin ? '/admin' : '/me')) me.setAttribute('aria-current', 'page');
+  if (admin ? here.startsWith('/admin') : here === '/me') me.setAttribute('aria-current', 'page');
   return me;
 }
 
