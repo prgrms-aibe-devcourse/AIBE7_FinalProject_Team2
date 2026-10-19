@@ -719,6 +719,10 @@ class GenerateCompareTest(unittest.TestCase):
         self.assertEqual((openai_row["prisonMin"], openai_row["prisonMedian"], openai_row["prisonMax"]),
                          (120, 165, 210))
         self.assertAlmostEqual(openai_row["crossCaseMedianStdev"], 40.0)  # 사건별 중앙값 125 · 205
+        # 사건 내 변동(각 사건 [120,130] · [200,210]의 표준편차 5.0 · IQR 5.0)의 평균. 사건 간 난이도
+        # 차이(120~210 전체를 풀어서 구하면 훨씬 큰 값이 나온다)가 섞이지 않아야 한다.
+        self.assertAlmostEqual(openai_row["prisonStdev"], 5.0)
+        self.assertAlmostEqual(openai_row["prisonIqr"], 5.0)
         self.assertEqual(openai_row["inRecommended"], 3)  # A: 120·130 모두, B: 200만 (210은 범위 밖)
 
         gemini_row = by_model["gemini:gem-x"]
@@ -730,9 +734,13 @@ class GenerateCompareTest(unittest.TestCase):
         markdown = render_markdown_aggregate(["사건 A", "사건 B"], rows)
         self.assertIn("사건 2개", markdown)
         self.assertIn("openai:gpt-x", markdown)
-        self.assertIn("요소 일관성", markdown)
+        # 판단 요소 · 권고 범위 칸은 사건 간 집계표에 없다(행 dict에는 남아 있어도 표에는 안 보인다)
+        self.assertNotIn("요소 방향 일관성", markdown)
+        self.assertNotIn("전체 다수 의견 일치율", markdown)
+        self.assertNotIn("권고 범위 안", markdown)
         csv_text = render_csv_aggregate(rows)
         self.assertIn("사건 수", csv_text)
+        self.assertNotIn("권고 범위 안", csv_text)
         self.assertEqual(len(csv_text.strip().splitlines()), 3)
 
     def test_aggregate_cli_rejects_case_and_court(self):
@@ -748,14 +756,26 @@ class GenerateCompareTest(unittest.TestCase):
 
     def test_aggregate_cli_combines_batches(self):
         self.run_batch()
+        other_case = copy.deepcopy(self.case)
+        other_case["title"] = "사건 B"
         other = Path(self.tmp.name) / "other"
-        generate_runs(self.case, ["openai:gpt-x"], 1, other, caller=fake_caller({"openai:gpt-x": [self.output]}),
+        generate_runs(other_case, ["openai:gpt-x"], 1, other, caller=fake_caller({"openai:gpt-x": [self.output]}),
                      log=lambda *_: None)
         argv = ["compare.py", str(self.batch_dir), str(other)]
         with mock.patch.object(sys, "argv", argv), mock.patch("sys.stdout", new_callable=io.StringIO) as out:
             self.assertEqual(compare_main(), 0)
         self.assertIn("사건 간 집계", out.getvalue())
         self.assertIn("openai:gpt-x", out.getvalue())
+
+    def test_aggregate_cli_rejects_duplicate_case(self):
+        self.run_batch()
+        other = Path(self.tmp.name) / "other"
+        generate_runs(self.case, ["openai:gpt-x"], 1, other, caller=fake_caller({"openai:gpt-x": [self.output]}),
+                     log=lambda *_: None)
+        argv = ["compare.py", str(self.batch_dir), str(other)]
+        with mock.patch.object(sys, "argv", argv), mock.patch("sys.stderr", new_callable=io.StringIO) as err:
+            self.assertEqual(compare_main(), 1)
+        self.assertIn("같은 사건", err.getvalue())
 
     def test_no_key_in_records(self):
         with mock.patch.dict(os.environ, FAKE_KEYS):

@@ -222,6 +222,17 @@ def aggregate(cases, prices=None):
 
     cases는 (case 입력, 모델별 실행 목록) 목록이다. 판단 요소는 사건마다 구성이 달라
     요소 일관성 · 전체 다수 의견 칸은 만들지 않는다.
+
+    `prisonStdev` · `prisonIqr`은 모든 사건의 형량을 한데 모아 구하지 않는다. 그렇게 하면 사건 자체의
+    난이도 차이(사건이 다르면 형량이 다른 게 당연함)와 같은 사건 안에서 회차마다 달라지는 변동이 뒤섞인다.
+    대신 사건별로 각각 구한 뒤 평균을 낸다("사건 내" 변동만 본다). 사건 간 차이는 `crossCaseMedianStdev`가
+    따로 본다.
+
+    `inRecommended`(권고 범위 안)는 `case`에 `recommended`가 있을 때만 계산되지만, CLI(`compare.py`에
+    폴더를 여러 개 주는 경우)는 결과 폴더만으로 사건의 권고 범위를 복원할 수 없어 항상 `None`이 된다
+    (`docs/decisions/BE-85.md` "2차" 참고). 그래서 CLI가 쓰는 렌더 함수(`render_markdown_aggregate`·
+    `render_csv_aggregate`)는 이 칸을 표에 넣지 않는다. 값 자체는 `recommended`를 넣어 `aggregate()`를
+    직접 호출하는 코드를 위해 행(dict)에는 남겨 둔다.
     """
     prices = prices or {}
     specs = sorted({spec for _, groups in cases for spec in groups})
@@ -229,6 +240,7 @@ def aggregate(cases, prices=None):
     rows = []
     for spec in specs:
         records, case_medians, in_recommended, recommended_counted = [], [], 0, False
+        case_stdevs, case_iqrs = [], []
         case_count = 0
         for case, groups in cases:
             case_records = groups.get(spec)
@@ -241,6 +253,11 @@ def aggregate(cases, prices=None):
                            if r["finalPenalty"] == "PRISON" and isinstance(r["output"].get("prisonMonths"), int)]
             if case_prison:
                 case_medians.append(statistics.median(case_prison))
+            case_stdev, case_iqr = _stdev(case_prison), _iqr(case_prison)
+            if case_stdev is not None:
+                case_stdevs.append(case_stdev)
+            if case_iqr is not None:
+                case_iqrs.append(case_iqr)
             recommended = case.get("recommended")
             if recommended and case_prison:
                 recommended_counted = True
@@ -267,8 +284,8 @@ def aggregate(cases, prices=None):
             "prisonMin": min(prison) if prison else None,
             "prisonMedian": statistics.median(prison) if prison else None,
             "prisonMax": max(prison) if prison else None,
-            "prisonStdev": _stdev(prison),
-            "prisonIqr": _iqr(prison),
+            "prisonStdev": _mean(case_stdevs),
+            "prisonIqr": _mean(case_iqrs),
             "crossCaseMedianStdev": _stdev(case_medians),
             "suspended": sum(1 for r in valid if r["output"].get("suspensionMonths") is not None),
             "inRecommended": in_recommended if recommended_counted else None,
@@ -367,11 +384,10 @@ AGGREGATE_COLUMNS = [
     ("prisonMin", "징역 최소(개월)"),
     ("prisonMedian", "징역 중앙값"),
     ("prisonMax", "징역 최대"),
-    ("prisonStdev", "징역 표준편차"),
-    ("prisonIqr", "징역 IQR"),
+    ("prisonStdev", "징역 표준편차(사건 내 평균)"),
+    ("prisonIqr", "징역 IQR(사건 내 평균)"),
     ("crossCaseMedianStdev", "사건별 중앙값 편차"),
     ("suspended", "집행유예"),
-    ("inRecommended", "권고 범위 안"),
 ] + COST_COLUMNS[1:]
 RATE_KEYS = {"factorConsistency", "consensusAgreement", "courtPenaltyMatch"}
 
@@ -433,7 +449,9 @@ def render_markdown_aggregate(case_titles, rows):
         "",
         f"- 사건 {len(case_titles)}개: " + ", ".join(case_titles),
         "- 판단 요소는 사건마다 구성이 달라 요소 일관성 · 전체 다수 의견 칸은 만들지 않는다(사건별 비교표 참고).",
+        "- 징역 표준편차 · IQR은 사건별로 구한 값의 평균이다(사건 간 난이도 차이가 아니라 같은 사건 안 회차 간 변동만 본다).",
         "- 사건별 중앙값 편차: 모델이 사건별로 낸 징역 중앙값들의 표준편차. 낮을수록 사건이 달라져도 비슷한 수준으로 선고한다.",
+        "- 권고 범위는 결과 폴더만으로 복원할 수 없어 집계표에는 넣지 않는다(사건별 비교표는 --case를 주면 계산한다).",
         "", "## 판결 결과", "", markdown_table(AGGREGATE_COLUMNS, rows), "",
     ]
     return "\n".join(parts)
@@ -462,10 +480,15 @@ def main():
         if len(args.batch_dir) > 1:
             if args.case or args.court:
                 raise CompareError("여러 사건을 합산할 때는 --case · --court를 쓸 수 없습니다 (사건마다 달라서 하나로 못 정합니다)")
-            cases, case_titles = [], []
+            cases, case_titles, seen_titles = [], [], set()
             for batch_dir in args.batch_dir:
                 batch, groups = load_runs(batch_dir)
-                case_titles.append(batch.get("caseTitle") or batch_dir)
+                title = batch.get("caseTitle") or batch_dir
+                if title in seen_titles:
+                    raise CompareError(f"같은 사건({title})의 결과 폴더를 여러 번 줄 수 없습니다 "
+                                       "(중복 집계를 막기 위해 폴더마다 다른 사건이어야 합니다)")
+                seen_titles.add(title)
+                case_titles.append(title)
                 cases.append((_case_from_records(groups), groups))
             rows = aggregate(cases, parse_prices(args.price))
             markdown = render_markdown_aggregate(case_titles, rows)
