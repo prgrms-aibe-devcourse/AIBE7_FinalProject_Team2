@@ -1,6 +1,6 @@
 import { button, element } from '../../components/siteLayout.js';
 import { errorText } from './adminLabels.js';
-import { badge, createLoader, dataTable, errorLine, formatDate, pageTop, runAction, tabBar } from './adminKit.js';
+import { badge, createLoader, dataTable, checkField, errorLine, formatDate, labeledField, pageTop, runAction, tabBar } from './adminKit.js';
 import { renderAdminShell } from './adminShell.js';
 
 // 공지 · 설정 (A-36 ~ A-41). 공지 작성 · 공개 / 비공개 · 상단 고정, 금칙어 목록.
@@ -31,12 +31,10 @@ export function renderAdminNoticesPage(container, { navigate }) {
         const text = Object.assign(element('textarea'), { rows: 5, maxLength: 2000 });
         const pinned = Object.assign(element('input'), { type: 'checkbox' });
         const published = Object.assign(element('input'), { type: 'checkbox' });
-        const field = (label, control) => { const wrap = element('label', 'admin-field'); wrap.append(element('span', '', label), control); return wrap; };
-        const check = (label, control) => { const wrap = element('label', 'admin-check'); wrap.append(control, element('span', '', label)); return wrap; };
         const error = errorLine();
         const submit = element('button', 'primary-button', '공지 등록');
         submit.type = 'submit';
-        form.append(field('제목 (100자 이하)', title), field('내용 (2,000자 이하)', text), check('상단에 고정', pinned), check('바로 공개', published), error, submit);
+        form.append(labeledField('제목 (100자 이하)', title), labeledField('내용 (2,000자 이하)', text), checkField('상단에 고정', pinned), checkField('바로 공개', published), error, submit);
         form.addEventListener('submit', async (event) => {
           event.preventDefault();
           if (!title.value.trim() || !text.value.trim()) { error.textContent = '제목과 내용을 입력해 주세요.'; return; }

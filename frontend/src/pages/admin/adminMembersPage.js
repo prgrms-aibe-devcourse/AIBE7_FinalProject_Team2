@@ -1,6 +1,6 @@
 import { button, element } from '../../components/siteLayout.js';
-import { MEMBER_STATUS, POST_STATUS, errorText } from './adminLabels.js';
-import { PAGE_SIZE, badge, createLoader, dataTable, errorLine, formatDate, pageTop, pager, reasonForm, runAction, searchBar } from './adminKit.js';
+import { MEMBER_STATUS, POST_STATUS } from './adminLabels.js';
+import { PAGE_SIZE, badge, createLoader, dataTable, detailPanel, errorLine, formatDate, labeledField, pageTop, pager, reasonForm, runAction, searchBar } from './adminKit.js';
 import { renderAdminShell } from './adminShell.js';
 
 // 회원 관리 (A-17 ~ A-20). 목록 · 검색 → 닉네임을 누르면 아래에 상세 · 정지 · 정지 해제.
@@ -16,8 +16,9 @@ export function renderAdminMembersPage(container, { navigate }) {
       let query = {};
       let page = 0;
       const body = element('div', 'admin-list-body');
-      const detail = element('section', 'admin-section admin-detail');
-      detail.hidden = true;
+      const { node: detail, show: showDetail } = detailPanel({
+        fetcher: (memberId) => api.getMember(memberId), draw: (member) => drawDetail(member), failText: '회원을 불러오지 못했어요.', active, unauthorized,
+      });
       const search = searchBar({
         placeholder: '닉네임 · 이메일 검색',
         filters: [{ name: 'status', label: '상태 전체', options: Object.entries(MEMBER_STATUS) }],
@@ -38,21 +39,6 @@ export function renderAdminMembersPage(container, { navigate }) {
           ], data.items, '해당하는 회원이 없어요.');
           body.replaceChildren(table, ...(data.items.length ? [pager(data, (next) => { page = next; load(); })] : []));
         });
-      }
-
-      async function showDetail(memberId) {
-        detail.hidden = false;
-        detail.replaceChildren(element('p', 'admin-message', '불러오는 중이에요.'));
-        try {
-          const member = await api.getMember(memberId);
-          if (!active()) return;
-          drawDetail(member);
-          detail.scrollIntoView?.({ block: 'nearest' });
-        } catch (failure) {
-          if (!active()) return;
-          if (failure?.code === 'UNAUTHORIZED') { unauthorized(); return; }
-          detail.replaceChildren(element('p', 'admin-error', errorText(failure, '회원을 불러오지 못했어요.')));
-        }
       }
 
       function drawDetail(member) {
@@ -76,8 +62,7 @@ export function renderAdminMembersPage(container, { navigate }) {
           const duration = element('select');
           duration.setAttribute('aria-label', '정지 기간');
           DURATIONS.forEach(([value, text]) => { const option = element('option', '', text); option.value = value; duration.append(option); });
-          const durationField = element('label', 'admin-field');
-          durationField.append(element('span', '', '정지 기간'), duration);
+          const durationField = labeledField('정지 기간', duration);
           const form = reasonForm({
             label: '정지 사유 (회원에게 보이는 사유가 아니라 운영 기록용, 200자 이하)', submitText: '정지하기', extra: [{ name: 'days', node: durationField, read: () => (duration.value ? Number(duration.value) : null) }],
             onSubmit: async (reason, { days }) => { await api.suspendMember(member.memberId, { reason, days }); await refresh(); },
