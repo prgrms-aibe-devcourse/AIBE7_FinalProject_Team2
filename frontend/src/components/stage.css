@@ -277,7 +277,7 @@
 .stage-wrap .sheet-cast-link:disabled { cursor: default; }
 .stage-wrap .sheet-cast-link:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 3px; }
 @media (hover: hover) and (pointer: fine) { .stage-wrap .sheet-cast-link:not(:disabled):hover span { text-decoration: underline; text-underline-offset: 3px; } }
-/* 광고 · 알림 단: 지면 맨 아래 띠. 서비스 안의 다른 메뉴를 신문 광고처럼 싣는다(누르지 않는 지면 장식) */
+/* 광고 · 알림 단: 지면 맨 아래 띠. 서비스 안의 다른 메뉴를 신문 광고처럼 싣는다. 판결 성향 테스트 광고만 읽기 화면에서 눌린다(FE-55, 나머지는 장식) */
 .stage-wrap .sheet-ads { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: calc(var(--u) * 2); padding-top: calc(var(--u) * 1.6); border-top: 3px double var(--color-text); }
 .stage-wrap .sheet-ad { display: flex; flex-direction: column; gap: calc(var(--u) * .5); min-height: calc(var(--u) * 15); padding: calc(var(--u) * 1.6) calc(var(--u) * 1.8); border: 1px solid var(--color-text); text-align: center; justify-content: center; }
 .stage-wrap .sheet-ad-tag { margin: 0; color: var(--muted); font: 700 calc(var(--u) * 1) / 1.3 var(--font-body); letter-spacing: .2em; }

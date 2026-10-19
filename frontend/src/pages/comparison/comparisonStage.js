@@ -279,16 +279,18 @@ export function renderComparisonStage({ script, data, caseId, caseTitle, navigat
     letter.setAttribute('aria-label', '독자 엽서 — 이 사건 리뷰 남기기');
     // 지면 아래 "판결 성향 테스트" 광고: 누르면 신문을 한 장 넘겨 뒷면(오피니언 면)의 성향 테스트로 간다(FE-55)
     const testAd = sheet.querySelector('.sheet-ad.is-lead');
-    testAd.classList.add('is-clickable');
-    testAd.setAttribute('role', 'button');
-    testAd.tabIndex = 0;
-    testAd.setAttribute('aria-label', '판결 성향 테스트 — 신문을 넘겨 시작하기');
-    testAd.addEventListener('click', turnToTest);
-    testAd.addEventListener('keydown', (event) => {
-      if (event.key !== 'Enter' && event.key !== ' ') return;
-      event.preventDefault();
-      turnToTest();
-    });
+    if (testAd) { // 광고 단이 없어도 읽기 화면은 열린다
+      testAd.classList.add('is-clickable');
+      testAd.setAttribute('role', 'button');
+      testAd.tabIndex = 0;
+      testAd.setAttribute('aria-label', '판결 성향 테스트 — 신문을 넘겨 시작하기');
+      testAd.addEventListener('click', turnToTest);
+      testAd.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        turnToTest();
+      });
+    }
     window.scrollTo(0, 0);
     sheet.setAttribute('tabindex', '-1');
     sheet.focus({ preventScroll: true });
@@ -351,7 +353,10 @@ export function renderComparisonStage({ script, data, caseId, caseTitle, navigat
     tilt('0');
     sheet.animate([{ rotate: 'y 0deg' }, { rotate: 'y -88deg' }],
       { duration: TURN_MS, easing: 'cubic-bezier(.45, 0, .7, .4)', fill: 'forwards' }).finished
-      .catch(() => {}).then(() => navigate('testPaper', { from: 'paper' }));
+      .catch(() => {}).then(() => {
+        if (closing) return; // 넘기는 사이 메인으로 갔다면 테스트 면으로 가지 않는다(foldToList와 같다)
+        navigate('testPaper', { from: 'paper' });
+      });
   }
   // 3D로 돌릴 준비: 원근은 지면의 부모에 건다(보는 눈은 지금 화면 가운데). 지면이 화면보다 길어서 축 높이를 화면 가운데로 맞춘다
   function tilt(axisX) {

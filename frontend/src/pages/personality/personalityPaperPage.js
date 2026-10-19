@@ -3,6 +3,7 @@ import { imageOf } from '../../components/stage.js';
 import { PERSONALITY_LINES } from '../../content/personalityLines.js';
 import { sheetMessage } from './personalityParts.js';
 import { reducedMotion } from '../../utils/motion.js';
+import { canGoBackInApp } from '../../app/router.js';
 
 // FE-55 판결 성향 테스트 — 8막 "다음 날 신문"의 뒷면(오피니언 2면). 8막 지면의 "판결 성향 테스트" 광고를 누르면 신문을 한 장 넘겨 들어온다.
 // 지면 문법은 8막 신문(stage.css .sheet)과 같다: 제호 띠 · 이중 괘선 · 명조 기사체 · 흑백 지면 사진.
@@ -51,11 +52,11 @@ export async function renderPersonalityPaperPage(container, { api, navigate, fro
   const date = element('div', 'tp-date');
   const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
   date.append(element('span', '', new Intl.DateTimeFormat('ko-KR', { dateStyle: 'full' }).format(tomorrow)), element('span', '', '2면'));
-  // 날짜 아래 이동 줄(표지 · 문항 모두): 왼쪽 이전으로(들어온 화면으로, 없으면 메인), 오른쪽 메인으로
+  // 날짜 아래 이동 줄(표지 · 문항 모두): 왼쪽 이전으로(앱 안의 이전 화면으로, 링크로 바로 들어왔으면 메인), 오른쪽 메인으로
   const moves = element('nav', 'tp-moves');
   moves.setAttribute('aria-label', '화면 이동');
   moves.append(
-    button('← 이전으로', () => (history.length > 1 ? history.back() : navigate('landing')), 'tp-move'),
+    button('← 이전으로', () => (canGoBackInApp() ? history.back() : navigate('landing')), 'tp-move'),
     button('메인으로', () => navigate('landing'), 'tp-move'),
   );
   mast.append(info, flag, date, moves);

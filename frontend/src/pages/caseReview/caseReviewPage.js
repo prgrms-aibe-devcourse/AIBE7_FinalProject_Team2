@@ -33,13 +33,16 @@ export async function mountCaseReview(main, { caseId, api, navigate }) {
   main.append(loading);
 
   let data;
+  const active = () => main.isConnected; // 받는 사이 화면을 떠났거나 엽서를 닫았으면 그리지 않는다(app/README.md)
   try {
     data = await api.getCaseReviews(caseId);
   } catch (error) {
+    if (!active()) return;
     loading.remove();
     main.append(failure(error?.code === 'CASE_NOT_FOUND' ? '사건을 찾을 수 없어요.' : '엽서를 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요.'));
     return;
   }
+  if (!active()) return;
   loading.remove();
 
   const summary = element('p', 'case-review-summary');

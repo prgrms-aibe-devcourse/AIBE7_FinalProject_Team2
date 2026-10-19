@@ -376,7 +376,8 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
   const loaded = load(undefined);
   if (ghost) rise(loaded);
   // 뒤집고 왔으면 기사와 첫 사진이 다 준비된 뒤에 한 번에 페이드인한다(늦게 온 기사가 따로 튀어나오지 않게)
-  if (root.classList.contains('is-unflipping')) drawn(loaded).then(() => unflip(handed));
+  // 기사 준비가 어떻게 끝나든(성공 · 실패 · 시간 초과) 덮고 있는 빈 종이는 반드시 걷는다
+  if (root.classList.contains('is-unflipping')) drawn(loaded).catch(() => {}).finally(() => unflip(handed));
 
   await loaded;
 }
