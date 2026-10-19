@@ -22,7 +22,17 @@ export function renderLoginPage(container, { api, navigate }) {
 
   const user = currentUser();
   if (user) showSignedIn(user);
+  else if (!api.login) showNotReady();
   else showForm();
+
+  // 사용자 로그인이 없는 실제 모드(api.login 없음): 입력칸을 보여 주지 않고 처음부터 준비 중이라고 알린다
+  function showNotReady() {
+    const heading = element('h1', '', '로그인');
+    heading.id = 'login-heading';
+    const actions = element('div', 'login-actions');
+    actions.append(button('사건 목록으로', () => navigate('list'), 'primary-button'), button('처음으로', () => navigate('landing'), 'secondary-button'));
+    card.replaceChildren(heading, element('p', 'login-lead', NOT_READY), actions);
+  }
 
   // 이미 로그인한 채로 왔을 때: 누구로 로그인했는지 + 마이페이지(관리자는 관리자 페이지) · 로그아웃
   function showSignedIn({ nickname }) {

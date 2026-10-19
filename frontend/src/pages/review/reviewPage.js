@@ -103,7 +103,7 @@ export async function renderReviewPage(container, { caseId, caseHeader, api, nav
     root.classList.add('has-stage');
     const header = element('header', 'case-topbar');
     header.append(button('← 목록', () => navigate('list'), 'back-button'),
-      element('strong', 'case-title', caseHeader.title), element('span', 'case-badge', caseHeader.chargeName));
+      element('strong', 'case-title', caseHeader.title), ...(caseHeader.chargeName ? [element('span', 'case-badge', caseHeader.chargeName)] : []));
     const main = element('div', 'review-main');
     main.append(element('h1', 'page-heading visually-hidden', '사건 정보 확인'), renderStage({
       script,
@@ -136,7 +136,7 @@ export async function renderReviewPage(container, { caseId, caseHeader, api, nav
     const current = data.openStep ?? 4;
     const header = element('header', 'case-topbar');
     header.append(button('← 목록', () => navigate('list'), 'back-button'),
-      element('strong', 'case-title', caseHeader.title), element('span', 'case-badge', caseHeader.chargeName));
+      element('strong', 'case-title', caseHeader.title), ...(caseHeader.chargeName ? [element('span', 'case-badge', caseHeader.chargeName)] : []));
     const progress = element('div', 'top-progress');
     const meter = element('progress');
     meter.max = 6;

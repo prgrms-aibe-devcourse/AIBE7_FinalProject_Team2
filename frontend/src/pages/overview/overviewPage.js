@@ -35,7 +35,8 @@ export function caseTopbar(info, navigate) {
   meter.setAttribute('aria-label', '진행 상황');
   progress.append(meter, element('span', '', '1 / 6'));
   header.append(button('← 목록', () => navigate('list'), 'back-button'),
-    element('strong', 'case-title', info.title), element('span', 'case-badge', info.chargeName), progress);
+    element('strong', 'case-title', info.title),
+    ...(info.chargeName ? [element('span', 'case-badge', info.chargeName)] : []), progress);
   return header;
 }
 

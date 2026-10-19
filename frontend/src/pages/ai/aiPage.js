@@ -177,7 +177,7 @@ export async function renderAiPage(container, { caseId, caseHeader, api, navigat
       title: 'AI 판결을 기다리는 중',
       sub: '곧 AI 판결이 도착해요.',
       k: 'AI 판결을 보기 전에',
-      lines: ['이 AI 판결은 같은 사건 기록을 바탕으로 미리 만들어 둔 판결이에요.', '방금 내린 내 판결과 실제 재판부의 판결은 AI가 보지 않았어요.'],
+      lines: ['같은 사건 기록만 보고 AI가 내린 판결이에요.', '방금 내린 내 판결과 실제 재판부의 판결은 AI가 보지 않았어요.'],
       cast: [['naero', 'cheek:idle-thinking'], ['nambul', 'cheek:idle-thinking']],
       ms: 4200,
     });

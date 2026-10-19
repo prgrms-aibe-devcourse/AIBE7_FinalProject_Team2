@@ -30,6 +30,11 @@ function myStatusOf(caseId) {
   return started ? toMyStatus(started.status) : null;
 }
 
+// 사건 1은 S-03 개요 목(API 4)과 같은 죄명을 쓰고, 나머지는 유형별 죄명(임의 데이터)
+const CHARGE_NAMES = { MURDER: '살인', FRAUD: '사기', INJURY: '상해' };
+const chargeNameOf = (item) =>
+  item.caseId === mockOverview.case.caseId ? mockOverview.case.chargeName : CHARGE_NAMES[item.crimeType];
+
 // API 1 — GET /cases
 export async function getCases(crimeType) {
   await delay();
@@ -43,13 +48,12 @@ export async function getCases(crimeType) {
     summary: { total: mockCases.length, byCrimeType },
     cases: mockCases
       .filter((item) => !crimeType || item.crimeType === crimeType)
-      .map((item) => ({ ...item, myStatus: myStatusOf(item.caseId) })),
+      .map((item) => ({ ...item, chargeName: chargeNameOf(item), myStatus: myStatusOf(item.caseId) })),
   });
 }
 
 // API 16 — GET /cases/{caseId} (S-20 사건 디테일). API 1 카드 값 + 죄명 · 사건 개요 · 내 상태.
 // 사건 1은 S-03 개요 목(API 4)과 같은 죄명 · 개요를 쓰고, 나머지 사건은 유형별 죄명 · 짧은 소개로 채운다(임의 데이터)
-const CHARGE_NAMES = { MURDER: '살인', FRAUD: '사기', INJURY: '상해' };
 export async function getCaseDetail(caseId) {
   await delay();
   const item = mockCases.find((entry) => entry.caseId === caseId);
@@ -57,7 +61,7 @@ export async function getCaseDetail(caseId) {
   const known = caseId === mockOverview.case.caseId ? mockOverview.case : null;
   return structuredClone({
     ...item,
-    chargeName: known?.chargeName ?? CHARGE_NAMES[item.crimeType],
+    chargeName: chargeNameOf(item),
     overview: known?.overview ?? item.shortIntro,
     myStatus: myStatusOf(caseId),
   });

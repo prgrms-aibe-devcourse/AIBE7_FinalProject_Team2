@@ -40,6 +40,7 @@ class CaseListApiTest extends ApiIntegrationTest {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath(CASE_BY_ID.formatted(caseId) + ".crimeType").value("FRAUD"))
 				.andExpect(jsonPath(CASE_BY_ID.formatted(caseId) + ".crimeCategoryLabel").value("재산범죄"))
+				.andExpect(jsonPath(CASE_BY_ID.formatted(caseId) + ".chargeName").value("테스트죄"))
 				.andExpect(jsonPath(CASE_BY_ID.formatted(caseId) + ".shortIntro").value("테스트 소개"))
 				.andExpect(jsonPath(CASE_BY_ID.formatted(caseId) + ".keywords[0]").value("키워드1"))
 				.andExpect(jsonPath(CASE_BY_ID.formatted(caseId) + ".difficulty").value("MID"))
