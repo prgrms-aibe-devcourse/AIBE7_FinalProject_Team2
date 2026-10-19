@@ -20,7 +20,9 @@ sys.path.insert(0, str(TOOL_DIR))
 
 import llm  # noqa: E402
 from common import load_json  # noqa: E402
-from compare import CompareError, check_court_case, load_runs, parse_prices, render_csv, render_markdown, summarize  # noqa: E402
+from compare import (CompareError, _iqr, _stdev, aggregate, check_court_case, load_runs,  # noqa: E402
+                     parse_prices, render_csv, render_csv_aggregate, render_markdown,
+                     render_markdown_aggregate, summarize)
 from generate import GenerateError, describe, generate_runs, import_runs, main as generate_main, model_slug  # noqa: E402
 from compare import main as compare_main  # noqa: E402
 
@@ -657,6 +659,7 @@ class GenerateCompareTest(unittest.TestCase):
         self.assertEqual(openai_row["penalties"], "PRISON×2")
         self.assertEqual((openai_row["prisonMin"], openai_row["prisonMedian"], openai_row["prisonMax"]),
                          (132, 138, 144))
+        self.assertEqual((openai_row["prisonStdev"], openai_row["prisonIqr"]), (6.0, 6.0))
         self.assertEqual(openai_row["inRecommended"], 2)  # 권고 84 ~ 144개월
         self.assertEqual(openai_row["factorConsistency"], 1.0)  # 요소 방향은 두 회차가 같다
         self.assertEqual(openai_row["courtPenaltyMatch"], 1.0)
@@ -683,6 +686,96 @@ class GenerateCompareTest(unittest.TestCase):
             load_runs(Path(self.tmp.name) / "none")
         with self.assertRaises(CompareError):
             parse_prices(["openai:gpt-x=abc"])
+
+    def test_prison_spread_helpers(self):
+        self.assertIsNone(_stdev([]))
+        self.assertIsNone(_stdev([120]))
+        self.assertEqual(_stdev([120, 180]), 30.0)
+        self.assertIsNone(_iqr([120]))
+        self.assertEqual(_iqr([132, 144]), 6.0)
+
+    def test_aggregate_across_cases(self):
+        case_a = self.case
+        case_b = copy.deepcopy(self.case)
+        case_b["title"] = "사건 B"
+        case_b["recommended"] = {"minMonths": 100, "maxMonths": 200, "basis": "예시"}
+
+        dir_a, dir_b = Path(self.tmp.name) / "case-a", Path(self.tmp.name) / "case-b"
+        caller_a = fake_caller({"openai:gpt-x": [self.variant(prisonMonths=120), self.variant(prisonMonths=130)]})
+        generate_runs(case_a, ["openai:gpt-x"], 2, dir_a, caller=caller_a, log=lambda *_: None)
+        caller_b = fake_caller({"openai:gpt-x": [self.variant(prisonMonths=200), self.variant(prisonMonths=210)],
+                                "gemini:gem-x": [self.variant(prisonMonths=150)]})
+        generate_runs(case_b, ["openai:gpt-x"], 2, dir_b, caller=caller_b, log=lambda *_: None)
+        generate_runs(case_b, ["gemini:gem-x"], 1, dir_b, caller=caller_b, log=lambda *_: None)
+
+        _, groups_a = load_runs(dir_a)
+        _, groups_b = load_runs(dir_b)
+        rows = aggregate([(case_a, groups_a), (case_b, groups_b)])
+        by_model = {row["model"]: row for row in rows}
+
+        openai_row = by_model["openai:gpt-x"]
+        self.assertEqual(openai_row["cases"], 2)
+        self.assertEqual(openai_row["runs"], 4)
+        self.assertEqual((openai_row["prisonMin"], openai_row["prisonMedian"], openai_row["prisonMax"]),
+                         (120, 165, 210))
+        self.assertAlmostEqual(openai_row["crossCaseMedianStdev"], 40.0)  # 사건별 중앙값 125 · 205
+        # 사건 내 변동(각 사건 [120,130] · [200,210]의 표준편차 5.0 · IQR 5.0)의 평균. 사건 간 난이도
+        # 차이(120~210 전체를 풀어서 구하면 훨씬 큰 값이 나온다)가 섞이지 않아야 한다.
+        self.assertAlmostEqual(openai_row["prisonStdev"], 5.0)
+        self.assertAlmostEqual(openai_row["prisonIqr"], 5.0)
+        self.assertEqual(openai_row["inRecommended"], 3)  # A: 120·130 모두, B: 200만 (210은 범위 밖)
+
+        gemini_row = by_model["gemini:gem-x"]
+        self.assertEqual(gemini_row["cases"], 1)  # case-a에는 등장하지 않는다
+        self.assertEqual(gemini_row["runs"], 1)
+        self.assertIsNone(gemini_row["prisonStdev"])  # 값이 하나뿐이라 퍼진 정도를 말할 수 없다
+        self.assertIsNone(gemini_row["crossCaseMedianStdev"])
+
+        markdown = render_markdown_aggregate(["사건 A", "사건 B"], rows)
+        self.assertIn("사건 2개", markdown)
+        self.assertIn("openai:gpt-x", markdown)
+        # 판단 요소 · 권고 범위 칸은 사건 간 집계표에 없다(행 dict에는 남아 있어도 표에는 안 보인다)
+        self.assertNotIn("요소 방향 일관성", markdown)
+        self.assertNotIn("전체 다수 의견 일치율", markdown)
+        self.assertNotIn("권고 범위 안", markdown)
+        csv_text = render_csv_aggregate(rows)
+        self.assertIn("사건 수", csv_text)
+        self.assertNotIn("권고 범위 안", csv_text)
+        self.assertEqual(len(csv_text.strip().splitlines()), 3)
+
+    def test_aggregate_cli_rejects_case_and_court(self):
+        self.run_batch()
+        other = Path(self.tmp.name) / "other"
+        generate_runs(self.case, ["openai:gpt-x"], 1, other, caller=fake_caller({"openai:gpt-x": [self.output]}),
+                     log=lambda *_: None)
+        for flag in ("--case", "--court"):
+            argv = ["compare.py", str(self.batch_dir), str(other), flag, str(EXAMPLES / "case_input.json")]
+            with mock.patch.object(sys, "argv", argv), mock.patch("sys.stderr", new_callable=io.StringIO) as err:
+                self.assertEqual(compare_main(), 1)
+            self.assertIn("합산", err.getvalue())
+
+    def test_aggregate_cli_combines_batches(self):
+        self.run_batch()
+        other_case = copy.deepcopy(self.case)
+        other_case["title"] = "사건 B"
+        other = Path(self.tmp.name) / "other"
+        generate_runs(other_case, ["openai:gpt-x"], 1, other, caller=fake_caller({"openai:gpt-x": [self.output]}),
+                     log=lambda *_: None)
+        argv = ["compare.py", str(self.batch_dir), str(other)]
+        with mock.patch.object(sys, "argv", argv), mock.patch("sys.stdout", new_callable=io.StringIO) as out:
+            self.assertEqual(compare_main(), 0)
+        self.assertIn("사건 간 집계", out.getvalue())
+        self.assertIn("openai:gpt-x", out.getvalue())
+
+    def test_aggregate_cli_rejects_duplicate_case(self):
+        self.run_batch()
+        other = Path(self.tmp.name) / "other"
+        generate_runs(self.case, ["openai:gpt-x"], 1, other, caller=fake_caller({"openai:gpt-x": [self.output]}),
+                     log=lambda *_: None)
+        argv = ["compare.py", str(self.batch_dir), str(other)]
+        with mock.patch.object(sys, "argv", argv), mock.patch("sys.stderr", new_callable=io.StringIO) as err:
+            self.assertEqual(compare_main(), 1)
+        self.assertIn("같은 사건", err.getvalue())
 
     def test_no_key_in_records(self):
         with mock.patch.dict(os.environ, FAKE_KEYS):
