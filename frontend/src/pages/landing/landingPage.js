@@ -3,6 +3,7 @@ import { casePhoto, fallbackImages, todayLabel } from '../../utils/newspaper.js'
 import { takePaper } from '../../utils/paperHandoff.js';
 import { flyCoffee } from '../../utils/coffeeDive.js';
 import { reducedMotion } from '../../utils/motion.js';
+import { peelOff } from '../../utils/peelOff.js';
 
 // S-01 메인 — 판사의 책상 (FE-18, 시안 "B안 일러스트 · C안 구도", 논의기록 2026-10-12 S01 메인 책상 시안 결정)
 // 책상 위 물건이 곧 메뉴다: 신문 = 사건 목록(S-02), 서류철 = 판결 성향 테스트(S-15), 커피잔 = 마이페이지(S-17), 노트북 = 커뮤니티.
@@ -35,7 +36,6 @@ const CHEEKS = [
   { who: 'naero', look: 'idle-sorry', right: 644, top: 2, height: 170 }, // 가운데에서 살짝 오른쪽(가운데 x ≈ 960), 턱이 신문 위쪽 가장자리에 걸친다
   { who: 'nambul', look: 'idle-thinking', right: 1300, top: 782, height: 158 },
 ];
-const PEEL_MS = 520; // 내로를 가린 포스트잇이 떼어져 날아가는 시간
 let newsCache = null; // 사건 목록(API 1) 마지막 응답
 const LIFT_MS = 380; // 신문을 집어 드는 시간(landing.css .is-held와 같게). 그 뒤 지면이 아래에서 올라온다
 // 8막에서 "메인으로" 올 때: 보던 지면이 줌아웃(제자리에서 .82배)과 페이드아웃을 함께 하며 책상이 드러난다
@@ -192,17 +192,7 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
   const rescue = element('button', 'desk-rescue');
   rescue.type = 'button';
   rescue.append(span('', '포스트잇을 제거해'), span('', '귀여운 고양이를'), span('', '구해주세요'));
-  rescue.addEventListener('click', async () => {
-    rescue.disabled = true;
-    if (document.activeElement === rescue) newsButton.focus({ preventScroll: true });
-    if (!reducedMotion()) {
-      await rescue.animate(
-        [{ transform: 'rotate(4deg)' }, { transform: 'translate(70px, -150px) rotate(32deg)', opacity: 0 }],
-        { duration: PEEL_MS, easing: 'cubic-bezier(.4, 0, .7, .2)', fill: 'forwards' },
-      ).finished.catch(() => {});
-    }
-    rescue.remove();
-  });
+  rescue.addEventListener('click', () => peelOff(rescue, { from: 'rotate(4deg)', to: 'translate(70px, -150px) rotate(32deg)', focusTarget: () => newsButton }));
 
   // 엽서(FE-50, 장식). 펜 옆 빈자리를 채운다. 우표는 판결 체험의 첫인상 엽서(paperStage.css)와 같다
   const postcard = deco('desk-postcard');

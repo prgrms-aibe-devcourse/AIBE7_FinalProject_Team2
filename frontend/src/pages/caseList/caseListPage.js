@@ -3,6 +3,7 @@ import { casePhoto } from '../../utils/newspaper.js';
 import { newspaperMasthead } from '../../components/newspaperFront.js';
 import { turnPage } from '../../utils/pageTurn.js';
 import { reducedMotion } from '../../utils/motion.js';
+import { peelOff } from '../../utils/peelOff.js';
 
 // S-02 사건 목록 — 신문 1면 (FE-18, 시안 v12 + 배치 조정). 유형 필터 · 오류 처리 로직은 FE-4 · FE-11과 같다.
 // 흐름 목업 ②(FE-32): 책상에서 집어 든 신문이다. 위에 남불의 안내 포스트잇(누르면 떼어짐, FE-50)이 있고, 기사를 누르면
@@ -47,7 +48,6 @@ const JUMP_LABEL = '3면에 계속'; // 신문의 이어 읽기 줄(jump line). 
 // shortcut: 캐릭터 얼굴은 원본 이미지 레포 PNG를 직접 읽는다(무대와 같음), 웹 webp 변환(WBS 7.6.8) 때 public 경로로 옮긴다
 const NAMBUL_FACE = 'https://raw.githubusercontent.com/peanutboi710/NaeLawNamBul_Images/main/character/cuts/nambul/icon/nambul_icon_face-happy.png';
 const RISE_WAIT_MS = 1200; // 책상에서 들고 올 때 지면이 다 그려지기를 기다리는 최대 시간(그동안 책상은 신문을 든 채로 남아 있다)
-const TIP_PEEL_MS = 520; // 남불의 포스트잇이 떼어져 날아가는 시간(메인 책상의 내로 포스트잇과 같다)
 const headlineOf = (item) => item.headline || item.title;
 function dense(paragraphs) {
   const node = element('div', 'dense');
@@ -96,17 +96,12 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
   const tipLine = element('span', '', '마음이 가는 기사를 눌러 보세요!');
   tipText.append(element('b', '', '남불'), tipLine, element('span', 'visually-hidden', '(눌러서 떼기)'));
   tip.append(face, tipText);
-  tip.addEventListener('click', async () => {
-    tip.disabled = true;
-    if (document.activeElement === tip) main.querySelector('button')?.focus({ preventScroll: true }); // 사라지는 버튼에서 포커스를 잃지 않게
-    if (!reducedMotion()) {
-      await tip.animate(
-        [{ transform: 'none' }, { transform: 'translate(-60px, -140px) rotate(-28deg)', opacity: 0 }],
-        { duration: TIP_PEEL_MS, easing: 'cubic-bezier(.4, 0, .7, .2)', fill: 'forwards' },
-      ).finished.catch(() => {});
-    }
-    tip.remove();
-  });
+  tip.addEventListener('click', () => peelOff(tip, {
+    from: 'none',
+    to: 'translate(-60px, -140px) rotate(-28deg)',
+    // 목록을 아직 불러오는 중이면 첫 탭 대신 본문(main)이 포커스를 받는다
+    focusTarget: () => main.querySelector('button') ?? Object.assign(main, { tabIndex: -1 }),
+  }));
   paper.prepend(tip);
   root.append(desk, paper);
   if (ghost) root.insertBefore(ghost, paper);
@@ -119,9 +114,16 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
     })));
     await Promise.race([ready, new Promise((done) => { window.setTimeout(done, RISE_WAIT_MS); })]);
     if (!active()) return;
-    const drop = () => { ghost.remove(); root.classList.remove('is-rising', 'is-going'); };
-    paper.addEventListener('animationend', (event) => { if (event.target === paper) drop(); });
-    window.setTimeout(drop, 2000); // animationend가 오지 않아도 걷는다
+    let timer = 0;
+    const drop = () => { // 한 번만: 올라오는 애니메이션이 끝나면 뒤에 남긴 책상과 표시를 걷는다
+      window.clearTimeout(timer);
+      paper.removeEventListener('animationend', onEnd);
+      ghost.remove();
+      root.classList.remove('is-rising', 'is-going');
+    };
+    const onEnd = (event) => { if (event.target === paper && event.animationName === 'paper-rise') drop(); };
+    paper.addEventListener('animationend', onEnd);
+    timer = window.setTimeout(drop, 2000); // animationend가 오지 않아도 걷는다
     root.classList.add('is-going');
   }
 
