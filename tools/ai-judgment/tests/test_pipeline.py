@@ -23,6 +23,7 @@ from build_prompt import build_prompt  # noqa: E402
 from case_seed_sql import CaseSeedError, build_case_sql, resolve_sources  # noqa: E402
 from common import load_json, write_json  # noqa: E402
 from court_seed_sql import CourtSeedError, build_court_sql, check_court  # noqa: E402
+from rag_store import case_number_hash  # noqa: E402
 from to_seed_sql import build_sql  # noqa: E402
 
 EXAMPLES = TOOL_DIR / "examples"
@@ -97,8 +98,57 @@ class CaseSeedSqlTest(unittest.TestCase):
         report["factorExtras"][1]["valueAxisVotes"] = {
             "runs": 4, "counts": {"NONE": 2, "ORDER_OPPORTUNITY": 2}, "needsReview": True}  # 동률, 축은 NULL을 고름
         sql = build_case_sql(case, report, resolve_sources(SOURCES, [{}, {"caseNumber": "2099노2"}]))
-        self.assertIn("""'FAULT_STANDARD', '{"runs": 5, "counts": {"FAULT_STANDARD": 3, "NONE": 2}, "needsReview": false}'::jsonb, 1);""", sql)
-        self.assertIn(""", NULL, '{"runs": 4, "counts": {"NONE": 2, "ORDER_OPPORTUNITY": 2}, "needsReview": true}'::jsonb, 2);""", sql)
+        self.assertIn("""'FAULT_STANDARD', '{"runs": 5, "counts": {"FAULT_STANDARD": 3, "NONE": 2}, "needsReview": false}'::jsonb, NULL, 1);""", sql)
+        self.assertIn(""", NULL, '{"runs": 4, "counts": {"NONE": 2, "ORDER_OPPORTUNITY": 2}, "needsReview": true}'::jsonb, NULL, 2);""", sql)
+
+    def test_build_case_sql_summaryTagCandidates_insertsJsonb(self):
+        # 요약어 후보(BE-53)는 summary_tag_candidates에 jsonb로 넣는다 (BE-80). 후보가 없는 요소는 NULL
+        case = listing_case()
+        report = report_for(case)
+        report["factorExtras"][0]["summaryTagCandidates"] = {
+            "candidates": [{"tag": "흉기 사용", "score": 0.9312}, {"tag": "범행 동기", "score": 0.8123}],
+            "inVocabulary": False, "ambiguous": False, "suggested": "흉기 사용"}
+        sql = build_case_sql(case, report, resolve_sources(SOURCES, [{}, {"caseNumber": "2099노2"}]))
+        self.assertEqual(sql.count("summary_tag_candidates, display_order)"), len(case["factors"]))
+        self.assertIn("""'{"candidates": [{"tag": "흉기 사용", "score": 0.9312}, {"tag": "범행 동기", "score": 0.8123}], """
+                      """"inVocabulary": false, "ambiguous": false, "suggested": "흉기 사용"}'::jsonb, 1);""", sql)
+        self.assertIn("NULL, NULL, NULL, 2);", sql)  # 두 번째 요소: 축 · 투표 기록 · 후보 모두 없음
+        existing = sql.split("RETURNING id INTO v_case_id")[0]
+        self.assertNotIn("summary_tag_candidates", existing)  # 이미 적재된 사건은 후보를 바꾸지 않는다(축만 맞춤)
+
+    def test_build_case_sql_invalidSummaryTagCandidates_isError(self):
+        ok = {"tag": "흉기 사용", "score": 0.93}
+        cases = [
+            ("객체", "candidates"),
+            ("배열", {"candidates": "흉기 사용", "inVocabulary": False, "ambiguous": False, "suggested": None}),
+            ("tag는", {"candidates": [{"tag": "", "score": 0.9}], "inVocabulary": False, "ambiguous": False, "suggested": None}),
+            ("tag는", {"candidates": [{"tag": "가" * 21, "score": 0.9}], "inVocabulary": False, "ambiguous": False, "suggested": None}),
+            ("score는", {"candidates": [{"tag": "흉기 사용", "score": 1.5}], "inVocabulary": False, "ambiguous": False, "suggested": None}),
+            ("score는", {"candidates": [{"tag": "흉기 사용", "score": True}], "inVocabulary": False, "ambiguous": False, "suggested": None}),
+            ("inVocabulary", {"candidates": [ok], "inVocabulary": "no", "ambiguous": False, "suggested": None}),
+            ("ambiguous", {"candidates": [ok], "inVocabulary": False, "suggested": None}),
+            ("tag 중 하나", {"candidates": [ok], "inVocabulary": False, "ambiguous": False, "suggested": "반성"}),
+            ("false일 때만", {"candidates": [ok], "inVocabulary": False, "ambiguous": True, "suggested": "흉기 사용"}),
+            ("모르는 키", {"candidates": [ok], "inVocabulary": False, "ambiguous": False, "suggested": None, "futureKey": 1}),
+            ("모르는 키", {"candidates": [{**ok, "rank": 1}], "inVocabulary": False, "ambiguous": False, "suggested": None}),
+        ]
+        for message, candidates in cases:
+            with self.subTest(message):
+                case = listing_case()
+                report = report_for(case)
+                report["factorExtras"][0]["summaryTagCandidates"] = candidates
+                with self.assertRaises(CaseSeedError) as ctx:
+                    build_case_sql(case, report, resolve_sources(SOURCES, [{}, {"caseNumber": "2099노2"}]))
+                self.assertIn(message, str(ctx.exception))
+
+    def test_build_case_sql_emptySummaryTagCandidates_passes(self):
+        # 요약어가 비어 후보 계산에서 빠진 요소(summary_tags._empty_result)도 형식은 맞다
+        case = listing_case()
+        report = report_for(case)
+        report["factorExtras"][0]["summaryTagCandidates"] = {
+            "candidates": [], "inVocabulary": False, "ambiguous": False, "suggested": None}
+        self.assertIn("""'{"candidates": [], "inVocabulary": false, "ambiguous": false, "suggested": null}'::jsonb""",
+                      build_case_sql(case, report, resolve_sources(SOURCES, [{}, {"caseNumber": "2099노2"}])))
 
     def test_build_case_sql_existingDraft_updatesAutoAxesOnly(self):
         # 이미 적재된 DRAFT 사건이면 사건은 건너뛰고, 확정 전(AUTO) 요소의 축 · 투표 기록만 맞춘다 (리뷰 반영)
@@ -189,7 +239,12 @@ class CaseSeedSqlTest(unittest.TestCase):
     def test_build_case_sql_incident_date(self):
         case = listing_case()
         sources = resolve_sources(SOURCES, [{}, {"caseNumber": "2099노2"}])
-        self.assertIn("NULL, '2099-01-10'::date,", build_case_sql(case, report_for(case), sources, incident_date="2099-01-10"))
+        # 양형기준 버전은 기준일(공소제기일 → 없으면 발생일)로 DB 함수가 고른다 (BE-54)
+        self.assertIn("sentencing_guideline_at('살인범죄', '2099-01-10'::date), '2099-01-10'::date,",
+                      build_case_sql(case, report_for(case), sources, incident_date="2099-01-10"))
+        self.assertIn("sentencing_guideline_at('살인범죄', '2099-02-01'::date), '2099-01-10'::date,",
+                      build_case_sql(case, report_for(case), sources, incident_date="2099-01-10",
+                                     indictment_date="2099-02-01"))
         self.assertIn("NULL, NULL,", build_case_sql(case, report_for(case), sources))
         with self.assertRaises(CaseSeedError):
             build_case_sql(case, report_for(case), sources, incident_date="2099/01/10")
@@ -373,11 +428,19 @@ class PipelineTest(unittest.TestCase):
 
         functions["court"] = lambda c, s, log: pipeline.stage_court(c, s, log, caller=court_caller)
         functions["contamination"] = lambda c, s, log: pipeline.stage_contamination(c, s, log, caller=caller)
+        # 참고 자료 RAG (BE-54): 실제 임베딩 · DB 대신 가짜. rag_db를 주지 않으면 DB 접속 실패로 대체 동작
+        functions["rag"] = lambda c, s, log: pipeline.stage_rag(
+            c, s, log, embedder=lambda texts, task_type: [[0.001] * 3072 for _ in texts],
+            runner=getattr(self, "rag_db", None) or self.rag_unavailable)
         functions["generate"] = lambda c, s, log: pipeline.stage_generate(c, s, log, caller=caller)
         functions["axis"] = lambda c, s, log: pipeline.stage_axis(c, s, log, caller=axis_caller_for(c, s))
         functions["load"] = lambda c, s, log: pipeline.stage_load(
             c, s, log, apply=lambda path, db: (applied.append((path, db)) if applied is not None else None) or [])
         return pipeline.run_pipeline(config, functions=functions, log=self.logs.append, **kwargs)
+
+    @staticmethod
+    def rag_unavailable(sql):
+        raise pipeline.RagUnavailable("connection refused")
 
     def variant(self, **changes):
         return {**self.output, **changes}
@@ -456,6 +519,94 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(report["contamination"]["verdict"], contamination[selection["modelSpec"]]["verdict"])
         self.assertNotIn("120", json.dumps(report["contamination"]))
         self.assertTrue(load["runKey"])
+
+    def test_rag_references_go_into_prompt_and_report(self):
+        # BE-54: rag 단계가 찾은 참고 자료로 생성 프롬프트를 만들고, 생성 정보에는 id · 점수 · 버전 이름만 남긴다
+        applied, queries = [], []
+        result = {"guideline": {"id": 7, "versionName": "2차 수정 2013", "effectiveDate": "2013-05-15"},
+                  "ranges": [{"id": 1, "subject": "제2유형", "typeNo": 2, "content": "기본 10 ~ 16년"}],
+                  "factors": [],
+                  "precedents": [{"id": 31, "caseGroup": "g31", "score": 0.81, "guidelineId": 7, "chargeName": "살인",
+                                  "courtLevel": "FIRST", "penaltyType": "PRISON", "prisonMonths": 144,
+                                  "suspensionMonths": None, "fineAmount": None, "sentencingFactors": None,
+                                  "factsSummary": "검색된 판례 사실관계", "sentencingReason": "검색된 판례 양형 이유"}]}
+        self.rag_db = lambda sql: queries.append(sql) or json.dumps(result, ensure_ascii=False)
+        config = self.config({"incidentDate": "2014-03-01"}, rag={"enabled": True},
+                             generate={"models": ["openai:a"], "runs": 1, "maxRetries": 0})
+        state = self.run_with(config, {"openai:a": [self.output]}, applied)
+        rag = state["stages"]["rag"]["outputs"]
+        self.assertEqual(rag["report"]["status"], "OK")
+        self.assertIn(case_number_hash("2099노2"), queries[0])  # 설정 sources의 사건번호도 자기 사건 제외에 쓴다
+        self.assertNotIn("2099노2", queries[0])
+        prompt = (Path(state["stages"]["generate"]["outputs"]["batchDir"]) / "prompt.md").read_text(encoding="utf-8")
+        self.assertIn("검색된 판례 사실관계", prompt)
+        self.assertIn("2차 수정 2013", prompt)
+        self.assertNotIn("유사 판례 A (예시)", prompt)
+        self.assertEqual(load_json(pipeline.input_file(config, state, "case"))["references"], self.case["references"])
+        sql = Path(state["stages"]["load"]["outputs"]["sqlFile"]).read_text(encoding="utf-8")
+        self.assertIn("검색된 판례 사실관계", sql)  # ai_generation 입력 프롬프트도 실제로 보낸 것
+        report = json.loads(sql.split("'PENDING', NULL, NULL, '")[1].split("'::jsonb")[0].replace("''", "'"))
+        self.assertEqual(report["rag"]["precedents"], [{"id": 31, "score": 0.81, "sameGuideline": True}])
+        self.assertEqual(report["rag"]["guideline"], "2차 수정 2013")
+        self.assertNotIn("검색된 판례", json.dumps(report, ensure_ascii=False))
+
+        # 생성 뒤에 참고 자료가 바뀌면 실제로 보낸 것과 다른 프롬프트가 기록되므로 적재를 멈춘다 (#143 리뷰)
+        references_file = Path(state["stages"]["rag"]["outputs"]["referencesFile"])
+        saved = load_json(references_file)
+        saved["references"]["similarCases"][0]["summary"] = "생성 뒤에 바뀐 사실관계"
+        references_file.write_text(json.dumps(saved, ensure_ascii=False), encoding="utf-8")
+        with self.assertRaises(pipeline.PipelineError) as ctx:
+            self.run_with(config, {"openai:a": [self.output]}, applied, start="load")
+        self.assertIn("--from generate", str(ctx.exception))
+
+        # 고른 회차의 묶음 정보(batch.json)가 없으면 확인할 수 없으므로 멈춘다 (#143 리뷰)
+        saved["references"]["similarCases"][0]["summary"] = "검색된 판례 사실관계"
+        references_file.write_text(json.dumps(saved, ensure_ascii=False), encoding="utf-8")
+        batch_file = Path(state["stages"]["generate"]["outputs"]["batchDir"]) / "batch.json"
+        batch_file.rename(batch_file.with_name("batch.moved.json"))
+        with self.assertRaises(pipeline.PipelineError) as ctx:
+            self.run_with(config, {"openai:a": [self.output]}, applied, start="load")
+        self.assertIn("묶음 정보가 없어", str(ctx.exception))
+        batch_file.with_name("batch.moved.json").rename(batch_file)
+
+        # 참고 자료를 만든 뒤 기준일 · 사건 입력이 바뀌면 --from generate만으로는 예전 참고 자료를 쓰므로 멈춘다 (#143 리뷰)
+        changed = {**config, "indictmentDate": "2014-04-01"}
+        with self.assertRaises(pipeline.PipelineError) as ctx:
+            self.run_with(changed, {"openai:a": [self.output]}, applied, start="generate")
+        self.assertIn("--from rag", str(ctx.exception))
+        state = self.run_with(changed, {"openai:a": [self.output]}, applied, start="rag")  # rag부터 다시 돌리면 통과
+        self.assertEqual(state["stages"]["rag"]["outputs"]["report"]["guidelineBasis"], "INDICTMENT_DATE")
+        self.assertNotIn("2014-04-01", json.dumps(state["stages"]["rag"]["outputs"], ensure_ascii=False))  # 지문에 날짜를 그대로 남기지 않는다
+
+    def test_rag_fallback_and_disabled(self):
+        config = self.config(rag={"enabled": True}, generate={"models": ["openai:a"], "runs": 1, "maxRetries": 0})
+        state = self.run_with(config, {"openai:a": [self.output]})  # DB 접속 실패 → 사건 입력의 참고 자료로 진행
+        self.assertEqual(state["stages"]["rag"]["outputs"]["report"]["status"], "FALLBACK")
+        prompt = (Path(state["stages"]["generate"]["outputs"]["batchDir"]) / "prompt.md").read_text(encoding="utf-8")
+        self.assertIn("유사 판례 A (예시)", prompt)
+        self.assertTrue(any("RAG 대체" in line for line in self.logs))
+
+        required = self.config(rag={"enabled": True, "required": True},
+                               generate={"models": ["openai:a"], "runs": 1, "maxRetries": 0})
+        with self.assertRaises(pipeline.PipelineError):
+            self.run_with(required, {"openai:a": [self.output]}, start="rag")
+
+        off = self.config(generate={"models": ["openai:a"], "runs": 1, "maxRetries": 0})  # 기본은 꺼짐
+        self.assertNotIn("rag", pipeline.plan(off, {"stages": {}}))
+        state = self.run_with(off, {"openai:a": [self.output]}, start="generate")
+        sql = Path(state["stages"]["load"]["outputs"]["sqlFile"]).read_text(encoding="utf-8")
+        report = json.loads(sql.split("'PENDING', NULL, NULL, '")[1].split("'::jsonb")[0].replace("''", "'"))
+        self.assertEqual(report["rag"], {"status": "SKIPPED"})
+
+    def test_rag_config_validation(self):
+        bad = copy.deepcopy(self.raw_config)
+        bad["indictmentDate"] = "2014/03/01"
+        bad["stages"]["rag"] = {"precedent": {"topK": 0}}
+        write_json(self.dir / "bad.json", bad)
+        with self.assertRaises(pipeline.PipelineError) as ctx:
+            pipeline.load_config(self.dir / "bad.json")
+        self.assertIn("indictmentDate", str(ctx.exception))
+        self.assertIn("stages.rag.precedent.topK", str(ctx.exception))
 
     def test_contamination_insufficient_and_criteria(self):
         clean = {"knowsCase": False, "penaltyType": "PRISON", "prisonMonths": 60, "fineAmount": None,
@@ -730,8 +881,8 @@ class PipelineTest(unittest.TestCase):
                          {"runs": 5, "counts": {"APOLOGY_SINCERITY": 3, "NONE": 2}, "needsReview": False, "requestedRuns": 5})
         # 적재 SQL은 투표 결과 축과 투표 기록(value_axis_votes, BE-48)을 쓴다 (추출기 값 위에 덮어씀). 추출기 보고서 파일은 바뀌지 않는다
         sql = Path(state["stages"]["load"]["outputs"]["sqlFile"]).read_text(encoding="utf-8")
-        self.assertIn("""'분류', 'APOLOGY_SINCERITY', '{"runs": 5, "counts": {"APOLOGY_SINCERITY": 3, "NONE": 2}, "needsReview": false, "requestedRuns": 5}'::jsonb, 2);""", sql)
-        self.assertIn("""'분류', 'ORDER_OPPORTUNITY', '{"runs": 5, "counts": {"PRINCIPLE_RELATION": 2, "ORDER_OPPORTUNITY": 3}, "needsReview": false, "requestedRuns": 5}'::jsonb, 3);""", sql)
+        self.assertIn("""'분류', 'APOLOGY_SINCERITY', '{"runs": 5, "counts": {"APOLOGY_SINCERITY": 3, "NONE": 2}, "needsReview": false, "requestedRuns": 5}'::jsonb, NULL, 2);""", sql)
+        self.assertIn("""'분류', 'ORDER_OPPORTUNITY', '{"runs": 5, "counts": {"PRINCIPLE_RELATION": 2, "ORDER_OPPORTUNITY": 3}, "needsReview": false, "requestedRuns": 5}'::jsonb, NULL, 3);""", sql)
         self.assertIsNone(load_json(self.raw_config["inputs"]["report"])["factorExtras"][1]["valueAxis"])
         self.assertTrue(any("가치관 축 분류 단계" in line and "openai" in line for line in self.logs))  # 외부 전송 안내
 
@@ -776,8 +927,8 @@ class PipelineTest(unittest.TestCase):
         # 축 단계를 건너뛰면 추출기 값 그대로 적재한다
         state = self.run_with(config, {}, skip=["axis"])
         sql = Path(state["stages"]["load"]["outputs"]["sqlFile"]).read_text(encoding="utf-8")
-        self.assertIn("'분류', 'FAULT_STANDARD', NULL, 1);", sql)  # 투표 기록 없음 (value_axis_votes NULL)
-        self.assertIn("'분류', NULL, NULL, 2);", sql)
+        self.assertIn("'분류', 'FAULT_STANDARD', NULL, NULL, 1);", sql)  # 투표 기록 · 요약어 후보 없음 (NULL)
+        self.assertIn("'분류', NULL, NULL, NULL, 2);", sql)
         self.assertEqual(state["stages"]["axis"]["status"], "failed")  # 실패한 투표 결과는 쓰지 않는다
 
     def test_axis_disabled_ignoresPreviousVotes_skipKeepsThem(self):
@@ -791,7 +942,7 @@ class PipelineTest(unittest.TestCase):
         state = self.run_with(disabled, {}, start="load")
         inserted = Path(state["stages"]["load"]["outputs"]["sqlFile"]).read_text(encoding="utf-8").split("RETURNING id INTO v_case_id")[1]
         self.assertNotIn("APOLOGY_SINCERITY", inserted)
-        self.assertIn("'분류', NULL, NULL, 2);", inserted)  # 추출기 값(null) · 투표 기록 없음
+        self.assertIn("'분류', NULL, NULL, NULL, 2);", inserted)  # 추출기 값(null) · 투표 기록 · 요약어 후보 없음
         self.assertFalse(any("투표 결과 사용" in line for line in self.logs[-5:]))
 
     def test_axis_rerun_from_axis_keepsGeneration(self):
@@ -857,6 +1008,18 @@ class PipelineTest(unittest.TestCase):
                     "postgresql://localhost/db?host=localhost,prod.example.com"):
             with self.assertRaises(pipeline.PipelineError, msg=url):
                 pipeline.apply_sql(self.dir / "x.sql", {"mode": "psql", "url": url})
+
+    def test_apply_sql_rejects_service(self):
+        # service 접속은 서비스 파일의 host를 써서 호스트 검사를 우회한다 (#143 리뷰)
+        with mock.patch.dict(os.environ, {}, clear=True):
+            with self.assertRaises(pipeline.PipelineError) as ctx:
+                pipeline.apply_sql(self.dir / "x.sql", {"mode": "psql", "url": "postgresql:///lawnambul?service=remote"})
+        self.assertIn("service", str(ctx.exception))
+        with mock.patch.dict(os.environ, {"PGSERVICE": "remote"}, clear=True):
+            with self.assertRaises(pipeline.PipelineError):
+                pipeline.apply_sql(self.dir / "x.sql", {"mode": "psql", "url": "postgresql:///lawnambul"})
+            with self.assertRaises(pipeline.RagUnavailable):  # RAG 검색도 같은 검사
+                pipeline.query_db("SELECT 1;", {"mode": "psql", "url": "postgresql://localhost/lawnambul"})
 
     def test_apply_sql_unix_socket_and_pghost(self):
         socket_url = {"mode": "psql", "url": "postgresql:///lawnambul"}

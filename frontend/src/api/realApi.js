@@ -8,6 +8,9 @@ const experience = (caseId) => `/cases/${encodeURIComponent(caseId)}/experience`
 export const getCases = (crimeType) =>
   get(crimeType === undefined ? '/cases' : `/cases?crimeType=${encodeURIComponent(crimeType)}`);
 
+// API 16 — 공개 사건 상세 (S-20 사건 디테일. 체험 없이 부를 수 있고, 쿠키는 읽기만 한다)
+export const getCaseDetail = (caseId) => get(`/cases/${encodeURIComponent(caseId)}`);
+
 // API 2 — 체험 시작 (있으면 기존 체험, 쿠키가 없으면 익명 ID 쿠키를 내려준다)
 export const startExperience = (caseId) => post(experience(caseId));
 
@@ -30,3 +33,11 @@ export const postCourtReveal = (caseId) => post(`${experience(caseId)}/court-rev
 export const getCourtJudgment = (caseId) => get(`${experience(caseId)}/judgments/court`);
 export const postComparisonReveal = (caseId) => post(`${experience(caseId)}/comparison-reveal`);
 export const getComparison = (caseId) => get(`${experience(caseId)}/comparison`);
+
+// 성향 API P-1 ~ P-5 (명세 9장) — 문항 · 응답 제출 · 내 결과 · 공유용 유형 · 마이페이지. 응답 제출(P-2)만 익명 ID 쿠키를 새로 발급한다
+// 내 결과가 없으면 P-3은 404 PERSONALITY_RESULT_NOT_FOUND이고, 마이페이지(P-5)는 기록이 없어도 빈 200이다
+export const getPersonalityQuestions = () => get('/personality/questions');
+export const submitPersonality = (answers) => post('/personality/results', { answers });
+export const getMyPersonality = () => get('/personality/results/me');
+export const getPersonalityType = (shareId) => get(`/personality/types/${encodeURIComponent(shareId)}`);
+export const getMyPage = () => get('/my-page');

@@ -17,6 +17,15 @@
 | v1.10 | 2026-10-08 | COMMON-19 반영 (AI 판결 파이프라인 BE-30 ~ BE-45) — 2장 마이그레이션 목록에 V7(사건 제목 · 판단 요소 번호 유니크) · V8(`ai_generation.generation_report`) 추가, 6장에 오프라인 생성 도구(`tools/ai-judgment`)의 LLM 공급자 · 호출 안정성(재시도 · 교차 호출 · 대체 체인) · 무료 등급 데이터 정책 · 퓨샷 · RAG 구현 상태 추가, "LLM 제공사는 구현 단계에서 결정" 문구를 오프라인 도구(결정됨)와 서비스 안 파이프라인(미결정)으로 구분 |
 | v1.11 | 2026-10-08 | 11 · 12차 회의 반영 (COMMON-20) — 3장 카카오 로그인(OAuth2 · JWT) 검토 표기, 6장 세 판결 AI 비교 분석 제외(REQ-062 · 063) · 임베딩 API 행 추가(모델 미정) · 퓨샷 · RAG · 임베딩 적용 위치가 12차 회의 결정임을 명시 |
 | **v1.12** | **2026-10-09** | **COMMON-21 반영** — 6장 퓨샷 · RAG · 임베딩 구현 현황에서 임베딩 모델 · 판례 저장소 범위 확정 표기, 선행 작업을 BE-50 ~ BE-52로 정정 |
+| v1.13 | 2026-10-12 | BE-39 반영 (**확장 단계**, 닫힌 #79를 최신 develop에 다시 적용) — 3장에 관리자 인증 추가: Spring Security, 관리자 계정(V12 `admin_account`) · 세션 로그인, `/api/v1/admin/**`만 보호하고 사용자 API는 그대로(인증 · CSRF · 세션 없음), 관리자 상태 변경 요청 CSRF. 2장 마이그레이션 목록에 V9 ~ V12 추가 |
+| v1.14 | 2026-10-12 | BE-52 반영 — 2장 마이그레이션 목록에 V13(`rag_guideline` · 양형기준 버전 함수) 추가, 6장 구현 현황에 양형기준 RAG 저장소 표기 |
+| v1.15 | 2026-10-12 | BE-57 반영 (**확장 단계**, WBS 7.4.1) — 3장 "사용자 인증 기반" 신설: 필터 체인을 관리자(세션 · CSRF) / 사용자(무상태 · Bearer 토큰)로 분리, 토큰 계약(`TokenIssuer` · `AccessTokenVerifier` · `MemberPrincipal` · `IssuedTokens`), 토큰 오류 401(`TOKEN_INVALID` · `TOKEN_EXPIRED`), CORS 미설정 근거, 보안 헤더(Referrer-Policy · HSTS · CSP 담당), 리프레시 쿠키 · OAuth 임시 상태 결정 위임(C · D). 리뷰 반영: `Bearer`가 아닌 스킴은 검증하지 않고 익명으로 통과 |
+| v1.16 | 2026-10-13 | 관리자 로그인 보강 (**확장 단계**, BE-67 · WBS 7.4.5) — 3장 관리자 인증: 세션 중 계정 확인(비활성 · 삭제면 CSRF 검사 전에 401) 추가, 로그인 실패 응답 시간 맞춤(비활성 계정도 계정 없음과 같은 경로, 해시는 앱 인코더로만), 로그인 성공 시 CSRF 토큰 교체 · 로그아웃 시 삭제, 비밀번호 확인을 트랜잭션 밖으로 |
+| v1.17 | 2026-10-13 | BE-58 반영 (**확장 단계**, WBS 7.1.1) — 8장 배포 흐름을 실제 구성으로 정정: 웹(Nginx) · 백엔드 · DB 컨테이너(`deploy/docker-compose.prod.yml`), GitHub Actions(`deploy-images.yml`)가 이미지 빌드 → 운영 구성 스모크 테스트 → develop 머지 시 GHCR 업로드, 서버는 받아서 실행만. Nginx 예시 경로를 웹 이미지 기준(`/usr/share/nginx/html`)으로 바꾸고 `/api` 프록시 규칙 추가. 실제 사건 연결은 2장 "운영 (최종)"대로 서버 전용 덧붙임 파일(`docker-compose.real-seed.yml`) |
+| v1.18 | 2026-10-13 | 관리자 감사 로그 (**확장 단계**, BE-68 · WBS 7.4.5) — 3장 관리자 인증에 감사 로그 행 추가: 기록 대상 · 저장 실패 처리(같은 트랜잭션 / 별도 트랜잭션) · IP 수집과 forward 헤더 |
+| v1.19 | 2026-10-13 | BE-61 반영 (**확장 단계**, WBS 7.1.4) — 2장 Redis를 캐시(DB 0) · 토큰 저장소(DB 1)로 분리, "Redis가 없어도 서비스가 동작"은 캐시에만 해당하도록 정정, "Redis 운영 구성" 신설: AOF `everysec` 영속화, `noeviction` + 모든 키 TTL 필수, 메모리 상한, 사용자별 값 캐시 제외, 비밀번호 · 네트워크 접근. 8장 운영 컨테이너에 Redis 추가. 리뷰 반영: 캐시 장애 시 원본 조회는 아직 구현 전인 규칙(6.5.3, `CacheErrorHandler`)임을 명시, 7장에 로컬 테스트 전 Redis 기동 안내 |
+| v1.20 | 2026-10-15 | BE-63 반영 (**확장 단계**, WBS 7.4.6 1차) — 3장 사용자 인증 기반에 **Rate limit** 행 추가: 운영 Nginx `/api` IP별 제한(평균 초당 20 · 순간 40), JSON 429 `TOO_MANY_REQUESTS`, 정적 파일 제외, 백엔드 지표에 잡히지 않음, 사용자 IP 전제와 서버 확인 · 로드 밸런서 시 `real_ip`. 2차(로그인 · 재발급)는 7.4.2 이후 |
+| v1.21 | 2026-10-16 | BE-60 반영 (**확장 단계**, WBS 7.1.3) — 8장 배포 흐름에 자동 배포(CD) 추가: 운영은 `main`만, 서버가 2분마다 GHCR `main` 이미지를 확인해 배포(실패 시 자동 되돌림), Actions는 `/version.json`으로 결과 확인. IAM 권한 없이 하는 방식을 고른 이유는 `docs/decisions/BE-60.md` |
 
 
 ## **1. Backend**
@@ -80,7 +89,7 @@ JPA 사용 시 Lazy Loading을 기본으로 하며, `open-in-view`는 끄고 �
 | --- | --- |
 | PostgreSQL | 사건, 판단 요소, 체험 기록, 판결 등 서비스 주요 데이터 저장 |
 | **Flyway** | DB 스키마 변경 이력 및 Migration 관리 |
-| Redis | 참여자 수, 공개 판결, 사건 목록 등 자주 조회되는 데이터 캐시 |
+| Redis | DB 0: 참여자 수, 공개 판결, 사건 목록 등 자주 조회되는 데이터 캐시 / DB 1: (확장) 로그인 토큰 저장소 (BE-61 · WBS 7.1.4) |
 | pgvector | 유사 판례·양형기준 임베딩 저장 및 유사도 검색. RAG 전환 시 활용 |
 
 사건 정보의 피해 결과 카드, 부가 처분, AI 입력·출력 기록처럼 구조가 사건마다 다른 데이터는 `jsonb` 컬럼에 저장한다.
@@ -105,7 +114,12 @@ backend/src/main/resources/db/migration
  ├─ V5__create_extension_tables.sql   -- (확장) AI 판결 생성 기록, 세 판결 비교 분석
  ├─ V6__add_case_source_final_unique.sql   -- 사건마다 최종 확정 판결 1건 (부분 유니크)
  ├─ V7__add_legal_case_title_factor_display_order_unique.sql   -- 사건 제목 · (사건, 판단 요소 번호) 유일 (적재 SQL의 조회 키, BE-15)
- └─ V8__add_ai_generation_generation_report.sql   -- ai_generation.generation_report (자동 생성 정보, BE-31)
+ ├─ V8__add_ai_generation_generation_report.sql   -- ai_generation.generation_report (자동 생성 정보, BE-31)
+ ├─ V9__add_factor_value_axis.sql      -- factor.value_axis 판단 요소 가치관 축 (BE-47)
+ ├─ V10__add_factor_value_axis_review.sql   -- factor.value_axis_status · value_axis_votes (BE-48)
+ ├─ V11__create_rag_precedent.sql     -- (확장) AI 판결 RAG 판례 저장소 · pgvector (BE-51)
+ ├─ V12__create_admin_account.sql     -- (확장) 관리자 계정 (BE-39)
+ └─ V13__create_rag_guideline.sql     -- (확장) AI 판결 RAG 양형기준 저장소 · 버전 함수 (BE-52)
 
 backend/src/main/resources/db/seed          -- 로컬 · CI 전용 (운영에는 넣지 않음)
  └─ R__seed_sample_case.sql           -- 개발용 임시 시드: 가상 살인 사건 1건 (ERD 6장 예시)
@@ -145,7 +159,7 @@ MVP에는 관리자 화면이 없으므로 대표 사건 데이터와 검수된 
 - 접속 정보는 `DB_URL` · `DB_USERNAME` · `DB_PASSWORD` 환경변수로 받고, 값이 없으면 로컬 Docker 기본값을 쓴다(`application.yml`). 단계를 옮겨도 코드는 바꾸지 않고 환경변수만 바꾼다.
 - 운영 계정 · 비밀번호는 저장소 어디에도 적지 않는다.
 
-Redis는 캐시 용도로만 사용한다. 체험 진행 상태나 판결 같은 원본 데이터는 모두 PostgreSQL에 저장하고, Redis가 없어도 서비스가 동작하도록 한다.
+Redis의 **캐시(DB 0)** 에는 원본 데이터를 두지 않는다. 체험 진행 상태나 판결 같은 원본 데이터는 모두 PostgreSQL에 저장하고, Redis가 없어도 캐시를 건너뛰고 PostgreSQL에서 읽어 서비스가 동작하도록 한다. 토큰 저장소(DB 1)는 이 원칙의 예외다(아래 "Redis 운영 구성").
 
 ```
 사건 목록 / 공개 판결 조회
@@ -157,6 +171,21 @@ PostgreSQL 조회 → Redis 저장 → 반환
 
 캐시는 사건 공개나 AI 판결 교체 시점에 삭제한다.
 
+### Redis 운영 구성 (확장 단계, BE-61 · WBS 7.1.4)
+
+Redis 한 인스턴스를 **논리 DB 두 개**로 나눠 쓴다. 캐시는 지워져도 되고 토큰은 지워지면 안 되는, 성격이 반대인 데이터라 섞지 않는다(캐시를 비우다 토큰까지 지우는 사고를 막는다).
+
+| 항목 | 내용 |
+| --- | --- |
+| DB 0 — 캐시 | 사건 목록 · 참여자 수 · 공개 판결 등. 원본은 PostgreSQL에 있어 지워져도 다시 만든다. **Redis 장애면 캐시를 건너뛰고 PostgreSQL에서 읽어야 한다 — 이건 아직 구현되지 않은 규칙이다**(BE-61은 연결만 만들었다). 캐시를 붙이는 작업(6.5.3)에서 Redis 예외를 잡아 원본 조회로 넘긴다. Spring Cache(`@Cacheable`)를 쓰면 기본 동작이 예외를 그대로 던져 500이 되므로 `CacheErrorHandler`로 기록만 하고 넘긴다 |
+| DB 1 — 토큰 | 리프레시 토큰 · 폐기 목록(7.4.3, C). 지워지면 로그인이 풀리고 폐기한 토큰이 다시 통하므로 **원본처럼 다룬다**. Redis 장애는 토큰 오류로 바꾸지 않고 500(3장 "사용자 인증 기반") |
+| 영속화 | AOF, `appendfsync everysec`(최대 1초 유실). 재시작 · 배포 때 토큰이 사라지지 않게 한다. AOF는 인스턴스 전체에 적용돼 캐시도 기록되지만 문제없다(WBS R11). 데이터는 볼륨 `redisdata` |
+| 메모리 · 축출 | `maxmemory 200mb` · **`maxmemory-policy noeviction`**, 컨테이너 `mem_limit 256m`(t3.small 2GB를 백엔드 1g · PostgreSQL 512m과 나눔). `allkeys-lru` 같은 축출 정책은 DB를 구분하지 않아 오래 안 쓴 토큰을 지울 수 있어 쓰지 않는다. 메모리가 차면 **쓰기가 실패**한다(OOM 오류) |
+| TTL 필수 | `noeviction`이라 자동으로 비워지지 않는다. **모든 키에 TTL을 단다** — 캐시는 기능마다 정하고, 토큰은 만료 시각과 같게 둔다. TTL 없는 키는 리뷰에서 막는다 |
+| 사용자별 값 | 사용자마다 다른 값(사건 목록의 `myStatus` 등, 7.7.2)은 공통 캐시에 넣지 않고 요청마다 붙인다 |
+| 접근 | 비밀번호(`requirepass`, 환경변수 `REDIS_PASSWORD`). 운영에서는 포트를 호스트에 열지 않고 Compose 네트워크 안에서만 쓴다 |
+| 코드 | 설정 접두어는 `redis.*`(`application.yml`, `AppRedisProperties`). Spring Boot 기본 설정(`spring.data.redis.*`)은 DB 번호를 하나만 받아 쓰지 않는다. `RedisConfig`가 DB별 커넥션 팩토리를 따로 둔다. 캐시는 기본(`@Primary`) 템플릿, 토큰은 `@Qualifier(RedisConfig.TOKEN)` 템플릿 |
+
 ---
 
 ## **3. 사용자 식별 / Security**
@@ -165,7 +194,7 @@ PostgreSQL 조회 → Redis 저장 → 반환
 | --- | --- |
 | 익명 ID (UUID 쿠키) | 로그인 없이 사용자의 체험 기록과 진행 상태 식별 |
 | HttpOnly Cookie | 브라우저 스크립트에서 익명 ID를 읽지 못하도록 보호 |
-| Spring Security | (이후) 회원 기능 도입 시 인증 및 API 접근 제어 |
+| Spring Security | (확장) 필터 체인 두 개 — 관리자(세션 · CSRF, BE-39) / 사용자(무상태 · Bearer 토큰, BE-57). 실제 토큰 발급 · 검증은 카카오 로그인 · JWT(WBS 7.4.2 · 7.4.3)에서 더한다 |
 | 카카오 로그인 (OAuth2) · JWT | (이후 · 검토, v1.11) 11차 회의 제안. 로그인 시 익명 ID를 회원에 연결(`anonymous_user.member_id`). 관리자 화면(S-19) 인증 방식과 함께 정한다 |
 
 MVP는 회원가입 없이 핵심 체험이 끝까지 동작해야 한다. 사용자를 익명 ID로 구분하고, 같은 브라우저에서는 이어서 체험할 수 있도록 한다.
@@ -191,6 +220,44 @@ MVP는 회원가입 없이 핵심 체험이 끝까지 동작해야 한다. 사�
 원본 판결문, 사건번호 등 내부 정보는 사용자 API에서 절대 조회하지 않는다. AI 판결과 실제 판결은 진행 상태가 해당 단계에 도달했을 때만 응답에 포함한다.
 
 회원가입 / 로그인은 MVP 이후 기능이며, 도입 시 기존 익명 체험을 회원 기록으로 연결한다.
+
+### 관리자 인증 (확장 단계, BE-39 · BE-40)
+
+자동 파이프라인이 비공개로 적재한 사건 · 판결을 관리자가 검수 · 공개하는 **관리자 후검수(BE-33)** 를 위한 인증이다. **MVP 범위가 아니다**(MVP는 관리자 화면 없이 SQL로 적재, MVP 정의서).
+
+| 항목 | 내용 |
+| --- | --- |
+| 보호 범위 | `/api/v1/admin/**`만 관리자(`ROLE_ADMIN`)를 요구한다. **사용자 API는 지금처럼 인증 없이 동작**하고 세션 · CSRF 쿠키도 만들지 않는다 |
+| 계정 | `admin_account`(V12): 이메일(소문자 정규화, 유일) · 비밀번호 해시(BCrypt, `{bcrypt}` 접두어) · 표시 이름 · 활성 여부 · 마지막 로그인 시각 |
+| 로그인 | 세션 기반. `POST /api/v1/admin/auth/login`(JSON) → 세션 쿠키 `NLNB_ADMIN_SESSION`(HttpOnly · Secure · SameSite=Lax, 기본 30분). 로그인 시 세션 ID를 바꿔 세션 고정을 막는다. 실패는 계정 없음 · 비활성 · 비밀번호 불일치를 구분하지 않고, **응답 시간도 같게** 한다(비활성 계정도 계정 없음과 같은 가짜 비밀번호 확인을 거친다, BE-67). 이 전제를 지키려면 **관리자 비밀번호 해시는 앱의 인코더(`PasswordEncoder`, 첫 계정 · 관리 도구)로만 만든다** — SQL로 다른 bcrypt 비용(예: `$2a$12$`)의 해시를 넣으면 시간 차이가 다시 생긴다. 비밀번호 확인(bcrypt)은 트랜잭션 밖에서 하고 마지막 로그인 시각만 짧게 갱신한다 |
+| 세션 중 계정 확인 | 관리자 요청마다 세션의 계정이 아직 있고 활성인지 확인한다(`AdminAccountStatusFilter`, BE-67). **CSRF 검사보다 먼저** 돌아, 비활성 · 삭제면 세션을 끝내고 바로 401 `UNAUTHORIZED`(CSRF 토큰이 없어도 403이 아니라 401). 로그인 · CSRF 발급 경로는 세션만 끝내고 그대로 통과. 요청마다 기본 키 조회 한 번이 더 들지만 관리자 요청은 적다 |
+| CSRF | 관리자 API의 상태 변경 요청(로그인 포함)은 CSRF 토큰을 요구한다. `GET /api/v1/admin/auth/csrf`가 쿠키 `XSRF-TOKEN`을 내려 주고, 화면이 그 값을 헤더 `X-XSRF-TOKEN`에 담는다. **로그인에 성공하면 토큰을 새로 바꾸고, 로그아웃하면 지운다**(BE-67) — 쿠키 방식(서버는 쿠키 값과 헤더 값이 같은지만 본다)이라 바뀐 쿠키와 맞지 않는 로그인 전 토큰은 막힌다. 화면은 요청할 때마다 쿠키를 다시 읽는다 |
+| 첫 계정 | 환경변수 `ADMIN_BOOTSTRAP_EMAIL` · `ADMIN_BOOTSTRAP_PASSWORD`(12자 이상)가 있고 그 이메일의 계정이 없을 때만 기동 시 한 번 만든다. 이미 있는 계정의 비밀번호는 바꾸지 않는다. 만든 뒤 환경변수를 지운다 |
+| OAuth (BE-40, 예정) | OAuth 2.0 / OIDC 로그인. 허용 목록(등록된 관리자 이메일)에 있을 때만 관리자 권한. 같은 세션 · 권한 경계를 쓴다 |
+| 감사 로그 | `admin_audit_log`(V14, BE-68): 로그인 성공 · 실패 · 로그아웃, 원본 판결문 열람(A-7), 검수 API(A-9 ~ A-13)를 남긴다. 비밀번호 · 원문 내용은 넣지 않고, 로그인 실패 때 입력값도 원문으로 남기지 않는다(실제 계정과 일치할 때만 그 계정). 검수 API · 원문 열람은 같은 트랜잭션(기록이 실패하면 그 일도 되돌림), 로그인 성공은 세션 발급 직전에 저장(실패하면 세션 없이 로그인 실패), 로그인 실패 · 로그아웃은 별도 트랜잭션(실패해도 응답 그대로, 서버 로그에는 예외 종류만). 원문 열람(A-7)은 `recordRead`(별도 트랜잭션, 실패하면 열람도 실패)로 readOnly 서비스에서도 남긴다. 보관 1년(예정). IP는 `request.getRemoteAddr()` — 운영에서 Nginx 뒤 실제 IP를 받으려면 **`server.forward-headers-strategy=native`**(Tomcat `RemoteIpValve`, 오른쪽부터 신뢰 프록시를 건너뛰며 읽어 Nginx의 `$proxy_add_x_forwarded_for`와 함께 써도 안전)를 쓴다. `framework`(`ForwardedHeaderFilter`)는 맨 왼쪽 값을 써서 위조될 수 있다(#118 리뷰, 7.1 D) |
+| 오류 응답 | 필터에서 막힌 요청도 공통 에러 형식: 로그인 안 함 401 `UNAUTHORIZED`, 권한 없음 · CSRF 실패 403 `FORBIDDEN`, 로그인 실패 401 `INVALID_CREDENTIALS` |
+
+원본 판결문 등 내부 정보는 관리자 API(BE-41)에서만 보여 주고, 사용자 API에는 지금처럼 넣지 않는다.
+
+### 사용자 인증 기반 (확장 단계, BE-57 · WBS 7.4.1)
+
+카카오 로그인(7.4.2, D) · JWT(7.4.3, C)가 올라탈 자리를 먼저 만든다. **지금 사용자 API의 동작은 바뀌지 않는다**(토큰을 보내지 않으면 지금처럼 익명 ID 쿠키로 동작).
+
+| 항목 | 내용 |
+| --- | --- |
+| 필터 체인 | `SecurityConfig`가 체인 두 개를 둔다. ① `/api/v1/admin/**` 관리자 체인(먼저 검사): 세션 · CSRF · `ROLE_ADMIN`, Bearer 토큰은 보지 않는다. ② 그 밖의 모든 요청 사용자 체인: **세션을 만들지도 읽지도 않는다**(`STATELESS` + 요청 안에서만 쓰는 SecurityContext 저장소). 그래서 브라우저에 관리자 세션 쿠키가 있어도 사용자 API에서는 관리자로 보지 않는다 |
+| Bearer 토큰 | 사용자 체인의 `BearerTokenAuthenticationFilter`. `Authorization` 헤더가 없거나 `Bearer`가 아닌 스킴(`Basic` 등 — 앞단 Nginx 인증 · 모니터링 scrape가 붙일 수 있다)이면 익명. **`Bearer` 헤더는 반드시 검증한다**: 토큰이 비었거나 검증기 빈이 없거나 검증에 실패하면 **401**. 잘못된 토큰을 익명으로 바꾸지 않는다. 사용자 체인 경로라면 `permitAll`이어도 같다(관리자 체인은 Bearer를 보지 않는다). `Authorization` 헤더가 여러 개이거나(스킴과 관계없이) `Bearer` 토큰에 RFC 6750 밖의 글자(공백 · 쉼표 등)가 있으면 검증기를 부르지 않고 401 |
+| 토큰 오류 | 401 `TOKEN_EXPIRED`(만료, 화면은 재발급 시도) · 401 `TOKEN_INVALID`(그 밖). Redis 장애 등 인프라 오류는 토큰 오류로 바꾸지 않는다(500 `INTERNAL_ERROR`, 원인은 서버 로그에만) |
+| 토큰 계약 | `common.security.token` 패키지. `AccessTokenVerifier`(토큰 → `MemberPrincipal`, C 구현) · `TokenIssuer`(회원 → `IssuedTokens` 액세스 · 리프레시 토큰과 만료 시각, C 구현 · D 호출) · `MemberPrincipal`(회원 ID · 접두어 없는 권한 `USER`, 바꿀 수 없음) · `TokenException`(INVALID · EXPIRED). 재발급 · 폐기 · 재사용 탐지 계약은 C가 7.4.3에서 정한다 |
+| 담당 경계 (R14) | B: HTTP 헤더 처리 · 체인 연결(`SecurityConfig` · Bearer 필터) / C: 검증 · 발급 · 재발급 · 폐기 로직 / D: 카카오 로그인 성공 후 발급 호출. WBS 7-2-1의 "JWT 검증 필터(C)"와의 조정은 C 확인 후 정정한다 |
+| 회원 전용 API | 지금은 사용자 체인 전체가 `permitAll`이다. 회원만 쓸 API를 만들면 그 경로에 `authenticated()`를 추가한다(없으면 401 `UNAUTHORIZED`) |
+| 재발급 요청 | 화면은 재발급 요청에 `Authorization` 헤더를 붙이지 않는다(만료된 토큰이 붙으면 401로 막힌다) |
+| 리프레시 토큰 쿠키 (C 결정) | 쿠키에 두면 브라우저가 자동으로 보내므로 재발급 · 로그아웃 요청에 CSRF 대책(CSRF 토큰 또는 Origin 검증)과 `HttpOnly` · `Secure` · `SameSite`가 필요하다. 무상태 · 같은 출처라는 이유만으로 CSRF가 해결되지는 않는다 |
+| 익명 ID 쿠키와 CSRF | 익명 ID 쿠키도 브라우저가 자동으로 보낸다. 사용자 API에 CSRF 토큰을 두지 않는 것은 `SameSite=Lax` · 같은 출처 배포 · 익명 체험이라는 피해 범위를 보고 **받아들인 위험**이다 |
+| OAuth 왕복 임시 상태 (D 결정) | `STATELESS`는 일반 API 기준이다. 카카오 로그인 왕복의 `state` 저장(세션 또는 쿠키) · 콜백 경로 · 성공 · 실패 후 정리는 D가 7.4.2에서 정한다 |
+| CORS | 설정하지 않는다. 프론트와 API가 같은 출처다(운영 Nginx `/api` 프록시, 로컬 Vite 프록시, API 명세 6장 #2). 다른 출처에서 부를 일이 생기면 그때 허용 목록으로 연다 |
+| 보안 헤더 | Spring Security 기본값(`X-Content-Type-Options` · `X-Frame-Options: DENY` · `Cache-Control: no-store` 등) + 두 체인 모두 `Referrer-Policy: strict-origin-when-cross-origin`. HSTS는 HTTPS 요청에만 붙으므로 TLS를 끝내는 Nginx가 맡는다(중복 없음). CSP · HTML 응답의 Referrer-Policy도 정적 파일을 서빙하는 Nginx에서 정한다(7.1.1, D) |
+| Rate limit (BE-63, 7.4.6, D) | **1차**: 운영 Nginx가 `/api`를 IP별 평균 초당 20번 · 순간 40번으로 제한하고, 넘으면 API 명세 1-4 형식의 JSON 429(`TOO_MANY_REQUESTS`, `Retry-After: 1`)를 돌려준다. 화면 · 정적 파일은 제한하지 않는다. 백엔드에는 닿지 않으므로 백엔드 지표에는 잡히지 않는다(Nginx 로그로 확인). **2차**(7.4.2 이후): 로그인 · 토큰 재발급 엔드포인트를 더 엄격하게. IP 기준이라 Nginx가 사용자 IP를 본다는 전제가 필요하다 — 배포 서버에서 확인하고(deploy/README.md "Rate limit"), 앞에 로드 밸런서 · CDN을 두면 `real_ip` 설정을 함께 바꾼다 |
 
 ---
 
@@ -379,7 +446,7 @@ AI 판결 생성 파이프라인은 **RAG를 기본으로** 한다. 별도 벡�
 
 **무료 등급 데이터 정책**: 무료 등급은 입력을 제품 개선에 쓰고 사람이 검토할 수 있다(Gemini 약관). 정규식 마스킹만 거친 판결문 원문은 결제를 연결한 유료 키로만 보낸다(팀이 "이미 공개된 판결문에 한해" 허용한 `allowFreeTierForJudgment`의 마지막 백업만 예외, [ai-judgment-pipeline.md](ai-judgment-pipeline.md) 5-5). 정규식 마스킹은 법조인 실명 등을 지우지 못하므로 예외 설정은 공개 판결문에만 쓴다.
 
-**퓨샷 · RAG · 임베딩은 아직 구현하지 않았다.** 위 RAG · pgvector · 퓨샷 설명은 서비스 설계(FR-4-2)이고, 오프라인 도구의 참고 자료 중 유사 판례는 비어 있다(BE-25). 적용 위치(비식별화 · 재판부 초안 · 생성 · 회차 선택)만 정해 두었고(12차 회의, v1.11 — 단계별 표는 [ai-judgment-pipeline.md](ai-judgment-pipeline.md) 8장 · [user-flow.md](user-flow.md) 3-6), 임베딩 모델 · 판례 저장소 범위는 COMMON-21에서 정했고(`gemini-embedding-001` 3072차원, 상세는 [ai-judgment-pipeline.md](ai-judgment-pipeline.md) 8-1), 판례 수집 · 저장소 구축 · 양형기준 데이터화(BE-50 ~ BE-52)가 선행 작업이다. 기능마다 설정으로 끌 수 있고, 끄면 지금과 같은 결과가 나와야 한다(비교 기준선).
+**퓨샷 · RAG · 임베딩은 아직 구현하지 않았다.** 위 RAG · pgvector · 퓨샷 설명은 서비스 설계(FR-4-2)이고, 오프라인 도구의 참고 자료 중 유사 판례는 비어 있다(BE-25). 적용 위치(비식별화 · 재판부 초안 · 생성 · 회차 선택)만 정해 두었고(12차 회의, v1.11 — 단계별 표는 [ai-judgment-pipeline.md](ai-judgment-pipeline.md) 8장 · [user-flow.md](user-flow.md) 3-6), 임베딩 모델 · 판례 저장소 범위는 COMMON-21에서 정했고(`gemini-embedding-001` 3072차원, 상세는 [ai-judgment-pipeline.md](ai-judgment-pipeline.md) 8-1), 선행 작업인 판례 수집 · 저장소(BE-50 · BE-51)와 양형기준 데이터화(BE-52 — RAG로 결정, V13 `rag_guideline`, [sentencing-guideline-rag.md](sentencing-guideline-rag.md))를 마쳤다. 기능마다 설정으로 끌 수 있고, 끄면 지금과 같은 결과가 나와야 한다(비교 기준선).
 
 ---
 
@@ -428,6 +495,8 @@ CI가 실패한 PR은 Merge하지 않는 것을 기본 원칙으로 한다.
 
 상태 전이, 선고 가능 범위 검증, 판결 비교 분류 등 핵심 로직은 반드시 테스트한다. 부분 유니크 인덱스 같은 PostgreSQL 전용 제약은 H2 같은 인메모리 DB로 확인할 수 없으므로, 통합 테스트는 CI에서도 실제 PostgreSQL 컨테이너로 실행한다.
 
+Redis도 같다(BE-61). `RedisConfigTest`가 실제 Redis에 붙으므로 **로컬에서 `./gradlew test`를 돌리기 전에 `backend`에서 `docker compose up -d`로 PostgreSQL과 Redis를 함께 띄운다.** 예전에 `postgres`만 띄워 둔 경우에도 `docker compose up -d`를 한 번 더 실행하면 Redis만 추가로 뜬다. CI는 `backend-ci.yml`의 Redis 서비스 컨테이너를 쓴다.
+
 ---
 
 ## **8. Deployment**
@@ -435,21 +504,26 @@ CI가 실패한 PR은 Merge하지 않는 것을 기본 원칙으로 한다.
 | **기술** | **사용 목적** |
 | --- | --- |
 | AWS EC2 | 백엔드 · 프론트엔드 서버 운영 |
-| Docker | EC2에서 백엔드 컨테이너 실행 |
-| Nginx | 프론트엔드 빌드 파일(정적 파일) 서빙, `/api` 요청을 백엔드 컨테이너로 프록시 |
+| Docker · Docker Compose | EC2에서 웹(Nginx) · 백엔드 · DB · Redis 컨테이너 실행 (`deploy/docker-compose.prod.yml`) |
+| Nginx | 웹 이미지 안에서 프론트엔드 빌드 파일(정적 파일) 서빙, `/api` 요청을 백엔드 컨테이너로 프록시 (`frontend/nginx/default.conf`) |
+| GHCR (GitHub Container Registry) | 운영 이미지 저장소. 서버는 받아서 실행만 한다 (서버에서 빌드하지 않음) |
 
 ```
-PR Merge
+PR (develop · main 대상) → GitHub Actions(deploy-images.yml): 이미지 빌드 → 운영 구성으로 실행 → 스모크 테스트 (업로드 안 함)
 
-↓
-Docker 이미지 빌드
+PR Merge (develop) → 빌드 · 스모크 테스트 → GHCR 업로드 (태그 sha-커밋7자리 · develop). 운영에는 배포하지 않는다
 
+PR Merge (develop → main)
 ↓
-AWS EC2에서 컨테이너 실행 (환경변수로 접속 정보 주입)
-
+GitHub Actions: 빌드 · 스모크 테스트 → GHCR 업로드 (태그 sha-커밋7자리 · main, 이미지 라벨에 커밋 해시)
 ↓
-PostgreSQL / Redis 연결
+AWS EC2 (cd-agent.sh, systemd 타이머 2분마다): main 이미지가 바뀌었으면 deploy.sh
+  → 백엔드 교체 → healthy 확인 → 웹 교체 → deploy/smoke-test.sh → 실패하면 직전 sha로 되돌림
+↓
+GitHub Actions (verify-deploy): 운영 /version.json이 이 커밋이 될 때까지 대기 → 운영 주소로 스모크 테스트
 ```
+
+자세한 실행 방법 · 환경변수는 [`deploy/README.md`](../deploy/README.md)에 둔다 (BE-58).
 
 프론트엔드와 API는 **같은 도메인**으로 배포한다. 프론트엔드는 `npm run build` 결과물을 Nginx가 서빙하고, `/api`로 시작하는 요청은 Nginx가 백엔드 컨테이너로 넘긴다. 로컬의 Vite 프록시와 같은 구조라 익명 ID 쿠키를 `SameSite=Lax`로 쓸 수 있고 CORS 설정이 필요 없다(API 명세서 1-2 · 6장 #2).
 
@@ -464,13 +538,19 @@ PostgreSQL / Redis 연결
 이 처리를 자동으로 해 주지만 Nginx는 직접 설정해야 한다(FE-2 PR #55 리뷰 반영).
 
 ```nginx
+# frontend/nginx/default.conf 요약 — 웹 이미지 안에서는 빌드 산출물을 /usr/share/nginx/html에 둔다
+location ^~ /api/ {
+    proxy_pass http://backend:8080;   # /api는 index.html로 떨어지면 안 된다 (200 + HTML → 프론트가 응답을 해석하지 못함)
+}
 location / {
-    root /var/www/frontend;        # 프론트엔드 빌드 산출물(dist) 경로
+    root /usr/share/nginx/html;       # 프론트엔드 빌드 산출물(dist) 경로
     try_files $uri $uri/ /index.html;
 }
 ```
 
-배포 자동화(CD)는 개발이 어느 정도 완료된 이후 추가한다.
+배포 자동화(CD)는 단계로 나눠 붙였다. 이미지 빌드 · 스모크 테스트 · GHCR 업로드는 BE-58, EC2 자동 반영은 7.1.3(BE-60)이다.
+
+**자동 배포 방식 (BE-60)**: 운영은 `main`만 배포한다(서버 한 대라 스테이징 없음, WBS 7-5 범위 조정안 6번). GitHub Actions가 서버에 들어가지 않고 **서버가 2분마다 GHCR을 확인**해 스스로 배포한다 — SSH(22)는 배포 담당 IP만 열려 있고 IAM(Session Manager) 생성 권한이 없어, 새 포트 · AWS 권한 없이 하는 방식을 골랐다. 배포 결과는 web 이미지의 `/version.json`(커밋 해시)으로 Actions가 확인한다. 실패하면 직전 이미지로 자동 되돌리고 DB 스키마는 되돌리지 않는다. 근거 · 대안은 [의사결정 기록](decisions/BE-60.md), 설치 · 운영 명령은 [`deploy/README.md`](../deploy/README.md) "자동 배포(CD)".
 
 ---
 

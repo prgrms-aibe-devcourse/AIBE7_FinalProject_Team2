@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 익명 사용자 조회 · 발급 (API 명세 1-2)
  * 쿠키 읽기 · 쓰기는 AnonymousIdCookie가 하고, 여기서는 쿠키 값으로 DB의 익명 사용자를 다룬다.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AnonymousUserService {

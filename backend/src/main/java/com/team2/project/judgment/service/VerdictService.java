@@ -1,5 +1,6 @@
 package com.team2.project.judgment.service;
 
+import com.team2.project.common.metrics.BusinessMetrics;
 import com.team2.project.experience.domain.Experience;
 import com.team2.project.experience.domain.ExperienceStatus;
 import com.team2.project.experience.service.ExperienceTransitionService;
@@ -20,14 +21,18 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * 판결 제출 (API 9). 검사 순서: 형식(@Valid) → 사건 · 체험 → 상태 → 형벌 → 범위 → 집행유예 → 요소
  * 판단 저장과 상태 이동은 ExperienceTransitionService.apply 한 번으로 묶는다 (BE-4).
  * 동시 중복 제출로 유니크 제약(uk_judgment_experience_timing)을 만나면 apply가 현재 상태로 INVALID_STATE를 던진다.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class VerdictService {
@@ -39,6 +44,7 @@ public class VerdictService {
 	private final JudgmentFactorRepository judgmentFactorRepository;
 	private final VerdictValidator validator;
 	private final Clock clock;
+	private final BusinessMetrics metrics;
 
 	/** Bean Validation(@Valid)을 통과한 요청을 받는다. REVIEWED가 아니면 INVALID_STATE (이미 확정 포함) */
 	@Transactional
@@ -58,6 +64,13 @@ public class VerdictService {
 					.map(factor -> JudgmentFactor.forFinal(judgment, factors.get(factor.factorId()), factor.direction())).toList());
 			},
 			target -> target.markVerdictConfirmed(now));
+		// 커밋이 끝난 뒤에만 센다 (커밋 실패 · 호출자의 바깥 트랜잭션 롤백으로 되돌아간 판결은 세지 않는다, #110 리뷰)
+		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+			@Override
+			public void afterCommit() {
+				metrics.recordVerdictConfirmed();
+			}
+		});
 		return new VerdictResponse(ExperienceStatus.VERDICT_CONFIRMED);
 	}
 }

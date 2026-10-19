@@ -35,7 +35,7 @@ public class AnonymousIdCookie {
 			.flatMap(AnonymousIdCookie::parse);
 	}
 
-	/** 익명 ID를 쿠키로 내려준다 (체험 시작 API 2에서만 발급) */
+	/** 익명 ID를 쿠키로 내려준다 (체험 시작 API 2 · 성향 테스트 제출 P-2에서만 발급) */
 	public void write(HttpServletResponse response, UUID anonymousId) {
 		ResponseCookie cookie = ResponseCookie.from(NAME, anonymousId.toString())
 			.httpOnly(true)

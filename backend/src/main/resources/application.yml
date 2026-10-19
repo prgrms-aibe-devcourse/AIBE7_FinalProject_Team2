@@ -23,16 +23,104 @@ spring:
     locations: ${FLYWAY_LOCATIONS:classpath:db/migration}
     # 시드(R__)를 한 번 적용한 DB에서 시드 위치를 빼고 실행해도 기동되도록, 적용된 반복 마이그레이션이 없어도 검증을 통과시킨다.
     # (없으면 "Detected applied migration not resolved locally"로 기동 실패) 버전 파일 검증은 그대로 유지한다.
-    # 운영에도 적용되는 설정이다. 지금 R__ 파일은 개발용 시드뿐이라 안전하지만, 시드 외의 R__ 파일을 추가하면 이 설정을 재검토한다.
+    # 운영에도 적용되는 설정이다. 운영용 R__는 db/migration의 성향 콘텐츠(R__personality_content, BE-72)뿐이고, 이 파일은 운영 위치에 항상 있어
+    # missing이 될 일이 없다. 그래서 이 무시 규칙은 개발용 시드(db/seed)를 뺐을 때만 작동한다(BE-72에서 재검토).
     ignore-migration-patterns: "*:future,repeatable:missing"
     # 운영 DB 전체 삭제를 막기 위해 clean 명령은 항상 막아 둔다 (기본값이지만 명시)
     clean-disabled: true
+
+  data:
+    redis:
+      # Redis는 템플릿(RedisConfig)으로만 쓴다. 켜 두면 JPA 리포지토리마다 "저장소를 판별할 수 없다"는 로그가 남는다 (BE-61, 15개 → 15줄)
+      repositories:
+        enabled: false
 
   jackson:
     deserialization:
       # 정수 필드(형량 개월 · 금액 · step · id 등)에 소수가 오면 소수점을 버리지 않고 400 VALIDATION_ERROR로 거절한다 (BE-22, B안)
       # 36.7 → 36처럼 사용자가 보낸 값과 다른 값이 조용히 저장되는 것을 막는다. "36" 같은 문자열 숫자는 허용한다
       accept-float-as-int: false
+
+# Actuator · Micrometer 메트릭 노출 (BE-66, WBS 7.2.1). 애플리케이션 포트(8080)와 분리된 별도 포트로만 연다.
+# Nginx는 /api/만 backend:8080으로 프록시하므로, 이 포트는 Nginx 설정을 바꾸지 않는 한 외부에서 닿지 않는다.
+# health · prometheus 두 엔드포인트만 연다 (env · beans · threaddump 등은 운영 정보 노출이라 기본값대로 닫아 둔다)
+management:
+  server:
+    port: ${MANAGEMENT_PORT:8081}
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  endpoint:
+    health:
+      show-details: never
+      # 운영 Compose의 백엔드 healthcheck가 /actuator/health/readiness(관리 포트)를 쓴다 (BE-60).
+      # Boot 4.1.1은 기본값이 true지만, 버전 · 실행 환경이 바뀌어 꺼지면 healthcheck가 404로 실패해 배포가 매번 되돌려지므로 명시한다 (#161 리뷰)
+      probes:
+        enabled: true
+  metrics:
+    tags:
+      # 지금은 서비스가 하나뿐이지만, Grafana에서 환경 · 다른 서비스와 섞이지 않게 공통 태그로 미리 붙여 둔다 (#110 리뷰)
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        # 7.3.1의 "p95 지연" 경보는 히스토그램 버킷이 있어야 Prometheus에서 histogram_quantile()로 계산할 수 있다.
+        # http.server.requests 하나만 켠다 — 전체(Global)로 켜면 HikariCP 등 다른 타이머까지 버킷이 늘어난다 (WBS 7-13)
+        http.server.requests: true
+      # 버킷 범위를 API 응답 시간대로 좁힌다 (기본은 1ms ~ 30s 전체라 라우트당 버킷이 69개나 생긴다, #120 리뷰).
+      # p95 계산에는 지장 없이 시계열 수를 줄여서, 7.3.3 Grafana Cloud remote_write 비용(R9)도 함께 줄어든다
+      minimum-expected-value:
+        http.server.requests: 10ms
+      maximum-expected-value:
+        http.server.requests: 5s
+
+# AI 판결 RAG 유사 판례 검색 (BE-51). 키가 없으면 RAG만 꺼지고 서버는 정상으로 뜬다
+# 모델 · 차원은 판례 적재 도구(tools/ai-judgment/rag_store.py)와 같아야 한다
+rag:
+  embedding:
+    api-key: ${GEMINI_API_KEY:}
+    model: ${RAG_EMBEDDING_MODEL:gemini-embedding-001}
+    dimensions: 3072
+  search:
+    top-k: ${RAG_SEARCH_TOP_K:5}
+    min-score: ${RAG_SEARCH_MIN_SCORE:0.6}
+    # 이 이상이면 같은 사건으로 보고 뺀다 (해시로 못 잡은 자기 사건 대비). 샘플 사건 검색으로 다시 맞춘다
+    max-score: ${RAG_SEARCH_MAX_SCORE:0.95}
+
+# Redis (확장 단계, BE-61 · WBS 7.1.4). 정책은 기술 스택 2장 "Redis 운영 구성"
+# 논리 DB를 용도별로 나눈다 — 캐시(0)는 지워져도 되고, 토큰(1)은 지워지면 안 된다
+# 커넥션은 첫 사용 때 맺으므로 Redis가 없어도 서버는 뜬다 (Redis를 쓰는 기능 — 캐시 · 토큰 — 만 실패)
+redis:
+  host: ${REDIS_HOST:localhost}
+  port: ${REDIS_PORT:6379}
+  # 로컬 docker-compose는 비밀번호 없음. 운영은 환경변수로만 넘긴다
+  password: ${REDIS_PASSWORD:}
+  # 명령 응답 대기 상한. Lettuce 기본값(60초)이면 Redis 장애 때 요청이 오래 매달린다
+  timeout: ${REDIS_TIMEOUT:2s}
+  cache-database: 0
+  token-database: 1
+
+# 관리자 세션 쿠키 (확장 단계, BE-39). 사용자 API는 세션을 쓰지 않는다(익명 ID 쿠키).
+server:
+  servlet:
+    session:
+      timeout: ${ADMIN_SESSION_TIMEOUT:30m}
+      cookie:
+        name: NLNB_ADMIN_SESSION
+        http-only: true
+        # 로컬 http 개발은 localhost라 브라우저가 Secure 쿠키를 허용한다. 운영은 항상 true
+        secure: ${SESSION_COOKIE_SECURE:true}
+        # Lax: OAuth 로그인(BE-40) 콜백은 외부 사이트에서 돌아오는 이동이라 Strict면 세션 쿠키가 빠져 실패한다.
+        # 상태를 바꾸는 관리자 요청은 CSRF 토큰으로 막는다
+        same-site: lax
+
+# 첫 관리자 계정 (BE-39). 값이 둘 다 있고 그 이메일의 계정이 없을 때만 기동 시 한 번 만든다.
+# 비밀번호는 환경변수로만 넘기고, 만든 뒤에는 환경변수에서 지운다(이미 있는 계정의 비밀번호는 바꾸지 않는다)
+admin:
+  bootstrap:
+    email: ${ADMIN_BOOTSTRAP_EMAIL:}
+    password: ${ADMIN_BOOTSTRAP_PASSWORD:}
+    display-name: ${ADMIN_BOOTSTRAP_NAME:관리자}
 
 # Swagger UI · OpenAPI 문서. 기본값은 꺼짐: 운영에서 환경변수를 빠뜨려도 API 문서가 노출되지 않도록 안전한 쪽에 둔다.
 # 로컬 · 개발에서만 SWAGGER_ENABLED=true 로 켠다.

@@ -1,0 +1,29 @@
+/* S-20 사건 디테일: 모든 사건이 신문 안쪽 면(components/newspaperFront.js · paperStage.css · caseList.css)으로 그려진다.
+   이 파일은 자료를 불러오는 동안 · 오류일 때 책상 위에 놓이는 종이 한 장(.detail-clip)만 꾸민다. 색은 style.css 역할 토큰만 쓴다 */
+
+.case-detail-page { min-height: 100vh; padding: 48px 24px 64px; }
+.case-detail-page .detail-desk {
+  position: fixed; inset: 0; z-index: -1;
+  background: var(--color-banner-bg) url('/images/desk-felt.webp') center / cover no-repeat;
+}
+.case-detail-page .detail-desk::after { content: ''; position: absolute; inset: 0; background: var(--color-banner-bg); opacity: .55; }
+
+/* 오려 낸 기사: 살짝 기울어 놓이고, 위 두 모서리를 종이테이프로 붙였다 */
+.case-detail-page .detail-clip {
+  position: relative; width: min(1040px, 100%); margin: 0 auto; padding: 30px 36px 28px;
+  background: var(--color-paper); color: var(--color-text); border: 1px solid var(--color-desk-sheet-line); border-radius: 3px;
+  box-shadow: 10px 14px 18px -4px color-mix(in srgb, var(--color-desk-shadow) 55%, transparent);
+  transform: rotate(-.4deg); transform-origin: center;
+}
+.case-detail-page .detail-clip::before, .case-detail-page .detail-clip::after {
+  content: ''; position: absolute; top: -12px; width: 86px; height: 26px;
+  background: color-mix(in srgb, var(--color-desk-news) 85%, transparent);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--color-desk-shadow) 30%, transparent);
+}
+.case-detail-page .detail-clip::before { left: 36px; transform: rotate(-5deg); }
+.case-detail-page .detail-clip::after { right: 36px; transform: rotate(4deg); }
+
+@media (max-width: 720px) {
+  .case-detail-page { padding: 32px 12px 48px; }
+  .case-detail-page .detail-clip { padding: 26px 18px 22px; transform: none; }
+}

@@ -21,18 +21,30 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+	// 관리자 인증 · 권한 (확장 단계, BE-39). 사용자 API는 인증 없이 그대로 동작하고 /api/v1/admin/**만 보호한다
+	implementation 'org.springframework.boot:spring-boot-starter-security'
+	// Actuator 헬스체크/메트릭 엔드포인트, Micrometer Prometheus 레지스트리 (BE-66)
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+	implementation 'io.micrometer:micrometer-registry-prometheus'
+	// 구조화(JSON) 로그 + 민감정보 마스킹 (BE-71, WBS 7.2.3). logback-classic은 Spring Boot가 이미 전이 의존성으로 가져온다
+	implementation 'net.logstash.logback:logstash-logback-encoder:9.0'
 	// DB 스키마 마이그레이션 (Spring Boot 4는 Flyway 자동 설정이 별도 스타터로 분리됨)
 	implementation 'org.springframework.boot:spring-boot-starter-flyway'
 	// Flyway 10 이상은 PostgreSQL 지원 모듈이 따로 필요
 	runtimeOnly 'org.flywaydb:flyway-database-postgresql'
 	// Swagger UI + OpenAPI 문서 (Spring Boot 4는 springdoc-openapi 3.x 필요)
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.1'
+	// Redis 캐시(DB 0) · 토큰 저장소(DB 1) (확장 단계, BE-61 · WBS 7.1.4). 접속 설정은 common.redis.RedisConfig
+	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 	compileOnly 'org.projectlombok:lombok'
 	runtimeOnly 'org.postgresql:postgresql'
 	annotationProcessor 'org.projectlombok:lombok'
 	testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-validation-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+	testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
+	testImplementation 'org.springframework.boot:spring-boot-starter-actuator-test'
+	testImplementation 'org.springframework.boot:spring-boot-restclient'
 	testCompileOnly 'org.projectlombok:lombok'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 	testAnnotationProcessor 'org.projectlombok:lombok'

@@ -1,0 +1,410 @@
+{
+  "uid": "lawnambul-infrastructure",
+  "title": "인프라",
+  "description": "호스트 자원(node_exporter)과 JVM을 함께 본다. 메인 서버는 t3.small 2GB에 backend 1g · postgres 512m · redis 256m이 이미 할당돼 있어 여유가 250MB 남짓이다(deploy/docker-compose.prod.yml) — 메모리 패널을 맨 앞에 둔 이유이자, 모니터링 스택을 별도 EC2로 분리한 이유다.",
+  "tags": ["lawnambul", "7.2.4"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "CPU 사용률",
+      "description": "idle 시간을 뺀 값. t3는 버스트 인스턴스라 CPU 크레딧이 떨어지면 사용률이 낮아 보여도 실제로는 느려질 수 있다 — 지속적으로 높으면 크레딧 소진(CloudWatch)도 함께 확인한다.",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 1,
+          "min": 0,
+          "max": 100,
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 70 },
+              { "color": "red", "value": 90 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "graphMode": "area",
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 - (avg(rate(node_cpu_seconds_total{job=\"node\", mode=\"idle\"}[$__rate_interval])) * 100)"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "메모리 사용률",
+      "description": "MemAvailable 기준(캐시·버퍼는 회수 가능하므로 사용 중으로 세지 않는다). 2GB 중 1.75GB가 컨테이너에 할당돼 있어 평소에도 높게 나온다 — 90%를 넘으면 OOM killer가 가장 큰 프로세스(대개 JVM)를 죽일 수 있다.",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 1,
+          "min": 0,
+          "max": 100,
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 80 },
+              { "color": "red", "value": 90 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "graphMode": "area",
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(1 - (node_memory_MemAvailable_bytes{job=\"node\"} / node_memory_MemTotal_bytes{job=\"node\"})) * 100"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "디스크 사용률 (루트)",
+      "description": "루트 파일시스템. 로그 파일(backend/logs, 최대 2GB)과 Docker 이미지가 같은 디스크를 쓰므로, 배포로 이미지가 쌓이면 여기부터 찬다. 로컬(Docker Desktop · Rancher Desktop)에서는 VM의 /가 tmpfs라 fstype 제외 조건에 걸려 값이 비는 게 정상이다 — EC2에서는 /가 ext4 · xfs라 정상적으로 나온다.",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 1,
+          "min": 0,
+          "max": 100,
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 75 },
+              { "color": "red", "value": 90 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "graphMode": "area",
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(1 - (node_filesystem_avail_bytes{job=\"node\", mountpoint=\"/\", fstype!~\"tmpfs|overlay|squashfs\"} / node_filesystem_size_bytes{job=\"node\", mountpoint=\"/\", fstype!~\"tmpfs|overlay|squashfs\"})) * 100"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "로드 평균 (1분)",
+      "description": "실행 대기 중인 작업 수. vCPU 수(t3.small은 2)를 넘으면 처리보다 쌓이는 속도가 빠르다는 뜻이다.",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 2,
+          "min": 0,
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 2 },
+              { "color": "red", "value": 4 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "graphMode": "area",
+        "textMode": "auto"
+      },
+      "targets": [
+        { "refId": "A", "expr": "max(node_load1{job=\"node\"})" }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "CPU 사용률 (모드별)",
+      "description": "iowait이 높으면 CPU가 아니라 디스크를, system이 높으면 커널·네트워크 쪽을 본다. idle은 빼고 그린다.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 30,
+            "showPoints": "never",
+            "stacking": { "mode": "normal", "group": "A" }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "avg by (mode) (rate(node_cpu_seconds_total{job=\"node\", mode!=\"idle\"}[$__rate_interval])) * 100",
+          "legendFormat": "{{mode}}"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "메모리",
+      "description": "전체 대비 사용 가능 용량. 사용 가능이 200MB 아래로 내려가면 컨테이너 하나가 더 뜨거나 JVM이 힙을 늘리는 순간 터질 수 있다.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "전체" },
+            "properties": [
+              { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 10] } },
+              { "id": "custom.fillOpacity", "value": 0 },
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "text" } }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "min"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "node_memory_MemTotal_bytes{job=\"node\"} - node_memory_MemAvailable_bytes{job=\"node\"}",
+          "legendFormat": "사용 중"
+        },
+        {
+          "refId": "B",
+          "expr": "node_memory_MemAvailable_bytes{job=\"node\"}",
+          "legendFormat": "사용 가능"
+        },
+        {
+          "refId": "C",
+          "expr": "node_memory_MemTotal_bytes{job=\"node\"}",
+          "legendFormat": "전체"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "네트워크",
+      "description": "물리 인터페이스만 본다. lo · docker0 · veth · br-는 컨테이너끼리 주고받는 양이라 빼야 실제 외부 트래픽이 보인다.",
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": [] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(node_network_receive_bytes_total{job=\"node\", device!~\"lo|veth.*|docker.*|br-.*\"}[$__rate_interval]))",
+          "legendFormat": "수신"
+        },
+        {
+          "refId": "B",
+          "expr": "sum(rate(node_network_transmit_bytes_total{job=\"node\", device!~\"lo|veth.*|docker.*|br-.*\"}[$__rate_interval]))",
+          "legendFormat": "송신"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "수집 대상 상태",
+      "description": "Prometheus가 각 대상을 긁고 있는지. 모니터링을 별도 EC2로 분리하면 여기서 0이 뜨는 원인 대부분은 프로세스 중단이 아니라 보안 그룹 · 사설 IP 변경이다(인스턴스를 중지했다 켜면 사설 IP가 바뀔 수 있다).",
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "max": 1,
+          "decimals": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 20,
+            "showPoints": "never",
+            "lineInterpolation": "stepAfter"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["min"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "up",
+          "legendFormat": "{{job}} ({{instance}})"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "JVM 힙",
+      "description": "컨테이너 상한 1g에 MaxRAMPercentage=60을 걸어 힙 최대치는 약 600MB다(deploy/docker-compose.prod.yml). 사용량이 최대치에 붙어 톱니 모양이 촘촘해지면 GC가 계속 돌며 응답이 느려지는 상태다.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 19 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "힙 최대" },
+            "properties": [
+              { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 10] } },
+              { "id": "custom.fillOpacity", "value": 0 },
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "text" } }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(jvm_memory_used_bytes{job=\"backend\", area=\"heap\"})",
+          "legendFormat": "힙 사용"
+        },
+        {
+          "refId": "B",
+          "expr": "sum(jvm_memory_max_bytes{job=\"backend\", area=\"heap\"})",
+          "legendFormat": "힙 최대"
+        },
+        {
+          "refId": "C",
+          "expr": "sum(jvm_memory_used_bytes{job=\"backend\", area=\"nonheap\"})",
+          "legendFormat": "논힙 사용"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "GC 시간 · 스레드",
+      "description": "GC에 쓰는 시간 비율이 올라가면 같은 CPU로 처리하는 실제 일이 줄어든다. 스레드 수가 계단처럼 계속 오르기만 하면 어딘가에서 스레드를 반납하지 않는 것이다.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 19 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "showPoints": "never"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "라이브 스레드" },
+            "properties": [
+              { "id": "unit", "value": "short" },
+              { "id": "custom.axisPlacement", "value": "right" }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(jvm_gc_pause_seconds_sum{job=\"backend\"}[$__rate_interval]))",
+          "legendFormat": "초당 GC 정지 시간"
+        },
+        {
+          "refId": "B",
+          "expr": "max(jvm_threads_live_threads{job=\"backend\"})",
+          "legendFormat": "라이브 스레드"
+        }
+      ]
+    }
+  ]
+}

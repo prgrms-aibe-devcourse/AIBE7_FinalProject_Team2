@@ -10,6 +10,7 @@ import com.team2.project.judgment.service.JudgmentResultService;
 import com.team2.project.judgment.service.RevealService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
  * 결과 공개 · 조회 (API 10 ~ 14, S-07 · S-08 · S-09)
  * 상태를 바꾸는 공개는 POST, 결과를 읽는 조회는 GET으로 나눈다. 새로고침하면 조회만 다시 부르면 된다.
  */
+@Slf4j
 @RestController
 @RequestMapping("/api/v1/cases/{caseId}/experience")
 @RequiredArgsConstructor

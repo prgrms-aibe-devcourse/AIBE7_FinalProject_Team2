@@ -32,6 +32,7 @@ import com.team2.project.legalcase.domain.PenaltyType;
 import com.team2.project.legalcase.domain.RangeKind;
 import com.team2.project.legalcase.domain.RevealStage;
 import com.team2.project.legalcase.domain.SentenceRangeOption;
+import com.team2.project.legalcase.domain.SummaryTagCandidates;
 import com.team2.project.legalcase.domain.ValueAxis;
 import com.team2.project.legalcase.domain.ValueAxisStatus;
 import com.team2.project.legalcase.domain.ValueAxisVotes;
@@ -157,6 +158,73 @@ class JpaMappingTest {
 		assertThat(confirmed.getValueAxis()).isNull();
 		assertThat(confirmed.getValueAxisStatus()).isEqualTo(ValueAxisStatus.CONFIRMED);
 		assertThat(confirmed.getValueAxisVotes()).isNull();
+	}
+
+	@Test
+	@DisplayName("투표 기록에 모르는 키가 있어도 요소를 읽는다 (BE-81 — 파이프라인 키 추가 · 배포 되돌림 대비)")
+	void findById_factorValueAxisVotes_ignoresUnknownKeys() {
+		jdbc.update("""
+			UPDATE factor SET value_axis_votes = '{"runs": 3, "counts": {"NONE": 3}, "needsReview": false, "futureKey": "x"}'::jsonb
+			WHERE id = ?""", overviewFactorId);
+
+		assertThat(factorRepository.findById(overviewFactorId).orElseThrow().getValueAxisVotes())
+			.isEqualTo(new ValueAxisVotes(3, Map.of("NONE", 3), false, null));
+	}
+
+	@Test
+	@DisplayName("관리자가 축을 확정해도 투표 기록 · 요약어 후보의 모르는 키를 보존한다 (BE-81)")
+	void confirmValueAxis_keepsUnknownKeysInPipelineJsonb() {
+		jdbc.update("""
+			UPDATE factor SET
+			    value_axis_votes = '{"runs": 3, "counts": {"NONE": 3}, "needsReview": false, "futureKey": "x"}'::jsonb,
+			    summary_tag_candidates = '{"candidates": [{"tag": "흉기 사용", "score": 0.93, "rank": 1}],
+			        "inVocabulary": true, "ambiguous": false, "suggested": null, "futureKey": 1}'::jsonb
+			WHERE id = ?""", overviewFactorId);
+		Map<String, Object> originalJsonb = jdbc.queryForMap("""
+			SELECT value_axis_votes::text, summary_tag_candidates::text
+			FROM factor WHERE id = ?""", overviewFactorId);
+
+		Factor factor = factorRepository.findById(overviewFactorId).orElseThrow();
+		factor.confirmValueAxis(ValueAxis.FAULT_STANDARD);
+		factorRepository.flush();
+		em.clear();
+
+		Factor confirmed = factorRepository.findById(overviewFactorId).orElseThrow();
+		assertThat(confirmed.getValueAxis()).isEqualTo(ValueAxis.FAULT_STANDARD);
+		assertThat(confirmed.getValueAxisStatus()).isEqualTo(ValueAxisStatus.CONFIRMED);
+		// 엔티티에는 없는 최상위 키와 후보 내부 rank까지 DB 원본 전체가 그대로여야 한다.
+		assertThat(jdbc.queryForMap("""
+			SELECT value_axis_votes::text, summary_tag_candidates::text
+			FROM factor WHERE id = ?""", overviewFactorId)).isEqualTo(originalJsonb);
+	}
+
+	@Test
+	@DisplayName("판단 요소의 요약어 후보를 읽는다, 없으면 null (BE-80)")
+	void findById_factorSummaryTagCandidates_readsJson() {
+		jdbc.update("""
+			UPDATE factor SET summary_tag_candidates = '{"candidates": [{"tag": "흉기 사용", "score": 0.9312},
+			    {"tag": "범행 동기", "score": 0.8123}], "inVocabulary": false, "ambiguous": false, "suggested": "흉기 사용"}'::jsonb
+			WHERE id = ?""", overviewFactorId);
+
+		Factor withCandidates = factorRepository.findById(overviewFactorId).orElseThrow();
+		Factor without = factorRepository.findById(detailFactorId).orElseThrow();
+
+		assertThat(withCandidates.getSummaryTagCandidates()).isEqualTo(new SummaryTagCandidates(
+			List.of(new SummaryTagCandidates.Candidate("흉기 사용", 0.9312), new SummaryTagCandidates.Candidate("범행 동기", 0.8123)),
+			false, false, "흉기 사용"));
+		assertThat(without.getSummaryTagCandidates()).isNull();
+	}
+
+	@Test
+	@DisplayName("요약어 후보에 모르는 키가 있어도 요소를 읽는다 (#166 리뷰 — 파이프라인 키 추가 · 배포 되돌림 대비)")
+	void findById_factorSummaryTagCandidates_ignoresUnknownKeys() {
+		jdbc.update("""
+			UPDATE factor SET summary_tag_candidates = '{"candidates": [{"tag": "흉기 사용", "score": 0.93, "rank": 1}],
+			    "inVocabulary": true, "ambiguous": false, "suggested": null, "futureKey": 1}'::jsonb
+			WHERE id = ?""", overviewFactorId);
+
+		assertThat(factorRepository.findById(overviewFactorId).orElseThrow().getSummaryTagCandidates()).isEqualTo(
+			new SummaryTagCandidates(List.of(new SummaryTagCandidates.Candidate("흉기 사용", 0.93)), true, false, null));
 	}
 
 	@Test

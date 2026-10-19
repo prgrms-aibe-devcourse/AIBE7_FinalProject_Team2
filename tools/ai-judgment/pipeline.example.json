@@ -25,7 +25,13 @@
       "_modelComment": "목록으로 주면 앞 모델이 과부하 · 한도로 막혔을 때 다음 모델로 넘어간다 (BE-45). 예: [\"gemini:<모델ID>\", \"openai:<모델ID>\"]",
       "effort": "high",
       "requireEligible": true,
-      "maxTokens": null
+      "maxTokens": null,
+      "summaryTags": {
+        "_comment": "요약어 후보 (BE-53). 요약어를 summary_tags.json 기준 목록과 비교해 비슷한 기존 요약어를 report.json factorExtras[].summaryTagCandidates에 제안한다(요약어는 바꾸지 않음). GEMINI_API_KEY(임베딩)가 없으면 건너뛰고 extract는 계속한다. 요약어만 보내고 판결문은 보내지 않는다. minScore 0.90은 샘플 실측으로 정한 값이고 실제 사건 요약어로 다시 정한다(ai-judgment-pipeline.md 8-1). 1 · 2순위 점수 차가 0.01 미만이면 ambiguous로 표시하고 제안하지 않는다. 이어 하기로 extract를 건너뛰면 후보를 만들지 않는다(--from extract는 뒤 단계 결과를 지우니 주의, README)",
+        "enabled": true,
+        "topK": 3,
+        "minScore": 0.9
+      }
     },
     "court": {
       "enabled": true,
@@ -41,6 +47,13 @@
       "onInsufficient": "stop",
       "delay": 0,
       "criteria": {}
+    },
+    "rag": {
+      "_comment": "생성 참고 자료 RAG (BE-54). 로컬 DB(stages.load.db)의 판례 · 양형기준 저장소와 GEMINI_API_KEY(검색어 임베딩)가 필요하다. 못 찾으면 사건 입력의 references로 진행하고, required면 하나라도 못 찾을 때 멈춘다. 대상 사건의 사건번호가 없으면 유사 판례는 붙이지 않는다. 점수 값은 판례 53건으로 확정한 값(rag-handover 5-4)",
+      "enabled": false,
+      "required": false,
+      "precedent": {"topK": 5, "candidates": 10, "minScore": 0.70, "maxScore": 0.88},
+      "guideline": {"topK": 6, "minScore": 0.6}
     },
     "generate": {
       "enabled": true,
@@ -87,6 +100,7 @@
     }
   },
   "incidentDate": null,
+  "indictmentDate": null,
   "retry": {
     "maxAttempts": 5,
     "maxWait": 120

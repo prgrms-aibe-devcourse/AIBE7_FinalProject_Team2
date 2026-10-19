@@ -20,6 +20,15 @@
 | v1.13 | 2026-10-08 | 판단 요소 가치관 축 추가 (BE-47)<br>• `factor.value_axis` 추가(V9 마이그레이션, nullable): 판결 체험에서 고르는 판단 요소를 사용자 성향과 매칭하는 가치관 축 4개(`APOLOGY_SINCERITY` · `FAULT_STANDARD` · `PRINCIPLE_RELATION` · `ORDER_OPPORTUNITY`) 또는 NULL<br>• 사전 판단(`OVERVIEW`)과 형량 선택은 성향 계산에 쓰지 않는다(계산하는 쪽에서 제외) |
 | v1.14 | 2026-10-08 | 11 · 12차 회의 반영 (COMMON-20)<br>• `comparison_analysis`: AI 비교 분석(REQ-063) 제외로 보류. V5 마이그레이션의 테이블은 그대로 두고 쓰지 않는다(삭제 여부 미정)<br>• 8장 신설: 판결 성향 테스트 테이블 제안(미확정) — 문항 · 선택지 · 유형 · 결과 · 체험별 성향 기여. 판단 요소별 가치관 축은 새로 만들지 않고 `factor.value_axis`(v1.13, BE-47)를 쓴다 |
 | v1.15 | 2026-10-08 | 판단 요소 가치관 축 후검수 반영 (BE-48)<br>• `factor.value_axis_status` 추가(V10 마이그레이션, 기본 `AUTO`): `AUTO`(AI 투표 · 사람 초안 기본값) / `CONFIRMED`(관리자 확정, NULL 확정 포함). 시드 · 적재 SQL은 `CONFIRMED` 행을 덮어쓰지 않는다<br>• `factor.value_axis_votes`(jsonb) 추가: 축 분류 투표 기록(BE-49). 최다표가 요청 횟수의 과반이 아니면(동률 · 유효 응답 부족 포함) `needsReview` |
+| v1.16 | 2026-10-10 | AI 판결 RAG 판례 저장소 추가 (BE-51)<br>• `rag_precedent` 추가(V11 마이그레이션, pgvector `vector(3072)`): 비식별화한 사실관계 요약(검색 기준 · 임베딩 입력) · 양형 이유 · 법조문 · 주문 형량 · 양형인자 · 사건 그룹 · 사건번호 해시(병합 사건은 번호마다). 판결문 원문 · 사건번호 · 법원명은 넣지 않는다<br>• 검색 함수 `rag_precedent_search`: 자기 사건(사건번호 해시가 있는 사건 그룹 전체) 제외, 사건 그룹당 1건, 점수 하한 · 개수 제한<br>• 검색어 임베딩 · 검색은 백엔드 `RagSearchService`(Java), 판례 적재는 오프라인 `rag_store.py`(Python)<br>• 사용 보류 `on_hold` · `hold_reason`: LBox 판례는 라이선스 확인 전까지 보류(검색 제외)<br>• 사용자 API에서 조회하지 않는 오프라인 파이프라인 전용 테이블. 행은 비공개 시드 `R__40`이 넣는다 |
+| v1.17 | 2026-10-13 | 관리자 계정 추가 (**확장 단계**, BE-39 — 닫힌 #79를 최신 develop에 다시 적용)<br>• `admin_account`(V12 마이그레이션): 관리자 후검수 API 로그인 계정. 사용자(익명 ID)와 관계없음 |
+| v1.18 | 2026-10-12 | AI 판결 RAG 양형기준 저장소 추가 (BE-52)<br>• `rag_guideline` 추가(V13 마이그레이션, pgvector `vector(3072)`): 양형기준 한 버전 × 한 섹션 × 한 대상 조각 · 임베딩 입력(머리말 + 본문) · 구조 값 `meta`(형량범위 · 양형인자)<br>• `sentencing_guideline` (`crime_category`, `version_name`) 유니크. 살인범죄 6개 버전(2009 최초 ~ 2026 수정)을 비공개 시드 `R__41`이 넣는다<br>• 함수 `sentencing_guideline_at`(기준일 → 시행 중 버전) · `rag_guideline_search`(버전 안 검색)<br>• 버전 기준일은 공소제기일 → 없으면 발생일(결정은 [양형기준 저장소](sentencing-guideline-rag.md) 6장) |
+| v1.19 | 2026-10-13 | 관리자 감사 로그 추가 (**확장 단계**, BE-68 · WBS 7.4.5) — `admin_audit_log`(V14): 누가(`admin_id` · `actor_email`) · 무엇을(`action` 9종) · 어디에(`target_type` · `target_id`) · 상세(`detail` jsonb, 비밀번호 · 원문 제외) · IP · 시각. 계정이 지워져도 기록은 남는다(`ON DELETE SET NULL`). 성향 DB는 다음 번호(V15)를 쓴다 |
+| v1.20 | 2026-10-14 | 판결 성향 테스트 테이블 확정 (**확장 단계**, BE-69 · WBS 7.6.3) — 8장 제안을 V15 마이그레이션으로 확정<br>• `personality_question`에 두 행동 문장 `option_a` · `option_b` 추가. 선택지는 5칸 고정이고 "매우 · 조금 · 보통"은 화면이 붙이므로 `personality_choice.content` 삭제(글자 · 점수 · 순서만)<br>• 선택지 축은 복합 FK(`question_id`, `axis`)로 문항 축과 같게 묶고, 글자는 그 축의 두 글자만 · 보통은 글자 없음 0점(CHECK)<br>• `personality_type`: 공유 주소 `share_id` 추가(#119, 코드는 화면 · 주소에 안 씀), `animal` → `character_code`(NAERO · NAMBUL), `description` → `meme` · `daily_description` · `verdict_description`, `tolerance`는 코드의 I · N · F · P 개수(CHECK)<br>• `personality_result`: 현재 결과는 사용자당 1건(부분 유니크 인덱스)<br>• `experience_personality`: `axis_scores` · `type_code` → 축별 고른 개수 `axis_counts`(`{down, up}`, 산식 문서 v0.4) |
+| v1.21 | 2026-10-14 | 성향 콘텐츠 시드 추가 (**확장 단계**, BE-72 · WBS 7.6.4) — `db/migration/R__personality_content.sql`(반복 마이그레이션, **운영에도 적용**): 유형 16 · 문항 16 · 선택지 80. upsert라 다시 실행해도 선택지 id · `share_id`는 바뀌지 않는다(응답 기록 · 공유 링크 보존). `image_url`은 이미지가 들어오기 전까지 NULL. 스키마 변경 없음 |
+| v1.23 | 2026-10-15 | RAG 판례 · 양형기준 설명 갱신 (BE-54, **스키마 변경 없음**) — `rag_precedent`: LBox 행 삭제(사용 불가) · `guideline_id`는 NULL로 두고 검색 때 발생일로 버전을 고름 · `flags.guidelineBasis` · 오프라인 생성 검색은 Python(`rag_context.py`) · 점수 기준(하한 0.70 · 상한 0.88). `legal_case.guideline_id`는 적재 때 기준일(공소제기일 → 발생일)로 채움 |
+| v1.22 | 2026-10-14 | 판결 후보 검수 기록 (**확장 단계**, BE-41 · WBS 7.4.7, V16) — `judgment`에 `review_status`(APPROVED · REJECTED, NULL = 기록 없음) · `reviewed_by_admin_id` · `reviewed_at` · `review_note` 추가. AI · 재판부 후보를 같은 방식으로 검수한다(재판부는 지금까지 반려를 둘 곳이 없었다, API 명세 8-3 #4). 제약: 사용자 판단은 검수 값 없음, 반려 후보는 공개 불가, 사유는 반려에만. 기존 데이터는 `ai_generation`의 검수 결과와 공개 중 판결(승인)을 옮겼다. `ai_generation.review_status` · `reviewed_by`는 기존 도구용으로 남긴다(승인 · 반려 때 함께 맞춤, BE-42) |
+| v1.24 | 2026-10-16 | 판단 요소 요약어 후보 추가 (**확장 단계**, BE-80 · V17) — `factor.summary_tag_candidates`(jsonb, nullable). 적재 SQL(`case_seed_sql.py`)이 새 사건을 넣을 때 보고서 후보를 넣고, 이미 적재된 사건은 바꾸지 않는다. 관리자 상세 A-6에 내려 준다(API 명세 v0.31) |
 
 ---
 
@@ -52,6 +61,8 @@ erDiagram
     FACTOR ||--o{ JUDGMENT_FACTOR : "평가 대상"
     JUDGMENT ||--o| AI_GENERATION : "생성 기록"
     EXPERIENCE ||--o| COMPARISON_ANALYSIS : "비교 분석 (확장)"
+    SENTENCING_GUIDELINE |o--o{ RAG_PRECEDENT : "적용 (확장)"
+    SENTENCING_GUIDELINE ||--o{ RAG_GUIDELINE : "조각 (확장)"
  
     LEGAL_CASE {
         bigint id PK
@@ -81,6 +92,7 @@ erDiagram
         varchar value_axis "가치관 축 (nullable)"
         varchar value_axis_status "AUTO CONFIRMED"
         jsonb value_axis_votes "축 분류 투표 기록 (nullable)"
+        jsonb summary_tag_candidates "요약어 후보 (nullable)"
         int display_order
     }
     ANONYMOUS_USER {
@@ -125,6 +137,26 @@ erDiagram
         bigint factor_id FK
         varchar direction "UP DOWN 또는 NULL"
         text evidence "재판부 근거 문장"
+    }
+    RAG_PRECEDENT {
+        bigint id PK
+        varchar source "LAW_GO_KR LBOX"
+        text_array case_number_hashes "사건번호마다 SHA-256"
+        varchar case_group "같은 사건 묶음"
+        text facts_summary "검색 기준 (비식별)"
+        text sentencing_reason "프롬프트 본문 (비식별)"
+        vector embedding "3072차원"
+        bigint guideline_id FK
+    }
+
+    RAG_GUIDELINE {
+        bigint id PK
+        bigint guideline_id FK
+        varchar chunk_key "조각 ID"
+        varchar section "형량범위 양형인자 등"
+        text content "프롬프트 본문"
+        jsonb meta "형량범위 양형인자 구조 값"
+        vector embedding "3072차원"
     }
 ```
 
@@ -241,6 +273,7 @@ S-06에서 보여 줄 형벌 선택지, 그리고 **선고 가능 범위 밖 판
 | value_axis | varchar(20) |  | 가치관 축 (v1.13 추가, BE-47). 사용자가 이 요소를 고르는 것으로 드러나는 성향을 매칭하는 축: `APOLOGY_SINCERITY`(사과와 진정성: 반성 · 자수 · 수사 협조 · 사후 정황) / `FAULT_STANDARD`(잘잘못의 기준: 범행 동기 · 수단 · 방법 · 계획성 · 결과의 중대성) / `PRINCIPLE_RELATION`(원칙과 관계: 피해 회복 · 합의 · 처벌불원 · 피해자 과실) / `ORDER_OPPORTUNITY`(질서와 기회: 전과 · 연령 · 가족 · 부양 · 직업 · 사회적 유대). 어느 축에도 맞지 않으면 NULL | |
 | value_axis_status | varchar(20) | ✓ | 가치관 축 후검수 상태 (v1.15 추가, BE-48): `AUTO`(기본값. AI 투표 · 사람 초안, 아직 관리자가 확정하지 않음) / `CONFIRMED`(관리자 확정, NULL로 확정한 것 포함). 기본 `AUTO` | |
 | value_axis_votes | jsonb |  | 축 분류 투표 기록 (v1.15 추가, BE-49). 예: `{"runs": 5, "counts": {"FAULT_STANDARD": 3, "NONE": 2}, "needsReview": false}`. `counts`는 표를 받은 축만, NULL 표는 `NONE` 키. `requestedRuns`(선택)는 요청한 횟수로, `runs`(유효 응답 수)와 다를 수 있다. `needsReview`는 최다표가 요청 횟수의 과반이 아니면(동률 · 유효 응답 부족 포함) true. 사람 초안 · 투표 없이 정한 값은 NULL | |
+| summary_tag_candidates | jsonb |  | 요약어 후보 (v1.24 추가, BE-80 · V17). 파이프라인 extract가 요약어를 공개 기준 목록(`tools/ai-judgment/summary_tags.json`)과 임베딩으로 비교한 결과(BE-53). 예: `{"candidates": [{"tag": "흉기 사용", "score": 0.9312}], "inVocabulary": false, "ambiguous": false, "suggested": "흉기 사용"}`. `candidates`는 점수 높은 순, `ambiguous`는 1 · 2순위 차가 작아 제안하지 않음, `suggested`는 목록에 없고 애매하지 않고 기준 점수 이상일 때만. **요약어(`summary_tag`)는 바꾸지 않고** 관리자 상세(A-6)에서 제안으로만 보여 준다. 후보 계산을 켜지 않은 적재 · 사람 초안 · 기존 행은 NULL |  |
 | display_order | int | ✓ |  |  |
 - `(case_id, display_order)`는 유일하다(`uk_factor_case_display_order`, V7 · BE-15, v1.12). 적재 SQL이 요소를 번호와 문구로 찾기 때문이다.
 - `value_axis`는 AI(사건 추출기 · 파이프라인 축 분류 투표) 또는 사람 초안(비공개 시드)이 기본값을 정하고, 관리자가 후검수로 확정한다(CHECK는 네 값 또는 NULL). 값이 NULL인 요소는 성향 계산에서 빠진다. 사전 판단(`OVERVIEW`)과 형량 선택은 성향 계산에 쓰지 않는다.
@@ -271,9 +304,12 @@ S-06에서 보여 줄 형벌 선택지, 그리고 **선고 가능 범위 밖 판
 | --- | --- | --- | --- |
 | id | bigint PK | ✓ |  |
 | crime_category | varchar(50) | ✓ | 예: 살인범죄 |
-| version_name | varchar(50) | ✓ | 예: 2024 개정 |
+| version_name | varchar(50) | ✓ | `<의결 연도> 수정 (<의결일> 의결)` (예: `2013 수정 (2013. 4. 22. 의결)`, 최초는 `2009 최초 (2009. 4. 24. 의결)`). (`crime_category`, `version_name`) 유니크(V13) — 시드가 이름으로 찾아 넣는다 |
 | effective_date | date | ✓ | 시행일 |
 | source_url | varchar(300) |  |  |
+
+- 버전 행은 비공개 시드 `R__41`(`tools/sentencing-guideline/store.py` 출력)이 이름으로 맞춰 넣는다(있으면 시행일 · 출처만 고친다). 살인범죄는 2009 최초 · 2011 · 2013 · 2021 · 2023 · 2026 수정 6개(BE-52)
+- 기준일에 시행 중이던 버전은 `sentencing_guideline_at(crime_category, 기준일)`로 찾는다(아래 `rag_guideline`). 기준일은 공소제기일 → 없으면 발생일([양형기준 저장소](sentencing-guideline-rag.md) 6장)
 
 #### `sentence_range_option` — 사전 판단 형량 구간
 
@@ -362,6 +398,10 @@ IA 9장의 진행 상태를 저장한다.
 | free_opinion | text |  | 자유 의견 (USER, 비교 대상 아님) |
 | reference_tags | jsonb |  | 참고 자료 태그 (AI, 예: `["형법 제250조", "살인범죄 양형기준", "유사 판례 5건"]`). S-07에 표시 (v1.2 추가, v1.3에서 `references` → `reference_tags`: `REFERENCES`는 SQL 예약어) |
 | is_published | boolean | ✓ | AI · COURT는 검수 후 `true`만 노출. USER는 항상 `true` |
+| review_status | varchar(20) |  | (v1.22, V16) 검수 결과 `APPROVED` / `REJECTED`. **NULL = 검수 기록 없음** — 화면에는 공개 중이면 승인, 아니면 대기로 보인다(파이프라인 · 시드는 채우지 않는다). AI · COURT만 |
+| reviewed_by_admin_id | bigint FK |  | (v1.22) 검수한 관리자(`admin_account`, 계정을 지워도 기록은 남김 `ON DELETE SET NULL`) |
+| reviewed_at | timestamptz |  | (v1.22) 검수 시각 |
+| review_note | varchar(500) |  | (v1.22) 반려 사유. `REJECTED`일 때만 |
 | created_at | timestamptz | ✓ |  |
 
 **제약 조건**
@@ -415,6 +455,40 @@ AI 판결 1건을 어떤 조건으로 만들었는지 남긴다(REQ-047, 079). M
 - 자동 파이프라인(BE-31)은 AI 판결을 비공개(`judgment.is_published=false`) · `review_status='PENDING'`으로 넣는다. 관리자가 검수해 `APPROVED`로 바꾸고 공개 판단을 교체한다(후검수). `REJECTED`는 공개하지 않는다.
 - 모델·프롬프트가 바뀌면 새 `judgment` + 새 `ai_generation`을 만들고, 검수 후 공개 판단을 교체한다. 기존 행은 지우지 않는다(REQ-079).
 
+#### `admin_account` — 관리자 계정 (확장 단계, v1.17)
+
+관리자 후검수 API(`/api/v1/admin/**`, BE-33)에 로그인하는 관리자(BE-39). 사용자는 익명 ID로만 구분하므로 이 테이블과 관계가 없다.
+
+| 컬럼 | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| id | bigint PK | ✓ |  |
+| email | varchar(254) | ✓ | 로그인 아이디. 소문자로 정규화해 저장(CHECK `email = lower(email)`), 유니크 |
+| password_hash | varchar(100) |  | BCrypt 해시(`{bcrypt}` 접두어). OAuth로만 로그인하는 관리자(BE-40)는 NULL |
+| display_name | varchar(50) | ✓ | 화면 · 검수 기록에 쓰는 이름 |
+| enabled | boolean | ✓ | 비활성이면 로그인할 수 없다 |
+| created_at | timestamptz | ✓ |  |
+| last_login_at | timestamptz |  | 마지막 로그인 시각 |
+
+#### `admin_audit_log` — 관리자 감사 로그 (확장 단계, v1.19)
+
+관리자가 "누가 · 언제 · 무엇을" 했는지 남긴다(BE-68 · WBS 7.4.5). 로그인 성공 · 실패 · 로그아웃, 원본 판결문 열람(A-7), 검수 API(A-9 ~ A-13)가 쓴다. 한 번 쓰면 고치지 않는다(수정 · 삭제 API 없음).
+
+| 컬럼 | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| id | bigint PK | ✓ |  |
+| admin_id | bigint FK |  | `admin_account.id`. 로그인 실패는 입력이 실제 계정과 일치할 때만 그 계정, 아니면 NULL. 계정이 지워지면 NULL이 된다(`ON DELETE SET NULL`) |
+| actor_email | varchar(254) |  | 그때의 계정 이메일(소문자, CHECK). 계정이 지워져도 누구였는지 남긴다. **로그인 실패 때 입력한 값은 원문으로 남기지 않는다** — 이메일 칸에 비밀번호를 잘못 넣으면 평문으로 남기 때문이다. 입력이 실제 계정과 일치할 때만 그 계정 이메일, 아니면 NULL(`detail`에 `{"knownAccount": false}`) |
+| action | varchar(30) | ✓ | `LOGIN_SUCCESS` · `LOGIN_FAILURE` · `LOGOUT` · `SOURCE_VIEW` · `JUDGMENT_APPROVE` · `JUDGMENT_REJECT` · `CASE_UPDATE` · `VALUE_AXIS_CONFIRM` · `CASE_PUBLISH` (CHECK) |
+| target_type | varchar(20) |  | `CASE` · `JUDGMENT` · `FACTOR` · `CASE_SOURCE`. `target_id`와 둘 다 있거나 둘 다 없다(CHECK) |
+| target_id | bigint |  | 대상 행 ID (FK 없음 — 대상이 지워져도 기록은 남긴다) |
+| detail | jsonb |  | 판단에 필요한 값만(반려 사유 · 바꾼 필드 이름 등). **비밀번호 · 원문 내용 · 토큰은 넣지 않는다** |
+| ip_address | varchar(45) |  | 요청 IP(IPv6까지). Nginx 뒤에서는 forward 헤더 설정이 있어야 실제 사용자 IP다 |
+| created_at | timestamptz | ✓ |  |
+
+- 보관: 이메일 · IP가 들어 있어 **1년**까지 둔다(예정). 오래된 행을 지우는 정리 작업은 운영 단계에서 추가한다.
+- 인덱스: (`admin_id`, `created_at` 내림차순) · (`target_type`, `target_id`, `created_at` 내림차순) · (`created_at` 내림차순)
+- 저장 실패 처리(`AdminAuditLogger`): 검수 API(A-9 ~ A-13)는 부르는 쪽 트랜잭션에 함께 들어가(`record`) 기록이 실패하면 그 일도 되돌린다. 그래서 **성공한 변경만 남는다**(변경이 409 등으로 실패하면 기록도 함께 롤백). `record`는 읽기 전용 트랜잭션 안에서 부르지 않는다(INSERT가 거절된다). 원문 열람(A-7)은 `recordRead`로 별도 트랜잭션에 저장해 readOnly 서비스에서도 쓸 수 있고, 저장이 실패하면 열람도 실패한다. `LOGIN_SUCCESS`는 "비밀번호 확인 성공 · 세션 발급 직전"에 따로 저장하고, 실패하면 세션을 만들지 않고 로그인도 실패한다(로그인 전체는 bcrypt 때문에 트랜잭션으로 묶지 않는다, BE-67). 로그인 실패 · 로그아웃은 별도 트랜잭션이고 실패해도 응답은 그대로이며, 서버 로그에는 예외 종류만 남긴다(DB 오류 메시지에 값이 들어 있어서).
+
 #### `comparison_analysis` — 세 판결 비교 분석 (확장 단계, v1.1)
 
 > **(v1.13) 보류** — AI 비교 분석(REQ-062 · 063)을 11차 회의에서 확장 범위에서 제외했다. V5 마이그레이션으로 만든 테이블은 그대로 두고 쓰지 않는다. 아래 정의는 결정 기록으로 남긴다.
@@ -439,6 +513,72 @@ AI 판결 1건을 어떤 조건으로 만들었는지 남긴다(REQ-047, 079). M
 - `FAILED`는 자동으로 다시 만들지 않는다(MVP와 같은 규칙 문장이 보이므로 체험은 정상). 재시도 정책은 기술 설계에서 정한다.
 - 비교 분석은 `COMPLETED` 상태에서만 응답한다.
 - `content.perspectives.USER`는 확장 단계의 AI "내 판결" 요약이다(REQ-062, v1.3). `DONE`이면 S-09 내 판결 카드의 한 줄 요약(MVP: `summary_tag` 규칙 문장)을 이 값으로 바꾼다. 따로 테이블을 두지 않고 이 행에 함께 저장한다.
+
+### 3-4. AI 판결 참고 자료 (확장 단계, v1.16)
+
+#### `rag_precedent` — RAG 유사 판례 (내부 전용, BE-51)
+
+AI 판결 생성(generate, BE-54)이 검색하는 유사 판례다. 오프라인 파이프라인만 쓰고 사용자 API에서는 조회하지 않는다. 결정은 [AI 판결 오프라인 파이프라인](ai-judgment-pipeline.md) 8-1(COMMON-21), 수집은 [판례 수집처 조사](rag-precedent-sources.md)(BE-50). 행은 비공개 시드 `R__40`(공개 저장소 `tools/ai-judgment/rag_store.py` 출력)이 통째로 지우고 다시 넣는다.
+
+| 컬럼 | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| id | bigint PK | ✓ |  |
+| source | varchar(20) | ✓ | `LAW_GO_KR`(법제처 국가법령정보센터) / `LBOX`(LBox Open — 사용 불가, 2026-10-12. BE-54에서 행 삭제, 지금은 없음) |
+| source_ref | varchar(50) | ✓ | 출처 안의 ID(판례일련번호 · LBox id). (`source`, `source_ref`) 유니크 |
+| case_number_hashes | text[] |  | 사건번호마다(공백 제거) SHA-256 hex. 병합 사건(`2014고13, 2014고14(병합)`)은 번호마다 하나씩 넣는다 — 대상 사건 `case_source`에는 번호가 하나만 있을 수 있어 칸 전체를 해시하면 자기 사건 제외가 빗나간다. 자기 사건 제외에만 쓴다. LBox는 사건번호가 없어 NULL. CHECK로 원소마다 64자 hex(빈 배열 불가), GIN 인덱스 |
+| case_group | varchar(50) | ✓ | 같은 사건(1심 · 항소심 · 공범 별도 판결 · 병합) 묶음 ID. 그룹에서 가장 앞선 판례 키(예: `LAW_GO_KR-143304`) |
+| crime_type | varchar(20) | ✓ | `legal_case.crime_type`과 같은 값 |
+| charge_name | varchar(200) |  | 죄명 (살인 · 살인미수 · 존속살해 · 강도살인 등) |
+| statutes | jsonb |  | 적용 법조문 (예: `["형법 제250조 제1항"]`) |
+| court_level | varchar(20) | ✓ | `FIRST` / `APPEAL` |
+| decided_at | date |  | 선고일. LBox는 NULL |
+| incident_date | date |  | 사건 발생일 (자동 추정, 의심 사유는 `flags.checks`) |
+| guideline_id | bigint FK |  | 적용 양형기준 버전. 공소제기일을 아는 판례만 채운다. **지금은 전부 NULL**이고, 검색 때 `coalesce(guideline_id, sentencing_guideline_at(범주, incident_date))`로 발생일 기준 버전을 고른다(BE-54). 반복 마이그레이션 순서상 R__40이 R__41(버전 행)보다 먼저 돌아 시드에서 버전 id를 찾을 수 없다 |
+| penalty_type · prison_months · suspension_months · fine_amount | varchar(20) · int · int · bigint |  | 주된 피고인의 주문 형량 (`judgment`와 같은 값) |
+| recommended_range | jsonb |  | 양형기준 권고 범위. 양형기준 데이터화 뒤 채운다 (지금은 NULL) |
+| sentencing_factors | jsonb |  | 양형인자 `{"aggravating": [...], "mitigating": [...]}` |
+| facts_summary | text | ✓ | 비식별화한 사실관계 요약. **검색 기준이고 임베딩 입력은 이 칸뿐이다** |
+| sentencing_reason | text | ✓ | 비식별화한 양형 이유 (프롬프트 본문) |
+| embedding | vector(3072) | ✓ | `facts_summary` 임베딩 (task type `RETRIEVAL_DOCUMENT`, 유사도 cosine) |
+| embedding_model · embedding_dim | varchar(50) · int | ✓ | 예: `gemini-embedding-001` · 3072. CHECK `embedding_dim = vector_dims(embedding)` |
+| on_hold · hold_reason | boolean · text | ✓ · | 사용 보류. `true`면 검색에서 뺀다(행은 남긴다). 보류면 사유가 있어야 하고 아니면 비어야 한다(CHECK). 지금은 살인 관련 공소사실 무죄 6건 |
+| flags | jsonb | ✓ | 자동 판정 표시: `verified`(사람 확인 여부, 지금은 모두 false — 팀 결정 2026-10-10), `checks`(확인 필요 사유), `partlyAcquitted` · `concurrent` · `beforePenaltyRevision`(2010. 4. 15. 법정형 개정 전), `guidelineBasis`(버전 기준일 종류: `INCIDENT_DATE` · 없으면 null, BE-54), `notes` · `privacyWarnings`(개수) |
+| created_at | timestamptz | ✓ |  |
+
+- **판결문 원문 · 사건번호 · 법원명은 넣지 않는다.** 원문은 비공개 저장소 `raw/`(git 제외)에만 둔다.
+- 판례가 수백 건인 동안 벡터 인덱스 없이 전체를 비교한다. 수만 건이면 `halfvec(3072)` + HNSW로 바꾼다(8-1).
+- **검색하는 곳은 둘이다.** 둘 다 사건 개요를 `RETRIEVAL_QUERY`로 임베딩하고, 그 사건 `case_source`의 사건번호를 번호마다 해시해 `exclude_hashes`로 넘긴다. `GEMINI_API_KEY`가 없으면 RAG만 꺼진다
+  - 오프라인 생성(BE-54): Python `tools/ai-judgment/rag_context.py`가 DB 함수를 직접 부른다. 상위 5건 · 하한 0.70 · 상한 0.88(이상이면 자기 사건 의심으로 뺌) · 같은 양형기준 버전은 점수에 0.01을 더해 정렬
+  - 서비스 요청(BE-51): 백엔드 `RagSearchService`. 판례 임베딩 모델 · 차원이 검색어와 다르면 멈춘다. 설정 `rag.*`(top-k 5 · 하한 0.6 · 상한 0.95, 서비스 안 생성 BE-56에서 위 값으로 맞춘다)
+- **검색 함수** `rag_precedent_search(query, crime, exclude_hashes, exclude_groups, top_k, min_score)` → (`precedent_id`, `case_group`, `score`)
+  - `exclude_hashes`(판결하려는 사건의 사건번호 해시, 병합이면 번호마다)와 하나라도 겹치는 판례의 **사건 그룹 전체**와 `exclude_groups`를 뺀다. 실제 판결이 AI에게 노출되지 않게 한다
+  - 같은 사건 그룹은 가장 비슷한 판례 1건만 돌려준다. 점수 = 1 − 코사인 거리, `min_score` 미만은 뺀다
+  - 사용 보류(`on_hold`) 판례는 결과에서 빼지만, 자기 사건 제외에는 보류 판례의 사건번호 해시도 쓴다
+- V11은 `CREATE EXTENSION IF NOT EXISTS vector`를 실행한다. 확장을 만들 권한이 없는 DB면 관리자가 먼저 만들어 둔다.
+
+#### `rag_guideline` — RAG 양형기준 조각 (내부 전용, BE-52)
+
+AI 판결 생성(generate, BE-54)이 참고하는 양형기준이다. 판례처럼 오프라인 파이프라인만 쓴다. 결정 · 조각 규칙은 [양형기준 저장소](sentencing-guideline-rag.md). 행은 비공개 시드 `R__41`(공개 저장소 `tools/sentencing-guideline/store.py` 출력)이 통째로 지우고 다시 넣는다.
+
+| 컬럼 | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| id | bigint PK | ✓ |  |
+| guideline_id | bigint FK | ✓ | 양형기준 버전 (`sentencing_guideline`) |
+| chunk_key | varchar(60) | ✓ | 조각 ID(예: `살인-2013-05-15-001`). 유니크 |
+| section | varchar(30) | ✓ | 사이트 탭 이름: 형량범위 · 형량 적용 참고 · 양형인자 · 유형의 정의 · 양형인자의 정의 · 양형인자의 평가원칙 · 공통 원칙 · 다수범죄 처리기준 · 집행유예 참작사유(정의 · 평가원칙). 범죄마다 탭이 달라질 수 있어 CHECK를 두지 않는다 |
+| subject | varchar(200) |  | 섹션 안의 대상 (예: `제2유형 보통 동기 살인`, `특별양형인자 > 행위 > 공통`) |
+| type_no | int |  | 형량범위 조각의 유형 번호 |
+| content | text | ✓ | 프롬프트에 넣는 본문 |
+| embed_text | text | ✓ | 임베딩 입력. 본문 앞에 `[범죄 · 버전(시행 기간) · 섹션 · 대상]` 머리말 |
+| meta | jsonb | ✓ | 바로 찾기용 구조 값: 형량범위 `{"typeName", "range": {"감경", "기본", "가중"}}`, 양형인자 `{"factorPath", "감경요소", "가중요소"}`, 집행유예 `{"factorPath", "부정적", "긍정적"}`, 시행 기간 |
+| embedding | vector(3072) | ✓ | `embed_text` 임베딩 (task type `RETRIEVAL_DOCUMENT`, 유사도 cosine) |
+| embedding_model · embedding_dim | varchar(50) · int | ✓ | 예: `gemini-embedding-001` · 3072. CHECK `embedding_dim = vector_dims(embedding)` |
+| source_url | varchar(300) |  | 양형위원회 페이지 |
+| created_at | timestamptz | ✓ |  |
+
+- 버전당 조각이 수십 개라(살인 6개 버전 237개) 벡터 인덱스 없이 버전으로 거른 뒤 전체를 비교한다. (`guideline_id`, `section`) 인덱스
+- **`sentencing_guideline_at(category, at)`** → 기준일에 시행 중이던 버전 id. 조각이 적재된 버전만 본다(개발용 시드의 가상 버전 제외). 기준일이 NULL이거나 최초 시행일 전이면 NULL
+- **`rag_guideline_search(query, guideline, sections, top_k, min_score)`** → (`chunk_id`, `section`, `score`). 한 버전 안의 검색. 형량범위처럼 구조가 정해진 값은 검색하지 않고 `section` · `type_no` · `meta`로 바로 읽는다
 
 ---
 
@@ -638,9 +778,9 @@ IA 9장의 규칙을 어느 테이블·제약이 책임지는지 정리한다.
 
 ---
 
-## 8. (확장 · 제안) 판결 성향 테스트 테이블 (v1.14)
+## 8. (확장 단계) 판결 성향 테스트 테이블 (v1.14 제안 → v1.20 확정)
 
-> **미확정 제안이다.** 12차 회의 "DB에 성향 테스트 관련 내용 추가"를 위한 초안으로, 문항 산식 · 매핑 로직(요구사항 15장)이 정해지면 확정한다. 요구사항 DR-11, 기능 명세 REQ-112 ~ 119 · 127.
+> **V15 마이그레이션으로 확정했다 (v1.20, BE-69).** 산식은 [성향 산식](personality-scoring.md) v0.4, 문항 · 유형 문구는 [성향 테스트 콘텐츠](personality-test-content.md)를 따른다. 문항 · 유형 콘텐츠는 `db/migration/R__personality_content.sql`(v1.21, 운영에도 적용)이 넣는다. 이 파일은 upsert라 문구를 고쳐 다시 실행해도 선택지 id와 `share_id`가 그대로이고, 축 · 선택지 글자 · 점수를 바꾸거나 문항을 지우는 일은 하지 않는다(내릴 때는 그 행의 `is_active`를 `false`로). **문항 출제 순서(`display_order`)는 문항의 고정 키라 바꾸지 않는다** — 바꾸면 과거 응답(`answers`)이 다른 문장을 가리킨다. 새 문항은 뒤 번호로 붙인다(#128 리뷰). 요구사항 DR-11, 기능 명세 REQ-112 ~ 119 · 127.
 >
 > **판단 요소 ↔ 가치관 축은 이 장에서 새로 만들지 않는다.** 요소가 어느 축에 속하는지는 이미 있는 `factor.value_axis`(v1.13, BE-47)를 그대로 쓴다. 값은 파이프라인의 AI 분류(BE-49)와 관리자 후검수(BE-48 · BE-43)로 정해진다. 축 이름도 같은 키(`APOLOGY_SINCERITY` · `FAULT_STANDARD` · `PRINCIPLE_RELATION` · `ORDER_OPPORTUNITY`)를 쓰므로 성향 테스트 점수와 체험 기여분을 같은 키로 합칠 수 있다.
 >
@@ -654,13 +794,13 @@ erDiagram
     experience ||--o| experience_personality : "체험별 성향 기여"
 ```
 
-| 테이블 | 주요 컬럼 (제안) | 설명 |
+| 테이블 | 주요 컬럼 | 설명 |
 | --- | --- | --- |
-| `personality_question` | id, axis(`APOLOGY_SINCERITY` / `FAULT_STANDARD` / `PRINCIPLE_RELATION` / `ORDER_OPPORTUNITY`, `factor.value_axis`와 같은 값), scenario(`FRIEND` / `FAMILY` / `WORK` / `NEIGHBOR`), content, display_order, is_active | 일상 시나리오 문항. 축당 3 ~ 4개. 법률 용어 금지 |
-| `personality_choice` | id, question_id FK, content, letter(`E`·`I` / `S`·`N` / `T`·`F` / `J`·`P`), score, display_order | 선택지가 어느 글자 쪽에 몇 점을 주는지 |
-| `personality_type` | code PK(char(4), 예: `INFP`), name(예: 너그러운 판다형), animal, one_liner, tolerance(0 ~ 4), description, image_url | 16유형 콘텐츠. 코드 상수로 둘 수도 있다 |
-| `personality_result` | id, anonymous_user_id FK, type_code FK, axis_scores jsonb(키는 위 4개 축 이름), answers jsonb, is_current, created_at | 응시 결과. 재응시 시 새 행 + 이전 행 `is_current=false`(제안). 회원 연결은 `anonymous_user.member_id`로 따라간다 |
-| `experience_personality` | id, experience_id FK unique, axis_scores jsonb(키는 위 4개 축 이름), type_code, created_at | 판결 체험이 `COMPLETED`가 될 때 계산한 성향 기여분. 성향 변화 흐름 · 종합 성향(평균) 계산에 쓴다. 성향 테스트 전에 한 체험도 남겨 둔다 |
+| `personality_question` | id, axis(`APOLOGY_SINCERITY` / `FAULT_STANDARD` / `PRINCIPLE_RELATION` / `ORDER_OPPORTUNITY`, `factor.value_axis`와 같은 값), scenario(`FRIEND` / `FAMILY` / `WORK` / `NEIGHBOR`), content(상황 문장), option_a · option_b(두 끝 행동 문장), display_order(unique), is_active | 일상 시나리오 문항. 법률 용어 금지. (id, axis) 유니크는 선택지 복합 FK용 |
+| `personality_choice` | id, (question_id, axis) 복합 FK, letter(varchar(1), 보통은 NULL), score(int), display_order(1 ~ 5) | 5칸(매우 A · 조금 A · 보통 · 조금 B · 매우 B) 중 한 칸. 문구는 없고 글자 · 점수만. 칸 순서로 점수가 정해진다(1 · 5칸 2점, 2 · 4칸 1점, 3칸은 글자 없음 0점, CHECK). 글자는 그 축의 두 글자만(E·I / S·N / T·F / J·P). (question_id, display_order) 유니크 |
+| `personality_type` | code PK(varchar(4), 내부용), share_id(unique, 영숫자 6 ~ 16자), name, character_code(`NAERO` / `NAMBUL`), one_liner, meme, daily_description, verdict_description, tolerance, image_url | 16유형 콘텐츠. 코드는 화면 · 공유 주소에 쓰지 않고(#119) 공유 주소는 `/test/types/{share_id}`. share_id는 시드로 고정하고 바꾸지 않는다. tolerance = 코드의 I · N · F · P 개수(CHECK) |
+| `personality_result` | id, anonymous_user_id FK, type_code FK, axis_scores jsonb(네 축 키, 값 0 ~ 1), answers jsonb(배열, `{questionId, choiceId}`), is_current, created_at | 응시 결과. 재응시는 이전 행 `is_current=false` 후 새 행. 사용자당 현재 결과 1건(부분 유니크 인덱스). 이력은 남는다 |
+| `experience_personality` | id, experience_id FK unique, axis_counts jsonb(네 축 키, 각 `{down, up}` 0 이상 정수), created_at | 판결 체험이 끝날 때 남기는 축별 형량 ↓ / ↑ 선택 개수. 고르지 않은 축도 `{0, 0}`으로 키를 둔다. 유형 코드는 저장하지 않고 산식(v0.4)이 합산해서 계산한다. 종합 성향은 각 사건 첫 회차만 쓴다 |
 
 - 사용자 응답에 원본 판결문 정보가 섞이지 않는다는 원칙(5장)은 그대로다. 성향 기여는 사용자의 `USER` · `FINAL` 판단 요소 기록(`judgment_factor`)에서만 계산한다.
 - 공유 링크는 `personality_type`만 읽는다. `personality_result`의 응답 · 점수는 공유 응답에 넣지 않는다.

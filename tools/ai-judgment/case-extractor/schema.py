@@ -14,7 +14,7 @@ sys.path.insert(0, str(PARENT_DIR))
 from common import NO_TERM_PENALTIES, PENALTY_TYPES, REDUCIBLE_TO, VALUE_AXES, format_months, format_won  # noqa: E402
 
 # 프롬프트나 스키마를 고치면 올린다. 보고서(report.json)에 기록된다.
-EXTRACT_PROMPT_VERSION = "extract-v5"  # v3: Claude 외 공급자 스키마 안내 (BE-35), v4: 사건 발생일 incidentDate (BE-38), v5: 판단 요소 가치관 축 valueAxis (BE-47)
+EXTRACT_PROMPT_VERSION = "extract-v6"  # v3: Claude 외 공급자 스키마 안내 (BE-35), v4: 사건 발생일 incidentDate (BE-38), v5: 판단 요소 가치관 축 valueAxis (BE-47), v6: 판단 요소 작성 예시 퓨샷 extract_fewshot.md (BE-53)
 
 CRIME_TYPES = ("MURDER", "FRAUD", "INJURY")  # ERD legal_case.crime_type
 REVEAL_STAGES = ("OVERVIEW", "DETAIL", "ARGUMENT", "LAW")  # ERD factor.reveal_stage
@@ -391,15 +391,30 @@ def _leak_patterns(court):
     return patterns
 
 
-def sentence_leak_check(case_input, court):
+def factor_extra_texts(output):
+    """case.json 밖에 있지만 사용자 화면에 보이는 판단 요소 문구 [(위치, 문자열)] (BE-53).
+
+    summaryTag는 판결 카드 한 줄 요약(S-09), preLabel은 사전 판단 선택지에 그대로 나온다. visible_texts(case_input)에는
+    없어 개인정보 · 실제 형량 검사에서 빠져 있었다. 요약어 후보 임베딩도 이 값을 외부로 보낸다.
+    """
+    texts = []
+    for i, factor in enumerate(output.get("factors") or [], start=1):
+        texts.append((f"factors[{i}].summaryTag", factor.get("summaryTag") or ""))
+        if factor.get("preLabel"):
+            texts.append((f"factors[{i}].preLabel", factor["preLabel"]))
+    return texts
+
+
+def sentence_leak_check(case_input, court, extra_texts=()):
     """실제 선고 형량이 AI 입력(개요 · 사실관계 · 주장 · 요소)에 드러났는지 본다 (FR-4-1).
 
     공백과 어순이 달라도("징역10년", "10년의 징역", "징역 120개월") 잡되,
     법정형 범위("징역 10년 이상")나 범행 기간 같은 다른 숫자는 형량 용어와 붙어 있을 때만 본다.
+    extra_texts: case.json 밖의 사용자에게 보이는 문구(factor_extra_texts). 기본은 없음.
     """
     patterns = _leak_patterns(court)
     errors, warnings = [], []
-    for where, text in visible_texts(case_input):
+    for where, text in list(visible_texts(case_input)) + list(extra_texts):
         if where.startswith("sections") and "LAW_TERM" in where:
             continue  # 용어 설명은 법정형 · 감경 범위 숫자를 쓴다
         compact = re.sub(r"\s+", "", text)

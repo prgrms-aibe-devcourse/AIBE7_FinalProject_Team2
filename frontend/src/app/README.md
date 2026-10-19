@@ -7,7 +7,7 @@
 | `routes.js` | **화면 표.** 이름 · 주소(IA 4장) · 진입 함수 · 푸터 · 사건 상단 바 필요 여부. 새 화면은 여기에 한 줄 추가한다 |
 | `router.js` | History API 라우터. `navigate(이름, { caseId, ... })`, 새로고침 · 뒤로 가기 처리 |
 | `errorRedirect.js` | api를 감싸서 에러 코드에 따라 화면을 이동시킨다 (API 명세 1-5 · 1-6) |
-| `caseHeader.js` | 사건 상단 바의 제목 · 죄명을 공급한다 (정합성 점검 D-01 결정 전 임시 방식) |
+| `caseHeader.js` | 사건 상단 바의 제목 · 죄명을 공급한다 (API 1 목록에서 찾는다, D-01) |
 | `appApi.js` | 목 또는 실제 api에 "사건 제목 기억"과 "에러 시 이동"을 입혀 화면에 주입할 api를 만든다 |
 | `styles.js` | 화면별 CSS를 한 번에 불러온다 |
 | `notFoundPage.js` | S-14 404 · 오류 화면. 알 수 없는 주소 · 없는 사건(`CASE_NOT_FOUND`)에서 보여 준다. 사이트 헤더 · 안내 · 이동 버튼 2개, 푸터는 라우터가 붙인다 |
@@ -36,6 +36,10 @@ export async function renderXxxPage(container, { caseId, caseHeader, api, naviga
 | `summary` | `/cases/{caseId}/summary` | S-05 |
 | `verdict` | `/cases/{caseId}/verdict` | S-06 |
 | `ai` · `court` · `comparison` | `/cases/{caseId}/result/ai` · `court` · `compare` | S-07 · S-08 · S-09 |
+| `test` · `testResult` | `/test` · `/test/result` | S-15 판결 성향 테스트 · S-16 성향 결과(내 결과, 공유하기 버튼) |
+| `testType` | `/test/types/{shareId}` | S-16 공유된 결과 — 유형 설명만(응답 · 점수 없음, FR-8-6). `{shareId}`는 서버가 정한 영숫자 6 ~ 16자 해시(대소문자 구분). 유형 코드(INTP 등)는 주소에 쓰지 않는다 |
+| `me` | `/me` | S-17 마이페이지 |
+| `admin` · `adminCase` | `/admin` · `/admin/cases/{caseId}` | S-19 관리자 검수 목록 · 상세 (FE-16). 관리자 코드는 이 주소로 들어올 때만 불러온다(동적 import), 관리자 api는 `pages/admin/adminApi.js`가 따로 고른다 |
 | `notFound` | 주소 없음 | S-14 |
 
 ## 에러 코드와 이동
@@ -51,6 +55,6 @@ export async function renderXxxPage(container, { caseId, caseHeader, api, naviga
 - **요청을 시작한 화면이 아직 보일 때만 이동한다.** 요청 중에 다른 화면으로 이동했다면(예: `← 목록`) 그 요청의 에러가 새 화면을 덮어쓰지 않는다. 요청 시작 시점의 이동 번호(`navigationToken`)를 저장했다가 에러가 왔을 때 지금 번호와 비교한다. 같은 화면에서 동시에 보낸 요청이 여러 개 실패해도 처음 실패한 요청만 이동시킨다.
 - 에러는 이동한 뒤에도 그대로 다시 던진다. 화면이 자기 안내를 그려도 이미 화면에서 떼어진 뒤라 보이지 않는다.
 
-## 사건 제목 (D-01 임시 방식)
+## 사건 제목 (D-01)
 
-S-04 이후 화면의 API에는 사건 제목이 없다. 목록 응답(API 1)에서 `caseId`로 찾고, 사건 개요(API 4)를 지나면 정확한 죄명으로 갱신한다. API가 제목을 주도록 정해지면 `caseHeader.js`의 `loadCaseHeader`만 바꾼다.
+S-04 이후 화면의 API에는 사건 제목이 없다. 목록 응답(API 1)이 제목과 죄명(`chargeName`)을 주므로 `caseId`로 찾고, 사건 개요(API 4)를 지나면 같은 값으로 갱신한다. 사건이 많아지면 공통 사건 헤더 API로 옮긴다(`docs/decisions/BE-79.md`). 그때는 `caseHeader.js`의 `loadCaseHeader`만 바꾼다.

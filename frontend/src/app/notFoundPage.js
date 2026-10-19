@@ -6,8 +6,7 @@ import { button, element, renderSiteHeader } from '../components/siteLayout.js';
 
 export function renderNotFoundPage(container, { navigate }) {
   const root = element('div', 'not-found-page');
-  // 서비스 소개 메뉴는 S-02와 같이 랜딩의 소개 섹션으로 보낸다
-  root.append(renderSiteHeader({ navigate, onIntro: () => navigate('landing', { section: 'intro' }) }));
+  root.append(renderSiteHeader({ navigate }));
 
   const actions = element('div', 'not-found-actions');
   actions.append(

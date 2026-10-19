@@ -2,6 +2,9 @@ import { renderLawInfoBox } from '../../components/lawInfoBox.js';
 import { renderRecommendedRangeBar } from '../../components/recommendedRangeBar.js';
 import { renderProgressSidebar } from './progressSidebar.js';
 import { renderContent } from '../../utils/contentLines.js';
+import { renderStage } from '../../components/stage.js';
+import { SCRIPTS } from '../../content/scripts.js';
+import { restartMock, jumpActMock } from '../overview/overviewPage.js';
 
 // 양측 주장 카드 위 안내 (정보 구조 S-04 v1.10, FE-14). 서버 응답에 없는 화면 고정 문구다.
 // "양형 이유" 같은 출처 표현은 쓰지 않는다 — 재판부가 인정한 사정인지가 판결 공개 전에 드러난다.
@@ -75,7 +78,7 @@ export async function renderReviewPage(container, { caseId, caseHeader, api, nav
       await api.postReviewStep(caseId, step);
       if (!active()) return;
       if (step === 4) {
-        navigate('summary');
+        navigate('verdict'); // 4막(판결 전 정리)은 5막 파일철의 "사건 요약" 장으로 옮겨 건너뛴다(FE-48)
       } else {
         const data = await api.getReview(caseId);
         if (active()) draw(data, true);
@@ -94,11 +97,46 @@ export async function renderReviewPage(container, { caseId, caseHeader, api, nav
       trigger.textContent = originalText;
     }
   }
+  // 3막 재판(흐름 목업, REQ-089). 서버 순서(섹션 ② → ③ → ④)는 그대로 두고, 대본의 confirm 장면을 떠날 때 "읽었습니다"를 보낸다.
+  // 사실관계 · 주장 · 법률 전체 정리는 S-05 판결 전 최종 정리가 보여 준다
+  function drawStage(data, script) {
+    root.classList.add('has-stage');
+    const header = element('header', 'case-topbar');
+    header.append(button('← 목록', () => navigate('list'), 'back-button'),
+      element('strong', 'case-title', caseHeader.title), ...(caseHeader.chargeName ? [element('span', 'case-badge', caseHeader.chargeName)] : []));
+    const main = element('div', 'review-main');
+    main.append(element('h1', 'page-heading visually-hidden', '사건 정보 확인'), renderStage({
+      script,
+      order: ['3'],
+      start: (step) => step.section === data.openStep,
+      onRestart: restartMock(caseId),
+      onJump: jumpActMock(caseId),
+      onConfirm: async (step) => {
+        try {
+          await api.postReviewStep(caseId, step);
+          if (step !== 4) return true;
+          if (active()) navigate('verdict'); // 4막은 건너뛴다(FE-48)
+          return false;
+        } catch (error) {
+          if (error?.code === 'STEP_OUT_OF_ORDER') await load();
+          else showError(error);
+          return false;
+        }
+      },
+    }));
+    const layout = element('main', 'review-layout');
+    layout.append(main);
+    root.replaceChildren(header, layout);
+  }
   function draw(data, moveFocus = false) {
+    // 사건 번호는 DB마다 다를 수 있어 번호만으로 고르지 않는다. 대본의 제목이 사건 제목과 같을 때만 무대를 쓴다(S-03과 같은 규칙)
+    const candidate = SCRIPTS[caseId];
+    const script = candidate?.title === caseHeader.title ? candidate : undefined;
+    if (script) { drawStage(data, script); return; }
     const current = data.openStep ?? 4;
     const header = element('header', 'case-topbar');
     header.append(button('← 목록', () => navigate('list'), 'back-button'),
-      element('strong', 'case-title', caseHeader.title), element('span', 'case-badge', caseHeader.chargeName));
+      element('strong', 'case-title', caseHeader.title), ...(caseHeader.chargeName ? [element('span', 'case-badge', caseHeader.chargeName)] : []));
     const progress = element('div', 'top-progress');
     const meter = element('progress');
     meter.max = 6;
@@ -161,7 +199,7 @@ export async function renderReviewPage(container, { caseId, caseHeader, api, nav
     main.append(accordion);
     if (data.status === 'REVIEWED') {
       const actions = element('div', 'section-actions');
-      actions.append(button('판결 전 최종 정리로', () => navigate('summary'), 'primary-button'));
+      actions.append(button('판결로', () => navigate('verdict'), 'primary-button'));
       main.append(actions);
     }
     layout.append(main);

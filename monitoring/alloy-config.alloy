@@ -1,0 +1,32 @@
+// Grafana Alloy — 백엔드 JSON 로그 파일을 읽어 Loki로 보낸다 (BE-71, WBS 7.2.3).
+// Promtail은 2026-03-02에 EOL(지원 종료)돼서 신규로는 쓰지 않는다. 같은 역할을 Alloy의 구성 요소로 만든다.
+
+local.file_match "backend_logs" {
+	// docker-compose.yml이 backend/logs를 이 경로로 읽기 전용 마운트한다
+	path_targets = [{"__path__" = "/var/log/backend/*.log", "job" = "backend"}]
+}
+
+loki.source.file "backend" {
+	targets    = local.file_match.backend_logs.targets
+	forward_to = [loki.process.backend.receiver]
+}
+
+loki.process "backend" {
+	forward_to = [loki.write.default.receiver]
+
+	// JSON 로그에서 level만 꺼내 라벨로 쓴다. level은 DEBUG·INFO·WARN·ERROR 등 값의 종류가 적어서
+	// 라벨로 둬도 스트림이 늘어나지 않는다. traceId 같은 요청별 고유값은 절대 라벨로 승격하지 않는다
+	// (7.2.1에서 메트릭 라벨에 사건 ID·체험 ID를 금지한 것과 같은 이유 — Loki도 라벨 조합마다 스트림이 하나씩 생긴다)
+	stage.json {
+		expressions = {level = "level"}
+	}
+	stage.labels {
+		values = {level = "level"}
+	}
+}
+
+loki.write "default" {
+	endpoint {
+		url = "http://loki:3100/loki/api/v1/push"
+	}
+}

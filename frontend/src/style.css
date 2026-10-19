@@ -7,20 +7,247 @@
 
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+  font-family: var(--font-body);
+  color: var(--color-text);
+  background: var(--color-bg);
 }
 
-/* 공통 디자인 변수. 화면 CSS도 같은 이름 · 같은 값을 쓴다 (와이어프레임 v2.2 기준).
-   새 화면은 색상 · 간격을 여기 변수로 쓰고, 값을 바꿀 때는 이 한 곳만 고친다. */
+/* ===== 디자인 토큰 (FE-17) =====
+   색 · 글꼴은 언제든 바뀔 수 있다. 바꿀 때는 이 :root 한 곳만 고친다.
+   ① 팔레트(--palette-*): 색 값(hex)은 여기에만 쓴다. 테마를 바꾸면 이 값만 바꾼다.
+   ② 역할(--color-*): 화면 CSS는 이 이름만 쓴다. 특정 역할만 다른 색으로 바꾸려면 그 줄만 고친다.
+   ③ 글꼴 · 크기(--font-* · --text-*): 글꼴을 바꾸면 여기만 고친다.
+   화면 CSS(pages/*)에 색 값(#..., rgb())을 직접 쓰지 않는다. 확인: grep -rnE "#[0-9a-fA-F]{3,8}\b|rgba?\(" src/pages --include=*.css
+   기준: 색상 · 글꼴 확정안 2026-10-07 (네이비 · 브론즈) */
 :root {
-  --color-primary: #e8391e;   /* 강조 색 (선택된 형벌, 경고) */
-  --color-text: #1a1a1a;
-  --color-muted: #66615e;
-  --color-border: #dfd9d5;
-  --color-surface: #faf8f6;
+  /* ① 팔레트 */
+  --palette-navy-900: #101d39;
+  --palette-navy-700: #1f3563;
+  --palette-navy-200: #c9d1e3;
+  --palette-navy-100: #e3e8f2;
+  --palette-navy-50: #eef1f7;
+  --palette-bronze-500: #ba854b;
+  --palette-bronze-700: #86581f;
+  --palette-bronze-200: #e6d2b5;
+  --palette-paper-0: #fdfcfa;
+  --palette-paper-50: #f7f3ee;
+  --palette-paper-100: #f4efe4;
+  --palette-paper-150: #f1ebe4;
+  --palette-paper-200: #ebe5dc;
+  --palette-paper-300: #e2dad0;
+  --palette-paper-600: #8b8174;
+  --palette-ink-900: #151a24;
+  --palette-ink-600: #5d5952;
+  --palette-white: #ffffff;
+  --palette-red-700: #b3261e;
+  --palette-red-200: #efb8b3;
+  --palette-red-50: #fcecea;
+  --palette-orange-800: #9a3d0a;
+  --palette-orange-500: #d4692a;
+  --palette-orange-50: #fff1e7;
+  --palette-blue-focus: #2f6fdb;
+  --palette-kakao-yellow: #fee500; /* 카카오 로그인 버튼(카카오 디자인 가이드 색) */
+  --palette-kakao-ink: #000000;
+  --palette-up: #9c3a1d;
+  --palette-down: #235a9c;
+  --palette-case-murder: #5b3a40;
+  --palette-case-fraud: #2f4b66;
+  --palette-case-injury: #4d5838;
+  --palette-judge-me: #61538b;
+  --palette-judge-ai: #0b6762;
+  --palette-judge-court: #4f6526;
+
+  /* ② 역할 — 바탕 · 면 */
+  --color-bg: var(--palette-paper-0);              /* 페이지 바탕 */
+  --color-card: var(--palette-white);              /* 카드 · 입력칸 · 떠 있는 상자 */
+  --color-surface: var(--palette-paper-50);        /* 옅은 면: 안내 박스 · 푸터 */
+  --color-surface-strong: var(--palette-paper-150);/* 한 단계 진한 면: 사이드바 · 잠긴 섹션 · 비활성 입력 */
+  --color-paper: var(--palette-paper-100);         /* 신문지 */
+  --color-track: var(--palette-paper-200);         /* 막대 · 진행 표시 바탕 */
+  /* ② 역할 — 선 */
+  --color-border: var(--palette-paper-300);        /* 기본 테두리 · 구분선 */
+  --color-border-strong: var(--palette-paper-600); /* 입력칸 · 버튼 테두리 · 강조 괘선 */
+  /* ② 역할 — 글자 */
+  --color-text: var(--palette-ink-900);
+  --color-muted: var(--palette-ink-600);
+  --color-heading: var(--palette-navy-900);        /* 로고 · 큰 제목 · 강조 값(형량 등) */
+  --color-label: var(--palette-bronze-700);        /* 섹션 머리 작은 라벨 (신문 kicker) */
+  /* ② 역할 — 조작 · 선택 */
+  --color-accent: var(--palette-navy-700);         /* 주 버튼 · 선택 표시 · 링크 */
+  --color-accent-hover: var(--palette-navy-900);
+  --color-on-accent: var(--palette-white);         /* 주 버튼 위 글자 */
+  --color-accent-tint: var(--palette-navy-50);     /* 선택된 칩 · 항목 바탕 */
+  --color-accent-text: var(--palette-navy-700);    /* 선택된 항목 글자 */
+  --color-primary: var(--color-accent);            /* 이전 이름(FE-2). 새 코드는 --color-accent를 쓴다 */
+  --color-decor: var(--palette-bronze-500);        /* 장식 선 · 로고 "Law" (작은 글자 금지) */
+  --color-range-fill: var(--palette-bronze-200);   /* 권고 범위 막대 */
+  --color-focus: var(--palette-blue-focus);        /* 키보드 포커스 링 */
+  /* ② 역할 — 상태 (빨강은 오류에만) */
+  --color-danger: var(--palette-red-700);
+  --color-danger-border: var(--palette-red-200);
+  --color-danger-tint: var(--palette-red-50);
+  --color-caution: var(--palette-orange-800);      /* 되돌릴 수 없음 · 권고 범위 밖 안내 */
+  --color-caution-border: var(--palette-orange-500);
+  --color-caution-tint: var(--palette-orange-50);
+  /* ② 역할 — 의미 색 (항상 기호 · 문장과 함께) */
+  --color-up: var(--palette-up);                   /* 가중 ↑ */
+  --color-down: var(--palette-down);               /* 감경 ↓ */
+  --color-case-murder: var(--palette-case-murder);
+  --color-case-fraud: var(--palette-case-fraud);
+  --color-case-injury: var(--palette-case-injury);
+  --color-on-case: var(--palette-white);
+  --color-judge-me: var(--palette-judge-me);       /* 세 판결은 밝기가 같다. 선 · 라벨에만 쓰고 바탕을 칠하지 않는다 */
+  --color-judge-ai: var(--palette-judge-ai);
+  --color-judge-court: var(--palette-judge-court);
+  --photo-filter: grayscale(1) contrast(1.05);     /* 지면 사진 색보정 (테마마다 톤을 바꿀 수 있다) */
+  --color-cup: var(--palette-mug);                 /* 마이페이지 프로필의 잔 테두리 링(메인 책상 커피잔과 같은 색, FE-44) */
+  --color-cup-rim: var(--palette-mug-rim);
+  --color-banner-bg: var(--palette-navy-900);      /* 결과 화면 배너 */
+  --color-banner-text: var(--palette-white);
+  --color-banner-muted: var(--palette-navy-200);
+  --color-kakao: var(--palette-kakao-yellow);       /* 카카오 로그인 버튼 바탕 (S-12, FE-52) */
+  --color-on-kakao: var(--palette-kakao-ink);      /* 그 위 심볼 · 글자(글자는 85% 농도로 쓴다) */
+
+  /* ④ S-01 메인 책상 일러스트 (FE-18). 책상 그림 전용 색이다. 다른 화면에서는 쓰지 않는다 */
+  --palette-wood-300: #b06d36;
+  --palette-wood-500: #a8652f;
+  --palette-wood-700: #8a4f22;
+  --palette-wood-950: #3a2414;
+  --palette-wood-glow: #ffd696;
+  --palette-felt-700: #1c2b4f;
+  --palette-felt-900: #14213f;
+  --palette-felt-glow: #7896d2;
+  --palette-kraft-300: #d6a468;
+  --palette-kraft-500: #bf8a50;
+  --palette-kraft-600: #b78049;
+  --palette-sheet: #f6f3ec;
+  --palette-sheet-line: #c9c3b8;
+  --palette-label: #f7f2e8;
+  --palette-metal-200: #d6d8dd;
+  --palette-metal-300: #c9cbd1;
+  --palette-metal-400: #bfc2c9;
+  --palette-metal-450: #b4b7be;
+  --palette-metal-500: #a9adb6;
+  --palette-keys: #24272d;
+  --palette-bezel: #1a1f2b;
+  --palette-screen-300: #a6afc2;
+  --palette-screen-400: #8f99ad;
+  --palette-screen-500: #7c869b;
+  --palette-mug: #f4efe7;
+  --palette-mug-rim: #e6dfd4;
+  --palette-coffee-cream: #faf3e8;
+  --palette-coffee-25: #ead8c0;
+  --palette-coffee-50: #f3e6d3;
+  --palette-coffee-100: #dfc8aa;
+  --palette-coffee-200: #cdb18f;
+  --palette-coffee-300: #7a5038;
+  --palette-coffee-400: #8a6a55;
+  --palette-coffee-500: #66544a;
+  --palette-coffee-600: #4a2c1c;
+  --palette-coffee-900: #2f1b10;
+  --palette-pen-gold: #d9b46a;
+  --palette-pen-body: #151515;
+  --palette-pen-cap: #cfc6b4;
+  --palette-note: #f3e3b3;
+  --palette-note-ink: #2b2414;
+  --palette-note-pen: #5b4210;
+  --palette-news: #ece2d4;
+  --palette-news-sheet-1: #d9ccba;
+  --palette-news-sheet-2: #e4d8c8;
+  --palette-news-ink: #3b3833;
+  --palette-news-ink-soft: #55514a;
+  /* 판결 체험 무대 (흐름 목업 그대로, FE-27 · 28) */
+  --palette-role-guide: #4a5677;
+  --palette-role-prosecutor: #6f1d2e;
+  /* 판단 요소 무겁게 · 가볍게(S-06): 진하지 않은 레드 · 그린 */
+  --palette-factor-heavy: #a03f35;
+  --palette-factor-heavy-tint: #f6e4e1;
+  --palette-factor-light: #35704a;
+  --palette-factor-light-tint: #e2efe6;
+  --palette-shadow: #0f0a19;
+  --palette-desk-text: #ead9c6;
+
+  --color-desk-floor: var(--palette-wood-950);     /* 책상 밖 바탕 · 푸터 */
+  --color-desk-wood: var(--palette-wood-500);
+  --color-desk-wood-light: var(--palette-wood-300);
+  --color-desk-wood-dark: var(--palette-wood-700);
+  --color-desk-wood-glow: var(--palette-wood-glow);
+  --color-desk-pad: var(--palette-felt-700);       /* 데스크 패드 (펠트) */
+  --color-desk-pad-edge: var(--palette-felt-900);
+  --color-desk-pad-glow: var(--palette-felt-glow);
+  --color-desk-kraft: var(--palette-kraft-300);    /* 서류철 */
+  --color-desk-kraft-back: var(--palette-kraft-500);
+  --color-desk-kraft-shade: var(--palette-kraft-600);
+  --color-desk-sheet: var(--palette-sheet);
+  --color-desk-sheet-line: var(--palette-sheet-line);
+  --color-desk-label: var(--palette-label);
+  --color-desk-metal-light: var(--palette-metal-200); /* 노트북 몸체 */
+  --color-desk-metal: var(--palette-metal-300);
+  --color-desk-metal-pad: var(--palette-metal-400);
+  --color-desk-metal-line: var(--palette-metal-450);
+  --color-desk-metal-dark: var(--palette-metal-500);
+  --color-desk-keys: var(--palette-keys);
+  --color-desk-bezel: var(--palette-bezel);
+  --color-desk-screen-light: var(--palette-screen-300);
+  --color-desk-screen: var(--palette-screen-400);
+  --color-desk-screen-dark: var(--palette-screen-500);
+  --color-desk-mug: var(--palette-mug);
+  --color-desk-mug-rim: var(--palette-mug-rim);
+  --color-desk-coffee-light: var(--palette-coffee-300);
+  --color-desk-coffee: var(--palette-coffee-600);
+  --color-desk-coffee-dark: var(--palette-coffee-900);
+  --color-desk-pen-gold: var(--palette-pen-gold);
+  --color-desk-pen: var(--palette-pen-body);
+  --color-desk-pen-cap: var(--palette-pen-cap);
+  --color-desk-note: var(--palette-note);          /* 메모지(포스트잇) */
+  --color-desk-note-ink: var(--palette-note-ink);
+  --color-desk-note-pen: var(--palette-note-pen);
+  --color-desk-news: var(--palette-news);          /* 책상 위 신문 */
+  --color-desk-news-sheet-1: var(--palette-news-sheet-1);
+  --color-desk-news-sheet-2: var(--palette-news-sheet-2);
+  --color-desk-news-ink: var(--palette-news-ink);
+  --color-desk-news-ink-soft: var(--palette-news-ink-soft);
+  --color-desk-shadow: var(--palette-shadow);      /* 물건 그림자 (투명도는 color-mix로) */
+  --color-desk-text: var(--palette-desk-text);     /* 책상 위 · 푸터 글자 */
+
+  /* 판결 체험 무대 (components/stage.css) */
+  --color-stage-news: var(--palette-news);
+  --color-stage-bench: var(--palette-wood-500);
+  --color-stage-bench-dark: var(--palette-wood-700);
+  --color-stage-ink: var(--palette-felt-700);       /* 무대 테두리 · 제목 · 선택 */
+  --color-stage-face: var(--palette-wood-glow);     /* 이름표 얼굴 바탕 */
+  --color-role-narrator: var(--palette-ink-600);    /* 이름표 색: 법정 진행 */
+  --color-role-guide: var(--palette-role-guide);    /* 안내 */
+  --color-role-actor: var(--palette-judge-ai);      /* 사건 속 인물(A씨 · B씨 역) */
+  --color-role-prosecutor: var(--palette-role-prosecutor); /* 검사(역할 의상 버건디 띠) */
+  --color-role-defense: var(--palette-navy-700);    /* 변호인 */
+  --color-role-law: var(--palette-bronze-700);      /* 법률 안내 · AI 판사 */
+
+  --color-factor-heavy: var(--palette-factor-heavy);           /* 무겁게: 글자 · 테두리 */
+  --color-factor-heavy-tint: var(--palette-factor-heavy-tint); /* 무겁게: 바탕 */
+  --color-factor-light: var(--palette-factor-light);           /* 가볍게: 글자 · 테두리 */
+  --color-factor-light-tint: var(--palette-factor-light-tint); /* 가볍게: 바탕 */
+
+  /* ③ 글꼴 · 크기 */
+  --font-heading: "Noto Serif KR", AppleMyungjo, Batang, serif;
+  --font-body: Pretendard, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --font-article: "Nanum Myeongjo", "Noto Serif KR", AppleMyungjo, Batang, serif; /* 신문 기사 본문 (S-02 지면) */
+  --font-hand: "Nanum Pen Script", cursive;          /* 손글씨 (S-01 메모지) */
+  --text-display: 34px;
+  --text-title-1: 28px;
+  --text-title-2: 22px;
+  --text-title-3: 18px;
+  --text-body: 15px;
+  --text-small: 13px;
+  --text-caption: 12px;
+
+  /* 간격 · 폭 */
   --space-md: 16px;
   --content-width: 1180px;
 }
+
+/* 화면 제목(h1)은 제목 글꼴(명조). 섹션 · 카드 제목은 본문 글꼴 그대로 둔다 */
+h1 { font-family: var(--font-heading); color: var(--color-heading); letter-spacing: -.02em; }
 
 /* 공통 버튼. 화면 CSS에도 같은 값으로 정의돼 있다(화면마다 일부러 중복). 여기 정의는
    라우터 · 404 화면처럼 특정 화면 CSS를 빌리지 않는 곳에서 쓴다 (리뷰 반영, router.js 참고). */
@@ -34,31 +261,59 @@ body {
   font-weight: 700;
   cursor: pointer;
 }
-.primary-button { background: #c83019; border-color: #c83019; color: #fff; }
-.primary-button:hover:not(:disabled) { background: #a92612; }
+.primary-button { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-on-accent); }
+.primary-button:hover:not(:disabled) { background: var(--color-accent-hover); border-color: var(--color-accent-hover); }
 .primary-button:disabled { opacity: .6; }
-.secondary-button { color: var(--color-text); background: #fff; }
+.secondary-button { color: var(--color-text); background: var(--color-card); border-color: var(--color-border-strong); }
 .secondary-button:hover { background: var(--color-surface); }
+
+/* 겹치는 스크롤바 (components/scrollArea.js). 스크롤 영역은 모두 이 형식을 쓴다:
+   기본 막대는 숨기고, 글 위에 겹치는 반투명 막대를 스크롤하는 동안만 보여 준다 */
+.scroll-area { position: relative; display: flex; flex-direction: column; min-height: 0; }
+.scroll-body { flex: 1; min-height: 0; overflow: auto; scrollbar-width: none; overscroll-behavior: contain; }
+.scroll-body::-webkit-scrollbar { display: none; }
+.scroll-body:focus-visible { outline: 3px solid var(--color-focus); outline-offset: -3px; border-radius: 4px; }
+.scroll-thumb { position: absolute; top: 0; right: 2px; width: 5px; border-radius: 3px; background: color-mix(in srgb, var(--color-text) 38%, transparent); opacity: 0; pointer-events: none; transition: opacity .4s ease-out; }
+.scroll-area.scrolling .scroll-thumb { opacity: 1; transition-duration: .1s; }
 
 /* 불러오는 중 · 오류 안내. 화면 CSS는 각자 .message-panel에 padding을 더 얹어 쓴다(review.css 등). */
 .message-panel {
   padding: 44px 28px;
   color: var(--color-text);
-  font: 15px/1.75 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+  font: var(--text-body)/1.75 var(--font-body);
 }
 .message-panel button { margin-top: 20px; }
 
 /* 공통 사이트 헤더 · 푸터 (siteLayout.js의 renderSiteHeader · renderSiteFooter).
    S-01 · S-02 · S-14 · 라우터 푸터(S-03 ~ S-09)가 모두 쓰는 유일한 정의다. 화면 CSS에 같은 규칙을 다시 두지 않는다.
    특정 화면만 다르게 해야 하면 그 화면 CSS에 .landing-page .site-header처럼 화면 클래스로 감싸서 추가한다. */
-.site-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 28px; border-bottom: 1px solid var(--color-border); }
-.site-nav { display: flex; gap: 8px; }
-.logo-button { border: 0; background: transparent; padding: 6px 0; font-size: 18px; font-weight: 800; color: var(--color-text); }
-.nav-button { border: 0; background: transparent; padding: 10px 12px; min-height: 44px; color: var(--color-muted); }
+/* FE-50: 스크롤과 상관없이 화면 위에 고정한다(sticky — 자리는 그대로 차지해 아래 내용이 가려지지 않는다). 전환 연출 층(z-index 1000)보다는 아래 */
+.site-header { position: sticky; top: 0; z-index: 50; display: flex; align-items: center; gap: 16px; padding: 16px 28px; border-bottom: 1px solid var(--color-border); background: var(--color-bg); }
+.site-nav { display: flex; align-items: center; gap: 8px; margin-left: auto; } /* 로고는 왼쪽, 메뉴 · 로그인은 오른쪽 */
+.site-header .nav-button[aria-current="page"] { color: var(--color-text); box-shadow: inset 0 -2px 0 currentColor; } /* 지금 보고 있는 메뉴 */
+.site-header .nav-button[aria-disabled="true"] { cursor: default; opacity: .6; }
+.site-header .nav-button[aria-disabled="true"]:hover { text-decoration: none; }
+/* 화면 CSS의 button { font: inherit } 보다 우선하도록 .site-header를 붙인다 */
+.site-header .logo-button { border: 0; background: transparent; padding: 6px 0; font-family: var(--font-heading); font-size: 20px; font-weight: 900; letter-spacing: -.04em; color: var(--color-heading); }
+.nav-button { border: 0; background: transparent; padding: 10px 12px; min-height: 44px; color: var(--color-muted); white-space: nowrap; }
 .nav-button:hover { color: var(--color-text); }
+/* 로그인(FE-50): 메뉴 맨 오른쪽, 얇은 테두리로 계정 동작임을 구분한다. 테두리는 글자색을 따라가 네이비 · 흰 헤더 모두에 맞는다 */
+.site-header .login-button { flex: none; margin-left: 4px; padding: 6px 14px; min-height: 36px; border: 1px solid color-mix(in srgb, currentColor 45%, transparent); border-radius: 6px; }
+.site-header .login-button[aria-current="page"] { box-shadow: none; } /* 테두리 버튼이라 밑줄 대신 테두리로 충분하다 */
+.site-header .account-name { display: block; max-width: 9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } /* 로그인한 닉네임(FE-52). 길면 줄인다 */
+/* 연출 스위치(FE-50, utils/motion.js): "연출" 글자 + 작은 스위치. 색은 글자색을 따라간다 */
+.site-header .motion-switch { display: inline-flex; align-items: center; gap: 8px; }
+.site-header .switch-track { position: relative; display: block; width: 30px; height: 18px; border: 1px solid color-mix(in srgb, currentColor 55%, transparent); border-radius: 9px; transition: background-color .15s ease-out; }
+.site-header .switch-thumb { position: absolute; top: 2px; left: 2px; display: block; width: 12px; height: 12px; border-radius: 50%; background: currentColor; transition: translate .15s ease-out; }
+.site-header .motion-switch[aria-checked="true"] .switch-track { background: color-mix(in srgb, currentColor 22%, transparent); }
+.site-header .motion-switch[aria-checked="true"] .switch-thumb { translate: 12px 0; }
 .site-footer { padding: 24px 28px; border-top: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-muted); font-size: 13px; }
 @media (max-width: 720px) {
-  .site-header { padding: 12px 16px; }
+  /* 좁은 화면(FE-52): 두 줄. 윗줄 = 로고 · 로그인, 아랫줄 = 메뉴(넘치면 가로로 민다) */
+  .site-header { flex-wrap: wrap; row-gap: 0; padding: 12px 16px; }
+  .site-header .login-button { order: 2; margin-left: auto; }
+  .site-nav { order: 3; width: 100%; margin: 0 -8px; gap: 0; overflow-x: auto; scrollbar-width: none; }
+  .site-nav .nav-button { padding: 8px; }
 }
 
 /* S-14 404 · 오류 화면 (FE-3) */
@@ -69,9 +324,9 @@ body {
   max-width: var(--content-width);
   margin: 0 auto;
   border: 1px solid var(--color-border);
-  background: #fff;
+  background: var(--color-bg);
   color: var(--color-text);
-  font: 15px/1.75 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+  font: var(--text-body)/1.75 var(--font-body);
   overflow-wrap: anywhere;
   word-break: keep-all;
 }
@@ -99,3 +354,26 @@ body {
    여러 화면(S-04 · S-05, 이후 다른 화면)이 함께 쓰므로 화면 클래스 없이 여기 둔다 */
 .content-lines { margin: 0; padding-left: 20px; }
 .content-lines li + li { margin-top: 6px; }
+
+/* 관용 지수 눈금 (components/toleranceScale.js). S-16 · S-17이 함께 쓴다 */
+.tolerance-scale { width: 100%; max-width: 360px; }
+.tolerance-track { position: relative; height: 4px; margin: 10px 8px 8px; border-radius: 2px; background: var(--color-border-strong); }
+.tolerance-marker { position: absolute; top: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px; border: 3px solid var(--color-card); border-radius: 50%; background: var(--color-accent); box-shadow: 0 0 0 1px var(--color-accent); }
+.tolerance-ends { display: flex; justify-content: space-between; color: var(--color-muted); font-size: var(--text-caption); }
+
+/* 터치 기기 공통(FE-32 점검, mobile-native): 탭 번쩍임 제거 · 즉시 반응 · 컨트롤 글자 선택 막기 · 누르는 순간의 눌림 피드백 */
+html { -webkit-tap-highlight-color: transparent; }
+button, [role="button"], a, label.range-option, summary { touch-action: manipulation; }
+button, [role="button"] { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+@media (prefers-reduced-motion: no-preference) {
+  :is(.primary-button, .secondary-button, .ear-button, .paper-start button, .dlg-choices button):not(:disabled) { transition: scale .12s cubic-bezier(.2, .8, .2, 1); }
+  :is(.primary-button, .secondary-button, .ear-button, .paper-start button, .dlg-choices button):not(:disabled):active { scale: .96; }
+}
+
+/* 연출 끄기(FE-50, utils/motion.js): 헤더의 "연출" 스위치를 끄면 <html data-motion="off">가 된다.
+   CSS 애니메이션 · 전환을 지우지 않고 길이만 0으로 만들어, 끝 상태(fill)는 그대로 두고 animationend · transitionend도 바로 오게 한다.
+   JS 연출은 reducedMotion()으로 따로 건너뛴다. 기기의 "동작 줄이기"는 각 화면 CSS의 prefers-reduced-motion이 그대로 맡는다 */
+:root[data-motion="off"] *, :root[data-motion="off"] *::before, :root[data-motion="off"] *::after {
+  animation-duration: 0s !important; animation-delay: 0s !important; animation-iteration-count: 1 !important;
+  transition-duration: 0s !important; transition-delay: 0s !important; scroll-behavior: auto !important;
+}

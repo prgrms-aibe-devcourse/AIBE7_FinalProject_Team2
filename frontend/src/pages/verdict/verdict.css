@@ -1,95 +1,239 @@
 @import '../review/review.css';
 
-.verdict-page .reduction-area { margin-top: 18px; padding: 18px; border: 1px solid var(--color-border); border-radius: 4px; background: var(--color-surface); }
+.verdict-page .reduction-area { margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--color-desk-sheet-line); }
 .verdict-page .reduction-toggle,
 .verdict-page .reduction-option { display: flex; align-items: center; gap: 8px; }
 .verdict-page .reduction-toggle { font-weight: 700; margin-bottom: 8px; }
 .verdict-page .reduction-choices { border: 0; padding: 0; margin: 14px 0 0; display: flex; flex-wrap: wrap; gap: 16px; }
 .verdict-page .reduction-auto { margin-top: 12px; font-weight: 700; }
-.verdict-page .fixed-penalty { padding: 20px; border: 1px solid var(--color-border); background: var(--color-surface); border-radius: 4px; }
-.verdict-page .fixed-penalty-name { display: block; font-size: 28px; margin-bottom: 8px; }
+.verdict-page .fixed-penalty { min-height: 118px; padding: 14px 0; border-block: 1px dashed var(--color-desk-sheet-line); }
+.verdict-page .fixed-penalty.is-empty .fixed-penalty-name { color: var(--color-muted); }
+.verdict-page .sentence-entry.is-off { opacity: .55; filter: grayscale(1); }
+@media (max-width: 600px) { .verdict-page .fixed-penalty { min-height: 128px; } }
+.verdict-page .fixed-penalty-name { display: block; margin-bottom: 8px; font: 900 28px/1.2 var(--font-heading); color: var(--color-heading); }
 .verdict-page .no-suspension { margin-top: 18px; }
-.verdict-page .range-unavailable { position: absolute; inset: 0 auto 0 0; background: repeating-linear-gradient(135deg, #c3bcb5 0, #c3bcb5 2px, #eeeae6 2px, #eeeae6 6px); }
+.verdict-page .range-unavailable { position: absolute; inset: 0 auto 0 0; background: repeating-linear-gradient(135deg, var(--color-border) 0, var(--color-border) 2px, var(--color-surface-strong) 2px, var(--color-surface-strong) 6px); }
 .verdict-page .range-lower-label { margin-top: 8px; font-size: 12px; color: var(--color-muted); }
-.verdict-page .range-no-overlap { margin-top: 12px; padding: 12px; border-left: 3px solid #81756b; background: #f3f1ee; font-size: 13px; }
+.verdict-page .range-no-overlap { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--color-desk-sheet-line); font-size: 13px; }
 .verdict-page .range-recommendation { margin: 8px 0 16px; font-size: 13px; }
 .verdict-page .range-track-with-ticks { margin-top: 34px; }
 .verdict-page .range-ticks { position: relative; height: 22px; margin-top: 6px; font-size: 11px; color: var(--color-muted); }
 .verdict-page .range-tick { position: absolute; top: 0; white-space: nowrap; max-width: 100%; }
-.verdict-page .range-input-label { top: auto; bottom: calc(100% + 6px); font-size: 11px; color: #224d8a; font-weight: 700; }
+.verdict-page .range-input-label { top: auto; bottom: calc(100% + 6px); font-size: 11px; color: var(--color-accent-text); font-weight: 700; }
 
 .verdict-page { word-break: keep-all; overflow-wrap: anywhere; }
 .verdict-page .case-topbar { justify-content: space-between; }
-.verdict-page .verdict-layout { display: grid; grid-template-columns: minmax(0, 1fr) 330px; }
-.verdict-page .verdict-main { padding: 28px; min-width: 0; }
-.verdict-page h1 { font-size: 28px; }
+.verdict-page .verdict-main { min-width: 0; }
+.verdict-page h1 { font: 900 28px/1.25 var(--font-heading); letter-spacing: -.02em; color: var(--color-heading); }
+
+/* ── 파일철(FE-43): 크라프트 서류철 위로 튀어나온 색인 탭 두 개, 철 안에는 종이 한 장(1 판결 · 2 참고 정보) ──
+   메인 책상의 서류철과 같은 재료(--color-desk-kraft · -sheet). 고른 탭은 철과 같은 색으로 이어지고, 안 고른 탭은 한 겹 뒤(어둡고 낮게) */
+.verdict-page .verdict-folder { display: block; min-width: 0; }
+.verdict-page .folder-tabs { display: flex; align-items: flex-end; gap: 4px; padding-left: 24px; }
+.verdict-page .folder-tab {
+  position: relative; z-index: 1; display: inline-flex; align-items: baseline; gap: 8px; min-height: 44px; margin-bottom: -1px; padding: 10px 22px 9px;
+  border: 1px solid var(--color-desk-kraft-shade); border-bottom: 0; border-radius: 10px 10px 0 0;
+  background: var(--color-desk-kraft-back); color: var(--color-heading); font: 700 15px/1.2 var(--font-heading); cursor: pointer;
+  transform: translateY(4px); transition: transform .16s cubic-bezier(.2, .8, .2, 1), background-color .16s ease;
+}
+.verdict-page .folder-tab[aria-selected='true'] { z-index: 2; background: var(--color-desk-kraft); transform: none; cursor: default; }
+.verdict-page .folder-tab-no { font: 900 13px/1 var(--font-heading); font-variant-numeric: tabular-nums; color: var(--color-label); }
+.verdict-page .folder-tab:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+@media (hover: hover) and (pointer: fine) { .verdict-page .folder-tab[aria-selected='false']:hover { transform: translateY(1px); } }
+.verdict-page .folder-body {
+  position: relative; padding: 12px; border: 1px solid var(--color-desk-kraft-shade); border-radius: 10px; background: var(--color-desk-kraft);
+  box-shadow: 0 14px 28px -16px color-mix(in srgb, var(--color-desk-shadow) 60%, transparent);
+}
+/* 철 안 종이: 왼쪽 여백에 철끈 구멍 두 개(구멍으로 서류철이 비친다) */
+.verdict-page .folder-sheet {
+  position: relative; min-height: 420px; padding: 34px 32px 28px 52px; /* 위 여백: 책갈피 끝이 제목에 아주 살짝 닿게 */ border: 1px solid var(--color-desk-sheet-line); border-radius: 2px;
+  background: var(--color-desk-sheet); color: var(--color-desk-news-ink);
+}
+.verdict-page .folder-sheet::before {
+  content: ''; position: absolute; left: 18px; top: 72px; width: 12px; height: 12px; border-radius: 50%;
+  background: var(--color-desk-kraft); box-shadow: inset 0 1px 2px color-mix(in srgb, var(--color-desk-shadow) 45%, transparent), 0 96px 0 var(--color-desk-kraft);
+}
+.verdict-page .folder-sheet[hidden] { display: none; }
+.verdict-page .folder-sheet:has(> .folder-curl) { padding-bottom: 72px; } /* 오른쪽 아래 말린 모서리 자리 */
+
+/* 아직 안 본 장의 탭 · 확정할 수 없는 서명란: 짧게 움찔(좌우 흔들림, 0.32초) */
+.verdict-page .is-denied { animation: folder-deny .32s cubic-bezier(.36, .07, .19, .97); }
+@keyframes folder-deny { 20% { translate: -4px 0; } 40% { translate: 4px 0; } 60% { translate: -3px 0; } 80% { translate: 2px 0; } }
+.verdict-page .folder-tab[aria-disabled='true'] { color: color-mix(in srgb, var(--color-heading) 55%, transparent); cursor: not-allowed; }
+
+/* 빠진 칸 반짝임(확정 장을 열 수 없을 때): 두 번 밝아졌다 사라진다 */
+.verdict-page .is-flash { border-radius: 4px; animation: field-flash .7s ease-out 2; }
+@keyframes field-flash { 0%, 100% { background-color: transparent; box-shadow: 0 0 0 0 transparent; } 40% { background-color: color-mix(in srgb, var(--color-label) 16%, transparent); box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-label) 16%, transparent); } }
+
+/* 진행 책갈피: 펼쳐 본 장의 탭 뒤에 끼운 리본 + 내로 얼굴. 탭 줄보다 살짝 솟고, 아래는 서류철 가장자리를 넘어 종이 위까지 걸친다
+   (탭 줄을 서류철보다 위에 그려야 걸친 부분이 보인다) */
+.verdict-page .folder-tabs { position: relative; z-index: 2; }
+.verdict-page .folder-bookmark {
+  position: relative; z-index: 3; flex: none; align-self: flex-end; width: 22px; height: 60px; margin: 0 -6px -34px; pointer-events: none;
+  background: var(--color-label); clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 88%, 0 100%);
+  filter: drop-shadow(0 2px 2px color-mix(in srgb, var(--color-desk-shadow) 35%, transparent));
+}
+.verdict-page .folder-bookmark img { position: absolute; left: 50%; top: 3px; width: 18px; height: 18px; translate: -50% 0; border-radius: 50%; background: var(--color-card); object-fit: cover; object-position: top; }
+
+/* 말린 모서리(다음 장으로 넘기기): 종이 오른쪽 아래가 대각선으로 접혀 들려 있다. 접힌 자리에는 아래 서류철(크라프트)이 보이고,
+   들린 자락은 종이 뒷면(조금 어둡게)이다. 마우스를 올리면 자락이 바람에 날리듯 넘실거린다 */
+.verdict-page .folder-curl {
+  position: absolute; right: -1px; bottom: -1px; width: 64px; height: 64px; padding: 0; border: 0; background: none; cursor: pointer;
+  transform-origin: 100% 100%; transition: scale .18s cubic-bezier(.2, .8, .2, 1);
+}
+.verdict-page .folder-curl::before { content: ''; position: absolute; inset: 0; background: var(--color-desk-kraft); clip-path: polygon(100% 0, 100% 100%, 0 100%); }
+.verdict-page .folder-curl::after {
+  content: ''; position: absolute; inset: 0; clip-path: polygon(0 0, 100% 0, 0 100%);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--color-desk-sheet) 82%, var(--color-desk-shadow)) 10%, var(--color-desk-sheet) 46%, color-mix(in srgb, var(--color-desk-sheet) 72%, var(--color-desk-shadow)) 50%);
+}
+.verdict-page .folder-curl:active { scale: .96; }
+.verdict-page .folder-curl:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+@media (hover: hover) and (pointer: fine) {
+  .verdict-page .folder-curl:hover { animation: folder-curl-wave 1.4s ease-in-out infinite; }
+}
+@keyframes folder-curl-wave { 0%, 100% { scale: 1.06; rotate: 0deg; } 35% { scale: 1.16; rotate: -2deg; } 70% { scale: 1.1; rotate: 1deg; } }
+
+/* 첫 장: 사건 요약(사건 개요 · 핵심 사실) */
+.verdict-page .summary-block { margin-top: 18px; }
+.verdict-page .summary-block p { margin: 0 0 .6em; font: 400 15px/1.8 var(--font-article); text-wrap: pretty; }
+.verdict-page .summary-facts { margin: 0; padding-left: 1.2em; }
+.verdict-page .summary-facts li { margin: .3em 0; font: 400 15px/1.7 var(--font-article); }
+.verdict-page .sign-subtitle { margin: 0 0 8px; font: 800 16px/1.4 var(--font-heading); color: var(--color-heading); }
+
+/* 마지막 장: 판결 확정(정한 내용 · 주의사항 · 서명) */
+.verdict-page .sign-summary { display: grid; grid-template-columns: minmax(96px, max-content) minmax(0, 1fr); gap: 8px 20px; margin: 16px 0 20px; padding: 14px 0; border-block: 3px double var(--color-desk-sheet-line); }
+.verdict-page .sign-summary dt { color: var(--color-muted); font-size: 14px; }
+.verdict-page .sign-summary dd { margin: 0; font: 700 15px/1.5 var(--font-heading); color: var(--color-heading); }
+.verdict-page .sign-summary ul { margin: 0; padding-left: 1.1em; font-weight: 600; }
+.verdict-page .sign-cautions { margin: 0 0 16px; padding-left: 1.2em; font-size: 14px; }
+.verdict-page .sign-reason { margin: 0 0 10px; color: var(--color-caution); font-size: 14px; font-weight: 700; }
+.verdict-page .sign-reason:empty { display: none; }
+.verdict-page .sign-row { display: flex; align-items: flex-end; justify-content: flex-end; gap: 12px; margin-top: 8px; }
+.verdict-page .sign-role, .verdict-page .sign-seal { flex: none; padding-bottom: 8px; white-space: nowrap; font: 700 15px/1 var(--font-heading); color: var(--color-heading); }
+.verdict-page .sign-seal { color: var(--color-muted); font-weight: 400; }
+/* 서명란: 밑줄 위를 누르면 서명 획이 그려진다 */
+.verdict-page .sign-line {
+  position: relative; flex: 0 1 260px; min-width: 0; min-height: 64px; padding: 0; border: 0; border-bottom: 1.5px solid var(--color-heading);
+  background: none; cursor: pointer;
+}
+.verdict-page .sign-line:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 4px; }
+.verdict-page .sign-hint { position: absolute; left: 0; right: 0; bottom: 10px; text-align: center; font: 400 20px/1 var(--font-hand); color: var(--color-muted); transition: opacity .2s ease-out; }
+@media (hover: hover) and (pointer: fine) { .verdict-page .sign-line:not([aria-disabled='true']):hover .sign-hint { color: var(--color-heading); } }
+.verdict-page .sign-ink { position: absolute; inset: 0 0 4px; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.verdict-page .sign-ink path { fill: none; stroke: var(--color-desk-note-pen); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; stroke-dashoffset: 1; }
+.verdict-page .sign-row.is-signed .sign-ink path { stroke-dashoffset: 0; transition: stroke-dashoffset .9s cubic-bezier(.45, .05, .55, .95); }
+.verdict-page .sign-row.is-signed .sign-hint { opacity: 0; }
+.verdict-page .sign-line[aria-disabled='true'] { cursor: progress; }
+.verdict-page .folder-title { margin: 0 0 6px; font: 900 24px/1.25 var(--font-heading); letter-spacing: -.02em; color: var(--color-heading); }
+/* 지금 고를 수 없는 것(감경 · 감경 후 형벌 · 형량 막대)은 회색으로 두고 누르지 않는다 */
+.verdict-page :is(.reduction-toggle, .reduction-option).is-disabled { color: var(--color-muted); font-weight: 600; cursor: not-allowed; }
+.verdict-page .range-slider.is-off .recommended-range { opacity: .55; filter: grayscale(1); cursor: not-allowed; user-select: none; }
 .verdict-page .verdict-intro { margin: 6px 0 28px; }
+/* 형량 칸(공통): 범위 상자 안 "선고할 수 있는 범위" 설명과 같은 줄 오른쪽. 징역 · 벌금에 따라 내용이 바뀐다 */
+.verdict-page .sentence-entry { float: right; display: inline-flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 10px 16px; padding: 6px 12px; border: 1px solid var(--color-desk-sheet-line); border-radius: 3px; background: var(--color-card); }
+.verdict-page .recommended-range .range-track { clear: both; }
+.verdict-page .sentence-entry .number-fields { gap: 8px; }
+/* 형량 칸 입력은 두 자리(년 · 개월)라 좁게, 벌금(만원)은 조금 넓게 */
+.verdict-page .sentence-entry .number-field input { width: 44px; min-height: 30px; padding: 3px 6px; text-align: right; }
+.verdict-page .sentence-entry .number-field input[name='fineAmount'] { width: 70px; }
+.verdict-page .sentence-entry-type { color: var(--color-heading); }
+/* 범위 막대 = 형량 조절 막대(징역). 막대 위 입력값 글자는 우상단 입력칸이 대신한다 */
+.verdict-page .range-slider.is-sliding .range-track { cursor: pointer; touch-action: none; }
+.verdict-page .range-track[role='slider']:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 4px; }
+.verdict-page .range-slider .range-track { height: 26px; } /* 회색(고를 수 없음)일 때도 같은 굵기 */
+/* 벌금 막대 눈금(아래에서 위로): 100만 원 0.2 · 500만 원 0.5 · 1,000만 원 막대 높이만큼 */
+.verdict-page .fine-tick { position: absolute; bottom: 0; width: 1px; transform: translateX(-50%); background: var(--color-border-strong); pointer-events: none; }
+.verdict-page .fine-tick.minor { height: 20%; }
+.verdict-page .fine-tick.mid { height: 50%; }
+.verdict-page .fine-tick.major { height: 100%; }
+.verdict-page .fine-labels { position: relative; height: 22px; margin-top: 6px; font-size: 11px; color: var(--color-muted); } /* 징역 눈금 줄(.range-ticks)과 같은 높이 */
+.verdict-page .fine-labels span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+.verdict-page .fine-labels span:first-child { transform: none; }
+.verdict-page .fine-labels span:last-child { transform: translateX(-100%); }
+.verdict-page .slider-hint { margin-bottom: 6px; }
+.verdict-page .sentence-slider { display: block; margin: 8px 0; }
+.verdict-page .sentence-slider input { width: 100%; }
+.verdict-page .suspension-years { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
+/* 집행유예 줄: 체크박스 + 조건(같은 줄). 붙일 수 없으면 회색 */
+.verdict-page .suspension-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-bottom: 8px; }
+.verdict-page .suspension-row .suspension-toggle { margin-bottom: 0; }
+.verdict-page .suspension-toggle.is-disabled { color: var(--color-muted); font-weight: 600; }
+.verdict-page .suspension-toggle.is-disabled input { cursor: default; }
 .verdict-page .verdict-controls,
 .verdict-page .verdict-group { border: 0; padding: 0; margin: 0; min-width: 0; }
 .verdict-page .verdict-group { margin-bottom: 28px; }
-.verdict-page .verdict-group > legend { font-size: 14px; font-weight: 700; color: #ac301e; padding: 0; margin-bottom: 14px; }
+.verdict-page .verdict-group > legend { margin-bottom: 12px; padding: 0; font: 800 16px/1.4 var(--font-heading); color: var(--color-heading); }
 .verdict-page .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 .verdict-page .penalty-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.verdict-page .penalty-option { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer; }
-.verdict-page .penalty-option:has(input:checked) { background: #fff0eb; border-color: var(--color-primary); color: #a92a16; font-weight: 700; }
+.verdict-page .penalty-option { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 10px 14px; border: 1px solid var(--color-desk-sheet-line); border-radius: 3px; background: color-mix(in srgb, var(--color-card) 55%, transparent); cursor: pointer; }
+.verdict-page .penalty-option:has(input:checked) { background: var(--color-card); border-color: var(--color-heading); box-shadow: inset 0 0 0 1px var(--color-heading); color: var(--color-heading); font-weight: 700; }
 .verdict-page input { font: inherit; color: inherit; accent-color: var(--color-primary); }
-.verdict-page input:focus-visible { outline: 3px solid #224d8a; outline-offset: 3px; }
+.verdict-page input:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 3px; }
 .verdict-page input[type='radio'],
 .verdict-page input[type='checkbox'] { width: 18px; height: 18px; flex-shrink: 0; }
 .verdict-page .number-fields { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
 .verdict-page .number-field { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
-.verdict-page .number-field input { width: 110px; max-width: 100%; min-height: 46px; border: 1px solid #a99e96; border-radius: 4px; padding: 8px 12px; background: #fff; }
+.verdict-page .number-field input { width: 110px; max-width: 100%; min-height: 46px; border: 1px solid var(--color-border-strong); border-radius: 4px; padding: 8px 12px; background: var(--color-card); }
 .verdict-page .number-field input[name='fineAmount'] { width: 180px; }
 .verdict-page input[aria-invalid='true'] { border-color: var(--color-primary); }
 .verdict-page .money-readable { color: var(--color-muted); font-size: 14px; }
-.verdict-page .field-error { color: #aa2715; font-size: 13px; margin-top: 8px; }
+.verdict-page .field-error { color: var(--color-danger); font-size: 13px; margin-top: 8px; }
 .verdict-page .field-error:empty { display: none; }
-.verdict-page .verdict-range .recommended-range { margin-top: 18px; }
-.verdict-page .range-marker { position: absolute; top: -7px; bottom: -7px; width: 3px; transform: translateX(-50%); background: #224d8a; }
-.verdict-page .range-marker::before { content: ''; position: absolute; top: -3px; left: -4px; border-inline: 5px solid transparent; border-top: 6px solid #224d8a; }
-.verdict-page .range-marker.is-warning { background: #b62310; }
-.verdict-page .range-marker.is-warning::before { border-top-color: #b62310; }
-.verdict-page .range-warning { border: 1px solid #c83019; border-radius: 4px; background: #fff0ec; padding: 16px; margin-top: 16px; color: #92200f; }
+.verdict-page .verdict-range .recommended-range { margin-top: 18px; border-color: var(--color-desk-sheet-line); background: color-mix(in srgb, var(--color-card) 45%, transparent); }
+.verdict-page .range-marker { position: absolute; top: -7px; bottom: -7px; width: 3px; transform: translateX(-50%); background: var(--color-accent); }
+.verdict-page .range-marker::before { content: ''; position: absolute; top: -3px; left: -4px; border-inline: 5px solid transparent; border-top: 6px solid var(--color-accent); }
+.verdict-page .range-marker.is-warning { background: var(--color-caution); }
+.verdict-page .range-marker.is-warning::before { border-top-color: var(--color-caution); }
+.verdict-page .range-warning { border: 1px solid var(--color-caution-border); border-radius: 4px; background: var(--color-caution-tint); padding: 16px; margin-top: 16px; color: var(--color-caution); }
 .verdict-page .range-warning strong { display: block; margin-bottom: 8px; }
 .verdict-page .range-warning p { font-size: 13px; }
-.verdict-page .range-reference { padding: 12px 16px; margin-top: 16px; background: #f3f1ee; border-left: 3px solid #81756b; font-size: 13px; }
+.verdict-page .range-reference { margin-top: 16px; padding-top: 10px; border-top: 1px dashed var(--color-desk-sheet-line); font-size: 13px; }
 .verdict-page .suspension-area { margin-top: 20px; }
+.verdict-page .suspension-area.is-off { opacity: .55; filter: grayscale(1); cursor: not-allowed; }
+.verdict-page .suspension-area.is-off :is(label, input) { cursor: not-allowed; }
 .verdict-page .suspension-toggle { display: flex; align-items: center; gap: 8px; font-weight: 700; margin-bottom: 12px; }
-.verdict-page .factor-list { list-style: none; padding: 0; margin: 16px 0 0; border: 1px solid var(--color-border); border-radius: 4px; overflow: hidden; }
+.verdict-page .factor-list { list-style: none; padding: 0; margin: 12px 0 0; border-top: 1px solid var(--color-desk-sheet-line); }
 .verdict-page .factor-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px; }
-.verdict-page .factor-row + .factor-row { border-top: 1px solid var(--color-border); }
-.verdict-page .factor-row.is-selected { background: #fff4ef; }
+.verdict-page .factor-row { border-bottom: 1px dashed var(--color-desk-sheet-line); }
 .verdict-page .factor-label { font-size: 14px; }
 .verdict-page .factor-actions { display: flex; gap: 6px; flex-shrink: 0; }
-.verdict-page .factor-button { background: #fff; border: 1px solid #bdb1a8; border-radius: 4px; padding: 8px 10px; min-height: 44px; color: #62564e; font-size: 12px; }
-.verdict-page .factor-button[aria-pressed='true'] { background: #a92a16; border-color: #a92a16; color: #fff; }
-.verdict-page .verdict-submit { border-top: 1px solid var(--color-border); padding-top: 22px; display: flex; align-items: center; justify-content: flex-end; gap: 16px; }
-.verdict-page .confirmation-box { margin-top: 22px; padding: 22px; border: 1px solid #a99e96; border-radius: 4px; background: var(--color-surface); }
-.verdict-page .confirmation-box h2 { font-size: 18px; margin-bottom: 8px; }
-.verdict-page .confirmation-box p { font-size: 14px; }
-.verdict-page .confirmation-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
-.verdict-page .verdict-sidebar { padding: 28px 22px; min-width: 0; border-left: 1px solid var(--color-border); background: #f5f2ef; }
-.verdict-page .verdict-sidebar > h2 { font-size: 14px; margin-bottom: 18px; }
-.verdict-page .verdict-sidebar .law-info-box { background: #fff; padding: 18px; }
+.verdict-page .factor-button { background: var(--color-card); border: 1px solid var(--color-border-strong); border-radius: 3px; padding: 8px 10px; min-height: 44px; color: var(--color-muted); font-size: 12px; }
+.verdict-page .factor-button[aria-pressed='true'] { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-on-accent); }
+.verdict-page .factor-button[data-direction='UP'][aria-pressed='true'] { background: var(--color-factor-heavy-tint); border-color: var(--color-factor-heavy); color: var(--color-factor-heavy); }
+.verdict-page .factor-button[data-direction='DOWN'][aria-pressed='true'] { background: var(--color-factor-light-tint); border-color: var(--color-factor-light); color: var(--color-factor-light); }
+.verdict-page .verdict-sidebar { min-width: 0; }
+/* 2페이지 참고 정보: 상자 없이 종이 위 조판(겹줄 · 괘선으로 구분) */
+.verdict-page .verdict-sidebar :is(.law-info-box, .recommended-range) { padding: 0 0 18px; border: 0; border-radius: 0; background: none; }
+.verdict-page .verdict-sidebar .recommended-range { margin-top: 18px; padding-top: 16px; border-top: 3px double var(--color-desk-sheet-line); }
+.verdict-page .verdict-sidebar :is(.law-info-box, .recommended-range) h3 { font: 800 16px/1.4 var(--font-heading); color: var(--color-heading); }
 .verdict-page .verdict-sidebar .law-info-box dl { grid-template-columns: minmax(0, 1fr); gap: 4px; }
 .verdict-page .verdict-sidebar .law-info-box dd { margin-bottom: 10px; }
 .verdict-page .verdict-sidebar .range-value { font-size: 20px; }
-.verdict-page .verdict-sidebar > button { margin-top: 20px; width: 100%; }
 .verdict-page :disabled { cursor: default; }
-.verdict-page .verdict-controls:disabled input { background: #f5f2ef; }
+.verdict-page .verdict-controls:disabled input { background: var(--color-surface-strong); }
 .verdict-page button:disabled { opacity: .55; }
-@media (max-width: 900px) {
-  .verdict-page .verdict-layout { grid-template-columns: minmax(0, 1fr); }
-  .verdict-page .verdict-sidebar { border-left: 0; border-top: 1px solid var(--color-border); }
+.verdict-page .folder-tab:disabled { opacity: 1; }
+/* 터치 화면: 판단 요소 · 집행유예 년 버튼도 44px */
+@media (pointer: coarse) { .verdict-page .factor-button { min-height: 44px; } }
+@media (prefers-reduced-motion: reduce) {
+  .verdict-page :is(.folder-tab, .folder-curl, .sign-hint) { transition: none; }
+  .verdict-page .is-flash { animation: none; outline: 3px solid var(--color-label); outline-offset: 4px; }
+  .verdict-page .folder-curl:hover { animation: none; }
+  .verdict-page .sign-row.is-signed .sign-ink path { transition: none; }
 }
 @media (max-width: 600px) {
-  .verdict-page .verdict-main { padding: 24px 16px; }
+  .verdict-page .sentence-entry { float: none; display: flex; margin: 0 0 10px; }
+  .verdict-page .folder-tabs { padding-left: 10px; }
+  .verdict-page .folder-tab { flex: 1; justify-content: center; padding: 10px 6px 9px; white-space: nowrap; }
+  /* 탭 다섯 장이 한 줄에 들어가게: 고른 장만 번호 + 이름, 나머지는 번호만(이름은 화면 읽기 프로그램용으로 남긴다) */
+  .verdict-page .folder-tab[aria-selected='false'] { flex: 0 0 44px; }
+  .verdict-page .folder-tab[aria-selected='false'] > span:not(.folder-tab-no) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .verdict-page .folder-body { padding: 6px; border-radius: 8px; }
+  .verdict-page .folder-sheet { min-height: 0; padding: 20px 16px 22px 34px; }
+  .verdict-page .folder-sheet::before { left: 11px; top: 56px; width: 10px; height: 10px; }
+  .verdict-page .penalty-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .verdict-page h1 { font-size: 24px; }
   .verdict-page .factor-row { flex-direction: column; align-items: stretch; gap: 10px; }
   .verdict-page .factor-actions { justify-content: flex-end; }
   .verdict-page .number-field input { width: 88px; }
-  .verdict-page .verdict-submit { flex-direction: column; align-items: stretch; gap: 10px; }
-  .verdict-page .confirmation-box { padding: 18px; }
-  .verdict-page .confirmation-actions { flex-direction: column; }
-  .verdict-page .verdict-sidebar { padding: 24px 16px; }
 }

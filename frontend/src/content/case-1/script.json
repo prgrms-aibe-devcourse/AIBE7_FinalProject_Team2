@@ -1,0 +1,736 @@
+{
+  "caseId": 1,
+  "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",
+  "paper": {
+    "desk": "사회면",
+    "headline": "빌린 돈 갚으라며 찾아온 지인, 자택서 숨져",
+    "deck": "오래 이어진 변제 갈등…말다툼 끝 흉기 휘두른 뒤 현장 떠나",
+    "photo": "https://raw.githubusercontent.com/peanutboi710/NaeLawNamBul_Images/main/character/cuts/reenact/common/reenact-common-2_cut_headline.png",
+    "caption": "사건 이해를 돕기 위한 재연 일러스트(샘플)",
+    "article": [
+      "돈 문제로 오래 다퉈 온 지인 사이의 갈등이 끝내 한 사람의 죽음으로 이어졌다. A씨는 빌린 돈 문제를 이야기하려고 자신의 집을 찾아온 지인 B씨를 집 안에 있던 흉기로 살해한 것으로 조사됐다.",
+      "두 사람은 A씨가 B씨에게 빌린 돈을 제때 갚지 못하면서 사이가 틀어졌다. 그동안 상환 문제로 다툼이 이어졌고, 이날도 B씨가 직접 A씨의 집을 찾아가 이야기를 꺼낸 것이 발단이 됐다.",
+      "대화는 곧 말다툼으로 번졌다. 다툼이 격해지자 A씨는 집 안에 있던 흉기를 집어 들었고, B씨는 그 자리에서 숨졌다. A씨는 쓰러진 B씨에게 별다른 구호 조치를 하지 않은 채 집을 나선 것으로 전해졌다."
+    ],
+    "extraPhotos": [
+      {
+        "src": "/images/cases/case-1-sub.webp",
+        "caption": "사건 이해를 돕기 위한 연출 이미지"
+      },
+      {
+        "src": "/images/cases/case-1-detail.webp",
+        "caption": "사건 이해를 돕기 위한 연출 이미지"
+      }
+    ]
+  },
+  "cards": {
+    "indict": {
+      "k": "공소사실 · 검사",
+      "ul": [
+        "피고인은 피해자에게 빌린 돈을 갚지 못해 오래 다퉈 왔다.",
+        "사건 당일 집을 찾아온 피해자와 말다툼을 하다가 집 안에 있던 흉기로 피해자를 살해했다."
+      ],
+      "p": [
+        {
+          "b": "적용 법조",
+          "t": "형법 제250조 제1항 살인"
+        }
+      ]
+    },
+    "plea": {
+      "k": "피고인 측 모두진술 · 변호인",
+      "p": [
+        {
+          "b": "공소사실을 인정한다."
+        }
+      ],
+      "ul": [
+        "미리 계획한 범행이 아니라 말다툼 중 우발적으로 벌어진 일이다."
+      ]
+    },
+    "issues": {
+      "k": "쟁점 정리",
+      "p": [
+        "피고인이 범행을 인정해 사실관계 다툼은 없다. 남은 쟁점은 형량이다."
+      ],
+      "ul": [
+        "범행 경위 — 계획했나, 우발적이었나",
+        "범행 뒤의 행동 — 구호 조치 없이 떠남",
+        "피해 회복 노력 — 반성 · 공탁"
+      ]
+    }
+  },
+  "evidence": [
+    {
+      "side": "검사",
+      "text": "두 사람 사이에 빌린 돈 문제로 오래 이어진 다툼이 있었다"
+    },
+    {
+      "side": "검사",
+      "text": "사건 당일 피해자가 돈 이야기를 하려고 피고인의 집을 찾아갔다"
+    },
+    {
+      "side": "검사",
+      "text": "말다툼 중 집 안에 있던 흉기가 사용됐고, 피고인은 구호 조치 없이 집을 나갔다"
+    },
+    {
+      "side": "검사",
+      "text": "피해자에게는 부양하던 어린 자녀 2명이 있고, 유족은 엄벌을 원한다"
+    },
+    {
+      "side": "변호인",
+      "text": "피고인은 수사 초기부터 범행을 인정했다"
+    },
+    {
+      "side": "변호인",
+      "text": "피해 회복을 위해 5,000만 원을 공탁했다"
+    },
+    {
+      "side": "변호인",
+      "text": "피고인에게 형사처벌 전력이 없다"
+    }
+  ],
+  "evidencePhotos": {
+    "검사": "https://raw.githubusercontent.com/peanutboi710/NaeLawNamBul_Images/main/character/cuts/reenact/common/reenact-common-2_cut_headline.png",
+    "변호인": "https://raw.githubusercontent.com/peanutboi710/NaeLawNamBul_Images/main/character/cuts/reenact/common/reenact-common-2_cut_sub-1.png"
+  },
+  "acts": {
+    "1": {
+      "title": "1막 첫인상 (기사)",
+      "scene": "sheet",
+      "look": {
+        "naero": "guide-neutral",
+        "nambul": "idle-neutral"
+      },
+      "steps": [
+        {
+          "say": "nambul",
+          "look": {
+            "nambul": "guide-neutral"
+          },
+          "text": "기사 제목부터 같이 봐요. 돈을 갚으라며 찾아온 지인이 자택에서 숨졌다는 내용이에요.",
+          "focus": "head"
+        },
+        {
+          "say": "naero",
+          "text": "사진은 사건을 이해하도록 만든 연출 이미지예요. 실제 현장 사진이 아니에요.",
+          "focus": "photo"
+        },
+        {
+          "say": "nambul",
+          "text": "기사에 따르면 A씨는 B씨에게 빌린 돈을 제때 갚지 못했어요. 그 문제로 두 사람은 오래 다퉈 왔다고 해요.",
+          "focus": "body"
+        },
+        {
+          "say": "naero",
+          "text": "그날 B씨는 돈 이야기를 하려고 A씨의 집을 찾아갔어요. 이야기는 곧 말다툼이 됐다고 해요.",
+          "focus": "body"
+        },
+        {
+          "say": "nambul",
+          "text": "다툼이 격해지자 A씨는 집에 있던 흉기를 집어 들었고, B씨는 그 자리에서 숨졌어요. A씨는 구호 조치 없이 집을 나갔다고 전해져요.",
+          "focus": "body"
+        },
+        {
+          "say": "naero",
+          "look": {
+            "naero": "react-sorry",
+            "nambul": "idle-neutral"
+          },
+          "text": "기사로 알 수 있는 건 여기까지예요. 기사에 없는 이야기는 지어내지 않을게요.",
+          "focus": "body"
+        },
+        {
+          "say": "nambul",
+          "look": {
+            "nambul": "react-sorry"
+          },
+          "text": "무거운 사건이니까, 서두르지 말고 생각해 봐요.",
+          "focus": "body"
+        }
+      ]
+    },
+    "2": {
+      "title": "1막 첫인상 (엽서)",
+      "scene": "sheet",
+      "look": {
+        "naero": "guide-neutral",
+        "nambul": "idle-neutral"
+      },
+      "steps": [
+        {
+          "say": "naero",
+          "text": "기록을 펼치기 전에, 지금 드는 생각을 먼저 남겨 둘게요. 이 사람은 어느 정도의 벌을 받아야 할까요?",
+          "textAgain": "기록을 펼치기 전에 남겨 둔 첫인상이 있었죠. 그때 이 사람에게 어느 정도의 벌이 맞다고 봤는지 다시 볼게요.",
+          "focus": "photo"
+        },
+        {
+          "say": "nambul",
+          "look": {
+            "nambul": "guide-neutral",
+            "naero": "read-thinking"
+          },
+          "text": "정답은 없어요. 기사만 읽고 떠오르는 대로 골라 봐요.",
+          "textAgain": "그때는 기사만 읽고 떠오르는 대로 하나를 골랐었어요."
+        },
+        {
+          "say": "nambul",
+          "look": {
+            "nambul": "guide-happy"
+          },
+          "text": "그래서 신문사 독자 의견 엽서를 가져왔어요. 여기에 첫인상을 적어 보내 주세요.",
+          "textAgain": "그때 보낸 독자 의견 엽서를 다시 가져왔어요. 어떤 첫인상이었는지 볼까요?"
+        },
+        {
+          "card": "preJudgment",
+          "look": {
+            "naero": "read-thinking",
+            "nambul": "read-thinking"
+          }
+        }
+      ]
+    },
+    "3": {
+      "title": "2막 재판",
+      "scene": "court",
+      "procedures": [
+        "인정신문",
+        "모두진술",
+        "쟁점 정리",
+        "증거조사",
+        "피고인신문"
+      ],
+      "look": {
+        "naero": "role:prosecutor",
+        "nambul": "role:defense"
+      },
+      "steps": [
+        {
+          "say": "narrator",
+          "cameo": "naero",
+          "hideCast": true,
+          "delay": 500,
+          "proc": 0,
+          "section": 2,
+          "text": "재판을 시작합니다. 재판장은 당신이에요. 먼저 피고인 A씨가 본인이 맞는지 확인합니다."
+        },
+        {
+          "say": "naero",
+          "role": "검사",
+          "text": "이번 재판에서 저는 검사 자리를 맡을게요."
+        },
+        {
+          "say": "nambul",
+          "role": "변호인",
+          "text": "저는 변호인 자리예요. 둘 다 맡은 쪽의 주장만 전해요."
+        },
+        {
+          "say": "naero",
+          "role": "검사",
+          "proc": 1,
+          "card": "indict",
+          "text": "공소사실을 말씀드리겠습니다. 피고인은 피해자에게 빌린 돈을 갚지 못해 오래 다퉈 왔습니다."
+        },
+        {
+          "say": "naero",
+          "role": "검사",
+          "card": "indict",
+          "text": "사건 당일, 집을 찾아온 피해자와 말다툼을 하다가 집 안에 있던 흉기로 피해자를 살해했습니다. 적용 법조는 형법 제250조 제1항, 살인입니다."
+        },
+        {
+          "say": "nambul",
+          "role": "변호인",
+          "card": "plea",
+          "text": "피고인은 공소사실을 모두 인정합니다."
+        },
+        {
+          "say": "nambul",
+          "role": "변호인",
+          "card": "plea",
+          "text": "다만 미리 계획한 일이 아니라, 말다툼 중에 우발적으로 벌어진 일이라는 점을 살펴 주시기 바랍니다."
+        },
+        {
+          "say": "narrator",
+          "cameo": "naero",
+          "proc": 2,
+          "card": "issues",
+          "text": "피고인이 범행을 인정했으니, 남은 쟁점은 얼마나 무겁게 벌할지예요."
+        },
+        {
+          "say": "narrator",
+          "cameo": "naero",
+          "card": "issues",
+          "text": "범행 경위, 범행 뒤의 행동, 피해 회복 노력. 이 세 가지를 눈여겨보세요."
+        },
+        {
+          "say": "naero",
+          "role": "검사",
+          "proc": 3,
+          "card": "evidence",
+          "ev": 0,
+          "text": "검사 측 증거입니다. 두 사람 사이에 빌린 돈 문제로 오래 이어진 다툼을 보여 주는 기록입니다."
+        },
+        {
+          "say": "naero",
+          "role": "검사",
+          "card": "evidence",
+          "ev": 1,
+          "text": "사건 당일, 피해자가 돈 이야기를 하려고 피고인의 집을 찾아간 사실입니다."
+        },
+        {
+          "say": "naero",
+          "role": "검사",
+          "card": "evidence",
+          "ev": 2,
+          "text": "말다툼 끝에 집 안에 있던 흉기가 사용됐고, 피고인은 구호 조치 없이 집을 나갔습니다."
+        },
+        {
+          "say": "naero",
+          "role": "검사",
+          "card": "evidence",
+          "ev": 3,
+          "text": "피해자에게는 부양하던 어린 자녀 둘이 있고, 유족은 엄벌을 원한다는 진술입니다."
+        },
+        {
+          "say": "nambul",
+          "role": "변호인",
+          "card": "evidence",
+          "ev": 4,
+          "text": "변호인 측 증거입니다. 피고인이 수사 초기부터 범행을 인정했다는 진술 기록입니다."
+        },
+        {
+          "say": "nambul",
+          "role": "변호인",
+          "card": "evidence",
+          "ev": 5,
+          "text": "피해 회복을 위해 5,000만 원을 공탁한 자료입니다."
+        },
+        {
+          "say": "nambul",
+          "role": "변호인",
+          "card": "evidence",
+          "ev": 6,
+          "confirm": 2,
+          "text": "피고인에게 형사처벌 전력이 없다는 기록도 함께 제출합니다."
+        },
+        {
+          "say": "narrator",
+          "cameo": "nambul",
+          "proc": 4,
+          "section": 3,
+          "look": {
+            "naero": "role:prosecutor",
+            "nambul": "role:actor"
+          },
+          "tags": {
+            "nambul": "A씨 역"
+          },
+          "spots": {
+            "nambul": "stand"
+          },
+          "text": "이제 피고인에게 직접 묻습니다. 남불이 변호인석에서 일어나 A씨 자리에 서고, 검사 내로가 물어요."
+        },
+        {
+          "say": "naero",
+          "role": "검사",
+          "text": "피고인은 그날 피해자를 만나기 전부터 해칠 생각이 있었습니까?"
+        },
+        {
+          "say": "nambul",
+          "role": "A씨 역",
+          "text": "아닙니다. 돈 이야기를 하다가 말다툼이 커졌고, 그러다 그렇게 됐습니다."
+        },
+        {
+          "say": "naero",
+          "role": "검사",
+          "text": "범행 뒤 피해자를 두고 집을 나간 것은 사실입니까?"
+        },
+        {
+          "say": "nambul",
+          "role": "A씨 역",
+          "text": "…네, 사실입니다."
+        },
+        {
+          "say": "naero",
+          "role": "검사",
+          "text": "지금 그 일을 어떻게 생각합니까?"
+        },
+        {
+          "say": "nambul",
+          "role": "A씨 역",
+          "confirm": 3,
+          "text": "제가 한 일을 모두 인정합니다. 깊이 반성하고 있습니다."
+        },
+        {
+          "say": "naero",
+          "role": "검사",
+          "section": 4,
+          "text": "이상으로 피고인 신문을 마치겠습니다."
+        },
+        {
+          "say": "nambul",
+          "role": "변호인",
+          "look": {
+            "nambul": "role:defense"
+          },
+          "tags": {
+            "nambul": ""
+          },
+          "spots": {
+            "nambul": ""
+          },
+          "confirm": 4,
+          "next": "판결로",
+          "text": "변호인도 추가 질문 없습니다."
+        }
+      ]
+    },
+    "4": {
+      "title": "(건너뜀) 판결 전 정리 — 3막 사건 요약 장으로 옮김",
+      "scene": "court",
+      "look": {
+        "naero": "read-thinking",
+        "nambul": "idle-neutral"
+      },
+      "steps": [
+        {
+          "say": "naero",
+          "role": "안내",
+          "card": "summary",
+          "text": "지금까지 읽은 내용을 한 장에 모았어요."
+        },
+        {
+          "say": "nambul",
+          "role": "안내",
+          "card": "summary",
+          "look": {
+            "nambul": "guide-neutral",
+            "naero": "idle-neutral"
+          },
+          "text": "검사 측은 구호 조치 없이 현장을 떠난 점과 유족의 엄벌 의사를 강조했어요."
+        },
+        {
+          "say": "naero",
+          "role": "안내",
+          "card": "summary",
+          "look": {
+            "naero": "guide-neutral",
+            "nambul": "idle-neutral"
+          },
+          "text": "변호인 측은 우발적인 범행이라는 점, 그리고 범행 인정 · 반성 · 공탁을 강조했어요."
+        },
+        {
+          "say": "nambul",
+          "role": "안내",
+          "look": {
+            "nambul": "react-surprised",
+            "naero": "read-thinking"
+          },
+          "text": "잠깐, 반대로 보면요? 내가 유족이라면, 내가 피고인이라면. 양쪽 자리에 한 번씩 서 보고 정해요."
+        },
+        {
+          "say": "naero",
+          "role": "안내",
+          "look": {
+            "naero": "guide-happy",
+            "nambul": "idle-neutral"
+          },
+          "confirm": "verdict",
+          "next": "판결 내리러 가기",
+          "text": "준비되면 판결로 넘어가요. 여기서부터는 당신이 판사예요."
+        }
+      ]
+    },
+    "5": {
+      "title": "3막 내 판결",
+      "scene": "court",
+      "procedures": [
+        "검사 의견",
+        "최종변론",
+        "최후진술",
+        "판결"
+      ],
+      "look": {
+        "naero": "role:prosecutor",
+        "nambul": "role:defense"
+      },
+      "steps": [
+        {
+          "say": "naero",
+          "role": "검사",
+          "proc": 0,
+          "text": "검사 측 의견입니다. 피고인은 구호 조치 없이 현장을 떠났고, 유족은 엄벌을 원합니다. 엄한 처벌을 구합니다."
+        },
+        {
+          "say": "nambul",
+          "role": "변호인",
+          "proc": 1,
+          "text": "변호인 측 최종변론입니다. 우발적인 범행이었고, 피고인은 범행을 인정하며 5,000만 원을 공탁했습니다. 이 점을 살펴 주십시오."
+        },
+        {
+          "say": "nambul",
+          "role": "A씨 역",
+          "proc": 2,
+          "look": {
+            "nambul": "role:actor"
+          },
+          "tags": {
+            "nambul": "A씨 역"
+          },
+          "spots": {
+            "nambul": "stand"
+          },
+          "text": "제가 한 일을 깊이 반성하고 있습니다."
+        },
+        {
+          "say": "naero",
+          "role": "판사",
+          "proc": 3,
+          "look": {
+            "naero": "role:judge"
+          },
+          "spots": {
+            "nambul": ""
+          },
+          "text": "이제 판결을 내려 주십시오. 형벌의 종류와 형량, 그리고 양형에 고려한 요소를 정해 주십시오."
+        },
+        {
+          "proc": 3,
+          "card": "verdict",
+          "look": {
+            "naero": "read-thinking"
+          },
+          "board": "full"
+        }
+      ]
+    },
+    "6": {
+      "title": "4막 AI 판결",
+      "scene": "court",
+      "look": {
+        "naero": "guide-neutral",
+        "nambul": "idle-neutral"
+      },
+      "steps": [
+        {
+          "say": "nambul",
+          "look": {
+            "naero": "deform:ranma",
+            "nambul": "deform:ranma"
+          },
+          "text": "이제 AI 판사의 판결을 확인해 볼게요."
+        },
+        {
+          "say": "law",
+          "law": "trio",
+          "text": "양쪽을 함께 보겠습니다. 판단 요소를 하나씩 짚어 보겠습니다.",
+          "textNoFactors": "양쪽을 함께 보겠습니다."
+        },
+        {
+          "factors": true
+        },
+        {
+          "system": "AI 판사들이 의견을 맞추고 있어요",
+          "law": "think",
+          "auto": 300
+        },
+        {
+          "say": "law",
+          "law": "deliver",
+          "text": "합의 결과를 말씀드리겠습니다."
+        },
+        {
+          "say": "law",
+          "law": "deliver",
+          "card": "ai",
+          "text": "{penalty}입니다.\n{summary}입니다."
+        },
+        {
+          "say": "naero",
+          "role": "안내",
+          "text": "AI 판사는 {penalty을} 선고했어요."
+        },
+        {
+          "say": "nambul",
+          "role": "안내",
+          "confirm": "court",
+          "next": "실제 판결 확인하기",
+          "text": "그렇다면 실제 판결은 어떨까요?"
+        }
+      ]
+    },
+    "7": {
+      "title": "5막 실제 판결",
+      "scene": "court",
+      "look": {
+        "naero": "role:judge",
+        "nambul": "role:actor"
+      },
+      "steps": [
+        {
+          "say": "naero",
+          "role": "판사",
+          "text": "지금부터 판결을 선고하겠습니다. 피고인은 일어서 주시기 바랍니다."
+        },
+        {
+          "say": "nambul",
+          "role": "A씨 역",
+          "text": "…네."
+        },
+        {
+          "say": "naero",
+          "role": "판사",
+          "card": "court-penalty",
+          "board": "reading",
+          "text": "주문. {order}"
+        },
+        {
+          "say": "naero",
+          "role": "판사",
+          "card": "court-reasoning",
+          "board": "reading",
+          "text": "판결 이유를 말씀드리겠습니다."
+        },
+        {
+          "say": "naero",
+          "role": "판사",
+          "card": "court-excerpt",
+          "board": "reading",
+          "text": "판결문에는 이렇게 적었습니다."
+        },
+        {
+          "say": "naero",
+          "role": "판사",
+          "card": "court-plain",
+          "board": "reading",
+          "text": "쉽게 풀면 이런 뜻입니다."
+        },
+        {
+          "say": "naero",
+          "role": "판사",
+          "card": "court-factors",
+          "board": "reading",
+          "text": "재판부가 무겁게, 가볍게 본 요소입니다."
+        },
+        {
+          "say": "naero",
+          "role": "판사",
+          "confirm": "compare",
+          "next": "세 판결 비교하기",
+          "text": "피고인은 이 판결에 불복하는 경우 7일 이내에 상소할 수 있습니다. 이것으로 선고를 마치겠습니다."
+        }
+      ]
+    },
+    "8": {
+      "title": "6막 세 판결 비교",
+      "scene": "sheet",
+      "look": {
+        "naero": "idle-neutral",
+        "nambul": "idle-neutral"
+      },
+      "steps": [
+        {
+          "focus": "front",
+          "from": "photo",
+          "say": "nambul",
+          "look": {
+            "naero": "idle-neutral",
+            "nambul": "react-surprised"
+          },
+          "text": "앗, 신문이에요! 우리가 본 사건이 다음 날 신문에 실렸어요."
+        },
+        {
+          "focus": "front",
+          "say": "naero",
+          "look": {
+            "naero": "guide-neutral",
+            "nambul": "idle-neutral"
+          },
+          "text": "제목이 '같은 사건, 세 개의 판결'이에요. 그중 하나는 내가 내린 판결이고요."
+        },
+        {
+          "focus": "verdicts",
+          "say": "naero",
+          "look": {
+            "naero": "read-thinking",
+            "nambul": "idle-neutral"
+          },
+          "text": "{vsCourt}"
+        },
+        {
+          "focus": "verdicts",
+          "say": "nambul",
+          "look": {
+            "naero": "idle-neutral",
+            "nambul": "guide-neutral"
+          },
+          "text": "{vsAi}"
+        },
+        {
+          "focus": "letters",
+          "say": "nambul",
+          "look": {
+            "naero": "idle-neutral",
+            "nambul": "react-surprised"
+          },
+          "text": "어, 이 엽서는…! 우리가 처음에 받았던 독자 의견이에요. 기사만 읽고 보낸 첫인상이 신문에 실렸어요."
+        },
+        {
+          "focus": "letters",
+          "say": "naero",
+          "look": {
+            "naero": "guide-neutral",
+            "nambul": "idle-neutral"
+          },
+          "text": "그때는 「{pre}」이라고 적었어요. 지금의 판결과 나란히 놓고 볼 뿐, 맞고 틀리는 건 아니에요."
+        },
+        {
+          "focus": "letters",
+          "say": "nambul",
+          "look": {
+            "naero": "idle-neutral",
+            "nambul": "guide-neutral"
+          },
+          "text": "편집부가 한 줄 달아 뒀어요. “{editor}”"
+        },
+        {
+          "focus": "factors",
+          "say": "nambul",
+          "look": {
+            "naero": "read-thinking",
+            "nambul": "read-thinking"
+          },
+          "text": "요소마다 셋이 어떻게 봤는지 나란히 실렸어요. 어디서 갈렸는지 한눈에 보여요!"
+        },
+        {
+          "focus": "rules",
+          "say": "naero",
+          "look": {
+            "naero": "guide-neutral",
+            "nambul": "idle-neutral"
+          },
+          "text": "같게 본 것도, 다르게 본 것도 있어요. 정답을 고르는 게 아니라, 나는 무엇을 무겁게 봤는지 보는 거예요."
+        },
+        {
+          "focus": "cast",
+          "say": "nambul",
+          "look": {
+            "naero": "guide-happy",
+            "nambul": "guide-happy"
+          },
+          "text": "이번 사건에서 우리가 맡았던 모습이에요. 함께 봐 줘서 고마워요!"
+        },
+        {
+          "focus": "front",
+          "say": "naero",
+          "look": {
+            "naero": "guide-happy",
+            "nambul": "guide-happy"
+          },
+          "text": "이번 사건은 여기까지예요. 다음엔 무엇을 해 볼까요?",
+          "choices": "end"
+        }
+      ]
+    }
+  }
+}

@@ -86,6 +86,60 @@ public class LegalCase {
 	@UpdateTimestamp
 	private Instant updatedAt;
 
+	/**
+	 * 관리자가 처음 손대면 DRAFT → REVIEW (API 명세 8-2, 8-3 #3). 이미 REVIEW · PUBLISHED면 그대로 둔다.
+	 * 되돌리는 경로(REVIEW → DRAFT)는 두지 않는다
+	 */
+	public void startReview() {
+		if (status == CaseStatus.DRAFT) {
+			status = CaseStatus.REVIEW;
+		}
+	}
+
+	/** 공개 (A-13). 공개 조건 확인은 호출하는 쪽(관리자 서비스)이 한다 */
+	public void publish(Instant at) {
+		this.status = CaseStatus.PUBLISHED;
+		this.publishedAt = at;
+	}
+
+	// 관리자 사건 내용 수정 (A-11). 값 검사는 AdminCaseEditService가 API 명세 A-11 표대로 먼저 한다
+	public void changeTitle(String title) {
+		this.title = title;
+	}
+
+	public void changeShortIntro(String shortIntro) {
+		this.shortIntro = shortIntro;
+	}
+
+	public void changeOverview(String overview) {
+		this.overview = overview;
+	}
+
+	public void changeKeywords(List<String> keywords) {
+		this.keywords = List.copyOf(keywords);
+	}
+
+	public void changeDifficulty(Difficulty difficulty) {
+		this.difficulty = difficulty;
+	}
+
+	public void changeEstimatedMinutes(Integer estimatedMinutes) {
+		this.estimatedMinutes = estimatedMinutes;
+	}
+
+	public void changeThumbnailUrl(String thumbnailUrl) {
+		this.thumbnailUrl = thumbnailUrl;
+	}
+
+	public void changeRecommendedRange(Integer minMonths, Integer maxMonths) {
+		this.recommendedMinMonths = minMonths;
+		this.recommendedMaxMonths = maxMonths;
+	}
+
+	public void changeRecommendedBasis(String recommendedBasis) {
+		this.recommendedBasis = recommendedBasis;
+	}
+
 	/** 사용자에게 노출되는 사건인지 */
 	public boolean isPublished() {
 		return status == CaseStatus.PUBLISHED;

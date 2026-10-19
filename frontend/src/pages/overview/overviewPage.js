@@ -1,4 +1,223 @@
 import { renderProgressSidebar } from '../review/progressSidebar.js';
+import { renderStage, ACT_JUMP_KEY } from '../../components/stage.js';
+import { SCRIPTS } from '../../content/scripts.js';
+import { API_MODE } from '../../api/config.js';
+import courtFacts from '../../content/courtFacts.json';
+import { caseNewspaper, paperFromCase } from '../../components/newspaperFront.js';
+import { reducedMotion } from '../../utils/motion.js';
+
+function element(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+function button(text, action, className = 'secondary-button') {
+  const node = element('button', className, text);
+  node.type = 'button';
+  node.addEventListener('click', action);
+  return node;
+}
+
+// 사건 번호(legal_case.id)는 DB마다 다를 수 있어 번호만으로 고르지 않는다. 대본의 제목이 API 제목과 같을 때만 무대를 쓴다
+export function scriptFor(caseId, title) {
+  const candidate = SCRIPTS[caseId];
+  return candidate?.title === title ? candidate : undefined;
+}
+
+// 체험 화면 윗줄: ← 목록 · 사건 제목 · 죄명 · 진행(1 / 6). S-03과 S-20(대본 있는 사건)이 같은 줄을 쓴다
+export function caseTopbar(info, navigate) {
+  const header = element('header', 'case-topbar');
+  const progress = element('div', 'top-progress');
+  const meter = element('progress');
+  meter.max = 6;
+  meter.value = 1;
+  meter.setAttribute('aria-label', '진행 상황');
+  progress.append(meter, element('span', '', '1 / 6'));
+  header.append(button('← 목록', () => navigate('list'), 'back-button'),
+    element('strong', 'case-title', info.title),
+    ...(info.chargeName ? [element('span', 'case-badge', info.chargeName)] : []), progress);
+  return header;
+}
+
+// 1 · 2막 무대를 화면에 놓는다. S-03과 S-20이 같은 짜임으로 그려 두 화면이 똑같이 보이게 한다(FE-32).
+// 화면 전체가 S-02와 같은 신문 지면이다: 책상(펠트) 위에 지면 한 장, 그 위에 무대(캐릭터 · 대사창은 화면 아래 고정)
+export function mountStagePage(root, { stage }) {
+  root.className = 'case-list-page case-paper-page overview-page';
+  const desk = element('div', 'desk');
+  desk.setAttribute('aria-hidden', 'true');
+  root.replaceChildren(desk, stage);
+}
+
+// 보낸 사전 판단(형량 구간 이름)을 이 브라우저에 적어 둔다. 진행 중인 체험은 서버에서 다시 읽을 API가 없어서(API 14는 완료 뒤에만),
+// S-20에서 1막부터 다시 볼 때 "이미 보낸 엽서"에 적는 데 쓴다. 없으면 이름 없이 안내만 한다
+const SENT_KEY = 'nlnb-sent-pre-judgment';
+function readSent() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SENT_KEY));
+    return saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {}; // 손상 · 직접 수정한 값(문자열 · 숫자 · 배열)은 버린다
+  } catch { return {}; }
+}
+export const sentPreJudgment = (caseId) => readSent()[caseId] ?? null;
+function rememberSent(caseId, label) { try { localStorage.setItem(SENT_KEY, JSON.stringify({ ...readSent(), [caseId]: label })); } catch { /* 저장소를 못 쓰면 엽서에 이름만 빠진다 */ } }
+
+// 모든 사건 1막의 첫 대사(내로가 말을 건다). 사건마다의 다음 대사는 대본이 잇는다
+const INTRO_STEP = { say: 'naero', text: '오늘 신문에 실린 사건이에요. 기사에 나온 내용만 같이 읽어 볼게요.', focus: 'head' };
+
+// 1 · 2막 무대(흐름 목업). 2막 보드는 사전 판단 폼이고, 폼은 API 4 응답(형량 구간)이 오면 setOverview로 채운다.
+// parked: S-20(체험 전) — 지면만 보이고 캐릭터 · 대사는 stage.release()로 시작한다. earRight: 지면 오른쪽 귀(S-20 "이어서 하기")
+// paper: 지면에 실을 기사(paperFromCase — 메인 · S-02와 같은 사건 데이터). 없으면 대본 지면
+// prompt: S-20에서 진행 중인 체험을 "시작하기"로 열 때 맨 앞에서 내로가 묻는 장면 { text, choices }
+export function caseStage({ caseId, api, navigate, script, info, paper = script.paper, parked = false, earRight, prompt }) {
+  const cards = {};
+  const first = prompt ? [{ say: 'naero', text: prompt.text, choices: 'prompt', focus: 'all' }, INTRO_STEP] : [INTRO_STEP];
+  const acts = { ...script.acts, 1: { ...script.acts[1], steps: [...first, ...script.acts[1].steps] } };
+  const sheet = caseNewspaper({ paper, info, navigate, ...(earRight ? { earRight } : {}) });
+  const stage = renderStage({
+    script: { ...script, acts }, order: ['1', '2'], cards, inputCards: ['preJudgment'], sheet, layout: 'paper', parked,
+    choices: prompt ? { prompt: prompt.choices } : {},
+    onRestart: restartMock(caseId), onJump: jumpActMock(caseId),
+  });
+  let submitting = false;
+  let labels = {};
+
+  async function submit(rangeOptionId, trigger, notice) {
+    if (submitting) return;
+    submitting = true;
+    trigger.disabled = true;
+    trigger.setAttribute('aria-busy', 'true');
+    notice.textContent = '';
+    try {
+      // MVP는 작용 요소(factorIds)를 보내지 않는다. (REQ-093 확장)
+      await api.postPreJudgment(caseId, { rangeOptionId });
+      if (labels[rangeOptionId]) rememberSent(caseId, labels[rangeOptionId]);
+      await postmark(); // 접수 도장을 찍고 잠깐 보여 준 뒤 넘어간다(보낸 순간이 남게)
+      // 제출 뒤 사진 속으로 들어가는 연출을 보여 주고 S-04로 간다
+      if (stage.isConnected) await stage.enterPhoto();
+      if (stage.isConnected) await stage.interlude(courtFacts);
+      if (stage.isConnected) navigate('review', { caseId });
+    } catch (error) {
+      if (!stage.isConnected) return;
+      trigger.disabled = false;
+      trigger.removeAttribute('aria-busy');
+      notice.textContent = '제출하지 못했어요. 잠시 후 다시 시도해 주세요.';
+    } finally {
+      submitting = false;
+    }
+  }
+
+  // 보낸 엽서에 접수 도장(소인)을 찍는다. 움직임 줄이기면 도장만 바로 찍히고 기다리지 않는다
+  let sendingCard = null;
+  async function postmark() {
+    if (!sendingCard) return;
+    const mark = element('div', 'postcard-postmark');
+    mark.setAttribute('aria-hidden', 'true');
+    mark.append(element('b', '', '접수 완료'), element('small', '', '내Law남불 신문 편집부'));
+    sendingCard.append(mark);
+    sendingCard.classList.add('is-sent');
+    if (!reducedMotion()) await new Promise((resolve) => setTimeout(resolve, 900));
+  }
+
+  // 독자 의견 엽서 머리(제목 · 받는 곳 · 우표)
+  function postcardHead() {
+    const head = element('div', 'postcard-head');
+    const title = element('div');
+    title.append(element('h2', '', '독자 의견 엽서'), element('p', '', '받는 곳: 내Law남불 신문 편집부 · 기사만 읽고 남기는 첫인상'));
+    const stamp = element('span', 'postcard-stamp', '내Law\n남불');
+    stamp.setAttribute('aria-hidden', 'true');
+    stamp.style.whiteSpace = 'pre-line';
+    head.append(title, stamp);
+    return head;
+  }
+
+  // 이미 사전 판단을 낸 사건을 1막부터 다시 볼 때(S-20 "시작하기"): 엽서 차례에 "이미 보낸 엽서"를 보여 주고 저장된 단계로 잇는다.
+  // MVP는 사건당 1회 체험 · 판단 수정 불가(IA 결정 5)라 다시 고르게 하지 않는다
+  function setAlreadySent(onContinue, sent = sentPreJudgment(caseId)) {
+    const card = element('div', 'postcard');
+    const go = element('button', 'primary-button', '이어서 하기 ▶');
+    go.type = 'button';
+    go.addEventListener('click', onContinue);
+    const actions = element('div', 'section-actions');
+    actions.append(go);
+    const written = element('div', 'postcard-sent');
+    written.append(element('p', 'postcard-sent-q', '이 사건, 어느 정도의 형량이 맞다고 생각하나요?'),
+      element('p', sent ? 'postcard-sent-a' : 'postcard-sent-none', sent ?? '이 브라우저에는 보낸 판단이 적혀 있지 않아요.'));
+    card.append(postcardHead(), written, element('p', 'guide-box', '이 엽서는 이미 보냈어요. 보낸 판단은 바꿀 수 없어요. 남긴 단계부터 이어서 볼게요.'), actions);
+    cards.preJudgment = card;
+    stage.refresh('preJudgment');
+  }
+
+  function setOverview({ rangeOptions }) {
+    labels = Object.fromEntries(rangeOptions.map(({ rangeOptionId, label }) => [rangeOptionId, label]));
+    // 독자 의견 엽서(신문 지면 무대의 팝업): 엽서 머리(제목 · 받는 곳 · 우표) + 안내 + 형량 고르기.
+    // 되돌릴 수 없는 판단이라 두 박자: 고르기 → 엽서 안 확인("보낼까요?") → 보내기(접수 도장)
+    const card = element('div', 'postcard');
+    sendingCard = card;
+    const drawForm = (selectedId) => {
+      card.replaceChildren(postcardHead(), preJudgmentGuide(), preJudgmentForm(rangeOptions, askConfirm, { submitLabel: '이 판단으로 정하기 ▶', pendingLabel: '형량을 하나 골라 주세요', selectedId }));
+    };
+    function askConfirm(rangeOptionId) {
+      const written = element('div', 'postcard-sent');
+      written.append(element('p', 'postcard-sent-q', '이 사건, 어느 정도의 형량이 맞다고 생각하나요?'), element('p', 'postcard-sent-a', labels[rangeOptionId]));
+      const notice = element('p', 'submit-error');
+      notice.setAttribute('role', 'alert');
+      const back = element('button', 'secondary-button', '다시 고르기');
+      back.type = 'button';
+      back.addEventListener('click', () => { drawForm(rangeOptionId); card.querySelector('input:checked')?.focus(); });
+      const send = element('button', 'primary-button', '엽서 보내고 재판 보러 가기 ▶');
+      send.type = 'button';
+      send.addEventListener('click', () => submit(rangeOptionId, send, notice).then(() => { back.disabled = send.disabled; }));
+      const actions = element('div', 'section-actions');
+      actions.append(back, send);
+      card.replaceChildren(postcardHead(), written, element('p', 'submit-warning', '이 판단으로 보낼까요? 보내면 바꿀 수 없어요.'), notice, actions);
+      send.focus();
+    }
+    drawForm();
+    cards.preJudgment = card;
+    stage.refresh('preJudgment');
+  }
+  return { stage, setOverview, setAlreadySent };
+}
+
+const preJudgmentGuide = () => element('p', 'guide-box', '지금은 뉴스에서 볼 수 있는 정도의 정보만 있어요. 기사로 이 사건을 접했다고 생각하고 판단해 보세요.');
+
+// pendingLabel: 아직 고르지 않았을 때 버튼 글자(엽서: "형량을 하나 골라 주세요"). 없으면 처음부터 submitLabel
+function preJudgmentForm(rangeOptions, submit, { submitLabel = '판단 제출하고 사건 자세히 보기', pendingLabel, selectedId } = {}) {
+  const form = element('form', 'pre-judgment-form');
+  form.noValidate = true;
+  const fieldset = element('fieldset');
+  fieldset.append(element('legend', '', '이 사건, 어느 정도의 형량이 맞다고 생각하나요?'));
+  const options = element('div', 'range-options');
+  options.style.setProperty('--rows', String(Math.ceil(rangeOptions.length / 2))); // 두 열일 때 위 → 아래로 읽게(가벼운 형량 → 무거운 형량)
+  const warning = element('p', 'submit-warning', '제출하면 이 판단은 바꿀 수 없어요.');
+  const notice = element('p', 'submit-error');
+  notice.setAttribute('role', 'alert');
+  const submitButton = element('button', 'primary-button', pendingLabel ?? submitLabel);
+  const ready = () => { submitButton.disabled = false; submitButton.textContent = submitLabel; };
+  submitButton.type = 'submit';
+  submitButton.disabled = true;
+  rangeOptions.forEach(({ rangeOptionId, label }) => {
+    const item = element('label', 'range-option');
+    const input = element('input');
+    input.type = 'radio';
+    input.name = 'rangeOptionId';
+    input.value = String(rangeOptionId);
+    input.addEventListener('change', ready);
+    if (rangeOptionId === selectedId) { input.checked = true; ready(); }
+    item.append(input, element('span', '', label));
+    options.append(item);
+  });
+  fieldset.append(options);
+  const actions = element('div', 'section-actions');
+  actions.append(submitButton);
+  form.append(fieldset, warning, notice, actions);
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const checked = form.querySelector('input[name="rangeOptionId"]:checked');
+    if (checked) submit(Number(checked.value), submitButton, notice);
+  });
+  return form;
+}
 
 // S-03 사건 개요 · 사전 판단
 export async function renderOverviewPage(container, { caseId, api, navigate }) {
@@ -10,18 +229,6 @@ export async function renderOverviewPage(container, { caseId, api, navigate }) {
   let loading = false;
   let submitting = false;
 
-  function element(tag, className, text) {
-    const node = document.createElement(tag);
-    if (className) node.className = className;
-    if (text !== undefined) node.textContent = text;
-    return node;
-  }
-  function button(text, action, className = 'secondary-button') {
-    const node = element('button', className, text);
-    node.type = 'button';
-    node.addEventListener('click', action);
-    return node;
-  }
   // 상태 불일치(INVALID_STATE, 예: 이미 제출함)는 withErrorRedirect가 현재 상태의 화면으로 먼저 이동시킨다
   // (app/errorRedirect.js, API 명세 1-6 · REQ-103). 이동한 뒤에는 active()가 false라 아래 안내를 그리지 않는다.
   function showError(error) {
@@ -40,6 +247,7 @@ export async function renderOverviewPage(container, { caseId, api, navigate }) {
     }
     root.replaceChildren(box);
   }
+  // 대본이 없는 사건(MVP 화면)의 제출: 제출하면 S-04로 간다
   async function submit(rangeOptionId, trigger, notice) {
     if (submitting) return;
     submitting = true;
@@ -47,7 +255,6 @@ export async function renderOverviewPage(container, { caseId, api, navigate }) {
     trigger.setAttribute('aria-busy', 'true');
     notice.textContent = '';
     try {
-      // MVP는 작용 요소(factorIds)를 보내지 않는다. (REQ-093 확장)
       await api.postPreJudgment(caseId, { rangeOptionId });
       if (active()) navigate('review', { caseId });
     } catch (error) {
@@ -59,20 +266,18 @@ export async function renderOverviewPage(container, { caseId, api, navigate }) {
       submitting = false;
     }
   }
-  function draw({ case: info, rangeOptions }) {
-    const header = element('header', 'case-topbar');
-    const progress = element('div', 'top-progress');
-    const meter = element('progress');
-    meter.max = 6;
-    meter.value = 1;
-    meter.setAttribute('aria-label', '진행 상황');
-    progress.append(meter, element('span', '', '1 / 6'));
-    header.append(button('← 목록', () => navigate('list'), 'back-button'),
-      element('strong', 'case-title', info.title), element('span', 'case-badge', info.chargeName), progress);
-
+  function draw(data, detail) {
+    const { case: info, rangeOptions } = data;
+    const script = scriptFor(caseId, info.title);
+    if (script) {
+      // 1 · 2막 무대(신문 지면). 진행 표시는 지면 탭 줄의 막 칩이 맡는다. S-20(대본 있는 사건)과 같은 화면이다
+      const { stage, setOverview } = caseStage({ caseId, api, navigate, script, info: { ...(detail ?? {}), ...info, caseId }, paper: paperFromCase(detail, script.paper) });
+      setOverview(data);
+      mountStagePage(root, { stage });
+      return;
+    }
     const main = element('div', 'review-main');
     main.append(element('h1', 'page-heading', '사건 개요 · 사전 판단'));
-
     const overview = element('section', 'overview-box');
     const facts = element('dl', 'overview-facts');
     [['죄명', info.chargeName], ['범죄 분류', info.crimeCategoryLabel]].forEach(([label, value]) => {
@@ -81,46 +286,11 @@ export async function renderOverviewPage(container, { caseId, api, navigate }) {
       facts.append(row);
     });
     overview.append(element('h2', '', '사건 개요'), facts, element('p', 'overview-text', info.overview));
-
-    const guide = element('p', 'guide-box', '지금은 뉴스에서 볼 수 있는 정도의 정보만 있어요. 기사로 이 사건을 접했다고 생각하고 판단해 보세요.');
-
-    const form = element('form', 'pre-judgment-form');
-    form.noValidate = true;
-    const fieldset = element('fieldset');
-    fieldset.append(element('legend', '', '이 사건, 어느 정도의 형량이 맞다고 생각하나요?'));
-    const options = element('div', 'range-options');
-    rangeOptions.forEach(({ rangeOptionId, label }) => {
-      const item = element('label', 'range-option');
-      const input = element('input');
-      input.type = 'radio';
-      input.name = 'rangeOptionId';
-      input.value = String(rangeOptionId);
-      input.addEventListener('change', () => { submitButton.disabled = false; });
-      item.append(input, element('span', '', label));
-      options.append(item);
-    });
-    fieldset.append(options);
-
-    const warning = element('p', 'submit-warning', '제출하면 이 판단은 바꿀 수 없어요.');
-    const notice = element('p', 'submit-error');
-    notice.setAttribute('role', 'alert');
-    const submitButton = element('button', 'primary-button', '판단 제출하고 사건 자세히 보기');
-    submitButton.type = 'submit';
-    submitButton.disabled = true;
-    const actions = element('div', 'section-actions');
-    actions.append(submitButton);
-    form.append(fieldset, warning, notice, actions);
-    form.addEventListener('submit', (event) => {
-      event.preventDefault();
-      const checked = form.querySelector('input[name="rangeOptionId"]:checked');
-      if (checked) submit(Number(checked.value), submitButton, notice);
-    });
-
-    main.append(overview, guide, form);
+    main.append(overview, preJudgmentGuide(), preJudgmentForm(rangeOptions, submit));
     const layout = element('main', 'review-layout');
     layout.append(main);
     renderProgressSidebar(layout, { lastReviewedStep: 0, openStep: 1 });
-    root.replaceChildren(header, layout);
+    root.replaceChildren(caseTopbar(info, navigate), layout);
   }
   async function load() {
     if (loading || !active()) return;
@@ -130,9 +300,34 @@ export async function renderOverviewPage(container, { caseId, api, navigate }) {
     root.replaceChildren(message);
     try {
       const data = await api.getOverview(caseId);
-      if (active()) draw(data);
+      // 대본이 있는 사건은 지면 기사를 S-20과 같은 사건 데이터(API 16)로 싣는다. 못 받으면 대본 지면으로
+      const detail = scriptFor(caseId, data.case.title) ? await api.getCaseDetail(caseId).catch(() => null) : null;
+      if (active()) draw(data, detail);
     } catch (error) { showError(error); }
     finally { loading = false; }
   }
   await load();
+}
+
+// 무대의 "처음부터 다시"(목 데이터 전용): 목 저장소를 사건 시작 전으로 되돌리고 S-03을 새로 연다. 실제 API에서는 버튼을 달지 않는다
+export function restartMock(caseId) {
+  if (API_MODE !== 'mock') return undefined;
+  return async () => {
+    const { restart } = await import('../../mocks/mockExperienceStore.js');
+    restart();
+    window.location.assign(`/cases/${caseId}/start`);
+  };
+}
+
+// 막 버튼으로 바로 가기(목 데이터 전용, 테스트 기간): 목 상태를 그 막에 맞추고 막의 화면을 연다.
+// 무대는 ACT_JUMP_KEY를 한 번 읽어 그 막의 첫 장면에서 시작한다. 실제 API에서는 막 버튼이 눌리지 않는다
+const ACT_SCREENS = { 1: 'start', 2: 'start', 3: 'review', 4: 'summary', 5: 'verdict', 6: 'result/ai', 7: 'result/court', 8: 'result/compare' };
+export function jumpActMock(caseId) {
+  if (API_MODE !== 'mock') return undefined;
+  return async (act) => {
+    const { jumpToAct } = await import('../../mocks/mockExperienceStore.js');
+    jumpToAct(act);
+    try { sessionStorage.setItem(ACT_JUMP_KEY, String(act)); } catch { /* 저장소를 못 쓰면 막의 처음 장면에서 시작한다 */ }
+    window.location.assign(`/cases/${caseId}/${ACT_SCREENS[act]}`);
+  };
 }

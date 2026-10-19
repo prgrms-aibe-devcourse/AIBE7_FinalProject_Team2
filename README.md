@@ -39,7 +39,7 @@ JDK 17이 필요하다. 기본 JDK가 17이 아니면 `JAVA_HOME`을 17로 지�
 
 ```bash
 cd backend
-docker compose up -d      # PostgreSQL 컨테이너(lawnambul-postgres, 5432) 실행
+docker compose up -d      # PostgreSQL(lawnambul-postgres, 5432) · Redis(lawnambul-redis, 127.0.0.1:6379) 컨테이너 실행
 ./gradlew bootRun         # 서버 실행 (기본 8080, 시작할 때 Flyway가 스키마 · 시드를 넣는다)
 ```
 
@@ -70,9 +70,9 @@ ls backend/private-seed/seed                # R__10 · R__20 · R__30 세 파일
 - 서브모듈 안의 파일을 공개 저장소의 다른 위치(`db/seed` 등)로 **복사하지 않는다.** 공개 저장소의 커밋 메시지 · PR · Jira 댓글에도 사건 내용(형량 · 판단 요소 · 사실관계)을 쓰지 않는다.
 - 서브모듈은 `src/main/resources` 밖에 있어 jar에 들어가지 않고, `backend/.dockerignore`로 Docker 빌드에서도 뺀다.
 
-로컬 DB를 비우고 처음부터 다시 만들려면 `docker compose down -v && docker compose up -d`를 실행한다. (볼륨이 삭제된다)
+로컬 DB를 비우고 처음부터 다시 만들려면 `docker compose down -v && docker compose up -d`를 실행한다. (볼륨이 삭제된다 — 로컬 Redis 데이터도 함께 지워진다)
 
-테스트는 실제 PostgreSQL에 연결하므로 DB를 먼저 띄운 뒤 실행한다.
+테스트는 실제 PostgreSQL · Redis에 연결하므로 `docker compose up -d`로 둘 다 띄운 뒤 실행한다. (Redis는 BE-61에서 추가됐다. 전에 PostgreSQL만 띄워 뒀다면 `docker compose up -d`를 한 번 더 실행한다)
 
 ```bash
 ./gradlew test
@@ -88,6 +88,9 @@ ls backend/private-seed/seed                # R__10 · R__20 · R__30 세 파일
 | `DDL_AUTO` | `validate` | Hibernate 스키마 처리 방식 (스키마는 Flyway로만 바꾼다) |
 | `FLYWAY_LOCATIONS` | `classpath:db/migration` (`bootRun`은 자동: 가상 시드 + 실제 사건이 있으면 포함) | 마이그레이션 위치. 주면 `bootRun` 자동 설정보다 우선한다. 가상 시드는 `classpath:db/seed`, 실제 사건은 `filesystem:./private-seed/seed` |
 | `SWAGGER_ENABLED` | `false` | Swagger UI · OpenAPI 문서 노출. 로컬 · 개발에서만 `true`로 켠다 (`/swagger-ui/index.html`, `/v3/api-docs`) |
+| `ADMIN_BOOTSTRAP_EMAIL` · `ADMIN_BOOTSTRAP_PASSWORD` | 없음 | (확장, BE-39) 첫 관리자 계정. 둘 다 있고 그 이메일의 계정이 없을 때만 기동 시 한 번 만든다(비밀번호 12자 이상). 만든 뒤 환경변수를 지운다. `ADMIN_BOOTSTRAP_NAME`으로 표시 이름 지정(기본 `관리자`) |
+| `SESSION_COOKIE_SECURE` | `true` | (확장) 관리자 세션 · CSRF 쿠키의 Secure 속성. localhost는 Secure 쿠키를 그대로 받으므로 보통 바꿀 필요 없다 |
+| `ADMIN_SESSION_TIMEOUT` | `30m` | (확장) 관리자 세션 유지 시간 |
 
 운영 DB 계정은 이 저장소에 적지 않고 실행할 때 환경변수로만 넘긴다. 시드는 운영에 넣지 않는다.
 

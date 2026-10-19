@@ -1,4 +1,6 @@
 import { formatPenalty, formatDispositions } from '../../utils/judgmentFormat.js';
+import { SCRIPTS } from '../../content/scripts.js';
+import { renderComparisonStage, mountNewspaperStage } from './comparisonStage.js';
 
 const directionSymbols = { UP: '↑', DOWN: '↓' };
 const categoryLabels = { ALL_SAME: '셋 모두 같게 본 요소', ONLY_ME_MISSED: '나만 고려하지 않은 요소', DIVERGED: '판단이 엇갈린 요소' };
@@ -45,7 +47,15 @@ export async function renderComparisonPage(container, { caseId, caseHeader, api,
     return element('td', `matrix-direction${direction ? ` is-${direction.toLowerCase()}` : ' is-none'}`, direction ? directionSymbols[direction] : '—');
   }
 
+  // 대본의 제목이 사건 제목과 같을 때만 무대를 쓴다(S-03 ~ S-08과 같은 규칙). 보통은 7막 무대에서 이어지고 주소만 바뀐다
+  const candidate = SCRIPTS[caseId];
+  const script = candidate?.title === caseHeader.title ? candidate : undefined;
+
   function draw(data) {
+    if (script) {
+      mountNewspaperStage(root, { stage: renderComparisonStage({ script, data, caseId, caseTitle: caseHeader.title, navigate }) });
+      return;
+    }
     const { preToFinal, judgments, matrix, ruleSentences } = data;
 
     const header = element('header', 'case-topbar');

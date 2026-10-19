@@ -15,6 +15,15 @@ import org.springframework.transaction.annotation.Transactional;
 
 public interface ExperienceRepository extends JpaRepository<Experience, Long> {
 
+	/** 마이페이지(P-5) 체험 목록: 사용자의 사건마다 최근 회차 하나, 최근 순. 사건 제목 · 유형을 함께 읽는다 */
+	@Query("""
+		select e from Experience e join fetch e.legalCase
+		where e.anonymousUser.id = :anonymousUserId
+		  and e.attemptNo = (select max(e2.attemptNo) from Experience e2
+		                     where e2.anonymousUser = e.anonymousUser and e2.legalCase = e.legalCase)
+		order by e.updatedAt desc, e.id desc""")
+	List<Experience> findLatestPerCase(@Param("anonymousUserId") UUID anonymousUserId);
+
 	/** 내 체험: 익명 ID + 사건의 가장 최근 회차 (API 명세 1-3, MVP는 항상 1회차) */
 	Optional<Experience> findFirstByAnonymousUser_IdAndLegalCase_IdOrderByAttemptNoDesc(UUID anonymousUserId,
 		Long caseId);

@@ -4,10 +4,10 @@ MVP의 AI 판결은 서비스 안에서 만들지 않고, **팀이 오프라인�
 
 AI 판결 생성(3단계)은 두 가지 방법 중 하나로 한다. 외부 LLM 서비스에서 할 때의 주의 사항은 아래 "외부 LLM으로 생성할 때"를 따른다.
 
-- **API로 생성 (BE-30)**: `generate.py`가 공급자(OpenAI · Anthropic · Gemini) API를 직접 불러 여러 모델 · 여러 회차로 생성하고 검증까지 기록한다. 모델은 옵션으로 갈아끼우고, `compare.py`가 모델별 비교표를 만든다. 이것도 표준 라이브러리만 쓴다.
+- **API로 생성 (BE-30)**: `generate.py`가 공급자(OpenAI · Anthropic · Gemini · Groq · NVIDIA NIM) API를 직접 불러 여러 모델 · 여러 회차로 생성하고 검증까지 기록한다. 모델은 옵션으로 갈아끼우고, `compare.py`가 모델별 비교표를 만든다. 이것도 표준 라이브러리만 쓴다.
 - **채팅 화면에서 생성**: `build_prompt.py`로 프롬프트를 만들어 LLM 서비스에 붙여 넣고 응답을 파일로 저장한다. 저장한 응답은 `generate.py import`로 같은 기록에 넣어 비교할 수 있다.
 
-**전체 자동 실행 (BE-31)**: `pipeline.py`가 판결문 → 비식별화 → (사전 학습 점검) → 생성 → 회차 선택 → 적재를 한 명령으로 이어서 실행한다. 사람 검수 없이 **비공개로 적재하고, 관리자가 나중에 검수 · 공개한다(후검수)**. 아래 "파이프라인 (BE-31)". 아래 "작업 순서" 1 ~ 6단계는 단계별로 직접 돌릴 때의 방법이다.
+**전체 자동 실행 (BE-31)**: `pipeline.py`가 판결문 → 비식별화 → (사전 학습 점검) → (참고 자료 RAG) → 생성 → 회차 선택 → 적재를 한 명령으로 이어서 실행한다. 사람 검수 없이 **비공개로 적재하고, 관리자가 나중에 검수 · 공개한다(후검수)**. 아래 "파이프라인 (BE-31)". 아래 "작업 순서" 1 ~ 6단계는 단계별로 직접 돌릴 때의 방법이다.
 
 **형벌 종류**: 사형(`DEATH`) · 무기징역(`LIFE`) · 징역(`PRISON`) · 벌금(`FINE`)과, 사형 · 무기를 감경해 다른 형벌로 선고하는 경우(`reducedTo`)를 다룬다(ERD v1.4 · API 명세 9). 무죄는 MVP에서 뺐다.
 
@@ -17,13 +17,16 @@ AI 판결 생성(3단계)은 두 가지 방법 중 하나로 한다. 외부 LLM 
 | --- | --- |
 | `prompts/judgment_system.md` | AI 판결 생성 시스템 프롬프트 (원칙 · 판단 순서 · 출력 JSON 형식) |
 | `prompts/judgment_user.md` | 사건별 사용자 프롬프트 틀 |
+| `prompts/judgment_fewshot.md` | 판결 형식 예시(퓨샷). 가상 사기 사건이고 형량은 `⟨형량⟩`으로 가렸다. 시스템 프롬프트 뒤에 항상 붙는다 (BE-54) |
 | `prompts/contamination_check.md` | 사전 학습 점검 프롬프트 틀 (개요 · 죄명만) |
 | `prompts/axis_system.md` | 판단 요소 가치관 축 분류 프롬프트 (축 정의 · 출력 JSON 형식, BE-49) |
 | `build_prompt.py` | 사건 입력 JSON → AI 판결 생성 프롬프트 |
 | `validate_output.py` | 모델 응답 JSON 검증 (오류 · 경고) |
 | `check_contamination.py` | 사전 학습 점검 프롬프트 생성 · 응답 판정 (REQ-102) |
 | `to_seed_sql.py` | 검수 통과본 → 적재 SQL (`judgment` · `judgment_factor` · `ai_generation`) |
-| `llm.py` | LLM 공급자 공통 호출 (OpenAI · Anthropic · Gemini, 표준 라이브러리 HTTP). API 키는 환경변수로만 읽는다 (BE-30) |
+| `llm.py` | LLM 공급자 공통 호출 (OpenAI · Anthropic · Gemini · Groq · NVIDIA NIM, 표준 라이브러리 HTTP). API 키는 환경변수(`.env` 포함)로만 읽는다 (BE-30, 공급자 추가 BE-84) |
+| `env_file.py` | `.env` 파일을 읽어 아직 설정되지 않은 환경변수만 채운다. `llm.py`를 불러오는 시점에 자동으로 적용된다 (BE-86) |
+| `list_models.py` | 공급자에게 지금 쓸 수 있는 모델 ID를 물어본다 (OpenAI 호환 공급자만). `free_models.json`을 고치기 전에 확인하는 용도 (BE-84) |
 | `generate.py` | 여러 모델 · 여러 회차 AI 판결 생성 → 검증 → 실행 기록 (`out/runs/`). 채팅 응답 파일 넣기(`import`) (BE-30) |
 | `compare.py` | 실행 기록 → 모델별 비교표 (Markdown · CSV) (BE-30) |
 | `examples/` | 예시 사건(ERD 6장 가상 살인 사건 "빌린 돈 문제로 찾아온 지인을 살해한 사건") 입력 · AI 출력 · 실제 판결(내부 전용) |
@@ -35,6 +38,11 @@ AI 판결 생성(3단계)은 두 가지 방법 중 하나로 한다. 외부 LLM 
 | `pipeline.example.json` | 파이프라인 설정 예시 (복사해 `cases/`에 두고 고친다) |
 | `court_seed_sql.py` | 재판부 판결(BE-14 형식) → **비공개** 적재 SQL (`judgment` COURT · `judgment_factor`) (BE-38) |
 | `case_seed_sql.py` | 비식별화한 사건 파일 → 사건 콘텐츠 적재 SQL (`legal_case` DRAFT · 섹션 · 형벌 규칙 · 판단 요소 · 원본 판결문) (BE-31) |
+| `rag_store.py` · `prompts/rag_precedent_system.md` | RAG 유사 판례 저장소 적재: 판결문 비식별화 · 사실관계 요약 / 양형 이유 분리 → 임베딩 → 비공개 시드 `R__40` (BE-51, 아래 "RAG 판례 저장소") |
+| `rag_context.py` | 파이프라인 `rag` 단계: 양형기준 버전 · 형량범위 · 양형인자 · 유사 판례를 로컬 DB에서 찾아 생성 참고 자료로 만든다 (BE-54, 아래 "생성 참고 자료 RAG") |
+| `rag_check.py` | RAG 검색 결과 · 점수 확인 도구 (BE-54, 아래 "생성 참고 자료 RAG") |
+| `summary_tags.py` · `summary_tags.json` | 요약어 후보: extract 요약어를 공개 기준 목록과 임베딩으로 비교해 비슷한 기존 요약어 제안 (BE-53, 아래 "요약어 후보") |
+| `db_case_input.py` | 로컬 DB에 적재된 사건 → 생성용 사건 입력 JSON · 원본 판결문 정보(+ RAG 끔 · 켬 파이프라인 설정). LLM 호출 없음, 결과는 `cases/`에만 (BE-76, 아래 "RAG 끔 · 켬 생성 비교") |
 
 ## 작업 순서
 
@@ -101,7 +109,8 @@ python3 build_prompt.py case.json > out/prompt.md
 #### API로 생성하고 모델끼리 비교하기 (BE-30)
 
 ```bash
-export OPENAI_API_KEY=...        # 쓰는 공급자의 키만 설정한다 (ANTHROPIC_API_KEY, GEMINI_API_KEY 또는 GOOGLE_API_KEY)
+export OPENAI_API_KEY=...        # 쓰는 공급자의 키만 설정한다 (ANTHROPIC_API_KEY, GEMINI_API_KEY 또는 GOOGLE_API_KEY, GROQ_API_KEY, NVIDIA_API_KEY)
+# 매번 export하지 않고 .env 파일에 적어 둘 수도 있다 (아래 "API 키를 .env 파일로 주기")
 
 # 모델은 '공급자:모델ID'. --model을 여러 번 주면 모델마다 --runs회씩 생성한다
 python3 generate.py run case.json --model openai:<모델ID> --model gemini:<모델ID> --runs 5
@@ -111,6 +120,9 @@ python3 generate.py import case.json --model manual:gemini-app out/answer1.json 
 
 # 모델별 비교표
 python3 compare.py out/runs/case --case case.json --out out/runs/case/comparison.md --csv out/runs/case/comparison.csv
+
+# 여러 사건을 모델별로 합산 (BE-85). --case · --court는 줄 수 없다
+python3 compare.py out/runs/case1 out/runs/case2 --out out/runs/all-cases.md --csv out/runs/all-cases.csv
 ```
 
 | 공급자 | 호출 API | 키 환경변수 | JSON 출력 강제 |
@@ -118,14 +130,35 @@ python3 compare.py out/runs/case --case case.json --out out/runs/case/comparison
 | `openai` | Chat Completions (`OPENAI_BASE_URL`로 호환 엔드포인트 지정 가능) | `OPENAI_API_KEY` | `response_format: json_object` |
 | `anthropic` | Messages | `ANTHROPIC_API_KEY` | 프롬프트로만 (응답이 코드 블록이어도 받아 준다) |
 | `gemini` | `generateContent` | `GEMINI_API_KEY` 또는 `GOOGLE_API_KEY` | `responseMimeType: application/json` |
+| `groq` | Chat Completions (`GROQ_BASE_URL`) | `GROQ_API_KEY` | `response_format: json_object` |
+| `nim` | Chat Completions — NVIDIA NIM (`NVIDIA_BASE_URL`) | `NVIDIA_API_KEY` 또는 `NVIDIA_NIM_API_KEY` | `response_format: json_object` (**모델마다 지원이 다르다**) |
 | `manual` | 부르지 않음 (`import` 전용) | — | — |
 
 - 모델 ID는 공급자가 정한 정확한 ID를 그대로 쓴다. 도구에 기본 모델은 없다(모델이 자주 바뀌므로 매번 명시한다).
+- **`groq` · `nim` (BE-84)**: 둘 다 OpenAI Chat Completions 형식이라 같은 코드로 부른다. 차이는 세 가지다. ① `nim`의 모델 ID에는 `nvidia/nemotron-3-super-120b-a12b`처럼 `/`가 들어간다(공급자는 첫 `:`에서만 나누므로 그대로 적는다). ② `nim`은 `max_tokens`만 받는다(OpenAI · Groq는 `max_completion_tokens`). ③ `nim`은 JSON 모드를 지원하지 않는 모델이 있어 400이 올 수 있고, 그때는 오류에 안내를 붙인다 — JSON 모드를 지원하는 모델로 바꾸거나 다른 공급자를 쓴다(`generate.py`는 JSON 모드를 끄는 옵션이 없다).
+- **쓸 수 있는 모델 확인**: `python3 list_models.py groq`(또는 `nim`)이 공급자에게 직접 물어 모델 ID를 보여 준다(`--grep`으로 거르고 `--json`으로 원본). 공급자가 모델을 자주 바꾸므로 `free_models.json`을 고치기 전에 이것으로 확인한다. **조회만 하고 자동으로 넣지는 않는다** — 응답에는 임베딩 · 음성 · 코드 · 비전 · 안전 분류 모델이 섞여 있어, 그대로 넣으면 `free:<공급자>` 자동 선택이 판결 생성에 쓸 수 없는 모델을 고른다.
 - 검색 · 그라운딩 같은 도구는 붙이지 않는다. 매 회차가 독립 요청이라 이전 회차 응답이 섞이지 않는다("외부 LLM으로 생성할 때" 원칙과 같다).
 - 옵션: `--temperature`(주지 않으면 공급자 기본값. 사고 모델 중에는 받지 않는 것이 있다), `--max-tokens`(기본 16000), `--timeout`(초, 기본 300), `--delay`(요청 사이 쉬는 초, 무료 등급 분당 한도용), `--max-attempts`(요청 한 건을 보내는 최대 횟수, 첫 시도 포함, 기본 5) · `--max-wait`(재시도 사이 한 번에 기다릴 최대 초, 기본 120) — "무료 등급 한도 대응", `--batch`(묶음 이름, 기본은 사건 파일 이름).
 - **HTTPS 인증서(BE-34)**: 인증서 검증은 항상 켜 둔다. 기본 인증서 위치에 인증서가 없으면(예: macOS python.org Python) `/etc/ssl/cert.pem` 같은 시스템 CA 묶음을 자동으로 찾아 쓴다. 그래도 `CERTIFICATE_VERIFY_FAILED`가 나면 `SSL_CERT_FILE`에 인증서 묶음 경로를 지정하거나(macOS: `/etc/ssl/cert.pem`) python.org Python의 `Install Certificates.command`를 한 번 실행한다. 인증서 오류는 다시 보내지 않고 바로 해결 방법을 안내한다. 검증을 끄는 옵션은 없다.
 - 과부하(503 · 529) · 한도 초과(429) · 서버 오류(5xx)는 원인에 맞게 기다렸다가 자동으로 다시 보낸다(기본 최대 5번, "무료 등급 한도 대응"). 그래도 실패하면 그 회차는 원인(과부하 / 분당 한도 / 일 한도)을 적어 "호출 실패"로 기록하고 다음 회차로 넘어간다. 일 한도 · 크레딧 소진이면 그 모델의 남은 회차는 부르지 않고 건너뛴다. API 키가 없으면 아무것도 기록하지 않고 바로 멈춘다.
-- 공급자를 추가하려면 `llm.py`에 `_call_<공급자>` 형태의 함수를 만들고 `PROVIDERS` · `API_KEY_ENVS`에 등록한다.
+- 공급자를 추가하려면 `llm.py`에 `_call_<공급자>` 형태의 함수를 만들고 `PROVIDERS` · `API_KEY_ENVS`에 등록한다. OpenAI Chat Completions 형식을 그대로 쓰는 공급자라면 함수 없이 `OPENAI_COMPATIBLE`에 한 줄(기본 주소 · 주소를 바꾸는 환경변수 · 생성 토큰 상한 필드 · JSON 모드 지원 여부)만 더하면 된다(BE-84).
+
+#### API 키를 `.env` 파일로 주기 (BE-86)
+
+매번 `export`하는 대신 `.env` 파일에 적어 두면 `llm.py`를 쓰는 모든 도구(`generate.py` · `pipeline.py` · `case-extractor/*.py` 등)가 자동으로 읽는다.
+
+```bash
+cp .env.example .env    # tools/ai-judgment에서
+# .env를 열어 쓰는 공급자의 키만 채운다
+```
+
+- **찾는 위치**: `tools/ai-judgment/.env` → 저장소 루트 `.env` 순. 둘 다 있으면 먼저 찾은 쪽(도구 폴더)이 이긴다.
+- **우선순위**: 이미 셸에 설정된 환경변수가 있으면 **그 값이 `.env`보다 우선한다.** `GROQ_API_KEY=... python3 generate.py ...`처럼 한 번만 다른 키로 돌리는 걸 막지 않기 위해서다.
+- **`.env`는 커밋하지 않는다** (`.gitignore`). 커밋하는 건 값이 빈 `.env.example`뿐이다.
+- 문법은 `KEY=VALUE`, `export KEY=VALUE`(접두어 무시), `#`으로 시작하는 주석, 큰따옴표 · 작은따옴표로 감싼 값(이스케이프 처리는 하지 않는다)을 지원한다. `python-dotenv` 같은 패키지는 쓰지 않는다("설치 없이 실행" 원칙).
+- **로드한 변수는 이름만 안내하고 값은 어디에도 남기지 않는다.** 파일 권한이 느슨하면(다른 사용자도 읽을 수 있으면) 경고한다.
+- LLM API 키뿐 아니라 파이프라인 적재(`stages.load`)가 읽는 DB 접속 값(`DB_URL` · `DB_USERNAME` · `DB_PASSWORD`)도 같은 방식으로 `.env`에 넣을 수 있다. 다만 이 파일은 **API 키 · DB 접속 정보만** 두고 다른 비밀값을 섞지 않는다 — 파이프라인이 띄우는 자식 프로세스(`psql` 등)에도 전체 환경변수가 그대로 전달되기 때문이다.
+- 구현: `env_file.py`(`llm.py`를 불러오는 시점에 한 번 적용된다). 직접 쓸 일은 거의 없지만, `env_file.apply_env_files(paths=[...])`로 다른 위치의 파일을 적용할 수 있다.
 
 **결과 폴더** (`out/runs/<batch>/`, git 제외)
 
@@ -145,7 +178,7 @@ python3 compare.py out/runs/case --case case.json --out out/runs/case/comparison
 | --- | --- |
 | 실행 · 호출 실패 · 파싱 실패 · 검증 통과 | 모델별 회차 수. 파싱 실패는 응답이 JSON이 아니거나, JSON이어도 판결 객체가 아닌 경우(배열 · 숫자 · 문자열) |
 | 평균 오류 · 평균 경고 | 파싱된 회차의 `validate_output.py` 오류 · 경고 수 평균 |
-| 최종 형벌 분포 · 징역 최소 / 중앙값 / 최대 · 집행유예 · 권고 범위 안 | 검증 통과 회차만 센다. 권고 범위는 `--case`를 줘야 계산한다 |
+| 최종 형벌 분포 · 징역 최소 / 중앙값 / 최대 · 표준편차 · IQR · 집행유예 · 권고 범위 안 | 검증 통과 회차만 센다. 표준편차 · IQR(사분위 범위)은 같은 모델이 매번 비슷한 형량을 내는지(안정성)를 본다. 권고 범위는 `--case`를 줘야 계산한다 |
 | 요소 방향 일관성 | 같은 모델의 회차끼리 판단 요소마다 다수 의견과 같은 비율의 평균. 1에 가까울수록 매번 같은 방향으로 판단한다(고르지 않은 요소도 "선택 안 함"으로 센다). 검증 통과 회차가 2개 이상일 때만 |
 | 전체 다수 의견 일치율 | 모든 모델 · 회차를 합친 요소별 다수 의견과 같은 비율. 다른 모델들과 얼마나 비슷하게 판단하는지 |
 | 평균 입력 · 출력 · 합계 토큰 | 공급자가 준 값을 그대로 쓴다. 사고 토큰 셈법이 공급자마다 달라 **합계끼리** 비교한다(아래 "토큰 사용 기록") |
@@ -157,6 +190,17 @@ python3 compare.py out/runs/case --case case.json --out out/runs/case/comparison
 - 비교에 쓴 모델 중 실제로 적재할 모델은 **그 모델로** 2단계 사전 학습 점검을 거쳐야 한다(점검 결과는 모델마다 다르다). 파이프라인은 `contamination`을 켜면 생성 모델마다 점검한다.
 
 비교표는 모델 선택 참고용이다. 어느 모델이 실제 판결에 가까운지가 "좋은 판결"의 기준은 아니다(AI 판결은 독립 판단이 목적이다). 검증 통과율 · 일관성 · 비용을 주로 보고, 판결 이유의 질은 팀 검수(5단계)로 본다.
+
+**사건 간 집계** (`compare.py` 여러 묶음, BE-85)
+
+`compare.py out/runs/사건1 out/runs/사건2 ...`처럼 결과 폴더를 여러 개 주면 모델별로 모든 사건의 실행을 합쳐 하나의 표로 만든다. COMMON-40(generate 모델 고정)처럼 여러 사건으로 모델 하나를 고를 때, 사건별 표를 사람이 눈으로 합치지 않아도 된다.
+
+- 위 항목 대부분은 그대로 모든 사건의 실행을 합쳐 계산한다(`사건 수` 칸 추가).
+- 판단 요소는 사건마다 구성이 달라 **요소 방향 일관성 · 전체 다수 의견 일치율 칸은 만들지 않는다**(필요하면 사건별 비교표를 따로 본다).
+- **징역 표준편차 · IQR**은 모든 사건의 형량을 한데 모아 구하지 않는다. 사건마다 따로 구한 값의 평균이다 — 그래야 사건 간 난이도 차이가 아니라 "같은 사건 안에서 회차마다 들쭉날쭉한지"만 본다. 형량이 1개뿐인 사건은 (퍼진 정도를 말할 수 없어) 평균에서 빠진다.
+- **사건별 중앙값 편차**: 모델이 사건마다 낸 징역 **중앙값**들이 얼마나 벌어지는지 보는 참고용 보조 지표. 사건마다 합당한 형량 자체가 다르므로 **값이 낮다고 좋은 것은 아니다**(모든 사건에 같은 형량만 내는 모델도 낮게 나온다). 모델마다 등장한 사건 수(`사건 수` 칸)가 다르면 서로 다른 집합의 편차라 비교하기 어렵다. 사건이 1개뿐이면 계산하지 않는다(모델이 2개 이상 사건에 등장해야 함).
+- **권고 범위 안 칸은 없다**: 결과 폴더만으로는 사건의 권고 범위(`recommended`)를 복원할 수 없어서다(사건별 비교표는 `--case`를 주면 계산한다).
+- `--case` · `--court`는 사건마다 달라 여러 사건을 합산할 때는 줄 수 없다(오류로 막는다).
 
 ### 4. 검증
 
@@ -250,7 +294,8 @@ python3 pipeline.py status cases/my-case.pipeline.json
 | `extract` | `case-extractor`로 판결문(여러 개면 1심 · 항소심 함께)을 비식별화 · 구조화한다. 모델은 `stages.extract.model`로 고른다(Claude 모델 ID, `openai:모델ID`, `gemini:모델ID` — BE-35, `maxTokens`는 Claude 외 출력 상한). 목록으로 주면 앞 모델이 과부하 · 한도로 막혔을 때 다음 모델로 넘어간다(BE-45, "무료 등급 한도 대응"). 사건번호 · 법원명 · 선고일은 **마스킹 전에 로컬에서** 꺼내 내부 파일에만 둔다. 목록 카드 칸(소개 · 키워드 · 난이도 · 예상 시간)도 함께 만든다 | 모델이 서비스 대상이 아니라고 판정하면 멈춘다(`requireEligible: false`로 무시). 판정 기준은 `docs/cases/README.md` 1장 선정 조건 |
 | `court` | 재판부 판결(COURT) 초안을 만든다(`case-extractor/court_draft.py`, BE-38). 마스킹한 원문을 모델에 보내 요약 · 이유 · 쉬운 설명 · 발췌 · 요소별 방향과 근거를 받고, **발췌 · 근거가 원문을 글자 그대로 인용했는지**(바꾼 식별 정보만 `⟦ ⟧`) · **형량이 최종 판결문 주문과 맞는지** · 개인정보 잔존을 자동으로 검사한다. 모델은 `stages.court.model`(없으면 extract 모델, 목록 가능) | 검사를 통과하지 못하면 **파이프라인이 멈춘다**(오류를 알려 주며 최대 2번 다시 요청한 뒤). 재판부 판결 없이 이어 가려면 `stages.court.enabled: false`로 끄거나 사람이 쓴 BE-14 JSON을 `inputs.courtDraft`로 넣고 `--from contamination`(또는 다음 단계)으로 다시 실행한다 |
 | `contamination` | 모델마다 사전 학습 점검을 `runs`회(기본 10) 자동으로 묻고 판정한다(REQ-102). 응답을 분류해 **비율로** 판정한다(위 "2. 사전 학습 점검", BE-37). 호출 실패는 응답 수에 넣지 않는다(모두 실패해도 `INSUFFICIENT`로 판정해 `onInsufficient`를 따르고, 멈출 때도 다른 모델까지 점검한 뒤 멈춘다) | **기본 꺼짐**(`enabled: true`로 켬). `onContaminated`: `stop`(기본) · `exclude`(그 모델만 생성에서 뺌). `onSuspect`: `continue`(기본) · `exclude` · `stop`. `onInsufficient`(응답 부족): `stop`(기본) · `continue` · `exclude`. 기준 값은 `criteria`(예: `{"minAnswered": 5, "closeRatio": 0.15, "closeMinMonths": 1, "closeMaxMonths": 6, "closeFineRatio": 0.1, "exactRatio": 0.5, "suspectRatio": 0.5}`, 빈 값은 기본값). `minAnswered`가 `runs`보다 크면 설정 오류 |
-| `generate` | 모델마다 `runs`회 생성 · 검증한다(`generate.py`와 같음). 검증 통과 회차가 없으면 한 번씩 더 생성한다(최대 `maxRetries`회) | 모든 모델에서 통과 회차가 없으면 멈춘다 |
+| `rag` | 생성 참고 자료(양형기준 · 유사 판례)를 로컬 DB에서 찾아 `out/pipeline/<name>/references.json`에 둔다(BE-54, 아래 "생성 참고 자료 RAG"). 사건 입력 파일은 바꾸지 않는다 | **기본 꺼짐**(`enabled: true`로 켬). 참고 자료를 못 만들면 사건 입력의 기존 값으로 대체한다. `required: true`면 멈춘다 |
+| `generate` | 모델마다 `runs`회 생성 · 검증한다(`generate.py`와 같음). `rag` 단계를 켰으면 그 참고 자료로 프롬프트를 만든다. 검증 통과 회차가 없으면 한 번씩 더 생성한다(최대 `maxRetries`회) | 모든 모델에서 통과 회차가 없으면 멈춘다 |
 | `select` | 검증을 통과한 회차 중 하나를 고른다 | 아래 "회차 선택" |
 | `axis` | 판단 요소의 가치관 축만 같은 모델에 `runs`회(기본 5) 묻고 요소별로 표를 센다(BE-49, 아래 "가치관 축 투표") | 유효 응답이 하나도 없으면 멈춘다. `enabled: false`면 추출기가 한 번 정한 값으로 적재한다(예전 투표 결과가 있어도 쓰지 않음). `--skip axis`는 다른 단계처럼 이번에 다시 투표하지 않을 뿐이라, 끝난 투표 결과가 있으면 그것을 쓰고 없으면 추출기 값을 쓴다 |
 | `load` | 사건(DRAFT) + AI 판결(비공개 · PENDING) 적재 SQL을 만들어 보관하고 로컬 DB에 적재한다 | `case: false`면 사건은 빼고 AI 판결만(사건이 이미 DB에 있을 때). `applyToDb: false`면 SQL만 만든다 |
@@ -265,6 +310,22 @@ python3 pipeline.py status cases/my-case.pipeline.json
 | `--rerun` | 켜진 단계를 모두 다시 돌린다 |
 
 설정 파일의 `retry`(`maxAttempts` · `maxWait`)는 모든 단계의 LLM 호출 재시도에 적용된다("무료 등급 한도 대응"). `stages.<단계>.enabled: false`는 항상 끈다. `extract`를 끄면 `inputs`(case · court · report · source)에 이미 만든 파일을 넣는다.
+
+### 요약어 후보 (`stages.extract.summaryTags`, BE-53)
+
+extract가 끝나면 요소마다 요약어(`summaryTag`)를 기준 목록 [`summary_tags.json`](summary_tags.json)과 비교해 비슷한 기존 요약어를 제안한다. 사건마다 같은 뜻의 요약어가 제각각("흉기 사용" / "흉기를 씀")으로 나오지 않게, 관리자가 고를 수 있는 후보를 남기는 것이다. **요약어는 바꾸지 않는다.**
+
+| 설정 | 기본 | 뜻 |
+| --- | --- | --- |
+| `enabled` | `false` (예시 설정은 `true`) | 켜면 `GEMINI_API_KEY`(임베딩)가 필요하다. 없거나 임베딩이 실패하면 경고만 남기고 extract는 계속한다 |
+| `topK` | 3 | 요소마다 남길 후보 수 (1 ~ 10) |
+| `minScore` | 0.90 | 이 점수 이상이고 목록에 없는 요약어면 `suggested`로 표시한다. 샘플 실측으로 정한 값이고(0.85는 무관한 쌍 0.81 ~ 0.86과 구분이 안 됨, BE-53 리뷰) **실제 사건 요약어로 다시 정한다** |
+
+- 임베딩은 `llm.embed`, task type `SEMANTIC_SIMILARITY`, cosine 유사도다. **요약어만 보내고** 판단 요소 문장 · 판결문은 보내지 않는다. 요약어는 extract 검사(개인정보 · 실제 형량)를 통과한 값이다.
+- 1 · 2순위 점수 차가 0.01 미만이면 `ambiguous: true`로 표시하고 `suggested`는 비운다(설정 아님, 예시값). 임베딩은 부정어를 잘 못 가려서("초범" → 전과 없음 0.877 / 동종 전과 0.871) 관리자가 직접 고르게 한다. 요약어가 빈 요소는 후보 없이 둔다.
+- **이어 하기로 extract를 건너뛰면 후보를 만들지 않는다.** `--from court` 등은 이전 extract 보고서를 그대로 쓰므로, 옵션을 나중에 켰다면 extract를 다시 돌려야 후보가 생긴다. 단 `--from extract`는 판결문을 LLM으로 다시 가공해 판단 요소 문구가 바뀔 수 있고 **뒤 단계 결과(생성 회차 · 선택 · 적재 SQL)를 지운다**(위 `--from` 설명). 후보만 보려고 다시 돌리지 않는다.
+- 결과는 `out/cases/<name>.report.json`의 `factorExtras[].summaryTagCandidates`(`candidates` · `inVocabulary` · `ambiguous` · `suggested`)와 맨 위 `summaryTagCandidates`(상태 · 기준)에 남는다. 가치관 축 투표(`valueAxisVotes`)와 같은 자리다. **DB 적재 · 관리자 화면 표시는 아직 없다**(후속).
+- `summary_tags.json`에는 **공개해도 되는 일반 요약어만** 넣는다. 실제 사건(비공개 시드 R__10)의 요약어는 공개 저장소에 실제 사건 정보를 두지 않는 원칙(BE-17) 때문에 넣지 않는다. 임베딩 자체는 판례 저장소(R__40)처럼 가능해서, 비공개 시드 추가 목록은 지금 두지 않는다(BE-53 리뷰 결정, 10/16: 실제 사건이 아직 몇 건뿐이고 비공개 시드 · 공개 도구를 함께 읽는 경로가 하나 더 생김). 실제 사건 적재가 쌓이면(관리자 후검수 연결 뒤) 다시 정한다. 목록 형식이 틀리면 파이프라인이 멈춘다(조용히 빈 목록으로 비교하지 않는다).
 
 ### 회차 선택 (`stages.select`)
 
@@ -281,7 +342,7 @@ python3 pipeline.py status cases/my-case.pipeline.json
 
 ### 가치관 축 투표 (`stages.axis`, BE-49)
 
-추출기(extract-v5)는 요소마다 축을 한 번 정한다. 한 번 정한 값은 흔들릴 수 있어서 요소가 확정된 뒤 **축만** 여러 번 물어 투표한다(추출을 여러 번 돌리면 회차마다 요소 문구 · 개수가 달라져 비교할 수 없다). 결과는 기본값이고, 관리자가 후검수로 확정한다(BE-43 · FE-16).
+추출기(extract-v5부터)는 요소마다 축을 한 번 정한다. 한 번 정한 값은 흔들릴 수 있어서 요소가 확정된 뒤 **축만** 여러 번 물어 투표한다(추출을 여러 번 돌리면 회차마다 요소 문구 · 개수가 달라져 비교할 수 없다). 결과는 기본값이고, 관리자가 후검수로 확정한다(BE-43 · FE-16).
 
 - **모델**: `model`(없으면 생성에 쓰는 첫 모델, `free:`는 지금 쓰는 무료 모델로 펼친 뒤). **한 모델로만** `runs`회 묻는다. 보내는 내용은 죄명 · 사건 개요 · 판단 요소 문구뿐이다(형량 · 판결 정보 없음, `prompts/axis_system.md`)
 - **집계**: 기본값 = 최다표 축. 동률이면 추출기 값이 최다표 안에 있으면 그것, 아니면 축 순서(① ~ ④, 없음)상 앞의 것
@@ -292,9 +353,9 @@ python3 pipeline.py status cases/my-case.pipeline.json
 
 ### 적재 (`stages.load`)
 
-- **사건**: `legal_case.status='DRAFT'` → 사용자 목록 · 체험에서 보이지 않는다(서버가 `PUBLISHED`만 조회). 섹션 · 형벌 규칙 · 판단 요소 · 원본 판결문(`case_source`)을 함께 넣는다. 사건 발생일은 비식별화 단계가 원문 · 선고일과 대조해 확인한 값(또는 설정 `incidentDate`)을 넣는다(BE-38). 재판부 판결은 아래 "재판부 판결"대로 비공개로 넣는다(BE-38). 양형기준 연결은 넣지 않는다.
+- **사건**: `legal_case.status='DRAFT'` → 사용자 목록 · 체험에서 보이지 않는다(서버가 `PUBLISHED`만 조회). 섹션 · 형벌 규칙 · 판단 요소 · 원본 판결문(`case_source`)을 함께 넣는다. 사건 발생일은 비식별화 단계가 원문 · 선고일과 대조해 확인한 값(또는 설정 `incidentDate`)을 넣는다(BE-38). 재판부 판결은 아래 "재판부 판결"대로 비공개로 넣는다(BE-38). 양형기준 버전(`guideline_id`)은 기준일(설정 `indictmentDate` → 없으면 발생일)에 시행 중이던 버전을 DB 함수 `sentencing_guideline_at`으로 넣는다(BE-54, 단독 실행은 `case_seed_sql.py --indictment-date`). 기준일 · 버전이 없으면 NULL.
 - **재판부 판결 (BE-38)**: `court` 단계 초안(또는 `inputs.courtDraft`)이 있으면 `judgment`(COURT · FINAL) · `judgment_factor`를 **비공개**(`is_published=false`)로 넣는다. 기존 공개 재판부 판결은 건드리지 않고, 같은 내용이 이미 있으면 건너뛴다. `load.court: false`면 뺀다. **court 단계를 다시 돌리면** 모델이 다른 글을 만들어 내용이 달라지므로 같은 사건에 비공개 재판부 판결 후보가 하나 더 쌓인다(기존 행은 지우지 않음, REQ-079와 같은 원칙). 관리자 후검수(BE-33)에서 후보 중 하나를 골라 공개한다. 초안은 **실제 판결이 들어 있는 내부 파일**이라 AI 판결 단계(contamination · generate)는 읽지 않는다. 사실 기록이므로 공개 전에 원 판결문과 대조해 검수한다(REQ-075 · 077).
-- **공개에 필요한 것**: 사건 `PUBLISHED` + 공개 재판부 판결 + 공개 AI 판결. 셋이 갖춰지면 체험 흐름 전체(사전 판단 → 판결 → AI 판결 → 실제 판결 → 세 판결 비교)가 동작한다(임시 DB로 확인). 양형기준 연결(`guideline_id`)은 서비스 코드가 읽지 않아 비어 있어도 된다(이후 RAG로 연결).
+- **공개에 필요한 것**: 사건 `PUBLISHED` + 공개 재판부 판결 + 공개 AI 판결. 셋이 갖춰지면 체험 흐름 전체(사전 판단 → 판결 → AI 판결 → 실제 판결 → 세 판결 비교)가 동작한다(임시 DB로 확인). 양형기준 연결(`guideline_id`)은 서비스 코드가 읽지 않아 비어 있어도 된다.
 - **AI 판결**: `judgment.is_published=false`, `ai_generation.review_status='PENDING'`(검수자 · 검수 시각 없음). 기존 공개 AI 판결은 그대로 둔다. `ai_generation.generation_report`(V8)에 검증 경고 · 사전 학습 점검 판정 · 회차 선택 이유 · 모델 · 토큰을 남겨 관리자가 검수할 때 본다(실제 판결 값은 넣지 않는다).
 - **같은 SQL을 두 번 실행해도 안전하다**: 같은 제목의 DRAFT 사건이 있으면 사건 적재를 건너뛰고, 같은 실행(`runKey`)의 AI 판결이 있으면 건너뛴다(`runKey`는 DB 부분 유니크 인덱스로도 막는다). 판단 요소가 다르면 전체가 취소된다.
 - **같은 제목의 공개 · 검토 중 사건이 있으면 멈춘다**(전체 취소). 모델이 만든 중립 제목은 다른 사건과 겹칠 수 있어서다. 이미 공개된 사건에 AI 판결만 넣으려면 `load.case: false`로 사건 SQL을 뺀다.
@@ -305,12 +366,95 @@ python3 pipeline.py status cases/my-case.pipeline.json
 
 | 항목 | 처리 |
 | --- | --- |
-| 외부 전송 | `extract`는 정규식 마스킹을 거친 판결문을 설정한 비식별화 모델의 공급자(기본 Anthropic)로, `contamination` · `generate`는 비식별화한 사건 내용을, `axis`는 비식별화한 사건 개요 · 판단 요소를 설정한 공급자로 보낸다. 실행할 때 전송 대상을 먼저 출력한다 |
+| 외부 전송 | `extract`는 정규식 마스킹을 거친 판결문을 설정한 비식별화 모델의 공급자(기본 Anthropic)로, `contamination` · `generate`는 비식별화한 사건 내용을, `axis`는 비식별화한 사건 개요 · 판단 요소를 설정한 공급자로 보낸다. `rag`는 비식별화한 사건 개요 · 섹션을 검색어 임베딩용으로 Gemini에 보낸다(사건번호 · 판결 정보 없음). 실행할 때 전송 대상을 먼저 출력한다 |
 | 재판부 판결 초안 | 실제 판결(형량 · 재판부 판단)이 들어 있다. `cases/<name>.court_draft.json`(git 제외) → DB 비공개 행에만 둔다. AI 판결 입력과 분리돼 있다(테스트로 확인) |
 | 원본 판결문 정보 | 사건번호 · 법원명 · 선고일 · 원문은 마스킹 전에 로컬에서 꺼내 `cases/<name>.source_internal.json`(git 제외) → DB `case_source`(API는 `source_org`만 노출)에만 둔다. 모델에 보내지 않는다 |
 | 비식별화 검수 | 사람 검수 없이 적재하므로 비식별화 누락이 있을 수 있다. **사건은 항상 DRAFT로만 넣고 자동으로 공개하지 않는다.** 관리자 페이지(BE-33 · FE-16)의 공개 승인이 비식별화 검수(REQ-075)를 겸한다 |
 | 운영 DB | 파이프라인은 운영 DB에 접속하지 않는다. 운영 계정을 개발 PC에 두지 않는다 |
 | 승인 상태 | 후검수 뒤 공개 · 승인 상태는 DB에만 있다(파일에 없음). 운영 DB 백업이 원본이다 |
+
+## RAG 판례 저장소 (BE-51)
+
+AI 판결 생성(generate, BE-54)이 검색할 유사 판례를 `rag_precedent`(V11, [ERD](../../docs/erd.md) 3-4)에 넣는다. 판례 후보와 원문은 비공개 저장소에 있다(BE-50, `work/BE-50-precedent-candidates.json` · `raw/BE-50/`). 수집처 · 건수는 [`docs/rag-precedent-sources.md`](../../docs/rag-precedent-sources.md).
+
+```bash
+# tools/ai-judgment에서. P = 비공개 저장소 체크아웃 (../../backend/private-seed)
+python3 rag_store.py build --candidates $P/work/BE-50-precedent-candidates.json --raw $P/raw/BE-50 --model <공급자:모델ID>
+python3 rag_store.py embed
+python3 rag_store.py sql --candidates $P/work/BE-50-precedent-candidates.json --holds $P/work/rag-precedent-holds.json --output $P/seed/R__40_rag_precedent.sql
+```
+
+| 단계 | 하는 일 | 외부 전송 |
+| --- | --- | --- |
+| `build` | 판결문을 로컬에서 마스킹(`premask`)한 뒤 모델이 비식별화해 사실관계 요약(`factsSummary`, 검색 기준) · 양형 이유(`sentencingReason`, 프롬프트 본문) · 법조문 · 주문 형량 · 양형인자로 나눈다. 형식 오류 · 남은 개인정보(`residual_check` 오류)가 있으면 다시 묻고(`--max-retries`, 기본 2), 끝까지 남으면 그 판례는 저장하지 않는다 | 마스킹한 판결문 본문. 무료 등급이 있는 모델은 `--allow-free-tier`를 붙여야 쓴다(아래 "판결문 단계의 무료 등급 백업"과 같은 위험, 공개 판결문에만. 판례마다 `usedFreeTier` 기록). `free:` 자동 선택은 쓰지 않는다. 사건번호 · 법원명 · 선고일 · 해시는 보내지 않는다 |
+| `embed` | `factsSummary`**만** `gemini-embedding-001`(`RETRIEVAL_DOCUMENT`, 3072차원)로 임베딩한다. 100건씩 묶어 보낸다 | 비식별화한 사실관계 요약만. 무료 등급이어도 된다(8-1) |
+| `sql` | `R__40` 시드를 만든다. `--candidates`(최신 후보 목록)를 주면 사건 그룹 · 발생일 · 양형기준 · 표시를 그 값으로 다시 맞추고, 후보에서 빠진 판례(사본 판정 등)는 넣지 않는다. `rag_precedent`를 통째로 지우고 다시 넣는다. 양형기준은 버전 이름으로 찾고 없으면 NULL. **비공개 저장소 체크아웃 안에만** 쓴다(BE-31 `check_sql_dir`) | 없음 |
+
+- 중간 결과는 `out/rag/precedents/` · `out/rag/embeddings/`(git 제외)에 판례마다 파일로 남는다. 이미 끝난 판례는 다시 부르지 않으므로 끊겨도 같은 명령으로 이어 간다. 다시 만들려면 그 판례 파일을 지운다.
+- **살인 관련 공소사실이 무죄**이고 다른 죄만 유죄인 판결(6건)도 사용 보류한다. 어떤 판례인지는 공개 코드에 적지 않고 비공개 저장소 `work/rag-precedent-holds.json`(`{판례 키: 사유}`)에 두어 `sql --holds`로 읽는다. 형량 · 양형 이유가 살인 기준이 아닌데 사실관계는 살인 사건과 비슷해 유사도로 걸러지지 않는다(시험에서 상위 5건에 9번 듦, 팀 결정 2026-10-12).
+- **LBox 판례는 쓰지 않는다**(라이선스 문의 결과 사용 불가, 2026-10-12). 넣었던 15건은 BE-54에서 R__40에서 지웠다. 지금은 공유본 `$P/work/rag-store`(law.go.kr 53건)로 R__40을 만든다: `python3 rag_store.py sql --out $P/work/rag-store --candidates … --holds … --output $P/seed/R__40_rag_precedent.sql`. 실수로 LBox 판례가 들어와도 `SOURCE_HOLDS`로 사용 보류(검색 제외)가 된다.
+- 판례 `guideline_id`는 NULL로 두고 `flags.guidelineBasis`(`INCIDENT_DATE` · 발생일이 없으면 null)만 남긴다. 버전은 검색 때 발생일로 고른다(R__40이 R__41보다 먼저 돌아 시드에서 버전 id를 찾을 수 없다, BE-54).
+- 팀 결정(2026-10-10)으로 사람 확인 없이 후보를 전부 넣는다. 행의 `flags.verified`는 false이고, 발생일이 의심스러운 판례는 `flags.checks`에 이유가 남는다.
+- 사건 그룹 ID는 그룹에서 가장 앞선 판례 키다(예: `LAW_GO_KR-143304`). 후보 목록을 다시 만들어도 같은 그룹이면 같은 ID다.
+- **서비스 요청의 검색은 백엔드가 한다** (`backend` `rag/service/RagSearchService`). 사건 개요를 `RETRIEVAL_QUERY`로 임베딩하고(`GEMINI_API_KEY`가 없으면 RAG만 꺼짐), `case_source` 사건번호 해시로 자기 사건 그룹을 뺀 뒤 DB 함수 `rag_precedent_search`를 부른다. 설정은 `application.yml`의 `rag.*`(top-k 5 · 하한 0.6 · 상한 0.95). 오프라인 생성의 검색은 아래 "생성 참고 자료 RAG"(Python)가 같은 DB 함수를 부른다.
+- 사건번호 해시 규칙은 `rag_store.case_number_hashes`와 백엔드 `CaseNumberHash.ofAll`이 같아야 한다(`CaseNumberHashTest`가 Python 값과 비교): 사건번호 칸에서 번호(`2014고13` 형식)를 하나씩 뽑아 유니코드 공백을 지우고 SHA-256 hex. 병합 사건(`2014고13, 2014고14(병합)`)은 번호마다 해시하므로 대상 사건 쪽 번호가 하나여도 자기 사건으로 빠진다. 번호 형식이 없으면 칸 전체를 하나로 해시한다. 임베딩 모델 · 차원도 같아야 하며, 다르면 백엔드 검색이 멈춘다.
+
+## 생성 참고 자료 RAG (BE-54)
+
+파이프라인 `rag` 단계(`stages.rag`, 기본 꺼짐)가 생성 프롬프트의 참고 자료를 로컬 DB에서 찾는다. 판례 저장소(R__40)와 양형기준 저장소(R__41)가 들어간 로컬 DB가 필요하다(`bootRun` 한 번이면 들어간다). 키는 `GEMINI_API_KEY`(검색어 임베딩). DB 접속은 `stages.load.db`와 같다(로컬만).
+
+```json
+"indictmentDate": null,
+"stages": {"rag": {"enabled": true, "required": false,
+                   "precedent": {"topK": 5, "candidates": 10, "minScore": 0.70, "maxScore": 0.88},
+                   "guideline": {"topK": 6, "minScore": 0.6}}}
+```
+
+| 순서 | 하는 일 |
+| --- | --- |
+| 검색어 | 비식별화한 사건 개요 + 섹션 본문(최대 6,000자)을 `gemini-embedding-001` `RETRIEVAL_QUERY`로 임베딩. 죄명 · 형벌 범위 · 판단 요소는 넣지 않는다 |
+| 양형기준 버전 | 기준일 = `indictmentDate`(공소제기일) → 없으면 발생일. `sentencing_guideline_at(범주, 기준일)`. 범주는 `common.GUIDELINE_CATEGORIES`(`MURDER` → 살인범죄) |
+| 형량범위 | 그 버전의 `형량범위` 조각 전부 (유형 판단은 모델 몫이라 검색하지 않는다) |
+| 양형인자 · 정의 | `rag_guideline_search`로 그 버전 안에서 `guideline.topK`개 · `minScore` 이상 |
+| 유사 판례 | 대상 사건의 사건번호가 없으면 붙이지 않는다(자기 사건을 뺄 수 없음). `rag_precedent_search`로 `candidates`건(자기 사건 그룹 제외) → `maxScore` 이상은 자기 사건 의심으로 빼고 경고 → 같은 버전 판례는 점수에 0.01을 더해 정렬 → 상위 `topK`건 |
+| 결과 | `out/pipeline/<name>/references.json`. `generate` · `select` · `load`가 이 참고 자료로 프롬프트를 만든다. 보고는 `generation_report.rag`(상태 `OK` · `PARTIAL` · `FALLBACK`, 버전 이름 · 기준 종류 · 판례 id · 점수 · 대체 사유) |
+
+- **대체**: 키 없음 · DB 접속 실패면 사건 입력의 기존 참고 자료를 통째로 쓴다. 버전 · 형량범위가 없으면(기준일 없음 포함) 양형기준만 기존 값을 쓰고, 판례를 못 찾으면(사건번호 없음 포함) 예시 판례를 남기지 않고 비운다. `required: true`면 하나라도 못 찾을 때(`PARTIAL` 포함) 대신 멈춘다.
+- **입력 지문**: `rag`는 검색 입력(검색어 · 기준일 · 사건번호 해시 · 설정)의 지문을 상태에 남긴다. 사건 입력 · `indictmentDate` · `incidentDate` · `sources` · rag 설정을 바꾼 뒤 `--from generate`만 돌리면 예전 참고 자료를 쓰게 되므로 멈추고 `--from rag`를 안내한다.
+- **적재 확인**: `load`는 프롬프트를 다시 만들어 고른 회차의 프롬프트(`batch.json`의 해시)와 비교하고, 다르거나 `batch.json`이 없으면 멈춘다(`--from generate`로 다시 생성).
+- **DB 접속**: `rag` · `load` 모두 로컬 DB만 쓴다. `service` 접속(URL의 `service` · 환경변수 `PGSERVICE`)은 서비스 파일의 원격 host로 갈 수 있어 거부한다.
+- **점수 기준**은 판례 53건으로 잰 값이다(2026-10-15, [RAG 인수인계](../../docs/rag-handover.md) 5-4). 판례 · 범죄 유형이 늘면 아래 도구로 다시 잰다.
+- 프롬프트에는 사건번호 · 기준일 · 점수를 넣지 않는다. 같은 버전 판례에는 "이 사건과 같은 양형기준 버전"을 붙인다.
+
+**확인 도구 `rag_check.py`** — 검색 결과와 점수를 화면에만 출력한다(저장 안 함, 사건번호 출력 안 함).
+
+```bash
+python3 rag_check.py db-case <사건 id> --prompt     # DB에 있는 사건으로 검색, 프롬프트에 들어갈 참고 자료까지
+python3 rag_check.py case cases/x.case.json --source cases/x.source_internal.json
+python3 rag_check.py sample --count 10             # 판례끼리 검색해 1위 · 5위 점수 분포 보기
+python3 rag_check.py self                          # 자기 사건 점수(같은 사건의 다른 판결 · DB 사건 → 자기 판례)가 상한보다 높은지
+```
+
+공통 옵션: `--explore`(하한 0 · 후보 20건), `--indictment-date` · `--incident-date`, DB 옵션(`--db-mode` · `--container` · `--db-user` · `--database` · `--db-url`).
+
+### RAG 끔 · 켬 생성 비교 (BE-76)
+
+이미 DB에 있는 사건으로 참고 자료 없이(끔) · RAG로(켬) 생성해 비교한다. 사건 입력은 DB에서 뽑는다(사건 입력 파일이 없는 실제 사건도 시험할 수 있다).
+
+```bash
+# 1) 사건 입력 · 원본 판결문 정보 · 파이프라인 설정 두 개를 cases/에 만든다 (LLM 호출 없음)
+python3 db_case_input.py <사건 id> --name my-case --pipeline --model <공급자:모델ID> --runs 3
+# 2) 끔 · 켬을 각각 회차 선택까지만 (DB에 적재하지 않는다). 켬은 GEMINI_API_KEY(검색어 임베딩)도 필요하다
+python3 pipeline.py run cases/my-case-rag-off.pipeline.json --until select
+python3 pipeline.py run cases/my-case-rag-on.pipeline.json --until select
+# 3) 묶음별 비교표 (묶음 경로는 status의 batchDir)
+python3 compare.py <끔 batchDir>
+python3 compare.py <켬 batchDir>
+```
+
+- `--name`은 사건을 특정할 수 없는 이름으로 짓는다(파일 이름에 쓴다). 결과 파일에는 실제 사건 내용 · 사건번호가 들어 있어 `cases/` · `out/`(git 제외)에만 둔다.
+- 사건 입력에는 용어 설명(`LAW_TERM`) · 핵심 정리(`SUMMARY`) 섹션과 원문을 넣지 않는다. 참고 자료는 비워 둔다(끔 = 참고 자료 없음).
+- 결과 요약은 사건 내용 없이 [RAG 인수인계](../../docs/rag-handover.md) 5-7에 적는다.
 
 ## 외부 LLM으로 생성할 때
 
@@ -344,7 +488,7 @@ python3 pipeline.py status cases/my-case.pipeline.json
 | --- | --- | --- |
 | 서비스 과부하 | 503 · 529 | 5 · 10 · 20 · 40초…로 늘려 가며(±25% 지터) 다시 보낸다. 한 번에 `maxWait`초를 넘게 기다리지 않는다 |
 | 분당 한도 | 429 | 응답이 알려 준 시간(`Retry-After` 헤더, Gemini는 본문 `retryDelay`) + 1초를 기다린다. 안내가 없으면 1분(분당 한도가 풀릴 시간)을 기다린다. 안내가 `maxWait`보다 길면 기다려도 소용없으므로 바로 끝낸다 |
-| 일 한도 · 크레딧 소진 | 429 (Gemini `...PerDay...`, OpenAI `insufficient_quota`) | **다시 보내지 않는다.** 그 모델의 남은 회차 · 재생성도 건너뛴다 |
+| 일 한도 · 크레딧 소진 | 429 (Gemini `...PerDay...`, OpenAI `insufficient_quota`, Groq `on requests per day (RPD)`, 크레딧 소진 문구 — BE-84) | **다시 보내지 않는다.** 그 모델의 남은 회차 · 재생성도 건너뛴다 |
 | 그 밖의 서버 오류 · 연결 실패 | 500 · 502 · 504 등 | 2 · 4 · 8초…로 다시 보낸다 |
 
 - 최종 실패 시 오류 메시지가 원인(과부하 / 분당 한도 / 일 한도)과 다음에 할 일을 알려 준다. 실행 기록(`run-NNN.json`)의 `callErrorKind`에도 `overloaded` · `rate_limit` · `daily_quota`로 남는다.
@@ -357,7 +501,9 @@ python3 pipeline.py status cases/my-case.pipeline.json
 
 ### 무료 등급이 있는 모델 목록 (BE-45)
 
-목록은 `free_models.json`(확인일 2026-10-08)에 있고, `llm.py`(`has_free_tier`)와 파이프라인 전송 안내가 읽는다. **"무료 등급이 있는 모델"이지 "지금 키가 무료"라는 뜻이 아니다** — 결제를 연결한 프로젝트의 키는 같은 모델도 유료다. 그래서 호출을 막지는 않고 안내만 한다.
+목록은 `free_models.json`(확인일 2026-10-16)에 있고, `llm.py`(`has_free_tier`)와 파이프라인 전송 안내가 읽는다. **"무료 등급이 있는 모델"이지 "지금 키가 무료"라는 뜻이 아니다** — 결제를 연결한 프로젝트의 키는 같은 모델도 유료다. 그래서 호출을 막지는 않고 안내만 한다.
+
+- **목록 밖 모델은 경고되지 않는다.** `has_free_tier`는 `models`에 **정확히 등록된 모델명**만 본다. 예를 들어 NVIDIA API Trial 키는 키 자체가 체험 약관 대상이라 `nim:` 모델이면 목록에 없어도 같은 약관(입력을 제품 개선에 사용)이 적용되지만, extract·court에 목록 밖 NIM 모델이나 Groq `previewModels`를 직접 지정하면 "원문이 외부로 나간다"는 경고가 뜨지 않는다. `free_models.json`에 모델을 추가하지 않은 채 쓰는 경우 이 경고에 의존하지 말 것.
 
 **Gemini API** (출처: [가격 문서](https://ai.google.dev/gemini-api/docs/pricing), 확인일 2026-10-08)
 
@@ -370,6 +516,27 @@ python3 pipeline.py status cases/my-case.pipeline.json
 - **데이터 사용**: 무료 등급은 입력 · 응답을 제품 개선에 쓰고 사람이 검토할 수 있다. 유료 등급은 쓰지 않는다([약관](https://ai.google.dev/gemini-api/terms)).
 - **자동 사용**: 아래 "무료 모델 자동 사용"을 켜면 이 목록의 모델을 파이프라인이 알아서 돌려가며 쓴다.
 - **쓰임**: 무료 등급이 있는 모델은 비식별화한 사건 데이터를 보내는 **점검 · 생성**(`stages.contamination.models` · `stages.generate.models`, 교차 호출 BE-44)에서만 무료 키로 쓴다. **판결문 원문을 보내는 비식별화(`extract`) · 재판부 초안(`court`)에는 기본으로 무료 키를 쓰지 않는다**(위 원칙, 모델 대체 체인에 넣는 모델도 마찬가지). 유료 모델이 모두 막혔을 때의 마지막 백업으로만 `allowFreeTierForJudgment`로 켤 수 있다(아래 "판결문 단계의 무료 등급 백업"). 파이프라인은 시작할 때 이 단계에 무료 등급이 있는 모델이 들어 있으면 경고 안내를 출력한다.
+**Groq** (출처: [모델 문서](https://console.groq.com/docs/models), 확인일 2026-10-16, BE-84)
+
+| 자동 선택에 넣은 모델 | preview (자동 선택 제외) |
+| --- | --- |
+| `llama-3.3-70b-versatile` · `openai/gpt-oss-120b` · `openai/gpt-oss-20b` · `llama-3.1-8b-instant` | `qwen/qwen3.8-27b` · `minimaxai/minimax-m2.7` · `meta-models/muse-spark-open` |
+
+- **한도**: 문서의 표는 개발자 요금제 기준이라 무료 등급과 다르다. [콘솔 Settings → Limits](https://console.groq.com/settings/limits)에서 계정별로 확인한다. 한도는 **조직 단위**라 API 키를 더 만들어도 늘지 않는다. 429에 `retry-after` 헤더(초)가 오고, 본문 문구로 분당 한도(`per minute (RPM · TPM)`)와 일 한도(`per day (RPD · TPD)`)를 구분한다.
+- **데이터 사용**: Groq는 추론 입력 · 응답을 기본으로 보관하지 않고(사용 메타데이터만 남는다), 서비스 계약상 고객 데이터를 학습에 쓰지 않는다고 적고 있다([데이터 문서](https://console.groq.com/docs/your-data) · [서비스 계약](https://console.groq.com/docs/legal/services-agreement)). **다만 무료 등급을 따로 떼어 규정한 조항은 확인하지 못했다.** 판결문 원문 단계는 다른 무료 등급과 똑같이 다룬다(유료 키만, 아래 "판결문 단계의 무료 등급 백업" 예외만).
+- preview 모델은 공급자가 예고 없이 내릴 수 있다고 안내한 모델이라 `free:groq` 자동 선택에서 뺐다. 직접 지정(`groq:qwen/qwen3.8-27b`)은 된다.
+
+**NVIDIA NIM** (출처: [모델 카탈로그](https://build.nvidia.com/models) · 목록 API `https://integrate.api.nvidia.com/v1/models`, 확인일 2026-10-16, BE-84)
+
+| 자동 선택에 넣은 모델 |
+| --- |
+| `nvidia/nemotron-3-super-120b-a12b` · `nvidia/nemotron-3.5-lightning-30b-a3b` · `nvidia/nemotron-nano-3-30b-a3b` · `z-ai/glm-5.3` · `google/gemma-4-31b-it` · `openai/gpt-oss-20b` · `deepseek-ai/deepseek-v4.1-flash` · `moonshotai/kimi-k2.6` · `mistralai/mistral-large-2-instruct` |
+
+- 카탈로그에는 임베딩 · 음성 · 코드 · 비전 · 안전 분류 모델이 함께 있다. 위 목록은 그중 **판결 생성에 쓸 수 있는 범용 텍스트 모델만** 고른 것이다. 전체는 `python3 list_models.py nim`으로 본다.
+- **한도**: 분당 요청 수와 체험 크레딧으로 제한되고 계정마다 다르다. 공식 표가 없으므로 계정 설정에서 확인한다.
+- ⚠️ **데이터 사용**: [NVIDIA API Trial 약관](https://assets.ngc.nvidia.com/products/api-catalog/legal/NVIDIA%20API%20Trial%20Terms%20of%20Service.pdf)은 입력(User Content) · 응답(Generated Content)을 **AI 모델을 포함한 제품 · 서비스 개선에 쓸 수 있다**고 적고 있다. Gemini 무료 등급과 같은 기준으로 다룬다 — 비식별화한 사건 내용(점검 · 생성)만 보내고 판결문 원문 단계에는 쓰지 않는다.
+- JSON 모드(`response_format`)를 지원하지 않는 모델이 있다. 400이 오면 오류에 안내가 붙는다.
+
 - **다른 공급자(OpenAI · Anthropic)**: 이번에 공식 문서로 확인하지 않았다. 목록이 비어 있다는 것이지 무료 등급이 없다는 보증이 아니다. 확인하면 `free_models.json`에 `"<공급자>": {"source": …, "models": […]}`를 추가한다(공급자 이름은 `llm.py`의 `PROVIDERS`와 같게).
 - **목록은 자주 바뀐다.** 쓰기 전에 `source`에서 다시 확인하고 `checkedAt`을 고친다. 이 목록은 공식 문서 요약 도구로 가져온 값이므로, 팀이 쓸 모델은 가격 문서에서 직접 한 번 더 확인한다. 같은 주제를 다룬 블로그 중에는 "Pro 모델은 2026-04-01부터 무료 등급에서 빠졌다"는 글이 있으나, 공식 가격 문서에는 `gemini-2.5-pro`가 무료로 표시되어 있어 공식 문서를 따랐다.
 

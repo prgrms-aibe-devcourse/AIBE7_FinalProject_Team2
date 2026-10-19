@@ -15,7 +15,7 @@ function fail(code, currentStatus) {
 function checkState(caseId) {
   const { status } = read();
   if (caseId !== 1) fail('CASE_NOT_FOUND', status);
-  // COMPLETED 전 거절. 화면은 S-08로 안내한다(API 명세 1-6).
+  // COMPLETED 전 거절. 공통 래퍼가 currentStatus에 맞는 화면으로 안내한다(API 명세 1-6).
   if (status !== 'COMPLETED') fail('INVALID_STATE', status);
   return status;
 }

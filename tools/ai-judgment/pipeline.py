@@ -35,6 +35,8 @@ from pathlib import Path
 
 from build_prompt import InputError, build_prompt
 from case_seed_sql import DEFAULT_SOURCE_ORG, CaseSeedError, build_case_sql, resolve_sources
+from rag_context import RagContextError, RagUnavailable, build_references, input_key
+from rag_context import option_errors as rag_option_errors
 from court_seed_sql import CourtSeedError, build_court_sql
 from check_contamination import DEFAULT_CRITERIA, aggregate, build_contamination_prompt, classify, criteria_with
 from axis_vote import AxisVoteError, aggregate_votes, apply_votes, build_axis_prompt, parse_axis_answer
@@ -45,9 +47,11 @@ from llm import (DEFAULT_MAX_ATTEMPTS, DEFAULT_MAX_WAIT, LLMError, LLMQuotaExhau
                  check_retry, configure_retry, free_tier_model_list, has_free_tier, model_provider,
                  parse_model_spec)
 from to_seed_sql import NAME_MAX_LENGTH, build_sql
+from summary_tags import DEFAULT_MIN_SCORE, DEFAULT_TOP_K, SummaryTagError, annotate_report, load_vocabulary, skipped_report
+from summary_tags import option_errors as summary_tag_option_errors
 from validate_output import parse_output
 
-STAGES = ("extract", "court", "contamination", "generate", "select", "axis", "load")
+STAGES = ("extract", "court", "contamination", "rag", "generate", "select", "axis", "load")
 PIPELINE_DIR = TOOL_DIR / "out" / "pipeline"
 PUBLIC_ROOT = TOOL_DIR.parent.parent  # 공개 저장소 루트
 PRIVATE_SEED_DIR = PUBLIC_ROOT / "backend" / "private-seed"
@@ -64,6 +68,8 @@ DEFAULT_CONFIG = {
     "finalSourceIndex": None,  # 최종 확정 판결 번호(0부터). 없으면 심급이 가장 높은 판결
     # 사건 발생일 YYYY-MM-DD. 주면 추출 결과(source_internal.json incidentDate)보다 우선한다 (BE-38)
     "incidentDate": None,
+    # 공소제기일 YYYY-MM-DD (BE-54). 양형기준 버전 기준일은 이 값 → 없으면 발생일 (docs/sentencing-guideline-rag.md 6장)
+    "indictmentDate": None,
     # LLM 호출 재시도 (BE-36). 과부하(503 · 529) · 한도(429) · 서버 오류 때 요청 한 건을 보내는 최대 횟수(첫 시도 포함)와
     # 한 번에 기다릴 최대 시간(초). 무료 등급이면 각 단계의 delay(호출 사이 대기)도 함께 둔다 (README "무료 등급 한도 대응")
     "retry": {"maxAttempts": DEFAULT_MAX_ATTEMPTS, "maxWait": DEFAULT_MAX_WAIT},
@@ -80,7 +86,10 @@ DEFAULT_CONFIG = {
         # model: Claude는 모델 ID(또는 anthropic:모델ID), 다른 공급자는 openai:모델ID · gemini:모델ID (BE-35). maxTokens는 Claude 외 공급자의 출력 상한
         # 목록으로 주면 앞 모델이 과부하 · 한도로 막혔을 때(재시도를 다 쓴 뒤) 다음 모델로 넘어간다 (BE-45)
         "extract": {"enabled": True, "model": "claude-opus-5-5", "effort": "high", "requireEligible": True,
-                    "maxTokens": None},
+                    "maxTokens": None,
+                    # 요약어 후보 (BE-53, summary_tags.py): 요약어를 기준 목록(summary_tags.json)과 비교해 비슷한 기존 요약어를
+                    # 제안한다(바꾸지 않음). GEMINI_API_KEY(임베딩)가 없으면 건너뛰고 extract는 계속한다. 기본은 꺼짐
+                    "summaryTags": {"enabled": False, "topK": DEFAULT_TOP_K, "minScore": DEFAULT_MIN_SCORE}},
         # 재판부 판결(COURT) 초안 자동 생성 (BE-38). model이 null이면 extract 모델을 쓴다. 결과는 비공개로 적재된다
         "court": {"enabled": True, "model": None, "maxTokens": 16000},
         "contamination": {
@@ -90,6 +99,11 @@ DEFAULT_CONFIG = {
             # max(1, min(6, 15%))개월, 벌금 10%, 정확히 맞힘 50% 이상 CONTAMINATED, 가까움 50% 이상 SUSPECT
             "criteria": {},
         },
+        # 생성에 넣을 참고 자료를 RAG로 찾는다 (BE-54, rag_context.py). 로컬 DB(stages.load.db)의 판례 · 양형기준 저장소와
+        # GEMINI_API_KEY(검색어 임베딩)가 필요하다. 못 찾으면 사건 입력의 references를 그대로 쓰고, required면 멈춘다
+        "rag": {"enabled": False, "required": False,
+                "precedent": {"topK": 5, "candidates": 10, "minScore": 0.70, "maxScore": 0.88},
+                "guideline": {"topK": 6, "minScore": 0.6}},
         "generate": {
             "enabled": True, "models": [], "runs": 3, "maxRetries": 3,
             "temperature": None, "maxTokens": 16000, "timeout": 300, "delay": 0.0,
@@ -388,6 +402,11 @@ def validate_config(config):
             datetime.date.fromisoformat(config["incidentDate"])
         except (TypeError, ValueError):
             errors.append("incidentDate는 YYYY-MM-DD다")
+    if config.get("indictmentDate") is not None:
+        try:
+            datetime.date.fromisoformat(config["indictmentDate"])
+        except (TypeError, ValueError):
+            errors.append("indictmentDate는 YYYY-MM-DD다")
     if stages["extract"]["enabled"] and not config["sources"]:
         errors.append("extract를 쓰려면 sources에 판결문 경로를 넣는다")
     extract_model = stages["extract"]["model"]
@@ -402,6 +421,10 @@ def validate_config(config):
                                            or extract_max_tokens <= 0):
         errors.append("stages.extract.maxTokens는 null 또는 양의 정수다")
     errors += chain_errors("stages.extract.model", extract_model, "모델 이름 문자열 · 목록 (예: claude-opus-5-5, openai:모델ID)")
+    summary_tags = stages["extract"].get("summaryTags") or {}
+    if not isinstance(summary_tags.get("enabled", False), bool):
+        errors.append("stages.extract.summaryTags.enabled는 true · false다")
+    errors += summary_tag_option_errors({k: v for k, v in summary_tags.items() if k != "enabled"})
     errors += free_models_errors(config)
     for spec in stages["generate"]["models"] + (stages["contamination"]["models"] or []):
         if is_free_token(spec):
@@ -428,6 +451,7 @@ def validate_config(config):
     if select["strategy"] == "manual" and not select["run"]:
         errors.append("manual 선택은 stages.select.run에 '공급자__모델/run-003' 형식으로 회차를 적는다")
     errors += axis_errors(config)
+    errors += rag_option_errors({k: v for k, v in stages["rag"].items() if k != "enabled"})
     if stages["load"]["db"]["mode"] not in ("docker", "psql"):
         errors.append("stages.load.db.mode는 docker · psql 중 하나다")
     retry = config["retry"]
@@ -551,6 +575,42 @@ def batch_dir_for(config, case):
     return RUNS_DIR / f"{config['name']}-{digest}"
 
 
+def references_path(config):
+    return PIPELINE_DIR / config["name"] / "references.json"
+
+
+def rag_inputs(config, state):
+    """rag 단계의 입력: (사건 입력, 원본 판결문 정보, 공소제기일, 발생일, rag 설정)."""
+    case = load_json(input_file(config, state, "case"))
+    source = load_json(input_file(config, state, "source"))
+    overrides = [{k: v for k, v in s.items() if k != "path"} for s in config["sources"]]
+    try:
+        sources = resolve_sources(source.get("sources") or [], overrides, config["finalSourceIndex"])
+    except CaseSeedError as e:
+        raise PipelineError(str(e))
+    options = {k: v for k, v in config["stages"]["rag"].items() if k != "enabled"}
+    return case, sources, config.get("indictmentDate"), config.get("incidentDate") or source.get("incidentDate"), options
+
+
+def rag_input_key(config, state):
+    case, sources, indictment_date, incident_date, options = rag_inputs(config, state)
+    return input_key(case, sources, indictment_date=indictment_date, incident_date=incident_date, options=options)
+
+
+def generation_case(config, state):
+    """생성 · 선택 · 적재에 쓰는 사건 입력: rag 단계 결과가 있으면 references를 그것으로 바꾼다 (BE-54).
+    사건 입력 파일 자체는 바꾸지 않는다. rag를 끄면(enabled: false) 예전 결과가 남아 있어도 쓰지 않는다.
+    rag 결과가 지금 입력(사건 입력 · 기준일 · 사건번호 · 설정)으로 만든 것이 아니면 멈춘다(--from rag, #143 리뷰)."""
+    case = load_json(input_file(config, state, "case"))
+    rag = stage_output(state, "rag") if config["stages"]["rag"]["enabled"] else {}
+    if rag.get("referencesFile") and Path(rag["referencesFile"]).exists():
+        if rag.get("inputKey") and rag["inputKey"] != rag_input_key(config, state):
+            raise PipelineError("참고 자료(rag)를 만든 뒤 사건 입력 · 공소제기일 · 발생일 · 원본 판결문 정보 · rag 설정이 바뀌었습니다. "
+                                "--from rag로 참고 자료부터 다시 만드세요")
+        case["references"] = load_json(rag["referencesFile"])["references"]
+    return case
+
+
 def active_models(config, state, include_kept=True):
     """생성 · 선택에 쓸 모델: generate.models(free:는 지금 쓰는 무료 모델로 펼침)에서 사전 학습 점검으로 뺀 모델을 제외한다.
 
@@ -593,6 +653,9 @@ def stage_extract(config, state, log):
         raise PipelineError(f"비식별화 실패: {e}")
     outputs = {"case": str(case_path), "court": str(court_path), "report": str(report_path), "source": str(source_path)}
     report = load_json(report_path)
+    if (cfg.get("summaryTags") or {}).get("enabled"):
+        report = attach_summary_tags(report_path, report, cfg["summaryTags"], log)
+        outputs["summaryTags"] = report["summaryTagCandidates"]["status"]
     eligibility = report.get("eligibility") or {}
     outputs["eligible"] = eligibility.get("eligible")
     outputs["warnings"] = len(report.get("warnings", []))
@@ -606,6 +669,35 @@ def stage_extract(config, state, log):
         raise PipelineError("서비스 대상이 아닌 판결로 판정됐습니다 (stages.extract.requireEligible=false로 무시 가능): "
                             + " / ".join(eligibility.get("reasons", [])), outputs)
     return outputs
+
+
+def attach_summary_tags(report_path, report, options, log, embed_fn=None):
+    """extract 보고서에 요약어 후보를 더해 다시 쓴다 (BE-53). 고친 보고서를 돌려준다.
+
+    키가 없거나 임베딩 호출이 실패하면 상태만 SKIPPED로 남기고 extract는 계속한다(RAG 단계와 같은 정책).
+    기준 목록 파일이 잘못된 것은 저장소 오류라 멈춘다(조용히 빈 목록으로 비교하지 않는다).
+    embed_fn은 테스트에서 네트워크 대신 넣는 함수다.
+    """
+    try:
+        vocabulary = load_vocabulary()
+    except SummaryTagError as e:
+        raise PipelineError(f"요약어 후보 기준 목록 오류 (summary_tags.json): {e}")
+    options_kw = {"top_k": options.get("topK", DEFAULT_TOP_K), "min_score": options.get("minScore", DEFAULT_MIN_SCORE)}
+    try:
+        if embed_fn is None:
+            api_key("gemini")  # 없으면 LLMError → 건너뜀. 판결문은 보내지 않고 요약어만 임베딩한다
+        else:
+            options_kw["embed_fn"] = embed_fn
+        updated = annotate_report(report, vocabulary, **options_kw)
+        summary = updated["summaryTagCandidates"]
+        log(f"요약어 후보: 기준 목록 {summary['vocabularySize']}개와 비교 — 비슷한 기존 요약어가 있는 요소 "
+            f"{summary['suggested']}개 ({summary['minScore']} 이상), 1 · 2순위가 붙어 애매한 요소 {summary['ambiguous']}개 "
+            f"(제안 안 함) — 요약어는 바꾸지 않고 제안만")
+    except LLMError as e:
+        updated = skipped_report(report, str(e)[:200])
+        log(f"⚠ 요약어 후보를 만들지 못했습니다 (extract는 계속): {str(e)[:200]}")
+    write_json(report_path, updated)
+    return updated
 
 
 def court_model(config):
@@ -767,9 +859,27 @@ def vet_replacement(config, state, spec, log, caller):
     return spec not in excluded
 
 
+def stage_rag(config, state, log, embedder=None, runner=None):
+    """생성 참고 자료(양형기준 · 유사 판례)를 RAG로 찾아 references.json에 둔다 (BE-54). 사건 입력 파일은 바꾸지 않는다."""
+    case, sources, indictment_date, incident_date, options = rag_inputs(config, state)
+    db = config["stages"]["load"]["db"]
+    try:
+        references, report = build_references(
+            case, sources, indictment_date=indictment_date, incident_date=incident_date, options=options,
+            embedder=embedder, runner=runner or (lambda sql: query_db(sql, db)), log=log)
+    except RagContextError as e:
+        raise PipelineError(f"RAG 참고 자료 실패: {e}")
+    path = references_path(config)
+    write_json(path, {"_comment": "생성 프롬프트에 넣는 참고 자료 (BE-54). 비식별화한 판례 · 공개 양형기준만 담는다. 사건번호 없음.",
+                      "references": references, "report": report})
+    log(f"참고 자료: {path}")
+    key = input_key(case, sources, indictment_date=indictment_date, incident_date=incident_date, options=options)
+    return {"referencesFile": str(path), "report": report, "inputKey": key}
+
+
 def stage_generate(config, state, log, caller=call):
     cfg = config["stages"]["generate"]
-    case = load_json(input_file(config, state, "case"))
+    case = generation_case(config, state)
     batch_dir = batch_dir_for(config, case)
     options = {"temperature": cfg["temperature"], "max_tokens": cfg["maxTokens"], "timeout": cfg["timeout"],
                "delay": cfg["delay"], "caller": caller, "log": log, "replacement_runs": cfg["runs"],
@@ -856,7 +966,7 @@ def select_run(case, groups, models, strategy, manual_run=None):
 
 def stage_select(config, state, log):
     cfg = config["stages"]["select"]
-    case = load_json(input_file(config, state, "case"))
+    case = generation_case(config, state)
     batch_dir = Path(stage_output(state, "generate").get("batchDir") or batch_dir_for(config, case))
     _, groups = load_runs(batch_dir)
     models = active_models(config, state)
@@ -898,7 +1008,18 @@ def build_generation_report(config, state, run_record, selection):
         "contamination": ({"verdict": contamination["verdict"], "reason": contamination.get("reason"),
                            "counts": contamination["counts"], "criteria": contamination.get("criteria")}
                           if contamination else {"verdict": "SKIPPED"}),
+        # 참고 자료 검색 요약 (BE-54): 버전 이름 · 기준 종류 · 판례 id · 점수 · 대체 사유. 사건번호 · 판례 본문은 넣지 않는다
+        "rag": rag_report(config, state),
     }
+
+
+def rag_report(config, state):
+    rag = stage_output(state, "rag") if config["stages"]["rag"]["enabled"] else {}
+    report = rag.get("report")
+    if not report:
+        return {"status": "SKIPPED"}
+    return {k: report.get(k) for k in ("status", "fallbackReasons", "embeddingModel", "guideline", "guidelineBasis",
+                                         "guidelineFactors", "precedents", "excludedSuspects", "warnings")}
 
 
 def axis_model(config, state):
@@ -989,9 +1110,17 @@ def stage_load(config, state, log, apply=None):
     run_record = load_json(selection["runFile"])
     output = run_record["output"]
     try:
-        prompt = build_prompt(case)
+        prompt = build_prompt(generation_case(config, state))  # 생성 때 실제로 보낸 프롬프트 (rag 참고 자료 포함)
     except InputError as e:
         raise PipelineError(str(e))
+    # 다시 만든 프롬프트가 고른 회차를 생성한 프롬프트와 같은지 확인한다. 생성 뒤에 사건 입력 · 참고 자료(references.json)가
+    # 바뀌었으면 실제로 보낸 것과 다른 프롬프트가 기록되므로 멈춘다 (#143 리뷰)
+    batch_file = Path(selection["runFile"]).parent.parent / "batch.json"
+    if not batch_file.exists():
+        raise PipelineError(f"고른 회차의 묶음 정보가 없어 프롬프트를 확인할 수 없습니다: {batch_file}. --from generate로 다시 생성하세요")
+    if load_json(batch_file).get("promptSha256") != prompt_digest(prompt):
+        raise PipelineError("생성 뒤에 사건 입력 또는 참고 자료가 바뀌어 고른 회차의 프롬프트와 다릅니다. "
+                            "--from generate로 다시 생성하세요(사건 입력 · 기준일을 바꿨으면 --from rag)")
 
     parts = []
     if cfg["case"]:
@@ -1008,7 +1137,7 @@ def stage_load(config, state, log, apply=None):
             sources = resolve_sources(source["sources"], overrides, config["finalSourceIndex"])
             incident_date = config.get("incidentDate") or source.get("incidentDate")
             parts.append(build_case_sql(case, report, sources, source_org=cfg["sourceOrg"], source_note=cfg["sourceNote"],
-                                        incident_date=incident_date))
+                                        incident_date=incident_date, indictment_date=config.get("indictmentDate")))
         except CaseSeedError as e:
             raise PipelineError(str(e))
 
@@ -1104,8 +1233,8 @@ def _local_docker_endpoint():
     return endpoint
 
 
-def apply_sql(sql_path, db):
-    """로컬 DB에만 적재한다. 운영 반영은 SQL 파일을 별도 절차로 실행한다."""
+def psql_command(db):
+    """로컬 DB용 psql 명령과 환경 변수. 원격 DB는 거부한다 (적재 · RAG 검색 공통)."""
     if db["mode"] == "docker":
         if not shutil.which("docker"):
             raise PipelineError("docker 명령이 없습니다 (stages.load.db.mode=psql로 바꾸거나 applyToDb=false)")
@@ -1119,6 +1248,10 @@ def apply_sql(sql_path, db):
         parsed = urllib.parse.urlparse(url)
         # libpq는 쿼리의 host · hostaddr를 URL 호스트보다 우선해 쓰고, 쉼표로 여러 호스트를 받는다. 모두 로컬이어야 한다
         query = urllib.parse.parse_qs(parsed.query)
+        # service 접속은 서비스 파일(pg_service.conf)의 host를 쓰므로 아래 호스트 검사를 거치지 않는다. 쓰지 않는다 (#143 리뷰)
+        if query.get("service") or os.environ.get("PGSERVICE"):
+            raise PipelineError("service 접속(URL의 service · 환경변수 PGSERVICE)은 쓰지 않습니다. 서비스 파일의 원격 host로 "
+                                "접속할 수 있어서입니다. stages.load.db.url에 로컬 호스트를 직접 적고 PGSERVICE를 비우세요")
         hosts = [h for key in ("host", "hostaddr") for value in query.get(key, []) for h in value.split(",")]
         if parsed.hostname:
             hosts.append(parsed.hostname)
@@ -1133,6 +1266,27 @@ def apply_sql(sql_path, db):
         command = ["psql", url, "-v", "ON_ERROR_STOP=1", "-q"]
         env = {**os.environ, "PGUSER": os.environ.get("DB_USERNAME", "lawnambul"),
                "PGPASSWORD": os.environ.get("DB_PASSWORD", "lawnambul")}
+    return command, env
+
+
+def query_db(sql, db):
+    """읽기 전용 질의 하나를 로컬 DB에 보내고 출력(-At, 한 줄 JSON)을 돌려준다 (BE-54 RAG 검색). 실패는 RagUnavailable."""
+    try:
+        command, env = psql_command(db)
+        at = command.index("psql") + 1  # psql 옵션은 접속 문자열 앞에 둔다
+        command = command[:at] + ["-X", "-At"] + command[at:]
+        completed = subprocess.run(command, input=sql.encode("utf-8"), capture_output=True, env=env,
+                                   timeout=120)
+    except (PipelineError, OSError, subprocess.SubprocessError) as e:
+        raise RagUnavailable(str(e.args[0] if isinstance(e, PipelineError) else e))
+    if completed.returncode != 0:
+        raise RagUnavailable(completed.stderr.decode("utf-8", "replace").strip()[-1000:])
+    return completed.stdout.decode("utf-8", "replace")
+
+
+def apply_sql(sql_path, db):
+    """로컬 DB에만 적재한다. 운영 반영은 SQL 파일을 별도 절차로 실행한다."""
+    command, env = psql_command(db)
     with open(sql_path, "rb") as f:
         completed = subprocess.run(command, stdin=f, capture_output=True, env=env, timeout=300)
     stderr = completed.stderr.decode("utf-8", "replace")
@@ -1147,6 +1301,7 @@ STAGE_FUNCTIONS = {
     "extract": stage_extract,
     "court": stage_court,
     "contamination": stage_contamination,
+    "rag": stage_rag,
     "generate": stage_generate,
     "select": stage_select,
     "axis": stage_axis,
@@ -1192,6 +1347,8 @@ def run_pipeline(config, start=None, until=None, skip=(), rerun=False, log=print
         log(f"외부 전송: 재판부 판결 초안 단계에서 마스킹한 판결문이 {providers_text(court_model(config))}로 전송됩니다")
     if {"contamination", "generate"} & set(steps):
         log(f"외부 전송: 비식별화한 사건 내용이 {', '.join(providers)}로 전송됩니다")
+    if "rag" in steps:
+        log("외부 전송: 참고 자료 검색어로 비식별화한 사건 개요가 gemini(임베딩)로 전송됩니다")
     if "axis" in steps:
         # 무료 모델(free:)은 점검 단계에서 다시 정해지므로 지금 모델을 모를 수 있다. 그때는 생성 공급자로 안내한다(축 모델은 그중 하나)
         axis_spec = axis_model(config, state)

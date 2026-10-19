@@ -4,6 +4,9 @@ import { createAppApi } from './app/appApi.js';
 import { routes } from './app/routes.js';
 import { createRouter } from './app/router.js';
 import { loadApi } from './api/index.js';
+import { applyMotion } from './utils/motion.js';
+
+applyMotion(); // 연출 스위치 설정을 첫 화면 전에 <html data-motion>에 반영한다
 
 const app = document.querySelector('#app');
 const view = document.createElement('div');

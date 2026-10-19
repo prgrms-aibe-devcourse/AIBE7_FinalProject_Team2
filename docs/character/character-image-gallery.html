@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>내Law남불 이미지 갤러리</title>
+<style>
+:root{--bg:#faf8f3;--fg:#222;--mute:#777;--card:#fff;--bd:#e4dfd3;--ac:#c2410c;--chk1:#fff;--chk2:#eee;--sz:220px}
+@media(prefers-color-scheme:dark){:root{--bg:#1b1a18;--fg:#eee;--mute:#999;--card:#262421;--bd:#3a3733;--ac:#fb923c;--chk1:#33312e;--chk2:#2a2826}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 -apple-system,"Apple SD Gothic Neo","Pretendard",sans-serif}
+header{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--bd);padding:12px 16px}
+h1{margin:0 0 8px;font-size:18px}
+h1 small{color:var(--mute);font-weight:400;font-size:13px;margin-left:8px}
+.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px}
+.row b{color:var(--mute);font-weight:500;font-size:12px;min-width:44px}
+.chip{border:1px solid var(--bd);background:var(--card);color:var(--fg);border-radius:99px;padding:3px 11px;cursor:pointer;font:inherit;font-size:13px}
+.chip.on{background:var(--ac);border-color:var(--ac);color:#fff}
+input[type=search]{border:1px solid var(--bd);background:var(--card);color:var(--fg);border-radius:8px;padding:6px 10px;font:inherit;width:240px;max-width:100%}
+input[type=range]{width:120px}
+main{padding:16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--sz),1fr));gap:12px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;overflow:hidden;cursor:pointer}
+.card:hover{border-color:var(--ac)}
+.th{aspect-ratio:1;background:repeating-conic-gradient(var(--chk1) 0 25%,var(--chk2) 0 50%) 0 0/16px 16px;display:flex}
+.th img{width:100%;height:100%;object-fit:contain}
+.cap{padding:6px 8px;font-size:12px;word-break:break-all}
+.cap i{display:block;color:var(--mute);font-style:normal;font-size:11px}
+.empty{padding:40px;text-align:center;color:var(--mute)}
+#lb{position:fixed;inset:0;background:rgba(0,0,0,.88);display:none;z-index:10;flex-direction:column;align-items:center;justify-content:center;padding:16px}
+#lb.on{display:flex}
+#lb .stage{flex:1;min-height:0;width:100%;display:flex;align-items:center;justify-content:center;background:none}
+#lb img{max-width:100%;max-height:100%;object-fit:contain;background:repeating-conic-gradient(#fff 0 25%,#e6e6e6 0 50%) 0 0/20px 20px}
+#lb .bar{color:#fff;margin-top:10px;text-align:center;font-size:13px;word-break:break-all}
+#lb .bar button,#lb .bar a{color:#fff;background:#ffffff22;border:0;border-radius:6px;padding:4px 10px;margin:6px 3px 0;cursor:pointer;font:inherit;text-decoration:none;display:inline-block}
+.nav{position:absolute;top:50%;transform:translateY(-50%);font-size:34px;color:#fff;background:#ffffff22;border:0;border-radius:8px;width:44px;height:64px;cursor:pointer}
+#prev{left:10px}#next{right:10px}#x{position:absolute;top:10px;right:14px;font-size:28px;color:#fff;background:none;border:0;cursor:pointer}
+</style>
+</head>
+<body>
+<header>
+  <h1>내Law남불 이미지 갤러리<small id="cnt"></small><small id="src"></small></h1>
+  <div class="row"><input type="search" id="q" placeholder="파일명 검색 (예: hug, personality-06)">
+    <b style="margin-left:8px">크기</b><input type="range" id="sz" min="120" max="420" value="220"></div>
+  <div class="row"><b>캐릭터</b><span id="f-char"></span></div>
+  <div class="row"><b>종류</b><span id="f-cat"></span></div>
+  <div class="row"><label style="font-size:13px"><input type="checkbox" id="orig"> 원본 백업(_original) 포함</label></div>
+</header>
+<main><div class="grid" id="grid"></div><div class="empty" id="empty" hidden>결과 없음</div></main>
+<div id="lb"><button id="x">×</button><button class="nav" id="prev">‹</button><button class="nav" id="next">›</button>
+  <div class="stage"><img id="lbimg" alt=""></div>
+  <div class="bar"><div id="lbname"></div><div><a id="lbopen" target="_blank" rel="noopener">원본 열기</a><button id="lbcopy">URL 복사</button></div></div></div>
+<script>
+const BASE="https://raw.githubusercontent.com/peanutboi710/NaeLawNamBul_Images/main/";
+// 이미지 목록은 페이지를 열 때 GitHub API(git/trees, 토큰 없이 시간당 60회)로 이미지 레포에서 직접 읽어 온다.
+// 그래서 레포에 이미지를 올리기만 하면 갤러리에 나타난다(GitHub 캐시 때문에 몇 분 늦을 수 있음).
+// API가 막히거나(호출 제한 · 오프라인) 실패하면 아래 저장된 목록(2026-10-15 기준, 공용 재연 세트 2 추가 · 10/15 이관 이미지는 납품 전이라 없음)으로 보여 준다.
+const TREE_API="https://api.github.com/repos/peanutboi710/NaeLawNamBul_Images/git/trees/main?recursive=1";
+const FALLBACK_PATHS=["character/_original/original_all_sheet_height-compare_generated-wrong-ratio.png", "character/_original/original_compare_cut_trio-thinking_v1-scale-too-small.png", "character/_original/original_law-book_cut_deliver-neutral.png", "character/_original/original_law-book_sheet_acting_v1.png", "character/_original/original_law-book_sheet_acting_v2.png", "character/_original/original_law-book_sheet_reference_gpt-layout.png", "character/_original/original_law-book_sheet_reference_r2-fixed.png", "character/_original/original_law-book_standing_a2-tall-book.png", "character/_original/original_law-book_standing_a4-3-near-duplicate.png", "character/_original/original_law-gavel_cut_deliver-neutral_v1-slim-body.png", "character/_original/original_law-gavel_cut_deliver-neutral_v2.png", "character/_original/original_law-gavel_sheet_acting.png", "character/_original/original_law-gavel_standing_empty-hand-slim.png", "character/_original/original_law-scale_cut_deliver-neutral.png", "character/_original/original_law-scale_cut_idle-neutral.png", "character/_original/original_law-scale_sheet_acting_v1.png", "character/_original/original_law-scale_standing_empty-hand.png", "character/_original/original_naero_cut-cheek_idle-sorry.png", "character/_original/original_naero_cut-cheek_idle-thinking.png", "character/_original/original_naero_cut_cheer-cheer.png", "character/_original/original_naero_cut_guide-happy.png", "character/_original/original_naero_cut_guide-neutral.png", "character/_original/original_naero_cut_react-happy.png", "character/_original/original_naero_cut_react-sorry.png", "character/_original/original_naero_cut_react-surprised.png", "character/_original/original_naero_cut_read-thinking.png", "character/_original/original_naero_icon_face-cheer_v1.png", "character/_original/original_naero_icon_face-cheer_v2.png", "character/_original/original_naero_icon_face-happy_v1.png", "character/_original/original_naero_icon_face-neutral_v1.png", "character/_original/original_naero_icon_face-sorry_v1.png", "character/_original/original_naero_icon_face-sorry_v2.png", "character/_original/original_naero_icon_face-surprised_v1.png", "character/_original/original_naero_icon_face-thinking_v1.png", "character/_original/original_naero_sheet_acting_v1.png", "character/_original/original_naero_sheet_deform-cheek.png", "character/_original/original_naero_sheet_deform-ppg.png", "character/_original/original_naero_sheet_deform-ranma_v1-mascot-proportions.png", "character/_original/original_naero_sheet_deform-ranma_v2.png", "character/_original/original_naero_sheet_role-outfits_v1-ochre-bands.png", "character/_original/original_naero_sheet_role-outfits_v2.png", "character/_original/original_nambul_cut-cheek_idle-sorry.png", "character/_original/original_nambul_cut-cheek_idle-thinking.png", "character/_original/original_nambul_cut_cheer-cheer.png", "character/_original/original_nambul_cut_guide-happy.png", "character/_original/original_nambul_cut_guide-neutral.png", "character/_original/original_nambul_cut_react-happy.png", "character/_original/original_nambul_cut_react-sorry.png", "character/_original/original_nambul_cut_react-surprised.png", "character/_original/original_nambul_cut_read-thinking.png", "character/_original/original_nambul_icon_face-cheer_v1.png", "character/_original/original_nambul_icon_face-cheer_v2.png", "character/_original/original_nambul_icon_face-happy_v1.png", "character/_original/original_nambul_icon_face-neutral_v1.png", "character/_original/original_nambul_icon_face-sorry_v1.png", "character/_original/original_nambul_icon_face-sorry_v2.png", "character/_original/original_nambul_icon_face-surprised_v1.png", "character/_original/original_nambul_icon_face-thinking_v1.png", "character/_original/original_nambul_sheet_acting_v1.png", "character/_original/original_nambul_sheet_deform-cheek.png", "character/_original/original_nambul_sheet_deform-ppg.png", "character/_original/original_nambul_sheet_deform-ranma_v1-mascot-proportions.png", "character/_original/original_nambul_sheet_deform-ranma_v2.png", "character/_original/original_nambul_sheet_role-outfits_v1-ochre-bands.png", "character/_original/original_nambul_sheet_role-outfits_v3.png", "character/_original/original_personality-01_naero_rule-binder_v1.png", "character/_original/original_personality-01_nambul_rule-binder.png", "character/_original/original_personality-02_naero_apology-letter_v2.png", "character/_original/original_personality-02_nambul_apology-letter_v1.png", "character/_original/original_personality-02_nambul_apology-letter_v2.png", "character/_original/original_personality-03_naero_stopwatch_v1.png", "character/_original/original_personality-03_naero_stopwatch_v2.png", "character/_original/original_personality-03_nambul_stopwatch.png", "character/_original/original_personality-04_naero_checklist_v1.png", "character/_original/original_personality-04_nambul_checklist.png", "character/_original/original_personality-05_naero_group-announcement.png", "character/_original/original_personality-05_nambul_group-announcement_v1.png", "character/_original/original_personality-06_naero_pinky-promise_v1.png", "character/_original/original_personality-06_naero_pinky-promise_v3.png", "character/_original/original_personality-06_nambul_pinky-promise_v5.png", "character/_original/original_personality-07_naero_glasses.png", "character/_original/original_personality-07_nambul_glasses_v1.png", "character/_original/original_personality-08_naero_thumbs-up.png", "character/_original/original_personality-08_nambul_thumbs-up_v1.png", "character/_original/original_personality-09_naero_chin-tilt_v1.png", "character/_original/original_personality-09_naero_chin-tilt_v2.png", "character/_original/original_personality-09_nambul_chin-tilt.png", "character/_original/original_personality-10_naero_open-arm.png", "character/_original/original_personality-10_nambul_open-arm_v1.png", "character/_original/original_personality-10_nambul_open-arm_v2.png", "character/_original/original_personality-11_naero_hug.png", "character/_original/original_personality-11_nambul_hug_v1.png", "character/_original/original_personality-11_nambul_hug_v2.png", "character/_original/original_personality-12_naero_hand-on-chest_v1.png", "character/_original/original_personality-12_nambul_hand-on-chest.png", "character/_original/original_personality-13_naero_whiteboard.png", "character/_original/original_personality-13_nambul_whiteboard_v1.png", "character/_original/original_personality-13_nambul_whiteboard_v3.png", "character/_original/original_personality-14_naero_handkerchief_v1.png", "character/_original/original_personality-14_nambul_handkerchief.png", "character/_original/original_personality-15_naero_cheer-stick.png", "character/_original/original_personality-15_nambul_cheer-stick_v1.png", "character/_original/original_personality-16_naero_blanket-mug_v1.png", "character/_original/original_personality-16_nambul_blanket-mug.png", "character/_original/original_reenact-common_cut_detail-1_v1.png", "character/_original/original_reenact-common_cut_detail-1_v2.png", "character/_original/original_reenact-common_cut_headline_v1.png", "character/_original/original_reenact-common_cut_headline_v2.png", "character/_original/original_reenact-common_cut_sub-1_v1.png", "character/_original/original_reenact-common_cut_sub-1_v2.png", "character/_original/original_trio_cut_idle_v1.png", "character/_original/original_trio_cut_idle_v2.png", "character/_original/original_trio_cut_think_v1.png", "character/_original/original_trio_cut_think_v2.png", "character/cuts/compare/compare_cut_trio-thinking.png", "character/cuts/law-book/base/law-book_cut_deliver-neutral.png", "character/cuts/law-book/base/law-book_cut_idle-neutral.png", "character/cuts/law-gavel/base/law-gavel_cut_deliver-neutral.png", "character/cuts/law-gavel/base/law-gavel_cut_idle-neutral.png", "character/cuts/law-scale/base/law-scale_cut_deliver-neutral.png", "character/cuts/law-scale/base/law-scale_cut_idle-neutral.png", "character/cuts/naero/base/naero_cut-cheek_idle-sorry.png", "character/cuts/naero/base/naero_cut-cheek_idle-thinking.png", "character/cuts/naero/base/naero_cut_cheer-cheer.png", "character/cuts/naero/base/naero_cut_guide-happy.png", "character/cuts/naero/base/naero_cut_guide-neutral.png", "character/cuts/naero/base/naero_cut_idle-neutral.png", "character/cuts/naero/base/naero_cut_react-happy.png", "character/cuts/naero/base/naero_cut_react-sorry.png", "character/cuts/naero/base/naero_cut_react-surprised.png", "character/cuts/naero/base/naero_cut_read-thinking.png", "character/cuts/naero/icon/naero_icon_face-cheer.png", "character/cuts/naero/icon/naero_icon_face-happy.png", "character/cuts/naero/icon/naero_icon_face-neutral.png", "character/cuts/naero/icon/naero_icon_face-sorry.png", "character/cuts/naero/icon/naero_icon_face-surprised.png", "character/cuts/naero/icon/naero_icon_face-thinking.png", "character/cuts/nambul/base/nambul_cut-cheek_idle-sorry.png", "character/cuts/nambul/base/nambul_cut-cheek_idle-thinking.png", "character/cuts/nambul/base/nambul_cut_cheer-cheer.png", "character/cuts/nambul/base/nambul_cut_guide-happy.png", "character/cuts/nambul/base/nambul_cut_guide-neutral.png", "character/cuts/nambul/base/nambul_cut_idle-neutral.png", "character/cuts/nambul/base/nambul_cut_react-happy.png", "character/cuts/nambul/base/nambul_cut_react-sorry.png", "character/cuts/nambul/base/nambul_cut_react-surprised.png", "character/cuts/nambul/base/nambul_cut_read-thinking.png", "character/cuts/nambul/icon/nambul_icon_face-cheer.png", "character/cuts/nambul/icon/nambul_icon_face-happy.png", "character/cuts/nambul/icon/nambul_icon_face-neutral.png", "character/cuts/nambul/icon/nambul_icon_face-sorry.png", "character/cuts/nambul/icon/nambul_icon_face-surprised.png", "character/cuts/nambul/icon/nambul_icon_face-thinking.png", "character/cuts/personality/personality-01_naero_rule-binder.png", "character/cuts/personality/personality-01_nambul_rule-binder.png", "character/cuts/personality/personality-02_naero_apology-letter.png", "character/cuts/personality/personality-02_nambul_apology-letter.png", "character/cuts/personality/personality-03_naero_stopwatch.png", "character/cuts/personality/personality-03_nambul_stopwatch.png", "character/cuts/personality/personality-04_naero_checklist.png", "character/cuts/personality/personality-04_nambul_checklist.png", "character/cuts/personality/personality-05_naero_group-announcement.png", "character/cuts/personality/personality-05_nambul_group-announcement.png", "character/cuts/personality/personality-06_naero_pinky-promise.png", "character/cuts/personality/personality-06_nambul_pinky-promise.png", "character/cuts/personality/personality-07_naero_glasses.png", "character/cuts/personality/personality-07_nambul_glasses.png", "character/cuts/personality/personality-08_naero_thumbs-up.png", "character/cuts/personality/personality-08_nambul_thumbs-up.png", "character/cuts/personality/personality-09_naero_chin-tilt.png", "character/cuts/personality/personality-09_nambul_chin-tilt.png", "character/cuts/personality/personality-10_naero_open-arm.png", "character/cuts/personality/personality-10_nambul_open-arm.png", "character/cuts/personality/personality-11_naero_hug.png", "character/cuts/personality/personality-11_nambul_hug.png", "character/cuts/personality/personality-12_naero_hand-on-chest.png", "character/cuts/personality/personality-12_nambul_hand-on-chest.png", "character/cuts/personality/personality-13_naero_whiteboard.png", "character/cuts/personality/personality-13_nambul_whiteboard.png", "character/cuts/personality/personality-14_naero_handkerchief.png", "character/cuts/personality/personality-14_nambul_handkerchief.png", "character/cuts/personality/personality-15_naero_cheer-stick.png", "character/cuts/personality/personality-15_nambul_cheer-stick.png", "character/cuts/personality/personality-16_naero_blanket-mug.png", "character/cuts/personality/personality-16_nambul_blanket-mug.png", "character/cuts/reenact/common/reenact-common-2_cut_detail-1.png", "character/cuts/reenact/common/reenact-common-2_cut_headline.png", "character/cuts/reenact/common/reenact-common-2_cut_sub-1.png", "character/cuts/reenact/common/reenact-common_cut_detail-1.png", "character/cuts/reenact/common/reenact-common_cut_headline.png", "character/cuts/reenact/common/reenact-common_cut_sub-1.png", "character/cuts/trio/trio_cut_idle.png", "character/cuts/trio/trio_cut_think.png", "character/sheets/acting/law-book_sheet_acting.png", "character/sheets/acting/law-gavel_sheet_acting.png", "character/sheets/acting/law-scale_sheet_acting.png", "character/sheets/acting/naero_sheet_acting.png", "character/sheets/acting/nambul_sheet_acting.png", "character/sheets/all_sheet_height-compare.png", "character/sheets/deform/naero_sheet_deform-cheek.png", "character/sheets/deform/naero_sheet_deform-ppg.png", "character/sheets/deform/naero_sheet_deform-ranma.png", "character/sheets/deform/nambul_sheet_deform-cheek.png", "character/sheets/deform/nambul_sheet_deform-ppg.png", "character/sheets/deform/nambul_sheet_deform-ranma.png", "character/sheets/law-book_sheet_reference.png", "character/sheets/law-gavel_sheet_reference.png", "character/sheets/law-scale_sheet_reference.png", "character/sheets/naero_sheet_reference.png", "character/sheets/nambul_sheet_reference.png", "character/sheets/role-outfits/naero_sheet_role-outfits.png", "character/sheets/role-outfits/nambul_sheet_role-outfits.png", "character/standing/law-book_standing.png", "character/standing/law-gavel_standing.png", "character/standing/law-scale_standing.png", "character/standing/naero_standing.png", "character/standing/nambul_standing.png"];
+const CHARS={naero:"내로",nambul:"남불","law-scale":"로울","law-gavel":"로봉","law-book":"로북",trio:"로 3인",compare:"비교",reenact:"재연",props:"소품",all:"전체 시트"};
+const CATS={standing:"스탠딩",sheet:"시트",cut:"컷",icon:"아이콘",personality:"성향 결과",reenact:"재연",original:"원본 백업"};
+function info(p){
+  const n=p.split("/").pop().replace(/\.png$/,"");
+  const orig=p.includes("/_original/");
+  const base=n.replace(/^original_/,"");
+  let ch=Object.keys(CHARS).find(k=>base.startsWith(k+"_"))||"";
+  if(base.startsWith("personality-")) ch=(base.split("_")[1])||"";
+  if(base.startsWith("reenact-")) ch="reenact";
+  let cat=orig?"original":base.startsWith("personality-")?"personality":base.startsWith("reenact-")?"reenact":/_icon_/.test(base)?"icon":/_standing/.test(base)?"standing":/_sheet/.test(base)?"sheet":"cut";
+  return{p,n,ch,cat,orig,base};
+}
+let items=FALLBACK_PATHS.map(info);
+const st={ch:"",cat:"",q:"",orig:false};
+const $=s=>document.querySelector(s);
+function chips(id,map,key){
+  const el=$(id);el.innerHTML="";
+  [["","전체"],...Object.entries(map)].forEach(([k,v])=>{
+    if(k&&!items.some(i=>i[key==="ch"?"ch":"cat"]===k))return;
+    const b=document.createElement("button");b.className="chip"+(st[key]===k?" on":"");b.textContent=v;
+    b.onclick=()=>{st[key]=k;render();};el.appendChild(b);
+  });
+}
+let view=[];
+function render(){
+  chips("#f-char",CHARS,"ch");chips("#f-cat",CATS,"cat");
+  const q=st.q.toLowerCase();
+  view=items.filter(i=>(st.orig||!i.orig||st.cat==="original")&&(!st.ch||i.ch===st.ch)&&(!st.cat||i.cat===st.cat)&&(!q||i.p.toLowerCase().includes(q)));
+  $("#cnt").textContent=view.length+" / "+items.length+"장";
+  $("#empty").hidden=view.length>0;
+  const g=$("#grid");g.innerHTML="";
+  view.forEach((i,idx)=>{
+    const d=document.createElement("div");d.className="card";
+    d.innerHTML='<div class="th"><img loading="lazy" decoding="async"></div><div class="cap"></div>';
+    d.querySelector("img").src=BASE+encodeURI(i.p);d.querySelector("img").alt=i.n;
+    const c=d.querySelector(".cap");c.textContent=i.n;const s=document.createElement("i");s.textContent=i.p.replace(/\/[^/]+$/,"");c.appendChild(s);
+    d.onclick=()=>openAt(idx);g.appendChild(d);
+  });
+}
+let cur=0;
+function openAt(i){cur=(i+view.length)%view.length;const it=view[cur],u=BASE+encodeURI(it.p);
+  $("#lbimg").src=u;$("#lbname").textContent=it.p+"  ("+(cur+1)+"/"+view.length+")";$("#lbopen").href=u;$("#lb").classList.add("on");}
+function closeViewer(){$("#lb").classList.remove("on");$("#lbimg").removeAttribute("src");}
+$("#x").onclick=closeViewer;$("#prev").onclick=e=>{e.stopPropagation();openAt(cur-1)};$("#next").onclick=e=>{e.stopPropagation();openAt(cur+1)};
+$("#lb").onclick=e=>{if(e.target.id==="lb"||e.target.classList.contains("stage"))closeViewer()};
+$("#lbcopy").onclick=async e=>{const u=BASE+encodeURI(view[cur].p);try{await navigator.clipboard.writeText(u);e.target.textContent="복사됨";}catch{e.target.textContent="복사 실패";}setTimeout(()=>e.target.textContent="URL 복사",1200)};
+document.addEventListener("keydown",e=>{if(!$("#lb").classList.contains("on"))return;
+  if(e.key==="Escape")closeViewer();if(e.key==="ArrowLeft")openAt(cur-1);if(e.key==="ArrowRight")openAt(cur+1);});
+$("#q").oninput=e=>{st.q=e.target.value;render()};
+$("#orig").onchange=e=>{st.orig=e.target.checked;render()};
+$("#sz").oninput=e=>document.documentElement.style.setProperty("--sz",e.target.value+"px");
+render();
+// 최신 목록 읽기
+(async()=>{
+  const note=$("#src");
+  note.textContent="저장된 목록(10/15 기준)으로 표시 중(최신 목록을 확인하는 중)";
+  try{
+    const r=await fetch(TREE_API,{headers:{Accept:"application/vnd.github+json"},signal:AbortSignal.timeout(8000)});
+    if(!r.ok)throw new Error(r.status);
+    const t=await r.json();
+    const paths=(t.tree||[]).filter(f=>f.type==="blob"&&/^character\/.+\.png$/.test(f.path)).map(f=>f.path).sort();
+    if(!paths.length)throw new Error("empty");
+    items=paths.map(info);
+    closeViewer(); // 목록이 바뀌면 열린 뷰어의 위치(cur)가 어긋나므로 닫는다
+    if(st.ch&&!items.some(i=>i.ch===st.ch))st.ch=""; // 새 목록에 없는 필터는 풀어 빈 화면을 막는다
+    if(st.cat&&!items.some(i=>i.cat===st.cat))st.cat="";
+    note.textContent="레포 최신 목록";
+    if(t.truncated)note.textContent+=" (일부 생략됨)";
+    render();
+  }catch(e){
+    note.textContent="저장된 목록(10/15 기준)으로 표시 중(최신 목록을 읽지 못함)";
+  }
+})();
+</script>
+</body>
+</html>

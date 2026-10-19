@@ -11,6 +11,7 @@ import com.team2.project.legalcase.repository.LegalCaseRepository;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 실패 순서: 비공개 · 없는 사건 → CASE_NOT_FOUND / 쿠키 없음 · 모르는 익명 ID · 체험 없음 → EXPERIENCE_NOT_FOUND
  * 조회만 하므로 읽기 전용이다. 최근 접속 시각 갱신은 AnonymousUserRepository가 별도 트랜잭션으로 한다.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class MyExperienceService {

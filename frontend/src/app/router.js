@@ -10,13 +10,14 @@ import { loadCaseHeader } from './caseHeader.js';
 
 const SITE_TITLE = '내Law남불';
 
+// 주소 자리표시자: :caseId(사건 번호) · :shareId(성향 유형 공유 주소의 해시 값, S-16 공유 — 유형 코드를 주소에 드러내지 않는다)
 function toMatcher(path) {
-  const pattern = path.replace(':caseId', '([0-9]+)');
+  const pattern = path.replace(':caseId', '(?<caseId>[0-9]+)').replace(':shareId', '(?<shareId>[A-Za-z0-9]{6,16})');
   return new RegExp(`^${pattern}/?$`);
 }
 
-function buildPath(path, caseId) {
-  return path.replace(':caseId', String(caseId));
+function buildPath(path, caseId, shareId) {
+  return path.replace(':caseId', String(caseId)).replace(':shareId', String(shareId)); // 해시는 대소문자를 구분한다(그대로 둔다)
 }
 
 function sameExtras(a, b) {
@@ -55,9 +56,10 @@ export function createRouter({ view, footerHost, routes }) {
     for (const { route, regex } of matchers) {
       const found = regex.exec(pathname);
       if (!found) continue;
-      const caseId = found[1] === undefined ? undefined : Number(found[1]);
+      const rawCaseId = found.groups?.caseId;
+      const caseId = rawCaseId === undefined ? undefined : Number(rawCaseId);
       if (caseId !== undefined && !(Number.isSafeInteger(caseId) && caseId > 0)) return null;
-      return { route, caseId };
+      return { route, caseId, shareId: found.groups?.shareId };
     }
     return null;
   }
@@ -96,8 +98,11 @@ export function createRouter({ view, footerHost, routes }) {
     await show(notFound, undefined, {}, null, 'navigate');
   }
 
-  /** 화면 이동. 반환값은 화면을 그리는 작업의 완료 시점이다 (기다리지 않아도 된다) */
-  async function navigate(name, params = {}, { replace = false } = {}) {
+  /** 화면 이동. 반환값은 화면을 그리는 작업의 완료 시점이다 (기다리지 않아도 된다)
+   *  keepView: 화면은 다시 그리지 않고 주소 · 탭 제목만 바꾼다(판결 체험 6 → 7 → 8막처럼 한 무대에서 이어 갈 때).
+   *  keepScroll: 새 화면을 그리되 스크롤을 맨 위로 올리지 않는다(무대 자리가 같은 화면끼리, 예: 판결 서명 → AI 판결).
+   *  show()를 거치지 않으므로 이전 화면의 정리(cleanup)가 돌지 않는다 — 화면별 정리 로직이 생기면 여기서 빠지지 않게 챙길 것 */
+  async function navigate(name, params = {}, { replace = false, keepView = false, keepScroll = false } = {}) {
     const route = byName.get(name);
     if (!route) {
       console.warn(`알 수 없는 화면 이름: ${name}`);
@@ -111,7 +116,10 @@ export function createRouter({ view, footerHost, routes }) {
     if (needsCaseId(route) && caseId === undefined) {
       return showNotFound();
     }
-    const path = buildPath(route.path, caseId);
+    if (route.path.includes(':shareId') && !/^[A-Za-z0-9]{6,16}$/.test(String(extras.shareId))) {
+      return showNotFound();
+    }
+    const path = buildPath(route.path, caseId, extras.shareId);
     if (path === current.path && sameExtras(extras, current.extras)) {
       return undefined;
     }
@@ -119,8 +127,19 @@ export function createRouter({ view, footerHost, routes }) {
     const seq = replace ? (history.state?.seq ?? ++historySeq) : ++historySeq;
     history[replace ? 'replaceState' : 'pushState']({ extras, seq }, '', path);
     lastKnownSeq = seq; // 코드로 만든 이동이니 바로 갱신해 둔다 (다음 popstate 비교 기준)
-    window.scrollTo(0, 0);
-    return show(route, caseId, extras, path, 'navigate'); // 코드로 호출한 이동은 뒤로 · 앞으로 가기가 아니다
+    if (keepView) {
+      // 지금 화면이 그대로 이어지므로 token은 올리지 않는다(진행 중인 요청을 오래된 것으로 버리지 않게)
+      current = { ...current, name: route.name, path, caseId, extras };
+      document.title = `${route.title} · ${SITE_TITLE}`;
+      return undefined;
+    }
+    if (!keepScroll) window.scrollTo(0, 0);
+    const y = window.scrollY;
+    const drawing = show(route, caseId, extras, path, 'navigate'); // 코드로 호출한 이동은 뒤로 · 앞으로 가기가 아니다
+    // keepScroll: 새 화면은 처음에 "불러오는 중"만 있어 문서가 짧아지며 스크롤이 0으로 깎인다 — 다 그린 뒤 원래 자리로 돌린다
+    const mine = token; // show()가 token을 올린 직후 값 — 그려지는 사이 다른 화면으로 갔다면 복원하지 않는다
+    if (keepScroll) drawing?.then?.(() => { if (token === mine) window.scrollTo(0, y); });
+    return drawing;
   }
 
   // 지금 주소에 맞는 화면을 그린다 (처음 접속 · 새로고침 · 뒤로 · 앞으로 가기)
@@ -133,11 +152,13 @@ export function createRouter({ view, footerHost, routes }) {
     const raw = window.location.pathname.replace(/(.)\/$/, '$1');
     // /cases/01/review처럼 정규화되지 않은 사건 번호로 들어오면, navigate()가 만드는 경로(/cases/1/review)와
     // 달라져서 "같은 화면으로의 이동 무시"가 깨진다. 주소창도 정규화된 경로로 맞춰 둔다 (리뷰 반영)
-    const path = found.caseId === undefined ? raw : buildPath(found.route.path, found.caseId);
+    const path = found.caseId === undefined && found.shareId === undefined ? raw : buildPath(found.route.path, found.caseId, found.shareId);
     if (path !== raw) {
       history.replaceState(history.state, '', path); // state(순번 포함)는 그대로 유지한다
     }
-    return show(found.route, found.caseId, history.state?.extras ?? {}, path, navKind);
+    // 주소의 :shareId는 화면에 extras.shareId로 넘긴다 (직접 입력 · 새로고침해도 같은 값)
+    const extras = { ...(history.state?.extras ?? {}), ...(found.shareId === undefined ? {} : { shareId: found.shareId }) };
+    return show(found.route, found.caseId, extras, path, navKind);
   }
 
   return {
