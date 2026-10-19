@@ -28,3 +28,9 @@ test('저장소를 못 쓰면 이번 방문 동안만 기억한다', () => {
   assert.equal(motionSwitchOn(broken), false);
   setMotionSwitch(true, memoryStorage()); // 다음 테스트에 남지 않게 되돌린다
 });
+
+test('저장소가 아예 없어도(null) 이번 방문 동안 기억한다', () => {
+  setMotionSwitch(false, null);
+  assert.equal(motionSwitchOn(null), false);
+  setMotionSwitch(true, memoryStorage()); // 다음 테스트에 남지 않게 되돌린다
+});
