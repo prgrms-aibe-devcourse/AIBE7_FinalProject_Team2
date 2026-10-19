@@ -5,17 +5,12 @@ import { casePhoto, todayLabel } from '../utils/newspaper.js';
 // 신문 지면 공통 짜임 (FE-32). S-02 사건 목록(신문 1면)과, 사건을 고른 뒤 이어지는 사건 기사 지면(S-20 · 1 · 2막)이
 // 같은 제호 · 날짜 띠 · 탭 줄 · 배너 · [사진 | 기사 단]을 쓴다. 스타일은 caseList.css(.case-list-page)를 그대로 쓴다.
 
-// 제호: 정보 줄(판결 체험 신문 · 보조 메뉴) → [왼쪽 귀 | 제호 | 오른쪽 귀] → 날짜 띠
+// 제호: 정보 줄(← 메인으로 · 판결 체험 신문) → [왼쪽 귀 | 제호 | 오른쪽 귀] → 날짜 띠
+// FE-56: 정보 줄 왼쪽에 "메인으로"를 두고, 오른쪽의 "처음으로" · "서비스 소개"는 뺐다(공통 헤더가 모든 화면 위에 있다)
 export function newspaperMasthead({ navigate, earRight, earLeft: givenLeft, title = '내Law남불 사건 목록' }) {
   const header = element('header', 'masthead');
   const infoRow = element('div', 'info-row');
-  const links = element('nav', 'info-links');
-  links.setAttribute('aria-label', '보조 메뉴');
-  links.append(
-    button('← 처음으로', () => navigate('landing'), 'paper-link'),
-    button('서비스 소개', () => navigate('landing', { section: 'intro' }), 'paper-link'),
-  );
-  infoRow.append(element('span', '', '판결 체험 신문'), links);
+  infoRow.append(button('← 메인으로', () => navigate('landing'), 'paper-link'), element('span', '', '판결 체험 신문'));
 
   const earLeft = givenLeft ?? element('div', 'ear ear-left');
   if (!givenLeft) earLeft.append('“모든 판결에는', element('br'), '이유가 있다”');

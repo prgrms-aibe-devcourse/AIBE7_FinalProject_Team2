@@ -92,8 +92,8 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
   const paperNote = element('p', 'paper-note', '이 지면의 사건과 기사는 판결 체험을 위해 재구성한 것이며, 사진은 AI로 생성한 연출 이미지입니다.');
   paper.append(newspaperMasthead({ navigate, earRight }), main, paperNote, renderSiteFooter());
 
-  // 남불의 안내. 지면 왼쪽 위에 붙인 정사각형 포스트잇(지면과 함께 움직인다). 누르면 떼어져 날아간다(FE-50, 메인 책상의 내로 포스트잇과 같은 놀이).
-  // 책상으로 돌아가는 길은 정보 줄의 "← 처음으로"와 Esc가 맡는다
+  // 남불의 안내. 지면 오른쪽 위에 붙인 정사각형 포스트잇(FE-56, 지면과 함께 움직인다). 누르면 떼어져 날아간다(FE-50, 메인 책상의 내로 포스트잇과 같은 놀이).
+  // 책상으로 돌아가는 길은 정보 줄의 "← 메인으로"와 Esc가 맡는다
   const tip = element('button', 'paper-tip');
   tip.type = 'button';
   const face = element('img');
@@ -106,7 +106,7 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
   tip.append(face, tipText);
   tip.addEventListener('click', () => peelOff(tip, {
     from: 'none',
-    to: 'translate(-60px, -140px) rotate(-28deg)',
+    to: 'translate(60px, -140px) rotate(28deg)', // 오른쪽 위로 떼어져 날아간다
     // 목록을 아직 불러오는 중이면 첫 탭 대신 본문(main)이 포커스를 받는다
     focusTarget: () => main.querySelector('button') ?? Object.assign(main, { tabIndex: -1 }),
   }));

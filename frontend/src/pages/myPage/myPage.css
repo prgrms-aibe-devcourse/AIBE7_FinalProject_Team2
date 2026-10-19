@@ -27,8 +27,14 @@
 /* 화면 양옆 · 푸터도 같은 커피색으로 이어 붙인다(커피 한 잔의 여유: 흰 여백이 보이지 않게) */
 body:has(.my-page) { background: var(--palette-coffee-100); }
 body:has(.my-page) .site-footer { background: var(--palette-coffee-50); border-top-color: var(--palette-coffee-200); color: var(--palette-coffee-500); }
-.my-page .site-header button { cursor: pointer; }
-.my-page .site-header button:not(.logo-button) { font: inherit; } /* 로고는 style.css의 워드마크 글꼴을 지킨다(FE-56) */
+/* 마이페이지 헤더: 공통 네이비 띠(style.css) 대신 커피색 바탕의 밝은 헤더를 유지한다(FE-56, 마이페이지만 예외) */
+.my-page .site-header { padding: 16px 28px; border-bottom: 1px solid var(--color-border); background: var(--color-bg); color: var(--color-text); }
+.my-page .site-header .logo-button { font-size: 20px; color: var(--color-heading); }
+.my-page .site-header .logo-button .law { color: inherit; }
+.my-page .site-header .nav-button { color: var(--color-muted); font-size: inherit; }
+.my-page .site-header .nav-button[aria-current="page"] { color: var(--color-text); }
+@media (hover: hover) and (pointer: fine) { .my-page .site-header .nav-button:hover { color: var(--color-text); text-decoration: none; } }
+.my-page .site-header button:focus-visible { outline-color: var(--color-focus); }
 .my-page .visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .my-page ::selection { background: var(--color-range-fill); color: var(--color-text); }
 .my-main { max-width: 760px; margin: 0 auto; padding: 48px 28px 56px; }
@@ -171,6 +177,7 @@ body:has(.my-page) .site-footer { background: var(--palette-coffee-50); border-t
 }
 
 @media (max-width: 720px) {
+  .my-page .site-header { padding: 12px 16px; }
   .my-main { padding: 28px 16px 40px; }
   .my-top { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; padding-bottom: 28px; }
   .my-card { width: 100%; }

@@ -1,4 +1,4 @@
-import { button, element, renderSiteHeader } from '../../components/siteLayout.js';
+import { button, element } from '../../components/siteLayout.js';
 import { imageOf } from '../../components/stage.js';
 import { CHARACTER_NAMES } from '../../utils/personalityAxes.js';
 import { reducedMotion } from '../../utils/motion.js';
@@ -26,7 +26,7 @@ export function renderFolder(container, { navigate, sheetLabel, orientation = 'p
   sheet.append(label, body);
   folder.append(sheet);
   binder.append(tabs, folder);
-  root.append(desk, renderSiteHeader({ navigate }), binder);
+  root.append(desk, binder); // 공통 헤더는 라우터가 붙인다(FE-56)
   // 책상(메인)에서 검사지를 들고 온 경우: 책상 화면을 뒤에 남겨 두었다가 철이 올라오는 동안 흐려지며 걷는다. 헤더 등으로 오면(rise 없음) 연출 없이 바로 보인다
   const ghost = rise && orientation === 'landscape' && !reducedMotion() && container.querySelector('.landing-page')
     ? element('div', 'personality-ghost') : null;

@@ -1,4 +1,4 @@
-import { button, element, renderSiteHeader } from '../../components/siteLayout.js';
+import { button, element } from '../../components/siteLayout.js';
 import { API_MODE } from '../../api/index.js';
 import { clearUser, currentUser, isAdmin, saveUser } from '../../utils/session.js';
 import { homeRoute } from '../admin/adminMenu.js';
@@ -17,7 +17,7 @@ export function renderLoginPage(container, { api, navigate }) {
   const card = element('section', 'login-card');
   card.setAttribute('aria-labelledby', 'login-heading');
   main.append(card);
-  root.append(renderSiteHeader({ navigate }), main);
+  root.append(main); // 공통 헤더는 라우터가 붙인다(FE-56)
   container.replaceChildren(root);
 
   const user = currentUser();

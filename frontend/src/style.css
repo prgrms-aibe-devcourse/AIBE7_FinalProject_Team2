@@ -285,19 +285,29 @@ h1 { font-family: var(--font-heading); color: var(--color-heading); letter-spaci
 .message-panel button { margin-top: 20px; }
 
 /* 공통 사이트 헤더 · 푸터 (siteLayout.js의 renderSiteHeader · renderSiteFooter).
-   S-01 · S-02 · S-14 · 라우터 푸터(S-03 ~ S-09)가 모두 쓰는 유일한 정의다. 화면 CSS에 같은 규칙을 다시 두지 않는다.
-   특정 화면만 다르게 해야 하면 그 화면 CSS에 .landing-page .site-header처럼 화면 클래스로 감싸서 추가한다. */
+   FE-56: 헤더는 라우터가 모든 화면 위(#route-header)에 붙이고, 모두 같은 네이비 띠(메인 책상과 같은 모양)다.
+   마이페이지만 자기 헤더를 그려 myPage.css에서 커피색으로 바꾼다. 관리자 화면은 자기 틀을 쓴다.
+   화면 CSS에 같은 규칙을 다시 두지 않는다. 특정 화면만 다르게 해야 하면 body:has(.xx-page) .site-header처럼 감싸서 추가한다. */
 /* FE-50: 스크롤과 상관없이 화면 위에 고정한다(sticky — 자리는 그대로 차지해 아래 내용이 가려지지 않는다). 전환 연출 층(z-index 1000)보다는 아래 */
-.site-header { position: sticky; top: 0; z-index: 50; display: flex; align-items: center; gap: 16px; padding: 16px 28px; border-bottom: 1px solid var(--color-border); background: var(--color-bg); }
+/* sticky는 부모 안에서만 붙어 있으므로, 라우터가 붙인 헤더는 감싸는 #route-header를 붙인다(마이페이지처럼 화면 안에 그린 헤더는 .site-header 자체가 붙는다) */
+#route-header { position: sticky; top: 0; z-index: 50; }
+.site-header {
+  position: sticky; top: 0; z-index: 50; display: flex; align-items: center; gap: 16px; padding: 4px 32px;
+  background: var(--color-banner-bg); color: var(--color-banner-text); font: var(--text-body)/1.5 var(--font-body);
+}
+html { scroll-padding-top: 64px; } /* 포커스로 스크롤될 때 위에 붙은 헤더에 가리지 않게 */
+.site-header button { font: inherit; cursor: pointer; } /* 브라우저 기본 버튼 글꼴 대신 헤더 글꼴 */
+.site-header button:focus-visible { outline-color: var(--color-range-fill); }
 .site-nav { display: flex; align-items: center; gap: 8px; margin-left: auto; } /* 로고는 왼쪽, 메뉴 · 로그인은 오른쪽 */
-.site-header .nav-button[aria-current="page"] { color: var(--color-text); box-shadow: inset 0 -2px 0 currentColor; } /* 지금 보고 있는 메뉴 */
+.site-header .nav-button[aria-current="page"] { color: var(--color-banner-text); box-shadow: inset 0 -2px 0 currentColor; } /* 지금 보고 있는 메뉴 */
 .site-header .nav-button[aria-disabled="true"] { cursor: default; opacity: .6; }
 .site-header .nav-button[aria-disabled="true"]:hover { text-decoration: none; }
-/* 화면 CSS의 button { font: inherit } 보다 우선하도록 .site-header를 붙인다.
+/* 위 .site-header button { font: inherit } · 화면 CSS의 button 규칙보다 우선하도록 .site-header를 붙인다.
    화면 CSS가 .xx-page .site-header button처럼 더 구체적으로 쓰면 이 규칙을 이기므로, 그때는 :not(.logo-button)으로 로고를 빼 둔다(FE-56) */
-.site-header .logo-button { border: 0; background: transparent; padding: 6px 0; font-family: var(--font-heading); font-size: 20px; font-weight: 900; letter-spacing: -.04em; color: var(--color-heading); }
-.nav-button { border: 0; background: transparent; padding: 10px 12px; min-height: 44px; color: var(--color-muted); white-space: nowrap; }
-.nav-button:hover { color: var(--color-text); }
+.site-header .logo-button { border: 0; background: transparent; padding: 6px 0; font-family: var(--font-heading); font-size: 22px; font-weight: 900; letter-spacing: -.04em; color: var(--color-banner-text); }
+.site-header .logo-button .law { display: inline; color: var(--color-range-fill); }
+.nav-button { border: 0; background: transparent; padding: 10px 12px; min-height: 44px; color: var(--color-banner-muted); font-size: var(--text-small); white-space: nowrap; }
+@media (hover: hover) and (pointer: fine) { .nav-button:hover { color: var(--color-banner-text); text-decoration: underline; text-underline-offset: 4px; } }
 /* 로그인(FE-50): 메뉴 맨 오른쪽, 얇은 테두리로 계정 동작임을 구분한다. 테두리는 글자색을 따라가 네이비 · 흰 헤더 모두에 맞는다 */
 .site-header .login-button { flex: none; margin-left: 4px; padding: 6px 14px; min-height: 36px; border: 1px solid color-mix(in srgb, currentColor 45%, transparent); border-radius: 6px; }
 .site-header .login-button[aria-current="page"] { box-shadow: none; } /* 테두리 버튼이라 밑줄 대신 테두리로 충분하다 */
@@ -320,9 +330,7 @@ h1 { font-family: var(--font-heading); color: var(--color-heading); letter-spaci
 }
 
 /* S-14 404 · 오류 화면 (FE-3) */
-/* 페이지 틀은 사이트 헤더를 쓰는 S-01 · S-02(landing.css의 :is(.landing-page, .case-list-page))와 같게 맞춘다.
-   헤더 버튼은 브라우저 기본 버튼 글꼴(13.3px Arial)이 아니라 페이지 글꼴을 따르게 한다(S-01 · S-02와 같은 크기 · 글꼴).
-   이동 버튼(.primary-button 등)의 굵기는 유지해야 하므로 font: inherit는 헤더 안 버튼에만 둔다 */
+/* 페이지 틀은 S-01 · S-02(landing.css의 :is(.landing-page, .case-list-page))와 같게 맞춘다. 헤더는 라우터가 위에 붙인다(FE-56) */
 .not-found-page {
   max-width: var(--content-width);
   margin: 0 auto;
@@ -333,8 +341,6 @@ h1 { font-family: var(--font-heading); color: var(--color-heading); letter-spaci
   overflow-wrap: anywhere;
   word-break: keep-all;
 }
-.not-found-page .site-header button { cursor: pointer; }
-.not-found-page .site-header button:not(.logo-button) { font: inherit; } /* 로고는 워드마크 글꼴을 지킨다(FE-56) */
 .not-found-panel {
   max-width: 480px;
   margin: 48px auto;

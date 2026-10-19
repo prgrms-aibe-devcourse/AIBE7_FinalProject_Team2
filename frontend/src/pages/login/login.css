@@ -2,8 +2,6 @@
    구성: 공통 헤더 → 가운데 카드(제목 · 안내 · [목업 안내] · 카카오 로그인 · 또는 · 아이디 · 비밀번호 · 로그인 · 회원가입) */
 
 .login-page { min-height: 100vh; background: var(--color-bg); color: var(--color-text); font: var(--text-body)/1.6 var(--font-body); }
-.login-page .site-header button { cursor: pointer; }
-.login-page .site-header button:not(.logo-button) { font: inherit; } /* 로고는 style.css의 워드마크 글꼴을 지킨다(FE-56) */
 .login-main { display: flex; justify-content: center; padding: 64px 20px 80px; }
 .login-card { width: min(400px, 100%); padding: 36px 32px 28px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-card); }
 .login-card h1 { margin: 0 0 8px; font: 900 26px/1.3 var(--font-heading); letter-spacing: -.02em; color: var(--color-heading); }

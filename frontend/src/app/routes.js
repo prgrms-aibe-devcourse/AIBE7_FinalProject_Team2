@@ -5,6 +5,7 @@
 //   render      화면 진입 함수 renderXxxPage(container, { caseId, caseHeader, api, navigate, section })
 //   needsHeader 사건 상단 바(제목 · 유형)가 필요한 화면 — 라우터가 caseHeader를 채워서 넘긴다
 //   ownsFooter  화면이 공통 푸터를 직접 그리면 true (아니면 라우터가 화면 아래에 푸터를 붙인다. REQ-071 모든 화면 법적 고지)
+//   ownsHeader  공통 헤더(상단 내비)를 라우터가 붙이지 않는 화면 — 마이페이지 · 관리자처럼 자기 헤더를 그리는 화면만(FE-56)
 //   title       브라우저 탭 제목
 import { renderAiPage } from '../pages/ai/aiPage.js';
 import { renderCaseListPage } from '../pages/caseList/caseListPage.js';
@@ -39,21 +40,22 @@ export const routes = [
   { name: 'test', path: '/test', render: renderPersonalityPage, title: '판결 성향 테스트' },
   { name: 'testResult', path: '/test/result', render: renderPersonalityResultPage, title: '성향 결과' },
   { name: 'testType', path: '/test/types/:shareId', render: renderPersonalitySharedPage, title: '판결 성향 유형' },
-  { name: 'me', path: '/me', render: renderMyPage, title: '마이페이지' },
+  // 마이페이지는 커피색 헤더를 직접 그린다(FE-44)
+  { name: 'me', path: '/me', render: renderMyPage, ownsHeader: true, title: '마이페이지' },
   // S-12 로그인 (FE-52): 화면 틀. 사용자 로그인 API가 없어 목 모드에서만 개발용 목업 로그인이 된다
   { name: 'login', path: '/login', render: renderLoginPage, title: '로그인' },
   // 확장: S-19 관리자 검수 (FE-16). 관리자 코드는 사용자 화면 번들에 넣지 않으려고 필요할 때만 불러온다.
   // 관리자 화면은 관리자 api를 따로 쓰고(pages/admin/adminApi.js), 사용자 사이트 푸터 대신 자기 틀을 그린다
-  { name: 'admin', path: '/admin', render: (container, options) => import('../pages/admin/adminListPage.js').then((m) => m.renderAdminListPage(container, options)), ownsFooter: true, title: '관리자' },
-  { name: 'adminRegister', path: '/admin/register', render: (container, options) => import('../pages/admin/adminRegisterPage.js').then((m) => m.renderAdminRegisterPage(container, options)), ownsFooter: true, title: '관리자' },
+  { name: 'admin', path: '/admin', render: (container, options) => import('../pages/admin/adminListPage.js').then((m) => m.renderAdminListPage(container, options)), ownsFooter: true, ownsHeader: true, title: '관리자' },
+  { name: 'adminRegister', path: '/admin/register', render: (container, options) => import('../pages/admin/adminRegisterPage.js').then((m) => m.renderAdminRegisterPage(container, options)), ownsFooter: true, ownsHeader: true, title: '관리자' },
   // 관리자 운영 메뉴 (FE-45): 대시보드 · 회원 · 게시글 · 신고 · 관리자 계정 · 공지. 서버 API가 생기기 전에는 목으로 동작한다
-  { name: 'adminDashboard', path: '/admin/dashboard', render: (container, options) => import('../pages/admin/adminDashboardPage.js').then((m) => m.renderAdminDashboardPage(container, options)), ownsFooter: true, title: '관리자' },
-  { name: 'adminMembers', path: '/admin/members', render: (container, options) => import('../pages/admin/adminMembersPage.js').then((m) => m.renderAdminMembersPage(container, options)), ownsFooter: true, title: '관리자' },
-  { name: 'adminPosts', path: '/admin/posts', render: (container, options) => import('../pages/admin/adminPostsPage.js').then((m) => m.renderAdminPostsPage(container, options)), ownsFooter: true, title: '관리자' },
-  { name: 'adminReports', path: '/admin/reports', render: (container, options) => import('../pages/admin/adminReportsPage.js').then((m) => m.renderAdminReportsPage(container, options)), ownsFooter: true, title: '관리자' },
-  { name: 'adminAccounts', path: '/admin/accounts', render: (container, options) => import('../pages/admin/adminAccountsPage.js').then((m) => m.renderAdminAccountsPage(container, options)), ownsFooter: true, title: '관리자' },
-  { name: 'adminNotices', path: '/admin/notices', render: (container, options) => import('../pages/admin/adminNoticesPage.js').then((m) => m.renderAdminNoticesPage(container, options)), ownsFooter: true, title: '관리자' },
-  { name: 'adminCase', path: '/admin/cases/:caseId', render: (container, options) => import('../pages/admin/adminCasePage.js').then((m) => m.renderAdminCasePage(container, options)), ownsFooter: true, title: '관리자' },
+  { name: 'adminDashboard', path: '/admin/dashboard', render: (container, options) => import('../pages/admin/adminDashboardPage.js').then((m) => m.renderAdminDashboardPage(container, options)), ownsFooter: true, ownsHeader: true, title: '관리자' },
+  { name: 'adminMembers', path: '/admin/members', render: (container, options) => import('../pages/admin/adminMembersPage.js').then((m) => m.renderAdminMembersPage(container, options)), ownsFooter: true, ownsHeader: true, title: '관리자' },
+  { name: 'adminPosts', path: '/admin/posts', render: (container, options) => import('../pages/admin/adminPostsPage.js').then((m) => m.renderAdminPostsPage(container, options)), ownsFooter: true, ownsHeader: true, title: '관리자' },
+  { name: 'adminReports', path: '/admin/reports', render: (container, options) => import('../pages/admin/adminReportsPage.js').then((m) => m.renderAdminReportsPage(container, options)), ownsFooter: true, ownsHeader: true, title: '관리자' },
+  { name: 'adminAccounts', path: '/admin/accounts', render: (container, options) => import('../pages/admin/adminAccountsPage.js').then((m) => m.renderAdminAccountsPage(container, options)), ownsFooter: true, ownsHeader: true, title: '관리자' },
+  { name: 'adminNotices', path: '/admin/notices', render: (container, options) => import('../pages/admin/adminNoticesPage.js').then((m) => m.renderAdminNoticesPage(container, options)), ownsFooter: true, ownsHeader: true, title: '관리자' },
+  { name: 'adminCase', path: '/admin/cases/:caseId', render: (container, options) => import('../pages/admin/adminCasePage.js').then((m) => m.renderAdminCasePage(container, options)), ownsFooter: true, ownsHeader: true, title: '관리자' },
   // S-14: 주소가 없다. 맞는 화면이 없는 주소거나 없는 사건일 때 보여 준다 (라우터 showNotFound · errorRedirect CASE_NOT_FOUND)
   { name: 'notFound', path: null, render: renderNotFoundPage, title: '찾을 수 없어요' },
 ];

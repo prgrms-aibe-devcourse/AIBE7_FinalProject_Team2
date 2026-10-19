@@ -114,8 +114,9 @@ function paperCamera(sheet, dockTop, byKeyboard = () => false) {
   function show(target) {
     requestAnimationFrame(() => {
       const box = target.getBoundingClientRect();
-      const room = dockTop() - 24;
-      const top = box.height < room ? box.top - (room - box.height) / 2 : box.top - 24;
+      const head = Math.max(0, document.querySelector('#route-header .site-header')?.getBoundingClientRect().bottom ?? 0); // 위에 붙은 공통 헤더(FE-56)가 가리는 만큼 뺀다
+      const room = dockTop() - head - 24;
+      const top = box.height < room ? box.top - head - (room - box.height) / 2 : box.top - head - 24;
       const y = window.scrollY + top;
       window.scrollTo({ top: y < 200 ? 0 : y, // 지면 맨 위 근처 기사는 머리글(제호)까지 보이게 맨 위로
         behavior: reducedMotion() || byKeyboard() ? 'auto' : 'smooth' }); // 키보드로 넘길 때는 즉시(연달아 눌러도 화면이 따라오느라 느려지지 않게)

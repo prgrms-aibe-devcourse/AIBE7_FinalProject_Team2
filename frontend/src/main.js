@@ -9,14 +9,21 @@ import { applyMotion } from './utils/motion.js';
 applyMotion(); // 연출 스위치 설정을 첫 화면 전에 <html data-motion>에 반영한다
 
 const app = document.querySelector('#app');
+const headerHost = document.createElement('div');
+headerHost.id = 'route-header';
 const view = document.createElement('div');
 view.id = 'route-view';
 const footerHost = document.createElement('div');
 footerHost.id = 'route-footer';
-app.replaceChildren(view, footerHost);
+app.replaceChildren(headerHost, view, footerHost);
+// 공통 헤더 높이를 --site-header-h로 내보낸다(FE-56). 화면 전체를 덮는 고정 무대(8막 등)가 헤더 아래에서 시작하도록 쓴다.
+// 좁은 화면에서 헤더가 두 줄이 되거나 헤더가 없는 화면(마이페이지 · 관리자)이면 값이 따라 바뀐다
+new ResizeObserver(() => {
+  document.documentElement.style.setProperty('--site-header-h', `${headerHost.offsetHeight}px`);
+}).observe(headerHost);
 
 try {
-  const router = createRouter({ view, footerHost, routes });
+  const router = createRouter({ view, headerHost, footerHost, routes });
   const api = createAppApi(await loadApi(), {
     navigate: router.navigate,
     currentCaseId: router.currentCaseId,

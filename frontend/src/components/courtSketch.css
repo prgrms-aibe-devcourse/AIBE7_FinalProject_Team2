@@ -107,7 +107,7 @@
 /* 모바일 브라우저 아래 바에 가리지 않게 안전 영역에 여유 16px를 더한다(받침 전체가 같이 올라간다) */
 .comparison-full { --safe-bottom: calc(env(safe-area-inset-bottom, 0px) + 16px); }
 .comparison-full .stage-wrap { --dock-w: min(860px, calc(100vw - 340px)); }
-.comparison-full .stage-wrap .stage { position: fixed; inset: 0; z-index: 1; aspect-ratio: auto; width: auto; overflow: hidden; border: 0; border-radius: 0; }
+.comparison-full .stage-wrap .stage { position: fixed; inset: var(--site-header-h, 0px) 0 0; z-index: 1; /* 위는 공통 헤더 아래부터(FE-56, main.js가 높이를 넘긴다) */ aspect-ratio: auto; width: auto; overflow: hidden; border: 0; border-radius: 0; }
 .comparison-full .stage-wrap .scene, .comparison-full .stage-wrap .stage[data-scene] .scene { position: absolute; inset: 0; aspect-ratio: auto; border: 0; border-radius: 0; overflow: hidden; }
 .comparison-full .stage-wrap .sheet-frame { bottom: calc(230px + var(--safe-bottom)); } /* 카메라 틀 = 말풍선 위 */
 .comparison-full .stage-wrap .ctrl { position: fixed; z-index: 2; left: 50%; right: auto; bottom: calc(10px + var(--safe-bottom)); translate: -50% 0; width: var(--dock-w); margin: 0; padding: 4px 10px; border: 0; border-radius: 999px;

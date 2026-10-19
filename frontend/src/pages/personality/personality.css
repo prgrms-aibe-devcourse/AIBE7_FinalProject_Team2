@@ -13,16 +13,8 @@
 .personality-ghost { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
 .personality-desk { position: fixed; inset: 0; z-index: -1; background: var(--color-banner-bg) url('/images/desk-felt.webp') center / cover no-repeat; }
 .personality-desk::after { content: ''; position: absolute; inset: 0; background: var(--color-banner-bg); opacity: .55; }
-/* 공통 헤더: 메인 책상과 같은 네이비 띠. 위에 얹어 두고(철 위치는 그대로) 철이 올라올 때 가려지지 않게 한다 */
-.personality-page .site-header { position: fixed; top: 0; left: 0; right: 0; z-index: 50; background: var(--color-banner-bg); border-bottom: 0; padding: 4px 32px; }
-.personality-page .site-header button { cursor: pointer; }
-.personality-page .site-header button:not(.logo-button) { font: inherit; } /* 로고는 style.css의 워드마크 글꼴을 지킨다(FE-56) */
-.personality-page .site-header .logo-button { color: var(--color-banner-text); font-size: 22px; }
-.personality-page .site-header .logo-button .law { display: inline; color: var(--color-range-fill); }
-.personality-page .nav-button { color: var(--color-banner-muted); font-size: var(--text-small); }
-.personality-page .site-header .nav-button[aria-current="page"] { color: var(--color-banner-text); }
-@media (hover: hover) and (pointer: fine) { .personality-page .nav-button:hover { color: var(--color-banner-text); text-decoration: underline; text-underline-offset: 4px; } }
-.personality-page .site-header button:focus-visible { outline-color: var(--color-range-fill); }
+/* 공통 헤더(style.css 네이비 띠, 라우터가 붙임): 이 화면에서는 위에 얹어 두고(철 위치는 그대로) 철이 올라올 때 가려지지 않게 한다 */
+#app:has(.personality-page) > #route-header .site-header { position: fixed; left: 0; right: 0; }
 /* 공통 푸터(법적 고지)는 펠트 위에 그대로 */
 #app:has(.personality-page) > #route-footer .site-footer { border-top: 0; background: transparent; color: var(--color-desk-text); }
 
@@ -239,7 +231,7 @@
 /* ── 모바일 ── */
 @media (max-width: 720px) {
   .personality-page { padding: 112px max(10px, env(safe-area-inset-right, 0px)) 32px max(10px, env(safe-area-inset-left, 0px)); } /* 고정 헤더가 두 줄(FE-52)이라 그만큼 내린다 */
-  .personality-page .site-header { padding: 4px 16px; }
+  #app:has(.personality-page) > #route-header .site-header { padding: 4px 16px; }
   .test-folder { padding: 8px; }
   .test-folder::before { inset: 4px -3px -5px 4px; }
   .test-sheet-body { padding: 20px 16px 24px; }

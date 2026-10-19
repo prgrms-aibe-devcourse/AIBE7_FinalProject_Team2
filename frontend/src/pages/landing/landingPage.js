@@ -1,4 +1,4 @@
-import { button, element, renderSiteFooter, renderSiteHeader } from '../../components/siteLayout.js';
+import { button, element, renderSiteFooter } from '../../components/siteLayout.js';
 import { casePhoto, fallbackImages, todayLabel } from '../../utils/newspaper.js';
 import { takePaper } from '../../utils/paperHandoff.js';
 import { flyCoffee } from '../../utils/coffeeDive.js';
@@ -125,8 +125,8 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
   newsSheets.append(span(''), span(''));
   const info = span('news-info');
   const infoLinks = span('news-info-links');
-  infoLinks.append(span('', '← 처음으로'), span('', '서비스 소개')); // S-02 정보 줄의 보조 메뉴 두 개(newspaperFront.js)와 같게
-  info.append(span('', '판결 체험 신문'), infoLinks);
+  infoLinks.append(span('', '← 메인으로'), span('', '판결 체험 신문')); // S-02 정보 줄(newspaperFront.js, FE-56)과 같게 왼쪽에 모은다
+  info.append(infoLinks);
   const earLeft = span('news-ear');
   earLeft.append(element('b', '', '“모든 판결에는 이유가 있다”'));
   const earRight = span('news-ear');
@@ -319,7 +319,7 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
   sheet.append(heading, track, verdicts, introActions);
   intro.append(sheet);
 
-  root.append(renderSiteHeader({ navigate }), scene, mobile, intro, renderSiteFooter());
+  root.append(scene, mobile, intro, renderSiteFooter()); // 공통 헤더는 라우터가 붙인다(FE-56)
   container.replaceChildren(root);
   fit();
   if (section === 'intro') showIntro();
