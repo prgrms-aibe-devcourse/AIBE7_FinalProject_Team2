@@ -51,7 +51,14 @@ export async function renderPersonalityPaperPage(container, { api, navigate, fro
   const date = element('div', 'tp-date');
   const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
   date.append(element('span', '', new Intl.DateTimeFormat('ko-KR', { dateStyle: 'full' }).format(tomorrow)), element('span', '', '2면'));
-  mast.append(info, flag, date);
+  // 날짜 아래 이동 줄(표지 · 문항 모두): 왼쪽 이전으로(들어온 화면으로, 없으면 메인), 오른쪽 메인으로
+  const moves = element('nav', 'tp-moves');
+  moves.setAttribute('aria-label', '화면 이동');
+  moves.append(
+    button('← 이전으로', () => (history.length > 1 ? history.back() : navigate('landing')), 'tp-move'),
+    button('메인으로', () => navigate('landing'), 'tp-move'),
+  );
+  mast.append(info, flag, date, moves);
   const body = element('div', 'tp-body');
   sheet.append(mast, body);
   root.append(element('h1', 'visually-hidden', '판결 성향 테스트'), sheet);
