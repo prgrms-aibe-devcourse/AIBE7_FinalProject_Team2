@@ -37,14 +37,6 @@ function messagePanel(text) {
  *   view        화면이 그려지는 영역 (화면 진입 함수의 container)
  *   footerHost  공통 푸터를 붙이는 영역 (화면이 자기 푸터를 그리지 않을 때만 사용)
  */
-// 이 탭에서 라우터가 처음 그린 기록의 순번. 그보다 큰 순번이면 앱 안에서 뒤로 갈 기록이 있다
-let firstSeq = null;
-
-/** 앱 안에서 뒤로 갈 기록이 있는지(첫 진입 화면이면 false). history.length는 앱에 오기 전 다른 사이트 기록까지 세서 쓰지 않는다 (FE-55 리뷰 반영) */
-export function canGoBackInApp() {
-  return firstSeq !== null && (history.state?.seq ?? firstSeq) > firstSeq;
-}
-
 export function createRouter({ view, footerHost, routes }) {
   const byName = new Map(routes.map((route) => [route.name, route]));
   const matchers = routes.filter((route) => route.path).map((route) => ({ route, regex: toMatcher(route.path) }));
@@ -198,4 +190,12 @@ export function createRouter({ view, footerHost, routes }) {
       return renderLocation('navigate'); // 최초 접속 · 새로고침은 뒤로 가기가 아니다
     },
   };
+}
+
+// 이 탭에서 라우터가 처음 그린 기록의 순번. 그보다 큰 순번이면 앱 안에서 뒤로 갈 기록이 있다
+let firstSeq = null;
+
+/** 앱 안에서 뒤로 갈 기록이 있는지(첫 진입 화면이면 false). history.length는 앱에 오기 전 다른 사이트 기록까지 세서 쓰지 않는다 (FE-55 리뷰 반영) */
+export function canGoBackInApp() {
+  return firstSeq !== null && (history.state?.seq ?? firstSeq) > firstSeq;
 }
