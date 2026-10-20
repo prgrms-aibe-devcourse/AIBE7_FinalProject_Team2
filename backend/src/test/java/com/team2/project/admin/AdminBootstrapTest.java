@@ -38,7 +38,7 @@ class AdminBootstrapTest {
 
 		AdminAccount account = repository.findByEmail(AdminAccount.normalizeEmail(email)).orElseThrow();
 		assertThat(account.getEmail()).isEqualTo(email.toLowerCase());
-		assertThat(account.getPasswordHash()).startsWith("{bcrypt}").doesNotContain("long-enough-password");
+		assertThat(account.getPasswordHash()).startsWith("{argon2}").doesNotContain("long-enough-password");
 		assertThat(passwordEncoder.matches("long-enough-password", account.getPasswordHash())).isTrue();
 		assertThat(account.isEnabled()).isTrue();
 	}
