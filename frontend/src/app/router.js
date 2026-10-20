@@ -181,6 +181,7 @@ export function createRouter({ view, footerHost, routes }) {
       }
       lastKnownSeq = seq;
       firstSeq = seq;
+      historySeq = Math.max(historySeq, seq); // 새로고침해도 다음 push 순번이 지금 기록보다 커지게
       window.addEventListener('popstate', () => {
         const seq2 = history.state?.seq;
         const direction = seq2 === undefined ? 'navigate' : seq2 < lastKnownSeq ? 'back' : seq2 > lastKnownSeq ? 'forward' : 'navigate';

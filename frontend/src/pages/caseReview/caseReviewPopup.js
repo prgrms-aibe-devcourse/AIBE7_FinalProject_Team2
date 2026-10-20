@@ -67,6 +67,7 @@ export function openCaseReviewPopup({ caseId, api, navigate, from, hand = false 
     }
     layer.remove();
     document.body.classList.remove('case-review-open');
+    window.removeEventListener('popstate', dispose);
     if (opener?.isConnected) opener.focus({ preventScroll: true });
   }
   // 엽서 안의 키는 뒤 무대(← → Space로 넘기기)에 닿지 않게 여기서 끊는다. Tab은 엽서 안에서만 돈다
@@ -78,7 +79,9 @@ export function openCaseReviewPopup({ caseId, api, navigate, from, hand = false 
     if (!items.length) { event.preventDefault(); return; }
     const first = items[0];
     const last = items[items.length - 1];
-    if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog)) { event.preventDefault(); last.focus(); }
+    // 별점 라디오는 Tab 순서에 선택된 한 개만 들어가므로, 같은 그룹이면 첫 항목으로 본다
+    const atFirst = document.activeElement === first || (first.type === 'radio' && document.activeElement?.name === first.name);
+    if (event.shiftKey && (atFirst || document.activeElement === dialog)) { event.preventDefault(); last.focus(); }
     else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
   });
   layer.addEventListener('mousedown', (event) => { if (event.target === layer) requestShut(); });
@@ -87,7 +90,9 @@ export function openCaseReviewPopup({ caseId, api, navigate, from, hand = false 
   document.body.append(layer);
   dialog.focus({ preventScroll: true });
   // 엽서 안에서 다른 화면으로 가면(다른 사건 보러 가기 · 체험하러 가기) 엽서 층을 바로 걷고 간다(남겨 두면 새 화면을 덮는다)
-  const leave = (...args) => { closing = true; layer.remove(); document.body.classList.remove('case-review-open'); return navigate(...args); };
+  const dispose = () => { closing = true; layer.remove(); document.body.classList.remove('case-review-open'); window.removeEventListener('popstate', dispose); };
+  window.addEventListener('popstate', dispose); // 브라우저 뒤로 가기로 화면이 바뀔 때도 엽서 층을 남기지 않는다
+  const leave = (...args) => { dispose(); return navigate(...args); };
   const mounted = mountCaseReview(body, { caseId, api, navigate: leave });
   if (!reducedMotion()) {
     // 남불은 바로 손을 내밀고, 엽서는 내용이 준비되면(늦으면 READY_WAIT_MS 뒤) 날아온다
