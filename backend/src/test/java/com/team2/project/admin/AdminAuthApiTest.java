@@ -12,6 +12,7 @@ import com.team2.project.admin.domain.AdminAccount;
 import com.team2.project.admin.repository.AdminAccountRepository;
 import com.team2.project.admin.service.AdminPrincipal;
 import com.team2.project.admin.service.AdminUserDetailsService;
+import com.team2.project.common.security.token.MemberPrincipal;
 import com.team2.project.support.ApiIntegrationTest;
 import jakarta.servlet.http.Cookie;
 import java.time.Instant;
@@ -20,11 +21,16 @@ import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextImpl;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
@@ -153,6 +159,73 @@ class AdminAuthApiTest extends ApiIntegrationTest {
 		// 아직 없는 관리자 경로도 404가 아니라 401 (경로 존재 여부를 드러내지 않는다)
 		mockMvc.perform(get("/api/v1/admin/reviews"))
 			.andExpect(status().isUnauthorized());
+	}
+
+	@Test
+	void adminApi_emptySessionOrAnonymousCookie_doesNotAuthenticate() throws Exception {
+		Cookie anonymous = new Cookie(COOKIE, UUID.randomUUID().toString());
+		for (MockHttpServletRequestBuilder request : List.of(
+			get("/api/v1/admin/auth/me").session(new MockHttpSession()),
+			get("/api/v1/admin/auth/me").cookie(anonymous),
+			get("/api/v1/admin/auth/me").session(new MockHttpSession()).cookie(anonymous))) {
+			mockMvc.perform(request).andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+		}
+	}
+
+	@Test
+	void adminApi_syntheticAuthenticatedUserSession_forbidden() throws Exception {
+		// 인가 경계만 검증한다. 회원 로그인/JWT가 실제로 관리자 세션을 발급한다는 뜻이 아니다.
+		MemberPrincipal member = MemberPrincipal.user(7);
+		var authentication = UsernamePasswordAuthenticationToken.authenticated(member, null, member.authorities());
+		assertThat(authentication.isAuthenticated()).isTrue();
+		assertThat(authentication.getAuthorities()).extracting(Object::toString).containsExactly("ROLE_USER");
+		MockHttpSession session = new MockHttpSession();
+		session.setAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY,
+			new SecurityContextImpl(authentication));
+
+		mockMvc.perform(get("/api/v1/admin/auth/me").session(session))
+			.andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("FORBIDDEN"));
+	}
+
+	@ParameterizedTest
+	@CsvSource({"VALID, 401, UNAUTHORIZED", "MISSING, 403, FORBIDDEN", "INVALID, 403, FORBIDDEN"})
+	void anonymousProtectedPost_csrfBeforeAuthentication(String csrfState, int status, String code) throws Exception {
+		mockMvc.perform(policyPost(csrfState))
+			.andExpect(status().is(status)).andExpect(jsonPath("$.code").value(code));
+	}
+
+	@ParameterizedTest
+	@CsvSource({"VALID", "INVALID"})
+	void disabledAdminProtectedPost_accountStatusBeforeCsrf(String csrfState) throws Exception {
+		// MISSING은 기존 session_accountDisabled_postWithoutCsrf_unauthorizedNotForbidden에서 검증한다.
+		String email = createAdmin(true);
+		MockHttpSession session = login(email);
+		jdbcTemplate.update("UPDATE admin_account SET enabled = false WHERE email = ?", email);
+
+		mockMvc.perform(policyPost(csrfState).session(session))
+			.andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+		assertThat(session.isInvalid()).isTrue();
+	}
+
+	@Test
+	void disabledAdminSession_csrfEndpointStillPublicAndSessionInvalidated() throws Exception {
+		String email = createAdmin(true);
+		MockHttpSession session = login(email);
+		jdbcTemplate.update("UPDATE admin_account SET enabled = false WHERE email = ?", email);
+
+		mockMvc.perform(get("/api/v1/admin/auth/csrf").session(session))
+			.andExpect(status().isOk()).andExpect(cookie().exists(CSRF_COOKIE));
+		assertThat(session.isInvalid()).isTrue();
+	}
+
+	private MockHttpServletRequestBuilder policyPost(String csrfState) throws Exception {
+		MockHttpServletRequestBuilder request = post("/api/v1/admin/auth/logout");
+		if (!"MISSING".equals(csrfState)) {
+			Cookie csrf = csrfCookie();
+			request.cookie(csrf).header(CSRF_HEADER, "VALID".equals(csrfState) ? csrf.getValue() : "wrong-token");
+		}
+		return request;
 	}
 
 	@Test
