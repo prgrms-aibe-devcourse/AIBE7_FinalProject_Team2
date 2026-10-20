@@ -30,21 +30,20 @@ const ROLE_COLOR = { 'AI 판사': 'law', '법정 진행': 'narrator', 볼따구:
 export const LAWS = ['law-scale', 'law-gavel', 'law-book'];
 const LAW_SPOTS = ['law-gavel', 'law-scale', 'law-book'];
 export const LAW_TITLES = { 'law-scale': '재판장', 'law-gavel': '배석판사', 'law-book': '배석판사' };
-// 로 이미지: 대기 · 생각(합의) · 발표 세 자세와 얼굴 아이콘. 원본 레포 컷 · 연기 시트에서 잘라 키(발 위치)를 맞춰 public에 둔다
+// 로 이미지: 대기 · 생각(합의) · 발표 세 자세와 얼굴 아이콘(마스코트 버전). 원본 레포 컷에서 투명 여백을 잘라 키(발 위치)를 맞춰 public에 둔다
 const LAW_POSES = ['idle', 'think', 'deliver'];
 const LAW_FADE_MS = 350; // 판사 페이드 시간 하나로: 첫 등장 · 자세 바뀜 · 사라짐(stage.css --law-fade와 같게)
-const lawImage = (who, pose) => `/images/characters/law/${who}_${pose}.webp`;
-// shortcut: 캐릭터 컷은 원본 이미지 레포 PNG를 직접 읽는다, 웹 webp 변환(WBS 7.6.8) 때 public 경로로 옮긴다
-const CUTS = 'https://raw.githubusercontent.com/peanutboi710/NaeLawNamBul_Images/main/character/cuts/';
-export const imageOf = (who, look) => (look.startsWith('role:') ? `/images/characters/roles/${who}_${look.slice(5)}.webp`
-  : look.startsWith('cheek:') ? `${CUTS}${who}/base/cheek/${who}_cut-cheek_${look.slice(6)}.png` // 볼따구(기다림)
-    : look.startsWith('deform:') ? `/images/characters/deform/${who}_${look.slice(7)}.webp` // 데포르메(란마 등, 시트에서 잘라 public에 둔다)
-    : `${CUTS}${who}/base/scene/${who}_cut_${look}.png`);
+const IMAGES = '/images/characters/'; // 원본 PNG는 이미지 레포(NaeLawNamBul_Images), 웹용 webp는 public에 둔다
+const lawImage = (who, pose) => `${IMAGES}mascot/${who}_${pose}.webp`;
+export const imageOf = (who, look) => (look.startsWith('role:') ? `${IMAGES}roles/${who}_${look.slice(5)}.webp`
+  : look.startsWith('cheek:') ? `${IMAGES}cheek/${who}_${look.slice(6)}.webp` // 볼따구(기다림)
+    : look.startsWith('deform:') ? `${IMAGES}deform/${who}_${look.slice(7)}.webp` // 데포르메(란마 등, 시트에서 잘라 public에 둔다)
+    : `${IMAGES}scene/${who}_${look}.webp`);
 const FACES = ['neutral', 'happy', 'surprised', 'thinking', 'sorry', 'cheer'];
 const iconOf = (who, look) => {
-  if (who.startsWith('law-')) return `/images/characters/law/${who}_icon.webp`;
+  if (who.startsWith('law-')) return `${IMAGES}mascot/${who}_icon.webp`;
   const face = look.startsWith('role:') ? 'neutral' : look.split('-')[1];
-  return `${CUTS}${who}/icon/${who}_icon_face-${FACES.includes(face) ? face : 'neutral'}.png`;
+  return `${IMAGES}icon/${who}_face-${FACES.includes(face) ? face : 'neutral'}.webp`;
 };
 // 이름표는 역할 의상을 입었을 때만 단다(평상복이면 없음)
 const chipText = (look, role) => {
