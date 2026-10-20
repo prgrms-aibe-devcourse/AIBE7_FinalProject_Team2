@@ -57,8 +57,7 @@ public class AdminCasePhotoService {
 
 		Map<String, Object> detail = new LinkedHashMap<>();
 		detail.put("type", "REPRESENTATIVE");
-		auditLogger.record(admin, AdminAuditAction.CASE_PHOTO_GENERATE, AuditTargetType.CASE, caseId, detail, request);
-		caseRepository.flush();
+		auditLogger.record(admin, AdminAuditAction.CASE_PHOTO_UPLOAD, AuditTargetType.CASE, caseId, detail, request);
 		return queryService.getCase(caseId);
 	}
 
@@ -76,7 +75,7 @@ public class AdminCasePhotoService {
 		Map<String, Object> detail = new LinkedHashMap<>();
 		detail.put("type", "INCIDENT");
 		detail.put("photoId", photo.getId());
-		auditLogger.record(admin, AdminAuditAction.CASE_PHOTO_GENERATE, AuditTargetType.CASE, caseId, detail, request);
+		auditLogger.record(admin, AdminAuditAction.CASE_PHOTO_UPLOAD, AuditTargetType.CASE, caseId, detail, request);
 		return IncidentPhotoResponse.from(photo);
 	}
 

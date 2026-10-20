@@ -16,12 +16,6 @@ spring:
       ddl-auto: ${DDL_AUTO:validate}
     open-in-view: false
 
-  cloud:
-    aws:
-      # 사건 사진 S3 저장 (BE-91). 리전만 지정하고, 자격 증명은 Spring Cloud AWS 기본 체인을 쓴다
-      region:
-        static: ${AWS_REGION:ap-northeast-2}
-
   flyway:
     enabled: true
     # 기본값은 스키마(db/migration)만. 운영에서 환경변수를 빠뜨려도 시드가 들어가지 않도록 기본값을 안전한 쪽으로 둔다.

@@ -137,6 +137,37 @@ public class CasePhotoService {
 		if (contentType == null || !ALLOWED_CONTENT_TYPES.contains(contentType.toLowerCase(java.util.Locale.ROOT))) {
 			throw BusinessException.ofField(ErrorCode.INVALID_IMAGE_FILE, "file");
 		}
+		if (!matchesSignature(image, contentType.toLowerCase(java.util.Locale.ROOT))) {
+			throw BusinessException.ofField(ErrorCode.INVALID_IMAGE_FILE, "file");
+		}
+	}
+
+	/** Content-Type은 클라이언트가 임의로 선언할 수 있으므로, 실제 파일 시그니처(매직 바이트)도 확인한다 */
+	private static boolean matchesSignature(byte[] image, String contentType) {
+		return switch (contentType) {
+			case "image/jpeg" -> startsWith(image, (byte) 0xFF, (byte) 0xD8, (byte) 0xFF);
+			case "image/png" -> startsWith(image, (byte) 0x89, (byte) 0x50, (byte) 0x4E, (byte) 0x47, (byte) 0x0D,
+				(byte) 0x0A, (byte) 0x1A, (byte) 0x0A);
+			case "image/webp" -> startsWith(image, (byte) 'R', (byte) 'I', (byte) 'F', (byte) 'F')
+				&& image.length >= 12 && startsWith(image, 8, (byte) 'W', (byte) 'E', (byte) 'B', (byte) 'P');
+			default -> false;
+		};
+	}
+
+	private static boolean startsWith(byte[] data, byte... prefix) {
+		return startsWith(data, 0, prefix);
+	}
+
+	private static boolean startsWith(byte[] data, int offset, byte... prefix) {
+		if (data.length < offset + prefix.length) {
+			return false;
+		}
+		for (int i = 0; i < prefix.length; i++) {
+			if (data[offset + i] != prefix[i]) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	private static void validateCaption(String caption) {

@@ -11,5 +11,5 @@ public enum AdminAuditAction {
 	CASE_UPDATE,		// A-11
 	VALUE_AXIS_CONFIRM,	// A-12
 	CASE_PUBLISH,		// A-13
-	CASE_PHOTO_GENERATE	// 사건 사진 생성 (BE-91)
+	CASE_PHOTO_UPLOAD	// 사건 사진 업로드 (BE-91)
 }

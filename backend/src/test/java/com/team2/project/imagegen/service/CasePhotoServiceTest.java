@@ -32,6 +32,9 @@ import org.mockito.ArgumentCaptor;
  */
 class CasePhotoServiceTest {
 
+	private static final byte[] JPEG_BYTES = {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, 0x00};
+	private static final byte[] PNG_BYTES = {(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
+
 	private FakePromptClient promptClient;
 	private FileStorage fileStorage;
 	private CaseIncidentPhotoRepository incidentPhotoRepository;
@@ -91,7 +94,7 @@ class CasePhotoServiceTest {
 			.thenReturn(new FileStorage.UploadedFile("case-photos/case-1/representative-1.jpg",
 				"https://bucket.s3.test/case-photos/case-1/representative-1.jpg"));
 
-		String url = service.uploadRepresentativePhoto(1L, new byte[] {1, 2, 3}, "image/jpeg");
+		String url = service.uploadRepresentativePhoto(1L, JPEG_BYTES, "image/jpeg");
 
 		assertThat(url).isEqualTo("https://bucket.s3.test/case-photos/case-1/representative-1.jpg");
 		ArgumentCaptor<String> keyCaptor = ArgumentCaptor.forClass(String.class);
@@ -108,7 +111,7 @@ class CasePhotoServiceTest {
 			.thenReturn(new FileStorage.UploadedFile("k", "https://bucket.s3.test/k"));
 		when(incidentPhotoRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-		CaseIncidentPhoto photo = service.uploadIncidentPhoto(legalCase, new byte[] {1}, "image/png", "캡션", "참고 프롬프트");
+		CaseIncidentPhoto photo = service.uploadIncidentPhoto(legalCase, PNG_BYTES, "image/png", "캡션", "참고 프롬프트");
 
 		ArgumentCaptor<CaseIncidentPhoto> captor = ArgumentCaptor.forClass(CaseIncidentPhoto.class);
 		verify(incidentPhotoRepository).save(captor.capture());
@@ -137,11 +140,20 @@ class CasePhotoServiceTest {
 	}
 
 	@Test
+	@DisplayName("Content-Type을 image/jpeg로 속여도 실제 바이트가 JPEG 시그니처가 아니면 거절한다")
+	void contentTypeMismatchesActualBytes_isRejected() {
+		assertThatThrownBy(() -> service.uploadRepresentativePhoto(1L, new byte[] {1, 2, 3}, "image/jpeg"))
+			.isInstanceOf(BusinessException.class)
+			.extracting(e -> ((BusinessException) e).getErrorCode()).isEqualTo(ErrorCode.INVALID_IMAGE_FILE);
+		verifyNoInteractions(fileStorage);
+	}
+
+	@Test
 	@DisplayName("S3가 꺼져 있으면 FILE_UPLOAD_FAILED로 알린다")
 	void storageDisabled_wrapsAsBusinessException() {
 		when(fileStorage.enabled()).thenReturn(false);
 
-		assertThatThrownBy(() -> service.uploadRepresentativePhoto(1L, new byte[] {1}, "image/jpeg"))
+		assertThatThrownBy(() -> service.uploadRepresentativePhoto(1L, JPEG_BYTES, "image/jpeg"))
 			.isInstanceOf(BusinessException.class)
 			.extracting(e -> ((BusinessException) e).getErrorCode()).isEqualTo(ErrorCode.FILE_UPLOAD_FAILED);
 	}
@@ -151,7 +163,7 @@ class CasePhotoServiceTest {
 	void storageFailure_wrapsAsBusinessException() {
 		when(fileStorage.upload(any(), any(), any())).thenThrow(new FileStorageException("업로드 실패"));
 
-		assertThatThrownBy(() -> service.uploadRepresentativePhoto(1L, new byte[] {1}, "image/jpeg"))
+		assertThatThrownBy(() -> service.uploadRepresentativePhoto(1L, JPEG_BYTES, "image/jpeg"))
 			.isInstanceOf(BusinessException.class)
 			.extracting(e -> ((BusinessException) e).getErrorCode()).isEqualTo(ErrorCode.FILE_UPLOAD_FAILED);
 	}
