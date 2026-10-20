@@ -107,9 +107,11 @@ rag:
 # 추천만 꺼지고 서버는 정상으로 뜬다. RAG 임베딩과 같은 GEMINI_API_KEY를 쓴다
 case-photo-prompt:
   api-key: ${GEMINI_API_KEY:}
-  model: ${CASE_PHOTO_PROMPT_MODEL:gemini-3.7-flash}
-  # gemini-3.7-flash는 COMMON-40 테스트에서도 응답 40 ~ 65초로 Gemini 3.x 중 가장 느렸다(decisions/COMMON-40.md).
-  # 그보다 넉넉하게 둔다 — 기본 20s · 45s는 실제로 자주 타임아웃났다
+  # AI 판결 생성과 같은 gemini-3.7-flash를 쓰려 했으나, 사건 내용 몇 줄을 한글 프롬프트 한 문단으로
+  # 바꾸는 간단한 작업에는 과한 모델이었다(응답 40 ~ 65초, thinking 토큰까지 소모). 가벼운 작업에
+  # thinking 예산을 쓰지 않는 gemini-3.5-flash-lite로 낮췄다(PR #202 리뷰 반영, decisions/BE-91.md)
+  model: ${CASE_PHOTO_PROMPT_MODEL:gemini-3.5-flash-lite}
+  # timeout은 3.7-flash 기준(90s)을 그대로 둔다 — lite 전환 후 응답 속도를 운영에서 다시 잰 뒤 낮춘다
   timeout: ${CASE_PHOTO_PROMPT_TIMEOUT:90s}
 
 # 파일 저장소 - S3 (COMMON-47). 값은 환경변수로만 넘긴다(운영: deploy/.env, 로컬: 실행 환경변수)

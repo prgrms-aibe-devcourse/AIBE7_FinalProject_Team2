@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,9 +26,12 @@ import org.springframework.transaction.annotation.Transactional;
  * 사진은 사람이 만들어 업로드하고, 여기서는 ① 사건 내용을 바탕으로 한글 프롬프트를 추천하고 ② 업로드된
  * 사진을 S3에 저장 · DB에 기록하는 일만 한다.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class CasePhotoService {
+
+	private static final int MAX_CAPTION_LENGTH = 200;
 
 	/** 모든 프롬프트 추천에 공통으로 붙이는 그림체 · 등장인물 · 수위 규칙 (COMMON-41 결정) */
 	private static final String STYLE_GUIDE = "등장인물은 눈 · 코 · 입 등 이목구비가 없는 무표정한 회색 사람(엑스트라)으로"
@@ -88,6 +92,7 @@ public class CasePhotoService {
 	public CaseIncidentPhoto uploadIncidentPhoto(LegalCase legalCase, byte[] image, String contentType, String caption,
 			String promptUsed) {
 		validateImage(image, contentType);
+		validateCaption(caption);
 		int nextOrder = incidentPhotoRepository.countByLegalCaseId(legalCase.getId());
 		String key = "case-photos/case-" + legalCase.getId() + "/incident-" + nextOrder + "-"
 			+ System.currentTimeMillis() + extensionFor(contentType);
@@ -108,6 +113,7 @@ public class CasePhotoService {
 		try {
 			return promptClient.generateText(instruction);
 		} catch (ImageGenException e) {
+			log.warn("사건 사진 프롬프트 추천 실패", e);
 			throw new BusinessException(ErrorCode.PROMPT_GENERATION_FAILED, ErrorCode.PROMPT_GENERATION_FAILED.getMessage());
 		}
 	}
@@ -119,6 +125,7 @@ public class CasePhotoService {
 		try {
 			return fileStorage.upload(image, key, contentType);
 		} catch (FileStorageException e) {
+			log.warn("사건 사진 S3 업로드 실패 key={}", key, e);
 			throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, ErrorCode.FILE_UPLOAD_FAILED.getMessage());
 		}
 	}
@@ -129,6 +136,12 @@ public class CasePhotoService {
 		}
 		if (contentType == null || !ALLOWED_CONTENT_TYPES.contains(contentType.toLowerCase(java.util.Locale.ROOT))) {
 			throw BusinessException.ofField(ErrorCode.INVALID_IMAGE_FILE, "file");
+		}
+	}
+
+	private static void validateCaption(String caption) {
+		if (caption != null && caption.length() > MAX_CAPTION_LENGTH) {
+			throw BusinessException.ofField(ErrorCode.VALIDATION_ERROR, "caption");
 		}
 	}
 

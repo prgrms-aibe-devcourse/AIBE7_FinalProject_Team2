@@ -87,15 +87,19 @@ public class GeminiCasePhotoPromptClient implements CasePhotoPromptClient {
 	}
 
 	private static String extractText(GenerateContentResponse response) {
-		String text = response == null || response.candidates() == null || response.candidates().isEmpty() ? null
-			: firstText(response.candidates().get(0));
+		Candidate candidate = response == null || response.candidates() == null || response.candidates().isEmpty()
+			? null
+			: response.candidates().get(0);
+		String text = candidate == null ? null : firstText(candidate);
+		String finishReason = candidate == null ? null : candidate.finishReason();
 		if (text == null || text.isBlank()) {
-			String finishReason = response == null || response.candidates() == null || response.candidates().isEmpty()
-				? null
-				: response.candidates().get(0).finishReason();
 			log.warn("프롬프트 추천 응답에 텍스트가 없습니다: promptFeedback={}, finishReason={}",
 				response == null ? null : response.promptFeedback(), finishReason);
 			throw new ImageGenException("프롬프트 추천 응답에 텍스트가 없습니다");
+		}
+		if (finishReason != null && !"STOP".equals(finishReason)) {
+			log.warn("프롬프트 추천 응답이 잘렸을 수 있습니다: finishReason={}", finishReason);
+			throw new ImageGenException("프롬프트 추천 응답이 끝까지 오지 않았습니다 (finishReason=" + finishReason + ")");
 		}
 		return text.strip();
 	}

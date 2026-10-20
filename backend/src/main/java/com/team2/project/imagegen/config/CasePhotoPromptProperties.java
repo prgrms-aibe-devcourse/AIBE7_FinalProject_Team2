@@ -17,7 +17,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 public record CasePhotoPromptProperties(
 	String apiKey,
 	@DefaultValue("https://generativelanguage.googleapis.com/v1beta") String baseUrl,
-	@DefaultValue("gemini-3.7-flash") String model,
+	@DefaultValue("gemini-3.5-flash-lite") String model,
 	@DefaultValue("90s") Duration timeout
 ) {
 
