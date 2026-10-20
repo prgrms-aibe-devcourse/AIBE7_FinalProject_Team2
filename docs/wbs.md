@@ -42,6 +42,7 @@
 | v1.37 | 2026-10-19 | **COMMON-40 모델 테스트 결과 반영** — 가상 테스트 사건 2건(살인 · 상해, 실제 서비스 미사용) × 후보 무료 등급 모델 16개(Gemini · Groq · NIM)로 `compare.py` 비교, **`gemini:gemini-3.7-flash`로 확정**(교차 모델 중앙값과 가장 가까움 · 판단 요소 일관성·합의도 두 사건 모두 1.0 · 토큰 사용량 최저 수준). 근거는 [COMMON-40 의사결정 기록](decisions/COMMON-40.md), 문서 반영은 `ai-judgment-pipeline.md` v2.10 · `requirements-specification.md` v5.14. 테스트 중 Groq 호출이 Cloudflare에 자동화 요청으로 차단되는 버그(User-Agent 미지정)를 찾아 별도 PR(#185)로 먼저 수정·머지했다. **사건별 파이프라인 설정에 실제 반영하는 것은 남은 작업**(v1.27의 "문서 PR 머지만으로 완료 처리하지 않는다" 원칙 유지, PR #188) |
 | v1.38 | 2026-10-20 | **7.1.3 CD · 7.1.1 남은 범위(도메인 · HTTPS) 완료, 7.6.7 성향 갱신 연결 구현 반영 (BE-60 · BE-75 · BE-64, D)** — ① Jira 기준 BE-60(PR #161) · BE-75(PR #181) 완료(`main` 반영 #184): 7-6 · 7-12 상태를 완료로, 7-7 W3 D 행 10/27 CD 자리를 빈 자리로. ② **7.6.7(BE-64) 구현 완료**(10/28 ~ 29에서 당김, PR 머지 시 확정): 7-6 · 7-12를 검토 중으로, 7-7 W3 D 행 10/28 · 10/29 자리를 빈 자리로. M3 확인 기준에 CD · 성향 갱신 연결 완료 표시. ③ **R10**: 도메인 확보로 위험 해소, 카카오 앱에 운영 Redirect URI 추가 등록(10/19). 운영 서버 https · 자동 배포 동작 확인(10/20). 관리자 OAuth(BE-40) 범위는 팀 확정 전이라 이번에 바꾸지 않았다 |
 | v1.39 | 2026-10-19 | **COMMON-41 범위 확정** — 신문 지면(헤드라인 · 부제 · 사진 캡션 · 본문) · 사건 스크립트(내로 · 남불 대사)는 PR #138 `script.json`의 `paper` · `acts.steps` 구조 재사용. 사건 사진은 범위 검토안(프롬프트만 제공)과 달리 **Cloudflare AI(Workers AI)로 직접 생성**하기로 결정 — 신문용 사건 대표사진과 사건 발단 사진 두 종류, 등장인물은 얼굴 없는 회색 엑스트라로 그리고 내로 · 남불은 미등장(다른 화면에는 계속 등장). 근거는 [COMMON-41 의사결정 기록](decisions/COMMON-41.md), 문서 반영은 `ai-judgment-pipeline.md` v2.13 · `requirements-specification.md` v5.15. 7-9 업무 분장표의 COMMON-41 행 갱신 |
+| v1.40 | 2026-10-20 | **COMMON-17 운영 DB 실제 사건 시드 적용 완료 (D)** — 적용 방식: 서버에 비공개 저장소 `seed/`만 읽기 전용 Deploy key로 받아 `docker-compose.real-seed.yml`로 백엔드에 읽기 전용 연결(`.env` `REAL_SEED_DIR`, 자동 배포도 같은 파일 사용). 10/19 운영 적용(실제 사건 1건 · 판례 53건 · 양형기준 237건, 체험 끝까지 확인), 10/20 비공개 시드가 공개 저장소 · 이미지 · jar에 없음을 운영 이미지로 확인. `loads/` 실행 절차 · 운영 DB 백업 정책(매일 `pg_dump` 7일 + 작업 직전 수동, RDS 전환 후 자동 백업)을 `deploy/README.md` "운영 데이터"에 반영. 근거 `docs/decisions/COMMON-17.md`. 7-12에 COMMON-17 행 추가 |
 
 **기준 문서**: 요구사항 명세서(`requirements-specification.md` v5.9) · 기능 명세서(`functional-specification.md` v3.6) · 정보 구조도(`information-architecture.md` v1.11) · ERD(`erd.md` v1.15) · API 명세서(`api-specification.md` v0.14) · 시퀀스 다이어그램(`sequence-diagram.md` v0.7) · 기술 스택(`tech-stack.md` v1.12) · 유저 흐름도(`user-flow.md` v1.1) · AI 판결 파이프라인(`ai-judgment-pipeline.md` v2) · 와이어프레임(`wireframe.pdf`)
 
@@ -629,6 +630,7 @@ R = 실행 · A = 최종 책임 · C = 협의 · I = 공유
 | 7.1.3 | BE-60 GitHub Actions CD | 완료 (PR #161, v1.38) |
 | 7.1.4 | BE-61 Redis 운영 구성 — 캐시 · 토큰 DB 분리 · 영속화 | 완료 (#123) |
 | 7.1.2 | BE-59 AWS RDS 전환 · 환경변수 · 시크릿 관리 | 할 일 (v1.19: "미생성"은 잘못 적은 것) |
+| 7.1.x 범위 밖 | COMMON-17 운영 DB 실제 사건 시드 적용 방식 | 완료 (v1.40: 10/19 적용 · 10/20 미포함 검증 · 절차 문서화) |
 | 7.2.1 ~ 7.2.3 | BE-66 Actuator · Micrometer, BE-70 Prometheus, BE-71 구조화 로그 · Loki | 완료 (BE-70 #120 · BE-71 #129) |
 | 7.2.4 | **COMMON-43** Grafana 대시보드 4종 | 진행 중 (10/16) |
 | 7.3.1 ~ 7.3.4 | COMMON (신규 4건) | 미생성 |

@@ -319,19 +319,108 @@ docker compose -f docker-compose.prod.yml exec redis redis-cli -n 0 --scan | hea
 - **메모리가 찼을 때**(쓰기가 `OOM command not allowed`로 실패): 먼저 TTL 없는 캐시 키를 찾아 원인 코드를 고치고, 급하면 DB 0만 비운다.
 - **데이터 위치**: 볼륨 `redisdata`. `docker compose down -v`는 이 볼륨도 지워 **모든 사용자가 로그아웃**되니 운영에서 쓰지 않는다.
 
-## 운영 데이터 (docs/tech-stack.md 2장)
+## 운영 데이터 (docs/tech-stack.md 2장 · COMMON-17)
 
 - 기본 실행(`docker-compose.prod.yml`만)은 **스키마만** 넣는다(`FLYWAY_LOCATIONS=classpath:db/migration`, `.env`로 바꿀 수 없게 고정). 처음 띄우면 사건 목록이 비어 있다("사건 0건").
-- **개발용 가상 사건 시드(`classpath:db/seed`)는 운영(EC2)에 넣지 않는다.**
-- 실제 사건은 비공개 저장소(`backend/private-seed` 서브모듈의 원본)의 `seed/` 폴더를 서버에 따로 받아 두고, 컨테이너에 **읽기 전용**으로 붙여 넣는다. 공개 저장소 · 이미지 · CI에는 들어가지 않는다(BE-17).
+- **개발용 가상 사건 시드(`classpath:db/seed`)는 운영(EC2)에 넣지 않는다.** 파일은 jar 안에 있지만(공개 저장소 파일) 운영 `FLYWAY_LOCATIONS`에 없어서 읽히지 않는다.
+- 실제 사건은 비공개 저장소(`backend/private-seed` 서브모듈의 원본)의 `seed/` 폴더를 서버에 따로 받아 두고, 컨테이너에 **읽기 전용**으로 붙여 넣는다. 공개 저장소 · 이미지 · jar · CI에는 들어가지 않는다(BE-17, 10/20 운영 이미지로 확인 — `docs/decisions/COMMON-17.md`).
+- `.env`에 `REAL_SEED_DIR`가 있으면 `deploy.sh`(자동 배포)가 `docker-compose.real-seed.yml`을 자동으로 함께 쓴다. 손으로 Compose를 실행할 때도 두 파일을 같이 준다.
+
+### 처음 한 번: 서버에 비공개 시드 받기
+
+비공개 저장소 하나만 **읽을 수 있는** Deploy key를 쓴다(개인 토큰 · 쓰기 권한을 서버에 두지 않는다). `seed/`만 받고 원본 판결문(`source/`) 등은 받지 않는다.
 
 ```bash
-# 서버에서: 비공개 저장소를 읽기 전용 권한으로 받아 둔다 (권한은 저장소 관리자에게 받는다)
-# .env에 REAL_SEED_DIR=/opt/lawnambul/private-seed/seed
-docker compose -f docker-compose.prod.yml -f docker-compose.real-seed.yml up -d --no-build
+# 1) 서버에서 키 만들기 → 공개키(.pub) 한 줄을 비공개 저장소 관리자에게 전달
+ssh-keygen -t ed25519 -f ~/.ssh/private_seed_ro -N "" -C "lawnambul-ec2-private-seed-readonly"
+cat >> ~/.ssh/config <<'EOF'
+
+Host github-private-seed
+  HostName github.com
+  User git
+  IdentityFile ~/.ssh/private_seed_ro
+  IdentitiesOnly yes
+EOF
+chmod 600 ~/.ssh/config
+cat ~/.ssh/private_seed_ro.pub
+#    관리자: 비공개 저장소 Settings → Deploy keys → Add deploy key ("Allow write access" 체크하지 않음)
+#    개인키(~/.ssh/private_seed_ro)는 서버 밖으로 꺼내지 않는다
+
+# 2) 연결 확인 → "Hi <소유자>/<비공개 저장소>! You've successfully authenticated" 가 나오면 성공
+ssh -T github-private-seed
+
+# 3) seed/만 받기 (공개 저장소 main이 가리키는 서브모듈 커밋과 같은지 확인)
+git clone --filter=blob:none --sparse --branch develop \
+  github-private-seed:<소유자>/<비공개 저장소>.git /opt/lawnambul/private-seed
+cd /opt/lawnambul/private-seed && git sparse-checkout set seed
+git log -1 --format='%h %s'
+
+# 4) .env에 경로 넣기 (.env.example에서 복사한 빈 줄이 있으면 그 줄을 바꾼다)
+cd /opt/lawnambul/app/deploy
+sed -i 's#^REAL_SEED_DIR=$#REAL_SEED_DIR=/opt/lawnambul/private-seed/seed#' .env
+grep -n '^REAL_SEED_DIR=' .env                       # 정확히 한 줄
+docker compose -f docker-compose.prod.yml -f docker-compose.real-seed.yml config | grep -E 'FLYWAY_LOCATIONS|/real-seed'
+
+# 5) 백업 → 타이머 정지 → backend만 다시 만들기 → Flyway 적재 확인 → 타이머 재개
+docker compose -f docker-compose.prod.yml exec -T postgres \
+  sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > ~/backup-before-real-seed-$(date +%F-%H%M).dump
+chmod 600 ~/backup-*.dump
+sudo systemctl stop lawnambul-cd.timer
+docker compose -f docker-compose.prod.yml -f docker-compose.real-seed.yml up -d --no-build --no-deps backend
+docker compose -f docker-compose.prod.yml -f docker-compose.real-seed.yml logs -f backend 2>&1 \
+  | grep -E 'Migrating|Successfully applied|ERROR|Started '   # "Started …" 후 Ctrl+C
+sudo systemctl start lawnambul-cd.timer
+curl -s https://naelawnambul.today/api/v1/cases | head -c 200; echo   # total이 0이 아니면 성공
 ```
 
-- 시드는 반복 마이그레이션(`R__`)이라 같은 제목의 사건이 있으면 건너뛴다. 실제 사건 폴더를 붙였다가 빼고 실행해도 기동된다(`ignore-migration-patterns`).
+### 시드가 바뀌었을 때 (비공개 저장소에 머지된 뒤)
+
+비공개 저장소에 머지해도 운영에 **자동으로 반영되지 않는다.** 자동 배포(`cd-agent.sh`)는 공개 저장소 `main`만 보고, 서버의 시드 사본은 받은 시점에 멈춰 있다.
+
+```bash
+cd /opt/lawnambul/private-seed && git pull && git log -1 --format='%h %s'
+# 이어서 위 5)의 백업 → 타이머 정지 → backend 재생성 → 확인 → 타이머 재개
+# (재생성하지 않으면 다음 main 자동 배포 때 반영된다)
+```
+
+- **머지 전에 로컬 `bootRun`으로 먼저 확인한다.** 시드 SQL이 실패하면 백엔드가 뜨지 않는데, 자동 되돌림은 이미지만 바꾸고 시드 폴더는 그대로라 **되돌린 이미지도 같은 이유로 실패한다.** 그때는 시드 사본을 직전 커밋으로 돌리고(`git checkout <직전 커밋>`) backend를 다시 만든다.
+- 시드는 반복 마이그레이션(`R__`)이고 "같은 제목의 사건이 있으면 건너뛰기" 구조다. **새 사건 추가는 바로 반영되지만, 이미 들어간 사건의 내용 수정은 `UPDATE` 문을 함께 넣어야 반영된다**(비공개 저장소 README).
+- 실제 사건 폴더를 붙였다가 빼고 실행해도 기동된다(`ignore-migration-patterns`).
+
+### 파이프라인 적재 파일(`loads/`) 넣기 (BE-31)
+
+파이프라인이 만든 `loads/<시각>-<name>.sql`은 Flyway가 읽지 않는 **한 번 실행하는 파일**이다. 사건은 `DRAFT`, AI 판결은 비공개로 들어가 사용자에게 보이지 않고, 관리자 후검수(A-11 ~ A-13)로 공개한다. 같은 파일을 두 번 실행해도 중복되지 않는다.
+
+```bash
+# 서버 사본은 seed/만 받아 두었으므로 loads/를 추가로 받는다 (처음 한 번)
+cd /opt/lawnambul/private-seed && git sparse-checkout add loads && git pull
+# 백업 후 실행 (컨테이너 안 psql로, 접속 정보는 컨테이너 환경변수를 쓴다)
+cd /opt/lawnambul/app/deploy
+docker compose -f docker-compose.prod.yml exec -T postgres \
+  sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > ~/backup-before-load-$(date +%F-%H%M).dump
+docker compose -f docker-compose.prod.yml exec -T postgres \
+  sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < /opt/lawnambul/private-seed/loads/<파일>.sql
+```
+
+- `loads/` 파일에는 원본 판결문(사건번호 · 원문)이 들어 있다. 서버 밖으로 옮기지 않고, 공개 저장소 · PR · Jira에 내용을 쓰지 않는다.
+- 후검수 뒤의 공개 · 승인 상태는 **DB에만** 있다(파일에 없음). 그래서 아래 백업이 그 상태의 원본이다.
+
+### 운영 DB 백업
+
+| 언제 | 방법 | 보관 |
+|---|---|---|
+| 매일 1번 | 서버 cron으로 `pg_dump -Fc` → `~/backups/` | 7일 |
+| 시드 갱신 · `loads/` 실행 · 위험한 마이그레이션 직전 | 위 명령으로 손으로 한 번 | 작업 확인 후 며칠 |
+| 7.1.2 RDS 전환 후(10/28) | RDS 자동 백업 | 7일 |
+
+```bash
+# 매일 03:17 백업, 7일 지난 파일 삭제 (crontab -e 로 한 줄 추가)
+17 3 * * * cd /opt/lawnambul/app/deploy && mkdir -p ~/backups && docker compose -f docker-compose.prod.yml exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > ~/backups/lawnambul-$(date +\%F).dump && chmod 600 ~/backups/*.dump && find ~/backups -name 'lawnambul-*.dump' -mtime +7 -delete
+```
+
+- 백업 파일에는 관리자 비밀번호 해시 등 운영 데이터가 있으므로 권한 600, 서버 밖으로 옮기지 않는다.
+- **한계**: 같은 서버 디스크에 둔다. 서버(EBS)가 통째로 사라지면 백업도 같이 사라진다. 서버 밖 보관(S3 등)은 IAM 권한이 없어 지금은 하지 않고, RDS 전환으로 해결한다.
+- 되살리기: `docker compose ... exec -T postgres sh -c 'pg_restore --clean --if-exists -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < <백업>.dump` (실행 전 타이머 정지 · 백엔드 중지).
 
 ## 다음 작업에서 바꿀 곳
 
