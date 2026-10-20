@@ -99,6 +99,10 @@ public abstract class ApiIntegrationTest {
 			jdbcTemplate.update("DELETE FROM judgment WHERE case_id = ?", caseId);
 			userIds.addAll(jdbcTemplate.queryForList(
 					"SELECT anonymous_user_id FROM experience WHERE case_id = ?", UUID.class, caseId));
+			// 비교 공개(API 13)가 체험 성향 기여를 저장하므로(BE-64) 체험보다 먼저 지운다 (FK)
+			jdbcTemplate.update(
+					"DELETE FROM experience_personality WHERE experience_id IN (SELECT id FROM experience WHERE case_id = ?)",
+					caseId);
 			jdbcTemplate.update("DELETE FROM experience WHERE case_id = ?", caseId);
 		}
 		userIds.forEach(id -> jdbcTemplate.update("DELETE FROM anonymous_user WHERE id = ?", id));
