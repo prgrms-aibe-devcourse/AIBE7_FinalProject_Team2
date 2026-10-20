@@ -15,6 +15,7 @@
 | `docker-compose.real-seed.yml` | 서버 전용 덧붙임 파일. 실제 사건 seed 폴더를 백엔드에 읽기 전용으로 연결 |
 | `docker-compose.monitoring-agent.yml` | 서버 전용 덧붙임 파일. 모니터링 에이전트(Alloy · node_exporter)와 backend의 로그 볼륨 · 8081 포트 (COMMON-43). `.env`의 `MONITORING_AGENT=1`이면 `deploy.sh`가 자동으로 함께 쓴다 |
 | `alloy-agent.alloy` | 위 Alloy 설정. 백엔드 로그를 모니터링 호스트의 Loki로 보낸다 (COMMON-43) |
+| `docker-compose.pipeline.yml` | 서버 전용 덧붙임 파일. AI 판결 파이프라인 서비스(관리자 사건 등록 A-14)와 backend의 `PIPELINE_SERVICE_URL` (COMMON-50). `.env`의 `PIPELINE_SERVICE=1`이면 `deploy.sh`가 자동으로 함께 쓴다. **켜기 전 메모리 확인 필요** — 아래 "AI 판결 파이프라인 서비스" |
 | `.env.example` | 환경변수 예시. `.env`로 복사해 쓴다 (`.env`는 커밋하지 않음) |
 | `smoke-test.sh` | `/` · 화면 주소 · `/api` · 캐시 정책 · Let's Encrypt 확인 경로 확인. CI와 서버에서 같은 스크립트를 쓴다 |
 | `deploy.sh` | 서버 배포 한 번: sha 이미지로 교체 → 준비 대기 → 스모크 테스트 → 실패하면 직전 이미지로 되돌림 (BE-60) |
@@ -35,7 +36,8 @@
 1. `develop` · `main`으로 가는 PR: Actions가 이미지를 빌드해 이 구성으로 띄우고 `smoke-test.sh`를 실행한다. **업로드하지 않는다.**
 2. `develop` push(머지): 스모크 테스트를 통과한 이미지를 GHCR에 올린다. **운영에는 배포하지 않는다.**
 3. `main` push(`develop → main` PR 머지): 같은 방식으로 올리고, **운영 서버가 2분 안에 스스로 받아 배포한다** (아래 "자동 배포(CD)").
-   - `ghcr.io/prgrms-aibe-devcourse/lawnambul-web` · `ghcr.io/prgrms-aibe-devcourse/lawnambul-backend`
+   - `ghcr.io/prgrms-aibe-devcourse/lawnambul-web` · `ghcr.io/prgrms-aibe-devcourse/lawnambul-backend` · `ghcr.io/prgrms-aibe-devcourse/lawnambul-pipeline`
+     (파이프라인 이미지는 오버레이를 켠 서버만 쓰지만 항상 올린다 — 켜는 순간 그 태그가 GHCR에 있어야 한다, COMMON-50)
    - 태그: `sha-커밋7자리`(배포 · 되돌릴 때 쓰는 고정 태그) + 브랜치 이름 `develop` · `main`(그 브랜치의 최신)
    - 이미지 라벨 `org.opencontainers.image.revision`에 커밋 전체 해시가 붙는다 (서버가 배포할 sha 태그를 이걸로 정한다)
 4. 서버는 이미지를 받아서 실행만 한다. 서버에서 Gradle · npm 빌드를 하지 않는다 (메모리 절약).
@@ -502,6 +504,74 @@ docker exec lawnambul-web-1 nginx -T 2>/dev/null | grep client_max_body_size
 | 1MB가 넘는 파일만 실패 (백엔드 오류) | Spring multipart 상한 → `application.yml` `spring.servlet.multipart` |
 | `Unable to load credentials` | 역할이 연결되지 않았거나 홉 제한이 1 → 위 확인 1) |
 | `AccessDenied` | 역할 정책의 버킷 이름 · 권한 확인 (인프라 담당) |
+
+## AI 판결 파이프라인 서비스 (COMMON-50, 서버 전용)
+
+관리자가 판결문을 넣고 사건 등록을 누르면(A-14) 백엔드가 **같은 서버의 내부 컨테이너**에 작업을 맡긴다.
+오프라인 도구 `tools/ai-judgment`(BE-31)를 그대로 쓰고, HTTP 껍데기만 덧씌운 구조다 (`tools/ai-judgment/service/README.md`).
+
+```text
+backend ──▶ pipeline (FastAPI :8000, 내부 네트워크 전용) ──▶ 외부 LLM API
+                │
+                └─ 볼륨: pipeline-out(작업 상태 · 생성 결과) · pipeline-cases(추출 산출물)
+```
+
+- **포트를 호스트로 열지 않는다.** 같은 Compose 네트워크의 backend만 `http://pipeline:8000`으로 부른다.
+  그래서 서비스 자체에는 인증이 없다 — 관리자 인증 · CSRF는 백엔드가 한다 (`docs/decisions/COMMON-50.md`).
+- 운영 DB에 직접 쓰지 않는다. 파이프라인의 `load` 단계는 서비스에서 꺼 두고, 검수 · 등록은 백엔드가 한다.
+- 판결문 원문은 이미지가 아니라 볼륨에만 있고, 결과 응답에도 넣지 않는다 (FR-5-3). 검수가 끝나면 백엔드가 작업을 지운다.
+
+### ⚠️ 켜기 전: 메모리
+
+t3.small은 2GB인데 지금 base 구성이 이미 1.75GB를 할당한다(backend 1g · postgres 512m · redis 256m).
+실측 여유는 약 250MB이고, 모니터링 에이전트를 켠 서버는 그중 100MB를 이미 쓴다.
+그래서 **7.1.2 RDS 전환(postgres 컨테이너 512m이 빠진다) 뒤에 켜는 것을 전제로 한다.**
+그 전에 켜야 하면 `backend`의 `mem_limit`을 먼저 내리고 `docker stats`로 확인한다.
+
+### 켜기
+
+```bash
+# 1) .env에 값 추가 (deploy/.env.example "AI 판결 파이프라인 서비스" 참고)
+#    PIPELINE_SERVICE=1
+#    ANTHROPIC_API_KEY · GEMINI_API_KEY · OPENAI_API_KEY 중 하나 이상 (없으면 deploy.sh가 배포 전에 멈춘다)
+
+# 2) 올린다. 지금 운영에서 쓰는 -f 조합을 그대로 쓴다
+docker compose -f docker-compose.prod.yml -f docker-compose.pipeline.yml up -d --no-build pipeline
+
+# 3) backend를 다시 만들어 PIPELINE_SERVICE_URL을 받게 한다 (환경변수는 컨테이너를 새로 만들어야 반영된다)
+docker compose -f docker-compose.prod.yml -f docker-compose.pipeline.yml up -d --no-build --no-deps backend
+```
+
+이후 자동 배포(`deploy.sh`)는 `.env`의 `PIPELINE_SERVICE=1`을 보고 이 오버레이를 함께 쓰고,
+`pipeline` 이미지도 같은 태그로 받아 올린다. **다만 파이프라인이 실패해도 배포를 되돌리지 않는다** —
+관리자 전용 기능이라 사용자 화면 · API와 무관하기 때문이다. 대신 배포 로그에 `⚠` 줄이 남는다.
+
+### 확인
+
+```bash
+# 1) 호스트에 포트가 열려 있지 않아야 한다 (PORTS 칸이 비어 있어야 정상)
+docker compose -f docker-compose.prod.yml -f docker-compose.pipeline.yml ps pipeline
+
+# 2) 서비스 응답 (컨테이너 안에서만 된다)
+docker exec lawnambul-pipeline-1 python3 -c \
+  "import urllib.request; print(urllib.request.urlopen('http://localhost:8000/health').read().decode())"
+
+# 3) 백엔드가 내부 주소를 받았는지 (값이 비어 있으면 overlay 없이 backend를 다시 만든 것)
+docker exec lawnambul-backend-1 printenv PIPELINE_SERVICE_URL
+
+# 4) 메모리 (위 "켜기 전" 참고 — backend가 밀려나지 않는지 본다)
+docker stats --no-stream
+```
+
+### 문제가 생겼을 때
+
+| 증상 | 원인 · 조치 |
+|---|---|
+| 배포 로그에 `⚠ 파이프라인 이미지를 받지 못했다` | 그 태그의 이미지가 아직 GHCR에 없다 → Actions 실행 확인. 파이프라인만 이전 이미지로 계속 돈다 |
+| 배포 로그에 `⚠ 파이프라인 서비스를 띄우지 못했다` | `docker compose ... logs pipeline`으로 원인 확인. 사용자 화면 · API는 정상이다 |
+| 사건 등록만 안 된다 | 위 확인 3) — overlay를 빼고 backend를 다시 만들면 `PIPELINE_SERVICE_URL`이 사라진다 |
+| 작업이 계속 `FAILED` | LLM 키 문제가 가장 흔하다. `docker exec lawnambul-pipeline-1 printenv | grep -c API_KEY` 로 개수만 확인(값은 출력하지 않는다) |
+| 서버 메모리가 모자란다 | 위 "켜기 전: 메모리". 급하면 `PIPELINE_SERVICE=`로 비우고 `docker compose ... stop pipeline` |
 
 ## 다음 작업에서 바꿀 곳
 
