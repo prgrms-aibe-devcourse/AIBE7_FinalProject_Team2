@@ -1,7 +1,8 @@
 // npm test : 책갈피 캐릭터 저장
+import { existsSync } from 'node:fs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { getBookmarkCharacter, selectedBookmarkFace, setBookmarkCharacter, setBookmarkFace } from './bookmarkCharacter.js';
+import { BOOKMARK_CHARACTERS, BOOKMARK_FACES, BOOKMARK_LAWS, BOOKMARK_STYLES, bookmarkFace, getBookmarkCharacter, selectedBookmarkFace, setBookmarkCharacter, setBookmarkFace } from './bookmarkCharacter.js';
 
 const memory = () => {
   const data = new Map();
@@ -54,4 +55,12 @@ test('로도 책갈피로 고를 수 있고, 얼굴 대신 로 아이콘 한 장
   assert.equal(selectedBookmarkFace(storage), '/images/characters/icon/cropped/law-gavel_icon.webp');
   setBookmarkCharacter('law-sword', storage);
   assert.equal(getBookmarkCharacter(storage), 'law-gavel');
+});
+
+test('책갈피 얼굴 경로는 모두 실제 이미지 파일을 가리킨다(이미지 폴더를 옮기다 놓치지 않게)', () => {
+  const onDisk = (src) => existsSync(new URL(`../../public${src}`, import.meta.url));
+  const faces = BOOKMARK_STYLES.flatMap((style) => BOOKMARK_CHARACTERS.flatMap((who) => BOOKMARK_FACES.map((face) => bookmarkFace(who, face, style))));
+  const laws = BOOKMARK_LAWS.map((who) => bookmarkFace(who));
+  [...faces, ...laws].forEach((src) => assert.ok(onDisk(src), `없는 파일: ${src}`));
+  assert.equal(faces.length + laws.length, 27);
 });
