@@ -193,3 +193,4 @@ body:has(.my-page) .site-footer { background: var(--palette-coffee-50); border-t
   .collection-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .my-type-hero { grid-template-columns: 120px minmax(0, 1fr); gap: 16px; }
 }
+.my-case-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }

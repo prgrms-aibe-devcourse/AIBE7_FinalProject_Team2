@@ -19,6 +19,7 @@ export const ACT_GROUPS = [
 ];
 // 로 합의부는 판결 화면에서 이름 대신 "AI 판사"로 부른다(직책 재판장 · 배석판사는 이름표 옆에 단다)
 const NAMES = { naero: '내로', nambul: '남불', 'law-scale': 'AI 판사', 'law-gavel': 'AI 판사', 'law-book': 'AI 판사' };
+const ENTER_MS = 1000; // paperStage.css의 들어오는 연출(.55초 + 남불 .12초 지연, 대사창 .35초 지연 + .3초)이 모두 끝나는 시간
 const CAMEO_LABEL = '볼따구'; // 해설을 맡는 작은 내로 · 남불(배역이 아니라 데포르메 모습)
 const CAMEO_LOOK = 'cheek:idle-thinking';
 const DEFORM_LABEL = { ranma: '란마' }; // 데포르메 모습 이름(look "deform:ranma" → 이름표 "남불 란마") // 볼따구 컷은 지금 idle-thinking · idle-sorry 두 표정만 있다
@@ -753,6 +754,9 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
     parked = false;
     wrap.classList.remove('parked');
     wrap.classList.add('entering'); // 움직임 줄이기에서는 CSS가 움직임 없이 페이드만 건다(paperStage.css)
+    // 들어오는 연출이 끝나면 걷는다. 남겨 두면 이 클래스의 animation(우선순위가 더 높다)이 남불의 "엽서 건네기"(.delivering) animation을 덮어
+    // 사건 디테일에서 시작한 뒤에는 남불이 움직이지 않는다
+    setTimeout(() => wrap.classList.remove('entering'), ENTER_MS);
     render();
     // 시작 버튼이 사라지므로 포커스를 옮긴다: 선택지 장면이면 첫 선택지(대사를 바로 다 보여 준다), 아니면 대사 진행
     if (asks(steps[index])) { finishTyping(); choiceRow.querySelector('button')?.focus({ preventScroll: true }); }

@@ -78,6 +78,7 @@
 /* 날아오는 엽서(8막 "리뷰하기" · 독자 엽서, caseReviewPopup.js): 흰 상자 없이 대화상자 자체가 항공우편 엽서 한 장이다.
    뒤 무대는 어둡게 가린다. 날아오고 돌아가는 움직임은 WAAPI(transform · opacity)로 한다 */
 body.case-review-open { overflow: hidden; }
+html.case-review-gutter { scrollbar-gutter: stable; } /* 스크롤을 잠가도 스크롤바 자리는 남겨 뒤 화면이 움찔하지 않게 한다 */
 .case-review-layer { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 16px; background: color-mix(in srgb, var(--color-desk-shadow) 55%, transparent); }
 .case-review-dialog { position: relative; width: min(640px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior: contain; padding: 22px 26px 20px; border: 8px solid transparent; border-radius: 6px; outline: none;
   background: linear-gradient(color-mix(in srgb, var(--color-desk-kraft) 10%, var(--color-card)), color-mix(in srgb, var(--color-desk-kraft) 10%, var(--color-card))) padding-box,

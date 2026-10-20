@@ -1,6 +1,5 @@
 import { button, element, mockTag, renderSiteHeader } from '../../components/siteLayout.js';
 import { API_MODE } from '../../api/config.js';
-import { screenByStatus } from '../../utils/screenByStatus.js';
 import { renderAxisRow } from '../../components/axisRow.js';
 import { imageOf } from '../../components/stage.js';
 import { AXES, CHARACTER_NAMES } from '../../utils/personalityAxes.js';
@@ -9,6 +8,7 @@ import { BOOKMARK_CHARACTERS, BOOKMARK_NAMES, bookmarkFace, getBookmarkCharacter
 import { SCRIPTS } from '../../content/scripts.js';
 import { clearUser, currentUser, isAdmin } from '../../utils/session.js';
 import { homeRoute } from '../admin/adminMenu.js';
+import { openCaseReviewPopup } from '../caseReview/caseReviewPopup.js';
 
 // S-17 마이페이지 (WBS 7.6.6). GET /my-page 한 번 호출로 받고, 기록이 없어도 404가 아니라 빈 200이다(명세 P-5).
 // 메인 책상의 커피잔으로 들어온다(FE-44): 커다란 커피잔이 날아와 페이드아웃하는 사이(utils/coffeeDive.js) 이 화면(from: 'mug')으로 넘어온다.
@@ -287,7 +287,7 @@ function renderCollection(experiences) {
   return box;
 }
 
-function renderCases(experiences, navigate) {
+function renderCases(experiences, navigate, api) {
   const box = element('div', 'my-detail');
   if (experiences.length === 0) {
     const empty = element('div', 'my-empty');
@@ -300,8 +300,11 @@ function renderCases(experiences, navigate) {
     const line = element('li', 'my-case');
     const info = element('div');
     info.append(element('p', 'my-case-title', item.title), element('p', 'my-case-status', STATUS_LABELS[item.status] ?? '체험 중'));
-    const label = item.status === 'COMPLETED' ? '결과 다시 보기' : '이어서 하기';
-    line.append(info, button(label, () => navigate(screenByStatus[item.status] ?? 'list', { caseId: item.caseId }), 'secondary-button'));
+    // 사건 디테일(기사 페이지)로 간다. 거기서 이어서 · 결과만 · 1막부터를 고른다(FE-62). 마친 사건은 독자 엽서로 바로 갈 수도 있다
+    const actions = element('div', 'my-case-actions');
+    actions.append(button('사건 보기', () => navigate('caseDetail', { caseId: item.caseId }), 'secondary-button'));
+    if (item.status === 'COMPLETED') actions.append(button('독자 엽서 쓰기', (event) => openCaseReviewPopup({ caseId: item.caseId, api, navigate, from: event.currentTarget }), 'secondary-button'));
+    line.append(info, actions);
     list.append(line);
   });
   box.append(list);
@@ -340,7 +343,7 @@ function renderShell(text) {
   return box;
 }
 
-function renderView(view, data, navigate, go) {
+function renderView(view, data, navigate, go, api) {
   const head = element('div', 'my-view-head');
   const back = element('button', 'my-back');
   back.type = 'button';
@@ -353,7 +356,7 @@ function renderView(view, data, navigate, go) {
     profile: () => renderShell('프로필카드 화면은 곧 열려요.'),
     type: () => renderTypePage(data, navigate),
     collection: () => renderCollection(data.experiences),
-    cases: () => renderCases(data.experiences ?? [], navigate),
+    cases: () => renderCases(data.experiences ?? [], navigate, api),
     edit: () => renderShell('내 정보 수정은 곧 열려요.'),
     settings: () => renderShell('환경 설정은 곧 열려요.'),
   }[view]();
@@ -401,7 +404,7 @@ export async function renderMyPage(container, { api, navigate, view, from }) {
 
   const paint = (data) => {
     if (shown) {
-      main.replaceChildren(...renderView(shown, data, navigate, go));
+      main.replaceChildren(...renderView(shown, data, navigate, go, api));
       return;
     }
     const title = element('h1', 'visually-hidden', '마이페이지');

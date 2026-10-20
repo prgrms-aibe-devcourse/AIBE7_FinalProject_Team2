@@ -26,6 +26,7 @@ import { renderPersonalitySharedPage } from '../pages/personality/personalitySha
 import { renderReviewPage } from '../pages/review/reviewPage.js';
 import { renderSummaryPage } from '../pages/summary/summaryPage.js';
 import { renderVerdictPage } from '../pages/verdict/verdictPage.js';
+import { renderPrivacyPage, renderTermsPage } from './legalPage.js';
 import { renderNotFoundPage } from './notFoundPage.js';
 
 export const routes = [
@@ -67,6 +68,9 @@ export const routes = [
   { name: 'adminAccounts', path: '/admin/accounts', render: (container, options) => import('../pages/admin/adminAccountsPage.js').then((m) => m.renderAdminAccountsPage(container, options)), ownsFooter: true, ownsHeader: true, title: '관리자' },
   { name: 'adminNotices', path: '/admin/notices', render: (container, options) => import('../pages/admin/adminNoticesPage.js').then((m) => m.renderAdminNoticesPage(container, options)), ownsFooter: true, ownsHeader: true, title: '관리자' },
   { name: 'adminCase', path: '/admin/cases/:caseId', render: (container, options) => import('../pages/admin/adminCasePage.js').then((m) => m.renderAdminCasePage(container, options)), ownsFooter: true, ownsHeader: true, title: '관리자' },
+  // S-10 이용약관 · S-11 개인정보처리방침 (FE-62): 메인 맨 아래 입구. 조항이 정해질 때까지 "준비 중" 틀이다
+  { name: 'terms', path: '/terms', render: renderTermsPage, title: '이용약관' },
+  { name: 'privacy', path: '/privacy', render: renderPrivacyPage, title: '개인정보처리방침' },
   // S-14: 주소가 없다. 맞는 화면이 없는 주소거나 없는 사건일 때 보여 준다 (라우터 showNotFound · errorRedirect CASE_NOT_FOUND)
   { name: 'notFound', path: null, render: renderNotFoundPage, title: '찾을 수 없어요' },
 ];
