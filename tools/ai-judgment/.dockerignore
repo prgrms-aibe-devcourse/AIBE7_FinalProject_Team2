@@ -1,0 +1,8 @@
+# 이미지에 넣지 않는 것 (COMMON-50). .gitignore와 같은 기준 — 판결문 원문 · 생성 결과 · 비밀값은 이미지에 없다.
+cases/
+out/
+.env
+.venv/
+__pycache__/
+**/__pycache__/
+*.pyc
