@@ -18,4 +18,5 @@ import '../pages/personality/personalityPaper.css';
 import '../pages/myPage/myPage.css';
 import '../pages/login/login.css';
 import '../pages/caseReview/caseReview.css';
+import '../pages/community/community.css';
 import '../components/courtSketch.css'; // 3 ~ 8막 상자 무대를 신문 세계에 맞춘다: 화면별 CSS 뒤에 와야 한다

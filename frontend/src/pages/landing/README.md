@@ -17,7 +17,7 @@
   | 서류철 | 판결 성향 테스트 | 철이 화면 아래에서 올라옴 → `navigate('test', { from: 'desk' })` → S-15 | 동작 |
   | 커피잔 | 마이페이지 | 커다란 잔이 우상단에서 날아와 섰다가 오른쪽으로 빠져나감(`utils/coffeeDive.js`) → `navigate('me', { from: 'mug' })` → S-17 | 동작 |
   | 펜 | 의견 보내기 (FE-50, 휴대폰 자리) | 범위 밖 | 곧 열려요 |
-  | 노트북 | 커뮤니티 | 범위 밖 | 곧 열려요 |
+  | 노트북 | 커뮤니티 | 기울어진 화면이 똑바로 서며 화면 가득 커짐(`utils/laptopZoom.js`, FE-47) → `navigate('community')` → S-18 | 동작 (목 모드) |
 
   화면이 생기면 `landingPage.js`의 `OBJECTS`에서 그 물건의 `route`에 화면 이름(`routes.js`의 `name`)만 넣는다. 누르기 가능 여부가 함께 바뀐다.
   책상 위 포스트잇은 내로를 가린 한 장(`--postit`, 접착면 띠)뿐이다. 서류철 그림 위 라벨은 "3분 성향검사".
@@ -37,5 +37,5 @@
 
 - 색은 `src/style.css` ④의 `--color-desk-*` 역할 토큰과 공통 역할 토큰만 쓴다. 이 CSS에 색 값(hex · rgb)을 쓰지 않는다. 그림자 · 투명도는 `color-mix()`로 만든다.
 - 포스트잇 손글씨는 `--font-hand`(나눔펜). `index.html` · `preview.html`의 글꼴 링크에 함께 있다.
-- 공통 헤더 · 푸터는 [`components/siteLayout.js`](../../components/siteLayout.js)를 쓰고, 메인에서만 네이비 헤더 · 어두운 푸터로 바꾼다(`.landing-page .site-header` 등). 헤더는 화면 위에 고정되고(sticky), 메뉴는 사건 목록 · 성향검사 · 커뮤니티(준비 중) · 연출 스위치 · 로그인이다(FE-50).
+- 공통 헤더 · 푸터는 [`components/siteLayout.js`](../../components/siteLayout.js)를 쓰고, 메인에서만 네이비 헤더 · 어두운 푸터로 바꾼다(`.landing-page .site-header` 등). 헤더는 화면 위에 고정되고(sticky), 메뉴는 사건 목록 · 성향검사 · 커뮤니티(FE-47) · 연출 스위치 · 로그인이다(FE-50).
 - **연출은 책상 물건을 눌렀을 때만** 켜진다: 신문 · 서류철 · 커피잔은 `from` 표시(`desk` · `mug`)를 넘기고, 받는 화면이 그 표시가 있을 때만 연출한 뒤 지운다. 헤더 · 서비스 소개 버튼으로 가면 바로 바뀐다. 연출 스위치를 끄면 물건을 눌러도 바로 간다(`utils/motion.js`).
