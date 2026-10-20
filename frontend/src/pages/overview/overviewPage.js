@@ -105,11 +105,11 @@ export function caseStage({ caseId, api, navigate, script, info, paper = script.
     if (!reducedMotion()) await new Promise((resolve) => setTimeout(resolve, 900));
   }
 
-  // 독자 의견 엽서 머리(제목 · 받는 곳 · 우표)
+  // 첫인상 엽서 머리(제목 · 받는 곳 · 우표)
   function postcardHead() {
     const head = element('div', 'postcard-head');
     const title = element('div');
-    title.append(element('h2', '', '독자 의견 엽서'), element('p', '', '받는 곳: 내Law남불 신문 편집부 · 기사만 읽고 남기는 첫인상'));
+    title.append(element('h2', '', '첫인상 엽서'), element('p', '', '받는 곳: 내Law남불 신문 편집부 · 기사만 읽고 남기는 첫인상'));
     const stamp = element('span', 'postcard-stamp', '내Law\n남불');
     stamp.setAttribute('aria-hidden', 'true');
     stamp.style.whiteSpace = 'pre-line';
@@ -136,7 +136,7 @@ export function caseStage({ caseId, api, navigate, script, info, paper = script.
 
   function setOverview({ rangeOptions }) {
     labels = Object.fromEntries(rangeOptions.map(({ rangeOptionId, label }) => [rangeOptionId, label]));
-    // 독자 의견 엽서(신문 지면 무대의 팝업): 엽서 머리(제목 · 받는 곳 · 우표) + 안내 + 형량 고르기.
+    // 첫인상 엽서(신문 지면 무대의 팝업): 엽서 머리(제목 · 받는 곳 · 우표) + 안내 + 형량 고르기.
     // 되돌릴 수 없는 판단이라 두 박자: 고르기 → 엽서 안 확인("보낼까요?") → 보내기(접수 도장)
     const card = element('div', 'postcard');
     sendingCard = card;
@@ -206,7 +206,7 @@ function preJudgmentForm(rangeOptions, submit, { submitLabel = '판단 제출하
   return form;
 }
 
-// S-03 사건 개요 · 사전 판단
+// S-03 첫인상(사건 개요 · 사전 판단)
 export async function renderOverviewPage(container, { caseId, api, navigate }) {
   const root = document.createElement('div');
   root.className = 'review-page overview-page';
@@ -264,7 +264,7 @@ export async function renderOverviewPage(container, { caseId, api, navigate }) {
       return;
     }
     const main = element('div', 'review-main');
-    main.append(element('h1', 'page-heading', '사건 개요 · 사전 판단'));
+    main.append(element('h1', 'page-heading', '첫인상'));
     const overview = element('section', 'overview-box');
     const facts = element('dl', 'overview-facts');
     [['죄명', info.chargeName], ['범죄 분류', info.crimeCategoryLabel]].forEach(([label, value]) => {

@@ -267,7 +267,7 @@ function evidenceBoard(script, at) {
 // 장면의 focus 기사로 카메라가 옮겨 가고, 첫 장면의 from 요소가 무대를 채운 데서 빠져나온다.
 // fromRect: 첫 장면의 from 요소를 이 화면 사각형(앞 막 무대 자리)에서 시작한다(8막). cameraFill · cameraMinScale · cameraMaxUnit은 sheetCamera 옵션.
 // layout 'paper': 무대 상자 없이 지면(sheet)이 화면 전체가 된다(S-20 · 1 · 2막, S-02 신문과 같은 짜임). 막 칩 · 보드는 지면의
-// 막 칩은 숨기고(지면 탭 줄은 신문 목차), 카드(2막 사전 판단)는 지면 위에 독자 의견 엽서 팝업으로 뜬다 — 남불이 가져와 건네는 연출.
+// 막 칩은 숨기고(지면 탭 줄은 신문 목차), 카드(2막 사전 판단)는 지면 위에 첫인상 엽서 팝업으로 뜬다 — 남불이 가져와 건네는 연출.
 // 캐릭터 · 대사창 · 조작 줄은 화면 아래에 고정된다. 카메라는 화면을 굴린다(paperCamera)
 // parked: 지면만 보여 주고 캐릭터 · 대사창 · 조작 줄은 숨긴 채 기다린다(S-20 사건 정보 — 체험 시작 전). 화면이 wrap.release()로 풀면
 // 내로 · 남불이 들어오며 첫 대사가 시작된다.
@@ -543,7 +543,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
     board.hidden = !entry;
     // 신문 지면 무대의 엽서(입력 카드)는 대화창이다: 열려 있는 동안 뒤 지면은 비활성(포커스 · 읽기 제외)
     if (paperMode) {
-      if (input) { board.setAttribute('role', 'dialog'); board.setAttribute('aria-modal', 'true'); board.setAttribute('aria-label', '독자 의견 엽서'); }
+      if (input) { board.setAttribute('role', 'dialog'); board.setAttribute('aria-modal', 'true'); board.setAttribute('aria-label', '첫인상 엽서'); }
       else { board.removeAttribute('role'); board.removeAttribute('aria-modal'); board.removeAttribute('aria-label'); }
       sheet.inert = Boolean(input);
       controls.inert = Boolean(input); // 조작부(◀ 이전 등)로 Tab 포커스가 빠져나가지 않게(aria-modal만으로는 가둬지지 않는다)

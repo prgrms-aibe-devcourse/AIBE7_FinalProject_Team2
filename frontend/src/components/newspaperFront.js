@@ -78,12 +78,12 @@ function pullQuote(paragraph) {
   return quote;
 }
 // 지면 목차: 신문의 다른 면으로 간다. 앱 기능을 신문의 면에 빗댄다 — 1면 = 오늘의 사건 목록, 3면 사회 = 지금 이 사건,
-// 오피니언 = 판결 성향 테스트, 독자 = 내 판결 기록(마이페이지). 지금 면은 aria-current로 표시하고 누르지 않는다
+// 오피니언 = 판결 성향 테스트, 독자 = 마이페이지. 지금 면은 aria-current로 표시하고 누르지 않는다
 const PAGES = [
   { page: '1면', name: '오늘의 지면', route: 'list' },
   { page: '3면', name: '사회', current: true },
   { page: '8면', name: '오피니언 · 판결 성향 테스트', route: 'test' },
-  { page: '10면', name: '독자 · 내 판결 기록', route: 'me' },
+  { page: '10면', name: '독자 · 마이페이지', route: 'me' },
 ];
 function pageIndex(navigate) {
   const nav = element('nav', 'page-index');
