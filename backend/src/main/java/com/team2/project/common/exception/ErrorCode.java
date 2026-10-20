@@ -42,6 +42,8 @@ public enum ErrorCode {
 	PROMPT_GENERATION_FAILED(HttpStatus.BAD_GATEWAY, "프롬프트 추천에 실패했습니다."),
 	FILE_UPLOAD_FAILED(HttpStatus.BAD_GATEWAY, "사진 업로드에 실패했습니다."),
 	INVALID_IMAGE_FILE(HttpStatus.BAD_REQUEST, "사진 파일이 올바르지 않습니다."),
+	// 신문 지면 콘텐츠 생성 API (확장 단계, BE-92)
+	PAPER_NOT_FOUND(HttpStatus.NOT_FOUND, "신문 지면 콘텐츠가 없습니다."),
 	INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "서버 오류가 발생했습니다.");
 
 	private final HttpStatus status;

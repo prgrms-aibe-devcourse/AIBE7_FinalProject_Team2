@@ -212,6 +212,11 @@ class CasePhotoServiceTest {
 
 		@Override
 		public String generateText(String instruction) {
+			return generateText(instruction, 400);
+		}
+
+		@Override
+		public String generateText(String instruction, int maxOutputTokens) {
 			if (!enabled) {
 				throw new ImageGenException("꺼져 있습니다");
 			}

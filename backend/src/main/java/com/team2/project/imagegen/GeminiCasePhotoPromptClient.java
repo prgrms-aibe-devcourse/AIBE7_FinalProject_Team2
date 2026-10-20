@@ -15,8 +15,9 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 
 /**
- * Gemini `generateContent`로 사건 사진 한글 프롬프트를 짓는다 (BE-91 재설계). 호출 1회가 비용이
- * 작고 실패가 드물어, Cloudflare 이미지 생성 때와 같은 이유로 재시도는 하지 않는다 — 실패하면 바로 알린다.
+ * Gemini `generateContent`로 한글 텍스트를 짓는다 (BE-91 재설계, BE-92에서 신문 지면 생성에도 재사용).
+ * 호출 1회가 비용이 작고 실패가 드물어, Cloudflare 이미지 생성 때와 같은 이유로 재시도는 하지 않는다 —
+ * 실패하면 바로 알린다.
  */
 @Slf4j
 @Component
@@ -39,17 +40,24 @@ public class GeminiCasePhotoPromptClient implements CasePhotoPromptClient {
 		return properties.enabled();
 	}
 
+	private static final int DEFAULT_MAX_OUTPUT_TOKENS = 400;
+
 	@Override
 	public String generateText(String instruction) {
+		return generateText(instruction, DEFAULT_MAX_OUTPUT_TOKENS);
+	}
+
+	@Override
+	public String generateText(String instruction, int maxOutputTokens) {
 		if (!enabled()) {
-			throw new ImageGenException("사진 프롬프트 추천이 꺼져 있습니다 (GEMINI_API_KEY 없음)");
+			throw new ImageGenException("텍스트 생성이 꺼져 있습니다 (GEMINI_API_KEY 없음)");
 		}
 		if (instruction == null || instruction.isBlank()) {
-			throw new ImageGenException("프롬프트 지시문이 비어 있습니다");
+			throw new ImageGenException("지시문이 비어 있습니다");
 		}
 		long startedAt = System.currentTimeMillis();
 		try {
-			String text = extractText(call(instruction));
+			String text = extractText(call(instruction, maxOutputTokens));
 			metrics.recordAiCallSuccess();
 			return text;
 		} catch (ImageGenException e) {
@@ -57,26 +65,26 @@ public class GeminiCasePhotoPromptClient implements CasePhotoPromptClient {
 			throw e;
 		} catch (RestClientResponseException e) {
 			metrics.recordAiCallFailure();
-			log.warn("프롬프트 추천 API 오류: status={}, body={}, 경과={}ms", e.getStatusCode().value(),
+			log.warn("텍스트 생성 API 오류: status={}, body={}, 경과={}ms", e.getStatusCode().value(),
 				e.getResponseBodyAsString(), System.currentTimeMillis() - startedAt);
-			throw new ImageGenException("프롬프트 추천 API 오류 (" + e.getStatusCode().value() + ")", e);
+			throw new ImageGenException("텍스트 생성 API 오류 (" + e.getStatusCode().value() + ")", e);
 		} catch (ResourceAccessException e) {
 			metrics.recordAiCallFailure();
-			log.warn("프롬프트 추천 API에 연결하지 못했습니다: {}, 경과={}ms, 설정 타임아웃={}", e.getMessage(),
+			log.warn("텍스트 생성 API에 연결하지 못했습니다: {}, 경과={}ms, 설정 타임아웃={}", e.getMessage(),
 				System.currentTimeMillis() - startedAt, properties.timeout());
-			throw new ImageGenException("프롬프트 추천 API에 연결하지 못했습니다", e);
+			throw new ImageGenException("텍스트 생성 API에 연결하지 못했습니다", e);
 		} catch (RestClientException e) {
 			metrics.recordAiCallFailure();
-			log.warn("프롬프트 추천 API 응답을 읽을 수 없습니다: {}, 경과={}ms", e.getMessage(),
+			log.warn("텍스트 생성 API 응답을 읽을 수 없습니다: {}, 경과={}ms", e.getMessage(),
 				System.currentTimeMillis() - startedAt);
-			throw new ImageGenException("프롬프트 추천 API 응답을 읽을 수 없습니다", e);
+			throw new ImageGenException("텍스트 생성 API 응답을 읽을 수 없습니다", e);
 		}
 	}
 
-	private GenerateContentResponse call(String instruction) {
+	private GenerateContentResponse call(String instruction, int maxOutputTokens) {
 		Map<String, Object> body = Map.of(
 			"contents", List.of(Map.of("parts", List.of(Map.of("text", instruction)))),
-			"generationConfig", Map.of("temperature", 0.7, "maxOutputTokens", 400));
+			"generationConfig", Map.of("temperature", 0.7, "maxOutputTokens", maxOutputTokens));
 		return restClient.post()
 			.uri("/models/{model}:generateContent", properties.model())
 			.header("x-goog-api-key", properties.apiKey())
@@ -93,13 +101,13 @@ public class GeminiCasePhotoPromptClient implements CasePhotoPromptClient {
 		String text = candidate == null ? null : firstText(candidate);
 		String finishReason = candidate == null ? null : candidate.finishReason();
 		if (text == null || text.isBlank()) {
-			log.warn("프롬프트 추천 응답에 텍스트가 없습니다: promptFeedback={}, finishReason={}",
+			log.warn("텍스트 생성 응답에 텍스트가 없습니다: promptFeedback={}, finishReason={}",
 				response == null ? null : response.promptFeedback(), finishReason);
-			throw new ImageGenException("프롬프트 추천 응답에 텍스트가 없습니다");
+			throw new ImageGenException("텍스트 생성 응답에 텍스트가 없습니다");
 		}
 		if (finishReason != null && !"STOP".equals(finishReason)) {
-			log.warn("프롬프트 추천 응답이 잘렸을 수 있습니다: finishReason={}", finishReason);
-			throw new ImageGenException("프롬프트 추천 응답이 끝까지 오지 않았습니다 (finishReason=" + finishReason + ")");
+			log.warn("텍스트 생성 응답이 잘렸을 수 있습니다: finishReason={}", finishReason);
+			throw new ImageGenException("텍스트 생성 응답이 끝까지 오지 않았습니다 (finishReason=" + finishReason + ")");
 		}
 		return text.strip();
 	}

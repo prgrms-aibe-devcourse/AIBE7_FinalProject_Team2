@@ -38,6 +38,7 @@
 | v0.34 | 2026-10-20 | API 13에 판결 성향 기여 저장 추가 (BE-64, WBS 7.6.7) — 처음 `COMPLETED`로 바꿀 때 첫 회차 체험의 `experience_personality`를 같은 트랜잭션에서 저장, 이미 완료면 유지(성향 산식 3-4, PR #109 리뷰에서 "7.6.7 PR에서 구현과 함께 고친다"로 미룬 항목). 7장 성향 갱신 메모를 "제안"에서 확정으로 |
 | v0.35 | 2026-10-20 | BE-77 — API 14 `preToCourt.direction` 추가(재판부 기준, SAME은 동일 형벌 종류·구간). API 2·3은 기존 5개 상태 필드를 유지하고 API 3은 사전 판단을 반환하지 않음을 명시. 1막부터 다시 보기 삭제 결정 및 완료 후 독자 의견에서 최초 사전 판단 공개 원칙 반영 (PR #198) |
 | v0.36 | 2026-10-20 | 사건 사진 프롬프트 추천 · 업로드 API 신설 (BE-91, COMMON-41 재검토) — Cloudflare Workers AI 직접 생성은 그림 품질 때문에 그만두고, A-13-1(대표사진 프롬프트 추천) · A-13-2(발단 사진 프롬프트 추천) · A-13-3(대표사진 업로드) · A-13-4(발단 사진 업로드) · A-13-5(발단 사진 목록) 추가. 번호는 A-16 ~ A-41이 8-4(운영 메뉴 초안)에 이미 예약돼 있어 A-13-N으로 둠. 에러 코드 `PROMPT_GENERATION_FAILED` · `FILE_UPLOAD_FAILED` · `INVALID_IMAGE_FILE` 추가 |
+| v0.37 | 2026-10-20 | 신문 지면 콘텐츠 생성 API 신설 (BE-92, COMMON-41) — A-13-6(생성) · A-13-7(조회) · A-13-8(수정) 추가. `photo`는 `legal_case.thumbnail_url`, `extraPhotos`는 A-13-5(발단 사진)를 그대로 재사용(새로 저장하지 않음, `docs/decisions/BE-92.md`). 에러 코드 `PAPER_NOT_FOUND` 추가(1-5) |
 
 ---
 
@@ -124,9 +125,10 @@ json
 | 404 | `PERSONALITY_TYPE_NOT_FOUND` | (확장, 성향 API) 공유 주소의 유형이 없음 | 공유 결과 없음 안내 · 테스트 권유 |
 | 409 | `DUPLICATE_TITLE` | (확장, 관리자 API) 사건 제목이 다른 사건과 겹침 | 입력 안내 |
 | 409 | `PUBLISH_NOT_READY` | (확장, 관리자 API) 공개 조건 미충족. `details`에 조건 코드 | 남은 조건 안내 (A-13) |
-| 502 | `PROMPT_GENERATION_FAILED` | (확장, 관리자 API, BE-91) Gemini 호출 실패, 또는 설정(`GEMINI_API_KEY`) 없음 | 다시 시도 안내 (A-13-1 · A-13-2) |
+| 502 | `PROMPT_GENERATION_FAILED` | (확장, 관리자 API, BE-91 · BE-92) Gemini 호출 실패, 또는 설정(`GEMINI_API_KEY`) 없음 | 다시 시도 안내 (A-13-1 · A-13-2 · A-13-6) |
 | 502 | `FILE_UPLOAD_FAILED` | (확장, 관리자 API, BE-91) S3 업로드 실패, 또는 설정(`S3_BUCKET_NAME`) 없음 | 다시 시도 안내 (A-13-3 · A-13-4) |
 | 400 | `INVALID_IMAGE_FILE` | (확장, 관리자 API, BE-91) 사진 파일이 없음 · 비어 있음 · 허용하지 않는 형식 | 입력 안내 (A-13-3 · A-13-4) |
+| 404 | `PAPER_NOT_FOUND` | (확장, 관리자 API, BE-92) 신문 지면을 아직 생성한 적 없음 | 먼저 생성하도록 안내 (A-13-7 · A-13-8) |
 | 429 | `TOO_MANY_REQUESTS` | (확장, BE-63) 같은 IP에서 `/api` 요청이 너무 많음(평균 초당 20번 · 순간 40번 초과). **백엔드가 아니라 운영 Nginx가 돌려준다** — 형식은 1-4와 같고 `Retry-After: 1` 헤더가 붙는다. 로컬 개발(Vite)에는 Nginx가 없어 나오지 않는다 | 일반 오류 안내. 자동으로 다시 보내지 않는다 |
 | 500 | `INTERNAL_ERROR` | 서버 오류 | 일반 오류 안내 |
 - "이미 제출함"과 "순서가 맞지 않음"을 따로 나누지 않고 `INVALID_STATE` 하나로 둔다. 화면이 할 일은 둘 다 "`currentStatus`의 화면으로 이동"으로 같기 때문이다.
@@ -1288,6 +1290,69 @@ API 1 · 2 · 16은 상태와 관계없이 부를 수 있다. 표에 없는 조�
 | 거절 | 조건 |
 | --- | --- |
 | 404 `CASE_NOT_FOUND` | 사건이 없음 |
+
+### A-13-6. 신문 지면 생성 — `POST /admin/cases/{caseId}/paper/generate`
+
+사건 내용(`overview` · `factor` · `chargeName`)을 바탕으로 Gemini가 메인 화면 신문 지면 콘텐츠를 짓는다(BE-92, COMMON-41). 이미 있으면 새로 만들지 않고 내용을 덮어쓴다. 본문 없음.
+
+응답 200:
+
+```json
+{
+  "desk": "사회면",
+  "headline": "빌린 돈 문제로 다투다 벌어진 사건",
+  "deck": "오랜 금전 다툼 끝에...",
+  "photo": "https://…/case-photos/case-1/representative-….jpg",
+  "caption": "다투는 두 사람",
+  "article": ["문단 1", "문단 2"],
+  "extraPhotos": [
+    { "id": 12, "imageUrl": "…", "caption": "다툼이 격해진 순간", "displayOrder": 0, "createdAt": "…" }
+  ],
+  "updatedAt": "2026-10-20T09:00:00Z"
+}
+```
+
+- `photo`는 A-13-3으로 올린 사건 대표사진(`legal_case.thumbnail_url`)을 그대로 내려준다. 아직 안 올렸으면 `null`.
+- `extraPhotos`는 A-13-5와 같은 배열 — `case_incident_photo`를 그대로 재사용한다(새로 저장하지 않는다, `docs/decisions/BE-92.md`).
+- 공개한 사건은 바꿀 수 없다(A-11과 같은 규칙). 감사 로그 `CASE_PAPER_GENERATE`를 남긴다.
+
+| 거절 | 조건 |
+| --- | --- |
+| 404 `CASE_NOT_FOUND` | 사건이 없음 |
+| 409 `INVALID_STATE` | 이미 `PUBLISHED`(`CASE_PUBLISHED`) |
+| 502 `PROMPT_GENERATION_FAILED` | Gemini 호출 실패, 응답을 JSON으로 못 읽음, 또는 설정 없음(`GEMINI_API_KEY`) |
+
+### A-13-7. 신문 지면 조회 — `GET /admin/cases/{caseId}/paper`
+
+응답은 A-13-6과 같은 형식. 아직 생성한 적 없으면 404.
+
+| 거절 | 조건 |
+| --- | --- |
+| 404 `PAPER_NOT_FOUND` | 아직 생성한 적 없음 |
+
+### A-13-8. 신문 지면 수정 — `PATCH /admin/cases/{caseId}/paper`
+
+A-11과 같은 방식(보낸 필드만, `null` = 지움). `headline` · `article`은 필수라 `null` 불가.
+
+```json
+{ "headline": "고친 헤드라인", "deck": null }
+```
+
+| 필드 | 규칙 |
+| --- | --- |
+| `headline` | 1 ~ 200자, `null` 불가 |
+| `deck` | 0 ~ 300자, `null` 가능(지움) |
+| `caption` | 0 ~ 200자, `null` 가능(지움) |
+| `article` | 문단 1개 이상의 배열, `null` 불가(빈 배열도 거절) |
+
+응답은 A-13-6과 같은 형식.
+
+| 거절 | 조건 |
+| --- | --- |
+| 400 `VALIDATION_ERROR` | 위 규칙 위반, 또는 모르는 필드 |
+| 404 `CASE_NOT_FOUND` | 사건이 없음 |
+| 404 `PAPER_NOT_FOUND` | 아직 생성한 적 없음(먼저 A-13-6으로 생성해야 한다) |
+| 409 `INVALID_STATE` | 이미 `PUBLISHED`(`CASE_PUBLISHED`) |
 
 ### A-14. 사건 등록 시작 — `POST /admin/case-imports` (초안)
 
