@@ -2,7 +2,7 @@ import { renderLawInfoBox } from '../../components/lawInfoBox.js';
 import { renderRecommendedRangeBar, formatMonths } from '../../components/recommendedRangeBar.js';
 import { renderStage } from '../../components/stage.js';
 import { SCRIPTS } from '../../content/scripts.js';
-import { restartMock, jumpActMock } from '../overview/overviewPage.js';
+import { restartMock, jumpActMock } from '../../mocks/mockStageButtons.js';
 import { getDraft, saveDraft, clearDraft } from './verdictDraft.js';
 import { markAiRevealIntro } from '../ai/aiRevealIntro.js';
 import { reducedMotion } from '../../utils/motion.js';

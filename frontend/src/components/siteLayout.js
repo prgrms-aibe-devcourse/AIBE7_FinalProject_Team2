@@ -2,6 +2,7 @@
 import { motionSwitchOn, reducedMotion, setMotionSwitch, systemReducesMotion } from '../utils/motion.js';
 import { currentUser, isAdmin } from '../utils/session.js';
 import { homeRoute } from '../pages/admin/adminMenu.js';
+import { API_MODE, setApiMode } from '../api/config.js';
 
 export function element(tag, className, text) {
   const node = document.createElement(tag);
@@ -38,6 +39,7 @@ export function renderSiteHeader({ navigate }) {
     tab('성향검사', 'test', '/test'),
     tab('커뮤니티', 'community', '/community'),
     motionSwitch(),
+    ...(import.meta.env?.DEV ? [modeSwitch()] : []),
   );
   // 로그인 자리는 메뉴 밖 맨 오른쪽. 좁은 화면에서는 로고와 같은 줄에 남고 메뉴가 아랫줄로 내려간다(style.css)
   header.append(logo, nav, account(navigate, here));
@@ -81,6 +83,20 @@ function motionSwitch() {
     });
   }
   sync();
+  return node;
+}
+
+// 목 ↔ 실제 API 스위치(개발 서버 전용). 켜면 실제 백엔드(8080 프록시), 끄면 목 데이터. 누르면 새로 불러온다
+function modeSwitch() {
+  const node = element('button', 'nav-button motion-switch');
+  node.type = 'button';
+  node.setAttribute('role', 'switch');
+  node.setAttribute('aria-checked', String(API_MODE === 'real'));
+  const track = element('span', 'switch-track');
+  track.setAttribute('aria-hidden', 'true');
+  track.append(element('span', 'switch-thumb'));
+  node.append(element('span', '', API_MODE === 'real' ? '실제 API' : '목 데이터'), track);
+  node.addEventListener('click', () => setApiMode(API_MODE === 'real' ? 'mock' : 'real'));
   return node;
 }
 

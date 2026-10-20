@@ -9,7 +9,7 @@ import { formatPenalty, formatDispositions } from '../../utils/judgmentFormat.js
 import { formatMonths } from '../../components/recommendedRangeBar.js';
 import { renderStage, courtSet, imageOf } from '../../components/stage.js';
 import { openCaseReviewPopup } from '../caseReview/caseReviewPopup.js';
-import { restartMock, jumpActMock } from '../overview/overviewPage.js';
+import { restartMock, jumpActMock } from '../../mocks/mockStageButtons.js';
 import { editorNote } from '../../utils/preJudgmentCompare.js';
 import { handPaper } from '../../utils/paperHandoff.js';
 import { castOf } from '../../utils/myPageView.js';

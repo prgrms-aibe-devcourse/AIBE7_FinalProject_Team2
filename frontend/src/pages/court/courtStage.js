@@ -4,7 +4,8 @@
 import { formatPenalty, formatDispositions } from '../../utils/judgmentFormat.js';
 import { formatMonths } from '../../components/recommendedRangeBar.js';
 import { renderStage } from '../../components/stage.js';
-import { restartMock, jumpActMock } from '../overview/overviewPage.js';
+import { renderComparisonStage, mountNewspaperStage, sceneRect } from '../comparison/comparisonStage.js';
+import { restartMock, jumpActMock } from '../../mocks/mockStageButtons.js';
 
 function element(tag, className, text) {
   const node = document.createElement(tag);
@@ -52,6 +53,13 @@ function courtPages(data) {
 /**
  * @returns {{ stage: HTMLElement, error: HTMLElement }} 무대와 그 아래 오류 안내(세 판결 비교 공개 실패)
  */
+// 7막 → 8막: 같은 화면에서 7막 장면 자리 그대로 신문으로 빠져나오고 주소만 S-09로 바꾼다
+export function openComparison({ root, script, comparison, caseId, caseTitle, navigate, api }) {
+  const fromRect = sceneRect(root);
+  mountNewspaperStage(root, { stage: renderComparisonStage({ script, data: comparison, caseId, caseTitle, navigate, api, fromRect }) });
+  navigate('comparison', {}, { replace: true, keepView: true });
+}
+
 export function renderCourtStage({ script, data, caseId, api, navigate, active, onInvalid, onCompared }) {
   const { judgment } = data;
   // 주문 문장(판결문 말투): "피고인을 징역 10년에 처한다." 집행유예면 유예 문장을 잇는다
