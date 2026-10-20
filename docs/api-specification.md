@@ -1188,43 +1188,72 @@ API 1 · 2 · 16은 상태와 관계없이 부를 수 있다. 표에 없는 조�
 | 409 `INVALID_STATE` | 이미 `PUBLISHED`(`CASE_PUBLISHED`) |
 | 409 `PUBLISH_NOT_READY` | 공개 조건 미충족. `details`에 `[{ "field": "case", "reason": "NO_PUBLISHED_AI" }, …]` |
 
-### A-13-1. 사건 대표사진 생성 — `POST /admin/cases/{caseId}/photos/representative`
+### A-13-1. 사건 대표사진 프롬프트 추천 — `POST /admin/cases/{caseId}/photos/representative/prompt`
 
 > 번호: A-16 ~ A-41은 8-4(운영 메뉴 API, 초안)가 이미 예약해 둬서, A-13에 소속된 추가 API라는 뜻으로 A-13-N을 쓴다.
+> **재검토(v0.36)**: Cloudflare Workers AI로 사진을 직접 생성하는 방식(v0.37 이전 초안)은 그림 품질이 기대에 못 미쳐 그만뒀다. 사진은 사람이 만들어 A-13-3 · A-13-4로 올리고, AI(Gemini)는 그 사람이 참고할 **한글 프롬프트만** 추천한다(결정: `docs/decisions/BE-91.md`).
 
-Cloudflare Workers AI로 사진을 생성해 S3에 올리고, 신문 지면(S-02 등)에 쓰는 `legal_case.thumbnail_url`을 그 URL로 바꾼다(COMMON-41 — "사건 사진은 AI가 직접 생성"). 새 테이블을 두지 않고 A-11이 이미 자유롭게 바꿀 수 있던 칸을 그대로 쓴다(결정: `docs/decisions/BE-91.md`). 응답은 A-6과 같은 형식(`AdminCaseDetailResponse`).
+본문 없음. 사건의 `overview` · `chargeName`을 바탕으로 Gemini가 한글 이미지 생성 프롬프트 한 문단을 지어 돌려준다. 등장인물은 얼굴 없는 회색 엑스트라로, 내로 · 남불은 넣지 말라는 규칙을 프롬프트 지시문에 고정으로 포함한다(COMMON-41).
+
+응답 200:
 
 ```json
-{ "caseSummary": "a dispute over an unpaid loan between two neighbors" }
+{ "prompt": "신문 지면에 쓸 삽화를 그려줘. 어두운 거실에서 두 사람이 돈 문제로 다투는 장면을..." }
+```
+
+| 거절 | 조건 |
+| --- | --- |
+| 404 `CASE_NOT_FOUND` | 사건이 없음 |
+| 502 `PROMPT_GENERATION_FAILED` | Gemini 호출 실패, 또는 설정 없음(`GEMINI_API_KEY`) |
+
+조회만 하므로 사건 행을 잠그지 않고, 감사 로그도 남기지 않는다(사건 내용을 바꾸지 않음).
+
+### A-13-2. 사건 발단 사진 프롬프트 추천 — `POST /admin/cases/{caseId}/photos/incident/prompt`
+
+사건이 시작된 발단 장면을 그리기 위한 한글 프롬프트를 추천한다. `overview`에 판단 요소(`factor`) 목록을 더해 지시문을 만든다.
+
+```json
+{ "hint": "다투는 장면을 더 강조해줘" }
 ```
 
 | 필드 | 규칙 |
 | --- | --- |
-| `caseSummary` | 필수, 1 ~ 1000자. 비식별화한 사건 요약(영문) — `CaseImagePromptBuilder`가 그대로 프롬프트에 넣는다 |
+| `hint` | 선택, 500자 이하. 특정 장면을 더 짚고 싶을 때만 |
 
-- 등장인물은 얼굴 없는 회색 엑스트라로 그리고, 내로 · 남불은 넣지 않는다(프롬프트에 고정 문구로 강제).
-- Cloudflare 호출 · S3 업로드를 동기로 기다린다(수십 초 걸릴 수 있다. 화면은 로딩 상태를 보여 준다).
+응답 200은 A-13-1과 같은 형식(`{ "prompt": "..." }`).
+
+| 거절 | 조건 |
+| --- | --- |
+| 400 `VALIDATION_ERROR` | `hint` 500자 초과 |
+| 404 `CASE_NOT_FOUND` | 사건이 없음 |
+| 502 `PROMPT_GENERATION_FAILED` | A-13-1과 같음 |
+
+### A-13-3. 사건 대표사진 업로드 — `POST /admin/cases/{caseId}/photos/representative` (multipart/form-data)
+
+관리자가 A-13-1 프롬프트를 참고해 직접(또는 다른 생성 도구로) 만든 사진을 올린다. S3에 저장하고, 신문 지면(S-02 등)에 쓰는 `legal_case.thumbnail_url`을 그 URL로 바꾼다. 새 테이블을 두지 않고 A-11이 이미 자유롭게 바꿀 수 있던 칸을 그대로 쓴다. 응답은 A-6과 같은 형식(`AdminCaseDetailResponse`).
+
+| 필드(form) | 규칙 |
+| --- | --- |
+| `file` | 필수. `image/jpeg` · `image/png` · `image/webp`만 허용, 최대 10MB(8-1 공통 multipart 상한) |
+
 - 공개한 사건은 바꿀 수 없다(A-11과 같은 규칙). 감사 로그 `CASE_PHOTO_GENERATE`(`detail.type = "REPRESENTATIVE"`)를 남긴다.
 
 | 거절 | 조건 |
 | --- | --- |
-| 400 `VALIDATION_ERROR` | `caseSummary` 없음 · 1000자 초과 |
+| 400 `INVALID_IMAGE_FILE` | 파일이 없음 · 비어 있음 · 허용하지 않는 형식 |
 | 404 `CASE_NOT_FOUND` | 사건이 없음 |
 | 409 `INVALID_STATE` | 이미 `PUBLISHED`(`CASE_PUBLISHED`) |
-| 502 `IMAGE_GENERATION_FAILED` | Cloudflare 생성 실패, S3 업로드 실패, 또는 설정 없음(계정 ID · API 토큰 · 버킷) |
+| 502 `FILE_UPLOAD_FAILED` | S3 업로드 실패, 또는 설정 없음(`S3_BUCKET_NAME`) |
 
-### A-13-2. 사건 발단 사진 생성 — `POST /admin/cases/{caseId}/photos/incident`
+### A-13-4. 사건 발단 사진 업로드 — `POST /admin/cases/{caseId}/photos/incident` (multipart/form-data)
 
-사건 안에서 쓰는 발단 사진을 한 장 생성해 `case_incident_photo`에 순서대로 쌓는다(여러 번 불러 여러 장 추가). 201과 함께 추가된 사진을 돌려준다.
+사건 안에서 쓰는 발단 사진 한 장을 올려 `case_incident_photo`에 순서대로 쌓는다(여러 번 불러 여러 장 추가). 201과 함께 추가된 사진을 돌려준다.
 
-```json
-{ "incidentDescription": "the moment the argument turned violent", "caption": "다툼이 격해진 순간" }
-```
-
-| 필드 | 규칙 |
+| 필드(form) | 규칙 |
 | --- | --- |
-| `incidentDescription` | 필수, 1 ~ 1000자. 비식별화한 발단 상황(영문), 프롬프트 재료 |
+| `file` | 필수. A-13-3과 같은 형식 · 크기 제한 |
 | `caption` | 선택, 200자 이하. 화면에 보일 설명 |
+| `prompt` | 선택, 자유 길이. 관리자가 이 사진을 만들 때 참고한 프롬프트(A-13-2 추천 그대로 또는 고친 것) — 감사 · 재참고용으로만 남긴다 |
 
 응답 201:
 
@@ -1233,19 +1262,20 @@ Cloudflare Workers AI로 사진을 생성해 S3에 올리고, 신문 지면(S-02
 ```
 
 - `displayOrder`는 0부터 자동으로 매겨진다(사건마다 이미 있는 발단 사진 수).
-- S3 객체 키(`s3_key`)와 생성에 쓴 프롬프트(`prompt`)는 내부 기록용이라 응답에 내려주지 않는다.
+- S3 객체 키(`s3_key`)는 내부 기록용이라 응답에 내려주지 않는다. `prompt`는 관리자가 보냈을 때만 들어가고, 응답에는 내려주지 않는다(A-13-5 목록도 마찬가지 — 내부 기록 확인은 DB로 한다).
 - 공개한 사건은 추가할 수 없다. 감사 로그 `CASE_PHOTO_GENERATE`(`detail.type = "INCIDENT"`, `detail.photoId`)를 남긴다.
 
 | 거절 | 조건 |
 | --- | --- |
-| 400 `VALIDATION_ERROR` | `incidentDescription` 없음 · 1000자 초과, `caption` 200자 초과 |
+| 400 `INVALID_IMAGE_FILE` | A-13-3과 같음 |
+| 400 `VALIDATION_ERROR` | `caption` 200자 초과 |
 | 404 `CASE_NOT_FOUND` | 사건이 없음 |
 | 409 `INVALID_STATE` | 이미 `PUBLISHED`(`CASE_PUBLISHED`) |
-| 502 `IMAGE_GENERATION_FAILED` | A-13-1과 같음 |
+| 502 `FILE_UPLOAD_FAILED` | A-13-3과 같음 |
 
-### A-13-3. 사건 발단 사진 목록 — `GET /admin/cases/{caseId}/photos/incident`
+### A-13-5. 사건 발단 사진 목록 — `GET /admin/cases/{caseId}/photos/incident`
 
-사건에 쌓인 발단 사진을 순서대로 돌려준다(A-13-2 응답과 같은 형식의 배열). 공개한 사건도 조회만은 된다.
+사건에 쌓인 발단 사진을 순서대로 돌려준다(A-13-4 응답과 같은 형식의 배열, `prompt` 제외). 공개한 사건도 조회만은 된다.
 
 ```json
 [

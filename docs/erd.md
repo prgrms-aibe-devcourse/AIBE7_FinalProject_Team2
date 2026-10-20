@@ -30,6 +30,7 @@
 | v1.22 | 2026-10-14 | 판결 후보 검수 기록 (**확장 단계**, BE-41 · WBS 7.4.7, V16) — `judgment`에 `review_status`(APPROVED · REJECTED, NULL = 기록 없음) · `reviewed_by_admin_id` · `reviewed_at` · `review_note` 추가. AI · 재판부 후보를 같은 방식으로 검수한다(재판부는 지금까지 반려를 둘 곳이 없었다, API 명세 8-3 #4). 제약: 사용자 판단은 검수 값 없음, 반려 후보는 공개 불가, 사유는 반려에만. 기존 데이터는 `ai_generation`의 검수 결과와 공개 중 판결(승인)을 옮겼다. `ai_generation.review_status` · `reviewed_by`는 기존 도구용으로 남긴다(승인 · 반려 때 함께 맞춤, BE-42) |
 | v1.24 | 2026-10-16 | 판단 요소 요약어 후보 추가 (**확장 단계**, BE-80 · V17) — `factor.summary_tag_candidates`(jsonb, nullable). 적재 SQL(`case_seed_sql.py`)이 새 사건을 넣을 때 보고서 후보를 넣고, 이미 적재된 사건은 바꾸지 않는다. 관리자 상세 A-6에 내려 준다(API 명세 v0.31) |
 | v1.25 | 2026-10-20 | 사건 발단 사진 테이블 추가 (**확장 단계**, BE-91 · V19) — `case_incident_photo` 신설(Cloudflare Workers AI 생성 → S3 업로드 결과를 순서대로 기록). 사건 대표사진(신문용)은 새 테이블 없이 `legal_case.thumbnail_url` 재사용(결정: `docs/decisions/BE-91.md`) |
+| v1.26 | 2026-10-20 | 사건 사진 생성 방식 재검토 (**확장 단계**, BE-91 재검토 · V20) — Cloudflare Workers AI 직접 생성은 그림 품질 때문에 그만두고, 사람이 만든 사진을 올리는 방식으로 바꿨다. `case_incident_photo.model` 컬럼 삭제, `prompt`는 참고용 선택 항목으로 바뀌어 NOT NULL 해제(결정: `docs/decisions/BE-91.md`) |
 
 ---
 
@@ -301,7 +302,11 @@ S-06에서 보여 줄 형벌 선택지, 그리고 **선고 가능 범위 밖 판
 
 #### `case_incident_photo` — 사건 발단 사진 (BE-91, COMMON-41)
 
-Cloudflare Workers AI로 생성해 S3에 올린 사진을 사건마다 순서대로 쌓는다. 사건 대표사진(신문용)은 별도 테이블 없이 `legal_case.thumbnail_url`을 그대로 쓴다(결정: `docs/decisions/BE-91.md`).
+관리자가 직접 만들어 올린 사진을 사건마다 순서대로 쌓는다. 사건 대표사진(신문용)은 별도 테이블 없이
+`legal_case.thumbnail_url`을 그대로 쓴다. **재검토(V20)**: Cloudflare Workers AI 직접 생성은 그림
+품질 때문에 그만두고, AI(Gemini)는 사람이 참고할 한글 프롬프트만 추천하는 방식으로 바꿨다(결정:
+`docs/decisions/BE-91.md`). `model`(생성 모델) 컬럼은 더 이상 자동으로 알 수 없어 뺐고, `prompt`는
+참고용 선택 항목이 되어 NOT NULL을 뗐다.
 
 | 컬럼 | 타입 | 필수 | 설명 |
 | --- | --- | --- | --- |
@@ -310,12 +315,11 @@ Cloudflare Workers AI로 생성해 S3에 올린 사진을 사건마다 순서대
 | image_url | varchar(500) | ✓ | 프론트에 내려주는 공개 URL (S3 또는 CDN) |
 | s3_key | varchar(300) | ✓ | S3 객체 키 (재생성 · 삭제용, 사용자 응답에 내려주지 않는다) |
 | caption | varchar(200) |  | 화면에 보일 설명 |
-| prompt | text | ✓ | 생성에 쓴 프롬프트 원문 (감사 · 재생성용) |
-| model | varchar(100) | ✓ | 생성에 쓴 Cloudflare Workers AI 모델 |
+| prompt | text |  | 관리자가 사진을 만들 때 참고한 프롬프트(선택, V20부터 NOT NULL 아님) |
 | display_order | int | ✓ | 사건 안에서 보여줄 순서 (0부터) |
 | created_at | timestamptz | ✓ |  |
 
-- 등장인물은 얼굴 없는 회색 엑스트라, 내로 · 남불은 등장시키지 않는다(COMMON-41).
+- 등장인물은 얼굴 없는 회색 엑스트라, 내로 · 남불은 등장시키지 않는다(COMMON-41, 프롬프트 추천 지시문에 고정 포함).
 - 유니크 제약: (`case_id`, `display_order`) — 사건마다 순서가 유일하다(V19).
 
 #### `sentencing_guideline` — 양형기준 버전
