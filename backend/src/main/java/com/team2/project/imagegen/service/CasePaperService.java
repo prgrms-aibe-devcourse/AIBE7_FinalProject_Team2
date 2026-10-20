@@ -110,7 +110,21 @@ public class CasePaperService {
 			throw new BusinessException(ErrorCode.PROMPT_GENERATION_FAILED,
 				"신문 지면 응답이 headline · article 규칙(A-13-8과 동일한 길이 · 빈 문단 규칙)을 지키지 않습니다");
 		}
-		return paper;
+		return normalize(paper);
+	}
+
+	/** A-13-8 수정(PATCH, CasePaperEditRequest)처럼 앞뒤 공백을 지우고, deck · caption이 빈 값이면 null로 맞춘다 */
+	private static GeneratedPaper normalize(GeneratedPaper paper) {
+		return new GeneratedPaper(paper.headline().strip(), blankToNull(paper.deck()), blankToNull(paper.caption()),
+			paper.article().stream().map(String::strip).toList());
+	}
+
+	private static String blankToNull(String value) {
+		if (value == null) {
+			return null;
+		}
+		String stripped = value.strip();
+		return stripped.isBlank() ? null : stripped;
 	}
 
 	/** A-13-8 수정 API(CasePaperEditRequest)와 같은 길이 규칙을 생성 응답에도 적용한다(DB 컬럼 길이 초과로 500이 나는 것을 막는다) */
