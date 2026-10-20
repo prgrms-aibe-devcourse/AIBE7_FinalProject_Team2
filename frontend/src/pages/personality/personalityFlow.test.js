@@ -53,6 +53,16 @@ test('다른 문항으로 옮기면 기다리던 자동 넘기기는 취소된�
   assert.deepEqual(shown, []);
 });
 
+test('표지로 돌아가면 기다리던 자동 넘기기는 취소된다', async () => {
+  const flow = makeFlow();
+  const shown = [];
+  flow.enter(0);
+  flow.answer(0, 0, { advance: true, goNext: () => flow.next(0, { show: (i) => shown.push(i), submit() {} }) });
+  flow.leave(); // 칸을 누른 직후 "이전"으로 표지에 감
+  await sleep(320);
+  assert.deepEqual(shown, []);
+});
+
 test('마지막 문항은 자동으로 넘기지 않고, 다음을 누르면 제출한다', async () => {
   const flow = makeFlow();
   const calls = [];

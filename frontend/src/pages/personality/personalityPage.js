@@ -97,6 +97,7 @@ export async function renderPersonalityPage(container, { api, navigate, from }) 
   }
 
   function renderIntro() {
+    flow.leave();
     measureOnce();
     label.textContent = '표지';
     const intro = element('div', 'test-intro');

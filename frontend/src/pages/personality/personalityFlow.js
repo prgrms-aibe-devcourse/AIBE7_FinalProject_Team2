@@ -33,6 +33,11 @@ export function createTestFlow({ api, isActive }) {
       clearTimeout(timer);
       current = index;
     },
+    /** 문항이 아닌 화면(표지)을 그릴 때 부른다(기다리던 자동 넘기기는 취소) */
+    leave() {
+      clearTimeout(timer);
+      current = -1;
+    },
     /** 답을 적는다. advance면 잠시 뒤 goNext(마지막 문항은 넘기지 않는다). 처음 답한 문항이면 true */
     answer(index, value, { advance = false, goNext }) {
       const { id } = questions[index];

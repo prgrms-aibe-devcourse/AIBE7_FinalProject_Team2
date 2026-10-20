@@ -84,6 +84,7 @@ export async function renderPersonalityPaperPage(container, { api, navigate, fro
 
   // 표지 기사: 설문 소개 + 사진 + 응모권(시작하기)
   function renderIntro() {
+    flow.leave();
     const story = element('section', 'tp-intro');
     const lead = element('div', 'tp-intro-lead');
     const text = element('div', 'tp-columns');
