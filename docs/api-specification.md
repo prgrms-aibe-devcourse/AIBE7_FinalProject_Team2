@@ -36,6 +36,7 @@
 | v0.32 | 2026-10-18 | API 1 사건 목록 카드에 `chargeName`(죄명) 추가 (BE-79, 정합성 점검 D-01) — 사건 상단 바(S-04~S-09)가 목록에서 제목과 정확한 죄명을 함께 찾는다. 공통 사건 헤더 API는 사건 수가 늘면 재검토(`docs/decisions/BE-79.md`) |
 | v0.33 | 2026-10-19 | BE-88 — 관리자 401/403 정책의 인증 영역·쿠키/세션 의미·CSRF 및 계정 상태 검사 우선순위와 공개 인증 경로 예외를 명시. 현행 응답 및 형식 변경 없음. 기존 포괄적인 401 문구의 정합성 확인 사항을 별도 기록 |
 | v0.34 | 2026-10-20 | API 13에 판결 성향 기여 저장 추가 (BE-64, WBS 7.6.7) — 처음 `COMPLETED`로 바꿀 때 첫 회차 체험의 `experience_personality`를 같은 트랜잭션에서 저장, 이미 완료면 유지(성향 산식 3-4, PR #109 리뷰에서 "7.6.7 PR에서 구현과 함께 고친다"로 미룬 항목). 7장 성향 갱신 메모를 "제안"에서 확정으로 |
+| v0.35 | 2026-10-20 | BE-77 — API 3 전용 응답에 본인 사전 판단 구간(`preJudgment`) 추가, API 2는 기존 응답 유지. API 14에 `preToCourt.direction` 추가. 본인 선택 구간 조회 예외와 비교 방향·상태 제한 명시 |
 
 ---
 
@@ -210,7 +211,7 @@ json
 
 **요청**: 본문 없음. 쿠키가 있으면 함께 보낸다.
 
-**응답** — 새로 만들면 `201`, 이미 있으면 `200`. 본문은 API 3과 같다.
+**응답** — 새로 만들면 `201`, 이미 있으면 `200`. 본문은 아래 기존 형식을 유지하며, API 3 전용 필드 `preJudgment`는 포함하지 않는다.
 
 json
 
@@ -230,7 +231,24 @@ json
 
 ### API 3. 내 체험 상태 — `GET /cases/{caseId}/experience`
 
-**응답 200**: API 2와 같은 형식.
+**응답 200**: API 2의 상태 필드를 유지하고, 본인 사전 판단 선택 구간만 더한 전용 응답이다.
+
+```json
+{
+  "caseId": 1,
+  "attemptNo": 1,
+  "status": "PRE_JUDGED",
+  "lastReviewedStep": 1,
+  "startedAt": "2026-10-20T09:00:00+09:00",
+  "preJudgment": { "rangeOptionId": 11, "label": "실형 5년 이상 ~ 10년 미만" }
+}
+```
+
+- `STARTED`는 `preJudgment: null`, `PRE_JUDGED` 이후는 저장된 `USER · PRE`의 구간 ID·label을 반환한다. label은 현재 선택지 표시 문구다.
+- 사건 공개 여부와 익명 ID 쿠키 소유권을 확인한 최신 회차의 판단만 조회한다. 새 체험 생성·판단 수정·상태 전이는 하지 않는다.
+- 제출 이후 상태인데 사전 판단이 없으면 데이터 불일치로 `500 INTERNAL_ERROR`를 반환한다. 상세 원인은 서버 로그에만 남긴다.
+- BE-77 예외: 본인 선택 구간을 다시 보기에서 복원할 수 있다. 선택 요소·AI/재판부 판결·비교 방향은 이 응답에 포함하지 않는다.
+- API 2는 기존 5개 필드만 반환한다. 브라우저·기기 간 기록 연결은 로그인 연동의 별도 과제이며 이 API만으로 제공하지 않는다.
 
 | 거절 | 조건 |
 | --- | --- |
@@ -552,7 +570,89 @@ json
 json
 
 ```json
-{  "preToFinal": {    "preJudgment": { "rangeOptionId": 11, "label": "실형 5년 이상 ~ 10년 미만", "factorIds": [1, 2] },    "finalJudgmentText": "징역 15년",    "direction": "HEAVIER",    "summaryText": "사건을 모두 확인한 뒤, 처음 생각보다 무거운 판결을 내렸어요."  },  "judgments": {    "USER": { "subjectType": "USER", "summary": "흉기 사용 · 피해자의 부양 가족을 무겁게 보고 범행 인정 · 반성을 감안한 판단", "…": "…" },    "AI": { "subjectType": "AI", "summary": "다투다 벌어진 범행과 공탁 · 반성을 함께 저울질한 판단", "…": "…" },    "COURT": { "subjectType": "COURT", "summary": "유족의 처벌 의사를 무겁게 보면서도 공탁과 반성을 감안한 판단", "…": "…" }  },  "matrix": [    { "factorId": 2, "label": "다투던 중 집에 있던 흉기를 집어 들었다", "revealStage": "OVERVIEW",      "user": "UP", "ai": "UP", "court": "UP", "category": "ALL_SAME" },    { "factorId": 6, "label": "피해자에게는 부양하던 어린 자녀 2명이 있다", "revealStage": "DETAIL",      "user": "UP", "ai": null, "court": "UP", "category": "DIVERGED" },    { "factorId": 7, "label": "수사 초기부터 범행을 인정하고 반성하고 있다", "revealStage": "DETAIL",      "user": "DOWN", "ai": "DOWN", "court": "DOWN", "category": "ALL_SAME" },    { "factorId": 9, "label": "피해 회복을 위해 5,000만 원을 공탁했다", "revealStage": "DETAIL",      "user": null, "ai": "DOWN", "court": "DOWN", "category": "ONLY_ME_MISSED" }  ],  "ruleSentences": {    "common": ["세 판결 모두 흉기 사용을 형량을 높이는 요소로, 범행 인정 · 반성을 형량을 낮추는 요소로 봤어요."],    "differences": ["AI와 재판부는 피해 회복 공탁을 고려했지만, 내 판결에서는 고려하지 않았어요.", "피해자의 부양 가족에 대한 판단이 세 판결 사이에서 엇갈렸어요."]  },  "analysisAvailable": false}
+{
+  "preToFinal": {
+    "preJudgment": {
+      "rangeOptionId": 11,
+      "label": "실형 5년 이상 ~ 10년 미만",
+      "factorIds": [
+        1,
+        2
+      ]
+    },
+    "finalJudgmentText": "징역 15년",
+    "direction": "HEAVIER",
+    "summaryText": "사건을 모두 확인한 뒤, 처음 생각보다 무거운 판결을 내렸어요."
+  },
+  "preToCourt": {
+    "direction": "HEAVIER"
+  },
+  "judgments": {
+    "USER": {
+      "subjectType": "USER",
+      "summary": "흉기 사용 · 피해자의 부양 가족을 무겁게 보고 범행 인정 · 반성을 감안한 판단",
+      "…": "…"
+    },
+    "AI": {
+      "subjectType": "AI",
+      "summary": "다투다 벌어진 범행과 공탁 · 반성을 함께 저울질한 판단",
+      "…": "…"
+    },
+    "COURT": {
+      "subjectType": "COURT",
+      "summary": "유족의 처벌 의사를 무겁게 보면서도 공탁과 반성을 감안한 판단",
+      "…": "…"
+    }
+  },
+  "matrix": [
+    {
+      "factorId": 2,
+      "label": "다투던 중 집에 있던 흉기를 집어 들었다",
+      "revealStage": "OVERVIEW",
+      "user": "UP",
+      "ai": "UP",
+      "court": "UP",
+      "category": "ALL_SAME"
+    },
+    {
+      "factorId": 6,
+      "label": "피해자에게는 부양하던 어린 자녀 2명이 있다",
+      "revealStage": "DETAIL",
+      "user": "UP",
+      "ai": null,
+      "court": "UP",
+      "category": "DIVERGED"
+    },
+    {
+      "factorId": 7,
+      "label": "수사 초기부터 범행을 인정하고 반성하고 있다",
+      "revealStage": "DETAIL",
+      "user": "DOWN",
+      "ai": "DOWN",
+      "court": "DOWN",
+      "category": "ALL_SAME"
+    },
+    {
+      "factorId": 9,
+      "label": "피해 회복을 위해 5,000만 원을 공탁했다",
+      "revealStage": "DETAIL",
+      "user": null,
+      "ai": "DOWN",
+      "court": "DOWN",
+      "category": "ONLY_ME_MISSED"
+    }
+  ],
+  "ruleSentences": {
+    "common": [
+      "세 판결 모두 흉기 사용을 형량을 높이는 요소로, 범행 인정 · 반성을 형량을 낮추는 요소로 봤어요."
+    ],
+    "differences": [
+      "AI와 재판부는 피해 회복 공탁을 고려했지만, 내 판결에서는 고려하지 않았어요.",
+      "피해자의 부양 가족에 대한 판단이 세 판결 사이에서 엇갈렸어요."
+    ]
+  },
+  "analysisAvailable": false
+}
 ```
 
 **`preToFinal.direction`** — 사전 판단 구간과 최종 판결을 비교한다(`sentence_range_option.kind` · 개월 범위 사용). **확정 (BE-11, 2026-10-06)**
@@ -575,7 +675,9 @@ json
 - `judgments.*.summary`: 판결 카드의 한 줄 요약(판결 응답 공통 형식 참고). `USER`는 MVP 규칙 문장이다.
 - `analysisAvailable`: (확장) AI 비교 분석을 API 15로 불러올 수 있는지. MVP에서는 항상 `false`.
 - (확장, REQ-096) `matrix[].changeType`에 판단 이유 변화 유형(`NEWLY_LEARNED` 새로 알게 된 요소 / `KEPT` 처음부터 알던 요소 · 판단에 그대로 반영 / `WEIGHT_CHANGED` 이미 알던 요소의 무게가 바뀜 / `null`)을 넣는다. 판별 기준은 요구사항 FR-6-6: `OVERVIEW` 이후 요소가 최종 판결에만 있으면 `NEWLY_LEARNED`, `OVERVIEW` 요소가 사전 · 최종 양쪽에 있으면 `KEPT`, 한쪽에만 있으면 `WEIGHT_CHANGED`. 사전 판단 작용 요소가 있을 때만.
-- **사전 판단은 이 API에서 처음 내려간다.**
+- 본인 사전 판단의 선택 구간(ID·label)은 API 3에서도 조회할 수 있다(BE-77). 선택 요소와 비교 결과는 이 API에서 반환한다.
+- **`preToCourt.direction`**: `preToFinal.direction`과 같은 계산을 재판부 판결에 적용한다. `HEAVIER`는 재판부가 사전 판단 구간보다 무거움, `LIGHTER`는 가벼움, `SAME`은 같은 형벌 종류 및 해당 구간이다. `SAME`은 형량의 정확한 일치를 뜻하지 않는다. 감경은 `reducedTo` 우선, 실형 구간은 하한 이상·상한 미만이며 표시 label을 해석하지 않는다.
+- `preToCourt`는 API 14 최상위 객체이며 `direction`만 포함한다. 기존 필드·`COMPLETED` 이후 조회 제한은 그대로 유지한다. API 3에서는 이 비교나 AI·재판부 판결을 공개하지 않는다.
 
 | 거절 | 조건 |
 | --- | --- |

@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.team2.project.common.web.AnonymousIdCookie;
 import com.team2.project.experience.dto.ExperienceResponse;
+import com.team2.project.experience.dto.ExperienceStatusResponse;
 import com.team2.project.experience.dto.OverviewResponse;
 import com.team2.project.experience.dto.PreJudgmentRequest;
 import com.team2.project.experience.dto.PreJudgmentResponse;
@@ -47,7 +48,7 @@ public class ExperienceController {
 
 	/** API 3. 내 체험 상태 */
 	@GetMapping
-	public ExperienceResponse getMyExperience(@PathVariable Long caseId, HttpServletRequest request) {
+	public ExperienceStatusResponse getMyExperience(@PathVariable Long caseId, HttpServletRequest request) {
 		return experienceService.getMyExperience(caseId, anonymousIdCookie.read(request));
 	}
 

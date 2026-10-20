@@ -38,7 +38,7 @@ public interface JudgmentRepository extends JpaRepository<Judgment, Long> {
 	int unpublishOthers(@Param("caseId") Long caseId, @Param("subjectType") SubjectType subjectType,
 		@Param("keepId") Long keepId);
 
-	/** 내 사전 판단 (API 14에서 처음 응답) */
+	/** 내 사전 판단 (API 3은 선택 구간, API 14는 선택 요소도 응답) */
 	@Query("select j from Judgment j where j.experience.id = :experienceId "
 		+ "and j.subjectType = com.team2.project.judgment.domain.SubjectType.USER "
 		+ "and j.timing = com.team2.project.judgment.domain.Timing.PRE")

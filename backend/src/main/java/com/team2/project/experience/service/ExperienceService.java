@@ -9,8 +9,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.team2.project.common.metrics.BusinessMetrics;
 import com.team2.project.experience.domain.Experience;
+import com.team2.project.experience.domain.ExperienceStatus;
 import com.team2.project.experience.dto.ExperienceResponse;
+import com.team2.project.experience.dto.ExperienceStatusResponse;
 import com.team2.project.experience.repository.ExperienceRepository;
+import com.team2.project.judgment.domain.Judgment;
+import com.team2.project.judgment.repository.JudgmentRepository;
 import com.team2.project.legalcase.service.LegalCaseService;
 
 import lombok.RequiredArgsConstructor;
@@ -30,6 +34,7 @@ public class ExperienceService {
 	private final MyExperienceService myExperienceService;
 	private final ExperienceWriter experienceWriter;
 	private final ExperienceRepository experienceRepository;
+	private final JudgmentRepository judgmentRepository;
 	private final BusinessMetrics metrics;
 
 	/** API 2. 체험 시작. 이미 있으면 새로 만들지 않고 기존 체험을 돌려준다. */
@@ -56,8 +61,17 @@ public class ExperienceService {
 
 	/** API 3. 내 체험 상태 (사건 · 쿠키 · 체험 확인은 MyExperienceService, DTO 변환까지 읽기 전용 트랜잭션 안에서) */
 	@Transactional(readOnly = true)
-	public ExperienceResponse getMyExperience(Long caseId, Optional<UUID> anonymousId) {
-		return ExperienceResponse.from(myExperienceService.getMyExperience(caseId, anonymousId));
+	public ExperienceStatusResponse getMyExperience(Long caseId, Optional<UUID> anonymousId) {
+		Experience experience = myExperienceService.getMyExperience(caseId, anonymousId);
+		ExperienceStatusResponse.PreJudgment preJudgment = null;
+		if (experience.getStatus().isAtLeast(ExperienceStatus.PRE_JUDGED)) {
+			Judgment pre = judgmentRepository.findPreJudgment(experience.getId())
+					.orElseThrow(() -> new IllegalStateException(
+							"체험 " + experience.getId() + "의 사전 판단이 없습니다."));
+			preJudgment = new ExperienceStatusResponse.PreJudgment(
+					pre.getRangeOption().getId(), pre.getRangeOption().getLabel());
+		}
+		return ExperienceStatusResponse.of(experience, preJudgment);
 	}
 
 	/**
