@@ -34,6 +34,7 @@
 | v0.28 | 2026-10-15 | 1차 · 2차 지시서와 맞춤 — 항목마다 지시서 묶음 · 완성 프롬프트(프롬프트 모음 10장) · 결과를 올릴 공개 레포 경로를 적고, H0 ~ H3 · H4(사건 1 배역 컷)를 🟨 이관으로 |
 | v0.29 | 2026-10-15 | PR #149 리뷰 결정(COMMON-35): 재연 컷 "양쪽 감정을 같은 무게로" 규칙 철회(이미지가 판결에 미칠 영향은 추후 필요 시 조절), 공용 컷 세트 2는 오차를 감수하고 공용으로 유지(추후 백엔드: 파일명에 상황 설명 + 사건별 자동 매칭), 지시서 · HTML 보고서 대신 수작업(`작업-가이드.md`)으로 진행 |
 | v0.30 | 2026-10-19 | 스테이징 신규 이미지 12장 반영(COMMON-46) — A6 마스코트 로 6장 · G2 소품 시트 · H1 내로 · 남불 의상 시트 · 사건 1 재연 컷 3장. 파일 이름은 이 문서 규칙대로, `_original/`에도 백업. 검수는 아직 |
+| v0.31 | 2026-10-20 | 스테이징 신규 이미지 반영(COMMON-46) — H0 라인업 시트 5장 · H1 로 의상 시트 3장 · H2 마스코트 로 컷 9 + 합의 · 비교 컷 3장 · H3 · H4 역할 컷 10장(검수는 아직). **볼따구(B4) 컷 4장을 시트 `deform-cheek` 기준(짧은 만두형 몸통 · 납작한 볼)으로 다시 만들어** `base/cheek/`에 넣고, 옛 컷은 `base/cheek-slim/`(`cut-cheek-slim_*`)에 보존, 그 그림체 시트 2장(`deform-cheek-slim`)을 추가. `cuts/{캐릭터}/base/`를 `scene` · `cheek` · `cheek-slim` · `role` · `mascot` 하위 폴더로 나눔(이미지 저장소와 로컬 동일) |
 
 > 형식 · 이름 규칙 · 검수 기준은 [캐릭터 에셋 아키텍처](character-asset-architecture.md)가 기준이다(시트 2-2 · 장면 · 감정 코드 3-2 · 상황 4-1 · 크기 6-5 · 검수 7-2). 이 문서는 **무엇을 몇 장 만들고 어디까지 했는지**만 적는다.
 > 캐릭터 설정은 [캐릭터 프로필 · 세계관](character-profile-worldview.md), 성향 이미지 번호는 [성향 이미지 번호표](personality-image-numbers.md)가 기준이다.
@@ -44,7 +45,7 @@
 > - `staging/` 새로 뽑았거나 고칠 이미지를 두는 **임시 폴더**(검수 뒤에 정식 위치로 옮기고 이름을 규칙대로 바꾼다). 지금은 비어 있다
 > - `standing/` 스탠딩 5장(기준)
 > - `discard/` 폐기한 이전 시안(`discard/sheets/` 옛 시트 · 합성본, `discard/standing/` 봉투를 든 옛 스탠딩 · 탈락 후보, `discard/cuts/` · `discard/icons/` · `discard/personality/` 옛 컷, `discard/attempts/` 실패한 재생성 시도). 파일 이름은 `discard_` 접두사 + 실패 이유. 쓰지 않고 `NaeLawNamBul_Images` 레포에도 올리지 않는다
-> - `cuts/{캐릭터}/base/{캐릭터}_cut_{장면}-{감정}.png` · `cuts/{캐릭터}/icon/{캐릭터}_icon_face-{감정}.png` — 아키텍처 6-4와 같은 구조(웹 변환 전 PNG). 로 합의 컷은 `cuts/trio/`, 내로 · 남불 · 로 비교 컷은 `cuts/compare/` 성향 결과 컷은 `cuts/personality/personality-{01 ~ 16}_{캐릭터}_{밈}.png`(기본 · 반대편 캐릭터가 각각 한 장씩, 번호 · 밈은 번호표 기준) 사건 재연 컷은 `cuts/reenact/case-{caseId}/`(아키텍처 6-4), **사건 이미지가 없을 때 대신 쓰는 공용 컷**은 `cuts/reenact/common/{headline · sub-1 · detail-1}.png`. 연기 시트는 `sheets/acting/{naero · nambul · law-scale · law-gavel · law-book}_sheet_acting.png`, 역할 의상 시트는 `sheets/role-outfits/{naero · nambul}.png` 데포르메 대표 시트는 `sheets/deform/{naero · nambul}-{ranma · cheek · ppg}.png`
+> - `cuts/{캐릭터}/base/scene/{캐릭터}_cut_{장면}-{감정}.png`(`base/`는 하위 폴더 `scene` · `cheek` · `cheek-slim` · `role` · `mascot`으로 나뉨, 10/20) · `cuts/{캐릭터}/icon/{캐릭터}_icon_face-{감정}.png` — 아키텍처 6-4와 같은 구조(웹 변환 전 PNG). 로 합의 컷은 `cuts/trio/`, 내로 · 남불 · 로 비교 컷은 `cuts/compare/` 성향 결과 컷은 `cuts/personality/personality-{01 ~ 16}_{캐릭터}_{밈}.png`(기본 · 반대편 캐릭터가 각각 한 장씩, 번호 · 밈은 번호표 기준) 사건 재연 컷은 `cuts/reenact/case-{caseId}/`(아키텍처 6-4), **사건 이미지가 없을 때 대신 쓰는 공용 컷**은 `cuts/reenact/common/{headline · sub-1 · detail-1}.png`. 연기 시트는 `sheets/acting/{naero · nambul · law-scale · law-gavel · law-book}_sheet_acting.png`, 역할 의상 시트는 `sheets/role-outfits/{naero · nambul}.png` 데포르메 대표 시트는 `sheets/deform/{naero · nambul}-{ranma · cheek · ppg}.png`
 > - `_original/`(`character/` 바로 아래) 생성 직후 원본 114장 보관(`original_` 접두사, 재생성 이력은 `_v1` `_v2`). 다른 폴더에 둔 정식 파일의 사본이다. 원본 백업은 공개 레포 `NaeLawNamBul_Images`에도 올렸다(10/14, 새 이름 구조로 반영 완료). 컷 PNG는 4:5(1122 × 1402)로 캔버스를 맞췄다(그림은 늘리거나 줄이지 않고 투명 여백만 추가)
 
 > **파일 이름 규칙 (10/14, 폴더 없이 파일 이름만으로 역할을 알 수 있게)**: `{대상}_{종류}_{세부}.png` — 대상 `naero` · `nambul` · `law-scale` · `law-gavel` · `law-book` · `trio` · `compare` · `reenact-common` · `personality-{번호}`, 종류 `standing` · `sheet`(`reference` · `acting` · `role-outfits` · `deform-{ranma|cheek|ppg}`) · `cut` · `cut-cheek` · `icon`. 예: `naero_standing.png`, `law-gavel_sheet_reference.png`, `nambul_cut_guide-neutral.png`, `naero_icon_face-cheer.png`, `personality-06_naero_pinky-promise.png`, `trio_cut_idle.png`. 폐기는 `discard_` 접두사 + `_v1` · `_tryN-이유`, 원본은 `original_` 접두사. 옛 이름 → 새 이름은 `rename-map`(`Claude outputs/character/rename-map_2026-10-14.csv`). 웹용 webp 이름 규칙(`{장면}-{감정}.webp` · `01.webp`)은 바뀌지 않았다. **10/15 추가**: 마스코트 로 컷 `{law-*}_cut-mascot_{장면}-{감정}.png`(로 셋 함께는 `trio_cut-mascot_{장면}.png`), 역할 의상 컷 `{naero · nambul}_cut-role-{judge · prosecutor · defense · actor}_{장면}-{감정}.png`, 사건 배역 컷 `{naero · nambul}_cut-role-case-{caseId}_{장면}-{감정}.png`, 데포르메 묶음 시트 `{캐릭터}_sheet_deform-lineup.png`, 의상 시트 `{캐릭터}_sheet_wardrobe.png`.
@@ -101,13 +102,13 @@
 
 | # | 캐릭터 | 컷 | 수량 | 쓰는 곳 | 상태 |
 | --- | --- | --- | --- | --- | --- |
-| B1 | 로(저울) | `idle-neutral` · `deliver-neutral`(봉투) | 2 | S-01 메인 · S-02 신문 지면 · 로딩 끝 전달 | ✅ 검수 통과 · PNG 정리(`cuts/law-scale/base/`), webp 변환 전. `idle-neutral`은 A4 변환 대신 새로 생성한 컷(`law-scale_standing.png`와 별개). 저울 수평 · 두 손 봉투 · 목 없음 OK, `deliver`는 "반 걸음 앞으로"가 약함 |
-| B2 | 내로 (`mascot`) | `guide-neutral` · `guide-happy` · `react-surprised` · `react-happy` · `react-sorry` | 5 | 안내 · 리액션 | ✅ 검수 통과 · PNG 정리(`cuts/naero/base/`) · 4:5 맞춤. 후속: 컷마다 캐릭터 크기 차이(웹 변환 때 기준 정함), `react-happy` 눈 감은 웃음 확인 |
-| B3 | 남불 (`mascot`) | B2와 같은 5종 | 5 | 안내 · 리액션 | ✅ 검수 통과 · PNG 정리(`cuts/nambul/base/`) · 4:5 맞춤. 후속: `react-surprised` 캐릭터가 작음, `react-happy` 눈 감음(남불은 동공이 보이는 눈이 정체성이라 확인) |
-| B4 | 내로 · 남불 (`cheek`) | `idle-sorry` · `idle-thinking` | 4 | 로딩 · 빈 상태 · 오류 | ✅ **10/14 사용자 판단으로 통과** · PNG 정리(`cuts/{naero,nambul}/base/{naero,nambul}_cut-cheek_`). 한계로 기록: 몸통이 "작고 둥근 만두 + 돌기 팔다리" 지시와 다름(`idle-thinking` 둘은 가는 다리로 서 있음), 남불 `idle-thinking`은 입을 활짝 웃음 |
+| B1 | 로(저울) | `idle-neutral` · `deliver-neutral`(봉투) | 2 | S-01 메인 · S-02 신문 지면 · 로딩 끝 전달 | ✅ 검수 통과 · PNG 정리(`cuts/law-scale/base/scene/`), webp 변환 전. `idle-neutral`은 A4 변환 대신 새로 생성한 컷(`law-scale_standing.png`와 별개). 저울 수평 · 두 손 봉투 · 목 없음 OK, `deliver`는 "반 걸음 앞으로"가 약함 |
+| B2 | 내로 (`mascot`) | `guide-neutral` · `guide-happy` · `react-surprised` · `react-happy` · `react-sorry` | 5 | 안내 · 리액션 | ✅ 검수 통과 · PNG 정리(`cuts/naero/base/scene/`) · 4:5 맞춤. 후속: 컷마다 캐릭터 크기 차이(웹 변환 때 기준 정함), `react-happy` 눈 감은 웃음 확인 |
+| B3 | 남불 (`mascot`) | B2와 같은 5종 | 5 | 안내 · 리액션 | ✅ 검수 통과 · PNG 정리(`cuts/nambul/base/scene/`) · 4:5 맞춤. 후속: `react-surprised` 캐릭터가 작음, `react-happy` 눈 감음(남불은 동공이 보이는 눈이 정체성이라 확인) |
+| B4 | 내로 · 남불 (`cheek`) | `idle-sorry` · `idle-thinking` | 4 | 로딩 · 빈 상태 · 오류 | ✅ **10/14 사용자 판단으로 통과** · PNG 정리(`cuts/{naero,nambul}/base/cheek-slim/{naero,nambul}_cut-cheek-slim_`(10/20 시트 기준으로 다시 만든 컷은 `base/cheek/`, 이 컷은 `cheek-slim/`으로 보존)). 한계로 기록: 몸통이 "작고 둥근 만두 + 돌기 팔다리" 지시와 다름(`idle-thinking` 둘은 가는 다리로 서 있음), 남불 `idle-thinking`은 입을 활짝 웃음 |
 | B5 | 내로 · 남불 (`ppg` 아이콘) | `face-{neutral · happy · surprised · thinking · sorry · cheer}` | 12 | 토스트 · 완료 피드백 | ✅ 10/14 `cheer` · `sorry` 4장 재생성본 통과(`cheer`는 별 하이라이트 + 반짝이로 `happy`와 64 px에서 구분, `sorry`는 땀방울이 읽힘 — 남불은 흐림), 아이콘 12장 모두 통과. 머리 비율은 칸의 76 ~ 85%(규격 약 70%, 허용). 이전 `cheer` · `sorry`는 `discard/icons/` |
 | B6 | 내로 · 남불 · 로봉 · 로북 | `idle-neutral`(**스탠딩을 4:5로 변환만**, 생성 없음) | 4 | S-17 프로필 기본 자세(4-1 `profile`) · 컬렉션 · 빈 상태 기본 · 결과 화면 합의 전후 단독 컷. 로울은 B1에 있음 → 5캐릭터 모두 `idle-neutral`을 갖춘다. 로봉은 **10/14 새 체형 스탠딩**을 변환한다 | ✅ 10/14 변환 완료(4:5 · 1122 × 1402, 내로 · 남불은 스탠딩 bbox를 캔버스 높이 약 72%로 가운데 배치, 로봉 · 로북은 971 × 1619 캔버스에 투명 여백을 더해 맞춤, 로봉은 새 떡대 스탠딩). 로울은 B1의 `idle-neutral`을 그대로 씀. 한계: 내로 · 남불 스탠딩은 입을 벌린 밝은 웃음이라 `neutral`보다 `happy`에 가까움 |
-| B7 | 내로 · 남불 (`mascot`) | `cheer-cheer` | 2 | S-06 판결 입력 응원(4-1 `cheer`). **특정 형량 쪽 응원처럼 보이면 안 됨**(빈손, 가리키지 않음) | ✅ 10/14 검수 통과 · `cuts/{naero,nambul}/base/{naero,nambul}_cut_cheer-cheer.png`(4:5). 작게 뛰며 두 주먹 · 빈손 · 가리키지 않음 |
+| B7 | 내로 · 남불 (`mascot`) | `cheer-cheer` | 2 | S-06 판결 입력 응원(4-1 `cheer`). **특정 형량 쪽 응원처럼 보이면 안 됨**(빈손, 가리키지 않음) | ✅ 10/14 검수 통과 · `cuts/{naero,nambul}/base/scene/{naero,nambul}_cut_cheer-cheer.png`(4:5). 작게 뛰며 두 주먹 · 빈손 · 가리키지 않음 |
 | B8 | 남불 · 내로 (`mascot`) | `read-thinking`(서류철 · 돋보기) | 2 | S-04 기록 함께 읽기(4-1 `companion`). 기본은 남불, 내로는 바꿔 쓰기용 | ✅ 10/14 검수 통과 · `…/read-thinking.png`(4:5). 서류철 + 돋보기, 사소: 눈썹이 날카로워 보임 |
 
 ### C. 판결 결과 화면 (S-07 · S-09)
@@ -115,7 +116,7 @@
 | # | 이미지 | 수량 | 비고 | 상태 |
 | --- | --- | --- | --- | --- |
 | C1 | 로 3인 합의 컷 | 2 | 셋이 나란히(`idle`) · 고개를 맞댐(`think`). 같은 바닥선, **키는 각자 체형대로**(로울 230 · 로봉 190 · 로북 210, 아키텍처 2-5), 서열 없음. 이견(2 : 1)처럼 보이는 연출 금지(프로필 · 세계관 5-3). 16:9 투명 PNG(1672 × 941), `cuts/trio/trio_cut_idle.png` · `trio-think.png`. **`idle`**: 배치 · 키(로봉 0.79 · 로북 0.89, 목표 0.83 · 0.91) OK, 로봉 · 로북 손가락 사이에 **초록 잔여 픽셀 92개**(배경 제거 때 남음) → 제거 필요. **`think`**: 포즈 OK, 셋이 서로를 향해 기울이지 않고(로북은 바깥쪽으로 기울어짐), 로북 키가 로봉과 거의 같음(0.86, 목표 0.91). **10/14 재생성본 통과**: 새 떡대 로봉 기준 `trio-idle`(키 로봉 0.82 · 로북 0.89, 초록 잔여는 후처리로 제거) · `trio-think`(서로를 향해 기울임, 사소: 로봉 · 로북 높이 0.86으로 거의 같음). 옛 버전은 `discard/cuts/`. 이전 연쇄 메모:(`idle`은 초록 잔여 문제도 재생성으로 해결, 작업 목록 문서 C1-idle · C1-think) | ✅ 10/14 재생성본 통과 |
-| C2 | 로(법봉) · 로(법전) `deliver-neutral` | 2 | 발표자 컷. 저울은 B1. 4:5(1122 × 1402), `cuts/law-gavel/base/` · `cuts/law-book/base/`. 반 걸음 앞으로 두 손으로 봉투 · 법봉 머리 수평 · 법전 닫힌 채 떠 있음 · 목 없음 · 검정 구두 OK. 두 컷의 키 비율은 0.97(목표 0.905)이라 변환 때 크기 기준으로 맞춘다. **연쇄(10/14)**: 로봉 `deliver-neutral`은 10/14 새 체형으로 재생성해 통과(옛 슬림본은 `discard/cuts/`)(작업 목록 문서 C2-gavel) | ✅ |
+| C2 | 로(법봉) · 로(법전) `deliver-neutral` | 2 | 발표자 컷. 저울은 B1. 4:5(1122 × 1402), `cuts/law-gavel/base/scene/` · `cuts/law-book/base/scene/`. 반 걸음 앞으로 두 손으로 봉투 · 법봉 머리 수평 · 법전 닫힌 채 떠 있음 · 목 없음 · 검정 구두 OK. 두 컷의 키 비율은 0.97(목표 0.905)이라 변환 때 크기 기준으로 맞춘다. **연쇄(10/14)**: 로봉 `deliver-neutral`은 10/14 새 체형으로 재생성해 통과(옛 슬림본은 `discard/cuts/`)(작업 목록 문서 C2-gavel) | ✅ |
 | C3 | S-09 비교 `trio-thinking` | 1 | 내로 왼쪽 · 로(저울) 가운데 · 남불 오른쪽. 셋 중 하나를 더 크게 · 앞에 두지 않는다. 16:9(1672 × 941), `cuts/compare/compare_cut_trio-thinking.png`. 내로 · 남불 같은 키 · 정체성 OK. **10/14 후처리 완료**: 마스코트 둘을 약 0.87배로 줄여 로울이 내로 · 남불의 1.92배(817 / 426), 같은 바닥선(발 y 876) — 옛 버전은 `discard/cuts/`. 이전 후속: 로울이 내로의 **1.69배**(목표 1.92), 로울 구두가 마스코트보다 36 px 아래(같은 바닥선 아님) → 로울을 약 1.14배 키우고 바닥선을 맞춘다 | ✅ 10/14 후처리 완료 |
 
 ### D. 성향 테스트 (S-15 · S-16)
@@ -164,7 +165,7 @@
 | --- | --- | --- | --- | --- | --- |
 | H0 | **데포르메 묶음 시트** — 한 캐릭터를 기본 + 데포르메 11종, 12칸에 같은 자세로 | 5 (내로 · 남불 · 로울 · 로봉 · 로북) | 시트 16:9 | **느낌을 보는 용도**. 11종(아키텍처 3-1) 전부를 한 장에 넣어 비교하고, 본격적으로 만들 데포르메를 고른다. 로는 기본 칸에 마스코트 로(A6)를 쓰므로 A6 뒤. 12칸이 너무 빽빽하게 나오면 6칸씩 두 장으로 나눈다. 렌더링(외곽선 없음 · 평면 색)은 같게 두고 비율 · 형태 · 연기만 바꾼다. 2차 지시서 H0, 10-6. 올릴 곳: `sheets/deform/` | 🟨 이관 |
 | H1 | **의상 시트** — 일상 의상 8벌 | 5 (내로 · 남불 · 로울 · 로봉 · 로북) | 시트 16:9 | 기존 역할 의상 시트(F2: 판사 · 검사 · 변호인 · 사건 역할)와 별개. 정장 · 트렌치코트 · 후드티 · 니트 · 작업복 · 앞치마 · 패딩 · 잠옷(제복은 법정 역할과 헷갈려 뺌). 내로 · 남불은 사건 재연(H4)의 의상을 여기서 고르고, 로는 법복을 벗은 모습(컬렉션 · 카드용, 기본 로 `authority` × `adult`, 머리 물체 · 흰 장갑 유지). 반다나 없음, 초록 · 캐릭터 고정색 피함. 2차 지시서 H1, 10-7. 올릴 곳: `sheets/wardrobe/` | 🟨 내로 · 남불 2장 ✅ 10/19 반영(COMMON-46, 검수 전), 로 3장 이관 |
-| H2 | **마스코트 로 컷** | 12 | 장면 컷 4:5 · 16:9 | 로 셋 × `idle-neutral` · `deliver-neutral` · `think-thinking`(9) + `trio_cut-mascot_idle` · `trio_cut-mascot_think`(2, 16:9) + 내로 · 로울 · 남불 비교 `compare_cut-mascot_trio-thinking`(1, 16:9). 키 로울 180 · 로북 170 · 로봉 160(내로 · 남불 120). A6 통과 뒤. 2차 지시서 H2, 10-8(1차 1묶음 통과 뒤). 올릴 곳: `cuts/{law-*}/base/` · `cuts/trio/` · `cuts/compare/` | 🟨 이관 |
+| H2 | **마스코트 로 컷** | 12 | 장면 컷 4:5 · 16:9 | 로 셋 × `idle-neutral` · `deliver-neutral` · `think-thinking`(9) + `trio_cut-mascot_idle` · `trio_cut-mascot_think`(2, 16:9) + 내로 · 로울 · 남불 비교 `compare_cut-mascot_trio-thinking`(1, 16:9). 키 로울 180 · 로북 170 · 로봉 160(내로 · 남불 120). A6 통과 뒤. 2차 지시서 H2, 10-8(1차 1묶음 통과 뒤). 올릴 곳: `cuts/{law-*}/base/mascot/` · `cuts/trio/` · `cuts/compare/` | 🟨 이관 |
 | H3 | **역할 의상 정식 컷** | 8 | 장면 컷 4:5 | 지금 판결 체험 무대(`frontend/public/images/characters/roles/*.webp`, FE-27 · 28)는 **역할 의상 시트에서 잘라 낸 컷**(높이 560 px)을 쓰고, **남불 변호인 컷은 없다**. 내로 · 남불 × 판사 · 검사 · 변호인 · 사건 역할 = 8장을 `idle-neutral`로 정식 생성한다. **검사 · 변호인은 같은 자세 · 같은 표정**(한쪽이 옳아 보이지 않게). 파일 `{naero · nambul}_cut-role-{역할}_idle-neutral.png`. 2차 지시서 H3, 10-9. 올릴 곳: `cuts/{naero · nambul}/role/`. 통과하면 웹 webp로 바꿔 `frontend/public/images/characters/roles/`를 교체한다 | 🟨 이관 |
 
 **2순위**
@@ -380,7 +381,7 @@ EXPRESSION — {neutral | happy | surprised | thinking | sorry | cheer}.
 SCENE — face only, the head filling about 70% of a 1:1 square, centered, readable at 64 px, flat solid green #00B140 background. No green on the character.
 ```
 
-**B6 `idle-neutral` (내로 · 남불 · 로봉 · 로북)** — 생성하지 않는다. 해당 `*_standing.png`를 4:5 캔버스(투명 여백만 추가)로 맞춰 `cuts/{캐릭터}/base/{캐릭터}_cut_idle-neutral.png`로 둔다(내로 · 남불 `editorial-mascot`, 로 `authority-adult`). 스탠딩을 고치면 다시 변환한다.
+**B6 `idle-neutral` (내로 · 남불 · 로봉 · 로북)** — 생성하지 않는다. 해당 `*_standing.png`를 4:5 캔버스(투명 여백만 추가)로 맞춰 `cuts/{캐릭터}/base/scene/{캐릭터}_cut_idle-neutral.png`로 둔다(내로 · 남불 `editorial-mascot`, 로 `authority-adult`). 스탠딩을 고치면 다시 변환한다.
 
 **B7 내로 · 남불 `cheer-cheer`** — 첨부 `naero_standing.png` 또는 `nambul_standing.png`
 
