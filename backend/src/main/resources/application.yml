@@ -133,6 +133,14 @@ redis:
   cache-database: 0
   token-database: 1
 
+# JWT 액세스 토큰 · 리프레시 토큰 (확장 단계, BE-94 · WBS 7.4.3). secret은 Base64, HS256이라 디코딩 32바이트 이상이어야 한다.
+# 기본값은 로컬 개발 전용(운영에 그대로 쓰면 안 된다). 운영은 JWT_SECRET 환경변수로만 넘긴다.
+jwt:
+  secret: ${JWT_SECRET:bGF3bmFtYnVsLWxvY2FsLWRldi1qd3Qtc2VjcmV0LW5vdC1mb3ItcHJvZC0zMmJ5dGVzISE=}
+  issuer: lawnambul
+  access-token-ttl: ${JWT_ACCESS_TOKEN_TTL:15m}
+  refresh-token-ttl: ${JWT_REFRESH_TOKEN_TTL:14d}
+
 # 관리자 세션 쿠키 (확장 단계, BE-39). 사용자 API는 세션을 쓰지 않는다(익명 ID 쿠키).
 server:
   servlet:

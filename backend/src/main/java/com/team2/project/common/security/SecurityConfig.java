@@ -62,6 +62,9 @@ public class SecurityConfig {
 	public static final String ADMIN_PATTERN = "/api/v1/admin/**";
 	public static final String LOGIN_PATH = "/api/v1/admin/auth/login";
 	public static final String CSRF_PATH = "/api/v1/admin/auth/csrf";
+	/** 리프레시 토큰 쿠키로만 인증하는 상태 변경 요청 — Origin 검증 대상 (BE-94 · WBS 7.4.3) */
+	public static final String REISSUE_PATH = "/api/v1/auth/token/reissue";
+	public static final String LOGOUT_PATH = "/api/v1/auth/logout";
 	private static final Set<String> SAFE_METHODS = Set.of("GET", "HEAD", "OPTIONS", "TRACE");
 	private static final ReferrerPolicy REFERRER_POLICY = ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN;
 
@@ -118,6 +121,9 @@ public class SecurityConfig {
 			.exceptionHandling(e -> e.authenticationEntryPoint(errors).accessDeniedHandler(errors))
 			// SecurityContext를 불러온 뒤 · 익명 인증 전에 Bearer 토큰을 확인한다
 			.addFilterBefore(new BearerTokenAuthenticationFilter(accessTokenVerifiers, errors, requestOnly),
+				AnonymousAuthenticationFilter.class)
+			// 재발급 · 로그아웃(리프레시 토큰 쿠키로만 인증)은 Origin 검증으로 CSRF를 막는다 (BE-94, C 결정)
+			.addFilterBefore(new OriginVerificationFilter(Set.of(REISSUE_PATH, LOGOUT_PATH), errors),
 				AnonymousAuthenticationFilter.class);
 		return http.build();
 	}

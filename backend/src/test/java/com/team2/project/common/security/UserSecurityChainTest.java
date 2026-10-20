@@ -24,6 +24,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
@@ -52,6 +53,7 @@ class UserSecurityChainTest extends ApiIntegrationTest {
 	static class TestBeans {
 
 		@Bean
+		@Primary	// BE-94가 실제 구현체를 빈으로 등록한 뒤에도 이 가짜 검증기를 쓴다
 		AccessTokenVerifier fakeAccessTokenVerifier() {
 			return token -> switch (token) {
 				case "member-7" -> MemberPrincipal.user(7);

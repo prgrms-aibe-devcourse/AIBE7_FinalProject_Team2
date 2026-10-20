@@ -1553,3 +1553,41 @@ json
 | 3 | `experiences` 범위 | 사건마다 최근 회차 하나. 회차별 전체 이력이 필요하면 추가 | A |
 | 4 | 이미지 경로 | `/images/characters/personality/{이미지 번호}.webp`, 이미지 번호(`01 ~ 32`)는 성향 이미지 번호표 기준으로 **유형마다 화면에 보이는 이미지 하나**(기본 캐릭터, 예: ISTJ는 남불 `18.webp`). **한 번 정한 번호는 바꾸지 않는다**(공유 미리보기 · 캐시가 깨지지 않게, #121 리뷰) | A |
 | 5 | `shareId` 값 | 16개를 시드에 고정값으로 넣는다(바꾸면 공유한 링크가 깨진다). 목 API의 해시 값과는 다르다. v0.28: OG 빌드용 값(shareId · 유형 번호 · 이미지 번호 · 유형명 · `oneLiner`)은 `frontend/og/personality-types.json`에 두고, 시드와 같은지 백엔드 테스트(`PersonalityContentSeedTest`)가 확인한다(BE-73) | B (시드) |
+
+---
+
+## 10. (확장) 회원 인증 API (7.4.3, BE-94)
+
+카카오 로그인(7.4.2, BE-62)이 성공 처리에서 발급한 액세스 · 리프레시 토큰 중, **리프레시 토큰만 `NLNB_RT`
+쿠키**(`HttpOnly` · `Secure` · `SameSite=Strict` · `Path=/api/v1/auth`)로 받는다. 액세스 토큰은 화면이 메모리에만
+들고 있고, 아래 재발급 API로 다시 받는다(docs/tech-stack.md 3장 "리프레시 토큰 쿠키").
+
+둘 다 **`Authorization` 헤더를 보지 않고 리프레시 토큰 쿠키로만 인증**한다. 상태를 바꾸는 요청이라 Origin 검증(요청의
+Origin이 이 서버 자신과 같은 출처인지)을 거친다 — 벗어나면 403 `FORBIDDEN`.
+
+### A-16. 토큰 재발급 — `POST /api/v1/auth/token/reissue`
+
+**응답 200**
+
+```json
+{ "accessToken": "eyJhbGciOi...", "accessTokenExpiresAt": "2026-10-21T00:15:00Z" }
+```
+
+- 리프레시 토큰은 **재발급마다 로테이션**된다 — 응답의 `Set-Cookie`로 새 `NLNB_RT`를 받고, 기존 값은 그 순간 무효가
+  된다(탈취된 토큰이 먼저 쓰이면 원래 주인의 다음 재발급이 실패해 알아챌 수 있다).
+
+| 거절 | 조건 |
+| --- | --- |
+| 401 `TOKEN_INVALID` | 리프레시 토큰 쿠키 없음, 모르는 값, 이미 로테이션 · 로그아웃으로 사라진 값 |
+| 403 `FORBIDDEN` | Origin(없으면 Referer)이 이 서버와 다른 출처 |
+
+### A-17. 로그아웃 — `POST /api/v1/auth/logout`
+
+**응답 204**: 본문 없음. 쿠키가 없거나 이미 로그아웃된 상태여도 204(멱등).
+
+- 리프레시 토큰이 있으면 Redis 저장소에서 지우고(그 뒤 재발급은 전부 실패한다), `NLNB_RT` 쿠키를 `Set-Cookie`로
+  지운다. 이미 나간 액세스 토큰은 블랙리스트를 두지 않아 자연 만료(기본 15분)까지는 유효하다.
+
+| 거절 | 조건 |
+| --- | --- |
+| 403 `FORBIDDEN` | Origin(없으면 Referer)이 이 서버와 다른 출처 |
