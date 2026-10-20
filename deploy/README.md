@@ -350,11 +350,13 @@ cat ~/.ssh/private_seed_ro.pub
 # 2) 연결 확인 → "Hi <소유자>/<비공개 저장소>! You've successfully authenticated" 가 나오면 성공
 ssh -T github-private-seed
 
-# 3) seed/만 받기 (공개 저장소 main이 가리키는 서브모듈 커밋과 같은지 확인)
+# 3) seed/만 받고, 공개 저장소(운영에 배포된 main)가 서브모듈로 고정한 커밋으로 맞춘다
+#    비공개 저장소 develop 최신이 아니라 "main이 검증한 커밋"을 쓴다 (detached HEAD가 정상)
 git clone --filter=blob:none --sparse --branch develop \
   github-private-seed:<소유자>/<비공개 저장소>.git /opt/lawnambul/private-seed
 cd /opt/lawnambul/private-seed && git sparse-checkout set seed
-git log -1 --format='%h %s'
+PTR=$(git -C /opt/lawnambul/app ls-tree HEAD backend/private-seed | awk '{print $3}')
+git checkout -q --detach "$PTR" && git log -1 --format='%h %s'   # PTR 앞 7자리와 같아야 함
 
 # 4) .env에 경로 넣기 (.env.example에서 복사한 빈 줄이 있으면 그 줄을 바꾼다)
 cd /opt/lawnambul/app/deploy
@@ -381,31 +383,43 @@ curl -s https://naelawnambul.today/api/v1/cases | head -c 200; echo   # total이
 
 ### 시드가 바뀌었을 때 (비공개 저장소에 머지된 뒤)
 
-비공개 저장소에 머지해도 운영에 **자동으로 반영되지 않는다.** 자동 배포(`cd-agent.sh`)는 공개 저장소 `main`만 보고, 서버의 시드 사본은 받은 시점에 멈춰 있다.
+비공개 저장소에 머지해도 운영에 **자동으로 반영되지 않는다.** 운영 시드는 **공개 저장소 `main`이 서브모듈로 고정한 커밋**을 따른다. 그래서 순서는 이렇다.
+
+1. 비공개 저장소에 머지 (머지 전에 로컬 `bootRun`으로 확인)
+2. 공개 저장소에서 서브모듈 포인터를 올리는 PR → `develop` → `main` 머지
+   (`cd backend/private-seed && git checkout develop && git pull && cd ../.. && git add backend/private-seed`)
+3. `main` 자동 배포가 끝난 뒤 서버에서 시드 사본을 그 커밋으로 맞추고 backend를 다시 만든다
 
 ```bash
-cd /opt/lawnambul/private-seed && git pull && git log -1 --format='%h %s'
+cd /opt/lawnambul/private-seed && git fetch -q origin
+PTR=$(git -C /opt/lawnambul/app ls-tree HEAD backend/private-seed | awk '{print $3}')
+git log -1 --format='지금 %h %s'
+git checkout -q --detach "$PTR" && git log -1 --format='바꾼 뒤 %h %s'
 # 이어서 위 5)를 그대로 실행한다 (백업 이름은 before-seed-update 등으로)
-# (재생성하지 않으면 다음 main 자동 배포 때 반영된다)
 ```
 
-- **머지 전에 로컬 `bootRun`으로 먼저 확인한다.** 시드 SQL이 실패하면 백엔드가 뜨지 않는데, 자동 되돌림은 이미지만 바꾸고 시드 폴더는 그대로라 **되돌린 이미지도 같은 이유로 실패한다.** 그때는 시드 사본을 직전 커밋으로 돌리고(`git checkout <직전 커밋>`) backend를 다시 만든다.
+- 서버에서 `git pull`(비공개 저장소 develop 최신)을 쓰지 않는다. `main`이 검증하지 않은 시드가 운영에 들어간다.
+- **시드 SQL이 실패하면 백엔드가 뜨지 않는다.** 자동 되돌림은 이미지만 바꾸고 시드 폴더는 그대로라 **되돌린 이미지도 같은 이유로 실패한다.** 그때는 시드 사본을 바꾸기 전 커밋(위 "지금" 줄)으로 돌리고(`git checkout -q --detach <직전 커밋>`) backend를 다시 만든다. 브랜치가 아니라 커밋에 고정하는 방식이라 그대로 두면 된다 — 원인을 고친 포인터가 `main`에 올라오면 위 명령을 다시 실행한다.
 - 시드는 반복 마이그레이션(`R__`)이고 "같은 제목의 사건이 있으면 건너뛰기" 구조다. **새 사건 추가는 바로 반영되지만, 이미 들어간 사건의 내용 수정은 `UPDATE` 문을 함께 넣어야 반영된다**(비공개 저장소 README).
 - 실제 사건 폴더를 붙였다가 빼고 실행해도 기동된다(`ignore-migration-patterns`).
 
 ### 파이프라인 적재 파일(`loads/`) 넣기 (BE-31)
 
-파이프라인이 만든 `loads/<시각>-<name>.sql`은 Flyway가 읽지 않는 **한 번 실행하는 파일**이다. 사건은 `DRAFT`, AI 판결은 비공개로 들어가 사용자에게 보이지 않고, 관리자 후검수(A-11 ~ A-13)로 공개한다. 같은 파일을 두 번 실행해도 중복되지 않는다.
+파이프라인이 만든 `loads/<시각>-<name>.sql`은 Flyway가 읽지 않는 **한 번 실행하는 파일**이다. 사건은 `DRAFT`, AI 판결은 비공개로 들어가 사용자에게 보이지 않고, 관리자 후검수(A-11 ~ A-13)로 공개한다.
 
 ```bash
-# 서버 사본은 seed/만 받아 두었으므로 loads/를 추가로 받는다 (처음 한 번)
-cd /opt/lawnambul/private-seed && git sparse-checkout add loads && git pull
+# loads/는 서버 작업 폴더에 받지 않고(seed/ 고정 커밋을 건드리지 않음), 비공개 저장소 develop에서 파일 하나만 꺼내 실행한다
+cd /opt/lawnambul/private-seed && git fetch -q origin develop
+git ls-tree --name-only origin/develop loads/                 # 실행할 파일 이름 확인
 # 백업 후 실행 (컨테이너 안 psql로, 접속 정보는 컨테이너 환경변수를 쓴다)
 cd /opt/lawnambul/app/deploy
 ./backup-db.sh before-load
-docker compose -f docker-compose.prod.yml exec -T postgres \
-  sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < /opt/lawnambul/private-seed/loads/<파일>.sql
+git -C /opt/lawnambul/private-seed show origin/develop:loads/<파일>.sql \
+  | docker compose -f docker-compose.prod.yml exec -T postgres \
+      sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
 ```
+
+- **파일 전체가 한 트랜잭션이다.** 파이프라인이 파일을 `BEGIN;` … `COMMIT;`으로 감싸 만들고(`tools/ai-judgment/pipeline.py`), `ON_ERROR_STOP=1`이라 중간에 실패하면 psql이 멈추며 전부 취소된다. 그래서 `psql -1`을 따로 주지 않는다(파일 안 `BEGIN`과 겹친다). 실패하면 원인을 고친 뒤 같은 파일을 다시 실행하면 된다 — 같은 제목의 사건 · 같은 실행(`runKey`)의 AI 판결은 건너뛰어 중복되지 않는다.
 
 - `loads/` 파일에는 원본 판결문(사건번호 · 원문)이 들어 있다. 서버 밖으로 옮기지 않고, 공개 저장소 · PR · Jira에 내용을 쓰지 않는다.
 - 후검수 뒤의 공개 · 승인 상태는 **DB에만** 있다(파일에 없음). 그래서 아래 백업이 그 상태의 원본이다.
@@ -420,7 +434,8 @@ docker compose -f docker-compose.prod.yml exec -T postgres \
 
 ```bash
 # 매일 03:17 백업 (crontab -e 로 한 줄 추가). 결과는 ~/backups/backup.log
-17 3 * * * mkdir -p $HOME/backups && /opt/lawnambul/app/deploy/backup-db.sh >> $HOME/backups/backup.log 2>&1
+# umask 077: 백업 폴더 · 로그를 처음부터 나만 읽게 만든다(덤프 파일은 backup-db.sh가 umask 077로 만든다)
+17 3 * * * umask 077; mkdir -p $HOME/backups && /opt/lawnambul/app/deploy/backup-db.sh >> $HOME/backups/backup.log 2>&1
 ```
 
 - `backup-db.sh`는 임시 파일에 먼저 덤프하고, `pg_dump`가 성공하고 `pg_restore --list`로 형식을 읽을 수 있을 때만 최종 이름으로 옮긴다. 실패하면 임시 파일을 지우고 실패 코드로 끝나서, 반쯤 만들어진 파일이 백업처럼 남지 않는다. 확인: `tail ~/backups/backup.log`
