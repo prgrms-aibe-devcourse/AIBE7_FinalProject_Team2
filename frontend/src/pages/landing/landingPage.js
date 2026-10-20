@@ -185,7 +185,7 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
 
   const cheeks = CHEEKS.map(({ who, look, right, top, height }) => {
     const image = element('img', `desk-cheek cheek-${who}`);
-    image.src = `${CUTS}${who}/base/${who}_cut-cheek_${look}.png`;
+    image.src = `${CUTS}${who}/base/cheek/${who}_cut-cheek_${look}.png`;
     image.alt = '';
     image.setAttribute('aria-hidden', 'true');
     Object.assign(image.style, { right: `${right}px`, top: `${top}px`, height: `${height}px` });

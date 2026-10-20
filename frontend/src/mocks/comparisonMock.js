@@ -28,14 +28,19 @@ function directionFromBucket(weight, bucket) {
   return 'SAME';
 }
 
-export function buildPreToFinal(myJudgment, preJudgment, rangeOptions) {
+// 저장된 사전 판단 구간(없으면 대체 구간)과 그 무게 구간을 찾는다. preToFinal · preToCourt가 같은 구간으로 비교한다.
+function findPreBucket(preJudgment, rangeOptions) {
   const found = rangeOptions.find((item) => item.rangeOptionId === preJudgment.rangeOptionId);
   if (!found) {
     // 코드리뷰 지적: 저장된 구간을 못 찾으면 사용자가 고르지 않은 구간이 "처음 판단"으로 조용히 표시되는 문제가 있었다.
     console.warn(`사전 판단 구간(rangeOptionId: ${preJudgment.rangeOptionId})을 찾지 못해 대체 구간으로 표시합니다.`);
   }
   const option = found ?? rangeOptions[3];
-  const bucket = rangeBuckets[option.rangeOptionId] ?? rangeBuckets[4];
+  return { option, bucket: rangeBuckets[option.rangeOptionId] ?? rangeBuckets[4] };
+}
+
+export function buildPreToFinal(myJudgment, preJudgment, rangeOptions) {
+  const { option, bucket } = findPreBucket(preJudgment, rangeOptions);
   const direction = directionFromBucket(finalWeight(myJudgment), bucket);
   const finalJudgmentText = [formatPenalty(myJudgment), formatDispositions(myJudgment)].filter(Boolean).join(' · ');
   return {
@@ -44,6 +49,12 @@ export function buildPreToFinal(myJudgment, preJudgment, rangeOptions) {
     direction,
     summaryText: directionTexts[direction],
   };
+}
+
+// preToCourt.direction: preToFinal.direction과 같은 계산을 재판부 판결에 적용한다. 재판부가 더 무거우면 HEAVIER(API 14 명세).
+export function buildPreToCourt(courtJudgment, preJudgment, rangeOptions) {
+  const { bucket } = findPreBucket(preJudgment, rangeOptions);
+  return { direction: directionFromBucket(finalWeight(courtJudgment), bucket) };
 }
 
 // REQ-109 MVP 규칙: 사용자가 고른 요소마다 붙인 요약어를 방향별로 모아 문장을 만든다(`factor.summary_tag`, BE-26 확정).
