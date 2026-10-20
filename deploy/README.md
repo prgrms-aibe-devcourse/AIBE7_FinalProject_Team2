@@ -18,6 +18,7 @@
 | `.env.example` | 환경변수 예시. `.env`로 복사해 쓴다 (`.env`는 커밋하지 않음) |
 | `smoke-test.sh` | `/` · 화면 주소 · `/api` · 캐시 정책 · Let's Encrypt 확인 경로 확인. CI와 서버에서 같은 스크립트를 쓴다 |
 | `deploy.sh` | 서버 배포 한 번: sha 이미지로 교체 → 준비 대기 → 스모크 테스트 → 실패하면 직전 이미지로 되돌림 (BE-60) |
+| `backup-db.sh` | 운영 DB 백업 한 번: 임시 파일로 `pg_dump` → `pg_restore --list` 확인 → 최종 이름으로 옮김 → 7일 지난 파일 정리 (COMMON-17, 아래 "운영 DB 백업") |
 | `cd-agent.sh` | 자동 배포 확인: GHCR의 `main` 이미지가 바뀌었으면 `deploy.sh` 실행 (BE-60) |
 | `cd/lawnambul-cd.service` · `.timer` | `cd-agent.sh`를 2분마다 부르는 systemd 설정 (서버에 한 번 설치) |
 | `../frontend/Dockerfile` | 웹 이미지 (Vite 빌드 → Nginx). 커밋 해시를 `/version.json`에 넣는다 |
@@ -319,19 +320,138 @@ docker compose -f docker-compose.prod.yml exec redis redis-cli -n 0 --scan | hea
 - **메모리가 찼을 때**(쓰기가 `OOM command not allowed`로 실패): 먼저 TTL 없는 캐시 키를 찾아 원인 코드를 고치고, 급하면 DB 0만 비운다.
 - **데이터 위치**: 볼륨 `redisdata`. `docker compose down -v`는 이 볼륨도 지워 **모든 사용자가 로그아웃**되니 운영에서 쓰지 않는다.
 
-## 운영 데이터 (docs/tech-stack.md 2장)
+## 운영 데이터 (docs/tech-stack.md 2장 · COMMON-17)
 
 - 기본 실행(`docker-compose.prod.yml`만)은 **스키마만** 넣는다(`FLYWAY_LOCATIONS=classpath:db/migration`, `.env`로 바꿀 수 없게 고정). 처음 띄우면 사건 목록이 비어 있다("사건 0건").
-- **개발용 가상 사건 시드(`classpath:db/seed`)는 운영(EC2)에 넣지 않는다.**
-- 실제 사건은 비공개 저장소(`backend/private-seed` 서브모듈의 원본)의 `seed/` 폴더를 서버에 따로 받아 두고, 컨테이너에 **읽기 전용**으로 붙여 넣는다. 공개 저장소 · 이미지 · CI에는 들어가지 않는다(BE-17).
+- **개발용 가상 사건 시드(`classpath:db/seed`)는 운영(EC2)에 넣지 않는다.** 파일은 jar 안에 있지만(공개 저장소 파일) 운영 `FLYWAY_LOCATIONS`에 없어서 읽히지 않는다.
+- 실제 사건은 비공개 저장소(`backend/private-seed` 서브모듈의 원본)의 `seed/` 폴더를 서버에 따로 받아 두고, 컨테이너에 **읽기 전용**으로 붙여 넣는다. 공개 저장소 · 이미지 · jar · CI에는 들어가지 않는다(BE-17, 10/20 운영 이미지로 확인 — `docs/decisions/COMMON-17.md`).
+- `.env`에 `REAL_SEED_DIR`가 있으면 `deploy.sh`(자동 배포)가 `docker-compose.real-seed.yml`을 자동으로 함께 쓴다. 손으로 Compose를 실행할 때도 두 파일을 같이 준다.
+
+### 처음 한 번: 서버에 비공개 시드 받기
+
+비공개 저장소 하나만 **읽을 수 있는** Deploy key를 쓴다(개인 토큰 · 쓰기 권한을 서버에 두지 않는다). `seed/`만 받고 원본 판결문(`source/`) 등은 받지 않는다.
 
 ```bash
-# 서버에서: 비공개 저장소를 읽기 전용 권한으로 받아 둔다 (권한은 저장소 관리자에게 받는다)
-# .env에 REAL_SEED_DIR=/opt/lawnambul/private-seed/seed
-docker compose -f docker-compose.prod.yml -f docker-compose.real-seed.yml up -d --no-build
+# 1) 서버에서 키 만들기 → 공개키(.pub) 한 줄을 비공개 저장소 관리자에게 전달
+ssh-keygen -t ed25519 -f ~/.ssh/private_seed_ro -N "" -C "lawnambul-ec2-private-seed-readonly"
+cat >> ~/.ssh/config <<'EOF'
+
+Host github-private-seed
+  HostName github.com
+  User git
+  IdentityFile ~/.ssh/private_seed_ro
+  IdentitiesOnly yes
+EOF
+chmod 600 ~/.ssh/config
+cat ~/.ssh/private_seed_ro.pub
+#    관리자: 비공개 저장소 Settings → Deploy keys → Add deploy key ("Allow write access" 체크하지 않음)
+#    개인키(~/.ssh/private_seed_ro)는 서버 밖으로 꺼내지 않는다
+
+# 2) 연결 확인 → "Hi <소유자>/<비공개 저장소>! You've successfully authenticated" 가 나오면 성공
+ssh -T github-private-seed
+
+# 3) seed/만 받고, 공개 저장소(운영에 배포된 main)가 서브모듈로 고정한 커밋으로 맞춘다
+#    비공개 저장소 develop 최신이 아니라 "main이 검증한 커밋"을 쓴다 (detached HEAD가 정상)
+git clone --filter=blob:none --sparse --branch develop \
+  github-private-seed:<소유자>/<비공개 저장소>.git /opt/lawnambul/private-seed
+cd /opt/lawnambul/private-seed && git sparse-checkout set seed
+PTR=$(git -C /opt/lawnambul/app ls-tree HEAD backend/private-seed | awk '{print $3}')
+git checkout -q --detach "$PTR" && git log -1 --format='%h %s'   # PTR 앞 7자리와 같아야 함
+
+# 4) .env에 경로 넣기 (.env.example에서 복사한 빈 줄이 있으면 그 줄을 바꾼다)
+cd /opt/lawnambul/app/deploy
+sed -i 's#^REAL_SEED_DIR=$#REAL_SEED_DIR=/opt/lawnambul/private-seed/seed#' .env
+grep -n '^REAL_SEED_DIR=' .env                       # 정확히 한 줄
+docker compose -f docker-compose.prod.yml -f docker-compose.real-seed.yml config | grep -E 'FLYWAY_LOCATIONS|/real-seed'
+
+# 5) 백업 → 타이머 정지 → backend만 다시 만들기 → Flyway 적재 확인 → 타이머 재개
+./backup-db.sh before-real-seed                      # 실패하면 여기서 멈춘다 (아래 "운영 DB 백업")
+# 괄호 안(서브셸)을 어떻게 빠져나가든(정상 종료 · Ctrl+C · 명령 실패 · SSH 끊김) 타이머를 다시 켠다.
+# 손으로 start를 빼먹으면 이후 main 머지가 자동 배포되지 않는다
+(
+  trap 'sudo systemctl start lawnambul-cd.timer; systemctl is-active lawnambul-cd.timer' EXIT
+  trap 'exit 1' HUP INT TERM   # 신호로 끝날 때도 EXIT를 거치게 한다 (EXIT만으로는 SSH 끊김(HUP)에 실행되지 않는다)
+  set -e
+  sudo systemctl stop lawnambul-cd.timer
+  docker compose -f docker-compose.prod.yml -f docker-compose.real-seed.yml up -d --no-build --no-deps backend
+  docker compose -f docker-compose.prod.yml -f docker-compose.real-seed.yml logs -f backend 2>&1 \
+    | grep -E 'Migrating|Successfully applied|ERROR|Started '   # "Started …" 후 Ctrl+C
+)
+systemctl list-timers lawnambul-cd.timer --no-pager            # NEXT가 보여야 함
+curl -s https://naelawnambul.today/api/v1/cases | head -c 200; echo   # total이 0이 아니면 성공
 ```
 
-- 시드는 반복 마이그레이션(`R__`)이라 같은 제목의 사건이 있으면 건너뛴다. 실제 사건 폴더를 붙였다가 빼고 실행해도 기동된다(`ignore-migration-patterns`).
+### 시드가 바뀌었을 때 (비공개 저장소에 머지된 뒤)
+
+비공개 저장소에 머지해도 운영에 **자동으로 반영되지 않는다.** 운영 시드는 **공개 저장소 `main`이 서브모듈로 고정한 커밋**을 따른다. 그래서 순서는 이렇다.
+
+1. 비공개 저장소에 머지 (머지 전에 로컬 `bootRun`으로 확인)
+2. 공개 저장소에서 서브모듈 포인터를 올리는 PR → `develop` → `main` 머지
+   (`cd backend/private-seed && git checkout develop && git pull && cd ../.. && git add backend/private-seed`)
+3. `main` 자동 배포가 끝난 뒤 서버에서 시드 사본을 그 커밋으로 맞추고 backend를 다시 만든다
+
+```bash
+cd /opt/lawnambul/private-seed && git fetch -q origin
+PTR=$(git -C /opt/lawnambul/app ls-tree HEAD backend/private-seed | awk '{print $3}')
+git log -1 --format='지금 %h %s'
+git checkout -q --detach "$PTR" && git log -1 --format='바꾼 뒤 %h %s'
+# 이어서 위 5)를 그대로 실행한다 (백업 이름은 before-seed-update 등으로)
+```
+
+- 서버에서 `git pull`(비공개 저장소 develop 최신)을 쓰지 않는다. `main`이 검증하지 않은 시드가 운영에 들어간다.
+- **시드 SQL이 실패하면 백엔드가 뜨지 않는다.** 자동 되돌림은 이미지만 바꾸고 시드 폴더는 그대로라 **되돌린 이미지도 같은 이유로 실패한다.** 그때는 시드 사본을 바꾸기 전 커밋(위 "지금" 줄)으로 돌리고(`git checkout -q --detach <직전 커밋>`) backend를 다시 만든다. 브랜치가 아니라 커밋에 고정하는 방식이라 그대로 두면 된다 — 원인을 고친 포인터가 `main`에 올라오면 위 명령을 다시 실행한다.
+- 시드는 반복 마이그레이션(`R__`)이고 "같은 제목의 사건이 있으면 건너뛰기" 구조다. **새 사건 추가는 바로 반영되지만, 이미 들어간 사건의 내용 수정은 `UPDATE` 문을 함께 넣어야 반영된다**(비공개 저장소 README).
+- 실제 사건 폴더를 붙였다가 빼고 실행해도 기동된다(`ignore-migration-patterns`).
+
+### 파이프라인 적재 파일(`loads/`) 넣기 (BE-31)
+
+파이프라인이 만든 `loads/<시각>-<name>.sql`은 Flyway가 읽지 않는 **한 번 실행하는 파일**이다. 사건은 `DRAFT`, AI 판결은 비공개로 들어가 사용자에게 보이지 않고, 관리자 후검수(A-11 ~ A-13)로 공개한다.
+
+```bash
+# loads/는 서버 작업 폴더에 받지 않고(seed/ 고정 커밋을 건드리지 않음), 비공개 저장소 develop에서 파일 하나만 꺼내 실행한다
+cd /opt/lawnambul/private-seed && git fetch -q origin develop
+git ls-tree --name-only origin/develop loads/                 # 실행할 파일 이름 확인
+# 백업 후 실행 (컨테이너 안 psql로, 접속 정보는 컨테이너 환경변수를 쓴다)
+cd /opt/lawnambul/app/deploy
+./backup-db.sh before-load
+git -C /opt/lawnambul/private-seed show origin/develop:loads/<파일>.sql \
+  | docker compose -f docker-compose.prod.yml exec -T postgres \
+      sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+```
+
+- **파일 전체가 한 트랜잭션이다.** 파이프라인이 파일을 `BEGIN;` … `COMMIT;`으로 감싸 만들고(`tools/ai-judgment/pipeline.py`), `ON_ERROR_STOP=1`이라 중간에 실패하면 psql이 멈추며 전부 취소된다. 그래서 `psql -1`을 따로 주지 않는다(파일 안 `BEGIN`과 겹친다). 실패하면 원인을 고친 뒤 같은 파일을 다시 실행하면 된다 — 같은 제목의 사건 · 같은 실행(`runKey`)의 AI 판결은 건너뛰어 중복되지 않는다.
+
+- `loads/` 파일에는 원본 판결문(사건번호 · 원문)이 들어 있다. 서버 밖으로 옮기지 않고, 공개 저장소 · PR · Jira에 내용을 쓰지 않는다.
+- 후검수 뒤의 공개 · 승인 상태는 **DB에만** 있다(파일에 없음). 그래서 아래 백업이 그 상태의 원본이다.
+
+### 운영 DB 백업
+
+| 언제 | 방법 | 보관 |
+|---|---|---|
+| 매일 1번 | 서버 cron으로 `deploy/backup-db.sh` → `~/backups/lawnambul-YYYY-MM-DD.dump` | 7일 |
+| 시드 갱신 · `loads/` 실행 · 위험한 마이그레이션 직전 | `./backup-db.sh <작업 이름>`을 손으로 한 번 | 7일(같은 정리 규칙) |
+| 7.1.2 RDS 전환 후(10/28) | RDS 자동 백업 | 7일 |
+
+```bash
+# 매일 03:17 백업 (crontab -e 로 한 줄 추가). 결과는 ~/backups/backup.log
+# umask 077: 백업 폴더 · 로그를 처음부터 나만 읽게 만든다(덤프 파일은 backup-db.sh가 umask 077로 만든다)
+17 3 * * * umask 077; mkdir -p $HOME/backups && /opt/lawnambul/app/deploy/backup-db.sh >> $HOME/backups/backup.log 2>&1
+```
+
+- `backup-db.sh`는 임시 파일에 먼저 덤프하고, `pg_dump`가 성공하고 `pg_restore --list`로 형식을 읽을 수 있을 때만 최종 이름으로 옮긴다. 실패하면 임시 파일을 지우고 실패 코드로 끝나서, 반쯤 만들어진 파일이 백업처럼 남지 않는다. 확인: `tail ~/backups/backup.log`
+
+- 백업 파일에는 관리자 비밀번호 해시 등 운영 데이터가 있으므로 권한 600, 서버 밖으로 옮기지 않는다.
+- **한계**: 같은 서버 디스크에 둔다. 서버(EBS)가 통째로 사라지면 백업도 같이 사라진다. 서버 밖 보관(S3 등)은 IAM 권한이 없어 지금은 하지 않고, RDS 전환으로 해결한다.
+- 되살리기: 타이머 정지 · 백엔드 중지 후 **한 트랜잭션으로** 복구한다. 중간에 실패하면 전부 취소돼 반쯤 복구된 상태가 남지 않는다.
+
+  ```bash
+  sudo systemctl stop lawnambul-cd.timer
+  docker compose -f docker-compose.prod.yml stop backend
+  docker compose -f docker-compose.prod.yml exec -T postgres \
+    sh -c 'pg_restore --clean --if-exists --single-transaction --exit-on-error -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < ~/backups/<백업>.dump
+  docker compose -f docker-compose.prod.yml -f docker-compose.real-seed.yml up -d --no-build --no-deps backend
+  sudo systemctl start lawnambul-cd.timer
+  ```
 
 ## 다음 작업에서 바꿀 곳
 
