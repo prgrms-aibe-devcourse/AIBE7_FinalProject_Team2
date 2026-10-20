@@ -1392,7 +1392,7 @@ SCENE — a long-running money dispute. Nambul (the borrower) sits slumped on a 
 
 ### 10-5. 소품 시트 (1차 4묶음, 제작 목록 G2)
 
-`props_sheet_catalog.png` · 첨부 `standing/naero_standing.png` · `cuts/law-scale/base/law-scale_cut_deliver-neutral.png` · `standing/law-gavel_standing.png`
+`props_sheet_catalog.png` · 첨부 `standing/naero_standing.png` · `cuts/law-scale/base/scene/law-scale_cut_deliver-neutral.png` · `standing/law-gavel_standing.png`
 
 ```
 ATTACHMENTS — naero_standing.png: the art style to match and the size reference. law-scale_cut_deliver-neutral.png: the look of the sealed verdict envelope. law-gavel_standing.png: the look of the gavel, to be drawn as a small hand-held prop (not a head).
