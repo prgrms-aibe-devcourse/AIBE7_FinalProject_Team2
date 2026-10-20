@@ -45,6 +45,11 @@ public class CloudflareCaseImageGenClient implements CaseImageGenClient {
 	}
 
 	@Override
+	public String model() {
+		return properties.model();
+	}
+
+	@Override
 	public byte[] generateImage(String prompt) {
 		if (!enabled()) {
 			throw new ImageGenException("사건 사진 생성이 꺼져 있습니다 (Cloudflare 계정 ID · API 토큰 없음)");

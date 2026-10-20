@@ -38,6 +38,7 @@
 | v0.34 | 2026-10-20 | API 13에 판결 성향 기여 저장 추가 (BE-64, WBS 7.6.7) — 처음 `COMPLETED`로 바꿀 때 첫 회차 체험의 `experience_personality`를 같은 트랜잭션에서 저장, 이미 완료면 유지(성향 산식 3-4, PR #109 리뷰에서 "7.6.7 PR에서 구현과 함께 고친다"로 미룬 항목). 7장 성향 갱신 메모를 "제안"에서 확정으로 |
 | v0.35 | 2026-10-20 | BE-77 — API 14에 `preToCourt.direction` 추가. 재판부 기준 비교 방향·구간 의미와 COMPLETED 이후 조회 제한 명시 |
 | v0.36 | 2026-10-20 | BE-77 PR #198 리뷰 및 팀 기획 재확인 — API 3 조기 조회 초안을 철회하고 API 2·3 공용 상태 응답 유지. 사전 판단은 완료 후 독자 의견에서 처음 공개하며 1막부터 다시 보기는 삭제(프론트 후속). API 14 서버 비교 기능 유지 |
+| v0.37 | 2026-10-20 | 사건 사진 생성 API 신설 (BE-91, COMMON-41) — A-13-1(대표사진) · A-13-2(발단 사진 생성) · A-13-3(발단 사진 목록) 추가. 번호는 A-16 ~ A-41이 8-4(운영 메뉴 초안)에 이미 예약돼 있어 A-13-N으로 둠. 에러 코드 `IMAGE_GENERATION_FAILED` 추가 |
 
 ---
 
@@ -124,6 +125,7 @@ json
 | 404 | `PERSONALITY_TYPE_NOT_FOUND` | (확장, 성향 API) 공유 주소의 유형이 없음 | 공유 결과 없음 안내 · 테스트 권유 |
 | 409 | `DUPLICATE_TITLE` | (확장, 관리자 API) 사건 제목이 다른 사건과 겹침 | 입력 안내 |
 | 409 | `PUBLISH_NOT_READY` | (확장, 관리자 API) 공개 조건 미충족. `details`에 조건 코드 | 남은 조건 안내 (A-13) |
+| 502 | `IMAGE_GENERATION_FAILED` | (확장, 관리자 API, BE-91) Cloudflare 생성 · S3 업로드 실패, 또는 설정(계정 ID · API 토큰 · 버킷) 없음 | 다시 시도 안내 (A-13-1 · A-13-2) |
 | 429 | `TOO_MANY_REQUESTS` | (확장, BE-63) 같은 IP에서 `/api` 요청이 너무 많음(평균 초당 20번 · 순간 40번 초과). **백엔드가 아니라 운영 Nginx가 돌려준다** — 형식은 1-4와 같고 `Retry-After: 1` 헤더가 붙는다. 로컬 개발(Vite)에는 Nginx가 없어 나오지 않는다 | 일반 오류 안내. 자동으로 다시 보내지 않는다 |
 | 500 | `INTERNAL_ERROR` | 서버 오류 | 일반 오류 안내 |
 - "이미 제출함"과 "순서가 맞지 않음"을 따로 나누지 않고 `INVALID_STATE` 하나로 둔다. 화면이 할 일은 둘 다 "`currentStatus`의 화면으로 이동"으로 같기 때문이다.
@@ -1186,6 +1188,75 @@ API 1 · 2 · 16은 상태와 관계없이 부를 수 있다. 표에 없는 조�
 | 404 `CASE_NOT_FOUND` | 사건이 없음 |
 | 409 `INVALID_STATE` | 이미 `PUBLISHED`(`CASE_PUBLISHED`) |
 | 409 `PUBLISH_NOT_READY` | 공개 조건 미충족. `details`에 `[{ "field": "case", "reason": "NO_PUBLISHED_AI" }, …]` |
+
+### A-13-1. 사건 대표사진 생성 — `POST /admin/cases/{caseId}/photos/representative`
+
+> 번호: A-16 ~ A-41은 8-4(운영 메뉴 API, 초안)가 이미 예약해 둬서, A-13에 소속된 추가 API라는 뜻으로 A-13-N을 쓴다.
+
+Cloudflare Workers AI로 사진을 생성해 S3에 올리고, 신문 지면(S-02 등)에 쓰는 `legal_case.thumbnail_url`을 그 URL로 바꾼다(COMMON-41 — "사건 사진은 AI가 직접 생성"). 새 테이블을 두지 않고 A-11이 이미 자유롭게 바꿀 수 있던 칸을 그대로 쓴다(결정: `docs/decisions/BE-91.md`). 응답은 A-6과 같은 형식(`AdminCaseDetailResponse`).
+
+```json
+{ "caseSummary": "a dispute over an unpaid loan between two neighbors" }
+```
+
+| 필드 | 규칙 |
+| --- | --- |
+| `caseSummary` | 필수, 1 ~ 1000자. 비식별화한 사건 요약(영문) — `CaseImagePromptBuilder`가 그대로 프롬프트에 넣는다 |
+
+- 등장인물은 얼굴 없는 회색 엑스트라로 그리고, 내로 · 남불은 넣지 않는다(프롬프트에 고정 문구로 강제).
+- Cloudflare 호출 · S3 업로드를 동기로 기다린다(수십 초 걸릴 수 있다. 화면은 로딩 상태를 보여 준다).
+- 공개한 사건은 바꿀 수 없다(A-11과 같은 규칙). 감사 로그 `CASE_PHOTO_GENERATE`(`detail.type = "REPRESENTATIVE"`)를 남긴다.
+
+| 거절 | 조건 |
+| --- | --- |
+| 400 `VALIDATION_ERROR` | `caseSummary` 없음 · 1000자 초과 |
+| 404 `CASE_NOT_FOUND` | 사건이 없음 |
+| 409 `INVALID_STATE` | 이미 `PUBLISHED`(`CASE_PUBLISHED`) |
+| 502 `IMAGE_GENERATION_FAILED` | Cloudflare 생성 실패, S3 업로드 실패, 또는 설정 없음(계정 ID · API 토큰 · 버킷) |
+
+### A-13-2. 사건 발단 사진 생성 — `POST /admin/cases/{caseId}/photos/incident`
+
+사건 안에서 쓰는 발단 사진을 한 장 생성해 `case_incident_photo`에 순서대로 쌓는다(여러 번 불러 여러 장 추가). 201과 함께 추가된 사진을 돌려준다.
+
+```json
+{ "incidentDescription": "the moment the argument turned violent", "caption": "다툼이 격해진 순간" }
+```
+
+| 필드 | 규칙 |
+| --- | --- |
+| `incidentDescription` | 필수, 1 ~ 1000자. 비식별화한 발단 상황(영문), 프롬프트 재료 |
+| `caption` | 선택, 200자 이하. 화면에 보일 설명 |
+
+응답 201:
+
+```json
+{ "id": 12, "imageUrl": "https://…/case-photos/case-7/incident-0-….jpg", "caption": "다툼이 격해진 순간", "displayOrder": 0, "createdAt": "2026-10-20T09:00:00Z" }
+```
+
+- `displayOrder`는 0부터 자동으로 매겨진다(사건마다 이미 있는 발단 사진 수).
+- S3 객체 키(`s3_key`)와 생성에 쓴 프롬프트(`prompt`)는 내부 기록용이라 응답에 내려주지 않는다.
+- 공개한 사건은 추가할 수 없다. 감사 로그 `CASE_PHOTO_GENERATE`(`detail.type = "INCIDENT"`, `detail.photoId`)를 남긴다.
+
+| 거절 | 조건 |
+| --- | --- |
+| 400 `VALIDATION_ERROR` | `incidentDescription` 없음 · 1000자 초과, `caption` 200자 초과 |
+| 404 `CASE_NOT_FOUND` | 사건이 없음 |
+| 409 `INVALID_STATE` | 이미 `PUBLISHED`(`CASE_PUBLISHED`) |
+| 502 `IMAGE_GENERATION_FAILED` | A-13-1과 같음 |
+
+### A-13-3. 사건 발단 사진 목록 — `GET /admin/cases/{caseId}/photos/incident`
+
+사건에 쌓인 발단 사진을 순서대로 돌려준다(A-13-2 응답과 같은 형식의 배열). 공개한 사건도 조회만은 된다.
+
+```json
+[
+  { "id": 12, "imageUrl": "…", "caption": "다툼이 격해진 순간", "displayOrder": 0, "createdAt": "…" }
+]
+```
+
+| 거절 | 조건 |
+| --- | --- |
+| 404 `CASE_NOT_FOUND` | 사건이 없음 |
 
 ### A-14. 사건 등록 시작 — `POST /admin/case-imports` (초안)
 

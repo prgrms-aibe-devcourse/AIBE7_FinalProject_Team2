@@ -8,7 +8,7 @@ import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
 @Configuration
-@EnableConfigurationProperties(ImageGenProperties.class)
+@EnableConfigurationProperties({ImageGenProperties.class, CaseStorageProperties.class})
 public class ImageGenConfig {
 
 	/** Cloudflare Workers AI 전용 클라이언트. 연결 · 응답 대기 시간은 cloudflare.imagegen.timeout */
