@@ -9,6 +9,7 @@
 | v0.3 | 2026-10-13 | PR #109 CodeRabbit 리뷰 반영 — 체험 성향은 축 점수(소수) 대신 **축별 감경 · 가중 개수**(`axis_counts`)를 고정 저장하고 점수 · 판정은 개수로 계산, 이미 `COMPLETED`인 요청은 기존 기록 유지(API 13 본문은 7.6.7에서 갱신), 선택지 CHECK에 `letter IS NOT NULL` · `score NOT NULL` 추가 |
 | v0.4 | 2026-10-13 | 마이그레이션 번호 표기 정리 — V14는 관리자 감사 로그(BE-68)가 써서, 성향 DB(7.6.3)는 머지 직전 develop의 다음 번호를 쓴다(WBS R17) |
 | v0.5 | 2026-10-14 | 구현 반영 (BE-72, WBS 7.6.4) — 2-5 제출 검증을 API 계약(P-2)에 맞춤: 답은 선택지 ID가 아니라 5칸 `value`(0 ~ 4)로 받아 `display_order = value + 1`인 선택지로 채점하고, 검증 통과 뒤에만 익명 ID를 발급한다. 채점 구현은 `PersonalityScoring`(7장 의사코드 그대로) |
+| v0.6 | 2026-10-20 | 3-4 저장 구현 반영 (BE-64, WBS 7.6.7) — API 13이 처음 `COMPLETED`로 바꿀 때 첫 회차 체험의 `axis_counts`를 같은 트랜잭션에서 저장. API 명세 v0.33 |
 
 > 요구사항 [18장](requirements-specification.md) FR-8-1 ~ FR-8-8, 15장 "성향 테스트 (v5.8)" 미정 항목 중 **산식 · 매핑 · 종합 · 재응시 · 테스트 없이 체험만 한 사용자**를 이 문서에서 정한다.
 > 테이블은 [ERD 8장](erd.md) 제안을 따른다. 판단 요소가 어느 축에 속하는지는 `factor.value_axis`(BE-47)가 정하고, 이 문서는 **고른 방향이 어느 글자로 가는지**만 정한다(ERD 8장 "산식 문서로 정한다").
@@ -135,7 +136,7 @@
 체험이 **처음** `COMPLETED`가 될 때(API 13 비교 공개, `AI_REVEALED` → `COMPLETED`) 서버가 상태 변경과 **같은 트랜잭션**에서 개수를 세어 `experience_personality`에 저장한다(7.6.7).
 
 - **이미 `COMPLETED`인 체험에 API 13이 다시 오면** 상태와 함께 기존 기록을 그대로 둔다(다시 세지 않는다). `experience_id` 유니크라 행이 둘 생기지 않는다.
-- API 13 본문(api-specification 3장)에는 아직 이 저장이 없다. 구현 전에 명세에 "저장한다"고 쓰면 코드와 어긋나므로, **7.6.7 PR에서 구현과 함께 API 13 본문을 고친다**(PR #109 리뷰).
+- **구현 (v0.6, BE-64)**: `RevealService.revealComparison`이 상태 전이 결과(`TransitionResult.changed`)가 참일 때만 `ExperiencePersonalityRecorder`를 부른다. 첫 회차(`attempt_no = 1`)만 저장하고(3-1), 기록기는 `MANDATORY` 트랜잭션이라 단독으로 부를 수 없다. API 13 본문도 함께 고쳤다(API 명세 v0.33 — PR #109 리뷰에서 "7.6.7 PR에서 구현과 함께 고친다"로 미룬 항목).
 
 - **고정 저장.** 나중에 관리자가 `value_axis`를 고쳐도 지난 체험의 성향은 바뀌지 않는다. 성향 변화 흐름이 저절로 바뀌면 사용자가 혼란스럽기 때문이다.
 - 성향 테스트를 하기 전에 끝낸 체험도 저장한다(ERD 8장). 나중에 테스트를 하면 바로 종합 성향에 들어간다.
