@@ -35,3 +35,6 @@ out/
 
 ### VS Code ###
 .vscode/
+
+# 로컬 수동 curl 테스트용 쿠키 저장 파일 (BE-91 수동 테스트)
+cookies.txt

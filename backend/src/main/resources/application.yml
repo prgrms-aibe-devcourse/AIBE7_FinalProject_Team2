@@ -95,13 +95,18 @@ rag:
     # 이 이상이면 같은 사건으로 보고 뺀다 (해시로 못 잡은 자기 사건 대비). 샘플 사건 검색으로 다시 맞춘다
     max-score: ${RAG_SEARCH_MAX_SCORE:0.95}
 
-# 사건 사진 생성 - Cloudflare Workers AI (BE-89, COMMON-41). 계정 ID · API 토큰이 없으면
-# 이미지 생성만 꺼지고 서버는 정상으로 뜬다. 저장(업로드) · DB 기록은 아직 없다(후속 이슈)
-cloudflare:
-  imagegen:
-    account-id: ${CF_ACCOUNT_ID:}
-    api-token: ${CF_API_TOKEN:}
-    model: ${CF_IMAGEGEN_MODEL:@cf/black-forest-labs/flux-1-schnell}
+# 사건 사진 한글 프롬프트 추천 - Gemini generateContent (BE-91 재설계, COMMON-41). Cloudflare로
+# 이미지를 직접 생성하던 것(BE-89)은 그림 품질 때문에 그만뒀다 — 이제 AI는 사람이 참고할 한글 프롬프트만
+# 짓고, 사진은 사람이 만들어 업로드한다(결정: docs/decisions/BE-91.md). API 키가 없으면 프롬프트
+# 추천만 꺼지고 서버는 정상으로 뜬다. RAG 임베딩과 같은 GEMINI_API_KEY를 쓴다
+case-photo-prompt:
+  api-key: ${GEMINI_API_KEY:}
+  # AI 판결 생성과 같은 gemini-3.7-flash를 쓰려 했으나, 사건 내용 몇 줄을 한글 프롬프트 한 문단으로
+  # 바꾸는 간단한 작업에는 과한 모델이었다(응답 40 ~ 65초, thinking 토큰까지 소모). 가벼운 작업에
+  # thinking 예산을 쓰지 않는 gemini-3.5-flash-lite로 낮췄다(PR #202 리뷰 반영, decisions/BE-91.md)
+  model: ${CASE_PHOTO_PROMPT_MODEL:gemini-3.5-flash-lite}
+  # timeout은 3.7-flash 기준(90s)을 그대로 둔다 — lite 전환 후 응답 속도를 운영에서 다시 잰 뒤 낮춘다
+  timeout: ${CASE_PHOTO_PROMPT_TIMEOUT:90s}
 
 # 파일 저장소 - S3 (COMMON-47). 값은 환경변수로만 넘긴다(운영: deploy/.env, 로컬: 실행 환경변수)
 # - 인증은 이 파일에 두지 않는다. AWS SDK 기본 자격증명 체인을 쓴다 — 운영은 EC2 IAM 역할, 로컬은 AWS_PROFILE
