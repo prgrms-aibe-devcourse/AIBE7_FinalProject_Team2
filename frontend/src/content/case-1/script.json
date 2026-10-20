@@ -515,8 +515,8 @@
         {
           "say": "nambul",
           "look": {
-            "naero": "deform:ranma",
-            "nambul": "deform:ranma"
+            "naero": "cheek-slim:idle-thinking",
+            "nambul": "cheek-slim:idle-thinking"
           },
           "text": "이제 AI 판사의 판결을 확인해 볼게요."
         },

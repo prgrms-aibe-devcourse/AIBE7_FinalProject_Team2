@@ -1,7 +1,7 @@
 import { formatPenalty, formatDispositions } from '../../utils/judgmentFormat.js';
 import { SCRIPTS } from '../../content/scripts.js';
-import { renderCourtStage } from './courtStage.js';
-import { renderComparisonStage, mountStage, mountNewspaperStage, sceneRect } from '../comparison/comparisonStage.js';
+import { renderCourtStage, openComparison } from './courtStage.js';
+import { mountStage } from '../comparison/comparisonStage.js';
 
 const directionLabels = { UP: '재판부 가중 요소', DOWN: '재판부 감경 요소' };
 
@@ -59,11 +59,7 @@ export async function renderCourtPage(container, { caseId, caseHeader, api, navi
       script, data, caseId, api, navigate, active,
       onInvalid: (failure) => message(`지금 단계에서는 이 화면을 볼 수 없어요. (현재 상태: ${failure.currentStatus})`),
       // 8막은 같은 화면에서 이어 가고 주소만 S-09로 바꾼다
-      onCompared: (comparison) => {
-        const fromRect = sceneRect(root); // 7막 장면 자리(이 자리 그대로에서 신문으로 빠져나온다)
-        mountNewspaperStage(root, { stage: renderComparisonStage({ script, data: comparison, caseId, caseTitle: caseHeader.title, navigate, api, fromRect }) });
-        navigate('comparison', {}, { replace: true, keepView: true });
-      },
+      onCompared: (comparison) => openComparison({ root, script, comparison, caseId, caseTitle: caseHeader.title, navigate, api }),
     });
     mountStage(root, { caseHeader, badge: '실제 판결', heading: '실제 판결', stage, extra: [error] });
   }

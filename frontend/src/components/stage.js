@@ -22,6 +22,7 @@ const NAMES = { naero: '내로', nambul: '남불', 'law-scale': 'AI 판사', 'la
 const CAMEO_LABEL = '볼따구'; // 해설을 맡는 작은 내로 · 남불(배역이 아니라 데포르메 모습)
 const CAMEO_LOOK = 'cheek:idle-thinking';
 const DEFORM_LABEL = { ranma: '란마' }; // 데포르메 모습 이름(look "deform:ranma" → 이름표 "남불 란마") // 볼따구 컷은 지금 idle-thinking · idle-sorry 두 표정만 있다
+const SLIM_CHEEK_LABEL = '슬림볼따구'; // look "cheek-slim:…"의 모습 이름(이름표 "남불 슬림볼따구")
 const ROLE_LABEL = { actor: '사건 속 인물', prosecutor: '검사', defense: '변호인', judge: '판사' };
 const ROLE_COLOR = { 'AI 판사': 'law', '법정 진행': 'narrator', 볼따구: 'narrator', 판사: 'law', 'A씨 역': 'actor', 'B씨 역': 'actor', '사건 속 인물': 'actor', 검사: 'prosecutor', 변호인: 'defense', 재판장: 'law', 배석판사: 'law' };
 // 로 합의부(6막 AI 판사): 로울(저울) · 로봉(법봉) · 로북(법전). LAWS는 판단 요소를 맡는 순서(저울 → 법봉 → 법전),
@@ -36,7 +37,8 @@ const LAW_FADE_MS = 350; // 판사 페이드 시간 하나로: 첫 등장 · 자
 const IMAGES = '/images/characters/'; // 원본 PNG는 이미지 레포(NaeLawNamBul_Images), 웹용 webp는 public에 둔다
 const lawImage = (who, pose) => `${IMAGES}mascot/${who}_${pose}.webp`;
 export const imageOf = (who, look) => (look.startsWith('role:') ? `${IMAGES}roles/${who}_${look.slice(5)}.webp`
-  : look.startsWith('cheek:') ? `${IMAGES}cheek/${who}_${look.slice(6)}.webp` // 볼따구(기다림)
+  : look.startsWith('cheek-slim:') ? `${IMAGES}cheek-slim/${who}_${look.slice(11)}.webp` // 슬림볼따구
+    : look.startsWith('cheek:') ? `${IMAGES}cheek/${who}_${look.slice(6)}.webp` // 볼따구(기다림)
     : look.startsWith('deform:') ? `${IMAGES}deform/${who}_${look.slice(7)}.webp` // 데포르메(란마 등, 시트에서 잘라 public에 둔다)
     : `${IMAGES}scene/${who}_${look}.webp`);
 const FACES = ['neutral', 'happy', 'surprised', 'thinking', 'sorry', 'cheer'];
@@ -580,7 +582,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
       // 말하는 캐릭터가 가운데 피고인석(stand)에 서 있으면 꼬리도 가운데로
       dialog.dataset.spot = !cameoWho && (step.say === 'naero' || step.say === 'nambul') ? step.spots[step.say] ?? '' : '';
       const who = cameoWho || step.say;
-      const deform = !cameoWho && DEFORM_LABEL[step.look[who]?.split(':')[1]] && step.look[who].startsWith('deform:') ? DEFORM_LABEL[step.look[who].split(':')[1]] : '';
+      const deform = !cameoWho && step.look[who]?.startsWith('cheek-slim:') ? SLIM_CHEEK_LABEL : !cameoWho && DEFORM_LABEL[step.look[who]?.split(':')[1]] && step.look[who].startsWith('deform:') ? DEFORM_LABEL[step.look[who].split(':')[1]] : '';
       if (NAMES[who]) name.append(picture(iconOf(who, cameoWho ? 'idle-thinking' : step.look[who])), NAMES[who]); // AI 판사는 이름 · 얼굴 없이 역할만
       // 데포르메(란마 등)는 배역이 아니라 모습이라 역할 대신 모습 이름을 단다(예: 남불 란마)
       const label = deform && (!role || role === '안내') ? deform : role;

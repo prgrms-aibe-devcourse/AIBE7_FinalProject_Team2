@@ -430,9 +430,6 @@
 .stage-wrap .ctrl button:disabled { opacity: .5; cursor: default; } /* 첫 장면의 이전 · 기다림 중의 다음 */
 .stage-wrap .stage-skip { min-height: 44px; padding: 0 4px; border: 0; background: none; color: var(--muted); font-size: var(--text-small); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 @media (hover: hover) and (pointer: fine) { .stage-wrap .stage-skip:hover { color: var(--ink); } }
-/* 테스트 기간용 조작(목 데이터): 발표 판사 고르기 */
-.stage-test { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 4px; color: var(--color-muted); font-size: var(--text-caption); }
-.stage-test-button { min-height: 32px; padding: 0 10px; border: 1px dashed var(--color-border-strong); border-radius: 6px; background: none; color: var(--color-muted); font-size: var(--text-caption); cursor: pointer; }
 .stage-wrap .stage-restart { min-height: 36px; margin-left: 12px; padding: 0 10px; border: 1px dashed var(--color-border-strong); border-radius: 6px; background: none; color: var(--muted); font-size: var(--text-caption); cursor: pointer; }
 .stage-wrap :is(button, .board):focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
 
