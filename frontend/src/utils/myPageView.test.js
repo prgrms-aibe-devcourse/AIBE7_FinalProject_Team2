@@ -1,7 +1,7 @@
 // npm test : 마이페이지 변화 흐름 계산
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { axisSeries, castOf, collectionOf, trailLeft, trailSummary } from './myPageView.js';
+import { axisSeries, castOf, collectionOf, trailLeft, trailSummary, webpGroups } from './myPageView.js';
 
 const AXIS = { key: 'APOLOGY_SINCERITY', strict: { name: '행동증명형' }, lenient: { name: '마음신뢰형' } };
 const entry = (value) => ({ axisScores: { APOLOGY_SINCERITY: value } });
@@ -50,7 +50,13 @@ test('collectionOf: 체험을 마친 사건의 일러스트만 모으고 같은 
   assert.deepEqual(collectionOf([], scripts), []);
 });
 
-test('castOf: 대본의 역할 의상을 등장 순서대로 한 번씩 모으고, 역할 의상이 아닌 모습은 뺀다', () => {
+test('webpGroups: 폴더별로 묶고 이름순으로 정렬한다', () => {
+  const groups = webpGroups(['/images/b/z.webp', '/images/a/y.webp', '/images/b/x.webp', '/images/top.webp']);
+  assert.deepEqual(groups.map((group) => group.folder), ['a', 'b', '(images)']);
+  assert.deepEqual(groups[1].items.map((item) => item.label), ['x', 'z']);
+});
+
+test('castOf:대본의 역할 의상을 등장 순서대로 한 번씩 모으고, 역할 의상이 아닌 모습은 뺀다', () => {
   const script = {
     acts: {
       1: { look: { naero: 'idle', nambul: 'role:actor' }, steps: [{ look: { naero: 'role:judge' } }] },

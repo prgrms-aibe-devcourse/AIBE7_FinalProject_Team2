@@ -4,7 +4,7 @@ import { screenByStatus } from '../../utils/screenByStatus.js';
 import { renderAxisRow } from '../../components/axisRow.js';
 import { imageOf } from '../../components/stage.js';
 import { AXES, CHARACTER_NAMES } from '../../utils/personalityAxes.js';
-import { axisSeries, collectionOf, trailLeft, trailSummary } from '../../utils/myPageView.js';
+import { axisSeries, collectionOf, trailLeft, trailSummary, webpGroups } from '../../utils/myPageView.js';
 import { BOOKMARK_CHARACTERS, BOOKMARK_NAMES, bookmarkFace, getBookmarkCharacter, setBookmarkCharacter } from '../../utils/bookmarkCharacter.js';
 import { SCRIPTS } from '../../content/scripts.js';
 import { fitPortraitIn } from '../../utils/portraitFit.js';
@@ -31,6 +31,8 @@ const DEFAULT_NICKNAME = '익명의 판사'; // 로그인 · 닉네임 API 전�
 // 닉네임 아래 프로필 수치. 레벨 · 직업 · 출석 일수는 목 데이터(API 전, data.profile이 오면 그 값을 쓴다). 완료한 사건 · 모은 일러스트는 지금 기록에서 센다
 const MOCK_PROFILE = { level: 7, job: '수습 판사', attendanceDays: 12 };
 const IS_MOCK = API_MODE === 'mock'; // 목 모드에서는 체험 기록 · 성향 평균도 목(mocks/personalityMockApi.js)이라 함께 표기한다(FE-56)
+// 개발 서버 + 목 모드에서만 public/images의 webp 전부를 컬렉션 아래에 펼친다(FE-67). 빌드에서는 이 분기가 통째로 빠진다
+const ALL_WEBP = import.meta.env?.DEV ? Object.keys(import.meta.glob('/public/images/**/*.webp', { query: '?url', import: 'default' })).map((key) => key.replace(/^\/public/, '')) : [];
 let cache = null; // 마지막 응답. 항목 화면을 오갈 때 바로 그리고 뒤에서 새로 받는다
 
 const svg = (path, className) => {
@@ -262,33 +264,79 @@ function renderBookmarkPicker() {
   return field;
 }
 
+// 컬렉션 카드를 누르면 그림을 크게 띄운다. 바깥 · 닫기 · Esc로 닫는다(dialog가 포커스도 가둔다)
+// 마이페이지의 커피색 역할 토큰이 적용되도록 .my-page 안에 붙이고, 닫으면 지운다
+function zoomIn(src, alt, label) {
+  const dialog = element('dialog', 'collection-zoom');
+  dialog.addEventListener('click', (event) => { if (event.target === dialog) dialog.close(); });
+  dialog.addEventListener('close', () => dialog.remove());
+  dialog.append(picture(src, alt), element('p', 'collection-label', label), button('닫기', () => dialog.close(), 'secondary-button'));
+  (document.querySelector('.my-page') ?? document.body).append(dialog);
+  dialog.showModal();
+}
+
+function collectionCard(className, src, alt, label) {
+  const card = element('li', `collection-card ${className}`.trim());
+  const open = element('button', 'collection-open');
+  open.type = 'button';
+  open.setAttribute('aria-label', `${label} 크게 보기`);
+  const frame = element('div', 'collection-window'); // 그림 틀. 캐릭터가 틀에서 같은 크기로 서도록 맞춘다(FE-67)
+  const image = picture(src, '');
+  frame.append(image);
+  fitPortraitIn(frame, image, { top: 20, bottom: 20, side: 0.84, center: true });
+  const caption = element('p', 'collection-label', label);
+  caption.title = label; // 길어서 줄여 보일 때 전체 이름
+  open.append(frame, caption); // 이름은 캡션이 읽는다
+  open.addEventListener('click', () => zoomIn(src, alt, label));
+  card.append(open);
+  return card;
+}
+
 // 컬렉션 — 체험을 마친 사건마다 만난 모습(역할 의상)과 사건 일러스트. 체험하지 않은 사건은 나오지 않는다
+// 목 모드에서는 모든 대본의 사건을 체험 완료로 쳐서 전부 펼쳐 보여 준다(FE-67). 어떻게 모이는지 미리 보는 용도다
 function renderCollection(experiences) {
   const box = element('div', 'my-detail');
   box.append(renderBookmarkPicker());
-  const groups = collectionOf(experiences, SCRIPTS);
+  const shown = IS_MOCK ? Object.values(SCRIPTS).map(({ caseId, title }) => ({ caseId, title, status: 'COMPLETED' })) : experiences;
+  const groups = collectionOf(shown, SCRIPTS);
   if (groups.length === 0) {
     box.append(element('p', 'my-hint', '사건 체험을 마치면 그 사건에서 만난 모습과 일러스트가 여기에 모여요.'));
     return box;
   }
   groups.forEach((group) => {
     const part = element('section', 'collection-group');
-    part.append(element('h2', 'collection-title', group.title));
+    const title = element('h2', 'collection-title', group.title);
+    if (IS_MOCK) title.append(mockTag());
+    part.append(title);
     const grid = element('ul', 'collection-grid');
     group.cast.forEach(({ who, role, label }) => {
-      const card = element('li', 'collection-card is-cast');
-      card.append(picture(imageOf(who, `role:${role}`), ''), element('p', 'collection-label', label)); // 이름은 캡션이 읽는다
-      grid.append(card);
+      grid.append(collectionCard('is-cast', imageOf(who, `role:${role}`), label, label));
     });
     group.items.forEach((item) => {
-      const card = element('li', 'collection-card');
-      card.append(picture(item.src, `${group.title} ${item.label} 일러스트`), element('p', 'collection-label', item.label));
-      grid.append(card);
+      grid.append(collectionCard('', item.src, `${group.title} ${item.label} 일러스트`, item.label));
     });
     part.append(grid);
     box.append(part);
   });
+  if (IS_MOCK && ALL_WEBP.length > 0) box.append(renderAllWebp());
   return box;
+}
+
+// 목 모드 전용 — public/images의 webp를 폴더별로 전부 보여 준다
+function renderAllWebp() {
+  const all = element('section', 'collection-group');
+  const heading = element('h2', 'collection-title', `모든 webp ${ALL_WEBP.length}장`);
+  heading.append(mockTag());
+  all.append(heading);
+  webpGroups(ALL_WEBP).forEach(({ folder, items }) => {
+    all.append(element('h3', 'collection-subtitle', `${folder} (${items.length})`));
+    const grid = element('ul', 'collection-grid');
+    items.forEach((item) => {
+      grid.append(collectionCard('', item.src, item.label, item.label));
+    });
+    all.append(grid);
+  });
+  return all;
 }
 
 function renderCases(experiences, navigate) {

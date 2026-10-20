@@ -158,11 +158,21 @@ body:has(.my-page) .site-footer { background: var(--palette-coffee-50); border-t
 /* 컬렉션: 사건마다 한 묶음. 만난 모습(역할 의상)은 인물 그림이라 자르지 않고 담는다 */
 .collection-group + .collection-group { margin-top: 32px; }
 .collection-title { margin: 0 0 12px; font: 700 var(--text-title-3)/1.4 var(--font-heading); color: var(--color-heading); }
+.collection-subtitle { margin: 20px 0 8px; font: 600 var(--text-body)/1.4 var(--font-heading); color: var(--color-text); }
 .collection-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; margin: 0; padding: 0; list-style: none; }
-.collection-card { margin: 0; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-card); overflow: hidden; }
-.collection-card img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; background: var(--color-surface); }
-.collection-card.is-cast img { aspect-ratio: 3 / 4; object-fit: contain; object-position: bottom; padding-top: 8px; }
+.collection-card { aspect-ratio: 7 / 12; margin: 0; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-card); overflow: hidden; }
+.collection-open { display: flex; flex-direction: column; width: 100%; height: 100%; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: zoom-in; }
+.collection-open:focus-visible { outline: 2px solid var(--color-focus, currentColor); outline-offset: -2px; }
+.collection-zoom { width: min(92vw, 640px); max-height: 92vh; padding: 16px; border: 1px solid var(--color-border); border-radius: 16px; background: var(--color-bg); color: var(--color-text); text-align: center; overflow: auto; } /* 화면(.my-page)과 같은 라떼색 */
+.collection-zoom::backdrop { background: oklch(0 0 0 / 0.6); }
+.collection-zoom img { display: block; background: var(--color-bg); max-width: 100%; max-height: 70vh; margin: 0 auto; object-fit: contain; }
+.collection-zoom .collection-label { padding: 10px 0 12px; font-size: var(--text-body); }
+.collection-window { position: relative; flex: 1; min-height: 0; overflow: hidden; background: var(--color-surface); } /* 카드는 모두 타로 비율(7:12). 그림은 잘리지 않게 안에 맞춘다 */
+.collection-window img { box-sizing: border-box; display: block; width: 100%; height: 100%; padding: 20px 14px; object-fit: contain; object-position: center; } /* 못 쟀을 때의 기본 모양에도 여백 */
+.collection-window img.is-fitted { position: absolute; max-width: none; padding: 0; object-fit: fill; }
+.collection-window img.is-fitting { visibility: hidden; }
 .collection-card img.is-missing { visibility: hidden; }
+.collection-card .collection-label { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; } /* 카드의 이름은 한 줄, 길면 ... */
 .collection-label { margin: 0; padding: 8px 12px 10px; color: var(--color-text); font-size: var(--text-small); }
 
 /* 체험한 사건 */

@@ -44,6 +44,18 @@ export function castOf(script) {
   return [...seen.values()];
 }
 
+// public/images 아래 webp 경로("/images/a/b.webp")를 폴더별로 묶는다(목 모드 컬렉션 미리 보기용)
+export function webpGroups(paths) {
+  const groups = new Map();
+  [...paths].sort().forEach((path) => {
+    const slash = path.lastIndexOf('/');
+    const folder = path.slice(0, slash).replace(/^\/images\/?/, '') || '(images)';
+    if (!groups.has(folder)) groups.set(folder, []);
+    groups.get(folder).push({ src: path, label: path.slice(slash + 1).replace(/\.webp$/, '') });
+  });
+  return [...groups].map(([folder, items]) => ({ folder, items }));
+}
+
 // 컬렉션 — 체험을 마친 사건마다 만난 모습(역할 의상)과 대본에 나온 일러스트를 모은다. 같은 그림은 한 장으로 센다.
 // 대본이 없는 사건은 모을 것이 없으므로 건너뛴다.
 export function collectionOf(experiences, scripts) {

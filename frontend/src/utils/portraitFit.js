@@ -8,10 +8,10 @@ const ALPHA_MIN = 16; // 이 값보다 불투명해야 캐릭터로 본다(0 ~ 2
  * 경계 상자(box)가 창 안에서 위 · 아래 여백을 뺀 높이를 채우도록 그림의 크기와 자리를 계산한다. 너비가 넘치면 너비에 맞춘다. 발은 창 아래에 둔다.
  * @param {{ width: number, height: number, box: { x0: number, y0: number, x1: number, y1: number } }} image 그림 원본 크기와 불투명 경계 상자(끝 칸 포함, 원본 픽셀)
  * @param {{ width: number, height: number }} win 창 크기
- * @param {{ top?: number, bottom?: number, side?: number }} options top: 윗 여백(둥근 위쪽이 머리를 깎지 않게), bottom: 아랫 여백, side: 창 너비 중 쓸 비율
+ * @param {{ top?: number, bottom?: number, side?: number, center?: boolean }} options top: 윗 여백(둥근 위쪽이 머리를 깎지 않게), bottom: 아랫 여백, side: 창 너비 중 쓸 비율, center: true면 발을 아래에 두지 않고 창 세로 가운데에 둔다
  * @returns {{ width: number, height: number, left: number, top: number }} 그림 상자의 크기와 창 안 위치(px)
  */
-export function fitPortrait({ width, height, box }, win, { top = 22, bottom = 6, side = 0.92 } = {}) {
+export function fitPortrait({ width, height, box }, win, { top = 22, bottom = 6, side = 0.92, center = false } = {}) {
   const visibleW = box.x1 - box.x0 + 1;
   const visibleH = box.y1 - box.y0 + 1;
   const scale = Math.min(Math.max(1, win.height - top - bottom) / visibleH, (win.width * side) / visibleW);
@@ -19,11 +19,46 @@ export function fitPortrait({ width, height, box }, win, { top = 22, bottom = 6,
     width: width * scale,
     height: height * scale,
     left: win.width / 2 - (box.x0 + visibleW / 2) * scale,
-    top: win.height - bottom - (box.y1 + 1) * scale,
+    top: center ? (win.height - visibleH * scale) / 2 - box.y0 * scale : win.height - bottom - (box.y1 + 1) * scale,
   };
 }
 
-// 이미지의 불투명 경계 상자를 잰다. 다른 출처 이미지(캔버스를 못 읽음) · 전부 투명한 이미지는 null
+// 네 모서리가 모두 불투명하고 거의 같은 색이면 그 색을 "단색 배경"으로 본다(투명 배경이 아닌 그림용). 아니면 null
+const BG_CORNER_GAP = 24; // 모서리끼리 이 값(RGB 채널 차이)보다 다르면 배경이 아니라 그림으로 본다
+const BG_TOLERANCE = 40; // 배경색과 이 값보다 가까운 칸은 배경으로 센다
+const channelGap = (a, b) => Math.max(Math.abs(a[0] - b[0]), Math.abs(a[1] - b[1]), Math.abs(a[2] - b[2]));
+function solidBackground(data, width, height) {
+  const at = (x, y) => { const i = (y * width + x) * 4; return [data[i], data[i + 1], data[i + 2], data[i + 3]]; };
+  const corners = [at(0, 0), at(width - 1, 0), at(0, height - 1), at(width - 1, height - 1)];
+  if (corners.some((c) => c[3] < 250)) return null;
+  return corners.every((c) => channelGap(c, corners[0]) <= BG_CORNER_GAP) ? corners[0] : null;
+}
+
+/**
+ * RGBA 픽셀(data, width x height)에서 캐릭터(투명하지도 단색 배경도 아닌 칸)의 경계 상자를 잰다. 끝 칸 포함. 없으면 null
+ * @param {Uint8ClampedArray | number[]} data RGBA 픽셀
+ */
+export function foregroundBox(data, width, height) {
+  const background = solidBackground(data, width, height);
+  let x0 = width;
+  let y0 = height;
+  let x1 = -1;
+  let y1 = -1;
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const i = (y * width + x) * 4;
+      if (data[i + 3] <= ALPHA_MIN) continue;
+      if (background && channelGap([data[i], data[i + 1], data[i + 2]], background) <= BG_TOLERANCE) continue;
+      if (x < x0) x0 = x;
+      if (x > x1) x1 = x;
+      if (y < y0) y0 = y;
+      if (y > y1) y1 = y;
+    }
+  }
+  return x1 >= 0 ? { x0, y0, x1, y1 } : null;
+}
+
+// 이미지의 경계 상자를 잰다. 다른 출처 이미지(캔버스를 못 읽음) · 전부 투명한 이미지는 null
 const measured = new Map();
 export function measureOpaqueBox(img) {
   const key = img.currentSrc || img.src;
@@ -35,22 +70,7 @@ export function measureOpaqueBox(img) {
     canvas.height = img.naturalHeight;
     const context = canvas.getContext('2d', { willReadFrequently: true });
     context.drawImage(img, 0, 0);
-    const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
-    let x0 = canvas.width;
-    let y0 = canvas.height;
-    let x1 = -1;
-    let y1 = -1;
-    for (let y = 0; y < canvas.height; y += 1) {
-      for (let x = 0; x < canvas.width; x += 1) {
-        if (data[(y * canvas.width + x) * 4 + 3] > ALPHA_MIN) {
-          if (x < x0) x0 = x;
-          if (x > x1) x1 = x;
-          if (y < y0) y0 = y;
-          if (y > y1) y1 = y;
-        }
-      }
-    }
-    if (x1 >= 0) box = { x0, y0, x1, y1 };
+    box = foregroundBox(context.getImageData(0, 0, canvas.width, canvas.height).data, canvas.width, canvas.height);
   } catch {
     box = null; // 캔버스가 막힌 이미지(다른 출처) — 맞추지 않고 창에 그대로 담는다
   }
@@ -80,6 +100,6 @@ export function fitPortraitIn(windowEl, img, options) {
   img.decode().then(() => {
     box = measureOpaqueBox(img);
     if (box) apply();
-    else img.classList.remove('is-fitting'); // 못 쟀으면 기본 모양 그대로
+    else img.classList.remove('is-fitting'); // 못 쟀으면 기본 모양(contain) 그대로
   }, () => img.classList.remove('is-fitting'));
 }
