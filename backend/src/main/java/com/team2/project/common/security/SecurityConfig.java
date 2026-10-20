@@ -5,6 +5,7 @@ import com.team2.project.admin.service.AdminPrincipal;
 import com.team2.project.admin.service.AdminUserDetailsService;
 import com.team2.project.common.security.token.AccessTokenVerifier;
 import jakarta.servlet.http.HttpServletRequest;
+import java.util.Map;
 import java.util.Set;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
@@ -18,7 +19,9 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.crypto.factory.PasswordEncoderFactories;
+import org.springframework.security.crypto.argon2.Argon2PasswordEncoder;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.DelegatingPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.AnonymousAuthenticationFilter;
@@ -135,18 +138,30 @@ public class SecurityConfig {
 		return (HttpServletRequest request) -> !SAFE_METHODS.contains(request.getMethod());
 	}
 
-	/** 비밀번호 해시. {bcrypt} 접두어가 붙어 나중에 알고리즘을 바꿔도 기존 해시를 읽는다 */
+	/**
+	 * 비밀번호 해시. {argon2} 접두어로 인코딩한다(OWASP 1순위 권장, BE-90 비교 선정 — docs/decisions/BE-90.md).
+	 * OWASP Password Storage Cheat Sheet 권장값(m=19 MiB, t=2, p=1, 솔트 16바이트 · 해시 32바이트)을 직접 지정한다 —
+	 * defaultsForSpringSecurity_v5_8()의 기본값(m=16 MiB)과는 다르다.
+	 * {bcrypt} 접두어가 붙은 기존 해시도 계속 검증할 수 있도록 함께 등록한다
+	 */
 	@Bean
 	public PasswordEncoder passwordEncoder() {
-		return PasswordEncoderFactories.createDelegatingPasswordEncoder();
+		Map<String, PasswordEncoder> encoders = Map.of(
+			"argon2", new Argon2PasswordEncoder(16, 32, 1, 19 * 1024, 2),
+			"bcrypt", new BCryptPasswordEncoder());
+		return new DelegatingPasswordEncoder("argon2", encoders);
 	}
 
-	/** 관리자 비밀번호 로그인. 계정 없음 · 비활성 · 비밀번호 불일치는 모두 같은 실패로 처리한다(로그인 API) */
+	/**
+	 * 관리자 비밀번호 로그인. 계정 없음 · 비활성 · 비밀번호 불일치는 모두 같은 실패로 처리한다(로그인 API).
+	 * 로그인에 성공하면 {bcrypt} 해시를 {argon2}로 다시 인코딩해 저장한다(UserDetailsPasswordService, BE-90)
+	 */
 	@Bean
 	public AuthenticationManager authenticationManager(AdminUserDetailsService userDetailsService,
 		PasswordEncoder passwordEncoder) {
 		DaoAuthenticationProvider provider = new DaoAuthenticationProvider(userDetailsService);
 		provider.setPasswordEncoder(passwordEncoder);
+		provider.setUserDetailsPasswordService(userDetailsService);
 		return new ProviderManager(provider);
 	}
 

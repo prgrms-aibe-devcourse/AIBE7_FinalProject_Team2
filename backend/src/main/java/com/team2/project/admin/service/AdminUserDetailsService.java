@@ -4,6 +4,8 @@ import com.team2.project.admin.domain.AdminAccount;
 import com.team2.project.admin.repository.AdminAccountRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsPasswordService;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
@@ -19,7 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class AdminUserDetailsService implements UserDetailsService {
+public class AdminUserDetailsService implements UserDetailsService, UserDetailsPasswordService {
 
 	private final AdminAccountRepository repository;
 
@@ -31,5 +33,18 @@ public class AdminUserDetailsService implements UserDetailsService {
 			.filter(AdminAccount::isEnabled)	// 비활성도 계정 없음과 같은 경로(가짜 비밀번호 확인)로
 			.map(AdminPrincipal::from)
 			.orElseThrow(() -> new UsernameNotFoundException("관리자 계정 없음"));
+	}
+
+	/**
+	 * 로그인 성공 직후 호출된다(DaoAuthenticationProvider). 옛 해시({bcrypt})를 새 인코더({argon2})로
+	 * 바꿔 저장해, 로그인할 때마다 조금씩 전체 계정을 전환한다 (BE-90)
+	 */
+	@Override
+	@Transactional
+	public UserDetails updatePassword(UserDetails user, String newEncodedPassword) {
+		AdminPrincipal principal = (AdminPrincipal) user;
+		repository.findById(principal.adminId()).ifPresent(account -> account.changePasswordHash(newEncodedPassword));
+		return new AdminPrincipal(principal.adminId(), principal.email(), principal.displayName(),
+			newEncodedPassword, principal.enabled());
 	}
 }
