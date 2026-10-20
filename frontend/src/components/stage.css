@@ -77,9 +77,9 @@
 .stage-wrap .laws.entering { animation: laws-in var(--law-fade) ease-out; }
 @keyframes laws-in { from { opacity: 0; } }
 .stage-wrap .law-slot { --home: 50%; position: absolute; bottom: 0; left: var(--home); width: 20%; height: 100%; translate: -50% 0; transform-origin: bottom center; transition: left .45s ease-in-out, opacity var(--law-fade) ease-out, filter .3s, transform .3s; }
-/* 키 · 체형(캐릭터 프로필 4-3): 로울 230 · 로북 210 · 로봉 190(떡대라 키 비율보다 조금 크게) */
-.stage-wrap .law-slot.law-gavel { --home: 30%; height: 88%; }
-.stage-wrap .law-slot.law-book { --home: 70%; height: 91.3%; }
+/* 키 · 체형(마스코트 로, 내로 · 남불 120 기준): 로울 180 · 로북 170 · 로봉 160 → 로울 100% · 로북 94.4% · 로봉 88.9% */
+.stage-wrap .law-slot.law-gavel { --home: 30%; height: 88.9%; }
+.stage-wrap .law-slot.law-book { --home: 70%; height: 94.4%; }
 .stage-wrap .law-slot[data-place="center"] { left: 50%; }
 .stage-wrap .law-slot[data-place="side"] { left: 17%; }
 .stage-wrap .laws.resolving .law-slot[data-place="center"] { transition-delay: var(--law-fade), 0s, 0s, 0s; }

@@ -5,9 +5,7 @@ const DEFAULT = 'naero';
 export const BOOKMARK_CHARACTERS = ['naero', 'nambul'];
 export const BOOKMARK_NAMES = { naero: '내로', nambul: '남불' };
 
-// shortcut: 원본 이미지 레포 PNG를 직접 읽는다(FE-48 책갈피와 같음), 웹 webp 변환(WBS 7.6.8) 때 public 경로로 옮긴다
-const FACES = 'https://raw.githubusercontent.com/peanutboi710/NaeLawNamBul_Images/main/character/cuts/';
-export const bookmarkFace = (who) => `${FACES}${who}/icon/${who}_icon_face-happy.png`;
+export const bookmarkFace = (who) => `/images/characters/icon/${who}_face-happy.webp`;
 
 export function getBookmarkCharacter(storage = globalThis.localStorage) {
   try {

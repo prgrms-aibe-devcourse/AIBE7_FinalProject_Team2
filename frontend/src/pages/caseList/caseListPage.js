@@ -51,8 +51,7 @@ const SOON = { badge: '준비 중', tone: 'soon' };
 const statusViewOf = (item) => STATUS_VIEW[item.myStatus] ?? (scriptFor(item.caseId, item.title) ? NOT_STARTED : SOON);
 const PICK_LABEL = '사건 펼쳐 보기';
 const JUMP_LABEL = '3면에 계속'; // 신문의 이어 읽기 줄(jump line). 누르면 사건 지면(S-20, 3면)으로 간다
-// shortcut: 캐릭터 얼굴은 원본 이미지 레포 PNG를 직접 읽는다(무대와 같음), 웹 webp 변환(WBS 7.6.8) 때 public 경로로 옮긴다
-const NAMBUL_FACE = 'https://raw.githubusercontent.com/peanutboi710/NaeLawNamBul_Images/main/character/cuts/nambul/icon/nambul_icon_face-happy.png';
+const NAMBUL_FACE = '/images/characters/icon/nambul_face-happy.webp';
 const UNFLIP_MS = 450; // 8막에서 뒤집고 온 빈 종이 · 바탕을 걷는 시간(그동안 기사가 페이드인한다)
 const RISE_WAIT_MS = 1200; // 책상에서 들고 올 때 지면이 다 그려지기를 기다리는 최대 시간(그동안 책상은 신문을 든 채로 남아 있다)
 const headlineOf = (item) => item.headline || item.title;
