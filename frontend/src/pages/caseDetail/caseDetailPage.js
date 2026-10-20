@@ -154,7 +154,7 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
     async function playAgain(experience, saved) {
       stage.replay();
       if (prompt) stage.advance({ dropCurrent: true }); // 묻는 장면은 빼서 ◀ 이전으로 다시 나오지 않게
-      // 완료한 사건은 세 판결 비교(API 14)에서 보낸 판단을 읽는다. 진행 중이면 이 브라우저에 적어 둔 것을 쓴다
+      // 완료한 사건만 세 판결 비교(API 14)에서 보낸 판단을 읽어 보여 준다. 진행 중이면 형량은 보여 주지 않고 제출 완료 안내만 한다(BE-77)
       let sent;
       if (experience.status === 'COMPLETED') sent = await api.getComparison(caseId).then((r) => r?.preToFinal?.preJudgment?.label).catch(() => undefined);
       if (active()) setAlreadySent(saved, sent ?? undefined);

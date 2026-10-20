@@ -206,7 +206,6 @@
 /* 이미 보낸 엽서: 질문과 보낸 판단을 손글씨로 */
 .stage-wrap.paper-mode .board .postcard-sent { margin-bottom: 14px; padding: 6px 4px 12px; border-bottom: 1px dashed var(--color-border-strong); }
 .stage-wrap.paper-mode .board .postcard-sent-q { margin: 0 0 6px; font: 400 20px/1.4 var(--font-hand); color: var(--color-muted); }
-.stage-wrap.paper-mode .board .postcard-sent-none { margin: 0; color: var(--color-muted); font-size: 14px; } /* 시스템 안내는 손글씨(사용자 답) 대신 본문체로 */
 .stage-wrap.paper-mode .board .postcard-sent-a { margin: 0; font: 400 30px/1.3 var(--font-hand); color: var(--color-desk-note-pen); }
 
 /* 모바일 읽기 보정(FE-32 디자인 점검): 대사창 · 조작 줄은 뒤 본문이 비치지 않게 불투명, 제출 줄은 엽서 아래에 고정 */

@@ -49,18 +49,6 @@ export function mountStagePage(root, { stage }) {
   root.replaceChildren(desk, stage);
 }
 
-// 보낸 사전 판단(형량 구간 이름)을 이 브라우저에 적어 둔다. 진행 중인 체험은 서버에서 다시 읽을 API가 없어서(API 14는 완료 뒤에만),
-// S-20에서 1막부터 다시 볼 때 "이미 보낸 엽서"에 적는 데 쓴다. 없으면 이름 없이 안내만 한다
-const SENT_KEY = 'nlnb-sent-pre-judgment';
-function readSent() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(SENT_KEY));
-    return saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {}; // 손상 · 직접 수정한 값(문자열 · 숫자 · 배열)은 버린다
-  } catch { return {}; }
-}
-export const sentPreJudgment = (caseId) => readSent()[caseId] ?? null;
-function rememberSent(caseId, label) { try { localStorage.setItem(SENT_KEY, JSON.stringify({ ...readSent(), [caseId]: label })); } catch { /* 저장소를 못 쓰면 엽서에 이름만 빠진다 */ } }
-
 // 모든 사건 1막의 첫 대사(내로가 말을 건다). 사건마다의 다음 대사는 대본이 잇는다
 const INTRO_STEP = { say: 'naero', text: '오늘 신문에 실린 사건이에요. 기사에 나온 내용만 같이 읽어 볼게요.', focus: 'head' };
 
@@ -90,7 +78,6 @@ export function caseStage({ caseId, api, navigate, script, info, paper = script.
     try {
       // MVP는 작용 요소(factorIds)를 보내지 않는다. (REQ-093 확장)
       await api.postPreJudgment(caseId, { rangeOptionId });
-      if (labels[rangeOptionId]) rememberSent(caseId, labels[rangeOptionId]);
       await postmark(); // 접수 도장을 찍고 잠깐 보여 준 뒤 넘어간다(보낸 순간이 남게)
       // 제출 뒤 사진 속으로 들어가는 연출을 보여 주고 S-04로 간다
       if (stage.isConnected) await stage.enterPhoto();
@@ -131,8 +118,9 @@ export function caseStage({ caseId, api, navigate, script, info, paper = script.
   }
 
   // 이미 사전 판단을 낸 사건을 1막부터 다시 볼 때(S-20 "시작하기"): 엽서 차례에 "이미 보낸 엽서"를 보여 주고 저장된 단계로 잇는다.
-  // MVP는 사건당 1회 체험 · 판단 수정 불가(IA 결정 5)라 다시 고르게 하지 않는다
-  function setAlreadySent(onContinue, sent = sentPreJudgment(caseId)) {
+  // MVP는 사건당 1회 체험 · 판단 수정 불가(IA 결정 5)라 다시 고르게 하지 않는다.
+  // 보낸 형량(sent)은 완료한 사건만 받는다. 진행 중에는 최종 판단 전이라 사전 형량을 다시 보여 주지 않고 제출 완료 안내만 한다(BE-77)
+  function setAlreadySent(onContinue, sent) {
     const card = element('div', 'postcard');
     const go = element('button', 'primary-button', '이어서 하기 ▶');
     go.type = 'button';
@@ -140,9 +128,8 @@ export function caseStage({ caseId, api, navigate, script, info, paper = script.
     const actions = element('div', 'section-actions');
     actions.append(go);
     const written = element('div', 'postcard-sent');
-    written.append(element('p', 'postcard-sent-q', '이 사건, 어느 정도의 형량이 맞다고 생각하나요?'),
-      element('p', sent ? 'postcard-sent-a' : 'postcard-sent-none', sent ?? '이 브라우저에는 보낸 판단이 적혀 있지 않아요.'));
-    card.append(postcardHead(), written, element('p', 'guide-box', '이 엽서는 이미 보냈어요. 보낸 판단은 바꿀 수 없어요. 남긴 단계부터 이어서 볼게요.'), actions);
+    if (sent) written.append(element('p', 'postcard-sent-q', '이 사건, 어느 정도의 형량이 맞다고 생각하나요?'), element('p', 'postcard-sent-a', sent));
+    card.append(postcardHead(), ...(sent ? [written] : []), element('p', 'guide-box', '이 엽서는 이미 보냈어요. 보낸 판단은 바꿀 수 없어요. 남긴 단계부터 이어서 볼게요.'), actions);
     cards.preJudgment = card;
     stage.refresh('preJudgment');
   }
