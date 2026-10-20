@@ -108,6 +108,9 @@ rag:
 case-photo-prompt:
   api-key: ${GEMINI_API_KEY:}
   model: ${CASE_PHOTO_PROMPT_MODEL:gemini-3.7-flash}
+  # gemini-3.7-flash는 COMMON-40 테스트에서도 응답 40 ~ 65초로 Gemini 3.x 중 가장 느렸다(decisions/COMMON-40.md).
+  # 그보다 넉넉하게 둔다 — 기본 20s · 45s는 실제로 자주 타임아웃났다
+  timeout: ${CASE_PHOTO_PROMPT_TIMEOUT:90s}
 
 # 파일 저장소 - S3 (COMMON-47). 값은 환경변수로만 넘긴다(운영: deploy/.env, 로컬: 실행 환경변수)
 # - 인증은 이 파일에 두지 않는다. AWS SDK 기본 자격증명 체인을 쓴다 — 운영은 EC2 IAM 역할, 로컬은 AWS_PROFILE

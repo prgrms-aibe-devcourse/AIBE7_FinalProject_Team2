@@ -18,7 +18,7 @@ public record CasePhotoPromptProperties(
 	String apiKey,
 	@DefaultValue("https://generativelanguage.googleapis.com/v1beta") String baseUrl,
 	@DefaultValue("gemini-3.7-flash") String model,
-	@DefaultValue("20s") Duration timeout
+	@DefaultValue("90s") Duration timeout
 ) {
 
 	public boolean enabled() {
