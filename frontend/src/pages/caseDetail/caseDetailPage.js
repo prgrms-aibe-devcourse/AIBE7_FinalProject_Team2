@@ -114,11 +114,17 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
     // 오른쪽 귀: 하던 체험이 있으면 "이어서 하기" · "결과 다시 보기", 처음 보는 사건이면 사건 번호 · 분류 그대로
     const resume = ACTIONS[data.myStatus]
       ? earButton(`${label} ▶`, `사건 ${String(data.caseId).padStart(2, '0')} · ${data.crimeCategoryLabel}`, () => begin(resume), 'ear-right ear-go') : null;
-    // 진행 중인 체험을 "시작하기"로 열면 내로가 먼저 묻는다: 이어서 할지, 1막부터 새로 볼지(완료한 사건은 묻지 않고 다시 보기)
-    const prompt = data.myStatus === 'IN_PROGRESS' ? {
-      text: '진행 중인 체험이 있어요. 이어서 할래요? 1막부터 다시 봐도 보낸 판단은 그대로예요.',
+    // 하던 · 마친 체험을 "시작하기"로 열면 내로가 먼저 묻는다: 진행 중이면 이어서 할지 1막부터 새로 볼지, 완료면 결과만 볼지 1막부터 다시 볼지
+    // (선택지 'resume'은 둘 다 저장된 단계로 간다 — 완료는 6막 세 판결 비교)
+    const PROMPTS = {
+      IN_PROGRESS: { text: '진행 중인 체험이 있어요. 이어서 할래요? 1막부터 다시 봐도 보낸 판단은 그대로예요.', resume: '이어서 하기' },
+      COMPLETED: { text: '이미 마친 체험이에요. 결과만 볼래요? 1막부터 다시 봐도 보낸 판단은 그대로예요.', resume: '결과만 보기' },
+    };
+    const asking = PROMPTS[data.myStatus];
+    const prompt = asking ? {
+      text: asking.text,
       choices: [
-        { label: '이어서 하기', primary: true, action: () => chosen?.('resume') },
+        { label: asking.resume, primary: true, action: () => chosen?.('resume') },
         { label: '1막부터 다시 보기', action: () => chosen?.('again') },
       ],
     } : undefined;
@@ -148,7 +154,7 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
     async function playAgain(experience, saved) {
       stage.replay();
       if (prompt) stage.advance({ dropCurrent: true }); // 묻는 장면은 빼서 ◀ 이전으로 다시 나오지 않게
-      // 완료한 사건은 세 판결 비교(API 14)에서 보낸 판단을 읽는다. 진행 중이면 이 브라우저에 적어 둔 것을 쓴다
+      // 완료한 사건만 세 판결 비교(API 14)에서 보낸 판단을 읽어 보여 준다. 진행 중이면 형량은 보여 주지 않고 제출 완료 안내만 한다(BE-77)
       let sent;
       if (experience.status === 'COMPLETED') sent = await api.getComparison(caseId).then((r) => r?.preToFinal?.preJudgment?.label).catch(() => undefined);
       if (active()) setAlreadySent(saved, sent ?? undefined);
@@ -170,7 +176,7 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
         started = true;
         dock.remove();
         if (fromStart && prompt) {
-          // 진행 중: 내로가 먼저 묻는다 → "이어서 하기"는 저장된 단계로, "새로 하기"는 1막부터(사전 판단 전이면 둘 다 1막부터)
+          // 하던 · 마친 체험: 내로가 먼저 묻는다 → "이어서 하기" · "결과만 보기"는 저장된 단계로, "1막부터 다시 보기"는 1막부터(사전 판단 전이면 둘 다 1막부터)
           chosen = (pick) => {
             chosen = null;
             if (pick === 'resume' && !fresh) { saved(); return; }
@@ -180,7 +186,7 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
           stage.release();
           return;
         }
-        if (!fresh) stage.replay(); // 완료한 사건을 "시작하기": 묻지 않고 1막부터 다시 보기
+        if (!fresh) stage.replay(); // 묻지 못한 채 이미 하던 · 마친 체험이 된 경우(다른 탭에서 진행 등): 1막부터 다시 보기
         stage.release();
         if (fresh) await playFresh(); else await playAgain(experience, saved);
       } catch (error) {

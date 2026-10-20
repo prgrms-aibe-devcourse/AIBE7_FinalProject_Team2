@@ -2,7 +2,7 @@ import { mockOverview } from './overviewMockData.js';
 import { mockComparisonBase, fallbackPreJudgment } from './comparisonMockData.js';
 import { read, readPreJudgment } from './mockExperienceStore.js';
 import { getMyJudgment } from './myJudgmentMock.js';
-import { buildPreToFinal, buildUserSummary, buildMatrix, buildRuleSentences } from './comparisonMock.js';
+import { buildPreToFinal, buildPreToCourt, buildUserSummary, buildMatrix, buildRuleSentences } from './comparisonMock.js';
 
 const delay = () => new Promise((resolve) => setTimeout(resolve, 250));
 
@@ -30,6 +30,7 @@ export async function getComparison(caseId) {
   const matrix = buildMatrix(myJudgment.factors ?? [], ai.factors, court.factors, factorLabels, factorRevealStages);
   return {
     preToFinal: buildPreToFinal(myJudgment, preJudgment, mockOverview.rangeOptions),
+    preToCourt: buildPreToCourt(court, preJudgment, mockOverview.rangeOptions),
     judgments: {
       USER: { ...myJudgment, summary: buildUserSummary(myJudgment.factors ?? [], factorTags) },
       AI: { ...ai },
