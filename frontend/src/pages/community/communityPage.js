@@ -3,7 +3,7 @@ import {
   NOT_READY, SORT_LABELS, communityShell, composer, filterControls, icon, likeButton, loginHint, popularList, postImages, postLink, postMeta, verdictCard,
 } from './communityParts.js';
 
-// S-18 커뮤니티 목록 (FE-47). 메인 책상의 노트북에서 들어온다(utils/laptopZoom.js).
+// S-18 커뮤니티 목록 (FE-47). 메인 책상의 노트북에서 들어온다(utils/laptopBoot.js).
 // 가운데 한 줄 타임라인(정렬 · 글 · 더 보기), 왼쪽 말머리 · 사건 거르기, 오른쪽 늘 열려 있는 글쓰기 칸.
 // 거르기 값은 기록 항목에 넣어 두어(history.state) 상세에서 뒤로 오면 같은 목록이 보인다. 바꿀 때는 화면을 다시 그리지 않아 쓰던 글이 남는다
 const DEFAULT_FILTERS = { category: null, caseId: null, sort: 'LATEST' };

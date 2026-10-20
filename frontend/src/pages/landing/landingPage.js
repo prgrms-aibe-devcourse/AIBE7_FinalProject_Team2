@@ -2,7 +2,7 @@ import { button, element, renderSiteFooter } from '../../components/siteLayout.j
 import { casePhoto, fallbackImages, todayLabel } from '../../utils/newspaper.js';
 import { takePaper } from '../../utils/paperHandoff.js';
 import { flyCoffee } from '../../utils/coffeeDive.js';
-import { zoomLaptop } from '../../utils/laptopZoom.js';
+import { bootLaptop } from '../../utils/laptopBoot.js';
 import { reducedMotion } from '../../utils/motion.js';
 import { isAdmin } from '../../utils/session.js';
 import { homeRoute } from '../admin/adminMenu.js';
@@ -16,7 +16,7 @@ import { peelOff } from '../../utils/peelOff.js';
 // 흐름 목업 ①(FE-32): 신문을 누르면 신문만 책상에서 들려 올라오고(그림자가 길어진다), 이어서 신문 지면(S-02)이 화면 아래에서 올라온다(FE-50,
 // 책상은 그 뒤에서 흐려진다 — caseListPage.js). 신문 들기는 이 연출에만 쓰는 예외다.
 // 커피잔을 누르면(FE-44) 커다란 커피잔이 우상단에서 빠르게 날아와 서는 동안 책상이 마이페이지로 바뀌고, 다 바뀌면 잔이 오른쪽으로 빠져나간다(utils/coffeeDive.js).
-// 노트북을 누르면(FE-47) 기울어진 노트북 화면이 똑바로 서며 화면 가득 커지고 커뮤니티로 넘어간다(utils/laptopZoom.js).
+// 노트북을 누르면(FE-47) 화면이 눈을 감듯 어두워졌다가 눈을 뜨듯 열리며 커뮤니티가 나온다 — 컴퓨터 부팅(utils/laptopBoot.js).
 // 책상에는 내로(신문 위쪽, 포스트잇에 가려 있음) · 남불(펜 아래)이 볼을 괴고 엎드려 있다(장식).
 
 // 책상 그림의 기준 좌표계. 화면 너비에 맞춰 통째로 줄인다(--desk-scale)
@@ -234,13 +234,12 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
     lifting = true;
     flyCoffee(() => { if (root.isConnected) goMug(); }, root);
   }
-  // 노트북: 화면이 똑바로 서며 화면 가득 커진 뒤 커뮤니티로 간다(laptopZoom). 움직임 줄이기면 바로 간다
+  // 노트북: 눈을 감았다 뜨듯 커뮤니티가 나온다(laptopBoot). 움직임 줄이기면 바로 간다
   function openLaptop() {
     if (lifting) return;
     if (reducedMotion()) { navigate('community'); return; }
     lifting = true;
-    const scale = Number(world.style.getPropertyValue('--desk-scale')) || 1;
-    zoomLaptop(screen, scale, () => { if (root.isConnected) navigate('community'); });
+    bootLaptop(() => (root.isConnected ? navigate('community') : undefined)); // 커뮤니티가 다 그려질 때까지 눈을 감고 기다린다(laptopBoot.js)
   }
   // 서류철: 성향 검사 철이 화면 아래에서 올라온다(personality.css folder-rise). 헤더 · 서비스 소개 버튼으로 가면 연출 없이 바로 간다
   const ACTIONS = { news: lift, mug: sip, laptop: openLaptop, folder: () => navigate('test', { from: 'desk' }) };

@@ -92,10 +92,11 @@ body:has(.community-page) { background: var(--color-desk-bezel); }
 .cm-images { display: grid; gap: 6px; max-width: 560px; margin-top: 12px; }
 .cm-images.count-2 { grid-template-columns: repeat(2, 1fr); }
 .cm-images.count-3 { grid-template-columns: repeat(3, 1fr); }
-.cm-images img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 8px; background: var(--color-surface-strong); }
-.cm-images.count-1 img { aspect-ratio: 16 / 9; }
+/* 사진은 잘리지 않게 전체를 보인다(contain). 한 장은 원래 비율, 여러 장은 같은 칸 안에 맞추고 남는 곳은 옅은 바탕 */
+.cm-images img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: contain; border-radius: 8px; background: var(--color-surface-strong); }
+.cm-images.count-1 img { aspect-ratio: auto; height: auto; max-height: 480px; }
 .cm-images.is-full { max-width: 680px; grid-template-columns: 1fr; }
-.cm-images.is-full img { aspect-ratio: auto; max-height: 70vh; object-fit: contain; }
+.cm-images.is-full img { aspect-ratio: auto; height: auto; max-height: 70vh; }
 
 /* 내 판결 카드: 세 판결 색 중 "내 판결" 색은 선 · 라벨에만 쓴다(바탕을 칠하지 않는다, style.css) */
 .cm-verdict {
@@ -183,7 +184,7 @@ textarea.cm-input { resize: vertical; min-height: 96px; line-height: 1.6; }
 .cm-previews { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 0; padding: 0; list-style: none; }
 .cm-previews:empty { display: none; }
 .cm-preview { position: relative; }
-.cm-preview img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 6px; }
+.cm-preview img { display: block; width: 100%; aspect-ratio: 1; object-fit: contain; border-radius: 6px; background: var(--color-surface-strong); }
 .cm-preview-remove {
   position: absolute; top: 4px; right: 4px; display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 50%;
   background: color-mix(in srgb, var(--color-banner-bg) 78%, transparent); color: var(--color-banner-text);

@@ -17,7 +17,7 @@
   | 서류철 | 판결 성향 테스트 | 철이 화면 아래에서 올라옴 → `navigate('test', { from: 'desk' })` → S-15 | 동작 |
   | 커피잔 | 마이페이지 | 커다란 잔이 우상단에서 날아와 섰다가 오른쪽으로 빠져나감(`utils/coffeeDive.js`) → `navigate('me', { from: 'mug' })` → S-17 | 동작 |
   | 펜 | 의견 보내기 (FE-50, 휴대폰 자리) | 범위 밖 | 곧 열려요 |
-  | 노트북 | 커뮤니티 | 기울어진 화면이 똑바로 서며 화면 가득 커짐(`utils/laptopZoom.js`, FE-47) → `navigate('community')` → S-18 | 동작 (목 모드) |
+  | 노트북 | 커뮤니티 | 눈을 감았다 뜨듯 위아래로 닫혔다 열리며 커뮤니티가 나옴 — 컴퓨터 부팅(`utils/laptopBoot.js`, FE-47) → `navigate('community')` → S-18 | 동작 (목 모드) |
 
   화면이 생기면 `landingPage.js`의 `OBJECTS`에서 그 물건의 `route`에 화면 이름(`routes.js`의 `name`)만 넣는다. 누르기 가능 여부가 함께 바뀐다.
   책상 위 포스트잇은 내로를 가린 한 장(`--postit`, 접착면 띠)뿐이다. 서류철 그림 위 라벨은 "3분 성향검사".
