@@ -53,7 +53,7 @@ export async function renderComparisonPage(container, { caseId, caseHeader, api,
 
   function draw(data) {
     if (script) {
-      mountNewspaperStage(root, { stage: renderComparisonStage({ script, data, caseId, caseTitle: caseHeader.title, navigate }) });
+      mountNewspaperStage(root, { stage: renderComparisonStage({ script, data, caseId, caseTitle: caseHeader.title, navigate, api }) });
       return;
     }
     const { preToFinal, judgments, matrix, ruleSentences } = data;

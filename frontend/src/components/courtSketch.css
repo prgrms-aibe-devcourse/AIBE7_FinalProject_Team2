@@ -205,14 +205,11 @@ html:has(.comparison-full .stage-wrap:not(.reading-paper)) { overflow: hidden; }
   .stage-wrap .sheet-ear-left small { display: none; }
   .comparison-full .stage-wrap.reading-paper .paper-to-main { right: calc(12px + env(safe-area-inset-right, 0px)); bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
 }
-
-/* 리뷰하기(임시): 화면을 살짝 어둡게 하고 엽서 한 장이 떠오른다 */
-.review-layer { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 16px; background: color-mix(in srgb, var(--color-desk-shadow) 45%, transparent); animation: review-fade .25s ease-out; }
-.review-postcard { width: min(460px, 100%); padding: 26px 26px 22px; border: 6px solid transparent; border-radius: 6px;
-  background: linear-gradient(var(--color-card), var(--color-card)) padding-box, repeating-linear-gradient(135deg, var(--color-accent) 0 12px, var(--color-card) 12px 20px, var(--color-caution) 20px 32px, var(--color-card) 32px 40px) border-box;
-  box-shadow: 0 24px 48px -20px color-mix(in srgb, var(--color-desk-shadow) 80%, transparent); animation: review-rise .35s cubic-bezier(.2, .8, .2, 1); }
-.review-title { margin: 0 0 8px; font: 900 22px/1.3 var(--font-heading); letter-spacing: .06em; color: var(--color-heading); }
-.review-text { margin: 0 0 18px; font: 400 20px/1.5 var(--font-hand); color: var(--color-desk-note-pen); }
-@keyframes review-fade { from { opacity: 0; } }
-@keyframes review-rise { from { opacity: 0; translate: 0 18px; scale: .96; } }
-@media (prefers-reduced-motion: reduce) { .review-layer, .review-postcard { animation: none; } }
+/* FE-55: 읽는 지면에서 "판결 성향 테스트" 광고는 눌러서 성향 테스트 면으로 넘어간다 */
+.comparison-full .stage-wrap.reading-paper .sheet-ad.is-clickable { cursor: pointer; }
+.comparison-full .stage-wrap.reading-paper .sheet-ad.is-clickable:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 3px; }
+@media (hover: hover) and (pointer: fine) { .comparison-full .stage-wrap.reading-paper .sheet-ad.is-clickable:hover { background: color-mix(in srgb, var(--color-desk-kraft) 16%, transparent); } }
+/* 다른 사건 보기(플립): 신문이 옆으로 선 순간부터 앞면 기사를 감춰 빈 뒷면만 보인다(comparisonStage.js foldToList) */
+.comparison-full .stage-wrap.reading-paper .sheet.is-flipped > * { visibility: hidden; }
+/* 리뷰하기(FE-55): 2막처럼 남불이 앞으로 나서며 엽서를 건넨다(paperStage.css nambul-hand) */
+.comparison-full .stage-wrap .spr.b.delivering { animation: nambul-hand .75s cubic-bezier(.3, .7, .2, 1); }

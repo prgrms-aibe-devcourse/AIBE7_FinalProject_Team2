@@ -8,6 +8,7 @@
 import { formatPenalty, formatDispositions } from '../../utils/judgmentFormat.js';
 import { formatMonths } from '../../components/recommendedRangeBar.js';
 import { renderStage, courtSet, imageOf } from '../../components/stage.js';
+import { openCaseReviewPopup } from '../caseReview/caseReviewPopup.js';
 import { restartMock, jumpActMock } from '../overview/overviewPage.js';
 import { editorNote } from '../../utils/preJudgmentCompare.js';
 import { handPaper } from '../../utils/paperHandoff.js';
@@ -17,7 +18,8 @@ import { reducedMotion } from '../../utils/motion.js';
 const SUBJECTS = [['USER', '내 판결'], ['AI', 'AI 판결'], ['COURT', '실제 판결']];
 const DIRECTIONS = { UP: ['무겁게', 'up'], DOWN: ['가볍게', 'down'] };
 const STAY_ZOOM_MS = 700;
-const FOLD_MS = 450; // 다른 사건 보기: 신문을 위로 접어 넘기는 시간 // 여기 남아있기: 당겨 보던 지면이 전체 지면으로 줄어드는 시간
+const FLIP_MS = [300, 380]; // 다른 사건 보기: 신문을 들어 올려 옆으로 세우는 시간 · 뒷면이 보이게 마저 뒤집는 시간
+const TURN_MS = 600; // 성향 테스트: 신문을 왼쪽 가장자리를 축으로 넘겨 세우는 시간
 
 function element(tag, className, text) {
   const node = document.createElement(tag);
@@ -63,7 +65,7 @@ function courtPhoto() {
 }
 
 // 다음 날 신문 한 장: 제호 · 1면(제목 · 사진) · 세 판결 · 판단 요소 · 칼럼(처음 → 직접) · 분석(공통점 · 차이점) · 사진란(만난 모습)
-function newspaper(data, script, caseTitle, navigate) {
+function newspaper(data, script, caseTitle, navigate, openReview) {
   const { preToFinal, judgments, matrix, ruleSentences } = data;
   const sheet = element('article', 'sheet');
   sheet.setAttribute('aria-label', '다음 날 신문');
@@ -76,11 +78,11 @@ function newspaper(data, script, caseTitle, navigate) {
   const date = element('div', 'sheet-date');
   const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
   date.append(element('span', '', new Intl.DateTimeFormat('ko-KR', { dateStyle: 'full' }).format(tomorrow)), element('span', '', '참여 무료'));
-  // 귀(제호 양옆): "여기 남아있기"로 지면을 읽을 때만 보인다(courtSketch.css). 왼쪽은 다른 사건 보기(신문을 접고 1면으로),
+  // 귀(제호 양옆): "여기 남아있기"로 지면을 읽을 때만 보인다(courtSketch.css). 왼쪽은 다른 사건 보기(신문을 뒤집고 1면으로),
   // 오른쪽은 아직 정하지 않은 자리라 메모만 붙여 둔다
   const earLeft = element('button', 'sheet-ear sheet-ear-left is-clickable');
   earLeft.type = 'button';
-  earLeft.append(element('b', '', '← 다른 사건 보기'), element('small', '', '신문을 접고 오늘의 지면으로'));
+  earLeft.append(element('b', '', '← 다른 사건 보기'), element('small', '', '신문을 뒤집어 오늘의 지면으로'));
   const earRight = element('div', 'sheet-ear sheet-ear-right');
   earRight.append(element('span', 'sheet-ear-memo', '고민 중'));
   const brandRow = element('div', 'sheet-brand-row');
@@ -137,7 +139,9 @@ function newspaper(data, script, caseTitle, navigate) {
     const item = element('li');
     const open = element('button', 'sheet-cast-link');
     open.type = 'button';
-    open.setAttribute('aria-label', `${label} — 마이페이지 컬렉션에서 보기`);
+    // 체험 중에는 누를 수 없다("여기 남아있기"로 지면을 읽는 상태가 되면 stay()가 연다)
+    open.disabled = true;
+    open.dataset.openLabel = `${label} — 마이페이지 컬렉션에서 보기`;
     open.append(picture(imageOf(who, `role:${role}`), ''), element('span', '', label));
     open.addEventListener('click', () => navigate('me', { view: 'collection' }));
     item.append(open);
@@ -148,12 +152,22 @@ function newspaper(data, script, caseTitle, navigate) {
   // 아래 편집부 의견은 그 첫인상을 실제 판결과 견줘 한 줄로 적는다(어느 쪽이 맞는지는 말하지 않는다).
   // 추후 확장(우선도 낮음): 사용자 데이터가 쌓이면 이 칸에 다른 독자들의 첫인상 분포를 함께 보여 줄 수 있다 — 지금은 데이터가 없어 보여 주지 않는다.
   const letter = element('div', 'sheet-letter');
+  // 엽서를 누르면 이 엽서가 떠올라 리뷰 엽서로 펼쳐진다("리뷰하기" 버튼과 같은 내용). 체험 중에는 누를 수 없고(아무 표시도 없다),
+  // "여기 남아있기"로 지면을 읽는 상태가 되면 stay()가 is-clickable을 붙여 연다
+  letter.addEventListener('click', () => { if (letter.classList.contains('is-clickable')) openReview(letter); });
+  letter.addEventListener('keydown', (event) => {
+    if (!letter.classList.contains('is-clickable') || (event.key !== 'Enter' && event.key !== ' ')) return;
+    event.preventDefault();
+    event.stopPropagation();
+    openReview(letter);
+  });
   const letterMark = element('span', 'sheet-letter-mark');
   letterMark.setAttribute('aria-hidden', 'true');
   letterMark.append('접수', element('br'), '완료');
   letter.append(element('p', 'sheet-letter-q', '이 사건, 어느 정도의 형량이 맞다고 생각하나요?'),
     element('p', 'sheet-letter-a', preToFinal.preJudgment.label),
     element('p', 'sheet-letter-by', '— 기사만 읽고 보낸 첫인상, 독자 엽서'), element('div', 'sheet-letter-lines'), letterMark);
+  letter.append(element('p', 'sheet-letter-hint', '엽서를 눌러 이 사건 리뷰 남기기 ✎'));
   const note = editorNote(preToFinal.preJudgment.label, judgments.COURT);
   if (note) {
     const edit = element('p', 'sheet-letter-edit');
@@ -217,7 +231,7 @@ async function share(note, caseId) {
  * @returns {HTMLElement} 8막 무대. 마지막 대사창의 선택지로 다른 사건 · 메인 · 공유를 고른다
  */
 // fromRect: 7막 무대 장면이 있던 화면 사각형(이어 받을 때). 그 자리 그대로에서 신문으로 빠져나온다
-export function renderComparisonStage({ script, data, caseId, caseTitle, navigate, fromRect }) {
+export function renderComparisonStage({ script, data, caseId, caseTitle, navigate, api, fromRect }) {
   const { judgments } = data;
   const vsCourt = diffLine(judgments.USER, judgments.COURT, '실제 판결',
     '실제 판결과 형량이 같았네요. 그런데 무겁게 본 요소도 같았을까요?', (head) => `${head} 어떤 요소를 다르게 봤을까요?`);
@@ -229,7 +243,7 @@ export function renderComparisonStage({ script, data, caseId, caseTitle, navigat
   const steps = act.steps.filter((step) => editor || !step.text?.includes('{editor}'))
     .map((step) => (step.text ? { ...step, text: step.text.replace('{vsCourt}', vsCourt).replace('{vsAi}', vsAi).replace('{pre}', pre).replace('{editor}', editor ?? '') } : step));
   const narrow = window.matchMedia('(max-width: 680px)').matches;
-  const sheet = newspaper(data, script, caseTitle, navigate);
+  const sheet = newspaper(data, script, caseTitle, navigate, (letter) => openCaseReviewPopup({ caseId, api, navigate, from: letter }));
   const stage = renderStage({
     script: { ...script, acts: { ...script.acts, 8: { ...act, steps } } },
     order: ['8'],
@@ -241,7 +255,7 @@ export function renderComparisonStage({ script, data, caseId, caseTitle, navigat
     choices: { end: [
       { label: '메인으로', action: () => toDesk(), primary: true }, // 판사의 책상(데스크톱 메인)
       { label: '여기 남아있기', action: () => stay() },
-      { label: '리뷰하기', action: () => openReview() },
+      { label: '리뷰하기', action: () => openCaseReviewPopup({ caseId, api, navigate, from: stage.querySelector('.spr.b'), hand: true }) }, // 남불이 엽서를 건넨다
       { label: '공유하기', action: (note) => share(note, caseId) },
     ] },
     onRestart: restartMock(caseId),
@@ -254,6 +268,29 @@ export function renderComparisonStage({ script, data, caseId, caseTitle, navigat
     const from = sheet.getBoundingClientRect();
     stage.freeze();
     stage.classList.add('reading-paper');
+    sheet.querySelectorAll('.sheet-cast-link').forEach((link) => {
+      link.disabled = false;
+      link.setAttribute('aria-label', link.dataset.openLabel);
+    });
+    const letter = sheet.querySelector('.sheet-letter');
+    letter.classList.add('is-clickable');
+    letter.setAttribute('role', 'button');
+    letter.tabIndex = 0;
+    letter.setAttribute('aria-label', '독자 엽서 — 이 사건 리뷰 남기기');
+    // 지면 아래 "판결 성향 테스트" 광고: 누르면 신문을 한 장 넘겨 뒷면(오피니언 면)의 성향 테스트로 간다(FE-55)
+    const testAd = sheet.querySelector('.sheet-ad.is-lead');
+    if (testAd) { // 광고 단이 없어도 읽기 화면은 열린다
+      testAd.classList.add('is-clickable');
+      testAd.setAttribute('role', 'button');
+      testAd.tabIndex = 0;
+      testAd.setAttribute('aria-label', '판결 성향 테스트 — 신문을 넘겨 시작하기');
+      testAd.addEventListener('click', turnToTest);
+      testAd.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        turnToTest();
+      });
+    }
     window.scrollTo(0, 0);
     sheet.setAttribute('tabindex', '-1');
     sheet.focus({ preventScroll: true });
@@ -279,7 +316,7 @@ export function renderComparisonStage({ script, data, caseId, caseTitle, navigat
     handPaper(sheet, { backdrop: 'desk' }); // 지면 양옆은 책상
     navigate('landing', { from: 'paper' });
   }
-  // 읽기 화면: 우하단 "메인으로"(신문을 책상에 내려놓기), 왼쪽 귀 "다른 사건 보기"(신문을 접어 1면으로)
+  // 읽기 화면: 우하단 "메인으로"(신문을 책상에 내려놓기), 왼쪽 귀 "다른 사건 보기"(신문을 뒤집어 1면으로)
   const toMain = element('button', 'primary-button paper-to-main is-clickable', '메인으로');
   toMain.type = 'button';
   toMain.addEventListener('click', toDesk);
@@ -290,42 +327,55 @@ export function renderComparisonStage({ script, data, caseId, caseTitle, navigat
     if (folding) return;
     folding = true;
     if (reducedMotion()) { navigate('list'); return; }
-    sheet.style.transformOrigin = '50% 0';
-    sheet.animate([{ scale: '1 1', opacity: 1 }, { scale: '1 .5', opacity: .9, offset: .5 }, { scale: '1 .04', opacity: 0 }],
-      { duration: FOLD_MS, easing: 'cubic-bezier(.5, 0, .75, 0)', fill: 'forwards' }).finished
-      .catch(() => {}).then(() => { if (!closing) navigate('list', { from: 'desk' }); }); // 접는 사이 메인으로 갔다면(closing) 목록으로 되돌리지 않는다
+    // 신문을 뒤집는다(플립): 살짝 들어 올리며 옆으로 세우고(앞면이 사라짐), 마저 돌려 빈 뒷면이 보이게 내려놓는다.
+    // 축은 지면의 세로 가운데, 높이는 지금 보는 화면 가운데다. 읽기 모드의 지면은 transform을 끄므로 개별 속성(rotate · scale)으로 움직인다
+    tilt('50%');
+    const [up, down] = FLIP_MS;
+    sheet.animate([{ rotate: 'y 0deg', scale: '1' }, { rotate: 'y 90deg', scale: '1.05' }],
+      { duration: up, easing: 'cubic-bezier(.45, 0, .8, .5)', fill: 'forwards' }).finished
+      .then(() => {
+        sheet.classList.add('is-flipped'); // 옆으로 선 순간 앞면 기사를 감춘다(뒷면 = 빈 지면)
+        return sheet.animate([{ rotate: 'y 90deg', scale: '1.05' }, { rotate: 'y 180deg', scale: '1' }],
+          { duration: down, easing: 'cubic-bezier(.2, .5, .3, 1)', fill: 'forwards' }).finished;
+      })
+      .catch(() => {}).then(() => {
+        if (closing) return; // 뒤집는 사이 메인으로 갔다면 목록으로 되돌리지 않는다
+        // 뒤집힌 빈 뒷면을 사건 목록에 넘긴다: 목록이 그 종이를 자기 지면 자리로 옮기고 기사를 그 위에 페이드인한다(caseListPage.js)
+        handPaper(sheet, { backdrop: pageBackdrop(sheet), blank: true });
+        navigate('list', { from: 'flip' });
+      });
   }
-  // 리뷰하기(임시, BE-82 · 후속 이슈): 엽서 한 장이 떠오른다. 사건별 후기 페이지가 생기면 그 화면으로 바꾼다
-  function openReview() {
-    const layer = element('div', 'review-layer');
-    const card = element('section', 'review-postcard');
-    card.setAttribute('role', 'dialog');
-    card.setAttribute('aria-modal', 'true');
-    card.setAttribute('aria-labelledby', `review-title-${caseId}`);
-    const title = element('h2', 'review-title', '독자 엽서');
-    title.id = `review-title-${caseId}`;
-    const close = element('button', 'secondary-button', '닫기');
-    close.type = 'button';
-    const opener = document.activeElement; // 닫으면 포커스를 여기(리뷰하기 버튼)로 돌려준다
-    const shut = () => {
-      layer.remove();
-      document.removeEventListener('keydown', onKey);
-      if (opener?.isConnected) opener.focus({ preventScroll: true });
-    };
-    // 대화상자 안에 누를 수 있는 건 닫기 하나뿐이라, Tab은 그 자리에 머물게 해 뒤 무대로 빠지지 않게 한다
-    const onKey = (event) => {
-      if (event.key === 'Escape') shut();
-      else if (event.key === 'Tab') { event.preventDefault(); close.focus(); }
-    };
-    close.addEventListener('click', shut);
-    layer.addEventListener('click', (event) => { if (event.target === layer) shut(); });
-    document.addEventListener('keydown', onKey);
-    card.append(title, element('p', 'review-text', '이 사건을 체험한 소감을 엽서로 남기는 곳이에요. 곧 열려요.'), close);
-    layer.append(card);
-    document.body.append(layer);
-    close.focus();
+  // 성향 테스트: 신문을 왼쪽 가장자리를 축으로 넘겨 세운다. 넘어간 뒷면(오피니언 면, /test/paper)이 같은 축에서 내려앉으며 이어진다
+  function turnToTest() {
+    if (folding || closing) return;
+    folding = true;
+    if (reducedMotion()) { navigate('testPaper'); return; }
+    tilt('0');
+    sheet.animate([{ rotate: 'y 0deg' }, { rotate: 'y -88deg' }],
+      { duration: TURN_MS, easing: 'cubic-bezier(.45, 0, .7, .4)', fill: 'forwards' }).finished
+      .catch(() => {}).then(() => {
+        if (closing) return; // 넘기는 사이 메인으로 갔다면 테스트 면으로 가지 않는다(foldToList와 같다)
+        navigate('testPaper', { from: 'paper' });
+      });
+  }
+  // 3D로 돌릴 준비: 원근은 지면의 부모에 건다(보는 눈은 지금 화면 가운데). 지면이 화면보다 길어서 축 높이를 화면 가운데로 맞춘다
+  function tilt(axisX) {
+    const parent = sheet.parentElement;
+    const middle = window.innerHeight / 2;
+    parent.style.perspective = '2400px';
+    parent.style.perspectiveOrigin = `50% ${middle - parent.getBoundingClientRect().top}px`;
+    sheet.style.transformOrigin = `${axisX} ${middle - sheet.getBoundingClientRect().top}px`;
   }
   return stage;
+}
+
+// 지면 바깥에 보이는 바탕색(지면에서 위로 올라가며 처음 칠해진 색). 넘겨줄 때 장식 층이 같은 색으로 화면을 덮는다
+function pageBackdrop(node) {
+  for (let parent = node.parentElement; parent; parent = parent.parentElement) {
+    const color = getComputedStyle(parent).backgroundColor;
+    if (color && color !== 'transparent' && color !== 'rgba(0, 0, 0, 0)') return color;
+  }
+  return 'transparent';
 }
 
 // 8막 화면 틀: 무대(카메라 틀)가 화면 전체를 채운다 — 판사의 책상 위 다음 날 신문을 화면 가득 들여다본다(FE-32, comparison.css)

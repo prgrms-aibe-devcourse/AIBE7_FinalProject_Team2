@@ -219,6 +219,11 @@
 /* 좁은 화면 메뉴 · 비교 화면에서 신문을 들고 오면 지면이 한 번 다가오며 나타난다 */
 .case-list-page.is-arriving .paper { animation: paper-arrive .5s cubic-bezier(.2, .8, .2, 1); }
 @keyframes paper-arrive { from { opacity: 0; transform: scale(.94); } }
+/* 8막 신문을 뒤집고 오면(FE-55) 넘겨받은 빈 종이가 같은 자리를 덮고 있는 동안 지면을 감춰 두고,
+   기사가 다 그려지면(is-revealing) 지면 종이는 바로, 기사는 페이드인으로 나타난다(위의 빈 종이는 그동안 걷힌다) */
+.case-list-page.is-unflipping:not(.is-revealing) .paper { visibility: hidden; }
+.case-list-page.is-revealing .paper > * { animation: list-fade-in .5s ease-out both; }
+@keyframes list-fade-in { from { opacity: 0; } }
 /* 메인 책상에서 들고 오면(FE-50) 지면이 화면 아래에서 들린 기울기(-3도) 그대로 올라오며 바로 서고, 뒤에 남긴 책상(.paper-ghost)은 흐려진다 */
 .case-list-page.is-rising { overflow: clip; } /* 아래에 내려가 있는 지면이 쪽을 늘리지 않게 */
 .case-list-page .paper-ghost { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
@@ -241,5 +246,5 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .case-list-page .is-pickable, .case-list-page .paper-tip { transition: none; }
-  .case-list-page.is-arriving .paper { animation: none; }
+  .case-list-page.is-arriving .paper, .case-list-page.is-revealing .paper > * { animation: none; }
 }

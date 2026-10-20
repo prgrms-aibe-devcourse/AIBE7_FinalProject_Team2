@@ -184,6 +184,8 @@ export function createRouter({ view, headerHost, footerHost, routes }) {
         history.replaceState({ ...(history.state ?? {}), seq }, '', window.location.pathname);
       }
       lastKnownSeq = seq;
+      firstSeq = seq;
+      historySeq = Math.max(historySeq, seq); // 새로고침해도 다음 push 순번이 지금 기록보다 커지게
       window.addEventListener('popstate', () => {
         const seq2 = history.state?.seq;
         const direction = seq2 === undefined ? 'navigate' : seq2 < lastKnownSeq ? 'back' : seq2 > lastKnownSeq ? 'forward' : 'navigate';
@@ -193,4 +195,12 @@ export function createRouter({ view, headerHost, footerHost, routes }) {
       return renderLocation('navigate'); // 최초 접속 · 새로고침은 뒤로 가기가 아니다
     },
   };
+}
+
+// 이 탭에서 라우터가 처음 그린 기록의 순번. 그보다 큰 순번이면 앱 안에서 뒤로 갈 기록이 있다
+let firstSeq = null;
+
+/** 앱 안에서 뒤로 갈 기록이 있는지(첫 진입 화면이면 false). history.length는 앱에 오기 전 다른 사이트 기록까지 세서 쓰지 않는다 (FE-55 리뷰 반영) */
+export function canGoBackInApp() {
+  return firstSeq !== null && (history.state?.seq ?? firstSeq) > firstSeq;
 }
