@@ -1,6 +1,7 @@
 package com.team2.project.imagegen.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.team2.project.common.exception.BusinessException;
 import com.team2.project.common.exception.ErrorCode;
@@ -35,14 +36,20 @@ public class CasePaperService {
 	private final CasePhotoPromptClient contentClient;
 	private final CasePaperRepository paperRepository;
 	private final FactorRepository factorRepository;
-	private final ObjectMapper objectMapper = new ObjectMapper();
+	private final ObjectMapper objectMapper = new ObjectMapper()
+		.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
-	/** 사건 내용을 바탕으로 신문 지면을 짓는다. 이미 있으면 내용을 덮어쓰고, 없으면 새로 만든다 */
+	/**
+	 * 사건 내용을 바탕으로 신문 지면 콘텐츠를 Gemini로 짓는다. DB에는 손대지 않는다 — Gemini 호출(40 ~ 90초)을
+	 * 트랜잭션 · 사건 행 잠금 밖에서 먼저 끝내기 위해 저장({@link #savePaper})과 분리했다(PR #212 리뷰)
+	 */
+	public GeneratedPaper generateContent(LegalCase legalCase) {
+		return generate(buildInstruction(legalCase));
+	}
+
+	/** 생성된 콘텐츠를 저장한다. 이미 있으면 내용을 덮어쓰고, 없으면 새로 만든다 */
 	@Transactional
-	public CasePaper generatePaper(LegalCase legalCase) {
-		String instruction = buildInstruction(legalCase);
-		GeneratedPaper generated = generate(instruction);
-
+	public CasePaper savePaper(LegalCase legalCase, GeneratedPaper generated) {
 		return paperRepository.findByLegalCaseId(legalCase.getId())
 			.map(paper -> {
 				paper.overwrite(DEFAULT_DESK, generated.headline(), generated.deck(), generated.caption(),
@@ -91,16 +98,24 @@ public class CasePaperService {
 
 	private GeneratedPaper parse(String raw) {
 		String json = stripCodeFence(raw);
+		GeneratedPaper paper;
 		try {
-			GeneratedPaper paper = objectMapper.readValue(json, GeneratedPaper.class);
-			if (paper.headline() == null || paper.headline().isBlank() || paper.article() == null
-					|| paper.article().isEmpty()) {
-				throw new BusinessException(ErrorCode.PROMPT_GENERATION_FAILED, "신문 지면 응답에 headline · article이 없습니다");
-			}
-			return paper;
+			paper = objectMapper.readValue(json, GeneratedPaper.class);
 		} catch (JsonProcessingException e) {
 			throw new BusinessException(ErrorCode.PROMPT_GENERATION_FAILED, "신문 지면 응답을 JSON으로 읽지 못했습니다");
 		}
+		if (paper.headline() == null || paper.headline().isBlank() || tooLong(paper.headline(), 200)
+				|| tooLong(paper.deck(), 300) || tooLong(paper.caption(), 200) || paper.article() == null
+				|| paper.article().isEmpty() || paper.article().stream().anyMatch(p -> p == null || p.isBlank())) {
+			throw new BusinessException(ErrorCode.PROMPT_GENERATION_FAILED,
+				"신문 지면 응답이 headline · article 규칙(A-13-8과 동일한 길이 · 빈 문단 규칙)을 지키지 않습니다");
+		}
+		return paper;
+	}
+
+	/** A-13-8 수정 API(CasePaperEditRequest)와 같은 길이 규칙을 생성 응답에도 적용한다(DB 컬럼 길이 초과로 500이 나는 것을 막는다) */
+	private static boolean tooLong(String value, int max) {
+		return value != null && value.strip().length() > max;
 	}
 
 	/** Gemini가 지시를 어기고 ```json ... ``` 코드블록으로 감싸 보낼 때를 대비한다 */
@@ -116,6 +131,6 @@ public class CasePaperService {
 		return text;
 	}
 
-	record GeneratedPaper(String headline, String deck, String caption, List<String> article) {
+	public record GeneratedPaper(String headline, String deck, String caption, List<String> article) {
 	}
 }

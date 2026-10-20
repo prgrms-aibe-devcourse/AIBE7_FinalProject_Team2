@@ -48,7 +48,7 @@ class CasePaperServiceTest {
 		contentClient.nextResponse = "{\"headline\":\"헤드라인\",\"deck\":\"부제\",\"caption\":\"캡션\","
 			+ "\"article\":[\"문단1\",\"문단2\"]}";
 
-		CasePaper paper = service.generatePaper(legalCase);
+		CasePaper paper = service.savePaper(legalCase, service.generateContent(legalCase));
 
 		assertThat(paper.getHeadline()).isEqualTo("헤드라인");
 		assertThat(paper.getDeck()).isEqualTo("부제");
@@ -68,7 +68,7 @@ class CasePaperServiceTest {
 		contentClient.nextResponse = "```json\n{\"headline\":\"H\",\"deck\":null,\"caption\":null,"
 			+ "\"article\":[\"문단\"]}\n```";
 
-		CasePaper paper = service.generatePaper(legalCase);
+		CasePaper paper = service.savePaper(legalCase, service.generateContent(legalCase));
 
 		assertThat(paper.getHeadline()).isEqualTo("H");
 		assertThat(paper.getArticle()).containsExactly("문단");
@@ -84,7 +84,7 @@ class CasePaperServiceTest {
 		contentClient.nextResponse = "{\"headline\":\"새 헤드라인\",\"deck\":\"새 부제\",\"caption\":\"새 캡션\","
 			+ "\"article\":[\"새 문단\"]}";
 
-		CasePaper paper = service.generatePaper(legalCase);
+		CasePaper paper = service.savePaper(legalCase, service.generateContent(legalCase));
 
 		assertThat(paper).isSameAs(existing);
 		assertThat(paper.getHeadline()).isEqualTo("새 헤드라인");
@@ -98,7 +98,7 @@ class CasePaperServiceTest {
 		when(factorRepository.findAllByCaseId(1L)).thenReturn(List.of());
 		contentClient.nextResponse = "이건 JSON이 아닙니다";
 
-		assertThatThrownBy(() -> service.generatePaper(legalCase)).isInstanceOf(BusinessException.class)
+		assertThatThrownBy(() -> service.generateContent(legalCase)).isInstanceOf(BusinessException.class)
 			.extracting(e -> ((BusinessException) e).getErrorCode()).isEqualTo(ErrorCode.PROMPT_GENERATION_FAILED);
 	}
 
@@ -109,8 +109,42 @@ class CasePaperServiceTest {
 		when(factorRepository.findAllByCaseId(1L)).thenReturn(List.of());
 		contentClient.nextResponse = "{\"deck\":\"부제\"}";
 
-		assertThatThrownBy(() -> service.generatePaper(legalCase)).isInstanceOf(BusinessException.class)
+		assertThatThrownBy(() -> service.generateContent(legalCase)).isInstanceOf(BusinessException.class)
 			.extracting(e -> ((BusinessException) e).getErrorCode()).isEqualTo(ErrorCode.PROMPT_GENERATION_FAILED);
+	}
+
+	@Test
+	@DisplayName("headline · deck · caption이 DB 컬럼 길이(200 · 300 · 200)를 넘으면 실패한다")
+	void generatePaper_tooLongFields_fail() {
+		LegalCase legalCase = legalCase(1L, "개요", "살인");
+		when(factorRepository.findAllByCaseId(1L)).thenReturn(List.of());
+		contentClient.nextResponse = "{\"headline\":\"" + "가".repeat(201) + "\",\"article\":[\"문단\"]}";
+
+		assertThatThrownBy(() -> service.generateContent(legalCase)).isInstanceOf(BusinessException.class)
+			.extracting(e -> ((BusinessException) e).getErrorCode()).isEqualTo(ErrorCode.PROMPT_GENERATION_FAILED);
+	}
+
+	@Test
+	@DisplayName("article에 빈 문단이 섞여 있으면 실패한다")
+	void generatePaper_blankArticleElement_fails() {
+		LegalCase legalCase = legalCase(1L, "개요", "살인");
+		when(factorRepository.findAllByCaseId(1L)).thenReturn(List.of());
+		contentClient.nextResponse = "{\"headline\":\"헤드라인\",\"article\":[\"문단1\",\"  \"]}";
+
+		assertThatThrownBy(() -> service.generateContent(legalCase)).isInstanceOf(BusinessException.class)
+			.extracting(e -> ((BusinessException) e).getErrorCode()).isEqualTo(ErrorCode.PROMPT_GENERATION_FAILED);
+	}
+
+	@Test
+	@DisplayName("모르는 필드가 섞여 있어도 나머지 필드로 파싱한다")
+	void generatePaper_ignoresUnknownFields() {
+		LegalCase legalCase = legalCase(1L, "개요", "살인");
+		when(factorRepository.findAllByCaseId(1L)).thenReturn(List.of());
+		contentClient.nextResponse = "{\"headline\":\"헤드라인\",\"article\":[\"문단\"],\"extra\":\"모델이 덧붙인 필드\"}";
+
+		CasePaperService.GeneratedPaper generated = service.generateContent(legalCase);
+
+		assertThat(generated.headline()).isEqualTo("헤드라인");
 	}
 
 	@Test
@@ -120,7 +154,7 @@ class CasePaperServiceTest {
 		LegalCase legalCase = legalCase(1L, "개요", "살인");
 		when(factorRepository.findAllByCaseId(1L)).thenReturn(List.of());
 
-		assertThatThrownBy(() -> service.generatePaper(legalCase)).isInstanceOf(BusinessException.class)
+		assertThatThrownBy(() -> service.generateContent(legalCase)).isInstanceOf(BusinessException.class)
 			.extracting(e -> ((BusinessException) e).getErrorCode()).isEqualTo(ErrorCode.PROMPT_GENERATION_FAILED);
 	}
 

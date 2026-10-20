@@ -16,34 +16,56 @@ import com.team2.project.legalcase.repository.LegalCaseRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 신문 지면 생성 · 조회 · 수정 API (BE-92, COMMON-41). 사건 행 잠금 · 공개 여부 확인 · 감사 로그는
  * A-11 · A-13 · BE-91(사진)과 같은 원칙을 따른다 — 공개한 사건은 고칠 수 없다.
  */
 @Service
-@RequiredArgsConstructor
 public class AdminCasePaperService {
 
 	private final LegalCaseRepository caseRepository;
 	private final CasePaperService paperService;
 	private final CaseIncidentPhotoRepository incidentPhotoRepository;
 	private final AdminAuditLogger auditLogger;
+	private final TransactionTemplate transactionTemplate;
 
-	@Transactional
+	public AdminCasePaperService(LegalCaseRepository caseRepository, CasePaperService paperService,
+			CaseIncidentPhotoRepository incidentPhotoRepository, AdminAuditLogger auditLogger,
+			PlatformTransactionManager transactionManager) {
+		this.caseRepository = caseRepository;
+		this.paperService = paperService;
+		this.incidentPhotoRepository = incidentPhotoRepository;
+		this.auditLogger = auditLogger;
+		this.transactionTemplate = new TransactionTemplate(transactionManager);
+	}
+
+	/**
+	 * 신문 지면 생성. Gemini 호출(40 ~ 90초)은 사건 행 잠금 없이 먼저 끝내고, 저장(짧은 트랜잭션)에서만
+	 * 잠근다 — 그렇지 않으면 그 시간만큼 다른 쓰기 요청(A-11 수정 · 사진 업로드 · 공개 처리)이 막힌다(PR #212 리뷰).
+	 * 생성하는 동안 사건이 공개될 수 있어 저장 직전에 공개 여부를 다시 확인한다
+	 */
 	public CasePaperResponse generatePaper(Long caseId, AdminPrincipal admin, HttpServletRequest request) {
-		LegalCase legalCase = lockCase(caseId);
-		guardNotPublished(legalCase);
+		LegalCase snapshot = findCase(caseId);
+		guardNotPublished(snapshot);
 
-		CasePaper paper = paperService.generatePaper(legalCase);
-		legalCase.startReview();
-		caseRepository.saveAndFlush(legalCase);
+		CasePaperService.GeneratedPaper generated = paperService.generateContent(snapshot);
 
-		auditLogger.record(admin, AdminAuditAction.CASE_PAPER_GENERATE, AuditTargetType.CASE, caseId, Map.of(), request);
-		return toResponse(legalCase, paper);
+		return transactionTemplate.execute(status -> {
+			LegalCase legalCase = lockCase(caseId);
+			guardNotPublished(legalCase);
+			CasePaper paper = paperService.savePaper(legalCase, generated);
+			legalCase.startReview();
+			caseRepository.saveAndFlush(legalCase);
+
+			auditLogger.record(admin, AdminAuditAction.CASE_PAPER_GENERATE, AuditTargetType.CASE, caseId, Map.of(),
+				request);
+			return toResponse(legalCase, paper);
+		});
 	}
 
 	public CasePaperResponse getPaper(Long caseId) {

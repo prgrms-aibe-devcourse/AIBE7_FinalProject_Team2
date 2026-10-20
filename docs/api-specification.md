@@ -1328,6 +1328,7 @@ API 1 · 2 · 16은 상태와 관계없이 부를 수 있다. 표에 없는 조�
 
 | 거절 | 조건 |
 | --- | --- |
+| 404 `CASE_NOT_FOUND` | 사건이 없음 |
 | 404 `PAPER_NOT_FOUND` | 아직 생성한 적 없음 |
 
 ### A-13-8. 신문 지면 수정 — `PATCH /admin/cases/{caseId}/paper`
