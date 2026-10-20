@@ -35,8 +35,6 @@ const OBJECTS = {
 const ADMIN_MUG = { label: '관리자 페이지', route: homeRoute(), mobileText: '사건 검수 · 운영' }; // 관리자로 로그인하면 마이페이지 자리 (FE-53)
 const SOON = '곧 열려요';
 // 책상 위 내로 · 남불(기준 좌표계 px, 오른쪽 끝에서 잰다 — FE-50에서 소품 배치를 좌우로 뒤집었다).
-// shortcut: 원본 이미지 레포 PNG를 직접 읽는다, 웹 webp 변환(WBS 7.6.8) 때 public 경로로 옮긴다
-const CUTS = 'https://raw.githubusercontent.com/peanutboi710/NaeLawNamBul_Images/main/character/cuts/';
 const CHEEKS = [
   { who: 'naero', look: 'idle-sorry', right: 644, top: 2, height: 170 }, // 가운데에서 살짝 오른쪽(가운데 x ≈ 960), 턱이 신문 위쪽 가장자리에 걸친다
   { who: 'nambul', look: 'idle-thinking', right: 1300, top: 782, height: 158 },
@@ -185,7 +183,7 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
 
   const cheeks = CHEEKS.map(({ who, look, right, top, height }) => {
     const image = element('img', `desk-cheek cheek-${who}`);
-    image.src = `${CUTS}${who}/base/${who}_cut-cheek_${look}.png`;
+    image.src = `/images/characters/cheek/${who}_${look}.webp`;
     image.alt = '';
     image.setAttribute('aria-hidden', 'true');
     Object.assign(image.style, { right: `${right}px`, top: `${top}px`, height: `${height}px` });
