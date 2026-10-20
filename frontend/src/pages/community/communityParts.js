@@ -274,7 +274,7 @@ export function postLink(text, postId, navigate, className = '') {
 // ---- 글쓰기 칸 ----
 // 말머리 · 사건 · 제목 · 본문 · 사진(최대 3장) · 내 판결 붙이기. 로그아웃 상태면 로그인 안내만 둔다.
 // 올리면 onPosted(새 글)를 부른다
-export function composer({ api, navigate, cases, onPosted, closeButton }) {
+export function composer({ api, navigate, cases, onPosted, closeButton, closeCompose }) {
   const box = element('section', 'cm-compose');
   box.setAttribute('aria-labelledby', 'cm-compose-title');
   const head = element('div', 'cm-compose-head');
@@ -285,7 +285,7 @@ export function composer({ api, navigate, cases, onPosted, closeButton }) {
 
   if (!currentUser()) {
     box.append(element('p', 'cm-compose-note', '로그인하면 글을 쓰고 댓글 · 좋아요를 남길 수 있어요.'),
-      button('로그인하기', () => navigate('login'), 'primary-button cm-compose-login'));
+      button('로그인하기', () => { closeCompose(); navigate('login'); }, 'primary-button cm-compose-login'));
     return box;
   }
 

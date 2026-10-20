@@ -79,7 +79,7 @@ export function renderCommunityPage(container, { api, navigate, category = null,
     if (!caseList) {
       caseList = data.cases;
       filterHost.append(filterControls({ value: filters, cases: caseList, onChange: onFilter }));
-      side.append(composer({ api, navigate, cases: data.cases, closeButton, onPosted: (post) => { closeCompose(); navigate('community', { justPosted: post.postId }); } }),
+      side.append(composer({ api, navigate, cases: data.cases, closeButton, closeCompose, onPosted: (post) => { closeCompose(); navigate('community', { justPosted: post.postId }); } }),
         popularList(data.popular, navigate));
     }
     count.textContent = `글 ${data.total}개`;

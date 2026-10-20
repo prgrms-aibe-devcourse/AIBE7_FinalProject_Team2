@@ -29,7 +29,11 @@ function load() {
   try { return { ...empty(), ...JSON.parse(localStorage.getItem(KEY)) }; } catch { return empty(); }
 }
 function store(state) {
-  try { localStorage.setItem(KEY, JSON.stringify(state)); memory = null; } catch { memory = state; }
+  try { localStorage.setItem(KEY, JSON.stringify(state)); memory = null; } catch (error) {
+    memory = state;
+    // 사진(data URL)이 많으면 저장 한도를 넘는다 — 이번 탭에서만 보이고 새로고침하면 사라진다
+    console.warn('[communityMock] 브라우저 저장 한도를 넘어 이번 탭에서만 글을 보관합니다', error);
+  }
 }
 
 function me() {

@@ -33,7 +33,7 @@ export function renderCommunityPostPage(container, { api, navigate, postId }) {
   api.getCommunityPosts?.().then((data) => {
     if (!active()) return;
     filterHost.append(filterControls({ value: { category: undefined, caseId: null }, cases: data.cases, onChange: ({ category, caseId }) => navigate('community', { category: category ?? null, filterCaseId: caseId }) }));
-    side.append(composer({ api, navigate, cases: data.cases, closeButton, onPosted: (post) => { closeCompose(); navigate('community', { justPosted: post.postId }); } }),
+    side.append(composer({ api, navigate, cases: data.cases, closeButton, closeCompose, onPosted: (post) => { closeCompose(); navigate('community', { justPosted: post.postId }); } }),
       popularList(data.popular, navigate));
   }).catch(() => {});
 
