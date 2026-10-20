@@ -16,8 +16,8 @@
 
 ## 선택한 방법과 이유
 - 동시 요청은 조건부 갱신으로 처리하고 비관적 잠금은 쓰지 않았다. 유니크 제약 위반은 `409 INVALID_STATE`로, 그 밖의 제약 위반·예상 못 한 예외는 `500 INTERNAL_ERROR`로 분류했다(원인은 로그에만 남김).
-- (리뷰 반영) 대안 (a)를 선택해 `ExperienceTransitionService` 사용 순서를 "상태 전이 먼저, 판단 저장은 그 다음"으로 뒤집었다. 반대 순서가 실제로 패자에게 `currentStatus` 없는 409를 발생시키는 것과, 권장 순서로 패자가 유니크 위반 없이 `currentStatus` 포함 409를 받는 것을 각각 테스트로 확인했다.
-- (리뷰 반영) 이어서 `apply(experience, relatedWrites, change)` 오버로드를 추가해, 판단 저장(`relatedWrites`)을 상태 전이 호출 쪽에 넘기면 호출자가 저장 순서를 직접 맞추지 않아도 되게 했다. 패자는 유니크 위반 없이 깨끗하게 `currentStatus` 포함 `INVALID_STATE`를 받는다.
+- (리뷰 반영, **중간 단계** — `8b76342`) 처음에는 대안 (a)를 골라 `ExperienceTransitionService` 사용 규칙을 "상태 전이 먼저, 판단 저장은 그 다음"으로 정했다. 반대 순서가 실제로 패자에게 `currentStatus` 없는 409를 발생시키는 것과, 이 순서로 패자가 `currentStatus` 포함 409를 받는 것을 각각 테스트로 확인했다. 이 규칙은 바로 다음 커밋에서 아래 오버로드로 대체됐다.
+- (리뷰 반영, **최종** — `e95ddfd`) `apply(experience, relatedWrites, change)` 오버로드를 추가했다. 이 메서드는 **판단 저장(`relatedWrites`)을 먼저 실행한 뒤 상태를 전이**한다. 동시 제출의 패자는 판단 저장에서 유니크 위반을 만나고, 메서드가 이를 잡아 새 트랜잭션에서 현재 상태를 다시 읽어 `currentStatus` 포함 `INVALID_STATE`로 바꿔 던진다(대안 (b)를 공통 메서드 안으로 옮긴 형태). 그래서 호출자가 저장 순서를 직접 맞추지 않아도 된다.
   - 이 과정에서 실제 버그 2건을 발견해 함께 고쳤다: 유니크 위반으로 flush 실패 후 같은 트랜잭션에서 바로 재조회하면 Hibernate가 AssertionFailure로 죽는 문제, 그리고 PostgreSQL이 제약 위반 후 그 트랜잭션 전체를 실패 상태로 만들어 같은 트랜잭션의 SELECT까지 거부하는 문제. 재조회는 반드시 새 트랜잭션(`REQUIRES_NEW`)에서 하도록 `ExperienceRepository.findStateInNewTransaction`을 추가했다.
 - (리뷰 반영) 섹션 확인(API 7) 동시 클릭 문제: `applyIdempotent`의 재확인 로직을 상태만이 아니라 `(상태, lastReviewedStep)` 비교로 일반화해, "이미 그 섹션 이상 진행됨"을 멱등 성공으로 처리했다. 반환 타입도 `boolean`에서 `TransitionResult(changed, status, lastReviewedStep)`로 바꿔, 멱등 성공 시 호출자가 넘긴 목표값이 아니라 실제 현재 값을 돌려주도록 했다.
 - 공개 요청(AI/실제 판결, 비교)은 이미 공개된 상태여도 성공으로 처리한다(멱등).
