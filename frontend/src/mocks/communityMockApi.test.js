@@ -84,6 +84,11 @@ test('내 판결은 판결을 확정한 뒤에만 붙일 수 있고, 붙이면 �
   assert.equal(saved.verdict.prisonMonths, 120);
 });
 
+test('내 판결 조회는 체험 기록을 만들지 않는다', async () => {
+  assert.equal(await getMyShareableVerdict(), null);
+  assert.equal(localStorage.getItem('nlnb-mock-review'), null);
+});
+
 test('좋아요는 누를 때마다 켜고 끈다', async () => {
   const before = (await getCommunityPost(108)).likeCount;
   assert.deepEqual(await toggleCommunityLike(108), { liked: true, likeCount: before + 1 });

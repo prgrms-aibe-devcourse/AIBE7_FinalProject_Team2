@@ -32,7 +32,7 @@ export function renderCommunityPostPage(container, { api, navigate, postId }) {
   // 거르기 · 글쓰기 칸 · 많이 본 글은 목록 응답으로 채운다(글 상세와 따로 불러 글이 먼저 보이게 한다)
   api.getCommunityPosts?.().then((data) => {
     if (!active()) return;
-    filterHost.append(filterControls({ value: { category: undefined, caseId: null }, cases: data.cases, onChange: ({ category, caseId }) => navigate('community', { category: category ?? null, caseId }) }));
+    filterHost.append(filterControls({ value: { category: undefined, caseId: null }, cases: data.cases, onChange: ({ category, caseId }) => navigate('community', { category: category ?? null, filterCaseId: caseId }) }));
     side.append(composer({ api, navigate, cases: data.cases, closeButton, onPosted: (post) => { closeCompose(); navigate('community', { justPosted: post.postId }); } }),
       popularList(data.popular, navigate));
   }).catch(() => {});

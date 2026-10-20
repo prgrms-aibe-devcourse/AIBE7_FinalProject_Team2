@@ -176,12 +176,18 @@ export function communityShell({ navigate }) {
   closeButton.setAttribute('aria-label', '글쓰기 닫기');
   const narrow = window.matchMedia(NARROW);
   const onKey = (event) => { if (event.key === 'Escape') closeCompose(); };
+  // 창 밖은 모두 조작되지 않게 한다: 창에서 body까지 올라가며 형제 요소(공통 헤더 · 푸터 포함)에 inert를 건다(PR #200 리뷰 반영)
+  let inertNodes = [];
   function openCompose() {
     side.classList.add('is-open');
     side.setAttribute('role', 'dialog');
     side.setAttribute('aria-modal', 'true');
-    filters.inert = true;
-    main.inert = true;
+    inertNodes = [];
+    for (let node = side; node && node !== document.body; node = node.parentElement) {
+      for (const sibling of node.parentElement?.children ?? []) {
+        if (sibling !== node && !sibling.inert) { sibling.inert = true; inertNodes.push(sibling); }
+      }
+    }
     openButton.setAttribute('aria-expanded', 'true');
     document.addEventListener('keydown', onKey);
     side.querySelector('input, textarea, button:not(.cm-compose-close)')?.focus();
@@ -191,8 +197,8 @@ export function communityShell({ navigate }) {
     side.classList.remove('is-open');
     side.removeAttribute('role');
     side.removeAttribute('aria-modal');
-    filters.inert = false;
-    main.inert = false;
+    inertNodes.forEach((node) => { node.inert = false; });
+    inertNodes = [];
     openButton.setAttribute('aria-expanded', 'false');
     document.removeEventListener('keydown', onKey);
     if (root.isConnected) openButton.focus();
@@ -348,8 +354,12 @@ export function composer({ api, navigate, cases, onPosted, closeButton }) {
   fileInput.addEventListener('change', async () => {
     const files = [...fileInput.files].filter((file) => file.type.startsWith('image/')).slice(0, IMAGE_MAX - photos.length);
     fileInput.value = '';
+    addPhoto.disabled = true; // 줄이는 동안 다시 고르지 못하게 한다(PR #200 리뷰 반영)
     for (const file of files) {
-      try { photos.push(await shrinkImage(file)); } catch { showError('사진을 읽지 못했어요. 다른 사진을 골라 주세요.'); }
+      try {
+        const src = await shrinkImage(file);
+        if (photos.length < IMAGE_MAX) photos.push(src);
+      } catch { showError('사진을 읽지 못했어요. 다른 사진을 골라 주세요.'); }
     }
     if (box.isConnected) paintPhotos();
   });

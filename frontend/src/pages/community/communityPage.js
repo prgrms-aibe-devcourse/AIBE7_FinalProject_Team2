@@ -8,7 +8,8 @@ import {
 // 거르기 값은 기록 항목에 넣어 두어(history.state) 상세에서 뒤로 오면 같은 목록이 보인다. 바꿀 때는 화면을 다시 그리지 않아 쓰던 글이 남는다
 const DEFAULT_FILTERS = { category: null, caseId: null, sort: 'LATEST' };
 
-export function renderCommunityPage(container, { api, navigate, category = null, caseId = null, sort = 'LATEST', justPosted = null }) {
+// caseId는 라우터가 사건 경로용으로 덮어쓰므로 사건 거르기 값은 filterCaseId로 받는다(PR #200 리뷰 반영)
+export function renderCommunityPage(container, { api, navigate, category = null, filterCaseId: caseId = null, sort = 'LATEST', justPosted = null }) {
   const shell = communityShell({ navigate });
   const { root, filters: filterHost, main, side, openButton, closeButton, closeCompose } = shell;
   container.replaceChildren(root);
@@ -22,7 +23,11 @@ export function renderCommunityPage(container, { api, navigate, category = null,
   let filters = { category, caseId, sort: SORT_LABELS[sort] ? sort : 'LATEST' };
   let page = 1;
   let token = 0;
-  if (justPosted) history.replaceState({ ...history.state, extras: { ...filters } }, ''); // 새로고침 · 뒤로 가기로 새 글 표시를 되풀이하지 않는다
+  const saveFilters = () => {
+    const { caseId: filterCaseId, ...rest } = filters;
+    history.replaceState({ ...history.state, extras: { ...rest, filterCaseId } }, '');
+  };
+  if (justPosted) saveFilters(); // 새로고침 · 뒤로 가기로 새 글 표시를 되풀이하지 않는다
 
   const toolbar = element('div', 'cm-toolbar');
   const count = element('p', 'cm-count-line');
@@ -38,18 +43,22 @@ export function renderCommunityPage(container, { api, navigate, category = null,
   loading.setAttribute('role', 'status');
   timeline.append(loading);
 
+  // 정렬 칩은 한 번만 만들고 눌린 표시만 바꾼다(다시 만들면 키보드 포커스가 사라진다, PR #200 리뷰 반영)
   function paintSorts() {
-    sorts.replaceChildren(...Object.entries(SORT_LABELS).map(([key, label]) => {
-      const chip = button(label, () => change({ ...filters, sort: key }), 'cm-chip');
-      chip.setAttribute('aria-pressed', String(filters.sort === key));
-      return chip;
-    }));
+    if (!sorts.children.length) {
+      sorts.append(...Object.entries(SORT_LABELS).map(([key, label]) => {
+        const chip = button(label, () => change({ ...filters, sort: key }), 'cm-chip');
+        chip.dataset.sort = key;
+        return chip;
+      }));
+    }
+    for (const chip of sorts.children) chip.setAttribute('aria-pressed', String(filters.sort === chip.dataset.sort));
   }
 
   function change(next) {
     filters = next;
     page = 1;
-    history.replaceState({ ...history.state, extras: { ...filters } }, '');
+    saveFilters();
     load();
   }
 

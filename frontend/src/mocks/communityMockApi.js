@@ -1,6 +1,6 @@
 import { currentUser } from '../utils/session.js';
 import { getBookmarkCharacter } from '../utils/bookmarkCharacter.js';
-import { read as readExperience, readJudgment } from './mockExperienceStore.js';
+import { peek as peekExperience, readJudgment } from './mockExperienceStore.js';
 import { mockCases as cases } from './caseListMockData.js';
 import { seedComments, seedPosts } from './communityMockData.js';
 
@@ -99,7 +99,7 @@ export async function getCommunityPost(postId) {
 // 내 판결 붙이기에 쓸 값. 판결을 확정하지 않았으면 null. 목 체험 기록은 사건 1 하나뿐이다(mockExperienceStore)
 export async function getMyShareableVerdict() {
   await delay();
-  if (!VERDICT_DONE.includes(readExperience().status)) return null;
+  if (!VERDICT_DONE.includes(peekExperience()?.status)) return null; // 읽기만 한다: 체험 기록을 만들지 않는다
   const judgment = readJudgment();
   if (!judgment) return null;
   const factors = judgment.factors ?? [];
