@@ -29,11 +29,13 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class CasePhotoService {
 
-	/** 모든 프롬프트 추천에 공통으로 붙이는 그림체 · 등장인물 규칙 (COMMON-41 결정) */
+	/** 모든 프롬프트 추천에 공통으로 붙이는 그림체 · 등장인물 · 수위 규칙 (COMMON-41 결정) */
 	private static final String STYLE_GUIDE = "등장인물은 눈 · 코 · 입 등 이목구비가 없는 무표정한 회색 사람(엑스트라)으로"
 		+ " 그려 달라고 해줘. 내로(고양이 마스코트) · 남불(불꽃 마스코트) 같은 특정 캐릭터나 동물 마스코트는 절대"
 		+ " 넣지 말라고 해줘. 따뜻한 베이지 · 크림색 톤의 플랫 일러스트 스타일, 종이 질감 배경, 부드러운 조명,"
-		+ " 동화책 같은 분위기로 그려 달라고 해줘. 글자 · 로고는 넣지 말라고 해줘.";
+		+ " 동화책 같은 분위기로 그려 달라고 해줘. 글자 · 로고는 넣지 말라고 해줘."
+		+ " 피 · 상처 같은 자극적인 묘사는 넣지 말고, 흉기 등 위험 요소를 꼭 그려야 하면 실루엣이나 모자이크 처리로"
+		+ " 뭉뚱그려 표현해 직접적으로 드러나지 않게 해 달라고 해줘.";
 
 	private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of("image/jpeg", "image/png", "image/webp");
 

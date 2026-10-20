@@ -57,7 +57,7 @@ class CasePhotoServiceTest {
 
 		assertThat(prompt).isEqualTo("추천 프롬프트");
 		assertThat(promptClient.lastInstruction).contains("빌린 돈 문제로 다투다 벌어진 사건").contains("살인")
-			.contains("이목구비가 없는").contains("내로").contains("남불");
+			.contains("이목구비가 없는").contains("내로").contains("남불").contains("모자이크");
 	}
 
 	@Test
