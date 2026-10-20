@@ -28,7 +28,7 @@ const SCENE_WIDTH = 1672;
 // 책상 위 물건에는 이름표(메모지)를 붙이지 않는다(FE-50). label은 낭독기 이름과 좁은 화면 메뉴 카드에 쓴다
 const OBJECTS = {
   folder: { label: '판결 성향 테스트', route: 'test', mobileText: '나의 판결 성향 알아보기' },
-  news: { label: '실제 사건 판결 체험', route: 'list', mobileText: '오늘의 사건' },
+  news: { label: '실제 사건 판결 체험', route: 'list', mobileText: '사건 목록' },
   mug: { label: '마이페이지', route: 'me', mobileText: '내 판결 기록' },
   laptop: { label: '커뮤니티', route: 'community', mobileText: '다른 사람의 생각' },
   postcard: { label: '의견 보내기', route: 'feedback' }, // FE-62: 펜 옆 엽서도 같은 창을 연다(누르는 범위만 넓힌다, 낭독기 · 키보드는 펜 하나로)
@@ -49,8 +49,8 @@ const FADE_MS = 800;
 // 서비스 소개(FE-50): "뉴스만 본 나 → 모든 사실을 본 나"를 잇는 한 줄. 양 끝은 상태, 가운데 두 지점은 되돌릴 수 없는 판단이다
 const TRACK = [
   { pole: '뉴스만 본 나' },
-  { title: '첫인상 판단', text: '기사 제목과 재연만 보고 먼저 고릅니다. 고른 뒤에는 바꿀 수 없어요.' },
-  { title: '최종 판결', text: '사실관계 · 양측 주장 · 법률을 차례로 읽고 형량을 정합니다. 확정하면 바꿀 수 없어요.' },
+  { title: '첫인상', text: '기사 제목과 재연만 보고 먼저 고릅니다. 고른 뒤에는 바꿀 수 없어요.' },
+  { title: '내 판결', text: '사실관계 · 양측 주장 · 법률을 차례로 읽고 형량을 정합니다. 확정하면 바꿀 수 없어요.' },
   { pole: '모든 사실을 본 나' },
 ];
 const VERDICTS = ['내 판결', 'AI 판결', '실제 판결']; // 세 판결은 대등하다(같은 모양으로 나란히)
@@ -117,7 +117,7 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
   const folderArt = span('folder-art');
   folderArt.innerHTML = FOLDER_SVG;
   folderArt.append(deco('folder-label'));
-  folderArt.lastChild.textContent = '3분 성향검사';
+  folderArt.lastChild.textContent = '3분 성향 테스트';
 
   // 신문 — 집어 들면 펼쳐지는 S-02 지면을 줄여 놓은 모습(FE-32): 정보 줄 → [귀 | 제호 | 귀] → 날짜 띠 → 유형 탭 줄 →
   // 배너 제목 → [사진 | 머리기사 단] → 추천 2건(지면 끝까지, FE-50). 사건 목록의 머리기사로 채운다(불러오기 전 · 실패 시 기본 문구)
@@ -244,7 +244,7 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
     lifting = true;
     bootLaptop(() => (root.isConnected ? navigate('community') : undefined)); // 커뮤니티가 다 그려질 때까지 눈을 감고 기다린다(laptopBoot.js)
   }
-  // 서류철: 성향 검사 철이 화면 아래에서 올라온다(personality.css folder-rise). 헤더 · 서비스 소개 버튼으로 가면 연출 없이 바로 간다
+  // 서류철: 성향 테스트 철이 화면 아래에서 올라온다(personality.css folder-rise). 헤더 · 서비스 소개 버튼으로 가면 연출 없이 바로 간다
   const ACTIONS = { news: lift, mug: sip, laptop: openLaptop, folder: () => navigate('test', { from: 'desk' }), pen: openFeedbackDialog, postcard: openFeedbackDialog };
 
   // 기준 좌표계(1672px)를 화면 너비에 맞춘다
@@ -390,7 +390,7 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
       node.append(picture, element('b', '', item.headline || item.title), span('', item.article?.join(' ') || item.shortIntro));
       return node;
     }));
-    mobileCounts.news.textContent = `오늘의 사건 ${summary.total}건`;
+    mobileCounts.news.textContent = `사건 ${summary.total}건`;
     mobileNews.headline.textContent = top.headline || top.title;
     mobileNews.photo.src = casePhoto(top);
   }

@@ -152,7 +152,7 @@ function newspaper(data, script, caseTitle, navigate, openReview) {
   // 아래 편집부 의견은 그 첫인상을 실제 판결과 견줘 한 줄로 적는다(어느 쪽이 맞는지는 말하지 않는다).
   // 추후 확장(우선도 낮음): 사용자 데이터가 쌓이면 이 칸에 다른 독자들의 첫인상 분포를 함께 보여 줄 수 있다 — 지금은 데이터가 없어 보여 주지 않는다.
   const letter = element('div', 'sheet-letter');
-  // 엽서를 누르면 이 엽서가 떠올라 리뷰 엽서로 펼쳐진다("리뷰하기" 버튼과 같은 내용). 체험 중에는 누를 수 없고(아무 표시도 없다),
+  // 엽서를 누르면 이 엽서가 떠올라 독자 엽서로 펼쳐진다("엽서 쓰기" 버튼과 같은 내용). 체험 중에는 누를 수 없고(아무 표시도 없다),
   // "여기 남아있기"로 지면을 읽는 상태가 되면 stay()가 is-clickable을 붙여 연다
   letter.addEventListener('click', () => { if (letter.classList.contains('is-clickable')) openReview(letter); });
   letter.addEventListener('keydown', (event) => {
@@ -166,8 +166,8 @@ function newspaper(data, script, caseTitle, navigate, openReview) {
   letterMark.append('접수', element('br'), '완료');
   letter.append(element('p', 'sheet-letter-q', '이 사건, 어느 정도의 형량이 맞다고 생각하나요?'),
     element('p', 'sheet-letter-a', preToFinal.preJudgment.label),
-    element('p', 'sheet-letter-by', '— 기사만 읽고 보낸 첫인상, 독자 엽서'), element('div', 'sheet-letter-lines'), letterMark);
-  letter.append(element('p', 'sheet-letter-hint', '엽서를 눌러 이 사건 리뷰 남기기 ✎'));
+    element('p', 'sheet-letter-by', '— 기사만 읽고 보낸 첫인상 엽서'), element('div', 'sheet-letter-lines'), letterMark);
+  letter.append(element('p', 'sheet-letter-hint', '엽서를 눌러 이 사건에 독자 엽서 쓰기 ✎'));
   const note = editorNote(data.preToCourt?.direction);
   if (note) {
     const edit = element('p', 'sheet-letter-edit');
@@ -196,9 +196,9 @@ function advertisements() {
     return box;
   };
   ads.append(
-    ad('is-lead', '광고', '판결 성향 테스트', '나는 엄하게 보는 편일까, 사정을 살피는 편일까? 3분이면 끝나는 판결 성향 검사.'),
+    ad('is-lead', '광고', '판결 성향 테스트', '나는 엄하게 보는 편일까, 사정을 살피는 편일까? 3분이면 끝나는 판결 성향 테스트.'),
     ad('', '알림', '오늘의 지면', '다른 사건도 판결을 기다리고 있어요. 신문을 펼쳐 다음 사건을 골라 보세요.'),
-    ad('is-notice', '독자 엽서 모집', '첫인상을 보내 주세요', '기사만 읽고 보낸 엽서는 다음 날 독자 의견란에 실립니다.'),
+    ad('is-notice', '첫인상 엽서 모집', '첫인상을 보내 주세요', '기사만 읽고 보낸 엽서는 다음 날 독자 의견란에 실립니다.'),
     element('p', 'sheet-ads-note', '이 지면의 사건과 기사는 판결 체험을 위해 재구성한 것이며, 사진은 AI로 생성한 연출 이미지입니다.'),
   );
   return ads;
@@ -255,7 +255,7 @@ export function renderComparisonStage({ script, data, caseId, caseTitle, navigat
     choices: { end: [
       { label: '메인으로', action: () => toDesk(), primary: true }, // 판사의 책상(데스크톱 메인)
       { label: '여기 남아있기', action: () => stay() },
-      { label: '리뷰하기', action: () => openCaseReviewPopup({ caseId, api, navigate, from: stage.querySelector('.spr.b'), hand: true }) }, // 남불이 엽서를 건넨다
+      { label: '엽서 쓰기', action: () => openCaseReviewPopup({ caseId, api, navigate, from: stage.querySelector('.spr.b'), hand: true }) }, // 남불이 엽서를 건넨다
       { label: '공유하기', action: (note) => share(note, caseId) },
     ] },
     onRestart: restartMock(caseId),
@@ -276,7 +276,7 @@ export function renderComparisonStage({ script, data, caseId, caseTitle, navigat
     letter.classList.add('is-clickable');
     letter.setAttribute('role', 'button');
     letter.tabIndex = 0;
-    letter.setAttribute('aria-label', '독자 엽서 — 이 사건 리뷰 남기기');
+    letter.setAttribute('aria-label', '독자 엽서 — 이 사건에 엽서 쓰기');
     // 지면 아래 "판결 성향 테스트" 광고: 누르면 신문을 한 장 넘겨 뒷면(오피니언 면)의 성향 테스트로 간다(FE-55)
     const testAd = sheet.querySelector('.sheet-ad.is-lead');
     if (testAd) { // 광고 단이 없어도 읽기 화면은 열린다

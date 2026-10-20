@@ -2,9 +2,9 @@ import { button, element } from '../../components/siteLayout.js';
 import { mountCaseReview } from './caseReviewPage.js';
 import { reducedMotion } from '../../utils/motion.js';
 
-// 8막 "리뷰하기" 버튼 · 독자 의견 엽서를 누르면 날아오는 엽서 한 장(FE-55). 화면(/cases/:caseId/opinion)과 같은 내용을 쓴다.
+// 8막 "엽서 쓰기" 버튼 · 지면의 엽서를 누르면 날아오는 엽서 한 장(FE-55). 화면(/cases/:caseId/opinion)과 같은 내용을 쓴다.
 // 2막 사전 판단 엽서와 같은 연출(paperStage.css nambul-hand · postcard-in): 남불이 앞으로 나서며 손을 내밀고, 엽서가 그 손에서 날아와 가운데에서 펼쳐진다.
-// 읽기 화면에서 지면의 독자 의견 엽서를 눌렀으면(남불이 없다) 그 엽서가 제자리에서 떠올라 가운데로 온다.
+// 읽기 화면에서 지면의 엽서를 눌렀으면(남불이 없다) 그 엽서가 제자리에서 떠올라 가운데로 온다.
 // 닫으면(쓰던 내용이 있으면 한 번 묻고) 엽서가 온 곳으로 돌아가며 사라지고, 누른 곳으로 포커스가 돌아온다. 뒤 무대는 그대로다(새 화면으로 가지 않는다)
 const FOCUSABLE = 'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';
 const FLY_MS = 700;

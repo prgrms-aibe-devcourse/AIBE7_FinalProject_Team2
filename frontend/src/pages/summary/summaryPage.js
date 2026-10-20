@@ -28,7 +28,7 @@ export async function renderSummaryPage(container, { caseId, api, navigate }) {
       const data = await api.getReview(caseId);
       if (!active()) return;
       if (data.status === 'REVIEWED') { navigate('verdict', {}, { replace: true }); return; }
-      const back = element('button', 'secondary-button', '사건 정보 확인으로');
+      const back = element('button', 'secondary-button', '재판으로');
       back.type = 'button';
       back.addEventListener('click', () => navigate('review'));
       message('사건 정보를 모두 확인한 뒤 볼 수 있어요.', back);
