@@ -11,6 +11,8 @@ import { renderAiPage } from '../pages/ai/aiPage.js';
 import { renderCaseListPage } from '../pages/caseList/caseListPage.js';
 import { renderCaseDetailPage } from '../pages/caseDetail/caseDetailPage.js';
 import { renderCaseReviewPage } from '../pages/caseReview/caseReviewPage.js';
+import { renderCommunityPage } from '../pages/community/communityPage.js';
+import { renderCommunityPostPage } from '../pages/community/communityPostPage.js';
 import { renderComparisonPage } from '../pages/comparison/comparisonPage.js';
 import { renderCourtPage } from '../pages/court/courtPage.js';
 import { renderLandingPage } from '../pages/landing/landingPage.js';
@@ -48,6 +50,9 @@ export const routes = [
   { name: 'testType', path: '/test/types/:shareId', render: renderPersonalitySharedPage, title: '판결 성향 유형' },
   // 마이페이지는 커피색 헤더를 직접 그린다(FE-44)
   { name: 'me', path: '/me', render: renderMyPage, ownsHeader: true, title: '마이페이지' },
+  // S-18 커뮤니티 (FE-47): 메인 책상의 노트북으로 들어온다. 커뮤니티 API가 없어 목 모드에서만 동작한다(실제 모드는 "준비 중")
+  { name: 'community', path: '/community', render: renderCommunityPage, title: '커뮤니티' },
+  { name: 'communityPost', path: '/community/posts/:postId', render: renderCommunityPostPage, title: '커뮤니티' },
   // S-12 로그인 (FE-52): 화면 틀. 사용자 로그인 API가 없어 목 모드에서만 개발용 목업 로그인이 된다
   { name: 'login', path: '/login', render: renderLoginPage, title: '로그인' },
   // 확장: S-19 관리자 검수 (FE-16). 관리자 코드는 사용자 화면 번들에 넣지 않으려고 필요할 때만 불러온다.

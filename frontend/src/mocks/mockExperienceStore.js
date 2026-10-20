@@ -18,6 +18,18 @@ export function save(state) {
   return state;
 }
 
+// 저장하지 않고 읽기만 한다. 기록이 없으면 null (read()는 없으면 초기 상태를 저장해 다른 화면 상태를 바꾼다)
+export function peek() {
+  const raw = localStorage.getItem(storageKey);
+  if (!raw) return null;
+  try {
+    const state = JSON.parse(raw);
+    return validState(state) ? state : null;
+  } catch {
+    return null;
+  }
+}
+
 export function read() {
   const raw = localStorage.getItem(storageKey);
   if (raw) {

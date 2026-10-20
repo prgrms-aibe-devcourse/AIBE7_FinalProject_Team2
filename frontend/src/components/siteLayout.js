@@ -33,18 +33,10 @@ export function renderSiteHeader({ navigate }) {
     if (here === path || here.startsWith(`${path}/`)) node.setAttribute('aria-current', 'page');
     return node;
   };
-  // 아직 화면이 없는 메뉴: 누를 수 없고 낭독기에는 "준비 중"으로 읽힌다. 화면이 생기면 tab()으로 바꾼다
-  const soon = (label) => {
-    const node = element('button', 'nav-button', label);
-    node.type = 'button';
-    node.setAttribute('aria-disabled', 'true');
-    node.setAttribute('aria-label', `${label} — 준비 중`);
-    return node;
-  };
   nav.append(
     tab('사건 목록', 'list', '/cases'),
     tab('성향검사', 'test', '/test'),
-    soon('커뮤니티'),
+    tab('커뮤니티', 'community', '/community'),
     motionSwitch(),
   );
   // 로그인 자리는 메뉴 밖 맨 오른쪽. 좁은 화면에서는 로고와 같은 줄에 남고 메뉴가 아랫줄로 내려간다(style.css)
