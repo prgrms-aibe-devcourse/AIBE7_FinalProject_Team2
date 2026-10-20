@@ -70,10 +70,23 @@ class CloudflareCaseImageGenClientTest {
 	}
 
 	@Test
-	@DisplayName("응답에 이미지가 없으면 실패한다")
-	void generateImage_missingImage_isError() {
+	@DisplayName("success가 false면 이미지가 있어도 실패로 본다")
+	void generateImage_successFalse_isError() {
 		server.expect(requestTo(URL))
 			.andRespond(withSuccess("{\"success\":false,\"result\":{},\"errors\":[\"model busy\"]}", MediaType.APPLICATION_JSON));
+
+		assertThatThrownBy(() -> client("acc-1", "test-token").generateImage("프롬프트"))
+			.isInstanceOf(ImageGenException.class)
+			.hasMessageContaining("실패를 나타냅니다");
+		assertThat(aiCallCount("failure")).isEqualTo(1);
+		server.verify();
+	}
+
+	@Test
+	@DisplayName("success가 true인데 응답에 이미지가 없으면 실패한다")
+	void generateImage_missingImage_isError() {
+		server.expect(requestTo(URL))
+			.andRespond(withSuccess("{\"success\":true,\"result\":{},\"errors\":[]}", MediaType.APPLICATION_JSON));
 
 		assertThatThrownBy(() -> client("acc-1", "test-token").generateImage("프롬프트"))
 			.isInstanceOf(ImageGenException.class)
@@ -116,9 +129,19 @@ class CloudflareCaseImageGenClientTest {
 	@Test
 	@DisplayName("설정 객체를 문자열로 찍어도 API 토큰 · 계정 ID가 그대로 나오지 않는다")
 	void properties_toString_masksSecrets() {
-		ImageGenProperties properties = new ImageGenProperties("acc-1", "secret-token", "model", Duration.ofSeconds(1));
+		ImageGenProperties properties = new ImageGenProperties("acc-1", "secret-token",
+			"@cf/black-forest-labs/flux-1-schnell", Duration.ofSeconds(1));
 
 		assertThat(properties.toString()).doesNotContain("secret-token").doesNotContain("acc-1");
+	}
+
+	@Test
+	@DisplayName("FLUX 계열이 아닌 모델은 설정 단계에서 거절한다 (응답 형식이 달라 해석하지 못한다)")
+	void unsupportedModel_isRejectedAtConfig() {
+		assertThatThrownBy(
+			() -> new ImageGenProperties("acc-1", "test-token", "@cf/meta/llama-3", Duration.ofSeconds(60)))
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("flux-");
 	}
 
 	private CloudflareCaseImageGenClient client(String accountId, String apiToken) {

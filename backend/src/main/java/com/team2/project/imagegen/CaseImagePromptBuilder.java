@@ -19,22 +19,33 @@ public class CaseImagePromptBuilder {
 		+ "clothing. Do not depict any specific identifiable face. Do not include any cat or flame "
 		+ "mascot characters. No text, no letters, no logos in the image.";
 
+	/** Cloudflare `flux-1-schnell` 기준 prompt 최대 길이. 모델을 바꾸면 재확인이 필요하다. */
+	private static final int MAX_PROMPT_LENGTH = 2048;
+
 	/** @param caseSummary 비식별화한 사건 요약(영문 번역본 또는 영문으로 지어낸 요약) */
 	public String buildRepresentativePhoto(String caseSummary) {
-		return "Newspaper-style representative photo illustrating this case: " + requireText(caseSummary, "caseSummary")
-			+ ". " + STYLE_SUFFIX;
+		requireText(caseSummary, "caseSummary");
+		return requireWithinLimit(
+			"Newspaper-style representative photo illustrating this case: " + caseSummary + ". " + STYLE_SUFFIX);
 	}
 
 	/** @param incidentDescription 비식별화한 사건 발단 상황 설명(영문) */
 	public String buildIncidentPhoto(String incidentDescription) {
-		return "Illustration depicting the moment the incident began: "
-			+ requireText(incidentDescription, "incidentDescription") + ". " + STYLE_SUFFIX;
+		requireText(incidentDescription, "incidentDescription");
+		return requireWithinLimit(
+			"Illustration depicting the moment the incident began: " + incidentDescription + ". " + STYLE_SUFFIX);
 	}
 
-	private static String requireText(String text, String name) {
+	private static void requireText(String text, String name) {
 		if (text == null || text.isBlank()) {
 			throw new ImageGenException(name + "가 비어 있습니다");
 		}
-		return text;
+	}
+
+	private static String requireWithinLimit(String prompt) {
+		if (prompt.length() > MAX_PROMPT_LENGTH) {
+			throw new ImageGenException("이미지 생성 프롬프트가 너무 깁니다 (" + prompt.length() + "자, 최대 " + MAX_PROMPT_LENGTH + "자)");
+		}
+		return prompt;
 	}
 }

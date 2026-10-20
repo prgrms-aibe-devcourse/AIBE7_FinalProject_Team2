@@ -85,6 +85,9 @@ public class CloudflareCaseImageGenClient implements CaseImageGenClient {
 	}
 
 	private byte[] toImageBytes(RunResponse response) {
+		if (response != null && !response.success()) {
+			throw new ImageGenException("이미지 생성 응답이 실패를 나타냅니다 (errors=" + response.errors() + ")");
+		}
 		String base64 = response == null || response.result() == null ? null : response.result().image();
 		if (base64 == null || base64.isBlank()) {
 			List<Object> errors = response == null ? null : response.errors();

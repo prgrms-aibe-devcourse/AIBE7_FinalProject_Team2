@@ -40,4 +40,13 @@ class CaseImagePromptBuilderTest {
 		assertThatThrownBy(() -> builder.buildRepresentativePhoto(" ")).isInstanceOf(ImageGenException.class);
 		assertThatThrownBy(() -> builder.buildIncidentPhoto("")).isInstanceOf(ImageGenException.class);
 	}
+
+	@Test
+	@DisplayName("최대 길이(2,048자)를 넘는 프롬프트는 거절한다")
+	void tooLongInput_isRejected() {
+		String tooLong = "a".repeat(2048);
+
+		assertThatThrownBy(() -> builder.buildRepresentativePhoto(tooLong)).isInstanceOf(ImageGenException.class);
+		assertThatThrownBy(() -> builder.buildIncidentPhoto(tooLong)).isInstanceOf(ImageGenException.class);
+	}
 }

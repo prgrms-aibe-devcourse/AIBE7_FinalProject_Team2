@@ -18,6 +18,21 @@ public record ImageGenProperties(
 	@DefaultValue("60s") Duration timeout
 ) {
 
+	/**
+	 * `CloudflareCaseImageGenClient`는 응답을 `{ "result": { "image": "<base64>" } }` 형식(FLUX 계열)으로만
+	 * 해석한다. 다른 계열 모델은 응답 형식이 달라(예: `result`가 문자열) 그대로 쓰면 읽지 못한다 — 모델을 바꾸려면
+	 * 응답 처리 코드도 같이 확인해야 한다.
+	 */
+	private static final String SUPPORTED_MODEL_PREFIX = "@cf/black-forest-labs/flux-";
+
+	public ImageGenProperties {
+		if (model != null && !model.isBlank() && !model.startsWith(SUPPORTED_MODEL_PREFIX)) {
+			throw new IllegalStateException(
+				"cloudflare.imagegen.model은 " + SUPPORTED_MODEL_PREFIX + "* 계열만 지원합니다 (현재: " + model
+					+ "). 다른 모델은 응답 형식이 달라 CloudflareCaseImageGenClient의 역직렬화 코드를 먼저 확인해야 합니다.");
+		}
+	}
+
 	public boolean enabled() {
 		return accountId != null && !accountId.isBlank() && apiToken != null && !apiToken.isBlank();
 	}
