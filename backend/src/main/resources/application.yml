@@ -41,6 +41,14 @@ spring:
       # 36.7 → 36처럼 사용자가 보낸 값과 다른 값이 조용히 저장되는 것을 막는다. "36" 같은 문자열 숫자는 허용한다
       accept-float-as-int: false
 
+  servlet:
+    multipart:
+      # 파일 업로드 상한 (COMMON-47, S3 업로드). Spring 기본값(파일 1MB)이면 Nginx를 올려도 1MB 넘는 파일이 막힌다
+      # - max-request-size는 Nginx client_max_body_size(frontend/nginx/snippets/app.conf, 20m)와 같게 둔다
+      # - 바꿀 때는 두 곳을 함께 고친다
+      max-file-size: 10MB
+      max-request-size: 20MB
+
 # Actuator · Micrometer 메트릭 노출 (BE-66, WBS 7.2.1). 애플리케이션 포트(8080)와 분리된 별도 포트로만 연다.
 # Nginx는 /api/만 backend:8080으로 프록시하므로, 이 포트는 Nginx 설정을 바꾸지 않는 한 외부에서 닿지 않는다.
 # health · prometheus 두 엔드포인트만 연다 (env · beans · threaddump 등은 운영 정보 노출이라 기본값대로 닫아 둔다)
@@ -94,6 +102,18 @@ cloudflare:
     account-id: ${CF_ACCOUNT_ID:}
     api-token: ${CF_API_TOKEN:}
     model: ${CF_IMAGEGEN_MODEL:@cf/black-forest-labs/flux-1-schnell}
+
+# 파일 저장소 - S3 (COMMON-47). 값은 환경변수로만 넘긴다(운영: deploy/.env, 로컬: 실행 환경변수)
+# - 인증은 이 파일에 두지 않는다. AWS SDK 기본 자격증명 체인을 쓴다 — 운영은 EC2 IAM 역할, 로컬은 AWS_PROFILE
+#   AWS 키(AWS_ACCESS_KEY_ID 등)는 이 파일 · Compose · 코드 어디에도 적지 않는다
+# - 버킷 기본값은 비워 둔다: 환경변수를 빠뜨린 로컬 실행이 운영 버킷에 쓰지 않도록 안전한 쪽에 둔다
+# - dir-prefix: 로컬은 local로 두어 운영 파일과 경로를 나눈다. 운영은 비워 둔다
+cloud:
+  aws:
+    region: ${AWS_REGION:ap-northeast-2}
+    s3:
+      bucket: ${S3_BUCKET_NAME:}
+      dir-prefix: ${S3_DIR_PREFIX:}
 
 # Redis (확장 단계, BE-61 · WBS 7.1.4). 정책은 기술 스택 2장 "Redis 운영 구성"
 # 논리 DB를 용도별로 나눈다 — 캐시(0)는 지워져도 되고, 토큰(1)은 지워지면 안 된다
