@@ -5,7 +5,7 @@
     "desk": "사회면",
     "headline": "빌린 돈 갚으라며 찾아온 지인, 자택서 숨져",
     "deck": "오래 이어진 변제 갈등…말다툼 끝 흉기 휘두른 뒤 현장 떠나",
-    "photo": "https://raw.githubusercontent.com/peanutboi710/NaeLawNamBul_Images/main/character/cuts/reenact/case-1/reenact-case-1_cut_headline.png",
+    "photo": "/images/cases/case-1-reenact.webp",
     "caption": "사건 이해를 돕기 위한 재연 일러스트",
     "article": [
       "돈 문제로 오래 다퉈 온 지인 사이의 갈등이 끝내 한 사람의 죽음으로 이어졌다. A씨는 빌린 돈 문제를 이야기하려고 자신의 집을 찾아온 지인 B씨를 집 안에 있던 흉기로 살해한 것으로 조사됐다.",
@@ -91,8 +91,8 @@
     }
   ],
   "evidencePhotos": {
-    "검사": "https://raw.githubusercontent.com/peanutboi710/NaeLawNamBul_Images/main/character/cuts/reenact/case-1/reenact-case-1_cut_headline.png",
-    "변호인": "https://raw.githubusercontent.com/peanutboi710/NaeLawNamBul_Images/main/character/cuts/reenact/case-1/reenact-case-1_cut_sub-1.png"
+    "검사": "/images/cases/case-1-reenact.webp",
+    "변호인": "/images/cases/case-1-sub.webp"
   },
   "acts": {
     "1": {
