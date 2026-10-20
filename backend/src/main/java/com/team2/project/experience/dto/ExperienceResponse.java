@@ -6,7 +6,7 @@ import java.time.ZoneId;
 import com.team2.project.experience.domain.Experience;
 import com.team2.project.experience.domain.ExperienceStatus;
 
-/** API 2 응답 및 API 3의 공통 상태 필드 변환. */
+/** API 2 · 3 응답. */
 public record ExperienceResponse(
 		Long caseId,
 		int attemptNo,
