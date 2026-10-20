@@ -18,6 +18,20 @@ export const fallbackImages = {
 // 원본은 이미지 레포 character/cuts/reenact/common(PNG 약 2MB) → 1000px webp로 줄여 public에 둔다. 사건 번호로 돌려 쓴다
 export const commonPhotos = ['/images/cases/common-1.webp', '/images/cases/common-2.webp', '/images/cases/common-3.webp'];
 
+/** 공용 재연 컷 한 장(seed로 고정 — 같은 자리는 늘 같은 컷) */
+export function commonPhotoAt(seed = 0) {
+  return commonPhotos[Math.abs(Number(seed) || 0) % commonPhotos.length];
+}
+
+/** 사진이 없거나 불러오지 못하면 공용 컷으로 바꾼다. 공용 컷도 못 불러오면 깨진 이미지 대신 사진을 뺀다 */
+export function useCommonPhotoOnError(image, seed = 0) {
+  image.addEventListener('error', () => {
+    if (image.dataset.fallback) { image.remove(); return; }
+    image.dataset.fallback = 'true';
+    image.src = commonPhotoAt(seed);
+  });
+}
+
 /** 사건 사진: 썸네일이 있으면 그것, 없으면 공용 재연 컷(사건 번호로 고정 — 새로고침해도 같은 사진) */
 export function casePhoto(item) {
   if (item?.thumbnailUrl) return item.thumbnailUrl;
