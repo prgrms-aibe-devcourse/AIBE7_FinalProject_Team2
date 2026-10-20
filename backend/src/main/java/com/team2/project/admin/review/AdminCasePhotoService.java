@@ -8,7 +8,7 @@ import com.team2.project.admin.review.dto.IncidentPhotoResponse;
 import com.team2.project.admin.service.AdminPrincipal;
 import com.team2.project.common.exception.BusinessException;
 import com.team2.project.common.exception.ErrorCode;
-import com.team2.project.imagegen.service.CaseImageGenerationService;
+import com.team2.project.imagegen.service.CasePhotoService;
 import com.team2.project.legalcase.domain.CaseIncidentPhoto;
 import com.team2.project.legalcase.domain.LegalCase;
 import com.team2.project.legalcase.repository.LegalCaseRepository;
@@ -21,26 +21,36 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 사건 사진 생성 API (BE-91, COMMON-41). Cloudflare 호출 · S3 업로드는 {@link CaseImageGenerationService}가 하고,
- * 여기서는 사건 행 잠금 · 공개 여부 확인 · 감사 로그만 맡는다(A-11 · A-13과 같은 원칙 — 공개한 사건은 고칠 수 없다)
+ * 사건 사진 프롬프트 추천 · 업로드 API (BE-91 재설계, COMMON-41). 사진은 사람이 만들어 업로드하고,
+ * 여기서는 사건 행 잠금 · 공개 여부 확인 · 감사 로그만 맡는다(A-11 · A-13과 같은 원칙 — 공개한 사건은 고칠 수 없다).
  */
 @Service
 @RequiredArgsConstructor
 public class AdminCasePhotoService {
 
 	private final LegalCaseRepository caseRepository;
-	private final CaseImageGenerationService imageGenerationService;
+	private final CasePhotoService photoService;
 	private final AdminReviewQueryService queryService;
 	private final AdminAuditLogger auditLogger;
 
-	/** 사건 대표사진(신문용) 생성. legal_case.thumbnail_url을 그대로 바꾼다(새 테이블을 두지 않는다, docs/decisions/BE-91.md) */
+	/** 사건 대표사진용 한글 프롬프트 추천. 읽기만 하므로 잠그지 않고, 사건 내용도 바꾸지 않는다 */
+	public String suggestRepresentativePrompt(Long caseId) {
+		return photoService.suggestRepresentativePrompt(findCase(caseId));
+	}
+
+	/** 사건 발단 사진용 한글 프롬프트 추천 */
+	public String suggestIncidentPrompt(Long caseId, String hint) {
+		return photoService.suggestIncidentPrompt(findCase(caseId), hint);
+	}
+
+	/** 사건 대표사진(신문용) 업로드. legal_case.thumbnail_url을 그대로 바꾼다(새 테이블을 두지 않는다) */
 	@Transactional
-	public AdminCaseDetailResponse generateRepresentativePhoto(Long caseId, String caseSummary, AdminPrincipal admin,
-			HttpServletRequest request) {
+	public AdminCaseDetailResponse uploadRepresentativePhoto(Long caseId, byte[] image, String contentType,
+			AdminPrincipal admin, HttpServletRequest request) {
 		LegalCase legalCase = lockCase(caseId);
 		guardNotPublished(legalCase);
 
-		String url = imageGenerationService.generateRepresentativePhoto(caseId, caseSummary);
+		String url = photoService.uploadRepresentativePhoto(caseId, image, contentType);
 		legalCase.changeThumbnailUrl(url);
 		legalCase.startReview();
 		caseRepository.saveAndFlush(legalCase);
@@ -52,14 +62,14 @@ public class AdminCasePhotoService {
 		return queryService.getCase(caseId);
 	}
 
-	/** 사건 발단 사진 생성. 사건마다 순서대로 쌓이고, 몇 장이든 추가할 수 있다 */
+	/** 사건 발단 사진 업로드. 사건마다 순서대로 쌓이고, 몇 장이든 추가할 수 있다 */
 	@Transactional
-	public IncidentPhotoResponse generateIncidentPhoto(Long caseId, String incidentDescription, String caption,
-			AdminPrincipal admin, HttpServletRequest request) {
+	public IncidentPhotoResponse uploadIncidentPhoto(Long caseId, byte[] image, String contentType, String caption,
+			String promptUsed, AdminPrincipal admin, HttpServletRequest request) {
 		LegalCase legalCase = lockCase(caseId);
 		guardNotPublished(legalCase);
 
-		CaseIncidentPhoto photo = imageGenerationService.generateIncidentPhoto(legalCase, incidentDescription, caption);
+		CaseIncidentPhoto photo = photoService.uploadIncidentPhoto(legalCase, image, contentType, caption, promptUsed);
 		legalCase.startReview();
 		caseRepository.saveAndFlush(legalCase);
 
@@ -72,10 +82,12 @@ public class AdminCasePhotoService {
 
 	/** 사건 발단 사진 목록 (순서대로). 읽기만 하므로 잠그지 않는다 */
 	public List<IncidentPhotoResponse> listIncidentPhotos(Long caseId) {
-		if (!caseRepository.existsById(caseId)) {
-			throw new BusinessException(ErrorCode.CASE_NOT_FOUND);
-		}
-		return imageGenerationService.listIncidentPhotos(caseId).stream().map(IncidentPhotoResponse::from).toList();
+		findCase(caseId);
+		return photoService.listIncidentPhotos(caseId).stream().map(IncidentPhotoResponse::from).toList();
+	}
+
+	private LegalCase findCase(Long caseId) {
+		return caseRepository.findById(caseId).orElseThrow(() -> new BusinessException(ErrorCode.CASE_NOT_FOUND));
 	}
 
 	private LegalCase lockCase(Long caseId) {

@@ -38,8 +38,10 @@ public enum ErrorCode {
 	// 성향 API (확장 단계, BE-72)
 	PERSONALITY_RESULT_NOT_FOUND(HttpStatus.NOT_FOUND, "성향 테스트 결과가 없습니다."),
 	PERSONALITY_TYPE_NOT_FOUND(HttpStatus.NOT_FOUND, "성향 유형을 찾을 수 없습니다."),
-	// 사건 사진 생성 API (확장 단계, BE-91)
-	IMAGE_GENERATION_FAILED(HttpStatus.BAD_GATEWAY, "사진 생성에 실패했습니다."),
+	// 사건 사진 업로드 · 프롬프트 추천 API (확장 단계, BE-91)
+	PROMPT_GENERATION_FAILED(HttpStatus.BAD_GATEWAY, "프롬프트 추천에 실패했습니다."),
+	FILE_UPLOAD_FAILED(HttpStatus.BAD_GATEWAY, "사진 업로드에 실패했습니다."),
+	INVALID_IMAGE_FILE(HttpStatus.BAD_REQUEST, "사진 파일이 올바르지 않습니다."),
 	INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "서버 오류가 발생했습니다.");
 
 	private final HttpStatus status;
