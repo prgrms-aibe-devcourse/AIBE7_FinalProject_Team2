@@ -7,6 +7,7 @@ import { AXES, CHARACTER_NAMES } from '../../utils/personalityAxes.js';
 import { axisSeries, collectionOf, trailLeft, trailSummary } from '../../utils/myPageView.js';
 import { BOOKMARK_CHARACTERS, BOOKMARK_NAMES, bookmarkFace, getBookmarkCharacter, setBookmarkCharacter } from '../../utils/bookmarkCharacter.js';
 import { SCRIPTS } from '../../content/scripts.js';
+import { fitPortraitIn } from '../../utils/portraitFit.js';
 import { clearUser, currentUser, isAdmin } from '../../utils/session.js';
 import { homeRoute } from '../admin/adminMenu.js';
 
@@ -71,6 +72,7 @@ function typePortrait(type) {
     image.addEventListener('error', showName, { once: true });
     image.src = type.imageUrl;
     portrait.append(image);
+    fitPortraitIn(portrait, image); // 이미지마다 다른 투명 여백을 걷어 대표 이미지와 비슷한 크기로 맞춘다(FE-67)
   } else showName();
   return portrait;
 }
@@ -123,7 +125,9 @@ function renderTop(data, go) {
   const section = element('section', 'my-top');
   const who = getBookmarkCharacter();
   const face = element('div', 'my-card-window');
-  face.append(picture(imageOf(who, 'role:judge'), `${BOOKMARK_NAMES[who]} 전신`, 'my-profile-face'));
+  const faceImage = picture(imageOf(who, 'role:judge'), `${BOOKMARK_NAMES[who]} 전신`, 'my-profile-face');
+  face.append(faceImage);
+  fitPortraitIn(face, faceImage);
   const profile = cardButton('is-profile', `프로필카드 열기: 대표 이미지 ${BOOKMARK_NAMES[who]}-판사`, element('p', 'my-card-name', '대표 이미지'), face, element('p', 'my-card-note', `${BOOKMARK_NAMES[who]}-판사`));
   profile.addEventListener('click', () => go('profile'));
 

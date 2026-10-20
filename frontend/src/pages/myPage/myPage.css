@@ -44,7 +44,7 @@ body:has(.my-page) .site-footer { background: var(--palette-coffee-50); border-t
 /* ── 위쪽: 프로필카드 | 닉네임 · 수치 | 성향카드 (좌우 대칭, 같은 크기의 세로로 긴 카드) ── */
 .my-top { display: grid; grid-template-columns: 200px minmax(0, 1fr) 200px; gap: 28px; align-items: start; padding-bottom: 36px; }
 .my-card {
-  position: relative; display: grid; width: 200px; aspect-ratio: 7 / 12; padding: 12px; border: 1px solid var(--color-border-strong); border-radius: 14px;
+  position: relative; display: grid; width: 200px; aspect-ratio: 7 / 14; padding: 12px; border: 1px solid var(--color-border-strong); border-radius: 14px;
   background: var(--color-card); color: inherit; font: inherit; text-align: center; cursor: pointer; user-select: none;
   box-shadow: 0 1px 0 var(--color-border), 0 10px 20px color-mix(in srgb, var(--color-heading) 14%, transparent);
   transition: transform .15s ease-out, box-shadow .15s ease-out;
@@ -55,8 +55,13 @@ body:has(.my-page) .site-footer { background: var(--palette-coffee-50); border-t
 .my-card { grid-template-rows: 2.8em minmax(0, 1fr) 3.6em; gap: 8px; padding: 16px 14px 12px; } /* 위 이름 · 가운데 그림 창 · 아래 한 줄 — 두 카드가 같은 칸이라 그림 크기가 같다 */
 .my-card.is-profile { background: linear-gradient(180deg, var(--color-card), var(--color-surface)); }
 .my-card-name { display: grid; align-items: center; margin: 0; font: 900 var(--text-title-3)/1.3 var(--font-heading); letter-spacing: -.02em; text-wrap: balance; color: inherit; }
-.my-card-window { display: grid; place-items: end center; min-height: 0; border-radius: 999px 999px 8px 8px; background: var(--color-surface); border: 1px solid color-mix(in srgb, var(--color-border-strong) 70%, transparent); overflow: hidden; }
-.my-card-window img { width: 100%; height: 100%; object-fit: contain; object-position: bottom; }
+.my-card-window { position: relative; display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); place-items: end center; min-height: 0; border-radius: 999px 999px 8px 8px; background: var(--color-surface); border: 1px solid color-mix(in srgb, var(--color-border-strong) 70%, transparent); overflow: hidden; }
+/* 행 · 열을 창 크기에 묶어(위 grid-template) 그림의 100%가 창 크기로 풀리게 한다(FE-67). 묶지 않으면 행이 그림 원래 높이로 늘어나 contain이 듣지 않고 아래가 잘렸다 */
+.my-card-window img { box-sizing: border-box; width: 100%; height: 100%; min-height: 0; padding: 22px 8px 0; object-fit: contain; object-position: bottom; }
+/* 윗 패딩(22px): 아치(둥근 위쪽)가 머리 · 가발 끝을 깎지 않게 그림을 곡선 아래로 내린다. 카드를 7 / 14로 키워 그림이 더 크게 보인다.
+   JS(utils/portraitFit.js)가 캐릭터 크기를 맞추면 .is-fitted가 붙고, 그림 상자의 크기 · 자리는 JS가 px로 정한다. 맞추는 동안(.is-fitting)은 크기가 튀지 않게 가린다 */
+.my-card-window img.is-fitted { position: absolute; max-width: none; padding: 0; object-fit: fill; }
+.my-card-window img.is-fitting { visibility: hidden; }
 .my-card-window strong { align-self: center; font: 900 var(--text-title-2)/1 var(--font-heading); color: var(--color-heading); }
 .my-card-note { display: grid; align-items: center; margin: 0; padding: 4px 4px 0; color: var(--color-muted); font: 400 var(--text-caption)/1.45 var(--font-article); text-wrap: balance; }
 .my-profile-face.is-missing { visibility: hidden; }
