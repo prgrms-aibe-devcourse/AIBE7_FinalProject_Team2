@@ -37,9 +37,9 @@ const lawImage = (who, pose) => `/images/characters/law/${who}_${pose}.webp`;
 // shortcut: 캐릭터 컷은 원본 이미지 레포 PNG를 직접 읽는다, 웹 webp 변환(WBS 7.6.8) 때 public 경로로 옮긴다
 const CUTS = 'https://raw.githubusercontent.com/peanutboi710/NaeLawNamBul_Images/main/character/cuts/';
 export const imageOf = (who, look) => (look.startsWith('role:') ? `/images/characters/roles/${who}_${look.slice(5)}.webp`
-  : look.startsWith('cheek:') ? `${CUTS}${who}/base/${who}_cut-cheek_${look.slice(6)}.png` // 볼따구(기다림)
+  : look.startsWith('cheek:') ? `${CUTS}${who}/base/cheek/${who}_cut-cheek_${look.slice(6)}.png` // 볼따구(기다림)
     : look.startsWith('deform:') ? `/images/characters/deform/${who}_${look.slice(7)}.webp` // 데포르메(란마 등, 시트에서 잘라 public에 둔다)
-    : `${CUTS}${who}/base/${who}_cut_${look}.png`);
+    : `${CUTS}${who}/base/scene/${who}_cut_${look}.png`);
 const FACES = ['neutral', 'happy', 'surprised', 'thinking', 'sorry', 'cheer'];
 const iconOf = (who, look) => {
   if (who.startsWith('law-')) return `/images/characters/law/${who}_icon.webp`;

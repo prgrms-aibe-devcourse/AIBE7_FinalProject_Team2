@@ -67,7 +67,7 @@ const INTRO_STEP = { say: 'naero', text: '오늘 신문에 실린 사건이에�
 // 1 · 2막 무대(흐름 목업). 2막 보드는 사전 판단 폼이고, 폼은 API 4 응답(형량 구간)이 오면 setOverview로 채운다.
 // parked: S-20(체험 전) — 지면만 보이고 캐릭터 · 대사는 stage.release()로 시작한다. earRight: 지면 오른쪽 귀(S-20 "이어서 하기")
 // paper: 지면에 실을 기사(paperFromCase — 메인 · S-02와 같은 사건 데이터). 없으면 대본 지면
-// prompt: S-20에서 진행 중인 체험을 "시작하기"로 열 때 맨 앞에서 내로가 묻는 장면 { text, choices }
+// prompt: S-20에서 하던 · 마친 체험을 "시작하기"로 열 때 맨 앞에서 내로가 묻는 장면 { text, choices }
 export function caseStage({ caseId, api, navigate, script, info, paper = script.paper, parked = false, earRight, prompt }) {
   const cards = {};
   const first = prompt ? [{ say: 'naero', text: prompt.text, choices: 'prompt', focus: 'all' }, INTRO_STEP] : [INTRO_STEP];

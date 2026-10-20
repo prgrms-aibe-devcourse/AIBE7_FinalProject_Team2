@@ -399,7 +399,7 @@
 .stage-wrap .dlg.has-choices .nxt { display: none; }
 
 /* 2막 → 3막: 신문 사진 속으로 들어간다 · 법정이 나타난다 */
-.stage-wrap .zoom { position: absolute; z-index: 10; object-fit: cover; filter: var(--photo-filter); transition: left .7s cubic-bezier(.3, .7, .2, 1), top .7s cubic-bezier(.3, .7, .2, 1), width .7s cubic-bezier(.3, .7, .2, 1), height .7s cubic-bezier(.3, .7, .2, 1), filter .7s ease-out; }
+.stage-wrap .zoom { position: absolute; z-index: 10; object-fit: cover; background: var(--color-paper); /* 배경이 투명한 사진도 있어, 확대하며 컬러가 될 때 뒤 지면이 비치지 않게 신문지색으로 채운다 */ filter: var(--photo-filter); transition: left .7s cubic-bezier(.3, .7, .2, 1), top .7s cubic-bezier(.3, .7, .2, 1), width .7s cubic-bezier(.3, .7, .2, 1), height .7s cubic-bezier(.3, .7, .2, 1), filter .7s ease-out; }
 .stage-wrap .zoom.in { filter: none; }
 .stage-wrap .stage.arrive .scene { animation: stage-arrive .6s ease-out; }
 @keyframes stage-arrive { from { opacity: .3; transform: scale(1.08); filter: blur(3px); } }
