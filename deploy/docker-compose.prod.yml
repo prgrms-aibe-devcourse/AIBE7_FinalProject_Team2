@@ -58,6 +58,11 @@ services:
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-true}
       # 없으면 RAG 유사 판례 검색만 꺼지고 서버는 뜬다
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      # 파일 저장소 S3 (COMMON-47). 버킷 이름은 deploy/.env에만 둔다. 비어 있으면 S3를 쓰는 기능만 동작하지 않는다
+      # - 인증은 EC2 IAM 역할로 한다. AWS_ACCESS_KEY_ID · AWS_SECRET_ACCESS_KEY는 넣지 않는다(넣으면 역할보다 먼저 쓰인다)
+      # - 컨테이너가 역할 자격증명을 받으려면 인스턴스 메타데이터 홉 제한이 2 이상이어야 한다 (deploy/README.md "파일 저장소 S3")
+      S3_BUCKET_NAME: ${S3_BUCKET_NAME:-}
+      AWS_REGION: ${AWS_REGION:-ap-northeast-2}
       # 첫 관리자 계정 (BE-39). 처음 한 번만 넣고, 계정이 만들어지면 .env에서 지운다
       ADMIN_BOOTSTRAP_EMAIL: ${ADMIN_BOOTSTRAP_EMAIL:-}
       ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:-}

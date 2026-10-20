@@ -453,6 +453,56 @@ git -C /opt/lawnambul/private-seed show origin/develop:loads/<파일>.sql \
   sudo systemctl start lawnambul-cd.timer
   ```
 
+## 파일 저장소 S3 (COMMON-47)
+
+파일 업로드는 S3 버킷 하나에 저장한다. 버킷 · IAM 설정은 AWS 콘솔에서 인프라 담당이 관리하고, 이 저장소에는 비밀값을 두지 않는다.
+
+- **버킷**: 서울 리전(ap-northeast-2), 퍼블릭 액세스 전면 차단, 기본 암호화 SSE-S3. 파일은 Presigned URL로만 내려준다
+- **인증**: EC2 인스턴스에 연결한 IAM 역할로 한다. 역할의 정책은 이 버킷의 객체 읽기 · 쓰기 · 삭제 · 목록만 허용한다(최소 권한)
+  - `AWS_ACCESS_KEY_ID` · `AWS_SECRET_ACCESS_KEY`를 `.env` · Compose · 코드에 넣지 않는다. 넣으면 SDK가 역할보다 그 키를 먼저 쓴다
+- **컨테이너에서 역할 받기**: 인스턴스 메타데이터가 IMDSv2 필수라서, 응답 홉 제한이 1이면 컨테이너 안에서는 자격증명을 받지 못한다 → **2 이상**이어야 한다
+- **설정 이름**: Compose가 `S3_BUCKET_NAME` · `AWS_REGION`을 넘기고, `application.yml`의 `cloud.aws.*`가 읽는다
+- **업로드 용량**: Nginx `client_max_body_size`(frontend/nginx/snippets/app.conf, 20m)와 Spring `spring.servlet.multipart.max-request-size`(20MB)를 같게 둔다. 바꿀 때는 두 곳을 함께 고친다
+
+### 처음 한 번: 서버 .env에 버킷 이름 넣기
+
+```bash
+cd /opt/lawnambul/app/deploy
+# .env.example에서 복사한 빈 줄이 있으면 그 줄을 바꾼다 (IMAGE_TAG처럼 deploy.sh가 관리하는 값이 아니므로 손으로 넣어도 된다)
+#   S3_BUCKET_NAME=<운영 버킷 이름>
+#   AWS_REGION=ap-northeast-2
+vi .env
+
+# backend만 다시 만든다 (환경변수는 컨테이너를 새로 만들어야 반영된다)
+# ⚠️ 지금 운영에서 쓰는 -f 조합을 그대로 쓴다 — real-seed · monitoring-agent overlay를 빼면 그 설정이 사라진다
+#    (위 "운영 데이터" 5)와 .env의 MONITORING_AGENT 참고)
+docker compose -f docker-compose.prod.yml -f docker-compose.real-seed.yml up -d --no-build --no-deps backend
+```
+
+### 확인
+
+```bash
+# 1) 컨테이너 안에서 IAM 역할 이름이 보이면 정상 (안 보이면 역할 연결 · 홉 제한 확인)
+docker exec lawnambul-backend-1 sh -c '
+TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 60");
+curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/iam/security-credentials/; echo'
+
+# 2) 백엔드가 버킷 이름을 받았는지 (값이 비어 있으면 .env 확인)
+docker exec lawnambul-backend-1 printenv S3_BUCKET_NAME
+
+# 3) Nginx 업로드 상한이 20m인지
+docker exec lawnambul-web-1 nginx -T 2>/dev/null | grep client_max_body_size
+```
+
+### 문제가 생겼을 때
+
+| 증상 | 원인 · 조치 |
+|---|---|
+| 업로드가 413 | Nginx `client_max_body_size`가 작다 → 위 확인 3) |
+| 1MB가 넘는 파일만 실패 (백엔드 오류) | Spring multipart 상한 → `application.yml` `spring.servlet.multipart` |
+| `Unable to load credentials` | 역할이 연결되지 않았거나 홉 제한이 1 → 위 확인 1) |
+| `AccessDenied` | 역할 정책의 버킷 이름 · 권한 확인 (인프라 담당) |
+
 ## 다음 작업에서 바꿀 곳
 
 | 작업 | 바꿀 곳 |
