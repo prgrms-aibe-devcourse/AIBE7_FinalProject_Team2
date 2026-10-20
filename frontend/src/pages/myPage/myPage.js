@@ -4,8 +4,8 @@ import { screenByStatus } from '../../utils/screenByStatus.js';
 import { renderAxisRow } from '../../components/axisRow.js';
 import { imageOf } from '../../components/stage.js';
 import { AXES, CHARACTER_NAMES } from '../../utils/personalityAxes.js';
-import { axisSeries, collectionOf, trailLeft, trailSummary, webpGroups } from '../../utils/myPageView.js';
-import { BOOKMARK_CHARACTERS, BOOKMARK_NAMES, bookmarkFace, getBookmarkCharacter, setBookmarkCharacter } from '../../utils/bookmarkCharacter.js';
+import { axisSeries, collectionOf, imageKinds, trailLeft, trailSummary } from '../../utils/myPageView.js';
+import { BOOKMARK_CHARACTERS, BOOKMARK_FACES, BOOKMARK_LAWS, BOOKMARK_NAMES, BOOKMARK_STYLES, FACE_NAMES, STYLE_NAMES, getBookmarkCharacter, getBookmarkFaceName, getBookmarkStyle, bookmarkFace, setBookmarkCharacter, setBookmarkFace } from '../../utils/bookmarkCharacter.js';
 import { SCRIPTS } from '../../content/scripts.js';
 import { fitPortraitIn } from '../../utils/portraitFit.js';
 import { clearUser, currentUser, isAdmin } from '../../utils/session.js';
@@ -127,10 +127,12 @@ function renderTop(data, go) {
   const section = element('section', 'my-top');
   const who = getBookmarkCharacter();
   const face = element('div', 'my-card-window');
-  const faceImage = picture(imageOf(who, 'role:judge'), `${BOOKMARK_NAMES[who]} 전신`, 'my-profile-face');
+  const isLaw = BOOKMARK_LAWS.includes(who); // 로는 역할 의상 컷이 없어 대기 자세 마스코트를 대표 이미지로 쓴다
+  const faceImage = picture(isLaw ? `/images/characters/mascot/${who}_idle.webp` : imageOf(who, 'role:judge'), `${BOOKMARK_NAMES[who]} 전신`, 'my-profile-face');
   face.append(faceImage);
   fitPortraitIn(face, faceImage);
-  const profile = cardButton('is-profile', `프로필카드 열기: 대표 이미지 ${BOOKMARK_NAMES[who]}-판사`, element('p', 'my-card-name', '대표 이미지'), face, element('p', 'my-card-note', `${BOOKMARK_NAMES[who]}-판사`));
+  const caption = isLaw ? BOOKMARK_NAMES[who] : `${BOOKMARK_NAMES[who]}-판사`;
+  const profile = cardButton('is-profile', `프로필카드 열기: 대표 이미지 ${caption}`, element('p', 'my-card-name', '대표 이미지'), face, element('p', 'my-card-note', caption));
   profile.addEventListener('click', () => go('profile'));
 
   const middle = element('div', 'my-top-middle');
@@ -248,18 +250,50 @@ function renderTrail(history) {
 function renderBookmarkPicker() {
   const field = element('fieldset', 'my-bookmark');
   field.append(element('legend', '', '책갈피 캐릭터'));
-  const current = getBookmarkCharacter();
-  BOOKMARK_CHARACTERS.forEach((who) => {
+  const current = { who: getBookmarkCharacter(), face: getBookmarkFaceName(), style: getBookmarkStyle() };
+  BOOKMARK_STYLES.forEach((style) => {
+    const group = element('div', 'my-bookmark-group');
+    group.append(element('h3', 'my-bookmark-style', STYLE_NAMES[style]));
+    BOOKMARK_CHARACTERS.forEach((who) => {
+      const row = element('div', 'my-bookmark-row');
+      row.append(element('span', 'my-bookmark-name', BOOKMARK_NAMES[who]));
+      BOOKMARK_FACES.forEach((face) => {
+        const name = `${STYLE_NAMES[style]} · ${BOOKMARK_NAMES[who]} · ${FACE_NAMES[face]}`;
+        const label = element('label', 'my-bookmark-option');
+        label.title = name;
+        const input = element('input');
+        input.type = 'radio';
+        input.name = 'bookmark-face';
+        input.value = `${style}:${who}:${face}`;
+        input.checked = style === current.style && who === current.who && face === current.face;
+        input.setAttribute('aria-label', name);
+        input.addEventListener('change', () => setBookmarkFace(who, face, style));
+        label.append(input, picture(bookmarkFace(who, face, style), ''));
+        row.append(label);
+      });
+      group.append(row);
+    });
+    field.append(group);
+  });
+  const lawGroup = element('div', 'my-bookmark-group');
+  lawGroup.append(element('h3', 'my-bookmark-style', '로 (표정 없이 아이콘 한 장씩)'));
+  const lawRow = element('div', 'my-bookmark-row');
+  lawRow.append(element('span', 'my-bookmark-name', '로'));
+  BOOKMARK_LAWS.forEach((who) => {
     const label = element('label', 'my-bookmark-option');
+    label.title = BOOKMARK_NAMES[who];
     const input = element('input');
     input.type = 'radio';
-    input.name = 'bookmark-character';
+    input.name = 'bookmark-face';
     input.value = who;
-    input.checked = who === current;
+    input.checked = who === current.who;
+    input.setAttribute('aria-label', BOOKMARK_NAMES[who]);
     input.addEventListener('change', () => setBookmarkCharacter(who));
-    label.append(input, picture(bookmarkFace(who), ''), element('span', '', BOOKMARK_NAMES[who]));
-    field.append(label);
+    label.append(input, picture(bookmarkFace(who), ''));
+    lawRow.append(label);
   });
+  lawGroup.append(lawRow);
+  field.append(lawGroup);
   field.append(element('p', 'my-hint', '판결 체험에서 읽던 자리를 표시하는 책갈피에 이 얼굴이 꽂혀요.'));
   return field;
 }
@@ -292,51 +326,46 @@ function collectionCard(className, src, alt, label) {
   return card;
 }
 
-// 컬렉션 — 체험을 마친 사건마다 만난 모습(역할 의상)과 사건 일러스트. 체험하지 않은 사건은 나오지 않는다
-// 목 모드에서는 모든 대본의 사건을 체험 완료로 쳐서 전부 펼쳐 보여 준다(FE-67). 어떻게 모이는지 미리 보는 용도다
+// 컬렉션 — 이미지를 사건별이 아니라 종류별(역할 의상 · 얼굴 아이콘 · 장면 컷 …)로 보여 준다. 사건 고유 이미지는 "사건 이미지" 안에서 사건별로 나눈다
+// 실제 모드: 체험을 마친 사건에서 만난 모습(역할 의상)과 사건 일러스트만 모은다
+// 목 모드(FE-67): public/images의 webp를 전부 펼쳐 어떻게 모이는지 미리 본다
+function collectedKinds(experiences) {
+  if (IS_MOCK && ALL_WEBP.length > 0) return imageKinds(ALL_WEBP, { caseNames: caseNamesOf() });
+  const groups = collectionOf(experiences, SCRIPTS);
+  const labels = {};
+  const paths = [];
+  groups.forEach((group) => {
+    group.cast.forEach(({ who, role, label }) => { const src = imageOf(who, `role:${role}`); paths.push(src); labels[src] = label; });
+    group.items.forEach(({ src, label }) => { paths.push(src); labels[src] = `${group.title} · ${label}`; });
+  });
+  return imageKinds(paths, { labels, caseNames: caseNamesOf() });
+}
+
+const caseNamesOf = () => Object.fromEntries(Object.values(SCRIPTS).map(({ caseId, title }) => [caseId, title]));
+
 function renderCollection(experiences) {
   const box = element('div', 'my-detail');
   box.append(renderBookmarkPicker());
-  const shown = IS_MOCK ? Object.values(SCRIPTS).map(({ caseId, title }) => ({ caseId, title, status: 'COMPLETED' })) : experiences;
-  const groups = collectionOf(shown, SCRIPTS);
-  if (groups.length === 0) {
+  const kinds = collectedKinds(experiences);
+  if (kinds.length === 0) {
     box.append(element('p', 'my-hint', '사건 체험을 마치면 그 사건에서 만난 모습과 일러스트가 여기에 모여요.'));
     return box;
   }
-  groups.forEach((group) => {
+  const cards = (items) => {
+    const grid = element('ul', 'collection-grid');
+    items.forEach((item) => grid.append(collectionCard('', item.src, item.label, item.label)));
+    return grid;
+  };
+  kinds.forEach((kind) => {
     const part = element('section', 'collection-group');
-    const title = element('h2', 'collection-title', group.title);
+    const title = element('h2', 'collection-title', `${kind.title} (${kind.items.length})`);
     if (IS_MOCK) title.append(mockTag());
     part.append(title);
-    const grid = element('ul', 'collection-grid');
-    group.cast.forEach(({ who, role, label }) => {
-      grid.append(collectionCard('is-cast', imageOf(who, `role:${role}`), label, label));
-    });
-    group.items.forEach((item) => {
-      grid.append(collectionCard('', item.src, `${group.title} ${item.label} 일러스트`, item.label));
-    });
-    part.append(grid);
+    if (kind.groups) kind.groups.forEach((group) => part.append(element('h3', 'collection-subtitle', `${group.title} (${group.items.length})`), cards(group.items)));
+    else part.append(cards(kind.items));
     box.append(part);
   });
-  if (IS_MOCK && ALL_WEBP.length > 0) box.append(renderAllWebp());
   return box;
-}
-
-// 목 모드 전용 — public/images의 webp를 폴더별로 전부 보여 준다
-function renderAllWebp() {
-  const all = element('section', 'collection-group');
-  const heading = element('h2', 'collection-title', `모든 webp ${ALL_WEBP.length}장`);
-  heading.append(mockTag());
-  all.append(heading);
-  webpGroups(ALL_WEBP).forEach(({ folder, items }) => {
-    all.append(element('h3', 'collection-subtitle', `${folder} (${items.length})`));
-    const grid = element('ul', 'collection-grid');
-    items.forEach((item) => {
-      grid.append(collectionCard('', item.src, item.label, item.label));
-    });
-    all.append(grid);
-  });
-  return all;
 }
 
 function renderCases(experiences, navigate) {

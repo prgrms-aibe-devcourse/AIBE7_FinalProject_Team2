@@ -44,16 +44,54 @@ export function castOf(script) {
   return [...seen.values()];
 }
 
-// public/images 아래 webp 경로("/images/a/b.webp")를 폴더별로 묶는다(목 모드 컬렉션 미리 보기용)
-export function webpGroups(paths) {
-  const groups = new Map();
-  [...paths].sort().forEach((path) => {
+// 이미지를 사건별이 아니라 종류별로 묶는다(FE-67). 종류 = public/images 아래 폴더. 위에서부터 이 순서로 나온다.
+// 사건마다 가진 고유 이미지(cases/)는 "사건 이미지" 종류 안에서 사건별 하위 묶음으로 나눈다.
+const KINDS = [
+  ['characters/roles', '역할 의상'],
+  ['characters/scene', '장면 컷'],
+  ['characters/icon/generated', '얼굴 아이콘 · 생성한 것'],
+  ['characters/icon/cropped', '얼굴 아이콘 · 잘라 만든 것'],
+  ['characters/mascot', '로 마스코트'],
+  ['characters/law', '로 · 성인 비율(보존)'],
+  ['characters/adult', '성인 비율 로 컷'],
+  ['characters/standing', '서 있는 컷'],
+  ['characters/cheek', '볼따구 컷'],
+  ['characters/cheek-slim', '슬림 볼따구 컷'],
+  ['characters/deform', '데포르메'],
+  ['characters/personality', '성향 이미지'],
+  ['cases', '사건 이미지'],
+];
+const OTHER_KIND = '기타';
+const CASE_FILE = /^case-(\d+)(?:[-.]|$)/; // cases/case-1-origin.webp → 사건 1
+
+/**
+ * 경로("/images/a/b.webp")를 종류별로 묶는다. 각 묶음은 { key, title, items } 이고, 사건 이미지는 items 대신 사건별 groups를 가진다.
+ * @param {Iterable<string>} paths
+ * @param {{ labels?: Record<string, string>, caseNames?: Record<string, string> }} options labels: 경로별 이름(없으면 파일 이름), caseNames: 사건 번호별 이름(없으면 "사건 N")
+ */
+export function imageKinds(paths, { labels = {}, caseNames = {} } = {}) {
+  const buckets = new Map();
+  [...new Set(paths)].sort().forEach((path) => {
     const slash = path.lastIndexOf('/');
-    const folder = path.slice(0, slash).replace(/^\/images\/?/, '') || '(images)';
-    if (!groups.has(folder)) groups.set(folder, []);
-    groups.get(folder).push({ src: path, label: path.slice(slash + 1).replace(/\.webp$/, '') });
+    const folder = path.slice(0, slash).replace(/^\/images\/?/, '');
+    const file = path.slice(slash + 1);
+    const known = KINDS.find(([key]) => key === folder);
+    const key = known ? known[0] : folder || OTHER_KIND;
+    if (!buckets.has(key)) buckets.set(key, { key, title: known ? known[1] : key, items: [] });
+    buckets.get(key).items.push({ src: path, label: labels[path] ?? file.replace(/\.webp$/, '') });
   });
-  return [...groups].map(([folder, items]) => ({ folder, items }));
+  const order = (key) => { const i = KINDS.findIndex(([known]) => known === key); return i < 0 ? KINDS.length : i; };
+  return [...buckets.values()].sort((a, b) => order(a.key) - order(b.key) || a.key.localeCompare(b.key)).map((kind) => {
+    if (kind.key !== 'cases') return kind;
+    const groups = new Map();
+    kind.items.forEach((item) => {
+      const id = CASE_FILE.exec(item.src.slice(item.src.lastIndexOf('/') + 1))?.[1];
+      const title = id ? (caseNames[id] ?? `사건 ${id}`) : '공용 컷';
+      if (!groups.has(title)) groups.set(title, []);
+      groups.get(title).push(item);
+    });
+    return { key: kind.key, title: kind.title, items: kind.items, groups: [...groups].map(([title, items]) => ({ title, items })) };
+  });
 }
 
 // 컬렉션 — 체험을 마친 사건마다 만난 모습(역할 의상)과 대본에 나온 일러스트를 모은다. 같은 그림은 한 장으로 센다.
