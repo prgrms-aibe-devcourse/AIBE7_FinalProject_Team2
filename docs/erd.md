@@ -463,7 +463,7 @@ AI 판결 1건을 어떤 조건으로 만들었는지 남긴다(REQ-047, 079). M
 | --- | --- | --- | --- |
 | id | bigint PK | ✓ |  |
 | email | varchar(254) | ✓ | 로그인 아이디. 소문자로 정규화해 저장(CHECK `email = lower(email)`), 유니크 |
-| password_hash | varchar(100) |  | BCrypt 해시(`{bcrypt}` 접두어). OAuth로만 로그인하는 관리자(BE-40)는 NULL |
+| password_hash | varchar(255) |  | Argon2id 해시(`{argon2}` 접두어, BE-90). 기존 BCrypt 해시(`{bcrypt}` 접두어)도 검증은 되고 로그인 시 재해시된다. OAuth로만 로그인하는 관리자(BE-40)는 NULL |
 | display_name | varchar(50) | ✓ | 화면 · 검수 기록에 쓰는 이름 |
 | enabled | boolean | ✓ | 비활성이면 로그인할 수 없다 |
 | created_at | timestamptz | ✓ |  |
