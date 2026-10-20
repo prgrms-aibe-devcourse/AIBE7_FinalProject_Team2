@@ -9,10 +9,11 @@ import java.util.Map;
 
 /**
  * API 14. 세 판결 비교 (S-09) — `GET /cases/{caseId}/experience/comparison`
- * 사전 판단은 이 API에서 처음 내려간다 (API 명세).
+ * 사전 판단은 완료 후 이 API에서 처음 내려간다 (독자 의견 표시용).
  */
 public record ComparisonResponse(
 	PreToFinal preToFinal,
+	PreToCourt preToCourt,
 	Map<SubjectType, JudgmentView> judgments,
 	List<MatrixRow> matrix,
 	RuleSentences ruleSentences,
@@ -26,6 +27,9 @@ public record ComparisonResponse(
 		String summaryText
 	) { }
 
-	/** 사전 판단 내용. 이 API에서 처음 응답한다(그 전에는 되돌려주지 않는다) */
+	/** 사전 판단 대비 재판부 판결의 방향. SAME은 정확한 형량 일치가 아니라 같은 구간이다. */
+	public record PreToCourt(PreToFinalDirection direction) { }
+
+	/** 사전 판단 내용. 완료 후 API 14에서만 응답한다. */
 	public record PreJudgmentView(Long rangeOptionId, String label, List<Long> factorIds) { }
 }

@@ -5,7 +5,7 @@ import com.team2.project.legalcase.domain.RangeKind;
 import com.team2.project.legalcase.domain.SentenceRangeOption;
 
 /**
- * 사전 판단 구간과 최종 판결 비교 (API 14 preToFinal.direction, API 명세 "preToFinal.direction")
+ * 사전 판단 구간 대비 대상 판결 비교 (API 14 preToFinal.direction · preToCourt.direction).
  * 형벌 종류의 무게는 FINE &lt; SUSPENDED &lt; PRISON &lt; LIFE &lt; DEATH 순이며, 이는 RangeKind의 선언 순서와 같다.
  * 최종 판결은 reducedTo가 있으면 그 값(최종 선고 형벌)으로 비교한다(ERD sentence_range_option 무겁기 순서와 같다).
  * 무죄는 MVP에서 뺐으므로 비교 대상이 아니다(API 명세 v0.3).

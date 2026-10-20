@@ -14,6 +14,7 @@ import com.team2.project.judgment.domain.SubjectType;
 import com.team2.project.judgment.dto.ComparisonResponse;
 import com.team2.project.judgment.dto.ComparisonResponse.PreJudgmentView;
 import com.team2.project.judgment.dto.ComparisonResponse.PreToFinal;
+import com.team2.project.judgment.dto.ComparisonResponse.PreToCourt;
 import com.team2.project.judgment.dto.JudgmentView;
 import com.team2.project.judgment.repository.JudgmentFactorRepository;
 import com.team2.project.judgment.repository.JudgmentRepository;
@@ -75,7 +76,8 @@ public class ComparisonService {
 
 		PreToFinal preToFinal = preToFinal(pre, preFactors, mine);
 
-		return new ComparisonResponse(preToFinal, judgments, matrix, RuleSentences.from(matrix), false);
+		PreToCourt preToCourt = new PreToCourt(PreToFinalDirection.of(pre.getRangeOption(), court));
+		return new ComparisonResponse(preToFinal, preToCourt, judgments, matrix, RuleSentences.from(matrix), false);
 	}
 
 	private PreToFinal preToFinal(Judgment pre, List<JudgmentFactor> preFactors, Judgment mine) {
