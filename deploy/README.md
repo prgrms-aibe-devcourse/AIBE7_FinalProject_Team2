@@ -18,6 +18,7 @@
 | `.env.example` | 환경변수 예시. `.env`로 복사해 쓴다 (`.env`는 커밋하지 않음) |
 | `smoke-test.sh` | `/` · 화면 주소 · `/api` · 캐시 정책 · Let's Encrypt 확인 경로 확인. CI와 서버에서 같은 스크립트를 쓴다 |
 | `deploy.sh` | 서버 배포 한 번: sha 이미지로 교체 → 준비 대기 → 스모크 테스트 → 실패하면 직전 이미지로 되돌림 (BE-60) |
+| `backup-db.sh` | 운영 DB 백업 한 번: 임시 파일로 `pg_dump` → `pg_restore --list` 확인 → 최종 이름으로 옮김 → 7일 지난 파일 정리 (COMMON-17, 아래 "운영 DB 백업") |
 | `cd-agent.sh` | 자동 배포 확인: GHCR의 `main` 이미지가 바뀌었으면 `deploy.sh` 실행 (BE-60) |
 | `cd/lawnambul-cd.service` · `.timer` | `cd-agent.sh`를 2분마다 부르는 systemd 설정 (서버에 한 번 설치) |
 | `../frontend/Dockerfile` | 웹 이미지 (Vite 빌드 → Nginx). 커밋 해시를 `/version.json`에 넣는다 |
@@ -362,14 +363,19 @@ grep -n '^REAL_SEED_DIR=' .env                       # 정확히 한 줄
 docker compose -f docker-compose.prod.yml -f docker-compose.real-seed.yml config | grep -E 'FLYWAY_LOCATIONS|/real-seed'
 
 # 5) 백업 → 타이머 정지 → backend만 다시 만들기 → Flyway 적재 확인 → 타이머 재개
-docker compose -f docker-compose.prod.yml exec -T postgres \
-  sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > ~/backup-before-real-seed-$(date +%F-%H%M).dump
-chmod 600 ~/backup-*.dump
-sudo systemctl stop lawnambul-cd.timer
-docker compose -f docker-compose.prod.yml -f docker-compose.real-seed.yml up -d --no-build --no-deps backend
-docker compose -f docker-compose.prod.yml -f docker-compose.real-seed.yml logs -f backend 2>&1 \
-  | grep -E 'Migrating|Successfully applied|ERROR|Started '   # "Started …" 후 Ctrl+C
-sudo systemctl start lawnambul-cd.timer
+./backup-db.sh before-real-seed                      # 실패하면 여기서 멈춘다 (아래 "운영 DB 백업")
+# 괄호 안(서브셸)을 어떻게 빠져나가든(정상 종료 · Ctrl+C · 명령 실패 · SSH 끊김) 타이머를 다시 켠다.
+# 손으로 start를 빼먹으면 이후 main 머지가 자동 배포되지 않는다
+(
+  trap 'sudo systemctl start lawnambul-cd.timer; systemctl is-active lawnambul-cd.timer' EXIT
+  trap 'exit 1' HUP INT TERM   # 신호로 끝날 때도 EXIT를 거치게 한다 (EXIT만으로는 SSH 끊김(HUP)에 실행되지 않는다)
+  set -e
+  sudo systemctl stop lawnambul-cd.timer
+  docker compose -f docker-compose.prod.yml -f docker-compose.real-seed.yml up -d --no-build --no-deps backend
+  docker compose -f docker-compose.prod.yml -f docker-compose.real-seed.yml logs -f backend 2>&1 \
+    | grep -E 'Migrating|Successfully applied|ERROR|Started '   # "Started …" 후 Ctrl+C
+)
+systemctl list-timers lawnambul-cd.timer --no-pager            # NEXT가 보여야 함
 curl -s https://naelawnambul.today/api/v1/cases | head -c 200; echo   # total이 0이 아니면 성공
 ```
 
@@ -379,7 +385,7 @@ curl -s https://naelawnambul.today/api/v1/cases | head -c 200; echo   # total이
 
 ```bash
 cd /opt/lawnambul/private-seed && git pull && git log -1 --format='%h %s'
-# 이어서 위 5)의 백업 → 타이머 정지 → backend 재생성 → 확인 → 타이머 재개
+# 이어서 위 5)를 그대로 실행한다 (백업 이름은 before-seed-update 등으로)
 # (재생성하지 않으면 다음 main 자동 배포 때 반영된다)
 ```
 
@@ -396,8 +402,7 @@ cd /opt/lawnambul/private-seed && git pull && git log -1 --format='%h %s'
 cd /opt/lawnambul/private-seed && git sparse-checkout add loads && git pull
 # 백업 후 실행 (컨테이너 안 psql로, 접속 정보는 컨테이너 환경변수를 쓴다)
 cd /opt/lawnambul/app/deploy
-docker compose -f docker-compose.prod.yml exec -T postgres \
-  sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > ~/backup-before-load-$(date +%F-%H%M).dump
+./backup-db.sh before-load
 docker compose -f docker-compose.prod.yml exec -T postgres \
   sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < /opt/lawnambul/private-seed/loads/<파일>.sql
 ```
@@ -409,18 +414,29 @@ docker compose -f docker-compose.prod.yml exec -T postgres \
 
 | 언제 | 방법 | 보관 |
 |---|---|---|
-| 매일 1번 | 서버 cron으로 `pg_dump -Fc` → `~/backups/` | 7일 |
-| 시드 갱신 · `loads/` 실행 · 위험한 마이그레이션 직전 | 위 명령으로 손으로 한 번 | 작업 확인 후 며칠 |
+| 매일 1번 | 서버 cron으로 `deploy/backup-db.sh` → `~/backups/lawnambul-YYYY-MM-DD.dump` | 7일 |
+| 시드 갱신 · `loads/` 실행 · 위험한 마이그레이션 직전 | `./backup-db.sh <작업 이름>`을 손으로 한 번 | 7일(같은 정리 규칙) |
 | 7.1.2 RDS 전환 후(10/28) | RDS 자동 백업 | 7일 |
 
 ```bash
-# 매일 03:17 백업, 7일 지난 파일 삭제 (crontab -e 로 한 줄 추가)
-17 3 * * * cd /opt/lawnambul/app/deploy && mkdir -p ~/backups && docker compose -f docker-compose.prod.yml exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > ~/backups/lawnambul-$(date +\%F).dump && chmod 600 ~/backups/*.dump && find ~/backups -name 'lawnambul-*.dump' -mtime +7 -delete
+# 매일 03:17 백업 (crontab -e 로 한 줄 추가). 결과는 ~/backups/backup.log
+17 3 * * * mkdir -p $HOME/backups && /opt/lawnambul/app/deploy/backup-db.sh >> $HOME/backups/backup.log 2>&1
 ```
+
+- `backup-db.sh`는 임시 파일에 먼저 덤프하고, `pg_dump`가 성공하고 `pg_restore --list`로 형식을 읽을 수 있을 때만 최종 이름으로 옮긴다. 실패하면 임시 파일을 지우고 실패 코드로 끝나서, 반쯤 만들어진 파일이 백업처럼 남지 않는다. 확인: `tail ~/backups/backup.log`
 
 - 백업 파일에는 관리자 비밀번호 해시 등 운영 데이터가 있으므로 권한 600, 서버 밖으로 옮기지 않는다.
 - **한계**: 같은 서버 디스크에 둔다. 서버(EBS)가 통째로 사라지면 백업도 같이 사라진다. 서버 밖 보관(S3 등)은 IAM 권한이 없어 지금은 하지 않고, RDS 전환으로 해결한다.
-- 되살리기: `docker compose ... exec -T postgres sh -c 'pg_restore --clean --if-exists -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < <백업>.dump` (실행 전 타이머 정지 · 백엔드 중지).
+- 되살리기: 타이머 정지 · 백엔드 중지 후 **한 트랜잭션으로** 복구한다. 중간에 실패하면 전부 취소돼 반쯤 복구된 상태가 남지 않는다.
+
+  ```bash
+  sudo systemctl stop lawnambul-cd.timer
+  docker compose -f docker-compose.prod.yml stop backend
+  docker compose -f docker-compose.prod.yml exec -T postgres \
+    sh -c 'pg_restore --clean --if-exists --single-transaction --exit-on-error -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < ~/backups/<백업>.dump
+  docker compose -f docker-compose.prod.yml -f docker-compose.real-seed.yml up -d --no-build --no-deps backend
+  sudo systemctl start lawnambul-cd.timer
+  ```
 
 ## 다음 작업에서 바꿀 곳
 
