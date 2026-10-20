@@ -18,7 +18,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 /**
- * 사건 정보 섹션 (S-04 · S-05)
+ * 사건 정보 섹션 (S-04)
  * 섹션 ① 개요는 legal_case.overview를 쓰고 여기에 저장하지 않는다.
  */
 @Entity

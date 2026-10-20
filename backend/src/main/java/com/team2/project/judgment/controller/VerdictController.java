@@ -27,7 +27,7 @@ public class VerdictController {
 	private final VerdictService verdictService;
 	private final AnonymousIdCookie anonymousIdCookie;
 
-	/** API 8. 판결 입력 정보 (S-06) */
+	/** API 8. 판결 입력 정보 (S-05) */
 	@GetMapping("/verdict-form")
 	public VerdictFormResponse getForm(@PathVariable Long caseId, HttpServletRequest request) {
 		return verdictFormService.getForm(caseId, anonymousIdCookie.read(request));
