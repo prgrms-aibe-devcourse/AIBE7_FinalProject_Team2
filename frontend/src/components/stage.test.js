@@ -71,3 +71,15 @@ test('건너뛰기는 서버 확인(confirm) 장면을 넘지 않는다', () => 
 test('재진입: 서버가 연 섹션의 첫 장면이 있다(② · ③ · ④)', () => {
   [2, 3, 4].forEach((n) => assert.ok(trial.some((s) => s.section === n), `섹션 ${n}`));
 });
+
+test('자리는 이름("stand") 또는 슬롯 { slot, row }이고, 다음 장면이 이어받는다(FE-39)', () => {
+  const acts = { x: { look: { naero: 'role:prosecutor', nambul: 'role:defense' }, steps: [
+    { say: 'nambul', spots: { nambul: { slot: 24, row: 'back' } }, text: '…' },
+    { say: 'naero', text: '…' }, // 자리를 따로 주지 않으면 앞 장면의 슬롯을 이어받는다
+    { say: 'nambul', spots: { nambul: '' }, text: '…' }, // 빈 값이면 기본 자리로 돌아간다
+  ] } };
+  const [first, second, third] = flatten(acts, ['x']);
+  assert.deepEqual(first.spots.nambul, { slot: 24, row: 'back' });
+  assert.deepEqual(second.spots.nambul, { slot: 24, row: 'back' });
+  assert.equal(third.spots.nambul, '');
+});
