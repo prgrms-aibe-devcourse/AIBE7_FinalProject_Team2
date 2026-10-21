@@ -58,19 +58,35 @@ export function foregroundBox(data, width, height) {
   return x1 >= 0 ? { x0, y0, x1, y1 } : null;
 }
 
+// 줄여서 잰 경계 상자를 원본 픽셀 좌표로 되돌린다(ratio = 줄인 크기 / 원본 크기). 원본 밖으로 나가지 않게 자른다
+export function scaleBoxUp(box, ratio, width, height) {
+  return {
+    x0: Math.floor(box.x0 / ratio),
+    y0: Math.floor(box.y0 / ratio),
+    x1: Math.min(width - 1, Math.ceil((box.x1 + 1) / ratio) - 1),
+    y1: Math.min(height - 1, Math.ceil((box.y1 + 1) / ratio) - 1),
+  };
+}
+
 // 이미지의 경계 상자를 잰다. 다른 출처 이미지(캔버스를 못 읽음) · 전부 투명한 이미지는 null
+// 경계 상자는 카드 크기(수백 px)에 맞추는 용도라 긴 변 MEASURE_EDGE로 줄여 재도 오차가 1 ~ 2px이다(원본은 1672 × 941까지 있어 전체 펼침에서 느려진다)
+const MEASURE_EDGE = 256;
 const measured = new Map();
 export function measureOpaqueBox(img) {
   const key = img.currentSrc || img.src;
   if (measured.has(key)) return measured.get(key);
   let box = null;
   try {
+    const ratio = Math.min(1, MEASURE_EDGE / Math.max(img.naturalWidth, img.naturalHeight));
+    const width = Math.max(1, Math.round(img.naturalWidth * ratio));
+    const height = Math.max(1, Math.round(img.naturalHeight * ratio));
     const canvas = document.createElement('canvas');
-    canvas.width = img.naturalWidth;
-    canvas.height = img.naturalHeight;
+    canvas.width = width;
+    canvas.height = height;
     const context = canvas.getContext('2d', { willReadFrequently: true });
-    context.drawImage(img, 0, 0);
-    box = foregroundBox(context.getImageData(0, 0, canvas.width, canvas.height).data, canvas.width, canvas.height);
+    context.drawImage(img, 0, 0, width, height);
+    const small = foregroundBox(context.getImageData(0, 0, width, height).data, width, height);
+    box = small && scaleBoxUp(small, ratio, img.naturalWidth, img.naturalHeight);
   } catch {
     box = null; // 캔버스가 막힌 이미지(다른 출처) — 맞추지 않고 창에 그대로 담는다
   }

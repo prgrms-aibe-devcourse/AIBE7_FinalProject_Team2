@@ -1,7 +1,7 @@
 // npm test : 캐릭터 그림을 창에 맞추는 계산 (FE-67). 브라우저 쪽(measureOpaqueBox · fitPortraitIn)은 캔버스가 필요해 여기서 재지 않는다
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { fitPortrait, foregroundBox } from './portraitFit.js';
+import { fitPortrait, foregroundBox, scaleBoxUp } from './portraitFit.js';
 
 const WINDOW = { width: 170, height: 258 };
 const approx = (actual, expected, message) => assert.ok(Math.abs(actual - expected) < 0.01, `${message}: ${actual} ≠ ${expected}`);
@@ -75,4 +75,11 @@ test('그림 전체가 캐릭터여도 위 · 아래 여백을 남기고 창 안
   const fit = fitPortrait({ width: 300, height: 560, box: { x0: 0, y0: 0, x1: 299, y1: 559 } }, { width: 150, height: 250 }, { top: 20, bottom: 20, center: true });
   approx(fit.height, 210, '높이는 창 − 위 · 아래 여백');
   approx(fit.top, 20, '위 여백');
+});
+
+test('scaleBoxUp: 줄여서 잰 경계 상자를 원본 좌표로 되돌리고, 원본 밖으로 나가지 않는다', () => {
+  // 800 × 1000을 0.256배(205 × 256)로 줄여 잰 상자
+  assert.deepEqual(scaleBoxUp({ x0: 20, y0: 10, x1: 150, y1: 255 }, 0.256, 800, 1000), { x0: 78, y0: 39, x1: 589, y1: 999 });
+  // 줄이지 않았으면(ratio 1) 그대로
+  assert.deepEqual(scaleBoxUp({ x0: 3, y0: 4, x1: 9, y1: 12 }, 1, 100, 100), { x0: 3, y0: 4, x1: 9, y1: 12 });
 });
