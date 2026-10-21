@@ -29,7 +29,10 @@ new MutationObserver(() => {
 
 try {
   const router = createRouter({ view, headerHost, footerHost, routes });
-  const api = createAppApi(await loadApi(), {
+  const baseApi = await loadApi();
+  // 출석 기록(BE-97 P-6): 사이트에 들어올 때 한 번 부른다. 같은 날 다시 불러도 하루로 센다. 실패해도 화면은 그대로 쓰므로 에러 이동(createAppApi)을 거치지 않고 조용히 넘긴다
+  Promise.resolve(baseApi.postAttendance?.()).catch(() => {});
+  const api = createAppApi(baseApi, {
     navigate: router.navigate,
     currentCaseId: router.currentCaseId,
     navigationToken: router.navigationToken,

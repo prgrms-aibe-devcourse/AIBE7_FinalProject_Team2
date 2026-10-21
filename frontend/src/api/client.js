@@ -10,9 +10,9 @@ function fallbackError(code, message, status) {
 }
 
 /**
- * @param {'GET'|'POST'} method
+ * @param {'GET'|'POST'|'PUT'} method
  * @param {string} endpoint  /api/v1 뒤의 경로 (예: '/cases/1/experience')
- * @param {object} [body] JSON 본문 (POST)
+ * @param {object} [body] JSON 본문 (POST · PUT)
  */
 export async function request(method, endpoint, body) {
   let response;
@@ -59,3 +59,4 @@ export async function request(method, endpoint, body) {
 
 export const get = (endpoint) => request('GET', endpoint);
 export const post = (endpoint, body) => request('POST', endpoint, body ?? {});
+export const put = (endpoint, body) => request('PUT', endpoint, body ?? {});

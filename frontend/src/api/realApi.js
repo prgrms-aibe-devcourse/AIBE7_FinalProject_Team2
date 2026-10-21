@@ -1,6 +1,6 @@
 // 실제 백엔드 API. src/mocks/*MockApi.js와 함수 이름 · 인자 · 응답 형식이 같다 (docs/api-specification.md)
 // 화면은 api 객체로 주입받아 쓰므로, 목 ↔ 실제 전환은 VITE_API_MODE로 한다 (src/api/index.js).
-import { get, post } from './client.js';
+import { get, post, put } from './client.js';
 
 const experience = (caseId) => `/cases/${encodeURIComponent(caseId)}/experience`;
 
@@ -44,3 +44,9 @@ export const submitPersonality = (answers) => post('/personality/results', { ans
 export const getMyPersonality = () => get('/personality/results/me');
 export const getPersonalityType = (shareId) => get(`/personality/types/${encodeURIComponent(shareId)}`);
 export const getMyPage = () => get('/my-page');
+
+// 출석 기록 P-6 (BE-97) — 사이트에 들어올 때 한 번 부른다. 항상 204이고, 익명 ID 쿠키가 없으면 서버가 아무것도 하지 않는다(발급도 안 한다)
+export const postAttendance = () => post('/attendance');
+// 프로필 꾸미기 저장 P-7 (BE-96) — 꾸미기 전체(대표 이미지 · 테두리 · 배경 · 카드 책갈피 · 책갈피 캐릭터 · 리본 색)를 한 번에 보낸다.
+// 성공하면 저장된 꾸미기를 돌려주고, 쿠키가 없었으면 익명 ID가 발급된다. 400 VALIDATION_ERROR · 409 DECO_LOCKED는 details에 필드별 사유가 온다
+export const putProfileDeco = (deco) => put('/profile-deco', deco);
