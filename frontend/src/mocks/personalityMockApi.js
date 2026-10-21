@@ -1,5 +1,7 @@
 import { AXES } from '../utils/personalityAxes.js';
 import { imageNumberOf, QUESTIONS, TYPES } from './personalityMockData.js';
+import { mockCases } from './caseListMockData.js';
+import { mockProfileView, setStatsReader } from './profileDecoMockApi.js';
 
 // 판결 성향 테스트 · 마이페이지 목 API. 응답 모양은 API 명세 9장(성향 API, v0.20)의 P-1 ~ P-5를 따른다.
 // 채점은 docs/personality-scoring.md 2장을 따른다. 문항의 글자 · 축은 서버 쪽 정보라 응답에 넣지 않는다.
@@ -9,10 +11,6 @@ const delay = () => new Promise((resolve) => setTimeout(resolve, 250));
 const storageKey = 'nlnb-mock-personality';
 const WEIGHTS = [2, 1, 0, 1, 2]; // 매우 A · 조금 A · 보통 · 조금 B · 매우 B
 
-// 체험한 사건 목록 목. 실제로는 마이페이지 API가 체험 기록에서 만든다 (사건마다 최근 회차 하나, 명세 P-5)
-const mockExperiences = [
-  { caseId: 1, title: '가상 살인 사건', crimeType: 'MURDER', status: 'COMPLETED', attemptNo: 1, updatedAt: '2026-10-14T15:00:00+09:00' },
-];
 
 const MESSAGES = {
   VALIDATION_ERROR: '모든 문항에 답해 주세요.',
@@ -133,12 +131,36 @@ export async function getPersonalityType(shareId) {
   return toType(SHARE_IDS[key]);
 }
 
-// 체험별 4축 점수 목 (명세 P-5 예시와 같은 모양). 실제로는 체험 → 성향 저장(7.6.7)이 만든다. 완료한 사건 1건 + 아래 두 건으로 화면을 확인한다
-const mockHistory = [
-  { caseId: 1, title: '가상 살인 사건', completedAt: '2026-10-14T15:00:00+09:00', axisScores: { APOLOGY_SINCERITY: 1.0, FAULT_STANDARD: 0.0, PRINCIPLE_RELATION: 1.0, ORDER_OPPORTUNITY: null } },
-  { caseId: 2, title: '가상 사기 사건', completedAt: '2026-10-15T11:00:00+09:00', axisScores: { APOLOGY_SINCERITY: 0.5, FAULT_STANDARD: 0.25, PRINCIPLE_RELATION: 0.75, ORDER_OPPORTUNITY: 0.5 } },
-  { caseId: 3, title: '가상 상해 사건', completedAt: '2026-10-16T09:00:00+09:00', axisScores: { APOLOGY_SINCERITY: 0.25, FAULT_STANDARD: 0.25, PRINCIPLE_RELATION: 0.9, ORDER_OPPORTUNITY: 0.75 } },
+// 체험별 4축 점수 목 (명세 P-5 예시와 같은 모양). 실제로는 체험 → 성향 저장(7.6.7)이 만든다.
+// 사건 목록 목(caseListMockData) 9건을 완료 순서대로 한 번씩 체험한 사용자로 맞춘다. 점수는 축별 감경 · 가중 개수의 비율이라
+// 0 · 1로 튀지 않는 분수이고, 고르지 않은 축은 null이다. 뒤로 갈수록 사과와 진정성 · 질서와 기회는 엄격 쪽, 잘잘못의 기준은 관대 쪽으로 옮겨 간다
+const AXIS_KEYS = ['APOLOGY_SINCERITY', 'FAULT_STANDARD', 'PRINCIPLE_RELATION', 'ORDER_OPPORTUNITY'];
+const HISTORY_SCORES = [
+  // [caseId, 완료 시각, 사과와 진정성, 잘잘못의 기준, 원칙과 관계, 질서와 기회]
+  [1, '2026-10-06T21:10:00+09:00', 0.67, 0.5, 0.75, 0.5],
+  [2, '2026-10-08T20:40:00+09:00', 0.75, 0.33, 0.67, 0.6],
+  [3, '2026-10-09T22:05:00+09:00', 0.5, 0.4, null, 0.5],
+  [4, '2026-10-11T19:30:00+09:00', 0.6, 0.5, 0.6, 0.4],
+  [5, '2026-10-13T21:50:00+09:00', 0.4, 0.6, 0.5, 0.5],
+  [6, '2026-10-15T20:15:00+09:00', 0.5, 0.67, 0.67, 0.33],
+  [7, '2026-10-17T22:30:00+09:00', 0.33, 0.67, 0.5, 0.25],
+  [8, '2026-10-19T21:00:00+09:00', 0.25, 0.75, 0.67, 0.33],
+  [9, '2026-10-20T20:20:00+09:00', 0.4, 0.6, null, 0.4],
 ];
+const mockHistory = HISTORY_SCORES.map(([caseId, completedAt, ...scores]) => ({
+  caseId,
+  title: mockCases.find((item) => item.caseId === caseId).title,
+  completedAt,
+  axisScores: Object.fromEntries(AXIS_KEYS.map((key, index) => [key, scores[index]])),
+}));
+
+// 체험한 사건 목록 목. 실제로는 마이페이지 API가 체험 기록에서 만든다 (사건마다 최근 회차 하나, 명세 P-5). 위 체험 기록과 같은 사건들이다
+const mockExperiences = mockHistory.map(({ caseId, title, completedAt }) => ({
+  caseId, title, crimeType: mockCases.find((item) => item.caseId === caseId).crimeType, status: 'COMPLETED', attemptNo: 1, updatedAt: completedAt,
+}));
+
+// 현재 판결 성향은 최근 체험 이만큼의 평균이다(명세 P-5, 성향 산식 4장)
+const RECENT_COUNT = 3;
 
 // 축마다 값이 있는 체험의 평균. 값이 하나도 없는 축은 null (명세 P-5)
 function averageAxes(history) {
@@ -150,6 +172,24 @@ function averageAxes(history) {
   return axisScores;
 }
 
+// 도전과제 판정에 쓰는 값(P-5의 profileDeco · achievements · unlocked). 완료한 사건 수는 체험 기록 목에서 센다
+const profileStats = () => ({
+  completed: new Set(mockExperiences.filter((item) => item.status === 'COMPLETED').map((item) => item.caseId)).size,
+  hasType: savedResult() ? 1 : 0,
+});
+setStatsReader(profileStats);
+
+// 현재 판결 성향: 최근 3건 평균. 네 축이 다 있을 때만 유형(글자는 0.5 이상이면 관대, 산식 3-3), 축이 모두 비면 null
+function judgmentOf(history) {
+  const recent = history.slice(-RECENT_COUNT); // 목 기록은 완료 순서대로다
+  if (recent.length === 0) return null;
+  const axisScores = averageAxes(recent);
+  const values = AXES.map((axis) => axisScores[axis.key]);
+  if (values.every((value) => value === null)) return null;
+  const code = values.every((value) => value !== null) ? AXES.map((axis, index) => (values[index] >= 0.5 ? axis.lenient.letter : axis.strict.letter)).join('') : null;
+  return { axisScores, type: code && TYPES[code] ? toType(code) : null, experienceCount: recent.length };
+}
+
 // P-5 마이페이지 조회. 기록이 없어도 404가 아니라 빈 200이다. 종합 판결 성향 · 성향 변화 흐름은 체험 → 성향 저장(7.6.7) 전에는
 // 실제로 null · 빈 배열이다. 목은 화면 확인용으로 체험 기록 목을 채워 둔다. 기록이 없는 상태는 `?empty=history`로 볼 수 있다
 export async function getMyPage() {
@@ -159,8 +199,9 @@ export async function getMyPage() {
   const history = noHistory ? [] : mockHistory;
   return structuredClone({
     personality: saved ? toResult(saved) : null,
-    judgmentPersonality: history.length === 0 ? null : { axisScores: averageAxes(history), type: null, experienceCount: history.length },
+    judgmentPersonality: judgmentOf(history),
     history: history.map(({ caseId, title, completedAt, axisScores }) => ({ caseId, title, completedAt, axisScores })),
     experiences: mockExperiences,
+    ...mockProfileView(profileStats()),
   });
 }

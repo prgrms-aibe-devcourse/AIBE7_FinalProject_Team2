@@ -83,3 +83,15 @@ test('scaleBoxUp: 줄여서 잰 경계 상자를 원본 좌표로 되돌리고, 
   // 줄이지 않았으면(ratio 1) 그대로
   assert.deepEqual(scaleBoxUp({ x0: 3, y0: 4, x1: 9, y1: 12 }, 1, 100, 100), { x0: 3, y0: 4, x1: 9, y1: 12 });
 });
+
+test('centerWide: 가로로 긴 그림만 창 세로 가운데에 두고, 서 있는 캐릭터는 발을 아래에 둔다', () => {
+  const wideBox = { x0: 0, y0: 0, x1: 1671, y1: 940 };
+  const wide = fitPortrait({ width: 1672, height: 941, box: wideBox }, WINDOW, { centerWide: true });
+  approx(wide.width, 170 * 0.92, '너비에 맞춘다');
+  approx(wide.top + (wide.height / 2), 258 / 2, '세로 가운데');
+  const wideDefault = fitPortrait({ width: 1672, height: 941, box: wideBox }, WINDOW);
+  approx(wideDefault.top + wideDefault.height, 258 - 6, '옵션이 없으면 아래에 붙는다');
+  const standing = fitPortrait({ width: 288, height: 560, box: { x0: 0, y0: 0, x1: 287, y1: 559 } }, WINDOW, { centerWide: true });
+  approx(standing.top, 22, '서 있는 캐릭터는 그대로');
+  approx(standing.top + standing.height, 258 - 6, '발이 아래에');
+});
