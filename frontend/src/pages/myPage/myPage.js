@@ -3,7 +3,7 @@ import { API_MODE } from '../../api/config.js';
 import { renderAxisRow } from '../../components/axisRow.js';
 import { imageOf } from '../../components/stage.js';
 import { AXES, CHARACTER_NAMES } from '../../utils/personalityAxes.js';
-import { KIND_TITLES, axisChange, axisTrend, biggestChanges, collectionOf, imageKinds, leanText, trailLeft } from '../../utils/myPageView.js';
+import { KIND_TITLES, axisChange, axisTrend, collectionOf, imageKinds, leanText, trailLeft } from '../../utils/myPageView.js';
 import { BACKGROUNDS, DEFAULT_DECO, DEFAULT_PORTRAITS, FRAMES, SASH_COLORS, SASH_ICONS, SASH_STYLES, achievementProgress, sashColorField, sashColorKey, sashColorOf, getProfileDeco, kindOfPortrait, portraitLabel, setProfileDeco, shownDeco, unlockedBy, unlockerOf } from '../../utils/profileDeco.js';
 import { PORTRAIT_POOL } from '../../content/portraitPool.js';
 import { BOOKMARK_CHARACTERS, BOOKMARK_FACES, BOOKMARK_LAWS, BOOKMARK_NAMES, BOOKMARK_STYLES, FACE_NAMES, STYLE_NAMES, getBookmarkCharacter, getBookmarkFaceName, getBookmarkStyle, bookmarkFace, setBookmarkCharacter, setBookmarkFace, BOOKMARK_COLORS, getBookmarkColor, setBookmarkColor, selectedBookmarkFace } from '../../utils/bookmarkCharacter.js';
@@ -287,9 +287,9 @@ function trendsOf(data) {
 
 const movedText = (change) => (change.steady ? '거의 그대로' : `${change.toward} 쪽으로 ${Math.abs(change.moved)}%p`);
 
-// 성향 변경폭 — 축마다 처음(빈 점)과 지금(찬 점)을 엄격 ↔ 관대 막대 위에 잇는다. 가장 많이 움직인 축만 진하게(나머지는 흐리게)
-function changeRow({ axis, points, change }, isBiggest) {
-  const item = element('li', `axis-row change-row${isBiggest ? ' is-biggest' : ''}`);
+// 성향 변경폭 — 축마다 처음(빈 점)과 지금(진한 점)을 엄격 ↔ 관대 막대 위에 잇고, 움직였으면 지금 점 앞에 방향 화살촉을 둔다
+function changeRow({ axis, points, change }) {
+  const item = element('li', 'axis-row change-row');
   const head = element('div', 'change-head');
   head.append(element('p', 'axis-label', axis.label));
   if (change) head.append(element('p', `change-moved${change.steady ? ' is-steady' : ''}`, movedText(change)));
@@ -314,6 +314,12 @@ function changeRow({ axis, points, change }, isBiggest) {
     const start = element('span', 'change-dot is-from');
     start.style.left = `${trailLeft(from.ratio)}%`;
     track.append(span, start);
+    if (!change.steady) {
+      // 막대는 왼쪽 엄격 · 오른쪽 관대라 관대 쪽으로 움직였으면(moved > 0) 오른쪽을 가리킨다. 화살촉 끝은 지금 점 바로 앞
+      const arrow = element('span', `change-arrow ${change.moved > 0 ? 'is-right' : 'is-left'}`);
+      arrow.style.left = `${trailLeft(to.ratio)}%`;
+      track.append(arrow);
+    }
   }
   const end = element('span', 'change-dot is-to');
   end.style.left = `${trailLeft(to.ratio)}%`;
@@ -331,18 +337,15 @@ function renderChanges(trends, hasHistory) {
     box.append(element('p', 'my-hint', '사건을 하나 마치면 성향 테스트 때와 비교해 얼마나 움직였는지 보여요.'));
     return box;
   }
-  const biggest = biggestChanges(trends);
-  const anyChange = trends.some((trend) => trend.change);
-  const lead = !anyChange ? '한 건을 더 체험하면 움직인 폭이 보여요.'
-    : biggest.length === 0 ? '네 축 모두 처음과 거의 같아요.'
-      : biggest.length === 1 ? `가장 많이 움직인 건 ${biggest[0].axis.label}이에요. ${movedText(biggest[0].change)} 움직였어요.`
-        : `가장 많이 움직인 건 ${biggest.map((trend) => trend.axis.label).join(' · ')}이에요. ${biggest.length === 2 ? '둘 다' : '모두'} ${Math.abs(biggest[0].change.moved)}%p씩 움직였어요.`;
-  box.append(element('p', 'change-lead', lead));
-  const hint = element('p', 'my-hint', '빈 점이 처음(성향 테스트, 없으면 첫 체험), 찬 점이 가장 최근 체험이에요.');
+  const changes = trends.filter((trend) => trend.change);
+  // 움직인 축이 있으면 머리 문장 없이 막대만 보인다
+  const lead = changes.length === 0 ? '한 건을 더 체험하면 움직인 폭이 보여요.' : changes.every((trend) => trend.change.steady) ? '네 축 모두 처음과 거의 같아요.' : null;
+  if (lead) box.append(element('p', 'change-lead', lead));
+  const hint = element('p', 'my-hint', '빈 점이 처음(성향 테스트, 없으면 첫 체험), 진한 점이 지금(가장 최근 체험)이에요.');
   if (IS_MOCK) hint.append(mockTag());
   box.append(hint);
   const list = element('ul', 'axis-list change-list');
-  trends.forEach((trend) => list.append(changeRow(trend, biggest.includes(trend))));
+  trends.forEach((trend) => list.append(changeRow(trend)));
   box.append(list);
   return box;
 }
@@ -355,7 +358,9 @@ function svgNode(tag, attrs = {}, text) {
   if (text != null) node.textContent = text;
   return node;
 }
-const CHART = { width: 320, height: 160, left: 22, right: 22, top: 10, bottom: 30 }; // bottom: 가로 눈금 글자 자리
+const CHART = { width: 320, height: 160, axis: 34, left: 52, right: 22, top: 10, bottom: 30 }; // axis: 세로 눈금 글자 자리(이 왼쪽), left: 첫 점 자리, bottom: 가로 눈금 글자 자리
+// 세로 눈금: 툴팁 · 표(leanText)와 같이 기운 쪽 비중으로 읽는다. 위 끝 관대 100, 가운데 50(반반), 아래 끝 엄격 100
+const Y_TICKS = [[1, '100'], [0.75, '75'], [0.5, '50'], [0.25, '75'], [0, '100']];
 
 function trendChart({ axis, points }, slots) {
   const figure = element('figure', 'trend-chart');
@@ -368,21 +373,26 @@ function trendChart({ axis, points }, slots) {
     figure.append(element('p', 'axis-empty', '체험 자료가 아직 없어요'));
     return figure;
   }
-  const { width, height, left, right, top, bottom } = CHART;
+  const { width, height, axis: axisX, left, right, top, bottom } = CHART;
   const plotBottom = height - bottom;
   const xOf = (order) => {
     const index = slots.findIndex((slot) => slot.order === order);
-    return slots.length === 1 ? width / 2 : left + (index * (width - left - right)) / (slots.length - 1);
+    return slots.length === 1 ? (axisX + width) / 2 : left + (index * (width - left - right)) / (slots.length - 1);
   };
   const yOf = (ratio) => plotBottom - ratio * (plotBottom - top);
   const chart = svgNode('svg', { viewBox: `0 0 ${width} ${height}`, class: 'trend-svg', role: 'img' });
   chart.setAttribute('aria-label', `${axis.label} 흐름: ${points.map((point) => `${point.title} ${leanText(point.ratio, axis)}`).join(', ')}`);
   const middle = yOf(0.5);
   chart.append(
-    svgNode('rect', { x: 0, y: top, width, height: middle - top, class: 'trend-zone is-lenient' }),
-    svgNode('rect', { x: 0, y: middle, width, height: plotBottom - middle, class: 'trend-zone is-strict' }),
-    svgNode('line', { x1: 0, x2: width, y1: middle, y2: middle, class: 'trend-mid' }),
+    svgNode('rect', { x: axisX, y: top, width: width - axisX, height: middle - top, class: 'trend-zone is-lenient' }),
+    svgNode('rect', { x: axisX, y: middle, width: width - axisX, height: plotBottom - middle, class: 'trend-zone is-strict' }),
   );
+  Y_TICKS.forEach(([ratio, label]) => {
+    const y = yOf(ratio);
+    if (ratio !== 0.5) chart.append(svgNode('line', { x1: axisX, x2: width, y1: y, y2: y, class: 'trend-grid-line' }));
+    chart.append(svgNode('text', { x: axisX - 6, y, class: 'trend-tick', 'text-anchor': 'end', 'dominant-baseline': 'middle' }, label));
+  });
+  chart.append(svgNode('line', { x1: axisX, x2: width, y1: middle, y2: middle, class: 'trend-mid' }));
   slots.forEach((slot) => chart.append(svgNode('text', { x: xOf(slot.order), y: height - 10, class: 'trend-tick', 'text-anchor': 'middle' }, slot.label)));
   if (points.length > 1) chart.append(svgNode('polyline', { points: points.map((point) => `${xOf(point.order)},${yOf(point.ratio)}`).join(' '), class: 'trend-line' }));
 
@@ -607,30 +617,36 @@ function renderCases(experiences, navigate, api) {
   return box;
 }
 
-// 성향카드 화면 — 성향 이미지 · 이름 · 설명, 그 아래에 판결에서 드러난 성향 · 성향 변화 흐름
+// 성향 설명(성향 테스트 결과 유형): 성향 막대 아래에 둔다. 이름은 왼쪽 카드에 있어 설명만
+const typeDescription = (type) => element('p', 'my-type-desc', type.oneLiner);
+
+// 성향카드 화면 — 왼쪽에 타로카드(이름 · 성향 이미지 · 캐릭터 대사), 오른쪽에 판결에서 드러난 성향, 그 아래에 성향 변경폭 · 성향 변화 흐름
 function renderTypePage(data, navigate) {
   const box = element('div', 'my-detail');
   const type = data.personality?.type;
+  const judgment = element('section', 'my-type-section');
+  judgment.append(element('h2', 'my-section-title', '판결에서 드러난 성향'), renderJudgment(data.judgmentPersonality));
   if (type) {
     const hero = element('section', 'my-type-hero');
-    const text = element('div');
-    text.append(element('h2', 'my-type-hero-name', type.name), element('p', 'my-type-hero-text', type.oneLiner));
-    hero.append(typePortrait(type), text);
+    const card = element('div', 'my-card is-type is-detail'); // 첫 화면 성향카드와 같은 타로카드 모양. 누르는 카드가 아니라 div
+    card.setAttribute('role', 'group');
+    card.setAttribute('aria-label', `성향카드: ${type.name}`);
+    card.append(element('p', 'my-card-name', type.name), typePortrait(type), element('p', 'my-card-note my-type-quote', type.meme));
+    judgment.append(typeDescription(type)); // 기존 성향 설명은 성향 막대 아래로
+    hero.append(card, judgment);
     box.append(hero);
   } else {
     const empty = element('div', 'my-empty');
     empty.append(element('p', '', '아직 내 판결 성향을 몰라요. 성향 테스트는 3분이면 끝나요.'), button('성향 테스트 하러 가기', () => navigate('test'), 'primary-button'));
-    box.append(empty);
+    box.append(empty, judgment);
   }
-  const judgment = element('section', 'my-type-section');
-  judgment.append(element('h2', 'my-section-title', '판결에서 드러난 성향'), renderJudgment(data.judgmentPersonality));
   const history = data.history ?? [];
   const trends = trendsOf(data);
   const changes = element('section', 'my-type-section');
   changes.append(element('h2', 'my-section-title', '성향 변경폭'), renderChanges(trends, history.length > 0));
   const trail = element('section', 'my-type-section');
   trail.append(element('h2', 'my-section-title', '성향 변화 흐름'), renderTrend(trends, history));
-  box.append(judgment, changes, trail);
+  box.append(changes, trail);
   return box;
 }
 

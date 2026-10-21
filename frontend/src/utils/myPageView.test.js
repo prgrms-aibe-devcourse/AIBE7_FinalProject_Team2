@@ -1,7 +1,7 @@
 // npm test : 마이페이지 변화 흐름 계산
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { axisChange, axisSeries, axisTrend, biggestChanges,castOf, collectionOf, leanText, trailLeft, imageKinds } from './myPageView.js';
+import { axisChange, axisSeries, axisTrend, castOf, collectionOf, leanText, trailLeft, imageKinds } from './myPageView.js';
 
 const AXIS = { key: 'APOLOGY_SINCERITY', strict: { name: '행동증명형' }, lenient: { name: '마음신뢰형' } };
 const entry = (value) => ({ axisScores: { APOLOGY_SINCERITY: value } });
@@ -44,13 +44,6 @@ test('axisChange: 처음 → 지금 변경폭과 움직인 쪽, 5%p 안쪽은 �
 test('axisChange: 점이 하나뿐이거나 체험 없이 테스트만 있으면 null', () => {
   assert.equal(axisChange(axisTrend([titled('가', 0.5)], AXIS.key), FULL_AXIS), null);
   assert.equal(axisChange(axisTrend([], AXIS.key, { APOLOGY_SINCERITY: 0.5 }), FULL_AXIS), null);
-});
-
-test('biggestChanges: 가장 크게 움직인 축을 고르고(같은 크기면 함께), 모두 그대로면 빈 배열', () => {
-  const move = (moved) => ({ moved, steady: Math.abs(moved) < 5 });
-  assert.deepEqual(biggestChanges([{ axis: 'a', change: move(-30) }, { axis: 'b', change: move(10) }, { axis: 'c', change: null }]).map((item) => item.axis), ['a']);
-  assert.deepEqual(biggestChanges([{ axis: 'a', change: move(30) }, { axis: 'b', change: move(-30) }]).map((item) => item.axis), ['a', 'b']);
-  assert.deepEqual(biggestChanges([{ axis: 'a', change: move(2) }, { axis: 'b', change: null }]), []);
 });
 
 test('leanText: 더 기운 쪽 이름과 비중, 반반이면 반반', () => {

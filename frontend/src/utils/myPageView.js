@@ -39,13 +39,6 @@ export function axisChange(points, axis) {
   return { from, to, moved, steady, toward: steady ? null : (moved > 0 ? axis.lenient.name : axis.strict.name) };
 }
 
-// 가장 많이 움직인 축들(변경폭 정리의 머리 문장). 같은 크기면 함께 돌려주고, 모두 거의 그대로면 빈 배열
-export function biggestChanges(changes) {
-  const moving = changes.filter((item) => item.change && !item.change.steady);
-  const top = Math.max(0, ...moving.map((item) => Math.abs(item.change.moved)));
-  return moving.filter((item) => Math.abs(item.change.moved) === top);
-}
-
 // 한 위치를 말로: 더 기운 쪽 이름과 그 비중. 정확히 반반이면 "반반"
 export function leanText(ratio, axis) {
   const lenient = Math.round(ratio * 100);

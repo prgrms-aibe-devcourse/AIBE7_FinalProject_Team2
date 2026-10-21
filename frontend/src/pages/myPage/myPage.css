@@ -225,7 +225,7 @@ img.my-sash-icon.is-missing { visibility: hidden; }
 .axis-row:has(.axis-empty)::after { display: none; } /* 막대가 없는 줄에는 가운데 눈금도 없다 */
 .my-page .visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
-/* 성향 변경폭(FE-70): 처음(빈 점) → 지금(찬 점)을 잇는 막대. 가장 많이 움직인 축만 진하고 나머지는 흐리게 */
+/* 성향 변경폭(FE-70): 처음(빈 점) → 지금(진한 점)을 잇는 막대와 방향 화살촉 */
 .change-lead { margin: 0 0 6px; font: 700 var(--text-body)/1.5 var(--font-heading); color: var(--color-heading); text-wrap: pretty; }
 .change-list { gap: 22px; }
 .change-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
@@ -233,11 +233,14 @@ img.my-sash-icon.is-missing { visibility: hidden; }
 .change-moved.is-steady { color: var(--color-muted); font-weight: 400; }
 .change-track { position: relative; height: 6px; margin: 12px 8px 10px; background: var(--color-track); border-radius: 3px; }
 .change-span { position: absolute; top: 0; bottom: 0; background: var(--color-border-strong); border-radius: 3px; }
-.change-dot { position: absolute; top: 50%; width: 14px; height: 14px; transform: translate(-50%, -50%); border-radius: 50%; border: 2px solid var(--color-border-strong); background: var(--color-card); box-shadow: 0 0 0 2px var(--color-bg); }
-.change-dot.is-to { background: var(--color-border-strong); }
-.change-row.is-biggest .change-span { background: var(--color-accent); }
-.change-row.is-biggest .change-dot { border-color: var(--color-accent); }
-.change-row.is-biggest .change-dot.is-to { background: var(--color-accent); }
+.change-span { height: 4px; top: 1px; bottom: auto; }
+.change-dot { position: absolute; top: 50%; width: 12px; height: 12px; transform: translate(-50%, -50%); border-radius: 50%; border: 2px solid var(--color-muted); background: var(--color-card); box-shadow: 0 0 0 2px var(--color-bg); }
+/* 지금 점: 처음 점보다 크고 진하게(제목 색으로 채우고 바탕색 고리로 막대에서 띄운다) */
+.change-dot.is-to { width: 18px; height: 18px; border: 0; background: var(--color-heading); box-shadow: 0 0 0 3px var(--color-bg), 0 1px 3px color-mix(in srgb, var(--color-heading) 35%, transparent); }
+/* 화살촉: 끝이 지금 점 가장자리(반지름 9px + 고리) 바로 앞에 닿는다 */
+.change-arrow { position: absolute; top: 50%; width: 10px; height: 12px; background: var(--color-border-strong); }
+.change-arrow.is-right { clip-path: polygon(0 0, 100% 50%, 0 100%); transform: translate(calc(-100% - 12px), -50%); }
+.change-arrow.is-left { clip-path: polygon(100% 0, 0 50%, 100% 100%); transform: translate(12px, -50%); }
 .change-detail { margin: 0; color: var(--color-muted); font-size: var(--text-small); font-variant-numeric: tabular-nums; }
 .change-row::after { display: none; } /* 가운데 눈금은 막대(.axis-bar) 전용 */
 
@@ -250,6 +253,7 @@ img.my-sash-icon.is-missing { visibility: hidden; }
 .trend-zone.is-lenient { fill: color-mix(in srgb, var(--color-label) 7%, transparent); }
 .trend-zone.is-strict { fill: color-mix(in srgb, var(--color-heading) 6%, transparent); }
 .trend-mid { stroke: var(--color-border-strong); stroke-width: 1; }
+.trend-grid-line { stroke: var(--color-border); stroke-width: 1; }
 .trend-tick { fill: var(--color-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
 .trend-line { fill: none; stroke: var(--color-accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .trend-dot { fill: var(--color-accent); stroke: var(--color-card); stroke-width: 2; }
@@ -272,10 +276,12 @@ img.my-sash-icon.is-missing { visibility: hidden; }
 .trend-table tbody th { font-weight: 400; color: var(--color-heading); }
 
 /* 성향카드 화면 */
-.my-type-hero { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 24px; align-items: center; margin: 0 0 36px; }
-.my-type-hero .my-card-window { aspect-ratio: 7 / 12; border-radius: 999px 999px 12px 12px; border: 1px solid var(--color-border-strong); background: var(--color-card); }
-.my-type-hero-name { margin: 0 0 8px; font: 900 var(--text-title-1)/1.25 var(--font-heading); letter-spacing: -.03em; color: var(--color-heading); text-wrap: balance; }
-.my-type-hero-text { margin: 0; color: var(--color-muted); text-wrap: pretty; }
+.my-type-hero { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 32px; align-items: start; margin: 0 0 36px; }
+/* 첫 화면 성향카드(.my-card.is-type)를 크기 · 칸 · 그림 자리까지 그대로 쓴다. 누르는 카드가 아니라 움직임만 뺀다 */
+.my-card.is-detail { cursor: default; }
+.my-card.is-detail:hover, .my-card.is-detail:active { transform: none; }
+.my-type-desc { margin: 20px 0 0; padding-top: 16px; border-top: 1px solid var(--color-border); color: var(--color-muted); text-wrap: pretty; }
+.my-empty + .my-type-section { margin-top: 36px; }
 .my-type-section + .my-type-section { margin-top: 36px; }
 .my-section-title { margin: 0 0 12px; font: 700 var(--text-title-3)/1.4 var(--font-heading); color: var(--color-heading); }
 .my-type-section .my-detail > .my-hint:first-child { margin-top: 0; }
@@ -446,7 +452,9 @@ img.my-sash-icon.is-missing { visibility: hidden; }
   .my-view-head h1 { font-size: var(--text-title-2); }
   .my-case { flex-direction: column; align-items: flex-start; }
   .collection-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-  .my-type-hero { grid-template-columns: 120px minmax(0, 1fr); gap: 16px; }
+  .my-type-hero { grid-template-columns: minmax(0, 1fr); justify-items: center; gap: 28px; }
+  .my-type-hero .my-type-section { justify-self: stretch; }
+  .my-card.is-detail { width: 200px; } /* 모바일 2열 카드처럼 100%로 늘지 않게 */
   .trend-grid { grid-template-columns: minmax(0, 1fr); }
   .trend-table { overflow-x: auto; } /* 네 축 표는 좁은 화면에서 표만 옆으로 민다 */
   .my-profile-hero { grid-template-columns: minmax(0, 1fr); gap: 20px; justify-items: center; }
