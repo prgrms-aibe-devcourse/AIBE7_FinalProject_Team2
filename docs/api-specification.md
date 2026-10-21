@@ -47,6 +47,7 @@
 | v0.43 | 2026-10-21 | **BE-96 · BE-97 후속 (BE-98, FE-71 리뷰)** — P-7 잠김 검사가 저장값과 같은 칸(저장할 때도 쓰이던 칸)은 다시 거절하지 않도록 보완(표가 바뀌어 저장값이 잠겨도 다른 칸 저장 가능). 익명 ID를 새로 발급하는 요청(API 2 · P-2 · P-7)은 그날 출석도 함께 남긴다(첫 방문날 누락 방지). P-6 · P-7 설명 갱신 |
 | v0.44 | 2026-10-21 | **P-5 `judgmentPersonality`를 현재 판결 성향으로 변경 (FE-70)** — 첫 회차 체험 **전체 평균**에서 **최근 첫 회차 체험 3건의 평균**으로 바꾼다(`type` · `null` 규칙은 그대로, `experienceCount`는 평균에 쓴 체험 수 = 최대 3). 마이페이지 성향카드 화면이 "지금"을 이 값으로 보여 준다. 서버 구현(`MyPageService`)은 후속 백엔드 작업 |
 | v0.45 | 2026-10-21 | 10장 카카오 로그인 추가 (BE-62, WBS 7.4.2) — M-3 시작 `GET /api/v1/auth/oauth2/authorization/kakao` · M-4 콜백 `GET /api/v1/auth/oauth2/callback/kakao`(브라우저 이동, JSON API 아님). 성공 시 리프레시 토큰 쿠키(`NLNB_RT`)만 심고 화면 경로로 리다이렉트, 토큰은 URL에 싣지 않음. 익명 ID 쿠키 연결 규칙. **10장 번호를 M-N으로 변경**: 재발급 · 로그아웃(BE-94)의 A-16 · A-17이 8-4 운영 메뉴 API 예약 번호(A-16 ~ A-41)와 겹쳐 M-1 · M-2로 |
+| v0.47 | 2026-10-21 | **사건 등록 적재 A-14-1 신설 (BE-93 2차)** — `POST /admin/case-imports/{importId}/load`. 생성 결과를 사건(DRAFT) · 섹션 · 형벌 규칙 · 판단 요소 · 원본 판결문 · AI · 재판부 판결 후보로 만든다. **A-15가 SUCCEEDED가 된 뒤 관리자가 따로 누른다**(번호는 A-16 ~ A-41 예약 때문에 A-14-1) — 2초마다 불리는 조회에서 적재하면 같은 사건이 여러 번 만들어질 수 있다. 적재가 끝나면 A-15의 `caseId`가 채워진다(1차에 비워 두었던 값). 에러 코드 `IMPORT_NOT_READY`(409) · `IMPORT_RESULT_INVALID`(422) 추가. 판결 후보는 **공개하지 않은 상태**로 들어가 A-9 승인을 기다린다 |
 | v0.46 | 2026-10-21 | **사건 등록 A-14 · A-15 서버 구현 (BE-93 1차)** — "초안" 표시를 떼고 담당을 BE-93으로. **A-14 머리말의 "파이프라인을 자바로 옮긴 뒤 구현한다"는 옛 결정이라 정정**: 파이프라인은 옮기지 않고 같은 서버의 내부 컨테이너로 띄워 백엔드가 내부망으로 부른다(COMMON-50). 에러 코드 `DUPLICATE_SOURCE` · `IMPORT_IN_PROGRESS` · `IMPORT_NOT_FOUND` · `IMPORT_UNAVAILABLE`(신설)을 1-5에 추가. **적재는 BE-93 2차**라 그때까지 A-15는 `SUCCEEDED`여도 `caseId`가 `null`임을 명시(차수별 표로 구분). **A-14의 "파이프라인이 적재까지 한다"도 정정**: 파이프라인의 `load` 단계는 운영 DB에 직접 쓰는 단계라 서비스에서 영구히 막아 두었고(COMMON-50), 1차 · 2차 모두 `SKIPPED`다 — 사건을 만드는 일은 서버가 한다. 항상 `SKIPPED`인 세 단계(`load` · `rag` · `contamination`)가 오류가 아님을 A-15에 명시. 요청 · 응답 형식은 바뀌지 않았다(화면 목 `adminMockApi.js` 그대로) |
 
 ---
@@ -142,6 +143,8 @@ json
 | 409 | `DUPLICATE_SOURCE` | (확장, 관리자 API, BE-93) 이미 등록한 사건번호. `details`에 어느 항목인지 담는다 | 입력 안내 (A-14) |
 | 409 | `IMPORT_IN_PROGRESS` | (확장, 관리자 API, BE-93) 실행 중인 등록이 있음. 한 번에 하나만 돌린다(외부 AI 호출 한도 보호) | 끝난 뒤 다시 시도 안내 (A-14) |
 | 404 | `IMPORT_NOT_FOUND` | (확장, 관리자 API, BE-93) 등록 작업이 없음 | 목록으로 안내 (A-15) |
+| 409 | `IMPORT_NOT_READY` | (확장, 관리자 API, BE-93 2차) 아직 적재할 수 없음 — 생성이 끝나지 않았거나 이미 적재한 등록 | 진행 상황 확인 안내 (A-14-1) |
+| 422 | `IMPORT_RESULT_INVALID` | (확장, 관리자 API, BE-93 2차) 생성 결과를 사건으로 만들 수 없음. `details`에 어느 값이 문제인지 담는다(예: `case.factors[2].label`) | 다시 생성하도록 안내 (A-14-1) |
 | 502 | `IMPORT_UNAVAILABLE` | (확장, 관리자 API, BE-93) 파이프라인 서비스에 닿지 못함, 또는 설정(`PIPELINE_SERVICE_URL`) 없음. **이 서비스를 켜지 않은 서버에서는 사건 등록만 꺼지고 나머지는 정상이다**(COMMON-50) | 다시 시도 · 관리자 문의 안내 (A-14) |
 | 429 | `TOO_MANY_REQUESTS` | (확장, BE-63) 같은 IP에서 `/api` 요청이 너무 많음(평균 초당 20번 · 순간 40번 초과). **백엔드가 아니라 운영 Nginx가 돌려준다** — 형식은 1-4와 같고 `Retry-After: 1` 헤더가 붙는다. 로컬 개발(Vite)에는 Nginx가 없어 나오지 않는다 | 일반 오류 안내. 자동으로 다시 보내지 않는다 |
 | 500 | `INTERNAL_ERROR` | 서버 오류 | 일반 오류 안내 |
@@ -924,7 +927,8 @@ API 1 · 2 · 16은 상태와 관계없이 부를 수 있다. 표에 없는 조�
 | A-12 | `PUT /admin/factors/{factorId}/value-axis` | 판단 요소 가치관 축 확정 | BE-43 · BE-48 |
 | A-13 | `POST /admin/cases/{caseId}/publish` | 사건 공개 | BE-43 |
 | A-14 | `POST /admin/case-imports` | 사건 등록 시작 (원본 판결문 → 파이프라인 실행) | BE-93 (적재는 2차) |
-| A-15 | `GET /admin/case-imports/{importId}` | 사건 등록 진행 상황 | BE-93 (적재는 2차) |
+| A-15 | `GET /admin/case-imports/{importId}` | 사건 등록 진행 상황 | BE-93 |
+| A-14-1 | `POST /admin/case-imports/{importId}/load` | 사건 등록 적재 (생성 결과 → 사건 DRAFT) | BE-93 2차 |
 
 ### A-5. 검수 사건 목록 — `GET /admin/cases`
 
@@ -1448,7 +1452,7 @@ A-11과 같은 방식(보낸 필드만, `null` = 지움). `headline` · `article
   | 차수 | `SUCCEEDED` 응답 | 뜻 |
   | --- | --- | --- |
   | **BE-93 1차** (지금) | `caseId: null` | 파이프라인 생성까지 끝났고 **사건은 아직 만들어지지 않았다** |
-  | **BE-93 2차** | `caseId: <사건 ID>` | 사건이 `DRAFT`로 만들어졌다. A-5 목록 · A-6 상세로 이어서 검수한다 |
+  | **BE-93 2차** | `caseId: <사건 ID>` | **A-14-1로 적재한 뒤** 채워진다. 사건이 `DRAFT`로 만들어져 A-5 목록 · A-6 상세로 이어서 검수한다 |
 
   1차 범위에서 실제 모드의 사건 등록 메뉴는 열지 않는다(`adminMenu.js`의 `serverReady: false`, `docs/information-architecture.md`). 2차 전에 메뉴를 열려면 `caseId == null`을 다루는 처리가 화면에 먼저 있어야 한다.
 - 단계별 상태는 파이프라인만 알고 있어 서버가 마지막으로 받은 값을 저장해 둔다. 끝난 작업은 파이프라인에 다시 묻지 않고 그 값을 그대로 내려준다.
@@ -1458,7 +1462,49 @@ A-11과 같은 방식(보낸 필드만, `null` = 지움). `headline` · `article
 | --- | --- |
 | 404 `IMPORT_NOT_FOUND` | 등록 작업이 없음 |
 
-**에러 코드**: 1-5의 `JUDGMENT_NOT_FOUND` · `FACTOR_NOT_FOUND` · `DUPLICATE_TITLE` · `PUBLISH_NOT_READY`(v0.17 추가)와 공통 코드를 쓴다. 사건 등록(A-14 · A-15)은 `DUPLICATE_SOURCE` · `IMPORT_IN_PROGRESS` · `IMPORT_NOT_FOUND` · `IMPORT_UNAVAILABLE`을 더 쓴다(BE-93에서 1-5 목록에 추가했다).
+### A-14-1. 사건 등록 적재 —
+
+> 번호: A-16 ~ A-41은 8-4(운영 메뉴 API, 초안)가 예약해 두어, A-14(사건 등록)에 딸린 API라는 뜻으로 A-14-1을 쓴다 (A-13-N과 같은 방식).
+ `POST /admin/case-imports/{importId}/load`
+
+생성 결과를 **사건으로 만든다.** A-15가 `SUCCEEDED`가 된 뒤 관리자가 누른다.
+
+> **왜 A-15에서 자동으로 하지 않는가**: A-15는 화면이 2초마다 부르는 조회다. 거기서 적재하면 응답이 늦어지거나 끊겼을 때 같은 사건이 여러 번 만들어질 수 있다. 쓰기는 명시적인 호출 하나로 둔다.
+
+요청 본문은 없다. 응답은 **A-15와 같은 형식**이고, 적재가 끝났으므로 `caseId`가 채워져 있다.
+
+```json
+{ "importId": 1, "status": "SUCCEEDED", "stages": [ ... ], "caseId": 42,
+  "errorCode": null, "message": null, "createdAt": "...", "finishedAt": "..." }
+```
+
+**무엇이 만들어지는가**
+
+| 표 | 내용 |
+| --- | --- |
+| `legal_case` | 사건 (`DRAFT`) |
+| `case_section` · `penalty_rule` | 섹션 · 형벌 규칙 (`display_order` = 배열 순서) |
+| `factor` | 판단 요소. **`display_order`에 파이프라인의 `factorId`를 그대로 넣는다** — 판결의 작용 요소가 이 번호로 요소를 찾는다 |
+| `case_source` | 원본 판결문. **원문은 등록 요청에서 받아 둔 값을 옮긴다**(파이프라인은 원문을 돌려주지 않는다, FR-5-3) |
+| `judgment` (AI · COURT) + `judgment_factor` | 판결 후보 둘. **공개하지 않은 상태**로 들어간다 |
+| `ai_generation` | 어느 모델 · 몇 번째 회차를 왜 골랐는지 (`review_status: PENDING`) |
+
+- **판결은 공개 상태로 만들지 않는다.** 관리자가 A-9에서 승인해야 공개 후보가 된다 — 적재가 바로 공개하면 검수를 건너뛴다.
+- 재판부 판결 초안이 없으면 그 부분만 건너뛰고 사건은 만들어진다.
+- 모두 한 트랜잭션이다. 중간에 실패하면 **아무것도 만들어지지 않는다** — 반쯤 만들어진 사건은 관리자가 고칠 수도 지울 수도 없다.
+
+| 거절 | 조건 |
+| --- | --- |
+| 404 `IMPORT_NOT_FOUND` | 등록 작업이 없음 |
+| 409 `IMPORT_NOT_READY` | 생성이 아직 끝나지 않았거나, 이미 적재한 등록 |
+| 409 `DUPLICATE_TITLE` | 같은 제목의 사건이 이미 있음. 제목을 바꿔 다시 등록한다 |
+| 422 `IMPORT_RESULT_INVALID` | 생성 결과를 사건으로 만들 수 없음. `details[].field`에 어느 값이 문제인지 담는다 (예: `case.factors[2].label`, `report.factorExtras[factorId=5].summaryTag`) |
+| 502 `IMPORT_UNAVAILABLE` | 생성 결과를 가져오지 못함 |
+
+- 감사 로그 `CASE_IMPORT_LOAD`를 남긴다(만들어진 사건 번호와 등록 번호만).
+- 적재가 끝나면 파이프라인에 남은 작업을 지운다 — 판결문 원문이 서비스 볼륨에 남지 않게 한다(FR-5-3).
+
+**에러 코드**: 1-5의 `JUDGMENT_NOT_FOUND` · `FACTOR_NOT_FOUND` · `DUPLICATE_TITLE` · `PUBLISH_NOT_READY`(v0.17 추가)와 공통 코드를 쓴다. 사건 등록(A-14 · A-14-1 · A-15)은 `DUPLICATE_SOURCE` · `IMPORT_IN_PROGRESS` · `IMPORT_NOT_FOUND` · `IMPORT_UNAVAILABLE` · `IMPORT_NOT_READY` · `IMPORT_RESULT_INVALID`를 더 쓴다(BE-93에서 1-5 목록에 추가했다).
 
 - `CASE_NOT_FOUND`는 관리자 API에서 "사건이 없음"만 뜻한다(사용자 API는 "없거나 `PUBLISHED`가 아님").
 
