@@ -4,9 +4,9 @@ import { renderAxisRow } from '../../components/axisRow.js';
 import { imageOf } from '../../components/stage.js';
 import { AXES, CHARACTER_NAMES } from '../../utils/personalityAxes.js';
 import { KIND_TITLES, TREND_RECENT, trendOrders, lenientPercent, axisChange, axisTrend, collectionOf, imageKinds, leanText } from '../../utils/myPageView.js';
-import { BACKGROUNDS, DEFAULT_DECO, DEFAULT_PORTRAITS, FRAMES, SASH_COLORS, SASH_ICONS, SASH_STYLES, achievementProgress, sashColorField, sashColorKey, sashColorOf, getProfileDeco, kindOfPortrait, portraitLabel, setProfileDeco, shownDeco, unlockedBy, unlockerOf } from '../../utils/profileDeco.js';
+import { BACKGROUNDS, DEFAULT_DECO, DEFAULT_PORTRAITS, FRAMES, SASH_COLORS, SASH_ICONS, SASH_STYLES, achievementView, normalizeDeco, sashColorField, sashColorKey, sashColorOf, kindOfPortrait, portraitLabel, shownDeco, unlockedSets, unlockerIn } from '../../utils/profileDeco.js';
 import { PORTRAIT_POOL } from '../../content/portraitPool.js';
-import { BOOKMARK_CHARACTERS, BOOKMARK_FACES, BOOKMARK_LAWS, BOOKMARK_NAMES, BOOKMARK_STYLES, FACE_NAMES, STYLE_NAMES, getBookmarkCharacter, getBookmarkFaceName, getBookmarkStyle, bookmarkFace, setBookmarkCharacter, setBookmarkFace, BOOKMARK_COLORS, getBookmarkColor, setBookmarkColor, selectedBookmarkFace } from '../../utils/bookmarkCharacter.js';
+import { BOOKMARK_CHARACTERS, BOOKMARK_FACES, BOOKMARK_LAWS, BOOKMARK_NAMES, BOOKMARK_STYLES, FACE_NAMES, STYLE_NAMES, applyBookmark, getBookmarkCharacter, getBookmarkFaceName, getBookmarkStyle, bookmarkFace, BOOKMARK_COLORS, getBookmarkColor, selectedBookmarkFace } from '../../utils/bookmarkCharacter.js';
 import { SCRIPTS } from '../../content/scripts.js';
 import { fitPortraitIn } from '../../utils/portraitFit.js';
 import { clearUser, currentUser, isAdmin } from '../../utils/session.js';
@@ -18,6 +18,7 @@ import { openCaseReviewPopup } from '../caseReview/caseReviewPopup.js';
 // 첫 화면은 [프로필카드 | 닉네임 | 성향카드] + 하단 항목 줄(만난 모습 · 내가 체험한 사건 · 내 정보 수정 · 환경 설정)이고, 카드나 줄을 누르면 그 화면(view)으로 들어간다.
 // 내 정보 수정 · 환경 설정은 껍데기만 있다(추가 예정). 성향카드 화면에는 판결에서 드러난 성향 · 성향 변경폭 · 성향 변화 흐름(FE-70)이 들어 있다.
 // 프로필카드 화면(FE-68)은 꾸미기를 모은 곳이다: 대표 이미지 · 카드 테두리 · 카드 배경 · 책갈피를 고르고, 도전과제를 깨면 잠긴 것이 열린다.
+// 꾸미기 값 · 도전과제 진행도 · 열린 항목은 서버가 원본이다(FE-71, BE-96). 고르면 바로 화면에 쓰고 PUT /profile-deco로 저장하며, 거절(409 DECO_LOCKED 등)되면 서버 값으로 되돌린다.
 // 항목 화면은 주소가 같고 view만 다르다(뒤로 가기로 첫 화면에 돌아온다).
 // 종합 · 변화 흐름은 체험 → 성향 저장(7.6.7, BE-64) 뒤부터 채워지므로 그 전에는 null · 빈 배열로 와서 안내만 보인다.
 // 로그인 전에는 익명 ID 기준이다(REQ-108).
@@ -35,12 +36,75 @@ const VIEWS = {
 // 프로필카드에서 들어가는 화면은 뒤로 가기가 프로필카드로 간다(FE-68)
 const PARENTS = { achievements: 'profile', bookmark: 'profile' };
 const DEFAULT_NICKNAME = '익명의 판사'; // 로그인 · 닉네임 API 전까지 임시 문구
-// 닉네임 아래 프로필 수치. 레벨 · 직업 · 출석 일수는 목 데이터(API 전, data.profile이 오면 그 값을 쓴다). 완료한 사건 · 모은 일러스트는 지금 기록에서 센다
-const MOCK_PROFILE = { level: 7, job: '수습 판사', attendanceDays: 12 };
+// 닉네임 아래 프로필 수치. 레벨 · 직업은 목 데이터(API 전, data.profile이 오면 그 값을 쓴다). 출석 일수는 서버 값(P-5 profile.attendanceDays)이다. 완료한 사건 · 모은 일러스트는 지금 기록에서 센다
+const MOCK_PROFILE = { level: 7, job: '수습 판사', attendanceDays: 0 };
 const IS_MOCK = API_MODE === 'mock'; // 목 모드에서는 체험 기록 · 성향 평균도 목(mocks/personalityMockApi.js)이라 함께 표기한다(FE-56)
 // 개발 서버 + 목 모드에서만 public/images의 webp 전부를 컬렉션 아래에 펼친다(FE-67). 빌드에서는 이 분기가 통째로 빠진다
 const ALL_WEBP = import.meta.env?.DEV ? Object.keys(import.meta.glob('/public/images/**/*.webp', { query: '?url', import: 'default' })).map((key) => key.replace(/^\/public/, '')) : [];
 let cache = null; // 마지막 응답. 항목 화면을 오갈 때 바로 그리고 뒤에서 새로 받는다
+let apiRef = null; // 꾸미기 저장에 쓰는 api(화면을 그릴 때마다 맞춘다)
+let refresh = null; // 저장이 거절됐을 때 서버 값으로 화면을 다시 그리는 함수(renderMyPage가 정한다)
+let saveQueue = Promise.resolve(); // 저장은 고른 순서대로 한 번에 하나씩 보낸다(PUT은 전체를 덮어쓰므로 순서가 바뀌면 안 된다)
+let saveEpoch = 0; // 거절되면 올린다. 거절 전에 줄 선 저장은 건너뛴다
+let decoVersion = 0; // 꾸미기를 고를 때마다 올린다. 받아 둔 서버 값이 그 사이에 고른 것을 덮어쓰지 않게 비교한다
+
+// 지금 고른 꾸미기(서버 값 + 방금 고른 것). 잠겼는지는 보지 않는다(shownDeco가 한다)
+const currentDeco = () => normalizeDeco(cache?.profileDeco);
+// 서버가 알려 준 열린 항목 · 잠긴 항목을 여는 도전과제
+const openOf = (data) => unlockedSets(data.unlocked);
+const unlockerOf = (type, id) => unlockerIn(cache?.achievements, type, id);
+
+const LOCKED_FIELD_NAMES = {
+  portrait: '대표 이미지', frame: '카드 테두리', background: '카드 배경', sashStyle: '카드 책갈피 모양',
+  sashColorShort: '카드 책갈피 색', sashColorLong: '카드 책갈피 색', sashIconLeft: '책갈피 아이콘', sashIconRight: '책갈피 아이콘',
+};
+function saveFailureText(error) {
+  if (error?.code === 'DECO_LOCKED') {
+    const names = [...new Set((error.details ?? []).map(({ field }) => LOCKED_FIELD_NAMES[field]).filter(Boolean))];
+    return `아직 열리지 않은 꾸미기가 있어서 저장하지 못했어요${names.length ? `(${names.join(' · ')})` : ''}. 열린 것으로 다시 보여 드려요.`;
+  }
+  if (error?.code === 'VALIDATION_ERROR') return '꾸미기를 저장하지 못했어요. 저장된 값으로 다시 보여 드려요.';
+  return '꾸미기를 저장하지 못했어요. 잠시 뒤 다시 골라 주세요.';
+}
+
+/**
+ * 꾸미기를 바꾼다: 고른 것을 바로 화면 값(cache)에 반영하고 서버에 저장한다. 서버는 전체를 한 번에 받으므로 지금 값 전체를 보낸다.
+ * 거절되면 서버 값으로 되돌리고 안내한다(409면 마이페이지를 다시 불러온다, 명세 P-7)
+ */
+function saveDeco(patch) {
+  const next = normalizeDeco({ ...currentDeco(), ...patch });
+  if (cache) cache.profileDeco = next;
+  applyBookmark(next); // 판결 체험 화면이 바로 읽는 거울
+  const epoch = saveEpoch;
+  decoVersion += 1;
+  const version = decoVersion;
+  saveQueue = saveQueue.then(async () => {
+    if (epoch !== saveEpoch) return;
+    try {
+      const saved = await apiRef.putProfileDeco(next);
+      // 서버가 정리해 돌려준 값을 따른다. 그 사이 새로 골랐으면 그 선택이 최신이므로 건드리지 않는다
+      if (version === decoVersion && cache && saved) {
+        cache.profileDeco = normalizeDeco(saved);
+        applyBookmark(cache.profileDeco);
+      }
+    } catch (error) {
+      saveEpoch += 1;
+      await refresh?.(saveFailureText(error));
+    }
+  });
+  return next;
+}
+
+/**
+ * 마이페이지를 받는다. 저장이 끝나길 기다린 뒤 요청하고, 받는 동안 꾸미기를 새로 골랐으면 받은 꾸미기 대신 화면 값을 지킨다
+ * (오래된 서버 값이 방금 고른 것을 덮어쓰지 않게). 거절 뒤 서버 값으로 되돌릴 때는 쓰지 않는다
+ */
+async function loadMyPage(api) {
+  await saveQueue;
+  const version = decoVersion;
+  const data = await api.getMyPage();
+  return version === decoVersion || !cache ? data : { ...data, profileDeco: cache.profileDeco };
+}
 
 const svg = (path, className) => {
   const node = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -103,7 +167,7 @@ function emptyWindow() {
   return window_;
 }
 
-// 프로필 수치와 도전과제 판정(FE-68)이 함께 쓰는 값. 응답에 없거나 null이면 MOCK_PROFILE로 채우고, 목인 값은 mocked에 표시한다(FE-56)
+// 프로필 수치로 보여 주는 값. 응답에 없거나 null이면 MOCK_PROFILE로 채우고, 목인 값은 mocked에 표시한다(FE-56). 도전과제 판정은 서버가 한다
 function statsOf(data) {
   const missing = (key) => data.profile?.[key] == null;
   const profile = Object.fromEntries(Object.keys(MOCK_PROFILE).map((key) => [key, missing(key) ? MOCK_PROFILE[key] : data.profile[key]]));
@@ -113,8 +177,7 @@ function statsOf(data) {
     ...profile,
     completed: experiences.filter((item) => item.status === 'COMPLETED').length,
     collected: groups.reduce((sum, group) => sum + group.cast.length + group.items.length, 0),
-    hasType: Boolean(data.personality?.type),
-    mocked: { level: missing('level'), job: missing('job'), attendanceDays: missing('attendanceDays'), completed: IS_MOCK, collected: IS_MOCK, hasType: IS_MOCK },
+    mocked: { level: missing('level'), job: missing('job'), attendanceDays: IS_MOCK || missing('attendanceDays'), completed: IS_MOCK, collected: IS_MOCK },
   };
 }
 
@@ -138,7 +201,7 @@ function renderStats(stats) {
 }
 
 // 지금 보여 줄 꾸미기: 고른 것 중 잠긴 것은 기본으로(profileDeco.js shownDeco)
-const decoFor = (stats) => shownDeco(getProfileDeco(), unlockedBy(stats));
+const decoFor = (data) => shownDeco(currentDeco(), openOf(data));
 const nameOf = (list, id) => list.find((item) => item.id === id)?.name ?? id;
 
 // 카드 책갈피(FE-68): 카드 좌우에 걸리는 띠 두 줄. 색은 .deco-sash-*, 모양은 .sash-style-*(짧고 굵은 책갈피 · 얇고 긴 띠)가 정한다.
@@ -182,7 +245,7 @@ function profileCardParts(deco, data) {
   const face = element('div', 'my-card-window');
   const faceImage = picture(src, `${caption} 대표 이미지`, 'my-profile-face');
   face.append(faceImage);
-  fitPortraitIn(face, faceImage);
+  fitPortraitIn(face, faceImage, { centerWide: true }); // 가로로 긴 그림(사건 사진 등)은 창 세로 가운데에, 서 있는 캐릭터는 발을 아래에
   const nickname = data.nickname || DEFAULT_NICKNAME;
   const typeName = data.personality?.type?.name;
   const result = element('p', `my-card-note${typeName ? '' : ' is-empty'}`, typeName ?? '성향 테스트 전');
@@ -198,7 +261,7 @@ function profileCardParts(deco, data) {
 function renderTop(data, go) {
   const section = element('section', 'my-top');
   const stats = statsOf(data);
-  const parts = profileCardParts(decoFor(stats), data);
+  const parts = profileCardParts(decoFor(data), data);
   const profile = cardButton(parts.classes, `프로필카드 열기: ${parts.note}`, ...parts.children);
   profile.addEventListener('click', () => go('profile'));
 
@@ -524,7 +587,7 @@ function renderBookmarkPicker(onPick) {
         input.value = `${style}:${who}:${face}`;
         input.checked = style === current.style && who === current.who && face === current.face;
         input.setAttribute('aria-label', name);
-        input.addEventListener('change', () => { setBookmarkFace(who, face, style); onPick?.(); });
+        input.addEventListener('change', () => { saveDeco({ bookmarkCharacter: who, bookmarkFace: face, bookmarkFaceStyle: style }); onPick?.(); });
         label.append(input, picture(bookmarkFace(who, face, style), ''));
         row.append(label);
       });
@@ -545,7 +608,7 @@ function renderBookmarkPicker(onPick) {
     input.value = who;
     input.checked = who === current.who;
     input.setAttribute('aria-label', BOOKMARK_NAMES[who]);
-    input.addEventListener('change', () => { setBookmarkCharacter(who); onPick?.(); });
+    input.addEventListener('change', () => { saveDeco({ bookmarkCharacter: who }); onPick?.(); });
     label.append(input, picture(bookmarkFace(who), ''));
     lawRow.append(label);
   });
@@ -746,7 +809,7 @@ function portraitPicker(open, shownPortrait, onPick) {
     box.append(picture(src, ''));
     return box;
   };
-  const pick = (portrait) => () => { setProfileDeco({ portrait }); onPick(); };
+  const pick = (portrait) => () => { saveDeco({ portrait }); onPick(); };
   const first = element('div', 'my-deco-grid');
   DEFAULT_PORTRAITS.forEach((src) => first.append(decoOption({
     group: 'profile-portrait', value: src, checked: src === shownPortrait, locked: false, name: `기본 · ${portraitLabel(src)} 스탠딩`, onChange: pick(src),
@@ -797,7 +860,7 @@ function swatchPicker(type, open, shown, onPick, base = PLAIN_DECO, legendClass 
   list.forEach(({ id, name }) => {
     row.append(unlockOption(open, set, id, {
       group, id, name, checked: id === shown, art: miniCard({ ...base, [type]: id }),
-      onChange: () => { setProfileDeco({ [type]: id }); onPick(); },
+      onChange: () => { saveDeco({ [type]: id }); onPick(); },
     }));
   });
   field.append(row);
@@ -816,7 +879,7 @@ function sashIconPicker(side, open, deco, onPick) {
     if (art) chip.append(art);
     const option = unlockOption(open, 'sashIcons', id, {
       group: `profile-${key}`, id, name, checked: id === deco[key], art: chip, reason: false,
-      onChange: () => { setProfileDeco({ [key]: id }); onPick(); },
+      onChange: () => { saveDeco({ [key]: id }); onPick(); },
     });
     option.classList.add('is-pill');
     row.append(option);
@@ -836,7 +899,7 @@ function sashColorPicker(open, deco, onPick) {
     row.append(unlockOption(open, 'sashColors', key, {
       group: `profile-sash-color-${style}`, id, name, checked: id === sashColorOf(deco),
       art: miniCard({ ...PLAIN_DECO, sashStyle: style, [sashColorField(style)]: id }),
-      onChange: () => { setProfileDeco({ [sashColorField(style)]: id }); onPick(); },
+      onChange: () => { saveDeco({ [sashColorField(style)]: id }); onPick(); },
     }));
   });
   field.append(row);
@@ -847,7 +910,7 @@ function sashColorPicker(open, deco, onPick) {
 function sashSection(open, onPick) {
   const section = element('section', 'my-deco-section');
   const paint = (focusName, focusValue) => {
-    const deco = shownDeco(getProfileDeco(), open);
+    const deco = shownDeco(currentDeco(), open);
     const repaint = () => {
       const active = document.activeElement;
       paint(active?.name, active?.value);
@@ -869,22 +932,25 @@ function sashSection(open, onPick) {
 }
 
 // 보상을 한 줄로: "장면 컷 16장 · 원목 테두리"
-function rewardText(item) {
+function rewardText({ rewards }) {
   const count = (kind) => PORTRAIT_POOL.filter((src) => kindOfPortrait(src) === kind).length;
+  const given = (type) => rewards?.[type] ?? [];
   return [
-    ...item.kinds.map((kind) => `${KIND_TITLES[kind]} ${count(kind)}장`),
-    ...item.frames.map((id) => `${nameOf(FRAMES, id)} 테두리`),
-    ...item.backgrounds.map((id) => `${nameOf(BACKGROUNDS, id)} 배경`),
-    ...item.sashStyles.map((id) => `책갈피 모양 ${nameOf(SASH_STYLES, id)}`),
-    ...item.sashColors.map((key) => {
+    ...given('kinds').map((kind) => `${KIND_TITLES[kind] ?? kind} ${count(kind)}장`),
+    ...given('frames').map((id) => `${nameOf(FRAMES, id)} 테두리`),
+    ...given('backgrounds').map((id) => `${nameOf(BACKGROUNDS, id)} 배경`),
+    ...given('sashStyles').map((id) => `책갈피 모양 ${nameOf(SASH_STYLES, id)}`),
+    ...given('sashColors').map((key) => {
       const [style, color] = key.split(':');
-      return `${nameOf(SASH_STYLES, style)} ${nameOf(SASH_COLORS[style], color)}`;
+      return `${nameOf(SASH_STYLES, style)} ${nameOf(SASH_COLORS[style] ?? [], color)}`;
     }),
-    ...item.sashIcons.map((id) => `책갈피 아이콘 ${nameOf(SASH_ICONS, id)}`),
+    ...given('sashIcons').map((id) => `책갈피 아이콘 ${nameOf(SASH_ICONS, id)}`),
   ].join(' · ');
 }
 
-function achievementList(progress, mocked) {
+// 서버가 내려 준 도전과제(P-5 achievements)를 제목 · 문구와 함께 그린다. PENDING(수집 도전과제, BE-83 전)은 아직 셀 수 없어 "준비 중"으로 둔다
+function achievementList(achievements) {
+  const progress = achievements.map(achievementView);
   const section = element('section', 'my-achievements-section');
   section.id = 'my-achievements';
   const done = progress.filter((item) => item.cleared).length;
@@ -893,17 +959,20 @@ function achievementList(progress, mocked) {
   progress.forEach((item) => {
     const line = element('li', `my-achievement${item.cleared ? ' is-cleared' : ''}`);
     const head = element('div', 'my-achievement-head');
-    const state = element('span', 'my-achievement-state', item.cleared ? '달성' : `${item.value} / ${item.goal}`);
-    if (mocked[item.stat]) state.append(mockTag());
+    const pending = item.status === 'PENDING' || item.value == null;
+    const value = pending ? 0 : item.value;
+    const state = element('span', 'my-achievement-state', pending ? '준비 중' : item.cleared ? '달성' : `${value} / ${item.goal}`);
+    if (IS_MOCK) state.append(mockTag());
     head.append(element('strong', '', item.title), state);
     const bar = element('div', 'my-achievement-bar');
     bar.setAttribute('role', 'progressbar');
     bar.setAttribute('aria-label', `${item.title} 진행도`);
     bar.setAttribute('aria-valuemin', '0');
     bar.setAttribute('aria-valuemax', String(item.goal));
-    bar.setAttribute('aria-valuenow', String(item.value));
+    bar.setAttribute('aria-valuenow', String(value));
+    if (pending) bar.setAttribute('aria-valuetext', '아직 판정할 수 없어요');
     const fill = element('span');
-    fill.style.width = `${Math.round((item.value / item.goal) * 100)}%`;
+    fill.style.width = `${Math.round((value / item.goal) * 100)}%`;
     bar.append(fill);
     line.append(head, element('p', 'my-achievement-text', item.text), bar, element('p', 'my-achievement-reward', `보상: ${rewardText(item)}`));
     list.append(line);
@@ -913,7 +982,7 @@ function achievementList(progress, mocked) {
 }
 
 // 미리 보기 카드(첫 화면 카드와 같은 모양, 누를 수 없음)
-function previewCard(stats, data, deco = decoFor(stats)) {
+function previewCard(data, deco = decoFor(data)) {
   const parts = profileCardParts(deco, data);
   const card = element('div', `my-card ${parts.classes} is-preview`);
   card.setAttribute('role', 'img');
@@ -924,17 +993,17 @@ function previewCard(stats, data, deco = decoFor(stats)) {
 
 // 카드 꾸미기 창: 테두리 · 배경 · 카드 책갈피를 고른다. 창 안에도 미리 보기를 두고, 고를 때마다 화면 쪽 미리 보기(onPick)도 다시 그린다.
 // 마이페이지 커피색 토큰이 적용되도록 .my-page 안에 붙이고, 닫으면 지우고 연 버튼으로 포커스를 돌려준다(Esc · 바깥 · 닫기)
-function openDecoDialog({ open, stats, data, onPick, opener }) {
+function openDecoDialog({ open, data, onPick, opener }) {
   const dialog = element('dialog', 'my-deco-dialog');
   const title = element('h2', 'my-deco-dialog-title', '카드 꾸미기');
   title.id = `my-deco-dialog-title-${Date.now()}`;
   dialog.setAttribute('aria-labelledby', title.id);
   const head = element('div', 'my-deco-dialog-head');
   head.append(title, button('닫기', () => dialog.close(), 'secondary-button'));
-  const shown = decoFor(stats);
+  const shown = decoFor(data);
   const preview = element('div', 'my-deco-dialog-preview');
   const paint = () => {
-    preview.replaceChildren(previewCard(stats, data));
+    preview.replaceChildren(previewCard(data));
     onPick();
   };
   const body = element('div', 'my-deco-dialog-body');
@@ -949,7 +1018,7 @@ function openDecoDialog({ open, stats, data, onPick, opener }) {
   dialog.append(head, body);
   dialog.addEventListener('click', (event) => { if (event.target === dialog) dialog.close(); });
   dialog.addEventListener('close', () => { dialog.remove(); opener?.focus(); });
-  preview.replaceChildren(previewCard(stats, data, shown));
+  preview.replaceChildren(previewCard(data, shown));
   (document.querySelector('.my-page') ?? document.body).append(dialog);
   dialog.showModal();
 }
@@ -967,16 +1036,15 @@ function countValue(have, total) {
 
 function renderProfilePage(data, go) {
   const box = element('div', 'my-detail');
-  const stats = statsOf(data);
-  const open = unlockedBy(stats);
-  const progress = achievementProgress(stats);
+  const open = openOf(data);
+  const progress = data.achievements ?? [];
 
   // 위: 미리 보기 카드 + 열린 개수 + 버튼(카드 꾸미기 창 · 도전과제 화면 · 책갈피 설정 화면)
   const hero = element('section', 'my-profile-hero');
   const preview = element('div', 'my-profile-preview');
-  const deco = decoFor(stats);
-  const paintPreview = () => preview.replaceChildren(previewCard(stats, data));
-  preview.replaceChildren(previewCard(stats, data, deco));
+  const deco = decoFor(data);
+  const paintPreview = () => preview.replaceChildren(previewCard(data));
+  preview.replaceChildren(previewCard(data, deco));
   const summary = element('div', 'my-profile-summary');
   const counts = element('dl', 'my-stats my-profile-counts');
   const sashTotal = SASH_STYLES.length + Object.values(SASH_COLORS).reduce((sum, list) => sum + list.length, 0) + SASH_ICONS.length;
@@ -992,9 +1060,17 @@ function renderProfilePage(data, go) {
     counts.append(item);
   });
   const actions = element('div', 'my-profile-actions');
-  const decorate = button('카드 꾸미기', () => openDecoDialog({ open, stats, data, onPick: paintPreview, opener: decorate }), 'primary-button');
+  const decorate = button('카드 꾸미기', () => openDecoDialog({ open, data, onPick: paintPreview, opener: decorate }), 'primary-button');
   actions.append(decorate, button('책갈피 설정', () => go('bookmark'), 'secondary-button'), button('도전과제 보기', () => go('achievements'), 'secondary-button'));
-  summary.append(element('p', 'my-hint', '도전과제를 깨면 대표 이미지 · 테두리 · 배경 · 카드 책갈피가 열려요. 고른 것은 이 브라우저에 저장돼요.'), counts, actions);
+  // 개발 전용: 목 API에서 도전과제를 전부 깬 것으로 본다(잠긴 꾸미기를 확인할 때). 개발 서버 + 목 모드에서만 보인다
+  if (import.meta.env?.DEV && apiRef?.setMockUnlockAll) {
+    const allCleared = progress.length > 0 && progress.every((item) => item.cleared);
+    actions.append(button(allCleared ? '개발용: 해금 되돌리기' : '개발용: 모두 해금', async () => {
+      await apiRef.setMockUnlockAll(!allCleared);
+      await refresh?.();
+    }, 'secondary-button is-dev'));
+  }
+  summary.append(element('p', 'my-hint', '도전과제를 깨면 대표 이미지 · 테두리 · 배경 · 카드 책갈피가 열려요. 고른 것은 바로 저장돼요.'), counts, actions);
   hero.append(preview, summary);
 
   box.append(hero, portraitPicker(open, deco.portrait, paintPreview));
@@ -1004,8 +1080,7 @@ function renderProfilePage(data, go) {
 // 도전과제 화면(FE-68): 진행도 · 보상 목록
 function renderAchievementsPage(data) {
   const box = element('div', 'my-detail');
-  const stats = statsOf(data);
-  box.append(element('p', 'my-hint', '도전과제를 깨면 프로필카드의 대표 이미지 · 카드 꾸미기가 열려요.'), achievementList(achievementProgress(stats), stats.mocked));
+  box.append(element('p', 'my-hint', '도전과제를 깨면 프로필카드의 대표 이미지 · 카드 꾸미기가 열려요.'), achievementList(data.achievements ?? []));
   return box;
 }
 
@@ -1047,7 +1122,7 @@ function bookmarkColorPicker(onPick) {
     sample.append(element('span', `my-bm-swatch bookmark-color-${id}`));
     row.append(decoOption({
       group: 'bookmark-color', value: id, checked: id === current, locked: false, name,
-      onChange: () => { setBookmarkColor(id); onPick(); },
+      onChange: () => { saveDeco({ bookmarkColor: id }); onPick(); },
     }, sample, element('span', 'my-deco-name', name)));
   });
   field.append(row);
@@ -1121,6 +1196,7 @@ export async function renderMyPage(container, { api, navigate, view, from }) {
   root.append(main);
   const shown = VIEWS[view] ? view : null;
   const go = (next) => navigate('me', next ? { view: next } : {});
+  apiRef = api;
 
   // 커피잔에서 왔으면 표시를 지운다(새로고침 · 뒤로 가기로는 되풀이하지 않는다). 눌렀던 커피잔이 사라졌으니 화면이 그려진 뒤 포커스를 제목으로 옮긴다
   let arrived = false;
@@ -1144,6 +1220,25 @@ export async function renderMyPage(container, { api, navigate, view, from }) {
     main.replaceChildren(title, renderTop(data, go), renderRows(data, go), accountNote(api, navigate));
   };
 
+  // 꾸미기 저장이 거절되면 서버 값으로 되돌려 다시 그리고 이유를 알린다. 열려 있는 꾸미기 창은 옛 선택을 들고 있으므로 닫는다
+  refresh = async (message) => {
+    if (!active()) return;
+    try {
+      const fresh = await api.getMyPage();
+      if (!active()) return;
+      cache = fresh;
+      applyBookmark(fresh.profileDeco);
+      document.querySelector('.my-deco-dialog')?.close();
+      paint(fresh);
+    } catch {
+      // 다시 받지 못하면 고른 그대로 둔다
+    }
+    if (!active() || !message) return;
+    const notice = element('p', 'message-panel my-save-notice', message);
+    notice.setAttribute('role', 'alert');
+    main.prepend(notice);
+  };
+
   if (cache) paint(cache);
   else {
     const loading = element('p', 'message-panel', '불러오는 중이에요.');
@@ -1157,7 +1252,7 @@ export async function renderMyPage(container, { api, navigate, view, from }) {
 
   let data;
   try {
-    data = await api.getMyPage();
+    data = await loadMyPage(api);
   } catch {
     if (!active()) return;
     reveal();
@@ -1171,6 +1266,7 @@ export async function renderMyPage(container, { api, navigate, view, from }) {
   if (!active()) return;
   const changed = JSON.stringify(cache) !== JSON.stringify(data);
   cache = data;
+  applyBookmark(data.profileDeco); // 서버에 저장된 책갈피 설정을 판결 체험 화면이 읽는 거울에 맞춘다
   if (changed) {
     paint(data);
     if (shown && !from) main.querySelector('h1')?.focus({ preventScroll: true });

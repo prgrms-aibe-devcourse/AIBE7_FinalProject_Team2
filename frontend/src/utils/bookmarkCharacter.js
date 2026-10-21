@@ -2,7 +2,8 @@
 // FE-67: 얼굴 아이콘 중에서 골라 책갈피로 쓴다. 새로 생성한 얼굴(characters/icon/generated)과 장면 컷에서 잘라 만든 얼굴(icon/cropped) 각 12장이 있고,
 // 캐릭터 · 표정 · 종류를 따로 저장한다(표정 기본 happy, 종류 기본 generated).
 // FE-68: 리본 색도 고른다(판결 체험 파일철의 색인 탭 사이에 끼운 리본). 처음 색은 지금까지와 같은 브론즈.
-// 서버 저장은 없다(BE-83에서 수집 상태와 함께 검토). 이 브라우저에만 두고, 저장소를 못 쓰면 기본값(내로)으로 본다.
+// 고른 값의 원본은 서버다(FE-71, PUT /profile-deco). 판결 체험 화면이 바로 읽을 수 있게 이 브라우저에도 거울로 두고(applyBookmark),
+// 저장소를 못 쓰면 기본값(내로)으로 본다.
 import { localStore } from './safeStorage.js';
 
 const STORAGE_KEY = 'nlnb-bookmark-character';
@@ -103,6 +104,17 @@ export function setBookmarkColor(color, storage = localStore()) {
   if (!BOOKMARK_COLORS.some(({ id }) => id === color)) return;
   try {
     storage?.setItem(COLOR_KEY, color);
+  } catch {
+    // 저장소를 못 쓰면 이번 화면에서만 바뀐다
+  }
+}
+
+/** 서버가 준 책갈피 설정(P-5 profileDeco의 bookmark*)을 이 브라우저의 거울에 옮긴다. 판결 체험 화면 등이 동기로 읽는다 */
+export function applyBookmark(deco, storage = localStore()) {
+  if (!deco) return;
+  const values = [[STORAGE_KEY, deco.bookmarkCharacter], [FACE_KEY, deco.bookmarkFace], [STYLE_KEY, deco.bookmarkFaceStyle], [COLOR_KEY, deco.bookmarkColor]];
+  try {
+    values.forEach(([key, value]) => { if (value) storage?.setItem(key, value); });
   } catch {
     // 저장소를 못 쓰면 이번 화면에서만 바뀐다
   }

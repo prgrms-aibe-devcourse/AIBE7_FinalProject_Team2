@@ -64,7 +64,7 @@ body[data-theme="coffee"] .site-footer { background: var(--palette-coffee-50); b
 .my-card {
   position: relative; display: grid; width: 200px; aspect-ratio: 7 / 14; padding: 12px; border: 1px solid var(--color-border-strong); border-radius: 14px;
   background: var(--color-card); color: inherit; font: inherit; text-align: center; cursor: pointer; user-select: none;
-  box-shadow: 0 1px 0 var(--color-border), 0 10px 20px color-mix(in srgb, var(--color-heading) 14%, transparent);
+  box-shadow: var(--frame-ring, inset 0 0 0 0 transparent), 0 1px 0 var(--color-border), 0 10px 20px color-mix(in srgb, var(--color-heading) 14%, transparent);
   transition: transform .15s ease-out, box-shadow .15s ease-out;
 }
 .my-card:active { transform: translateY(1px); }
@@ -108,17 +108,18 @@ body[data-theme="coffee"] .site-footer { background: var(--palette-coffee-50); b
 .my-card.is-type .my-card-note.my-type-quote { color: inherit; border-top: 1px solid color-mix(in srgb, var(--color-card) 40%, transparent); }
 
 /* ── 대표 이미지 카드 꾸미기(FE-68): 테두리 .deco-frame-* · 배경 .deco-bg-* — 첫 화면 카드 · 미리 보기 · 견본(.my-mini-card)이 함께 쓴다.
-   :is()로 묶어 .my-card.is-profile(배경)보다 뒤에서 이긴다. 기본 테두리(basic) · 크림 배경(cream)은 원래 모양 그대로다 ── */
+   :is()로 묶어 .my-card.is-profile(배경)보다 뒤에서 이긴다. 기본 테두리(basic) · 크림 배경(cream)은 원래 모양 그대로다.
+   테두리 두께는 항상 1px로 두고 더 두꺼워 보이는 부분은 안쪽 그림자(--frame-ring)로 그린다 — 테두리 두께가 달라지면 안쪽 크기가 1 ~ 2px씩 바뀌기 때문이다 ── */
 .my-mini-card {
   position: relative; display: block; width: 56px; aspect-ratio: 7 / 12; border: 1px solid var(--color-border-strong); border-radius: 8px;
-  background: linear-gradient(180deg, var(--color-card), var(--color-surface));
+  background: linear-gradient(180deg, var(--color-card), var(--color-surface)); box-shadow: var(--frame-ring, inset 0 0 0 0 transparent);
 }
 :is(.my-card, .my-mini-card)[class*="deco-frame-"]:not(.deco-frame-basic)::before { content: ''; position: absolute; pointer-events: none; }
-:is(.my-card, .my-mini-card).deco-frame-wood { border: 3px solid var(--deco-wood); box-shadow: inset 0 0 0 2px var(--deco-wood-light), var(--deco-drop); }
+:is(.my-card, .my-mini-card).deco-frame-wood { border: 1px solid var(--deco-wood); --frame-ring: inset 0 0 0 2px var(--deco-wood), inset 0 0 0 4px var(--deco-wood-light); box-shadow: var(--frame-ring), var(--deco-drop); }
 :is(.my-card, .my-mini-card).deco-frame-wood::before { display: none; }
-:is(.my-card, .my-mini-card).deco-frame-gold { border: 2px solid var(--deco-gold); }
+:is(.my-card, .my-mini-card).deco-frame-gold { border: 1px solid var(--deco-gold); --frame-ring: inset 0 0 0 1px var(--deco-gold); }
 :is(.my-card, .my-mini-card).deco-frame-gold::before { inset: 5px; border: 1px solid var(--deco-gold); border-radius: 10px; }
-:is(.my-card, .my-mini-card).deco-frame-navy { border: 2px solid var(--deco-navy); }
+:is(.my-card, .my-mini-card).deco-frame-navy { border: 1px solid var(--deco-navy); --frame-ring: inset 0 0 0 1px var(--deco-navy); }
 :is(.my-card, .my-mini-card).deco-frame-navy::before { inset: 5px; border: 3px double var(--deco-navy-soft); border-radius: 10px; }
 :is(.my-card, .my-mini-card).deco-frame-stitch { border: 1px solid var(--color-border-strong); }
 :is(.my-card, .my-mini-card).deco-frame-stitch::before { inset: 5px; border: 2px dashed var(--color-accent); border-radius: 10px; }
@@ -358,6 +359,7 @@ img.my-sash-icon.is-missing { visibility: hidden; }
 .my-profile-summary { display: grid; gap: 16px; justify-items: start; min-width: 0; }
 .my-profile-summary .my-hint, .my-profile-summary .my-stats { margin: 0; width: 100%; }
 .my-profile-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.my-profile-actions .is-dev { border-style: dashed; } /* 개발 전용 버튼(목 모드 + 개발 서버에서만 보인다) */
 /* 요약 표 "열린 수 / 전체": 분자는 오른쪽, 분모는 왼쪽 정렬 칸이라 줄마다 빗금이 한 줄로 선다 */
 .my-profile-counts .my-count-row { display: flex; align-items: baseline; gap: 8px; }
 .my-count-cell { display: inline-grid; grid-template-columns: 3.2ch auto 3.2ch; column-gap: 5px; font-variant-numeric: tabular-nums; }

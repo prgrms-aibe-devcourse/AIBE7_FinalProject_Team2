@@ -1,6 +1,7 @@
 import { AXES } from '../utils/personalityAxes.js';
 import { imageNumberOf, QUESTIONS, TYPES } from './personalityMockData.js';
 import { mockCases } from './caseListMockData.js';
+import { mockProfileView, setStatsReader } from './profileDecoMockApi.js';
 
 // 판결 성향 테스트 · 마이페이지 목 API. 응답 모양은 API 명세 9장(성향 API, v0.20)의 P-1 ~ P-5를 따른다.
 // 채점은 docs/personality-scoring.md 2장을 따른다. 문항의 글자 · 축은 서버 쪽 정보라 응답에 넣지 않는다.
@@ -171,6 +172,13 @@ function averageAxes(history) {
   return axisScores;
 }
 
+// 도전과제 판정에 쓰는 값(P-5의 profileDeco · achievements · unlocked). 완료한 사건 수는 체험 기록 목에서 센다
+const profileStats = () => ({
+  completed: new Set(mockExperiences.filter((item) => item.status === 'COMPLETED').map((item) => item.caseId)).size,
+  hasType: savedResult() ? 1 : 0,
+});
+setStatsReader(profileStats);
+
 // 현재 판결 성향: 최근 3건 평균. 네 축이 다 있을 때만 유형(글자는 0.5 이상이면 관대, 산식 3-3), 축이 모두 비면 null
 function judgmentOf(history) {
   const recent = history.slice(-RECENT_COUNT); // 목 기록은 완료 순서대로다
@@ -194,5 +202,6 @@ export async function getMyPage() {
     judgmentPersonality: judgmentOf(history),
     history: history.map(({ caseId, title, completedAt, axisScores }) => ({ caseId, title, completedAt, axisScores })),
     experiences: mockExperiences,
+    ...mockProfileView(profileStats()),
   });
 }

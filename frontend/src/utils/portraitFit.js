@@ -8,18 +8,21 @@ const ALPHA_MIN = 16; // 이 값보다 불투명해야 캐릭터로 본다(0 ~ 2
  * 경계 상자(box)가 창 안에서 위 · 아래 여백을 뺀 높이를 채우도록 그림의 크기와 자리를 계산한다. 너비가 넘치면 너비에 맞춘다. 발은 창 아래에 둔다.
  * @param {{ width: number, height: number, box: { x0: number, y0: number, x1: number, y1: number } }} image 그림 원본 크기와 불투명 경계 상자(끝 칸 포함, 원본 픽셀)
  * @param {{ width: number, height: number }} win 창 크기
- * @param {{ top?: number, bottom?: number, side?: number, center?: boolean }} options top: 윗 여백(둥근 위쪽이 머리를 깎지 않게), bottom: 아랫 여백, side: 창 너비 중 쓸 비율, center: true면 발을 아래에 두지 않고 창 세로 가운데에 둔다
+ * @param {{ top?: number, bottom?: number, side?: number, center?: boolean, centerWide?: boolean }} options top: 윗 여백(둥근 위쪽이 머리를 깎지 않게), bottom: 아랫 여백, side: 창 너비 중 쓸 비율, center: true면 발을 아래에 두지 않고 창 세로 가운데에 둔다, centerWide: true면 가로가 길어 너비에 맞춘 그림만 창 세로 가운데에 둔다(서 있는 캐릭터는 그대로 발을 아래에 둔다)
  * @returns {{ width: number, height: number, left: number, top: number }} 그림 상자의 크기와 창 안 위치(px)
  */
-export function fitPortrait({ width, height, box }, win, { top = 22, bottom = 6, side = 0.92, center = false } = {}) {
+export function fitPortrait({ width, height, box }, win, { top = 22, bottom = 6, side = 0.92, center = false, centerWide = false } = {}) {
   const visibleW = box.x1 - box.x0 + 1;
   const visibleH = box.y1 - box.y0 + 1;
-  const scale = Math.min(Math.max(1, win.height - top - bottom) / visibleH, (win.width * side) / visibleW);
+  const byHeight = Math.max(1, win.height - top - bottom) / visibleH;
+  const byWidth = (win.width * side) / visibleW;
+  const scale = Math.min(byHeight, byWidth);
+  const middle = center || (centerWide && byWidth < byHeight); // 너비가 한계인 가로로 긴 그림은 아래에 붙이면 위가 비어 보인다
   return {
     width: width * scale,
     height: height * scale,
     left: win.width / 2 - (box.x0 + visibleW / 2) * scale,
-    top: center ? (win.height - visibleH * scale) / 2 - box.y0 * scale : win.height - bottom - (box.y1 + 1) * scale,
+    top: middle ? (win.height - visibleH * scale) / 2 - box.y0 * scale : win.height - bottom - (box.y1 + 1) * scale,
   };
 }
 
