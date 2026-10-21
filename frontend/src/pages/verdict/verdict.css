@@ -70,7 +70,7 @@
 .verdict-page .folder-tabs { position: relative; z-index: 2; }
 .verdict-page .folder-bookmark {
   position: relative; z-index: 3; flex: none; align-self: flex-end; width: 22px; height: 60px; margin: 0 -6px -34px; pointer-events: none;
-  background: var(--color-label); clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 88%, 0 100%);
+  background: var(--bookmark-color, var(--color-label)); clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 88%, 0 100%); /* 리본 색은 마이페이지 책갈피 설정(FE-68) */
   filter: drop-shadow(0 2px 2px color-mix(in srgb, var(--color-desk-shadow) 35%, transparent));
 }
 .verdict-page .folder-bookmark img { position: absolute; left: 50%; top: 3px; width: 18px; height: 18px; translate: -50% 0; border-radius: 50%; background: var(--color-card); object-fit: cover; object-position: top; }

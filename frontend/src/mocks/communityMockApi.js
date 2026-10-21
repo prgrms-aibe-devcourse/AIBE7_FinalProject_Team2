@@ -15,7 +15,7 @@ export const BODY_MAX = 2000;
 export const COMMENT_MAX = 500;
 export const IMAGE_MAX = 3;
 export const PAGE_SIZE = 6;
-// 판결을 확정한 뒤(S-06 제출 이후)여야 내 판결을 붙일 수 있다
+// 판결을 확정한 뒤(S-05 제출 이후)여야 내 판결을 붙일 수 있다
 const VERDICT_DONE = ['VERDICT_CONFIRMED', 'AI_REVEALED', 'COMPLETED'];
 
 function fail(code, message, details = null) {

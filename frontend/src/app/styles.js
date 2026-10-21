@@ -8,7 +8,6 @@ import '../components/paperStage.css'; // 신문 지면 무대: stage.css · cas
 import '../utils/pageTurn.css';
 import '../pages/review/review.css';
 import '../pages/overview/overview.css';
-import '../pages/summary/summary.css';
 import '../pages/verdict/verdict.css';
 import '../pages/ai/ai.css';
 import '../pages/court/court.css';

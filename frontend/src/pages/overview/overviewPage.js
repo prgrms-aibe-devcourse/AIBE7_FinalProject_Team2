@@ -226,7 +226,7 @@ export async function renderOverviewPage(container, { caseId, api, navigate }) {
       box.append(element('p', '', '사건을 찾을 수 없어요.'), button('사건 목록으로', () => navigate('list')));
     } else if (error?.code === 'INVALID_STATE') {
       // 여기 오는 것은 래퍼가 이동하지 못한 경우다 — 화면 표(screenByStatus)에 없는 상태값이거나,
-      // 이미 이 화면이라 라우터가 이동을 건너뛴 경우. 다시 시도해도 같은 에러라 S-06 ~ S-09처럼 안내만 둔다.
+      // 이미 이 화면이라 라우터가 이동을 건너뛴 경우. 다시 시도해도 같은 에러라 S-05 ~ S-08처럼 안내만 둔다.
       box.append(element('p', '', `지금 단계에서는 이 화면을 볼 수 없어요. (현재 상태: ${error.currentStatus})`), button('사건 목록으로', () => navigate('list')));
       console.info('현재 상태:', error.currentStatus);
     } else {

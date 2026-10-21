@@ -62,9 +62,9 @@ for (const [status, screen] of Object.entries(screenByStatus)) {
 // 상태를 바꾼 뒤 열어 볼 주소 (기준 사건으로 만든다)
 const quick = [
   ['/cases/:caseId/verdict', null],
-  ['/cases/:caseId/result/ai', null],
-  ['/cases/:caseId/start', null],
-  ['/cases/999999/review', '/cases/999999/review (없는 사건)'],
+  ['/cases/:caseId/ai-verdict', null],
+  ['/cases/:caseId/impression', null],
+  ['/cases/999999/trial', '/cases/999999/trial (없는 사건)'],
 ];
 quick.forEach(([pattern, label], index) => {
   if (index > 0) $('#quickLinks').append(' · ');

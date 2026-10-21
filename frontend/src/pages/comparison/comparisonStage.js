@@ -4,7 +4,7 @@
 // FE-32: 무대 상자 없이 화면 전체가 카메라 틀이다(mountNewspaperStage — 넓은 화면은 무대가 화면을 가득 채우고, 좁은 화면은 지면 안 무대)
 // 세 판결은 같은 크기 · 같은 무게로 싣고 어느 쪽이 맞았는지 말하지 않는다(PRODUCT.md 원칙 1).
 // 마지막 장면에서 다음 행동을 고른다: 다른 사건 보기 · 여기 남아있기(지면 읽기 → 메인으로) · 메인으로 · 공유하기.
-// S-08(7막)에서 비교를 공개한 뒤 무대를 이어 받고(주소만 S-09로), 재진입(S-09 주소)에서도 같은 무대를 연다
+// S-07(7막)에서 비교를 공개한 뒤 무대를 이어 받고(주소만 S-08로), 재진입(S-08 주소)에서도 같은 무대를 연다
 import { formatPenalty, formatDispositions } from '../../utils/judgmentFormat.js';
 import { formatMonths } from '../../components/recommendedRangeBar.js';
 import { renderStage, courtSet, imageOf } from '../../components/stage.js';

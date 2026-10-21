@@ -85,7 +85,7 @@
 
 - `display_order`는 id 순서와 같다. `pre_label`은 OVERVIEW 요소에만 쓴다.
 - `reveal_stage`는 그 사실이 처음 나오는 섹션 기준이다(개요 → OVERVIEW, DETAIL 섹션 → DETAIL, ARGUMENT 섹션 → ARGUMENT).
-- 재판부가 고려하지 않은 요소("—")도 목록에 넣을 수 있다. S-09에서 "—"로 표시된다.
+- 재판부가 고려하지 않은 요소("—")도 목록에 넣을 수 있다. S-08에서 "—"로 표시된다.
 
 ## 7. 실제 판결 (`judgment` COURT, 가상)
 

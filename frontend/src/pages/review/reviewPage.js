@@ -98,7 +98,7 @@ export async function renderReviewPage(container, { caseId, caseHeader, api, nav
     }
   }
   // 3막 재판(흐름 목업, REQ-089). 서버 순서(섹션 ② → ③ → ④)는 그대로 두고, 대본의 confirm 장면을 떠날 때 "읽었습니다"를 보낸다.
-  // 사실관계 · 주장 · 법률 전체 정리는 S-05 판결 전 최종 정리가 보여 준다
+  // 사건 요약(개요 · 핵심 사실)은 3막 내 판결(S-05) 파일철 첫 장이 보여 준다(FE-48)
   function drawStage(data, script) {
     root.classList.add('has-stage');
     const header = element('header', 'case-topbar');
