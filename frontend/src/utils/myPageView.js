@@ -1,3 +1,5 @@
+import { lenientPercent } from './personalityAxes.js';
+
 // S-17 마이페이지 화면용 계산. 화면 코드에서 떼어 npm test로 확인한다.
 // 점수는 API 명세 9장의 축 점수와 같다: 0 ~ 1, 관대 쪽 비중이고 값이 없는 축은 null.
 
@@ -12,11 +14,6 @@ export function axisSeries(history, axisKey) {
     if (typeof ratio === 'number') points.push({ order: index + 1, ratio });
   });
   return points;
-}
-
-// 점의 가로 위치(%). 왼쪽 = 엄격 쪽, 오른쪽 = 관대 쪽이다(ratio는 관대 쪽 비중)
-export function trailLeft(ratio) {
-  return Math.round(ratio * 100);
 }
 
 // 성향 변화 흐름(FE-70)의 한 축: 성향 테스트 점수가 있으면 맨 앞(order 0)에 두고, 뒤로 체험 순서대로 잇는다.
@@ -43,14 +40,17 @@ export function axisChange(points, axis, current) {
   if (points.length < 2 || points.every((point) => point.isTest)) return null;
   const from = points[0];
   const to = typeof current === 'number' ? { ratio: current, isCurrent: true } : points[points.length - 1];
-  const moved = Math.round((to.ratio - from.ratio) * 100);
+  const moved = lenientPercent(to.ratio) - lenientPercent(from.ratio); // 화면에 보이는 두 비중의 차이
   const steady = Math.abs(moved) < STEADY_POINTS;
   return { from, to, moved, steady, toward: steady ? null : (moved > 0 ? axis.lenient.name : axis.strict.name) };
 }
 
+// 관대 쪽 비중(%)은 4축 막대와 같은 함수(utils/personalityAxes.js)를 쓴다. 0.585가 막대 58% · 글자 59%로 갈리지 않게
+export { lenientPercent };
+
 // 한 위치를 말로: 더 기운 쪽 이름과 그 비중. 정확히 반반이면 "반반"
 export function leanText(ratio, axis) {
-  const lenient = Math.round(ratio * 100);
+  const lenient = lenientPercent(ratio);
   if (lenient === 50) return '반반';
   return lenient > 50 ? `${axis.lenient.name} ${lenient}%` : `${axis.strict.name} ${100 - lenient}%`;
 }

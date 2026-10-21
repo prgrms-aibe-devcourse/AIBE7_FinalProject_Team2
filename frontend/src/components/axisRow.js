@@ -1,9 +1,9 @@
 import { element } from './siteLayout.js';
+import { lenientPercent } from '../utils/personalityAxes.js';
 
 // 4축 그래프의 한 줄: 축마다 양쪽 성향의 비중(관대 쪽 비중 = 축 점수). 성향 결과(S-16)와 마이페이지(S-17)가 함께 쓴다.
 // 엄격 쪽 남색 · 관대 쪽 갈색, 둘 다 진하게 막대를 가득 채운다. 두 색은 어느 쪽이 좋다는 뜻이 아니라 양쪽을 구분할 뿐이다(FR-8-4).
 // 점수가 null이면 체험 자료가 없는 축이라 막대 대신 안내를 둔다(명세 P-5).
-const pct = (ratio) => Math.round(ratio * 100);
 
 export function renderAxisRow(axis, lenientRatio) {
   const row = element('li', 'axis-row');
@@ -12,8 +12,8 @@ export function renderAxisRow(axis, lenientRatio) {
     row.append(element('p', 'axis-empty', '체험 자료가 아직 없어요'));
     return row;
   }
-  const strict = pct(1 - lenientRatio);
-  const lenient = 100 - strict;
+  const lenient = lenientPercent(lenientRatio); // 반올림 규칙은 personalityAxes.js(마이페이지 글자 · 변경폭과 같은 값)
+  const strict = 100 - lenient;
   const labels = element('div', 'axis-ends');
   labels.append(
     element('span', `is-strict${strict > lenient ? ' is-major' : ''}`, `${axis.strict.name} ${strict}%`),

@@ -1,7 +1,7 @@
 // npm test : 마이페이지 변화 흐름 계산
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { trendOrders, axisChange, axisSeries, axisTrend, castOf, collectionOf, leanText, trailLeft, imageKinds } from './myPageView.js';
+import { trendOrders, axisChange, axisSeries, axisTrend, castOf, collectionOf, leanText, imageKinds } from './myPageView.js';
 
 const AXIS = { key: 'APOLOGY_SINCERITY', strict: { name: '행동증명형' }, lenient: { name: '마음신뢰형' } };
 const entry = (value) => ({ axisScores: { APOLOGY_SINCERITY: value } });
@@ -14,12 +14,6 @@ test('값이 없는 체험은 건너뛰지만 체험 번호는 유지한다', ()
 test('기록이 없거나 모양이 달라도 빈 배열을 돌려준다', () => {
   assert.deepEqual(axisSeries(undefined, AXIS.key), []);
   assert.deepEqual(axisSeries([{}, null], AXIS.key), []);
-});
-
-test('점 위치는 왼쪽이 엄격 쪽, 오른쪽이 관대 쪽이다', () => {
-  assert.equal(trailLeft(0), 0);
-  assert.equal(trailLeft(1), 100);
-  assert.equal(trailLeft(0.25), 25);
 });
 
 const FULL_AXIS = { ...AXIS, label: '사과와 진정성' };
@@ -65,6 +59,11 @@ test('leanText: 더 기운 쪽 이름과 비중, 반반이면 반반', () => {
   assert.equal(leanText(0.75, FULL_AXIS), '마음신뢰형 75%');
   assert.equal(leanText(0.1, FULL_AXIS), '행동증명형 90%');
   assert.equal(leanText(0.5, FULL_AXIS), '반반');
+  assert.equal(leanText(0.585, FULL_AXIS), '마음신뢰형 58%'); // 4축 막대와 같은 반올림(엄격 42% · 관대 58%)
+  // 반올림하면 50%지만 반반이 아니면 기운 쪽으로 1%p(서버 유형 글자와 맞춘다). 분수 평균의 부동소수 오차는 반반
+  assert.equal(leanText(0.497, FULL_AXIS), '행동증명형 51%');
+  assert.equal(leanText(0.503, FULL_AXIS), '마음신뢰형 51%');
+  assert.equal(leanText((1 / 3 + 2 / 3) / 2, FULL_AXIS), '반반');
 });
 
 test('collectionOf: 체험을 마친 사건의 일러스트만 모으고 같은 그림은 한 장으로 센다', () => {
