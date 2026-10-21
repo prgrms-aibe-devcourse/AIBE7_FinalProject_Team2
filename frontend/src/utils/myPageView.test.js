@@ -1,7 +1,7 @@
 // npm test : 마이페이지 변화 흐름 계산
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { axisSeries, castOf, collectionOf, trailLeft, trailSummary } from './myPageView.js';
+import { axisSeries, castOf, collectionOf, trailLeft, trailSummary, imageKinds } from './myPageView.js';
 
 const AXIS = { key: 'APOLOGY_SINCERITY', strict: { name: '행동증명형' }, lenient: { name: '마음신뢰형' } };
 const entry = (value) => ({ axisScores: { APOLOGY_SINCERITY: value } });
@@ -50,7 +50,27 @@ test('collectionOf: 체험을 마친 사건의 일러스트만 모으고 같은 
   assert.deepEqual(collectionOf([], scripts), []);
 });
 
-test('castOf: 대본의 역할 의상을 등장 순서대로 한 번씩 모으고, 역할 의상이 아닌 모습은 뺀다', () => {
+test('imageKinds: 사건별이 아니라 종류(폴더)별로 정해진 순서대로 묶는다', () => {
+  const kinds = imageKinds([
+    '/images/characters/scene/a.webp', '/images/characters/roles/naero_judge.webp', '/images/cases/case-1-origin.webp', '/images/unknown/z.webp',
+    '/images/characters/icon/cropped/b.webp', '/images/characters/icon/generated/c.webp',
+  ]);
+  assert.deepEqual(kinds.map((kind) => kind.title), ['역할 의상', '장면 컷', '얼굴 아이콘 · 생성한 것', '얼굴 아이콘 · 잘라 만든 것', '사건 이미지', 'unknown']);
+});
+
+test('imageKinds: 사건 고유 이미지는 사건 이미지 종류 안에서 사건별로, 공용 컷은 따로 나눈다', () => {
+  const [cases] = imageKinds(['/images/cases/case-1-origin.webp', '/images/cases/case-1.webp', '/images/cases/case-2-origin.webp', '/images/cases/common-1.webp', '/images/cases/reenact-common_headline.webp'], { caseNames: { 1: '빌린 돈 사건' } });
+  assert.deepEqual(cases.groups.map((group) => group.title), ['빌린 돈 사건', '사건 2', '공용 컷']);
+  assert.equal(cases.groups[0].items.length, 2);
+  assert.equal(cases.groups[2].items.length, 2);
+});
+
+test('imageKinds: 같은 경로는 한 장으로 세고, 이름표(labels)가 있으면 파일 이름 대신 쓴다', () => {
+  const [kind] = imageKinds(['/images/characters/roles/x.webp', '/images/characters/roles/x.webp'], { labels: { '/images/characters/roles/x.webp': '내로 · 판사' } });
+  assert.deepEqual(kind.items, [{ src: '/images/characters/roles/x.webp', label: '내로 · 판사' }]);
+});
+
+test('castOf:대본의 역할 의상을 등장 순서대로 한 번씩 모으고, 역할 의상이 아닌 모습은 뺀다', () => {
   const script = {
     acts: {
       1: { look: { naero: 'idle', nambul: 'role:actor' }, steps: [{ look: { naero: 'role:judge' } }] },

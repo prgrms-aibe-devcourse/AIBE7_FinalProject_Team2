@@ -1,6 +1,6 @@
 import { button, element, mockTag, renderSiteFooter } from './siteLayout.js';
 import { API_MODE } from '../api/config.js';
-import { casePhoto, todayLabel } from '../utils/newspaper.js';
+import { casePhoto, extraPhotosOf, todayLabel, useCommonPhotoOnError } from '../utils/newspaper.js';
 
 // 신문 지면 공통 짜임 (FE-32). S-02 사건 목록(신문 1면)과, 사건을 고른 뒤 이어지는 사건 기사 지면(S-20 · 1 · 2막)이
 // 같은 제호 · 날짜 띠 · 탭 줄 · 배너 · [사진 | 기사 단]을 쓴다. 스타일은 caseList.css(.case-list-page)를 그대로 쓴다.
@@ -37,7 +37,7 @@ export function paperFromCase(data, fallback = {}) {
     deck: data.deck || data.shortIntro,
     article: data.article?.length ? data.article : [data.shortIntro].filter(Boolean),
     photo: casePhoto(data),
-    extraPhotos: fallback.extraPhotos ?? [], // 기사 속 작은 사진(대본 지면에만 있다, 사건 1의 재연 컷)
+    extraPhotos: extraPhotosOf(fallback.extraPhotos), // 기사 속 작은 사진(대본 지면에만 있다, 사건 1의 재연 컷). 없는 사건은 공용 컷
     caption: '사건 이해를 돕기 위한 연출 이미지',
     desk: '사회부', // S-02 기사와 같은 기자 줄
   };
@@ -55,8 +55,9 @@ export function caseInfoEar(info) {
   return ear;
 }
 
-function newsPhoto(src, width, height) {
+function newsPhoto(src, width, height, seed = 0, role) {
   const photo = element('img', 'photo sheet-case-photo');
+  useCommonPhotoOnError(photo, seed, role); // src보다 먼저 달아 두어야 첫 로딩 실패도 잡는다
   photo.src = src;
   photo.alt = ''; // 연출 이미지라 읽지 않는다(사건 내용은 기사 본문에 있다)
   photo.width = width; // 크기 힌트(CSS가 폭 · 비율을 정한다) — 사진이 늦게 떠도 화면이 밀리지 않게
@@ -64,9 +65,9 @@ function newsPhoto(src, width, height) {
   photo.loading = 'lazy';
   return photo;
 }
-function smallFigure({ src, caption }) {
+function smallFigure({ src, caption }, seed, role) {
   const figure = element('figure', 'story-photo is-small');
-  figure.append(newsPhoto(src, 1000, 563), element('figcaption', 'caption', caption ?? '사건 이해를 돕기 위한 연출 이미지'));
+  figure.append(newsPhoto(src, 1000, 563, seed, role), element('figcaption', 'caption', caption ?? '사건 이해를 돕기 위한 연출 이미지'));
   return figure;
 }
 // 인용구: 기사 첫 문장(없는 말을 지어내지 않는다)
@@ -157,10 +158,10 @@ export function caseNewspaper({ paper, info, navigate, earRight = caseInfoEar(in
   const figure = element('figure', 'story-photo');
   figure.dataset.focus = 'photo';
   figure.append(newsPhoto(paper.photo, 1200, 675), element('figcaption', 'caption', paper.caption));
-  const [sidePhoto, inlinePhoto] = paper.extraPhotos ?? [];
+  const [sidePhoto, inlinePhoto] = extraPhotosOf(paper.extraPhotos);
   const media = element('div', 'story-media');
   media.append(figure);
-  if (sidePhoto) media.append(smallFigure(sidePhoto));
+  media.append(smallFigure(sidePhoto, 1, 'origin')); // 발단사진 — 없거나 실패하면 발단 공용 컷
 
   const body = element('div', 'story-body');
   body.dataset.focus = 'body';
@@ -168,7 +169,7 @@ export function caseNewspaper({ paper, info, navigate, earRight = caseInfoEar(in
     body.append(element('p', '', line));
     // 첫 단락 뒤에 인용구(기사 첫 문장), 둘째 단락 뒤에 작은 사진 — 신문 기사 면처럼 본문 사이에 쉼을 둔다
     if (i === 0) body.append(pullQuote(paper.article[0]));
-    if (i === 1 && inlinePhoto) body.append(smallFigure(inlinePhoto));
+    if (i === 1) body.append(smallFigure(inlinePhoto, 2, 'conclusion')); // 결론사진 — 없거나 실패하면 결론 공용 컷
   });
   const main = element('div', 'story-main');
   main.append(media, body);

@@ -25,7 +25,7 @@ public class ReviewController {
 	private final ReviewService reviewService;
 	private final AnonymousIdCookie anonymousIdCookie;
 
-	/** API 6. 사건 정보 (S-04 · S-05) */
+	/** API 6. 사건 정보 (S-04) */
 	@GetMapping("/review")
 	public ReviewResponse getReview(@PathVariable Long caseId, HttpServletRequest request) {
 		return reviewService.getReview(caseId, anonymousIdCookie.read(request));

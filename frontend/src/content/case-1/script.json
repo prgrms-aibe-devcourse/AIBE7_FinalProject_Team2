@@ -14,11 +14,11 @@
     ],
     "extraPhotos": [
       {
-        "src": "/images/cases/case-1-sub.webp",
+        "src": "/images/cases/case-1-origin.webp",
         "caption": "사건 이해를 돕기 위한 연출 이미지"
       },
       {
-        "src": "/images/cases/case-1-detail.webp",
+        "src": "/images/cases/case-1-conclusion.webp",
         "caption": "사건 이해를 돕기 위한 연출 이미지"
       }
     ]
@@ -91,8 +91,8 @@
     }
   ],
   "evidencePhotos": {
-    "검사": "/images/cases/case-1-reenact.webp",
-    "변호인": "/images/cases/case-1-sub.webp"
+    "검사": "/images/cases/case-1-conclusion.webp",
+    "변호인": "/images/cases/case-1-origin.webp"
   },
   "acts": {
     "1": {

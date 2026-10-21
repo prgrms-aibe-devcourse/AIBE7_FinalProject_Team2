@@ -32,7 +32,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * API 14. 세 판결 비교 (S-09)
+ * API 14. 세 판결 비교 (S-08)
  * 비교를 공개한 뒤(COMPLETED)에만 볼 수 있다. 조회는 상태를 바꾸지 않는다 (API 명세 2장).
  * 공개 사건에 검수한 AI · 재판부 판결이 없으면 RevealService가 상태를 옮기기 전에 막으므로,
  * 여기서 조회에 실패하면 데이터 문제다 (JudgmentResultService와 같은 불변식).
