@@ -161,8 +161,13 @@ kakao:
 server:
   # Nginx(TLS 종료) 뒤에서 원래 scheme · Host · 클라이언트 IP를 쓰기 위해 X-Forwarded-* 를 믿는다 (BE-62, #118 권장).
   # 카카오 Redirect URI({baseUrl})가 https 도메인이 되고, Origin 검증(BE-94) · 요청 제한 · 감사 로그 IP가 실제 값을 본다.
-  # Tomcat RemoteIpValve는 내부 대역(Docker 172.16/12 등)에서 온 헤더만 믿는다
+  # Tomcat RemoteIpValve는 아래 internal-proxies 대역에서 온 헤더만 믿는다
   forward-headers-strategy: native
+  tomcat:
+    remoteip:
+      # X-Forwarded-* 를 믿을 프록시 대역을 명시한다(Tomcat 비공개 기본값에 기대지 않음, PR #229 리뷰)
+      # 로컬 루프백 + Docker 기본 브리지 대역(172.16/12). 좁히는 조건은 docs/decisions/BE-62.md "추후 재검토"
+      internal-proxies: '127\.0\.0\.1|0:0:0:0:0:0:0:1|172\.(1[6-9]|2[0-9]|3[0-1])\.\d{1,3}\.\d{1,3}'
   servlet:
     session:
       timeout: ${ADMIN_SESSION_TIMEOUT:30m}

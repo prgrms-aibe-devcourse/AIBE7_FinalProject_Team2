@@ -28,9 +28,11 @@ public record KakaoOAuthProperties(
 		requireSameOriginPath(failureRedirect, "kakao.oauth.failure-redirect");
 	}
 
-	/** 열린 리다이렉트 방지: 우리 사이트 안의 경로만 허용한다("/..."로 시작, "//"와 "\" 금지) */
+	/** 열린 리다이렉트 방지: 우리 사이트 안의 경로만 허용한다("/..."로 시작, "//"와 "\" · 제어 문자 금지) */
 	private static void requireSameOriginPath(String path, String name) {
-		if (path == null || !path.startsWith("/") || path.startsWith("//") || path.contains("\\")) {
+		if (path == null || !path.startsWith("/") || path.startsWith("//") || path.contains("\\")
+			// 브라우저는 탭 · 개행 같은 제어 문자를 지우고 읽어 "/\t/evil.com"이 "//evil.com"이 된다 (PR #229 리뷰)
+			|| path.chars().anyMatch(c -> c < 0x20 || c == 0x7F)) {
 			throw new IllegalStateException(name + "는 우리 사이트 안의 경로(/...)여야 한다");
 		}
 	}

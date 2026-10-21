@@ -296,7 +296,7 @@ docker compose -f docker-compose.prod.yml logs --tail 3 web
 
 ### 카카오 로그인 경로 전용 제한 (BE-62, PR #229 리뷰)
 
-`/api/v1/auth/oauth2/`(카카오 로그인 시작 · 콜백)에는 `/api` 공통 제한에 더해 **전용 제한 두 개**를 건다(`default.conf`의 `oauth_per_ip` · `oauth_all`, `snippets/app.conf`의 전용 location).
+`/api/v1/auth/oauth2/`(카카오 로그인 시작 · 콜백)에는 `/api` 공통 제한에 더해 **전용 제한**을 건다(`default.conf`의 `oauth_per_ip` · `oauth_all`, `snippets/app.conf`의 전용 location). IP별 제한은 시작 · 콜백 모두, 전체 합계 제한은 **시작(`/authorization/`)에만** 건다 — 콜백은 Redis에 새로 쓰지 않고, 묶어 두면 카카오 인증을 끝낸 정상 사용자가 429를 본다(PR #229 리뷰).
 
 | 설정 | 값 | 이유 |
 | --- | --- | --- |
@@ -305,6 +305,7 @@ docker compose -f docker-compose.prod.yml logs --tail 3 web
 | 넘으면 | `/api`와 같은 JSON 429 | `@api_rate_limited` |
 
 - 재발급 · 로그아웃(`/api/v1/auth/token/reissue` · `/api/v1/auth/logout`) 제한은 BE-63 2차에서 따로 정한다.
+- **`KAKAO_CLIENT_ID`는 HTTPS(BE-75) 적용 뒤에만 넣는다.** state 쿠키 · `NLNB_RT` · `NLNB_AID`가 모두 `Secure`라 http에서는 브라우저가 저장하지 않아 로그인이 끝나지 않는다(PR #229 리뷰). 넣는 즉시 카카오 로그인 경로가 켜지므로, 화면 `/auth/callback`(FE 후속)이 배포되기 전에는 로그인 후 화면이 404로 보인다.
 
 ## Redis (BE-61, docs/tech-stack.md 2장 "Redis 운영 구성")
 
@@ -604,5 +605,4 @@ docker stats --no-stream
 | 7.4.3 JWT (C) | 토큰은 `@Qualifier(RedisConfig.TOKEN)` 템플릿(DB 1)에 TTL과 함께 저장 |
 | 백엔드 healthcheck 추가 (BE-66 이후) | Actuator(관리 포트 8081)에는 Redis 헬스체크가 자동으로 붙고, 커넥션 팩토리 두 개가 `redis` 아래 묶인다. **실측(BE-61, Boot 4.1.1)**: Redis를 끄면 `/actuator/health`는 **DOWN(503)**, `/actuator/health/liveness` · `/readiness`는 **UP**, API는 정상. liveness · readiness는 추가 설정 없이 이미 열려 있다. 그래서 컨테이너 healthcheck · 재시작 조건에는 **`/actuator/health`가 아니라 `/actuator/health/liveness`** 를 쓴다(전체 상태를 쓰면 Redis 장애 때 백엔드까지 재시작된다) |
 | 7.4.6 Rate limit 2차 (10/23) | 로그인 · 토큰 재발급 엔드포인트에 더 엄격한 zone을 `default.conf`에 추가 (1차는 위 "Rate limit") |
-| 서버 IP 확인 후 (D) | `server.forward-headers-strategy=native`로 백엔드가 사용자 IP를 받게 함 (위 "서버에서 꼭 확인" 다음에) |
 | HTTPS 안정화 후 (BE-75 후속) | 갱신이 한 번 이상 정상으로 돈 뒤 `https.conf.template`에 HSTS를 짧은 `max-age`부터 추가 |

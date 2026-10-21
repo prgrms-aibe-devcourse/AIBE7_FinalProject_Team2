@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -111,6 +112,10 @@ class KakaoOAuthFlowTest extends ApiIntegrationTest {
 
 		assertThat(setCookies(result.getResponse())).contains(OAuthAuthorizationRequestRepository.COOKIE + "=")
 			.contains("HttpOnly").contains("SameSite=Lax").contains("Path=/api/v1/auth/oauth2");
+		// 콜백 대조(로그인 CSRF 방지)의 전제: 쿠키 값이 카카오로 보낸 state와 같아야 한다 (PR #229 리뷰)
+		Cookie stateCookie = result.getResponse().getCookie(OAuthAuthorizationRequestRepository.COOKIE);
+		assertThat(stateCookie).isNotNull();
+		assertThat(stateCookie.getValue()).isEqualTo(state);
 		assertThat(result.getRequest().getSession(false)).as("세션을 만들지 않는다").isNull();
 
 		String key = "oauth2:auth-request:" + state;
@@ -146,11 +151,14 @@ class KakaoOAuthFlowTest extends ApiIntegrationTest {
 		Cookie refresh = response.getCookie(RefreshTokenCookies.NAME);
 		assertThat(refresh).isNotNull();
 		redisKeys.add("refresh:" + refresh.getValue());
-		assertThat(setCookies(response)).contains(AnonymousIdCookie.NAME + "=");
 		assertThat(response.getRedirectedUrl()).doesNotContain("token");
-		assertThat(jdbcTemplate.queryForObject(
-			"SELECT count(*) FROM member WHERE provider = 'KAKAO' AND provider_user_id = ?", Integer.class, KAKAO_ID))
-			.isEqualTo(1);
+		Long memberId = jdbcTemplate.queryForObject(
+			"SELECT id FROM member WHERE provider = 'KAKAO' AND provider_user_id = ?", Long.class, KAKAO_ID);
+		// 심은 익명 ID 쿠키 값이 실제로 이 회원에 연결된 익명 사용자인지 DB로 확인 (PR #229 리뷰)
+		Cookie anonymousId = response.getCookie(AnonymousIdCookie.NAME);
+		assertThat(anonymousId).isNotNull();
+		assertThat(jdbcTemplate.queryForObject("SELECT member_id FROM anonymous_user WHERE id = ?", Long.class,
+			UUID.fromString(anonymousId.getValue()))).isEqualTo(memberId);
 	}
 
 	@Test
