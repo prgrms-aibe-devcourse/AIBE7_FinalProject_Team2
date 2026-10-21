@@ -8,6 +8,7 @@ import { ACHIEVEMENTS, DEFAULT_SERVER_DECO, FREE, REWARD_TYPES } from './profile
 const delay = () => new Promise((resolve) => setTimeout(resolve, 250));
 const DECO_KEY = 'nlnb-mock-profile-deco';
 const ATTENDANCE_KEY = 'nlnb-mock-attendance';
+const UNLOCK_ALL_KEY = 'nlnb-mock-unlock-all'; // 개발 전용: 도전과제를 전부 깬 것으로 본다
 const EARLIER_ATTENDANCE = 11; // 목: 이전에 11일 출석했다고 친다. 오늘 한 번 부르면 12일이 된다(예전 목 값)
 
 const read = (key, fallback) => {
@@ -46,9 +47,21 @@ export async function postAttendance() {
 
 const attendanceDays = () => EARLIER_ATTENDANCE + read(ATTENDANCE_KEY, []).length;
 
-/** 도전과제 진행도. collected는 서버가 셀 수 없어 PENDING · value null · 잠김 */
+/**
+ * 개발 전용(실제 API에는 없다): 도전과제를 전부 깬 것으로 보게 하거나 되돌린다. 마이페이지 프로필카드 화면의 "모두 해금" 버튼이 쓴다.
+ * 수집 도전과제(PENDING)도 깬 것으로 보므로 잠긴 보상까지 모두 확인해 볼 수 있다
+ */
+export async function setMockUnlockAll(on) {
+  await delay();
+  write(UNLOCK_ALL_KEY, Boolean(on));
+  return null;
+}
+
+/** 도전과제 진행도. collected는 서버가 셀 수 없어 PENDING · value null · 잠김 (개발 전용 모두 해금이면 전부 달성) */
 export function mockAchievements(stats) {
+  const unlockAll = read(UNLOCK_ALL_KEY, false);
   return ACHIEVEMENTS.map((item) => {
+    if (unlockAll) return { ...item, value: item.goal, cleared: true, status: 'CLEARED' };
     const raw = stats[item.stat];
     if (raw == null) return { ...item, value: null, cleared: false, status: 'PENDING' };
     const cleared = raw >= item.goal;

@@ -257,6 +257,7 @@ img.my-sash-icon.is-missing { visibility: hidden; }
 .my-profile-summary { display: grid; gap: 16px; justify-items: start; min-width: 0; }
 .my-profile-summary .my-hint, .my-profile-summary .my-stats { margin: 0; width: 100%; }
 .my-profile-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.my-profile-actions .is-dev { border-style: dashed; } /* 개발 전용 버튼(목 모드 + 개발 서버에서만 보인다) */
 /* 요약 표 "열린 수 / 전체": 분자는 오른쪽, 분모는 왼쪽 정렬 칸이라 줄마다 빗금이 한 줄로 선다 */
 .my-profile-counts .my-count-row { display: flex; align-items: baseline; gap: 8px; }
 .my-count-cell { display: inline-grid; grid-template-columns: 3.2ch auto 3.2ch; column-gap: 5px; font-variant-numeric: tabular-nums; }

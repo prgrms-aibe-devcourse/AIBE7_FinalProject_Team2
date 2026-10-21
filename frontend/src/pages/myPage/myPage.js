@@ -815,6 +815,14 @@ function renderProfilePage(data, go) {
   const actions = element('div', 'my-profile-actions');
   const decorate = button('카드 꾸미기', () => openDecoDialog({ open, data, onPick: paintPreview, opener: decorate }), 'primary-button');
   actions.append(decorate, button('책갈피 설정', () => go('bookmark'), 'secondary-button'), button('도전과제 보기', () => go('achievements'), 'secondary-button'));
+  // 개발 전용: 목 API에서 도전과제를 전부 깬 것으로 본다(잠긴 꾸미기를 확인할 때). 개발 서버 + 목 모드에서만 보인다
+  if (import.meta.env?.DEV && apiRef?.setMockUnlockAll) {
+    const allCleared = progress.length > 0 && progress.every((item) => item.cleared);
+    actions.append(button(allCleared ? '개발용: 해금 되돌리기' : '개발용: 모두 해금', async () => {
+      await apiRef.setMockUnlockAll(!allCleared);
+      await refresh?.();
+    }, 'secondary-button is-dev'));
+  }
   summary.append(element('p', 'my-hint', '도전과제를 깨면 대표 이미지 · 테두리 · 배경 · 카드 책갈피가 열려요. 고른 것은 바로 저장돼요.'), counts, actions);
   hero.append(preview, summary);
 
@@ -978,7 +986,7 @@ export async function renderMyPage(container, { api, navigate, view, from }) {
     } catch {
       // 다시 받지 못하면 고른 그대로 둔다
     }
-    if (!active()) return;
+    if (!active() || !message) return;
     const notice = element('p', 'message-panel my-save-notice', message);
     notice.setAttribute('role', 'alert');
     main.prepend(notice);

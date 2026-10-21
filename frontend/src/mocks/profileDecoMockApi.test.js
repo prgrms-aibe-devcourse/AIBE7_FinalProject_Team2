@@ -9,7 +9,7 @@ Object.defineProperty(globalThis, 'localStorage', {
   value: { getItem: (key) => data.get(key) ?? null, setItem: (key, value) => data.set(key, String(value)), removeItem: (key) => data.delete(key) },
 });
 const { getMyPage } = await import('./personalityMockApi.js');
-const { postAttendance, putProfileDeco, setStatsReader } = await import('./profileDecoMockApi.js');
+const { postAttendance, putProfileDeco, setMockUnlockAll, setStatsReader } = await import('./profileDecoMockApi.js');
 
 const DEFAULT = {
   portrait: '/images/characters/standing/naero.webp', frame: 'basic', background: 'cream', sashStyle: 'none', sashColorShort: 'wine', sashColorLong: 'wine',
@@ -94,4 +94,16 @@ test('P-7: 값이 없거나 목록에 없거나 대표 이미지 모양이 틀�
     const bad = await putProfileDeco({ ...DEFAULT, frame: 'wood', portrait }).catch((e) => e);
     assert.deepEqual([bad.code, bad.details], ['VALIDATION_ERROR', [{ field: 'portrait', reason: 'INVALID_FORMAT' }]], portrait);
   }
+});
+
+test('개발 전용 모두 해금: 도전과제를 전부 깬 것으로 보고, 잠긴 꾸미기도 저장되며, 되돌릴 수 있다', async () => {
+  reset();
+  await assert.rejects(putProfileDeco({ ...DEFAULT, frame: 'wood' }), { code: 'DECO_LOCKED' });
+  await setMockUnlockAll(true);
+  const page = await getMyPage();
+  assert.ok(page.achievements.every((item) => item.cleared && item.status === 'CLEARED'), '수집 도전과제도 달성으로 본다');
+  assert.ok(page.unlocked.kinds.includes('cases') && page.unlocked.frames.includes('navy'));
+  assert.equal((await putProfileDeco({ ...DEFAULT, frame: 'wood', portrait: '/images/characters/mascot/trio_idle.webp' })).frame, 'wood');
+  await setMockUnlockAll(false);
+  assert.ok((await getMyPage()).achievements.some((item) => !item.cleared));
 });
