@@ -1675,12 +1675,13 @@ Origin이 이 서버 자신과 같은 출처인지)을 거친다 — 벗어나�
 - 302로 카카오 인가 화면(`https://kauth.kakao.com/oauth/authorize`)에 보낸다. 동의항목(scope)은 요청하지 않는다 — 회원번호만 쓰고 개인정보는 받지 않는다
 - 이때 `NLNB_OAUTH_STATE` 쿠키(`HttpOnly` · `Secure` · `SameSite=Lax` · `Path=/api/v1/auth/oauth2` · 5분)를 심는다. 인가 요청 내용은 서버 Redis에만 두고 세션은 만들지 않는다
 - `KAKAO_CLIENT_ID`가 없는 환경(로컬 · 테스트)에서는 이 경로가 없다(404)
+- 운영 Nginx는 M-3 · M-4에 `/api` 공통 제한보다 엄격한 전용 제한을 건다(IP별 분당 30번 · 전체 초당 10번, PR #229 리뷰). 넘으면 JSON 429(1-4 형식)
 
 ### M-4. 카카오 로그인 콜백 — `GET /api/v1/auth/oauth2/callback/kakao` (BE-62)
 
 카카오가 브라우저를 돌려보내는 주소다(카카오 콘솔 Redirect URI에 등록). 화면이 직접 부르지 않는다.
 
-- **성공**: 회원을 찾거나 만들고, 익명 기록을 연결한 뒤 `NLNB_RT`(리프레시 토큰, A-16과 같은 쿠키)를 심고 **화면 경로 `/auth/callback`으로 302**. 토큰은 URL에 싣지 않는다 → 화면은 도착하면 **M-1 재발급을 한 번 불러 액세스 토큰을 받는다**
+- **성공**: 회원을 찾거나 만들고, 익명 기록을 연결한 뒤 `NLNB_RT`(리프레시 토큰, M-1과 같은 쿠키)를 심고 **화면 경로 `/auth/callback`으로 302**. 토큰은 URL에 싣지 않는다 → 화면은 도착하면 **M-1 재발급을 한 번 불러 액세스 토큰을 받는다**
 - **실패 · 취소**: `state` 불일치(쿠키 없음 · 다름 · 만료), 사용자가 카카오에서 취소, 카카오 오류 → **`/auth/callback?error=login_failed`로 302**(JSON 401이 아니다)
 - 익명 ID 쿠키(`NLNB_AID`) 연결 규칙(docs/decisions/BE-62.md)
   - 아직 연결 안 된 익명 ID → 이 회원에 연결

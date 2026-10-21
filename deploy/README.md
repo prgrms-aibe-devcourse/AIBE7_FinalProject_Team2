@@ -292,7 +292,19 @@ docker compose -f docker-compose.prod.yml logs --tail 3 web
 
 - 앞에 로드 밸런서 · CDN을 두면 그 장비의 IP로 묶인다. 그때는 `set_real_ip_from`(그 장비 대역) + `real_ip_header X-Forwarded-For`를 같이 설정한다.
 - HTTPS(BE-75)의 443 server도 http와 같은 `snippets/app.conf`를 include하고, 그 안의 두 `/api` location은 `snippets/api-proxy.conf` 하나를 include하므로 http · https · `/api` · `/api/` 모두에 같은 `limit_req` · `error_page 429`가 걸린다. `/api` 설정은 `api-proxy.conf`에서만 고친다. zone도 하나라 한 IP의 http · https 요청을 합쳐 센다.
-- **백엔드가 보는 IP(관리자 감사 로그)**는 아직 Nginx 컨테이너 IP다. 위 확인이 끝나면 `server.forward-headers-strategy=native`를 켠다(기술 스택 3장 "감사 로그", D). Nginx가 사용자 IP를 못 보는 상태에서 켜면 위조된 `X-Forwarded-For`가 그대로 기록될 수 있어 순서를 지킨다.
+- **백엔드가 보는 IP · Host**: BE-62에서 `server.forward-headers-strategy=native`를 켰다. 백엔드는 Nginx가 넘기는 `X-Forwarded-For` · `X-Forwarded-Proto` · `X-Forwarded-Host` · `X-Forwarded-Port`를 믿으므로, `snippets/api-proxy.conf`가 **네 헤더를 모두 Nginx가 본 값으로 덮어쓴다**(비워 두면 클라이언트가 보낸 값이 그대로 넘어간다, PR #229 리뷰). 위 "사용자 IP" 확인은 그대로 필요하다 — Nginx가 172.x만 보면 백엔드도 그 값을 본다
+
+### 카카오 로그인 경로 전용 제한 (BE-62, PR #229 리뷰)
+
+`/api/v1/auth/oauth2/`(카카오 로그인 시작 · 콜백)에는 `/api` 공통 제한에 더해 **전용 제한 두 개**를 건다(`default.conf`의 `oauth_per_ip` · `oauth_all`, `snippets/app.conf`의 전용 location).
+
+| 설정 | 값 | 이유 |
+| --- | --- | --- |
+| IP별 (`oauth_per_ip`) | 분당 30번, 순간 30번 | 로그인 1번 = 시작 + 콜백 2번. 같은 와이파이에서 여러 명이 동시에 로그인해도 막히지 않게 |
+| 전체 합계 (`oauth_all`) | 초당 10번, 순간 50번 | 시작 요청마다 백엔드가 Redis에 state를 5분 보관한다. IP를 여러 개 써서 IP별 제한을 나눠 피해도, 대기 중 state가 많아야 약 3,000개(약 3MB)로 묶여 Redis(200MB, `noeviction`)를 채우지 못한다 |
+| 넘으면 | `/api`와 같은 JSON 429 | `@api_rate_limited` |
+
+- 재발급 · 로그아웃(`/api/v1/auth/token/reissue` · `/api/v1/auth/logout`) 제한은 BE-63 2차에서 따로 정한다.
 
 ## Redis (BE-61, docs/tech-stack.md 2장 "Redis 운영 구성")
 
