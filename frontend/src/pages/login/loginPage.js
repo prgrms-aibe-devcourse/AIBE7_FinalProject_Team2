@@ -4,8 +4,10 @@ import { clearUser, currentUser, isAdmin, saveUser } from '../../utils/session.j
 import { homeRoute } from '../admin/adminMenu.js';
 import { adminLogout, tryAdminLogin } from './adminLogin.js';
 import { canGoBackInApp } from '../../app/router.js';
+import { devJumpBar } from './loginDevJump.js';
+import { loginDesk } from './loginDesk.js';
 
-// S-12 로그인 (FE-52, IA 4장 /login). 화면 틀: 카카오 로그인 버튼 + 아이디 · 비밀번호 폼.
+// S-12 로그인 (FE-52, IA 4장 /login). 책상 위 펠트 패드(FE-69)에 카카오 로그인 버튼 + 아이디 · 비밀번호 폼.
 // 목 모드에서는 개발용 목업 로그인(mocks/authMockApi.js)이, 실제 모드에서는 카카오 로그인(realApi.js login, FE-74)이 받는다.
 // 실제 모드의 아이디 · 비밀번호는 관리자 로그인만 된다. 로그인하지 않아도 모든 판결 체험을 할 수 있다(REQ-003).
 // 로그인하면 닉네임을 이 브라우저에 두고(utils/session.js) 공통 헤더의 "로그인" 자리에 닉네임이 나온다. 회원가입(/signup)은 아직 없다
@@ -13,21 +15,28 @@ const KAKAO_SVG = '<svg viewBox="0 0 18 18" aria-hidden="true" focusable="false"
 const NOT_READY = '로그인은 아직 준비 중이에요. 로그인하지 않아도 모든 판결 체험을 할 수 있어요.';
 
 export function renderLoginPage(container, { api, navigate }) {
-  const root = element('div', 'login-page');
-  const main = element('main', 'login-main');
-  const card = element('section', 'login-card');
+  const { root, main, card, peek } = loginDesk(container);
   card.setAttribute('aria-labelledby', 'login-heading');
-  main.append(card);
-  root.append(main); // 공통 헤더는 라우터가 붙인다(FE-56)
-  container.replaceChildren(root);
 
   const user = currentUser();
   if (user) showSignedIn(user);
   else showForm();
 
+  // 개발용: 모든 화면 상태로 바로 넘어간다(목 모드만). 로그인 표시는 바꾸지 않고 모양만 그린다
+  const jump = devJumpBar([
+    { label: '입력 폼', run: () => showForm() },
+    { label: '빈칸 오류', run: () => showForm().form.requestSubmit() },
+    { label: '로그인 실패', run: () => showForm().showError('로그인하지 못했어요. 잠시 뒤 다시 시도해 주세요.') },
+    { label: '로그인 중(로딩)', run: () => { const { busy } = showForm(); setBusy(busy, true); } },
+    { label: '로그인됨', run: () => showSignedIn({ nickname: '내로판사' }, false) },
+    { label: '관리자 로그인됨', run: () => showSignedIn({ nickname: '운영자' }, true) },
+    { label: '콜백 로딩', run: () => window.location.assign('/auth/callback?dev=loading') },
+    { label: '콜백 실패', run: () => window.location.assign('/auth/callback?error=login_failed') },
+  ]);
+  if (jump) main.append(jump);
+
   // 이미 로그인한 채로 왔을 때: 누구로 로그인했는지 + 마이페이지(관리자는 관리자 페이지) · 로그아웃
-  function showSignedIn({ nickname }) {
-    const admin = isAdmin();
+  function showSignedIn({ nickname }, admin = isAdmin()) {
     const heading = element('h1', '', '로그인했어요');
     heading.id = 'login-heading';
     const actions = element('div', 'login-actions');
@@ -39,6 +48,7 @@ export function renderLoginPage(container, { api, navigate }) {
         navigate('landing', {}, { replace: true });
       }, 'secondary-button'),
     );
+    peek('scene/react-happy');
     card.replaceChildren(heading, element('p', 'login-lead', `${nickname} 님으로 로그인한 상태예요.`), actions);
   }
 
@@ -75,6 +85,7 @@ export function renderLoginPage(container, { api, navigate }) {
     form.append(error, submit);
     form.addEventListener('submit', (event) => {
       event.preventDefault();
+      if (pending) return;
       const empty = [idInput, passwordInput].filter((input) => !input.value.trim());
       [idInput, passwordInput].forEach((input) => {
         if (empty.includes(input)) input.setAttribute('aria-invalid', 'true');
@@ -96,19 +107,21 @@ export function renderLoginPage(container, { api, navigate }) {
     signup.append(signupButton);
 
     parts.push(...(adminOnly ? [form] : [kakao, divider, form, signup]));
+    let pending = false; // return보다 앞에 둔다(뒤에 두면 초기화되지 않아 로그인 때 ReferenceError)
+    peek(null);
     card.replaceChildren(...parts);
+    return { form, showError, busy: [kakao, submit] };
 
     function showError(message) {
       error.textContent = message;
       error.hidden = false;
     }
 
-    let pending = false;
     async function signIn(request) {
       if (pending) return;
       pending = true;
       const busy = [kakao, submit];
-      busy.forEach((node) => { node.disabled = true; });
+      setBusy(busy, true);
       error.hidden = true;
       try {
         // 아이디 · 비밀번호는 관리자 계정인지 먼저 본다. 관리자면 마이페이지 자리가 관리자 페이지가 된다 (FE-53)
@@ -129,7 +142,7 @@ export function renderLoginPage(container, { api, navigate }) {
         }
         if (!api.login) {
           showError(request.method === 'password' ? `아이디와 비밀번호를 확인해 주세요. ${NOT_READY}` : NOT_READY);
-          busy.forEach((node) => { node.disabled = false; });
+          setBusy(busy, false);
           pending = false;
           return;
         }
@@ -141,11 +154,20 @@ export function renderLoginPage(container, { api, navigate }) {
       } catch (failure) {
         if (!container.contains(root)) return;
         if (failure?.code !== 'LOGIN_CANCELLED') showError(failure?.code === 'VALIDATION_ERROR' ? '아이디와 비밀번호를 확인해 주세요.' : '로그인하지 못했어요. 잠시 뒤 다시 시도해 주세요.');
-        busy.forEach((node) => { node.disabled = false; });
+        setBusy(busy, false);
         pending = false;
       }
     }
   }
+}
+
+// 요청 중에는 disabled 대신 aria-disabled를 쓴다: disabled가 되면 눌렀던 버튼의 포커스가 사라져 키보드 사용자가 처음부터 다시 Tab을 눌러야 한다.
+// 누름은 signIn의 pending 검사가 막고, 모양은 login.css의 [aria-disabled="true"]가 맡는다
+function setBusy(nodes, busy) {
+  nodes.forEach((node) => {
+    if (busy) node.setAttribute('aria-disabled', 'true');
+    else node.removeAttribute('aria-disabled');
+  });
 }
 
 // 라벨 + 입력칸 한 줄. 빈칸 안내(#login-error)를 입력칸 설명으로 잇는다
@@ -157,6 +179,8 @@ function field(form, id, label, attributes) {
   input.id = id;
   input.name = id;
   Object.assign(input, { type: attributes.type, autocomplete: attributes.autocomplete });
+  input.spellcheck = false; // 아이디 · 비밀번호에 맞춤법 밑줄이 뜨지 않게
+  input.autocapitalize = 'off'; // 모바일에서 아이디 첫 글자가 대문자가 되지 않게
   input.setAttribute('aria-describedby', 'login-error');
   input.addEventListener('input', () => input.removeAttribute('aria-invalid'));
   row.append(caption, input);

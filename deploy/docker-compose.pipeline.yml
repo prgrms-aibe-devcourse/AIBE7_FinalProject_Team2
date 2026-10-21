@@ -59,6 +59,12 @@ services:
     environment:
       # 백엔드가 부를 내부 주소 (BE-93). 이 값이 없으면 사건 등록 기능만 꺼지고 서버는 정상으로 뜬다
       PIPELINE_SERVICE_URL: http://pipeline:8000
+      # 사건 등록에 쓸 모델 (BE-93). 비워 두면 application.yml의 기본값을 쓴다.
+      # 여기에 적어 두지 않으면 .env에 넣어도 백엔드 컨테이너까지 전달되지 않는다
+      #   PIPELINE_MODELS: AI 판결 생성(generate). "공급자:모델ID", 쉼표로 여러 개
+      #   PIPELINE_EXTRACT_MODEL: 비식별화 · 구조화(extract). 판결문 원문이 나가므로 **유료 등급 키의 모델만** 쓴다
+      PIPELINE_MODELS: ${PIPELINE_MODELS:-}
+      PIPELINE_EXTRACT_MODEL: ${PIPELINE_EXTRACT_MODEL:-}
     # default를 반드시 함께 적는다 — networks를 쓰는 순간 기본 네트워크에서 빠져 postgres · redis · web과 끊긴다
     networks: [default, pipeline]
 

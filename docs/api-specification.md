@@ -47,7 +47,8 @@
 | v0.43 | 2026-10-21 | **BE-96 · BE-97 후속 (BE-98, FE-71 리뷰)** — P-7 잠김 검사가 저장값과 같은 칸(저장할 때도 쓰이던 칸)은 다시 거절하지 않도록 보완(표가 바뀌어 저장값이 잠겨도 다른 칸 저장 가능). 익명 ID를 새로 발급하는 요청(API 2 · P-2 · P-7)은 그날 출석도 함께 남긴다(첫 방문날 누락 방지). P-6 · P-7 설명 갱신 |
 | v0.44 | 2026-10-21 | **P-5 `judgmentPersonality`를 현재 판결 성향으로 변경 (FE-70)** — 첫 회차 체험 **전체 평균**에서 **최근 첫 회차 체험 3건의 평균**으로 바꾼다(`type` · `null` 규칙은 그대로, `experienceCount`는 평균에 쓴 체험 수 = 최대 3). 마이페이지 성향카드 화면이 "지금"을 이 값으로 보여 준다. 서버 구현(`MyPageService`)은 후속 백엔드 작업 |
 | v0.45 | 2026-10-21 | 10장 카카오 로그인 추가 (BE-62, WBS 7.4.2) — M-3 시작 `GET /api/v1/auth/oauth2/authorization/kakao` · M-4 콜백 `GET /api/v1/auth/oauth2/callback/kakao`(브라우저 이동, JSON API 아님). 성공 시 리프레시 토큰 쿠키(`NLNB_RT`)만 심고 화면 경로로 리다이렉트, 토큰은 URL에 싣지 않음. 익명 ID 쿠키 연결 규칙. **10장 번호를 M-N으로 변경**: 재발급 · 로그아웃(BE-94)의 A-16 · A-17이 8-4 운영 메뉴 API 예약 번호(A-16 ~ A-41)와 겹쳐 M-1 · M-2로 |
-| v0.46 | 2026-10-21 | Rate limit 2차 (BE-63, WBS 7.4.6) — 1-5 `TOO_MANY_REQUESTS`에 **전용 제한 3곳** 추가: M-1 재발급 · M-2 로그아웃(IP별 합쳐서 분당 30번 · 순간 30번), A-2 관리자 로그인(IP별 분당 5번 · 순간 5번), M-3 카카오 로그인 시작(BE-62, 이미 적용). `/api` 공통 제한에 더해 걸리고(전용 제한은 POST만 센다) 응답 형식은 같다. `Retry-After`는 경로별(공통 1 · 재발급 · 로그아웃 · 카카오 시작 2 · 관리자 로그인 12초). 재발급이 429여도 로그아웃된 것이 아니다(401만 로그인 종료). 형식 변경 없음 |
+| v0.46 | 2026-10-21 | **사건 등록 A-14 · A-15 서버 구현 (BE-93 1차)** — "초안" 표시를 떼고 담당을 BE-93으로. **A-14 머리말의 "파이프라인을 자바로 옮긴 뒤 구현한다"는 옛 결정이라 정정**: 파이프라인은 옮기지 않고 같은 서버의 내부 컨테이너로 띄워 백엔드가 내부망으로 부른다(COMMON-50). 에러 코드 `DUPLICATE_SOURCE` · `IMPORT_IN_PROGRESS` · `IMPORT_NOT_FOUND` · `IMPORT_UNAVAILABLE`(신설)을 1-5에 추가. **적재는 BE-93 2차**라 그때까지 A-15는 `SUCCEEDED`여도 `caseId`가 `null`임을 명시(차수별 표로 구분). **A-14의 "파이프라인이 적재까지 한다"도 정정**: 파이프라인의 `load` 단계는 운영 DB에 직접 쓰는 단계라 서비스에서 영구히 막아 두었고(COMMON-50), 1차 · 2차 모두 `SKIPPED`다 — 사건을 만드는 일은 서버가 한다. 항상 `SKIPPED`인 세 단계(`load` · `rag` · `contamination`)가 오류가 아님을 A-15에 명시. 요청 · 응답 형식은 바뀌지 않았다(화면 목 `adminMockApi.js` 그대로) |
+| v0.47 | 2026-10-21 | Rate limit 2차 (BE-63, WBS 7.4.6) — 1-5 `TOO_MANY_REQUESTS`에 **전용 제한 3곳** 추가: M-1 재발급 · M-2 로그아웃(IP별 합쳐서 분당 30번 · 순간 30번), A-2 관리자 로그인(IP별 분당 5번 · 순간 5번), M-3 카카오 로그인 시작(BE-62, 이미 적용). `/api` 공통 제한에 더해 걸리고(전용 제한은 POST만 센다) 응답 형식은 같다. `Retry-After`는 경로별(공통 1 · 재발급 · 로그아웃 · 카카오 시작 2 · 관리자 로그인 12초). 재발급이 429여도 로그아웃된 것이 아니다(401만 로그인 종료). 형식 변경 없음 |
 
 ---
 
@@ -139,7 +140,11 @@ json
 | 400 | `INVALID_IMAGE_FILE` | (확장, 관리자 API, BE-91) 사진 파일이 없음 · 비어 있음 · 허용하지 않는 형식 | 입력 안내 (A-13-3 · A-13-4) |
 | 404 | `PAPER_NOT_FOUND` | (확장, 관리자 API, BE-92) 신문 지면을 아직 생성한 적 없음 | 먼저 생성하도록 안내 (A-13-7 · A-13-8) |
 | 409 | `DECO_LOCKED` | (확장, BE-96) 아직 열리지 않은 꾸미기를 저장하려 함. `details`에 잠긴 필드(`reason: DECO_LOCKED`) | 화면에서 잠긴 항목은 고를 수 없게 막는다. 오면 마이페이지를 다시 불러온다 (P-7) |
-| 429 | `TOO_MANY_REQUESTS` | (확장, BE-63) 같은 IP에서 `/api` 요청이 너무 많음(평균 초당 20번 · 순간 40번 초과). (v0.46) 아래 경로는 이에 더해 **더 엄격한 전용 제한**을 받는다: M-1 재발급 · M-2 로그아웃(IP별 둘을 합쳐 분당 30번 · 순간 30번), A-2 관리자 로그인(IP별 분당 5번 · 순간 5번), M-3 카카오 로그인 시작(IP별 분당 30번 · 순간 30번 + 전체 합계). 전용 제한은 POST(M-3은 GET)만 센다. **백엔드가 아니라 운영 Nginx가 돌려준다** — 형식은 1-4와 같고 `Retry-After`(초) 헤더가 붙는다: 공통 `1`, M-1 · M-2 · M-3 `2`, A-2 `12`. M-1이 429여도 리프레시 토큰은 그대로라 로그아웃된 것이 아니다. 로컬 개발(Vite)에는 Nginx가 없어 나오지 않는다 | 일반 오류 안내. 자동으로 다시 보내지 않는다 |
+| 409 | `DUPLICATE_SOURCE` | (확장, 관리자 API, BE-93) 이미 등록한 사건번호. `details`에 어느 항목인지 담는다 | 입력 안내 (A-14) |
+| 409 | `IMPORT_IN_PROGRESS` | (확장, 관리자 API, BE-93) 실행 중인 등록이 있음. 한 번에 하나만 돌린다(외부 AI 호출 한도 보호) | 끝난 뒤 다시 시도 안내 (A-14) |
+| 404 | `IMPORT_NOT_FOUND` | (확장, 관리자 API, BE-93) 등록 작업이 없음 | 목록으로 안내 (A-15) |
+| 502 | `IMPORT_UNAVAILABLE` | (확장, 관리자 API, BE-93) 파이프라인 서비스에 닿지 못함, 또는 설정(`PIPELINE_SERVICE_URL`) 없음. **이 서비스를 켜지 않은 서버에서는 사건 등록만 꺼지고 나머지는 정상이다**(COMMON-50) | 다시 시도 · 관리자 문의 안내 (A-14) |
+| 429 | `TOO_MANY_REQUESTS` | (확장, BE-63) 같은 IP에서 `/api` 요청이 너무 많음(평균 초당 20번 · 순간 40번 초과). (v0.47) 아래 경로는 이에 더해 **더 엄격한 전용 제한**을 받는다: M-1 재발급 · M-2 로그아웃(IP별 둘을 합쳐 분당 30번 · 순간 30번), A-2 관리자 로그인(IP별 분당 5번 · 순간 5번), M-3 카카오 로그인 시작(IP별 분당 30번 · 순간 30번 + 전체 합계). 전용 제한은 POST(M-3은 GET)만 센다. **백엔드가 아니라 운영 Nginx가 돌려준다** — 형식은 1-4와 같고 `Retry-After`(초) 헤더가 붙는다: 공통 `1`, M-1 · M-2 · M-3 `2`, A-2 `12`. M-1이 429여도 리프레시 토큰은 그대로라 로그아웃된 것이 아니다. 로컬 개발(Vite)에는 Nginx가 없어 나오지 않는다 | 일반 오류 안내. 자동으로 다시 보내지 않는다 |
 | 500 | `INTERNAL_ERROR` | 서버 오류 | 일반 오류 안내 |
 - "이미 제출함"과 "순서가 맞지 않음"을 따로 나누지 않고 `INVALID_STATE` 하나로 둔다. 화면이 할 일은 둘 다 "`currentStatus`의 화면으로 이동"으로 같기 때문이다.
 - 관리자 오류는 쿠키 유무만으로 결정하지 않는다. 먼저 요청을 거절한 보안 필터의 오류를 반환하므로 미인증 POST도 CSRF 검사 실패 시 403일 수 있다. 인증·인가 구분과 응답 우선순위는 **8-1의 BE-88 검증 기준**을 따른다.
@@ -887,7 +892,8 @@ API 1 · 2 · 16은 상태와 관계없이 부를 수 있다. 표에 없는 조�
 **검수 흐름**
 
 ```text
-파이프라인 적재                      관리자 (S-19)
+사건이 DRAFT로 들어옴                관리자 (S-19)
+(오프라인 시드 적재 · 사건 등록 A-14)
 사건 DRAFT ─┬─ 판단 요소 축 확정 (A-12) ───────────────┐
             ├─ 사건 내용 수정 (A-11) ──────────────────┤ 처음 바꾸는 순간 DRAFT → REVIEW ⚠️
             ├─ AI 판결 후보 승인 · 반려 (A-9 · A-10) ──┤
@@ -918,8 +924,8 @@ API 1 · 2 · 16은 상태와 관계없이 부를 수 있다. 표에 없는 조�
 | A-11 | `PATCH /admin/cases/{caseId}` | 사건 내용 수정 | BE-43 |
 | A-12 | `PUT /admin/factors/{factorId}/value-axis` | 판단 요소 가치관 축 확정 | BE-43 · BE-48 |
 | A-13 | `POST /admin/cases/{caseId}/publish` | 사건 공개 | BE-43 |
-| A-14 | `POST /admin/case-imports` | 사건 등록 시작 (원본 판결문 → 파이프라인 실행) **초안** | 미정 (FE-45 제안) |
-| A-15 | `GET /admin/case-imports/{importId}` | 사건 등록 진행 상황 **초안** | 미정 (FE-45 제안) |
+| A-14 | `POST /admin/case-imports` | 사건 등록 시작 (원본 판결문 → 파이프라인 실행) | BE-93 (적재는 2차) |
+| A-15 | `GET /admin/case-imports/{importId}` | 사건 등록 진행 상황 | BE-93 (적재는 2차) |
 
 ### A-5. 검수 사건 목록 — `GET /admin/cases`
 
@@ -1369,11 +1375,15 @@ A-11과 같은 방식(보낸 필드만, `null` = 지움). `headline` · `article
 | 404 `PAPER_NOT_FOUND` | 아직 생성한 적 없음(먼저 A-13-6으로 생성해야 한다) |
 | 409 `INVALID_STATE` | 이미 `PUBLISHED`(`CASE_PUBLISHED`) |
 
-### A-14. 사건 등록 시작 — `POST /admin/case-imports` (초안)
+### A-14. 사건 등록 시작 — `POST /admin/case-imports`
 
-> **초안이다.** 파이프라인(`tools/ai-judgment`)을 자바로 옮긴 뒤 서버가 구현한다. 화면(FE-45)은 이 계약의 목으로 먼저 만들었고, 서버 구현 전에는 404가 온다. 계약이 바뀌면 이 절과 `adminMockApi.js`를 함께 고친다.
+> **1차 구현됨 (BE-93).** 파이프라인(`tools/ai-judgment`)은 **자바로 옮기지 않았다** — 같은 서버의 내부 컨테이너로 띄우고 백엔드가 내부망으로 부른다(COMMON-50, 결정: `docs/decisions/COMMON-50.md`). 화면(FE-45)은 이 계약의 목으로 먼저 만들었고, `adminMockApi.js`와 이 절은 함께 고친다.
+>
+> **아직 남은 것**: 적재(파이프라인 결과 → 사건 DRAFT 생성)는 BE-93 2차에서 한다. 그때까지 A-15는 `SUCCEEDED`가 되어도 `caseId`가 `null`이다.
 
-원본 판결문을 받아 파이프라인(비식별화 · 구조화 → 재판부 판결 정리 → 사전 학습 점검 → 참고 자료 검색 → AI 판결 생성 → 회차 선택 → 가치관 축 분류 → 적재)을 서버에서 실행한다. 오래 걸리므로 **작업만 만들고 202로 바로 돌려준다.**
+원본 판결문을 받아 파이프라인(비식별화 · 구조화 → 재판부 판결 정리 → 사전 학습 점검 → 참고 자료 검색 → AI 판결 생성 → 회차 선택 → 가치관 축 분류)을 서버에서 실행한다. 오래 걸리므로 **작업만 만들고 202로 바로 돌려준다.**
+
+**적재는 파이프라인이 하지 않는다.** 파이프라인에도 적재(`load`) 단계가 있지만 운영 DB에 직접 쓰는 단계라 서비스에서 **어떤 요청으로도 켜지지 않게 막아 두었다**(COMMON-50). 그래서 A-15의 `load`는 1차 · 2차 모두 항상 `SKIPPED`다. 사건을 만드는 일은 검수 흐름을 쥔 서버가 BE-93 2차에서 맡는다.
 
 ```json
 {
@@ -1407,11 +1417,12 @@ A-11과 같은 방식(보낸 필드만, `null` = 지움). `headline` · `article
 | --- | --- |
 | 400 `VALIDATION_ERROR` | 위 규칙 위반. `details`에 `[{ "field": "sources[0].originalText", "reason": "INVALID" }]` |
 | 409 `DUPLICATE_SOURCE` | 이미 등록한 사건번호 |
-| 409 `IMPORT_IN_PROGRESS` | 실행 중인 등록이 있음 (한 번에 하나만. 외부 AI 호출 한도 보호) |
+| 409 `IMPORT_IN_PROGRESS` | 실행 중인 등록이 있음 (한 번에 하나만. 외부 AI 호출 한도 보호). 서버와 파이프라인 서비스가 각각 막는다 — 서버 검사를 동시에 통과해도 서비스가 둘째를 거절한다(COMMON-50) |
+| 502 `IMPORT_UNAVAILABLE` | 파이프라인 서비스에 닿지 못함, 또는 `PIPELINE_SERVICE_URL`을 설정하지 않은 서버 |
 
 - 감사 로그 `CASE_IMPORT`를 남긴다(원문은 남기지 않고 사건번호 · 심급만).
 
-### A-15. 사건 등록 진행 상황 — `GET /admin/case-imports/{importId}` (초안)
+### A-15. 사건 등록 진행 상황 — `GET /admin/case-imports/{importId}`
 
 ```json
 {
@@ -1431,15 +1442,24 @@ A-11과 같은 방식(보낸 필드만, `null` = 지움). `headline` · `article
 ```
 
 - `status`: `QUEUED` · `RUNNING` · `SUCCEEDED` · `FAILED`. 화면은 끝날 때까지 2초마다 묻는다.
-- `stages[].name`: `extract` · `court` · `contamination` · `rag` · `generate` · `select` · `axis` · `load`. 건너뛴 단계는 `SKIPPED`, 값은 `PENDING` · `RUNNING` · `DONE` · `SKIPPED` · `FAILED`.
-- `SUCCEEDED`이면 `caseId`가 채워지고, 사건은 `DRAFT`로 적재된다. A-5 목록 · A-6 상세로 이어서 검수한다.
+- `stages[].name`: `extract` · `court` · `contamination` · `rag` · `generate` · `select` · `axis` · `load`. 값은 `PENDING` · `RUNNING` · `DONE` · `SKIPPED` · `FAILED`.
+  - **항상 `SKIPPED`인 단계가 셋 있다**: `load`(적재는 서버가 한다, A-14 참고) · `rag` · `contamination`. 서비스에서 끄고 시작하기 때문이며(COMMON-50) 오류가 아니다. 화면도 건너뜀으로 그린다.
+- `SUCCEEDED`일 때 `caseId`는 **서버 구현 차수에 따라 다르다.** 클라이언트는 `caseId`가 있을 때만 검수 화면으로 보낸다.
+
+  | 차수 | `SUCCEEDED` 응답 | 뜻 |
+  | --- | --- | --- |
+  | **BE-93 1차** (지금) | `caseId: null` | 파이프라인 생성까지 끝났고 **사건은 아직 만들어지지 않았다** |
+  | **BE-93 2차** | `caseId: <사건 ID>` | 사건이 `DRAFT`로 만들어졌다. A-5 목록 · A-6 상세로 이어서 검수한다 |
+
+  1차 범위에서 실제 모드의 사건 등록 메뉴는 열지 않는다(`adminMenu.js`의 `serverReady: false`, `docs/information-architecture.md`). 2차 전에 메뉴를 열려면 `caseId == null`을 다루는 처리가 화면에 먼저 있어야 한다.
+- 단계별 상태는 파이프라인만 알고 있어 서버가 마지막으로 받은 값을 저장해 둔다. 끝난 작업은 파이프라인에 다시 묻지 않고 그 값을 그대로 내려준다.
 - `FAILED`이면 `errorCode` · `message`를 내려 준다. `message`에 원문 · 모델 출력을 담지 않는다.
 
 | 거절 | 조건 |
 | --- | --- |
 | 404 `IMPORT_NOT_FOUND` | 등록 작업이 없음 |
 
-**에러 코드**: 1-5의 `JUDGMENT_NOT_FOUND` · `FACTOR_NOT_FOUND` · `DUPLICATE_TITLE` · `PUBLISH_NOT_READY`(v0.17 추가)와 공통 코드를 쓴다. 사건 등록 초안(A-14 · A-15)은 `DUPLICATE_SOURCE` · `IMPORT_IN_PROGRESS` · `IMPORT_NOT_FOUND`를 더 쓴다(1-5 목록에는 서버 구현 때 추가).
+**에러 코드**: 1-5의 `JUDGMENT_NOT_FOUND` · `FACTOR_NOT_FOUND` · `DUPLICATE_TITLE` · `PUBLISH_NOT_READY`(v0.17 추가)와 공통 코드를 쓴다. 사건 등록(A-14 · A-15)은 `DUPLICATE_SOURCE` · `IMPORT_IN_PROGRESS` · `IMPORT_NOT_FOUND` · `IMPORT_UNAVAILABLE`을 더 쓴다(BE-93에서 1-5 목록에 추가했다).
 
 - `CASE_NOT_FOUND`는 관리자 API에서 "사건이 없음"만 뜻한다(사용자 API는 "없거나 `PUBLISHED`가 아님").
 
