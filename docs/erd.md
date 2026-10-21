@@ -31,6 +31,7 @@
 | v1.24 | 2026-10-16 | 판단 요소 요약어 후보 추가 (**확장 단계**, BE-80 · V17) — `factor.summary_tag_candidates`(jsonb, nullable). 적재 SQL(`case_seed_sql.py`)이 새 사건을 넣을 때 보고서 후보를 넣고, 이미 적재된 사건은 바꾸지 않는다. 관리자 상세 A-6에 내려 준다(API 명세 v0.31) |
 | v1.25 | 2026-10-20 | 사건 발단 사진 테이블 추가 (**확장 단계**, BE-91 · V19) — `case_incident_photo` 신설(Cloudflare Workers AI 생성 → S3 업로드 결과를 순서대로 기록). 사건 대표사진(신문용)은 새 테이블 없이 `legal_case.thumbnail_url` 재사용(결정: `docs/decisions/BE-91.md`) |
 | v1.26 | 2026-10-20 | 사건 사진 생성 방식 재검토 (**확장 단계**, BE-91 재검토 · V20) — Cloudflare Workers AI 직접 생성은 그림 품질 때문에 그만두고, 사람이 만든 사진을 올리는 방식으로 바꿨다. `case_incident_photo.model` 컬럼 삭제, `prompt`는 참고용 선택 항목으로 바뀌어 NOT NULL 해제(결정: `docs/decisions/BE-91.md`) |
+| v1.27 | 2026-10-20 | 신문 지면 테이블 추가 (**확장 단계**, BE-92 · V21) — `case_paper` 신설(사건당 1건: desk · headline · deck · caption · article). `photo`는 `legal_case.thumbnail_url`, `extraPhotos`는 `case_incident_photo`를 그대로 재사용(새 컬럼 없음, 결정: `docs/decisions/BE-92.md`) |
 
 ---
 
@@ -321,6 +322,27 @@ S-06에서 보여 줄 형벌 선택지, 그리고 **선고 가능 범위 밖 판
 
 - 등장인물은 얼굴 없는 회색 엑스트라, 내로 · 남불은 등장시키지 않는다(COMMON-41, 프롬프트 추천 지시문에 고정 포함).
 - 유니크 제약: (`case_id`, `display_order`) — 사건마다 순서가 유일하다(V19).
+
+#### `case_paper` — 신문 지면 콘텐츠 (BE-92, COMMON-41)
+
+메인 화면에서 신문을 눌렀을 때 보이는 콘텐츠. 사건마다 1건. `photo`(대표사진)는 `legal_case.thumbnail_url`,
+`extraPhotos`(발단 사진)는 `case_incident_photo`를 그대로 재사용한다 — 같은 사진을 두 번 저장하지 않는다
+(결정: `docs/decisions/BE-92.md`).
+
+| 컬럼 | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| id | bigint PK | ✓ |  |
+| case_id | bigint FK | ✓ |  |
+| desk | varchar(50) | ✓ | 지면 섹션명 (예: 사회면). 지금은 고정값 |
+| headline | varchar(200) | ✓ | 헤드라인 |
+| deck | varchar(300) |  | 부제 |
+| caption | varchar(200) |  | 대표사진 아래 캡션 |
+| article | jsonb | ✓ | 본문 문단 배열 |
+| created_at | timestamptz | ✓ |  |
+| updated_at | timestamptz | ✓ |  |
+
+- 유니크 제약: `case_id` — 사건마다 신문 지면은 1건. 재생성은 새 행을 만들지 않고 덮어쓴다.
+- Gemini `generateContent` 한 번 호출로 `{headline, deck, caption, article}` JSON을 받아 그대로 채운다(`CasePaperService`).
 
 #### `sentencing_guideline` — 양형기준 버전
 
