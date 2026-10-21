@@ -38,6 +38,10 @@ dependencies {
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.1'
 	// Redis 캐시(DB 0) · 토큰 저장소(DB 1) (확장 단계, BE-61 · WBS 7.1.4). 접속 설정은 common.redis.RedisConfig
 	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+	// JWT 액세스 토큰 발급 · 검증 (확장 단계, BE-94 · WBS 7.4.3). jjwt-jackson은 테스트 범위까지 필요해 implementation으로 둔다
+	implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
+	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
+	implementation 'io.jsonwebtoken:jjwt-jackson:0.12.6'
 	// 파일 저장소 S3 (COMMON-47, BE-91). AWS SDK v2를 직접 쓴다. 자격 증명은 기본 체인(운영은 IAM 역할)을 쓴다
 	implementation 'software.amazon.awssdk:s3:2.47.4'
 	compileOnly 'org.projectlombok:lombok'

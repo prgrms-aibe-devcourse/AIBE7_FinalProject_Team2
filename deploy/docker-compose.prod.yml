@@ -66,6 +66,11 @@ services:
       # 첫 관리자 계정 (BE-39). 처음 한 번만 넣고, 계정이 만들어지면 .env에서 지운다
       ADMIN_BOOTSTRAP_EMAIL: ${ADMIN_BOOTSTRAP_EMAIL:-}
       ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:-}
+      # 회원 JWT 서명 키 (확장 단계, BE-94). application.yml이 기본값을 두지 않으므로(공개 저장소 노출 방지) 여기서도
+      # 값이 없으면 기동을 막는다. deploy/.env에 openssl rand -base64 32로 만든 값을 넣는다
+      JWT_SECRET: ${JWT_SECRET:?deploy/.env에 JWT_SECRET을 넣어야 한다 (openssl rand -base64 32)}
+      JWT_ACCESS_TOKEN_TTL: ${JWT_ACCESS_TOKEN_TTL:-15m}
+      JWT_REFRESH_TOKEN_TTL: ${JWT_REFRESH_TOKEN_TTL:-14d}
       # 운영에서 API 문서를 열지 않는다 (application.yml 기본값과 같음, 명시만)
       SWAGGER_ENABLED: "false"
       # 서버 메모리(t3.small 2GB)에 맞춰 JVM 힙 상한을 컨테이너 메모리 비율로 둔다

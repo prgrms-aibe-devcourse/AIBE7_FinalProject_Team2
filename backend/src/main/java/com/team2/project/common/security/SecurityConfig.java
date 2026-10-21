@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
@@ -33,6 +34,8 @@ import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.web.csrf.CsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy;
+import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
+import org.springframework.security.web.util.matcher.OrRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 
 /**
@@ -62,6 +65,9 @@ public class SecurityConfig {
 	public static final String ADMIN_PATTERN = "/api/v1/admin/**";
 	public static final String LOGIN_PATH = "/api/v1/admin/auth/login";
 	public static final String CSRF_PATH = "/api/v1/admin/auth/csrf";
+	/** 리프레시 토큰 쿠키로만 인증하는 상태 변경 요청 — Origin 검증 대상 (BE-94 · WBS 7.4.3) */
+	public static final String REISSUE_PATH = "/api/v1/auth/token/reissue";
+	public static final String LOGOUT_PATH = "/api/v1/auth/logout";
 	private static final Set<String> SAFE_METHODS = Set.of("GET", "HEAD", "OPTIONS", "TRACE");
 	private static final ReferrerPolicy REFERRER_POLICY = ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN;
 
@@ -118,6 +124,10 @@ public class SecurityConfig {
 			.exceptionHandling(e -> e.authenticationEntryPoint(errors).accessDeniedHandler(errors))
 			// SecurityContext를 불러온 뒤 · 익명 인증 전에 Bearer 토큰을 확인한다
 			.addFilterBefore(new BearerTokenAuthenticationFilter(accessTokenVerifiers, errors, requestOnly),
+				AnonymousAuthenticationFilter.class)
+			// 재발급 · 로그아웃(리프레시 토큰 쿠키로만 인증)은 Origin 검증으로 CSRF를 막는다 (BE-94, C 결정)
+			// RequestMatcher로 판정한다 — getRequestURI() 원시 비교는 context path 포함 · 미디코딩이라 우회될 수 있다(PR #218 리뷰)
+			.addFilterBefore(new OriginVerificationFilter(originProtectedRequests(), errors),
 				AnonymousAuthenticationFilter.class);
 		return http.build();
 	}
@@ -136,6 +146,13 @@ public class SecurityConfig {
 	/** CSRF를 확인할 요청: 관리자 체인 안의 상태 변경 요청(GET · HEAD · OPTIONS · TRACE 제외) */
 	private static RequestMatcher stateChanging() {
 		return (HttpServletRequest request) -> !SAFE_METHODS.contains(request.getMethod());
+	}
+
+	/** Origin 검증 대상: 재발급 · 로그아웃(둘 다 POST). PathPatternRequestMatcher는 디코딩된 경로 · context path 제외 기준으로 비교한다 */
+	private static RequestMatcher originProtectedRequests() {
+		return new OrRequestMatcher(
+			PathPatternRequestMatcher.pathPattern(HttpMethod.POST, REISSUE_PATH),
+			PathPatternRequestMatcher.pathPattern(HttpMethod.POST, LOGOUT_PATH));
 	}
 
 	/**

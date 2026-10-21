@@ -30,3 +30,8 @@ admin:
 rag:
   embedding:
     api-key: ""
+
+# JWT 서명 키(BE-94). application.yml은 기본값을 두지 않으므로(PR #218 리뷰) 테스트 전용 값을 여기서 준다.
+# 운영 키가 아니다 — 테스트 DB · Redis 계정처럼 저장소에 있어도 되는 로컬 전용 값
+jwt:
+  secret: bGF3bmFtYnVsLXRlc3Qtand0LXNlY3JldC1ub3QtZm9yLXByb2QtMzJieXRlcyEh
