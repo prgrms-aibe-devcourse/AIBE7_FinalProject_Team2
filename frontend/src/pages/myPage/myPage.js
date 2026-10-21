@@ -4,9 +4,9 @@ import { renderAxisRow } from '../../components/axisRow.js';
 import { imageOf } from '../../components/stage.js';
 import { AXES, CHARACTER_NAMES } from '../../utils/personalityAxes.js';
 import { KIND_TITLES, axisSeries, collectionOf, imageKinds, trailLeft, trailSummary } from '../../utils/myPageView.js';
-import { BACKGROUNDS, FRAMES, achievementProgress, getProfileDeco, kindOfPortrait, portraitLabel, setProfileDeco, shownDeco, unlockedBy, unlockerOf } from '../../utils/profileDeco.js';
+import { BACKGROUNDS, FRAMES, SASH_COLORS, SASH_ICONS, SASH_STYLES, achievementProgress, sashColorField, sashColorKey, sashColorOf, getProfileDeco, kindOfPortrait, portraitLabel, setProfileDeco, shownDeco, unlockedBy, unlockerOf } from '../../utils/profileDeco.js';
 import { PORTRAIT_POOL } from '../../content/portraitPool.js';
-import { BOOKMARK_CHARACTERS, BOOKMARK_FACES, BOOKMARK_LAWS, BOOKMARK_NAMES, BOOKMARK_STYLES, FACE_NAMES, STYLE_NAMES, getBookmarkCharacter, getBookmarkFaceName, getBookmarkStyle, bookmarkFace, setBookmarkCharacter, setBookmarkFace } from '../../utils/bookmarkCharacter.js';
+import { BOOKMARK_CHARACTERS, BOOKMARK_FACES, BOOKMARK_LAWS, BOOKMARK_NAMES, BOOKMARK_STYLES, FACE_NAMES, STYLE_NAMES, getBookmarkCharacter, getBookmarkFaceName, getBookmarkStyle, bookmarkFace, setBookmarkCharacter, setBookmarkFace, BOOKMARK_COLORS, getBookmarkColor, setBookmarkColor, selectedBookmarkFace } from '../../utils/bookmarkCharacter.js';
 import { SCRIPTS } from '../../content/scripts.js';
 import { fitPortraitIn } from '../../utils/portraitFit.js';
 import { clearUser, currentUser, isAdmin } from '../../utils/session.js';
@@ -29,7 +29,11 @@ const VIEWS = {
   cases: '내가 체험한 사건',
   edit: '내 정보 수정',
   settings: '환경 설정',
+  achievements: '도전과제',
+  bookmark: '책갈피 설정',
 };
+// 프로필카드에서 들어가는 화면은 뒤로 가기가 프로필카드로 간다(FE-68)
+const PARENTS = { achievements: 'profile', bookmark: 'profile' };
 const DEFAULT_NICKNAME = '익명의 판사'; // 로그인 · 닉네임 API 전까지 임시 문구
 // 닉네임 아래 프로필 수치. 레벨 · 직업 · 출석 일수는 목 데이터(API 전, data.profile이 오면 그 값을 쓴다). 완료한 사건 · 모은 일러스트는 지금 기록에서 센다
 const MOCK_PROFILE = { level: 7, job: '수습 판사', attendanceDays: 12 };
@@ -147,17 +151,55 @@ function defaultPortrait() {
 const decoFor = (stats) => shownDeco(getProfileDeco(), unlockedBy(stats));
 const nameOf = (list, id) => list.find((item) => item.id === id)?.name ?? id;
 
-// 대표 이미지 카드의 속: 위 "대표 이미지" · 그림 창 · 아래 이름. 테두리 · 배경은 클래스(.deco-frame-* · .deco-bg-*)로 입힌다
-function profileCardParts(deco) {
+// 카드 책갈피(FE-68): 카드 좌우에 걸리는 띠 두 줄. 색은 .deco-sash-*, 모양은 .sash-style-*(짧고 굵은 책갈피 · 얇고 긴 띠)가 정한다.
+// 짧은 책갈피에는 좌 · 우 아이콘을 따로 단다. 장식이라 스크린리더에는 숨긴다(카드의 읽는 이름에 적는다)
+const SASH_ICON_ART = {
+  star: { path: 'M8 1.5l1.8 4.7 4.7 1.8-4.7 1.8L8 14.5l-1.8-4.7L1.5 8l4.7-1.8z' },
+  scale: { path: 'M8 2v12M4 14h8M3 5h10M3 5l-2 4h4zM13 5l-2 4h4z' },
+  gavel: { path: 'M9.5 2.5l4 4M7.5 4.5l4 4M8.5 3.5l-4 4 2 2 4-4M5.5 8.5L2 12M9 14h5' },
+  cup: { path: 'M3 6h8v4a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3zM11 7h1.5a1.5 1.5 0 0 1 0 3H11M5 2.5c0 1 1 1 1 2M8 2.5c0 1 1 1 1 2' },
+  heart: { path: 'M8 13.5S2.5 10 2.5 6.3A2.8 2.8 0 0 1 8 5a2.8 2.8 0 0 1 5.5 1.3C13.5 10 8 13.5 8 13.5z' },
+  naero: { src: '/images/characters/icon/generated/naero_face-happy.webp' },
+  nambul: { src: '/images/characters/icon/generated/nambul_face-cheer.webp' },
+  law: { src: '/images/characters/icon/cropped/law-scale_icon.webp' },
+};
+function sashIcon(id) {
+  const art = SASH_ICON_ART[id];
+  if (!art) return null;
+  return art.path ? svg(art.path, 'my-sash-icon') : picture(art.src, '', 'my-sash-icon');
+}
+function sashes(deco) {
+  if (deco.sashStyle === 'none') return [];
+  return [['left', deco.sashIconLeft], ['right', deco.sashIconRight]].map(([side, icon]) => {
+    const band = element('span', `my-card-sash is-${side}`);
+    band.setAttribute('aria-hidden', 'true');
+    const art = deco.sashStyle === 'short' ? sashIcon(icon) : null;
+    if (art) band.append(art);
+    return band;
+  });
+}
+const sashClasses = (deco) => `deco-sash-${sashColorOf(deco) ?? 'none'} sash-style-${deco.sashStyle}`;
+const sashNote = (deco) => {
+  if (deco.sashStyle === 'none') return '';
+  const icons = deco.sashStyle === 'short' ? [deco.sashIconLeft, deco.sashIconRight].filter((id) => id !== 'none').map((id) => nameOf(SASH_ICONS, id)) : [];
+  return `, ${nameOf(SASH_COLORS[deco.sashStyle], sashColorOf(deco))} ${nameOf(SASH_STYLES, deco.sashStyle)}${icons.length ? `(${icons.join(' · ')})` : ''}`;
+};
+
+// 대표 이미지 카드의 속: 위 닉네임 · 그림 창(대표 이미지) · 아래 성향 테스트 결과. 테두리 · 배경 · 책갈피는 클래스(.deco-frame-* · .deco-bg-* · .deco-sash-*)로 입힌다
+function profileCardParts(deco, data) {
   const { src, caption } = deco.portrait ? { src: deco.portrait, caption: portraitLabel(deco.portrait) } : defaultPortrait();
   const face = element('div', 'my-card-window');
   const faceImage = picture(src, `${caption} 대표 이미지`, 'my-profile-face');
   face.append(faceImage);
   fitPortraitIn(face, faceImage);
+  const nickname = data.nickname || DEFAULT_NICKNAME;
+  const typeName = data.personality?.type?.name;
+  const result = element('p', `my-card-note${typeName ? '' : ' is-empty'}`, typeName ?? '성향 테스트 전');
   return {
     caption,
-    classes: `is-profile deco-frame-${deco.frame} deco-bg-${deco.background}`,
-    children: [element('p', 'my-card-name', '대표 이미지'), face, element('p', 'my-card-note', caption)],
+    note: `${nickname}, 대표 이미지 ${caption}, 성향 ${typeName ?? '테스트 전'}${sashNote(deco)}`,
+    classes: `is-profile deco-frame-${deco.frame} deco-bg-${deco.background} ${sashClasses(deco)}`,
+    children: [element('p', 'my-card-name', nickname), face, result, ...sashes(deco)],
   };
 }
 
@@ -165,8 +207,8 @@ function profileCardParts(deco) {
 function renderTop(data, go) {
   const section = element('section', 'my-top');
   const stats = statsOf(data);
-  const parts = profileCardParts(decoFor(stats));
-  const profile = cardButton(parts.classes, `프로필카드 열기: 대표 이미지 ${parts.caption}`, ...parts.children);
+  const parts = profileCardParts(decoFor(stats), data);
+  const profile = cardButton(parts.classes, `프로필카드 열기: ${parts.note}`, ...parts.children);
   profile.addEventListener('click', () => go('profile'));
 
   const middle = element('div', 'my-top-middle');
@@ -283,6 +325,7 @@ function renderTrail(history) {
 // 책갈피 캐릭터 고르기(프로필카드 화면, FE-68에서 만난 모습에서 옮김): 얼굴 라디오. 고르면 바로 저장되고 판결 체험 책갈피 · 기본 대표 이미지에 쓰인다
 function renderBookmarkPicker(onPick) {
   const field = element('fieldset', 'my-bookmark');
+  field.id = 'my-bookmark-picker';
   field.append(element('legend', '', '책갈피 캐릭터'));
   const current = { who: getBookmarkCharacter(), face: getBookmarkFaceName(), style: getBookmarkStyle() };
   BOOKMARK_STYLES.forEach((style) => {
@@ -502,26 +545,106 @@ function portraitPicker(open, shownPortrait, onPick) {
   return field;
 }
 
-// 카드 테두리 · 배경 견본. type: 'frame' | 'background'
-function swatchPicker(type, open, shown, onPick) {
-  const list = type === 'frame' ? FRAMES : BACKGROUNDS;
-  const opened = type === 'frame' ? open.frames : open.backgrounds;
-  const field = element('fieldset', 'my-deco');
-  field.append(element('legend', '', type === 'frame' ? '카드 테두리' : '카드 배경'));
+// 카드 테두리 · 배경 견본, 책갈피 색 · 모양 견본. 견본은 그 요소만 바꾼 작은 카드다.
+// base: 견본에 깔 나머지 꾸미기(모양 견본은 그 모양에서 지금 고른 색으로 그린다)
+const SWATCH_TYPES = {
+  frame: { list: FRAMES, set: 'frames', title: '카드 테두리', group: 'profile-frame' },
+  background: { list: BACKGROUNDS, set: 'backgrounds', title: '카드 배경', group: 'profile-background' },
+  sashStyle: { list: SASH_STYLES, set: 'sashStyles', title: '모양', group: 'profile-sash-style' },
+};
+const PLAIN_DECO = { frame: 'basic', background: 'cream', sashStyle: 'none', sashColorShort: 'wine', sashColorLong: 'wine', sashIconLeft: 'none', sashIconRight: 'none' };
+function swatchPicker(type, open, shown, onPick, base = PLAIN_DECO, legendClass = '') {
+  const { list, set, title, group } = SWATCH_TYPES[type];
+  const field = element('fieldset', `my-deco${legendClass ? ` ${legendClass}` : ''}`);
+  field.append(element('legend', '', title));
   const row = element('div', 'my-deco-swatches');
   list.forEach(({ id, name }) => {
-    const locked = !opened.has(id);
-    const by = unlockerOf(type === 'frame' ? 'frames' : 'backgrounds', id)?.title ?? '';
-    const sample = element('span', `my-mini-card deco-frame-${type === 'frame' ? id : 'basic'} deco-bg-${type === 'frame' ? 'cream' : id}`);
+    const locked = !open[set].has(id);
+    const by = unlockerOf(set, id)?.title ?? '';
+    const look = { ...base, [type]: id };
+    const sample = element('span', `my-mini-card deco-frame-${look.frame} deco-bg-${look.background} ${sashClasses(look)}`);
+    sample.append(...sashes(look));
     const caption = element('span', 'my-deco-name', name);
     if (locked) caption.append(element('small', '', by));
     row.append(decoOption({
-      group: `profile-${type}`, value: id, checked: id === shown, locked, name, lockedBy: by,
+      group, value: id, checked: id === shown, locked, name, lockedBy: by,
       onChange: () => { setProfileDeco({ [type]: id }); onPick(); },
     }, sample, caption));
   });
   field.append(row);
   return field;
+}
+
+// 짧은 책갈피의 한쪽(좌 · 우) 아이콘 고르기
+function sashIconPicker(side, open, deco, onPick) {
+  const key = side === 'left' ? 'sashIconLeft' : 'sashIconRight';
+  const field = element('fieldset', 'my-deco is-sub');
+  field.append(element('legend', '', side === 'left' ? '왼쪽 아이콘' : '오른쪽 아이콘'));
+  const row = element('div', 'my-deco-pills');
+  SASH_ICONS.forEach(({ id, name }) => {
+    const locked = !open.sashIcons.has(id);
+    const by = unlockerOf('sashIcons', id)?.title ?? '';
+    const chip = element('span', `my-icon-chip deco-sash-${sashColorOf(deco) ?? 'wine'}`);
+    const art = sashIcon(id);
+    if (art) chip.append(art);
+    const option = decoOption({
+      group: `profile-${key}`, value: id, checked: id === deco[key], locked, name, lockedBy: by,
+      onChange: () => { setProfileDeco({ [key]: id }); onPick(); },
+    }, chip, element('span', 'my-deco-name', name));
+    option.classList.add('is-pill');
+    row.append(option);
+  });
+  field.append(row);
+  return field;
+}
+
+// 지금 모양의 색 고르기. 색 표는 모양마다 따로 있고(SASH_COLORS), 해금도 "모양:색"으로 따로 센다
+function sashColorPicker(open, deco, onPick) {
+  const style = deco.sashStyle;
+  const field = element('fieldset', 'my-deco is-sub');
+  field.append(element('legend', '', `색 · ${nameOf(SASH_STYLES, style)}`));
+  const row = element('div', 'my-deco-swatches');
+  SASH_COLORS[style].forEach(({ id, name }) => {
+    const key = sashColorKey(style, id);
+    const locked = !open.sashColors.has(key);
+    const by = unlockerOf('sashColors', key)?.title ?? '';
+    const look = { ...PLAIN_DECO, sashStyle: style, [sashColorField(style)]: id };
+    const sample = element('span', `my-mini-card deco-frame-basic deco-bg-cream ${sashClasses(look)}`);
+    sample.append(...sashes(look));
+    const caption = element('span', 'my-deco-name', name);
+    if (locked) caption.append(element('small', '', by));
+    row.append(decoOption({
+      group: `profile-sash-color-${style}`, value: id, checked: id === sashColorOf(deco), locked, name, lockedBy: by,
+      onChange: () => { setProfileDeco({ [sashColorField(style)]: id }); onPick(); },
+    }, sample, caption));
+  });
+  field.append(row);
+  return field;
+}
+
+// 카드 책갈피 묶음: 모양(맨 위) → 그 모양의 색 → (짧은 책갈피면) 좌우 아이콘. 고른 것에 따라 아래 칸이 바뀌므로 묶음을 다시 그리고 포커스를 되돌린다
+function sashSection(open, onPick) {
+  const section = element('section', 'my-deco-section');
+  const paint = (focusName, focusValue) => {
+    const deco = shownDeco(getProfileDeco(), open);
+    const repaint = () => {
+      const active = document.activeElement;
+      paint(active?.name, active?.value);
+      onPick();
+    };
+    const parts = [
+      element('h2', 'my-deco-title', '카드 책갈피'),
+      element('p', 'my-hint', '카드 윗변 좌우에 거는 띠예요. 모양을 먼저 고르고, 색은 모양마다 따로 골라요. 책갈피 설정(얼굴 · 리본)과는 별개예요.'),
+      swatchPicker('sashStyle', open, deco.sashStyle, repaint, deco, 'is-sub'),
+    ];
+    if (deco.sashStyle !== 'none') parts.push(sashColorPicker(open, deco, repaint));
+    if (deco.sashStyle === 'short') parts.push(sashIconPicker('left', open, deco, repaint), sashIconPicker('right', open, deco, repaint));
+    else if (deco.sashStyle === 'long') parts.push(element('p', 'my-hint', '아이콘은 짧고 굵은 책갈피에만 달 수 있어요.'));
+    section.replaceChildren(...parts);
+    if (focusName) [...section.querySelectorAll(`input[name="${focusName}"]`)].find((input) => input.value === focusValue)?.focus({ preventScroll: true });
+  };
+  paint();
+  return section;
 }
 
 // 보상을 한 줄로: "장면 컷 16장 · 원목 테두리"
@@ -531,6 +654,12 @@ function rewardText(item) {
     ...item.kinds.map((kind) => `${KIND_TITLES[kind]} ${count(kind)}장`),
     ...item.frames.map((id) => `${nameOf(FRAMES, id)} 테두리`),
     ...item.backgrounds.map((id) => `${nameOf(BACKGROUNDS, id)} 배경`),
+    ...item.sashStyles.map((id) => `책갈피 모양 ${nameOf(SASH_STYLES, id)}`),
+    ...item.sashColors.map((key) => {
+      const [style, color] = key.split(':');
+      return `${nameOf(SASH_STYLES, style)} ${nameOf(SASH_COLORS[style], color)}`;
+    }),
+    ...item.sashIcons.map((id) => `책갈피 아이콘 ${nameOf(SASH_ICONS, id)}`),
   ].join(' · ');
 }
 
@@ -538,7 +667,7 @@ function achievementList(progress, mocked) {
   const section = element('section', 'my-achievements-section');
   section.id = 'my-achievements';
   const done = progress.filter((item) => item.cleared).length;
-  section.append(element('h2', 'my-section-title', `도전과제 ${done} / ${progress.length}`));
+  section.append(element('h2', 'my-section-title', `달성 ${done} / ${progress.length}`));
   const list = element('ol', 'my-achievements');
   progress.forEach((item) => {
     const line = element('li', `my-achievement${item.cleared ? ' is-cleared' : ''}`);
@@ -562,57 +691,155 @@ function achievementList(progress, mocked) {
   return section;
 }
 
-function renderProfilePage(data) {
+// 미리 보기 카드(첫 화면 카드와 같은 모양, 누를 수 없음)
+function previewCard(stats, data) {
+  const deco = decoFor(stats);
+  const parts = profileCardParts(deco, data);
+  const card = element('div', `my-card ${parts.classes} is-preview`);
+  card.setAttribute('role', 'img');
+  card.setAttribute('aria-label', `미리 보기: ${parts.note}, ${nameOf(FRAMES, deco.frame)} 테두리, ${nameOf(BACKGROUNDS, deco.background)} 배경`);
+  card.append(...parts.children);
+  return card;
+}
+
+// 카드 꾸미기 창: 테두리 · 배경 · 카드 책갈피를 고른다. 창 안에도 미리 보기를 두고, 고를 때마다 화면 쪽 미리 보기(onPick)도 다시 그린다.
+// 마이페이지 커피색 토큰이 적용되도록 .my-page 안에 붙이고, 닫으면 지우고 연 버튼으로 포커스를 돌려준다(Esc · 바깥 · 닫기)
+function openDecoDialog({ open, stats, data, onPick, opener }) {
+  const dialog = element('dialog', 'my-deco-dialog');
+  const title = element('h2', 'my-deco-dialog-title', '카드 꾸미기');
+  title.id = `my-deco-dialog-title-${Date.now()}`;
+  dialog.setAttribute('aria-labelledby', title.id);
+  const head = element('div', 'my-deco-dialog-head');
+  head.append(title, button('닫기', () => dialog.close(), 'secondary-button'));
+  const preview = element('div', 'my-deco-dialog-preview');
+  const paint = () => {
+    preview.replaceChildren(previewCard(stats, data));
+    onPick();
+  };
+  const shown = decoFor(stats);
+  const body = element('div', 'my-deco-dialog-body');
+  const pickers = element('div', 'my-deco-dialog-pickers');
+  pickers.append(
+    element('p', 'my-hint', '도전과제를 깨면 테두리 · 배경 · 카드 책갈피가 더 열려요. 고르면 바로 저장돼요.'),
+    swatchPicker('frame', open, shown.frame, paint),
+    swatchPicker('background', open, shown.background, paint),
+    sashSection(open, paint),
+  );
+  body.append(preview, pickers);
+  dialog.append(head, body);
+  dialog.addEventListener('click', (event) => { if (event.target === dialog) dialog.close(); });
+  dialog.addEventListener('close', () => { dialog.remove(); opener?.focus(); });
+  preview.replaceChildren(previewCard(stats, data));
+  (document.querySelector('.my-page') ?? document.body).append(dialog);
+  dialog.showModal();
+}
+
+// 요약 표의 "열린 수 / 전체": 분자 · 빗금 · 분모를 칸으로 나눠 줄마다 빗금 위치가 맞게 한다
+function countValue(have, total) {
+  const dd = element('dd', 'my-count-row');
+  const cell = element('span', 'my-count-cell');
+  cell.setAttribute('aria-label', `${have} / ${total}`);
+  cell.append(element('span', 'is-have', String(have)), element('span', 'is-sep', '/'), element('span', 'is-total', String(total)));
+  dd.append(cell);
+  if (IS_MOCK) dd.append(mockTag());
+  return dd;
+}
+
+function renderProfilePage(data, go) {
   const box = element('div', 'my-detail');
   const stats = statsOf(data);
   const open = unlockedBy(stats);
   const progress = achievementProgress(stats);
 
-  // 위: 미리 보기 카드 + 열린 개수. 무엇을 고르든 미리 보기를 다시 그린다
+  // 위: 미리 보기 카드 + 열린 개수 + 버튼(카드 꾸미기 창 · 도전과제 화면 · 책갈피 설정 화면)
   const hero = element('section', 'my-profile-hero');
   const preview = element('div', 'my-profile-preview');
-  const paintPreview = () => {
-    const deco = decoFor(stats);
-    const parts = profileCardParts(deco);
-    const card = element('div', `my-card ${parts.classes} is-preview`);
-    card.setAttribute('role', 'img');
-    card.setAttribute('aria-label', `미리 보기: 대표 이미지 ${parts.caption}, ${nameOf(FRAMES, deco.frame)} 테두리, ${nameOf(BACKGROUNDS, deco.background)} 배경`);
-    card.append(...parts.children);
-    preview.replaceChildren(card);
-  };
+  const paintPreview = () => preview.replaceChildren(previewCard(stats, data));
   paintPreview();
   const summary = element('div', 'my-profile-summary');
-  const counts = element('dl', 'my-stats');
+  const counts = element('dl', 'my-stats my-profile-counts');
+  const sashTotal = SASH_STYLES.length + Object.values(SASH_COLORS).reduce((sum, list) => sum + list.length, 0) + SASH_ICONS.length;
   [
-    ['대표 이미지', `${PORTRAIT_POOL.filter((src) => open.kinds.has(kindOfPortrait(src))).length} / ${PORTRAIT_POOL.length}`],
-    ['카드 테두리', `${open.frames.size} / ${FRAMES.length}`],
-    ['카드 배경', `${open.backgrounds.size} / ${BACKGROUNDS.length}`],
-    ['도전과제', `${progress.filter((item) => item.cleared).length} / ${progress.length}`],
-  ].forEach(([label, value]) => {
+    ['대표 이미지', PORTRAIT_POOL.filter((src) => open.kinds.has(kindOfPortrait(src))).length, PORTRAIT_POOL.length],
+    ['카드 테두리', open.frames.size, FRAMES.length],
+    ['카드 배경', open.backgrounds.size, BACKGROUNDS.length],
+    ['카드 책갈피', open.sashStyles.size + open.sashColors.size + open.sashIcons.size, sashTotal],
+    ['도전과제', progress.filter((item) => item.cleared).length, progress.length],
+  ].forEach(([label, have, total]) => {
     const item = element('div', 'my-stat');
-    const dd = element('dd', '', value);
-    if (IS_MOCK) dd.append(mockTag());
-    item.append(element('dt', '', label), dd);
+    item.append(element('dt', '', label), countValue(have, total));
     counts.append(item);
   });
-  const jump = button('도전과제 보기', () => box.querySelector('#my-achievements')?.scrollIntoView({ block: 'start' }), 'secondary-button');
-  summary.append(element('p', 'my-hint', '도전과제를 깨면 대표 이미지 · 테두리 · 배경이 열려요. 고른 것은 이 브라우저에 저장돼요.'), counts, jump);
+  const actions = element('div', 'my-profile-actions');
+  const decorate = button('카드 꾸미기', () => openDecoDialog({ open, stats, data, onPick: paintPreview, opener: decorate }), 'primary-button');
+  actions.append(decorate, button('도전과제 보기', () => go('achievements'), 'secondary-button'), button('책갈피 설정', () => go('bookmark'), 'secondary-button'));
+  summary.append(element('p', 'my-hint', '도전과제를 깨면 대표 이미지 · 테두리 · 배경 · 카드 책갈피가 열려요. 고른 것은 이 브라우저에 저장돼요.'), counts, actions);
   hero.append(preview, summary);
 
-  const shown = decoFor(stats);
-  box.append(
-    hero,
-    portraitPicker(open, shown.portrait, paintPreview),
-    swatchPicker('frame', open, shown.frame, paintPreview),
-    swatchPicker('background', open, shown.background, paintPreview),
-    renderBookmarkPicker(() => {
-      // 기본 대표 이미지는 책갈피 캐릭터를 따라가므로 "기본" 칸 그림도 바꾼다
-      const base = box.querySelector('.my-deco-default img');
-      if (base) base.src = defaultPortrait().src;
-      paintPreview();
-    }),
-    achievementList(progress, stats.mocked),
-  );
+  box.append(hero, portraitPicker(open, decoFor(stats).portrait, paintPreview));
+  return box;
+}
+
+// 도전과제 화면(FE-68): 진행도 · 보상 목록
+function renderAchievementsPage(data) {
+  const box = element('div', 'my-detail');
+  const stats = statsOf(data);
+  box.append(element('p', 'my-hint', '도전과제를 깨면 프로필카드의 대표 이미지 · 카드 꾸미기가 열려요.'), achievementList(achievementProgress(stats), stats.mocked));
+  return box;
+}
+
+// 책갈피 설정 예시: 판결 체험 파일철처럼 색인 탭 사이에 고른 얼굴 · 리본 색의 책갈피가 끼워진 모습(펼쳐 본 장 = 2번 탭 뒤)
+const EXAMPLE_TABS = ['사건 요약', '참고 정보', '판단 요소', '최종 판결'];
+function bookmarkExample() {
+  const figure = element('figure', 'my-bm-example');
+  const art = element('div', 'my-bm-art');
+  art.setAttribute('role', 'img');
+  art.setAttribute('aria-label', `예시: 판결 체험 서류철의 색인 탭 2번과 3번 사이에 ${nameOf(BOOKMARK_COLORS, getBookmarkColor())} 리본 책갈피가 끼워진 모습`);
+  const tabs = element('div', 'my-bm-tabs');
+  EXAMPLE_TABS.forEach((label, index) => {
+    const tab = element('span', `my-bm-tab${index === 1 ? ' is-current' : ''}`);
+    tab.append(element('b', '', String(index + 1)), element('span', '', label));
+    tabs.append(tab);
+    if (index === 1) {
+      const ribbon = element('span', `my-bm-ribbon bookmark-color-${getBookmarkColor()}`);
+      ribbon.append(picture(selectedBookmarkFace(), ''));
+      tabs.append(ribbon);
+    }
+  });
+  const folder = element('div', 'my-bm-folder');
+  const sheet = element('div', 'my-bm-sheet');
+  sheet.append(element('span', 'my-bm-line'), element('span', 'my-bm-line'), element('span', 'my-bm-line is-short'));
+  folder.append(sheet);
+  art.append(tabs, folder);
+  figure.append(art, element('figcaption', 'my-hint', '판결 체험에서 펼쳐 본 장의 색인 탭 뒤에 이 책갈피가 끼워져요.'));
+  return figure;
+}
+
+// 리본 색 고르기(처음부터 다 열려 있음)
+function bookmarkColorPicker(onPick) {
+  const field = element('fieldset', 'my-deco');
+  field.append(element('legend', '', '리본 색'));
+  const row = element('div', 'my-deco-swatches');
+  const current = getBookmarkColor();
+  BOOKMARK_COLORS.forEach(({ id, name }) => {
+    const sample = element('span', 'my-bm-swatch-box'); // 리본은 clip-path라 고른 표시(테두리선)를 감싼 상자에 그린다
+    sample.append(element('span', `my-bm-swatch bookmark-color-${id}`));
+    row.append(decoOption({
+      group: 'bookmark-color', value: id, checked: id === current, locked: false, name,
+      onChange: () => { setBookmarkColor(id); onPick(); },
+    }, sample, element('span', 'my-deco-name', name)));
+  });
+  field.append(row);
+  return field;
+}
+
+// 책갈피 설정 화면(FE-68): 예시 · 리본 색 · 얼굴. 고를 때마다 예시를 다시 그린다
+function renderBookmarkPage() {
+  const box = element('div', 'my-detail');
+  const slot = element('div', 'my-bm-slot');
+  const paint = () => slot.replaceChildren(bookmarkExample());
+  paint();
+  box.append(slot, bookmarkColorPicker(paint), renderBookmarkPicker(paint));
   return box;
 }
 
@@ -629,13 +856,16 @@ function renderView(view, data, navigate, go, api) {
   const head = element('div', 'my-view-head');
   const back = element('button', 'my-back');
   back.type = 'button';
-  back.append(backArrow(), '마이페이지');
-  back.addEventListener('click', () => go(null));
+  const parent = PARENTS[view] ?? null;
+  back.append(backArrow(), parent ? VIEWS[parent] : '마이페이지');
+  back.addEventListener('click', () => go(parent));
   const title = element('h1', '', VIEWS[view]);
   title.tabIndex = -1;
   head.append(back, title);
   const body = {
-    profile: () => renderProfilePage(data),
+    profile: () => renderProfilePage(data, go),
+    achievements: () => renderAchievementsPage(data),
+    bookmark: () => renderBookmarkPage(),
     type: () => renderTypePage(data, navigate),
     collection: () => renderCollection(data.experiences),
     cases: () => renderCases(data.experiences ?? [], navigate, api),

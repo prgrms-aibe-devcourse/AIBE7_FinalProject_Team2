@@ -1,6 +1,7 @@
 // 책갈피 캐릭터 (FE-44). 마이페이지 "만난 모습" 위쪽에서 내로 · 남불 중 하나를 고르고, 마이페이지 프로필 · 판결 체험의 진행 책갈피(FE-48)가 그 얼굴을 쓴다.
 // FE-67: 얼굴 아이콘 중에서 골라 책갈피로 쓴다. 새로 생성한 얼굴(characters/icon/generated)과 장면 컷에서 잘라 만든 얼굴(icon/cropped) 각 12장이 있고,
 // 캐릭터 · 표정 · 종류를 따로 저장한다(표정 기본 happy, 종류 기본 generated).
+// FE-68: 리본 색도 고른다(판결 체험 파일철의 색인 탭 사이에 끼운 리본). 처음 색은 지금까지와 같은 브론즈.
 // 서버 저장은 없다(BE-83에서 수집 상태와 함께 검토). 이 브라우저에만 두고, 저장소를 못 쓰면 기본값(내로)으로 본다.
 const STORAGE_KEY = 'nlnb-bookmark-character';
 const FACE_KEY = 'nlnb-bookmark-face';
@@ -8,6 +9,8 @@ const STYLE_KEY = 'nlnb-bookmark-face-style';
 const DEFAULT = 'naero';
 const DEFAULT_FACE = 'happy';
 const DEFAULT_STYLE = 'generated';
+const COLOR_KEY = 'nlnb-bookmark-color';
+const DEFAULT_COLOR = 'bronze';
 // localStorage 속성 접근 자체가 예외를 던지는 환경(저장소 차단)이 있어, 기본 인수에서도 터지지 않게 한 곳에서 감싼다
 const localStore = () => {
   try { return globalThis.localStorage; } catch { return undefined; }
@@ -24,6 +27,15 @@ export const FACE_NAMES = { cheer: '응원', happy: '기쁨', neutral: '보통',
 
 export const BOOKMARK_STYLES = ['generated', 'cropped'];
 export const STYLE_NAMES = { generated: '생성한 얼굴', cropped: '잘라 만든 얼굴' };
+
+// 리본 색. 칠은 style.css의 .bookmark-color-{id}(--bookmark-color)가 정해 판결 화면 · 마이페이지가 함께 쓴다
+export const BOOKMARK_COLORS = [
+  { id: 'bronze', name: '브론즈' },
+  { id: 'wine', name: '와인' },
+  { id: 'navy', name: '네이비' },
+  { id: 'green', name: '법정 초록' },
+  { id: 'gold', name: '금사' },
+];
 
 export const bookmarkFace = (who, face = DEFAULT_FACE, style = DEFAULT_STYLE) => (BOOKMARK_LAWS.includes(who)
   ? `/images/characters/icon/cropped/${who}_icon.webp`
@@ -79,3 +91,21 @@ export function setBookmarkFace(who, face, style = DEFAULT_STYLE, storage = loca
 
 // 지금 책갈피로 쓰는 얼굴 그림 경로
 export const selectedBookmarkFace = (storage = localStore()) => bookmarkFace(getBookmarkCharacter(storage), getBookmarkFaceName(storage), getBookmarkStyle(storage));
+
+export function getBookmarkColor(storage = localStore()) {
+  try {
+    const saved = storage?.getItem(COLOR_KEY);
+    return BOOKMARK_COLORS.some(({ id }) => id === saved) ? saved : DEFAULT_COLOR;
+  } catch {
+    return DEFAULT_COLOR;
+  }
+}
+
+export function setBookmarkColor(color, storage = localStore()) {
+  if (!BOOKMARK_COLORS.some(({ id }) => id === color)) return;
+  try {
+    storage?.setItem(COLOR_KEY, color);
+  } catch {
+    // 저장소를 못 쓰면 이번 화면에서만 바뀐다
+  }
+}
