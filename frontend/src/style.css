@@ -308,7 +308,7 @@ html { scroll-padding-top: calc(var(--site-header-h, 64px) + 8px); }
 .site-header .logo-button { border: 0; background: transparent; padding: 6px 0; font-family: var(--font-heading); font-size: 22px; font-weight: 900; letter-spacing: -.04em; color: var(--color-banner-text); }
 .site-header .logo-button .law { display: inline; color: var(--color-range-fill); }
 .nav-button { border: 0; background: transparent; padding: 10px 12px; min-height: 44px; color: var(--color-banner-muted); font-size: var(--text-small); white-space: nowrap; }
-@media (hover: hover) and (pointer: fine) { .nav-button:hover { color: var(--color-banner-text); text-decoration: underline; text-underline-offset: 4px; } }
+@media (hover: hover) and (pointer: fine) { .nav-button:hover { color: var(--color-banner-text); } }
 /* 로그인(FE-50): 메뉴 맨 오른쪽, 얇은 테두리로 계정 동작임을 구분한다. 테두리는 글자색을 따라가 네이비 · 흰 헤더 모두에 맞는다 */
 .site-header .login-button { flex: none; margin-left: 4px; padding: 6px 14px; min-height: 36px; border: 1px solid color-mix(in srgb, currentColor 45%, transparent); border-radius: 6px; }
 .site-header .login-button[aria-current="page"] { box-shadow: none; } /* 테두리 버튼이라 밑줄 대신 테두리로 충분하다 */
