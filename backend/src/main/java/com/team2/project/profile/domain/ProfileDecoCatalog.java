@@ -75,7 +75,7 @@ public final class ProfileDecoCatalog {
 
 	/**
 	 * 대표 이미지 경로의 종류(폴더): "/images/characters/scene/a.webp" → "characters/scene" (프론트 kindOfPortrait와 같은 규칙).
-	 * 형식 검사(PortraitPath.isValid)를 통과한 경로에만 쓴다
+	 * 형식 검사(ProfileDecoValidator의 PORTRAIT 정규식)를 통과한 경로에만 쓴다
 	 */
 	public static String kindOf(String portrait) {
 		return portrait.substring("/images/".length(), portrait.lastIndexOf('/'));
