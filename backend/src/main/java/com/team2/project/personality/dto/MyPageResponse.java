@@ -4,6 +4,11 @@ import com.team2.project.experience.domain.Experience;
 import com.team2.project.experience.domain.ExperienceStatus;
 import com.team2.project.legalcase.domain.CrimeType;
 import com.team2.project.legalcase.domain.ValueAxis;
+import com.team2.project.profile.domain.AchievementProgress;
+import com.team2.project.profile.domain.ProfileDecoValues;
+import com.team2.project.profile.domain.Rewards;
+import com.team2.project.profile.service.ProfileDecoService;
+import com.team2.project.profile.service.ProfileDecoService.ProfileDecoView;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
@@ -18,12 +23,17 @@ public record MyPageResponse(
 	JudgmentPersonality judgmentPersonality,
 	List<HistoryItem> history,
 	List<ExperienceItem> experiences,
-	Profile profile) {
+	Profile profile,
+	ProfileDecoValues profileDeco,		// 꾸미기 저장값(없으면 기본값). 잠긴 값이어도 그대로 (BE-96)
+	List<AchievementProgress> achievements,	// 도전과제 진행도 · 상태 · 보상 (서버 표가 원본, BE-96)
+	Rewards unlocked) {				// 지금 열린 것: 처음부터 열린 것 + 달성한 도전과제의 보상 (BE-96)
 
 	private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
 	public static MyPageResponse empty() {
-		return new MyPageResponse(null, null, List.of(), List.of(), Profile.EMPTY);
+		ProfileDecoView deco = ProfileDecoService.emptyView();
+		return new MyPageResponse(null, null, List.of(), List.of(), Profile.EMPTY, deco.profileDeco(), deco.achievements(),
+			deco.unlocked());
 	}
 
 	/** 프로필 수치. attendanceDays: 누적 출석 일수(BE-97, 기록이 없으면 0) */

@@ -35,6 +35,7 @@
 | v1.28 | 2026-10-20 | `admin_account.password_hash` 설명 — 관리자 OAuth(BE-40) 제외 반영. NULL 허용 제약(V12)은 그대로 둔다 |
 | v1.29 | 2026-10-21 | 화면 ID를 6막 체계로 갱신(FE-58, BE-82 매핑: 옛 S-06 ~ S-09 → S-05 ~ S-08). 없앤 정리 화면은 "옛 S-05"로 표기. 작성 이력의 ID는 옛 뜻 그대로 |
 | v1.30 | 2026-10-21 | 출석 기록 테이블 추가 (**확장 단계**, BE-97 · V22) — `attendance` 신설(익명 사용자 × 출석 날짜, 기본 키 두 칼럼, 하루 한 줄). 9장 추가 |
+| v1.31 | 2026-10-21 | 프로필 꾸미기 테이블 추가 (**확장 단계**, BE-96 · V23) — `profile_deco` 신설(익명 사용자당 한 줄, 꾸미기 12칸 · `updated_at`). 도전과제 진행도는 저장하지 않고 계산한다. 10장 추가 |
 
 ---
 
@@ -874,3 +875,28 @@ erDiagram
 - **누적 출석 일수** = 그 익명 사용자의 줄 수. 날짜를 남겨 두어 연속 출석은 나중에 계산만 더하면 된다.
 - **로그인 이관**: 행을 옮기지 않는다. 회원에 연결된 익명 ID들(`anonymous_user.member_id`)의 `attended_on`을 중복 없이 센다.
 - 하루 시작 시각을 바꾸면 이미 저장된 날짜는 그대로이고, 그 뒤 기록부터 새 기준이 적용된다.
+
+## 10. (확장 단계) 프로필 꾸미기 테이블 (v1.31, BE-96)
+
+> **V23 마이그레이션.** 마이페이지 꾸미기(FE-68)를 서버에 저장한다. 저장은 API 명세 P-7 `PUT /profile-deco`, 조회는 P-5. 결정 기록 [`BE-96.md`](decisions/BE-96.md)
+
+```mermaid
+erDiagram
+    anonymous_user ||--o| profile_deco : "꾸미기"
+```
+
+| 컬럼 | 타입 | NOT NULL | 설명 |
+| --- | --- | --- | --- |
+| anonymous_user_id | uuid PK FK | ✓ | `anonymous_user.id`. 사용자당 한 줄 |
+| portrait | varchar(200) | ✓ | 대표 이미지 경로(`/images/…/이름.webp`, 형식은 서버가 검사) |
+| frame · background | varchar(30) | ✓ | 카드 테두리 · 배경 |
+| sash_style | varchar(30) | ✓ | 카드 책갈피 모양(`none` · `short` · `long`) |
+| sash_color_short · sash_color_long | varchar(30) | ✓ | 모양별 색(모양을 바꿔도 각자 기억한다) |
+| sash_icon_left · sash_icon_right | varchar(30) | ✓ | 짧은 책갈피 좌우 아이콘 |
+| bookmark_character · bookmark_face · bookmark_face_style · bookmark_color | varchar(30) | ✓ | 책갈피 캐릭터 · 얼굴 표정 · 얼굴 종류 · 리본 색(잠금 없음) |
+| updated_at | timestamptz | ✓ | 마지막 저장 시각(기본값 `now()`). 로그인 이관 때 가장 최근 꾸미기를 고르는 기준 |
+
+- **값 목록 · 잠금은 서버 코드(`ProfileDecoCatalog`)가 검사한다.** 도전과제 · 보상 표가 아직 임시안이라 CHECK 제약을 두지 않는다(표가 바뀔 때마다 마이그레이션이 필요해지지 않게).
+- **도전과제 진행도는 저장하지 않는다.** 완료한 사건 수(`experience`) · 성향 테스트 여부(`personality_result`) · 출석 일수(`attendance`, 9장)로 그때그때 계산한다. 모은 일러스트 수는 BE-83 전까지 계산하지 않는다.
+- 저장 기록이 없으면 서버가 기본값을 내려 준다(행을 미리 만들지 않는다).
+- **로그인 이관**: 행을 옮기지 않는다. 회원에 연결된 익명 ID들(`anonymous_user.member_id`) 중 `updated_at`이 가장 최근인 꾸미기를 쓴다.

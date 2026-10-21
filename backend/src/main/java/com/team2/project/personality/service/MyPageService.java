@@ -17,6 +17,8 @@ import com.team2.project.personality.dto.PersonalityTypeResponse;
 import com.team2.project.personality.repository.ExperiencePersonalityRepository;
 import com.team2.project.personality.repository.PersonalityResultRepository;
 import com.team2.project.personality.repository.PersonalityTypeRepository;
+import com.team2.project.profile.service.ProfileDecoService;
+import com.team2.project.profile.service.ProfileDecoService.ProfileDecoView;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -38,6 +40,7 @@ public class MyPageService {
 	private final ExperiencePersonalityRepository contributionRepository;
 	private final ExperienceRepository experienceRepository;
 	private final AttendanceService attendanceService;
+	private final ProfileDecoService profileDecoService;
 
 	@Transactional(readOnly = true)
 	public MyPageResponse get(Optional<UUID> anonymousId) {
@@ -65,7 +68,8 @@ public class MyPageService {
 
 		List<ExperienceItem> experiences = experienceRepository.findLatestPerCase(userId).stream()
 			.map(ExperienceItem::from).toList();
+		ProfileDecoView deco = profileDecoService.view(userId);
 		return new MyPageResponse(personality, judgment, history, experiences,
-			new Profile(attendanceService.countDays(userId)));
+			new Profile(attendanceService.countDays(userId)), deco.profileDeco(), deco.achievements(), deco.unlocked());
 	}
 }
