@@ -6,6 +6,7 @@
 import { scrollArea } from './scrollArea.js';
 import { sheetCamera } from './sheetCamera.js';
 import { reducedMotion } from '../utils/motion.js';
+import { commonPhotoAt, useCommonPhotoOnError } from '../utils/newspaper.js';
 
 // 화면에 보이는 막(FE-48, 6막): 대본 · 코드의 막 번호(1 ~ 8)는 그대로 두고 보이는 묶음만 바꾼다.
 // 대본 1 · 2막 = 1막 첫인상, 4막(판결 전 정리)은 3막 파일철 "사건 요약" 장으로 옮겨 칩이 없다. 주소 · 막 번호 정리는 BE-82
@@ -140,11 +141,13 @@ function element(tag, className, text) {
   if (text !== undefined) node.textContent = text;
   return node;
 }
-function picture(src, className, alt = '') {
+// commonSeed를 주면(사건 사진) 불러오지 못할 때 공용 컷으로 바꾸고, 안 주면(아이콘 · 캐릭터) 그냥 뺀다
+function picture(src, className, alt = '', commonSeed, role) {
   const image = element('img', className);
+  if (commonSeed === undefined) image.addEventListener('error', () => image.remove(), { once: true });
+  else useCommonPhotoOnError(image, commonSeed, role);
   image.src = src;
   image.alt = alt;
-  image.addEventListener('error', () => image.remove(), { once: true });
   return image;
 }
 
@@ -166,7 +169,7 @@ function caseSheet(paper) {
   head.append(element('h2', 'sheet-headline', paper.headline), element('p', 'sheet-deck', paper.deck));
   const figure = element('figure', 'sheet-figure sheet-story');
   figure.dataset.focus = 'photo';
-  figure.append(picture(paper.photo, 'sheet-case-photo'), element('figcaption', '', paper.caption));
+  figure.append(picture(paper.photo, 'sheet-case-photo', '', 0), element('figcaption', '', paper.caption));
   const body = element('section', 'sheet-story sheet-body');
   body.dataset.focus = 'body';
   paper.article.forEach((line) => body.append(element('p', 'sheet-text', line)));
@@ -241,7 +244,10 @@ function evidenceBoard(script, at) {
   const board = element('div', 'evd');
   ['검사', '변호인'].forEach((side) => {
     const column = element('section', `evd-side ${side === '검사' ? 'p' : 'd'}`);
-    if (script.evidencePhotos?.[side]) column.append(picture(script.evidencePhotos[side], 'evd-photo'));
+    // 변호인 측 = 발단사진, 검사 측 = 결론사진(기사 지면 작은 사진과 같은 그림). 사진이 없으면 그 자리의 공용 컷
+    const role = side === '변호인' ? 'origin' : 'conclusion';
+    const seed = side === '검사' ? 1 : 2;
+    column.append(picture(script.evidencePhotos?.[side] ?? commonPhotoAt(seed, role), 'evd-photo', '', seed, role));
     column.append(element('h4', '', `${side} 측 증거`));
     const list = element('ol', 'evd-list');
     script.evidence.forEach((item, i) => {
