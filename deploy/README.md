@@ -304,7 +304,26 @@ docker compose -f docker-compose.prod.yml logs --tail 3 web
 | 전체 합계 (`oauth_all`) | 초당 10번, 순간 50번 | 시작 요청마다 백엔드가 Redis에 state를 5분 보관한다. IP를 여러 개 써서 IP별 제한을 나눠 피해도, 대기 중 state가 많아야 약 3,000개(약 3MB)로 묶여 Redis(200MB, `noeviction`)를 채우지 못한다 |
 | 넘으면 | `/api`와 같은 JSON 429 | `@api_rate_limited` |
 
-- 재발급 · 로그아웃(`/api/v1/auth/token/reissue` · `/api/v1/auth/logout`) 제한은 BE-63 2차에서 따로 정한다.
+- 재발급 · 로그아웃 · 관리자 로그인 제한은 아래 "토큰 재발급 · 관리자 로그인 전용 제한"(BE-63 2차).
+
+### 토큰 재발급 · 관리자 로그인 전용 제한 (BE-63 2차, WBS 7.4.6)
+
+카카오 로그인 시작과 같은 방식으로 `/api` 공통 제한에 **더해** 건다(`default.conf`의 zone, `snippets/app.conf`의 전용 location). 넘으면 같은 JSON 429(`@api_rate_limited`).
+
+| 경로 | zone | 값 | 이유 |
+| --- | --- | --- | --- |
+| `POST /api/v1/auth/token/reissue` · `POST /api/v1/auth/logout` | `auth_token_per_ip` (둘이 나눠 씀) | IP별 분당 30번, 순간 30번 | 정상 화면은 액세스 토큰 만료(15분) · 새로고침 때만 재발급하고 동시 재발급은 프론트가 하나로 묶는다. 같은 와이파이에서 여러 명이 동시에 새로고침해도 막히지 않게 카카오 시작과 같은 값 |
+| `POST /api/v1/admin/auth/login` | `admin_login_per_ip` | IP별 분당 5번, 순간 5번 | 백엔드에 로그인 실패 횟수 잠금이 없어 비밀번호 대입을 늦춘다(처음 5번 뒤 12초에 1번 ≈ 시간당 300번). 요청마다 Argon2id 검증(BE-90)이 CPU를 쓰는 것도 막는다 |
+
+- **재발급에는 전체 합계 zone을 두지 않는다.** 재발급은 기존 토큰을 지우고(`getAndDelete`) 새 토큰 하나를 쓰므로 Redis 키가 늘지 않고, 쿠키가 없거나 모르는 토큰은 401로 끝나 아무것도 쓰지 않는다(`RefreshTokenStore`). 카카오 시작(요청마다 state를 새로 씀)과 다르다.
+- **재발급 429는 로그아웃이 아니다.** 프론트(`api/client.js`)는 재발급이 401일 때만 로그인 표시를 지운다. 리프레시 토큰은 그대로라 다음 요청 때 다시 재발급된다.
+- 관리자 CSRF 토큰 조회 · 내 정보 · 로그아웃(`/api/v1/admin/auth/csrf` · `me` · `logout`)은 전용 제한 없이 `/api` 공통 제한만 받는다.
+- `Retry-After`는 공통 응답이라 `1`로 고정이다. 전용 zone에서는 실제로 풀리는 시간(관리자 로그인 12초 · 재발급 2초)보다 짧다. 프론트는 429를 자동으로 다시 보내지 않으므로 그대로 둔다.
+
+```bash
+# 전용 zone에서 막힌 기록
+docker compose -f docker-compose.prod.yml logs web 2>&1 | grep -E 'zone "(auth_token_per_ip|admin_login_per_ip|oauth_per_ip|oauth_all)"' | tail
+```
 - **`KAKAO_CLIENT_ID`는 HTTPS(BE-75) 적용 뒤에만 넣는다.** state 쿠키 · `NLNB_RT` · `NLNB_AID`가 모두 `Secure`라 http에서는 브라우저가 저장하지 않아 로그인이 끝나지 않는다(PR #229 리뷰). 넣는 즉시 카카오 로그인 경로가 켜지므로, 화면 `/auth/callback`(FE 후속)이 배포되기 전에는 로그인 후 화면이 404로 보인다.
 
 ## Redis (BE-61, docs/tech-stack.md 2장 "Redis 운영 구성")
@@ -604,5 +623,4 @@ docker stats --no-stream
 | 7.1.2 RDS 전환 · 시크릿 | `postgres` 서비스를 빼고 `DB_URL`을 RDS 주소로. 비밀값은 서버 환경변수 · 시크릿 저장소로. `backend`의 `depends_on: postgres`도 함께 뺀다. `deploy.sh`의 마이그레이션 비교는 `postgres` 서비스가 없으면 건너뛴다(RDS면 비교 방법을 다시 정한다). 자동 배포가 켜져 있으니 머지 직후 `journalctl -u lawnambul-cd`로 지켜본다 |
 | 7.4.3 JWT (C) | 토큰은 `@Qualifier(RedisConfig.TOKEN)` 템플릿(DB 1)에 TTL과 함께 저장 |
 | 백엔드 healthcheck 추가 (BE-66 이후) | Actuator(관리 포트 8081)에는 Redis 헬스체크가 자동으로 붙고, 커넥션 팩토리 두 개가 `redis` 아래 묶인다. **실측(BE-61, Boot 4.1.1)**: Redis를 끄면 `/actuator/health`는 **DOWN(503)**, `/actuator/health/liveness` · `/readiness`는 **UP**, API는 정상. liveness · readiness는 추가 설정 없이 이미 열려 있다. 그래서 컨테이너 healthcheck · 재시작 조건에는 **`/actuator/health`가 아니라 `/actuator/health/liveness`** 를 쓴다(전체 상태를 쓰면 Redis 장애 때 백엔드까지 재시작된다) |
-| 7.4.6 Rate limit 2차 (10/23) | 로그인 · 토큰 재발급 엔드포인트에 더 엄격한 zone을 `default.conf`에 추가 (1차는 위 "Rate limit") |
 | HTTPS 안정화 후 (BE-75 후속) | 갱신이 한 번 이상 정상으로 돈 뒤 `https.conf.template`에 HSTS를 짧은 `max-age`부터 추가 |

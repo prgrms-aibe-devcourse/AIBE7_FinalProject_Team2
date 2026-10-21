@@ -30,6 +30,7 @@
 | v1.23 | 2026-10-20 | 관리자 인증 — OAuth(BE-40) **제외**. 관리자 로그인은 이메일 · 비밀번호(세션)만 둔다(B 김현중 확인, WBS v1.42). 일반 사용자 로그인은 카카오(BE-62) |
 | v1.24 | 2026-10-21 | 화면 ID를 6막 체계로 갱신(FE-58, BE-82 매핑: 옛 S-06 ~ S-09 → S-05 ~ S-08). 없앤 정리 화면은 "옛 S-05"로 표기. 작성 이력의 ID는 옛 뜻 그대로 |
 | v1.25 | 2026-10-21 | 카카오 로그인 반영 (**확장 단계**, BE-62 · WBS 7.4.2) — 3장 사용자 인증에 OAuth 전용 체인(관리자 `@Order(1)` → OAuth `@Order(2)` → 사용자 `@Order(3)`), OAuth 왕복 임시 상태(Redis + state 쿠키, 세션 없음), 성공 · 실패 처리, `server.forward-headers-strategy: native` 반영 |
+| v1.26 | 2026-10-21 | BE-63 2차 반영 (**확장 단계**, WBS 7.4.6) — 3장 Rate limit 행: 토큰 재발급 · 로그아웃(IP별 분당 30 · 순간 30), 관리자 로그인(IP별 분당 5 · 순간 5) 전용 zone 추가. 카카오 로그인 시작 제한(BE-62)과 함께 "2차 예정" 문구를 확정 값으로 교체 |
 
 
 ## **1. Backend**
@@ -265,7 +266,7 @@ MVP는 회원가입 없이 핵심 체험이 끝까지 동작해야 한다. 사�
 | 프록시 헤더 (BE-62) | `server.forward-headers-strategy: native`. Nginx 뒤에서 `{baseUrl}`(카카오 Redirect URI) · Origin 검증(BE-94) · 클라이언트 IP가 원래 https · 도메인 · IP를 본다. Tomcat은 `internal-proxies`(루프백 + Docker 172.16/12)에서 온 `X-Forwarded-*`만 믿는다. Nginx(`snippets/api-proxy.conf`)는 `Proto` · `Host` · `Port`를 자기가 본 값으로 덮어쓰고 — 비워 두면 클라이언트가 보낸 `X-Forwarded-Host`가 그대로 백엔드의 Host가 된다 — `X-Forwarded-For`는 기존 값 뒤에 접속 IP를 덧붙인다(백엔드는 가장 오른쪽 신뢰 밖 IP를 씀, PR #229 리뷰). 카카오 로그인 시작 경로에는 `/api` 공통 제한에 더해 IP별 · 전체 합계 전용 제한을 둔다(콜백은 공통 제한만)(deploy/README.md "카카오 로그인 경로 전용 제한") |
 | CORS | 설정하지 않는다. 프론트와 API가 같은 출처다(운영 Nginx `/api` 프록시, 로컬 Vite 프록시, API 명세 6장 #2). 다른 출처에서 부를 일이 생기면 그때 허용 목록으로 연다 |
 | 보안 헤더 | Spring Security 기본값(`X-Content-Type-Options` · `X-Frame-Options: DENY` · `Cache-Control: no-store` 등) + 두 체인 모두 `Referrer-Policy: strict-origin-when-cross-origin`. HSTS는 HTTPS 요청에만 붙으므로 TLS를 끝내는 Nginx가 맡는다(중복 없음). CSP · HTML 응답의 Referrer-Policy도 정적 파일을 서빙하는 Nginx에서 정한다(7.1.1, D) |
-| Rate limit (BE-63, 7.4.6, D) | **1차**: 운영 Nginx가 `/api`를 IP별 평균 초당 20번 · 순간 40번으로 제한하고, 넘으면 API 명세 1-4 형식의 JSON 429(`TOO_MANY_REQUESTS`, `Retry-After: 1`)를 돌려준다. 화면 · 정적 파일은 제한하지 않는다. 백엔드에는 닿지 않으므로 백엔드 지표에는 잡히지 않는다(Nginx 로그로 확인). **2차**(7.4.2 이후): 로그인 · 토큰 재발급 엔드포인트를 더 엄격하게. IP 기준이라 Nginx가 사용자 IP를 본다는 전제가 필요하다 — 배포 서버에서 확인하고(deploy/README.md "Rate limit"), 앞에 로드 밸런서 · CDN을 두면 `real_ip` 설정을 함께 바꾼다 |
+| Rate limit (BE-63, 7.4.6, D) | **1차**: 운영 Nginx가 `/api`를 IP별 평균 초당 20번 · 순간 40번으로 제한하고, 넘으면 API 명세 1-4 형식의 JSON 429(`TOO_MANY_REQUESTS`, `Retry-After: 1`)를 돌려준다. 화면 · 정적 파일은 제한하지 않는다. 백엔드에는 닿지 않으므로 백엔드 지표에는 잡히지 않는다(Nginx 로그로 확인). **2차**(v1.26): `/api` 공통 제한에 더해 전용 zone을 건다 — 토큰 재발급 · 로그아웃 IP별 분당 30번 · 순간 30번(`auth_token_per_ip`), 관리자 로그인 IP별 분당 5번 · 순간 5번(`admin_login_per_ip`, 백엔드에 실패 횟수 잠금이 없어 비밀번호 대입을 늦춘다), 카카오 로그인 시작 IP별 + 전체 합계(BE-62). IP 기준이라 Nginx가 사용자 IP를 본다는 전제가 필요하다 — 배포 서버에서 확인하고(deploy/README.md "Rate limit"), 앞에 로드 밸런서 · CDN을 두면 `real_ip` 설정을 함께 바꾼다 |
 
 ---
 
