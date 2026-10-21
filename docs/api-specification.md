@@ -42,6 +42,7 @@
 | v0.38 | 2026-10-21 | **BE-82 화면 ID 재배치 (S-05 ~ S-09 뜻 변경)** — 6막 재구성(FE-48)에 맞춰 화면 ID를 막 순서로 다시 매김: S-05 내 판결(옛 S-06) · S-06 AI 판결(옛 S-07) · S-07 실제 판결(옛 S-08) · S-08 세 판결 비교(옛 S-09) · **S-09 리뷰 페이지(새로 추가, `COMPLETED`만)**. 정리 화면(옛 S-05 `/summary`)은 없앰. 1-6 `REVIEWED` 보낼 화면 → S-05(판결 입력), 2장 API 6 화면 S-04만, 3장 API 6 · 5장 갱신. 서버 상태 값 · API 경로 · 응답 형식 변경 없음. 이 버전 전의 이력 행은 옛 ID 그대로다(`docs/decisions/BE-82.md` 매핑 표 참고) S-09는 진입 API가 없어 예외적으로 API 3으로 `COMPLETED`를 확인(5장, PR #214 리뷰) |
 | v0.39 | 2026-10-21 | 8-3 #7 관리자 OAuth(BE-40) **제외** — 관리자 로그인은 이메일 · 비밀번호(세션, BE-39 · BE-67 · BE-68)로 유지한다(B 김현중 확인). 일반 사용자는 카카오 로그인(BE-62) |
 | v0.40 | 2026-10-21 | API 6 `summary`를 S-05 사건 요약 장에서 쓴다고 명시(FE-58). 형식 변경 없음 |
+| v0.41 | 2026-10-21 | **출석 기록 · 출석 일수 추가 (BE-97)** — P-6 `POST /attendance`(쿠키가 있을 때만 하루 한 번 기록, 항상 `204`, 익명 ID를 발급하지 않음) 신설, P-5 응답에 `profile.attendanceDays`(누적 출석 일수, 없으면 `0`) 추가. 날짜는 `Asia/Seoul` · 하루 시작 시각 설정 기준(`docs/decisions/BE-97.md`) |
 
 ---
 
@@ -1530,7 +1531,8 @@ json
 | P-2 | POST | `/personality/results` | 응답 제출 → 결과 저장 | S-15 → S-16 |
 | P-3 | GET | `/personality/results/me` | 내 현재 결과 | S-16 |
 | P-4 | GET | `/personality/types/{shareId}` | 공유용 유형 설명 (공개) | 공유 결과 |
-| P-5 | GET | `/my-page` | 마이페이지 (테스트 결과 · 판결 성향 · 체험 목록) | S-17 |
+| P-5 | GET | `/my-page` | 마이페이지 (테스트 결과 · 판결 성향 · 체험 목록 · 출석 일수) | S-17 |
+| P-6 | POST | `/attendance` | 출석 기록 (하루 한 번, v0.41) | 사이트 진입 |
 
 ---
 
@@ -1601,7 +1603,7 @@ json
 json
 
 ```json
-{  "personality": { "type": { "shareId": "Qm7xK2pa", "…": "…" }, "axisScores": { "…": "…" }, "testedAt": "2026-10-14T14:00:00+09:00" },  "judgmentPersonality": {    "axisScores": { "APOLOGY_SINCERITY": 0.75, "FAULT_STANDARD": 0.11, "PRINCIPLE_RELATION": 0.83, "ORDER_OPPORTUNITY": null },    "type": null,    "experienceCount": 3  },  "history": [    { "caseId": 1, "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건", "completedAt": "2026-10-14T15:00:00+09:00", "axisScores": { "APOLOGY_SINCERITY": 1.0, "FAULT_STANDARD": 0.0, "PRINCIPLE_RELATION": 1.0, "ORDER_OPPORTUNITY": null } }  ],  "experiences": [    { "caseId": 1, "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건", "crimeType": "MURDER", "status": "COMPLETED", "attemptNo": 1, "updatedAt": "2026-10-14T15:00:00+09:00" }  ]}
+{  "personality": { "type": { "shareId": "Qm7xK2pa", "…": "…" }, "axisScores": { "…": "…" }, "testedAt": "2026-10-14T14:00:00+09:00" },  "judgmentPersonality": {    "axisScores": { "APOLOGY_SINCERITY": 0.75, "FAULT_STANDARD": 0.11, "PRINCIPLE_RELATION": 0.83, "ORDER_OPPORTUNITY": null },    "type": null,    "experienceCount": 3  },  "history": [    { "caseId": 1, "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건", "completedAt": "2026-10-14T15:00:00+09:00", "axisScores": { "APOLOGY_SINCERITY": 1.0, "FAULT_STANDARD": 0.0, "PRINCIPLE_RELATION": 1.0, "ORDER_OPPORTUNITY": null } }  ],  "experiences": [    { "caseId": 1, "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건", "crimeType": "MURDER", "status": "COMPLETED", "attemptNo": 1, "updatedAt": "2026-10-14T15:00:00+09:00" }  ],  "profile": { "attendanceDays": 3 }}
 ```
 
 | 필드 | 설명 |
@@ -1610,10 +1612,26 @@ json
 | `judgmentPersonality` | 종합 판결 성향(성향 산식 4장). 각 사건의 **첫 회차**만, 축마다 체험별 축 점수 평균. 값이 없는 축은 `null`("체험 자료 없음"). `type`은 **네 축 모두 값이 있을 때만** 있고 아니면 `null`. 값이 있으면 **유형 공통 형식(9-1) 그대로**다(`shareId`로 그 유형의 공유 링크로 이어 갈 수 있다). 화면은 "판결에서는 ○○○○"처럼 테스트 유형과 나란히 보여 준다. 완료한 체험이 없거나 네 축 모두 `null`이면 `judgmentPersonality` 자체가 `null`("종합 없음"). `experienceCount`는 **성향 기여(`experience_personality`)가 저장된 첫 회차 체험 수**다. 종합 점수를 낸 체험과 같은 집합이고, 축 자료가 모두 비어 있는 체험도 센다. 7.6.7(체험 완료 시 성향 저장) 전에 완료해 기여가 없는 체험은 세지 않는다 |
 | `history` | 성향 변화 흐름. 각 사건의 첫 회차 체험별 축 점수(값이 없는 축은 `null`), 완료 순 |
 | `experiences` | 체험한 사건. 사건마다 최근 회차 하나, 최근 순. `status`로 결과 다시 보기(`COMPLETED`) · 이어 하기를 나눈다(1-6) |
+| `profile.attendanceDays` | 누적 출석 일수(P-6, v0.41). 기록이 없거나 빈 마이페이지면 `0`. 로그인 전에는 기기(익명 ID)마다 따로 센다 |
 
 - 쿠키가 없거나 기록이 없으면 `404`가 아니라 **빈 마이페이지**(`personality`·`judgmentPersonality` `null`, 목록 빈 배열)를 `200`으로 준다. 마이페이지는 "아직 없음"을 안내하는 화면이기 때문이다.
 - `judgmentPersonality` · `history`는 체험 성향 저장(7.6.7, BE-64)이 붙은 뒤부터 채워진다. 그 전에는 각각 `null` · 빈 배열이다.
 - 판결 체험 중(S-03 ~ S-07)에 성향을 보여 주지 않는 규칙(FR-8-5)은 화면이 지킨다. 이 API는 마이페이지에서만 부른다.
+
+---
+
+### P-6. 출석 기록 — `POST /attendance`
+
+> 확장 단계(BE-97, v0.41). 마이페이지 출석 일수 · 출석 도전과제(FE-68, BE-96)에 쓴다. 결정 기록 [`BE-97.md`](decisions/BE-97.md)
+
+**요청**: 본문 없음. 익명 ID 쿠키(1-2)를 읽는다. 프론트가 사이트에 들어올 때 한 번 부른다.
+
+**응답 204** (본문 없음)
+
+- 쿠키의 익명 ID가 DB에 있으면 **오늘 날짜로 한 줄** 남긴다. 같은 날 다시 불러도 결과가 같다(하루 한 번만 센다).
+- 쿠키가 없거나 DB에 없는 값이면 **아무것도 하지 않고** `204`. 익명 ID를 새로 발급하지 않는다(발급은 API 2 · P-2만).
+- "오늘"은 `Asia/Seoul` 기준이며, 하루 시작 시각은 설정값이다(`attendance.day-start-hour`, 기본 0시). 예: 4시로 두면 03:59 접속은 전날 출석이다.
+- 거절 응답은 없다(공통 Rate limit 429는 그대로).
 
 ---
 

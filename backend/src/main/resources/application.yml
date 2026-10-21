@@ -142,6 +142,11 @@ jwt:
   access-token-ttl: ${JWT_ACCESS_TOKEN_TTL:15m}
   refresh-token-ttl: ${JWT_REFRESH_TOKEN_TTL:14d}
 
+# 출석 날짜 기준 (BE-97). 하루 시작 시각을 바꾸면 그 뒤 기록부터 적용된다(docs/decisions/BE-97.md)
+attendance:
+  zone: ${ATTENDANCE_ZONE:Asia/Seoul}
+  day-start-hour: ${ATTENDANCE_DAY_START_HOUR:0}
+
 # 관리자 세션 쿠키 (확장 단계, BE-39). 사용자 API는 세션을 쓰지 않는다(익명 ID 쿠키).
 server:
   servlet:

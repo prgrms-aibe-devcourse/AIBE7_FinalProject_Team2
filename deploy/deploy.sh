@@ -65,7 +65,8 @@ cleanup_old_images() {
   local keep_a="$1" keep_b="$2" prefix ref
   prefix="$(env_value IMAGE_PREFIX)"
   [[ -n "$prefix" ]] || return 0
-  for name in web backend; do
+  # pipeline은 오버레이를 켠 서버에만 있다. 없으면 docker images가 아무것도 내지 않아 그냥 넘어간다 (COMMON-50)
+  for name in web backend pipeline; do
     docker images --format '{{.Repository}}:{{.Tag}}' "$prefix-$name" 2>/dev/null | while read -r ref; do
       [[ "$ref" =~ :sha-[0-9a-f]{7}$ ]] || continue
       [[ "$ref" == *":$keep_a" || "$ref" == *":$keep_b" ]] && continue
@@ -99,6 +100,37 @@ case "$MONITORING_AGENT_VALUE" in
     ;;
   ""|0) ;;
   *) log "❌ MONITORING_AGENT는 1 또는 빈 값이어야 한다: $MONITORING_AGENT_VALUE"; exit 4 ;;
+esac
+# AI 판결 파이프라인 서비스를 올린 서버면 그 오버레이도 함께 쓴다 (COMMON-50).
+# 빼먹으면 backend를 다시 만들 때 PIPELINE_SERVICE_URL이 사라져 사건 등록(A-14)만 조용히 안 되므로
+# 모니터링 오버레이와 같은 방식으로 .env 플래그를 본다. 켜기 전 메모리 확인은
+# deploy/docker-compose.pipeline.yml 머리말 참고 (t3.small 여유가 적다)
+PIPELINE_SERVICE_VALUE="$(env_value PIPELINE_SERVICE | tr -d "\"' \r")"
+PIPELINE_ENABLED=0
+case "$PIPELINE_SERVICE_VALUE" in
+  1)
+    # 키가 하나도 없으면 모든 단계가 실패한다. 판결문 원문을 보내는 extract · court가 쓰는 키를 먼저 본다
+    [[ -n "$(env_value ANTHROPIC_API_KEY)" || -n "$(env_value GEMINI_API_KEY)" || -n "$(env_value OPENAI_API_KEY)" ]] || {
+      log "❌ PIPELINE_SERVICE=1인데 .env에 LLM 키가 하나도 없다 (ANTHROPIC_API_KEY · GEMINI_API_KEY · OPENAI_API_KEY 중 하나)"
+      exit 4
+    }
+    # 메모리 가드 (PR #219 리뷰 반영). postgres 컨테이너가 아직 있는 서버 = 7.1.2 RDS 전환 전이고,
+    # 그때 base 구성이 이미 1.75GB를 잡아 실측 여유가 약 250MB뿐이다. 여기에 이 컨테이너가 붙으면
+    # 커널 OOM이 **가장 큰 프로세스(backend)를 먼저 죽일 수 있다.** 문서 경고만으로는 실수를 막지 못하므로
+    # 사람이 docker stats로 확인하고 PIPELINE_MEMORY_CHECKED=1을 넣었을 때만 켠다
+    # (RDS 전환 뒤에는 postgres 서비스가 없어져 이 분기를 타지 않는다)
+    if grep -qE '^[[:space:]]+postgres:[[:space:]]*$' "$DEPLOY_DIR/docker-compose.prod.yml" \
+       && [[ "$(env_value PIPELINE_MEMORY_CHECKED | tr -d "\"' \r")" != "1" ]]; then
+      log "❌ postgres 컨테이너가 있는 서버(RDS 전환 전)에서 파이프라인을 켜려 한다. 메모리 여유가 약 250MB뿐이라"
+      log "   backend가 OOM으로 죽을 수 있다. docker stats로 확인한 뒤 .env에 PIPELINE_MEMORY_CHECKED=1을 넣는다"
+      log "   (deploy/README.md \"AI 판결 파이프라인 서비스\" 참고)"
+      exit 4
+    fi
+    COMPOSE+=(-f "$DEPLOY_DIR/docker-compose.pipeline.yml")
+    PIPELINE_ENABLED=1
+    ;;
+  ""|0) ;;
+  *) log "❌ PIPELINE_SERVICE는 1 또는 빈 값이어야 한다: $PIPELINE_SERVICE_VALUE"; exit 4 ;;
 esac
 WEB_PORT="$(env_value WEB_PORT)"; WEB_PORT="${WEB_PORT:-80}"
 BASE_URL="http://localhost:$WEB_PORT"
@@ -149,6 +181,19 @@ wait_backend_healthy() {
   return 1
 }
 
+# 파이프라인 서비스를 지금 태그로 바꿔 띄운다 (COMMON-50, PIPELINE_SERVICE=1인 서버만).
+# **실패해도 배포를 되돌리지 않고 경고만 남긴다.** 이 컨테이너는 관리자 전용 사건 등록(A-14)에만 쓰여서
+# 사용자 화면 · API와 무관하다. 정상인 web · backend 배포를 이것 때문에 되돌리면 손해가 더 크다.
+# 대신 조용히 넘어가지는 않는다 — 안 떴으면 로그에 남겨 사람이 보게 한다
+start_pipeline() {
+  (( PIPELINE_ENABLED )) || return 0
+  if ! "${COMPOSE[@]}" up -d --no-build pipeline; then
+    log "⚠ 파이프라인 서비스를 띄우지 못했다. 사건 등록(A-14)만 안 되고 나머지는 정상 — 사람이 확인"
+    return 0
+  fi
+  log "파이프라인 서비스 반영됨"
+}
+
 # 지정한 태그로 띄우고 확인한다. 성공 0 · 실패 1
 # 순서가 중요하다: 백엔드를 먼저 바꾸고, 준비된 뒤에 웹을 바꾼다.
 #   한 번에 up 하면 Compose가 웹을 먼저 내려 두고 새 백엔드를 기다려서(depends_on: service_healthy), 배포 중에는 화면까지 안 열린다.
@@ -172,6 +217,8 @@ start_and_check() {
     log "❌ 스모크 테스트 실패 ($tag)"
     return 1
   fi
+  # 사용자 경로(web · backend)가 확인된 뒤에 올린다. 되돌림 때도 같은 함수를 타므로 파이프라인도 함께 직전 태그로 돌아간다
+  start_pipeline
   return 0
 }
 
@@ -209,6 +256,11 @@ if [[ "${DEPLOY_SKIP_PULL:-}" != "1" ]]; then
   if ! IMAGE_TAG="$TARGET" "${COMPOSE[@]}" pull --quiet web backend; then
     log "❌ 이미지를 받지 못했다 ($TARGET). GHCR 로그인 토큰 만료(11/14경)인지 확인: docker login ghcr.io"
     exit 2
+  fi
+  # 파이프라인 이미지는 따로, 실패를 허용하고 받는다 (COMMON-50). 아직 올라오지 않은 태그라도
+  # web · backend 배포까지 막지는 않는다 — 못 받으면 파이프라인만 이전 이미지로 계속 돈다
+  if (( PIPELINE_ENABLED )) && ! IMAGE_TAG="$TARGET" "${COMPOSE[@]}" pull --quiet pipeline; then
+    log "⚠ 파이프라인 이미지를 받지 못했다 ($TARGET). 이전 이미지로 계속 돈다 — 사람이 확인"
   fi
 fi
 

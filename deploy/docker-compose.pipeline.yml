@@ -1,0 +1,71 @@
+# AI 판결 파이프라인 서비스 (COMMON-50, WBS COMMON-41). docker-compose.prod.yml 위에 겹쳐 쓴다 —
+# docker-compose.real-seed.yml · docker-compose.monitoring-agent.yml과 같은 방식이다.
+#
+#   docker compose -f docker-compose.prod.yml -f docker-compose.pipeline.yml up -d
+#
+# `deploy.sh`가 `.env`의 PIPELINE_SERVICE=1을 보고 이 파일을 포함한다. 값을 넣지 않은 서버에서는 분기 자체를
+# 타지 않으므로 기존 배포 동작은 그대로다.
+#
+# ⚠️ 메모리 — 이 오버레이를 켜기 전에 꼭 확인한다.
+#   t3.small은 2GB인데 지금 base 구성이 이미 1.75GB를 할당한다(backend 1g · postgres 512m · redis 256m).
+#   실측 여유는 약 250MB이고, 모니터링 에이전트(COMMON-43)를 켠 서버는 그중 100MB를 이미 쓴다.
+#   이 컨테이너는 쉴 때 약 32MB(로컬 실측, 10/21)지만 extract(PDF · 비식별화) 단계에서 더 쓴다. 그래서
+#   **7.1.2 RDS 전환(postgres 컨테이너 512m이 빠진다) 뒤에 켜는 것을 전제로 한다.**
+#   그 전에 켜야 하면 backend의 mem_limit을 먼저 내리고 `docker stats`로 확인한다.
+#
+# 보안
+#   - 포트를 호스트로 열지 않는다. 그리고 **backend만 있는 별도 네트워크**에 둔다 — 기본 네트워크에 두면
+#     web(Nginx) · redis · postgres · 모니터링 에이전트도 `pipeline:8000`에 닿는다 (PR #219 리뷰 반영).
+#     인증이 없는 서비스라 닿을 수 있는 범위를 줄여 둔다
+#     (인증을 두지 않은 이유는 docs/decisions/COMMON-50.md — 관리자 인증 · CSRF는 백엔드가 한다)
+#   - 판결문 원문은 이미지가 아니라 볼륨에만 있다. 검수가 끝나면 백엔드가 작업을 지운다(DELETE /jobs/{id})
+
+services:
+  pipeline:
+    image: ${IMAGE_PREFIX:-lawnambul}-pipeline:${IMAGE_TAG:-local}
+    build:
+      context: ../tools/ai-judgment
+    environment:
+      # LLM 공급자 키. 없는 키의 공급자는 그 단계에서 실패한다(서비스는 뜬다)
+      # - extract · court(판결문 원문이 나간다)는 유료 키만 쓴다 — 무료 등급은 입력을 제품 개선에 쓸 수 있다
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
+      # 작업 폴더(판결문 원문 · 설정 · 로그). 아래 볼륨과 같은 경로여야 한다
+      PIPELINE_JOBS_DIR: /app/out/jobs
+    volumes:
+      # 작업 · 생성 결과(out/)와 추출 산출물(cases/). 컨테이너를 다시 만들어도 진행 중이던 작업 상태가 남는다
+      # — 파이프라인은 state.json으로 이어서 돌릴 수 있게 돼 있다(BE-31)
+      - pipeline-out:/app/out
+      - pipeline-cases:/app/cases
+    healthcheck:
+      # 파이프라인을 돌려 보지는 않는다(호출 비용). 서비스가 응답하는지만 본다
+      test: ["CMD", "python3", "-c",
+             "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health', timeout=3).status == 200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+    restart: unless-stopped
+    # 상한이지 예약이 아니다. 백엔드를 밀어내지 못하게 막는 용도 (monitoring-agent 오버레이와 같은 뜻)
+    mem_limit: 512m
+    # 기본 네트워크에 두지 않는다 → web · redis · postgres · 에이전트는 이 서비스 이름을 찾지도 못한다.
+    # pipeline 네트워크는 internal이 아니라서(아래) 외부 LLM API 호출은 그대로 나간다
+    networks: [pipeline]
+
+  backend:
+    environment:
+      # 백엔드가 부를 내부 주소 (BE-93). 이 값이 없으면 사건 등록 기능만 꺼지고 서버는 정상으로 뜬다
+      PIPELINE_SERVICE_URL: http://pipeline:8000
+    # default를 반드시 함께 적는다 — networks를 쓰는 순간 기본 네트워크에서 빠져 postgres · redis · web과 끊긴다
+    networks: [default, pipeline]
+
+networks:
+  # backend ↔ pipeline 전용. internal로 두지 않는 이유는 pipeline이 외부 LLM API를 불러야 하기 때문이다
+  pipeline:
+
+volumes:
+  pipeline-out:
+  pipeline-cases:
