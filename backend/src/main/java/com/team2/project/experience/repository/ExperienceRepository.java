@@ -52,6 +52,11 @@ public interface ExperienceRepository extends JpaRepository<Experience, Long> {
 		+ "group by e.legalCase.id")
 	List<CaseParticipantCount> countCompletedByAttemptNoGroupByCase(@Param("attemptNo") int attemptNo);
 	/** 체험의 현재 상태만 다시 읽는다 (조건부 갱신이 실패했을 때 currentStatus 응답용) */
+	/** 완료한 회차가 하나라도 있는 사건 수 (도전과제 completed, BE-96). 다시 하기를 시작해도 줄지 않는다 */
+	@Query("select count(distinct e.legalCase.id) from Experience e where e.anonymousUser.id = :anonymousUserId "
+		+ "and e.status = com.team2.project.experience.domain.ExperienceStatus.COMPLETED")
+	long countCompletedCases(@Param("anonymousUserId") UUID anonymousUserId);
+
 	@Query("select e.status from Experience e where e.id = :id")
 	Optional<ExperienceStatus> findStatusById(@Param("id") Long id);
 

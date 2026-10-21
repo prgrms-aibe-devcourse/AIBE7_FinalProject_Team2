@@ -44,6 +44,8 @@ public enum ErrorCode {
 	INVALID_IMAGE_FILE(HttpStatus.BAD_REQUEST, "사진 파일이 올바르지 않습니다."),
 	// 신문 지면 콘텐츠 생성 API (확장 단계, BE-92)
 	PAPER_NOT_FOUND(HttpStatus.NOT_FOUND, "신문 지면 콘텐츠가 없습니다."),
+	// 프로필 꾸미기 (확장 단계, BE-96). details에 잠긴 필드를 담는다
+	DECO_LOCKED(HttpStatus.CONFLICT, "아직 열리지 않은 꾸미기입니다."),
 	INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "서버 오류가 발생했습니다.");
 
 	private final HttpStatus status;
