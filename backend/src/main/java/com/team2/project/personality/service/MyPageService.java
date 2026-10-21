@@ -58,7 +58,7 @@ public class MyPageService {
 			.map(PersonalityResultResponse::from).orElse(null);
 
 		List<ExperiencePersonality> contributions = contributionRepository.findFirstAttemptsByAnonymousUser(userId);
-		// 현재 판결 성향은 완료 순서(쿼리의 createdAt, id 순)로 최근 3건만 평균한다. 흐름(history)은 전체를 내려준다
+		// 현재 판결 성향은 완료 순서(쿼리의 completedAt, id 순)로 최근 3건만 평균한다. 흐름(history)은 전체를 내려준다
 		List<ExperiencePersonality> recent = contributions.subList(
 			Math.max(0, contributions.size() - RECENT_COUNT), contributions.size());
 		List<Map<ValueAxis, AxisCount>> counts = recent.stream().map(ExperiencePersonality::getAxisCounts).toList();

@@ -286,6 +286,31 @@ class PersonalityApiTest extends ApiIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("P-5: 최근 3건은 기여 저장 순서가 아니라 완료 시각 순서로 고른다 (BE-99, #238 리뷰)")
+	void myPage_recentThreeByCompletedAt_notContributionOrder() throws Exception {
+		Cookie cookie = submitNew(strictValues());
+		UUID user = UUID.fromString(cookie.getValue());
+		// 동시 비교 공개로 가장 먼저 완료된 체험(가중)의 기여가 가장 늦게 저장된 상황
+		long earliest = insertCase("MURDER", "PUBLISHED");
+		insertExperience(user, earliest, 1, "COMPLETED");
+		completedAt(user, earliest, "2026-10-21T10:00:00+09:00");
+		for (int i = 1; i <= 3; i++) {
+			long caseId = insertCase("MURDER", "PUBLISHED");
+			insertExperience(user, caseId, 1, "COMPLETED");
+			completedAt(user, caseId, "2026-10-21T10:0" + i + ":00+09:00");
+			contribution(user, caseId, 1, axes(1, 0, 1, 0, 1, 0, 1, 0));
+		}
+		contribution(user, earliest, 1, axes(0, 5, 0, 5, 0, 5, 0, 5));	// 저장은 마지막
+
+		mockMvc.perform(get(MY_PAGE).cookie(cookie))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.judgmentPersonality.experienceCount").value(3))
+			.andExpect(jsonPath("$.judgmentPersonality.axisScores.APOLOGY_SINCERITY").value(1.0))	// 저장 순서면 0.667
+			.andExpect(jsonPath("$.history.length()").value(4))
+			.andExpect(jsonPath("$.history[0].caseId").value(earliest));	// 흐름도 완료 순서
+	}
+
+	@Test
 	@DisplayName("P-5: 최근 3건에 자료가 없는 축은 오래된 체험에 있어도 null이고 유형도 null (BE-99)")
 	void myPage_recentThreeMissingAxis_typeNull() throws Exception {
 		Cookie cookie = submitNew(strictValues());
@@ -339,6 +364,12 @@ class PersonalityApiTest extends ApiIntegrationTest {
 		long caseId = insertCase("MURDER", "PUBLISHED");
 		insertExperience(user, caseId, 1, "COMPLETED");
 		contribution(user, caseId, 1, axisCounts);
+	}
+
+	/** 첫 회차 체험의 완료 시각을 정한다. 정하지 않은 체험은 completed_at이 null이라 기여 저장 시각으로 정렬된다 */
+	private void completedAt(UUID user, long caseId, String completedAt) {
+		jdbcTemplate.update("UPDATE experience SET completed_at = ?::timestamptz WHERE anonymous_user_id = ? AND case_id = ? AND attempt_no = 1",
+			completedAt, user, caseId);
 	}
 
 	/** 축 순서(사과 · 과실 · 원칙 · 질서)대로 감경 · 가중 횟수를 받아 axis_counts JSON을 만든다 */
