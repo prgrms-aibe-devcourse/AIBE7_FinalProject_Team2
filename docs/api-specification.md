@@ -36,7 +36,9 @@
 | v0.32 | 2026-10-18 | API 1 사건 목록 카드에 `chargeName`(죄명) 추가 (BE-79, 정합성 점검 D-01) — 사건 상단 바(S-04~S-09)가 목록에서 제목과 정확한 죄명을 함께 찾는다. 공통 사건 헤더 API는 사건 수가 늘면 재검토(`docs/decisions/BE-79.md`) |
 | v0.33 | 2026-10-19 | BE-88 — 관리자 401/403 정책의 인증 영역·쿠키/세션 의미·CSRF 및 계정 상태 검사 우선순위와 공개 인증 경로 예외를 명시. 현행 응답 및 형식 변경 없음. 기존 포괄적인 401 문구의 정합성 확인 사항을 별도 기록 |
 | v0.34 | 2026-10-20 | API 13에 판결 성향 기여 저장 추가 (BE-64, WBS 7.6.7) — 처음 `COMPLETED`로 바꿀 때 첫 회차 체험의 `experience_personality`를 같은 트랜잭션에서 저장, 이미 완료면 유지(성향 산식 3-4, PR #109 리뷰에서 "7.6.7 PR에서 구현과 함께 고친다"로 미룬 항목). 7장 성향 갱신 메모를 "제안"에서 확정으로 |
-| v0.35 | 2026-10-20 | BE-77 — API 14 `preToCourt.direction` 추가(재판부 기준, SAME은 동일 형벌 종류·구간). API 2·3은 기존 5개 상태 필드를 유지하고 API 3은 사전 판단을 반환하지 않음을 명시. 1막부터 다시 보기 삭제 결정 및 완료 후 독자 의견에서 최초 사전 판단 공개 원칙 반영 (PR #198) |
+| v0.35 | 2026-10-20 | BE-77 — API 14 `preToCourt.direction` 추가(재판부 기준, SAME은 동일 형벌 종류·구간). API 2·3은 기존 5개 상태 필드를 유지하고 API 3은 사전 판단을 반환하지 않음을 명시. 기존 체험을 보존하는 읽기 전용 1막부터 다시 보기 유지(진행 중 사전 형량 비노출·완료 후 API 14 표시) 및 완료 후 독자 의견 공개 원칙 반영 (PR #198·#203) |
+| v0.36 | 2026-10-20 | 사건 사진 프롬프트 추천 · 업로드 API 신설 (BE-91, COMMON-41 재검토) — Cloudflare Workers AI 직접 생성은 그림 품질 때문에 그만두고, A-13-1(대표사진 프롬프트 추천) · A-13-2(발단 사진 프롬프트 추천) · A-13-3(대표사진 업로드) · A-13-4(발단 사진 업로드) · A-13-5(발단 사진 목록) 추가. 번호는 A-16 ~ A-41이 8-4(운영 메뉴 초안)에 이미 예약돼 있어 A-13-N으로 둠. 에러 코드 `PROMPT_GENERATION_FAILED` · `FILE_UPLOAD_FAILED` · `INVALID_IMAGE_FILE` 추가 |
+| v0.37 | 2026-10-20 | 신문 지면 콘텐츠 생성 API 신설 (BE-92, COMMON-41) — A-13-6(생성) · A-13-7(조회) · A-13-8(수정) 추가. `photo`는 `legal_case.thumbnail_url`, `extraPhotos`는 A-13-5(발단 사진)를 그대로 재사용(새로 저장하지 않음, `docs/decisions/BE-92.md`). 에러 코드 `PAPER_NOT_FOUND` 추가(1-5) |
 
 ---
 
@@ -123,6 +125,10 @@ json
 | 404 | `PERSONALITY_TYPE_NOT_FOUND` | (확장, 성향 API) 공유 주소의 유형이 없음 | 공유 결과 없음 안내 · 테스트 권유 |
 | 409 | `DUPLICATE_TITLE` | (확장, 관리자 API) 사건 제목이 다른 사건과 겹침 | 입력 안내 |
 | 409 | `PUBLISH_NOT_READY` | (확장, 관리자 API) 공개 조건 미충족. `details`에 조건 코드 | 남은 조건 안내 (A-13) |
+| 502 | `PROMPT_GENERATION_FAILED` | (확장, 관리자 API, BE-91 · BE-92) Gemini 호출 실패, 또는 설정(`GEMINI_API_KEY`) 없음 | 다시 시도 안내 (A-13-1 · A-13-2 · A-13-6) |
+| 502 | `FILE_UPLOAD_FAILED` | (확장, 관리자 API, BE-91) S3 업로드 실패, 또는 설정(`S3_BUCKET_NAME`) 없음 | 다시 시도 안내 (A-13-3 · A-13-4) |
+| 400 | `INVALID_IMAGE_FILE` | (확장, 관리자 API, BE-91) 사진 파일이 없음 · 비어 있음 · 허용하지 않는 형식 | 입력 안내 (A-13-3 · A-13-4) |
+| 404 | `PAPER_NOT_FOUND` | (확장, 관리자 API, BE-92) 신문 지면을 아직 생성한 적 없음 | 먼저 생성하도록 안내 (A-13-7 · A-13-8) |
 | 429 | `TOO_MANY_REQUESTS` | (확장, BE-63) 같은 IP에서 `/api` 요청이 너무 많음(평균 초당 20번 · 순간 40번 초과). **백엔드가 아니라 운영 Nginx가 돌려준다** — 형식은 1-4와 같고 `Retry-After: 1` 헤더가 붙는다. 로컬 개발(Vite)에는 Nginx가 없어 나오지 않는다 | 일반 오류 안내. 자동으로 다시 보내지 않는다 |
 | 500 | `INTERNAL_ERROR` | 서버 오류 | 일반 오류 안내 |
 - "이미 제출함"과 "순서가 맞지 않음"을 따로 나누지 않고 `INVALID_STATE` 하나로 둔다. 화면이 할 일은 둘 다 "`currentStatus`의 화면으로 이동"으로 같기 때문이다.
@@ -234,7 +240,7 @@ json
 **응답 200**: API 2와 같은 형식. 기존 5개 상태 필드만 반환한다.
 
 - 사전 판단·AI 판결·재판부 판결·비교 결과는 포함하지 않는다. 사전 판단은 체험 완료 후 API 14의 독자 의견에서 처음 다시 확인한다.
-- 제출 후 처음 선택한 형량을 진행 중에 다시 조회할 수 없다. 1막부터 다시 보기 기능은 삭제하기로 확정했으며, 프론트 반영은 별도 후속 작업이다(2026-10-20 팀 논의, BE-77).
+- 제출 후 처음 선택한 형량을 진행 중에 다시 조회할 수 없다. 1막부터 다시 보기는 기존 체험 기록을 보존하는 읽기 전용 기능으로 유지하며 초기화·재제출·수정은 허용하지 않는다. 진행 중에는 제출 완료 안내만 표시하고, 완료 후에는 API 14로 최초 사전 판단을 표시할 수 있다(BE-77, PR #198·#203).
 
 | 거절 | 조건 |
 | --- | --- |
@@ -1185,6 +1191,169 @@ API 1 · 2 · 16은 상태와 관계없이 부를 수 있다. 표에 없는 조�
 | 404 `CASE_NOT_FOUND` | 사건이 없음 |
 | 409 `INVALID_STATE` | 이미 `PUBLISHED`(`CASE_PUBLISHED`) |
 | 409 `PUBLISH_NOT_READY` | 공개 조건 미충족. `details`에 `[{ "field": "case", "reason": "NO_PUBLISHED_AI" }, …]` |
+
+### A-13-1. 사건 대표사진 프롬프트 추천 — `POST /admin/cases/{caseId}/photos/representative/prompt`
+
+> 번호: A-16 ~ A-41은 8-4(운영 메뉴 API, 초안)가 이미 예약해 둬서, A-13에 소속된 추가 API라는 뜻으로 A-13-N을 쓴다.
+> **재검토(v0.36)**: Cloudflare Workers AI로 사진을 직접 생성하는 방식(v0.37 이전 초안)은 그림 품질이 기대에 못 미쳐 그만뒀다. 사진은 사람이 만들어 A-13-3 · A-13-4로 올리고, AI(Gemini)는 그 사람이 참고할 **한글 프롬프트만** 추천한다(결정: `docs/decisions/BE-91.md`).
+
+본문 없음. 사건의 `overview` · `chargeName`을 바탕으로 Gemini가 한글 이미지 생성 프롬프트 한 문단을 지어 돌려준다. 등장인물은 얼굴 없는 회색 엑스트라로, 내로 · 남불은 넣지 말라는 규칙을 프롬프트 지시문에 고정으로 포함한다(COMMON-41).
+
+응답 200:
+
+```json
+{ "prompt": "신문 지면에 쓸 삽화를 그려줘. 어두운 거실에서 두 사람이 돈 문제로 다투는 장면을..." }
+```
+
+| 거절 | 조건 |
+| --- | --- |
+| 404 `CASE_NOT_FOUND` | 사건이 없음 |
+| 502 `PROMPT_GENERATION_FAILED` | Gemini 호출 실패, 또는 설정 없음(`GEMINI_API_KEY`) |
+
+조회만 하므로 사건 행을 잠그지 않고, 감사 로그도 남기지 않는다(사건 내용을 바꾸지 않음).
+
+### A-13-2. 사건 발단 사진 프롬프트 추천 — `POST /admin/cases/{caseId}/photos/incident/prompt`
+
+사건이 시작된 발단 장면을 그리기 위한 한글 프롬프트를 추천한다. `overview`에 판단 요소(`factor`) 목록을 더해 지시문을 만든다.
+
+```json
+{ "hint": "다투는 장면을 더 강조해줘" }
+```
+
+| 필드 | 규칙 |
+| --- | --- |
+| `hint` | 선택, 500자 이하. 특정 장면을 더 짚고 싶을 때만 |
+
+응답 200은 A-13-1과 같은 형식(`{ "prompt": "..." }`).
+
+| 거절 | 조건 |
+| --- | --- |
+| 400 `VALIDATION_ERROR` | `hint` 500자 초과 |
+| 404 `CASE_NOT_FOUND` | 사건이 없음 |
+| 502 `PROMPT_GENERATION_FAILED` | A-13-1과 같음 |
+
+### A-13-3. 사건 대표사진 업로드 — `POST /admin/cases/{caseId}/photos/representative` (multipart/form-data)
+
+관리자가 A-13-1 프롬프트를 참고해 직접(또는 다른 생성 도구로) 만든 사진을 올린다. S3에 저장하고, 신문 지면(S-02 등)에 쓰는 `legal_case.thumbnail_url`을 그 URL로 바꾼다. 새 테이블을 두지 않고 A-11이 이미 자유롭게 바꿀 수 있던 칸을 그대로 쓴다. 응답은 A-6과 같은 형식(`AdminCaseDetailResponse`).
+
+| 필드(form) | 규칙 |
+| --- | --- |
+| `file` | 필수. `image/jpeg` · `image/png` · `image/webp`만 허용, 최대 10MB(8-1 공통 multipart 상한) |
+
+- 공개한 사건은 바꿀 수 없다(A-11과 같은 규칙). 감사 로그 `CASE_PHOTO_GENERATE`(`detail.type = "REPRESENTATIVE"`)를 남긴다.
+
+| 거절 | 조건 |
+| --- | --- |
+| 400 `INVALID_IMAGE_FILE` | 파일이 없음 · 비어 있음 · 허용하지 않는 형식 |
+| 404 `CASE_NOT_FOUND` | 사건이 없음 |
+| 409 `INVALID_STATE` | 이미 `PUBLISHED`(`CASE_PUBLISHED`) |
+| 502 `FILE_UPLOAD_FAILED` | S3 업로드 실패, 또는 설정 없음(`S3_BUCKET_NAME`) |
+
+### A-13-4. 사건 발단 사진 업로드 — `POST /admin/cases/{caseId}/photos/incident` (multipart/form-data)
+
+사건 안에서 쓰는 발단 사진 한 장을 올려 `case_incident_photo`에 순서대로 쌓는다(여러 번 불러 여러 장 추가). 201과 함께 추가된 사진을 돌려준다.
+
+| 필드(form) | 규칙 |
+| --- | --- |
+| `file` | 필수. A-13-3과 같은 형식 · 크기 제한 |
+| `caption` | 선택, 200자 이하. 화면에 보일 설명 |
+| `prompt` | 선택, 자유 길이. 관리자가 이 사진을 만들 때 참고한 프롬프트(A-13-2 추천 그대로 또는 고친 것) — 감사 · 재참고용으로만 남긴다 |
+
+응답 201:
+
+```json
+{ "id": 12, "imageUrl": "https://…/case-photos/case-7/incident-0-….jpg", "caption": "다툼이 격해진 순간", "displayOrder": 0, "createdAt": "2026-10-20T09:00:00Z" }
+```
+
+- `displayOrder`는 0부터 자동으로 매겨진다(사건마다 이미 있는 발단 사진 수).
+- S3 객체 키(`s3_key`)는 내부 기록용이라 응답에 내려주지 않는다. `prompt`는 관리자가 보냈을 때만 들어가고, 응답에는 내려주지 않는다(A-13-5 목록도 마찬가지 — 내부 기록 확인은 DB로 한다).
+- 공개한 사건은 추가할 수 없다. 감사 로그 `CASE_PHOTO_GENERATE`(`detail.type = "INCIDENT"`, `detail.photoId`)를 남긴다.
+
+| 거절 | 조건 |
+| --- | --- |
+| 400 `INVALID_IMAGE_FILE` | A-13-3과 같음 |
+| 400 `VALIDATION_ERROR` | `caption` 200자 초과 |
+| 404 `CASE_NOT_FOUND` | 사건이 없음 |
+| 409 `INVALID_STATE` | 이미 `PUBLISHED`(`CASE_PUBLISHED`) |
+| 502 `FILE_UPLOAD_FAILED` | A-13-3과 같음 |
+
+### A-13-5. 사건 발단 사진 목록 — `GET /admin/cases/{caseId}/photos/incident`
+
+사건에 쌓인 발단 사진을 순서대로 돌려준다(A-13-4 응답과 같은 형식의 배열, `prompt` 제외). 공개한 사건도 조회만은 된다.
+
+```json
+[
+  { "id": 12, "imageUrl": "…", "caption": "다툼이 격해진 순간", "displayOrder": 0, "createdAt": "…" }
+]
+```
+
+| 거절 | 조건 |
+| --- | --- |
+| 404 `CASE_NOT_FOUND` | 사건이 없음 |
+
+### A-13-6. 신문 지면 생성 — `POST /admin/cases/{caseId}/paper/generate`
+
+사건 내용(`overview` · `factor` · `chargeName`)을 바탕으로 Gemini가 메인 화면 신문 지면 콘텐츠를 짓는다(BE-92, COMMON-41). 이미 있으면 새로 만들지 않고 내용을 덮어쓴다. 본문 없음.
+
+응답 200:
+
+```json
+{
+  "desk": "사회면",
+  "headline": "빌린 돈 문제로 다투다 벌어진 사건",
+  "deck": "오랜 금전 다툼 끝에...",
+  "photo": "https://…/case-photos/case-1/representative-….jpg",
+  "caption": "다투는 두 사람",
+  "article": ["문단 1", "문단 2"],
+  "extraPhotos": [
+    { "id": 12, "imageUrl": "…", "caption": "다툼이 격해진 순간", "displayOrder": 0, "createdAt": "…" }
+  ],
+  "updatedAt": "2026-10-20T09:00:00Z"
+}
+```
+
+- `photo`는 A-13-3으로 올린 사건 대표사진(`legal_case.thumbnail_url`)을 그대로 내려준다. 아직 안 올렸으면 `null`.
+- `extraPhotos`는 A-13-5와 같은 배열 — `case_incident_photo`를 그대로 재사용한다(새로 저장하지 않는다, `docs/decisions/BE-92.md`).
+- 공개한 사건은 바꿀 수 없다(A-11과 같은 규칙). 감사 로그 `CASE_PAPER_GENERATE`를 남긴다.
+
+| 거절 | 조건 |
+| --- | --- |
+| 404 `CASE_NOT_FOUND` | 사건이 없음 |
+| 409 `INVALID_STATE` | 이미 `PUBLISHED`(`CASE_PUBLISHED`) |
+| 502 `PROMPT_GENERATION_FAILED` | Gemini 호출 실패, 응답을 JSON으로 못 읽음, 또는 설정 없음(`GEMINI_API_KEY`) |
+
+### A-13-7. 신문 지면 조회 — `GET /admin/cases/{caseId}/paper`
+
+응답은 A-13-6과 같은 형식. 아직 생성한 적 없으면 404.
+
+| 거절 | 조건 |
+| --- | --- |
+| 404 `CASE_NOT_FOUND` | 사건이 없음 |
+| 404 `PAPER_NOT_FOUND` | 아직 생성한 적 없음 |
+
+### A-13-8. 신문 지면 수정 — `PATCH /admin/cases/{caseId}/paper`
+
+A-11과 같은 방식(보낸 필드만, `null` = 지움). `headline` · `article`은 필수라 `null` 불가.
+
+```json
+{ "headline": "고친 헤드라인", "deck": null }
+```
+
+| 필드 | 규칙 |
+| --- | --- |
+| `headline` | 1 ~ 200자, `null` 불가 |
+| `deck` | 0 ~ 300자, `null` 가능(지움) |
+| `caption` | 0 ~ 200자, `null` 가능(지움) |
+| `article` | 문단 1개 이상의 배열, `null` 불가(빈 배열도 거절) |
+
+응답은 A-13-6과 같은 형식.
+
+| 거절 | 조건 |
+| --- | --- |
+| 400 `VALIDATION_ERROR` | 위 규칙 위반, 또는 모르는 필드 |
+| 404 `CASE_NOT_FOUND` | 사건이 없음 |
+| 404 `PAPER_NOT_FOUND` | 아직 생성한 적 없음(먼저 A-13-6으로 생성해야 한다) |
+| 409 `INVALID_STATE` | 이미 `PUBLISHED`(`CASE_PUBLISHED`) |
 
 ### A-14. 사건 등록 시작 — `POST /admin/case-imports` (초안)
 
