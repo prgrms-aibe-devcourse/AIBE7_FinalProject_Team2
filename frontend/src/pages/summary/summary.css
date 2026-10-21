@@ -1,4 +1,0 @@
-/* S-05(4막)은 FE-48부터 판결 입력(S-06)으로 바로 넘기는 화면이다. 넘어가기 전 안내 · 오류 문구(.message-panel)만 보인다.
-   내용(사건 개요 · 핵심 사실)은 5막 파일철 첫 장 "사건 요약"으로 옮겼다(verdict.css). 공유 스타일은 review.css에서 가져온다 */
-@import '../review/review.css';
-.summary-page { word-break: keep-all; overflow-wrap: anywhere; }

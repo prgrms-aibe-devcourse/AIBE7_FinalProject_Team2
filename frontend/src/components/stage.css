@@ -148,10 +148,6 @@
 .stage-wrap .evd-list li.now { background: color-mix(in srgb, var(--kraft) 20%, transparent); font-weight: 700; }
 .stage-wrap .evd-count { grid-column: 1 / -1; margin: 0; color: var(--muted); font-size: max(10px, 1cqw); text-align: right; }
 
-/* 4막 정리 카드(S-05가 주는 카드, 흐름 목업): 핵심 사실만 */
-.stage-wrap .summary-card h3 { margin: .3em 0 .5em; }
-.stage-wrap .summary-card .summary-list { margin: 0; padding-left: 1.2em; }
-
 /* 6막 판단 요소 보드(흐름 목업): 요소가 한 줄씩 쌓이고 줄 끝에 무겁게 · 가볍게. 판사들 위로 넓게 */
 .stage-wrap .stage.lawcard .board.small:has(.ai-factor-board) { left: 14%; right: 14%; }
 .stage-wrap .ai-factor-board h3 { margin-bottom: .4em; }
@@ -322,7 +318,7 @@
 .stage-wrap .board .submit-warning { margin-top: 1cqw; color: var(--color-caution); font-size: max(12px, 1.25cqw); }
 .stage-wrap .board .section-actions { padding-top: .6cqw; }
 
-/* 5막 판결 입력 카드: S-06 화면(입력 · 참고 정보)을 그대로 싣고, 무대 전체를 덮는다(대본 board: "full").
+/* 5막 판결 입력 카드: S-05 화면(입력 · 참고 정보)을 그대로 싣고, 무대 전체를 덮는다(대본 board: "full").
    글씨 · 버튼은 흐름 목업 크기(본문 12 ~ 13px)로 줄인다. 위의 2막 폼 규칙(fieldset · legend · p)도 여기서 되돌린다 */
 .stage-wrap .stage .board.full { left: 0; right: 0; top: 0; bottom: 0; border-radius: 10px; }
 /* 판결 파일철(FE-43)은 판사 책상의 남색 매트 위에 놓인다(메인 책상과 같은 재료) */
@@ -440,7 +436,7 @@
 .stage-wrap .stage-restart { min-height: 36px; margin-left: 12px; padding: 0 10px; border: 1px dashed var(--color-border-strong); border-radius: 6px; background: none; color: var(--muted); font-size: var(--text-caption); cursor: pointer; }
 .stage-wrap :is(button, .board):focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
 
-/* 무대가 있는 화면(S-03 ~ S-09): 사이드바 없이 무대를 가운데 넓게, 제목은 읽기 도구용 */
+/* 무대가 있는 화면(S-03 ~ S-08): 사이드바 없이 무대를 가운데 넓게, 제목은 읽기 도구용 */
 :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page).has-stage .review-layout { display: block; }
 :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page).has-stage .review-main { max-width: 1120px; margin: 0 auto; padding: 18px 20px 40px; }
 :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page).has-stage .visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }

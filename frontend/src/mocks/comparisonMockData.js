@@ -1,4 +1,4 @@
-// API 14 응답을 만드는 데 쓰는 고정 목 데이터. AI · 실제 판결은 S-07 · S-08과 같은 사건을 가정한다.
+// API 14 응답을 만드는 데 쓰는 고정 목 데이터. AI · 실제 판결은 S-06 · S-07과 같은 사건을 가정한다.
 export const mockComparisonBase = {
   ai: {
     subjectType: 'AI', penaltyType: 'PRISON', reducedTo: null, prisonMonths: 144, fineAmount: null, suspensionMonths: null,
@@ -49,7 +49,7 @@ export const mockComparisonBase = {
   factorRevealStages: { 1: 'OVERVIEW', 2: 'OVERVIEW', 3: 'OVERVIEW' },
 };
 
-// S-06을 거치지 않고 "상태 강제 선택"으로 들어온 경우를 대비한 대체 사용자 판단(myJudgmentMock.js).
+// S-05를 거치지 않고 "상태 강제 선택"으로 들어온 경우를 대비한 대체 사용자 판단(myJudgmentMock.js).
 export const fallbackUserFactors = [
   { factorId: 2, direction: 'UP' },
   { factorId: 3, direction: 'UP' },

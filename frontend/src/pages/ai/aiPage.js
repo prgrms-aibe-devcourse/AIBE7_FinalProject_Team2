@@ -49,7 +49,7 @@ export async function renderAiPage(container, { caseId, caseHeader, api, navigat
     return group;
   }
 
-  // 대본의 제목이 사건 제목과 같을 때만 무대를 쓴다(S-03 ~ S-06과 같은 규칙)
+  // 대본의 제목이 사건 제목과 같을 때만 무대를 쓴다(S-03 ~ S-05와 같은 규칙)
   const candidate = SCRIPTS[caseId];
   const script = candidate?.title === caseHeader.title ? candidate : undefined;
 
@@ -61,7 +61,7 @@ export async function renderAiPage(container, { caseId, caseHeader, api, navigat
   };
   // 6막 대본을 AI 판결로 채운다: {"factors": true}는 판단 요소마다 한 장면(저울 → 법봉 → 법전 순서로 돌아가며),
   // say "law"는 판사(셋이 함께 서면 로울, 발표는 발표하는 판사), {penalty}는 형량, {summary}는 AI 판결 한 줄 요약.
-  // summary는 생성 계약대로 "~한 판단"(S-09 판결 카드와 같은 문장)이라 대사에서 "입니다"를 붙이고, 없으면(null) 그 줄을 뺀다.
+  // summary는 생성 계약대로 "~한 판단"(S-08 판결 카드와 같은 문장)이라 대사에서 "입니다"를 붙이고, 없으면(null) 그 줄을 뺀다.
   // 판단 요소가 하나도 없으면 "하나씩 짚어 보겠습니다" 대신 textNoFactors를 쓴다. 이름표는 내로처럼 아이콘 · 이름(AI 판사) · 직책(재판장 · 배석판사).
   // 발표하는 판사(캐릭터 프로필 5-3): 감경 비율이 1/3 미만이면 로봉, 2/3 초과면 로북, 그 사이(또는 요소 없음)면 로울
   function act6Script(data) {
@@ -124,7 +124,7 @@ export async function renderAiPage(container, { caseId, caseHeader, api, navigat
     return paper;
   }
   // 6막 AI 판사의 합의(흐름 목업). 처음에 아이캐치(AI 판결을 기다리는 중 + 안내)를 띄우고,
-  // 마지막 장면을 떠나면 실제 판결을 공개(API 11) · 조회(API 12)해 같은 법정에서 7막으로 이어 간다(주소만 S-08로)
+  // 마지막 장면을 떠나면 실제 판결을 공개(API 11) · 조회(API 12)해 같은 법정에서 7막으로 이어 간다(주소만 S-07로)
   function drawStage(data) {
     root.classList.add('has-stage');
     const header = element('header', 'case-topbar');
@@ -170,12 +170,12 @@ export async function renderAiPage(container, { caseId, caseHeader, api, navigat
     });
   }
 
-  // 7막 실제 판결: 6막 무대를 다시 불러오지 않고 이어 가며, 주소만 S-08로 바꾼다(새로고침하면 7막부터)
+  // 7막 실제 판결: 6막 무대를 다시 불러오지 않고 이어 가며, 주소만 S-07로 바꾼다(새로고침하면 7막부터)
   function drawCourt(court) {
     const { stage, error } = renderCourtStage({
       script, data: court, caseId, api, navigate, active,
       onInvalid: (failure) => message(`지금 단계에서는 이 화면을 볼 수 없어요. (현재 상태: ${failure.currentStatus})`),
-      // 8막도 같은 방식으로 이어 가고 주소만 S-09로 바꾼다
+      // 8막도 같은 방식으로 이어 가고 주소만 S-08로 바꾼다
       onCompared: (comparison) => openComparison({ root, script, comparison, caseId, caseTitle: caseHeader.title, navigate, api }),
     });
     mountStage(root, { caseHeader, badge: '실제 판결', heading: '실제 판결', stage, extra: [error] });
@@ -189,7 +189,7 @@ export async function renderAiPage(container, { caseId, caseHeader, api, navigat
     const header = element('header', 'case-topbar');
     header.append(element('strong', 'case-title', `AI 판결 · ${caseHeader.title}`), element('span', 'case-badge', '2 / 3 공개'));
 
-    // 공개 진행 탭(와이어프레임 S-07): 내 판결은 이동하지 않는 정보, 실제 판결은 API 11로만 공개한다.
+    // 공개 진행 탭(와이어프레임 S-06): 내 판결은 이동하지 않는 정보, 실제 판결은 API 11로만 공개한다.
     const tabs = element('div', 'release-tabs');
     const myTab = element('div', 'release-tab');
     const myState = formatPenalty(myJudgment) + (myJudgment.suspensionMonths ? ` (집행유예 ${formatMonths(myJudgment.suspensionMonths)})` : '');
@@ -261,7 +261,7 @@ export async function renderAiPage(container, { caseId, caseHeader, api, navigat
   async function load(intro = false) {
     if (loading || !active()) return;
     loading = true;
-    // 판결을 막 확정하고 온 경우(S-06 → S-07)에는 로딩 · 안내를 먼저 보여 준다 (7.7.4)
+    // 판결을 막 확정하고 온 경우(S-05 → S-06)에는 로딩 · 안내를 먼저 보여 준다 (7.7.4)
     if (!intro) message('AI 판결 정보를 불러오는 중…');
     try {
       const request = api.getAiJudgment(caseId);

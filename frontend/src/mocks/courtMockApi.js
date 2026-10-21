@@ -29,7 +29,7 @@ export async function postCourtReveal(caseId) {
 // API 12 — GET /cases/{caseId}/experience/judgments/court
 export async function getCourtJudgment(caseId) {
   await delay();
-  // AI_REVEALED 전(= S-07 미확인) 거절. 화면은 S-07로 안내한다(REQ-050 순서 유지).
+  // AI_REVEALED 전(= S-06 미확인) 거절. 화면은 S-06으로 안내한다(REQ-050 순서 유지).
   checkState(caseId, ['AI_REVEALED', 'COMPLETED']);
   return {
     judgment: structuredClone(mockCourtJudgment.judgment),

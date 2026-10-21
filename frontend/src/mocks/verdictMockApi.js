@@ -78,7 +78,7 @@ export async function postVerdict(caseId, body) {
       || !['UP', 'DOWN'].includes(direction)) fail('INVALID_FACTOR', status);
     ids.add(factorId);
   }
-  // S-07 · S-08 · S-09에서 "내 판결"로 보여줘야 해서 형벌 판단값 · 판단 요소를 저장한다(자유 의견은 저장하지 않는다).
+  // S-06 · S-07 · S-08에서 "내 판결"로 보여줘야 해서 형벌 판단값 · 판단 요소를 저장한다(자유 의견은 저장하지 않는다).
   saveJudgment({
     subjectType: 'USER',
     penaltyType,
