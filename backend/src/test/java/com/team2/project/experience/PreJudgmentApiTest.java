@@ -147,7 +147,7 @@ class PreJudgmentApiTest extends ApiIntegrationTest {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.status").value("PRE_JUDGED"))
 				.andExpect(jsonPath("$.lastReviewedStep").value(1))
-				// 사전 판단 내용은 되돌려주지 않는다 (S-09 전까지 다시 보여 주지 않음)
+				// 사전 판단 내용은 되돌려주지 않는다 (S-08 전까지 다시 보여 주지 않음)
 				.andExpect(jsonPath("$.length()").value(2))
 				.andExpect(jsonPath("$.rangeOptionId").doesNotExist())
 				.andExpect(jsonPath("$.factorIds").doesNotExist());
