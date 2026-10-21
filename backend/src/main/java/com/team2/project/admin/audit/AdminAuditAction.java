@@ -13,5 +13,6 @@ public enum AdminAuditAction {
 	CASE_PUBLISH,		// A-13
 	CASE_PHOTO_UPLOAD,	// 사건 사진 업로드 (BE-91)
 	CASE_PAPER_GENERATE,	// 신문 지면 생성 (BE-92)
-	CASE_PAPER_UPDATE	// 신문 지면 수정 (BE-92)
+	CASE_PAPER_UPDATE,	// 신문 지면 수정 (BE-92)
+	CASE_IMPORT		// 사건 등록 시작 (BE-93, A-14). 원문은 남기지 않고 사건번호 · 심급만 남긴다
 }
