@@ -1,6 +1,6 @@
 package com.team2.project.admin.caseimport.load;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import com.team2.project.common.exception.BusinessException;
 import com.team2.project.common.exception.ErrorCode;
 import java.time.LocalDate;

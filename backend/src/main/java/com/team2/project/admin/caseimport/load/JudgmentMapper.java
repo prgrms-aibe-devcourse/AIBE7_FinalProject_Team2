@@ -1,6 +1,6 @@
 package com.team2.project.admin.caseimport.load;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import com.team2.project.judgment.domain.Direction;
 import com.team2.project.judgment.domain.ExtraDisposition;
 import com.team2.project.judgment.domain.ExtraDispositionType;
@@ -47,7 +47,8 @@ public class JudgmentMapper {
 			Json.requiredText(judgment, "summary", path + ".summary"),
 			Json.requiredText(judgment, "reasoning", path + ".reasoning"),
 			Json.requiredText(judgment, "plainExplanation", path + ".plainExplanation"),
-			Json.requiredText(judgment, "excerpt", path + ".excerpt"));
+			Json.requiredText(judgment, "excerpt", path + ".excerpt"),
+			List.of());	// 참고 자료 태그는 AI 판결에만 있다
 	}
 
 	/** AI 판결. 쉬운 설명 · 판결문 발췌 · 부가 처분은 재판부에만 있는 값이라 비운다 */
@@ -65,7 +66,8 @@ public class JudgmentMapper {
 			Json.requiredText(output, "summary", "judgment.summary"),
 			Json.requiredText(output, "reasoning", "judgment.reasoning"),
 			null,
-			null);
+			null,
+			Json.stringArray(output, "referenceTags"));
 	}
 
 	/**

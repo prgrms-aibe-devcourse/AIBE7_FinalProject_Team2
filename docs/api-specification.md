@@ -1462,10 +1462,9 @@ A-11과 같은 방식(보낸 필드만, `null` = 지움). `headline` · `article
 | --- | --- |
 | 404 `IMPORT_NOT_FOUND` | 등록 작업이 없음 |
 
-### A-14-1. 사건 등록 적재 —
+### A-14-1. 사건 등록 적재 — `POST /admin/case-imports/{importId}/load`
 
 > 번호: A-16 ~ A-41은 8-4(운영 메뉴 API, 초안)가 예약해 두어, A-14(사건 등록)에 딸린 API라는 뜻으로 A-14-1을 쓴다 (A-13-N과 같은 방식).
- `POST /admin/case-imports/{importId}/load`
 
 생성 결과를 **사건으로 만든다.** A-15가 `SUCCEEDED`가 된 뒤 관리자가 누른다.
 

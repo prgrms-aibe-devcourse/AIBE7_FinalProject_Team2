@@ -240,12 +240,13 @@ public class Judgment {
 	 * 된다 — 적재가 바로 공개하면 검수 흐름을 건너뛴다. 사용자 판결(userPre · userFinal)과 달리 체험에
 	 * 매이지 않으므로 experience는 없다.
 	 *
-	 * @param subjectType {@link SubjectType#AI} 또는 {@link SubjectType#COURT}
+	 * @param subjectType   {@link SubjectType#AI} 또는 {@link SubjectType#COURT}
+	 * @param referenceTags 참고 자료 태그 (AI 판결에만 있다. 화면 S-06이 보여 준다)
 	 */
 	public static Judgment candidate(LegalCase legalCase, SubjectType subjectType, PenaltyType penaltyType,
 			PenaltyType reducedTo, Integer prisonMonths, Long fineAmount, Integer suspensionMonths,
 			List<ExtraDisposition> extraDispositions, String summary, String reasoning, String plainExplanation,
-			String excerpt) {
+			String excerpt, List<String> referenceTags) {
 		if (subjectType != SubjectType.AI && subjectType != SubjectType.COURT) {
 			throw new InvalidJudgmentException(InvalidJudgmentException.Reason.MISSING_DIRECTION,
 				"적재로 만드는 판결은 AI 또는 COURT여야 합니다.");
@@ -265,6 +266,7 @@ public class Judgment {
 		judgment.reasoning = reasoning;
 		judgment.plainExplanation = plainExplanation;
 		judgment.excerpt = excerpt;
+		judgment.referenceTags = referenceTags;
 		judgment.isPublished = false;
 		return judgment;
 	}

@@ -198,6 +198,33 @@ class HttpPipelineClientTest {
 	}
 
 	@Test
+	@DisplayName("결과를 받아 사건 · 판결 JSON을 그대로 읽어 온다 (적재의 입력)")
+	void getResult_parsesPayload() {
+		server.expect(requestTo(BASE + "/jobs/abc123/result"))
+			.andExpect(method(HttpMethod.GET))
+			.andRespond(withSuccess("""
+				{"jobId":"abc123",
+				 "case":{"title":"사건","factors":[{"factorId":7,"label":"계획적"}]},
+				 "report":{"promptVersion":"judgment-v3"},
+				 "courtDraft":{"judgment":{"penaltyType":"PRISON"},"judgmentFactors":[]},
+				 "judgment":{"penaltyType":"PRISON","referenceTags":["양형기준"]},
+				 "selection":{"modelSpec":"gemini:x","runIndex":1,"strategy":"consensus",
+				              "reason":"합의","warnings":[]},
+				 "axis":{"factors":[{"factorId":7,"valueAxis":"FAULT_STANDARD"}]}}""",
+				MediaType.APPLICATION_JSON));
+
+		PipelineResult result = client().getResult("abc123");
+
+		assertThat(result.loadable()).isTrue();
+		assertThat(result.caseContent().get("title").asText()).isEqualTo("사건");
+		assertThat(result.judgment().get("referenceTags").get(0).asText()).isEqualTo("양형기준");
+		assertThat(result.courtDraft().get("judgment").get("penaltyType").asText()).isEqualTo("PRISON");
+		assertThat(result.axis().get("factors").get(0).get("factorId").asInt()).isEqualTo(7);
+		assertThat(result.selection().modelSpec()).isEqualTo("gemini:x");
+		server.verify();
+	}
+
+	@Test
 	@DisplayName("작업 삭제가 실패해도 예외를 던지지 않는다 (정리 실패가 등록 흐름을 막지 않는다)")
 	void deleteJobQuietly_swallowsFailure() {
 		server.expect(requestTo(BASE + "/jobs/abc123"))

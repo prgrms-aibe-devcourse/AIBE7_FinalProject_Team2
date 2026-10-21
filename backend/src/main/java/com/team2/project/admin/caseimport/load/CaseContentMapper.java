@@ -1,6 +1,6 @@
 package com.team2.project.admin.caseimport.load;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import com.team2.project.common.exception.BusinessException;
 import com.team2.project.common.exception.ErrorCode;
 import com.team2.project.legalcase.domain.CaseSection;
@@ -146,12 +146,18 @@ public class CaseContentMapper {
 		// 그 단계를 껐으므로(COMMON-50) 여기서 합친다
 		Map<Integer, JsonNode> votes = byFactorId(Json.array(axis, "factors"));
 		List<Factor> factors = new ArrayList<>();
+		java.util.Set<Integer> seen = new java.util.HashSet<>();
 		boolean hasOverview = false;
 		for (int i = 0; i < items.size(); i++) {
 			JsonNode item = items.get(i);
 			String path = "case.factors[" + i + "]";
 			Integer factorId = Json.integer(item, "factorId");
 			if (factorId == null) {
+				throw Json.invalid(path + ".factorId");
+			}
+			// 같은 번호가 두 번 오면 display_order가 겹친다. 그대로 두면 DB 유니크 제약이나
+			// 판결 쪽 요소 찾기에서 터지는데, 둘 다 422가 아닌 다른 코드로 나간다
+			if (!seen.add(factorId)) {
 				throw Json.invalid(path + ".factorId");
 			}
 			JsonNode extra = extras.get(factorId);

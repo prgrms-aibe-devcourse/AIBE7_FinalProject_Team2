@@ -3,8 +3,8 @@ package com.team2.project.admin.caseimport.load;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 import com.team2.project.admin.caseimport.domain.CaseImport;
 import com.team2.project.admin.caseimport.domain.CaseImportSource;
 import com.team2.project.common.exception.BusinessException;
@@ -33,7 +33,7 @@ class CaseImportLoaderTest extends ApiIntegrationTest {
 
 	@Autowired CaseImportLoader loader;
 
-	private static final ObjectMapper MAPPER = new ObjectMapper();
+	private static final JsonMapper MAPPER = JsonMapper.builder().build();
 
 	private static final String TITLE_PREFIX = "적재 테스트 사건 ";
 
@@ -196,6 +196,30 @@ class CaseImportLoaderTest extends ApiIntegrationTest {
 		assertThat(jdbcTemplate.queryForList(
 			"SELECT value_axis_status FROM factor WHERE case_id = ?", String.class, legalCase.getId()))
 			.containsOnly("AUTO");
+	}
+
+	@Test
+	@DisplayName("AI 판결의 참고 자료 태그를 적재한다 (화면 S-06이 보여 주는 값)")
+	void load_keepsReferenceTags() {
+		LegalCase legalCase = loader.load(caseImport(), result());
+
+		assertThat(jdbcTemplate.queryForObject("""
+			SELECT reference_tags::text FROM judgment WHERE case_id = ? AND subject_type = 'AI'""",
+			String.class, legalCase.getId())).contains("양형기준");
+		// 재판부 판결에는 없는 값이다
+		assertThat(jdbcTemplate.queryForObject("""
+			SELECT reference_tags::text FROM judgment WHERE case_id = ? AND subject_type = 'COURT'""",
+			String.class, legalCase.getId())).isEqualTo("[]");
+	}
+
+	@Test
+	@DisplayName("같은 factorId가 두 번 오면 422로 막는다 (display_order가 겹쳐 판결 연결이 깨진다)")
+	void load_duplicateFactorId() {
+		JsonNode broken = node(caseJson().replace("\"factorId\": 9", "\"factorId\": 7"));
+
+		assertThatThrownBy(() -> loader.load(caseImport(), resultWith(broken)))
+			.isInstanceOf(BusinessException.class)
+			.extracting(e -> ((BusinessException) e).getErrorCode()).isEqualTo(ErrorCode.IMPORT_RESULT_INVALID);
 	}
 
 	// ---------------------------------------------------------------- 도우미

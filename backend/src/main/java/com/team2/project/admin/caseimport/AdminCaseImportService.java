@@ -197,8 +197,13 @@ public class AdminCaseImportService {
 		PipelineResult result = fetchResult(entity.getJobId());
 
 		LegalCase legalCase = transactionTemplate.execute(status -> {
-			CaseImport managed = importRepository.findById(importId)
+			// 행을 잠그고 다시 본다. 버튼을 두 번 누르거나 재시도가 겹치면 둘 다 "아직 적재 안 함"을
+			// 통과해 같은 사건을 두 번 만들려 한다 (PR #242 리뷰)
+			CaseImport managed = importRepository.findByIdForUpdate(importId)
 				.orElseThrow(() -> new BusinessException(ErrorCode.IMPORT_NOT_FOUND));
+			if (managed.isLoaded()) {
+				throw new BusinessException(ErrorCode.IMPORT_NOT_READY, "이미 사건으로 만든 등록입니다.");
+			}
 			LegalCase created = loader.load(managed, result);
 			managed.linkLoadedCase(created);
 			// 원문은 적재하면서 case_source로 옮겼다. 사건번호만 남겨 무엇이 만들어졌는지 추적한다
