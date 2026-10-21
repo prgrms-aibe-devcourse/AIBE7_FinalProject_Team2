@@ -8,7 +8,7 @@ public enum ExperienceStatus {
 	STARTED,			// 체험 시작 (S-03)
 	PRE_JUDGED,			// 사전 판단 제출 완료
 	REVIEWING,			// 사건 정보 확인 중 (S-04)
-	REVIEWED,			// 사건 정보 확인 완료 (S-05 · S-06 가능)
+	REVIEWED,			// 사건 정보 확인 완료 (S-04 · S-05 가능)
 	VERDICT_CONFIRMED,	// 판결 확정 → AI 판결 조회 가능
 	AI_REVEALED,		// 실제 판결 공개 → 실제 판결 조회 가능
 	COMPLETED;			// 비교 공개 → 세 판결 비교 조회 가능

@@ -16,7 +16,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 
 /**
- * API 14. 세 판결 비교 통합 테스트 (S-09)
+ * API 14. 세 판결 비교 통합 테스트 (S-08)
  * ERD 6장 예시 데이터(가상 살인 사건)와 같은 조합을 쓴다: 사전 판단 구간 "실형 5년 이상 ~ 10년 미만"(60 ~ 120개월),
  * 최종 판결 180개월(15년) → HEAVIER.
  */

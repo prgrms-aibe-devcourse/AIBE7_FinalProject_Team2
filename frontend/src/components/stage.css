@@ -40,11 +40,18 @@
 .stage-wrap .bg.dark { background: var(--color-heading); }
 
 /* 캐릭터 = 그림 + 역할 이름표(한 묶음, stage.js). 자리는 캐릭터 가운데 기준(left): 내로 왼쪽(--l) · 남불 오른쪽(--r),
-   data-spot="stand"면 가운데 피고인석(피고인신문). 장면 · 보드에 따라 --l · --r과 키만 바꾼다. 역할별 자리는 추후 따로 정한다 */
+   data-seat는 역할 의상이 정한 자리: 검사 · 판사 왼쪽(검사편) · 변호인 오른쪽 변호인석(누가 맡든 같다). 의상이 없으면 내로 · 남불 기본 자리.
+   data-spot="stand"면 가운데 피고인석(피고인신문). 장면 · 보드에 따라 --l · --r과 키만 바꾼다.
+   슬롯: 대본 spots가 { slot, row }를 주면 무대 폭을 60등분한 칸 번호(0~60, 가운데 = 30)에 선다. row는 앞줄(front) · 뒷줄(back, 조금 작고 앞줄 뒤에 겹친다) */
 .stage-wrap .spr { --l: 16%; --r: 84%; position: absolute; bottom: 25%; height: 62%; left: var(--l); translate: -50% 0; transform-origin: bottom center;
-  transition: left .7s ease-in-out, bottom .5s ease-out, height .4s, opacity .3s; }
+  transition: left .7s ease-in-out, bottom .5s ease-out, height .4s, opacity .3s, scale .4s; }
 .stage-wrap .spr.b { left: var(--r); }
+.stage-wrap .spr[data-seat="left"] { left: var(--l); }
+.stage-wrap .spr[data-seat="right"] { left: var(--r); }
 .stage-wrap .spr[data-spot="stand"] { left: 50%; }
+.stage-wrap .spr[data-slot] { left: calc(var(--slot) / 60 * 100%); }
+.stage-wrap .spr[data-row="front"] { z-index: 2; }
+.stage-wrap .spr[data-row="back"] { z-index: 1; scale: .88; }
 .stage-wrap .spr.role { height: 52%; }
 .stage-wrap .spr-img { display: block; height: 100%; width: auto; transform-origin: bottom center; transition: filter .3s, transform .3s; }
 .stage-wrap .spr.dim .spr-img { filter: brightness(.8) saturate(.85); transform: scale(.97); }
@@ -58,7 +65,7 @@
 /* 역할 이름표: 캐릭터 아래쪽 가운데(정강이 높이 — 발밑까지 내리면 대사창 이름표와 겹친다). 캐릭터와 함께 움직이고, 그림을 못 불러오면 이름표만 남는다 */
 .stage-wrap .spr .chip { position: absolute; left: 50%; bottom: 11%; translate: -50% 0; padding: .15em .9em; border-radius: 999px; background: var(--role); color: var(--color-on-accent); font-size: max(11px, 1.2cqw); font-weight: 800; line-height: 1.5; white-space: nowrap;
   box-shadow: 0 .15em .4em color-mix(in srgb, var(--color-text) 28%, transparent); }
-.stage-wrap .spr .chip[hidden] { display: none; }
+.stage-wrap .spr .chip[hidden], .stage-wrap.chips-off .spr .chip { display: none; }
 .stage-wrap .spr.dim .chip { opacity: .85; }
 /* 법정의 평상복 캐릭터(4막 등)는 역할 의상보다 그림이 넓어서 조금 더 바깥에 선다 */
 @media (min-width: 681px) {

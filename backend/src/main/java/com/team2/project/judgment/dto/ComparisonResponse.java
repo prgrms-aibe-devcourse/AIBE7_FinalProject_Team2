@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * API 14. 세 판결 비교 (S-09) — `GET /cases/{caseId}/experience/comparison`
+ * API 14. 세 판결 비교 (S-08) — `GET /cases/{caseId}/experience/comparison`
  * 사전 판단은 완료 후 이 API에서 처음 내려간다 (독자 의견 표시용).
  */
 public record ComparisonResponse(

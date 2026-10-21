@@ -3,9 +3,10 @@ import { API_MODE } from '../../api/config.js';
 import { renderAxisRow } from '../../components/axisRow.js';
 import { imageOf } from '../../components/stage.js';
 import { AXES, CHARACTER_NAMES } from '../../utils/personalityAxes.js';
-import { axisSeries, collectionOf, trailLeft, trailSummary } from '../../utils/myPageView.js';
-import { BOOKMARK_CHARACTERS, BOOKMARK_NAMES, bookmarkFace, getBookmarkCharacter, setBookmarkCharacter } from '../../utils/bookmarkCharacter.js';
+import { axisSeries, collectionOf, imageKinds, trailLeft, trailSummary } from '../../utils/myPageView.js';
+import { BOOKMARK_CHARACTERS, BOOKMARK_FACES, BOOKMARK_LAWS, BOOKMARK_NAMES, BOOKMARK_STYLES, FACE_NAMES, STYLE_NAMES, getBookmarkCharacter, getBookmarkFaceName, getBookmarkStyle, bookmarkFace, setBookmarkCharacter, setBookmarkFace } from '../../utils/bookmarkCharacter.js';
 import { SCRIPTS } from '../../content/scripts.js';
+import { fitPortraitIn } from '../../utils/portraitFit.js';
 import { clearUser, currentUser, isAdmin } from '../../utils/session.js';
 import { homeRoute } from '../admin/adminMenu.js';
 import { openCaseReviewPopup } from '../caseReview/caseReviewPopup.js';
@@ -30,6 +31,8 @@ const DEFAULT_NICKNAME = '익명의 판사'; // 로그인 · 닉네임 API 전�
 // 닉네임 아래 프로필 수치. 레벨 · 직업 · 출석 일수는 목 데이터(API 전, data.profile이 오면 그 값을 쓴다). 완료한 사건 · 모은 일러스트는 지금 기록에서 센다
 const MOCK_PROFILE = { level: 7, job: '수습 판사', attendanceDays: 12 };
 const IS_MOCK = API_MODE === 'mock'; // 목 모드에서는 체험 기록 · 성향 평균도 목(mocks/personalityMockApi.js)이라 함께 표기한다(FE-56)
+// 개발 서버 + 목 모드에서만 public/images의 webp 전부를 컬렉션 아래에 펼친다(FE-67). 빌드에서는 이 분기가 통째로 빠진다
+const ALL_WEBP = import.meta.env?.DEV ? Object.keys(import.meta.glob('/public/images/**/*.webp', { query: '?url', import: 'default' })).map((key) => key.replace(/^\/public/, '')) : [];
 let cache = null; // 마지막 응답. 항목 화면을 오갈 때 바로 그리고 뒤에서 새로 받는다
 
 const svg = (path, className) => {
@@ -71,6 +74,7 @@ function typePortrait(type) {
     image.addEventListener('error', showName, { once: true });
     image.src = type.imageUrl;
     portrait.append(image);
+    fitPortraitIn(portrait, image); // 이미지마다 다른 투명 여백을 걷어 대표 이미지와 비슷한 크기로 맞춘다(FE-67)
   } else showName();
   return portrait;
 }
@@ -123,8 +127,12 @@ function renderTop(data, go) {
   const section = element('section', 'my-top');
   const who = getBookmarkCharacter();
   const face = element('div', 'my-card-window');
-  face.append(picture(imageOf(who, 'role:judge'), `${BOOKMARK_NAMES[who]} 전신`, 'my-profile-face'));
-  const profile = cardButton('is-profile', `프로필카드 열기: 대표 이미지 ${BOOKMARK_NAMES[who]}-판사`, element('p', 'my-card-name', '대표 이미지'), face, element('p', 'my-card-note', `${BOOKMARK_NAMES[who]}-판사`));
+  const isLaw = BOOKMARK_LAWS.includes(who); // 로는 역할 의상 컷이 없어 대기 자세 마스코트를 대표 이미지로 쓴다
+  const faceImage = picture(isLaw ? `/images/characters/mascot/${who}_idle.webp` : imageOf(who, 'role:judge'), `${BOOKMARK_NAMES[who]} 전신`, 'my-profile-face');
+  face.append(faceImage);
+  fitPortraitIn(face, faceImage);
+  const caption = isLaw ? BOOKMARK_NAMES[who] : `${BOOKMARK_NAMES[who]}-판사`;
+  const profile = cardButton('is-profile', `프로필카드 열기: 대표 이미지 ${caption}`, element('p', 'my-card-name', '대표 이미지'), face, element('p', 'my-card-note', caption));
   profile.addEventListener('click', () => go('profile'));
 
   const middle = element('div', 'my-top-middle');
@@ -242,46 +250,122 @@ function renderTrail(history) {
 function renderBookmarkPicker() {
   const field = element('fieldset', 'my-bookmark');
   field.append(element('legend', '', '책갈피 캐릭터'));
-  const current = getBookmarkCharacter();
-  BOOKMARK_CHARACTERS.forEach((who) => {
+  const current = { who: getBookmarkCharacter(), face: getBookmarkFaceName(), style: getBookmarkStyle() };
+  BOOKMARK_STYLES.forEach((style) => {
+    const group = element('div', 'my-bookmark-group');
+    group.append(element('h3', 'my-bookmark-style', STYLE_NAMES[style]));
+    BOOKMARK_CHARACTERS.forEach((who) => {
+      const row = element('div', 'my-bookmark-row');
+      row.append(element('span', 'my-bookmark-name', BOOKMARK_NAMES[who]));
+      BOOKMARK_FACES.forEach((face) => {
+        const name = `${STYLE_NAMES[style]} · ${BOOKMARK_NAMES[who]} · ${FACE_NAMES[face]}`;
+        const label = element('label', 'my-bookmark-option');
+        label.title = name;
+        const input = element('input');
+        input.type = 'radio';
+        input.name = 'bookmark-face';
+        input.value = `${style}:${who}:${face}`;
+        input.checked = style === current.style && who === current.who && face === current.face;
+        input.setAttribute('aria-label', name);
+        input.addEventListener('change', () => setBookmarkFace(who, face, style));
+        label.append(input, picture(bookmarkFace(who, face, style), ''));
+        row.append(label);
+      });
+      group.append(row);
+    });
+    field.append(group);
+  });
+  const lawGroup = element('div', 'my-bookmark-group');
+  lawGroup.append(element('h3', 'my-bookmark-style', '로 (표정 없이 아이콘 한 장씩)'));
+  const lawRow = element('div', 'my-bookmark-row');
+  lawRow.append(element('span', 'my-bookmark-name', '로'));
+  BOOKMARK_LAWS.forEach((who) => {
     const label = element('label', 'my-bookmark-option');
+    label.title = BOOKMARK_NAMES[who];
     const input = element('input');
     input.type = 'radio';
-    input.name = 'bookmark-character';
+    input.name = 'bookmark-face';
     input.value = who;
-    input.checked = who === current;
+    input.checked = who === current.who;
+    input.setAttribute('aria-label', BOOKMARK_NAMES[who]);
     input.addEventListener('change', () => setBookmarkCharacter(who));
-    label.append(input, picture(bookmarkFace(who), ''), element('span', '', BOOKMARK_NAMES[who]));
-    field.append(label);
+    label.append(input, picture(bookmarkFace(who), ''));
+    lawRow.append(label);
   });
+  lawGroup.append(lawRow);
+  field.append(lawGroup);
   field.append(element('p', 'my-hint', '판결 체험에서 읽던 자리를 표시하는 책갈피에 이 얼굴이 꽂혀요.'));
   return field;
 }
 
-// 컬렉션 — 체험을 마친 사건마다 만난 모습(역할 의상)과 사건 일러스트. 체험하지 않은 사건은 나오지 않는다
+// 컬렉션 카드를 누르면 그림을 크게 띄운다. 바깥 · 닫기 · Esc로 닫는다(dialog가 포커스도 가둔다)
+// 마이페이지의 커피색 역할 토큰이 적용되도록 .my-page 안에 붙이고, 닫으면 지운다
+function zoomIn(src, alt, label) {
+  const dialog = element('dialog', 'collection-zoom');
+  const caption = element('p', 'collection-label', label);
+  caption.id = `collection-zoom-label-${Date.now()}`;
+  dialog.setAttribute('aria-labelledby', caption.id); // 스크린리더가 "대화상자"만 읽지 않게 캡션을 이름으로 쓴다
+  dialog.addEventListener('click', (event) => { if (event.target === dialog) dialog.close(); });
+  dialog.addEventListener('close', () => dialog.remove());
+  dialog.append(picture(src, alt === label ? '' : alt), caption, button('닫기', () => dialog.close(), 'secondary-button'));
+  (document.querySelector('.my-page') ?? document.body).append(dialog);
+  dialog.showModal();
+}
+
+function collectionCard(className, src, alt, label) {
+  const card = element('li', `collection-card ${className}`.trim());
+  const open = element('button', 'collection-open');
+  open.type = 'button';
+  open.setAttribute('aria-label', `${label} 크게 보기`);
+  const frame = element('div', 'collection-window'); // 그림 틀. 캐릭터가 틀에서 같은 크기로 서도록 맞춘다(FE-67)
+  const image = picture(src, '');
+  frame.append(image);
+  fitPortraitIn(frame, image, { top: 20, bottom: 20, side: 0.84, center: true });
+  const caption = element('p', 'collection-label', label);
+  caption.title = label; // 길어서 줄여 보일 때 전체 이름
+  open.append(frame, caption); // 이름은 캡션이 읽는다
+  open.addEventListener('click', () => zoomIn(src, alt, label));
+  card.append(open);
+  return card;
+}
+
+// 컬렉션 — 이미지를 사건별이 아니라 종류별(역할 의상 · 얼굴 아이콘 · 장면 컷 …)로 보여 준다. 사건 고유 이미지는 "사건 이미지" 안에서 사건별로 나눈다
+// 실제 모드: 체험을 마친 사건에서 만난 모습(역할 의상)과 사건 일러스트만 모은다
+// 목 모드(FE-67): public/images의 webp를 전부 펼쳐 어떻게 모이는지 미리 본다
+function collectedKinds(experiences) {
+  if (IS_MOCK && ALL_WEBP.length > 0) return imageKinds(ALL_WEBP, { caseNames: caseNamesOf() });
+  const groups = collectionOf(experiences, SCRIPTS);
+  const labels = {};
+  const paths = [];
+  groups.forEach((group) => {
+    group.cast.forEach(({ who, role, label }) => { const src = imageOf(who, `role:${role}`); paths.push(src); labels[src] = label; });
+    group.items.forEach(({ src, label }) => { paths.push(src); labels[src] = `${group.title} · ${label}`; });
+  });
+  return imageKinds(paths, { labels, caseNames: caseNamesOf() });
+}
+
+const caseNamesOf = () => Object.fromEntries(Object.values(SCRIPTS).map(({ caseId, title }) => [caseId, title]));
+
 function renderCollection(experiences) {
   const box = element('div', 'my-detail');
   box.append(element('p', 'my-hint', '체험한 사건에서 만난 캐릭터 모습과 일러스트를 모아 두는 곳이에요.'), renderBookmarkPicker());
-  const groups = collectionOf(experiences, SCRIPTS);
-  if (groups.length === 0) {
+  const kinds = collectedKinds(experiences);
+  if (kinds.length === 0) {
     box.append(element('p', 'my-hint', '사건 체험을 마치면 그 사건에서 만난 모습과 일러스트가 여기에 모여요.'));
     return box;
   }
-  groups.forEach((group) => {
-    const part = element('section', 'collection-group');
-    part.append(element('h2', 'collection-title', group.title));
+  const cards = (items) => {
     const grid = element('ul', 'collection-grid');
-    group.cast.forEach(({ who, role, label }) => {
-      const card = element('li', 'collection-card is-cast');
-      card.append(picture(imageOf(who, `role:${role}`), ''), element('p', 'collection-label', label)); // 이름은 캡션이 읽는다
-      grid.append(card);
-    });
-    group.items.forEach((item) => {
-      const card = element('li', 'collection-card');
-      card.append(picture(item.src, `${group.title} ${item.label} 일러스트`), element('p', 'collection-label', item.label));
-      grid.append(card);
-    });
-    part.append(grid);
+    items.forEach((item) => grid.append(collectionCard('', item.src, item.label, item.label)));
+    return grid;
+  };
+  kinds.forEach((kind) => {
+    const part = element('section', 'collection-group');
+    const title = element('h2', 'collection-title', `${kind.title} (${kind.items.length})`);
+    if (IS_MOCK) title.append(mockTag());
+    part.append(title);
+    if (kind.groups) kind.groups.forEach((group) => part.append(element('h3', 'collection-subtitle', `${group.title} (${group.items.length})`), cards(group.items)));
+    else part.append(cards(kind.items));
     box.append(part);
   });
   return box;

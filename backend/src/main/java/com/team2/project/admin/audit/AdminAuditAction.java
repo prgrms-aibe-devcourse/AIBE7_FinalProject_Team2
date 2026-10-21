@@ -10,5 +10,8 @@ public enum AdminAuditAction {
 	JUDGMENT_REJECT,	// A-10
 	CASE_UPDATE,		// A-11
 	VALUE_AXIS_CONFIRM,	// A-12
-	CASE_PUBLISH		// A-13
+	CASE_PUBLISH,		// A-13
+	CASE_PHOTO_UPLOAD,	// 사건 사진 업로드 (BE-91)
+	CASE_PAPER_GENERATE,	// 신문 지면 생성 (BE-92)
+	CASE_PAPER_UPDATE	// 신문 지면 수정 (BE-92)
 }

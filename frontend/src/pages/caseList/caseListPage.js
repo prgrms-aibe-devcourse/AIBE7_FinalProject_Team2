@@ -1,7 +1,7 @@
 import { button, element, mockTag, renderSiteFooter } from '../../components/siteLayout.js';
 import { API_MODE } from '../../api/config.js';
 import { scriptFor } from '../overview/overviewPage.js';
-import { casePhoto } from '../../utils/newspaper.js';
+import { casePhoto, useCommonPhotoOnError } from '../../utils/newspaper.js';
 import { newspaperMasthead } from '../../components/newspaperFront.js';
 import { turnPage } from '../../utils/pageTurn.js';
 import { reducedMotion } from '../../utils/motion.js';
@@ -51,7 +51,7 @@ const SOON = { badge: '준비 중', tone: 'soon' };
 const statusViewOf = (item) => STATUS_VIEW[item.myStatus] ?? (scriptFor(item.caseId, item.title) ? NOT_STARTED : SOON);
 const PICK_LABEL = '사건 펼쳐 보기';
 const JUMP_LABEL = '3면에 계속'; // 신문의 이어 읽기 줄(jump line). 누르면 사건 지면(S-20, 3면)으로 간다
-const NAMBUL_FACE = '/images/characters/icon/nambul_face-happy.webp';
+const NAMBUL_FACE = '/images/characters/icon/generated/nambul_face-happy.webp';
 const UNFLIP_MS = 450; // 8막에서 뒤집고 온 빈 종이 · 바탕을 걷는 시간(그동안 기사가 페이드인한다)
 const RISE_WAIT_MS = 1200; // 책상에서 들고 올 때 지면이 다 그려지기를 기다리는 최대 시간(그동안 책상은 신문을 든 채로 남아 있다)
 const headlineOf = (item) => item.headline || item.title;
@@ -215,6 +215,7 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
 
   function photo(item) {
     const image = element('img', 'photo');
+    useCommonPhotoOnError(image, Number(item?.caseId) || 0); // 썸네일 로딩 실패 시 공용 컷 (src보다 먼저)
     image.src = casePhoto(item); // 썸네일이 없으면 공용 재연 컷(샘플)
     image.alt = ''; // 연출 이미지라 읽지 않는다 (사건 정보는 제목 · 소개문에 있다)
     image.width = 3; // 비율 힌트(3:2). 크기는 CSS가 정한다

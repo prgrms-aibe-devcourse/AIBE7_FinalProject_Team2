@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 결과 공개 · 조회 (API 10 ~ 14, S-07 · S-08 · S-09)
+ * 결과 공개 · 조회 (API 10 ~ 14, S-06 · S-07 · S-08)
  * 상태를 바꾸는 공개는 POST, 결과를 읽는 조회는 GET으로 나눈다. 새로고침하면 조회만 다시 부르면 된다.
  */
 @Slf4j
@@ -32,7 +32,7 @@ public class JudgmentResultController {
 	private final ComparisonService comparisonService;
 	private final AnonymousIdCookie anonymousIdCookie;
 
-	/** API 10. AI 판결 (S-07) */
+	/** API 10. AI 판결 (S-06) */
 	@GetMapping("/judgments/ai")
 	public AiJudgmentResponse getAiJudgment(@PathVariable Long caseId, HttpServletRequest request) {
 		return judgmentResultService.getAiJudgment(caseId, anonymousIdCookie.read(request));
@@ -44,7 +44,7 @@ public class JudgmentResultController {
 		return revealService.revealCourt(caseId, anonymousIdCookie.read(request));
 	}
 
-	/** API 12. 실제 판결 (S-08) */
+	/** API 12. 실제 판결 (S-07) */
 	@GetMapping("/judgments/court")
 	public CourtJudgmentResponse getCourtJudgment(@PathVariable Long caseId, HttpServletRequest request) {
 		return judgmentResultService.getCourtJudgment(caseId, anonymousIdCookie.read(request));
@@ -56,7 +56,7 @@ public class JudgmentResultController {
 		return revealService.revealComparison(caseId, anonymousIdCookie.read(request));
 	}
 
-	/** API 14. 세 판결 비교 (S-09) */
+	/** API 14. 세 판결 비교 (S-08) */
 	@GetMapping("/comparison")
 	public ComparisonResponse getComparison(@PathVariable Long caseId, HttpServletRequest request) {
 		return comparisonService.getComparison(caseId, anonymousIdCookie.read(request));

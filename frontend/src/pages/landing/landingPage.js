@@ -1,5 +1,5 @@
 import { button, element, renderSiteFooter } from '../../components/siteLayout.js';
-import { casePhoto, fallbackImages, todayLabel } from '../../utils/newspaper.js';
+import { casePhoto, fallbackImages, todayLabel, useCommonPhotoOnError } from '../../utils/newspaper.js';
 import { takePaper } from '../../utils/paperHandoff.js';
 import { flyCoffee } from '../../utils/coffeeDive.js';
 import { bootLaptop } from '../../utils/laptopBoot.js';
@@ -378,6 +378,7 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
     earCount.textContent = `법정에 오른 사건 ${summary.total}건`;
     tabCount.textContent = `총 ${summary.total}건`;
     lead.textContent = top.article?.[0] || top.shortIntro;
+    useCommonPhotoOnError(photo, Number(top.caseId) || 0);
     photo.src = casePhoto(top);
     recs.replaceChildren(...others.slice(0, 2).map((item) => {
       const node = span('news-rec');
@@ -386,12 +387,14 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
       picture.alt = '';
       picture.width = 16; // 비율 힌트. 크기는 CSS가 정한다
       picture.height = 9;
+      useCommonPhotoOnError(picture, Number(item.caseId) || 0);
       picture.src = casePhoto(item);
       node.append(picture, element('b', '', item.headline || item.title), span('', item.article?.join(' ') || item.shortIntro));
       return node;
     }));
     mobileCounts.news.textContent = `사건 ${summary.total}건`;
     mobileNews.headline.textContent = top.headline || top.title;
+    useCommonPhotoOnError(mobileNews.photo, Number(top.caseId) || 0);
     mobileNews.photo.src = casePhoto(top);
   }
   if (api?.getCases) fillNews();

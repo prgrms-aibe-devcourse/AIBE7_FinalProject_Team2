@@ -1,7 +1,7 @@
 import { button, element, renderSiteHeader } from '../../components/siteLayout.js';
 import { canGoBackInApp } from '../../app/router.js';
 
-// S-21 사건 리뷰 (FE-55). 8막 마지막 대사창의 "엽서 쓰기"로 들어오는 독자 엽서 화면.
+// S-09 리뷰 페이지 · 독자 엽서 (FE-55, 화면 ID는 BE-82). 8막 마지막 대사창의 "엽서 쓰기"로 들어오는 독자 엽서 화면.
 // 위: 이 사건의 평균 별점 → 내 엽서(별점 + 내 의견, 사건마다 한 장) → 아래: 다른 독자의 엽서.
 // 리뷰 API가 아직 명세에 없어 목 모드에서만 동작한다(mocks/caseReviewMockApi.js). 실제 모드에는 api.getCaseReviews가 없어 "준비 중"으로 안내한다.
 const COMMENT_MAX = 200;
