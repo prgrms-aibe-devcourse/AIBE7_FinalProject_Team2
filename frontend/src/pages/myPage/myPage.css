@@ -285,6 +285,11 @@ img.my-sash-icon.is-missing { visibility: hidden; }
 .trend-dot.is-test { fill: var(--color-card); stroke: var(--color-accent); }
 .trend-dot.is-current { fill: var(--color-desk-coffee); } /* 변경폭의 지금 점과 같은 진한 커피색 */
 .trend-line.is-current { stroke-dasharray: 3 3; }
+/* 강조한 칸(내 결과 지면의 이 사건, FE-75): 세로 띠 · 진한 눈금 · 갈색 점 */
+.trend-focus { fill: color-mix(in srgb, var(--color-label) 16%, transparent); }
+.trend-tick.is-focus { fill: var(--color-heading); font-weight: 800; }
+.trend-dot.is-focus { fill: var(--color-label); }
+.trend-table tr.is-focus :is(th, td) { font-weight: 700; }
 .trend-hit { fill: transparent; cursor: default; }
 .trend-tip {
   position: absolute; z-index: 2; display: grid; gap: 2px; width: max-content; max-width: 220px; padding: 6px 10px; border-radius: 6px;

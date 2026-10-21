@@ -1,5 +1,6 @@
 import { AXES } from '../utils/personalityAxes.js';
 import { imageNumberOf, QUESTIONS, TYPES } from './personalityMockData.js';
+import { shareIdOfCode } from '../utils/personalityTypes.js';
 import { mockCases } from './caseListMockData.js';
 import { mockProfileView, setStatsReader } from './profileDecoMockApi.js';
 
@@ -54,15 +55,9 @@ function score(answers) {
   return { typeCode: letters.join(''), axisScores };
 }
 
-// 공유 주소용 해시. 실제로는 서버가 시드로 고정한다(유형 코드를 주소에 드러내지 않는 값, 명세 9-1). 목은 코드에서 결정적으로 만든다
-function shareIdOf(code) {
-  let hash = 2166136261; // FNV-1a
-  for (const char of `nlnb-share:${code}`) {
-    hash ^= char.charCodeAt(0);
-    hash = Math.imul(hash, 16777619) >>> 0;
-  }
-  return hash.toString(36).padStart(7, '0') + (hash % 36).toString(36); // 8자
-}
+// 공유 주소용 해시(유형 코드를 주소에 드러내지 않는 값, 명세 9-1). 서버 시드와 같은 값을 쓴다(og/personality-types.json).
+// 목과 실제 API가 같은 shareId를 받아야 내 결과 지면이 축 점수로 고른 유형을 P-4로 받아 올 수 있다(FE-75)
+const shareIdOf = shareIdOfCode;
 const SHARE_IDS = Object.fromEntries(Object.keys(TYPES).map((code) => [shareIdOf(code), code]));
 
 // 유형 공통 형식(명세 9-1). 4글자 코드 · 밈 장면 설명(scene)은 응답에 넣지 않는다

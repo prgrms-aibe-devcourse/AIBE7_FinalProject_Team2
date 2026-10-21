@@ -34,8 +34,8 @@ function picture(src, className, alt = '') {
   image.addEventListener('error', () => image.remove(), { once: true });
   return image;
 }
-// 지면 기사 한 꼭지: 카메라가 찾는 이름(data-focus) + 제목 + 내용
-function story(focus, title, ...children) {
+// 지면 기사 한 꼭지: 카메라가 찾는 이름(data-focus) + 제목 + 내용. 마이페이지 내 결과 지면(FE-75)도 같은 꼭지를 쓴다
+export function story(focus, title, ...children) {
   const node = element('section', `sheet-story sheet-${focus}`);
   node.dataset.focus = focus;
   node.append(element('h3', 'sheet-head', title), ...children);
@@ -65,38 +65,11 @@ function courtPhoto() {
 }
 
 // 다음 날 신문 한 장: 제호 · 1면(제목 · 사진) · 세 판결 · 판단 요소 · 칼럼(처음 → 직접) · 분석(공통점 · 차이점) · 사진란(만난 모습)
+// 제호 · 1면 · 독자 의견 · 만난 모습 · 광고는 마이페이지 내 결과 지면(FE-75)도 그대로 쓴다(아래 내보낸 함수들)
 function newspaper(data, script, caseTitle, navigate, openReview) {
-  const { preToFinal, judgments, matrix, ruleSentences } = data;
+  const { judgments, matrix, ruleSentences } = data;
   const sheet = element('article', 'sheet');
   sheet.setAttribute('aria-label', '다음 날 신문');
-
-  const mast = element('header', 'sheet-mast');
-  const info = element('div', 'sheet-info');
-  info.append(element('span', '', '판결 체험 신문'), element('span', '', '종합'));
-  const brand = element('div', 'sheet-brand');
-  brand.append('내', element('span', 'law', 'Law'), '남불');
-  const date = element('div', 'sheet-date');
-  const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
-  date.append(element('span', '', new Intl.DateTimeFormat('ko-KR', { dateStyle: 'full' }).format(tomorrow)), element('span', '', '참여 무료'));
-  // 귀(제호 양옆): "여기 남아있기"로 지면을 읽을 때만 보인다(courtSketch.css). 왼쪽은 다른 사건 보기(신문을 뒤집고 1면으로),
-  // 오른쪽은 아직 정하지 않은 자리라 메모만 붙여 둔다
-  const earLeft = element('button', 'sheet-ear sheet-ear-left is-clickable');
-  earLeft.type = 'button';
-  earLeft.append(element('b', '', '← 다른 사건 보기'), element('small', '', '신문을 뒤집어 오늘의 지면으로'));
-  const earRight = element('div', 'sheet-ear sheet-ear-right');
-  earRight.append(element('span', 'sheet-ear-memo', '고민 중'));
-  const brandRow = element('div', 'sheet-brand-row');
-  brandRow.append(earLeft, brand, earRight);
-  mast.append(info, brandRow, date);
-
-  const front = element('section', 'sheet-story sheet-front');
-  front.dataset.focus = 'front';
-  const lead = element('div', 'sheet-lead');
-  lead.append(element('p', 'sheet-deck', `${caseTitle}, 내 판결과 AI 판결, 실제 재판부의 판결을 나란히 싣는다`),
-    element('p', 'sheet-text', '같은 사건 기록을 놓고 세 쪽이 각자 형량을 정했다. 무엇을 무겁게 보고 무엇을 가볍게 봤는지, 지면 곳곳에 나눠 실었다.'));
-  const frontBody = element('div', 'sheet-front-body');
-  frontBody.append(courtPhoto(), lead);
-  front.append(element('h2', 'sheet-headline', '같은 사건, 세 개의 판결'), frontBody);
 
   const verdicts = element('div', 'sheet-verdict-row');
   SUBJECTS.forEach(([key, label]) => {
@@ -133,7 +106,57 @@ function newspaper(data, script, caseTitle, navigate, openReview) {
     return part;
   });
 
-  // 이번 사건에서 만난 모습(대본의 역할 의상). 누르면 마이페이지 컬렉션으로 간다(FE-44)
+  sheet.append(masthead(), frontStory(caseTitle), letterStory(data, openReview),
+    story('verdicts', '세 판결, 나란히', verdicts),
+    castStory(script, navigate),
+    story('factors', '판단 요소, 어디서 갈렸나', table),
+    story('rules', '같게 본 것, 다르게 본 것', ...rules),
+    advertisements());
+  return sheet;
+}
+
+// 제호: 정보 줄 · [왼쪽 귀 | 제호 | 오른쪽 귀] · 날짜(다음 날)
+export function masthead() {
+  const mast = element('header', 'sheet-mast');
+  const info = element('div', 'sheet-info');
+  info.append(element('span', '', '판결 체험 신문'), element('span', '', '종합'));
+  const brand = element('div', 'sheet-brand');
+  brand.append('내', element('span', 'law', 'Law'), '남불');
+  const date = element('div', 'sheet-date');
+  const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  date.append(element('span', '', new Intl.DateTimeFormat('ko-KR', { dateStyle: 'full' }).format(tomorrow)), element('span', '', '참여 무료'));
+  // 귀(제호 양옆): "여기 남아있기"로 지면을 읽을 때만 보인다(courtSketch.css). 왼쪽은 다른 사건 보기(신문을 뒤집고 1면으로),
+  // 오른쪽은 아직 정하지 않은 자리라 메모만 붙여 둔다
+  const earLeft = element('button', 'sheet-ear sheet-ear-left is-clickable');
+  earLeft.type = 'button';
+  earLeft.append(element('b', '', '← 다른 사건 보기'), element('small', '', '신문을 뒤집어 오늘의 지면으로'));
+  const earRight = element('div', 'sheet-ear sheet-ear-right');
+  earRight.append(element('span', 'sheet-ear-memo', '고민 중'));
+  const brandRow = element('div', 'sheet-brand-row');
+  brandRow.append(earLeft, brand, earRight);
+  mast.append(info, brandRow, date);
+  return mast;
+}
+
+// 1면: 헤드라인 · 법정 사진 · 리드. leadText: { headline, deck, text }를 넘기면 그 문구로 바꾼다(내 결과 지면, FE-75).
+// deck · text는 글자와 요소(굵은 형량 등)의 배열이다
+export function frontStory(caseTitle, leadText) {
+  const front = element('section', 'sheet-story sheet-front');
+  front.dataset.focus = 'front';
+  const lead = element('div', 'sheet-lead');
+  const deck = element('p', 'sheet-deck');
+  deck.append(...(leadText?.deck ?? [`${caseTitle}, 내 판결과 AI 판결, 실제 재판부의 판결을 나란히 싣는다`]));
+  const text = element('p', 'sheet-text');
+  text.append(...(leadText?.text ?? ['같은 사건 기록을 놓고 세 쪽이 각자 형량을 정했다. 무엇을 무겁게 보고 무엇을 가볍게 봤는지, 지면 곳곳에 나눠 실었다.']));
+  lead.append(deck, text);
+  const frontBody = element('div', 'sheet-front-body');
+  frontBody.append(courtPhoto(), lead);
+  front.append(element('h2', 'sheet-headline', leadText?.headline ?? '같은 사건, 세 개의 판결'), frontBody);
+  return front;
+}
+
+// 이번 사건에서 만난 모습(대본의 역할 의상). 누르면 마이페이지 컬렉션으로 간다(FE-44)
+export function castStory(script, navigate) {
   const cast = element('ul', 'sheet-cast-grid');
   castOf(script).forEach(({ who, role, label }) => {
     const item = element('li');
@@ -147,7 +170,12 @@ function newspaper(data, script, caseTitle, navigate, openReview) {
     item.append(open);
     cast.append(item);
   });
+  return story('cast', '이번 사건에서 만난 모습', cast);
+}
 
+// openReview(letter): 엽서를 눌렀을 때 독자 엽서를 연다
+export function letterStory(data, openReview) {
+  const { preToFinal } = data;
   // 독자 의견란: 2막에서 보낸 엽서가 다음 날 신문 독자란에 실려 돌아온다. 처음 보낸 첫인상만 다시 싣는다(API 14의 preToFinal.preJudgment).
   // 아래 편집부 의견은 그 첫인상을 실제 판결과 견줘 한 줄로 적는다(어느 쪽이 맞는지는 말하지 않는다).
   // 추후 확장(우선도 낮음): 사용자 데이터가 쌓이면 이 칸에 다른 독자들의 첫인상 분포를 함께 보여 줄 수 있다 — 지금은 데이터가 없어 보여 주지 않는다.
@@ -174,20 +202,42 @@ function newspaper(data, script, caseTitle, navigate, openReview) {
     edit.append(element('b', '', '편집부 의견'), note);
     letter.append(edit);
   }
+  return story('letters', '독자 의견', letter);
+}
 
-  sheet.append(mast, front,
-    story('letters', '독자 의견', letter),
-    story('verdicts', '세 판결, 나란히', verdicts),
-    story('cast', '이번 사건에서 만난 모습', cast),
-    story('factors', '판단 요소, 어디서 갈렸나', table),
-    story('rules', '같게 본 것, 다르게 본 것', ...rules),
-    advertisements());
-  return sheet;
+// 지면을 읽는 상태로 연다: 만난 모습 · 독자 엽서 · 성향 테스트 광고를 누를 수 있게 한다(체험 중에는 막혀 있다).
+// onTestAd: 성향 테스트 광고를 눌렀을 때(6막은 신문을 넘겨 오피니언 면으로, FE-55)
+export function openForReading(sheet, onTestAd) {
+  sheet.querySelectorAll('.sheet-cast-link').forEach((link) => {
+    link.disabled = false;
+    link.setAttribute('aria-label', link.dataset.openLabel);
+  });
+  const letter = sheet.querySelector('.sheet-letter');
+  if (letter) {
+    letter.classList.add('is-clickable');
+    letter.setAttribute('role', 'button');
+    letter.tabIndex = 0;
+    letter.setAttribute('aria-label', '독자 엽서 — 이 사건에 엽서 쓰기');
+  }
+  // 지면 아래 "판결 성향 테스트" 광고
+  const testAd = sheet.querySelector('.sheet-ad.is-lead');
+  if (testAd) { // 광고 단이 없어도 읽기 화면은 열린다
+    testAd.classList.add('is-clickable');
+    testAd.setAttribute('role', 'button');
+    testAd.tabIndex = 0;
+    testAd.setAttribute('aria-label', '판결 성향 테스트 — 신문을 넘겨 시작하기');
+    testAd.addEventListener('click', onTestAd);
+    testAd.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      onTestAd();
+    });
+  }
 }
 
 // 지면 맨 아래 광고 · 알림 단: 서비스 안의 다른 메뉴를 신문 광고처럼 싣는다(누르지 않는 장식, 메인 책상의 물건과 같은 이름).
 // 마지막 기사(공통점 · 차이점, 만난 모습)가 지면 끝에 붙지 않게 해서, 카메라가 그 기사를 화면 가운데로 당길 수 있다
-function advertisements() {
+export function advertisements() {
   const ads = element('aside', 'sheet-ads');
   ads.setAttribute('aria-label', '광고 · 알림');
   const ad = (kind, tag, title, text) => {
@@ -268,29 +318,7 @@ export function renderComparisonStage({ script, data, caseId, caseTitle, navigat
     const from = sheet.getBoundingClientRect();
     stage.freeze();
     stage.classList.add('reading-paper');
-    sheet.querySelectorAll('.sheet-cast-link').forEach((link) => {
-      link.disabled = false;
-      link.setAttribute('aria-label', link.dataset.openLabel);
-    });
-    const letter = sheet.querySelector('.sheet-letter');
-    letter.classList.add('is-clickable');
-    letter.setAttribute('role', 'button');
-    letter.tabIndex = 0;
-    letter.setAttribute('aria-label', '독자 엽서 — 이 사건에 엽서 쓰기');
-    // 지면 아래 "판결 성향 테스트" 광고: 누르면 신문을 한 장 넘겨 뒷면(오피니언 면)의 성향 테스트로 간다(FE-55)
-    const testAd = sheet.querySelector('.sheet-ad.is-lead');
-    if (testAd) { // 광고 단이 없어도 읽기 화면은 열린다
-      testAd.classList.add('is-clickable');
-      testAd.setAttribute('role', 'button');
-      testAd.tabIndex = 0;
-      testAd.setAttribute('aria-label', '판결 성향 테스트 — 신문을 넘겨 시작하기');
-      testAd.addEventListener('click', turnToTest);
-      testAd.addEventListener('keydown', (event) => {
-        if (event.key !== 'Enter' && event.key !== ' ') return;
-        event.preventDefault();
-        turnToTest();
-      });
-    }
+    openForReading(sheet, turnToTest);
     window.scrollTo(0, 0);
     sheet.setAttribute('tabindex', '-1');
     sheet.focus({ preventScroll: true });

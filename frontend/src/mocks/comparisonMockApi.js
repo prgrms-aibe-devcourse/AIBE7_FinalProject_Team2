@@ -21,9 +21,11 @@ function checkState(caseId) {
 }
 
 // API 14 — GET /cases/{caseId}/experience/comparison
-export async function getComparison(caseId) {
+// record: 마이페이지 "내 결과 보기"(FE-75)의 목 전용 옵션. 마이페이지 목은 여러 사건을 마친 기록이라(personalityMockApi.js)
+// 지금 체험 상태 · 사건 번호를 따지지 않고 1번 사건 비교 목을 돌려준다(화면에 "목데이터" 표기). 실제 API에는 없는 인수다
+export async function getComparison(caseId, { record = false } = {}) {
   await delay();
-  checkState(caseId);
+  if (!record) checkState(caseId);
   const myJudgment = getMyJudgment();
   const preJudgment = readPreJudgment() ?? fallbackPreJudgment;
   const { ai, court, factorLabels, factorTags, factorRevealStages } = mockComparisonBase;
