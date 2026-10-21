@@ -180,6 +180,7 @@ img.my-sash-icon.is-missing { visibility: hidden; }
 .my-mini-card .my-sash-icon { display: none; } /* 견본은 작아서 아이콘을 그리지 않는다 */
 .my-card:not(.deco-sash-none) .my-card-name { padding-inline: calc(var(--sash-x) + var(--sash-w) - 4.7cqi); } /* 위 닉네임이 책갈피에 가리지 않게 */
 .my-card.is-profile .my-card-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; align-self: center; } /* 닉네임은 한 줄, 길면 ... */
+.my-card.is-profile .my-card-note { font: 900 10.6cqi/1.3 var(--font-heading); letter-spacing: -.02em; } /* 하단 성향 이름은 성향카드 상단 이름(.my-card-name)과 같은 글꼴 */
 .my-card.is-profile .my-card-note.is-empty { opacity: .7; }
 .my-card.is-preview { cursor: default; }
 @media (hover: hover) and (pointer: fine) { .my-card.is-preview:hover { transform: none; } }
@@ -255,7 +256,7 @@ img.my-sash-icon.is-missing { visibility: hidden; }
 }
 .change-gain::before {
   content: ''; position: absolute; inset: 0; --base: max(0px, 100% - 10px);
-  background: repeating-linear-gradient(-45deg, var(--color-card) 0 1.5px, color-mix(in srgb, var(--ink) 65%, var(--color-heading)) 1.5px 5px); /* 막대보다 진한 바탕에 흰 빗금 */
+  background: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--ink) 45%, var(--color-card)) 0 1.5px, color-mix(in srgb, var(--ink) 65%, var(--color-heading)) 1.5px 5px); /* 막대보다 진한 바탕에 화살표색을 밝힌 빗금 */
 }
 .change-gain.is-strict { --ink: var(--axis-strict); } /* 엄격이 늘었다: 오른쪽을 가리킨다 */
 .change-gain.is-strict::before { clip-path: polygon(0 4px, var(--base) 4px, var(--base) 0, 100% 50%, var(--base) 100%, var(--base) 14px, 0 14px); }

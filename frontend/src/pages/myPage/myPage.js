@@ -247,7 +247,7 @@ function profileCardParts(deco, data) {
   face.append(faceImage);
   fitPortraitIn(face, faceImage, { centerWide: true }); // 가로로 긴 그림(사건 사진 등)은 창 세로 가운데에, 서 있는 캐릭터는 발을 아래에
   const nickname = data.nickname || DEFAULT_NICKNAME;
-  const typeName = data.personality?.type?.name;
+  const typeName = currentTypeOf(data)?.name;
   const result = element('p', `my-card-note${typeName ? '' : ' is-empty'}`, typeName ?? '성향 테스트 전');
   return {
     caption,
@@ -256,6 +256,9 @@ function profileCardParts(deco, data) {
     children: [element('p', 'my-card-name', nickname), face, result, ...sashes(deco)],
   };
 }
+
+// 성향카드가 보여 줄 현재 유형: 현재 판결 성향(최근 체험 평균). 네 축이 다 모이지 않아 없으면 성향 테스트 유형. 첫 화면 · 성향카드 화면이 같이 쓴다
+const currentTypeOf = (data) => data.judgmentPersonality?.type ?? data.personality?.type;
 
 // 첫 화면 위쪽: [프로필카드(대표 이미지 · 꾸미기) | 닉네임 · 수치 | 성향카드(타로카드: 이름 · 성향 이미지 · 대사 한 줄)]
 function renderTop(data, go) {
@@ -268,7 +271,7 @@ function renderTop(data, go) {
   const middle = element('div', 'my-top-middle');
   middle.append(element('h2', 'my-nickname', data.nickname || DEFAULT_NICKNAME), renderStats(stats));
 
-  const type = data.personality?.type;
+  const type = currentTypeOf(data);
   const typeCardNode = type
     ? cardButton('is-type', `성향카드 열기: ${type.name}`, element('p', 'my-card-name', type.name), typePortrait(type), element('p', 'my-card-note my-type-quote', type.meme))
     : cardButton('is-type is-empty', '성향카드 열기: 아직 성향을 몰라요', element('p', 'my-card-name', '아직 몰라요'), emptyWindow(), element('p', 'my-card-note my-type-quote', '"성향 테스트로 카드를 뽑아 봐요"'));
@@ -746,13 +749,12 @@ function typeShift(data) {
 // 성향카드 화면 — 왼쪽에 지금 유형 타로카드(이름 · 성향 이미지 · 캐릭터 대사), 오른쪽에 판결에서 드러난 성향, 그 아래에 성향 변경폭 · 성향 변화 흐름
 function renderTypePage(data, navigate) {
   const box = element('div', 'my-detail');
-  const type = data.personality?.type;
   const judgment = element('section', 'my-type-section');
   const judgmentHead = element('div', 'my-type-head');
   judgmentHead.append(element('h2', 'my-section-title', '판결에서 드러난 성향'));
   judgment.append(judgmentHead, renderJudgment(data.judgmentPersonality, judgmentHead));
-  // 왼쪽 카드 · 설명은 옆 막대(현재 판결 성향)와 같은 유형이다. 네 축이 다 모이지 않아 현재 유형이 없으면 성향 테스트 유형
-  const heroType = data.judgmentPersonality?.type ?? type;
+  // 왼쪽 카드 · 설명은 옆 막대(현재 판결 성향)와 같은 유형이고, 첫 화면 성향카드와도 같다
+  const heroType = currentTypeOf(data);
   if (heroType) {
     const hero = element('section', 'my-type-hero');
     const card = typeFace(heroType);
