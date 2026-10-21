@@ -87,6 +87,46 @@ class ProfileDecoValidatorTest {
 	}
 
 	@Test
+	@DisplayName("저장값과 같은 칸은 잠겨 있어도 다시 거절하지 않고, 바꾼 칸만 검사한다 (BE-98)")
+	void savedLockedValueKept() {
+		// 표가 바뀌어 저장해 둔 테두리 gold · 짧은 책갈피 아이콘 law가 잠긴 상황
+		ProfileDecoValues saved = with(D.portrait(), "gold", "short", "wine", "wine", "law", "none");
+		ProfileDecoValues changedOther = new ProfileDecoValues(saved.portrait(), "gold", "cream", "short", "wine", "wine", "law",
+			"star", "nambul", "cheer", "cropped", "navy");
+
+		assertThatCode(() -> ProfileDecoValidator.validate(changedOther, FREE, saved)).doesNotThrowAnyException();
+
+		BusinessException e = fail3(with(D.portrait(), "navy", "short", "wine", "wine", "law", "none"), saved);
+		assertThat(e.getErrorCode()).isEqualTo(ErrorCode.DECO_LOCKED);
+		assertThat(e.getDetails()).containsExactly(new FieldErrorDetail("frame", "DECO_LOCKED"));
+	}
+
+	@Test
+	@DisplayName("저장할 때 쓰이지 않던 칸은 값이 같아도 쓰이게 되면 다시 검사한다 (안 쓰이는 칸에 넣어 두고 여는 것 방지)")
+	void inactiveSavedValueRechecked() {
+		// 책갈피 없음 + 짧은 책갈피 색 gold(잠김)로 저장해 두었다가 모양만 짧은 책갈피로 바꾼다
+		ProfileDecoValues saved = with(D.portrait(), "basic", "none", "gold", "wine", "law", "none");
+
+		BusinessException e = fail3(with(D.portrait(), "basic", "short", "gold", "wine", "law", "none"), saved);
+
+		assertThat(e.getErrorCode()).isEqualTo(ErrorCode.DECO_LOCKED);
+		assertThat(e.getDetails()).extracting(FieldErrorDetail::field)
+			.containsExactlyInAnyOrder("sashColorShort", "sashIconLeft");
+	}
+
+	@Test
+	@DisplayName("형식 · 값 목록은 저장값과 같아도 늘 검사한다")
+	void valuesAlwaysChecked() {
+		ProfileDecoValues broken = portrait("/images/../x.webp");
+
+		assertThat(fail3(broken, broken).getErrorCode()).isEqualTo(ErrorCode.VALIDATION_ERROR);
+	}
+
+	private static BusinessException fail3(ProfileDecoValues deco, ProfileDecoValues saved) {
+		return catchThrowableOfType(BusinessException.class, () -> ProfileDecoValidator.validate(deco, FREE, saved));
+	}
+
+	@Test
 	@DisplayName("지금 쓰이지 않는 칸은 잠김을 보지 않는다 (고르지 않은 모양의 색 · 짧은 책갈피가 아닐 때 아이콘)")
 	void inactiveFieldsIgnored() {
 		// 책갈피 없음: 긴 띠 색 gold · 아이콘 law는 잠겨 있지만 쓰이지 않는다

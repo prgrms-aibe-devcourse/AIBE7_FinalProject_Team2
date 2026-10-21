@@ -33,6 +33,7 @@ class ProfileDecoApiTest extends ApiIntegrationTest {
 	@AfterEach
 	void deleteBareUsers() {
 		bareUserIds.forEach(id -> {
+			jdbcTemplate.update("DELETE FROM attendance WHERE anonymous_user_id = ?", id);	// 발급 시 출석(BE-98)
 			jdbcTemplate.update("DELETE FROM profile_deco WHERE anonymous_user_id = ?", id);
 			jdbcTemplate.update("DELETE FROM anonymous_user WHERE id = ?", id);
 		});
@@ -183,5 +184,49 @@ class ProfileDecoApiTest extends ApiIntegrationTest {
 		UUID issued = UUID.fromString(setCookie.split(";")[0].substring((COOKIE + "=").length()));
 		bareUserIds.add(issued);
 		assertThat(countDeco(issued)).isEqualTo(1);
+		// 발급할 때 그날 출석도 함께 남긴다 (BE-98)
+		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM attendance WHERE anonymous_user_id = ?",
+			Integer.class, issued)).isEqualTo(1);
+	}
+
+	private void insertSavedDeco(UUID id, String frame, String sashStyle, String sashColorShort) {
+		jdbcTemplate.update("""
+			INSERT INTO profile_deco (anonymous_user_id, portrait, frame, background, sash_style, sash_color_short,
+			  sash_color_long, sash_icon_left, sash_icon_right, bookmark_character, bookmark_face, bookmark_face_style, bookmark_color)
+			VALUES (?, '/images/characters/standing/naero.webp', ?, 'cream', ?, ?, 'wine', 'none', 'none',
+			  'naero', 'happy', 'generated', 'bronze')
+			""", id, frame, sashStyle, sashColorShort);
+	}
+
+	@Test
+	@DisplayName("저장해 둔 값이 잠겨도(표 변경) 다른 칸 저장은 통과하고, 새로 바꾼 잠긴 칸만 409 (BE-98)")
+	void savedLockedValueDoesNotBlock() throws Exception {
+		UUID id = newUser();
+		insertSavedDeco(id, "gold", "none", "wine");	// 표가 바뀌어 잠긴 테두리를 저장해 둔 상황
+		Cookie cookie = new Cookie(COOKIE, id.toString());
+		Map<String, String> body = defaults();
+		body.put("frame", "gold");
+		body.put("bookmarkColor", "navy");
+
+		putDeco(cookie, body).andExpect(status().isOk());
+
+		body.put("frame", "navy");	// 저장값과 다른 잠긴 테두리
+		putDeco(cookie, body)
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.details[0].field").value("frame"));
+	}
+
+	@Test
+	@DisplayName("안 쓰이던 칸에 넣어 둔 잠긴 값은 쓰이게 바꿀 때 409 (BE-98)")
+	void inactiveSavedValueRechecked() throws Exception {
+		UUID id = newUser();
+		insertSavedDeco(id, "basic", "none", "gold");	// 책갈피 없음 + 짧은 책갈피 색 gold(잠김)
+		Map<String, String> body = defaults();
+		body.put("sashStyle", "short");
+		body.put("sashColorShort", "gold");
+
+		putDeco(new Cookie(COOKIE, id.toString()), body)
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.details[0].field").value("sashColorShort"));
 	}
 }
