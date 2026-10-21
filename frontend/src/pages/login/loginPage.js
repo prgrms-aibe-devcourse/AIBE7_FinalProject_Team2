@@ -3,6 +3,7 @@ import { API_MODE } from '../../api/index.js';
 import { clearUser, currentUser, isAdmin, saveUser } from '../../utils/session.js';
 import { homeRoute } from '../admin/adminMenu.js';
 import { adminLogout, tryAdminLogin } from './adminLogin.js';
+import { canGoBackInApp } from '../../app/router.js';
 
 // S-12 로그인 (FE-52, IA 4장 /login). 화면 틀: 카카오 로그인 버튼 + 아이디 · 비밀번호 폼.
 // 사용자 로그인 API가 아직 없어(카카오 로그인 검토 중) 목 모드에서는 개발용 목업 로그인(mocks/authMockApi.js)이 받는다.
@@ -135,7 +136,8 @@ export function renderLoginPage(container, { api, navigate }) {
         const { nickname } = await api.login(request);
         if (!container.contains(root)) return;
         saveUser({ nickname });
-        navigate('landing', {}, { replace: true }); // 뒤로 가기로 로그인 화면에 돌아오지 않게
+        // 보던 화면에서 로그인 자리를 눌러 왔으면 그 화면으로 돌아간다(진행 상태는 서버 · 쿠키에 있어 그대로다). 바로 /login으로 왔으면 메인으로
+        if (canGoBackInApp()) history.back(); else navigate('landing', {}, { replace: true });
       } catch (failure) {
         if (!container.contains(root)) return;
         showError(failure?.code === 'VALIDATION_ERROR' ? '아이디와 비밀번호를 확인해 주세요.' : '로그인하지 못했어요. 잠시 뒤 다시 시도해 주세요.');

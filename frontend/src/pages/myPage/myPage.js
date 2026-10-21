@@ -1,6 +1,5 @@
 import { button, element, mockTag, renderSiteHeader } from '../../components/siteLayout.js';
 import { API_MODE } from '../../api/config.js';
-import { screenByStatus } from '../../utils/screenByStatus.js';
 import { renderAxisRow } from '../../components/axisRow.js';
 import { imageOf } from '../../components/stage.js';
 import { AXES, CHARACTER_NAMES } from '../../utils/personalityAxes.js';
@@ -10,10 +9,11 @@ import { SCRIPTS } from '../../content/scripts.js';
 import { fitPortraitIn } from '../../utils/portraitFit.js';
 import { clearUser, currentUser, isAdmin } from '../../utils/session.js';
 import { homeRoute } from '../admin/adminMenu.js';
+import { openCaseReviewPopup } from '../caseReview/caseReviewPopup.js';
 
 // S-17 마이페이지 (WBS 7.6.6). GET /my-page 한 번 호출로 받고, 기록이 없어도 404가 아니라 빈 200이다(명세 P-5).
 // 메인 책상의 커피잔으로 들어온다(FE-44): 커다란 커피잔이 날아와 페이드아웃하는 사이(utils/coffeeDive.js) 이 화면(from: 'mug')으로 넘어온다.
-// 첫 화면은 [프로필카드 | 닉네임 | 성향카드] + 하단 항목 줄(만난 모습 · 내 데이터베이스 · 내 정보 수정 · 환경 설정)이고, 카드나 줄을 누르면 그 화면(view)으로 들어간다.
+// 첫 화면은 [프로필카드 | 닉네임 | 성향카드] + 하단 항목 줄(만난 모습 · 내가 체험한 사건 · 내 정보 수정 · 환경 설정)이고, 카드나 줄을 누르면 그 화면(view)으로 들어간다.
 // 프로필카드 · 내 정보 수정 · 환경 설정은 껍데기만 있다(추가 예정). 성향카드 화면에는 판결에서 드러난 성향 · 성향 변화 흐름이 들어 있다.
 // 항목 화면은 주소가 같고 view만 다르다(뒤로 가기로 첫 화면에 돌아온다).
 // 종합 · 변화 흐름은 체험 → 성향 저장(7.6.7, BE-64) 뒤부터 채워지므로 그 전에는 null · 빈 배열로 와서 안내만 보인다.
@@ -23,7 +23,7 @@ const VIEWS = {
   profile: '프로필카드',
   type: '성향카드',
   collection: '만난 모습',
-  cases: '내 데이터베이스',
+  cases: '내가 체험한 사건',
   edit: '내 정보 수정',
   settings: '환경 설정',
 };
@@ -165,7 +165,7 @@ function row(view, sub, preview, go, spoken) {
   return item;
 }
 
-// 하단 항목 줄(순서: 만난 모습 · 내 데이터베이스 · 내 정보 수정 · 환경 설정)
+// 하단 항목 줄(순서: 만난 모습 · 내가 체험한 사건 · 내 정보 수정 · 환경 설정)
 function renderRows(data, go) {
   const list = element('ul', 'my-rows');
   const experiences = data.experiences ?? [];
@@ -181,7 +181,7 @@ function renderRows(data, go) {
     ]).slice(0, 4);
     firsts.forEach(({ src, cast }) => thumbs.append(picture(src, '', cast ? 'is-cast' : '')));
   }
-  list.append(row('collection', total > 0 ? `${total}가지를 모았어요. 책갈피 캐릭터도 여기서 골라요` : '체험을 마치면 만난 모습이 모여요. 책갈피 캐릭터도 여기서 골라요', thumbs, go));
+  list.append(row('collection', total > 0 ? `체험한 사건에서 만난 캐릭터 ${total}가지를 모았어요. 책갈피 캐릭터도 여기서 골라요` : '체험을 마치면 사건에서 만난 캐릭터가 모여요. 책갈피 캐릭터도 여기서 골라요', thumbs, go));
 
   const latest = [...experiences].sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')))[0];
   list.append(row('cases', latest ? `최근: ${latest.title}` : '아직 체험한 사건이 없어요', element('span', 'my-count', `${experiences.length}건`), go, `${experiences.length}건`));
@@ -348,7 +348,7 @@ const caseNamesOf = () => Object.fromEntries(Object.values(SCRIPTS).map(({ caseI
 
 function renderCollection(experiences) {
   const box = element('div', 'my-detail');
-  box.append(renderBookmarkPicker());
+  box.append(element('p', 'my-hint', '체험한 사건에서 만난 캐릭터 모습과 일러스트를 모아 두는 곳이에요.'), renderBookmarkPicker());
   const kinds = collectedKinds(experiences);
   if (kinds.length === 0) {
     box.append(element('p', 'my-hint', '사건 체험을 마치면 그 사건에서 만난 모습과 일러스트가 여기에 모여요.'));
@@ -371,7 +371,7 @@ function renderCollection(experiences) {
   return box;
 }
 
-function renderCases(experiences, navigate) {
+function renderCases(experiences, navigate, api) {
   const box = element('div', 'my-detail');
   if (experiences.length === 0) {
     const empty = element('div', 'my-empty');
@@ -384,8 +384,11 @@ function renderCases(experiences, navigate) {
     const line = element('li', 'my-case');
     const info = element('div');
     info.append(element('p', 'my-case-title', item.title), element('p', 'my-case-status', STATUS_LABELS[item.status] ?? '체험 중'));
-    const label = item.status === 'COMPLETED' ? '결과 다시 보기' : '이어서 하기';
-    line.append(info, button(label, () => navigate(screenByStatus[item.status] ?? 'list', { caseId: item.caseId }), 'secondary-button'));
+    // 사건 디테일(기사 페이지)로 간다. 거기서 이어서 · 결과만 · 1막부터를 고른다(FE-62). 마친 사건은 독자 엽서로 바로 갈 수도 있다
+    const actions = element('div', 'my-case-actions');
+    actions.append(button('사건 보기', () => navigate('caseDetail', { caseId: item.caseId }), 'secondary-button'));
+    if (item.status === 'COMPLETED') actions.append(button('독자 엽서 쓰기', (event) => openCaseReviewPopup({ caseId: item.caseId, api, navigate, from: event.currentTarget }), 'secondary-button'));
+    line.append(info, actions);
     list.append(line);
   });
   box.append(list);
@@ -424,7 +427,7 @@ function renderShell(text) {
   return box;
 }
 
-function renderView(view, data, navigate, go) {
+function renderView(view, data, navigate, go, api) {
   const head = element('div', 'my-view-head');
   const back = element('button', 'my-back');
   back.type = 'button';
@@ -437,7 +440,7 @@ function renderView(view, data, navigate, go) {
     profile: () => renderShell('프로필카드 화면은 곧 열려요.'),
     type: () => renderTypePage(data, navigate),
     collection: () => renderCollection(data.experiences),
-    cases: () => renderCases(data.experiences ?? [], navigate),
+    cases: () => renderCases(data.experiences ?? [], navigate, api),
     edit: () => renderShell('내 정보 수정은 곧 열려요.'),
     settings: () => renderShell('환경 설정은 곧 열려요.'),
   }[view]();
@@ -485,7 +488,7 @@ export async function renderMyPage(container, { api, navigate, view, from }) {
 
   const paint = (data) => {
     if (shown) {
-      main.replaceChildren(...renderView(shown, data, navigate, go));
+      main.replaceChildren(...renderView(shown, data, navigate, go, api));
       return;
     }
     const title = element('h1', 'visually-hidden', '마이페이지');

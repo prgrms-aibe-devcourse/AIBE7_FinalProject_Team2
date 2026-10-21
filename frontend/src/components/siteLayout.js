@@ -18,7 +18,7 @@ export function button(text, action, className = 'secondary-button') {
   return node;
 }
 
-// 공통 헤더(FE-50): 화면 위에 고정된다(style.css). 메뉴는 사건 목록 · 성향검사 · 커뮤니티 · 연출 스위치 · 로그인(맨 오른쪽).
+// 공통 헤더(FE-50): 화면 위에 고정된다(style.css). 메뉴는 사건 목록 · 성향 테스트 · 커뮤니티 · 연출 스위치 · 로그인(맨 오른쪽).
 // 로그인 자리(FE-52): 로그아웃 상태면 "로그인"(→ S-12), 로그인 상태면 닉네임(→ 마이페이지). 상태는 utils/session.js에서 읽는다
 // 헤더로 옮겨 갈 때는 연출 없이 바로 간다 — 연출은 책상 위 물건을 눌렀을 때만 넘기는 표시(from)로 켜지고, 헤더는 그 표시를 넘기지 않는다
 export function renderSiteHeader({ navigate }) {
@@ -36,7 +36,7 @@ export function renderSiteHeader({ navigate }) {
   };
   nav.append(
     tab('사건 목록', 'list', '/cases'),
-    tab('성향검사', 'test', '/test'),
+    tab('성향 테스트', 'test', '/test'),
     tab('커뮤니티', 'community', '/community'),
     motionSwitch(),
     ...(import.meta.env?.DEV ? [modeSwitch()] : []),
@@ -105,11 +105,18 @@ export function mockTag() {
   return element('span', 'mock-tag', '목데이터');
 }
 
-export function renderSiteFooter() {
+// navigate를 넘기면 이용약관 · 개인정보처리방침 입구를 함께 그린다(FE-62: 지금은 메인 맨 아래에서만)
+export function renderSiteFooter({ navigate } = {}) {
   const footer = element('footer', 'site-footer');
   footer.append(
     element('p', '', '이 서비스의 사건은 실제 판결을 바탕으로 비식별화 처리한 내용입니다.'),
     element('p', '', '내Law남불은 법률 자문이나 특정 사건에 대한 법적 판단을 제공하지 않습니다.'),
   );
+  if (navigate) {
+    const links = element('nav', 'footer-links');
+    links.setAttribute('aria-label', '약관 및 방침');
+    links.append(button('이용약관', () => navigate('terms'), 'footer-link'), button('개인정보처리방침', () => navigate('privacy'), 'footer-link'));
+    footer.append(links);
+  }
   return footer;
 }

@@ -59,7 +59,7 @@ export async function renderComparisonPage(container, { caseId, caseHeader, api,
     const { preToFinal, judgments, matrix, ruleSentences } = data;
 
     const header = element('header', 'case-topbar');
-    header.append(element('strong', 'case-title', `판결 비교 · ${caseHeader.title}`), button('다른 사건 체험', () => navigate('list'), 'secondary-button'));
+    header.append(element('strong', 'case-title', `세 판결 비교 · ${caseHeader.title}`), button('다른 사건 체험', () => navigate('list'), 'secondary-button'));
 
     // 최상단: 처음 판단 → 직접 판결(REQ-057).
     const preSection = element('section', 'pre-to-final');

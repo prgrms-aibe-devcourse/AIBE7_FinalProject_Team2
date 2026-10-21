@@ -20,6 +20,7 @@ export const ACT_GROUPS = [
 ];
 // 로 합의부는 판결 화면에서 이름 대신 "AI 판사"로 부른다(직책 재판장 · 배석판사는 이름표 옆에 단다)
 const NAMES = { naero: '내로', nambul: '남불', 'law-scale': 'AI 판사', 'law-gavel': 'AI 판사', 'law-book': 'AI 판사' };
+const ENTER_MS = 1000; // paperStage.css의 들어오는 연출(.55초 + 남불 .12초 지연, 대사창 .35초 지연 + .3초)이 모두 끝나는 시간
 const CAMEO_LABEL = '볼따구'; // 해설을 맡는 작은 내로 · 남불(배역이 아니라 데포르메 모습)
 const CAMEO_LOOK = 'cheek:idle-thinking';
 const DEFORM_LABEL = { ranma: '란마' }; // 데포르메 모습 이름(look "deform:ranma" → 이름표 "남불 란마") // 볼따구 컷은 지금 idle-thinking · idle-sorry 두 표정만 있다
@@ -278,7 +279,7 @@ function evidenceBoard(script, at) {
 // 장면의 focus 기사로 카메라가 옮겨 가고, 첫 장면의 from 요소가 무대를 채운 데서 빠져나온다.
 // fromRect: 첫 장면의 from 요소를 이 화면 사각형(앞 막 무대 자리)에서 시작한다(8막). cameraFill · cameraMinScale · cameraMaxUnit은 sheetCamera 옵션.
 // layout 'paper': 무대 상자 없이 지면(sheet)이 화면 전체가 된다(S-20 · 1 · 2막, S-02 신문과 같은 짜임). 막 칩 · 보드는 지면의
-// 막 칩은 숨기고(지면 탭 줄은 신문 목차), 카드(2막 사전 판단)는 지면 위에 독자 의견 엽서 팝업으로 뜬다 — 남불이 가져와 건네는 연출.
+// 막 칩은 숨기고(지면 탭 줄은 신문 목차), 카드(2막 사전 판단)는 지면 위에 첫인상 엽서 팝업으로 뜬다 — 남불이 가져와 건네는 연출.
 // 캐릭터 · 대사창 · 조작 줄은 화면 아래에 고정된다. 카메라는 화면을 굴린다(paperCamera)
 // parked: 지면만 보여 주고 캐릭터 · 대사창 · 조작 줄은 숨긴 채 기다린다(S-20 사건 정보 — 체험 시작 전). 화면이 wrap.release()로 풀면
 // 내로 · 남불이 들어오며 첫 대사가 시작된다.
@@ -572,7 +573,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
     board.hidden = !entry;
     // 신문 지면 무대의 엽서(입력 카드)는 대화창이다: 열려 있는 동안 뒤 지면은 비활성(포커스 · 읽기 제외)
     if (paperMode) {
-      if (input) { board.setAttribute('role', 'dialog'); board.setAttribute('aria-modal', 'true'); board.setAttribute('aria-label', '독자 의견 엽서'); }
+      if (input) { board.setAttribute('role', 'dialog'); board.setAttribute('aria-modal', 'true'); board.setAttribute('aria-label', '첫인상 엽서'); }
       else { board.removeAttribute('role'); board.removeAttribute('aria-modal'); board.removeAttribute('aria-label'); }
       sheet.inert = Boolean(input);
       controls.inert = Boolean(input); // 조작부(◀ 이전 등)로 Tab 포커스가 빠져나가지 않게(aria-modal만으로는 가둬지지 않는다)
@@ -782,6 +783,9 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
     parked = false;
     wrap.classList.remove('parked');
     wrap.classList.add('entering'); // 움직임 줄이기에서는 CSS가 움직임 없이 페이드만 건다(paperStage.css)
+    // 들어오는 연출이 끝나면 걷는다. 남겨 두면 이 클래스의 animation(우선순위가 더 높다)이 남불의 "엽서 건네기"(.delivering) animation을 덮어
+    // 사건 디테일에서 시작한 뒤에는 남불이 움직이지 않는다
+    setTimeout(() => wrap.classList.remove('entering'), ENTER_MS);
     render();
     // 시작 버튼이 사라지므로 포커스를 옮긴다: 선택지 장면이면 첫 선택지(대사를 바로 다 보여 준다), 아니면 대사 진행
     if (asks(steps[index])) { finishTyping(); choiceRow.querySelector('button')?.focus({ preventScroll: true }); }

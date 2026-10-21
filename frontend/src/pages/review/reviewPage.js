@@ -105,7 +105,7 @@ export async function renderReviewPage(container, { caseId, caseHeader, api, nav
     header.append(button('← 목록', () => navigate('list'), 'back-button'),
       element('strong', 'case-title', caseHeader.title), ...(caseHeader.chargeName ? [element('span', 'case-badge', caseHeader.chargeName)] : []));
     const main = element('div', 'review-main');
-    main.append(element('h1', 'page-heading visually-hidden', '사건 정보 확인'), renderStage({
+    main.append(element('h1', 'page-heading visually-hidden', '재판'), renderStage({
       script,
       order: ['3'],
       start: (step) => step.section === data.openStep,
@@ -141,12 +141,12 @@ export async function renderReviewPage(container, { caseId, caseHeader, api, nav
     const meter = element('progress');
     meter.max = 6;
     meter.value = current;
-    meter.setAttribute('aria-label', '사건 정보 확인 진행');
+    meter.setAttribute('aria-label', '재판 진행');
     progress.append(meter, element('span', '', `${current} / 6`));
     header.append(progress);
     const layout = element('main', 'review-layout');
     const main = element('div', 'review-main');
-    main.append(element('h1', 'page-heading', '사건 정보 확인'));
+    main.append(element('h1', 'page-heading', '재판'));
     const accordion = element('div', 'review-accordion');
     const titles = ['사건 개요', '상세 사실관계', '양측 주장', '법률 · 양형기준'];
     let focusTarget;
@@ -187,7 +187,7 @@ export async function renderReviewPage(container, { caseId, caseHeader, api, nav
         }
         if (opened) {
           const actions = element('div', 'section-actions');
-          const next = button(step === 4 ? '판결 전 최종 정리로' : '읽었습니다 · 다음 단계 열기', () => confirm(step, next), 'primary-button');
+          const next = button(step === 4 ? '사건 요약으로' : '읽었습니다 · 다음 단계 열기', () => confirm(step, next), 'primary-button');
           actions.append(next);
           body.append(actions);
           focusTarget = toggle;

@@ -2,15 +2,27 @@ import { button, element } from '../../components/siteLayout.js';
 import { mountCaseReview } from './caseReviewPage.js';
 import { reducedMotion } from '../../utils/motion.js';
 
-// 8막 "리뷰하기" 버튼 · 독자 의견 엽서를 누르면 날아오는 엽서 한 장(FE-55). 화면(/cases/:caseId/opinion)과 같은 내용을 쓴다.
+// 8막 "엽서 쓰기" 버튼 · 지면의 엽서를 누르면 날아오는 엽서 한 장(FE-55). 화면(/cases/:caseId/opinion)과 같은 내용을 쓴다.
 // 2막 사전 판단 엽서와 같은 연출(paperStage.css nambul-hand · postcard-in): 남불이 앞으로 나서며 손을 내밀고, 엽서가 그 손에서 날아와 가운데에서 펼쳐진다.
-// 읽기 화면에서 지면의 독자 의견 엽서를 눌렀으면(남불이 없다) 그 엽서가 제자리에서 떠올라 가운데로 온다.
+// 읽기 화면에서 지면의 엽서를 눌렀으면(남불이 없다) 그 엽서가 제자리에서 떠올라 가운데로 온다.
 // 닫으면(쓰던 내용이 있으면 한 번 묻고) 엽서가 온 곳으로 돌아가며 사라지고, 누른 곳으로 포커스가 돌아온다. 뒤 무대는 그대로다(새 화면으로 가지 않는다)
 const FOCUSABLE = 'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';
 const FLY_MS = 700;
 const FLY_DELAY_MS = 220; // 남불이 손을 내미는 사이(2막과 같다)
 const BACK_MS = 380;
 const READY_WAIT_MS = 500; // 엽서 내용을 받는 동안 기다리는 최대 시간(받은 뒤에 날려야 날아오는 중에 엽서 크기가 바뀌지 않는다)
+
+// 엽서가 떠 있는 동안 뒤 화면 스크롤을 잠근다. 잠그면 스크롤바가 사라져 화면 폭이 넓어지며 뒤 지면이 다시 계산돼 움찔하므로,
+// 스크롤바가 있던 화면이면 그 자리를 비워 둔다(html.case-review-gutter, caseReview.css). 스크롤바가 없던 화면은 건드리지 않는다
+function lockScroll() {
+  const root = document.documentElement;
+  root.classList.toggle('case-review-gutter', window.innerWidth > root.clientWidth);
+  document.body.classList.add('case-review-open');
+}
+function unlockScroll() {
+  document.body.classList.remove('case-review-open');
+  document.documentElement.classList.remove('case-review-gutter');
+}
 
 /**
  * @param {{ caseId, api, navigate, from?: Element, hand?: boolean }} options
@@ -66,7 +78,7 @@ export function openCaseReviewPopup({ caseId, api, navigate, from, hand = false 
       ]).catch(() => {});
     }
     layer.remove();
-    document.body.classList.remove('case-review-open');
+    unlockScroll();
     window.removeEventListener('popstate', dispose);
     if (opener?.isConnected) opener.focus({ preventScroll: true });
   }
@@ -86,11 +98,11 @@ export function openCaseReviewPopup({ caseId, api, navigate, from, hand = false 
   });
   layer.addEventListener('mousedown', (event) => { if (event.target === layer) requestShut(); });
 
-  document.body.classList.add('case-review-open');
+  lockScroll();
   document.body.append(layer);
   dialog.focus({ preventScroll: true });
   // 엽서 안에서 다른 화면으로 가면(다른 사건 보러 가기 · 체험하러 가기) 엽서 층을 바로 걷고 간다(남겨 두면 새 화면을 덮는다)
-  const dispose = () => { closing = true; layer.remove(); document.body.classList.remove('case-review-open'); window.removeEventListener('popstate', dispose); };
+  const dispose = () => { closing = true; layer.remove(); unlockScroll(); window.removeEventListener('popstate', dispose); };
   window.addEventListener('popstate', dispose); // 브라우저 뒤로 가기로 화면이 바뀔 때도 엽서 층을 남기지 않는다
   const leave = (...args) => { dispose(); return navigate(...args); };
   const mounted = mountCaseReview(body, { caseId, api, navigate: leave });
@@ -104,7 +116,12 @@ export function openCaseReviewPopup({ caseId, api, navigate, from, hand = false 
     }
     const handedAt = performance.now();
     dialog.style.opacity = '0';
-    layer.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 250, easing: 'ease-out' });
+    if (handing) {
+      // 남불이 손을 내미는 동안은 어두운 가림막을 걸지 않는다(처음부터 걸면 남불이 가림막 뒤에 가려져 움직임이 보이지 않는다).
+      // 손을 내민 뒤 엽서가 날아올 즈음 서서히 어두워진다
+      const dim = getComputedStyle(layer).backgroundColor;
+      layer.animate([{ backgroundColor: 'transparent' }, { backgroundColor: dim }], { duration: 450, delay: FLY_DELAY_MS, easing: 'ease-out', fill: 'backwards' });
+    } else layer.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 250, easing: 'ease-out' });
     Promise.race([mounted, new Promise((done) => { setTimeout(done, READY_WAIT_MS); })]).then(() => {
       if (closing || !layer.isConnected) return;
       dialog.style.opacity = '';
