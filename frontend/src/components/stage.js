@@ -49,9 +49,9 @@ const seatOf = (look) => (look.startsWith('role:') ? SEAT[look.slice(5)] : undef
 let chipsOff = false; // 개발 전용: 역할 이름표 끄기(이름표가 필요한지 판단용). 화면을 다시 그려도 유지한다
 const FACES = ['neutral', 'happy', 'surprised', 'thinking', 'sorry', 'cheer'];
 const iconOf = (who, look) => {
-  if (who.startsWith('law-')) return `${IMAGES}mascot/${who}_icon.webp`;
+  if (who.startsWith('law-')) return `${IMAGES}icon/cropped/${who}_icon.webp`;
   const face = look.startsWith('role:') ? 'neutral' : look.split('-')[1];
-  return `${IMAGES}icon/${who}_face-${FACES.includes(face) ? face : 'neutral'}.webp`;
+  return `${IMAGES}icon/generated/${who}_face-${FACES.includes(face) ? face : 'neutral'}.webp`;
 };
 // 이름표는 역할 의상을 입었을 때만 단다(평상복이면 없음)
 const chipText = (look, role) => {

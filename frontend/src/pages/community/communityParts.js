@@ -1,6 +1,6 @@
 import { button, element, mockTag } from '../../components/siteLayout.js';
 import { formatDispositions, formatPenalty } from '../../utils/judgmentFormat.js';
-import { bookmarkFace } from '../../utils/bookmarkCharacter.js';
+import { BOOKMARK_LAWS, bookmarkFace } from '../../utils/bookmarkCharacter.js';
 import { currentUser } from '../../utils/session.js';
 
 // S-18 커뮤니티 (FE-47) 목록 · 상세가 함께 쓰는 틀과 조각: 노트북 화면 틀(왼쪽 거르기 · 가운데 · 오른쪽 글쓰기), 글 한 편, 내 판결 카드, 글쓰기 칸.
@@ -55,7 +55,7 @@ export function avatar({ nickname, character }) {
   image.width = 36;
   image.height = 36;
   image.loading = 'lazy';
-  image.src = bookmarkFace(character === 'nambul' ? 'nambul' : 'naero');
+  image.src = bookmarkFace(character === 'nambul' || BOOKMARK_LAWS.includes(character) ? character : 'naero');
   image.addEventListener('error', () => { image.remove(); node.textContent = [...nickname][0] ?? ''; }, { once: true });
   node.append(image);
   return node;
