@@ -199,6 +199,31 @@ class AdminCaseImportApiTest extends ApiIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("A-14: sources에 null이 섞이면 500이 아니라 400 (Bean Validation은 null 원소를 건너뛴다)")
+	void startImport_nullSourceElement() throws Exception {
+		perform(post(URL).contentType(MediaType.APPLICATION_JSON)
+			.content("{\"crimeType\":\"MURDER\",\"sources\":[null]}"))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+	}
+
+	@Test
+	@DisplayName("A-14: 최종 확정 판결을 둘 이상 표시하면 400 — 적재에서야 터지지 않게 미리 막는다")
+	void startImport_multipleFinalDecisions() throws Exception {
+		String body = """
+			{"crimeType":"MURDER","sources":[
+			  {"courtLevel":"FIRST","caseNumber":"2099고합001","isFinal":true,"originalText":"1심"},
+			  {"courtLevel":"APPEAL","caseNumber":"2099노001","isFinal":true,"originalText":"2심"}]}""";
+
+		perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(body))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+			.andExpect(jsonPath("$.details[0].field").value("sources"));
+		// 파이프라인을 부르지 않았으니 수십 분을 버리지 않는다
+		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM case_import", Integer.class)).isZero();
+	}
+
+	@Test
 	@DisplayName("A-14: 같은 심급을 두 번 넣으면 400, 어느 필드인지 알려준다")
 	void startImport_duplicateCourtLevel() throws Exception {
 		String body = """

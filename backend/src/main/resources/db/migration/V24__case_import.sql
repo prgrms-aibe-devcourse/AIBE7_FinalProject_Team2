@@ -60,6 +60,10 @@ CREATE TABLE case_import_source (
     CONSTRAINT uk_case_import_source_level UNIQUE (import_id, court_level)
 );
 
+-- 한 등록에서 최종 확정 판결은 1건 (case_source의 uk_case_source_final과 같은 규칙, V6).
+-- A-14에서도 막지만, 적재 대상 표와 같은 조건을 여기서도 지켜 두 표가 어긋나지 않게 한다
+CREATE UNIQUE INDEX uk_case_import_source_final ON case_import_source (import_id) WHERE is_final = TRUE;
+
 CREATE INDEX idx_case_import_source_import_id ON case_import_source (import_id);
 -- 이미 등록한 사건번호인지 볼 때 쓴다 (A-14 DUPLICATE_SOURCE는 case_source를 보지만,
 -- 진행 중인 등록과 겹치는지도 함께 본다)

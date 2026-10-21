@@ -122,11 +122,23 @@ class AdminCaseImportServiceTest {
 	}
 
 	@Test
+	@DisplayName("최종 확정 판결을 둘 이상 표시하면 400 (파이프라인에는 첫 번째만 넘어가 어긋난다)")
+	void startImport_multipleFinalDecisions() {
+		CaseImportCreateRequest request = new CaseImportCreateRequest(CrimeType.MURDER,
+			List.of(source(CourtLevel.FIRST, "2099고합001"), source(CourtLevel.APPEAL, "2099노001")));
+
+		assertThatThrownBy(() -> service.startImport(request, admin, httpRequest))
+			.isInstanceOf(BusinessException.class)
+			.extracting(e -> ((BusinessException) e).getErrorCode()).isEqualTo(ErrorCode.VALIDATION_ERROR);
+		verify(pipelineClient, never()).createJob(any());
+	}
+
+	@Test
 	@DisplayName("이미 등록한 사건번호면 409 DUPLICATE_SOURCE, 어느 항목인지 details로 알려준다")
 	void startImport_duplicateSource() {
 		when(caseSourceRepository.findExistingCaseNumbers(any())).thenReturn(List.of("2099고합002"));
 		CaseImportCreateRequest request = new CaseImportCreateRequest(CrimeType.MURDER,
-			List.of(source(CourtLevel.FIRST, "2099고합001"), source(CourtLevel.APPEAL, "2099고합002")));
+			List.of(source(CourtLevel.FIRST, "2099고합001", false), source(CourtLevel.APPEAL, "2099고합002")));
 
 		assertThatThrownBy(() -> service.startImport(request, admin, httpRequest))
 			.isInstanceOf(BusinessException.class)
@@ -399,8 +411,13 @@ class AdminCaseImportServiceTest {
 	}
 
 	private static CaseImportCreateRequest.Source source(CourtLevel level, String caseNumber) {
+		return source(level, caseNumber, true);
+	}
+
+	/** 최종 확정 판결은 한 건까지라, 두 건 이상 넣는 테스트는 하나만 true로 둔다 */
+	private static CaseImportCreateRequest.Source source(CourtLevel level, String caseNumber, boolean isFinal) {
 		return new CaseImportCreateRequest.Source(level, caseNumber, "가상지방법원", LocalDate.of(2025, 1, 10),
-			true, "법제처", "판결문 본문", null);
+			isFinal, "법제처", "판결문 본문", null);
 	}
 
 	private static CaseImport running(String jobId) {

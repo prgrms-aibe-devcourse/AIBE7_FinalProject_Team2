@@ -90,6 +90,7 @@ public class AdminCaseImportService {
 				"사건 등록 서비스가 연결되지 않았습니다 (관리자에게 문의해 주세요).");
 		}
 		guardDistinctCourtLevels(request.sources());
+		guardSingleFinalDecision(request.sources());
 		guardNotAlreadyImported(request.sources());
 		guardNoRunningImport();
 
@@ -176,6 +177,20 @@ public class AdminCaseImportService {
 	private static void guardDistinctCourtLevels(List<CaseImportCreateRequest.Source> sources) {
 		Set<?> levels = new HashSet<>(sources.stream().map(CaseImportCreateRequest.Source::courtLevel).toList());
 		if (levels.size() != sources.size()) {
+			throw BusinessException.ofField(ErrorCode.VALIDATION_ERROR, "sources");
+		}
+	}
+
+	/**
+	 * 최종 확정 판결은 1건까지 (PR #232 CodeRabbit 리뷰).
+	 *
+	 * <p>여럿을 표시해도 파이프라인에는 <b>첫 번째 번호만</b> 넘어가므로, 파이프라인이 보는 최종 판결과
+	 * 저장해 둔 원본 정보가 어긋난다. 게다가 `case_source`에는 "사건마다 최종 판결 1건" 유니크 제약이
+	 * 있어(V6), 그대로 두면 <b>수십 분짜리 파이프라인이 끝난 뒤 적재에서야</b> 실패한다.
+	 * 받는 자리에서 막는 편이 훨씬 싸다.
+	 */
+	private static void guardSingleFinalDecision(List<CaseImportCreateRequest.Source> sources) {
+		if (sources.stream().filter(CaseImportCreateRequest.Source::finalDecision).count() > 1) {
 			throw BusinessException.ofField(ErrorCode.VALIDATION_ERROR, "sources");
 		}
 	}

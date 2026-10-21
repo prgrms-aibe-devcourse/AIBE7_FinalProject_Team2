@@ -12,12 +12,16 @@ import java.util.List;
 /**
  * 사건 등록 요청 (API 명세 A-14).
  *
- * <p>심급이 서로 달라야 한다는 조건은 애너테이션으로 적을 수 없어 서비스에서 본다.
- * 원문 길이 상한(20만 자)은 화면에서도 같은 값을 쓴다(adminMockApi.js MAX_ORIGINAL_LENGTH).
+ * <p>심급이 서로 달라야 한다는 조건과 최종 확정 판결이 1건이어야 한다는 조건은 애너테이션으로 적을 수 없어
+ * 서비스에서 본다. 원문 길이 상한(20만 자)은 화면에서도 같은 값을 쓴다(adminMockApi.js MAX_ORIGINAL_LENGTH).
+ *
+ * <p>원소의 {@code @NotNull}이 필요한 이유: Bean Validation은 <b>null 원소를 건너뛴다</b>. 없으면
+ * {@code {"sources":[null]}}이 검증을 통과해 서비스에서 NPE로 터지고, 400이어야 할 응답이 500이 된다
+ * (PR #232 CodeRabbit 리뷰).
  */
 public record CaseImportCreateRequest(
 	@NotNull CrimeType crimeType,
-	@NotNull @Size(min = 1, max = 3) List<@Valid Source> sources
+	@NotNull @Size(min = 1, max = 3) List<@NotNull @Valid Source> sources
 ) {
 
 	public static final int MAX_ORIGINAL_TEXT_LENGTH = 200_000;
