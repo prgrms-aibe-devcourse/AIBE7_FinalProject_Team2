@@ -3,6 +3,7 @@
 // 해금은 이미지 한 장씩이 아니라 종류(폴더) 단위로 열린다. 종류 이름은 컬렉션과 같은 표(myPageView.js KIND_TITLES)를 쓴다.
 import { PORTRAIT_POOL } from '../content/portraitPool.js';
 import { FACE_NAMES } from './bookmarkCharacter.js';
+import { localStore } from './safeStorage.js';
 
 // 카드 테두리 · 카드 배경. 모양은 myPage.css의 .deco-frame-{id} · .deco-bg-{id}
 export const FRAMES = [
@@ -110,12 +111,6 @@ const DECO_KEY = 'nlnb-profile-deco';
 // 기본 제공 대표 이미지: 내로 · 남불 스탠딩. 늘 열려 있고, 처음에는 내로다(책갈피 캐릭터와는 상관없다)
 export const DEFAULT_PORTRAITS = ['/images/characters/standing/naero.webp', '/images/characters/standing/nambul.webp'];
 export const DEFAULT_DECO = { portrait: DEFAULT_PORTRAITS[0], frame: 'basic', background: 'cream', sashStyle: 'none', sashColorShort: 'wine', sashColorLong: 'wine', sashIconLeft: 'none', sashIconRight: 'none' };
-
-// 일부 브라우저(쿠키 · 사이트 데이터 차단)는 globalThis.localStorage를 읽기만 해도 SecurityError를 던진다.
-// 기본 인수는 함수 본문의 try보다 먼저 평가되므로 접근 자체를 감싼다(bookmarkCharacter.js localStore와 같은 방식). 공용 헬퍼가 생기면 교체한다
-const localStore = () => {
-  try { return globalThis.localStorage; } catch { return undefined; }
-};
 
 const pickId = (list, value, fallback) => (list.some(({ id }) => id === value) ? value : fallback);
 const valid = (deco) => ({

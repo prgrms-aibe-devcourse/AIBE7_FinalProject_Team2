@@ -148,8 +148,8 @@ body[data-theme="coffee"] .site-footer { background: var(--palette-coffee-50); b
 .my-card.deco-bg-news .my-card-note { color: inherit; }
 /* 카드 책갈피: 색 .deco-sash-* · 모양 .sash-style-*. 위는 카드 윗변에 걸쳐 살짝 올라오고, 아래 끝은 V자로 갈라진다. 띠 양 끝의 가는 선(--sash-edge)이 테두리 바느질 자리다
    short = 책에 꽂힌 책갈피처럼 짧고 굵게(아이콘을 단다) · long = 판사 법복의 띠처럼 얇고 길게 카드 아래까지 내려와 꼬리가 밖으로 나온다 */
-:is(.my-card, .my-mini-card) { --sash-x: 7cqi; --sash-rise: 3.5cqi; }
-.my-mini-card { --sash-x: 5px; --sash-rise: 3px; }
+:is(.my-card, .my-mini-card) { --sash-x: 7cqi; --sash-rise: 3.5cqi; --sash-pad: 3.5cqi; }
+.my-mini-card { --sash-x: 5px; --sash-rise: 3px; --sash-pad: 3px; }
 .sash-style-short { --sash-w: 15.3cqi; --sash-len: 27cqi; --sash-notch: 5.3cqi; }
 .sash-style-long { --sash-w: 7.6cqi; --sash-tail: 10.6cqi; --sash-notch: 4.7cqi; }
 .my-mini-card.sash-style-short { --sash-w: 11px; --sash-len: 18px; --sash-notch: 4px; }
@@ -159,7 +159,7 @@ body[data-theme="coffee"] .site-footer { background: var(--palette-coffee-50); b
 .deco-sash-gold { --sash: var(--deco-gold); --sash-edge: var(--deco-wood); }
 .deco-sash-green { --sash: var(--deco-sash-green); --sash-edge: var(--deco-gold); }
 .my-card-sash {
-  position: absolute; top: calc(var(--sash-rise) * -1); z-index: 1; display: grid; justify-items: center; align-content: start; width: var(--sash-w); padding-top: calc(var(--sash-rise) + 3.5cqi); pointer-events: none;
+  position: absolute; top: calc(var(--sash-rise) * -1); z-index: 1; display: grid; justify-items: center; align-content: start; width: var(--sash-w); padding-top: calc(var(--sash-rise) + var(--sash-pad)); pointer-events: none;
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--color-heading) 30%, transparent) 0 var(--sash-rise), transparent var(--sash-rise)), /* 윗변에 걸친 접힘 그늘 */
     linear-gradient(90deg, var(--sash-edge) 0 1.5px, var(--sash) 1.5px calc(100% - 1.5px), var(--sash-edge) calc(100% - 1.5px));

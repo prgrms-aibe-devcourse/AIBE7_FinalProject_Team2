@@ -4,7 +4,7 @@ import { renderAxisRow } from '../../components/axisRow.js';
 import { imageOf } from '../../components/stage.js';
 import { AXES, CHARACTER_NAMES } from '../../utils/personalityAxes.js';
 import { KIND_TITLES, axisSeries, collectionOf, imageKinds, trailLeft, trailSummary } from '../../utils/myPageView.js';
-import { BACKGROUNDS, DEFAULT_PORTRAITS, FRAMES, SASH_COLORS, SASH_ICONS, SASH_STYLES, achievementProgress, sashColorField, sashColorKey, sashColorOf, getProfileDeco, kindOfPortrait, portraitLabel, setProfileDeco, shownDeco, unlockedBy, unlockerOf } from '../../utils/profileDeco.js';
+import { BACKGROUNDS, DEFAULT_DECO, DEFAULT_PORTRAITS, FRAMES, SASH_COLORS, SASH_ICONS, SASH_STYLES, achievementProgress, sashColorField, sashColorKey, sashColorOf, getProfileDeco, kindOfPortrait, portraitLabel, setProfileDeco, shownDeco, unlockedBy, unlockerOf } from '../../utils/profileDeco.js';
 import { PORTRAIT_POOL } from '../../content/portraitPool.js';
 import { BOOKMARK_CHARACTERS, BOOKMARK_FACES, BOOKMARK_LAWS, BOOKMARK_NAMES, BOOKMARK_STYLES, FACE_NAMES, STYLE_NAMES, getBookmarkCharacter, getBookmarkFaceName, getBookmarkStyle, bookmarkFace, setBookmarkCharacter, setBookmarkFace, BOOKMARK_COLORS, getBookmarkColor, setBookmarkColor, selectedBookmarkFace } from '../../utils/bookmarkCharacter.js';
 import { SCRIPTS } from '../../content/scripts.js';
@@ -547,24 +547,30 @@ const SWATCH_TYPES = {
   background: { list: BACKGROUNDS, set: 'backgrounds', title: '카드 배경', group: 'profile-background' },
   sashStyle: { list: SASH_STYLES, set: 'sashStyles', title: '모양', group: 'profile-sash-style' },
 };
-const PLAIN_DECO = { frame: 'basic', background: 'cream', sashStyle: 'none', sashColorShort: 'wine', sashColorLong: 'wine', sashIconLeft: 'none', sashIconRight: 'none' };
+const { portrait: _portrait, ...PLAIN_DECO } = DEFAULT_DECO;
+const miniCard = (look) => {
+  const sample = element('span', `my-mini-card deco-frame-${look.frame} deco-bg-${look.background} ${sashClasses(look)}`);
+  sample.append(...sashes(look));
+  return sample;
+};
+// 해금 요소 하나의 라디오 칸: 잠김 여부 · 잠금 사유 · 이름 캡션을 한곳에서 만든다. reason: 캡션에 잠금 사유를 덧붙일지(칩 모양은 좁아서 뺀다)
+function unlockOption(open, set, key, { group, id, name, checked, art, onChange, reason = true }) {
+  const locked = !open[set].has(key);
+  const by = unlockerOf(set, key)?.title ?? '';
+  const caption = element('span', 'my-deco-name', name);
+  if (locked && reason) caption.append(element('small', '', by));
+  return decoOption({ group, value: id, checked, locked, name, lockedBy: by, onChange }, art, caption);
+}
 function swatchPicker(type, open, shown, onPick, base = PLAIN_DECO, legendClass = '') {
   const { list, set, title, group } = SWATCH_TYPES[type];
   const field = element('fieldset', `my-deco${legendClass ? ` ${legendClass}` : ''}`);
   field.append(element('legend', '', title));
   const row = element('div', 'my-deco-swatches');
   list.forEach(({ id, name }) => {
-    const locked = !open[set].has(id);
-    const by = unlockerOf(set, id)?.title ?? '';
-    const look = { ...base, [type]: id };
-    const sample = element('span', `my-mini-card deco-frame-${look.frame} deco-bg-${look.background} ${sashClasses(look)}`);
-    sample.append(...sashes(look));
-    const caption = element('span', 'my-deco-name', name);
-    if (locked) caption.append(element('small', '', by));
-    row.append(decoOption({
-      group, value: id, checked: id === shown, locked, name, lockedBy: by,
+    row.append(unlockOption(open, set, id, {
+      group, id, name, checked: id === shown, art: miniCard({ ...base, [type]: id }),
       onChange: () => { setProfileDeco({ [type]: id }); onPick(); },
-    }, sample, caption));
+    }));
   });
   field.append(row);
   return field;
@@ -577,15 +583,13 @@ function sashIconPicker(side, open, deco, onPick) {
   field.append(element('legend', '', side === 'left' ? '왼쪽 아이콘' : '오른쪽 아이콘'));
   const row = element('div', 'my-deco-pills');
   SASH_ICONS.forEach(({ id, name }) => {
-    const locked = !open.sashIcons.has(id);
-    const by = unlockerOf('sashIcons', id)?.title ?? '';
     const chip = element('span', `my-icon-chip deco-sash-${sashColorOf(deco) ?? 'wine'}`);
     const art = sashIcon(id);
     if (art) chip.append(art);
-    const option = decoOption({
-      group: `profile-${key}`, value: id, checked: id === deco[key], locked, name, lockedBy: by,
+    const option = unlockOption(open, 'sashIcons', id, {
+      group: `profile-${key}`, id, name, checked: id === deco[key], art: chip, reason: false,
       onChange: () => { setProfileDeco({ [key]: id }); onPick(); },
-    }, chip, element('span', 'my-deco-name', name));
+    });
     option.classList.add('is-pill');
     row.append(option);
   });
@@ -601,17 +605,11 @@ function sashColorPicker(open, deco, onPick) {
   const row = element('div', 'my-deco-swatches');
   SASH_COLORS[style].forEach(({ id, name }) => {
     const key = sashColorKey(style, id);
-    const locked = !open.sashColors.has(key);
-    const by = unlockerOf('sashColors', key)?.title ?? '';
-    const look = { ...PLAIN_DECO, sashStyle: style, [sashColorField(style)]: id };
-    const sample = element('span', `my-mini-card deco-frame-basic deco-bg-cream ${sashClasses(look)}`);
-    sample.append(...sashes(look));
-    const caption = element('span', 'my-deco-name', name);
-    if (locked) caption.append(element('small', '', by));
-    row.append(decoOption({
-      group: `profile-sash-color-${style}`, value: id, checked: id === sashColorOf(deco), locked, name, lockedBy: by,
+    row.append(unlockOption(open, 'sashColors', key, {
+      group: `profile-sash-color-${style}`, id, name, checked: id === sashColorOf(deco),
+      art: miniCard({ ...PLAIN_DECO, sashStyle: style, [sashColorField(style)]: id }),
       onChange: () => { setProfileDeco({ [sashColorField(style)]: id }); onPick(); },
-    }, sample, caption));
+    }));
   });
   field.append(row);
   return field;
@@ -687,8 +685,7 @@ function achievementList(progress, mocked) {
 }
 
 // 미리 보기 카드(첫 화면 카드와 같은 모양, 누를 수 없음)
-function previewCard(stats, data) {
-  const deco = decoFor(stats);
+function previewCard(stats, data, deco = decoFor(stats)) {
   const parts = profileCardParts(deco, data);
   const card = element('div', `my-card ${parts.classes} is-preview`);
   card.setAttribute('role', 'img');
@@ -706,12 +703,12 @@ function openDecoDialog({ open, stats, data, onPick, opener }) {
   dialog.setAttribute('aria-labelledby', title.id);
   const head = element('div', 'my-deco-dialog-head');
   head.append(title, button('닫기', () => dialog.close(), 'secondary-button'));
+  const shown = decoFor(stats);
   const preview = element('div', 'my-deco-dialog-preview');
   const paint = () => {
     preview.replaceChildren(previewCard(stats, data));
     onPick();
   };
-  const shown = decoFor(stats);
   const body = element('div', 'my-deco-dialog-body');
   const pickers = element('div', 'my-deco-dialog-pickers');
   pickers.append(
@@ -724,7 +721,7 @@ function openDecoDialog({ open, stats, data, onPick, opener }) {
   dialog.append(head, body);
   dialog.addEventListener('click', (event) => { if (event.target === dialog) dialog.close(); });
   dialog.addEventListener('close', () => { dialog.remove(); opener?.focus(); });
-  preview.replaceChildren(previewCard(stats, data));
+  preview.replaceChildren(previewCard(stats, data, shown));
   (document.querySelector('.my-page') ?? document.body).append(dialog);
   dialog.showModal();
 }
@@ -749,8 +746,9 @@ function renderProfilePage(data, go) {
   // 위: 미리 보기 카드 + 열린 개수 + 버튼(카드 꾸미기 창 · 도전과제 화면 · 책갈피 설정 화면)
   const hero = element('section', 'my-profile-hero');
   const preview = element('div', 'my-profile-preview');
+  const deco = decoFor(stats);
   const paintPreview = () => preview.replaceChildren(previewCard(stats, data));
-  paintPreview();
+  preview.replaceChildren(previewCard(stats, data, deco));
   const summary = element('div', 'my-profile-summary');
   const counts = element('dl', 'my-stats my-profile-counts');
   const sashTotal = SASH_STYLES.length + Object.values(SASH_COLORS).reduce((sum, list) => sum + list.length, 0) + SASH_ICONS.length;
@@ -771,7 +769,7 @@ function renderProfilePage(data, go) {
   summary.append(element('p', 'my-hint', '도전과제를 깨면 대표 이미지 · 테두리 · 배경 · 카드 책갈피가 열려요. 고른 것은 이 브라우저에 저장돼요.'), counts, actions);
   hero.append(preview, summary);
 
-  box.append(hero, portraitPicker(open, decoFor(stats).portrait, paintPreview));
+  box.append(hero, portraitPicker(open, deco.portrait, paintPreview));
   return box;
 }
 

@@ -3,6 +3,8 @@
 // 캐릭터 · 표정 · 종류를 따로 저장한다(표정 기본 happy, 종류 기본 generated).
 // FE-68: 리본 색도 고른다(판결 체험 파일철의 색인 탭 사이에 끼운 리본). 처음 색은 지금까지와 같은 브론즈.
 // 서버 저장은 없다(BE-83에서 수집 상태와 함께 검토). 이 브라우저에만 두고, 저장소를 못 쓰면 기본값(내로)으로 본다.
+import { localStore } from './safeStorage.js';
+
 const STORAGE_KEY = 'nlnb-bookmark-character';
 const FACE_KEY = 'nlnb-bookmark-face';
 const STYLE_KEY = 'nlnb-bookmark-face-style';
@@ -11,10 +13,6 @@ const DEFAULT_FACE = 'happy';
 const DEFAULT_STYLE = 'generated';
 const COLOR_KEY = 'nlnb-bookmark-color';
 const DEFAULT_COLOR = 'bronze';
-// localStorage 속성 접근 자체가 예외를 던지는 환경(저장소 차단)이 있어, 기본 인수에서도 터지지 않게 한 곳에서 감싼다
-const localStore = () => {
-  try { return globalThis.localStorage; } catch { return undefined; }
-};
 
 export const BOOKMARK_CHARACTERS = ['naero', 'nambul'];
 // 로(마스코트)도 책갈피가 된다. 표정 없이 잘라 만든 아이콘 한 장씩이다(icon/cropped/law-*_icon.webp)
