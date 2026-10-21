@@ -23,8 +23,8 @@ export const BACKGROUNDS = [
 // short: 카드 윗변에 꽂힌 짧고 굵은 책갈피(아이콘을 달 수 있다) · long: 판사 법복의 띠처럼 카드 좌우를 따라 내려오는 얇고 긴 띠(아이콘 없음)
 export const SASH_STYLES = [
   { id: 'none', name: '없음' },
-  { id: 'short', name: '짧고 굵은 책갈피' },
   { id: 'long', name: '얇고 긴 띠' },
+  { id: 'short', name: '짧고 굵은 책갈피' },
 ];
 export const SASH_COLORS = {
   short: [
@@ -107,7 +107,9 @@ export const unlockerOf = (type, id) => ACHIEVEMENTS.find((item) => item[type].i
 
 // ── 고른 꾸미기 저장 ──
 const DECO_KEY = 'nlnb-profile-deco';
-export const DEFAULT_DECO = { portrait: null, frame: 'basic', background: 'cream', sashStyle: 'none', sashColorShort: 'wine', sashColorLong: 'wine', sashIconLeft: 'none', sashIconRight: 'none' }; // portrait null = 책갈피 캐릭터의 기본 대표 이미지
+// 기본 제공 대표 이미지: 내로 · 남불 스탠딩. 늘 열려 있고, 처음에는 내로다(책갈피 캐릭터와는 상관없다)
+export const DEFAULT_PORTRAITS = ['/images/characters/standing/naero.webp', '/images/characters/standing/nambul.webp'];
+export const DEFAULT_DECO = { portrait: DEFAULT_PORTRAITS[0], frame: 'basic', background: 'cream', sashStyle: 'none', sashColorShort: 'wine', sashColorLong: 'wine', sashIconLeft: 'none', sashIconRight: 'none' };
 
 // 일부 브라우저(쿠키 · 사이트 데이터 차단)는 globalThis.localStorage를 읽기만 해도 SecurityError를 던진다.
 // 기본 인수는 함수 본문의 try보다 먼저 평가되므로 접근 자체를 감싼다(bookmarkCharacter.js localStore와 같은 방식). 공용 헬퍼가 생기면 교체한다
@@ -117,7 +119,7 @@ const localStore = () => {
 
 const pickId = (list, value, fallback) => (list.some(({ id }) => id === value) ? value : fallback);
 const valid = (deco) => ({
-  portrait: PORTRAIT_POOL.includes(deco?.portrait) ? deco.portrait : null,
+  portrait: PORTRAIT_POOL.includes(deco?.portrait) ? deco.portrait : DEFAULT_DECO.portrait,
   frame: pickId(FRAMES, deco?.frame, DEFAULT_DECO.frame),
   background: pickId(BACKGROUNDS, deco?.background, DEFAULT_DECO.background),
   sashStyle: pickId(SASH_STYLES, deco?.sashStyle, DEFAULT_DECO.sashStyle),
@@ -159,7 +161,7 @@ export function shownDeco(deco, open) {
   if (COLOR_FIELD[sashStyle] && !colorFor(sashStyle)) sashStyle = 'none';
   const icon = (id) => (sashStyle === 'short' && open.sashIcons.has(id) ? id : 'none');
   return {
-    portrait: deco.portrait && open.kinds.has(kindOfPortrait(deco.portrait)) ? deco.portrait : null,
+    portrait: DEFAULT_PORTRAITS.includes(deco.portrait) || open.kinds.has(kindOfPortrait(deco.portrait)) ? deco.portrait : DEFAULT_DECO.portrait,
     frame: open.frames.has(deco.frame) ? deco.frame : DEFAULT_DECO.frame,
     background: open.backgrounds.has(deco.background) ? deco.background : DEFAULT_DECO.background,
     sashStyle,

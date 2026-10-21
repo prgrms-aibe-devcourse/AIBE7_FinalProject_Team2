@@ -5,13 +5,14 @@ import assert from 'node:assert/strict';
 import { PORTRAIT_POOL } from '../content/portraitPool.js';
 import { KIND_TITLES } from './myPageView.js';
 import {
-  ACHIEVEMENTS, BACKGROUNDS, FRAMES, REWARD_TYPES, SASH_COLORS, SASH_ICONS, SASH_STYLES, sashColorKey, achievementProgress, getProfileDeco, kindOfPortrait, portraitLabel, setProfileDeco, shownDeco, unlockedBy, unlockerOf,
+  ACHIEVEMENTS, BACKGROUNDS, DEFAULT_PORTRAITS, FRAMES, REWARD_TYPES, SASH_COLORS, SASH_ICONS, SASH_STYLES, sashColorKey, achievementProgress, getProfileDeco, kindOfPortrait, portraitLabel, setProfileDeco, shownDeco, unlockedBy, unlockerOf,
 } from './profileDeco.js';
 
 const memory = () => {
   const data = new Map();
   return { getItem: (key) => data.get(key) ?? null, setItem: (key, value) => data.set(key, value) };
 };
+const NAERO = '/images/characters/standing/naero.webp';
 const NOTHING = { completed: 0, collected: 0, attendanceDays: 0, hasType: false };
 
 test('후보는 130장이고 종류별 개수가 정한 대로이며, 모두 실제 파일이다', () => {
@@ -74,17 +75,17 @@ test('도전과제 id는 겹치지 않고, 보상이 하나 이상 있다', () =
 
 test('꾸미기는 고른 것만 바꿔 저장하고, 모르는 값 · 깨진 저장값은 기본으로 본다', () => {
   const storage = memory();
-  assert.deepEqual(getProfileDeco(storage), { portrait: null, frame: 'basic', background: 'cream', sashStyle: 'none', sashColorShort: 'wine', sashColorLong: 'wine', sashIconLeft: 'none', sashIconRight: 'none' });
+  assert.deepEqual(getProfileDeco(storage), { portrait: NAERO, frame: 'basic', background: 'cream', sashStyle: 'none', sashColorShort: 'wine', sashColorLong: 'wine', sashIconLeft: 'none', sashIconRight: 'none' });
   setProfileDeco({ frame: 'gold' }, storage);
   setProfileDeco({ portrait: '/images/characters/scene/naero_idle-neutral.webp' }, storage);
   assert.deepEqual(getProfileDeco(storage), { portrait: '/images/characters/scene/naero_idle-neutral.webp', frame: 'gold', background: 'cream', sashStyle: 'none', sashColorShort: 'wine', sashColorLong: 'wine', sashIconLeft: 'none', sashIconRight: 'none' });
   setProfileDeco({ background: 'rainbow', portrait: '/images/elsewhere.webp' }, storage);
-  assert.deepEqual(getProfileDeco(storage), { portrait: null, frame: 'gold', background: 'cream', sashStyle: 'none', sashColorShort: 'wine', sashColorLong: 'wine', sashIconLeft: 'none', sashIconRight: 'none' });
+  assert.deepEqual(getProfileDeco(storage), { portrait: NAERO, frame: 'gold', background: 'cream', sashStyle: 'none', sashColorShort: 'wine', sashColorLong: 'wine', sashIconLeft: 'none', sashIconRight: 'none' });
   storage.setItem('nlnb-profile-deco', '{broken');
-  assert.deepEqual(getProfileDeco(storage), { portrait: null, frame: 'basic', background: 'cream', sashStyle: 'none', sashColorShort: 'wine', sashColorLong: 'wine', sashIconLeft: 'none', sashIconRight: 'none' });
+  assert.deepEqual(getProfileDeco(storage), { portrait: NAERO, frame: 'basic', background: 'cream', sashStyle: 'none', sashColorShort: 'wine', sashColorLong: 'wine', sashIconLeft: 'none', sashIconRight: 'none' });
   const broken = { getItem: () => { throw new Error('blocked'); }, setItem: () => { throw new Error('blocked'); } };
   assert.doesNotThrow(() => setProfileDeco({ frame: 'wood' }, broken));
-  assert.deepEqual(getProfileDeco(broken), { portrait: null, frame: 'basic', background: 'cream', sashStyle: 'none', sashColorShort: 'wine', sashColorLong: 'wine', sashIconLeft: 'none', sashIconRight: 'none' });
+  assert.deepEqual(getProfileDeco(broken), { portrait: NAERO, frame: 'basic', background: 'cream', sashStyle: 'none', sashColorShort: 'wine', sashColorLong: 'wine', sashIconLeft: 'none', sashIconRight: 'none' });
 });
 
 test('카드 책갈피는 모양마다 색을 따로 저장하고, 모르는 값은 기본으로 본다', () => {
@@ -92,7 +93,7 @@ test('카드 책갈피는 모양마다 색을 따로 저장하고, 모르는 값
   setProfileDeco({ sashStyle: 'short', sashColorShort: 'navy' }, storage);
   setProfileDeco({ sashStyle: 'long', sashColorLong: 'gold' }, storage);
   setProfileDeco({ frame: 'gold' }, storage); // 다른 것을 바꿔도 책갈피는 그대로
-  assert.deepEqual(getProfileDeco(storage), { portrait: null, frame: 'gold', background: 'cream', sashStyle: 'long', sashColorShort: 'navy', sashColorLong: 'gold', sashIconLeft: 'none', sashIconRight: 'none' });
+  assert.deepEqual(getProfileDeco(storage), { portrait: NAERO, frame: 'gold', background: 'cream', sashStyle: 'long', sashColorShort: 'navy', sashColorLong: 'gold', sashIconLeft: 'none', sashIconRight: 'none' });
   setProfileDeco({ sashStyle: 'zigzag', sashColorShort: 'rainbow', sashIconLeft: 'rocket' }, storage);
   const deco = getProfileDeco(storage);
   assert.equal(deco.sashStyle, 'none');
@@ -104,7 +105,7 @@ test('카드 책갈피는 모양마다 색을 따로 저장하고, 모르는 값
 test('잠긴 꾸미기를 골라 둔 상태면 화면에는 기본으로 보인다', () => {
   const deco = { portrait: '/images/characters/mascot/trio_idle.webp', frame: 'navy', background: 'tarot', sashStyle: 'short', sashColorShort: 'gold', sashColorLong: 'wine', sashIconLeft: 'law', sashIconRight: 'star' };
   const shown = shownDeco(deco, unlockedBy(NOTHING));
-  assert.equal(shown.portrait, null);
+  assert.equal(shown.portrait, NAERO, '잠긴 대표 이미지는 기본(내로 스탠딩)으로');
   assert.equal(shown.frame, 'basic');
   assert.equal(shown.background, 'cream');
   assert.equal(shown.sashStyle, 'short');
@@ -137,12 +138,20 @@ test('localStorage 접근 자체가 막혀도 기본 꾸미기를 돌려준다',
   const original = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
   Object.defineProperty(globalThis, 'localStorage', { configurable: true, get() { throw new Error('blocked'); } });
   try {
-    assert.deepEqual(getProfileDeco(), { portrait: null, frame: 'basic', background: 'cream', sashStyle: 'none', sashColorShort: 'wine', sashColorLong: 'wine', sashIconLeft: 'none', sashIconRight: 'none' });
+    assert.deepEqual(getProfileDeco(), { portrait: NAERO, frame: 'basic', background: 'cream', sashStyle: 'none', sashColorShort: 'wine', sashColorLong: 'wine', sashIconLeft: 'none', sashIconRight: 'none' });
     assert.doesNotThrow(() => setProfileDeco({ frame: 'wood' }));
   } finally {
     if (original) Object.defineProperty(globalThis, 'localStorage', original);
     else delete globalThis.localStorage;
   }
+});
+
+test('기본 제공 대표 이미지는 내로 · 남불 스탠딩이고, 처음은 내로 · 언제나 열려 있다', () => {
+  assert.deepEqual(DEFAULT_PORTRAITS, [NAERO, '/images/characters/standing/nambul.webp']);
+  assert.equal(getProfileDeco(memory()).portrait, NAERO);
+  DEFAULT_PORTRAITS.forEach((src) => assert.ok(PORTRAIT_POOL.includes(src)));
+  const nothing = unlockedBy(NOTHING);
+  assert.equal(shownDeco({ ...getProfileDeco(memory()), portrait: DEFAULT_PORTRAITS[1] }, nothing).portrait, DEFAULT_PORTRAITS[1]);
 });
 
 test('portraitLabel: 파일 이름을 읽기 쉬운 이름으로 바꾼다', () => {

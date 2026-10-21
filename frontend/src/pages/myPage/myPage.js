@@ -4,7 +4,7 @@ import { renderAxisRow } from '../../components/axisRow.js';
 import { imageOf } from '../../components/stage.js';
 import { AXES, CHARACTER_NAMES } from '../../utils/personalityAxes.js';
 import { KIND_TITLES, axisSeries, collectionOf, imageKinds, trailLeft, trailSummary } from '../../utils/myPageView.js';
-import { BACKGROUNDS, FRAMES, SASH_COLORS, SASH_ICONS, SASH_STYLES, achievementProgress, sashColorField, sashColorKey, sashColorOf, getProfileDeco, kindOfPortrait, portraitLabel, setProfileDeco, shownDeco, unlockedBy, unlockerOf } from '../../utils/profileDeco.js';
+import { BACKGROUNDS, DEFAULT_PORTRAITS, FRAMES, SASH_COLORS, SASH_ICONS, SASH_STYLES, achievementProgress, sashColorField, sashColorKey, sashColorOf, getProfileDeco, kindOfPortrait, portraitLabel, setProfileDeco, shownDeco, unlockedBy, unlockerOf } from '../../utils/profileDeco.js';
 import { PORTRAIT_POOL } from '../../content/portraitPool.js';
 import { BOOKMARK_CHARACTERS, BOOKMARK_FACES, BOOKMARK_LAWS, BOOKMARK_NAMES, BOOKMARK_STYLES, FACE_NAMES, STYLE_NAMES, getBookmarkCharacter, getBookmarkFaceName, getBookmarkStyle, bookmarkFace, setBookmarkCharacter, setBookmarkFace, BOOKMARK_COLORS, getBookmarkColor, setBookmarkColor, selectedBookmarkFace } from '../../utils/bookmarkCharacter.js';
 import { SCRIPTS } from '../../content/scripts.js';
@@ -137,16 +137,6 @@ function renderStats(stats) {
   return list;
 }
 
-// 대표 이미지를 고르지 않았으면 책갈피 캐릭터의 판사 전신(로는 역할 의상 컷이 없어 대기 자세 마스코트)
-function defaultPortrait() {
-  const who = getBookmarkCharacter();
-  const isLaw = BOOKMARK_LAWS.includes(who);
-  return {
-    src: isLaw ? `/images/characters/mascot/${who}_idle.webp` : imageOf(who, 'role:judge'),
-    caption: isLaw ? BOOKMARK_NAMES[who] : `${BOOKMARK_NAMES[who]}-판사`,
-  };
-}
-
 // 지금 보여 줄 꾸미기: 고른 것 중 잠긴 것은 기본으로(profileDeco.js shownDeco)
 const decoFor = (stats) => shownDeco(getProfileDeco(), unlockedBy(stats));
 const nameOf = (list, id) => list.find((item) => item.id === id)?.name ?? id;
@@ -187,7 +177,8 @@ const sashNote = (deco) => {
 
 // 대표 이미지 카드의 속: 위 닉네임 · 그림 창(대표 이미지) · 아래 성향 테스트 결과. 테두리 · 배경 · 책갈피는 클래스(.deco-frame-* · .deco-bg-* · .deco-sash-*)로 입힌다
 function profileCardParts(deco, data) {
-  const { src, caption } = deco.portrait ? { src: deco.portrait, caption: portraitLabel(deco.portrait) } : defaultPortrait();
+  const src = deco.portrait;
+  const caption = portraitLabel(src);
   const face = element('div', 'my-card-window');
   const faceImage = picture(src, `${caption} 대표 이미지`, 'my-profile-face');
   face.append(faceImage);
@@ -517,7 +508,8 @@ function decoOption({ group, value, checked, locked, name, lockedBy, onChange },
   return label;
 }
 
-// 대표 이미지: 기본(책갈피 캐릭터) + 후보 130장을 종류별로. 잠긴 종류는 실루엣으로만 보인다
+// 대표 이미지: 기본 제공(내로 · 남불 스탠딩) + 나머지 후보를 종류별로. 잠긴 종류는 실루엣으로만 보인다.
+// 기본 제공 두 장은 "서 있는 컷"에도 들어 있지만 같은 칸이 두 번 나오지 않게 기본에만 둔다
 function portraitPicker(open, shownPortrait, onPick) {
   const field = element('fieldset', 'my-deco');
   field.append(element('legend', '', '대표 이미지'), element('p', 'my-hint', '종류마다 도전과제를 깨면 열려요. 고르면 바로 마이페이지 카드에 쓰여요.'));
@@ -527,11 +519,14 @@ function portraitPicker(open, shownPortrait, onPick) {
     return box;
   };
   const pick = (portrait) => () => { setProfileDeco({ portrait }); onPick(); };
-  const base = defaultPortrait();
-  const first = element('div', 'my-deco-grid my-deco-default');
-  first.append(decoOption({ group: 'profile-portrait', value: 'default', checked: shownPortrait === null, locked: false, name: `기본: ${base.caption} (책갈피 캐릭터를 따라가요)`, onChange: pick(null) }, thumb(base.src)));
-  field.append(element('h3', 'my-deco-kind', '기본'), first);
-  imageKinds(PORTRAIT_POOL).forEach((kind) => {
+  const first = element('div', 'my-deco-grid');
+  DEFAULT_PORTRAITS.forEach((src) => first.append(decoOption({
+    group: 'profile-portrait', value: src, checked: src === shownPortrait, locked: false, name: `기본 · ${portraitLabel(src)} 스탠딩`, onChange: pick(src),
+  }, thumb(src))));
+  const head = element('h3', 'my-deco-kind', `기본 (${DEFAULT_PORTRAITS.length})`);
+  head.append(element('span', 'my-deco-state is-open', '기본 제공'));
+  field.append(head, first);
+  imageKinds(PORTRAIT_POOL.filter((src) => !DEFAULT_PORTRAITS.includes(src))).forEach((kind) => {
     const locked = !open.kinds.has(kind.key);
     const by = unlockerOf('kinds', kind.key)?.title ?? '';
     const head = element('h3', 'my-deco-kind', `${kind.title} (${kind.items.length})`);
@@ -772,7 +767,7 @@ function renderProfilePage(data, go) {
   });
   const actions = element('div', 'my-profile-actions');
   const decorate = button('카드 꾸미기', () => openDecoDialog({ open, stats, data, onPick: paintPreview, opener: decorate }), 'primary-button');
-  actions.append(decorate, button('도전과제 보기', () => go('achievements'), 'secondary-button'), button('책갈피 설정', () => go('bookmark'), 'secondary-button'));
+  actions.append(decorate, button('책갈피 설정', () => go('bookmark'), 'secondary-button'), button('도전과제 보기', () => go('achievements'), 'secondary-button'));
   summary.append(element('p', 'my-hint', '도전과제를 깨면 대표 이미지 · 테두리 · 배경 · 카드 책갈피가 열려요. 고른 것은 이 브라우저에 저장돼요.'), counts, actions);
   hero.append(preview, summary);
 

@@ -70,9 +70,11 @@ body[data-theme="coffee"] .site-footer { background: var(--palette-coffee-50); b
 .my-card:active { transform: translateY(1px); }
 .my-card:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 3px; }
 @media (hover: hover) and (pointer: fine) { .my-card:hover { transform: translateY(-3px); } }
-.my-card { grid-template-rows: 2.8em minmax(0, 1fr) 3.6em; gap: 8px; padding: 16px 14px 12px; } /* 위 이름 · 가운데 그림 창 · 아래 한 줄 — 두 카드가 같은 칸이라 그림 크기가 같다 */
+.my-card { grid-template-rows: 2.8em minmax(0, 1fr) 3.6em; gap: 8px; padding: 16px 14px 12px; container-type: inline-size; } /* 위 이름 · 가운데 그림 창 · 아래 한 줄 — 두 카드가 같은 칸이라 그림 크기가 같다 */
 .my-card.is-profile { background: linear-gradient(180deg, var(--color-card), var(--color-surface)); }
-.my-card-name { display: grid; align-items: center; margin: 0; font: 900 var(--text-title-3)/1.3 var(--font-heading); letter-spacing: -.02em; text-wrap: balance; color: inherit; }
+/* 카드 안 글자 · 책갈피는 카드 폭에 비례한다(FE-68). cqi = 카드 안쪽 폭(테두리 · 좌우 여백 제외)의 1%라, 200px 카드(안쪽 170px)에서 1cqi = 1.7px이고 지금 px 크기와 같다.
+   모바일 2열(카드 170px)에서도 같은 비율로 줄어 닉네임이 잘리지 않는다 */
+.my-card-name { display: grid; align-items: center; margin: 0; font: 900 10.6cqi/1.3 var(--font-heading); letter-spacing: -.02em; text-wrap: balance; color: inherit; }
 .my-card-window { position: relative; display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); place-items: end center; min-height: 0; border-radius: 999px 999px 8px 8px; background: var(--color-surface); border: 1px solid color-mix(in srgb, var(--color-border-strong) 70%, transparent); overflow: hidden; }
 /* 행 · 열을 창 크기에 묶어(위 grid-template) 그림의 100%가 창 크기로 풀리게 한다(FE-67). 묶지 않으면 행이 그림 원래 높이로 늘어나 contain이 듣지 않고 아래가 잘렸다 */
 .my-card-window img { box-sizing: border-box; width: 100%; height: 100%; min-height: 0; padding: 22px 8px 0; object-fit: contain; object-position: bottom; }
@@ -81,7 +83,7 @@ body[data-theme="coffee"] .site-footer { background: var(--palette-coffee-50); b
 .my-card-window img.is-fitted { position: absolute; max-width: none; padding: 0; object-fit: fill; }
 .my-card-window img.is-fitting { visibility: hidden; }
 .my-card-window strong { align-self: center; font: 900 var(--text-title-2)/1 var(--font-heading); color: var(--color-heading); }
-.my-card-note { display: grid; align-items: center; margin: 0; padding: 4px 4px 0; color: var(--color-muted); font: 400 var(--text-caption)/1.45 var(--font-article); text-wrap: balance; }
+.my-card-note { display: grid; align-items: center; margin: 0; padding: 4px 4px 0; color: var(--color-muted); font: 400 7cqi/1.45 var(--font-article); text-wrap: balance; }
 .my-profile-face.is-missing { visibility: hidden; }
 
 /* 성향카드: 타로카드 모티브 — 어두운 바탕 · 이중 테두리 · 위 이름 띠 · 아치형 그림 창 · 아래 대사 띠 · 모서리 별 */
@@ -146,10 +148,10 @@ body[data-theme="coffee"] .site-footer { background: var(--palette-coffee-50); b
 .my-card.deco-bg-news .my-card-note { color: inherit; }
 /* 카드 책갈피: 색 .deco-sash-* · 모양 .sash-style-*. 위는 카드 윗변에 걸쳐 살짝 올라오고, 아래 끝은 V자로 갈라진다. 띠 양 끝의 가는 선(--sash-edge)이 테두리 바느질 자리다
    short = 책에 꽂힌 책갈피처럼 짧고 굵게(아이콘을 단다) · long = 판사 법복의 띠처럼 얇고 길게 카드 아래까지 내려와 꼬리가 밖으로 나온다 */
-:is(.my-card, .my-mini-card) { --sash-x: 12px; --sash-rise: 6px; }
+:is(.my-card, .my-mini-card) { --sash-x: 7cqi; --sash-rise: 3.5cqi; }
 .my-mini-card { --sash-x: 5px; --sash-rise: 3px; }
-.sash-style-short { --sash-w: 26px; --sash-len: 46px; --sash-notch: 9px; }
-.sash-style-long { --sash-w: 13px; --sash-tail: 18px; --sash-notch: 8px; }
+.sash-style-short { --sash-w: 15.3cqi; --sash-len: 27cqi; --sash-notch: 5.3cqi; }
+.sash-style-long { --sash-w: 7.6cqi; --sash-tail: 10.6cqi; --sash-notch: 4.7cqi; }
 .my-mini-card.sash-style-short { --sash-w: 11px; --sash-len: 18px; --sash-notch: 4px; }
 .my-mini-card.sash-style-long { --sash-w: 6px; --sash-tail: 8px; --sash-notch: 4px; }
 .deco-sash-wine { --sash: var(--deco-sash-wine); --sash-edge: var(--deco-gold); }
@@ -157,7 +159,7 @@ body[data-theme="coffee"] .site-footer { background: var(--palette-coffee-50); b
 .deco-sash-gold { --sash: var(--deco-gold); --sash-edge: var(--deco-wood); }
 .deco-sash-green { --sash: var(--deco-sash-green); --sash-edge: var(--deco-gold); }
 .my-card-sash {
-  position: absolute; top: calc(var(--sash-rise) * -1); z-index: 1; display: grid; justify-items: center; align-content: start; width: var(--sash-w); padding-top: calc(var(--sash-rise) + 6px); pointer-events: none;
+  position: absolute; top: calc(var(--sash-rise) * -1); z-index: 1; display: grid; justify-items: center; align-content: start; width: var(--sash-w); padding-top: calc(var(--sash-rise) + 3.5cqi); pointer-events: none;
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--color-heading) 30%, transparent) 0 var(--sash-rise), transparent var(--sash-rise)), /* 윗변에 걸친 접힘 그늘 */
     linear-gradient(90deg, var(--sash-edge) 0 1.5px, var(--sash) 1.5px calc(100% - 1.5px), var(--sash-edge) calc(100% - 1.5px));
@@ -168,12 +170,14 @@ body[data-theme="coffee"] .site-footer { background: var(--palette-coffee-50); b
 .sash-style-short .my-card-sash { height: var(--sash-len); }
 .sash-style-long .my-card-sash { bottom: calc(var(--sash-tail) * -1); }
 .deco-sash-gold { --sash-ink: var(--color-heading); } /* 밝은 금사 띠 위 아이콘은 진하게 */
-.my-sash-icon { width: 15px; height: 15px; }
+.my-sash-icon { width: 8.8cqi; height: 8.8cqi; }
 svg.my-sash-icon { fill: none; stroke: var(--sash-ink, var(--color-card)); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
-img.my-sash-icon { width: 19px; height: 19px; border-radius: 50%; background: var(--color-cup); box-shadow: 0 0 0 1.5px var(--sash-edge); object-fit: cover; object-position: top; }
+img.my-sash-icon { width: 11.2cqi; height: 11.2cqi; border-radius: 50%; background: var(--color-cup); box-shadow: 0 0 0 1.5px var(--sash-edge); object-fit: cover; object-position: top; }
 img.my-sash-icon.is-missing { visibility: hidden; }
+.my-icon-chip svg.my-sash-icon { width: 15px; height: 15px; } /* 카드 밖(고르기 칩)에는 cqi 기준 카드가 없어 px로 둔다 */
+.my-icon-chip img.my-sash-icon { width: 19px; height: 19px; }
 .my-mini-card .my-sash-icon { display: none; } /* 견본은 작아서 아이콘을 그리지 않는다 */
-.my-card:not(.deco-sash-none) .my-card-name { padding-inline: calc(var(--sash-x) + var(--sash-w) - 8px); } /* 위 닉네임이 책갈피에 가리지 않게 */
+.my-card:not(.deco-sash-none) .my-card-name { padding-inline: calc(var(--sash-x) + var(--sash-w) - 4.7cqi); } /* 위 닉네임이 책갈피에 가리지 않게 */
 .my-card.is-profile .my-card-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; align-self: center; } /* 닉네임은 한 줄, 길면 ... */
 .my-card.is-profile .my-card-note.is-empty { opacity: .7; }
 .my-card.is-preview { cursor: default; }
