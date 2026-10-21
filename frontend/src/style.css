@@ -388,3 +388,10 @@ button, [role="button"] { -webkit-user-select: none; user-select: none; -webkit-
   animation-duration: 0s !important; animation-delay: 0s !important; animation-iteration-count: 1 !important;
   transition-duration: 0s !important; transition-delay: 0s !important; scroll-behavior: auto !important;
 }
+
+/* 책갈피 리본 색(FE-68): 판결 체험 파일철의 진행 책갈피 · 마이페이지 책갈피 설정 미리 보기가 함께 쓴다(bookmarkCharacter.js BOOKMARK_COLORS) */
+.bookmark-color-bronze { --bookmark-color: var(--palette-bronze-700); }
+.bookmark-color-wine { --bookmark-color: var(--palette-red-700); }
+.bookmark-color-navy { --bookmark-color: var(--palette-navy-700); }
+.bookmark-color-green { --bookmark-color: var(--palette-judge-court); }
+.bookmark-color-gold { --bookmark-color: var(--palette-pen-gold); }

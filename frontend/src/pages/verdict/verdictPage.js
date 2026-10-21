@@ -6,7 +6,7 @@ import { restartMock, jumpActMock } from '../../mocks/mockStageButtons.js';
 import { getDraft, saveDraft, clearDraft } from './verdictDraft.js';
 import { markAiRevealIntro } from '../ai/aiRevealIntro.js';
 import { reducedMotion } from '../../utils/motion.js';
-import { selectedBookmarkFace } from '../../utils/bookmarkCharacter.js';
+import { getBookmarkColor, selectedBookmarkFace } from '../../utils/bookmarkCharacter.js';
 
 const penaltyLabels = { DEATH: '사형', LIFE: '무기징역', PRISON: '징역', FINE: '벌금' };
 // 해금 책갈피의 얼굴(내로)
@@ -587,7 +587,7 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
     const LAST = 4;
     // 진행 책갈피: 펼쳐 본 가장 뒤 장(reached)의 탭 바로 뒤에 끼워 둔 내로 얼굴 책갈피(장식). 잠금이 아니라 진행을 표시하므로
     // 늘 보이고, 뒤로 넘겨도 자리를 지킨다(마지막 장까지 오면 탭 줄 끝). 얼굴은 마이페이지 "만난 모습"에서 고른 것(FE-67)
-    const bookmark = element('span', 'folder-bookmark');
+    const bookmark = element('span', `folder-bookmark bookmark-color-${getBookmarkColor()}`);
     bookmark.setAttribute('aria-hidden', 'true');
     bookmark.append(picture(selectedBookmarkFace()));
     const pages = [[summaryPage, '사건 요약'], [sidebar, '참고 정보'], [factorPage, '판단 요소'], [main, '최종 판결'], [signPage, '확정']].map(([panel, title], i) => {
