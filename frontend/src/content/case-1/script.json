@@ -102,6 +102,16 @@
         "naero": "guide-neutral",
         "nambul": "idle-neutral"
       },
+      "slots": {
+        "naero": {
+          "slot": 5,
+          "row": "front"
+        },
+        "nambul": {
+          "slot": 55,
+          "row": "front"
+        }
+      },
       "steps": [
         {
           "say": "nambul",
@@ -109,26 +119,53 @@
             "nambul": "guide-neutral"
           },
           "text": "기사 제목부터 같이 봐요. 돈을 갚으라며 찾아온 지인이 자택에서 숨졌다는 내용이에요.",
+          "source": {
+            "type": "ai",
+            "basis": [
+              "paper.article"
+            ]
+          },
           "focus": "head"
         },
         {
           "say": "naero",
           "text": "사진은 사건을 이해하도록 만든 연출 이미지예요. 실제 현장 사진이 아니에요.",
+          "source": {
+            "type": "fixed"
+          },
           "focus": "photo"
         },
         {
           "say": "nambul",
           "text": "기사에 따르면 A씨는 B씨에게 빌린 돈을 제때 갚지 못했어요. 그 문제로 두 사람은 오래 다퉈 왔다고 해요.",
+          "source": {
+            "type": "ai",
+            "basis": [
+              "paper.article"
+            ]
+          },
           "focus": "body"
         },
         {
           "say": "naero",
           "text": "그날 B씨는 돈 이야기를 하려고 A씨의 집을 찾아갔어요. 이야기는 곧 말다툼이 됐다고 해요.",
+          "source": {
+            "type": "ai",
+            "basis": [
+              "paper.article"
+            ]
+          },
           "focus": "body"
         },
         {
           "say": "nambul",
           "text": "다툼이 격해지자 A씨는 집에 있던 흉기를 집어 들었고, B씨는 그 자리에서 숨졌어요. A씨는 구호 조치 없이 집을 나갔다고 전해져요.",
+          "source": {
+            "type": "ai",
+            "basis": [
+              "paper.article"
+            ]
+          },
           "focus": "body"
         },
         {
@@ -138,6 +175,9 @@
             "nambul": "idle-neutral"
           },
           "text": "기사로 알 수 있는 건 여기까지예요. 기사에 없는 이야기는 지어내지 않을게요.",
+          "source": {
+            "type": "fixed"
+          },
           "focus": "body"
         },
         {
@@ -146,6 +186,9 @@
             "nambul": "react-sorry"
           },
           "text": "무거운 사건이니까, 서두르지 말고 생각해 봐요.",
+          "source": {
+            "type": "fixed"
+          },
           "focus": "body"
         }
       ]
@@ -157,10 +200,23 @@
         "naero": "guide-neutral",
         "nambul": "idle-neutral"
       },
+      "slots": {
+        "naero": {
+          "slot": 5,
+          "row": "front"
+        },
+        "nambul": {
+          "slot": 55,
+          "row": "front"
+        }
+      },
       "steps": [
         {
           "say": "naero",
           "text": "기록을 펼치기 전에, 지금 드는 생각을 먼저 남겨 둘게요. 이 사람은 어느 정도의 벌을 받아야 할까요?",
+          "source": {
+            "type": "fixed"
+          },
           "textAgain": "기록을 펼치기 전에 남겨 둔 첫인상이 있었죠. 그때 이 사람에게 어느 정도의 벌이 맞다고 봤는지 다시 볼게요.",
           "focus": "photo"
         },
@@ -171,6 +227,9 @@
             "naero": "read-thinking"
           },
           "text": "정답은 없어요. 기사만 읽고 떠오르는 대로 골라 봐요.",
+          "source": {
+            "type": "fixed"
+          },
           "textAgain": "그때는 기사만 읽고 떠오르는 대로 하나를 골랐었어요."
         },
         {
@@ -179,6 +238,9 @@
             "nambul": "guide-happy"
           },
           "text": "그래서 신문사 첫인상 엽서를 가져왔어요. 여기에 첫인상을 적어 보내 주세요.",
+          "source": {
+            "type": "fixed"
+          },
           "textAgain": "그때 보낸 첫인상 엽서를 다시 가져왔어요. 어떤 첫인상이었는지 볼까요?"
         },
         {
@@ -186,6 +248,15 @@
           "look": {
             "naero": "read-thinking",
             "nambul": "read-thinking"
+          },
+          "source": {
+            "card": {
+              "type": "api",
+              "api": "API 4 · GET /cases/{caseId}/experience/overview",
+              "fields": [
+                "rangeOptions"
+              ]
+            }
           }
         }
       ]
@@ -204,6 +275,16 @@
         "naero": "role:prosecutor",
         "nambul": "role:defense"
       },
+      "slots": {
+        "naero": {
+          "slot": 10,
+          "row": "front"
+        },
+        "nambul": {
+          "slot": 50,
+          "row": "front"
+        }
+      },
       "steps": [
         {
           "say": "narrator",
@@ -212,55 +293,124 @@
           "delay": 500,
           "proc": 0,
           "section": 2,
-          "text": "재판을 시작합니다. 재판장은 당신이에요. 먼저 피고인 A씨가 본인이 맞는지 확인합니다."
+          "text": "재판을 시작합니다. 재판장은 당신이에요. 먼저 피고인 A씨가 본인이 맞는지 확인합니다.",
+          "source": {
+            "type": "fixed"
+          }
         },
         {
           "say": "naero",
           "role": "검사",
-          "text": "이번 재판에서 저는 검사 자리를 맡을게요."
+          "text": "이번 재판에서 저는 검사 자리를 맡을게요.",
+          "source": {
+            "type": "fixed"
+          }
         },
         {
           "say": "nambul",
           "role": "변호인",
-          "text": "저는 변호인 자리예요. 둘 다 맡은 쪽의 주장만 전해요."
+          "text": "저는 변호인 자리예요. 둘 다 맡은 쪽의 주장만 전해요.",
+          "source": {
+            "type": "fixed"
+          }
         },
         {
           "say": "naero",
           "role": "검사",
           "proc": 1,
           "card": "indict",
-          "text": "공소사실을 말씀드리겠습니다. 피고인은 피해자에게 빌린 돈을 갚지 못해 오래 다퉈 왔습니다."
+          "text": "공소사실을 말씀드리겠습니다. 피고인은 피해자에게 빌린 돈을 갚지 못해 오래 다퉈 왔습니다.",
+          "source": {
+            "type": "ai",
+            "basis": [
+              "API 6 · GET /cases/{caseId}/experience/review sections"
+            ],
+            "card": {
+              "type": "ai",
+              "ref": "cards.indict"
+            }
+          }
         },
         {
           "say": "naero",
           "role": "검사",
           "card": "indict",
-          "text": "사건 당일, 집을 찾아온 피해자와 말다툼을 하다가 집 안에 있던 흉기로 피해자를 살해했습니다. 적용 법조는 형법 제250조 제1항, 살인입니다."
+          "text": "사건 당일, 집을 찾아온 피해자와 말다툼을 하다가 집 안에 있던 흉기로 피해자를 살해했습니다. 적용 법조는 형법 제250조 제1항, 살인입니다.",
+          "source": {
+            "type": "ai",
+            "basis": [
+              "API 6 · GET /cases/{caseId}/experience/review sections"
+            ],
+            "card": {
+              "type": "ai",
+              "ref": "cards.indict"
+            }
+          }
         },
         {
           "say": "nambul",
           "role": "변호인",
           "card": "plea",
-          "text": "피고인은 공소사실을 모두 인정합니다."
+          "text": "피고인은 공소사실을 모두 인정합니다.",
+          "source": {
+            "type": "ai",
+            "basis": [
+              "API 6 · GET /cases/{caseId}/experience/review sections"
+            ],
+            "card": {
+              "type": "ai",
+              "ref": "cards.plea"
+            }
+          }
         },
         {
           "say": "nambul",
           "role": "변호인",
           "card": "plea",
-          "text": "다만 미리 계획한 일이 아니라, 말다툼 중에 우발적으로 벌어진 일이라는 점을 살펴 주시기 바랍니다."
+          "text": "다만 미리 계획한 일이 아니라, 말다툼 중에 우발적으로 벌어진 일이라는 점을 살펴 주시기 바랍니다.",
+          "source": {
+            "type": "ai",
+            "basis": [
+              "API 6 · GET /cases/{caseId}/experience/review sections"
+            ],
+            "card": {
+              "type": "ai",
+              "ref": "cards.plea"
+            }
+          }
         },
         {
           "say": "narrator",
           "cameo": "naero",
           "proc": 2,
           "card": "issues",
-          "text": "피고인이 범행을 인정했으니, 남은 쟁점은 얼마나 무겁게 벌할지예요."
+          "text": "피고인이 범행을 인정했으니, 남은 쟁점은 얼마나 무겁게 벌할지예요.",
+          "source": {
+            "type": "ai",
+            "basis": [
+              "API 6 · GET /cases/{caseId}/experience/review sections"
+            ],
+            "card": {
+              "type": "ai",
+              "ref": "cards.issues"
+            }
+          }
         },
         {
           "say": "narrator",
           "cameo": "naero",
           "card": "issues",
-          "text": "범행 경위, 범행 뒤의 행동, 피해 회복 노력. 이 세 가지를 눈여겨보세요."
+          "text": "범행 경위, 범행 뒤의 행동, 피해 회복 노력. 이 세 가지를 눈여겨보세요.",
+          "source": {
+            "type": "ai",
+            "basis": [
+              "API 6 · GET /cases/{caseId}/experience/review sections"
+            ],
+            "card": {
+              "type": "ai",
+              "ref": "cards.issues"
+            }
+          }
         },
         {
           "say": "naero",
@@ -268,42 +418,102 @@
           "proc": 3,
           "card": "evidence",
           "ev": 0,
-          "text": "검사 측 증거입니다. 두 사람 사이에 빌린 돈 문제로 오래 이어진 다툼을 보여 주는 기록입니다."
+          "text": "검사 측 증거입니다. 두 사람 사이에 빌린 돈 문제로 오래 이어진 다툼을 보여 주는 기록입니다.",
+          "source": {
+            "type": "ai",
+            "basis": [
+              "API 8 · GET /cases/{caseId}/experience/verdict-form factors"
+            ],
+            "card": {
+              "type": "ai",
+              "ref": "evidence[0]"
+            }
+          }
         },
         {
           "say": "naero",
           "role": "검사",
           "card": "evidence",
           "ev": 1,
-          "text": "사건 당일, 피해자가 돈 이야기를 하려고 피고인의 집을 찾아간 사실입니다."
+          "text": "사건 당일, 피해자가 돈 이야기를 하려고 피고인의 집을 찾아간 사실입니다.",
+          "source": {
+            "type": "ai",
+            "basis": [
+              "API 8 · GET /cases/{caseId}/experience/verdict-form factors"
+            ],
+            "card": {
+              "type": "ai",
+              "ref": "evidence[1]"
+            }
+          }
         },
         {
           "say": "naero",
           "role": "검사",
           "card": "evidence",
           "ev": 2,
-          "text": "말다툼 끝에 집 안에 있던 흉기가 사용됐고, 피고인은 구호 조치 없이 집을 나갔습니다."
+          "text": "말다툼 끝에 집 안에 있던 흉기가 사용됐고, 피고인은 구호 조치 없이 집을 나갔습니다.",
+          "source": {
+            "type": "ai",
+            "basis": [
+              "API 8 · GET /cases/{caseId}/experience/verdict-form factors"
+            ],
+            "card": {
+              "type": "ai",
+              "ref": "evidence[2]"
+            }
+          }
         },
         {
           "say": "naero",
           "role": "검사",
           "card": "evidence",
           "ev": 3,
-          "text": "피해자에게는 부양하던 어린 자녀 둘이 있고, 유족은 엄벌을 원한다는 진술입니다."
+          "text": "피해자에게는 부양하던 어린 자녀 둘이 있고, 유족은 엄벌을 원한다는 진술입니다.",
+          "source": {
+            "type": "ai",
+            "basis": [
+              "API 8 · GET /cases/{caseId}/experience/verdict-form factors"
+            ],
+            "card": {
+              "type": "ai",
+              "ref": "evidence[3]"
+            }
+          }
         },
         {
           "say": "nambul",
           "role": "변호인",
           "card": "evidence",
           "ev": 4,
-          "text": "변호인 측 증거입니다. 피고인이 수사 초기부터 범행을 인정했다는 진술 기록입니다."
+          "text": "변호인 측 증거입니다. 피고인이 수사 초기부터 범행을 인정했다는 진술 기록입니다.",
+          "source": {
+            "type": "ai",
+            "basis": [
+              "API 8 · GET /cases/{caseId}/experience/verdict-form factors"
+            ],
+            "card": {
+              "type": "ai",
+              "ref": "evidence[4]"
+            }
+          }
         },
         {
           "say": "nambul",
           "role": "변호인",
           "card": "evidence",
           "ev": 5,
-          "text": "피해 회복을 위해 5,000만 원을 공탁한 자료입니다."
+          "text": "피해 회복을 위해 5,000만 원을 공탁한 자료입니다.",
+          "source": {
+            "type": "ai",
+            "basis": [
+              "API 8 · GET /cases/{caseId}/experience/verdict-form factors"
+            ],
+            "card": {
+              "type": "ai",
+              "ref": "evidence[5]"
+            }
+          }
         },
         {
           "say": "nambul",
@@ -311,7 +521,17 @@
           "card": "evidence",
           "ev": 6,
           "confirm": 2,
-          "text": "피고인에게 형사처벌 전력이 없다는 기록도 함께 제출합니다."
+          "text": "피고인에게 형사처벌 전력이 없다는 기록도 함께 제출합니다.",
+          "source": {
+            "type": "ai",
+            "basis": [
+              "API 8 · GET /cases/{caseId}/experience/verdict-form factors"
+            ],
+            "card": {
+              "type": "ai",
+              "ref": "evidence[6]"
+            }
+          }
         },
         {
           "say": "narrator",
@@ -328,44 +548,92 @@
           "spots": {
             "nambul": "stand"
           },
-          "text": "이제 피고인에게 직접 묻습니다. 남불이 변호인석에서 일어나 A씨 자리에 서고, 검사 내로가 물어요."
+          "slots": {
+            "nambul": {
+              "slot": 30,
+              "row": "front"
+            }
+          },
+          "text": "이제 피고인에게 직접 묻습니다. 남불이 변호인석에서 일어나 A씨 자리에 서고, 검사 내로가 물어요.",
+          "source": {
+            "type": "fixed"
+          }
         },
         {
           "say": "naero",
           "role": "검사",
-          "text": "피고인은 그날 피해자를 만나기 전부터 해칠 생각이 있었습니까?"
+          "text": "피고인은 그날 피해자를 만나기 전부터 해칠 생각이 있었습니까?",
+          "source": {
+            "type": "ai",
+            "basis": [
+              "API 6 · GET /cases/{caseId}/experience/review sections"
+            ]
+          }
         },
         {
           "say": "nambul",
           "role": "A씨 역",
-          "text": "아닙니다. 돈 이야기를 하다가 말다툼이 커졌고, 그러다 그렇게 됐습니다."
+          "text": "아닙니다. 돈 이야기를 하다가 말다툼이 커졌고, 그러다 그렇게 됐습니다.",
+          "source": {
+            "type": "ai",
+            "basis": [
+              "API 6 · GET /cases/{caseId}/experience/review sections"
+            ]
+          }
         },
         {
           "say": "naero",
           "role": "검사",
-          "text": "범행 뒤 피해자를 두고 집을 나간 것은 사실입니까?"
+          "text": "범행 뒤 피해자를 두고 집을 나간 것은 사실입니까?",
+          "source": {
+            "type": "ai",
+            "basis": [
+              "API 6 · GET /cases/{caseId}/experience/review sections"
+            ]
+          }
         },
         {
           "say": "nambul",
           "role": "A씨 역",
-          "text": "…네, 사실입니다."
+          "text": "…네, 사실입니다.",
+          "source": {
+            "type": "ai",
+            "basis": [
+              "API 6 · GET /cases/{caseId}/experience/review sections"
+            ]
+          }
         },
         {
           "say": "naero",
           "role": "검사",
-          "text": "지금 그 일을 어떻게 생각합니까?"
+          "text": "지금 그 일을 어떻게 생각합니까?",
+          "source": {
+            "type": "ai",
+            "basis": [
+              "API 6 · GET /cases/{caseId}/experience/review sections"
+            ]
+          }
         },
         {
           "say": "nambul",
           "role": "A씨 역",
           "confirm": 3,
-          "text": "제가 한 일을 모두 인정합니다. 깊이 반성하고 있습니다."
+          "text": "제가 한 일을 모두 인정합니다. 깊이 반성하고 있습니다.",
+          "source": {
+            "type": "ai",
+            "basis": [
+              "API 6 · GET /cases/{caseId}/experience/review sections"
+            ]
+          }
         },
         {
           "say": "naero",
           "role": "검사",
           "section": 4,
-          "text": "이상으로 피고인 신문을 마치겠습니다."
+          "text": "이상으로 피고인 신문을 마치겠습니다.",
+          "source": {
+            "type": "fixed"
+          }
         },
         {
           "say": "nambul",
@@ -379,9 +647,18 @@
           "spots": {
             "nambul": ""
           },
+          "slots": {
+            "nambul": {
+              "slot": 50,
+              "row": "front"
+            }
+          },
           "confirm": 4,
           "next": "판결로",
-          "text": "변호인도 추가 질문 없습니다."
+          "text": "변호인도 추가 질문 없습니다.",
+          "source": {
+            "type": "fixed"
+          }
         }
       ]
     },
@@ -392,12 +669,25 @@
         "naero": "read-thinking",
         "nambul": "idle-neutral"
       },
+      "slots": {
+        "naero": {
+          "slot": 8,
+          "row": "front"
+        },
+        "nambul": {
+          "slot": 52,
+          "row": "front"
+        }
+      },
       "steps": [
         {
           "say": "naero",
           "role": "안내",
           "card": "summary",
-          "text": "지금까지 읽은 내용을 한 장에 모았어요."
+          "text": "지금까지 읽은 내용을 한 장에 모았어요.",
+          "source": {
+            "type": "fixed"
+          }
         },
         {
           "say": "nambul",
@@ -407,7 +697,13 @@
             "nambul": "guide-neutral",
             "naero": "idle-neutral"
           },
-          "text": "검사 측은 구호 조치 없이 현장을 떠난 점과 유족의 엄벌 의사를 강조했어요."
+          "text": "검사 측은 구호 조치 없이 현장을 떠난 점과 유족의 엄벌 의사를 강조했어요.",
+          "source": {
+            "type": "ai",
+            "basis": [
+              "API 6 · GET /cases/{caseId}/experience/review sections"
+            ]
+          }
         },
         {
           "say": "naero",
@@ -417,7 +713,13 @@
             "naero": "guide-neutral",
             "nambul": "idle-neutral"
           },
-          "text": "변호인 측은 우발적인 범행이라는 점, 그리고 범행 인정 · 반성 · 공탁을 강조했어요."
+          "text": "변호인 측은 우발적인 범행이라는 점, 그리고 범행 인정 · 반성 · 공탁을 강조했어요.",
+          "source": {
+            "type": "ai",
+            "basis": [
+              "API 6 · GET /cases/{caseId}/experience/review sections"
+            ]
+          }
         },
         {
           "say": "nambul",
@@ -426,7 +728,10 @@
             "nambul": "react-surprised",
             "naero": "read-thinking"
           },
-          "text": "잠깐, 반대로 보면요? 내가 유족이라면, 내가 피고인이라면. 양쪽 자리에 한 번씩 서 보고 정해요."
+          "text": "잠깐, 반대로 보면요? 내가 유족이라면, 내가 피고인이라면. 양쪽 자리에 한 번씩 서 보고 정해요.",
+          "source": {
+            "type": "fixed"
+          }
         },
         {
           "say": "naero",
@@ -437,7 +742,10 @@
           },
           "confirm": "verdict",
           "next": "판결 내리러 가기",
-          "text": "준비되면 판결로 넘어가요. 여기서부터는 당신이 판사예요."
+          "text": "준비되면 판결로 넘어가요. 여기서부터는 당신이 판사예요.",
+          "source": {
+            "type": "fixed"
+          }
         }
       ]
     },
@@ -454,18 +762,40 @@
         "naero": "role:prosecutor",
         "nambul": "role:defense"
       },
+      "slots": {
+        "naero": {
+          "slot": 10,
+          "row": "front"
+        },
+        "nambul": {
+          "slot": 50,
+          "row": "front"
+        }
+      },
       "steps": [
         {
           "say": "naero",
           "role": "검사",
           "proc": 0,
-          "text": "검사 측 의견입니다. 피고인은 구호 조치 없이 현장을 떠났고, 유족은 엄벌을 원합니다. 엄한 처벌을 구합니다."
+          "text": "검사 측 의견입니다. 피고인은 구호 조치 없이 현장을 떠났고, 유족은 엄벌을 원합니다. 엄한 처벌을 구합니다.",
+          "source": {
+            "type": "ai",
+            "basis": [
+              "API 6 · GET /cases/{caseId}/experience/review sections"
+            ]
+          }
         },
         {
           "say": "nambul",
           "role": "변호인",
           "proc": 1,
-          "text": "변호인 측 최종변론입니다. 우발적인 범행이었고, 피고인은 범행을 인정하며 5,000만 원을 공탁했습니다. 이 점을 살펴 주십시오."
+          "text": "변호인 측 최종변론입니다. 우발적인 범행이었고, 피고인은 범행을 인정하며 5,000만 원을 공탁했습니다. 이 점을 살펴 주십시오.",
+          "source": {
+            "type": "ai",
+            "basis": [
+              "API 6 · GET /cases/{caseId}/experience/review sections"
+            ]
+          }
         },
         {
           "say": "nambul",
@@ -480,7 +810,19 @@
           "spots": {
             "nambul": "stand"
           },
-          "text": "제가 한 일을 깊이 반성하고 있습니다."
+          "slots": {
+            "nambul": {
+              "slot": 30,
+              "row": "front"
+            }
+          },
+          "text": "제가 한 일을 깊이 반성하고 있습니다.",
+          "source": {
+            "type": "ai",
+            "basis": [
+              "API 6 · GET /cases/{caseId}/experience/review sections"
+            ]
+          }
         },
         {
           "say": "naero",
@@ -492,7 +834,16 @@
           "spots": {
             "nambul": ""
           },
-          "text": "이제 판결을 내려 주십시오. 형벌의 종류와 형량, 그리고 양형에 고려한 요소를 정해 주십시오."
+          "slots": {
+            "nambul": {
+              "slot": 50,
+              "row": "front"
+            }
+          },
+          "text": "이제 판결을 내려 주십시오. 형벌의 종류와 형량, 그리고 양형에 고려한 요소를 정해 주십시오.",
+          "source": {
+            "type": "fixed"
+          }
         },
         {
           "proc": 3,
@@ -500,7 +851,19 @@
           "look": {
             "naero": "read-thinking"
           },
-          "board": "full"
+          "board": "full",
+          "source": {
+            "card": {
+              "type": "api",
+              "api": "API 8 · GET /cases/{caseId}/experience/verdict-form",
+              "fields": [
+                "penaltyOptions",
+                "recommended",
+                "suspensionRule",
+                "factors"
+              ]
+            }
+          }
         }
       ]
     },
@@ -511,6 +874,16 @@
         "naero": "guide-neutral",
         "nambul": "idle-neutral"
       },
+      "slots": {
+        "naero": {
+          "slot": 8,
+          "row": "front"
+        },
+        "nambul": {
+          "slot": 52,
+          "row": "front"
+        }
+      },
       "steps": [
         {
           "say": "nambul",
@@ -518,44 +891,110 @@
             "naero": "cheek-slim:idle-thinking",
             "nambul": "cheek-slim:idle-thinking"
           },
-          "text": "이제 AI 판사의 판결을 확인해 볼게요."
+          "text": "이제 AI 판사의 판결을 확인해 볼게요.",
+          "source": {
+            "type": "fixed"
+          }
         },
         {
           "say": "law",
           "law": "trio",
           "text": "양쪽을 함께 보겠습니다. 판단 요소를 하나씩 짚어 보겠습니다.",
+          "source": {
+            "type": "fixed"
+          },
           "textNoFactors": "양쪽을 함께 보겠습니다."
         },
         {
-          "factors": true
+          "factors": true,
+          "source": {
+            "card": {
+              "type": "api",
+              "api": "API 10 · GET /cases/{caseId}/experience/judgments/ai",
+              "fields": [
+                "factors[].label",
+                "factors[].direction"
+              ]
+            }
+          }
         },
         {
           "system": "AI 판사들이 의견을 맞추고 있어요",
           "law": "think",
-          "auto": 300
+          "auto": 300,
+          "source": {
+            "type": "fixed"
+          }
         },
         {
           "say": "law",
           "law": "deliver",
-          "text": "합의 결과를 말씀드리겠습니다."
+          "text": "합의 결과를 말씀드리겠습니다.",
+          "source": {
+            "type": "fixed"
+          }
         },
         {
           "say": "law",
           "law": "deliver",
           "card": "ai",
-          "text": "{penalty}입니다.\n{summary}입니다."
+          "text": "{penalty}입니다.\n{summary}입니다.",
+          "source": {
+            "type": "api",
+            "api": "API 10 · GET /cases/{caseId}/experience/judgments/ai",
+            "fills": {
+              "penalty": [
+                "penaltyType",
+                "reducedTo",
+                "prisonMonths",
+                "fineAmount",
+                "suspensionMonths"
+              ],
+              "summary": [
+                "summary"
+              ]
+            },
+            "card": {
+              "type": "api",
+              "api": "API 10 · GET /cases/{caseId}/experience/judgments/ai",
+              "fields": [
+                "penaltyType",
+                "reducedTo",
+                "prisonMonths",
+                "fineAmount",
+                "suspensionMonths",
+                "summary"
+              ]
+            }
+          }
         },
         {
           "say": "naero",
           "role": "안내",
-          "text": "AI 판사는 {penalty을} 선고했어요."
+          "text": "AI 판사는 {penalty을} 선고했어요.",
+          "source": {
+            "type": "api",
+            "api": "API 10 · GET /cases/{caseId}/experience/judgments/ai",
+            "fills": {
+              "penalty을": [
+                "penaltyType",
+                "reducedTo",
+                "prisonMonths",
+                "fineAmount",
+                "suspensionMonths"
+              ]
+            }
+          }
         },
         {
           "say": "nambul",
           "role": "안내",
           "confirm": "court",
           "next": "실제 판결 확인하기",
-          "text": "그렇다면 실제 판결은 어떨까요?"
+          "text": "그렇다면 실제 판결은 어떨까요?",
+          "source": {
+            "type": "fixed"
+          }
         }
       ]
     },
@@ -566,58 +1005,143 @@
         "naero": "role:judge",
         "nambul": "role:actor"
       },
+      "slots": {
+        "naero": {
+          "slot": 10,
+          "row": "front"
+        },
+        "nambul": {
+          "slot": 50,
+          "row": "front"
+        }
+      },
       "steps": [
         {
           "say": "naero",
           "role": "판사",
-          "text": "지금부터 판결을 선고하겠습니다. 피고인은 일어서 주시기 바랍니다."
+          "text": "지금부터 판결을 선고하겠습니다. 피고인은 일어서 주시기 바랍니다.",
+          "source": {
+            "type": "fixed"
+          }
         },
         {
           "say": "nambul",
           "role": "A씨 역",
-          "text": "…네."
+          "text": "…네.",
+          "source": {
+            "type": "fixed"
+          }
         },
         {
           "say": "naero",
           "role": "판사",
           "card": "court-penalty",
           "board": "reading",
-          "text": "주문. {order}"
+          "text": "주문. {order}",
+          "source": {
+            "type": "api",
+            "api": "API 12 · GET /cases/{caseId}/experience/judgments/court",
+            "fills": {
+              "order": [
+                "penaltyType",
+                "reducedTo",
+                "prisonMonths",
+                "fineAmount",
+                "suspensionMonths"
+              ]
+            },
+            "card": {
+              "type": "api",
+              "api": "API 12 · GET /cases/{caseId}/experience/judgments/court",
+              "fields": [
+                "penaltyType",
+                "reducedTo",
+                "prisonMonths",
+                "fineAmount",
+                "suspensionMonths"
+              ]
+            }
+          }
         },
         {
           "say": "naero",
           "role": "판사",
           "card": "court-reasoning",
           "board": "reading",
-          "text": "판결 이유를 말씀드리겠습니다."
+          "text": "판결 이유를 말씀드리겠습니다.",
+          "source": {
+            "type": "fixed",
+            "card": {
+              "type": "api",
+              "api": "API 12 · GET /cases/{caseId}/experience/judgments/court",
+              "fields": [
+                "reasoning"
+              ]
+            }
+          }
         },
         {
           "say": "naero",
           "role": "판사",
           "card": "court-excerpt",
           "board": "reading",
-          "text": "판결문에는 이렇게 적었습니다."
+          "text": "판결문에는 이렇게 적었습니다.",
+          "source": {
+            "type": "fixed",
+            "card": {
+              "type": "api",
+              "api": "API 12 · GET /cases/{caseId}/experience/judgments/court",
+              "fields": [
+                "excerpt"
+              ]
+            }
+          }
         },
         {
           "say": "naero",
           "role": "판사",
           "card": "court-plain",
           "board": "reading",
-          "text": "쉽게 풀면 이런 뜻입니다."
+          "text": "쉽게 풀면 이런 뜻입니다.",
+          "source": {
+            "type": "fixed",
+            "card": {
+              "type": "api",
+              "api": "API 12 · GET /cases/{caseId}/experience/judgments/court",
+              "fields": [
+                "plainExplanation"
+              ]
+            }
+          }
         },
         {
           "say": "naero",
           "role": "판사",
           "card": "court-factors",
           "board": "reading",
-          "text": "재판부가 무겁게, 가볍게 본 요소입니다."
+          "text": "재판부가 무겁게, 가볍게 본 요소입니다.",
+          "source": {
+            "type": "fixed",
+            "card": {
+              "type": "api",
+              "api": "API 12 · GET /cases/{caseId}/experience/judgments/court",
+              "fields": [
+                "factors[].label",
+                "factors[].direction",
+                "source.sourceOrg"
+              ]
+            }
+          }
         },
         {
           "say": "naero",
           "role": "판사",
           "confirm": "compare",
           "next": "세 판결 비교하기",
-          "text": "피고인은 이 판결에 불복하는 경우 7일 이내에 상소할 수 있습니다. 이것으로 선고를 마치겠습니다."
+          "text": "피고인은 이 판결에 불복하는 경우 7일 이내에 상소할 수 있습니다. 이것으로 선고를 마치겠습니다.",
+          "source": {
+            "type": "fixed"
+          }
         }
       ]
     },
@@ -628,6 +1152,16 @@
         "naero": "idle-neutral",
         "nambul": "idle-neutral"
       },
+      "slots": {
+        "naero": {
+          "slot": 5,
+          "row": "front"
+        },
+        "nambul": {
+          "slot": 55,
+          "row": "front"
+        }
+      },
       "steps": [
         {
           "focus": "front",
@@ -637,7 +1171,10 @@
             "naero": "idle-neutral",
             "nambul": "react-surprised"
           },
-          "text": "앗, 신문이에요! 우리가 본 사건이 다음 날 신문에 실렸어요."
+          "text": "앗, 신문이에요! 우리가 본 사건이 다음 날 신문에 실렸어요.",
+          "source": {
+            "type": "fixed"
+          }
         },
         {
           "focus": "front",
@@ -646,7 +1183,10 @@
             "naero": "guide-neutral",
             "nambul": "idle-neutral"
           },
-          "text": "제목이 '같은 사건, 세 개의 판결'이에요. 그중 하나는 내가 내린 판결이고요."
+          "text": "제목이 '같은 사건, 세 개의 판결'이에요. 그중 하나는 내가 내린 판결이고요.",
+          "source": {
+            "type": "fixed"
+          }
         },
         {
           "focus": "verdicts",
@@ -655,7 +1195,17 @@
             "naero": "read-thinking",
             "nambul": "idle-neutral"
           },
-          "text": "{vsCourt}"
+          "text": "{vsCourt}",
+          "source": {
+            "type": "api",
+            "api": "API 14 · GET /cases/{caseId}/experience/comparison",
+            "fills": {
+              "vsCourt": [
+                "judgments.USER",
+                "judgments.COURT"
+              ]
+            }
+          }
         },
         {
           "focus": "verdicts",
@@ -664,7 +1214,17 @@
             "naero": "idle-neutral",
             "nambul": "guide-neutral"
           },
-          "text": "{vsAi}"
+          "text": "{vsAi}",
+          "source": {
+            "type": "api",
+            "api": "API 14 · GET /cases/{caseId}/experience/comparison",
+            "fills": {
+              "vsAi": [
+                "judgments.USER",
+                "judgments.AI"
+              ]
+            }
+          }
         },
         {
           "focus": "letters",
@@ -673,7 +1233,10 @@
             "naero": "idle-neutral",
             "nambul": "react-surprised"
           },
-          "text": "어, 이 엽서는…! 우리가 처음에 받았던 첫인상 엽서예요. 기사만 읽고 보낸 첫인상이 신문에 실렸어요."
+          "text": "어, 이 엽서는…! 우리가 처음에 받았던 첫인상 엽서예요. 기사만 읽고 보낸 첫인상이 신문에 실렸어요.",
+          "source": {
+            "type": "fixed"
+          }
         },
         {
           "focus": "letters",
@@ -682,7 +1245,16 @@
             "naero": "guide-neutral",
             "nambul": "idle-neutral"
           },
-          "text": "그때는 「{pre}」이라고 적었어요. 지금의 판결과 나란히 놓고 볼 뿐, 맞고 틀리는 건 아니에요."
+          "text": "그때는 「{pre}」이라고 적었어요. 지금의 판결과 나란히 놓고 볼 뿐, 맞고 틀리는 건 아니에요.",
+          "source": {
+            "type": "api",
+            "api": "API 14 · GET /cases/{caseId}/experience/comparison",
+            "fills": {
+              "pre": [
+                "preToFinal.preJudgment.label"
+              ]
+            }
+          }
         },
         {
           "focus": "letters",
@@ -691,7 +1263,16 @@
             "naero": "idle-neutral",
             "nambul": "guide-neutral"
           },
-          "text": "편집부가 한 줄 달아 뒀어요. “{editor}”"
+          "text": "편집부가 한 줄 달아 뒀어요. “{editor}”",
+          "source": {
+            "type": "api",
+            "api": "API 14 · GET /cases/{caseId}/experience/comparison",
+            "fills": {
+              "editor": [
+                "preToCourt.direction"
+              ]
+            }
+          }
         },
         {
           "focus": "factors",
@@ -700,7 +1281,10 @@
             "naero": "read-thinking",
             "nambul": "read-thinking"
           },
-          "text": "요소마다 셋이 어떻게 봤는지 나란히 실렸어요. 어디서 갈렸는지 한눈에 보여요!"
+          "text": "요소마다 셋이 어떻게 봤는지 나란히 실렸어요. 어디서 갈렸는지 한눈에 보여요!",
+          "source": {
+            "type": "fixed"
+          }
         },
         {
           "focus": "rules",
@@ -709,7 +1293,10 @@
             "naero": "guide-neutral",
             "nambul": "idle-neutral"
           },
-          "text": "같게 본 것도, 다르게 본 것도 있어요. 정답을 고르는 게 아니라, 나는 무엇을 무겁게 봤는지 보는 거예요."
+          "text": "같게 본 것도, 다르게 본 것도 있어요. 정답을 고르는 게 아니라, 나는 무엇을 무겁게 봤는지 보는 거예요.",
+          "source": {
+            "type": "fixed"
+          }
         },
         {
           "focus": "cast",
@@ -718,7 +1305,10 @@
             "naero": "guide-happy",
             "nambul": "guide-happy"
           },
-          "text": "이번 사건에서 우리가 맡았던 모습이에요. 함께 봐 줘서 고마워요!"
+          "text": "이번 사건에서 우리가 맡았던 모습이에요. 함께 봐 줘서 고마워요!",
+          "source": {
+            "type": "fixed"
+          }
         },
         {
           "focus": "front",
@@ -728,6 +1318,9 @@
             "nambul": "guide-happy"
           },
           "text": "이번 사건은 여기까지예요. 다음엔 무엇을 해 볼까요?",
+          "source": {
+            "type": "fixed"
+          },
           "choices": "end"
         }
       ]
