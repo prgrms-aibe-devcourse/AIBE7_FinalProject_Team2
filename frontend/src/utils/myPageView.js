@@ -14,18 +14,43 @@ export function axisSeries(history, axisKey) {
   return points;
 }
 
-// 첫 값과 마지막 값을 견줘 어느 쪽으로 얼마나 움직였는지 말해 준다. 값이 둘보다 적으면 null
-export function trailSummary(points, axis) {
-  if (points.length < 2) return null;
-  const moved = Math.round((points[points.length - 1].ratio - points[0].ratio) * 100);
-  if (Math.abs(moved) < STEADY_POINTS) return '처음과 거의 같아요';
-  const side = moved > 0 ? axis.lenient.name : axis.strict.name;
-  return `처음보다 ${side} 쪽으로 ${Math.abs(moved)}%p 움직였어요`;
-}
-
 // 점의 가로 위치(%). 왼쪽 = 엄격 쪽, 오른쪽 = 관대 쪽이다(ratio는 관대 쪽 비중)
 export function trailLeft(ratio) {
   return Math.round(ratio * 100);
+}
+
+// 성향 변화 흐름(FE-70)의 한 축: 성향 테스트 점수가 있으면 맨 앞(order 0)에 두고, 뒤로 체험 순서대로 잇는다.
+// label은 그래프 아래 · 표에 쓰는 짧은 이름, title은 툴팁에 쓰는 긴 이름이다
+export function axisTrend(history, axisKey, testScores) {
+  const test = testScores?.[axisKey];
+  const start = typeof test === 'number' ? [{ order: 0, ratio: test, label: '테스트', title: '성향 테스트', isTest: true }] : [];
+  const points = axisSeries(history, axisKey).map((point) => ({ ...point, label: String(point.order), title: `${point.order}번째 체험 · ${history[point.order - 1]?.title ?? ''}`.replace(/ · $/, ''), isTest: false }));
+  return [...start, ...points];
+}
+
+// 한 축의 변경폭: 처음(테스트 또는 첫 체험) → 지금(가장 최근 체험). 체험이 하나도 없거나 점이 둘보다 적으면 null.
+// moved는 관대 쪽으로 움직인 %p(음수면 엄격 쪽), toward는 움직인 쪽 이름, steady는 STEADY_POINTS 안쪽이면 true
+export function axisChange(points, axis) {
+  if (points.length < 2 || points.every((point) => point.isTest)) return null;
+  const from = points[0];
+  const to = points[points.length - 1];
+  const moved = Math.round((to.ratio - from.ratio) * 100);
+  const steady = Math.abs(moved) < STEADY_POINTS;
+  return { from, to, moved, steady, toward: steady ? null : (moved > 0 ? axis.lenient.name : axis.strict.name) };
+}
+
+// 가장 많이 움직인 축들(변경폭 정리의 머리 문장). 같은 크기면 함께 돌려주고, 모두 거의 그대로면 빈 배열
+export function biggestChanges(changes) {
+  const moving = changes.filter((item) => item.change && !item.change.steady);
+  const top = Math.max(0, ...moving.map((item) => Math.abs(item.change.moved)));
+  return moving.filter((item) => Math.abs(item.change.moved) === top);
+}
+
+// 한 위치를 말로: 더 기운 쪽 이름과 그 비중. 정확히 반반이면 "반반"
+export function leanText(ratio, axis) {
+  const lenient = Math.round(ratio * 100);
+  if (lenient === 50) return '반반';
+  return lenient > 50 ? `${axis.lenient.name} ${lenient}%` : `${axis.strict.name} ${100 - lenient}%`;
 }
 
 // 이번 사건에서 만난 모습 — 대본에 나온 역할 의상(look "role:…")을 등장 순서대로 모은다. 8막 신문 사진란과 마이페이지가 함께 쓴다

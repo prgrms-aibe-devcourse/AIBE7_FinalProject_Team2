@@ -1,7 +1,7 @@
 // npm test : 마이페이지 변화 흐름 계산
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { axisSeries, castOf, collectionOf, trailLeft, trailSummary, imageKinds } from './myPageView.js';
+import { axisChange, axisSeries, axisTrend, biggestChanges,castOf, collectionOf, leanText, trailLeft, imageKinds } from './myPageView.js';
 
 const AXIS = { key: 'APOLOGY_SINCERITY', strict: { name: '행동증명형' }, lenient: { name: '마음신뢰형' } };
 const entry = (value) => ({ axisScores: { APOLOGY_SINCERITY: value } });
@@ -16,20 +16,47 @@ test('기록이 없거나 모양이 달라도 빈 배열을 돌려준다', () =>
   assert.deepEqual(axisSeries([{}, null], AXIS.key), []);
 });
 
-test('첫 값과 마지막 값으로 움직인 쪽과 크기를 말한다', () => {
-  assert.equal(trailSummary(axisSeries([entry(0.2), entry(0.5), entry(0.75)], AXIS.key), AXIS), '처음보다 마음신뢰형 쪽으로 55%p 움직였어요');
-  assert.equal(trailSummary(axisSeries([entry(0.8), entry(0.4)], AXIS.key), AXIS), '처음보다 행동증명형 쪽으로 40%p 움직였어요');
-});
-
-test('5%p보다 작게 움직이면 거의 같다고 하고, 값이 하나뿐이면 말하지 않는다', () => {
-  assert.equal(trailSummary(axisSeries([entry(0.5), entry(0.53)], AXIS.key), AXIS), '처음과 거의 같아요');
-  assert.equal(trailSummary(axisSeries([entry(0.5)], AXIS.key), AXIS), null);
-});
-
 test('점 위치는 왼쪽이 엄격 쪽, 오른쪽이 관대 쪽이다', () => {
   assert.equal(trailLeft(0), 0);
   assert.equal(trailLeft(1), 100);
   assert.equal(trailLeft(0.25), 25);
+});
+
+const FULL_AXIS = { ...AXIS, label: '사과와 진정성' };
+const titled = (title, value) => ({ title, axisScores: { APOLOGY_SINCERITY: value } });
+
+test('axisTrend: 테스트 점수를 맨 앞(0번)에 두고 체험 번호와 사건 이름을 붙인다', () => {
+  const points = axisTrend([titled('가', 0.5), titled('나', null), titled('다', 0.75)], AXIS.key, { APOLOGY_SINCERITY: 0.25 });
+  assert.deepEqual(points.map(({ order, label, isTest }) => [order, label, isTest]), [[0, '테스트', true], [1, '1', false], [3, '3', false]]);
+  assert.equal(points[2].title, '3번째 체험 · 다');
+  assert.equal(axisTrend([titled('가', 0.5)], AXIS.key, null).length, 1); // 테스트 전이면 체험만
+});
+
+test('axisChange: 처음 → 지금 변경폭과 움직인 쪽, 5%p 안쪽은 그대로로 본다', () => {
+  const change = axisChange(axisTrend([titled('가', 0.6)], AXIS.key, { APOLOGY_SINCERITY: 0.2 }), FULL_AXIS);
+  assert.equal(change.moved, 40);
+  assert.equal(change.toward, '마음신뢰형');
+  assert.equal(change.from.isTest, true);
+  assert.equal(axisChange(axisTrend([titled('가', 0.8), titled('나', 0.5)], AXIS.key), FULL_AXIS).toward, '행동증명형');
+  assert.equal(axisChange(axisTrend([titled('가', 0.5), titled('나', 0.52)], AXIS.key), FULL_AXIS).steady, true);
+});
+
+test('axisChange: 점이 하나뿐이거나 체험 없이 테스트만 있으면 null', () => {
+  assert.equal(axisChange(axisTrend([titled('가', 0.5)], AXIS.key), FULL_AXIS), null);
+  assert.equal(axisChange(axisTrend([], AXIS.key, { APOLOGY_SINCERITY: 0.5 }), FULL_AXIS), null);
+});
+
+test('biggestChanges: 가장 크게 움직인 축을 고르고(같은 크기면 함께), 모두 그대로면 빈 배열', () => {
+  const move = (moved) => ({ moved, steady: Math.abs(moved) < 5 });
+  assert.deepEqual(biggestChanges([{ axis: 'a', change: move(-30) }, { axis: 'b', change: move(10) }, { axis: 'c', change: null }]).map((item) => item.axis), ['a']);
+  assert.deepEqual(biggestChanges([{ axis: 'a', change: move(30) }, { axis: 'b', change: move(-30) }]).map((item) => item.axis), ['a', 'b']);
+  assert.deepEqual(biggestChanges([{ axis: 'a', change: move(2) }, { axis: 'b', change: null }]), []);
+});
+
+test('leanText: 더 기운 쪽 이름과 비중, 반반이면 반반', () => {
+  assert.equal(leanText(0.75, FULL_AXIS), '마음신뢰형 75%');
+  assert.equal(leanText(0.1, FULL_AXIS), '행동증명형 90%');
+  assert.equal(leanText(0.5, FULL_AXIS), '반반');
 });
 
 test('collectionOf: 체험을 마친 사건의 일러스트만 모으고 같은 그림은 한 장으로 센다', () => {
