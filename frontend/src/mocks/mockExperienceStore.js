@@ -1,4 +1,14 @@
 // 목 전용 저장소. 실제 체험 진행 상태는 서버에서 관리한다.
+import { localStore } from '../utils/safeStorage.js';
+
+// 저장소 접근이 막힌 브라우저(쿠키 차단 · 사생활 보호 모드)에서는 못 읽고 못 쓴 것으로 본다. 이번 방문 동안만 초기 상태로 돌아간다
+export const getItem = (key) => {
+  try { return localStore()?.getItem(key) ?? null; } catch { return null; }
+};
+const setItem = (key, value) => {
+  try { localStore()?.setItem(key, value); } catch { /* 저장하지 못해도 화면은 돌려준 값으로 이어 간다 */ }
+};
+
 export const storageKey = 'nlnb-mock-review';
 export const defaultSteps = {
   STARTED: 0, PRE_JUDGED: 1, REVIEWING: 2, REVIEWED: 4,
@@ -14,13 +24,13 @@ export function validState(state) {
 }
 
 export function save(state) {
-  localStorage.setItem(storageKey, JSON.stringify(state));
+  setItem(storageKey, JSON.stringify(state));
   return state;
 }
 
 // 저장하지 않고 읽기만 한다. 기록이 없으면 null (read()는 없으면 초기 상태를 저장해 다른 화면 상태를 바꾼다)
 export function peek() {
-  const raw = localStorage.getItem(storageKey);
+  const raw = getItem(storageKey);
   if (!raw) return null;
   try {
     const state = JSON.parse(raw);
@@ -31,7 +41,7 @@ export function peek() {
 }
 
 export function read() {
-  const raw = localStorage.getItem(storageKey);
+  const raw = getItem(storageKey);
   if (raw) {
     try {
       const state = JSON.parse(raw);
@@ -44,11 +54,11 @@ export function read() {
 function jsonStore(key) {
   return {
     save: (value) => {
-      localStorage.setItem(key, JSON.stringify(value));
+      setItem(key, JSON.stringify(value));
       return value;
     },
     read: () => {
-      const raw = localStorage.getItem(key);
+      const raw = getItem(key);
       if (!raw) return null;
       try {
         return JSON.parse(raw);
@@ -56,7 +66,9 @@ function jsonStore(key) {
         return null;
       }
     },
-    clear: () => localStorage.removeItem(key),
+    clear: () => {
+      try { localStore()?.removeItem(key); } catch { /* 저장소를 못 쓰면 지울 것도 없다 */ }
+    },
   };
 }
 
