@@ -8,6 +8,11 @@ const STYLE_KEY = 'nlnb-bookmark-face-style';
 const DEFAULT = 'naero';
 const DEFAULT_FACE = 'happy';
 const DEFAULT_STYLE = 'generated';
+// localStorage 속성 접근 자체가 예외를 던지는 환경(저장소 차단)이 있어, 기본 인수에서도 터지지 않게 한 곳에서 감싼다
+const localStore = () => {
+  try { return globalThis.localStorage; } catch { return undefined; }
+};
+
 export const BOOKMARK_CHARACTERS = ['naero', 'nambul'];
 // 로(마스코트)도 책갈피가 된다. 표정 없이 잘라 만든 아이콘 한 장씩이다(icon/cropped/law-*_icon.webp)
 export const BOOKMARK_LAWS = ['law-scale', 'law-gavel', 'law-book'];
@@ -24,7 +29,7 @@ export const bookmarkFace = (who, face = DEFAULT_FACE, style = DEFAULT_STYLE) =>
   ? `/images/characters/icon/cropped/${who}_icon.webp`
   : `/images/characters/icon/${style}/${who}_face-${face}.webp`);
 
-export function getBookmarkCharacter(storage = globalThis.localStorage) {
+export function getBookmarkCharacter(storage = localStore()) {
   try {
     const saved = storage?.getItem(STORAGE_KEY);
     return ALL_WHO.includes(saved) ? saved : DEFAULT;
@@ -33,7 +38,7 @@ export function getBookmarkCharacter(storage = globalThis.localStorage) {
   }
 }
 
-export function setBookmarkCharacter(who, storage = globalThis.localStorage) {
+export function setBookmarkCharacter(who, storage = localStore()) {
   if (!ALL_WHO.includes(who)) return;
   try {
     storage?.setItem(STORAGE_KEY, who);
@@ -42,7 +47,7 @@ export function setBookmarkCharacter(who, storage = globalThis.localStorage) {
   }
 }
 
-export function getBookmarkFaceName(storage = globalThis.localStorage) {
+export function getBookmarkFaceName(storage = localStore()) {
   try {
     const saved = storage?.getItem(FACE_KEY);
     return BOOKMARK_FACES.includes(saved) ? saved : DEFAULT_FACE;
@@ -51,7 +56,7 @@ export function getBookmarkFaceName(storage = globalThis.localStorage) {
   }
 }
 
-export function getBookmarkStyle(storage = globalThis.localStorage) {
+export function getBookmarkStyle(storage = localStore()) {
   try {
     const saved = storage?.getItem(STYLE_KEY);
     return BOOKMARK_STYLES.includes(saved) ? saved : DEFAULT_STYLE;
@@ -61,7 +66,7 @@ export function getBookmarkStyle(storage = globalThis.localStorage) {
 }
 
 // 얼굴 아이콘 하나를 책갈피로 정한다(캐릭터도 그 얼굴의 캐릭터로 바뀐다)
-export function setBookmarkFace(who, face, style = DEFAULT_STYLE, storage = globalThis.localStorage) {
+export function setBookmarkFace(who, face, style = DEFAULT_STYLE, storage = localStore()) {
   if (!BOOKMARK_CHARACTERS.includes(who) || !BOOKMARK_FACES.includes(face) || !BOOKMARK_STYLES.includes(style)) return;
   setBookmarkCharacter(who, storage);
   try {
@@ -73,4 +78,4 @@ export function setBookmarkFace(who, face, style = DEFAULT_STYLE, storage = glob
 }
 
 // 지금 책갈피로 쓰는 얼굴 그림 경로
-export const selectedBookmarkFace = (storage = globalThis.localStorage) => bookmarkFace(getBookmarkCharacter(storage), getBookmarkFaceName(storage), getBookmarkStyle(storage));
+export const selectedBookmarkFace = (storage = localStore()) => bookmarkFace(getBookmarkCharacter(storage), getBookmarkFaceName(storage), getBookmarkStyle(storage));

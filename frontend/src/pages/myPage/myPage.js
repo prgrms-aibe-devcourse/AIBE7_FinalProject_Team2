@@ -302,9 +302,12 @@ function renderBookmarkPicker() {
 // 마이페이지의 커피색 역할 토큰이 적용되도록 .my-page 안에 붙이고, 닫으면 지운다
 function zoomIn(src, alt, label) {
   const dialog = element('dialog', 'collection-zoom');
+  const caption = element('p', 'collection-label', label);
+  caption.id = `collection-zoom-label-${Date.now()}`;
+  dialog.setAttribute('aria-labelledby', caption.id); // 스크린리더가 "대화상자"만 읽지 않게 캡션을 이름으로 쓴다
   dialog.addEventListener('click', (event) => { if (event.target === dialog) dialog.close(); });
   dialog.addEventListener('close', () => dialog.remove());
-  dialog.append(picture(src, alt), element('p', 'collection-label', label), button('닫기', () => dialog.close(), 'secondary-button'));
+  dialog.append(picture(src, alt === label ? '' : alt), caption, button('닫기', () => dialog.close(), 'secondary-button'));
   (document.querySelector('.my-page') ?? document.body).append(dialog);
   dialog.showModal();
 }

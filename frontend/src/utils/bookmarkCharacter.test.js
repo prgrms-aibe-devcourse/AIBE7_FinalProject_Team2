@@ -64,3 +64,14 @@ test('책갈피 얼굴 경로는 모두 실제 이미지 파일을 가리킨다(
   [...faces, ...laws].forEach((src) => assert.ok(onDisk(src), `없는 파일: ${src}`));
   assert.equal(faces.length + laws.length, 27);
 });
+
+test('localStorage 접근 자체가 막혀도 기본 얼굴을 돌려준다', () => {
+  const original = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, get() { throw new Error('blocked'); } });
+  try {
+    assert.equal(selectedBookmarkFace(), bookmarkFace('naero', 'happy', 'generated'));
+  } finally {
+    if (original) Object.defineProperty(globalThis, 'localStorage', original);
+    else delete globalThis.localStorage;
+  }
+});
