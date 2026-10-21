@@ -97,6 +97,20 @@ class AttendanceApiTest extends ApiIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("쿠키 없이 체험을 시작하면 발급과 함께 그날 출석이 남고, 이어 출석 API를 불러도 하루다 (BE-98)")
+	void issuingCookieRecordsAttendance() throws Exception {
+		Cookie cookie = startAndGetCookie(insertCase("MURDER", "PUBLISHED"));	// 부모가 사건 · 체험 · 사용자 · 출석을 지운다
+		UUID id = UUID.fromString(cookie.getValue());
+
+		assertThat(countRows(id)).isEqualTo(1);
+		assertThat(jdbcTemplate.queryForObject("SELECT attended_on FROM attendance WHERE anonymous_user_id = ?",
+			LocalDate.class, id)).isEqualTo(TODAY_KST);
+
+		mockMvc.perform(post(ATTENDANCE).cookie(cookie)).andExpect(status().isNoContent());
+		assertThat(countRows(id)).isEqualTo(1);
+	}
+
+	@Test
 	@DisplayName("마이페이지 profile.attendanceDays는 누적 출석 일수다")
 	void myPageShowsAttendanceDays() throws Exception {
 		UUID id = newUser();

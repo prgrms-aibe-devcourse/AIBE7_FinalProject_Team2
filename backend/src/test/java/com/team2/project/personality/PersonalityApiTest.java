@@ -50,6 +50,7 @@ class PersonalityApiTest extends ApiIntegrationTest {
 				DELETE FROM experience_personality
 				WHERE experience_id IN (SELECT id FROM experience WHERE anonymous_user_id = ?)""", user);
 			jdbcTemplate.update("DELETE FROM personality_result WHERE anonymous_user_id = ?", user);
+			jdbcTemplate.update("DELETE FROM attendance WHERE anonymous_user_id = ?", user);	// P-2 발급 시 출석(BE-98)
 			jdbcTemplate.update("""
 				DELETE FROM anonymous_user a WHERE a.id = ?
 				AND NOT EXISTS (SELECT 1 FROM experience e WHERE e.anonymous_user_id = a.id)""", user);
