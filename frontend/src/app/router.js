@@ -166,7 +166,8 @@ export function createRouter({ view, headerHost, footerHost, routes }) {
   // navKind: 'back' | 'forward' | 'navigate' (코드로 부른 이동, 최초 접속 · 새로고침 포함)
   function renderLocation(navKind) {
     const moved = legacyPath(window.location.pathname);
-    if (moved) history.replaceState(history.state, '', moved); // 옛 주소(공유 링크 · 북마크)는 새 주소로 바꿔 그린다
+    // 옛 주소(공유 링크 · 북마크)는 새 주소로 바꿔 그린다. 쿼리 · 해시는 그대로 둔다
+    if (moved) history.replaceState(history.state, '', moved + window.location.search + window.location.hash);
     const found = match(window.location.pathname);
     if (!found) {
       return showNotFound();

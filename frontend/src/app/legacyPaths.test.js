@@ -11,6 +11,8 @@ test('옛 체험 주소를 새 주소로 옮긴다', () => {
   assert.equal(legacyPath('/cases/1/result/court'), '/cases/1/court-verdict');
   assert.equal(legacyPath('/cases/1/result/compare'), '/cases/1/compare');
   assert.equal(legacyPath('/cases/12/opinion/'), '/cases/12/letters');
+  // 정규화되지 않은 사건 번호는 그대로 옮기고, 이어서 라우터가 /cases/1/trial로 정규화한다
+  assert.equal(legacyPath('/cases/01/review'), '/cases/01/trial');
 });
 
 test('새 주소 · 다른 주소는 그대로 둔다', () => {
