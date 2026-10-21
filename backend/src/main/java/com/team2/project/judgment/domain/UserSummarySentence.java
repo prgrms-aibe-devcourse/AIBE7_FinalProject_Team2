@@ -28,7 +28,7 @@ public final class UserSummarySentence {
 	 * 다른 하나를 ↓로 고를 수도 있다. 그때는 **먼저 고른(표시 순서가 앞선) 방향에만** 남겨
 	 * "A를 무겁게 보고 A를 감안한 판단"처럼 스스로 모순되는 문장이 나오지 않게 한다 (BE-10 리뷰).
 	 * 방향별 태그 수는 제한하지 않는다 — 요소마다 서로 다른 요약어가 붙으므로 많이 고르면 문장이 길어질 수
-	 * 있지만, 우선 그대로 두고 S-09에서 실제로 문제가 되면 상한을 다시 검토한다 (BE-26 확정).
+	 * 있지만, 우선 그대로 두고 S-08에서 실제로 문제가 되면 상한을 다시 검토한다 (BE-26 확정).
 	 */
 	public static String of(List<JudgmentFactor> factors) {
 		List<String> up = new ArrayList<>();
