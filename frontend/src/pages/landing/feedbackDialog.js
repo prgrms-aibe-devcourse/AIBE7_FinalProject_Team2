@@ -59,7 +59,9 @@ export function openFeedbackDialog() {
       text.focus();
       return;
     }
-    status.textContent = '의견 받기는 아직 준비 중이에요. 곧 열려요. 적어 주신 내용은 닫으면 사라져요.';
+    // 같은 문구를 다시 넣으면 낭독기가 읽지 않으므로 비웠다가 다음 프레임에 넣는다
+    status.textContent = '';
+    requestAnimationFrame(() => { status.textContent = '의견 받기는 아직 준비 중이에요. 곧 열려요. 적어 주신 내용은 닫으면 사라져요.'; });
   }
 
   // 쓰던 내용이 있으면 처음 닫을 때 한 번 알리고, 한 번 더 닫으면 닫는다
@@ -84,6 +86,7 @@ export function openFeedbackDialog() {
     if (event.key === 'Escape') { event.preventDefault(); requestShut(); return; }
     if (event.key !== 'Tab') return;
     const items = [...dialog.querySelectorAll(FOCUSABLE)];
+    if (!items.length) { event.preventDefault(); return; }
     const first = items[0];
     const last = items[items.length - 1];
     if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog)) { event.preventDefault(); last.focus(); }

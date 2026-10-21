@@ -3,7 +3,7 @@
 import { button, element } from '../components/siteLayout.js';
 
 function renderLegalPage(container, { navigate }, title) {
-  const root = element('div', 'not-found-page');
+  const root = element('main', 'not-found-page'); // 라우터가 <main>을 두지 않아 본문 landmark를 여기서 만든다
   const actions = element('div', 'not-found-actions');
   actions.append(button('메인으로', () => navigate('landing'), 'primary-button'));
   const panel = element('div', 'message-panel not-found-panel');

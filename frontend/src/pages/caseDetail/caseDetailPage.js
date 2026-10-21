@@ -94,7 +94,12 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
       go.setAttribute('aria-label', `준비 중, ${data.title} 체험`);
     }
     const dock = element('div', 'paper-start');
-    dock.append(notice, go);
+    dock.append(notice);
+    // 마친 사건만: 대본 사건의 선택지와 같이 독자 엽서를 열 수 있다 (FE-62 #213 리뷰)
+    if (data.myStatus === 'COMPLETED') {
+      dock.append(button('독자 엽서 쓰기', (event) => openCaseReviewPopup({ caseId, api, navigate, from: event.currentTarget }), 'secondary-button'));
+    }
+    dock.append(go);
     const deskBack = element('div', 'desk');
     deskBack.setAttribute('aria-hidden', 'true');
     root.className = 'case-list-page case-paper-page overview-page';
