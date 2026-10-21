@@ -20,11 +20,11 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -45,7 +45,13 @@ class AdminCaseImportApiTest extends ApiIntegrationTest {
 	@Autowired AdminAccountRepository accountRepository;
 	@Autowired PasswordEncoder passwordEncoder;
 
-	@MockitoBean PipelineClient pipelineClient;
+	/**
+	 * 가짜 파이프라인 클라이언트 (TestPipelineClientConfig).
+	 *
+	 * <p>{@code @MockitoBean}을 쓰지 않는 이유는 그 설정 클래스에 적어 두었다 — 컨텍스트가 하나 더
+	 * 생겨 CI의 DB 커넥션 상한을 넘긴다. 대신 여러 테스트가 같은 가짜를 나눠 쓰므로 매번 초기화한다.
+	 */
+	@Autowired PipelineClient pipelineClient;
 
 	private AdminAccount admin;
 	private MockHttpSession session;
@@ -56,6 +62,7 @@ class AdminCaseImportApiTest extends ApiIntegrationTest {
 		admin = accountRepository.save(AdminAccount.withPassword("import-" + UUID.randomUUID() + "@example.com",
 			passwordEncoder.encode(PASSWORD), "등록 테스트"));
 		login();
+		Mockito.reset(pipelineClient);	// 가짜를 여러 테스트가 나눠 쓴다 (TestPipelineClientConfig)
 		when(pipelineClient.enabled()).thenReturn(true);
 		// 부를 때마다 새 작업 ID를 준다 — 실제 서비스와 같다. 같은 값을 두 번 주면 job_id 유니크 제약에 걸린다
 		when(pipelineClient.createJob(any())).thenAnswer(invocation -> new PipelineJob(
