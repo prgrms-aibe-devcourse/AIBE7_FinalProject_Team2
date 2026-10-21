@@ -75,7 +75,7 @@
   .case-review-actions .primary-button { width: 100%; }
 }
 
-/* 날아오는 엽서(8막 "리뷰하기" · 독자 엽서, caseReviewPopup.js): 흰 상자 없이 대화상자 자체가 항공우편 엽서 한 장이다.
+/* 날아오는 엽서(6막 "리뷰하기" · 독자 엽서, caseReviewPopup.js): 흰 상자 없이 대화상자 자체가 항공우편 엽서 한 장이다.
    뒤 무대는 어둡게 가린다. 날아오고 돌아가는 움직임은 WAAPI(transform · opacity)로 한다 */
 body.case-review-open { overflow: hidden; }
 html.case-review-gutter { scrollbar-gutter: stable; } /* 스크롤을 잠가도 스크롤바 자리는 남겨 뒤 화면이 움찔하지 않게 한다 */

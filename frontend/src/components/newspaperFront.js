@@ -2,7 +2,7 @@ import { button, element, mockTag, renderSiteFooter } from './siteLayout.js';
 import { API_MODE } from '../api/config.js';
 import { casePhoto, extraPhotosOf, todayLabel, useCommonPhotoOnError } from '../utils/newspaper.js';
 
-// 신문 지면 공통 짜임 (FE-32). S-02 사건 목록(신문 1면)과, 사건을 고른 뒤 이어지는 사건 기사 지면(S-20 · 1 · 2막)이
+// 신문 지면 공통 짜임 (FE-32). S-02 사건 목록(신문 1면)과, 사건을 고른 뒤 이어지는 사건 기사 지면(S-20 · 1막)이
 // 같은 제호 · 날짜 띠 · 탭 줄 · 배너 · [사진 | 기사 단]을 쓴다. 스타일은 caseList.css(.case-list-page)를 그대로 쓴다.
 
 // 제호: 정보 줄(← 메인으로 · 판결 체험 신문) → [왼쪽 귀 | 제호 | 오른쪽 귀] → 날짜 띠
@@ -121,9 +121,9 @@ function caseMemo(info) {
 }
 
 /**
- * 사건 기사 지면(S-20 · 1 · 2막 무대의 장면). S-02 1면과 같은 짜임에 이 사건 기사 하나를 머리기사로 싣는다.
+ * 사건 기사 지면(S-20 · 1막 무대의 장면). S-02 1면과 같은 짜임에 이 사건 기사 하나를 머리기사로 싣는다.
  * 무대 카메라가 맞추는 자리(data-focus): head(배너 제목) · photo(사진) · body(기사 단).
- * 탭 줄은 신문의 다른 면(1면 · 3면 사회 · 오피니언 · 독자)으로 가는 목차다(막 칩은 쓰지 않는다). 2막 사전 판단 등 무대 카드는 지면 위에 엽서 팝업으로 뜬다
+ * 탭 줄은 신문의 다른 면(1면 · 3면 사회 · 오피니언 · 독자)으로 가는 목차다(막 칩은 쓰지 않는다). 1막 엽서의 사전 판단 등 무대 카드는 지면 위에 엽서 팝업으로 뜬다
  * @param {{ paper: object, info: object, navigate: Function, earRight?: HTMLElement }} options paper: 대본의 지면(headline · deck · photo · caption · article),
  *   info: 사건(title · crimeType · crimeCategoryLabel · caseId), earRight: 오른쪽 귀를 바꿔 끼울 때(S-20 "이어서 하기")
  */

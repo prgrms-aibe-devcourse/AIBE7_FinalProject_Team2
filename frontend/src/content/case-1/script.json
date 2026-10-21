@@ -95,7 +95,7 @@
     "변호인": "/images/cases/case-1-origin.webp"
   },
   "acts": {
-    "1": {
+    "1a": {
       "title": "1막 첫인상 (기사)",
       "scene": "sheet",
       "look": {
@@ -193,7 +193,7 @@
         }
       ]
     },
-    "2": {
+    "1b": {
       "title": "1막 첫인상 (엽서)",
       "scene": "sheet",
       "look": {
@@ -261,7 +261,7 @@
         }
       ]
     },
-    "3": {
+    "2": {
       "title": "2막 재판",
       "scene": "court",
       "procedures": [
@@ -662,94 +662,7 @@
         }
       ]
     },
-    "4": {
-      "title": "(건너뜀) 판결 전 정리 — 3막 사건 요약 장으로 옮김",
-      "scene": "court",
-      "look": {
-        "naero": "read-thinking",
-        "nambul": "idle-neutral"
-      },
-      "slots": {
-        "naero": {
-          "slot": 8,
-          "row": "front"
-        },
-        "nambul": {
-          "slot": 52,
-          "row": "front"
-        }
-      },
-      "steps": [
-        {
-          "say": "naero",
-          "role": "안내",
-          "card": "summary",
-          "text": "지금까지 읽은 내용을 한 장에 모았어요.",
-          "source": {
-            "type": "fixed"
-          }
-        },
-        {
-          "say": "nambul",
-          "role": "안내",
-          "card": "summary",
-          "look": {
-            "nambul": "guide-neutral",
-            "naero": "idle-neutral"
-          },
-          "text": "검사 측은 구호 조치 없이 현장을 떠난 점과 유족의 엄벌 의사를 강조했어요.",
-          "source": {
-            "type": "ai",
-            "basis": [
-              "API 6 · GET /cases/{caseId}/experience/review sections"
-            ]
-          }
-        },
-        {
-          "say": "naero",
-          "role": "안내",
-          "card": "summary",
-          "look": {
-            "naero": "guide-neutral",
-            "nambul": "idle-neutral"
-          },
-          "text": "변호인 측은 우발적인 범행이라는 점, 그리고 범행 인정 · 반성 · 공탁을 강조했어요.",
-          "source": {
-            "type": "ai",
-            "basis": [
-              "API 6 · GET /cases/{caseId}/experience/review sections"
-            ]
-          }
-        },
-        {
-          "say": "nambul",
-          "role": "안내",
-          "look": {
-            "nambul": "react-surprised",
-            "naero": "read-thinking"
-          },
-          "text": "잠깐, 반대로 보면요? 내가 유족이라면, 내가 피고인이라면. 양쪽 자리에 한 번씩 서 보고 정해요.",
-          "source": {
-            "type": "fixed"
-          }
-        },
-        {
-          "say": "naero",
-          "role": "안내",
-          "look": {
-            "naero": "guide-happy",
-            "nambul": "idle-neutral"
-          },
-          "confirm": "verdict",
-          "next": "판결 내리러 가기",
-          "text": "준비되면 판결로 넘어가요. 여기서부터는 당신이 판사예요.",
-          "source": {
-            "type": "fixed"
-          }
-        }
-      ]
-    },
-    "5": {
+    "3": {
       "title": "3막 내 판결",
       "scene": "court",
       "procedures": [
@@ -867,7 +780,7 @@
         }
       ]
     },
-    "6": {
+    "4": {
       "title": "4막 AI 판결",
       "scene": "court",
       "look": {
@@ -998,7 +911,7 @@
         }
       ]
     },
-    "7": {
+    "5": {
       "title": "5막 실제 판결",
       "scene": "court",
       "look": {
@@ -1145,7 +1058,7 @@
         }
       ]
     },
-    "8": {
+    "6": {
       "title": "6막 세 판결 비교",
       "scene": "sheet",
       "look": {

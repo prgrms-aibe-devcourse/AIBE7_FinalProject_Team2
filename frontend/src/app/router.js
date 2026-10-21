@@ -116,7 +116,7 @@ export function createRouter({ view, headerHost, footerHost, routes }) {
   }
 
   /** 화면 이동. 반환값은 화면을 그리는 작업의 완료 시점이다 (기다리지 않아도 된다)
-   *  keepView: 화면은 다시 그리지 않고 주소 · 탭 제목만 바꾼다(판결 체험 6 → 7 → 8막처럼 한 무대에서 이어 갈 때).
+   *  keepView: 화면은 다시 그리지 않고 주소 · 탭 제목만 바꾼다(판결 체험 4 → 5 → 6막처럼 한 무대에서 이어 갈 때).
    *  keepScroll: 새 화면을 그리되 스크롤을 맨 위로 올리지 않는다(무대 자리가 같은 화면끼리, 예: 판결 서명 → AI 판결).
    *  show()를 거치지 않으므로 이전 화면의 정리(cleanup)가 돌지 않는다 — 화면별 정리 로직이 생기면 여기서 빠지지 않게 챙길 것 */
   async function navigate(name, params = {}, { replace = false, keepView = false, keepScroll = false } = {}) {

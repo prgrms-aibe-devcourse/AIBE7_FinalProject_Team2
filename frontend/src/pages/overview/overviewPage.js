@@ -40,7 +40,7 @@ export function caseTopbar(info, navigate) {
   return header;
 }
 
-// 1 · 2막 무대를 화면에 놓는다. S-03과 S-20이 같은 짜임으로 그려 두 화면이 똑같이 보이게 한다(FE-32).
+// 1막 무대를 화면에 놓는다. S-03과 S-20이 같은 짜임으로 그려 두 화면이 똑같이 보이게 한다(FE-32).
 // 화면 전체가 S-02와 같은 신문 지면이다: 책상(펠트) 위에 지면 한 장, 그 위에 무대(캐릭터 · 대사창은 화면 아래 고정)
 export function mountStagePage(root, { stage }) {
   root.className = 'case-list-page case-paper-page overview-page';
@@ -52,17 +52,17 @@ export function mountStagePage(root, { stage }) {
 // 모든 사건 1막의 첫 대사(내로가 말을 건다). 사건마다의 다음 대사는 대본이 잇는다
 const INTRO_STEP = { say: 'naero', text: '오늘 신문에 실린 사건이에요. 기사에 나온 내용만 같이 읽어 볼게요.', focus: 'head' };
 
-// 1 · 2막 무대(흐름 목업). 2막 보드는 사전 판단 폼이고, 폼은 API 4 응답(형량 구간)이 오면 setOverview로 채운다.
+// 1막 무대(흐름 목업). 1막 엽서 보드는 사전 판단 폼이고, 폼은 API 4 응답(형량 구간)이 오면 setOverview로 채운다.
 // parked: S-20(체험 전) — 지면만 보이고 캐릭터 · 대사는 stage.release()로 시작한다. earRight: 지면 오른쪽 귀(S-20 "이어서 하기")
 // paper: 지면에 실을 기사(paperFromCase — 메인 · S-02와 같은 사건 데이터). 없으면 대본 지면
 // prompt: S-20에서 하던 · 마친 체험을 "시작하기"로 열 때 맨 앞에서 내로가 묻는 장면 { text, choices }
 export function caseStage({ caseId, api, navigate, script, info, paper = script.paper, parked = false, earRight, prompt }) {
   const cards = {};
   const first = prompt ? [{ say: 'naero', text: prompt.text, choices: 'prompt', focus: 'all' }, INTRO_STEP] : [INTRO_STEP];
-  const acts = { ...script.acts, 1: { ...script.acts[1], steps: [...first, ...script.acts[1].steps] } };
+  const acts = { ...script.acts, '1a': { ...script.acts['1a'], steps: [...first, ...script.acts['1a'].steps] } };
   const sheet = caseNewspaper({ paper, info, navigate, ...(earRight ? { earRight } : {}) });
   const stage = renderStage({
-    script: { ...script, acts }, order: ['1', '2'], cards, inputCards: ['preJudgment'], sheet, layout: 'paper', parked,
+    script: { ...script, acts }, order: ['1a', '1b'], cards, inputCards: ['preJudgment'], sheet, layout: 'paper', parked,
     choices: prompt ? { prompt: prompt.choices } : {},
     onRestart: restartMock(caseId), onJump: jumpActMock(caseId),
   });
@@ -257,7 +257,7 @@ export async function renderOverviewPage(container, { caseId, api, navigate }) {
     const { case: info, rangeOptions } = data;
     const script = scriptFor(caseId, info.title);
     if (script) {
-      // 1 · 2막 무대(신문 지면). 진행 표시는 지면 탭 줄의 막 칩이 맡는다. S-20(대본 있는 사건)과 같은 화면이다
+      // 1막 무대(신문 지면). 진행 표시는 지면 탭 줄의 막 칩이 맡는다. S-20(대본 있는 사건)과 같은 화면이다
       const { stage, setOverview } = caseStage({ caseId, api, navigate, script, info: { ...(detail ?? {}), ...info, caseId }, paper: paperFromCase(detail, script.paper) });
       setOverview(data);
       mountStagePage(root, { stage });

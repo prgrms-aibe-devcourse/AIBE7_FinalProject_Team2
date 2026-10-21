@@ -22,7 +22,7 @@
 }
 
 /* 가운데 접힌 자국은 두지 않는다(FE-41: 보관하며 생긴 선이라 펼친 지면에는 없다).
-   사건 기사 지면(S-20 · 1 · 2막, .case-paper)과 1면 아닌 유형 탭(살인 · 사기 · 상해, .inner-page)은 펼친 신문의 오른쪽 면이다: 왼쪽 끝이 제본 쪽으로 말려 들어가 그늘이 지고,
+   사건 기사 지면(S-20 · 1막, .case-paper)과 1면 아닌 유형 탭(살인 · 사기 · 상해, .inner-page)은 펼친 신문의 오른쪽 면이다: 왼쪽 끝이 제본 쪽으로 말려 들어가 그늘이 지고,
    그 밑으로 넘긴 왼쪽 면(앞 지면)의 가장자리가 겹쳐 보인다. 1면(S-02)에서 한 장을 넘기면(pageTurn.js) 이 면이 드러난다 */
 .case-list-page .paper:is(.case-paper, .inner-page) {
   box-shadow: -5px 2px 0 -1px var(--color-desk-news-sheet-1), -10px 4px 0 -2px var(--color-desk-news-sheet-2),
@@ -219,7 +219,7 @@
 /* 좁은 화면 메뉴 · 비교 화면에서 신문을 들고 오면 지면이 한 번 다가오며 나타난다 */
 .case-list-page.is-arriving .paper { animation: paper-arrive .5s cubic-bezier(.2, .8, .2, 1); }
 @keyframes paper-arrive { from { opacity: 0; transform: scale(.94); } }
-/* 8막 신문을 뒤집고 오면(FE-55) 넘겨받은 빈 종이가 같은 자리를 덮고 있는 동안 지면을 감춰 두고,
+/* 6막 신문을 뒤집고 오면(FE-55) 넘겨받은 빈 종이가 같은 자리를 덮고 있는 동안 지면을 감춰 두고,
    기사가 다 그려지면(is-revealing) 지면 종이는 바로, 기사는 페이드인으로 나타난다(위의 빈 종이는 그동안 걷힌다) */
 .case-list-page.is-unflipping:not(.is-revealing) .paper { visibility: hidden; }
 .case-list-page.is-revealing .paper > * { animation: list-fade-in .5s ease-out both; }

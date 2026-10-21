@@ -28,7 +28,7 @@ export function trailLeft(ratio) {
   return Math.round(ratio * 100);
 }
 
-// 이번 사건에서 만난 모습 — 대본에 나온 역할 의상(look "role:…")을 등장 순서대로 모은다. 8막 신문 사진란과 마이페이지가 함께 쓴다
+// 이번 사건에서 만난 모습 — 대본에 나온 역할 의상(look "role:…")을 등장 순서대로 모은다. 6막 신문 사진란과 마이페이지가 함께 쓴다
 const CAST_NAMES = { naero: '내로', nambul: '남불' };
 const ROLE_NAMES = { actor: 'A씨 역', prosecutor: '검사', defense: '변호인', judge: '판사' };
 export function castOf(script) {
