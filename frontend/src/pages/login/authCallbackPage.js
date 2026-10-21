@@ -1,5 +1,5 @@
 import { button, element } from '../../components/siteLayout.js';
-import { loginDesk } from './loginPage.js';
+import { loginDesk } from './loginDesk.js';
 import { saveUser } from '../../utils/session.js';
 import { devJumpBar } from './loginDevJump.js';
 
@@ -7,7 +7,7 @@ import { devJumpBar } from './loginDevJump.js';
 // - 성공: 리프레시 토큰 쿠키만 심겨 있으므로 M-1 재발급을 한 번 불러 첫 액세스 토큰을 받고, 로그인 표시를 남긴 뒤 메인으로 간다
 // - 실패 · 취소: ?error=login_failed로 온다. 재발급이 실패해도 같은 안내를 보여 준다
 // 회원 정보에 개인정보를 두지 않아 서버 닉네임이 없다 → 고정 문구로 표시한다(PR #229 합의)
-// 모양은 로그인 화면과 같은 책상 위 펠트 패드(loginPage.js loginDesk, FE-69)다
+// 모양은 로그인 화면과 같은 책상 위 펠트 패드(loginDesk.js, FE-69)다
 export const KAKAO_MEMBER_NICKNAME = '카카오 회원';
 
 export function renderAuthCallbackPage(container, { api, navigate }) {
