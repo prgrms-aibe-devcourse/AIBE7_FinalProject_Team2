@@ -38,6 +38,8 @@ export function loginDesk(container, tag = 'section') {
       const image = element('img', `login-peek peek-${who}`);
       image.src = `/images/characters/${folder}/${who}_${face}.webp`;
       image.alt = '';
+      image.width = 800; // 원본 비율(800 × 1000). 높이는 CSS가 정하고, 이미지가 늦게 떠도 자리가 밀리지 않게 비율을 알려 준다
+      image.height = 1000;
       image.decoding = 'async';
       desk.prepend(image);
     });
@@ -58,7 +60,7 @@ export function renderLoginPage(container, { api, navigate }) {
     { label: '입력 폼', run: () => showForm() },
     { label: '빈칸 오류', run: () => showForm().form.requestSubmit() },
     { label: '로그인 실패', run: () => showForm().showError('로그인하지 못했어요. 잠시 뒤 다시 시도해 주세요.') },
-    { label: '로그인 중(로딩)', run: () => { const { busy } = showForm(); busy.forEach((node) => { node.disabled = true; }); } },
+    { label: '로그인 중(로딩)', run: () => { const { busy } = showForm(); setBusy(busy, true); } },
     { label: '로그인됨', run: () => showSignedIn({ nickname: '내로판사' }, false) },
     { label: '관리자 로그인됨', run: () => showSignedIn({ nickname: '운영자' }, true) },
     { label: '콜백 로딩', run: () => window.location.assign('/auth/callback?dev=loading') },
@@ -116,6 +118,7 @@ export function renderLoginPage(container, { api, navigate }) {
     form.append(error, submit);
     form.addEventListener('submit', (event) => {
       event.preventDefault();
+      if (pending) return;
       const empty = [idInput, passwordInput].filter((input) => !input.value.trim());
       [idInput, passwordInput].forEach((input) => {
         if (empty.includes(input)) input.setAttribute('aria-invalid', 'true');
@@ -137,6 +140,7 @@ export function renderLoginPage(container, { api, navigate }) {
     signup.append(signupButton);
 
     parts.push(...(adminOnly ? [form] : [kakao, divider, form, signup]));
+    let pending = false; // return보다 앞에 둔다(뒤에 두면 초기화되지 않아 로그인 때 ReferenceError)
     peek(null);
     card.replaceChildren(...parts);
     return { form, showError, busy: [kakao, submit] };
@@ -146,12 +150,11 @@ export function renderLoginPage(container, { api, navigate }) {
       error.hidden = false;
     }
 
-    let pending = false;
     async function signIn(request) {
       if (pending) return;
       pending = true;
       const busy = [kakao, submit];
-      busy.forEach((node) => { node.disabled = true; });
+      setBusy(busy, true);
       error.hidden = true;
       try {
         // 아이디 · 비밀번호는 관리자 계정인지 먼저 본다. 관리자면 마이페이지 자리가 관리자 페이지가 된다 (FE-53)
@@ -172,7 +175,7 @@ export function renderLoginPage(container, { api, navigate }) {
         }
         if (!api.login) {
           showError(request.method === 'password' ? `아이디와 비밀번호를 확인해 주세요. ${NOT_READY}` : NOT_READY);
-          busy.forEach((node) => { node.disabled = false; });
+          setBusy(busy, false);
           pending = false;
           return;
         }
@@ -184,11 +187,20 @@ export function renderLoginPage(container, { api, navigate }) {
       } catch (failure) {
         if (!container.contains(root)) return;
         if (failure?.code !== 'LOGIN_CANCELLED') showError(failure?.code === 'VALIDATION_ERROR' ? '아이디와 비밀번호를 확인해 주세요.' : '로그인하지 못했어요. 잠시 뒤 다시 시도해 주세요.');
-        busy.forEach((node) => { node.disabled = false; });
+        setBusy(busy, false);
         pending = false;
       }
     }
   }
+}
+
+// 요청 중에는 disabled 대신 aria-disabled를 쓴다: disabled가 되면 눌렀던 버튼의 포커스가 사라져 키보드 사용자가 처음부터 다시 Tab을 눌러야 한다.
+// 누름은 signIn의 pending 검사가 막고, 모양은 login.css의 [aria-disabled="true"]가 맡는다
+function setBusy(nodes, busy) {
+  nodes.forEach((node) => {
+    if (busy) node.setAttribute('aria-disabled', 'true');
+    else node.removeAttribute('aria-disabled');
+  });
 }
 
 // 라벨 + 입력칸 한 줄. 빈칸 안내(#login-error)를 입력칸 설명으로 잇는다
@@ -200,6 +212,8 @@ function field(form, id, label, attributes) {
   input.id = id;
   input.name = id;
   Object.assign(input, { type: attributes.type, autocomplete: attributes.autocomplete });
+  input.spellcheck = false; // 아이디 · 비밀번호에 맞춤법 밑줄이 뜨지 않게
+  input.autocapitalize = 'off'; // 모바일에서 아이디 첫 글자가 대문자가 되지 않게
   input.setAttribute('aria-describedby', 'login-error');
   input.addEventListener('input', () => input.removeAttribute('aria-invalid'));
   row.append(caption, input);

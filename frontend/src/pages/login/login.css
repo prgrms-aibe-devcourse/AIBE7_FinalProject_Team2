@@ -34,7 +34,7 @@
 .login-card .primary-button { background: var(--felt-ink); border-color: var(--felt-ink); color: var(--color-desk-pad); }
 .login-card .secondary-button { background: transparent; border-color: var(--felt-muted); color: var(--felt-ink); }
 @media (hover: hover) and (pointer: fine) {
-  .login-card .primary-button:hover:not(:disabled) { background: var(--color-card); border-color: var(--color-card); }
+  .login-card .primary-button:hover:not([aria-disabled="true"]) { background: var(--color-card); border-color: var(--color-card); }
   .login-card .secondary-button:hover { background: color-mix(in srgb, var(--felt-ink) 10%, transparent); }
 }
 
@@ -45,7 +45,10 @@
   font: 700 15px/1 var(--font-body); cursor: pointer;
 }
 .kakao-button svg { position: absolute; left: 16px; width: 18px; height: 18px; fill: var(--color-on-kakao); }
-.kakao-button:disabled, .login-submit:disabled { opacity: .6; cursor: default; }
+.kakao-button[aria-disabled="true"], .login-submit[aria-disabled="true"] { opacity: .6; cursor: default; }
+@media (hover: hover) and (pointer: fine) {
+  .kakao-button:hover:not([aria-disabled="true"]) { background: color-mix(in srgb, var(--color-kakao) 88%, var(--palette-white)); } /* 살짝 밝아진다. 카카오 가이드 색은 기본 상태에서 그대로 */
+}
 
 .login-divider { display: flex; align-items: center; gap: 12px; margin: 20px 0; color: var(--felt-muted); font-size: var(--text-small); }
 .login-divider::before, .login-divider::after { content: ''; flex: 1; height: 1px; background: var(--felt-line); }
