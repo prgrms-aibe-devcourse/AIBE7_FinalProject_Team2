@@ -4,7 +4,7 @@ import { renderProgressSidebar } from './progressSidebar.js';
 import { renderContent } from '../../utils/contentLines.js';
 import { renderStage } from '../../components/stage.js';
 import { SCRIPTS } from '../../content/scripts.js';
-import { restartMock, jumpActMock } from '../overview/overviewPage.js';
+import { restartMock, jumpActMock } from '../../mocks/mockStageButtons.js';
 
 // 양측 주장 카드 위 안내 (정보 구조 S-04 v1.10, FE-14). 서버 응답에 없는 화면 고정 문구다.
 // "양형 이유" 같은 출처 표현은 쓰지 않는다 — 재판부가 인정한 사정인지가 판결 공개 전에 드러난다.

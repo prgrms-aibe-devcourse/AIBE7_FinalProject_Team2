@@ -8,17 +8,15 @@ import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
 @Configuration
-@EnableConfigurationProperties(ImageGenProperties.class)
-public class ImageGenConfig {
+@EnableConfigurationProperties(CasePhotoPromptProperties.class)
+public class CasePhotoPromptConfig {
 
-	/** Cloudflare Workers AI 전용 클라이언트. 연결 · 응답 대기 시간은 cloudflare.imagegen.timeout */
+	/** Gemini generateContent 전용 클라이언트. 연결 · 응답 대기 시간은 case-photo-prompt.timeout */
 	@Bean
-	public RestClient cloudflareRestClient(ImageGenProperties properties) {
+	public RestClient casePhotoPromptRestClient(CasePhotoPromptProperties properties) {
 		HttpClient httpClient = HttpClient.newBuilder().connectTimeout(properties.timeout()).build();
 		JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
 		requestFactory.setReadTimeout(properties.timeout());
-		String accountId = properties.accountId() == null ? "" : properties.accountId();
-		String baseUrl = "https://api.cloudflare.com/client/v4/accounts/%s/ai".formatted(accountId);
-		return RestClient.builder().baseUrl(baseUrl).requestFactory(requestFactory).build();
+		return RestClient.builder().baseUrl(properties.baseUrl()).requestFactory(requestFactory).build();
 	}
 }

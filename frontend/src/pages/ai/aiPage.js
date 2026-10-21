@@ -4,10 +4,9 @@ import { renderAiRevealIntro, takeAiRevealIntro } from './aiRevealIntro.js';
 import { formatPenalty, diffPhrase } from '../../utils/judgmentFormat.js';
 import { renderStage, LAWS, LAW_TITLES } from '../../components/stage.js';
 import { SCRIPTS } from '../../content/scripts.js';
-import { restartMock, jumpActMock } from '../overview/overviewPage.js';
-import { API_MODE } from '../../api/config.js';
-import { renderCourtStage } from '../court/courtStage.js';
-import { renderComparisonStage, mountStage, mountNewspaperStage, sceneRect } from '../comparison/comparisonStage.js';
+import { restartMock, jumpActMock } from '../../mocks/mockStageButtons.js';
+import { renderCourtStage, openComparison } from '../court/courtStage.js';
+import { mountStage } from '../comparison/comparisonStage.js';
 
 const directionLabels = { UP: '가중 요소', DOWN: '감경 요소' };
 
@@ -65,12 +64,12 @@ export async function renderAiPage(container, { caseId, caseHeader, api, navigat
   // summary는 생성 계약대로 "~한 판단"(S-09 판결 카드와 같은 문장)이라 대사에서 "입니다"를 붙이고, 없으면(null) 그 줄을 뺀다.
   // 판단 요소가 하나도 없으면 "하나씩 짚어 보겠습니다" 대신 textNoFactors를 쓴다. 이름표는 내로처럼 아이콘 · 이름(AI 판사) · 직책(재판장 · 배석판사).
   // 발표하는 판사(캐릭터 프로필 5-3): 감경 비율이 1/3 미만이면 로봉, 2/3 초과면 로북, 그 사이(또는 요소 없음)면 로울
-  function act6Script(data, speakerOverride) {
+  function act6Script(data) {
     const { judgment } = data;
     const factors = judgment.factors.filter(({ direction }) => direction === 'UP' || direction === 'DOWN');
     const down = factors.filter(({ direction }) => direction === 'DOWN').length;
     const ratio = down / (factors.length || 1);
-    const speaker = speakerOverride ?? (!factors.length ? 'law-scale' : ratio < 1 / 3 ? 'law-gavel' : ratio > 2 / 3 ? 'law-book' : 'law-scale');
+    const speaker = !factors.length ? 'law-scale' : ratio < 1 / 3 ? 'law-gavel' : ratio > 2 / 3 ? 'law-book' : 'law-scale';
     const penalty = formatPenalty(judgment) + (judgment.suspensionMonths ? `에 집행유예 ${formatMonths(judgment.suspensionMonths)}` : '');
     const steps = script.acts['6'].steps.flatMap((step) => {
       if (step.factors) {
@@ -126,12 +125,11 @@ export async function renderAiPage(container, { caseId, caseHeader, api, navigat
   }
   // 6막 AI 판사의 합의(흐름 목업). 처음에 아이캐치(AI 판결을 기다리는 중 + 안내)를 띄우고,
   // 마지막 장면을 떠나면 실제 판결을 공개(API 11) · 조회(API 12)해 같은 법정에서 7막으로 이어 간다(주소만 S-08로)
-  // test: { speaker, fromThink } — 발표 판사 테스트(목 데이터 전용): 고른 판사로 발표하게 하고 합의 장면부터 다시 본다
-  function drawStage(data, test = {}) {
+  function drawStage(data) {
     root.classList.add('has-stage');
     const header = element('header', 'case-topbar');
     header.append(element('strong', 'case-title', caseHeader.title), element('span', 'case-badge', 'AI 판결'));
-    const { script: filled, factors } = act6Script(data, test.speaker);
+    const { script: filled, factors } = act6Script(data);
     const cards = { ai: aiCard(data) };
     factors.forEach((_, k) => { cards[`factor-${k}`] = factorBoard(factors, k); });
     const revealError = element('p', 'field-error');
@@ -140,7 +138,6 @@ export async function renderAiPage(container, { caseId, caseHeader, api, navigat
       script: filled,
       order: ['6'],
       cards,
-      ...(test.fromThink ? { start: (step) => step.law === 'think' } : {}),
       onRestart: restartMock(caseId),
       onJump: jumpActMock(caseId),
       onConfirm: async () => {
@@ -159,19 +156,9 @@ export async function renderAiPage(container, { caseId, caseHeader, api, navigat
     });
     const main = element('div', 'review-main');
     main.append(element('h1', 'page-heading visually-hidden', 'AI 판결'), stage, revealError);
-    if (API_MODE === 'mock') {
-      // 테스트 기간용: 발표 판사를 골라 합의 → 발표 연출(좌우 판사가 가운데로 오는 것 포함)을 바로 본다
-      const tools = element('div', 'stage-test');
-      tools.append(element('span', '', '발표 판사 테스트(목 데이터)'));
-      [['law-gavel', '로봉 · 왼쪽'], ['law-scale', '로울 · 가운데'], ['law-book', '로북 · 오른쪽']].forEach(([who, label]) => {
-        tools.append(button(label, () => drawStage(data, { speaker: who, fromThink: true }), 'stage-test-button'));
-      });
-      main.append(tools);
-    }
     const layout = element('main', 'review-layout');
     layout.append(main);
     root.replaceChildren(header, layout);
-    if (test.fromThink) return;
     // 기다림은 아이캐치로(문구는 생성 · 불러오기 양쪽으로 읽히게, REQ-128)
     stage.interlude({
       title: 'AI 판결을 기다리는 중',
@@ -189,11 +176,7 @@ export async function renderAiPage(container, { caseId, caseHeader, api, navigat
       script, data: court, caseId, api, navigate, active,
       onInvalid: (failure) => message(`지금 단계에서는 이 화면을 볼 수 없어요. (현재 상태: ${failure.currentStatus})`),
       // 8막도 같은 방식으로 이어 가고 주소만 S-09로 바꾼다
-      onCompared: (comparison) => {
-        const fromRect = sceneRect(root); // 7막 장면 자리(이 자리 그대로에서 신문으로 빠져나온다)
-        mountNewspaperStage(root, { stage: renderComparisonStage({ script, data: comparison, caseId, caseTitle: caseHeader.title, navigate, api, fromRect }) });
-        navigate('comparison', {}, { replace: true, keepView: true });
-      },
+      onCompared: (comparison) => openComparison({ root, script, comparison, caseId, caseTitle: caseHeader.title, navigate, api }),
     });
     mountStage(root, { caseHeader, badge: '실제 판결', heading: '실제 판결', stage, extra: [error] });
     navigate('court', {}, { replace: true, keepView: true });
