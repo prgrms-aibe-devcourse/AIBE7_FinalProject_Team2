@@ -18,8 +18,12 @@ class AttendanceDateTest {
 	private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
 	private static LocalDate todayAt(String kstDateTime, int dayStartHour) {
-		Instant now = java.time.LocalDateTime.parse(kstDateTime).atZone(KST).toInstant();
-		AttendanceService service = new AttendanceService(null, null, new AttendanceProperties(KST, dayStartHour),
+		return todayAt(KST, kstDateTime, dayStartHour);
+	}
+
+	private static LocalDate todayAt(ZoneId zone, String localDateTime, int dayStartHour) {
+		Instant now = java.time.LocalDateTime.parse(localDateTime).atZone(zone).toInstant();
+		AttendanceService service = new AttendanceService(null, null, new AttendanceProperties(zone, dayStartHour),
 			Clock.fixed(now, ZoneOffset.UTC));
 		return service.today();
 	}
@@ -38,6 +42,15 @@ class AttendanceDateTest {
 	void dayStartHourShiftsBoundary() {
 		assertThat(todayAt("2026-10-22T03:59", 4)).isEqualTo(LocalDate.of(2026, 10, 21));
 		assertThat(todayAt("2026-10-22T04:00", 4)).isEqualTo(LocalDate.of(2026, 10, 22));
+	}
+
+	@Test
+	@DisplayName("서머타임 전환일에도 현지 시각 기준으로 계산한다 (#227 리뷰)")
+	void dstUsesLocalWallClock() {
+		// 2026-03-08 미국 동부는 02:00이 03:00으로 건너뛴다. 현지 04:30은 자정부터 3.5시간만 지났지만 3/8 출석이어야 한다
+		ZoneId newYork = ZoneId.of("America/New_York");
+		assertThat(todayAt(newYork, "2026-03-08T04:30", 4)).isEqualTo(LocalDate.of(2026, 3, 8));
+		assertThat(todayAt(newYork, "2026-03-08T03:59", 4)).isEqualTo(LocalDate.of(2026, 3, 7));
 	}
 
 	@Test

@@ -8,16 +8,38 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.team2.project.support.ApiIntegrationTest;
 import jakarta.servlet.http.Cookie;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
 
-/** 출석 API (BE-97) · 마이페이지 profile.attendanceDays */
+/**
+ * 출석 API (BE-97) · 마이페이지 profile.attendanceDays.
+ * 시각을 고정해 두 요청 사이에 자정이 지나도 결과가 같게 한다 (#227 리뷰). 고정 시각은 KST 2026-03-02 03:30
+ */
 class AttendanceApiTest extends ApiIntegrationTest {
+
+	private static final Instant NOW = Instant.parse("2026-03-01T18:30:00Z");
+	private static final LocalDate TODAY_KST = LocalDate.of(2026, 3, 2);
+
+	@TestConfiguration(proxyBeanMethods = false)
+	static class FixedClock {
+
+		@Bean
+		@Primary	// TimeConfig의 시스템 시계 대신 이 시계를 주입한다
+		Clock fixedClock() {
+			return Clock.fixed(NOW, ZoneOffset.UTC);
+		}
+	}
 
 	private static final String ATTENDANCE = "/api/v1/attendance";
 	private static final String MY_PAGE = "/api/v1/my-page";
@@ -54,6 +76,8 @@ class AttendanceApiTest extends ApiIntegrationTest {
 		mockMvc.perform(post(ATTENDANCE).cookie(cookie)).andExpect(status().isNoContent());
 
 		assertThat(countRows(id)).isEqualTo(1);
+		assertThat(jdbcTemplate.queryForObject("SELECT attended_on FROM attendance WHERE anonymous_user_id = ?",
+			LocalDate.class, id)).isEqualTo(TODAY_KST);	// UTC로는 3/1이지만 KST 날짜로 저장된다
 	}
 
 	@Test
@@ -77,7 +101,7 @@ class AttendanceApiTest extends ApiIntegrationTest {
 	void myPageShowsAttendanceDays() throws Exception {
 		UUID id = newUser();
 		Cookie cookie = new Cookie(COOKIE, id.toString());
-		LocalDate base = LocalDate.of(2026, 1, 1);	// 오늘과 겹치지 않는 지난 날짜
+		LocalDate base = LocalDate.of(2026, 1, 1);	// 고정한 오늘(3/2)과 겹치지 않는 지난 날짜
 		jdbcTemplate.update("INSERT INTO attendance (anonymous_user_id, attended_on) VALUES (?, ?), (?, ?)",
 			id, base, id, base.plusDays(1));
 

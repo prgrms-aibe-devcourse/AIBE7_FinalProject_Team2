@@ -40,8 +40,11 @@ public class AttendanceService {
 		return Math.toIntExact(attendanceRepository.countByIdAnonymousUserId(anonymousUserId));
 	}
 
-	/** 출석으로 칠 날짜: 설정 시간대의 지금 시각에서 하루 시작 시각만큼 뺀 날짜 */
+	/**
+	 * 출석으로 칠 날짜: 설정 시간대의 현지 시각(벽시계)에서 하루 시작 시각만큼 뺀 날짜.
+	 * ZonedDateTime에서 바로 빼면 경과 시간 기준이라 서머타임 전환일에 한 시간 어긋나므로, 현지 시각(LocalDateTime)으로 바꾼 뒤 뺀다 (#227 리뷰)
+	 */
 	LocalDate today() {
-		return clock.instant().atZone(properties.zone()).minusHours(properties.dayStartHour()).toLocalDate();
+		return clock.instant().atZone(properties.zone()).toLocalDateTime().minusHours(properties.dayStartHour()).toLocalDate();
 	}
 }
