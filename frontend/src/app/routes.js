@@ -5,7 +5,8 @@
 //   render      화면 진입 함수 renderXxxPage(container, { caseId, caseHeader, api, navigate, section })
 //   needsHeader 사건 상단 바(제목 · 유형)가 필요한 화면 — 라우터가 caseHeader를 채워서 넘긴다
 //   ownsFooter  화면이 공통 푸터를 직접 그리면 true (아니면 라우터가 화면 아래에 푸터를 붙인다. REQ-071 모든 화면 법적 고지)
-//   ownsHeader  공통 헤더(상단 내비)를 라우터가 붙이지 않는 화면 — 마이페이지 · 관리자처럼 자기 헤더를 그리는 화면만(FE-56)
+//   ownsHeader  공통 헤더(상단 내비)를 라우터가 붙이지 않는 화면 — 관리자처럼 자기 헤더를 그리는 화면만(FE-56, 마이페이지는 FE-66부터 공통 헤더를 쓴다)
+//   theme       화면의 색 테마 이름 — 라우터가 화면을 그리기 시작하는 순간 공통 헤더와 body에 data-theme으로 붙인다(마이페이지: coffee, FE-66)
 //   title       브라우저 탭 제목
 import { renderAiPage } from '../pages/ai/aiPage.js';
 import { renderCaseListPage } from '../pages/caseList/caseListPage.js';
@@ -49,8 +50,8 @@ export const routes = [
   { name: 'testPaper', path: '/test/paper', render: renderPersonalityPaperPage, title: '판결 성향 테스트' },
   { name: 'testResult', path: '/test/result', render: renderPersonalityResultPage, title: '판결 성향 결과' },
   { name: 'testType', path: '/test/types/:shareId', render: renderPersonalitySharedPage, title: '판결 성향 유형' },
-  // 마이페이지는 커피색 헤더를 직접 그린다(FE-44)
-  { name: 'me', path: '/me', render: renderMyPage, ownsHeader: true, title: '마이페이지' },
+  // 마이페이지도 공통 헤더를 쓰고 색만 커피색으로 덮어쓴다(FE-66, myPage.css)
+  { name: 'me', path: '/me', render: renderMyPage, theme: 'coffee', title: '마이페이지' },
   // S-18 커뮤니티 (FE-47): 메인 책상의 노트북으로 들어온다. 커뮤니티 API가 없어 목 모드에서만 동작한다(실제 모드는 "준비 중")
   { name: 'community', path: '/community', render: renderCommunityPage, title: '커뮤니티' },
   { name: 'communityPost', path: '/community/posts/:postId', render: renderCommunityPostPage, title: '커뮤니티' },

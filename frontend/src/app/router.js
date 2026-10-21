@@ -75,7 +75,13 @@ export function createRouter({ view, headerHost, footerHost, routes }) {
     current = { name: route.name, path, caseId, extras, navKind };
     document.title = route.name === 'landing' ? SITE_TITLE : `${route.title} · ${SITE_TITLE}`;
     // 화면마다 새로 그린다(지금 메뉴 표시 · 로그인 상태가 바뀌므로)
-    headerHost?.replaceChildren(...(route.ownsHeader ? [] : [renderSiteHeader({ navigate })]));
+    // 색 테마는 화면이 그려지기를 기다리지 않고 이 순간 헤더 · body에 정한다(화면이 늦게 그려져도 헤더 · 바탕 · 푸터가 앞 화면 색으로 남지 않게, FE-66)
+    const header = route.ownsHeader ? null : renderSiteHeader({ navigate });
+    for (const node of [header, document.body]) {
+      if (!node) continue;
+      if (route.theme) node.dataset.theme = route.theme; else delete node.dataset.theme;
+    }
+    headerHost?.replaceChildren(...(header ? [header] : []));
     if (headerHost) headerHost.inert = false; // 이전 화면의 대화창(엽서 · 커뮤니티 글쓰기 창)이 막아 둔 헤더 · 푸터를 푼다(stage.js, communityParts.js)
     footerHost.inert = false;
 
