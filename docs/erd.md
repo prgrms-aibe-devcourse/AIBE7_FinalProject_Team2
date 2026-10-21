@@ -32,6 +32,7 @@
 | v1.25 | 2026-10-20 | 사건 발단 사진 테이블 추가 (**확장 단계**, BE-91 · V19) — `case_incident_photo` 신설(Cloudflare Workers AI 생성 → S3 업로드 결과를 순서대로 기록). 사건 대표사진(신문용)은 새 테이블 없이 `legal_case.thumbnail_url` 재사용(결정: `docs/decisions/BE-91.md`) |
 | v1.26 | 2026-10-20 | 사건 사진 생성 방식 재검토 (**확장 단계**, BE-91 재검토 · V20) — Cloudflare Workers AI 직접 생성은 그림 품질 때문에 그만두고, 사람이 만든 사진을 올리는 방식으로 바꿨다. `case_incident_photo.model` 컬럼 삭제, `prompt`는 참고용 선택 항목으로 바뀌어 NOT NULL 해제(결정: `docs/decisions/BE-91.md`) |
 | v1.27 | 2026-10-20 | 신문 지면 테이블 추가 (**확장 단계**, BE-92 · V21) — `case_paper` 신설(사건당 1건: desk · headline · deck · caption · article). `photo`는 `legal_case.thumbnail_url`, `extraPhotos`는 `case_incident_photo`를 그대로 재사용(새 컬럼 없음, 결정: `docs/decisions/BE-92.md`) |
+| v1.28 | 2026-10-20 | `admin_account.password_hash` 설명 — 관리자 OAuth(BE-40) 제외 반영. NULL 허용 제약(V12)은 그대로 둔다 |
 
 ---
 
@@ -509,7 +510,7 @@ AI 판결 1건을 어떤 조건으로 만들었는지 남긴다(REQ-047, 079). M
 | --- | --- | --- | --- |
 | id | bigint PK | ✓ |  |
 | email | varchar(254) | ✓ | 로그인 아이디. 소문자로 정규화해 저장(CHECK `email = lower(email)`), 유니크 |
-| password_hash | varchar(255) |  | Argon2id 해시(`{argon2}` 접두어, BE-90). 기존 BCrypt 해시(`{bcrypt}` 접두어)도 검증은 되고 로그인 시 재해시된다. OAuth로만 로그인하는 관리자(BE-40)는 NULL |
+| password_hash | varchar(255) |  | Argon2id 해시(`{argon2}` 접두어, BE-90). 기존 BCrypt 해시(`{bcrypt}` 접두어)도 검증은 되고 로그인 시 재해시된다. NULL 허용은 OAuth로만 로그인하는 관리자(BE-40)를 위해 V12에서 둔 것이다. BE-40은 제외됐지만(v1.28) 제약은 그대로 둔다(마이그레이션 변경 없음) |
 | display_name | varchar(50) | ✓ | 화면 · 검수 기록에 쓰는 이름 |
 | enabled | boolean | ✓ | 비활성이면 로그인할 수 없다 |
 | created_at | timestamptz | ✓ |  |
