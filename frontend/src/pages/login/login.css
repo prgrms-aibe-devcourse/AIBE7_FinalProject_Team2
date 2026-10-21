@@ -1,12 +1,42 @@
-/* S-12 로그인 (FE-52). 색은 style.css 역할 토큰만 쓴다.
-   구성: 공통 헤더 → 가운데 카드(제목 · 안내 · [목업 안내] · 카카오 로그인 · 또는 · 아이디 · 비밀번호 · 로그인 · 회원가입) */
+/* S-12 로그인 (FE-52) · 책상 위 펠트 패드 (FE-69).
+   메인 책상(S-01, landing.css .desk-wood · .desk-pad)과 같은 나뭇결 위에 네이비 펠트 데스크 패드를 놓고, 그 위에 로그인 상자를 그린다.
+   카카오 콜백(authCallbackPage.js)도 같은 모양을 쓴다. 색은 style.css 역할 토큰과 ④ 책상 토큰만 쓴다.
+   구성: 공통 헤더 → 나뭇결 책상 → 펠트 패드(제목 · 안내 · [목업 안내] · 카카오 로그인 · 또는 · 아이디 · 비밀번호 · 로그인 · 회원가입) + 펜(장식) */
 
-.login-page { min-height: 100vh; background: var(--color-bg); color: var(--color-text); font: var(--text-body)/1.6 var(--font-body); }
-.login-main { display: flex; justify-content: center; padding: 64px 20px 80px; }
-.login-card { width: min(400px, 100%); padding: 36px 32px 28px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-card); }
-.login-card h1 { margin: 0 0 8px; font: 900 26px/1.3 var(--font-heading); letter-spacing: -.02em; color: var(--color-heading); }
-.login-lead { margin: 0 0 20px; color: var(--color-muted); font-size: 14px; word-break: keep-all; }
-.login-mock-note { margin: 0 0 20px; padding: 10px 12px; border: 1px dashed var(--color-border-strong); border-radius: 4px; background: var(--color-surface); color: var(--color-muted); font-size: var(--text-small); line-height: 1.5; word-break: keep-all; }
+.login-page {
+  min-height: 100vh; color: var(--color-text); font: var(--text-body)/1.6 var(--font-body);
+  background: /* 메인 책상(landing.css .desk-wood)과 같은 나뭇결 */
+    radial-gradient(ellipse at 8% 0%, color-mix(in srgb, var(--color-desk-wood-glow) 38%, transparent), transparent 55%),
+    repeating-linear-gradient(176deg, color-mix(in srgb, var(--color-desk-shadow) 6%, transparent) 0 2px, transparent 2px 9px),
+    repeating-linear-gradient(178deg, color-mix(in srgb, var(--color-desk-wood-glow) 6%, transparent) 0 1px, transparent 1px 23px),
+    linear-gradient(180deg, var(--color-desk-wood-light), var(--color-desk-wood) 40%, var(--color-desk-wood-dark));
+}
+.login-main { display: flex; justify-content: center; padding: 72px 20px 96px; }
+.login-desk { position: relative; width: min(1080px, 100%); }
+
+/* 펠트 패드: 메인 .desk-pad와 같은 바탕 · 안쪽 테두리 · 그림자. 펠트 위 글자는 밝은 종이색으로 뒤집는다 */
+.login-card {
+  --felt-ink: var(--color-desk-sheet);
+  --felt-muted: var(--color-banner-muted);
+  --felt-line: color-mix(in srgb, var(--color-desk-pad-glow) 35%, transparent);
+  position: relative; z-index: 1; border-radius: 24px; color: var(--felt-ink);
+  padding: 48px max(36px, calc((100% - 400px) / 2)) 40px; /* 메인처럼 가로로 긴 패드. 글줄 · 입력칸은 가운데 400px 단에 둔다 */
+  background: radial-gradient(ellipse at 10% 0%, color-mix(in srgb, var(--color-desk-pad-glow) 16%, transparent), transparent 50%), var(--color-desk-pad);
+  box-shadow: inset 0 0 0 3px var(--color-desk-pad-edge), 2px 4px 6px color-mix(in srgb, var(--color-desk-shadow) 35%, transparent), 6px 18px 28px color-mix(in srgb, var(--color-desk-shadow) 30%, transparent);
+}
+.login-card h1 { margin: 0 0 8px; font: 900 28px/1.3 var(--font-heading); letter-spacing: -.02em; color: var(--felt-ink); word-break: keep-all; text-wrap: balance; }
+.login-lead { margin: 0 0 24px; color: var(--felt-muted); font-size: 14px; word-break: keep-all; text-wrap: pretty; }
+.login-card > .login-lead:last-child { margin-bottom: 0; }
+.login-mock-note { margin: 0 0 20px; padding: 10px 12px; border: 1px dashed var(--felt-line); border-radius: 6px; color: var(--felt-muted); font-size: var(--text-small); line-height: 1.5; word-break: keep-all; }
+
+/* 펠트 위 버튼 · 포커스: 네이비 주 버튼은 펠트에 묻히므로 종이색으로 뒤집는다. 포커스 링은 메인 책상과 같은 브론즈 */
+.login-card :is(button, input):focus-visible { outline: 3px solid var(--color-range-fill); outline-offset: 2px; }
+.login-card .primary-button { background: var(--felt-ink); border-color: var(--felt-ink); color: var(--color-desk-pad); }
+.login-card .secondary-button { background: transparent; border-color: var(--felt-muted); color: var(--felt-ink); }
+@media (hover: hover) and (pointer: fine) {
+  .login-card .primary-button:hover:not(:disabled) { background: var(--color-card); border-color: var(--color-card); }
+  .login-card .secondary-button:hover { background: color-mix(in srgb, var(--felt-ink) 10%, transparent); }
+}
 
 /* 카카오 로그인: 카카오 디자인 가이드(노란 바탕 · 검은 말풍선 심볼 · 85% 검은 글자) */
 .kakao-button {
@@ -17,28 +47,54 @@
 .kakao-button svg { position: absolute; left: 16px; width: 18px; height: 18px; fill: var(--color-on-kakao); }
 .kakao-button:disabled, .login-submit:disabled { opacity: .6; cursor: default; }
 
-.login-divider { display: flex; align-items: center; gap: 12px; margin: 20px 0; color: var(--color-muted); font-size: var(--text-small); }
-.login-divider::before, .login-divider::after { content: ''; flex: 1; height: 1px; background: var(--color-border); }
+.login-divider { display: flex; align-items: center; gap: 12px; margin: 20px 0; color: var(--felt-muted); font-size: var(--text-small); }
+.login-divider::before, .login-divider::after { content: ''; flex: 1; height: 1px; background: var(--felt-line); }
 
 .login-form { display: flex; flex-direction: column; gap: 14px; }
 .login-field { display: flex; flex-direction: column; gap: 6px; }
-.login-field label { font-size: 14px; font-weight: 700; color: var(--color-text); }
+.login-field label { font-size: 14px; font-weight: 700; color: var(--felt-ink); }
+/* 입력칸은 펠트 위에 놓인 종이: 밝은 바탕 · 어두운 글자로 읽기 쉽게 둔다 */
 .login-field input {
-  min-height: 46px; padding: 0 12px; border: 1px solid var(--color-border-strong); border-radius: 4px;
-  background: var(--color-card); color: var(--color-text); font: inherit; font-size: 16px; /* 16px 미만이면 iOS가 확대한다 */
+  min-height: 46px; padding: 0 12px; border: 1px solid var(--color-desk-pad-edge); border-radius: 6px;
+  background: var(--felt-ink); color: var(--color-text); caret-color: var(--color-desk-pad); font: inherit; font-size: 16px; /* 16px 미만이면 iOS가 확대한다 */
 }
-.login-field input:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 1px; }
-.login-field input[aria-invalid="true"] { border-color: var(--color-danger); }
-.login-error { margin: 0; padding: 10px 12px; border: 1px solid var(--color-danger-border); border-radius: 4px; background: var(--color-danger-tint); color: var(--color-danger); font-size: 14px; word-break: keep-all; }
-.login-submit { width: 100%; margin-top: 4px; }
+.login-field input[aria-invalid="true"] { border-color: var(--color-danger); box-shadow: 0 0 0 1px var(--color-danger); }
+/* 오류 문구: 따로 상자를 만들지 않고 펠트 위 글줄로 둔다. 진한 빨강은 네이비 펠트에서 읽히지 않아 옅은 빨강(--color-danger-border)을 글자색으로 쓴다 */
+.login-error { margin: 0; color: var(--color-danger-border); font-size: 14px; font-weight: 700; line-height: 1.5; word-break: keep-all; text-wrap: pretty; }
+.login-submit { width: 100%; margin-top: 6px; }
 
-.login-signup { margin: 20px 0 0; text-align: center; color: var(--color-muted); font-size: 14px; }
-.login-link { padding: 4px; border: 0; background: transparent; color: var(--color-accent); font: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+.login-signup { margin: 20px 0 0; text-align: center; color: var(--felt-muted); font-size: 14px; }
+.login-link { padding: 4px; border: 0; background: transparent; color: var(--felt-ink); font: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
 .login-link[aria-disabled="true"] { cursor: default; opacity: .6; }
 
 .login-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 
-@media (max-width: 720px) {
-  .login-main { padding: 32px 16px 56px; }
-  .login-card { padding: 28px 20px 24px; }
+/* 카카오 콜백(로딩 · 실패): 글이 짧아 패드 높이를 잡아 주고 가운데에 둔다. 내로 · 남불이 패드 위 가장자리에서 고개를 내민다 */
+.login-card-message { display: flex; flex-direction: column; justify-content: center; min-height: 340px; margin-top: 140px; text-align: center; }
+.login-card-message .login-actions { justify-content: center; }
+.login-peek { position: absolute; z-index: 0; top: 0; width: auto; height: 200px; pointer-events: none; filter: drop-shadow(6px 8px 6px color-mix(in srgb, var(--color-desk-shadow) 40%, transparent)); }
+.login-peek.peek-naero { left: calc(50% - 180px); }
+.login-peek.peek-nambul { left: calc(50% + 20px); }
+
+/* 펜(장식): 패드 오른쪽에 비스듬히 걸쳐 둔다. 메인 책상 펜(landing.css .pen-art)과 같은 색 띠 */
+.login-pen {
+  position: absolute; z-index: 2; right: -12px; top: 64px; width: 14px; height: 230px; border-radius: 7px; transform: rotate(16deg); pointer-events: none;
+  background: linear-gradient(180deg, var(--color-desk-pen-gold) 0 5%, var(--color-desk-pen) 5% 46%, var(--color-desk-pen-gold) 46% 49%, var(--color-desk-pen) 49% 92%, var(--color-desk-pen-cap) 92%);
+  filter: drop-shadow(9px 11px 7px color-mix(in srgb, var(--color-desk-shadow) 42%, transparent));
 }
+
+@media (max-width: 720px) {
+  .login-main { padding: 28px 16px 56px; }
+  .login-card { padding: 32px 22px 26px; border-radius: 20px; }
+  .login-card-message { min-height: 280px; margin-top: 112px; }
+  .login-peek { height: 160px; }
+  .login-peek.peek-naero { left: calc(50% - 140px); }
+  .login-peek.peek-nambul { left: calc(50% + 12px); }
+  .login-pen { display: none; } /* 좁은 화면에서는 패드가 화면을 거의 채워 펜 자리가 없다 */
+}
+
+/* 개발용 화면 넘어가기(FE-69, 목 모드만). 폴리싱이 끝나면 loginDevJump.js와 함께 뺀다 */
+.login-dev-jump { position: fixed; right: 12px; bottom: 12px; z-index: 50; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; max-width: min(460px, calc(100vw - 24px)); padding: 8px 10px; border: 1px dashed var(--color-border-strong); border-radius: 6px; background: var(--color-surface); font-size: var(--text-small); }
+.login-dev-jump-title { width: 100%; color: var(--color-muted); font-weight: 700; }
+.login-dev-jump-button { min-height: 32px; padding: 0 10px; border: 1px solid var(--color-border-strong); border-radius: 4px; background: var(--color-card); color: var(--color-text); font: inherit; cursor: pointer; }
+.login-dev-jump-button:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 1px; }
