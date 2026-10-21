@@ -64,8 +64,13 @@ public class HttpPipelineClient implements PipelineClient {
 		} catch (RestClientResponseException e) {
 			throw translate(e, "작업 생성");
 		} catch (RestClientException e) {
-			// 원문이 들어간 요청 본문은 로그에 남기지 않는다
-			log.warn("파이프라인 서비스에 닿지 못했습니다 (작업 생성): {}", e.toString());
+			// 원문이 들어간 요청 본문은 로그에 남기지 않는다.
+			// 타임아웃이면 파이프라인은 작업을 만들어 돌고 있을 수 있다 — 그때는 백엔드에 행이 없는데도
+			// 다음 등록이 파이프라인 쪽 잠금에 걸린다. 증상을 알아볼 수 있게 함께 적는다
+			// (docs/decisions/BE-93.md "작업 생성이 타임아웃되면 고아 작업이 남는다")
+			log.warn("파이프라인 서비스에 닿지 못했습니다 (작업 생성): {}. 타임아웃이었다면 파이프라인에"
+				+ " 작업이 남아 다음 등록이 IMPORT_IN_PROGRESS가 될 수 있다 — pipeline 컨테이너를 확인한다",
+				e.toString());
 			throw new PipelineException("파이프라인 서비스에 닿지 못했습니다", e);
 		}
 	}
