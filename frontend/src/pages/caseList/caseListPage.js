@@ -1,7 +1,7 @@
 import { button, element, mockTag, renderSiteFooter } from '../../components/siteLayout.js';
 import { API_MODE } from '../../api/config.js';
 import { scriptFor } from '../overview/overviewPage.js';
-import { casePhoto } from '../../utils/newspaper.js';
+import { casePhoto, useCommonPhotoOnError } from '../../utils/newspaper.js';
 import { newspaperMasthead } from '../../components/newspaperFront.js';
 import { turnPage } from '../../utils/pageTurn.js';
 import { reducedMotion } from '../../utils/motion.js';
@@ -215,6 +215,7 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
 
   function photo(item) {
     const image = element('img', 'photo');
+    useCommonPhotoOnError(image, Number(item?.caseId) || 0); // 썸네일 로딩 실패 시 공용 컷 (src보다 먼저)
     image.src = casePhoto(item); // 썸네일이 없으면 공용 재연 컷(샘플)
     image.alt = ''; // 연출 이미지라 읽지 않는다 (사건 정보는 제목 · 소개문에 있다)
     image.width = 3; // 비율 힌트(3:2). 크기는 CSS가 정한다
