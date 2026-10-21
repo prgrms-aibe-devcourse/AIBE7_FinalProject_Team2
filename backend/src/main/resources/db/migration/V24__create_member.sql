@@ -1,4 +1,4 @@
--- V22__create_member.sql (확장 단계, BE-62 · WBS 7.4.2)
+-- V24__create_member.sql (확장 단계, BE-62 · WBS 7.4.2)
 -- 회원: 카카오 로그인으로 만든다. 개인정보는 받지 않고 공급자 회원번호만 저장한다(카카오 동의항목 없음)
 
 CREATE TABLE member (

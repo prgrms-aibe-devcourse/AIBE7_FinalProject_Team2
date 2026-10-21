@@ -1,5 +1,6 @@
 package com.team2.project.personality.service;
 
+import com.team2.project.attendance.service.AttendanceService;
 import com.team2.project.experience.repository.ExperienceRepository;
 import com.team2.project.experience.service.AnonymousUserService;
 import com.team2.project.legalcase.domain.ValueAxis;
@@ -10,11 +11,14 @@ import com.team2.project.personality.dto.MyPageResponse;
 import com.team2.project.personality.dto.MyPageResponse.ExperienceItem;
 import com.team2.project.personality.dto.MyPageResponse.HistoryItem;
 import com.team2.project.personality.dto.MyPageResponse.JudgmentPersonality;
+import com.team2.project.personality.dto.MyPageResponse.Profile;
 import com.team2.project.personality.dto.PersonalityResultResponse;
 import com.team2.project.personality.dto.PersonalityTypeResponse;
 import com.team2.project.personality.repository.ExperiencePersonalityRepository;
 import com.team2.project.personality.repository.PersonalityResultRepository;
 import com.team2.project.personality.repository.PersonalityTypeRepository;
+import com.team2.project.profile.service.ProfileDecoService;
+import com.team2.project.profile.service.ProfileDecoService.ProfileDecoView;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -35,6 +39,8 @@ public class MyPageService {
 	private final PersonalityTypeRepository typeRepository;
 	private final ExperiencePersonalityRepository contributionRepository;
 	private final ExperienceRepository experienceRepository;
+	private final AttendanceService attendanceService;
+	private final ProfileDecoService profileDecoService;
 
 	@Transactional(readOnly = true)
 	public MyPageResponse get(Optional<UUID> anonymousId) {
@@ -62,6 +68,8 @@ public class MyPageService {
 
 		List<ExperienceItem> experiences = experienceRepository.findLatestPerCase(userId).stream()
 			.map(ExperienceItem::from).toList();
-		return new MyPageResponse(personality, judgment, history, experiences);
+		ProfileDecoView deco = profileDecoService.view(userId);
+		return new MyPageResponse(personality, judgment, history, experiences,
+			new Profile(attendanceService.countDays(userId)), deco.profileDeco(), deco.achievements(), deco.unlocked());
 	}
 }

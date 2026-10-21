@@ -13,6 +13,9 @@ public interface PersonalityResultRepository extends JpaRepository<PersonalityRe
 	/** 사용자의 현재 결과 (없으면 테스트 전) */
 	Optional<PersonalityResult> findByAnonymousUser_IdAndCurrentTrue(UUID anonymousUserId);
 
+	/** 성향 테스트를 한 적이 있는지 (도전과제 hasType, BE-96) */
+	boolean existsByAnonymousUser_IdAndCurrentTrue(UUID anonymousUserId);
+
 	/**
 	 * 재응시 전에 이전 현재 결과를 내린다(이력은 남긴다). 새 결과 저장과 같은 트랜잭션에서 먼저 부른다 —
 	 * 부분 유니크(사용자마다 현재 결과 1건)는 문장마다 검사하므로 순서가 바뀌면 위반이 난다.

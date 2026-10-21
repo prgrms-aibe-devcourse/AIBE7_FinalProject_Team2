@@ -34,7 +34,9 @@
 | v1.27 | 2026-10-20 | 신문 지면 테이블 추가 (**확장 단계**, BE-92 · V21) — `case_paper` 신설(사건당 1건: desk · headline · deck · caption · article). `photo`는 `legal_case.thumbnail_url`, `extraPhotos`는 `case_incident_photo`를 그대로 재사용(새 컬럼 없음, 결정: `docs/decisions/BE-92.md`) |
 | v1.28 | 2026-10-20 | `admin_account.password_hash` 설명 — 관리자 OAuth(BE-40) 제외 반영. NULL 허용 제약(V12)은 그대로 둔다 |
 | v1.29 | 2026-10-21 | 화면 ID를 6막 체계로 갱신(FE-58, BE-82 매핑: 옛 S-06 ~ S-09 → S-05 ~ S-08). 없앤 정리 화면은 "옛 S-05"로 표기. 작성 이력의 ID는 옛 뜻 그대로 |
-| v1.30 | 2026-10-21 | 회원 테이블 추가 (**확장 단계**, BE-62 · V22) — `member` 신설(공급자 · 공급자 회원번호만, 개인정보 없음, `(provider, provider_user_id)` 유일). `anonymous_user.member_id`에 FK(`fk_anonymous_user_member`) · 부분 인덱스 추가. 익명 기록 연결 규칙(공용 PC면 덮어쓰지 않고 새 익명 ID) |
+| v1.30 | 2026-10-21 | 출석 기록 테이블 추가 (**확장 단계**, BE-97 · V22) — `attendance` 신설(익명 사용자 × 출석 날짜, 기본 키 두 칼럼, 하루 한 줄). 9장 추가 |
+| v1.31 | 2026-10-21 | 프로필 꾸미기 테이블 추가 (**확장 단계**, BE-96 · V23) — `profile_deco` 신설(익명 사용자당 한 줄, 꾸미기 12칸 · `updated_at`). 도전과제 진행도는 저장하지 않고 계산한다. 10장 추가 |
+| v1.32 | 2026-10-21 | 회원 테이블 추가 (**확장 단계**, BE-62 · V24) — `member` 신설(공급자 · 공급자 회원번호만, 개인정보 없음, `(provider, provider_user_id)` 유일). `anonymous_user.member_id`에 FK(`fk_anonymous_user_member`) · 부분 인덱스 추가. 익명 기록 연결 규칙(공용 PC면 덮어쓰지 않고 새 익명 ID) |
 
 ---
 
@@ -384,14 +386,14 @@ S-03의 객관식 선택지. 범죄 유형별로 정의한다(FR-2-8).
 | 컬럼 | 타입 | 필수 | 설명 |
 | --- | --- | --- | --- |
 | id | uuid PK | ✓ | 브라우저에 저장하는 익명 ID |
-| member_id | bigint FK → member |  | 이 브라우저에서 로그인한 회원. 회원 1명에 익명 ID 여러 개가 연결될 수 있다(1:N). 로그인 전에는 비어 있다. FK · 부분 인덱스 `ix_anonymous_user_member`는 V22(BE-62) |
+| member_id | bigint FK → member |  | 이 브라우저에서 로그인한 회원. 회원 1명에 익명 ID 여러 개가 연결될 수 있다(1:N). 로그인 전에는 비어 있다. FK · 부분 인덱스 `ix_anonymous_user_member`는 V24(BE-62) |
 | created_at | timestamptz | ✓ |  |
 | last_seen_at | timestamptz | ✓ |  |
 - 카카오 로그인(BE-62)하는 순간 해당 브라우저의 `member_id`를 채운다. 그러면 비로그인 때 한 체험이 회원 기록으로 이어진다.
 - **연결 규칙 (v1.30, BE-62)**: 아직 연결 안 됨 → 이 회원에 연결 / 같은 회원 → 그대로 / **다른 회원에 연결됨(공용 PC) → 덮어쓰지 않고 이 회원에 연결된 새 익명 ID를 발급**(그대로 두면 이후 체험이 앞 사람 계정으로 쌓인다) / 쿠키 없음 · 모르는 값 → 새 익명 ID 발급. 연결은 `member_id IS NULL`일 때만 바꾸는 조건부 UPDATE라 동시에 와도 꼬이지 않는다
 - 기존 체험의 `experience.member_id`는 일괄로 채우지 않는다(`anonymous_user`를 거쳐 찾는다).
 
-#### `member` — 회원 (확장 단계, v1.30 · BE-62 · V22)
+#### `member` — 회원 (확장 단계, v1.32 · BE-62 · V24)
 
 | 컬럼 | 타입 | 필수 | 설명 |
 | --- | --- | --- | --- |
@@ -868,3 +870,48 @@ erDiagram
 - 사용자 응답에 원본 판결문 정보가 섞이지 않는다는 원칙(5장)은 그대로다. 성향 기여는 사용자의 `USER` · `FINAL` 판단 요소 기록(`judgment_factor`)에서만 계산한다.
 - 공유 링크는 `personality_type`만 읽는다. `personality_result`의 응답 · 점수는 공유 응답에 넣지 않는다.
 - `factor.value_axis`가 `NULL`인 판단 요소는 성향 계산에서 빠진다(4장 규칙과 동일).
+
+## 9. (확장 단계) 출석 기록 테이블 (v1.30, BE-97)
+
+> **V22 마이그레이션.** 마이페이지 출석 일수(API 명세 P-5 `profile.attendanceDays`) · 출석 도전과제(FE-68, BE-96)에 쓴다. 기록은 P-6 `POST /attendance`. 결정 기록 [`BE-97.md`](decisions/BE-97.md)
+
+```mermaid
+erDiagram
+    anonymous_user ||--o{ attendance : "출석"
+```
+
+| 컬럼 | 타입 | NOT NULL | 설명 |
+| --- | --- | --- | --- |
+| anonymous_user_id | uuid FK | ✓ | `anonymous_user.id` |
+| attended_on | date | ✓ | 출석 날짜. 서버가 `Asia/Seoul` · 하루 시작 시각 설정(`attendance.day-start-hour`, 기본 0시) 기준으로 계산한다 |
+| created_at | timestamptz | ✓ | 기록 시각(기본값 `now()`) |
+
+- **기본 키**: (`anonymous_user_id`, `attended_on`). 하루 한 줄이고, 같은 날 다시 출석하면 `ON CONFLICT DO NOTHING`으로 무시한다. 익명 사용자가 기본 키 첫 칼럼이라 별도 인덱스는 두지 않는다.
+- **누적 출석 일수** = 그 익명 사용자의 줄 수. 날짜를 남겨 두어 연속 출석은 나중에 계산만 더하면 된다.
+- **로그인 이관**: 행을 옮기지 않는다. 회원에 연결된 익명 ID들(`anonymous_user.member_id`)의 `attended_on`을 중복 없이 센다.
+- 하루 시작 시각을 바꾸면 이미 저장된 날짜는 그대로이고, 그 뒤 기록부터 새 기준이 적용된다.
+
+## 10. (확장 단계) 프로필 꾸미기 테이블 (v1.31, BE-96)
+
+> **V23 마이그레이션.** 마이페이지 꾸미기(FE-68)를 서버에 저장한다. 저장은 API 명세 P-7 `PUT /profile-deco`, 조회는 P-5. 결정 기록 [`BE-96.md`](decisions/BE-96.md)
+
+```mermaid
+erDiagram
+    anonymous_user ||--o| profile_deco : "꾸미기"
+```
+
+| 컬럼 | 타입 | NOT NULL | 설명 |
+| --- | --- | --- | --- |
+| anonymous_user_id | uuid PK FK | ✓ | `anonymous_user.id`. 사용자당 한 줄 |
+| portrait | varchar(200) | ✓ | 대표 이미지 경로(`/images/…/이름.webp`, 형식은 서버가 검사) |
+| frame · background | varchar(30) | ✓ | 카드 테두리 · 배경 |
+| sash_style | varchar(30) | ✓ | 카드 책갈피 모양(`none` · `short` · `long`) |
+| sash_color_short · sash_color_long | varchar(30) | ✓ | 모양별 색(모양을 바꿔도 각자 기억한다) |
+| sash_icon_left · sash_icon_right | varchar(30) | ✓ | 짧은 책갈피 좌우 아이콘 |
+| bookmark_character · bookmark_face · bookmark_face_style · bookmark_color | varchar(30) | ✓ | 책갈피 캐릭터 · 얼굴 표정 · 얼굴 종류 · 리본 색(잠금 없음) |
+| updated_at | timestamptz | ✓ | 마지막 저장 시각(기본값 `now()`). 로그인 이관 때 가장 최근 꾸미기를 고르는 기준 |
+
+- **값 목록 · 잠금은 서버 코드(`ProfileDecoCatalog`)가 검사한다.** 도전과제 · 보상 표가 아직 임시안이라 CHECK 제약을 두지 않는다(표가 바뀔 때마다 마이그레이션이 필요해지지 않게).
+- **도전과제 진행도는 저장하지 않는다.** 완료한 사건 수(`experience`) · 성향 테스트 여부(`personality_result`) · 출석 일수(`attendance`, 9장)로 그때그때 계산한다. 모은 일러스트 수는 BE-83 전까지 계산하지 않는다.
+- 저장 기록이 없으면 서버가 기본값을 내려 준다(행을 미리 만들지 않는다).
+- **로그인 이관**: 행을 옮기지 않는다. 회원에 연결된 익명 ID들(`anonymous_user.member_id`) 중 `updated_at`이 가장 최근인 꾸미기를 쓴다.

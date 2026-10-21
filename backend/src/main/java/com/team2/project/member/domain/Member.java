@@ -14,7 +14,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * 회원 (확장 단계, BE-62 · WBS 7.4.2, V22)
+ * 회원 (확장 단계, BE-62 · WBS 7.4.2, V24)
  *
  * 카카오 로그인으로만 만든다. 개인정보(이름 · 이메일 · 프로필)는 받지 않고 공급자 회원번호만 저장한다.
  * 행은 MemberRepository.insertIfAbsent(ON CONFLICT DO NOTHING)로 만든다 — 같은 카카오 계정의 첫 로그인이

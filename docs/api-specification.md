@@ -42,7 +42,9 @@
 | v0.38 | 2026-10-21 | **BE-82 화면 ID 재배치 (S-05 ~ S-09 뜻 변경)** — 6막 재구성(FE-48)에 맞춰 화면 ID를 막 순서로 다시 매김: S-05 내 판결(옛 S-06) · S-06 AI 판결(옛 S-07) · S-07 실제 판결(옛 S-08) · S-08 세 판결 비교(옛 S-09) · **S-09 리뷰 페이지(새로 추가, `COMPLETED`만)**. 정리 화면(옛 S-05 `/summary`)은 없앰. 1-6 `REVIEWED` 보낼 화면 → S-05(판결 입력), 2장 API 6 화면 S-04만, 3장 API 6 · 5장 갱신. 서버 상태 값 · API 경로 · 응답 형식 변경 없음. 이 버전 전의 이력 행은 옛 ID 그대로다(`docs/decisions/BE-82.md` 매핑 표 참고) S-09는 진입 API가 없어 예외적으로 API 3으로 `COMPLETED`를 확인(5장, PR #214 리뷰) |
 | v0.39 | 2026-10-21 | 8-3 #7 관리자 OAuth(BE-40) **제외** — 관리자 로그인은 이메일 · 비밀번호(세션, BE-39 · BE-67 · BE-68)로 유지한다(B 김현중 확인). 일반 사용자는 카카오 로그인(BE-62) |
 | v0.40 | 2026-10-21 | API 6 `summary`를 S-05 사건 요약 장에서 쓴다고 명시(FE-58). 형식 변경 없음 |
-| v0.41 | 2026-10-21 | 10장 카카오 로그인 추가 (BE-62, WBS 7.4.2) — M-3 시작 `GET /api/v1/auth/oauth2/authorization/kakao` · M-4 콜백 `GET /api/v1/auth/oauth2/callback/kakao`(브라우저 이동, JSON API 아님). 성공 시 리프레시 토큰 쿠키(`NLNB_RT`)만 심고 화면 경로로 리다이렉트, 토큰은 URL에 싣지 않음. 익명 ID 쿠키 연결 규칙. **10장 번호를 M-N으로 변경**: 재발급 · 로그아웃(BE-94)의 A-16 · A-17이 8-4 운영 메뉴 API 예약 번호(A-16 ~ A-41)와 겹쳐 M-1 · M-2로 |
+| v0.41 | 2026-10-21 | **출석 기록 · 출석 일수 추가 (BE-97)** — P-6 `POST /attendance`(쿠키가 있을 때만 하루 한 번 기록, 항상 `204`, 익명 ID를 발급하지 않음) 신설, P-5 응답에 `profile.attendanceDays`(누적 출석 일수, 없으면 `0`) 추가. 날짜는 `Asia/Seoul` · 하루 시작 시각 설정 기준(`docs/decisions/BE-97.md`) |
+| v0.42 | 2026-10-21 | **프로필 꾸미기 저장 · 도전과제 판정 추가 (BE-96, FE-68)** — P-7 `PUT /profile-deco`(꾸미기 전체 저장, 형식 · 값 목록 400 → 잠김 409 `DECO_LOCKED`) 신설, P-5 응답에 `profileDeco` · `achievements` · `unlocked` 추가(도전과제 · 보상 표는 서버가 원본, 수집 도전과제는 BE-83 전까지 `PENDING`), 1-5에 `DECO_LOCKED` 추가(`docs/decisions/BE-96.md`) |
+| v0.43 | 2026-10-21 | 10장 카카오 로그인 추가 (BE-62, WBS 7.4.2) — M-3 시작 `GET /api/v1/auth/oauth2/authorization/kakao` · M-4 콜백 `GET /api/v1/auth/oauth2/callback/kakao`(브라우저 이동, JSON API 아님). 성공 시 리프레시 토큰 쿠키(`NLNB_RT`)만 심고 화면 경로로 리다이렉트, 토큰은 URL에 싣지 않음. 익명 ID 쿠키 연결 규칙. **10장 번호를 M-N으로 변경**: 재발급 · 로그아웃(BE-94)의 A-16 · A-17이 8-4 운영 메뉴 API 예약 번호(A-16 ~ A-41)와 겹쳐 M-1 · M-2로 |
 
 ---
 
@@ -133,6 +135,7 @@ json
 | 502 | `FILE_UPLOAD_FAILED` | (확장, 관리자 API, BE-91) S3 업로드 실패, 또는 설정(`S3_BUCKET_NAME`) 없음 | 다시 시도 안내 (A-13-3 · A-13-4) |
 | 400 | `INVALID_IMAGE_FILE` | (확장, 관리자 API, BE-91) 사진 파일이 없음 · 비어 있음 · 허용하지 않는 형식 | 입력 안내 (A-13-3 · A-13-4) |
 | 404 | `PAPER_NOT_FOUND` | (확장, 관리자 API, BE-92) 신문 지면을 아직 생성한 적 없음 | 먼저 생성하도록 안내 (A-13-7 · A-13-8) |
+| 409 | `DECO_LOCKED` | (확장, BE-96) 아직 열리지 않은 꾸미기를 저장하려 함. `details`에 잠긴 필드(`reason: DECO_LOCKED`) | 화면에서 잠긴 항목은 고를 수 없게 막는다. 오면 마이페이지를 다시 불러온다 (P-7) |
 | 429 | `TOO_MANY_REQUESTS` | (확장, BE-63) 같은 IP에서 `/api` 요청이 너무 많음(평균 초당 20번 · 순간 40번 초과). **백엔드가 아니라 운영 Nginx가 돌려준다** — 형식은 1-4와 같고 `Retry-After: 1` 헤더가 붙는다. 로컬 개발(Vite)에는 Nginx가 없어 나오지 않는다 | 일반 오류 안내. 자동으로 다시 보내지 않는다 |
 | 500 | `INTERNAL_ERROR` | 서버 오류 | 일반 오류 안내 |
 - "이미 제출함"과 "순서가 맞지 않음"을 따로 나누지 않고 `INVALID_STATE` 하나로 둔다. 화면이 할 일은 둘 다 "`currentStatus`의 화면으로 이동"으로 같기 때문이다.
@@ -1531,7 +1534,9 @@ json
 | P-2 | POST | `/personality/results` | 응답 제출 → 결과 저장 | S-15 → S-16 |
 | P-3 | GET | `/personality/results/me` | 내 현재 결과 | S-16 |
 | P-4 | GET | `/personality/types/{shareId}` | 공유용 유형 설명 (공개) | 공유 결과 |
-| P-5 | GET | `/my-page` | 마이페이지 (테스트 결과 · 판결 성향 · 체험 목록) | S-17 |
+| P-5 | GET | `/my-page` | 마이페이지 (테스트 결과 · 판결 성향 · 체험 목록 · 출석 일수) | S-17 |
+| P-6 | POST | `/attendance` | 출석 기록 (하루 한 번, v0.41) | 사이트 진입 |
+| P-7 | PUT | `/profile-deco` | 프로필 꾸미기 저장 (v0.42) | S-17 |
 
 ---
 
@@ -1602,7 +1607,7 @@ json
 json
 
 ```json
-{  "personality": { "type": { "shareId": "Qm7xK2pa", "…": "…" }, "axisScores": { "…": "…" }, "testedAt": "2026-10-14T14:00:00+09:00" },  "judgmentPersonality": {    "axisScores": { "APOLOGY_SINCERITY": 0.75, "FAULT_STANDARD": 0.11, "PRINCIPLE_RELATION": 0.83, "ORDER_OPPORTUNITY": null },    "type": null,    "experienceCount": 3  },  "history": [    { "caseId": 1, "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건", "completedAt": "2026-10-14T15:00:00+09:00", "axisScores": { "APOLOGY_SINCERITY": 1.0, "FAULT_STANDARD": 0.0, "PRINCIPLE_RELATION": 1.0, "ORDER_OPPORTUNITY": null } }  ],  "experiences": [    { "caseId": 1, "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건", "crimeType": "MURDER", "status": "COMPLETED", "attemptNo": 1, "updatedAt": "2026-10-14T15:00:00+09:00" }  ]}
+{  "personality": { "type": { "shareId": "Qm7xK2pa", "…": "…" }, "axisScores": { "…": "…" }, "testedAt": "2026-10-14T14:00:00+09:00" },  "judgmentPersonality": {    "axisScores": { "APOLOGY_SINCERITY": 0.75, "FAULT_STANDARD": 0.11, "PRINCIPLE_RELATION": 0.83, "ORDER_OPPORTUNITY": null },    "type": null,    "experienceCount": 3  },  "history": [    { "caseId": 1, "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건", "completedAt": "2026-10-14T15:00:00+09:00", "axisScores": { "APOLOGY_SINCERITY": 1.0, "FAULT_STANDARD": 0.0, "PRINCIPLE_RELATION": 1.0, "ORDER_OPPORTUNITY": null } }  ],  "experiences": [    { "caseId": 1, "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건", "crimeType": "MURDER", "status": "COMPLETED", "attemptNo": 1, "updatedAt": "2026-10-14T15:00:00+09:00" }  ],  "profile": { "attendanceDays": 3 },  "profileDeco": { "portrait": "/images/characters/standing/naero.webp", "frame": "wood", "background": "cream", "sashStyle": "long", "sashColorShort": "wine", "sashColorLong": "wine", "sashIconLeft": "none", "sashIconRight": "none", "bookmarkCharacter": "naero", "bookmarkFace": "happy", "bookmarkFaceStyle": "generated", "bookmarkColor": "bronze" },  "achievements": [    { "id": "first-case", "stat": "completed", "goal": 1, "value": 1, "cleared": true, "status": "CLEARED", "rewards": { "kinds": ["characters/scene"], "frames": ["wood"], "backgrounds": [], "sashStyles": ["long"], "sashColors": ["long:wine"], "sashIcons": [] } },    { "id": "collect-5", "stat": "collected", "goal": 5, "value": null, "cleared": false, "status": "PENDING", "rewards": { "kinds": ["cases"], "frames": [], "backgrounds": ["news"], "sashStyles": [], "sashColors": [], "sashIcons": ["naero", "nambul"] } },    { "…": "…" }  ],  "unlocked": { "kinds": ["characters/roles", "characters/standing", "characters/scene"], "frames": ["basic", "wood"], "backgrounds": ["cream"], "sashStyles": ["none", "short", "long"], "sashColors": ["short:wine", "long:wine"], "sashIcons": ["none", "star"] }}
 ```
 
 | 필드 | 설명 |
@@ -1611,10 +1616,67 @@ json
 | `judgmentPersonality` | 종합 판결 성향(성향 산식 4장). 각 사건의 **첫 회차**만, 축마다 체험별 축 점수 평균. 값이 없는 축은 `null`("체험 자료 없음"). `type`은 **네 축 모두 값이 있을 때만** 있고 아니면 `null`. 값이 있으면 **유형 공통 형식(9-1) 그대로**다(`shareId`로 그 유형의 공유 링크로 이어 갈 수 있다). 화면은 "판결에서는 ○○○○"처럼 테스트 유형과 나란히 보여 준다. 완료한 체험이 없거나 네 축 모두 `null`이면 `judgmentPersonality` 자체가 `null`("종합 없음"). `experienceCount`는 **성향 기여(`experience_personality`)가 저장된 첫 회차 체험 수**다. 종합 점수를 낸 체험과 같은 집합이고, 축 자료가 모두 비어 있는 체험도 센다. 7.6.7(체험 완료 시 성향 저장) 전에 완료해 기여가 없는 체험은 세지 않는다 |
 | `history` | 성향 변화 흐름. 각 사건의 첫 회차 체험별 축 점수(값이 없는 축은 `null`), 완료 순 |
 | `experiences` | 체험한 사건. 사건마다 최근 회차 하나, 최근 순. `status`로 결과 다시 보기(`COMPLETED`) · 이어 하기를 나눈다(1-6) |
+| `profile.attendanceDays` | 누적 출석 일수(P-6, v0.41). 기록이 없거나 빈 마이페이지면 `0`. 로그인 전에는 기기(익명 ID)마다 따로 센다 |
+| `profileDeco` | 프로필 꾸미기(v0.42, BE-96). 저장한 적이 없거나 빈 마이페이지면 기본값(내로 스탠딩 · `basic` · `cream` · 책갈피 없음 · 내로 · `happy` · `generated` · `bronze`). **잠긴 값이어도 거절하지 않고 그대로** 내려 준다(표가 바뀌어 잠긴 경우 화면이 기본값으로 보여 준다). 필드는 P-7 요청과 같다 |
+| `achievements` | 도전과제 8개(서버 표가 원본, FE-68 순서). `stat`: `completed`(완료한 회차가 하나라도 있는 사건 수, 다시 하기를 시작해도 줄지 않는다) · `hasType`(성향 테스트 결과가 있으면 1) · `attendanceDays`(P-6) · `collected`(모은 일러스트). `value`는 목표에서 멈춘다. `status`: `CLEARED` · `IN_PROGRESS` · `PENDING`. **`collected` 도전과제는 BE-83 전까지 서버가 셀 수 없어 `PENDING` · `value: null` · `cleared: false`(잠김)**. `rewards`는 여섯 종류(`kinds` · `frames` · `backgrounds` · `sashStyles` · `sashColors`(`모양:색`) · `sashIcons`), 받지 않는 종류는 빈 배열. 제목 · 문구 · 그림은 화면이 `id`로 붙인다 |
+| `unlocked` | 지금 열린 것(여섯 종류). 처음부터 열린 것 + `CLEARED` 도전과제의 보상 |
 
 - 쿠키가 없거나 기록이 없으면 `404`가 아니라 **빈 마이페이지**(`personality`·`judgmentPersonality` `null`, 목록 빈 배열)를 `200`으로 준다. 마이페이지는 "아직 없음"을 안내하는 화면이기 때문이다.
 - `judgmentPersonality` · `history`는 체험 성향 저장(7.6.7, BE-64)이 붙은 뒤부터 채워진다. 그 전에는 각각 `null` · 빈 배열이다.
 - 판결 체험 중(S-03 ~ S-07)에 성향을 보여 주지 않는 규칙(FR-8-5)은 화면이 지킨다. 이 API는 마이페이지에서만 부른다.
+
+---
+
+### P-6. 출석 기록 — `POST /attendance`
+
+> 확장 단계(BE-97, v0.41). 마이페이지 출석 일수 · 출석 도전과제(FE-68, BE-96)에 쓴다. 결정 기록 [`BE-97.md`](decisions/BE-97.md)
+
+**요청**: 본문 없음. 익명 ID 쿠키(1-2)를 읽는다. 프론트가 사이트에 들어올 때 한 번 부른다.
+
+**응답 204** (본문 없음)
+
+- 쿠키의 익명 ID가 DB에 있으면 **오늘 날짜로 한 줄** 남긴다. 같은 날 다시 불러도 결과가 같다(하루 한 번만 센다).
+- 쿠키가 없거나 DB에 없는 값이면 **아무것도 하지 않고** `204`. 익명 ID를 새로 발급하지 않는다(발급은 API 2 · P-2만).
+- "오늘"은 `Asia/Seoul` 기준이며, 하루 시작 시각은 설정값이다(`attendance.day-start-hour`, 기본 0시). 예: 4시로 두면 03:59 접속은 전날 출석이다.
+- 거절 응답은 없다(공통 Rate limit 429는 그대로).
+
+---
+
+### P-7. 프로필 꾸미기 저장 — `PUT /profile-deco`
+
+> 확장 단계(BE-96, v0.42). 꾸미기 **전체**를 한 번에 보낸다. 조회는 P-5에 함께 있다. 결정 기록 [`BE-96.md`](decisions/BE-96.md)
+
+**요청**
+
+json
+
+```json
+{  "portrait": "/images/characters/scene/naero_idle-neutral.webp",  "frame": "wood",  "background": "cream",  "sashStyle": "short",  "sashColorShort": "wine",  "sashColorLong": "wine",  "sashIconLeft": "star",  "sashIconRight": "none",  "bookmarkCharacter": "nambul",  "bookmarkFace": "thinking",  "bookmarkFaceStyle": "cropped",  "bookmarkColor": "green"}
+```
+
+| 필드 | 값 |
+| --- | --- |
+| `portrait` | 대표 이미지 경로. **`/images/폴더/…/이름.webp` 모양만**(영문 · 숫자 · `_` · `-`). `..` · `//` · `\` · 쿼리 · 외부 주소는 거절. 종류는 `/images/`와 파일명 사이(예: `characters/scene`). 파일이 실제로 있는지는 보지 않는다 |
+| `frame` | `basic` · `wood` · `gold` · `navy` · `stitch` |
+| `background` | `cream` · `latte` · `tarot` · `news` · `linen` |
+| `sashStyle` | 카드 책갈피 모양 `none` · `long` · `short` |
+| `sashColorShort` · `sashColorLong` | 모양별 색 `wine` · `navy` · `gold` · `green` |
+| `sashIconLeft` · `sashIconRight` | 짧은 책갈피 아이콘 `none` · `star` · `scale` · `gavel` · `cup` · `heart` · `naero` · `nambul` · `law` |
+| `bookmarkCharacter` | `naero` · `nambul` · `law-scale` · `law-gavel` · `law-book` (잠금 없음) |
+| `bookmarkFace` | `cheer` · `happy` · `neutral` · `sorry` · `surprised` · `thinking` (잠금 없음) |
+| `bookmarkFaceStyle` | `generated` · `cropped` (잠금 없음) |
+| `bookmarkColor` | 리본 색 `bronze` · `wine` · `navy` · `green` · `gold` (잠금 없음) |
+
+**응답 200**: 저장된 꾸미기(요청과 같은 모양). 쿠키가 없었으면 익명 ID를 새로 발급해 `Set-Cookie`로 내려준다(P-2와 같다).
+
+| 거절 | 조건 |
+| --- | --- |
+| 400 `VALIDATION_ERROR` | 값이 없음(`reason: REQUIRED`) · 목록에 없는 값(`INVALID_VALUE`) · 대표 이미지 형식 오류(`INVALID_FORMAT`). `details`에 필드별 사유 |
+| 409 `DECO_LOCKED` | 아직 열리지 않은 항목(P-5 `unlocked`에 없음). `details`에 잠긴 필드(`reason: DECO_LOCKED`) |
+
+- 검사 순서는 400 → 409이고, 하나라도 걸리면 **아무것도 저장하지 않는다.**
+- 잠김은 **지금 화면에 쓰이는 칸만** 본다: 대표 이미지(기본 두 장 `standing/naero` · `standing/nambul`은 늘 허용) · 테두리 · 배경 · 책갈피 모양, 고른 모양의 색(`모양:색`), 짧은 책갈피일 때 좌우 아이콘. 쓰이지 않는 칸(고르지 않은 모양의 색 등)은 기본값이 잠겨 있어도 거절하지 않는다.
+- 수집 도전과제 보상(대표 이미지 `cases` · `characters/law` · `characters/adult`, 배경 `news`, 아이콘 `naero` · `nambul`, 책갈피 색 `green`)은 BE-83 전까지 열리지 않는다.
 
 ---
 
