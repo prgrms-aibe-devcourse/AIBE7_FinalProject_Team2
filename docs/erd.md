@@ -33,6 +33,7 @@
 | v1.26 | 2026-10-20 | 사건 사진 생성 방식 재검토 (**확장 단계**, BE-91 재검토 · V20) — Cloudflare Workers AI 직접 생성은 그림 품질 때문에 그만두고, 사람이 만든 사진을 올리는 방식으로 바꿨다. `case_incident_photo.model` 컬럼 삭제, `prompt`는 참고용 선택 항목으로 바뀌어 NOT NULL 해제(결정: `docs/decisions/BE-91.md`) |
 | v1.27 | 2026-10-20 | 신문 지면 테이블 추가 (**확장 단계**, BE-92 · V21) — `case_paper` 신설(사건당 1건: desk · headline · deck · caption · article). `photo`는 `legal_case.thumbnail_url`, `extraPhotos`는 `case_incident_photo`를 그대로 재사용(새 컬럼 없음, 결정: `docs/decisions/BE-92.md`) |
 | v1.28 | 2026-10-20 | `admin_account.password_hash` 설명 — 관리자 OAuth(BE-40) 제외 반영. NULL 허용 제약(V12)은 그대로 둔다 |
+| v1.29 | 2026-10-21 | 출석 기록 테이블 추가 (**확장 단계**, BE-97 · V22) — `attendance` 신설(익명 사용자 × 출석 날짜, 기본 키 두 칼럼, 하루 한 줄). 9장 추가 |
 
 ---
 
@@ -852,3 +853,23 @@ erDiagram
 - 사용자 응답에 원본 판결문 정보가 섞이지 않는다는 원칙(5장)은 그대로다. 성향 기여는 사용자의 `USER` · `FINAL` 판단 요소 기록(`judgment_factor`)에서만 계산한다.
 - 공유 링크는 `personality_type`만 읽는다. `personality_result`의 응답 · 점수는 공유 응답에 넣지 않는다.
 - `factor.value_axis`가 `NULL`인 판단 요소는 성향 계산에서 빠진다(4장 규칙과 동일).
+
+## 9. (확장 단계) 출석 기록 테이블 (v1.29, BE-97)
+
+> **V22 마이그레이션.** 마이페이지 출석 일수(API 명세 P-5 `profile.attendanceDays`) · 출석 도전과제(FE-68, BE-96)에 쓴다. 기록은 P-6 `POST /attendance`. 결정 기록 [`BE-97.md`](decisions/BE-97.md)
+
+```mermaid
+erDiagram
+    anonymous_user ||--o{ attendance : "출석"
+```
+
+| 컬럼 | 타입 | NOT NULL | 설명 |
+| --- | --- | --- | --- |
+| anonymous_user_id | uuid FK | ✓ | `anonymous_user.id` |
+| attended_on | date | ✓ | 출석 날짜. 서버가 `Asia/Seoul` · 하루 시작 시각 설정(`attendance.day-start-hour`, 기본 0시) 기준으로 계산한다 |
+| created_at | timestamptz | ✓ | 기록 시각(기본값 `now()`) |
+
+- **기본 키**: (`anonymous_user_id`, `attended_on`). 하루 한 줄이고, 같은 날 다시 출석하면 `ON CONFLICT DO NOTHING`으로 무시한다. 익명 사용자가 기본 키 첫 칼럼이라 별도 인덱스는 두지 않는다.
+- **누적 출석 일수** = 그 익명 사용자의 줄 수. 날짜를 남겨 두어 연속 출석은 나중에 계산만 더하면 된다.
+- **로그인 이관**: 행을 옮기지 않는다. 회원에 연결된 익명 ID들(`anonymous_user.member_id`)의 `attended_on`을 중복 없이 센다.
+- 하루 시작 시각을 바꾸면 이미 저장된 날짜는 그대로이고, 그 뒤 기록부터 새 기준이 적용된다.

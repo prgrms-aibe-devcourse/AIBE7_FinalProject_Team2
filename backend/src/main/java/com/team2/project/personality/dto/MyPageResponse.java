@@ -17,12 +17,19 @@ public record MyPageResponse(
 	PersonalityResultResponse personality,
 	JudgmentPersonality judgmentPersonality,
 	List<HistoryItem> history,
-	List<ExperienceItem> experiences) {
+	List<ExperienceItem> experiences,
+	Profile profile) {
 
 	private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
 	public static MyPageResponse empty() {
-		return new MyPageResponse(null, null, List.of(), List.of());
+		return new MyPageResponse(null, null, List.of(), List.of(), Profile.EMPTY);
+	}
+
+	/** 프로필 수치. attendanceDays: 누적 출석 일수(BE-97, 기록이 없으면 0) */
+	public record Profile(int attendanceDays) {
+
+		static final Profile EMPTY = new Profile(0);
 	}
 
 	/** 종합 판결 성향. type은 네 축 모두 값이 있을 때만 있다 (성향 산식 4장) */
