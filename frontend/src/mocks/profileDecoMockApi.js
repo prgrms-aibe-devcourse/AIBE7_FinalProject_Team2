@@ -116,20 +116,34 @@ function checkValues(deco) {
   if (errors.length) fail('VALIDATION_ERROR', errors);
 }
 
-/** P-7 잠김 검사(409): 지금 화면에 쓰이는 칸만 본다(고른 모양의 색, 짧은 책갈피일 때 아이콘) */
-function checkLocks(deco, open) {
+// 저장값에서 이 칸이 화면에 쓰이는지 (잠김 검사 대상이었는지)
+const activeIn = (deco, field) => {
+  if (['sashColorShort', 'sashIconLeft', 'sashIconRight'].includes(field)) return deco.sashStyle === 'short';
+  if (field === 'sashColorLong') return deco.sashStyle === 'long';
+  return true;
+};
+
+/**
+ * P-7 잠김 검사(409): 지금 화면에 쓰이는 칸만 본다(고른 모양의 색, 짧은 책갈피일 때 아이콘).
+ * 이미 저장해 둔 값은 다시 거절하지 않는다(BE-98): 저장값과 같고 저장할 때도 쓰이던 칸은 건너뛰고 바꾼 칸만 본다
+ */
+function checkLocks(deco, open, saved) {
   const has = (type, id) => open[type].includes(id);
   const locked = [];
-  if (!DEFAULT_PORTRAITS.includes(deco.portrait) && !has('kinds', kindOfPortrait(deco.portrait))) locked.push('portrait');
-  if (!has('frames', deco.frame)) locked.push('frame');
-  if (!has('backgrounds', deco.background)) locked.push('background');
-  if (!has('sashStyles', deco.sashStyle)) locked.push('sashStyle');
+  const lock = (field) => {
+    if (saved && activeIn(saved, field) && saved[field] === deco[field]) return;
+    locked.push(field);
+  };
+  if (!DEFAULT_PORTRAITS.includes(deco.portrait) && !has('kinds', kindOfPortrait(deco.portrait))) lock('portrait');
+  if (!has('frames', deco.frame)) lock('frame');
+  if (!has('backgrounds', deco.background)) lock('background');
+  if (!has('sashStyles', deco.sashStyle)) lock('sashStyle');
   if (deco.sashStyle === 'short') {
-    if (!has('sashColors', sashColorKey('short', deco.sashColorShort))) locked.push('sashColorShort');
-    if (!has('sashIcons', deco.sashIconLeft)) locked.push('sashIconLeft');
-    if (!has('sashIcons', deco.sashIconRight)) locked.push('sashIconRight');
+    if (!has('sashColors', sashColorKey('short', deco.sashColorShort))) lock('sashColorShort');
+    if (!has('sashIcons', deco.sashIconLeft)) lock('sashIconLeft');
+    if (!has('sashIcons', deco.sashIconRight)) lock('sashIconRight');
   } else if (deco.sashStyle === 'long' && !has('sashColors', sashColorKey('long', deco.sashColorLong))) {
-    locked.push('sashColorLong');
+    lock('sashColorLong');
   }
   if (locked.length) fail('DECO_LOCKED', locked.map((field) => ({ field, reason: 'DECO_LOCKED' })));
 }
@@ -144,7 +158,7 @@ export async function putProfileDeco(deco) {
   await delay();
   checkValues(deco);
   const view = mockProfileView(readStats());
-  checkLocks(deco, view.unlocked);
+  checkLocks(deco, view.unlocked, read(DECO_KEY, null));
   const saved = Object.fromEntries(Object.keys(DEFAULT_SERVER_DECO).map((field) => [field, deco[field]]));
   write(DECO_KEY, saved);
   return structuredClone(saved);

@@ -107,3 +107,24 @@ test('개발 전용 모두 해금: 도전과제를 전부 깬 것으로 보고, 
   await setMockUnlockAll(false);
   assert.ok((await getMyPage()).achievements.some((item) => !item.cleared));
 });
+
+test('P-7: 저장해 둔 값이 잠겨도(표 변경) 다른 칸 저장은 통과하고, 새로 바꾼 잠긴 칸만 409 (BE-98)', async () => {
+  reset();
+  await setMockUnlockAll(true);
+  await putProfileDeco({ ...DEFAULT, frame: 'wood' });
+  await setMockUnlockAll(false); // 저장해 둔 원목 테두리가 다시 잠긴 상황
+  const kept = { ...DEFAULT, frame: 'wood', bookmarkColor: 'navy' };
+  assert.deepEqual(await putProfileDeco(kept), kept);
+  const error = await putProfileDeco({ ...kept, frame: 'navy' }).catch((e) => e);
+  assert.deepEqual(error.details, [{ field: 'frame', reason: 'DECO_LOCKED' }]);
+});
+
+test('P-7: 저장할 때 쓰이지 않던 칸에 넣어 둔 잠긴 값은 쓰이게 바꿀 때 다시 검사한다 (BE-98)', async () => {
+  reset();
+  await setMockUnlockAll(true);
+  await putProfileDeco({ ...DEFAULT, sashColorShort: 'gold' }); // 책갈피 없음이라 짧은 책갈피 색은 쓰이지 않는다
+  await setMockUnlockAll(false);
+  const error = await putProfileDeco({ ...DEFAULT, sashStyle: 'short', sashColorShort: 'gold' }).catch((e) => e);
+  assert.equal(error.code, 'DECO_LOCKED');
+  assert.deepEqual(error.details, [{ field: 'sashColorShort', reason: 'DECO_LOCKED' }]);
+});
