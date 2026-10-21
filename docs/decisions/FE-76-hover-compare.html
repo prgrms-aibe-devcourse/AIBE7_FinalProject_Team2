@@ -68,8 +68,11 @@
   th { font-size: 12px; color: var(--color-muted); }
   td.src { font-size: 12px; color: var(--color-muted); white-space: nowrap; }
   .lk { background: none; border: 0; padding: 4px 0; font: inherit; color: var(--color-text); cursor: pointer; text-decoration: none; }
-  .cur-base { text-decoration: underline; text-underline-offset: 3px; } .cur-base:hover { opacity: .75; }
+  .cur-base { text-decoration: underline; text-underline-offset: 3px; }
+  .cur-opacity:hover { opacity: .75; }
   .cur-hov:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .cur-paper:hover { text-decoration: underline; text-underline-offset: 4px; }
+  .cur-start:hover { color: var(--color-heading); text-decoration: underline; text-underline-offset: 3px; }
   .cur-color { color: var(--color-muted); } .cur-color:hover { color: var(--color-heading); }
   .prop:hover { text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
   .on-felt .lk, .on-wood .lk { color: inherit; }
@@ -103,7 +106,7 @@
   .linkpair:has(.pen:hover) .card2 { filter: brightness(1.13); }
   .pen, .card2 { width: 110px; min-height: 70px; display: grid; place-items: center; border-radius: 6px; background: var(--color-desk-pen); color: #fff; font-size: 12px; cursor: pointer; transition: filter .2s; }
   .card2 { background: var(--color-desk-sheet); color: var(--color-text); }
-  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } .d-lift:hover { transform: none; } .d-letter:hover { translate: none; } .d-star:hover { scale: none; } }
 </style>
 </head>
 <body>
@@ -122,22 +125,22 @@
   </div>
 
   <h2>P2. 면 단위 항목 — 옅은 틴트 후보 6가지</h2>
-  <p class="note">목록 줄·카드·필터·메뉴 줄에 쓰이는 틴트가 코드에 4~5가지로 흩어져 있습니다. 같은 목록으로 비교해 보세요. 제안은 <b>surface</b>(중립 면)와 <b>kraft 16%</b>(책상·종이 계열)입니다.</p>
+  <p class="note">목록 줄·카드·필터·메뉴 줄에 쓰이는 틴트가 코드에 4~5가지로 흩어져 있습니다. 같은 목록으로 비교해 보세요. 확정은 <b>kraft 16%</b>(책상·종이 계열)이며, <b>surface</b>(중립 면)는 검토한 대안입니다.</p>
   <h3>흰 카드 위</h3>
   <div class="stage on-card"><div class="row">
-    <div class="tintcol"><span class="lbl">surface <span class="badge new">제안</span></span><ul class="tintlist t-surface"><li>첫째 줄</li><li>둘째 줄</li><li>셋째 줄</li></ul></div>
+    <div class="tintcol"><span class="lbl">surface <span class="badge">검토 대안</span></span><ul class="tintlist t-surface"><li>첫째 줄</li><li>둘째 줄</li><li>셋째 줄</li></ul></div>
     <div class="tintcol"><span class="lbl">accent-tint (admin 메뉴)</span><ul class="tintlist t-accent"><li>첫째 줄</li><li>둘째 줄</li><li>셋째 줄</li></ul></div>
     <div class="tintcol"><span class="lbl">kraft 14% (사건 목록)</span><ul class="tintlist t-k14"><li>첫째 줄</li><li>둘째 줄</li><li>셋째 줄</li></ul></div>
-    <div class="tintcol"><span class="lbl">kraft 16% (지면 귀 · tp-move) <span class="badge new">제안</span></span><ul class="tintlist t-k16"><li>첫째 줄</li><li>둘째 줄</li><li>셋째 줄</li></ul></div>
+    <div class="tintcol"><span class="lbl">kraft 16% (지면 귀 · tp-move) <span class="badge ok">확정</span></span><ul class="tintlist t-k16"><li>첫째 줄</li><li>둘째 줄</li><li>셋째 줄</li></ul></div>
     <div class="tintcol"><span class="lbl">kraft 28% (ear-button)</span><ul class="tintlist t-k28"><li>첫째 줄</li><li>둘째 줄</li><li>셋째 줄</li></ul></div>
     <div class="tintcol"><span class="lbl">글자색 8% (tp-option)</span><ul class="tintlist t-text8"><li>첫째 줄</li><li>둘째 줄</li><li>셋째 줄</li></ul></div>
   </div></div>
   <h3>신문지 · 종이 위</h3>
   <div class="stage on-paper"><div class="row">
-    <div class="tintcol"><span class="lbl">surface</span><ul class="tintlist t-surface"><li>첫째 줄</li><li>둘째 줄</li><li>셋째 줄</li></ul></div>
+    <div class="tintcol"><span class="lbl">surface <span class="badge">검토 대안</span></span><ul class="tintlist t-surface"><li>첫째 줄</li><li>둘째 줄</li><li>셋째 줄</li></ul></div>
     <div class="tintcol"><span class="lbl">accent-tint</span><ul class="tintlist t-accent"><li>첫째 줄</li><li>둘째 줄</li><li>셋째 줄</li></ul></div>
     <div class="tintcol"><span class="lbl">kraft 14%</span><ul class="tintlist t-k14"><li>첫째 줄</li><li>둘째 줄</li><li>셋째 줄</li></ul></div>
-    <div class="tintcol"><span class="lbl">kraft 16% <span class="badge new">제안</span></span><ul class="tintlist t-k16"><li>첫째 줄</li><li>둘째 줄</li><li>셋째 줄</li></ul></div>
+    <div class="tintcol"><span class="lbl">kraft 16% <span class="badge ok">확정</span></span><ul class="tintlist t-k16"><li>첫째 줄</li><li>둘째 줄</li><li>셋째 줄</li></ul></div>
     <div class="tintcol"><span class="lbl">kraft 28%</span><ul class="tintlist t-k28"><li>첫째 줄</li><li>둘째 줄</li><li>셋째 줄</li></ul></div>
     <div class="tintcol"><span class="lbl">글자색 8%</span><ul class="tintlist t-text8"><li>첫째 줄</li><li>둘째 줄</li><li>셋째 줄</li></ul></div>
   </div></div>
@@ -156,14 +159,14 @@
   <table>
     <thead><tr><th>요소</th><th>파일</th><th>현재 동작</th><th>현재(체험)</th><th>제안(체험)</th></tr></thead>
     <tbody>
-      <tr><td>paper-link <span class="badge ok">맞음</span></td><td class="src">caseList.css</td><td>호버 밑줄 4px</td><td><button class="lk cur-hov">전체 사건 보기</button></td><td><button class="lk prop">전체 사건 보기</button></td></tr>
-      <tr><td>.start (사건 목록) <span class="badge ok">맞음</span></td><td class="src">caseList.css</td><td>호버 밑줄 + 제목색 4px</td><td><button class="lk cur-hov">체험 시작</button></td><td><button class="lk prop">체험 시작</button></td></tr>
+      <tr><td>paper-link <span class="badge ok">맞음</span></td><td class="src">caseList.css</td><td>호버 밑줄 4px</td><td><button class="lk cur-paper">전체 사건 보기</button></td><td><button class="lk prop">전체 사건 보기</button></td></tr>
+      <tr><td>.start (사건 목록) <span class="badge ok">맞음</span></td><td class="src">caseList.css</td><td>호버 밑줄 + 제목색 3px</td><td><button class="lk cur-start">체험 시작</button></td><td><button class="lk prop">체험 시작</button></td></tr>
       <tr><td>case-review-back <span class="badge ok">맞음</span></td><td class="src">caseReview.css</td><td>호버 밑줄</td><td><button class="lk cur-hov">← 돌아가기</button></td><td><button class="lk prop">← 돌아가기</button></td></tr>
       <tr><td>cm-post-title a <span class="badge ok">맞음</span></td><td class="src">community.css</td><td>호버 밑줄 3px</td><td><button class="lk cur-hov">제목이 긴 커뮤니티 글</button></td><td><button class="lk prop">제목이 긴 커뮤니티 글</button></td></tr>
       <tr><td>cm-popular-list a <span class="badge ok">맞음</span></td><td class="src">community.css</td><td>호버 밑줄 3px</td><td><button class="lk cur-hov">인기 글 제목</button></td><td><button class="lk prop">인기 글 제목</button></td></tr>
       <tr><td>sheet-cast-link <span class="badge ok">맞음</span></td><td class="src">stage.css</td><td>호버 밑줄 3px</td><td><button class="lk cur-hov">등장인물 이름</button></td><td><button class="lk prop">등장인물 이름</button></td></tr>
       <tr><td>login-link <span class="badge gap">차이</span></td><td class="src">login.css</td><td>평소 밑줄, 호버 변화 없음</td><td><button class="lk cur-base">회원가입</button></td><td><button class="lk prop">회원가입</button></td></tr>
-      <tr><td>footer-link <span class="badge gap">차이</span></td><td class="src">landing.css</td><td>평소 밑줄, 호버 opacity .75</td><td><button class="lk cur-base">이용약관</button></td><td><button class="lk prop">이용약관</button></td></tr>
+      <tr><td>footer-link <span class="badge gap">차이</span></td><td class="src">landing.css</td><td>평소 밑줄, 호버 opacity .75</td><td><button class="lk cur-base cur-opacity">이용약관</button></td><td><button class="lk prop">이용약관</button></td></tr>
       <tr><td>admin-link <span class="badge gap">차이</span></td><td class="src">admin.css</td><td>평소 밑줄</td><td><button class="lk cur-base">관리자 링크</button></td><td><button class="lk prop">관리자 링크</button></td></tr>
       <tr><td>cm-text-button <span class="badge gap">차이</span></td><td class="src">community.css</td><td>평소 밑줄</td><td><button class="lk cur-base">답글 달기</button></td><td><button class="lk prop">답글 달기</button></td></tr>
       <tr><td>stage-skip <span class="badge gap">차이</span></td><td class="src">stage.css</td><td>평소 밑줄, 호버 글자색</td><td><button class="lk cur-base">대사 건너뛰기</button></td><td><button class="lk prop">대사 건너뛰기</button></td></tr>
