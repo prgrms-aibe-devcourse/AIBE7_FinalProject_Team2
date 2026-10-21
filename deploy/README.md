@@ -153,7 +153,7 @@ rm .deploy/failed_rev                         # 실패해서 건너뛰는 커밋
 - **되돌릴 때 Compose · 스크립트는 새 커밋 것을 그대로 쓴다** (이미지 태그만 되돌린다). Compose를 크게 바꾸는 PR(예: RDS 전환)은 머지 직후 한 번 지켜본다.
 - 서버는 이미지 라벨의 커밋이 **지금 `main`의 최신 커밋일 때만** 배포한다(그 커밋의 스크립트를 서버가 실행하므로). `main`이 더 앞서 있으면 새 이미지가 올라올 때까지 건너뛴다 — 연달아 머지하면 마지막 커밋만 배포될 수 있다.
 - 배포에 성공하면 지금 · 직전 sha 이미지만 남기고 옛 이미지를 지운다(디스크 30GB). 더 옛날로 되돌리려면 `./deploy.sh sha-xxxxxxx`가 GHCR에서 다시 받는다.
-- 배포 실패는 서버 로그(journald)와 Actions `verify-deploy` 실패(커밋한 사람에게 GitHub 알림)로만 보인다. Grafana · Loki에는 아직 안 잡힌다(Alloy가 백엔드 로그만 수집, 필요하면 C 후속).
+- 배포 실패는 서버 로그(journald)와 Actions `verify-deploy` 실패(커밋한 사람에게 GitHub 알림)로만 보인다. Grafana · Loki에는 아직 안 잡힌다(Alloy는 백엔드 로그와 웹의 429 전용 로그만 수집, 배포 로그는 필요하면 C 후속).
 - `develop` 머지는 운영에 나가지 않는다. 운영에 올리려면 `develop → main` PR을 올린다.
 - 켠 뒤에는 서버에서 `git pull` · 파일 직접 수정을 하지 않는다. 저장소 사본은 `cd-agent.sh`가 배포하는 커밋으로 옮긴다(브랜치가 아니라 커밋에 고정, detached). 고칠 게 있으면 PR로 `main`에 올린다.
 - 반영까지 최대 2 ~ 3분(확인 주기) + 기동 시간이 걸린다.
@@ -270,7 +270,7 @@ sudo certbot certificates                                # 서버의 인증서 �
 | 범위 | `/api`만 | 화면 · 정적 파일은 Nginx가 바로 주는 거라 부담이 거의 없다 |
 | 기준 | IP (`$binary_remote_addr`) | 로그인 전 서비스라 사용자를 구분할 다른 값이 없다 |
 | 속도 | 평균 초당 20번, 순간 40번까지 기다림 없이 처리 | 혼자 쓰면 초당 1 ~ 3번(동시 호출 · 폴링 없음). 발표장처럼 여러 명이 같은 와이파이(같은 IP)를 써도 막히지 않게 넉넉히 |
-| 넘으면 | 429 + JSON `{"code":"TOO_MANY_REQUESTS", ...}` + `Retry-After: 1` | API 명세 1-4 형식. Nginx 기본 429(HTML)는 프론트가 "서버 오류"로 잘못 보여 준다 |
+| 넘으면 | 429 + JSON `{"code":"TOO_MANY_REQUESTS", ...}` + `Retry-After: 1`(공통 제한 기준, 전용 제한 경로는 아래) | API 명세 1-4 형식. Nginx 기본 429(HTML)는 프론트가 "서버 오류"로 잘못 보여 준다 |
 
 ```bash
 # 막힌 기록 보기 (zone api_per_ip, client가 막힌 IP)
@@ -288,7 +288,7 @@ Nginx가 **막은 요청(429)만** JSON 한 줄씩 따로 남기고, 모니터�
 | --- | --- |
 | 파일 | 웹 컨테이너 `/var/log/nginx-ratelimit/rate-limited.log` (`default.conf`의 `log_format rate_limited`, `if=$rate_limited`) |
 | 내용 | `time` · `status` · `route` · `method` · `path`(쿼리 제외) · `ip` |
-| Loki 라벨 | `job="web"`, `route` = `auth_token`(재발급 · 로그아웃) · `admin_login` · `oauth`(카카오 시작) · `api`(공통) — 값 4개로 고정. `ip` · `path`는 라벨로 올리지 않는다(BE-71 카디널리티 규칙) |
+| Loki 라벨 | `job="web"`, `route` = `auth_token`(재발급 · 로그아웃) · `admin_login` · `oauth`(카카오 시작) · `api`(그 밖) — 값 4개로 고정. **경로 기준**이라 zone과 1:1이 아니다(전용 · 공통 어느 쪽에 걸려도 그 경로로 센다). `ip` · `path`는 라벨로 올리지 않는다(BE-71 카디널리티 규칙) |
 | 공유 | `docker-compose.monitoring-agent.yml`의 `web-ratelimit-logs` 볼륨(웹 쓰기 · Alloy 읽기 전용). 에이전트를 안 쓰는 서버는 컨테이너 안에만 남는다 |
 | 크기 상한 | `41-trim-rate-limit-log.sh`가 1분마다 보고 **10MB**(`RATE_LIMIT_LOG_MAX_BYTES`)를 넘으면 비운다. 공격 중에도 디스크를 채우지 않는다. 비우기 직전 1분 안의 일부 줄은 Loki에 빠질 수 있다 |
 | 평소 접속 기록 | 그대로 stdout(`docker compose logs web`) |
@@ -340,7 +340,8 @@ docker compose -f docker-compose.prod.yml logs --tail 3 web
 - **재발급에는 전체 합계 zone을 두지 않는다.** 재발급은 기존 토큰을 지우고(`getAndDelete`) 새 토큰 하나를 쓰므로 Redis 키가 늘지 않고, 쿠키가 없거나 모르는 토큰은 401로 끝나 아무것도 쓰지 않는다(`RefreshTokenStore`). 카카오 시작(요청마다 state를 새로 씀)과 다르다.
 - **재발급 429는 로그아웃이 아니다.** 프론트(`api/client.js`)는 재발급이 401일 때만 로그인 표시를 지운다. 리프레시 토큰은 그대로라 다음 요청 때 다시 재발급된다.
 - 관리자 CSRF 토큰 조회 · 내 정보 · 로그아웃(`/api/v1/admin/auth/csrf` · `me` · `logout`)은 전용 제한 없이 `/api` 공통 제한만 받는다.
-- `Retry-After`는 공통 응답이라 `1`로 고정이다. 전용 zone에서는 실제로 풀리는 시간(관리자 로그인 12초 · 재발급 2초)보다 짧다. 프론트는 429를 자동으로 다시 보내지 않으므로 그대로 둔다.
+- **전용 zone은 POST만 센다**(`default.conf`의 `$post_only_ip`, PR #236 리뷰). 같은 경로의 GET이 전용 한도를 써서 같은 IP의 정상 POST가 막히지 않게 하기 위해서다. GET 등도 `/api` 공통 제한은 받는다.
+- **`Retry-After`는 경로별**이다(`default.conf`의 `$rate_limit_retry_after`): 공통 1초 · 재발급 · 로그아웃 · 카카오 시작 2초 · 관리자 로그인 12초. zone의 `rate`를 바꾸면 이 값도 같이 바꾼다. 같은 경로라도 공통 제한에 걸린 경우에는 실제보다 조금 길게 안내된다. 프론트는 429를 자동으로 다시 보내지 않는다.
 
 ```bash
 # 전용 zone에서 막힌 기록
