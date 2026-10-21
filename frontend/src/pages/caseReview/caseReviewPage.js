@@ -25,12 +25,12 @@ export async function renderCaseReviewPage(container, { caseId, api, navigate })
   // 진입 API가 없어 API 3으로 상태를 확인한다(IA 6장 S-09). 체험이 없으면 공통 래퍼가 S-02로, 사건이 없으면 S-14로 보낸다
   try {
     const { status } = await api.getExperience(caseId);
+    if (!container.contains(root)) return undefined; // 확인하는 사이 다른 화면으로 갔다(늦은 응답이 그 화면을 옮기지 않게)
     if (status !== 'COMPLETED') { navigate(screenByStatus[status] ?? 'list', { caseId }, { replace: true }); return undefined; }
   } catch (error) {
     if (['EXPERIENCE_NOT_FOUND', 'CASE_NOT_FOUND'].includes(error?.code)) return undefined;
     throw error; // 라우터가 "화면을 불러오지 못했어요"로 안내한다
   }
-  if (!container.contains(root)) return undefined; // 확인하는 사이 다른 화면으로 갔다
   return mountCaseReview(body, { caseId, api, navigate });
 }
 

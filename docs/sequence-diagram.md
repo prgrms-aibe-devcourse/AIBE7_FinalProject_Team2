@@ -79,7 +79,7 @@ sequenceDiagram
     else PRE_JUDGED 또는 REVIEWING
         F-->>U: S-04 (확인한 섹션까지 펼친 상태)
     else REVIEWED
-        F-->>U: 옛 S-05 판결 전 최종 정리
+        F-->>U: S-05 판결 입력
     else VERDICT_CONFIRMED 또는 AI_REVEALED
         F-->>U: 공개가 진행된 마지막 결과 화면
     else COMPLETED
@@ -156,7 +156,7 @@ sequenceDiagram
 - 새로고침하면 첫 조회 결과의 `last_reviewed_step`으로 펼침 상태를 복원한다(FR-2-11).
 - 섹션 ①(개요)은 S-03에서 이미 봤으므로 확인 완료로 시작한다. 번호는 ① = 1 ~ ④ = 4이고, 사전 판단을 제출하면 `last_reviewed_step`이 1이 된다(API 5).
 - 잠긴 섹션 본문은 응답에 넣지 않는다. 화면에서만 숨기면 개발자 도구로 볼 수 있다.
-- 옛 S-05 판결 전 최종 정리도 사건 정보 조회(API 6)를 부른다. `REVIEWED`이면 옛 S-05용 핵심 사실 요약(`SUMMARY`)이 함께 내려온다. 새로고침해도 같은 요청으로 다시 그린다.
+- S-05 판결 입력도 파일철 첫 장 "사건 요약"을 그리려고 사건 정보 조회(API 6)를 부른다. `REVIEWED`이면 핵심 사실 요약(`SUMMARY`)이 함께 내려온다. 새로고침해도 같은 요청으로 다시 그린다. (판결 전 최종 정리 화면 옛 S-05는 6막 재구성으로 없앴다, FE-48 · BE-82)
 
 ---
 
