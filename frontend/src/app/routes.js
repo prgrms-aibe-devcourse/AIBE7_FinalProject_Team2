@@ -17,6 +17,7 @@ import { renderCommunityPostPage } from '../pages/community/communityPostPage.js
 import { renderComparisonPage } from '../pages/comparison/comparisonPage.js';
 import { renderCourtPage } from '../pages/court/courtPage.js';
 import { renderLandingPage } from '../pages/landing/landingPage.js';
+import { renderAuthCallbackPage } from '../pages/login/authCallbackPage.js';
 import { renderLoginPage } from '../pages/login/loginPage.js';
 import { renderMyPage } from '../pages/myPage/myPage.js';
 import { renderOverviewPage } from '../pages/overview/overviewPage.js';
@@ -54,8 +55,10 @@ export const routes = [
   // S-18 커뮤니티 (FE-47): 메인 책상의 노트북으로 들어온다. 커뮤니티 API가 없어 목 모드에서만 동작한다(실제 모드는 "준비 중")
   { name: 'community', path: '/community', render: renderCommunityPage, title: '커뮤니티' },
   { name: 'communityPost', path: '/community/posts/:postId', render: renderCommunityPostPage, title: '커뮤니티' },
-  // S-12 로그인 (FE-52): 화면 틀. 사용자 로그인 API가 없어 목 모드에서만 개발용 목업 로그인이 된다
+  // S-12 로그인 (FE-52): 목 모드는 개발용 목업 로그인, 실제 모드는 카카오 로그인(FE-74)
   { name: 'login', path: '/login', render: renderLoginPage, title: '로그인' },
+  // 카카오 로그인 콜백 (FE-74): 서버(M-4)가 로그인을 마치고 보내는 주소. 주소는 서버 설정과 같아야 한다
+  { name: 'authCallback', path: '/auth/callback', render: renderAuthCallbackPage, title: '로그인' },
   // 확장: S-19 관리자 검수 (FE-16). 관리자 코드는 사용자 화면 번들에 넣지 않으려고 필요할 때만 불러온다.
   // 관리자 화면은 관리자 api를 따로 쓰고(pages/admin/adminApi.js), 사용자 사이트 푸터 대신 자기 틀을 그린다
   { name: 'admin', path: '/admin', render: (container, options) => import('../pages/admin/adminListPage.js').then((m) => m.renderAdminListPage(container, options)), ownsFooter: true, ownsHeader: true, title: '관리자' },

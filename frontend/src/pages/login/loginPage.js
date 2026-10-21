@@ -6,8 +6,8 @@ import { adminLogout, tryAdminLogin } from './adminLogin.js';
 import { canGoBackInApp } from '../../app/router.js';
 
 // S-12 로그인 (FE-52, IA 4장 /login). 화면 틀: 카카오 로그인 버튼 + 아이디 · 비밀번호 폼.
-// 사용자 로그인 API가 아직 없어(카카오 로그인 검토 중) 목 모드에서는 개발용 목업 로그인(mocks/authMockApi.js)이 받는다.
-// 실제 모드에는 api.login이 없어 "준비 중"으로 안내한다. 로그인하지 않아도 모든 판결 체험을 할 수 있다(REQ-003).
+// 목 모드에서는 개발용 목업 로그인(mocks/authMockApi.js)이, 실제 모드에서는 카카오 로그인(realApi.js login, FE-74)이 받는다.
+// 실제 모드의 아이디 · 비밀번호는 관리자 로그인만 된다. 로그인하지 않아도 모든 판결 체험을 할 수 있다(REQ-003).
 // 로그인하면 닉네임을 이 브라우저에 두고(utils/session.js) 공통 헤더의 "로그인" 자리에 닉네임이 나온다. 회원가입(/signup)은 아직 없다
 const KAKAO_SVG = '<svg viewBox="0 0 18 18" aria-hidden="true" focusable="false"><path d="M9 1.6C4.6 1.6 1 4.4 1 7.9c0 2.2 1.5 4.2 3.7 5.3l-.9 3.4c-.1.3.3.6.5.4l4.1-2.7.6.1c4.4 0 8-2.8 8-6.3S13.4 1.6 9 1.6Z"/></svg>';
 const NOT_READY = '로그인은 아직 준비 중이에요. 로그인하지 않아도 모든 판결 체험을 할 수 있어요.';
@@ -118,7 +118,7 @@ export function renderLoginPage(container, { api, navigate }) {
           try {
             admin = await tryAdminLogin(request.id, request.password);
           } catch (failure) {
-            if (adminOnly) throw failure;
+            if (adminOnly || API_MODE === 'real') throw failure; // 실제 모드는 아이디 · 비밀번호 회원 로그인이 없어 관리자 쪽 오류를 그대로 알린다
           }
         }
         if (!container.contains(root)) return; // 기다리는 사이 다른 화면으로 갔으면 이동하지 않는다
@@ -140,7 +140,7 @@ export function renderLoginPage(container, { api, navigate }) {
         if (canGoBackInApp()) history.back(); else navigate('landing', {}, { replace: true });
       } catch (failure) {
         if (!container.contains(root)) return;
-        showError(failure?.code === 'VALIDATION_ERROR' ? '아이디와 비밀번호를 확인해 주세요.' : '로그인하지 못했어요. 잠시 뒤 다시 시도해 주세요.');
+        if (failure?.code !== 'LOGIN_CANCELLED') showError(failure?.code === 'VALIDATION_ERROR' ? '아이디와 비밀번호를 확인해 주세요.' : '로그인하지 못했어요. 잠시 뒤 다시 시도해 주세요.');
         busy.forEach((node) => { node.disabled = false; });
         pending = false;
       }

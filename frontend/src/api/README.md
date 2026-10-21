@@ -5,7 +5,7 @@
 | 파일 | 내용 |
 | --- | --- |
 | `config.js` | `API_BASE_URL`, `API_MODE` (환경변수 `VITE_API_BASE_URL`, `VITE_API_MODE`) |
-| `client.js` | `fetch` 공통 함수. 성공은 응답 본문 그대로, 실패는 에러 본문을 `throw` |
+| `client.js` | `fetch` 공통 함수. 성공은 응답 본문 그대로, 실패는 에러 본문을 `throw`. 회원 액세스 토큰을 메모리에 두고 401이면 한 번 재발급 후 다시 요청 (FE-74) |
 | `realApi.js` | 실제 백엔드 API 함수 (`docs/api-specification.md`) |
 | `index.js` | `loadApi()` — 모드에 맞는 api 객체를 돌려준다 (기본 `mock`) |
 
@@ -33,6 +33,7 @@
 | `getAiJudgment(caseId)` | 10 AI 판결 |
 | `postCourtReveal(caseId)` · `getCourtJudgment(caseId)` | 11 · 12 실제 판결 |
 | `postComparisonReveal(caseId)` · `getComparison(caseId)` | 13 · 14 세 판결 비교 |
+| `login({ method: 'kakao' })` · `reissueToken()` · `logout()` | M-3 카카오 로그인(브라우저 이동) · M-1 재발급 · M-2 로그아웃 (FE-74) |
 
 API 10 ~ 14는 백엔드 구현 전에는 404가 온다. 구현되면 그대로 동작한다.
 
