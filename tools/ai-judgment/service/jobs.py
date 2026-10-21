@@ -147,6 +147,20 @@ def _terminate(pid):
         pass
 
 
+def _axis_result(axis):
+    """가치관 축 투표 결과를 **내용으로** 돌려준다.
+
+    단계 산출물에는 `votesFile`(컨테이너 안 경로)만 있어서 그대로 내보내면 부르는 쪽이 읽을 수 없다.
+    파일을 읽어 factors를 넣고 경로는 뺀다 — 백엔드가 쓸 수 없는 값이고 내부 경로를 밖으로 내보낼 이유도 없다.
+    """
+    if not axis:
+        return None
+    votes = _read_json(Path(axis["votesFile"])) if axis.get("votesFile") else None
+    result = {key: value for key, value in axis.items() if key != "votesFile"}
+    result["factors"] = (votes or {}).get("factors") or []
+    return result
+
+
 class JobStore:
     """작업 폴더를 읽고 쓴다. 작업 하나 = 폴더 하나라 서비스를 다시 띄워도 이어서 볼 수 있다.
 
@@ -415,20 +429,26 @@ class JobStore:
 
         판결문 원문(extract outputs의 source)은 넣지 않는다. 원문은 열람 기록을 남기는 A-7로만 본다
         (요구사항 FR-5-3 "원본 판결문 정보는 내부 전용").
+
+        재판부 판결은 **court 단계의 courtDraft**를 쓴다. extract의 court 산출물
+        (`*.court_judgment_internal.json`)은 형벌 값만 담은 사전 학습 점검 전용 파일이라
+        (case-extractor/schema.py build_court_judgment) 적재에 필요한 judgmentFactors · 요약 ·
+        판결 이유가 없다. 처음에는 그 파일을 내보냈는데 적재(BE-93 2차)를 붙이면서 드러났다.
         """
         self.job_dir(job_id)  # 없는 작업이면 여기서 JobNotFound
         state = _read_json(self.state_path(job_id)) or {"stages": {}}
         outputs = {stage: (state.get("stages", {}).get(stage) or {}).get("outputs") or {} for stage in STAGES}
-        extract, selection = outputs.get("extract") or {}, outputs.get("select") or {}
+        extract, court = outputs.get("extract") or {}, outputs.get("court") or {}
+        selection = outputs.get("select") or {}
         result = {
             "jobId": job_id,
             "case": _read_json(Path(extract["case"])) if extract.get("case") else None,
             "report": _read_json(Path(extract["report"])) if extract.get("report") else None,
-            "courtJudgment": _read_json(Path(extract["court"])) if extract.get("court") else None,
+            "courtDraft": _read_json(Path(court["courtDraft"])) if court.get("courtDraft") else None,
             "judgment": _read_json(Path(selection["outputFile"])) if selection.get("outputFile") else None,
             "selection": {k: selection.get(k) for k in ("modelSpec", "runIndex", "strategy", "reason", "warnings")}
             if selection else None,
-            "axis": outputs.get("axis") or None,
+            "axis": _axis_result(outputs.get("axis") or {}),
         }
         if result["case"] is None and result["judgment"] is None:
             raise JobNotFound(f"아직 결과가 없습니다: {job_id}")

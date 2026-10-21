@@ -154,4 +154,14 @@ public class CaseImport {
 		}
 		return stripped.length() <= max ? stripped : stripped.substring(0, max - 1) + "…";
 	}
+
+	/** 적재가 끝나 사건이 만들어졌다 (BE-93 2차). 이 값이 있으면 A-15가 caseId를 내려준다 */
+	public void linkLoadedCase(LegalCase legalCase) {
+		this.legalCase = legalCase;
+	}
+
+	/** 이미 적재된 등록인지. 같은 작업을 두 번 적재하지 않게 막는 기준이다 */
+	public boolean isLoaded() {
+		return legalCase != null;
+	}
 }

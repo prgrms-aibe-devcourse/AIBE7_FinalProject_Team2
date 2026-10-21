@@ -18,6 +18,13 @@ public interface PipelineClient {
 	PipelineJob getJob(String jobId);
 
 	/**
+	 * 생성 결과 (적재의 입력, BE-93 2차). 작업이 SUCCEEDED일 때만 쓸모가 있다.
+	 *
+	 * <p>판결문 원문은 들어 있지 않다 (FR-5-3). 적재에 쓰는 원문은 백엔드가 들고 있던 값이다.
+	 */
+	PipelineResult getResult(String jobId);
+
+	/**
 	 * 작업이 남긴 것을 지운다 (판결문 원문 포함).
 	 *
 	 * <p>지우지 못해도 예외를 던지지 않는다 — 정리 실패가 등록 흐름을 막지 않게 한다.

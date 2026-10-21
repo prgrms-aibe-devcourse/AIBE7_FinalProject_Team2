@@ -1,6 +1,7 @@
 package com.team2.project.admin.caseimport;
 
 import com.team2.project.admin.audit.AdminAuditAction;
+import com.team2.project.admin.audit.AuditTargetType;
 import com.team2.project.admin.audit.AdminAuditLogger;
 import com.team2.project.admin.caseimport.domain.CaseImport;
 import com.team2.project.admin.caseimport.domain.CaseImportSource;
@@ -8,16 +9,19 @@ import com.team2.project.admin.caseimport.domain.CaseImportStatus;
 import com.team2.project.admin.caseimport.dto.CaseImportCreateRequest;
 import com.team2.project.admin.caseimport.dto.CaseImportCreatedResponse;
 import com.team2.project.admin.caseimport.dto.CaseImportResponse;
+import com.team2.project.admin.caseimport.load.CaseImportLoader;
 import com.team2.project.admin.caseimport.repository.CaseImportRepository;
 import com.team2.project.admin.service.AdminPrincipal;
 import com.team2.project.common.exception.BusinessException;
 import com.team2.project.common.exception.ErrorCode;
 import com.team2.project.common.exception.FieldErrorDetail;
+import com.team2.project.legalcase.domain.LegalCase;
 import com.team2.project.legalcase.repository.CaseSourceRepository;
 import com.team2.project.pipeline.PipelineClient;
 import com.team2.project.pipeline.PipelineException;
 import com.team2.project.pipeline.PipelineJob;
 import com.team2.project.pipeline.PipelineJobRequest;
+import com.team2.project.pipeline.PipelineResult;
 import com.team2.project.pipeline.config.PipelineProperties;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
@@ -58,6 +62,7 @@ public class AdminCaseImportService {
 	private final PipelineClient pipelineClient;
 	private final PipelineProperties pipelineProperties;
 	private final AdminAuditLogger auditLogger;
+	private final CaseImportLoader loader;
 	private final TransactionTemplate transactionTemplate;
 
 	/** 파이프라인 단계 순서 (COMMON-50 STAGES와 같아야 한다). 아직 아무 값도 못 받았을 때 쓴다 */
@@ -72,12 +77,13 @@ public class AdminCaseImportService {
 	 */
 	public AdminCaseImportService(CaseImportRepository importRepository, CaseSourceRepository caseSourceRepository,
 			PipelineClient pipelineClient, PipelineProperties pipelineProperties, AdminAuditLogger auditLogger,
-			PlatformTransactionManager transactionManager) {
+			CaseImportLoader loader, PlatformTransactionManager transactionManager) {
 		this.importRepository = importRepository;
 		this.caseSourceRepository = caseSourceRepository;
 		this.pipelineClient = pipelineClient;
 		this.pipelineProperties = pipelineProperties;
 		this.auditLogger = auditLogger;
+		this.loader = loader;
 		this.transactionTemplate = new TransactionTemplate(transactionManager);
 	}
 
@@ -169,6 +175,59 @@ public class AdminCaseImportService {
 			Instant finishedAt, List<Map<String, String>> stages) {
 		transactionTemplate.executeWithoutResult(ignored -> importRepository.findById(importId)
 			.ifPresent(managed -> managed.applyProgress(status, errorCode, message, finishedAt, stages)));
+	}
+
+	/**
+	 * A-14-1. 생성 결과를 사건으로 적재한다 (BE-93 2차).
+	 *
+	 * <p>관리자가 A-15에서 `SUCCEEDED`를 보고 누른다. <b>조회(A-15)가 아니라 별도 호출로 둔 이유</b>:
+	 * A-15는 2초마다 불리는 조회라 거기서 적재하면 같은 사건이 여러 번 만들어질 위험이 있다.
+	 *
+	 * <p>파이프라인 호출은 트랜잭션 밖에서 하고, 쓰기만 {@link CaseImportLoader}가 한 트랜잭션으로 묶는다.
+	 */
+	public CaseImportResponse loadImport(Long importId, AdminPrincipal admin, HttpServletRequest httpRequest) {
+		CaseImport entity = read(importId);
+		if (entity.isLoaded()) {
+			throw new BusinessException(ErrorCode.IMPORT_NOT_READY, "이미 사건으로 만든 등록입니다.");
+		}
+		if (entity.getStatus() != CaseImportStatus.SUCCEEDED) {
+			throw new BusinessException(ErrorCode.IMPORT_NOT_READY,
+				"아직 생성이 끝나지 않았습니다. 진행 상황을 먼저 확인해 주세요.");
+		}
+		PipelineResult result = fetchResult(entity.getJobId());
+
+		LegalCase legalCase = transactionTemplate.execute(status -> {
+			CaseImport managed = importRepository.findById(importId)
+				.orElseThrow(() -> new BusinessException(ErrorCode.IMPORT_NOT_FOUND));
+			LegalCase created = loader.load(managed, result);
+			managed.linkLoadedCase(created);
+			// 원문은 적재하면서 case_source로 옮겼다. 사건번호만 남겨 무엇이 만들어졌는지 추적한다
+			auditLogger.record(admin, AdminAuditAction.CASE_IMPORT_LOAD, AuditTargetType.CASE, created.getId(),
+				Map.of("importId", importId), httpRequest);
+			return created;
+		});
+		log.info("사건 등록 적재 완료: importId={}, caseId={}", importId, legalCase.getId());
+		// 적재가 끝났으니 파이프라인에 남은 판결문 원문을 치운다 (FR-5-3)
+		pipelineClient.deleteJobQuietly(entity.getJobId());
+		return getImport(importId);
+	}
+
+	private PipelineResult fetchResult(String jobId) {
+		PipelineResult result;
+		try {
+			result = pipelineClient.getResult(jobId);
+		} catch (PipelineException.NotFound e) {
+			throw new BusinessException(ErrorCode.IMPORT_NOT_READY,
+				"생성 결과가 사라졌습니다. 다시 등록해 주세요.");
+		} catch (PipelineException e) {
+			log.warn("생성 결과를 가져오지 못했습니다: {}", e.getMessage());
+			throw new BusinessException(ErrorCode.IMPORT_UNAVAILABLE, "생성 결과를 가져오지 못했습니다.");
+		}
+		if (!result.loadable()) {
+			throw new BusinessException(ErrorCode.IMPORT_RESULT_INVALID,
+				"생성 결과에 사건 또는 AI 판결이 없어 사건을 만들 수 없습니다.");
+		}
+		return result;
 	}
 
 	// ---------------------------------------------------------------- 검증

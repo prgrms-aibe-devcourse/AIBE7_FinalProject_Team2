@@ -49,4 +49,24 @@ public class CaseSource {
 	private String originalText;
 
 	private String note;
+
+	/**
+	 * 적재(BE-93 2차). 등록 요청에 들어온 판결문을 사건에 붙인다.
+	 *
+	 * <p>원문은 파이프라인이 돌려주지 않아(FR-5-3) 백엔드가 case_import_source에 들고 있던 값을 옮긴다.
+	 */
+	public static CaseSource of(LegalCase legalCase, CourtLevel courtLevel, String caseNumber, String courtName,
+			LocalDate decidedAt, boolean isFinal, String sourceOrg, String originalText, String note) {
+		CaseSource entity = new CaseSource();
+		entity.legalCase = legalCase;
+		entity.courtLevel = courtLevel;
+		entity.caseNumber = caseNumber;
+		entity.courtName = courtName;
+		entity.decidedAt = decidedAt;
+		entity.isFinal = isFinal;
+		entity.sourceOrg = sourceOrg;
+		entity.originalText = originalText;
+		entity.note = note;
+		return entity;
+	}
 }

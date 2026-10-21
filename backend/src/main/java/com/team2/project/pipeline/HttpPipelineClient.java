@@ -93,6 +93,24 @@ public class HttpPipelineClient implements PipelineClient {
 	}
 
 	@Override
+	public PipelineResult getResult(String jobId) {
+		requireEnabled();
+		try {
+			PipelineResult result = restClient.get().uri("/jobs/{jobId}/result", jobId)
+				.retrieve().body(PipelineResult.class);
+			if (result == null) {
+				throw new PipelineException("파이프라인 서비스가 빈 결과를 보냈습니다");
+			}
+			return result;
+		} catch (RestClientResponseException e) {
+			throw translate(e, "결과 조회");
+		} catch (RestClientException e) {
+			log.warn("파이프라인 서비스에 닿지 못했습니다 (결과 조회 jobId={}): {}", jobId, e.toString());
+			throw new PipelineException("파이프라인 서비스에 닿지 못했습니다", e);
+		}
+	}
+
+	@Override
 	public void deleteJobQuietly(String jobId) {
 		if (!enabled() || jobId == null || jobId.isBlank()) {
 			return;

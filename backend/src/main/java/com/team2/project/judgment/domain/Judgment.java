@@ -232,4 +232,40 @@ public class Judgment {
 	private static boolean isPositiveOrNull(Number value) {
 		return value == null || value.longValue() > 0;
 	}
+
+	/**
+	 * 적재(BE-93 2차): AI · 재판부 판결 후보를 만든다.
+	 *
+	 * <p><b>공개하지 않은 상태로 만든다</b>(`isPublished = false`). 관리자가 A-9에서 승인해야 공개 후보가
+	 * 된다 — 적재가 바로 공개하면 검수 흐름을 건너뛴다. 사용자 판결(userPre · userFinal)과 달리 체험에
+	 * 매이지 않으므로 experience는 없다.
+	 *
+	 * @param subjectType {@link SubjectType#AI} 또는 {@link SubjectType#COURT}
+	 */
+	public static Judgment candidate(LegalCase legalCase, SubjectType subjectType, PenaltyType penaltyType,
+			PenaltyType reducedTo, Integer prisonMonths, Long fineAmount, Integer suspensionMonths,
+			List<ExtraDisposition> extraDispositions, String summary, String reasoning, String plainExplanation,
+			String excerpt) {
+		if (subjectType != SubjectType.AI && subjectType != SubjectType.COURT) {
+			throw new InvalidJudgmentException(InvalidJudgmentException.Reason.MISSING_DIRECTION,
+				"적재로 만드는 판결은 AI 또는 COURT여야 합니다.");
+		}
+		validateFinalValues(penaltyType, reducedTo, prisonMonths, fineAmount, suspensionMonths);
+		Judgment judgment = new Judgment();
+		judgment.legalCase = legalCase;
+		judgment.subjectType = subjectType;
+		judgment.timing = Timing.FINAL;
+		judgment.penaltyType = penaltyType;
+		judgment.reducedTo = reducedTo;
+		judgment.prisonMonths = prisonMonths;
+		judgment.fineAmount = fineAmount;
+		judgment.suspensionMonths = suspensionMonths;
+		judgment.extraDispositions = extraDispositions;
+		judgment.summary = summary;
+		judgment.reasoning = reasoning;
+		judgment.plainExplanation = plainExplanation;
+		judgment.excerpt = excerpt;
+		judgment.isPublished = false;
+		return judgment;
+	}
 }
