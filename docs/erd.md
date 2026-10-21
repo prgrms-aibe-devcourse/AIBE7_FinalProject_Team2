@@ -37,6 +37,7 @@
 | v1.30 | 2026-10-21 | 출석 기록 테이블 추가 (**확장 단계**, BE-97 · V22) — `attendance` 신설(익명 사용자 × 출석 날짜, 기본 키 두 칼럼, 하루 한 줄). 9장 추가 |
 | v1.31 | 2026-10-21 | 프로필 꾸미기 테이블 추가 (**확장 단계**, BE-96 · V23) — `profile_deco` 신설(익명 사용자당 한 줄, 꾸미기 12칸 · `updated_at`). 도전과제 진행도는 저장하지 않고 계산한다. 10장 추가 |
 | v1.33 | 2026-10-21 | 회원 테이블 추가 (**확장 단계**, BE-62 · V25) — `member` 신설(공급자 · 공급자 회원번호만, 개인정보 없음, `(provider, provider_user_id)` 유일). `anonymous_user.member_id`에 FK(`fk_anonymous_user_member`) · 부분 인덱스 추가. 익명 기록 연결 규칙(공용 PC면 덮어쓰지 않고 새 익명 ID) |
+| v1.34 | 2026-10-21 | 사건 등록 작업 테이블 추가 (**확장 단계**, BE-93 1차 · V24) — `case_import`(작업 상태 · 마지막으로 받은 단계 상태) · `case_import_source`(등록 요청에 들어온 판결문) 신설. 원문을 `case_import_source.original_text`에 들고 있다가 적재 때 `case_source`로 옮기고 비운다 — 파이프라인 서비스가 원문을 돌려주지 않기 때문(FR-5-3, COMMON-50). 감사 로그 행동 `CASE_IMPORT` 추가(V24). 적재(`case_id` 채우기)는 BE-93 2차 (결정: `docs/decisions/BE-93.md`) |
 
 ---
 
@@ -348,6 +349,47 @@ S-05에서 보여 줄 형벌 선택지, 그리고 **선고 가능 범위 밖 판
 
 - 유니크 제약: `case_id` — 사건마다 신문 지면은 1건. 재생성은 새 행을 만들지 않고 덮어쓴다.
 - Gemini `generateContent` 한 번 호출로 `{headline, deck, caption, article}` JSON을 받아 그대로 채운다(`CasePaperService`).
+
+#### `case_import` · `case_import_source` — 사건 등록 작업 (BE-93, A-14 · A-15)
+
+관리자가 판결문을 넣으면 백엔드가 AI 판결 파이프라인 서비스(COMMON-50)에 작업을 맡기고 이 표로 추적한다.
+파이프라인은 수십 분 걸려서 요청을 기다리지 않고(202) 화면이 2초마다 진행 상황을 묻는다.
+
+| 컬럼 | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| id | bigint PK | ✓ |  |
+| job_id | varchar(32) | ✓ | 파이프라인 서비스의 작업 ID. 유니크 |
+| status | varchar(20) | ✓ | `QUEUED` · `RUNNING` · `SUCCEEDED` · `FAILED` |
+| crime_type | varchar(20) | ✓ | `MURDER` · `FRAUD` · `INJURY` |
+| case_id | bigint FK |  | 적재가 끝나면 채워진다 (BE-93 2차). 1차에는 `SUCCEEDED`여도 NULL |
+| error_code | varchar(50) |  |  |
+| message | varchar(500) |  | 실패 사유. **원문 · 모델 출력을 담지 않는다** |
+| stages | jsonb |  | 파이프라인에서 마지막으로 받은 단계 상태 `[{name, status}, ...]` |
+| created_at | timestamptz | ✓ |  |
+| finished_at | timestamptz |  |  |
+
+- **진행 상황의 출처는 파이프라인의 `state.json` 하나다.** 백엔드는 받아 적기만 한다(COMMON-50과 같은 원칙).
+  `stages`를 저장해 두는 이유는, 끝난 작업은 파이프라인에 다시 묻지 않는데 화면은 나중에 다시 열릴 수 있어서다 —
+  그때 "모두 PENDING"처럼 사실과 다른 값을 보여주지 않기 위해서다.
+
+| 컬럼 (`case_import_source`) | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| id | bigint PK | ✓ |  |
+| import_id | bigint FK | ✓ | `ON DELETE CASCADE` |
+| court_level | varchar(20) | ✓ | `FIRST` · `APPEAL` · `SUPREME`. (`import_id`, `court_level`) 유니크 — 한 등록에 같은 심급은 한 번 |
+| case_number | varchar(50) | ✓ |  |
+| court_name | varchar(50) |  |  |
+| decided_at | date |  |  |
+| is_final | boolean | ✓ | 최종 확정 판결 여부 |
+| source_org | varchar(50) |  | `case_source`와 달리 NULL 허용 — A-14에서 선택 값이고 적재할 때 기본값을 채운다 |
+| original_text | text |  | **판결문 원문.** 적재가 끝나면 비운다 (아래) |
+| note | text |  |  |
+| display_order | int | ✓ | 요청에 들어온 순서 |
+
+- 적재할 때 `case_source`로 옮기므로 컬럼을 그 표와 맞춰 두었다.
+- **원문을 여기에 두는 이유**: 파이프라인 서비스는 원문을 결과로 돌려주지 않는데(FR-5-3, COMMON-50)
+  `case_source.original_text`에는 원문이 필요하다. 서비스 쪽 경계를 무르게 만드는 대신, A-14에서 이미 받은
+  원문을 백엔드가 들고 있다가 옮긴다. 옮긴 뒤에는 비워 두 벌로 남기지 않는다 (결정: `docs/decisions/BE-93.md`).
 
 #### `sentencing_guideline` — 양형기준 버전
 
