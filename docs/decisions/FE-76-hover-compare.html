@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FE-76 호버 패턴 비교</title>
+<link rel="stylesheet" href="../../frontend/src/style.css"> <!-- 실제 토큰을 그대로 읽는다. 저장소 어디서든 이 상대 경로가 유지돼야 한다 -->
+<style>
+  /* 비교 페이지 전용. 색은 실제 style.css 토큰을 그대로 쓴다 */
+  body { background: var(--color-bg); color: var(--color-text); font: var(--text-body)/1.6 var(--font-body); margin: 0; padding: 24px 20px 120px; }
+  main { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 26px; margin: 0 0 4px; }
+  h2 { font: 800 20px/1.4 var(--font-heading); margin: 48px 0 6px; padding-top: 16px; border-top: 1px solid var(--color-border); color: var(--color-heading); }
+  h3 { font-size: 14px; margin: 20px 0 8px; color: var(--color-muted); }
+  p.note { margin: 0 0 12px; color: var(--color-muted); font-size: 14px; }
+  code { font-size: 12px; background: var(--color-surface); padding: 1px 5px; border-radius: 3px; }
+  .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: stretch; }
+  .stage { padding: 20px; border-radius: 8px; border: 1px solid var(--color-border); }
+  .stage > h4 { margin: 0 0 12px; font-size: 12px; color: var(--color-muted); font-weight: 700; }
+  .on-card { background: var(--color-card); }
+  .on-paper { background: var(--color-paper); }
+  .on-felt { background: var(--color-desk-pad); color: var(--color-desk-sheet); border-color: var(--color-desk-pad-edge); }
+  .on-felt > h4 { color: var(--color-banner-muted); }
+  .on-wood { background: linear-gradient(180deg, var(--color-desk-wood-light), var(--color-desk-wood) 40%, var(--color-desk-wood-dark)); border-color: transparent; color: var(--color-desk-text); }
+  .on-wood > h4 { color: var(--color-desk-text); }
+  .on-navy { background: var(--color-banner-bg); color: var(--color-banner-muted); }
+  .badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px; margin-left: 6px; vertical-align: middle; }
+  .ok { background: #e3f1e6; color: #1d5a2b; } .gap { background: var(--color-danger-tint); color: var(--color-danger); } .new { background: var(--color-accent-tint); color: var(--color-accent-text); }
+  .lbl { font-size: 11px; color: var(--color-muted); margin-top: 4px; display: block; }
+  .on-felt .lbl, .on-navy .lbl, .on-wood .lbl { color: var(--color-banner-muted); }
+
+  /* P1 버튼 — 호버 전부 0.15s ease-out */
+  .btn { min-height: 44px; padding: 10px 18px; border: 1px solid var(--color-border); border-radius: 4px; font: inherit; font-weight: 700; cursor: pointer; transition: background-color .15s ease-out, border-color .15s ease-out; }
+  .btn.primary { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-on-accent); }
+  .btn.primary:hover { background: var(--color-accent-hover); border-color: var(--color-accent-hover); }
+  .btn.secondary { background: var(--color-card); border-color: var(--color-border-strong); color: var(--color-text); }
+  .btn.secondary:hover { background: var(--color-surface); }
+  .felt .btn.primary { background: var(--color-desk-sheet); border-color: var(--color-desk-sheet); color: var(--color-desk-pad); }
+  .felt .btn.primary:hover { background: var(--color-card); border-color: var(--color-card); }
+  .felt .btn.secondary { background: transparent; border-color: var(--color-banner-muted); color: var(--color-desk-sheet); }
+  .felt .btn.secondary:hover { background: color-mix(in srgb, var(--color-desk-sheet) 10%, transparent); }
+  .btn.kakao { background: var(--color-kakao); border-color: var(--color-kakao); color: color-mix(in srgb, var(--color-on-kakao) 85%, transparent); }
+  .btn.kakao:hover { background: color-mix(in srgb, var(--color-kakao) 88%, #fff); border-color: transparent; }
+  .btn:disabled, .btn[aria-disabled="true"] { opacity: .6; cursor: default; }
+  .btn:disabled:hover { background: var(--color-card); }
+
+  /* P2 면 단위 항목: 틴트 후보 */
+  .tintlist { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+  .tintlist li { padding: 9px 12px; border-radius: 6px; cursor: pointer; transition: background-color .15s ease-out; font-size: 14px; }
+  .t-surface li:hover { background: var(--color-surface); }
+  .t-accent li:hover { background: var(--color-accent-tint); }
+  .t-k14 li:hover { background: color-mix(in srgb, var(--color-desk-kraft) 14%, transparent); }
+  .t-k16 li:hover { background: color-mix(in srgb, var(--color-desk-kraft) 16%, transparent); }
+  .t-k28 li:hover { background: color-mix(in srgb, var(--color-desk-kraft) 28%, transparent); }
+  .t-text8 li:hover { background: color-mix(in srgb, var(--color-text) 8%, transparent); }
+  .tintcol { flex: 1 1 150px; min-width: 150px; }
+
+  /* P3 선택지 */
+  .opt { display: block; width: 100%; text-align: left; padding: 10px 14px; margin-bottom: 6px; border: 1px solid var(--color-border-strong); border-radius: 6px; background: var(--color-card); font: inherit; cursor: pointer; transition: border-color .15s ease-out, background-color .15s ease-out; }
+  .o-navy:hover { border-color: var(--color-stage-ink); background: var(--color-paper); }
+  .o-heading:hover { border-color: var(--color-heading); background: color-mix(in srgb, var(--color-heading) 6%, transparent); }
+  .o-final:hover { border-color: var(--color-heading); background: color-mix(in srgb, var(--color-desk-kraft) 16%, transparent); }
+  .o-accent:hover { border-color: var(--color-accent); background: var(--color-accent-tint); }
+
+  /* P4 글자 링크 */
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--color-border); vertical-align: middle; }
+  th { font-size: 12px; color: var(--color-muted); }
+  td.src { font-size: 12px; color: var(--color-muted); white-space: nowrap; }
+  .lk { background: none; border: 0; padding: 4px 0; font: inherit; color: var(--color-text); cursor: pointer; text-decoration: none; }
+  .cur-base { text-decoration: underline; text-underline-offset: 3px; } .cur-base:hover { opacity: .75; }
+  .cur-hov:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .cur-color { color: var(--color-muted); } .cur-color:hover { color: var(--color-heading); }
+  .prop:hover { text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+  .on-felt .lk, .on-wood .lk { color: inherit; }
+
+  /* P5 헤더 메뉴 */
+  .nav { display: flex; gap: 18px; }
+  .nav button { background: none; border: 0; padding: 8px 2px; font: inherit; color: var(--color-banner-muted); cursor: pointer; transition: color .15s ease-out; }
+  .nav button:hover { color: var(--color-banner-text); }
+  .nav button[aria-disabled="true"] { cursor: default; opacity: .6; }
+  .nav button[aria-disabled="true"]:hover { color: var(--color-banner-muted); }
+
+  /* P7 예외 연출 */
+  .demo { display: inline-grid; place-items: center; width: 140px; min-height: 90px; padding: 10px; border-radius: 8px; text-align: center; font-size: 13px; cursor: pointer; border: 1px solid var(--color-border); background: var(--color-card); color: var(--color-text); }
+  .demo .lbl { color: var(--color-muted); }
+  .d-obj { background: var(--color-desk-news); border-color: transparent; filter: drop-shadow(9px 11px 7px color-mix(in srgb, var(--color-desk-shadow) 42%, transparent)); transition: filter .2s ease-out; }
+  .d-obj:hover { filter: drop-shadow(12px 16px 10px color-mix(in srgb, var(--color-desk-shadow) 50%, transparent)) brightness(1.13) saturate(1.06); }
+  .d-lift { transition: transform .2s cubic-bezier(.2, .8, .2, 1), box-shadow .2s; } .d-lift:hover { transform: translateY(-3px); box-shadow: 0 8px 14px color-mix(in srgb, var(--color-desk-shadow) 22%, transparent); } .d-lift:active { transform: translateY(1px); }
+  .d-letter { background: var(--color-desk-sheet); transition: translate .15s, box-shadow .15s; } .d-letter:hover { translate: 0 -6px; box-shadow: 0 14px 18px color-mix(in srgb, var(--color-desk-shadow) 30%, transparent); }
+  .d-tab { border-radius: 8px 8px 0 0; background: var(--color-desk-kraft); transition: transform .12s; } .d-tab:hover { transform: translateY(1px); }
+  .d-star { font-size: 30px; background: none; border: 0; width: auto; min-height: 0; color: var(--color-decor); transition: scale .15s; } .d-star:hover { scale: 1.12; }
+  .d-ring { transition: box-shadow .15s; } .d-ring:hover { box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-label) 45%, transparent); }
+  @keyframes wave { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(2deg); } 75% { transform: rotate(-2deg); } }
+  .d-curl:hover { animation: wave 1.4s ease-in-out infinite; }
+  .d-press { transition: scale .12s cubic-bezier(.2, .8, .2, 1); } .d-press:active { scale: .96; }
+  .d-like { background: none; border: 0; width: auto; min-height: 0; font-size: 26px; } .d-like:active span { display: inline-block; scale: .86; }
+  .tip { position: relative; display: inline-block; }
+  .tip .dot { width: 14px; height: 14px; border-radius: 50%; background: var(--color-accent); display: inline-block; cursor: pointer; padding: 0; border: 0; }
+  .tip .bubble { position: absolute; left: 50%; bottom: 140%; transform: translateX(-50%); white-space: nowrap; background: var(--color-text); color: #fff; font-size: 12px; padding: 4px 8px; border-radius: 4px; opacity: 0; pointer-events: none; transition: opacity .12s; }
+  .tip:hover .bubble, .tip:focus-within .bubble { opacity: 1; }
+  .linkpair { position: relative; display: flex; gap: 20px; }
+  .linkpair:has(.pen:hover) .card2 { filter: brightness(1.13); }
+  .pen, .card2 { width: 110px; min-height: 70px; display: grid; place-items: center; border-radius: 6px; background: var(--color-desk-pen); color: #fff; font-size: 12px; cursor: pointer; transition: filter .2s; }
+  .card2 { background: var(--color-desk-sheet); color: var(--color-text); }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>호버 패턴 비교 (FE-76)</h1>
+  <p class="note"><b>확정 결과 (2026-10-22)</b> · P1 버튼은 배경만 변함 · P2 면 단위 항목 틴트는 <b>kraft 16%</b> 하나 · P3 선택지는 <b>테두리 heading + 틴트 kraft 16%</b> · P4 글자 링크는 <b>전부 "평소 밑줄 없음 · 호버 밑줄 3px"</b>(<b>임시 확정</b>, 추후 수정 예정) · P5~P7은 아래 설명대로. 이 페이지는 결정 과정을 보존한 비교용이고, 규칙의 기준은 <code>docs/decisions/FE-76.md</code>입니다. 열 때는 저장소의 <code>frontend/src/style.css</code>를 상대 경로로 읽으므로 저장소 안에서 열어야 합니다(<code>npx vite</code> 없이 파일을 바로 열어도 됩니다).</p>
+  <p class="note">각 칸 위에 마우스를 올려 보세요. 색과 간격은 실제 <code>style.css</code> 토큰을 그대로 씁니다. <span class="badge ok">맞음</span> 지금 코드와 같음 · <span class="badge gap">차이</span> 지금 코드와 다름 · <span class="badge new">추가</span> 이번에 새로 찾은 것</p>
+
+  <h2>P1. 버튼 — 배경색만 한 단계 변함</h2>
+  <p class="note">크기와 위치는 그대로, 배경에서 멀어지는 방향. 눌림은 <code>scale .96</code>(전역). 비활성은 반응 없음.</p>
+  <div class="row">
+    <div class="stage on-card"><h4>흰 카드 위 (style.css · landing.css · review.css)</h4>
+      <button class="btn primary">주 버튼</button> <button class="btn secondary">보조 버튼</button> <button class="btn secondary" disabled>비활성</button></div>
+    <div class="stage on-felt felt"><h4>펠트 패드 위 (login.css)</h4>
+      <button class="btn primary">주 버튼</button> <button class="btn secondary">보조 버튼</button> <button class="btn kakao">카카오</button></div>
+  </div>
+
+  <h2>P2. 면 단위 항목 — 옅은 틴트 후보 6가지</h2>
+  <p class="note">목록 줄·카드·필터·메뉴 줄에 쓰이는 틴트가 코드에 4~5가지로 흩어져 있습니다. 같은 목록으로 비교해 보세요. 제안은 <b>surface</b>(중립 면)와 <b>kraft 16%</b>(책상·종이 계열)입니다.</p>
+  <h3>흰 카드 위</h3>
+  <div class="stage on-card"><div class="row">
+    <div class="tintcol"><span class="lbl">surface <span class="badge new">제안</span></span><ul class="tintlist t-surface"><li>첫째 줄</li><li>둘째 줄</li><li>셋째 줄</li></ul></div>
+    <div class="tintcol"><span class="lbl">accent-tint (admin 메뉴)</span><ul class="tintlist t-accent"><li>첫째 줄</li><li>둘째 줄</li><li>셋째 줄</li></ul></div>
+    <div class="tintcol"><span class="lbl">kraft 14% (사건 목록)</span><ul class="tintlist t-k14"><li>첫째 줄</li><li>둘째 줄</li><li>셋째 줄</li></ul></div>
+    <div class="tintcol"><span class="lbl">kraft 16% (지면 귀 · tp-move) <span class="badge new">제안</span></span><ul class="tintlist t-k16"><li>첫째 줄</li><li>둘째 줄</li><li>셋째 줄</li></ul></div>
+    <div class="tintcol"><span class="lbl">kraft 28% (ear-button)</span><ul class="tintlist t-k28"><li>첫째 줄</li><li>둘째 줄</li><li>셋째 줄</li></ul></div>
+    <div class="tintcol"><span class="lbl">글자색 8% (tp-option)</span><ul class="tintlist t-text8"><li>첫째 줄</li><li>둘째 줄</li><li>셋째 줄</li></ul></div>
+  </div></div>
+  <h3>신문지 · 종이 위</h3>
+  <div class="stage on-paper"><div class="row">
+    <div class="tintcol"><span class="lbl">surface</span><ul class="tintlist t-surface"><li>첫째 줄</li><li>둘째 줄</li><li>셋째 줄</li></ul></div>
+    <div class="tintcol"><span class="lbl">accent-tint</span><ul class="tintlist t-accent"><li>첫째 줄</li><li>둘째 줄</li><li>셋째 줄</li></ul></div>
+    <div class="tintcol"><span class="lbl">kraft 14%</span><ul class="tintlist t-k14"><li>첫째 줄</li><li>둘째 줄</li><li>셋째 줄</li></ul></div>
+    <div class="tintcol"><span class="lbl">kraft 16% <span class="badge new">제안</span></span><ul class="tintlist t-k16"><li>첫째 줄</li><li>둘째 줄</li><li>셋째 줄</li></ul></div>
+    <div class="tintcol"><span class="lbl">kraft 28%</span><ul class="tintlist t-k28"><li>첫째 줄</li><li>둘째 줄</li><li>셋째 줄</li></ul></div>
+    <div class="tintcol"><span class="lbl">글자색 8%</span><ul class="tintlist t-text8"><li>첫째 줄</li><li>둘째 줄</li><li>셋째 줄</li></ul></div>
+  </div></div>
+
+  <h2>P3. 선택지 — 테두리 강조 + 옅은 틴트</h2>
+  <p class="note">고르는 칸. 테두리 색이 코드에 <code>navy</code>(stage-ink <code>#1c2b4f</code>), <code>heading</code>(<code>#101d39</code>), <code>accent</code>(<code>#1f3563</code>) 셋으로 갈리지만 모두 어두운 네이비라 눈으로는 거의 구분되지 않습니다. 실제로 갈리는 것은 틴트이고, 확정은 오른쪽 칸입니다.</p>
+  <div class="row">
+    <div class="stage on-card" style="flex:1 1 220px"><h4>navy (stage.css range-option)</h4><button class="opt o-navy">선택지 가</button><button class="opt o-navy">선택지 나</button></div>
+    <div class="stage on-card" style="flex:1 1 220px"><h4>heading (personality answer-cell) <span class="badge new">제안</span></h4><button class="opt o-heading">선택지 가</button><button class="opt o-heading">선택지 나</button></div>
+    <div class="stage on-card" style="flex:1 1 220px"><h4>accent (admin-card)</h4><button class="opt o-accent">선택지 가</button><button class="opt o-accent">선택지 나</button></div>
+    <div class="stage on-card" style="flex:1 1 220px"><h4>확정: 테두리 heading + 틴트 kraft 16% <span class="badge ok">확정</span></h4><button class="opt o-final">선택지 가</button><button class="opt o-final">선택지 나</button></div>
+  </div>
+
+  <h2>P4. 글자 링크 — 호버에서 밑줄 (일단 전부 적용)</h2>
+  <p class="note">"하나씩 보고 확인"하도록 글자 링크 전부에 호버 밑줄을 넣었습니다. 왼쪽이 <b>현재</b>, 오른쪽이 <b>제안</b>(평소 밑줄 없음 · 호버 밑줄 3px)입니다. 항목마다 마음에 드는지 보고 예외로 남길 것을 골라 주세요.</p>
+  <table>
+    <thead><tr><th>요소</th><th>파일</th><th>현재 동작</th><th>현재(체험)</th><th>제안(체험)</th></tr></thead>
+    <tbody>
+      <tr><td>paper-link <span class="badge ok">맞음</span></td><td class="src">caseList.css</td><td>호버 밑줄 4px</td><td><button class="lk cur-hov">전체 사건 보기</button></td><td><button class="lk prop">전체 사건 보기</button></td></tr>
+      <tr><td>.start (사건 목록) <span class="badge ok">맞음</span></td><td class="src">caseList.css</td><td>호버 밑줄 + 제목색 4px</td><td><button class="lk cur-hov">체험 시작</button></td><td><button class="lk prop">체험 시작</button></td></tr>
+      <tr><td>case-review-back <span class="badge ok">맞음</span></td><td class="src">caseReview.css</td><td>호버 밑줄</td><td><button class="lk cur-hov">← 돌아가기</button></td><td><button class="lk prop">← 돌아가기</button></td></tr>
+      <tr><td>cm-post-title a <span class="badge ok">맞음</span></td><td class="src">community.css</td><td>호버 밑줄 3px</td><td><button class="lk cur-hov">제목이 긴 커뮤니티 글</button></td><td><button class="lk prop">제목이 긴 커뮤니티 글</button></td></tr>
+      <tr><td>cm-popular-list a <span class="badge ok">맞음</span></td><td class="src">community.css</td><td>호버 밑줄 3px</td><td><button class="lk cur-hov">인기 글 제목</button></td><td><button class="lk prop">인기 글 제목</button></td></tr>
+      <tr><td>sheet-cast-link <span class="badge ok">맞음</span></td><td class="src">stage.css</td><td>호버 밑줄 3px</td><td><button class="lk cur-hov">등장인물 이름</button></td><td><button class="lk prop">등장인물 이름</button></td></tr>
+      <tr><td>login-link <span class="badge gap">차이</span></td><td class="src">login.css</td><td>평소 밑줄, 호버 변화 없음</td><td><button class="lk cur-base">회원가입</button></td><td><button class="lk prop">회원가입</button></td></tr>
+      <tr><td>footer-link <span class="badge gap">차이</span></td><td class="src">landing.css</td><td>평소 밑줄, 호버 opacity .75</td><td><button class="lk cur-base">이용약관</button></td><td><button class="lk prop">이용약관</button></td></tr>
+      <tr><td>admin-link <span class="badge gap">차이</span></td><td class="src">admin.css</td><td>평소 밑줄</td><td><button class="lk cur-base">관리자 링크</button></td><td><button class="lk prop">관리자 링크</button></td></tr>
+      <tr><td>cm-text-button <span class="badge gap">차이</span></td><td class="src">community.css</td><td>평소 밑줄</td><td><button class="lk cur-base">답글 달기</button></td><td><button class="lk prop">답글 달기</button></td></tr>
+      <tr><td>stage-skip <span class="badge gap">차이</span></td><td class="src">stage.css</td><td>평소 밑줄, 호버 글자색</td><td><button class="lk cur-base">대사 건너뛰기</button></td><td><button class="lk prop">대사 건너뛰기</button></td></tr>
+      <tr><td>result-turn-button <span class="badge gap">차이</span></td><td class="src">personality.css</td><td>투명 밑줄 → 호버에서 나타남</td><td><button class="lk cur-hov">다시 해보기</button></td><td><button class="lk prop">다시 해보기</button></td></tr>
+      <tr><td>my-back <span class="badge gap">차이</span></td><td class="src">myPage.css</td><td>호버 글자색만 변함</td><td><button class="lk cur-color">← 마이페이지</button></td><td><button class="lk prop">← 마이페이지</button></td></tr>
+      <tr><td>page-index-item · act-jump <span class="badge gap">차이</span></td><td class="src">paperStage · stage.css</td><td>호버 글자색만 변함</td><td><button class="lk cur-color">쪽 목차 항목</button></td><td><button class="lk prop">쪽 목차 항목</button></td></tr>
+    </tbody>
+  </table>
+
+  <h2>P5. 헤더 메뉴 — 글자색만 변함</h2>
+  <div class="stage on-navy"><h4>style.css nav-button</h4>
+    <div class="nav"><button>사건 목록</button><button>성향 테스트</button><button>커뮤니티</button><button aria-disabled="true">준비 중 메뉴</button></div>
+    <span class="lbl">마지막은 비활성 — 호버 반응 없음(P6)</span></div>
+
+  <h2>P6. 비활성 · 준비 중 — 반응 없음</h2>
+  <p class="note">위 P1의 비활성 버튼과 P5의 마지막 메뉴가 같은 규칙입니다. 비활성 모양(<code>opacity</code>)은 지금 .6(8곳)·.55·.5·.45가 섞여 있습니다. 제안은 .6.</p>
+
+  <h2>P7. 예외 연출 <span class="badge ok">기존</span> + <span class="badge new">이번에 더 찾은 것</span></h2>
+  <p class="note">규칙에서 벗어나지만 의도된 호버·눌림입니다. 조건: 호버 가드(<code>@media (hover: hover)</code>) 안에서만, <code>prefers-reduced-motion</code> 때는 끔, 비활성이면 반응 없음.</p>
+  <h3>기존 (59개 호버 점검에서 확인)</h3>
+  <div class="stage on-wood"><h4>책상 위</h4><div class="row" style="align-items:center">
+    <div class="demo d-obj"><span>책상 물건<br><span class="lbl">밝기 1.13 + 그림자</span></span></div>
+    <div class="linkpair"><div class="pen">펜 (호버)</div><div class="card2">엽서 (같이 반응)</div></div>
+  </div></div>
+  <div class="stage on-card" style="margin-top:12px"><div class="row" style="align-items:flex-end">
+    <div class="demo d-lift">카드 들어올림<span class="lbl">-3px · 눌리면 1px</span></div>
+    <div class="demo d-letter">8막 편지 들어올림<span class="lbl">-6px + 그림자</span></div>
+    <div class="demo d-tab">폴더 탭 눌림<span class="lbl">1px 아래로</span></div>
+    <div class="demo d-star">★ 별 확대<span class="lbl">scale 1.12</span></div>
+    <div class="demo d-curl">폴더 말림<span class="lbl">물결 애니메이션</span></div>
+    <div class="demo d-ring">고리 강조<span class="lbl">테두리 고리</span></div>
+  </div></div>
+  <h3>이번에 더 찾은 것</h3>
+  <div class="stage on-card"><div class="row" style="align-items:flex-end">
+    <div class="demo d-press">버튼 눌림 (전역)<span class="lbl">:active scale .96 — 누르고 있어 보세요</span></div>
+    <button class="demo d-like"><span>♥</span><span class="lbl">좋아요 눌림 scale .86 <span class="badge new">추가</span></span></button>
+    <div class="demo" style="cursor:default">차트 점 툴팁<br>
+      <span class="tip"><button class="dot" aria-label="점"></button><span class="bubble">3회차 · 관용 62%</span></span>
+      <span class="lbl">JS pointerenter (터치는 누르면) <span class="badge new">추가</span></span></div>
+    <div class="demo" title="선고할 수 없는 구간">브라우저 기본 툴팁<span class="lbl"><code>title</code> 속성 3곳 <span class="badge new">추가</span></span></div>
+  </div></div>
+  <p class="note" style="margin-top:10px">더 찾은 것의 위치: 좋아요 눌림 <code>community.css .cm-like:active</code>, 폴더 말림 눌림 <code>verdict.css .folder-curl:active scale .96</code>, 마이페이지 카드 눌림 <code>translateY 1px</code>, 책상 엽서·펜 연동 호버(<code>:has(.obj-pen:hover)</code>와 <code>:focus-visible</code> 짝), 마이페이지 차트 점 툴팁(<code>myPage.js pointerenter / pointerdown</code>), 브라우저 기본 툴팁 3곳(<code>recommendedRangeBar.js</code> 2곳 · <code>stage.js</code> 1곳). 판결의 <code>is-off</code> 비활성은 opacity .55 + grayscale + <code>cursor: not-allowed</code>라 위 .6과 다릅니다.</p>
+</main>
+</body>
+</html>
