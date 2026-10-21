@@ -15,6 +15,21 @@
   --color-accent-hover: var(--palette-coffee-900);
   --color-accent-tint: var(--palette-coffee-50);
   --color-accent-text: var(--palette-coffee-600);
+  /* 대표 이미지 카드 꾸미기(FE-68) 색. 팔레트 값은 여기서만 꺼내 쓴다 */
+  --deco-drop: 0 1px 0 var(--color-border), 0 10px 20px color-mix(in srgb, var(--color-heading) 14%, transparent);
+  --deco-wood: var(--palette-bronze-700);
+  --deco-wood-light: var(--palette-bronze-500);
+  --deco-gold: var(--palette-pen-gold);
+  --deco-navy: var(--palette-navy-900);
+  --deco-navy-soft: var(--palette-navy-700);
+  --deco-night-line: var(--palette-navy-200);
+  --deco-news: var(--palette-news);
+  --deco-news-line: var(--palette-news-sheet-1);
+  --deco-news-ink: var(--palette-news-ink);
+  --deco-linen: var(--palette-paper-0);
+  --deco-linen-line: color-mix(in srgb, var(--palette-coffee-100) 40%, transparent);
+  --deco-sash-wine: var(--palette-red-700);
+  --deco-sash-green: var(--palette-judge-court);
   max-width: var(--content-width);
   margin: 0 auto;
   border: 1px solid var(--color-border);
@@ -55,9 +70,11 @@ body[data-theme="coffee"] .site-footer { background: var(--palette-coffee-50); b
 .my-card:active { transform: translateY(1px); }
 .my-card:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 3px; }
 @media (hover: hover) and (pointer: fine) { .my-card:hover { transform: translateY(-3px); } }
-.my-card { grid-template-rows: 2.8em minmax(0, 1fr) 3.6em; gap: 8px; padding: 16px 14px 12px; } /* 위 이름 · 가운데 그림 창 · 아래 한 줄 — 두 카드가 같은 칸이라 그림 크기가 같다 */
+.my-card { grid-template-rows: 2.8em minmax(0, 1fr) 3.6em; gap: 8px; padding: 16px 14px 12px; container-type: inline-size; } /* 위 이름 · 가운데 그림 창 · 아래 한 줄 — 두 카드가 같은 칸이라 그림 크기가 같다 */
 .my-card.is-profile { background: linear-gradient(180deg, var(--color-card), var(--color-surface)); }
-.my-card-name { display: grid; align-items: center; margin: 0; font: 900 var(--text-title-3)/1.3 var(--font-heading); letter-spacing: -.02em; text-wrap: balance; color: inherit; }
+/* 카드 안 글자 · 책갈피는 카드 폭에 비례한다(FE-68). cqi = 카드 안쪽 폭(테두리 · 좌우 여백 제외)의 1%라, 200px 카드(안쪽 170px)에서 1cqi = 1.7px이고 지금 px 크기와 같다.
+   모바일 2열(카드 170px)에서도 같은 비율로 줄어 닉네임이 잘리지 않는다 */
+.my-card-name { display: grid; align-items: center; margin: 0; font: 900 10.6cqi/1.3 var(--font-heading); letter-spacing: -.02em; text-wrap: balance; color: inherit; }
 .my-card-window { position: relative; display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); place-items: end center; min-height: 0; border-radius: 999px 999px 8px 8px; background: var(--color-surface); border: 1px solid color-mix(in srgb, var(--color-border-strong) 70%, transparent); overflow: hidden; }
 /* 행 · 열을 창 크기에 묶어(위 grid-template) 그림의 100%가 창 크기로 풀리게 한다(FE-67). 묶지 않으면 행이 그림 원래 높이로 늘어나 contain이 듣지 않고 아래가 잘렸다 */
 .my-card-window img { box-sizing: border-box; width: 100%; height: 100%; min-height: 0; padding: 22px 8px 0; object-fit: contain; object-position: bottom; }
@@ -66,7 +83,7 @@ body[data-theme="coffee"] .site-footer { background: var(--palette-coffee-50); b
 .my-card-window img.is-fitted { position: absolute; max-width: none; padding: 0; object-fit: fill; }
 .my-card-window img.is-fitting { visibility: hidden; }
 .my-card-window strong { align-self: center; font: 900 var(--text-title-2)/1 var(--font-heading); color: var(--color-heading); }
-.my-card-note { display: grid; align-items: center; margin: 0; padding: 4px 4px 0; color: var(--color-muted); font: 400 var(--text-caption)/1.45 var(--font-article); text-wrap: balance; }
+.my-card-note { display: grid; align-items: center; margin: 0; padding: 4px 4px 0; color: var(--color-muted); font: 400 7cqi/1.45 var(--font-article); text-wrap: balance; }
 .my-profile-face.is-missing { visibility: hidden; }
 
 /* 성향카드: 타로카드 모티브 — 어두운 바탕 · 이중 테두리 · 위 이름 띠 · 아치형 그림 창 · 아래 대사 띠 · 모서리 별 */
@@ -89,6 +106,82 @@ body[data-theme="coffee"] .site-footer { background: var(--palette-coffee-50); b
 .my-stat dd { margin: 0; font: 700 var(--text-body)/1.4 var(--font-heading); color: var(--color-heading); font-variant-numeric: tabular-nums; }
 .my-card.is-type .my-card-window { border-color: color-mix(in srgb, var(--color-card) 60%, transparent); }
 .my-card.is-type .my-card-note.my-type-quote { color: inherit; border-top: 1px solid color-mix(in srgb, var(--color-card) 40%, transparent); }
+
+/* ── 대표 이미지 카드 꾸미기(FE-68): 테두리 .deco-frame-* · 배경 .deco-bg-* — 첫 화면 카드 · 미리 보기 · 견본(.my-mini-card)이 함께 쓴다.
+   :is()로 묶어 .my-card.is-profile(배경)보다 뒤에서 이긴다. 기본 테두리(basic) · 크림 배경(cream)은 원래 모양 그대로다 ── */
+.my-mini-card {
+  position: relative; display: block; width: 56px; aspect-ratio: 7 / 12; border: 1px solid var(--color-border-strong); border-radius: 8px;
+  background: linear-gradient(180deg, var(--color-card), var(--color-surface));
+}
+:is(.my-card, .my-mini-card)[class*="deco-frame-"]:not(.deco-frame-basic)::before { content: ''; position: absolute; pointer-events: none; }
+:is(.my-card, .my-mini-card).deco-frame-wood { border: 3px solid var(--deco-wood); box-shadow: inset 0 0 0 2px var(--deco-wood-light), var(--deco-drop); }
+:is(.my-card, .my-mini-card).deco-frame-wood::before { display: none; }
+:is(.my-card, .my-mini-card).deco-frame-gold { border: 2px solid var(--deco-gold); }
+:is(.my-card, .my-mini-card).deco-frame-gold::before { inset: 5px; border: 1px solid var(--deco-gold); border-radius: 10px; }
+:is(.my-card, .my-mini-card).deco-frame-navy { border: 2px solid var(--deco-navy); }
+:is(.my-card, .my-mini-card).deco-frame-navy::before { inset: 5px; border: 3px double var(--deco-navy-soft); border-radius: 10px; }
+:is(.my-card, .my-mini-card).deco-frame-stitch { border: 1px solid var(--color-border-strong); }
+:is(.my-card, .my-mini-card).deco-frame-stitch::before { inset: 5px; border: 2px dashed var(--color-accent); border-radius: 10px; }
+.my-mini-card[class*="deco-frame-"]::before { inset: 3px; border-radius: 5px; }
+
+:is(.my-card, .my-mini-card).deco-bg-latte {
+  background: radial-gradient(circle at 50% 46%, var(--color-card) 0 20%, var(--palette-coffee-100) 21% 29%, var(--color-card) 30% 34%, var(--palette-coffee-100) 35% 52%, var(--palette-coffee-200) 53%);
+}
+:is(.my-card, .my-mini-card).deco-bg-tarot {
+  background:
+    radial-gradient(1px 1px at 18% 22%, var(--color-card), transparent),
+    radial-gradient(1px 1px at 78% 14%, var(--color-card), transparent),
+    radial-gradient(1.5px 1.5px at 84% 70%, var(--color-card), transparent),
+    radial-gradient(1px 1px at 12% 82%, var(--color-card), transparent),
+    radial-gradient(ellipse at 50% 30%, var(--deco-navy-soft), var(--deco-navy) 75%);
+  color: var(--color-card);
+}
+:is(.my-card, .my-mini-card).deco-bg-news {
+  background: repeating-linear-gradient(180deg, transparent 0 7px, var(--deco-news-line) 7px 8px), var(--deco-news);
+  color: var(--deco-news-ink);
+}
+:is(.my-card, .my-mini-card).deco-bg-linen {
+  background: repeating-linear-gradient(90deg, var(--deco-linen-line) 0 6px, transparent 6px 12px), repeating-linear-gradient(180deg, var(--deco-linen-line) 0 6px, transparent 6px 12px), var(--deco-linen);
+}
+.my-card.deco-bg-tarot .my-card-note { color: color-mix(in srgb, var(--color-card) 80%, transparent); }
+.my-card.deco-bg-tarot .my-card-window { background: color-mix(in srgb, var(--color-card) 14%, transparent); border-color: color-mix(in srgb, var(--deco-night-line) 60%, transparent); }
+.my-card.deco-bg-news .my-card-note { color: inherit; }
+/* 카드 책갈피: 색 .deco-sash-* · 모양 .sash-style-*. 위는 카드 윗변에 걸쳐 살짝 올라오고, 아래 끝은 V자로 갈라진다. 띠 양 끝의 가는 선(--sash-edge)이 테두리 바느질 자리다
+   short = 책에 꽂힌 책갈피처럼 짧고 굵게(아이콘을 단다) · long = 판사 법복의 띠처럼 얇고 길게 카드 아래까지 내려와 꼬리가 밖으로 나온다 */
+:is(.my-card, .my-mini-card) { --sash-x: 7cqi; --sash-rise: 3.5cqi; --sash-pad: 3.5cqi; }
+.my-mini-card { --sash-x: 5px; --sash-rise: 3px; --sash-pad: 3px; }
+.sash-style-short { --sash-w: 15.3cqi; --sash-len: 27cqi; --sash-notch: 5.3cqi; }
+.sash-style-long { --sash-w: 7.6cqi; --sash-tail: 10.6cqi; --sash-notch: 4.7cqi; }
+.my-mini-card.sash-style-short { --sash-w: 11px; --sash-len: 18px; --sash-notch: 4px; }
+.my-mini-card.sash-style-long { --sash-w: 6px; --sash-tail: 8px; --sash-notch: 4px; }
+.deco-sash-wine { --sash: var(--deco-sash-wine); --sash-edge: var(--deco-gold); }
+.deco-sash-navy { --sash: var(--deco-navy-soft); --sash-edge: var(--deco-night-line); }
+.deco-sash-gold { --sash: var(--deco-gold); --sash-edge: var(--deco-wood); }
+.deco-sash-green { --sash: var(--deco-sash-green); --sash-edge: var(--deco-gold); }
+.my-card-sash {
+  position: absolute; top: calc(var(--sash-rise) * -1); z-index: 1; display: grid; justify-items: center; align-content: start; width: var(--sash-w); padding-top: calc(var(--sash-rise) + var(--sash-pad)); pointer-events: none;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--color-heading) 30%, transparent) 0 var(--sash-rise), transparent var(--sash-rise)), /* 윗변에 걸친 접힘 그늘 */
+    linear-gradient(90deg, var(--sash-edge) 0 1.5px, var(--sash) 1.5px calc(100% - 1.5px), var(--sash-edge) calc(100% - 1.5px));
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% calc(100% - var(--sash-notch)), 0 100%);
+}
+.my-card-sash.is-left { left: var(--sash-x); }
+.my-card-sash.is-right { right: var(--sash-x); }
+.sash-style-short .my-card-sash { height: var(--sash-len); }
+.sash-style-long .my-card-sash { bottom: calc(var(--sash-tail) * -1); }
+.deco-sash-gold { --sash-ink: var(--color-heading); } /* 밝은 금사 띠 위 아이콘은 진하게 */
+.my-sash-icon { width: 8.8cqi; height: 8.8cqi; }
+svg.my-sash-icon { fill: none; stroke: var(--sash-ink, var(--color-card)); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+img.my-sash-icon { width: 11.2cqi; height: 11.2cqi; border-radius: 50%; background: var(--color-cup); box-shadow: 0 0 0 1.5px var(--sash-edge); object-fit: cover; object-position: top; }
+img.my-sash-icon.is-missing { visibility: hidden; }
+.my-icon-chip svg.my-sash-icon { width: 15px; height: 15px; } /* 카드 밖(고르기 칩)에는 cqi 기준 카드가 없어 px로 둔다 */
+.my-icon-chip img.my-sash-icon { width: 19px; height: 19px; }
+.my-mini-card .my-sash-icon { display: none; } /* 견본은 작아서 아이콘을 그리지 않는다 */
+.my-card:not(.deco-sash-none) .my-card-name { padding-inline: calc(var(--sash-x) + var(--sash-w) - 4.7cqi); } /* 위 닉네임이 책갈피에 가리지 않게 */
+.my-card.is-profile .my-card-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; align-self: center; } /* 닉네임은 한 줄, 길면 ... */
+.my-card.is-profile .my-card-note.is-empty { opacity: .7; }
+.my-card.is-preview { cursor: default; }
+@media (hover: hover) and (pointer: fine) { .my-card.is-preview:hover { transform: none; } }
 
 /* ── 항목 네 줄: 줄 전체가 버튼이다 ── */
 .my-rows { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--color-border-strong); }
@@ -158,6 +251,107 @@ body[data-theme="coffee"] .site-footer { background: var(--palette-coffee-50); b
 .my-bookmark-option img { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; object-position: top; background: var(--color-cup); box-shadow: inset 0 0 0 3px var(--color-cup-rim); }
 .my-bookmark .my-hint { margin: 0; }
 
+/* 프로필카드 화면(FE-68): 미리 보기 + 열린 개수, 그 아래 고르기 칸들과 도전과제 */
+.my-profile-hero { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 28px; align-items: center; margin: 0 0 36px; }
+.my-profile-summary { display: grid; gap: 16px; justify-items: start; min-width: 0; }
+.my-profile-summary .my-hint, .my-profile-summary .my-stats { margin: 0; width: 100%; }
+.my-profile-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+/* 요약 표 "열린 수 / 전체": 분자는 오른쪽, 분모는 왼쪽 정렬 칸이라 줄마다 빗금이 한 줄로 선다 */
+.my-profile-counts .my-count-row { display: flex; align-items: baseline; gap: 8px; }
+.my-count-cell { display: inline-grid; grid-template-columns: 3.2ch auto 3.2ch; column-gap: 5px; font-variant-numeric: tabular-nums; }
+.my-count-cell .is-have { text-align: right; }
+.my-count-cell .is-sep { color: var(--color-muted); font-weight: 400; }
+.my-count-cell .is-total { text-align: left; }
+
+/* 책갈피 설정 예시(FE-68): 판결 체험 파일철(verdict.css .folder-*)과 같은 재료 — 크라프트 서류철 위 색인 탭, 펼쳐 본 탭 뒤에 리본 책갈피 */
+.my-bm-example { margin: 0 0 32px; }
+.my-bm-example figcaption { margin: 12px 0 0; }
+.my-bm-art { overflow: hidden; padding: 18px 0 0; }
+.my-bm-tabs { position: relative; z-index: 2; display: flex; align-items: flex-end; gap: 4px; padding-left: 20px; }
+.my-bm-tab {
+  position: relative; z-index: 1; display: inline-flex; align-items: baseline; gap: 6px; min-height: 40px; margin-bottom: -1px; padding: 10px 16px 9px;
+  border: 1px solid var(--color-desk-kraft-shade); border-bottom: 0; border-radius: 10px 10px 0 0; background: var(--color-desk-kraft-back);
+  color: var(--palette-coffee-900); font: 700 14px/1.2 var(--font-heading); white-space: nowrap; transform: translateY(4px);
+}
+.my-bm-tab.is-current { z-index: 2; background: var(--color-desk-kraft); transform: none; }
+.my-bm-tab b { font: 900 12px/1 var(--font-heading); font-variant-numeric: tabular-nums; color: var(--color-label); }
+.my-bm-ribbon {
+  position: relative; z-index: 3; flex: none; align-self: flex-end; width: 22px; height: 60px; margin: 0 -6px -34px;
+  background: var(--bookmark-color, var(--color-label)); clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 88%, 0 100%);
+  filter: drop-shadow(0 2px 2px color-mix(in srgb, var(--color-desk-shadow) 35%, transparent));
+}
+.my-bm-ribbon img { position: absolute; left: 50%; top: 3px; width: 18px; height: 18px; translate: -50% 0; border-radius: 50%; background: var(--color-card); object-fit: cover; object-position: top; }
+.my-bm-folder { position: relative; z-index: 1; padding: 14px 16px 0; border: 1px solid var(--color-desk-kraft-shade); border-radius: 0 12px 0 0; background: var(--color-desk-kraft); }
+.my-bm-sheet { display: grid; gap: 10px; height: 110px; padding: 22px 22px 0; border-radius: 4px 4px 0 0; background: var(--color-desk-sheet, var(--color-card)); box-shadow: 0 -1px 0 color-mix(in srgb, var(--color-desk-shadow) 18%, transparent); }
+.my-bm-line { display: block; height: 8px; border-radius: 4px; background: color-mix(in srgb, var(--color-desk-shadow) 14%, transparent); }
+.my-bm-line.is-short { width: 55%; }
+.my-bm-swatch { display: block; width: 22px; height: 44px; background: var(--bookmark-color); clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 84%, 0 100%); }
+.my-bm-swatch-box { display: block; padding: 6px 10px; border: 1px solid transparent; border-radius: 8px; }
+.my-deco-option:has(input:checked) .my-bm-swatch-box { border-color: var(--color-accent); box-shadow: 0 0 0 1px var(--color-accent); background: var(--color-accent-tint); }
+.my-deco-option:has(input:focus-visible) .my-bm-swatch-box { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+.my-deco-swatches .my-deco-option:has(.my-bm-swatch) { width: 64px; }
+/* 카드 꾸미기 창(FE-68): 왼쪽 미리 보기(스크롤해도 따라옴) · 오른쪽 테두리 · 배경 · 카드 책갈피 */
+.my-deco-dialog { width: min(94vw, 880px); max-height: 92vh; padding: 0; border: 1px solid var(--color-border); border-radius: 16px; background: var(--color-bg); color: var(--color-text); overflow: auto; overscroll-behavior: contain; }
+.my-deco-dialog::backdrop { background: oklch(0 0 0 / 0.55); }
+.my-deco-dialog-head { position: sticky; top: 0; z-index: 2; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 24px; border-bottom: 1px solid var(--color-border); background: var(--color-bg); }
+.my-deco-dialog-title { margin: 0; font: 700 var(--text-title-2)/1.3 var(--font-heading); color: var(--color-heading); }
+.my-deco-dialog-body { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 32px; align-items: start; padding: 28px 24px 8px; }
+.my-deco-dialog-preview { position: sticky; top: 96px; padding-top: 6px; } /* 책갈피가 카드 윗변 위로 올라오는 만큼 띄운다 */
+.my-deco-dialog-pickers > .my-hint { margin: 0 0 20px; }
+.my-deco-dialog-pickers > :last-child { border-bottom: 0; }
+.my-deco { min-width: 0; margin: 0 0 32px; padding: 0 0 28px; border: 0; border-bottom: 1px solid var(--color-border); }
+.my-deco legend { margin-bottom: 8px; padding: 0; font: 700 var(--text-title-3)/1.4 var(--font-heading); color: var(--color-heading); }
+.my-deco > .my-hint { margin-bottom: 4px; }
+.my-deco-kind { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin: 20px 0 8px; font: 600 var(--text-body)/1.4 var(--font-heading); color: var(--color-text); }
+.my-deco-state { color: var(--color-muted); font: 400 var(--text-small)/1.4 var(--font-body); white-space: nowrap; }
+.my-deco-state.is-open { color: var(--color-accent); font-weight: 700; }
+.my-deco-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 8px; }
+.my-deco-option { position: relative; display: grid; justify-items: center; gap: 6px; cursor: pointer; }
+.my-deco-option input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; } /* 라디오는 숨기고 그림 · 견본이 선택칸이다. 키보드 방향키 · 포커스는 그대로 */
+.my-deco-option:has(input:focus-visible) :is(.my-deco-thumb, .my-mini-card) { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+.my-deco-thumb { display: block; width: 100%; aspect-ratio: 7 / 12; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-card); overflow: hidden; }
+.my-deco-thumb img { box-sizing: border-box; display: block; width: 100%; height: 100%; padding: 6px 4px; object-fit: contain; }
+.my-deco-thumb img.is-missing { visibility: hidden; }
+.my-deco-option:has(input:checked) .my-deco-thumb { border-color: var(--color-accent); box-shadow: 0 0 0 2px var(--color-accent); background: var(--color-accent-tint); }
+.my-deco-option:has(input:checked) .my-mini-card { outline: 2px solid var(--color-accent); outline-offset: 3px; }
+.my-deco-option.is-locked { cursor: not-allowed; }
+.my-deco-option.is-locked .my-deco-thumb { background: var(--color-surface); }
+.my-deco-option.is-locked .my-deco-thumb img { filter: brightness(0); opacity: .18; } /* 잠긴 그림은 실루엣만 */
+.my-deco-option.is-locked .my-mini-card { opacity: .45; }
+.my-lock { position: absolute; top: 6px; right: 6px; width: 16px; height: 16px; padding: 3px; border-radius: 50%; background: var(--color-card); fill: none; stroke: var(--color-muted); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.my-deco-swatches { display: flex; flex-wrap: wrap; gap: 16px 20px; }
+/* 카드 책갈피 묶음: 제목 아래 색 · 모양 · 아이콘 칸이 붙어 있다 */
+.my-deco-section { margin: 0 0 32px; padding: 0 0 28px; border-bottom: 1px solid var(--color-border); }
+.my-deco-title { margin: 0 0 8px; font: 700 var(--text-title-3)/1.4 var(--font-heading); color: var(--color-heading); }
+.my-deco.is-sub { margin: 16px 0 0; padding: 0; border: 0; }
+.my-deco.is-sub legend { margin-bottom: 8px; font: 600 var(--text-body)/1.4 var(--font-heading); color: var(--color-text); }
+.my-deco-section > .my-hint { margin: 0; }
+.my-deco-section > .my-hint + .my-hint, .my-deco-section > .my-deco + .my-hint { margin-top: 16px; }
+.my-deco-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+.my-deco-option.is-pill { display: inline-flex; grid-auto-flow: column; align-items: center; gap: 8px; min-height: 40px; padding: 4px 14px 4px 6px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-card); }
+.my-deco-option.is-pill:has(input:checked) { border-color: var(--color-accent); box-shadow: inset 0 0 0 1px var(--color-accent); background: var(--color-accent-tint); }
+.my-deco-option.is-pill:has(input:focus-visible) { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+.my-deco-option.is-pill.is-locked { opacity: .55; }
+.my-deco-option.is-pill .my-lock { top: -6px; right: -6px; }
+.my-deco-option.is-pill .my-deco-name small { display: none; } /* 아이콘 칸은 좁아서 잠금 사유를 이름(title · 읽는 이름)으로만 알린다 */
+.my-icon-chip { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: linear-gradient(90deg, var(--sash-edge) 0 1.5px, var(--sash) 1.5px calc(100% - 1.5px), var(--sash-edge) calc(100% - 1.5px)); }
+.my-deco-swatches .my-deco-option { width: 76px; }
+.my-deco-name { display: grid; text-align: center; font-size: var(--text-small); line-height: 1.35; color: var(--color-text); }
+.my-deco-name small { color: var(--color-muted); font-size: var(--text-caption); }
+.my-deco-swatches .my-lock { top: 4px; right: 6px; }
+.my-achievements-section { scroll-margin-top: 24px; }
+.my-achievements { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.my-achievement { padding: 14px 16px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-card); }
+.my-achievement.is-cleared { border-color: var(--color-accent); background: var(--color-accent-tint); }
+.my-achievement-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.my-achievement-head strong { font: 700 var(--text-body)/1.4 var(--font-heading); color: var(--color-heading); }
+.my-achievement-state { color: var(--color-muted); font-size: var(--text-small); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.my-achievement.is-cleared .my-achievement-state { color: var(--color-accent); font-weight: 700; }
+.my-achievement-text { margin: 2px 0 10px; color: var(--color-text); font-size: var(--text-small); }
+.my-achievement-bar { height: 8px; border-radius: 4px; background: var(--color-track); overflow: hidden; }
+.my-achievement-bar span { display: block; height: 100%; border-radius: inherit; background: var(--color-accent); }
+.my-achievement-reward { margin: 8px 0 0; color: var(--color-muted); font-size: var(--text-small); }
+
 /* 컬렉션: 사건마다 한 묶음. 만난 모습(역할 의상)은 인물 그림이라 자르지 않고 담는다 */
 .collection-group + .collection-group { margin-top: 32px; }
 .collection-title { margin: 0 0 12px; font: 700 var(--text-title-3)/1.4 var(--font-heading); color: var(--color-heading); }
@@ -209,5 +403,17 @@ body[data-theme="coffee"] .site-footer { background: var(--palette-coffee-50); b
   .my-case { flex-direction: column; align-items: flex-start; }
   .collection-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .my-type-hero { grid-template-columns: 120px minmax(0, 1fr); gap: 16px; }
+  .my-profile-hero { grid-template-columns: minmax(0, 1fr); gap: 20px; justify-items: center; }
+  .my-profile-preview .my-card { width: 200px; }
+  .my-profile-summary { width: 100%; }
+  .my-deco-grid { grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); gap: 6px; }
+  .my-deco-swatches { gap: 12px 14px; }
+  .my-bm-tabs { padding-left: 8px; }
+  .my-bm-tab { padding: 10px 8px 9px; }
+  .my-bm-tab:not(.is-current) span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); } /* 좁은 화면은 판결 화면처럼 안 고른 탭은 번호만 */
+  .my-deco-dialog-head { padding: 12px 16px; }
+  .my-deco-dialog-body { grid-template-columns: minmax(0, 1fr); gap: 20px; padding: 20px 16px 4px; }
+  .my-deco-dialog-preview { position: static; justify-self: center; }
+  .my-deco-dialog-preview .my-card { width: 200px; } /* 데스크톱과 같은 폭: 좌우 책갈피를 비켜도 닉네임이 들어간다 */
 }
 .my-case-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }

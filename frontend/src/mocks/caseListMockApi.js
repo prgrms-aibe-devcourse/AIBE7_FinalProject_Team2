@@ -1,6 +1,6 @@
 import { mockCases } from './caseListMockData.js';
 import { mockOverview } from './overviewMockData.js';
-import { read, restart, storageKey, validState } from './mockExperienceStore.js';
+import { peek, read, restart, storageKey, validState } from './mockExperienceStore.js';
 
 const delay = () => new Promise((resolve) => setTimeout(resolve, 250));
 const crimeTypes = ['MURDER', 'FRAUD', 'INJURY'];
@@ -85,4 +85,15 @@ export async function startExperience(caseId) {
     });
   }
   return structuredClone(startedCases.get(caseId));
+}
+
+// API 3 — GET /cases/{caseId}/experience (내 체험 상태). 보기만 하므로 기록을 새로 만들지 않는다(peek)
+export async function getExperience(caseId) {
+  await delay();
+  if (!mockCases.some((item) => item.caseId === caseId)) {
+    fail('CASE_NOT_FOUND', '사건을 찾을 수 없습니다.');
+  }
+  const state = caseId === 1 ? peek() : startedCases.get(caseId);
+  if (!state) fail('EXPERIENCE_NOT_FOUND', '체험 기록이 없습니다.');
+  return structuredClone({ caseId, attemptNo: 1, startedAt: new Date().toISOString(), ...state });
 }

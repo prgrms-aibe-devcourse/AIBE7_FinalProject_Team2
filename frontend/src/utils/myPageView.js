@@ -61,6 +61,7 @@ const KINDS = [
   ['characters/personality', '성향 이미지'],
   ['cases', '사건 이미지'],
 ];
+export const KIND_TITLES = Object.fromEntries(KINDS); // 폴더 → 종류 이름 (대표 이미지 페이지 FE-68도 쓴다)
 const OTHER_KIND = '기타';
 const CASE_FILE = /^case-(\d+)(?:[-.]|$)/; // cases/case-1-origin.webp → 사건 1
 

@@ -159,7 +159,7 @@ body {
   /* 판결 체험 무대 (흐름 목업 그대로, FE-27 · 28) */
   --palette-role-guide: #4a5677;
   --palette-role-prosecutor: #6f1d2e;
-  /* 판단 요소 무겁게 · 가볍게(S-06): 진하지 않은 레드 · 그린 */
+  /* 판단 요소 무겁게 · 가볍게(S-05): 진하지 않은 레드 · 그린 */
   --palette-factor-heavy: #a03f35;
   --palette-factor-heavy-tint: #f6e4e1;
   --palette-factor-light: #35704a;
@@ -362,7 +362,7 @@ html { scroll-padding-top: calc(var(--site-header-h, 64px) + 8px); }
 .not-found-panel .not-found-actions button { margin-top: 0; }
 
 /* 섹션 본문 점 목록 (FE-14). utils/contentLines.js의 renderContent가 만든다.
-   여러 화면(S-04 · S-05, 이후 다른 화면)이 함께 쓰므로 화면 클래스 없이 여기 둔다 */
+   여러 화면(S-04, 이후 다른 화면)이 함께 쓸 수 있게 화면 클래스 없이 여기 둔다 */
 .content-lines { margin: 0; padding-left: 20px; }
 .content-lines li + li { margin-top: 6px; }
 
@@ -388,3 +388,10 @@ button, [role="button"] { -webkit-user-select: none; user-select: none; -webkit-
   animation-duration: 0s !important; animation-delay: 0s !important; animation-iteration-count: 1 !important;
   transition-duration: 0s !important; transition-delay: 0s !important; scroll-behavior: auto !important;
 }
+
+/* 책갈피 리본 색(FE-68): 판결 체험 파일철의 진행 책갈피 · 마이페이지 책갈피 설정 미리 보기가 함께 쓴다(bookmarkCharacter.js BOOKMARK_COLORS) */
+.bookmark-color-bronze { --bookmark-color: var(--palette-bronze-700); }
+.bookmark-color-wine { --bookmark-color: var(--palette-red-700); }
+.bookmark-color-navy { --bookmark-color: var(--palette-navy-700); }
+.bookmark-color-green { --bookmark-color: var(--palette-judge-court); }
+.bookmark-color-gold { --bookmark-color: var(--palette-pen-gold); }

@@ -43,6 +43,8 @@ AI 판결 생성(3단계)은 두 가지 방법 중 하나로 한다. 외부 LLM 
 | `rag_check.py` | RAG 검색 결과 · 점수 확인 도구 (BE-54, 아래 "생성 참고 자료 RAG") |
 | `summary_tags.py` · `summary_tags.json` | 요약어 후보: extract 요약어를 공개 기준 목록과 임베딩으로 비교해 비슷한 기존 요약어 제안 (BE-53, 아래 "요약어 후보") |
 | `db_case_input.py` | 로컬 DB에 적재된 사건 → 생성용 사건 입력 JSON · 원본 판결문 정보(+ RAG 끔 · 켬 파이프라인 설정). LLM 호출 없음, 결과는 `cases/`에만 (BE-76, 아래 "RAG 끔 · 켬 생성 비교") |
+| `service/` | 위 `pipeline.py`를 백엔드가 HTTP로 부를 수 있게 감싼 내부 서비스 (COMMON-50). 파이프라인 로직은 건드리지 않는다. [README](service/README.md) |
+| `Dockerfile` · `.dockerignore` | 위 서비스 이미지. 운영에서는 `deploy/docker-compose.pipeline.yml`이 띄운다 (COMMON-50) |
 
 ## 작업 순서
 
@@ -626,6 +628,9 @@ python3 compare.py <켬 batchDir>
 
 ```bash
 python3 -m unittest discover tests
+
+# 서비스 층은 따로 돈다 (COMMON-50, service/README.md)
+cd service && python3 -m unittest discover tests
 ```
 
 ## 참고

@@ -2,7 +2,7 @@
 import { existsSync } from 'node:fs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { BOOKMARK_CHARACTERS, BOOKMARK_FACES, BOOKMARK_LAWS, BOOKMARK_STYLES, bookmarkFace, getBookmarkCharacter, selectedBookmarkFace, setBookmarkCharacter, setBookmarkFace } from './bookmarkCharacter.js';
+import { BOOKMARK_CHARACTERS, BOOKMARK_FACES, BOOKMARK_LAWS, BOOKMARK_STYLES, bookmarkFace, getBookmarkCharacter, getBookmarkColor, setBookmarkColor, selectedBookmarkFace, setBookmarkCharacter, setBookmarkFace } from './bookmarkCharacter.js';
 
 const memory = () => {
   const data = new Map();
@@ -74,4 +74,16 @@ test('localStorage 접근 자체가 막혀도 기본 얼굴을 돌려준다', ()
     if (original) Object.defineProperty(globalThis, 'localStorage', original);
     else delete globalThis.localStorage;
   }
+});
+
+test('리본 색을 저장하고, 처음 · 모르는 값 · 저장소 차단이면 브론즈다', () => {
+  const storage = memory();
+  assert.equal(getBookmarkColor(storage), 'bronze');
+  setBookmarkColor('navy', storage);
+  assert.equal(getBookmarkColor(storage), 'navy');
+  setBookmarkColor('rainbow', storage);
+  assert.equal(getBookmarkColor(storage), 'navy');
+  const broken = { getItem: () => { throw new Error('blocked'); }, setItem: () => { throw new Error('blocked'); } };
+  assert.doesNotThrow(() => setBookmarkColor('wine', broken));
+  assert.equal(getBookmarkColor(broken), 'bronze');
 });

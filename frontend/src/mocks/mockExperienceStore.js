@@ -60,7 +60,7 @@ function jsonStore(key) {
   };
 }
 
-// S-06에서 확정 제출한 판결 · S-03에서 고른 사전 판단(목 전용, S-09에서 사용).
+// S-05에서 확정 제출한 판결 · S-03에서 고른 사전 판단(목 전용, S-08에서 사용).
 // 상태(storageKey)와 별도 키로 둬서 다른 save() 호출이 이 값들을 덮어쓰지 않게 한다.
 const judgmentStore = jsonStore('nlnb-mock-judgment');
 export const saveJudgment = judgmentStore.save;
