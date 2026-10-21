@@ -46,6 +46,7 @@
 | v0.42 | 2026-10-21 | **프로필 꾸미기 저장 · 도전과제 판정 추가 (BE-96, FE-68)** — P-7 `PUT /profile-deco`(꾸미기 전체 저장, 형식 · 값 목록 400 → 잠김 409 `DECO_LOCKED`) 신설, P-5 응답에 `profileDeco` · `achievements` · `unlocked` 추가(도전과제 · 보상 표는 서버가 원본, 수집 도전과제는 BE-83 전까지 `PENDING`), 1-5에 `DECO_LOCKED` 추가(`docs/decisions/BE-96.md`) |
 | v0.43 | 2026-10-21 | **BE-96 · BE-97 후속 (BE-98, FE-71 리뷰)** — P-7 잠김 검사가 저장값과 같은 칸(저장할 때도 쓰이던 칸)은 다시 거절하지 않도록 보완(표가 바뀌어 저장값이 잠겨도 다른 칸 저장 가능). 익명 ID를 새로 발급하는 요청(API 2 · P-2 · P-7)은 그날 출석도 함께 남긴다(첫 방문날 누락 방지). P-6 · P-7 설명 갱신 |
 | v0.44 | 2026-10-21 | **P-5 `judgmentPersonality`를 현재 판결 성향으로 변경 (FE-70)** — 첫 회차 체험 **전체 평균**에서 **최근 첫 회차 체험 3건의 평균**으로 바꾼다(`type` · `null` 규칙은 그대로, `experienceCount`는 평균에 쓴 체험 수 = 최대 3). 마이페이지 성향카드 화면이 "지금"을 이 값으로 보여 준다. 서버 구현(`MyPageService`)은 후속 백엔드 작업 |
+| v0.45 | 2026-10-21 | 10장 카카오 로그인 추가 (BE-62, WBS 7.4.2) — M-3 시작 `GET /api/v1/auth/oauth2/authorization/kakao` · M-4 콜백 `GET /api/v1/auth/oauth2/callback/kakao`(브라우저 이동, JSON API 아님). 성공 시 리프레시 토큰 쿠키(`NLNB_RT`)만 심고 화면 경로로 리다이렉트, 토큰은 URL에 싣지 않음. 익명 ID 쿠키 연결 규칙. **10장 번호를 M-N으로 변경**: 재발급 · 로그아웃(BE-94)의 A-16 · A-17이 8-4 운영 메뉴 API 예약 번호(A-16 ~ A-41)와 겹쳐 M-1 · M-2로 |
 
 ---
 
@@ -1695,16 +1696,18 @@ json
 
 ---
 
-## 10. (확장) 회원 인증 API (7.4.3, BE-94)
+## 10. (확장) 회원 인증 API (7.4.2 BE-62 · 7.4.3 BE-94)
 
 카카오 로그인(7.4.2, BE-62)이 성공 처리에서 발급한 액세스 · 리프레시 토큰 중, **리프레시 토큰만 `NLNB_RT`
 쿠키**(`HttpOnly` · `Secure` · `SameSite=Strict` · `Path=/api/v1/auth`)로 받는다. 액세스 토큰은 화면이 메모리에만
 들고 있고, 아래 재발급 API로 다시 받는다(docs/tech-stack.md 3장 "리프레시 토큰 쿠키").
 
-둘 다 **`Authorization` 헤더를 보지 않고 리프레시 토큰 쿠키로만 인증**한다. 상태를 바꾸는 요청이라 Origin 검증(요청의
+> 번호(v0.41): 회원 인증 API는 **M-N**을 쓴다. 처음 붙였던 A-16 · A-17은 8-4 운영 메뉴 API가 예약한 A-16 ~ A-41과 겹쳐 M-1 · M-2로 바꿨다(BE-94의 재발급 · 로그아웃). M-3 · M-4는 카카오 로그인(BE-62)이다.
+
+M-1 · M-2는 **`Authorization` 헤더를 보지 않고 리프레시 토큰 쿠키로만 인증**한다. 상태를 바꾸는 요청이라 Origin 검증(요청의
 Origin이 이 서버 자신과 같은 출처인지)을 거친다 — 벗어나면 403 `FORBIDDEN`.
 
-### A-16. 토큰 재발급 — `POST /api/v1/auth/token/reissue`
+### M-1. 토큰 재발급 — `POST /api/v1/auth/token/reissue`
 
 **응답 200**
 
@@ -1720,7 +1723,7 @@ Origin이 이 서버 자신과 같은 출처인지)을 거친다 — 벗어나�
 | 401 `TOKEN_INVALID` | 리프레시 토큰 쿠키 없음, 모르는 값, 이미 로테이션 · 로그아웃으로 사라진 값 |
 | 403 `FORBIDDEN` | Origin(없으면 Referer)이 이 서버와 다른 출처 |
 
-### A-17. 로그아웃 — `POST /api/v1/auth/logout`
+### M-2. 로그아웃 — `POST /api/v1/auth/logout`
 
 **응답 204**: 본문 없음. 쿠키가 없거나 이미 로그아웃된 상태여도 204(멱등).
 
@@ -1730,3 +1733,25 @@ Origin이 이 서버 자신과 같은 출처인지)을 거친다 — 벗어나�
 | 거절 | 조건 |
 | --- | --- |
 | 403 `FORBIDDEN` | Origin(없으면 Referer)이 이 서버와 다른 출처 |
+
+### M-3. 카카오 로그인 시작 — `GET /api/v1/auth/oauth2/authorization/kakao` (BE-62)
+
+브라우저 **이동**으로 연다(`fetch`가 아니라 `location.href` · 링크). JSON을 돌려주지 않는다.
+
+- 302로 카카오 인가 화면(`https://kauth.kakao.com/oauth/authorize`)에 보낸다. 동의항목(scope)은 요청하지 않는다 — 회원번호만 쓰고 개인정보는 받지 않는다
+- 이때 `NLNB_OAUTH_STATE` 쿠키(`HttpOnly` · `Secure` · `SameSite=Lax` · `Path=/api/v1/auth/oauth2` · 5분)를 심는다. 인가 요청 내용은 서버 Redis에만 두고 세션은 만들지 않는다
+- `KAKAO_CLIENT_ID`가 없는 환경(로컬 · 테스트)에서는 이 경로가 없다(404)
+- 운영 Nginx는 M-3 · M-4에 `/api` 공통 제한보다 엄격한 전용 제한을 건다(IP별 분당 30번 · 전체 초당 10번, PR #229 리뷰). 넘으면 JSON 429(1-4 형식)
+
+### M-4. 카카오 로그인 콜백 — `GET /api/v1/auth/oauth2/callback/kakao` (BE-62)
+
+카카오가 브라우저를 돌려보내는 주소다(카카오 콘솔 Redirect URI에 등록). 화면이 직접 부르지 않는다.
+
+- **성공**: 회원을 찾거나 만들고, 익명 기록을 연결한 뒤 `NLNB_RT`(리프레시 토큰, M-1과 같은 쿠키)를 심고 **화면 경로 `/auth/callback`으로 302**. 토큰은 URL에 싣지 않는다 → 화면은 도착하면 **M-1 재발급을 한 번 불러 액세스 토큰을 받는다**
+- **실패 · 취소**: `state` 불일치(쿠키 없음 · 다름 · 만료), 사용자가 카카오에서 취소, 카카오 오류 → **`/auth/callback?error=login_failed`로 302**(JSON 401이 아니다)
+- 익명 ID 쿠키(`NLNB_AID`) 연결 규칙(docs/decisions/BE-62.md)
+  - 아직 연결 안 된 익명 ID → 이 회원에 연결
+  - 이미 같은 회원 → 그대로
+  - 다른 회원에 연결됨(공용 PC) → 덮어쓰지 않고, 이 회원에 연결된 **새 익명 ID를 `Set-Cookie`로** 내려준다
+  - 쿠키 없음 · 모르는 값 → 이 회원에 연결된 새 익명 ID를 내려준다
+- 화면 경로(`/auth/callback`)는 환경변수로 바꿀 수 있고, 우리 사이트 안의 경로만 허용한다(열린 리다이렉트 방지)

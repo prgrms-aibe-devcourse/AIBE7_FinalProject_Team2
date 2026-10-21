@@ -292,7 +292,20 @@ docker compose -f docker-compose.prod.yml logs --tail 3 web
 
 - 앞에 로드 밸런서 · CDN을 두면 그 장비의 IP로 묶인다. 그때는 `set_real_ip_from`(그 장비 대역) + `real_ip_header X-Forwarded-For`를 같이 설정한다.
 - HTTPS(BE-75)의 443 server도 http와 같은 `snippets/app.conf`를 include하고, 그 안의 두 `/api` location은 `snippets/api-proxy.conf` 하나를 include하므로 http · https · `/api` · `/api/` 모두에 같은 `limit_req` · `error_page 429`가 걸린다. `/api` 설정은 `api-proxy.conf`에서만 고친다. zone도 하나라 한 IP의 http · https 요청을 합쳐 센다.
-- **백엔드가 보는 IP(관리자 감사 로그)**는 아직 Nginx 컨테이너 IP다. 위 확인이 끝나면 `server.forward-headers-strategy=native`를 켠다(기술 스택 3장 "감사 로그", D). Nginx가 사용자 IP를 못 보는 상태에서 켜면 위조된 `X-Forwarded-For`가 그대로 기록될 수 있어 순서를 지킨다.
+- **백엔드가 보는 IP · Host**: BE-62에서 `server.forward-headers-strategy=native`를 켰다. 백엔드는 Nginx가 넘기는 `X-Forwarded-For` · `X-Forwarded-Proto` · `X-Forwarded-Host` · `X-Forwarded-Port`를 믿으므로, `snippets/api-proxy.conf`가 **`Proto` · `Host` · `Port`는 Nginx가 본 값으로 덮어쓰고**(비워 두면 클라이언트가 보낸 값이 그대로 넘어간다), **`X-Forwarded-For`는 클라이언트가 보낸 값 뒤에 Nginx가 본 접속 IP를 덧붙인다**(`$proxy_add_x_forwarded_for`). 백엔드(RemoteIpValve)는 `internal-proxies` 밖의 가장 오른쪽 IP를 쓰므로 앞쪽에 위조한 값은 쓰이지 않는다(PR #229 리뷰). 위 "사용자 IP" 확인은 그대로 필요하다 — Nginx가 172.x만 보면 백엔드도 그 값을 본다
+
+### 카카오 로그인 경로 전용 제한 (BE-62, PR #229 리뷰)
+
+카카오 로그인 **시작**(`/api/v1/auth/oauth2/authorization/`)에는 `/api` 공통 제한에 더해 **전용 제한 두 개**를 건다(`default.conf`의 `oauth_per_ip` · `oauth_all`, `snippets/app.conf`의 전용 location). **콜백**(`/api/v1/auth/oauth2/callback/`)은 전용 제한 없이 `/api` 공통 제한(IP별 초당 20번 · 순간 40번)만 받는다 — 콜백은 Redis에 새로 쓰지 않고, 시작과 같은 zone에 묶으면 같은 와이파이에서 여러 명이 동시에 로그인할 때 시작 요청이 용량을 다 써서 카카오 인증을 끝낸 사용자가 429를 본다(PR #229 리뷰).
+
+| 설정 | 값 | 이유 |
+| --- | --- | --- |
+| IP별 (`oauth_per_ip`) | 분당 30번, 순간 30번 | 시작만 센다. 같은 와이파이에서 30명이 동시에 로그인을 시작해도 막히지 않게 |
+| 전체 합계 (`oauth_all`) | 초당 10번, 순간 50번 | 시작 요청마다 백엔드가 Redis에 state를 5분 보관한다. IP를 여러 개 써서 IP별 제한을 나눠 피해도, 대기 중 state가 많아야 약 3,000개(약 3MB)로 묶여 Redis(200MB, `noeviction`)를 채우지 못한다 |
+| 넘으면 | `/api`와 같은 JSON 429 | `@api_rate_limited` |
+
+- 재발급 · 로그아웃(`/api/v1/auth/token/reissue` · `/api/v1/auth/logout`) 제한은 BE-63 2차에서 따로 정한다.
+- **`KAKAO_CLIENT_ID`는 HTTPS(BE-75) 적용 뒤에만 넣는다.** state 쿠키 · `NLNB_RT` · `NLNB_AID`가 모두 `Secure`라 http에서는 브라우저가 저장하지 않아 로그인이 끝나지 않는다(PR #229 리뷰). 넣는 즉시 카카오 로그인 경로가 켜지므로, 화면 `/auth/callback`(FE 후속)이 배포되기 전에는 로그인 후 화면이 404로 보인다.
 
 ## Redis (BE-61, docs/tech-stack.md 2장 "Redis 운영 구성")
 
@@ -592,5 +605,4 @@ docker stats --no-stream
 | 7.4.3 JWT (C) | 토큰은 `@Qualifier(RedisConfig.TOKEN)` 템플릿(DB 1)에 TTL과 함께 저장 |
 | 백엔드 healthcheck 추가 (BE-66 이후) | Actuator(관리 포트 8081)에는 Redis 헬스체크가 자동으로 붙고, 커넥션 팩토리 두 개가 `redis` 아래 묶인다. **실측(BE-61, Boot 4.1.1)**: Redis를 끄면 `/actuator/health`는 **DOWN(503)**, `/actuator/health/liveness` · `/readiness`는 **UP**, API는 정상. liveness · readiness는 추가 설정 없이 이미 열려 있다. 그래서 컨테이너 healthcheck · 재시작 조건에는 **`/actuator/health`가 아니라 `/actuator/health/liveness`** 를 쓴다(전체 상태를 쓰면 Redis 장애 때 백엔드까지 재시작된다) |
 | 7.4.6 Rate limit 2차 (10/23) | 로그인 · 토큰 재발급 엔드포인트에 더 엄격한 zone을 `default.conf`에 추가 (1차는 위 "Rate limit") |
-| 서버 IP 확인 후 (D) | `server.forward-headers-strategy=native`로 백엔드가 사용자 IP를 받게 함 (위 "서버에서 꼭 확인" 다음에) |
 | HTTPS 안정화 후 (BE-75 후속) | 갱신이 한 번 이상 정상으로 돈 뒤 `https.conf.template`에 HSTS를 짧은 `max-age`부터 추가 |

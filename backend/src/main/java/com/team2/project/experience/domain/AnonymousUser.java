@@ -29,7 +29,7 @@ public class AnonymousUser implements Persistable<UUID> {
 	@Id
 	private UUID id;
 
-	private Long memberId;		// (이후) 로그인 시 연결할 회원
+	private Long memberId;		// 로그인 시 연결한 회원 (BE-62). 회원 1 : 익명 N
 
 	@CreationTimestamp
 	private Instant createdAt;
@@ -47,6 +47,16 @@ public class AnonymousUser implements Persistable<UUID> {
 	/** 새 익명 사용자 발급 (무작위 UUID) */
 	public static AnonymousUser issue(Instant now) {
 		return new AnonymousUser(UUID.randomUUID(), now);
+	}
+
+	/**
+	 * 회원에 연결된 새 익명 사용자 발급 (카카오 로그인, BE-62). 브라우저에 익명 쿠키가 없거나,
+	 * 쿠키의 익명 기록이 다른 회원 것이라(공용 PC) 그대로 쓸 수 없을 때 쓴다
+	 */
+	public static AnonymousUser issueFor(long memberId, Instant now) {
+		AnonymousUser user = new AnonymousUser(UUID.randomUUID(), now);
+		user.memberId = memberId;
+		return user;
 	}
 
 	/** 최근 접속 시각 갱신. 갱신 주기 제한은 서비스에서 판단한다 */

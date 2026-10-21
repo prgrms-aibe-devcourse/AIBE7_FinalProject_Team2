@@ -71,6 +71,10 @@ services:
       JWT_SECRET: ${JWT_SECRET:?deploy/.env에 JWT_SECRET을 넣어야 한다 (openssl rand -base64 32)}
       JWT_ACCESS_TOKEN_TTL: ${JWT_ACCESS_TOKEN_TTL:-15m}
       JWT_REFRESH_TOKEN_TTL: ${JWT_REFRESH_TOKEN_TTL:-14d}
+      # 카카오 로그인 (확장 단계, BE-62). 비어 있으면 카카오 로그인 경로만 꺼지고 서버는 뜬다.
+      # ID를 넣으면 SECRET도 필수다(없으면 백엔드 기동 실패). 카카오 콘솔 Redirect URI: https://<도메인>/api/v1/auth/oauth2/callback/kakao
+      KAKAO_CLIENT_ID: ${KAKAO_CLIENT_ID:-}
+      KAKAO_CLIENT_SECRET: ${KAKAO_CLIENT_SECRET:-}
       # 운영에서 API 문서를 열지 않는다 (application.yml 기본값과 같음, 명시만)
       SWAGGER_ENABLED: "false"
       # 서버 메모리(t3.small 2GB)에 맞춰 JVM 힙 상한을 컨테이너 메모리 비율로 둔다

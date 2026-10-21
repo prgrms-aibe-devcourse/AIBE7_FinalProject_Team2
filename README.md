@@ -92,6 +92,8 @@ ls backend/private-seed/seed                # R__10 · R__20 · R__30 세 파일
 | `ADMIN_SESSION_TIMEOUT` | `30m` | (확장) 관리자 세션 유지 시간 |
 | `JWT_SECRET` | 없음(필수) | (확장, BE-94) 액세스 토큰 서명 키. Base64, 디코딩 32바이트 이상. 없으면 기동이 실패한다(공개 저장소에 기본값을 두지 않는다 — 있으면 누구나 토큰을 위조할 수 있다). 로컬은 `export JWT_SECRET=$(openssl rand -base64 32)`처럼 각자 만들어 쓴다 |
 | `JWT_ACCESS_TOKEN_TTL` · `JWT_REFRESH_TOKEN_TTL` | `15m` · `14d` | (확장, BE-94) 액세스 · 리프레시 토큰 유효 기간 |
+| `KAKAO_CLIENT_ID` · `KAKAO_CLIENT_SECRET` | 없음 | (확장, BE-62) 카카오 로그인 REST API 키 · Client Secret. 비어 있으면 카카오 로그인 경로만 꺼진다. ID를 넣으면 SECRET도 필수(없으면 기동 실패). 로컬은 카카오 콘솔 Redirect URI에 `http://localhost:<포트>/api/v1/auth/oauth2/callback/kakao`를 등록해 쓴다 |
+| `KAKAO_LOGIN_SUCCESS_REDIRECT` · `KAKAO_LOGIN_FAILURE_REDIRECT` | `/auth/callback` · `/auth/callback?error=login_failed` | (확장, BE-62) 로그인 성공 · 실패 후 보낼 화면 경로. 우리 사이트 안의 경로(`/...`)만 허용 |
 
 운영 DB 계정은 이 저장소에 적지 않고 실행할 때 환경변수로만 넘긴다. 시드는 운영에 넣지 않는다.
 
