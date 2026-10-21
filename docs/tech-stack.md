@@ -28,6 +28,7 @@
 | v1.21 | 2026-10-16 | BE-60 반영 (**확장 단계**, WBS 7.1.3) — 8장 배포 흐름에 자동 배포(CD) 추가: 운영은 `main`만, 서버가 2분마다 GHCR `main` 이미지를 확인해 배포(실패 시 자동 되돌림), Actions는 `/version.json`으로 결과 확인. IAM 권한 없이 하는 방식을 고른 이유는 `docs/decisions/BE-60.md` |
 | v1.22 | 2026-10-19 | BE-87 반영 (WBS 7.0.3) — 테스트 PostgreSQL·Redis를 개발 환경과 분리, test 프로필·Gradle/JVM 접속 검증·외부 임베딩 비활성화 적용. 실행 절차는 backend/TESTING.md로 통일 |
 | v1.23 | 2026-10-20 | 관리자 인증 — OAuth(BE-40) **제외**. 관리자 로그인은 이메일 · 비밀번호(세션)만 둔다(B 김현중 확인, WBS v1.42). 일반 사용자 로그인은 카카오(BE-62) |
+| v1.24 | 2026-10-21 | 카카오 로그인 반영 (**확장 단계**, BE-62 · WBS 7.4.2) — 3장 사용자 인증에 OAuth 전용 체인(관리자 `@Order(1)` → OAuth `@Order(2)` → 사용자 `@Order(3)`), OAuth 왕복 임시 상태(Redis + state 쿠키, 세션 없음), 성공 · 실패 처리, `server.forward-headers-strategy: native` 반영 |
 
 
 ## **1. Backend**
@@ -248,7 +249,7 @@ MVP는 회원가입 없이 핵심 체험이 끝까지 동작해야 한다. 사�
 
 | 항목 | 내용 |
 | --- | --- |
-| 필터 체인 | `SecurityConfig`가 체인 두 개를 둔다. ① `/api/v1/admin/**` 관리자 체인(먼저 검사): 세션 · CSRF · `ROLE_ADMIN`, Bearer 토큰은 보지 않는다. ② 그 밖의 모든 요청 사용자 체인: **세션을 만들지도 읽지도 않는다**(`STATELESS` + 요청 안에서만 쓰는 SecurityContext 저장소). 그래서 브라우저에 관리자 세션 쿠키가 있어도 사용자 API에서는 관리자로 보지 않는다 |
+| 필터 체인 | `SecurityConfig`가 체인 두 개를 둔다(v1.24: 그 사이에 카카오 로그인 체인이 들어가 셋, 아래 "카카오 로그인 체인"). ① `/api/v1/admin/**` 관리자 체인(먼저 검사): 세션 · CSRF · `ROLE_ADMIN`, Bearer 토큰은 보지 않는다. ② 그 밖의 모든 요청 사용자 체인: **세션을 만들지도 읽지도 않는다**(`STATELESS` + 요청 안에서만 쓰는 SecurityContext 저장소). 그래서 브라우저에 관리자 세션 쿠키가 있어도 사용자 API에서는 관리자로 보지 않는다 |
 | Bearer 토큰 | 사용자 체인의 `BearerTokenAuthenticationFilter`. `Authorization` 헤더가 없거나 `Bearer`가 아닌 스킴(`Basic` 등 — 앞단 Nginx 인증 · 모니터링 scrape가 붙일 수 있다)이면 익명. **`Bearer` 헤더는 반드시 검증한다**: 토큰이 비었거나 검증기 빈이 없거나 검증에 실패하면 **401**. 잘못된 토큰을 익명으로 바꾸지 않는다. 사용자 체인 경로라면 `permitAll`이어도 같다(관리자 체인은 Bearer를 보지 않는다). `Authorization` 헤더가 여러 개이거나(스킴과 관계없이) `Bearer` 토큰에 RFC 6750 밖의 글자(공백 · 쉼표 등)가 있으면 검증기를 부르지 않고 401 |
 | 토큰 오류 | 401 `TOKEN_EXPIRED`(만료, 화면은 재발급 시도) · 401 `TOKEN_INVALID`(그 밖). Redis 장애 등 인프라 오류는 토큰 오류로 바꾸지 않는다(500 `INTERNAL_ERROR`, 원인은 서버 로그에만) |
 | 토큰 계약 | `common.security.token` 패키지. `AccessTokenVerifier`(토큰 → `MemberPrincipal`, C 구현) · `TokenIssuer`(회원 → `IssuedTokens` 액세스 · 리프레시 토큰과 만료 시각, C 구현 · D 호출) · `MemberPrincipal`(회원 ID · 접두어 없는 권한 `USER`, 바꿀 수 없음) · `TokenException`(INVALID · EXPIRED). 재발급 · 폐기 · 재사용 탐지 계약은 C가 7.4.3에서 정한다 |
@@ -257,7 +258,10 @@ MVP는 회원가입 없이 핵심 체험이 끝까지 동작해야 한다. 사�
 | 재발급 요청 | 화면은 재발급 요청에 `Authorization` 헤더를 붙이지 않는다(만료된 토큰이 붙으면 401로 막힌다) |
 | 리프레시 토큰 쿠키 (C 결정) | 쿠키에 두면 브라우저가 자동으로 보내므로 재발급 · 로그아웃 요청에 CSRF 대책(CSRF 토큰 또는 Origin 검증)과 `HttpOnly` · `Secure` · `SameSite`가 필요하다. 무상태 · 같은 출처라는 이유만으로 CSRF가 해결되지는 않는다 |
 | 익명 ID 쿠키와 CSRF | 익명 ID 쿠키도 브라우저가 자동으로 보낸다. 사용자 API에 CSRF 토큰을 두지 않는 것은 `SameSite=Lax` · 같은 출처 배포 · 익명 체험이라는 피해 범위를 보고 **받아들인 위험**이다 |
-| OAuth 왕복 임시 상태 (D 결정) | `STATELESS`는 일반 API 기준이다. 카카오 로그인 왕복의 `state` 저장(세션 또는 쿠키) · 콜백 경로 · 성공 · 실패 후 정리는 D가 7.4.2에서 정한다 |
+| 카카오 로그인 체인 (BE-62) | `auth.oauth.KakaoOAuthConfig`의 **OAuth 전용 체인**(`/api/v1/auth/oauth2/**`, `@Order(2)`, B 제안 · 합의). 관리자 체인(1)과 사용자 체인(3, `securityMatcher` 없음) 사이에 둔다. 브라우저 이동 경로라 실패는 JSON 401이 아니라 리다이렉트다. `KAKAO_CLIENT_ID`가 없으면 체인째 꺼지고 그 경로는 404 |
+| OAuth 왕복 임시 상태 (D 결정, BE-62) | 세션을 만들지 않는다(`STATELESS`). 인가 요청 내용은 **Redis 토큰 DB에 JSON**(TTL 5분)으로 두고, 브라우저에는 **state 값만** `NLNB_OAUTH_STATE` 쿠키(`HttpOnly` · `Secure` · **`SameSite=Lax`** — 카카오에서 돌아오는 이동은 다른 사이트발이라 Strict면 빠진다 · `Path=/api/v1/auth/oauth2`)로 준다. 콜백의 `state`와 쿠키가 같을 때만 GETDEL로 꺼낸다(로그인 CSRF · 재사용 방지). 요청 객체를 쿠키에 직렬화하지 않는다(사용자가 고칠 수 있는 값을 역직렬화하지 않기 위해) |
+| 로그인 성공 · 실패 (BE-62) | 성공: 회원 찾기 · 만들기 → 익명 기록 연결(ERD `anonymous_user`) → `TokenIssuer`(BE-94) → **리프레시 토큰만** `RefreshTokenCookies`로 심고 화면 `/auth/callback`으로 302. 토큰은 URL에 싣지 않는다(화면이 재발급 API로 받는다). 실패 · 취소: `/auth/callback?error=login_failed`로 302, 로그에는 오류 코드만. 기본 성공 처리(SavedRequestAware)는 세션을 써서 쓰지 않는다. 카카오 액세스 토큰은 보관하지 않는다(다시 부르지 않음) |
+| 프록시 헤더 (BE-62) | `server.forward-headers-strategy: native`. Nginx 뒤에서 `{baseUrl}`(카카오 Redirect URI) · Origin 검증(BE-94) · 클라이언트 IP가 원래 https · 도메인 · IP를 본다. Tomcat은 내부 대역에서 온 `X-Forwarded-*`만 믿는다 |
 | CORS | 설정하지 않는다. 프론트와 API가 같은 출처다(운영 Nginx `/api` 프록시, 로컬 Vite 프록시, API 명세 6장 #2). 다른 출처에서 부를 일이 생기면 그때 허용 목록으로 연다 |
 | 보안 헤더 | Spring Security 기본값(`X-Content-Type-Options` · `X-Frame-Options: DENY` · `Cache-Control: no-store` 등) + 두 체인 모두 `Referrer-Policy: strict-origin-when-cross-origin`. HSTS는 HTTPS 요청에만 붙으므로 TLS를 끝내는 Nginx가 맡는다(중복 없음). CSP · HTML 응답의 Referrer-Policy도 정적 파일을 서빙하는 Nginx에서 정한다(7.1.1, D) |
 | Rate limit (BE-63, 7.4.6, D) | **1차**: 운영 Nginx가 `/api`를 IP별 평균 초당 20번 · 순간 40번으로 제한하고, 넘으면 API 명세 1-4 형식의 JSON 429(`TOO_MANY_REQUESTS`, `Retry-After: 1`)를 돌려준다. 화면 · 정적 파일은 제한하지 않는다. 백엔드에는 닿지 않으므로 백엔드 지표에는 잡히지 않는다(Nginx 로그로 확인). **2차**(7.4.2 이후): 로그인 · 토큰 재발급 엔드포인트를 더 엄격하게. IP 기준이라 Nginx가 사용자 IP를 본다는 전제가 필요하다 — 배포 서버에서 확인하고(deploy/README.md "Rate limit"), 앞에 로드 밸런서 · CDN을 두면 `real_ip` 설정을 함께 바꾼다 |
