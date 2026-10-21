@@ -23,9 +23,9 @@ class AttendanceDateTest {
 
 	private static LocalDate todayAt(ZoneId zone, String localDateTime, int dayStartHour) {
 		Instant now = java.time.LocalDateTime.parse(localDateTime).atZone(zone).toInstant();
-		AttendanceService service = new AttendanceService(null, null, new AttendanceProperties(zone, dayStartHour),
+		AttendanceRecorder recorder = new AttendanceRecorder(null, new AttendanceProperties(zone, dayStartHour),
 			Clock.fixed(now, ZoneOffset.UTC));
-		return service.today();
+		return recorder.today();
 	}
 
 	@Test
