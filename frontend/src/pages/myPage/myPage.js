@@ -46,6 +46,7 @@ let apiRef = null; // 꾸미기 저장에 쓰는 api(화면을 그릴 때마다 
 let refresh = null; // 저장이 거절됐을 때 서버 값으로 화면을 다시 그리는 함수(renderMyPage가 정한다)
 let saveQueue = Promise.resolve(); // 저장은 고른 순서대로 한 번에 하나씩 보낸다(PUT은 전체를 덮어쓰므로 순서가 바뀌면 안 된다)
 let saveEpoch = 0; // 거절되면 올린다. 거절 전에 줄 선 저장은 건너뛴다
+let decoVersion = 0; // 꾸미기를 고를 때마다 올린다. 받아 둔 서버 값이 그 사이에 고른 것을 덮어쓰지 않게 비교한다
 
 // 지금 고른 꾸미기(서버 값 + 방금 고른 것). 잠겼는지는 보지 않는다(shownDeco가 한다)
 const currentDeco = () => normalizeDeco(cache?.profileDeco);
@@ -75,16 +76,34 @@ function saveDeco(patch) {
   if (cache) cache.profileDeco = next;
   applyBookmark(next); // 판결 체험 화면이 바로 읽는 거울
   const epoch = saveEpoch;
+  decoVersion += 1;
+  const version = decoVersion;
   saveQueue = saveQueue.then(async () => {
     if (epoch !== saveEpoch) return;
     try {
-      await apiRef.putProfileDeco(next);
+      const saved = await apiRef.putProfileDeco(next);
+      // 서버가 정리해 돌려준 값을 따른다. 그 사이 새로 골랐으면 그 선택이 최신이므로 건드리지 않는다
+      if (version === decoVersion && cache && saved) {
+        cache.profileDeco = normalizeDeco(saved);
+        applyBookmark(cache.profileDeco);
+      }
     } catch (error) {
       saveEpoch += 1;
       await refresh?.(saveFailureText(error));
     }
   });
   return next;
+}
+
+/**
+ * 마이페이지를 받는다. 저장이 끝나길 기다린 뒤 요청하고, 받는 동안 꾸미기를 새로 골랐으면 받은 꾸미기 대신 화면 값을 지킨다
+ * (오래된 서버 값이 방금 고른 것을 덮어쓰지 않게). 거절 뒤 서버 값으로 되돌릴 때는 쓰지 않는다
+ */
+async function loadMyPage(api) {
+  await saveQueue;
+  const version = decoVersion;
+  const data = await api.getMyPage();
+  return version === decoVersion || !cache ? data : { ...data, profileDeco: cache.profileDeco };
 }
 
 const svg = (path, className) => {
@@ -1005,7 +1024,7 @@ export async function renderMyPage(container, { api, navigate, view, from }) {
 
   let data;
   try {
-    data = await api.getMyPage();
+    data = await loadMyPage(api);
   } catch {
     if (!active()) return;
     reveal();
