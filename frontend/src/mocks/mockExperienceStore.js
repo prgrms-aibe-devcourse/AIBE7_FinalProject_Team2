@@ -1,4 +1,29 @@
 // 목 전용 저장소. 실제 체험 진행 상태는 서버에서 관리한다.
+import { localStore } from '../utils/safeStorage.js';
+
+// 저장소 접근이 막힌 브라우저(쿠키 차단 · 사생활 보호 모드)에서는 이번 방문 동안 메모리에 둔다(session.js · communityMockApi.js와 같은 방식).
+// 저장이 실패한 값은 메모리가 우선이라, 저장 직후 peek() · read()가 같은 상태를 읽는다
+const memory = new Map();
+
+export const getItem = (key) => {
+  if (memory.has(key)) return memory.get(key);
+  try { return localStore()?.getItem(key) ?? null; } catch { return null; }
+};
+const setItem = (key, value) => {
+  try {
+    const store = localStore();
+    if (!store) throw new Error('no storage'); // 저장소가 없으면 메모리로 보낸다
+    store.setItem(key, value);
+    memory.delete(key);
+  } catch {
+    memory.set(key, value);
+  }
+};
+const removeItem = (key) => {
+  memory.delete(key);
+  try { localStore()?.removeItem(key); } catch { /* 저장소를 못 쓰면 메모리만 지운다 */ }
+};
+
 export const storageKey = 'nlnb-mock-review';
 export const defaultSteps = {
   STARTED: 0, PRE_JUDGED: 1, REVIEWING: 2, REVIEWED: 4,
@@ -14,13 +39,13 @@ export function validState(state) {
 }
 
 export function save(state) {
-  localStorage.setItem(storageKey, JSON.stringify(state));
+  setItem(storageKey, JSON.stringify(state));
   return state;
 }
 
 // 저장하지 않고 읽기만 한다. 기록이 없으면 null (read()는 없으면 초기 상태를 저장해 다른 화면 상태를 바꾼다)
 export function peek() {
-  const raw = localStorage.getItem(storageKey);
+  const raw = getItem(storageKey);
   if (!raw) return null;
   try {
     const state = JSON.parse(raw);
@@ -31,7 +56,7 @@ export function peek() {
 }
 
 export function read() {
-  const raw = localStorage.getItem(storageKey);
+  const raw = getItem(storageKey);
   if (raw) {
     try {
       const state = JSON.parse(raw);
@@ -44,11 +69,11 @@ export function read() {
 function jsonStore(key) {
   return {
     save: (value) => {
-      localStorage.setItem(key, JSON.stringify(value));
+      setItem(key, JSON.stringify(value));
       return value;
     },
     read: () => {
-      const raw = localStorage.getItem(key);
+      const raw = getItem(key);
       if (!raw) return null;
       try {
         return JSON.parse(raw);
@@ -56,7 +81,7 @@ function jsonStore(key) {
         return null;
       }
     },
-    clear: () => localStorage.removeItem(key),
+    clear: () => removeItem(key),
   };
 }
 

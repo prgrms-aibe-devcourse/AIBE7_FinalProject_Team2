@@ -1,6 +1,6 @@
 import { mockCases } from './caseListMockData.js';
 import { mockOverview } from './overviewMockData.js';
-import { peek, read, restart, storageKey, validState } from './mockExperienceStore.js';
+import { getItem, peek, read, restart, storageKey, validState } from './mockExperienceStore.js';
 
 const delay = () => new Promise((resolve) => setTimeout(resolve, 250));
 const crimeTypes = ['MURDER', 'FRAUD', 'INJURY'];
@@ -20,7 +20,7 @@ const toMyStatus = (status) => (status === 'COMPLETED' ? 'COMPLETED' : 'IN_PROGR
 // 진행 중이고, 나머지는 이번 세션에 시작한 사건만 진행 중. 목록을 보기만 해서 기록이 생기지 않도록 read()는 부르지 않는다.
 function myStatusOf(caseId) {
   if (caseId === 1) {
-    const raw = localStorage.getItem(storageKey);
+    const raw = getItem(storageKey);
     if (!raw) return null; // 체험 전 — read()와 같은 기준(값 없음 · 빈 값). FE-19 리뷰: 목에서도 "체험 시작" 상태가 보이게
     let stored = null;
     try { stored = JSON.parse(raw); } catch { /* 손상된 값은 read()가 초기 상태로 되살리므로 진행 중으로 본다 */ }
