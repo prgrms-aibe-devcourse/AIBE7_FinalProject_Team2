@@ -290,7 +290,7 @@ Nginx가 **막은 요청(429)만** JSON 한 줄씩 따로 남기고, 모니터�
 | 내용 | `time` · `status` · `route` · `method` · `path`(쿼리 제외) · `ip` |
 | Loki 라벨 | `job="web"`, `route` = `auth_token`(재발급 · 로그아웃) · `admin_login` · `oauth`(카카오 시작) · `api`(그 밖) — 값 4개로 고정. **경로 기준**이라 zone과 1:1이 아니다(전용 · 공통 어느 쪽에 걸려도 그 경로로 센다). `ip` · `path`는 라벨로 올리지 않는다(BE-71 카디널리티 규칙) |
 | 공유 | `docker-compose.monitoring-agent.yml`의 `web-ratelimit-logs` 볼륨(웹 쓰기 · Alloy 읽기 전용). 에이전트를 안 쓰는 서버는 컨테이너 안에만 남는다 |
-| 크기 상한 | `41-trim-rate-limit-log.sh`가 1분마다 보고 **10MB**(`RATE_LIMIT_LOG_MAX_BYTES`)를 넘으면 비운다. 공격 중에도 디스크를 채우지 않는다. 비우기 직전 1분 안의 일부 줄은 Loki에 빠질 수 있다 |
+| 크기 상한 | `41-trim-rate-limit-log.sh`가 1분마다 보고 **10MB**(`.env`의 `RATE_LIMIT_LOG_MAX_BYTES`, 비우면 기본값 · 1보다 작으면 기본값)를 넘으면 비운다. 공격 중에도 디스크를 채우지 않는다. 비우기 직전 1분 안의 일부 줄은 Loki에 빠질 수 있다 |
 | 평소 접속 기록 | 그대로 stdout(`docker compose logs web`) |
 
 ```logql
@@ -298,6 +298,15 @@ Nginx가 **막은 요청(429)만** JSON 한 줄씩 따로 남기고, 모니터�
 topk(10, sum by (ip) (count_over_time({job="web"} | json [1h])))
 # 관리자 로그인에서 막힌 요청만
 {job="web", route="admin_login"} | json
+```
+
+- **시각**: Loki 엔트리 시각은 줄의 `time`(Nginx가 막은 시각)이다(`stage.timestamp`). Alloy가 멈췄다 켜져도 그 사이 429가 복구 시각에 몰리지 않는다.
+- **Alloy가 멈춘 사이 파일이 비워지면 그 구간 줄은 빠진다.** 다시 켜진 Alloy가 비우기 전 위치부터 읽기 때문이다(PR #236 리뷰에서 확인: 새 줄이 그 위치보다 짧으면 전부, 길면 앞부분이 빠진다). 앞이 잘린 조각 줄은 Alloy가 버린다(`stage.drop`). 상한(10MB)에 닿을 만큼 막히는 중에 Alloy까지 멈춘 경우에만 생긴다 — 그때 정확한 개수는 서버 오류 로그(`by zone`)로 본다.
+- **대시보드 반영**: `service.json`은 모니터링 EC2의 Grafana가 파일로 읽는다(프로비저닝, 기본 10초마다 다시 읽음). 메인 서버 자동 배포 대상이 아니므로, 머지 후 모니터링 EC2에서 저장소를 갱신한다 — 재시작은 필요 없다.
+
+```bash
+# 모니터링 EC2 (저장소 사본 위치에서)
+git fetch -q origin main && git checkout -q origin/main -- monitoring/grafana/dashboards
 ```
 
 - Docker의 socket이나 `/var/lib/docker/containers`를 Alloy에 붙이지 않았다. 다른 컨테이너의 로그 · 설정(환경변수 = 비밀값)까지 읽을 수 있게 되기 때문이다. 파일 하나만 볼륨으로 나눈다.

@@ -41,9 +41,27 @@ loki.source.file "web_rate_limited" {
 loki.process "web_rate_limited" {
 	forward_to = [loki.write.default.receiver]
 
-	stage.json {
-		expressions = {route = "route"}
+	// 줄 중간부터 읽힌 조각을 버린다. Alloy가 멈춘 사이 웹이 파일을 비우고(41-trim-rate-limit-log.sh) 다시 채우면,
+	// 다시 켜진 Alloy가 기억해 둔 위치부터 읽어 앞이 잘린 줄이 들어올 수 있다(PR #236 리뷰 확인 — 그 구간의 줄은 빠진다).
+	// 온전한 줄은 항상 "{"로 시작한다
+	stage.drop {
+		expression          = "^[^{]"
+		drop_counter_reason = "partial_line"
 	}
+
+	stage.json {
+		expressions = {route = "route", time = "time"}
+	}
+
+	// Loki 시각을 "Alloy가 읽은 시각"이 아니라 Nginx가 막은 시각으로 둔다(PR #236 리뷰).
+	// Alloy가 멈췄던 구간(재시작 · 이미지 교체 · mem_limit OOM)에 쌓인 줄이 복구 시각 한 점에 몰리지 않게 한다.
+	// $time_iso8601(예: 2026-10-21T12:00:00+00:00)은 RFC3339 그대로다. 재시도 상한(약 1시간)이 Loki의
+	// reject_old_samples_max_age(기본 1주)보다 훨씬 짧아 거부되지 않는다
+	stage.timestamp {
+		source = "time"
+		format = "RFC3339"
+	}
+
 	stage.labels {
 		values = {route = "route"}
 	}
