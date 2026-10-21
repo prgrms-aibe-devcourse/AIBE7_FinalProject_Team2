@@ -31,6 +31,7 @@ test('재발급하면 이후 요청에 액세스 토큰을 싣는다', async () 
 });
 
 test('401이면 한 번 재발급하고 같은 요청을 새 토큰으로 다시 보낸다', async () => {
+  saveUser({ nickname: '카카오 회원' }); // 새로고침 뒤: 토큰은 없고 로그인 표시만 있다
   let first = true;
   stubFetch((url) => {
     if (url.endsWith('/auth/token/reissue')) return reissued('B');
@@ -42,6 +43,7 @@ test('401이면 한 번 재발급하고 같은 요청을 새 토큰으로 다시
 });
 
 test('동시에 401을 받아도 재발급은 한 번만 부른다', async () => {
+  saveUser({ nickname: '카카오 회원' });
   stubFetch((url, init) => {
     if (url.endsWith('/auth/token/reissue')) return new Promise((resolve) => setTimeout(() => resolve(reissued('C')), 5));
     if (init.headers.Authorization) return { status: 200, body: {} };
@@ -76,6 +78,26 @@ test('로그아웃하면 토큰을 버린다', async () => {
   stubFetch((url) => (url.endsWith('/auth/token/reissue') ? reissued('D') : { status: 204 }));
   await reissueAccessToken();
   await logout();
+  await request('GET', '/cases');
+  assert.equal(calls.at(-1).auth, undefined);
+});
+
+test('토큰도 로그인 표시도 없으면 401에 재발급하지 않는다', async () => {
+  stubFetch(() => invalid);
+  await assert.rejects(request('GET', '/my-page'), { status: 401 });
+  assert.equal(calls.length, 1);
+});
+
+test('재발급 중에 로그아웃하면 재발급이 끝나도 토큰을 채우지 않는다', async () => {
+  let finish;
+  stubFetch((url) => {
+    if (url.endsWith('/auth/token/reissue')) return new Promise((resolve) => { finish = () => resolve(reissued('E')); });
+    return { status: 204 };
+  });
+  const pending = reissueAccessToken();
+  await logout();
+  finish();
+  await pending;
   await request('GET', '/cases');
   assert.equal(calls.at(-1).auth, undefined);
 });
