@@ -189,6 +189,29 @@ class ProfileDecoApiTest extends ApiIntegrationTest {
 			Integer.class, issued)).isEqualTo(1);
 	}
 
+	private int countTable(String table) {
+		return jdbcTemplate.queryForObject("SELECT count(*) FROM " + table, Integer.class);
+	}
+
+	@Test
+	@DisplayName("쿠키 없이 저장했다가 거절(400 · 409)되면 발급한 익명 사용자 · 출석이 함께 취소되고 쿠키도 내려가지 않는다 (BE-98)")
+	void rejectedSaveRollsBackIssue() throws Exception {
+		int users = countTable("anonymous_user");
+		int attendance = countTable("attendance");
+		Map<String, String> locked = defaults();
+		locked.put("frame", "wood");	// 첫 판결 전 잠김
+		Map<String, String> invalid = defaults();
+		invalid.put("frame", "rainbow");	// 목록에 없는 값
+
+		putDeco(null, locked).andExpect(status().isConflict())
+			.andExpect(result -> assertThat(result.getResponse().getHeader(HttpHeaders.SET_COOKIE)).isNull());
+		putDeco(null, invalid).andExpect(status().isBadRequest())
+			.andExpect(result -> assertThat(result.getResponse().getHeader(HttpHeaders.SET_COOKIE)).isNull());
+
+		assertThat(countTable("anonymous_user")).isEqualTo(users);
+		assertThat(countTable("attendance")).isEqualTo(attendance);
+	}
+
 	private void insertSavedDeco(UUID id, String frame, String sashStyle, String sashColorShort) {
 		jdbcTemplate.update("""
 			INSERT INTO profile_deco (anonymous_user_id, portrait, frame, background, sash_style, sash_color_short,
