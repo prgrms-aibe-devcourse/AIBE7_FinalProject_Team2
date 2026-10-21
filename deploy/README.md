@@ -516,8 +516,9 @@ backend ──▶ pipeline (FastAPI :8000, 내부 네트워크 전용) ──▶
                 └─ 볼륨: pipeline-out(작업 상태 · 생성 결과) · pipeline-cases(추출 산출물)
 ```
 
-- **포트를 호스트로 열지 않는다.** 같은 Compose 네트워크의 backend만 `http://pipeline:8000`으로 부른다.
-  그래서 서비스 자체에는 인증이 없다 — 관리자 인증 · CSRF는 백엔드가 한다 (`docs/decisions/COMMON-50.md`).
+- **포트를 호스트로 열지 않고, backend만 있는 별도 네트워크(`pipeline`)에 둔다.** 기본 네트워크에 두면
+  web(Nginx) · redis · postgres · 모니터링 에이전트도 `pipeline:8000`에 닿는다. 인증이 없는 서비스라 범위를 줄였다.
+  관리자 인증 · CSRF는 백엔드가 한다 (`docs/decisions/COMMON-50.md`).
 - 운영 DB에 직접 쓰지 않는다. 파이프라인의 `load` 단계는 서비스에서 꺼 두고, 검수 · 등록은 백엔드가 한다.
 - 판결문 원문은 이미지가 아니라 볼륨에만 있고, 결과 응답에도 넣지 않는다 (FR-5-3). 검수가 끝나면 백엔드가 작업을 지운다.
 
@@ -526,7 +527,11 @@ backend ──▶ pipeline (FastAPI :8000, 내부 네트워크 전용) ──▶
 t3.small은 2GB인데 지금 base 구성이 이미 1.75GB를 할당한다(backend 1g · postgres 512m · redis 256m).
 실측 여유는 약 250MB이고, 모니터링 에이전트를 켠 서버는 그중 100MB를 이미 쓴다.
 그래서 **7.1.2 RDS 전환(postgres 컨테이너 512m이 빠진다) 뒤에 켜는 것을 전제로 한다.**
-그 전에 켜야 하면 `backend`의 `mem_limit`을 먼저 내리고 `docker stats`로 확인한다.
+
+그 전에 켜려 하면 **`deploy.sh`가 배포를 시작하기 전에 멈춘다.** 여유가 모자란 상태에서 이 컨테이너가 붙으면
+커널 OOM이 가장 큰 프로세스(backend)를 먼저 죽일 수 있기 때문이다. 꼭 켜야 하면 `backend`의 `mem_limit`을
+먼저 내리고 `docker stats`로 확인한 뒤, `.env`에 `PIPELINE_MEMORY_CHECKED=1`을 넣는다.
+(RDS 전환 뒤에는 `postgres` 서비스가 없어져 이 검사를 타지 않는다.)
 
 ### 켜기
 
@@ -534,6 +539,7 @@ t3.small은 2GB인데 지금 base 구성이 이미 1.75GB를 할당한다(backen
 # 1) .env에 값 추가 (deploy/.env.example "AI 판결 파이프라인 서비스" 참고)
 #    PIPELINE_SERVICE=1
 #    ANTHROPIC_API_KEY · GEMINI_API_KEY · OPENAI_API_KEY 중 하나 이상 (없으면 deploy.sh가 배포 전에 멈춘다)
+#    PIPELINE_MEMORY_CHECKED=1  ← RDS 전환 전(postgres 컨테이너가 있는 서버)에만 필요. 위 "켜기 전: 메모리" 확인 후
 
 # 2) 올린다. 지금 운영에서 쓰는 -f 조합을 그대로 쓴다
 docker compose -f docker-compose.prod.yml -f docker-compose.pipeline.yml up -d --no-build pipeline
@@ -551,6 +557,9 @@ docker compose -f docker-compose.prod.yml -f docker-compose.pipeline.yml up -d -
 ```bash
 # 1) 호스트에 포트가 열려 있지 않아야 한다 (PORTS 칸이 비어 있어야 정상)
 docker compose -f docker-compose.prod.yml -f docker-compose.pipeline.yml ps pipeline
+
+# 1-2) 기본 네트워크에서는 이름조차 찾을 수 없어야 한다 (exit code 6 = 호스트를 못 찾음 → 정상)
+docker run --rm --network deploy_default curlimages/curl:8.11.1 -s --max-time 5 http://pipeline:8000/health; echo $?
 
 # 2) 서비스 응답 (컨테이너 안에서만 된다)
 docker exec lawnambul-pipeline-1 python3 -c \
@@ -572,6 +581,8 @@ docker stats --no-stream
 | 사건 등록만 안 된다 | 위 확인 3) — overlay를 빼고 backend를 다시 만들면 `PIPELINE_SERVICE_URL`이 사라진다 |
 | 작업이 계속 `FAILED` | LLM 키 문제가 가장 흔하다. `docker exec lawnambul-pipeline-1 printenv | grep -c API_KEY` 로 개수만 확인(값은 출력하지 않는다) |
 | 서버 메모리가 모자란다 | 위 "켜기 전: 메모리". 급하면 `PIPELINE_SERVICE=`로 비우고 `docker compose ... stop pipeline` |
+| 배포가 `PIPELINE_MEMORY_CHECKED` 때문에 멈춘다 | 의도한 동작이다 (RDS 전환 전 서버). 위 "켜기 전: 메모리"를 확인하고 값을 넣는다 |
+| 백엔드가 `pipeline`을 못 찾는다 | backend가 `pipeline` 네트워크에 붙어야 한다 → overlay 없이 backend를 다시 만들지 않았는지 확인 |
 
 ## 다음 작업에서 바꿀 곳
 

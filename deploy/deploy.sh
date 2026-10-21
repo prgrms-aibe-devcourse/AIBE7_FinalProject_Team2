@@ -114,6 +114,18 @@ case "$PIPELINE_SERVICE_VALUE" in
       log "❌ PIPELINE_SERVICE=1인데 .env에 LLM 키가 하나도 없다 (ANTHROPIC_API_KEY · GEMINI_API_KEY · OPENAI_API_KEY 중 하나)"
       exit 4
     }
+    # 메모리 가드 (PR #219 리뷰 반영). postgres 컨테이너가 아직 있는 서버 = 7.1.2 RDS 전환 전이고,
+    # 그때 base 구성이 이미 1.75GB를 잡아 실측 여유가 약 250MB뿐이다. 여기에 이 컨테이너가 붙으면
+    # 커널 OOM이 **가장 큰 프로세스(backend)를 먼저 죽일 수 있다.** 문서 경고만으로는 실수를 막지 못하므로
+    # 사람이 docker stats로 확인하고 PIPELINE_MEMORY_CHECKED=1을 넣었을 때만 켠다
+    # (RDS 전환 뒤에는 postgres 서비스가 없어져 이 분기를 타지 않는다)
+    if grep -qE '^[[:space:]]+postgres:[[:space:]]*$' "$DEPLOY_DIR/docker-compose.prod.yml" \
+       && [[ "$(env_value PIPELINE_MEMORY_CHECKED | tr -d "\"' \r")" != "1" ]]; then
+      log "❌ postgres 컨테이너가 있는 서버(RDS 전환 전)에서 파이프라인을 켜려 한다. 메모리 여유가 약 250MB뿐이라"
+      log "   backend가 OOM으로 죽을 수 있다. docker stats로 확인한 뒤 .env에 PIPELINE_MEMORY_CHECKED=1을 넣는다"
+      log "   (deploy/README.md \"AI 판결 파이프라인 서비스\" 참고)"
+      exit 4
+    fi
     COMPOSE+=(-f "$DEPLOY_DIR/docker-compose.pipeline.yml")
     PIPELINE_ENABLED=1
     ;;

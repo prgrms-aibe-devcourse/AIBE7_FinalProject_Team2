@@ -12,10 +12,12 @@ deploy/docker-compose.pipeline.yml). 그래서 이 서비스 자체에는 인증
 
 from __future__ import annotations
 
-from fastapi import FastAPI, HTTPException
+import logging
+
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 
-from jobs import JobConflict, JobError, JobNotFound, JobStore
+from jobs import MAX_LOG_TAIL, JobConflict, JobError, JobNotFound, JobStore
 
 app = FastAPI(title="AI 판결 파이프라인 서비스", version="1.0.0", docs_url=None, redoc_url=None)
 store = JobStore()
@@ -45,10 +47,25 @@ def create_job(request: dict):
 
     본문: {"sources": [{"originalText": "...", "note": "..."}], "models": ["gemini:..."],
            "stages": {...}, "until": "axis", "incidentDate": "...", "indictmentDate": "..."}
+
+    시작하지 못하면 만들어 둔 작업을 **지우고** 오류를 돌려준다 (PR #219 리뷰 반영). 그냥 두면 이미 도는
+    작업이 있어 409로 거절된 요청의 판결문 원문이 디스크에 남는다 (FR-5-3).
     """
     job_id = _handle(lambda: store.create(request))
-    _handle(lambda: store.start(job_id))
+    try:
+        _handle(lambda: store.start(job_id))
+    except Exception:
+        _discard(job_id)
+        raise
     return store.status(job_id)
+
+
+def _discard(job_id):
+    """시작하지 못한 작업을 치운다. 치우다 실패해도 원래 오류를 가리지 않는다"""
+    try:
+        store.delete(job_id)
+    except Exception:  # noqa: BLE001 - 정리 실패가 원래 오류를 덮지 않게 한다
+        logging.getLogger(__name__).warning("시작하지 못한 작업을 지우지 못했습니다: %s", job_id)
 
 
 @app.get("/jobs/{job_id}")
@@ -64,8 +81,8 @@ def job_result(job_id: str):
 
 
 @app.get("/jobs/{job_id}/log", response_class=PlainTextResponse)
-def job_log(job_id: str, tail: int = 200):
-    """파이프라인 출력 꼬리 (실패 원인 확인용)"""
+def job_log(job_id: str, tail: int = Query(default=200, ge=1, le=MAX_LOG_TAIL)):
+    """파이프라인 출력 꼬리 (실패 원인 확인용). tail=0은 로그 전체가 되므로 1부터 받는다"""
     return _handle(lambda: store.log(job_id, tail=tail))
 
 

@@ -19,12 +19,21 @@ import shutil
 import signal
 import subprocess
 import sys
+import threading
 import uuid
 from pathlib import Path
 
 TOOL_DIR = Path(__file__).resolve().parent.parent
 PIPELINE_SCRIPT = TOOL_DIR / "pipeline.py"
 DEFAULT_JOBS_DIR = TOOL_DIR / "out" / "jobs"
+
+# 파이프라인이 작업 이름(job-<작업ID>)으로 파일 · 폴더를 만드는 곳. 작업을 지울 때 여기까지 지워야
+# 판결문 원문이 남지 않는다 (PR #219 리뷰 반영, FR-5-3)
+#   cases/job-<id>.source_internal.json  ← 원문. extract가 쓴다 (pipeline.py CASES_DIR)
+#   cases/job-<id>.case.json · .court_judgment_internal.json · .report.json
+#   out/runs/job-<id>-<해시>/            ← generate 회차 결과 (pipeline.py RUNS_DIR)
+# out/pipeline/job-<id>/ (state · references · contamination · axis)는 state_path로 따로 지운다
+ARTIFACT_DIRS = ("cases", "out/runs")
 
 # 파이프라인 단계 순서 (pipeline.py STAGES와 같아야 한다)
 STAGES = ("extract", "court", "contamination", "rag", "generate", "select", "axis", "load")
@@ -50,6 +59,9 @@ DISABLED_STAGES = ("load", "rag", "contamination")
 NEVER_ENABLED_STAGES = ("load",)
 
 JOB_ID_PATTERN = re.compile(r"^[0-9a-f]{32}$")
+
+# 로그 꼬리 요청의 상한 (log 참고)
+MAX_LOG_TAIL = 2000
 
 
 class JobError(Exception):
@@ -115,6 +127,26 @@ def _alive(pid, process=None):
     return not _is_zombie(pid)
 
 
+def _terminate(pid):
+    """작업 프로세스를 멈춘다.
+
+    파이프라인은 단계에 따라 자식 프로세스를 띄운다(psql 등). 부모에게만 SIGTERM을 보내면 그 자식이 남아
+    계속 돌 수 있다. 그래서 **프로세스 그룹째** 보낸다 — start_new_session=True로 띄워 그룹 ID가 pid와 같다.
+    그룹을 찾지 못하는 환경이면 프로세스 하나에만 보낸다 (PR #219 리뷰 반영).
+    """
+    if not pid:
+        return
+    try:
+        os.killpg(os.getpgid(pid), signal.SIGTERM)
+        return
+    except (ProcessLookupError, PermissionError, OSError):
+        pass
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except (ProcessLookupError, PermissionError):
+        pass
+
+
 class JobStore:
     """작업 폴더를 읽고 쓴다. 작업 하나 = 폴더 하나라 서비스를 다시 띄워도 이어서 볼 수 있다.
 
@@ -131,6 +163,8 @@ class JobStore:
         self._popen = popen  # 테스트에서 가짜로 바꾼다
         # 이 프로세스가 띄운 작업의 핸들 (jobId → Popen). 끝난 자식을 거둬 가려면 핸들이 있어야 한다(_alive)
         self._processes = {}
+        # "도는 작업이 있나" 확인과 실제 띄우기를 묶는 잠금 (start 참고)
+        self._start_lock = threading.Lock()
 
     # ---------------------------------------------------------------- 경로
 
@@ -153,32 +187,46 @@ class JobStore:
     # ---------------------------------------------------------------- 생성 · 실행
 
     def create(self, request):
-        """작업 폴더를 만들고 설정 · 판결문 파일을 쓴다. 아직 실행하지는 않는다"""
-        sources = request.get("sources") or []
-        if not sources:
+        """작업 폴더를 만들고 설정 · 판결문 파일을 쓴다. 아직 실행하지는 않는다.
+
+        **요청을 전부 검증한 뒤에야 파일을 쓴다** (PR #219 리뷰 반영). 원문을 먼저 쓰고 나중에 검증하면,
+        400으로 거절한 요청의 판결문 원문이 디스크에 남는다
+        """
+        sources = request.get("sources")
+        if not isinstance(sources, list) or not sources:
             raise JobError("sources가 비어 있습니다 (판결문 1건 이상)")
         if len(sources) > 3:
             raise JobError("sources는 3건까지입니다 (심급별 1건)")
 
+        # 1) 먼저 검증만 한다. 아직 아무것도 쓰지 않는다
+        texts = []
+        for index, source in enumerate(sources):
+            if not isinstance(source, dict):
+                raise JobError(f"sources[{index}]는 객체여야 합니다")
+            text = source.get("originalText")
+            if not isinstance(text, str) or not text.strip():
+                raise JobError(f"sources[{index}].originalText가 비어 있습니다")
+            note = source.get("note")
+            if note is not None and not isinstance(note, str):
+                raise JobError(f"sources[{index}].note는 문자열이어야 합니다")
+            texts.append((text, note))
+
         job_id = uuid.uuid4().hex
         path = self.jobs_dir / job_id
         raw_dir = path / "raw"
-        raw_dir.mkdir(parents=True, exist_ok=True)
-
+        # 원문은 작업 폴더에만 둔다(공개 저장소에 남기지 않는다). 볼륨 설정은 docker-compose.pipeline.yml 참고
         config_sources = []
-        for index, source in enumerate(sources, start=1):
-            text = source.get("originalText")
-            if not isinstance(text, str) or not text.strip():
-                raise JobError(f"sources[{index - 1}].originalText가 비어 있습니다")
-            # 원문은 작업 폴더에만 둔다(공개 저장소에 남기지 않는다). 볼륨 설정은 docker-compose.pipeline.yml 참고
-            source_file = raw_dir / f"source-{index}.txt"
-            source_file.write_text(text, encoding="utf-8")
-            entry = {"path": str(source_file)}
-            if source.get("note"):
-                entry["note"] = source["note"]
+        for index, (text, note) in enumerate(texts, start=1):
+            entry = {"path": str(raw_dir / f"source-{index}.txt")}
+            if note:
+                entry["note"] = note
             config_sources.append(entry)
+        config = self._build_config(job_id, config_sources, request)  # 여기서 실패해도 쓴 파일이 없다
 
-        config = self._build_config(job_id, config_sources, request)
+        # 2) 검증이 모두 끝난 뒤에만 쓴다
+        raw_dir.mkdir(parents=True, exist_ok=True)
+        for index, (text, _) in enumerate(texts, start=1):
+            (raw_dir / f"source-{index}.txt").write_text(text, encoding="utf-8")
         _write_json(path / "config.json", config)
         _write_json(path / "job.json", {
             "jobId": job_id,
@@ -195,9 +243,15 @@ class JobStore:
     def _build_config(self, job_id, config_sources, request):
         """파이프라인 설정. 요청에서 받은 stages를 덮어쓰되, 서비스에서 끄기로 한 단계는 끈 채로 둔다"""
         stages = {stage: {"enabled": False} for stage in DISABLED_STAGES}
-        for stage, override in (request.get("stages") or {}).items():
+        overrides = request.get("stages")
+        if overrides is not None and not isinstance(overrides, dict):
+            raise JobError("stages는 객체여야 합니다")
+        for stage, override in (overrides or {}).items():
             if stage not in STAGES:
                 raise JobError(f"모르는 단계입니다: {stage}")
+            # dict가 아니면 update()에서 TypeError가 나 500이 된다. 요청이 잘못된 것이므로 400으로 돌려준다
+            if not isinstance(override, dict):
+                raise JobError(f"stages.{stage}는 객체여야 합니다")
             stages.setdefault(stage, {}).update(override)
         # rag · contamination은 요청으로 다시 켤 수 있지만 load는 아니다.
         # load는 운영 DB에 직접 쓰는 단계다 — 적재는 관리자가 검수한 뒤 백엔드가 한다(COMMON-50).
@@ -224,41 +278,55 @@ class JobStore:
         """파이프라인을 서브프로세스로 띄운다. 이미 도는 작업이 있으면 거절한다
 
         한 번에 하나만 돌린다 — 외부 AI 호출 한도를 지키기 위해서다(API 명세 A-14 IMPORT_IN_PROGRESS).
+
+        **확인과 띄우기를 잠금으로 묶는다** (PR #219 리뷰 반영). FastAPI는 `def` 엔드포인트를 스레드 풀에서
+        돌리기 때문에, 묶지 않으면 두 요청이 나란히 "도는 작업 없음"을 통과해 파이프라인이 둘 다 뜬다.
+        워커는 1개라서(Dockerfile `--workers 1`) 프로세스 안 잠금으로 충분하다.
         """
-        running = self.running_job_id()
-        if running and running != job_id:
-            raise JobConflict(f"이미 실행 중인 작업이 있습니다: {running}")
+        with self._start_lock:
+            running = self.running_job_id()
+            if running and running != job_id:
+                raise JobConflict(f"이미 실행 중인 작업이 있습니다: {running}")
 
-        path = self.job_dir(job_id)
-        meta = _read_json(path / "job.json") or {}
-        log_file = path / "log.txt"
-        command = [sys.executable, str(PIPELINE_SCRIPT), "run", str(path / "config.json")]
-        until = meta.get("until") or "axis"
-        if until:
-            command += ["--until", until]
+            path = self.job_dir(job_id)
+            meta = _read_json(path / "job.json") or {}
+            log_file = path / "log.txt"
+            command = [sys.executable, str(PIPELINE_SCRIPT), "run", str(path / "config.json")]
+            until = meta.get("until") or "axis"
+            if until:
+                command += ["--until", until]
 
-        handle = log_file.open("a", encoding="utf-8")
-        try:
-            process = self._popen(command, cwd=str(self.tool_dir), stdout=handle, stderr=subprocess.STDOUT)
-        finally:
-            handle.close()
-        self._processes[job_id] = process
-        meta.update(status=RUNNING, pid=process.pid, startedAt=_now())
-        _write_json(path / "job.json", meta)
-        return meta
+            handle = log_file.open("a", encoding="utf-8")
+            try:
+                # start_new_session: 파이프라인을 새 프로세스 그룹의 우두머리로 띄운다.
+                # 중단할 때 파이프라인이 띄운 자식까지 그룹째 멈추기 위해서다 (cancel 참고)
+                process = self._popen(command, cwd=str(self.tool_dir), stdout=handle,
+                                      stderr=subprocess.STDOUT, start_new_session=True)
+            finally:
+                handle.close()
+            self._processes[job_id] = process
+            # 메타를 쓰고 나서야 잠금을 놓는다 — 다음 요청의 running_job_id가 이 작업을 보게 하려면 필요하다
+            meta.update(status=RUNNING, pid=process.pid, startedAt=_now())
+            _write_json(path / "job.json", meta)
+            return meta
 
     def _job_alive(self, meta):
         """그 작업의 프로세스가 살아 있는지. 이 프로세스가 띄운 작업이면 핸들로 본다 (_alive 참고)"""
         return _alive(meta.get("pid"), self._processes.get(meta.get("jobId")))
 
     def cancel(self, job_id):
-        """도는 작업을 멈춘다. state.json은 그대로 남아 어디까지 갔는지 볼 수 있다"""
-        meta = _read_json(self.job_dir(job_id) / "job.json") or {}
-        pid = meta.get("pid")
-        if self._job_alive(meta):
-            os.kill(pid, signal.SIGTERM)
+        """도는 작업을 멈춘다. state.json은 그대로 남아 어디까지 갔는지 볼 수 있다.
+
+        **이미 끝난 작업은 건드리지 않는다** (PR #219 리뷰 반영). 전에는 성공으로 끝난 작업에 중단을 불러도
+        FAILED로 덮어써서, 끝난 결과를 되돌릴 수 없게 망가뜨렸다.
+        """
+        path = self.job_dir(job_id)
+        meta = _read_json(path / "job.json") or {}
+        if not self._job_alive(meta):
+            return meta
+        _terminate(meta.get("pid"))
         meta.update(status=FAILED, finishedAt=_now(), error="관리자가 중단했습니다")
-        _write_json(self.job_dir(job_id) / "job.json", meta)
+        _write_json(path / "job.json", meta)
         return meta
 
     # ---------------------------------------------------------------- 조회
@@ -367,20 +435,60 @@ class JobStore:
         return result
 
     def log(self, job_id, tail=200):
+        """파이프라인 출력의 마지막 tail줄.
+
+        tail은 1 ~ MAX_LOG_TAIL로 맞춘다. 0을 그대로 쓰면 `lines[-0:]`이 **로그 전체**가 되어,
+        꼬리만 달라던 요청에 수만 줄을 돌려주게 된다 (PR #219 리뷰 반영)
+        """
         path = self.job_dir(job_id) / "log.txt"
         if not path.exists():
             return ""
+        try:
+            tail = int(tail)
+        except (TypeError, ValueError):
+            raise JobError("tail은 정수여야 합니다")
+        tail = max(1, min(tail, MAX_LOG_TAIL))
         lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
         return "\n".join(lines[-tail:])
 
     def delete(self, job_id):
-        """작업 폴더를 지운다 (판결문 원문이 들어 있어 검수가 끝나면 지운다)"""
+        """작업이 남긴 것을 **모두** 지운다. 검수가 끝나면 백엔드가 부른다.
+
+        **판결문 원문을 지우는 것이 이 함수의 핵심이다** (요구사항 FR-5-3). 파이프라인은 한 작업의 산출물을
+        네 군데에 나눠 쓰기 때문에, 작업 폴더만 지우면 원문(`cases/job-<id>.source_internal.json`)이 볼륨에
+        그대로 남는다 (PR #219 리뷰에서 발견).
+
+          1. <jobs_dir>/<id>/          입력 원문 raw/ · 설정 · 로그
+          2. out/pipeline/job-<id>/    state.json · references · contamination · axis
+          3. cases/job-<id>.*          extract · court 산출물 (**원문 포함**)
+          4. out/runs/job-<id>-*/      generate 회차 결과
+
+        3 · 4는 state.json의 outputs 경로가 아니라 **작업 이름으로 훑어서** 지운다. 단계가 파일을 쓰다가
+        중간에 실패하면 outputs에 경로가 기록되지 않아, 경로만 보고 지우면 원문이 남기 때문이다.
+        """
         path = self.job_dir(job_id)
         meta = _read_json(path / "job.json") or {}
         if self._job_alive(meta):
             raise JobConflict("실행 중인 작업은 지울 수 없습니다 (먼저 중단하세요)")
         self._processes.pop(job_id, None)
-        shutil.rmtree(path)
+        self._remove_artifacts(job_id)
         state_dir = self.state_path(job_id).parent
         if state_dir.is_dir():
             shutil.rmtree(state_dir)
+        shutil.rmtree(path)  # 작업 폴더는 마지막에 — 앞에서 실패하면 흔적이 남아 다시 지울 수 있다
+
+    def _remove_artifacts(self, job_id):
+        """ARTIFACT_DIRS에서 이 작업 이름으로 시작하는 파일 · 폴더를 지운다.
+
+        작업 ID는 job_dir에서 이미 32자리 16진수로 확인했으므로 glob 패턴에 다른 문자가 섞이지 않는다
+        """
+        prefix = self.pipeline_name(job_id)
+        for relative in ARTIFACT_DIRS:
+            base = self.tool_dir / relative
+            if not base.is_dir():
+                continue
+            for target in base.glob(f"{prefix}*"):
+                if target.is_dir():
+                    shutil.rmtree(target, ignore_errors=True)
+                else:
+                    target.unlink(missing_ok=True)
