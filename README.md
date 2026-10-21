@@ -90,6 +90,8 @@ ls backend/private-seed/seed                # R__10 · R__20 · R__30 세 파일
 | `ADMIN_BOOTSTRAP_EMAIL` · `ADMIN_BOOTSTRAP_PASSWORD` | 없음 | (확장, BE-39) 첫 관리자 계정. 둘 다 있고 그 이메일의 계정이 없을 때만 기동 시 한 번 만든다(비밀번호 12자 이상). 만든 뒤 환경변수를 지운다. `ADMIN_BOOTSTRAP_NAME`으로 표시 이름 지정(기본 `관리자`) |
 | `SESSION_COOKIE_SECURE` | `true` | (확장) 관리자 세션 · CSRF 쿠키의 Secure 속성. localhost는 Secure 쿠키를 그대로 받으므로 보통 바꿀 필요 없다 |
 | `ADMIN_SESSION_TIMEOUT` | `30m` | (확장) 관리자 세션 유지 시간 |
+| `JWT_SECRET` | 없음(필수) | (확장, BE-94) 액세스 토큰 서명 키. Base64, 디코딩 32바이트 이상. 없으면 기동이 실패한다(공개 저장소에 기본값을 두지 않는다 — 있으면 누구나 토큰을 위조할 수 있다). 로컬은 `export JWT_SECRET=$(openssl rand -base64 32)`처럼 각자 만들어 쓴다 |
+| `JWT_ACCESS_TOKEN_TTL` · `JWT_REFRESH_TOKEN_TTL` | `15m` · `14d` | (확장, BE-94) 액세스 · 리프레시 토큰 유효 기간 |
 
 운영 DB 계정은 이 저장소에 적지 않고 실행할 때 환경변수로만 넘긴다. 시드는 운영에 넣지 않는다.
 

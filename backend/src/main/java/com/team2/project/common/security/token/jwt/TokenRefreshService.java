@@ -25,9 +25,8 @@ public class TokenRefreshService {
 
 	/** @throws TokenException 리프레시 토큰이 없거나 이미 폐기됨(INVALID) */
 	public IssuedTokens reissue(String refreshToken) {
-		StoredRefreshToken stored = refreshTokens.find(refreshToken)
+		StoredRefreshToken stored = refreshTokens.consume(refreshToken)
 			.orElseThrow(() -> TokenException.invalid("리프레시 토큰이 없거나 만료됨"));
-		refreshTokens.delete(refreshToken);
 		MemberPrincipal member = new MemberPrincipal(stored.memberId(), stored.roles());
 		return tokenIssuer.issue(member);
 	}

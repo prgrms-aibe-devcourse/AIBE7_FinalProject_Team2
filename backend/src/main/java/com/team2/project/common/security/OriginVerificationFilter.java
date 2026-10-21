@@ -8,9 +8,9 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
+import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
@@ -23,22 +23,27 @@ import org.springframework.web.filter.OncePerRequestFilter;
  *
  * 포트는 비교하지 않는다(Nginx가 TLS를 끝내고 내부 포트로 넘기므로 외부에서 본 포트와 다를 수 있다).
  * 스프링 빈으로 등록하지 않는다(사용자 체인에만 넣는다, BearerTokenAuthenticationFilter와 같은 이유).
+ *
+ * 보호 경로 판정은 원시 {@code getRequestURI()} 문자열 비교가 아니라 {@link RequestMatcher}로 한다 —
+ * {@code getRequestURI()}는 context path를 포함하고 디코딩되지 않아, context path가 있는 배포나
+ * percent-encoding된 경로(예: {@code /token/%72eissue})에서는 Spring MVC가 디코딩해 컨트롤러까지
+ * 통과시키는 요청을 이 필터가 놓칠 수 있다(PR #218 리뷰)
  */
 @Slf4j
 public class OriginVerificationFilter extends OncePerRequestFilter {
 
-	private final Set<String> protectedPaths;
+	private final RequestMatcher protectedRequests;
 	private final JsonSecurityErrorHandler errors;
 
-	public OriginVerificationFilter(Set<String> protectedPaths, JsonSecurityErrorHandler errors) {
-		this.protectedPaths = Set.copyOf(protectedPaths);
+	public OriginVerificationFilter(RequestMatcher protectedRequests, JsonSecurityErrorHandler errors) {
+		this.protectedRequests = protectedRequests;
 		this.errors = errors;
 	}
 
 	@Override
 	protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
 		throws ServletException, IOException {
-		if (!protectedPaths.contains(request.getRequestURI())) {
+		if (!protectedRequests.matches(request)) {
 			chain.doFilter(request, response);
 			return;
 		}
@@ -72,6 +77,13 @@ public class OriginVerificationFilter extends OncePerRequestFilter {
 		}
 	}
 
+	/**
+	 * {@code request.getScheme()} · {@code getServerName()}은 Nginx가 TLS를 끝내고 HTTP로 넘기는 배포에서
+	 * {@code server.forward-headers-strategy: native}(Tomcat RemoteIpValve)가 켜져 있어야 원래 scheme · Host를
+	 * 돌려준다. 그 설정과 Nginx의 forwarded 헤더 전달은 BE-62(카카오 로그인, `forward-headers-strategy: native`
+	 * 도입 예정)에서 함께 들어간다 — docs/decisions/BE-94.md "추후 재검토" 참고. 그 전까지 운영에 먼저 올라가면
+	 * Origin(https)과 서버가 본 scheme(http)이 달라 재발급 · 로그아웃이 403으로 막힐 수 있다
+	 */
 	private static boolean matchesServer(String origin, HttpServletRequest request) {
 		try {
 			URI uri = new URI(origin);

@@ -12,6 +12,7 @@ import com.team2.project.common.security.token.jwt.RefreshTokenStore;
 import com.team2.project.common.web.RefreshTokenCookies;
 import com.team2.project.support.ApiIntegrationTest;
 import jakarta.servlet.http.Cookie;
+import java.net.URI;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
@@ -100,6 +101,20 @@ class AuthControllerTest extends ApiIntegrationTest {
 
 		mockMvc.perform(post(REISSUE).cookie(cookie).header(HttpHeaders.REFERER, SAME_ORIGIN + "/mypage"))
 			.andExpect(status().isOk());
+	}
+
+	/** PR #218 리뷰: getRequestURI() 원시 비교였다면 percent-encoding으로 Origin 검증을 건너뛸 수 있었다 */
+	@Test
+	void reissue_percentEncodedPath_stillGoesThroughOriginCheck() throws Exception {
+		Cookie cookie = refreshCookie(25);
+		// post(String)은 '%'를 다시 인코딩해 버리므로(%72 → %2572), 이미 인코딩된 URI를 그대로 쓴다
+		URI encoded = new URI("/api/v1/auth/token/%72eissue");
+
+		mockMvc.perform(post(encoded).cookie(cookie).header(HttpHeaders.ORIGIN, OTHER_ORIGIN))
+			.andExpect(status().isForbidden())
+			.andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+		refreshTokens.delete(cookie.getValue());
 	}
 
 	// ---- 로그아웃 ----
