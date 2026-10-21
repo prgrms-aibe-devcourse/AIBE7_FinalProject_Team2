@@ -23,7 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * 체험이 처음 COMPLETED가 될 때(API 13 비교 공개) 상태 변경과 같은 트랜잭션에서 한 번만 부른다 (3-4).
  * - 단독으로 부르지 못하게 MANDATORY로 둔다. 저장이 실패하면 COMPLETED 전이도 함께 롤백되어
- *   "완료했는데 성향 기여가 없는" 체험이 생기지 않는다 (P-5 experienceCount가 완료 체험 수와 어긋나지 않게, #128)
+ *   "완료했는데 성향 기여가 없는" 체험이 생기지 않는다 (P-5 history · experienceCount가 완료 체험과 어긋나지 않게, #128 · BE-99)
  * - 그 순간의 factor.value_axis로 세어 개수를 고정 저장한다. 나중에 관리자가 축을 바꿔도 지난 체험은 바뀌지 않는다 (3-4)
  * - 첫 회차 체험만 저장한다. 두 번째 체험부터는 실제 판결을 이미 알고 있어 통계에서 뺀다 (3-1, ERD 결정 #5, #109)
  */
