@@ -1,4 +1,5 @@
 // Grafana Alloy — 백엔드 JSON 로그 파일을 읽어 Loki로 보낸다 (BE-71, WBS 7.2.3).
+// (BE-63) 웹 429 전용 로그도 같은 규칙으로 보낸다. 로컬 Compose에는 웹이 없어 파일이 없으면 그냥 건너뛴다
 // Promtail은 2026-03-02에 EOL(지원 종료)돼서 신규로는 쓰지 않는다. 같은 역할을 Alloy의 구성 요소로 만든다.
 
 local.file_match "backend_logs" {
@@ -22,6 +23,29 @@ loki.process "backend" {
 	}
 	stage.labels {
 		values = {level = "level"}
+	}
+}
+
+// 웹(Nginx)의 429 전용 로그 (BE-63). Nginx가 막은 요청은 백엔드에 닿지 않아 위 백엔드 로그에 없다.
+// default.conf가 status 429만 JSON 한 줄씩 쓴다. route(auth_token · admin_login · oauth · api)만 라벨로 올린다 —
+// 값이 네 개로 고정이라 스트림이 늘지 않는다. ip · path는 요청마다 달라 라벨로 올리지 않는다(BE-71 카디널리티 규칙)
+local.file_match "web_rate_limited" {
+	path_targets = [{"__path__" = "/var/log/web/rate-limited.log", "job" = "web"}]
+}
+
+loki.source.file "web_rate_limited" {
+	targets    = local.file_match.web_rate_limited.targets
+	forward_to = [loki.process.web_rate_limited.receiver]
+}
+
+loki.process "web_rate_limited" {
+	forward_to = [loki.write.default.receiver]
+
+	stage.json {
+		expressions = {route = "route"}
+	}
+	stage.labels {
+		values = {route = "route"}
 	}
 }
 

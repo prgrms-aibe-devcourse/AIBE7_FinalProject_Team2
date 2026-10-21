@@ -278,7 +278,29 @@ docker compose -f docker-compose.prod.yml logs web 2>&1 | grep "limiting request
 ```
 
 - **값 조정**: 정상 사용자가 막히는 기록이 보이면 `default.conf`의 `rate`(zone) · `snippets/api-proxy.conf`의 `burst`를 고쳐 PR → 새 웹 이미지로 반영한다. 서버에서 컨테이너 안 파일을 직접 고치지 않는다(다음 배포 때 사라진다).
-- 백엔드 지표(Prometheus)에는 429가 잡히지 않는다. 백엔드까지 가지 않고 Nginx에서 끝나기 때문이다. 확인은 위 로그로 한다. 로그 수집(`monitoring/alloy-config.alloy`)도 지금은 **백엔드 로그만** 모아서 Loki · Grafana에서는 보이지 않는다 — 막히는 빈도를 대시보드 · 경보로 보려면 웹 컨테이너 로그도 수집하도록 추가한다(C 후속 검토).
+- 백엔드 지표(Prometheus)에는 429가 잡히지 않는다. 백엔드까지 가지 않고 Nginx에서 끝나기 때문이다. 서버에서는 위 로그로, Grafana에서는 아래 "429 로그 수집"으로 본다.
+
+### 429 로그 수집 (BE-63 2차)
+
+Nginx가 **막은 요청(429)만** JSON 한 줄씩 따로 남기고, 모니터링 에이전트(`MONITORING_AGENT=1`)의 Alloy가 Loki로 보낸다. Grafana **서비스** 대시보드의 "Rate limit 429 (제한별)" 패널에서 본다.
+
+| 항목 | 내용 |
+| --- | --- |
+| 파일 | 웹 컨테이너 `/var/log/nginx-ratelimit/rate-limited.log` (`default.conf`의 `log_format rate_limited`, `if=$rate_limited`) |
+| 내용 | `time` · `status` · `route` · `method` · `path`(쿼리 제외) · `ip` |
+| Loki 라벨 | `job="web"`, `route` = `auth_token`(재발급 · 로그아웃) · `admin_login` · `oauth`(카카오 시작) · `api`(공통) — 값 4개로 고정. `ip` · `path`는 라벨로 올리지 않는다(BE-71 카디널리티 규칙) |
+| 공유 | `docker-compose.monitoring-agent.yml`의 `web-ratelimit-logs` 볼륨(웹 쓰기 · Alloy 읽기 전용). 에이전트를 안 쓰는 서버는 컨테이너 안에만 남는다 |
+| 크기 상한 | `41-trim-rate-limit-log.sh`가 1분마다 보고 **10MB**(`RATE_LIMIT_LOG_MAX_BYTES`)를 넘으면 비운다. 공격 중에도 디스크를 채우지 않는다. 비우기 직전 1분 안의 일부 줄은 Loki에 빠질 수 있다 |
+| 평소 접속 기록 | 그대로 stdout(`docker compose logs web`) |
+
+```logql
+# 막힌 IP 상위 (Grafana Explore, Loki)
+topk(10, sum by (ip) (count_over_time({job="web"} | json [1h])))
+# 관리자 로그인에서 막힌 요청만
+{job="web", route="admin_login"} | json
+```
+
+- Docker의 socket이나 `/var/lib/docker/containers`를 Alloy에 붙이지 않았다. 다른 컨테이너의 로그 · 설정(환경변수 = 비밀값)까지 읽을 수 있게 되기 때문이다. 파일 하나만 볼륨으로 나눈다.
 
 ### 서버에서 꼭 확인: Nginx가 사용자 IP를 보는가
 
