@@ -42,7 +42,10 @@ public record MyPageResponse(
 		static final Profile EMPTY = new Profile(0);
 	}
 
-	/** 종합 판결 성향. type은 네 축 모두 값이 있을 때만 있다 (성향 산식 4장) */
+	/**
+	 * 현재 판결 성향: 첫 회차 체험 중 완료 순서로 최근 3건의 평균 (성향 산식 4장 v0.8, API 명세 v0.44).
+	 * type은 네 축 모두 값이 있을 때만 있다. experienceCount는 평균에 쓴 체험 수(최대 3)
+	 */
 	public record JudgmentPersonality(Map<ValueAxis, Double> axisScores, PersonalityTypeResponse type,
 		int experienceCount) {
 	}
