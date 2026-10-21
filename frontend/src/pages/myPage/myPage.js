@@ -573,8 +573,9 @@ function caseLine(item, navigate, api) {
   const actions = element('div', 'my-case-actions');
   if (status === 'COMPLETED') {
     // 내 결과 보기(FE-75): 6막 지면 모양의 내 결과 지면(처음 판단 → 최종 판결 · 이 사건으로 달라진 성향 · 이 사건의 판결 성향)
+    // hasResult: false는 목의 페이지 확인용 추가 줄(결과가 사건 번호로 찾아져 원래 사건 결과가 나오므로 숨긴다). 실제 API에는 없는 값이라 늘 보인다
+    if (item.hasResult !== false) actions.append(button('내 결과 보기', () => navigate('myResult', { caseId: item.caseId }), 'secondary-button'));
     actions.append(
-      button('내 결과 보기', () => navigate('myResult', { caseId: item.caseId }), 'secondary-button'),
       button('독자 엽서 쓰기', (event) => openCaseReviewPopup({ caseId: item.caseId, api, navigate, from: event.currentTarget }), 'secondary-button'),
     );
   } else {
