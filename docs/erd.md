@@ -38,6 +38,7 @@
 | v1.31 | 2026-10-21 | 프로필 꾸미기 테이블 추가 (**확장 단계**, BE-96 · V23) — `profile_deco` 신설(익명 사용자당 한 줄, 꾸미기 12칸 · `updated_at`). 도전과제 진행도는 저장하지 않고 계산한다. 10장 추가 |
 | v1.33 | 2026-10-21 | 회원 테이블 추가 (**확장 단계**, BE-62 · V25) — `member` 신설(공급자 · 공급자 회원번호만, 개인정보 없음, `(provider, provider_user_id)` 유일). `anonymous_user.member_id`에 FK(`fk_anonymous_user_member`) · 부분 인덱스 추가. 익명 기록 연결 규칙(공용 PC면 덮어쓰지 않고 새 익명 ID) |
 | v1.34 | 2026-10-21 | 사건 등록 작업 테이블 추가 (**확장 단계**, BE-93 1차 · V24) — `case_import`(작업 상태 · 마지막으로 받은 단계 상태) · `case_import_source`(등록 요청에 들어온 판결문) 신설. 원문을 `case_import_source.original_text`에 들고 있다가 적재 때 `case_source`로 옮기고 비운다 — 파이프라인 서비스가 원문을 돌려주지 않기 때문(FR-5-3, COMMON-50). 감사 로그 행동 `CASE_IMPORT` 추가(V24). 적재(`case_id` 채우기)는 BE-93 2차 (결정: `docs/decisions/BE-93.md`) |
+| v1.35 | 2026-10-22 | `case_incident_photo` 역할 칸 1단계 추가 (**확장 단계**, BE-78 2차 검토 · BE-101 · V26) — `role`(`ORIGIN` · `CONCLUSION`, NULL 허용) 칸 추가 + `UNIQUE (case_id, role)`. `display_order`는 1단계 동안 함께 유지(다음 단계에서 뺀다). 감사 로그 행동 `CASE_PHOTO_DELETE` 추가(V26). 3단계로 나눈 마이그레이션 계획은 `docs/decisions/BE-78.md` "확정 사항" 참고 |
 
 ---
 
@@ -307,13 +308,14 @@ S-05에서 보여 줄 형벌 선택지, 그리고 **선고 가능 범위 밖 판
 - 1심과 항소심 판결문을 모두 쓰는 사건은 행을 2개 둔다(FR-2-2).
 - **부분 유니크 제약**: `case_id` WHERE `is_final = true` — 사건마다 최종 확정 판결은 1건 (V6, v1.8)
 
-#### `case_incident_photo` — 사건 발단 사진 (BE-91, COMMON-41)
+#### `case_incident_photo` — 사건 발단 · 결론 사진 (BE-91, COMMON-41 / 역할 칸 BE-78 2차 검토 · BE-101)
 
-관리자가 직접 만들어 올린 사진을 사건마다 순서대로 쌓는다. 사건 대표사진(신문용)은 별도 테이블 없이
-`legal_case.thumbnail_url`을 그대로 쓴다. **재검토(V20)**: Cloudflare Workers AI 직접 생성은 그림
-품질 때문에 그만두고, AI(Gemini)는 사람이 참고할 한글 프롬프트만 추천하는 방식으로 바꿨다(결정:
-`docs/decisions/BE-91.md`). `model`(생성 모델) 컬럼은 더 이상 자동으로 알 수 없어 뺐고, `prompt`는
-참고용 선택 항목이 되어 NOT NULL을 뗐다.
+관리자가 직접 만들어 올린 사진을 사건마다 역할별로 둔다. 테이블 · API 경로 이름(`case_incident_photo`,
+`/photos/incident`)은 "발단(incident)"이지만, BE-78 2차 검토 이후 발단 · 결론 사진을 모두 담는다(이름은
+바꾸지 않음). 사건 대표사진(신문용)은 별도 테이블 없이 `legal_case.thumbnail_url`을 그대로 쓴다.
+**재검토(V20)**: Cloudflare Workers AI 직접 생성은 그림 품질 때문에 그만두고, AI(Gemini)는 사람이
+참고할 한글 프롬프트만 추천하는 방식으로 바꿨다(결정: `docs/decisions/BE-91.md`). `model`(생성 모델)
+컬럼은 더 이상 자동으로 알 수 없어 뺐고, `prompt`는 참고용 선택 항목이 되어 NOT NULL을 뗐다.
 
 | 컬럼 | 타입 | 필수 | 설명 |
 | --- | --- | --- | --- |
@@ -323,17 +325,20 @@ S-05에서 보여 줄 형벌 선택지, 그리고 **선고 가능 범위 밖 판
 | s3_key | varchar(300) | ✓ | S3 객체 키 (재생성 · 삭제용, 사용자 응답에 내려주지 않는다) |
 | caption | varchar(200) |  | 화면에 보일 설명 |
 | prompt | text |  | 관리자가 사진을 만들 때 참고한 프롬프트(선택, V20부터 NOT NULL 아님) |
-| display_order | int | ✓ | 사건 안에서 보여줄 순서 (0부터) |
+| display_order | int | ✓ | 1단계(V26) 동안 role과 함께 유지하는 옛 순번 칸(ORIGIN = 0, CONCLUSION = 1). 다음 단계에서 뺀다 |
+| role | varchar(20) |  | `ORIGIN`(발단) · `CONCLUSION`(결론). V26 이전(사건당 3번째 이상) 사진은 `NULL` |
 | created_at | timestamptz | ✓ |  |
 
 - 등장인물은 얼굴 없는 회색 엑스트라, 내로 · 남불은 등장시키지 않는다(COMMON-41, 프롬프트 추천 지시문에 고정 포함).
-- 유니크 제약: (`case_id`, `display_order`) — 사건마다 순서가 유일하다(V19).
+- 유니크 제약: (`case_id`, `display_order`, V19) — 1단계 동안 유지, (`case_id`, `role`, V26) — PostgreSQL UNIQUE는 NULL을 중복으로 보지 않아 role 없는 행이 여럿이어도 걸리지 않는다.
+- 같은 역할로 다시 올리면 새 행을 만들지 않고 기존 행을 교체한다(UPDATE, id 유지). 역할 칸 도입 · 2 · 3단계 계획은 `docs/decisions/BE-78.md` "확정 사항" 참고.
 
 #### `case_paper` — 신문 지면 콘텐츠 (BE-92, COMMON-41)
 
 메인 화면에서 신문을 눌렀을 때 보이는 콘텐츠. 사건마다 1건. `photo`(대표사진)는 `legal_case.thumbnail_url`,
-`extraPhotos`(발단 사진)는 `case_incident_photo`를 그대로 재사용한다 — 같은 사진을 두 번 저장하지 않는다
-(결정: `docs/decisions/BE-92.md`).
+`extraPhotos`(발단 · 결론 사진)는 `case_incident_photo`를 그대로 재사용한다 — 같은 사진을 두 번 저장하지
+않는다(결정: `docs/decisions/BE-92.md`). v1.35(BE-101)부터는 `role`이 있는 행만 발단 → 결론 순으로
+내려준다(`docs/decisions/BE-78.md`).
 
 | 컬럼 | 타입 | 필수 | 설명 |
 | --- | --- | --- | --- |

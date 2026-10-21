@@ -48,6 +48,7 @@
 | v0.44 | 2026-10-21 | **P-5 `judgmentPersonality`를 현재 판결 성향으로 변경 (FE-70)** — 첫 회차 체험 **전체 평균**에서 **최근 첫 회차 체험 3건의 평균**으로 바꾼다(`type` · `null` 규칙은 그대로, `experienceCount`는 평균에 쓴 체험 수 = 최대 3). 마이페이지 성향카드 화면이 "지금"을 이 값으로 보여 준다. 서버 구현(`MyPageService`)은 후속 백엔드 작업 |
 | v0.45 | 2026-10-21 | 10장 카카오 로그인 추가 (BE-62, WBS 7.4.2) — M-3 시작 `GET /api/v1/auth/oauth2/authorization/kakao` · M-4 콜백 `GET /api/v1/auth/oauth2/callback/kakao`(브라우저 이동, JSON API 아님). 성공 시 리프레시 토큰 쿠키(`NLNB_RT`)만 심고 화면 경로로 리다이렉트, 토큰은 URL에 싣지 않음. 익명 ID 쿠키 연결 규칙. **10장 번호를 M-N으로 변경**: 재발급 · 로그아웃(BE-94)의 A-16 · A-17이 8-4 운영 메뉴 API 예약 번호(A-16 ~ A-41)와 겹쳐 M-1 · M-2로 |
 | v0.46 | 2026-10-21 | **사건 등록 A-14 · A-15 서버 구현 (BE-93 1차)** — "초안" 표시를 떼고 담당을 BE-93으로. **A-14 머리말의 "파이프라인을 자바로 옮긴 뒤 구현한다"는 옛 결정이라 정정**: 파이프라인은 옮기지 않고 같은 서버의 내부 컨테이너로 띄워 백엔드가 내부망으로 부른다(COMMON-50). 에러 코드 `DUPLICATE_SOURCE` · `IMPORT_IN_PROGRESS` · `IMPORT_NOT_FOUND` · `IMPORT_UNAVAILABLE`(신설)을 1-5에 추가. **적재는 BE-93 2차**라 그때까지 A-15는 `SUCCEEDED`여도 `caseId`가 `null`임을 명시(차수별 표로 구분). **A-14의 "파이프라인이 적재까지 한다"도 정정**: 파이프라인의 `load` 단계는 운영 DB에 직접 쓰는 단계라 서비스에서 영구히 막아 두었고(COMMON-50), 1차 · 2차 모두 `SKIPPED`다 — 사건을 만드는 일은 서버가 한다. 항상 `SKIPPED`인 세 단계(`load` · `rag` · `contamination`)가 오류가 아님을 A-15에 명시. 요청 · 응답 형식은 바뀌지 않았다(화면 목 `adminMockApi.js` 그대로) |
+| v0.47 | 2026-10-22 | **발단 · 결론 사진 역할 칸 1단계 (BE-78 2차 검토, BE-101)** — A-13-4(사진 업로드)에 `role`(`ORIGIN` · `CONCLUSION`) 필수 필드 추가, 같은 역할로 다시 올리면 기존 사진을 교체(응답은 그대로 200이 아니라 201, id는 유지). A-13-5(목록) 응답에 `role` 추가(1단계 이전 사진은 `null`). **A-13-9(발단 · 결론 사진 삭제) 신설** — `DELETE /admin/cases/{caseId}/photos/incident/{role}`. 에러 코드 `INCIDENT_PHOTO_NOT_FOUND` 추가(1-5). A-13-6 ~ 8(신문 지면)의 `extraPhotos`는 `role`이 있는 사진만 발단 → 결론 순으로 내려준다(`display_order` 약속은 쓰지 않는다, `docs/decisions/BE-78.md`) |
 
 ---
 
@@ -138,6 +139,7 @@ json
 | 502 | `FILE_UPLOAD_FAILED` | (확장, 관리자 API, BE-91) S3 업로드 실패, 또는 설정(`S3_BUCKET_NAME`) 없음 | 다시 시도 안내 (A-13-3 · A-13-4) |
 | 400 | `INVALID_IMAGE_FILE` | (확장, 관리자 API, BE-91) 사진 파일이 없음 · 비어 있음 · 허용하지 않는 형식 | 입력 안내 (A-13-3 · A-13-4) |
 | 404 | `PAPER_NOT_FOUND` | (확장, 관리자 API, BE-92) 신문 지면을 아직 생성한 적 없음 | 먼저 생성하도록 안내 (A-13-7 · A-13-8) |
+| 404 | `INCIDENT_PHOTO_NOT_FOUND` | (확장, 관리자 API, BE-78 2차 검토 · BE-101) 그 역할의 발단 · 결론 사진이 없음 | 목록 다시 불러오기 (A-13-9) |
 | 409 | `DECO_LOCKED` | (확장, BE-96) 아직 열리지 않은 꾸미기를 저장하려 함. `details`에 잠긴 필드(`reason: DECO_LOCKED`) | 화면에서 잠긴 항목은 고를 수 없게 막는다. 오면 마이페이지를 다시 불러온다 (P-7) |
 | 409 | `DUPLICATE_SOURCE` | (확장, 관리자 API, BE-93) 이미 등록한 사건번호. `details`에 어느 항목인지 담는다 | 입력 안내 (A-14) |
 | 409 | `IMPORT_IN_PROGRESS` | (확장, 관리자 API, BE-93) 실행 중인 등록이 있음. 한 번에 하나만 돌린다(외부 AI 호출 한도 보호) | 끝난 뒤 다시 시도 안내 (A-14) |
@@ -1268,47 +1270,72 @@ API 1 · 2 · 16은 상태와 관계없이 부를 수 있다. 표에 없는 조�
 | 409 `INVALID_STATE` | 이미 `PUBLISHED`(`CASE_PUBLISHED`) |
 | 502 `FILE_UPLOAD_FAILED` | S3 업로드 실패, 또는 설정 없음(`S3_BUCKET_NAME`) |
 
-### A-13-4. 사건 발단 사진 업로드 — `POST /admin/cases/{caseId}/photos/incident` (multipart/form-data)
+### A-13-4. 사건 발단 · 결론 사진 업로드 — `POST /admin/cases/{caseId}/photos/incident` (multipart/form-data)
 
-사건 안에서 쓰는 발단 사진 한 장을 올려 `case_incident_photo`에 순서대로 쌓는다(여러 번 불러 여러 장 추가). 201과 함께 추가된 사진을 돌려준다.
+> **역할 칸 1단계(v0.47, BE-78 2차 검토 · BE-101)**: 발단 · 결론 사진은 사건마다 역할별로 1장만 둔다
+> (`uk_case_incident_photo_case_role`). `role`을 새로 받고, 같은 역할로 다시 올리면 새 행을 만들지 않고
+> 기존 사진을 교체한다(id 유지) — "그 사건 사진 개수"로 채번하던 `display_order` 약속은 쓰지 않는다
+> (결정: `docs/decisions/BE-78.md`).
+
+사건 안에서 쓰는 발단 또는 결론 사진 한 장을 올려 `case_incident_photo`에 기록한다(역할별 1장, 같은 역할로 다시 올리면 교체). 201과 함께 저장된 사진을 돌려준다.
 
 | 필드(form) | 규칙 |
 | --- | --- |
 | `file` | 필수. A-13-3과 같은 형식 · 크기 제한 |
+| `role` | 필수. `ORIGIN`(발단) 또는 `CONCLUSION`(결론) |
 | `caption` | 선택, 200자 이하. 화면에 보일 설명 |
 | `prompt` | 선택, 자유 길이. 관리자가 이 사진을 만들 때 참고한 프롬프트(A-13-2 추천 그대로 또는 고친 것) — 감사 · 재참고용으로만 남긴다 |
 
 응답 201:
 
 ```json
-{ "id": 12, "imageUrl": "https://…/case-photos/case-7/incident-0-….jpg", "caption": "다툼이 격해진 순간", "displayOrder": 0, "createdAt": "2026-10-20T09:00:00Z" }
+{ "id": 12, "imageUrl": "https://…/case-photos/case-7/incident-origin-….jpg", "caption": "다툼이 격해진 순간", "role": "ORIGIN", "displayOrder": 0, "createdAt": "2026-10-20T09:00:00Z" }
 ```
 
-- `displayOrder`는 0부터 자동으로 매겨진다(사건마다 이미 있는 발단 사진 수).
+- `displayOrder`는 1단계 동안 `role`과 함께 유지하는 옛 순번 칸이다(`ORIGIN` = 0, `CONCLUSION` = 1). 다음 단계에서 뺀다 — 화면은 `role`을 본다.
 - S3 객체 키(`s3_key`)는 내부 기록용이라 응답에 내려주지 않는다. `prompt`는 관리자가 보냈을 때만 들어가고, 응답에는 내려주지 않는다(A-13-5 목록도 마찬가지 — 내부 기록 확인은 DB로 한다).
-- 공개한 사건은 추가할 수 없다. 감사 로그 `CASE_PHOTO_GENERATE`(`detail.type = "INCIDENT"`, `detail.photoId`)를 남긴다.
+- 교체 때 이전 S3 객체는 지우지 않는다 — 업로드 키에 시각이 붙어 매번 새 키이므로 캐시로 옛 사진이 다시 보이지 않는다.
+- 공개한 사건은 추가 · 교체할 수 없다. 감사 로그 `CASE_PHOTO_UPLOAD`(`detail.type = "INCIDENT"`, `detail.role`, `detail.photoId`)를 남긴다.
 
 | 거절 | 조건 |
 | --- | --- |
 | 400 `INVALID_IMAGE_FILE` | A-13-3과 같음 |
-| 400 `VALIDATION_ERROR` | `caption` 200자 초과 |
+| 400 `VALIDATION_ERROR` | `role`이 없거나 `ORIGIN` · `CONCLUSION`이 아님, `caption` 200자 초과 |
 | 404 `CASE_NOT_FOUND` | 사건이 없음 |
 | 409 `INVALID_STATE` | 이미 `PUBLISHED`(`CASE_PUBLISHED`) |
 | 502 `FILE_UPLOAD_FAILED` | A-13-3과 같음 |
 
-### A-13-5. 사건 발단 사진 목록 — `GET /admin/cases/{caseId}/photos/incident`
+### A-13-5. 사건 발단 · 결론 사진 목록 — `GET /admin/cases/{caseId}/photos/incident`
 
-사건에 쌓인 발단 사진을 순서대로 돌려준다(A-13-4 응답과 같은 형식의 배열, `prompt` 제외). 공개한 사건도 조회만은 된다.
+사건에 쌓인 발단 · 결론 사진을 돌려준다(A-13-4 응답과 같은 형식의 배열, `prompt` 제외). 공개한 사건도 조회만은 된다.
 
 ```json
 [
-  { "id": 12, "imageUrl": "…", "caption": "다툼이 격해진 순간", "displayOrder": 0, "createdAt": "…" }
+  { "id": 12, "imageUrl": "…", "caption": "다툼이 격해진 순간", "role": "ORIGIN", "displayOrder": 0, "createdAt": "…" }
 ]
 ```
+
+- `role`이 `null`인 행은 역할 칸 도입(v0.47) 이전에 사건당 3번째 이상 올라간 사진이다. 자리가 둘(발단 · 결론)뿐이라 역할을 매길 수 없어 신문 지면 · 공개 응답에서는 빠진다 — 이 목록에서만 정리 대상으로 노출된다. 정리하려면 A-13-9로 지우거나 역할을 지정해 다시 올린다.
 
 | 거절 | 조건 |
 | --- | --- |
 | 404 `CASE_NOT_FOUND` | 사건이 없음 |
+
+### A-13-9. 발단 · 결론 사진 삭제 — `DELETE /admin/cases/{caseId}/photos/incident/{role}` (v0.47, BE-78 2차 검토 · BE-101)
+
+> 번호가 A-13-6 ~ 8(신문 지면) 뒤인 이유: 신문 지면 API(BE-92)가 먼저 A-13-6 ~ 8을 썼고, 이 삭제
+> API는 그 뒤에 추가됐다. A-13-4 · 5(업로드 · 목록)와 같은 사진 API군이다.
+
+본문 없음. `{role}`(`ORIGIN` 또는 `CONCLUSION`)에 해당하는 사진 한 장을 지운다. 성공하면 204(본문 없음). S3 객체는 지우지 않는다(A-13-4와 같은 원칙 — 재업로드 때 새 키를 쓰므로 운영에 지장 없다, 정리는 후속 과제).
+
+- 공개한 사건은 지울 수 없다(업로드와 같은 규칙). 감사 로그 `CASE_PHOTO_DELETE`(`detail.role`)를 남긴다.
+
+| 거절 | 조건 |
+| --- | --- |
+| 400 `VALIDATION_ERROR` | `role`이 `ORIGIN` · `CONCLUSION`이 아님 |
+| 404 `CASE_NOT_FOUND` | 사건이 없음 |
+| 404 `INCIDENT_PHOTO_NOT_FOUND` | 그 역할의 사진이 없음 |
+| 409 `INVALID_STATE` | 이미 `PUBLISHED`(`CASE_PUBLISHED`) |
 
 ### A-13-6. 신문 지면 생성 — `POST /admin/cases/{caseId}/paper/generate`
 
@@ -1325,14 +1352,14 @@ API 1 · 2 · 16은 상태와 관계없이 부를 수 있다. 표에 없는 조�
   "caption": "다투는 두 사람",
   "article": ["문단 1", "문단 2"],
   "extraPhotos": [
-    { "id": 12, "imageUrl": "…", "caption": "다툼이 격해진 순간", "displayOrder": 0, "createdAt": "…" }
+    { "id": 12, "imageUrl": "…", "caption": "다툼이 격해진 순간", "role": "ORIGIN", "displayOrder": 0, "createdAt": "…" }
   ],
   "updatedAt": "2026-10-20T09:00:00Z"
 }
 ```
 
 - `photo`는 A-13-3으로 올린 사건 대표사진(`legal_case.thumbnail_url`)을 그대로 내려준다. 아직 안 올렸으면 `null`.
-- `extraPhotos`는 A-13-5와 같은 배열 — `case_incident_photo`를 그대로 재사용한다(새로 저장하지 않는다, `docs/decisions/BE-92.md`).
+- `extraPhotos`는 A-13-5와 같은 배열 — `case_incident_photo`를 그대로 재사용한다(새로 저장하지 않는다, `docs/decisions/BE-92.md`). **v0.47부터는 `role`이 있는 사진만 발단(`ORIGIN`) → 결론(`CONCLUSION`) 순으로 내려준다** — 역할 칸 도입 이전에 사건당 3번째 이상 올라간 사진(`role: null`)은 여기서 빠진다(`docs/decisions/BE-78.md`).
 - 공개한 사건은 바꿀 수 없다(A-11과 같은 규칙). 감사 로그 `CASE_PAPER_GENERATE`를 남긴다.
 
 | 거절 | 조건 |

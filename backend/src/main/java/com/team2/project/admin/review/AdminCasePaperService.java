@@ -103,7 +103,10 @@ public class AdminCasePaperService {
 	}
 
 	private CasePaperResponse toResponse(LegalCase legalCase, CasePaper paper) {
+		// role 없는 행(1단계 이전에 3번째 이상 올라간 사진)은 지면에서 뺀다 — 관리자 목록(A-13-5)에만 노출한다
+		// (결정: docs/decisions/BE-78.md "확정 사항")
 		var extraPhotos = incidentPhotoRepository.findByLegalCaseIdOrderByDisplayOrder(legalCase.getId()).stream()
+			.filter(photo -> photo.getRole() != null)
 			.map(IncidentPhotoResponse::from)
 			.toList();
 		return CasePaperResponse.of(paper, legalCase.getThumbnailUrl(), extraPhotos);

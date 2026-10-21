@@ -7,6 +7,7 @@ import com.team2.project.admin.review.dto.IncidentPhotoResponse;
 import com.team2.project.admin.service.AdminPrincipal;
 import com.team2.project.common.exception.BusinessException;
 import com.team2.project.common.exception.ErrorCode;
+import com.team2.project.legalcase.domain.IncidentPhotoRole;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.io.IOException;
@@ -14,6 +15,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -59,20 +61,29 @@ public class AdminCasePhotoController {
 		return photoService.uploadRepresentativePhoto(caseId, bytesOf(file), file.getContentType(), admin, request);
 	}
 
-	/** 사건 발단 사진 업로드 (여러 번 호출해 순서대로 쌓는다) */
+	/** 사건 발단 · 결론 사진 업로드. 같은 역할로 다시 올리면 기존 사진을 교체한다(BE-78 2차 검토) */
 	@PostMapping("/incident")
 	@ResponseStatus(HttpStatus.CREATED)
 	public IncidentPhotoResponse uploadIncidentPhoto(@PathVariable Long caseId, @RequestPart("file") MultipartFile file,
-			@RequestParam(required = false) String caption, @RequestParam(required = false) String prompt,
-			@AuthenticationPrincipal AdminPrincipal admin, HttpServletRequest request) {
-		return photoService.uploadIncidentPhoto(caseId, bytesOf(file), file.getContentType(), caption, prompt, admin,
-			request);
+			@RequestParam IncidentPhotoRole role, @RequestParam(required = false) String caption,
+			@RequestParam(required = false) String prompt, @AuthenticationPrincipal AdminPrincipal admin,
+			HttpServletRequest request) {
+		return photoService.uploadIncidentPhoto(caseId, role, bytesOf(file), file.getContentType(), caption, prompt,
+			admin, request);
 	}
 
-	/** 사건 발단 사진 목록 (순서대로) */
+	/** 사건 발단 · 결론 사진 목록. role이 없는 행(1단계 이전 사진)도 그대로 보여 정리 대상을 드러낸다 */
 	@GetMapping("/incident")
 	public List<IncidentPhotoResponse> listIncidentPhotos(@PathVariable Long caseId) {
 		return photoService.listIncidentPhotos(caseId);
+	}
+
+	/** 발단 · 결론 사진 한 장 삭제 (A-13-9, BE-78 2차 검토) */
+	@DeleteMapping("/incident/{role}")
+	@ResponseStatus(HttpStatus.NO_CONTENT)
+	public void deleteIncidentPhoto(@PathVariable Long caseId, @PathVariable IncidentPhotoRole role,
+			@AuthenticationPrincipal AdminPrincipal admin, HttpServletRequest request) {
+		photoService.deleteIncidentPhoto(caseId, role, admin, request);
 	}
 
 	private static byte[] bytesOf(MultipartFile file) {
