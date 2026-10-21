@@ -10,6 +10,7 @@ import { PORTRAIT_POOL } from '../../content/portraitPool.js';
 import { BOOKMARK_CHARACTERS, BOOKMARK_FACES, BOOKMARK_LAWS, BOOKMARK_NAMES, BOOKMARK_STYLES, FACE_NAMES, STYLE_NAMES, applyBookmark, getBookmarkCharacter, getBookmarkFaceName, getBookmarkStyle, bookmarkFace, BOOKMARK_COLORS, getBookmarkColor, selectedBookmarkFace } from '../../utils/bookmarkCharacter.js';
 import { SCRIPTS } from '../../content/scripts.js';
 import { fitPortraitIn } from '../../utils/portraitFit.js';
+import { reducedMotion } from '../../utils/motion.js';
 import { clearUser, currentUser, isAdmin } from '../../utils/session.js';
 import { homeRoute } from '../admin/adminMenu.js';
 import { openCaseReviewPopup } from '../caseReview/caseReviewPopup.js';
@@ -24,6 +25,8 @@ import { openCaseReviewPopup } from '../caseReview/caseReviewPopup.js';
 // 종합 · 변화 흐름은 체험 → 성향 저장(7.6.7, BE-64) 뒤부터 채워지므로 그 전에는 null · 빈 배열로 와서 안내만 보인다.
 // 로그인 전에는 익명 ID 기준이다(REQ-108).
 const STATUS_LABELS = { COMPLETED: '체험 완료' };
+// 목 모드의 "내가 체험한 사건" 목록에서만 체험 중으로 보여 줄 사건(체험 중 모양 확인용). 첫 화면 수치 · 컬렉션 · 성향 기록은 그대로 완료로 센다
+const MOCK_IN_PROGRESS = new Set([3, 6, 8]);
 const VIEWS = {
   profile: '프로필카드',
   type: '성향카드',
@@ -549,6 +552,58 @@ function renderCollection(experiences) {
   return box;
 }
 
+const CASES_PER_PAGE = 10; // 내가 체험한 사건은 한 페이지에 이만큼만 보여 준다
+
+// 사건 한 줄: [제목(링크) · 상태 | 마친 사건은 버튼 둘, 체험 중이면 안내 문구]
+function caseLine(item, navigate, api) {
+  const status = IS_MOCK && MOCK_IN_PROGRESS.has(item.caseId) ? 'REVIEWED' : item.status; // 목: 이 화면에서만 몇 건을 체험 중으로 보여 준다(위 상수)
+  const line = element('li', 'my-case');
+  const info = element('div');
+  // 사건 제목이 사건 디테일(기사 페이지)로 가는 링크다. 거기서 이어서 · 결과만 · 1막부터를 고른다(FE-62). 새 탭 · 가운데 클릭이 되도록 진짜 링크로 두고, 보통 클릭만 화면 안에서 이동한다
+  const title = element('p', 'my-case-title');
+  const link = element('a', 'my-case-link', item.title);
+  link.href = `/cases/${item.caseId}`;
+  link.addEventListener('click', (event) => {
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    navigate('caseDetail', { caseId: item.caseId });
+  });
+  title.append(link);
+  info.append(title, element('p', 'my-case-status', STATUS_LABELS[status] ?? '체험 중'));
+  const actions = element('div', 'my-case-actions');
+  if (status === 'COMPLETED') {
+    // 내 결과 보기(FE-75): 6막 지면 모양의 내 결과 지면(처음 판단 → 최종 판결 · 이 사건으로 달라진 성향 · 이 사건의 판결 성향)
+    actions.append(
+      button('내 결과 보기', () => navigate('myResult', { caseId: item.caseId }), 'secondary-button'),
+      button('독자 엽서 쓰기', (event) => openCaseReviewPopup({ caseId: item.caseId, api, navigate, from: event.currentTarget }), 'secondary-button'),
+    );
+  } else {
+    actions.append(element('p', 'my-case-hint', '사건 제목을 눌러 이어서 체험해요'));
+  }
+  line.append(info, actions);
+  return line;
+}
+
+// 페이지 이동 줄: 이전 · 번호 · 다음. 지금 페이지는 aria-current. 한 페이지를 넘을 때만 보인다
+function casePager(pageCount, current, onGo) {
+  const nav = element('nav', 'my-pager');
+  nav.setAttribute('aria-label', '체험한 사건 페이지');
+  const step = (label, to, disabled) => {
+    const node = button(label, () => onGo(to), 'secondary-button my-pager-step');
+    node.disabled = disabled;
+    return node;
+  };
+  nav.append(step('이전', current - 1, current === 1));
+  for (let page = 1; page <= pageCount; page += 1) {
+    const node = button(String(page), () => onGo(page), `secondary-button my-pager-page${page === current ? ' is-current' : ''}`);
+    node.setAttribute('aria-label', `${page}페이지`);
+    if (page === current) node.setAttribute('aria-current', 'page');
+    nav.append(node);
+  }
+  nav.append(step('다음', current + 1, current === pageCount));
+  return nav;
+}
+
 function renderCases(experiences, navigate, api) {
   const box = element('div', 'my-detail');
   if (experiences.length === 0) {
@@ -558,20 +613,17 @@ function renderCases(experiences, navigate, api) {
     return box;
   }
   const list = element('ul', 'my-cases');
-  experiences.forEach((item) => {
-    const line = element('li', 'my-case');
-    const info = element('div');
-    info.append(element('p', 'my-case-title', item.title), element('p', 'my-case-status', STATUS_LABELS[item.status] ?? '체험 중'));
-    // 사건 디테일(기사 페이지)로 간다. 거기서 이어서 · 결과만 · 1막부터를 고른다(FE-62). 마친 사건은 독자 엽서로 바로 갈 수도 있다
-    const actions = element('div', 'my-case-actions');
-    actions.append(button('사건 보기', () => navigate('caseDetail', { caseId: item.caseId }), 'secondary-button'));
-    // 내 결과 보기(FE-75): 6막 지면 모양의 내 결과 지면(처음 판단 → 최종 판결 · 이 사건으로 달라진 성향 · 이 사건의 판결 성향)
-    if (item.status === 'COMPLETED') actions.append(button('내 결과 보기', () => navigate('myResult', { caseId: item.caseId }), 'secondary-button'));
-    if (item.status === 'COMPLETED') actions.append(button('독자 엽서 쓰기', (event) => openCaseReviewPopup({ caseId: item.caseId, api, navigate, from: event.currentTarget }), 'secondary-button'));
-    line.append(info, actions);
-    list.append(line);
-  });
-  box.append(list);
+  const pageCount = Math.ceil(experiences.length / CASES_PER_PAGE);
+  const pager = element('div', 'my-pager-host');
+  function show(page, moved) {
+    list.replaceChildren(...experiences.slice((page - 1) * CASES_PER_PAGE, page * CASES_PER_PAGE).map((item) => caseLine(item, navigate, api)));
+    pager.replaceChildren(...(pageCount > 1 ? [casePager(pageCount, page, (to) => show(to, true))] : []));
+    if (!moved) return;
+    pager.querySelector('[aria-current="page"]')?.focus({ preventScroll: true }); // 눌렀던 번호 버튼은 새로 그려져 없어지므로 키보드 초점을 지금 페이지 번호로 옮긴다
+    list.scrollIntoView({ block: 'start', behavior: reducedMotion() ? 'auto' : 'smooth' }); // 페이지를 넘기면 목록 맨 위부터 보이게
+  }
+  show(1, false);
+  box.append(list, pager);
   return box;
 }
 

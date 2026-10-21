@@ -153,6 +153,14 @@ const mockHistory = HISTORY_SCORES.map(([caseId, completedAt, ...scores]) => ({
 const mockExperiences = mockHistory.map(({ caseId, title, completedAt }) => ({
   caseId, title, crimeType: mockCases.find((item) => item.caseId === caseId).crimeType, status: 'COMPLETED', attemptNo: 1, updatedAt: completedAt,
 }));
+// "내가 체험한 사건" 목록의 페이지 나누기(10건씩) 확인용 추가 목. 사건은 9개뿐이라 2 ~ 9번 사건을 이름만 바꿔 되풀이한다(제목을 누르면 원래 사건으로 간다).
+// 체험 기록(history) · 성향 기록에는 넣지 않으므로 성향 그래프 · 현재 성향은 그대로이고, 내 결과 보기에서는 "성향 기록이 없어요"가 나온다
+const EXTRA_CASE_IDS = [2, 3, 4, 5, 6, 7, 8, 9, 2, 3, 4, 5, 6, 7];
+const extraExperiences = EXTRA_CASE_IDS.map((caseId, index) => {
+  const { title, crimeType } = mockCases.find((item) => item.caseId === caseId);
+  return { caseId, title: `${title} (목 예시 ${index + 1})`, crimeType, status: 'COMPLETED', attemptNo: 1, updatedAt: new Date(Date.UTC(2026, 8, 30 - index, 12)).toISOString() };
+});
+
 
 // 현재 판결 성향은 최근 체험 이만큼의 평균이다(명세 P-5, 성향 산식 4장)
 const RECENT_COUNT = 3;
@@ -196,7 +204,7 @@ export async function getMyPage() {
     personality: saved ? toResult(saved) : null,
     judgmentPersonality: judgmentOf(history),
     history: history.map(({ caseId, title, completedAt, axisScores }) => ({ caseId, title, completedAt, axisScores })),
-    experiences: mockExperiences,
+    experiences: [...mockExperiences, ...extraExperiences],
     ...mockProfileView(profileStats()),
   });
 }

@@ -63,7 +63,7 @@ function cardStory(type, hasCode) {
   } else {
     text.append(element('p', 'sheet-text', hasCode ? '성향카드를 불러오지 못했다. 마이페이지에서 다시 열면 보인다.' : '이 사건에서는 네 축이 모두 드러나지 않아 유형을 정하지 않았다.'));
   }
-  text.append(element('p', 'my-result-note', '이 사건 한 건의 판단으로 낸 값이다. 마이페이지의 현재 성향은 최근 체험 3건의 평균이다.'));
+  text.append(element('p', 'sheet-text my-result-note', '이 성향은 이 사건 한 건의 판단만으로 집계했으며, 최근 체험 3건을 평균한 성향은 마이페이지에서 확인할 수 있다.'));
   return text;
 }
 

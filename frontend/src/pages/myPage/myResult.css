@@ -40,7 +40,16 @@
 .my-result-card { display: flow-root; } /* 왼쪽 단의 별도 섹션(구분선 없음). 막대와의 간격은 단 간격 */
 .my-result-card > .my-card.is-detail { float: left; width: clamp(165px, calc(var(--u, 10px) * 22.5), 225px); margin: 0 20px 8px 0; }
 .my-result-card-text strong { font-weight: 800; color: var(--color-heading); }
-.my-result-note { margin: 14px 0 0; color: var(--color-muted); font-size: 14px; line-height: 1.6; text-wrap: pretty; }
+.my-result-page .stage-wrap .my-result-note { margin-top: 14px; color: var(--color-muted); } /* 글꼴 · 크기는 바로 위 설명(.sheet-text)과 같다 */
 @media (max-width: 680px) {
   .my-result-card > .my-card.is-detail { margin-right: 14px; }
 }
+
+/* 내 결과 지면의 글자를 6막 지면보다 조금 키운다(1.12배). 지면 글자 크기는 --u(지면 폭 단위)에서 나오므로 글 요소만 --u를 키워 쓰고,
+   지면 폭 · 단 · 간격은 원래 --u 그대로다(--u-base). 그래프 · 막대 줄의 px 글자도 같은 비율로 키운다 */
+.my-result-page .stage-wrap .sheet-result { --u-base: var(--u); --text-up: 1.12; }
+.my-result-page .stage-wrap .sheet-result :is(.sheet-info, .sheet-date, .sheet-brand, .sheet-headline, .sheet-head, .sheet-deck, .sheet-text, .sheet-figure figcaption, .sheet-ear-memo, .sheet-ad-tag, .sheet-ad-title, .sheet-ad-text, .sheet-ads-note) {
+  --u: calc(var(--u-base) * var(--text-up));
+}
+.my-result-page .sheet-result :is(.my-hint, .axis-empty) { font-size: calc(var(--text-small) * var(--text-up)); } /* 막대 위 비중 글자(.axis-ends)는 원래 크기 그대로 */
+.my-result-page .sheet-result .trend-title { font-size: calc(1em * var(--text-up)); } /* 그래프 제목만 키운다. 막대 줄의 축 이름 · 비중 글자는 원래 크기 */
