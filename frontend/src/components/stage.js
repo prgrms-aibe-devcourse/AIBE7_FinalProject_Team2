@@ -42,6 +42,11 @@ export const imageOf = (who, look) => (look.startsWith('role:') ? `${IMAGES}role
     : look.startsWith('cheek:') ? `${IMAGES}cheek/${who}_${look.slice(6)}.webp` // 볼따구(기다림)
     : look.startsWith('deform:') ? `${IMAGES}deform/${who}_${look.slice(7)}.webp` // 데포르메(란마 등, 시트에서 잘라 public에 둔다)
     : `${IMAGES}scene/${who}_${look}.webp`);
+// 법정 자리는 역할 의상(look "role:…")이 정한다: 검사 · 판사 = 왼쪽(검사편, 가운데는 카드 · 판이 많이 떠서 판사도 왼쪽이 기본) · 변호인 = 오른쪽 변호인석.
+// 판사를 가운데에 세우려면 대본 spots로 준다. 그 밖의 의상은 캐릭터 기본 자리(내로 왼쪽 · 남불 오른쪽)
+const SEAT = { prosecutor: 'left', judge: 'left', defense: 'right' };
+const seatOf = (look) => (look.startsWith('role:') ? SEAT[look.slice(5)] : undefined);
+let chipsOff = false; // 개발 전용: 역할 이름표 끄기(이름표가 필요한지 판단용). 화면을 다시 그려도 유지한다
 const FACES = ['neutral', 'happy', 'surprised', 'thinking', 'sorry', 'cheer'];
 const iconOf = (who, look) => {
   if (who.startsWith('law-')) return `${IMAGES}mascot/${who}_icon.webp`;
@@ -410,6 +415,17 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
   const status = element('span', 'sp');
   [prev, next, skip].forEach((b) => { b.type = 'button'; });
   controls.append(skip, status, prev, next);
+  if (import.meta.env?.DEV) {
+    const chipToggle = element('button', 'stage-skip', '');
+    chipToggle.type = 'button';
+    const syncChips = () => {
+      wrap.classList.toggle('chips-off', chipsOff);
+      chipToggle.textContent = chipsOff ? '이름표 켜기 (개발)' : '이름표 끄기 (개발)';
+    };
+    chipToggle.addEventListener('click', () => { chipsOff = !chipsOff; syncChips(); });
+    syncChips();
+    skip.after(chipToggle);
+  }
   if (onRestart) {
     const restart = element('button', 'stage-restart', '처음부터 다시 (목 데이터)');
     restart.type = 'button';
@@ -501,7 +517,14 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
       figures[who].classList.toggle('near', onSheet && step.say === who); // 지면에서는 말하는 쪽이 기사에 다가선다
       const offCast = Boolean(step.cast) && !step.cast.includes(who); // 대본 cast: 이 막에 나오는 캐릭터만(7막은 남불만)
       figures[who].classList.toggle('hide', dark || Boolean(step.law) || offCast || Boolean(step.hideCast)); // 대본 hideCast: 빈 무대(2막 시작)
-      if (step.spots[who]) figures[who].dataset.spot = step.spots[who]; else delete figures[who].dataset.spot;
+      // spots 값: 이름 자리("stand") 또는 슬롯 { slot: 0~60, row: "front" | "back" }
+      const spot = step.spots[who];
+      const at = spot && typeof spot === 'object' ? spot : null;
+      if (spot && !at) figures[who].dataset.spot = spot; else delete figures[who].dataset.spot;
+      if (at && Number.isFinite(at.slot)) { figures[who].dataset.slot = ''; figures[who].style.setProperty('--slot', at.slot); } else { delete figures[who].dataset.slot; figures[who].style.removeProperty('--slot'); }
+      if (at?.row) figures[who].dataset.row = at.row; else delete figures[who].dataset.row;
+      const seat = seatOf(look);
+      if (seat) figures[who].dataset.seat = seat; else delete figures[who].dataset.seat;
       chips[who].textContent = step.chips[who];
       chips[who].dataset.role = ROLE_COLOR[step.chips[who]] ?? 'actor';
       chips[who].hidden = !step.chips[who];
@@ -586,7 +609,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
       // 말풍선 꼬리 방향(말하는 캐릭터 쪽). 볼따구는 대사창 모서리에 나온 작은 캐릭터 쪽
       dialog.dataset.speaker = cameoWho ? `cameo-${cameoWho}` : step.say === 'naero' || step.say === 'nambul' ? step.say : 'none';
       // 말하는 캐릭터가 가운데 피고인석(stand)에 서 있으면 꼬리도 가운데로
-      dialog.dataset.spot = !cameoWho && (step.say === 'naero' || step.say === 'nambul') ? step.spots[step.say] ?? '' : '';
+      dialog.dataset.spot = !cameoWho && (step.say === 'naero' || step.say === 'nambul') ? (typeof step.spots[step.say] === 'string' ? step.spots[step.say] : '') : '';
       const who = cameoWho || step.say;
       const deform = !cameoWho && step.look[who]?.startsWith('cheek-slim:') ? SLIM_CHEEK_LABEL : !cameoWho && DEFORM_LABEL[step.look[who]?.split(':')[1]] && step.look[who].startsWith('deform:') ? DEFORM_LABEL[step.look[who].split(':')[1]] : '';
       if (NAMES[who]) name.append(picture(iconOf(who, cameoWho ? 'idle-thinking' : step.look[who])), NAMES[who]); // AI 판사는 이름 · 얼굴 없이 역할만
