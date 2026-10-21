@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { getPersonalityQuestions, getPersonalityType, submitPersonality } from './personalityMockApi.js';
+import { getMyPage, getPersonalityQuestions, getPersonalityType, submitPersonality } from './personalityMockApi.js';
 import { imageNumberOf, TYPES } from './personalityMockData.js';
 
 const publicDir = fileURLToPath(new URL('../../public', import.meta.url));
@@ -49,4 +49,14 @@ test('성향 이미지 01 ~ 32가 모두 있고, 유형마다 보이는 이미�
 test('P-4 모르는 shareId · 상속 속성 이름은 PERSONALITY_TYPE_NOT_FOUND', async () => {
   await assert.rejects(getPersonalityType('nope0000'), { code: 'PERSONALITY_TYPE_NOT_FOUND' });
   await assert.rejects(getPersonalityType('constructor'), { code: 'PERSONALITY_TYPE_NOT_FOUND' });
+});
+
+test('P-5 현재 판결 성향은 최근 체험 3건의 평균이고, 네 축이 다 있으면 유형(코드 없이)이 붙는다', async () => {
+  const { history, judgmentPersonality } = await getMyPage();
+  const recent = history.slice(-3);
+  assert.equal(judgmentPersonality.experienceCount, recent.length);
+  const values = recent.map((entry) => entry.axisScores.ORDER_OPPORTUNITY).filter((value) => typeof value === 'number');
+  assert.equal(judgmentPersonality.axisScores.ORDER_OPPORTUNITY, values.reduce((sum, value) => sum + value, 0) / values.length);
+  assert.ok(judgmentPersonality.type?.shareId);
+  assert.equal(judgmentPersonality.type.code, undefined);
 });

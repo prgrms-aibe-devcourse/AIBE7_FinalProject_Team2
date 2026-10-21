@@ -28,12 +28,21 @@ export function axisTrend(history, axisKey, testScores) {
   return [...start, ...points];
 }
 
-// 한 축의 변경폭: 처음(테스트 또는 첫 체험) → 지금(가장 최근 체험). 체험이 하나도 없거나 점이 둘보다 적으면 null.
+// 성향 변화 흐름에 보일 칸(order): 시작점(테스트 0, 없으면 첫 체험 1) + 최근 체험 recent건. 체험이 적으면 있는 만큼만
+export const TREND_RECENT = 10;
+export function trendOrders(historyLength, hasTest, recent = TREND_RECENT) {
+  const latest = Array.from({ length: Math.min(recent, historyLength) }, (_, index) => historyLength - Math.min(recent, historyLength) + index + 1);
+  const start = hasTest ? 0 : (historyLength > 0 ? 1 : null);
+  return start === null || latest.includes(start) ? latest : [start, ...latest];
+}
+
+// 한 축의 변경폭: 처음(테스트 또는 첫 체험) → 지금. 지금은 current(현재 판결 성향 = 최근 체험 3건 평균, API 명세 P-5)이고,
+// 그 축 값이 없으면 가장 최근 체험 점이다. 체험이 하나도 없거나 점이 둘보다 적으면 null.
 // moved는 관대 쪽으로 움직인 %p(음수면 엄격 쪽), toward는 움직인 쪽 이름, steady는 STEADY_POINTS 안쪽이면 true
-export function axisChange(points, axis) {
+export function axisChange(points, axis, current) {
   if (points.length < 2 || points.every((point) => point.isTest)) return null;
   const from = points[0];
-  const to = points[points.length - 1];
+  const to = typeof current === 'number' ? { ratio: current, isCurrent: true } : points[points.length - 1];
   const moved = Math.round((to.ratio - from.ratio) * 100);
   const steady = Math.abs(moved) < STEADY_POINTS;
   return { from, to, moved, steady, toward: steady ? null : (moved > 0 ? axis.lenient.name : axis.strict.name) };

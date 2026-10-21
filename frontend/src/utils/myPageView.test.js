@@ -1,7 +1,7 @@
 // npm test : 마이페이지 변화 흐름 계산
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { axisChange, axisSeries, axisTrend, castOf, collectionOf, leanText, trailLeft, imageKinds } from './myPageView.js';
+import { trendOrders, axisChange, axisSeries, axisTrend, castOf, collectionOf, leanText, trailLeft, imageKinds } from './myPageView.js';
 
 const AXIS = { key: 'APOLOGY_SINCERITY', strict: { name: '행동증명형' }, lenient: { name: '마음신뢰형' } };
 const entry = (value) => ({ axisScores: { APOLOGY_SINCERITY: value } });
@@ -41,9 +41,24 @@ test('axisChange: 처음 → 지금 변경폭과 움직인 쪽, 5%p 안쪽은 �
   assert.equal(axisChange(axisTrend([titled('가', 0.5), titled('나', 0.52)], AXIS.key), FULL_AXIS).steady, true);
 });
 
+test('axisChange: 현재 판결 성향(최근 3건 평균)이 있으면 지금은 그 값, 없으면 가장 최근 체험', () => {
+  const points = axisTrend([titled('가', 0.9), titled('나', 0.3)], AXIS.key, { APOLOGY_SINCERITY: 0.5 });
+  assert.equal(axisChange(points, FULL_AXIS, 0.6).moved, 10);
+  assert.equal(axisChange(points, FULL_AXIS, 0.6).to.isCurrent, true);
+  assert.equal(axisChange(points, FULL_AXIS, null).moved, -20);
+});
+
 test('axisChange: 점이 하나뿐이거나 체험 없이 테스트만 있으면 null', () => {
   assert.equal(axisChange(axisTrend([titled('가', 0.5)], AXIS.key), FULL_AXIS), null);
   assert.equal(axisChange(axisTrend([], AXIS.key, { APOLOGY_SINCERITY: 0.5 }), FULL_AXIS), null);
+});
+
+test('trendOrders: 테스트(없으면 첫 체험) + 최근 10건, 적으면 있는 만큼', () => {
+  assert.deepEqual(trendOrders(3, true), [0, 1, 2, 3]);
+  assert.deepEqual(trendOrders(3, false), [1, 2, 3]);
+  assert.deepEqual(trendOrders(12, true), [0, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+  assert.deepEqual(trendOrders(12, false), [1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+  assert.deepEqual(trendOrders(0, true), [0]);
 });
 
 test('leanText: 더 기운 쪽 이름과 비중, 반반이면 반반', () => {

@@ -220,28 +220,46 @@ img.my-sash-icon.is-missing { visibility: hidden; }
 .my-view-head h1 { margin: 0; font-size: var(--text-title-1); }
 .my-view-head h1:focus { outline: none; }
 .my-hint { margin: 0 0 16px; color: var(--color-muted); font-size: var(--text-small); }
-.my-judgment-type { margin: 0 0 4px; font: 900 var(--text-title-2)/1.3 var(--font-heading); color: var(--color-accent); }
 .axis-empty { margin: 4px 0 0; color: var(--color-muted); font-size: var(--text-small); }
 .axis-row:has(.axis-empty)::after { display: none; } /* 막대가 없는 줄에는 가운데 눈금도 없다 */
 .my-page .visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 /* 성향 변경폭(FE-70): 처음(빈 점) → 지금(진한 점)을 잇는 막대와 방향 화살촉 */
 .change-lead { margin: 0 0 6px; font: 700 var(--text-body)/1.5 var(--font-heading); color: var(--color-heading); text-wrap: pretty; }
-.change-list { gap: 22px; }
-.change-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-.change-moved { margin: 0; color: var(--color-heading); font-size: var(--text-small); font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.change-moved.is-steady { color: var(--color-muted); font-weight: 400; }
-.change-track { position: relative; height: 6px; margin: 12px 8px 10px; background: var(--color-track); border-radius: 3px; }
-.change-span { position: absolute; top: 0; bottom: 0; background: var(--color-border-strong); border-radius: 3px; }
-.change-span { height: 4px; top: 1px; bottom: auto; }
-.change-dot { position: absolute; top: 50%; width: 12px; height: 12px; transform: translate(-50%, -50%); border-radius: 50%; border: 2px solid var(--color-muted); background: var(--color-card); box-shadow: 0 0 0 2px var(--color-bg); }
-/* 지금 점: 처음 점보다 크고 진하게(제목 색으로 채우고 바탕색 고리로 막대에서 띄운다) */
-.change-dot.is-to { width: 18px; height: 18px; border: 0; background: var(--color-heading); box-shadow: 0 0 0 3px var(--color-bg), 0 1px 3px color-mix(in srgb, var(--color-heading) 35%, transparent); }
-/* 화살촉: 끝이 지금 점 가장자리(반지름 9px + 고리) 바로 앞에 닿는다 */
-.change-arrow { position: absolute; top: 50%; width: 10px; height: 12px; background: var(--color-border-strong); }
-.change-arrow.is-right { clip-path: polygon(0 0, 100% 50%, 0 100%); transform: translate(calc(-100% - 12px), -50%); }
-.change-arrow.is-left { clip-path: polygon(100% 0, 0 50%, 100% 100%); transform: translate(12px, -50%); }
-.change-detail { margin: 0; color: var(--color-muted); font-size: var(--text-small); font-variant-numeric: tabular-nums; }
+.change-list { grid-template-columns: 7em minmax(0, 1fr) max-content; column-gap: 12px; row-gap: 22px; }
+/* 한 줄: [축 이름 | 끝 이름 / 막대 | 비중]. 축 이름 · 비중은 막대 줄에 맞춘다(판결 성향 막대와 같은 7em 칸) */
+.change-row { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: center; } /* 네 줄이 목록의 칸(축 이름 | 막대 | 움직인 양)을 함께 써서 막대 좌우 끝이 맞는다. 움직인 양 칸은 가장 긴 글자만큼 */
+.change-row .axis-label { grid-row: 2; grid-column: 1; margin: 0; }
+.change-row .axis-ends { grid-row: 1; grid-column: 2; }
+.change-row .change-track { grid-row: 2; grid-column: 2; }
+.change-row .change-detail { grid-row: 2; grid-column: 3; justify-self: end; text-align: right; }
+.change-row .axis-empty { grid-row: 2; grid-column: 2 / -1; margin: 0; }
+.change-track { position: relative; height: 4px; margin: 14px 8px 12px; }
+/* 판결 성향 막대와 같은 두 색: 왼쪽 엄격 · 오른쪽 관대. 화살표 아래(--gap-a ~ --gap-b)는 비운다. 막대 색만 지우도록 ::before에 마스크를 건다 */
+.change-track::before {
+  content: ''; position: absolute; inset: 0; border-radius: 2px;
+  background: linear-gradient(to right, var(--axis-strict) 50%, var(--axis-lenient) 50%);
+  mask-image: linear-gradient(to right, #000 var(--gap-a, 0%), transparent var(--gap-a, 0%), transparent var(--gap-b, 0%), #000 var(--gap-b, 0%));
+}
+/* 잇는 선: 왼쪽 남색 → 오른쪽 갈색 그라데이션(오른쪽으로 갔으면 남색 → 갈색, 왼쪽으로 갔으면 갈색 → 남색으로 처음 → 지금 순서가 된다).
+   모양(몸통 4px + 끝이 뾰족한 화살촉, 머리 12 × 13px, 길게 빼 테두리를 둘러도 끝이 뾰족하다)은 ::before의 clip-path로 한 덩어리로 자르고, 테두리는 바깥 span의 그림자 네 겹으로 화살촉까지 두른다.
+   화살촉 끝은 지금 점 가장자리(반지름 7.5px)에서 3px 떨어진 10.5px 앞 */
+.change-span {
+  position: absolute; top: 50%; height: 12px; transform: translateY(-50%);
+  --edge: var(--color-heading);
+  filter: drop-shadow(1px 0 0 var(--edge)) drop-shadow(-1px 0 0 var(--edge)) drop-shadow(0 1px 0 var(--edge)) drop-shadow(0 -1px 0 var(--edge));
+}
+.change-span::before { content: ''; position: absolute; inset: 4px 0; border-radius: 2px; background: linear-gradient(to right, var(--axis-strict), var(--axis-lenient)); }
+.change-span.is-arrow::before { inset: 0; border-radius: 0; }
+.change-span.is-arrow { --tip: max(0px, 100% - 10.5px); --base: max(0px, 100% - 23.5px); } /* 짧은 화살표(변화가 작을 때)는 몸통 없이 화살촉만, 화살촉도 함께 줄어든다 */
+.change-span.is-right::before { clip-path: polygon(0 4px, var(--base) 4px, var(--base) 0, var(--tip) 50%, var(--base) 100%, var(--base) 8px, 0 8px); }
+.change-span.is-left { --tip: min(100%, 10.5px); --base: min(100%, 23.5px); }
+.change-span.is-left::before { clip-path: polygon(100% 4px, var(--base) 4px, var(--base) 0, var(--tip) 50%, var(--base) 100%, var(--base) 8px, 100% 8px); }
+.change-dot { position: absolute; top: 50%; width: 12px; height: 12px; transform: translate(-50%, -50%); border-radius: 50%; border: 2px solid var(--color-muted); background: var(--color-card); }
+/* 지금 점: 처음 점보다 크고 진한 커피색으로 채운다 */
+.change-dot.is-to { width: 15px; height: 15px; border: 0; background: var(--color-desk-coffee); box-shadow: 0 1px 3px color-mix(in srgb, var(--color-desk-coffee) 35%, transparent); }
+.change-detail { margin: 0; white-space: nowrap; color: var(--color-muted); font-size: var(--text-small); font-variant-numeric: tabular-nums; }
+.change-detail.is-moved { color: var(--color-heading); font-weight: 700; }
 .change-row::after { display: none; } /* 가운데 눈금은 막대(.axis-bar) 전용 */
 
 /* 성향 변화 흐름(FE-70): 축마다 작은 꺾은선. 위 반쪽 = 관대, 아래 반쪽 = 엄격(색은 4축 막대와 같은 두 색을 아주 옅게) */
@@ -280,7 +298,36 @@ img.my-sash-icon.is-missing { visibility: hidden; }
 /* 첫 화면 성향카드(.my-card.is-type)를 크기 · 칸 · 그림 자리까지 그대로 쓴다. 누르는 카드가 아니라 움직임만 뺀다 */
 .my-card.is-detail { cursor: default; }
 .my-card.is-detail:hover, .my-card.is-detail:active { transform: none; }
+/* 오른쪽(판결에서 드러난 성향 ~ 성향 설명)은 카드 높이에 맞춘다: height 0 + min-height 100%라 줄 높이는 카드(고정)만 정하고, 네 축은 남는 높이에 고르게 펼친다 */
+.my-type-hero > .my-type-section { display: flex; flex-direction: column; align-self: stretch; height: 0; min-height: 100%; }
+.my-type-hero > .my-type-section > .my-detail { flex: 1; display: flex; flex-direction: column; }
+.my-type-hero .axis-list { flex: 1; align-content: space-between; }
+.my-type-head { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 12px; margin-bottom: 12px; }
+.my-type-head .my-section-title, .my-type-head .my-hint { margin: 0; }
+/* 판결 성향 막대: 축 이름을 비중 글자와 한 줄에 두고, 더 기운 쪽만 그 쪽 색 · 굵게. 두 쪽은 채도가 비슷한 남색 · 갈색으로 색만 다르다(좋고 나쁨이 아님) */
+.my-page {
+  --axis-strict: #2f5592; --axis-lenient: #a8652f;
+  --axis-lenient-text: var(--palette-wood-700); /* 갈색 막대 색은 글자로는 대비가 모자라(3.3:1) 한 단계 진하게 */
+}
+.my-type-hero .axis-row { display: grid; grid-template-columns: 7em minmax(0, 1fr); column-gap: 12px; align-items: center; } /* 축 이름은 막대 왼쪽, 비중 글자는 막대 위 */
+.my-type-hero .axis-label { grid-row: 2; grid-column: 1; margin: 0; }
+.my-type-hero .axis-ends { grid-row: 1; grid-column: 2; }
+.my-type-hero .axis-bar { grid-row: 2; grid-column: 2; }
+.my-type-hero .axis-empty { grid-row: 2; grid-column: 2; margin: 0; }
+.my-type-hero .axis-row { grid-template-rows: auto 20px; } /* 막대 줄을 20px로 묶어 막대(10px)가 줄 가운데(아래에서 5 ~ 15px)에 오게 한다 */
+.my-type-hero .axis-label { line-height: 20px; }
+.my-type-hero .axis-row::after { left: calc(7em + 12px + (100% - 7em - 12px) / 2); bottom: 1px; height: 18px; } /* 가운데 눈금은 막대 가운데, 위 · 아래로 4px씩 튀어나온다 */
+.my-type-hero .axis-bar .is-strict { background: var(--axis-strict); }
+.my-type-hero .axis-bar .is-lenient { background: var(--axis-lenient); }
+.my-type-hero .axis-ends span { color: var(--color-muted); font-weight: 400; }
+.my-type-hero .axis-ends .is-strict.is-major { color: var(--axis-strict); font-weight: 700; }
+.my-type-hero .axis-ends .is-lenient.is-major { color: var(--axis-lenient-text); font-weight: 700; }
 .my-type-desc { margin: 20px 0 0; padding-top: 16px; border-top: 1px solid var(--color-border); color: var(--color-muted); text-wrap: pretty; }
+/* 성향 변경폭 아래: 처음 유형 → 지금 유형 카드. 화살표는 카드 가운데 높이(글자 칸만큼 위로) */
+.my-type-shift { display: flex; justify-content: center; align-items: center; gap: 24px; margin-top: 32px; }
+.my-type-shift-side { display: grid; justify-items: center; gap: 10px; margin: 0; }
+.my-type-shift-side figcaption { color: var(--color-muted); font-size: var(--text-small); }
+.my-type-shift-arrow { flex: none; width: 28px; height: 28px; margin-bottom: 30px; fill: none; stroke: var(--color-heading); stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
 .my-empty + .my-type-section { margin-top: 36px; }
 .my-type-section + .my-type-section { margin-top: 36px; }
 .my-section-title { margin: 0 0 12px; font: 700 var(--text-title-3)/1.4 var(--font-heading); color: var(--color-heading); }
@@ -454,7 +501,14 @@ img.my-sash-icon.is-missing { visibility: hidden; }
   .collection-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .my-type-hero { grid-template-columns: minmax(0, 1fr); justify-items: center; gap: 28px; }
   .my-type-hero .my-type-section { justify-self: stretch; }
+  .my-type-hero > .my-type-section { height: auto; min-height: 0; } /* 세로로 쌓이면 카드 높이에 맞추지 않는다 */
+  .my-type-hero .axis-list { gap: 14px; }
+  .change-list { grid-template-columns: 7em minmax(0, 1fr); }
+  .change-row .change-detail { grid-row: 3; grid-column: 2; justify-self: end; } /* 좁은 화면은 비중을 막대 아래 오른쪽으로 */
   .my-card.is-detail { width: 200px; } /* 모바일 2열 카드처럼 100%로 늘지 않게 */
+  .my-type-shift { gap: 8px; }
+  .my-type-shift .my-card.is-detail { width: 140px; } /* 두 장이 한 줄에 들어가게. 글자 · 책갈피는 카드 폭에 비례(cqi) */
+  .my-type-shift-arrow { width: 20px; height: 20px; }
   .trend-grid { grid-template-columns: minmax(0, 1fr); }
   .trend-table { overflow-x: auto; } /* 네 축 표는 좁은 화면에서 표만 옆으로 민다 */
   .my-profile-hero { grid-template-columns: minmax(0, 1fr); gap: 20px; justify-items: center; }
