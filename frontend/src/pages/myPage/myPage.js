@@ -226,7 +226,7 @@ function profileCardParts(deco, data) {
   const face = element('div', 'my-card-window');
   const faceImage = picture(src, `${caption} 대표 이미지`, 'my-profile-face');
   face.append(faceImage);
-  fitPortraitIn(face, faceImage);
+  fitPortraitIn(face, faceImage, { centerWide: true }); // 가로로 긴 그림(사건 사진 등)은 창 세로 가운데에, 서 있는 캐릭터는 발을 아래에
   const nickname = data.nickname || DEFAULT_NICKNAME;
   const typeName = data.personality?.type?.name;
   const result = element('p', `my-card-note${typeName ? '' : ' is-empty'}`, typeName ?? '성향 테스트 전');
