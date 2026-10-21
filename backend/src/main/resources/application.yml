@@ -142,8 +142,22 @@ jwt:
   access-token-ttl: ${JWT_ACCESS_TOKEN_TTL:15m}
   refresh-token-ttl: ${JWT_REFRESH_TOKEN_TTL:14d}
 
+# 카카오 로그인 (확장 단계, BE-62 · WBS 7.4.2). client-id가 비어 있으면 카카오 로그인 경로만 꺼진다(서버는 그대로 뜬다).
+# client-id를 넣으면 client-secret도 필수다(없으면 기동 실패). 키는 환경변수로만 넘긴다(운영: deploy/.env)
+# 리다이렉트 경로는 우리 사이트 안의 경로만 허용한다(열린 리다이렉트 방지, KakaoOAuthProperties)
+kakao:
+  oauth:
+    client-id: ${KAKAO_CLIENT_ID:}
+    client-secret: ${KAKAO_CLIENT_SECRET:}
+    success-redirect: ${KAKAO_LOGIN_SUCCESS_REDIRECT:/auth/callback}
+    failure-redirect: ${KAKAO_LOGIN_FAILURE_REDIRECT:/auth/callback?error=login_failed}
+
 # 관리자 세션 쿠키 (확장 단계, BE-39). 사용자 API는 세션을 쓰지 않는다(익명 ID 쿠키).
 server:
+  # Nginx(TLS 종료) 뒤에서 원래 scheme · Host · 클라이언트 IP를 쓰기 위해 X-Forwarded-* 를 믿는다 (BE-62, #118 권장).
+  # 카카오 Redirect URI({baseUrl})가 https 도메인이 되고, Origin 검증(BE-94) · 요청 제한 · 감사 로그 IP가 실제 값을 본다.
+  # Tomcat RemoteIpValve는 내부 대역(Docker 172.16/12 등)에서 온 헤더만 믿는다
+  forward-headers-strategy: native
   servlet:
     session:
       timeout: ${ADMIN_SESSION_TIMEOUT:30m}
