@@ -32,7 +32,11 @@ public class AuthController {
 	private final TokenRefreshService tokenRefreshService;
 	private final RefreshTokenCookies refreshTokenCookies;
 
-	/** 리프레시 토큰을 로테이션하며 새 액세스 토큰을 내준다 */
+	/**
+	 * 리프레시 토큰을 로테이션하며 새 액세스 토큰을 내준다.
+	 * 실패(쿠키 없음 · 모르는 값 · 이미 로테이션 · 로그아웃된 값)하면 쿠키도 함께 지운다 — 죽은 쿠키를 남겨 두면
+	 * 화면이 실패하는 재발급을 계속 반복할 수 있다(PR #218 리뷰, 정민석)
+	 */
 	@PostMapping("/token/reissue")
 	public AccessTokenResponse reissue(HttpServletRequest request, HttpServletResponse response) {
 		try {
@@ -42,6 +46,7 @@ public class AuthController {
 			refreshTokenCookies.write(response, tokens.refreshToken(), remaining(tokens.refreshTokenExpiresAt()));
 			return AccessTokenResponse.of(tokens);
 		} catch (TokenException e) {
+			refreshTokenCookies.clear(response);
 			throw new BusinessException(e.reason().errorCode(), e.getMessage());
 		}
 	}

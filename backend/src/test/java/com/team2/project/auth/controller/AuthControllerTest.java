@@ -58,18 +58,25 @@ class AuthControllerTest extends ApiIntegrationTest {
 	}
 
 	@Test
-	void reissue_noCookie_401TokenInvalid() throws Exception {
-		mockMvc.perform(post(REISSUE).header(HttpHeaders.ORIGIN, SAME_ORIGIN))
+	void reissue_noCookie_401TokenInvalid_andClearsCookie() throws Exception {
+		MvcResult result = mockMvc.perform(post(REISSUE).header(HttpHeaders.ORIGIN, SAME_ORIGIN))
 			.andExpect(status().isUnauthorized())
-			.andExpect(jsonPath("$.code").value("TOKEN_INVALID"));
+			.andExpect(jsonPath("$.code").value("TOKEN_INVALID"))
+			.andReturn();
+
+		assertThat(result.getResponse().getHeader(HttpHeaders.SET_COOKIE)).contains("Max-Age=0");
 	}
 
+	/** PR #218 리뷰(정민석): 재발급 실패 때 죽은 쿠키를 남겨 두면 화면이 실패하는 재발급을 계속 반복할 수 있다 */
 	@Test
-	void reissue_unknownCookieValue_401TokenInvalid() throws Exception {
-		mockMvc.perform(post(REISSUE).cookie(new Cookie(RefreshTokenCookies.NAME, "no-such-token"))
+	void reissue_unknownCookieValue_401TokenInvalid_andClearsCookie() throws Exception {
+		MvcResult result = mockMvc.perform(post(REISSUE).cookie(new Cookie(RefreshTokenCookies.NAME, "no-such-token"))
 				.header(HttpHeaders.ORIGIN, SAME_ORIGIN))
 			.andExpect(status().isUnauthorized())
-			.andExpect(jsonPath("$.code").value("TOKEN_INVALID"));
+			.andExpect(jsonPath("$.code").value("TOKEN_INVALID"))
+			.andReturn();
+
+		assertThat(result.getResponse().getHeader(HttpHeaders.SET_COOKIE)).contains("Max-Age=0");
 	}
 
 	@Test
