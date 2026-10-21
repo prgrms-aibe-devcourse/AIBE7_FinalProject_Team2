@@ -1,0 +1,29 @@
+/* 내 정보 수정(FE-77, myProfileEdit.js): 섹션을 세로로 쌓은 한 단 폼. 읽기 줄 길이를 위해 폭을 제한한다 */
+.edit-page { max-width: 640px; }
+.edit-intro { margin: 0 0 20px; color: var(--color-muted); font-size: var(--text-small); }
+.edit-form { display: grid; gap: 28px; }
+.edit-section { display: grid; gap: 14px; padding-top: 20px; border-top: 1px solid var(--color-border); }
+.edit-section:first-child { padding-top: 0; border-top: 0; }
+.edit-title { margin: 0; color: var(--color-heading); font: 700 var(--text-title-3)/1.4 var(--font-heading); }
+.edit-field { display: grid; gap: 6px; justify-items: start; }
+.edit-label { font-weight: 700; }
+.edit-input { box-sizing: border-box; width: 100%; max-width: 320px; min-height: 44px; padding: 8px 12px; border: 1px solid var(--color-border-strong); border-radius: 6px; background: var(--color-card); color: var(--color-text); font: inherit; }
+.edit-input:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+.edit-input:disabled { background: var(--color-surface); color: var(--color-muted); }
+.edit-input[aria-invalid="true"] { border-color: var(--color-danger); }
+.edit-hint { margin: 0; color: var(--color-muted); font-size: var(--text-small); text-wrap: pretty; }
+.edit-error { margin: 0; color: var(--color-danger); font-size: var(--text-small); }
+.edit-error:empty { display: none; }
+.edit-facts { display: grid; gap: 8px; margin: 0; }
+.edit-fact { display: grid; grid-template-columns: 7em minmax(0, 1fr); gap: 12px; }
+.edit-fact dt { color: var(--color-muted); }
+.edit-fact dd { margin: 0; }
+.edit-confirm { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--color-border-strong); border-radius: 8px; background: var(--color-surface); }
+.edit-confirm[hidden] { display: none; }
+.edit-agree { display: flex; align-items: flex-start; gap: 8px; }
+.edit-agree input { margin-top: 4px; }
+.edit-danger { color: var(--color-danger); border-color: currentColor; }
+.edit-danger:disabled { opacity: .5; cursor: default; }
+.edit-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.edit-status { min-height: 1.5em; margin: 0; color: var(--color-heading); font-weight: 700; }
+@media (max-width: 720px) { .edit-fact { grid-template-columns: minmax(0, 1fr); gap: 2px; } }

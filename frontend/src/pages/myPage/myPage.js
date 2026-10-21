@@ -12,6 +12,7 @@ import { fitPortraitIn } from '../../utils/portraitFit.js';
 import { clearUser, currentUser, isAdmin } from '../../utils/session.js';
 import { homeRoute } from '../admin/adminMenu.js';
 import { openCaseReviewPopup } from '../caseReview/caseReviewPopup.js';
+import { renderProfileEdit } from './myProfileEdit.js';
 
 // S-17 마이페이지 (WBS 7.6.6). GET /my-page 한 번 호출로 받고, 기록이 없어도 404가 아니라 빈 200이다(명세 P-5).
 // 메인 책상의 커피잔으로 들어온다(FE-44): 커다란 커피잔이 날아와 페이드아웃하는 사이(utils/coffeeDive.js) 이 화면(from: 'mug')으로 넘어온다.
@@ -1165,7 +1166,7 @@ function renderView(view, data, navigate, go, api) {
     type: () => renderTypePage(data, navigate),
     collection: () => renderCollection(data.experiences),
     cases: () => renderCases(data.experiences ?? [], navigate, api),
-    edit: () => renderShell('내 정보 수정은 곧 열려요.'),
+    edit: () => renderProfileEdit({ api, navigate, go }),
     settings: () => renderShell('환경 설정은 곧 열려요.'),
   }[view]();
   return [head, body];
