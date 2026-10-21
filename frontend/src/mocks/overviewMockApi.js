@@ -49,7 +49,7 @@ export async function postPreJudgment(caseId, body) {
     || !factorIds.every((id) => mockOverview.preFactors.some((item) => item.factorId === id))) {
     fail('INVALID_FACTOR', status);
   }
-  // S-09 최상단 "처음 판단 → 직접 판결"에서 써야 해서 사전 판단 선택값을 저장한다.
+  // S-08 최상단 "처음 판단 → 직접 판결"에서 써야 해서 사전 판단 선택값을 저장한다.
   savePreJudgment({ rangeOptionId: body.rangeOptionId, factorIds });
   return save({ status: 'PRE_JUDGED', lastReviewedStep: 1 });
 }

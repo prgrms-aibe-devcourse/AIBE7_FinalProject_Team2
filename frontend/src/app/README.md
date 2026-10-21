@@ -31,16 +31,18 @@ export async function renderXxxPage(container, { caseId, caseHeader, api, naviga
 | --- | --- | --- |
 | `landing` | `/` | S-01 |
 | `list` | `/cases` | S-02 |
-| `overview` | `/cases/{caseId}/start` | S-03 |
-| `review` | `/cases/{caseId}/review` | S-04 |
-| `summary` | `/cases/{caseId}/summary` | S-05 |
-| `verdict` | `/cases/{caseId}/verdict` | S-06 |
-| `ai` · `court` · `comparison` | `/cases/{caseId}/result/ai` · `court` · `compare` | S-07 · S-08 · S-09 |
+| `overview` | `/cases/{caseId}/impression` | S-03 1막 첫인상 |
+| `review` | `/cases/{caseId}/trial` | S-04 2막 재판 |
+| `verdict` | `/cases/{caseId}/verdict` | S-05 3막 내 판결 |
+| `ai` · `court` · `comparison` | `/cases/{caseId}/ai-verdict` · `court-verdict` · `compare` | S-06 · S-07 · S-08 4 ~ 6막 |
+| `caseReview` | `/cases/{caseId}/letters` | S-09 리뷰 페이지(독자 엽서) |
 | `test` · `testResult` | `/test` · `/test/result` | S-15 판결 성향 테스트 · S-16 성향 결과(내 결과, 공유하기 버튼) |
 | `testType` | `/test/types/{shareId}` | S-16 공유된 결과 — 유형 설명만(응답 · 점수 없음, FR-8-6). `{shareId}`는 서버가 정한 영숫자 6 ~ 16자 해시(대소문자 구분). 유형 코드(INTP 등)는 주소에 쓰지 않는다 |
 | `me` | `/me` | S-17 마이페이지 |
 | `admin` · `adminCase` | `/admin` · `/admin/cases/{caseId}` | S-19 관리자 검수 목록 · 상세 (FE-16). 관리자 코드는 이 주소로 들어올 때만 불러온다(동적 import), 관리자 api는 `pages/admin/adminApi.js`가 따로 고른다 |
 | `notFound` | 주소 없음 | S-14 |
+
+- 6막 재구성 전 옛 주소(`/start` · `/review` · `/summary` · `/result/*` · `/opinion`)는 라우터가 새 주소로 바꿔 연다(`legacyPaths.js`, BE-82 주소표).
 
 ## 에러 코드와 이동
 

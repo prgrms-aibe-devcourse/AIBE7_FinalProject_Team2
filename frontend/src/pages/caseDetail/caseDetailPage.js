@@ -132,7 +132,7 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
       choices: [
         { label: asking.resume, primary: true, action: () => chosen?.('resume') },
         { label: '1막부터 다시 보기', action: () => chosen?.('again') },
-        // 마친 사건만: 독자 엽서(S-09)으로 (FE-62)
+        // 마친 사건만: 독자 엽서(S-09)로 (FE-62)
         ...(data.myStatus === 'COMPLETED' ? [{ label: '독자 엽서 쓰기', action: () => chosen?.('opinion') }] : []),
       ],
     } : undefined;

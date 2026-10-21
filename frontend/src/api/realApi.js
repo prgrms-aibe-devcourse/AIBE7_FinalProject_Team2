@@ -14,6 +14,9 @@ export const getCaseDetail = (caseId) => get(`/cases/${encodeURIComponent(caseId
 // API 2 — 체험 시작 (있으면 기존 체험, 쿠키가 없으면 익명 ID 쿠키를 내려준다)
 export const startExperience = (caseId) => post(experience(caseId));
 
+// API 3 — 내 체험 상태 (S-09 리뷰 페이지 진입 확인. 체험이 없으면 EXPERIENCE_NOT_FOUND)
+export const getExperience = (caseId) => get(experience(caseId));
+
 // API 4 · 5 — 사건 개요 · 사전 판단 제출
 export const getOverview = (caseId) => get(`${experience(caseId)}/overview`);
 export const postPreJudgment = (caseId, body) => post(`${experience(caseId)}/pre-judgment`, body);

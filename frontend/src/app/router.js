@@ -7,6 +7,7 @@
 // - 오래된 이동의 결과는 버린다 (빠르게 연속 이동했을 때 마지막 이동만 그려진다).
 import { element, renderSiteFooter, renderSiteHeader } from '../components/siteLayout.js';
 import { loadCaseHeader } from './caseHeader.js';
+import { legacyPath } from './legacyPaths.js';
 
 const SITE_TITLE = '내Law남불';
 
@@ -164,12 +165,15 @@ export function createRouter({ view, headerHost, footerHost, routes }) {
   // 지금 주소에 맞는 화면을 그린다 (처음 접속 · 새로고침 · 뒤로 · 앞으로 가기)
   // navKind: 'back' | 'forward' | 'navigate' (코드로 부른 이동, 최초 접속 · 새로고침 포함)
   function renderLocation(navKind) {
+    const moved = legacyPath(window.location.pathname);
+    // 옛 주소(공유 링크 · 북마크)는 새 주소로 바꿔 그린다. 쿼리 · 해시는 그대로 둔다
+    if (moved) history.replaceState(history.state, '', moved + window.location.search + window.location.hash);
     const found = match(window.location.pathname);
     if (!found) {
       return showNotFound();
     }
     const raw = window.location.pathname.replace(/(.)\/$/, '$1');
-    // /cases/01/review처럼 정규화되지 않은 사건 번호로 들어오면, navigate()가 만드는 경로(/cases/1/review)와
+    // /cases/01/trial처럼 정규화되지 않은 사건 번호로 들어오면, navigate()가 만드는 경로(/cases/1/trial)와
     // 달라져서 "같은 화면으로의 이동 무시"가 깨진다. 주소창도 정규화된 경로로 맞춰 둔다 (리뷰 반영)
     const path = found.caseId === undefined && found.shareId === undefined && found.postId === undefined ? raw : buildPath(found.route.path, found.caseId, found.shareId, found.postId);
     if (path !== raw) {

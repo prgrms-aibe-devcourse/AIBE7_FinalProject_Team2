@@ -33,6 +33,7 @@
 | v1.26 | 2026-10-20 | 사건 사진 생성 방식 재검토 (**확장 단계**, BE-91 재검토 · V20) — Cloudflare Workers AI 직접 생성은 그림 품질 때문에 그만두고, 사람이 만든 사진을 올리는 방식으로 바꿨다. `case_incident_photo.model` 컬럼 삭제, `prompt`는 참고용 선택 항목으로 바뀌어 NOT NULL 해제(결정: `docs/decisions/BE-91.md`) |
 | v1.27 | 2026-10-20 | 신문 지면 테이블 추가 (**확장 단계**, BE-92 · V21) — `case_paper` 신설(사건당 1건: desk · headline · deck · caption · article). `photo`는 `legal_case.thumbnail_url`, `extraPhotos`는 `case_incident_photo`를 그대로 재사용(새 컬럼 없음, 결정: `docs/decisions/BE-92.md`) |
 | v1.28 | 2026-10-20 | `admin_account.password_hash` 설명 — 관리자 OAuth(BE-40) 제외 반영. NULL 허용 제약(V12)은 그대로 둔다 |
+| v1.29 | 2026-10-21 | 화면 ID를 6막 체계로 갱신(FE-58, BE-82 매핑: 옛 S-06 ~ S-09 → S-05 ~ S-08). 없앤 정리 화면은 "옛 S-05"로 표기. 작성 이력의 ID는 옛 뜻 그대로 |
 
 ---
 
@@ -204,13 +205,13 @@ erDiagram
 
 #### `case_section` — 사건 정보 섹션
 
-S-04 · S-05에 보여 줄 사건 정보를 섹션 단위로 저장한다(결정 #3). S-03 개요와 S-04 섹션 ①은 `legal_case.overview` 하나를 함께 쓰고, 이 테이블에 중복 저장하지 않는다.
+S-04 · 옛 S-05에 보여 줄 사건 정보를 섹션 단위로 저장한다(결정 #3). S-03 개요와 S-04 섹션 ①은 `legal_case.overview` 하나를 함께 쓰고, 이 테이블에 중복 저장하지 않는다.
 
 | 컬럼 | 타입 | 필수 | 설명 |
 | --- | --- | --- | --- |
 | id | bigint PK | ✓ |  |
 | case_id | bigint FK | ✓ |  |
-| stage | varchar(20) | ✓ | 화면 단계: `DETAIL` / `ARGUMENT` / `LAW` / `SUMMARY`(S-05 전용) |
+| stage | varchar(20) | ✓ | 화면 단계: `DETAIL` / `ARGUMENT` / `LAW` / `SUMMARY`(옛 S-05 정리 화면용. 지금은 3막 내 판결(S-05) 파일철 "사건 요약"의 핵심 사실, FE-58) |
 | section_type | varchar(30) | ✓ | 섹션 종류 (아래 표) |
 | title | varchar(100) |  | 섹션 라벨 (예: 주요 사실관계) |
 | content | text |  | 본문. 항목이 여럿이면 한 줄에 하나씩 쓰고 줄바꿈(`\n`)으로 나눈다(v1.9) |
@@ -226,14 +227,14 @@ S-04 · S-05에 보여 줄 사건 정보를 섹션 단위로 저장한다(결정
 | `PROSECUTOR` | ARGUMENT | 검사 측 주장 | — |
 | `DEFENSE` | ARGUMENT | 피고인 · 변호인 측 주장 | — |
 | `LAW_TERM` | LAW | 법률 · 양형기준 용어 설명 | `[{"term":"기본영역","desc":"..."}]` |
-| `SUMMARY` | SUMMARY | S-05 핵심 사실 요약 | `["집으로 찾아온 지인 1명을 살해", "다투던 중 집에 있던 흉기를 사용", ...]` |
+| `SUMMARY` | SUMMARY | 핵심 사실 요약(옛 S-05 → 지금은 S-05 사건 요약 장) | `["집으로 찾아온 지인 1명을 살해", "다투던 중 집에 있던 흉기를 사용", ...]` |
 - 적용 법률 · 법정형 · 권고 범위는 `legal_case` 컬럼에서, 선고 가능 범위는 `penalty_rule`에서 꺼내 LAW 단계에 함께 보여 준다.
 - 범죄 유형마다 섹션 종류가 달라지면 `section_type` 값만 추가한다.
 - `PROSECUTOR` · `DEFENSE` 섹션 위의 안내 문구(판결문의 양형 이유에서 정리한 내용이라는 안내)는 이 테이블에 두지 않는다. 화면이 섹션 종류별 고정 문구로 보여 준다(v1.9, [정보 구조](information-architecture.md) S-04). 사건마다 문구가 달라져야 하면 그때 칸을 추가한다.
 
 #### `penalty_rule` — 형벌별 법정형과 선고 가능 범위
 
-S-06에서 보여 줄 형벌 선택지, 그리고 **선고 가능 범위 밖 판결을 막는 기준**이다(FR-3-3 ②).
+S-05에서 보여 줄 형벌 선택지, 그리고 **선고 가능 범위 밖 판결을 막는 기준**이다(FR-3-3 ②).
 
 | 컬럼 | 타입 | 필수 | 설명 |
 | --- | --- | --- | --- |
@@ -246,7 +247,7 @@ S-06에서 보여 줄 형벌 선택지, 그리고 **선고 가능 범위 밖 판
 | allowed_max | bigint |  | **선고 가능 상한** — 법정형 상한. 누범 등 사실관계로 정해지는 가중이 있으면 반영한 값 |
 | allowed_basis | varchar(300) |  | 선고 가능 범위 산출 근거 (예: 작량감경 시 하한 1/2) |
 | suspension_allowed | boolean | ✓ | 이 형벌에 집행유예 입력을 보여 줄지 |
-| display_order | int | ✓ | 형벌 표시 순서. **법조문 표기 순서대로 무거운 형벌부터** `DEATH` → `LIFE` → `PRISON` → `FINE`(v1.9). API 8 · S-06 형벌 버튼이 이 순서를 그대로 쓴다 |
+| display_order | int | ✓ | 형벌 표시 순서. **법조문 표기 순서대로 무거운 형벌부터** `DEATH` → `LIFE` → `PRISON` → `FINE`(v1.9). API 8 · S-05 형벌 버튼이 이 순서를 그대로 쓴다 |
 
 > **`DEATH` · `LIFE` 행 (v1.4)**: `allowed_min` ~ `allowed_max`는 그 형벌을 고른 뒤 **작량감경해 징역으로 선고할 때의 범위**(개월)다. 무기징역은 10년 ~ 50년(120 ~ 600, 형법 제55조 제1항 제2호), 사형은 20년 ~ 50년(240 ~ 600, 같은 항 제1호). 법률상 감경 사유도 있으면 그만큼 더 넓힌다. 사형을 감경해 무기징역으로 선고하는 경우는 형법 규정이라 코드 상수로 판단한다. 두 행 모두 `suspension_allowed = false`(감경해도 징역 10년 이상).
 
@@ -273,7 +274,7 @@ S-06에서 보여 줄 형벌 선택지, 그리고 **선고 가능 범위 밖 판
 | label | varchar(100) | ✓ | 판단 요소 문구 (예: 다투던 중 집에 있던 흉기를 집어 들었다) | REQ-076 |
 | pre_label | varchar(100) |  | 사전 판단용 짧은 문구 (예: 피해 금액이 수천만 원이다). `OVERVIEW` 요소만 | REQ-093 |
 | reveal_stage | varchar(20) | ✓ | 처음 알게 되는 단계: `OVERVIEW` / `DETAIL` / `ARGUMENT` / `LAW` | REQ-095 |
-| summary_tag | varchar(20) | ✓ | 요약 태그 (v1.3 추가, v1.10 확정). 여러 요소를 묶는 분류명이 아니라 **요소마다 붙이는 짧은 요약어**다(예: 요소 "다투던 중 집에 있던 흉기를 집어 들었다" → `흉기 사용`). S-09 "내 판결" 한 줄 요약과 세 판결 비교 규칙 문장(API 14 `ruleSentences`)에 쓴다 | REQ-060 |
+| summary_tag | varchar(20) | ✓ | 요약 태그 (v1.3 추가, v1.10 확정). 여러 요소를 묶는 분류명이 아니라 **요소마다 붙이는 짧은 요약어**다(예: 요소 "다투던 중 집에 있던 흉기를 집어 들었다" → `흉기 사용`). S-08 "내 판결" 한 줄 요약과 세 판결 비교 규칙 문장(API 14 `ruleSentences`)에 쓴다 | REQ-060 |
 | value_axis | varchar(20) |  | 가치관 축 (v1.13 추가, BE-47). 사용자가 이 요소를 고르는 것으로 드러나는 성향을 매칭하는 축: `APOLOGY_SINCERITY`(사과와 진정성: 반성 · 자수 · 수사 협조 · 사후 정황) / `FAULT_STANDARD`(잘잘못의 기준: 범행 동기 · 수단 · 방법 · 계획성 · 결과의 중대성) / `PRINCIPLE_RELATION`(원칙과 관계: 피해 회복 · 합의 · 처벌불원 · 피해자 과실) / `ORDER_OPPORTUNITY`(질서와 기회: 전과 · 연령 · 가족 · 부양 · 직업 · 사회적 유대). 어느 축에도 맞지 않으면 NULL | |
 | value_axis_status | varchar(20) | ✓ | 가치관 축 후검수 상태 (v1.15 추가, BE-48): `AUTO`(기본값. AI 투표 · 사람 초안, 아직 관리자가 확정하지 않음) / `CONFIRMED`(관리자 확정, NULL로 확정한 것 포함). 기본 `AUTO` | |
 | value_axis_votes | jsonb |  | 축 분류 투표 기록 (v1.15 추가, BE-49). 예: `{"runs": 5, "counts": {"FAULT_STANDARD": 3, "NONE": 2}, "needsReview": false}`. `counts`는 표를 받은 축만, NULL 표는 `NONE` 키. `requestedRuns`(선택)는 요청한 횟수로, `runs`(유효 응답 수)와 다를 수 있다. `needsReview`는 최다표가 요청 횟수의 과반이 아니면(동률 · 유효 응답 부족 포함) true. 사람 초안 · 투표 없이 정한 값은 NULL | |
@@ -371,7 +372,7 @@ S-03의 객관식 선택지. 범죄 유형별로 정의한다(FR-2-8).
 | min_months | int |  | 실형 구간 하한 |
 | max_months | int |  | 실형 구간 상한 |
 | display_order | int | ✓ |  |
-- `kind`와 개월 범위가 있어야 S-09에서 "처음 생각보다 가벼운/무거운 판결"을 계산할 수 있다.
+- `kind`와 개월 범위가 있어야 S-08에서 "처음 생각보다 가벼운/무거운 판결"을 계산할 수 있다.
 - 법정형에 벌금이 없는 범죄 유형(살인)은 `FINE` 구간을 두지 않는다. 살인은 집행유예부터 사형까지 8개다(요구사항 FR-2-8, v1.4).
 - 무겁기 순서: `FINE` < `SUSPENDED` < `PRISON`(개월 순) < `LIFE` < `DEATH` (v1.4). 최종 판결은 `reduced_to`가 있으면 그 값으로 비교한다.
 
@@ -410,7 +411,7 @@ IA 9장의 진행 상태를 저장한다.
 | updated_at | timestamptz | ✓ |  |
 - **유니크 제약**: (`anonymous_user_id`, `case_id`, `attempt_no`)
 - **CHECK**: `last_reviewed_step`은 0 ~ 4, `attempt_no`는 1 이상 (v1.5)
-- MVP에서는 `attempt_no = 1`만 만든다. 같은 브라우저에서 이미 체험을 시작한 사건에 들어오면 새 체험을 만들지 않고 기존 체험의 진행 단계로 보낸다. 완료(`COMPLETED`)한 사건이면 S-09 결과 화면으로 보낸다.
+- MVP에서는 `attempt_no = 1`만 만든다. 같은 브라우저에서 이미 체험을 시작한 사건에 들어오면 새 체험을 만들지 않고 기존 체험의 진행 단계로 보낸다. 완료(`COMPLETED`)한 사건이면 S-08 결과 화면으로 보낸다.
 - 통계와 참여자 비교에는 `attempt_no = 1`인 체험만 쓴다. 두 번째 체험부터는 실제 판결을 이미 알고 있는 상태이기 때문이다.
 - 체험 당시 로그인 여부 구분:
 
@@ -438,12 +439,12 @@ IA 9장의 진행 상태를 저장한다.
 | fine_amount | bigint |  | 벌금 (원) |
 | suspension_months | int |  | 집행유예 기간 (개월). 없으면 NULL |
 | extra_dispositions | jsonb |  | 부가 처분 (예: `[{"type":"COMMUNITY_SERVICE","value":"80시간"}]`). 주로 `COURT`. `type` 값: `COMMUNITY_SERVICE`(사회봉사), `CONFISCATION`(몰수, v1.4). 필요하면 값을 추가한다 |
-| summary | varchar(100) |  | S-09 판결 카드의 한 줄 요약 (v1.3). AI · COURT는 팀이 입력. USER는 저장하지 않고 서버가 `factor.summary_tag`로 규칙 문장을 만들어 응답한다(API 판결 응답 공통 형식) |
+| summary | varchar(100) |  | S-08 판결 카드의 한 줄 요약 (v1.3). AI · COURT는 팀이 입력. USER는 저장하지 않고 서버가 `factor.summary_tag`로 규칙 문장을 만들어 응답한다(API 판결 응답 공통 형식) |
 | reasoning | text |  | 판결 이유 요약 (AI · COURT) |
 | plain_explanation | text |  | 쉬운 설명 (COURT) |
 | excerpt | text |  | 판결문 발췌 (COURT, 비식별화 적용) |
 | free_opinion | text |  | 자유 의견 (USER, 비교 대상 아님) |
-| reference_tags | jsonb |  | 참고 자료 태그 (AI, 예: `["형법 제250조", "살인범죄 양형기준", "유사 판례 5건"]`). S-07에 표시 (v1.2 추가, v1.3에서 `references` → `reference_tags`: `REFERENCES`는 SQL 예약어) |
+| reference_tags | jsonb |  | 참고 자료 태그 (AI, 예: `["형법 제250조", "살인범죄 양형기준", "유사 판례 5건"]`). S-06에 표시 (v1.2 추가, v1.3에서 `references` → `reference_tags`: `REFERENCES`는 SQL 예약어) |
 | is_published | boolean | ✓ | AI · COURT는 검수 후 `true`만 노출. USER는 항상 `true` |
 | review_status | varchar(20) |  | (v1.22, V16) 검수 결과 `APPROVED` / `REJECTED`. **NULL = 검수 기록 없음** — 화면에는 공개 중이면 승인, 아니면 대기로 보인다(파이프라인 · 시드는 채우지 않는다). AI · COURT만 |
 | reviewed_by_admin_id | bigint FK |  | (v1.22) 검수한 관리자(`admin_account`, 계정을 지워도 기록은 남김 `ON DELETE SET NULL`) |
@@ -553,13 +554,13 @@ AI 판결 1건을 어떤 조건으로 만들었는지 남긴다(REQ-047, 079). M
 | prompt_version | varchar(30) | ✓ |  |
 | input_snapshot | jsonb |  | AI에 넣은 입력 (사건 원문 · 판결문 전문이 없는지 점검용) |
 | raw_output | jsonb |  | 모델 원본 출력 (실패 원인 분석 · 샘플 점검용) |
-| created_at | timestamptz | ✓ | 생성 시작 (S-08 진입, `AI_REVEALED`) |
+| created_at | timestamptz | ✓ | 생성 시작 (S-07 진입, `AI_REVEALED`) |
 | completed_at | timestamptz |  | `DONE` · `FAILED`가 된 시각 |
 - 행은 실제 판결 공개(`AI_REVEALED`) 시 `PENDING`으로 만들고, 생성 작업이 끝나면 `DONE` 또는 `FAILED`로 바꾼다. 유니크 제약으로 동시 요청이 와도 한 번만 생성한다.
 - **CHECK**: `fail_reason`은 위 표의 5개 값만 허용 (v1.5)
 - `FAILED`는 자동으로 다시 만들지 않는다(MVP와 같은 규칙 문장이 보이므로 체험은 정상). 재시도 정책은 기술 설계에서 정한다.
 - 비교 분석은 `COMPLETED` 상태에서만 응답한다.
-- `content.perspectives.USER`는 확장 단계의 AI "내 판결" 요약이다(REQ-062, v1.3). `DONE`이면 S-09 내 판결 카드의 한 줄 요약(MVP: `summary_tag` 규칙 문장)을 이 값으로 바꾼다. 따로 테이블을 두지 않고 이 행에 함께 저장한다.
+- `content.perspectives.USER`는 확장 단계의 AI "내 판결" 요약이다(REQ-062, v1.3). `DONE`이면 S-08 내 판결 카드의 한 줄 요약(MVP: `summary_tag` 규칙 문장)을 이 값으로 바꾼다. 따로 테이블을 두지 않고 이 행에 함께 저장한다.
 
 ### 3-4. AI 판결 참고 자료 (확장 단계, v1.16)
 
@@ -670,7 +671,7 @@ IA 9장의 규칙을 어느 테이블·제약이 책임지는지 정리한다.
 | 사전 판단은 비교 화면에서만 | `status = COMPLETED`일 때만 `PRE` 판단 응답 |
 | 새로고침 복원 | `experience.status` + `last_reviewed_step` |
 | 섹션 확인 순서 (서버 강제) | `last_reviewed_step + 1`번 섹션만 확인 가능. 잠긴 섹션 본문은 응답하지 않음 (REQ-019) |
-| 체험 중복 방지 | 같은 (`anonymous_user_id`, `case_id`)의 체험이 있으면 새로 만들지 않고 기존 체험으로 이동. 완료했으면 S-09 |
+| 체험 중복 방지 | 같은 (`anonymous_user_id`, `case_id`)의 체험이 있으면 새로 만들지 않고 기존 체험으로 이동. 완료했으면 S-08 |
 | 원본 판결문 비노출 | `case_source`는 사용자 API에서 조회하지 않음 (`source_org`만 예외) |
 | 검수된 결과만 노출 | `legal_case.status = PUBLISHED`, `judgment.is_published = true` |
 
@@ -702,7 +703,7 @@ IA 9장의 규칙을 어느 테이블·제약이 책임지는지 정리한다.
 | LIFE | NULL | NULL | 120 | 600 | 무기징역을 작량감경하면 징역 10 ~ 50년 (같은 항 제2호) | false |
 | PRISON | 60 | 360 | 30 | 360 | 유기징역 선택, 작량감경 시 하한 1/2. 법률상 감경 · 가중 사유 없음 | true |
 
-→ 벌금은 법정형에 없어 `FINE` 행을 두지 않는다. 징역 31년(372개월)을 입력하면 `allowed_max` 360을 넘으므로 확정 불가(S-06c). 무기징역을 고른 뒤 감경해 징역 50년으로 선고하면 `penalty_type = LIFE`, `reduced_to = PRISON`, `prison_months = 600`이고, `LIFE` 행의 120 ~ 600으로 검사한다.
+→ 벌금은 법정형에 없어 `FINE` 행을 두지 않는다. 징역 31년(372개월)을 입력하면 `allowed_max` 360을 넘으므로 확정 불가(S-05c). 무기징역을 고른 뒤 감경해 징역 50년으로 선고하면 `penalty_type = LIFE`, `reduced_to = PRISON`, `prison_months = 600`이고, `LIFE` 행의 120 ~ 600으로 검사한다.
 
 **sentence_range_option** (`crime_type = MURDER`, 8개)
 
@@ -765,7 +766,7 @@ IA 9장의 규칙을 어느 테이블·제약이 책임지는지 정리한다.
 | 30 | 2, 3, 5, 6 | UP |
 | 30 | 7, 8, 9 | DOWN |
 
-→ S-09 매트릭스(API 14): 요소 11개 × (USER FINAL · AI · COURT)를 조회해 행이 없으면 "—"로 표시한다.
+→ S-08 매트릭스(API 14): 요소 11개 × (USER FINAL · AI · COURT)를 조회해 행이 없으면 "—"로 표시한다.
 
 | 요소 | 내 판결 | AI | 재판부 | 분류 |
 | --- | --- | --- | --- | --- |

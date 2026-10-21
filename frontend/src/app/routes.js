@@ -25,7 +25,6 @@ import { renderPersonalityPaperPage } from '../pages/personality/personalityPape
 import { renderPersonalityResultPage } from '../pages/personality/personalityResultPage.js';
 import { renderPersonalitySharedPage } from '../pages/personality/personalitySharedPage.js';
 import { renderReviewPage } from '../pages/review/reviewPage.js';
-import { renderSummaryPage } from '../pages/summary/summaryPage.js';
 import { renderVerdictPage } from '../pages/verdict/verdictPage.js';
 import { renderPrivacyPage, renderTermsPage } from './legalPage.js';
 import { renderNotFoundPage } from './notFoundPage.js';
@@ -35,15 +34,15 @@ export const routes = [
   { name: 'list', path: '/cases', render: renderCaseListPage, ownsFooter: true, title: '사건 목록' },
   // S-20 사건 디테일(확장, IA v1.12): 신문에서 고른 기사를 펼쳐 놓은 화면. 체험 전에도 열린다(API 16)
   { name: 'caseDetail', path: '/cases/:caseId', render: renderCaseDetailPage, title: '사건 정보' },
-  { name: 'overview', path: '/cases/:caseId/start', render: renderOverviewPage, title: '첫인상' },
-  { name: 'review', path: '/cases/:caseId/review', render: renderReviewPage, needsHeader: true, title: '재판' },
-  { name: 'summary', path: '/cases/:caseId/summary', render: renderSummaryPage, needsHeader: true, title: '사건 요약' },
+  // 판결 체험 6막 (BE-82 주소 · 화면 ID). 옛 주소는 라우터가 새 주소로 옮긴다(legacyPaths.js)
+  { name: 'overview', path: '/cases/:caseId/impression', render: renderOverviewPage, title: '첫인상' },
+  { name: 'review', path: '/cases/:caseId/trial', render: renderReviewPage, needsHeader: true, title: '재판' },
   { name: 'verdict', path: '/cases/:caseId/verdict', render: renderVerdictPage, needsHeader: true, title: '판결 입력' },
-  { name: 'ai', path: '/cases/:caseId/result/ai', render: renderAiPage, needsHeader: true, title: 'AI 판결' },
-  { name: 'court', path: '/cases/:caseId/result/court', render: renderCourtPage, needsHeader: true, title: '실제 판결' },
-  { name: 'comparison', path: '/cases/:caseId/result/compare', render: renderComparisonPage, needsHeader: true, title: '세 판결 비교' },
-  // S-09 리뷰 페이지 · 독자 엽서 (FE-55, 화면 ID는 BE-82 · 주소 /letters는 FE-58): 8막(6막 세 판결 비교) 마지막 대사창의 "엽서 쓰기"로 들어오는 독자 엽서(별점 + 내 의견). 리뷰 API가 없어 목 모드에서만 동작한다
-  { name: 'caseReview', path: '/cases/:caseId/opinion', render: renderCaseReviewPage, title: '독자 엽서' },
+  { name: 'ai', path: '/cases/:caseId/ai-verdict', render: renderAiPage, needsHeader: true, title: 'AI 판결' },
+  { name: 'court', path: '/cases/:caseId/court-verdict', render: renderCourtPage, needsHeader: true, title: '실제 판결' },
+  { name: 'comparison', path: '/cases/:caseId/compare', render: renderComparisonPage, needsHeader: true, title: '세 판결 비교' },
+  // S-09 리뷰 페이지 · 독자 엽서 (FE-55, 화면 ID는 BE-82): 6막(대본 8막) 마지막 대사창의 "엽서 쓰기"로 들어오는 독자 엽서(별점 + 내 의견). 리뷰 API가 없어 목 모드에서만 동작한다
+  { name: 'caseReview', path: '/cases/:caseId/letters', render: renderCaseReviewPage, title: '독자 엽서' },
   // 확장: 판결 성향 테스트 · 마이페이지 (S-15 ~ S-17). 공유된 결과(/test/types/{shareId}, 해시 주소)는 유형 설명만 보여 준다(FR-8-6)
   { name: 'test', path: '/test', render: renderPersonalityPage, title: '판결 성향 테스트' },
   // FE-55: 8막 신문의 성향 테스트 광고에서 신문을 넘겨 들어오는 오피니언 면(문항 · 결과는 /test와 같다)
