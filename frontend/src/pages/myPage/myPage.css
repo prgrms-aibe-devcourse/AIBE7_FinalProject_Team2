@@ -335,6 +335,7 @@ img.my-sash-icon.is-missing { visibility: hidden; }
 .my-type-hero .axis-row::after { left: calc(7em + 12px + (100% - 7em - 12px) / 2); bottom: 1px; height: 18px; } /* 가운데 눈금은 막대 가운데, 위 · 아래로 4px씩 튀어나온다 */
 .my-type-hero .axis-bar .is-strict { background: var(--axis-strict); }
 .my-type-hero .axis-bar .is-lenient { background: var(--axis-lenient); }
+.my-type-hero .axis-bar.has-split .is-lenient { box-shadow: none; } /* 커피색 바탕에서는 결과지용 종이색 틈(personality.css)이 흰 줄로 튀어, 남색 · 갈색이 바로 맞닿는다 */
 :is(.my-type-hero, .change-list) .axis-ends span { color: var(--color-muted); font-weight: 400; }
 :is(.my-type-hero, .change-list) .axis-ends .is-strict.is-major { color: var(--axis-strict); font-weight: 700; }
 :is(.my-type-hero, .change-list) .axis-ends .is-lenient.is-major { color: var(--axis-lenient-text); font-weight: 700; }
