@@ -1,7 +1,7 @@
 // npm test : 마이페이지 변화 흐름 계산
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { trendOrders, trendSlotOrders, recordOf, axisChange, axisSeries, axisTrend, castOf, collectionOf, leanText, imageKinds, retakeAfterOrder, withRetakeSlot } from './myPageView.js';
+import { trendOrders, trendSlotOrders, recordOf, axisChange, steadyBand, lenientPercent, axisSeries, axisTrend, castOf, collectionOf, leanText, imageKinds, retakeAfterOrder, withRetakeSlot } from './myPageView.js';
 
 const AXIS = { key: 'APOLOGY_SINCERITY', strict: { name: '행동증명형' }, lenient: { name: '마음신뢰형' } };
 const entry = (value) => ({ axisScores: { APOLOGY_SINCERITY: value } });
@@ -33,6 +33,12 @@ test('axisChange: 처음 → 지금 변경폭과 움직인 쪽, 5%p 안쪽은 �
   assert.equal(change.from.isTest, true);
   assert.equal(axisChange(axisTrend([titled('가', 0.8), titled('나', 0.5)], AXIS.key), FULL_AXIS).toward, '행동증명형');
   assert.equal(axisChange(axisTrend([titled('가', 0.5), titled('나', 0.52)], AXIS.key), FULL_AXIS).steady, true);
+});
+
+test('axisChange: 완전히 같을 때만 same(표시가 같아도 실제로 다르면 아니다)', () => {
+  assert.equal(axisChange(axisTrend([titled('가', 0.6), titled('나', 0.6)], AXIS.key), FULL_AXIS).same, true);
+  assert.equal(axisChange(axisTrend([titled('가', 0.6), titled('나', 0.602)], AXIS.key), FULL_AXIS).same, false);
+  assert.equal(axisChange(axisTrend([titled('가', 0.6), titled('나', 0.6 + 1e-12)], AXIS.key), FULL_AXIS).same, true);
 });
 
 test('axisChange: 현재 판결 성향(최근 3건 평균)이 있으면 지금은 그 값, 없으면 가장 최근 체험', () => {
@@ -160,4 +166,46 @@ test('recordOf: type 칸이 없는 옛 응답(BE-100 이전 서버)은 undefined
   const myPage = { history: [{ caseId: 3, axisScores: { APOLOGY_SINCERITY: 1 } }] };
   assert.deepEqual(recordOf(myPage, 3), { scores: { APOLOGY_SINCERITY: 1 }, type: undefined, order: 1 });
   assert.notEqual(recordOf(myPage, 3).type, null);
+});
+
+// 거의 그대로(steady)의 빗금 띠: 비례 폭 · 최소 1% · 실제로 같으면 없음 · 반반 특별법과 충돌하지 않음
+test('steadyBand: 실제로 같으면(부동소수 잡음 포함) 띠가 없다', () => {
+  assert.equal(steadyBand(0.6, 0.6), null);
+  assert.equal(steadyBand(0.5, 0.5 + 1e-12), null);
+  assert.equal(steadyBand((0.4 + 0.5 + 0.6) / 3, 0.5), null);
+});
+
+test('steadyBand: 표시 비중이 같아도 실제 값이 다르면 1% 띠를 두 경계 가운데에 얹는다', () => {
+  const band = steadyBand(0.6, 0.602); // 60 → 60 (엄격 40)
+  assert.equal(band.width, 1);
+  assert.equal(band.left, 39.5);
+  assert.equal(band.grew, 'lenient');
+  assert.equal(steadyBand(0.602, 0.6).grew, 'strict');
+});
+
+test('steadyBand: 표시 차이가 있으면 그 폭에 비례한다', () => {
+  const two = steadyBand(0.6, 0.62); // 엄격 40 → 38
+  assert.deepEqual([two.left, two.width], [38, 2]);
+  const four = steadyBand(0.6, 0.64);
+  assert.equal(four.width, 4);
+});
+
+test('steadyBand: 끝에 붙어도 막대 밖으로 나가지 않는다', () => {
+  const edge = steadyBand(0.999, 1); // 엄격 0
+  assert.ok(edge.left >= 0 && edge.left + edge.width <= 100);
+  const other = steadyBand(0.001, 0);
+  assert.ok(other.left >= 0 && other.left + other.width <= 100);
+});
+
+test('steadyBand: 반반 특별법과 충돌하지 않는다(정확히 반반이 아니면 띠가 50%에 닿지 않는다)', () => {
+  for (let from = 0.46; from <= 0.54; from += 0.0007) {
+    for (let diff = -0.004; diff <= 0.004; diff += 0.0003) {
+      const to = from + diff;
+      const band = steadyBand(from, to);
+      if (!band || Math.abs(to - 0.5) < 1e-9 || Math.abs(from - 0.5) < 1e-9) continue;
+      const shown = Math.abs(lenientPercent(to) - lenientPercent(from));
+      if (shown > 0) continue; // 표시 차이가 있는 띠는 두 표시 경계를 그대로 잇는다
+      assert.ok(band.left > 50 || band.left + band.width < 50, `${from} → ${to}: ${band.left} ~ ${band.left + band.width}`);
+    }
+  }
 });

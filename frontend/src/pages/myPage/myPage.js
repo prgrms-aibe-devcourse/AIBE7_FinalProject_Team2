@@ -3,7 +3,7 @@ import { API_MODE } from '../../api/config.js';
 import { renderAxisRow } from '../../components/axisRow.js';
 import { imageOf } from '../../components/stage.js';
 import { AXES, CHARACTER_NAMES } from '../../utils/personalityAxes.js';
-import { KIND_TITLES, lenientPercent, axisChange, axisTrend, collectionOf, imageKinds, leanText, retakeAfterOrder } from '../../utils/myPageView.js';
+import { KIND_TITLES, lenientPercent, axisChange, steadyBand, axisTrend, collectionOf, imageKinds, leanText, retakeAfterOrder } from '../../utils/myPageView.js';
 import { renderTrend, trendsOf } from '../../components/trendGraph.js';
 import { BACKGROUNDS, DEFAULT_DECO, DEFAULT_PORTRAITS, FRAMES, SASH_COLORS, SASH_ICONS, SASH_STYLES, achievementView, normalizeDeco, sashColorField, sashColorKey, sashColorOf, kindOfPortrait, portraitLabel, shownDeco, unlockedSets, unlockerIn } from '../../utils/profileDeco.js';
 import { PORTRAIT_POOL } from '../../content/portraitPool.js';
@@ -387,7 +387,9 @@ function retakeTrendsOf(data, retake) {
   });
 }
 
-const movedText = (change) => (change.steady ? '거의 그대로' : `+${Math.abs(change.moved)}%p ${change.toward}`); // 늘어난 쪽과 그 양(함유량의 말)
+const movedText = (change) => (change.same ? '변화 없음' : change.steady ? '거의 그대로' : `+${Math.abs(change.moved)}%p ${change.toward}`); // 늘어난 쪽과 그 양(함유량의 말)
+
+const EDGE_TOUCH_PX = 2; // 두 경계선 사이가 이 이하(px)면 선을 하나로 합친다(선 1px씩 둘이 나란히 붙는 폭)
 
 // 성향 변경폭 — 영역 다툼. 막대는 판결에서 드러난 성향과 같은 "지금" 함유량 막대(왼쪽 엄격 남색 | 오른쪽 관대 갈색)이고,
 // 처음 → 지금 경계 사이(늘어난 몫)는 늘어난 쪽 색 빗금 화살표(머리 끝이 지금 경계, 늘어난 쪽이 상대 쪽으로 밀고 들어간 방향)이고, 양 끝 경계에 같은 검정 세로선.
@@ -425,6 +427,7 @@ function changeRow({ axis, points, change }) {
   lenientPart.style.flexGrow = String(100 - toStrict);
   bar.append(strictPart, lenientPart);
   track.append(bar);
+  let steadyEdges = null;
   if (moving) {
     // 늘어난 몫(처음 경계 ~ 지금 경계)을 몸통 · 머리 한 덩어리 빗금 화살표로. 엄격이 늘면 경계가 오른쪽으로 가서 오른쪽을 가리킨다
     const gain = element('span', `change-gain is-${grew}`);
@@ -434,14 +437,40 @@ function changeRow({ axis, points, change }) {
     bar.style.setProperty('--gap-a', gain.style.left);
     bar.style.setProperty('--gap-b', `${Math.max(fromStrict, toStrict)}%`);
     track.append(gain);
+  } else if (change) {
+    // 거의 그대로여도 실제로 달라졌으면 화살표 없는 빗금 띠(숫자 · 글자는 그대로, 폭은 steadyBand가 정한다)
+    const band = steadyBand(from.ratio, to.ratio);
+    if (band) {
+      const gain = element('span', `change-gain is-steady is-${band.grew}`);
+      gain.style.left = `${band.left}%`;
+      gain.style.width = `${band.width}%`;
+      bar.style.setProperty('--gap-a', gain.style.left);
+      bar.style.setProperty('--gap-b', `${band.left + band.width}%`);
+      track.append(gain);
+      steadyEdges = [band.left, band.left + band.width];
+    }
   }
   // 경계 세로선: 지금 경계(막대의 두 색 사이)와, 바뀌었으면 처음 경계. 화살표의 양 끝이 된다. 끝(0 · 100%)에 붙은 경계는 긋지 않는다
-  const edges = change ? [fromStrict, toStrict] : [toStrict];
-  edges.filter((edge, index) => edge > 0 && edge < 100 && edges.indexOf(edge) === index).forEach((edge) => {
+  // 거의 그대로의 빗금 띠는 띠의 양 끝이 경계다(표시가 같아도 실제로 다르면 1% 간격의 두 선, 표시 차이가 1%p일 때와 같은 모양)
+  const edges = steadyEdges ?? (change ? [fromStrict, toStrict] : [toStrict]);
+  const marks = edges.filter((edge, index) => edge > 0 && edge < 100 && edges.indexOf(edge) === index).sort((a, b) => a - b);
+  // 선은 막대를 위아래로 쭉 가로지르고, 경계 정중앙에 걸친다(선 폭의 절반은 막대, 절반은 빗금 몸통)
+  const lines = marks.map((edge) => {
     const line = element('span', 'change-edge');
     line.style.left = `${edge}%`;
     track.append(line);
+    return line;
   });
+  // 두 선이 겹치거나 붙으면(사이가 선 두 개를 놓을 수 없을 만큼 좁으면) 두 선의 가운데에 하나만 둔다. 폭은 그려진 뒤에야 알 수 있고 창 크기에 따라 바뀌므로
+  // 막대 크기를 지켜보다가(ResizeObserver) 다시 잰다. 합쳤다가 넓어지면 원래 두 선으로 돌아온다. 관찰을 끝내는 코드(disconnect)는 두지 않는다: 화면이 바뀌어 막대가 DOM에서 떨어지면 브라우저가 관찰 대상과 observer를 함께 정리한다
+  if (lines.length === 2 && typeof ResizeObserver === 'function') {
+    new ResizeObserver(() => {
+      const width = track.getBoundingClientRect().width;
+      const merged = width > 0 && ((marks[1] - marks[0]) / 100) * width <= EDGE_TOUCH_PX;
+      lines[0].style.left = `${merged ? (marks[0] + marks[1]) / 2 : marks[0]}%`;
+      lines[1].hidden = merged;
+    }).observe(track);
+  }
   const detail = change ? movedText(change) : leanText(from.ratio, axis); // 점이 하나뿐이면 그 비중
   item.append(ends, track, element('p', `change-detail${moving ? ` is-moved is-${grew}` : ''}`, detail));
   return item;
