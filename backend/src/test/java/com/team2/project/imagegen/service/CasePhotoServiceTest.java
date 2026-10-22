@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -16,12 +17,14 @@ import com.team2.project.imagegen.CasePhotoPromptClient;
 import com.team2.project.imagegen.ImageGenException;
 import com.team2.project.legalcase.domain.CaseIncidentPhoto;
 import com.team2.project.legalcase.domain.Factor;
+import com.team2.project.legalcase.domain.IncidentPhotoRole;
 import com.team2.project.legalcase.domain.LegalCase;
 import com.team2.project.legalcase.repository.CaseIncidentPhotoRepository;
 import com.team2.project.legalcase.repository.FactorRepository;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -103,22 +106,71 @@ class CasePhotoServiceTest {
 	}
 
 	@Test
-	@DisplayName("발단 사진 업로드는 순번(0부터)을 매겨 저장한다")
-	void uploadIncidentPhoto_assignsDisplayOrder() {
+	@DisplayName("처음 올리는 역할은 새 행을 만들고, 역할에 맞는 옛 순번(ORIGIN=0 · CONCLUSION=1)을 함께 채운다")
+	void uploadIncidentPhoto_firstUpload_createsNewRow() {
 		LegalCase legalCase = legalCase(7L, "개요", "살인");
-		when(incidentPhotoRepository.countByLegalCaseId(7L)).thenReturn(2);
+		when(incidentPhotoRepository.findByLegalCaseIdAndRole(7L, IncidentPhotoRole.CONCLUSION))
+			.thenReturn(Optional.empty());
 		when(fileStorage.upload(any(), any(), any()))
 			.thenReturn(new FileStorage.UploadedFile("k", "https://bucket.s3.test/k"));
 		when(incidentPhotoRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-		CaseIncidentPhoto photo = service.uploadIncidentPhoto(legalCase, PNG_BYTES, "image/png", "캡션", "참고 프롬프트");
+		CaseIncidentPhoto photo = service.uploadIncidentPhoto(legalCase, IncidentPhotoRole.CONCLUSION, PNG_BYTES,
+			"image/png", "캡션", "참고 프롬프트");
 
 		ArgumentCaptor<CaseIncidentPhoto> captor = ArgumentCaptor.forClass(CaseIncidentPhoto.class);
 		verify(incidentPhotoRepository).save(captor.capture());
-		assertThat(captor.getValue().getDisplayOrder()).isEqualTo(2);
+		assertThat(captor.getValue().getRole()).isEqualTo(IncidentPhotoRole.CONCLUSION);
+		assertThat(captor.getValue().getDisplayOrder()).isEqualTo(1);
 		assertThat(captor.getValue().getCaption()).isEqualTo("캡션");
 		assertThat(captor.getValue().getPrompt()).isEqualTo("참고 프롬프트");
-		assertThat(photo.getDisplayOrder()).isEqualTo(2);
+		assertThat(photo.getRole()).isEqualTo(IncidentPhotoRole.CONCLUSION);
+	}
+
+	@Test
+	@DisplayName("같은 역할로 다시 올리면 새 행을 만들지 않고 기존 행을 교체한다")
+	void uploadIncidentPhoto_sameRoleAgain_replacesExistingRow() {
+		LegalCase legalCase = legalCase(7L, "개요", "살인");
+		CaseIncidentPhoto existing = CaseIncidentPhoto.of(legalCase, "https://old", "old-key", "옛 캡션", "옛 프롬프트",
+			IncidentPhotoRole.ORIGIN);
+		when(incidentPhotoRepository.findByLegalCaseIdAndRole(7L, IncidentPhotoRole.ORIGIN))
+			.thenReturn(Optional.of(existing));
+		when(fileStorage.upload(any(), any(), any()))
+			.thenReturn(new FileStorage.UploadedFile("new-key", "https://bucket.s3.test/new"));
+		when(incidentPhotoRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+		CaseIncidentPhoto photo = service.uploadIncidentPhoto(legalCase, IncidentPhotoRole.ORIGIN, PNG_BYTES,
+			"image/png", "새 캡션", "새 프롬프트");
+
+		assertThat(photo).isSameAs(existing);
+		assertThat(photo.getImageUrl()).isEqualTo("https://bucket.s3.test/new");
+		assertThat(photo.getCaption()).isEqualTo("새 캡션");
+		verify(incidentPhotoRepository, never()).save(org.mockito.ArgumentMatchers.argThat(p -> p != existing));
+	}
+
+	@Test
+	@DisplayName("사진 삭제는 그 역할의 행을 지운다")
+	void deleteIncidentPhoto_deletesMatchingRow() {
+		LegalCase legalCase = legalCase(7L, "개요", "살인");
+		CaseIncidentPhoto existing = CaseIncidentPhoto.of(legalCase, "https://old", "old-key", "캡션", null,
+			IncidentPhotoRole.ORIGIN);
+		when(incidentPhotoRepository.findByLegalCaseIdAndRole(7L, IncidentPhotoRole.ORIGIN))
+			.thenReturn(Optional.of(existing));
+
+		service.deleteIncidentPhoto(7L, IncidentPhotoRole.ORIGIN);
+
+		verify(incidentPhotoRepository).delete(existing);
+	}
+
+	@Test
+	@DisplayName("삭제할 사진이 없으면 INCIDENT_PHOTO_NOT_FOUND로 거절한다")
+	void deleteIncidentPhoto_missing_throwsNotFound() {
+		when(incidentPhotoRepository.findByLegalCaseIdAndRole(7L, IncidentPhotoRole.CONCLUSION))
+			.thenReturn(Optional.empty());
+
+		assertThatThrownBy(() -> service.deleteIncidentPhoto(7L, IncidentPhotoRole.CONCLUSION))
+			.isInstanceOf(BusinessException.class)
+			.extracting(e -> ((BusinessException) e).getErrorCode()).isEqualTo(ErrorCode.INCIDENT_PHOTO_NOT_FOUND);
 	}
 
 	@Test

@@ -153,7 +153,7 @@ rm .deploy/failed_rev                         # 실패해서 건너뛰는 커밋
 - **되돌릴 때 Compose · 스크립트는 새 커밋 것을 그대로 쓴다** (이미지 태그만 되돌린다). Compose를 크게 바꾸는 PR(예: RDS 전환)은 머지 직후 한 번 지켜본다.
 - 서버는 이미지 라벨의 커밋이 **지금 `main`의 최신 커밋일 때만** 배포한다(그 커밋의 스크립트를 서버가 실행하므로). `main`이 더 앞서 있으면 새 이미지가 올라올 때까지 건너뛴다 — 연달아 머지하면 마지막 커밋만 배포될 수 있다.
 - 배포에 성공하면 지금 · 직전 sha 이미지만 남기고 옛 이미지를 지운다(디스크 30GB). 더 옛날로 되돌리려면 `./deploy.sh sha-xxxxxxx`가 GHCR에서 다시 받는다.
-- 배포 실패는 서버 로그(journald)와 Actions `verify-deploy` 실패(커밋한 사람에게 GitHub 알림)로만 보인다. Grafana · Loki에는 아직 안 잡힌다(Alloy가 백엔드 로그만 수집, 필요하면 C 후속).
+- 배포 실패는 서버 로그(journald)와 Actions `verify-deploy` 실패(커밋한 사람에게 GitHub 알림)로만 보인다. Grafana · Loki에는 아직 안 잡힌다(Alloy는 백엔드 로그와 웹의 429 전용 로그만 수집, 배포 로그는 필요하면 C 후속).
 - `develop` 머지는 운영에 나가지 않는다. 운영에 올리려면 `develop → main` PR을 올린다.
 - 켠 뒤에는 서버에서 `git pull` · 파일 직접 수정을 하지 않는다. 저장소 사본은 `cd-agent.sh`가 배포하는 커밋으로 옮긴다(브랜치가 아니라 커밋에 고정, detached). 고칠 게 있으면 PR로 `main`에 올린다.
 - 반영까지 최대 2 ~ 3분(확인 주기) + 기동 시간이 걸린다.
@@ -270,7 +270,7 @@ sudo certbot certificates                                # 서버의 인증서 �
 | 범위 | `/api`만 | 화면 · 정적 파일은 Nginx가 바로 주는 거라 부담이 거의 없다 |
 | 기준 | IP (`$binary_remote_addr`) | 로그인 전 서비스라 사용자를 구분할 다른 값이 없다 |
 | 속도 | 평균 초당 20번, 순간 40번까지 기다림 없이 처리 | 혼자 쓰면 초당 1 ~ 3번(동시 호출 · 폴링 없음). 발표장처럼 여러 명이 같은 와이파이(같은 IP)를 써도 막히지 않게 넉넉히 |
-| 넘으면 | 429 + JSON `{"code":"TOO_MANY_REQUESTS", ...}` + `Retry-After: 1` | API 명세 1-4 형식. Nginx 기본 429(HTML)는 프론트가 "서버 오류"로 잘못 보여 준다 |
+| 넘으면 | 429 + JSON `{"code":"TOO_MANY_REQUESTS", ...}` + `Retry-After: 1`(공통 제한 기준, 전용 제한 경로는 아래) | API 명세 1-4 형식. Nginx 기본 429(HTML)는 프론트가 "서버 오류"로 잘못 보여 준다 |
 
 ```bash
 # 막힌 기록 보기 (zone api_per_ip, client가 막힌 IP)
@@ -278,7 +278,38 @@ docker compose -f docker-compose.prod.yml logs web 2>&1 | grep "limiting request
 ```
 
 - **값 조정**: 정상 사용자가 막히는 기록이 보이면 `default.conf`의 `rate`(zone) · `snippets/api-proxy.conf`의 `burst`를 고쳐 PR → 새 웹 이미지로 반영한다. 서버에서 컨테이너 안 파일을 직접 고치지 않는다(다음 배포 때 사라진다).
-- 백엔드 지표(Prometheus)에는 429가 잡히지 않는다. 백엔드까지 가지 않고 Nginx에서 끝나기 때문이다. 확인은 위 로그로 한다. 로그 수집(`monitoring/alloy-config.alloy`)도 지금은 **백엔드 로그만** 모아서 Loki · Grafana에서는 보이지 않는다 — 막히는 빈도를 대시보드 · 경보로 보려면 웹 컨테이너 로그도 수집하도록 추가한다(C 후속 검토).
+- 백엔드 지표(Prometheus)에는 429가 잡히지 않는다. 백엔드까지 가지 않고 Nginx에서 끝나기 때문이다. 서버에서는 위 로그로, Grafana에서는 아래 "429 로그 수집"으로 본다.
+
+### 429 로그 수집 (BE-63 2차)
+
+Nginx가 **막은 요청(429)만** JSON 한 줄씩 따로 남기고, 모니터링 에이전트(`MONITORING_AGENT=1`)의 Alloy가 Loki로 보낸다. Grafana **서비스** 대시보드의 "Rate limit 429 (제한별)" 패널에서 본다.
+
+| 항목 | 내용 |
+| --- | --- |
+| 파일 | 웹 컨테이너 `/var/log/nginx-ratelimit/rate-limited.log` (`default.conf`의 `log_format rate_limited`, `if=$rate_limited`) |
+| 내용 | `time` · `status` · `route` · `method` · `path`(쿼리 제외) · `ip` |
+| Loki 라벨 | `job="web"`, `route` = `auth_token`(재발급 · 로그아웃) · `admin_login` · `oauth`(카카오 시작) · `api`(그 밖) — 값 4개로 고정. **경로 기준**이라 zone과 1:1이 아니다(전용 · 공통 어느 쪽에 걸려도 그 경로로 센다). `ip` · `path`는 라벨로 올리지 않는다(BE-71 카디널리티 규칙) |
+| 공유 | `docker-compose.monitoring-agent.yml`의 `web-ratelimit-logs` 볼륨(웹 쓰기 · Alloy 읽기 전용). 에이전트를 안 쓰는 서버는 컨테이너 안에만 남는다 |
+| 크기 상한 | `41-trim-rate-limit-log.sh`가 1분마다 보고 **10MB**(`.env`의 `RATE_LIMIT_LOG_MAX_BYTES`, 비우면 기본값 · 1보다 작으면 기본값)를 넘으면 비운다. 공격 중에도 디스크를 채우지 않는다. 비우기 직전 1분 안의 일부 줄은 Loki에 빠질 수 있다 |
+| 평소 접속 기록 | 그대로 stdout(`docker compose logs web`) |
+
+```logql
+# 막힌 IP 상위 (Grafana Explore, Loki)
+topk(10, sum by (ip) (count_over_time({job="web"} | json [1h])))
+# 관리자 로그인에서 막힌 요청만
+{job="web", route="admin_login"} | json
+```
+
+- **시각**: Loki 엔트리 시각은 줄의 `time`(Nginx가 막은 시각)이다(`stage.timestamp`). Alloy가 멈췄다 켜져도 그 사이 429가 복구 시각에 몰리지 않는다.
+- **Alloy가 멈춘 사이 파일이 비워지면 그 구간 줄은 빠진다.** 다시 켜진 Alloy가 비우기 전 위치부터 읽기 때문이다(PR #236 리뷰에서 확인: 새 줄이 그 위치보다 짧으면 전부, 길면 앞부분이 빠진다). 앞이 잘린 조각 줄은 Alloy가 버린다(`stage.drop`). 상한(10MB)에 닿을 만큼 막히는 중에 Alloy까지 멈춘 경우에만 생긴다 — 그때 정확한 개수는 서버 오류 로그(`by zone`)로 본다.
+- **대시보드 반영**: `service.json`은 모니터링 EC2의 Grafana가 파일로 읽는다(프로비저닝, 기본 10초마다 다시 읽음). 메인 서버 자동 배포 대상이 아니므로, 머지 후 모니터링 EC2에서 저장소를 갱신한다 — 재시작은 필요 없다.
+
+```bash
+# 모니터링 EC2 (저장소 사본 위치에서)
+git fetch -q origin main && git checkout -q origin/main -- monitoring/grafana/dashboards
+```
+
+- Docker의 socket이나 `/var/lib/docker/containers`를 Alloy에 붙이지 않았다. 다른 컨테이너의 로그 · 설정(환경변수 = 비밀값)까지 읽을 수 있게 되기 때문이다. 파일 하나만 볼륨으로 나눈다.
 
 ### 서버에서 꼭 확인: Nginx가 사용자 IP를 보는가
 
@@ -304,7 +335,27 @@ docker compose -f docker-compose.prod.yml logs --tail 3 web
 | 전체 합계 (`oauth_all`) | 초당 10번, 순간 50번 | 시작 요청마다 백엔드가 Redis에 state를 5분 보관한다. IP를 여러 개 써서 IP별 제한을 나눠 피해도, 대기 중 state가 많아야 약 3,000개(약 3MB)로 묶여 Redis(200MB, `noeviction`)를 채우지 못한다 |
 | 넘으면 | `/api`와 같은 JSON 429 | `@api_rate_limited` |
 
-- 재발급 · 로그아웃(`/api/v1/auth/token/reissue` · `/api/v1/auth/logout`) 제한은 BE-63 2차에서 따로 정한다.
+- 재발급 · 로그아웃 · 관리자 로그인 제한은 아래 "토큰 재발급 · 관리자 로그인 전용 제한"(BE-63 2차).
+
+### 토큰 재발급 · 관리자 로그인 전용 제한 (BE-63 2차, WBS 7.4.6)
+
+카카오 로그인 시작과 같은 방식으로 `/api` 공통 제한에 **더해** 건다(`default.conf`의 zone, `snippets/app.conf`의 전용 location). 넘으면 같은 JSON 429(`@api_rate_limited`).
+
+| 경로 | zone | 값 | 이유 |
+| --- | --- | --- | --- |
+| `POST /api/v1/auth/token/reissue` · `POST /api/v1/auth/logout` | `auth_token_per_ip` (둘이 나눠 씀) | IP별 분당 30번, 순간 30번 | 정상 화면은 액세스 토큰 만료(15분) · 새로고침 때만 재발급하고 동시 재발급은 프론트가 하나로 묶는다. 같은 와이파이에서 여러 명이 동시에 새로고침해도 막히지 않게 카카오 시작과 같은 값 |
+| `POST /api/v1/admin/auth/login` | `admin_login_per_ip` | IP별 분당 5번, 순간 5번 | 백엔드에 로그인 실패 횟수 잠금이 없어 비밀번호 대입을 늦춘다(처음 5번 뒤 12초에 1번 ≈ 시간당 300번). 요청마다 Argon2id 검증(BE-90)이 CPU를 쓰는 것도 막는다 |
+
+- **재발급에는 전체 합계 zone을 두지 않는다.** 재발급은 기존 토큰을 지우고(`getAndDelete`) 새 토큰 하나를 쓰므로 Redis 키가 늘지 않고, 쿠키가 없거나 모르는 토큰은 401로 끝나 아무것도 쓰지 않는다(`RefreshTokenStore`). 카카오 시작(요청마다 state를 새로 씀)과 다르다.
+- **재발급 429는 로그아웃이 아니다.** 프론트(`api/client.js`)는 재발급이 401일 때만 로그인 표시를 지운다. 리프레시 토큰은 그대로라 다음 요청 때 다시 재발급된다.
+- 관리자 CSRF 토큰 조회 · 내 정보 · 로그아웃(`/api/v1/admin/auth/csrf` · `me` · `logout`)은 전용 제한 없이 `/api` 공통 제한만 받는다.
+- **전용 zone은 POST만 센다**(`default.conf`의 `$post_only_ip`, PR #236 리뷰). 같은 경로의 GET이 전용 한도를 써서 같은 IP의 정상 POST가 막히지 않게 하기 위해서다. GET 등도 `/api` 공통 제한은 받는다.
+- **`Retry-After`는 경로별**이다(`default.conf`의 `$rate_limit_retry_after`): 공통 1초 · 재발급 · 로그아웃 · 카카오 시작 2초 · 관리자 로그인 12초. zone의 `rate`를 바꾸면 이 값도 같이 바꾼다. 같은 경로라도 공통 제한에 걸린 경우에는 실제보다 조금 길게 안내된다. 프론트는 429를 자동으로 다시 보내지 않는다.
+
+```bash
+# 전용 zone에서 막힌 기록
+docker compose -f docker-compose.prod.yml logs web 2>&1 | grep -E 'zone "(auth_token_per_ip|admin_login_per_ip|oauth_per_ip|oauth_all)"' | tail
+```
 - **`KAKAO_CLIENT_ID`는 HTTPS(BE-75) 적용 뒤에만 넣는다.** state 쿠키 · `NLNB_RT` · `NLNB_AID`가 모두 `Secure`라 http에서는 브라우저가 저장하지 않아 로그인이 끝나지 않는다(PR #229 리뷰). 넣는 즉시 카카오 로그인 경로가 켜지므로, 화면 `/auth/callback`(FE 후속)이 배포되기 전에는 로그인 후 화면이 404로 보인다.
 
 ## Redis (BE-61, docs/tech-stack.md 2장 "Redis 운영 구성")
@@ -604,5 +655,4 @@ docker stats --no-stream
 | 7.1.2 RDS 전환 · 시크릿 | `postgres` 서비스를 빼고 `DB_URL`을 RDS 주소로. 비밀값은 서버 환경변수 · 시크릿 저장소로. `backend`의 `depends_on: postgres`도 함께 뺀다. `deploy.sh`의 마이그레이션 비교는 `postgres` 서비스가 없으면 건너뛴다(RDS면 비교 방법을 다시 정한다). 자동 배포가 켜져 있으니 머지 직후 `journalctl -u lawnambul-cd`로 지켜본다 |
 | 7.4.3 JWT (C) | 토큰은 `@Qualifier(RedisConfig.TOKEN)` 템플릿(DB 1)에 TTL과 함께 저장 |
 | 백엔드 healthcheck 추가 (BE-66 이후) | Actuator(관리 포트 8081)에는 Redis 헬스체크가 자동으로 붙고, 커넥션 팩토리 두 개가 `redis` 아래 묶인다. **실측(BE-61, Boot 4.1.1)**: Redis를 끄면 `/actuator/health`는 **DOWN(503)**, `/actuator/health/liveness` · `/readiness`는 **UP**, API는 정상. liveness · readiness는 추가 설정 없이 이미 열려 있다. 그래서 컨테이너 healthcheck · 재시작 조건에는 **`/actuator/health`가 아니라 `/actuator/health/liveness`** 를 쓴다(전체 상태를 쓰면 Redis 장애 때 백엔드까지 재시작된다) |
-| 7.4.6 Rate limit 2차 (10/23) | 로그인 · 토큰 재발급 엔드포인트에 더 엄격한 zone을 `default.conf`에 추가 (1차는 위 "Rate limit") |
 | HTTPS 안정화 후 (BE-75 후속) | 갱신이 한 번 이상 정상으로 돈 뒤 `https.conf.template`에 HSTS를 짧은 `max-age`부터 추가 |

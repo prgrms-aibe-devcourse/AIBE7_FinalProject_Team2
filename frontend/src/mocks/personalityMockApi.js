@@ -1,5 +1,6 @@
 import { AXES } from '../utils/personalityAxes.js';
 import { imageNumberOf, QUESTIONS, TYPES } from './personalityMockData.js';
+import { shareIdOfCode } from '../utils/personalityTypes.js';
 import { mockCases } from './caseListMockData.js';
 import { mockProfileView, setStatsReader } from './profileDecoMockApi.js';
 
@@ -54,15 +55,9 @@ function score(answers) {
   return { typeCode: letters.join(''), axisScores };
 }
 
-// 공유 주소용 해시. 실제로는 서버가 시드로 고정한다(유형 코드를 주소에 드러내지 않는 값, 명세 9-1). 목은 코드에서 결정적으로 만든다
-function shareIdOf(code) {
-  let hash = 2166136261; // FNV-1a
-  for (const char of `nlnb-share:${code}`) {
-    hash ^= char.charCodeAt(0);
-    hash = Math.imul(hash, 16777619) >>> 0;
-  }
-  return hash.toString(36).padStart(7, '0') + (hash % 36).toString(36); // 8자
-}
+// 공유 주소용 해시(유형 코드를 주소에 드러내지 않는 값, 명세 9-1). 서버 시드와 같은 값을 쓴다(og/personality-types.json).
+// 목과 실제 API가 같은 shareId를 받아야 내 결과 지면이 축 점수로 고른 유형을 P-4로 받아 올 수 있다(FE-75)
+const shareIdOf = shareIdOfCode;
 const SHARE_IDS = Object.fromEntries(Object.keys(TYPES).map((code) => [shareIdOf(code), code]));
 
 // 유형 공통 형식(명세 9-1). 4글자 코드 · 밈 장면 설명(scene)은 응답에 넣지 않는다
@@ -158,6 +153,14 @@ const mockHistory = HISTORY_SCORES.map(([caseId, completedAt, ...scores]) => ({
 const mockExperiences = mockHistory.map(({ caseId, title, completedAt }) => ({
   caseId, title, crimeType: mockCases.find((item) => item.caseId === caseId).crimeType, status: 'COMPLETED', attemptNo: 1, updatedAt: completedAt,
 }));
+// "내가 체험한 사건" 목록의 페이지 나누기(10건씩) 확인용 추가 목. 사건은 9개뿐이라 2 ~ 9번 사건을 이름만 바꿔 되풀이한다(제목을 누르면 원래 사건으로 간다).
+// 체험 기록(history) · 성향 기록에는 넣지 않으므로 성향 그래프 · 현재 성향은 그대로다. 결과는 사건 번호로 찾아 원래 사건의 결과가 나오므로, hasResult: false로 "내 결과 보기"를 숨긴다
+const EXTRA_CASE_IDS = [2, 3, 4, 5, 6, 7, 8, 9, 2, 3, 4, 5, 6, 7];
+const extraExperiences = EXTRA_CASE_IDS.map((caseId, index) => {
+  const { title, crimeType } = mockCases.find((item) => item.caseId === caseId);
+  return { caseId, title: `${title} (목 예시 ${index + 1})`, crimeType, status: 'COMPLETED', attemptNo: 1, hasResult: false, updatedAt: new Date(Date.UTC(2026, 8, 30 - index, 12)).toISOString() };
+});
+
 
 // 현재 판결 성향은 최근 체험 이만큼의 평균이다(명세 P-5, 성향 산식 4장)
 const RECENT_COUNT = 3;
@@ -201,7 +204,7 @@ export async function getMyPage() {
     personality: saved ? toResult(saved) : null,
     judgmentPersonality: judgmentOf(history),
     history: history.map(({ caseId, title, completedAt, axisScores }) => ({ caseId, title, completedAt, axisScores })),
-    experiences: mockExperiences,
+    experiences: [...mockExperiences, ...extraExperiences],
     ...mockProfileView(profileStats()),
   });
 }

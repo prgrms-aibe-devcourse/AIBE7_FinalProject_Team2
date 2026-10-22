@@ -42,6 +42,8 @@ public enum ErrorCode {
 	PROMPT_GENERATION_FAILED(HttpStatus.BAD_GATEWAY, "프롬프트 추천에 실패했습니다."),
 	FILE_UPLOAD_FAILED(HttpStatus.BAD_GATEWAY, "사진 업로드에 실패했습니다."),
 	INVALID_IMAGE_FILE(HttpStatus.BAD_REQUEST, "사진 파일이 올바르지 않습니다."),
+	// 발단 · 결론 사진 역할 칸 · 삭제 API (확장 단계, BE-78 2차 검토 · BE-101)
+	INCIDENT_PHOTO_NOT_FOUND(HttpStatus.NOT_FOUND, "그 역할의 사진이 없습니다."),
 	// 신문 지면 콘텐츠 생성 API (확장 단계, BE-92)
 	PAPER_NOT_FOUND(HttpStatus.NOT_FOUND, "신문 지면 콘텐츠가 없습니다."),
 	// 프로필 꾸미기 (확장 단계, BE-96). details에 잠긴 필드를 담는다

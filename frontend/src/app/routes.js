@@ -20,6 +20,7 @@ import { renderLandingPage } from '../pages/landing/landingPage.js';
 import { renderAuthCallbackPage } from '../pages/login/authCallbackPage.js';
 import { renderLoginPage } from '../pages/login/loginPage.js';
 import { renderMyPage } from '../pages/myPage/myPage.js';
+import { renderMyResultPage } from '../pages/myPage/myResultPage.js';
 import { renderOverviewPage } from '../pages/overview/overviewPage.js';
 import { renderPersonalityPage } from '../pages/personality/personalityPage.js';
 import { renderPersonalityPaperPage } from '../pages/personality/personalityPaperPage.js';
@@ -52,6 +53,8 @@ export const routes = [
   { name: 'testType', path: '/test/types/:shareId', render: renderPersonalitySharedPage, title: '판결 성향 유형' },
   // 마이페이지도 공통 헤더를 쓰고 색만 커피색으로 덮어쓴다(FE-66, myPage.css)
   { name: 'me', path: '/me', render: renderMyPage, theme: 'coffee', title: '마이페이지' },
+  // 내 결과 (FE-75): 마이페이지 "내 결과 보기". 6막 세 판결 비교 지면 모양에 내 판단 · 내 성향을 싣는다(읽기 전용, 마친 체험만)
+  { name: 'myResult', path: '/me/cases/:caseId', render: renderMyResultPage, needsHeader: true, title: '내 결과' },
   // S-18 커뮤니티 (FE-47): 메인 책상의 노트북으로 들어온다. 커뮤니티 API가 없어 목 모드에서만 동작한다(실제 모드는 "준비 중")
   { name: 'community', path: '/community', render: renderCommunityPage, title: '커뮤니티' },
   { name: 'communityPost', path: '/community/posts/:postId', render: renderCommunityPostPage, title: '커뮤니티' },
