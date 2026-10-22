@@ -1,11 +1,9 @@
 // 프로필카드 아래에 보일 성향(FE-77): 초심 · 재심 · 최근 중 하나. 기본은 최근. 카드 꾸미기 창의 글자 라디오에서 고른다.
-// 공개 성향카드(shownCard.js)와는 별개의 값이다. 서버 API 전이라 이 브라우저에만 저장한다(BE-104에서 서버로 옮긴다)
-import { localStore } from './safeStorage.js';
+// 공개 성향카드(shownCard.js)와는 별개의 값이다. 값은 서버(P-8 profileCardType)가 원본이고 profileSettings.js의 사본을 읽고 쓴다(FE-81)
+import { getProfileSettings, updateProfileSettings } from './profileSettings.js';
 
-const STORAGE_KEY = 'nlnb-profile-card-type';
 const SLOT_NAMES = { initial: '초심', retake: '재심', current: '최근' };
 const SLOT_ORDER = ['initial', 'retake', 'current'];
-let unsaved; // 저장소를 못 쓸 때 이번 방문 동안의 값
 
 /** 마이페이지 응답(P-5)에서 칸별 유형. 없는 칸은 null */
 export function typeSlots(data) {
@@ -36,24 +34,10 @@ export function typeChoices(data) {
   return groups.map((group) => ({ ...group, pick: group.keys.includes('current') ? 'current' : group.keys[0], label: `${group.keys.map((key) => SLOT_NAMES[key]).join(' · ')}: ${group.type.name}` }));
 }
 
-export function getProfileCardType(storage = localStore()) {
-  if (unsaved) return unsaved;
-  try {
-    const value = storage?.getItem(STORAGE_KEY);
-    return SLOT_ORDER.includes(value) ? value : 'current';
-  } catch {
-    return 'current';
-  }
-}
+export const getProfileCardType = () => getProfileSettings().profileCardType;
 
-export function setProfileCardType(key, storage = localStore()) {
-  try {
-    storage.setItem(STORAGE_KEY, key);
-    unsaved = undefined;
-  } catch {
-    unsaved = key;
-  }
-}
+/** 저장되면 true, 거절되면 false(이전 값으로 돌아간다) */
+export const setProfileCardType = (key) => updateProfileSettings({ profileCardType: key });
 
 /** 지금 프로필카드 아래에 보일 선택(choices 중 하나). 고른 칸이 비면 최근 → 첫 칸 순으로 대신하고, 성향이 하나도 없으면 null */
 export function selectedChoice(data, chosen = getProfileCardType()) {

@@ -8,6 +8,7 @@ import { ACHIEVEMENTS, DEFAULT_SERVER_DECO, FREE, REWARD_TYPES } from './profile
 const delay = () => new Promise((resolve) => setTimeout(resolve, 250));
 const DECO_KEY = 'nlnb-mock-profile-deco';
 const ATTENDANCE_KEY = 'nlnb-mock-attendance';
+const SETTINGS_KEY = 'nlnb-mock-profile-settings';
 const UNLOCK_ALL_KEY = 'nlnb-mock-unlock-all'; // 개발 전용: 도전과제를 전부 깬 것으로 본다
 const EARLIER_ATTENDANCE = 11; // 목: 이전에 11일 출석했다고 친다. 오늘 한 번 부르면 12일이 된다(예전 목 값)
 
@@ -162,4 +163,37 @@ export async function putProfileDeco(deco) {
   const saved = Object.fromEntries(Object.keys(DEFAULT_SERVER_DECO).map((field) => [field, deco[field]]));
   write(DECO_KEY, saved);
   return structuredClone(saved);
+}
+
+// ── P-8 프로필 선택 설정 부분 저장 (FE-81, BE-104) ──
+// 서버와 같은 규칙: 보낸 칸만 바꾸고 응답은 세 값 전체. 객체가 아님 · 빈 객체 · 모르는 칸 · null · 문자열이 아님 · 세 값 밖 · 소개 40자 초과(앞뒤 공백을 뺀 코드 포인트) · 제어 문자(탭 · 줄바꿈 등) → 400
+const SETTING_SLOTS = ['initial', 'retake', 'current'];
+const DEFAULT_SETTINGS = { shownCard: 'current', profileCardType: 'current', bio: '' };
+let savedSettings = null; // 저장소를 못 쓰는 환경(테스트 등)에서도 이번 방문 동안 값을 지킨다
+
+/** P-5 profileSettings: 저장한 적이 없으면 최근 · 최근 · 소개 없음 */
+export const mockProfileSettings = () => ({ ...DEFAULT_SETTINGS, ...(savedSettings ?? read(SETTINGS_KEY, {})) });
+
+function settingsError(field) {
+  throw { code: 'VALIDATION_ERROR', message: '요청 값이 올바르지 않습니다.', currentStatus: null, details: field ? [{ field }] : null, status: 400 };
+}
+
+export async function patchProfileSettings(patch) {
+  await delay();
+  if (patch === null || typeof patch !== 'object' || Array.isArray(patch) || Object.keys(patch).length === 0) settingsError();
+  const next = {};
+  Object.entries(patch).forEach(([field, value]) => {
+    if (!(field in DEFAULT_SETTINGS) || typeof value !== 'string') settingsError(field);
+    if (field === 'bio') {
+      const bio = value.trim();
+      if ([...bio].length > 40 || /[\u0000-\u001F\u007F-\u009F\u2028\u2029]/.test(bio)) settingsError(field); // 서버(isForbidden)와 같다: 제어 문자 전체 + 줄 · 문단 구분자
+      next.bio = bio;
+    } else {
+      if (!SETTING_SLOTS.includes(value)) settingsError(field);
+      next[field] = value;
+    }
+  });
+  savedSettings = { ...mockProfileSettings(), ...next };
+  write(SETTINGS_KEY, savedSettings);
+  return { ...savedSettings };
 }

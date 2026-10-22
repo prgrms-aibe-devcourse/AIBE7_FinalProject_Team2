@@ -56,14 +56,35 @@ export function trendSlotOrders(historyLength, hasTest, focus) {
 
 // 한 축의 변경폭: 처음(테스트 또는 첫 체험) → 지금. 지금은 current(현재 판결 성향 = 최근 체험 3건 평균, API 명세 P-5)이고,
 // 그 축 값이 없으면 가장 최근 체험 점이다. 체험이 하나도 없거나 점이 둘보다 적으면 null.
-// moved는 관대 쪽으로 움직인 %p(음수면 엄격 쪽), toward는 움직인 쪽 이름, steady는 STEADY_POINTS 안쪽이면 true
+// moved는 관대 쪽으로 움직인 %p(음수면 엄격 쪽), toward는 움직인 쪽 이름, steady는 STEADY_POINTS 안쪽이면 true,
+// same은 실제 값이 같으면 true(부동소수 오차 SAME 안쪽 포함). 표시가 같아도 실제로 다르면 false라서 "변화 없음"은 완전 일치만이다
 export function axisChange(points, axis, current) {
   if (points.length < 2 || points.every((point) => point.isTest)) return null;
   const from = points[0];
   const to = typeof current === 'number' ? { ratio: current, isCurrent: true } : points[points.length - 1];
   const moved = lenientPercent(to.ratio) - lenientPercent(from.ratio); // 화면에 보이는 두 비중의 차이
   const steady = Math.abs(moved) < STEADY_POINTS;
-  return { from, to, moved, steady, toward: steady ? null : (moved > 0 ? axis.lenient.name : axis.strict.name) };
+  const same = Math.abs(to.ratio - from.ratio) < SAME;
+  return { from, to, moved, steady, same, toward: steady ? null : (moved > 0 ? axis.lenient.name : axis.strict.name) };
+}
+
+// "거의 그대로"(steady)여도 처음과 지금이 실제로 다르면 변경폭에 빗금 띠(머리 없는 화살표 몸통)를 그린다. 숫자 · 글자("거의 그대로")는 바꾸지 않고 그리는 폭에만 쓴다.
+// - 폭은 두 경계 사이(표시 비중 차이)에 비례한다. 표시 비중이 같은데 실제 값이 다르면 최소 폭(BAND_MIN_PERCENT)으로 **표시 경계 가운데에** 두고,
+//   화면은 그 띠의 양 끝에 경계선 둘을 긋는다(표시 차이 1%p일 때와 같은 모양).
+//   방향으로 늘리지 않는 이유: 49 → 49에서 관대 쪽으로 1%p를 늘리면 끝이 50%에 닿는데, lenientPercent(반반 특별법)는 정확히 반반이 아니면 50을 보여 주지 않는다.
+// - 실제로 같으면(부동소수 오차 SAME 안쪽 포함) 그리지 않는다. 표시값은 단조라서 표시 차이의 부호는 실제 변화의 부호와 같다.
+// 돌려주는 값: { left, width(%, 막대 안), grew('strict' | 'lenient', 실제 변화 쪽) } 또는 null
+export const BAND_MIN_PERCENT = 1;
+const SAME = 1e-9; // personalityAxes의 TIE와 같은 허용 오차(분수 평균의 부동소수 잡음은 같은 값)
+export function steadyBand(fromRatio, toRatio) {
+  if (Math.abs(toRatio - fromRatio) < SAME) return null;
+  const fromStrict = 100 - lenientPercent(fromRatio);
+  const toStrict = 100 - lenientPercent(toRatio);
+  const shown = Math.abs(toStrict - fromStrict);
+  const width = Math.max(shown, BAND_MIN_PERCENT);
+  const center = (fromStrict + toStrict) / 2;
+  const left = Math.min(Math.max(center - width / 2, 0), 100 - width); // 막대 안쪽으로
+  return { left, width, grew: toRatio > fromRatio ? 'lenient' : 'strict' };
 }
 
 // 관대 쪽 비중(%)은 4축 막대와 같은 함수(utils/personalityAxes.js)를 쓴다. 0.585가 막대 58% · 글자 59%로 갈리지 않게
