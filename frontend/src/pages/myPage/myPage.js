@@ -343,7 +343,7 @@ function renderRows(data, go) {
   const latest = [...experiences].sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')))[0];
   list.append(row('cases', latest ? `최근: ${latest.title}` : '아직 체험한 사건이 없어요', element('span', 'my-count', `${experiences.length}건`), go, `${experiences.length}건`));
 
-  list.append(row('edit', '닉네임 · 프로필을 바꿔요 (추가 예정)', null, go));
+  list.append(row('edit', '닉네임 · 프로필을 바꿔요', null, go));
   list.append(row('settings', '화면 · 알림을 내 취향대로 바꿔요', null, go));
   return list;
 }
