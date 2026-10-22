@@ -339,6 +339,7 @@ function renderRows(data, go) {
 function renderJudgment(judgment, head) {
   const box = element('div', 'my-detail');
   if (!judgment) {
+    box.classList.add('is-empty'); // 성향카드 옆(테스트만 하고 체험 전)이면 카드 높이의 빈 자리 가운데에 둔다
     box.append(element('p', 'my-hint', '사건을 체험하면 판결에서 무엇을 무겁게 봤는지 여기에 쌓여요.'));
     return box;
   }

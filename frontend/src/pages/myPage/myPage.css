@@ -310,6 +310,7 @@ img.my-sash-icon.is-missing { visibility: hidden; }
 /* 오른쪽(판결에서 드러난 성향 ~ 성향 설명)은 카드 높이에 맞춘다: height 0 + min-height 100%라 줄 높이는 카드(고정)만 정하고, 네 축은 남는 높이에 고르게 펼친다 */
 .my-type-hero > .my-type-section { display: flex; flex-direction: column; align-self: stretch; height: 0; min-height: 100%; }
 .my-type-hero > .my-type-section > .my-detail { flex: 1; display: flex; flex-direction: column; }
+.my-type-hero > .my-type-section > .my-detail.is-empty { justify-content: center; align-items: center; text-align: center; text-wrap: balance; } /* 체험 전: 안내를 빈 자리 가운데에 */
 .my-type-hero .axis-list { flex: 1; align-content: space-between; }
 .my-type-head { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 12px; margin-bottom: 12px; }
 .my-type-head .my-section-title, .my-type-head .my-hint { margin: 0; }
