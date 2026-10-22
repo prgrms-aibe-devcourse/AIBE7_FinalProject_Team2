@@ -15,7 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 프로필 선택 설정 — 공개 성향카드 · 프로필카드 아래 성향 · 한 줄 소개 (API 명세 P-8 · P-5 v0.51, BE-104).
+ * 프로필 선택 설정 — 공개 성향카드 · 프로필카드 아래 성향 · 한 줄 소개 (API 명세 P-8 · P-5 v0.52, BE-104).
  * 프로필 꾸미기(P-7, 전체 저장)와 따로 둔다. 세 값은 화면마다 따로 바뀌므로 보낸 칸만 바꾼다(PATCH)
  */
 @Service

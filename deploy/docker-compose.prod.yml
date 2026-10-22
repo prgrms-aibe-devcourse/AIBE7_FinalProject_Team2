@@ -100,6 +100,10 @@ services:
       start_period: 120s
     restart: unless-stopped
     mem_limit: 1g
+    # swap을 쓰지 않는다 (COMMON-54). 값을 안 주면 서버에 swap이 있을 때 Docker가 mem_limit만큼 swap을 더 허용한다 —
+    # JVM 힙이 swap으로 밀리면 GC가 디스크를 기다려 응답이 수십 초씩 멈추고, 죽지는 않아 재시작도 안 되는 "느린 서버"가 된다.
+    # mem_limit과 같게 두면 swap을 켜기 전과 동작이 같다(넘으면 지금처럼 OOM으로 재시작). 서버 swap은 호스트 · 파이프라인 몫이다
+    memswap_limit: 1g
 
   postgres:
     # 로컬 backend/docker-compose.yml · CI와 같은 이미지 (RDS PostgreSQL 17과 맞춘 태그)
@@ -117,6 +121,8 @@ services:
       retries: 20
     restart: unless-stopped
     mem_limit: 512m
+    # swap을 쓰지 않는다 (COMMON-54, backend와 같은 이유 — 쿼리 중 페이지가 swap에 있으면 지연이 튄다)
+    memswap_limit: 512m
 
   redis:
     # 로컬 backend/docker-compose.yml · CI와 같은 이미지. 정책은 로컬과 같고 비밀번호만 더한다
@@ -153,6 +159,9 @@ services:
     # AOF 재작성(fork) 때 바뀐 페이지 복사분이다. 데이터가 작을 때(지금은 수 MB)는 넉넉하지만, 사용량이 150MB를 넘으면
     # 재작성 중 컨테이너가 메모리 초과로 죽을 수 있으니 점검한다 (deploy/README.md "Redis")
     mem_limit: 256m
+    # swap을 쓰지 않는다 (COMMON-54). Redis는 메모리 안에서 동작한다는 전제로 maxmemory · AOF 재작성 여유를 계산했다 —
+    # swap으로 밀리면 단일 스레드라 모든 요청이 같이 느려진다. 넘으면 지금처럼 컨테이너가 재시작된다
+    memswap_limit: 256m
 
 volumes:
   pgdata:

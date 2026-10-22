@@ -191,7 +191,7 @@
       "id": 6,
       "type": "timeseries",
       "title": "메모리",
-      "description": "전체 대비 사용 가능 용량. 사용 가능이 200MB 아래로 내려가면 컨테이너 하나가 더 뜨거나 JVM이 힙을 늘리는 순간 터질 수 있다.",
+      "description": "전체 대비 사용 가능 용량. 사용 가능이 200MB 아래로 내려가면 컨테이너 하나가 더 뜨거나 JVM이 힙을 늘리는 순간 터질 수 있다. swap 사용(COMMON-54)은 평소 0에 가까워야 한다 — 계속 수백 MB면 swap이 안전망이 아니라 상시 메모리가 된 것이라 mem_limit을 다시 나눈다(deploy/README.md \"Swap\"). swap을 켜지 않은 서버는 0으로 보인다.",
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
@@ -207,6 +207,13 @@
         },
         "overrides": [
           {
+            "matcher": { "id": "byName", "options": "swap 사용" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } },
+              { "id": "custom.fillOpacity", "value": 0 }
+            ]
+          },
+          {
             "matcher": { "id": "byName", "options": "전체" },
             "properties": [
               { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 10] } },
@@ -217,7 +224,7 @@
         ]
       },
       "options": {
-        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "min"] },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "min", "max"] },
         "tooltip": { "mode": "multi", "sort": "desc" }
       },
       "targets": [
@@ -235,6 +242,11 @@
           "refId": "C",
           "expr": "node_memory_MemTotal_bytes{job=\"node\"}",
           "legendFormat": "전체"
+        },
+        {
+          "refId": "D",
+          "expr": "node_memory_SwapTotal_bytes{job=\"node\"} - node_memory_SwapFree_bytes{job=\"node\"}",
+          "legendFormat": "swap 사용"
         }
       ]
     },

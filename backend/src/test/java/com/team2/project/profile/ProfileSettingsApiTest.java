@@ -19,7 +19,7 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.web.servlet.ResultActions;
 
-/** 프로필 선택 설정 부분 저장 PATCH /profile-settings · 마이페이지 profileSettings (P-8 · P-5 v0.51, BE-104) */
+/** 프로필 선택 설정 부분 저장 PATCH /profile-settings · 마이페이지 profileSettings (P-8 · P-5 v0.52, BE-104) */
 class ProfileSettingsApiTest extends ApiIntegrationTest {
 
 	private static final String SETTINGS = "/api/v1/profile-settings";
@@ -125,6 +125,8 @@ class ProfileSettingsApiTest extends ApiIntegrationTest {
 			"{\"bio\":null}",
 			"{\"bio\":\"" + "가".repeat(41) + "\"}",	// 41자
 			"{\"bio\":\"첫 줄\\n둘째 줄\"}",			// 줄바꿈
+			"{\"bio\":\"a\\u0000b\"}",				// NUL(DB에 저장할 수 없어 500이 나던 값)
+			"{\"bio\":\"a\\tb\"}",					// 탭 등 제어 문자
 			"{\"bio\":\"한 줄\",\"isPublic\":true}");	// 모르는 칸(공개 범위는 두지 않는다)
 		for (String body : bodies) {
 			patchSettings(cookie, body)

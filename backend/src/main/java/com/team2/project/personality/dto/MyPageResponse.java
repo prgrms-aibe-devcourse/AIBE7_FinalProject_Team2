@@ -30,7 +30,7 @@ public record MyPageResponse(
 	ProfileDecoValues profileDeco,		// 꾸미기 저장값(없으면 기본값). 잠긴 값이어도 그대로 (BE-96)
 	List<AchievementProgress> achievements,	// 도전과제 진행도 · 상태 · 보상 (서버 표가 원본, BE-96)
 	Rewards unlocked,				// 지금 열린 것: 처음부터 열린 것 + 달성한 도전과제의 보상 (BE-96)
-	ProfileSettingsValues profileSettings) {	// 공개 성향카드 · 프로필카드 아래 성향 · 한 줄 소개(없으면 기본값, v0.51 BE-104)
+	ProfileSettingsValues profileSettings) {	// 공개 성향카드 · 프로필카드 아래 성향 · 한 줄 소개(없으면 기본값, v0.52 BE-104)
 
 	private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 

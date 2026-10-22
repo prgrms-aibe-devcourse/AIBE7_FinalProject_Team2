@@ -3,7 +3,7 @@ package com.team2.project.profile.domain;
 import java.util.Set;
 
 /**
- * 프로필 선택 설정 값 (API 명세 P-8 · P-5 profileSettings v0.51, BE-104). 응답과 저장값이 같은 모양이다.
+ * 프로필 선택 설정 값 (API 명세 P-8 · P-5 profileSettings v0.52, BE-104). 응답과 저장값이 같은 모양이다.
  * shownCard: 공개 성향카드, profileCardType: 프로필카드 아래 성향 — 둘 다 initial(초심) · retake(재심) · current(최근) 중 하나,
  * 서로 별개의 값이다. bio: 한 줄 소개(빈 문자열 = 소개 없음)
  */
