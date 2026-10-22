@@ -4,6 +4,7 @@
 # 사용법 (서버의 deploy 폴더에서):
 #   ./deploy.sh sha-1a2b3c4     # 그 커밋의 이미지로 배포
 #   ./deploy.sh --rollback      # 직전에 배포했던 이미지로 되돌린다
+#   ./deploy.sh --reapply       # 이미지는 그대로, .env 설정(외부 DB 접속 등)만 다시 적용한다 (BE-59)
 # 보통은 사람이 부르지 않고 cd-agent.sh(systemd 타이머)가 main의 새 이미지를 보고 부른다.
 #
 # 순서: 이미지 받기 → .env의 IMAGE_TAG 교체 → up -d → 백엔드 준비 대기 → 스모크 테스트
@@ -12,6 +13,10 @@
 # 되돌리지 않는 것: DB 스키마(Flyway). 새 이미지가 마이그레이션을 적용한 뒤 실패하면 앱만 되돌리고 경고를 남긴다.
 #   이전 앱은 자기가 모르는 새 마이그레이션을 무시하고 뜬다(Flyway 기본 ignoreMigrationPatterns "*:future").
 #   스키마를 되돌리는 것은 데이터 손상 위험이 있어 사람이 판단한다 (deploy/README.md "자동 배포(CD)")
+#
+# --reapply: cd-agent는 이미지 태그가 바뀔 때만 배포하므로, .env만 바꾼 변경(외부 DB 전환 · 되돌리기 등)은 이걸로 적용한다.
+#   지금 IMAGE_TAG 그대로 같은 확인(백엔드 준비 · 스모크 테스트)을 한다. 실패해도 자동으로 되돌리지 않는다 —
+#   되돌릴 대상이 이미지가 아니라 사람이 바꾼 .env이기 때문이다(고치기 전 사본으로 되돌린 뒤 다시 --reapply)
 #
 # 종료 코드: 0 배포 성공(또는 이미 그 버전) · 1 배포 실패 → 되돌림 성공 · 2 이미지 받기 실패(아무것도 안 바꿈)
 #            3 되돌림까지 실패(사람이 확인) · 4 사용법 · 잠금 · 설정 오류
@@ -77,6 +82,38 @@ cleanup_old_images() {
 }
 
 COMPOSE=(docker compose -f "$DEPLOY_DIR/docker-compose.prod.yml")
+# 외부 DB 모드 (BE-59): .env에 EXTERNAL_DB_URL이 있으면 postgres 컨테이너 대신 외부 PostgreSQL(Supabase → RDS)에 붙는다.
+# 오버레이를 빼먹으면 backend가 다시 같은 서버의 postgres로 붙어 "어느 DB에 썼는지"가 조용히 바뀌므로, 플래그로 자동으로 겹친다
+EXTERNAL_DB_URL_VALUE="$(env_value EXTERNAL_DB_URL | tr -d "\"' \r")"
+EXTERNAL_DB=0
+if [[ -n "$EXTERNAL_DB_URL_VALUE" ]]; then
+  # 두 값이 없으면 compose가 뒤늦게 다른 이유처럼 실패하므로 먼저 막는다 (값은 출력하지 않는다)
+  for required in EXTERNAL_DB_USERNAME EXTERNAL_DB_PASSWORD; do
+    [[ -n "$(env_value "$required")" ]] || {
+      log "❌ EXTERNAL_DB_URL이 있는데 .env에 $required 가 없다 (deploy/docker-compose.external-db.yml)"
+      exit 4
+    }
+  done
+  # 외부 연결이라 TLS를 강제한다 — sslmode가 없거나 disable · allow · prefer면 암호화 없이 붙을 수 있다
+  case "$EXTERNAL_DB_URL_VALUE" in
+    *[?\&]sslmode=require|*[?\&]sslmode=require\&*|*[?\&]sslmode=verify-ca*|*[?\&]sslmode=verify-full*) ;;
+    *) log "❌ EXTERNAL_DB_URL에 sslmode=require(또는 verify-ca · verify-full)가 없다 — 주소 끝에 ?sslmode=require를 붙인다"; exit 4 ;;
+  esac
+  # 외부 DB(지금은 팀 공용 Supabase)에 실제 사건 시드를 올리지 않는다 — 비공개 데이터 · 사용 불가 데이터(LBox) 규칙
+  # (backend/SHARED-DEV-DB.md 규칙 6). RDS로 옮긴 뒤 실제 사건 시드를 쓸 때 이 검사를 다시 정한다
+  if [[ -n "$(env_value REAL_SEED_DIR)" ]]; then
+    log "❌ 외부 DB 모드에서는 실제 사건 시드(REAL_SEED_DIR)를 함께 쓰지 않는다. .env에서 REAL_SEED_DIR을 비운다"
+    exit 4
+  fi
+  # 오버레이의 depends_on: !override는 Compose 2.24.4부터 안다. 모르는 버전은 postgres 의존을 그대로 두거나 거부한다
+  compose_version="$(docker compose version --short 2>/dev/null | sed 's/^v//')"
+  if [[ -z "$compose_version" ]] || [[ "$(printf '%s\n' 2.24.4 "$compose_version" | sort -V | head -1)" != "2.24.4" ]]; then
+    log "❌ 외부 DB 모드에는 Docker Compose 2.24.4 이상이 필요하다 (지금: ${compose_version:-확인 불가})"
+    exit 4
+  fi
+  COMPOSE+=(-f "$DEPLOY_DIR/docker-compose.external-db.yml")
+  EXTERNAL_DB=1
+fi
 # 실제 사건 시드를 겹쳐 띄우는 서버면 같은 구성으로 다시 띄운다 (README "실제 사건 시드")
 if [[ -n "$(env_value REAL_SEED_DIR)" ]]; then
   COMPOSE+=(-f "$DEPLOY_DIR/docker-compose.real-seed.yml")
@@ -118,8 +155,9 @@ case "$PIPELINE_SERVICE_VALUE" in
     # 그때 base 구성이 이미 1.75GB를 잡아 실측 여유가 약 250MB뿐이다. 여기에 이 컨테이너가 붙으면
     # 커널 OOM이 **가장 큰 프로세스(backend)를 먼저 죽일 수 있다.** 문서 경고만으로는 실수를 막지 못하므로
     # 사람이 docker stats로 확인하고 PIPELINE_MEMORY_CHECKED=1을 넣었을 때만 켠다
-    # (RDS 전환 뒤에는 postgres 서비스가 없어져 이 분기를 타지 않는다)
-    if grep -qE '^[[:space:]]+postgres:[[:space:]]*$' "$DEPLOY_DIR/docker-compose.prod.yml" \
+    # (외부 DB 모드(BE-59)에서는 postgres 컨테이너를 띄우지 않아 이 분기를 타지 않는다 — 옛 컨테이너는 README대로 멈춘다)
+    if (( ! EXTERNAL_DB )) \
+       && grep -qE '^[[:space:]]+postgres:[[:space:]]*$' "$DEPLOY_DIR/docker-compose.prod.yml" \
        && [[ "$(env_value PIPELINE_MEMORY_CHECKED | tr -d "\"' \r")" != "1" ]]; then
       log "❌ postgres 컨테이너가 있는 서버(RDS 전환 전)에서 파이프라인을 켜려 한다. 메모리 여유가 약 250MB뿐이라"
       log "   backend가 OOM으로 죽을 수 있다. docker stats로 확인한 뒤 .env에 PIPELINE_MEMORY_CHECKED=1을 넣는다"
@@ -139,6 +177,9 @@ BASE_URL="http://localhost:$WEB_PORT"
 # 작은따옴표는 일부러다: $POSTGRES_USER · $POSTGRES_DB는 이 셸이 아니라 postgres 컨테이너 안에서 풀린다(비밀값을 여기서 읽지 않음)
 # shellcheck disable=SC2016
 schema_rank() {
+  # 외부 DB 모드(BE-59)에서는 건너뛴다 — 전환 직후에는 옛 postgres 컨테이너가 아직 떠 있어 엉뚱한 DB의 번호를 읽게 된다.
+  # 이 값은 실패 시 "마이그레이션이 적용됐다" 경고에만 쓴다. 외부 DB의 적용 이력은 backend 로그(Flyway)로 본다
+  (( EXTERNAL_DB )) && return 0
   "${COMPOSE[@]}" exec -T postgres sh -c \
     'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "select coalesce(max(installed_rank), 0) from flyway_schema_history"' \
     2>/dev/null | tr -d '[:space:]'
@@ -233,7 +274,13 @@ show_failure_logs() {
 
 # ---------- 인자 ----------
 CURRENT="$(env_value IMAGE_TAG)"
+REAPPLY=0
 case "${1:-}" in
+  --reapply)
+    [[ -n "$CURRENT" ]] || { log "❌ .env에 IMAGE_TAG가 없다 — 다시 적용할 배포가 없다 (먼저 sha 태그로 배포한다)"; exit 4; }
+    REAPPLY=1
+    TARGET="$CURRENT"
+    ;;
   --rollback)
     TARGET="$(cat "$STATE_DIR/previous_tag" 2>/dev/null || true)"
     [[ -n "$TARGET" ]] || { log "❌ 되돌릴 직전 태그 기록이 없다 ($STATE_DIR/previous_tag)"; exit 4; }
@@ -244,8 +291,19 @@ case "${1:-}" in
     TARGET="$1"
     ;;
   *)
-    echo "사용법: $0 sha-<커밋7자리> | --rollback"; exit 4 ;;
+    echo "사용법: $0 sha-<커밋7자리> | --rollback | --reapply"; exit 4 ;;
 esac
+
+if (( REAPPLY )); then
+  log "설정 다시 적용 시작: $CURRENT (이미지 그대로$( (( EXTERNAL_DB )) && echo ", 외부 DB 모드" ))"
+  if start_and_check "$CURRENT"; then
+    log "✅ 설정 다시 적용 성공: $CURRENT"
+    exit 0
+  fi
+  show_failure_logs
+  log "❌ 설정 다시 적용 실패. 자동으로 되돌리지 않는다 — .env를 고치기 전 사본으로 되돌린 뒤 ./deploy.sh --reapply (deploy/README.md \"외부 DB 모드\")"
+  exit 3
+fi
 
 if [[ "$TARGET" == "$CURRENT" ]]; then
   log "이미 $TARGET 이 배포돼 있다. 할 일 없음"

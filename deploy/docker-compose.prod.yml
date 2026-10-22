@@ -4,7 +4,8 @@
 # - 이미지는 GitHub Actions(deploy-images.yml)가 빌드해 GHCR에 올리고, 서버는 pull해서 실행만 한다(서버에서 Gradle 빌드 안 함)
 # - 로컬 · CI 스모크 테스트에서는 build:로 같은 이미지를 직접 만든다 (docker compose build)
 # - 밖으로 여는 포트는 웹 80 · 443뿐이다(443은 BE-75). 백엔드 8080 · DB 5432 · Redis 6379는 컨테이너 내부 네트워크에서만 쓴다 (보안 그룹도 80 · 443 · 22만)
-# - 7.1.2에서 DB를 RDS로 옮기면 postgres 서비스를 빼고 DB_URL만 RDS 주소로 바꾼다
+# - 외부 DB(Supabase → 7.1.2 RDS)로 붙을 때는 이 파일을 고치지 않고 docker-compose.external-db.yml을 겹친다
+#   (.env에 EXTERNAL_DB_URL이 있으면 deploy.sh가 자동으로 겹친다, BE-59 · deploy/README.md "외부 DB 모드")
 # - Redis는 캐시(DB 0) · 토큰 저장소(DB 1)로 나눠 쓴다. 정책은 docs/tech-stack.md 2장 "Redis 운영 구성"
 
 name: lawnambul
