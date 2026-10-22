@@ -65,7 +65,7 @@ public abstract class ApiIntegrationTest {
 	protected void insertCasePaper(long caseId, String headline) {
 		jdbcTemplate.update("""
 				INSERT INTO case_paper (case_id, desk, headline, deck, caption, article)
-				VALUES (?, '사회면', ?, '테스트 부제', '테스트 캡션', '["문단1"]'::jsonb)
+				VALUES (?, '사회부', ?, '테스트 부제', '테스트 캡션', '["문단1"]'::jsonb)
 				""", caseId, headline);
 	}
 

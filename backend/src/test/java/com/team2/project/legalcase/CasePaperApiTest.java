@@ -27,7 +27,7 @@ class CasePaperApiTest extends ApiIntegrationTest {
 
 		mockMvc.perform(get(paperUrl(caseId)))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.desk").value("사회면"))
+				.andExpect(jsonPath("$.desk").value("사회부"))
 				.andExpect(jsonPath("$.headline").value("테스트 헤드라인"))
 				.andExpect(jsonPath("$.deck").value("테스트 부제"))
 				.andExpect(jsonPath("$.photo").value((Object) null))	// thumbnail_url 미설정

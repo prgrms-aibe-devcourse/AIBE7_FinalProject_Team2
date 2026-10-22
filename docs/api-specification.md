@@ -144,7 +144,7 @@ json
 | 502 | `PROMPT_GENERATION_FAILED` | (확장, 관리자 API, BE-91 · BE-92) Gemini 호출 실패, 또는 설정(`GEMINI_API_KEY`) 없음 | 다시 시도 안내 (A-13-1 · A-13-2 · A-13-6) |
 | 502 | `FILE_UPLOAD_FAILED` | (확장, 관리자 API, BE-91) S3 업로드 실패, 또는 설정(`S3_BUCKET_NAME`) 없음 | 다시 시도 안내 (A-13-3 · A-13-4) |
 | 400 | `INVALID_IMAGE_FILE` | (확장, 관리자 API, BE-91) 사진 파일이 없음 · 비어 있음 · 허용하지 않는 형식 | 입력 안내 (A-13-3 · A-13-4) |
-| 404 | `PAPER_NOT_FOUND` | (확장, BE-92) 신문 지면을 아직 생성한 적 없음. 관리자 API는 A-13-7 · A-13-8, 공개 API는 API 17(v0.52, BE-102) | 먼저 생성하도록 안내 (A-13-7 · A-13-8). API 17은 S-14로 |
+| 404 | `PAPER_NOT_FOUND` | (확장, BE-92) 신문 지면을 아직 생성한 적 없음. 관리자 API는 A-13-7 · A-13-8, 공개 API는 API 17(v0.53, BE-102) | 먼저 생성하도록 안내 (A-13-7 · A-13-8). API 17은 S-14로 |
 | 404 | `INCIDENT_PHOTO_NOT_FOUND` | (확장, 관리자 API, BE-78 2차 검토 · BE-101) 그 역할의 발단 · 결론 사진이 없음 | 목록 다시 불러오기 (A-13-9) |
 | 409 | `DECO_LOCKED` | (확장, BE-96) 아직 열리지 않은 꾸미기를 저장하려 함. `details`에 잠긴 필드(`reason: DECO_LOCKED`) | 화면에서 잠긴 항목은 고를 수 없게 막는다. 오면 마이페이지를 다시 불러온다 (P-7) |
 | 409 | `DUPLICATE_SOURCE` | (확장, 관리자 API, BE-93) 이미 등록한 사건번호. `details`에 어느 항목인지 담는다 | 입력 안내 (A-14) |
@@ -197,7 +197,7 @@ json
 | 14 | GET | `/cases/{caseId}/experience/comparison` | 세 판결 비교 | `COMPLETED` | — | S-08 | MVP |
 | 15 | GET | `/cases/{caseId}/experience/comparison/analysis` | AI 비교 분석 | `COMPLETED` | — | S-08 | 확장 |
 | 16 | GET | `/cases/{caseId}` | 공개 사건 상세 (체험 없이) | — | — | S-20 | 확장 (v0.29) |
-| 17 | GET | `/cases/{caseId}/paper` | 공개 신문 지면 (헤드라인 · 본문 · 발단 · 결론 사진) | — | — | S-20 | 확장 (v0.52) |
+| 17 | GET | `/cases/{caseId}/paper` | 공개 신문 지면 (헤드라인 · 본문 · 발단 · 결론 사진) | — | — | S-20 | 확장 (v0.53) |
 
 **공개(11, 13)와 조회(12, 14)를 나눈 이유**: 상태를 바꾸는 요청은 POST로 두고, 조회는 몇 번을 불러도 상태가 바뀌지 않게 한다. 결과 화면을 새로고침하면 조회만 다시 부르면 된다. 공개 요청은 이미 공개된 상태에서 다시 와도 거절하지 않고 성공으로 돌려준다(시퀀스 7장).
 
@@ -811,7 +811,7 @@ FE-64가 쓰는 API(S-20 기사 지면 · 증거조사). 관리자 신문 지면
 | `AI_REVEALED` | 3, 10, 12 | 11 (그대로 통과), 13 |
 | `COMPLETED` | 3, 10, 12, 14 (15 보류) | 11 · 13 (그대로 통과) |
 
-API 1 · 2 · 16은 상태와 관계없이 부를 수 있다. 표에 없는 조합은 `409 INVALID_STATE`다.
+API 1 · 2 · 16 · 17은 상태와 관계없이 부를 수 있다. 표에 없는 조합은 `409 INVALID_STATE`다.
 
 ---
 
