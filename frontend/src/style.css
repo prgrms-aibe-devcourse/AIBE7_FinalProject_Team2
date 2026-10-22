@@ -24,7 +24,6 @@ body {
   --palette-navy-900: #101d39;
   --palette-navy-700: #1f3563;
   --palette-navy-200: #c9d1e3;
-  --palette-navy-100: #e3e8f2;
   --palette-navy-50: #eef1f7;
   --palette-bronze-500: #ba854b;
   --palette-bronze-700: #86581f;
@@ -86,6 +85,7 @@ body {
   --color-danger: var(--palette-red-700);
   --color-danger-border: var(--palette-red-200);
   --color-danger-tint: var(--palette-red-50);
+  --color-danger-on-dark: var(--palette-red-200);  /* 어두운 면(펠트 · 네이비) 위 오류 글자. 진한 빨강은 거기서 읽히지 않는다 */
   --color-caution: var(--palette-orange-800);      /* 되돌릴 수 없음 · 권고 범위 밖 안내 */
   --color-caution-border: var(--palette-orange-500);
   --color-caution-tint: var(--palette-orange-50);
@@ -95,7 +95,6 @@ body {
   --color-case-murder: var(--palette-case-murder);
   --color-case-fraud: var(--palette-case-fraud);
   --color-case-injury: var(--palette-case-injury);
-  --color-on-case: var(--palette-white);
   --color-judge-me: var(--palette-judge-me);       /* 세 판결은 밝기가 같다. 선 · 라벨에만 쓰고 바탕을 칠하지 않는다 */
   --color-judge-ai: var(--palette-judge-ai);
   --color-judge-court: var(--palette-judge-court);
@@ -108,7 +107,7 @@ body {
   --color-kakao: var(--palette-kakao-yellow);       /* 카카오 로그인 버튼 바탕 (S-12, FE-52) */
   --color-on-kakao: var(--palette-kakao-ink);      /* 그 위 심볼 · 글자(글자는 85% 농도로 쓴다) */
 
-  /* ④ S-01 메인 책상 일러스트 (FE-18). 책상 그림 전용 색이다. 다른 화면에서는 쓰지 않는다 */
+  /* ④ 책상 계열 색 (FE-18). 처음엔 S-01 메인 책상 그림 전용이었으나 지금은 책상 · 신문 지면 · 판결 체험 무대 · 성향 테스트 종이 · 마이페이지 · 커뮤니티 · 로그인이 함께 쓴다. 책상 세계의 공용 색이다 */
   --palette-wood-300: #b06d36;
   --palette-wood-500: #a8652f;
   --palette-wood-700: #8a4f22;
@@ -241,8 +240,7 @@ body {
   --text-small: 13px;
   --text-caption: 12px;
 
-  /* 간격 · 폭 */
-  --space-md: 16px;
+  /* 폭 */
   --content-width: 1180px;
 }
 

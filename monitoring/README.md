@@ -12,7 +12,7 @@ Grafana로 대시보드 4종(7.2.4)을 띄운다.
 | `docker-compose.yml` | **로컬** 전체 스택(Prometheus · Loki · Alloy · Grafana · node_exporter). `backend/docker-compose.yml`(DB)과 독립적으로 켜고 끈다 |
 | `prometheus.yml` | **로컬** scrape 대상 · 간격. 보존 기간은 `docker-compose.yml`의 `--storage.tsdb.retention.time` |
 | `loki-config.yml` | Loki 단일 바이너리 구성(파일시스템 저장), 보존 기간. 로컬 · 운영 공용 |
-| `alloy-config.alloy` | **로컬** — `backend/logs`의 JSON 로그를 tail해서 Loki로 보낸다 (Promtail 대체, 아래 참고) |
+| `alloy-config.alloy` | **로컬** — `backend/logs`의 JSON 로그를 tail해서 Loki로 보낸다 (Promtail 대체, 아래 참고). (BE-63) 웹 429 전용 로그 규칙도 같이 들어 있지만, 로컬 Compose에는 웹이 없어 비어 있다 |
 | `grafana/provisioning/` | 데이터소스(Prometheus · Loki) · 대시보드 공급자 설정. 로컬 · 운영 공용 |
 | `grafana/dashboards/*.json` | 대시보드 4종. 로컬 · 운영 공용이고 7.3.3 Grafana Cloud에도 같은 파일을 가져간다 |
 | `docker-compose.prod.yml` | **모니터링 전용 EC2**용(Prometheus · Loki · Grafana만) |
@@ -102,6 +102,9 @@ Loki로 보낸다.
   요청마다 다른 traceId를 라벨로 쓰면 스트림이 무한히 늘어나 Loki가 못 버틴다(7.2.1의 메트릭 카디널리티 규칙과 같은 이유).
   traceId는 **로그 내용(JSON 필드)**으로만 남기고, 조회는 `| json | traceId="..."`로 한다.
   라벨로 두는 건 `job`·`level`처럼 값의 종류가 적은 것뿐이다(`alloy-config.alloy`).
+- **(BE-63) 웹 429 전용 로그**는 `job="web"`, 라벨은 `route`(값 4개: `auth_token` · `admin_login` · `oauth` · `api`)뿐이다.
+  막힌 IP · 경로는 JSON 필드라 `{job="web"} | json`으로 본다. 운영에서는 모니터링 에이전트의 `web-ratelimit-logs` 볼륨으로 읽는다
+  (`deploy/README.md` "429 로그 수집"). IP는 막힌 쪽을 찾기 위해 남긴다 — 백엔드 마스킹(토큰 · 이메일) 대상이 아니다.
 - **민감정보 마스킹**은 `backend/src/main/resources/logback-spring.xml`의 `MaskingJsonGeneratorDecorator`가 한다.
   필드 이름(`password`·`token` 등)과 메시지 속 패턴(Bearer 토큰·이메일) 둘 다 가린다. 지금 코드는 이미 비밀번호 · API 키를
   로그에 남기지 않지만, 이 마스킹은 그 규칙이 깨졌을 때의 마지막 안전망이다.

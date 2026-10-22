@@ -1,0 +1,172 @@
+// 내 결과(FE-75): 마이페이지 "내가 체험한 사건"의 "내 결과 보기"로 들어오는 지면. 주소 /me/cases/{caseId}
+// 6막 세 판결 비교(S-08)의 다음 날 신문 모양을 빌리되, 판결 비교 대신 내 판단과 내 성향을 싣는다.
+//   제호 · 1면 · 광고                       → 6막 지면과 같다(comparisonStage.js에서 가져온다). 1면 헤드라인 · 리드는 사건 제목 · 판결을 내린 판사(나)로 바꾼다
+//   독자 의견 · 세 판결, 나란히 · 만난 모습   → 싣지 않는다(첫인상 · 최종 판결은 1면 리드에 굵게 싣는다)
+//   판단 요소, 어디서 갈렸나                  → 이 사건으로 달라진 내 성향(성향카드의 성향 변화 흐름, 이 사건 칸 강조). 오른쪽 단: 지문 · 그래프 네 개가 각각 섹션
+//   같게 본 것, 다르게 본 것                  → 이 사건에서 드러난 판결 성향(이 사건 한 건의 4축) · 그 유형의 성향카드 · 설명. 왼쪽 단: 1면 · 막대 · 카드가 각각 섹션
+// 두 단은 긴 쪽이 높이를 정하고, 짧은 쪽 단이 섹션 사이에 남는 높이를 똑같이 나눠 끝선을 맞춘다(myResult.css)
+// 대사 · 카메라 없이 처음부터 읽는 지면이다(6막 "여기 남아있기"와 같은 읽기 화면 클래스를 쓴다).
+// 지면 글은 기사 문체("~다")로 쓰고, 바뀌는 값은 모두 API 값 그대로 끼운다(지어내는 문장 없음).
+// 데이터: API 14(처음 판단 · 최종 판결, 누를 때 한 번) + P-5(성향 변화 흐름 · 이 사건의 축 점수) + P-4(이 사건의 유형). 결정 기록 docs/decisions/FE-75.md
+import { button, element, mockTag } from '../../components/siteLayout.js';
+import { API_MODE } from '../../api/config.js';
+import { renderAxisRow } from '../../components/axisRow.js';
+import { renderTrend, trendsOf } from '../../components/trendGraph.js';
+import { AXES } from '../../utils/personalityAxes.js';
+import { TREND_RECENT, recordOf, typeCodeOf } from '../../utils/myPageView.js';
+import { shareIdOfCode } from '../../utils/personalityTypes.js';
+import { story, masthead, frontStory, advertisements, openForReading } from '../comparison/comparisonStage.js';
+import { DEFAULT_NICKNAME, typeFace } from './myPage.js';
+
+const IS_MOCK = API_MODE === 'mock'; // 목 모드는 비교 · 성향 모두 목이라 기사 제목 옆에 표기한다
+
+function headed(node) {
+  if (IS_MOCK) node.querySelector('.sheet-head')?.append(mockTag());
+  return node;
+}
+
+const bold = (text) => element('strong', '', text);
+
+// 이 사건으로 달라진 내 성향: 성향카드 화면의 성향 변화 흐름 그래프 그대로, 이 사건 칸만 강조한다. 안내는 기사 문체
+const trendHint = ({ hasTest, focused }) => `${hasTest ? '성향 테스트와' : '첫 체험과'} 최근 체험 ${TREND_RECENT}건까지의 판결 성향을 축마다 실었다. `
+  + `가운데 줄이 반반이고, 아래 숫자는 사건을 마친 순서, '현재'는 최근 체험 3건의 평균이다.${focused ? ' 띠를 깐 칸이 이 사건이다.' : ''} 점을 누르면 그때의 사건과 비중이 나온다.`;
+// 오른쪽 단의 섹션들: [제목 + 지문] · 그래프 네 개. 단 높이를 맞출 때 섹션 사이에 여백을 나누려고 그래프를 하나씩 단의 섹션으로 꺼낸다
+function trendSections(myPage, record) {
+  const intro = story('factors', '이 사건으로 달라진 내 성향');
+  if (!myPage) {
+    intro.append(element('p', 'sheet-text', '성향 기록을 불러오지 못했어요. 마이페이지에서 다시 열어 주세요.'));
+    return [intro];
+  }
+  if (!record.order) intro.append(element('p', 'sheet-text', '이 사건은 성향 기록이 없어 강조한 칸이 없다.'));
+  const trend = renderTrend(trendsOf(myPage), myPage.history ?? [], myPage.judgmentPersonality, { mock: IS_MOCK, focus: record.order, hint: trendHint, table: false });
+  const charts = [...trend.querySelectorAll('.trend-chart')];
+  intro.append(...[...trend.childNodes].filter((node) => !node.classList?.contains('trend-grid'))); // 지문(체험이 없으면 안내 한 줄)
+  return [intro, ...charts];
+}
+
+// 이 사건 한 건의 유형: P-5는 사건별 축 점수만 주므로, 축 점수로 유형을 고르고(typeCodeOf) 그 유형을 P-4(공유용 유형 조회)로 받아 온다.
+// 받은 값은 성향카드 공통 형식(이름 · 캐릭터 · 대사 · 이미지 · 설명, 명세 9-1). 네 축이 다 모이지 않았거나 못 받으면 null(빈 카드)
+async function caseType(api, scores) {
+  const shareId = shareIdOfCode(typeCodeOf(scores));
+  if (!shareId) return null;
+  return api.getPersonalityType(shareId).catch(() => null);
+}
+
+// 성향카드 옆 설명(기사 문체): 유형 이름(16개 모두 "~형"이라 「」 뒤 "에 가깝다"로 잇는다) + 판결 연계 설명(verdictDescription, "~다" 문체)
+function cardStory(type, hasCode) {
+  const text = element('div', 'my-result-card-text');
+  if (type) {
+    const lead = element('p', 'sheet-text');
+    lead.append('이 사건 한 건의 판단만 놓고 보면 ', bold(`「${type.name}」`), '에 가깝다.');
+    text.append(lead);
+    if (type.verdictDescription) text.append(element('p', 'sheet-text', type.verdictDescription));
+  } else {
+    text.append(element('p', 'sheet-text', hasCode ? '성향카드를 불러오지 못했다. 마이페이지에서 다시 열면 보인다.' : '이 사건에서는 네 축이 모두 드러나지 않아 유형을 정하지 않았다.'));
+  }
+  text.append(element('p', 'sheet-text my-result-note', '이 성향은 이 사건 한 건의 판단만으로 집계했으며, 최근 체험 3건을 평균한 성향은 마이페이지에서 확인할 수 있다.'));
+  return text;
+}
+
+// 왼쪽 단의 판결 성향 섹션들: [제목 + 이 사건 한 건의 4축(마이페이지 성향카드의 막대와 같은 배치)] · [그 유형의 성향카드(왼쪽) + 설명].
+// 성향카드는 구분선 없는 별도 섹션이라, 단 높이를 맞출 때 막대와 카드 사이에도 여백이 나뉜다
+function leanSections(record, type) {
+  const lean = headed(story('rules', '이 사건에서 드러난 판결 성향'));
+  lean.classList.add('my-result-lean');
+  if (!record?.scores) {
+    lean.append(element('p', 'sheet-text', record === null ? '성향 기록을 불러오지 못했어요. 마이페이지에서 다시 열어 주세요.' : '이 사건은 성향 기록이 없다.'));
+    return [lean];
+  }
+  const list = element('ul', 'axis-list');
+  AXES.forEach((axis) => list.append(renderAxisRow(axis, record.scores[axis.key])));
+  lean.append(list);
+  const hasCode = Boolean(typeCodeOf(record.scores));
+  const card = element('section', 'my-result-card');
+  card.setAttribute('aria-label', '이 사건의 성향카드');
+  card.append(typeFace(type, hasCode ? '"성향카드를 불러오지 못했어요"' : '"이 사건에서 네 축이 모두 드러나지 않았어요"'), cardStory(type, hasCode));
+  return [lean, card];
+}
+
+// 1면: 사건 제목과 판결을 내린 판사(나)를 중심으로.
+//   사건 제목(API 16 · 목록) · 첫인상 구간(API 14 preToFinal.preJudgment.label, 예: "실형 5년 이상 ~ 10년 미만")
+//   최종 판결(preToFinal.finalJudgmentText, 서버 FinalJudgmentText: "사형" · "무기징역" · "징역 2년 6개월" · "벌금 …" · "징역 3년에 집행유예 5년")
+//   첫인상과 견준 방향(preToFinal.direction: HEAVIER · SAME · LIGHTER)
+// 형량(첫인상 구간 · 최종 판결)은 굵게 둔다. 값 바로 뒤에는 받침에 따라 갈리는 조사(이/가 · 을/를 · 으로/로)를 붙이지 않는다 — "~의", "~에", 쉼표 · "쪽"으로 잇는다.
+// 판사 이름은 마이페이지 프로필카드와 같은 값(닉네임, 없으면 "익명의 판사")이다
+const DIRECTION_LINES = {
+  HEAVIER: '사건 기록과 법정 공방을 모두 지켜본 뒤에는 첫인상보다 무거운 쪽으로 판결을 정했다.',
+  SAME: '사건 기록과 법정 공방을 모두 지켜본 뒤에도 첫인상과 같은 구간 안에서 판결을 정했다.',
+  LIGHTER: '사건 기록과 법정 공방을 모두 지켜본 뒤에는 첫인상보다 가벼운 쪽으로 판결을 정했다.',
+};
+function leadOf(caseTitle, preToFinal, judge) {
+  return {
+    headline: `${judge}의 판결, 다시 펼치다`,
+    deck: [`${caseTitle}, ${judge}의 판결은 `, bold(preToFinal.finalJudgmentText)],
+    text: [
+      `기사만 읽었을 때 ${judge}의 첫인상은 `, bold(preToFinal.preJudgment.label), ' 쪽이었다. ',
+      DIRECTION_LINES[preToFinal.direction] ?? '사건 기록과 법정 공방을 모두 지켜본 뒤 판결을 정했다.',
+      ' 그 판결에 드러난 판결 성향과, 이 사건으로 달라진 성향을 함께 싣는다.',
+    ],
+  };
+}
+
+export async function renderMyResultPage(container, { caseId, caseHeader, api, navigate }) {
+  const root = element('div', 'comparison-page comparison-full my-result-page'); // 6막 읽기 지면과 같은 화면 틀(courtSketch.css)
+  container.replaceChildren(root);
+  const active = () => container.contains(root);
+  let loading = false;
+
+  function message(text, action) {
+    const panel = element('section', 'message-panel');
+    panel.setAttribute('role', 'status');
+    panel.append(element('p', '', text));
+    if (action) panel.append(action);
+    root.replaceChildren(panel);
+  }
+
+  // type: 이 사건 한 건의 유형(P-4, 없으면 null)
+  function draw(data, myPage, type) {
+    const record = recordOf(myPage, caseId);
+    const sheet = element('article', 'sheet sheet-result');
+    sheet.setAttribute('aria-label', '내 결과 지면');
+    const mast = masthead();
+    // 왼쪽 귀: 6막은 신문을 뒤집어 사건 목록으로 가지만, 이 지면은 연출 없이 간다
+    mast.querySelector('.sheet-ear-left small').textContent = '오늘의 지면으로';
+    mast.querySelector('.sheet-ear-left').addEventListener('click', () => navigate('list'));
+    // 왼쪽 · 오른쪽 단을 따로 쌓는다. 한 격자 줄에 두면 긴 흐름 그래프 높이만큼 왼쪽 기사 사이가 벌어진다(myResult.css)
+    const left = element('div', 'sheet-col is-left');
+    left.append(frontStory(caseHeader.title, leadOf(caseHeader.title, data.preToFinal, myPage?.nickname || DEFAULT_NICKNAME)), ...leanSections(record, type));
+    const right = element('div', 'sheet-col is-right');
+    right.append(...trendSections(myPage, record ?? {}));
+    sheet.append(mast, left, right, advertisements());
+    openForReading(sheet, () => navigate('testPaper'));
+
+    // 6막 읽기 화면과 같은 구조(.stage-wrap.reading-paper > .stage > .scene > .sheet)라 지면 스타일을 그대로 받는다
+    const wrap = element('div', 'stage-wrap reading-paper');
+    const stage = element('div', 'stage');
+    const scene = element('div', 'scene');
+    scene.append(sheet);
+    stage.append(scene);
+    wrap.append(stage, button('마이페이지로', () => navigate('me', { view: 'cases' }), 'primary-button paper-to-main is-clickable'));
+    const desk = element('div', 'desk');
+    desk.setAttribute('aria-hidden', 'true');
+    root.replaceChildren(desk, element('h1', 'visually-hidden', `내 결과 · ${caseHeader.title}`), wrap);
+  }
+
+  async function load() {
+    if (loading || !active()) return;
+    loading = true;
+    message('내 결과를 불러오는 중…');
+    try {
+      // { record: true }는 목 전용(지난 체험 기록 보기, comparisonMockApi.js). 실제 API는 두 번째 인수를 쓰지 않는다.
+      // 마이페이지를 못 불러와도 처음 판단 · 최종 판결은 보여 준다
+      const [data, myPage] = await Promise.all([api.getComparison(caseId, { record: true }), api.getMyPage().catch(() => null)]);
+      const type = await caseType(api, recordOf(myPage, caseId)?.scores); // 축 점수가 있어야 고를 수 있어 마이페이지 다음에 부른다
+      if (active()) draw(data, myPage, type);
+    } catch (error) {
+      if (!active()) return;
+      // 마치지 않은 체험(INVALID_STATE)은 withErrorRedirect가 지금 단계 화면으로 먼저 보낸다(app/errorRedirect.js)
+      message('내 결과를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.', button('다시 시도', load));
+    } finally { loading = false; }
+  }
+  await load();
+}

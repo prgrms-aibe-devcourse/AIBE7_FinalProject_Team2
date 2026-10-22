@@ -1,5 +1,6 @@
 // 판결 성향 테스트 콘텐츠 목 데이터 (WBS 7.6.1). docs/personality-test-content.md 3-3 · 4-2 · 4-3에서 옮겼다.
 // 문구를 고칠 때는 문서를 먼저 고치고 여기를 맞춘다. 실제 API가 생기면(7.6.3 · 7.6.4) 서버가 이 내용을 준다.
+import { TYPE_NUMBERS } from '../utils/personalityTypes.js';
 
 // 문항 16개 (출제 순서). a · b = 양 끝 행동과 그 행동이 가리키는 글자
 export const QUESTIONS = [
@@ -229,11 +230,8 @@ export const QUESTIONS = [
   }
 ];
 
-// 유형 번호(01 ~ 16). 순서가 바뀌어도 번호는 바꾸지 않는다 (docs/character/personality-image-numbers.md)
-export const TYPE_NUMBERS = {
-  ESTJ: 1, ISTJ: 2, ESTP: 3, ENTJ: 4, ESFJ: 5, ISFJ: 6, INTJ: 7, ISTP: 8,
-  ENTP: 9, ESFP: 10, ENFJ: 11, INFJ: 12, INTP: 13, ISFP: 14, ENFP: 15, INFP: 16,
-};
+// 유형 번호(01 ~ 16)는 shareId 찾기와 함께 쓰려고 utils/personalityTypes.js로 옮겼다(FE-75)
+export { TYPE_NUMBERS };
 
 // 이미지 번호(`personality/{번호}.webp`, 01 ~ 32)는 캐릭터별 대역이다. 내로 01 ~ 16 · 남불 17 ~ 32, 이미지 번호 = 유형 번호 + 16 × (내로 0 · 남불 1).
 // 한 유형에는 이미지 하나만 보여 준다. 지금은 유형의 기본 캐릭터(TYPES의 character)를 하드코딩으로 쓴다. 선택 방식(사용자 선택 · 무작위)이 생기면 이 함수만 바꾼다

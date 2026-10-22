@@ -62,8 +62,8 @@
   background: var(--felt-ink); color: var(--color-text); caret-color: var(--color-desk-pad); font: inherit; font-size: 16px; /* 16px 미만이면 iOS가 확대한다 */
 }
 .login-field input[aria-invalid="true"] { border-color: var(--color-danger); box-shadow: 0 0 0 1px var(--color-danger); }
-/* 오류 문구: 따로 상자를 만들지 않고 펠트 위 글줄로 둔다. 진한 빨강은 네이비 펠트에서 읽히지 않아 옅은 빨강(--color-danger-border)을 글자색으로 쓴다 */
-.login-error { margin: 0; color: var(--color-danger-border); font-size: 14px; font-weight: 700; line-height: 1.5; word-break: keep-all; text-wrap: pretty; }
+/* 오류 문구: 따로 상자를 만들지 않고 펠트 위 글줄로 둔다. 진한 빨강은 네이비 펠트에서 읽히지 않아 어두운 면용 오류 글자 토큰(--color-danger-on-dark)을 쓴다 */
+.login-error { margin: 0; color: var(--color-danger-on-dark); font-size: 14px; font-weight: 700; line-height: 1.5; word-break: keep-all; text-wrap: pretty; }
 .login-submit { width: 100%; margin-top: 6px; }
 
 .login-signup { margin: 20px 0 0; text-align: center; color: var(--felt-muted); font-size: 14px; }
