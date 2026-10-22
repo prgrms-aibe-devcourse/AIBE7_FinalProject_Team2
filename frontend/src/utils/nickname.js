@@ -3,7 +3,7 @@
 export const NICKNAME_MIN = 2;
 export const NICKNAME_MAX = 12; // 입력칸 한도(영문 · 숫자). 한글이 섞이면 NICKNAME_MAX_HANGUL로 검사한다
 export const NICKNAME_MAX_HANGUL = 9;
-export const NICKNAME_HINT = `한글 · 영문 · 숫자 ${NICKNAME_MIN}자 이상. 한글이 있으면 ${NICKNAME_MAX_HANGUL}자, 영문 · 숫자만이면 ${NICKNAME_MAX}자까지(공백 포함)`;
+export const NICKNAME_HINT = `한글 · 영문 · 숫자로 ${NICKNAME_MIN}자 이상 써요. 한글이 있으면 ${NICKNAME_MAX_HANGUL}자, 영문 · 숫자만이면 ${NICKNAME_MAX}자까지예요(공백 포함).`;
 
 /** 문제가 있으면 고치는 방법을 담은 안내 문구, 괜찮으면 빈 문자열 */
 export function nicknameError(value) {

@@ -87,7 +87,7 @@ export function renderProfileEdit({ api, navigate, go, data = {}, card, fan }) {
   const bioLabel = element('label', 'edit-label', '한 줄 소개');
   bioLabel.htmlFor = bio.id;
   const bioCount = element('span', 'edit-count');
-  const bioHint = element('p', 'edit-hint', `프로필카드에 함께 보여요. 최대 ${BIO_MAX}자.`);
+  const bioHint = element('p', 'edit-hint', `프로필카드와 커뮤니티에 함께 보여요. ${BIO_MAX}자까지 쓸 수 있어요.`);
   bioHint.id = 'edit-bio-hint';
   bioHint.append(' ', bioCount);
   const bioField = element('div', 'edit-field');
@@ -109,7 +109,7 @@ export function renderProfileEdit({ api, navigate, go, data = {}, card, fan }) {
   syncPreview();
 
   const portrait = element('div', 'edit-field');
-  portrait.append(element('span', 'edit-label', '대표 이미지 · 카드 꾸미기'), button('프로필카드에서 바꾸기', () => go('profile'), 'secondary-button'));
+  portrait.append(element('span', 'edit-label', '대표 이미지 · 카드 꾸미기'), button('프로필카드에서 꾸미기', () => go('profile'), 'secondary-button'));
 
   // 계정 관리 위쪽, 읽기 전용 정보: 서버가 아이디 · 가입일 · 최근 로그인을 주기 전까지는 자리만 둔다
   const facts = element('dl', 'edit-facts');
@@ -133,18 +133,22 @@ export function renderProfileEdit({ api, navigate, go, data = {}, card, fan }) {
     runLabel: '탈퇴하기',
     onRun: () => { status.textContent = '회원 탈퇴는 서버 연동 후 열려요. 지금은 계정이 그대로 남아 있어요.'; },
   });
-  const password = button('비밀번호 변경 (준비 중)', () => {}, 'secondary-button');
-  password.disabled = true; // 비밀번호로 로그인하는 계정(관리자)만 해당. 일반 사용자는 카카오 로그인이라 비밀번호가 없다
-  const passwordHint = element('p', 'edit-hint', user ? '비밀번호로 로그인하는 계정만 바꿀 수 있어요. 카카오로 로그인했다면 비밀번호는 카카오에서 바꿔요.' : '로그인하면 계정 정보를 관리할 수 있어요.');
-  const account = element('div', 'edit-field');
-  account.append(...(user ? [password] : []), passwordHint, ...(user ? [logout, withdrawOpen, withdrawConfirm] : []));
+  const password = button('비밀번호 변경', () => {}, 'secondary-button');
+  password.disabled = true; // 준비 중. 비밀번호로 로그인하는 계정(관리자)만 해당하고, 일반 사용자는 카카오 로그인이라 비밀번호가 없다
+  const passwordField = element('div', 'edit-field');
+  passwordField.append(element('span', 'edit-label', '비밀번호'), password, element('p', 'edit-hint', '준비 중이에요. 비밀번호로 로그인하는 계정만 바꿀 수 있고, 카카오로 로그인했다면 카카오에서 바꿔요.'));
+  const sessionActions = element('div', 'edit-actions');
+  sessionActions.append(logout, withdrawOpen);
+  const sessionField = element('div', 'edit-field');
+  sessionField.append(element('span', 'edit-label', '로그아웃 · 탈퇴'), sessionActions, withdrawConfirm);
+  const account = user ? [passwordField, sessionField] : [element('p', 'edit-hint', '로그인하면 계정을 관리할 수 있어요.')];
 
   // 약관 · 방침 입구
   const policies = element('nav', 'edit-actions');
   policies.setAttribute('aria-label', '약관 및 방침');
   policies.append(button('이용약관', () => navigate('terms'), 'secondary-button'), button('개인정보처리방침', () => navigate('privacy'), 'secondary-button'));
   const policyField = element('div', 'edit-field');
-  policyField.append(element('p', 'edit-hint', '가입과 이용에 적용되는 약관과 개인정보 처리 방침이에요.'), policies);
+  policyField.append(policies, element('p', 'edit-hint', '가입과 이용에 적용되는 약관과 개인정보 처리 방침이에요.'));
 
   // 저장 · 취소
   const save = element('button', 'primary-button', '저장');
@@ -158,8 +162,8 @@ export function renderProfileEdit({ api, navigate, go, data = {}, card, fan }) {
   profileBody.append(profileCard, profileFields);
 
   form.append(
-    section('프로필', profileBody, fan(), element('p', 'edit-hint', '프로필카드와 성향카드는 커뮤니티에서 항상 다른 사람에게 보여요.')),
-    section('계정 관리', facts, account),
+    section('프로필', profileBody, fan()),
+    section('계정 관리', facts, ...account),
     section('약관 · 방침', policyField),
     status,
     actions,

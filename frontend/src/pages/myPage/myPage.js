@@ -721,13 +721,20 @@ function typeSlotsOf(data) {
 // 내 정보 수정: 성향카드를 겹쳐 놓고(y는 같고 x만 다르다) 오른쪽에 버튼을 둔다. 고른 카드가 맨 왼쪽 · 맨 앞이다.
 // 오른쪽: 초심 · 재심 · 최근 버튼 세 개(고른 카드가 커뮤니티에 보이는 공개 카드, 성향카드 화면의 "공개" 도장과 같은 값),
 // 첫 성향 테스트 하기 · 재심 청구하기(할 수 없어도 숨기지 않고 비활성으로 둔다. 끝나면 문구만 바뀐다), 성향카드 보기
+// 내 정보 수정의 칸 하나: 제목 → 조작 → 설명(있으면). myProfileEdit.css의 .edit-field와 같은 모양
+function editGroup(title, control, hint) {
+  const group = element('div', 'edit-field');
+  group.append(element('span', 'edit-label', title), control, ...(hint ? [element('p', 'edit-hint', hint)] : []));
+  return group;
+}
+
 function typeFan(data, navigate, go) {
   const { slots, tested, retakeDone } = typeSlotsOf(data);
   const names = { initial: '초심', retake: '재심', current: '최근' };
   const box = element('div', 'edit-fan');
   const stack = element('div', 'edit-fan-stack');
   const side = element('div', 'edit-fan-side');
-  const bar = element('div', 'edit-fan-buttons');
+  const bar = element('div', 'edit-actions');
   const buttons = new Map();
   const paint = () => {
     const shown = shownSlot(slots);
@@ -755,7 +762,7 @@ function typeFan(data, navigate, go) {
     paint();
   };
   SHOWN_SLOTS.forEach((key) => {
-    const node = element('button', 'edit-fan-pick', names[key]);
+    const node = element('button', 'secondary-button edit-choice', names[key]);
     node.type = 'button';
     node.disabled = !slots[key];
     if (!slots[key]) node.setAttribute('aria-label', `${names[key]}: 아직 카드가 없어요`);
@@ -765,7 +772,6 @@ function typeFan(data, navigate, go) {
   });
   // 첫 테스트 · 재심 청구: 상태에 따라 문구와 눌림만 바뀐다
   const state = retakeState(data);
-  const actions = element('div', 'edit-fan-actions');
   const firstTest = button(tested ? '첫 성향 테스트 완료' : '첫 성향 테스트 하기', () => navigate('test'), 'secondary-button');
   firstTest.disabled = tested;
   const claim = button(retakeDone ? '재심 완료' : '재심 청구하기', () => openRetakeDialog({ data, navigate, from: claim }), 'secondary-button');
@@ -775,19 +781,12 @@ function typeFan(data, navigate, go) {
     : tested ? `성향 테스트를 한 번 더 해서 성향카드를 다시 정해요. ${RETAKE_NOTES[state]}` : '재심은 첫 성향 테스트 뒤에 청구할 수 있어요.';
   const tests = element('div', 'edit-actions'); // 첫 테스트 옆에 재심
   tests.append(firstTest, claim);
-  actions.append(
-    element('span', 'edit-label', '성향 테스트 하러 가기'),
-    tests,
-    element('span', 'edit-label', '성향카드 확인 및 꾸미기'),
-    button('성향카드에서 보기', () => go('type'), 'secondary-button'),
-  );
   paint();
+  // 오른쪽은 내 정보 수정의 다른 칸과 같은 묶음(제목 → 조작 → 설명)을 세 개 쌓는다
   side.append(
-    element('span', 'edit-label', '커뮤니티에 보일 성향카드'),
-    bar,
-    element('p', 'edit-hint', '고른 카드가 맨 앞에 놓이고 "공개" 도장이 찍혀요.'),
-    actions,
-    ...(note ? [element('p', 'edit-hint', note)] : []),
+    editGroup('커뮤니티에 보일 성향카드', bar, '고른 카드가 맨 앞에 놓이고 "공개" 도장이 찍혀요. 프로필카드와 성향카드는 커뮤니티에서 항상 다른 사람에게 보여요.'),
+    editGroup('성향 테스트 하러 가기', tests, note),
+    editGroup('성향카드 확인 및 꾸미기', button('성향카드에서 보기', () => go('type'), 'secondary-button')),
   );
   box.append(stack, side);
   return box;
