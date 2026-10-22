@@ -450,15 +450,15 @@ function changeRow({ axis, points, change }) {
     track.append(line);
     return line;
   });
-  // 두 선이 겹치거나 붙으면(사이가 선 두 개를 놓을 수 없을 만큼 좁으면) 두 선의 가운데에 하나만 둔다. 폭은 그려진 뒤에야 알 수 있어서 한 프레임 뒤에 잰다
-  if (lines.length === 2) {
-    requestAnimationFrame(() => {
+  // 두 선이 겹치거나 붙으면(사이가 선 두 개를 놓을 수 없을 만큼 좁으면) 두 선의 가운데에 하나만 둔다. 폭은 그려진 뒤에야 알 수 있고 창 크기에 따라 바뀌므로
+  // 막대 크기를 지켜보다가(ResizeObserver) 다시 잰다. 합쳤다가 넓어지면 원래 두 선으로 돌아온다(막대가 화면에서 떨어지면 관찰도 같이 끝난다)
+  if (lines.length === 2 && typeof ResizeObserver === 'function') {
+    new ResizeObserver(() => {
       const width = track.getBoundingClientRect().width;
-      if (width > 0 && ((marks[1] - marks[0]) / 100) * width <= EDGE_TOUCH_PX) {
-        lines[0].style.left = `${(marks[0] + marks[1]) / 2}%`;
-        lines[1].remove();
-      }
-    });
+      const merged = width > 0 && ((marks[1] - marks[0]) / 100) * width <= EDGE_TOUCH_PX;
+      lines[0].style.left = `${merged ? (marks[0] + marks[1]) / 2 : marks[0]}%`;
+      lines[1].hidden = merged;
+    }).observe(track);
   }
   const detail = change ? movedText(change) : leanText(from.ratio, axis); // 점이 하나뿐이면 그 비중
   item.append(ends, track, element('p', `change-detail${moving ? ` is-moved is-${grew}` : ''}`, detail));
