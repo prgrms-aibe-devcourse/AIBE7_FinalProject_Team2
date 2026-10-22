@@ -18,6 +18,16 @@ global:
   external_labels:
     env: prod
 
+# 경보 규칙 파일 (7.3.1). 로컬(prometheus.yml)과 같은 파일
+rule_files:
+  - /etc/prometheus/alert-rules.yml
+
+# 경보가 울리면 보낼 곳 (7.3.2). 같은 Compose 네트워크 안의 alertmanager 서비스
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
 scrape_configs:
   - job_name: prometheus
     static_configs:

@@ -1,0 +1,85 @@
+# Prometheus 경보 규칙 (WBS 7.3.1). 로컬 · 운영 공용 — prometheus.yml · prometheus.prod.yml 둘 다
+# `rule_files`로 이 파일 하나를 가리킨다.
+#
+# `for:` 값(지속 시간)을 둔 이유: 조건이 한 번 스크레이프(15s)에 참이라고 바로 울리면, 배포 직후
+# 잠깐 튀는 값이나 스크레이프 한 번의 결측 때문에 오탐이 난다. 몇 분 동안 계속 참이어야 진짜 장애로 본다.
+#
+# `rate(...[5m])` · `histogram_quantile`의 창 길이는 scrape_interval=15s 기준 최소 4 ~ 5 표본
+# (prometheus.yml 주석 참고)보다 훨씬 넉넉하게 뒀다 — 경보는 대시보드보다 "노이즈에 둔감한 것"이 더
+# 중요해서다.
+groups:
+  - name: lawnambul-service
+    rules:
+      # 1. 5xx 비율 — 서버 오류 응답이 늘어난 것 자체가 가장 기본적인 "서비스가 고장났다" 신호다
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(http_server_requests_seconds_count{outcome="SERVER_ERROR"}[5m]))
+            /
+          sum(rate(http_server_requests_seconds_count[5m]))
+          > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "5xx 응답 비율이 5%를 넘었습니다"
+          description: "지난 5분 동안 전체 요청 중 5xx 응답 비율이 {{ $value | humanizePercentage }}입니다."
+
+      # 2. p95 지연 — 평균만 보면 가끔 아주 느린 사용자를 놓친다. p95는 "꽤 많은 사용자가 느리게 겪고 있다"를 잡는다
+      - alert: HighLatencyP95
+        expr: |
+          histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket[5m])) by (le))
+          > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "응답 시간 p95가 2초를 넘었습니다"
+          description: "지난 5분 p95 응답 시간이 {{ $value | humanizeDuration }}입니다."
+
+      # 3. DB 커넥션 고갈 — 커넥션이 바닥나면 새 요청이 DB를 못 써서 전부 타임아웃, 장애가 도미노처럼 번지기 직전 신호
+      - alert: DbConnectionPoolNearExhaustion
+        expr: |
+          hikaricp_connections_active / hikaricp_connections_max > 0.9
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "DB 커넥션 풀이 거의 찼습니다"
+          description: "HikariCP 사용률이 {{ $value | humanizePercentage }}입니다(90% 초과 3분 지속)."
+
+      - alert: DbConnectionPending
+        expr: |
+          hikaricp_connections_pending > 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "DB 커넥션을 기다리는 요청이 있습니다"
+          description: "커넥션을 기다리는 스레드가 {{ $value }}개입니다(2분 이상 지속)."
+
+      # 4. LLM 호출 실패율 — Gemini 등 외부 AI 호출이 조용히 계속 실패하면 사진 프롬프트 · 신문 지면 ·
+      #    판결 생성 같은 기능이 반쪽만 도는 걸 아무도 모르게 된다(BusinessMetrics.recordAiCallFailure)
+      - alert: HighAiCallFailureRate
+        expr: |
+          sum(rate(lawnambul_ai_call_total{result="failure"}[10m]))
+            /
+          sum(rate(lawnambul_ai_call_total[10m]))
+          > 0.3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "AI 호출 실패율이 30%를 넘었습니다"
+          description: "지난 10분 AI(임베딩 등) 호출 실패율이 {{ $value | humanizePercentage }}입니다."
+
+      # 5. 배치 지연 — 사건 등록(BE-93)처럼 202로 받아놓고 영영 안 끝나는 긴 작업을 사람이 놓칠 수 있다
+      #    (CaseImportMetrics, 7.3.1 신설). 파이프라인 타임아웃(COMMON-50)보다 넉넉하게 10분으로 둔다
+      - alert: CaseImportStuck
+        expr: |
+          lawnambul_case_import_oldest_running_seconds > 600
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "사건 등록 작업이 오래 멈춰 있습니다"
+          description: "진행 중(QUEUED · RUNNING)인 사건 등록 작업이 {{ $value | humanizeDuration }}째 끝나지 않았습니다."

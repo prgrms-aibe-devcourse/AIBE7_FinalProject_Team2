@@ -1,7 +1,8 @@
-# 모니터링 (Prometheus BE-70 WBS 7.2.2 · Loki/Alloy BE-71 WBS 7.2.3 · Grafana COMMON-43 WBS 7.2.4)
+# 모니터링 (Prometheus BE-70 WBS 7.2.2 · Loki/Alloy BE-71 WBS 7.2.3 · Grafana COMMON-43 WBS 7.2.4 · 경보 7.3.1 · 7.3.2)
 
 Prometheus로 백엔드 Actuator 메트릭(7.2.1)을 수집하고, Loki + Grafana Alloy로 백엔드 JSON 로그(7.2.3)를 적재하고,
-Grafana로 대시보드 4종(7.2.4)을 띄운다.
+Grafana로 대시보드 4종(7.2.4)을 띄운다. Prometheus가 경보 규칙(7.3.1)을 평가해 Alertmanager로 보내고,
+Alertmanager가 그룹핑 · 억제한 뒤 Slack으로 알린다(7.3.2).
 
 **Grafana는 데이터를 저장하지 않는다.** 데이터는 Prometheus(메트릭) · Loki(로그)에 있고 Grafana는 그걸 읽어 그리는
 조회 계층일 뿐이다. 그래서 Grafana가 죽어도 데이터는 남지만, Prometheus · Loki가 죽은 시간대의 데이터는 영영 없다 —
@@ -9,14 +10,17 @@ Grafana로 대시보드 4종(7.2.4)을 띄운다.
 
 | 파일 | 내용 |
 | --- | --- |
-| `docker-compose.yml` | **로컬** 전체 스택(Prometheus · Loki · Alloy · Grafana · node_exporter). `backend/docker-compose.yml`(DB)과 독립적으로 켜고 끈다 |
-| `prometheus.yml` | **로컬** scrape 대상 · 간격. 보존 기간은 `docker-compose.yml`의 `--storage.tsdb.retention.time` |
+| `docker-compose.yml` | **로컬** 전체 스택(Alertmanager · Prometheus · Loki · Alloy · Grafana · node_exporter). `backend/docker-compose.yml`(DB)과 독립적으로 켜고 끈다 |
+| `prometheus.yml` | **로컬** scrape 대상 · 간격 · 경보 규칙 파일 · Alertmanager 주소. 보존 기간은 `docker-compose.yml`의 `--storage.tsdb.retention.time` |
+| `alert-rules.yml` | **경보 규칙(7.3.1)**. 로컬 · 운영 공용 — 5xx 비율 · p95 지연 · DB 커넥션 고갈 · AI 호출 실패율 · 사건 등록 배치 지연 |
+| `alertmanager.yml` | **Alertmanager 라우팅 · 그룹핑 · 억제 · Slack 채널(7.3.2)**. 로컬 · 운영 공용. 웹훅 URL은 여기 없다(아래) |
+| `secrets/` | Slack 웹훅 URL(`slack-webhook-url`, 커밋 안 함, `.example` 참고). `monitoring/targets/`와 같은 원칙 |
 | `loki-config.yml` | Loki 단일 바이너리 구성(파일시스템 저장), 보존 기간. 로컬 · 운영 공용 |
 | `alloy-config.alloy` | **로컬** — `backend/logs`의 JSON 로그를 tail해서 Loki로 보낸다 (Promtail 대체, 아래 참고). (BE-63) 웹 429 전용 로그 규칙도 같이 들어 있지만, 로컬 Compose에는 웹이 없어 비어 있다 |
 | `grafana/provisioning/` | 데이터소스(Prometheus · Loki) · 대시보드 공급자 설정. 로컬 · 운영 공용 |
 | `grafana/dashboards/*.json` | 대시보드 4종. 로컬 · 운영 공용이고 7.3.3 Grafana Cloud에도 같은 파일을 가져간다 |
-| `docker-compose.prod.yml` | **모니터링 전용 EC2**용(Prometheus · Loki · Grafana만) |
-| `prometheus.prod.yml` | **운영** scrape 설정. 대상 주소는 `targets/`(커밋 안 함)에서 읽는다 |
+| `docker-compose.prod.yml` | **모니터링 전용 EC2**용(Alertmanager · Prometheus · Loki · Grafana) |
+| `prometheus.prod.yml` | **운영** scrape 설정 · 경보 규칙 파일 · Alertmanager 주소. 대상 주소는 `targets/`(커밋 안 함)에서 읽는다 |
 | `.env.example` | 운영 환경변수 예시(Grafana 계정 · 보존 기간 등) |
 
 메인 EC2 쪽 에이전트(Alloy · node_exporter)는 `deploy/docker-compose.monitoring-agent.yml` · `deploy/alloy-agent.alloy`에 있다.
@@ -42,6 +46,53 @@ Grafana 폴더 "남불법정"에 들어간다. 각 패널의 ⓘ에 "이 수치�
   판결문 생성은 오프라인 파이프라인(`tools/ai-judgment`)에서 돌아 서버 메트릭에 잡히지 않는다. 생성 단계 계측은 COMMON-40과 함께 본다.
 - **DB**: `postgres_exporter`를 붙이지 않았다. 7.1.2에서 RDS로 전환하면(**10/28 예정**, COMMON-43 협의에서 D 확인) 연결 대상이 바뀌어 다시 해야 하기 때문이다.
   대신 7.3.1 경보가 실제로 쓸 지표인 **HikariCP 커넥션 풀**로 먼저 만들었다.
+
+## 경보 (7.3.1 · 7.3.2)
+
+Prometheus가 `alert-rules.yml`의 규칙을 15초마다(평가 주기) 다시 계산하고, 조건이 일정 시간(`for:`) 계속
+참이면 Alertmanager로 알린다. Alertmanager는 그걸 묶고(`group_by`) 걸러서(`inhibit_rules`) Slack으로 보낸다.
+
+| 규칙 | 조건 | 지속 | 심각도 |
+| --- | --- | --- | --- |
+| `HighErrorRate` | 5분간 5xx 응답 비율 > 5% | 5m | critical |
+| `HighLatencyP95` | 5분간 p95 응답 시간 > 2초 | 5m | warning |
+| `DbConnectionPoolNearExhaustion` | HikariCP 사용률 > 90% | 3m | critical |
+| `DbConnectionPending` | 커넥션을 기다리는 스레드 있음 | 2m | warning (위 경보가 울리는 동안은 억제됨) |
+| `HighAiCallFailureRate` | 10분간 AI 호출 실패율 > 30% | 5m | warning |
+| `CaseImportStuck` | 진행 중인 사건 등록 작업이 10분 넘게 안 끝남 | 2m | warning |
+
+`CaseImportStuck`이 보는 지표(`lawnambul_case_import_oldest_running_seconds`)는 기존에 없던 걸 7.3.1에서
+새로 추가했다(`CaseImportMetrics`, 스크레이프할 때마다 `case_import` 중 QUEUED · RUNNING 상태인 행을 조회해
+가장 오래된 것의 경과 시간을 낸다).
+
+### Slack 웹훅 설정
+
+1. Slack에서 수신 웹훅(Incoming Webhook)을 만들고 보낼 채널을 고른다 — **이 채널이 그 웹훅의 고정 채널이다.**
+   `alertmanager.yml`에 `channel:`을 따로 지정하지 않는다(다른 채널 이름을 주면 그 채널이 실제로 있어야 하고,
+   없으면 `404 channel_not_found`로 실패한다 — 직접 겪은 문제).
+2. `monitoring/secrets/slack-webhook-url.example`을 복사해 `slack-webhook-url`로 만들고 웹훅 URL을 넣는다.
+   ```bash
+   cp secrets/slack-webhook-url.example secrets/slack-webhook-url
+   vi secrets/slack-webhook-url   # 발급받은 https://hooks.slack.com/services/... 값으로 교체
+   chmod 600 secrets/slack-webhook-url
+   ```
+   이 파일은 `.gitignore`에 있다 — 커밋되지 않는다.
+3. `docker compose up -d`(또는 `alertmanager`만 `docker compose restart alertmanager`)로 반영한다.
+
+### 확인
+
+- http://localhost:9090/alerts 에서 규칙 상태(`inactive` · `pending` · `firing`)를 본다.
+- http://localhost:9093 에서 Alertmanager가 받은 경보를 본다.
+- 실제로 Slack까지 가는지 테스트 경보를 직접 보낼 수 있다(Prometheus 조건을 기다리지 않고):
+  ```bash
+  curl -X POST http://localhost:9093/api/v2/alerts -H 'Content-Type: application/json' -d '[{
+    "labels": {"alertname": "TestAlert", "severity": "warning"},
+    "annotations": {"summary": "테스트", "description": "Alertmanager → Slack 연결 확인"},
+    "startsAt": "'"$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"'"
+  }]'
+  ```
+  `group_wait`(30s) 뒤에 Slack 채널에 메시지가 오면 정상이다. 안 오면 `docker compose logs alertmanager`에서
+  `Notify for alerts failed` 줄을 찾는다(웹훅 URL 오타 · 채널 문제가 대부분이다).
 
 ## Promtail 대신 Grafana Alloy를 쓴 이유
 
@@ -191,6 +242,11 @@ EOF
 cat > targets/node.json <<'EOF'
 [{"targets": ["<메인 EC2 사설 IP>:9100"], "labels": {"instance": "main"}}]
 EOF
+
+# Slack 웹훅 (7.3.2). 커밋하지 않으므로 서버에서 만든다 — "경보" 절의 웹훅 설정 참고
+mkdir -p secrets
+echo -n "https://hooks.slack.com/services/..." > secrets/slack-webhook-url
+chmod 600 secrets/slack-webhook-url
 
 docker compose -f docker-compose.prod.yml up -d --no-build
 

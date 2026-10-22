@@ -37,6 +37,10 @@ monitoring/loki-data/
 # ===== Prometheus 스크레이프 대상 (COMMON-43). 서버 사설 IP라 공개 저장소에 올리지 않는다 =====
 monitoring/targets/
 
+# ===== Alertmanager 알림 채널 비밀값 (7.3.2). Slack 웹훅 URL 등, 서버 접속 정보와 같은 원칙 =====
+monitoring/secrets/*
+!monitoring/secrets/*.example
+
 # ===== graphify 산출물 (COMMON-34). 분석 리포트만 공유하고 그래프 데이터·캐시는 로컬 전용 =====
 graphify-out/*
 !graphify-out/GRAPH_REPORT.md

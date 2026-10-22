@@ -7,6 +7,16 @@ global:
   # rate() · irate()는 표본이 최소 4~5개는 있어야 값이 튀지 않는다. scrape_interval=15s면 7.3.1 경보의 rate(...[1m])
   # 이상(15s * 4)을 쓴다 — [1m] 미만 창은 쓰지 않는다
 
+# 경보 규칙 파일 (7.3.1). 로컬 · 운영이 같은 파일을 쓴다 — prometheus.prod.yml도 같은 경로를 가리킨다
+rule_files:
+  - /etc/prometheus/alert-rules.yml
+
+# 경보가 울리면 보낼 곳 (7.3.2). 같은 Compose 네트워크 안의 alertmanager 서비스
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
 scrape_configs:
   # Prometheus 자기 자신. 공식 기본 설정에도 들어 있는 항목으로, 수집 파이프라인 자체가 멈추지 않았는지 확인하는 용도다
   - job_name: prometheus
