@@ -1,6 +1,6 @@
 // 내 정보 수정(FE-77): 마이페이지 "내 정보 수정" 화면의 내부 틀. 서버 닉네임 · 탈퇴 API가 아직 없어 저장은 이 브라우저의 로그인 표시값(session.js)에만 반영한다.
-// 구성: 프로필(닉네임 · 한 줄 소개 · 재심 · 공개 범위) · 계정 정보 · 내 기록 관리 · 계정 관리(로그아웃 · 회원 탈퇴) · 약관. 알림 등 앱 설정은 "환경 설정"에서 다룬다
-// 한 줄 소개 · 공개 범위도 서버 API 전이라 이 브라우저(localStorage)에만 저장한다
+// 구성: 프로필(닉네임 · 한 줄 소개 · 재심) · 계정 정보 · 내 기록 관리 · 계정 관리(로그아웃 · 회원 탈퇴) · 약관. 알림 등 앱 설정은 "환경 설정"에서 다룬다
+// 한 줄 소개도 서버 API 전이라 이 브라우저(localStorage)에만 저장한다. 프로필카드 · 성향카드는 커뮤니티에서 항상 공개다(공개 범위 설정을 두지 않는다, 의도된 서비스 특징)
 import { button, element, mockTag } from '../../components/siteLayout.js';
 import { API_MODE } from '../../api/config.js';
 import { clearUser, currentUser, saveUser } from '../../utils/session.js';
@@ -10,7 +10,7 @@ import { RETAKE_NOTES, openRetakeDialog, retakeAfter, retakeState } from './base
 
 const EXTRAS_KEY = 'nlnb-profile-extras';
 const BIO_MAX = 40;
-const DEFAULT_EXTRAS = { bio: '', showProfileCard: true, showTypeCard: true };
+const DEFAULT_EXTRAS = { bio: '' };
 
 function loadExtras() {
   try {
@@ -64,20 +64,6 @@ function dangerAction({ id, openLabel, agreeText, runLabel, onRun }) {
   actions.append(run, cancel);
   confirm.append(agreeRow, actions);
   return [open, confirm];
-}
-
-// 켜고 끄는 항목 한 줄
-function toggle(id, label, checked, onChange) {
-  const input = element('input');
-  input.type = 'checkbox';
-  input.id = id;
-  input.checked = checked;
-  input.addEventListener('change', () => onChange(input.checked));
-  const text = element('label', '', label);
-  text.htmlFor = id;
-  const row = element('div', 'edit-toggle');
-  row.append(input, text);
-  return row;
 }
 
 export function renderProfileEdit({ api, navigate, go, data = {} }) {
@@ -134,15 +120,6 @@ export function renderProfileEdit({ api, navigate, go, data = {} }) {
 
   const portrait = element('div', 'edit-field');
   portrait.append(element('span', 'edit-label', '대표 이미지 · 카드 꾸미기'), button('프로필카드에서 바꾸기', () => go('profile'), 'secondary-button'));
-
-  // 공개 범위: 커뮤니티가 열리면 남에게 보여줄 카드를 고른다
-  const visibility = element('div', 'edit-field');
-  visibility.append(
-    element('span', 'edit-label', '공개 범위'),
-    toggle('edit-show-profile', '프로필카드를 다른 사람에게 보여 줘요', extras.showProfileCard, (on) => { extras.showProfileCard = on; }),
-    toggle('edit-show-type', '성향카드를 다른 사람에게 보여 줘요', extras.showTypeCard, (on) => { extras.showTypeCard = on; }),
-    element('p', 'edit-hint', '커뮤니티가 열리면 적용돼요. 지금은 이 브라우저에만 기억해 둬요.'),
-  );
 
   // 성향카드 다시 정하기: 성향카드 화면 가운데 칸과 같은 동작(1회, 처음 카드는 남는다)
   const retake = element('div', 'edit-field');
@@ -230,7 +207,7 @@ export function renderProfileEdit({ api, navigate, go, data = {} }) {
   profileBody.append(nickname, bioField);
 
   form.append(
-    section('프로필', profileBody, portrait, retake, visibility),
+    section('프로필', profileBody, portrait, retake, element('p', 'edit-hint', '프로필카드와 성향카드는 커뮤니티에서 항상 다른 사람에게 보여요.')),
     section('계정 정보', facts),
     section('내 기록 관리', records),
     section('계정 관리', account),

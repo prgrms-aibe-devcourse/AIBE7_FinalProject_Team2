@@ -29,6 +29,4 @@
 
 .edit-profile { display: grid; gap: 14px; }
 .edit-count { font-variant-numeric: tabular-nums; }
-.edit-toggle { display: flex; align-items: center; gap: 8px; min-height: 44px; }
-.edit-toggle label { cursor: pointer; }
 @media (max-width: 720px) { .edit-fact { grid-template-columns: minmax(0, 1fr); gap: 2px; } }
