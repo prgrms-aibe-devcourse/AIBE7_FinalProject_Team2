@@ -47,7 +47,9 @@ function trendChart({ axis, points }, slots, retakeBetween) {
   caption.append(element('span', '', axis.label), ends);
   figure.append(caption);
   if (points.length === 0) {
-    figure.append(element('p', 'axis-empty', '체험 자료가 아직 없어요'));
+    // 이 축의 점수가 하나도 없으면 위아래 끝 표시(↑ ↓)는 뜻이 없어 감춘다(자리는 남겨 다른 그래프와 같은 크기). 축 이름(제목)은 그대로 두고 안내를 박스 가운데에 둔다
+    figure.classList.add('is-empty');
+    figure.append(element('div', 'trend-spacer'), element('p', 'axis-empty', '체험 자료가 아직 없어요'));
     return figure;
   }
   const { width, height, axis: axisX, left, right, bottom } = CHART;
@@ -85,10 +87,10 @@ function trendChart({ axis, points }, slots, retakeBetween) {
   if (focus) chart.append(svgNode('rect', { x: xOf(focus.order) - FOCUS_BAND / 2, y: top, width: FOCUS_BAND, height: plotBottom - top, class: 'trend-focus' }));
   Y_TICKS.forEach(([ratio, label]) => {
     const y = yOf(ratio);
-    if (ratio !== 0.5) chart.append(svgNode('line', { x1: axisX, x2: width, y1: y, y2: y, class: 'trend-grid-line' }));
+    // 눈금선은 75 · 50 · 75(가운데 세 줄)만 점선으로 긋는다. 100(위 · 아래 끝)은 그래프 끝이 이미 보여 선을 두지 않는다(눈금 글자는 둔다)
+    if (ratio > 0 && ratio < 1) chart.append(svgNode('line', { x1: axisX, x2: width, y1: y, y2: y, class: 'trend-grid-line' }));
     chart.append(svgNode('text', { x: axisX - 6, y, class: 'trend-tick', 'text-anchor': 'end', 'dominant-baseline': 'middle' }, label));
   });
-  chart.append(svgNode('line', { x1: axisX, x2: width, y1: middle, y2: middle, class: 'trend-mid' }));
   slots.forEach((slot) => chart.append(svgNode('text', { x: xOf(slot.order), y: height - 10, class: `trend-tick${slot.isFocus ? ' is-focus' : ''}`, 'text-anchor': 'middle' }, slot.label)));
   // 기준점 세로 점선(FE-77): 초심 · 최근 칸, 재심 자리. 재심은 가로축 글자와 겹치지 않게 그래프 위에 글자를 둔다
   slots.filter((slot) => slot.order === 0 || slot.order === 'now').forEach((slot) => {

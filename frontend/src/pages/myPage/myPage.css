@@ -57,6 +57,12 @@ body[data-theme="coffee"] .site-footer { background: var(--palette-coffee-50); b
 .my-page ::selection { background: var(--color-range-fill); color: var(--color-text); }
 .my-main { max-width: 760px; margin: 0 auto; padding: 48px 28px 56px; }
 .my-main .message-panel button { margin-top: 20px; }
+/* 커피 헤더의 "연출" 스위치(FE-83): 모양은 style.css 헤더 스위치(= 환경 설정 스위치와 같은 규칙)이고 색만 커피로 바꾼다 — 꺼짐 = 옅은 트랙, 켜짐 = 커피 강조색 채움 + 밝은 손잡이.
+   헤더는 .my-page 밖이라 역할 토큰을 못 받아 팔레트를 직접 쓴다 */
+.site-header[data-theme="coffee"] .switch-track { background: var(--palette-coffee-200); box-shadow: inset 0 0 0 1px var(--palette-coffee-400); }
+.site-header[data-theme="coffee"] .switch-thumb { background: var(--palette-coffee-cream); box-shadow: 0 1px 2px color-mix(in srgb, var(--palette-coffee-900) 30%, transparent); }
+.site-header[data-theme="coffee"] .motion-switch[aria-checked="true"] .switch-track { background: var(--palette-coffee-600); box-shadow: none; }
+.site-header[data-theme="coffee"] .motion-switch[aria-checked="true"] .switch-thumb { background: var(--palette-coffee-cream); }
 .my-page button { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 
 /* ── 위쪽: 프로필카드 | 닉네임 · 수치 | 성향카드 (좌우 대칭, 같은 크기의 세로로 긴 카드) ── */
@@ -279,10 +285,13 @@ img.my-sash-icon.is-missing { visibility: hidden; }
 .trend-title { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin: 0 0 8px; font-weight: 700; color: var(--color-heading); }
 .trend-ends { display: grid; justify-items: end; color: var(--color-muted); font-size: 11px; font-weight: 400; line-height: 1.4; }
 .trend-svg { display: block; width: 100%; height: auto; overflow: visible; }
+/* 이 축에 점수가 없는 박스: 축 이름은 두고 위아래 끝 표시만 숨기며(자리는 남김), 그래프 자리(가로 : 세로 = CHART 320 : 160)를 비워 다른 그래프와 같은 크기로 두고, 안내를 박스 정중앙에 둔다 */
+.trend-chart.is-empty .trend-ends { visibility: hidden; }
+.trend-spacer { aspect-ratio: 320 / 160; }
+.trend-chart.is-empty .axis-empty { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: 0 16px; text-align: center; }
 .trend-zone.is-lenient { fill: color-mix(in srgb, var(--color-label) 7%, transparent); }
 .trend-zone.is-strict { fill: color-mix(in srgb, var(--color-heading) 6%, transparent); }
-.trend-mid { stroke: var(--color-border-strong); stroke-width: 1; }
-.trend-grid-line { stroke: var(--color-border); stroke-width: 1; }
+.trend-grid-line { stroke: var(--color-border-strong); stroke-opacity: .75; stroke-width: 1; stroke-dasharray: 4 3; } /* 75 · 50 · 75 세 줄만 있는 점선. 100(끝) 선은 두지 않는다 */
 .trend-tick { fill: var(--color-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
 .trend-line { fill: none; stroke: var(--color-accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .trend-dot { fill: var(--color-accent); stroke: var(--color-card); stroke-width: 2; }

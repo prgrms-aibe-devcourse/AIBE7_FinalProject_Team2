@@ -1,0 +1,15 @@
+/* 환경 설정(FE-83, mySettings.js): 내 정보 수정(.edit-*)과 같은 한 단 폼 위에 "제목 · 설명 | 조작" 줄만 더한다 */
+.set-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 44px; }
+.set-text { display: grid; gap: 2px; min-width: 0; }
+.set-label { color: var(--color-heading); font-weight: 700; }
+.set-soon { margin-left: 8px; padding: 1px 8px; border: 1px solid var(--color-border-strong); border-radius: 999px; color: var(--color-muted); font: 400 var(--text-caption)/1.5 var(--font-body); vertical-align: 1px; }
+.set-choices { display: flex; flex: none; gap: 6px; }
+/* 스위치: 누르는 칸은 44px 높이를 지키고, 눈에 보이는 트랙은 그 안에 작게 둔다. 켜짐은 색만이 아니라 손잡이 위치로도 드러난다 */
+.set-switch { flex: none; display: grid; place-items: center; min-width: 52px; min-height: 44px; padding: 0; border: 0; background: transparent; cursor: pointer; }
+.set-switch:disabled { opacity: .6; cursor: default; }
+.set-switch:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; border-radius: 999px; }
+.set-switch-track { position: relative; width: 44px; height: 24px; border-radius: 999px; background: var(--color-track); box-shadow: inset 0 0 0 1px var(--color-border-strong); transition: background-color .15s ease-out; }
+.set-switch-thumb { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--color-card); box-shadow: 0 1px 2px color-mix(in srgb, var(--color-heading) 30%, transparent); transition: translate .15s ease-out; }
+.set-switch[aria-checked="true"] .set-switch-track { background: var(--color-accent); box-shadow: none; }
+.set-switch[aria-checked="true"] .set-switch-thumb { translate: 20px 0; }
+@media (max-width: 720px) { .set-row { align-items: flex-start; } .set-choices { flex-wrap: wrap; justify-content: flex-end; } }
