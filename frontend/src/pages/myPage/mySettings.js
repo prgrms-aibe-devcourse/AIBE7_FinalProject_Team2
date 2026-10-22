@@ -1,8 +1,10 @@
-// 환경 설정(FE-83): 마이페이지 "환경 설정" 화면의 틀. 화면 · 소리 · 알림 항목을 한 단으로 쌓고, 맨 아래에서 설정을 기본으로 되돌린다.
+// 환경 설정(FE-83): 마이페이지 "환경 설정" 화면의 틀. 화면 · 알림 항목을 한 단으로 쌓고, 맨 아래 오른쪽에 "설정 초기화"와 "저장하기"를 둔다.
+// 항목을 바꿔도 바로 저장되지 않는다. 고친 값은 화면에만 두었다가 "저장하기"를 눌러야 저장 · 적용된다(바꾼 것이 없으면 저장하기는 꺼져 있다).
+// "설정 초기화"는 모든 항목을 처음 값으로 되돌려 보여 줄 뿐이고, 이것도 저장하기를 눌러야 저장된다.
 // 화면 연출은 사이트 전체가 보는 스위치(utils/motion.js, 공통 헤더의 "연출"과 같은 값)를 그대로 쓴다. 나머지 항목은 값만 이 브라우저에 저장하고(utils/appSettings.js)
 // "곧 적용" 표시가 붙은 것은 아직 앱 동작에 연결되지 않았다. 서버 저장은 알림 API가 생긴 뒤 옮긴다
 import { button, element } from '../../components/siteLayout.js';
-import { SETTING_GROUPS, getSettings, resetSettings, setSetting } from '../../utils/appSettings.js';
+import { SETTING_GROUPS, defaultSettings, getSettings, saveSettings } from '../../utils/appSettings.js';
 import { motionSwitchOn, setMotionSwitch, systemReducesMotion } from '../../utils/motion.js';
 
 let rowId = 0;
@@ -63,48 +65,56 @@ function section(title, ...children) {
   return box;
 }
 
-// 되돌리기: 누르면 한 번 더 확인한다(내 정보 수정의 확인 상자와 같은 모양, 동의 체크 없이 두 단계). 끝나면 화면을 새로 그리고 결과를 알린다
-function resetSection(onReset, message) {
-  const status = element('p', 'edit-status', message);
-  status.setAttribute('role', 'status');
-  const confirm = element('div', 'edit-confirm');
-  confirm.hidden = true;
-  const open = button('설정 되돌리기', () => { confirm.hidden = false; open.hidden = true; run.focus(); }, 'secondary-button edit-danger set-reset-open');
-  const run = button('모두 기본으로', onReset, 'secondary-button edit-danger');
-  const cancel = button('취소', () => { confirm.hidden = true; open.hidden = false; open.focus(); }, 'secondary-button');
-  const actions = element('div', 'edit-actions');
-  actions.append(run, cancel);
-  confirm.append(element('p', 'edit-hint', '화면 연출 · 글자 크기 · 소리 · 알림 설정이 모두 처음 값으로 돌아가요. 꾸미기나 내 기록은 그대로예요.'), actions);
-  return section('설정 되돌리기', open, confirm, status);
-}
+// 지금 저장된 값 전체(화면 연출 포함)
+const savedValues = () => ({ motion: motionSwitchOn(), ...getSettings() });
+const sameValues = (a, b) => Object.keys(a).every((key) => a[key] === b[key]);
 
 export function renderSettings() {
   const box = element('div', 'my-detail edit-page set-page');
-  const build = (message = '') => {
-    const settings = getSettings();
+  let saved = savedValues(); // 마지막으로 저장한 값
+  const build = (draft, message = '') => {
     const form = element('div', 'edit-form');
+    const status = element('p', 'edit-status', message);
+    status.setAttribute('role', 'status');
+    const save = element('button', 'primary-button', '저장하기');
+    save.type = 'button';
+    const sync = () => { save.disabled = sameValues(draft, saved); };
+    const change = (key) => (value) => { draft[key] = value; status.textContent = ''; sync(); };
+
     SETTING_GROUPS.forEach((group) => {
       const rows = group.items.map((item) => settingRow(item, (id) => (item.type === 'switch'
-        ? switchControl(id, settings[item.key], (on) => setSetting(item.key, on))
-        : choiceControl(id, item.options, settings[item.key], (value) => setSetting(item.key, value)))));
+        ? switchControl(id, draft[item.key], change(item.key))
+        : choiceControl(id, item.options, draft[item.key], change(item.key)))));
       if (group.id === 'display') {
         // 화면 연출은 맨 위: 기기의 "동작 줄이기"가 켜져 있으면 바꿀 수 없다
         const locked = systemReducesMotion();
         rows.unshift(settingRow(
           { label: '화면 연출', hint: '화면 전환 · 책상 위 움직임 같은 연출을 보여 줘요. 끄면 바로 끝 모양으로 보여요.', note: locked ? '기기의 "동작 줄이기"가 켜져 있어 연출이 꺼져 있어요.' : '' },
-          (id) => switchControl(id, !locked && motionSwitchOn(), (on) => setMotionSwitch(on), locked),
+          (id) => switchControl(id, !locked && draft.motion, change('motion'), locked),
         ));
       }
       form.append(section(group.title, ...rows));
     });
-    form.append(resetSection(() => {
-      resetSettings();
-      setMotionSwitch(true);
-      build('설정을 기본으로 되돌렸어요.');
-      box.querySelector('.set-reset-open')?.focus();
-    }, message));
-    box.replaceChildren(element('p', 'edit-intro', '화면 · 소리 · 알림을 내 취향대로 바꿔요. 지금은 이 브라우저에만 저장돼요.'), form);
+
+    // 맨 아래 오른쪽: 설정 초기화 · 저장하기
+    const reset = button('설정 초기화', () => {
+      build({ motion: true, ...defaultSettings() }, '모든 설정을 처음 값으로 돌려 놨어요. 저장하기를 눌러야 적용돼요.');
+      box.querySelector('.set-reset')?.focus();
+    }, 'secondary-button set-reset');
+    save.addEventListener('click', () => {
+      setMotionSwitch(draft.motion);
+      const { motion: _motion, ...rest } = draft;
+      saved = { motion: draft.motion, ...saveSettings(rest) };
+      sync();
+      status.textContent = '설정을 저장했어요.';
+    });
+    sync();
+    const actions = element('div', 'edit-actions edit-submit');
+    actions.append(reset, save);
+    form.append(actions, status);
+
+    box.replaceChildren(element('p', 'edit-intro', '화면 · 알림을 내 취향대로 바꿔요. 지금은 이 브라우저에만 저장돼요.'), form);
   };
-  build();
+  build({ ...saved });
   return box;
 }

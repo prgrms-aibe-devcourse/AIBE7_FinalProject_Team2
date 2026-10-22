@@ -6,7 +6,7 @@ import { localStore } from './safeStorage.js';
 const STORAGE_KEY = 'nlnb-app-settings';
 let unsaved; // 저장소를 못 쓸 때 이번 방문 동안의 값
 
-const switchItem = (key, label, hint, value, extra = {}) => ({ key, type: 'switch', label, hint, default: value, soon: true, ...extra });
+const switchItem = (key, label, hint, value) => ({ key, type: 'switch', label, hint, default: value, soon: true });
 
 export const SETTING_GROUPS = [
   {
@@ -17,14 +17,6 @@ export const SETTING_GROUPS = [
         key: 'textSize', type: 'choice', label: '글자 크기', hint: '화면의 글자를 키워서 읽기 편하게 해요.', default: 'normal', soon: true,
         options: [{ id: 'normal', name: '보통' }, { id: 'large', name: '크게' }, { id: 'xlarge', name: '아주 크게' }],
       },
-    ],
-  },
-  {
-    id: 'sound',
-    title: '소리',
-    items: [
-      switchItem('sfx', '효과음', '종이 넘김 · 도장 같은 소리를 들려줘요.', true),
-      switchItem('bgm', '배경 음악', '사건 체험 중 잔잔한 음악을 깔아요.', false),
     ],
   },
   {
@@ -49,27 +41,21 @@ export function normalizeSettings(raw) {
   return Object.fromEntries(ITEMS.map((item) => [item.key, valid(item, raw?.[item.key]) ? raw[item.key] : item.default]));
 }
 
+/** 처음 값(설정 초기화가 이 값으로 되돌린다) */
+export const defaultSettings = () => ({ ...DEFAULTS });
+
 export function getSettings(storage = localStore()) {
   if (unsaved) return unsaved;
   try {
     return normalizeSettings(JSON.parse(storage?.getItem(STORAGE_KEY)));
   } catch {
-    return { ...DEFAULTS };
+    return defaultSettings();
   }
 }
 
-/** 항목 하나를 바꿔 저장하고 전체 값을 돌려준다. 모르는 항목 · 맞지 않는 값은 무시한다 */
-export function setSetting(key, value, storage = localStore()) {
-  const item = ITEMS.find((candidate) => candidate.key === key);
-  const current = getSettings(storage);
-  if (!item || !valid(item, value)) return current;
-  return save({ ...current, [key]: value }, storage);
-}
-
-/** 모든 항목을 기본으로 되돌린다 */
-export const resetSettings = (storage = localStore()) => save({ ...DEFAULTS }, storage);
-
-function save(next, storage) {
+/** 값 전체를 저장하고 저장된 값을 돌려준다. 모르는 항목은 버리고 맞지 않는 값은 기본으로 본다 */
+export function saveSettings(values, storage = localStore()) {
+  const next = normalizeSettings(values);
   try {
     storage.setItem(STORAGE_KEY, JSON.stringify(next));
     unsaved = undefined;

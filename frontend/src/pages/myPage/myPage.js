@@ -24,7 +24,7 @@ import { configureProfileSettings, hydrateProfileSettings } from '../../utils/pr
 // S-17 마이페이지 (WBS 7.6.6). GET /my-page 한 번 호출로 받고, 기록이 없어도 404가 아니라 빈 200이다(명세 P-5).
 // 메인 책상의 커피잔으로 들어온다(FE-44): 커다란 커피잔이 날아와 페이드아웃하는 사이(utils/coffeeDive.js) 이 화면(from: 'mug')으로 넘어온다.
 // 첫 화면은 [프로필카드 | 닉네임 | 성향카드] + 하단 항목 줄(만난 모습 · 내가 체험한 사건 · 내 정보 수정 · 환경 설정)이고, 카드나 줄을 누르면 그 화면(view)으로 들어간다.
-// 환경 설정은 화면 · 소리 · 알림 틀이 있다(FE-83, mySettings.js). 내 정보 수정은 FE-77. 성향카드 화면에는 판결에서 드러난 성향 · 성향 변경폭 · 성향 변화 흐름(FE-70)이 들어 있다.
+// 환경 설정은 화면 · 알림 틀이 있다(FE-83, mySettings.js). 내 정보 수정은 FE-77. 성향카드 화면에는 판결에서 드러난 성향 · 성향 변경폭 · 성향 변화 흐름(FE-70)이 들어 있다.
 // 프로필카드 화면(FE-68)은 꾸미기를 모은 곳이다: 대표 이미지 · 카드 테두리 · 카드 배경 · 책갈피를 고르고, 도전과제를 깨면 잠긴 것이 열린다.
 // 꾸미기 값 · 도전과제 진행도 · 열린 항목은 서버가 원본이다(FE-71, BE-96). 고르면 바로 화면에 쓰고 PUT /profile-deco로 저장하며, 거절(409 DECO_LOCKED 등)되면 서버 값으로 되돌린다.
 // 항목 화면은 주소가 같고 view만 다르다(뒤로 가기로 첫 화면에 돌아온다).
@@ -344,7 +344,7 @@ function renderRows(data, go) {
   list.append(row('cases', latest ? `최근: ${latest.title}` : '아직 체험한 사건이 없어요', element('span', 'my-count', `${experiences.length}건`), go, `${experiences.length}건`));
 
   list.append(row('edit', '닉네임 · 프로필을 바꿔요 (추가 예정)', null, go));
-  list.append(row('settings', '화면 · 소리 · 알림을 내 취향대로 바꿔요', null, go));
+  list.append(row('settings', '화면 · 알림을 내 취향대로 바꿔요', null, go));
   return list;
 }
 
