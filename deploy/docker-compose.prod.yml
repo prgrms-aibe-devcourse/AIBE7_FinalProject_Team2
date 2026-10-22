@@ -22,6 +22,8 @@ services:
       # 이 값 + 서버의 인증서가 있을 때만 컨테이너 시작 시 https를 켠다 (frontend/nginx/40-enable-https.sh)
       # 비어 있으면(CI · 로컬) 지금처럼 http만 뜬다
       SERVER_DOMAIN: ${SERVER_DOMAIN:-}
+      # 429 전용 로그 크기 상한(바이트, BE-63 — frontend/nginx/41-trim-rate-limit-log.sh). 비워 두면 10MB
+      RATE_LIMIT_LOG_MAX_BYTES: ${RATE_LIMIT_LOG_MAX_BYTES:-10485760}
     volumes:
       # 서버 호스트의 certbot이 발급 · 갱신하는 인증서. 읽기만 한다 (deploy/README.md "HTTPS")
       # - live/(최신 인증서를 가리키는 링크)와 archive/(실제 파일)만 붙인다. live/의 링크가 ../../archive/를 가리키므로
@@ -71,6 +73,10 @@ services:
       JWT_SECRET: ${JWT_SECRET:?deploy/.env에 JWT_SECRET을 넣어야 한다 (openssl rand -base64 32)}
       JWT_ACCESS_TOKEN_TTL: ${JWT_ACCESS_TOKEN_TTL:-15m}
       JWT_REFRESH_TOKEN_TTL: ${JWT_REFRESH_TOKEN_TTL:-14d}
+      # 카카오 로그인 (확장 단계, BE-62). 비어 있으면 카카오 로그인 경로만 꺼지고 서버는 뜬다.
+      # ID를 넣으면 SECRET도 필수다(없으면 백엔드 기동 실패). 카카오 콘솔 Redirect URI: https://<도메인>/api/v1/auth/oauth2/callback/kakao
+      KAKAO_CLIENT_ID: ${KAKAO_CLIENT_ID:-}
+      KAKAO_CLIENT_SECRET: ${KAKAO_CLIENT_SECRET:-}
       # 운영에서 API 문서를 열지 않는다 (application.yml 기본값과 같음, 명시만)
       SWAGGER_ENABLED: "false"
       # 서버 메모리(t3.small 2GB)에 맞춰 JVM 힙 상한을 컨테이너 메모리 비율로 둔다

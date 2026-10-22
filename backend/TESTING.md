@@ -24,6 +24,8 @@ Windows PowerShell에서는 같은 Compose 명령 후 `.\gradlew.bat cleanTest t
 | Compose 프로젝트 | 기존 개발 프로젝트 | lawnambul-test |
 | 볼륨 | 기존 개발 볼륨 | lawnambul-test_test-pgdata / lawnambul-test_test-redisdata |
 
+팀 공용 개발 DB(Supabase, [SHARED-DEV-DB.md](SHARED-DEV-DB.md), COMMON-59)에 붙어 개발하는 중이어도 테스트는 위 테스트 전용 DB만 쓴다 — `.env.supabase`의 `DB_*` · `SPRING_*` 값은 테스트 실행에 넘어가지 않는다(아래 "연결 차단과 설정").
+
 CI는 기존 서비스 컨테이너를 사용하므로 Compose를 실행하지 않는다. 실행마다 서비스가 새로 생성되며,
 로컬은 테스트 전용 볼륨을 유지한다. CI Redis는 기존대로 기본 정책을 사용하고, 로컬은 AOF/noeviction을 적용한다.
 

@@ -1,9 +1,8 @@
-// 대표 이미지 페이지(FE-68) — 도전과제 · 해금 · 꾸미기 저장. 화면 코드에서 떼어 npm test로 확인한다.
-// 서버 API 전이라 진행도는 마이페이지 응답(체험 기록 · 성향 · 출석)에서 그때그때 계산하고 저장하지 않는다. 고른 꾸미기만 이 브라우저(localStorage)에 둔다.
+// 대표 이미지 페이지(FE-68, 서버 연동 FE-71) — 꾸미기 값 목록 · 이름과 도전과제 문구. 화면 코드에서 떼어 npm test로 확인한다.
+// 도전과제 표(목표 · 보상 · 처음부터 열린 것)와 판정은 서버가 원본이다(BE-96). 이 파일은 id → 제목 · 문구와 응답을 화면에 쓰기 좋게 바꾸는 일만 한다.
 // 해금은 이미지 한 장씩이 아니라 종류(폴더) 단위로 열린다. 종류 이름은 컬렉션과 같은 표(myPageView.js KIND_TITLES)를 쓴다.
 import { PORTRAIT_POOL } from '../content/portraitPool.js';
-import { FACE_NAMES } from './bookmarkCharacter.js';
-import { localStore } from './safeStorage.js';
+import { BOOKMARK_CHARACTERS, BOOKMARK_COLORS, BOOKMARK_FACES, BOOKMARK_LAWS, BOOKMARK_STYLES, FACE_NAMES } from './bookmarkCharacter.js';
 
 // 카드 테두리 · 카드 배경. 모양은 myPage.css의 .deco-frame-{id} · .deco-bg-{id}
 export const FRAMES = [
@@ -61,59 +60,50 @@ export const SASH_ICONS = [
   { id: 'law', name: '로(저울)' },
 ];
 
-// 보상 종류: 대표 이미지 종류 · 테두리 · 배경 · 책갈피 모양 · 책갈피 색(모양:색) · 책갈피 아이콘
+// 보상 종류: 대표 이미지 종류 · 테두리 · 배경 · 책갈피 모양 · 책갈피 색(모양:색) · 책갈피 아이콘 (서버 응답 unlocked · rewards의 키와 같다)
 export const REWARD_TYPES = ['kinds', 'frames', 'backgrounds', 'sashStyles', 'sashColors', 'sashIcons'];
 
-// 처음부터 열려 있는 것
-const FREE = {
-  kinds: ['characters/roles', 'characters/standing'], frames: ['basic'], backgrounds: ['cream'],
-  sashStyles: ['none', 'short'], sashColors: ['short:wine'], sashIcons: ['none', 'star'],
+// 도전과제 제목 · 문구. 목표 · 진행도 · 보상은 서버 응답(achievements)이 정한다. id가 새로 생겨 여기에 없으면 id를 제목으로 보여 준다
+export const ACHIEVEMENT_TEXT = {
+  'first-case': { title: '첫 판결', text: '사건 체험을 하나 끝까지 마쳐요' },
+  personality: { title: '내 성향 카드', text: '성향 테스트로 내 판결 성향을 알아봐요' },
+  'attend-3': { title: '단골 손님', text: '3일 출석해요' },
+  'collect-5': { title: '수집가', text: '일러스트를 5장 모아요' },
+  'attend-7': { title: '일주일 출석', text: '7일 출석해요' },
+  'cases-3': { title: '세 번째 판결', text: '사건 체험을 세 건 마쳐요' },
+  'collect-20': { title: '열혈 수집가', text: '일러스트를 20장 모아요' },
+  'attend-30': { title: '한 달 출석', text: '30일 출석해요' },
 };
 
-// 도전과제. stat은 statsOf(마이페이지)가 세는 값: completed(완료한 사건) · collected(모은 일러스트) · attendanceDays(출석 일수) · hasType(성향 테스트, 참이면 1)
-// 보상은 받는 것만 적고, 적지 않은 종류는 빈 배열로 채운다
-export const ACHIEVEMENTS = [
-  { id: 'first-case', title: '첫 판결', text: '사건 체험을 하나 끝까지 마쳐요', stat: 'completed', goal: 1, kinds: ['characters/scene'], frames: ['wood'], sashStyles: ['long'], sashColors: ['long:wine'] },
-  { id: 'personality', title: '내 성향 카드', text: '성향 테스트로 내 판결 성향을 알아봐요', stat: 'hasType', goal: 1, kinds: ['characters/personality'], backgrounds: ['tarot'], sashIcons: ['scale'] },
-  { id: 'attend-3', title: '단골 손님', text: '3일 출석해요', stat: 'attendanceDays', goal: 3, kinds: ['characters/icon/generated'], backgrounds: ['latte'], sashIcons: ['cup'] },
-  { id: 'collect-5', title: '수집가', text: '일러스트를 5장 모아요', stat: 'collected', goal: 5, kinds: ['cases'], backgrounds: ['news'], sashIcons: ['naero', 'nambul'] },
-  { id: 'attend-7', title: '일주일 출석', text: '7일 출석해요', stat: 'attendanceDays', goal: 7, kinds: ['characters/cheek', 'characters/cheek-slim', 'characters/deform'], frames: ['gold'], sashIcons: ['heart'] },
-  { id: 'cases-3', title: '세 번째 판결', text: '사건 체험을 세 건 마쳐요', stat: 'completed', goal: 3, frames: ['stitch'], backgrounds: ['linen'], sashColors: ['short:navy', 'long:navy'], sashIcons: ['gavel'] },
-  { id: 'collect-20', title: '열혈 수집가', text: '일러스트를 20장 모아요', stat: 'collected', goal: 20, kinds: ['characters/law', 'characters/adult'], sashColors: ['short:green', 'long:green'] },
-  { id: 'attend-30', title: '한 달 출석', text: '30일 출석해요', stat: 'attendanceDays', goal: 30, kinds: ['characters/mascot'], frames: ['navy'], sashColors: ['short:gold', 'long:gold'], sashIcons: ['law'] },
-].map((item) => ({ ...Object.fromEntries(REWARD_TYPES.map((type) => [type, []])), ...item }));
+/** 서버의 도전과제 하나(P-5 achievements)에 제목 · 문구를 붙인다. PENDING(판정 대기)이면 value는 null이다 */
+export const achievementView = (item) => ({ title: item.id, text: '', ...ACHIEVEMENT_TEXT[item.id], ...item });
+
+/** 서버가 알려 준 열린 항목(unlocked)을 보상 종류마다 Set으로. 빠진 종류는 빈 Set */
+export function unlockedSets(unlocked) {
+  return Object.fromEntries(REWARD_TYPES.map((type) => [type, new Set(unlocked?.[type] ?? [])]));
+}
+
+/** 잠긴 항목을 여는 도전과제(없으면 null). type: REWARD_TYPES 중 하나 */
+export const unlockerIn = (achievements, type, id) => {
+  const found = (achievements ?? []).find((item) => item.rewards?.[type]?.includes(id));
+  return found ? achievementView(found) : null;
+};
 
 // "/images/characters/scene/a.webp" → "characters/scene"
 export const kindOfPortrait = (src) => src.slice('/images/'.length, src.lastIndexOf('/'));
 
-/** 도전과제마다 진행도. value는 목표에서 멈춘다 */
-export function achievementProgress(stats) {
-  return ACHIEVEMENTS.map((item) => {
-    const raw = Number(stats?.[item.stat] ?? 0) || 0;
-    return { ...item, value: Math.min(raw, item.goal), cleared: raw >= item.goal };
-  });
-}
-
-/** 지금 열린 것. 보상 종류(REWARD_TYPES)마다 Set */
-export function unlockedBy(stats) {
-  const open = Object.fromEntries(REWARD_TYPES.map((type) => [type, new Set(FREE[type])]));
-  achievementProgress(stats).filter((item) => item.cleared).forEach((item) => {
-    REWARD_TYPES.forEach((type) => item[type].forEach((id) => open[type].add(id)));
-  });
-  return open;
-}
-
-/** 잠긴 항목을 여는 도전과제(없으면 null). type: REWARD_TYPES 중 하나 */
-export const unlockerOf = (type, id) => ACHIEVEMENTS.find((item) => item[type].includes(id)) ?? null;
-
-// ── 고른 꾸미기 저장 ──
-const DECO_KEY = 'nlnb-profile-deco';
+// ── 고른 꾸미기 ──
 // 기본 제공 대표 이미지: 내로 · 남불 스탠딩. 늘 열려 있고, 처음에는 내로다(책갈피 캐릭터와는 상관없다)
 export const DEFAULT_PORTRAITS = ['/images/characters/standing/naero.webp', '/images/characters/standing/nambul.webp'];
+// 카드 꾸미기 기본값. 책갈피 캐릭터 · 얼굴 · 리본 색의 기본값은 DEFAULT_BOOKMARK (서버 기본값과 같다)
 export const DEFAULT_DECO = { portrait: DEFAULT_PORTRAITS[0], frame: 'basic', background: 'cream', sashStyle: 'none', sashColorShort: 'wine', sashColorLong: 'wine', sashIconLeft: 'none', sashIconRight: 'none' };
+export const DEFAULT_BOOKMARK = { bookmarkCharacter: 'naero', bookmarkFace: 'happy', bookmarkFaceStyle: 'generated', bookmarkColor: 'bronze' };
 
 const pickId = (list, value, fallback) => (list.some(({ id }) => id === value) ? value : fallback);
-const valid = (deco) => ({
+const pickOf = (list, value, fallback) => (list.includes(value) ? value : fallback);
+
+/** 서버가 준 꾸미기(P-5 profileDeco)를 화면이 쓰는 모양으로. 모르는 값 · 빠진 값은 기본으로 본다. 잠겼는지는 보지 않는다(shownDeco가 한다) */
+export const normalizeDeco = (deco) => ({
   portrait: PORTRAIT_POOL.includes(deco?.portrait) ? deco.portrait : DEFAULT_DECO.portrait,
   frame: pickId(FRAMES, deco?.frame, DEFAULT_DECO.frame),
   background: pickId(BACKGROUNDS, deco?.background, DEFAULT_DECO.background),
@@ -122,26 +112,11 @@ const valid = (deco) => ({
   sashColorLong: pickId(SASH_COLORS.long, deco?.sashColorLong, DEFAULT_DECO.sashColorLong),
   sashIconLeft: pickId(SASH_ICONS, deco?.sashIconLeft, DEFAULT_DECO.sashIconLeft),
   sashIconRight: pickId(SASH_ICONS, deco?.sashIconRight, DEFAULT_DECO.sashIconRight),
+  bookmarkCharacter: pickOf([...BOOKMARK_CHARACTERS, ...BOOKMARK_LAWS], deco?.bookmarkCharacter, DEFAULT_BOOKMARK.bookmarkCharacter),
+  bookmarkFace: pickOf(BOOKMARK_FACES, deco?.bookmarkFace, DEFAULT_BOOKMARK.bookmarkFace),
+  bookmarkFaceStyle: pickOf(BOOKMARK_STYLES, deco?.bookmarkFaceStyle, DEFAULT_BOOKMARK.bookmarkFaceStyle),
+  bookmarkColor: pickId(BOOKMARK_COLORS, deco?.bookmarkColor, DEFAULT_BOOKMARK.bookmarkColor),
 });
-
-export function getProfileDeco(storage = localStore()) {
-  try {
-    return valid(JSON.parse(storage?.getItem(DECO_KEY) ?? 'null'));
-  } catch {
-    return { ...DEFAULT_DECO };
-  }
-}
-
-/** 고른 것 일부만 바꿔 저장한다(모르는 값은 기본으로) */
-export function setProfileDeco(patch, storage = localStore()) {
-  const next = valid({ ...getProfileDeco(storage), ...patch });
-  try {
-    storage?.setItem(DECO_KEY, JSON.stringify(next));
-  } catch {
-    // 저장소를 못 쓰면 이번 화면에서만 바뀐다
-  }
-  return next;
-}
 
 /** 화면에 쓸 꾸미기. 고른 것이 잠겨 있으면 기본으로 보여 준다(저장값은 두어서 다시 열리면 돌아온다). 아이콘은 짧은 책갈피에만 단다.
  *  고른 색이 그 모양에서 잠겨 있으면 그 모양에서 열린 첫 색으로, 열린 색이 없으면 책갈피를 없음으로 본다 */

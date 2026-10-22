@@ -10,6 +10,7 @@ import com.team2.project.common.exception.BusinessException;
 import com.team2.project.common.exception.ErrorCode;
 import com.team2.project.imagegen.service.CasePhotoService;
 import com.team2.project.legalcase.domain.CaseIncidentPhoto;
+import com.team2.project.legalcase.domain.IncidentPhotoRole;
 import com.team2.project.legalcase.domain.LegalCase;
 import com.team2.project.legalcase.repository.LegalCaseRepository;
 import jakarta.servlet.http.HttpServletRequest;
@@ -61,25 +62,41 @@ public class AdminCasePhotoService {
 		return queryService.getCase(caseId);
 	}
 
-	/** 사건 발단 사진 업로드. 사건마다 순서대로 쌓이고, 몇 장이든 추가할 수 있다 */
+	/** 사건 발단 · 결론 사진 업로드. 같은 역할로 다시 올리면 기존 사진을 교체한다(BE-78 2차 검토) */
 	@Transactional
-	public IncidentPhotoResponse uploadIncidentPhoto(Long caseId, byte[] image, String contentType, String caption,
-			String promptUsed, AdminPrincipal admin, HttpServletRequest request) {
+	public IncidentPhotoResponse uploadIncidentPhoto(Long caseId, IncidentPhotoRole role, byte[] image,
+			String contentType, String caption, String promptUsed, AdminPrincipal admin, HttpServletRequest request) {
 		LegalCase legalCase = lockCase(caseId);
 		guardNotPublished(legalCase);
 
-		CaseIncidentPhoto photo = photoService.uploadIncidentPhoto(legalCase, image, contentType, caption, promptUsed);
+		CaseIncidentPhoto photo = photoService.uploadIncidentPhoto(legalCase, role, image, contentType, caption,
+			promptUsed);
 		legalCase.startReview();
 		caseRepository.saveAndFlush(legalCase);
 
 		Map<String, Object> detail = new LinkedHashMap<>();
 		detail.put("type", "INCIDENT");
+		detail.put("role", role.name());
 		detail.put("photoId", photo.getId());
 		auditLogger.record(admin, AdminAuditAction.CASE_PHOTO_UPLOAD, AuditTargetType.CASE, caseId, detail, request);
 		return IncidentPhotoResponse.from(photo);
 	}
 
-	/** 사건 발단 사진 목록 (순서대로). 읽기만 하므로 잠그지 않는다 */
+	/** 발단 · 결론 사진 한 장 삭제 (A-13-9). 공개한 사건은 삭제할 수 없다(업로드와 같은 규칙) */
+	@Transactional
+	public void deleteIncidentPhoto(Long caseId, IncidentPhotoRole role, AdminPrincipal admin,
+			HttpServletRequest request) {
+		LegalCase legalCase = lockCase(caseId);
+		guardNotPublished(legalCase);
+
+		photoService.deleteIncidentPhoto(caseId, role);
+
+		Map<String, Object> detail = new LinkedHashMap<>();
+		detail.put("role", role.name());
+		auditLogger.record(admin, AdminAuditAction.CASE_PHOTO_DELETE, AuditTargetType.CASE, caseId, detail, request);
+	}
+
+	/** 사건 발단 · 결론 사진 목록 (순서대로). 읽기만 하므로 잠그지 않는다 */
 	public List<IncidentPhotoResponse> listIncidentPhotos(Long caseId) {
 		findCase(caseId);
 		return photoService.listIncidentPhotos(caseId).stream().map(IncidentPhotoResponse::from).toList();

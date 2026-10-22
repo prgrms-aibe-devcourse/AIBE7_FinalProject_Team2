@@ -39,7 +39,10 @@ import org.springframework.security.web.util.matcher.OrRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 
 /**
- * 인증 · 권한. 출입구(필터 체인)를 둘로 나눈다 (관리자 BE-39, 체인 분리 BE-57 · WBS 7.4.1)
+ * 인증 · 권한. 출입구(필터 체인)를 나눈다 (관리자 BE-39, 체인 분리 BE-57 · WBS 7.4.1, 카카오 로그인 체인 BE-62)
+ *
+ * 순서: ① 관리자 @Order(1) → (카카오 로그인 @Order(2), auth.oauth.KakaoOAuthConfig) → ② 사용자 @Order(3).
+ * 카카오 로그인 체인은 {@code /api/v1/auth/oauth2/**}만 맡고, KAKAO_CLIENT_ID가 없으면 만들어지지 않는다
  *
  * ① 관리자 체인 {@code /api/v1/admin/**} — 세션 + CSRF (BE-39)
  * - ROLE_ADMIN만. 로그인 · CSRF 토큰 발급만 예외. 없는 관리자 경로도 로그인 전이면 401
@@ -105,9 +108,9 @@ public class SecurityConfig {
 		return http.build();
 	}
 
-	/** ② 사용자 체인. 관리자 경로가 아닌 모든 요청(@Order(2), securityMatcher 없음) */
+	/** ② 사용자 체인. 관리자 · 카카오 로그인 경로가 아닌 모든 요청(@Order(3), securityMatcher 없음 — 맨 마지막에 둔다) */
 	@Bean
-	@Order(2)
+	@Order(3)
 	public SecurityFilterChain userSecurityFilterChain(HttpSecurity http, JsonSecurityErrorHandler errors,
 		ObjectProvider<AccessTokenVerifier> accessTokenVerifiers) throws Exception {
 		SecurityContextRepository requestOnly = new RequestAttributeSecurityContextRepository();

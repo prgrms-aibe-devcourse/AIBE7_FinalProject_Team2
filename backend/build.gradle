@@ -23,6 +23,8 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
 	// 관리자 인증 · 권한 (확장 단계, BE-39). 사용자 API는 인증 없이 그대로 동작하고 /api/v1/admin/**만 보호한다
 	implementation 'org.springframework.boot:spring-boot-starter-security'
+	// 카카오 로그인 OAuth2 클라이언트 (확장 단계, BE-62 · WBS 7.4.2). 체인 · 등록 정보는 auth.oauth.KakaoOAuthConfig
+	implementation 'org.springframework.boot:spring-boot-starter-security-oauth2-client'
 	// 비밀번호 해시 Argon2id (BE-90, WBS 7.4.4). Spring Security의 Argon2PasswordEncoder는 BouncyCastle을 직접 포함하지 않는다
 	runtimeOnly 'org.bouncycastle:bcprov-jdk18on:1.85'
 	// Actuator 헬스체크/메트릭 엔드포인트, Micrometer Prometheus 레지스트리 (BE-66)

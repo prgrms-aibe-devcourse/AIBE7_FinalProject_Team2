@@ -32,4 +32,13 @@ public interface AnonymousUserRepository extends JpaRepository<AnonymousUser, UU
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("select a from AnonymousUser a where a.id = :id")
 	Optional<AnonymousUser> findByIdForUpdate(@Param("id") UUID id);
+
+	/**
+	 * 아직 어느 회원에도 연결되지 않은 익명 사용자만 이 회원에 연결한다 (카카오 로그인, BE-62).
+	 * 이미 다른 회원에 연결된 기록은 덮어쓰지 않는다(공용 PC에서 남의 기록을 가져가지 않게). 동시에 와도 조건부 UPDATE라 한쪽만 바뀐다
+	 * @return 연결한 행 수 (0이면 없는 ID거나 이미 연결됨)
+	 */
+	@Modifying
+	@Query("update AnonymousUser a set a.memberId = :memberId where a.id = :id and a.memberId is null")
+	int linkIfUnlinked(@Param("id") UUID id, @Param("memberId") long memberId);
 }

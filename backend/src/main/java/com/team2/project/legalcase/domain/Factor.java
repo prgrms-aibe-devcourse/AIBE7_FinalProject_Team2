@@ -71,4 +71,27 @@ public class Factor {
 	public boolean isSelectableInPreJudgment() {
 		return revealStage == RevealStage.OVERVIEW;
 	}
+
+	/**
+	 * 적재(BE-93 2차).
+	 *
+	 * <p><b>displayOrder는 사건 입력의 factorId를 그대로 쓴다.</b> 파이프라인의 세 생성기가 모두 factorId를
+	 * display_order로 조인하므로(판결의 judgment_factor도 이 값으로 요소를 찾는다) 바꾸면 연결이 끊긴다.
+	 *
+	 * <p>valueAxisStatus는 AUTO로 시작한다 — 자동 분류 결과이고, 관리자가 A-12에서 확정한다.
+	 */
+	public static Factor of(LegalCase legalCase, String label, String preLabel, RevealStage revealStage,
+			String summaryTag, ValueAxis valueAxis, ValueAxisVotes valueAxisVotes, int displayOrder) {
+		Factor entity = new Factor();
+		entity.legalCase = legalCase;
+		entity.label = label;
+		entity.preLabel = preLabel;
+		entity.revealStage = revealStage;
+		entity.summaryTag = summaryTag;
+		entity.valueAxis = valueAxis;
+		entity.valueAxisVotes = valueAxisVotes;
+		entity.valueAxisStatus = ValueAxisStatus.AUTO;
+		entity.displayOrder = displayOrder;
+		return entity;
+	}
 }

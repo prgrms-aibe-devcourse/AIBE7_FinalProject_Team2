@@ -200,7 +200,8 @@ export function createRouter({ view, headerHost, footerHost, routes }) {
       // 최초 진입 기록에도 순번을 매겨 둬야 이후 popstate에서 방향을 비교할 수 있다
       const seq = history.state?.seq ?? ++historySeq;
       if (history.state?.seq !== seq) {
-        history.replaceState({ ...(history.state ?? {}), seq }, '', window.location.pathname);
+        // 쿼리 · 해시는 남긴다 (/auth/callback?error=login_failed를 화면이 읽어야 한다, FE-74)
+        history.replaceState({ ...(history.state ?? {}), seq }, '', window.location.pathname + window.location.search + window.location.hash);
       }
       lastKnownSeq = seq;
       firstSeq = seq;

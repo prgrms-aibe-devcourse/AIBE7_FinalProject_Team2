@@ -281,6 +281,41 @@
           "queryType": "range"
         }
       ]
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Rate limit 429 (제한별)",
+      "description": "Nginx가 막은 요청(429) 수. 백엔드까지 가지 않아 위 상태 코드별 처리량에는 없다(BE-63). 경로 기준이다: auth_token = 토큰 재발급 · 로그아웃, admin_login = 관리자 로그인, oauth = 카카오 로그인 시작, api = 그 밖의 /api. 앞의 세 경로는 전용 제한과 /api 공통 제한 어느 쪽에 걸려도 그 경로로 센다(어느 제한인지는 웹 오류 로그의 zone 이름). 막힌 IP · 경로는 `{job=\"web\"} | json`으로 본다. 모니터링 에이전트(MONITORING_AGENT=1)를 켠 서버에서만 수집된다. route 라벨이 있는 줄만 센다 — 나중에 job=\"web\"으로 다른 웹 로그가 붙어도 이 패널 수가 바뀌지 않게(PR #236 리뷰).",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 30 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "decimals": 0,
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 60,
+            "showPoints": "never",
+            "stacking": { "mode": "normal", "group": "A" }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["sum", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (route) (count_over_time({job=\"web\", route=~\".+\"}[$__interval]))",
+          "legendFormat": "{{route}}",
+          "queryType": "range"
+        }
+      ]
     }
   ]
 }

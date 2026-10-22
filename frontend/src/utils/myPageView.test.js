@@ -1,7 +1,7 @@
 // npm test : 마이페이지 변화 흐름 계산
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { axisSeries, castOf, collectionOf, trailLeft, trailSummary, imageKinds } from './myPageView.js';
+import { trendOrders, trendSlotOrders, recordOf, typeCodeOf, axisChange, axisSeries, axisTrend, castOf, collectionOf, leanText, imageKinds } from './myPageView.js';
 
 const AXIS = { key: 'APOLOGY_SINCERITY', strict: { name: '행동증명형' }, lenient: { name: '마음신뢰형' } };
 const entry = (value) => ({ axisScores: { APOLOGY_SINCERITY: value } });
@@ -16,20 +16,54 @@ test('기록이 없거나 모양이 달라도 빈 배열을 돌려준다', () =>
   assert.deepEqual(axisSeries([{}, null], AXIS.key), []);
 });
 
-test('첫 값과 마지막 값으로 움직인 쪽과 크기를 말한다', () => {
-  assert.equal(trailSummary(axisSeries([entry(0.2), entry(0.5), entry(0.75)], AXIS.key), AXIS), '처음보다 마음신뢰형 쪽으로 55%p 움직였어요');
-  assert.equal(trailSummary(axisSeries([entry(0.8), entry(0.4)], AXIS.key), AXIS), '처음보다 행동증명형 쪽으로 40%p 움직였어요');
+const FULL_AXIS = { ...AXIS, label: '사과와 진정성' };
+const titled = (title, value) => ({ title, axisScores: { APOLOGY_SINCERITY: value } });
+
+test('axisTrend: 테스트 점수를 맨 앞(0번)에 두고 체험 번호와 사건 이름을 붙인다', () => {
+  const points = axisTrend([titled('가', 0.5), titled('나', null), titled('다', 0.75)], AXIS.key, { APOLOGY_SINCERITY: 0.25 });
+  assert.deepEqual(points.map(({ order, label, isTest }) => [order, label, isTest]), [[0, '테스트', true], [1, '1', false], [3, '3', false]]);
+  assert.equal(points[2].title, '3번째 체험 · 다');
+  assert.equal(axisTrend([titled('가', 0.5)], AXIS.key, null).length, 1); // 테스트 전이면 체험만
 });
 
-test('5%p보다 작게 움직이면 거의 같다고 하고, 값이 하나뿐이면 말하지 않는다', () => {
-  assert.equal(trailSummary(axisSeries([entry(0.5), entry(0.53)], AXIS.key), AXIS), '처음과 거의 같아요');
-  assert.equal(trailSummary(axisSeries([entry(0.5)], AXIS.key), AXIS), null);
+test('axisChange: 처음 → 지금 변경폭과 움직인 쪽, 5%p 안쪽은 그대로로 본다', () => {
+  const change = axisChange(axisTrend([titled('가', 0.6)], AXIS.key, { APOLOGY_SINCERITY: 0.2 }), FULL_AXIS);
+  assert.equal(change.moved, 40);
+  assert.equal(change.toward, '마음신뢰형');
+  assert.equal(change.from.isTest, true);
+  assert.equal(axisChange(axisTrend([titled('가', 0.8), titled('나', 0.5)], AXIS.key), FULL_AXIS).toward, '행동증명형');
+  assert.equal(axisChange(axisTrend([titled('가', 0.5), titled('나', 0.52)], AXIS.key), FULL_AXIS).steady, true);
 });
 
-test('점 위치는 왼쪽이 엄격 쪽, 오른쪽이 관대 쪽이다', () => {
-  assert.equal(trailLeft(0), 0);
-  assert.equal(trailLeft(1), 100);
-  assert.equal(trailLeft(0.25), 25);
+test('axisChange: 현재 판결 성향(최근 3건 평균)이 있으면 지금은 그 값, 없으면 가장 최근 체험', () => {
+  const points = axisTrend([titled('가', 0.9), titled('나', 0.3)], AXIS.key, { APOLOGY_SINCERITY: 0.5 });
+  assert.equal(axisChange(points, FULL_AXIS, 0.6).moved, 10);
+  assert.equal(axisChange(points, FULL_AXIS, 0.6).to.isCurrent, true);
+  assert.equal(axisChange(points, FULL_AXIS, null).moved, -20);
+});
+
+test('axisChange: 점이 하나뿐이거나 체험 없이 테스트만 있으면 null', () => {
+  assert.equal(axisChange(axisTrend([titled('가', 0.5)], AXIS.key), FULL_AXIS), null);
+  assert.equal(axisChange(axisTrend([], AXIS.key, { APOLOGY_SINCERITY: 0.5 }), FULL_AXIS), null);
+});
+
+test('trendOrders: 테스트(없으면 첫 체험) + 최근 10건, 적으면 있는 만큼', () => {
+  assert.deepEqual(trendOrders(3, true), [0, 1, 2, 3]);
+  assert.deepEqual(trendOrders(3, false), [1, 2, 3]);
+  assert.deepEqual(trendOrders(12, true), [0, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+  assert.deepEqual(trendOrders(12, false), [1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+  assert.deepEqual(trendOrders(0, true), [0]);
+});
+
+test('leanText: 더 기운 쪽 이름과 비중, 반반이면 반반', () => {
+  assert.equal(leanText(0.75, FULL_AXIS), '마음신뢰형 75%');
+  assert.equal(leanText(0.1, FULL_AXIS), '행동증명형 90%');
+  assert.equal(leanText(0.5, FULL_AXIS), '반반');
+  assert.equal(leanText(0.585, FULL_AXIS), '마음신뢰형 58%'); // 4축 막대와 같은 반올림(엄격 42% · 관대 58%)
+  // 반올림하면 50%지만 반반이 아니면 기운 쪽으로 1%p(서버 유형 글자와 맞춘다). 분수 평균의 부동소수 오차는 반반
+  assert.equal(leanText(0.497, FULL_AXIS), '행동증명형 51%');
+  assert.equal(leanText(0.503, FULL_AXIS), '마음신뢰형 51%');
+  assert.equal(leanText((1 / 3 + 2 / 3) / 2, FULL_AXIS), '반반');
 });
 
 test('collectionOf: 체험을 마친 사건의 일러스트만 모으고 같은 그림은 한 장으로 센다', () => {
@@ -86,4 +120,28 @@ test('collectionOf: 일러스트가 없어도 만난 모습이 있으면 묶음�
   const [group] = collectionOf([{ caseId: 1, title: '사건', status: 'COMPLETED' }], scripts);
   assert.deepEqual(group.cast.map((item) => item.role), ['defense']);
   assert.deepEqual(group.items, []);
+});
+
+test('trendSlotOrders: 강조할 체험이 최근 10건 밖이면 순서대로 끼워 넣고, 안이면 그대로', () => {
+  assert.deepEqual(trendSlotOrders(12, true, 2), [0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+  assert.deepEqual(trendSlotOrders(12, false, 2), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+  assert.deepEqual(trendSlotOrders(12, true, 5), trendOrders(12, true));
+  assert.deepEqual(trendSlotOrders(3, true, undefined), [0, 1, 2, 3]);
+});
+
+test('recordOf: 마이페이지 history에서 이 사건의 축 점수와 체험 순서(1부터)를 찾는다', () => {
+  const scores = { APOLOGY_SINCERITY: 0.5, FAULT_STANDARD: 0.25, PRINCIPLE_RELATION: null, ORDER_OPPORTUNITY: 1 };
+  const myPage = { history: [{ caseId: 2, axisScores: { APOLOGY_SINCERITY: 1 } }, { caseId: 3, axisScores: scores }] };
+  assert.deepEqual(recordOf(myPage, 3), { scores, order: 2 });
+  assert.deepEqual(recordOf(myPage, '3'), { scores, order: 2 }); // 주소의 사건 번호가 문자열이어도 같다
+  assert.deepEqual(recordOf(myPage, 9), {}); // 성향 기록이 없는 사건
+  assert.deepEqual(recordOf({}, 3), {});
+  assert.equal(recordOf(null, 3), null); // 마이페이지를 못 불러옴
+});
+
+test('typeCodeOf: 네 축이 모두 있을 때만 유형 코드, 반반(0.5)은 관대 글자', () => {
+  assert.equal(typeCodeOf({ APOLOGY_SINCERITY: 0.75, FAULT_STANDARD: 0.25, PRINCIPLE_RELATION: 0.5, ORDER_OPPORTUNITY: 0 }), 'ISFJ');
+  assert.equal(typeCodeOf({ APOLOGY_SINCERITY: 0, FAULT_STANDARD: 1, PRINCIPLE_RELATION: 0.49, ORDER_OPPORTUNITY: 1 }), 'ENTP');
+  assert.equal(typeCodeOf({ APOLOGY_SINCERITY: 0.5, FAULT_STANDARD: 0.5, PRINCIPLE_RELATION: null, ORDER_OPPORTUNITY: 0.5 }), null);
+  assert.equal(typeCodeOf(undefined), null);
 });

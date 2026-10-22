@@ -50,3 +50,18 @@ test('관리자로 로그인하면 role을 함께 읽고, 일반 사용자는 ro
   assert.equal(isAdmin(currentUser(storage)), false);
   assert.equal(isAdmin(null), false);
 });
+
+test('localStorage 접근 자체가 막혀도 인수 없이 부른 헤더가 깨지지 않는다', () => {
+  const original = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, get() { throw new Error('blocked'); } });
+  try {
+    assert.equal(currentUser(), null);
+    assert.doesNotThrow(() => saveUser({ nickname: '남불판사' }));
+    assert.deepEqual(currentUser(), { nickname: '남불판사' }); // 이번 방문 동안만 기억한다
+    assert.doesNotThrow(() => clearUser());
+    assert.equal(currentUser(), null);
+  } finally {
+    if (original) Object.defineProperty(globalThis, 'localStorage', original);
+    else delete globalThis.localStorage;
+  }
+});

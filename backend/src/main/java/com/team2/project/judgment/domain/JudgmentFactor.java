@@ -60,4 +60,14 @@ public class JudgmentFactor {
 		}
 		return new JudgmentFactor(judgment, factor, direction);
 	}
+
+	/**
+	 * 적재(BE-93 2차). AI · 재판부 판결의 작용 요소에는 근거 문장이 함께 온다
+	 * (재판부는 `evidence`, AI는 `reason`).
+	 */
+	public static JudgmentFactor forLoad(Judgment judgment, Factor factor, Direction direction, String evidence) {
+		JudgmentFactor entity = forFinal(judgment, factor, direction);
+		entity.evidence = evidence;
+		return entity;
+	}
 }

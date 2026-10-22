@@ -2,7 +2,7 @@
 // 어떤 아이디 · 비밀번호든 로그인된다. 계정을 저장하거나 비밀번호를 어디에도 보내지 · 남기지 않는다.
 // 실제 API가 생기면 같은 이름(login · logout)으로 realApi.js에 붙이고 이 파일은 목 모드에서만 쓴다
 const delay = () => new Promise((resolve) => setTimeout(resolve, 250));
-const KAKAO_NICKNAME = '카카오 판사'; // 목업 카카오 로그인의 닉네임
+const KAKAO_NICKNAME = '카카오 회원'; // 목업 카카오 로그인의 닉네임
 const NICKNAME_MAX = 12;
 
 function fail(code, details = null) {
