@@ -24,10 +24,10 @@
 :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .case-title { font-size: 16px; }
 :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .case-badge { padding: 2px 9px; border-radius: 3px; background: var(--color-accent-tint); color: var(--color-accent-text); font-size: 12px; white-space: nowrap; }
 :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .top-progress { margin-left: auto; display: flex; align-items: center; gap: 12px; white-space: nowrap; font-size: 13px; color: var(--color-muted); }
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) progress { width: 110px; height: 5px; border: none; background: var(--color-track); accent-color: var(--color-primary); }
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) progress { width: 110px; height: 5px; border: none; background: var(--color-track); accent-color: var(--color-accent); }
 :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) progress::-webkit-progress-bar { background: var(--color-track); }
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) progress::-webkit-progress-value { background: var(--color-primary); }
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) progress::-moz-progress-bar { background: var(--color-primary); }
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) progress::-webkit-progress-value { background: var(--color-accent); }
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) progress::-moz-progress-bar { background: var(--color-accent); }
 :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .primary-button,
 :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .secondary-button { min-height: 44px; padding: 10px 18px; border: 1px solid var(--color-border); border-radius: 4px; font-weight: 700; }
 :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .primary-button { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-on-accent); }
@@ -50,7 +50,7 @@
 :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .recommended-range { margin-top: 20px; padding: 22px; border: 1px solid var(--color-border); background: var(--color-surface); border-radius: 4px; }
 :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .range-value { font-size: 23px; font-weight: 800; line-height: 1.5; margin-bottom: 18px; }
 :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .range-track { position: relative; height: 20px; background: var(--color-track); border: 1px solid var(--color-border); }
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .range-fill { position: absolute; top: -1px; bottom: -1px; background: var(--color-range-fill); border-inline: 2px solid var(--color-primary); }
+:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .range-fill { position: absolute; top: -1px; bottom: -1px; background: var(--color-range-fill); border-inline: 2px solid var(--color-accent); }
 :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .range-labels { display: flex; justify-content: space-between; gap: 20px; font-size: 11px; color: var(--color-muted); margin: 6px 0 16px; }
 :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .range-labels span:last-child { text-align: right; }
 :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .range-note { margin-top: 16px; font-size: 13px; font-weight: 700; }
@@ -62,7 +62,7 @@
 .review-page .section-toggle { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 22px 28px; width: 100%; border: 0; background: var(--color-surface); color: var(--color-text); text-align: left; }
 .review-page .section-name { font-weight: 700; font-size: 16px; }
 .review-page .section-state { font-size: 12px; color: var(--color-muted); text-align: right; font-weight: 400; }
-.review-page .is-open > h2 .section-toggle { background: var(--color-card); box-shadow: inset 4px 0 var(--color-primary); }
+.review-page .is-open > h2 .section-toggle { background: var(--color-card); box-shadow: inset 4px 0 var(--color-accent); }
 .review-page .is-open > h2 .section-state { color: var(--color-label); }
 .review-page .is-locked .section-toggle { color: var(--color-muted); background: var(--color-surface-strong); }
 .review-page .section-body { padding: 8px 28px 28px; }

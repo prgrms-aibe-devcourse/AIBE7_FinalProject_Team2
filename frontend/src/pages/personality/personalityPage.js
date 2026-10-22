@@ -1,7 +1,7 @@
 import { button, element } from '../../components/siteLayout.js';
 import { imageOf } from '../../components/stage.js';
 import { PERSONALITY_LINES } from '../../content/personalityLines.js';
-import { guide, markFolderTurn, renderFolder, sheetMessage } from './personalityParts.js';
+import { canTurnFolder, guide, markFolderTurn, renderFolder, setFolderTurnFrom, sheetMessage, takeFolderTurn } from './personalityParts.js';
 import { createTestFlow } from './personalityFlow.js';
 
 // S-15 판결 성향 테스트 — 시작 안내 + 문항 (WBS 7.6.1 콘텐츠 · 7.6.5 화면, FE-42 디자인). 한 화면에 한 문항, 5칸 선택지.
@@ -53,9 +53,18 @@ export async function renderPersonalityPage(container, { api, navigate, from }) 
   // 책상의 서류철에서 왔으면 철이 아래에서 올라온다. 표시는 바로 지워 새로고침 · 뒤로 가기로는 되풀이하지 않는다
   const rise = from === 'desk';
   if (rise) history.replaceState({ ...history.state, extras: {} }, '');
+  // 공유된 결과지에서 "나도 해 보기"로 왔으면 세운 철이 눕는다. 값은 한 번만 읽어 새로고침으로는 되풀이하지 않는다(책상에서 올라올 때는 올라오는 연출이 먼저)
+  const turnFrom = rise ? null : takeFolderTurn();
   const openFolder = () => {
     ({ root, label, body } = renderFolder(container, { navigate, sheetLabel: '문항지', orientation: 'landscape', rise }));
     root.classList.add('is-test');
+    if (turnFrom && canTurnFolder()) {
+      setFolderTurnFrom(root.querySelector('.test-folder'), turnFrom);
+      root.classList.add('is-turning');
+      root.addEventListener('animationend', (event) => {
+        if (event.animationName === 'folder-content-in') root.classList.remove('is-turning');
+      });
+    }
     // 숫자 1 ~ 5 = 왼쪽부터 다섯 칸. 철이 생긴 뒤에 단다(문항을 받는 중에는 아직 철이 없다)
     flow.listenKeys((value) => {
       const panel = body.querySelector('.test-question');
