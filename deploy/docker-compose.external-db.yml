@@ -1,0 +1,29 @@
+# 외부 DB 모드 (BE-59, WBS 7.1.2): 같은 서버의 postgres 컨테이너 대신 외부 PostgreSQL에 붙는다
+#
+# - 10/22 ~ 10/28 오전: Supabase 공용 DB(테스트 데이터만, backend/SHARED-DEV-DB.md) · 10/28 오후 ~: RDS
+#   두 경우 모두 이 파일 그대로 두고 deploy/.env의 EXTERNAL_DB_* 값만 바꾼다
+# - deploy.sh는 .env에 EXTERNAL_DB_URL이 있으면 이 파일을 자동으로 겹친다 (직접 쓸 때도 같은 -f 조합)
+#     docker compose -f docker-compose.prod.yml -f docker-compose.external-db.yml ...
+# - postgres 컨테이너는 profiles로 기본 실행에서 뺀다. 정의 · 볼륨(pgdata)은 남겨 두어 되돌릴 수 있다
+#   (되돌리기: .env에서 EXTERNAL_DB_*를 지우고 다시 배포 — deploy/README.md "외부 DB 모드")
+# - Compose 2.24.4 이상이 필요하다(!override). deploy.sh가 먼저 확인한다
+# - 자세한 절차 · 주의: deploy/README.md "외부 DB 모드 (BE-59)"
+
+services:
+  backend:
+    environment:
+      # application.yml이 읽는 이름 그대로. 비어 있으면 compose가 실행을 거부한다
+      # JDBC 주소. TLS 필수(sslmode=require 이상). 예: jdbc:postgresql://<호스트>:5432/postgres?sslmode=require
+      DB_URL: ${EXTERNAL_DB_URL:?deploy/.env에 EXTERNAL_DB_URL(외부 DB JDBC 주소)을 넣어야 한다}
+      DB_USERNAME: ${EXTERNAL_DB_USERNAME:?deploy/.env에 EXTERNAL_DB_USERNAME을 넣어야 한다}
+      DB_PASSWORD: ${EXTERNAL_DB_PASSWORD:?deploy/.env에 EXTERNAL_DB_PASSWORD를 넣어야 한다}
+      # 외부 DB의 연결 수 상한을 여러 클라이언트가 나눠 쓴다(Supabase 무료 60 — 운영 + 팀원 로컬). 기본 5
+      SPRING_DATASOURCE_HIKARI_MAXIMUMPOOLSIZE: ${EXTERNAL_DB_POOL_SIZE:-5}
+    # postgres를 기다리지 않는다 — 외부 DB의 준비 여부는 backend healthcheck(readiness)가 본다
+    depends_on: !override
+      redis:
+        condition: service_healthy
+
+  postgres:
+    # 기본 실행에서 뺀다. 되돌릴 때를 위해 정의 · 볼륨은 남긴다 (이 프로필은 일부러 켜지 않는다)
+    profiles: ["embedded-db"]

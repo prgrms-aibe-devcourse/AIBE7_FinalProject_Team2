@@ -51,6 +51,9 @@ services:
     restart: unless-stopped
     # 상한이지 예약이 아니다. 백엔드를 밀어내지 못하게 막는 용도 (monitoring-agent 오버레이와 같은 뜻)
     mem_limit: 512m
+    # memswap_limit을 일부러 두지 않는다 (COMMON-54) → 서버 swap이 있으면 mem_limit만큼 swap을 더 쓸 수 있다.
+    # extract(PDF · 비식별화)는 관리자가 기다리는 일괄 작업이라 느려져도 되고, 순간 급증 때 죽는 것보다 낫다.
+    # 사용자 요청을 받는 backend · postgres · redis는 swap을 쓰지 않게 막아 두었다(docker-compose.prod.yml)
     # 기본 네트워크에 두지 않는다 → web · redis · postgres · 에이전트는 이 서비스 이름을 찾지도 못한다.
     # pipeline 네트워크는 internal이 아니라서(아래) 외부 LLM API 호출은 그대로 나간다
     networks: [pipeline]

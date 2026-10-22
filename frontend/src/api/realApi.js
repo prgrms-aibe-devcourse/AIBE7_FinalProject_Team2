@@ -1,7 +1,7 @@
 // 실제 백엔드 API. src/mocks/*MockApi.js와 함수 이름 · 인자 · 응답 형식이 같다 (docs/api-specification.md)
 // 화면은 api 객체로 주입받아 쓰므로, 목 ↔ 실제 전환은 VITE_API_MODE로 한다 (src/api/index.js).
 import { API_BASE_URL } from './config.js';
-import { get, logout, post, put, reissueAccessToken } from './client.js';
+import { get, logout, patch, post, put, reissueAccessToken } from './client.js';
 
 const experience = (caseId) => `/cases/${encodeURIComponent(caseId)}/experience`;
 
@@ -51,6 +51,9 @@ export const postAttendance = () => post('/attendance');
 // 프로필 꾸미기 저장 P-7 (BE-96) — 꾸미기 전체(대표 이미지 · 테두리 · 배경 · 카드 책갈피 · 책갈피 캐릭터 · 리본 색)를 한 번에 보낸다.
 // 성공하면 저장된 꾸미기를 돌려주고, 쿠키가 없었으면 익명 ID가 발급된다. 400 VALIDATION_ERROR · 409 DECO_LOCKED는 details에 필드별 사유가 온다
 export const putProfileDeco = (deco) => put('/profile-deco', deco);
+
+// P-8 — 프로필 선택 설정 부분 저장(FE-81, BE-104). 보낸 칸만 바꾸고, 응답은 세 값 전체 { shownCard, profileCardType, bio }
+export const patchProfileSettings = (settings) => patch('/profile-settings', settings);
 
 // 회원 로그인 (FE-74, API 명세 10장). 목(mocks/authMockApi.js)과 같은 login · logout 이름을 쓴다
 // 카카오(M-3)는 fetch가 아니라 브라우저 이동이다. 카카오 → 서버 콜백(M-4) → 화면 /auth/callback으로 돌아온다(authCallbackPage.js).

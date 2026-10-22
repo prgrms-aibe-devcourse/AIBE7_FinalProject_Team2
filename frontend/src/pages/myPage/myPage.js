@@ -16,8 +16,9 @@ import { homeRoute } from '../admin/adminMenu.js';
 import { openCaseReviewPopup } from '../caseReview/caseReviewPopup.js';
 import { renderProfileEdit } from './myProfileEdit.js';
 import { RETAKE_NOTES, openRetakeDialog, retakeAfter, retakeState } from './baselineRetake.js';
-import { setShownCard, shownSlot } from '../../utils/shownCard.js';
+import { SHOWN_SLOTS, setShownCard, shownSlot } from '../../utils/shownCard.js';
 import { selectedChoice, setProfileCardType, typeChoices } from '../../utils/profileCardType.js';
+import { configureProfileSettings, hydrateProfileSettings } from '../../utils/profileSettings.js';
 
 // S-17 마이페이지 (WBS 7.6.6). GET /my-page 한 번 호출로 받고, 기록이 없어도 404가 아니라 빈 200이다(명세 P-5).
 // 메인 책상의 커피잔으로 들어온다(FE-44): 커다란 커피잔이 날아와 페이드아웃하는 사이(utils/coffeeDive.js) 이 화면(from: 'mug')으로 넘어온다.
@@ -66,6 +67,9 @@ const LOCKED_FIELD_NAMES = {
   portrait: '대표 이미지', frame: '카드 테두리', background: '카드 배경', sashStyle: '카드 책갈피 모양',
   sashColorShort: '카드 책갈피 색', sashColorLong: '카드 책갈피 색', sashIconLeft: '책갈피 아이콘', sashIconRight: '책갈피 아이콘',
 };
+// 공개 카드 · 카드 아래 성향 저장이 거절되면(P-8) 서버 값으로 다시 그리고 알린다
+const saveSettingsOr = (saving) => saving.then((saved) => { if (!saved) refresh?.('선택을 저장하지 못했어요. 저장된 값으로 다시 보여 드려요.'); });
+
 function saveFailureText(error) {
   if (error?.code === 'DECO_LOCKED') {
     const names = [...new Set((error.details ?? []).map(({ field }) => LOCKED_FIELD_NAMES[field]).filter(Boolean))];
@@ -111,6 +115,7 @@ async function loadMyPage(api) {
   await saveQueue;
   const version = decoVersion;
   const data = await api.getMyPage();
+  hydrateProfileSettings(data.profileSettings);
   return version === decoVersion || !cache ? data : { ...data, profileDeco: cache.profileDeco };
 }
 
@@ -269,10 +274,15 @@ function profileCardParts(deco, data) {
 const currentTypeOf = (data) => data.judgmentPersonality?.type ?? data.personality?.type;
 
 // 프로필카드 · 성향카드(타로카드) 한 쌍. 첫 화면 위쪽과 내 정보 수정 화면이 같이 쓴다
-function profileCardPair(data, go) {
+function profileCardOf(data, go) {
   const parts = profileCardParts(decoFor(data), data);
   const profile = cardButton(parts.classes, `프로필카드 열기: ${parts.note}`, ...parts.children);
   profile.addEventListener('click', () => go('profile'));
+  return profile;
+}
+
+function profileCardPair(data, go) {
+  const profile = profileCardOf(data, go);
   const type = currentTypeOf(data);
   const typeCardNode = type
     ? cardButton('is-type', `성향카드 열기: ${type.name}`, element('p', 'my-card-name', type.name), typePortrait(type), element('p', 'my-card-note my-type-quote', type.meme))
@@ -720,17 +730,101 @@ function shownStamp() {
 // 처음 → 다시 정함 → 지금 줄(FE-77). 카드를 누르면 그 카드에 "공개" 도장을 찍는다 — 도장 찍힌 카드가 커뮤니티에서 다른 사람에게 보이는 성향카드다.
 // 처음은 initialPersonality(첫 테스트, 테스트 전이면 첫 판결). 서버가 아직 주지 않으면(실제 모드, 후속 BE) 테스트 현재 결과로 둔다.
 // 가운데는 다시 정했으면 그 결과 카드(공개 후보), 아니면 카드 크기의 점선 빈 칸이 "다시 정하기" 버튼이다
-function typeShift(data, navigate) {
-  const box = element('div', 'my-type-shift-wrap');
-  const row = element('div', 'my-type-shift');
+// 초심 · 재심 · 최근 세 칸의 카드(없으면 null). 성향카드 화면의 줄과 내 정보 수정의 겹친 카드가 같이 쓴다
+function typeSlotsOf(data) {
   const initial = data.initialPersonality === undefined ? data.personality : data.initialPersonality;
   const tested = Boolean(initial?.type) && initial.source !== 'JUDGMENT'; // 첫 테스트를 했는지(처음 카드 · 다시 정하기는 첫 테스트가 있어야 한다)
   const retakeDone = retakeState(data) === 'done';
-  const slots = {
-    initial: tested ? { type: initial.type, caption: '초심 · 성향 테스트' } : null,
-    retake: retakeDone ? { type: data.baselineRetake.result.type, caption: ['재심', retakeAfter(data.baselineRetake.result)].filter(Boolean).join(' · ') } : null,
-    current: data.judgmentPersonality?.type ? { type: data.judgmentPersonality.type, caption: `최근 · 체험 ${data.judgmentPersonality.experienceCount ?? 3}건 평균` } : null,
+  return {
+    initial,
+    tested,
+    retakeDone,
+    slots: {
+      initial: tested ? { type: initial.type, caption: '초심 · 성향 테스트' } : null,
+      retake: retakeDone ? { type: data.baselineRetake.result.type, caption: ['재심', retakeAfter(data.baselineRetake.result)].filter(Boolean).join(' · ') } : null,
+      current: data.judgmentPersonality?.type ? { type: data.judgmentPersonality.type, caption: `최근 · 체험 ${data.judgmentPersonality.experienceCount ?? 3}건 평균` } : null,
+    },
   };
+}
+
+// 내 정보 수정: 성향카드를 겹쳐 놓고(y는 같고 x만 다르다) 오른쪽에 버튼을 둔다. 고른 카드가 맨 왼쪽 · 맨 앞이다.
+// 오른쪽: 초심 · 재심 · 최근 버튼 세 개(고른 카드가 커뮤니티에 보이는 공개 카드, 성향카드 화면의 "공개" 도장과 같은 값),
+// 첫 성향 테스트 하기 · 재심 청구하기(할 수 없어도 숨기지 않고 비활성으로 둔다. 끝나면 문구만 바뀐다), 성향카드 보기
+// 내 정보 수정의 칸 하나: 제목 → 조작 → 설명(있으면). myProfileEdit.css의 .edit-field와 같은 모양
+function editGroup(title, control, hint) {
+  const group = element('div', 'edit-field');
+  group.append(element('span', 'edit-label', title), control, ...(hint ? [element('p', 'edit-hint', hint)] : []));
+  return group;
+}
+
+function typeFan(data, navigate, go) {
+  const { slots, tested, retakeDone } = typeSlotsOf(data);
+  const names = { initial: '초심', retake: '재심', current: '최근' };
+  const box = element('div', 'edit-fan');
+  const stack = element('div', 'edit-fan-stack');
+  const side = element('div', 'edit-fan-side');
+  const bar = element('div', 'edit-actions');
+  const buttons = new Map();
+  const paint = () => {
+    const shown = shownSlot(slots);
+    const order = shown ? [shown, ...SHOWN_SLOTS.filter((key) => key !== shown && slots[key])] : [];
+    stack.style.setProperty('--n', String(Math.max(order.length, 1)));
+    stack.replaceChildren(...order.map((key, index) => {
+      const card = element('button', 'edit-fan-card');
+      card.type = 'button';
+      card.style.setProperty('--i', String(index));
+      card.style.zIndex = String(order.length - index);
+      card.setAttribute('aria-pressed', String(key === shown));
+      card.setAttribute('aria-label', `${names[key]}: ${slots[key].type.name}${key === shown ? ', 공개 카드' : ''}. 누르면 이 카드를 맨 앞에 두고 커뮤니티에 보여요`);
+      const face = typeFace(slots[key].type);
+      face.removeAttribute('role'); // 버튼 이름(aria-label)이 대신한다
+      card.append(face);
+      if (key === shown) card.append(shownStamp());
+      card.addEventListener('click', () => pick(key));
+      return card;
+    }));
+    buttons.forEach((node, key) => node.setAttribute('aria-pressed', String(key === shown)));
+  };
+  const pick = (key) => {
+    if (key === shownSlot(slots)) return;
+    saveSettingsOr(setShownCard(key));
+    paint();
+  };
+  SHOWN_SLOTS.forEach((key) => {
+    const node = element('button', 'secondary-button edit-choice', names[key]);
+    node.type = 'button';
+    node.disabled = !slots[key];
+    if (!slots[key]) node.setAttribute('aria-label', `${names[key]}: 아직 카드가 없어요`);
+    node.addEventListener('click', () => pick(key));
+    buttons.set(key, node);
+    bar.append(node);
+  });
+  // 첫 테스트 · 재심 청구: 상태에 따라 문구와 눌림만 바뀐다
+  const state = retakeState(data);
+  const firstTest = button(tested ? '첫 성향 테스트 완료' : '첫 성향 테스트 하기', () => navigate('test'), 'secondary-button');
+  firstTest.disabled = tested;
+  const claim = button(retakeDone ? '재심 완료' : '재심 청구하기', () => openRetakeDialog({ data, navigate, from: claim }), 'secondary-button');
+  claim.disabled = state !== 'ready';
+  // 재심을 마친 뒤의 "체험 n건 뒤" 안내는 성향카드 화면에만 둔다
+  const note = retakeDone ? null
+    : tested ? `성향 테스트를 한 번 더 해서 성향카드를 다시 정해요. ${RETAKE_NOTES[state]}` : '재심은 첫 성향 테스트 뒤에 청구할 수 있어요.';
+  const tests = element('div', 'edit-actions'); // 첫 테스트 옆에 재심
+  tests.append(firstTest, claim);
+  paint();
+  // 오른쪽은 내 정보 수정의 다른 칸과 같은 묶음(제목 → 조작 → 설명)을 세 개 쌓는다
+  side.append(
+    editGroup('커뮤니티에 보일 성향카드', bar, '고른 카드가 맨 앞에 놓이고 "공개" 도장이 찍혀요. 프로필카드와 성향카드는 커뮤니티에서 항상 다른 사람에게 보여요.'),
+    editGroup('성향 테스트 하러 가기', tests, note),
+    editGroup('성향카드 확인 및 꾸미기', button('성향카드에서 보기', () => go('type'), 'secondary-button')),
+  );
+  box.append(stack, side);
+  return box;
+}
+
+function typeShift(data, navigate) {
+  const box = element('div', 'my-type-shift-wrap');
+  const row = element('div', 'my-type-shift');
+  const { initial, tested, retakeDone, slots } = typeSlotsOf(data);
   const shown = shownSlot(slots);
   const side = (caption, node) => {
     const figure = element('figure', 'my-type-shift-side');
@@ -752,7 +846,7 @@ function typeShift(data, navigate) {
     if (key === shown) pick.append(shownStamp());
     pick.addEventListener('click', () => {
       if (key === shown) return;
-      setShownCard(key);
+      saveSettingsOr(setShownCard(key));
       const next = typeShift(data, navigate);
       box.replaceWith(next);
       next.querySelector(`[data-slot="${key}"]`)?.focus();
@@ -795,7 +889,7 @@ function typeShift(data, navigate) {
     arrow(),
     now,
   );
-  box.append(row, element('p', 'my-shown-hint', '"공개" 도장이 찍힌 카드가 커뮤니티에서 다른 사람에게 보여요. 카드를 눌러 바꿀 수 있어요. 지금은 이 브라우저에만 저장돼요.'));
+  box.append(row, element('p', 'my-shown-hint', '"공개" 도장이 찍힌 카드가 커뮤니티에서 다른 사람에게 보여요. 카드를 눌러 바꿀 수 있어요.'));
   return box;
 }
 
@@ -1066,7 +1160,7 @@ function typeChoiceSection(data, onPick) {
     input.name = 'profile-card-type';
     input.value = choice.pick;
     input.checked = choice === selected || (!selected && index === 0);
-    input.addEventListener('change', () => { setProfileCardType(choice.pick); onPick(); });
+    input.addEventListener('change', () => { saveSettingsOr(setProfileCardType(choice.pick)); onPick(); });
     label.append(input, element('span', '', choice.label));
     list.append(label);
   });
@@ -1249,7 +1343,7 @@ function renderView(view, data, navigate, go, api) {
     type: () => renderTypePage(data, navigate),
     collection: () => renderCollection(data.experiences),
     cases: () => renderCases(data.experiences ?? [], navigate, api),
-    edit: () => renderProfileEdit({ api, navigate, go, data }),
+    edit: () => renderProfileEdit({ api, navigate, go, data, card: () => profileCardOf(data, go), fan: () => typeFan(data, navigate, go) }),
     settings: () => renderShell('환경 설정은 곧 열려요.'),
   }[view]();
   return [head, body];
@@ -1281,6 +1375,7 @@ export async function renderMyPage(container, { api, navigate, view, from }) {
   const shown = VIEWS[view] ? view : null;
   const go = (next) => navigate('me', next ? { view: next } : {});
   apiRef = api;
+  configureProfileSettings(api.patchProfileSettings ? (settings) => api.patchProfileSettings(settings) : null); // 공개 카드 · 카드 아래 성향 · 한 줄 소개 저장(P-8)
 
   // 커피잔에서 왔으면 표시를 지운다(새로고침 · 뒤로 가기로는 되풀이하지 않는다). 눌렀던 커피잔이 사라졌으니 화면이 그려진 뒤 포커스를 제목으로 옮긴다
   let arrived = false;
@@ -1310,6 +1405,7 @@ export async function renderMyPage(container, { api, navigate, view, from }) {
     try {
       const fresh = await api.getMyPage();
       if (!active()) return;
+      hydrateProfileSettings(fresh.profileSettings);
       cache = fresh;
       applyBookmark(fresh.profileDeco);
       document.querySelector('.my-deco-dialog')?.close();

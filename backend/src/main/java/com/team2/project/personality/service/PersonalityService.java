@@ -4,6 +4,7 @@ import com.team2.project.common.exception.BusinessException;
 import com.team2.project.common.exception.ErrorCode;
 import com.team2.project.experience.domain.AnonymousUser;
 import com.team2.project.experience.repository.AnonymousUserRepository;
+import com.team2.project.experience.repository.ExperienceRepository;
 import com.team2.project.experience.service.AnonymousUserService;
 import com.team2.project.experience.service.AnonymousUserService.IssuedAnonymousUser;
 import com.team2.project.personality.domain.PersonalityAnswer;
@@ -51,6 +52,7 @@ public class PersonalityService {
 	private final PersonalityChoiceRepository choiceRepository;
 	private final PersonalityTypeRepository typeRepository;
 	private final PersonalityResultRepository resultRepository;
+	private final ExperienceRepository experienceRepository;
 
 	/** P-1 문항 목록 (활성 문항, 출제 순서) */
 	@Transactional(readOnly = true)
@@ -61,12 +63,15 @@ public class PersonalityService {
 
 	/**
 	 * P-2 응답 제출. 쿠키가 없으면 익명 ID를 발급하고, 재응시면 이전 현재 결과를 이력으로 내린다.
-	 * 같은 사용자의 제출은 사용자 행을 잠가 차례로 처리한다 (#124 리뷰)
+	 * 같은 사용자의 제출은 사용자 행을 잠가 차례로 처리한다 (#124 리뷰).
+	 * 성향카드 재심(baseline: true)은 사용자당 1회다. 이미 했으면 409이고 결과를 저장하지 않는다.
+	 * 테스트한 적이 없으면 첫 테스트로 처리하고 횟수는 쓰지 않는다(API 명세 P-2 v0.50, BE-104)
 	 */
 	@Transactional
 	public SubmitResult submit(Optional<UUID> anonymousId, PersonalitySubmitRequest request) {
 		List<PersonalityQuestion> questions = questionRepository.findAllByActiveTrueOrderByDisplayOrderAsc();
 		Map<Long, Integer> values = validateAnswers(request, questions);
+		boolean baseline = request.baselineRequested();	// 형식 검사는 익명 ID 발급 전에 끝낸다(P-2)
 		Map<Long, Map<Integer, PersonalityChoice>> choices = choiceRepository
 			.findAllByQuestion_IdInOrderByQuestion_IdAscDisplayOrderAsc(values.keySet()).stream()
 			.collect(Collectors.groupingBy(choice -> choice.getQuestion().getId(),
@@ -88,13 +93,19 @@ public class PersonalityService {
 		IssuedAnonymousUser issued = anonymousUserService.getOrIssue(anonymousId);
 		UUID userId = issued.user().getId();
 		anonymousUserRepository.findByIdForUpdate(userId).orElseThrow();
+		// 사용자 행을 잠근 뒤에 보므로 같은 사용자의 동시 재심 제출도 차례로 판정된다. V28 부분 유니크가 마지막 방어선이다
+		boolean retake = baseline && resultRepository.existsByAnonymousUser_Id(userId);
+		if (retake && resultRepository.existsByAnonymousUser_IdAndBaselineRetakeTrue(userId)) {
+			throw new BusinessException(ErrorCode.BASELINE_RETAKE_USED);
+		}
+		int completedCases = Math.toIntExact(experienceRepository.countCompletedCases(userId));
 		// clearCurrent는 영속성 컨텍스트를 비운다. 앞에서 읽은 엔티티는 detach되므로 아래에서 다시 잡는다 (#124 리뷰)
 		resultRepository.clearCurrent(userId);
 		AnonymousUser user = anonymousUserRepository.getReferenceById(userId);
 		PersonalityType type = typeRepository.findById(score.typeCode()).orElseThrow(
 			() -> new IllegalStateException("유형 시드가 없음: " + score.typeCode()));
 		PersonalityResult saved = resultRepository.saveAndFlush(
-			PersonalityResult.create(user, type, score.axisScores(), answers));
+			PersonalityResult.create(user, type, score.axisScores(), answers, completedCases, retake));
 		return new SubmitResult(PersonalityResultResponse.from(saved), issued.issued() ? userId : null);
 	}
 
