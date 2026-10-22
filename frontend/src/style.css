@@ -168,6 +168,11 @@ body {
   --palette-factor-light-tint: #e2efe6;
   --palette-shadow: #0f0a19;
   --palette-desk-text: #ead9c6;
+  /* 판사의 집무실 바닥 (S-01 아래, FE-87). 위에서 내려다본 마루 · 회벽 */
+  --palette-floor-plank: #45291a;
+  --palette-floor-seam: #22140b;
+  --palette-wall: #d8cfc1;
+  --palette-wall-shade: #b9ad9b;
 
   --color-desk-floor: var(--palette-wood-950);     /* 책상 밖 바탕 · 푸터 */
   --color-desk-wood: var(--palette-wood-500);
@@ -211,6 +216,16 @@ body {
   --color-desk-news-ink-soft: var(--palette-news-ink-soft);
   --color-desk-shadow: var(--palette-shadow);      /* 물건 그림자 (투명도는 color-mix로) */
   --color-desk-text: var(--palette-desk-text);     /* 책상 위 · 푸터 글자 */
+  --color-room-floor: var(--palette-wood-950);     /* 집무실 마루 (FE-87) */
+  --color-room-plank: var(--palette-floor-plank);  /* 마루 널 한 장씩 어긋난 결 */
+  --color-room-seam: var(--palette-floor-seam);    /* 널 사이 이음매 */
+  --color-room-wall: var(--palette-wall);          /* 평면도의 벽 (위에서 본 벽 윗면) */
+  --color-room-wall-shade: var(--palette-wall-shade);
+  --color-room-rug: var(--palette-felt-700);       /* 러그 = 책상 패드와 같은 네이비 */
+  --color-room-rug-edge: var(--palette-felt-900);
+  --color-room-light: var(--palette-wood-glow);    /* 문틈으로 들어오는 복도 불빛 */
+  --color-room-table: var(--palette-wood-700);     /* 낮은 탁자 */
+  --color-room-chair: var(--palette-felt-900);     /* 판사 의자 가죽 */
 
   /* 판결 체험 무대 (components/stage.css) */
   --color-stage-news: var(--palette-news);

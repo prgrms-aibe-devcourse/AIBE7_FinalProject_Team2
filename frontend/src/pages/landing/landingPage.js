@@ -18,10 +18,24 @@ import { openFeedbackDialog } from './feedbackDialog.js';
 // 책상은 그 뒤에서 흐려진다 — caseListPage.js). 신문 들기는 이 연출에만 쓰는 예외다.
 // 커피잔을 누르면(FE-44) 커다란 커피잔이 우상단에서 빠르게 날아와 서는 동안 책상이 마이페이지로 바뀌고, 다 바뀌면 잔이 오른쪽으로 빠져나간다(utils/coffeeDive.js).
 // 노트북을 누르면(FE-47) 화면이 눈을 감듯 어두워졌다가 눈을 뜨듯 열리며 커뮤니티가 나온다 — 컴퓨터 부팅(utils/laptopBoot.js).
-// 책상에는 내로(신문 위쪽, 포스트잇에 가려 있음) · 남불(펜 아래)이 볼을 괴고 엎드려 있다(장식).
+// 책상에는 내로(신문 위쪽, 포스트잇에 가려 있음)가 볼을 괴고 엎드려 있다(장식). 남불은 아래 집무실 안내문 종이 밑에 숨어 있다(FE-87).
 
-// 책상 그림의 기준 좌표계. 화면 너비에 맞춰 통째로 줄인다(--desk-scale)
+// 책상 그림의 기준 좌표계(1672 × 941). 첫 화면(헤더 아래)에 책상만 꽉 차게 보이도록(FE-87) 화면 안에 들어가게 통째로 줄이고(--desk-scale),
+// 남는 쪽으로 책상을 늘린다. 소품 배치 순서(왼쪽 노트북 · 엽서 · 펜, 가운데 신문, 오른쪽 커피잔 · 서류철)는 어떤 크기에서도 그대로다.
+// - 화면이 기준보다 넓으면(--dx = 한쪽에 더해진 기준 px): 패드 둘레 · 패드 · 물건 사이가 고르게 넓어진다(왼쪽 0.5 · 가운데 1 · 오른쪽 1.5배).
+// - 화면이 기준보다 높으면: 늘어난 높이를 먼저 신문이 흡수한다. 신문만 아래로 길어지고(--ng, 기본 높이의 1.2배까지) 다른 물건은 비율을 바꾸지 않는다.
+//   그래도 남는 높이(--r)는 나무 띠보다 패드 안에 더 준다: 패드 위 · 아래 나무 0.1씩, 패드 안 0.8. 위 소품(노트북 · 커피잔)은 패드 윗변, 아래 소품(엽서 · 펜)은
+//   패드 아랫변에 원래처럼 붙고, 신문(가운데) · 서류철 위아래가 0.4씩 넓어진다.
+//   남는 높이가 클수록(--t, 0 ~ 1) 소품을 모양 그대로 큼직하게 키우고 신문 밖 소품은 조금 더 기울인다(landing.css).
+// - 화면 폭이 좁아 책상이 작게 줄어들수록(--u, 0 ~ 1) 작은 소품(엽서 · 펜 · 서류철 · 커피잔 · 포스트잇 · 내로)을 더 키운다.
+//   작은 소품은 둘 중 큰 쪽(--k = max(t, u))을 따른다. 신문 · 노트북은 --t만 따른다
 const SCENE_WIDTH = 1672;
+const SCENE_HEIGHT = 941;
+const NEWS_GROW_MAX = 142; // 신문 높이 712 → 854(기본의 1.2배까지)
+const ROOMY = 800; // 신문이 흡수하고 남은 높이가 이만큼(기준 px)이면 소품을 가장 크게 · 가장 많이 기울인다(--t = 1)
+const SMALL_FROM = .85; // 책상 배율이 이보다 작아지면(약 1420px 폭 아래) 작은 소품을 키우기 시작해
+const SMALL_SPAN = .35; // 배율 .5(약 840px 폭)에서 가장 크게(--u = 1)
+const NEWS_LINE = 15; // 신문 기사 한 줄 높이(기준 px, 10px × 1.5). 길어진 신문은 사진 · 첫 문단 · 아래 기사가 나눠 채운다(landing.css)
 
 // 물건(메뉴) 목록. route가 없으면 준비 중이라 누를 수 없다(낭독기에는 "준비 중"으로 읽힌다).
 // 화면이 생기면 route에 화면 이름(routes.js의 name)만 넣으면 된다.
@@ -36,24 +50,29 @@ const OBJECTS = {
 };
 const ADMIN_MUG = { label: '관리자 페이지', route: homeRoute(), mobileText: '사건 검수 · 운영' }; // 관리자로 로그인하면 마이페이지 자리 (FE-53)
 const SOON = '곧 열려요';
-// 책상 위 내로 · 남불(기준 좌표계 px, 오른쪽 끝에서 잰다 — FE-50에서 소품 배치를 좌우로 뒤집었다).
+// 책상 위 내로(기준 좌표계 px, 오른쪽 끝에서 잰다 — FE-50에서 소품 배치를 좌우로 뒤집었다). 남불은 FE-87에서 아래 집무실 안내문 밑으로 옮겼다
 const CHEEKS = [
-  { who: 'naero', look: 'idle-sorry', right: 644, top: 2, height: 170 }, // 가운데에서 살짝 오른쪽(가운데 x ≈ 960), 턱이 신문 위쪽 가장자리에 걸친다
-  { who: 'nambul', look: 'idle-thinking', right: 1300, top: 782, height: 158 },
+  { who: 'naero', look: 'idle-sorry', height: 170, right: 'calc(644px + var(--dx, 0px) - var(--t, 0) * 37px)', top: 'calc(2px + var(--r, 0px) * .1)' }, // 패드 윗변 위 나무에(네이비 패드와 겹치지 않게)
 ];
 let newsCache = null; // 사건 목록(API 1) 마지막 응답
 const LIFT_MS = 380; // 신문을 집어 드는 시간(landing.css .is-held와 같게). 그 뒤 지면이 아래에서 올라온다
 // 6막에서 "메인으로" 올 때: 보던 지면이 줌아웃(제자리에서 .82배)과 페이드아웃을 함께 하며 책상이 드러난다
 const FADE_MS = 800;
 
-// 서비스 소개(FE-50): "뉴스만 본 나 → 모든 사실을 본 나"를 잇는 한 줄. 양 끝은 상태, 가운데 두 지점은 되돌릴 수 없는 판단이다
+// 서비스 소개(FE-50 → FE-87 집무실 바닥): "뉴스만 본 나 → 모든 사실을 본 나"를 러그 위 서류 네 장으로 잇는다.
+// 양 끝은 상태(pole), 가운데 두 장은 되돌릴 수 없는 판단이다. 서류는 체험에서 실제로 만나는 물건 모양이다(신문 스크랩 · 첫인상 엽서 · 판결 파일철 · 판결문)
 const TRACK = [
-  { pole: '뉴스만 본 나' },
-  { title: '첫인상', text: '기사 제목과 재연만 보고 먼저 고릅니다. 고른 뒤에는 바꿀 수 없어요.' },
-  { title: '내 판결', text: '사실관계 · 양측 주장 · 법률을 차례로 읽고 형량을 정합니다. 확정하면 바꿀 수 없어요.' },
-  { pole: '모든 사실을 본 나' },
+  { pole: true, kind: 'clip', title: '뉴스만 본 나', text: '기사 제목과 사진 한 장으로 사건을 처음 만나요.' },
+  { kind: 'postcard', title: '첫인상', text: '기사 제목과 재연만 보고 먼저 고릅니다. 고른 뒤에는 바꿀 수 없어요.' },
+  { kind: 'folder', title: '내 판결', text: '사실관계 · 양측 주장 · 법률을 차례로 읽고 형량을 정합니다. 확정하면 바꿀 수 없어요.' },
+  { pole: true, kind: 'sheet', title: '모든 사실을 본 나', text: '세 판결을 나란히 놓고 무엇이 달랐는지 봐요.' },
 ];
-const VERDICTS = ['내 판결', 'AI 판결', '실제 판결']; // 세 판결은 대등하다(같은 모양으로 나란히)
+// 세 판결은 대등하다(같은 종이 · 같은 크기로 나란히). 실제 판결만 봉인 띠를 두른다(마지막 전까지 보이지 않는다는 뜻, PRODUCT.md)
+const VERDICTS = [
+  { name: '내 판결', text: '기록을 다 읽고 내가 정한 형량' },
+  { name: 'AI 판결', text: '같은 기록으로 AI 판사가 낸 판단. 법률 자문이 아니에요.' },
+  { name: '실제 판결', text: '재판부가 실제로 선고한 형량', sealed: '맨 마지막에 공개' },
+];
 
 // 서류철 그림 (장식). 색은 클래스로 landing.css에서 칠한다
 const FOLDER_SVG = `
@@ -183,12 +202,12 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
   mug.setAttribute('aria-hidden', 'true');
   mug.append(span('mug-coffee'));
 
-  const cheeks = CHEEKS.map(({ who, look, right, top, height }) => {
+  const cheeks = CHEEKS.map(({ who, look, height, right, top }) => {
     const image = element('img', `desk-cheek cheek-${who}`);
     image.src = `/images/characters/cheek/${who}_${look}.webp`;
     image.alt = '';
     image.setAttribute('aria-hidden', 'true');
-    Object.assign(image.style, { right: `${right}px`, top: `${top}px`, height: `${height}px` });
+    Object.assign(image.style, { right, top, height: `${height}px` });
     image.addEventListener('error', () => image.remove(), { once: true });
     return image;
   });
@@ -208,8 +227,10 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
   postcard.tabIndex = -1; // 펜과 같은 동작이라 Tab · 낭독기에는 펜 하나만 남긴다
   postcard.setAttribute('aria-hidden', 'true');
 
+  // 포스트잇을 맨 앞에 둬 첫 Tab이 포스트잇이다(가장 먼저 눌러 보길 바라는 놀이). 그리는 순서는 z-index가 정한다
   world.append(
     deco('desk-wood'), deco('desk-pad'),
+    rescue,
     postcard,
     deskObject('pen', span('pen-art')),
     deskObject('folder', folderArt),
@@ -217,7 +238,6 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
     deskObject('laptop', laptop),
     deskObject('mug', mug),
     ...cheeks,
-    rescue,
   );
 
   // 신문 집어 들기: 신문을 들어 올린 뒤 지면(S-02)으로 간다. 지면은 화면 아래에서 올라오고 이 책상은 그 뒤에서 흐려진다(caseListPage.js).
@@ -247,8 +267,28 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
   // 서류철: 성향 테스트 철이 화면 아래에서 올라온다(personality.css folder-rise). 헤더 · 서비스 소개 버튼으로 가면 연출 없이 바로 간다
   const ACTIONS = { news: lift, mug: sip, laptop: openLaptop, folder: () => navigate('test', { from: 'desk' }), pen: openFeedbackDialog, postcard: openFeedbackDialog };
 
-  // 기준 좌표계(1672px)를 화면 너비에 맞춘다
-  const fit = () => world.style.setProperty('--desk-scale', String(scene.clientWidth / SCENE_WIDTH));
+  // 기준 좌표계가 장면(첫 화면) 안에 들어가게 줄이고, 남는 쪽으로 책상을 늘린다(위 SCENE_WIDTH 주석)
+  const fit = () => {
+    const width = scene.clientWidth;
+    const height = scene.clientHeight;
+    if (!width || !height) return;
+    const scale = Math.min(width / SCENE_WIDTH, height / SCENE_HEIGHT);
+    const extra = height / scale - SCENE_HEIGHT; // 늘어난 높이(기준 px)
+    const newsGrow = Math.min(extra * .75, NEWS_GROW_MAX);
+    const set = (name, px) => world.style.setProperty(name, `${px}px`);
+    world.style.setProperty('--desk-scale', String(scale));
+    root.style.setProperty('--desk-px', String(scale)); // 아래 집무실 의자가 책상 소품과 같은 배율을 쓰도록
+    set('--dx', (width / scale - SCENE_WIDTH) / 2);
+    set('--ng', newsGrow);
+    set('--r', extra - newsGrow);
+    const roomy = Math.min(1, Math.max(0, extra - newsGrow) / ROOMY);
+    const small = Math.min(1, Math.max(0, (SMALL_FROM - scale) / SMALL_SPAN));
+    world.style.setProperty('--t', String(roomy));
+    world.style.setProperty('--k', String(Math.max(roomy, small)));
+    // 길어진 신문: 머리기사 단(사진 · 첫 문단)에 0.45, 아래 기사 사진에 0.2, 아래 기사 글에 0.35
+    world.style.setProperty('--lead-lines', String(9 + Math.floor((newsGrow * .45) / NEWS_LINE)));
+    world.style.setProperty('--rec-lines', String(4 + Math.floor((newsGrow * .35) / NEWS_LINE)));
+  };
   const observer = new ResizeObserver(() => {
     if (!root.isConnected) { observer.disconnect(); return; }
     fit();
@@ -301,36 +341,72 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
   });
   mobile.append(mobileHead, mobileList);
 
-  // ---- 서비스 소개 ----
-  // 책상 밖 바닥에 펼쳐 둔 신문 한 장(FE-50). 왼쪽 "뉴스만 본 나"에서 오른쪽 "모든 사실을 본 나"까지 한 줄로 잇고,
-  // 줄 위 두 지점이 되돌릴 수 없는 판단이다. 첫인상 전까지는 아는 것이 적어 점선, 그 뒤는 실선이다.
-  // 아래 단은 세 판결을 같은 모양으로 나란히 둔다
-  const heading = element('h2', '', '이렇게 체험해요');
+  // ---- 서비스 소개: 판사의 집무실 바닥 (FE-87) ----
+  // 책상(위)에서 카메라가 그대로 아래로 내려가며 방바닥을 내려다본다. 2D 평면 탑뷰라 원근 없이 그린다(문은 평면도 기호: 문짝 + 열리는 원호).
+  // 위에서부터: 책상 밑으로 밀어 넣은 판사 의자(등받이만 보임) · 책상이 바닥에 드리운 그림자 → 안내문 → 러그 위 서류 네 장(흐름, 왼쪽 위에서 오른쪽 아래로 흩어 놓음) → 낮은 탁자 위 판결문 세 장 → 아래 벽의 열린 문(사건 목록)
+  const room = element('div', 'room');
+  // 안내문 종이(놀이): 왼쪽 위 귀퉁이가 늘 들썩이고, 누르면 종이가 러그 쪽(거의 아래, 살짝 오른쪽)으로 러그 위를 지나 끌려가며 치워지고 밑에 숨어 있던 남불이 드러난다.
+  // 화면 제목(h2)은 종이와 따로 둔다(종이를 치워도 구역 이름은 남는다). 종이 위 글자는 장식이다
+  const heading = element('h2', 'visually-hidden', '이렇게 체험해요');
   heading.id = 'feature-heading';
-  const track = element('ol', 'feature-track');
-  TRACK.forEach(({ pole, title, text }) => {
-    const stop = element('li', pole ? 'track-pole' : 'track-stop');
-    const mark = span('track-mark');
-    mark.setAttribute('aria-hidden', 'true');
-    if (pole) stop.append(mark, element('strong', '', pole));
-    else stop.append(mark, element('h3', '', title), element('p', '', text));
-    track.append(stop);
+  const spot = element('div', 'room-note-spot');
+  const nambul = element('img', 'room-nambul');
+  nambul.src = '/images/characters/cheek/nambul_idle-thinking.webp';
+  nambul.alt = '';
+  nambul.setAttribute('aria-hidden', 'true');
+  nambul.addEventListener('error', () => nambul.remove(), { once: true });
+  const note = button('', () => {
+    note.classList.add('is-peeling');
+    peelOff(note, { from: 'rotate(-4deg)', to: 'translate(70px, 340px) rotate(8deg)', focusTarget: () => null });
+  }, 'room-note');
+  note.setAttribute('aria-label', '안내문 종이 치우기');
+  const paper = span('room-note-paper');
+  paper.setAttribute('aria-hidden', 'true');
+  paper.append(span('room-note-title', '이렇게 체험해요')); // 설명은 러그 위 서류가 대신한다
+  note.append(paper);
+  spot.append(nambul, note);
+  const head = element('div', 'room-head');
+  const chair = deco('room-chair');
+  chair.append(span('chair-back'), span('chair-arm'), span('chair-arm'), span('chair-seat'));
+  head.append(heading, spot);
+
+  // 러그 위 서류: 순서가 곧 흐름이다(ol). 표시는 빈 원(모르는 나) → 마름모(되돌릴 수 없는 판단) → 꽉 찬 원(다 아는 나)
+  const rug = element('ol', 'room-rug');
+  TRACK.forEach(({ pole, kind, title, text }) => {
+    const paper = element('li', `room-paper paper-${kind}${pole ? ' track-pole' : ' track-stop'}`);
+    paper.append(deco('track-mark'), element(pole ? 'strong' : 'h3', 'paper-title', title), element('p', '', text));
+    if (kind === 'postcard') paper.append(deco('paper-stamp'));
+    rug.append(paper);
   });
-  const verdicts = element('div', 'feature-verdicts');
-  verdicts.setAttribute('aria-labelledby', 'verdicts-heading');
-  const verdictsHeading = element('h3', '', '세 판결을 나란히');
-  verdictsHeading.id = 'verdicts-heading';
+
+  const table = element('div', 'room-table');
+  table.setAttribute('role', 'group');
+  table.setAttribute('aria-labelledby', 'verdicts-heading');
+  const tableHeading = element('h3', '', '세 판결을 나란히');
+  tableHeading.id = 'verdicts-heading';
   const verdictList = element('ul', 'verdict-list');
-  verdictList.append(...VERDICTS.map((name) => element('li', '', name)));
-  verdicts.append(verdictsHeading, verdictList, element('p', 'verdict-note', '실제 판결은 맨 마지막에 공개돼요.'));
-  const introActions = element('div', 'feature-actions');
-  introActions.append(
-    button('사건 목록 보기', () => navigate('list'), 'primary-button'),
-    button('판결 성향 테스트부터', () => navigate('test'), 'secondary-button'),
-  );
-  const sheet = element('div', 'feature-sheet');
-  sheet.append(heading, track, verdicts, introActions);
-  intro.append(sheet);
+  verdictList.append(...VERDICTS.map(({ name, text, sealed }) => {
+    const item = element('li', sealed ? 'is-sealed' : '');
+    item.append(element('b', '', name), element('p', '', text));
+    if (sealed) item.append(element('p', 'verdict-seal', sealed));
+    return item;
+  }));
+  table.append(tableHeading, verdictList);
+
+  // 아래 벽: 열린 문 = 사건 목록. 문 앞 발판이 버튼이고, 문틈으로 복도 불빛이 바닥에 길게 들어온다.
+  // 문 옆 바닥의 크라프트 서류철 = 성향 테스트(책상 위 서류철과 같은 물건)
+  const exit = element('div', 'room-exit');
+  const door = element('div', 'room-door');
+  door.append(deco('door-light'), deco('door-leaf'), deco('door-swing'),
+    button('', () => navigate('list'), 'room-door-button'));
+  const doorButton = door.lastChild;
+  doorButton.append(span('door-mat-title', '사건 목록 보기'), span('door-mat-sub', '법정으로 가는 문'));
+  const testSlip = button('', () => navigate('test'), 'room-test');
+  testSlip.append(span('room-test-title', '판결 성향 테스트부터'), span('room-test-sub', '16문항, 3분이면 끝나요'));
+  exit.append(testSlip, door);
+
+  room.append(chair, deco('room-desk-shade'), head, rug, table, exit); // 의자는 책상 밑으로 밀어 넣어 위쪽이 책상에 가린다
+  intro.append(room);
 
   root.append(scene, mobile, intro, renderSiteFooter({ navigate })); // 공통 헤더는 라우터가 붙인다(FE-56)
   container.replaceChildren(root);
