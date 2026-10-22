@@ -180,6 +180,7 @@ img.my-sash-icon.is-missing { visibility: hidden; }
 .my-mini-card .my-sash-icon { display: none; } /* 견본은 작아서 아이콘을 그리지 않는다 */
 .my-card:not(.deco-sash-none) .my-card-name { padding-inline: calc(var(--sash-x) + var(--sash-w) - 4.7cqi); } /* 위 닉네임이 책갈피에 가리지 않게 */
 .my-card.is-profile .my-card-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; align-self: center; } /* 닉네임은 한 줄, 길면 ... */
+.my-card.is-profile .my-card-note { font: 900 10.6cqi/1.3 var(--font-heading); letter-spacing: -.02em; } /* 하단 성향 이름은 성향카드 상단 이름(.my-card-name)과 같은 글꼴 */
 .my-card.is-profile .my-card-note.is-empty { opacity: .7; }
 .my-card.is-preview { cursor: default; }
 @media (hover: hover) and (pointer: fine) { .my-card.is-preview:hover { transform: none; } }
@@ -255,7 +256,7 @@ img.my-sash-icon.is-missing { visibility: hidden; }
 }
 .change-gain::before {
   content: ''; position: absolute; inset: 0; --base: max(0px, 100% - 10px);
-  background: repeating-linear-gradient(-45deg, var(--color-card) 0 1.5px, color-mix(in srgb, var(--ink) 65%, var(--color-heading)) 1.5px 5px); /* 막대보다 진한 바탕에 흰 빗금 */
+  background: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--ink) 45%, var(--color-card)) 0 1.5px, color-mix(in srgb, var(--ink) 65%, var(--color-heading)) 1.5px 5px); /* 막대보다 진한 바탕에 화살표색을 밝힌 빗금 */
 }
 .change-gain.is-strict { --ink: var(--axis-strict); } /* 엄격이 늘었다: 오른쪽을 가리킨다 */
 .change-gain.is-strict::before { clip-path: polygon(0 4px, var(--base) 4px, var(--base) 0, 100% 50%, var(--base) 100%, var(--base) 14px, 0 14px); }
@@ -282,10 +283,15 @@ img.my-sash-icon.is-missing { visibility: hidden; }
 .trend-line { fill: none; stroke: var(--color-accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .trend-dot { fill: var(--color-accent); stroke: var(--color-card); stroke-width: 2; }
 .trend-dot.is-test { fill: var(--color-card); stroke: var(--color-accent); }
-.trend-retake-line { stroke: var(--color-heading); stroke-width: 1.25; stroke-dasharray: 3 3; } /* 성향카드를 다시 정한 때(FE-77) */
+.trend-anchor-line { stroke: var(--color-heading); stroke-width: 1.25; stroke-dasharray: 3 3; } /* 기준점(초심 · 재심 · 최근) 세로 점선(FE-77) */
 .trend-tick.is-retake { fill: var(--color-heading); font-weight: 700; }
 .change-sub-title { margin: 22px 0 10px; font: 700 var(--text-body)/1.5 var(--font-heading); color: var(--color-heading); }
 .trend-dot.is-current { fill: var(--color-desk-coffee); } /* 변경폭의 지금 점과 같은 진한 커피색 */
+/* 강조한 칸(내 결과 지면의 이 사건, FE-75): 세로 띠 · 진한 눈금 · 갈색 점 */
+.trend-focus { fill: color-mix(in srgb, var(--color-label) 16%, transparent); }
+.trend-tick.is-focus { fill: var(--color-heading); font-weight: 800; }
+.trend-dot.is-focus { fill: var(--color-label); }
+.trend-table tr.is-focus :is(th, td) { font-weight: 700; }
 .trend-hit { fill: transparent; cursor: default; }
 .trend-tip {
   position: absolute; z-index: 2; display: grid; gap: 2px; width: max-content; max-width: 220px; padding: 6px 10px; border-radius: 6px;
@@ -512,11 +518,15 @@ img.my-sash-icon.is-missing { visibility: hidden; }
 /* 체험한 사건 */
 .my-empty { padding: 28px 20px; border: 1px dashed var(--color-border-strong); border-radius: 12px; background: var(--color-surface); text-align: center; }
 .my-empty p { margin: 0 0 16px; color: var(--color-muted); }
-.my-cases { margin: 0; padding: 0; list-style: none; }
-.my-case { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 16px 0; border-top: 1px solid var(--color-border); }
+.my-cases { display: grid; grid-template-columns: minmax(0, 1fr) minmax(14em, max-content); column-gap: 12px; margin: 0; padding: 0; list-style: none; } /* 오른쪽 칸은 모든 줄이 같은 폭(버튼 둘이 들어가는 폭)이라 안내 문구를 버튼들 가운데에 맞출 수 있다 */
+.my-case { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: center; padding: 16px 0; border-top: 1px solid var(--color-border); }
 .my-case:first-child { border-top: 0; }
 .my-case p { margin: 0; }
 .my-case-title { font-weight: 700; }
+.my-case-link { color: inherit; text-decoration: none; }
+.my-case-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+.my-case-link:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; border-radius: 2px; text-decoration: underline; text-underline-offset: 3px; }
+.my-case-hint { width: 0; min-width: 100%; color: var(--color-muted); font-size: var(--text-small); text-align: center; text-wrap: balance; } /* 체험 중인 사건: 버튼 자리 안내. 폭은 칸에 맞춰(0 + min 100%) 칸 폭을 키우지 않고 가운데에 둔다 */
 .my-case-status { color: var(--color-muted); font-size: var(--text-small); }
 
 @media (prefers-reduced-motion: reduce) {
@@ -538,7 +548,9 @@ img.my-sash-icon.is-missing { visibility: hidden; }
   .my-thumbs img { width: 40px; height: 50px; }
   .my-count { font-size: var(--text-title-2); }
   .my-view-head h1 { font-size: var(--text-title-2); }
-  .my-case { flex-direction: column; align-items: flex-start; }
+  .my-cases { grid-template-columns: minmax(0, 1fr); }
+  .my-case { grid-template-columns: minmax(0, 1fr); justify-items: start; gap: 12px; }
+  .my-case-hint { width: auto; min-width: 0; text-align: left; }
   .collection-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .my-type-hero { grid-template-columns: minmax(0, 1fr); justify-items: center; gap: 28px; }
   .my-type-hero .my-type-section { justify-self: stretch; }
@@ -565,4 +577,12 @@ img.my-sash-icon.is-missing { visibility: hidden; }
   .my-deco-dialog-preview { position: static; justify-self: center; }
   .my-deco-dialog-preview .my-card { width: 200px; } /* 데스크톱과 같은 폭: 좌우 책갈피를 비켜도 닉네임이 들어간다 */
 }
-.my-case-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.my-case-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+/* 페이지 이동 줄(10건 넘을 때): 가운데 정렬, 지금 페이지는 채운 버튼 */
+.my-pager { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 20px; }
+.my-pager :is(.my-pager-page, .my-pager-step) { min-width: 36px; min-height: 36px; padding: 4px 10px; font-size: var(--text-small); }
+.my-pager .my-pager-page.is-current { background: var(--color-heading); border-color: var(--color-heading); color: var(--color-card); }
+.my-pager button:disabled { opacity: .45; cursor: default; }
+@media (pointer: coarse) { .my-pager :is(.my-pager-page, .my-pager-step) { min-height: 44px; min-width: 44px; } }
+.my-case-actions :is(.primary-button, .secondary-button) { min-height: 36px; padding: 6px 14px; font-size: var(--text-small); } /* 기본 버튼(44px)보다 작게. 간격은 그대로 */
+@media (pointer: coarse) { .my-case-actions :is(.primary-button, .secondary-button) { min-height: 44px; } } /* 터치는 누를 자리를 줄이지 않는다 */

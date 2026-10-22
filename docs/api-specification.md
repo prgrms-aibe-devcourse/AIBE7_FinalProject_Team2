@@ -47,7 +47,12 @@
 | v0.43 | 2026-10-21 | **BE-96 · BE-97 후속 (BE-98, FE-71 리뷰)** — P-7 잠김 검사가 저장값과 같은 칸(저장할 때도 쓰이던 칸)은 다시 거절하지 않도록 보완(표가 바뀌어 저장값이 잠겨도 다른 칸 저장 가능). 익명 ID를 새로 발급하는 요청(API 2 · P-2 · P-7)은 그날 출석도 함께 남긴다(첫 방문날 누락 방지). P-6 · P-7 설명 갱신 |
 | v0.44 | 2026-10-21 | **P-5 `judgmentPersonality`를 현재 판결 성향으로 변경 (FE-70)** — 첫 회차 체험 **전체 평균**에서 **최근 첫 회차 체험 3건의 평균**으로 바꾼다(`type` · `null` 규칙은 그대로, `experienceCount`는 평균에 쓴 체험 수 = 최대 3). 마이페이지 성향카드 화면이 "지금"을 이 값으로 보여 준다. 서버 구현(`MyPageService`)은 후속 백엔드 작업 |
 | v0.45 | 2026-10-21 | 10장 카카오 로그인 추가 (BE-62, WBS 7.4.2) — M-3 시작 `GET /api/v1/auth/oauth2/authorization/kakao` · M-4 콜백 `GET /api/v1/auth/oauth2/callback/kakao`(브라우저 이동, JSON API 아님). 성공 시 리프레시 토큰 쿠키(`NLNB_RT`)만 심고 화면 경로로 리다이렉트, 토큰은 URL에 싣지 않음. 익명 ID 쿠키 연결 규칙. **10장 번호를 M-N으로 변경**: 재발급 · 로그아웃(BE-94)의 A-16 · A-17이 8-4 운영 메뉴 API 예약 번호(A-16 ~ A-41)와 겹쳐 M-1 · M-2로 |
-| v0.46 | 2026-10-22 | **최초 성향 · 성향카드 다시 정하기 추가 (FE-77)** — 화면 이름은 초심(처음 성향) · 재심(다시 정하기) · 최근(현재 판결 성향). 결과 공통 형식에 `completedExperienceCount`(응시 시점에 완료한 사건 수) 추가. P-2 요청에 `baseline`(성향카드 다시 정하기, 사용자당 1회, 이미 썼으면 409 `BASELINE_RETAKE_USED`) 추가. 일반 응시는 그대로 횟수 제한 없음. P-5 응답에 `initialPersonality`(처음 성향: 첫 테스트, 테스트 전이면 첫 판결 체험 3건) · `baselineRetake`(다시 정한 결과 · 가능 여부) 추가. 1-5에 `BASELINE_RETAKE_USED` 추가. 서버 구현은 후속 백엔드 작업 |
+| v0.47 | 2026-10-21 | **사건 등록 적재 A-14-1 신설 (BE-93 2차)** — `POST /admin/case-imports/{importId}/load`. 생성 결과를 사건(DRAFT) · 섹션 · 형벌 규칙 · 판단 요소 · 원본 판결문 · AI · 재판부 판결 후보로 만든다. **A-15가 SUCCEEDED가 된 뒤 관리자가 따로 누른다**(번호는 A-16 ~ A-41 예약 때문에 A-14-1) — 2초마다 불리는 조회에서 적재하면 같은 사건이 여러 번 만들어질 수 있다. 적재가 끝나면 A-15의 `caseId`가 채워진다(1차에 비워 두었던 값). 에러 코드 `IMPORT_NOT_READY`(409) · `IMPORT_RESULT_INVALID`(422) 추가. 판결 후보는 **공개하지 않은 상태**로 들어가 A-9 승인을 기다린다 |
+| v0.46 | 2026-10-21 | **사건 등록 A-14 · A-15 서버 구현 (BE-93 1차)** — "초안" 표시를 떼고 담당을 BE-93으로. **A-14 머리말의 "파이프라인을 자바로 옮긴 뒤 구현한다"는 옛 결정이라 정정**: 파이프라인은 옮기지 않고 같은 서버의 내부 컨테이너로 띄워 백엔드가 내부망으로 부른다(COMMON-50). 에러 코드 `DUPLICATE_SOURCE` · `IMPORT_IN_PROGRESS` · `IMPORT_NOT_FOUND` · `IMPORT_UNAVAILABLE`(신설)을 1-5에 추가. **적재는 BE-93 2차**라 그때까지 A-15는 `SUCCEEDED`여도 `caseId`가 `null`임을 명시(차수별 표로 구분). **A-14의 "파이프라인이 적재까지 한다"도 정정**: 파이프라인의 `load` 단계는 운영 DB에 직접 쓰는 단계라 서비스에서 영구히 막아 두었고(COMMON-50), 1차 · 2차 모두 `SKIPPED`다 — 사건을 만드는 일은 서버가 한다. 항상 `SKIPPED`인 세 단계(`load` · `rag` · `contamination`)가 오류가 아님을 A-15에 명시. 요청 · 응답 형식은 바뀌지 않았다(화면 목 `adminMockApi.js` 그대로) |
+| v0.47 | 2026-10-21 | Rate limit 2차 (BE-63, WBS 7.4.6) — 1-5 `TOO_MANY_REQUESTS`에 **전용 제한 3곳** 추가: M-1 재발급 · M-2 로그아웃(IP별 합쳐서 분당 30번 · 순간 30번), A-2 관리자 로그인(IP별 분당 5번 · 순간 5번), M-3 카카오 로그인 시작(BE-62, 이미 적용). `/api` 공통 제한에 더해 걸리고(전용 제한은 POST만 센다) 응답 형식은 같다. `Retry-After`는 경로별(공통 1 · 재발급 · 로그아웃 · 카카오 시작 2 · 관리자 로그인 12초). 재발급이 429여도 로그아웃된 것이 아니다(401만 로그인 종료). 형식 변경 없음 |
+| v0.48 | 2026-10-22 | **발단 · 결론 사진 역할 칸 1단계 (BE-78 2차 검토, BE-101)** — A-13-4(사진 업로드)에 `role`(`ORIGIN` · `CONCLUSION`) 필수 필드 추가, 같은 역할로 다시 올리면 기존 사진을 교체(응답은 그대로 200이 아니라 201, id는 유지). A-13-5(목록) 응답에 `role` 추가(1단계 이전 사진은 `null`). **A-13-9(발단 · 결론 사진 삭제) 신설** — `DELETE /admin/cases/{caseId}/photos/incident/{role}`. 에러 코드 `INCIDENT_PHOTO_NOT_FOUND` 추가(1-5). A-13-6 ~ 8(신문 지면)의 `extraPhotos`는 `role`이 있는 사진만 발단 → 결론 순으로 내려준다(`display_order` 약속은 쓰지 않는다, `docs/decisions/BE-78.md`). **PR #243 리뷰 반영**: A-13-5의 "role 없는 행은 A-13-9로 지운다"는 설명이 틀려 있어 정정(A-13-9는 `{role}`로만 찾으므로 지울 수 없음), A-13-6 ~ 8의 `extraPhotos` 정렬이 "1단계는 `display_order`"임을 명시(`docs/decisions/BE-101.md` 참고). **(병합 메모) 이 PR 작업 중 BE-63 PR #236이 먼저 develop에 머지되며 v0.47 번호를 먼저 썼다 — 원래 v0.47로 적었던 걸 v0.48로 다시 매겼다(BE-101.md의 V26 마이그레이션 번호 충돌과 같은 상황)** |
+| v0.49 | 2026-10-22 | **P-5 `history[]`에 사건별 유형 `type` 추가 (BE-100, FE-75 리뷰 후속)** — 각 줄에 그 체험 한 건의 유형(유형 공통 형식 9-1)을 넣는다. 규칙은 `judgmentPersonality.type`과 같다(그 체험 하나만으로 낸 종합의 유형: 네 축 모두 값이 있을 때만, 글자는 정확한 분수의 부호 · 동점은 관대 글자). 없으면 `null`. 화면(내 결과 지면)이 축 점수로 유형을 직접 계산하고 P-4로 다시 받아 오던 경로를 없앤다(`docs/decisions/BE-100.md`) |
+| v0.50 | 2026-10-22 | **최초 성향 · 성향카드 다시 정하기 추가 (FE-77)** — 화면 이름은 초심(처음 성향) · 재심(다시 정하기) · 최근(현재 판결 성향). 결과 공통 형식에 `completedExperienceCount`(응시 시점에 완료한 사건 수) 추가. P-2 요청에 `baseline`(성향카드 다시 정하기, 사용자당 1회, 이미 썼으면 409 `BASELINE_RETAKE_USED`) 추가. 일반 응시는 그대로 횟수 제한 없음. P-5 응답에 `initialPersonality`(처음 성향: 첫 테스트, 테스트 전이면 첫 판결 체험 3건) · `baselineRetake`(다시 정한 결과 · 가능 여부) 추가. 1-5에 `BASELINE_RETAKE_USED` 추가. 서버 구현은 후속 백엔드 작업 |
 
 ---
 
@@ -138,9 +143,16 @@ json
 | 502 | `FILE_UPLOAD_FAILED` | (확장, 관리자 API, BE-91) S3 업로드 실패, 또는 설정(`S3_BUCKET_NAME`) 없음 | 다시 시도 안내 (A-13-3 · A-13-4) |
 | 400 | `INVALID_IMAGE_FILE` | (확장, 관리자 API, BE-91) 사진 파일이 없음 · 비어 있음 · 허용하지 않는 형식 | 입력 안내 (A-13-3 · A-13-4) |
 | 404 | `PAPER_NOT_FOUND` | (확장, 관리자 API, BE-92) 신문 지면을 아직 생성한 적 없음 | 먼저 생성하도록 안내 (A-13-7 · A-13-8) |
+| 404 | `INCIDENT_PHOTO_NOT_FOUND` | (확장, 관리자 API, BE-78 2차 검토 · BE-101) 그 역할의 발단 · 결론 사진이 없음 | 목록 다시 불러오기 (A-13-9) |
 | 409 | `DECO_LOCKED` | (확장, BE-96) 아직 열리지 않은 꾸미기를 저장하려 함. `details`에 잠긴 필드(`reason: DECO_LOCKED`) | 화면에서 잠긴 항목은 고를 수 없게 막는다. 오면 마이페이지를 다시 불러온다 (P-7) |
-| 409 | `BASELINE_RETAKE_USED` | (확장, 성향 API, v0.46) 성향카드 다시 정하기를 이미 씀 | 화면은 다 쓰면 버튼을 막는다. 오면 "재심은 이미 한 번 청구했어요" 안내 후 마이페이지를 다시 불러온다 (P-2) |
-| 429 | `TOO_MANY_REQUESTS` | (확장, BE-63) 같은 IP에서 `/api` 요청이 너무 많음(평균 초당 20번 · 순간 40번 초과). **백엔드가 아니라 운영 Nginx가 돌려준다** — 형식은 1-4와 같고 `Retry-After: 1` 헤더가 붙는다. 로컬 개발(Vite)에는 Nginx가 없어 나오지 않는다 | 일반 오류 안내. 자동으로 다시 보내지 않는다 |
+| 409 | `DUPLICATE_SOURCE` | (확장, 관리자 API, BE-93) 이미 등록한 사건번호. `details`에 어느 항목인지 담는다 | 입력 안내 (A-14) |
+| 409 | `IMPORT_IN_PROGRESS` | (확장, 관리자 API, BE-93) 실행 중인 등록이 있음. 한 번에 하나만 돌린다(외부 AI 호출 한도 보호) | 끝난 뒤 다시 시도 안내 (A-14) |
+| 404 | `IMPORT_NOT_FOUND` | (확장, 관리자 API, BE-93) 등록 작업이 없음 | 목록으로 안내 (A-15) |
+| 409 | `IMPORT_NOT_READY` | (확장, 관리자 API, BE-93 2차) 아직 적재할 수 없음 — 생성이 끝나지 않았거나 이미 적재한 등록 | 진행 상황 확인 안내 (A-14-1) |
+| 422 | `IMPORT_RESULT_INVALID` | (확장, 관리자 API, BE-93 2차) 생성 결과를 사건으로 만들 수 없음. `details`에 어느 값이 문제인지 담는다(예: `case.factors[2].label`) | 다시 생성하도록 안내 (A-14-1) |
+| 502 | `IMPORT_UNAVAILABLE` | (확장, 관리자 API, BE-93) 파이프라인 서비스에 닿지 못함, 또는 설정(`PIPELINE_SERVICE_URL`) 없음. **이 서비스를 켜지 않은 서버에서는 사건 등록만 꺼지고 나머지는 정상이다**(COMMON-50) | 다시 시도 · 관리자 문의 안내 (A-14) |
+| 409 | `BASELINE_RETAKE_USED` | (확장, 성향 API, v0.50) 성향카드 다시 정하기를 이미 씀 | 화면은 다 쓰면 버튼을 막는다. 오면 "재심은 이미 한 번 청구했어요" 안내 후 마이페이지를 다시 불러온다 (P-2) |
+| 429 | `TOO_MANY_REQUESTS` | (확장, BE-63) 같은 IP에서 `/api` 요청이 너무 많음(평균 초당 20번 · 순간 40번 초과). (v0.47) 아래 경로는 이에 더해 **더 엄격한 전용 제한**을 받는다: M-1 재발급 · M-2 로그아웃(IP별 둘을 합쳐 분당 30번 · 순간 30번), A-2 관리자 로그인(IP별 분당 5번 · 순간 5번), M-3 카카오 로그인 시작(IP별 분당 30번 · 순간 30번 + 전체 합계). 전용 제한은 POST(M-3은 GET)만 센다. **백엔드가 아니라 운영 Nginx가 돌려준다** — 형식은 1-4와 같고 `Retry-After`(초) 헤더가 붙는다: 공통 `1`, M-1 · M-2 · M-3 `2`, A-2 `12`. M-1이 429여도 리프레시 토큰은 그대로라 로그아웃된 것이 아니다. 로컬 개발(Vite)에는 Nginx가 없어 나오지 않는다 | 일반 오류 안내. 자동으로 다시 보내지 않는다 |
 | 500 | `INTERNAL_ERROR` | 서버 오류 | 일반 오류 안내 |
 - "이미 제출함"과 "순서가 맞지 않음"을 따로 나누지 않고 `INVALID_STATE` 하나로 둔다. 화면이 할 일은 둘 다 "`currentStatus`의 화면으로 이동"으로 같기 때문이다.
 - 관리자 오류는 쿠키 유무만으로 결정하지 않는다. 먼저 요청을 거절한 보안 필터의 오류를 반환하므로 미인증 POST도 CSRF 검사 실패 시 403일 수 있다. 인증·인가 구분과 응답 우선순위는 **8-1의 BE-88 검증 기준**을 따른다.
@@ -888,7 +900,8 @@ API 1 · 2 · 16은 상태와 관계없이 부를 수 있다. 표에 없는 조�
 **검수 흐름**
 
 ```text
-파이프라인 적재                      관리자 (S-19)
+사건이 DRAFT로 들어옴                관리자 (S-19)
+(오프라인 시드 적재 · 사건 등록 A-14)
 사건 DRAFT ─┬─ 판단 요소 축 확정 (A-12) ───────────────┐
             ├─ 사건 내용 수정 (A-11) ──────────────────┤ 처음 바꾸는 순간 DRAFT → REVIEW ⚠️
             ├─ AI 판결 후보 승인 · 반려 (A-9 · A-10) ──┤
@@ -919,8 +932,9 @@ API 1 · 2 · 16은 상태와 관계없이 부를 수 있다. 표에 없는 조�
 | A-11 | `PATCH /admin/cases/{caseId}` | 사건 내용 수정 | BE-43 |
 | A-12 | `PUT /admin/factors/{factorId}/value-axis` | 판단 요소 가치관 축 확정 | BE-43 · BE-48 |
 | A-13 | `POST /admin/cases/{caseId}/publish` | 사건 공개 | BE-43 |
-| A-14 | `POST /admin/case-imports` | 사건 등록 시작 (원본 판결문 → 파이프라인 실행) **초안** | 미정 (FE-45 제안) |
-| A-15 | `GET /admin/case-imports/{importId}` | 사건 등록 진행 상황 **초안** | 미정 (FE-45 제안) |
+| A-14 | `POST /admin/case-imports` | 사건 등록 시작 (원본 판결문 → 파이프라인 실행) | BE-93 (적재는 2차) |
+| A-15 | `GET /admin/case-imports/{importId}` | 사건 등록 진행 상황 | BE-93 |
+| A-14-1 | `POST /admin/case-imports/{importId}/load` | 사건 등록 적재 (생성 결과 → 사건 DRAFT) | BE-93 2차 |
 
 ### A-5. 검수 사건 목록 — `GET /admin/cases`
 
@@ -1264,47 +1278,72 @@ API 1 · 2 · 16은 상태와 관계없이 부를 수 있다. 표에 없는 조�
 | 409 `INVALID_STATE` | 이미 `PUBLISHED`(`CASE_PUBLISHED`) |
 | 502 `FILE_UPLOAD_FAILED` | S3 업로드 실패, 또는 설정 없음(`S3_BUCKET_NAME`) |
 
-### A-13-4. 사건 발단 사진 업로드 — `POST /admin/cases/{caseId}/photos/incident` (multipart/form-data)
+### A-13-4. 사건 발단 · 결론 사진 업로드 — `POST /admin/cases/{caseId}/photos/incident` (multipart/form-data)
 
-사건 안에서 쓰는 발단 사진 한 장을 올려 `case_incident_photo`에 순서대로 쌓는다(여러 번 불러 여러 장 추가). 201과 함께 추가된 사진을 돌려준다.
+> **역할 칸 1단계(v0.48, BE-78 2차 검토 · BE-101)**: 발단 · 결론 사진은 사건마다 역할별로 1장만 둔다
+> (`uk_case_incident_photo_case_role`). `role`을 새로 받고, 같은 역할로 다시 올리면 새 행을 만들지 않고
+> 기존 사진을 교체한다(id 유지) — "그 사건 사진 개수"로 채번하던 `display_order` 약속은 쓰지 않는다
+> (결정: `docs/decisions/BE-78.md`).
+
+사건 안에서 쓰는 발단 또는 결론 사진 한 장을 올려 `case_incident_photo`에 기록한다(역할별 1장, 같은 역할로 다시 올리면 교체). 201과 함께 저장된 사진을 돌려준다.
 
 | 필드(form) | 규칙 |
 | --- | --- |
 | `file` | 필수. A-13-3과 같은 형식 · 크기 제한 |
+| `role` | 필수. `ORIGIN`(발단) 또는 `CONCLUSION`(결론) |
 | `caption` | 선택, 200자 이하. 화면에 보일 설명 |
 | `prompt` | 선택, 자유 길이. 관리자가 이 사진을 만들 때 참고한 프롬프트(A-13-2 추천 그대로 또는 고친 것) — 감사 · 재참고용으로만 남긴다 |
 
 응답 201:
 
 ```json
-{ "id": 12, "imageUrl": "https://…/case-photos/case-7/incident-0-….jpg", "caption": "다툼이 격해진 순간", "displayOrder": 0, "createdAt": "2026-10-20T09:00:00Z" }
+{ "id": 12, "imageUrl": "https://…/case-photos/case-7/incident-origin-….jpg", "caption": "다툼이 격해진 순간", "role": "ORIGIN", "displayOrder": 0, "createdAt": "2026-10-20T09:00:00Z" }
 ```
 
-- `displayOrder`는 0부터 자동으로 매겨진다(사건마다 이미 있는 발단 사진 수).
+- `displayOrder`는 1단계 동안 `role`과 함께 유지하는 옛 순번 칸이다(`ORIGIN` = 0, `CONCLUSION` = 1). 다음 단계에서 뺀다 — 화면은 `role`을 본다.
 - S3 객체 키(`s3_key`)는 내부 기록용이라 응답에 내려주지 않는다. `prompt`는 관리자가 보냈을 때만 들어가고, 응답에는 내려주지 않는다(A-13-5 목록도 마찬가지 — 내부 기록 확인은 DB로 한다).
-- 공개한 사건은 추가할 수 없다. 감사 로그 `CASE_PHOTO_GENERATE`(`detail.type = "INCIDENT"`, `detail.photoId`)를 남긴다.
+- 교체 때 이전 S3 객체는 지우지 않는다 — 업로드 키에 시각이 붙어 매번 새 키이므로 캐시로 옛 사진이 다시 보이지 않는다.
+- 공개한 사건은 추가 · 교체할 수 없다. 감사 로그 `CASE_PHOTO_UPLOAD`(`detail.type = "INCIDENT"`, `detail.role`, `detail.photoId`)를 남긴다.
 
 | 거절 | 조건 |
 | --- | --- |
 | 400 `INVALID_IMAGE_FILE` | A-13-3과 같음 |
-| 400 `VALIDATION_ERROR` | `caption` 200자 초과 |
+| 400 `VALIDATION_ERROR` | `role`이 없거나 `ORIGIN` · `CONCLUSION`이 아님, `caption` 200자 초과 |
 | 404 `CASE_NOT_FOUND` | 사건이 없음 |
 | 409 `INVALID_STATE` | 이미 `PUBLISHED`(`CASE_PUBLISHED`) |
 | 502 `FILE_UPLOAD_FAILED` | A-13-3과 같음 |
 
-### A-13-5. 사건 발단 사진 목록 — `GET /admin/cases/{caseId}/photos/incident`
+### A-13-5. 사건 발단 · 결론 사진 목록 — `GET /admin/cases/{caseId}/photos/incident`
 
-사건에 쌓인 발단 사진을 순서대로 돌려준다(A-13-4 응답과 같은 형식의 배열, `prompt` 제외). 공개한 사건도 조회만은 된다.
+사건에 쌓인 발단 · 결론 사진을 돌려준다(A-13-4 응답과 같은 형식의 배열, `prompt` 제외). 공개한 사건도 조회만은 된다.
 
 ```json
 [
-  { "id": 12, "imageUrl": "…", "caption": "다툼이 격해진 순간", "displayOrder": 0, "createdAt": "…" }
+  { "id": 12, "imageUrl": "…", "caption": "다툼이 격해진 순간", "role": "ORIGIN", "displayOrder": 0, "createdAt": "…" }
 ]
 ```
+
+- `role`이 `null`인 행은 역할 칸 도입(v0.48) 이전에 사건당 3번째 이상 올라간 사진이다. 자리가 둘(발단 · 결론)뿐이라 역할을 매길 수 없어 신문 지면 · 공개 응답에서는 빠진다 — 이 목록에서만 정리 대상으로 노출된다. **A-13-9는 `{role}`(`ORIGIN` · `CONCLUSION`)로만 사진을 찾으므로 `role: null`인 행은 이 API로 지울 수 없다** — 정리가 필요하면 관리자가 DB에서 직접 확인한다(3단계 전 점검 항목, `docs/decisions/BE-78.md`).
 
 | 거절 | 조건 |
 | --- | --- |
 | 404 `CASE_NOT_FOUND` | 사건이 없음 |
+
+### A-13-9. 발단 · 결론 사진 삭제 — `DELETE /admin/cases/{caseId}/photos/incident/{role}` (v0.48, BE-78 2차 검토 · BE-101)
+
+> 번호가 A-13-6 ~ 8(신문 지면) 뒤인 이유: 신문 지면 API(BE-92)가 먼저 A-13-6 ~ 8을 썼고, 이 삭제
+> API는 그 뒤에 추가됐다. A-13-4 · 5(업로드 · 목록)와 같은 사진 API군이다.
+
+본문 없음. `{role}`(`ORIGIN` 또는 `CONCLUSION`)에 해당하는 사진 한 장을 지운다. 성공하면 204(본문 없음). S3 객체는 지우지 않는다(A-13-4와 같은 원칙 — 재업로드 때 새 키를 쓰므로 운영에 지장 없다, 정리는 후속 과제).
+
+- 공개한 사건은 지울 수 없다(업로드와 같은 규칙). 감사 로그 `CASE_PHOTO_DELETE`(`detail.role`)를 남긴다.
+
+| 거절 | 조건 |
+| --- | --- |
+| 400 `VALIDATION_ERROR` | `role`이 `ORIGIN` · `CONCLUSION`이 아님 |
+| 404 `CASE_NOT_FOUND` | 사건이 없음 |
+| 404 `INCIDENT_PHOTO_NOT_FOUND` | 그 역할의 사진이 없음 |
+| 409 `INVALID_STATE` | 이미 `PUBLISHED`(`CASE_PUBLISHED`) |
 
 ### A-13-6. 신문 지면 생성 — `POST /admin/cases/{caseId}/paper/generate`
 
@@ -1321,14 +1360,14 @@ API 1 · 2 · 16은 상태와 관계없이 부를 수 있다. 표에 없는 조�
   "caption": "다투는 두 사람",
   "article": ["문단 1", "문단 2"],
   "extraPhotos": [
-    { "id": 12, "imageUrl": "…", "caption": "다툼이 격해진 순간", "displayOrder": 0, "createdAt": "…" }
+    { "id": 12, "imageUrl": "…", "caption": "다툼이 격해진 순간", "role": "ORIGIN", "displayOrder": 0, "createdAt": "…" }
   ],
   "updatedAt": "2026-10-20T09:00:00Z"
 }
 ```
 
 - `photo`는 A-13-3으로 올린 사건 대표사진(`legal_case.thumbnail_url`)을 그대로 내려준다. 아직 안 올렸으면 `null`.
-- `extraPhotos`는 A-13-5와 같은 배열 — `case_incident_photo`를 그대로 재사용한다(새로 저장하지 않는다, `docs/decisions/BE-92.md`).
+- `extraPhotos`는 A-13-5와 같은 배열 — `case_incident_photo`를 그대로 재사용한다(새로 저장하지 않는다, `docs/decisions/BE-92.md`). **v0.48부터는 `role`이 있는 사진만 발단(`ORIGIN`) → 결론(`CONCLUSION`) 순으로 내려준다** — 역할 칸 도입 이전에 사건당 3번째 이상 올라간 사진(`role: null`)은 여기서 빠진다(`docs/decisions/BE-78.md`). **정렬은 1단계 동안 `display_order`로 한다**(`ORIGIN` = 0, `CONCLUSION` = 1로 고정 채번되므로 결과적으로 역할 순과 같다) — `display_order`를 빼는 2 · 3단계에서 역할 기준 정렬로 바꾼다.
 - 공개한 사건은 바꿀 수 없다(A-11과 같은 규칙). 감사 로그 `CASE_PAPER_GENERATE`를 남긴다.
 
 | 거절 | 조건 |
@@ -1370,11 +1409,15 @@ A-11과 같은 방식(보낸 필드만, `null` = 지움). `headline` · `article
 | 404 `PAPER_NOT_FOUND` | 아직 생성한 적 없음(먼저 A-13-6으로 생성해야 한다) |
 | 409 `INVALID_STATE` | 이미 `PUBLISHED`(`CASE_PUBLISHED`) |
 
-### A-14. 사건 등록 시작 — `POST /admin/case-imports` (초안)
+### A-14. 사건 등록 시작 — `POST /admin/case-imports`
 
-> **초안이다.** 파이프라인(`tools/ai-judgment`)을 자바로 옮긴 뒤 서버가 구현한다. 화면(FE-45)은 이 계약의 목으로 먼저 만들었고, 서버 구현 전에는 404가 온다. 계약이 바뀌면 이 절과 `adminMockApi.js`를 함께 고친다.
+> **1차 구현됨 (BE-93).** 파이프라인(`tools/ai-judgment`)은 **자바로 옮기지 않았다** — 같은 서버의 내부 컨테이너로 띄우고 백엔드가 내부망으로 부른다(COMMON-50, 결정: `docs/decisions/COMMON-50.md`). 화면(FE-45)은 이 계약의 목으로 먼저 만들었고, `adminMockApi.js`와 이 절은 함께 고친다.
+>
+> **아직 남은 것**: 적재(파이프라인 결과 → 사건 DRAFT 생성)는 BE-93 2차에서 한다. 그때까지 A-15는 `SUCCEEDED`가 되어도 `caseId`가 `null`이다.
 
-원본 판결문을 받아 파이프라인(비식별화 · 구조화 → 재판부 판결 정리 → 사전 학습 점검 → 참고 자료 검색 → AI 판결 생성 → 회차 선택 → 가치관 축 분류 → 적재)을 서버에서 실행한다. 오래 걸리므로 **작업만 만들고 202로 바로 돌려준다.**
+원본 판결문을 받아 파이프라인(비식별화 · 구조화 → 재판부 판결 정리 → 사전 학습 점검 → 참고 자료 검색 → AI 판결 생성 → 회차 선택 → 가치관 축 분류)을 서버에서 실행한다. 오래 걸리므로 **작업만 만들고 202로 바로 돌려준다.**
+
+**적재는 파이프라인이 하지 않는다.** 파이프라인에도 적재(`load`) 단계가 있지만 운영 DB에 직접 쓰는 단계라 서비스에서 **어떤 요청으로도 켜지지 않게 막아 두었다**(COMMON-50). 그래서 A-15의 `load`는 1차 · 2차 모두 항상 `SKIPPED`다. 사건을 만드는 일은 검수 흐름을 쥔 서버가 BE-93 2차에서 맡는다.
 
 ```json
 {
@@ -1408,11 +1451,12 @@ A-11과 같은 방식(보낸 필드만, `null` = 지움). `headline` · `article
 | --- | --- |
 | 400 `VALIDATION_ERROR` | 위 규칙 위반. `details`에 `[{ "field": "sources[0].originalText", "reason": "INVALID" }]` |
 | 409 `DUPLICATE_SOURCE` | 이미 등록한 사건번호 |
-| 409 `IMPORT_IN_PROGRESS` | 실행 중인 등록이 있음 (한 번에 하나만. 외부 AI 호출 한도 보호) |
+| 409 `IMPORT_IN_PROGRESS` | 실행 중인 등록이 있음 (한 번에 하나만. 외부 AI 호출 한도 보호). 서버와 파이프라인 서비스가 각각 막는다 — 서버 검사를 동시에 통과해도 서비스가 둘째를 거절한다(COMMON-50) |
+| 502 `IMPORT_UNAVAILABLE` | 파이프라인 서비스에 닿지 못함, 또는 `PIPELINE_SERVICE_URL`을 설정하지 않은 서버 |
 
 - 감사 로그 `CASE_IMPORT`를 남긴다(원문은 남기지 않고 사건번호 · 심급만).
 
-### A-15. 사건 등록 진행 상황 — `GET /admin/case-imports/{importId}` (초안)
+### A-15. 사건 등록 진행 상황 — `GET /admin/case-imports/{importId}`
 
 ```json
 {
@@ -1432,15 +1476,65 @@ A-11과 같은 방식(보낸 필드만, `null` = 지움). `headline` · `article
 ```
 
 - `status`: `QUEUED` · `RUNNING` · `SUCCEEDED` · `FAILED`. 화면은 끝날 때까지 2초마다 묻는다.
-- `stages[].name`: `extract` · `court` · `contamination` · `rag` · `generate` · `select` · `axis` · `load`. 건너뛴 단계는 `SKIPPED`, 값은 `PENDING` · `RUNNING` · `DONE` · `SKIPPED` · `FAILED`.
-- `SUCCEEDED`이면 `caseId`가 채워지고, 사건은 `DRAFT`로 적재된다. A-5 목록 · A-6 상세로 이어서 검수한다.
+- `stages[].name`: `extract` · `court` · `contamination` · `rag` · `generate` · `select` · `axis` · `load`. 값은 `PENDING` · `RUNNING` · `DONE` · `SKIPPED` · `FAILED`.
+  - **항상 `SKIPPED`인 단계가 셋 있다**: `load`(적재는 서버가 한다, A-14 참고) · `rag` · `contamination`. 서비스에서 끄고 시작하기 때문이며(COMMON-50) 오류가 아니다. 화면도 건너뜀으로 그린다.
+- `SUCCEEDED`일 때 `caseId`는 **서버 구현 차수에 따라 다르다.** 클라이언트는 `caseId`가 있을 때만 검수 화면으로 보낸다.
+
+  | 차수 | `SUCCEEDED` 응답 | 뜻 |
+  | --- | --- | --- |
+  | **BE-93 1차** (지금) | `caseId: null` | 파이프라인 생성까지 끝났고 **사건은 아직 만들어지지 않았다** |
+  | **BE-93 2차** | `caseId: <사건 ID>` | **A-14-1로 적재한 뒤** 채워진다. 사건이 `DRAFT`로 만들어져 A-5 목록 · A-6 상세로 이어서 검수한다 |
+
+  1차 범위에서 실제 모드의 사건 등록 메뉴는 열지 않는다(`adminMenu.js`의 `serverReady: false`, `docs/information-architecture.md`). 2차 전에 메뉴를 열려면 `caseId == null`을 다루는 처리가 화면에 먼저 있어야 한다.
+- 단계별 상태는 파이프라인만 알고 있어 서버가 마지막으로 받은 값을 저장해 둔다. 끝난 작업은 파이프라인에 다시 묻지 않고 그 값을 그대로 내려준다.
 - `FAILED`이면 `errorCode` · `message`를 내려 준다. `message`에 원문 · 모델 출력을 담지 않는다.
 
 | 거절 | 조건 |
 | --- | --- |
 | 404 `IMPORT_NOT_FOUND` | 등록 작업이 없음 |
 
-**에러 코드**: 1-5의 `JUDGMENT_NOT_FOUND` · `FACTOR_NOT_FOUND` · `DUPLICATE_TITLE` · `PUBLISH_NOT_READY`(v0.17 추가)와 공통 코드를 쓴다. 사건 등록 초안(A-14 · A-15)은 `DUPLICATE_SOURCE` · `IMPORT_IN_PROGRESS` · `IMPORT_NOT_FOUND`를 더 쓴다(1-5 목록에는 서버 구현 때 추가).
+### A-14-1. 사건 등록 적재 — `POST /admin/case-imports/{importId}/load`
+
+> 번호: A-16 ~ A-41은 8-4(운영 메뉴 API, 초안)가 예약해 두어, A-14(사건 등록)에 딸린 API라는 뜻으로 A-14-1을 쓴다 (A-13-N과 같은 방식).
+
+생성 결과를 **사건으로 만든다.** A-15가 `SUCCEEDED`가 된 뒤 관리자가 누른다.
+
+> **왜 A-15에서 자동으로 하지 않는가**: A-15는 화면이 2초마다 부르는 조회다. 거기서 적재하면 응답이 늦어지거나 끊겼을 때 같은 사건이 여러 번 만들어질 수 있다. 쓰기는 명시적인 호출 하나로 둔다.
+
+요청 본문은 없다. 응답은 **A-15와 같은 형식**이고, 적재가 끝났으므로 `caseId`가 채워져 있다.
+
+```json
+{ "importId": 1, "status": "SUCCEEDED", "stages": [ ... ], "caseId": 42,
+  "errorCode": null, "message": null, "createdAt": "...", "finishedAt": "..." }
+```
+
+**무엇이 만들어지는가**
+
+| 표 | 내용 |
+| --- | --- |
+| `legal_case` | 사건 (`DRAFT`) |
+| `case_section` · `penalty_rule` | 섹션 · 형벌 규칙 (`display_order` = 배열 순서) |
+| `factor` | 판단 요소. **`display_order`에 파이프라인의 `factorId`를 그대로 넣는다** — 판결의 작용 요소가 이 번호로 요소를 찾는다 |
+| `case_source` | 원본 판결문. **원문은 등록 요청에서 받아 둔 값을 옮긴다**(파이프라인은 원문을 돌려주지 않는다, FR-5-3) |
+| `judgment` (AI · COURT) + `judgment_factor` | 판결 후보 둘. **공개하지 않은 상태**로 들어간다 |
+| `ai_generation` | 어느 모델 · 몇 번째 회차를 왜 골랐는지 (`review_status: PENDING`) |
+
+- **판결은 공개 상태로 만들지 않는다.** 관리자가 A-9에서 승인해야 공개 후보가 된다 — 적재가 바로 공개하면 검수를 건너뛴다.
+- 재판부 판결 초안이 없으면 그 부분만 건너뛰고 사건은 만들어진다.
+- 모두 한 트랜잭션이다. 중간에 실패하면 **아무것도 만들어지지 않는다** — 반쯤 만들어진 사건은 관리자가 고칠 수도 지울 수도 없다.
+
+| 거절 | 조건 |
+| --- | --- |
+| 404 `IMPORT_NOT_FOUND` | 등록 작업이 없음 |
+| 409 `IMPORT_NOT_READY` | 생성이 아직 끝나지 않았거나, 이미 적재한 등록 |
+| 409 `DUPLICATE_TITLE` | 같은 제목의 사건이 이미 있음. 제목을 바꿔 다시 등록한다 |
+| 422 `IMPORT_RESULT_INVALID` | 생성 결과를 사건으로 만들 수 없음. `details[].field`에 어느 값이 문제인지 담는다 (예: `case.factors[2].label`, `report.factorExtras[factorId=5].summaryTag`) |
+| 502 `IMPORT_UNAVAILABLE` | 생성 결과를 가져오지 못함 |
+
+- 감사 로그 `CASE_IMPORT_LOAD`를 남긴다(만들어진 사건 번호와 등록 번호만).
+- 적재가 끝나면 파이프라인에 남은 작업을 지운다 — 판결문 원문이 서비스 볼륨에 남지 않게 한다(FR-5-3).
+
+**에러 코드**: 1-5의 `JUDGMENT_NOT_FOUND` · `FACTOR_NOT_FOUND` · `DUPLICATE_TITLE` · `PUBLISH_NOT_READY`(v0.17 추가)와 공통 코드를 쓴다. 사건 등록(A-14 · A-14-1 · A-15)은 `DUPLICATE_SOURCE` · `IMPORT_IN_PROGRESS` · `IMPORT_NOT_FOUND` · `IMPORT_UNAVAILABLE` · `IMPORT_NOT_READY` · `IMPORT_RESULT_INVALID`를 더 쓴다(BE-93에서 1-5 목록에 추가했다).
 
 - `CASE_NOT_FOUND`는 관리자 API에서 "사건이 없음"만 뜻한다(사용자 API는 "없거나 `PUBLISHED`가 아님").
 
@@ -1532,7 +1626,7 @@ json
 {  "type": { "shareId": "Qm7xK2pa", "name": "그럴 수도 있지형", "…": "…" },  "axisScores": { "APOLOGY_SINCERITY": 0.75, "FAULT_STANDARD": 0.625, "PRINCIPLE_RELATION": 1.0, "ORDER_OPPORTUNITY": 0.5 },  "testedAt": "2026-10-14T14:00:00+09:00",  "completedExperienceCount": 2}
 ```
 
-- `completedExperienceCount`(v0.46): 응시한 시점에 완료한 사건 수(완료한 회차가 하나라도 있는 사건, P-5 도전과제 `completed`와 같은 셈). "체험 n건 뒤에 다시 한 테스트"를 남기려고 저장한다. v0.46 전에 저장한 결과는 `null`
+- `completedExperienceCount`(v0.50): 응시한 시점에 완료한 사건 수(완료한 회차가 하나라도 있는 사건, P-5 도전과제 `completed`와 같은 셈). "체험 n건 뒤에 다시 한 테스트"를 남기려고 저장한다. v0.50 전에 저장한 결과는 `null`
 
 | # | 메서드 | 경로 | 설명 | 화면 |
 | --- | --- | --- | --- | --- |
@@ -1573,7 +1667,7 @@ json
 ```
 
 - `value`: 0 매우 A · 1 조금 A · 2 보통 · 3 조금 B · 4 매우 B. 서버는 그 문항의 `display_order = value + 1`인 선택지로 바꿔 채점한다(성향 산식 2장).
-- `baseline`(v0.46, 생략하면 `false`): **성향카드 다시 정하기**. 사용자당 한 번만 받는다. `true`인 결과는 처음 성향(P-5 `initialPersonality`)을 덮어쓰지 않고 다시 정한 결과(`baselineRetake.result`)로 따로 남는다. 테스트한 적이 없으면 이 제출이 첫 테스트(처음 성향)가 되고 다시 정하기 횟수는 쓰지 않는다(`false`와 같게 처리).
+- `baseline`(v0.50, 생략하면 `false`): **성향카드 다시 정하기**. 사용자당 한 번만 받는다. `true`인 결과는 처음 성향(P-5 `initialPersonality`)을 덮어쓰지 않고 다시 정한 결과(`baselineRetake.result`)로 따로 남는다. 테스트한 적이 없으면 이 제출이 첫 테스트(처음 성향)가 되고 다시 정하기 횟수는 쓰지 않는다(`false`와 같게 처리).
 
 **응답 201**: 결과 공통 형식(9-1).
 
@@ -1585,7 +1679,7 @@ json
 | 거절 | 조건 |
 | --- | --- |
 | 400 `VALIDATION_ERROR` | `answers` 없음, 활성 문항 중 빠진 문항 · 같은 문항 두 번, 없거나 비활성인 `questionId`, `value`가 0 ~ 4 정수가 아님(소수는 1-1 숫자 규칙대로 거절), `baseline`이 불리언이 아님 |
-| 409 `BASELINE_RETAKE_USED` | `baseline: true`인데 이미 다시 정한 결과가 있음(v0.46). 결과를 저장하지 않는다 |
+| 409 `BASELINE_RETAKE_USED` | `baseline: true`인데 이미 다시 정한 결과가 있음(v0.50). 결과를 저장하지 않는다 |
 
 ---
 
@@ -1616,16 +1710,16 @@ json
 json
 
 ```json
-{  "personality": { "type": { "shareId": "Qm7xK2pa", "…": "…" }, "axisScores": { "…": "…" }, "testedAt": "2026-10-14T14:00:00+09:00", "completedExperienceCount": 4 },  "initialPersonality": { "source": "TEST", "type": { "shareId": "Qm7xK2pa", "…": "…" }, "axisScores": { "…": "…" }, "testedAt": "2026-10-10T20:00:00+09:00", "completedExperienceCount": 0 },  "baselineRetake": { "available": false, "result": { "type": { "…": "…" }, "axisScores": { "…": "…" }, "testedAt": "2026-10-14T14:00:00+09:00", "completedExperienceCount": 4 } },  "judgmentPersonality": {    "axisScores": { "APOLOGY_SINCERITY": 0.75, "FAULT_STANDARD": 0.11, "PRINCIPLE_RELATION": 0.83, "ORDER_OPPORTUNITY": null },    "type": null,    "experienceCount": 3  },  "history": [    { "caseId": 1, "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건", "completedAt": "2026-10-14T15:00:00+09:00", "axisScores": { "APOLOGY_SINCERITY": 1.0, "FAULT_STANDARD": 0.0, "PRINCIPLE_RELATION": 1.0, "ORDER_OPPORTUNITY": null } }  ],  "experiences": [    { "caseId": 1, "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건", "crimeType": "MURDER", "status": "COMPLETED", "attemptNo": 1, "updatedAt": "2026-10-14T15:00:00+09:00" }  ],  "profile": { "attendanceDays": 3 },  "profileDeco": { "portrait": "/images/characters/standing/naero.webp", "frame": "wood", "background": "cream", "sashStyle": "long", "sashColorShort": "wine", "sashColorLong": "wine", "sashIconLeft": "none", "sashIconRight": "none", "bookmarkCharacter": "naero", "bookmarkFace": "happy", "bookmarkFaceStyle": "generated", "bookmarkColor": "bronze" },  "achievements": [    { "id": "first-case", "stat": "completed", "goal": 1, "value": 1, "cleared": true, "status": "CLEARED", "rewards": { "kinds": ["characters/scene"], "frames": ["wood"], "backgrounds": [], "sashStyles": ["long"], "sashColors": ["long:wine"], "sashIcons": [] } },    { "id": "collect-5", "stat": "collected", "goal": 5, "value": null, "cleared": false, "status": "PENDING", "rewards": { "kinds": ["cases"], "frames": [], "backgrounds": ["news"], "sashStyles": [], "sashColors": [], "sashIcons": ["naero", "nambul"] } },    { "…": "…" }  ],  "unlocked": { "kinds": ["characters/roles", "characters/standing", "characters/scene"], "frames": ["basic", "wood"], "backgrounds": ["cream"], "sashStyles": ["none", "short", "long"], "sashColors": ["short:wine", "long:wine"], "sashIcons": ["none", "star"] }}
+{  "personality": { "type": { "shareId": "Qm7xK2pa", "…": "…" }, "axisScores": { "…": "…" }, "testedAt": "2026-10-14T14:00:00+09:00", "completedExperienceCount": 4 },  "initialPersonality": { "source": "TEST", "type": { "shareId": "Qm7xK2pa", "…": "…" }, "axisScores": { "…": "…" }, "testedAt": "2026-10-10T20:00:00+09:00", "completedExperienceCount": 0 },  "baselineRetake": { "available": false, "result": { "type": { "…": "…" }, "axisScores": { "…": "…" }, "testedAt": "2026-10-14T14:00:00+09:00", "completedExperienceCount": 4 } },  "judgmentPersonality": {    "axisScores": { "APOLOGY_SINCERITY": 0.75, "FAULT_STANDARD": 0.11, "PRINCIPLE_RELATION": 0.83, "ORDER_OPPORTUNITY": null },    "type": null,    "experienceCount": 3  },  "history": [    { "caseId": 1, "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건", "completedAt": "2026-10-14T15:00:00+09:00", "axisScores": { "APOLOGY_SINCERITY": 1.0, "FAULT_STANDARD": 0.0, "PRINCIPLE_RELATION": 1.0, "ORDER_OPPORTUNITY": null }, "type": null }  ],  "experiences": [    { "caseId": 1, "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건", "crimeType": "MURDER", "status": "COMPLETED", "attemptNo": 1, "updatedAt": "2026-10-14T15:00:00+09:00" }  ],  "profile": { "attendanceDays": 3 },  "profileDeco": { "portrait": "/images/characters/standing/naero.webp", "frame": "wood", "background": "cream", "sashStyle": "long", "sashColorShort": "wine", "sashColorLong": "wine", "sashIconLeft": "none", "sashIconRight": "none", "bookmarkCharacter": "naero", "bookmarkFace": "happy", "bookmarkFaceStyle": "generated", "bookmarkColor": "bronze" },  "achievements": [    { "id": "first-case", "stat": "completed", "goal": 1, "value": 1, "cleared": true, "status": "CLEARED", "rewards": { "kinds": ["characters/scene"], "frames": ["wood"], "backgrounds": [], "sashStyles": ["long"], "sashColors": ["long:wine"], "sashIcons": [] } },    { "id": "collect-5", "stat": "collected", "goal": 5, "value": null, "cleared": false, "status": "PENDING", "rewards": { "kinds": ["cases"], "frames": [], "backgrounds": ["news"], "sashStyles": [], "sashColors": [], "sashIcons": ["naero", "nambul"] } },    { "…": "…" }  ],  "unlocked": { "kinds": ["characters/roles", "characters/standing", "characters/scene"], "frames": ["basic", "wood"], "backgrounds": ["cream"], "sashStyles": ["none", "short", "long"], "sashColors": ["short:wine", "long:wine"], "sashIcons": ["none", "star"] }}
 ```
 
 | 필드 | 설명 |
 | --- | --- |
 | `personality` | 테스트 현재 결과(결과 공통 형식). 테스트 전이면 `null` → 화면은 테스트 안내. **대표 캐릭터는 이 유형**(성향 산식 4장) |
-| `initialPersonality` | **처음 성향**(v0.46). 성향카드 화면 아래 "처음" 카드에 쓴다. 다시 응시해도 · 다시 정해도 바뀌지 않는다. 테스트한 적이 있으면 **첫 테스트 결과**(결과 공통 형식 + `source: "TEST"`). 테스트한 적이 없으면 **첫 판결**: 각 사건의 첫 회차 체험을 완료 순서로 **처음 3건** 평균한 유형(`source: "JUDGMENT"`, 모양은 `judgmentPersonality`와 같음 + `source`, `type`이 있을 때만). 나중에 테스트를 하면 그 첫 테스트가 대신한다. 둘 다 없으면 `null` |
-| `baselineRetake` | **성향카드 다시 정하기**(v0.46). `result`: 다시 정한 결과(결과 공통 형식), 아직이면 `null`. `available`: 지금 다시 정할 수 있는지 — 첫 테스트가 있고(`initialPersonality.source`가 `TEST`) 아직 다시 정하지 않았을 때만 `true`. 빈 마이페이지면 `{ "available": false, "result": null }` |
+| `initialPersonality` | **처음 성향**(v0.50). 성향카드 화면 아래 "처음" 카드에 쓴다. 다시 응시해도 · 다시 정해도 바뀌지 않는다. 테스트한 적이 있으면 **첫 테스트 결과**(결과 공통 형식 + `source: "TEST"`). 테스트한 적이 없으면 **첫 판결**: 각 사건의 첫 회차 체험을 완료 순서로 **처음 3건** 평균한 유형(`source: "JUDGMENT"`, 모양은 `judgmentPersonality`와 같음 + `source`, `type`이 있을 때만). 나중에 테스트를 하면 그 첫 테스트가 대신한다. 둘 다 없으면 `null` |
+| `baselineRetake` | **성향카드 다시 정하기**(v0.50). `result`: 다시 정한 결과(결과 공통 형식), 아직이면 `null`. `available`: 지금 다시 정할 수 있는지 — 첫 테스트가 있고(`initialPersonality.source`가 `TEST`) 아직 다시 정하지 않았을 때만 `true`. 빈 마이페이지면 `{ "available": false, "result": null }` |
 | `judgmentPersonality` | 현재 판결 성향(성향 산식 4장). 각 사건의 **첫 회차**만, 완료 순서로 **최근 3건**의 축마다 체험별 축 점수 평균(v0.44 전에는 전체 평균). 값이 없는 축은 `null`("체험 자료 없음"). `type`은 **네 축 모두 값이 있을 때만** 있고 아니면 `null`. 값이 있으면 **유형 공통 형식(9-1) 그대로**다(`shareId`로 그 유형의 공유 링크로 이어 갈 수 있다). 화면은 "판결에서는 ○○○○"처럼 테스트 유형과 나란히 보여 준다. 완료한 체험이 없거나 네 축 모두 `null`이면 `judgmentPersonality` 자체가 `null`("종합 없음"). `experienceCount`는 **평균에 쓴 체험 수**(성향 기여(`experience_personality`)가 저장된 첫 회차 체험 중 최근 것, 최대 3)다. 종합 점수를 낸 체험과 같은 집합이고, 축 자료가 모두 비어 있는 체험도 센다. 7.6.7(체험 완료 시 성향 저장) 전에 완료해 기여가 없는 체험은 세지 않는다 |
-| `history` | 성향 변화 흐름. 각 사건의 첫 회차 체험별 축 점수(값이 없는 축은 `null`), 완료 순 |
+| `history` | 성향 변화 흐름. 각 사건의 첫 회차 체험별 축 점수(값이 없는 축은 `null`), 완료 순. **`type`(v0.49)은 그 체험 한 건의 유형**이다 — `judgmentPersonality.type`과 같은 규칙으로 그 체험 하나만 넣어 정한다(**네 축 모두 값이 있을 때만**, 아니면 `null`, 값이 있으면 유형 공통 형식(9-1) 그대로). 내 결과 지면(`/me/cases/{caseId}`)의 "이 사건의 성향카드"에 쓴다. 최근 3건 평균인 `judgmentPersonality.type`과는 다를 수 있다 |
 | `experiences` | 체험한 사건. 사건마다 최근 회차 하나, 최근 순. `status`로 결과 다시 보기(`COMPLETED`) · 이어 하기를 나눈다(1-6) |
 | `profile.attendanceDays` | 누적 출석 일수(P-6, v0.41). 기록이 없거나 빈 마이페이지면 `0`. 로그인 전에는 기기(익명 ID)마다 따로 센다 |
 | `profileDeco` | 프로필 꾸미기(v0.42, BE-96). 저장한 적이 없거나 빈 마이페이지면 기본값(내로 스탠딩 · `basic` · `cream` · 책갈피 없음 · 내로 · `happy` · `generated` · `bronze`). **잠긴 값이어도 거절하지 않고 그대로** 내려 준다(표가 바뀌어 잠긴 경우 화면이 기본값으로 보여 준다). 필드는 P-7 요청과 같다 |
@@ -1635,7 +1729,7 @@ json
 - 쿠키가 없거나 기록이 없으면 `404`가 아니라 **빈 마이페이지**(`personality`·`initialPersonality`·`judgmentPersonality` `null`, 목록 빈 배열)를 `200`으로 준다. 마이페이지는 "아직 없음"을 안내하는 화면이기 때문이다.
 - `judgmentPersonality` · `history`는 체험 성향 저장(7.6.7, BE-64)이 붙은 뒤부터 채워진다. 그 전에는 각각 `null` · 빈 배열이다.
 - 판결 체험 중(S-03 ~ S-07)에 성향을 보여 주지 않는 규칙(FR-8-5)은 화면이 지킨다. 이 API는 마이페이지에서만 부른다.
-- 화면의 **현재 성향카드**(마이페이지 첫 화면 · 내 정보 수정 · 성향카드 화면 위쪽)는 `judgmentPersonality.type`, 없으면 `personality.type`이다. 처음 성향(`initialPersonality`)은 성향카드 화면 아래 "초심 → 재심 → 최근" 줄에만 나온다(v0.46).
+- 화면의 **현재 성향카드**(마이페이지 첫 화면 · 내 정보 수정 · 성향카드 화면 위쪽)는 `judgmentPersonality.type`, 없으면 `personality.type`이다. 처음 성향(`initialPersonality`)은 성향카드 화면 아래 "초심 → 재심 → 최근" 줄에만 나온다(v0.50).
 
 ---
 

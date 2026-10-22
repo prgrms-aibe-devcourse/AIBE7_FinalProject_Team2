@@ -52,7 +52,7 @@ const statusViewOf = (item) => STATUS_VIEW[item.myStatus] ?? (scriptFor(item.cas
 const PICK_LABEL = '사건 펼쳐 보기';
 const JUMP_LABEL = '3면에 계속'; // 신문의 이어 읽기 줄(jump line). 누르면 사건 지면(S-20, 3면)으로 간다
 const NAMBUL_FACE = '/images/characters/icon/generated/nambul_face-happy.webp';
-const UNFLIP_MS = 450; // 8막에서 뒤집고 온 빈 종이 · 바탕을 걷는 시간(그동안 기사가 페이드인한다)
+const UNFLIP_MS = 450; // 6막에서 뒤집고 온 빈 종이 · 바탕을 걷는 시간(그동안 기사가 페이드인한다)
 const RISE_WAIT_MS = 1200; // 책상에서 들고 올 때 지면이 다 그려지기를 기다리는 최대 시간(그동안 책상은 신문을 든 채로 남아 있다)
 const headlineOf = (item) => item.headline || item.title;
 function dense(paragraphs) {
@@ -81,7 +81,7 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
     history.replaceState({ ...history.state, extras: {} }, '');
     if (!reducedMotion()) root.classList.add(ghost ? 'is-rising' : 'is-arriving');
   }
-  // 8막 신문을 뒤집고 왔으면(FE-55 "다른 사건 보기") 넘겨받은 빈 뒷면(paperHandoff.js)이 화면을 덮고 있다.
+  // 6막 신문을 뒤집고 왔으면(FE-55 "다른 사건 보기") 넘겨받은 빈 뒷면(paperHandoff.js)이 화면을 덮고 있다.
   // 기사가 다 그려지면 같은 자리의 이 지면 위에 기사가 페이드인한다(unflip)
   const handed = from === 'flip' ? takePaper() : null;
   if (from === 'flip') {
@@ -123,7 +123,7 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
   paper.prepend(tip);
   root.append(desk, paper);
   if (ghost) root.insertBefore(ghost, paper);
-  // 뒤집고 왔으면 8막 지면과 같은 폭 · 같은 자리에 지면을 놓는다(같은 신문 한 장이 이어진다). 아래로 길어지는 부분은 화면 밖이다
+  // 뒤집고 왔으면 6막 지면과 같은 폭 · 같은 자리에 지면을 놓는다(같은 신문 한 장이 이어진다). 아래로 길어지는 부분은 화면 밖이다
   if (handed && root.classList.contains('is-unflipping')) {
     const top = Math.max(0, handed.rect.top);
     Object.assign(paper.style, { width: `${handed.rect.width}px`, marginLeft: 'auto', marginRight: 'auto', marginTop: `${top}px` });
@@ -156,7 +156,7 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
   }
 
   // 넘겨받은 빈 종이는 이 지면과 같은 자리 · 같은 크기로 덮여 있다. 기사가 다 그려지면 지면을 드러내 기사를 페이드인하고,
-  // 그 위의 빈 종이와 바탕(8막 화면 색)은 함께 걷는다 — 종이는 움직이지 않고 내용만 나타난다
+  // 그 위의 빈 종이와 바탕(6막 화면 색)은 함께 걷는다 — 종이는 움직이지 않고 내용만 나타난다
   async function unflip(paperHanded) {
     if (!active()) { paperHanded?.layer.remove(); return; }
     root.classList.add('is-revealing');

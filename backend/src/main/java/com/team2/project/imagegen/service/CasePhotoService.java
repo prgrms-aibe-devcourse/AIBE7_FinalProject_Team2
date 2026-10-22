@@ -8,6 +8,7 @@ import com.team2.project.imagegen.CasePhotoPromptClient;
 import com.team2.project.imagegen.ImageGenException;
 import com.team2.project.legalcase.domain.CaseIncidentPhoto;
 import com.team2.project.legalcase.domain.Factor;
+import com.team2.project.legalcase.domain.IncidentPhotoRole;
 import com.team2.project.legalcase.domain.LegalCase;
 import com.team2.project.legalcase.repository.CaseIncidentPhotoRepository;
 import com.team2.project.legalcase.repository.FactorRepository;
@@ -87,19 +88,36 @@ public class CasePhotoService {
 		return upload(image, key, contentType).url();
 	}
 
-	/** 사건 발단 사진 업로드 · DB 기록. 사건마다 순서대로 쌓인다 */
+	/**
+	 * 사건 발단 · 결론 사진 업로드 · DB 기록 (BE-78 2차 검토, BE-101). 같은 역할로 이미 올린 사진이
+	 * 있으면 그 행을 교체(UPDATE)한다 — id는 그대로다. 이전 S3 객체는 지우지 않는다(업로드 키에
+	 * 시각이 붙어 매번 새 키이므로 캐시로 옛 사진이 다시 보이지 않는다, BE-91과 같은 트레이드오프).
+	 */
 	@Transactional
-	public CaseIncidentPhoto uploadIncidentPhoto(LegalCase legalCase, byte[] image, String contentType, String caption,
-			String promptUsed) {
+	public CaseIncidentPhoto uploadIncidentPhoto(LegalCase legalCase, IncidentPhotoRole role, byte[] image,
+			String contentType, String caption, String promptUsed) {
 		validateImage(image, contentType);
 		validateCaption(caption);
-		int nextOrder = incidentPhotoRepository.countByLegalCaseId(legalCase.getId());
-		String key = "case-photos/case-" + legalCase.getId() + "/incident-" + nextOrder + "-"
-			+ System.currentTimeMillis() + extensionFor(contentType);
+		String key = "case-photos/case-" + legalCase.getId() + "/incident-" + role.name().toLowerCase(java.util.Locale.ROOT)
+			+ "-" + System.currentTimeMillis() + extensionFor(contentType);
 		FileStorage.UploadedFile uploaded = upload(image, key, contentType);
-		CaseIncidentPhoto photo = CaseIncidentPhoto.of(legalCase, uploaded.url(), uploaded.key(), caption, promptUsed,
-			nextOrder);
-		return incidentPhotoRepository.save(photo);
+
+		return incidentPhotoRepository.findByLegalCaseIdAndRole(legalCase.getId(), role)
+			.map(existing -> {
+				existing.replace(uploaded.url(), uploaded.key(), caption, promptUsed);
+				return existing;
+			})
+			.map(incidentPhotoRepository::save)
+			.orElseGet(() -> incidentPhotoRepository
+				.save(CaseIncidentPhoto.of(legalCase, uploaded.url(), uploaded.key(), caption, promptUsed, role)));
+	}
+
+	/** 발단 · 결론 사진 한 장 삭제 (A-13-9). 그 역할의 사진이 없으면 거절한다 */
+	@Transactional
+	public void deleteIncidentPhoto(Long caseId, IncidentPhotoRole role) {
+		CaseIncidentPhoto photo = incidentPhotoRepository.findByLegalCaseIdAndRole(caseId, role)
+			.orElseThrow(() -> new BusinessException(ErrorCode.INCIDENT_PHOTO_NOT_FOUND));
+		incidentPhotoRepository.delete(photo);
 	}
 
 	public List<CaseIncidentPhoto> listIncidentPhotos(Long caseId) {

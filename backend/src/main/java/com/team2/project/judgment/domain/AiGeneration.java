@@ -68,4 +68,27 @@ public class AiGeneration {
 		this.reviewStatus = status;
 		this.reviewedAt = at;
 	}
+
+	/**
+	 * 적재(BE-93 2차). 관리자 후검수를 기다리는 상태로 만든다.
+	 *
+	 * <p>{@code reviewStatus = PENDING}이고 검토자 · 검토 시각은 비운다 — 관리자가 A-9에서 승인하면 채워진다.
+	 *
+	 * @param inputSnapshot    AI에 넣은 프롬프트 (실제 판결이 섞이지 않았는지 확인용)
+	 * @param rawOutput        모델이 돌려준 판결 원본
+	 * @param generationReport 어느 모델 · 몇 번째 회차를 왜 골랐는지와 검증 경고 (관리자 후검수용)
+	 */
+	public static AiGeneration pending(Judgment judgment, String modelName, String promptVersion,
+			Map<String, Object> inputSnapshot, Map<String, Object> rawOutput,
+			Map<String, Object> generationReport) {
+		AiGeneration entity = new AiGeneration();
+		entity.judgment = judgment;
+		entity.modelName = modelName;
+		entity.promptVersion = promptVersion;
+		entity.inputSnapshot = inputSnapshot;
+		entity.rawOutput = rawOutput;
+		entity.generationReport = generationReport;
+		entity.reviewStatus = ReviewStatus.PENDING;
+		return entity;
+	}
 }

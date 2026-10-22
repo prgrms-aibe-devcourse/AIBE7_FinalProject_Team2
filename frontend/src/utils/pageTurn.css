@@ -43,7 +43,7 @@
 .laptop-boot-lid.is-top { top: 0; transform: translateY(-101%); }
 .laptop-boot-lid.is-bottom { bottom: 0; transform: translateY(101%); }
 
-/* 8막 신문 → 메인 책상 (utils/paperHandoff.js · landingPage.js). 지금 보던 지면을 본뜬 한 장이 책상 위 신문 자리로 물러난 뒤 뒤집힌다 */
+/* 6막 신문 → 메인 책상 (utils/paperHandoff.js · landingPage.js). 지금 보던 지면을 본뜬 한 장이 책상 위 신문 자리로 물러난 뒤 뒤집힌다 */
 .paper-hand-layer { position: fixed; inset: 0; z-index: 1000; overflow: hidden; pointer-events: none; perspective: 1800px; }
 .paper-hand-shade { position: absolute; inset: 0; }
 .paper-hand-shade.is-desk { background:

@@ -42,18 +42,26 @@ public record MyPageResponse(
 		static final Profile EMPTY = new Profile(0);
 	}
 
-	/** 종합 판결 성향. type은 네 축 모두 값이 있을 때만 있다 (성향 산식 4장) */
+	/**
+	 * 현재 판결 성향: 첫 회차 체험 중 완료 순서로 최근 3건의 평균 (성향 산식 4장 v0.8, API 명세 v0.44).
+	 * type은 네 축 모두 값이 있을 때만 있다. experienceCount는 평균에 쓴 체험 수(최대 3)
+	 */
 	public record JudgmentPersonality(Map<ValueAxis, Double> axisScores, PersonalityTypeResponse type,
 		int experienceCount) {
 	}
 
-	/** 성향 변화 흐름의 한 점: 사건의 첫 회차 체험별 축 점수 (자료 없는 축은 null) */
-	public record HistoryItem(Long caseId, String title, OffsetDateTime completedAt, Map<ValueAxis, Double> axisScores) {
+	/**
+	 * 성향 변화 흐름의 한 점: 사건의 첫 회차 체험별 축 점수 (자료 없는 축은 null).
+	 * type은 이 체험 한 건의 유형으로, judgmentPersonality.type과 같은 규칙이다(네 축 모두 값이 있을 때만, BE-100)
+	 */
+	public record HistoryItem(Long caseId, String title, OffsetDateTime completedAt, Map<ValueAxis, Double> axisScores,
+		PersonalityTypeResponse type) {
 
-		public static HistoryItem of(Experience experience, Instant fallbackCompletedAt, Map<ValueAxis, Double> axisScores) {
+		public static HistoryItem of(Experience experience, Instant fallbackCompletedAt, Map<ValueAxis, Double> axisScores,
+			PersonalityTypeResponse type) {
 			Instant completedAt = experience.getCompletedAt() != null ? experience.getCompletedAt() : fallbackCompletedAt;
 			return new HistoryItem(experience.getLegalCase().getId(), experience.getLegalCase().getTitle(),
-				kst(completedAt), axisScores);
+				kst(completedAt), axisScores, type);
 		}
 	}
 

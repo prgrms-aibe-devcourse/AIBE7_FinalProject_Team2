@@ -1,9 +1,9 @@
-/* 신문 지면 무대 (layout 'paper', FE-32): S-20 · S-03의 1 · 2막이 S-02 신문 지면(caseList.css) 위에 얹히는 화면의 스타일.
+/* 신문 지면 무대 (layout 'paper', FE-32): S-20 · S-03의 1막이 S-02 신문 지면(caseList.css) 위에 얹히는 화면의 스타일.
    components/stage.css(상자 무대)에서 분리했다 — styles.js에서 stage.css · caseList.css 뒤에 불러, 선택자를 길게 덧붙이지 않고 파일 순서로 이긴다.
    구성: 지면 아래 여백 → 막 칩(탭 줄) → 귀 버튼 · 머리글 → 기사(story) → 화면 아래 고정 대사창 · 캐릭터 · 조작 줄 → 엽서 팝업 → 모바일 보정 */
 
-/* ── 신문 지면 무대 (layout 'paper', FE-32): S-20 · 1 · 2막 ──
-   화면 전체가 S-02와 같은 신문 지면이다(지면 스타일은 caseList.css .case-list-page). 막 칩은 지면 탭 줄, 2막 카드는 지면 안 "독자 의견" 칸.
+/* ── 신문 지면 무대 (layout 'paper', FE-32): S-20 · 1막 ──
+   화면 전체가 S-02와 같은 신문 지면이다(지면 스타일은 caseList.css .case-list-page). 막 칩은 지면 탭 줄, 1막 엽서 카드는 지면 안 "독자 의견" 칸.
    캐릭터 · 대사창 · 조작 줄은 화면 아래에 고정되고, 지면은 그 위로 굴러간다(stage.js paperCamera) */
 .case-paper-page { padding-bottom: calc(300px + var(--safe-bottom)); padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); } /* 아래 고정 대사창 높이만큼 비워 맨 아래 문구까지 읽힌다(여백이 합쳐져 사라지지 않게 margin 대신 padding) */
 .case-paper-page .paper { margin-bottom: 0; }
@@ -17,7 +17,7 @@
 .stage-wrap.paper-mode .paper.spot [data-focus]:not(.is-on) { opacity: .72; } /* 다른 기사도 읽을 수 있게(본문 글자 대비 4.5:1 안팎) */
 :root { --safe-bottom: env(safe-area-inset-bottom, 0px); } /* 아이폰 홈 바 높이(index.html viewport-fit=cover) */
 :root:has(.stage-wrap.paper-mode) { scroll-padding-bottom: calc(300px + var(--safe-bottom)); } /* 아래 고정 대사창이 포커스를 가리지 않게 */
-.stage-wrap.paper-mode > .acts { display: none; } /* 막 칩은 상자 무대(3 ~ 8막)에서만. hidden 속성만으로는 .stage-wrap .acts의 display에 진다 */
+.stage-wrap.paper-mode > .acts { display: none; } /* 막 칩은 상자 무대(2 ~ 6막)에서만. hidden 속성만으로는 .stage-wrap .acts의 display에 진다 */
 /* 탭 줄 = 신문 목차(1면 · 3면 사회 · 오피니언 · 독자). S-02 유형 탭과 같은 모양 */
 .case-paper-page .page-index { display: flex; align-items: stretch; gap: 4px; overflow-x: auto; scrollbar-width: none; }
 .case-paper-page .page-index-item { position: relative; display: flex; align-items: baseline; gap: 6px; min-height: 44px; padding: 12px 14px 10px; border: 0; background: transparent; color: var(--color-muted); font: 700 14px/1.2 var(--font-body); white-space: nowrap; cursor: pointer; }
@@ -26,8 +26,8 @@
 .case-paper-page .page-index-item.is-current::after { content: ''; position: absolute; left: 12px; right: 12px; bottom: 0; height: 2px; background: var(--color-accent); }
 @media (hover: hover) and (pointer: fine) { .case-paper-page .page-index-item:not(.is-current):hover { color: var(--color-text); } }
 .case-paper-page .page-index-item:focus-visible { outline: 3px solid var(--color-focus); outline-offset: -3px; }
-/* 독자 의견 칸(2막 카드). 카드가 없으면 칸째 숨는다 */
-/* 독자 의견 엽서(2막 사전 판단): 지면 위 팝업. 가장자리는 항공우편 줄무늬, 오른쪽 위에 우표 · 소인. 뒤 지면은 어둡게 가린다 */
+/* 독자 의견 칸(1막 엽서 카드). 카드가 없으면 칸째 숨는다 */
+/* 독자 의견 엽서(1막 사전 판단): 지면 위 팝업. 가장자리는 항공우편 줄무늬, 오른쪽 위에 우표 · 소인. 뒤 지면은 어둡게 가린다 */
 .stage-wrap.paper-mode .stage:has(> .board:not([hidden]))::after { content: ''; position: fixed; inset: 0; z-index: 25; background: color-mix(in srgb, var(--color-desk-shadow) 45%, transparent); animation: dlg-in .3s ease-out; }
 .stage-wrap.paper-mode .board, .stage-wrap.paper-mode .board.wide { position: fixed; z-index: 26; left: 50%; top: 46%; right: auto; bottom: auto; translate: -50% -50%; display: block; width: min(700px, calc(100vw - 32px)); height: auto; max-height: calc(100dvh - 150px);
   padding: 9px; border: 0; border-radius: 12px; overflow: hidden; animation: none; transform: rotate(-.6deg);
@@ -143,7 +143,7 @@
   .stage-wrap.paper-mode .spr.b.delivering { animation: none; }
 }
 
-/* ── 사건 기사 지면(S-20 · 1 · 2막): 1면이 아니라 안쪽 기사 면 (FE-32) ──
+/* ── 사건 기사 지면(S-20 · 1막): 1면이 아니라 안쪽 기사 면 (FE-32) ──
    S-02 1면과 같은 신문이되 짜임이 달라서, 신문이 넘어갔다는 게 보인다: 작은 제호 머리글 · 큰 기사 제목 · 기자 줄 · 사진 · 여러 단 본문 */
 .case-paper-page .page-head { display: grid; grid-template-columns: minmax(150px, 190px) minmax(0, 1fr) minmax(150px, 190px); align-items: center; gap: 16px; padding: 22px 0 14px; border-bottom: 3px double var(--color-border-strong); }
 .case-paper-page .page-head-title { text-align: center; }
@@ -255,7 +255,7 @@
 .stage-wrap.paper-mode .stage[data-scene] .spr.dim { translate: -50% 26px; }
 .stage-wrap.paper-mode .stage[data-scene] .spr.dim .spr-img { filter: brightness(.72) saturate(.55); transform: none; }
 .stage-wrap.paper-mode .stage[data-scene] .spr:not(.dim) { translate: -50% -6px; }
-/* 조작 줄(FE-48): 화면 맨 아래 가로 전체 종이 띠 — 1 · 2막 신문 무대와 8막은 courtSketch.css의 같은 규칙을 쓴다 */
+/* 조작 줄(FE-48): 화면 맨 아래 가로 전체 종이 띠 — 1막 신문 무대와 6막은 courtSketch.css의 같은 규칙을 쓴다 */
 .stage-wrap.paper-mode:has(.stage.bmode) .ctrl { z-index: 28; } /* 판결 보드를 띄운 장면에서도 캐릭터(27)보다 위 */
 @media (max-width: 680px) {
   .stage-wrap.paper-mode .dlg { bottom: calc(64px + var(--safe-bottom)); }

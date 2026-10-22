@@ -53,12 +53,12 @@ export async function renderCourtPage(container, { caseId, caseHeader, api, navi
   const candidate = SCRIPTS[caseId];
   const script = candidate?.title === caseHeader.title ? candidate : undefined;
 
-  // 7막 실제 판결(재진입 · 바로 들어온 경우). 보통은 S-06 6막에서 무대를 이어 받고 주소만 바뀐다(courtStage.js)
+  // 5막 실제 판결(재진입 · 바로 들어온 경우). 보통은 S-06 4막에서 무대를 이어 받고 주소만 바뀐다(courtStage.js)
   function drawStage(data) {
     const { stage, error } = renderCourtStage({
       script, data, caseId, api, navigate, active,
       onInvalid: (failure) => message(`지금 단계에서는 이 화면을 볼 수 없어요. (현재 상태: ${failure.currentStatus})`),
-      // 8막은 같은 화면에서 이어 가고 주소만 S-08로 바꾼다
+      // 6막은 같은 화면에서 이어 가고 주소만 S-08로 바꾼다
       onCompared: (comparison) => openComparison({ root, script, comparison, caseId, caseTitle: caseHeader.title, navigate, api }),
     });
     mountStage(root, { caseHeader, badge: '실제 판결', heading: '실제 판결', stage, extra: [error] });

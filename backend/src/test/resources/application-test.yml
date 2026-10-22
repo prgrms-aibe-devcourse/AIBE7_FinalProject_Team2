@@ -4,6 +4,18 @@ spring:
     url: ${TEST_DB_URL:jdbc:postgresql://127.0.0.1:55432/lawnambul_test}
     username: ${TEST_DB_USERNAME:lawnambul_test}
     password: ${TEST_DB_PASSWORD:lawnambul_test}
+    hikari:
+      # 유휴 커넥션 최소치 (BE-93). HikariCP 기본값은 maximum-pool-size와 같아서, 풀을 열자마자
+      # 커넥션 10개를 채우고 테스트가 끝나도 계속 붙잡는다.
+      #
+      # Spring 테스트는 설정이 다른 테스트마다 컨텍스트를 따로 캐시하고 **컨텍스트마다 풀을 하나씩** 연다.
+      # 지금 10개가 동시에 살아 있어 10 × 10 = 100 — PostgreSQL 기본 상한(max_connections=100)과 같다.
+      # 넘는 순간 뒤에 뜨는 컨텍스트가 "FATAL: sorry, too many clients already"로 무너지고,
+      # **바꾼 적도 없는 테스트가** 실행 순서에 따라 깨져 원인을 찾기 어렵다 (PR #232 CI에서 겪었다).
+      #
+      # 실제로 커넥션을 많이 쓰는 컨텍스트는 몇 안 되므로, 쓰는 만큼만 열게 둔다. 상한(10)은 그대로라
+      # 동시 요청 테스트(PreJudgmentApiTest의 8스레드)는 필요한 만큼 늘려 쓴다.
+      minimum-idle: ${TEST_DB_MIN_IDLE:2}
   jpa:
     hibernate:
       ddl-auto: validate

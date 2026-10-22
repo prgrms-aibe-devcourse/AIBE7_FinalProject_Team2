@@ -42,10 +42,19 @@ public enum ErrorCode {
 	PROMPT_GENERATION_FAILED(HttpStatus.BAD_GATEWAY, "프롬프트 추천에 실패했습니다."),
 	FILE_UPLOAD_FAILED(HttpStatus.BAD_GATEWAY, "사진 업로드에 실패했습니다."),
 	INVALID_IMAGE_FILE(HttpStatus.BAD_REQUEST, "사진 파일이 올바르지 않습니다."),
+	// 발단 · 결론 사진 역할 칸 · 삭제 API (확장 단계, BE-78 2차 검토 · BE-101)
+	INCIDENT_PHOTO_NOT_FOUND(HttpStatus.NOT_FOUND, "그 역할의 사진이 없습니다."),
 	// 신문 지면 콘텐츠 생성 API (확장 단계, BE-92)
 	PAPER_NOT_FOUND(HttpStatus.NOT_FOUND, "신문 지면 콘텐츠가 없습니다."),
 	// 프로필 꾸미기 (확장 단계, BE-96). details에 잠긴 필드를 담는다
 	DECO_LOCKED(HttpStatus.CONFLICT, "아직 열리지 않은 꾸미기입니다."),
+	// 사건 등록 API (확장 단계, BE-93, API 명세 A-14 · A-15)
+	DUPLICATE_SOURCE(HttpStatus.CONFLICT, "이미 등록한 사건번호입니다."),
+	IMPORT_IN_PROGRESS(HttpStatus.CONFLICT, "다른 사건을 등록하는 중입니다."),
+	IMPORT_NOT_FOUND(HttpStatus.NOT_FOUND, "등록 작업을 찾을 수 없습니다."),
+	IMPORT_UNAVAILABLE(HttpStatus.BAD_GATEWAY, "사건 등록을 지금 쓸 수 없습니다."),
+	IMPORT_NOT_READY(HttpStatus.CONFLICT, "아직 적재할 수 없는 등록 작업입니다."),
+	IMPORT_RESULT_INVALID(HttpStatus.UNPROCESSABLE_CONTENT, "생성 결과를 사건으로 만들 수 없습니다."),
 	INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "서버 오류가 발생했습니다.");
 
 	private final HttpStatus status;

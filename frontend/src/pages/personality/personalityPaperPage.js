@@ -6,8 +6,8 @@ import { reducedMotion } from '../../utils/motion.js';
 import { canGoBackInApp } from '../../app/router.js';
 import { createTestFlow } from './personalityFlow.js';
 
-// FE-55 판결 성향 테스트 — 8막 "다음 날 신문"의 뒷면(오피니언 2면). 8막 지면의 "판결 성향 테스트" 광고를 누르면 신문을 한 장 넘겨 들어온다.
-// 지면 문법은 8막 신문(stage.css .sheet)과 같다: 제호 띠 · 이중 괘선 · 명조 기사체 · 흑백 지면 사진.
+// FE-55 판결 성향 테스트 — 6막 "다음 날 신문"의 뒷면(오피니언 2면). 6막 지면의 "판결 성향 테스트" 광고를 누르면 신문을 한 장 넘겨 들어온다.
+// 지면 문법은 6막 신문(stage.css .sheet)과 같다: 제호 띠 · 이중 괘선 · 명조 기사체 · 흑백 지면 사진.
 // 문항 하나 = 찬반 토론 지면 한 판(A · B 두 단이 맞선다), 답 = 아래 독자 설문 응모권의 다섯 칸.
 // 문항 · 답 · 제출은 기존 성향 테스트(personalityPage.js, /test)와 같은 api를 쓰고, 결과는 기존 결과 화면(/test/result)으로 간다.
 // 고르는 방법(진행 규칙)도 같은 personalityFlow.js를 쓴다: 칸을 누르거나 숫자 1 ~ 5를 치면 다음 문항으로 넘어가고, 마지막 문항은 "결과 보기"를 눌러야 제출된다.

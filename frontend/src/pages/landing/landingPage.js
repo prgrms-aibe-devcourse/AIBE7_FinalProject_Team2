@@ -43,7 +43,7 @@ const CHEEKS = [
 ];
 let newsCache = null; // 사건 목록(API 1) 마지막 응답
 const LIFT_MS = 380; // 신문을 집어 드는 시간(landing.css .is-held와 같게). 그 뒤 지면이 아래에서 올라온다
-// 8막에서 "메인으로" 올 때: 보던 지면이 줌아웃(제자리에서 .82배)과 페이드아웃을 함께 하며 책상이 드러난다
+// 6막에서 "메인으로" 올 때: 보던 지면이 줌아웃(제자리에서 .82배)과 페이드아웃을 함께 하며 책상이 드러난다
 const FADE_MS = 800;
 
 // 서비스 소개(FE-50): "뉴스만 본 나 → 모든 사실을 본 나"를 잇는 한 줄. 양 끝은 상태, 가운데 두 지점은 되돌릴 수 없는 판단이다
@@ -337,7 +337,7 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
   fit();
   if (section === 'intro') showIntro();
 
-  // 8막에서 왔으면(from: 'paper') 넘겨받은 지면이 화면을 덮은 채로 시작한다.
+  // 6막에서 왔으면(from: 'paper') 넘겨받은 지면이 화면을 덮은 채로 시작한다.
   // 지면이 페이드아웃되며 책상이 드러난다.
   // 좁은 화면은 메뉴의 신문 카드로 같은 연출. 새로고침 · 뒤로 가기로는 되풀이하지 않고, 움직임 줄이기면 연출 없이 바로 책상이다
   if (from === 'paper') {
@@ -354,7 +354,7 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
   }
 
   // ---- 신문 지면 채우기 (사건 목록 API 1). 실패해도 책상은 그대로 쓴다 ----
-  // 한 번 받은 목록은 모듈에 두고 다시 올 때 처음부터 채운다(8막 "메인으로" 등에서 책상이 드러날 때 기본 사진이 사건 사진으로 튀지 않게).
+  // 한 번 받은 목록은 모듈에 두고 다시 올 때 처음부터 채운다(6막 "메인으로" 등에서 책상이 드러날 때 기본 사진이 사건 사진으로 튀지 않게).
   // 새 응답이 같으면(JSON 비교) 다시 그리지 않는다
   async function fillNews() {
     try {

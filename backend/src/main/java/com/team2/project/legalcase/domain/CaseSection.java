@@ -54,4 +54,18 @@ public class CaseSection {
 	private List<Object> data;
 
 	private int displayOrder;
+
+	/** 적재(BE-93 2차). displayOrder는 사건 입력의 sections 배열 순서(1부터)다 */
+	public static CaseSection of(LegalCase legalCase, SectionStage stage, String sectionType, String title,
+			String content, List<Object> data, int displayOrder) {
+		CaseSection entity = new CaseSection();
+		entity.legalCase = legalCase;
+		entity.stage = stage;
+		entity.sectionType = sectionType;
+		entity.title = title;
+		entity.content = content;
+		entity.data = data;
+		entity.displayOrder = displayOrder;
+		return entity;
+	}
 }

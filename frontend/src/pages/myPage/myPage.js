@@ -3,12 +3,14 @@ import { API_MODE } from '../../api/config.js';
 import { renderAxisRow } from '../../components/axisRow.js';
 import { imageOf } from '../../components/stage.js';
 import { AXES, CHARACTER_NAMES } from '../../utils/personalityAxes.js';
-import { KIND_TITLES, TREND_RECENT, trendOrders, lenientPercent, axisChange, axisTrend, collectionOf, imageKinds, leanText, retakeAfterOrder, withRetakeSlot } from '../../utils/myPageView.js';
+import { KIND_TITLES, lenientPercent, axisChange, axisTrend, collectionOf, imageKinds, leanText, retakeAfterOrder } from '../../utils/myPageView.js';
+import { renderTrend, trendsOf } from '../../components/trendGraph.js';
 import { BACKGROUNDS, DEFAULT_DECO, DEFAULT_PORTRAITS, FRAMES, SASH_COLORS, SASH_ICONS, SASH_STYLES, achievementView, normalizeDeco, sashColorField, sashColorKey, sashColorOf, kindOfPortrait, portraitLabel, shownDeco, unlockedSets, unlockerIn } from '../../utils/profileDeco.js';
 import { PORTRAIT_POOL } from '../../content/portraitPool.js';
 import { BOOKMARK_CHARACTERS, BOOKMARK_FACES, BOOKMARK_LAWS, BOOKMARK_NAMES, BOOKMARK_STYLES, FACE_NAMES, STYLE_NAMES, applyBookmark, getBookmarkCharacter, getBookmarkFaceName, getBookmarkStyle, bookmarkFace, BOOKMARK_COLORS, getBookmarkColor, selectedBookmarkFace } from '../../utils/bookmarkCharacter.js';
 import { SCRIPTS } from '../../content/scripts.js';
 import { fitPortraitIn } from '../../utils/portraitFit.js';
+import { reducedMotion } from '../../utils/motion.js';
 import { clearUser, currentUser, isAdmin } from '../../utils/session.js';
 import { homeRoute } from '../admin/adminMenu.js';
 import { openCaseReviewPopup } from '../caseReview/caseReviewPopup.js';
@@ -26,6 +28,8 @@ import { setShownCard, shownSlot } from '../../utils/shownCard.js';
 // 종합 · 변화 흐름은 체험 → 성향 저장(7.6.7, BE-64) 뒤부터 채워지므로 그 전에는 null · 빈 배열로 와서 안내만 보인다.
 // 로그인 전에는 익명 ID 기준이다(REQ-108).
 const STATUS_LABELS = { COMPLETED: '체험 완료' };
+// 목 모드의 "내가 체험한 사건" 목록에서만 체험 중으로 보여 줄 사건(체험 중 모양 확인용). 첫 화면 수치 · 컬렉션 · 성향 기록은 그대로 완료로 센다
+const MOCK_IN_PROGRESS = new Set([3, 6, 8]);
 const VIEWS = {
   profile: '프로필카드',
   type: '성향카드',
@@ -38,7 +42,7 @@ const VIEWS = {
 };
 // 프로필카드에서 들어가는 화면은 뒤로 가기가 프로필카드로 간다(FE-68)
 const PARENTS = { achievements: 'profile', bookmark: 'profile' };
-const DEFAULT_NICKNAME = '익명의 판사'; // 로그인 · 닉네임 API 전까지 임시 문구
+export const DEFAULT_NICKNAME = '익명의 판사'; // 로그인 · 닉네임 API 전까지 임시 문구
 // 닉네임 아래 프로필 수치. 레벨 · 직업은 목 데이터(API 전, data.profile이 오면 그 값을 쓴다). 출석 일수는 서버 값(P-5 profile.attendanceDays)이다. 완료한 사건 · 모은 일러스트는 지금 기록에서 센다
 const MOCK_PROFILE = { level: 7, job: '수습 판사', attendanceDays: 0 };
 const IS_MOCK = API_MODE === 'mock'; // 목 모드에서는 체험 기록 · 성향 평균도 목(mocks/personalityMockApi.js)이라 함께 표기한다(FE-56)
@@ -241,10 +245,6 @@ const sashNote = (deco) => {
   return `, ${nameOf(SASH_COLORS[deco.sashStyle], sashColorOf(deco))} ${nameOf(SASH_STYLES, deco.sashStyle)}${icons.length ? `(${icons.join(' · ')})` : ''}`;
 };
 
-// 현재 성향 유형: 지금 판결 성향(최근 체험 3건 평균)이고, 네 축이 다 모이지 않아 없으면 성향 테스트 유형이다.
-// 마이페이지 첫 화면 성향카드 · 내 정보 수정의 카드 · 성향카드 화면 위쪽 카드가 모두 이 값을 쓴다. 처음(성향 테스트) 유형은 성향카드 화면 아래에만 나온다
-const currentType = (data) => data.judgmentPersonality?.type ?? data.personality?.type ?? null;
-
 // 대표 이미지 카드의 속: 위 닉네임 · 그림 창(대표 이미지) · 아래 성향 테스트 결과. 테두리 · 배경 · 책갈피는 클래스(.deco-frame-* · .deco-bg-* · .deco-sash-*)로 입힌다
 function profileCardParts(deco, data) {
   const src = deco.portrait;
@@ -254,7 +254,7 @@ function profileCardParts(deco, data) {
   face.append(faceImage);
   fitPortraitIn(face, faceImage, { centerWide: true }); // 가로로 긴 그림(사건 사진 등)은 창 세로 가운데에, 서 있는 캐릭터는 발을 아래에
   const nickname = data.nickname || DEFAULT_NICKNAME;
-  const typeName = currentType(data)?.name;
+  const typeName = currentTypeOf(data)?.name;
   const result = element('p', `my-card-note${typeName ? '' : ' is-empty'}`, typeName ?? '성향 테스트 전');
   return {
     caption,
@@ -264,12 +264,15 @@ function profileCardParts(deco, data) {
   };
 }
 
+// 성향카드가 보여 줄 현재 유형: 현재 판결 성향(최근 체험 평균). 네 축이 다 모이지 않아 없으면 성향 테스트 유형. 첫 화면 · 성향카드 화면이 같이 쓴다
+const currentTypeOf = (data) => data.judgmentPersonality?.type ?? data.personality?.type;
+
 // 프로필카드 · 성향카드(타로카드) 한 쌍. 첫 화면 위쪽과 내 정보 수정 화면이 같이 쓴다
 function profileCardPair(data, go) {
   const parts = profileCardParts(decoFor(data), data);
   const profile = cardButton(parts.classes, `프로필카드 열기: ${parts.note}`, ...parts.children);
   profile.addEventListener('click', () => go('profile'));
-  const type = currentType(data);
+  const type = currentTypeOf(data);
   const typeCardNode = type
     ? cardButton('is-type', `성향카드 열기: ${type.name}`, element('p', 'my-card-name', type.name), typePortrait(type), element('p', 'my-card-note my-type-quote', type.meme))
     : cardButton('is-type is-empty', '성향카드 열기: 아직 성향을 몰라요', element('p', 'my-card-name', '아직 몰라요'), emptyWindow(), element('p', 'my-card-note my-type-quote', '"성향 테스트로 카드를 뽑아 봐요"'));
@@ -351,22 +354,6 @@ function renderJudgment(judgment, head) {
   AXES.forEach((axis) => list.append(renderAxisRow(axis, judgment.axisScores?.[axis.key])));
   box.append(list);
   return box;
-}
-
-// 시작점 테스트 점수: 처음 성향의 첫 테스트(FE-77). 재응시해도 바뀌지 않는다. 처음이 첫 판결이면 테스트 점이 없다(첫 체험이 시작점).
-// 서버가 아직 initialPersonality를 주지 않으면(실제 모드, 후속 BE) 테스트 현재 결과로 둔다
-function startTestScores(data) {
-  if (data.initialPersonality === undefined) return data.personality?.axisScores;
-  return data.initialPersonality?.source === 'TEST' ? data.initialPersonality.axisScores : null;
-}
-
-// 축마다 흐름 점(성향 테스트 → 체험 순서)과 변경폭(처음 → 현재 판결 성향). 변경폭 정리 · 변화 흐름 그래프가 함께 쓴다(FE-70)
-function trendsOf(data) {
-  const history = data.history ?? [];
-  return AXES.map((axis) => {
-    const points = axisTrend(history, axis.key, startTestScores(data));
-    return { axis, points, change: axisChange(points, axis, data.judgmentPersonality?.axisScores?.[axis.key]) };
-  });
 }
 
 // 성향카드를 다시 정했으면 그 테스트(FE-77): { result, after(그 전에 마친 체험 수), title }. 아니면 null
@@ -475,181 +462,6 @@ function renderChanges(trends, hasHistory, head, retakeTrends) {
       box.append(element('p', 'my-hint', '재심 뒤에 사건을 마치면 그때부터 움직인 폭이 보여요.'));
     }
   }
-  return box;
-}
-
-// 성향 변화 흐름 — 축마다 작은 꺾은선 그래프(가로 = 테스트 → 체험 순서, 세로 = 위 관대 · 아래 엄격, 가운데 줄 = 반반)
-const SVG_NS = 'http://www.w3.org/2000/svg';
-function svgNode(tag, attrs = {}, text) {
-  const node = document.createElementNS(SVG_NS, tag);
-  Object.entries(attrs).forEach(([key, value]) => node.setAttribute(key, String(value)));
-  if (text != null) node.textContent = text;
-  return node;
-}
-const CHART = { width: 320, height: 160, axis: 34, left: 52, right: 22, top: 10, bottom: 30, anchorGap: 0.7 }; // axis: 세로 눈금 글자 자리(이 왼쪽), left: 첫 점 자리, bottom: 가로 눈금 글자 자리
-// 세로 눈금: 툴팁 · 표(leanText)와 같이 기운 쪽 비중으로 읽는다. 위 끝 관대 100, 가운데 50(반반), 아래 끝 엄격 100
-const Y_TICKS = [[1, '100'], [0.75, '75'], [0.5, '50'], [0.25, '75'], [0, '100']];
-
-// retakeBetween: 다시 정한 때가 낀 두 칸의 order [앞, 뒤](FE-77). 칸을 하나 더 만들면 체험 사이 간격(기울기)이 달라져, 칸 없이 두 칸 사이에 세로 점선으로 얹는다
-function trendChart({ axis, points }, slots, retakeBetween) {
-  const figure = element('figure', 'trend-chart');
-  const caption = element('figcaption', 'trend-title');
-  const ends = element('span', 'trend-ends'); // 위 · 아래 끝이 어느 쪽인지. 그래프 안에 두면 끝에 찍힌 점과 겹친다
-  ends.append(element('span', '', `↑ ${axis.lenient.name}`), element('span', '', `↓ ${axis.strict.name}`));
-  caption.append(element('span', '', axis.label), ends);
-  figure.append(caption);
-  if (points.length === 0) {
-    figure.append(element('p', 'axis-empty', '체험 자료가 아직 없어요'));
-    return figure;
-  }
-  const { width, height, axis: axisX, left, right, bottom } = CHART;
-  const top = retakeBetween ? CHART.top + 14 : CHART.top; // 다시 정함 글자 자리(그래프 위)
-  const plotBottom = height - bottom;
-  // 칸은 모두 같은 간격이다. 재심이 초심 바로 뒤(체험 0건 뒤) · 최근 바로 앞(맨 끝)에 끼면 그 사이만 anchorGap칸 더 띄워 점이 겹치지 않게 한다.
-  // 재심이 체험 사이에 끼면 칸은 그대로 두고 두 점 사이에 얹는다(체험 사이 간격 · 기울기는 그대로)
-  const gap = CHART.anchorGap;
-  const startGap = retakeBetween?.[0] === 0 ? gap : 0;
-  const nowGap = retakeBetween?.[1] === 'now' ? gap : 0;
-  const units = slots.length - 1 + startGap + nowGap;
-  const step = slots.length > 1 ? (width - left - right) / units : 0;
-  const slotX = (order) => {
-    const index = slots.findIndex((slot) => slot.order === order);
-    if (slots.length === 1) return (axisX + width) / 2;
-    return left + (index + (order !== 0 ? startGap : 0) + (order === 'now' ? nowGap : 0)) * step;
-  };
-  // 다시 정함: 앞 · 뒤 칸의 가운데. 한쪽 칸이 없으면(맨 앞 · 맨 뒤) 반 칸 옆
-  const retakeX = (() => {
-    if (!retakeBetween) return null;
-    const [before, after] = retakeBetween.map((order) => (order == null ? null : slotX(order)));
-    const half = (step || 40) / 2;
-    if (before != null && after != null) return (before + after) / 2;
-    return Math.max(axisX + 6, Math.min(width - 4, before != null ? before + half : after - half));
-  })();
-  const xOf = (order) => (order === 'retake' ? retakeX : slotX(order));
-  const yOf = (ratio) => plotBottom - ratio * (plotBottom - top);
-  const chart = svgNode('svg', { viewBox: `0 0 ${width} ${height}`, class: 'trend-svg', role: 'img' });
-  chart.setAttribute('aria-label', `${axis.label} 흐름: ${points.map((point) => `${point.title} ${leanText(point.ratio, axis)}`).join(', ')}`);
-  const middle = yOf(0.5);
-  chart.append(
-    svgNode('rect', { x: axisX, y: top, width: width - axisX, height: middle - top, class: 'trend-zone is-lenient' }),
-    svgNode('rect', { x: axisX, y: middle, width: width - axisX, height: plotBottom - middle, class: 'trend-zone is-strict' }),
-  );
-  Y_TICKS.forEach(([ratio, label]) => {
-    const y = yOf(ratio);
-    if (ratio !== 0.5) chart.append(svgNode('line', { x1: axisX, x2: width, y1: y, y2: y, class: 'trend-grid-line' }));
-    chart.append(svgNode('text', { x: axisX - 6, y, class: 'trend-tick', 'text-anchor': 'end', 'dominant-baseline': 'middle' }, label));
-  });
-  chart.append(svgNode('line', { x1: axisX, x2: width, y1: middle, y2: middle, class: 'trend-mid' }));
-  slots.forEach((slot) => chart.append(svgNode('text', { x: xOf(slot.order), y: height - 10, class: 'trend-tick', 'text-anchor': 'middle' }, slot.label)));
-  // 기준점 세로 점선(FE-77): 처음 테스트 · 현재(최근 3건 평균) 칸. 체험 흐름과 나눠 보이게 한다
-  slots.filter((slot) => slot.order === 0 || slot.order === 'now').forEach((slot) => {
-    chart.append(svgNode('line', { x1: slotX(slot.order), x2: slotX(slot.order), y1: top, y2: plotBottom, class: 'trend-retake-line' }));
-  });
-  // 성향카드를 다시 정한 자리(FE-77): 세로 점선과 그래프 위 글자로 "여기서 기준을 다시 정했다"를 표시한다(가로축 글자와 겹치지 않게 위에 둔다)
-  if (retakeX != null) {
-    chart.append(
-      svgNode('line', { x1: retakeX, x2: retakeX, y1: top, y2: plotBottom, class: 'trend-retake-line' }),
-      svgNode('text', { x: retakeX, y: top - 5, class: 'trend-tick is-retake', 'text-anchor': 'middle' }, '재심'),
-    );
-  }
-  // 체험 점끼리만 실선으로 잇는다. 기준점(처음 테스트 · 다시 정함 · 현재 평균)은 한 번의 판결이 아니라 잇지 않고 마름모로 따로 찍는다
-  const steps = points.filter((point) => !point.isCurrent && !point.isTest);
-  const at = (point) => `${xOf(point.order)},${yOf(point.ratio)}`;
-  if (steps.length > 1) chart.append(svgNode('polyline', { points: steps.map(at).join(' '), class: 'trend-line' }));
-
-  const tip = element('div', 'trend-tip');
-  tip.setAttribute('aria-hidden', 'true'); // 같은 내용은 그래프 이름 · 표가 읽어 준다
-  const show = (point, hit) => {
-    tip.replaceChildren(element('strong', '', point.title), element('span', '', leanText(point.ratio, axis)));
-    const box = figure.getBoundingClientRect();
-    const dot = hit.getBoundingClientRect();
-    tip.style.left = `${dot.left + dot.width / 2 - box.left}px`;
-    tip.style.top = `${dot.top - box.top}px`;
-    tip.classList.add('is-shown');
-  };
-  points.forEach((point) => {
-    const x = xOf(point.order);
-    const y = yOf(point.ratio);
-    chart.append(point.isTest || point.isCurrent
-      ? svgNode('polygon', { points: `${x},${y - 6} ${x + 6},${y} ${x},${y + 6} ${x - 6},${y}`, class: `trend-dot ${point.isCurrent ? 'is-current' : 'is-test'}` })
-      : svgNode('circle', { cx: x, cy: y, r: 4.5, class: 'trend-dot' }));
-    const hit = svgNode('circle', { cx: x, cy: y, r: 16, class: 'trend-hit' }); // 점보다 넉넉한 마우스 자리
-    hit.addEventListener('pointerenter', () => show(point, hit));
-    hit.addEventListener('pointerdown', () => show(point, hit)); // 터치: 누르면 보이고, 그래프의 빈 곳을 누르면 닫힌다
-    hit.addEventListener('pointerleave', (event) => { if (event.pointerType === 'mouse') tip.classList.remove('is-shown'); });
-    chart.append(hit);
-  });
-  chart.addEventListener('pointerdown', (event) => { if (!event.target.classList.contains('trend-hit')) tip.classList.remove('is-shown'); });
-  figure.append(chart, tip);
-  return figure;
-}
-
-// 그래프와 같은 값을 표로(스크린리더 · 키보드 · 정확한 수치 확인용)
-function trendTable(trends, slots) {
-  const details = element('details', 'trend-table');
-  details.append(element('summary', '', '표로 보기'));
-  const table = element('table');
-  const headRow = element('tr');
-  headRow.append(element('th', '', '시점'), ...trends.map(({ axis }) => element('th', '', axis.label)));
-  const head = element('thead');
-  head.append(headRow);
-  const body = element('tbody');
-  slots.forEach((slot) => {
-    const line = element('tr');
-    const when = element('th', '', slot.title);
-    when.scope = 'row';
-    line.append(when, ...trends.map(({ axis, points }) => {
-      const point = points.find((item) => item.order === slot.order);
-      return element('td', '', point ? leanText(point.ratio, axis) : '—');
-    }));
-    body.append(line);
-  });
-  table.append(head, body);
-  details.append(table);
-  return details;
-}
-
-// judgment: 현재 판결 성향(맨 오른쪽 "현재" 칸). retake: 성향카드를 다시 정한 테스트(retakeOf), 없으면 null
-function renderTrend(trends, history, judgment, retake) {
-  const box = element('div', 'my-detail');
-  if (history.length === 0) {
-    box.append(element('p', 'my-hint', '사건을 하나 마치면 첫 점이 찍혀요.'));
-    return box;
-  }
-  // 가로 칸: 시작점(테스트, 없으면 첫 체험) + 최근 체험 10건. 값이 없는 칸도 자리는 남겨 축끼리 같은 칸에 줄을 맞춘다
-  const hasTest = trends.some(({ points }) => points[0]?.isTest);
-  const baseOrders = trendOrders(history.length, hasTest);
-  const orders = retake ? withRetakeSlot(baseOrders, retake.after) : baseOrders; // 표 · 점 순서용. 그래프 가로 칸에는 다시 정함을 넣지 않는다
-  // 눈금 숫자는 보이는 체험끼리 완료한 순서대로 1부터 매긴다(앞의 체험이 빠져도 숫자가 건너뛰지 않는다)
-  const experienceOrders = orders.filter((order) => order > 0);
-  const slots = orders.map((order) => {
-    if (order === 0) return { order, label: '초심', title: '초심 · 성향 테스트' };
-    if (order === 'retake') return { order, label: '재심', title: retake.title };
-    const seq = experienceOrders.indexOf(order) + 1;
-    return { order, label: String(seq), title: `${seq}. ${history[order - 1].title}` };
-  });
-  // 맨 오른쪽 "현재" 칸: 현재 판결 성향(최근 3건 평균, 변경폭의 지금과 같은 값). 축 값이 없으면 칸만 남는다
-  const currentScores = judgment?.axisScores;
-  if (currentScores) slots.push({ order: 'now', label: '최근', title: `최근 · 체험 ${judgment.experienceCount}건 평균` });
-  const titleOf = new Map(slots.map((slot) => [slot.order, slot.title]));
-  // 그래프 가로 칸(다시 정함 제외)과, 다시 정함이 낀 앞 · 뒤 칸
-  const chartSlots = slots.filter((slot) => slot.order !== 'retake');
-  const at = orders.indexOf('retake');
-  const retakeBetween = at === -1 ? null : [orders[at - 1] ?? null, orders[at + 1] ?? (currentScores ? 'now' : null)];
-  const shown = trends.map((trend) => {
-    const points = trend.points.filter((point) => titleOf.has(point.order)).map((point) => ({ ...point, title: titleOf.get(point.order) }));
-    const again = retake?.result.axisScores?.[trend.axis.key];
-    if (typeof again === 'number') points.push({ order: 'retake', ratio: again, title: retake.title, isTest: true });
-    points.sort((a, b) => orders.indexOf(a.order) - orders.indexOf(b.order)); // 다시 정함 점을 칸 순서 자리로
-    const now = currentScores?.[trend.axis.key];
-    if (typeof now === 'number') points.push({ order: 'now', ratio: now, title: titleOf.get('now'), isCurrent: true });
-    return { ...trend, points };
-  });
-  const hint = element('p', 'my-hint', `${hasTest ? '초심(성향 테스트)과 ' : ''}최근 체험 ${TREND_RECENT}건까지 보여요. 가운데 줄이 반반이고, 숫자는 사건을 마친 순서, 최근은 최근 체험 3건의 평균이에요. 마름모는 기준점(초심${retake ? ' · 재심' : ''} · 최근)이라 체험 선과 잇지 않아요. 점을 누르거나 마우스를 올리면 사건과 비중이 보여요.`);
-  if (IS_MOCK) hint.append(mockTag());
-  const grid = element('div', 'trend-grid');
-  shown.forEach((trend) => grid.append(trendChart(trend, chartSlots, retakeBetween)));
-  box.append(hint, grid, trendTable(shown, slots));
   return box;
 }
 
@@ -779,6 +591,59 @@ function renderCollection(experiences) {
   return box;
 }
 
+const CASES_PER_PAGE = 10; // 내가 체험한 사건은 한 페이지에 이만큼만 보여 준다
+
+// 사건 한 줄: [제목(링크) · 상태 | 마친 사건은 버튼 둘, 체험 중이면 안내 문구]
+function caseLine(item, navigate, api) {
+  const status = IS_MOCK && MOCK_IN_PROGRESS.has(item.caseId) ? 'REVIEWED' : item.status; // 목: 이 화면에서만 몇 건을 체험 중으로 보여 준다(위 상수)
+  const line = element('li', 'my-case');
+  const info = element('div');
+  // 사건 제목이 사건 디테일(기사 페이지)로 가는 링크다. 거기서 이어서 · 결과만 · 1막부터를 고른다(FE-62). 새 탭 · 가운데 클릭이 되도록 진짜 링크로 두고, 보통 클릭만 화면 안에서 이동한다
+  const title = element('p', 'my-case-title');
+  const link = element('a', 'my-case-link', item.title);
+  link.href = `/cases/${item.caseId}`;
+  link.addEventListener('click', (event) => {
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    navigate('caseDetail', { caseId: item.caseId });
+  });
+  title.append(link);
+  info.append(title, element('p', 'my-case-status', STATUS_LABELS[status] ?? '체험 중'));
+  const actions = element('div', 'my-case-actions');
+  if (status === 'COMPLETED') {
+    // 내 결과 보기(FE-75): 6막 지면 모양의 내 결과 지면(처음 판단 → 최종 판결 · 이 사건으로 달라진 성향 · 이 사건의 판결 성향)
+    // hasResult: false는 목의 페이지 확인용 추가 줄(결과가 사건 번호로 찾아져 원래 사건 결과가 나오므로 숨긴다). 실제 API에는 없는 값이라 늘 보인다
+    if (item.hasResult !== false) actions.append(button('내 결과 보기', () => navigate('myResult', { caseId: item.caseId }), 'secondary-button'));
+    actions.append(
+      button('독자 엽서 쓰기', (event) => openCaseReviewPopup({ caseId: item.caseId, api, navigate, from: event.currentTarget }), 'secondary-button'),
+    );
+  } else {
+    actions.append(element('p', 'my-case-hint', '사건 제목을 눌러 이어서 체험해요'));
+  }
+  line.append(info, actions);
+  return line;
+}
+
+// 페이지 이동 줄: 이전 · 번호 · 다음. 지금 페이지는 aria-current. 한 페이지를 넘을 때만 보인다
+function casePager(pageCount, current, onGo) {
+  const nav = element('nav', 'my-pager');
+  nav.setAttribute('aria-label', '체험한 사건 페이지');
+  const step = (label, to, disabled) => {
+    const node = button(label, () => onGo(to), 'secondary-button my-pager-step');
+    node.disabled = disabled;
+    return node;
+  };
+  nav.append(step('이전', current - 1, current === 1));
+  for (let page = 1; page <= pageCount; page += 1) {
+    const node = button(String(page), () => onGo(page), `secondary-button my-pager-page${page === current ? ' is-current' : ''}`);
+    node.setAttribute('aria-label', `${page}페이지`);
+    if (page === current) node.setAttribute('aria-current', 'page');
+    nav.append(node);
+  }
+  nav.append(step('다음', current + 1, current === pageCount));
+  return nav;
+}
+
 function renderCases(experiences, navigate, api) {
   const box = element('div', 'my-detail');
   if (experiences.length === 0) {
@@ -788,18 +653,17 @@ function renderCases(experiences, navigate, api) {
     return box;
   }
   const list = element('ul', 'my-cases');
-  experiences.forEach((item) => {
-    const line = element('li', 'my-case');
-    const info = element('div');
-    info.append(element('p', 'my-case-title', item.title), element('p', 'my-case-status', STATUS_LABELS[item.status] ?? '체험 중'));
-    // 사건 디테일(기사 페이지)로 간다. 거기서 이어서 · 결과만 · 1막부터를 고른다(FE-62). 마친 사건은 독자 엽서로 바로 갈 수도 있다
-    const actions = element('div', 'my-case-actions');
-    actions.append(button('사건 보기', () => navigate('caseDetail', { caseId: item.caseId }), 'secondary-button'));
-    if (item.status === 'COMPLETED') actions.append(button('독자 엽서 쓰기', (event) => openCaseReviewPopup({ caseId: item.caseId, api, navigate, from: event.currentTarget }), 'secondary-button'));
-    line.append(info, actions);
-    list.append(line);
-  });
-  box.append(list);
+  const pageCount = Math.ceil(experiences.length / CASES_PER_PAGE);
+  const pager = element('div', 'my-pager-host');
+  function show(page, moved) {
+    list.replaceChildren(...experiences.slice((page - 1) * CASES_PER_PAGE, page * CASES_PER_PAGE).map((item) => caseLine(item, navigate, api)));
+    pager.replaceChildren(...(pageCount > 1 ? [casePager(pageCount, page, (to) => show(to, true))] : []));
+    if (!moved) return;
+    pager.querySelector('[aria-current="page"]')?.focus({ preventScroll: true }); // 눌렀던 번호 버튼은 새로 그려져 없어지므로 키보드 초점을 지금 페이지 번호로 옮긴다
+    list.scrollIntoView({ block: 'start', behavior: reducedMotion() ? 'auto' : 'smooth' }); // 페이지를 넘기면 목록 맨 위부터 보이게
+  }
+  show(1, false);
+  box.append(list, pager);
   return box;
 }
 
@@ -807,7 +671,8 @@ function renderCases(experiences, navigate, api) {
 const typeDescription = (type) => element('p', 'my-type-desc', type.oneLiner);
 
 // 첫 화면 성향카드와 같은 타로카드 모양(이름 · 성향 이미지 · 캐릭터 대사). 누르는 카드가 아니라 div. type이 없으면 빈 그림 창
-function typeFace(type, emptyNote = '"성향 테스트로 카드를 뽑아 봐요"') {
+// 내 결과 지면(FE-75)도 이 사건의 성향카드로 쓴다
+export function typeFace(type, emptyNote = '"성향 테스트로 카드를 뽑아 봐요"') {
   const card = element('div', `my-card is-type is-detail${type ? '' : ' is-empty'}`);
   card.setAttribute('role', 'group');
   card.setAttribute('aria-label', type ? `성향카드: ${type.name}` : '성향카드: 아직 몰라요');
@@ -911,8 +776,8 @@ function renderTypePage(data, navigate) {
   const judgmentHead = element('div', 'my-type-head');
   judgmentHead.append(element('h2', 'my-section-title', '판결에서 드러난 성향'));
   judgment.append(judgmentHead, renderJudgment(data.judgmentPersonality, judgmentHead));
-  // 왼쪽 카드 · 설명은 옆 막대(현재 판결 성향)와 같은 유형이다. 네 축이 다 모이지 않아 현재 유형이 없으면 성향 테스트 유형
-  const heroType = currentType(data);
+  // 왼쪽 카드 · 설명은 옆 막대(현재 판결 성향)와 같은 유형이고, 첫 화면 성향카드와도 같다
+  const heroType = currentTypeOf(data);
   if (heroType) {
     const hero = element('section', 'my-type-hero');
     const card = typeFace(heroType);
@@ -933,7 +798,7 @@ function renderTypePage(data, navigate) {
   changes.append(changesHead, renderChanges(trends, history.length > 0, changesHead, retake ? retakeTrendsOf(data, retake) : null));
   changes.append(typeShift(data, navigate)); // 체험 전에도 처음 → 다시 정함 → 지금 줄은 보인다(빈 칸은 점선 버튼)
   const trail = element('section', 'my-type-section');
-  trail.append(element('h2', 'my-section-title', '성향 변화 흐름'), renderTrend(trends, history, data.judgmentPersonality, retake));
+  trail.append(element('h2', 'my-section-title', '성향 변화 흐름'), renderTrend(trends, history, data.judgmentPersonality, { mock: IS_MOCK, retake }));
   box.append(changes, trail);
   return box;
 }

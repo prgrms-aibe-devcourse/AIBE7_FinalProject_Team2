@@ -377,6 +377,48 @@ class JobStoreTest(unittest.TestCase):
         self.assertNotIn("source", result)
         self.assertNotIn("/원문/경로.json", json.dumps(result, ensure_ascii=False))
 
+    def test_result_uses_court_stage_draft_not_the_contamination_file(self):
+        """재판부 판결은 court 단계의 courtDraft여야 한다.
+
+        extract의 court 산출물은 형벌 값만 담은 사전 학습 점검 전용 파일이라, 적재에 필요한
+        judgmentFactors · 요약 · 판결 이유가 없다. 처음에는 그 파일을 내보내고 있었다 (BE-93 2차에서 발견).
+        """
+        job_id = self.store.create(self._request())
+        draft = self.tool_dir / "cases" / "draft.json"
+        contamination = self.tool_dir / "cases" / "internal.json"
+        draft.parent.mkdir(parents=True, exist_ok=True)
+        draft.write_text(json.dumps({"judgment": {"penaltyType": "PRISON"}, "judgmentFactors": [{"factorId": 1}]},
+                                    ensure_ascii=False), encoding="utf-8")
+        contamination.write_text(json.dumps({"caseTitle": "사건", "penaltyType": "PRISON"}, ensure_ascii=False),
+                                 encoding="utf-8")
+        self._write_state(job_id, {
+            "extract": {"status": "done", "outputs": {"case": str(draft), "court": str(contamination)}},
+            "court": {"status": "done", "outputs": {"courtDraft": str(draft)}},
+        })
+
+        result = self.store.result(job_id)
+
+        self.assertIn("judgmentFactors", result["courtDraft"])
+        self.assertNotIn("courtJudgment", result)	# 점검 전용 파일은 내보내지 않는다
+
+    def test_result_reads_axis_votes_instead_of_sending_a_path(self):
+        """가치관 축은 투표 내용을 보내야 한다. 경로만 보내면 부르는 쪽이 읽을 수 없다 (BE-93 2차에서 발견)"""
+        job_id = self.store.create(self._request())
+        votes = self.tool_dir / "cases" / "votes.json"
+        votes.parent.mkdir(parents=True, exist_ok=True)
+        votes.write_text(json.dumps({"factors": [{"factorId": 7, "valueAxis": "FAULT_STANDARD",
+                                                  "valueAxisVotes": {"runs": 5}}]}, ensure_ascii=False),
+                         encoding="utf-8")
+        self._write_state(job_id, {
+            "extract": {"status": "done", "outputs": {"case": str(votes)}},
+            "axis": {"status": "done", "outputs": {"votesFile": str(votes), "runs": 5}},
+        })
+
+        axis = self.store.result(job_id)["axis"]
+
+        self.assertEqual(axis["factors"][0]["factorId"], 7)
+        self.assertNotIn("votesFile", axis)	# 컨테이너 내부 경로는 내보내지 않는다
+
     def test_result_before_pipeline_produced_anything(self):
         job_id = self.store.create(self._request())
 

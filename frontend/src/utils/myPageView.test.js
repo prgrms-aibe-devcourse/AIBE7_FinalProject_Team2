@@ -1,7 +1,7 @@
 // npm test : 마이페이지 변화 흐름 계산
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { trendOrders, axisChange, axisSeries, axisTrend, castOf, collectionOf, leanText, imageKinds, retakeAfterOrder, withRetakeSlot } from './myPageView.js';
+import { trendOrders, trendSlotOrders, recordOf, axisChange, axisSeries, axisTrend, castOf, collectionOf, leanText, imageKinds, retakeAfterOrder, withRetakeSlot } from './myPageView.js';
 
 const AXIS = { key: 'APOLOGY_SINCERITY', strict: { name: '행동증명형' }, lenient: { name: '마음신뢰형' } };
 const entry = (value) => ({ axisScores: { APOLOGY_SINCERITY: value } });
@@ -135,4 +135,29 @@ test('withRetakeSlot: 마친 체험 바로 뒤에 끼우고, 창 밖이면 보�
   assert.deepEqual(withRetakeSlot([0, 1, 2], 0), [0, 'retake', 1, 2]);
   assert.deepEqual(withRetakeSlot([0, 1, 2], 2), [0, 1, 2, 'retake']);
   assert.deepEqual(withRetakeSlot([0, 6, 7, 8], 3), [0, 'retake', 6, 7, 8]); // 4 ~ 5번째 체험은 창 밖
+});
+
+test('trendSlotOrders: 강조할 체험이 최근 10건 밖이면 순서대로 끼워 넣고, 안이면 그대로', () => {
+  assert.deepEqual(trendSlotOrders(12, true, 2), [0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+  assert.deepEqual(trendSlotOrders(12, false, 2), [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]); // 테스트가 없으면 최근 10건 + 강조 칸(FE-77)
+  assert.deepEqual(trendSlotOrders(12, true, 5), trendOrders(12, true));
+  assert.deepEqual(trendSlotOrders(3, true, undefined), [0, 1, 2, 3]);
+});
+
+test('recordOf: 마이페이지 history에서 이 사건의 축 점수 · 유형과 체험 순서(1부터)를 찾는다', () => {
+  const scores = { APOLOGY_SINCERITY: 0.5, FAULT_STANDARD: 0.25, PRINCIPLE_RELATION: 0.5, ORDER_OPPORTUNITY: 1 };
+  const type = { shareId: 'Qm7xK2pa', name: '예시 유형' };
+  const myPage = { history: [{ caseId: 2, axisScores: { APOLOGY_SINCERITY: 1 }, type: null }, { caseId: 3, axisScores: scores, type }] };
+  assert.deepEqual(recordOf(myPage, 3), { scores, type, order: 2 });
+  assert.deepEqual(recordOf(myPage, '3'), { scores, type, order: 2 }); // 주소의 사건 번호가 문자열이어도 같다
+  assert.deepEqual(recordOf(myPage, 2), { scores: { APOLOGY_SINCERITY: 1 }, type: null, order: 1 }); // 네 축이 다 없으면 서버가 null
+  assert.deepEqual(recordOf(myPage, 9), {}); // 성향 기록이 없는 사건
+  assert.deepEqual(recordOf({}, 3), {});
+  assert.equal(recordOf(null, 3), null); // 마이페이지를 못 불러옴
+});
+
+test('recordOf: type 칸이 없는 옛 응답(BE-100 이전 서버)은 undefined로 두어 서버의 null과 구분한다', () => {
+  const myPage = { history: [{ caseId: 3, axisScores: { APOLOGY_SINCERITY: 1 } }] };
+  assert.deepEqual(recordOf(myPage, 3), { scores: { APOLOGY_SINCERITY: 1 }, type: undefined, order: 1 });
+  assert.notEqual(recordOf(myPage, 3).type, null);
 });

@@ -48,6 +48,12 @@ export function withRetakeSlot(orders, after) {
   return index === -1 ? [...orders, 'retake'] : [...orders.slice(0, index), 'retake', ...orders.slice(index)];
 }
 
+// 강조할 체험(focus, 내 결과 지면의 이 사건 FE-75)이 위 칸 밖이면 순서대로 끼워 넣는다
+export function trendSlotOrders(historyLength, hasTest, focus) {
+  const orders = trendOrders(historyLength, hasTest);
+  return focus && !orders.includes(focus) ? [...orders, focus].sort((a, b) => a - b) : orders;
+}
+
 // 한 축의 변경폭: 처음(테스트 또는 첫 체험) → 지금. 지금은 current(현재 판결 성향 = 최근 체험 3건 평균, API 명세 P-5)이고,
 // 그 축 값이 없으면 가장 최근 체험 점이다. 체험이 하나도 없거나 점이 둘보다 적으면 null.
 // moved는 관대 쪽으로 움직인 %p(음수면 엄격 쪽), toward는 움직인 쪽 이름, steady는 STEADY_POINTS 안쪽이면 true
@@ -70,7 +76,18 @@ export function leanText(ratio, axis) {
   return lenient > 50 ? `${axis.lenient.name} ${lenient}%` : `${axis.strict.name} ${100 - lenient}%`;
 }
 
-// 이번 사건에서 만난 모습 — 대본에 나온 역할 의상(look "role:…")을 등장 순서대로 모은다. 8막 신문 사진란과 마이페이지가 함께 쓴다
+// 내 결과 지면(FE-75)에 실을 이 사건의 기록: scores(이 사건의 축 점수), type(이 사건 한 건의 유형, 서버가 정한다 BE-100),
+// order(성향 변화 흐름의 체험 순서, 1부터). myPage는 마이페이지 응답(P-5). 못 불러왔으면 null, 성향 기록이 없는 사건이면 빈 객체.
+// type: 유형 객체 · null(서버가 "네 축이 다 모이지 않았다"로 판단) · undefined(응답에 type 칸이 없음 = BE-100 이전 서버, PR #246 리뷰)
+export function recordOf(myPage, caseId) {
+  if (!myPage) return null;
+  const index = (myPage.history ?? []).findIndex((item) => String(item.caseId) === String(caseId));
+  if (index < 0) return {};
+  const item = myPage.history[index];
+  return { scores: item.axisScores, type: Object.hasOwn(item, 'type') ? item.type : undefined, order: index + 1 };
+}
+
+// 이번 사건에서 만난 모습 — 대본에 나온 역할 의상(look "role:…")을 등장 순서대로 모은다. 6막 신문 사진란과 마이페이지가 함께 쓴다
 const CAST_NAMES = { naero: '내로', nambul: '남불' };
 const ROLE_NAMES = { actor: 'A씨 역', prosecutor: '검사', defense: '변호인', judge: '판사' };
 export function castOf(script) {

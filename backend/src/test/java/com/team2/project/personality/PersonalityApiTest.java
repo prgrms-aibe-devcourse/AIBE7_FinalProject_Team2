@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.jayway.jsonpath.JsonPath;
 import com.team2.project.support.ApiIntegrationTest;
 import jakarta.servlet.http.Cookie;
 import java.util.ArrayList;
@@ -255,14 +256,172 @@ class PersonalityApiTest extends ApiIntegrationTest {
 			.andExpect(jsonPath("$.judgmentPersonality.axisScores.PRINCIPLE_RELATION").value(0.75))
 			.andExpect(jsonPath("$.history.length()").value(2))
 			.andExpect(jsonPath("$.history[0].caseId").value(firstCase))
+			.andExpect(jsonPath("$.history[0].type.name").value("새끼손가락 도장형"))	// 이 체험 한 건도 ISFJ (BE-100)
+			.andExpect(jsonPath("$.history[0].type.shareId").isNotEmpty())
+			.andExpect(jsonPath("$.history[0].type.code").doesNotExist())	// 4글자 코드는 내보내지 않는다(#119)
 			.andExpect(jsonPath("$.history[1].axisScores.PRINCIPLE_RELATION").value(0.5))
 			.andExpect(jsonPath("$.history[1].axisScores.APOLOGY_SINCERITY").isEmpty())
+			.andExpect(jsonPath("$.history[1].type").isEmpty())	// 축이 빠진 체험은 유형 없음
 			.andExpect(jsonPath("$.experiences.length()").value(2))
 			.andExpect(jsonPath("$.experiences[?(@.caseId == " + firstCase + ")].attemptNo").value(2))
 			.andExpect(jsonPath("$.experiences[?(@.caseId == " + firstCase + ")].status").value("STARTED"));
 	}
 
+	@Test
+	@DisplayName("P-5: 체험이 4건 이상이면 현재 판결 성향은 최근 3건 평균, 흐름은 전체 (BE-99)")
+	void myPage_judgmentUsesRecentThree() throws Exception {
+		Cookie cookie = submitNew(strictValues());
+		UUID user = UUID.fromString(cookie.getValue());
+		// 가장 오래된 체험은 네 축 모두 가중(0.0). 전체 평균이면 0.75, 최근 3건이면 1.0
+		completedWithContribution(user, axes(0, 5, 0, 5, 0, 5, 0, 5));
+		for (int i = 0; i < 3; i++) {
+			completedWithContribution(user, axes(1, 0, 1, 0, 1, 0, 1, 0));
+		}
+
+		mockMvc.perform(get(MY_PAGE).cookie(cookie))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.judgmentPersonality.experienceCount").value(3))	// 평균에 쓴 체험 수
+			.andExpect(jsonPath("$.judgmentPersonality.axisScores.APOLOGY_SINCERITY").value(1.0))
+			.andExpect(jsonPath("$.judgmentPersonality.axisScores.FAULT_STANDARD").value(1.0))
+			.andExpect(jsonPath("$.judgmentPersonality.axisScores.PRINCIPLE_RELATION").value(1.0))
+			.andExpect(jsonPath("$.judgmentPersonality.axisScores.ORDER_OPPORTUNITY").value(1.0))
+			.andExpect(jsonPath("$.judgmentPersonality.type").isNotEmpty())	// 네 축 모두 값이 있어 유형이 있다
+			.andExpect(jsonPath("$.history.length()").value(4))	// 흐름은 자르지 않는다
+			.andExpect(jsonPath("$.history[0].axisScores.APOLOGY_SINCERITY").value(0.0));
+	}
+
+	@Test
+	@DisplayName("P-5: 최근 3건은 기여 저장 순서가 아니라 완료 시각 순서로 고른다 (BE-99, #238 리뷰)")
+	void myPage_recentThreeByCompletedAt_notContributionOrder() throws Exception {
+		Cookie cookie = submitNew(strictValues());
+		UUID user = UUID.fromString(cookie.getValue());
+		// 동시 비교 공개로 가장 먼저 완료된 체험(가중)의 기여가 가장 늦게 저장된 상황
+		long earliest = insertCase("MURDER", "PUBLISHED");
+		insertExperience(user, earliest, 1, "COMPLETED");
+		completedAt(user, earliest, "2026-10-21T10:00:00+09:00");
+		for (int i = 1; i <= 3; i++) {
+			long caseId = insertCase("MURDER", "PUBLISHED");
+			insertExperience(user, caseId, 1, "COMPLETED");
+			completedAt(user, caseId, "2026-10-21T10:0" + i + ":00+09:00");
+			contribution(user, caseId, 1, axes(1, 0, 1, 0, 1, 0, 1, 0));
+		}
+		contribution(user, earliest, 1, axes(0, 5, 0, 5, 0, 5, 0, 5));	// 저장은 마지막
+
+		mockMvc.perform(get(MY_PAGE).cookie(cookie))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.judgmentPersonality.experienceCount").value(3))
+			.andExpect(jsonPath("$.judgmentPersonality.axisScores.APOLOGY_SINCERITY").value(1.0))	// 저장 순서면 0.667
+			.andExpect(jsonPath("$.history.length()").value(4))
+			.andExpect(jsonPath("$.history[0].caseId").value(earliest));	// 흐름도 완료 순서
+	}
+
+	@Test
+	@DisplayName("P-5: 최근 3건에 자료가 없는 축은 오래된 체험에 있어도 null이고 유형도 null (BE-99)")
+	void myPage_recentThreeMissingAxis_typeNull() throws Exception {
+		Cookie cookie = submitNew(strictValues());
+		UUID user = UUID.fromString(cookie.getValue());
+		completedWithContribution(user, axes(1, 0, 1, 0, 1, 0, 1, 0));	// 질서 · 기회 축은 이 체험에만 있다
+		for (int i = 0; i < 3; i++) {
+			completedWithContribution(user, axes(1, 1, 0, 2, 2, 0, 0, 0));
+		}
+
+		mockMvc.perform(get(MY_PAGE).cookie(cookie))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.judgmentPersonality.experienceCount").value(3))
+			.andExpect(jsonPath("$.judgmentPersonality.axisScores.APOLOGY_SINCERITY").value(0.5))
+			.andExpect(jsonPath("$.judgmentPersonality.axisScores.FAULT_STANDARD").value(0.0))
+			.andExpect(jsonPath("$.judgmentPersonality.axisScores.ORDER_OPPORTUNITY").isEmpty())
+			.andExpect(jsonPath("$.judgmentPersonality.type").isEmpty());
+	}
+
+	@Test
+	@DisplayName("P-5: 최근 3건이 네 축 모두 자료가 없으면 현재 판결 성향은 null, 흐름은 남는다 (BE-99)")
+	void myPage_recentThreeAllEmpty_judgmentNull() throws Exception {
+		Cookie cookie = submitNew(strictValues());
+		UUID user = UUID.fromString(cookie.getValue());
+		completedWithContribution(user, axes(1, 0, 1, 0, 1, 0, 1, 0));
+		for (int i = 0; i < 3; i++) {
+			completedWithContribution(user, axes(0, 0, 0, 0, 0, 0, 0, 0));
+		}
+
+		mockMvc.perform(get(MY_PAGE).cookie(cookie))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.judgmentPersonality").isEmpty())
+			.andExpect(jsonPath("$.history.length()").value(4));
+	}
+
+	@Test
+	@DisplayName("P-5: history[].type은 그 체험 하나만으로 낸 종합과 같은 유형이다 — 동점은 관대 글자 (BE-100)")
+	void myPage_historyType_sameRuleAsJudgment() throws Exception {
+		Cookie cookie = submitNew(strictValues());
+		UUID user = UUID.fromString(cookie.getValue());
+		completedWithContribution(user, axes(1, 1, 2, 2, 1, 1, 3, 3));	// 네 축 모두 동점(0.5) → 네 글자 모두 관대
+
+		String body = mockMvc.perform(get(MY_PAGE).cookie(cookie))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.history.length()").value(1))
+			.andExpect(jsonPath("$.history[0].type.tolerance").value(4))	// 관대 글자 4개
+			.andReturn().getResponse().getContentAsString();
+
+		// 체험이 하나뿐이면 현재 판결 성향도 같은 한 건이다 — 두 유형이 같아야 한다
+		String historyShareId = JsonPath.read(body, "$.history[0].type.shareId");
+		String judgmentShareId = JsonPath.read(body, "$.judgmentPersonality.type.shareId");
+		assertThat(historyShareId).isEqualTo(judgmentShareId);
+	}
+
+	@Test
+	@DisplayName("P-5: 사건별 유형은 체험마다 따로 정한다 — 종합에 유형이 없어도 네 축이 다 있는 체험은 유형이 있다 (BE-100)")
+	void myPage_historyType_perExperience() throws Exception {
+		Cookie cookie = submitNew(strictValues());
+		UUID user = UUID.fromString(cookie.getValue());
+		completedWithContribution(user, axes(1, 0, 1, 0, 1, 0, 1, 0));	// 네 축 모두 있음
+		for (int i = 0; i < 3; i++) {
+			completedWithContribution(user, axes(1, 1, 0, 2, 2, 0, 0, 0));	// 질서 · 기회 축 없음
+		}
+
+		mockMvc.perform(get(MY_PAGE).cookie(cookie))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.judgmentPersonality.type").isEmpty())	// 최근 3건에 질서 · 기회 축이 없다
+			.andExpect(jsonPath("$.history[0].type.tolerance").value(4))	// 가장 오래된 체험은 네 축 모두 관대
+			.andExpect(jsonPath("$.history[1].type").isEmpty())
+			.andExpect(jsonPath("$.history[3].type").isEmpty());
+	}
+
+	@Test
+	@DisplayName("P-5: 쿠키는 있지만 체험 기여가 없으면 현재 판결 성향은 null")
+	void myPage_noContributions_judgmentNull() throws Exception {
+		Cookie cookie = submitNew(strictValues());
+
+		mockMvc.perform(get(MY_PAGE).cookie(cookie))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.personality").isNotEmpty())
+			.andExpect(jsonPath("$.judgmentPersonality").isEmpty())
+			.andExpect(jsonPath("$.history.length()").value(0));
+	}
+
 	// --- 도움 함수 ---
+
+	/** 새 사건 하나를 첫 회차로 완료하고 기여를 저장한다. 호출 순서가 완료 순서다 */
+	private void completedWithContribution(UUID user, String axisCounts) {
+		long caseId = insertCase("MURDER", "PUBLISHED");
+		insertExperience(user, caseId, 1, "COMPLETED");
+		contribution(user, caseId, 1, axisCounts);
+	}
+
+	/** 첫 회차 체험의 완료 시각을 정한다. 정하지 않은 체험은 completed_at이 null이라 기여 저장 시각으로 정렬된다 */
+	private void completedAt(UUID user, long caseId, String completedAt) {
+		jdbcTemplate.update("UPDATE experience SET completed_at = ?::timestamptz WHERE anonymous_user_id = ? AND case_id = ? AND attempt_no = 1",
+			completedAt, user, caseId);
+	}
+
+	/** 축 순서(사과 · 과실 · 원칙 · 질서)대로 감경 · 가중 횟수를 받아 axis_counts JSON을 만든다 */
+	private static String axes(int apologyDown, int apologyUp, int faultDown, int faultUp,
+		int principleDown, int principleUp, int orderDown, int orderUp) {
+		return """
+			{"APOLOGY_SINCERITY":{"down":%d,"up":%d},"FAULT_STANDARD":{"down":%d,"up":%d},
+			 "PRINCIPLE_RELATION":{"down":%d,"up":%d},"ORDER_OPPORTUNITY":{"down":%d,"up":%d}}"""
+			.formatted(apologyDown, apologyUp, faultDown, faultUp, principleDown, principleUp, orderDown, orderUp);
+	}
 
 	/** 쿠키 없이 답을 제출하고 발급된 쿠키를 돌려준다 */
 	private Cookie submitNew(List<Integer> values) throws Exception {
