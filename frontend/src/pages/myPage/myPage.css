@@ -248,12 +248,9 @@ img.my-sash-icon.is-missing { visibility: hidden; }
 .change-bar span { flex-basis: 0; min-width: 0; }
 .change-bar .is-strict { background: var(--axis-strict); }
 .change-bar .is-lenient { background: var(--axis-lenient); }
-/* 늘어난 몫: 늘어난 쪽 색 빗금 화살표. 몸통(막대와 같은 10px)과 머리(18px)를 ::before 하나의 clip-path로 잘라 빗금이 머리까지 이어지고,
-   바깥 span의 그림자 네 겹이 잘린 실루엣 전체에 1px 테두리를 두른다. 머리 끝은 지금 경계. 몫이 머리(10px)보다 짧으면 머리만 남는다 */
-.change-gain {
-  position: absolute; top: -4px; height: 18px; --edge: var(--color-heading);
-  filter: drop-shadow(1px 0 0 var(--edge)) drop-shadow(-1px 0 0 var(--edge)) drop-shadow(0 1px 0 var(--edge)) drop-shadow(0 -1px 0 var(--edge));
-}
+/* 늘어난 몫: 늘어난 쪽 색 빗금 화살표. 몸통(막대와 같은 10px)과 머리(18px)를 ::before 하나의 clip-path로 잘라 빗금이 머리까지 이어진다.
+   테두리는 없고 경계선(.change-edge)만 남는다. 머리 끝은 지금 경계. 몫이 머리(10px)보다 짧으면 머리만 남는다 */
+.change-gain { position: absolute; top: -4px; height: 18px; }
 .change-gain::before {
   content: ''; position: absolute; inset: 0; --base: max(0px, 100% - 10px);
   background: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--ink) 45%, var(--color-card)) 0 1.5px, color-mix(in srgb, var(--ink) 65%, var(--color-heading)) 1.5px 5px); /* 막대보다 진한 바탕에 화살표색을 밝힌 빗금 */
@@ -262,8 +259,11 @@ img.my-sash-icon.is-missing { visibility: hidden; }
 .change-gain.is-strict::before { clip-path: polygon(0 4px, var(--base) 4px, var(--base) 0, 100% 50%, var(--base) 100%, var(--base) 14px, 0 14px); }
 .change-gain.is-lenient { --ink: var(--axis-lenient); }
 .change-gain.is-lenient::before { --base: min(100%, 10px); clip-path: polygon(100% 4px, var(--base) 4px, var(--base) 0, 0 50%, var(--base) 100%, var(--base) 14px, 100% 14px); }
-/* 경계 세로선(처음 · 지금): 막대 위아래로 4px 튀어나온 같은 검정 선. 막대 두 색 사이 흰 줄을 대신한다 */
-.change-edge { position: absolute; top: -4px; width: 2px; height: 18px; margin-left: -1px; border-radius: 1px; background: var(--color-heading); }
+/* 거의 그대로: 머리 없는 빗금 띠(몸통만, 막대와 같은 10px). 색은 실제로 늘어난 쪽. 폭은 차이에 비례하고 최소 1% */
+.change-gain.is-steady::before { clip-path: polygon(0 4px, 100% 4px, 100% 14px, 0 14px); }
+/* 경계선(처음 · 지금): 막대를 위아래로 쭉 가로지르는 같은 검정 선. 경계 정중앙에 걸쳐 선 폭의 절반은 막대, 절반은 빗금 몸통이다. 두 선이 겹치거나 붙으면 가운데 하나만(myPage.js EDGE_TOUCH_PX) */
+.change-edge { position: absolute; top: -4px; width: 1px; height: 18px; margin-left: -.5px; border-radius: .5px; background: var(--color-heading); }
+
 .change-detail { margin: 0; white-space: nowrap; color: var(--color-muted); font-size: var(--text-small); font-variant-numeric: tabular-nums; }
 .change-detail.is-moved { font-weight: 700; }
 .change-detail.is-strict { color: var(--axis-strict); }
@@ -282,7 +282,7 @@ img.my-sash-icon.is-missing { visibility: hidden; }
 .trend-tick { fill: var(--color-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
 .trend-line { fill: none; stroke: var(--color-accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .trend-dot { fill: var(--color-accent); stroke: var(--color-card); stroke-width: 2; }
-.trend-dot.is-test { fill: var(--color-card); stroke: var(--color-accent); }
+.trend-dot.is-test { fill: var(--color-card); stroke: var(--color-accent); stroke-width: 1.5; } /* 속 빈 마름모는 윤곽이 바깥으로 나와, 안쪽을 먹는 최근 마름모와 보이는 크기를 맞춘다(trendGraph.js BASE_R) */
 .trend-anchor-line { stroke: var(--color-heading); stroke-width: 1.25; stroke-dasharray: 3 3; } /* 기준점(초심 · 재심 · 최근) 세로 점선(FE-77) */
 .trend-tick.is-retake { fill: var(--color-heading); font-weight: 700; }
 .change-sub-title { margin: 22px 0 10px; font: 700 var(--text-body)/1.5 var(--font-heading); color: var(--color-heading); }

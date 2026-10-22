@@ -19,7 +19,7 @@ export function renderAxisRow(axis, lenientRatio) {
     element('span', `is-strict${strict > lenient ? ' is-major' : ''}`, `${axis.strict.name} ${strict}%`),
     element('span', `is-lenient${lenient > strict ? ' is-major' : ''}`, `${lenient}% ${axis.lenient.name}`),
   );
-  const bar = element('div', `axis-bar${strict > 0 && lenient > 0 ? ' has-split' : ''}`); // 양쪽이 다 있을 때만 사이 줄
+  const bar = element('div', 'axis-bar');
   bar.setAttribute('role', 'img');
   bar.setAttribute('aria-label', `${axis.strict.name} ${strict}%, ${axis.lenient.name} ${lenient}%`);
   const left = element('span', 'is-strict');

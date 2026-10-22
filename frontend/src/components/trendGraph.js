@@ -32,6 +32,11 @@ const CHART = { width: 320, height: 160, axis: 34, left: 52, right: 22, top: 10,
 // 세로 눈금: 툴팁 · 표(leanText)와 같이 기운 쪽 비중으로 읽는다. 위 끝 관대 100, 가운데 50(반반), 아래 끝 엄격 100
 const Y_TICKS = [[1, '100'], [0.75, '75'], [0.5, '50'], [0.25, '75'], [0, '100']];
 const FOCUS_BAND = 22; // 강조한 칸(이 사건) 띠 폭
+const DOT_R = 4.5; // 체험 점(원)의 반지름
+// 기준점 마름모의 반대각선 절반. 최근(진한 칠 + 흰 윤곽 2px, 윤곽이 안쪽을 먹어 보이는 지름 약 9.2)은 그대로 두고,
+// 초심 · 재심(속 빈 마름모 + 진한 윤곽 1.5px, 윤곽이 바깥으로 나와 보이는 지름이 최근과 같게 약 9.1)을 최근에 맞춘다
+const CURRENT_R = 6;
+const BASE_R = 3.5;
 
 // retakeBetween: 재심이 낀 두 칸의 order [앞, 뒤](FE-77). 칸을 하나 더 만들면 체험 사이 간격(기울기)이 사람마다 달라져, 칸 없이 두 칸 사이에 세로 점선으로 얹는다
 function trendChart({ axis, points }, slots, retakeBetween) {
@@ -114,9 +119,10 @@ function trendChart({ axis, points }, slots, retakeBetween) {
     const x = xOf(point.order);
     const y = yOf(point.ratio);
     const isFocus = focus?.order === point.order;
+    const r = point.isCurrent ? CURRENT_R : BASE_R;
     chart.append(point.isTest || point.isCurrent
-      ? svgNode('polygon', { points: `${x},${y - 6} ${x + 6},${y} ${x},${y + 6} ${x - 6},${y}`, class: `trend-dot ${point.isCurrent ? 'is-current' : 'is-test'}` })
-      : svgNode('circle', { cx: x, cy: y, r: isFocus ? 5.5 : 4.5, class: `trend-dot${isFocus ? ' is-focus' : ''}` }));
+      ? svgNode('polygon', { points: `${x},${y - r} ${x + r},${y} ${x},${y + r} ${x - r},${y}`, class: `trend-dot ${point.isCurrent ? 'is-current' : 'is-test'}` })
+      : svgNode('circle', { cx: x, cy: y, r: isFocus ? 5.5 : DOT_R, class: `trend-dot${isFocus ? ' is-focus' : ''}` }));
     const hit = svgNode('circle', { cx: x, cy: y, r: 16, class: 'trend-hit' }); // 점보다 넉넉한 마우스 자리
     hit.addEventListener('pointerenter', () => show(point, hit));
     hit.addEventListener('pointerdown', () => show(point, hit)); // 터치: 누르면 보이고, 그래프의 빈 곳을 누르면 닫힌다
