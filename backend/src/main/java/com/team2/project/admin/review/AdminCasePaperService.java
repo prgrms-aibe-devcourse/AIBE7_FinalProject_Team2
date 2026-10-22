@@ -103,7 +103,13 @@ public class AdminCasePaperService {
 	}
 
 	private CasePaperResponse toResponse(LegalCase legalCase, CasePaper paper) {
+		// role 없는 행(1단계 이전에 3번째 이상 올라간 사진)은 지면에서 뺀다 — 관리자 목록(A-13-5)에만 노출한다
+		// (결정: docs/decisions/BE-78.md "확정 사항")
+		// 정렬은 1단계 동안 display_order로 한다. role 업로드 시 ORIGIN = 0 · CONCLUSION = 1로 고정
+		// 채번되므로(CasePhotoService.uploadIncidentPhoto) 결과적으로 발단 → 결론 순과 같다. display_order를
+		// 빼는 2 · 3단계에서 role 기준 정렬로 바꿔야 한다(API 명세 A-13-6 참고, PR #243 리뷰).
 		var extraPhotos = incidentPhotoRepository.findByLegalCaseIdOrderByDisplayOrder(legalCase.getId()).stream()
+			.filter(photo -> photo.getRole() != null)
 			.map(IncidentPhotoResponse::from)
 			.toList();
 		return CasePaperResponse.of(paper, legalCase.getThumbnailUrl(), extraPhotos);
