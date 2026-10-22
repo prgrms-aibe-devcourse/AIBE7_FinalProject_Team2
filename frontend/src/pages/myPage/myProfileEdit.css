@@ -47,3 +47,5 @@
 .edit-count { font-variant-numeric: tabular-nums; }
 @media (max-width: 720px) { .edit-profile-row { flex-direction: column; align-items: center; } .edit-fan { justify-content: center; } .edit-profile-row > .edit-profile { width: 100%; } }
 @media (max-width: 720px) { .edit-fact { grid-template-columns: minmax(0, 1fr); gap: 2px; } }
+/* 할 수 없거나 끝난 버튼(첫 성향 테스트 완료 · 재심 완료 · 준비 중)은 흐리게 하고 눌림 표시를 뺀다. 전역 .secondary-button에는 비활성 모양이 없다 */
+.edit-page .secondary-button:disabled { opacity: .6; cursor: default; background: var(--color-card); }

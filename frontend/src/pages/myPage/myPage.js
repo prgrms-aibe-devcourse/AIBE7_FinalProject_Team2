@@ -765,15 +765,15 @@ function typeFan(data, navigate, go) {
   firstTest.disabled = tested;
   const claim = button(retakeDone ? '재심 완료' : '재심 청구하기', () => openRetakeDialog({ data, navigate, from: claim }), 'secondary-button');
   claim.disabled = state !== 'ready';
-  const after = retakeDone ? retakeAfter(data.baselineRetake.result) : null;
-  const note = retakeDone
-    ? `${after ? `${after}에 ` : ''}재심을 받았어요. 초심 카드는 그대로 남아 있어요.`
+  // 재심을 마친 뒤의 "체험 n건 뒤" 안내는 성향카드 화면에만 둔다
+  const note = retakeDone ? null
     : tested ? `성향 테스트를 한 번 더 해서 성향카드를 다시 정해요. ${RETAKE_NOTES[state]}` : '재심은 첫 성향 테스트 뒤에 청구할 수 있어요.';
   const tests = element('div', 'edit-actions'); // 첫 테스트 옆에 재심
   tests.append(firstTest, claim);
   actions.append(
+    element('span', 'edit-label', '성향 테스트 하러 가기'),
     tests,
-    element('p', 'edit-hint', '성향카드 화면에서 카드와 성향 변화를 확인하고, 공개 카드를 골라 꾸밀 수 있어요.'),
+    element('span', 'edit-label', '성향카드 확인 및 꾸미기'),
     button('성향카드에서 보기', () => go('type'), 'secondary-button'),
   );
   paint();
@@ -782,7 +782,7 @@ function typeFan(data, navigate, go) {
     bar,
     element('p', 'edit-hint', '고른 카드가 맨 앞에 놓이고 "공개" 도장이 찍혀요. 지금은 이 브라우저에만 저장돼요.'),
     actions,
-    element('p', 'edit-hint', note),
+    ...(note ? [element('p', 'edit-hint', note)] : []),
   );
   box.append(stack, side);
   return box;
