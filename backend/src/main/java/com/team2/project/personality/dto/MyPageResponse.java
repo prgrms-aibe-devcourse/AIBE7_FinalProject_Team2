@@ -50,13 +50,18 @@ public record MyPageResponse(
 		int experienceCount) {
 	}
 
-	/** 성향 변화 흐름의 한 점: 사건의 첫 회차 체험별 축 점수 (자료 없는 축은 null) */
-	public record HistoryItem(Long caseId, String title, OffsetDateTime completedAt, Map<ValueAxis, Double> axisScores) {
+	/**
+	 * 성향 변화 흐름의 한 점: 사건의 첫 회차 체험별 축 점수 (자료 없는 축은 null).
+	 * type은 이 체험 한 건의 유형으로, judgmentPersonality.type과 같은 규칙이다(네 축 모두 값이 있을 때만, BE-100)
+	 */
+	public record HistoryItem(Long caseId, String title, OffsetDateTime completedAt, Map<ValueAxis, Double> axisScores,
+		PersonalityTypeResponse type) {
 
-		public static HistoryItem of(Experience experience, Instant fallbackCompletedAt, Map<ValueAxis, Double> axisScores) {
+		public static HistoryItem of(Experience experience, Instant fallbackCompletedAt, Map<ValueAxis, Double> axisScores,
+			PersonalityTypeResponse type) {
 			Instant completedAt = experience.getCompletedAt() != null ? experience.getCompletedAt() : fallbackCompletedAt;
 			return new HistoryItem(experience.getLegalCase().getId(), experience.getLegalCase().getTitle(),
-				kst(completedAt), axisScores);
+				kst(completedAt), axisScores, type);
 		}
 	}
 

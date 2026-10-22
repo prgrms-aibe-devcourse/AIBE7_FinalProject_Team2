@@ -56,7 +56,7 @@ function score(answers) {
 }
 
 // 공유 주소용 해시(유형 코드를 주소에 드러내지 않는 값, 명세 9-1). 서버 시드와 같은 값을 쓴다(og/personality-types.json).
-// 목과 실제 API가 같은 shareId를 받아야 내 결과 지면이 축 점수로 고른 유형을 P-4로 받아 올 수 있다(FE-75)
+// 목과 실제 API가 같은 shareId를 써야 공유 주소(P-4)가 목 · 실제에서 같은 유형을 가리킨다(FE-75)
 const shareIdOf = shareIdOfCode;
 const SHARE_IDS = Object.fromEntries(Object.keys(TYPES).map((code) => [shareIdOf(code), code]));
 
@@ -193,6 +193,8 @@ function judgmentOf(history) {
   return { axisScores, type: code && TYPES[code] ? toType(code) : null, experienceCount: recent.length };
 }
 
+const historyLine = ({ caseId, title, completedAt, axisScores }) => ({ caseId, title, completedAt, axisScores });
+
 // P-5 마이페이지 조회. 기록이 없어도 404가 아니라 빈 200이다. 종합 판결 성향 · 성향 변화 흐름은 체험 → 성향 저장(7.6.7) 전에는
 // 실제로 null · 빈 배열이다. 목은 화면 확인용으로 체험 기록 목을 채워 둔다. 기록이 없는 상태는 `?empty=history`로 볼 수 있다
 export async function getMyPage() {
@@ -203,7 +205,10 @@ export async function getMyPage() {
   return structuredClone({
     personality: saved ? toResult(saved) : null,
     judgmentPersonality: judgmentOf(history),
-    history: history.map(({ caseId, title, completedAt, axisScores }) => ({ caseId, title, completedAt, axisScores })),
+    // 사건별 유형(history[].type, BE-100): 서버와 같이 그 체험 하나만으로 낸 종합의 유형이다.
+    // 주의: judgmentOf는 평균 점수를 0.5와 비교해 글자를 정하고, 서버는 정확한 분수의 부호로 정한다(산식 7장).
+    // 체험 한 건이면 두 방식의 결과가 같지만, 최근 3건 평균(judgmentPersonality)은 0.5 근처에서 서버와 다를 수 있다(PR #246 리뷰)
+    history: history.map((entry) => ({ ...historyLine(entry), type: judgmentOf([entry])?.type ?? null })),
     experiences: [...mockExperiences, ...extraExperiences],
     ...mockProfileView(profileStats()),
   });
