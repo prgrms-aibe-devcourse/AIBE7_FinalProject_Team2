@@ -37,3 +37,13 @@ test('selectedChoice: 고른 칸 → 없으면 최근 → 첫 칸 → 성향이 
   assert.equal(selectedChoice(data(type('a', 'A형'), null, type('a', 'A형')), 'initial').keys.join(), 'initial,current'); // 묶인 칸
   assert.equal(selectedChoice({}, 'current'), null);
 });
+
+test('typeChoices: 첫 판결이 대신한 초심(JUDGMENT)은 고를 수 없다', () => {
+  const judged = { ...data(null, null, type('a', 'A형')), initialPersonality: { source: 'JUDGMENT', type: type('a', 'A형') } };
+  assert.deepEqual(typeChoices(judged).map((choice) => choice.label), ['최근: A형']);
+});
+
+test('typeChoices: 묶인 칸을 고르면 최근을 저장한다', () => {
+  assert.equal(typeChoices(data(type('a', 'A형'), null, type('a', 'A형')))[0].pick, 'current');
+  assert.equal(typeChoices(data(type('a', 'A형'), type('b', 'B형'), null))[0].pick, 'initial');
+});

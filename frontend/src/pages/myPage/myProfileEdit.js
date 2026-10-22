@@ -21,11 +21,13 @@ function loadExtras() {
   }
 }
 
+// 저장했으면 true. 저장소를 못 쓰면(차단 · 용량) false라, 화면이 "저장 못 했어요"를 알린다
 function saveExtras(extras) {
   try {
     localStore().setItem(EXTRAS_KEY, JSON.stringify(extras));
+    return true;
   } catch {
-    // 저장소를 못 쓰면 이번 방문 동안만 화면에 남는다
+    return false;
   }
 }
 
@@ -222,9 +224,9 @@ export function renderProfileEdit({ api, navigate, go, data = {} }) {
     error.textContent = message;
     input.setAttribute('aria-invalid', message ? 'true' : 'false');
     if (message) { input.focus(); return; } // 첫 오류 칸으로 초점
-    saveExtras({ ...extras, bio: bio.value.trim() });
+    const bioSaved = saveExtras({ ...extras, bio: bio.value.trim() });
     if (user) saveUser({ nickname: input.value, role: user.role }); // 서버 닉네임 API 전: 이 브라우저의 로그인 표시값만 바꾼다
-    status.textContent = '저장했어요.';
+    status.textContent = bioSaved ? '저장했어요.' : '한 줄 소개를 저장하지 못했어요. 브라우저 저장 공간을 확인해 주세요.';
   });
 
   const head = element('p', 'edit-intro', '프로필과 계정을 관리해요. 알림 같은 앱 설정은 환경 설정에서 바꿀 수 있어요.');

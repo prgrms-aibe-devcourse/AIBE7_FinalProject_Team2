@@ -10,8 +10,9 @@ let unsaved; // 저장소를 못 쓸 때 이번 방문 동안의 값
 /** 마이페이지 응답(P-5)에서 칸별 유형. 없는 칸은 null */
 export function typeSlots(data) {
   const initial = data.initialPersonality === undefined ? data.personality : data.initialPersonality;
+  const tested = initial?.source !== 'JUDGMENT'; // 첫 테스트 전(첫 판결이 대신한 초심)에는 성향카드 화면에 초심 카드가 없으니 고를 수 없다
   return {
-    initial: initial?.type ?? null,
+    initial: tested ? (initial?.type ?? null) : null,
     retake: data.baselineRetake?.result?.type ?? null,
     current: data.judgmentPersonality?.type ?? data.personality?.type ?? null,
   };
@@ -19,7 +20,8 @@ export function typeSlots(data) {
 
 /**
  * 고를 수 있는 성향. 같은 유형(shareId)이 겹치면 한 칸으로 묶는다(칸이 3 → 2 → 1개).
- * 반환: [{ keys: ['current', 'initial'], type, label: '초심 · 최근: ○○형' }] (초심 → 재심 → 최근 순)
+ * 반환: [{ keys: ['initial', 'current'], pick: 'current', type, label: '초심 · 최근: ○○형' }] (초심 → 재심 → 최근 순)
+ * pick: 이 칸을 골랐을 때 저장할 값. 묶인 칸이면 최근을 우선한다(최근을 기본으로 쓰던 사용자가 초심에 묶이지 않게)
  */
 export function typeChoices(data) {
   const slots = typeSlots(data);
@@ -31,7 +33,7 @@ export function typeChoices(data) {
     if (same) same.keys.push(key);
     else groups.push({ keys: [key], type });
   });
-  return groups.map((group) => ({ ...group, label: `${group.keys.map((key) => SLOT_NAMES[key]).join(' · ')}: ${group.type.name}` }));
+  return groups.map((group) => ({ ...group, pick: group.keys.includes('current') ? 'current' : group.keys[0], label: `${group.keys.map((key) => SLOT_NAMES[key]).join(' · ')}: ${group.type.name}` }));
 }
 
 export function getProfileCardType(storage = localStore()) {

@@ -700,7 +700,7 @@ function typeShift(data, navigate) {
   const slots = {
     initial: tested ? { type: initial.type, caption: '초심 · 성향 테스트' } : null,
     retake: retakeDone ? { type: data.baselineRetake.result.type, caption: ['재심', retakeAfter(data.baselineRetake.result)].filter(Boolean).join(' · ') } : null,
-    current: data.judgmentPersonality?.type ? { type: data.judgmentPersonality.type, caption: '최근 · 체험 3건 평균' } : null,
+    current: data.judgmentPersonality?.type ? { type: data.judgmentPersonality.type, caption: `최근 · 체험 ${data.judgmentPersonality.experienceCount ?? 3}건 평균` } : null,
   };
   const shown = shownSlot(slots);
   const side = (caption, node) => {
@@ -1035,9 +1035,9 @@ function typeChoiceSection(data, onPick) {
     const input = element('input');
     input.type = 'radio';
     input.name = 'profile-card-type';
-    input.value = choice.keys[0];
+    input.value = choice.pick;
     input.checked = choice === selected || (!selected && index === 0);
-    input.addEventListener('change', () => { setProfileCardType(choice.keys[0]); onPick(); });
+    input.addEventListener('change', () => { setProfileCardType(choice.pick); onPick(); });
     label.append(input, element('span', '', choice.label));
     list.append(label);
   });
