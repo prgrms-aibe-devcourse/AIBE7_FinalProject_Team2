@@ -28,7 +28,6 @@
 .edit-status { min-height: 1.5em; margin: 0; color: var(--color-heading); font-weight: 700; }
 
 .edit-profile { display: grid; gap: 14px; }
-.edit-cards { display: flex; flex-wrap: wrap; gap: 20px; padding: 6px 0 12px; }
 .edit-count { font-variant-numeric: tabular-nums; }
 .edit-toggle { display: flex; align-items: center; gap: 8px; min-height: 44px; }
 .edit-toggle label { cursor: pointer; }

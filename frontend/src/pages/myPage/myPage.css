@@ -445,6 +445,9 @@ img.my-sash-icon.is-missing { visibility: hidden; }
 .my-deco { min-width: 0; margin: 0 0 32px; padding: 0 0 28px; border: 0; border-bottom: 1px solid var(--color-border); }
 .my-deco legend { margin-bottom: 8px; padding: 0; font: 700 var(--text-title-3)/1.4 var(--font-heading); color: var(--color-heading); }
 .my-deco > .my-hint { margin-bottom: 4px; }
+.my-type-choices { display: grid; gap: 4px; margin-top: 8px; }
+.my-type-choice { display: flex; align-items: center; gap: 8px; min-height: 44px; cursor: pointer; }
+.my-type-choice input { flex: none; }
 .my-deco-kind { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin: 20px 0 8px; font: 600 var(--text-body)/1.4 var(--font-heading); color: var(--color-text); }
 .my-deco-state { color: var(--color-muted); font: 400 var(--text-small)/1.4 var(--font-body); white-space: nowrap; }
 .my-deco-state.is-open { color: var(--color-accent); font-weight: 700; }

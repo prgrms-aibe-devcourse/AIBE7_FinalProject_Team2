@@ -1,5 +1,5 @@
 // 내 정보 수정(FE-77): 마이페이지 "내 정보 수정" 화면의 내부 틀. 서버 닉네임 · 탈퇴 API가 아직 없어 저장은 이 브라우저의 로그인 표시값(session.js)에만 반영한다.
-// 구성: 프로필(미리보기 · 닉네임 · 한 줄 소개 · 공개 범위) · 계정 정보 · 내 기록 관리 · 계정 관리(로그아웃 · 회원 탈퇴) · 약관. 알림 등 앱 설정은 "환경 설정"에서 다룬다
+// 구성: 프로필(닉네임 · 한 줄 소개 · 재심 · 공개 범위) · 계정 정보 · 내 기록 관리 · 계정 관리(로그아웃 · 회원 탈퇴) · 약관. 알림 등 앱 설정은 "환경 설정"에서 다룬다
 // 한 줄 소개 · 공개 범위도 서버 API 전이라 이 브라우저(localStorage)에만 저장한다
 import { button, element, mockTag } from '../../components/siteLayout.js';
 import { API_MODE } from '../../api/config.js';
@@ -80,7 +80,7 @@ function toggle(id, label, checked, onChange) {
   return row;
 }
 
-export function renderProfileEdit({ api, navigate, go, data = {}, cards }) {
+export function renderProfileEdit({ api, navigate, go, data = {} }) {
   const user = currentUser();
   const extras = loadExtras();
   const box = element('div', 'my-detail edit-page');
@@ -127,22 +127,10 @@ export function renderProfileEdit({ api, navigate, go, data = {}, cards }) {
   const bioField = element('div', 'edit-field');
   bioField.append(bioLabel, bio, bioHint);
 
-  // 카드 미리보기: 마이페이지 첫 화면과 같은 프로필카드 · 성향카드. 닉네임을 입력하는 대로 프로필카드 이름이 바뀐다
-  const [profileCard, typeCard] = cards();
-  const cardRow = element('div', 'edit-cards');
-  cardRow.append(profileCard, typeCard);
-  const syncPreview = () => {
-    const name = input.value.trim() || user?.nickname;
-    const title = profileCard.querySelector('.my-card-name');
-    if (name && title) {
-      title.textContent = name;
-      profileCard.setAttribute('aria-label', profileCard.getAttribute('aria-label').replace(/^(프로필카드 열기: )[^,]*/, `$1${name}`));
-    }
-    bioCount.textContent = `${bio.value.length}/${BIO_MAX}`;
-  };
-  input.addEventListener('input', syncPreview);
-  bio.addEventListener('input', syncPreview);
-  syncPreview();
+  // 한 줄 소개 글자 수. 프로필카드 · 성향카드 그림은 마이페이지 첫 화면에 있어 여기에는 두지 않는다
+  const syncCount = () => { bioCount.textContent = `${bio.value.length}/${BIO_MAX}`; };
+  bio.addEventListener('input', syncCount);
+  syncCount();
 
   const portrait = element('div', 'edit-field');
   portrait.append(element('span', 'edit-label', '대표 이미지 · 카드 꾸미기'), button('프로필카드에서 바꾸기', () => go('profile'), 'secondary-button'));
@@ -239,7 +227,7 @@ export function renderProfileEdit({ api, navigate, go, data = {}, cards }) {
   actions.append(save, button('취소', () => go(null), 'secondary-button'));
 
   const profileBody = element('div', 'edit-profile');
-  profileBody.append(cardRow, nickname, bioField);
+  profileBody.append(nickname, bioField);
 
   form.append(
     section('프로필', profileBody, portrait, retake, visibility),

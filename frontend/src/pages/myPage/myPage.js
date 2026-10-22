@@ -17,6 +17,7 @@ import { openCaseReviewPopup } from '../caseReview/caseReviewPopup.js';
 import { renderProfileEdit } from './myProfileEdit.js';
 import { RETAKE_NOTES, openRetakeDialog, retakeAfter, retakeState } from './baselineRetake.js';
 import { setShownCard, shownSlot } from '../../utils/shownCard.js';
+import { selectedChoice, setProfileCardType, typeChoices } from '../../utils/profileCardType.js';
 
 // S-17 마이페이지 (WBS 7.6.6). GET /my-page 한 번 호출로 받고, 기록이 없어도 404가 아니라 빈 200이다(명세 P-5).
 // 메인 책상의 커피잔으로 들어온다(FE-44): 커다란 커피잔이 날아와 페이드아웃하는 사이(utils/coffeeDive.js) 이 화면(from: 'mug')으로 넘어온다.
@@ -254,7 +255,7 @@ function profileCardParts(deco, data) {
   face.append(faceImage);
   fitPortraitIn(face, faceImage, { centerWide: true }); // 가로로 긴 그림(사건 사진 등)은 창 세로 가운데에, 서 있는 캐릭터는 발을 아래에
   const nickname = data.nickname || DEFAULT_NICKNAME;
-  const typeName = currentTypeOf(data)?.name;
+  const typeName = selectedChoice(data)?.type.name ?? currentTypeOf(data)?.name; // 카드 아래 성향: 카드 꾸미기에서 고른 것(기본 최근)
   const result = element('p', `my-card-note${typeName ? '' : ' is-empty'}`, typeName ?? '성향 테스트 전');
   return {
     caption,
@@ -1017,7 +1018,34 @@ function previewCard(data, deco = decoFor(data)) {
   return card;
 }
 
-// 카드 꾸미기 창: 테두리 · 배경 · 카드 책갈피를 고른다. 창 안에도 미리 보기를 두고, 고를 때마다 화면 쪽 미리 보기(onPick)도 다시 그린다.
+// 카드 아래 성향 고르기(FE-77): 초심 · 재심 · 최근 중 하나를 글자 라디오로. 같은 유형은 한 칸으로 묶인다. 공개 성향카드와는 별개의 값이다
+function typeChoiceSection(data, onPick) {
+  const field = element('fieldset', 'my-deco');
+  field.append(element('legend', '', '카드 아래 성향'));
+  const choices = typeChoices(data);
+  if (choices.length === 0) {
+    field.append(element('p', 'my-hint', '성향 테스트를 하면 카드 아래에 보여 줄 성향을 고를 수 있어요.'));
+    return field;
+  }
+  field.append(element('p', 'my-hint', '프로필카드 아래에 보일 성향이에요. 기본은 최근이고, 같은 유형은 한 칸으로 묶여요.'));
+  const selected = selectedChoice(data);
+  const list = element('div', 'my-type-choices');
+  choices.forEach((choice, index) => {
+    const label = element('label', 'my-type-choice');
+    const input = element('input');
+    input.type = 'radio';
+    input.name = 'profile-card-type';
+    input.value = choice.keys[0];
+    input.checked = choice === selected || (!selected && index === 0);
+    input.addEventListener('change', () => { setProfileCardType(choice.keys[0]); onPick(); });
+    label.append(input, element('span', '', choice.label));
+    list.append(label);
+  });
+  field.append(list);
+  return field;
+}
+
+// 카드 꾸미기 창: 테두리 · 배경 · 카드 책갈피 · 카드 아래 성향을 고른다. 창 안에도 미리 보기를 두고, 고를 때마다 화면 쪽 미리 보기(onPick)도 다시 그린다.
 // 마이페이지 커피색 토큰이 적용되도록 .my-page 안에 붙이고, 닫으면 지우고 연 버튼으로 포커스를 돌려준다(Esc · 바깥 · 닫기)
 function openDecoDialog({ open, data, onPick, opener }) {
   const dialog = element('dialog', 'my-deco-dialog');
@@ -1039,6 +1067,7 @@ function openDecoDialog({ open, data, onPick, opener }) {
     swatchPicker('frame', open, shown.frame, paint),
     swatchPicker('background', open, shown.background, paint),
     sashSection(open, paint),
+    typeChoiceSection(data, paint),
   );
   body.append(preview, pickers);
   dialog.append(head, body);
@@ -1191,7 +1220,7 @@ function renderView(view, data, navigate, go, api) {
     type: () => renderTypePage(data, navigate),
     collection: () => renderCollection(data.experiences),
     cases: () => renderCases(data.experiences ?? [], navigate, api),
-    edit: () => renderProfileEdit({ api, navigate, go, data, cards: () => profileCardPair(data, go) }),
+    edit: () => renderProfileEdit({ api, navigate, go, data }),
     settings: () => renderShell('환경 설정은 곧 열려요.'),
   }[view]();
   return [head, body];
