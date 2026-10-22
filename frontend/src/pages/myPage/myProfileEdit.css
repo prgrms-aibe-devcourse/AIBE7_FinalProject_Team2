@@ -7,7 +7,7 @@
 .edit-title { margin: 0; color: var(--color-heading); font: 700 var(--text-title-3)/1.4 var(--font-heading); }
 .edit-field { display: grid; gap: 6px; justify-items: start; }
 .edit-label { font-weight: 700; }
-.edit-input { box-sizing: border-box; width: 100%; max-width: 320px; min-height: 44px; padding: 8px 12px; border: 1px solid var(--color-border-strong); border-radius: 6px; background: var(--color-card); color: var(--color-text); font: inherit; }
+.edit-input { box-sizing: border-box; width: 100%; max-width: 320px; min-height: 44px; padding: 8px 12px; border: 1px solid var(--color-border-strong); border-radius: 4px; background: var(--color-card); color: var(--color-text); font: inherit; font-size: 16px; }
 .edit-input:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
 .edit-input:disabled { background: var(--color-surface); color: var(--color-muted); }
 .edit-input[aria-invalid="true"] { border-color: var(--color-danger); }
@@ -22,8 +22,14 @@
 .edit-confirm[hidden] { display: none; }
 .edit-agree { display: flex; align-items: flex-start; gap: 8px; }
 .edit-agree input { margin-top: 4px; }
-.edit-danger { color: var(--color-danger); border-color: currentColor; }
-.edit-danger:disabled { opacity: .5; cursor: default; }
+.edit-danger { color: var(--color-caution); border-color: var(--color-caution-border); } /* 되돌릴 수 없는 동작은 주의 색(빨강은 오류에만) */
+.edit-danger:disabled { opacity: .6; cursor: default; }
 .edit-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .edit-status { min-height: 1.5em; margin: 0; color: var(--color-heading); font-weight: 700; }
+
+.edit-profile { display: grid; gap: 14px; }
+.edit-cards { display: flex; flex-wrap: wrap; gap: 20px; padding: 6px 0 12px; }
+.edit-count { font-variant-numeric: tabular-nums; }
+.edit-toggle { display: flex; align-items: center; gap: 8px; min-height: 44px; }
+.edit-toggle label { cursor: pointer; }
 @media (max-width: 720px) { .edit-fact { grid-template-columns: minmax(0, 1fr); gap: 2px; } }

@@ -20,17 +20,32 @@ export function axisSeries(history, axisKey) {
 // label은 그래프 아래 · 표에 쓰는 짧은 이름, title은 툴팁에 쓰는 긴 이름이다
 export function axisTrend(history, axisKey, testScores) {
   const test = testScores?.[axisKey];
-  const start = typeof test === 'number' ? [{ order: 0, ratio: test, label: '테스트', title: '성향 테스트', isTest: true }] : [];
+  const start = typeof test === 'number' ? [{ order: 0, ratio: test, label: '초심', title: '초심 · 성향 테스트', isTest: true }] : [];
   const points = axisSeries(history, axisKey).map((point) => ({ ...point, label: String(point.order), title: `${point.order}번째 체험 · ${history[point.order - 1]?.title ?? ''}`.replace(/ · $/, ''), isTest: false }));
   return [...start, ...points];
 }
 
-// 성향 변화 흐름에 보일 칸(order): 시작점(테스트 0, 없으면 첫 체험 1) + 최근 체험 recent건. 체험이 적으면 있는 만큼만
+// 성향 변화 흐름에 보일 칸(order): 테스트(0, 있을 때만) + 최근 체험 recent건. 체험이 적으면 있는 만큼만.
+// 테스트가 없으면 체험만 recent건이다(창 밖의 첫 체험을 따로 붙이면 recent건보다 많아진다, FE-77)
 export const TREND_RECENT = 10;
 export function trendOrders(historyLength, hasTest, recent = TREND_RECENT) {
   const latest = Array.from({ length: Math.min(recent, historyLength) }, (_, index) => historyLength - Math.min(recent, historyLength) + index + 1);
-  const start = hasTest ? 0 : (historyLength > 0 ? 1 : null);
-  return start === null || latest.includes(start) ? latest : [start, ...latest];
+  return hasTest ? [0, ...latest] : latest;
+}
+
+// 성향카드를 다시 정한 테스트(FE-77)가 흐름에 들어갈 자리: 그 시각까지 마친 체험 수(history는 완료 순).
+// 사람마다 시점이 달라 건수(completedExperienceCount)가 아니라 시각으로 정한다(그래프의 체험은 성향 기여가 저장된 첫 회차만이라 건수와 어긋날 수 있다)
+export function retakeAfterOrder(history, testedAt) {
+  const list = history ?? [];
+  const at = Date.parse(testedAt);
+  if (Number.isNaN(at)) return list.length;
+  return list.filter((entry) => Date.parse(entry?.completedAt) <= at).length;
+}
+
+// trendOrders 결과에 다시 정함 칸('retake')을 끼운다: 마친 체험 after건 바로 뒤. 그 체험이 최근 창 밖으로 밀려났으면 보이는 첫 체험 앞에 둔다(항상 보인다)
+export function withRetakeSlot(orders, after) {
+  const index = orders.findIndex((order) => order > after);
+  return index === -1 ? [...orders, 'retake'] : [...orders.slice(0, index), 'retake', ...orders.slice(index)];
 }
 
 // 한 축의 변경폭: 처음(테스트 또는 첫 체험) → 지금. 지금은 current(현재 판결 성향 = 최근 체험 3건 평균, API 명세 P-5)이고,
