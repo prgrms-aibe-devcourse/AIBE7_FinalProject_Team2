@@ -99,7 +99,7 @@ export const DEFAULT_PORTRAITS = ['/images/characters/standing/naero.webp', '/im
 export const DEFAULT_DECO = { portrait: DEFAULT_PORTRAITS[0], frame: 'basic', background: 'cream', sashStyle: 'none', sashColorShort: 'wine', sashColorLong: 'wine', sashIconLeft: 'none', sashIconRight: 'none' };
 export const DEFAULT_BOOKMARK = { bookmarkCharacter: 'naero', bookmarkFace: 'happy', bookmarkFaceStyle: 'generated', bookmarkColor: 'bronze' };
 
-const pickId = (list, value, fallback) => (list.some(({ id }) => id === value) ? value : fallback);
+export const pickId = (list, value, fallback) => (list.some(({ id }) => id === value) ? value : fallback);
 const pickOf = (list, value, fallback) => (list.includes(value) ? value : fallback);
 
 /** 서버가 준 꾸미기(P-5 profileDeco)를 화면이 쓰는 모양으로. 모르는 값 · 빠진 값은 기본으로 본다. 잠겼는지는 보지 않는다(shownDeco가 한다) */

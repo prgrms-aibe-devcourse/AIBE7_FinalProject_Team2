@@ -1004,17 +1004,18 @@ const SWATCH_TYPES = {
 };
 const { portrait: _portrait, ...PLAIN_DECO } = DEFAULT_DECO;
 // 꾸미기 고르기가 다루는 카드: 프로필카드(서버에 저장) · 성향카드(FE-82, 이 브라우저에 저장). 고르기 칸(견본 · 책갈피 묶음)은 둘이 함께 쓴다
-// prefix: 라디오 묶음 이름 앞에 붙인다 · base: 견본에 깔 나머지 꾸미기 · backgrounds: 배경 목록(성향카드는 "기본"이 더 있다) · shown(open): 잠금을 반영한 지금 꾸미기
-const PROFILE_TARGET = { prefix: 'profile', base: PLAIN_DECO, backgrounds: BACKGROUNDS, save: (patch) => saveDeco(patch), shown: (open) => shownDeco(currentDeco(), open) };
-const TYPE_TARGET = { prefix: 'type', base: DEFAULT_TYPE_DECO, backgrounds: TYPE_BACKGROUNDS, save: (patch) => setTypeDeco(patch), shown: (open) => shownTypeDeco(getTypeDeco(), open) };
+// prefix: 라디오 묶음 이름 앞에 붙인다 · base: 견본에 깔 나머지 꾸미기 · backgrounds: 배경 목록(성향카드는 "기본"이 더 있다)
+// alwaysOpen: 도전과제와 상관없이 늘 열려 있는 칸({ 해금 종류: [id] }, 성향카드의 배경 "기본") · shown(open): 잠금을 반영한 지금 꾸미기
+const PROFILE_TARGET = { prefix: 'profile', base: PLAIN_DECO, backgrounds: BACKGROUNDS, alwaysOpen: {}, save: (patch) => saveDeco(patch), shown: (open) => shownDeco(currentDeco(), open) };
+const TYPE_TARGET = { prefix: 'type', base: DEFAULT_TYPE_DECO, backgrounds: TYPE_BACKGROUNDS, alwaysOpen: { backgrounds: [DEFAULT_TYPE_DECO.background] }, save: (patch) => setTypeDeco(patch), shown: (open) => shownTypeDeco(getTypeDeco(), open) };
 const miniCard = (look) => {
   const sample = element('span', `my-mini-card deco-frame-${look.frame} deco-bg-${look.background} ${sashClasses(look)}`);
   sample.append(...sashes(look));
   return sample;
 };
-// 해금 요소 하나의 라디오 칸: 잠김 여부 · 잠금 사유 · 이름 캡션을 한곳에서 만든다. reason: 캡션에 잠금 사유를 덧붙일지(칩 모양은 좁아서 뺀다)
-function unlockOption(open, set, key, { group, id, name, checked, art, onChange, reason = true }) {
-  const locked = !open[set].has(key) && !(set === 'backgrounds' && key === DEFAULT_TYPE_DECO.background); // 성향카드의 배경 "기본"은 늘 열려 있다
+// 해금 요소 하나의 라디오 칸: 잠김 여부 · 잠금 사유 · 이름 캡션을 한곳에서 만든다. reason: 캡션에 잠금 사유를 덧붙일지(칩 모양은 좁아서 뺀다) · alwaysOpen: 늘 열려 있는 칸이면 true
+function unlockOption(open, set, key, { group, id, name, checked, art, onChange, reason = true, alwaysOpen = false }) {
+  const locked = !alwaysOpen && !open[set].has(key);
   const by = unlockerOf(set, key)?.title ?? '';
   const caption = element('span', 'my-deco-name', name);
   if (locked && reason) caption.append(element('small', '', by));
@@ -1027,7 +1028,7 @@ function swatchPicker(type, open, shown, onPick, base = PLAIN_DECO, legendClass 
   const row = element('div', 'my-deco-swatches');
   (type === 'background' ? target.backgrounds : list).forEach(({ id, name }) => {
     row.append(unlockOption(open, set, id, {
-      group: `${target.prefix}-${group}`, id, name, checked: id === shown, art: miniCard({ ...base, [type]: id }),
+      group: `${target.prefix}-${group}`, id, name, checked: id === shown, art: miniCard({ ...base, [type]: id }), alwaysOpen: target.alwaysOpen[set]?.includes(id),
       onChange: () => { target.save({ [type]: id }); onPick(); },
     }));
   });

@@ -1,6 +1,6 @@
 // 성향카드 꾸미기(FE-82): 성향카드 화면에서 고르는 테두리 · 배경 · 책갈피. 프로필카드 꾸미기(profileDeco.js)와 같은 값 목록 · 같은 해금(도전과제)을 쓰고,
 // 저장만 따로다. 서버 API 전이라 이 브라우저에만 저장한다(profileCardType.js와 같다. 서버로 옮기는 것은 후속 작업)
-import { BACKGROUNDS, DEFAULT_DECO, DEFAULT_PORTRAITS, FRAMES, SASH_COLORS, SASH_ICONS, SASH_STYLES, shownDeco } from './profileDeco.js';
+import { BACKGROUNDS, DEFAULT_DECO, DEFAULT_PORTRAITS, FRAMES, SASH_COLORS, SASH_ICONS, SASH_STYLES, pickId, shownDeco } from './profileDeco.js';
 import { localStore } from './safeStorage.js';
 
 const STORAGE_KEY = 'nlnb-type-card-deco';
@@ -10,8 +10,6 @@ let unsaved; // 저장소를 못 쓸 때 이번 방문 동안의 값
 export const TYPE_BACKGROUNDS = [{ id: 'classic', name: '기본' }, ...BACKGROUNDS];
 const { portrait: _portrait, ...PLAIN } = DEFAULT_DECO;
 export const DEFAULT_TYPE_DECO = { ...PLAIN, background: 'classic' };
-
-const pickId = (list, value, fallback) => (list.some(({ id }) => id === value) ? value : fallback);
 
 /** 저장된 값을 화면이 쓰는 모양으로. 모르는 값 · 빠진 값은 기본으로 본다. 잠겼는지는 보지 않는다(shownTypeDeco가 한다) */
 export const normalizeTypeDeco = (deco) => ({
