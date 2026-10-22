@@ -282,7 +282,7 @@ img.my-sash-icon.is-missing { visibility: hidden; }
 .trend-tick { fill: var(--color-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
 .trend-line { fill: none; stroke: var(--color-accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .trend-dot { fill: var(--color-accent); stroke: var(--color-card); stroke-width: 2; }
-.trend-dot.is-test { fill: var(--color-card); stroke: var(--color-accent); }
+.trend-dot.is-test { fill: var(--color-card); stroke: var(--color-accent); stroke-width: 1.5; } /* 속 빈 마름모는 윤곽이 바깥으로 나와, 안쪽을 먹는 최근 마름모와 보이는 크기를 맞춘다(trendGraph.js BASE_R) */
 .trend-anchor-line { stroke: var(--color-heading); stroke-width: 1.25; stroke-dasharray: 3 3; } /* 기준점(초심 · 재심 · 최근) 세로 점선(FE-77) */
 .trend-tick.is-retake { fill: var(--color-heading); font-weight: 700; }
 .change-sub-title { margin: 22px 0 10px; font: 700 var(--text-body)/1.5 var(--font-heading); color: var(--color-heading); }
