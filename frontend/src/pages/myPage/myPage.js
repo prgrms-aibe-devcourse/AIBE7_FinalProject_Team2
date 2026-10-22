@@ -461,7 +461,7 @@ function changeRow({ axis, points, change }) {
     return line;
   });
   // 두 선이 겹치거나 붙으면(사이가 선 두 개를 놓을 수 없을 만큼 좁으면) 두 선의 가운데에 하나만 둔다. 폭은 그려진 뒤에야 알 수 있고 창 크기에 따라 바뀌므로
-  // 막대 크기를 지켜보다가(ResizeObserver) 다시 잰다. 합쳤다가 넓어지면 원래 두 선으로 돌아온다(막대가 화면에서 떨어지면 관찰도 같이 끝난다)
+  // 막대 크기를 지켜보다가(ResizeObserver) 다시 잰다. 합쳤다가 넓어지면 원래 두 선으로 돌아온다. 관찰을 끝내는 코드(disconnect)는 두지 않는다: 화면이 바뀌어 막대가 DOM에서 떨어지면 브라우저가 관찰 대상과 observer를 함께 정리한다
   if (lines.length === 2 && typeof ResizeObserver === 'function') {
     new ResizeObserver(() => {
       const width = track.getBoundingClientRect().width;
