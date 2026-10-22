@@ -141,7 +141,8 @@ test('recordOf: 마이페이지 history에서 이 사건의 축 점수 · 유형
   assert.equal(recordOf(null, 3), null); // 마이페이지를 못 불러옴
 });
 
-test('recordOf: type이 없는 옛 응답(BE-100 이전)이면 null로 둔다', () => {
+test('recordOf: type 칸이 없는 옛 응답(BE-100 이전 서버)은 undefined로 두어 서버의 null과 구분한다', () => {
   const myPage = { history: [{ caseId: 3, axisScores: { APOLOGY_SINCERITY: 1 } }] };
-  assert.deepEqual(recordOf(myPage, 3), { scores: { APOLOGY_SINCERITY: 1 }, type: null, order: 1 });
+  assert.deepEqual(recordOf(myPage, 3), { scores: { APOLOGY_SINCERITY: 1 }, type: undefined, order: 1 });
+  assert.notEqual(recordOf(myPage, 3).type, null);
 });

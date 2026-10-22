@@ -205,7 +205,9 @@ export async function getMyPage() {
   return structuredClone({
     personality: saved ? toResult(saved) : null,
     judgmentPersonality: judgmentOf(history),
-    // 사건별 유형(history[].type, BE-100): 서버와 같이 그 체험 하나만으로 낸 종합의 유형이다
+    // 사건별 유형(history[].type, BE-100): 서버와 같이 그 체험 하나만으로 낸 종합의 유형이다.
+    // 주의: judgmentOf는 평균 점수를 0.5와 비교해 글자를 정하고, 서버는 정확한 분수의 부호로 정한다(산식 7장).
+    // 체험 한 건이면 두 방식의 결과가 같지만, 최근 3건 평균(judgmentPersonality)은 0.5 근처에서 서버와 다를 수 있다(PR #246 리뷰)
     history: history.map((entry) => ({ ...historyLine(entry), type: judgmentOf([entry])?.type ?? null })),
     experiences: [...mockExperiences, ...extraExperiences],
     ...mockProfileView(profileStats()),

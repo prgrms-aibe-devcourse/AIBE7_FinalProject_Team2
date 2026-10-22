@@ -44,7 +44,10 @@ function trendSections(myPage, record) {
 }
 
 // 성향카드 옆 설명(기사 문체): 유형 이름(16개 모두 "~형"이라 「」 뒤 "에 가깝다"로 잇는다) + 판결 연계 설명(verdictDescription, "~다" 문체)
-// type: 이 사건 한 건의 유형(P-5 history[].type, 유형 공통 형식 9-1). 네 축이 다 모이지 않은 사건은 서버가 null로 준다(BE-100)
+// type: 이 사건 한 건의 유형(P-5 history[].type, 유형 공통 형식 9-1). 네 축이 다 모이지 않은 사건은 서버가 null로 준다(BE-100).
+// undefined는 응답에 type 칸이 없는 경우(BE-100 이전 서버)라 "네 축 부족"이라고 단정하지 않는다(PR #246 리뷰)
+const NO_TYPE_FIELD = '이 사건의 유형은 지금 보여 줄 수 없다. 잠시 뒤 마이페이지에서 다시 열면 보인다.';
+const NOT_ENOUGH_AXES = '이 사건에서는 네 축이 모두 드러나지 않아 유형을 정하지 않았다.';
 function cardStory(type) {
   const text = element('div', 'my-result-card-text');
   if (type) {
@@ -53,7 +56,7 @@ function cardStory(type) {
     text.append(lead);
     if (type.verdictDescription) text.append(element('p', 'sheet-text', type.verdictDescription));
   } else {
-    text.append(element('p', 'sheet-text', '이 사건에서는 네 축이 모두 드러나지 않아 유형을 정하지 않았다.'));
+    text.append(element('p', 'sheet-text', type === undefined ? NO_TYPE_FIELD : NOT_ENOUGH_AXES));
   }
   text.append(element('p', 'sheet-text my-result-note', '이 성향은 이 사건 한 건의 판단만으로 집계했으며, 최근 체험 3건을 평균한 성향은 마이페이지에서 확인할 수 있다.'));
   return text;
@@ -73,7 +76,8 @@ function leanSections(record) {
   lean.append(list);
   const card = element('section', 'my-result-card');
   card.setAttribute('aria-label', '이 사건의 성향카드');
-  card.append(typeFace(record.type, '"이 사건에서 네 축이 모두 드러나지 않았어요"'), cardStory(record.type));
+  const emptyNote = record.type === undefined ? '"지금은 성향카드를 보여 줄 수 없어요"' : '"이 사건에서 네 축이 모두 드러나지 않았어요"';
+  card.append(typeFace(record.type, emptyNote), cardStory(record.type));
   return [lean, card];
 }
 
