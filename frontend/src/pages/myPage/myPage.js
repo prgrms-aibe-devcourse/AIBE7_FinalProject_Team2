@@ -18,6 +18,7 @@ import { renderProfileEdit } from './myProfileEdit.js';
 import { RETAKE_NOTES, openRetakeDialog, retakeAfter, retakeState } from './baselineRetake.js';
 import { SHOWN_SLOTS, setShownCard, shownSlot } from '../../utils/shownCard.js';
 import { selectedChoice, setProfileCardType, typeChoices } from '../../utils/profileCardType.js';
+import { DEFAULT_TYPE_DECO, TYPE_BACKGROUNDS, getTypeDeco, setTypeDeco, shownTypeDeco } from '../../utils/typeCardDeco.js';
 import { configureProfileSettings, hydrateProfileSettings } from '../../utils/profileSettings.js';
 
 // S-17 마이페이지 (WBS 7.6.6). GET /my-page 한 번 호출로 받고, 기록이 없어도 404가 아니라 빈 200이다(명세 P-5).
@@ -270,6 +271,10 @@ function profileCardParts(deco, data) {
   };
 }
 
+// 성향카드 꾸미기(FE-82): 성향카드 화면에서 고른 테두리 · 배경 · 책갈피를 카드에 입힌다(잠긴 것은 기본으로). 기본 배경은 원래 타로카드 모양이라 클래스를 붙이지 않는다
+const shownTypeDecoOf = (data) => shownTypeDeco(getTypeDeco(), openOf(data));
+const typeDecoClasses = (deco) => `deco-frame-${deco.frame}${deco.background === DEFAULT_TYPE_DECO.background ? '' : ` deco-bg-${deco.background}`} ${sashClasses(deco)}`;
+
 // 성향카드가 보여 줄 현재 유형: 현재 판결 성향(최근 체험 평균). 네 축이 다 모이지 않아 없으면 성향 테스트 유형. 첫 화면 · 성향카드 화면이 같이 쓴다
 const currentTypeOf = (data) => data.judgmentPersonality?.type ?? data.personality?.type;
 
@@ -284,9 +289,11 @@ function profileCardOf(data, go) {
 function profileCardPair(data, go) {
   const profile = profileCardOf(data, go);
   const type = currentTypeOf(data);
+  const deco = shownTypeDecoOf(data); // 성향카드 화면에서 고른 꾸미기(FE-82)
+  const classes = typeDecoClasses(deco);
   const typeCardNode = type
-    ? cardButton('is-type', `성향카드 열기: ${type.name}`, element('p', 'my-card-name', type.name), typePortrait(type), element('p', 'my-card-note my-type-quote', type.meme))
-    : cardButton('is-type is-empty', '성향카드 열기: 아직 성향을 몰라요', element('p', 'my-card-name', '아직 몰라요'), emptyWindow(), element('p', 'my-card-note my-type-quote', '"성향 테스트로 카드를 뽑아 봐요"'));
+    ? cardButton(`is-type ${classes}`, `성향카드 열기: ${type.name}${sashNote(deco)}`, element('p', 'my-card-name', type.name), typePortrait(type), element('p', 'my-card-note my-type-quote', type.meme), ...sashes(deco))
+    : cardButton(`is-type is-empty ${classes}`, `성향카드 열기: 아직 성향을 몰라요${sashNote(deco)}`, element('p', 'my-card-name', '아직 몰라요'), emptyWindow(), element('p', 'my-card-note my-type-quote', '"성향 테스트로 카드를 뽑아 봐요"'), ...sashes(deco));
   typeCardNode.addEventListener('click', () => go('type'));
   return [profile, typeCardNode];
 }
@@ -712,11 +719,12 @@ const typeDescription = (type) => element('p', 'my-type-desc', type.oneLiner);
 
 // 첫 화면 성향카드와 같은 타로카드 모양(이름 · 성향 이미지 · 캐릭터 대사). 누르는 카드가 아니라 div. type이 없으면 빈 그림 창
 // 내 결과 지면(FE-75)도 이 사건의 성향카드로 쓴다
-export function typeFace(type, emptyNote = '"성향 테스트로 카드를 뽑아 봐요"') {
-  const card = element('div', `my-card is-type is-detail${type ? '' : ' is-empty'}`);
+// deco: 성향카드 꾸미기(FE-82). 주면 테두리 · 배경 · 책갈피를 입힌다(내 결과 지면은 사건별 카드라 주지 않는다)
+export function typeFace(type, emptyNote = '"성향 테스트로 카드를 뽑아 봐요"', deco = null) {
+  const card = element('div', `my-card is-type is-detail${type ? '' : ' is-empty'}${deco ? ` ${typeDecoClasses(deco)}` : ''}`);
   card.setAttribute('role', 'group');
-  card.setAttribute('aria-label', type ? `성향카드: ${type.name}` : '성향카드: 아직 몰라요');
-  card.append(element('p', 'my-card-name', type ? type.name : '아직 몰라요'), type ? typePortrait(type) : emptyWindow(), element('p', 'my-card-note my-type-quote', type ? type.meme : emptyNote));
+  card.setAttribute('aria-label', `${type ? `성향카드: ${type.name}` : '성향카드: 아직 몰라요'}${deco ? sashNote(deco) : ''}`);
+  card.append(element('p', 'my-card-name', type ? type.name : '아직 몰라요'), type ? typePortrait(type) : emptyWindow(), element('p', 'my-card-note my-type-quote', type ? type.meme : emptyNote), ...(deco ? sashes(deco) : []));
   return card;
 }
 
@@ -904,9 +912,15 @@ function renderTypePage(data, navigate) {
   const heroType = currentTypeOf(data);
   if (heroType) {
     const hero = element('section', 'my-type-hero');
-    const card = typeFace(heroType);
+    const open = openOf(data);
+    const slot = element('div', 'my-type-card-slot'); // 꾸미기 창에서 고를 때마다 카드를 다시 그린다
+    const paintCard = () => slot.replaceChildren(typeFace(heroType, undefined, shownTypeDecoOf(data)));
+    paintCard();
+    const decorate = button('카드 꾸미기', () => openDecoDialog({ open, data, onPick: paintCard, opener: decorate, forType: true }), 'primary-button my-card-deco-button');
+    const column = element('div', 'my-card-col');
+    column.append(slot, decorate);
     judgment.append(typeDescription(heroType)); // 성향 설명은 성향 막대 아래로
-    hero.append(card, judgment);
+    hero.append(column, judgment);
     box.append(hero);
   } else {
     const empty = element('div', 'my-empty');
@@ -984,33 +998,38 @@ function portraitPicker(open, shownPortrait, onPick) {
 // 카드 테두리 · 배경 견본, 책갈피 색 · 모양 견본. 견본은 그 요소만 바꾼 작은 카드다.
 // base: 견본에 깔 나머지 꾸미기(모양 견본은 그 모양에서 지금 고른 색으로 그린다)
 const SWATCH_TYPES = {
-  frame: { list: FRAMES, set: 'frames', title: '카드 테두리', group: 'profile-frame' },
-  background: { list: BACKGROUNDS, set: 'backgrounds', title: '카드 배경', group: 'profile-background' },
-  sashStyle: { list: SASH_STYLES, set: 'sashStyles', title: '모양', group: 'profile-sash-style' },
+  frame: { list: FRAMES, set: 'frames', title: '카드 테두리', group: 'frame' },
+  background: { list: BACKGROUNDS, set: 'backgrounds', title: '카드 배경', group: 'background' },
+  sashStyle: { list: SASH_STYLES, set: 'sashStyles', title: '모양', group: 'sash-style' },
 };
 const { portrait: _portrait, ...PLAIN_DECO } = DEFAULT_DECO;
+// 꾸미기 고르기가 다루는 카드: 프로필카드(서버에 저장) · 성향카드(FE-82, 이 브라우저에 저장). 고르기 칸(견본 · 책갈피 묶음)은 둘이 함께 쓴다
+// prefix: 라디오 묶음 이름 앞에 붙인다 · base: 견본에 깔 나머지 꾸미기 · backgrounds: 배경 목록(성향카드는 "기본"이 더 있다)
+// alwaysOpen: 도전과제와 상관없이 늘 열려 있는 칸({ 해금 종류: [id] }, 성향카드의 배경 "기본") · shown(open): 잠금을 반영한 지금 꾸미기
+const PROFILE_TARGET = { prefix: 'profile', base: PLAIN_DECO, backgrounds: BACKGROUNDS, alwaysOpen: {}, save: (patch) => saveDeco(patch), shown: (open) => shownDeco(currentDeco(), open) };
+const TYPE_TARGET = { prefix: 'type', base: DEFAULT_TYPE_DECO, backgrounds: TYPE_BACKGROUNDS, alwaysOpen: { backgrounds: [DEFAULT_TYPE_DECO.background] }, save: (patch) => setTypeDeco(patch), shown: (open) => shownTypeDeco(getTypeDeco(), open) };
 const miniCard = (look) => {
   const sample = element('span', `my-mini-card deco-frame-${look.frame} deco-bg-${look.background} ${sashClasses(look)}`);
   sample.append(...sashes(look));
   return sample;
 };
-// 해금 요소 하나의 라디오 칸: 잠김 여부 · 잠금 사유 · 이름 캡션을 한곳에서 만든다. reason: 캡션에 잠금 사유를 덧붙일지(칩 모양은 좁아서 뺀다)
-function unlockOption(open, set, key, { group, id, name, checked, art, onChange, reason = true }) {
-  const locked = !open[set].has(key);
+// 해금 요소 하나의 라디오 칸: 잠김 여부 · 잠금 사유 · 이름 캡션을 한곳에서 만든다. reason: 캡션에 잠금 사유를 덧붙일지(칩 모양은 좁아서 뺀다) · alwaysOpen: 늘 열려 있는 칸이면 true
+function unlockOption(open, set, key, { group, id, name, checked, art, onChange, reason = true, alwaysOpen = false }) {
+  const locked = !alwaysOpen && !open[set].has(key);
   const by = unlockerOf(set, key)?.title ?? '';
   const caption = element('span', 'my-deco-name', name);
   if (locked && reason) caption.append(element('small', '', by));
   return decoOption({ group, value: id, checked, locked, name, lockedBy: by, onChange }, art, caption);
 }
-function swatchPicker(type, open, shown, onPick, base = PLAIN_DECO, legendClass = '') {
+function swatchPicker(type, open, shown, onPick, base = PLAIN_DECO, legendClass = '', target = PROFILE_TARGET) {
   const { list, set, title, group } = SWATCH_TYPES[type];
   const field = element('fieldset', `my-deco${legendClass ? ` ${legendClass}` : ''}`);
   field.append(element('legend', '', title));
   const row = element('div', 'my-deco-swatches');
-  list.forEach(({ id, name }) => {
+  (type === 'background' ? target.backgrounds : list).forEach(({ id, name }) => {
     row.append(unlockOption(open, set, id, {
-      group, id, name, checked: id === shown, art: miniCard({ ...base, [type]: id }),
-      onChange: () => { saveDeco({ [type]: id }); onPick(); },
+      group: `${target.prefix}-${group}`, id, name, checked: id === shown, art: miniCard({ ...base, [type]: id }), alwaysOpen: target.alwaysOpen[set]?.includes(id),
+      onChange: () => { target.save({ [type]: id }); onPick(); },
     }));
   });
   field.append(row);
@@ -1018,7 +1037,7 @@ function swatchPicker(type, open, shown, onPick, base = PLAIN_DECO, legendClass 
 }
 
 // 짧은 책갈피의 한쪽(좌 · 우) 아이콘 고르기
-function sashIconPicker(side, open, deco, onPick) {
+function sashIconPicker(side, open, deco, onPick, target) {
   const key = side === 'left' ? 'sashIconLeft' : 'sashIconRight';
   const field = element('fieldset', 'my-deco is-sub');
   field.append(element('legend', '', side === 'left' ? '왼쪽 아이콘' : '오른쪽 아이콘'));
@@ -1028,8 +1047,8 @@ function sashIconPicker(side, open, deco, onPick) {
     const art = sashIcon(id);
     if (art) chip.append(art);
     const option = unlockOption(open, 'sashIcons', id, {
-      group: `profile-${key}`, id, name, checked: id === deco[key], art: chip, reason: false,
-      onChange: () => { saveDeco({ [key]: id }); onPick(); },
+      group: `${target.prefix}-${key}`, id, name, checked: id === deco[key], art: chip, reason: false,
+      onChange: () => { target.save({ [key]: id }); onPick(); },
     });
     option.classList.add('is-pill');
     row.append(option);
@@ -1039,7 +1058,7 @@ function sashIconPicker(side, open, deco, onPick) {
 }
 
 // 지금 모양의 색 고르기. 색 표는 모양마다 따로 있고(SASH_COLORS), 해금도 "모양:색"으로 따로 센다
-function sashColorPicker(open, deco, onPick) {
+function sashColorPicker(open, deco, onPick, target) {
   const style = deco.sashStyle;
   const field = element('fieldset', 'my-deco is-sub');
   field.append(element('legend', '', `색 · ${nameOf(SASH_STYLES, style)}`));
@@ -1047,9 +1066,9 @@ function sashColorPicker(open, deco, onPick) {
   SASH_COLORS[style].forEach(({ id, name }) => {
     const key = sashColorKey(style, id);
     row.append(unlockOption(open, 'sashColors', key, {
-      group: `profile-sash-color-${style}`, id, name, checked: id === sashColorOf(deco),
-      art: miniCard({ ...PLAIN_DECO, sashStyle: style, [sashColorField(style)]: id }),
-      onChange: () => { saveDeco({ [sashColorField(style)]: id }); onPick(); },
+      group: `${target.prefix}-sash-color-${style}`, id, name, checked: id === sashColorOf(deco),
+      art: miniCard({ ...target.base, sashStyle: style, [sashColorField(style)]: id }),
+      onChange: () => { target.save({ [sashColorField(style)]: id }); onPick(); },
     }));
   });
   field.append(row);
@@ -1057,10 +1076,10 @@ function sashColorPicker(open, deco, onPick) {
 }
 
 // 카드 책갈피 묶음: 모양(맨 위) → 그 모양의 색 → (짧은 책갈피면) 좌우 아이콘. 고른 것에 따라 아래 칸이 바뀌므로 묶음을 다시 그리고 포커스를 되돌린다
-function sashSection(open, onPick) {
+function sashSection(open, onPick, target = PROFILE_TARGET) {
   const section = element('section', 'my-deco-section');
   const paint = (focusName, focusValue) => {
-    const deco = shownDeco(currentDeco(), open);
+    const deco = target.shown(open);
     const repaint = () => {
       const active = document.activeElement;
       paint(active?.name, active?.value);
@@ -1069,10 +1088,10 @@ function sashSection(open, onPick) {
     const parts = [
       element('h2', 'my-deco-title', '카드 책갈피'),
       element('p', 'my-hint', '카드 윗변 좌우에 거는 띠예요. 모양을 먼저 고르고, 색은 모양마다 따로 골라요. 책갈피 설정(얼굴 · 리본)과는 별개예요.'),
-      swatchPicker('sashStyle', open, deco.sashStyle, repaint, deco, 'is-sub'),
+      swatchPicker('sashStyle', open, deco.sashStyle, repaint, deco, 'is-sub', target),
     ];
-    if (deco.sashStyle !== 'none') parts.push(sashColorPicker(open, deco, repaint));
-    if (deco.sashStyle === 'short') parts.push(sashIconPicker('left', open, deco, repaint), sashIconPicker('right', open, deco, repaint));
+    if (deco.sashStyle !== 'none') parts.push(sashColorPicker(open, deco, repaint, target));
+    if (deco.sashStyle === 'short') parts.push(sashIconPicker('left', open, deco, repaint, target), sashIconPicker('right', open, deco, repaint, target));
     else if (deco.sashStyle === 'long') parts.push(element('p', 'my-hint', '아이콘은 짧고 굵은 책갈피에만 달 수 있어요.'));
     section.replaceChildren(...parts);
     if (focusName) [...section.querySelectorAll(`input[name="${focusName}"]`)].find((input) => input.value === focusValue)?.focus({ preventScroll: true });
@@ -1170,33 +1189,36 @@ function typeChoiceSection(data, onPick) {
 
 // 카드 꾸미기 창: 테두리 · 배경 · 카드 책갈피 · 카드 아래 성향을 고른다. 창 안에도 미리 보기를 두고, 고를 때마다 화면 쪽 미리 보기(onPick)도 다시 그린다.
 // 마이페이지 커피색 토큰이 적용되도록 .my-page 안에 붙이고, 닫으면 지우고 연 버튼으로 포커스를 돌려준다(Esc · 바깥 · 닫기)
-function openDecoDialog({ open, data, onPick, opener }) {
+// forType: 성향카드 꾸미기(FE-82). 같은 창에 미리 보기만 성향카드로, 카드 아래 성향 고르기는 빼고 보여 준다
+function openDecoDialog({ open, data, onPick, opener, forType = false }) {
+  const target = forType ? TYPE_TARGET : PROFILE_TARGET;
   const dialog = element('dialog', 'my-deco-dialog');
-  const title = element('h2', 'my-deco-dialog-title', '카드 꾸미기');
+  const title = element('h2', 'my-deco-dialog-title', forType ? '성향카드 꾸미기' : '카드 꾸미기');
   title.id = `my-deco-dialog-title-${Date.now()}`;
   dialog.setAttribute('aria-labelledby', title.id);
   const head = element('div', 'my-deco-dialog-head');
   head.append(title, button('닫기', () => dialog.close(), 'secondary-button'));
-  const shown = decoFor(data);
+  const shown = target.shown(open);
   const preview = element('div', 'my-deco-dialog-preview');
+  const cardNow = () => (forType ? typeFace(currentTypeOf(data), undefined, target.shown(open)) : previewCard(data));
   const paint = () => {
-    preview.replaceChildren(previewCard(data));
+    preview.replaceChildren(cardNow());
     onPick();
   };
   const body = element('div', 'my-deco-dialog-body');
   const pickers = element('div', 'my-deco-dialog-pickers');
   pickers.append(
     element('p', 'my-hint', '도전과제를 깨면 테두리 · 배경 · 카드 책갈피가 더 열려요. 고르면 바로 저장돼요.'),
-    swatchPicker('frame', open, shown.frame, paint),
-    swatchPicker('background', open, shown.background, paint),
-    sashSection(open, paint),
-    typeChoiceSection(data, paint),
+    swatchPicker('frame', open, shown.frame, paint, target.base, '', target),
+    swatchPicker('background', open, shown.background, paint, target.base, '', target),
+    sashSection(open, paint, target),
   );
+  if (!forType) pickers.append(typeChoiceSection(data, paint));
   body.append(preview, pickers);
   dialog.append(head, body);
   dialog.addEventListener('click', (event) => { if (event.target === dialog) dialog.close(); });
   dialog.addEventListener('close', () => { dialog.remove(); opener?.focus(); });
-  preview.replaceChildren(previewCard(data, shown));
+  preview.replaceChildren(forType ? typeFace(currentTypeOf(data), undefined, shown) : previewCard(data, shown));
   (document.querySelector('.my-page') ?? document.body).append(dialog);
   dialog.showModal();
 }
@@ -1238,8 +1260,8 @@ function renderProfilePage(data, go) {
     counts.append(item);
   });
   const actions = element('div', 'my-profile-actions');
-  const decorate = button('카드 꾸미기', () => openDecoDialog({ open, data, onPick: paintPreview, opener: decorate }), 'primary-button');
-  actions.append(decorate, button('책갈피 설정', () => go('bookmark'), 'secondary-button'), button('도전과제 보기', () => go('achievements'), 'secondary-button'));
+  const decorate = button('카드 꾸미기', () => openDecoDialog({ open, data, onPick: paintPreview, opener: decorate }), 'primary-button my-card-deco-button');
+  actions.append(button('책갈피 설정', () => go('bookmark'), 'secondary-button'), button('도전과제 보기', () => go('achievements'), 'secondary-button'));
   // 개발 전용: 목 API에서 도전과제를 전부 깬 것으로 본다(잠긴 꾸미기를 확인할 때). 개발 서버 + 목 모드에서만 보인다
   if (import.meta.env?.DEV && apiRef?.setMockUnlockAll) {
     const allCleared = progress.length > 0 && progress.every((item) => item.cleared);
@@ -1249,7 +1271,9 @@ function renderProfilePage(data, go) {
     }, 'secondary-button is-dev'));
   }
   summary.append(element('p', 'my-hint', '도전과제를 깨면 대표 이미지 · 테두리 · 배경 · 카드 책갈피가 열려요. 고른 것은 바로 저장돼요.'), counts, actions);
-  hero.append(preview, summary);
+  const column = element('div', 'my-card-col'); // 카드 아래에 카드 꾸미기 버튼(성향카드 화면과 같은 자리 · 폭)
+  column.append(preview, decorate);
+  hero.append(column, summary);
 
   box.append(hero, portraitPicker(open, deco.portrait, paintPreview));
   return box;
