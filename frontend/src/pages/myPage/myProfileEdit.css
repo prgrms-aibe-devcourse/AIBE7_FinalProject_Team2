@@ -25,6 +25,7 @@
 .edit-danger { color: var(--color-caution); border-color: var(--color-caution-border); } /* 되돌릴 수 없는 동작은 주의 색(빨강은 오류에만) */
 .edit-danger:disabled { opacity: .6; cursor: default; }
 .edit-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.edit-submit { justify-content: flex-end; } /* 맨 아래 저장 · 취소는 오른쪽 */
 .edit-status { min-height: 1.5em; margin: 0; color: var(--color-heading); font-weight: 700; }
 
 .edit-profile { display: grid; gap: 14px; }

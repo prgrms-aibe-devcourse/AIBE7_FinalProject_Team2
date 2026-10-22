@@ -1,5 +1,5 @@
 // 내 정보 수정(FE-77): 마이페이지 "내 정보 수정" 화면의 내부 틀. 서버 닉네임 · 탈퇴 API가 아직 없어 저장은 이 브라우저의 로그인 표시값(session.js)에만 반영한다.
-// 구성: 프로필(프로필카드 · 닉네임 · 한 줄 소개 · 성향카드 · 재심) · 계정 정보 · 계정 관리(현재 아이디 · 비밀번호 변경 · 로그아웃 · 회원 탈퇴) · 약관. 알림 등 앱 설정은 "환경 설정"에서 다룬다
+// 구성: 프로필(프로필카드 · 닉네임 · 한 줄 소개 · 성향카드 · 재심) · 계정 관리(로그인 방식 · 현재 아이디 · 가입일 · 최근 로그인 · 비밀번호 변경 · 로그아웃 · 회원 탈퇴) · 약관. 알림 등 앱 설정은 "환경 설정"에서 다룬다
 // 한 줄 소개는 서버(P-8 PATCH /profile-settings)에 저장한다(profileSettings.js, FE-81). 프로필카드 · 성향카드는 커뮤니티에서 항상 공개다(공개 범위 설정을 두지 않는다, 의도된 서비스 특징)
 import { button, element, mockTag } from '../../components/siteLayout.js';
 import { API_MODE } from '../../api/config.js';
@@ -111,15 +111,16 @@ export function renderProfileEdit({ api, navigate, go, data = {}, card, fan }) {
   const portrait = element('div', 'edit-field');
   portrait.append(element('span', 'edit-label', '대표 이미지 · 카드 꾸미기'), button('프로필카드에서 바꾸기', () => go('profile'), 'secondary-button'));
 
-  // 계정 정보(읽기 전용): 서버가 로그인 방식 · 가입일 · 최근 로그인을 주기 전까지는 자리만 둔다
+  // 계정 관리 위쪽, 읽기 전용 정보: 서버가 아이디 · 가입일 · 최근 로그인을 주기 전까지는 자리만 둔다
   const facts = element('dl', 'edit-facts');
   facts.append(
     fact('로그인 방식', user ? (IS_MOCK ? '개발용 목업 로그인' : '카카오 로그인') : '로그인 전 (이 브라우저의 익명 ID)'),
+    fact('현재 아이디', user ? '서버 연동 후 표시돼요' : '로그인 전 (이 브라우저의 익명 ID)'),
     fact('가입일', user ? '서버 연동 후 표시돼요' : '—'),
     fact('최근 로그인', user ? '서버 연동 후 표시돼요' : '—'),
   );
 
-  // 계정 관리: 현재 아이디 · 비밀번호 변경 · 로그아웃 · 회원 탈퇴. 아이디 · 비밀번호 API가 없어 앞의 둘은 자리만 두고, 탈퇴는 한 번 더 확인한다
+  // 계정 관리: 비밀번호 변경 · 로그아웃 · 회원 탈퇴. 비밀번호 API가 없어 자리만 두고, 탈퇴는 한 번 더 확인한다
   const logout = button('로그아웃', async () => {
     await Promise.resolve(api.logout?.()).catch(() => {}); // 서버 쪽 로그아웃이 없거나 실패해도 이 브라우저의 표시는 지운다
     clearUser();
@@ -132,13 +133,11 @@ export function renderProfileEdit({ api, navigate, go, data = {}, card, fan }) {
     runLabel: '탈퇴하기',
     onRun: () => { status.textContent = '회원 탈퇴는 서버 연동 후 열려요. 지금은 계정이 그대로 남아 있어요.'; },
   });
-  const accountId = element('dl', 'edit-facts');
-  accountId.append(fact('현재 아이디', user ? '서버 연동 후 표시돼요' : '로그인 전 (이 브라우저의 익명 ID)'));
   const password = button('비밀번호 변경 (준비 중)', () => {}, 'secondary-button');
   password.disabled = true; // 비밀번호로 로그인하는 계정(관리자)만 해당. 일반 사용자는 카카오 로그인이라 비밀번호가 없다
   const passwordHint = element('p', 'edit-hint', user ? '비밀번호로 로그인하는 계정만 바꿀 수 있어요. 카카오로 로그인했다면 비밀번호는 카카오에서 바꿔요.' : '로그인하면 계정 정보를 관리할 수 있어요.');
   const account = element('div', 'edit-field');
-  account.append(accountId, ...(user ? [password] : []), passwordHint, ...(user ? [logout, withdrawOpen, withdrawConfirm] : []));
+  account.append(...(user ? [password] : []), passwordHint, ...(user ? [logout, withdrawOpen, withdrawConfirm] : []));
 
   // 약관 · 방침 입구
   const policies = element('nav', 'edit-actions');
@@ -150,8 +149,8 @@ export function renderProfileEdit({ api, navigate, go, data = {}, card, fan }) {
   // 저장 · 취소
   const save = element('button', 'primary-button', '저장');
   save.type = 'submit';
-  const actions = element('div', 'edit-actions');
-  actions.append(save, button('취소', () => go(null), 'secondary-button'));
+  const actions = element('div', 'edit-actions edit-submit');
+  actions.append(button('취소', () => go(null), 'secondary-button'), save);
 
   const profileFields = element('div', 'edit-profile');
   profileFields.append(nickname, bioField, portrait);
@@ -160,8 +159,7 @@ export function renderProfileEdit({ api, navigate, go, data = {}, card, fan }) {
 
   form.append(
     section('프로필', profileBody, fan(), element('p', 'edit-hint', '프로필카드와 성향카드는 커뮤니티에서 항상 다른 사람에게 보여요.')),
-    section('계정 정보', facts),
-    section('계정 관리', account),
+    section('계정 관리', facts, account),
     section('약관 · 방침', policyField),
     status,
     actions,
