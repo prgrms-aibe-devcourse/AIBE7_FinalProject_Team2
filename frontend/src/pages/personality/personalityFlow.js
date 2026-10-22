@@ -12,7 +12,7 @@ const MIN_LOADING_MS = 900;
 
 /**
  * @param {{ api, isActive: () => boolean, baseline?: boolean }} options isActive: 화면이 아직 보이는지(떠났으면 넘기기 · 키 · 제출 뒤 이동을 멈춘다).
- *   baseline: 성향카드 다시 정하기로 들어온 응시(마이페이지에서 navigate('test', { baseline: true }), 명세 P-2 v0.46)
+ *   baseline: 성향카드 다시 정하기로 들어온 응시(마이페이지에서 navigate('test', { baseline: true }), 명세 P-2 v0.50)
  */
 export function createTestFlow({ api, isActive, baseline = false }) {
   const answers = new Map(); // questionId → 0 ~ 4 (매우 A · 조금 A · 보통 · 조금 B · 매우 B)

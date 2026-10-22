@@ -10,7 +10,7 @@ import { mockProfileView, setStatsReader } from './profileDecoMockApi.js';
 
 const delay = () => new Promise((resolve) => setTimeout(resolve, 250));
 const storageKey = 'nlnb-mock-personality';
-const logKey = 'nlnb-mock-personality-log'; // 응시 기록 전체(처음 성향 · 다시 정하기용, 명세 v0.46). 실제로는 서버의 personality_result 행들
+const logKey = 'nlnb-mock-personality-log'; // 응시 기록 전체(처음 성향 · 다시 정하기용, 명세 v0.50). 실제로는 서버의 personality_result 행들
 let memoryLog = null; // 저장소를 못 쓸 때(테스트 · 사생활 보호 모드) 이번 실행 동안의 기록
 const WEIGHTS = [2, 1, 0, 1, 2]; // 매우 A · 조금 A · 보통 · 조금 B · 매우 B
 
@@ -80,12 +80,12 @@ function toType(code) {
   };
 }
 
-// 결과 공통 형식(명세 9-1). completedExperienceCount는 v0.46 전 저장값이면 null
+// 결과 공통 형식(명세 9-1). completedExperienceCount는 v0.50 전 저장값이면 null
 function toResult({ typeCode, axisScores, testedAt, completedExperienceCount = null }) {
   return { type: toType(typeCode), axisScores, testedAt, completedExperienceCount };
 }
 
-// 응시 기록(오래된 순). v0.46 전 목 저장값(현재 결과 하나)만 있으면 그것을 첫 기록으로 본다
+// 응시 기록(오래된 순). v0.50 전 목 저장값(현재 결과 하나)만 있으면 그것을 첫 기록으로 본다
 function loadLog() {
   if (memoryLog) return memoryLog;
   try {
@@ -123,7 +123,7 @@ export async function getPersonalityQuestions() {
 }
 
 // P-2 응답 제출. answers = [{ questionId, value }] (value 0 ~ 4: 매우 A · 조금 A · 보통 · 조금 B · 매우 B).
-// baseline: 성향카드 다시 정하기(사용자당 1회, 이미 썼으면 409 BASELINE_RETAKE_USED). 테스트한 적이 없으면 첫 테스트로 처리한다(명세 v0.46)
+// baseline: 성향카드 다시 정하기(사용자당 1회, 이미 썼으면 409 BASELINE_RETAKE_USED). 테스트한 적이 없으면 첫 테스트로 처리한다(명세 v0.50)
 export async function submitPersonality(answers, { baseline = false } = {}) {
   await delay();
   const byId = {};

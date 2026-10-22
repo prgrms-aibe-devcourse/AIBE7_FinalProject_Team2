@@ -1,4 +1,4 @@
-// 성향카드 재심(다시 정하기, FE-77, 명세 P-2 · P-5 v0.46). 화면 이름: 초심(첫 테스트) · 재심 · 최근(최근 3건 평균). 성향카드 화면의 가운데 칸과 내 정보 수정이 같이 쓴다.
+// 성향카드 재심(다시 정하기, FE-77, 명세 P-2 · P-5 v0.50). 화면 이름: 초심(첫 테스트) · 재심 · 최근(최근 3건 평균). 성향카드 화면의 가운데 칸과 내 정보 수정이 같이 쓴다.
 // 사용자당 1회. 처음 성향을 덮어쓰지 않고 "다시 정한 결과"를 하나 더 남긴다. 확인 창에서 "테스트 시작"을 누르면 성향 테스트로 간다(navigate('test', { baseline: true }))
 import { button, element } from '../../components/siteLayout.js';
 
@@ -19,7 +19,7 @@ export const RETAKE_NOTES = {
   soon: '서버 연동 후 열려요.',
 };
 
-// "체험 n건 뒤" 문구. v0.46 전 결과처럼 건수를 모르면 null
+// "체험 n건 뒤" 문구. v0.50 전 결과처럼 건수를 모르면 null
 export function retakeAfter(result) {
   const count = result?.completedExperienceCount;
   return typeof count === 'number' ? `체험 ${count}건 뒤` : null;

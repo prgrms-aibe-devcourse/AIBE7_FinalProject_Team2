@@ -61,7 +61,7 @@ test('P-5 현재 판결 성향은 최근 체험 3건의 평균이고, 네 축이
   assert.equal(judgmentPersonality.type.code, undefined);
 });
 
-test('P-2 · P-5 성향카드 다시 정하기: 1회만, 처음 성향은 그대로, 일반 응시는 계속 된다 (v0.46)', async () => {
+test('P-2 · P-5 성향카드 다시 정하기: 1회만, 처음 성향은 그대로, 일반 응시는 계속 된다 (v0.50)', async () => {
   const { questions } = await getPersonalityQuestions();
   const all = (value) => questions.map((question) => ({ questionId: question.id, value }));
   await submitPersonality(all(0)); // 테스트 순서와 무관하게 응시 기록이 하나는 있게
