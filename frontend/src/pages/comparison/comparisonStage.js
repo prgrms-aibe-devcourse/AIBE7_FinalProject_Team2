@@ -245,7 +245,7 @@ export function renderComparisonStage({ script, data, caseId, caseTitle, navigat
   const narrow = window.matchMedia('(max-width: 680px)').matches;
   const sheet = newspaper(data, script, caseTitle, navigate, (letter) => openCaseReviewPopup({ caseId, api, navigate, from: letter }));
   const stage = renderStage({
-    script: { ...script, acts: { ...script.acts, 8: { ...act, steps } } },
+    script: { ...script, acts: { ...script.acts, 6: { ...act, steps } } },
     order: ['6'],
     sheet,
     fromRect,

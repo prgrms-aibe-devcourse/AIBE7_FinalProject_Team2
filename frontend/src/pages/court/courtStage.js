@@ -73,7 +73,7 @@ export function renderCourtStage({ script, data, caseId, api, navigate, active, 
   const error = element('p', 'field-error');
   error.setAttribute('role', 'alert');
   const stage = renderStage({
-    script: { ...script, acts: { ...script.acts, 7: { ...act, steps } } },
+    script: { ...script, acts: { ...script.acts, 5: { ...act, steps } } },
     order: ['5'],
     cards,
     onRestart: restartMock(caseId),
