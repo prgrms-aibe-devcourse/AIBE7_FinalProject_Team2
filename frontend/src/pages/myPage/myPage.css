@@ -277,8 +277,7 @@ img.my-sash-icon.is-missing { visibility: hidden; }
 .trend-svg { display: block; width: 100%; height: auto; overflow: visible; }
 .trend-zone.is-lenient { fill: color-mix(in srgb, var(--color-label) 7%, transparent); }
 .trend-zone.is-strict { fill: color-mix(in srgb, var(--color-heading) 6%, transparent); }
-.trend-mid { stroke: var(--color-border-strong); stroke-width: 1; }
-.trend-grid-line { stroke: var(--color-border); stroke-width: 1; }
+.trend-grid-line { stroke: var(--color-border-strong); stroke-opacity: .75; stroke-width: 1; stroke-dasharray: 4 3; } /* 75(위 · 아래)만 있는 점선. 50 · 100 선은 두지 않는다 */
 .trend-tick { fill: var(--color-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
 .trend-line { fill: none; stroke: var(--color-accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .trend-dot { fill: var(--color-accent); stroke: var(--color-card); stroke-width: 2; }

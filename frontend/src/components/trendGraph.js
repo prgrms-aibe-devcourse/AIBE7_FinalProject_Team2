@@ -80,10 +80,10 @@ function trendChart({ axis, points }, slots, retakeBetween) {
   if (focus) chart.append(svgNode('rect', { x: xOf(focus.order) - FOCUS_BAND / 2, y: top, width: FOCUS_BAND, height: plotBottom - top, class: 'trend-focus' }));
   Y_TICKS.forEach(([ratio, label]) => {
     const y = yOf(ratio);
-    if (ratio !== 0.5) chart.append(svgNode('line', { x1: axisX, x2: width, y1: y, y2: y, class: 'trend-grid-line' }));
+    // 눈금선은 75(위 · 아래)만 점선으로 긋는다. 50 · 100은 위 · 아래 면(trend-zone)의 경계와 그래프 끝이 이미 보여 선을 두지 않는다(눈금 글자는 둔다)
+    if (ratio === 0.75 || ratio === 0.25) chart.append(svgNode('line', { x1: axisX, x2: width, y1: y, y2: y, class: 'trend-grid-line' }));
     chart.append(svgNode('text', { x: axisX - 6, y, class: 'trend-tick', 'text-anchor': 'end', 'dominant-baseline': 'middle' }, label));
   });
-  chart.append(svgNode('line', { x1: axisX, x2: width, y1: middle, y2: middle, class: 'trend-mid' }));
   slots.forEach((slot) => chart.append(svgNode('text', { x: xOf(slot.order), y: height - 10, class: `trend-tick${slot.isFocus ? ' is-focus' : ''}`, 'text-anchor': 'middle' }, slot.label)));
   // 기준점 세로 점선(FE-77): 초심 · 최근 칸, 재심 자리. 재심은 가로축 글자와 겹치지 않게 그래프 위에 글자를 둔다
   slots.filter((slot) => slot.order === 0 || slot.order === 'now').forEach((slot) => {
