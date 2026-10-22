@@ -28,5 +28,22 @@
 .edit-status { min-height: 1.5em; margin: 0; color: var(--color-heading); font-weight: 700; }
 
 .edit-profile { display: grid; gap: 14px; }
+.edit-profile-row { display: flex; align-items: flex-start; gap: 24px; }
+.edit-profile-row > .edit-profile { flex: 1 1 0; min-width: 0; }
+.edit-fan { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 24px; margin-top: 8px; }
+.edit-fan-side { display: grid; gap: 12px; justify-items: start; flex: 1 1 220px; min-width: 0; max-width: 360px; }
+.edit-fan-actions { display: grid; gap: 8px; justify-items: start; }
+.edit-fan-stack { position: relative; width: calc(200px + (var(--n, 1) - 1) * 56px); height: 400px; }
+.edit-fan-card { position: absolute; top: 0; left: calc(var(--i, 0) * 56px); padding: 0; border: 0; border-radius: 14px; background: none; color: inherit; font: inherit; cursor: pointer; transition: transform .15s ease-out; }
+.edit-fan-card:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 3px; }
+.edit-fan-card[aria-pressed="true"] { cursor: default; }
+@media (hover: hover) and (pointer: fine) { .edit-fan-card[aria-pressed="false"]:hover { transform: translateY(-4px); } }
+.edit-fan-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.edit-fan-pick { min-height: 44px; min-width: 64px; padding: 0 16px; border: 1px solid var(--color-border-strong); border-radius: 4px; background: transparent; color: var(--color-heading); font: 700 var(--text-small)/1 var(--font-body, inherit); cursor: pointer; transition: background-color .15s ease-out; }
+.edit-fan-pick[aria-pressed="true"] { background: var(--color-heading); color: var(--color-card); cursor: default; }
+.edit-fan-pick:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+.edit-fan-pick:disabled { opacity: .6; cursor: default; }
+@media (hover: hover) and (pointer: fine) { .edit-fan-pick:not(:disabled):not([aria-pressed="true"]):hover { background: var(--color-surface); } }
 .edit-count { font-variant-numeric: tabular-nums; }
+@media (max-width: 720px) { .edit-profile-row { flex-direction: column; align-items: center; } .edit-fan { justify-content: center; } .edit-profile-row > .edit-profile { width: 100%; } }
 @media (max-width: 720px) { .edit-fact { grid-template-columns: minmax(0, 1fr); gap: 2px; } }
