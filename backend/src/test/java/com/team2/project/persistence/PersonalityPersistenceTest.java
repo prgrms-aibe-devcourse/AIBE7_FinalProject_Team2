@@ -245,6 +245,34 @@ class PersonalityPersistenceTest {
 	}
 
 	@Test
+	@DisplayName("재심 결과는 사용자당 1건 — 두 번째 재심 행은 부분 유니크가 막는다 (V28, BE-104)")
+	void result_twoBaselineRetakes_rejected() {
+		resultRepository.saveAndFlush(PersonalityResult.create(user, typeRepository.getReferenceById("INTP"), SCORES, List.of(),
+			0, false));
+		resultRepository.clearCurrent(user.getId());
+		resultRepository.saveAndFlush(PersonalityResult.create(user, typeRepository.getReferenceById("ESTJ"), SCORES, List.of(),
+			2, true));
+		resultRepository.clearCurrent(user.getId());
+
+		assertThatThrownBy(() -> resultRepository.saveAndFlush(
+			PersonalityResult.create(user, typeRepository.getReferenceById("INFP"), SCORES, List.of(), 3, true)))
+			.isInstanceOf(DataIntegrityViolationException.class);
+	}
+
+	@Test
+	@DisplayName("응시 시점 완료 사건 수는 0 이상이고, 이전 행처럼 모르면 null로 저장된다 (V28, BE-104)")
+	void result_completedExperienceCount() {
+		assertThatThrownBy(() -> PersonalityResult.create(user, null, SCORES, List.of(), -1, false))
+			.isInstanceOf(IllegalArgumentException.class);
+		resultRepository.saveAndFlush(PersonalityResult.create(user, typeRepository.getReferenceById("INTP"), SCORES, List.of()));
+		assertThat(jdbc.queryForObject("SELECT completed_experience_count FROM personality_result WHERE anonymous_user_id = ?",
+			Integer.class, user.getId())).isNull();
+		assertThatThrownBy(() -> jdbc.update("UPDATE personality_result SET completed_experience_count = -1 WHERE anonymous_user_id = ?",
+			user.getId())).isInstanceOf(DataIntegrityViolationException.class)
+			.hasMessageContaining("chk_personality_result_completed_experience_count");
+	}
+
+	@Test
 	@DisplayName("결과 축 점수는 네 축 모두 0 ~ 1 (엔티티가 먼저 막는다)")
 	void result_missingAxis_rejectedByEntity() {
 		assertThatThrownBy(() -> PersonalityResult.create(user, null,

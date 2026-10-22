@@ -20,6 +20,8 @@ import java.util.Map;
  */
 public record MyPageResponse(
 	PersonalityResultResponse personality,
+	InitialPersonality initialPersonality,	// 처음 성향(초심, v0.50 BE-104). 없으면 null
+	BaselineRetake baselineRetake,			// 성향카드 재심(v0.50 BE-104)
 	JudgmentPersonality judgmentPersonality,
 	List<HistoryItem> history,
 	List<ExperienceItem> experiences,
@@ -32,8 +34,45 @@ public record MyPageResponse(
 
 	public static MyPageResponse empty() {
 		ProfileDecoView deco = ProfileDecoService.emptyView();
-		return new MyPageResponse(null, null, List.of(), List.of(), Profile.EMPTY, deco.profileDeco(), deco.achievements(),
-			deco.unlocked());
+		return new MyPageResponse(null, null, BaselineRetake.NONE, null, List.of(), List.of(), Profile.EMPTY,
+			deco.profileDeco(), deco.achievements(), deco.unlocked());
+	}
+
+	/**
+	 * 처음 성향(초심, API 명세 P-5 v0.50). source로 모양이 갈린다 — 화면은 source로 나눠 읽는다.
+	 * TEST: 첫 테스트 결과(결과 공통 형식 + source), JUDGMENT: 테스트 전의 첫 판결(judgmentPersonality 모양 + source)
+	 */
+	public sealed interface InitialPersonality permits InitialTest, InitialJudgment {
+
+		String source();
+	}
+
+	/** 첫 테스트 결과(가장 오래된 응시 행). 재응시 · 재심으로 바뀌지 않는다 */
+	public record InitialTest(String source, PersonalityTypeResponse type, Map<ValueAxis, Double> axisScores,
+		OffsetDateTime testedAt, Integer completedExperienceCount) implements InitialPersonality {
+
+		public static InitialTest from(PersonalityResultResponse result) {
+			return new InitialTest("TEST", result.type(), result.axisScores(), result.testedAt(),
+				result.completedExperienceCount());
+		}
+	}
+
+	/** 테스트 전의 첫 판결: 각 사건의 첫 회차 체험을 완료 순서로 처음 3건 평균. 유형이 있을 때만 만든다 */
+	public record InitialJudgment(String source, PersonalityTypeResponse type, Map<ValueAxis, Double> axisScores,
+		int experienceCount) implements InitialPersonality {
+
+		public InitialJudgment(PersonalityTypeResponse type, Map<ValueAxis, Double> axisScores, int experienceCount) {
+			this("JUDGMENT", type, axisScores, experienceCount);
+		}
+	}
+
+	/**
+	 * 성향카드 재심(API 명세 P-5 v0.50). result: 재심 결과(결과 공통 형식, 없으면 null).
+	 * available: 첫 테스트가 있고 아직 재심을 하지 않았을 때만 true
+	 */
+	public record BaselineRetake(boolean available, PersonalityResultResponse result) {
+
+		public static final BaselineRetake NONE = new BaselineRetake(false, null);
 	}
 
 	/** 프로필 수치. attendanceDays: 누적 출석 일수(BE-97, 기록이 없으면 0) */
