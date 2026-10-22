@@ -5,6 +5,7 @@ import com.team2.project.admin.caseimport.domain.CaseImport;
 import com.team2.project.admin.caseimport.domain.CaseImportSource;
 import com.team2.project.common.exception.BusinessException;
 import com.team2.project.common.exception.ErrorCode;
+import com.team2.project.common.exception.UniqueViolations;
 import com.team2.project.judgment.domain.AiGeneration;
 import com.team2.project.judgment.domain.Judgment;
 import com.team2.project.judgment.repository.AiGenerationRepository;
@@ -28,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -79,7 +81,7 @@ public class CaseImportLoader {
 		LocalDate incidentDate = incidentDate(caseImport);
 		LegalCase legalCase = caseContentMapper.toCase(content, report, incidentDate,
 			guidelineFor(content, caseImport, incidentDate));
-		caseRepository.save(legalCase);
+		saveCase(legalCase);
 
 		sectionRepository.saveAll(caseContentMapper.sections(legalCase, content));
 		penaltyRuleRepository.saveAll(caseContentMapper.penaltyRules(legalCase, content, report));
@@ -89,6 +91,27 @@ public class CaseImportLoader {
 		saveCourtJudgment(legalCase, factors, result);
 		saveAiJudgment(legalCase, factors, result);
 		return legalCase;
+	}
+
+	/**
+	 * 사건을 저장한다. 제목 유니크 제약(uk_legal_case_title)에 걸리면 DUPLICATE_TITLE로 바꾼다.
+	 *
+	 * <p>위에서 existsByTitle로 먼저 보지만, <b>다른 등록이 같은 제목으로 동시에 적재되면</b> 둘 다 그 검사를
+	 * 통과한다. 그때 올라오는 제약 위반은 전역 처리기가 409 INVALID_STATE로 바꾸는데, 적재 계약에 없는
+	 * 코드라 관리자가 무엇을 해야 할지 알 수 없다 — 순차로 부딪혔을 때와 같은 응답을 주도록 맞춘다
+	 * (PR #242 리뷰). 여기서 flush해야 커밋 전에 걸린다.
+	 */
+	private void saveCase(LegalCase legalCase) {
+		try {
+			caseRepository.saveAndFlush(legalCase);
+		} catch (DataIntegrityViolationException e) {
+			if (!UniqueViolations.isUniqueViolation(e)) {
+				throw e;
+			}
+			// legal_case의 유니크 제약은 제목뿐이다 (V7 uk_legal_case_title)
+			throw new BusinessException(ErrorCode.DUPLICATE_TITLE,
+				"같은 제목의 사건이 이미 있습니다. 제목을 바꾼 뒤 다시 등록해 주세요.");
+		}
 	}
 
 	/** 재판부 판결. 초안이 없으면 건너뛴다 — 사건은 만들어지고 관리자가 나중에 채울 수 있다 */
