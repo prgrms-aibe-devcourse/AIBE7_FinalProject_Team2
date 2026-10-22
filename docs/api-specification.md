@@ -53,6 +53,7 @@
 | v0.49 | 2026-10-22 | **P-5 `history[]`에 사건별 유형 `type` 추가 (BE-100, FE-75 리뷰 후속)** — 각 줄에 그 체험 한 건의 유형(유형 공통 형식 9-1)을 넣는다. 규칙은 `judgmentPersonality.type`과 같다(그 체험 하나만으로 낸 종합의 유형: 네 축 모두 값이 있을 때만, 글자는 정확한 분수의 부호 · 동점은 관대 글자). 없으면 `null`. 화면(내 결과 지면)이 축 점수로 유형을 직접 계산하고 P-4로 다시 받아 오던 경로를 없앤다(`docs/decisions/BE-100.md`) |
 | v0.50 | 2026-10-22 | **최초 성향 · 성향카드 다시 정하기 추가 (FE-77)** — 화면 이름은 초심(처음 성향) · 재심(다시 정하기) · 최근(현재 판결 성향). 결과 공통 형식에 `completedExperienceCount`(응시 시점에 완료한 사건 수) 추가. P-2 요청에 `baseline`(성향카드 다시 정하기, 사용자당 1회, 이미 썼으면 409 `BASELINE_RETAKE_USED`) 추가. 일반 응시는 그대로 횟수 제한 없음. P-5 응답에 `initialPersonality`(처음 성향: 첫 테스트, 테스트 전이면 첫 판결 체험 3건) · `baselineRetake`(다시 정한 결과 · 가능 여부) 추가. 1-5에 `BASELINE_RETAKE_USED` 추가. 서버 구현은 후속 백엔드 작업 |
 | v0.51 | 2026-10-22 | **사건 등록 적재 A-14-1 신설 (BE-93 2차)** — `POST /admin/case-imports/{importId}/load`. 생성 결과를 사건(DRAFT) · 섹션 · 형벌 규칙 · 판단 요소 · 원본 판결문 · AI · 재판부 판결 후보로 만든다. **A-15가 SUCCEEDED가 된 뒤 관리자가 따로 누른다**(번호는 A-16 ~ A-41 예약 때문에 A-14-1) — 2초마다 불리는 조회에서 적재하면 같은 사건이 여러 번 만들어질 수 있다. 적재가 끝나면 A-15의 `caseId`가 채워진다(1차에 비워 두었던 값). 에러 코드 `IMPORT_NOT_READY`(409) · `IMPORT_RESULT_INVALID`(422) 추가. 판결 후보는 **공개하지 않은 상태**로 들어가 A-9 승인을 기다린다. **(병합 메모) 이 줄의 번호는 PR #242 리베이스 도중 두 번 겹쳤다 — 처음 v0.47(BE-63과 겹침) → v0.50(COMMON-60) → 이번에 FE-77과 다시 겹쳐 v0.51로 재조정(COMMON-58, PR #244)** |
+| v0.52 | 2026-10-22 | **프로필 선택 설정 저장 P-8 신설 (BE-104, FE-77 후속)** — `PATCH /profile-settings`: 공개 성향카드(`shownCard`) · 프로필카드 아래 성향(`profileCardType`) · 한 줄 소개(`bio`)를 **보낸 칸만** 저장(P-7과 별개, 전체 덮어쓰기 아님). 값은 `initial` · `retake` · `current`, 소개는 앞뒤 공백을 뺀 0 ~ 40자 · 줄바꿈 없음. P-5 응답에 `profileSettings` 추가(저장 전이면 `current` · `current` · `""`). 공개 범위 칸은 두지 않는다(항상 공개, FE-77). ERD v1.37 `profile_setting`(V29). P-2 · P-5의 v0.50 서버 구현도 이 작업에서 했다(V28) **(병합 메모) 작업 중 COMMON-58(PR #244)이 BE-93 줄에 v0.51을 먼저 써서 v0.51 → v0.52로 다시 매겼다** |
 
 ---
 
@@ -1637,6 +1638,7 @@ json
 | P-5 | GET | `/my-page` | 마이페이지 (테스트 결과 · 판결 성향 · 체험 목록 · 출석 일수) | S-17 |
 | P-6 | POST | `/attendance` | 출석 기록 (하루 한 번, v0.41) | 사이트 진입 |
 | P-7 | PUT | `/profile-deco` | 프로필 꾸미기 저장 (v0.42) | S-17 |
+| P-8 | PATCH | `/profile-settings` | 프로필 선택 설정 저장 — 공개 성향카드 · 프로필카드 아래 성향 · 한 줄 소개, 보낸 칸만 (v0.52) | S-17 |
 
 ---
 
@@ -1710,7 +1712,7 @@ json
 json
 
 ```json
-{  "personality": { "type": { "shareId": "Qm7xK2pa", "…": "…" }, "axisScores": { "…": "…" }, "testedAt": "2026-10-14T14:00:00+09:00", "completedExperienceCount": 4 },  "initialPersonality": { "source": "TEST", "type": { "shareId": "Qm7xK2pa", "…": "…" }, "axisScores": { "…": "…" }, "testedAt": "2026-10-10T20:00:00+09:00", "completedExperienceCount": 0 },  "baselineRetake": { "available": false, "result": { "type": { "…": "…" }, "axisScores": { "…": "…" }, "testedAt": "2026-10-14T14:00:00+09:00", "completedExperienceCount": 4 } },  "judgmentPersonality": {    "axisScores": { "APOLOGY_SINCERITY": 0.75, "FAULT_STANDARD": 0.11, "PRINCIPLE_RELATION": 0.83, "ORDER_OPPORTUNITY": null },    "type": null,    "experienceCount": 3  },  "history": [    { "caseId": 1, "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건", "completedAt": "2026-10-14T15:00:00+09:00", "axisScores": { "APOLOGY_SINCERITY": 1.0, "FAULT_STANDARD": 0.0, "PRINCIPLE_RELATION": 1.0, "ORDER_OPPORTUNITY": null }, "type": null }  ],  "experiences": [    { "caseId": 1, "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건", "crimeType": "MURDER", "status": "COMPLETED", "attemptNo": 1, "updatedAt": "2026-10-14T15:00:00+09:00" }  ],  "profile": { "attendanceDays": 3 },  "profileDeco": { "portrait": "/images/characters/standing/naero.webp", "frame": "wood", "background": "cream", "sashStyle": "long", "sashColorShort": "wine", "sashColorLong": "wine", "sashIconLeft": "none", "sashIconRight": "none", "bookmarkCharacter": "naero", "bookmarkFace": "happy", "bookmarkFaceStyle": "generated", "bookmarkColor": "bronze" },  "achievements": [    { "id": "first-case", "stat": "completed", "goal": 1, "value": 1, "cleared": true, "status": "CLEARED", "rewards": { "kinds": ["characters/scene"], "frames": ["wood"], "backgrounds": [], "sashStyles": ["long"], "sashColors": ["long:wine"], "sashIcons": [] } },    { "id": "collect-5", "stat": "collected", "goal": 5, "value": null, "cleared": false, "status": "PENDING", "rewards": { "kinds": ["cases"], "frames": [], "backgrounds": ["news"], "sashStyles": [], "sashColors": [], "sashIcons": ["naero", "nambul"] } },    { "…": "…" }  ],  "unlocked": { "kinds": ["characters/roles", "characters/standing", "characters/scene"], "frames": ["basic", "wood"], "backgrounds": ["cream"], "sashStyles": ["none", "short", "long"], "sashColors": ["short:wine", "long:wine"], "sashIcons": ["none", "star"] }}
+{  "personality": { "type": { "shareId": "Qm7xK2pa", "…": "…" }, "axisScores": { "…": "…" }, "testedAt": "2026-10-14T14:00:00+09:00", "completedExperienceCount": 4 },  "initialPersonality": { "source": "TEST", "type": { "shareId": "Qm7xK2pa", "…": "…" }, "axisScores": { "…": "…" }, "testedAt": "2026-10-10T20:00:00+09:00", "completedExperienceCount": 0 },  "baselineRetake": { "available": false, "result": { "type": { "…": "…" }, "axisScores": { "…": "…" }, "testedAt": "2026-10-14T14:00:00+09:00", "completedExperienceCount": 4 } },  "judgmentPersonality": {    "axisScores": { "APOLOGY_SINCERITY": 0.75, "FAULT_STANDARD": 0.11, "PRINCIPLE_RELATION": 0.83, "ORDER_OPPORTUNITY": null },    "type": null,    "experienceCount": 3  },  "history": [    { "caseId": 1, "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건", "completedAt": "2026-10-14T15:00:00+09:00", "axisScores": { "APOLOGY_SINCERITY": 1.0, "FAULT_STANDARD": 0.0, "PRINCIPLE_RELATION": 1.0, "ORDER_OPPORTUNITY": null }, "type": null }  ],  "experiences": [    { "caseId": 1, "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건", "crimeType": "MURDER", "status": "COMPLETED", "attemptNo": 1, "updatedAt": "2026-10-14T15:00:00+09:00" }  ],  "profile": { "attendanceDays": 3 },  "profileDeco": { "portrait": "/images/characters/standing/naero.webp", "frame": "wood", "background": "cream", "sashStyle": "long", "sashColorShort": "wine", "sashColorLong": "wine", "sashIconLeft": "none", "sashIconRight": "none", "bookmarkCharacter": "naero", "bookmarkFace": "happy", "bookmarkFaceStyle": "generated", "bookmarkColor": "bronze" },  "achievements": [    { "id": "first-case", "stat": "completed", "goal": 1, "value": 1, "cleared": true, "status": "CLEARED", "rewards": { "kinds": ["characters/scene"], "frames": ["wood"], "backgrounds": [], "sashStyles": ["long"], "sashColors": ["long:wine"], "sashIcons": [] } },    { "id": "collect-5", "stat": "collected", "goal": 5, "value": null, "cleared": false, "status": "PENDING", "rewards": { "kinds": ["cases"], "frames": [], "backgrounds": ["news"], "sashStyles": [], "sashColors": [], "sashIcons": ["naero", "nambul"] } },    { "…": "…" }  ],  "unlocked": { "kinds": ["characters/roles", "characters/standing", "characters/scene"], "frames": ["basic", "wood"], "backgrounds": ["cream"], "sashStyles": ["none", "short", "long"], "sashColors": ["short:wine", "long:wine"], "sashIcons": ["none", "star"] },  "profileSettings": { "shownCard": "current", "profileCardType": "initial", "bio": "판결은 신중하게" }}
 ```
 
 | 필드 | 설명 |
@@ -1725,6 +1727,7 @@ json
 | `profileDeco` | 프로필 꾸미기(v0.42, BE-96). 저장한 적이 없거나 빈 마이페이지면 기본값(내로 스탠딩 · `basic` · `cream` · 책갈피 없음 · 내로 · `happy` · `generated` · `bronze`). **잠긴 값이어도 거절하지 않고 그대로** 내려 준다(표가 바뀌어 잠긴 경우 화면이 기본값으로 보여 준다). 필드는 P-7 요청과 같다 |
 | `achievements` | 도전과제 8개(서버 표가 원본, FE-68 순서). `stat`: `completed`(완료한 회차가 하나라도 있는 사건 수, 다시 하기를 시작해도 줄지 않는다) · `hasType`(성향 테스트 결과가 있으면 1) · `attendanceDays`(P-6) · `collected`(모은 일러스트). `value`는 목표에서 멈춘다. `status`: `CLEARED` · `IN_PROGRESS` · `PENDING`. **`collected` 도전과제는 BE-83 전까지 서버가 셀 수 없어 `PENDING` · `value: null` · `cleared: false`(잠김)**. `rewards`는 여섯 종류(`kinds` · `frames` · `backgrounds` · `sashStyles` · `sashColors`(`모양:색`) · `sashIcons`), 받지 않는 종류는 빈 배열. 제목 · 문구 · 그림은 화면이 `id`로 붙인다 |
 | `unlocked` | 지금 열린 것(여섯 종류). 처음부터 열린 것 + `CLEARED` 도전과제의 보상 |
+| `profileSettings` | 프로필 선택 설정(v0.52, BE-104): 공개 성향카드(`shownCard`) · 프로필카드 아래 성향(`profileCardType`) · 한 줄 소개(`bio`). 저장은 P-8. 저장한 적이 없거나 빈 마이페이지면 `{ "shownCard": "current", "profileCardType": "current", "bio": "" }` |
 
 - 쿠키가 없거나 기록이 없으면 `404`가 아니라 **빈 마이페이지**(`personality`·`initialPersonality`·`judgmentPersonality` `null`, 목록 빈 배열)를 `200`으로 준다. 마이페이지는 "아직 없음"을 안내하는 화면이기 때문이다.
 - `judgmentPersonality` · `history`는 체험 성향 저장(7.6.7, BE-64)이 붙은 뒤부터 채워진다. 그 전에는 각각 `null` · 빈 배열이다.
@@ -1785,6 +1788,45 @@ json
 - **이미 저장해 둔 값은 다시 거절하지 않는다**(v0.43, BE-98): 저장값과 같고 저장할 때도 쓰이던 칸은 잠김 검사를 건너뛴다. 표가 바뀌어 저장값이 잠겨도 다른 칸은 저장할 수 있다. 저장할 때 쓰이지 않던 칸(예: 책갈피 없음일 때의 짧은 책갈피 색)은 값이 같아도 쓰이게 되면 다시 검사한다. 형식 · 값 목록(400)은 늘 전체를 본다.
 - 잠김은 **지금 화면에 쓰이는 칸만** 본다: 대표 이미지(기본 두 장 `standing/naero` · `standing/nambul`은 늘 허용) · 테두리 · 배경 · 책갈피 모양, 고른 모양의 색(`모양:색`), 짧은 책갈피일 때 좌우 아이콘. 쓰이지 않는 칸(고르지 않은 모양의 색 등)은 기본값이 잠겨 있어도 거절하지 않는다.
 - 수집 도전과제 보상(대표 이미지 `cases` · `characters/law` · `characters/adult`, 배경 `news`, 아이콘 `naero` · `nambul`, 책갈피 색 `green`)은 BE-83 전까지 열리지 않는다.
+
+---
+
+### P-8. 프로필 선택 설정 저장 — `PATCH /profile-settings`
+
+> 확장 단계(BE-104, v0.52). 공개 성향카드 · 프로필카드 아래 성향 · 한 줄 소개를 서버에 둔다(FE-77이 화면에서 이 브라우저에만 저장하던 값). **보낸 칸만 바꾸는 부분 저장**이다. 조회는 P-5 `profileSettings`. 결정 기록 [`BE-104.md`](decisions/BE-104.md)
+
+**요청** (바꿀 칸만 보낸다)
+
+json
+
+```json
+{  "shownCard": "retake"}
+```
+
+| 필드 | 값 |
+| --- | --- |
+| `shownCard` | **공개 성향카드**: 성향카드 화면의 "공개" 도장 칸. 커뮤니티에서 다른 사람에게 보여 줄 카드. `initial`(초심) · `retake`(재심) · `current`(최근) |
+| `profileCardType` | **프로필카드 아래 성향**: 카드 꾸미기 창에서 고른 칸. 값은 `shownCard`와 같다. 공개 성향카드와는 **별개의 값**이다 |
+| `bio` | **한 줄 소개**. 문자열, 앞뒤 공백을 뺀 뒤 **0 ~ 40자**(유니코드 글자 기준, 이모지도 한 글자), 줄바꿈 · 제어 문자(탭 · NUL 등) 없음. 빈 문자열 `""`은 소개 지우기. HTML은 거르지 않고 그대로 저장한다 — 화면은 `textContent`로만 그린다(서버 HTML 걸러 내기는 금칙어와 함께 추후, `docs/decisions/BE-104.md`) |
+
+**응답 200**: 저장 뒤의 세 값 전체(P-5 `profileSettings`와 같은 모양). 쿠키가 없었으면 익명 ID를 새로 발급해 `Set-Cookie`로 내려준다(P-7과 같다).
+
+json
+
+```json
+{  "shownCard": "retake",  "profileCardType": "current",  "bio": "판결은 신중하게"}
+```
+
+| 거절 | 조건 |
+| --- | --- |
+| 400 `VALIDATION_ERROR` | 본문이 객체가 아님 · 바꿀 칸이 하나도 없음 · 모르는 칸(`details`에 그 이름) · 값이 `null` · 문자열이 아님 · `shownCard` · `profileCardType`이 세 값 밖 · `bio`가 40자 초과 · 줄바꿈 · 제어 문자 포함 |
+
+- **보낸 칸만 바꾼다.** 세 값은 화면마다 따로 바뀌므로(공개 도장 · 카드 꾸미기 창 · 내 정보 수정), 한 곳에서 저장할 때 다른 두 값을 보내지 않아도 된다. 오래된 화면이 다른 칸을 옛 값으로 덮어쓰지 않게 하려는 것이다(P-7은 꾸미기를 한 화면에서 함께 저장해 전체 저장).
+- 보내지 않은 칸과 `null`은 다르다: 보내지 않으면 그대로 두고, `null`은 400이다(지우려면 `bio: ""`).
+- **아직 재심이 없는데 `retake`를 골라도 저장한다.** 화면이 고른 칸에 카드가 없으면 대신 고르는 규칙(공개 카드: 최근 → 초심, 프로필카드 아래 성향: 최근 → 첫 칸)을 쓴다.
+- 형식 검사가 먼저다: 400이면 아무것도 저장하지 않고, 쿠키가 없었어도 익명 ID를 발급하지 않는다.
+- **공개 범위는 없다**: 프로필카드 · 성향카드는 커뮤니티에서 항상 다른 사람에게 보인다(FE-77). 한 줄 소개 금칙어 검사는 금칙어 기능(운영 A-39 ~ A-41, 초안)이 생기면 붙인다(추후).
+- 다른 사람에게 보여 주는 쪽(커뮤니티 API)은 이 값을 읽도록 나중에 붙인다(이번 범위 밖).
 
 ---
 

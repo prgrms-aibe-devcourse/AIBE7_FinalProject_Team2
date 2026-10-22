@@ -55,12 +55,32 @@ public class PersonalityResult {
 	@Column(name = "is_current")
 	private boolean current;
 
+	/** 응시 시점에 완료한 사건 수(API 명세 9-1 v0.50, BE-104). V28 전에 저장한 행은 알 수 없어 null */
+	private Integer completedExperienceCount;
+
+	/** 성향카드 재심(P-2 baseline)으로 낸 결과. 사용자당 1건(V28 부분 유니크 ux_personality_result_baseline_retake_user) */
+	@Column(name = "is_baseline_retake")
+	private boolean baselineRetake;
+
 	@CreationTimestamp
 	private Instant createdAt;
 
-	/** 새 현재 결과. 같은 사용자의 이전 현재 결과는 저장 전에 내려 둬야 한다(PersonalityResultRepository.clearCurrent) */
+	/** 새 현재 결과(일반 응시, 응시 시점 건수 모름). 테스트 · 이전 호출용 */
 	public static PersonalityResult create(AnonymousUser anonymousUser, PersonalityType type,
 		Map<ValueAxis, Double> axisScores, List<PersonalityAnswer> answers) {
+		return create(anonymousUser, type, axisScores, answers, null, false);
+	}
+
+	/**
+	 * 새 현재 결과. 같은 사용자의 이전 현재 결과는 저장 전에 내려 둬야 한다(PersonalityResultRepository.clearCurrent).
+	 * completedExperienceCount: 응시 시점에 완료한 사건 수, baselineRetake: 성향카드 재심 결과인지(BE-104)
+	 */
+	public static PersonalityResult create(AnonymousUser anonymousUser, PersonalityType type,
+		Map<ValueAxis, Double> axisScores, List<PersonalityAnswer> answers, Integer completedExperienceCount,
+		boolean baselineRetake) {
+		if (completedExperienceCount != null && completedExperienceCount < 0) {
+			throw new IllegalArgumentException("완료 사건 수는 0 이상이어야 한다");
+		}
 		// 키는 개수가 아니라 집합으로 본다(null 키 + 세 축도 크기는 4). NaN · 무한대는 범위 비교를 빠져나가므로 따로 막는다
 		if (axisScores == null || !axisScores.keySet().equals(EnumSet.allOf(ValueAxis.class))
 			|| axisScores.values().stream().anyMatch(
@@ -73,6 +93,8 @@ public class PersonalityResult {
 		result.axisScores = new EnumMap<>(axisScores);
 		result.answers = List.copyOf(answers);
 		result.current = true;
+		result.completedExperienceCount = completedExperienceCount;
+		result.baselineRetake = baselineRetake;
 		return result;
 	}
 }
