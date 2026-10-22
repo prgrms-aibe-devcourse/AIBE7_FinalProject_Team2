@@ -1,7 +1,7 @@
 // npm test : 마이페이지 변화 흐름 계산
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { trendOrders, trendSlotOrders, recordOf, axisChange, axisSeries, axisTrend, castOf, collectionOf, leanText, imageKinds } from './myPageView.js';
+import { trendOrders, trendSlotOrders, recordOf, axisChange, axisSeries, axisTrend, castOf, collectionOf, leanText, imageKinds, retakeAfterOrder, withRetakeSlot } from './myPageView.js';
 
 const AXIS = { key: 'APOLOGY_SINCERITY', strict: { name: '행동증명형' }, lenient: { name: '마음신뢰형' } };
 const entry = (value) => ({ axisScores: { APOLOGY_SINCERITY: value } });
@@ -21,7 +21,7 @@ const titled = (title, value) => ({ title, axisScores: { APOLOGY_SINCERITY: valu
 
 test('axisTrend: 테스트 점수를 맨 앞(0번)에 두고 체험 번호와 사건 이름을 붙인다', () => {
   const points = axisTrend([titled('가', 0.5), titled('나', null), titled('다', 0.75)], AXIS.key, { APOLOGY_SINCERITY: 0.25 });
-  assert.deepEqual(points.map(({ order, label, isTest }) => [order, label, isTest]), [[0, '테스트', true], [1, '1', false], [3, '3', false]]);
+  assert.deepEqual(points.map(({ order, label, isTest }) => [order, label, isTest]), [[0, '초심', true], [1, '1', false], [3, '3', false]]);
   assert.equal(points[2].title, '3번째 체험 · 다');
   assert.equal(axisTrend([titled('가', 0.5)], AXIS.key, null).length, 1); // 테스트 전이면 체험만
 });
@@ -47,11 +47,11 @@ test('axisChange: 점이 하나뿐이거나 체험 없이 테스트만 있으면
   assert.equal(axisChange(axisTrend([], AXIS.key, { APOLOGY_SINCERITY: 0.5 }), FULL_AXIS), null);
 });
 
-test('trendOrders: 테스트(없으면 첫 체험) + 최근 10건, 적으면 있는 만큼', () => {
+test('trendOrders: 테스트(있을 때만) + 최근 10건, 적으면 있는 만큼', () => {
   assert.deepEqual(trendOrders(3, true), [0, 1, 2, 3]);
   assert.deepEqual(trendOrders(3, false), [1, 2, 3]);
   assert.deepEqual(trendOrders(12, true), [0, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
-  assert.deepEqual(trendOrders(12, false), [1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+  assert.deepEqual(trendOrders(12, false), [3, 4, 5, 6, 7, 8, 9, 10, 11, 12]); // 테스트가 없으면 최근 10건만
   assert.deepEqual(trendOrders(0, true), [0]);
 });
 
@@ -122,9 +122,24 @@ test('collectionOf: 일러스트가 없어도 만난 모습이 있으면 묶음�
   assert.deepEqual(group.items, []);
 });
 
+test('retakeAfterOrder: 다시 정한 시각까지 마친 체험 수(시각 기준, FE-77)', () => {
+  const history = ['2026-10-01T10:00:00Z', '2026-10-02T10:00:00Z', '2026-10-03T10:00:00Z'].map((completedAt) => ({ completedAt }));
+  assert.equal(retakeAfterOrder(history, '2026-10-02T12:00:00Z'), 2);
+  assert.equal(retakeAfterOrder(history, '2026-09-30T00:00:00Z'), 0);
+  assert.equal(retakeAfterOrder(history, '2026-10-09T00:00:00Z'), 3);
+  assert.equal(retakeAfterOrder(history, 'not-a-date'), 3); // 시각을 모르면 맨 뒤
+});
+
+test('withRetakeSlot: 마친 체험 바로 뒤에 끼우고, 창 밖이면 보이는 첫 체험 앞에 둔다', () => {
+  assert.deepEqual(withRetakeSlot([0, 1, 2, 3, 4], 2), [0, 1, 2, 'retake', 3, 4]);
+  assert.deepEqual(withRetakeSlot([0, 1, 2], 0), [0, 'retake', 1, 2]);
+  assert.deepEqual(withRetakeSlot([0, 1, 2], 2), [0, 1, 2, 'retake']);
+  assert.deepEqual(withRetakeSlot([0, 6, 7, 8], 3), [0, 'retake', 6, 7, 8]); // 4 ~ 5번째 체험은 창 밖
+});
+
 test('trendSlotOrders: 강조할 체험이 최근 10건 밖이면 순서대로 끼워 넣고, 안이면 그대로', () => {
   assert.deepEqual(trendSlotOrders(12, true, 2), [0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
-  assert.deepEqual(trendSlotOrders(12, false, 2), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+  assert.deepEqual(trendSlotOrders(12, false, 2), [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]); // 테스트가 없으면 최근 10건 + 강조 칸(FE-77)
   assert.deepEqual(trendSlotOrders(12, true, 5), trendOrders(12, true));
   assert.deepEqual(trendSlotOrders(3, true, undefined), [0, 1, 2, 3]);
 });

@@ -15,6 +15,7 @@ import '../pages/comparison/comparison.css';
 import '../pages/personality/personality.css';
 import '../pages/personality/personalityPaper.css';
 import '../pages/myPage/myPage.css';
+import '../pages/myPage/myProfileEdit.css'; // 내 정보 수정(FE-77)
 import '../pages/login/login.css';
 import '../pages/caseReview/caseReview.css';
 import '../pages/community/community.css';

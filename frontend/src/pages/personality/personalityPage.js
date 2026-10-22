@@ -42,11 +42,11 @@ function preload(src) {
 // 답안 칸의 펜 체크 표시
 const CHECK_SVG = '<svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M4 10.5 L8.2 14.5 L16 5.5"/></svg>';
 
-export async function renderPersonalityPage(container, { api, navigate, from }) {
+export async function renderPersonalityPage(container, { api, navigate, from, baseline = false }) {
   // 검사지는 철을 가로로 눕혀 둔다. 문항과 표지 그림을 먼저 받아 두고 철을 그려, 올라오는 동안 시작 화면이 이미 보이게 한다(personality.css)
   let root, label, body;
   const active = () => container.contains(root);
-  const flow = createTestFlow({ api, isActive: active }); // 진행 규칙(답 · 넘기기 · 숫자 키 · 제출)은 신문 면(/test/paper)과 같다
+  const flow = createTestFlow({ api, isActive: active, baseline }); // 진행 규칙(답 · 넘기기 · 숫자 키 · 제출)은 신문 면(/test/paper)과 같다
   const { answers } = flow;
   const here = window.location.pathname;
   const stillHere = () => window.location.pathname === here; // 문항을 받는 사이 다른 화면으로 가면 새 화면을 덮어쓰지 않는다
@@ -273,7 +273,11 @@ export async function renderPersonalityPage(container, { api, navigate, from }) 
     body.replaceChildren(loading);
     try {
       await flow.submit();
-    } catch {
+    } catch (error) {
+      if (active() && error?.code === 'BASELINE_RETAKE_USED') { // 다시 정하기를 이미 썼다(다른 탭 등). 다시 보내도 같으니 마이페이지로 안내한다
+        sheetMessage(body, '재심은 이미 한 번 청구했어요.', { alert: true, action: { label: '마이페이지로', run: () => navigate('me') } });
+        return;
+      }
       if (active()) {
         sheetMessage(body, '결과를 저장하지 못했어요. 고른 답은 그대로 있어요.', { retry: submit, alert: true });
         body.querySelector('.test-message').append(button('마지막 문항으로', () => renderQuestion(questions.length - 1), 'secondary-button'));

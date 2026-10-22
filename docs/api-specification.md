@@ -52,6 +52,7 @@
 | v0.47 | 2026-10-21 | Rate limit 2차 (BE-63, WBS 7.4.6) — 1-5 `TOO_MANY_REQUESTS`에 **전용 제한 3곳** 추가: M-1 재발급 · M-2 로그아웃(IP별 합쳐서 분당 30번 · 순간 30번), A-2 관리자 로그인(IP별 분당 5번 · 순간 5번), M-3 카카오 로그인 시작(BE-62, 이미 적용). `/api` 공통 제한에 더해 걸리고(전용 제한은 POST만 센다) 응답 형식은 같다. `Retry-After`는 경로별(공통 1 · 재발급 · 로그아웃 · 카카오 시작 2 · 관리자 로그인 12초). 재발급이 429여도 로그아웃된 것이 아니다(401만 로그인 종료). 형식 변경 없음 |
 | v0.48 | 2026-10-22 | **발단 · 결론 사진 역할 칸 1단계 (BE-78 2차 검토, BE-101)** — A-13-4(사진 업로드)에 `role`(`ORIGIN` · `CONCLUSION`) 필수 필드 추가, 같은 역할로 다시 올리면 기존 사진을 교체(응답은 그대로 200이 아니라 201, id는 유지). A-13-5(목록) 응답에 `role` 추가(1단계 이전 사진은 `null`). **A-13-9(발단 · 결론 사진 삭제) 신설** — `DELETE /admin/cases/{caseId}/photos/incident/{role}`. 에러 코드 `INCIDENT_PHOTO_NOT_FOUND` 추가(1-5). A-13-6 ~ 8(신문 지면)의 `extraPhotos`는 `role`이 있는 사진만 발단 → 결론 순으로 내려준다(`display_order` 약속은 쓰지 않는다, `docs/decisions/BE-78.md`). **PR #243 리뷰 반영**: A-13-5의 "role 없는 행은 A-13-9로 지운다"는 설명이 틀려 있어 정정(A-13-9는 `{role}`로만 찾으므로 지울 수 없음), A-13-6 ~ 8의 `extraPhotos` 정렬이 "1단계는 `display_order`"임을 명시(`docs/decisions/BE-101.md` 참고). **(병합 메모) 이 PR 작업 중 BE-63 PR #236이 먼저 develop에 머지되며 v0.47 번호를 먼저 썼다 — 원래 v0.47로 적었던 걸 v0.48로 다시 매겼다(BE-101.md의 V26 마이그레이션 번호 충돌과 같은 상황)** |
 | v0.49 | 2026-10-22 | **P-5 `history[]`에 사건별 유형 `type` 추가 (BE-100, FE-75 리뷰 후속)** — 각 줄에 그 체험 한 건의 유형(유형 공통 형식 9-1)을 넣는다. 규칙은 `judgmentPersonality.type`과 같다(그 체험 하나만으로 낸 종합의 유형: 네 축 모두 값이 있을 때만, 글자는 정확한 분수의 부호 · 동점은 관대 글자). 없으면 `null`. 화면(내 결과 지면)이 축 점수로 유형을 직접 계산하고 P-4로 다시 받아 오던 경로를 없앤다(`docs/decisions/BE-100.md`) |
+| v0.50 | 2026-10-22 | **최초 성향 · 성향카드 다시 정하기 추가 (FE-77)** — 화면 이름은 초심(처음 성향) · 재심(다시 정하기) · 최근(현재 판결 성향). 결과 공통 형식에 `completedExperienceCount`(응시 시점에 완료한 사건 수) 추가. P-2 요청에 `baseline`(성향카드 다시 정하기, 사용자당 1회, 이미 썼으면 409 `BASELINE_RETAKE_USED`) 추가. 일반 응시는 그대로 횟수 제한 없음. P-5 응답에 `initialPersonality`(처음 성향: 첫 테스트, 테스트 전이면 첫 판결 체험 3건) · `baselineRetake`(다시 정한 결과 · 가능 여부) 추가. 1-5에 `BASELINE_RETAKE_USED` 추가. 서버 구현은 후속 백엔드 작업 |
 
 ---
 
@@ -150,6 +151,7 @@ json
 | 409 | `IMPORT_NOT_READY` | (확장, 관리자 API, BE-93 2차) 아직 적재할 수 없음 — 생성이 끝나지 않았거나 이미 적재한 등록 | 진행 상황 확인 안내 (A-14-1) |
 | 422 | `IMPORT_RESULT_INVALID` | (확장, 관리자 API, BE-93 2차) 생성 결과를 사건으로 만들 수 없음. `details`에 어느 값이 문제인지 담는다(예: `case.factors[2].label`) | 다시 생성하도록 안내 (A-14-1) |
 | 502 | `IMPORT_UNAVAILABLE` | (확장, 관리자 API, BE-93) 파이프라인 서비스에 닿지 못함, 또는 설정(`PIPELINE_SERVICE_URL`) 없음. **이 서비스를 켜지 않은 서버에서는 사건 등록만 꺼지고 나머지는 정상이다**(COMMON-50) | 다시 시도 · 관리자 문의 안내 (A-14) |
+| 409 | `BASELINE_RETAKE_USED` | (확장, 성향 API, v0.50) 성향카드 다시 정하기를 이미 씀 | 화면은 다 쓰면 버튼을 막는다. 오면 "재심은 이미 한 번 청구했어요" 안내 후 마이페이지를 다시 불러온다 (P-2) |
 | 429 | `TOO_MANY_REQUESTS` | (확장, BE-63) 같은 IP에서 `/api` 요청이 너무 많음(평균 초당 20번 · 순간 40번 초과). (v0.47) 아래 경로는 이에 더해 **더 엄격한 전용 제한**을 받는다: M-1 재발급 · M-2 로그아웃(IP별 둘을 합쳐 분당 30번 · 순간 30번), A-2 관리자 로그인(IP별 분당 5번 · 순간 5번), M-3 카카오 로그인 시작(IP별 분당 30번 · 순간 30번 + 전체 합계). 전용 제한은 POST(M-3은 GET)만 센다. **백엔드가 아니라 운영 Nginx가 돌려준다** — 형식은 1-4와 같고 `Retry-After`(초) 헤더가 붙는다: 공통 `1`, M-1 · M-2 · M-3 `2`, A-2 `12`. M-1이 429여도 리프레시 토큰은 그대로라 로그아웃된 것이 아니다. 로컬 개발(Vite)에는 Nginx가 없어 나오지 않는다 | 일반 오류 안내. 자동으로 다시 보내지 않는다 |
 | 500 | `INTERNAL_ERROR` | 서버 오류 | 일반 오류 안내 |
 - "이미 제출함"과 "순서가 맞지 않음"을 따로 나누지 않고 `INVALID_STATE` 하나로 둔다. 화면이 할 일은 둘 다 "`currentStatus`의 화면으로 이동"으로 같기 때문이다.
@@ -1621,8 +1623,10 @@ json
 json
 
 ```json
-{  "type": { "shareId": "Qm7xK2pa", "name": "그럴 수도 있지형", "…": "…" },  "axisScores": { "APOLOGY_SINCERITY": 0.75, "FAULT_STANDARD": 0.625, "PRINCIPLE_RELATION": 1.0, "ORDER_OPPORTUNITY": 0.5 },  "testedAt": "2026-10-14T14:00:00+09:00"}
+{  "type": { "shareId": "Qm7xK2pa", "name": "그럴 수도 있지형", "…": "…" },  "axisScores": { "APOLOGY_SINCERITY": 0.75, "FAULT_STANDARD": 0.625, "PRINCIPLE_RELATION": 1.0, "ORDER_OPPORTUNITY": 0.5 },  "testedAt": "2026-10-14T14:00:00+09:00",  "completedExperienceCount": 2}
 ```
+
+- `completedExperienceCount`(v0.50): 응시한 시점에 완료한 사건 수(완료한 회차가 하나라도 있는 사건, P-5 도전과제 `completed`와 같은 셈). "체험 n건 뒤에 다시 한 테스트"를 남기려고 저장한다. v0.50 전에 저장한 결과는 `null`
 
 | # | 메서드 | 경로 | 설명 | 화면 |
 | --- | --- | --- | --- | --- |
@@ -1659,20 +1663,23 @@ json
 json
 
 ```json
-{  "answers": [    { "questionId": 1, "value": 0 },    { "questionId": 2, "value": 3 }  ]}
+{  "answers": [    { "questionId": 1, "value": 0 },    { "questionId": 2, "value": 3 }  ],  "baseline": false}
 ```
 
 - `value`: 0 매우 A · 1 조금 A · 2 보통 · 3 조금 B · 4 매우 B. 서버는 그 문항의 `display_order = value + 1`인 선택지로 바꿔 채점한다(성향 산식 2장).
+- `baseline`(v0.50, 생략하면 `false`): **성향카드 다시 정하기**. 사용자당 한 번만 받는다. `true`인 결과는 처음 성향(P-5 `initialPersonality`)을 덮어쓰지 않고 다시 정한 결과(`baselineRetake.result`)로 따로 남는다. 테스트한 적이 없으면 이 제출이 첫 테스트(처음 성향)가 되고 다시 정하기 횟수는 쓰지 않는다(`false`와 같게 처리).
 
 **응답 201**: 결과 공통 형식(9-1).
 
 - 쿠키가 없거나 DB에 없는 익명 ID면 `anonymous_user`를 만들고 `Set-Cookie`로 내려준다(API 2와 같음). **요청 검증을 통과한 뒤에만** 발급한다. 400이면 사용자를 만들지 않고 쿠키도 내려 주지 않는다.
 - **재응시**: 이전 현재 결과는 이력으로 남기고 새 결과가 현재 결과가 된다(성향 산식 5장). 같은 사용자의 제출이 동시에 와도 차례로 처리되고, 나중에 처리된 것이 현재 결과다.
-- 저장하는 것은 유형 · 축 점수 · 답(`questionId` · 선택지 ID)이다. 응답에는 답을 다시 넣지 않는다.
+- **일반 응시는 언제든, 횟수 제한 없이** 할 수 있다. 다시 정하기(`baseline: true`)도 새 결과가 현재 결과가 되는 것은 같다.
+- 저장하는 것은 유형 · 축 점수 · 답(`questionId` · 선택지 ID) · 응시 시점 완료 사건 수 · 다시 정하기 여부다. 응답에는 답을 다시 넣지 않는다.
 
 | 거절 | 조건 |
 | --- | --- |
-| 400 `VALIDATION_ERROR` | `answers` 없음, 활성 문항 중 빠진 문항 · 같은 문항 두 번, 없거나 비활성인 `questionId`, `value`가 0 ~ 4 정수가 아님(소수는 1-1 숫자 규칙대로 거절) |
+| 400 `VALIDATION_ERROR` | `answers` 없음, 활성 문항 중 빠진 문항 · 같은 문항 두 번, 없거나 비활성인 `questionId`, `value`가 0 ~ 4 정수가 아님(소수는 1-1 숫자 규칙대로 거절), `baseline`이 불리언이 아님 |
+| 409 `BASELINE_RETAKE_USED` | `baseline: true`인데 이미 다시 정한 결과가 있음(v0.50). 결과를 저장하지 않는다 |
 
 ---
 
@@ -1703,12 +1710,14 @@ json
 json
 
 ```json
-{  "personality": { "type": { "shareId": "Qm7xK2pa", "…": "…" }, "axisScores": { "…": "…" }, "testedAt": "2026-10-14T14:00:00+09:00" },  "judgmentPersonality": {    "axisScores": { "APOLOGY_SINCERITY": 0.75, "FAULT_STANDARD": 0.11, "PRINCIPLE_RELATION": 0.83, "ORDER_OPPORTUNITY": null },    "type": null,    "experienceCount": 3  },  "history": [    { "caseId": 1, "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건", "completedAt": "2026-10-14T15:00:00+09:00", "axisScores": { "APOLOGY_SINCERITY": 1.0, "FAULT_STANDARD": 0.0, "PRINCIPLE_RELATION": 1.0, "ORDER_OPPORTUNITY": null }, "type": null }  ],  "experiences": [    { "caseId": 1, "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건", "crimeType": "MURDER", "status": "COMPLETED", "attemptNo": 1, "updatedAt": "2026-10-14T15:00:00+09:00" }  ],  "profile": { "attendanceDays": 3 },  "profileDeco": { "portrait": "/images/characters/standing/naero.webp", "frame": "wood", "background": "cream", "sashStyle": "long", "sashColorShort": "wine", "sashColorLong": "wine", "sashIconLeft": "none", "sashIconRight": "none", "bookmarkCharacter": "naero", "bookmarkFace": "happy", "bookmarkFaceStyle": "generated", "bookmarkColor": "bronze" },  "achievements": [    { "id": "first-case", "stat": "completed", "goal": 1, "value": 1, "cleared": true, "status": "CLEARED", "rewards": { "kinds": ["characters/scene"], "frames": ["wood"], "backgrounds": [], "sashStyles": ["long"], "sashColors": ["long:wine"], "sashIcons": [] } },    { "id": "collect-5", "stat": "collected", "goal": 5, "value": null, "cleared": false, "status": "PENDING", "rewards": { "kinds": ["cases"], "frames": [], "backgrounds": ["news"], "sashStyles": [], "sashColors": [], "sashIcons": ["naero", "nambul"] } },    { "…": "…" }  ],  "unlocked": { "kinds": ["characters/roles", "characters/standing", "characters/scene"], "frames": ["basic", "wood"], "backgrounds": ["cream"], "sashStyles": ["none", "short", "long"], "sashColors": ["short:wine", "long:wine"], "sashIcons": ["none", "star"] }}
+{  "personality": { "type": { "shareId": "Qm7xK2pa", "…": "…" }, "axisScores": { "…": "…" }, "testedAt": "2026-10-14T14:00:00+09:00", "completedExperienceCount": 4 },  "initialPersonality": { "source": "TEST", "type": { "shareId": "Qm7xK2pa", "…": "…" }, "axisScores": { "…": "…" }, "testedAt": "2026-10-10T20:00:00+09:00", "completedExperienceCount": 0 },  "baselineRetake": { "available": false, "result": { "type": { "…": "…" }, "axisScores": { "…": "…" }, "testedAt": "2026-10-14T14:00:00+09:00", "completedExperienceCount": 4 } },  "judgmentPersonality": {    "axisScores": { "APOLOGY_SINCERITY": 0.75, "FAULT_STANDARD": 0.11, "PRINCIPLE_RELATION": 0.83, "ORDER_OPPORTUNITY": null },    "type": null,    "experienceCount": 3  },  "history": [    { "caseId": 1, "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건", "completedAt": "2026-10-14T15:00:00+09:00", "axisScores": { "APOLOGY_SINCERITY": 1.0, "FAULT_STANDARD": 0.0, "PRINCIPLE_RELATION": 1.0, "ORDER_OPPORTUNITY": null }, "type": null }  ],  "experiences": [    { "caseId": 1, "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건", "crimeType": "MURDER", "status": "COMPLETED", "attemptNo": 1, "updatedAt": "2026-10-14T15:00:00+09:00" }  ],  "profile": { "attendanceDays": 3 },  "profileDeco": { "portrait": "/images/characters/standing/naero.webp", "frame": "wood", "background": "cream", "sashStyle": "long", "sashColorShort": "wine", "sashColorLong": "wine", "sashIconLeft": "none", "sashIconRight": "none", "bookmarkCharacter": "naero", "bookmarkFace": "happy", "bookmarkFaceStyle": "generated", "bookmarkColor": "bronze" },  "achievements": [    { "id": "first-case", "stat": "completed", "goal": 1, "value": 1, "cleared": true, "status": "CLEARED", "rewards": { "kinds": ["characters/scene"], "frames": ["wood"], "backgrounds": [], "sashStyles": ["long"], "sashColors": ["long:wine"], "sashIcons": [] } },    { "id": "collect-5", "stat": "collected", "goal": 5, "value": null, "cleared": false, "status": "PENDING", "rewards": { "kinds": ["cases"], "frames": [], "backgrounds": ["news"], "sashStyles": [], "sashColors": [], "sashIcons": ["naero", "nambul"] } },    { "…": "…" }  ],  "unlocked": { "kinds": ["characters/roles", "characters/standing", "characters/scene"], "frames": ["basic", "wood"], "backgrounds": ["cream"], "sashStyles": ["none", "short", "long"], "sashColors": ["short:wine", "long:wine"], "sashIcons": ["none", "star"] }}
 ```
 
 | 필드 | 설명 |
 | --- | --- |
 | `personality` | 테스트 현재 결과(결과 공통 형식). 테스트 전이면 `null` → 화면은 테스트 안내. **대표 캐릭터는 이 유형**(성향 산식 4장) |
+| `initialPersonality` | **처음 성향**(v0.50). 성향카드 화면 아래 "초심" 카드에 쓴다. 다시 응시해도 · 다시 정해도 바뀌지 않는다. 테스트한 적이 있으면 **첫 테스트 결과**(결과 공통 형식 + `source: "TEST"`). 테스트한 적이 없으면 **첫 판결**: 각 사건의 첫 회차 체험을 완료 순서로 **처음 3건** 평균한 유형(`source: "JUDGMENT"`, 모양은 `judgmentPersonality`와 같음 + `source`, `type`이 있을 때만). 나중에 테스트를 하면 그 첫 테스트가 대신한다. 둘 다 없으면 `null` |
+| `baselineRetake` | **성향카드 다시 정하기**(v0.50). `result`: 다시 정한 결과(결과 공통 형식), 아직이면 `null`. `available`: 지금 다시 정할 수 있는지 — 첫 테스트가 있고(`initialPersonality.source`가 `TEST`) 아직 다시 정하지 않았을 때만 `true`. 빈 마이페이지면 `{ "available": false, "result": null }` |
 | `judgmentPersonality` | 현재 판결 성향(성향 산식 4장). 각 사건의 **첫 회차**만, 완료 순서로 **최근 3건**의 축마다 체험별 축 점수 평균(v0.44 전에는 전체 평균). 값이 없는 축은 `null`("체험 자료 없음"). `type`은 **네 축 모두 값이 있을 때만** 있고 아니면 `null`. 값이 있으면 **유형 공통 형식(9-1) 그대로**다(`shareId`로 그 유형의 공유 링크로 이어 갈 수 있다). 화면은 "판결에서는 ○○○○"처럼 테스트 유형과 나란히 보여 준다. 완료한 체험이 없거나 네 축 모두 `null`이면 `judgmentPersonality` 자체가 `null`("종합 없음"). `experienceCount`는 **평균에 쓴 체험 수**(성향 기여(`experience_personality`)가 저장된 첫 회차 체험 중 최근 것, 최대 3)다. 종합 점수를 낸 체험과 같은 집합이고, 축 자료가 모두 비어 있는 체험도 센다. 7.6.7(체험 완료 시 성향 저장) 전에 완료해 기여가 없는 체험은 세지 않는다 |
 | `history` | 성향 변화 흐름. 각 사건의 첫 회차 체험별 축 점수(값이 없는 축은 `null`), 완료 순. **`type`(v0.49)은 그 체험 한 건의 유형**이다 — `judgmentPersonality.type`과 같은 규칙으로 그 체험 하나만 넣어 정한다(**네 축 모두 값이 있을 때만**, 아니면 `null`, 값이 있으면 유형 공통 형식(9-1) 그대로). 내 결과 지면(`/me/cases/{caseId}`)의 "이 사건의 성향카드"에 쓴다. 최근 3건 평균인 `judgmentPersonality.type`과는 다를 수 있다 |
 | `experiences` | 체험한 사건. 사건마다 최근 회차 하나, 최근 순. `status`로 결과 다시 보기(`COMPLETED`) · 이어 하기를 나눈다(1-6) |
@@ -1717,9 +1726,10 @@ json
 | `achievements` | 도전과제 8개(서버 표가 원본, FE-68 순서). `stat`: `completed`(완료한 회차가 하나라도 있는 사건 수, 다시 하기를 시작해도 줄지 않는다) · `hasType`(성향 테스트 결과가 있으면 1) · `attendanceDays`(P-6) · `collected`(모은 일러스트). `value`는 목표에서 멈춘다. `status`: `CLEARED` · `IN_PROGRESS` · `PENDING`. **`collected` 도전과제는 BE-83 전까지 서버가 셀 수 없어 `PENDING` · `value: null` · `cleared: false`(잠김)**. `rewards`는 여섯 종류(`kinds` · `frames` · `backgrounds` · `sashStyles` · `sashColors`(`모양:색`) · `sashIcons`), 받지 않는 종류는 빈 배열. 제목 · 문구 · 그림은 화면이 `id`로 붙인다 |
 | `unlocked` | 지금 열린 것(여섯 종류). 처음부터 열린 것 + `CLEARED` 도전과제의 보상 |
 
-- 쿠키가 없거나 기록이 없으면 `404`가 아니라 **빈 마이페이지**(`personality`·`judgmentPersonality` `null`, 목록 빈 배열)를 `200`으로 준다. 마이페이지는 "아직 없음"을 안내하는 화면이기 때문이다.
+- 쿠키가 없거나 기록이 없으면 `404`가 아니라 **빈 마이페이지**(`personality`·`initialPersonality`·`judgmentPersonality` `null`, 목록 빈 배열)를 `200`으로 준다. 마이페이지는 "아직 없음"을 안내하는 화면이기 때문이다.
 - `judgmentPersonality` · `history`는 체험 성향 저장(7.6.7, BE-64)이 붙은 뒤부터 채워진다. 그 전에는 각각 `null` · 빈 배열이다.
 - 판결 체험 중(S-03 ~ S-07)에 성향을 보여 주지 않는 규칙(FR-8-5)은 화면이 지킨다. 이 API는 마이페이지에서만 부른다.
+- 화면의 **현재 성향카드**(마이페이지 첫 화면 · 내 정보 수정 · 성향카드 화면 위쪽)는 `judgmentPersonality.type`, 없으면 `personality.type`이다. 처음 성향(`initialPersonality`)은 성향카드 화면 아래 "초심 → 재심 → 최근" 줄에만 나온다(v0.50).
 
 ---
 

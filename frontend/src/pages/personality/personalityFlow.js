@@ -11,9 +11,10 @@ const ADVANCE_MS = 260;
 const MIN_LOADING_MS = 900;
 
 /**
- * @param {{ api, isActive: () => boolean }} options isActive: 화면이 아직 보이는지(떠났으면 넘기기 · 키 · 제출 뒤 이동을 멈춘다)
+ * @param {{ api, isActive: () => boolean, baseline?: boolean }} options isActive: 화면이 아직 보이는지(떠났으면 넘기기 · 키 · 제출 뒤 이동을 멈춘다).
+ *   baseline: 성향카드 다시 정하기로 들어온 응시(마이페이지에서 navigate('test', { baseline: true }), 명세 P-2 v0.50)
  */
-export function createTestFlow({ api, isActive }) {
+export function createTestFlow({ api, isActive, baseline = false }) {
   const answers = new Map(); // questionId → 0 ~ 4 (매우 A · 조금 A · 보통 · 조금 B · 매우 B)
   const keys = new AbortController(); // 숫자 키 단축키. 화면을 떠나면 뗀다
   let questions = [];
@@ -69,7 +70,7 @@ export function createTestFlow({ api, isActive }) {
     /** 답을 제출한다(최소 MIN_LOADING_MS). 실패하면 throw — 고른 답은 그대로 있다 */
     async submit() {
       const started = performance.now();
-      await api.submitPersonality(questions.map((question) => ({ questionId: question.id, value: answers.get(question.id) })));
+      await api.submitPersonality(questions.map((question) => ({ questionId: question.id, value: answers.get(question.id) })), { baseline });
       const wait = reducedMotion() ? 0 : MIN_LOADING_MS - (performance.now() - started);
       if (wait > 0) await new Promise((resolve) => { setTimeout(resolve, wait); });
     },
