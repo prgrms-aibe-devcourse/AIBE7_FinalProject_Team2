@@ -40,12 +40,17 @@ status() {
   echo "--- fstab: $(grep -E "^[^#]*[[:space:]]swap[[:space:]]" /etc/fstab 2>/dev/null || echo '(없음)')"
   echo "--- 디스크(/) ---"; df -h /
   # Docker가 컨테이너 swap 상한을 지원하는지 (지원하지 않으면 memswap_limit이 무시된다)
+  # docker info가 실패하면(데몬 꺼짐 · docker 그룹이 아닌 사용자 등) "지원"으로 보이지 않게 "확인 불가"로 둔다 (PR #247 리뷰)
   if command -v docker >/dev/null 2>&1; then
-    if docker info 2>&1 | grep -qi "no swap limit support"; then
+    if ! docker_info=$(docker info 2>&1); then
+      echo "--- Docker: swap 상한 지원 여부 확인 불가 (docker info 실패 — sudo로 다시 보거나 docker 그룹 권한 확인)"
+    elif grep -qi "no swap limit support" <<<"$docker_info"; then
       echo "--- ⚠️ Docker: swap 상한 미지원(memswap_limit이 무시된다) — deploy/README.md \"Swap\" 참고"
     else
       echo "--- Docker: swap 상한 지원"
     fi
+  else
+    echo "--- Docker: 설치돼 있지 않아 확인 불가"
   fi
 }
 
@@ -56,18 +61,28 @@ fi
 
 [[ $EUID -eq 0 ]] || { log "❌ root로 실행한다: sudo $0 (상태만 보려면 $0 --check)"; exit 2; }
 
+# 0) 이 파일의 기존 fstab 줄에 noauto가 있으면 재부팅 뒤 swap이 켜지지 않는다.
+#    fstab이 깨지면 서버가 부팅하지 못하므로 스크립트가 고쳐 쓰지 않고, 아무것도 바꾸기 전에 멈춰 사람이 고치게 한다 (PR #247 리뷰)
+if awk -v f="$SWAP_FILE" '$1 == f && $3 == "swap" && $4 ~ /(^|,)noauto(,|$)/ { found = 1 } END { exit found ? 0 : 1 }' /etc/fstab; then
+  log "❌ /etc/fstab의 $SWAP_FILE 줄에 noauto가 있다 — 재부팅 뒤 swap이 켜지지 않는다."
+  log "   사본을 만든 뒤 그 줄의 옵션을 sw로 직접 고치고 다시 실행한다: sudo cp -p /etc/fstab /etc/fstab.bak-수동 && sudo nano /etc/fstab"
+  exit 3
+fi
+
 # 1) 이미 켜진 swap
 if [[ -n "$(swapon --noheadings --show=NAME 2>/dev/null)" ]]; then
   log "이미 켜진 swap이 있어 새로 만들지 않는다: $(swapon --noheadings --show=NAME,SIZE | tr '\n' ' ')"
 else
   if [[ -e "$SWAP_FILE" ]]; then
     # 꺼진 채 남은 파일(예: fstab만 지운 경우). 크기가 다르면 사람이 판단한다 — 함부로 지우지 않는다
-    size_gb=$(( $(stat -c %s "$SWAP_FILE") / 1024 / 1024 / 1024 ))
-    if [[ "$size_gb" -ne "$SWAP_SIZE_GB" ]]; then
-      log "❌ $SWAP_FILE이 이미 있고 크기(${size_gb}GB)가 요청(${SWAP_SIZE_GB}GB)과 다르다. 확인 후 지우고 다시 실행한다"
+    # 바이트로 비교한다 — GB로 나누면 2.5GB 파일도 2GB로 보여 통과한다 (PR #247 리뷰)
+    size_bytes=$(stat -c %s "$SWAP_FILE")
+    want_bytes=$(( SWAP_SIZE_GB * 1024 * 1024 * 1024 ))
+    if [[ "$size_bytes" -ne "$want_bytes" ]]; then
+      log "❌ $SWAP_FILE이 이미 있고 크기(${size_bytes}B)가 요청(${SWAP_SIZE_GB}GB = ${want_bytes}B)과 다르다. 확인 후 지우고 다시 실행한다"
       exit 3
     fi
-    log "$SWAP_FILE(${size_gb}GB)이 있어 그대로 켠다"
+    log "$SWAP_FILE(${SWAP_SIZE_GB}GB)이 있어 그대로 켠다"
   else
     # 2) 디스크 여유
     avail_gb=$(( $(df --output=avail -k "$(dirname "$SWAP_FILE")" | tail -1) / 1024 / 1024 ))
@@ -90,7 +105,14 @@ else
 fi
 
 # 4) 재부팅 뒤에도 켜지게 (이미 같은 파일 줄이 있으면 두지 않는다)
-if [[ -f "$SWAP_FILE" ]] && ! grep -qE "^[[:space:]]*${SWAP_FILE}[[:space:]]" /etc/fstab; then
+#    지금 실제로 켜져 있는 파일만 등록한다 — 다른 swap이 이미 켜져 있어 위에서 검증 · swapon을 건너뛴 경우,
+#    꺼진 채 남은 SWAP_FILE을 fstab에 넣으면 다음 부팅에서 검증 안 된 파일을 켜려 한다 (PR #247 리뷰)
+swap_file_active=false
+swapon --noheadings --show=NAME 2>/dev/null | grep -qxF "$SWAP_FILE" && swap_file_active=true
+if [[ "$swap_file_active" = false ]] && [[ -e "$SWAP_FILE" ]]; then
+  log "$SWAP_FILE은 켜져 있지 않아 /etc/fstab에 등록하지 않는다 (다른 swap 사용 중)"
+fi
+if [[ "$swap_file_active" = true ]] && ! grep -qE "^[[:space:]]*${SWAP_FILE}[[:space:]]" /etc/fstab; then
   cp -p /etc/fstab "/etc/fstab.bak-$(date +%Y%m%d%H%M%S)"   # fstab이 깨지면 부팅이 막힌다 — 되돌릴 사본
   echo "$SWAP_FILE none swap sw 0 0" >> /etc/fstab
   log "/etc/fstab에 추가 (사본: /etc/fstab.bak-*)"

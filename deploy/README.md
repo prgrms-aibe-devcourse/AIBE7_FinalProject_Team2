@@ -583,7 +583,7 @@ t3.small 2GB에 base 구성이 1.75GB를 할당해(backend 1g · postgres 512m �
 
 ### 처음 한 번: 서버에서 켜기
 
-**순서: 이 변경(`memswap_limit`)이 `main`에 머지돼 자동 배포가 끝난 뒤에 켠다.** 먼저 켜면 그 사이 backend · postgres · redis가 swap을 `mem_limit`만큼 더 쓸 수 있다(`memswap_limit`은 컨테이너를 새로 만들 때 적용된다). 배포가 끝났는지는 아래 "확인"의 `memory.swap.max`가 `0`인지로 본다.
+**순서: 이 변경(`memswap_limit`)이 `main`에 머지돼 자동 배포가 끝난 뒤에 켠다.** 먼저 켜면 그 사이 backend · postgres · redis가 swap을 `mem_limit`만큼 더 쓸 수 있다(`memswap_limit`은 컨테이너를 새로 만들 때 적용된다). 배포가 끝났는지는 아래 "확인"에서 **backend · postgres · redis 세 개가 모두** `memory.swap.max` `0`인지로 본다(하나라도 미실행이거나 0이 아니면 아직 켜지 않는다).
 
 ```bash
 cd /opt/lawnambul/app/deploy
@@ -592,7 +592,9 @@ sudo ./setup-swap.sh           # 없으면 만들고 켠다. 이미 맞게 돼 �
 ```
 
 - 디스크 여유가 **swap + 5GB**보다 적으면 만들지 않고 멈춘다(`MIN_FREE_AFTER_GB`). 옛 이미지 · 백업부터 정리한다.
-- 이미 켜진 swap이 있으면 새로 만들지 않고 swappiness만 맞춘다.
+- 이미 켜진 swap이 있으면 새로 만들지 않고 swappiness만 맞춘다. 이때 `/swapfile`이 꺼진 채 남아 있어도 `/etc/fstab`에는 등록하지 않는다(실제로 켠 파일만 등록).
+- `/etc/fstab`에 `/swapfile` 줄이 이미 있는데 옵션이 `noauto`면, 아무것도 바꾸기 전에 멈춘다. fstab이 깨지면 부팅이 막히므로 스크립트가 고쳐 쓰지 않는다 — 사본을 만든 뒤 그 줄의 옵션을 `sw`로 직접 고치고 다시 실행한다.
+- `/swapfile`이 이미 있는데 크기가 요청(2GB)과 바이트 단위로 다르면 멈춘다(함부로 지우지 않는다).
 - `memswap_limit`은 컨테이너를 **새로 만들 때** 적용된다. 이 변경이 `main`에 머지되면 자동 배포가 backend · postgres · redis를 다시 만든다(그 사이 API가 20 ~ 40초 끊긴다 — 일반 배포와 같다).
 
 ### 확인
@@ -601,9 +603,12 @@ sudo ./setup-swap.sh           # 없으면 만들고 켠다. 이미 맞게 돼 �
 free -h                                   # Swap: 2.0Gi
 cat /proc/sys/vm/swappiness               # 10
 docker info 2>&1 | grep -i "swap limit"   # 아무것도 안 나와야 한다 (나오면 memswap_limit이 무시된다 — 아래)
-# 컨테이너 swap 상한: memory.swap.max가 0이면 swap을 안 쓴다 (cgroup v2)
-for c in $(docker compose -f docker-compose.prod.yml ps -q); do
-  echo "$(docker inspect -f '{{.Name}}' "$c") $(docker exec "$c" cat /sys/fs/cgroup/memory.swap.max 2>/dev/null)"
+# 컨테이너 swap 상한: memswap_limit = mem_limit을 둔 세 서비스만 본다 — memory.swap.max가 0이면 swap을 안 쓴다 (cgroup v2)
+# (web · 모니터링 에이전트 · 파이프라인은 swap 제한을 두지 않아 0이 아닌 게 정상이다 — 판단에 넣지 않는다)
+for s in backend postgres redis; do
+  c=$(docker compose -f docker-compose.prod.yml ps -q "$s")
+  if [ -z "$c" ]; then echo "$s: 미실행 ⚠️"; continue; fi
+  echo "$s: $(docker exec "$c" cat /sys/fs/cgroup/memory.swap.max 2>/dev/null || echo '읽기 실패')"
 done
 ```
 

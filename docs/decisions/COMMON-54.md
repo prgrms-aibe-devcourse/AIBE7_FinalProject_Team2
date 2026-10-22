@@ -57,6 +57,7 @@ Docker는 `memswap_limit`을 주지 않으면, 서버에 swap이 있을 때 컨�
 - **swap은 용량을 늘려 주지 않는다.** 파이프라인을 RDS 전환 뒤에 켠다는 COMMON-50 전제와 `deploy.sh` 메모리 가드(`PIPELINE_MEMORY_CHECKED`)는 그대로 둔다.
 - `memswap_limit`은 커널이 컨테이너 swap 상한을 지원해야 적용된다(cgroup v2, Ubuntu 22.04 이상 기본). 지원하지 않으면 `docker info`에 `No swap limit support` 경고가 나오고 값이 무시된다 — 스크립트 `--check`와 README 확인 절차로 본다.
 - `memswap_limit`은 컨테이너를 새로 만들 때 적용된다. 머지 후 자동 배포가 backend · postgres · redis를 다시 만들어 API가 20 ~ 40초 끊긴다(일반 배포와 같다).
+- **`/etc/fstab`은 새 줄을 덧붙이기만 하고 기존 줄은 고쳐 쓰지 않는다**(PR #247 리뷰). fstab이 깨지면 서버가 부팅하지 못하는데, 원격 EC2라 콘솔로 고치기 어렵다. 그래서 `/swapfile` 줄에 `noauto`가 있으면 아무것도 바꾸기 전에 멈추고 사람이 고치게 했다. 지금 켜져 있는 파일만 등록한다(다른 swap이 켜져 있어 검증을 건너뛴 파일은 등록하지 않음).
 - swap 파일에는 메모리에 있던 값(비밀값 포함 가능)이 내려갈 수 있다 → 권한 600. EBS 암호화 여부는 인스턴스 설정을 따른다.
 - 디스크 30GB를 이미지 · DB · 백업과 나눈다. RDS 전환(10/28) 뒤에는 DB 데이터와 백업이 서버에서 빠져 여유가 늘어난다.
 
