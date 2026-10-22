@@ -48,7 +48,7 @@
 | v0.44 | 2026-10-21 | **P-5 `judgmentPersonality`를 현재 판결 성향으로 변경 (FE-70)** — 첫 회차 체험 **전체 평균**에서 **최근 첫 회차 체험 3건의 평균**으로 바꾼다(`type` · `null` 규칙은 그대로, `experienceCount`는 평균에 쓴 체험 수 = 최대 3). 마이페이지 성향카드 화면이 "지금"을 이 값으로 보여 준다. 서버 구현(`MyPageService`)은 후속 백엔드 작업 |
 | v0.45 | 2026-10-21 | 10장 카카오 로그인 추가 (BE-62, WBS 7.4.2) — M-3 시작 `GET /api/v1/auth/oauth2/authorization/kakao` · M-4 콜백 `GET /api/v1/auth/oauth2/callback/kakao`(브라우저 이동, JSON API 아님). 성공 시 리프레시 토큰 쿠키(`NLNB_RT`)만 심고 화면 경로로 리다이렉트, 토큰은 URL에 싣지 않음. 익명 ID 쿠키 연결 규칙. **10장 번호를 M-N으로 변경**: 재발급 · 로그아웃(BE-94)의 A-16 · A-17이 8-4 운영 메뉴 API 예약 번호(A-16 ~ A-41)와 겹쳐 M-1 · M-2로 |
 | v0.46 | 2026-10-21 | **사건 등록 A-14 · A-15 서버 구현 (BE-93 1차)** — "초안" 표시를 떼고 담당을 BE-93으로. **A-14 머리말의 "파이프라인을 자바로 옮긴 뒤 구현한다"는 옛 결정이라 정정**: 파이프라인은 옮기지 않고 같은 서버의 내부 컨테이너로 띄워 백엔드가 내부망으로 부른다(COMMON-50). 에러 코드 `DUPLICATE_SOURCE` · `IMPORT_IN_PROGRESS` · `IMPORT_NOT_FOUND` · `IMPORT_UNAVAILABLE`(신설)을 1-5에 추가. **적재는 BE-93 2차**라 그때까지 A-15는 `SUCCEEDED`여도 `caseId`가 `null`임을 명시(차수별 표로 구분). **A-14의 "파이프라인이 적재까지 한다"도 정정**: 파이프라인의 `load` 단계는 운영 DB에 직접 쓰는 단계라 서비스에서 영구히 막아 두었고(COMMON-50), 1차 · 2차 모두 `SKIPPED`다 — 사건을 만드는 일은 서버가 한다. 항상 `SKIPPED`인 세 단계(`load` · `rag` · `contamination`)가 오류가 아님을 A-15에 명시. 요청 · 응답 형식은 바뀌지 않았다(화면 목 `adminMockApi.js` 그대로) |
-| v0.47 | 2026-10-22 | **발단 · 결론 사진 역할 칸 1단계 (BE-78 2차 검토, BE-101)** — A-13-4(사진 업로드)에 `role`(`ORIGIN` · `CONCLUSION`) 필수 필드 추가, 같은 역할로 다시 올리면 기존 사진을 교체(응답은 그대로 200이 아니라 201, id는 유지). A-13-5(목록) 응답에 `role` 추가(1단계 이전 사진은 `null`). **A-13-9(발단 · 결론 사진 삭제) 신설** — `DELETE /admin/cases/{caseId}/photos/incident/{role}`. 에러 코드 `INCIDENT_PHOTO_NOT_FOUND` 추가(1-5). A-13-6 ~ 8(신문 지면)의 `extraPhotos`는 `role`이 있는 사진만 발단 → 결론 순으로 내려준다(`display_order` 약속은 쓰지 않는다, `docs/decisions/BE-78.md`) |
+| v0.47 | 2026-10-22 | **발단 · 결론 사진 역할 칸 1단계 (BE-78 2차 검토, BE-101)** — A-13-4(사진 업로드)에 `role`(`ORIGIN` · `CONCLUSION`) 필수 필드 추가, 같은 역할로 다시 올리면 기존 사진을 교체(응답은 그대로 200이 아니라 201, id는 유지). A-13-5(목록) 응답에 `role` 추가(1단계 이전 사진은 `null`). **A-13-9(발단 · 결론 사진 삭제) 신설** — `DELETE /admin/cases/{caseId}/photos/incident/{role}`. 에러 코드 `INCIDENT_PHOTO_NOT_FOUND` 추가(1-5). A-13-6 ~ 8(신문 지면)의 `extraPhotos`는 `role`이 있는 사진만 발단 → 결론 순으로 내려준다(`display_order` 약속은 쓰지 않는다, `docs/decisions/BE-78.md`). **PR #243 리뷰 반영**: A-13-5의 "role 없는 행은 A-13-9로 지운다"는 설명이 틀려 있어 정정(A-13-9는 `{role}`로만 찾으므로 지울 수 없음), A-13-6 ~ 8의 `extraPhotos` 정렬이 "1단계는 `display_order`"임을 명시(`docs/decisions/BE-101.md` 참고) |
 
 ---
 
@@ -1315,7 +1315,7 @@ API 1 · 2 · 16은 상태와 관계없이 부를 수 있다. 표에 없는 조�
 ]
 ```
 
-- `role`이 `null`인 행은 역할 칸 도입(v0.47) 이전에 사건당 3번째 이상 올라간 사진이다. 자리가 둘(발단 · 결론)뿐이라 역할을 매길 수 없어 신문 지면 · 공개 응답에서는 빠진다 — 이 목록에서만 정리 대상으로 노출된다. 정리하려면 A-13-9로 지우거나 역할을 지정해 다시 올린다.
+- `role`이 `null`인 행은 역할 칸 도입(v0.47) 이전에 사건당 3번째 이상 올라간 사진이다. 자리가 둘(발단 · 결론)뿐이라 역할을 매길 수 없어 신문 지면 · 공개 응답에서는 빠진다 — 이 목록에서만 정리 대상으로 노출된다. **A-13-9는 `{role}`(`ORIGIN` · `CONCLUSION`)로만 사진을 찾으므로 `role: null`인 행은 이 API로 지울 수 없다** — 정리가 필요하면 관리자가 DB에서 직접 확인한다(3단계 전 점검 항목, `docs/decisions/BE-78.md`).
 
 | 거절 | 조건 |
 | --- | --- |
@@ -1359,7 +1359,7 @@ API 1 · 2 · 16은 상태와 관계없이 부를 수 있다. 표에 없는 조�
 ```
 
 - `photo`는 A-13-3으로 올린 사건 대표사진(`legal_case.thumbnail_url`)을 그대로 내려준다. 아직 안 올렸으면 `null`.
-- `extraPhotos`는 A-13-5와 같은 배열 — `case_incident_photo`를 그대로 재사용한다(새로 저장하지 않는다, `docs/decisions/BE-92.md`). **v0.47부터는 `role`이 있는 사진만 발단(`ORIGIN`) → 결론(`CONCLUSION`) 순으로 내려준다** — 역할 칸 도입 이전에 사건당 3번째 이상 올라간 사진(`role: null`)은 여기서 빠진다(`docs/decisions/BE-78.md`).
+- `extraPhotos`는 A-13-5와 같은 배열 — `case_incident_photo`를 그대로 재사용한다(새로 저장하지 않는다, `docs/decisions/BE-92.md`). **v0.47부터는 `role`이 있는 사진만 발단(`ORIGIN`) → 결론(`CONCLUSION`) 순으로 내려준다** — 역할 칸 도입 이전에 사건당 3번째 이상 올라간 사진(`role: null`)은 여기서 빠진다(`docs/decisions/BE-78.md`). **정렬은 1단계 동안 `display_order`로 한다**(`ORIGIN` = 0, `CONCLUSION` = 1로 고정 채번되므로 결과적으로 역할 순과 같다) — `display_order`를 빼는 2 · 3단계에서 역할 기준 정렬로 바꾼다.
 - 공개한 사건은 바꿀 수 없다(A-11과 같은 규칙). 감사 로그 `CASE_PAPER_GENERATE`를 남긴다.
 
 | 거절 | 조건 |
