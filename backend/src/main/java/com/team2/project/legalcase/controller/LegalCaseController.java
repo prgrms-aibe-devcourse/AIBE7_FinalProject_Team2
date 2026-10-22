@@ -10,6 +10,8 @@ import com.team2.project.common.web.AnonymousIdCookie;
 import com.team2.project.legalcase.domain.CrimeType;
 import com.team2.project.legalcase.dto.CaseDetailResponse;
 import com.team2.project.legalcase.dto.CaseListResponse;
+import com.team2.project.legalcase.dto.PublicCasePaperResponse;
+import com.team2.project.legalcase.service.CasePaperQueryService;
 import com.team2.project.legalcase.service.LegalCaseService;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -23,6 +25,7 @@ import lombok.extern.slf4j.Slf4j;
 public class LegalCaseController {
 
 	private final LegalCaseService legalCaseService;
+	private final CasePaperQueryService casePaperQueryService;
 	private final AnonymousIdCookie anonymousIdCookie;
 
 	/**
@@ -41,5 +44,15 @@ public class LegalCaseController {
 	@GetMapping("/{caseId}")
 	public CaseDetailResponse getCase(@PathVariable Long caseId, HttpServletRequest request) {
 		return legalCaseService.getCase(caseId, anonymousIdCookie.read(request));
+	}
+
+	/**
+	 * API 17. 공개 신문 지면 (BE-102). 신문 지면(BE-92) · 발단·결론 사진(BE-91 · BE-101)을 그대로
+	 * 가져다 조립한다. 발단 · 결론 사진은 고정 자리({@code extraPhotos.origin} · {@code .conclusion})로
+	 * 준다 — 배열이 아니다(BE-78 2차 검토 참고).
+	 */
+	@GetMapping("/{caseId}/paper")
+	public PublicCasePaperResponse getCasePaper(@PathVariable Long caseId) {
+		return casePaperQueryService.getCasePaper(caseId);
 	}
 }

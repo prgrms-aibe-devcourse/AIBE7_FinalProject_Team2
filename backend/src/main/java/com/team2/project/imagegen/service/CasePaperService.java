@@ -31,7 +31,8 @@ public class CasePaperService {
 
 	/** 기사 본문까지 담아야 해서 사진 프롬프트(400)보다 넉넉히 둔다 */
 	private static final int MAX_OUTPUT_TOKENS = 1200;
-	private static final String DEFAULT_DESK = "사회면";
+	/** 지면 섹션명. 프론트 S-02 기사 기자 줄(FE-63)과 맞춰 "사회부"로 쓴다(FE-64 협의, BE-102 Jira 댓글) */
+	private static final String DEFAULT_DESK = "사회부";
 
 	private final CasePhotoPromptClient contentClient;
 	private final CasePaperRepository paperRepository;
