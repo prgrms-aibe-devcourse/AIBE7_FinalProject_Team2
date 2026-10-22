@@ -23,7 +23,9 @@ LABEL="${1:-}"
 log() { echo "[backup $(date '+%F %T')] $*"; }
 compose() { docker compose -f "$DEPLOY_DIR/docker-compose.prod.yml" "$@"; }
 ENV_FILE="$DEPLOY_DIR/.env"
-env_value() { grep -E "^$1=" "$ENV_FILE" 2>/dev/null | tail -1 | cut -d= -f2-; }
+# 값이 없을 때도 성공으로 끝낸다 — set -e · pipefail에서 grep의 "못 찾음"(종료 코드 1)이 그대로 올라오면
+# 외부 DB 값이 없는 서버(같은 서버 postgres)에서 스크립트가 아무 메시지 없이 끝나 백업이 만들어지지 않는다 (10/22 운영에서 발견)
+env_value() { grep -E "^$1=" "$ENV_FILE" 2>/dev/null | tail -1 | cut -d= -f2- || true; }
 PG_CLIENT_IMAGE="${PG_CLIENT_IMAGE:-postgres:17-alpine}"
 
 # 외부 DB 접속 값(JDBC 주소 → host · port · db · sslmode). 값은 출력하지 않는다
