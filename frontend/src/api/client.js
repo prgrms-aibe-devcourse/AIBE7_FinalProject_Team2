@@ -19,9 +19,9 @@ function fallbackError(code, message, status) {
 }
 
 /**
- * @param {'GET'|'POST'|'PUT'} method
+ * @param {'GET'|'POST'|'PUT'|'PATCH'} method
  * @param {string} endpoint  /api/v1 뒤의 경로 (예: '/cases/1/experience')
- * @param {object} [body] JSON 본문 (POST · PUT)
+ * @param {object} [body] JSON 본문 (POST · PUT · PATCH)
  */
 export async function request(method, endpoint, body) {
   const sentWith = accessToken;
@@ -111,3 +111,4 @@ async function send(method, endpoint, body) {
 export const get = (endpoint) => request('GET', endpoint);
 export const post = (endpoint, body) => request('POST', endpoint, body ?? {});
 export const put = (endpoint, body) => request('PUT', endpoint, body ?? {});
+export const patch = (endpoint, body) => request('PATCH', endpoint, body ?? {});
