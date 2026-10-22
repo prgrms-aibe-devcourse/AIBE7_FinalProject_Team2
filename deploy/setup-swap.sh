@@ -3,6 +3,7 @@
 #
 #   sudo ./setup-swap.sh           # 없으면 만들고 켠다. 이미 맞게 돼 있으면 아무것도 바꾸지 않는다(다시 실행해도 안전)
 #   ./setup-swap.sh --check        # 바꾸지 않고 지금 상태만 본다 (root 불필요)
+#   그 밖의 인자는 받지 않는다(실행하지 않고 멈춘다)
 #
 # 왜: t3.small 2GB에 base 구성이 1.75GB를 할당한다(backend 1g · postgres 512m · redis 256m). swap이 없으면 순간 급증
 #     (파이프라인 extract · 이미지 교체 중 컨테이너 두 벌 · apt 등) 때 커널 OOM이 가장 큰 프로세스(backend)를 바로 죽인다.
@@ -54,10 +55,12 @@ status() {
   fi
 }
 
-if [[ "${1:-}" == "--check" ]]; then
-  status
-  exit 0
-fi
+# 모르는 인자는 실행으로 떨어지지 않게 멈춘다 — root로 운영 서버에서 돌리므로 --dry-run · 오타(--chek)도 "진짜 실행"이 되면 안 된다 (PR #247 리뷰)
+case "${1:-}" in
+  --check) status; exit 0 ;;
+  "")      ;;   # 인자 없음 = 설정 실행
+  *)       log "❌ 모르는 인자: $1 (사용법: sudo $0 · 상태만 보기: $0 --check)"; exit 2 ;;
+esac
 
 [[ $EUID -eq 0 ]] || { log "❌ root로 실행한다: sudo $0 (상태만 보려면 $0 --check)"; exit 2; }
 
@@ -108,7 +111,10 @@ fi
 #    지금 실제로 켜져 있는 파일만 등록한다 — 다른 swap이 이미 켜져 있어 위에서 검증 · swapon을 건너뛴 경우,
 #    꺼진 채 남은 SWAP_FILE을 fstab에 넣으면 다음 부팅에서 검증 안 된 파일을 켜려 한다 (PR #247 리뷰)
 swap_file_active=false
-swapon --noheadings --show=NAME 2>/dev/null | grep -qxF "$SWAP_FILE" && swap_file_active=true
+# 출력을 변수로 받은 뒤 찾는다 — 파이프로 grep -q에 넘기면 pipefail에서 swapon이 SIGPIPE(141)를 받아
+# 켜져 있는데도 false로 남고 fstab 등록이 빠질 수 있다 (PR #247 리뷰)
+active_swaps=$(swapon --noheadings --show=NAME 2>/dev/null || true)
+grep -qxF "$SWAP_FILE" <<<"$active_swaps" && swap_file_active=true
 if [[ "$swap_file_active" = false ]] && [[ -e "$SWAP_FILE" ]]; then
   log "$SWAP_FILE은 켜져 있지 않아 /etc/fstab에 등록하지 않는다 (다른 swap 사용 중)"
 fi

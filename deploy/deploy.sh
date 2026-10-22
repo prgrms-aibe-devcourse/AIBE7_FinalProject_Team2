@@ -202,7 +202,10 @@ start_pipeline() {
 start_and_check() {
   local tag="$1"
   set_image_tag "$tag" || { log "❌ .env의 IMAGE_TAG를 바꾸지 못했다"; return 1; }
-  # DB · Redis는 이미지가 그대로라 다시 만들지 않는다. --remove-orphans는 쓰지 않는다(겹쳐 띄운 서비스를 지우지 않게)
+  # DB · Redis는 이미지가 그대로면 보통 다시 만들지 않는다. 다만 Compose는 이미지가 아니라 "설정"을 보고 다시 만들고,
+  # backend의 depends_on(postgres · redis)도 함께 본다 — mem_limit · memswap_limit · 환경변수 같은 설정이 바뀐 배포에서는
+  # 여기서 postgres · redis도 다시 만들어진다(COMMON-54, 로컬 실측). 그때는 DB 재기동 + healthcheck만큼 평소보다 오래 끊긴다.
+  # 데이터는 볼륨(pgdata · redisdata)에 있어 그대로다. --remove-orphans는 쓰지 않는다(겹쳐 띄운 서비스를 지우지 않게)
   if ! "${COMPOSE[@]}" up -d --no-build backend; then
     log "❌ 백엔드를 띄우지 못했다 ($tag)"
     return 1

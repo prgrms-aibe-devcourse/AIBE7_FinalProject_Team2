@@ -573,6 +573,8 @@ docker exec lawnambul-web-1 nginx -T 2>/dev/null | grep client_max_body_size
 
 t3.small 2GB에 base 구성이 1.75GB를 할당해(backend 1g · postgres 512m · redis 256m) 순간 급증을 받을 자리가 없다. swap이 없으면 그때 커널 OOM이 가장 큰 프로세스(backend)를 바로 죽인다. **swap은 "죽는 대신 잠깐 느려지는" 안전망이고, 용량을 늘리는 수단이 아니다.**
 
+**swap을 켜도 backend · postgres · redis 자신은 여전히 swap을 쓰지 않는다**(아래 표 "컨테이너"). 효과는 한 단계 건너서 온다 — 호스트 프로세스 · 파이프라인 쪽이 swap으로 밀려나 물리 메모리가 비는 덕분에, 서버 전체 OOM이 backend를 고를 일이 줄어든다. backend가 자기 `mem_limit`(1g)을 넘으면 지금처럼 재시작된다.
+
 | 항목 | 값 | 이유 |
 | --- | --- | --- |
 | 파일 | `/swapfile` **2GB** (권한 600) | 메모리와 같은 크기. 디스크 30GB를 이미지(배포마다 약 700MB, 두 벌 유지) · DB · 백업과 나눠 쓴다 |
@@ -580,6 +582,7 @@ t3.small 2GB에 base 구성이 1.75GB를 할당해(backend 1g · postgres 512m �
 | 재부팅 | `/etc/fstab`에 한 줄 | 고칠 때 `/etc/fstab.bak-*` 사본을 남긴다(fstab이 깨지면 부팅이 막힌다) |
 | 컨테이너 | backend · postgres · redis는 **swap 안 씀**(`memswap_limit` = `mem_limit`) | 값을 안 주면 Docker가 `mem_limit`만큼 swap을 더 허용한다. JVM 힙 · Redis가 swap으로 밀리면 죽지도 않고 수십 초씩 멈추는 "느린 서버"가 된다 → 지금과 같게(넘으면 OOM 재시작) |
 | 파이프라인 | swap **허용**(`memswap_limit` 없음) | extract는 관리자가 기다리는 일괄 작업이라 느려져도 된다. 순간 급증 때 죽는 것보다 낫다 |
+| web(Nginx) · 모니터링 에이전트 | 제한 없음 | web은 `mem_limit`이 없어 `memswap_limit`만 둘 수 없다(Docker가 메모리 제한 없는 swap 제한을 거부한다). 수십 MB라 급하지 않아 COMMON-52(파이프라인 반영)의 메모리 재조정 단계에서 `mem_limit`과 함께 본다. alloy(192m) · node-exporter(64m)도 열려 있지만 밀려나도 로그 · 지표 전송이 느려지는 정도다 |
 
 ### 처음 한 번: 서버에서 켜기
 
@@ -595,7 +598,8 @@ sudo ./setup-swap.sh           # 없으면 만들고 켠다. 이미 맞게 돼 �
 - 이미 켜진 swap이 있으면 새로 만들지 않고 swappiness만 맞춘다. 이때 `/swapfile`이 꺼진 채 남아 있어도 `/etc/fstab`에는 등록하지 않는다(실제로 켠 파일만 등록).
 - `/etc/fstab`에 `/swapfile` 줄이 이미 있는데 옵션이 `noauto`면, 아무것도 바꾸기 전에 멈춘다. fstab이 깨지면 부팅이 막히므로 스크립트가 고쳐 쓰지 않는다 — 사본을 만든 뒤 그 줄의 옵션을 `sw`로 직접 고치고 다시 실행한다.
 - `/swapfile`이 이미 있는데 크기가 요청(2GB)과 바이트 단위로 다르면 멈춘다(함부로 지우지 않는다).
-- `memswap_limit`은 컨테이너를 **새로 만들 때** 적용된다. 이 변경이 `main`에 머지되면 자동 배포가 backend · postgres · redis를 다시 만든다(그 사이 API가 20 ~ 40초 끊긴다 — 일반 배포와 같다).
+- `memswap_limit`은 컨테이너를 **새로 만들 때** 적용된다. 이 변경이 `main`에 머지되면 자동 배포(`deploy.sh`의 `up -d backend`)가 backend와 함께 **postgres · redis도 다시 만든다** — Compose는 설정이 바뀐 `depends_on` 서비스도 다시 만들기 때문이다(로컬 실측). 데이터는 볼륨에 있어 그대로다.
+- **이번 배포는 평소보다 오래 끊길 수 있다.** 평소 배포는 backend만 다시 떠서 API가 20 ~ 40초 끊기지만, 이번에는 postgres 재기동 + healthcheck를 backend가 기다린 뒤 뜬다. 팀에 미리 알린다.
 
 ### 확인
 
@@ -612,7 +616,7 @@ for s in backend postgres redis; do
 done
 ```
 
-평소 `free -h`의 Swap `used`는 0에 가까워야 한다. **계속 수백 MB씩 쓰이면 swap이 안전망이 아니라 상시 메모리가 된 것**이다 — 그때는 `mem_limit`을 다시 나누거나(COMMON-53) RDS 전환(7.1.2)으로 postgres를 빼는 게 맞다. Grafana 인프라 대시보드의 메모리 패널(node_exporter)로도 본다.
+평소 `free -h`의 Swap `used`는 0에 가까워야 한다. **계속 수백 MB씩 쓰이면 swap이 안전망이 아니라 상시 메모리가 된 것**이다 — 그때는 `mem_limit`을 다시 나누거나(COMMON-52 메모리 재조정 단계) RDS 전환(7.1.2)으로 postgres를 빼는 게 맞다. Grafana 인프라 대시보드의 메모리 패널(node_exporter)로도 본다.
 
 ### 문제가 생겼을 때
 
@@ -620,6 +624,8 @@ done
 | --- | --- |
 | `docker info`에 `WARNING: No swap limit support` | 커널이 컨테이너 swap 상한을 지원하지 않아 `memswap_limit`이 무시된다(cgroup v1 등). Ubuntu 22.04 이상 기본(cgroup v2)에서는 나오지 않는다. 나오면 D에게 알린다 — 컨테이너가 swap을 쓸 수 있는 상태다 |
 | 서버가 전체적으로 느리고 `free -h`의 Swap used가 계속 큼 | `docker stats --no-stream`으로 누가 쓰는지 본다. backend · postgres · redis는 swap을 못 쓰므로 호스트 프로세스나 파이프라인 · 에이전트다 |
+| `swapon`이 실패한다(`Invalid argument` · `skipping - it appears to have holes` 등) | 파일 시스템이 `fallocate`로 만든 파일을 거부한 경우다(EC2 Ubuntu ext4에서는 드물다). 2GB 파일이 `mkswap`까지 된 채 남아 다시 실행해도 같은 자리에서 멈춘다 → `sudo rm /swapfile` 후 `sudo dd if=/dev/zero of=/swapfile bs=1M count=2048 status=progress`로 만들고 다시 `sudo ./setup-swap.sh` |
+| `❌ 모르는 인자` | `sudo ./setup-swap.sh`(인자 없음) 또는 `./setup-swap.sh --check`만 받는다. `--dry-run` 같은 인자는 없다 — 상태만 보려면 `--check` |
 | swap 끄기 | `sudo swapoff /swapfile` → `/etc/fstab`의 `/swapfile` 줄 삭제 → `sudo rm /swapfile` → `sudo rm /etc/sysctl.d/99-lawnambul-swap.conf && sudo sysctl -w vm.swappiness=60` |
 
 ## AI 판결 파이프라인 서비스 (COMMON-50, 서버 전용)

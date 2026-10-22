@@ -224,7 +224,7 @@
         ]
       },
       "options": {
-        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "min"] },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "min", "max"] },
         "tooltip": { "mode": "multi", "sort": "desc" }
       },
       "targets": [
