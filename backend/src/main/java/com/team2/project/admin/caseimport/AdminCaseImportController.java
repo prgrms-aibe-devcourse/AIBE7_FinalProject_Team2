@@ -42,4 +42,15 @@ public class AdminCaseImportController {
 	public CaseImportResponse getImport(@PathVariable Long importId) {
 		return importService.getImport(importId);
 	}
+
+	/**
+	 * A-14-1. 생성 결과를 사건으로 만든다 (BE-93 2차).
+	 *
+	 * <p>A-15가 `SUCCEEDED`가 된 뒤 관리자가 누른다. 끝나면 응답의 `caseId`로 검수 화면(A-6)에 들어간다.
+	 */
+	@PostMapping("/{importId}/load")
+	public CaseImportResponse loadImport(@PathVariable Long importId,
+			@AuthenticationPrincipal AdminPrincipal admin, HttpServletRequest httpRequest) {
+		return importService.loadImport(importId, admin, httpRequest);
+	}
 }

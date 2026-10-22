@@ -149,4 +149,36 @@ public class LegalCase {
 	public List<String> getDeidentifiedItems() {
 		return deidentifiedItems == null ? List.of() : deidentifiedItems;
 	}
+
+	/**
+	 * 사건 등록(A-14)으로 들어온 사건을 DRAFT로 만든다 (BE-93 2차).
+	 *
+	 * <p>지금까지 사건은 시드 SQL로만 들어와 만드는 길이 없었다. 적재가 쓰는 유일한 생성 수단이다.
+	 * 공개 시각 · 대표 사진은 검수에서 채우므로 여기서는 비운다.
+	 */
+	public static LegalCase draft(String title, CrimeType crimeType, String chargeName, String shortIntro,
+			List<String> keywords, Difficulty difficulty, Integer estimatedMinutes, String overview,
+			List<String> deidentifiedItems, String appliedLaw, String statutoryPenaltyText,
+			Integer recommendedMinMonths, Integer recommendedMaxMonths, String recommendedBasis,
+			SentencingGuideline guideline, LocalDate incidentDate) {
+		LegalCase entity = new LegalCase();
+		entity.title = title;
+		entity.crimeType = crimeType;
+		entity.chargeName = chargeName;
+		entity.shortIntro = shortIntro;
+		entity.keywords = keywords;
+		entity.difficulty = difficulty;
+		entity.estimatedMinutes = estimatedMinutes;
+		entity.overview = overview;
+		entity.deidentifiedItems = deidentifiedItems;
+		entity.appliedLaw = appliedLaw;
+		entity.statutoryPenaltyText = statutoryPenaltyText;
+		entity.recommendedMinMonths = recommendedMinMonths;
+		entity.recommendedMaxMonths = recommendedMaxMonths;
+		entity.recommendedBasis = recommendedBasis;
+		entity.guideline = guideline;
+		entity.incidentDate = incidentDate;
+		entity.status = CaseStatus.DRAFT;
+		return entity;
+	}
 }

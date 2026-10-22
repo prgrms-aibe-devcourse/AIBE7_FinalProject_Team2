@@ -12,6 +12,7 @@ import com.team2.project.admin.domain.AdminAccount;
 import com.team2.project.admin.repository.AdminAccountRepository;
 import com.team2.project.pipeline.PipelineClient;
 import com.team2.project.pipeline.PipelineJob;
+import com.team2.project.pipeline.PipelineResult;
 import com.team2.project.support.ApiIntegrationTest;
 import jakarta.servlet.http.Cookie;
 import java.util.List;
@@ -290,6 +291,62 @@ class AdminCaseImportApiTest extends ApiIntegrationTest {
 			.andExpect(status().isForbidden());
 		// 조회는 CSRF 대상이 아니라 인증에서 걸린다
 		mockMvc.perform(get(URL + "/1")).andExpect(status().isUnauthorized());
+	}
+
+	// ---------------------------------------------------------------- A-14-1 적재
+
+	@Test
+	@DisplayName("A-14-1: 생성이 끝나지 않았으면 409 — 적재할 것이 없다")
+	void loadImport_notFinished() throws Exception {
+		long importId = importIdOf(perform(post(URL).contentType(MediaType.APPLICATION_JSON)
+			.content(body("2099고합001"))).andExpect(status().isAccepted()).andReturn());
+
+		perform(post(URL + "/" + importId + "/load"))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.code").value("IMPORT_NOT_READY"));
+	}
+
+	@Test
+	@DisplayName("A-14-1: 생성 결과에 사건이 없으면 422 — 사건을 만들 수 없다")
+	void loadImport_resultNotLoadable() throws Exception {
+		long importId = finishedImport();
+		when(pipelineClient.getResult(any())).thenReturn(new PipelineResult("job", null, null, null, null,
+			null, null));
+
+		perform(post(URL + "/" + importId + "/load"))
+			.andExpect(status().isUnprocessableEntity())
+			.andExpect(jsonPath("$.code").value("IMPORT_RESULT_INVALID"));
+	}
+
+	@Test
+	@DisplayName("A-14-1: 적재를 부를 수 없는 상태에서는 사건이 만들어지지 않는다")
+	void loadImport_doesNotCreateCaseOnFailure() throws Exception {
+		long importId = finishedImport();
+		when(pipelineClient.getResult(any())).thenReturn(new PipelineResult("job", null, null, null, null,
+			null, null));
+		int before = jdbcTemplate.queryForObject("SELECT count(*) FROM legal_case", Integer.class);
+
+		perform(post(URL + "/" + importId + "/load")).andExpect(status().isUnprocessableEntity());
+
+		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM legal_case", Integer.class)).isEqualTo(before);
+		assertThat(jdbcTemplate.queryForObject("SELECT case_id FROM case_import WHERE id = ?", Long.class, importId))
+			.isNull();
+	}
+
+	@Test
+	@DisplayName("A-14-1: 적재는 CSRF 토큰이 필요하다 (쓰기 요청)")
+	void loadImport_requiresCsrf() throws Exception {
+		mockMvc.perform(post(URL + "/1/load").session(session)).andExpect(status().isForbidden());
+	}
+
+	/** 생성이 끝난 등록을 하나 만든다 */
+	private long finishedImport() throws Exception {
+		long importId = importIdOf(perform(post(URL).contentType(MediaType.APPLICATION_JSON)
+			.content(body("2099고합001"))).andExpect(status().isAccepted()).andReturn());
+		when(pipelineClient.getJob(any())).thenReturn(new PipelineJob("job", "SUCCEEDED", List.of(),
+			null, null, null, null));
+		perform(get(URL + "/" + importId)).andExpect(jsonPath("$.status").value("SUCCEEDED"));
+		return importId;
 	}
 
 	// ---------------------------------------------------------------- 도우미

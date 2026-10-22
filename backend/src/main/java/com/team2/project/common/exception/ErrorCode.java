@@ -53,6 +53,8 @@ public enum ErrorCode {
 	IMPORT_IN_PROGRESS(HttpStatus.CONFLICT, "다른 사건을 등록하는 중입니다."),
 	IMPORT_NOT_FOUND(HttpStatus.NOT_FOUND, "등록 작업을 찾을 수 없습니다."),
 	IMPORT_UNAVAILABLE(HttpStatus.BAD_GATEWAY, "사건 등록을 지금 쓸 수 없습니다."),
+	IMPORT_NOT_READY(HttpStatus.CONFLICT, "아직 적재할 수 없는 등록 작업입니다."),
+	IMPORT_RESULT_INVALID(HttpStatus.UNPROCESSABLE_CONTENT, "생성 결과를 사건으로 만들 수 없습니다."),
 	INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "서버 오류가 발생했습니다.");
 
 	private final HttpStatus status;
