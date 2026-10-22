@@ -1,7 +1,7 @@
 // npm test : 마이페이지 변화 흐름 계산
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { trendOrders, axisChange, axisSeries, axisTrend, castOf, collectionOf, leanText, imageKinds } from './myPageView.js';
+import { trendOrders, trendSlotOrders, recordOf, typeCodeOf, axisChange, axisSeries, axisTrend, castOf, collectionOf, leanText, imageKinds } from './myPageView.js';
 
 const AXIS = { key: 'APOLOGY_SINCERITY', strict: { name: '행동증명형' }, lenient: { name: '마음신뢰형' } };
 const entry = (value) => ({ axisScores: { APOLOGY_SINCERITY: value } });
@@ -120,4 +120,28 @@ test('collectionOf: 일러스트가 없어도 만난 모습이 있으면 묶음�
   const [group] = collectionOf([{ caseId: 1, title: '사건', status: 'COMPLETED' }], scripts);
   assert.deepEqual(group.cast.map((item) => item.role), ['defense']);
   assert.deepEqual(group.items, []);
+});
+
+test('trendSlotOrders: 강조할 체험이 최근 10건 밖이면 순서대로 끼워 넣고, 안이면 그대로', () => {
+  assert.deepEqual(trendSlotOrders(12, true, 2), [0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+  assert.deepEqual(trendSlotOrders(12, false, 2), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+  assert.deepEqual(trendSlotOrders(12, true, 5), trendOrders(12, true));
+  assert.deepEqual(trendSlotOrders(3, true, undefined), [0, 1, 2, 3]);
+});
+
+test('recordOf: 마이페이지 history에서 이 사건의 축 점수와 체험 순서(1부터)를 찾는다', () => {
+  const scores = { APOLOGY_SINCERITY: 0.5, FAULT_STANDARD: 0.25, PRINCIPLE_RELATION: null, ORDER_OPPORTUNITY: 1 };
+  const myPage = { history: [{ caseId: 2, axisScores: { APOLOGY_SINCERITY: 1 } }, { caseId: 3, axisScores: scores }] };
+  assert.deepEqual(recordOf(myPage, 3), { scores, order: 2 });
+  assert.deepEqual(recordOf(myPage, '3'), { scores, order: 2 }); // 주소의 사건 번호가 문자열이어도 같다
+  assert.deepEqual(recordOf(myPage, 9), {}); // 성향 기록이 없는 사건
+  assert.deepEqual(recordOf({}, 3), {});
+  assert.equal(recordOf(null, 3), null); // 마이페이지를 못 불러옴
+});
+
+test('typeCodeOf: 네 축이 모두 있을 때만 유형 코드, 반반(0.5)은 관대 글자', () => {
+  assert.equal(typeCodeOf({ APOLOGY_SINCERITY: 0.75, FAULT_STANDARD: 0.25, PRINCIPLE_RELATION: 0.5, ORDER_OPPORTUNITY: 0 }), 'ISFJ');
+  assert.equal(typeCodeOf({ APOLOGY_SINCERITY: 0, FAULT_STANDARD: 1, PRINCIPLE_RELATION: 0.49, ORDER_OPPORTUNITY: 1 }), 'ENTP');
+  assert.equal(typeCodeOf({ APOLOGY_SINCERITY: 0.5, FAULT_STANDARD: 0.5, PRINCIPLE_RELATION: null, ORDER_OPPORTUNITY: 0.5 }), null);
+  assert.equal(typeCodeOf(undefined), null);
 });
