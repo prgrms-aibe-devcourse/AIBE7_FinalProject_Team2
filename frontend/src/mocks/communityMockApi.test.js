@@ -106,3 +106,17 @@ test('댓글은 공백을 뺀 1 ~ 500자, 달면 댓글 수가 는다', async ()
   assert.equal(after.commentCount, before.commentCount + 1);
   assert.equal(after.comments.at(-1).commentId, comment.commentId); // 오래된 순, 새 댓글은 맨 아래
 });
+
+test('글 · 댓글의 글쓴이에는 명함(프로필카드 꾸미기 + 공개 성향카드)이 붙는다 (FE-88)', async () => {
+  const { posts } = await getCommunityPosts();
+  const seeded = posts.find((item) => item.author.nickname === '새벽의 배심원');
+  assert.ok(seeded.author.profileCard.portrait.startsWith('/images/'));
+  assert.equal(seeded.author.shownType.slot, 'current');
+  assert.match(seeded.author.shownType.type.imageUrl, /^\/images\/characters\/personality\/\d{2}\.webp$/);
+  const detail = await getCommunityPost(seeded.postId);
+  assert.ok(detail.comments.every((comment) => comment.author.profileCard && 'shownType' in comment.author));
+  // 내가 쓴 글은 목에 내 꾸미기가 없어 기본 카드 · 성향 없음으로 온다
+  const mine = await createCommunityPost(post());
+  assert.equal(mine.author.shownType, null);
+  assert.equal(mine.author.profileCard.frame, 'basic');
+});

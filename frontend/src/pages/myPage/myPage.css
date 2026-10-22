@@ -1,20 +1,6 @@
 /* S-17 마이페이지. 색은 역할 토큰만 쓴다(FE-17). 페이지 틀은 S-14 · S-15와 같다.
    FE-44: 첫 화면 = 프로필(잔 테두리 링 안 책갈피 캐릭터 + 내 성향) + 항목 네 줄. 커피 요소는 잔 테두리 링 하나만 둔다 */
-.my-page {
-  /* 메인 컬러 = 커피색: 이 화면 안에서만 역할 토큰을 덮어쓴다(다른 화면은 네이비 그대로) */
-  --color-bg: var(--palette-coffee-25);
-  --color-card: var(--palette-coffee-cream); /* 카드 · 입력칸은 거품처럼 한 단계 밝게 */
-  --color-surface: var(--palette-coffee-50);
-  --color-surface-strong: var(--palette-coffee-100);
-  --color-track: var(--palette-coffee-200);
-  --color-border: var(--palette-coffee-200);
-  --color-border-strong: var(--palette-coffee-400);
-  --color-muted: var(--palette-coffee-500);
-  --color-heading: var(--palette-coffee-900);
-  --color-accent: var(--palette-coffee-600);
-  --color-accent-hover: var(--palette-coffee-900);
-  --color-accent-tint: var(--palette-coffee-50);
-  --color-accent-text: var(--palette-coffee-600);
+.my-page, .cm-cards {
   /* 대표 이미지 카드 꾸미기(FE-68) 색. 팔레트 값은 여기서만 꺼내 쓴다 */
   --deco-drop: 0 1px 0 var(--color-border), 0 10px 20px color-mix(in srgb, var(--color-heading) 14%, transparent);
   --deco-wood: var(--palette-bronze-700);
@@ -30,6 +16,33 @@
   --deco-linen-line: color-mix(in srgb, var(--palette-coffee-100) 40%, transparent);
   --deco-sash-wine: var(--palette-red-700);
   --deco-sash-green: var(--palette-judge-court);
+}
+/* 커뮤니티 글쓴이 명함(FE-88): 카드는 마이페이지에서 꾸민 그대로 보이게, 카드가 놓이는 칸 안에서만 커피 역할 토큰을 덮어쓴다(스코프 테마, DESIGN.md) */
+.cm-cards {
+  --color-card: var(--palette-coffee-cream);
+  --color-surface: var(--palette-coffee-50);
+  --color-border: var(--palette-coffee-200);
+  --color-border-strong: var(--palette-coffee-400);
+  --color-muted: var(--palette-coffee-500);
+  --color-heading: var(--palette-coffee-900);
+  --color-accent: var(--palette-coffee-600);
+  --color-accent-tint: var(--palette-coffee-50);
+}
+.my-page {
+  /* 메인 컬러 = 커피색: 이 화면 안에서만 역할 토큰을 덮어쓴다(다른 화면은 네이비 그대로) */
+  --color-bg: var(--palette-coffee-25);
+  --color-card: var(--palette-coffee-cream); /* 카드 · 입력칸은 거품처럼 한 단계 밝게 */
+  --color-surface: var(--palette-coffee-50);
+  --color-surface-strong: var(--palette-coffee-100);
+  --color-track: var(--palette-coffee-200);
+  --color-border: var(--palette-coffee-200);
+  --color-border-strong: var(--palette-coffee-400);
+  --color-muted: var(--palette-coffee-500);
+  --color-heading: var(--palette-coffee-900);
+  --color-accent: var(--palette-coffee-600);
+  --color-accent-hover: var(--palette-coffee-900);
+  --color-accent-tint: var(--palette-coffee-50);
+  --color-accent-text: var(--palette-coffee-600);
   --deco-community-paper: var(--palette-paper-50); /* 꾸미기 창 미리 보기 바탕 = 커뮤니티 글쓴이 명함 칸 바탕(community.css .cm-namecard, 커뮤니티의 --color-surface). .my-page가 역할 토큰을 커피로 덮어써서 팔레트로 꺼낸다(FE-88) */
   max-width: var(--content-width);
   margin: 0 auto;
