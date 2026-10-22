@@ -22,6 +22,8 @@ services:
       # 이 값 + 서버의 인증서가 있을 때만 컨테이너 시작 시 https를 켠다 (frontend/nginx/40-enable-https.sh)
       # 비어 있으면(CI · 로컬) 지금처럼 http만 뜬다
       SERVER_DOMAIN: ${SERVER_DOMAIN:-}
+      # 429 전용 로그 크기 상한(바이트, BE-63 — frontend/nginx/41-trim-rate-limit-log.sh). 비워 두면 10MB
+      RATE_LIMIT_LOG_MAX_BYTES: ${RATE_LIMIT_LOG_MAX_BYTES:-10485760}
     volumes:
       # 서버 호스트의 certbot이 발급 · 갱신하는 인증서. 읽기만 한다 (deploy/README.md "HTTPS")
       # - live/(최신 인증서를 가리키는 링크)와 archive/(실제 파일)만 붙인다. live/의 링크가 ../../archive/를 가리키므로
