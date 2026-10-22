@@ -47,7 +47,12 @@ function trendChart({ axis, points }, slots, retakeBetween) {
   caption.append(element('span', '', axis.label), ends);
   figure.append(caption);
   if (points.length === 0) {
-    figure.append(element('p', 'axis-empty', '체험 자료가 아직 없어요'));
+    // 이 축의 점수가 하나도 없으면 축 이름 · 위아래 끝 표시는 뜻이 없다. 눈에는 감추되(자리는 남겨 다른 그래프와 같은 크기) 안내를 박스 가운데에 둔다.
+    // 낭독기에는 어느 축인지 박스 이름으로 알린다
+    figure.classList.add('is-empty');
+    figure.setAttribute('aria-label', `${axis.label}: 체험 자료가 아직 없어요`);
+    caption.setAttribute('aria-hidden', 'true');
+    figure.append(element('div', 'trend-spacer'), element('p', 'axis-empty', '체험 자료가 아직 없어요'));
     return figure;
   }
   const { width, height, axis: axisX, left, right, bottom } = CHART;

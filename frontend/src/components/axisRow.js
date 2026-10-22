@@ -5,11 +5,20 @@ import { lenientPercent } from '../utils/personalityAxes.js';
 // 엄격 쪽 남색 · 관대 쪽 갈색, 둘 다 진하게 막대를 가득 채운다. 두 색은 어느 쪽이 좋다는 뜻이 아니라 양쪽을 구분할 뿐이다(FR-8-4).
 // 점수가 null이면 체험 자료가 없는 축이라 막대 대신 안내를 둔다(명세 P-5).
 
+// 자료가 없는 축의 안내. 막대가 있는 줄과 같은 높이를 차지한다: 양쪽 비중 글자(.axis-ends) 줄이 빠지면 줄 첫 칸이 0이 되어 줄이 짧아지고 글자가 위로 붙는다.
+// 그 줄만큼의 보이지 않는 자리를 채워 둔다(낭독기에는 읽히지 않는다). 4축 막대 · 마이페이지 변경폭 줄이 함께 쓴다
+export function appendEmptyAxis(row) {
+  const filler = element('div', 'axis-ends is-filler');
+  filler.setAttribute('aria-hidden', 'true');
+  filler.append(element('span', '', '\u00a0'));
+  row.append(filler, element('p', 'axis-empty', '체험 자료가 아직 없어요'));
+}
+
 export function renderAxisRow(axis, lenientRatio) {
   const row = element('li', 'axis-row');
   row.append(element('p', 'axis-label', axis.label));
   if (typeof lenientRatio !== 'number') {
-    row.append(element('p', 'axis-empty', '체험 자료가 아직 없어요'));
+    appendEmptyAxis(row);
     return row;
   }
   const lenient = lenientPercent(lenientRatio); // 반올림 규칙은 personalityAxes.js(마이페이지 글자 · 변경폭과 같은 값)

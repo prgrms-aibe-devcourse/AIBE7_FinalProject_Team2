@@ -1,6 +1,6 @@
 import { button, element, mockTag } from '../../components/siteLayout.js';
 import { API_MODE } from '../../api/config.js';
-import { renderAxisRow } from '../../components/axisRow.js';
+import { appendEmptyAxis, renderAxisRow } from '../../components/axisRow.js';
 import { imageOf } from '../../components/stage.js';
 import { AXES, CHARACTER_NAMES } from '../../utils/personalityAxes.js';
 import { KIND_TITLES, lenientPercent, axisChange, steadyBand, axisTrend, collectionOf, imageKinds, leanText, retakeAfterOrder } from '../../utils/myPageView.js';
@@ -398,7 +398,7 @@ function changeRow({ axis, points, change }) {
   const item = element('li', 'axis-row change-row');
   item.append(element('p', 'axis-label', axis.label));
   if (points.length === 0) {
-    item.append(element('p', 'axis-empty', '체험 자료가 아직 없어요'));
+    appendEmptyAxis(item);
     return item;
   }
   const from = points[0];
