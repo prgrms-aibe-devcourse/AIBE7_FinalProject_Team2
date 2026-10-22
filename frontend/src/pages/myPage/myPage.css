@@ -275,8 +275,8 @@ img.my-sash-icon.is-missing { visibility: hidden; }
 .trend-title { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin: 0 0 8px; font-weight: 700; color: var(--color-heading); }
 .trend-ends { display: grid; justify-items: end; color: var(--color-muted); font-size: 11px; font-weight: 400; line-height: 1.4; }
 .trend-svg { display: block; width: 100%; height: auto; overflow: visible; }
-/* 이 축에 점수가 없는 박스: 축 이름 · 끝 표시는 숨기고(자리만 남김) 그래프 자리(가로 : 세로 = CHART 320 : 160)를 비워 다른 그래프와 같은 크기로 두고, 안내를 박스 정중앙에 둔다 */
-.trend-chart.is-empty .trend-title { visibility: hidden; }
+/* 이 축에 점수가 없는 박스: 축 이름은 두고 위아래 끝 표시만 숨기며(자리는 남김), 그래프 자리(가로 : 세로 = CHART 320 : 160)를 비워 다른 그래프와 같은 크기로 두고, 안내를 박스 정중앙에 둔다 */
+.trend-chart.is-empty .trend-ends { visibility: hidden; }
 .trend-spacer { aspect-ratio: 320 / 160; }
 .trend-chart.is-empty .axis-empty { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: 0 16px; text-align: center; }
 .trend-zone.is-lenient { fill: color-mix(in srgb, var(--color-label) 7%, transparent); }
