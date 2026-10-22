@@ -8,7 +8,7 @@ import { reducedMotion } from '../../utils/motion.js';
 //   검사지(표지 · 문항, orientation 'landscape') = 철을 왼쪽으로 눕혀 가로로 놓았다: 탭이 왼쪽 모서리, 탭 글씨는 아래에서 위로 읽힌다.
 //   결과지(orientation 'portrait') = 철을 세워 세로로 놓았다: 탭이 위쪽 모서리. 제출 직후에는 눕힌 철을 돌려 세운다(personality.css folder-turn).
 // 결과지의 색인 탭(결과 · 풀이)은 위쪽 모서리에 붙는다(tabs).
-// 재료는 메인 책상 · 5막 파일철(FE-43)과 같다(--color-desk-kraft · -sheet). 흐름 목업 FE-26(판결성향검사지_흐름_목업)을 따른다.
+// 재료는 메인 책상 · 3막 파일철(FE-43)과 같다(--color-desk-kraft · -sheet). 흐름 목업 FE-26(판결성향검사지_흐름_목업)을 따른다.
 // 공유 화면에는 개인 응답 · 축 점수를 넣지 않는다(FR-8-6).
 // 4글자 코드(INTP 등)와 축 글자(E · I 등)는 화면에 보이지 않는다(상표 우려, 10/13). 공유 주소는 해시 값({shareId})이다.
 

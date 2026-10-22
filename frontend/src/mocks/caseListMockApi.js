@@ -75,7 +75,7 @@ export async function startExperience(caseId) {
   }
   if (caseId === 1) {
     // 체험 기록이 없으면(myStatus null) 실제 API처럼 새 체험(STARTED, 1막)으로 시작한다. 목 저장소의 초기값(PRE_JUDGED)은
-    // 주소로 S-04 이후 화면을 바로 열 때만 쓴다(FE-32 — S-20 "체험 시작"이 3막으로 건너뛰던 문제)
+    // 주소로 S-04 이후 화면을 바로 열 때만 쓴다(FE-32 — S-20 "체험 시작"이 2막으로 건너뛰던 문제)
     const { status, lastReviewedStep } = myStatusOf(caseId) === null ? restart() : read();
     return { caseId, attemptNo: 1, status, lastReviewedStep, startedAt: new Date().toISOString() };
   }

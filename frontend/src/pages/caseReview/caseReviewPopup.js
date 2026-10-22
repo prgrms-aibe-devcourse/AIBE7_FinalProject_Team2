@@ -2,13 +2,13 @@ import { button, element } from '../../components/siteLayout.js';
 import { mountCaseReview } from './caseReviewPage.js';
 import { reducedMotion } from '../../utils/motion.js';
 
-// 8막 "엽서 쓰기" 버튼 · 지면의 엽서를 누르면 날아오는 엽서 한 장(FE-55). 화면(/cases/:caseId/letters)과 같은 내용을 쓴다.
-// 2막 사전 판단 엽서와 같은 연출(paperStage.css nambul-hand · postcard-in): 남불이 앞으로 나서며 손을 내밀고, 엽서가 그 손에서 날아와 가운데에서 펼쳐진다.
+// 6막 "엽서 쓰기" 버튼 · 지면의 엽서를 누르면 날아오는 엽서 한 장(FE-55). 화면(/cases/:caseId/letters)과 같은 내용을 쓴다.
+// 1막 사전 판단 엽서와 같은 연출(paperStage.css nambul-hand · postcard-in): 남불이 앞으로 나서며 손을 내밀고, 엽서가 그 손에서 날아와 가운데에서 펼쳐진다.
 // 읽기 화면에서 지면의 엽서를 눌렀으면(남불이 없다) 그 엽서가 제자리에서 떠올라 가운데로 온다.
 // 닫으면(쓰던 내용이 있으면 한 번 묻고) 엽서가 온 곳으로 돌아가며 사라지고, 누른 곳으로 포커스가 돌아온다. 뒤 무대는 그대로다(새 화면으로 가지 않는다)
 const FOCUSABLE = 'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';
 const FLY_MS = 700;
-const FLY_DELAY_MS = 220; // 남불이 손을 내미는 사이(2막과 같다)
+const FLY_DELAY_MS = 220; // 남불이 손을 내미는 사이(1막 엽서와 같다)
 const BACK_MS = 380;
 const READY_WAIT_MS = 500; // 엽서 내용을 받는 동안 기다리는 최대 시간(받은 뒤에 날려야 날아오는 중에 엽서 크기가 바뀌지 않는다)
 
@@ -136,7 +136,7 @@ export function openCaseReviewPopup({ caseId, api, navigate, from, hand = false 
     const center = { x: to.left + to.width / 2, y: to.top + to.height / 2 };
     let start;
     if (rect?.width && hand) {
-      // 남불 손 자리(2막 deliver()와 같은 비율)에서 작게 접힌 채 기울어져 나온다
+      // 남불 손 자리(1막 엽서 deliver()와 같은 비율)에서 작게 접힌 채 기울어져 나온다
       start = `translate(${rect.left + rect.width * 0.3 - center.x}px, ${rect.top + rect.height * 0.45 - center.y}px) scale(.3) rotate(-14deg)`;
     } else if (rect?.width) {
       // 지면의 엽서가 그 크기 그대로 떠오른다

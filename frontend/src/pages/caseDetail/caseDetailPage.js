@@ -208,7 +208,7 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
         trigger.disabled = false;
       }
     }
-    // 2막 사전 판단 폼에 쓸 형량 구간(API 4). 1막을 보는 동안 받아 오고, 끝내 못 받으면 S-03을 새로 열어 그 화면의 오류 안내에 맡긴다
+    // 1막 엽서의 사전 판단 폼에 쓸 형량 구간(API 4). 1막을 보는 동안 받아 오고, 끝내 못 받으면 S-03을 새로 열어 그 화면의 오류 안내에 맡긴다
     async function loadOverview(tries = 2) {
       try {
         return await api.getOverview(caseId);

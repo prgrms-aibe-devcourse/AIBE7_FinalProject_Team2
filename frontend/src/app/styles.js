@@ -18,5 +18,5 @@ import '../pages/myPage/myPage.css';
 import '../pages/login/login.css';
 import '../pages/caseReview/caseReview.css';
 import '../pages/community/community.css';
-import '../components/courtSketch.css'; // 3 ~ 8막 상자 무대를 신문 세계에 맞춘다: 화면별 CSS 뒤에 와야 한다
+import '../components/courtSketch.css'; // 2 ~ 6막 상자 무대를 신문 세계에 맞춘다: 화면별 CSS 뒤에 와야 한다
 import '../pages/myPage/myResult.css'; // 내 결과 지면(FE-75): 6막 읽기 지면(courtSketch.css) 위에 배치만 바꾼다

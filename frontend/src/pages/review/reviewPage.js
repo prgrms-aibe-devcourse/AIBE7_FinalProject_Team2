@@ -78,7 +78,7 @@ export async function renderReviewPage(container, { caseId, caseHeader, api, nav
       await api.postReviewStep(caseId, step);
       if (!active()) return;
       if (step === 4) {
-        navigate('verdict'); // 4막(판결 전 정리)은 5막 파일철의 "사건 요약" 장으로 옮겨 건너뛴다(FE-48)
+        navigate('verdict'); // 판결 전 정리 화면은 없앴다. 그 내용은 3막 파일철의 "사건 요약" 장에 있다(FE-48)
       } else {
         const data = await api.getReview(caseId);
         if (active()) draw(data, true);
@@ -97,7 +97,7 @@ export async function renderReviewPage(container, { caseId, caseHeader, api, nav
       trigger.textContent = originalText;
     }
   }
-  // 3막 재판(흐름 목업, REQ-089). 서버 순서(섹션 ② → ③ → ④)는 그대로 두고, 대본의 confirm 장면을 떠날 때 "읽었습니다"를 보낸다.
+  // 2막 재판(흐름 목업, REQ-089). 서버 순서(섹션 ② → ③ → ④)는 그대로 두고, 대본의 confirm 장면을 떠날 때 "읽었습니다"를 보낸다.
   // 사건 요약(개요 · 핵심 사실)은 3막 내 판결(S-05) 파일철 첫 장이 보여 준다(FE-48)
   function drawStage(data, script) {
     root.classList.add('has-stage');
@@ -107,7 +107,7 @@ export async function renderReviewPage(container, { caseId, caseHeader, api, nav
     const main = element('div', 'review-main');
     main.append(element('h1', 'page-heading visually-hidden', '재판'), renderStage({
       script,
-      order: ['3'],
+      order: ['2'],
       start: (step) => step.section === data.openStep,
       onRestart: restartMock(caseId),
       onJump: jumpActMock(caseId),
@@ -115,7 +115,7 @@ export async function renderReviewPage(container, { caseId, caseHeader, api, nav
         try {
           await api.postReviewStep(caseId, step);
           if (step !== 4) return true;
-          if (active()) navigate('verdict'); // 4막은 건너뛴다(FE-48)
+          if (active()) navigate('verdict'); // 재판이 끝나면 바로 3막 내 판결로(FE-48)
           return false;
         } catch (error) {
           if (error?.code === 'STEP_OUT_OF_ORDER') await load();

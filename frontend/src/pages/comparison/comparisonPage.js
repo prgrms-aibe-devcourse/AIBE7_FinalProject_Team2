@@ -47,7 +47,7 @@ export async function renderComparisonPage(container, { caseId, caseHeader, api,
     return element('td', `matrix-direction${direction ? ` is-${direction.toLowerCase()}` : ' is-none'}`, direction ? directionSymbols[direction] : '—');
   }
 
-  // 대본의 제목이 사건 제목과 같을 때만 무대를 쓴다(S-03 ~ S-07과 같은 규칙). 보통은 7막 무대에서 이어지고 주소만 바뀐다
+  // 대본의 제목이 사건 제목과 같을 때만 무대를 쓴다(S-03 ~ S-07과 같은 규칙). 보통은 5막 무대에서 이어지고 주소만 바뀐다
   const candidate = SCRIPTS[caseId];
   const script = candidate?.title === caseHeader.title ? candidate : undefined;
 

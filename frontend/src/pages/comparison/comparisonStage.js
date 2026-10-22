@@ -1,10 +1,10 @@
-// 8막 세 판결 비교 무대. 재판(신문 속 사건)이 끝나고 현실의 신문으로 돌아온다 — 판사의 책상 위 "다음 날 신문"에
+// 6막 세 판결 비교 무대. 재판(신문 속 사건)이 끝나고 현실의 신문으로 돌아온다 — 판사의 책상 위 "다음 날 신문"에
 // 내 체험 결과가 녹아들어 내 판결 · AI 판결 · 실제 판결이 기사로 실렸다.
-// 지면은 화면보다 크고, 장면마다 카메라가 기사 하나(대본 focus)로 옮겨 간다. 7막 법정이 1면 사진 속으로 빠져나오며 시작한다(대본 from: "photo").
+// 지면은 화면보다 크고, 장면마다 카메라가 기사 하나(대본 focus)로 옮겨 간다. 5막 법정이 1면 사진 속으로 빠져나오며 시작한다(대본 from: "photo").
 // FE-32: 무대 상자 없이 화면 전체가 카메라 틀이다(mountNewspaperStage — 넓은 화면은 무대가 화면을 가득 채우고, 좁은 화면은 지면 안 무대)
 // 세 판결은 같은 크기 · 같은 무게로 싣고 어느 쪽이 맞았는지 말하지 않는다(PRODUCT.md 원칙 1).
 // 마지막 장면에서 다음 행동을 고른다: 다른 사건 보기 · 여기 남아있기(지면 읽기 → 메인으로) · 메인으로 · 공유하기.
-// S-07(7막)에서 비교를 공개한 뒤 무대를 이어 받고(주소만 S-08로), 재진입(S-08 주소)에서도 같은 무대를 연다
+// S-07(5막)에서 비교를 공개한 뒤 무대를 이어 받고(주소만 S-08로), 재진입(S-08 주소)에서도 같은 무대를 연다
 import { formatPenalty, formatDispositions } from '../../utils/judgmentFormat.js';
 import { formatMonths } from '../../components/recommendedRangeBar.js';
 import { renderStage, courtSet, imageOf } from '../../components/stage.js';
@@ -52,7 +52,7 @@ function diffLine(mine, other, name, same, differ) {
   return differ(`${name}과는 형벌이 달라요.`);
 }
 
-// 1면 사진: 7막 마지막 법정 그대로(판사 역 내로 · 피고인 역 남불). 지면에서는 흑백 사진이고, 시작 장면에서만 색이 남아 있다
+// 1면 사진: 5막 마지막 법정 그대로(판사 역 내로 · 피고인 역 남불). 지면에서는 흑백 사진이고, 시작 장면에서만 색이 남아 있다
 function courtPhoto() {
   const figure = element('figure', 'sheet-figure');
   const photo = element('div', 'sheet-photo');
@@ -176,7 +176,7 @@ export function castStory(script, navigate) {
 // openReview(letter): 엽서를 눌렀을 때 독자 엽서를 연다
 export function letterStory(data, openReview) {
   const { preToFinal } = data;
-  // 독자 의견란: 2막에서 보낸 엽서가 다음 날 신문 독자란에 실려 돌아온다. 처음 보낸 첫인상만 다시 싣는다(API 14의 preToFinal.preJudgment).
+  // 독자 의견란: 1막에서 보낸 엽서가 다음 날 신문 독자란에 실려 돌아온다. 처음 보낸 첫인상만 다시 싣는다(API 14의 preToFinal.preJudgment).
   // 아래 편집부 의견은 그 첫인상을 실제 판결과 견줘 한 줄로 적는다(어느 쪽이 맞는지는 말하지 않는다).
   // 추후 확장(우선도 낮음): 사용자 데이터가 쌓이면 이 칸에 다른 독자들의 첫인상 분포를 함께 보여 줄 수 있다 — 지금은 데이터가 없어 보여 주지 않는다.
   const letter = element('div', 'sheet-letter');
@@ -278,16 +278,16 @@ async function share(note, caseId) {
 }
 
 /**
- * @returns {HTMLElement} 8막 무대. 마지막 대사창의 선택지로 다른 사건 · 메인 · 공유를 고른다
+ * @returns {HTMLElement} 6막 무대. 마지막 대사창의 선택지로 다른 사건 · 메인 · 공유를 고른다
  */
-// fromRect: 7막 무대 장면이 있던 화면 사각형(이어 받을 때). 그 자리 그대로에서 신문으로 빠져나온다
+// fromRect: 5막 무대 장면이 있던 화면 사각형(이어 받을 때). 그 자리 그대로에서 신문으로 빠져나온다
 export function renderComparisonStage({ script, data, caseId, caseTitle, navigate, api, fromRect }) {
   const { judgments } = data;
   const vsCourt = diffLine(judgments.USER, judgments.COURT, '실제 판결',
     '실제 판결과 형량이 같았네요. 그런데 무겁게 본 요소도 같았을까요?', (head) => `${head} 어떤 요소를 다르게 봤을까요?`);
   const vsAi = diffLine(judgments.USER, judgments.AI, 'AI 판결',
     'AI 판결과 형량이 같아요! 그래도 이유까지 같은지는 따로 봐야 해요.', (head) => `${head} 다른 자리에서 보면 다르게 보이기도 해요!`);
-  const act = script.acts['8'];
+  const act = script.acts['6'];
   const pre = data.preToFinal.preJudgment.label;
   const editor = editorNote(data.preToCourt?.direction); // 편집부 의견을 못 만들면(direction이 없거나 모르는 값) 그 대사는 건너뛴다
   const steps = act.steps.filter((step) => editor || !step.text?.includes('{editor}'))
@@ -295,8 +295,8 @@ export function renderComparisonStage({ script, data, caseId, caseTitle, navigat
   const narrow = window.matchMedia('(max-width: 680px)').matches;
   const sheet = newspaper(data, script, caseTitle, navigate, (letter) => openCaseReviewPopup({ caseId, api, navigate, from: letter }));
   const stage = renderStage({
-    script: { ...script, acts: { ...script.acts, 8: { ...act, steps } } },
-    order: ['8'],
+    script: { ...script, acts: { ...script.acts, 6: { ...act, steps } } },
+    order: ['6'],
     sheet,
     fromRect,
     cameraFill: true, // 책상 없이 신문만 화면 가득(1막 지면처럼)
@@ -406,8 +406,8 @@ function pageBackdrop(node) {
   return 'transparent';
 }
 
-// 8막 화면 틀: 무대(카메라 틀)가 화면 전체를 채운다 — 판사의 책상 위 다음 날 신문을 화면 가득 들여다본다(FE-32, comparison.css)
-// 7막에서 이어 받을 때는 renderComparisonStage를 부르기 전에 sceneRect(root)로 7막 장면 자리를 재 둔다
+// 6막 화면 틀: 무대(카메라 틀)가 화면 전체를 채운다 — 판사의 책상 위 다음 날 신문을 화면 가득 들여다본다(FE-32, comparison.css)
+// 5막에서 이어 받을 때는 renderComparisonStage를 부르기 전에 sceneRect(root)로 5막 장면 자리를 재 둔다
 export const sceneRect = (root) => root.querySelector('.stage-wrap .scene')?.getBoundingClientRect();
 export function mountNewspaperStage(root, { stage }) {
   root.className = 'comparison-page comparison-full'; // comparison-page: 화면 공통 글꼴 · [hidden] 규칙(review.css)
@@ -417,7 +417,7 @@ export function mountNewspaperStage(root, { stage }) {
   window.scrollTo(0, 0);
 }
 
-// 무대 화면 틀(6 ~ 8막이 같은 화면에서 이어질 때도 쓴다): 사건 제목 줄 + 가운데 넓은 무대
+// 무대 화면 틀(4 ~ 6막이 같은 화면에서 이어질 때도 쓴다): 사건 제목 줄 + 가운데 넓은 무대
 export function mountStage(root, { caseHeader, badge, heading, stage, extra = [] }) {
   root.classList.add('has-stage');
   const header = element('header', 'case-topbar');

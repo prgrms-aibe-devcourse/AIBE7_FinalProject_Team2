@@ -1,8 +1,8 @@
-// 신문 카메라(1 · 2막 사건 기사, 8막 다음 날 신문). 화면보다 큰 지면(sheet)을 옮겨 기사 하나(data-focus)를 틀(frame)에 맞춘다.
+// 신문 카메라(1막 사건 기사, 6막 다음 날 신문). 화면보다 큰 지면(sheet)을 옮겨 기사 하나(data-focus)를 틀(frame)에 맞춘다.
 // 기사마다 크기가 달라서, 어느 기사든 틀 안에서 비슷한 크기로 보이게 배율을 맞춘다(크게 키우지는 않는다, MAX_SCALE).
 // 옮길 때는 지금 배율에서 다음 배율로 곧장 간다 — 큰 기사로 가면 줌아웃만, 작은 기사로 가면 줌인만(중간에 물러났다 들어가지 않는다).
 // 움직임은 transform 하나라 레이아웃을 다시 계산하지 않는다.
-// 예외 하나: from을 주면 그 요소가 무대를 꽉 채운 장면에서 시작해 한 번 빠져나온다(7막 법정 → 8막 신문 사진)
+// 예외 하나: from을 주면 그 요소가 무대를 꽉 채운 장면에서 시작해 한 번 빠져나온다(5막 법정 → 6막 신문 사진)
 import { reducedMotion } from '../utils/motion.js';
 
 const EASE = 'cubic-bezier(.45, 0, .2, 1)';
@@ -12,7 +12,7 @@ const css = ({ s, x, y }) => `translate(${x}px, ${y}px) scale(${s})`;
 /**
  * @param {HTMLElement} sheet 지면(무대 장면 안에 절대 위치, transform-origin 0 0)
  * @param {HTMLElement} frame 기사를 맞출 틀(장면 안의 빈 요소, 위치는 CSS가 정한다)
- * @param {{ fill?: boolean, minScale?: number, maxUnit?: number }} [options] fill: 지면이 장면 가장자리 밖을 보이지 않게(배율 · 위치를 지면 안으로 묶는다, 8막 화면 가득)
+ * @param {{ fill?: boolean, minScale?: number, maxUnit?: number }} [options] fill: 지면이 장면 가장자리 밖을 보이지 않게(배율 · 위치를 지면 안으로 묶는다, 6막 화면 가득)
  *   minScale: 기사를 이 배율보다 작게 보이지 않는다(좁은 화면에서 기사 일부만 크게, 왼쪽 위부터)
  *   maxUnit: 화면에 보이는 지면 단위(--u, 지면 폭의 1/118)를 이 px보다 크게 키우지 않는다(큰 화면에서 글씨가 지나치게 커지지 않게).
  *     fill보다 앞선다 — 지면이 화면보다 좁아지면 가운데에 두고 양옆에 책상이 보인다
