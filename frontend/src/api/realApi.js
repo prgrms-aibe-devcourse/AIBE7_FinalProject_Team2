@@ -41,7 +41,7 @@ export const getComparison = (caseId) => get(`${experience(caseId)}/comparison`)
 // 성향 API P-1 ~ P-5 (명세 9장) — 문항 · 응답 제출 · 내 결과 · 공유용 유형 · 마이페이지. 응답 제출(P-2)만 익명 ID 쿠키를 새로 발급한다
 // 내 결과가 없으면 P-3은 404 PERSONALITY_RESULT_NOT_FOUND이고, 마이페이지(P-5)는 기록이 없어도 빈 200이다
 export const getPersonalityQuestions = () => get('/personality/questions');
-export const submitPersonality = (answers) => post('/personality/results', { answers });
+export const submitPersonality = (answers, { baseline = false } = {}) => post('/personality/results', baseline ? { answers, baseline } : { answers }); // baseline: 성향카드 다시 정하기(명세 v0.50)
 export const getMyPersonality = () => get('/personality/results/me');
 export const getPersonalityType = (shareId) => get(`/personality/types/${encodeURIComponent(shareId)}`);
 export const getMyPage = () => get('/my-page');

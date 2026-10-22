@@ -167,7 +167,7 @@
 .verdict-page .penalty-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .verdict-page .penalty-option { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 10px 14px; border: 1px solid var(--color-desk-sheet-line); border-radius: 3px; background: color-mix(in srgb, var(--color-card) 55%, transparent); cursor: pointer; }
 .verdict-page .penalty-option:has(input:checked) { background: var(--color-card); border-color: var(--color-heading); box-shadow: inset 0 0 0 1px var(--color-heading); color: var(--color-heading); font-weight: 700; }
-.verdict-page input { font: inherit; color: inherit; accent-color: var(--color-primary); }
+.verdict-page input { font: inherit; color: inherit; accent-color: var(--color-accent); }
 .verdict-page input:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 3px; }
 .verdict-page input[type='radio'],
 .verdict-page input[type='checkbox'] { width: 18px; height: 18px; flex-shrink: 0; }
@@ -175,7 +175,7 @@
 .verdict-page .number-field { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
 .verdict-page .number-field input { width: 110px; max-width: 100%; min-height: 46px; border: 1px solid var(--color-border-strong); border-radius: 4px; padding: 8px 12px; background: var(--color-card); }
 .verdict-page .number-field input[name='fineAmount'] { width: 180px; }
-.verdict-page input[aria-invalid='true'] { border-color: var(--color-primary); }
+.verdict-page input[aria-invalid='true'] { border-color: var(--color-accent); }
 .verdict-page .money-readable { color: var(--color-muted); font-size: 14px; }
 .verdict-page .field-error { color: var(--color-danger); font-size: 13px; margin-top: 8px; }
 .verdict-page .field-error:empty { display: none; }

@@ -27,8 +27,8 @@ function headed(node) {
 const bold = (text) => element('strong', '', text);
 
 // 이 사건으로 달라진 내 성향: 성향카드 화면의 성향 변화 흐름 그래프 그대로, 이 사건 칸만 강조한다. 안내는 기사 문체
-const trendHint = ({ hasTest, focused }) => `${hasTest ? '성향 테스트와' : '첫 체험과'} 최근 체험 ${TREND_RECENT}건까지의 판결 성향을 축마다 실었다. `
-  + `가운데 줄이 반반이고, 아래 숫자는 사건을 마친 순서, '현재'는 최근 체험 3건의 평균이다.${focused ? ' 띠를 깐 칸이 이 사건이다.' : ''} 점을 누르면 그때의 사건과 비중이 나온다.`;
+const trendHint = ({ hasTest, focused }) => `${hasTest ? '초심(성향 테스트)과 ' : ''}최근 체험 ${TREND_RECENT}건까지의 판결 성향을 축마다 실었다. `
+  + `가운데 줄이 반반이고, 아래 숫자는 사건을 마친 순서, '최근'은 최근 체험 3건의 평균이다.${focused ? ' 띠를 깐 칸이 이 사건이다.' : ''} 점을 누르면 그때의 사건과 비중이 나온다.`;
 // 오른쪽 단의 섹션들: [제목 + 지문] · 그래프 네 개. 단 높이를 맞출 때 섹션 사이에 여백을 나누려고 그래프를 하나씩 단의 섹션으로 꺼낸다
 function trendSections(myPage, record) {
   const intro = story('factors', '이 사건으로 달라진 내 성향');

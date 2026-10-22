@@ -11,7 +11,7 @@
 .court-page .court-main { padding: 28px; }
 .court-page .court-main h2 { color: var(--color-label); font-size: 14px; margin-bottom: 12px; }
 .court-page .court-reasoning { margin-bottom: 24px; }
-.court-page .court-excerpt { margin: 0 0 24px; padding: 18px 20px; border-left: 3px solid var(--color-primary); background: var(--color-surface); font-style: normal; }
+.court-page .court-excerpt { margin: 0 0 24px; padding: 18px 20px; border-left: 3px solid var(--color-accent); background: var(--color-surface); font-style: normal; }
 .court-page .court-excerpt p { font-size: 14px; }
 .court-page .court-plain { margin-bottom: 24px; }
 .court-page .court-plain h3 { font-size: 13px; margin-bottom: 10px; }
