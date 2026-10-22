@@ -1,4 +1,4 @@
-import { AXES, lenientPercent } from './personalityAxes.js';
+import { lenientPercent } from './personalityAxes.js';
 
 // S-17 마이페이지 화면용 계산. 화면 코드에서 떼어 npm test로 확인한다.
 // 점수는 API 명세 9장의 축 점수와 같다: 0 ~ 1, 관대 쪽 비중이고 값이 없는 축은 null.
@@ -61,20 +61,14 @@ export function leanText(ratio, axis) {
   return lenient > 50 ? `${axis.lenient.name} ${lenient}%` : `${axis.strict.name} ${100 - lenient}%`;
 }
 
-// 내 결과 지면(FE-75)에 실을 이 사건의 기록: scores(이 사건의 축 점수), order(성향 변화 흐름의 체험 순서, 1부터).
-// myPage는 마이페이지 응답(P-5). 못 불러왔으면 null, 성향 기록이 없는 사건이면 빈 객체
+// 내 결과 지면(FE-75)에 실을 이 사건의 기록: scores(이 사건의 축 점수), type(이 사건 한 건의 유형, 서버가 정한다 BE-100),
+// order(성향 변화 흐름의 체험 순서, 1부터). myPage는 마이페이지 응답(P-5). 못 불러왔으면 null, 성향 기록이 없는 사건이면 빈 객체
 export function recordOf(myPage, caseId) {
   if (!myPage) return null;
   const index = (myPage.history ?? []).findIndex((item) => String(item.caseId) === String(caseId));
-  return index < 0 ? {} : { scores: myPage.history[index].axisScores, order: index + 1 };
-}
-
-// 축 점수 → 4글자 유형 코드. 네 축 모두 값이 있을 때만 있고 아니면 null(명세 P-5 judgmentPersonality.type과 같은 규칙).
-// 반반(0.5)은 관대 글자(성향 산식 3-3). 코드는 유형 표를 찾는 데만 쓰고 화면에는 드러내지 않는다
-export function typeCodeOf(scores) {
-  const values = AXES.map((axis) => scores?.[axis.key]);
-  if (values.some((value) => typeof value !== 'number')) return null;
-  return AXES.map((axis, index) => (values[index] >= 0.5 ? axis.lenient.letter : axis.strict.letter)).join('');
+  if (index < 0) return {};
+  const { axisScores, type } = myPage.history[index];
+  return { scores: axisScores, type: type ?? null, order: index + 1 };
 }
 
 // 이번 사건에서 만난 모습 — 대본에 나온 역할 의상(look "role:…")을 등장 순서대로 모은다. 8막 신문 사진란과 마이페이지가 함께 쓴다

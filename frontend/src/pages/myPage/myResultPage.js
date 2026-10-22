@@ -7,14 +7,13 @@
 // 두 단은 긴 쪽이 높이를 정하고, 짧은 쪽 단이 섹션 사이에 남는 높이를 똑같이 나눠 끝선을 맞춘다(myResult.css)
 // 대사 · 카메라 없이 처음부터 읽는 지면이다(6막 "여기 남아있기"와 같은 읽기 화면 클래스를 쓴다).
 // 지면 글은 기사 문체("~다")로 쓰고, 바뀌는 값은 모두 API 값 그대로 끼운다(지어내는 문장 없음).
-// 데이터: API 14(처음 판단 · 최종 판결, 누를 때 한 번) + P-5(성향 변화 흐름 · 이 사건의 축 점수) + P-4(이 사건의 유형). 결정 기록 docs/decisions/FE-75.md
+// 데이터: API 14(처음 판단 · 최종 판결, 누를 때 한 번) + P-5(성향 변화 흐름 · 이 사건의 축 점수 · 유형 history[].type). 결정 기록 docs/decisions/FE-75.md · BE-100.md
 import { button, element, mockTag } from '../../components/siteLayout.js';
 import { API_MODE } from '../../api/config.js';
 import { renderAxisRow } from '../../components/axisRow.js';
 import { renderTrend, trendsOf } from '../../components/trendGraph.js';
 import { AXES } from '../../utils/personalityAxes.js';
-import { TREND_RECENT, recordOf, typeCodeOf } from '../../utils/myPageView.js';
-import { shareIdOfCode } from '../../utils/personalityTypes.js';
+import { TREND_RECENT, recordOf } from '../../utils/myPageView.js';
 import { story, masthead, frontStory, advertisements, openForReading } from '../comparison/comparisonStage.js';
 import { DEFAULT_NICKNAME, typeFace } from './myPage.js';
 
@@ -44,16 +43,9 @@ function trendSections(myPage, record) {
   return [intro, ...charts];
 }
 
-// 이 사건 한 건의 유형: P-5는 사건별 축 점수만 주므로, 축 점수로 유형을 고르고(typeCodeOf) 그 유형을 P-4(공유용 유형 조회)로 받아 온다.
-// 받은 값은 성향카드 공통 형식(이름 · 캐릭터 · 대사 · 이미지 · 설명, 명세 9-1). 네 축이 다 모이지 않았거나 못 받으면 null(빈 카드)
-async function caseType(api, scores) {
-  const shareId = shareIdOfCode(typeCodeOf(scores));
-  if (!shareId) return null;
-  return api.getPersonalityType(shareId).catch(() => null);
-}
-
 // 성향카드 옆 설명(기사 문체): 유형 이름(16개 모두 "~형"이라 「」 뒤 "에 가깝다"로 잇는다) + 판결 연계 설명(verdictDescription, "~다" 문체)
-function cardStory(type, hasCode) {
+// type: 이 사건 한 건의 유형(P-5 history[].type, 유형 공통 형식 9-1). 네 축이 다 모이지 않은 사건은 서버가 null로 준다(BE-100)
+function cardStory(type) {
   const text = element('div', 'my-result-card-text');
   if (type) {
     const lead = element('p', 'sheet-text');
@@ -61,7 +53,7 @@ function cardStory(type, hasCode) {
     text.append(lead);
     if (type.verdictDescription) text.append(element('p', 'sheet-text', type.verdictDescription));
   } else {
-    text.append(element('p', 'sheet-text', hasCode ? '성향카드를 불러오지 못했다. 마이페이지에서 다시 열면 보인다.' : '이 사건에서는 네 축이 모두 드러나지 않아 유형을 정하지 않았다.'));
+    text.append(element('p', 'sheet-text', '이 사건에서는 네 축이 모두 드러나지 않아 유형을 정하지 않았다.'));
   }
   text.append(element('p', 'sheet-text my-result-note', '이 성향은 이 사건 한 건의 판단만으로 집계했으며, 최근 체험 3건을 평균한 성향은 마이페이지에서 확인할 수 있다.'));
   return text;
@@ -69,7 +61,7 @@ function cardStory(type, hasCode) {
 
 // 왼쪽 단의 판결 성향 섹션들: [제목 + 이 사건 한 건의 4축(마이페이지 성향카드의 막대와 같은 배치)] · [그 유형의 성향카드(왼쪽) + 설명].
 // 성향카드는 구분선 없는 별도 섹션이라, 단 높이를 맞출 때 막대와 카드 사이에도 여백이 나뉜다
-function leanSections(record, type) {
+function leanSections(record) {
   const lean = headed(story('rules', '이 사건에서 드러난 판결 성향'));
   lean.classList.add('my-result-lean');
   if (!record?.scores) {
@@ -79,10 +71,9 @@ function leanSections(record, type) {
   const list = element('ul', 'axis-list');
   AXES.forEach((axis) => list.append(renderAxisRow(axis, record.scores[axis.key])));
   lean.append(list);
-  const hasCode = Boolean(typeCodeOf(record.scores));
   const card = element('section', 'my-result-card');
   card.setAttribute('aria-label', '이 사건의 성향카드');
-  card.append(typeFace(type, hasCode ? '"성향카드를 불러오지 못했어요"' : '"이 사건에서 네 축이 모두 드러나지 않았어요"'), cardStory(type, hasCode));
+  card.append(typeFace(record.type, '"이 사건에서 네 축이 모두 드러나지 않았어요"'), cardStory(record.type));
   return [lean, card];
 }
 
@@ -123,8 +114,7 @@ export async function renderMyResultPage(container, { caseId, caseHeader, api, n
     root.replaceChildren(panel);
   }
 
-  // type: 이 사건 한 건의 유형(P-4, 없으면 null)
-  function draw(data, myPage, type) {
+  function draw(data, myPage) {
     const record = recordOf(myPage, caseId);
     const sheet = element('article', 'sheet sheet-result');
     sheet.setAttribute('aria-label', '내 결과 지면');
@@ -134,7 +124,7 @@ export async function renderMyResultPage(container, { caseId, caseHeader, api, n
     mast.querySelector('.sheet-ear-left').addEventListener('click', () => navigate('list'));
     // 왼쪽 · 오른쪽 단을 따로 쌓는다. 한 격자 줄에 두면 긴 흐름 그래프 높이만큼 왼쪽 기사 사이가 벌어진다(myResult.css)
     const left = element('div', 'sheet-col is-left');
-    left.append(frontStory(caseHeader.title, leadOf(caseHeader.title, data.preToFinal, myPage?.nickname || DEFAULT_NICKNAME)), ...leanSections(record, type));
+    left.append(frontStory(caseHeader.title, leadOf(caseHeader.title, data.preToFinal, myPage?.nickname || DEFAULT_NICKNAME)), ...leanSections(record));
     const right = element('div', 'sheet-col is-right');
     right.append(...trendSections(myPage, record ?? {}));
     sheet.append(mast, left, right, advertisements());
@@ -160,8 +150,7 @@ export async function renderMyResultPage(container, { caseId, caseHeader, api, n
       // { record: true }는 목 전용(지난 체험 기록 보기, comparisonMockApi.js). 실제 API는 두 번째 인수를 쓰지 않는다.
       // 마이페이지를 못 불러와도 처음 판단 · 최종 판결은 보여 준다
       const [data, myPage] = await Promise.all([api.getComparison(caseId, { record: true }), api.getMyPage().catch(() => null)]);
-      const type = await caseType(api, recordOf(myPage, caseId)?.scores); // 축 점수가 있어야 고를 수 있어 마이페이지 다음에 부른다
-      if (active()) draw(data, myPage, type);
+      if (active()) draw(data, myPage);
     } catch (error) {
       if (!active()) return;
       // 마치지 않은 체험(INVALID_STATE)은 withErrorRedirect가 지금 단계 화면으로 먼저 보낸다(app/errorRedirect.js)

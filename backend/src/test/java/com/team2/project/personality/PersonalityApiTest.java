@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.jayway.jsonpath.JsonPath;
 import com.team2.project.support.ApiIntegrationTest;
 import jakarta.servlet.http.Cookie;
 import java.util.ArrayList;
@@ -255,8 +256,12 @@ class PersonalityApiTest extends ApiIntegrationTest {
 			.andExpect(jsonPath("$.judgmentPersonality.axisScores.PRINCIPLE_RELATION").value(0.75))
 			.andExpect(jsonPath("$.history.length()").value(2))
 			.andExpect(jsonPath("$.history[0].caseId").value(firstCase))
+			.andExpect(jsonPath("$.history[0].type.name").value("새끼손가락 도장형"))	// 이 체험 한 건도 ISFJ (BE-100)
+			.andExpect(jsonPath("$.history[0].type.shareId").isNotEmpty())
+			.andExpect(jsonPath("$.history[0].type.code").doesNotExist())	// 4글자 코드는 내보내지 않는다(#119)
 			.andExpect(jsonPath("$.history[1].axisScores.PRINCIPLE_RELATION").value(0.5))
 			.andExpect(jsonPath("$.history[1].axisScores.APOLOGY_SINCERITY").isEmpty())
+			.andExpect(jsonPath("$.history[1].type").isEmpty())	// 축이 빠진 체험은 유형 없음
 			.andExpect(jsonPath("$.experiences.length()").value(2))
 			.andExpect(jsonPath("$.experiences[?(@.caseId == " + firstCase + ")].attemptNo").value(2))
 			.andExpect(jsonPath("$.experiences[?(@.caseId == " + firstCase + ")].status").value("STARTED"));
@@ -343,6 +348,43 @@ class PersonalityApiTest extends ApiIntegrationTest {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.judgmentPersonality").isEmpty())
 			.andExpect(jsonPath("$.history.length()").value(4));
+	}
+
+	@Test
+	@DisplayName("P-5: history[].type은 그 체험 하나만으로 낸 종합과 같은 유형이다 — 동점은 관대 글자 (BE-100)")
+	void myPage_historyType_sameRuleAsJudgment() throws Exception {
+		Cookie cookie = submitNew(strictValues());
+		UUID user = UUID.fromString(cookie.getValue());
+		completedWithContribution(user, axes(1, 1, 2, 2, 1, 1, 3, 3));	// 네 축 모두 동점(0.5) → 네 글자 모두 관대
+
+		String body = mockMvc.perform(get(MY_PAGE).cookie(cookie))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.history.length()").value(1))
+			.andExpect(jsonPath("$.history[0].type.tolerance").value(4))	// 관대 글자 4개
+			.andReturn().getResponse().getContentAsString();
+
+		// 체험이 하나뿐이면 현재 판결 성향도 같은 한 건이다 — 두 유형이 같아야 한다
+		String historyShareId = JsonPath.read(body, "$.history[0].type.shareId");
+		String judgmentShareId = JsonPath.read(body, "$.judgmentPersonality.type.shareId");
+		assertThat(historyShareId).isEqualTo(judgmentShareId);
+	}
+
+	@Test
+	@DisplayName("P-5: 사건별 유형은 체험마다 따로 정한다 — 종합에 유형이 없어도 네 축이 다 있는 체험은 유형이 있다 (BE-100)")
+	void myPage_historyType_perExperience() throws Exception {
+		Cookie cookie = submitNew(strictValues());
+		UUID user = UUID.fromString(cookie.getValue());
+		completedWithContribution(user, axes(1, 0, 1, 0, 1, 0, 1, 0));	// 네 축 모두 있음
+		for (int i = 0; i < 3; i++) {
+			completedWithContribution(user, axes(1, 1, 0, 2, 2, 0, 0, 0));	// 질서 · 기회 축 없음
+		}
+
+		mockMvc.perform(get(MY_PAGE).cookie(cookie))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.judgmentPersonality.type").isEmpty())	// 최근 3건에 질서 · 기회 축이 없다
+			.andExpect(jsonPath("$.history[0].type.tolerance").value(4))	// 가장 오래된 체험은 네 축 모두 관대
+			.andExpect(jsonPath("$.history[1].type").isEmpty())
+			.andExpect(jsonPath("$.history[3].type").isEmpty());
 	}
 
 	@Test
