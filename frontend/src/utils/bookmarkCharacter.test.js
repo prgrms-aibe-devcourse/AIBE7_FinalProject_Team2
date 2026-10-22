@@ -1,7 +1,8 @@
 // npm test : 책갈피 캐릭터 저장
+import { existsSync } from 'node:fs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { getBookmarkCharacter, setBookmarkCharacter } from './bookmarkCharacter.js';
+import { BOOKMARK_CHARACTERS, BOOKMARK_FACES, BOOKMARK_LAWS, BOOKMARK_STYLES, bookmarkFace, getBookmarkCharacter, getBookmarkColor, setBookmarkColor, selectedBookmarkFace, setBookmarkCharacter, setBookmarkFace } from './bookmarkCharacter.js';
 
 const memory = () => {
   const data = new Map();
@@ -22,4 +23,67 @@ test('모르는 값은 저장하지 않고, 저장소를 못 쓰면 내로로 �
   const broken = { getItem: () => { throw new Error('blocked'); }, setItem: () => { throw new Error('blocked'); } };
   assert.doesNotThrow(() => setBookmarkCharacter('nambul', broken));
   assert.equal(getBookmarkCharacter(broken), 'naero');
+});
+
+test('얼굴 아이콘을 고르면 캐릭터와 표정이 함께 저장되고, 처음에는 내로 happy다', () => {
+  const storage = memory();
+  assert.equal(selectedBookmarkFace(storage), '/images/characters/icon/generated/naero_face-happy.webp');
+  setBookmarkFace('nambul', 'thinking', 'generated', storage);
+  assert.equal(getBookmarkCharacter(storage), 'nambul');
+  assert.equal(selectedBookmarkFace(storage), '/images/characters/icon/generated/nambul_face-thinking.webp');
+});
+
+test('모르는 캐릭터나 표정은 저장하지 않는다', () => {
+  const storage = memory();
+  setBookmarkFace('law', 'happy', storage);
+  setBookmarkFace('naero', 'angry', storage);
+  assert.equal(selectedBookmarkFace(storage), '/images/characters/icon/generated/naero_face-happy.webp');
+});
+
+test('잘라 만든 얼굴도 고를 수 있고, 모르는 종류는 저장하지 않는다', () => {
+  const storage = memory();
+  setBookmarkFace('naero', 'cheer', 'cropped', storage);
+  assert.equal(selectedBookmarkFace(storage), '/images/characters/icon/cropped/naero_face-cheer.webp');
+  setBookmarkFace('nambul', 'happy', 'sketch', storage);
+  assert.equal(selectedBookmarkFace(storage), '/images/characters/icon/cropped/naero_face-cheer.webp');
+});
+
+test('로도 책갈피로 고를 수 있고, 얼굴 대신 로 아이콘 한 장이 쓰인다', () => {
+  const storage = memory();
+  setBookmarkCharacter('law-gavel', storage);
+  assert.equal(getBookmarkCharacter(storage), 'law-gavel');
+  assert.equal(selectedBookmarkFace(storage), '/images/characters/icon/cropped/law-gavel_icon.webp');
+  setBookmarkCharacter('law-sword', storage);
+  assert.equal(getBookmarkCharacter(storage), 'law-gavel');
+});
+
+test('책갈피 얼굴 경로는 모두 실제 이미지 파일을 가리킨다(이미지 폴더를 옮기다 놓치지 않게)', () => {
+  const onDisk = (src) => existsSync(new URL(`../../public${src}`, import.meta.url));
+  const faces = BOOKMARK_STYLES.flatMap((style) => BOOKMARK_CHARACTERS.flatMap((who) => BOOKMARK_FACES.map((face) => bookmarkFace(who, face, style))));
+  const laws = BOOKMARK_LAWS.map((who) => bookmarkFace(who));
+  [...faces, ...laws].forEach((src) => assert.ok(onDisk(src), `없는 파일: ${src}`));
+  assert.equal(faces.length + laws.length, 27);
+});
+
+test('localStorage 접근 자체가 막혀도 기본 얼굴을 돌려준다', () => {
+  const original = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, get() { throw new Error('blocked'); } });
+  try {
+    assert.equal(selectedBookmarkFace(), bookmarkFace('naero', 'happy', 'generated'));
+  } finally {
+    if (original) Object.defineProperty(globalThis, 'localStorage', original);
+    else delete globalThis.localStorage;
+  }
+});
+
+test('리본 색을 저장하고, 처음 · 모르는 값 · 저장소 차단이면 브론즈다', () => {
+  const storage = memory();
+  assert.equal(getBookmarkColor(storage), 'bronze');
+  setBookmarkColor('navy', storage);
+  assert.equal(getBookmarkColor(storage), 'navy');
+  setBookmarkColor('rainbow', storage);
+  assert.equal(getBookmarkColor(storage), 'navy');
+  const broken = { getItem: () => { throw new Error('blocked'); }, setItem: () => { throw new Error('blocked'); } };
+  assert.doesNotThrow(() => setBookmarkColor('wine', broken));
+  assert.equal(getBookmarkColor(broken), 'bronze');
 });

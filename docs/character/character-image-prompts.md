@@ -1170,7 +1170,7 @@ No face, no eyes, no mouth, no neck, no human head. The head is a chunky, thick,
 사건 재연 컷은 **드라마 한 장면처럼 극적인 표정 · 상황**을 쓸 수 있다(아키텍처 4-3). 9-7 `reenact` 뒤에 붙인다. 화난 · 적대적인 표정과 폭력은 여전히 쓰지 않는다.
 
 ```
-CASE RULES — a dramatic, tense, newspaper-photo-like moment that shows the situation and the relationship. Strong emotions through faces and body language (frustration, desperation, shock, pressure), like a still from a TV drama, but never violent, never hostile or snarling, and no comedy. Nothing hints at the verdict.
+CASE RULES — a dramatic, tense, newspaper-photo-like moment that shows the situation and the relationship. Strong emotions through faces and body language (frustration, desperation, shock, pressure), like a still from a TV drama, but never violent (no weapons, injuries or physical attacks), never mocking, and no comedy. Sharp, tense or angry expressions are allowed when they serve the dramatic emotional arc. Nothing hints at the verdict.
 ```
 
 - STYLE `editorial`의 Mood 줄은 `Mood: dramatic and tense like a TV drama still, while the drawing stays warm, flat and slightly vintage.`로 바꾼다.
@@ -1367,13 +1367,13 @@ OUTFITS (new for this case, not the plain shirt-and-jeans) —
 - Nambul (the borrower at home): a worn, stretched grey hoodie, loose track pants and house slippers.
 Their faces, fur and flame colors stay exactly the same; only the clothes change.
 
-CASE RULES — a dramatic, tense, newspaper-photo-like moment that shows the situation and the relationship. Strong emotions through faces and body language (frustration, desperation, shock, pressure), like a still from a TV drama, but never violent, never hostile or snarling, and no comedy. Nothing hints at the verdict. Draw only the characters and the few props listed: no room, no walls, no floor, no scenery.
+CASE RULES — a dramatic, tense, newspaper-photo-like moment that shows the situation and the relationship. Strong emotions through faces and body language (frustration, desperation, shock, pressure), like a still from a TV drama, but never violent (no weapons, injuries or physical attacks), never mocking, and no comedy. Sharp, tense or angry expressions are allowed when they serve the dramatic emotional arc. Nothing hints at the verdict. Draw only the characters and the few props listed: no room, no walls, no floor, no scenery.
 
 SCENE — the argument about borrowed money peaks. Naero (the lender) on the left leans forward over a small low wooden table and slaps a plain sheet of paper like an IOU (completely blank, no text) down on it, pointing at it, eyes wide with frustration. Nambul (the borrower) on the right steps back with both palms raised at chest height, eyes wide, a sweat drop, desperate to explain. On the table an empty mug has been knocked onto its side (nothing spilled). Dynamic diagonal composition. Full bodies visible, 10% margin.
 
 BACKGROUND — fully transparent background (PNG with alpha). No background color, no floor, no ground line, no shadow, no frame, no border. Aspect ratio 16:9 landscape.
 
-AVOID: text, letters, numbers, logos, watermarks, labels, speech bubbles, angry or hostile faces or poses, sexualized or revealing depiction, gendered body features, cropped limbs, any third character, black outlines, line art, drop shadows, ground shadows, background colors or scenery, 3D render, CGI, photo realism, injuries, weapons, knives, kitchen tools, blood, bodies, a crime in progress, grabbing, pushing, hitting, raising a fist at a person, tears, mocking anyone, a bandana on Naero, a nose on Nambul, flames below Nambul's head.
+AVOID: text, letters, numbers, logos, watermarks, labels, speech bubbles, violent, threatening or mocking faces or poses, sexualized or revealing depiction, gendered body features, cropped limbs, any third character, black outlines, line art, drop shadows, ground shadows, background colors or scenery, 3D render, CGI, photo realism, injuries, weapons, knives, kitchen tools, blood, bodies, a crime in progress, grabbing, pushing, hitting, raising a fist at a person, tears, mocking anyone, a bandana on Naero, a nose on Nambul, flames below Nambul's head.
 ```
 
 `sub-1` · `detail-1`은 SCENE 블록만 바꾼다.
@@ -1381,7 +1381,7 @@ AVOID: text, letters, numbers, logos, watermarks, labels, speech bubbles, angry 
 **sub-1** `reenact-case-1_cut_sub-1.png`
 
 ```
-SCENE — the visit. A single freestanding closed front door with its frame (just the door, no walls) in the middle. Naero (the lender) on the outside, left of the door, knocks hard on the door with the side of a fist (at the door, not at a person), a folded bundle of blank papers under the other arm, a tense, determined face. Nambul (the borrower) on the inside, right of the door, presses their back flat against the door, eyes squeezed shut, holding their breath. Small motion marks near the knocking hand. Full bodies visible, 10% margin.
+SCENE — the visit. A single freestanding closed front door with its frame (just the door, no walls) in the middle. Naero (the lender) on the outside, left of the door, knocks hard on the door with the side of a fist (at the door, not at a person), a folded bundle of blank papers under the other arm, a tense, determined face. Nambul (the borrower) stays inside the home and is NOT visible; only the closed door and Naero are shown (10/20: the generated image keeps Nambul off-frame). Small motion marks near the knocking hand. Full bodies visible, 10% margin.
 ```
 
 **detail-1** `reenact-case-1_cut_detail-1.png`
@@ -1392,7 +1392,7 @@ SCENE — a long-running money dispute. Nambul (the borrower) sits slumped on a 
 
 ### 10-5. 소품 시트 (1차 4묶음, 제작 목록 G2)
 
-`props_sheet_catalog.png` · 첨부 `standing/naero_standing.png` · `cuts/law-scale/base/law-scale_cut_deliver-neutral.png` · `standing/law-gavel_standing.png`
+`props_sheet_catalog.png` · 첨부 `standing/naero_standing.png` · `cuts/law-scale/base/scene/law-scale_cut_deliver-neutral.png` · `standing/law-gavel_standing.png`
 
 ```
 ATTACHMENTS — naero_standing.png: the art style to match and the size reference. law-scale_cut_deliver-neutral.png: the look of the sealed verdict envelope. law-gavel_standing.png: the look of the gavel, to be drawn as a small hand-held prop (not a head).
@@ -1638,7 +1638,7 @@ SCENE — a single character, centered, full body from head to feet fully visibl
 
 BACKGROUND — fully transparent background (PNG with alpha). No background color, no floor, no ground line, no shadow, no frame, no border. Aspect ratio 4:5 vertical.
 
-AVOID: text, letters, numbers, logos, watermarks, labels, speech bubbles, angry or hostile faces or poses, sexualized or revealing depiction, gendered body features, cropped limbs, black outlines, line art, drop shadows, ground shadows, background colors or scenery, 3D render, CGI, photo realism, extra characters, logos on clothes, props in the hands, a bandana, a different fur color, a human face, whisker lines.
+AVOID: text, letters, numbers, logos, watermarks, labels, speech bubbles, violent, threatening or mocking faces or poses, sexualized or revealing depiction, gendered body features, cropped limbs, black outlines, line art, drop shadows, ground shadows, background colors or scenery, 3D render, CGI, photo realism, extra characters, logos on clothes, props in the hands, a bandana, a different fur color, a human face, whisker lines.
 ```
 
 남불 `nambul_cut-role-case-1_idle-neutral.png`은 이름 · 첨부, OUTFIT 줄(`OUTFIT — a worn, stretched grey hoodie, loose track pants and house slippers.`), AVOID 끝(9-8 남불)을 바꾼다.

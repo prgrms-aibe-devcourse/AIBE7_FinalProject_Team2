@@ -18,7 +18,6 @@
   <link rel="stylesheet" href="./src/pages/caseList/caseList.css">
   <link rel="stylesheet" href="./src/pages/review/review.css">
   <link rel="stylesheet" href="./src/pages/overview/overview.css">
-  <link rel="stylesheet" href="./src/pages/summary/summary.css">
   <link rel="stylesheet" href="./src/pages/verdict/verdict.css">
   <link rel="stylesheet" href="./src/pages/ai/ai.css">
   <link rel="stylesheet" href="./src/pages/court/court.css">
@@ -43,11 +42,10 @@
       <button type="button" data-page="list">S-02 보기</button>
       <button type="button" data-page="overview">S-03 보기</button>
       <button type="button" data-page="review">S-04 보기</button>
-      <button type="button" data-page="summary">S-05 보기</button>
-      <button type="button" data-page="verdict">S-06 보기</button>
-      <button type="button" data-page="ai">S-07 보기</button>
-      <button type="button" data-page="court">S-08 보기</button>
-      <button type="button" data-page="comparison">S-09 보기</button>
+      <button type="button" data-page="verdict">S-05 보기</button>
+      <button type="button" data-page="ai">S-06 보기</button>
+      <button type="button" data-page="court">S-07 보기</button>
+      <button type="button" data-page="comparison">S-08 보기</button>
       <button type="button" id="reset">처음 상태로</button>
       <label>상태 강제 선택
         <select id="status">
@@ -74,7 +72,6 @@
     import { renderCaseListPage } from './src/pages/caseList/caseListPage.js';
     import { renderOverviewPage } from './src/pages/overview/overviewPage.js';
     import { renderReviewPage } from './src/pages/review/reviewPage.js';
-    import { renderSummaryPage } from './src/pages/summary/summaryPage.js';
     import { renderVerdictPage } from './src/pages/verdict/verdictPage.js';
     import { renderAiPage } from './src/pages/ai/aiPage.js';
     import { renderCourtPage } from './src/pages/court/courtPage.js';
@@ -119,7 +116,6 @@
       else if (name === 'list') await renderCaseListPage(container, dependencies);
       else if (name === 'overview') await renderOverviewPage(container, dependencies);
       else if (name === 'review') await renderReviewPage(container, dependencies);
-      else if (name === 'summary') await renderSummaryPage(container, dependencies);
       else if (name === 'verdict') await renderVerdictPage(container, dependencies);
       else if (name === 'ai') await renderAiPage(container, dependencies);
       else if (name === 'court') await renderCourtPage(container, dependencies);

@@ -29,6 +29,19 @@
 | v1.23 | 2026-10-15 | RAG 판례 · 양형기준 설명 갱신 (BE-54, **스키마 변경 없음**) — `rag_precedent`: LBox 행 삭제(사용 불가) · `guideline_id`는 NULL로 두고 검색 때 발생일로 버전을 고름 · `flags.guidelineBasis` · 오프라인 생성 검색은 Python(`rag_context.py`) · 점수 기준(하한 0.70 · 상한 0.88). `legal_case.guideline_id`는 적재 때 기준일(공소제기일 → 발생일)로 채움 |
 | v1.22 | 2026-10-14 | 판결 후보 검수 기록 (**확장 단계**, BE-41 · WBS 7.4.7, V16) — `judgment`에 `review_status`(APPROVED · REJECTED, NULL = 기록 없음) · `reviewed_by_admin_id` · `reviewed_at` · `review_note` 추가. AI · 재판부 후보를 같은 방식으로 검수한다(재판부는 지금까지 반려를 둘 곳이 없었다, API 명세 8-3 #4). 제약: 사용자 판단은 검수 값 없음, 반려 후보는 공개 불가, 사유는 반려에만. 기존 데이터는 `ai_generation`의 검수 결과와 공개 중 판결(승인)을 옮겼다. `ai_generation.review_status` · `reviewed_by`는 기존 도구용으로 남긴다(승인 · 반려 때 함께 맞춤, BE-42) |
 | v1.24 | 2026-10-16 | 판단 요소 요약어 후보 추가 (**확장 단계**, BE-80 · V17) — `factor.summary_tag_candidates`(jsonb, nullable). 적재 SQL(`case_seed_sql.py`)이 새 사건을 넣을 때 보고서 후보를 넣고, 이미 적재된 사건은 바꾸지 않는다. 관리자 상세 A-6에 내려 준다(API 명세 v0.31) |
+| v1.25 | 2026-10-20 | 사건 발단 사진 테이블 추가 (**확장 단계**, BE-91 · V19) — `case_incident_photo` 신설(Cloudflare Workers AI 생성 → S3 업로드 결과를 순서대로 기록). 사건 대표사진(신문용)은 새 테이블 없이 `legal_case.thumbnail_url` 재사용(결정: `docs/decisions/BE-91.md`) |
+| v1.26 | 2026-10-20 | 사건 사진 생성 방식 재검토 (**확장 단계**, BE-91 재검토 · V20) — Cloudflare Workers AI 직접 생성은 그림 품질 때문에 그만두고, 사람이 만든 사진을 올리는 방식으로 바꿨다. `case_incident_photo.model` 컬럼 삭제, `prompt`는 참고용 선택 항목으로 바뀌어 NOT NULL 해제(결정: `docs/decisions/BE-91.md`) |
+| v1.27 | 2026-10-20 | 신문 지면 테이블 추가 (**확장 단계**, BE-92 · V21) — `case_paper` 신설(사건당 1건: desk · headline · deck · caption · article). `photo`는 `legal_case.thumbnail_url`, `extraPhotos`는 `case_incident_photo`를 그대로 재사용(새 컬럼 없음, 결정: `docs/decisions/BE-92.md`) |
+| v1.28 | 2026-10-20 | `admin_account.password_hash` 설명 — 관리자 OAuth(BE-40) 제외 반영. NULL 허용 제약(V12)은 그대로 둔다 |
+| v1.29 | 2026-10-21 | 화면 ID를 6막 체계로 갱신(FE-58, BE-82 매핑: 옛 S-06 ~ S-09 → S-05 ~ S-08). 없앤 정리 화면은 "옛 S-05"로 표기. 작성 이력의 ID는 옛 뜻 그대로 |
+| v1.30 | 2026-10-21 | 출석 기록 테이블 추가 (**확장 단계**, BE-97 · V22) — `attendance` 신설(익명 사용자 × 출석 날짜, 기본 키 두 칼럼, 하루 한 줄). 9장 추가 |
+| v1.31 | 2026-10-21 | 프로필 꾸미기 테이블 추가 (**확장 단계**, BE-96 · V23) — `profile_deco` 신설(익명 사용자당 한 줄, 꾸미기 12칸 · `updated_at`). 도전과제 진행도는 저장하지 않고 계산한다. 10장 추가 |
+| v1.33 | 2026-10-21 | 회원 테이블 추가 (**확장 단계**, BE-62 · V25) — `member` 신설(공급자 · 공급자 회원번호만, 개인정보 없음, `(provider, provider_user_id)` 유일). `anonymous_user.member_id`에 FK(`fk_anonymous_user_member`) · 부분 인덱스 추가. 익명 기록 연결 규칙(공용 PC면 덮어쓰지 않고 새 익명 ID) |
+| v1.34 | 2026-10-21 | 사건 등록 작업 테이블 추가 (**확장 단계**, BE-93 1차 · V24) — `case_import`(작업 상태 · 마지막으로 받은 단계 상태) · `case_import_source`(등록 요청에 들어온 판결문) 신설. 원문을 `case_import_source.original_text`에 들고 있다가 적재 때 `case_source`로 옮기고 비운다 — 파이프라인 서비스가 원문을 돌려주지 않기 때문(FR-5-3, COMMON-50). 감사 로그 행동 `CASE_IMPORT` 추가(V24). 적재(`case_id` 채우기)는 BE-93 2차 (결정: `docs/decisions/BE-93.md`) |
+| v1.35 | 2026-10-22 | `case_incident_photo` 역할 칸 1단계 추가 (**확장 단계**, BE-78 2차 검토 · BE-101 · V26) — `role`(`ORIGIN` · `CONCLUSION`, NULL 허용) 칸 추가 + `UNIQUE (case_id, role)`. `display_order`는 1단계 동안 함께 유지(다음 단계에서 뺀다). 감사 로그 행동 `CASE_PHOTO_DELETE` 추가(V26). 3단계로 나눈 마이그레이션 계획은 `docs/decisions/BE-78.md` "확정 사항" 참고 |
+| v1.36 | 2026-10-22 | 성향 결과에 응시 시점 · 다시 정하기 추가 (**확장 단계**, FE-77 · API 명세 v0.50, 마이그레이션은 후속 BE 작업) — `personality_result`에 `completed_experience_count`(응시 시점에 완료한 사건 수, 이전 행은 NULL) · `is_baseline_retake`(성향카드 다시 정하기, 기본 false) 추가. 다시 정하기는 사용자당 1건(부분 유니크 인덱스). 처음 성향은 저장하지 않고 가장 오래된 행으로 정한다 |
+| v1.37 | 2026-10-22 | 사건 등록 적재 (**확장 단계**, BE-93 2차 · V27) — **표는 늘리지 않는다.** 생성 결과가 기존 사건 표(`legal_case` DRAFT · `case_section` · `penalty_rule` · `factor` · `case_source`)와 판결 표(`judgment` AI · COURT · `judgment_factor` · `ai_generation`)로 들어가고, 어느 등록에서 나왔는지는 `case_import.case_id`(V24)가 가리킨다. 판단 요소의 `display_order`에는 **파이프라인의 `factorId`를 그대로** 넣는다 — 판결의 작용 요소가 이 번호로 요소를 찾는다. 판결 후보는 `is_published = false` · `ai_generation.review_status = 'PENDING'`으로 들어가 A-9 승인을 기다린다. 감사 로그 행동 `CASE_IMPORT_LOAD` 추가 (결정: `docs/decisions/BE-93.md`). **(병합 메모) 이 줄의 번호는 PR #242 리베이스 도중 두 번 겹쳤다 — 처음 V26 · v1.35(BE-101과 겹침) → V27 · v1.36(COMMON-60) → 이번에 FE-77과 다시 겹쳐 v1.37로 재조정, 마이그레이션 번호 V27은 그대로(COMMON-58, PR #244)** |
+| v1.38 | 2026-10-22 | 프로필 선택 설정 테이블 추가 (**확장 단계**, BE-104 · V29 · API 명세 v0.52) — `profile_setting` 신설(익명 사용자당 한 줄: 공개 성향카드 `shown_card` · 프로필카드 아래 성향 `profile_card_type` · 한 줄 소개 `bio` · `updated_at`). 프로필 꾸미기와 나눈 테이블(부분 저장). v1.36의 `personality_result` 두 칸은 V28로 반영. 11장 추가 **(병합 메모) 작업 중 COMMON-58(PR #244)이 BE-93 줄에 v1.37을 먼저 써서 v1.37 → v1.38로 다시 매겼다(마이그레이션 V29는 그대로)** |
 
 ---
 
@@ -200,13 +213,13 @@ erDiagram
 
 #### `case_section` — 사건 정보 섹션
 
-S-04 · S-05에 보여 줄 사건 정보를 섹션 단위로 저장한다(결정 #3). S-03 개요와 S-04 섹션 ①은 `legal_case.overview` 하나를 함께 쓰고, 이 테이블에 중복 저장하지 않는다.
+S-04 · 옛 S-05에 보여 줄 사건 정보를 섹션 단위로 저장한다(결정 #3). S-03 개요와 S-04 섹션 ①은 `legal_case.overview` 하나를 함께 쓰고, 이 테이블에 중복 저장하지 않는다.
 
 | 컬럼 | 타입 | 필수 | 설명 |
 | --- | --- | --- | --- |
 | id | bigint PK | ✓ |  |
 | case_id | bigint FK | ✓ |  |
-| stage | varchar(20) | ✓ | 화면 단계: `DETAIL` / `ARGUMENT` / `LAW` / `SUMMARY`(S-05 전용) |
+| stage | varchar(20) | ✓ | 화면 단계: `DETAIL` / `ARGUMENT` / `LAW` / `SUMMARY`(옛 S-05 정리 화면용. 지금은 3막 내 판결(S-05) 파일철 "사건 요약"의 핵심 사실, FE-58) |
 | section_type | varchar(30) | ✓ | 섹션 종류 (아래 표) |
 | title | varchar(100) |  | 섹션 라벨 (예: 주요 사실관계) |
 | content | text |  | 본문. 항목이 여럿이면 한 줄에 하나씩 쓰고 줄바꿈(`\n`)으로 나눈다(v1.9) |
@@ -222,14 +235,14 @@ S-04 · S-05에 보여 줄 사건 정보를 섹션 단위로 저장한다(결정
 | `PROSECUTOR` | ARGUMENT | 검사 측 주장 | — |
 | `DEFENSE` | ARGUMENT | 피고인 · 변호인 측 주장 | — |
 | `LAW_TERM` | LAW | 법률 · 양형기준 용어 설명 | `[{"term":"기본영역","desc":"..."}]` |
-| `SUMMARY` | SUMMARY | S-05 핵심 사실 요약 | `["집으로 찾아온 지인 1명을 살해", "다투던 중 집에 있던 흉기를 사용", ...]` |
+| `SUMMARY` | SUMMARY | 핵심 사실 요약(옛 S-05 → 지금은 S-05 사건 요약 장) | `["집으로 찾아온 지인 1명을 살해", "다투던 중 집에 있던 흉기를 사용", ...]` |
 - 적용 법률 · 법정형 · 권고 범위는 `legal_case` 컬럼에서, 선고 가능 범위는 `penalty_rule`에서 꺼내 LAW 단계에 함께 보여 준다.
 - 범죄 유형마다 섹션 종류가 달라지면 `section_type` 값만 추가한다.
 - `PROSECUTOR` · `DEFENSE` 섹션 위의 안내 문구(판결문의 양형 이유에서 정리한 내용이라는 안내)는 이 테이블에 두지 않는다. 화면이 섹션 종류별 고정 문구로 보여 준다(v1.9, [정보 구조](information-architecture.md) S-04). 사건마다 문구가 달라져야 하면 그때 칸을 추가한다.
 
 #### `penalty_rule` — 형벌별 법정형과 선고 가능 범위
 
-S-06에서 보여 줄 형벌 선택지, 그리고 **선고 가능 범위 밖 판결을 막는 기준**이다(FR-3-3 ②).
+S-05에서 보여 줄 형벌 선택지, 그리고 **선고 가능 범위 밖 판결을 막는 기준**이다(FR-3-3 ②).
 
 | 컬럼 | 타입 | 필수 | 설명 |
 | --- | --- | --- | --- |
@@ -242,7 +255,7 @@ S-06에서 보여 줄 형벌 선택지, 그리고 **선고 가능 범위 밖 판
 | allowed_max | bigint |  | **선고 가능 상한** — 법정형 상한. 누범 등 사실관계로 정해지는 가중이 있으면 반영한 값 |
 | allowed_basis | varchar(300) |  | 선고 가능 범위 산출 근거 (예: 작량감경 시 하한 1/2) |
 | suspension_allowed | boolean | ✓ | 이 형벌에 집행유예 입력을 보여 줄지 |
-| display_order | int | ✓ | 형벌 표시 순서. **법조문 표기 순서대로 무거운 형벌부터** `DEATH` → `LIFE` → `PRISON` → `FINE`(v1.9). API 8 · S-06 형벌 버튼이 이 순서를 그대로 쓴다 |
+| display_order | int | ✓ | 형벌 표시 순서. **법조문 표기 순서대로 무거운 형벌부터** `DEATH` → `LIFE` → `PRISON` → `FINE`(v1.9). API 8 · S-05 형벌 버튼이 이 순서를 그대로 쓴다 |
 
 > **`DEATH` · `LIFE` 행 (v1.4)**: `allowed_min` ~ `allowed_max`는 그 형벌을 고른 뒤 **작량감경해 징역으로 선고할 때의 범위**(개월)다. 무기징역은 10년 ~ 50년(120 ~ 600, 형법 제55조 제1항 제2호), 사형은 20년 ~ 50년(240 ~ 600, 같은 항 제1호). 법률상 감경 사유도 있으면 그만큼 더 넓힌다. 사형을 감경해 무기징역으로 선고하는 경우는 형법 규정이라 코드 상수로 판단한다. 두 행 모두 `suspension_allowed = false`(감경해도 징역 10년 이상).
 
@@ -269,7 +282,7 @@ S-06에서 보여 줄 형벌 선택지, 그리고 **선고 가능 범위 밖 판
 | label | varchar(100) | ✓ | 판단 요소 문구 (예: 다투던 중 집에 있던 흉기를 집어 들었다) | REQ-076 |
 | pre_label | varchar(100) |  | 사전 판단용 짧은 문구 (예: 피해 금액이 수천만 원이다). `OVERVIEW` 요소만 | REQ-093 |
 | reveal_stage | varchar(20) | ✓ | 처음 알게 되는 단계: `OVERVIEW` / `DETAIL` / `ARGUMENT` / `LAW` | REQ-095 |
-| summary_tag | varchar(20) | ✓ | 요약 태그 (v1.3 추가, v1.10 확정). 여러 요소를 묶는 분류명이 아니라 **요소마다 붙이는 짧은 요약어**다(예: 요소 "다투던 중 집에 있던 흉기를 집어 들었다" → `흉기 사용`). S-09 "내 판결" 한 줄 요약과 세 판결 비교 규칙 문장(API 14 `ruleSentences`)에 쓴다 | REQ-060 |
+| summary_tag | varchar(20) | ✓ | 요약 태그 (v1.3 추가, v1.10 확정). 여러 요소를 묶는 분류명이 아니라 **요소마다 붙이는 짧은 요약어**다(예: 요소 "다투던 중 집에 있던 흉기를 집어 들었다" → `흉기 사용`). S-08 "내 판결" 한 줄 요약과 세 판결 비교 규칙 문장(API 14 `ruleSentences`)에 쓴다 | REQ-060 |
 | value_axis | varchar(20) |  | 가치관 축 (v1.13 추가, BE-47). 사용자가 이 요소를 고르는 것으로 드러나는 성향을 매칭하는 축: `APOLOGY_SINCERITY`(사과와 진정성: 반성 · 자수 · 수사 협조 · 사후 정황) / `FAULT_STANDARD`(잘잘못의 기준: 범행 동기 · 수단 · 방법 · 계획성 · 결과의 중대성) / `PRINCIPLE_RELATION`(원칙과 관계: 피해 회복 · 합의 · 처벌불원 · 피해자 과실) / `ORDER_OPPORTUNITY`(질서와 기회: 전과 · 연령 · 가족 · 부양 · 직업 · 사회적 유대). 어느 축에도 맞지 않으면 NULL | |
 | value_axis_status | varchar(20) | ✓ | 가치관 축 후검수 상태 (v1.15 추가, BE-48): `AUTO`(기본값. AI 투표 · 사람 초안, 아직 관리자가 확정하지 않음) / `CONFIRMED`(관리자 확정, NULL로 확정한 것 포함). 기본 `AUTO` | |
 | value_axis_votes | jsonb |  | 축 분류 투표 기록 (v1.15 추가, BE-49). 예: `{"runs": 5, "counts": {"FAULT_STANDARD": 3, "NONE": 2}, "needsReview": false}`. `counts`는 표를 받은 축만, NULL 표는 `NONE` 키. `requestedRuns`(선택)는 요청한 횟수로, `runs`(유효 응답 수)와 다를 수 있다. `needsReview`는 최다표가 요청 횟수의 과반이 아니면(동률 · 유효 응답 부족 포함) true. 사람 초안 · 투표 없이 정한 값은 NULL | |
@@ -298,6 +311,94 @@ S-06에서 보여 줄 형벌 선택지, 그리고 **선고 가능 범위 밖 판
 - 1심과 항소심 판결문을 모두 쓰는 사건은 행을 2개 둔다(FR-2-2).
 - **부분 유니크 제약**: `case_id` WHERE `is_final = true` — 사건마다 최종 확정 판결은 1건 (V6, v1.8)
 
+#### `case_incident_photo` — 사건 발단 · 결론 사진 (BE-91, COMMON-41 / 역할 칸 BE-78 2차 검토 · BE-101)
+
+관리자가 직접 만들어 올린 사진을 사건마다 역할별로 둔다. 테이블 · API 경로 이름(`case_incident_photo`,
+`/photos/incident`)은 "발단(incident)"이지만, BE-78 2차 검토 이후 발단 · 결론 사진을 모두 담는다(이름은
+바꾸지 않음). 사건 대표사진(신문용)은 별도 테이블 없이 `legal_case.thumbnail_url`을 그대로 쓴다.
+**재검토(V20)**: Cloudflare Workers AI 직접 생성은 그림 품질 때문에 그만두고, AI(Gemini)는 사람이
+참고할 한글 프롬프트만 추천하는 방식으로 바꿨다(결정: `docs/decisions/BE-91.md`). `model`(생성 모델)
+컬럼은 더 이상 자동으로 알 수 없어 뺐고, `prompt`는 참고용 선택 항목이 되어 NOT NULL을 뗐다.
+
+| 컬럼 | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| id | bigint PK | ✓ |  |
+| case_id | bigint FK | ✓ |  |
+| image_url | varchar(500) | ✓ | 프론트에 내려주는 공개 URL (S3 또는 CDN) |
+| s3_key | varchar(300) | ✓ | S3 객체 키 (재생성 · 삭제용, 사용자 응답에 내려주지 않는다) |
+| caption | varchar(200) |  | 화면에 보일 설명 |
+| prompt | text |  | 관리자가 사진을 만들 때 참고한 프롬프트(선택, V20부터 NOT NULL 아님) |
+| display_order | int | ✓ | 1단계(V26) 동안 role과 함께 유지하는 옛 순번 칸(ORIGIN = 0, CONCLUSION = 1). 다음 단계에서 뺀다 |
+| role | varchar(20) |  | `ORIGIN`(발단) · `CONCLUSION`(결론). V26 이전(사건당 3번째 이상) 사진은 `NULL` |
+| created_at | timestamptz | ✓ |  |
+
+- 등장인물은 얼굴 없는 회색 엑스트라, 내로 · 남불은 등장시키지 않는다(COMMON-41, 프롬프트 추천 지시문에 고정 포함).
+- 유니크 제약: (`case_id`, `display_order`, V19) — 1단계 동안 유지, (`case_id`, `role`, V26) — PostgreSQL UNIQUE는 NULL을 중복으로 보지 않아 role 없는 행이 여럿이어도 걸리지 않는다.
+- 같은 역할로 다시 올리면 새 행을 만들지 않고 기존 행을 교체한다(UPDATE, id 유지). 역할 칸 도입 · 2 · 3단계 계획은 `docs/decisions/BE-78.md` "확정 사항" 참고.
+
+#### `case_paper` — 신문 지면 콘텐츠 (BE-92, COMMON-41)
+
+메인 화면에서 신문을 눌렀을 때 보이는 콘텐츠. 사건마다 1건. `photo`(대표사진)는 `legal_case.thumbnail_url`,
+`extraPhotos`(발단 · 결론 사진)는 `case_incident_photo`를 그대로 재사용한다 — 같은 사진을 두 번 저장하지
+않는다(결정: `docs/decisions/BE-92.md`). v1.35(BE-101)부터는 `role`이 있는 행만 발단 → 결론 순으로
+내려준다(`docs/decisions/BE-78.md`).
+
+| 컬럼 | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| id | bigint PK | ✓ |  |
+| case_id | bigint FK | ✓ |  |
+| desk | varchar(50) | ✓ | 지면 섹션명 (예: 사회면). 지금은 고정값 |
+| headline | varchar(200) | ✓ | 헤드라인 |
+| deck | varchar(300) |  | 부제 |
+| caption | varchar(200) |  | 대표사진 아래 캡션 |
+| article | jsonb | ✓ | 본문 문단 배열 |
+| created_at | timestamptz | ✓ |  |
+| updated_at | timestamptz | ✓ |  |
+
+- 유니크 제약: `case_id` — 사건마다 신문 지면은 1건. 재생성은 새 행을 만들지 않고 덮어쓴다.
+- Gemini `generateContent` 한 번 호출로 `{headline, deck, caption, article}` JSON을 받아 그대로 채운다(`CasePaperService`).
+
+#### `case_import` · `case_import_source` — 사건 등록 작업 (BE-93, A-14 · A-15)
+
+관리자가 판결문을 넣으면 백엔드가 AI 판결 파이프라인 서비스(COMMON-50)에 작업을 맡기고 이 표로 추적한다.
+파이프라인은 수십 분 걸려서 요청을 기다리지 않고(202) 화면이 2초마다 진행 상황을 묻는다.
+
+| 컬럼 | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| id | bigint PK | ✓ |  |
+| job_id | varchar(32) | ✓ | 파이프라인 서비스의 작업 ID. 유니크 |
+| status | varchar(20) | ✓ | `QUEUED` · `RUNNING` · `SUCCEEDED` · `FAILED` |
+| crime_type | varchar(20) | ✓ | `MURDER` · `FRAUD` · `INJURY` |
+| case_id | bigint FK |  | 적재가 끝나면 채워진다 (BE-93 2차). 1차에는 `SUCCEEDED`여도 NULL |
+| error_code | varchar(50) |  |  |
+| message | varchar(500) |  | 실패 사유. **원문 · 모델 출력을 담지 않는다** |
+| stages | jsonb |  | 파이프라인에서 마지막으로 받은 단계 상태 `[{name, status}, ...]` |
+| created_at | timestamptz | ✓ |  |
+| finished_at | timestamptz |  |  |
+
+- **진행 상황의 출처는 파이프라인의 `state.json` 하나다.** 백엔드는 받아 적기만 한다(COMMON-50과 같은 원칙).
+  `stages`를 저장해 두는 이유는, 끝난 작업은 파이프라인에 다시 묻지 않는데 화면은 나중에 다시 열릴 수 있어서다 —
+  그때 "모두 PENDING"처럼 사실과 다른 값을 보여주지 않기 위해서다.
+
+| 컬럼 (`case_import_source`) | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| id | bigint PK | ✓ |  |
+| import_id | bigint FK | ✓ | `ON DELETE CASCADE` |
+| court_level | varchar(20) | ✓ | `FIRST` · `APPEAL` · `SUPREME`. (`import_id`, `court_level`) 유니크 — 한 등록에 같은 심급은 한 번 |
+| case_number | varchar(50) | ✓ |  |
+| court_name | varchar(50) |  |  |
+| decided_at | date |  |  |
+| is_final | boolean | ✓ | 최종 확정 판결 여부 |
+| source_org | varchar(50) |  | `case_source`와 달리 NULL 허용 — A-14에서 선택 값이고 적재할 때 기본값을 채운다 |
+| original_text | text |  | **판결문 원문.** 적재가 끝나면 비운다 (아래) |
+| note | text |  |  |
+| display_order | int | ✓ | 요청에 들어온 순서 |
+
+- 적재할 때 `case_source`로 옮기므로 컬럼을 그 표와 맞춰 두었다.
+- **원문을 여기에 두는 이유**: 파이프라인 서비스는 원문을 결과로 돌려주지 않는데(FR-5-3, COMMON-50)
+  `case_source.original_text`에는 원문이 필요하다. 서비스 쪽 경계를 무르게 만드는 대신, A-14에서 이미 받은
+  원문을 백엔드가 들고 있다가 옮긴다. 옮긴 뒤에는 비워 두 벌로 남기지 않는다 (결정: `docs/decisions/BE-93.md`).
+
 #### `sentencing_guideline` — 양형기준 버전
 
 | 컬럼 | 타입 | 필수 | 설명 |
@@ -324,7 +425,7 @@ S-03의 객관식 선택지. 범죄 유형별로 정의한다(FR-2-8).
 | min_months | int |  | 실형 구간 하한 |
 | max_months | int |  | 실형 구간 상한 |
 | display_order | int | ✓ |  |
-- `kind`와 개월 범위가 있어야 S-09에서 "처음 생각보다 가벼운/무거운 판결"을 계산할 수 있다.
+- `kind`와 개월 범위가 있어야 S-08에서 "처음 생각보다 가벼운/무거운 판결"을 계산할 수 있다.
 - 법정형에 벌금이 없는 범죄 유형(살인)은 `FINE` 구간을 두지 않는다. 살인은 집행유예부터 사형까지 8개다(요구사항 FR-2-8, v1.4).
 - 무겁기 순서: `FINE` < `SUSPENDED` < `PRISON`(개월 순) < `LIFE` < `DEATH` (v1.4). 최종 판결은 `reduced_to`가 있으면 그 값으로 비교한다.
 
@@ -335,11 +436,25 @@ S-03의 객관식 선택지. 범죄 유형별로 정의한다(FR-2-8).
 | 컬럼 | 타입 | 필수 | 설명 |
 | --- | --- | --- | --- |
 | id | uuid PK | ✓ | 브라우저에 저장하는 익명 ID |
-| member_id | bigint |  | 이 브라우저에서 로그인한 회원. 회원 1명에 익명 ID 여러 개가 연결될 수 있다(1:N). MVP에서는 비워 둠 |
+| member_id | bigint FK → member |  | 이 브라우저에서 로그인한 회원. 회원 1명에 익명 ID 여러 개가 연결될 수 있다(1:N). 로그인 전에는 비어 있다. FK · 부분 인덱스 `ix_anonymous_user_member`는 V25(BE-62) |
 | created_at | timestamptz | ✓ |  |
 | last_seen_at | timestamptz | ✓ |  |
-- 회원 기능(이후 단계)에서 로그인하는 순간 해당 브라우저의 `member_id`를 채운다. 그러면 비로그인 때 한 체험이 회원 기록으로 이어진다.
-- `member` 테이블은 회원 기능 설계 때 추가한다.
+- 카카오 로그인(BE-62)하는 순간 해당 브라우저의 `member_id`를 채운다. 그러면 비로그인 때 한 체험이 회원 기록으로 이어진다.
+- **연결 규칙 (v1.30, BE-62)**: 아직 연결 안 됨 → 이 회원에 연결 / 같은 회원 → 그대로 / **다른 회원에 연결됨(공용 PC) → 덮어쓰지 않고 이 회원에 연결된 새 익명 ID를 발급**(그대로 두면 이후 체험이 앞 사람 계정으로 쌓인다) / 쿠키 없음 · 모르는 값 → 새 익명 ID 발급. 연결은 `member_id IS NULL`일 때만 바꾸는 조건부 UPDATE라 동시에 와도 꼬이지 않는다
+- 기존 체험의 `experience.member_id`는 일괄로 채우지 않는다(`anonymous_user`를 거쳐 찾는다).
+
+#### `member` — 회원 (확장 단계, v1.33 · BE-62 · V25)
+
+| 컬럼 | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| id | bigint PK | ✓ | 자동 증가. 토큰의 subject(`MemberPrincipal.memberId`) |
+| provider | varchar(20) | ✓ | 로그인 공급자. `KAKAO`만(CHECK `ck_member_provider`) |
+| provider_user_id | varchar(64) | ✓ | 공급자 회원번호(카카오 `id`, 숫자 문자열) |
+| created_at | timestamptz | ✓ |  |
+| last_login_at | timestamptz |  | 마지막 로그인 성공 시각 |
+
+- `(provider, provider_user_id)` 유일(`uq_member_provider_user`). 행은 `INSERT ... ON CONFLICT DO NOTHING`으로 만들어, 같은 계정의 첫 로그인이 동시에 와도 한 행만 생긴다.
+- **개인정보를 저장하지 않는다**: 카카오 동의항목(닉네임 · 이메일 · 프로필)을 요청하지 않고 회원번호만 쓴다. 표시 이름 등이 필요해지면 그때 동의항목과 함께 칼럼을 추가한다.
 
 #### `experience` — 체험 (익명 사용자 × 사건 × 회차)
 
@@ -363,7 +478,7 @@ IA 9장의 진행 상태를 저장한다.
 | updated_at | timestamptz | ✓ |  |
 - **유니크 제약**: (`anonymous_user_id`, `case_id`, `attempt_no`)
 - **CHECK**: `last_reviewed_step`은 0 ~ 4, `attempt_no`는 1 이상 (v1.5)
-- MVP에서는 `attempt_no = 1`만 만든다. 같은 브라우저에서 이미 체험을 시작한 사건에 들어오면 새 체험을 만들지 않고 기존 체험의 진행 단계로 보낸다. 완료(`COMPLETED`)한 사건이면 S-09 결과 화면으로 보낸다.
+- MVP에서는 `attempt_no = 1`만 만든다. 같은 브라우저에서 이미 체험을 시작한 사건에 들어오면 새 체험을 만들지 않고 기존 체험의 진행 단계로 보낸다. 완료(`COMPLETED`)한 사건이면 S-08 결과 화면으로 보낸다.
 - 통계와 참여자 비교에는 `attempt_no = 1`인 체험만 쓴다. 두 번째 체험부터는 실제 판결을 이미 알고 있는 상태이기 때문이다.
 - 체험 당시 로그인 여부 구분:
 
@@ -391,12 +506,12 @@ IA 9장의 진행 상태를 저장한다.
 | fine_amount | bigint |  | 벌금 (원) |
 | suspension_months | int |  | 집행유예 기간 (개월). 없으면 NULL |
 | extra_dispositions | jsonb |  | 부가 처분 (예: `[{"type":"COMMUNITY_SERVICE","value":"80시간"}]`). 주로 `COURT`. `type` 값: `COMMUNITY_SERVICE`(사회봉사), `CONFISCATION`(몰수, v1.4). 필요하면 값을 추가한다 |
-| summary | varchar(100) |  | S-09 판결 카드의 한 줄 요약 (v1.3). AI · COURT는 팀이 입력. USER는 저장하지 않고 서버가 `factor.summary_tag`로 규칙 문장을 만들어 응답한다(API 판결 응답 공통 형식) |
+| summary | varchar(100) |  | S-08 판결 카드의 한 줄 요약 (v1.3). AI · COURT는 팀이 입력. USER는 저장하지 않고 서버가 `factor.summary_tag`로 규칙 문장을 만들어 응답한다(API 판결 응답 공통 형식) |
 | reasoning | text |  | 판결 이유 요약 (AI · COURT) |
 | plain_explanation | text |  | 쉬운 설명 (COURT) |
 | excerpt | text |  | 판결문 발췌 (COURT, 비식별화 적용) |
 | free_opinion | text |  | 자유 의견 (USER, 비교 대상 아님) |
-| reference_tags | jsonb |  | 참고 자료 태그 (AI, 예: `["형법 제250조", "살인범죄 양형기준", "유사 판례 5건"]`). S-07에 표시 (v1.2 추가, v1.3에서 `references` → `reference_tags`: `REFERENCES`는 SQL 예약어) |
+| reference_tags | jsonb |  | 참고 자료 태그 (AI, 예: `["형법 제250조", "살인범죄 양형기준", "유사 판례 5건"]`). S-06에 표시 (v1.2 추가, v1.3에서 `references` → `reference_tags`: `REFERENCES`는 SQL 예약어) |
 | is_published | boolean | ✓ | AI · COURT는 검수 후 `true`만 노출. USER는 항상 `true` |
 | review_status | varchar(20) |  | (v1.22, V16) 검수 결과 `APPROVED` / `REJECTED`. **NULL = 검수 기록 없음** — 화면에는 공개 중이면 승인, 아니면 대기로 보인다(파이프라인 · 시드는 채우지 않는다). AI · COURT만 |
 | reviewed_by_admin_id | bigint FK |  | (v1.22) 검수한 관리자(`admin_account`, 계정을 지워도 기록은 남김 `ON DELETE SET NULL`) |
@@ -463,7 +578,7 @@ AI 판결 1건을 어떤 조건으로 만들었는지 남긴다(REQ-047, 079). M
 | --- | --- | --- | --- |
 | id | bigint PK | ✓ |  |
 | email | varchar(254) | ✓ | 로그인 아이디. 소문자로 정규화해 저장(CHECK `email = lower(email)`), 유니크 |
-| password_hash | varchar(100) |  | BCrypt 해시(`{bcrypt}` 접두어). OAuth로만 로그인하는 관리자(BE-40)는 NULL |
+| password_hash | varchar(255) |  | Argon2id 해시(`{argon2}` 접두어, BE-90). 기존 BCrypt 해시(`{bcrypt}` 접두어)도 검증은 되고 로그인 시 재해시된다. NULL 허용은 OAuth로만 로그인하는 관리자(BE-40)를 위해 V12에서 둔 것이다. BE-40은 제외됐지만(v1.28) 제약은 그대로 둔다(마이그레이션 변경 없음) |
 | display_name | varchar(50) | ✓ | 화면 · 검수 기록에 쓰는 이름 |
 | enabled | boolean | ✓ | 비활성이면 로그인할 수 없다 |
 | created_at | timestamptz | ✓ |  |
@@ -506,13 +621,13 @@ AI 판결 1건을 어떤 조건으로 만들었는지 남긴다(REQ-047, 079). M
 | prompt_version | varchar(30) | ✓ |  |
 | input_snapshot | jsonb |  | AI에 넣은 입력 (사건 원문 · 판결문 전문이 없는지 점검용) |
 | raw_output | jsonb |  | 모델 원본 출력 (실패 원인 분석 · 샘플 점검용) |
-| created_at | timestamptz | ✓ | 생성 시작 (S-08 진입, `AI_REVEALED`) |
+| created_at | timestamptz | ✓ | 생성 시작 (S-07 진입, `AI_REVEALED`) |
 | completed_at | timestamptz |  | `DONE` · `FAILED`가 된 시각 |
 - 행은 실제 판결 공개(`AI_REVEALED`) 시 `PENDING`으로 만들고, 생성 작업이 끝나면 `DONE` 또는 `FAILED`로 바꾼다. 유니크 제약으로 동시 요청이 와도 한 번만 생성한다.
 - **CHECK**: `fail_reason`은 위 표의 5개 값만 허용 (v1.5)
 - `FAILED`는 자동으로 다시 만들지 않는다(MVP와 같은 규칙 문장이 보이므로 체험은 정상). 재시도 정책은 기술 설계에서 정한다.
 - 비교 분석은 `COMPLETED` 상태에서만 응답한다.
-- `content.perspectives.USER`는 확장 단계의 AI "내 판결" 요약이다(REQ-062, v1.3). `DONE`이면 S-09 내 판결 카드의 한 줄 요약(MVP: `summary_tag` 규칙 문장)을 이 값으로 바꾼다. 따로 테이블을 두지 않고 이 행에 함께 저장한다.
+- `content.perspectives.USER`는 확장 단계의 AI "내 판결" 요약이다(REQ-062, v1.3). `DONE`이면 S-08 내 판결 카드의 한 줄 요약(MVP: `summary_tag` 규칙 문장)을 이 값으로 바꾼다. 따로 테이블을 두지 않고 이 행에 함께 저장한다.
 
 ### 3-4. AI 판결 참고 자료 (확장 단계, v1.16)
 
@@ -623,7 +738,7 @@ IA 9장의 규칙을 어느 테이블·제약이 책임지는지 정리한다.
 | 사전 판단은 비교 화면에서만 | `status = COMPLETED`일 때만 `PRE` 판단 응답 |
 | 새로고침 복원 | `experience.status` + `last_reviewed_step` |
 | 섹션 확인 순서 (서버 강제) | `last_reviewed_step + 1`번 섹션만 확인 가능. 잠긴 섹션 본문은 응답하지 않음 (REQ-019) |
-| 체험 중복 방지 | 같은 (`anonymous_user_id`, `case_id`)의 체험이 있으면 새로 만들지 않고 기존 체험으로 이동. 완료했으면 S-09 |
+| 체험 중복 방지 | 같은 (`anonymous_user_id`, `case_id`)의 체험이 있으면 새로 만들지 않고 기존 체험으로 이동. 완료했으면 S-08 |
 | 원본 판결문 비노출 | `case_source`는 사용자 API에서 조회하지 않음 (`source_org`만 예외) |
 | 검수된 결과만 노출 | `legal_case.status = PUBLISHED`, `judgment.is_published = true` |
 
@@ -655,7 +770,7 @@ IA 9장의 규칙을 어느 테이블·제약이 책임지는지 정리한다.
 | LIFE | NULL | NULL | 120 | 600 | 무기징역을 작량감경하면 징역 10 ~ 50년 (같은 항 제2호) | false |
 | PRISON | 60 | 360 | 30 | 360 | 유기징역 선택, 작량감경 시 하한 1/2. 법률상 감경 · 가중 사유 없음 | true |
 
-→ 벌금은 법정형에 없어 `FINE` 행을 두지 않는다. 징역 31년(372개월)을 입력하면 `allowed_max` 360을 넘으므로 확정 불가(S-06c). 무기징역을 고른 뒤 감경해 징역 50년으로 선고하면 `penalty_type = LIFE`, `reduced_to = PRISON`, `prison_months = 600`이고, `LIFE` 행의 120 ~ 600으로 검사한다.
+→ 벌금은 법정형에 없어 `FINE` 행을 두지 않는다. 징역 31년(372개월)을 입력하면 `allowed_max` 360을 넘으므로 확정 불가(S-05c). 무기징역을 고른 뒤 감경해 징역 50년으로 선고하면 `penalty_type = LIFE`, `reduced_to = PRISON`, `prison_months = 600`이고, `LIFE` 행의 120 ~ 600으로 검사한다.
 
 **sentence_range_option** (`crime_type = MURDER`, 8개)
 
@@ -718,7 +833,7 @@ IA 9장의 규칙을 어느 테이블·제약이 책임지는지 정리한다.
 | 30 | 2, 3, 5, 6 | UP |
 | 30 | 7, 8, 9 | DOWN |
 
-→ S-09 매트릭스(API 14): 요소 11개 × (USER FINAL · AI · COURT)를 조회해 행이 없으면 "—"로 표시한다.
+→ S-08 매트릭스(API 14): 요소 11개 × (USER FINAL · AI · COURT)를 조회해 행이 없으면 "—"로 표시한다.
 
 | 요소 | 내 판결 | AI | 재판부 | 분류 |
 | --- | --- | --- | --- | --- |
@@ -799,9 +914,76 @@ erDiagram
 | `personality_question` | id, axis(`APOLOGY_SINCERITY` / `FAULT_STANDARD` / `PRINCIPLE_RELATION` / `ORDER_OPPORTUNITY`, `factor.value_axis`와 같은 값), scenario(`FRIEND` / `FAMILY` / `WORK` / `NEIGHBOR`), content(상황 문장), option_a · option_b(두 끝 행동 문장), display_order(unique), is_active | 일상 시나리오 문항. 법률 용어 금지. (id, axis) 유니크는 선택지 복합 FK용 |
 | `personality_choice` | id, (question_id, axis) 복합 FK, letter(varchar(1), 보통은 NULL), score(int), display_order(1 ~ 5) | 5칸(매우 A · 조금 A · 보통 · 조금 B · 매우 B) 중 한 칸. 문구는 없고 글자 · 점수만. 칸 순서로 점수가 정해진다(1 · 5칸 2점, 2 · 4칸 1점, 3칸은 글자 없음 0점, CHECK). 글자는 그 축의 두 글자만(E·I / S·N / T·F / J·P). (question_id, display_order) 유니크 |
 | `personality_type` | code PK(varchar(4), 내부용), share_id(unique, 영숫자 6 ~ 16자), name, character_code(`NAERO` / `NAMBUL`), one_liner, meme, daily_description, verdict_description, tolerance, image_url | 16유형 콘텐츠. 코드는 화면 · 공유 주소에 쓰지 않고(#119) 공유 주소는 `/test/types/{share_id}`. share_id는 시드로 고정하고 바꾸지 않는다. tolerance = 코드의 I · N · F · P 개수(CHECK) |
-| `personality_result` | id, anonymous_user_id FK, type_code FK, axis_scores jsonb(네 축 키, 값 0 ~ 1), answers jsonb(배열, `{questionId, choiceId}`), is_current, created_at | 응시 결과. 재응시는 이전 행 `is_current=false` 후 새 행. 사용자당 현재 결과 1건(부분 유니크 인덱스). 이력은 남는다 |
+| `personality_result` | id, anonymous_user_id FK, type_code FK, axis_scores jsonb(네 축 키, 값 0 ~ 1), answers jsonb(배열, `{questionId, choiceId}`), is_current, completed_experience_count int NULL, is_baseline_retake boolean, created_at | 응시 결과. 재응시는 이전 행 `is_current=false` 후 새 행. 사용자당 현재 결과 1건(부분 유니크 인덱스). 이력은 남는다. v1.36: `completed_experience_count`는 응시 시점에 완료한 사건 수(이전 행 NULL), `is_baseline_retake`는 성향카드 다시 정하기로 낸 결과(사용자당 1건, 부분 유니크 인덱스). 처음 성향 = 그 사용자의 가장 오래된 행 |
 | `experience_personality` | id, experience_id FK unique, axis_counts jsonb(네 축 키, 각 `{down, up}` 0 이상 정수), created_at | 판결 체험이 끝날 때 남기는 축별 형량 ↓ / ↑ 선택 개수. 고르지 않은 축도 `{0, 0}`으로 키를 둔다. 유형 코드는 저장하지 않고 산식(v0.4)이 합산해서 계산한다. 종합 성향은 각 사건 첫 회차만 쓴다 |
 
 - 사용자 응답에 원본 판결문 정보가 섞이지 않는다는 원칙(5장)은 그대로다. 성향 기여는 사용자의 `USER` · `FINAL` 판단 요소 기록(`judgment_factor`)에서만 계산한다.
 - 공유 링크는 `personality_type`만 읽는다. `personality_result`의 응답 · 점수는 공유 응답에 넣지 않는다.
 - `factor.value_axis`가 `NULL`인 판단 요소는 성향 계산에서 빠진다(4장 규칙과 동일).
+
+## 9. (확장 단계) 출석 기록 테이블 (v1.30, BE-97)
+
+> **V22 마이그레이션.** 마이페이지 출석 일수(API 명세 P-5 `profile.attendanceDays`) · 출석 도전과제(FE-68, BE-96)에 쓴다. 기록은 P-6 `POST /attendance`. 결정 기록 [`BE-97.md`](decisions/BE-97.md)
+
+```mermaid
+erDiagram
+    anonymous_user ||--o{ attendance : "출석"
+```
+
+| 컬럼 | 타입 | NOT NULL | 설명 |
+| --- | --- | --- | --- |
+| anonymous_user_id | uuid FK | ✓ | `anonymous_user.id` |
+| attended_on | date | ✓ | 출석 날짜. 서버가 `Asia/Seoul` · 하루 시작 시각 설정(`attendance.day-start-hour`, 기본 0시) 기준으로 계산한다 |
+| created_at | timestamptz | ✓ | 기록 시각(기본값 `now()`) |
+
+- **기본 키**: (`anonymous_user_id`, `attended_on`). 하루 한 줄이고, 같은 날 다시 출석하면 `ON CONFLICT DO NOTHING`으로 무시한다. 익명 사용자가 기본 키 첫 칼럼이라 별도 인덱스는 두지 않는다.
+- **누적 출석 일수** = 그 익명 사용자의 줄 수. 날짜를 남겨 두어 연속 출석은 나중에 계산만 더하면 된다.
+- **로그인 이관**: 행을 옮기지 않는다. 회원에 연결된 익명 ID들(`anonymous_user.member_id`)의 `attended_on`을 중복 없이 센다.
+- 하루 시작 시각을 바꾸면 이미 저장된 날짜는 그대로이고, 그 뒤 기록부터 새 기준이 적용된다.
+
+## 10. (확장 단계) 프로필 꾸미기 테이블 (v1.31, BE-96)
+
+> **V23 마이그레이션.** 마이페이지 꾸미기(FE-68)를 서버에 저장한다. 저장은 API 명세 P-7 `PUT /profile-deco`, 조회는 P-5. 결정 기록 [`BE-96.md`](decisions/BE-96.md)
+
+```mermaid
+erDiagram
+    anonymous_user ||--o| profile_deco : "꾸미기"
+```
+
+| 컬럼 | 타입 | NOT NULL | 설명 |
+| --- | --- | --- | --- |
+| anonymous_user_id | uuid PK FK | ✓ | `anonymous_user.id`. 사용자당 한 줄 |
+| portrait | varchar(200) | ✓ | 대표 이미지 경로(`/images/…/이름.webp`, 형식은 서버가 검사) |
+| frame · background | varchar(30) | ✓ | 카드 테두리 · 배경 |
+| sash_style | varchar(30) | ✓ | 카드 책갈피 모양(`none` · `short` · `long`) |
+| sash_color_short · sash_color_long | varchar(30) | ✓ | 모양별 색(모양을 바꿔도 각자 기억한다) |
+| sash_icon_left · sash_icon_right | varchar(30) | ✓ | 짧은 책갈피 좌우 아이콘 |
+| bookmark_character · bookmark_face · bookmark_face_style · bookmark_color | varchar(30) | ✓ | 책갈피 캐릭터 · 얼굴 표정 · 얼굴 종류 · 리본 색(잠금 없음) |
+| updated_at | timestamptz | ✓ | 마지막 저장 시각(기본값 `now()`). 로그인 이관 때 가장 최근 꾸미기를 고르는 기준 |
+
+- **값 목록 · 잠금은 서버 코드(`ProfileDecoCatalog`)가 검사한다.** 도전과제 · 보상 표가 아직 임시안이라 CHECK 제약을 두지 않는다(표가 바뀔 때마다 마이그레이션이 필요해지지 않게).
+- **도전과제 진행도는 저장하지 않는다.** 완료한 사건 수(`experience`) · 성향 테스트 여부(`personality_result`) · 출석 일수(`attendance`, 9장)로 그때그때 계산한다. 모은 일러스트 수는 BE-83 전까지 계산하지 않는다.
+- 저장 기록이 없으면 서버가 기본값을 내려 준다(행을 미리 만들지 않는다).
+- **로그인 이관**: 행을 옮기지 않는다. 회원에 연결된 익명 ID들(`anonymous_user.member_id`) 중 `updated_at`이 가장 최근인 꾸미기를 쓴다.
+
+## 11. (확장 단계) 프로필 선택 설정 테이블 (v1.38, BE-104)
+
+> **V29 마이그레이션.** 공개 성향카드 · 프로필카드 아래 성향 · 한 줄 소개(FE-77)를 서버에 저장한다. 저장은 API 명세 P-8 `PATCH /profile-settings`(보낸 칸만), 조회는 P-5 `profileSettings`. 결정 기록 [`BE-104.md`](decisions/BE-104.md)
+
+```mermaid
+erDiagram
+    anonymous_user ||--o| profile_setting : "프로필 선택 설정"
+```
+
+| 컬럼 | 타입 | NOT NULL | 설명 |
+| --- | --- | --- | --- |
+| anonymous_user_id | uuid PK FK | ✓ | `anonymous_user.id`. 사용자당 한 줄 |
+| shown_card | varchar(10) | ✓ | 공개 성향카드 `initial`(초심) · `retake`(재심) · `current`(최근). 기본 `current`, CHECK |
+| profile_card_type | varchar(10) | ✓ | 프로필카드 아래 성향. 값은 `shown_card`와 같고 별개의 선택이다. 기본 `current`, CHECK |
+| bio | varchar(40) | ✓ | 한 줄 소개(앞뒤 공백 없음 · 줄바꿈 없음, CHECK). 빈 문자열 = 소개 없음, 기본 `''` |
+| updated_at | timestamptz | ✓ | 마지막 저장 시각(기본값 `now()`) |
+
+- **프로필 꾸미기(`profile_deco`, 10장)와 테이블을 나눈다.** 꾸미기는 전체 저장(P-7)이고 이 세 값은 화면마다 따로 바뀌는 부분 저장(P-8)이라, 한쪽 저장이 다른 쪽을 덮어쓰지 않게 한다.
+- 저장 기록이 없으면 서버가 기본값을 내려 준다(행을 미리 만들지 않는다). 처음 저장은 기본값에서 시작해 보낸 칸만 바꾼다.
+- `retake`는 재심 결과가 없어도 저장할 수 있다(화면이 대신 고른다). 공개 범위 칸은 두지 않는다(항상 공개, FE-77).
+- **로그인 이관**: 프로필 꾸미기와 같이 행을 옮기지 않는다. 회원 화면이 생기면 연결된 익명 ID 중 `updated_at`이 가장 최근인 행을 쓴다.

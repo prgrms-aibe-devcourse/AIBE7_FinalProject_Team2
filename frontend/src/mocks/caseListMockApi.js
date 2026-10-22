@@ -1,6 +1,6 @@
 import { mockCases } from './caseListMockData.js';
 import { mockOverview } from './overviewMockData.js';
-import { read, restart, storageKey, validState } from './mockExperienceStore.js';
+import { getItem, peek, read, restart, storageKey, validState } from './mockExperienceStore.js';
 
 const delay = () => new Promise((resolve) => setTimeout(resolve, 250));
 const crimeTypes = ['MURDER', 'FRAUD', 'INJURY'];
@@ -20,7 +20,7 @@ const toMyStatus = (status) => (status === 'COMPLETED' ? 'COMPLETED' : 'IN_PROGR
 // 진행 중이고, 나머지는 이번 세션에 시작한 사건만 진행 중. 목록을 보기만 해서 기록이 생기지 않도록 read()는 부르지 않는다.
 function myStatusOf(caseId) {
   if (caseId === 1) {
-    const raw = localStorage.getItem(storageKey);
+    const raw = getItem(storageKey);
     if (!raw) return null; // 체험 전 — read()와 같은 기준(값 없음 · 빈 값). FE-19 리뷰: 목에서도 "체험 시작" 상태가 보이게
     let stored = null;
     try { stored = JSON.parse(raw); } catch { /* 손상된 값은 read()가 초기 상태로 되살리므로 진행 중으로 본다 */ }
@@ -75,7 +75,7 @@ export async function startExperience(caseId) {
   }
   if (caseId === 1) {
     // 체험 기록이 없으면(myStatus null) 실제 API처럼 새 체험(STARTED, 1막)으로 시작한다. 목 저장소의 초기값(PRE_JUDGED)은
-    // 주소로 S-04 이후 화면을 바로 열 때만 쓴다(FE-32 — S-20 "체험 시작"이 3막으로 건너뛰던 문제)
+    // 주소로 S-04 이후 화면을 바로 열 때만 쓴다(FE-32 — S-20 "체험 시작"이 2막으로 건너뛰던 문제)
     const { status, lastReviewedStep } = myStatusOf(caseId) === null ? restart() : read();
     return { caseId, attemptNo: 1, status, lastReviewedStep, startedAt: new Date().toISOString() };
   }
@@ -85,4 +85,15 @@ export async function startExperience(caseId) {
     });
   }
   return structuredClone(startedCases.get(caseId));
+}
+
+// API 3 — GET /cases/{caseId}/experience (내 체험 상태). 보기만 하므로 기록을 새로 만들지 않는다(peek)
+export async function getExperience(caseId) {
+  await delay();
+  if (!mockCases.some((item) => item.caseId === caseId)) {
+    fail('CASE_NOT_FOUND', '사건을 찾을 수 없습니다.');
+  }
+  const state = caseId === 1 ? peek() : startedCases.get(caseId);
+  if (!state) fail('EXPERIENCE_NOT_FOUND', '체험 기록이 없습니다.');
+  return structuredClone({ caseId, attemptNo: 1, startedAt: new Date().toISOString(), ...state });
 }

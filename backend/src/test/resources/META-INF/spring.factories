@@ -1,0 +1,3 @@
+# SpringApplication 및 @SpringBootTest가 실행기와 무관하게 로드한다. 운영 jar에는 포함되지 않는다.
+org.springframework.context.ApplicationContextInitializer=\
+com.team2.project.support.TestEnvironmentGuard

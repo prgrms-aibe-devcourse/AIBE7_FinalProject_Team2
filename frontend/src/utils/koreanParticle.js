@@ -1,5 +1,5 @@
 // 한글 단어 뒤에 붙는 목적격 조사(을 · 를) 판정. 백엔드 KoreanParticle(judgment 도메인)과 같은 규칙이다(BE-10 · BE-26).
-// S-09 내 판결 한 줄 요약 · 공통점/차이점 규칙 문장이 함께 쓴다(comparisonMock.js).
+// S-08 내 판결 한 줄 요약 · 공통점/차이점 규칙 문장이 함께 쓴다(comparisonMock.js).
 
 const HANGUL_FIRST = 0xac00;
 const HANGUL_LAST = 0xd7a3;

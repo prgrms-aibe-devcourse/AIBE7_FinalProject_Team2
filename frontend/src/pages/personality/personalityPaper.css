@@ -1,0 +1,150 @@
+/* FE-55 판결 성향 테스트 — 6막 다음 날 신문의 뒷면(오피니언 2면, personalityPaperPage.js).
+   책상 나뭇결 위에 신문 한 장. 지면 문법은 6막 신문(stage.css .sheet)과 같다: 제호 띠 · 이중 괘선 · 명조 기사체 · 흑백 지면 사진.
+   문항 = 찬반 토론 지면(A | B 두 단, 가운데 세로 괘선), 답 = 점선으로 둘린 독자 설문 응모권. 기존 성향 테스트 철(personality.css)과는 다른 화면이다 */
+.tp-page { min-height: 100dvh; padding: 28px 0 40px; overflow-x: clip; perspective: 2400px; background: var(--color-stage-news); } /* 6막 읽기 화면의 바탕(무대 색)과 같다 */
+/* 6막 읽기 화면의 지면(courtSketch.css .reading-paper .sheet)과 같은 폭 · 같은 자리에 놓인다 — 넘긴 뒷면이 그 자리에 그대로 이어진다.
+   세로는 화면 높이의 1.2배(조금 스크롤해 아래를 볼 수 있게, 넓은 화면에서 빈 지면이 너무 길지 않게). 내용이 더 길면 내용만큼 */
+.tp-sheet { --u: min(10px, calc((100vw - 32px) / 118)); width: calc(var(--u) * 118); min-height: calc((100dvh - 28px) * 1.2); margin: 0 auto; padding: calc(var(--u) * 2.4) calc(var(--u) * 4.6) calc(var(--u) * 4.4);
+  background: var(--color-desk-news); color: var(--color-text); transform-origin: 0 50%;
+  box-shadow: 0 10px 26px -8px color-mix(in srgb, var(--color-desk-shadow) 60%, transparent); }
+/* 화면별 CSS가 각자 숨김 규칙을 둔다(personality.css와 같은 꼴) */
+.tp-page .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+/* 6막 지면을 넘긴 뒷면으로 들어온다: 왼쪽 가장자리를 축으로 넘어와 바닥에 내려앉는다 */
+.tp-sheet.is-turning-in { animation: tp-turn-in .65s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes tp-turn-in { from { transform: rotateY(-88deg); } to { transform: none; } }
+
+/* 제호 띠: 6막 1면 제호(.sheet-mast)를 속면 크기로. 왼쪽 면 이름(오피니언)이 크고 제호는 작게 붙는다 */
+.tp-info, .tp-date { display: flex; justify-content: space-between; color: var(--muted); font-size: max(12px, calc(var(--u) * 1.15)); }
+.tp-info { padding-bottom: calc(var(--u) * .4); border-bottom: 1px solid var(--color-border-strong); }
+.tp-flag { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin: calc(var(--u) * .6) 0 calc(var(--u) * .4); }
+.tp-section { font: 900 calc(var(--u) * 4.4) / 1.05 var(--font-heading); letter-spacing: -.04em; color: var(--color-heading); }
+.tp-brand { font: 900 calc(var(--u) * 2.2) / 1 var(--font-heading); letter-spacing: -.04em; color: var(--color-heading); }
+.tp-brand .law { color: var(--color-label); }
+.tp-date { padding: calc(var(--u) * .35) 0; border-top: 2px solid var(--color-text); border-bottom: 1px solid var(--color-text); }
+.tp-body { padding-top: calc(var(--u) * 2.4); }
+/* 날짜 아래 이동 줄: 6막 지면 귀(다른 사건 보기)와 같은 이중 테두리 */
+.tp-moves { display: flex; justify-content: space-between; gap: 12px; padding-top: calc(var(--u) * 1.2); }
+.tp-move { min-height: 36px; padding: 6px 16px; border: 3px double var(--color-border-strong); background: transparent; color: var(--color-heading); font: 700 14px/1.3 var(--font-heading); cursor: pointer; }
+.tp-move:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+@media (hover: hover) and (pointer: fine) { .tp-move:hover { background: color-mix(in srgb, var(--color-desk-kraft) 16%, transparent); } }
+.tp-body .test-message { padding: calc(var(--u) * 8) 0; font-family: var(--font-article); }
+
+/* 기사 글자: 6막 지면과 같은 위계 */
+.tp-headline { margin: 0 0 calc(var(--u) * 1.2); font: 900 max(24px, calc(var(--u) * 4.2)) / 1.2 var(--font-heading); letter-spacing: -.03em; text-wrap: balance; word-break: keep-all; color: var(--color-text); }
+.tp-headline:focus { outline: none; }
+.tp-deck { margin: 0 0 calc(var(--u) * 1.6); font: 700 max(16px, calc(var(--u) * 1.9)) / 1.45 var(--font-heading); color: var(--color-heading); word-break: keep-all; }
+.tp-text { margin: 0 0 calc(var(--u) * .8); font: 400 max(15px, calc(var(--u) * 1.6)) / 1.75 var(--font-article); color: var(--color-desk-news-ink); text-indent: 1em; word-break: keep-all; text-wrap: pretty; }
+.tp-columns { column-count: 2; column-gap: calc(var(--u) * 2.4); column-rule: 1px solid var(--color-border); }
+
+/* 표지: 왼쪽 기사(제목 · 부제 · 본문 두 단) | 오른쪽 사진 · 참여권 */
+.tp-intro { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: calc(var(--u) * 3.2); }
+.tp-intro-side { display: flex; flex-direction: column; gap: calc(var(--u) * 2); }
+.tp-photo { margin: 0; }
+.tp-photo-frame { display: flex; justify-content: space-around; align-items: flex-end; aspect-ratio: 4 / 3; overflow: hidden; background: color-mix(in srgb, var(--color-desk-news-ink) 7%, var(--color-desk-news)); filter: var(--photo-filter); }
+.tp-photo-frame img { height: 86%; width: auto; mix-blend-mode: multiply; }
+.tp-photo figcaption { margin-top: calc(var(--u) * .5); color: var(--muted); font-size: max(12px, calc(var(--u) * 1.1)); }
+
+/* 응모권: 지면 귀퉁이에 오려 내는 점선 쿠폰(6막 광고단의 독자 엽서 모집 칸과 같은 점선) */
+.tp-coupon { padding: calc(var(--u) * 1.4) calc(var(--u) * 2.4) calc(var(--u) * 1.2); border: 2px dashed var(--color-text); background: color-mix(in srgb, var(--color-paper) 55%, transparent); }
+.tp-coupon-title { margin: 0 0 calc(var(--u) * .8); font: 900 max(15px, calc(var(--u) * 1.7)) / 1.3 var(--font-heading); color: var(--color-heading); text-align: center; letter-spacing: .08em; }
+.tp-coupon-text { margin: 0 0 calc(var(--u) * 1.2); color: var(--muted); font: 400 max(13px, calc(var(--u) * 1.3)) / 1.5 var(--font-article); text-align: center; }
+.tp-coupon-start { display: flex; flex-direction: column; align-items: center; }
+
+/* 응답 현황: 제호 아래 한 줄. 답한 칸은 먹으로 채운다 */
+.tp-progress { display: flex; align-items: center; gap: 14px; margin-bottom: calc(var(--u) * 2); padding-bottom: calc(var(--u) * 1.2); border-bottom: 1px solid var(--color-border); }
+.tp-progress-count { flex: none; font: 700 max(13px, calc(var(--u) * 1.3)) / 1 var(--font-body); color: var(--color-label); }
+.tp-progress-cells { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.tp-progress-cell { width: 24px; height: 24px; padding: 0; border: 1px solid var(--color-border-strong); background: transparent; color: var(--muted); font: 600 11px/1 var(--font-body); font-variant-numeric: tabular-nums; cursor: pointer; }
+.tp-progress-cell.is-done { border-color: var(--color-text); background: var(--color-text); color: var(--color-desk-news); }
+.tp-progress-cell.is-current { outline: 2px solid var(--color-label); outline-offset: 1px; }
+.tp-progress-cell:disabled { opacity: .45; cursor: default; }
+.tp-progress-cell:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+
+/* 찬반 토론: 상황 제목 + 진행자 한마디 / A | B 두 단 / 응모권 */
+.tp-debate { display: grid; gap: calc(var(--u) * 2.2); }
+.tp-debate-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, calc(var(--u) * 28)); gap: calc(var(--u) * 4.4); align-items: start; }
+.tp-situation { margin: 0; font-size: max(22px, calc(var(--u) * 3)); line-height: 1.3; }
+/* 칸 고정(personalityPaperPage.js stacked): 모든 문항의 같은 부분을 한 칸에 겹친다. 칸 높이 = 가장 긴 문항, 지금 문항은 칸 위에 붙는다 */
+.tp-stack { display: grid; min-width: 0; }
+.tp-stack > * { grid-area: 1 / 1; align-self: start; }
+.tp-stack > .is-ghost { visibility: hidden; }
+.tp-quote { display: grid; grid-template-columns: auto 1fr; gap: 4px calc(var(--u) * 1.2); margin: 0; padding-left: calc(var(--u) * 1.6); border-left: 1px solid var(--color-text); }
+.tp-quote-face { grid-row: span 2; width: calc(var(--u) * 7); height: calc(var(--u) * 8.4); object-fit: cover; object-position: top; background: color-mix(in srgb, var(--color-desk-news-ink) 7%, var(--color-desk-news)); filter: var(--photo-filter); }
+.tp-quote blockquote { margin: 0; font: 400 max(14px, calc(var(--u) * 1.45)) / 1.6 var(--font-article); color: var(--color-desk-news-ink); word-break: keep-all; }
+.tp-quote figcaption { color: var(--muted); font-size: max(12px, calc(var(--u) * 1.1)); }
+.tp-sides { display: grid; grid-template-columns: 1fr 1fr; border-top: 3px double var(--color-text); border-bottom: 1px solid var(--color-text); }
+.tp-side { padding: calc(var(--u) * 1.4) calc(var(--u) * 3.2) calc(var(--u) * 1.6); }
+.tp-side.is-a { padding-left: 0; border-right: 1px solid var(--color-text); }
+.tp-side.is-b { padding-right: 0; }
+.tp-side-mark { margin: 0 0 calc(var(--u) * .4); font: 900 max(30px, calc(var(--u) * 4.2)) / 1 var(--font-heading); color: var(--color-heading); }
+.tp-side-text { margin: 0; font: 700 max(16px, calc(var(--u) * 1.8)) / 1.5 var(--font-heading); color: var(--color-text); word-break: keep-all; text-wrap: pretty; }
+
+/* 다섯 칸: 네모 칸에 펜으로 체크한다. 양 끝일수록 칸이 크다 */
+.tp-ballot { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: calc(var(--u) * .8); }
+.tp-option { position: relative; display: grid; grid-template-rows: 34px auto; place-items: center; gap: 6px; padding: 6px 2px 4px; cursor: pointer; }
+.tp-option input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; }
+.tp-box { display: grid; place-items: center; width: 26px; height: 26px; border: 2px solid var(--color-text); }
+.tp-option:is(.step-0, .step-4) .tp-box { width: 34px; height: 34px; }
+.tp-option.step-2 .tp-box { width: 20px; height: 20px; }
+.tp-option input:checked + .tp-box::after { content: '✓'; color: var(--color-label); font: 400 calc(var(--u) * 3.6) / 1 var(--font-hand); translate: 2px -3px; rotate: -6deg; }
+.tp-degree { font: 700 max(13px, calc(var(--u) * 1.35)) / 1.2 var(--font-body); color: var(--color-desk-news-ink); white-space: nowrap; }
+.tp-option:has(input:checked) .tp-degree { color: var(--color-label); }
+.tp-option:has(input:focus-visible) { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+@media (hover: hover) and (pointer: fine) { .tp-option:hover .tp-box { background: color-mix(in srgb, var(--color-text) 8%, transparent); } }
+.tp-ballot-ends { display: flex; justify-content: space-between; margin-top: 4px; color: var(--muted); font-size: max(12px, calc(var(--u) * 1.15)); }
+
+.tp-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.tp-hint { margin: 0; color: var(--muted); font-size: max(12px, calc(var(--u) * 1.2)); text-align: center; }
+
+/* 답한 만큼 차는 막대: 좁은 화면에서만(번호 칸 대신) */
+.tp-progress-bar { display: none; }
+
+/* 6막 좁은 화면의 지면과 같은 폭 · 자리(세로는 가로의 2배) */
+@media (max-width: 680px) {
+  .tp-page { background: var(--color-banner-bg) url('/images/desk-felt.webp') center / cover fixed; } /* 좁은 화면 6막은 무대 색 없이 책상 펠트가 보인다 */
+  .tp-page { padding-top: 8px; }
+  .tp-sheet { width: calc(100vw - 16px); min-height: calc((100vw - 16px) * 2); }
+}
+/* 좁은 화면: 한 화면 안에 문항 · 응모권 · 이전/다음이 다 들어오게 글자와 간격을 줄인다 */
+@media (max-width: 720px) {
+  .tp-sheet { --u: 6px; padding: 14px 20px 20px; }
+  .tp-info { display: none; }
+  .tp-flag { margin: 0 0 4px; }
+  .tp-section { font-size: 22px; }
+  .tp-brand { font-size: 15px; }
+  .tp-date { font-size: 11px; }
+  .tp-body { padding-top: 14px; }
+  .tp-moves { padding-top: 8px; }
+  .tp-move { min-height: 36px; padding: 4px 12px; font-size: 13px; }
+  .tp-intro, .tp-debate-head { grid-template-columns: minmax(0, 1fr); }
+  .tp-intro { gap: 16px; }
+  .tp-columns { column-count: 1; }
+  .tp-headline { font-size: 22px; }
+  .tp-progress { gap: 10px; margin-bottom: 10px; padding-bottom: 8px; }
+  .tp-progress-cells { display: none; }
+  .tp-progress-bar { display: block; flex: 1; height: 4px; background: color-mix(in srgb, var(--color-text) 12%, transparent); }
+  .tp-progress-bar::before { content: ''; display: block; width: calc(var(--done) * 100%); height: 100%; background: var(--color-text); }
+  .tp-debate { gap: 10px; }
+  .tp-debate-head { gap: 8px; }
+  .tp-situation { font-size: 17px; line-height: 1.4; }
+  .tp-quote { grid-template-columns: minmax(0, 1fr); padding-left: 10px; }
+  .tp-quote-face { display: none; }
+  .tp-quote blockquote { font-size: 12px; line-height: 1.5; }
+  .tp-quote figcaption { font-size: 11px; }
+  .tp-sides { grid-template-columns: minmax(0, 1fr); }
+  .tp-side, .tp-side.is-a, .tp-side.is-b { display: grid; grid-template-columns: 24px minmax(0, 1fr); align-items: baseline; gap: 8px; padding: 8px 0; border-right: 0; }
+  .tp-side.is-a { border-bottom: 1px solid var(--color-text); }
+  .tp-side-mark { margin: 0; font-size: 22px; }
+  .tp-side-text { font-size: 14px; line-height: 1.45; }
+  .tp-coupon { padding: 12px 10px 10px; }
+  .tp-coupon-title { margin-bottom: 4px; font-size: 13px; }
+  .tp-option { grid-template-rows: 28px auto; gap: 2px; padding: 2px 0; }
+  .tp-box { width: 22px; height: 22px; }
+  .tp-option:is(.step-0, .step-4) .tp-box { width: 28px; height: 28px; }
+  .tp-option.step-2 .tp-box { width: 16px; height: 16px; }
+  .tp-option input:checked + .tp-box::after { font-size: 26px; }
+  .tp-degree { font-size: 12px; }
+  .tp-ballot-ends { margin-top: 0; font-size: 11px; }
+  .tp-hint { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .tp-sheet.is-turning-in { animation: none; } }

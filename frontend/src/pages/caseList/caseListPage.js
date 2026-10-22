@@ -1,9 +1,12 @@
-import { button, element, renderSiteFooter } from '../../components/siteLayout.js';
-import { casePhoto } from '../../utils/newspaper.js';
+import { button, element, mockTag, renderSiteFooter } from '../../components/siteLayout.js';
+import { API_MODE } from '../../api/config.js';
+import { scriptFor } from '../overview/overviewPage.js';
+import { casePhoto, useCommonPhotoOnError } from '../../utils/newspaper.js';
 import { newspaperMasthead } from '../../components/newspaperFront.js';
 import { turnPage } from '../../utils/pageTurn.js';
 import { reducedMotion } from '../../utils/motion.js';
 import { peelOff } from '../../utils/peelOff.js';
+import { takePaper } from '../../utils/paperHandoff.js';
 
 // S-02 사건 목록 — 신문 1면 (FE-18, 시안 v12 + 배치 조정). 유형 필터 · 오류 처리 로직은 FE-4 · FE-11과 같다.
 // 흐름 목업 ②(FE-32): 책상에서 집어 든 신문이다. 위에 남불의 안내 포스트잇(누르면 떼어짐, FE-50)이 있고, 기사를 누르면
@@ -42,11 +45,14 @@ const STATUS_VIEW = {
   COMPLETED: { badge: '완료', tone: 'done' },
 };
 const NOT_STARTED = { badge: null, tone: null };
-const statusViewOf = (item) => STATUS_VIEW[item.myStatus] ?? NOT_STARTED;
+// 체험 대본이 없는 사건(FE-33 전)은 "준비 중"으로 표시한다(FE-56). 기사 · 사건 정보(S-20)는 읽을 수 있고, 새 체험 시작은 S-20에서 막는다.
+// 이미 하던 · 마친 체험(myStatus)이 있으면 대본과 상관없이 그 상태를 그대로 보인다(이어서 하기 · 결과 보기는 S-20에서 열린다)
+const SOON = { badge: '준비 중', tone: 'soon' };
+const statusViewOf = (item) => STATUS_VIEW[item.myStatus] ?? (scriptFor(item.caseId, item.title) ? NOT_STARTED : SOON);
 const PICK_LABEL = '사건 펼쳐 보기';
 const JUMP_LABEL = '3면에 계속'; // 신문의 이어 읽기 줄(jump line). 누르면 사건 지면(S-20, 3면)으로 간다
-// shortcut: 캐릭터 얼굴은 원본 이미지 레포 PNG를 직접 읽는다(무대와 같음), 웹 webp 변환(WBS 7.6.8) 때 public 경로로 옮긴다
-const NAMBUL_FACE = 'https://raw.githubusercontent.com/peanutboi710/NaeLawNamBul_Images/main/character/cuts/nambul/icon/nambul_icon_face-happy.png';
+const NAMBUL_FACE = '/images/characters/icon/generated/nambul_face-happy.webp';
+const UNFLIP_MS = 450; // 6막에서 뒤집고 온 빈 종이 · 바탕을 걷는 시간(그동안 기사가 페이드인한다)
 const RISE_WAIT_MS = 1200; // 책상에서 들고 올 때 지면이 다 그려지기를 기다리는 최대 시간(그동안 책상은 신문을 든 채로 남아 있다)
 const headlineOf = (item) => item.headline || item.title;
 function dense(paragraphs) {
@@ -75,17 +81,29 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
     history.replaceState({ ...history.state, extras: {} }, '');
     if (!reducedMotion()) root.classList.add(ghost ? 'is-rising' : 'is-arriving');
   }
+  // 6막 신문을 뒤집고 왔으면(FE-55 "다른 사건 보기") 넘겨받은 빈 뒷면(paperHandoff.js)이 화면을 덮고 있다.
+  // 기사가 다 그려지면 같은 자리의 이 지면 위에 기사가 페이드인한다(unflip)
+  const handed = from === 'flip' ? takePaper() : null;
+  if (from === 'flip') {
+    history.replaceState({ ...history.state, extras: {} }, '');
+    if (!reducedMotion()) root.classList.add('is-unflipping');
+    else handed?.layer.remove();
+  }
 
   const desk = element('div', 'desk');
   desk.setAttribute('aria-hidden', 'true');
   const paper = element('div', 'paper');
   const earRight = element('div', 'ear ear-right');
   const main = element('main', 'front');
+  // 목록을 받기 전: 빈 지면 대신 상태 문구를 둔다(FE-56). 책상에서 들고 올 때는 다 그려진 뒤 올라오므로 주소로 바로 올 때만 보인다
+  const loading = element('p', 'paper-loading', '지면을 펼치는 중이에요');
+  loading.setAttribute('role', 'status');
+  main.append(loading);
   const paperNote = element('p', 'paper-note', '이 지면의 사건과 기사는 판결 체험을 위해 재구성한 것이며, 사진은 AI로 생성한 연출 이미지입니다.');
   paper.append(newspaperMasthead({ navigate, earRight }), main, paperNote, renderSiteFooter());
 
-  // 남불의 안내. 지면 왼쪽 위에 붙인 정사각형 포스트잇(지면과 함께 움직인다). 누르면 떼어져 날아간다(FE-50, 메인 책상의 내로 포스트잇과 같은 놀이).
-  // 책상으로 돌아가는 길은 정보 줄의 "← 처음으로"와 Esc가 맡는다
+  // 남불의 안내. 지면 오른쪽 위에 붙인 정사각형 포스트잇(FE-56, 지면과 함께 움직인다). 누르면 떼어져 날아간다(FE-50, 메인 책상의 내로 포스트잇과 같은 놀이).
+  // 책상으로 돌아가는 길은 정보 줄의 "← 메인으로"와 Esc가 맡는다
   const tip = element('button', 'paper-tip');
   tip.type = 'button';
   const face = element('img');
@@ -98,21 +116,31 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
   tip.append(face, tipText);
   tip.addEventListener('click', () => peelOff(tip, {
     from: 'none',
-    to: 'translate(-60px, -140px) rotate(-28deg)',
+    to: 'translate(60px, -140px) rotate(28deg)', // 오른쪽 위로 떼어져 날아간다
     // 목록을 아직 불러오는 중이면 첫 탭 대신 본문(main)이 포커스를 받는다
     focusTarget: () => main.querySelector('button') ?? Object.assign(main, { tabIndex: -1 }),
   }));
   paper.prepend(tip);
   root.append(desk, paper);
   if (ghost) root.insertBefore(ghost, paper);
+  // 뒤집고 왔으면 6막 지면과 같은 폭 · 같은 자리에 지면을 놓는다(같은 신문 한 장이 이어진다). 아래로 길어지는 부분은 화면 밖이다
+  if (handed && root.classList.contains('is-unflipping')) {
+    const top = Math.max(0, handed.rect.top);
+    Object.assign(paper.style, { width: `${handed.rect.width}px`, marginLeft: 'auto', marginRight: 'auto', marginTop: `${top}px` });
+    const off = paper.getBoundingClientRect().top - top; // 바깥 여백이 겹쳐 더 내려갔으면(좁은 화면) 그만큼 끌어올린다
+    if (off) paper.style.translate = `0 ${-off}px`;
+  }
   // 지면은 머리기사부터 다 그려지고 첫 사진들이 준비된 뒤 한 번에 올라온다(올라오는 도중 아래 기사가 채워지며 끊기지 않게).
   // 사건 목록이 늦으면 RISE_WAIT_MS에서 기다리기를 멈추고 올린다. 다 올라오면 뒤에 남긴 책상을 걷는다
-  async function rise(loaded) {
+  function drawn(loaded) {
     const ready = loaded.then(() => Promise.all([...main.querySelectorAll('.front-grid img, .recs img')].map((image) => {
       image.loading = 'eager';
       return image.decode().catch(() => {});
     })));
-    await Promise.race([ready, new Promise((done) => { window.setTimeout(done, RISE_WAIT_MS); })]);
+    return Promise.race([ready, new Promise((done) => { window.setTimeout(done, RISE_WAIT_MS); })]);
+  }
+  async function rise(loaded) {
+    await drawn(loaded);
     if (!active()) return;
     let timer = 0;
     const drop = () => { // 한 번만: 올라오는 애니메이션이 끝나면 뒤에 남긴 책상과 표시를 걷는다
@@ -125,6 +153,18 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
     paper.addEventListener('animationend', onEnd);
     timer = window.setTimeout(drop, 2000); // animationend가 오지 않아도 걷는다
     root.classList.add('is-going');
+  }
+
+  // 넘겨받은 빈 종이는 이 지면과 같은 자리 · 같은 크기로 덮여 있다. 기사가 다 그려지면 지면을 드러내 기사를 페이드인하고,
+  // 그 위의 빈 종이와 바탕(6막 화면 색)은 함께 걷는다 — 종이는 움직이지 않고 내용만 나타난다
+  async function unflip(paperHanded) {
+    if (!active()) { paperHanded?.layer.remove(); return; }
+    root.classList.add('is-revealing');
+    if (!paperHanded) return;
+    const { layer, shade, card } = paperHanded;
+    const timing = { duration: UNFLIP_MS, easing: 'ease-out', fill: 'forwards' };
+    await Promise.all([card, shade].map((node) => node.animate([{ opacity: 1 }, { opacity: 0 }], timing).finished)).catch(() => {});
+    layer.remove();
   }
 
   // Esc: 신문을 내려놓고 책상으로(목업과 같은 한 단계 뒤로)
@@ -175,6 +215,7 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
 
   function photo(item) {
     const image = element('img', 'photo');
+    useCommonPhotoOnError(image, Number(item?.caseId) || 0); // 썸네일 로딩 실패 시 공용 컷 (src보다 먼저)
     image.src = casePhoto(item); // 썸네일이 없으면 공용 재연 컷(샘플)
     image.alt = ''; // 연출 이미지라 읽지 않는다 (사건 정보는 제목 · 소개문에 있다)
     image.width = 3; // 비율 힌트(3:2). 크기는 CSS가 정한다
@@ -194,6 +235,7 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
     const node = element('p', 'meta');
     if (withTags && item.keywords?.length) node.append(element('span', 'tags', item.keywords.map((keyword) => `#${keyword}`).join(' ')));
     node.append(`참여 ${item.participantCount.toLocaleString('ko-KR')}명`);
+    if (API_MODE === 'mock') node.append(mockTag()); // 목 참여 수는 실제 반응이 아니다(FE-56)
     return node;
   }
 
@@ -343,5 +385,9 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
 
   const loaded = load(undefined);
   if (ghost) rise(loaded);
+  // 뒤집고 왔으면 기사와 첫 사진이 다 준비된 뒤에 한 번에 페이드인한다(늦게 온 기사가 따로 튀어나오지 않게)
+  // 기사 준비가 어떻게 끝나든(성공 · 실패 · 시간 초과) 덮고 있는 빈 종이는 반드시 걷는다
+  if (root.classList.contains('is-unflipping')) drawn(loaded).catch(() => {}).finally(() => unflip(handed));
+
   await loaded;
 }

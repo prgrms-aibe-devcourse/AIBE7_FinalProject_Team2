@@ -41,6 +41,14 @@ spring:
       # 36.7 → 36처럼 사용자가 보낸 값과 다른 값이 조용히 저장되는 것을 막는다. "36" 같은 문자열 숫자는 허용한다
       accept-float-as-int: false
 
+  servlet:
+    multipart:
+      # 파일 업로드 상한 (COMMON-47, S3 업로드). Spring 기본값(파일 1MB)이면 Nginx를 올려도 1MB 넘는 파일이 막힌다
+      # - max-request-size는 Nginx client_max_body_size(frontend/nginx/snippets/app.conf, 20m)와 같게 둔다
+      # - 바꿀 때는 두 곳을 함께 고친다
+      max-file-size: 10MB
+      max-request-size: 20MB
+
 # Actuator · Micrometer 메트릭 노출 (BE-66, WBS 7.2.1). 애플리케이션 포트(8080)와 분리된 별도 포트로만 연다.
 # Nginx는 /api/만 backend:8080으로 프록시하므로, 이 포트는 Nginx 설정을 바꾸지 않는 한 외부에서 닿지 않는다.
 # health · prometheus 두 엔드포인트만 연다 (env · beans · threaddump 등은 운영 정보 노출이라 기본값대로 닫아 둔다)
@@ -87,6 +95,46 @@ rag:
     # 이 이상이면 같은 사건으로 보고 뺀다 (해시로 못 잡은 자기 사건 대비). 샘플 사건 검색으로 다시 맞춘다
     max-score: ${RAG_SEARCH_MAX_SCORE:0.95}
 
+# 사건 사진 한글 프롬프트 추천 - Gemini generateContent (BE-91 재설계, COMMON-41). Cloudflare로
+# 이미지를 직접 생성하던 것(BE-89)은 그림 품질 때문에 그만뒀다 — 이제 AI는 사람이 참고할 한글 프롬프트만
+# 짓고, 사진은 사람이 만들어 업로드한다(결정: docs/decisions/BE-91.md). API 키가 없으면 프롬프트
+# 추천만 꺼지고 서버는 정상으로 뜬다. RAG 임베딩과 같은 GEMINI_API_KEY를 쓴다
+case-photo-prompt:
+  api-key: ${GEMINI_API_KEY:}
+  # AI 판결 생성과 같은 gemini-3.7-flash를 쓰려 했으나, 사건 내용 몇 줄을 한글 프롬프트 한 문단으로
+  # 바꾸는 간단한 작업에는 과한 모델이었다(응답 40 ~ 65초, thinking 토큰까지 소모). 가벼운 작업에
+  # thinking 예산을 쓰지 않는 gemini-3.5-flash-lite로 낮췄다(PR #202 리뷰 반영, decisions/BE-91.md)
+  model: ${CASE_PHOTO_PROMPT_MODEL:gemini-3.5-flash-lite}
+  # timeout은 3.7-flash 기준(90s)을 그대로 둔다 — lite 전환 후 응답 속도를 운영에서 다시 잰 뒤 낮춘다
+  timeout: ${CASE_PHOTO_PROMPT_TIMEOUT:90s}
+
+# AI 판결 파이프라인 서비스 연동 - 사건 등록 (BE-93, API 명세 A-14 · A-15). 파이프라인 자체는 같은 서버의
+# 내부 컨테이너로 돈다(COMMON-50). 주소가 없으면 사건 등록만 꺼지고 서버는 정상으로 뜬다 — 파이프라인
+# 오버레이를 켜지 않은 서버(지금 운영)에서도 나머지 기능을 그대로 쓰기 위해서다
+pipeline-service:
+  # 운영에서는 Compose 내부 주소(http://pipeline:8000)가 들어온다. 기본값은 비워 둔다:
+  # 환경변수를 빠뜨린 로컬 실행이 엉뚱한 주소를 부르지 않도록 안전한 쪽에 둔다
+  base-url: ${PIPELINE_SERVICE_URL:}
+  # AI 판결 생성(generate)에 쓸 모델. "공급자:모델ID" 형식이고 쉼표로 여러 개를 줄 수 있다
+  models: ${PIPELINE_MODELS:gemini:gemini-3.7-flash}
+  # 비식별화 · 구조화(extract) 모델. 비우면 파이프라인 기본값(claude-opus-5-5)을 쓴다.
+  # 이 단계에는 판결문 원문이 들어가므로 유료 등급 키의 모델만 쓴다 (무료 등급은 입력을 제품 개선에 쓸 수 있다)
+  extract-model: ${PIPELINE_EXTRACT_MODEL:}
+  # 작업 생성 · 상태 조회만 하는 호출이라 짧다. 실제 생성(수십 분)은 서비스가 뒤에서 돌린다
+  timeout: ${PIPELINE_SERVICE_TIMEOUT:30s}
+
+# 파일 저장소 - S3 (COMMON-47). 값은 환경변수로만 넘긴다(운영: deploy/.env, 로컬: 실행 환경변수)
+# - 인증은 이 파일에 두지 않는다. AWS SDK 기본 자격증명 체인을 쓴다 — 운영은 EC2 IAM 역할, 로컬은 AWS_PROFILE
+#   AWS 키(AWS_ACCESS_KEY_ID 등)는 이 파일 · Compose · 코드 어디에도 적지 않는다
+# - 버킷 기본값은 비워 둔다: 환경변수를 빠뜨린 로컬 실행이 운영 버킷에 쓰지 않도록 안전한 쪽에 둔다
+# - dir-prefix: 로컬은 local로 두어 운영 파일과 경로를 나눈다. 운영은 비워 둔다
+cloud:
+  aws:
+    region: ${AWS_REGION:ap-northeast-2}
+    s3:
+      bucket: ${S3_BUCKET_NAME:}
+      dir-prefix: ${S3_DIR_PREFIX:}
+
 # Redis (확장 단계, BE-61 · WBS 7.1.4). 정책은 기술 스택 2장 "Redis 운영 구성"
 # 논리 DB를 용도별로 나눈다 — 캐시(0)는 지워져도 되고, 토큰(1)은 지워지면 안 된다
 # 커넥션은 첫 사용 때 맺으므로 Redis가 없어도 서버는 뜬다 (Redis를 쓰는 기능 — 캐시 · 토큰 — 만 실패)
@@ -100,8 +148,41 @@ redis:
   cache-database: 0
   token-database: 1
 
+# JWT 액세스 토큰 · 리프레시 토큰 (확장 단계, BE-94 · WBS 7.4.3). secret은 Base64, HS256이라 디코딩 32바이트 이상이어야 한다.
+# 기본값을 두지 않는다 — 공개 저장소에 기본 서명 키가 있으면 환경변수 하나를 빠뜨려도 운영이 그 값으로 정상 기동해
+# 누구나 토큰을 위조할 수 있다(PR #218 리뷰). 로컬 · 테스트는 각자 환경(TESTING.md, README.md)에서 넘긴다.
+jwt:
+  secret: ${JWT_SECRET:}
+  issuer: lawnambul
+  access-token-ttl: ${JWT_ACCESS_TOKEN_TTL:15m}
+  refresh-token-ttl: ${JWT_REFRESH_TOKEN_TTL:14d}
+
+# 출석 날짜 기준 (BE-97). 하루 시작 시각을 바꾸면 그 뒤 기록부터 적용된다(docs/decisions/BE-97.md)
+attendance:
+  zone: ${ATTENDANCE_ZONE:Asia/Seoul}
+  day-start-hour: ${ATTENDANCE_DAY_START_HOUR:0}
+
+# 카카오 로그인 (확장 단계, BE-62 · WBS 7.4.2). client-id가 비어 있으면 카카오 로그인 경로만 꺼진다(서버는 그대로 뜬다).
+# client-id를 넣으면 client-secret도 필수다(없으면 기동 실패). 키는 환경변수로만 넘긴다(운영: deploy/.env)
+# 리다이렉트 경로는 우리 사이트 안의 경로만 허용한다(열린 리다이렉트 방지, KakaoOAuthProperties)
+kakao:
+  oauth:
+    client-id: ${KAKAO_CLIENT_ID:}
+    client-secret: ${KAKAO_CLIENT_SECRET:}
+    success-redirect: ${KAKAO_LOGIN_SUCCESS_REDIRECT:/auth/callback}
+    failure-redirect: ${KAKAO_LOGIN_FAILURE_REDIRECT:/auth/callback?error=login_failed}
+
 # 관리자 세션 쿠키 (확장 단계, BE-39). 사용자 API는 세션을 쓰지 않는다(익명 ID 쿠키).
 server:
+  # Nginx(TLS 종료) 뒤에서 원래 scheme · Host · 클라이언트 IP를 쓰기 위해 X-Forwarded-* 를 믿는다 (BE-62, #118 권장).
+  # 카카오 Redirect URI({baseUrl})가 https 도메인이 되고, Origin 검증(BE-94) · 요청 제한 · 감사 로그 IP가 실제 값을 본다.
+  # Tomcat RemoteIpValve는 아래 internal-proxies 대역에서 온 헤더만 믿는다
+  forward-headers-strategy: native
+  tomcat:
+    remoteip:
+      # X-Forwarded-* 를 믿을 프록시 대역을 명시한다(Tomcat 비공개 기본값에 기대지 않음, PR #229 리뷰)
+      # 로컬 루프백 + Docker 기본 브리지 대역(172.16/12). 좁히는 조건은 docs/decisions/BE-62.md "추후 재검토"
+      internal-proxies: '127\.0\.0\.1|0:0:0:0:0:0:0:1|172\.(1[6-9]|2[0-9]|3[0-1])\.\d{1,3}\.\d{1,3}'
   servlet:
     session:
       timeout: ${ADMIN_SESSION_TIMEOUT:30m}

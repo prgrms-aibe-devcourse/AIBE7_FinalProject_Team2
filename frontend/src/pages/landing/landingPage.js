@@ -1,20 +1,23 @@
-import { button, element, renderSiteFooter, renderSiteHeader } from '../../components/siteLayout.js';
-import { casePhoto, fallbackImages, todayLabel } from '../../utils/newspaper.js';
+import { button, element, renderSiteFooter } from '../../components/siteLayout.js';
+import { casePhoto, fallbackImages, todayLabel, useCommonPhotoOnError } from '../../utils/newspaper.js';
 import { takePaper } from '../../utils/paperHandoff.js';
 import { flyCoffee } from '../../utils/coffeeDive.js';
+import { bootLaptop } from '../../utils/laptopBoot.js';
 import { reducedMotion } from '../../utils/motion.js';
 import { isAdmin } from '../../utils/session.js';
 import { homeRoute } from '../admin/adminMenu.js';
 import { peelOff } from '../../utils/peelOff.js';
+import { openFeedbackDialog } from './feedbackDialog.js';
 
 // S-01 메인 — 판사의 책상 (FE-18, 시안 "B안 일러스트 · C안 구도", 논의기록 2026-10-12 S01 메인 책상 시안 결정)
 // 책상 위 물건이 곧 메뉴다: 신문 = 사건 목록(S-02), 서류철 = 판결 성향 테스트(S-15), 커피잔 = 마이페이지(S-17), 노트북 = 커뮤니티.
-// 펜 = 의견 보내기(FE-50, 준비 중). 휴대폰을 없애고 그 자리에 두었다.
+// 펜 = 의견 보내기(FE-50 자리 · FE-62 창 틀). 휴대폰을 없애고 그 자리에 두었다.
 // 그림은 CSS · 인라인 SVG로만 그린다(이미지 파일 없음). 색은 style.css의 --color-desk-* 역할 토큰만 쓴다.
 // 2D 평면 일러스트라 물건은 평소에 들리거나 기울지 않는다(팀 결정). 720px 이하에서는 책상 대신 메뉴 카드를 보여 준다.
 // 흐름 목업 ①(FE-32): 신문을 누르면 신문만 책상에서 들려 올라오고(그림자가 길어진다), 이어서 신문 지면(S-02)이 화면 아래에서 올라온다(FE-50,
 // 책상은 그 뒤에서 흐려진다 — caseListPage.js). 신문 들기는 이 연출에만 쓰는 예외다.
 // 커피잔을 누르면(FE-44) 커다란 커피잔이 우상단에서 빠르게 날아와 서는 동안 책상이 마이페이지로 바뀌고, 다 바뀌면 잔이 오른쪽으로 빠져나간다(utils/coffeeDive.js).
+// 노트북을 누르면(FE-47) 화면이 눈을 감듯 어두워졌다가 눈을 뜨듯 열리며 커뮤니티가 나온다 — 컴퓨터 부팅(utils/laptopBoot.js).
 // 책상에는 내로(신문 위쪽, 포스트잇에 가려 있음) · 남불(펜 아래)이 볼을 괴고 엎드려 있다(장식).
 
 // 책상 그림의 기준 좌표계. 화면 너비에 맞춰 통째로 줄인다(--desk-scale)
@@ -25,30 +28,29 @@ const SCENE_WIDTH = 1672;
 // 책상 위 물건에는 이름표(메모지)를 붙이지 않는다(FE-50). label은 낭독기 이름과 좁은 화면 메뉴 카드에 쓴다
 const OBJECTS = {
   folder: { label: '판결 성향 테스트', route: 'test', mobileText: '나의 판결 성향 알아보기' },
-  news: { label: '실제 사건 판결 체험', route: 'list', mobileText: '오늘의 사건' },
+  news: { label: '실제 사건 판결 체험', route: 'list', mobileText: '사건 목록' },
   mug: { label: '마이페이지', route: 'me', mobileText: '내 판결 기록' },
-  laptop: { label: '커뮤니티', route: null, mobileText: '다른 사람의 생각' },
-  pen: { label: '의견 보내기', route: null }, // FE-50: 펜 = 의견 보내기. 화면이 생기면 route만 넣는다(좁은 화면 메뉴에는 아직 없다)
+  laptop: { label: '커뮤니티', route: 'community', mobileText: '다른 사람의 생각' },
+  postcard: { label: '의견 보내기', route: 'feedback' }, // FE-62: 펜 옆 엽서도 같은 창을 연다(누르는 범위만 넓힌다, 낭독기 · 키보드는 펜 하나로)
+  pen: { label: '의견 보내기', route: 'feedback', mobileText: '서비스에 바라는 점' }, // FE-62: 펜 = 의견 보내기 창(화면 이동 없이 창이 뜬다, route는 켜짐 표시)
 };
 const ADMIN_MUG = { label: '관리자 페이지', route: homeRoute(), mobileText: '사건 검수 · 운영' }; // 관리자로 로그인하면 마이페이지 자리 (FE-53)
 const SOON = '곧 열려요';
 // 책상 위 내로 · 남불(기준 좌표계 px, 오른쪽 끝에서 잰다 — FE-50에서 소품 배치를 좌우로 뒤집었다).
-// shortcut: 원본 이미지 레포 PNG를 직접 읽는다, 웹 webp 변환(WBS 7.6.8) 때 public 경로로 옮긴다
-const CUTS = 'https://raw.githubusercontent.com/peanutboi710/NaeLawNamBul_Images/main/character/cuts/';
 const CHEEKS = [
   { who: 'naero', look: 'idle-sorry', right: 644, top: 2, height: 170 }, // 가운데에서 살짝 오른쪽(가운데 x ≈ 960), 턱이 신문 위쪽 가장자리에 걸친다
   { who: 'nambul', look: 'idle-thinking', right: 1300, top: 782, height: 158 },
 ];
 let newsCache = null; // 사건 목록(API 1) 마지막 응답
 const LIFT_MS = 380; // 신문을 집어 드는 시간(landing.css .is-held와 같게). 그 뒤 지면이 아래에서 올라온다
-// 8막에서 "메인으로" 올 때: 보던 지면이 줌아웃(제자리에서 .82배)과 페이드아웃을 함께 하며 책상이 드러난다
+// 6막에서 "메인으로" 올 때: 보던 지면이 줌아웃(제자리에서 .82배)과 페이드아웃을 함께 하며 책상이 드러난다
 const FADE_MS = 800;
 
 // 서비스 소개(FE-50): "뉴스만 본 나 → 모든 사실을 본 나"를 잇는 한 줄. 양 끝은 상태, 가운데 두 지점은 되돌릴 수 없는 판단이다
 const TRACK = [
   { pole: '뉴스만 본 나' },
-  { title: '첫인상 판단', text: '기사 제목과 재연만 보고 먼저 고릅니다. 고른 뒤에는 바꿀 수 없어요.' },
-  { title: '최종 판결', text: '사실관계 · 양측 주장 · 법률을 차례로 읽고 형량을 정합니다. 확정하면 바꿀 수 없어요.' },
+  { title: '첫인상', text: '기사 제목과 재연만 보고 먼저 고릅니다. 고른 뒤에는 바꿀 수 없어요.' },
+  { title: '내 판결', text: '사실관계 · 양측 주장 · 법률을 차례로 읽고 형량을 정합니다. 확정하면 바꿀 수 없어요.' },
   { pole: '모든 사실을 본 나' },
 ];
 const VERDICTS = ['내 판결', 'AI 판결', '실제 판결']; // 세 판결은 대등하다(같은 모양으로 나란히)
@@ -115,7 +117,7 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
   const folderArt = span('folder-art');
   folderArt.innerHTML = FOLDER_SVG;
   folderArt.append(deco('folder-label'));
-  folderArt.lastChild.textContent = '3분 성향검사';
+  folderArt.lastChild.textContent = '3분 성향 테스트';
 
   // 신문 — 집어 들면 펼쳐지는 S-02 지면을 줄여 놓은 모습(FE-32): 정보 줄 → [귀 | 제호 | 귀] → 날짜 띠 → 유형 탭 줄 →
   // 배너 제목 → [사진 | 머리기사 단] → 추천 2건(지면 끝까지, FE-50). 사건 목록의 머리기사로 채운다(불러오기 전 · 실패 시 기본 문구)
@@ -125,8 +127,8 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
   newsSheets.append(span(''), span(''));
   const info = span('news-info');
   const infoLinks = span('news-info-links');
-  infoLinks.append(span('', '← 처음으로'), span('', '서비스 소개')); // S-02 정보 줄의 보조 메뉴 두 개(newspaperFront.js)와 같게
-  info.append(span('', '판결 체험 신문'), infoLinks);
+  infoLinks.append(span('', '← 메인으로'), span('', '판결 체험 신문')); // S-02 정보 줄(newspaperFront.js, FE-56)과 같게 왼쪽에 모은다
+  info.append(infoLinks);
   const earLeft = span('news-ear');
   earLeft.append(element('b', '', '“모든 판결에는 이유가 있다”'));
   const earRight = span('news-ear');
@@ -183,7 +185,7 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
 
   const cheeks = CHEEKS.map(({ who, look, right, top, height }) => {
     const image = element('img', `desk-cheek cheek-${who}`);
-    image.src = `${CUTS}${who}/base/${who}_cut-cheek_${look}.png`;
+    image.src = `/images/characters/cheek/${who}_${look}.webp`;
     image.alt = '';
     image.setAttribute('aria-hidden', 'true');
     Object.assign(image.style, { right: `${right}px`, top: `${top}px`, height: `${height}px` });
@@ -199,9 +201,12 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
   rescue.append(span('', '포스트잇을 제거해'), span('', '귀여운 고양이를'), span('', '구해주세요'));
   rescue.addEventListener('click', () => peelOff(rescue, { from: 'rotate(4deg)', to: 'translate(70px, -150px) rotate(32deg)', focusTarget: () => newsButton }));
 
-  // 엽서(FE-50, 장식). 펜 옆 빈자리를 채운다. 우표는 판결 체험의 첫인상 엽서(paperStage.css)와 같다
-  const postcard = deco('desk-postcard');
-  postcard.append(span('postcard-stamp', '내Law\n남불'), span('postcard-title', '엽 서'), span('postcard-lines'));
+  // 엽서(FE-50 장식 · FE-62 누를 수 있음). 펜 옆 빈자리를 채운다. 우표는 판결 체험의 첫인상 엽서(paperStage.css)와 같다
+  const postcardArt = deco('desk-postcard');
+  postcardArt.append(span('postcard-stamp', '내Law\n남불'), span('postcard-title', '엽 서'), span('postcard-lines'));
+  const postcard = deskObject('postcard', postcardArt);
+  postcard.tabIndex = -1; // 펜과 같은 동작이라 Tab · 낭독기에는 펜 하나만 남긴다
+  postcard.setAttribute('aria-hidden', 'true');
 
   world.append(
     deco('desk-wood'), deco('desk-pad'),
@@ -232,8 +237,15 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
     lifting = true;
     flyCoffee(() => { if (root.isConnected) goMug(); }, root);
   }
-  // 서류철: 성향 검사 철이 화면 아래에서 올라온다(personality.css folder-rise). 헤더 · 서비스 소개 버튼으로 가면 연출 없이 바로 간다
-  const ACTIONS = { news: lift, mug: sip, folder: () => navigate('test', { from: 'desk' }) };
+  // 노트북: 눈을 감았다 뜨듯 커뮤니티가 나온다(laptopBoot). 움직임 줄이기면 바로 간다
+  function openLaptop() {
+    if (lifting) return;
+    if (reducedMotion()) { navigate('community'); return; }
+    lifting = true;
+    bootLaptop(() => (root.isConnected ? navigate('community') : undefined)); // 커뮤니티가 다 그려질 때까지 눈을 감고 기다린다(laptopBoot.js)
+  }
+  // 서류철: 성향 테스트 철이 화면 아래에서 올라온다(personality.css folder-rise). 헤더 · 서비스 소개 버튼으로 가면 연출 없이 바로 간다
+  const ACTIONS = { news: lift, mug: sip, laptop: openLaptop, folder: () => navigate('test', { from: 'desk' }), pen: openFeedbackDialog, postcard: openFeedbackDialog };
 
   // 기준 좌표계(1672px)를 화면 너비에 맞춘다
   const fit = () => world.style.setProperty('--desk-scale', String(scene.clientWidth / SCENE_WIDTH));
@@ -252,7 +264,7 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
   const mobileList = element('div', 'desk-menu-list');
   const mobileCounts = {};
   const mobileNews = {};
-  ['news', 'folder', 'mug', 'laptop'].forEach((key) => {
+  ['news', 'folder', 'mug', 'laptop', 'pen'].forEach((key) => {
     const { label, route, mobileText } = objects[key];
     const item = element('button', `desk-menu-item item-${key}${route ? '' : ' is-soon'}`);
     item.type = 'button';
@@ -281,6 +293,7 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
       item.append(cup, element('strong', '', label), text);
     } else item.append(element('strong', '', label), text);
     if (key === 'mug') item.addEventListener('click', sip);
+    else if (key === 'pen') item.addEventListener('click', openFeedbackDialog);
     else if (route) item.addEventListener('click', () => navigate(route, key === 'news' || key === 'folder' ? { from: 'desk' } : {}));
     else item.setAttribute('aria-disabled', 'true');
     mobileCounts[key] = text;
@@ -319,12 +332,12 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
   sheet.append(heading, track, verdicts, introActions);
   intro.append(sheet);
 
-  root.append(renderSiteHeader({ navigate }), scene, mobile, intro, renderSiteFooter());
+  root.append(scene, mobile, intro, renderSiteFooter({ navigate })); // 공통 헤더는 라우터가 붙인다(FE-56)
   container.replaceChildren(root);
   fit();
   if (section === 'intro') showIntro();
 
-  // 8막에서 왔으면(from: 'paper') 넘겨받은 지면이 화면을 덮은 채로 시작한다.
+  // 6막에서 왔으면(from: 'paper') 넘겨받은 지면이 화면을 덮은 채로 시작한다.
   // 지면이 페이드아웃되며 책상이 드러난다.
   // 좁은 화면은 메뉴의 신문 카드로 같은 연출. 새로고침 · 뒤로 가기로는 되풀이하지 않고, 움직임 줄이기면 연출 없이 바로 책상이다
   if (from === 'paper') {
@@ -341,7 +354,7 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
   }
 
   // ---- 신문 지면 채우기 (사건 목록 API 1). 실패해도 책상은 그대로 쓴다 ----
-  // 한 번 받은 목록은 모듈에 두고 다시 올 때 처음부터 채운다(8막 "메인으로" 등에서 책상이 드러날 때 기본 사진이 사건 사진으로 튀지 않게).
+  // 한 번 받은 목록은 모듈에 두고 다시 올 때 처음부터 채운다(6막 "메인으로" 등에서 책상이 드러날 때 기본 사진이 사건 사진으로 튀지 않게).
   // 새 응답이 같으면(JSON 비교) 다시 그리지 않는다
   async function fillNews() {
     try {
@@ -365,6 +378,7 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
     earCount.textContent = `법정에 오른 사건 ${summary.total}건`;
     tabCount.textContent = `총 ${summary.total}건`;
     lead.textContent = top.article?.[0] || top.shortIntro;
+    useCommonPhotoOnError(photo, Number(top.caseId) || 0);
     photo.src = casePhoto(top);
     recs.replaceChildren(...others.slice(0, 2).map((item) => {
       const node = span('news-rec');
@@ -373,12 +387,14 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
       picture.alt = '';
       picture.width = 16; // 비율 힌트. 크기는 CSS가 정한다
       picture.height = 9;
+      useCommonPhotoOnError(picture, Number(item.caseId) || 0);
       picture.src = casePhoto(item);
       node.append(picture, element('b', '', item.headline || item.title), span('', item.article?.join(' ') || item.shortIntro));
       return node;
     }));
-    mobileCounts.news.textContent = `오늘의 사건 ${summary.total}건`;
+    mobileCounts.news.textContent = `사건 ${summary.total}건`;
     mobileNews.headline.textContent = top.headline || top.title;
+    useCommonPhotoOnError(mobileNews.photo, Number(top.caseId) || 0);
     mobileNews.photo.src = casePhoto(top);
   }
   if (api?.getCases) fillNews();

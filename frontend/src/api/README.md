@@ -5,8 +5,8 @@
 | 파일 | 내용 |
 | --- | --- |
 | `config.js` | `API_BASE_URL`, `API_MODE` (환경변수 `VITE_API_BASE_URL`, `VITE_API_MODE`) |
-| `client.js` | `fetch` 공통 함수. 성공은 응답 본문 그대로, 실패는 에러 본문을 `throw` |
-| `realApi.js` | 실제 백엔드 API 함수 13개 (`docs/api-specification.md`) |
+| `client.js` | `fetch` 공통 함수. 성공은 응답 본문 그대로, 실패는 에러 본문을 `throw`. 회원 액세스 토큰을 메모리에 두고 401이면 한 번 재발급 후 다시 요청 (FE-74) |
+| `realApi.js` | 실제 백엔드 API 함수 (`docs/api-specification.md`) |
 | `index.js` | `loadApi()` — 모드에 맞는 api 객체를 돌려준다 (기본 `mock`) |
 
 ## 규칙
@@ -33,5 +33,14 @@
 | `getAiJudgment(caseId)` | 10 AI 판결 |
 | `postCourtReveal(caseId)` · `getCourtJudgment(caseId)` | 11 · 12 실제 판결 |
 | `postComparisonReveal(caseId)` · `getComparison(caseId)` | 13 · 14 세 판결 비교 |
+| `login({ method: 'kakao' })` · `reissueToken()` · `logout()` | M-3 카카오 로그인(브라우저 이동) · M-1 재발급 · M-2 로그아웃 (FE-74) |
 
 API 10 ~ 14는 백엔드 구현 전에는 404가 온다. 구현되면 그대로 동작한다.
+
+확장 단계 (명세 9장 성향 API):
+
+| 함수 | API |
+| --- | --- |
+| `getMyPage()` | P-5 마이페이지. 꾸미기(`profileDeco`) · 도전과제(`achievements`) · 열린 항목(`unlocked`) · 출석 일수(`profile.attendanceDays`)가 함께 온다 |
+| `putProfileDeco(deco)` | P-7 꾸미기 전체 저장. 400 `VALIDATION_ERROR` · 409 `DECO_LOCKED`는 `details`에 필드별 사유 |
+| `postAttendance()` | P-6 출석 기록. 앱 시작 때 한 번, 항상 204 (`main.js`) |

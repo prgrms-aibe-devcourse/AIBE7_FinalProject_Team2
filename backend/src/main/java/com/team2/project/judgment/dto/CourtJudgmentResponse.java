@@ -3,7 +3,7 @@ package com.team2.project.judgment.dto;
 import java.util.List;
 
 /**
- * API 12. 실제 판결 (S-08)
+ * API 12. 실제 판결 (S-07)
  * 실제 판결과 함께 내 판결 · AI 판결을 돌려준다. 세 판결을 한 화면에서 비교할 수 있게 하기 위해서다.
  */
 public record CourtJudgmentResponse(

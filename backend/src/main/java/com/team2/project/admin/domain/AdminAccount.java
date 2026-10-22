@@ -55,4 +55,9 @@ public class AdminAccount {
 	public static String normalizeEmail(String email) {
 		return email == null ? null : email.strip().toLowerCase(Locale.ROOT);
 	}
+
+	/** 로그인 성공 시 옛 해시(예: {bcrypt})를 새 인코더({argon2})로 바꿔 저장한다 (BE-90) */
+	public void changePasswordHash(String passwordHash) {
+		this.passwordHash = passwordHash;
+	}
 }

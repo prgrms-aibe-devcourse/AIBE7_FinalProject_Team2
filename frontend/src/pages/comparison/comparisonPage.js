@@ -47,19 +47,19 @@ export async function renderComparisonPage(container, { caseId, caseHeader, api,
     return element('td', `matrix-direction${direction ? ` is-${direction.toLowerCase()}` : ' is-none'}`, direction ? directionSymbols[direction] : '—');
   }
 
-  // 대본의 제목이 사건 제목과 같을 때만 무대를 쓴다(S-03 ~ S-08과 같은 규칙). 보통은 7막 무대에서 이어지고 주소만 바뀐다
+  // 대본의 제목이 사건 제목과 같을 때만 무대를 쓴다(S-03 ~ S-07과 같은 규칙). 보통은 5막 무대에서 이어지고 주소만 바뀐다
   const candidate = SCRIPTS[caseId];
   const script = candidate?.title === caseHeader.title ? candidate : undefined;
 
   function draw(data) {
     if (script) {
-      mountNewspaperStage(root, { stage: renderComparisonStage({ script, data, caseId, caseTitle: caseHeader.title, navigate }) });
+      mountNewspaperStage(root, { stage: renderComparisonStage({ script, data, caseId, caseTitle: caseHeader.title, navigate, api }) });
       return;
     }
     const { preToFinal, judgments, matrix, ruleSentences } = data;
 
     const header = element('header', 'case-topbar');
-    header.append(element('strong', 'case-title', `판결 비교 · ${caseHeader.title}`), button('다른 사건 체험', () => navigate('list'), 'secondary-button'));
+    header.append(element('strong', 'case-title', `세 판결 비교 · ${caseHeader.title}`), button('다른 사건 체험', () => navigate('list'), 'secondary-button'));
 
     // 최상단: 처음 판단 → 직접 판결(REQ-057).
     const preSection = element('section', 'pre-to-final');

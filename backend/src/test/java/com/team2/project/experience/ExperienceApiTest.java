@@ -1,6 +1,7 @@
 package com.team2.project.experience;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -15,14 +16,64 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.mock.web.MockHttpServletResponse;
 
 import jakarta.servlet.http.Cookie;
 
 import com.team2.project.support.ApiIntegrationTest;
+import com.team2.project.experience.domain.ExperienceStatus;
 
 class ExperienceApiTest extends ApiIntegrationTest {
+
+	@ParameterizedTest
+	@EnumSource(ExperienceStatus.class)
+	void statusAndStart_keepFiveFieldsAndNeverExposeJudgments(ExperienceStatus state) throws Exception {
+		long caseId = insertCase("MURDER", "PUBLISHED");
+		UUID userId = UUID.randomUUID();
+		insertExperience(userId, caseId, 1, state.name());
+		Cookie cookie = new Cookie(COOKIE, userId.toString());
+		if (state != ExperienceStatus.STARTED) {
+			long experienceId = jdbcTemplate.queryForObject(
+				"SELECT id FROM experience WHERE case_id = ?", Long.class, caseId);
+			jdbcTemplate.update("""
+				INSERT INTO judgment (case_id, subject_type, timing, experience_id, range_option_id, is_published)
+				VALUES (?, 'USER', 'PRE', ?, ?, true)
+				""", caseId, experienceId, rangeOptionIds("MURDER").get(3));
+		}
+		String before = jdbcTemplate.queryForObject(
+			"SELECT row(status, last_reviewed_step, updated_at)::text FROM experience WHERE case_id = ?", String.class, caseId);
+		for (var request : List.of(get(experienceUrl(caseId)), post(experienceUrl(caseId)))) {
+			mockMvc.perform(request.cookie(cookie))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.caseId").value(caseId))
+				.andExpect(jsonPath("$.attemptNo").value(1))
+				.andExpect(jsonPath("$.status").value(state.name()))
+				.andExpect(jsonPath("$.lastReviewedStep").value(0))
+				.andExpect(jsonPath("$.startedAt").isString())
+				.andExpect(jsonPath("$.*").value(hasSize(5)))
+				.andExpect(jsonPath("$.preJudgment").doesNotHaveJsonPath())
+				.andExpect(jsonPath("$.judgments").doesNotHaveJsonPath())
+				.andExpect(jsonPath("$.preToCourt").doesNotHaveJsonPath());
+		}
+		assertThat(jdbcTemplate.queryForObject(
+			"SELECT row(status, last_reviewed_step, updated_at)::text FROM experience WHERE case_id = ?", String.class, caseId))
+			.isEqualTo(before);
+	}
+
+	@Test
+	void getMyExperience_missingPreJudgment_doesNotBlockStatusLookup() throws Exception {
+		long caseId = insertCase("MURDER", "PUBLISHED");
+		UUID userId = UUID.randomUUID();
+		insertExperience(userId, caseId, 1, "PRE_JUDGED");
+		mockMvc.perform(get(experienceUrl(caseId)).cookie(new Cookie(COOKIE, userId.toString())))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.status").value("PRE_JUDGED"))
+			.andExpect(jsonPath("$.*").value(hasSize(5)))
+			.andExpect(jsonPath("$.preJudgment").doesNotHaveJsonPath());
+	}
 
 	@Test
 	void start_firstTime_createsExperienceAndIssuesCookie() throws Exception {

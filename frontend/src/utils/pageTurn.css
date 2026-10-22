@@ -36,7 +36,14 @@
   border: var(--rim) solid var(--color-desk-mug); border-left: 0; border-radius: 0 15% 15% 0 / 0 25% 25% 0; transform: rotate(24deg);
 }
 
-/* 8막 신문 → 메인 책상 (utils/paperHandoff.js · landingPage.js). 지금 보던 지면을 본뜬 한 장이 책상 위 신문 자리로 물러난 뒤 뒤집힌다 */
+/* 메인 책상 노트북 → 커뮤니티 (utils/laptopBoot.js, FE-47). 컴퓨터 부팅: 화면이 위아래에서 눈을 감듯 어두워지고, 눈을 뜨듯 열리며 커뮤니티가 드러난다.
+   움직임 줄이기면 연출 자체를 하지 않는다(landingPage.js) */
+.laptop-boot-layer { position: fixed; inset: 0; z-index: 1000; overflow: hidden; pointer-events: none; }
+.laptop-boot-lid { position: absolute; left: 0; right: 0; height: 50.2%; will-change: transform; background: var(--color-desk-bezel); } /* 외곽선 · 그림자 없음: 닫히면 한 장으로 보인다 */
+.laptop-boot-lid.is-top { top: 0; transform: translateY(-101%); }
+.laptop-boot-lid.is-bottom { bottom: 0; transform: translateY(101%); }
+
+/* 6막 신문 → 메인 책상 (utils/paperHandoff.js · landingPage.js). 지금 보던 지면을 본뜬 한 장이 책상 위 신문 자리로 물러난 뒤 뒤집힌다 */
 .paper-hand-layer { position: fixed; inset: 0; z-index: 1000; overflow: hidden; pointer-events: none; perspective: 1800px; }
 .paper-hand-shade { position: absolute; inset: 0; }
 .paper-hand-shade.is-desk { background:

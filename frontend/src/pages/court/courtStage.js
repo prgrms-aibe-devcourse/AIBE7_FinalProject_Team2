@@ -1,10 +1,11 @@
-// 7막 실제 판결 무대(흐름 목업). 법정에서 판사 역(내로)이 피고인 역(남불)에게 판결을 선고하고, 판결문을 한 장씩 넘기며 읽는다.
-// S-07(6막)에서 실제 판결을 공개한 뒤 무대를 이어 받고(주소만 S-08로), 재진입(S-08 주소)에서도 같은 무대를 연다.
-// 마지막 장면을 떠나면 세 판결 비교를 공개(API 13) · 조회(API 14)해 8막으로 이어 간다(onCompared, 주소만 S-09로)
+// 5막 실제 판결 무대(흐름 목업). 법정에서 판사 역(내로)이 피고인 역(남불)에게 판결을 선고하고, 판결문을 한 장씩 넘기며 읽는다.
+// S-06(4막)에서 실제 판결을 공개한 뒤 무대를 이어 받고(주소만 S-07로), 재진입(S-07 주소)에서도 같은 무대를 연다.
+// 마지막 장면을 떠나면 세 판결 비교를 공개(API 13) · 조회(API 14)해 6막으로 이어 간다(onCompared, 주소만 S-08로)
 import { formatPenalty, formatDispositions } from '../../utils/judgmentFormat.js';
 import { formatMonths } from '../../components/recommendedRangeBar.js';
 import { renderStage } from '../../components/stage.js';
-import { restartMock, jumpActMock } from '../overview/overviewPage.js';
+import { renderComparisonStage, mountNewspaperStage, sceneRect } from '../comparison/comparisonStage.js';
+import { restartMock, jumpActMock } from '../../mocks/mockStageButtons.js';
 
 function element(tag, className, text) {
   const node = document.createElement(tag);
@@ -52,21 +53,28 @@ function courtPages(data) {
 /**
  * @returns {{ stage: HTMLElement, error: HTMLElement }} 무대와 그 아래 오류 안내(세 판결 비교 공개 실패)
  */
+// 5막 → 6막: 같은 화면에서 5막 장면 자리 그대로 신문으로 빠져나오고 주소만 S-08로 바꾼다
+export function openComparison({ root, script, comparison, caseId, caseTitle, navigate, api }) {
+  const fromRect = sceneRect(root);
+  mountNewspaperStage(root, { stage: renderComparisonStage({ script, data: comparison, caseId, caseTitle, navigate, api, fromRect }) });
+  navigate('comparison', {}, { replace: true, keepView: true });
+}
+
 export function renderCourtStage({ script, data, caseId, api, navigate, active, onInvalid, onCompared }) {
   const { judgment } = data;
   // 주문 문장(판결문 말투): "피고인을 징역 10년에 처한다." 집행유예면 유예 문장을 잇는다
   const order = `피고인을 ${formatPenalty(judgment)}에 처한다.${judgment.suspensionMonths
     ? ` 다만 이 판결 확정일부터 ${formatMonths(judgment.suspensionMonths)}간 위 형의 집행을 유예한다.` : ''}`;
   const cards = courtPages(data);
-  const act = script.acts['7'];
+  const act = script.acts['5'];
   const steps = act.steps
     .filter((step) => !step.card || cards[step.card])
     .map((step) => (step.text ? { ...step, text: step.text.replace('{order}', order) } : step));
   const error = element('p', 'field-error');
   error.setAttribute('role', 'alert');
   const stage = renderStage({
-    script: { ...script, acts: { ...script.acts, 7: { ...act, steps } } },
-    order: ['7'],
+    script: { ...script, acts: { ...script.acts, 5: { ...act, steps } } },
+    order: ['5'],
     cards,
     onRestart: restartMock(caseId),
     onJump: jumpActMock(caseId),

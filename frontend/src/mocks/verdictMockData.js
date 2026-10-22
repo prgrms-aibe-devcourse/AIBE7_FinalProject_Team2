@@ -3,9 +3,6 @@ export const mockVerdictForm = {
     { penaltyType: 'DEATH', allowedMin: 240, allowedMax: 600, text: '사형 (감경하면 무기징역 또는 징역 20년 ~ 50년)', suspensionAllowed: false, reducibleTo: ['LIFE', 'PRISON'] },
     { penaltyType: 'LIFE', allowedMin: 120, allowedMax: 600, text: '무기징역 (감경하면 징역 10년 ~ 50년)', suspensionAllowed: false, reducibleTo: ['PRISON'] },
     { penaltyType: 'PRISON', allowedMin: 30, allowedMax: 360, text: '징역 2년 6개월 ~ 30년', suspensionAllowed: true, reducibleTo: [] },
-    // shortcut: 테스트 기간용 벌금 선택지(살인죄에는 벌금형이 없다). 벌금 입력 · 확정 · 결과 화면 확인용이라 테스트가 끝나면 지운다.
-    // 벌금은 상한이 없다(allowedMax: null)
-    { penaltyType: 'FINE', allowedMin: 50000, allowedMax: null, text: '벌금 5만 원 이상 (테스트용)', suspensionAllowed: true, reducibleTo: [] },
   ],
   statutoryPenaltyText: '사형, 무기 또는 5년 이상의 징역',
   allowedRangeNote: '감경·가중 사유를 반영해 법률상 선고할 수 있는 가장 넓은 범위예요.',

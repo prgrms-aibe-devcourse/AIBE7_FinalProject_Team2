@@ -157,7 +157,7 @@ export function renderRecommendedRangeBar(container, { law, markerMonths = null,
     source.textContent = basis;
     const note = document.createElement('p');
     note.className = 'range-note';
-    note.textContent = '권고 범위는 정답이 아니라 참고 기준입니다.';
+    note.textContent = '권고 범위는 비슷한 사건에서 참고하는 양형기준이며, 정답이 아니라 참고 기준입니다.';
     box.append(source, note);
   }
   container.append(box);

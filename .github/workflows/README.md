@@ -16,13 +16,13 @@
 
 ## backend CI
 
-1. `pgvector/pgvector:pg17` PostgreSQL · `redis:7.4-alpine` Redis 서비스 컨테이너를 띄운다. (로컬 `docker-compose.yml`과 같은 이미지. Redis는 BE-61)
+1. `pgvector/pgvector:pg17` PostgreSQL · `redis:7.4-alpine` Redis 서비스 컨테이너를 띄운다. 로컬 `docker-compose.test.yml`과 같은 이미지·테스트 DB(`lawnambul_test`)·호스트 포트(55432/56379)를 사용한다(BE-87).
 2. JDK 17(Temurin)로 `backend`에서 `./gradlew test`를 실행한다.
 3. `backend/Dockerfile`이 깨지지 않았는지 이미지만 빌드한다. (push하지 않음)
 
-- DB 접속 값(`DB_URL` · `DB_USERNAME` · `DB_PASSWORD`)과 Redis 접속 값(`REDIS_HOST` · `REDIS_PORT`)은 `application.yml`이 읽는 환경변수 이름과 같아야 한다.
+- DB 접속 값은 `TEST_DB_URL` · `TEST_DB_USERNAME` · `TEST_DB_PASSWORD`, Redis는 `TEST_REDIS_HOST` · `TEST_REDIS_PORT`를 쓴다. Gradle이 검증한 값을 `test` 프로필의 테스트 JVM에 주입한다. 기존 `DB_*`·`REDIS_*`는 상속하지 않는다. 로컬 실행·안전장치 설명은 [backend/TESTING.md](../../backend/TESTING.md).
 - Redis 서비스 컨테이너는 실행 옵션을 받지 못해 운영 정책(AOF · `noeviction`)이 없다. CI는 캐시 · 토큰 DB 분리(`RedisConfigTest`)만 확인한다. 정책은 운영 구성(`deploy/docker-compose.prod.yml`)에 있지만 **스모크 테스트도 정책을 검사하지는 않는다**. 정책 확인 명령은 [`deploy/README.md`](../../deploy/README.md) "Redis".
-- `FLYWAY_LOCATIONS`에 `classpath:db/seed`를 포함해 개발용 시드도 함께 적용한다. 운영에는 넣지 않는다. ([시드 설명](../../backend/src/main/resources/db/seed/README.md))
+- 테스트 Flyway 위치는 `classpath:db/migration,classpath:db/seed`로 고정해 공개 가상 시드도 검증한다. `FLYWAY_LOCATIONS`는 상속하지 않는다. 운영에는 가상 시드를 넣지 않는다. ([시드 설명](../../backend/src/main/resources/db/seed/README.md))
 - **실제 사건 데이터 서브모듈(`backend/private-seed`)은 받지 않는다.** `actions/checkout`의 기본값(`submodules: false`)을 그대로 둔다. CI에 비공개 저장소 접근 토큰을 넣으면 로그 · 산출물로 실제 데이터가 샐 수 있으므로 넣지 않는다(BE-17).
 
 ## frontend CI

@@ -1,7 +1,7 @@
 import { formatPenalty, formatDispositions } from '../../utils/judgmentFormat.js';
 import { SCRIPTS } from '../../content/scripts.js';
-import { renderCourtStage } from './courtStage.js';
-import { renderComparisonStage, mountStage, mountNewspaperStage, sceneRect } from '../comparison/comparisonStage.js';
+import { renderCourtStage, openComparison } from './courtStage.js';
+import { mountStage } from '../comparison/comparisonStage.js';
 
 const directionLabels = { UP: '재판부 가중 요소', DOWN: '재판부 감경 요소' };
 
@@ -49,21 +49,17 @@ export async function renderCourtPage(container, { caseId, caseHeader, api, navi
     return group;
   }
 
-  // 대본의 제목이 사건 제목과 같을 때만 무대를 쓴다(S-03 ~ S-07과 같은 규칙)
+  // 대본의 제목이 사건 제목과 같을 때만 무대를 쓴다(S-03 ~ S-06과 같은 규칙)
   const candidate = SCRIPTS[caseId];
   const script = candidate?.title === caseHeader.title ? candidate : undefined;
 
-  // 7막 실제 판결(재진입 · 바로 들어온 경우). 보통은 S-07 6막에서 무대를 이어 받고 주소만 바뀐다(courtStage.js)
+  // 5막 실제 판결(재진입 · 바로 들어온 경우). 보통은 S-06 4막에서 무대를 이어 받고 주소만 바뀐다(courtStage.js)
   function drawStage(data) {
     const { stage, error } = renderCourtStage({
       script, data, caseId, api, navigate, active,
       onInvalid: (failure) => message(`지금 단계에서는 이 화면을 볼 수 없어요. (현재 상태: ${failure.currentStatus})`),
-      // 8막은 같은 화면에서 이어 가고 주소만 S-09로 바꾼다
-      onCompared: (comparison) => {
-        const fromRect = sceneRect(root); // 7막 장면 자리(이 자리 그대로에서 신문으로 빠져나온다)
-        mountNewspaperStage(root, { stage: renderComparisonStage({ script, data: comparison, caseId, caseTitle: caseHeader.title, navigate, fromRect }) });
-        navigate('comparison', {}, { replace: true, keepView: true });
-      },
+      // 6막은 같은 화면에서 이어 가고 주소만 S-08로 바꾼다
+      onCompared: (comparison) => openComparison({ root, script, comparison, caseId, caseTitle: caseHeader.title, navigate, api }),
     });
     mountStage(root, { caseHeader, badge: '실제 판결', heading: '실제 판결', stage, extra: [error] });
   }
@@ -75,7 +71,7 @@ export async function renderCourtPage(container, { caseId, caseHeader, api, navi
     const header = element('header', 'case-topbar');
     header.append(element('strong', 'case-title', `실제 판결 · ${caseHeader.title}`), element('span', 'case-badge', '3 / 3 공개'));
 
-    // 강조 배너: 실제 형량 + 집행유예·부가 처분, 내·AI 판결 형량(와이어프레임 S-08).
+    // 강조 배너: 실제 형량 + 집행유예·부가 처분, 내·AI 판결 형량(와이어프레임 S-07).
     const banner = element('section', 'court-banner');
     const bannerMain = element('div', 'banner-main');
     bannerMain.append(element('span', 'muted', '실제 법원의 판결'), element('strong', 'banner-penalty', formatPenalty(judgment)));

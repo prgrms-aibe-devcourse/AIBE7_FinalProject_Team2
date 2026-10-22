@@ -6,7 +6,7 @@ export function renderProgressSidebar(container, { lastReviewedStep, openStep })
   const heading = document.createElement('h2');
   heading.textContent = '진행 상황';
   const list = document.createElement('ol');
-  const labels = ['사건 개요 · 사전 판단', '상세 사실관계', '양측 주장', '법률 · 양형기준', '판결 전 최종 정리', '판결'];
+  const labels = ['첫인상', '상세 사실관계', '양측 주장', '법률 · 양형기준', '사건 요약', '판결'];
   labels.forEach((label, index) => {
     const step = index + 1;
     const complete = step <= lastReviewedStep;

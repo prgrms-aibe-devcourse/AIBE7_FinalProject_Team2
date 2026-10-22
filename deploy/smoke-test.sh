@@ -5,7 +5,7 @@
 # GitHub Actions(deploy-images.yml)도 이미지를 올리기 전에 이 스크립트를 실행한다.
 #
 # 확인하는 것
-# 1) / 와 화면 주소(/cases/1/review)가 index.html(SPA)을 돌려주는지
+# 1) / 와 화면 주소(/cases/1/trial)가 index.html(SPA)을 돌려주는지
 # 2) /api 가 백엔드 JSON을 돌려주는지 — 없는 API 주소도 HTML이 아니라 JSON이어야 한다
 #    (Nginx가 /api를 index.html로 떨어뜨리면 프론트가 "서버 응답을 해석할 수 없어요"를 띄운다, FE-2 리뷰)
 # 3) 정적 파일 캐시 정책 — assets는 오래 캐시, index.html은 캐시 안 함
@@ -65,7 +65,8 @@ echo "스모크 테스트: $BASE_URL"
 
 echo "[화면]"
 expect_spa "/"
-expect_spa "/cases/1/review"   # 실제 파일이 없는 화면 주소 → SPA fallback
+expect_spa "/cases/1/trial"    # 실제 파일이 없는 화면 주소 → SPA fallback (6막 주소, FE-58)
+expect_spa "/cases/1/review"   # 옛 주소도 SPA로 열려야 라우터가 새 주소로 옮긴다 (legacyPaths.js)
 
 echo "[API]"
 expect_api_json "/api/v1/cases" 200

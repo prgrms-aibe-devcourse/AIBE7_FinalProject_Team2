@@ -26,6 +26,11 @@
 | v1.19 | 2026-10-13 | BE-61 반영 (**확장 단계**, WBS 7.1.4) — 2장 Redis를 캐시(DB 0) · 토큰 저장소(DB 1)로 분리, "Redis가 없어도 서비스가 동작"은 캐시에만 해당하도록 정정, "Redis 운영 구성" 신설: AOF `everysec` 영속화, `noeviction` + 모든 키 TTL 필수, 메모리 상한, 사용자별 값 캐시 제외, 비밀번호 · 네트워크 접근. 8장 운영 컨테이너에 Redis 추가. 리뷰 반영: 캐시 장애 시 원본 조회는 아직 구현 전인 규칙(6.5.3, `CacheErrorHandler`)임을 명시, 7장에 로컬 테스트 전 Redis 기동 안내 |
 | v1.20 | 2026-10-15 | BE-63 반영 (**확장 단계**, WBS 7.4.6 1차) — 3장 사용자 인증 기반에 **Rate limit** 행 추가: 운영 Nginx `/api` IP별 제한(평균 초당 20 · 순간 40), JSON 429 `TOO_MANY_REQUESTS`, 정적 파일 제외, 백엔드 지표에 잡히지 않음, 사용자 IP 전제와 서버 확인 · 로드 밸런서 시 `real_ip`. 2차(로그인 · 재발급)는 7.4.2 이후 |
 | v1.21 | 2026-10-16 | BE-60 반영 (**확장 단계**, WBS 7.1.3) — 8장 배포 흐름에 자동 배포(CD) 추가: 운영은 `main`만, 서버가 2분마다 GHCR `main` 이미지를 확인해 배포(실패 시 자동 되돌림), Actions는 `/version.json`으로 결과 확인. IAM 권한 없이 하는 방식을 고른 이유는 `docs/decisions/BE-60.md` |
+| v1.22 | 2026-10-19 | BE-87 반영 (WBS 7.0.3) — 테스트 PostgreSQL·Redis를 개발 환경과 분리, test 프로필·Gradle/JVM 접속 검증·외부 임베딩 비활성화 적용. 실행 절차는 backend/TESTING.md로 통일 |
+| v1.23 | 2026-10-20 | 관리자 인증 — OAuth(BE-40) **제외**. 관리자 로그인은 이메일 · 비밀번호(세션)만 둔다(B 김현중 확인, WBS v1.42). 일반 사용자 로그인은 카카오(BE-62) |
+| v1.24 | 2026-10-21 | 화면 ID를 6막 체계로 갱신(FE-58, BE-82 매핑: 옛 S-06 ~ S-09 → S-05 ~ S-08). 없앤 정리 화면은 "옛 S-05"로 표기. 작성 이력의 ID는 옛 뜻 그대로 |
+| v1.25 | 2026-10-21 | 카카오 로그인 반영 (**확장 단계**, BE-62 · WBS 7.4.2) — 3장 사용자 인증에 OAuth 전용 체인(관리자 `@Order(1)` → OAuth `@Order(2)` → 사용자 `@Order(3)`), OAuth 왕복 임시 상태(Redis + state 쿠키, 세션 없음), 성공 · 실패 처리, `server.forward-headers-strategy: native` 반영 |
+| v1.26 | 2026-10-21 | BE-63 2차 반영 (**확장 단계**, WBS 7.4.6) — 3장 Rate limit 행: 토큰 재발급 · 로그아웃(IP별 분당 30 · 순간 30), 관리자 로그인(IP별 분당 5 · 순간 5) 전용 zone 추가. 카카오 로그인 시작 제한(BE-62)과 함께 "2차 예정" 문구를 확정 값으로 교체. 전용 제한은 POST만 세고 `Retry-After`는 경로별(1 · 2 · 12초). **429 로그 수집**: Nginx가 429만 JSON 파일로 남기고 모니터링 에이전트 Alloy가 Loki로 보냄(`job="web"`, 라벨 `route`만, 10MB 상한) |
 
 
 ## **1. Backend**
@@ -133,7 +138,7 @@ MVP에는 관리자 화면이 없으므로 대표 사건 데이터와 검수된 
   | --- | --- | --- |
   | 운영 (기본값) | 지정하지 않음 → `classpath:db/migration` | 스키마만 |
   | 로컬 (`./gradlew bootRun`) | 지정하지 않음 → `build.gradle`이 자동으로 정함: `classpath:db/migration,classpath:db/seed` + 서브모듈에 SQL이 있으면 `,filesystem:<backend/private-seed/seed 절대 경로>` (BE-28) | 스키마 + 가상 사건 (+ 실제 사건, 비공개 저장소 권한 필요) |
-  | CI | `classpath:db/migration,classpath:db/seed` | 스키마 + 가상 사건 1건 |
+  | 테스트 (로컬 · CI, BE-87) | `test` 프로필·Gradle이 `classpath:db/migration,classpath:db/seed`로 고정 (`FLYWAY_LOCATIONS` 상속 안 함) | 테스트 전용 DB에 스키마 + 가상 사건 1건 (비공개 시드 제외) |
   | 운영 (최종) | `classpath:db/migration,filesystem:<서버의 실제 데이터 경로>` | 스키마 + 실제 사건 (가상 사건 제외) |
 
   기본값을 스키마만으로 둬서, 운영에서 환경변수를 빠뜨려도 시드가 들어가지 않는다. 로컬 `bootRun`만 자동 설정을 쓰는 이유는 셸 환경변수가 다른 터미널 · IDE 실행에서 빠지기 쉽고, 빠져도 오류 없이 시드 없이 떠서 알아채기 어렵기 때문이다(BE-28). `FLYWAY_LOCATIONS`를 주면 자동 설정보다 우선하고, 기동 로그에 `[bootRun] Flyway 위치(...)` · `[bootRun] 실제 사건 시드: 포함 / 없음`이 찍힌다. CI(`backend-ci.yml`)는 시드까지 켜서 시드가 스키마 제약을 깨지 않는지 매번 확인한다.
@@ -153,7 +158,8 @@ MVP에는 관리자 화면이 없으므로 대표 사건 데이터와 검수된 
 
 | 단계 | DB | 비고 |
 | --- | --- | --- |
-| 개발 (로컬 · CI) | Docker PostgreSQL (`pgvector/pgvector:pg17`, `backend/docker-compose.yml`) | AWS 키 없이 로컬에서 개발이 끝나도록 컨테이너로 띄운다. CI도 같은 이미지 태그를 쓴다 |
+| 개발 (로컬) | Docker PostgreSQL (`pgvector/pgvector:pg17`, `backend/docker-compose.yml`) | 개발용 DB와 Redis를 사용한다 |
+| 테스트 (로컬 · CI) | 별도 PostgreSQL·Redis (`backend/docker-compose.test.yml` / CI 서비스 컨테이너) | 같은 이미지 태그를 사용하되 개발 저장소와 분리한다. 실행 절차는 [테스트 환경 안내](../backend/TESTING.md) |
 | 최종 (운영) | AWS RDS for PostgreSQL | 이미지 태그를 RDS에서 쓸 PostgreSQL 버전과 맞춘다. 접속 정보는 EC2 실행 시 환경변수로만 넘긴다 |
 
 - 접속 정보는 `DB_URL` · `DB_USERNAME` · `DB_PASSWORD` 환경변수로 받고, 값이 없으면 로컬 Docker 기본값을 쓴다(`application.yml`). 단계를 옮겨도 코드는 바꾸지 않고 환경변수만 바꾼다.
@@ -221,19 +227,19 @@ MVP는 회원가입 없이 핵심 체험이 끝까지 동작해야 한다. 사�
 
 회원가입 / 로그인은 MVP 이후 기능이며, 도입 시 기존 익명 체험을 회원 기록으로 연결한다.
 
-### 관리자 인증 (확장 단계, BE-39 · BE-40)
+### 관리자 인증 (확장 단계, BE-39 · BE-67 · BE-68)
 
 자동 파이프라인이 비공개로 적재한 사건 · 판결을 관리자가 검수 · 공개하는 **관리자 후검수(BE-33)** 를 위한 인증이다. **MVP 범위가 아니다**(MVP는 관리자 화면 없이 SQL로 적재, MVP 정의서).
 
 | 항목 | 내용 |
 | --- | --- |
 | 보호 범위 | `/api/v1/admin/**`만 관리자(`ROLE_ADMIN`)를 요구한다. **사용자 API는 지금처럼 인증 없이 동작**하고 세션 · CSRF 쿠키도 만들지 않는다 |
-| 계정 | `admin_account`(V12): 이메일(소문자 정규화, 유일) · 비밀번호 해시(BCrypt, `{bcrypt}` 접두어) · 표시 이름 · 활성 여부 · 마지막 로그인 시각 |
+| 계정 | `admin_account`(V12, V18): 이메일(소문자 정규화, 유일) · 비밀번호 해시(Argon2id, `{argon2}` 접두어 — BE-90. 기존 `{bcrypt}` 해시는 검증 후 로그인 시 재해시) · 표시 이름 · 활성 여부 · 마지막 로그인 시각 |
 | 로그인 | 세션 기반. `POST /api/v1/admin/auth/login`(JSON) → 세션 쿠키 `NLNB_ADMIN_SESSION`(HttpOnly · Secure · SameSite=Lax, 기본 30분). 로그인 시 세션 ID를 바꿔 세션 고정을 막는다. 실패는 계정 없음 · 비활성 · 비밀번호 불일치를 구분하지 않고, **응답 시간도 같게** 한다(비활성 계정도 계정 없음과 같은 가짜 비밀번호 확인을 거친다, BE-67). 이 전제를 지키려면 **관리자 비밀번호 해시는 앱의 인코더(`PasswordEncoder`, 첫 계정 · 관리 도구)로만 만든다** — SQL로 다른 bcrypt 비용(예: `$2a$12$`)의 해시를 넣으면 시간 차이가 다시 생긴다. 비밀번호 확인(bcrypt)은 트랜잭션 밖에서 하고 마지막 로그인 시각만 짧게 갱신한다 |
 | 세션 중 계정 확인 | 관리자 요청마다 세션의 계정이 아직 있고 활성인지 확인한다(`AdminAccountStatusFilter`, BE-67). **CSRF 검사보다 먼저** 돌아, 비활성 · 삭제면 세션을 끝내고 바로 401 `UNAUTHORIZED`(CSRF 토큰이 없어도 403이 아니라 401). 로그인 · CSRF 발급 경로는 세션만 끝내고 그대로 통과. 요청마다 기본 키 조회 한 번이 더 들지만 관리자 요청은 적다 |
 | CSRF | 관리자 API의 상태 변경 요청(로그인 포함)은 CSRF 토큰을 요구한다. `GET /api/v1/admin/auth/csrf`가 쿠키 `XSRF-TOKEN`을 내려 주고, 화면이 그 값을 헤더 `X-XSRF-TOKEN`에 담는다. **로그인에 성공하면 토큰을 새로 바꾸고, 로그아웃하면 지운다**(BE-67) — 쿠키 방식(서버는 쿠키 값과 헤더 값이 같은지만 본다)이라 바뀐 쿠키와 맞지 않는 로그인 전 토큰은 막힌다. 화면은 요청할 때마다 쿠키를 다시 읽는다 |
 | 첫 계정 | 환경변수 `ADMIN_BOOTSTRAP_EMAIL` · `ADMIN_BOOTSTRAP_PASSWORD`(12자 이상)가 있고 그 이메일의 계정이 없을 때만 기동 시 한 번 만든다. 이미 있는 계정의 비밀번호는 바꾸지 않는다. 만든 뒤 환경변수를 지운다 |
-| OAuth (BE-40, 예정) | OAuth 2.0 / OIDC 로그인. 허용 목록(등록된 관리자 이메일)에 있을 때만 관리자 권한. 같은 세션 · 권한 경계를 쓴다 |
+| ~~OAuth (BE-40, 예정)~~ | **제외 (v1.23)** — 관리자 로그인은 위 이메일 · 비밀번호(세션)만 둔다(B 김현중 확인, WBS v1.42). 카카오 로그인(BE-62)은 일반 사용자용이고 관리자 권한을 주지 않는다 |
 | 감사 로그 | `admin_audit_log`(V14, BE-68): 로그인 성공 · 실패 · 로그아웃, 원본 판결문 열람(A-7), 검수 API(A-9 ~ A-13)를 남긴다. 비밀번호 · 원문 내용은 넣지 않고, 로그인 실패 때 입력값도 원문으로 남기지 않는다(실제 계정과 일치할 때만 그 계정). 검수 API · 원문 열람은 같은 트랜잭션(기록이 실패하면 그 일도 되돌림), 로그인 성공은 세션 발급 직전에 저장(실패하면 세션 없이 로그인 실패), 로그인 실패 · 로그아웃은 별도 트랜잭션(실패해도 응답 그대로, 서버 로그에는 예외 종류만). 원문 열람(A-7)은 `recordRead`(별도 트랜잭션, 실패하면 열람도 실패)로 readOnly 서비스에서도 남긴다. 보관 1년(예정). IP는 `request.getRemoteAddr()` — 운영에서 Nginx 뒤 실제 IP를 받으려면 **`server.forward-headers-strategy=native`**(Tomcat `RemoteIpValve`, 오른쪽부터 신뢰 프록시를 건너뛰며 읽어 Nginx의 `$proxy_add_x_forwarded_for`와 함께 써도 안전)를 쓴다. `framework`(`ForwardedHeaderFilter`)는 맨 왼쪽 값을 써서 위조될 수 있다(#118 리뷰, 7.1 D) |
 | 오류 응답 | 필터에서 막힌 요청도 공통 에러 형식: 로그인 안 함 401 `UNAUTHORIZED`, 권한 없음 · CSRF 실패 403 `FORBIDDEN`, 로그인 실패 401 `INVALID_CREDENTIALS` |
 
@@ -245,7 +251,7 @@ MVP는 회원가입 없이 핵심 체험이 끝까지 동작해야 한다. 사�
 
 | 항목 | 내용 |
 | --- | --- |
-| 필터 체인 | `SecurityConfig`가 체인 두 개를 둔다. ① `/api/v1/admin/**` 관리자 체인(먼저 검사): 세션 · CSRF · `ROLE_ADMIN`, Bearer 토큰은 보지 않는다. ② 그 밖의 모든 요청 사용자 체인: **세션을 만들지도 읽지도 않는다**(`STATELESS` + 요청 안에서만 쓰는 SecurityContext 저장소). 그래서 브라우저에 관리자 세션 쿠키가 있어도 사용자 API에서는 관리자로 보지 않는다 |
+| 필터 체인 | `SecurityConfig`가 체인 두 개를 둔다(v1.25: 그 사이에 카카오 로그인 체인이 들어가 셋, 아래 "카카오 로그인 체인"). ① `/api/v1/admin/**` 관리자 체인(먼저 검사): 세션 · CSRF · `ROLE_ADMIN`, Bearer 토큰은 보지 않는다. ② 그 밖의 모든 요청 사용자 체인: **세션을 만들지도 읽지도 않는다**(`STATELESS` + 요청 안에서만 쓰는 SecurityContext 저장소). 그래서 브라우저에 관리자 세션 쿠키가 있어도 사용자 API에서는 관리자로 보지 않는다 |
 | Bearer 토큰 | 사용자 체인의 `BearerTokenAuthenticationFilter`. `Authorization` 헤더가 없거나 `Bearer`가 아닌 스킴(`Basic` 등 — 앞단 Nginx 인증 · 모니터링 scrape가 붙일 수 있다)이면 익명. **`Bearer` 헤더는 반드시 검증한다**: 토큰이 비었거나 검증기 빈이 없거나 검증에 실패하면 **401**. 잘못된 토큰을 익명으로 바꾸지 않는다. 사용자 체인 경로라면 `permitAll`이어도 같다(관리자 체인은 Bearer를 보지 않는다). `Authorization` 헤더가 여러 개이거나(스킴과 관계없이) `Bearer` 토큰에 RFC 6750 밖의 글자(공백 · 쉼표 등)가 있으면 검증기를 부르지 않고 401 |
 | 토큰 오류 | 401 `TOKEN_EXPIRED`(만료, 화면은 재발급 시도) · 401 `TOKEN_INVALID`(그 밖). Redis 장애 등 인프라 오류는 토큰 오류로 바꾸지 않는다(500 `INTERNAL_ERROR`, 원인은 서버 로그에만) |
 | 토큰 계약 | `common.security.token` 패키지. `AccessTokenVerifier`(토큰 → `MemberPrincipal`, C 구현) · `TokenIssuer`(회원 → `IssuedTokens` 액세스 · 리프레시 토큰과 만료 시각, C 구현 · D 호출) · `MemberPrincipal`(회원 ID · 접두어 없는 권한 `USER`, 바꿀 수 없음) · `TokenException`(INVALID · EXPIRED). 재발급 · 폐기 · 재사용 탐지 계약은 C가 7.4.3에서 정한다 |
@@ -254,10 +260,13 @@ MVP는 회원가입 없이 핵심 체험이 끝까지 동작해야 한다. 사�
 | 재발급 요청 | 화면은 재발급 요청에 `Authorization` 헤더를 붙이지 않는다(만료된 토큰이 붙으면 401로 막힌다) |
 | 리프레시 토큰 쿠키 (C 결정) | 쿠키에 두면 브라우저가 자동으로 보내므로 재발급 · 로그아웃 요청에 CSRF 대책(CSRF 토큰 또는 Origin 검증)과 `HttpOnly` · `Secure` · `SameSite`가 필요하다. 무상태 · 같은 출처라는 이유만으로 CSRF가 해결되지는 않는다 |
 | 익명 ID 쿠키와 CSRF | 익명 ID 쿠키도 브라우저가 자동으로 보낸다. 사용자 API에 CSRF 토큰을 두지 않는 것은 `SameSite=Lax` · 같은 출처 배포 · 익명 체험이라는 피해 범위를 보고 **받아들인 위험**이다 |
-| OAuth 왕복 임시 상태 (D 결정) | `STATELESS`는 일반 API 기준이다. 카카오 로그인 왕복의 `state` 저장(세션 또는 쿠키) · 콜백 경로 · 성공 · 실패 후 정리는 D가 7.4.2에서 정한다 |
+| 카카오 로그인 체인 (BE-62) | `auth.oauth.KakaoOAuthConfig`의 **OAuth 전용 체인**(`/api/v1/auth/oauth2/**`, `@Order(2)`, B 제안 · 합의). 관리자 체인(1)과 사용자 체인(3, `securityMatcher` 없음) 사이에 둔다. 브라우저 이동 경로라 실패는 JSON 401이 아니라 리다이렉트다. `KAKAO_CLIENT_ID`가 없으면 체인째 꺼지고 그 경로는 404 |
+| OAuth 왕복 임시 상태 (D 결정, BE-62) | 세션을 만들지 않는다(`STATELESS`). 인가 요청 내용은 **Redis 토큰 DB에 JSON**(TTL 5분)으로 두고, 브라우저에는 **state 값만** `NLNB_OAUTH_STATE` 쿠키(`HttpOnly` · `Secure` · **`SameSite=Lax`** — 카카오에서 돌아오는 이동은 다른 사이트발이라 Strict면 빠진다 · `Path=/api/v1/auth/oauth2`)로 준다. 콜백의 `state`와 쿠키가 같을 때만 GETDEL로 꺼낸다(로그인 CSRF · 재사용 방지). 요청 객체를 쿠키에 직렬화하지 않는다(사용자가 고칠 수 있는 값을 역직렬화하지 않기 위해) |
+| 로그인 성공 · 실패 (BE-62) | 성공: 회원 찾기 · 만들기 → 익명 기록 연결(ERD `anonymous_user`) → `TokenIssuer`(BE-94) → **리프레시 토큰만** `RefreshTokenCookies`로 심고 화면 `/auth/callback`으로 302. 토큰은 URL에 싣지 않는다(화면이 재발급 API로 받는다). 실패 · 취소: `/auth/callback?error=login_failed`로 302, 로그에는 오류 코드만. 기본 성공 처리(SavedRequestAware)는 세션을 써서 쓰지 않는다. 카카오 액세스 토큰은 보관하지 않는다(다시 부르지 않음) |
+| 프록시 헤더 (BE-62) | `server.forward-headers-strategy: native`. Nginx 뒤에서 `{baseUrl}`(카카오 Redirect URI) · Origin 검증(BE-94) · 클라이언트 IP가 원래 https · 도메인 · IP를 본다. Tomcat은 `internal-proxies`(루프백 + Docker 172.16/12)에서 온 `X-Forwarded-*`만 믿는다. Nginx(`snippets/api-proxy.conf`)는 `Proto` · `Host` · `Port`를 자기가 본 값으로 덮어쓰고 — 비워 두면 클라이언트가 보낸 `X-Forwarded-Host`가 그대로 백엔드의 Host가 된다 — `X-Forwarded-For`는 기존 값 뒤에 접속 IP를 덧붙인다(백엔드는 가장 오른쪽 신뢰 밖 IP를 씀, PR #229 리뷰). 카카오 로그인 시작 경로에는 `/api` 공통 제한에 더해 IP별 · 전체 합계 전용 제한을 둔다(콜백은 공통 제한만)(deploy/README.md "카카오 로그인 경로 전용 제한") |
 | CORS | 설정하지 않는다. 프론트와 API가 같은 출처다(운영 Nginx `/api` 프록시, 로컬 Vite 프록시, API 명세 6장 #2). 다른 출처에서 부를 일이 생기면 그때 허용 목록으로 연다 |
 | 보안 헤더 | Spring Security 기본값(`X-Content-Type-Options` · `X-Frame-Options: DENY` · `Cache-Control: no-store` 등) + 두 체인 모두 `Referrer-Policy: strict-origin-when-cross-origin`. HSTS는 HTTPS 요청에만 붙으므로 TLS를 끝내는 Nginx가 맡는다(중복 없음). CSP · HTML 응답의 Referrer-Policy도 정적 파일을 서빙하는 Nginx에서 정한다(7.1.1, D) |
-| Rate limit (BE-63, 7.4.6, D) | **1차**: 운영 Nginx가 `/api`를 IP별 평균 초당 20번 · 순간 40번으로 제한하고, 넘으면 API 명세 1-4 형식의 JSON 429(`TOO_MANY_REQUESTS`, `Retry-After: 1`)를 돌려준다. 화면 · 정적 파일은 제한하지 않는다. 백엔드에는 닿지 않으므로 백엔드 지표에는 잡히지 않는다(Nginx 로그로 확인). **2차**(7.4.2 이후): 로그인 · 토큰 재발급 엔드포인트를 더 엄격하게. IP 기준이라 Nginx가 사용자 IP를 본다는 전제가 필요하다 — 배포 서버에서 확인하고(deploy/README.md "Rate limit"), 앞에 로드 밸런서 · CDN을 두면 `real_ip` 설정을 함께 바꾼다 |
+| Rate limit (BE-63, 7.4.6, D) | **1차**: 운영 Nginx가 `/api`를 IP별 평균 초당 20번 · 순간 40번으로 제한하고, 넘으면 API 명세 1-4 형식의 JSON 429(`TOO_MANY_REQUESTS`, `Retry-After: 1`)를 돌려준다. 화면 · 정적 파일은 제한하지 않는다. 백엔드에는 닿지 않으므로 백엔드 지표에는 잡히지 않는다(Nginx 로그로 확인). **2차**(v1.26): `/api` 공통 제한에 더해 전용 zone을 건다 — 토큰 재발급 · 로그아웃 IP별 분당 30번 · 순간 30번(`auth_token_per_ip`), 관리자 로그인 IP별 분당 5번 · 순간 5번(`admin_login_per_ip`, 백엔드에 실패 횟수 잠금이 없어 비밀번호 대입을 늦춘다), 카카오 로그인 시작 IP별 + 전체 합계(BE-62). 막힌 요청은 Nginx가 429만 JSON으로 따로 남기고 모니터링 에이전트(Alloy)가 Loki로 보낸다 — Grafana 서비스 대시보드 "Rate limit 429" 패널(`deploy/README.md` "429 로그 수집"). IP 기준이라 Nginx가 사용자 IP를 본다는 전제가 필요하다 — 배포 서버에서 확인하고(deploy/README.md "Rate limit"), 앞에 로드 밸런서 · CDN을 두면 `real_ip` 설정을 함께 바꾼다 |
 
 ---
 
@@ -313,7 +322,7 @@ GET  /api/v1/cases/{caseId}/experience/comparison           세 판결 비교 �
 | Vite | 개발 서버 실행, 모듈 번들링 및 빌드 |
 | Node.js | 프론트엔드 개발 및 빌드 환경 |
 
-별도 UI 프레임워크 없이 HTML · CSS · JavaScript로 구현한다. 화면 수(S-01 ~ S-09)가 많지 않고 화면 대부분이 "조회 → 표시 → 제출" 흐름이라, 프레임워크 없이도 충분히 구성할 수 있다. 대신 코드가 흩어지지 않도록 **역할별로 모듈을 나누는 것**을 기본 원칙으로 한다.
+별도 UI 프레임워크 없이 HTML · CSS · JavaScript로 구현한다. 화면 수(S-01 ~ S-08)이 많지 않고 화면 대부분이 "조회 → 표시 → 제출" 흐름이라, 프레임워크 없이도 충분히 구성할 수 있다. 대신 코드가 흩어지지 않도록 **역할별로 모듈을 나누는 것**을 기본 원칙으로 한다.
 
 ```
 frontend/src
@@ -411,9 +420,9 @@ DB 저장 → 서비스 공개
 
 AI는 반드시 사건별 판단 요소 목록 안에서만 판단 요소를 선택하도록 하고, 목록에 없는 요소가 나오면 결과를 사용하지 않는다. 또한 AI가 사건 개요만 보고 실제 형량을 맞히는 유명 사건은 서비스에서 제외하거나 다시 가공한다.
 
-> **(v1.11) 아래 세 판결 비교 분석은 11차 회의에서 확장 범위에서 제외했다(REQ-062 · 063).** S-09는 규칙 기반 문장과 요약 태그 규칙 문장을 계속 쓴다. 아래는 결정 기록이다.
+> **(v1.11) 아래 세 판결 비교 분석은 11차 회의에서 확장 범위에서 제외했다(REQ-062 · 063).** S-08은 규칙 기반 문장과 요약 태그 규칙 문장을 계속 쓴다. 아래는 결정 기록이다.
 
-세 판결 비교 분석(확장 단계)은 사용자 판결마다 달라지므로 체험별로 실시간 생성한다. 사용자를 기다리게 하지 않도록 실제 판결을 읽는 동안 비동기로 만든다. MVP에서는 AI 없이 규칙 기반 문장으로 공통점·차이점을 보여 주고, S-09 "내 판결" 카드의 한 줄 요약도 판단 요소의 요약 태그로 만든 규칙 문장을 쓴다. 확장 단계에서는 같은 비교 분석 호출이 사용자 입력을 바탕으로 "내 판결" 요약도 만들어 규칙 문장을 바꾼다.
+세 판결 비교 분석(확장 단계)은 사용자 판결마다 달라지므로 체험별로 실시간 생성한다. 사용자를 기다리게 하지 않도록 실제 판결을 읽는 동안 비동기로 만든다. MVP에서는 AI 없이 규칙 기반 문장으로 공통점·차이점을 보여 주고, S-08 "내 판결" 카드의 한 줄 요약도 판단 요소의 요약 태그로 만든 규칙 문장을 쓴다. 확장 단계에서는 같은 비교 분석 호출이 사용자 입력을 바탕으로 "내 판결" 요약도 만들어 규칙 문장을 바꾼다.
 
 ```
 실제 판결 공개
@@ -495,7 +504,7 @@ CI가 실패한 PR은 Merge하지 않는 것을 기본 원칙으로 한다.
 
 상태 전이, 선고 가능 범위 검증, 판결 비교 분류 등 핵심 로직은 반드시 테스트한다. 부분 유니크 인덱스 같은 PostgreSQL 전용 제약은 H2 같은 인메모리 DB로 확인할 수 없으므로, 통합 테스트는 CI에서도 실제 PostgreSQL 컨테이너로 실행한다.
 
-Redis도 같다(BE-61). `RedisConfigTest`가 실제 Redis에 붙으므로 **로컬에서 `./gradlew test`를 돌리기 전에 `backend`에서 `docker compose up -d`로 PostgreSQL과 Redis를 함께 띄운다.** 예전에 `postgres`만 띄워 둔 경우에도 `docker compose up -d`를 한 번 더 실행하면 Redis만 추가로 뜬다. CI는 `backend-ci.yml`의 Redis 서비스 컨테이너를 쓴다.
+Redis도 같다(BE-61). `RedisConfigTest`가 실제 Redis에 붙으므로 **테스트 전용 PostgreSQL(55432) · Redis(56379)** 를 준비한다(BE-87). 개발용 `docker compose up -d`로 대체하지 않는다. 실행·IDE 설정·Flyway 충돌 대응은 [backend/TESTING.md](../backend/TESTING.md)를 따른다. CI는 같은 접속 계약의 서비스 컨테이너를 사용한다. Gradle은 테스트 JVM 시작 전에, 테스트 전용 초기화기는 Spring 컨텍스트의 빈 생성 전에 접속 대상을 검증한다. 실제 RAG 임베딩 키는 비활성화하며 모의 클라이언트를 쓰는 테스트는 유지한다.
 
 ---
 

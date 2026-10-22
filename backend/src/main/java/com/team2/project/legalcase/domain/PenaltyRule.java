@@ -56,4 +56,20 @@ public class PenaltyRule {
 		return allowedMin != null && allowedMax != null
 			&& allowedMin <= value && value <= allowedMax;
 	}
+
+	/** 적재(BE-93 2차). displayOrder는 penaltyRules 배열 순서(1부터, DEATH → LIFE → PRISON → FINE) */
+	public static PenaltyRule of(LegalCase legalCase, PenaltyType penaltyType, Long statutoryMin, Long statutoryMax,
+			Long allowedMin, Long allowedMax, String allowedBasis, boolean suspensionAllowed, int displayOrder) {
+		PenaltyRule entity = new PenaltyRule();
+		entity.legalCase = legalCase;
+		entity.penaltyType = penaltyType;
+		entity.statutoryMin = statutoryMin;
+		entity.statutoryMax = statutoryMax;
+		entity.allowedMin = allowedMin;
+		entity.allowedMax = allowedMax;
+		entity.allowedBasis = allowedBasis;
+		entity.isSuspensionAllowed = suspensionAllowed;
+		entity.displayOrder = displayOrder;
+		return entity;
+	}
 }

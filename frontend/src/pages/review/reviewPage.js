@@ -4,7 +4,7 @@ import { renderProgressSidebar } from './progressSidebar.js';
 import { renderContent } from '../../utils/contentLines.js';
 import { renderStage } from '../../components/stage.js';
 import { SCRIPTS } from '../../content/scripts.js';
-import { restartMock, jumpActMock } from '../overview/overviewPage.js';
+import { restartMock, jumpActMock } from '../../mocks/mockStageButtons.js';
 
 // 양측 주장 카드 위 안내 (정보 구조 S-04 v1.10, FE-14). 서버 응답에 없는 화면 고정 문구다.
 // "양형 이유" 같은 출처 표현은 쓰지 않는다 — 재판부가 인정한 사정인지가 판결 공개 전에 드러난다.
@@ -78,7 +78,7 @@ export async function renderReviewPage(container, { caseId, caseHeader, api, nav
       await api.postReviewStep(caseId, step);
       if (!active()) return;
       if (step === 4) {
-        navigate('verdict'); // 4막(판결 전 정리)은 5막 파일철의 "사건 요약" 장으로 옮겨 건너뛴다(FE-48)
+        navigate('verdict'); // 판결 전 정리 화면은 없앴다. 그 내용은 3막 파일철의 "사건 요약" 장에 있다(FE-48)
       } else {
         const data = await api.getReview(caseId);
         if (active()) draw(data, true);
@@ -97,17 +97,17 @@ export async function renderReviewPage(container, { caseId, caseHeader, api, nav
       trigger.textContent = originalText;
     }
   }
-  // 3막 재판(흐름 목업, REQ-089). 서버 순서(섹션 ② → ③ → ④)는 그대로 두고, 대본의 confirm 장면을 떠날 때 "읽었습니다"를 보낸다.
-  // 사실관계 · 주장 · 법률 전체 정리는 S-05 판결 전 최종 정리가 보여 준다
+  // 2막 재판(흐름 목업, REQ-089). 서버 순서(섹션 ② → ③ → ④)는 그대로 두고, 대본의 confirm 장면을 떠날 때 "읽었습니다"를 보낸다.
+  // 사건 요약(개요 · 핵심 사실)은 3막 내 판결(S-05) 파일철 첫 장이 보여 준다(FE-48)
   function drawStage(data, script) {
     root.classList.add('has-stage');
     const header = element('header', 'case-topbar');
     header.append(button('← 목록', () => navigate('list'), 'back-button'),
       element('strong', 'case-title', caseHeader.title), ...(caseHeader.chargeName ? [element('span', 'case-badge', caseHeader.chargeName)] : []));
     const main = element('div', 'review-main');
-    main.append(element('h1', 'page-heading visually-hidden', '사건 정보 확인'), renderStage({
+    main.append(element('h1', 'page-heading visually-hidden', '재판'), renderStage({
       script,
-      order: ['3'],
+      order: ['2'],
       start: (step) => step.section === data.openStep,
       onRestart: restartMock(caseId),
       onJump: jumpActMock(caseId),
@@ -115,7 +115,7 @@ export async function renderReviewPage(container, { caseId, caseHeader, api, nav
         try {
           await api.postReviewStep(caseId, step);
           if (step !== 4) return true;
-          if (active()) navigate('verdict'); // 4막은 건너뛴다(FE-48)
+          if (active()) navigate('verdict'); // 재판이 끝나면 바로 3막 내 판결로(FE-48)
           return false;
         } catch (error) {
           if (error?.code === 'STEP_OUT_OF_ORDER') await load();
@@ -141,12 +141,12 @@ export async function renderReviewPage(container, { caseId, caseHeader, api, nav
     const meter = element('progress');
     meter.max = 6;
     meter.value = current;
-    meter.setAttribute('aria-label', '사건 정보 확인 진행');
+    meter.setAttribute('aria-label', '재판 진행');
     progress.append(meter, element('span', '', `${current} / 6`));
     header.append(progress);
     const layout = element('main', 'review-layout');
     const main = element('div', 'review-main');
-    main.append(element('h1', 'page-heading', '사건 정보 확인'));
+    main.append(element('h1', 'page-heading', '재판'));
     const accordion = element('div', 'review-accordion');
     const titles = ['사건 개요', '상세 사실관계', '양측 주장', '법률 · 양형기준'];
     let focusTarget;
@@ -187,7 +187,7 @@ export async function renderReviewPage(container, { caseId, caseHeader, api, nav
         }
         if (opened) {
           const actions = element('div', 'section-actions');
-          const next = button(step === 4 ? '판결 전 최종 정리로' : '읽었습니다 · 다음 단계 열기', () => confirm(step, next), 'primary-button');
+          const next = button(step === 4 ? '사건 요약으로' : '읽었습니다 · 다음 단계 열기', () => confirm(step, next), 'primary-button');
           actions.append(next);
           body.append(actions);
           focusTarget = toggle;

@@ -64,7 +64,8 @@ test('parseJudgmentText: 글자를 띄운 첫머리와 날짜가 앞에 오는 �
 });
 
 // 회귀: 한글 글꼴을 PDF에 넣지 않은 문서(국내 판결문 PDF에 흔함)는 글자표(cMap) 없이는 "글자를 읽지 못했어요"가 됐다
-const cmapUrl = fileURLToPath(new URL('../../../public/pdfjs/cmaps/', import.meta.url));
+// pdfjs는 cMapUrl이 "/"로 끝나야 받는다. 윈도에서는 fileURLToPath가 "\"로 끝나는 경로를 돌려주므로 구분자를 "/"로 바꾼다
+const cmapUrl = fileURLToPath(new URL('../../../public/pdfjs/cmaps/', import.meta.url)).replaceAll('\\', '/');
 const cmapFixture = () => readFileSync(new URL('./samples/fixture-cmap-font.pdf', import.meta.url));
 
 test('글꼴이 PDF 안에 없는 한글 문서: 글자표가 없으면 못 읽고, 있으면 읽는다', async () => {

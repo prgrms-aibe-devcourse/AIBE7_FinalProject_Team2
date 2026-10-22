@@ -99,9 +99,18 @@ public abstract class ApiIntegrationTest {
 			jdbcTemplate.update("DELETE FROM judgment WHERE case_id = ?", caseId);
 			userIds.addAll(jdbcTemplate.queryForList(
 					"SELECT anonymous_user_id FROM experience WHERE case_id = ?", UUID.class, caseId));
+			// 비교 공개(API 13)가 체험 성향 기여를 저장하므로(BE-64) 체험보다 먼저 지운다 (FK)
+			jdbcTemplate.update(
+					"DELETE FROM experience_personality WHERE experience_id IN (SELECT id FROM experience WHERE case_id = ?)",
+					caseId);
 			jdbcTemplate.update("DELETE FROM experience WHERE case_id = ?", caseId);
 		}
-		userIds.forEach(id -> jdbcTemplate.update("DELETE FROM anonymous_user WHERE id = ?", id));
+		userIds.forEach(id -> {
+			jdbcTemplate.update("DELETE FROM attendance WHERE anonymous_user_id = ?", id);	// 출석 기록(BE-97, FK)
+			jdbcTemplate.update("DELETE FROM profile_deco WHERE anonymous_user_id = ?", id);	// 꾸미기(BE-96, FK)
+			jdbcTemplate.update("DELETE FROM profile_setting WHERE anonymous_user_id = ?", id);	// 프로필 선택 설정(BE-104, FK)
+			jdbcTemplate.update("DELETE FROM anonymous_user WHERE id = ?", id);
+		});
 		for (Long caseId : createdCaseIds) {
 			jdbcTemplate.update("DELETE FROM factor WHERE case_id = ?", caseId);
 			jdbcTemplate.update("DELETE FROM case_source WHERE case_id = ?", caseId);

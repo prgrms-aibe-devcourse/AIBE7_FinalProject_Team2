@@ -38,6 +38,10 @@ RUN apk add --no-cache openssl
 # - 스크립트는 공식 이미지의 시작 단계(/docker-entrypoint.d/, 이름 순서)에서 실행된다. 실행 권한이 있어야 실행된다
 COPY nginx/https.conf.template /etc/nginx/lawnambul/https.conf.template
 COPY --chmod=755 nginx/40-enable-https.sh /docker-entrypoint.d/40-enable-https.sh
+# 429 전용 로그 폴더 · 크기 상한 (BE-63). 폴더는 Nginx 설정 검사(nginx -t) 전에 있어야 하므로 이미지에 만들어 둔다.
+# 모니터링 에이전트 오버레이가 이 자리에 볼륨을 붙여 Alloy와 나눠 쓴다(없으면 컨테이너 안에만 남는다)
+RUN mkdir -p /var/log/nginx-ratelimit
+COPY --chmod=755 nginx/41-trim-rate-limit-log.sh /docker-entrypoint.d/41-trim-rate-limit-log.sh
 
 # 빌드 결과만 복사한다. preview.html · sample.html은 vite build 입력이 아니라 운영 이미지에 들어가지 않는다
 COPY --from=build /app/dist /usr/share/nginx/html

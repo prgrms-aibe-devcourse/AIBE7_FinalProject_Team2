@@ -1,20 +1,16 @@
-import { button, element, renderSiteFooter } from './siteLayout.js';
-import { casePhoto, todayLabel } from '../utils/newspaper.js';
+import { button, element, mockTag, renderSiteFooter } from './siteLayout.js';
+import { API_MODE } from '../api/config.js';
+import { casePhoto, extraPhotosOf, todayLabel, useCommonPhotoOnError } from '../utils/newspaper.js';
 
-// 신문 지면 공통 짜임 (FE-32). S-02 사건 목록(신문 1면)과, 사건을 고른 뒤 이어지는 사건 기사 지면(S-20 · 1 · 2막)이
+// 신문 지면 공통 짜임 (FE-32). S-02 사건 목록(신문 1면)과, 사건을 고른 뒤 이어지는 사건 기사 지면(S-20 · 1막)이
 // 같은 제호 · 날짜 띠 · 탭 줄 · 배너 · [사진 | 기사 단]을 쓴다. 스타일은 caseList.css(.case-list-page)를 그대로 쓴다.
 
-// 제호: 정보 줄(판결 체험 신문 · 보조 메뉴) → [왼쪽 귀 | 제호 | 오른쪽 귀] → 날짜 띠
+// 제호: 정보 줄(← 메인으로 · 판결 체험 신문) → [왼쪽 귀 | 제호 | 오른쪽 귀] → 날짜 띠
+// FE-56: 정보 줄 왼쪽에 "메인으로"를 두고, 오른쪽의 "처음으로" · "서비스 소개"는 뺐다(공통 헤더가 모든 화면 위에 있다)
 export function newspaperMasthead({ navigate, earRight, earLeft: givenLeft, title = '내Law남불 사건 목록' }) {
   const header = element('header', 'masthead');
   const infoRow = element('div', 'info-row');
-  const links = element('nav', 'info-links');
-  links.setAttribute('aria-label', '보조 메뉴');
-  links.append(
-    button('← 처음으로', () => navigate('landing'), 'paper-link'),
-    button('서비스 소개', () => navigate('landing', { section: 'intro' }), 'paper-link'),
-  );
-  infoRow.append(element('span', '', '판결 체험 신문'), links);
+  infoRow.append(button('← 메인으로', () => navigate('landing'), 'paper-link'), element('span', '', '판결 체험 신문'));
 
   const earLeft = givenLeft ?? element('div', 'ear ear-left');
   if (!givenLeft) earLeft.append('“모든 판결에는', element('br'), '이유가 있다”');
@@ -41,7 +37,7 @@ export function paperFromCase(data, fallback = {}) {
     deck: data.deck || data.shortIntro,
     article: data.article?.length ? data.article : [data.shortIntro].filter(Boolean),
     photo: casePhoto(data),
-    extraPhotos: fallback.extraPhotos ?? [], // 기사 속 작은 사진(대본 지면에만 있다, 사건 1의 재연 컷)
+    extraPhotos: extraPhotosOf(fallback.extraPhotos), // 기사 속 작은 사진(대본 지면에만 있다, 사건 1의 재연 컷). 없는 사건은 공용 컷
     caption: '사건 이해를 돕기 위한 연출 이미지',
     desk: '사회부', // S-02 기사와 같은 기자 줄
   };
@@ -59,8 +55,9 @@ export function caseInfoEar(info) {
   return ear;
 }
 
-function newsPhoto(src, width, height) {
+function newsPhoto(src, width, height, seed = 0, role) {
   const photo = element('img', 'photo sheet-case-photo');
+  useCommonPhotoOnError(photo, seed, role); // src보다 먼저 달아 두어야 첫 로딩 실패도 잡는다
   photo.src = src;
   photo.alt = ''; // 연출 이미지라 읽지 않는다(사건 내용은 기사 본문에 있다)
   photo.width = width; // 크기 힌트(CSS가 폭 · 비율을 정한다) — 사진이 늦게 떠도 화면이 밀리지 않게
@@ -68,9 +65,9 @@ function newsPhoto(src, width, height) {
   photo.loading = 'lazy';
   return photo;
 }
-function smallFigure({ src, caption }) {
+function smallFigure({ src, caption }, seed, role) {
   const figure = element('figure', 'story-photo is-small');
-  figure.append(newsPhoto(src, 1000, 563), element('figcaption', 'caption', caption ?? '사건 이해를 돕기 위한 연출 이미지'));
+  figure.append(newsPhoto(src, 1000, 563, seed, role), element('figcaption', 'caption', caption ?? '사건 이해를 돕기 위한 연출 이미지'));
   return figure;
 }
 // 인용구: 기사 첫 문장(없는 말을 지어내지 않는다)
@@ -82,12 +79,12 @@ function pullQuote(paragraph) {
   return quote;
 }
 // 지면 목차: 신문의 다른 면으로 간다. 앱 기능을 신문의 면에 빗댄다 — 1면 = 오늘의 사건 목록, 3면 사회 = 지금 이 사건,
-// 오피니언 = 판결 성향 테스트, 독자 = 내 판결 기록(마이페이지). 지금 면은 aria-current로 표시하고 누르지 않는다
+// 오피니언 = 판결 성향 테스트, 독자 = 마이페이지. 지금 면은 aria-current로 표시하고 누르지 않는다
 const PAGES = [
   { page: '1면', name: '오늘의 지면', route: 'list' },
   { page: '3면', name: '사회', current: true },
   { page: '8면', name: '오피니언 · 판결 성향 테스트', route: 'test' },
-  { page: '10면', name: '독자 · 내 판결 기록', route: 'me' },
+  { page: '10면', name: '독자 · 마이페이지', route: 'me' },
 ];
 function pageIndex(navigate) {
   const nav = element('nav', 'page-index');
@@ -111,7 +108,12 @@ function caseMemo(info) {
     ['죄명', info.chargeName],
     ['범죄 분류', info.crimeCategoryLabel],
     ['참여', Number.isFinite(info.participantCount) ? `${info.participantCount.toLocaleString('ko-KR')}명` : null],
-  ].forEach(([term, value]) => { if (value) list.append(element('dt', '', term), element('dd', '', value)); });
+  ].forEach(([term, value]) => {
+    if (!value) return;
+    const dd = element('dd', '', value);
+    if (term === '참여' && API_MODE === 'mock') dd.append(mockTag()); // 목 참여 수는 실제 반응이 아니다(FE-56)
+    list.append(element('dt', '', term), dd);
+  });
   memo.append(list);
   if (info.keywords?.length) memo.append(element('p', 'story-memo-tags', info.keywords.map((word) => `#${word}`).join('  ')));
   memo.append(element('p', 'story-memo-note', '형량은 체험을 마친 뒤 공개돼요.'));
@@ -119,9 +121,9 @@ function caseMemo(info) {
 }
 
 /**
- * 사건 기사 지면(S-20 · 1 · 2막 무대의 장면). S-02 1면과 같은 짜임에 이 사건 기사 하나를 머리기사로 싣는다.
+ * 사건 기사 지면(S-20 · 1막 무대의 장면). S-02 1면과 같은 짜임에 이 사건 기사 하나를 머리기사로 싣는다.
  * 무대 카메라가 맞추는 자리(data-focus): head(배너 제목) · photo(사진) · body(기사 단).
- * 탭 줄은 신문의 다른 면(1면 · 3면 사회 · 오피니언 · 독자)으로 가는 목차다(막 칩은 쓰지 않는다). 2막 사전 판단 등 무대 카드는 지면 위에 엽서 팝업으로 뜬다
+ * 탭 줄은 신문의 다른 면(1면 · 3면 사회 · 오피니언 · 독자)으로 가는 목차다(막 칩은 쓰지 않는다). 1막 엽서의 사전 판단 등 무대 카드는 지면 위에 엽서 팝업으로 뜬다
  * @param {{ paper: object, info: object, navigate: Function, earRight?: HTMLElement }} options paper: 대본의 지면(headline · deck · photo · caption · article),
  *   info: 사건(title · crimeType · crimeCategoryLabel · caseId), earRight: 오른쪽 귀를 바꿔 끼울 때(S-20 "이어서 하기")
  */
@@ -156,10 +158,10 @@ export function caseNewspaper({ paper, info, navigate, earRight = caseInfoEar(in
   const figure = element('figure', 'story-photo');
   figure.dataset.focus = 'photo';
   figure.append(newsPhoto(paper.photo, 1200, 675), element('figcaption', 'caption', paper.caption));
-  const [sidePhoto, inlinePhoto] = paper.extraPhotos ?? [];
+  const [sidePhoto, inlinePhoto] = extraPhotosOf(paper.extraPhotos);
   const media = element('div', 'story-media');
   media.append(figure);
-  if (sidePhoto) media.append(smallFigure(sidePhoto));
+  media.append(smallFigure(sidePhoto, 1, 'origin')); // 발단사진 — 없거나 실패하면 발단 공용 컷
 
   const body = element('div', 'story-body');
   body.dataset.focus = 'body';
@@ -167,7 +169,7 @@ export function caseNewspaper({ paper, info, navigate, earRight = caseInfoEar(in
     body.append(element('p', '', line));
     // 첫 단락 뒤에 인용구(기사 첫 문장), 둘째 단락 뒤에 작은 사진 — 신문 기사 면처럼 본문 사이에 쉼을 둔다
     if (i === 0) body.append(pullQuote(paper.article[0]));
-    if (i === 1 && inlinePhoto) body.append(smallFigure(inlinePhoto));
+    if (i === 1) body.append(smallFigure(inlinePhoto, 2, 'conclusion')); // 결론사진 — 없거나 실패하면 결론 공용 컷
   });
   const main = element('div', 'story-main');
   main.append(media, body);

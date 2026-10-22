@@ -1,15 +1,14 @@
 import { button, element } from '../../components/siteLayout.js';
 import { imageOf } from '../../components/stage.js';
 import { PERSONALITY_LINES } from '../../content/personalityLines.js';
-import { guide, markFolderTurn, renderFolder, sheetMessage } from './personalityParts.js';
-import { reducedMotion } from '../../utils/motion.js';
+import { canTurnFolder, guide, markFolderTurn, renderFolder, setFolderTurnFrom, sheetMessage, takeFolderTurn } from './personalityParts.js';
+import { createTestFlow } from './personalityFlow.js';
 
 // S-15 판결 성향 테스트 — 시작 안내 + 문항 (WBS 7.6.1 콘텐츠 · 7.6.5 화면, FE-42 디자인). 한 화면에 한 문항, 5칸 선택지.
 // 결과 전까지는 이전 문항으로 돌아가 답을 바꿀 수 있다(user-flow 3-2). 문항 문구에는 법률 용어를 쓰지 않는다.
 // 칸 값은 0 ~ 4 (매우 A · 조금 A · 보통 · 조금 B · 매우 B). 점수 계산은 서버가 한다.
 // 낭독기에서도 어떤 행동인지 알 수 있게, 라벨에 그 칸이 가리키는 행동 문장을 잇는다 (side: 'optionA' · 'optionB')
-// 고르는 방법(FE-26 목업): 칸을 누르거나 숫자 1 ~ 5를 치면 바로 다음 문항으로 넘어간다. 화살표로 칸을 옮길 때는 넘어가지 않고 "다음"을 직접 누른다.
-// 마지막 문항은 자동으로 넘기지 않는다 — 결과는 "결과 보기"를 눌러야 제출된다.
+// 고르는 방법 · 넘어가기 · 숫자 키 · 제출 규칙은 personalityFlow.js(신문 면 /test/paper와 같이 쓴다). 이 파일은 서류철 화면만 그린다.
 const SCALE = [
   { value: 0, degree: '매우', side: 'optionA' },
   { value: 1, degree: '조금', side: 'optionA' },
@@ -17,8 +16,6 @@ const SCALE = [
   { value: 3, degree: '조금', side: 'optionB' },
   { value: 4, degree: '매우', side: 'optionB' },
 ];
-const ADVANCE_MS = 260; // 고른 칸이 칠해지는 것을 보고 넘어가도록
-const MIN_LOADING_MS = 900; // 결과 분석 연출(user-flow 3-2)이 깜빡이고 사라지지 않도록
 
 // 안내 캐릭터 + 문항별 한 줄 대사(content/personalityLines.js). 앞 절반은 내로, 뒤 절반은 남불(대사에 적힌 캐릭터가 우선).
 // 시작 · 절반 · 마지막만 자세가 바뀐다
@@ -45,19 +42,36 @@ function preload(src) {
 // 답안 칸의 펜 체크 표시
 const CHECK_SVG = '<svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M4 10.5 L8.2 14.5 L16 5.5"/></svg>';
 
-export async function renderPersonalityPage(container, { api, navigate, from }) {
+export async function renderPersonalityPage(container, { api, navigate, from, baseline = false }) {
   // 검사지는 철을 가로로 눕혀 둔다. 문항과 표지 그림을 먼저 받아 두고 철을 그려, 올라오는 동안 시작 화면이 이미 보이게 한다(personality.css)
   let root, label, body;
   const active = () => container.contains(root);
+  const flow = createTestFlow({ api, isActive: active, baseline }); // 진행 규칙(답 · 넘기기 · 숫자 키 · 제출)은 신문 면(/test/paper)과 같다
+  const { answers } = flow;
   const here = window.location.pathname;
   const stillHere = () => window.location.pathname === here; // 문항을 받는 사이 다른 화면으로 가면 새 화면을 덮어쓰지 않는다
-  const keys = new AbortController(); // 숫자 키 단축키. 화면을 떠나면 뗀다
   // 책상의 서류철에서 왔으면 철이 아래에서 올라온다. 표시는 바로 지워 새로고침 · 뒤로 가기로는 되풀이하지 않는다
   const rise = from === 'desk';
   if (rise) history.replaceState({ ...history.state, extras: {} }, '');
+  // 공유된 결과지에서 "나도 해 보기"로 왔으면 세운 철이 눕는다. 값은 한 번만 읽어 새로고침으로는 되풀이하지 않는다(책상에서 올라올 때는 올라오는 연출이 먼저)
+  const turnFrom = rise ? null : takeFolderTurn();
   const openFolder = () => {
     ({ root, label, body } = renderFolder(container, { navigate, sheetLabel: '문항지', orientation: 'landscape', rise }));
     root.classList.add('is-test');
+    if (turnFrom && canTurnFolder()) {
+      setFolderTurnFrom(root.querySelector('.test-folder'), turnFrom);
+      root.classList.add('is-turning');
+      root.addEventListener('animationend', (event) => {
+        if (event.animationName === 'folder-content-in') root.classList.remove('is-turning');
+      });
+    }
+    // 숫자 1 ~ 5 = 왼쪽부터 다섯 칸. 철이 생긴 뒤에 단다(문항을 받는 중에는 아직 철이 없다)
+    flow.listenKeys((value) => {
+      const panel = body.querySelector('.test-question');
+      if (!panel?.pickByKey) return false;
+      panel.pickByKey(value);
+      return true;
+    });
   };
   const fetchQuestions = async () => {
     const [{ questions: list }] = await Promise.all([
@@ -71,6 +85,7 @@ export async function renderPersonalityPage(container, { api, navigate, from }) 
   async function load() {
     try {
       questions = await fetchQuestions();
+      flow.setQuestions(questions);
     } catch {
       if (!stillHere()) return;
       if (!root) openFolder();
@@ -91,6 +106,7 @@ export async function renderPersonalityPage(container, { api, navigate, from }) 
   }
 
   function renderIntro() {
+    flow.leave();
     measureOnce();
     label.textContent = '표지';
     const intro = element('div', 'test-intro');
@@ -119,10 +135,7 @@ export async function renderPersonalityPage(container, { api, navigate, from }) 
     fitFolder();
   }
 
-  const answers = new Map(); // questionId → value
-  let current = 0;
   let pickedByPointer = false;
-  let advanceTimer = 0;
   // 표지와 문항지가 같은 크기의 철이 되게, 표지 · 모든 문항 중 가장 큰 높이를 철의 최소 높이로 잡아 둔다(데스크톱)
   let folderMin = 0;
   let measured = false;
@@ -148,7 +161,6 @@ export async function renderPersonalityPage(container, { api, navigate, from }) 
     const count = element('p', 'answer-count');
     count.append(element('b', '', String(index + 1)), ` / ${questions.length}`);
     const cells = element('ol', 'answer-cells');
-    const reachable = (i) => i <= index || questions.slice(0, i).every((q) => answers.has(q.id));
     questions.forEach((question, i) => {
       const item = element('li');
       const done = answers.has(question.id);
@@ -157,7 +169,7 @@ export async function renderPersonalityPage(container, { api, navigate, from }) 
       if (done) cell.insertAdjacentHTML('beforeend', CHECK_SVG);
       cell.setAttribute('aria-label', `${i + 1}번 문항${done ? ', 답함' : ''}`);
       if (i === index) cell.setAttribute('aria-current', 'step');
-      cell.disabled = !reachable(i);
+      cell.disabled = !flow.canReach(index, i);
       item.append(cell);
       cells.append(item);
     });
@@ -166,13 +178,12 @@ export async function renderPersonalityPage(container, { api, navigate, from }) 
   }
 
   function renderQuestion(index, { direction = 1 } = {}) {
-    window.clearTimeout(advanceTimer);
     pickedByPointer = false; // 이미 고른 칸을 다시 눌러 남은 표시가 다음 문항으로 넘어가지 않게
     measureOnce();
-    current = index;
+    flow.enter(index);
     label.textContent = '문항지';
     const question = questions[index];
-    const last = index === questions.length - 1;
+    const last = flow.isLast(index);
     const panel = element('div', 'test-question');
     panel.style.setProperty('--enter-x', `${direction * 14}px`);
 
@@ -232,45 +243,25 @@ export async function renderPersonalityPage(container, { api, navigate, from }) 
     fitFolder();
     legend.focus({ preventScroll: true });
 
-    function pick(value) {
-      const first = !answers.has(question.id);
-      answers.set(question.id, value);
-      next.disabled = false;
-      const pointer = pickedByPointer;
+    function pick(value, byKey = false) {
+      const first = flow.answer(index, value, { advance: pickedByPointer || byKey, goNext });
       pickedByPointer = false;
+      next.disabled = false;
       // 처음 답했으면 답안 칸을 다시 그려 체크를 단다(포커스는 지금 칸에 남는다)
       if (first) body.querySelector('.answer-grid')?.replaceWith(answerGrid(index, question.id));
-      if (pointer && !last) advanceTimer = window.setTimeout(goNext, reducedMotion() ? 0 : ADVANCE_MS);
     }
 
     function goNext() {
-      window.clearTimeout(advanceTimer);
-      if (!active() || current !== index || !answers.has(question.id)) return;
-      if (!last) renderQuestion(index + 1);
-      else submit();
+      flow.next(index, { show: renderQuestion, submit });
     }
 
     panel.pickByKey = (value) => {
       const input = options.querySelector(`input[value="${value}"]`);
       input.checked = true;
       input.focus({ preventScroll: true });
-      pick(value);
-      if (!last) advanceTimer = window.setTimeout(goNext, reducedMotion() ? 0 : ADVANCE_MS);
+      pick(value, true);
     };
   }
-
-  // 숫자 1 ~ 5 = 왼쪽부터 다섯 칸
-  document.addEventListener('keydown', (event) => {
-    if (!root) return; // 문항을 받는 중에는 아직 철이 없다
-    if (!active()) { keys.abort(); return; }
-    if (event.altKey || event.ctrlKey || event.metaKey || event.isComposing) return;
-    const value = Number(event.key) - 1;
-    if (!Number.isInteger(value) || value < 0 || value > 4) return;
-    const panel = body.querySelector('.test-question');
-    if (!panel?.pickByKey) return;
-    event.preventDefault();
-    panel.pickByKey(value);
-  }, { signal: keys.signal });
 
   async function submit() {
     label.textContent = '답안 정리';
@@ -280,24 +271,31 @@ export async function renderPersonalityPage(container, { api, navigate, from }) 
     duo.append(guide('naero', 'read-thinking'), guide('nambul', 'read-thinking'));
     loading.append(duo, element('p', '', '답안을 정리하는 중이에요.'));
     body.replaceChildren(loading);
-    const started = performance.now();
     try {
-      await api.submitPersonality(questions.map((question) => ({ questionId: question.id, value: answers.get(question.id) })));
-    } catch {
+      await flow.submit();
+    } catch (error) {
+      if (active() && error?.code === 'BASELINE_RETAKE_USED') { // 다시 정하기를 이미 썼다(다른 탭 등). 다시 보내도 같으니 마이페이지로 안내한다
+        sheetMessage(body, '재심은 이미 한 번 청구했어요.', { alert: true, action: { label: '마이페이지로', run: () => navigate('me') } });
+        return;
+      }
       if (active()) {
         sheetMessage(body, '결과를 저장하지 못했어요. 고른 답은 그대로 있어요.', { retry: submit, alert: true });
         body.querySelector('.test-message').append(button('마지막 문항으로', () => renderQuestion(questions.length - 1), 'secondary-button'));
       }
       return;
     }
-    const wait = reducedMotion() ? 0 : MIN_LOADING_MS - (performance.now() - started);
-    if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
     if (active()) {
-      keys.abort();
+      flow.stopKeys();
       markFolderTurn(body.closest('.test-folder')); // 결과지는 눕힌 철을 같은 자리 · 크기에서 돌려 세우며 보여 준다
       navigate('testResult');
     }
   }
 
+  // 주소로 바로 들어오면 철을 먼저 펴고 불러오는 중임을 알린다(빈 화면에 푸터만 보이지 않게, FE-56).
+  // 책상에서 올라올 때는 그대로 문항을 받은 뒤 철을 그린다(그동안 책상이 보이고, 올라오는 동안 표지가 이미 보인다)
+  if (!rise) {
+    openFolder();
+    sheetMessage(body, '문항을 불러오는 중이에요.');
+  }
   await load();
 }

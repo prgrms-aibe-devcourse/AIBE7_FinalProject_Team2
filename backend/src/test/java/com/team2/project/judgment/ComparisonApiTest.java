@@ -6,13 +6,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.team2.project.support.ApiIntegrationTest;
+import com.team2.project.experience.domain.ExperienceStatus;
 import jakarta.servlet.http.Cookie;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
 
 /**
- * API 14. 세 판결 비교 통합 테스트 (S-09)
+ * API 14. 세 판결 비교 통합 테스트 (S-08)
  * ERD 6장 예시 데이터(가상 살인 사건)와 같은 조합을 쓴다: 사전 판단 구간 "실형 5년 이상 ~ 10년 미만"(60 ~ 120개월),
  * 최종 판결 180개월(15년) → HEAVIER.
  */
@@ -94,6 +98,61 @@ class ComparisonApiTest extends ApiIntegrationTest {
 
 	private String url() {
 		return experienceUrl(caseId) + "/comparison";
+	}
+
+	@ParameterizedTest
+	@CsvSource(nullValues = "NULL", value = {
+		"PRISON,NULL,180,NULL,HEAVIER",
+		"PRISON,NULL,36,NULL,LIGHTER",
+		"PRISON,NULL,90,NULL,SAME",
+		"PRISON,NULL,60,NULL,SAME",
+		"PRISON,NULL,120,NULL,HEAVIER",
+		"PRISON,NULL,24,36,LIGHTER",
+		"LIFE,NULL,NULL,NULL,HEAVIER",
+		"DEATH,NULL,NULL,NULL,HEAVIER",
+		"FINE,NULL,NULL,NULL,LIGHTER",
+		"LIFE,PRISON,90,NULL,SAME"
+	})
+	void preToCourt_comparesCourtUsingExistingRangeRules(String penalty, String reducedTo,
+		Integer months, Integer suspension, String direction) throws Exception {
+		Cookie cookie = startCompletedExperience();
+		jdbcTemplate.update("""
+			UPDATE judgment SET penalty_type = ?, reduced_to = ?, prison_months = ?, suspension_months = ?,
+			 fine_amount = ? WHERE case_id = ? AND subject_type = 'COURT'
+			""", penalty, reducedTo, months, suspension, "FINE".equals(penalty) ? 100000L : null, caseId);
+		mockMvc.perform(get(url()).cookie(cookie))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.preToCourt.direction").value(direction))
+			.andExpect(jsonPath("$.preToFinal.direction").value("HEAVIER"));
+	}
+
+	@Test
+	void preToCourt_doesNotParseRangeLabel() throws Exception {
+		Cookie cookie = startCompletedExperience();
+		String original = jdbcTemplate.queryForObject("SELECT label FROM sentence_range_option WHERE id = ?",
+			String.class, preRangeOptionId);
+		try {
+			jdbcTemplate.update("UPDATE sentence_range_option SET label = '변경된 표시 문구' WHERE id = ?", preRangeOptionId);
+			mockMvc.perform(get(url()).cookie(cookie))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.preToFinal.preJudgment.label").value("변경된 표시 문구"))
+				.andExpect(jsonPath("$.preToCourt.direction").value("HEAVIER"));
+		} finally {
+			jdbcTemplate.update("UPDATE sentence_range_option SET label = ? WHERE id = ?", original, preRangeOptionId);
+		}
+	}
+
+	@ParameterizedTest
+	@EnumSource(value = ExperienceStatus.class,
+		names = {"STARTED", "PRE_JUDGED", "REVIEWING", "REVIEWED", "VERDICT_CONFIRMED"})
+	void preToCourt_beforeCourtReveal_doesNotExposeComparison(ExperienceStatus state) throws Exception {
+		insertExperience(anonymousId, caseId, 1, state.name());
+		mockMvc.perform(get(url()).cookie(new Cookie(COOKIE, anonymousId.toString())))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.code").value("INVALID_STATE"))
+			.andExpect(jsonPath("$.currentStatus").value(state.name()))
+			.andExpect(jsonPath("$.preToCourt").doesNotHaveJsonPath())
+			.andExpect(jsonPath("$.judgments").doesNotHaveJsonPath());
 	}
 
 	@Test

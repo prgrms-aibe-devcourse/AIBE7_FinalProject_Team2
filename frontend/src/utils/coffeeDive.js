@@ -45,6 +45,19 @@ export function flyCoffee(onNavigate, page) {
   Object.assign(table.style, { left: `${box.left}px`, top: `${box.top}px`, width: `${box.width}px` });
   table.append(copy);
   layer.append(table);
+  // 공통 헤더는 화면 루트 밖(#route-header)에 있어 위 복제에 들어가지 않는다. 빼면 이동하는 순간 헤더만 곧바로 새 헤더로 바뀌고 아래 페이지는 천천히 바뀌어
+  // 어긋나 깜빡이므로(FE-66), 헤더도 복제해 아래 페이지와 같은 페이드로 함께 걷는다
+  const header = document.querySelector('#route-header > .site-header');
+  let head = null;
+  if (header) {
+    const at = header.getBoundingClientRect();
+    head = div('coffee-fly-table');
+    const headCopy = header.cloneNode(true);
+    headCopy.querySelectorAll('[id]').forEach((node) => node.removeAttribute('id'));
+    Object.assign(head.style, { left: `${at.left}px`, top: `${at.top}px`, width: `${at.width}px` });
+    head.append(headCopy);
+    layer.append(head);
+  }
   const mug = div('coffee-fly-mug');
   mug.append(div('coffee-fly-coffee'));
   Object.assign(mug.style, { width: `${size}px`, height: `${size}px`, left: `${(width - size) / 2}px`, top: `${(height - size) / 2}px` });
@@ -61,8 +74,10 @@ export function flyCoffee(onNavigate, page) {
   const away = `translate(${(width + size) / 2 + 40}px, 0) rotate(-8deg) scale(1.08)`;
   const flightOut = mug.animate([{ transform: center }, { transform: away }],
     { duration: FLY_OUT_MS, delay: FLY_IN_MS, easing: 'cubic-bezier(.6, 0, .9, .5)', fill: 'forwards' });
-  const tableFade = table.animate([{ opacity: 1 }, { opacity: 0 }],
+  const fadeOut = (node) => node.animate([{ opacity: 1 }, { opacity: 0 }],
     { duration: TABLE_GONE_MS - NAVIGATE_AT_MS - TABLE_FADE_DELAY_MS, delay: NAVIGATE_AT_MS + TABLE_FADE_DELAY_MS, easing: 'ease-in-out', fill: 'both' });
+  const tableFade = fadeOut(table);
+  const headFade = head ? fadeOut(head) : null; // 헤더와 아래 페이지가 같은 시점 · 같은 속도로 바뀐다
   setTimeout(onNavigate, NAVIGATE_AT_MS);
-  Promise.all([flightIn.finished, flightOut.finished, tableFade.finished]).catch(() => {}).then(() => layer.remove());
+  Promise.all([flightIn.finished, flightOut.finished, tableFade.finished, headFade?.finished]).catch(() => {}).then(() => layer.remove());
 }

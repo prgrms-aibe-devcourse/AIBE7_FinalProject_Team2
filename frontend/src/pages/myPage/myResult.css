@@ -1,0 +1,55 @@
+/* 내 결과 지면(FE-75, myResultPage.js): 6막 읽기 지면(courtSketch.css .reading-paper)과 같은 틀에 기사만 바꿔 싣는다.
+   배치: [1면 · 이 사건에서 드러난 판결 성향 | 이 사건으로 달라진 내 성향(세로로 긴 흐름 그래프)].
+   두 단은 각자 세로로 쌓는다(.sheet-col) — 한 격자에 두면 긴 그래프가 줄 높이를 늘려 다른 단 기사 사이가 벌어진다 */
+.my-result-page .stage-wrap .sheet.sheet-result { grid-template-areas: "mast mast" "left right" "ads ads"; }
+.my-result-page .stage-wrap .sheet-result > .sheet-col { display: flex; flex-direction: column; gap: calc(var(--u) * 3.2); min-width: 0; }
+.my-result-page .stage-wrap .sheet-result > .sheet-col.is-left { grid-area: left; }
+.my-result-page .stage-wrap .sheet-result > .sheet-col.is-right { grid-area: right; }
+/* 두 단은 같은 높이로 늘어난다(격자 기본). 단 안의 기사를 위 · 아래 끝에 맞춰 왼쪽 · 오른쪽 끝선을 같게 하고,
+   짧은 단의 남는 높이는 기사 사이에 똑같이 나눈다(기사 수와 상관없이 간격이 균일) */
+.my-result-page .stage-wrap .sheet-result > .sheet-col { justify-content: space-between; }
+/* 1면 옆 단의 맨 위 기사라 위 줄을 긋지 않는다(6막의 독자 의견 자리와 같다) */
+.my-result-page .stage-wrap .sheet-result .sheet-factors { padding-top: calc(var(--u) * .4); border-top: 0; }
+/* 좁은 화면: 한 단으로 왼쪽 단(1면 · 판결 성향) 다음에 오른쪽 단(흐름 그래프) */
+@media (max-width: 680px) {
+  .my-result-page .stage-wrap .sheet.sheet-result { grid-template-areas: "mast" "left" "right" "ads"; }
+  .my-result-page .stage-wrap .sheet-result > .sheet-col { gap: 18px; }
+  .my-result-page .stage-wrap .sheet-result .sheet-factors { padding-top: calc(var(--u) * 1.3); border-top: 1px solid var(--color-text); }
+}
+
+/* 1면 리드의 형량(첫인상 구간 · 최종 판결, API 값)은 굵게 */
+.my-result-page .stage-wrap .sheet-lead strong { font-weight: 900; color: var(--color-heading); }
+
+/* 이 사건으로 달라진 내 성향: 오른쪽 단에 [제목 + 지문] · 그래프 네 개를 각각 섹션으로 쌓는다. 구분선 · 카드 테두리 없이 지면 위에 바로.
+   기본 간격은 그래프 위 12px(단 간격 0) — 짧은 단이 되면 남는 높이가 이 섹션들 사이에 똑같이 나뉜다 */
+.my-result-page .stage-wrap .sheet-result > .sheet-col.is-right { gap: 0; }
+.my-result-page .sheet-col.is-right > .trend-chart { padding: 12px 0 4px; border: 0; border-radius: 0; background: transparent; }
+.my-result-page .sheet-col.is-right > .sheet-factors + .trend-chart { padding-top: 0; }
+
+/* 이 사건에서 드러난 판결 성향: 마이페이지 성향카드(.my-type-hero)와 같은 배치 — 축 이름은 막대 왼쪽, 비중 글자는 막대 위 */
+.my-result-lean .axis-row { display: grid; grid-template-columns: 7em minmax(0, 1fr); grid-template-rows: auto 20px; column-gap: 12px; align-items: center; }
+.my-result-lean .axis-label { grid-row: 2; grid-column: 1; margin: 0; line-height: 20px; }
+.my-result-lean .axis-ends { grid-row: 1; grid-column: 2; }
+.my-result-lean .axis-bar { grid-row: 2; grid-column: 2; margin-top: 0; }
+.my-result-lean .axis-empty { grid-row: 2; grid-column: 2; margin: 0; color: var(--color-muted); font-size: 14px; }
+.my-result-lean .axis-row::after { left: calc(7em + 12px + (100% - 7em - 12px) / 2); bottom: 1px; }
+.my-result-lean .axis-row:has(.axis-empty)::after { display: none; }
+/* 그 유형의 성향카드(마이페이지 성향카드와 같은 타로카드, 그림 크기는 typeFace의 fitPortraitIn) + 설명(기사 문체).
+   카드는 지면 단위(--u)를 따라 줄어들고(넓은 화면 225px → 좁은 화면 165px, 글자는 카드 폭에 비례하는 cqi), 왼쪽에 띄워(float)
+   설명이 카드 옆을 지나 카드 아래까지 지면 폭으로 이어진다 — 세로로 긴 카드 옆에만 두면 줄이 짧아진다 */
+.my-result-card { display: flow-root; } /* 왼쪽 단의 별도 섹션(구분선 없음). 막대와의 간격은 단 간격 */
+.my-result-card > .my-card.is-detail { float: left; width: clamp(165px, calc(var(--u, 10px) * 22.5), 225px); margin: 0 20px 8px 0; }
+.my-result-card-text strong { font-weight: 800; color: var(--color-heading); }
+.my-result-page .stage-wrap .my-result-note { margin-top: 14px; color: var(--color-muted); } /* 글꼴 · 크기는 바로 위 설명(.sheet-text)과 같다 */
+@media (max-width: 680px) {
+  .my-result-card > .my-card.is-detail { margin-right: 14px; }
+}
+
+/* 내 결과 지면의 글자를 6막 지면보다 조금 키운다(1.12배). 지면 글자 크기는 --u(지면 폭 단위)에서 나오므로 글 요소만 --u를 키워 쓰고,
+   지면 폭 · 단 · 간격은 원래 --u 그대로다(--u-base). 그래프 · 막대 줄의 px 글자도 같은 비율로 키운다 */
+.my-result-page .stage-wrap .sheet-result { --u-base: var(--u); --text-up: 1.12; }
+.my-result-page .stage-wrap .sheet-result :is(.sheet-info, .sheet-date, .sheet-brand, .sheet-headline, .sheet-head, .sheet-deck, .sheet-text, .sheet-figure figcaption, .sheet-ear-memo, .sheet-ad-tag, .sheet-ad-title, .sheet-ad-text, .sheet-ads-note) {
+  --u: calc(var(--u-base) * var(--text-up));
+}
+.my-result-page .sheet-result :is(.my-hint, .axis-empty) { font-size: calc(var(--text-small) * var(--text-up)); } /* 막대 위 비중 글자(.axis-ends)는 원래 크기 그대로 */
+.my-result-page .sheet-result .trend-title { font-size: calc(1em * var(--text-up)); } /* 그래프 제목만 키운다. 막대 줄의 축 이름 · 비중 글자는 원래 크기 */

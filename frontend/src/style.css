@@ -23,8 +23,8 @@ body {
   /* ① 팔레트 */
   --palette-navy-900: #101d39;
   --palette-navy-700: #1f3563;
+  --palette-navy-500: #2f5592;
   --palette-navy-200: #c9d1e3;
-  --palette-navy-100: #e3e8f2;
   --palette-navy-50: #eef1f7;
   --palette-bronze-500: #ba854b;
   --palette-bronze-700: #86581f;
@@ -78,7 +78,6 @@ body {
   --color-on-accent: var(--palette-white);         /* 주 버튼 위 글자 */
   --color-accent-tint: var(--palette-navy-50);     /* 선택된 칩 · 항목 바탕 */
   --color-accent-text: var(--palette-navy-700);    /* 선택된 항목 글자 */
-  --color-primary: var(--color-accent);            /* 이전 이름(FE-2). 새 코드는 --color-accent를 쓴다 */
   --color-decor: var(--palette-bronze-500);        /* 장식 선 · 로고 "Law" (작은 글자 금지) */
   --color-range-fill: var(--palette-bronze-200);   /* 권고 범위 막대 */
   --color-focus: var(--palette-blue-focus);        /* 키보드 포커스 링 */
@@ -86,16 +85,19 @@ body {
   --color-danger: var(--palette-red-700);
   --color-danger-border: var(--palette-red-200);
   --color-danger-tint: var(--palette-red-50);
+  --color-danger-on-dark: var(--palette-red-200);  /* 어두운 면(펠트 · 네이비) 위 오류 글자. 진한 빨강은 거기서 읽히지 않는다 */
   --color-caution: var(--palette-orange-800);      /* 되돌릴 수 없음 · 권고 범위 밖 안내 */
   --color-caution-border: var(--palette-orange-500);
   --color-caution-tint: var(--palette-orange-50);
   /* ② 역할 — 의미 색 (항상 기호 · 문장과 함께) */
+  --color-axis-strict: var(--palette-navy-500);     /* 4축 막대: 엄격 쪽 남색 · 관대 쪽 갈색. 채도가 비슷한 두 색으로 구분만 한다(좋고 나쁨이 아님) */
+  --color-axis-lenient: var(--palette-wood-500);
+  --color-axis-lenient-text: var(--palette-wood-700); /* 갈색 막대 색은 글자로는 대비가 모자라(3.3:1) 한 단계 진하게 */
   --color-up: var(--palette-up);                   /* 가중 ↑ */
   --color-down: var(--palette-down);               /* 감경 ↓ */
   --color-case-murder: var(--palette-case-murder);
   --color-case-fraud: var(--palette-case-fraud);
   --color-case-injury: var(--palette-case-injury);
-  --color-on-case: var(--palette-white);
   --color-judge-me: var(--palette-judge-me);       /* 세 판결은 밝기가 같다. 선 · 라벨에만 쓰고 바탕을 칠하지 않는다 */
   --color-judge-ai: var(--palette-judge-ai);
   --color-judge-court: var(--palette-judge-court);
@@ -108,7 +110,7 @@ body {
   --color-kakao: var(--palette-kakao-yellow);       /* 카카오 로그인 버튼 바탕 (S-12, FE-52) */
   --color-on-kakao: var(--palette-kakao-ink);      /* 그 위 심볼 · 글자(글자는 85% 농도로 쓴다) */
 
-  /* ④ S-01 메인 책상 일러스트 (FE-18). 책상 그림 전용 색이다. 다른 화면에서는 쓰지 않는다 */
+  /* ④ 책상 계열 색 (FE-18). 처음엔 S-01 메인 책상 그림 전용이었으나 지금은 책상 · 신문 지면 · 판결 체험 무대 · 성향 테스트 종이 · 마이페이지 · 커뮤니티 · 로그인이 함께 쓴다. 책상 세계의 공용 색이다 */
   --palette-wood-300: #b06d36;
   --palette-wood-500: #a8652f;
   --palette-wood-700: #8a4f22;
@@ -120,7 +122,7 @@ body {
   --palette-kraft-300: #d6a468;
   --palette-kraft-500: #bf8a50;
   --palette-kraft-600: #b78049;
-  --palette-sheet: #f6f3ec;
+  --palette-sheet: var(--palette-paper-50);          /* 책상 종이 = 부드러운 종이(#f7f3ee). 1단계 차이(#f6f3ec)라 눈으로 구분되지 않아 한 값으로 합쳤다. 역할 이름(desk-sheet · surface)은 용도가 달라 그대로 둔다 */
   --palette-sheet-line: #c9c3b8;
   --palette-label: #f7f2e8;
   --palette-metal-200: #d6d8dd;
@@ -159,7 +161,7 @@ body {
   /* 판결 체험 무대 (흐름 목업 그대로, FE-27 · 28) */
   --palette-role-guide: #4a5677;
   --palette-role-prosecutor: #6f1d2e;
-  /* 판단 요소 무겁게 · 가볍게(S-06): 진하지 않은 레드 · 그린 */
+  /* 판단 요소 무겁게 · 가볍게(S-05): 진하지 않은 레드 · 그린 */
   --palette-factor-heavy: #a03f35;
   --palette-factor-heavy-tint: #f6e4e1;
   --palette-factor-light: #35704a;
@@ -241,8 +243,7 @@ body {
   --text-small: 13px;
   --text-caption: 12px;
 
-  /* 간격 · 폭 */
-  --space-md: 16px;
+  /* 폭 */
   --content-width: 1180px;
 }
 
@@ -285,18 +286,30 @@ h1 { font-family: var(--font-heading); color: var(--color-heading); letter-spaci
 .message-panel button { margin-top: 20px; }
 
 /* 공통 사이트 헤더 · 푸터 (siteLayout.js의 renderSiteHeader · renderSiteFooter).
-   S-01 · S-02 · S-14 · 라우터 푸터(S-03 ~ S-09)가 모두 쓰는 유일한 정의다. 화면 CSS에 같은 규칙을 다시 두지 않는다.
-   특정 화면만 다르게 해야 하면 그 화면 CSS에 .landing-page .site-header처럼 화면 클래스로 감싸서 추가한다. */
+   FE-56: 헤더는 라우터가 모든 화면 위(#route-header)에 붙이고, 모두 같은 네이비 띠(메인 책상과 같은 모양)다.
+   마이페이지는 같은 헤더에 myPage.css가 색만 커피색으로 덮어쓴다(FE-66). 관리자 화면은 자기 틀을 쓴다.
+   화면 CSS에 같은 규칙을 다시 두지 않는다. 특정 화면만 다르게 해야 하면 body:has(.xx-page) .site-header처럼 감싸서 추가한다. */
 /* FE-50: 스크롤과 상관없이 화면 위에 고정한다(sticky — 자리는 그대로 차지해 아래 내용이 가려지지 않는다). 전환 연출 층(z-index 1000)보다는 아래 */
-.site-header { position: sticky; top: 0; z-index: 50; display: flex; align-items: center; gap: 16px; padding: 16px 28px; border-bottom: 1px solid var(--color-border); background: var(--color-bg); }
+/* sticky는 부모 안에서만 붙어 있으므로, 라우터가 붙인 헤더는 감싸는 #route-header를 붙인다(화면 안에 직접 그린 헤더는 .site-header 자체가 붙는다) */
+#route-header { position: sticky; top: 0; z-index: 50; }
+.site-header {
+  position: sticky; top: 0; z-index: 50; display: flex; align-items: center; gap: 16px; padding: 4px 32px;
+  background: var(--color-banner-bg); color: var(--color-banner-text); font: var(--text-body)/1.5 var(--font-body);
+}
+/* 포커스 · scrollIntoView로 스크롤될 때 위에 붙은 헤더에 가리지 않게. 높이는 main.js가 잰 값(두 줄 헤더 · 성향검사 고정 헤더 포함) */
+html { scroll-padding-top: calc(var(--site-header-h, 64px) + 8px); }
+.site-header button { font: inherit; cursor: pointer; } /* 브라우저 기본 버튼 글꼴 대신 헤더 글꼴 */
+.site-header button:focus-visible { outline-color: var(--color-range-fill); }
 .site-nav { display: flex; align-items: center; gap: 8px; margin-left: auto; } /* 로고는 왼쪽, 메뉴 · 로그인은 오른쪽 */
-.site-header .nav-button[aria-current="page"] { color: var(--color-text); box-shadow: inset 0 -2px 0 currentColor; } /* 지금 보고 있는 메뉴 */
+.site-header .nav-button[aria-current="page"] { color: var(--color-banner-text); box-shadow: inset 0 -2px 0 currentColor; } /* 지금 보고 있는 메뉴 */
 .site-header .nav-button[aria-disabled="true"] { cursor: default; opacity: .6; }
 .site-header .nav-button[aria-disabled="true"]:hover { text-decoration: none; }
-/* 화면 CSS의 button { font: inherit } 보다 우선하도록 .site-header를 붙인다 */
-.site-header .logo-button { border: 0; background: transparent; padding: 6px 0; font-family: var(--font-heading); font-size: 20px; font-weight: 900; letter-spacing: -.04em; color: var(--color-heading); }
-.nav-button { border: 0; background: transparent; padding: 10px 12px; min-height: 44px; color: var(--color-muted); white-space: nowrap; }
-.nav-button:hover { color: var(--color-text); }
+/* 위 .site-header button { font: inherit } · 화면 CSS의 button 규칙보다 우선하도록 .site-header를 붙인다.
+   화면 CSS가 .xx-page .site-header button처럼 더 구체적으로 쓰면 이 규칙을 이기므로, 그때는 :not(.logo-button)으로 로고를 빼 둔다(FE-56) */
+.site-header .logo-button { border: 0; background: transparent; padding: 6px 0; font-family: var(--font-heading); font-size: 22px; font-weight: 900; letter-spacing: -.04em; color: var(--color-banner-text); }
+.site-header .logo-button .law { display: inline; color: var(--color-range-fill); }
+.nav-button { border: 0; background: transparent; padding: 10px 12px; min-height: 44px; color: var(--color-banner-muted); font-size: var(--text-small); white-space: nowrap; }
+@media (hover: hover) and (pointer: fine) { .nav-button:hover { color: var(--color-banner-text); } }
 /* 로그인(FE-50): 메뉴 맨 오른쪽, 얇은 테두리로 계정 동작임을 구분한다. 테두리는 글자색을 따라가 네이비 · 흰 헤더 모두에 맞는다 */
 .site-header .login-button { flex: none; margin-left: 4px; padding: 6px 14px; min-height: 36px; border: 1px solid color-mix(in srgb, currentColor 45%, transparent); border-radius: 6px; }
 .site-header .login-button[aria-current="page"] { box-shadow: none; } /* 테두리 버튼이라 밑줄 대신 테두리로 충분하다 */
@@ -307,6 +320,8 @@ h1 { font-family: var(--font-heading); color: var(--color-heading); letter-spaci
 .site-header .switch-thumb { position: absolute; top: 2px; left: 2px; display: block; width: 12px; height: 12px; border-radius: 50%; background: currentColor; transition: translate .15s ease-out; }
 .site-header .motion-switch[aria-checked="true"] .switch-track { background: color-mix(in srgb, currentColor 22%, transparent); }
 .site-header .motion-switch[aria-checked="true"] .switch-thumb { translate: 12px 0; }
+/* 목데이터 표기(FE-56, siteLayout.js mockTag): 목 값 옆의 작은 점선 딱지. 글자색 · 테두리는 주변 글자색을 따라간다 */
+.mock-tag { display: inline-block; margin-left: 6px; padding: 0 5px; border: 1px dashed currentColor; border-radius: 3px; font: 600 11px/1.5 var(--font-body); letter-spacing: 0; vertical-align: middle; white-space: nowrap; opacity: .85; }
 .site-footer { padding: 24px 28px; border-top: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-muted); font-size: 13px; }
 @media (max-width: 720px) {
   /* 좁은 화면(FE-52): 두 줄. 윗줄 = 로고 · 로그인, 아랫줄 = 메뉴(넘치면 가로로 민다) */
@@ -317,9 +332,7 @@ h1 { font-family: var(--font-heading); color: var(--color-heading); letter-spaci
 }
 
 /* S-14 404 · 오류 화면 (FE-3) */
-/* 페이지 틀은 사이트 헤더를 쓰는 S-01 · S-02(landing.css의 :is(.landing-page, .case-list-page))와 같게 맞춘다.
-   헤더 버튼은 브라우저 기본 버튼 글꼴(13.3px Arial)이 아니라 페이지 글꼴을 따르게 한다(S-01 · S-02와 같은 크기 · 글꼴).
-   이동 버튼(.primary-button 등)의 굵기는 유지해야 하므로 font: inherit는 헤더 안 버튼에만 둔다 */
+/* 페이지 틀은 S-01 · S-02(landing.css의 :is(.landing-page, .case-list-page))와 같게 맞춘다. 헤더는 라우터가 위에 붙인다(FE-56) */
 .not-found-page {
   max-width: var(--content-width);
   margin: 0 auto;
@@ -330,7 +343,6 @@ h1 { font-family: var(--font-heading); color: var(--color-heading); letter-spaci
   overflow-wrap: anywhere;
   word-break: keep-all;
 }
-.not-found-page .site-header button { font: inherit; cursor: pointer; }
 .not-found-panel {
   max-width: 480px;
   margin: 48px auto;
@@ -351,7 +363,7 @@ h1 { font-family: var(--font-heading); color: var(--color-heading); letter-spaci
 .not-found-panel .not-found-actions button { margin-top: 0; }
 
 /* 섹션 본문 점 목록 (FE-14). utils/contentLines.js의 renderContent가 만든다.
-   여러 화면(S-04 · S-05, 이후 다른 화면)이 함께 쓰므로 화면 클래스 없이 여기 둔다 */
+   여러 화면(S-04, 이후 다른 화면)이 함께 쓸 수 있게 화면 클래스 없이 여기 둔다 */
 .content-lines { margin: 0; padding-left: 20px; }
 .content-lines li + li { margin-top: 6px; }
 
@@ -377,3 +389,10 @@ button, [role="button"] { -webkit-user-select: none; user-select: none; -webkit-
   animation-duration: 0s !important; animation-delay: 0s !important; animation-iteration-count: 1 !important;
   transition-duration: 0s !important; transition-delay: 0s !important; scroll-behavior: auto !important;
 }
+
+/* 책갈피 리본 색(FE-68): 판결 체험 파일철의 진행 책갈피 · 마이페이지 책갈피 설정 미리 보기가 함께 쓴다(bookmarkCharacter.js BOOKMARK_COLORS) */
+.bookmark-color-bronze { --bookmark-color: var(--palette-bronze-700); }
+.bookmark-color-wine { --bookmark-color: var(--palette-red-700); }
+.bookmark-color-navy { --bookmark-color: var(--palette-navy-700); }
+.bookmark-color-green { --bookmark-color: var(--palette-judge-court); }
+.bookmark-color-gold { --bookmark-color: var(--palette-pen-gold); }

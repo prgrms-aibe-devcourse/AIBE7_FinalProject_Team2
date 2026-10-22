@@ -12,7 +12,7 @@ test('아이디 · 비밀번호로 로그인하면 닉네임을 돌려 준다', 
 });
 
 test('카카오 로그인은 고정 닉네임을 돌려 준다', async () => {
-  assert.deepEqual(await login({ method: 'kakao' }), { nickname: '카카오 판사' });
+  assert.deepEqual(await login({ method: 'kakao' }), { nickname: '카카오 회원' });
 });
 
 test('아이디나 비밀번호가 비었거나 @ 앞이 비면 입력값 오류다', async () => {

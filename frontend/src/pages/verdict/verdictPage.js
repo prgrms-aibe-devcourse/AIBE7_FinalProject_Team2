@@ -2,14 +2,14 @@ import { renderLawInfoBox } from '../../components/lawInfoBox.js';
 import { renderRecommendedRangeBar, formatMonths } from '../../components/recommendedRangeBar.js';
 import { renderStage } from '../../components/stage.js';
 import { SCRIPTS } from '../../content/scripts.js';
-import { restartMock, jumpActMock } from '../overview/overviewPage.js';
+import { restartMock, jumpActMock } from '../../mocks/mockStageButtons.js';
 import { getDraft, saveDraft, clearDraft } from './verdictDraft.js';
 import { markAiRevealIntro } from '../ai/aiRevealIntro.js';
 import { reducedMotion } from '../../utils/motion.js';
+import { getBookmarkColor, selectedBookmarkFace } from '../../utils/bookmarkCharacter.js';
 
 const penaltyLabels = { DEATH: '사형', LIFE: '무기징역', PRISON: '징역', FINE: '벌금' };
-// 해금 책갈피의 얼굴(내로). shortcut: 원본 이미지 레포 PNG를 직접 읽는다(무대와 같음), 웹 webp 변환(WBS 7.6.8) 때 public 경로로 옮긴다
-const BOOKMARK_FACE = 'https://raw.githubusercontent.com/peanutboi710/NaeLawNamBul_Images/main/character/cuts/naero/icon/naero_icon_face-happy.png';
+// 해금 책갈피의 얼굴(내로)
 const SIGN_MS = 900; // 서명 획이 다 그려지는 시간(verdict.css .sign-ink와 같게). 그다음 확정을 보낸다
 
 // 원문을 유지해 빈 칸, 0, 잘못 입력한 값을 구별한다.
@@ -494,7 +494,7 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       try {
         await api.postVerdict(caseId, payload);
         clearDraft(caseId);
-        markAiRevealIntro(caseId); // S-07에서 로딩 · 안내를 한 번 보여 준다 (7.7.4)
+        markAiRevealIntro(caseId); // S-06에서 로딩 · 안내를 한 번 보여 준다 (7.7.4)
         if (active()) navigate('ai', {}, { keepScroll: true }); // 서명한 자리 그대로 AI 판결 무대로(맨 위로 튀지 않게)
       } catch (error) {
         if (!active()) return;
@@ -549,7 +549,7 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       }));
     }
 
-    // ---- 첫 장: 사건 요약(4막 판결 전 정리를 옮김) — 사건 개요 · 핵심 사실(API 6). 못 받으면 이 장만 안내하고 나머지는 그대로 쓴다 ----
+    // ---- 첫 장: 사건 요약(없앤 판결 전 정리 화면의 내용) — 사건 개요 · 핵심 사실(API 6). 못 받으면 이 장만 안내하고 나머지는 그대로 쓴다 ----
     const summaryPage = element('section', 'verdict-summary folder-sheet');
     summaryPage.append(element('h2', 'folder-title', '사건 요약'));
     const overview = review?.sections?.find(({ step }) => step === 1)?.items ?? [];
@@ -586,10 +586,10 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
     let missingReason = '';
     const LAST = 4;
     // 진행 책갈피: 펼쳐 본 가장 뒤 장(reached)의 탭 바로 뒤에 끼워 둔 내로 얼굴 책갈피(장식). 잠금이 아니라 진행을 표시하므로
-    // 늘 보이고, 뒤로 넘겨도 자리를 지킨다(마지막 장까지 오면 탭 줄 끝). 캐릭터 고르기는 마이페이지 후속
-    const bookmark = element('span', 'folder-bookmark');
+    // 늘 보이고, 뒤로 넘겨도 자리를 지킨다(마지막 장까지 오면 탭 줄 끝). 얼굴은 마이페이지 "만난 모습"에서 고른 것(FE-67)
+    const bookmark = element('span', `folder-bookmark bookmark-color-${getBookmarkColor()}`);
     bookmark.setAttribute('aria-hidden', 'true');
-    bookmark.append(picture(BOOKMARK_FACE));
+    bookmark.append(picture(selectedBookmarkFace()));
     const pages = [[summaryPage, '사건 요약'], [sidebar, '참고 정보'], [factorPage, '판단 요소'], [main, '최종 판결'], [signPage, '확정']].map(([panel, title], i) => {
       const tab = element('button', 'folder-tab');
       tab.type = 'button';
@@ -686,14 +686,14 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
     const candidate = SCRIPTS[caseId];
     const script = candidate?.title === caseHeader.title ? candidate : undefined;
     if (script) {
-      // 5막 당신이 판사(흐름 목업): 검사 의견 → 최종변론 → 최후진술을 지나 판결 장면에서 이 화면(입력 · 참고 정보)을
-      // 무대 입력 카드로 띄운다. 입력 · 확정 · 오류 처리는 아래 그대로이고, 확정하면 AI 판결(S-07)로 간다
+      // 3막 당신이 판사(흐름 목업): 검사 의견 → 최종변론 → 최후진술을 지나 판결 장면에서 이 화면(입력 · 참고 정보)을
+      // 무대 입력 카드로 띄운다. 입력 · 확정 · 오류 처리는 아래 그대로이고, 확정하면 AI 판결(S-06)으로 간다
       root.classList.add('has-stage');
       const stageLayout = element('div', 'review-layout');
       const stageMain = element('div', 'review-main');
       stageMain.append(renderStage({
         script,
-        order: ['5'],
+        order: ['3'],
         cards: { verdict: layout },
         inputCards: ['verdict'],
         onRestart: restartMock(caseId),
@@ -813,7 +813,7 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
           element('p', '', `이 사건에서 선고할 수 있는 형량은 ${rangeText}입니다. 범위 안으로 형량을 조정해야 판결을 확정할 수 있어요.${help}`));
         feedback.append(warning);
       }
-      // 확장: REQ-036 S-06b — 권고 범위 밖이지만 선고 가능하면 별도 경고 없음(권고 범위는 참고 기준).
+      // 확장: REQ-036 S-05b — 권고 범위 밖이지만 선고 가능하면 별도 경고 없음(권고 범위는 참고 기준).
       const noSuspension = ['DEATH', 'LIFE'].includes(draft.penaltyType);
       checkbox.disabled = !eligible;
       suspensionLabel.classList.toggle('is-disabled', !eligible);

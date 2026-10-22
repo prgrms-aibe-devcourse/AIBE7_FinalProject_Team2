@@ -49,6 +49,11 @@ services:
       # 기본값을 두지 않아서, 값이 없으면 컨테이너가 아예 뜨지 않는다
       - "${MAIN_PRIVATE_IP:?deploy/.env에 MAIN_PRIVATE_IP(메인 EC2 사설 IP)를 넣어야 한다 — 0.0.0.0에 바인딩하지 않는다}:8081:8081"
 
+  # 웹(Nginx)의 429 전용 로그를 Alloy와 공유한다 (BE-63). 평소 접속 기록(stdout)은 그대로다
+  web:
+    volumes:
+      - web-ratelimit-logs:/var/log/nginx-ratelimit
+
   alloy:
     image: grafana/alloy:v1.14.1
     container_name: lawnambul-alloy
@@ -56,6 +61,8 @@ services:
       - ./alloy-agent.alloy:/etc/alloy/config.alloy:ro
       # 백엔드가 쓰고 Alloy는 읽기만 한다
       - backend-logs:/var/log/backend:ro
+      # 웹 429 전용 로그 (BE-63). 웹이 쓰고 Alloy는 읽기만 한다. 크기 상한은 웹의 41-trim-rate-limit-log.sh
+      - web-ratelimit-logs:/var/log/web:ro
       # --storage.path 자리. 여기에 loki.source.file의 읽은 위치와 loki.write WAL이 쌓인다.
       # 볼륨이 없으면 이미지 교체 등으로 컨테이너가 재생성될 때마다 위치 기록이 사라져,
       # 기본 동작대로 로그 파일을 처음부터 다시 읽어 Loki에 같은 로그가 또 들어간다 (PR #168 리뷰 반영)
@@ -100,5 +107,7 @@ services:
 
 volumes:
   backend-logs:
+  # 웹 429 전용 로그 (BE-63)
+  web-ratelimit-logs:
   # Alloy의 읽은 위치 · WAL (alloy-agent.alloy의 wal 블록). 지우면 로그가 중복 적재된다
   alloy-data:

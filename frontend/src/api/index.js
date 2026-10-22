@@ -18,7 +18,10 @@ export async function loadApi() {
     import('../mocks/courtMockApi.js'),
     import('../mocks/comparisonMockApi.js'),
     import('../mocks/personalityMockApi.js'),
-    import('../mocks/authMockApi.js'), // 개발용 목업 로그인(FE-52). 실제 모드에는 아직 login · logout이 없다
+    import('../mocks/profileDecoMockApi.js'), // 꾸미기 저장 · 출석 기록(P-6 · P-7)
+    import('../mocks/caseReviewMockApi.js'), // 사건 리뷰(FE-55). 실제 모드에는 아직 없다
+    import('../mocks/communityMockApi.js'), // 커뮤니티(FE-47). 실제 모드에는 아직 없다
+    import('../mocks/authMockApi.js'), // 개발용 목업 로그인(FE-52). 실제 모드의 login · logout은 카카오 로그인(FE-74)
   ]);
   return Object.assign({}, ...modules);
 }

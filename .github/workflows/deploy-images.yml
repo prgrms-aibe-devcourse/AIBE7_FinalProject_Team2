@@ -15,6 +15,7 @@ on:
       - frontend/**
       - backend/**
       - deploy/**
+      - tools/ai-judgment/**
       - .github/workflows/deploy-images.yml
   push:
     branches: [develop, main]
@@ -22,6 +23,7 @@ on:
       - frontend/**
       - backend/**
       - deploy/**
+      - tools/ai-judgment/**
       - .github/workflows/deploy-images.yml
   workflow_dispatch:
 
@@ -89,20 +91,61 @@ jobs:
           cache-from: type=gha,scope=backend
           cache-to: type=gha,scope=backend,mode=max
 
+      # AI 판결 파이프라인 서비스 이미지 (COMMON-50). 운영에서는 오버레이를 켠 서버(PIPELINE_SERVICE=1)만 쓰지만
+      # 이미지는 항상 빌드 · 업로드한다 — 켜는 순간 GHCR에 그 태그가 있어야 deploy.sh가 받아 올릴 수 있다
+      - name: Build pipeline image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./tools/ai-judgment
+          load: true
+          push: false
+          tags: ${{ env.IMAGE_PREFIX }}-pipeline:${{ env.IMAGE_TAG }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=pipeline
+          cache-to: type=gha,scope=pipeline,mode=max
+
+      # 파이프라인 서비스는 운영 스택(docker-compose.prod.yml)에 없어서 아래 스모크 테스트가 건드리지 않는다.
+      # 그래서 이미지 자체만 두 가지로 확인한다 — 파이프라인을 실제로 돌리지는 않는다(LLM 호출 비용 · 키가 없다)
+      #   1) 작업 관리 단위 테스트 (네트워크 없음, tools/ai-judgment/service/tests)
+      #   2) uvicorn이 떠서 /health가 200인지 (import 오류 · 실행 사용자 권한 문제를 여기서 잡는다)
+      - name: Test pipeline image
+        run: |
+          docker run --rm -w /app/service "$IMAGE_PREFIX-pipeline:$IMAGE_TAG" \
+            python3 -m unittest discover tests
+          # 운영에서는 포트를 호스트로 열지 않는다. 확인하려고 여기서만 잠깐 연다
+          docker run -d --name pipeline-ci -p 8000:8000 "$IMAGE_PREFIX-pipeline:$IMAGE_TAG"
+          for i in $(seq 1 30); do
+            if [ "$(curl -s --max-time 3 -o /dev/null -w '%{http_code}' http://localhost:8000/health)" = "200" ]; then
+              echo "pipeline ready after $((i * 2))s"
+              docker rm -f pipeline-ci >/dev/null
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "파이프라인 서비스가 1분 안에 뜨지 않았다"
+          docker logs --no-color --tail=50 pipeline-ci
+          docker rm -f pipeline-ci >/dev/null
+          exit 1
+
       # 운영과 같은 구성으로 띄운다. DB · Redis 비밀번호는 이 실행에서만 쓰는 무작위 값 (로그에 남지 않게 마스킹)
       - name: Start stack (production compose)
         working-directory: deploy
         run: |
           DB_PASSWORD_CI="$(openssl rand -hex 16)"
           REDIS_PASSWORD_CI="$(openssl rand -hex 16)"
+          JWT_SECRET_CI="$(openssl rand -base64 32)"
           echo "::add-mask::$DB_PASSWORD_CI"
           echo "::add-mask::$REDIS_PASSWORD_CI"
+          echo "::add-mask::$JWT_SECRET_CI"
           {
             echo "IMAGE_PREFIX=$IMAGE_PREFIX"
             echo "IMAGE_TAG=$IMAGE_TAG"
             echo "WEB_PORT=80"
             echo "POSTGRES_PASSWORD=$DB_PASSWORD_CI"
             echo "REDIS_PASSWORD=$REDIS_PASSWORD_CI"
+            echo "JWT_SECRET=$JWT_SECRET_CI"
           } > .env
           docker compose -f docker-compose.prod.yml up -d --no-build
 
@@ -147,7 +190,9 @@ jobs:
       # 이미지에는 비밀값이 없다(비밀값은 실행 시 .env로 주입). 하루 뒤 자동 삭제
       - name: Save tested images
         if: env.PUBLISH == 'true'
-        run: docker save "$IMAGE_PREFIX-web:$IMAGE_TAG" "$IMAGE_PREFIX-backend:$IMAGE_TAG" | gzip > images.tar.gz
+        run: |
+          docker save "$IMAGE_PREFIX-web:$IMAGE_TAG" "$IMAGE_PREFIX-backend:$IMAGE_TAG" \
+            "$IMAGE_PREFIX-pipeline:$IMAGE_TAG" | gzip > images.tar.gz
 
       - name: Upload tested images
         if: env.PUBLISH == 'true'
@@ -184,7 +229,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # 순서가 중요하다 (BE-60): sha 태그를 둘 다 먼저 올리고, 브랜치 태그(main)는 마지막에 옮긴다.
+      # 순서가 중요하다 (BE-60): sha 태그를 모두 먼저 올리고, 브랜치 태그(main)는 마지막에 옮긴다. web이 매번 마지막이다.
       # 서버는 web:main이 바뀌는 것을 보고 그 커밋의 sha 태그를 받는데, sha 태그가 아직 없으면 받기에 실패해 2분 뒤 다시 시도하게 된다
       - name: Push images (sha-xxxxxxx, then branch tag)
         env:
@@ -192,7 +237,7 @@ jobs:
         run: |
           SHORT_SHA="${GITHUB_SHA::7}"
           for tag in "sha-$SHORT_SHA" "$BRANCH_TAG"; do
-            for name in backend web; do
+            for name in backend pipeline web; do
               docker tag "$IMAGE_PREFIX-$name:$IMAGE_TAG" "$IMAGE_PREFIX-$name:$tag"
               docker push "$IMAGE_PREFIX-$name:$tag"
             done

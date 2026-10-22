@@ -17,10 +17,13 @@ export function renderLawInfoBox(container, { law, penaltyType = 'PRISON' }) {
     desc.textContent = value;
     list.append(term, desc);
   }
+  const guide = document.createElement('p');
+  guide.className = 'muted';
+  guide.textContent = '법정형은 법에 정해진 형의 범위, 선고할 수 있는 범위는 감경·가중까지 반영해 실제로 정할 수 있는 최대 범위예요.';
   const note = document.createElement('p');
   note.className = 'muted';
   note.textContent = law.allowedRangeNote;
-  box.append(list, note);
+  box.append(list, guide, note);
   container.append(box);
   return box;
 }

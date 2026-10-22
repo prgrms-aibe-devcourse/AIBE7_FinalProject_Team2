@@ -9,6 +9,7 @@ import com.team2.project.judgment.domain.Judgment;
 import com.team2.project.judgment.domain.SubjectType;
 import com.team2.project.judgment.dto.RevealResponse;
 import com.team2.project.judgment.repository.JudgmentRepository;
+import com.team2.project.personality.service.ExperiencePersonalityRecorder;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
@@ -36,6 +37,7 @@ public class RevealService {
 	private final MyExperienceService myExperienceService;
 	private final ExperienceTransitionService transitionService;
 	private final JudgmentRepository judgmentRepository;
+	private final ExperiencePersonalityRecorder experiencePersonalityRecorder;
 	private final Clock clock;
 
 	/** API 11. VERDICT_CONFIRMED면 AI_REVEALED로. 이미 공개했으면 그대로 */
@@ -51,7 +53,7 @@ public class RevealService {
 		return new RevealResponse(result.status());
 	}
 
-	/** API 13. AI_REVEALED면 COMPLETED로. 이미 완료했으면 그대로 */
+	/** API 13. AI_REVEALED면 COMPLETED로 바꾸고 첫 회차 체험의 성향 기여를 저장한다. 이미 완료했으면 그대로 */
 	@Transactional
 	public RevealResponse revealComparison(Long caseId, Optional<UUID> anonymousId) {
 		Experience experience = myExperienceService.getMyExperienceAtLeast(caseId, anonymousId,
@@ -59,6 +61,12 @@ public class RevealService {
 		requirePublishedJudgments(caseId);
 		Instant now = clock.instant();
 		TransitionResult result = transitionService.applyIdempotent(experience, target -> target.revealComparison(now));
+		// 이번 요청이 처음 COMPLETED로 바꾼 경우에만 성향 기여를 같은 트랜잭션에서 저장한다 (성향 산식 3-4, BE-64).
+		// 이미 완료된 체험의 재요청 · 동시 요청에서 진 쪽은 changed = false라 다시 세지 않는다.
+		// (조건부 갱신이라 한 요청만 changed가 되고, experience_id 유니크가 한 번 더 막는다)
+		if (result.changed()) {
+			experiencePersonalityRecorder.recordOnCompleted(experience);
+		}
 		return new RevealResponse(result.status());
 	}
 

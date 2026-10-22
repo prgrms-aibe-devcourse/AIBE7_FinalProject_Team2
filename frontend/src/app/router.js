@@ -5,20 +5,23 @@
 // - 같은 화면(주소 · 값이 같음)으로의 이동은 무시한다. 에러 이동과 화면 자체 이동이 겹쳐도 한 번만 그려진다.
 // - 새로고침 · 주소 직접 입력 · 뒤로 가기 모두 같은 화면을 다시 그린다.
 // - 오래된 이동의 결과는 버린다 (빠르게 연속 이동했을 때 마지막 이동만 그려진다).
-import { element, renderSiteFooter } from '../components/siteLayout.js';
+import { element, renderSiteFooter, renderSiteHeader } from '../components/siteLayout.js';
 import { loadCaseHeader } from './caseHeader.js';
+import { legacyPath } from './legacyPaths.js';
 
 const SITE_TITLE = '내Law남불';
 
-// 주소 자리표시자: :caseId(사건 번호) · :shareId(성향 유형 공유 주소의 해시 값, S-16 공유 — 유형 코드를 주소에 드러내지 않는다)
+// 주소 자리표시자: :caseId(사건 번호) · :shareId(성향 유형 공유 주소의 해시 값, S-16 공유 — 유형 코드를 주소에 드러내지 않는다) · :postId(커뮤니티 글 번호, FE-47)
 function toMatcher(path) {
-  const pattern = path.replace(':caseId', '(?<caseId>[0-9]+)').replace(':shareId', '(?<shareId>[A-Za-z0-9]{6,16})');
+  const pattern = path.replace(':caseId', '(?<caseId>[0-9]+)').replace(':shareId', '(?<shareId>[A-Za-z0-9]{6,16})').replace(':postId', '(?<postId>[0-9]+)');
   return new RegExp(`^${pattern}/?$`);
 }
 
-function buildPath(path, caseId, shareId) {
-  return path.replace(':caseId', String(caseId)).replace(':shareId', String(shareId)); // 해시는 대소문자를 구분한다(그대로 둔다)
+function buildPath(path, caseId, shareId, postId) {
+  return path.replace(':caseId', String(caseId)).replace(':shareId', String(shareId)).replace(':postId', String(postId)); // 해시는 대소문자를 구분한다(그대로 둔다)
 }
+
+const validPostId = (value) => Number.isSafeInteger(value) && value > 0;
 
 function sameExtras(a, b) {
   const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
@@ -33,11 +36,12 @@ function messagePanel(text) {
 }
 
 /**
- * @param {{ view: HTMLElement, footerHost: HTMLElement, routes: Array }} options
+ * @param {{ view: HTMLElement, headerHost?: HTMLElement, footerHost: HTMLElement, routes: Array }} options
  *   view        화면이 그려지는 영역 (화면 진입 함수의 container)
+ *   headerHost  공통 헤더(상단 내비)를 붙이는 영역 (FE-56: 모든 화면이 같은 내비를 쓴다. ownsHeader 화면은 비운다)
  *   footerHost  공통 푸터를 붙이는 영역 (화면이 자기 푸터를 그리지 않을 때만 사용)
  */
-export function createRouter({ view, footerHost, routes }) {
+export function createRouter({ view, headerHost, footerHost, routes }) {
   const byName = new Map(routes.map((route) => [route.name, route]));
   const matchers = routes.filter((route) => route.path).map((route) => ({ route, regex: toMatcher(route.path) }));
   const notFound = byName.get('notFound');
@@ -59,7 +63,10 @@ export function createRouter({ view, footerHost, routes }) {
       const rawCaseId = found.groups?.caseId;
       const caseId = rawCaseId === undefined ? undefined : Number(rawCaseId);
       if (caseId !== undefined && !(Number.isSafeInteger(caseId) && caseId > 0)) return null;
-      return { route, caseId, shareId: found.groups?.shareId };
+      const rawPostId = found.groups?.postId;
+      const postId = rawPostId === undefined ? undefined : Number(rawPostId);
+      if (postId !== undefined && !validPostId(postId)) return null;
+      return { route, caseId, shareId: found.groups?.shareId, postId };
     }
     return null;
   }
@@ -68,6 +75,16 @@ export function createRouter({ view, footerHost, routes }) {
     const mine = ++token;
     current = { name: route.name, path, caseId, extras, navKind };
     document.title = route.name === 'landing' ? SITE_TITLE : `${route.title} · ${SITE_TITLE}`;
+    // 화면마다 새로 그린다(지금 메뉴 표시 · 로그인 상태가 바뀌므로)
+    // 색 테마는 화면이 그려지기를 기다리지 않고 이 순간 헤더 · body에 정한다(화면이 늦게 그려져도 헤더 · 바탕 · 푸터가 앞 화면 색으로 남지 않게, FE-66)
+    const header = route.ownsHeader ? null : renderSiteHeader({ navigate });
+    for (const node of [header, document.body]) {
+      if (!node) continue;
+      if (route.theme) node.dataset.theme = route.theme; else delete node.dataset.theme;
+    }
+    headerHost?.replaceChildren(...(header ? [header] : []));
+    if (headerHost) headerHost.inert = false; // 이전 화면의 대화창(엽서 · 커뮤니티 글쓰기 창)이 막아 둔 헤더 · 푸터를 푼다(stage.js, communityParts.js)
+    footerHost.inert = false;
 
     let caseHeader;
     if (route.needsHeader) {
@@ -99,7 +116,7 @@ export function createRouter({ view, footerHost, routes }) {
   }
 
   /** 화면 이동. 반환값은 화면을 그리는 작업의 완료 시점이다 (기다리지 않아도 된다)
-   *  keepView: 화면은 다시 그리지 않고 주소 · 탭 제목만 바꾼다(판결 체험 6 → 7 → 8막처럼 한 무대에서 이어 갈 때).
+   *  keepView: 화면은 다시 그리지 않고 주소 · 탭 제목만 바꾼다(판결 체험 4 → 5 → 6막처럼 한 무대에서 이어 갈 때).
    *  keepScroll: 새 화면을 그리되 스크롤을 맨 위로 올리지 않는다(무대 자리가 같은 화면끼리, 예: 판결 서명 → AI 판결).
    *  show()를 거치지 않으므로 이전 화면의 정리(cleanup)가 돌지 않는다 — 화면별 정리 로직이 생기면 여기서 빠지지 않게 챙길 것 */
   async function navigate(name, params = {}, { replace = false, keepView = false, keepScroll = false } = {}) {
@@ -119,7 +136,10 @@ export function createRouter({ view, footerHost, routes }) {
     if (route.path.includes(':shareId') && !/^[A-Za-z0-9]{6,16}$/.test(String(extras.shareId))) {
       return showNotFound();
     }
-    const path = buildPath(route.path, caseId, extras.shareId);
+    if (route.path.includes(':postId') && !validPostId(extras.postId)) {
+      return showNotFound();
+    }
+    const path = buildPath(route.path, caseId, extras.shareId, extras.postId);
     if (path === current.path && sameExtras(extras, current.extras)) {
       return undefined;
     }
@@ -145,19 +165,22 @@ export function createRouter({ view, footerHost, routes }) {
   // 지금 주소에 맞는 화면을 그린다 (처음 접속 · 새로고침 · 뒤로 · 앞으로 가기)
   // navKind: 'back' | 'forward' | 'navigate' (코드로 부른 이동, 최초 접속 · 새로고침 포함)
   function renderLocation(navKind) {
+    const moved = legacyPath(window.location.pathname);
+    // 옛 주소(공유 링크 · 북마크)는 새 주소로 바꿔 그린다. 쿼리 · 해시는 그대로 둔다
+    if (moved) history.replaceState(history.state, '', moved + window.location.search + window.location.hash);
     const found = match(window.location.pathname);
     if (!found) {
       return showNotFound();
     }
     const raw = window.location.pathname.replace(/(.)\/$/, '$1');
-    // /cases/01/review처럼 정규화되지 않은 사건 번호로 들어오면, navigate()가 만드는 경로(/cases/1/review)와
+    // /cases/01/trial처럼 정규화되지 않은 사건 번호로 들어오면, navigate()가 만드는 경로(/cases/1/trial)와
     // 달라져서 "같은 화면으로의 이동 무시"가 깨진다. 주소창도 정규화된 경로로 맞춰 둔다 (리뷰 반영)
-    const path = found.caseId === undefined && found.shareId === undefined ? raw : buildPath(found.route.path, found.caseId, found.shareId);
+    const path = found.caseId === undefined && found.shareId === undefined && found.postId === undefined ? raw : buildPath(found.route.path, found.caseId, found.shareId, found.postId);
     if (path !== raw) {
       history.replaceState(history.state, '', path); // state(순번 포함)는 그대로 유지한다
     }
-    // 주소의 :shareId는 화면에 extras.shareId로 넘긴다 (직접 입력 · 새로고침해도 같은 값)
-    const extras = { ...(history.state?.extras ?? {}), ...(found.shareId === undefined ? {} : { shareId: found.shareId }) };
+    // 주소의 :shareId · :postId는 화면에 extras.shareId · extras.postId로 넘긴다 (직접 입력 · 새로고침해도 같은 값)
+    const extras = { ...(history.state?.extras ?? {}), ...(found.shareId === undefined ? {} : { shareId: found.shareId }), ...(found.postId === undefined ? {} : { postId: found.postId }) };
     return show(found.route, found.caseId, extras, path, navKind);
   }
 
@@ -177,9 +200,12 @@ export function createRouter({ view, footerHost, routes }) {
       // 최초 진입 기록에도 순번을 매겨 둬야 이후 popstate에서 방향을 비교할 수 있다
       const seq = history.state?.seq ?? ++historySeq;
       if (history.state?.seq !== seq) {
-        history.replaceState({ ...(history.state ?? {}), seq }, '', window.location.pathname);
+        // 쿼리 · 해시는 남긴다 (/auth/callback?error=login_failed를 화면이 읽어야 한다, FE-74)
+        history.replaceState({ ...(history.state ?? {}), seq }, '', window.location.pathname + window.location.search + window.location.hash);
       }
       lastKnownSeq = seq;
+      firstSeq = seq;
+      historySeq = Math.max(historySeq, seq); // 새로고침해도 다음 push 순번이 지금 기록보다 커지게
       window.addEventListener('popstate', () => {
         const seq2 = history.state?.seq;
         const direction = seq2 === undefined ? 'navigate' : seq2 < lastKnownSeq ? 'back' : seq2 > lastKnownSeq ? 'forward' : 'navigate';
@@ -189,4 +215,12 @@ export function createRouter({ view, footerHost, routes }) {
       return renderLocation('navigate'); // 최초 접속 · 새로고침은 뒤로 가기가 아니다
     },
   };
+}
+
+// 이 탭에서 라우터가 처음 그린 기록의 순번. 그보다 큰 순번이면 앱 안에서 뒤로 갈 기록이 있다
+let firstSeq = null;
+
+/** 앱 안에서 뒤로 갈 기록이 있는지(첫 진입 화면이면 false). history.length는 앱에 오기 전 다른 사이트 기록까지 세서 쓰지 않는다 (FE-55 리뷰 반영) */
+export function canGoBackInApp() {
+  return firstSeq !== null && (history.state?.seq ?? firstSeq) > firstSeq;
 }
