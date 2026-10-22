@@ -14,8 +14,8 @@ test('보낸 칸만 바꾸고 응답은 세 값 전체, 소개는 앞뒤 공백�
   assert.equal(mockProfileSettings().shownCard, 'retake'); // 앞서 저장한 칸 유지
 });
 
-test('빈 객체 · 모르는 칸 · null · 문자열 아님 · 세 값 밖 · 40자 초과 · 줄바꿈은 400', async () => {
-  const bad = [{}, [], null, { other: 'x' }, { shownCard: null }, { shownCard: 1 }, { profileCardType: 'last' }, { bio: '가'.repeat(41) }, { bio: '두\n줄' }];
+test('빈 객체 · 모르는 칸 · null · 문자열 아님 · 세 값 밖 · 40자 초과 · 제어 문자는 400', async () => {
+  const bad = [{}, [], null, { other: 'x' }, { shownCard: null }, { shownCard: 1 }, { profileCardType: 'last' }, { bio: '가'.repeat(41) }, { bio: '두\n줄' }, { bio: '탭\t소개' }, { bio: 'a\u0000b' }];
   for (const body of bad) await assert.rejects(patchProfileSettings(body), { code: 'VALIDATION_ERROR', status: 400 }, JSON.stringify(body));
   assert.equal((await patchProfileSettings({ bio: '가'.repeat(40) })).bio.length, 40);
 });

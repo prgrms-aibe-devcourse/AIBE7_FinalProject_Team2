@@ -80,18 +80,20 @@ export function renderProfileEdit({ api, navigate, go, data = {}, card, fan }) {
   bio.name = 'bio';
   bio.type = 'text';
   bio.value = getProfileSettings().bio;
-  bio.maxLength = BIO_MAX;
+  bio.maxLength = BIO_MAX * 2; // 입력칸은 UTF-16 단위로 세어 이모지가 일찍 막히므로 넉넉히 두고, 40자(코드 포인트)는 저장 전에 검사한다
   bio.placeholder = BIO_PLACEHOLDER; // 비워 두면 이 문구가 흐리게 보인다(저장되는 값은 아니다)
   bio.spellcheck = false;
-  bio.setAttribute('aria-describedby', 'edit-bio-hint');
   const bioLabel = element('label', 'edit-label', '한 줄 소개');
   bioLabel.htmlFor = bio.id;
   const bioCount = element('span', 'edit-count');
   const bioHint = element('p', 'edit-hint', `프로필카드와 커뮤니티에 함께 보여요. ${BIO_MAX}자까지 쓸 수 있어요.`);
   bioHint.id = 'edit-bio-hint';
   bioHint.append(' ', bioCount);
+  const bioError = element('p', 'edit-error');
+  bioError.id = 'edit-bio-error';
+  bio.setAttribute('aria-describedby', 'edit-bio-hint edit-bio-error');
   const bioField = element('div', 'edit-field');
-  bioField.append(bioLabel, bio, bioHint);
+  bioField.append(bioLabel, bio, bioHint, bioError);
 
   // 프로필카드 미리보기: 마이페이지 첫 화면과 같은 카드(누르면 프로필카드 화면). 닉네임을 입력하는 대로 카드 이름이 바뀐다. 성향카드는 마이페이지 첫 화면에만 둔다
   const profileCard = card();
@@ -102,7 +104,7 @@ export function renderProfileEdit({ api, navigate, go, data = {}, card, fan }) {
       title.textContent = name;
       profileCard.setAttribute('aria-label', profileCard.getAttribute('aria-label').replace(/^(프로필카드 열기: )[^,]*/, `$1${name}`));
     }
-    bioCount.textContent = `${bio.value.length}/${BIO_MAX}`;
+    bioCount.textContent = `${[...bio.value.trim()].length}/${BIO_MAX}`;
   };
   input.addEventListener('input', syncPreview);
   bio.addEventListener('input', syncPreview);
@@ -174,9 +176,13 @@ export function renderProfileEdit({ api, navigate, go, data = {}, card, fan }) {
     const message = user ? nicknameError(input.value) : '';
     error.textContent = message;
     input.setAttribute('aria-invalid', message ? 'true' : 'false');
-    if (message) { input.focus(); return; } // 첫 오류 칸으로 초점
-    if (user) saveUser({ nickname: input.value, role: user.role }); // 서버 닉네임 API 전: 이 브라우저의 로그인 표시값만 바꾼다
     const bioNext = bio.value.trim();
+    const bioMessage = [...bioNext].length > BIO_MAX ? `한 줄 소개는 ${BIO_MAX}자까지 쓸 수 있어요. 조금 줄여 주세요.` : '';
+    bioError.textContent = bioMessage;
+    bio.setAttribute('aria-invalid', bioMessage ? 'true' : 'false');
+    if (message) { input.focus(); return; } // 첫 오류 칸으로 초점
+    if (bioMessage) { bio.focus(); return; }
+    if (user) saveUser({ nickname: input.value, role: user.role }); // 서버 닉네임 API 전: 이 브라우저의 로그인 표시값만 바꾼다
     save.disabled = true; // 저장하는 동안 다시 누르지 못하게
     const bioSaved = bioNext === getProfileSettings().bio || await updateProfileSettings({ bio: bioNext });
     save.disabled = false;

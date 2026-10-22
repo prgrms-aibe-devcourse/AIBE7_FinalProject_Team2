@@ -166,7 +166,7 @@ export async function putProfileDeco(deco) {
 }
 
 // ── P-8 프로필 선택 설정 부분 저장 (FE-81, BE-104) ──
-// 서버와 같은 규칙: 보낸 칸만 바꾸고 응답은 세 값 전체. 객체가 아님 · 빈 객체 · 모르는 칸 · null · 문자열이 아님 · 세 값 밖 · 소개 40자 초과(앞뒤 공백을 뺀 코드 포인트) · 줄바꿈 → 400
+// 서버와 같은 규칙: 보낸 칸만 바꾸고 응답은 세 값 전체. 객체가 아님 · 빈 객체 · 모르는 칸 · null · 문자열이 아님 · 세 값 밖 · 소개 40자 초과(앞뒤 공백을 뺀 코드 포인트) · 제어 문자(탭 · 줄바꿈 등) → 400
 const SETTING_SLOTS = ['initial', 'retake', 'current'];
 const DEFAULT_SETTINGS = { shownCard: 'current', profileCardType: 'current', bio: '' };
 let savedSettings = null; // 저장소를 못 쓰는 환경(테스트 등)에서도 이번 방문 동안 값을 지킨다
@@ -186,7 +186,7 @@ export async function patchProfileSettings(patch) {
     if (!(field in DEFAULT_SETTINGS) || typeof value !== 'string') settingsError(field);
     if (field === 'bio') {
       const bio = value.trim();
-      if ([...bio].length > 40 || /[\r\n\u2028\u2029\u0085]/.test(bio)) settingsError(field);
+      if ([...bio].length > 40 || /[\u0000-\u001F\u007F-\u009F\u2028\u2029]/.test(bio)) settingsError(field); // 서버(isForbidden)와 같다: 제어 문자 전체 + 줄 · 문단 구분자
       next.bio = bio;
     } else {
       if (!SETTING_SLOTS.includes(value)) settingsError(field);
