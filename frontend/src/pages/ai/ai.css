@@ -6,7 +6,7 @@
 .ai-page .release-tab { padding: 14px 20px; border-right: 1px solid var(--color-border); font-size: 13px; color: var(--color-muted); }
 .ai-page .release-tab:last-child { border-right: 0; }
 .ai-page .release-tab-label { display: block; font-weight: 700; margin-bottom: 4px; color: var(--color-text); }
-.ai-page .release-tab.is-active { background: var(--color-accent-tint); box-shadow: inset 0 -3px var(--color-primary); }
+.ai-page .release-tab.is-active { background: var(--color-accent-tint); box-shadow: inset 0 -3px var(--color-accent); }
 .ai-page .release-tab.is-active .release-tab-label,
 .ai-page .release-tab.is-active .release-tab-state { color: var(--color-accent-text); }
 .ai-page .release-tab.is-locked { opacity: .65; }
@@ -22,7 +22,7 @@
 .ai-page .reference-box h3 { font-size: 13px; color: var(--color-label); margin-bottom: 10px; }
 .ai-page .diff-text { font-weight: 700; }
 .ai-page .reference-tags { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 8px; }
-.ai-page .reference-tag { padding: 6px 12px; border: 1px solid var(--color-primary); border-radius: 999px; font-size: 12px; color: var(--color-accent-text); background: var(--color-accent-tint); }
+.ai-page .reference-tag { padding: 6px 12px; border: 1px solid var(--color-accent); border-radius: 999px; font-size: 12px; color: var(--color-accent-text); background: var(--color-accent-tint); }
 .ai-page .reference-tag.muted { border-color: var(--color-border); color: var(--color-muted); background: transparent; }
 .ai-page .ai-detail { padding: 28px; min-width: 0; }
 .ai-page .ai-detail h2 { color: var(--color-label); font-size: 14px; margin-bottom: 14px; }

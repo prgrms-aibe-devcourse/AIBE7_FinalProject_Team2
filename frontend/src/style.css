@@ -23,6 +23,7 @@ body {
   /* ① 팔레트 */
   --palette-navy-900: #101d39;
   --palette-navy-700: #1f3563;
+  --palette-navy-500: #2f5592;
   --palette-navy-200: #c9d1e3;
   --palette-navy-50: #eef1f7;
   --palette-bronze-500: #ba854b;
@@ -77,7 +78,6 @@ body {
   --color-on-accent: var(--palette-white);         /* 주 버튼 위 글자 */
   --color-accent-tint: var(--palette-navy-50);     /* 선택된 칩 · 항목 바탕 */
   --color-accent-text: var(--palette-navy-700);    /* 선택된 항목 글자 */
-  --color-primary: var(--color-accent);            /* 이전 이름(FE-2). 새 코드는 --color-accent를 쓴다 */
   --color-decor: var(--palette-bronze-500);        /* 장식 선 · 로고 "Law" (작은 글자 금지) */
   --color-range-fill: var(--palette-bronze-200);   /* 권고 범위 막대 */
   --color-focus: var(--palette-blue-focus);        /* 키보드 포커스 링 */
@@ -90,6 +90,9 @@ body {
   --color-caution-border: var(--palette-orange-500);
   --color-caution-tint: var(--palette-orange-50);
   /* ② 역할 — 의미 색 (항상 기호 · 문장과 함께) */
+  --color-axis-strict: var(--palette-navy-500);     /* 4축 막대: 엄격 쪽 남색 · 관대 쪽 갈색. 채도가 비슷한 두 색으로 구분만 한다(좋고 나쁨이 아님) */
+  --color-axis-lenient: var(--palette-wood-500);
+  --color-axis-lenient-text: var(--palette-wood-700); /* 갈색 막대 색은 글자로는 대비가 모자라(3.3:1) 한 단계 진하게 */
   --color-up: var(--palette-up);                   /* 가중 ↑ */
   --color-down: var(--palette-down);               /* 감경 ↓ */
   --color-case-murder: var(--palette-case-murder);
@@ -119,7 +122,7 @@ body {
   --palette-kraft-300: #d6a468;
   --palette-kraft-500: #bf8a50;
   --palette-kraft-600: #b78049;
-  --palette-sheet: #f6f3ec;
+  --palette-sheet: var(--palette-paper-50);          /* 책상 종이 = 부드러운 종이(#f7f3ee). 1단계 차이(#f6f3ec)라 눈으로 구분되지 않아 한 값으로 합쳤다. 역할 이름(desk-sheet · surface)은 용도가 달라 그대로 둔다 */
   --palette-sheet-line: #c9c3b8;
   --palette-label: #f7f2e8;
   --palette-metal-200: #d6d8dd;

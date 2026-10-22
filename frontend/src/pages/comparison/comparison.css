@@ -8,7 +8,7 @@
 .comparison-page .pre-to-final-box { flex: 1; min-width: 0; padding: 18px 20px; border: 1px solid var(--color-border); border-radius: 4px; }
 .comparison-page .pre-to-final-box .muted { display: block; margin-bottom: 8px; }
 .comparison-page .pre-to-final-box strong { display: block; font-size: 18px; }
-.comparison-page .pre-to-final-box:last-child { border-color: var(--color-primary); background: var(--color-accent-tint); }
+.comparison-page .pre-to-final-box:last-child { border-color: var(--color-accent); background: var(--color-accent-tint); }
 .comparison-page .pre-to-final-arrow { align-self: center; flex-shrink: 0; font-size: 22px; color: var(--color-muted); }
 .comparison-page .pre-to-final-summary { margin-top: 16px; font-weight: 700; }
 .comparison-page .judgment-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-bottom: 1px solid var(--color-border); }
@@ -35,7 +35,7 @@
 .comparison-page .matrix-direction.is-none { color: var(--color-muted); font-weight: 400; }
 .comparison-page .category-tag { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 12px; white-space: nowrap; }
 .comparison-page .category-all-same { background: var(--color-surface); color: var(--color-muted); }
-.comparison-page .category-only-me-missed { border: 1px solid var(--color-primary); color: var(--color-accent-text); }
+.comparison-page .category-only-me-missed { border: 1px solid var(--color-accent); color: var(--color-accent-text); }
 .comparison-page .category-diverged { background: var(--color-accent-tint); color: var(--color-accent-text); }
 .comparison-page .rule-sentences { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid var(--color-border); }
 .comparison-page .rule-box { padding: 22px 28px; border-right: 1px solid var(--color-border); }

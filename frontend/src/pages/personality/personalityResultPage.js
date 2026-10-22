@@ -1,9 +1,8 @@
 import { button, element } from '../../components/siteLayout.js';
 import { renderToleranceScale } from '../../components/toleranceScale.js';
-import { descriptionSections, noticeBlock, renderFolder, resultPages, setFolderTurnFrom, sheetMessage, takeFolderTurn, TOLERANCE_NOTE, turnPage, typeCard } from './personalityParts.js';
+import { canTurnFolder, descriptionSections, noticeBlock, renderFolder, resultPages, setFolderTurnFrom, sheetMessage, takeFolderTurn, TOLERANCE_NOTE, turnPage, typeCard } from './personalityParts.js';
 import { renderAxisRow } from '../../components/axisRow.js';
 import { AXES } from '../../utils/personalityAxes.js';
-import { reducedMotion } from '../../utils/motion.js';
 
 // S-16 성향 결과 — 내 결과 (WBS 7.6.5, FE-42 디자인). 공유 버튼은 해시 주소(/test/types/{shareId})를 공유한다(FR-8-6).
 // 문구는 docs/personality-test-content.md 4 · 5장. 캐릭터 이미지는 유형마다 하나(personality-image-numbers.md, 01 ~ 32).
@@ -44,7 +43,7 @@ export async function renderPersonalityResultPage(container, { api, navigate }) 
   root.classList.add('is-result');
   // 검사지를 막 제출했으면 가로로 눕힌 철을 돌려 세운다. 다 돌면 결과지 글자 · 탭이 나타난다(personality.css folder-turn)
   const turnFrom = takeFolderTurn();
-  if (turnFrom && !reducedMotion()) {
+  if (turnFrom && canTurnFolder()) {
     setFolderTurnFrom(root.querySelector('.test-folder'), turnFrom);
     root.classList.add('is-turning');
     root.addEventListener('animationend', (event) => {
@@ -77,7 +76,9 @@ export async function renderPersonalityResultPage(container, { api, navigate }) 
     graph.append(element('h2', '', '가치관 4축'));
     const list = element('ul', 'axis-list');
     AXES.forEach((axis) => list.append(renderAxisRow(axis, axisScores[axis.key])));
-    graph.append(list, toleranceBlock(type.tolerance));
+    graph.append(list);
+    const tolerance = element('section', 'result-section'); // 4축과 관용 지수는 점선으로 나눈 따로 섹션
+    tolerance.append(toleranceBlock(type.tolerance, 'h2'));
 
     const actions = element('div', 'result-actions');
     const shareNote = element('p', 'share-note');
@@ -90,9 +91,14 @@ export async function renderPersonalityResultPage(container, { api, navigate }) 
     );
     actions.append(button('실제 사건으로 판결하러 가기', () => navigate('list'), 'primary-button'), more);
 
+    // 귀로 넘기면 새 장을 처음부터 읽도록 맨 위로 올린다
+    const flipTo = (index) => {
+      pages.show(index, { focusPanel: true });
+      window.scrollTo({ top: 0 });
+    };
     const pages = resultPages(tabs, body, [
-      { label: '결과', nodes: [card, graph, turnPage('풀이 보기', () => pages.show(1, { focusPanel: true }))] },
-      { label: '풀이', nodes: [...descriptionSections(type), noticeBlock(), actions, shareNote] },
+      { label: '결과', nodes: [card, graph, tolerance, turnPage('풀이 보기', () => flipTo(1))] },
+      { label: '풀이', nodes: [typeCard(type, { other: true }), ...descriptionSections(type), noticeBlock(), actions, shareNote, turnPage('결과 보기', () => flipTo(0), { prev: true })] },
     ]);
   }
 
