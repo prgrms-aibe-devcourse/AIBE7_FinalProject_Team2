@@ -386,7 +386,7 @@ function retakeTrendsOf(data, retake) {
   });
 }
 
-const movedText = (change) => (change.same ? '변화없음' : change.steady ? '거의 그대로' : `+${Math.abs(change.moved)}%p ${change.toward}`); // 늘어난 쪽과 그 양(함유량의 말)
+const movedText = (change) => (change.same ? '변화 없음' : change.steady ? '거의 그대로' : `+${Math.abs(change.moved)}%p ${change.toward}`); // 늘어난 쪽과 그 양(함유량의 말)
 
 const EDGE_TOUCH_PX = 2; // 두 경계선 사이가 이 이하(px)면 선을 하나로 합친다(선 1px씩 둘이 나란히 붙는 폭)
 

@@ -57,7 +57,7 @@ export function trendSlotOrders(historyLength, hasTest, focus) {
 // 한 축의 변경폭: 처음(테스트 또는 첫 체험) → 지금. 지금은 current(현재 판결 성향 = 최근 체험 3건 평균, API 명세 P-5)이고,
 // 그 축 값이 없으면 가장 최근 체험 점이다. 체험이 하나도 없거나 점이 둘보다 적으면 null.
 // moved는 관대 쪽으로 움직인 %p(음수면 엄격 쪽), toward는 움직인 쪽 이름, steady는 STEADY_POINTS 안쪽이면 true,
-// same은 실제 값이 같으면 true(부동소수 오차 SAME 안쪽 포함). 표시가 같아도 실제로 다르면 false라서 "변화없음"은 완전 일치만이다
+// same은 실제 값이 같으면 true(부동소수 오차 SAME 안쪽 포함). 표시가 같아도 실제로 다르면 false라서 "변화 없음"은 완전 일치만이다
 export function axisChange(points, axis, current) {
   if (points.length < 2 || points.every((point) => point.isTest)) return null;
   const from = points[0];
