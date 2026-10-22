@@ -18,6 +18,7 @@ import { renderProfileEdit } from './myProfileEdit.js';
 import { RETAKE_NOTES, openRetakeDialog, retakeAfter, retakeState } from './baselineRetake.js';
 import { SHOWN_SLOTS, setShownCard, shownSlot } from '../../utils/shownCard.js';
 import { selectedChoice, setProfileCardType, typeChoices } from '../../utils/profileCardType.js';
+import { configureProfileSettings, hydrateProfileSettings } from '../../utils/profileSettings.js';
 
 // S-17 마이페이지 (WBS 7.6.6). GET /my-page 한 번 호출로 받고, 기록이 없어도 404가 아니라 빈 200이다(명세 P-5).
 // 메인 책상의 커피잔으로 들어온다(FE-44): 커다란 커피잔이 날아와 페이드아웃하는 사이(utils/coffeeDive.js) 이 화면(from: 'mug')으로 넘어온다.
@@ -66,6 +67,9 @@ const LOCKED_FIELD_NAMES = {
   portrait: '대표 이미지', frame: '카드 테두리', background: '카드 배경', sashStyle: '카드 책갈피 모양',
   sashColorShort: '카드 책갈피 색', sashColorLong: '카드 책갈피 색', sashIconLeft: '책갈피 아이콘', sashIconRight: '책갈피 아이콘',
 };
+// 공개 카드 · 카드 아래 성향 저장이 거절되면(P-8) 서버 값으로 다시 그리고 알린다
+const saveSettingsOr = (saving) => saving.then((saved) => { if (!saved) refresh?.('선택을 저장하지 못했어요. 저장된 값으로 다시 보여 드려요.'); });
+
 function saveFailureText(error) {
   if (error?.code === 'DECO_LOCKED') {
     const names = [...new Set((error.details ?? []).map(({ field }) => LOCKED_FIELD_NAMES[field]).filter(Boolean))];
@@ -111,6 +115,7 @@ async function loadMyPage(api) {
   await saveQueue;
   const version = decoVersion;
   const data = await api.getMyPage();
+  hydrateProfileSettings(data.profileSettings);
   return version === decoVersion || !cache ? data : { ...data, profileDeco: cache.profileDeco };
 }
 
@@ -746,7 +751,7 @@ function typeFan(data, navigate, go) {
   };
   const pick = (key) => {
     if (key === shownSlot(slots)) return;
-    setShownCard(key);
+    saveSettingsOr(setShownCard(key));
     paint();
   };
   SHOWN_SLOTS.forEach((key) => {
@@ -780,7 +785,7 @@ function typeFan(data, navigate, go) {
   side.append(
     element('span', 'edit-label', '커뮤니티에 보일 성향카드'),
     bar,
-    element('p', 'edit-hint', '고른 카드가 맨 앞에 놓이고 "공개" 도장이 찍혀요. 지금은 이 브라우저에만 저장돼요.'),
+    element('p', 'edit-hint', '고른 카드가 맨 앞에 놓이고 "공개" 도장이 찍혀요.'),
     actions,
     ...(note ? [element('p', 'edit-hint', note)] : []),
   );
@@ -813,7 +818,7 @@ function typeShift(data, navigate) {
     if (key === shown) pick.append(shownStamp());
     pick.addEventListener('click', () => {
       if (key === shown) return;
-      setShownCard(key);
+      saveSettingsOr(setShownCard(key));
       const next = typeShift(data, navigate);
       box.replaceWith(next);
       next.querySelector(`[data-slot="${key}"]`)?.focus();
@@ -856,7 +861,7 @@ function typeShift(data, navigate) {
     arrow(),
     now,
   );
-  box.append(row, element('p', 'my-shown-hint', '"공개" 도장이 찍힌 카드가 커뮤니티에서 다른 사람에게 보여요. 카드를 눌러 바꿀 수 있어요. 지금은 이 브라우저에만 저장돼요.'));
+  box.append(row, element('p', 'my-shown-hint', '"공개" 도장이 찍힌 카드가 커뮤니티에서 다른 사람에게 보여요. 카드를 눌러 바꿀 수 있어요.'));
   return box;
 }
 
@@ -1127,7 +1132,7 @@ function typeChoiceSection(data, onPick) {
     input.name = 'profile-card-type';
     input.value = choice.pick;
     input.checked = choice === selected || (!selected && index === 0);
-    input.addEventListener('change', () => { setProfileCardType(choice.pick); onPick(); });
+    input.addEventListener('change', () => { saveSettingsOr(setProfileCardType(choice.pick)); onPick(); });
     label.append(input, element('span', '', choice.label));
     list.append(label);
   });
@@ -1342,6 +1347,7 @@ export async function renderMyPage(container, { api, navigate, view, from }) {
   const shown = VIEWS[view] ? view : null;
   const go = (next) => navigate('me', next ? { view: next } : {});
   apiRef = api;
+  configureProfileSettings(api.patchProfileSettings ? (settings) => api.patchProfileSettings(settings) : null); // 공개 카드 · 카드 아래 성향 · 한 줄 소개 저장(P-8)
 
   // 커피잔에서 왔으면 표시를 지운다(새로고침 · 뒤로 가기로는 되풀이하지 않는다). 눌렀던 커피잔이 사라졌으니 화면이 그려진 뒤 포커스를 제목으로 옮긴다
   let arrived = false;
@@ -1371,6 +1377,7 @@ export async function renderMyPage(container, { api, navigate, view, from }) {
     try {
       const fresh = await api.getMyPage();
       if (!active()) return;
+      hydrateProfileSettings(fresh.profileSettings);
       cache = fresh;
       applyBookmark(fresh.profileDeco);
       document.querySelector('.my-deco-dialog')?.close();

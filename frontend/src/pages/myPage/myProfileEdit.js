@@ -1,35 +1,13 @@
 // 내 정보 수정(FE-77): 마이페이지 "내 정보 수정" 화면의 내부 틀. 서버 닉네임 · 탈퇴 API가 아직 없어 저장은 이 브라우저의 로그인 표시값(session.js)에만 반영한다.
 // 구성: 프로필(프로필카드 · 닉네임 · 한 줄 소개 · 성향카드 · 재심) · 계정 정보 · 계정 관리(현재 아이디 · 비밀번호 변경 · 로그아웃 · 회원 탈퇴) · 약관. 알림 등 앱 설정은 "환경 설정"에서 다룬다
-// 한 줄 소개도 서버 API 전이라 이 브라우저(localStorage)에만 저장한다. 프로필카드 · 성향카드는 커뮤니티에서 항상 공개다(공개 범위 설정을 두지 않는다, 의도된 서비스 특징)
+// 한 줄 소개는 서버(P-8 PATCH /profile-settings)에 저장한다(profileSettings.js, FE-81). 프로필카드 · 성향카드는 커뮤니티에서 항상 공개다(공개 범위 설정을 두지 않는다, 의도된 서비스 특징)
 import { button, element, mockTag } from '../../components/siteLayout.js';
 import { API_MODE } from '../../api/config.js';
 import { clearUser, currentUser, saveUser } from '../../utils/session.js';
 import { NICKNAME_HINT, NICKNAME_MAX, nicknameError } from '../../utils/nickname.js';
-import { localStore } from '../../utils/safeStorage.js';
+import { BIO_MAX, getProfileSettings, updateProfileSettings } from '../../utils/profileSettings.js';
 
-const EXTRAS_KEY = 'nlnb-profile-extras';
-const BIO_MAX = 40;
 const BIO_PLACEHOLDER = '사건 앞에서는 한 번 더 생각하는 판사입니다.';
-const DEFAULT_EXTRAS = { bio: '' };
-
-function loadExtras() {
-  try {
-    const saved = JSON.parse(localStore()?.getItem(EXTRAS_KEY) ?? 'null');
-    return { ...DEFAULT_EXTRAS, ...(saved && typeof saved === 'object' ? saved : {}) };
-  } catch {
-    return { ...DEFAULT_EXTRAS };
-  }
-}
-
-// 저장했으면 true. 저장소를 못 쓰면(차단 · 용량) false라, 화면이 "저장 못 했어요"를 알린다
-function saveExtras(extras) {
-  try {
-    localStore().setItem(EXTRAS_KEY, JSON.stringify(extras));
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 const IS_MOCK = API_MODE === 'mock';
 
@@ -70,7 +48,6 @@ function dangerAction({ id, openLabel, agreeText, runLabel, onRun }) {
 
 export function renderProfileEdit({ api, navigate, go, data = {}, card, fan }) {
   const user = currentUser();
-  const extras = loadExtras();
   const box = element('div', 'my-detail edit-page');
   const form = element('form', 'edit-form');
   form.noValidate = true; // 브라우저 기본 말풍선 대신 아래 안내 문구를 쓴다
@@ -102,7 +79,7 @@ export function renderProfileEdit({ api, navigate, go, data = {}, card, fan }) {
   bio.id = 'edit-bio';
   bio.name = 'bio';
   bio.type = 'text';
-  bio.value = extras.bio;
+  bio.value = getProfileSettings().bio;
   bio.maxLength = BIO_MAX;
   bio.placeholder = BIO_PLACEHOLDER; // 비워 두면 이 문구가 흐리게 보인다(저장되는 값은 아니다)
   bio.spellcheck = false;
@@ -189,16 +166,20 @@ export function renderProfileEdit({ api, navigate, go, data = {}, card, fan }) {
     status,
     actions,
   );
-  form.addEventListener('submit', (event) => {
+  form.addEventListener('submit', async (event) => {
     event.preventDefault();
     status.textContent = '';
     const message = user ? nicknameError(input.value) : '';
     error.textContent = message;
     input.setAttribute('aria-invalid', message ? 'true' : 'false');
     if (message) { input.focus(); return; } // 첫 오류 칸으로 초점
-    const bioSaved = saveExtras({ ...extras, bio: bio.value.trim() });
     if (user) saveUser({ nickname: input.value, role: user.role }); // 서버 닉네임 API 전: 이 브라우저의 로그인 표시값만 바꾼다
-    status.textContent = bioSaved ? '저장했어요.' : '한 줄 소개를 저장하지 못했어요. 브라우저 저장 공간을 확인해 주세요.';
+    const bioNext = bio.value.trim();
+    save.disabled = true; // 저장하는 동안 다시 누르지 못하게
+    const bioSaved = bioNext === getProfileSettings().bio || await updateProfileSettings({ bio: bioNext });
+    save.disabled = false;
+    if (!bioSaved) bio.value = getProfileSettings().bio; // 거절되면 서버에 있는 값으로 돌린다
+    status.textContent = bioSaved ? '저장했어요.' : '한 줄 소개를 저장하지 못했어요. 잠시 뒤 다시 시도해 주세요.';
   });
 
   const head = element('p', 'edit-intro', '프로필과 계정을 관리해요. 알림 같은 앱 설정은 환경 설정에서 바꿀 수 있어요.');
