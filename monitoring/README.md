@@ -132,8 +132,10 @@ Account 토큰(아래)만으로 되고 YAML도 그대로 쓸 수 있어 이쪽�
 - 네임스페이스 `lawnambul` 아래 `lawnambul-service`(규칙 7개) · `lawnambul-meta`(`Watchdog`)로 나눠 올렸다.
 - **`AlertDeliveryFailing`은 올리지 않았다.** 이 규칙이 보는 지표(`alertmanager_notifications_failed_total`)는
   로컬 Alertmanager 자신을 스크레이프해야 나오는데, 운영에는 Alertmanager가 없고 Alloy도 이 지표를 Cloud로
-  보내지 않아 값이 전혀 들어오지 않는다. "경보 경로가 살아 있는가"는 Cloud에서도 `Watchdog`(Dead man's
-  switch) 하나로 확인한다.
+  보내지 않아 값이 전혀 들어오지 않는다. `Watchdog`(Dead man's switch)이 "규칙 평가와 알림 상태가
+  존재하는가"까지는 보여 주지만, **Cloud에서는 `Watchdog`에 `always-muted`가 걸려 있어(아래) Slack
+  전송까지는 증명하지 않는다** — `lawnambul-slack` 전송 자체가 조용히 막힐 가능성은 이 구성만으로는
+  감지하지 못하는 구멍으로 남는다(`docs/decisions/COMMON-63.md` 2절).
 - 로컬의 `null` 수신자에 대응하는 개념이 Grafana Cloud 알림 정책에는 없다. 대신 **항상 켜진 mute timing**
   (`always-muted`, 월~일 00:00~23:59)을 `severity="none"`(=`Watchdog`) 라우트에 걸어 같은 효과를 냈다 —
   `Watchdog`은 Cloud에서 계속 firing 상태를 유지하지만 Slack으로는 전송되지 않는다.
@@ -145,7 +147,9 @@ Account 토큰(아래)만으로 되고 YAML도 그대로 쓸 수 있어 이쪽�
 - Grafana Service Account 토큰(`glsa_...`): 그 Grafana 안에서 Administration → Users and access →
   Service accounts → Add service account(Editor 권한) → Add service account token.
   `GET /api/org`으로 먼저 유효성을 확인한 뒤 썼다. **이 토큰은 커밋하지 않는다** — 로컬 테스트에 쓴 파일은
-  작업 뒤 모두 지웠고, 팀에서 재사용하려면 Jira COMMON-63 댓글 또는 비공개 채널로 전달한다.
+  작업 뒤 모두 지웠다. **토큰 값 자체는 Jira 댓글이나 채널로 전달하지 않는다** — 범위·보존 기간을 통제할
+  수 없기 때문이다. 같은 작업을 다시 해야 하는 팀원은 위 절차대로 자신의 Service Account 토큰을 새로
+  발급받아 쓴다(발급은 Grafana Cloud 콘솔 권한만 있으면 되는 셀프서비스라 토큰 공유가 필요 없다).
 - Slack 연락처(`lawnambul-slack`)는 "Slack 웹훅 설정" 절의 웹훅 URL을 그대로 재사용했다.
 
 **확인**: Grafana 좌측 메뉴 Alerting → Alert rules에서 `lawnambul` 네임스페이스의 규칙 8개, Contact points에서

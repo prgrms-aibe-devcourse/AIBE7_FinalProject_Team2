@@ -43,10 +43,12 @@ Jira 이슈가 원한 "Prometheus 표준 문법이라 그대로 옮길 수 있�
 않는다(`deploy/alloy-agent.alloy`의 `cloud_filter`가 백엔드 · 노드 지표만 허용). 즉 이 규칙을 Cloud에
 그대로 옮겨도 값이 영원히 비어 평가될 수 없다.
 
-- **대안 A: 그대로 안 옮기고 뺀다.** "경보 경로가 살아 있는가"는 Cloud에서도 `Watchdog`
-  (`vector(1)`, Dead man's switch)만으로 충분히 확인된다 — Watchdog이 계속 firing 상태를 유지하는 한
-  Prometheus 평가 → Grafana 알림 정책 → (뮤트된) 상태까지 파이프라인 전체가 살아 있다는 뜻이고, 이게
-  멈추면 역으로 알아챌 수 있다.
+- **대안 A: 그대로 안 옮기고 뺀다.** `Watchdog`(`vector(1)`, Dead man's switch)이 계속 firing 상태를
+  유지하면 Prometheus 평가 → Grafana 알림 정책까지는 살아 있다는 뜻이다. 다만 **`Watchdog`에는
+  `always-muted` mute timing이 걸려 있어(3절) 실제로 `lawnambul-slack`까지 전송되지 않는다** — 즉
+  이 신호는 "규칙 평가와 알림 상태가 존재한다"까지만 증명하고, Slack 전송 자체가 살아 있는지는
+  증명하지 못한다. `AlertDeliveryFailing`이 빠진 채로는 Slack 전송 장애가 조용히 남을 수 있다는
+  뜻이므로, 이 구멍은 이 PR 범위에서 메우지 않고 남겨 둔다(대체 지표가 생기면 대안 B로 다시 본다).
 - **대안 B: Grafana Cloud 내부 지표(`grafanacloud-usage` 등)로 대체 지표를 새로 찾아 만든다.** 계정의
   내부 알림 전송 실패 지표가 어떤 이름 · 어느 데이터소스에 있는지 확인하는 조사가 추가로 필요하고, 이번
   이슈의 범위(기존 규칙 이식 + Slack 연락처)를 벗어난다.
