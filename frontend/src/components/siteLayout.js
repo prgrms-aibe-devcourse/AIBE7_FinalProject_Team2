@@ -1,5 +1,5 @@
 // 공통 사이트 헤더 · 푸터 (REQ-071 법적 고지). S-01 · S-02 · S-14가 헤더를 그리고, 푸터는 S-01 · S-02가 직접, 나머지 화면은 라우터가 붙인다. 스타일은 src/style.css
-import { motionSwitchOn, reducedMotion, setMotionSwitch, systemReducesMotion } from '../utils/motion.js';
+import { MOTION_EVENT, motionSwitchOn, reducedMotion, setMotionSwitch, systemReducesMotion } from '../utils/motion.js';
 import { currentUser, isAdmin } from '../utils/session.js';
 import { homeRoute } from '../pages/admin/adminMenu.js';
 import { API_MODE, setApiMode } from '../api/config.js';
@@ -79,9 +79,14 @@ function motionSwitch() {
   } else {
     node.addEventListener('click', () => {
       setMotionSwitch(!motionSwitchOn());
-      sync();
     });
   }
+  // 설정 화면에서 바꿔도 따라간다. 헤더가 다시 그려져 떨어진 스위치는 듣기를 멈춘다
+  const follow = () => {
+    if (!node.isConnected) document.removeEventListener(MOTION_EVENT, follow);
+    else sync();
+  };
+  document.addEventListener(MOTION_EVENT, follow);
   sync();
   return node;
 }

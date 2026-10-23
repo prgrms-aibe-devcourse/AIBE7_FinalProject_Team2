@@ -4,6 +4,7 @@
 // CSS 애니메이션 · 전환은 <html data-motion="off">에서 style.css가 길이를 0으로 만든다(끝 상태는 그대로, animationend도 온다).
 // data-motion도 기기 설정을 함께 본다(reduced-motion 미대응 CSS도 멈추도록)
 const STORAGE_KEY = 'nlnb-motion';
+export const MOTION_EVENT = 'nlnb:motion'; // 스위치 값이 바뀌었다는 알림(document)
 const OS_QUERY = '(prefers-reduced-motion: reduce)';
 let unsaved = null; // 저장소에 쓰지 못했을 때 이번 방문 동안의 스위치 값
 
@@ -56,4 +57,5 @@ export function setMotionSwitch(on, storage = safeStorage()) {
     unsaved = Boolean(on); // 저장소를 못 쓰면(사생활 보호 모드 등) 이번 방문에서만 바뀐다
   }
   applyMotion(storage);
+  globalThis.document?.dispatchEvent?.(new Event(MOTION_EVENT)); // 헤더 스위치 · 설정 화면이 같이 따라가도록
 }

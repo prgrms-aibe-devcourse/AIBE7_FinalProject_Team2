@@ -7,6 +7,7 @@ import { turnPage } from '../../utils/pageTurn.js';
 import { reducedMotion } from '../../utils/motion.js';
 import { peelOff } from '../../utils/peelOff.js';
 import { takePaper } from '../../utils/paperHandoff.js';
+import { spreadFromTail } from '../../utils/tailSpread.js';
 
 // S-02 사건 목록 — 신문 1면 (FE-18, 시안 v12 + 배치 조정). 유형 필터 · 오류 처리 로직은 FE-4 · FE-11과 같다.
 // 흐름 목업 ②(FE-32): 책상에서 집어 든 신문이다. 위에 남불의 안내 포스트잇(누르면 떼어짐, FE-50)이 있고, 기사를 누르면
@@ -65,7 +66,8 @@ function dense(paragraphs) {
 export async function renderCaseListPage(container, { api, navigate, from }) {
   const root = element('div', 'case-list-page');
   // 메인 책상에서 신문을 들고 온 경우(FE-50): 책상 화면을 뒤에 남겨 두었다가 지면이 아래에서 올라오는 동안 흐려지며 걷는다(성향 검사 서류철과 같은 방식)
-  const ghost = from === 'desk' && !reducedMotion() && container.querySelector('.landing-page') ? element('div', 'paper-ghost') : null;
+  // 맨 아래 신문 끝자락에서 왔으면(from: 'tail', FE-87) 같은 방식으로 메인을 뒤에 남기고, 지면은 끝자락 자리에서 커지며 나온다
+  const ghost = (from === 'desk' || from === 'tail') && !reducedMotion() && container.querySelector('.landing-page') ? element('div', 'paper-ghost') : null;
   if (ghost) {
     ghost.setAttribute('aria-hidden', 'true');
     ghost.inert = true;
@@ -80,6 +82,12 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
   if (from === 'desk') {
     history.replaceState({ ...history.state, extras: {} }, '');
     if (!reducedMotion()) root.classList.add(ghost ? 'is-rising' : 'is-arriving');
+  }
+  const tail = from === 'tail' ? takePaper() : null; // 메인이 본떠 넘긴 끝자락 한 장과 그 자리
+  if (from === 'tail') {
+    history.replaceState({ ...history.state, extras: {} }, '');
+    if (ghost && tail) root.classList.add('is-spreading');
+    else { tail?.layer.remove(); ghost?.remove(); } // 넘겨받은 한 장이 없으면 연출을 포기하고 뒤에 남긴 메인도 바로 걷는다(아래 rise()가 돌지 않는 길)
   }
   // 6막 신문을 뒤집고 왔으면(FE-55 "다른 사건 보기") 넘겨받은 빈 뒷면(paperHandoff.js)이 화면을 덮고 있다.
   // 기사가 다 그려지면 같은 자리의 이 지면 위에 기사가 페이드인한다(unflip)
@@ -153,6 +161,25 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
     paper.addEventListener('animationend', onEnd);
     timer = window.setTimeout(drop, 2000); // animationend가 오지 않아도 걷는다
     root.classList.add('is-going');
+  }
+
+  // 끝자락에서 왔으면 메인이 본뜬 끝자락이 곧바로 위로 잡아당겨지며 커지고, 들어 올린 뒤 그 밑에서 함께 움직이던 이 지면으로 넘어간다(utils/tailSpread.js).
+  // 넘어가기 직전까지 기사와 첫 사진이 다 준비되지 않았으면(최대 RISE_WAIT_MS) 그 자리에서 기다린다. 뒤에 남긴 메인은 함께 흐려진다
+  async function spread(loaded) {
+    if (!active()) { tail.layer.remove(); return; } // 기다리는 사이 다른 화면으로 갔으면 연출하지 않는다(rise · unflip과 같다)
+    root.classList.add('is-going');
+    // 연출 도중 다른 화면으로 가면(Esc · 헤더) 맨 위 층에 본뜬 끝자락이 새 화면 위에 남지 않게 바로 걷는다
+    const watch = window.setInterval(() => { if (!active()) tail.layer.remove(); }, 100);
+    try {
+      await spreadFromTail({ paper, face: tail.card, from: tail.rect, backdrop: ghost, ready: drawn(loaded) });
+    } catch {
+      // 연출이 실패해도 화면 전환은 막지 않는다(아래에서 연출 층을 걷고 지면을 그대로 둔다)
+    } finally {
+      window.clearInterval(watch);
+      tail.layer.remove();
+      ghost.remove();
+      if (active()) root.classList.remove('is-spreading', 'is-going'); // 그 사이 다른 화면으로 갔으면 이 지면은 이미 버려졌다
+    }
   }
 
   // 넘겨받은 빈 종이는 이 지면과 같은 자리 · 같은 크기로 덮여 있다. 기사가 다 그려지면 지면을 드러내 기사를 페이드인하고,
@@ -384,7 +411,8 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
   }
 
   const loaded = load(undefined);
-  if (ghost) rise(loaded);
+  if (root.classList.contains('is-spreading')) spread(loaded);
+  else if (ghost) rise(loaded);
   // 뒤집고 왔으면 기사와 첫 사진이 다 준비된 뒤에 한 번에 페이드인한다(늦게 온 기사가 따로 튀어나오지 않게)
   // 기사 준비가 어떻게 끝나든(성공 · 실패 · 시간 초과) 덮고 있는 빈 종이는 반드시 걷는다
   if (root.classList.contains('is-unflipping')) drawn(loaded).catch(() => {}).finally(() => unflip(handed));
