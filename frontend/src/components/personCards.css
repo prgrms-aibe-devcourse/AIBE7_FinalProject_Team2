@@ -1,0 +1,141 @@
+/* 성향카드 · 프로필카드 부품 스타일(FE-79). 마이페이지 · 내 결과 · 커뮤니티 명함이 함께 쓴다.
+   원래 myPage.css에 있던 것을 그대로 옮겼다. 화면별 배치(.my-top · .is-detail 등)는 각 화면 CSS에 남는다 */
+.my-page, .cm-cards {
+  /* 대표 이미지 카드 꾸미기(FE-68) 색. 팔레트 값은 여기서만 꺼내 쓴다 */
+  --deco-drop: 0 1px 0 var(--color-border), 0 10px 20px color-mix(in srgb, var(--color-heading) 14%, transparent);
+  --deco-wood: var(--palette-bronze-700);
+  --deco-wood-light: var(--palette-bronze-500);
+  --deco-gold: var(--palette-pen-gold);
+  --deco-navy: var(--palette-navy-900);
+  --deco-navy-soft: var(--palette-navy-700);
+  --deco-night-line: var(--palette-navy-200);
+  --deco-news: var(--palette-news);
+  --deco-news-line: var(--palette-news-sheet-1);
+  --deco-news-ink: var(--palette-news-ink);
+  --deco-linen: var(--palette-paper-0);
+  --deco-linen-line: color-mix(in srgb, var(--palette-coffee-100) 40%, transparent);
+  --deco-sash-wine: var(--palette-red-700);
+  --deco-sash-green: var(--palette-judge-court);
+}
+
+.my-card {
+  position: relative; display: grid; width: 200px; aspect-ratio: 7 / 14; padding: 12px; border: 1px solid var(--color-border-strong); border-radius: 14px;
+  background: var(--color-card); color: inherit; font: inherit; text-align: center; cursor: pointer; user-select: none;
+  box-shadow: var(--frame-ring, inset 0 0 0 0 transparent), 0 1px 0 var(--color-border), 0 10px 20px color-mix(in srgb, var(--color-heading) 14%, transparent);
+  transition: transform .15s ease-out, box-shadow .15s ease-out;
+}
+.my-card:active { transform: translateY(1px); }
+.my-card:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 3px; }
+@media (hover: hover) and (pointer: fine) { .my-card:hover { transform: translateY(-3px); } }
+.my-card { grid-template-rows: 2.8em minmax(0, 1fr) 3.6em; gap: 8px; padding: 16px 14px 12px; container-type: inline-size; } /* 위 이름 · 가운데 그림 창 · 아래 한 줄 — 두 카드가 같은 칸이라 그림 크기가 같다 */
+.my-card.is-profile { background: linear-gradient(180deg, var(--color-card), var(--color-surface)); }
+/* 카드 안 글자 · 책갈피는 카드 폭에 비례한다(FE-68). cqi = 카드 안쪽 폭(테두리 · 좌우 여백 제외)의 1%라, 200px 카드(안쪽 170px)에서 1cqi = 1.7px이고 지금 px 크기와 같다.
+   모바일 2열(카드 170px)에서도 같은 비율로 줄어 닉네임이 잘리지 않는다 */
+.my-card-name { display: grid; align-items: center; margin: 0; font: 900 10.6cqi/1.3 var(--font-heading); letter-spacing: -.02em; text-wrap: balance; color: inherit; }
+.my-card-window { position: relative; display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); place-items: end center; min-height: 0; border-radius: 999px 999px 8px 8px; background: var(--color-surface); border: 1px solid color-mix(in srgb, var(--color-border-strong) 70%, transparent); overflow: hidden; }
+/* 행 · 열을 창 크기에 묶어(위 grid-template) 그림의 100%가 창 크기로 풀리게 한다(FE-67). 묶지 않으면 행이 그림 원래 높이로 늘어나 contain이 듣지 않고 아래가 잘렸다 */
+.my-card-window img { box-sizing: border-box; width: 100%; height: 100%; min-height: 0; padding: 22px 8px 0; object-fit: contain; object-position: bottom; }
+/* 윗 패딩(22px): 아치(둥근 위쪽)가 머리 · 가발 끝을 깎지 않게 그림을 곡선 아래로 내린다. 카드를 7 / 14로 키워 그림이 더 크게 보인다.
+   JS(utils/portraitFit.js)가 캐릭터 크기를 맞추면 .is-fitted가 붙고, 그림 상자의 크기 · 자리는 JS가 px로 정한다. 맞추는 동안(.is-fitting)은 크기가 튀지 않게 가린다 */
+.my-card-window img.is-fitted { position: absolute; max-width: none; padding: 0; object-fit: fill; }
+.my-card-window img.is-fitting { visibility: hidden; }
+.my-card-window strong { align-self: center; font: 900 var(--text-title-2)/1 var(--font-heading); color: var(--color-heading); }
+.my-card-note { display: grid; align-items: center; margin: 0; padding: 4px 4px 0; color: var(--color-muted); font: 400 7cqi/1.45 var(--font-article); text-wrap: balance; }
+.my-profile-face.is-missing { visibility: hidden; }
+
+/* 성향카드: 타로카드 모티브 — 어두운 바탕 · 이중 테두리 · 위 이름 띠 · 아치형 그림 창 · 아래 대사 띠 · 모서리 별 */
+.my-card.is-type {
+  background: radial-gradient(ellipse at 50% 30%, color-mix(in srgb, var(--color-accent) 70%, var(--color-heading)), var(--color-heading) 75%);
+  color: var(--color-card); border-color: var(--color-heading);
+}
+.my-card.is-type::before { /* 안쪽 이중 테두리 */
+  content: ''; position: absolute; inset: 6px; border: 3px double color-mix(in srgb, var(--color-card) 55%, transparent); border-radius: 10px; pointer-events: none;
+}
+.my-card.is-type .my-card-window { border-color: color-mix(in srgb, var(--color-card) 60%, transparent); }
+.my-card.is-type .my-card-note.my-type-quote { color: inherit; border-top: 1px solid color-mix(in srgb, var(--color-card) 40%, transparent); }
+
+/* ── 대표 이미지 카드 꾸미기(FE-68): 테두리 .deco-frame-* · 배경 .deco-bg-* — 첫 화면 카드 · 미리 보기 · 견본(.my-mini-card)이 함께 쓴다.
+   :is()로 묶어 .my-card.is-profile(배경)보다 뒤에서 이긴다. 기본 테두리(basic) · 크림 배경(cream)은 원래 모양 그대로다.
+   테두리 두께는 항상 1px로 두고 더 두꺼워 보이는 부분은 안쪽 그림자(--frame-ring)로 그린다 — 테두리 두께가 달라지면 안쪽 크기가 1 ~ 2px씩 바뀌기 때문이다 ── */
+.my-mini-card {
+  position: relative; display: block; width: 56px; aspect-ratio: 7 / 12; border: 1px solid var(--color-border-strong); border-radius: 8px;
+  background: linear-gradient(180deg, var(--color-card), var(--color-surface)); box-shadow: var(--frame-ring, inset 0 0 0 0 transparent);
+}
+:is(.my-card, .my-mini-card)[class*="deco-frame-"]:not(.deco-frame-basic)::before { content: ''; position: absolute; pointer-events: none; }
+:is(.my-card, .my-mini-card).deco-frame-wood { border: 1px solid var(--deco-wood); --frame-ring: inset 0 0 0 2px var(--deco-wood), inset 0 0 0 4px var(--deco-wood-light); box-shadow: var(--frame-ring), var(--deco-drop); }
+:is(.my-card, .my-mini-card).deco-frame-wood::before { display: none; }
+:is(.my-card, .my-mini-card).deco-frame-gold { border: 1px solid var(--deco-gold); --frame-ring: inset 0 0 0 1px var(--deco-gold); }
+:is(.my-card, .my-mini-card).deco-frame-gold::before { inset: 5px; border: 1px solid var(--deco-gold); border-radius: 10px; }
+:is(.my-card, .my-mini-card).deco-frame-navy { border: 1px solid var(--deco-navy); --frame-ring: inset 0 0 0 1px var(--deco-navy); }
+:is(.my-card, .my-mini-card).deco-frame-navy::before { inset: 5px; border: 3px double var(--deco-navy-soft); border-radius: 10px; }
+:is(.my-card, .my-mini-card).deco-frame-stitch { border: 1px solid var(--color-border-strong); }
+:is(.my-card, .my-mini-card).deco-frame-stitch::before { inset: 5px; border: 2px dashed var(--color-accent); border-radius: 10px; }
+.my-mini-card[class*="deco-frame-"]::before { inset: 3px; border-radius: 5px; }
+
+:is(.my-card, .my-mini-card).deco-bg-latte {
+  background: radial-gradient(circle at 50% 46%, var(--color-card) 0 20%, var(--palette-coffee-100) 21% 29%, var(--color-card) 30% 34%, var(--palette-coffee-100) 35% 52%, var(--palette-coffee-200) 53%);
+}
+:is(.my-card, .my-mini-card).deco-bg-tarot {
+  background:
+    radial-gradient(1px 1px at 18% 22%, var(--color-card), transparent),
+    radial-gradient(1px 1px at 78% 14%, var(--color-card), transparent),
+    radial-gradient(1.5px 1.5px at 84% 70%, var(--color-card), transparent),
+    radial-gradient(1px 1px at 12% 82%, var(--color-card), transparent),
+    radial-gradient(ellipse at 50% 30%, var(--deco-navy-soft), var(--deco-navy) 75%);
+  color: var(--color-card);
+}
+:is(.my-card, .my-mini-card).deco-bg-news {
+  background: repeating-linear-gradient(180deg, transparent 0 7px, var(--deco-news-line) 7px 8px), var(--deco-news);
+  color: var(--deco-news-ink);
+}
+:is(.my-card, .my-mini-card).deco-bg-linen {
+  background: repeating-linear-gradient(90deg, var(--deco-linen-line) 0 6px, transparent 6px 12px), repeating-linear-gradient(180deg, var(--deco-linen-line) 0 6px, transparent 6px 12px), var(--deco-linen);
+}
+.my-card.deco-bg-tarot .my-card-note { color: color-mix(in srgb, var(--color-card) 80%, transparent); }
+.my-card.deco-bg-tarot .my-card-window { background: color-mix(in srgb, var(--color-card) 14%, transparent); border-color: color-mix(in srgb, var(--deco-night-line) 60%, transparent); }
+.my-card.deco-bg-news .my-card-note { color: inherit; }
+/* 카드 책갈피: 색 .deco-sash-* · 모양 .sash-style-*. 위는 카드 윗변에 걸쳐 살짝 올라오고, 아래 끝은 V자로 갈라진다. 띠 양 끝의 가는 선(--sash-edge)이 테두리 바느질 자리다
+   short = 책에 꽂힌 책갈피처럼 짧고 굵게(아이콘을 단다) · long = 판사 법복의 띠처럼 얇고 길게 카드 아래까지 내려와 꼬리가 밖으로 나온다 */
+:is(.my-card, .my-mini-card) { --sash-x: 7cqi; --sash-rise: 3.5cqi; --sash-pad: 3.5cqi; }
+.my-mini-card { --sash-x: 5px; --sash-rise: 3px; --sash-pad: 3px; }
+.sash-style-short { --sash-w: 15.3cqi; --sash-len: 27cqi; --sash-notch: 5.3cqi; }
+.sash-style-long { --sash-w: 7.6cqi; --sash-tail: 10.6cqi; --sash-notch: 4.7cqi; }
+.my-mini-card.sash-style-short { --sash-w: 11px; --sash-len: 18px; --sash-notch: 4px; }
+.my-mini-card.sash-style-long { --sash-w: 6px; --sash-tail: 8px; --sash-notch: 4px; }
+.deco-sash-wine { --sash: var(--deco-sash-wine); --sash-edge: var(--deco-gold); }
+.deco-sash-navy { --sash: var(--deco-navy-soft); --sash-edge: var(--deco-night-line); }
+.deco-sash-gold { --sash: var(--deco-gold); --sash-edge: var(--deco-wood); }
+.deco-sash-green { --sash: var(--deco-sash-green); --sash-edge: var(--deco-gold); }
+.my-card-sash {
+  position: absolute; top: calc(var(--sash-rise) * -1); z-index: 1; display: grid; justify-items: center; align-content: start; width: var(--sash-w); padding-top: calc(var(--sash-rise) + var(--sash-pad)); pointer-events: none;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--color-heading) 30%, transparent) 0 var(--sash-rise), transparent var(--sash-rise)), /* 윗변에 걸친 접힘 그늘 */
+    linear-gradient(90deg, var(--sash-edge) 0 1.5px, var(--sash) 1.5px calc(100% - 1.5px), var(--sash-edge) calc(100% - 1.5px));
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% calc(100% - var(--sash-notch)), 0 100%);
+}
+.my-card-sash.is-left { left: var(--sash-x); }
+.my-card-sash.is-right { right: var(--sash-x); }
+.sash-style-short .my-card-sash { height: var(--sash-len); }
+.sash-style-long .my-card-sash { bottom: calc(var(--sash-tail) * -1); }
+.deco-sash-gold { --sash-ink: var(--color-heading); } /* 밝은 금사 띠 위 아이콘은 진하게 */
+.my-sash-icon { width: 8.8cqi; height: 8.8cqi; }
+svg.my-sash-icon { fill: none; stroke: var(--sash-ink, var(--color-card)); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+img.my-sash-icon { width: 11.2cqi; height: 11.2cqi; border-radius: 50%; background: var(--color-cup); box-shadow: 0 0 0 1.5px var(--sash-edge); object-fit: cover; object-position: top; }
+img.my-sash-icon.is-missing { visibility: hidden; }
+.my-icon-chip svg.my-sash-icon { width: 15px; height: 15px; } /* 카드 밖(고르기 칩)에는 cqi 기준 카드가 없어 px로 둔다 */
+.my-icon-chip img.my-sash-icon { width: 19px; height: 19px; }
+.my-mini-card .my-sash-icon { display: none; } /* 견본은 작아서 아이콘을 그리지 않는다 */
+.my-card:not(.deco-sash-none) .my-card-name { padding-inline: calc(var(--sash-x) + var(--sash-w) - 4.7cqi); } /* 위 닉네임이 책갈피에 가리지 않게 */
+.my-card.is-profile .my-card-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; align-self: center; } /* 닉네임은 한 줄, 길면 ... */
+.my-card.is-profile .my-card-note { font: 900 10.6cqi/1.3 var(--font-heading); letter-spacing: -.02em; } /* 하단 성향 이름은 성향카드 상단 이름(.my-card-name)과 같은 글꼴 */
+.my-card.is-profile .my-card-note.is-empty { opacity: .7; }
+/* 성향카드 꾸미기(FE-82): 같은 테두리 · 배경 · 책갈피를 성향카드(.is-type)에도 입힌다. 기본 테두리(basic) · 기본 배경(classic)은 원래 타로카드 모양 그대로다.
+   타로 밤하늘(tarot)이 아닌 배경은 밝아서 글자 · 선을 어둡게 되돌린다. 견본(.my-mini-card)의 기본 배경은 타로카드 바탕이다 */
+.my-mini-card.deco-bg-classic { background: radial-gradient(ellipse at 50% 30%, color-mix(in srgb, var(--color-accent) 70%, var(--color-heading)), var(--color-heading) 75%); }
+.my-card.is-type[class*="deco-bg-"]:not(.deco-bg-tarot, .deco-bg-news) { color: var(--color-heading); }
+.my-card.is-type.deco-bg-cream { background: linear-gradient(180deg, var(--color-card), var(--color-surface)); }
+.my-card.is-type[class*="deco-bg-"]:not(.deco-bg-tarot) .my-card-window { border-color: color-mix(in srgb, var(--color-border-strong) 70%, transparent); }
+.my-card.is-type[class*="deco-bg-"]:not(.deco-bg-tarot) .my-card-note.my-type-quote { border-top-color: color-mix(in srgb, currentColor 30%, transparent); }
+.my-card.is-type.deco-bg-tarot .my-card-note.my-type-quote { color: color-mix(in srgb, var(--color-card) 80%, transparent); }
+.my-card.is-preview { cursor: default; }
+@media (hover: hover) and (pointer: fine) { .my-card.is-preview:hover { transform: none; } }

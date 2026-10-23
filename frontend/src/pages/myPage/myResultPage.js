@@ -15,7 +15,7 @@ import { renderTrend, trendsOf } from '../../components/trendGraph.js';
 import { AXES } from '../../utils/personalityAxes.js';
 import { TREND_RECENT, recordOf } from '../../utils/myPageView.js';
 import { story, masthead, frontStory, advertisements, openForReading } from '../comparison/comparisonStage.js';
-import { DEFAULT_NICKNAME, typeFace } from './myPage.js';
+import { DEFAULT_NICKNAME, typeFace } from '../../components/personCards.js';
 
 const IS_MOCK = API_MODE === 'mock'; // 목 모드는 비교 · 성향 모두 목이라 기사 제목 옆에 표기한다
 
