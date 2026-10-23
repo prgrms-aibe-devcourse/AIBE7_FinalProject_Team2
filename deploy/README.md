@@ -13,8 +13,8 @@
 | --- | --- |
 | `docker-compose.prod.yml` | 운영 구성 (web · backend · postgres · redis). 기본은 스키마만 |
 | `docker-compose.real-seed.yml` | 서버 전용 덧붙임 파일. 실제 사건 seed 폴더를 백엔드에 읽기 전용으로 연결 |
-| `docker-compose.monitoring-agent.yml` | 서버 전용 덧붙임 파일. 모니터링 에이전트(Alloy · node_exporter)와 backend의 로그 볼륨 · 8081 포트 (COMMON-43). `.env`의 `MONITORING_AGENT=1`이면 `deploy.sh`가 자동으로 함께 쓴다 |
-| `alloy-agent.alloy` | 위 Alloy 설정. 백엔드 로그를 모니터링 호스트의 Loki로 보낸다 (COMMON-43) |
+| `docker-compose.monitoring-agent.yml` | 서버 전용 덧붙임 파일. 모니터링 에이전트(Alloy · node_exporter)와 backend의 로그 볼륨. 호스트로 여는 포트는 없다 (COMMON-43 · 64). `.env`의 `MONITORING_AGENT=1`이면 `deploy.sh`가 자동으로 함께 쓴다 — 아래 "모니터링 에이전트 (Grafana Cloud)" |
+| `alloy-agent.alloy` | 위 Alloy 설정. 백엔드 · 429 로그와 backend · node 지표를 Grafana Cloud(Loki · Prometheus)로 보낸다 (COMMON-43 · 62 · 64) |
 | `docker-compose.pipeline.yml` | 서버 전용 덧붙임 파일. AI 판결 파이프라인 서비스(관리자 사건 등록 A-14)와 backend의 `PIPELINE_SERVICE_URL` (COMMON-50). `.env`의 `PIPELINE_SERVICE=1`이면 `deploy.sh`가 자동으로 함께 쓴다. **켜기 전 메모리 확인 필요** — 아래 "AI 판결 파이프라인 서비스" |
 | `.env.example` | 환경변수 예시. `.env`로 복사해 쓴다 (`.env`는 커밋하지 않음) |
 | `smoke-test.sh` | `/` · 화면 주소 · `/api` · 캐시 정책 · Let's Encrypt 확인 경로 확인. CI와 서버에서 같은 스크립트를 쓴다 |
@@ -282,7 +282,7 @@ docker compose -f docker-compose.prod.yml logs web 2>&1 | grep "limiting request
 
 ### 429 로그 수집 (BE-63 2차)
 
-Nginx가 **막은 요청(429)만** JSON 한 줄씩 따로 남기고, 모니터링 에이전트(`MONITORING_AGENT=1`)의 Alloy가 Loki로 보낸다. Grafana **서비스** 대시보드의 "Rate limit 429 (제한별)" 패널에서 본다.
+Nginx가 **막은 요청(429)만** JSON 한 줄씩 따로 남기고, 모니터링 에이전트(`MONITORING_AGENT=1`)의 Alloy가 Grafana Cloud Loki로 보낸다(COMMON-64). Grafana **서비스** 대시보드의 "Rate limit 429 (제한별)" 패널에서 본다.
 
 | 항목 | 내용 |
 | --- | --- |
@@ -302,12 +302,7 @@ topk(10, sum by (ip) (count_over_time({job="web"} | json [1h])))
 
 - **시각**: Loki 엔트리 시각은 줄의 `time`(Nginx가 막은 시각)이다(`stage.timestamp`). Alloy가 멈췄다 켜져도 그 사이 429가 복구 시각에 몰리지 않는다.
 - **Alloy가 멈춘 사이 파일이 비워지면 그 구간 줄은 빠진다.** 다시 켜진 Alloy가 비우기 전 위치부터 읽기 때문이다(PR #236 리뷰에서 확인: 새 줄이 그 위치보다 짧으면 전부, 길면 앞부분이 빠진다). 앞이 잘린 조각 줄은 Alloy가 버린다(`stage.drop`). 상한(10MB)에 닿을 만큼 막히는 중에 Alloy까지 멈춘 경우에만 생긴다 — 그때 정확한 개수는 서버 오류 로그(`by zone`)로 본다.
-- **대시보드 반영**: `service.json`은 모니터링 EC2의 Grafana가 파일로 읽는다(프로비저닝, 기본 10초마다 다시 읽음). 메인 서버 자동 배포 대상이 아니므로, 머지 후 모니터링 EC2에서 저장소를 갱신한다 — 재시작은 필요 없다.
-
-```bash
-# 모니터링 EC2 (저장소 사본 위치에서)
-git fetch -q origin main && git checkout -q origin/main -- monitoring/grafana/dashboards
-```
+- **대시보드 반영**: 운영 대시보드는 Grafana Cloud에 `monitoring/grafana/dashboards/*.json`을 가져와(Import) 쓴다. 파일과 자동으로 맞춰지지 않으므로, `service.json` 등을 고쳐 머지하면 Grafana Cloud에서 같은 파일을 다시 가져온다(COMMON-64). 로컬 Grafana는 지금처럼 파일을 바로 읽는다.
 
 - Docker의 socket이나 `/var/lib/docker/containers`를 Alloy에 붙이지 않았다. 다른 컨테이너의 로그 · 설정(환경변수 = 비밀값)까지 읽을 수 있게 되기 때문이다. 파일 하나만 볼륨으로 나눈다.
 
@@ -792,6 +787,82 @@ docker stats --no-stream
 | 서버 메모리가 모자란다 | 위 "켜기 전: 메모리". 급하면 `PIPELINE_SERVICE=`로 비우고 `docker compose ... stop pipeline` |
 | 배포가 `PIPELINE_MEMORY_CHECKED` 때문에 멈춘다 | 의도한 동작이다 (RDS 전환 전 서버). 위 "켜기 전: 메모리"를 확인하고 값을 넣는다 |
 | 백엔드가 `pipeline`을 못 찾는다 | backend가 `pipeline` 네트워크에 붙어야 한다 → overlay 없이 backend를 다시 만들지 않았는지 확인 |
+
+## 모니터링 에이전트 (Grafana Cloud, COMMON-43 · 62 · 64)
+
+메인 EC2에는 **에이전트 두 개만** 둔다. 수집 · 저장 · 대시보드 · 경보는 전부 Grafana Cloud다(서버가 죽어도 경보가 울리게, COMMON-62 · 63).
+
+```
+backend:8081 (Actuator) ─┐
+node-exporter:9100      ─┼─ Alloy ── 지표 remote_write ──▶ Grafana Cloud Prometheus ─▶ 경보 → Slack
+backend 로그 · 429 로그  ─┘        └─ 로그 push ─────────▶ Grafana Cloud Loki
+(같은 Docker 네트워크 · 볼륨)        (밖으로 나가는 https 443만 쓴다)
+```
+
+- **호스트로 여는 포트가 없다.** Alloy가 같은 Compose 네트워크에서 `backend:8081` · `node-exporter:9100`을 직접 긁는다. 전용 모니터링 EC2(차선, 안 씀)를 전제로 열던 8081 · 9100과 `MAIN_PRIVATE_IP`, 그 EC2의 Loki 주소 `LOKI_URL`은 COMMON-64에서 지웠다 — 서버 `.env`에 남아 있어도 쓰지 않는다.
+- **인증값은 환경변수로만** 넘긴다(`docker-compose.monitoring-agent.yml`의 `environment` → `alloy-agent.alloy`의 `sys.env`). 비밀값 파일을 컨테이너 사용자가 못 읽는 문제(PR #262)를 피하려고 파일 방식은 쓰지 않는다.
+- **`env` 라벨**: 지표 · 로그에 `env="prod"`가 붙는다(`MONITORING_ENV`, 이 오버레이 기본값). 같은 Alloy 설정으로 로컬에서 Cloud 전송을 테스트하면 `env="local"`이라 운영과 섞이지 않는다.
+- **보내는 지표는 걸러서** 보낸다(`alloy-agent.alloy`의 `cloud_filter` — 대시보드 · 경보가 쓰는 지표군만). 무료 등급 시계열 한도 때문이다.
+
+### 켜기 (처음 한 번)
+
+필요한 값: Grafana Cloud 포털 → 스택 → **Prometheus** · **Loki** → Details에서 주소 · ID, Access Policy 토큰(`metrics:write` · `logs:write`). 토큰은 저장소 · 채팅에 붙이지 않고 DM으로 받아 서버에서 직접 입력한다.
+
+```bash
+cd /opt/lawnambul/app/deploy
+cp .env ~/backups/env-$(date +%F-%H%M)-before-monitoring.bak && chmod 600 ~/backups/env-*-before-monitoring.bak
+
+# 주소 · ID (비밀값 아님)
+printf '\nGRAFANA_CLOUD_PROM_URL=%s\nGRAFANA_CLOUD_PROM_USERNAME=%s\nGRAFANA_CLOUD_LOKI_URL=%s\nGRAFANA_CLOUD_LOKI_USERNAME=%s\n' \
+  '<remote_write 주소>' '<Instance ID>' '<Loki push 주소>' '<Loki User ID>' >> .env
+
+# 토큰 — 화면 · 셸 기록에 남지 않게 read -rs로 받는다
+read -rs GC_KEY && printf 'GRAFANA_CLOUD_PROM_API_KEY=%s\n' "$GC_KEY" >> .env && unset GC_KEY
+# (로그용 토큰이 따로 있을 때만) read -rs GC_KEY && printf 'GRAFANA_CLOUD_LOKI_API_KEY=%s\n' "$GC_KEY" >> .env && unset GC_KEY
+
+# 값을 다 넣은 뒤 맨 마지막에 켠다
+printf 'MONITORING_AGENT=1\n' >> .env
+chmod 600 .env
+./deploy.sh --reapply
+```
+
+`deploy.sh`가 필수 값(주소는 https만)을 먼저 확인하고, 없으면 아무것도 바꾸지 않고 멈춘다(exit 4).
+
+### 확인
+
+```bash
+docker compose -f docker-compose.prod.yml ps -a | grep -E "alloy|node-exporter"   # 둘 다 Up
+docker logs --tail 30 lawnambul-alloy 2>&1 | grep -iE "error|401|403" || echo "오류 없음"
+ss -ltnp | grep -E ":8081|:9100" || echo "호스트 포트 없음 (정상)"
+docker stats --no-stream lawnambul-alloy lawnambul-node-exporter                   # 상한 192m · 64m
+```
+
+Grafana Cloud → Explore에서 1 ~ 2분 뒤:
+
+- 지표: `up{env="prod"}` → `job="backend"` · `job="node"` 둘 다 `1`
+- 로그: `{env="prod", job="backend"}` 최근 로그, 429가 있었다면 `{env="prod", job="web"}`
+- 경보: Alerting → Alert rules에서 `lawnambul` 규칙이 Normal로 돌아온다(Watchdog은 항상 Firing · 음소거)
+
+### 문제가 생겼을 때
+
+| 증상 | 원인 · 조치 |
+| --- | --- |
+| `deploy.sh`가 `MONITORING_AGENT=1인데 .env에 … 가 없다`로 멈춤 | 값 누락. 위 "켜기"의 값을 채우고 다시 `--reapply` |
+| Alloy 로그에 `401` · `403` | 토큰 · ID 불일치. 지표는 Instance ID, 로그는 Loki User ID인지(둘은 다른 숫자), 토큰에 `metrics:write` · `logs:write`가 있는지 |
+| Alloy가 계속 재시작 | `docker logs lawnambul-alloy`에서 설정 오류 확인. 대부분 환경변수가 비어 있는 경우다 |
+| 지표는 오는데 로그만 없음 | `GRAFANA_CLOUD_LOKI_*` 확인. 로그 토큰을 비웠다면 지표 토큰에 `logs:write`가 있어야 한다 |
+| 메모리가 모자람 | `docker stats`. 급하면 `.env`의 `MONITORING_AGENT=`를 비우고 `--reapply` → 아래 "끄기" |
+
+### 끄기
+
+```bash
+cd /opt/lawnambul/app/deploy
+sed -i 's/^MONITORING_AGENT=.*/MONITORING_AGENT=/' .env
+./deploy.sh --reapply
+docker rm -f lawnambul-alloy lawnambul-node-exporter    # 오버레이를 빼면 compose가 이 둘을 더는 관리하지 않는다
+```
+
+Grafana Cloud 경보가 no data로 울리기 시작하므로, 끄기 전에 Grafana Alerting → Silences로 기한을 걸어 둔다.
 
 ## 다음 작업에서 바꿀 곳
 

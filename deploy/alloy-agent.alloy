@@ -1,9 +1,14 @@
-// Grafana Alloy — 메인 EC2에서 백엔드 로그 · 메트릭을 Loki · Grafana Cloud로 보낸다
-// (로그: COMMON-43 WBS 7.2.4, 메트릭: 7.3.3 COMMON-62).
+// Grafana Alloy — 메인 EC2에서 백엔드 로그 · 메트릭을 Grafana Cloud(Loki · Prometheus)로 보낸다
+// (로그: COMMON-43 WBS 7.2.4, 메트릭: 7.3.3 COMMON-62, 로그 Cloud 전환 · 운영 반영: COMMON-64).
 //
 // 로컬용(monitoring/alloy-config.alloy)과 두 가지가 다르다.
-//   1. 보낼 곳이 같은 Compose 안의 loki:3100이 아니라, 모니터링 EC2의 사설 IP다 → 환경변수로 받는다
+//   1. 보낼 곳이 같은 Compose 안의 loki:3100이 아니라 Grafana Cloud다 → 주소 · 인증을 환경변수로 받는다
 //   2. 읽을 파일이 호스트의 backend/logs가 아니라, 백엔드 컨테이너와 공유하는 볼륨이다
+//
+// 환경변수(서버 deploy/.env → docker-compose.monitoring-agent.yml의 environment)
+//   GRAFANA_CLOUD_PROM_URL · _USERNAME · _API_KEY   지표 remote_write
+//   GRAFANA_CLOUD_LOKI_URL · _USERNAME · _API_KEY   로그 push (_API_KEY를 비우면 지표 토큰을 같이 쓴다)
+//   MONITORING_ENV                                 env 라벨. 비우면 local (운영 오버레이가 prod를 넘긴다)
 //
 // 이 파일이 monitoring/이 아니라 deploy/에 있는 이유: 메인 서버에는 "저장소에서 deploy 폴더만" 두기 때문이다
 // (deploy/README.md "서버(EC2)에서 실행"). monitoring/을 참조하면 서버에 없는 경로를 가리키게 된다.
@@ -80,13 +85,28 @@ loki.process "web_rate_limited" {
 	}
 }
 
+// 로그 → Grafana Cloud Loki (COMMON-64). 처음에는 "모니터링 전용 EC2"의 Loki(LOKI_URL, 사설 IP:3100)로
+// 보냈지만, 그 서버는 두지 않기로 해서(COMMON-43 → Cloud 1순위) 지표와 같은 Cloud로 보낸다.
+// 인증은 지표 remote_write와 같은 basic_auth다 — username은 Loki User ID(지표 Instance ID와 다른 숫자),
+// password는 logs:write 범위가 있는 Access Policy 토큰
 loki.write "default" {
-	endpoint {
-		// 예: http://10.0.1.23:3100/loki/api/v1/push — .env의 LOKI_URL로 넘긴다.
-		// 사설 IP는 커밋하지 않는다(CLAUDE.md 3-1 보안). 기본값을 두지 않아서, 값이 없으면 바로 드러난다
-		url = sys.env("LOKI_URL")
+	// 지표의 external_labels와 같은 값 — 로컬 테스트 로그가 운영 로그와 섞이지 않게 한다
+	external_labels = {
+		env = coalesce(sys.env("MONITORING_ENV"), "local"),
+	}
 
-		// 모니터링 EC2가 내려가 있는 동안 보내지 못한 배치를 버리지 않게 재시도 한도를 늘린다.
+	endpoint {
+		// 예: https://logs-prod-XXX.grafana.net/loki/api/v1/push — 기본값을 두지 않아서, 값이 없으면 바로 드러난다
+		// (deploy.sh가 MONITORING_AGENT=1일 때 배포 전에 먼저 막는다)
+		url = sys.env("GRAFANA_CLOUD_LOKI_URL")
+
+		basic_auth {
+			username = sys.env("GRAFANA_CLOUD_LOKI_USERNAME")
+			// 토큰 하나에 metrics:write · logs:write를 함께 준 경우가 많아, 로그 전용 토큰이 없으면 지표 토큰을 쓴다
+			password = coalesce(sys.env("GRAFANA_CLOUD_LOKI_API_KEY"), sys.env("GRAFANA_CLOUD_PROM_API_KEY"))
+		}
+
+		// Cloud가 잠깐 안 되는 동안 보내지 못한 배치를 버리지 않게 재시도 한도를 늘린다.
 		// 기본값(500ms ~ 5m, 10회)은 다 합쳐 약 8분 30초밖에 버티지 못하고, 그 뒤 배치는 **폐기된다**.
 		// 아래 설정이면 1s → 2 → 4 … → 5m 상한으로 20회, 약 1시간이다 (PR #168 리뷰 반영).
 		//
@@ -148,13 +168,14 @@ prometheus.relabel "cloud_filter" {
 }
 
 // Grafana Cloud remote_write. API 키를 이 파일에 직접 적지 않는다 — sys.env로 서버 .env의 값을 읽는다
-// (LOKI_URL과 같은 원칙). username(Instance ID)은 그 자체로는 접근 권한이 없어 기본값을 둬도 되지만,
+// (로그 loki.write와 같은 원칙). username(Instance ID)은 그 자체로는 접근 권한이 없어 기본값을 둬도 되지만,
 // 운영 환경마다 다를 수 있어 역시 .env로 받는다
 prometheus.remote_write "grafana_cloud" {
-	// 로컬에서 같은 .env 값으로 실제 Cloud에 테스트 전송을 해 본 적이 있다면, env="prod" 라벨이 없는 한
-	// 운영과 같은 job · instance 라벨로 섞여 들어간다(PR #266 리뷰, 정민석). 이 라벨을 붙여 구분한다
+	// 로컬에서 같은 .env 값으로 실제 Cloud에 테스트 전송을 하면, 이 라벨이 없는 한 운영과 같은 job · instance
+	// 라벨로 섞여 들어간다(PR #266 리뷰). 이 파일은 로컬 테스트에도 쓰이므로 "prod"를 박아 두지 않고
+	// 환경변수로 받는다(기본 local) — 운영 값 prod는 docker-compose.monitoring-agent.yml이 넘긴다 (COMMON-64)
 	external_labels = {
-		env = "prod",
+		env = coalesce(sys.env("MONITORING_ENV"), "local"),
 	}
 
 	endpoint {
