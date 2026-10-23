@@ -10,9 +10,9 @@
 
 const STEPS = 48;
 // 전체 시간과 본뜬 한 장이 걷히는 구간(들어 올린 뒤). 사건 목록이 아직 덜 그려졌으면 걷히기 직전에서 기다린다.
-// 중간 너비(책상이 화면 폭에 맞춰 줄어드는 구간 — 메인이 from.middle로 알려 준다)는 끝자락(메인 신문)과 사건 목록 지면의 배치가 많이 달라,
-// 조금 더 천천히 들어 올리고 더 길게 걷어 바뀌는 과정이 보이게 한다(들어 올림 약 0.32초 · 바뀜 0.42초 · 커짐 0.36초). 넓은 너비 · 좁은 너비(720px 이하)는 기본
-const PACE = { base: { ms: 900, handover: [.26, .42] }, middle: { ms: 1100, handover: [.29, .67] } };
+// 모든 너비가 같은 속도다. 끝자락(메인 신문)과 사건 목록 지면의 배치가 많이 달라(특히 중간 너비),
+// 조금 더 천천히 들어 올리고 더 길게 걷어 바뀌는 과정이 보이게 한다(들어 올림 약 0.32초 · 바뀜 0.42초 · 커짐 0.36초)
+const PACE = { ms: 1100, handover: [.29, .67] };
 
 // CSS cubic-bezier(x1, y1, x2, y2)와 같은 곡선. x(진행 시간)에서 y(진행량)를 이분법으로 찾는다
 function bezier(x1, y1, x2, y2) {
@@ -94,7 +94,7 @@ export function restingStyle(from) {
  *   backdrop = 뒤에 남긴 메인(함께 흐려진다), ready = 사건 목록이 다 그려지면 끝나는 약속
  */
 export async function spreadFromTail({ paper, face, from, backdrop, ready }) {
-  const { ms: duration, handover } = from.middle ? PACE.middle : PACE.base;
+  const { ms: duration, handover } = PACE;
   const to = paper.getBoundingClientRect();
   const origin = { left: 0, top: 0 };
   const open = window.innerHeight + 40; // 벽 선이 다 열리면 화면 아래 밖

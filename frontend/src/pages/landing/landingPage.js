@@ -473,9 +473,7 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
   const tail = button('', () => {
     if (reducedMotion()) { navigate('list'); return; }
     const floor = exit.getBoundingClientRect().bottom - parseFloat(getComputedStyle(exit).getPropertyValue('--wall')); // 신문이 벽에 들어가는 선
-    // 중간 너비 = 책상이 화면 폭에 맞춰 줄어드는 구간(높이보다 폭이 먼저 모자람, fit 참고). 좁은 너비(landing.css 720px 이하)는 책상 대신 메뉴 카드
-    const middle = !window.matchMedia('(max-width: 720px)').matches && scene.clientWidth / SCENE_WIDTH < scene.clientHeight / SCENE_HEIGHT;
-    const rect = { ...tailPose(tailSheet, tail, floor), middle };
+    const rect = tailPose(tailSheet, tail, floor);
     const scope = element('div', 'landing-page'); // 본뜬 지면에 메인 화면 스타일이 그대로 걸리게(자리는 차지하지 않는다)
     scope.style.display = 'contents';
     const layer = element('div', 'paper-hand-layer');
