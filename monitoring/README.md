@@ -57,8 +57,8 @@ Prometheus가 `alert-rules.yml`의 규칙을 15초마다(평가 주기) 다시 �
 띄운다. 운영 EC2는 1대뿐이고 별도 모니터링 서버를 두지 않기로 했다(COMMON-43 1순위 = Grafana Cloud).
 7.3.3에서 메트릭은 메인 EC2의 Alloy가 Cloud로 push하고(`deploy/alloy-agent.alloy`), **경보 평가 ·
 Alertmanager도 운영에서는 Grafana Cloud 쪽(Cloud Alerting)으로 옮긴다** — 메인 서버가 죽으면 그 서버
-안의 Alertmanager도 같이 죽어 정작 가장 필요한 순간에 조용해지기 때문이다(COMMON-62). 이 `alert-rules.yml`은
-Prometheus 표준 문법이라 Cloud 쪽으로 그대로 옮길 수 있다 — Cloud 쪽 반영은 별도 이슈.
+안의 Alertmanager도 같이 죽어 정작 가장 필요한 순간에 조용해지기 때문이다(COMMON-62). Cloud 쪽 반영은
+**완료했다(COMMON-63, 아래 "Grafana Cloud 경보 연동" 절)**.
 
 | 규칙 | 조건 | 지속 | 심각도 |
 | --- | --- | --- | --- |
@@ -81,11 +81,10 @@ Prometheus 표준 문법이라 Cloud 쪽으로 그대로 옮길 수 있다 — C
 
 `BackendDown` · `BackendScrapeTargetMissing`이 없으면, 위 다른 규칙은 전부 backend 지표가 들어와야
 계산되므로 **backend가 죽으면 지표 자체가 끊겨 아무 경보도 안 울린다** — 가장 큰 장애에서 오히려
-조용해지는 구멍이었다(PR #262 리뷰, 머지 전 필수 수정). `Watchdog` · `AlertDeliveryFailing`은 지금은
-**로컬 규칙 확인용이다.** "경보가 안 온다"를 역으로 감지하는 구조(Dead man's switch)인데, `Watchdog`은
-`null` 수신자로 보내 외부에 생존 신호를 전달하지 않고, Slack 전송 경로 자체가 죽으면 `AlertDeliveryFailing`도
-같은 경로로 전달되지 못한다 — 즉 이 구성만으로는 "신호가 조용해졌다"는 걸 알아챌 외부 관찰자가 없다.
-실제로 경보 경로 장애를 감지하려면 Alertmanager 바깥에서 도는 독립된 외부 감시가 별도로 필요하다.
+조용해지는 구멍이었다(PR #262 리뷰, 머지 전 필수 수정). `Watchdog`은 `null` 수신자로 보내 외부에
+생존 신호를 전달하지 않아, 이 로컬 구성만으로는 "신호가 조용해졌다"는 걸 알아챌 외부 관찰자가 없다
+— 운영은 Grafana Cloud로 옮겨 이 문제를 피한다(아래 "Grafana Cloud 경보 연동" 절).
+`AlertDeliveryFailing`은 **로컬 전용이다** — Cloud에는 옮기지 않았다(같은 절 참고).
 
 ### Slack 웹훅 설정
 
@@ -118,6 +117,59 @@ Prometheus 표준 문법이라 Cloud 쪽으로 그대로 옮길 수 있다 — C
   ```
   `group_wait`(30s) 뒤에 Slack 채널에 메시지가 오면 정상이다. 안 오면 `docker compose logs alertmanager`에서
   `Notify for alerts failed` 줄을 찾는다(웹훅 URL 오타 · 채널 문제가 대부분이다).
+
+## Grafana Cloud 경보 연동 (7.3.3, COMMON-63)
+
+운영 경보 평가 · 알림은 위 로컬 Alertmanager가 아니라 **Grafana Cloud**에서 돈다(이유는 "경보" 절 참고 —
+메인 서버가 죽으면 그 안의 Alertmanager도 같이 죽는다). `alert-rules.yml`을 그대로 옮기지 않고, Grafana의
+**"Convert Prometheus rules" API**(`POST /api/convert/prometheus/config/v1/rules/{namespace}`,
+헤더 `X-Grafana-Alerting-Datasource-UID: grafanacloud-prom`)로 Prometheus 표준 YAML을 보내 자동 변환했다 —
+Mimir ruler API(Basic Auth, 별도 범위의 Access Policy 토큰 필요)도 검토했으나, 이미 가진 Grafana Service
+Account 토큰(아래)만으로 되고 YAML도 그대로 쓸 수 있어 이쪽으로 갔다(대안 비교는
+`docs/decisions/COMMON-63.md`).
+
+**Cloud에 올라간 것과 로컬의 차이**:
+- 네임스페이스 `lawnambul` 아래 `lawnambul-service`(규칙 8개) · `lawnambul-meta`(`Watchdog`)로 나눠 올렸다.
+  Convert API는 규칙을 하나씩 변환하므로 올라간 개수가 안 맞으면 변환이 조용히 하나를 빠뜨렸다는 뜻이다 —
+  Grafana Alert rules 목록에서 실제로 8 + 1(Watchdog) = 9개가 보이는지 반드시 직접 확인한다(PR #266 리뷰,
+  정민석 — 문서만으로는 Cloud 쪽 실제 상태를 보장할 수 없다).
+- **`AlertDeliveryFailing`은 올리지 않았다.** 이 규칙이 보는 지표(`alertmanager_notifications_failed_total`)는
+  로컬 Alertmanager 자신을 스크레이프해야 나오는데, 운영에는 Alertmanager가 없고 Alloy도 이 지표를 Cloud로
+  보내지 않아 값이 전혀 들어오지 않는다. `Watchdog`(Dead man's switch)이 "규칙 평가와 알림 상태가
+  존재하는가"까지는 보여 주지만, **Cloud에서는 `Watchdog`에 `always-muted`가 걸려 있어(아래) Slack
+  전송까지는 증명하지 않는다** — `lawnambul-slack` 전송 자체가 조용히 막힐 가능성은 이 구성만으로는
+  감지하지 못하는 구멍으로 남는다(`docs/decisions/COMMON-63.md` 2절).
+- 로컬의 `null` 수신자에 대응하는 개념이 Grafana Cloud 알림 정책에는 없다. 대신 **항상 켜진 mute timing**
+  (`always-muted`)을 `severity="none"`(=`Watchdog`) 라우트에 걸어 같은 효과를 냈다 — `Watchdog`은 Cloud에서
+  계속 firing 상태를 유지하지만 Slack으로는 전송되지 않는다. **시간 범위를 `00:00~23:59`로 두면 안 된다**
+  (PR #266 리뷰, 정민석) — 매일 23:59~24:00 1분은 음소거 구간 밖이라, 그 1분에 재알림(`repeat_interval`)
+  시점이 걸리면 Watchdog이 그대로 Slack에 올라간다. 요일만 지정하고 시간 범위는 비워 하루 종일 적용되게
+  고쳐야 한다(또는 끝 시각을 `24:00`으로). **이 수정은 Grafana Cloud 콘솔 쪽 설정이라 저장소 코드로는
+  반영되지 않는다 — Notification policies → Mute timings에서 직접 고쳐야 한다.**
+- 억제(`inhibit_rules`, DB 커넥션 고갈이 울리는 동안 대기 경보를 숨기는 것)는 Grafana Cloud의 알림 정책
+  API에서 아직 지원되지 않아(이 계정 기준) 이번 범위에서 뺐다. 로컬(COMMON-61)에는 그대로 있다.
+
+**설정에 쓰인 것**:
+- Grafana URL: Grafana Cloud 포털(grafana.com) → 해당 스택 → "Launch" (예: `https://<stack-slug>.grafana.net`)
+- Grafana Service Account 토큰(`glsa_...`): 그 Grafana 안에서 Administration → Users and access →
+  Service accounts → Add service account(Editor 권한) → Add service account token.
+  `GET /api/org`으로 먼저 유효성을 확인한 뒤 썼다. **이 토큰은 커밋하지 않는다** — 로컬 테스트에 쓴 파일은
+  작업 뒤 모두 지웠다. **토큰 값 자체는 Jira 댓글이나 채널로 전달하지 않는다** — 범위·보존 기간을 통제할
+  수 없기 때문이다. 같은 작업을 다시 해야 하는 팀원은 위 절차대로 자신의 Service Account 토큰을 새로
+  발급받아 쓴다(발급은 Grafana Cloud 콘솔 권한만 있으면 되는 셀프서비스라 토큰 공유가 필요 없다).
+  지금 쓴 토큰은 Editor 권한(스택의 모든 대시보드 · 경보를 바꿀 수 있음)이라 범위가 넓다 — 설정 작업이
+  끝났다면 이 토큰은 삭제하고, 다음에 또 필요하면 그때 다시 발급하는 쪽을 권한다(PR #266 리뷰, 정민석).
+- Slack 연락처(`lawnambul-slack`)는 "Slack 웹훅 설정" 절의 웹훅 URL을 그대로 재사용했다.
+
+**확인**: Grafana 좌측 메뉴 Alerting → Alert rules에서 `lawnambul` 네임스페이스의 규칙 9개(서비스 8 + Watchdog),
+Contact points에서 `lawnambul-slack`, Notification policies에서 `severity="critical"` 빠른 재알림 ·
+`severity="none"` 항상 음소거 라우트가 보이면 **설정이 있다**는 것만 확인된 것이다. 아직 확인 못 한 것:
+- `BackendDown` 실제 발생(backend 컨테이너 정지)부터 Slack 수신까지 end-to-end 동작
+- Contact points → `lawnambul-slack` → Test 버튼으로 전송 테스트, 메시지에 summary · description이 로컬과
+  같이 제대로 보이는지
+- 변환된 규칙의 No data / Error 처리 상태(지표가 끊겼을 때 어떻게 동작하는지)
+
+(PR #266 리뷰, 정민석 — 설정 존재 확인과 장애 경로 검증은 다르다)
 
 ## Promtail 대신 Grafana Alloy를 쓴 이유
 
