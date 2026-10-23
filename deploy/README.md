@@ -849,6 +849,7 @@ Grafana Cloud → Explore에서 1 ~ 2분 뒤:
 | --- | --- |
 | `deploy.sh`가 `MONITORING_AGENT=1인데 .env에 … 가 없다`로 멈춤 | 값 누락. 위 "켜기"의 값을 채우고 다시 `--reapply` |
 | Alloy 로그에 `401` · `403` | 토큰 · ID 불일치. 지표는 Instance ID, 로그는 Loki User ID인지(둘은 다른 숫자), 토큰에 `metrics:write` · `logs:write`가 있는지 |
+| `alloy` · `node-exporter` 컨테이너가 없음 | 배포 로그(`journalctl -u lawnambul-cd`)에서 `⚠ 모니터링 에이전트를 띄우지 못했다`를 찾는다. `deploy.sh`가 backend · web 뒤에 `up -d --no-deps alloy node-exporter`로 따로 올린다(COMMON-64) — 실패해도 배포는 되돌리지 않는다 |
 | Alloy가 계속 재시작 | `docker logs lawnambul-alloy`에서 설정 오류 확인. 대부분 환경변수가 비어 있는 경우다 |
 | 지표는 오는데 로그만 없음 | `GRAFANA_CLOUD_LOKI_*` 확인. 로그 토큰을 비웠다면 지표 토큰에 `logs:write`가 있어야 한다 |
 | 메모리가 모자람 | `docker stats`. 급하면 `.env`의 `MONITORING_AGENT=`를 비우고 `--reapply` → 아래 "끄기" |

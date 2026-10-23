@@ -124,6 +124,7 @@ fi
 # 따옴표 · 캐리지리턴 · 공백을 지우고 판정한다: .env에 MONITORING_AGENT="1"처럼 따옴표를 쓰면
 # env_value가 "1"을 그대로 돌려줘 == "1" 비교에 걸리지 않고, 이 분기가 막으려던 "조용히 빠짐"이 재발한다 (PR #168 리뷰 반영)
 MONITORING_AGENT_VALUE="$(env_value MONITORING_AGENT | tr -d "\"' \r")"
+MONITORING_ENABLED=0
 case "$MONITORING_AGENT_VALUE" in
   1)
     # 검사한 값(.env)과 Compose가 실제로 쓰는 값을 같게 만든다 (PR #268 CodeRabbit 리뷰).
@@ -152,6 +153,7 @@ case "$MONITORING_AGENT_VALUE" in
       }
     done
     COMPOSE+=(-f "$DEPLOY_DIR/docker-compose.monitoring-agent.yml")
+    MONITORING_ENABLED=1
     ;;
   ""|0) ;;
   *) log "❌ MONITORING_AGENT는 1 또는 빈 값이어야 한다: $MONITORING_AGENT_VALUE"; exit 4 ;;
@@ -253,6 +255,21 @@ start_pipeline() {
   log "파이프라인 서비스 반영됨"
 }
 
+# 모니터링 에이전트(Alloy · node-exporter)를 띄운다 (COMMON-64, MONITORING_AGENT=1인 서버만).
+# 위 start_and_check는 backend · web만 이름으로 올리므로, 오버레이를 붙여도 이 둘은 따로 올리지 않으면 뜨지 않는다
+# (COMMON-64 운영 반영 때 실제로 발견 — 오버레이 · 볼륨은 붙었는데 에이전트 컨테이너가 없었다).
+# --no-deps: backend · web을 다시 건드리지 않는다. 설정(alloy-agent.alloy) · 이미지가 바뀌었을 때만 다시 만들어진다.
+# 파이프라인과 같은 기준으로 **실패해도 배포를 되돌리지 않고 경고만 남긴다** — 사용자 화면 · API와 무관하고,
+# Alloy가 멈추면 Grafana Cloud 경보(no data · BackendScrapeTargetMissing)가 따로 알린다
+start_monitoring_agent() {
+  (( MONITORING_ENABLED )) || return 0
+  if ! "${COMPOSE[@]}" up -d --no-build --no-deps alloy node-exporter; then
+    log "⚠ 모니터링 에이전트(alloy · node-exporter)를 띄우지 못했다. 서비스는 정상 — 사람이 확인 (deploy/README.md \"모니터링 에이전트\")"
+    return 0
+  fi
+  log "모니터링 에이전트 반영됨"
+}
+
 # 지정한 태그로 띄우고 확인한다. 성공 0 · 실패 1
 # 순서가 중요하다: 백엔드를 먼저 바꾸고, 준비된 뒤에 웹을 바꾼다.
 #   한 번에 up 하면 Compose가 웹을 먼저 내려 두고 새 백엔드를 기다려서(depends_on: service_healthy), 배포 중에는 화면까지 안 열린다.
@@ -281,6 +298,7 @@ start_and_check() {
   fi
   # 사용자 경로(web · backend)가 확인된 뒤에 올린다. 되돌림 때도 같은 함수를 타므로 파이프라인도 함께 직전 태그로 돌아간다
   start_pipeline
+  start_monitoring_agent
   return 0
 }
 
