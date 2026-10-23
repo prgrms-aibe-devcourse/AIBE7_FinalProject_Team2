@@ -442,17 +442,15 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
     rug.append(paper);
   });
 
-  // 아래 벽: 열린 문 = 사건 목록. 문 앞 발판이 버튼이고, 문틈으로 복도 불빛이 바닥에 길게 들어온다.
-  // 문 옆 바닥의 크라프트 서류철 = 성향 테스트(책상 위 서류철과 같은 물건)
+  // 맨 아래: 아래 벽 밑으로 밀려 들어간 신문 한 부, 윗부분(전체의 20%)만 보인다. 책상 위 신문과 같은 지면이고 누르면 사건 목록
   const exit = element('div', 'room-exit');
-  const door = element('div', 'room-door');
-  door.append(deco('door-light'), deco('door-leaf'), deco('door-swing'),
-    button('', () => navigate('list'), 'room-door-button'));
-  const doorButton = door.lastChild;
-  doorButton.append(span('door-mat-title', '사건 목록 보기'), span('door-mat-sub', '법정으로 가는 문'));
-  const testSlip = button('', () => navigate('test'), 'room-test');
-  testSlip.append(span('room-test-title', '판결 성향 테스트부터'), span('room-test-sub', '16문항, 3분이면 끝나요'));
-  exit.append(testSlip, door);
+  const tail = button('', () => navigate('list'), 'room-news');
+  tail.setAttribute('aria-label', '사건 목록 보기');
+  const tailSheet = span('room-news-sheet');
+  tailSheet.setAttribute('aria-hidden', 'true');
+  tailSheet.append(news.cloneNode(true)); // 제호 · 날짜 띠 쪽만 보이므로 사건 목록을 받기 전 지면을 그대로 쓴다
+  tail.append(tailSheet);
+  exit.append(tail);
 
   room.append(chair, deco('room-desk-shade'), head, rug, exit); // 의자는 책상 밑으로 밀어 넣어 위쪽이 책상에 가린다
   intro.append(room);
