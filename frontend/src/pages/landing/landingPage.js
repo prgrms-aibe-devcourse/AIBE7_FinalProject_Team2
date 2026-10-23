@@ -1,4 +1,4 @@
-import { button, element, renderSiteFooter } from '../../components/siteLayout.js';
+import { button, element, mockTag, renderSiteFooter } from '../../components/siteLayout.js';
 import { casePhoto, fallbackImages, todayLabel, useCommonPhotoOnError } from '../../utils/newspaper.js';
 import { takePaper } from '../../utils/paperHandoff.js';
 import { flyCoffee } from '../../utils/coffeeDive.js';
@@ -59,19 +59,24 @@ const LIFT_MS = 380; // 신문을 집어 드는 시간(landing.css .is-held와 �
 // 6막에서 "메인으로" 올 때: 보던 지면이 줌아웃(제자리에서 .82배)과 페이드아웃을 함께 하며 책상이 드러난다
 const FADE_MS = 800;
 
-// 서비스 소개(FE-50 → FE-87 집무실 바닥): "뉴스만 본 나 → 모든 사실을 본 나"를 러그 위 서류 네 장으로 잇는다.
-// 양 끝은 상태(pole), 가운데 두 장은 되돌릴 수 없는 판단이다. 서류는 체험에서 실제로 만나는 물건 모양이다(신문 스크랩 · 첫인상 엽서 · 판결 파일철 · 판결문)
+// 서비스 소개(FE-50 → FE-87 집무실 바닥): 러그 = 체험에서 내가 하는 일, 스툴 = 끝에 얻는 것(세 판결 비교 미리보기).
+// 러그 위 서류는 체험에서 실제로 만나는 물건의 축소판이다(신문 스크랩 · 첫인상 엽서 · 판단 요소 파일철 · 판결문). 설명은 한 줄로 줄이고 물건이 말하게 한다.
+// 양 끝은 상태(pole: 뉴스만 본 나 · 모든 사실을 본 나), 가운데 두 장은 되돌릴 수 없는 판단이다
 const TRACK = [
-  { pole: true, kind: 'clip', title: '뉴스만 본 나', text: '기사 제목과 사진 한 장으로 사건을 처음 만나요.' },
-  { kind: 'postcard', title: '첫인상', text: '기사 제목과 재연만 보고 먼저 고릅니다. 고른 뒤에는 바꿀 수 없어요.' },
-  { kind: 'folder', title: '내 판결', text: '사실관계 · 양측 주장 · 법률을 차례로 읽고 형량을 정합니다. 확정하면 바꿀 수 없어요.' },
-  { pole: true, kind: 'sheet', title: '모든 사실을 본 나', text: '세 판결을 나란히 놓고 무엇이 달랐는지 봐요.' },
+  { pole: true, kind: 'clip', title: '뉴스만 본 나', text: '제목과 사진 한 장으로 사건을 처음 만나요.' },
+  { kind: 'postcard', title: '첫인상', text: '고른 뒤에는 바꿀 수 없어요.' },
+  { kind: 'folder', title: '내 판결', text: '기록을 다 읽고 판단 요소마다 무게를 정해요.' },
+  { pole: true, kind: 'sheet', title: '모든 사실을 본 나', text: '형량을 적고 확정하면 바꿀 수 없어요.' },
 ];
-// 세 판결은 대등하다(같은 종이 · 같은 크기로 나란히). 실제 판결만 봉인 띠를 두른다(마지막 전까지 보이지 않는다는 뜻, PRODUCT.md)
+// 내 판결 파일철의 판단 요소 예시(특정 사건이 아닌 일반 항목)와 고른 칸(0 무겁게 · 1 해당 없음 · 2 가볍게)
+const FACTOR_SCALE = ['무겁게', '해당 없음', '가볍게'];
+const FACTOR_SAMPLES = [['범행 경위', 0], ['피해 회복', 1], ['반성 여부', 2]];
+// 스툴 위 세 판결(대등: 같은 종이 · 같은 막대). 막대는 0 ~ 10년, at = 점 자리(%). 내 판결은 비어 있고(?) 실제 판결은 마지막 전까지 가린다(PRODUCT.md).
+// AI 판결 수치는 실제 데이터가 아니라 목데이터로 밝힌다
 const VERDICTS = [
-  { name: '내 판결', text: '기록을 다 읽고 내가 정한 형량' },
-  { name: 'AI 판결', text: '같은 기록으로 AI 판사가 낸 판단. 법률 자문이 아니에요.' },
-  { name: '실제 판결', text: '재판부가 실제로 선고한 형량', sealed: '맨 마지막에 공개' },
+  { key: 'me', name: '내 판결', title: '당신이 정할 자리', value: '?', note: '직접 채워요' },
+  { key: 'ai', name: 'AI 판결', title: '같은 기록, AI 판사', at: 62, value: '징역 6년', mock: true, note: '법률 자문 아님' },
+  { key: 'court', name: '실제 판결', title: '재판부의 선고', at: 40, value: '징역 ■년', sealed: '맨 마지막에 공개' },
 ];
 
 // 서류철 그림 (장식). 색은 클래스로 landing.css에서 칠한다
@@ -343,7 +348,7 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
 
   // ---- 서비스 소개: 판사의 집무실 바닥 (FE-87) ----
   // 책상(위)에서 카메라가 그대로 아래로 내려가며 방바닥을 내려다본다. 2D 평면 탑뷰라 원근 없이 그린다(문은 평면도 기호: 문짝 + 열리는 원호).
-  // 위에서부터: 책상 밑으로 밀어 넣은 판사 의자(등받이만 보임) · 책상이 바닥에 드리운 그림자 → 안내문 → 러그 위 서류 네 장(흐름, 왼쪽 위에서 오른쪽 아래로 흩어 놓음) → 낮은 탁자 위 판결문 세 장 → 아래 벽의 열린 문(사건 목록)
+  // 위에서부터: 책상 밑으로 밀어 넣은 판사 의자(등받이만 보임) · 책상이 바닥에 드리운 그림자 → 안내문 → 러그 위 서류 네 장(흐름, 왼쪽 위에서 오른쪽 아래로 흩어 놓음) → 둥근 스툴 세 개 위 판결문 한 장씩(계단처럼 어긋나게) → 아래 벽의 열린 문(사건 목록)
   const room = element('div', 'room');
   // 안내문 종이(놀이): 왼쪽 위 귀퉁이가 늘 들썩이고, 누르면 종이가 러그 쪽(거의 아래, 살짝 오른쪽)으로 러그 위를 지나 끌려가며 치워지고 밑에 숨어 있던 남불이 드러난다.
   // 화면 제목(h2)은 종이와 따로 둔다(종이를 치워도 구역 이름은 남는다). 종이 위 글자는 장식이다
@@ -372,26 +377,79 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
 
   // 러그 위 서류: 순서가 곧 흐름이다(ol). 표시는 빈 원(모르는 나) → 마름모(되돌릴 수 없는 판단) → 꽉 찬 원(다 아는 나)
   const rug = element('ol', 'room-rug');
+  const rugClip = {}; // 신문 스크랩은 책상 신문과 같은 머리기사로 채운다(paintNews)
+  const box = (on) => span(`paper-box${on ? ' is-on' : ''}`);
+  const PAPER_BODY = {
+    clip: () => {
+      rugClip.kicker = span('clip-kicker', '머리기사');
+      rugClip.head = span('clip-head', '오늘의 머리기사');
+      rugClip.photo = element('img', 'clip-photo');
+      rugClip.photo.alt = '';
+      rugClip.photo.src = fallbackImages.MURDER;
+      return [rugClip.kicker, rugClip.head, rugClip.photo];
+    },
+    postcard: () => {
+      const choices = span('paper-choices');
+      choices.append(span('', ''), span('', ''));
+      choices.children[0].append(box(true), '징역형');
+      choices.children[1].append(box(false), '벌금형');
+      return [span('paper-q', '어떤 형이 맞을까?'), choices, deco('paper-stamp')];
+    },
+    folder: () => {
+      const table = span('factor-table');
+      const head = span('factor-row is-head');
+      head.append(span('', ''), ...FACTOR_SCALE.map((label) => span('', label)));
+      table.append(head, ...FACTOR_SAMPLES.map(([name, pick]) => {
+        const row = span('factor-row');
+        row.append(span('factor-name', name), ...FACTOR_SCALE.map((_, i) => box(i === pick)));
+        return row;
+      }));
+      return [table];
+    },
+    sheet: () => {
+      const order = span('sheet-order');
+      order.append('피고인을 징역 ', span('sheet-hand', '5'), '년에 처한다.');
+      return [span('sheet-title', '판 결 문'), span('sheet-label', '주문'), order, deco('sheet-seal')];
+    },
+  };
   TRACK.forEach(({ pole, kind, title, text }) => {
     const paper = element('li', `room-paper paper-${kind}${pole ? ' track-pole' : ' track-stop'}`);
-    paper.append(deco('track-mark'), element(pole ? 'strong' : 'h3', 'paper-title', title), element('p', '', text));
-    if (kind === 'postcard') paper.append(deco('paper-stamp'));
+    const step = span('paper-step');
+    step.append(deco('track-mark'), element(pole ? 'strong' : 'h3', 'paper-title', title));
+    paper.append(step, ...PAPER_BODY[kind](), element('p', 'paper-cap', text));
     rug.append(paper);
   });
 
-  const table = element('div', 'room-table');
+  // 둥근 스툴 세 개에 판결문을 한 장씩(FE-87, 탁자 대신). 스툴 크기 · 종이는 같고(대등), 러그 위 흐름을 이어 계단처럼 조금씩 어긋나게 놓는다
+  const table = element('div', 'room-stools');
   table.setAttribute('role', 'group');
   table.setAttribute('aria-labelledby', 'verdicts-heading');
-  const tableHeading = element('h3', '', '세 판결을 나란히');
+  const tableHeading = element('h3', 'stools-tag', '세 판결을 나란히'); // 바닥에 놓인 작은 꼬리표 종이
   tableHeading.id = 'verdicts-heading';
   const verdictList = element('ul', 'verdict-list');
-  verdictList.append(...VERDICTS.map(({ name, text, sealed }) => {
-    const item = element('li', sealed ? 'is-sealed' : '');
-    item.append(element('b', '', name), element('p', '', text));
-    if (sealed) item.append(element('p', 'verdict-seal', sealed));
+  verdictList.append(...VERDICTS.map(({ key, name, title, at, value, mock, note, sealed }) => {
+    const item = element('li', `stool${sealed ? ' is-sealed' : ''}`);
+    const paper = element('div', 'stool-paper');
+    // 0 ~ 10년 막대. 내 판결은 점 대신 빈 물음표, 실제 판결은 흐리게 가린다
+    const bar = span(`verdict-bar is-${key}`);
+    bar.setAttribute('aria-hidden', 'true');
+    if (at === undefined) bar.append(span('bar-ask', '?'));
+    else { const dot = span('bar-dot'); dot.style.left = `${at}%`; bar.append(dot); }
+    const ticks = span('bar-ticks');
+    ticks.setAttribute('aria-hidden', 'true');
+    ticks.append(span('', '0년'), span('', '5년'), span('', '10년'));
+    const amount = element('p', 'verdict-value', value);
+    if (mock) amount.append(' ', mockTag());
+    if (note) amount.append(' ', span('verdict-note', note));
+    const reading = span(`verdict-reading${sealed ? ' is-covered' : ''}`);
+    reading.append(bar, ticks, amount);
+    if (sealed) reading.setAttribute('aria-hidden', 'true'); // 가린 수치는 읽지 않는다
+    paper.append(span(`verdict-who is-${key}`, name), element('b', '', title), reading);
+    if (sealed) paper.append(element('p', 'verdict-seal', sealed));
+    item.append(paper);
     return item;
   }));
-  table.append(tableHeading, verdictList);
+  table.append(tableHeading, verdictList, element('p', 'stools-note', '셋을 나란히 놓으면, 어디서 갈렸는지 보여요')); // 바닥에 남긴 손글씨 메모
 
   // 아래 벽: 열린 문 = 사건 목록. 문 앞 발판이 버튼이고, 문틈으로 복도 불빛이 바닥에 길게 들어온다.
   // 문 옆 바닥의 크라프트 서류철 = 성향 테스트(책상 위 서류철과 같은 물건)
@@ -449,6 +507,10 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
     const ordered = [...cases].sort((a, b) => b.participantCount - a.participantCount);
     const [top, ...others] = ordered;
     banner.textContent = top.headline || top.title;
+    rugClip.head.textContent = top.headline || top.title; // 아래 집무실 러그의 신문 스크랩도 같은 머리기사
+    rugClip.kicker.textContent = `머리기사 · ${top.crimeCategoryLabel}`;
+    useCommonPhotoOnError(rugClip.photo, Number(top.caseId) || 0);
+    rugClip.photo.src = casePhoto(top);
     deck.textContent = top.deck || top.shortIntro;
     kicker.textContent = `머리기사 · ${top.crimeCategoryLabel}`;
     earCount.textContent = `법정에 오른 사건 ${summary.total}건`;
