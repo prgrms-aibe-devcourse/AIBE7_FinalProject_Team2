@@ -360,9 +360,10 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
   nambul.alt = '';
   nambul.setAttribute('aria-hidden', 'true');
   nambul.addEventListener('error', () => nambul.remove(), { once: true });
+  heading.tabIndex = -1; // 안내문을 치운 뒤 키보드 포커스를 받는 자리(구역 이름을 다시 읽어 준다)
   const note = button('', () => {
     note.classList.add('is-peeling');
-    peelOff(note, { from: 'rotate(-4deg)', to: 'translate(70px, 340px) rotate(8deg)', focusTarget: () => null });
+    peelOff(note, { from: 'rotate(-4deg)', to: 'translate(70px, 340px) rotate(8deg)', focusTarget: () => heading });
   }, 'room-note');
   note.setAttribute('aria-label', '안내문 종이 치우기');
   const paper = span('room-note-paper');
