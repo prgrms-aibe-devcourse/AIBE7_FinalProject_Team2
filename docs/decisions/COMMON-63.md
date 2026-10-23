@@ -92,7 +92,9 @@ Jira 이슈가 원한 "Prometheus 표준 문법이라 그대로 옮길 수 있�
    `lawnambul`에 `lawnambul-service`(8개) · `lawnambul-meta`(`Watchdog`, 1개) — 총 9개로 이식. (Convert
    API는 규칙을 하나씩 변환하므로, 실제 Grafana 쪽에 9개가 다 들어갔는지 Alert rules 목록으로 직접
    확인해야 한다 — PR #266 리뷰, 정민석)
-2. `AlertDeliveryFailing`은 이식하지 않음(Cloud에서는 평가 불가능한 지표, Watchdog으로 대체).
+2. `AlertDeliveryFailing`은 이식하지 않음(Cloud에서는 평가 불가능한 지표). **Watchdog으로 대체되는 건
+   아니다** — `Watchdog`은 `always-muted`라 규칙 평가·알림 상태 확인에만 쓰이고, `AlertDeliveryFailing`이
+   맡던 "Slack 전송 자체가 실패하는가" 감시는 공백으로 남는다(PR #266 리뷰 재지적, 정민석).
 3. Slack 연락처(`lawnambul-slack`)는 로컬과 같은 웹훅 URL을 재사용.
 4. 알림 정책: 기본 그룹핑(`alertname`, `severity`) · `severity="critical"` 빠른 재알림(10s/1h) ·
    `severity="none"`(Watchdog)은 `always-muted` mute timing으로 항상 음소거.
@@ -132,9 +134,10 @@ Jira 이슈가 원한 "Prometheus 표준 문법이라 그대로 옮길 수 있�
    화면에서 직접 봐야 확인되는 사항이라, 문서 정정만으로 끝나지 않는다 — 운영 담당(백승호)이 직접 확인
    필요.
 3. **토큰 전달 경로 문구 수정.** "Jira 댓글 또는 비공개 채널로 전달한다"는 문구를 지우고, 재사용이
-   필요하면 각자 셀프서비스로 새 토큰을 발급받도록 `monitoring/README.md`를 고쳤다. **작업 중 이 토큰이
-   AI 대화 도구에 붙여넣어진 적이 있는지는 별도 확인이 필요하다 — 코드/문서 수정만으로는 판단할 수
-   없는 사안이라 사용자에게 직접 확인을 요청했다.**
+   필요하면 각자 셀프서비스로 새 토큰을 발급받도록 `monitoring/README.md`를 고쳤다. 작업 중 이 토큰이
+   curl 인자로 여러 번 직접 쓰여 세션 로그에 평문으로 남았던 것을 확인해, **2026-10-23 Grafana Cloud
+   콘솔에서 기존 토큰(`sa-1-alerting-provisioning`)을 폐기하고 새로 발급했다**(로컬 쉘 히스토리는 grep으로
+   확인, 노출 흔적 없음).
 4. **`always-muted` mute timing의 1분 빈틈.** `00:00~23:59`로 넣으면 매일 23:59~24:00에 음소거가
    풀린다. 이 설정은 Grafana Cloud 콘솔(또는 API) 쪽에만 있고 저장소 코드로 표현되지 않아, 문서에 정확한
    수정 방법(요일만 지정하거나 끝 시각 `24:00`)을 남기고 실제 적용은 Grafana 접근 권한이 있는 담당자가
