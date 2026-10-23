@@ -137,7 +137,9 @@ case "$MONITORING_AGENT_VALUE" in
     # GRAFANA_CLOUD_LOKI_API_KEY는 비워도 된다 — 비우면 Alloy가 지표 토큰을 같이 쓴다(alloy-agent.alloy)
     for required in GRAFANA_CLOUD_PROM_URL GRAFANA_CLOUD_PROM_USERNAME GRAFANA_CLOUD_PROM_API_KEY \
                     GRAFANA_CLOUD_LOKI_URL GRAFANA_CLOUD_LOKI_USERNAME; do
-      [[ -n "$(env_value "$required")" ]] || {
+      # 따옴표 · CR · 공백을 지우고 본다 (PR #268 리뷰, 백승호) — MONITORING_AGENT · EXTERNAL_DB_URL 판정과 같은 기준.
+      # KEY=""는 Compose가 빈 값으로 보고 :? 오류로 up 도중에 실패하므로, 배포를 시작하기 전에 여기서 막는다
+      [[ -n "$(env_value "$required" | tr -d "\"' \r")" ]] || {
         log "❌ MONITORING_AGENT=1인데 .env에 ${required} 가 없다 (deploy/docker-compose.monitoring-agent.yml)"
         exit 4
       }
