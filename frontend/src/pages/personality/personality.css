@@ -200,14 +200,13 @@
 .axis-ends span { color: var(--color-muted); font-weight: 400; } /* 더 기운 쪽만 그 쪽 색 · 굵게(마이페이지와 같다) */
 .axis-ends .is-strict.is-major { color: var(--color-axis-strict); font-weight: 700; }
 .axis-ends .is-lenient.is-major { color: var(--color-axis-lenient-text); font-weight: 700; }
-/* 엄격 쪽 남색 · 관대 쪽 갈색, 둘 다 진하게 막대를 가득 채운다(반반이어도 비우지 않는다). 사이는 종이색 줄 하나, 가운데 눈금 = 반반 */
+/* 엄격 쪽 남색 · 관대 쪽 갈색, 둘 다 진하게 막대를 가득 채운다(반반이어도 비우지 않는다). 두 색은 틈 없이 바로 맞닿고, 가운데 눈금 = 반반 */
 .axis-bar { position: relative; display: flex; height: 10px; margin-top: 6px; border-radius: 3px; overflow: hidden; }
 .axis-bar span { flex-basis: 0; min-width: 0; }
 .axis-bar .is-strict { background: var(--color-axis-strict); }
 .axis-bar .is-lenient { background: var(--color-axis-lenient); }
-.axis-bar.has-split .is-lenient { box-shadow: inset 2px 0 0 var(--color-desk-sheet); }
 .axis-row { position: relative; }
-.axis-row::after { content: ''; position: absolute; left: 50%; bottom: -4px; width: 1px; height: 18px; background: var(--color-border-strong); }
+.axis-row::after { content: ''; position: absolute; left: 50%; bottom: -4px; width: 1px; height: 18px; background: var(--color-heading); } /* 가운데 눈금(반반)은 변경폭의 경계선(.change-edge)과 같은 검정 */
 /* 축 이름은 막대 왼쪽, 비중 글자는 막대 위(마이페이지 .my-type-hero와 같은 배치). 막대 줄을 20px로 묶어 막대(10px)가 이름과 같은 높이 가운데에 온다 */
 .personality-page .axis-row { display: grid; grid-template-columns: 7em minmax(0, 1fr); grid-template-rows: auto 20px; column-gap: 12px; align-items: center; }
 .personality-page .axis-label { grid-row: 2; grid-column: 1; margin: 0; line-height: 20px; }

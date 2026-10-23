@@ -23,7 +23,25 @@ LABEL="${1:-}"
 log() { echo "[backup $(date '+%F %T')] $*"; }
 compose() { docker compose -f "$DEPLOY_DIR/docker-compose.prod.yml" "$@"; }
 ENV_FILE="$DEPLOY_DIR/.env"
-env_value() { grep -E "^$1=" "$ENV_FILE" 2>/dev/null | tail -1 | cut -d= -f2-; }
+# .env가 있는데 읽을 수 없으면(권한 등) 먼저 멈춘다 — 그대로 두면 외부 DB 값을 "없음"으로 읽어
+# 외부 DB 모드 서버에서 같은 서버 postgres 경로로 잘못 빠진다 (PR #258 리뷰). cron은 ubuntu 사용자로 돈다
+if [[ -e "$ENV_FILE" && ! -r "$ENV_FILE" ]]; then
+  log "❌ ${ENV_FILE}을 읽을 수 없다 — 권한을 확인한다 (ls -l $ENV_FILE, 소유자가 이 스크립트를 실행하는 사용자여야 한다)"
+  exit 2
+fi
+# 값이 없으면 빈 값으로 성공한다 — set -e · pipefail에서 grep의 "못 찾음"(종료 코드 1)이 그대로 올라오면
+# 외부 DB 값이 없는 서버(같은 서버 postgres)에서 스크립트가 아무 메시지 없이 끝나 백업이 만들어지지 않는다 (10/22 운영에서 발견).
+# 그 밖의 실패(종료 코드 2 이상 = 읽기 오류)는 숨기지 않는다 — 이유를 stderr에 남기고 실패를 돌려줘 스크립트가 멈추게 한다
+# (stdout으로 쓰면 호출한 쪽 $(...)에 값으로 섞인다)
+env_value() {
+  [[ -e "$ENV_FILE" ]] || return 0
+  local rc=0
+  grep -E "^$1=" "$ENV_FILE" | tail -1 | cut -d= -f2- || rc=$?
+  if [[ "$rc" -ne 0 && "$rc" -ne 1 ]]; then
+    log "❌ ${ENV_FILE}에서 $1 값을 읽지 못했다 (grep 종료 코드 $rc)" >&2
+    return "$rc"
+  fi
+}
 PG_CLIENT_IMAGE="${PG_CLIENT_IMAGE:-postgres:17-alpine}"
 
 # 외부 DB 접속 값(JDBC 주소 → host · port · db · sslmode). 값은 출력하지 않는다

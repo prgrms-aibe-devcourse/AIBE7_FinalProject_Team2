@@ -1,6 +1,7 @@
 import { button, element } from '../../components/siteLayout.js';
 import { mountCaseReview } from './caseReviewPage.js';
 import { reducedMotion } from '../../utils/motion.js';
+import { lockScroll, unlockScroll } from '../../utils/scrollLock.js';
 
 // 6막 "엽서 쓰기" 버튼 · 지면의 엽서를 누르면 날아오는 엽서 한 장(FE-55). 화면(/cases/:caseId/letters)과 같은 내용을 쓴다.
 // 1막 사전 판단 엽서와 같은 연출(paperStage.css nambul-hand · postcard-in): 남불이 앞으로 나서며 손을 내밀고, 엽서가 그 손에서 날아와 가운데에서 펼쳐진다.
@@ -12,17 +13,7 @@ const FLY_DELAY_MS = 220; // 남불이 손을 내미는 사이(1막 엽서와 �
 const BACK_MS = 380;
 const READY_WAIT_MS = 500; // 엽서 내용을 받는 동안 기다리는 최대 시간(받은 뒤에 날려야 날아오는 중에 엽서 크기가 바뀌지 않는다)
 
-// 엽서가 떠 있는 동안 뒤 화면 스크롤을 잠근다. 잠그면 스크롤바가 사라져 화면 폭이 넓어지며 뒤 지면이 다시 계산돼 움찔하므로,
-// 스크롤바가 있던 화면이면 그 자리를 비워 둔다(html.case-review-gutter, caseReview.css). 스크롤바가 없던 화면은 건드리지 않는다
-function lockScroll() {
-  const root = document.documentElement;
-  root.classList.toggle('case-review-gutter', window.innerWidth > root.clientWidth);
-  document.body.classList.add('case-review-open');
-}
-function unlockScroll() {
-  document.body.classList.remove('case-review-open');
-  document.documentElement.classList.remove('case-review-gutter');
-}
+const SCROLL_CLASSES = ['case-review-open', 'case-review-gutter']; // 엽서가 떠 있는 동안 뒤 화면 스크롤을 잠근다(utils/scrollLock.js, 자리 비움은 caseReview.css)
 
 /**
  * @param {{ caseId, api, navigate, from?: Element, hand?: boolean }} options
@@ -78,7 +69,7 @@ export function openCaseReviewPopup({ caseId, api, navigate, from, hand = false 
       ]).catch(() => {});
     }
     layer.remove();
-    unlockScroll();
+    unlockScroll(...SCROLL_CLASSES);
     window.removeEventListener('popstate', dispose);
     if (opener?.isConnected) opener.focus({ preventScroll: true });
   }
@@ -98,11 +89,11 @@ export function openCaseReviewPopup({ caseId, api, navigate, from, hand = false 
   });
   layer.addEventListener('mousedown', (event) => { if (event.target === layer) requestShut(); });
 
-  lockScroll();
+  lockScroll(...SCROLL_CLASSES);
   document.body.append(layer);
   dialog.focus({ preventScroll: true });
   // 엽서 안에서 다른 화면으로 가면(다른 사건 보러 가기 · 체험하러 가기) 엽서 층을 바로 걷고 간다(남겨 두면 새 화면을 덮는다)
-  const dispose = () => { closing = true; layer.remove(); unlockScroll(); window.removeEventListener('popstate', dispose); };
+  const dispose = () => { closing = true; layer.remove(); unlockScroll(...SCROLL_CLASSES); window.removeEventListener('popstate', dispose); };
   window.addEventListener('popstate', dispose); // 브라우저 뒤로 가기로 화면이 바뀔 때도 엽서 층을 남기지 않는다
   const leave = (...args) => { dispose(); return navigate(...args); };
   const mounted = mountCaseReview(body, { caseId, api, navigate: leave });

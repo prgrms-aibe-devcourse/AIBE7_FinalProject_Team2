@@ -106,7 +106,7 @@ export function fitPortraitIn(windowEl, img, options) {
   img.classList.add('is-fitting');
   const apply = () => {
     if (!box || !windowEl.clientWidth || !windowEl.clientHeight) return;
-    const fit = fitPortrait({ width: img.naturalWidth, height: img.naturalHeight, box }, { width: windowEl.clientWidth, height: windowEl.clientHeight }, options);
+    const fit = fitPortrait({ width: img.naturalWidth, height: img.naturalHeight, box }, { width: windowEl.clientWidth, height: windowEl.clientHeight }, typeof options === 'function' ? options(windowEl) : options);
     Object.assign(img.style, { width: `${fit.width}px`, height: `${fit.height}px`, left: `${fit.left}px`, top: `${fit.top}px` });
     img.classList.remove('is-fitting');
     img.classList.add('is-fitted');

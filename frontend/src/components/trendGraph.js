@@ -32,6 +32,11 @@ const CHART = { width: 320, height: 160, axis: 34, left: 52, right: 22, top: 10,
 // 세로 눈금: 툴팁 · 표(leanText)와 같이 기운 쪽 비중으로 읽는다. 위 끝 관대 100, 가운데 50(반반), 아래 끝 엄격 100
 const Y_TICKS = [[1, '100'], [0.75, '75'], [0.5, '50'], [0.25, '75'], [0, '100']];
 const FOCUS_BAND = 22; // 강조한 칸(이 사건) 띠 폭
+const DOT_R = 4.5; // 체험 점(원)의 반지름
+// 기준점 마름모의 반대각선 절반. 최근(진한 칠 + 흰 윤곽 2px, 윤곽이 안쪽을 먹어 보이는 지름 약 9.2)은 그대로 두고,
+// 초심 · 재심(속 빈 마름모 + 진한 윤곽 1.5px, 윤곽이 바깥으로 나와 보이는 지름이 최근과 같게 약 9.1)을 최근에 맞춘다
+const CURRENT_R = 6;
+const BASE_R = 3.5;
 
 // retakeBetween: 재심이 낀 두 칸의 order [앞, 뒤](FE-77). 칸을 하나 더 만들면 체험 사이 간격(기울기)이 사람마다 달라져, 칸 없이 두 칸 사이에 세로 점선으로 얹는다
 function trendChart({ axis, points }, slots, retakeBetween) {
@@ -42,7 +47,9 @@ function trendChart({ axis, points }, slots, retakeBetween) {
   caption.append(element('span', '', axis.label), ends);
   figure.append(caption);
   if (points.length === 0) {
-    figure.append(element('p', 'axis-empty', '체험 자료가 아직 없어요'));
+    // 이 축의 점수가 하나도 없으면 위아래 끝 표시(↑ ↓)는 뜻이 없어 감춘다(자리는 남겨 다른 그래프와 같은 크기). 축 이름(제목)은 그대로 두고 안내를 박스 가운데에 둔다
+    figure.classList.add('is-empty');
+    figure.append(element('div', 'trend-spacer'), element('p', 'axis-empty', '체험 자료가 아직 없어요'));
     return figure;
   }
   const { width, height, axis: axisX, left, right, bottom } = CHART;
@@ -80,10 +87,10 @@ function trendChart({ axis, points }, slots, retakeBetween) {
   if (focus) chart.append(svgNode('rect', { x: xOf(focus.order) - FOCUS_BAND / 2, y: top, width: FOCUS_BAND, height: plotBottom - top, class: 'trend-focus' }));
   Y_TICKS.forEach(([ratio, label]) => {
     const y = yOf(ratio);
-    if (ratio !== 0.5) chart.append(svgNode('line', { x1: axisX, x2: width, y1: y, y2: y, class: 'trend-grid-line' }));
+    // 눈금선은 75 · 50 · 75(가운데 세 줄)만 점선으로 긋는다. 100(위 · 아래 끝)은 그래프 끝이 이미 보여 선을 두지 않는다(눈금 글자는 둔다)
+    if (ratio > 0 && ratio < 1) chart.append(svgNode('line', { x1: axisX, x2: width, y1: y, y2: y, class: 'trend-grid-line' }));
     chart.append(svgNode('text', { x: axisX - 6, y, class: 'trend-tick', 'text-anchor': 'end', 'dominant-baseline': 'middle' }, label));
   });
-  chart.append(svgNode('line', { x1: axisX, x2: width, y1: middle, y2: middle, class: 'trend-mid' }));
   slots.forEach((slot) => chart.append(svgNode('text', { x: xOf(slot.order), y: height - 10, class: `trend-tick${slot.isFocus ? ' is-focus' : ''}`, 'text-anchor': 'middle' }, slot.label)));
   // 기준점 세로 점선(FE-77): 초심 · 최근 칸, 재심 자리. 재심은 가로축 글자와 겹치지 않게 그래프 위에 글자를 둔다
   slots.filter((slot) => slot.order === 0 || slot.order === 'now').forEach((slot) => {
@@ -114,9 +121,10 @@ function trendChart({ axis, points }, slots, retakeBetween) {
     const x = xOf(point.order);
     const y = yOf(point.ratio);
     const isFocus = focus?.order === point.order;
+    const r = point.isCurrent ? CURRENT_R : BASE_R;
     chart.append(point.isTest || point.isCurrent
-      ? svgNode('polygon', { points: `${x},${y - 6} ${x + 6},${y} ${x},${y + 6} ${x - 6},${y}`, class: `trend-dot ${point.isCurrent ? 'is-current' : 'is-test'}` })
-      : svgNode('circle', { cx: x, cy: y, r: isFocus ? 5.5 : 4.5, class: `trend-dot${isFocus ? ' is-focus' : ''}` }));
+      ? svgNode('polygon', { points: `${x},${y - r} ${x + r},${y} ${x},${y + r} ${x - r},${y}`, class: `trend-dot ${point.isCurrent ? 'is-current' : 'is-test'}` })
+      : svgNode('circle', { cx: x, cy: y, r: isFocus ? 5.5 : DOT_R, class: `trend-dot${isFocus ? ' is-focus' : ''}` }));
     const hit = svgNode('circle', { cx: x, cy: y, r: 16, class: 'trend-hit' }); // 점보다 넉넉한 마우스 자리
     hit.addEventListener('pointerenter', () => show(point, hit));
     hit.addEventListener('pointerdown', () => show(point, hit)); // 터치: 누르면 보이고, 그래프의 빈 곳을 누르면 닫힌다

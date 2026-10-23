@@ -1,11 +1,11 @@
-# 모니터링 전용 EC2에서 돌리는 구성 (COMMON-43, WBS 7.2.4).
+# 모니터링 전용 EC2에서 돌리는 구성 (COMMON-43, WBS 7.2.4 · Alertmanager 7.3.2).
 #
 # 왜 메인 서버가 아니라 별도 호스트인가 (docs/decisions/COMMON-43.md에 자세히):
 #   1. 메인은 t3.small 2GB에 backend 1g · postgres 512m · redis 256m이 이미 할당돼 있다 — 올릴 자리가 없다
 #   2. 감시 대상과 감시자가 같은 호스트면, 그 호스트가 죽는 순간 원인을 볼 수단도 같이 죽는다
 #   3. Grafana는 사람이 붙는 UI다. 메인 보안 그룹(22 · 80 · 443)에 노출을 더 만들지 않는다
 #
-# 여기서 도는 것: Prometheus(수집 · 저장) · Loki(로그 저장) · Grafana(조회)
+# 여기서 도는 것: Prometheus(수집 · 저장) · Loki(로그 저장) · Grafana(조회) · Alertmanager(경보 알림, 7.3.2)
 # 메인 EC2에서 도는 것: Alloy(로그 전송) · node_exporter — deploy/docker-compose.monitoring-agent.yml
 #   메트릭은 Prometheus가 가져오고(pull), 로그는 Alloy가 보낸다(push). 지나간 로그 줄은 가져올 수 없어서 방향이 반대다.
 #
@@ -19,11 +19,29 @@
 name: lawnambul-monitoring
 
 services:
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: lawnambul-alertmanager
+    volumes:
+      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      # Slack 웹훅 URL. 서버에서 직접 만든다 — 커밋하지 않는다(.gitignore, targets/와 같은 원칙).
+      # `echo -n "https://hooks.slack.com/services/..." > secrets/slack-webhook-url && chmod 600 secrets/slack-webhook-url`
+      - ./secrets:/etc/alertmanager/secrets:ro
+      - alertmanager-data:/alertmanager
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    ports:
+      # Prometheus · Grafana와 같은 이유로 호스트 안에서만 연다(SSH 터널로 9093을 따로 열 수는 있다)
+      - "127.0.0.1:9093:9093"
+    restart: unless-stopped
+
   prometheus:
     image: prom/prometheus:v3.13.3
     container_name: lawnambul-prometheus
     volumes:
       - ./prometheus.prod.yml:/etc/prometheus/prometheus.yml:ro
+      - ./alert-rules.yml:/etc/prometheus/alert-rules.yml:ro
       # 스크레이프 대상(사설 IP)은 서버에서 만드는 파일이다 — 커밋하지 않는다(.gitignore)
       - ./targets:/etc/prometheus/targets:ro
       - prometheus-data:/prometheus
@@ -40,6 +58,8 @@ services:
     ports:
       # 사람은 Grafana로만 본다. Prometheus UI는 호스트 안에서만 연다(SSH 터널로 9090을 따로 열 수는 있다)
       - "127.0.0.1:9090:9090"
+    depends_on:
+      - alertmanager
     restart: unless-stopped
 
   loki:
@@ -87,3 +107,4 @@ volumes:
   prometheus-data:
   loki-data:
   grafana-data:
+  alertmanager-data:

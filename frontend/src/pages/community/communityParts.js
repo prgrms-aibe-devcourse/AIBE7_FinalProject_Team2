@@ -1,7 +1,9 @@
 import { button, element, mockTag } from '../../components/siteLayout.js';
 import { formatDispositions, formatPenalty } from '../../utils/judgmentFormat.js';
-import { BOOKMARK_LAWS, bookmarkFace } from '../../utils/bookmarkCharacter.js';
 import { currentUser } from '../../utils/session.js';
+import { profileFace, typeFace } from '../../components/personCards.js';
+import { normalizeDeco } from '../../utils/profileDeco.js';
+import { normalizeTypeDeco } from '../../utils/typeCardDeco.js';
 
 // S-18 커뮤니티 (FE-47) 목록 · 상세가 함께 쓰는 틀과 조각: 노트북 화면 틀(왼쪽 거르기 · 가운데 · 오른쪽 글쓰기), 글 한 편, 내 판결 카드, 글쓰기 칸.
 // 판결 공유는 내 판결만 담는다(AI · 실제 판결은 넣지 않는다, 앵커링 방지 — PRODUCT.md).
@@ -14,6 +16,7 @@ const BODY_MAX = 2000;
 const IMAGE_MAX = 3;
 const IMAGE_EDGE = 1280; // 첨부 사진은 긴 변을 이 크기로 줄여 보낸다(목은 브라우저 저장소에 둔다)
 const NARROW = '(max-width: 1023px)'; // community.css와 같은 경계. 이보다 좁으면 글쓰기 칸이 화면을 덮는 창으로 열린다
+const SHEET = '(max-width: 720px)'; // community.css 모바일 경계. 이보다 좁으면 글쓴이 작은 창이 아래에서 올라오는 판이 된다
 
 // 아이콘(한 가지 선 굵기 · 24 격자). 글자 · 이모지로 대신하지 않는다
 const ICONS = {
@@ -46,19 +49,144 @@ function timeNode(iso, full) {
   return node;
 }
 
-// 글쓴이 얼굴: 책갈피 캐릭터(내로 · 남불) 얼굴. 못 불러오면 닉네임 첫 글자
-export function avatar({ nickname, character }) {
-  const node = element('span', 'cm-avatar');
+// ---- 글쓴이 명함(FE-88) ----
+// 글쓴이는 닉네임이 아니라 프로필카드 + 공개 성향카드 두 장(명함)으로 보인다. 카드는 마이페이지에서 꾸민 모양 그대로(.cm-cards가 커피 색을 입힌다).
+// 성향으로 거르기 · 정렬 · 순위는 만들지 않는다(편 가르기 · 앵커링 방지). 글쓴이 값(author)은 목 API가 채우고, 실제 API가 같은 모양으로 내려준다(mocks/communityMockData.js)
+const CLIP_PATH = 'M7 30V8a4 4 0 0 1 8 0v30a6 6 0 0 1-12 0V14';
+const typeImage = (author) => author.shownType?.type.imageUrl ?? null;
+const SLOT_NAMES = { initial: '초심', retake: '재심', current: '최근' };
+const typeNameOf = (author) => author.shownType?.type.name ?? null;
+
+function clip() {
+  const node = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  node.setAttribute('viewBox', '0 0 22 52');
   node.setAttribute('aria-hidden', 'true');
-  const image = element('img');
-  image.alt = '';
-  image.width = 36;
-  image.height = 36;
-  image.loading = 'lazy';
-  image.src = bookmarkFace(character === 'nambul' || BOOKMARK_LAWS.includes(character) ? character : 'naero');
-  image.addEventListener('error', () => { image.remove(); node.textContent = [...nickname][0] ?? ''; }, { once: true });
-  node.append(image);
+  node.classList.add('cm-clip');
+  const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  line.setAttribute('d', CLIP_PATH);
+  node.append(line);
   return node;
+}
+
+// 프로필카드 · 성향카드 한 쌍(누를 수 없음). 크기는 부모(.cm-namecard · .cm-pop)가 정한다
+function cardPair(author) {
+  const box = element('div', 'cm-cards cm-card-pair');
+  box.append(profileFace(normalizeDeco(author.profileCard), author.nickname, typeNameOf(author)));
+  box.append(author.shownType
+    ? typeFace(author.shownType.type, undefined, normalizeTypeDeco(author.shownType.deco))
+    : typeFace(null, '"아직 성향 테스트를 안 했어요"'));
+  return box;
+}
+
+// 목록 · 댓글에 쓰는 작은 명함: 카드 두 장이 겹쳐 있고, 닉네임 아래 공개 성향 이름이 붙는다
+function miniPair(author) {
+  const pair = element('span', 'cm-cards cm-mini-pair');
+  pair.setAttribute('aria-hidden', 'true');
+  const deco = normalizeDeco(author.profileCard);
+  const profile = element('span', `cm-mini is-profile deco-frame-${deco.frame} deco-bg-${deco.background}`);
+  const face = element('img');
+  face.src = deco.portrait;
+  face.alt = '';
+  face.loading = 'lazy';
+  profile.append(face);
+  const type = element('span', `cm-mini is-type deco-frame-${normalizeTypeDeco(author.shownType?.deco).frame}`);
+  if (typeImage(author)) {
+    const image = element('img');
+    image.src = typeImage(author);
+    image.alt = '';
+    image.loading = 'lazy';
+    type.append(image);
+  }
+  pair.append(type, profile);
+  return pair;
+}
+
+// ③ 작은 창: 닉네임 · 작은 명함을 누르면 그 자리 아래에 명함이 펼쳐진다. 좁은 화면은 아래에서 올라오는 판(community.css)
+let popNode = null;
+let popOpener = null;
+function popover() {
+  if (popNode?.isConnected) return popNode;
+  popNode = element('div', 'cm-pop');
+  popNode.setAttribute('popover', 'auto');
+  popNode.setAttribute('role', 'dialog');
+  popNode.tabIndex = -1;
+  popNode.addEventListener('toggle', (event) => {
+    if (event.newState !== 'closed') return;
+    const opener = popOpener;
+    popOpener = null;
+    opener?.setAttribute('aria-expanded', 'false');
+    // 포커스가 창 안이나 body에 있을 때(Esc · 빈 곳을 눌러 닫힘)만 글쓴이 버튼으로 돌려준다. 바깥 입력칸을 눌러 닫히면 그 입력칸의 포커스를 지킨다(PR #264 리뷰 반영)
+    const active = document.activeElement;
+    const focusLost = !active || active === document.body || popNode.contains(active);
+    if (opener?.isConnected && focusLost) opener.focus({ preventScroll: true });
+  });
+  addEventListener('scroll', () => { if (popNode?.matches(':popover-open')) popNode.hidePopover(); }, { passive: true });
+  // 다른 화면으로 가면(뒤로 가기 포함) 명함 창을 닫는다. 창은 body 끝에 붙어 있어 라우터가 화면을 바꿔도 남기 때문이다(PR #264 리뷰 반영)
+  addEventListener('popstate', () => { if (popNode?.matches(':popover-open')) popNode.hidePopover(); });
+  document.body.append(popNode);
+  return popNode;
+}
+
+function openPop(author, from) {
+  const node = popover();
+  if (!node.showPopover) return; // 작은 창을 못 쓰는 브라우저는 카드를 펼치지 않는다(닉네임 · 성향 이름은 그대로 보인다)
+  // 이미 열려 있으면(키보드로 창에서 나와 다른 글쓴이 버튼을 누른 경우) 다시 열지 않고 내용만 바꾼다: 열린 창에 showPopover를 부르면 예외가 난다. 앞 버튼의 펼침 표시는 여기서 거둔다(PR #264 리뷰 반영)
+  if (node.matches(':popover-open')) popOpener?.setAttribute('aria-expanded', 'false');
+  popOpener = from;
+  node.setAttribute('aria-label', `${author.nickname}의 명함`);
+  node.replaceChildren(cardPair(author), authorInfo(author));
+  if (!node.matches(':popover-open')) node.showPopover();
+  from.setAttribute('aria-expanded', 'true');
+  node.focus({ preventScroll: true });
+  if (matchMedia(SHEET).matches) { node.style.left = ''; node.style.top = ''; return; } // 모바일: 아래에서 올라오는 판(자리는 CSS가 정한다)
+  const rect = from.getBoundingClientRect();
+  const width = node.offsetWidth;
+  node.style.left = `${Math.min(Math.max(8, rect.left), innerWidth - width - 8)}px`;
+  const below = rect.bottom + 8;
+  node.style.top = `${below + node.offsetHeight > innerHeight ? Math.max(8, rect.top - node.offsetHeight - 8) : below}px`;
+}
+
+// 닉네임 · 한 줄 소개 · 수치. 레벨 · 직업 · 체험한 사건은 마이페이지처럼 아직 서버 값이 없어 목이다
+function authorInfo(author) {
+  const box = element('div', 'cm-author-info');
+  const stats = element('dl', 'cm-author-stats');
+  [['레벨', `Lv.${author.level}`], ['직업', author.job], ['체험한 사건', `${author.completedCount}건`]].forEach(([label, value]) => {
+    const row = element('div');
+    row.append(element('dt', '', label), element('dd', '', value));
+    stats.append(row);
+  });
+  box.append(element('p', 'cm-author-name', author.nickname));
+  if (author.intro) box.append(element('p', 'cm-author-intro', `“${author.intro}”`));
+  box.append(stats);
+  return box;
+}
+
+// 글쓴이 버튼: 작은 명함 + 닉네임 + 공개 성향 이름. 누르면 작은 창(③)이 열린다
+export function authorButton(author) {
+  const node = element('button', 'cm-who-button');
+  node.type = 'button';
+  node.setAttribute('aria-haspopup', 'dialog');
+  node.setAttribute('aria-expanded', 'false');
+  const slot = author.shownType ? SLOT_NAMES[author.shownType.slot] : null;
+  node.setAttribute('aria-label', `${author.nickname}, 성향 ${typeNameOf(author) ?? '테스트 전'}${slot ? `(${slot})` : ''}. 명함 펼치기`);
+  const text = element('span', 'cm-who');
+  text.append(element('strong', '', author.nickname), element('span', 'cm-who-type', typeNameOf(author) ?? '성향 테스트 전'));
+  node.append(miniPair(author), text);
+  node.addEventListener('click', () => openPop(author, node));
+  return node;
+}
+
+// ② 글 상세 맨 아래의 글쓴이 명함: 카드 두 장 + 소개. 본문과 박스로 나누고 바탕을 한 단계 진한 종이로 둔다
+export function nameCard(author) {
+  const section = element('section', 'cm-namecard');
+  const title = element('h2', 'cm-namecard-title', '글쓴이 명함');
+  title.id = 'cm-namecard-title';
+  title.append(mockTag());
+  section.setAttribute('aria-labelledby', title.id);
+  const body = element('div', 'cm-namecard-body');
+  body.append(cardPair(author), authorInfo(author));
+  section.append(title, body);
+  return section;
 }
 
 // 내 판결 카드: 사건 · 내 형량 · 무겁게 / 가볍게 본 요소 수. 다른 판결(AI · 실제)은 담지 않는다
@@ -73,6 +201,18 @@ export function verdictCard(verdict, caseTitle) {
   return card;
 }
 
+// 판결 공유 글(상세): 내 판결 카드에 판결한 사람의 공개 성향카드를 클립으로 꽂는다. 성향이 없으면(성향 테스트 전) 내 판결 카드만 둔다
+export function verdictWithType(verdict, caseTitle, author) {
+  const card = verdictCard(verdict, caseTitle);
+  if (!author.shownType) return card;
+  const row = element('div', 'cm-verdict-row');
+  card.append(element('p', 'cm-verdict-type', `판결한 사람의 성향 ${author.shownType.type.name}(${SLOT_NAMES[author.shownType.slot]})`));
+  const holder = element('div', 'cm-cards cm-verdict-clip');
+  holder.append(clip(), typeFace(author.shownType.type, undefined, normalizeTypeDeco(author.shownType.deco)));
+  row.append(card, holder);
+  return row;
+}
+
 function tags(post) {
   const row = element('span', 'cm-tags');
   row.append(element('span', 'cm-tag', CATEGORY_LABELS[post.category] ?? post.category));
@@ -82,9 +222,7 @@ function tags(post) {
 
 export function postMeta(post, { full = false } = {}) {
   const meta = element('div', 'cm-meta');
-  const who = element('span', 'cm-who');
-  who.append(element('strong', '', post.author.nickname), timeNode(post.createdAt, full));
-  meta.append(avatar(post.author), who, tags(post));
+  meta.append(authorButton(post.author), timeNode(post.createdAt, full), tags(post));
   return meta;
 }
 

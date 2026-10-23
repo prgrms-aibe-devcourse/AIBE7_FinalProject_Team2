@@ -54,6 +54,7 @@
 | v0.50 | 2026-10-22 | **최초 성향 · 성향카드 다시 정하기 추가 (FE-77)** — 화면 이름은 초심(처음 성향) · 재심(다시 정하기) · 최근(현재 판결 성향). 결과 공통 형식에 `completedExperienceCount`(응시 시점에 완료한 사건 수) 추가. P-2 요청에 `baseline`(성향카드 다시 정하기, 사용자당 1회, 이미 썼으면 409 `BASELINE_RETAKE_USED`) 추가. 일반 응시는 그대로 횟수 제한 없음. P-5 응답에 `initialPersonality`(처음 성향: 첫 테스트, 테스트 전이면 첫 판결 체험 3건) · `baselineRetake`(다시 정한 결과 · 가능 여부) 추가. 1-5에 `BASELINE_RETAKE_USED` 추가. 서버 구현은 후속 백엔드 작업 |
 | v0.51 | 2026-10-22 | **사건 등록 적재 A-14-1 신설 (BE-93 2차)** — `POST /admin/case-imports/{importId}/load`. 생성 결과를 사건(DRAFT) · 섹션 · 형벌 규칙 · 판단 요소 · 원본 판결문 · AI · 재판부 판결 후보로 만든다. **A-15가 SUCCEEDED가 된 뒤 관리자가 따로 누른다**(번호는 A-16 ~ A-41 예약 때문에 A-14-1) — 2초마다 불리는 조회에서 적재하면 같은 사건이 여러 번 만들어질 수 있다. 적재가 끝나면 A-15의 `caseId`가 채워진다(1차에 비워 두었던 값). 에러 코드 `IMPORT_NOT_READY`(409) · `IMPORT_RESULT_INVALID`(422) 추가. 판결 후보는 **공개하지 않은 상태**로 들어가 A-9 승인을 기다린다. **(병합 메모) 이 줄의 번호는 PR #242 리베이스 도중 두 번 겹쳤다 — 처음 v0.47(BE-63과 겹침) → v0.50(COMMON-60) → 이번에 FE-77과 다시 겹쳐 v0.51로 재조정(COMMON-58, PR #244)** |
 | v0.52 | 2026-10-22 | **프로필 선택 설정 저장 P-8 신설 (BE-104, FE-77 후속)** — `PATCH /profile-settings`: 공개 성향카드(`shownCard`) · 프로필카드 아래 성향(`profileCardType`) · 한 줄 소개(`bio`)를 **보낸 칸만** 저장(P-7과 별개, 전체 덮어쓰기 아님). 값은 `initial` · `retake` · `current`, 소개는 앞뒤 공백을 뺀 0 ~ 40자 · 줄바꿈 없음. P-5 응답에 `profileSettings` 추가(저장 전이면 `current` · `current` · `""`). 공개 범위 칸은 두지 않는다(항상 공개, FE-77). ERD v1.37 `profile_setting`(V29). P-2 · P-5의 v0.50 서버 구현도 이 작업에서 했다(V28) **(병합 메모) 작업 중 COMMON-58(PR #244)이 BE-93 줄에 v0.51을 먼저 써서 v0.51 → v0.52로 다시 매겼다** |
+| v0.53 | 2026-10-22 | **API 17 공개 신문 지면 신설 (BE-102, BE-78 2차 검토 후속)** — `GET /cases/{caseId}/paper`. 관리자 신문 지면(A-13-6 ~ 8, BE-92)과 발단 · 결론 사진(A-13-4 · 5, BE-91 · BE-101)을 공개용으로 조립, 새로 저장하지 않는다. **`extraPhotos`는 A-13-6 ~ 8과 달리 배열이 아니라 `{ origin, conclusion }` 고정 자리** — 사진 한쪽이 없을 때 다른 쪽이 앞자리로 밀려 역할이 바뀌어 보이는 걸 막는다(FE-64 선행, BE-102 Jira 댓글로 제안 · 협의). 비공개 사건은 `CASE_NOT_FOUND`, 신문 지면 미생성은 `PAPER_NOT_FOUND`(1-5 설명을 공개 API도 쓰도록 정정) |
 
 ---
 
@@ -143,7 +144,7 @@ json
 | 502 | `PROMPT_GENERATION_FAILED` | (확장, 관리자 API, BE-91 · BE-92) Gemini 호출 실패, 또는 설정(`GEMINI_API_KEY`) 없음 | 다시 시도 안내 (A-13-1 · A-13-2 · A-13-6) |
 | 502 | `FILE_UPLOAD_FAILED` | (확장, 관리자 API, BE-91) S3 업로드 실패, 또는 설정(`S3_BUCKET_NAME`) 없음 | 다시 시도 안내 (A-13-3 · A-13-4) |
 | 400 | `INVALID_IMAGE_FILE` | (확장, 관리자 API, BE-91) 사진 파일이 없음 · 비어 있음 · 허용하지 않는 형식 | 입력 안내 (A-13-3 · A-13-4) |
-| 404 | `PAPER_NOT_FOUND` | (확장, 관리자 API, BE-92) 신문 지면을 아직 생성한 적 없음 | 먼저 생성하도록 안내 (A-13-7 · A-13-8) |
+| 404 | `PAPER_NOT_FOUND` | (확장, BE-92) 신문 지면을 아직 생성한 적 없음. 관리자 API는 A-13-7 · A-13-8, 공개 API는 API 17(v0.53, BE-102) | 먼저 생성하도록 안내 (A-13-7 · A-13-8). API 17은 S-14로 |
 | 404 | `INCIDENT_PHOTO_NOT_FOUND` | (확장, 관리자 API, BE-78 2차 검토 · BE-101) 그 역할의 발단 · 결론 사진이 없음 | 목록 다시 불러오기 (A-13-9) |
 | 409 | `DECO_LOCKED` | (확장, BE-96) 아직 열리지 않은 꾸미기를 저장하려 함. `details`에 잠긴 필드(`reason: DECO_LOCKED`) | 화면에서 잠긴 항목은 고를 수 없게 막는다. 오면 마이페이지를 다시 불러온다 (P-7) |
 | 409 | `DUPLICATE_SOURCE` | (확장, 관리자 API, BE-93) 이미 등록한 사건번호. `details`에 어느 항목인지 담는다 | 입력 안내 (A-14) |
@@ -196,6 +197,7 @@ json
 | 14 | GET | `/cases/{caseId}/experience/comparison` | 세 판결 비교 | `COMPLETED` | — | S-08 | MVP |
 | 15 | GET | `/cases/{caseId}/experience/comparison/analysis` | AI 비교 분석 | `COMPLETED` | — | S-08 | 확장 |
 | 16 | GET | `/cases/{caseId}` | 공개 사건 상세 (체험 없이) | — | — | S-20 | 확장 (v0.29) |
+| 17 | GET | `/cases/{caseId}/paper` | 공개 신문 지면 (헤드라인 · 본문 · 발단 · 결론 사진) | — | — | S-20 | 확장 (v0.53) |
 
 **공개(11, 13)와 조회(12, 14)를 나눈 이유**: 상태를 바꾸는 요청은 POST로 두고, 조회는 몇 번을 불러도 상태가 바뀌지 않게 한다. 결과 화면을 새로고침하면 조회만 다시 부르면 된다. 공개 요청은 이미 공개된 상태에서 다시 와도 거절하지 않고 성공으로 돌려준다(시퀀스 7장).
 
@@ -759,6 +761,44 @@ S-20 사건 디테일(정보 구조 v1.12)이 체험을 만들기 전에 부르�
 
 ---
 
+### API 17. (확장) 공개 신문 지면 — `GET /cases/{caseId}/paper`
+
+FE-64가 쓰는 API(S-20 기사 지면 · 증거조사). 관리자 신문 지면 API(A-13-6 ~ 8, BE-92)와 발단 · 결론 사진(A-13-4 · 5, BE-91 · BE-101)을 공개용으로 가져다 조립한다 — 새로 저장하지 않는다(`docs/decisions/BE-92.md`와 같은 원칙). 설계 근거: `docs/decisions/BE-78.md` "확정 사항", BE-102 Jira 댓글.
+
+**요청**: 본문 없음.
+
+**응답 200**
+
+```json
+{
+  "desk": "사회부",
+  "headline": "빌린 돈 문제로 다투다 벌어진 사건",
+  "deck": "오랜 금전 다툼 끝에...",
+  "photo": "https://…/case-photos/case-1/representative-….jpg",
+  "caption": "다투는 두 사람",
+  "article": ["문단 1", "문단 2"],
+  "extraPhotos": {
+    "origin": { "imageUrl": "https://…/incident-origin-….jpg", "caption": "다툼이 격해진 순간" },
+    "conclusion": { "imageUrl": "https://…/incident-conclusion-….jpg", "caption": "..." }
+  }
+}
+```
+
+- `photo`는 A-13-3으로 올린 사건 대표사진(`legal_case.thumbnail_url`). 아직 안 올렸으면 `null`.
+- **`extraPhotos`는 배열이 아니라 `{ origin, conclusion }` 고정 자리다.** 그 역할의 사진이 없으면 그 자리는 `null`이다(예: 발단만 올렸으면 `{ "origin": {...}, "conclusion": null }`) — 배열로 내려주면 한쪽이 비었을 때 다른 쪽이 앞자리로 밀려 역할이 뒤바뀌어 보일 수 있어서다(BE-101에서 역할 칸을 둔 것과 같은 이유). A-13-6 ~ 8의 `extraPhotos`(배열, `role` 포함)와는 형태가 다르다 — 관리자 화면은 목록 · 정리가 필요해 배열로, 공개 화면은 항상 같은 자리만 보면 돼서 고정 자리로 했다.
+- `prompt` · `s3Key` · `id` · `displayOrder` 등 내부 기록용 값은 내려주지 않는다.
+- 증거조사 `evidencePhotos`(검사 측 = 결론, 변호인 측 = 발단, FE-63)는 이 `extraPhotos.origin` · `.conclusion`을 그대로 연결해 쓴다 — 같은 사진을 두 번 받지 않는다.
+- 공용 컷(사진이 없거나 로딩 실패)으로 바꾸는 처리는 프론트가 한다(FE-63). 서버는 fallback을 내려주지 않는다.
+- 공개(`PUBLISHED`)된 사건만 응답한다(API 16과 같은 기준).
+
+| 거절 | 조건 |
+| --- | --- |
+| 404 `CASE_NOT_FOUND` | 사건 없음 · 비공개 |
+| 404 `PAPER_NOT_FOUND` | 사건은 공개됐지만 관리자가 신문 지면을 아직 생성한 적 없음 |
+| 400 `VALIDATION_ERROR` | `caseId`가 숫자가 아님 |
+
+---
+
 ## 4. 상태별 호출 가능 API
 
 | status | 호출 가능 (조회) | 호출 가능 (변경) |
@@ -771,7 +811,7 @@ S-20 사건 디테일(정보 구조 v1.12)이 체험을 만들기 전에 부르�
 | `AI_REVEALED` | 3, 10, 12 | 11 (그대로 통과), 13 |
 | `COMPLETED` | 3, 10, 12, 14 (15 보류) | 11 · 13 (그대로 통과) |
 
-API 1 · 2 · 16은 상태와 관계없이 부를 수 있다. 표에 없는 조합은 `409 INVALID_STATE`다.
+API 1 · 2 · 16 · 17은 상태와 관계없이 부를 수 있다. 표에 없는 조합은 `409 INVALID_STATE`다.
 
 ---
 
@@ -1354,7 +1394,7 @@ API 1 · 2 · 16은 상태와 관계없이 부를 수 있다. 표에 없는 조�
 
 ```json
 {
-  "desk": "사회면",
+  "desk": "사회부",
   "headline": "빌린 돈 문제로 다투다 벌어진 사건",
   "deck": "오랜 금전 다툼 끝에...",
   "photo": "https://…/case-photos/case-1/representative-….jpg",

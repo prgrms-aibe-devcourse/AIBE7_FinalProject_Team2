@@ -1,0 +1,149 @@
+# Prometheus 경보 규칙 (WBS 7.3.1). 로컬 · 운영 공용 — prometheus.yml · prometheus.prod.yml 둘 다
+# `rule_files`로 이 파일 하나를 가리킨다.
+#
+# `for:` 값(지속 시간)을 둔 이유: 조건이 한 번 스크레이프(15s)에 참이라고 바로 울리면, 배포 직후
+# 잠깐 튀는 값이나 스크레이프 한 번의 결측 때문에 오탐이 난다. 몇 분 동안 계속 참이어야 진짜 장애로 본다.
+#
+# `rate(...[5m])` · `histogram_quantile`의 창 길이는 scrape_interval=15s 기준 최소 4 ~ 5 표본
+# (prometheus.yml 주석 참고)보다 훨씬 넉넉하게 뒀다 — 경보는 대시보드보다 "노이즈에 둔감한 것"이 더
+# 중요해서다.
+#
+# 운영 실행 위치(PR #262 리뷰 9번): 이 파일 자체는 운영 EC(1대뿐, 별도 모니터링 서버 없음)에서 돌리지
+# 않는다. 7.3.3을 Alloy push로 가면서 운영 경보 평가 · Alertmanager는 Grafana Cloud 쪽(Cloud Alerting)
+# 으로 옮기기로 했다 — 메인 서버가 죽으면 그 서버 안의 Alertmanager도 같이 죽어 정작 가장 중요한 순간에
+# 조용해지는 문제를 피하기 위해서다(COMMON-62 논의). 이 YAML은 Prometheus 표준 문법 그대로라 Cloud
+# 쪽으로 옮기기 쉽다. 로컬 Alertmanager(이 저장소의 docker-compose.yml)는 **로컬 확인용으로만** 남긴다.
+groups:
+  - name: lawnambul-service
+    rules:
+      # 1. 5xx 비율 — 서버 오류 응답이 늘어난 것 자체가 가장 기본적인 "서비스가 고장났다" 신호다.
+      #    요청이 아주 적을 때(관리자 혼자 몇 번 시도) 의도된 502(IMPORT_UNAVAILABLE 등)만으로도 5%를
+      #    쉽게 넘길 수 있어, 최소 요청량(5분에 약 30건 이상)을 같이 본다(PR #262 리뷰 5번)
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(http_server_requests_seconds_count{outcome="SERVER_ERROR"}[5m]))
+            /
+          sum(rate(http_server_requests_seconds_count[5m]))
+          > 0.05
+          and
+          sum(rate(http_server_requests_seconds_count[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "5xx 응답 비율이 5%를 넘었습니다"
+          description: "지난 5분 동안 전체 요청 중 5xx 응답 비율이 {{ $value | humanizePercentage }}입니다."
+
+      # 2. p95 지연 — 평균만 보면 가끔 아주 느린 사용자를 놓친다. p95는 "꽤 많은 사용자가 느리게 겪고 있다"를 잡는다.
+      #    관리자 경로(사진 프롬프트 추천 등 Gemini 동기 호출, 최대 90초)는 뺀다 — 안 빼면 관리자가
+      #    몇 번만 써도 전체 p95가 쉽게 2초를 넘는다(PR #262 리뷰 6번). 사용자가 실제로 겪는 지연만 본다
+      - alert: HighLatencyP95
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_server_requests_seconds_bucket{uri!~"/api/v1/admin/.*"}[5m])) by (le))
+          > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "응답 시간 p95가 2초를 넘었습니다"
+          description: "지난 5분 p95 응답 시간이 {{ $value | humanizeDuration }}입니다(관리자 경로 제외)."
+
+      # 3. DB 커넥션 고갈 — 커넥션이 바닥나면 새 요청이 DB를 못 써서 전부 타임아웃, 장애가 도미노처럼 번지기 직전 신호
+      - alert: DbConnectionPoolNearExhaustion
+        expr: |
+          hikaricp_connections_active / hikaricp_connections_max > 0.9
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "DB 커넥션 풀이 거의 찼습니다"
+          description: "HikariCP 사용률이 {{ $value | humanizePercentage }}입니다(90% 초과 3분 지속)."
+
+      - alert: DbConnectionPending
+        expr: |
+          hikaricp_connections_pending > 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "DB 커넥션을 기다리는 요청이 있습니다"
+          description: "커넥션을 기다리는 스레드가 {{ $value }}개입니다(2분 이상 지속)."
+
+      # 4. LLM 호출 실패율 — Gemini 등 외부 AI 호출이 조용히 계속 실패하면 사진 프롬프트 · 신문 지면 ·
+      #    판결 생성 같은 기능이 반쪽만 도는 걸 아무도 모르게 된다(BusinessMetrics.recordAiCallFailure).
+      #    호출이 적을 때(10분에 2번 중 1번 실패 = 50%) 흔들리지 않게 최소 호출량도 본다(PR #262 리뷰 7번)
+      - alert: HighAiCallFailureRate
+        expr: |
+          sum(rate(lawnambul_ai_call_total{result="failure"}[10m]))
+            /
+          sum(rate(lawnambul_ai_call_total[10m]))
+          > 0.3
+          and
+          sum(rate(lawnambul_ai_call_total[10m])) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "AI 호출 실패율이 30%를 넘었습니다"
+          description: "지난 10분 AI(임베딩 등) 호출 실패율이 {{ $value | humanizePercentage }}입니다."
+
+      # 5. 배치 지연 — 사건 등록(BE-93)처럼 202로 받아놓고 영영 안 끝나는 긴 작업을 사람이 놓칠 수 있다
+      #    (CaseImportMetrics, 7.3.1 신설). 파이프라인 타임아웃(COMMON-50)보다 넉넉하게 10분으로 둔다.
+      #    서버 재시작으로 RUNNING인 채 남아 더 이상 진행되지 않는 행이면 COMMON-51(오래된 작업 자동
+      #    정리) 대상인지 먼저 확인한다(PR #262 리뷰 11번)
+      - alert: CaseImportStuck
+        expr: |
+          lawnambul_case_import_oldest_running_seconds > 600
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "사건 등록 작업이 오래 멈춰 있습니다"
+          description: "진행 중(QUEUED · RUNNING)인 사건 등록 작업이 {{ $value | humanizeDuration }}째 끝나지 않았습니다. 서버 재시작으로 멈춰 남은 작업이면 COMMON-51(오래된 작업 자동 정리) 대상인지 확인하세요."
+
+      # 6. 백엔드 다운 — 위 1 ~ 5번은 전부 backend 지표가 들어와야 계산된다. backend가 죽으면 지표
+      #    자체가 끊겨 아무 경보도 안 울린다 — 가장 큰 장애에서 오히려 조용해지는 구멍이었다
+      #    (PR #262 리뷰 3번, 머지 전 필수 수정 항목)
+      - alert: BackendDown
+        expr: up{job="backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "백엔드가 응답하지 않습니다"
+          description: "backend 타깃이 1분 넘게 스크레이프에 응답하지 않습니다."
+
+      - alert: BackendScrapeTargetMissing
+        expr: absent(up{job="backend"})
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "백엔드 스크레이프 대상 자체가 사라졌습니다"
+          description: "backend job이 Prometheus 설정에서 아예 보이지 않습니다(설정 오류 가능성)."
+
+  # 경보 경로 자체가 죽어 있어도 조용히 지나가지 않게 한다(PR #262 리뷰 10번). Watchdog은 식(vector(1))이
+  # 언제나 참이라 항상 firing 상태를 유지한다 — Alertmanager · Slack 경로가 멀쩡하면 이 알림이 계속
+  # 보여야(또는 Alertmanager의 "항상 떠 있는 경보" 전용 채널로 보내야) 정상이다. 하나라도 끊기면
+  # (Prometheus가 평가를 멈췄거나, Alertmanager가 죽었거나, 웹훅이 깨졌거나) Watchdog이 조용해진다 —
+  # "경보가 안 온다"를 역으로 감지하는 방법이다(Dead man's switch 패턴).
+  # alertmanager_notifications_failed_total은 Alertmanager 자신을 스크레이프해야 보인다
+  # (prometheus.yml · prometheus.prod.yml의 alertmanager 스크레이프 잡 참고).
+  - name: lawnambul-meta
+    rules:
+      - alert: Watchdog
+        expr: vector(1)
+        labels:
+          severity: none
+        annotations:
+          summary: "경보 경로 정상 확인용(Dead man's switch) — 이 경보가 안 보이면 경보 자체가 멈춘 것"
+
+      - alert: AlertDeliveryFailing
+        expr: rate(alertmanager_notifications_failed_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Alertmanager 알림 전송이 실패하고 있습니다"
+          description: "Slack 등으로 보내는 알림이 5분 넘게 계속 실패하고 있습니다(웹훅 URL · 권한 확인)."

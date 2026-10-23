@@ -61,6 +61,23 @@ public abstract class ApiIntegrationTest {
 		return id;
 	}
 
+	/** 신문 지면(BE-92). 사건당 1건 */
+	protected void insertCasePaper(long caseId, String headline) {
+		jdbcTemplate.update("""
+				INSERT INTO case_paper (case_id, desk, headline, deck, caption, article)
+				VALUES (?, '사회부', ?, '테스트 부제', '테스트 캡션', '["문단1"]'::jsonb)
+				""", caseId, headline);
+	}
+
+	/** 발단 · 결론 사진(BE-91, 역할 칸 BE-101). role은 "ORIGIN" · "CONCLUSION" */
+	protected void insertIncidentPhoto(long caseId, String role, String imageUrl, String caption) {
+		int displayOrder = "ORIGIN".equals(role) ? 0 : 1;
+		jdbcTemplate.update("""
+				INSERT INTO case_incident_photo (case_id, image_url, s3_key, caption, display_order, role)
+				VALUES (?, ?, ?, ?, ?, ?)
+				""", caseId, imageUrl, "test-key-" + UUID.randomUUID(), caption, displayOrder, role);
+	}
+
 	/** 범죄 유형의 사전 판단 형량 구간 ID (V1 마이그레이션이 넣은 고정 데이터), 표시 순서대로. */
 	protected List<Long> rangeOptionIds(String crimeType) {
 		return jdbcTemplate.queryForList(
@@ -114,6 +131,8 @@ public abstract class ApiIntegrationTest {
 		for (Long caseId : createdCaseIds) {
 			jdbcTemplate.update("DELETE FROM factor WHERE case_id = ?", caseId);
 			jdbcTemplate.update("DELETE FROM case_source WHERE case_id = ?", caseId);
+			jdbcTemplate.update("DELETE FROM case_paper WHERE case_id = ?", caseId);	// 신문 지면(BE-92, FK)
+			jdbcTemplate.update("DELETE FROM case_incident_photo WHERE case_id = ?", caseId);	// 발단 · 결론 사진(BE-91, FK)
 			jdbcTemplate.update("DELETE FROM legal_case WHERE id = ?", caseId);
 		}
 		createdCaseIds.clear();

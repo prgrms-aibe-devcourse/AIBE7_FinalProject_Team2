@@ -54,7 +54,7 @@ class CasePaperServiceTest {
 		assertThat(paper.getDeck()).isEqualTo("부제");
 		assertThat(paper.getCaption()).isEqualTo("캡션");
 		assertThat(paper.getArticle()).containsExactly("문단1", "문단2");
-		assertThat(paper.getDesk()).isEqualTo("사회면");
+		assertThat(paper.getDesk()).isEqualTo("사회부");
 		assertThat(contentClient.lastInstruction).contains("사건 개요").contains("살인").contains("세부 사정 1");
 	}
 

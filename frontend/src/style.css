@@ -314,12 +314,12 @@ html { scroll-padding-top: calc(var(--site-header-h, 64px) + 8px); }
 .site-header .login-button { flex: none; margin-left: 4px; padding: 6px 14px; min-height: 36px; border: 1px solid color-mix(in srgb, currentColor 45%, transparent); border-radius: 6px; }
 .site-header .login-button[aria-current="page"] { box-shadow: none; } /* 테두리 버튼이라 밑줄 대신 테두리로 충분하다 */
 .site-header .account-name { display: block; max-width: 9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } /* 로그인한 닉네임(FE-52). 길면 줄인다 */
-/* 연출 스위치(FE-50, utils/motion.js): "연출" 글자 + 작은 스위치. 색은 글자색을 따라간다 */
+/* 연출 스위치(FE-50, utils/motion.js): "연출" 글자 + 작은 스위치. 모양은 환경 설정 스위치와 같고 꺼짐의 윤곽선만 글자색을 따라간다 */
 .site-header .motion-switch { display: inline-flex; align-items: center; gap: 8px; }
-.site-header .switch-track { position: relative; display: block; width: 30px; height: 18px; border: 1px solid color-mix(in srgb, currentColor 55%, transparent); border-radius: 9px; transition: background-color .15s ease-out; }
-.site-header .switch-thumb { position: absolute; top: 2px; left: 2px; display: block; width: 12px; height: 12px; border-radius: 50%; background: currentColor; transition: translate .15s ease-out; }
-.site-header .motion-switch[aria-checked="true"] .switch-track { background: color-mix(in srgb, currentColor 22%, transparent); }
-.site-header .motion-switch[aria-checked="true"] .switch-thumb { translate: 12px 0; }
+.site-header .switch-track { position: relative; display: block; width: 36px; height: 20px; border-radius: 999px; background: color-mix(in srgb, var(--color-banner-text) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 55%, transparent); transition: background-color .15s ease-out; }
+.site-header .switch-thumb { position: absolute; top: 3px; left: 3px; display: block; width: 14px; height: 14px; border-radius: 50%; background: var(--color-banner-muted); transition: translate .15s ease-out; }
+.site-header .motion-switch[aria-checked="true"] .switch-track { background: var(--color-banner-text); box-shadow: none; } /* 켜짐: 어두운 면 위라 종이색 채움 + 네이비 손잡이로 뒤집는다(DESIGN.md "스위치" · 어두운 면 규칙) */
+.site-header .motion-switch[aria-checked="true"] .switch-thumb { background: var(--color-banner-bg); translate: 16px 0; }
 /* 목데이터 표기(FE-56, siteLayout.js mockTag): 목 값 옆의 작은 점선 딱지. 글자색 · 테두리는 주변 글자색을 따라간다 */
 .mock-tag { display: inline-block; margin-left: 6px; padding: 0 5px; border: 1px dashed currentColor; border-radius: 3px; font: 600 11px/1.5 var(--font-body); letter-spacing: 0; vertical-align: middle; white-space: nowrap; opacity: .85; }
 .site-footer { padding: 24px 28px; border-top: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-muted); font-size: 13px; }
