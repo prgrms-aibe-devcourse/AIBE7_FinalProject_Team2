@@ -2,7 +2,7 @@ import { button, element } from '../../components/siteLayout.js';
 import { canGoBackInApp } from '../../app/router.js';
 import { currentUser } from '../../utils/session.js';
 import {
-  NOT_READY, avatar, communityShell, composer, filterControls, formatDate, likeButton, loginHint, popularList, postImages, postMeta, textField, verdictCard,
+  NOT_READY, authorButton, communityShell, composer, filterControls, formatDate, likeButton, loginHint, popularList, nameCard, postImages, postMeta, textField, verdictWithType,
 } from './communityParts.js';
 
 // S-18 커뮤니티 글 상세 (FE-47, /community/posts/:postId). 목록과 같은 노트북 화면 틀에 글 전체 · 좋아요 · 댓글을 둔다.
@@ -63,10 +63,10 @@ export function renderCommunityPostPage(container, { api, navigate, postId }) {
     title.tabIndex = -1;
     node.append(postMeta(post, { full: true }), title, element('div', 'cm-article-body', post.body));
     if (post.images.length) node.append(postImages(post.images, { full: true }));
-    if (post.verdict) node.append(verdictCard(post.verdict, post.caseTitle));
+    if (post.verdict) node.append(verdictWithType(post.verdict, post.caseTitle, post.author));
     const actions = element('div', 'cm-actions');
     actions.append(likeButton(post, { api, onLoginNeeded: () => loginHint(node, navigate, '로그인하면 좋아요를 누를 수 있어요.') }));
-    node.append(actions);
+    node.append(actions, nameCard(post.author));
     return node;
   }
 
@@ -130,11 +130,9 @@ export function renderCommunityPostPage(container, { api, navigate, postId }) {
   function commentItem(comment) {
     const item = element('li', 'cm-comment');
     const who = element('div', 'cm-meta');
-    const name = element('span', 'cm-who');
     const time = element('time', '', formatDate(comment.createdAt, { full: true }));
     time.dateTime = comment.createdAt;
-    name.append(element('strong', '', comment.author.nickname), time);
-    who.append(avatar(comment.author), name);
+    who.append(authorButton(comment.author), time);
     item.append(who, element('p', 'cm-comment-body', comment.body));
     return item;
   }

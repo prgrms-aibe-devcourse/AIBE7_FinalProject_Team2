@@ -2,7 +2,9 @@ import { button, element, mockTag } from '../../components/siteLayout.js';
 import { API_MODE } from '../../api/config.js';
 import { appendEmptyAxis, renderAxisRow } from '../../components/axisRow.js';
 import { imageOf } from '../../components/stage.js';
-import { AXES, CHARACTER_NAMES } from '../../utils/personalityAxes.js';
+import { emptyWindow, nameOf, picture, profileCardParts, sashClasses, sashIcon, sashNote, sashes, svg, typeDecoClasses, typeFace, typePortrait } from '../../components/personCards.js';
+export { typeFace };
+import { AXES } from '../../utils/personalityAxes.js';
 import { KIND_TITLES, lenientPercent, axisChange, steadyBand, axisTrend, collectionOf, imageKinds, leanText, retakeAfterOrder } from '../../utils/myPageView.js';
 import { renderTrend, trendsOf } from '../../components/trendGraph.js';
 import { BACKGROUNDS, DEFAULT_DECO, DEFAULT_PORTRAITS, FRAMES, SASH_COLORS, SASH_ICONS, SASH_STYLES, achievementView, normalizeDeco, sashColorField, sashColorKey, sashColorOf, kindOfPortrait, portraitLabel, shownDeco, unlockedSets, unlockerIn } from '../../utils/profileDeco.js';
@@ -121,49 +123,10 @@ async function loadMyPage(api) {
   return version === decoVersion || !cache ? data : { ...data, profileDeco: cache.profileDeco };
 }
 
-const svg = (path, className) => {
-  const node = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  node.setAttribute('viewBox', '0 0 16 16');
-  node.setAttribute('aria-hidden', 'true');
-  node.setAttribute('focusable', 'false');
-  node.classList.add(className);
-  const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  line.setAttribute('d', path);
-  node.append(line);
-  return node;
-};
 const chevron = () => svg('M6 3l5 5-5 5', 'my-chevron');
 const backArrow = () => svg('M10 3L5 8l5 5', 'my-chevron');
 
-function picture(src, alt, className = '') {
-  const image = element('img', className);
-  image.src = src;
-  image.alt = alt;
-  image.loading = 'lazy';
-  image.addEventListener('error', () => image.classList.add('is-missing'), { once: true });
-  return image;
-}
-
 // ── 첫 화면 ──
-
-// 성향 이미지: 이미지(imageUrl)가 아직 없거나 불러오지 못하면 캐릭터 이름을 대신 둔다(personalityParts.js와 같은 규칙)
-function typePortrait(type) {
-  const portrait = element('div', 'my-card-window');
-  const characterName = CHARACTER_NAMES[type.character] ?? type.character;
-  const showName = () => {
-    portrait.replaceChildren(element('strong', '', characterName));
-    portrait.setAttribute('aria-label', `${characterName} 캐릭터 (이미지 준비 중)`);
-  };
-  if (type.imageUrl) {
-    const image = element('img');
-    image.alt = `${characterName} 캐릭터`;
-    image.addEventListener('error', showName, { once: true });
-    image.src = type.imageUrl;
-    portrait.append(image);
-    fitPortraitIn(portrait, image); // 이미지마다 다른 투명 여백을 걷어 대표 이미지와 비슷한 크기로 맞춘다(FE-67)
-  } else showName();
-  return portrait;
-}
 
 // 카드 버튼 하나: 네모난 박스. 누르면 해당 화면으로 간다
 function cardButton(className, label, ...children) {
@@ -172,14 +135,6 @@ function cardButton(className, label, ...children) {
   card.setAttribute('aria-label', label);
   card.append(...children);
   return card;
-}
-
-// 성향을 모를 때 타로카드의 빈 그림 창("?")
-function emptyWindow() {
-  const window_ = element('div', 'my-card-window');
-  window_.append(element('strong', '', '?'));
-  window_.setAttribute('aria-hidden', 'true');
-  return window_;
 }
 
 // 프로필 수치로 보여 주는 값. 응답에 없거나 null이면 MOCK_PROFILE로 채우고, 목인 값은 mocked에 표시한다(FE-56). 도전과제 판정은 서버가 한다
@@ -217,71 +172,22 @@ function renderStats(stats) {
 
 // 지금 보여 줄 꾸미기: 고른 것 중 잠긴 것은 기본으로(profileDeco.js shownDeco)
 const decoFor = (data) => shownDeco(currentDeco(), openOf(data));
-const nameOf = (list, id) => list.find((item) => item.id === id)?.name ?? id;
 
-// 카드 책갈피(FE-68): 카드 좌우에 걸리는 띠 두 줄. 색은 .deco-sash-*, 모양은 .sash-style-*(짧고 굵은 책갈피 · 얇고 긴 띠)가 정한다.
-// 짧은 책갈피에는 좌 · 우 아이콘을 따로 단다. 장식이라 스크린리더에는 숨긴다(카드의 읽는 이름에 적는다)
-const SASH_ICON_ART = {
-  star: { path: 'M8 1.5l1.8 4.7 4.7 1.8-4.7 1.8L8 14.5l-1.8-4.7L1.5 8l4.7-1.8z' },
-  scale: { path: 'M8 2v12M4 14h8M3 5h10M3 5l-2 4h4zM13 5l-2 4h4z' },
-  gavel: { path: 'M9.5 2.5l4 4M7.5 4.5l4 4M8.5 3.5l-4 4 2 2 4-4M5.5 8.5L2 12M9 14h5' },
-  cup: { path: 'M3 6h8v4a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3zM11 7h1.5a1.5 1.5 0 0 1 0 3H11M5 2.5c0 1 1 1 1 2M8 2.5c0 1 1 1 1 2' },
-  heart: { path: 'M8 13.5S2.5 10 2.5 6.3A2.8 2.8 0 0 1 8 5a2.8 2.8 0 0 1 5.5 1.3C13.5 10 8 13.5 8 13.5z' },
-  naero: { src: '/images/characters/icon/generated/naero_face-happy.webp' },
-  nambul: { src: '/images/characters/icon/generated/nambul_face-cheer.webp' },
-  law: { src: '/images/characters/icon/cropped/law-scale_icon.webp' },
-};
-function sashIcon(id) {
-  const art = SASH_ICON_ART[id];
-  if (!art) return null;
-  return art.path ? svg(art.path, 'my-sash-icon') : picture(art.src, '', 'my-sash-icon');
-}
-function sashes(deco) {
-  if (deco.sashStyle === 'none') return [];
-  return [['left', deco.sashIconLeft], ['right', deco.sashIconRight]].map(([side, icon]) => {
-    const band = element('span', `my-card-sash is-${side}`);
-    band.setAttribute('aria-hidden', 'true');
-    const art = deco.sashStyle === 'short' ? sashIcon(icon) : null;
-    if (art) band.append(art);
-    return band;
-  });
-}
-const sashClasses = (deco) => `deco-sash-${sashColorOf(deco) ?? 'none'} sash-style-${deco.sashStyle}`;
-const sashNote = (deco) => {
-  if (deco.sashStyle === 'none') return '';
-  const icons = deco.sashStyle === 'short' ? [deco.sashIconLeft, deco.sashIconRight].filter((id) => id !== 'none').map((id) => nameOf(SASH_ICONS, id)) : [];
-  return `, ${nameOf(SASH_COLORS[deco.sashStyle], sashColorOf(deco))} ${nameOf(SASH_STYLES, deco.sashStyle)}${icons.length ? `(${icons.join(' · ')})` : ''}`;
-};
-
-// 대표 이미지 카드의 속: 위 닉네임 · 그림 창(대표 이미지) · 아래 성향 테스트 결과. 테두리 · 배경 · 책갈피는 클래스(.deco-frame-* · .deco-bg-* · .deco-sash-*)로 입힌다
-function profileCardParts(deco, data) {
-  const src = deco.portrait;
-  const caption = portraitLabel(src);
-  const face = element('div', 'my-card-window');
-  const faceImage = picture(src, `${caption} 대표 이미지`, 'my-profile-face');
-  face.append(faceImage);
-  fitPortraitIn(face, faceImage, { centerWide: true }); // 가로로 긴 그림(사건 사진 등)은 창 세로 가운데에, 서 있는 캐릭터는 발을 아래에
-  const nickname = data.nickname || DEFAULT_NICKNAME;
-  const typeName = selectedChoice(data)?.type.name ?? currentTypeOf(data)?.name; // 카드 아래 성향: 카드 꾸미기에서 고른 것(기본 최근)
-  const result = element('p', `my-card-note${typeName ? '' : ' is-empty'}`, typeName ?? '성향 테스트 전');
-  return {
-    caption,
-    note: `${nickname}, 대표 이미지 ${caption}, 성향 ${typeName ?? '테스트 전'}${sashNote(deco)}`,
-    classes: `is-profile deco-frame-${deco.frame} deco-bg-${deco.background} ${sashClasses(deco)}`,
-    children: [element('p', 'my-card-name', nickname), face, result, ...sashes(deco)],
-  };
+// 대표 이미지 카드의 속(그리는 일은 components/personCards.js). 카드 아래 성향: 카드 꾸미기에서 고른 것(기본 최근)
+function profileCardPartsOf(deco, data) {
+  const typeName = selectedChoice(data)?.type.name ?? currentTypeOf(data)?.name;
+  return profileCardParts(deco, data.nickname || DEFAULT_NICKNAME, typeName);
 }
 
 // 성향카드 꾸미기(FE-82): 성향카드 화면에서 고른 테두리 · 배경 · 책갈피를 카드에 입힌다(잠긴 것은 기본으로). 기본 배경은 원래 타로카드 모양이라 클래스를 붙이지 않는다
 const shownTypeDecoOf = (data) => shownTypeDeco(getTypeDeco(), openOf(data));
-const typeDecoClasses = (deco) => `deco-frame-${deco.frame}${deco.background === DEFAULT_TYPE_DECO.background ? '' : ` deco-bg-${deco.background}`} ${sashClasses(deco)}`;
 
 // 성향카드가 보여 줄 현재 유형: 현재 판결 성향(최근 체험 평균). 네 축이 다 모이지 않아 없으면 성향 테스트 유형. 첫 화면 · 성향카드 화면이 같이 쓴다
 const currentTypeOf = (data) => data.judgmentPersonality?.type ?? data.personality?.type;
 
 // 프로필카드 · 성향카드(타로카드) 한 쌍. 첫 화면 위쪽과 내 정보 수정 화면이 같이 쓴다
 function profileCardOf(data, go) {
-  const parts = profileCardParts(decoFor(data), data);
+  const parts = profileCardPartsOf(decoFor(data), data);
   const profile = cardButton(parts.classes, `프로필카드 열기: ${parts.note}`, ...parts.children);
   profile.addEventListener('click', () => go('profile'));
   return profile;
@@ -721,14 +627,6 @@ const typeDescription = (type) => element('p', 'my-type-desc', type.oneLiner);
 // 첫 화면 성향카드와 같은 타로카드 모양(이름 · 성향 이미지 · 캐릭터 대사). 누르는 카드가 아니라 div. type이 없으면 빈 그림 창
 // 내 결과 지면(FE-75)도 이 사건의 성향카드로 쓴다
 // deco: 성향카드 꾸미기(FE-82). 주면 테두리 · 배경 · 책갈피를 입힌다(내 결과 지면은 사건별 카드라 주지 않는다)
-export function typeFace(type, emptyNote = '"성향 테스트로 카드를 뽑아 봐요"', deco = null) {
-  const card = element('div', `my-card is-type is-detail${type ? '' : ' is-empty'}${deco ? ` ${typeDecoClasses(deco)}` : ''}`);
-  card.setAttribute('role', 'group');
-  card.setAttribute('aria-label', `${type ? `성향카드: ${type.name}` : '성향카드: 아직 몰라요'}${deco ? sashNote(deco) : ''}`);
-  card.append(element('p', 'my-card-name', type ? type.name : '아직 몰라요'), type ? typePortrait(type) : emptyWindow(), element('p', 'my-card-note my-type-quote', type ? type.meme : emptyNote), ...(deco ? sashes(deco) : []));
-  return card;
-}
-
 // 결재 도장 "공개"(판사의 책상 은유). 버튼 이름(aria-label)이 공개 여부를 읽어 주므로 도장은 읽지 않는다
 function shownStamp() {
   const stamp = element('span', 'my-stamp', '공개');
@@ -1153,7 +1051,7 @@ function achievementList(achievements) {
 
 // 미리 보기 카드(첫 화면 카드와 같은 모양, 누를 수 없음)
 function previewCard(data, deco = decoFor(data)) {
-  const parts = profileCardParts(deco, data);
+  const parts = profileCardPartsOf(deco, data);
   const card = element('div', `my-card ${parts.classes} is-preview`);
   card.setAttribute('role', 'img');
   card.setAttribute('aria-label', `미리 보기: ${parts.note}, ${nameOf(FRAMES, deco.frame)} 테두리, ${nameOf(BACKGROUNDS, deco.background)} 배경`);

@@ -2,7 +2,8 @@ import { currentUser } from '../utils/session.js';
 import { getBookmarkCharacter } from '../utils/bookmarkCharacter.js';
 import { peek as peekExperience, readJudgment } from './mockExperienceStore.js';
 import { mockCases as cases } from './caseListMockData.js';
-import { seedComments, seedPosts } from './communityMockData.js';
+import { seedAuthors, seedComments, seedPosts } from './communityMockData.js';
+import { DEFAULT_DECO } from '../utils/profileDeco.js';
 
 // 커뮤니티 목 — FE-47 (S-18). 서버 API가 아직 명세에 없어 화면 확인용으로만 둔다.
 // 다른 사람의 글 · 댓글은 고정 값(communityMockData.js), 내가 쓴 글 · 댓글 · 좋아요는 브라우저 localStorage에 둔다.
@@ -42,6 +43,10 @@ function me() {
   return { nickname: user.nickname, character: getBookmarkCharacter() };
 }
 
+// 글쓴이 명함(FE-88): 글 · 댓글의 author에 프로필카드 꾸미기 + 공개 성향카드를 붙인다. 내 글은 목에 내 꾸미기가 없어 기본 카드다(실제 API는 서버가 채운다)
+const DEFAULT_AUTHOR = { intro: '', level: 1, job: '수습 판사', completedCount: 0, profileCard: { ...DEFAULT_DECO }, shownType: null };
+const withCard = (author) => ({ ...DEFAULT_AUTHOR, ...seedAuthors[author.nickname], ...author });
+
 const caseTitle = (caseId) => cases.find((item) => item.caseId === caseId)?.title ?? null;
 const allPosts = (state) => [...state.posts, ...seedPosts];
 const commentsOf = (state, postId) => [...(seedComments[postId] ?? []), ...(state.comments[postId] ?? [])];
@@ -52,6 +57,7 @@ function view(state, post) {
   const seedLike = seedPosts.some((seed) => seed.postId === post.postId) ? post.likeCount : 0;
   return {
     ...post,
+    author: withCard(post.author),
     caseTitle: caseTitle(post.caseId),
     likeCount: seedLike + (liked ? 1 : 0),
     liked,
@@ -97,7 +103,7 @@ export async function getCommunityPost(postId) {
   await delay();
   const state = load();
   const post = findPost(state, postId);
-  return structuredClone({ ...view(state, post), comments: commentsOf(state, postId) });
+  return structuredClone({ ...view(state, post), comments: commentsOf(state, postId).map((comment) => ({ ...comment, author: withCard(comment.author) })) });
 }
 
 // 내 판결 붙이기에 쓸 값. 판결을 확정하지 않았으면 null. 목 체험 기록은 사건 1 하나뿐이다(mockExperienceStore)
@@ -177,7 +183,7 @@ export async function createCommunityComment(postId, { body } = {}) {
   if (!text || text.length > COMMENT_MAX) fail('VALIDATION_ERROR', '입력값을 확인해 주세요.', [{ field: 'body', reason: `MUST_BE_1_TO_${COMMENT_MAX}_CHARS` }]);
   const comment = { commentId: state.nextId, author, body: text, createdAt: new Date().toISOString(), mine: true };
   store({ ...state, comments: { ...state.comments, [postId]: [...(state.comments[postId] ?? []), comment] }, nextId: state.nextId + 1 });
-  return structuredClone(comment);
+  return structuredClone({ ...comment, author: withCard(comment.author) });
 }
 
 // 목 전용: 내가 쓴 글 · 댓글 · 좋아요를 지워 처음부터 다시 확인한다
