@@ -368,7 +368,7 @@ export function filterControls({ value, cases, onChange }) {
   group.append(groupTitle, list);
 
   const caseGroup = element('div', 'cm-filter-group');
-  const picked = value.caseId ? cases.find((item) => item.caseId === value.caseId) : null;
+  const picked = value.caseId ? (cases.find((item) => item.caseId === value.caseId) ?? { caseId: value.caseId, title: '선택한 사건' }) : null; // 목록에 없는 사건으로 걸러 왔어도 거르는 중 표시와 해제 버튼은 보인다
   if (picked) {
     const label = element('span', 'cm-filter-title', '사건');
     const chosen = element('div', 'cm-case-chosen');
@@ -388,12 +388,14 @@ export function filterControls({ value, cases, onChange }) {
     label.htmlFor = search.id;
     const results = element('div');
     results.id = 'cm-case-results';
-    results.setAttribute('aria-live', 'polite');
+    const status = element('p', 'visually-hidden'); // 낭독은 개수만(한 글자마다 사건 제목을 다 읽지 않게)
+    status.setAttribute('role', 'status');
     search.addEventListener('input', () => {
       const word = search.value.trim().toLowerCase();
-      if (!word) { results.replaceChildren(); return; }
+      if (!word) { results.replaceChildren(); status.textContent = ''; return; }
       const found = cases.filter(({ title }) => title.toLowerCase().includes(word));
       found.sort((a, b) => Number(b.title.toLowerCase().startsWith(word)) - Number(a.title.toLowerCase().startsWith(word))); // 제목이 단어로 시작하는 사건을 위로(나머지는 원래 순서 유지: 정렬은 안정 정렬)
+      status.textContent = found.length ? `사건 ${found.length}건` : '맞는 사건이 없어요';
       if (!found.length) { results.replaceChildren(element('p', 'cm-case-empty', '맞는 사건이 없어요')); return; }
       const list = element('ul', 'cm-case-results');
       found.forEach(({ caseId, title }) => {
@@ -403,7 +405,7 @@ export function filterControls({ value, cases, onChange }) {
       });
       results.replaceChildren(list);
     });
-    caseGroup.append(label, search, results);
+    caseGroup.append(label, search, status, results);
   }
   box.append(group, caseGroup);
   return box;

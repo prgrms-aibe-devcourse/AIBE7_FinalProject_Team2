@@ -320,7 +320,7 @@ textarea.cm-input { resize: vertical; min-height: 96px; line-height: 1.6; }
   .cm-author-name { font-size: var(--text-title-3); }
 
   /* ③ 작은 창: 화면 아래에서 올라오는 판. 누른 자리 계산(left · top)은 쓰지 않는다(communityParts.js openPop) */
-  .cm-pop, .cm-pop:popover-open { inset: auto 0 0 0; width: auto; max-width: none; overflow: visible; padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); border-width: 1px 0 0; border-radius: 14px 14px 0 0; }
+  .cm-pop, .cm-pop:popover-open { inset: auto 0 0 0; width: auto; max-width: none; max-height: 85dvh; overflow: hidden auto; padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); border-width: 1px 0 0; border-radius: 14px 14px 0 0; }
   .cm-pop .cm-card-pair { justify-content: center; }
   .cm-pop .cm-card-pair .my-card { width: 112px; height: 224px; }
 
