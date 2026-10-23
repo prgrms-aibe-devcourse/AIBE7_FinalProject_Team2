@@ -806,6 +806,45 @@ class PipelineTest(unittest.TestCase):
             pipeline.select_run(case, groups, ["gemini:b"], "manual", "openai__a/run-001")
         self.assertEqual(state["stages"]["generate"]["status"], "done")
 
+    def _tied_candidate(self, run_index, reasoning):
+        """요소 방향은 self.output과 똑같아(구조 점수 동점) reasoning만 다른 후보 (BE-55 테스트용)."""
+        return {"modelSpec": "openai:a", "runIndex": run_index,
+                "output": {**self.output, "reasoning": reasoning},
+                "validation": {"ok": True, "warnings": []}}
+
+    def test_select_consensus_semantic_weight_breaks_tie(self):
+        """구조(요소 방향) 점수가 완전히 동점일 때, semanticWeight > 0이면 reasoning이 서로 더 비슷한
+        후보 쪽으로 선택이 바뀐다(동점이면 항상 1번 회차를 고르던 것과 달라진다)."""
+        groups = {"openai:a": [self._tied_candidate(1, "이유A"), self._tied_candidate(2, "이유B"),
+                                self._tied_candidate(3, "이유C")]}
+        vectors = {"이유A": [1.0, 0.0], "이유B": [0.0, 1.0], "이유C": [0.0, 0.9]}
+        embed_fn = lambda texts: [vectors[t] for t in texts]  # noqa: E731
+
+        without, reason_without, _ = pipeline.select_run(self.case, groups, ["openai:a"], "consensus")
+        self.assertEqual(without["runIndex"], 1)  # 동점이면 앞선 회차(semanticWeight 기본 0, 기존 동작)
+        self.assertNotIn("유사도", reason_without)
+
+        with_weight, reason_with, score = pipeline.select_run(
+            self.case, groups, ["openai:a"], "consensus", semantic_weight=0.3, embed_fn=embed_fn)
+        self.assertEqual(with_weight["runIndex"], 2)  # B · C가 서로 비슷해 A 대신 선택됨(동률이면 앞선 B)
+        self.assertIn("유사도", reason_with)
+        self.assertIsInstance(score, float)
+
+    def test_select_consensus_semantic_weight_falls_back_on_embed_failure(self):
+        """임베딩 호출이 실패하면(한도 초과 등) 가중치 없이 기존 방식(구조 점수)으로 조용히 선택한다."""
+        groups = {"openai:a": [self._tied_candidate(1, "이유A"), self._tied_candidate(2, "이유B")]}
+
+        def failing_embed(texts):
+            raise llm.LLMQuotaExhaustedError("일 한도 초과")
+
+        logs = []
+        record, reason, score = pipeline.select_run(
+            self.case, groups, ["openai:a"], "consensus", semantic_weight=0.3,
+            embed_fn=failing_embed, log=logs.append)
+        self.assertEqual(record["runIndex"], 1)  # 구조 점수 동점 → 앞선 회차로 fallback
+        self.assertNotIn("유사도", reason)
+        self.assertTrue(any("임베딩 실패" in line for line in logs))
+
     def test_changed_case_uses_new_batch(self):
         config = self.config(generate={"models": ["openai:a"], "runs": 1})
         state = self.run_with(config, {"openai:a": [self.output]}, until="generate")
