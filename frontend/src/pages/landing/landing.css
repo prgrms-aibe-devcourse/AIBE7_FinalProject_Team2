@@ -259,10 +259,7 @@
 }
 .landing-page .room {
   --placed: 3px 6px 9px color-mix(in srgb, var(--color-desk-shadow) 40%, transparent), 10px 20px 30px color-mix(in srgb, var(--color-desk-shadow) 30%, transparent);
-  position: relative; overflow-x: clip; /* 문틈 불빛이 좁은 화면에서 옆으로 넘치지 않게 */
-  /* 양옆 벽: 위에서 본 벽 윗면(회벽) + 방 안쪽 그늘 한 줄 */
-  border-inline: 26px solid var(--color-room-wall);
-  box-shadow: inset 6px 0 0 color-mix(in srgb, var(--color-desk-shadow) 35%, transparent), inset -6px 0 0 color-mix(in srgb, var(--color-desk-shadow) 35%, transparent);
+  position: relative; overflow-x: clip; /* 문틈 불빛이 좁은 화면에서 옆으로 넘치지 않게. 양옆 벽은 두지 않는다(마루가 화면 끝까지) */
 }
 .landing-page :where(.room) :where(span) { display: block; } /* 우선순위 0: 신문 지면 등 안쪽 grid · flex 규칙이 항상 이긴다 */
 .landing-page .room button:focus-visible { outline-color: var(--color-range-fill); }
@@ -366,9 +363,11 @@
   --rows: 4.25; /* 종이 묶음 세로 길이(W 단위) */
   --pt: 56px;
   --fringe: color-mix(in srgb, var(--color-desk-sheet) 72%, var(--color-room-rug));
-  position: relative; display: block;
-  width: min(1180px, calc(100% - 96px)); height: calc(var(--pt) + var(--W) * var(--rows) + 64px); margin: 64px auto 0; padding: var(--pt) 50px 64px;
-  border-radius: 3px; transform: rotate(-.6deg); /* 양 끝 술이 벽에 가리지 않게 옆을 비운다 */
+  position: relative; z-index: 1; display: block;
+  height: calc(var(--pt) + var(--W) * var(--rows) + 64px); margin: 0; padding: var(--pt) 50px 64px;
+  border-radius: 3px;
+  /* 오른쪽 아래 귀퉁이는 따로 접히는 한 장(.rug-flap)이 그린다 — 러그 본체는 그 삼각형만큼 비운다(밑의 서류철이 보이는 자리) */
+  clip-path: polygon(-40px -40px, calc(100% + 40px) -40px, calc(100% + 40px) calc(100% - var(--fold) - 40px), calc(100% - var(--fold) - 40px) calc(100% + 40px), -40px calc(100% + 40px));
   background:
     repeating-linear-gradient(45deg, color-mix(in srgb, var(--color-desk-shadow) 9%, transparent) 0 1px, transparent 1px 4px),
     repeating-linear-gradient(-45deg, color-mix(in srgb, var(--color-desk-pad-glow) 6%, transparent) 0 1px, transparent 1px 4px),
@@ -377,6 +376,59 @@
     inset 0 0 0 22px var(--color-room-rug-edge),
     inset 0 0 0 25px color-mix(in srgb, var(--color-decor) 30%, var(--color-room-rug-edge)),
     0 1px 2px color-mix(in srgb, var(--color-desk-shadow) 45%, transparent);
+}
+/* 러그 자리 · 기울기는 감싼 칸이 맡는다(러그 밑 서류철 · 접히는 귀퉁이가 같이 기운다) */
+.landing-page .room-rug-wrap {
+  --rw: min(1180px, 100cqw - 96px); /* 러그 폭(cqw = 방 폭). 양 끝 술이 벽에 가리지 않게 옆을 비운다 */
+  --fw: calc(var(--rw) * .48); /* 서류철 폭: 러그 폭의 48%(책상 위 서류철보다 조금 크게) */
+  --fold: calc(var(--rw) * .36); /* 접히는 귀퉁이(직각 삼각형 한 변) — 서류철 크기에 비례 */
+  --peek-x: calc(var(--fw) * .103); /* 서류철이 러그 밖으로 삐져나온 정도(서류철 폭 대비) */
+  --peek-y: calc(var(--fw) * .124);
+  position: relative; width: var(--rw); margin: 64px auto 0; transform: rotate(-.6deg);
+}
+/* 러그 밑에 깔린 성향 테스트 서류철: 오른쪽 아래로 조금 삐져나온다 */
+.landing-page .rug-folder { /* 비율은 책상 위 서류철(443 × 521) 그대로 */
+  position: absolute; z-index: 0; right: calc(var(--peek-x) * -1); bottom: calc(var(--peek-y) * -1);
+  width: var(--fw); aspect-ratio: 443 / 521; padding: 0; border: 0; background: none; cursor: pointer; transform: rotate(-10deg);
+  container-type: inline-size; /* 안쪽 이름표 글자 · 자리를 서류철 폭에 맞춘다(cqw) */
+}
+.landing-page .rug-folder .folder-art { filter: drop-shadow(2px 4px 4px color-mix(in srgb, var(--color-desk-shadow) 45%, transparent)); }
+.landing-page .rug-folder .folder-label { left: 38%; top: 63%; width: 54%; padding: 2.93cqw 3.61cqw; font-size: 6.1cqw; } /* 책상 위 이름표(443px 기준 px)를 같은 비율로. 귀퉁이를 접으면 드러나는 오른쪽 아래쪽에 둔다 */
+.landing-page .rug-folder:focus-visible { outline-color: var(--color-range-fill); outline-offset: 4px; }
+/* 접히는 귀퉁이: 대각선(왼쪽 아래 ↔ 오른쪽 위)을 축으로 뒤집혀 러그 위에 포개진다. 원근 없이 납작하게(2D) */
+.landing-page .rug-flap { position: absolute; z-index: 3; right: 0; bottom: 0; width: var(--fold); height: var(--fold); padding: 0; border: 0; background: none; pointer-events: none; }
+.landing-page .rug-flap > span, .landing-page .rug-flap-leaf > span { position: absolute; inset: 0; }
+.landing-page .rug-flap-hit { clip-path: polygon(100% 0, 100% 100%, 0 100%); pointer-events: auto; cursor: pointer; }
+.landing-page .rug-flap-leaf { transform-style: preserve-3d; } /* 접기 · 펴기 움직임은 landingPage.js(들썩이던 각도에서 이어 간다) */
+.landing-page .rug-flap-leaf > span { backface-visibility: hidden; }
+.landing-page .rug-flap-front {
+  clip-path: polygon(100% -2px, 100% 100%, -2px 100%); /* 대각선을 러그 본체 쪽으로 조금 넘겨 잘린 이음매가 비치지 않게 */
+  background:
+    repeating-linear-gradient(45deg, color-mix(in srgb, var(--color-desk-shadow) 9%, transparent) 0 1px, transparent 1px 4px),
+    repeating-linear-gradient(-45deg, color-mix(in srgb, var(--color-desk-pad-glow) 6%, transparent) 0 1px, transparent 1px 4px),
+    var(--color-room-rug);
+  box-shadow: inset -22px -22px 0 0 var(--color-room-rug-edge), inset -25px -25px 0 0 color-mix(in srgb, var(--color-decor) 30%, var(--color-room-rug-edge));
+}
+.landing-page .rug-flap-back { /* 러그 밑면: 거친 바탕천 + 접힌 선 쪽 그늘 */
+  clip-path: polygon(0 0, 100% 0, 0 100%); pointer-events: auto; cursor: pointer; transform: rotate3d(1, -1, 0, 180deg);
+  background:
+    linear-gradient(to bottom right, transparent 38%, color-mix(in srgb, var(--color-desk-shadow) 30%, transparent) 50%),
+    repeating-linear-gradient(0deg, color-mix(in srgb, var(--color-desk-shadow) 14%, transparent) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(90deg, color-mix(in srgb, var(--color-desk-shadow) 10%, transparent) 0 1px, transparent 1px 3px),
+    color-mix(in srgb, var(--color-room-rug-edge) 45%, var(--color-desk-sheet));
+}
+.landing-page .room-rug-wrap.is-folded .rug-flap-leaf { transform: rotate3d(1, -1, 0, 180deg); }
+.landing-page .room-rug-wrap.is-folded .rug-flap-hit { pointer-events: none; } /* 접힌 뒤 그 자리는 드러난 서류철을 누른다 */
+.landing-page .rug-flap:focus-visible { outline-color: var(--color-range-fill); outline-offset: 2px; }
+/* 마우스를 올리면 귀퉁이만 살짝 들렸다 내려앉는다(밑의 서류철이 잠깐 비친다) */
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .landing-page .room-rug-wrap:not(.is-folded) .rug-flap:hover .rug-flap-leaf,
+  .landing-page .room-rug-wrap:not(.is-folded):has(.rug-folder:hover) .rug-flap-leaf { animation: flap-lift 1.6s infinite; } /* 삐져나온 서류철에 올려도 같다 */
+}
+@keyframes flap-lift {
+  0% { transform: none; animation-timing-function: cubic-bezier(.32, .72, 0, 1); }
+  30% { transform: rotate3d(1, -1, 0, 55deg); animation-timing-function: cubic-bezier(.65, 0, .35, 1); }
+  70%, 100% { transform: none; }
 }
 /* 양 끝(짧은 변) 술 */
 .landing-page .room-rug::before,
@@ -407,6 +459,7 @@
 /* 좁은 방(860px 이하): 같은 자리, 러그 안에 들어가게 W만 줄인다 */
 @container (max-width: 860px) {
   .landing-page .room-rug { --W: min(300px, (100cqw - 196px) / 1.94); }
+  .landing-page .room-rug-wrap { --peek-x: calc(var(--fw) * .13); --peek-y: calc(var(--fw) * .15); }
 }
 .landing-page .paper-title { display: block; font: 900 calc(19 * var(--u))/1.35 var(--font-heading); letter-spacing: -.03em; color: var(--color-heading); text-wrap: balance; }
 .landing-page .paper-step { display: flex; align-items: center; gap: calc(10 * var(--u)); margin-bottom: calc(10 * var(--u)); }
@@ -479,14 +532,21 @@
 
 /* 맨 아래: 아래 벽 밑으로 밀려 들어간 신문 한 부. 책상 위 신문과 같은 지면(596 × 712)을 윗부분 20%만 보이게 자른다. 누르면 사건 목록 */
 .landing-page .room-exit {
-  --wall: 26px;
-  position: relative; display: flex; justify-content: center; margin-top: 64px; overflow: hidden; /* 신문은 아래 벽 테두리 밖으로 보이지 않는다 */
+  --wall: 44px; /* 맨 아래 문짝 두께(신문이 이 밑으로 들어간다) */
+  position: relative; display: flex; justify-content: center; margin-top: 16px; padding-top: 48px; overflow: hidden; /* 신문은 아래 벽 테두리 밖으로 보이지 않는다(벽 밑으로 들어간 지면이 쪽 높이를 늘리지 않게 overflow로 자른다). 위 여백은 안쪽에 둬 들썩일 때 기울어 올라간 귀퉁이가 잘리지 않게 */
 }
-.landing-page .room-exit::after { content: ''; position: absolute; z-index: 1; left: 0; right: 0; bottom: 0; /* 벽이 신문 위에 놓여 신문이 벽 밑으로 들어간다 */ height: var(--wall); background: var(--color-room-wall); box-shadow: inset 0 6px 0 color-mix(in srgb, var(--color-desk-shadow) 35%, transparent); }
+.landing-page .room-exit::after { /* 맨 아래 문: 위에서 본 닫힌 문짝. 신문이 문 밑으로 밀려 들어갔다. 윗면(밝은 나무 · 세로 결) + 앞면 두께(진한 띠) + 문 앞 바닥 그늘 */
+  content: ''; position: absolute; z-index: 1; left: 0; right: 0; bottom: 0; height: var(--wall);
+  background:
+    linear-gradient(180deg, transparent calc(100% - 12px), var(--color-room-door-edge) calc(100% - 12px)),
+    repeating-linear-gradient(90deg, color-mix(in srgb, var(--color-room-door-edge) 22%, transparent) 0 1px, transparent 1px 38px),
+    var(--color-room-door);
+  box-shadow: 0 -6px 10px -2px color-mix(in srgb, var(--color-desk-shadow) 55%, transparent), inset 0 2px 0 color-mix(in srgb, var(--color-room-light) 45%, transparent);
+}
 .landing-page .room-news {
   --news-zoom: 1;
-  position: relative; width: calc(596px * var(--news-zoom)); height: calc(712px * .2 * var(--news-zoom) + var(--wall)); overflow: hidden; /* 벽에 가린 만큼 더 둬서 보이는 부분이 20% */
-  margin-top: 14px; padding: 0; border: 0; background: none; cursor: pointer; transform: rotate(-1.5deg); transform-origin: 50% 100%;
+  position: relative; width: calc(596px * var(--news-zoom)); height: calc(712px * .2 * var(--news-zoom) + var(--wall)); /* 벽에 가린 만큼 더 둬서 보이는 부분이 20%. 아래는 바깥 칸(.room-exit)이 벽 선에서 자른다 */
+  margin-top: 14px; padding: 0; border: 0; background: none; cursor: pointer; transform: rotate(-1.5deg); transform-origin: 50% 100%; /* 누르면 이 기울기에서 시작해 바로 서며 커진다(utils/tailSpread.js) */
 }
 .landing-page .room-news-sheet { position: absolute; left: 0; top: 0; width: 596px; height: 712px; zoom: var(--news-zoom); filter: var(--placed-shadow, drop-shadow(3px 6px 6px color-mix(in srgb, var(--color-desk-shadow) 45%, transparent))); transition: filter .2s ease-out; }
 .landing-page :where(.room-news-sheet) :where(strong, em, b, small) { display: block; } /* 책상 그림과 같은 블록 규칙(우선순위 0) */
@@ -494,6 +554,21 @@
 @media (hover: hover) and (pointer: fine) {
   .landing-page .room-news:hover .room-news-sheet { filter: drop-shadow(5px 10px 9px color-mix(in srgb, var(--color-desk-shadow) 50%, transparent)) brightness(1.06); }
 }
+/* 마우스를 올리면 벽 밑의 신문 한쪽을 살짝 틀어 올렸다가 놓아 도로 들어가는 것처럼 들썩인다(올라갈 때는 빠르게, 들어갈 때는 천천히).
+   축은 벽 선의 왼쪽 끝(지면 위에서 20% 지점) — 오른쪽 귀퉁이가 1.5도 들린다 */
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .landing-page .room-news:hover .room-news-sheet { transform-origin: 0 20%; animation: tail-tug 1.5s infinite; }
+}
+@keyframes tail-tug {
+  0% { transform: none; animation-timing-function: cubic-bezier(.32, .72, 0, 1); }
+  28% { transform: rotate(-1.5deg); animation-timing-function: cubic-bezier(.65, 0, .35, 1); }
+  68%, 100% { transform: none; }
+}
+
+/* 쪽 끝에서 스크롤을 더 당겨 쪽 밖이 살짝 드러나도(오버스크롤) 이어지게: 아래로 당기면 푸터와 같은 갈색(쪽 바탕), 위로 당기면 헤더와 같은 남색.
+   (화면 고정 반쪽 그라디언트는 오버스크롤 틈에 그려지지 않아 흰색이 보였다.) 위쪽은 헤더 위로 남색 띠를 길게 내어 덮는다 — 쪽 위쪽 밖이라 스크롤 길이는 늘지 않는다 */
+body:has(.landing-page) { background: var(--color-desk-floor); }
+body:has(.landing-page) #route-header::before { content: ''; position: absolute; left: 0; right: 0; bottom: 100%; height: 100vh; background: var(--color-banner-bg); pointer-events: none; }
 
 /* 푸터: 책상 밖 어두운 바닥 위 */
 .landing-page .site-footer { background: var(--color-desk-floor); border-top: 0; color: var(--color-desk-text); }
@@ -537,14 +612,14 @@
   .landing-page .desk-menu-item.is-soon { opacity: .55; cursor: default; }
   .landing-page .desk-menu-item:focus-visible { outline-color: var(--color-range-fill); }
   /* 좁은 화면: 같은 방을 세로로 쌓는다. 벽은 얇게, 서류 · 판결문은 한 줄에 하나 */
-  .landing-page .room { border-inline-width: 10px; box-shadow: inset 3px 0 0 color-mix(in srgb, var(--color-desk-shadow) 35%, transparent), inset -3px 0 0 color-mix(in srgb, var(--color-desk-shadow) 35%, transparent); }
   .landing-page .room { --ch: 46vw; } /* 좁은 화면: 책상 대신 메뉴 카드 밑으로 의자를 넣는다 */
   /* 좁은 화면은 러그가 세로로 길어져 술이 위 · 아래 짧은 변으로 간다 */
-  .landing-page .room-rug { --pt: 40px; --W: min(300px, (100cqw - 92px) / 1.94); width: auto; margin: 52px 16px 0; padding: var(--pt) 30px 44px; transform: none; }
+  .landing-page .room-rug-wrap { --rw: calc(100cqw - 32px); --peek-x: calc(var(--fw) * .09); --peek-y: calc(var(--fw) * .34); margin: 52px 16px 0; transform: none; }
+  .landing-page .room-rug { --pt: 40px; --W: min(300px, (100cqw - 92px) / 1.94); padding: var(--pt) 30px 44px; }
   .landing-page .room-rug::before, .landing-page .room-rug::after { top: auto; left: 6px; right: 6px; width: auto; height: 14px; background: repeating-linear-gradient(90deg, var(--fringe) 0 2px, transparent 2px 6px); }
   .landing-page .room-rug::before { bottom: 100%; }
   .landing-page .room-rug::after { top: 100%; }
-  .landing-page .room-exit { margin-top: 48px; }
+  .landing-page .room-exit { margin-top: 0; }
   .landing-page .room-news { --news-zoom: .55; }
 }
 

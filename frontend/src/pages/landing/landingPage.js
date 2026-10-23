@@ -1,6 +1,7 @@
 import { button, element, mockTag, renderSiteFooter } from '../../components/siteLayout.js';
 import { casePhoto, fallbackImages, todayLabel, useCommonPhotoOnError } from '../../utils/newspaper.js';
-import { takePaper } from '../../utils/paperHandoff.js';
+import { holdPaper, takePaper } from '../../utils/paperHandoff.js';
+import { restingStyle, tailPose } from '../../utils/tailSpread.js';
 import { flyCoffee } from '../../utils/coffeeDive.js';
 import { bootLaptop } from '../../utils/laptopBoot.js';
 import { reducedMotion } from '../../utils/motion.js';
@@ -55,6 +56,8 @@ const CHEEKS = [
   { who: 'naero', look: 'idle-sorry', height: 170, right: 'calc(644px + var(--dx, 0px) - var(--t, 0) * 37px)', top: 'calc(2px + var(--r, 0px) * .1)' }, // 패드 윗변 위 나무에(네이비 패드와 겹치지 않게)
 ];
 let newsCache = null; // 사건 목록(API 1) 마지막 응답
+const FOLD_MS = 600; // 러그 귀퉁이를 접고 펴는 시간
+const FOLDED = 'rotate3d(1, -1, 0, 180deg)'; // 접힌 귀퉁이(landing.css .is-folded와 같다)
 const LIFT_MS = 380; // 신문을 집어 드는 시간(landing.css .is-held와 같게). 그 뒤 지면이 아래에서 올라온다
 // 6막에서 "메인으로" 올 때: 보던 지면이 줌아웃(제자리에서 .82배)과 페이드아웃을 함께 하며 책상이 드러난다
 const FADE_MS = 800;
@@ -442,17 +445,66 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
     rug.append(paper);
   });
 
+  // 러그 오른쪽 아래 귀퉁이 밑에 성향 테스트 서류철이 깔려 있다(바깥으로 조금 삐져나옴). 귀퉁이는 마우스를 올리면 들썩이고,
+  // 누르면 접혀 올라가 서류철이 드러난다(다시 누르면 덮는다). 서류철을 누르면 성향 테스트
+  const rugWrap = element('div', 'room-rug-wrap');
+  // 접기 전에는 삐져나온 서류철도 귀퉁이를 접는 자리다(누르면 접혀 드러남). 접힌 뒤에 누르면 성향 테스트
+  const stash = button('', () => (rugWrap.classList.contains('is-folded') ? navigate('test') : flap.click()), 'rug-folder');
+  stash.setAttribute('aria-label', '판결 성향 테스트');
+  stash.append(folderArt.cloneNode(true));
+  const flap = button('', () => {
+    const from = getComputedStyle(leaf).transform; // 들썩이던 중이면 그 각도에서 이어 접는다
+    const folded = rugWrap.classList.toggle('is-folded');
+    flap.setAttribute('aria-expanded', String(folded));
+    if (reducedMotion()) return;
+    leaf.animate([{ transform: from }, { transform: folded ? FOLDED : 'none' }], { duration: FOLD_MS, easing: 'cubic-bezier(.65, 0, .35, 1)' });
+  }, 'rug-flap');
+  flap.setAttribute('aria-label', '러그 귀퉁이 들추기');
+  flap.setAttribute('aria-expanded', 'false');
+  const leaf = span('rug-flap-leaf'); // 접히는 귀퉁이 한 장(앞면 = 러그 무늬, 뒷면 = 러그 밑면)
+  leaf.append(span('rug-flap-front'), span('rug-flap-back'));
+  flap.append(span('rug-flap-hit'), leaf); // 누르는 자리는 접히지 않고 귀퉁이 자리에 남는다(들썩이는 동안 마우스가 빠지지 않게)
+  rugWrap.append(stash, rug, flap);
+
   // 맨 아래: 아래 벽 밑으로 밀려 들어간 신문 한 부, 윗부분(전체의 20%)만 보인다. 책상 위 신문과 같은 지면이고 누르면 사건 목록
   const exit = element('div', 'room-exit');
-  const tail = button('', () => navigate('list'), 'room-news');
+  // 누르면 사건 목록으로 간다. 지금 보이는 끝자락을 맨 위 장식 층에 같은 자리 · 같은 기울기 그대로 본떠 두고 넘겨준다.
+  // 그 한 장이 곧바로 위로 잡아당겨지며 커지고, 들어 올린 뒤 그 밑에서 함께 움직이던 사건 목록 지면으로 넘어가 화면을 채운다(utils/tailSpread.js)
+  const tail = button('', () => {
+    if (reducedMotion()) { navigate('list'); return; }
+    const floor = exit.getBoundingClientRect().bottom - parseFloat(getComputedStyle(exit).getPropertyValue('--wall')); // 신문이 벽에 들어가는 선
+    // 중간 너비 = 책상이 화면 폭에 맞춰 줄어드는 구간(높이보다 폭이 먼저 모자람, fit 참고). 좁은 너비(landing.css 720px 이하)는 책상 대신 메뉴 카드
+    const middle = !window.matchMedia('(max-width: 720px)').matches && scene.clientWidth / SCENE_WIDTH < scene.clientHeight / SCENE_HEIGHT;
+    const rect = { ...tailPose(tailSheet, tail, floor), middle };
+    const scope = element('div', 'landing-page'); // 본뜬 지면에 메인 화면 스타일이 그대로 걸리게(자리는 차지하지 않는다)
+    scope.style.display = 'contents';
+    const layer = element('div', 'paper-hand-layer');
+    layer.setAttribute('aria-hidden', 'true');
+    layer.inert = true;
+    const face = element('div');
+    Object.assign(face.style, { position: 'absolute', left: 0, top: 0, width: `${rect.width}px`, height: `${tailSheet.getBoundingClientRect().height}px`, transformOrigin: '0 0', ...restingStyle(rect) });
+    const copy = tailSheet.cloneNode(true);
+    copy.style.setProperty('--news-zoom', getComputedStyle(tail).getPropertyValue('--news-zoom'));
+    face.append(copy);
+    layer.append(face);
+    scope.append(layer);
+    document.body.append(scope);
+    tailSheet.style.visibility = 'hidden';
+    holdPaper({ layer: scope, card: face, rect });
+    // 사건 목록은 이 화면을 뒤에 남기는데(.paper-ghost, 헤더 없이 맨 위부터 그리는 고정 층) 라우터가 스크롤을 맨 위로 올린다.
+    // 넘어간 뒤 화면이 지금 보이던 자리 그대로 남도록 옮겨진 만큼 되돌린다
+    const seen = root.getBoundingClientRect().top;
+    navigate('list', { from: 'tail' });
+    root.style.translate = `0 ${seen - root.getBoundingClientRect().top}px`;
+  }, 'room-news');
   tail.setAttribute('aria-label', '사건 목록 보기');
   const tailSheet = span('room-news-sheet');
   tailSheet.setAttribute('aria-hidden', 'true');
-  tailSheet.append(news.cloneNode(true)); // 제호 · 날짜 띠 쪽만 보이므로 사건 목록을 받기 전 지면을 그대로 쓴다
+  tailSheet.append(news.cloneNode(true)); // 책상 위 신문과 같은 지면. 머리기사가 채워지면 다시 본뜬다(paintNews)
   tail.append(tailSheet);
   exit.append(tail);
 
-  room.append(chair, deco('room-desk-shade'), head, rug, exit); // 의자는 책상 밑으로 밀어 넣어 위쪽이 책상에 가린다
+  room.append(chair, deco('room-desk-shade'), head, rugWrap, exit); // 의자는 책상 밑으로 밀어 넣어 위쪽이 책상에 가린다
   intro.append(room);
 
   root.append(scene, mobile, intro, renderSiteFooter({ navigate })); // 공통 헤더는 라우터가 붙인다(FE-56)
@@ -523,6 +575,7 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
     mobileNews.headline.textContent = top.headline || top.title;
     useCommonPhotoOnError(mobileNews.photo, Number(top.caseId) || 0);
     mobileNews.photo.src = casePhoto(top);
+    tailSheet.replaceChildren(news.cloneNode(true)); // 맨 아래 끝자락도 같은 머리기사로(눌러서 펼친 사건 목록 지면과 이어지게)
   }
   if (api?.getCases) fillNews();
 }
