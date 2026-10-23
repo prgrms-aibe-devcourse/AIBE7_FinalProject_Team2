@@ -1,4 +1,5 @@
-// Grafana Alloy — 메인 EC2에서 백엔드 로그를 모니터링 EC2의 Loki로 보낸다 (COMMON-43, WBS 7.2.4).
+// Grafana Alloy — 메인 EC2에서 백엔드 로그 · 메트릭을 Loki · Grafana Cloud로 보낸다
+// (로그: COMMON-43 WBS 7.2.4, 메트릭: 7.3.3 COMMON-62).
 //
 // 로컬용(monitoring/alloy-config.alloy)과 두 가지가 다르다.
 //   1. 보낼 곳이 같은 Compose 안의 loki:3100이 아니라, 모니터링 EC2의 사설 IP다 → 환경변수로 받는다
@@ -7,6 +8,12 @@
 // 이 파일이 monitoring/이 아니라 deploy/에 있는 이유: 메인 서버에는 "저장소에서 deploy 폴더만" 두기 때문이다
 // (deploy/README.md "서버(EC2)에서 실행"). monitoring/을 참조하면 서버에 없는 경로를 가리키게 된다.
 // 로그 라벨 규칙(level만 승격, traceId는 라벨 금지)은 로컬과 같아야 하므로, 한쪽을 고치면 다른 쪽도 같이 고친다.
+//
+// 메트릭(7.3.3, COMMON-62 — 운영 EC2가 1대뿐이라 별도 "모니터링 EC2"는 안 둔다. COMMON-43 1순위대로
+// Grafana Cloud로 보낸다): 이 Alloy가 같은 Docker 네트워크 안에서 backend:8081 · node-exporter:9100을
+// 직접 긁어서(scrape) Cloud로 push한다 — monitoring/prometheus.prod.yml(전용 EC2 차선, 지금 안 씀)처럼
+// 포트를 바깥에 열 필요가 없다. 처음에 Prometheus를 운영 EC2에 두려다 되돌린 경위는
+// docs/decisions/COMMON-61.md "PR #262 · #263 리뷰 반영" 참고.
 
 local.file_match "backend_logs" {
 	// docker-compose.monitoring-agent.yml이 백엔드의 /app/logs를 이 경로로 읽기 전용 마운트한다.
@@ -102,5 +109,55 @@ loki.write "default" {
 	wal {
 		enabled         = true
 		max_segment_age = "4h"
+	}
+}
+
+// --- 메트릭 (7.3.3, COMMON-62) ---
+
+// 백엔드 Actuator (7.2.1). monitoring/prometheus.yml의 backend job과 같은 대상 · 경로다
+prometheus.scrape "backend" {
+	targets         = [{"__address__" = "backend:8081"}]
+	metrics_path    = "/actuator/prometheus"
+	scrape_interval = "15s"
+	forward_to      = [prometheus.relabel.cloud_filter.receiver]
+}
+
+// 호스트 자원 (인프라 대시보드, COMMON-43). job 이름 "node"는 대시보드 쿼리에 박혀 있으니 바꾸지 않는다
+prometheus.scrape "node" {
+	targets         = [{"__address__" = "node-exporter:9100"}]
+	scrape_interval = "15s"
+	job_name        = "node"
+	forward_to      = [prometheus.relabel.cloud_filter.receiver]
+}
+
+// 무료 등급 시계열 한도(10,000/월, WBS R9 실측 23% 사용 중)를 지키려고 전부 보내지 않는다.
+// 대시보드 4종(7.2.4)과 경보 규칙(monitoring/alert-rules.yml, 7.3.1)이 실제로 쓰는 지표군만 허용한다.
+// Actuator가 기본으로 내보내는 tomcat · 시스템 프로세스 등 안 쓰는 지표는 여기서 걸러진다
+prometheus.relabel "cloud_filter" {
+	forward_to = [prometheus.remote_write.grafana_cloud.receiver]
+
+	rule {
+		source_labels = ["__name__"]
+		regex         = "up|http_server_requests_seconds_.*|hikaricp_connections_.*|lawnambul_.*|jvm_memory_.*|jvm_gc_.*|node_.*|prometheus_remote_storage_.*"
+		action        = "keep"
+	}
+}
+
+// Grafana Cloud remote_write. API 키를 이 파일에 직접 적지 않는다 — sys.env로 서버 .env의 값을 읽는다
+// (LOKI_URL과 같은 원칙). username(Instance ID)은 그 자체로는 접근 권한이 없어 기본값을 둬도 되지만,
+// 운영 환경마다 다를 수 있어 역시 .env로 받는다
+prometheus.remote_write "grafana_cloud" {
+	endpoint {
+		url = sys.env("GRAFANA_CLOUD_PROM_URL")
+
+		basic_auth {
+			username = sys.env("GRAFANA_CLOUD_PROM_USERNAME")
+			password = sys.env("GRAFANA_CLOUD_PROM_API_KEY")
+		}
+	}
+
+	// 로그(loki.write)와 같은 기준 — Cloud가 잠깐 안 되는 동안 보내지 못한 배치를 버리지 않는다
+	wal {
+		truncate_frequency = "2h"
 	}
 }
