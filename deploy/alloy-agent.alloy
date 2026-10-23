@@ -114,11 +114,15 @@ loki.write "default" {
 
 // --- 메트릭 (7.3.3, COMMON-62) ---
 
-// 백엔드 Actuator (7.2.1). monitoring/prometheus.yml의 backend job과 같은 대상 · 경로다
+// 백엔드 Actuator (7.2.1). monitoring/prometheus.yml의 backend job과 같은 대상 · 경로다.
+// job_name을 안 주면 Alloy가 컴포넌트 이름(prometheus.scrape.backend)을 기본값으로 쓴다 — alert-rules.yml의
+// 규칙들이 전부 job="backend"를 보므로, 이게 없으면 BackendDown은 절대 안 울리고 BackendScrapeTargetMissing은
+// 항상 firing 상태가 된다(PR #266 리뷰, 정민석)
 prometheus.scrape "backend" {
 	targets         = [{"__address__" = "backend:8081"}]
 	metrics_path    = "/actuator/prometheus"
 	scrape_interval = "15s"
+	job_name        = "backend"
 	forward_to      = [prometheus.relabel.cloud_filter.receiver]
 }
 
@@ -147,6 +151,12 @@ prometheus.relabel "cloud_filter" {
 // (LOKI_URL과 같은 원칙). username(Instance ID)은 그 자체로는 접근 권한이 없어 기본값을 둬도 되지만,
 // 운영 환경마다 다를 수 있어 역시 .env로 받는다
 prometheus.remote_write "grafana_cloud" {
+	// 로컬에서 같은 .env 값으로 실제 Cloud에 테스트 전송을 해 본 적이 있다면, env="prod" 라벨이 없는 한
+	// 운영과 같은 job · instance 라벨로 섞여 들어간다(PR #266 리뷰, 정민석). 이 라벨을 붙여 구분한다
+	external_labels = {
+		env = "prod",
+	}
+
 	endpoint {
 		url = sys.env("GRAFANA_CLOUD_PROM_URL")
 

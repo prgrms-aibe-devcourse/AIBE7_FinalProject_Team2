@@ -53,7 +53,12 @@ Jira 이슈가 원한 "Prometheus 표준 문법이라 그대로 옮길 수 있�
   내부 알림 전송 실패 지표가 어떤 이름 · 어느 데이터소스에 있는지 확인하는 조사가 추가로 필요하고, 이번
   이슈의 범위(기존 규칙 이식 + Slack 연락처)를 벗어난다.
 
-**선택: 대안 A.** Watchdog으로 같은 목적을 충분히 달성하고, 범위를 불필요하게 늘리지 않는다.
+**선택: 대안 A.** 범위를 불필요하게 늘리지 않는다. 다만 **이 선택에는 한계가 있다(PR #266 리뷰, 정민석)**
+— Cloud의 `Watchdog`은 `always-muted`라 Slack으로 안 가므로, "멈추면 역으로 알아챈다"는 걸 실제로 지켜보는
+사람이 없다. 이 PR에서 실질적으로 운영에 필요한 "EC2 · Alloy가 죽어 지표 자체가 끊김" 감지는 Watchdog이
+아니라 `BackendScrapeTargetMissing`(`absent(up{job="backend"})`, critical)이 맡는다 — 이 규칙은 뮤트돼
+있지 않아 실제로 Slack까지 간다. Watchdog을 외부 생존 신호 서비스(healthchecks.io 등)에 연결하는 건
+이번 범위 밖의 후속 과제로 남긴다.
 
 ### 3. Watchdog을 Slack으로 안 보내는 방법 — "null 수신자" 대응
 
@@ -66,7 +71,11 @@ Jira 이슈가 원한 "Prometheus 표준 문법이라 그대로 옮길 수 있�
 - **대안 B: 항상 적용되는 mute timing을 만들어 `severity="none"` 라우트에 건다.** Grafana가 1급으로
   지원하는 기능이고, "경보는 평가되고 있지만 알림만 보내지 않는다"는 의도를 정확히 표현한다.
 
-**선택: 대안 B.** `always-muted`(월~일 00:00~23:59) mute timing을 만들어 Watchdog 라우트에 적용했다.
+**선택: 대안 B.** `always-muted` mute timing을 만들어 Watchdog 라우트에 적용했다. **시간 범위를
+`00:00~23:59`로 넣으면 안 된다(PR #266 리뷰, 정민석)** — 23:59~24:00 1분이 음소거 구간 밖에 남아, 그
+1분에 Watchdog 재알림이 걸리면 Slack으로 샌다. 요일만 지정해 하루 종일(또는 끝 시각 `24:00`)로 고쳐야
+한다 — Grafana Cloud 콘솔 쪽 설정이라 코드 수정이 아니라 Notification policies → Mute timings에서
+직접 고쳐야 하는 작업으로 남겨 둔다.
 
 ### 4. 억제(inhibit) 규칙
 
@@ -80,7 +89,9 @@ Jira 이슈가 원한 "Prometheus 표준 문법이라 그대로 옮길 수 있�
 ## 선택한 방법과 이유
 
 1. Grafana "Convert Prometheus rules" API로 `monitoring/alert-rules.yml`의 규칙을 네임스페이스
-   `lawnambul`에 `lawnambul-service`(7개) · `lawnambul-meta`(`Watchdog`)로 이식.
+   `lawnambul`에 `lawnambul-service`(8개) · `lawnambul-meta`(`Watchdog`, 1개) — 총 9개로 이식. (Convert
+   API는 규칙을 하나씩 변환하므로, 실제 Grafana 쪽에 9개가 다 들어갔는지 Alert rules 목록으로 직접
+   확인해야 한다 — PR #266 리뷰, 정민석)
 2. `AlertDeliveryFailing`은 이식하지 않음(Cloud에서는 평가 불가능한 지표, Watchdog으로 대체).
 3. Slack 연락처(`lawnambul-slack`)는 로컬과 같은 웹훅 URL을 재사용.
 4. 알림 정책: 기본 그룹핑(`alertname`, `severity`) · `severity="critical"` 빠른 재알림(10s/1h) ·
@@ -102,3 +113,48 @@ Jira 이슈가 원한 "Prometheus 표준 문법이라 그대로 옮길 수 있�
 - 데이터소스의 "Manage alerts via Alerting UI"를 수동으로 켤 수 있는 권한이 생기면, 대안 B(Mimir ruler
   데이터소스 프록시)로 바꿀 이유는 딱히 없다 — 현재 방식(Convert Prometheus rules)이 이미 YAML을
   그대로 쓸 수 있어 실익이 없다.
+- Watchdog을 외부 생존 신호 서비스(healthchecks.io 등)에 연결하는 안(PR #266 리뷰 제안 5) — 지금은
+  범위 밖으로 둔다.
+- 규칙 동기화 자동화(PR #266 리뷰 제안 6) — `alert-rules.yml`이 바뀔 때마다 Cloud 쪽을 수동으로 다시
+  변환해야 한다. 스크립트화(토큰은 환경변수, `AlertDeliveryFailing` 제외 후 Convert API 업로드)는 다음
+  변경이 생기면 그때 만든다.
+
+## PR #266 리뷰 반영 (jms0326, 2026-10-23)
+
+### 머지 전 필수 수정
+
+1. **job 라벨 불일치로 `BackendDown`이 영원히 안 울리고 `BackendScrapeTargetMissing`이 항상 firing이던
+   문제.** `deploy/alloy-agent.alloy`의 `prometheus.scrape "backend"`에 `job_name`이 빠져 있어 Alloy가
+   컴포넌트 이름을 기본 job 라벨로 썼다 — `alert-rules.yml`의 모든 규칙이 보는 `job="backend"`와 어긋나
+   있었다. `job_name = "backend"`를 추가했다(이 PR과 COMMON-62 코드가 같이 걸린 문제라 여기서 반영).
+2. **Cloud 규칙 개수 표기 정정.** "7개 · 총 8개"로 적었던 걸 실제 `alert-rules.yml` 기준 "8개(서비스) +
+   1(Watchdog) = 9개"로 고쳤다. 다만 Convert API 변환이 실제로 9개 다 들어갔는지는 Grafana Alert rules
+   화면에서 직접 봐야 확인되는 사항이라, 문서 정정만으로 끝나지 않는다 — 운영 담당(백승호)이 직접 확인
+   필요.
+3. **토큰 전달 경로 문구 수정.** "Jira 댓글 또는 비공개 채널로 전달한다"는 문구를 지우고, 재사용이
+   필요하면 각자 셀프서비스로 새 토큰을 발급받도록 `monitoring/README.md`를 고쳤다. **작업 중 이 토큰이
+   AI 대화 도구에 붙여넣어진 적이 있는지는 별도 확인이 필요하다 — 코드/문서 수정만으로는 판단할 수
+   없는 사안이라 사용자에게 직접 확인을 요청했다.**
+4. **`always-muted` mute timing의 1분 빈틈.** `00:00~23:59`로 넣으면 매일 23:59~24:00에 음소거가
+   풀린다. 이 설정은 Grafana Cloud 콘솔(또는 API) 쪽에만 있고 저장소 코드로 표현되지 않아, 문서에 정확한
+   수정 방법(요일만 지정하거나 끝 시각 `24:00`)을 남기고 실제 적용은 Grafana 접근 권한이 있는 담당자가
+   해야 한다.
+
+### 반영한 수정 제안
+
+- Watchdog이 Cloud에서 `always-muted`라 "멈추면 역으로 알아챈다"는 실제로 지켜보는 사람이 없다는 점을
+  "선택한 방법과 이유" · README에 명시(제안 5). 운영에 실질적으로 필요한 장애 감지는
+  `BackendScrapeTargetMissing`이 맡는다는 점도 같이 적었다.
+- `deploy/alloy-agent.alloy`의 `prometheus.remote_write`에 `external_labels = {env = "prod"}` 추가해
+  로컬 테스트 전송과 운영 전송이 섞여도 구분 가능하게 함(제안 8).
+- Service Account 토큰 권한이 Editor로 넓다는 점, 작업이 끝났으면 삭제를 권한다는 점을 README에
+  추가(제안 7).
+- README "확인" 절에 설정 존재 확인과 실제 장애 경로(end-to-end) 검증이 다르다는 점, 아직 안 한 검증
+  목록을 명시(제안 9, 10).
+
+### 이번 PR에서 반영하지 않은 것
+
+- 규칙 동기화 스크립트(제안 6), Watchdog 외부 연결(제안 5 후속) — "추후 재검토" 절로 분리.
+- Cloud 쪽 실제 상태 확인(규칙 9개 여부 · No data 처리 · Slack 테스트 전송) — Grafana Cloud 콘솔 접근이
+  필요해 이 리뷰 반영 작업만으로는 검증할 수 없다. 운영 담당자 확인 필요.
+- WBS 7.3 전체 상태 표기 정정 — `docs/wbs.md`에서 반영.
