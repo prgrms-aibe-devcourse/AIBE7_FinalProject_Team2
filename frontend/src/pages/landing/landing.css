@@ -549,7 +549,7 @@
   margin-top: 14px; padding: 0; border: 0; background: none; cursor: pointer; transform: rotate(-1.5deg); transform-origin: 50% 100%; /* 누르면 이 기울기에서 시작해 바로 서며 커진다(utils/tailSpread.js) */
 }
 .landing-page .room-news-sheet { position: absolute; left: 0; top: 0; width: 596px; height: 712px; zoom: var(--news-zoom); filter: var(--placed-shadow, drop-shadow(3px 6px 6px color-mix(in srgb, var(--color-desk-shadow) 45%, transparent))); transition: filter .2s ease-out; }
-.landing-page :where(.room-news-sheet) :where(strong, em, b, small) { display: block; } /* 책상 그림과 같은 블록 규칙(우선순위 0) */
+.landing-page :where(.room-news-sheet) :where(span, strong, em, b, small) { display: block; } /* 책상 그림과 같은 블록 규칙(우선순위 0). .room 밖(body)에 본뜬 한 장에도 걸려야 해서 span까지 포함한다 */
 .landing-page .room-news:focus-visible { outline-color: var(--color-range-fill); outline-offset: 4px; }
 @media (hover: hover) and (pointer: fine) {
   .landing-page .room-news:hover .room-news-sheet { filter: drop-shadow(5px 10px 9px color-mix(in srgb, var(--color-desk-shadow) 50%, transparent)) brightness(1.06); }

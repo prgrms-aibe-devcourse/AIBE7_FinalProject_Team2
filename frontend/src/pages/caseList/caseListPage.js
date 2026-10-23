@@ -87,7 +87,7 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
   if (from === 'tail') {
     history.replaceState({ ...history.state, extras: {} }, '');
     if (ghost && tail) root.classList.add('is-spreading');
-    else tail?.layer.remove();
+    else { tail?.layer.remove(); ghost?.remove(); } // 넘겨받은 한 장이 없으면 연출을 포기하고 뒤에 남긴 메인도 바로 걷는다(아래 rise()가 돌지 않는 길)
   }
   // 6막 신문을 뒤집고 왔으면(FE-55 "다른 사건 보기") 넘겨받은 빈 뒷면(paperHandoff.js)이 화면을 덮고 있다.
   // 기사가 다 그려지면 같은 자리의 이 지면 위에 기사가 페이드인한다(unflip)
@@ -166,15 +166,19 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
   // 끝자락에서 왔으면 메인이 본뜬 끝자락이 곧바로 위로 잡아당겨지며 커지고, 들어 올린 뒤 그 밑에서 함께 움직이던 이 지면으로 넘어간다(utils/tailSpread.js).
   // 넘어가기 직전까지 기사와 첫 사진이 다 준비되지 않았으면(최대 RISE_WAIT_MS) 그 자리에서 기다린다. 뒤에 남긴 메인은 함께 흐려진다
   async function spread(loaded) {
+    if (!active()) { tail.layer.remove(); return; } // 기다리는 사이 다른 화면으로 갔으면 연출하지 않는다(rise · unflip과 같다)
     root.classList.add('is-going');
+    // 연출 도중 다른 화면으로 가면(Esc · 헤더) 맨 위 층에 본뜬 끝자락이 새 화면 위에 남지 않게 바로 걷는다
+    const watch = window.setInterval(() => { if (!active()) tail.layer.remove(); }, 100);
     try {
       await spreadFromTail({ paper, face: tail.card, from: tail.rect, backdrop: ghost, ready: drawn(loaded) });
     } catch {
       // 연출이 실패해도 화면 전환은 막지 않는다(아래에서 연출 층을 걷고 지면을 그대로 둔다)
     } finally {
+      window.clearInterval(watch);
       tail.layer.remove();
       ghost.remove();
-      root.classList.remove('is-spreading', 'is-going');
+      if (active()) root.classList.remove('is-spreading', 'is-going'); // 그 사이 다른 화면으로 갔으면 이 지면은 이미 버려졌다
     }
   }
 
