@@ -71,7 +71,9 @@
       "enabled": true,
       "strategy": "consensus",
       "model": null,
-      "run": null
+      "run": null,
+      "_semanticWeightComment": "BE-55: consensus 전략일 때만 쓴다. 0(기본)이면 기존 동작과 같다 — 판단 요소 방향이 후보 전원 같으면(동점) 판결 이유(reasoning) 임베딩 유사도를 섞어 동점을 깬다. 0 ~ 1, 샘플로 비교해 정한다(docs/decisions/BE-55.md)",
+      "semanticWeight": 0
     },
     "axis": {
       "enabled": true,

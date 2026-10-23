@@ -47,6 +47,9 @@ from llm import (DEFAULT_MAX_ATTEMPTS, DEFAULT_MAX_WAIT, LLMError, LLMQuotaExhau
                  check_retry, configure_retry, free_tier_model_list, has_free_tier, model_provider,
                  parse_model_spec)
 from to_seed_sql import NAME_MAX_LENGTH, build_sql
+from select_semantic import DEFAULT_WEIGHT as DEFAULT_SEMANTIC_WEIGHT
+from select_semantic import option_errors as select_semantic_option_errors
+from select_semantic import reasoning_similarity_scores
 from summary_tags import DEFAULT_MIN_SCORE, DEFAULT_TOP_K, SummaryTagError, annotate_report, load_vocabulary, skipped_report
 from summary_tags import option_errors as summary_tag_option_errors
 from validate_output import parse_output
@@ -108,7 +111,9 @@ DEFAULT_CONFIG = {
             "enabled": True, "models": [], "runs": 3, "maxRetries": 3,
             "temperature": None, "maxTokens": 16000, "timeout": 300, "delay": 0.0,
         },
-        "select": {"enabled": True, "strategy": "consensus", "model": None, "run": None},
+        # semanticWeight(BE-55): consensus 전략일 때만 쓴다. 0(기본)이면 기존 동작과 같다 — select_semantic.py 설명 참고
+        "select": {"enabled": True, "strategy": "consensus", "model": None, "run": None,
+                   "semanticWeight": DEFAULT_SEMANTIC_WEIGHT},
         # 가치관 축 분류 투표 (BE-49). 같은 모델로 runs회 묻고 요소별로 표를 센다. 최다표가 runs의 과반이 아니면(동률 · 유효 응답 부족 포함) 확인 필요.
         # model이 null이면 generate.models의 첫 모델(free: 제외)을 쓴다(비식별화한 사건 내용이라 generate와 같은 공급자로 보낸다).
         # 응답 형식이 틀리면 그 회차를 최대 maxRetries번 다시 묻고, 그래도 틀리면 집계에서 뺀다
@@ -450,6 +455,7 @@ def validate_config(config):
         errors.append(f"stages.select.strategy는 {' · '.join(SELECT_STRATEGIES)} 중 하나다")
     if select["strategy"] == "manual" and not select["run"]:
         errors.append("manual 선택은 stages.select.run에 '공급자__모델/run-003' 형식으로 회차를 적는다")
+    errors += select_semantic_option_errors(select)
     errors += axis_errors(config)
     errors += rag_option_errors({k: v for k, v in stages["rag"].items() if k != "enabled"})
     if stages["load"]["db"]["mode"] not in ("docker", "psql"):
@@ -932,8 +938,13 @@ def _candidate_key(record):
     return f"{model_slug(record['modelSpec'])}/run-{record['runIndex']:03d}"
 
 
-def select_run(case, groups, models, strategy, manual_run=None):
-    """검증을 통과한 회차 중 하나를 고른다. (기록, 고른 이유, 점수) — 점수는 consensus일 때만."""
+def select_run(case, groups, models, strategy, manual_run=None, semantic_weight=0.0, embed_fn=None, log=None):
+    """검증을 통과한 회차 중 하나를 고른다. (기록, 고른 이유, 점수) — 점수는 consensus일 때만.
+
+    semantic_weight(BE-55, consensus 전용): 0보다 크면 판결 이유(reasoning) 임베딩 유사도를 요소-방향
+    일치율과 섞어서 고른다(select_semantic.py). 0(기본)이면 이 로직을 타지 않아 기존 동작과 같다.
+    embed_fn은 테스트에서 네트워크 대신 넣는 함수다. log는 임베딩을 건너뛸 때 알리는 선택적 콜백이다.
+    """
     candidates = [r for spec in models for r in groups.get(spec, []) if r["validation"]["ok"]]
     if strategy == "manual":
         wanted = manual_run.replace(".json", "")
@@ -958,10 +969,29 @@ def select_run(case, groups, models, strategy, manual_run=None):
     factor_ids = sorted(int(f["factorId"]) for f in case.get("factors", []))
     table = direction_table(candidates, factor_ids)
     consensus = {fid: _majority(values) for fid, values in table.items() if values}
-    scores = {id(r): sum(table[fid][order[id(r)]] == consensus[fid] for fid in consensus) for r in candidates}
-    best = max(candidates, key=lambda r: (scores[id(r)], -len(r["validation"]["warnings"]), -order[id(r)]))
-    return best, (f"판단 요소 다수 의견 일치 {scores[id(best)]}/{len(consensus)} "
-                  f"(후보 {len(candidates)}개 중 최고, 동점이면 경고 적은 · 앞선 회차)"), scores[id(best)]
+    structural = {id(r): sum(table[fid][order[id(r)]] == consensus[fid] for fid in consensus) for r in candidates}
+
+    semantic = None
+    if semantic_weight > 0:
+        try:
+            semantic = reasoning_similarity_scores(candidates, embed_fn=embed_fn) if embed_fn \
+                else reasoning_similarity_scores(candidates)
+        except LLMError as exc:
+            if log:
+                log(f"⚠ 판결 이유 임베딩 실패, 유사도 가중치 없이 선택합니다: {str(exc)[:200]}")
+            semantic = None
+
+    if semantic is not None:
+        max_structural = len(consensus) or 1
+        blended = {id(r): (1 - semantic_weight) * (structural[id(r)] / max_structural) + semantic_weight * semantic[id(r)]
+                   for r in candidates}
+        best = max(candidates, key=lambda r: (blended[id(r)], -len(r["validation"]["warnings"]), -order[id(r)]))
+        return best, (f"판단 요소 다수 의견 일치 {structural[id(best)]}/{len(consensus)} + 판결 이유 유사도 "
+                      f"{semantic[id(best)]:.3f} (가중치 {semantic_weight}, 혼합 점수 {blended[id(best)]:.3f})"), blended[id(best)]
+
+    best = max(candidates, key=lambda r: (structural[id(r)], -len(r["validation"]["warnings"]), -order[id(r)]))
+    return best, (f"판단 요소 다수 의견 일치 {structural[id(best)]}/{len(consensus)} "
+                  f"(후보 {len(candidates)}개 중 최고, 동점이면 경고 적은 · 앞선 회차)"), structural[id(best)]
 
 
 def stage_select(config, state, log):
@@ -974,7 +1004,8 @@ def stage_select(config, state, log):
         if cfg["model"] not in models:
             raise PipelineError(f"select.model({cfg['model']})이 생성 대상 모델에 없습니다")
         models = [cfg["model"]]
-    record, reason, score = select_run(case, groups, models, cfg["strategy"], cfg["run"])
+    record, reason, score = select_run(case, groups, models, cfg["strategy"], cfg["run"],
+                                        semantic_weight=cfg.get("semanticWeight", 0.0), log=log)
     key = _candidate_key(record)
     log(f"선택: {key} — {reason}")
     return {
