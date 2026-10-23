@@ -119,17 +119,27 @@ if [[ -n "$(env_value REAL_SEED_DIR)" ]]; then
   COMPOSE+=(-f "$DEPLOY_DIR/docker-compose.real-seed.yml")
 fi
 # 모니터링 에이전트를 올린 서버면 그 오버레이도 함께 쓴다 (COMMON-43, PR #168 리뷰 반영).
-# 빼먹으면 자동 배포가 backend를 다시 만들 때 로그 볼륨과 8081 포트가 사라져 **수집이 조용히 끊긴다**
+# 빼먹으면 자동 배포가 backend를 다시 만들 때 로그 볼륨이 사라져 **로그 수집이 조용히 끊긴다**
 # — 에이전트 컨테이너는 그대로 떠 있어서 알아차리기 어렵다 (docker-compose.monitoring-agent.yml 머리말)
 # 따옴표 · 캐리지리턴 · 공백을 지우고 판정한다: .env에 MONITORING_AGENT="1"처럼 따옴표를 쓰면
 # env_value가 "1"을 그대로 돌려줘 == "1" 비교에 걸리지 않고, 이 분기가 막으려던 "조용히 빠짐"이 재발한다 (PR #168 리뷰 반영)
 MONITORING_AGENT_VALUE="$(env_value MONITORING_AGENT | tr -d "\"' \r")"
 case "$MONITORING_AGENT_VALUE" in
   1)
-    # 오버레이가 요구하는 두 값(사설 IP · Loki 주소)이 없으면 compose가 뒤늦게 다른 이유처럼 실패하므로 먼저 막는다
-    for required in MAIN_PRIVATE_IP LOKI_URL; do
+    # Grafana Cloud 주소 · 인증 값(COMMON-64)이 없으면 compose가 뒤늦게 다른 이유처럼 실패하거나, Alloy가 설정 오류로
+    # 시작하지 못해 지표 · 로그가 함께 끊긴다. 배포를 시작하기 전에 먼저 막는다.
+    # GRAFANA_CLOUD_LOKI_API_KEY는 비워도 된다 — 비우면 Alloy가 지표 토큰을 같이 쓴다(alloy-agent.alloy)
+    for required in GRAFANA_CLOUD_PROM_URL GRAFANA_CLOUD_PROM_USERNAME GRAFANA_CLOUD_PROM_API_KEY \
+                    GRAFANA_CLOUD_LOKI_URL GRAFANA_CLOUD_LOKI_USERNAME; do
       [[ -n "$(env_value "$required")" ]] || {
-        log "❌ MONITORING_AGENT=1인데 .env에 $required 가 없다 (deploy/docker-compose.monitoring-agent.yml)"
+        log "❌ MONITORING_AGENT=1인데 .env에 ${required} 가 없다 (deploy/docker-compose.monitoring-agent.yml)"
+        exit 4
+      }
+    done
+    # 토큰이 basic_auth로 실려 나가므로 주소는 https만 받는다 (http면 토큰이 평문으로 나간다)
+    for url_key in GRAFANA_CLOUD_PROM_URL GRAFANA_CLOUD_LOKI_URL; do
+      [[ "$(env_value "$url_key" | tr -d "\"' \r")" == https://* ]] || {
+        log "❌ ${url_key}는 https:// 로 시작해야 한다 (토큰이 평문으로 나가지 않게)"
         exit 4
       }
     done
