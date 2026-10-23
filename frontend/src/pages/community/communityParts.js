@@ -115,7 +115,10 @@ function popover() {
     const opener = popOpener;
     popOpener = null;
     opener?.setAttribute('aria-expanded', 'false');
-    if (opener?.isConnected) opener.focus({ preventScroll: true });
+    // 포커스가 창 안이나 body에 있을 때(Esc · 빈 곳을 눌러 닫힘)만 글쓴이 버튼으로 돌려준다. 바깥 입력칸을 눌러 닫히면 그 입력칸의 포커스를 지킨다(PR #264 리뷰 반영)
+    const active = document.activeElement;
+    const focusLost = !active || active === document.body || popNode.contains(active);
+    if (opener?.isConnected && focusLost) opener.focus({ preventScroll: true });
   });
   addEventListener('scroll', () => { if (popNode?.matches(':popover-open')) popNode.hidePopover(); }, { passive: true });
   document.body.append(popNode);
