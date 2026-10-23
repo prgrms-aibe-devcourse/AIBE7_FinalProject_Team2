@@ -71,10 +71,9 @@ const TRACK = [
 // 내 판결 파일철의 판단 요소 예시(특정 사건이 아닌 일반 항목)와 고른 칸(0 무겁게 · 1 해당 없음 · 2 가볍게)
 const FACTOR_SCALE = ['무겁게', '해당 없음', '가볍게'];
 const FACTOR_SAMPLES = [['범행 경위', 0], ['피해 회복', 1], ['반성 여부', 2]];
-// 스툴 위 세 판결(대등: 같은 종이 · 같은 막대). 막대는 0 ~ 10년, at = 점 자리(%). 내 판결은 비어 있고(?) 실제 판결은 마지막 전까지 가린다(PRODUCT.md).
-// AI 판결 수치는 실제 데이터가 아니라 목데이터로 밝힌다
+// 러그 위 판결 두 장(FE-87, 스툴 대신): AI 판결은 러그 가운데, 실제 판결은 왼쪽 아래. 내 판결은 러그의 판결문(모든 사실을 본 나)이 맡는다.
+// 막대는 0 ~ 10년, at = 점 자리(%). AI 판결 수치는 실제 데이터가 아니라 목데이터로 밝히고, 실제 판결은 마지막 전까지 가린다(PRODUCT.md)
 const VERDICTS = [
-  { key: 'me', name: '내 판결', title: '당신이 정할 자리', value: '?', note: '직접 채워요' },
   { key: 'ai', name: 'AI 판결', title: '같은 기록, AI 판사', at: 62, value: '징역 6년', mock: true, note: '법률 자문 아님' },
   { key: 'court', name: '실제 판결', title: '재판부의 선고', at: 40, value: '징역 ■년', sealed: '맨 마지막에 공개' },
 ];
@@ -348,7 +347,7 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
 
   // ---- 서비스 소개: 판사의 집무실 바닥 (FE-87) ----
   // 책상(위)에서 카메라가 그대로 아래로 내려가며 방바닥을 내려다본다. 2D 평면 탑뷰라 원근 없이 그린다(문은 평면도 기호: 문짝 + 열리는 원호).
-  // 위에서부터: 책상 밑으로 밀어 넣은 판사 의자(등받이만 보임) · 책상이 바닥에 드리운 그림자 → 안내문 → 러그 위 서류 네 장(흐름, 왼쪽 위에서 오른쪽 아래로 흩어 놓음) → 둥근 스툴 세 개 위 판결문 한 장씩(계단처럼 어긋나게) → 아래 벽의 열린 문(사건 목록)
+  // 위에서부터: 책상 밑으로 밀어 넣은 판사 의자(등받이만 보임) · 책상이 바닥에 드리운 그림자 → 안내문 → 러그 위 서류 네 장(흐름, 왼쪽 위에서 오른쪽 아래로 흩어 놓음) (이어서 AI 판결 · 실제 판결 두 장) → 아래 벽의 열린 문(사건 목록)
   const room = element('div', 'room');
   // 안내문 종이(놀이): 왼쪽 위 귀퉁이가 늘 들썩이고, 누르면 종이가 러그 쪽(거의 아래, 살짝 오른쪽)으로 러그 위를 지나 끌려가며 치워지고 밑에 숨어 있던 남불이 드러난다.
   // 화면 제목(h2)은 종이와 따로 둔다(종이를 치워도 구역 이름은 남는다). 종이 위 글자는 장식이다
@@ -421,21 +420,14 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
     rug.append(paper);
   });
 
-  // 둥근 스툴 세 개에 판결문을 한 장씩(FE-87, 탁자 대신). 스툴 크기 · 종이는 같고(대등), 러그 위 흐름을 이어 계단처럼 조금씩 어긋나게 놓는다
-  const table = element('div', 'room-stools');
-  table.setAttribute('role', 'group');
-  table.setAttribute('aria-labelledby', 'verdicts-heading');
-  const tableHeading = element('h3', 'stools-tag', '세 판결을 나란히'); // 바닥에 놓인 작은 꼬리표 종이
-  tableHeading.id = 'verdicts-heading';
-  const verdictList = element('ul', 'verdict-list');
-  verdictList.append(...VERDICTS.map(({ key, name, title, at, value, mock, note, sealed }) => {
-    const item = element('li', `stool${sealed ? ' is-sealed' : ''}`);
-    const paper = element('div', 'stool-paper');
-    // 0 ~ 10년 막대. 내 판결은 점 대신 빈 물음표, 실제 판결은 흐리게 가린다
-    const bar = span(`verdict-bar is-${key}`);
+  // 러그 위 판결 두 장: 러그 위 서류와 같은 규칙(종이 · 기울기 · 겹침)으로 이어 놓는다
+  VERDICTS.forEach(({ key, name, title, at, value, mock, note, sealed }) => {
+    const paper = element('li', `room-paper paper-verdict is-${key}${sealed ? ' is-sealed' : ''}`);
+    const bar = span(`verdict-bar is-${key}`); // 0 ~ 10년 막대, 실제 판결은 흐리게 가린다
     bar.setAttribute('aria-hidden', 'true');
-    if (at === undefined) bar.append(span('bar-ask', '?'));
-    else { const dot = span('bar-dot'); dot.style.left = `${at}%`; bar.append(dot); }
+    const dot = span('bar-dot');
+    dot.style.left = `${at}%`;
+    bar.append(dot);
     const ticks = span('bar-ticks');
     ticks.setAttribute('aria-hidden', 'true');
     ticks.append(span('', '0년'), span('', '5년'), span('', '10년'));
@@ -445,12 +437,10 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
     const reading = span(`verdict-reading${sealed ? ' is-covered' : ''}`);
     reading.append(bar, ticks, amount);
     if (sealed) reading.setAttribute('aria-hidden', 'true'); // 가린 수치는 읽지 않는다
-    paper.append(span(`verdict-who is-${key}`, name), element('b', '', title), reading);
+    paper.append(span(`verdict-who is-${key}`, name), element('h3', 'paper-title', title), reading);
     if (sealed) paper.append(element('p', 'verdict-seal', sealed));
-    item.append(paper);
-    return item;
-  }));
-  table.append(tableHeading, verdictList, element('p', 'stools-note', '셋을 나란히 놓으면, 어디서 갈렸는지 보여요')); // 바닥에 남긴 손글씨 메모
+    rug.append(paper);
+  });
 
   // 아래 벽: 열린 문 = 사건 목록. 문 앞 발판이 버튼이고, 문틈으로 복도 불빛이 바닥에 길게 들어온다.
   // 문 옆 바닥의 크라프트 서류철 = 성향 테스트(책상 위 서류철과 같은 물건)
@@ -464,7 +454,7 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
   testSlip.append(span('room-test-title', '판결 성향 테스트부터'), span('room-test-sub', '16문항, 3분이면 끝나요'));
   exit.append(testSlip, door);
 
-  room.append(chair, deco('room-desk-shade'), head, rug, table, exit); // 의자는 책상 밑으로 밀어 넣어 위쪽이 책상에 가린다
+  room.append(chair, deco('room-desk-shade'), head, rug, exit); // 의자는 책상 밑으로 밀어 넣어 위쪽이 책상에 가린다
   intro.append(room);
 
   root.append(scene, mobile, intro, renderSiteFooter({ navigate })); // 공통 헤더는 라우터가 붙인다(FE-56)
