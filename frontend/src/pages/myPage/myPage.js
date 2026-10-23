@@ -2,8 +2,7 @@ import { button, element, mockTag } from '../../components/siteLayout.js';
 import { API_MODE } from '../../api/config.js';
 import { appendEmptyAxis, renderAxisRow } from '../../components/axisRow.js';
 import { imageOf } from '../../components/stage.js';
-import { emptyWindow, nameOf, picture, profileCardParts, sashClasses, sashIcon, sashNote, sashes, svg, typeDecoClasses, typeFace, typePortrait } from '../../components/personCards.js';
-export { typeFace };
+import { DEFAULT_NICKNAME, emptyWindow, nameOf, picture, profileCardParts, sashClasses, sashIcon, sashNote, sashes, svg, typeDecoClasses, typeFace, typePortrait } from '../../components/personCards.js';
 import { AXES } from '../../utils/personalityAxes.js';
 import { KIND_TITLES, lenientPercent, axisChange, steadyBand, axisTrend, collectionOf, imageKinds, leanText, retakeAfterOrder } from '../../utils/myPageView.js';
 import { renderTrend, trendsOf } from '../../components/trendGraph.js';
@@ -48,7 +47,6 @@ const VIEWS = {
 };
 // 프로필카드에서 들어가는 화면은 뒤로 가기가 프로필카드로 간다(FE-68)
 const PARENTS = { achievements: 'profile', bookmark: 'profile' };
-export const DEFAULT_NICKNAME = '익명의 판사'; // 로그인 · 닉네임 API 전까지 임시 문구
 // 닉네임 아래 프로필 수치. 레벨 · 직업은 목 데이터(API 전, data.profile이 오면 그 값을 쓴다). 출석 일수는 서버 값(P-5 profile.attendanceDays)이다. 완료한 사건 · 모은 일러스트는 지금 기록에서 센다
 const MOCK_PROFILE = { level: 7, job: '수습 판사', attendanceDays: 0 };
 const IS_MOCK = API_MODE === 'mock'; // 목 모드에서는 체험 기록 · 성향 평균도 목(mocks/personalityMockApi.js)이라 함께 표기한다(FE-56)
