@@ -1,5 +1,12 @@
 # Prometheus 스크레이프 설정 — 운영(모니터링 전용 EC2) (COMMON-43, WBS 7.2.4)
 #
+# ⚠️ **지금은 이 파일이 운영에서 쓰이지 않는다.** 운영 EC2는 1대뿐이고 별도 모니터링 서버를 두지
+# 않기로 했다(COMMON-43 1순위 = Grafana Cloud). 7.3.3은 메인 EC2 안의 Alloy가 직접 scrape해서
+# Grafana Cloud로 push하는 방식(deploy/alloy-agent.alloy)으로 가고, 경보 평가 · Alertmanager도
+# 운영에서는 Grafana Cloud 쪽(Cloud Alerting)으로 옮긴다(PR #262 리뷰 9번, COMMON-62 논의) — 메인
+# 서버가 죽으면 그 서버 안의 Alertmanager도 같이 죽어 정작 중요한 순간에 조용해지는 문제를 피하려는
+# 것이다. 이 파일은 Cloud 경로가 막혔을 때(차선, v1.34) 전용 EC2를 실제로 만드는 경우에만 쓴다.
+#
 # 로컬(prometheus.yml)과 다른 점은 "대상이 같은 호스트가 아니다"는 것 하나다.
 # 로컬: host.docker.internal:8081 · node-exporter:9100 (같은 머신 · 같은 Compose 네트워크)
 # 운영: 메인 EC2의 사설 IP:8081 · :9100 (같은 VPC 안, 인터넷을 타지 않는다)
@@ -43,3 +50,8 @@ scrape_configs:
   - job_name: node
     file_sd_configs:
       - files: ["/etc/prometheus/targets/node.json"]
+
+  # Alertmanager 자기 자신 (7.3.1 AlertDeliveryFailing 경보가 alertmanager_notifications_failed_total을 본다)
+  - job_name: alertmanager
+    static_configs:
+      - targets: ["alertmanager:9093"]

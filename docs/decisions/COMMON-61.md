@@ -62,6 +62,64 @@
   Loki · Grafana처럼 별도 LTS 기준이 없어 "충분히 쓰인 안정 버전"을 고르는 같은 원칙을 따랐다.
 
 ## 추후 재검토가 필요하면
-- 7.3.3(Grafana Cloud 연동)으로 모니터링 호스트가 옮겨가면, Alertmanager도 Cloud의 관리형 Alertmanager를
-  쓸지 지금처럼 자체 호스팅을 유지할지 다시 정해야 한다(지금은 자체 호스팅 그대로 둔 상태).
 - 팀이 커지면 `route.routes`에 심각도 · 종류별 채널을 더 나눌 수 있다(지금 구조를 유지한 채 확장 가능).
+
+## PR #262 리뷰 반영 (jms0326, 2026-10-22)
+
+실제로 로컬에서 띄워 보고(`promtool` · `amtool` 통과 확인, 히스토그램 · AI 지표 · 사건 등록 지표 존재
+확인) 리뷰를 남겨 주셨다. 머지 전 필수 3건 + 수정 제안 8건.
+
+### 머지 전 필수 수정
+
+1. **비밀값 파일 권한 — 운영에서 Alertmanager가 웹훅을 못 읽는 문제.** `prom/alertmanager:v0.27.0` ·
+   `prom/prometheus:v3.13.3`은 둘 다 `nobody`(uid 65534)로 실행된다(`docker image inspect`로 직접
+   확인). README 안내대로 배포 사용자가 파일을 만들고 `chmod 600`하면, 컨테이너 안 `nobody`가 못 읽어서
+   경보가 울려도 Slack으로 안 간다 — Alertmanager는 설정은 정상으로 읽고 보낼 때만 실패해서
+   (`Notify for alerts failed … permission denied`) 눈치채기 어렵다. **다만 Mac · Windows(Docker
+   Desktop)에서는 재현되지 않는다** — 직접 테스트해 `chmod 600` 그대로도 Slack 수신까지 확인했다(파일
+   공유 계층의 권한 번역 때문으로 보임). **Linux(운영 EC2, 로컬 Docker Engine 포함)만 겪는 문제**라
+   README를 환경별로 나눠 적었다 — 운영은 `chown 65534:65534 + chmod 400`, Mac · Windows는 `chmod 600`
+   그대로 둬도 된다.
+2. **억제 규칙이 동작하지 않음.** `equal: ["severity"]`인데 source(critical) · target(warning)의
+   severity 값이 애초에 다르니 절대 같을 수 없어 억제가 한 번도 안 걸렸다. 같은 DB 풀을 가리키는지로
+   바꿨다(`equal: ["job", "instance", "pool"]`) — `pool` 라벨이 HikariCP 지표에 실제로 있는지
+   (`HikariPool-1`) 직접 쿼리해 확인한 뒤 반영했다.
+3. **"백엔드가 죽었다" 경보가 없었음.** 6개 규칙이 전부 backend 지표가 들어와야 계산되는데, backend가
+   죽으면 지표 자체가 끊겨 아무 경보도 안 울린다 — 가장 큰 장애에서 오히려 조용해지는 구멍이었다.
+   `BackendDown`(`up{job="backend"} == 0`) · `BackendScrapeTargetMissing`(`absent(...)`, job 자체가
+   설정에서 사라진 경우) 두 개를 추가했다.
+
+### 함께 반영한 수정 제안
+
+4. **사건 등록 지표가 스크레이프 전체를 막을 수 있던 문제.** `CaseImportMetrics`의 Gauge가 스크레이프
+   때마다 DB를 직접 조회했는데, DB 커넥션 풀이 가득 찬 순간(= `DbConnectionPoolNearExhaustion`이 울려야
+   할 순간) 이 조회가 커넥션을 기다리다 스크레이프 타임아웃을 넘기면 **그 스크레이프의 모든 지표가 함께
+   빠지는** 문제가 있었다. 운영이 외부 DB(Supabase, BE-59)에 작은 커넥션 풀(5개)로 붙어 있어 더 쉽게
+   일어난다. `@Scheduled`(1분 간격)로 미리 계산해 캐시하고 Gauge는 캐시만 읽도록 바꿨다
+   (`BackendApplication`에 `@EnableScheduling` 추가).
+5. **5xx 비율 경보가 요청이 적을 때 쉽게 울림.** `IMPORT_UNAVAILABLE`(파이프라인 꺼진 운영에서 사건
+   등록 시도마다 502) 같은 의도된 502가 있어, 관리자가 몇 번만 시도해도 5%를 넘겼다. 최소 요청량
+   (5분에 약 30건) 조건을 추가했다.
+6. **p95 경보에 관리자 전용(느린) 경로가 섞임.** 사진 프롬프트 추천은 Gemini 동기 호출이라 최대 90초
+   걸린다 — 관리자 몇 번만 써도 전체 p95가 2초를 넘었다. 사용자 경로만 보도록
+   (`uri!~"/api/v1/admin/.*"`) 바꿨다.
+7. **AI 실패율도 표본이 적으면 흔들림.** 5번과 같은 이유로 최소 호출량 조건을 추가했다.
+8. **Slack 메시지 제목이 비어 보일 수 있음.** 서로 다른 alertname이 한 그룹으로 묶이면
+   `CommonAnnotations.summary`가 비어 제목이 빈칸이 된다. `GroupLabels.alertname` + 상태로 제목을
+   바꿨다.
+
+### 추가로 반영(제안 10, 11)
+- **경보 경로 자체가 죽어도 모르는 문제**: `Watchdog`(항상 firing, Dead man's switch 패턴) ·
+  `AlertDeliveryFailing`(`alertmanager_notifications_failed_total`) 두 메타 경보를 추가했다. Watchdog은
+  Slack으로 보내면 스팸이라 `route.routes`에 `severity="none"` 전용 `null` 수신자를 만들어 분리했다.
+  `AlertDeliveryFailing`이 보는 지표를 위해 Prometheus가 Alertmanager 자신을 스크레이프하는 job을
+  추가했다.
+- **`CaseImportStuck` 설명 보강**: 서버 재시작으로 RUNNING인 채 멈춰 남은 행이면 COMMON-51(오래된
+  작업 자동 정리) 대상인지 확인하라는 안내를 description에 넣었다.
+
+### 운영 실행 위치 (제안 9) — 별도 결정 사항으로 분리
+이 리뷰에서 "운영 EC2가 1대뿐인데 이 규칙 · Alertmanager를 어디서 돌릴 거냐"는 질문을 받았고, 팀
+논의 끝에 **운영에서는 돌리지 않기로** 했다 — 자세한 경위와 이유는 COMMON-62(7.3.3) 쪽 의사결정
+기록 · PR #263 참고. 요약: 메인 서버가 죽으면 그 서버 안의 Alertmanager도 같이 죽어 정작 가장 필요한
+순간에 조용해지므로, 운영 경보는 Grafana Cloud 쪽으로 옮긴다. 이 저장소의 Alertmanager · 경보 규칙은
+**로컬 확인용으로만** 남긴다.

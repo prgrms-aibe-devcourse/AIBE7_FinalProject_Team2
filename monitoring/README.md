@@ -52,18 +52,38 @@ Grafana 폴더 "남불법정"에 들어간다. 각 패널의 ⓘ에 "이 수치�
 Prometheus가 `alert-rules.yml`의 규칙을 15초마다(평가 주기) 다시 계산하고, 조건이 일정 시간(`for:`) 계속
 참이면 Alertmanager로 알린다. Alertmanager는 그걸 묶고(`group_by`) 걸러서(`inhibit_rules`) Slack으로 보낸다.
 
+**운영에서 이 규칙 · Alertmanager는 어디서 도나 (PR #262 리뷰 9번)**: 지금은 **안 돈다.** 이 저장소의
+`docker-compose.yml`(로컬) · `docker-compose.prod.yml`(전용 EC2 차선, 지금 안 씀)에서만 로컬 확인용으로
+띄운다. 운영 EC2는 1대뿐이고 별도 모니터링 서버를 두지 않기로 했다(COMMON-43 1순위 = Grafana Cloud).
+7.3.3에서 메트릭은 메인 EC2의 Alloy가 Cloud로 push하고(`deploy/alloy-agent.alloy`), **경보 평가 ·
+Alertmanager도 운영에서는 Grafana Cloud 쪽(Cloud Alerting)으로 옮긴다** — 메인 서버가 죽으면 그 서버
+안의 Alertmanager도 같이 죽어 정작 가장 필요한 순간에 조용해지기 때문이다(COMMON-62). 이 `alert-rules.yml`은
+Prometheus 표준 문법이라 Cloud 쪽으로 그대로 옮길 수 있다 — Cloud 쪽 반영은 별도 이슈.
+
 | 규칙 | 조건 | 지속 | 심각도 |
 | --- | --- | --- | --- |
-| `HighErrorRate` | 5분간 5xx 응답 비율 > 5% | 5m | critical |
-| `HighLatencyP95` | 5분간 p95 응답 시간 > 2초 | 5m | warning |
+| `HighErrorRate` | 5분간 5xx 비율 > 5% (요청이 5분에 30건은 있을 때만) | 5m | critical |
+| `HighLatencyP95` | 5분간 p95 응답 시간 > 2초 (관리자 경로 제외) | 5m | warning |
 | `DbConnectionPoolNearExhaustion` | HikariCP 사용률 > 90% | 3m | critical |
 | `DbConnectionPending` | 커넥션을 기다리는 스레드 있음 | 2m | warning (위 경보가 울리는 동안은 억제됨) |
-| `HighAiCallFailureRate` | 10분간 AI 호출 실패율 > 30% | 5m | warning |
+| `HighAiCallFailureRate` | 10분간 AI 호출 실패율 > 30% (호출이 10분에 30번은 있을 때만) | 5m | warning |
 | `CaseImportStuck` | 진행 중인 사건 등록 작업이 10분 넘게 안 끝남 | 2m | warning |
+| `BackendDown` | backend 타깃이 스크레이프에 응답 안 함 | 1m | critical |
+| `BackendScrapeTargetMissing` | backend job 자체가 설정에서 사라짐 | 1m | critical |
+| `Watchdog` | 항상 참(`vector(1)`) — 경보 경로 자체가 살아 있는지 확인용, Slack에는 안 보냄 | — | none |
+| `AlertDeliveryFailing` | Alertmanager의 알림 전송이 계속 실패함 | 5m | warning |
 
 `CaseImportStuck`이 보는 지표(`lawnambul_case_import_oldest_running_seconds`)는 기존에 없던 걸 7.3.1에서
-새로 추가했다(`CaseImportMetrics`, 스크레이프할 때마다 `case_import` 중 QUEUED · RUNNING 상태인 행을 조회해
-가장 오래된 것의 경과 시간을 낸다).
+새로 추가했다(`CaseImportMetrics`). 스크레이프 때마다 DB를 직접 조회하면 DB 커넥션 풀이 가득 찬 순간(=
+`DbConnectionPoolNearExhaustion`이 울려야 할 순간)에 그 조회가 커넥션을 기다리다 스크레이프 전체가
+타임아웃될 수 있어(PR #262 리뷰), **1분마다 백그라운드(`@Scheduled`)로 미리 계산해 캐시해 두고
+스크레이프 때는 캐시만 읽는다.**
+
+`BackendDown` · `BackendScrapeTargetMissing`이 없으면, 위 다른 규칙은 전부 backend 지표가 들어와야
+계산되므로 **backend가 죽으면 지표 자체가 끊겨 아무 경보도 안 울린다** — 가장 큰 장애에서 오히려
+조용해지는 구멍이었다(PR #262 리뷰, 머지 전 필수 수정). `Watchdog` · `AlertDeliveryFailing`은 "경보가
+안 온다"를 역으로 감지한다(Dead man's switch) — Alertmanager 자신이나 Slack 전송 경로가 죽으면 다른
+경보는 아예 안 울리므로, 항상 떠 있어야 할 신호가 조용해지는 걸로 알아챈다.
 
 ### Slack 웹훅 설정
 
@@ -76,7 +96,10 @@ Prometheus가 `alert-rules.yml`의 규칙을 15초마다(평가 주기) 다시 �
    vi secrets/slack-webhook-url   # 발급받은 https://hooks.slack.com/services/... 값으로 교체
    chmod 600 secrets/slack-webhook-url
    ```
-   이 파일은 `.gitignore`에 있다 — 커밋되지 않는다.
+   **Mac · Windows(Docker Desktop)는 이대로 된다** — 직접 테스트해 Slack 수신까지 확인함. Docker
+   Desktop의 파일 공유 계층이 번역해 주기 때문이다. **운영(Linux EC2)은 다르다** — "운영 적용" 절 참고,
+   `chmod 600` 그대로 두면 컨테이너가 파일을 못 읽어 경보가 조용히 안 간다. 이 파일은 `.gitignore`에
+   있다 — 커밋되지 않는다.
 3. `docker compose up -d`(또는 `alertmanager`만 `docker compose restart alertmanager`)로 반영한다.
 
 ### 확인
@@ -170,6 +193,10 @@ Loki로 보낸다.
       - "host.docker.internal:host-gateway"
 ```
 
+**`secrets/slack-webhook-url`의 `chmod 600`도 Linux에서는 다르게 동작한다** — Docker Desktop의 파일 공유
+계층(권한 번역)이 없어서, 로컬이라도 Linux면 "경보" 절 대신 "운영 적용"의 `chown 65534:65534` 절차를
+따라야 한다.
+
 ## 운영 적용
 
 **모니터링 스택을 메인 서버에 함께 올리는 선택지는 없다.** 근거는 `docs/decisions/COMMON-43.md`에 정리했고, 요약하면
@@ -243,10 +270,16 @@ cat > targets/node.json <<'EOF'
 [{"targets": ["<메인 EC2 사설 IP>:9100"], "labels": {"instance": "main"}}]
 EOF
 
-# Slack 웹훅 (7.3.2). 커밋하지 않으므로 서버에서 만든다 — "경보" 절의 웹훅 설정 참고
+# Slack 웹훅 (7.3.2). 커밋하지 않으므로 서버에서 만든다 — "경보" 절의 웹훅 설정 참고.
+# ⚠️ Linux(EC2)는 chmod 600으로 두면 안 된다 — Alertmanager · Prometheus 컨테이너가 nobody(uid 65534)로
+# 실행되는데, 로컬(Mac · Windows Docker Desktop)과 달리 파일 공유 계층의 권한 번역이 없어서
+# 소유자(배포 사용자)만 읽게 두면 컨테이너가 못 읽는다. 그대로 두면 경보가 울려도 Slack으로 조용히 안
+# 간다(Alertmanager 로그에 "Notify for alerts failed … permission denied"만 남고 설정 자체는 정상으로
+# 읽힌 것처럼 보여 알아채기 어렵다 — 직접 재현해서 확인함, PR #262 리뷰).
 mkdir -p secrets
 echo -n "https://hooks.slack.com/services/..." > secrets/slack-webhook-url
-chmod 600 secrets/slack-webhook-url
+sudo chown 65534:65534 secrets/slack-webhook-url
+sudo chmod 400 secrets/slack-webhook-url
 
 docker compose -f docker-compose.prod.yml up -d --no-build
 
