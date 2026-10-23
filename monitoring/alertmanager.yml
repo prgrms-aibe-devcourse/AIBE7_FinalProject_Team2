@@ -1,0 +1,67 @@
+# Alertmanager 라우팅 · 그룹핑 · 억제 · 알림 채널 (WBS 7.3.2). 로컬 · 운영 공용.
+#
+# Slack 웹훅은 이 파일에 직접 적지 않는다 — `slack_configs.api_url_file`로 별도 파일을 가리킨다.
+# 그 파일(secrets/slack-webhook-url)은 monitoring/targets/와 같은 원칙으로 .gitignore에 있다
+# (서버 접속 정보 · 자격 증명을 공개 저장소에 두지 않는다, CLAUDE.md 3-1).
+#
+# 팀 규모가 작아 지금은 채널을 하나만 둔다 — 심각도(severity)별로 다른 채널로 나누는 건 팀이
+# 늘어나면 route.routes 아래에 자식 라우트를 추가해서 한다(지금 구조를 유지한 채 확장 가능).
+
+global:
+  resolve_timeout: 5m
+
+route:
+  # 그룹핑: 같은 alertname · severity로 묶인 경보는 한 메시지로 합쳐 보낸다(스팸 방지)
+  group_by: ["alertname", "severity"]
+  # 같은 그룹의 첫 경보가 울고 나서 더 모일 시간을 준다(한꺼번에 여러 개가 뜨는 장애 초반을 한 메시지로)
+  group_wait: 30s
+  # 같은 그룹에 새 경보가 추가되면 이 간격마다 갱신 메시지를 보낸다
+  group_interval: 5m
+  # 같은 경보가 계속 울리는 동안 재알림 간격(너무 자주 울리면 알림 자체가 무시당한다)
+  repeat_interval: 4h
+  receiver: slack
+
+  routes:
+    # critical은 더 빨리, 더 자주 재알림한다 — 5xx 비율 · DB 커넥션 고갈처럼 당장 봐야 하는 것들
+    - matchers:
+        - severity="critical"
+      group_wait: 10s
+      repeat_interval: 1h
+      receiver: slack
+
+    # Watchdog(severity=none, 7.3.1)은 "경보 경로가 살아 있다"를 보여주려고 항상 firing 상태다 —
+    # Slack으로 계속 보내면 스팸이라 null 수신자로 보낸다. 조용해지면(=수신자가 없어서가 아니라
+    # Alertmanager 자체가 멈춰서) 그게 이상 신호다 — Dead man's switch는 외부에서 "왜 안 오지"로 감지하는
+    # 구조라, 로컬 테스트 단계에서는 규칙이 있다는 것 자체만 확인한다(운영은 Cloud로 옮긴 뒤 다시 본다)
+    - matchers:
+        - severity="none"
+      receiver: "null"
+
+# 억제(inhibit): DB 커넥션 풀이 거의 찼다는 critical 경보가 울리는 동안은, 그로 인한 DbConnectionPending
+# (warning)을 따로 또 울리지 않는다 — 같은 원인으로 보이는 경보를 중복으로 받지 않기 위해서다.
+#
+# equal에 severity를 넣으면 안 된다(PR #262 리뷰 지적) — source는 critical, target은 warning이라
+# 두 값이 같을 일이 없어 억제가 한 번도 안 걸린다. 대신 "같은 DB 풀을 가리키는가"를 본다(job · instance ·
+# pool — pool은 HikariCP 지표의 풀 이름 라벨, 예: HikariPool-1. 실제 메트릭으로 라벨 존재 확인함)
+inhibit_rules:
+  - source_matchers:
+      - alertname="DbConnectionPoolNearExhaustion"
+    target_matchers:
+      - alertname="DbConnectionPending"
+    equal: ["job", "instance", "pool"]
+
+receivers:
+  - name: "null"
+
+  - name: slack
+    slack_configs:
+      # channel을 지정하지 않는다 — Slack 수신 웹훅(Incoming Webhook)은 만들 때 이미 채널이 고정돼 있고,
+      # 여기서 다른 채널 이름을 주면 그 채널이 실제로 있어야 하며 없으면 404 channel_not_found로 실패한다
+      # (실제로 테스트 알림을 보내 확인함, #lawnambul-alerts가 없어 실패 → 지정 제거로 해결)
+      - api_url_file: /etc/alertmanager/secrets/slack-webhook-url
+        # alertname만으로 제목을 짓는다(PR #262 리뷰) — 서로 다른 alertname이 한 그룹으로 묶이면
+        # CommonAnnotations.summary가 비어 제목이 빈칸이 된다. GroupLabels.alertname은 group_by에
+        # 넣어 둔 값이라 항상 채워져 있다. 상태(해결됨 포함)도 같이 보여준다
+        title: "[{{ .Status | toUpper }}] {{ .GroupLabels.alertname }}"
+        text: "{{ range .Alerts }}{{ .Annotations.summary }}\n{{ .Annotations.description }}\n{{ end }}"
+        send_resolved: true
