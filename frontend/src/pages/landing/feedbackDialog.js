@@ -1,10 +1,12 @@
 import { button, element } from '../../components/siteLayout.js';
 import { reducedMotion } from '../../utils/motion.js';
+import { lockScroll, unlockScroll } from '../../utils/scrollLock.js';
 
 // 의견 보내기 창 (FE-62). 메인 책상의 펜 · 엽서를 누르면 뜬다. 의견은 바깥 설문 링크로 받는다(입력칸 없음).
 // 창이 열려 있는 동안 Tab은 창 안에서만 돌고, Esc · 바깥 누르기 · 닫기로 닫으면 누른 곳으로 포커스가 돌아온다.
 const FOCUSABLE = 'button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';
-const FEEDBACK_URL = '#'; // 의견 받을 링크(정해지면 넣는다)
+const FEEDBACK_URL = ''; // 의견 받을 링크(정해지면 넣는다). 비어 있으면 입구는 "준비 중"으로 막아 둔다
+const SCROLL_CLASSES = ['feedback-open', 'feedback-gutter'];
 const FLY_MS = 650;
 const SWAP_MS = 160; // 도착 무렵 엽서 앞면은 사라지고 창 내용이 나타난다(엽서 안에서만 바뀐다)
 const SWAP_DELAY_MS = 165;
@@ -79,10 +81,17 @@ export function openFeedbackDialog() {
   const title = element('h2', '', '의견 보내기');
   title.id = 'feedback-title';
   const lead = element('p', 'feedback-lead', '서비스를 쓰면서 불편했거나 바라는 점을 들려주세요.');
-  const link = element('a', 'feedback-link primary-button', '의견 남기러 가기');
-  link.href = FEEDBACK_URL;
-  link.target = '_blank';
-  link.rel = 'noopener noreferrer';
+  const link = FEEDBACK_URL
+    ? element('a', 'feedback-link primary-button', '의견 남기러 가기')
+    : element('button', 'feedback-link primary-button', '링크 준비 중');
+  if (FEEDBACK_URL) {
+    link.href = FEEDBACK_URL;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+  } else {
+    link.type = 'button';
+    link.disabled = true;
+  }
   const words = element('div', 'feedback-words');
   words.append(title, lead, link);
 
@@ -109,8 +118,8 @@ export function openFeedbackDialog() {
     fly?.ghosts.forEach((ghost) => ghost.remove());
     fly?.sources.forEach((node) => { node.style.visibility = ''; });
     layer.remove();
-    document.body.classList.remove('feedback-open');
-    document.documentElement.classList.remove('feedback-gutter');
+    unlockScroll(...SCROLL_CLASSES);
+    window.removeEventListener('resize', shut);
     if (opener?.isConnected) opener.focus({ preventScroll: true });
   }
 
@@ -127,15 +136,14 @@ export function openFeedbackDialog() {
   });
   layer.addEventListener('mousedown', (event) => { if (event.target === layer) shut(); });
 
-  // 스크롤을 잠그면 스크롤바가 사라져 화면 폭이 넓어지며 뒤 지면이 움찔하므로, 스크롤바가 있던 화면이면 그 자리를 비워 둔다
-  const page = document.documentElement;
-  page.classList.toggle('feedback-gutter', window.innerWidth > page.clientWidth);
-  document.body.classList.add('feedback-open');
+  lockScroll(...SCROLL_CLASSES);
   document.body.append(layer);
   const fly = flyObjects(dialog);
   if (fly) {
     layer.animate([{ opacity: 0 }, { opacity: 1 }], { duration: FLY_MS, easing: 'ease-out', fill: 'backwards' });
     setTimeout(() => fly.face.remove(), SWAP_DELAY_MS + SWAP_MS + 50);
   }
+  // 펜은 열릴 때 계산한 자리에 고정돼 있어 창 크기가 바뀌면 어긋나므로, 크기가 바뀌면 닫는다
+  window.addEventListener('resize', shut);
   dialog.focus({ preventScroll: true });
 }
