@@ -126,6 +126,12 @@ fi
 MONITORING_AGENT_VALUE="$(env_value MONITORING_AGENT | tr -d "\"' \r")"
 case "$MONITORING_AGENT_VALUE" in
   1)
+    # 검사한 값(.env)과 Compose가 실제로 쓰는 값을 같게 만든다 (PR #268 CodeRabbit 리뷰).
+    # Compose는 셸에 export된 변수를 .env보다 우선 적용하므로, 셸에 http 주소 등이 남아 있으면 아래 검사는
+    # 통과하고 Alloy에는 다른 값이 넘어가 basic_auth 토큰이 평문으로 나갈 수 있다. 이 스크립트 프로세스에서만
+    # 지운다(호출한 셸에는 영향 없음) — Grafana Cloud 값은 deploy/.env 하나에서만 온다
+    unset GRAFANA_CLOUD_PROM_URL GRAFANA_CLOUD_PROM_USERNAME GRAFANA_CLOUD_PROM_API_KEY \
+          GRAFANA_CLOUD_LOKI_URL GRAFANA_CLOUD_LOKI_USERNAME GRAFANA_CLOUD_LOKI_API_KEY MONITORING_ENV
     # Grafana Cloud 주소 · 인증 값(COMMON-64)이 없으면 compose가 뒤늦게 다른 이유처럼 실패하거나, Alloy가 설정 오류로
     # 시작하지 못해 지표 · 로그가 함께 끊긴다. 배포를 시작하기 전에 먼저 막는다.
     # GRAFANA_CLOUD_LOKI_API_KEY는 비워도 된다 — 비우면 Alloy가 지표 토큰을 같이 쓴다(alloy-agent.alloy)
