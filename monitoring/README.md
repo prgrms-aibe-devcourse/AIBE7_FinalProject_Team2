@@ -81,9 +81,11 @@ Prometheus 표준 문법이라 Cloud 쪽으로 그대로 옮길 수 있다 — C
 
 `BackendDown` · `BackendScrapeTargetMissing`이 없으면, 위 다른 규칙은 전부 backend 지표가 들어와야
 계산되므로 **backend가 죽으면 지표 자체가 끊겨 아무 경보도 안 울린다** — 가장 큰 장애에서 오히려
-조용해지는 구멍이었다(PR #262 리뷰, 머지 전 필수 수정). `Watchdog` · `AlertDeliveryFailing`은 "경보가
-안 온다"를 역으로 감지한다(Dead man's switch) — Alertmanager 자신이나 Slack 전송 경로가 죽으면 다른
-경보는 아예 안 울리므로, 항상 떠 있어야 할 신호가 조용해지는 걸로 알아챈다.
+조용해지는 구멍이었다(PR #262 리뷰, 머지 전 필수 수정). `Watchdog` · `AlertDeliveryFailing`은 지금은
+**로컬 규칙 확인용이다.** "경보가 안 온다"를 역으로 감지하는 구조(Dead man's switch)인데, `Watchdog`은
+`null` 수신자로 보내 외부에 생존 신호를 전달하지 않고, Slack 전송 경로 자체가 죽으면 `AlertDeliveryFailing`도
+같은 경로로 전달되지 못한다 — 즉 이 구성만으로는 "신호가 조용해졌다"는 걸 알아챌 외부 관찰자가 없다.
+실제로 경보 경로 장애를 감지하려면 Alertmanager 바깥에서 도는 독립된 외부 감시가 별도로 필요하다.
 
 ### Slack 웹훅 설정
 
