@@ -56,12 +56,18 @@ export function handPaper(sheet, { backdrop = 'transparent', blank = false } = {
   layer.append(shade, card);
   document.body.append(layer);
 
-  const handed = { layer, shade, card, copy, width, view, start, rect };
+  holdPaper({ layer, shade, card, copy, width, view, start, rect });
+}
+
+// 이미 화면을 덮은 한 장(장식 층)을 다음 화면에 넘긴다. 메인 맨 아래 신문 끝자락처럼 직접 키운 종이를 사건 목록에 넘길 때도 쓴다(FE-87).
+// rect = 받는 화면의 지면이 놓일 자리(사건 목록은 top · width를 쓴다)
+export function holdPaper(handed) {
+  if (pending && pending !== handed) pending.layer.remove();
   pending = handed;
   setTimeout(() => {
     if (pending !== handed) return;
     pending = null;
-    layer.remove();
+    handed.layer.remove();
   }, UNCLAIMED_MS);
 }
 

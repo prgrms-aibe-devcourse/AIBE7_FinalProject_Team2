@@ -4,8 +4,10 @@ import { SASH_COLORS, SASH_ICONS, SASH_STYLES, portraitLabel, sashColorOf } from
 import { DEFAULT_TYPE_DECO } from '../utils/typeCardDeco.js';
 import { fitPortraitIn } from '../utils/portraitFit.js';
 
-// 프로필카드 · 성향카드를 그리는 조각(FE-88). 마이페이지(myPage.js)와 커뮤니티 글쓴이 명함(communityParts.js)이 함께 쓴다.
-// 모양은 myPage.css의 .my-card · .deco-frame-* · .deco-bg-* · .deco-sash-* 가 정한다. 커뮤니티에서는 카드를 .cm-cards 안에 놓아 같은 커피 색을 입힌다
+// 프로필카드 · 성향카드를 그리는 조각(FE-88). 마이페이지(myPage.js) · 내 결과(myResultPage.js) · 커뮤니티 글쓴이 명함(communityParts.js)이 함께 쓴다(FE-79).
+// 모양은 personCards.css의 .my-card · .deco-frame-* · .deco-bg-* · .deco-sash-* 가 정한다. 커뮤니티에서는 카드를 .cm-cards 안에 놓아 같은 커피 색을 입힌다
+
+export const DEFAULT_NICKNAME = '익명의 판사'; // 로그인 · 닉네임 API 전까지 임시 문구
 
 export const svg = (path, className) => {
   const node = document.createElementNS('http://www.w3.org/2000/svg', 'svg');

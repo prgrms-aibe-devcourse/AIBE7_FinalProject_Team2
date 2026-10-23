@@ -142,8 +142,8 @@
 /* 지면 고지: 재구성한 사건 · AI 연출 이미지 */
 .case-list-page .paper-note { margin: 0; padding: 12px 0; border-top: 1px solid var(--color-border); font-size: var(--text-caption); color: var(--color-muted); text-align: center; }
 
-/* 법적 고지 (공통 푸터를 지면 맨 아래 줄로) */
-.case-list-page .site-footer { padding: 18px 0 26px; border-top: 1px solid var(--color-border-strong); background: transparent; font-size: var(--text-caption); }
+/* 법적 고지 (공통 푸터를 지면 맨 아래 줄로). 지면 안으로 한정한다 — 메인에서 넘어올 때 뒤에 남긴 메인 푸터(.paper-ghost 안)에 걸리지 않게 */
+.case-list-page .paper .site-footer { padding: 18px 0 26px; border-top: 1px solid var(--color-border-strong); background: transparent; font-size: var(--text-caption); }
 .case-list-page .message-panel { padding-left: 0; padding-right: 0; }
 
 /* ── 태블릿 ── */
@@ -233,6 +233,9 @@
 .case-list-page.is-rising:not(.is-going) :is(.paper, .paper-ghost) { animation-play-state: paused; }
 @keyframes paper-rise { from { transform: translateY(100vh) rotate(-3deg); } }
 @keyframes paper-ghost-out { to { opacity: 0; } }
+/* 메인 맨 아래 신문 끝자락에서 오면(FE-87) 지면이 다 그려질 때까지 메인을 그대로 두고 지면은 감춰 둔다. 그 뒤 끝자락 자리에서 커진다(caseListPage.js spread) */
+.case-list-page.is-spreading { overflow: clip; }
+.case-list-page.is-spreading:not(.is-going) .paper { visibility: hidden; }
 
 @media (hover: none) {
   .case-list-page .is-pickable:hover { background-color: transparent; outline: 0; }

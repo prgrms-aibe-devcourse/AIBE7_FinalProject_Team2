@@ -261,7 +261,7 @@ Loki로 보낸다.
 
 | | 상태 |
 | --- | --- |
-| **1순위 — Grafana Cloud 무료 등급** | 결정됨. 실제 연동은 **7.3.3 범위** |
+| **1순위 — Grafana Cloud 무료 등급** | **적용 중.** 지표 remote_write(COMMON-62) · 경보(COMMON-63) · 로그 Cloud Loki 전환과 운영 반영(COMMON-64). 서버 절차는 `deploy/README.md` "모니터링 에이전트 (Grafana Cloud)" |
 | **차선 — 전용 EC2 추가** | Cloud가 막히면 이쪽. 아래 구성이 그 대비다 |
 
 Cloud가 1순위인 결정적 이유는 비용이 아니라 **노출면**이다. Cloud 방식에서는 메인 서버의 Alloy가 Docker 내부
@@ -338,16 +338,9 @@ sudo chmod 400 secrets/slack-webhook-url
 docker compose -f docker-compose.prod.yml up -d --no-build
 
 # --- 메인 EC2 ---
-cd deploy
-# .env에 아래 세 값 추가 (LOKI_URL만 넣으면 다음 자동 배포 때 오버레이가 빠진다 — 아래 ⚠️ 절 참고)
-#   MONITORING_AGENT=1
-#   MAIN_PRIVATE_IP=<메인 EC2 사설 IP>
-#   LOKI_URL=http://<모니터링 EC2 사설 IP>:3100/loki/api/v1/push
-
-# 수동 up은 deploy.sh의 잠금을 잡지 않아 cd-agent.sh의 자동 배포와 겹칠 수 있다. 적용 전후로 타이머를 멈췄다 켠다
-sudo systemctl stop lawnambul-cd.timer
-docker compose -f docker-compose.prod.yml -f docker-compose.monitoring-agent.yml up -d --no-build
-sudo systemctl start lawnambul-cd.timer
+# ⚠️ 차선으로 다시 간다면: COMMON-64에서 메인 쪽 오버레이를 Grafana Cloud 전용으로 바꿨다(8081 · 9100 포트 ·
+# MAIN_PRIVATE_IP · LOKI_URL 제거). 전용 EC2로 돌아가려면 그 오버레이 · alloy-agent.alloy · deploy.sh 검사를
+# 함께 되돌려야 한다 — 이 절은 구성 기록으로만 남긴다
 ```
 
 운영 compose 파일에는 `build:`가 있어서, 이미지가 없으면 서버가 직접 빌드를 시도한다. `deploy.sh`와 같은 기준으로
@@ -359,22 +352,18 @@ sudo systemctl start lawnambul-cd.timer
 
 ### ⚠️ 배포 때 오버레이가 빠지면 모니터링이 조용히 끊긴다
 
-base 파일만으로 backend를 다시 올리면 **8081 포트와 로그 볼륨이 빠진 채 컨테이너가 재생성되고, 에이전트 컨테이너만
+base 파일만으로 backend를 다시 올리면 **로그 볼륨이 빠진 채 컨테이너가 재생성되고, 에이전트 컨테이너만
 연결 없이 남는다.** 오류가 나지 않아 눈치채기 어렵다(D 지적, COMMON-43).
 
 **BE-60 CD가 들어온 지금은 상시 위험이다** — `deploy/cd-agent.sh`가 2분마다 GHCR `main` 이미지를 확인해
 `deploy.sh`로 자동 배포하므로, 수동으로 오버레이를 붙여 올려 두어도 다음 배포 한 번이면 원래대로 돌아간다.
 **(PR #168 리뷰 반영) 이 분기를 넣었다** — `deploy.sh`의 `COMPOSE` 배열이 `.env`의 `MONITORING_AGENT=1`을 보고
-이 오버레이를 포함한다(real-seed 오버레이 바로 뒤). 에이전트를 쓰는 서버의 `.env`에 아래 세 값을 넣는다.
+이 오버레이를 포함한다(real-seed 오버레이 바로 뒤). 에이전트를 쓰는 서버의 `.env`에 넣을 값(Grafana Cloud 주소 · ID ·
+토큰)과 순서는 `deploy/README.md` "모니터링 에이전트 (Grafana Cloud)"에 있다(COMMON-64 — 옛 `MAIN_PRIVATE_IP` ·
+`LOKI_URL`은 더 쓰지 않는다).
 
-```bash
-MONITORING_AGENT=1
-MAIN_PRIVATE_IP=<메인 EC2 사설 IP>
-LOKI_URL=http://<모니터링 EC2 사설 IP>:3100/loki/api/v1/push
-```
-
-`MONITORING_AGENT`가 비어 있는 서버는 분기를 타지 않으므로 **기존 배포 동작이 그대로다.** `1`인데 나머지 둘이
-없으면 배포를 시작하기 전에 멈춘다(exit 4) — 자동 배포가 "이미지를 받지 못했다"처럼 엉뚱한 원인으로 보이지 않게
+`MONITORING_AGENT`가 비어 있는 서버는 분기를 타지 않으므로 **기존 배포 동작이 그대로다.** `1`인데 필수 값이
+없거나 주소가 https가 아니면 배포를 시작하기 전에 멈춘다(exit 4) — 자동 배포가 "이미지를 받지 못했다"처럼 엉뚱한 원인으로 보이지 않게
 하기 위해서다. 원래 **`deploy.sh`는 D 소유 영역**이라(7-2-1) 머지 전에 D 확인이 필요하다.
 
 ### 아직 남은 것
@@ -383,7 +372,7 @@ LOKI_URL=http://<모니터링 EC2 사설 IP>:3100/loki/api/v1/push
   팀에서 정한다. 계정 공유는 하지 않는다.
 - ~~**`deploy.sh`에 `MONITORING_AGENT` 플래그 추가**~~ → PR #168 리뷰에서 반영했다(위 ⚠️ 절). **D 소유 파일을
   대신 고친 것이라 머지 전 확인만 받으면 된다.**
-- **Grafana Cloud 실제 연동은 7.3.3 범위다** — 계정 생성 · `remote_write` · Alloy를 내부 네트워크 스크레이프 방식으로
-  전환. 이번 작업은 전용 EC2 전제의 구성까지이고, 대시보드 JSON은 양쪽에서 그대로 쓴다.
+- ~~**Grafana Cloud 실제 연동은 7.3.3 범위다**~~ → 지표 remote_write(COMMON-62) · 경보(COMMON-63) · 로그 Cloud Loki
+  전환과 운영 서버 반영(COMMON-64)으로 진행했다. 대시보드 JSON은 Grafana Cloud에 가져와(Import) 그대로 쓴다.
 - **전용 EC2로 갈 경우에만**: 실제 EC2 생성 · 보안 그룹 변경(D), Prometheus 보존 30일/8GB 디스크 여유 확인(D),
   에이전트 적용 타이밍(backend 재생성에 20~40초 중단 — 월요일 첫 배포 이후). 사설 IP는 저장소·채팅이 아니라 DM으로 받는다.

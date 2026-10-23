@@ -5,7 +5,7 @@
 // "곧 적용" 표시가 붙은 것은 아직 앱 동작에 연결되지 않았다. 서버 저장은 알림 API가 생긴 뒤 옮긴다
 import { button, element } from '../../components/siteLayout.js';
 import { SETTING_GROUPS, defaultSettings, getSettings, saveSettings } from '../../utils/appSettings.js';
-import { motionSwitchOn, setMotionSwitch, systemReducesMotion } from '../../utils/motion.js';
+import { MOTION_EVENT, motionSwitchOn, setMotionSwitch, systemReducesMotion } from '../../utils/motion.js';
 
 let rowId = 0;
 
@@ -50,8 +50,10 @@ function settingRow({ label, hint, soon = false, note = '' }, makeControl) {
   const id = `set-title-${rowId += 1}`;
   const row = element('div', 'set-row');
   const text = element('div', 'set-text');
-  const title = element('strong', 'set-label', label);
-  title.id = id;
+  const title = element('strong', 'set-label');
+  const name = element('span', '', label);
+  name.id = id; // 낭독기가 "곧 적용" 딱지까지 이름에 붙여 읽지 않도록 이름만 가리킨다
+  title.append(name);
   if (soon) title.append(element('span', 'set-soon', '곧 적용'));
   text.append(title, element('p', 'edit-hint', hint));
   if (note) text.append(element('p', 'edit-hint', note));
@@ -72,7 +74,9 @@ const sameValues = (a, b) => Object.keys(a).every((key) => a[key] === b[key]);
 export function renderSettings() {
   const box = element('div', 'my-detail edit-page set-page');
   let saved = savedValues(); // 마지막으로 저장한 값
+  let shown = null; // 지금 화면에 그려진 값
   const build = (draft, message = '') => {
+    shown = draft;
     const form = element('div', 'edit-form');
     const status = element('p', 'edit-status', message);
     status.setAttribute('role', 'status');
@@ -98,10 +102,11 @@ export function renderSettings() {
 
     // 맨 아래 오른쪽: 설정 초기화 · 저장하기
     const reset = button('설정 초기화', () => {
-      build({ motion: true, ...defaultSettings() }, '모든 설정을 처음 값으로 돌려 놨어요. 저장하기를 눌러야 적용돼요.');
+      build({ ...defaultSettings(), motion: systemReducesMotion() ? saved.motion : true }, '모든 설정을 처음 값으로 돌려 놨어요. 저장하기를 눌러야 적용돼요.');
       box.querySelector('.set-reset')?.focus();
     }, 'secondary-button set-reset');
     save.addEventListener('click', () => {
+      saved.motion = draft.motion; // 바뀜 알림이 화면을 다시 그리지 않도록 먼저 맞춘다
       setMotionSwitch(draft.motion);
       const { motion: _motion, ...rest } = draft;
       saved = { motion: draft.motion, ...saveSettings(rest) };
@@ -116,5 +121,14 @@ export function renderSettings() {
     box.replaceChildren(element('p', 'edit-intro', '화면 · 알림을 내 취향대로 바꿔요. 지금은 이 브라우저에만 저장돼요.'), form);
   };
   build({ ...saved });
+  // 헤더 스위치로 연출을 바꾸면 화면의 스위치와 저장값도 그 값으로 맞춘다(예전 값으로 되돌려 저장하지 않도록)
+  const follow = () => {
+    if (!box.isConnected) return document.removeEventListener(MOTION_EVENT, follow);
+    const on = motionSwitchOn();
+    if (on === saved.motion) return;
+    saved.motion = on;
+    build({ ...shown, motion: on });
+  };
+  document.addEventListener(MOTION_EVENT, follow);
   return box;
 }
