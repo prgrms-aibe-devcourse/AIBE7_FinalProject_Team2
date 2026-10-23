@@ -167,10 +167,15 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
   // 넘어가기 직전까지 기사와 첫 사진이 다 준비되지 않았으면(최대 RISE_WAIT_MS) 그 자리에서 기다린다. 뒤에 남긴 메인은 함께 흐려진다
   async function spread(loaded) {
     root.classList.add('is-going');
-    await spreadFromTail({ paper, face: tail.card, from: tail.rect, backdrop: ghost, ready: drawn(loaded) });
-    tail.layer.remove();
-    ghost.remove();
-    root.classList.remove('is-spreading', 'is-going');
+    try {
+      await spreadFromTail({ paper, face: tail.card, from: tail.rect, backdrop: ghost, ready: drawn(loaded) });
+    } catch {
+      // 연출이 실패해도 화면 전환은 막지 않는다(아래에서 연출 층을 걷고 지면을 그대로 둔다)
+    } finally {
+      tail.layer.remove();
+      ghost.remove();
+      root.classList.remove('is-spreading', 'is-going');
+    }
   }
 
   // 넘겨받은 빈 종이는 이 지면과 같은 자리 · 같은 크기로 덮여 있다. 기사가 다 그려지면 지면을 드러내 기사를 페이드인하고,

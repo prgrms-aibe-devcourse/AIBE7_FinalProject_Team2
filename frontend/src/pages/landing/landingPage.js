@@ -451,11 +451,18 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
   // 접기 전에는 삐져나온 서류철도 귀퉁이를 접는 자리다(누르면 접혀 드러남). 접힌 뒤에 누르면 성향 테스트
   const stash = button('', () => (rugWrap.classList.contains('is-folded') ? navigate('test') : flap.click()), 'rug-folder');
   stash.setAttribute('aria-label', '판결 성향 테스트');
+  // 접기 전에는 귀퉁이 버튼(flap)이 같은 동작을 맡으므로 Tab · 낭독기에서 빼고, 접힌 뒤에 다시 보인다(책상 엽서와 같은 방식)
+  const exposeStash = (open) => {
+    stash.tabIndex = open ? 0 : -1;
+    if (open) stash.removeAttribute('aria-hidden'); else stash.setAttribute('aria-hidden', 'true');
+  };
+  exposeStash(false);
   stash.append(folderArt.cloneNode(true));
   const flap = button('', () => {
     const from = getComputedStyle(leaf).transform; // 들썩이던 중이면 그 각도에서 이어 접는다
     const folded = rugWrap.classList.toggle('is-folded');
     flap.setAttribute('aria-expanded', String(folded));
+    exposeStash(folded);
     if (reducedMotion()) return;
     leaf.animate([{ transform: from }, { transform: folded ? FOLDED : 'none' }], { duration: FOLD_MS, easing: 'cubic-bezier(.65, 0, .35, 1)' });
   }, 'rug-flap');
