@@ -121,6 +121,8 @@ function popover() {
     if (opener?.isConnected && focusLost) opener.focus({ preventScroll: true });
   });
   addEventListener('scroll', () => { if (popNode?.matches(':popover-open')) popNode.hidePopover(); }, { passive: true });
+  // 다른 화면으로 가면(뒤로 가기 포함) 명함 창을 닫는다. 창은 body 끝에 붙어 있어 라우터가 화면을 바꿔도 남기 때문이다(PR #264 리뷰 반영)
+  addEventListener('popstate', () => { if (popNode?.matches(':popover-open')) popNode.hidePopover(); });
   document.body.append(popNode);
   return popNode;
 }
@@ -128,10 +130,12 @@ function popover() {
 function openPop(author, from) {
   const node = popover();
   if (!node.showPopover) return; // 작은 창을 못 쓰는 브라우저는 카드를 펼치지 않는다(닉네임 · 성향 이름은 그대로 보인다)
+  // 이미 열려 있으면(키보드로 창에서 나와 다른 글쓴이 버튼을 누른 경우) 다시 열지 않고 내용만 바꾼다: 열린 창에 showPopover를 부르면 예외가 난다. 앞 버튼의 펼침 표시는 여기서 거둔다(PR #264 리뷰 반영)
+  if (node.matches(':popover-open')) popOpener?.setAttribute('aria-expanded', 'false');
   popOpener = from;
   node.setAttribute('aria-label', `${author.nickname}의 명함`);
   node.replaceChildren(cardPair(author), authorInfo(author));
-  node.showPopover();
+  if (!node.matches(':popover-open')) node.showPopover();
   from.setAttribute('aria-expanded', 'true');
   node.focus({ preventScroll: true });
   if (matchMedia(SHEET).matches) { node.style.left = ''; node.style.top = ''; return; } // 모바일: 아래에서 올라오는 판(자리는 CSS가 정한다)
