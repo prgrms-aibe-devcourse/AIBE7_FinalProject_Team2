@@ -393,6 +393,7 @@ export function filterControls({ value, cases, onChange }) {
       const word = search.value.trim().toLowerCase();
       if (!word) { results.replaceChildren(); return; }
       const found = cases.filter(({ title }) => title.toLowerCase().includes(word));
+      found.sort((a, b) => Number(b.title.toLowerCase().startsWith(word)) - Number(a.title.toLowerCase().startsWith(word))); // 제목이 단어로 시작하는 사건을 위로(나머지는 원래 순서 유지: 정렬은 안정 정렬)
       if (!found.length) { results.replaceChildren(element('p', 'cm-case-empty', '맞는 사건이 없어요')); return; }
       const list = element('ul', 'cm-case-results');
       found.forEach(({ caseId, title }) => {
