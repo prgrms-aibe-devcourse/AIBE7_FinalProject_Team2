@@ -2,8 +2,8 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  BODY_MAX, COMMENT_MAX, IMAGE_MAX, PAGE_SIZE, TITLE_MAX,
-  createCommunityComment, createCommunityPost, getCommunityPost, getCommunityPosts, getMyShareableVerdict, resetCommunityMock, toggleCommunityLike,
+  BODY_MAX, COMMENT_MAX, HOT_SIZE, IMAGE_MAX, PAGE_SIZE, RANKING_SIZE, RECOMMENDED_SIZE, TITLE_MAX,
+  createCommunityComment, createCommunityPost, getCommunityHome, getCommunityPost, getCommunityPosts, getMyShareableVerdict, resetCommunityMock, toggleCommunityLike,
 } from './communityMockApi.js';
 import { save as saveExperience, saveJudgment } from './mockExperienceStore.js';
 import { clearUser, saveUser } from '../utils/session.js';
@@ -108,7 +108,7 @@ test('댓글은 공백을 뺀 1 ~ 500자, 달면 댓글 수가 는다', async ()
 });
 
 test('글 · 댓글의 글쓴이에는 명함(프로필카드 꾸미기 + 공개 성향카드)이 붙는다 (FE-88)', async () => {
-  const { posts } = await getCommunityPosts();
+  const { posts } = await getCommunityPosts({ caseId: 1 }); // 첫 쪽에 들도록 사건 1 글에서 찾는다
   const seeded = posts.find((item) => item.author.nickname === '새벽의 배심원');
   assert.ok(seeded.author.profileCard.portrait.startsWith('/images/'));
   assert.equal(seeded.author.shownType.slot, 'current');
@@ -119,4 +119,40 @@ test('글 · 댓글의 글쓴이에는 명함(프로필카드 꾸미기 + 공개
   const mine = await createCommunityPost(post());
   assert.equal(mine.author.shownType, null);
   assert.equal(mine.author.profileCard.frame, 'basic');
+});
+
+test('메인: 이야기 많은 사건은 글 · 댓글 수 순, 추천 사건은 그 사건들과 겹치지 않는다 (FE-89)', async () => {
+  const home = await getCommunityHome();
+  assert.equal(home.hotCases.length, HOT_SIZE);
+  const talks = home.hotCases.map((item) => item.talkCount);
+  assert.deepEqual(talks, [...talks].sort((a, b) => b - a));
+  assert.equal(home.recommendedCases.length, RECOMMENDED_SIZE);
+  const hotIds = new Set(home.hotCases.map((item) => item.case.caseId));
+  assert.ok(home.recommendedCases.every((item) => !hotIds.has(item.case.caseId)));
+  // 사건 글은 좋아요 순 몇 개만, 댓글 내용은 싣지 않는다. 전체 글 수는 글 목록 사건 거르기와 같다
+  for (const item of [...home.hotCases, ...home.recommendedCases]) {
+    const likes = item.posts.map((post) => post.likeCount);
+    assert.deepEqual(likes, [...likes].sort((a, b) => b - a));
+    assert.ok(item.posts.every((post) => !('comments' in post) && !('body' in post) && post.author.profileCard));
+    assert.equal(item.postCount, (await getCommunityPosts({ caseId: item.case.caseId })).total);
+  }
+});
+
+test('메인: 새 글 · 댓글이 이야기 수에 더해진다', async () => {
+  const before = (await getCommunityHome()).hotCases.find((item) => item.case.caseId === 1).talkCount;
+  const saved = await createCommunityPost(post({ caseId: 1 }));
+  await createCommunityComment(saved.postId, { body: '댓글' });
+  const after = (await getCommunityHome()).hotCases.find((item) => item.case.caseId === 1).talkCount;
+  assert.equal(after, before + 2);
+});
+
+test('메인 랭킹: 레벨 순 열 명, 순위 · 레벨 · 프로필카드 · 공개 성향만 싣는다', async () => {
+  const { ranking } = await getCommunityHome();
+  assert.equal(ranking.length, RANKING_SIZE);
+  assert.deepEqual(ranking.map((item) => item.rank), Array.from({ length: RANKING_SIZE }, (_, i) => i + 1));
+  for (let i = 1; i < ranking.length; i += 1) {
+    const [a, b] = [ranking[i - 1], ranking[i]];
+    assert.ok(a.level > b.level || (a.level === b.level && a.completedCount >= b.completedCount));
+  }
+  assert.deepEqual(Object.keys(ranking[0]).sort(), ['completedCount', 'level', 'nickname', 'profileCard', 'rank', 'shownType']);
 });
