@@ -30,7 +30,7 @@
 /* 독자 의견 엽서(1막 사전 판단): 지면 위 팝업. 가장자리는 항공우편 줄무늬, 오른쪽 위에 우표 · 소인. 뒤 지면은 어둡게 가린다 */
 .stage-wrap.paper-mode .stage:has(> .board:not([hidden]))::after { content: ''; position: fixed; inset: 0; z-index: 25; background: color-mix(in srgb, var(--color-desk-shadow) 45%, transparent); animation: dlg-in .3s ease-out; }
 .stage-wrap.paper-mode .board, .stage-wrap.paper-mode .board.wide { position: fixed; z-index: 26; left: 50%; top: 46%; right: auto; bottom: auto; translate: -50% -50%; display: block; width: min(700px, calc(100vw - 32px)); height: auto; max-height: calc(100dvh - 150px);
-  padding: 9px; border: 0; border-radius: 12px; overflow: hidden; animation: none; transform: rotate(-.6deg);
+  padding: 9px; border: 0; border-radius: 12px; overflow: hidden; animation: none; rotate: -.6deg; /* transform이 아닌 rotate: 같은 규칙에 translate와 transform이 같이 있으면 빌드(lightningcss 압축)가 translate를 지운다 */
   background: repeating-linear-gradient(-45deg, var(--color-caution) 0 14px, var(--color-card) 14px 22px, var(--color-accent) 22px 36px, var(--color-card) 36px 44px);
   box-shadow: 0 24px 48px -16px color-mix(in srgb, var(--color-desk-shadow) 70%, transparent); }
 .stage-wrap.paper-mode .board[hidden] { display: none; }
