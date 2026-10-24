@@ -636,6 +636,7 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
     // 탭 잠금 · 책갈피를 지금 상태에 맞춘다(장을 넘길 때 · 판결 값이 바뀔 때)
     function refreshTabs() {
       pages.forEach(({ tab }, i) => tab.setAttribute('aria-disabled', String(!canOpen(i))));
+      layout.dispatchEvent(new Event('stagenextchange')); // 무대 하단 버튼의 글자 · 눌림을 지금 장에 맞춘다
       const before = pages[reached + 1]?.tab ?? null; // 마지막 장이면 탭 줄 끝
       if (bookmark.parentNode !== tabList || bookmark.nextSibling !== before) {
         const moved = bookmark.parentNode === tabList;
@@ -678,6 +679,19 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       curl.addEventListener('click', () => goTo(i + 1, true)); // 최종 판결 → 확정도 판결이 다 정해져야 넘어간다
       panel.append(curl);
     });
+    // 무대 하단 "다음" 버튼이 이 파일철을 조작한다(stage.js nextDriver): 다음 장으로 넘기고, 마지막 장에서는 서명(제출)을 한다.
+    // 못 넘길 때는 말린 모서리와 같이 움찔 · 반짝이며 이유를 알린다(goTo). 종이 귀는 같은 일을 하는 보조 손잡이다
+    const currentPage = () => pages.findIndex(({ panel }) => !panel.hidden);
+    layout.stageNext = {
+      label: () => (currentPage() === LAST ? '서명하고 제출 ▶' : '다음 장 ▶'),
+      hint: () => {
+        const now = currentPage();
+        if (now === LAST) return '서명하면 판결이 제출돼요';
+        return now === LAST - 1 && !ready ? `확정 장으로 가려면 ${missingReason}` : `다음 장: ${pages[now + 1].title}`;
+      },
+      enabled: () => !submitting,
+      run: () => { if (currentPage() === LAST) sign(); else goTo(currentPage() + 1, true); },
+    };
     showPage(0);
     const folderBody = element('div', 'folder-body');
     folderBody.append(...pages.map(({ panel }) => panel));
