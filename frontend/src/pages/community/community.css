@@ -255,6 +255,8 @@ textarea.cm-input { resize: vertical; min-height: 96px; line-height: 1.6; }
 .cm-pop:popover-open { display: grid; align-content: start; gap: 12px; } /* 카드 두 장 위 · 소개 아래. 상자 폭은 카드 두 장에 맞춘다 */
 /* 사파리는 열린 popover의 아래 · 오른쪽 자리를 0으로 남겨 창이 화면 아래까지 늘어난다 → 높이는 내용만큼, 아래 · 오른쪽은 비워 둔다(자리는 openPop이 left · top으로 정한다) */
 .cm-pop:popover-open { right: auto; bottom: auto; height: fit-content; overflow: visible; } /* overflow: popover 기본값(auto)이면 책갈피 · 카드 그림자가 넘쳐 스크롤 막대가 생긴다. 내용이 짧아 스크롤할 일이 없다 */
+/* 넓은 화면인데 화면이 팝오버(약 346px)보다 낮을 때만 높이 상한과 세로 스크롤을 둔다(높으면 overflow: visible 그대로) */
+@media (min-width: 721px) and (max-height: 400px) { .cm-pop:popover-open { max-height: calc(100dvh - 16px); overflow: hidden auto; } }
 .cm-pop:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
 /* 사파리는 aspect-ratio로 높이를 정하는 카드의 높이를 grid 안에서 크게 잡아 상자가 화면 끝까지 늘어난다 → 작은 창 카드는 높이까지 px로 준다(7:14 그대로) */
 .cm-pop .cm-card-pair { gap: 8px; }
