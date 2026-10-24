@@ -107,7 +107,7 @@ export function renderCommunityPage(container, { api, navigate, category = null,
     const usedSelect = value.caseId !== filters.caseId;
     change({ ...filters, ...value });
     filterHost.querySelector('.cm-filter-groups')?.replaceWith(filterControls({ value: filters, cases: caseList ?? [], onChange: onFilter }));
-    if (refocus) filterHost.querySelector(usedSelect ? '.cm-select' : '.cm-filter[aria-pressed="true"]')?.focus({ preventScroll: true });
+    if (refocus) filterHost.querySelector(usedSelect ? '.cm-case-clear, .cm-case-search' : '.cm-filter[aria-pressed="true"]')?.focus({ preventScroll: true });
   }
 
   function postItem(post) {
