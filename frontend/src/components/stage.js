@@ -653,6 +653,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
     next.disabled = input || asks(step) || (index === steps.length - 1 && !step.confirm); // 마지막 장면의 confirm은 화면이 다음 화면으로 보낸다
     skip.hidden = input || asks(step) || skipTarget(steps, index) === index;
     status.textContent = input ? (again ? '엽서를 확인하고 "이어서 하기"를 눌러요' : '선택하고 제출하면 다음으로 넘어가요') : '';
+    syncNext();
     if (input) (board.querySelector('[data-autofocus]') ?? board).focus(); // 입력 카드가 정한 첫 포커스(판결 파일철: 지금 장의 탭)
   }
 
@@ -690,7 +691,21 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
   }
   // 버튼의 click은 키보드(Space · Enter)로 눌러도 오지만 detail이 0이다
   prev.addEventListener('click', (event) => { byKeyboard = event.detail === 0; go(-1); });
-  next.addEventListener('click', (event) => { byKeyboard = event.detail === 0; go(1); });
+  // 입력 카드가 stageNext({ label, hint, enabled, run })를 주면 하단 "다음"은 장면을 넘기지 않고 카드를 조작한다(판결 파일철: 다음 장 · 서명)
+  const nextDriver = () => (inputCards.includes(steps[index].card) ? cards[steps[index].card]?.stageNext ?? null : null);
+  function syncNext() {
+    const driver = nextDriver();
+    if (!driver) return;
+    next.textContent = driver.label();
+    next.disabled = driver.enabled ? !driver.enabled() : false;
+    status.textContent = driver.hint();
+  }
+  inputCards.forEach((name) => cards[name]?.addEventListener('stagenextchange', syncNext));
+  next.addEventListener('click', (event) => {
+    byKeyboard = event.detail === 0;
+    const driver = nextDriver();
+    if (driver) driver.run(); else go(1);
+  });
   skip.addEventListener('click', () => { if (busy) return; finishTyping(); index = skipTarget(steps, index); render(); });
   dialog.addEventListener('click', () => { byKeyboard = false; go(1); });
   // 장면 클릭 = 다음. 지면 안의 버튼 · 링크 · 카드(신문 지면 무대의 막 칩 · 메뉴 · 독자 의견 칸)는 제 동작만 한다
