@@ -57,7 +57,21 @@ const typeImage = (author) => author.shownType?.type.imageUrl ?? null;
 const SLOT_NAMES = { initial: '초심', retake: '재심', current: '최근' };
 const typeNameOf = (author) => author.shownType?.type.name ?? null;
 
-function clip() {
+// 커뮤니티 이름 · 로고(임시). 이름은 확정 전이라 한 곳에서만 쓴다. 로고는 책상 위 스탠드 + 달(DESIGN.md 책상 물건 은유)이고, 최종 이미지 로고가 나오면 logoMark만 바꾼다
+export const COMMUNITY_NAME = '판사들의 밤';
+export function logoMark() {
+  const node = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  node.setAttribute('viewBox', '0 0 40 40');
+  node.setAttribute('aria-hidden', 'true');
+  node.classList.add('cm-logo');
+  node.innerHTML = '<path class="cm-logo-moon" d="M31 4.5a6.5 6.5 0 1 0 4.5 11A8 8 0 0 1 31 4.5Z"/>'
+    + '<path class="cm-logo-light" d="M13 17 6 33h20l-4-12"/>'
+    + '<path class="cm-logo-lamp" d="M9 17a9 9 0 0 1 18 0Z"/>'
+    + '<path class="cm-logo-line" d="M18 17v12M12 33.5h12M8 36.5h20"/>';
+  return node;
+}
+
+export function clip() {
   const node = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   node.setAttribute('viewBox', '0 0 22 52');
   node.setAttribute('aria-hidden', 'true');
@@ -299,8 +313,17 @@ export function communityShell({ navigate }) {
   root.append(screen);
 
   const head = element('div', 'cm-head');
-  const title = element('h1', 'cm-title', '커뮤니티');
-  title.append(mockTag());
+  // 제목을 누르면 커뮤니티 메인으로(주소가 있는 진짜 링크: 새 탭 열기 · 주소 복사가 된다, postLink와 같은 방식)
+  const title = element('h1', 'cm-title');
+  const home = element('a', 'cm-title-link');
+  home.append(logoMark(), element('span', '', COMMUNITY_NAME));
+  home.href = '/community';
+  home.addEventListener('click', (event) => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    navigate('community');
+  });
+  title.append(home, mockTag());
   head.append(title, element('p', 'cm-sub', '같은 기록, 다른 생각'));
   filters.append(head);
 
