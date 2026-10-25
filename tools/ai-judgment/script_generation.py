@@ -32,8 +32,9 @@ from llm import call as default_call
 ROLE_BY_DIRECTION = {"UP": "prosecutor", "DOWN": "defense"}
 CHARACTERS = ("naero", "nambul")
 MAX_LINES = 2
-BANNED_WORDS = ("정령", "명령", "배우", "천사", "악마", "MBTI",
-                "로울", "로봉", "로북", "엄벌", "중도", "자비")
+BANNED_PATTERNS = {"정령": "정령", "명령": "명령", "배우": r"배우(?!자)", "천사": "천사", "악마": "악마",
+                   "MBTI": "MBTI", "로울": "로울", "로봉": "로봉", "로북": "로북", "엄벌": "엄벌",
+                   "중도": "중도", "자비": "자비"}
 
 
 class ScriptGenerationError(Exception):
@@ -61,8 +62,14 @@ def ordered_evidence_factors(judgment_output):
     (`factorId` · `direction` · `reason`을 가진 쪽 — case.json의 `factors[]`는 `label`만 있고
     아직 방향이 없다. `frontend/src/content/case-1/script.json`의 증거 카드가 "API 8
     GET .../experience/verdict-form factors"를 근거로 적어 둔 것과 같다). 방향이 없는(선택 안 함)
-    요소는 증거로 소개하지 않는다."""
-    factors = [f for f in judgment_output.get("factors", []) if f.get("direction") in ROLE_BY_DIRECTION]
+    요소는 증거로 소개하지 않는다. 근거(`reason`)가 없거나 빈 문자열인 요소도 제외한다 — 모델에게 넘길
+    내용이 없다(validate_output.py는 빈 reason을 경고로만 남기고 통과시키므로 여기서 다시 거른다)."""
+    factors = [
+        f for f in judgment_output.get("factors", [])
+        if f.get("direction") in ROLE_BY_DIRECTION
+        and isinstance(f.get("reason"), str)
+        and f["reason"].strip()
+    ]
     return sorted(factors, key=lambda f: f["direction"] != "UP")
 
 
@@ -94,8 +101,8 @@ def validate_line(text, factor):
         errors.append("빈 응답입니다")
     elif len(lines) > MAX_LINES:
         errors.append(f"대사가 {MAX_LINES}줄을 넘습니다 ({len(lines)}줄)")
-    for word in BANNED_WORDS:
-        if word in stripped:
+    for word, pattern in BANNED_PATTERNS.items():
+        if re.search(pattern, stripped):
             errors.append(f"금지어 포함: {word}")
     source = factor.get("reason", "")
     for number in re.findall(r"\d+", stripped):
@@ -105,7 +112,7 @@ def validate_line(text, factor):
 
 
 def generate_evidence_lines(case, judgment_output, cast, *, model, caller=default_call, max_retries=2,
-                             temperature=None, max_tokens=200, timeout=60, delay=0.0, log=None):
+                             temperature=None, max_tokens=2000, timeout=60, delay=0.0, log=None):
     """판단 요소마다 증거조사 대사 한 줄을 생성한다. `case`는 제목 · 개요(SCENE CONTEXT)만 쓰고,
     판단 요소(방향 · 이유)는 `judgment_output`(select 단계가 고른 판결 출력)에서 가져온다
     (`ordered_evidence_factors` 설명 참고).

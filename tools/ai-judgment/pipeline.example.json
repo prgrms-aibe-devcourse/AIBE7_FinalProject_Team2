@@ -90,7 +90,7 @@
       "cast": { "prosecutor": "naero", "defense": "nambul" },
       "maxRetries": 2,
       "temperature": null,
-      "maxTokens": 200,
+      "maxTokens": 2000,
       "timeout": 60,
       "delay": 0
     },

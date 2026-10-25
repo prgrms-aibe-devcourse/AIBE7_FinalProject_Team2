@@ -119,7 +119,7 @@ DEFAULT_CONFIG = {
         # 사건 대본 — 증거조사 대사 생성 (BE-107). 기본 꺼짐(새 기능, 배역이 사건마다 정해지지 않았다).
         # cast는 자동으로 정하지 않는다 — 켤 때마다 넣는다(해송님 정정, 2026-10-24). 범위는 script_generation.py 참고
         "script": {"enabled": False, "model": None, "cast": None, "maxRetries": 2, "temperature": None,
-                   "maxTokens": 200, "timeout": 60, "delay": 0.0},
+                   "maxTokens": 2000, "timeout": 60, "delay": 0.0},
         "load": {
             # court: 재판부 판결 초안이 있으면 비공개로 함께 적재한다 (BE-38)
             "enabled": True, "case": True, "court": True, "applyToDb": True,
@@ -1432,6 +1432,10 @@ def run_pipeline(config, start=None, until=None, skip=(), rerun=False, log=print
         axis_spec = axis_model(config, state)
         log(f"외부 전송: 가치관 축 분류 단계에서 비식별화한 사건 개요 · 판단 요소가 "
             f"{providers_text(axis_spec) if axis_spec else ', '.join(providers)}로 전송됩니다")
+    if "script" in steps:
+        case_title = load_json(input_file(config, state, "case"))["title"]
+        log(f"외부 전송: 대본 증거조사 단계에서 비식별화한 사건 제목({case_title}) · 개요 · 판단 요소가 "
+            f"{providers_text(config['stages']['script']['model'])}로 전송됩니다")
     for notice in free_tier_notices(config, steps):
         log(notice)
     for stage in steps:
