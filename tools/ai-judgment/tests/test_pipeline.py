@@ -860,6 +860,13 @@ class PipelineTest(unittest.TestCase):
         with self.assertRaises(pipeline.PipelineError):
             self.config(select={"strategy": "first-valid", "semanticWeight": 0.3})
 
+    def test_validate_config_invalid_semantic_weight_type_does_not_crash(self):
+        """semanticWeight가 숫자가 아니면(타입 오류) strategy 비교에서 TypeError가 나지 않고
+        option_errors의 타입 오류만 보고한다."""
+        with self.assertRaises(pipeline.PipelineError) as ctx:
+            self.config(select={"strategy": "first-valid", "semanticWeight": "0.3"})
+        self.assertIn("semanticWeight", str(ctx.exception))
+
     def test_select_semantic_weight_external_send_notice(self):
         """semanticWeight > 0이면 판결 이유가 gemini(임베딩)로 전송된다는 안내가 나온다 (0이면 안 나온다)."""
         def stop(*args, **kwargs):

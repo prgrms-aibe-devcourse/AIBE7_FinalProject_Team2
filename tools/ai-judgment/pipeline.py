@@ -455,8 +455,10 @@ def validate_config(config):
         errors.append(f"stages.select.strategy는 {' · '.join(SELECT_STRATEGIES)} 중 하나다")
     if select["strategy"] == "manual" and not select["run"]:
         errors.append("manual 선택은 stages.select.run에 '공급자__모델/run-003' 형식으로 회차를 적는다")
-    errors += select_semantic_option_errors(select)
-    if select["strategy"] != "consensus" and select.get("semanticWeight", DEFAULT_SEMANTIC_WEIGHT) > 0:
+    semantic_weight_errors = select_semantic_option_errors(select)
+    errors += semantic_weight_errors
+    weight = select.get("semanticWeight", DEFAULT_SEMANTIC_WEIGHT)
+    if not semantic_weight_errors and select["strategy"] != "consensus" and weight > 0:
         errors.append("stages.select.semanticWeight는 strategy가 consensus일 때만 쓴다 (다른 전략에서는 조용히 무시된다)")
     errors += axis_errors(config)
     errors += rag_option_errors({k: v for k, v in stages["rag"].items() if k != "enabled"})
