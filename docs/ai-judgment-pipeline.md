@@ -235,7 +235,7 @@ MVP는 AI 판결을 **오프라인에서 생성 · 검수한 결과를 DB에 적
 | 관리자 후검수 (BE-33, 39 ~ 43, FE-16) | 미구현. BE-39(관리자 로그인)는 PR 검토 중이다(기준 코드 시점) |
 | BE-46 (판단 요소 개수 권장 범위 검사) | 선택. PR 검토 중(#85) |
 | **generate 퓨샷 · RAG** | **구현됨 (BE-54)**: ③-1 `rag` 단계(기본 꺼짐) · 판결 형식 예시 퓨샷 · 프롬프트 `judgment-v3`. 판례 저장소(BE-51) · 양형기준 저장소(BE-52)를 쓴다 |
-| **그 밖의 퓨샷 · 임베딩** | **extract · court · select 전부 구현했다**: extract 퓨샷(`extract-v6`) · 요약어 후보 임베딩(`stages.extract.summaryTags`, 기본 꺼짐, BE-53), court 퓨샷(`court-v2`). **select 판결 이유 임베딩 유사도(`stages.select.semanticWeight`, 기본 0, BE-55) 구현 완료** — `select_semantic.py`, 샘플 검증 전이라 기본값은 꺼둠(5장 ⑤). 요약어 후보는 보고서에만 남고 DB 적재 · 관리자 화면 표시는 후속이다(3장 ①). contamination · load · 후검수에는 넣지 않는다. 임베딩 모델 · 판례 저장소 범위는 COMMON-21에서 정했다(아래 8-1). 양형기준 저장소는 RAG로 정했다(BE-52, 8-1) |
+| **그 밖의 퓨샷 · 임베딩** | **extract · court · select 전부 구현했다**: extract 퓨샷(`extract-v6`) · 요약어 후보 임베딩(`stages.extract.summaryTags`, 기본 꺼짐, BE-53), court 퓨샷(`court-v2`). **select 판결 이유 임베딩 유사도(`stages.select.semanticWeight`, 기본 0, BE-55) 구현 완료** — `select_semantic.py`, 샘플 검증 전이라 기본값은 꺼둠(5장 ⑤). 요약어 후보는 DB 적재 · 관리자 상세(A-6) 전달까지 완료했다(BE-80, 3장 ①). 관리자 화면(S-19) 표시만 후속이다. contamination · load · 후검수에는 넣지 않는다. 임베딩 모델 · 판례 저장소 범위는 COMMON-21에서 정했다(아래 8-1). 양형기준 저장소는 RAG로 정했다(BE-52, 8-1) |
 | **generate 모델 고정** | **모델 선정 완료, 설정 반영은 후속** (COMMON-40). `gemini:gemini-3.7-flash`로 고정 결정([의사결정 기록](decisions/COMMON-40.md)). 사건별 설정 파일의 `stages.generate.models`를 새로 등록하는 사건부터 이 모델 하나로 적는다. ③ 사전 학습 점검 대상, ⑤ select 다수결 전제, 무료 등급 대체 체인 유지 여부는 아직 안 정했다 |
 
 ### 8-1. 결정 사항 (COMMON-21)

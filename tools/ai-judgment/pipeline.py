@@ -456,6 +456,8 @@ def validate_config(config):
     if select["strategy"] == "manual" and not select["run"]:
         errors.append("manual 선택은 stages.select.run에 '공급자__모델/run-003' 형식으로 회차를 적는다")
     errors += select_semantic_option_errors(select)
+    if select["strategy"] != "consensus" and select.get("semanticWeight", DEFAULT_SEMANTIC_WEIGHT) > 0:
+        errors.append("stages.select.semanticWeight는 strategy가 consensus일 때만 쓴다 (다른 전략에서는 조용히 무시된다)")
     errors += axis_errors(config)
     errors += rag_option_errors({k: v for k, v in stages["rag"].items() if k != "enabled"})
     if stages["load"]["db"]["mode"] not in ("docker", "psql"):
@@ -980,6 +982,9 @@ def select_run(case, groups, models, strategy, manual_run=None, semantic_weight=
             if log:
                 log(f"⚠ 판결 이유 임베딩 실패, 유사도 가중치 없이 선택합니다: {str(exc)[:200]}")
             semantic = None
+        else:
+            if semantic is None and log:
+                log("⚠ 판결 이유 유사도 비교 불가(후보 1개 또는 빈 reasoning), 유사도 가중치 없이 선택합니다")
 
     if semantic is not None:
         max_structural = len(consensus) or 1
@@ -1380,6 +1385,8 @@ def run_pipeline(config, start=None, until=None, skip=(), rerun=False, log=print
         log(f"외부 전송: 비식별화한 사건 내용이 {', '.join(providers)}로 전송됩니다")
     if "rag" in steps:
         log("외부 전송: 참고 자료 검색어로 비식별화한 사건 개요가 gemini(임베딩)로 전송됩니다")
+    if "select" in steps and config["stages"]["select"].get("semanticWeight", 0) > 0:
+        log("외부 전송: semanticWeight > 0이라 판결 이유(reasoning) 본문이 gemini(임베딩)로 전송됩니다")
     if "axis" in steps:
         # 무료 모델(free:)은 점검 단계에서 다시 정해지므로 지금 모델을 모를 수 있다. 그때는 생성 공급자로 안내한다(축 모델은 그중 하나)
         axis_spec = axis_model(config, state)

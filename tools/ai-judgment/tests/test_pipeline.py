@@ -845,6 +845,39 @@ class PipelineTest(unittest.TestCase):
         self.assertNotIn("유사도", reason)
         self.assertTrue(any("임베딩 실패" in line for line in logs))
 
+    def test_select_consensus_semantic_weight_logs_when_not_comparable(self):
+        """후보가 1개뿐이면 reasoning_similarity_scores가 None을 돌려주는데(예외가 아니다), 이때도
+        가중치가 적용되지 않았음을 로그로 남긴다."""
+        groups = {"openai:a": [self._tied_candidate(1, "이유A")]}
+        logs = []
+        record, reason, score = pipeline.select_run(
+            self.case, groups, ["openai:a"], "consensus", semantic_weight=0.3, log=logs.append)
+        self.assertEqual(record["runIndex"], 1)
+        self.assertNotIn("유사도", reason)
+        self.assertTrue(any("유사도 비교 불가" in line for line in logs))
+
+    def test_validate_config_rejects_semantic_weight_on_non_consensus_strategy(self):
+        with self.assertRaises(pipeline.PipelineError):
+            self.config(select={"strategy": "first-valid", "semanticWeight": 0.3})
+
+    def test_select_semantic_weight_external_send_notice(self):
+        """semanticWeight > 0이면 판결 이유가 gemini(임베딩)로 전송된다는 안내가 나온다 (0이면 안 나온다)."""
+        def stop(*args, **kwargs):
+            raise pipeline.PipelineError("테스트 중단")
+
+        functions = {stage: stop for stage in pipeline.STAGES}
+
+        config = self.config(select={"semanticWeight": 0.3})
+        with self.assertRaises(pipeline.PipelineError):
+            pipeline.run_pipeline(config, functions=functions, until="select", log=self.logs.append)
+        self.assertTrue(any(line.startswith("외부 전송") and "판결 이유" in line for line in self.logs))
+
+        self.logs.clear()
+        config = self.config(select={"semanticWeight": 0})
+        with self.assertRaises(pipeline.PipelineError):
+            pipeline.run_pipeline(config, functions=functions, until="select", log=self.logs.append)
+        self.assertFalse(any("판결 이유" in line for line in self.logs if line.startswith("외부 전송")))
+
     def test_changed_case_uses_new_batch(self):
         config = self.config(generate={"models": ["openai:a"], "runs": 1})
         state = self.run_with(config, {"openai:a": [self.output]}, until="generate")

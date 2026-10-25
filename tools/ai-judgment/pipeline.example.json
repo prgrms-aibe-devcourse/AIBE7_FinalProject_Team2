@@ -72,7 +72,7 @@
       "strategy": "consensus",
       "model": null,
       "run": null,
-      "_semanticWeightComment": "BE-55: consensus 전략일 때만 쓴다. 0(기본)이면 기존 동작과 같다 — 판단 요소 방향이 후보 전원 같으면(동점) 판결 이유(reasoning) 임베딩 유사도를 섞어 동점을 깬다. 0 ~ 1, 샘플로 비교해 정한다(docs/decisions/BE-55.md)",
+      "_semanticWeightComment": "BE-55: consensus 전략일 때만 쓴다. 0(기본)이면 기존 동작과 같다 — 0보다 크면 동점 여부와 관계없이 판단 요소 방향 일치율(구조 점수)과 판결 이유(reasoning) 임베딩 유사도를 가중 합산해서 고르므로, 근소한 차이에서도 구조 점수의 우선순위가 달라질 수 있다. 0 ~ 1, 샘플로 비교해 정한다(docs/decisions/BE-55.md)",
       "semanticWeight": 0
     },
     "axis": {
