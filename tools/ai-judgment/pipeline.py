@@ -47,11 +47,13 @@ from llm import (DEFAULT_MAX_ATTEMPTS, DEFAULT_MAX_WAIT, LLMError, LLMQuotaExhau
                  check_retry, configure_retry, free_tier_model_list, has_free_tier, model_provider,
                  parse_model_spec)
 from to_seed_sql import NAME_MAX_LENGTH, build_sql
+from script_generation import balance_warning, generate_evidence_lines
+from script_generation import cast_errors as script_cast_errors
 from summary_tags import DEFAULT_MIN_SCORE, DEFAULT_TOP_K, SummaryTagError, annotate_report, load_vocabulary, skipped_report
 from summary_tags import option_errors as summary_tag_option_errors
 from validate_output import parse_output
 
-STAGES = ("extract", "court", "contamination", "rag", "generate", "select", "axis", "load")
+STAGES = ("extract", "court", "contamination", "rag", "generate", "select", "axis", "script", "load")
 PIPELINE_DIR = TOOL_DIR / "out" / "pipeline"
 PUBLIC_ROOT = TOOL_DIR.parent.parent  # 공개 저장소 루트
 PRIVATE_SEED_DIR = PUBLIC_ROOT / "backend" / "private-seed"
@@ -114,6 +116,10 @@ DEFAULT_CONFIG = {
         # 응답 형식이 틀리면 그 회차를 최대 maxRetries번 다시 묻고, 그래도 틀리면 집계에서 뺀다
         "axis": {"enabled": True, "model": None, "runs": 5, "maxRetries": 2, "temperature": None, "maxTokens": 4000,
                  "timeout": 120, "delay": 0.0},
+        # 사건 대본 — 증거조사 대사 생성 (BE-107). 기본 꺼짐(새 기능, 배역이 사건마다 정해지지 않았다).
+        # cast는 자동으로 정하지 않는다 — 켤 때마다 넣는다(해송님 정정, 2026-10-24). 범위는 script_generation.py 참고
+        "script": {"enabled": False, "model": None, "cast": None, "maxRetries": 2, "temperature": None,
+                   "maxTokens": 200, "timeout": 60, "delay": 0.0},
         "load": {
             # court: 재판부 판결 초안이 있으면 비공개로 함께 적재한다 (BE-38)
             "enabled": True, "case": True, "court": True, "applyToDb": True,
@@ -451,6 +457,7 @@ def validate_config(config):
     if select["strategy"] == "manual" and not select["run"]:
         errors.append("manual 선택은 stages.select.run에 '공급자__모델/run-003' 형식으로 회차를 적는다")
     errors += axis_errors(config)
+    errors += script_errors(config)
     errors += rag_option_errors({k: v for k, v in stages["rag"].items() if k != "enabled"})
     if stages["load"]["db"]["mode"] not in ("docker", "psql"):
         errors.append("stages.load.db.mode는 docker · psql 중 하나다")
@@ -497,6 +504,35 @@ def axis_errors(config):
     temperature = cfg.get("temperature")
     if temperature is not None and (not is_finite_number(temperature) or temperature < 0):
         errors.append("stages.axis.temperature는 null 또는 0 이상 유한한 숫자다")
+    return errors
+
+
+def script_errors(config):
+    """사건 대본 증거조사 대사 생성 설정(stages.script) 검사 (BE-107)."""
+    cfg = config["stages"]["script"]
+    errors = []
+    if not cfg["enabled"]:
+        return errors
+    model = cfg.get("model")
+    if not isinstance(model, str) or is_free_token(model):
+        errors.append("stages.script.model은 '공급자:모델ID' 문자열이다 (free: 자동 선택은 쓰지 않는다)")
+    else:
+        try:
+            if parse_model_spec(model)[0] == "manual":
+                errors.append(f"파이프라인은 API 공급자만 쓴다 (manual 불가): {model}")
+        except LLMError as e:
+            errors.append(str(e))
+    errors += script_cast_errors(cfg.get("cast") or {})
+    for key, minimum in (("maxRetries", 0), ("maxTokens", 1), ("timeout", 1)):
+        value = cfg.get(key)
+        if not isinstance(value, int) or isinstance(value, bool) or value < minimum:
+            errors.append(f"stages.script.{key}는 {minimum} 이상 정수다")
+    delay = cfg.get("delay")
+    if not is_finite_number(delay) or delay < 0:
+        errors.append("stages.script.delay는 0 이상 유한한 숫자다 (초)")
+    temperature = cfg.get("temperature")
+    if temperature is not None and (not is_finite_number(temperature) or temperature < 0):
+        errors.append("stages.script.temperature는 null 또는 0 이상 유한한 숫자다")
     return errors
 
 
@@ -1101,6 +1137,47 @@ def stage_axis(config, state, log, caller=call):
             "attempts": attempts, "failures": failures, "needsReview": needs_review, "changedFromExtract": changed}
 
 
+def stage_script(config, state, log, caller=call):
+    """사건 대본 — 증거조사 대사 생성 (BE-107). 판단 요소마다 대사 한 줄을 만든다 — 검사 측(UP
+    방향) 먼저, 변호인 측(DOWN 방향) 다음(case-1 대본과 같은 순서). 판단 요소(방향 · 이유)는 select
+    단계가 고른 판결 출력에서 가져온다 — case.json의 factors는 아직 방향이 없는 입력값이라 쓰지 않는다
+    (script_generation.ordered_evidence_factors 설명 참고). 배역(cast)은 설정에서 받는다 — 이
+    단계가 자동으로 정하지 않는다(해송님 정정, 2026-10-24). 범위(지금은 증거조사만, 피고인신문 등은 범위
+    밖인 이유)는 script_generation.py 모듈 docstring 참고."""
+    cfg = config["stages"]["script"]
+    case = load_json(input_file(config, state, "case"))
+    selection = stage_output(state, "select")
+    if not selection:
+        raise PipelineError("script 단계는 select 단계가 고른 판결(방향 · 이유)이 있어야 합니다. select를 먼저 돌리세요")
+    judgment_output = load_json(selection["outputFile"])
+    cast = cfg["cast"]
+    out_dir = PIPELINE_DIR / config["name"] / "script"
+    if out_dir.exists():
+        shutil.rmtree(out_dir)  # 이전 실행 결과와 섞지 않는다 (axis 단계와 같은 정책)
+    log(f"대본 증거조사 생성: {cfg['model']} (배역 — 검사: {cast['prosecutor']} · 변호인: {cast['defense']})")
+    lines, stopped = generate_evidence_lines(
+        case, judgment_output, cast, model=cfg["model"], caller=caller, max_retries=cfg["maxRetries"],
+        temperature=cfg["temperature"], max_tokens=cfg["maxTokens"], timeout=cfg["timeout"],
+        delay=cfg["delay"], log=log)
+    for line in lines:
+        for warning in line["validation"]["warnings"]:
+            log(f"⚠ [요소 {line['factorId']}] {warning}")
+    balance = balance_warning(lines)
+    if balance:
+        log(f"⚠ {balance}")
+    failed = [line for line in lines if not line["validation"]["ok"]]
+    evidence_file = out_dir / "evidence.json"
+    write_json(evidence_file, {"model": cfg["model"], "cast": cast, "createdAt": _now(),
+                               "evidence": lines, "balanceWarning": balance})
+    if stopped:
+        log(f"호출 한도 소진 → 판단 요소 {len(lines)}개까지만 생성했습니다")
+    if failed:
+        log(f"⚠ {len(failed)}개 요소는 끝내 생성하지 못했습니다(evidenceFile 참고) — 관리자 검수 전에 다시 돌려야 합니다")
+    log(f"결과: 판단 요소 {len(lines)}개 중 성공 {len(lines) - len(failed)}개")
+    return {"evidenceFile": str(evidence_file), "model": cfg["model"], "cast": cast,
+            "count": len(lines), "failed": len(failed), "stopped": stopped, "balanceWarning": balance}
+
+
 def stage_load(config, state, log, apply=None):
     cfg = config["stages"]["load"]
     selection = stage_output(state, "select")
@@ -1305,6 +1382,7 @@ STAGE_FUNCTIONS = {
     "generate": stage_generate,
     "select": stage_select,
     "axis": stage_axis,
+    "script": stage_script,
     "load": stage_load,
 }
 

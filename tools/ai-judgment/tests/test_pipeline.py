@@ -398,13 +398,25 @@ class PipelineTest(unittest.TestCase):
         write_json(path, raw)
         return pipeline.load_config(path)
 
-    def run_with(self, config, answers, applied=None, court_answers=None, caller=None, axis_answers=None, **kwargs):
+    def run_with(self, config, answers, applied=None, court_answers=None, caller=None, axis_answers=None,
+                script_answers=None, **kwargs):
         caller = caller or fake_caller(answers)
         functions = dict(pipeline.STAGE_FUNCTIONS)
         court_queue = list(court_answers or [])
         self.court_requests = getattr(self, "court_requests", [])
         axis_queue = None if axis_answers is None else list(axis_answers)
         self.axis_requests = getattr(self, "axis_requests", [])
+        script_queue = None if script_answers is None else list(script_answers)
+        self.script_requests = getattr(self, "script_requests", [])
+
+        def script_caller(spec, system, user, **kw):
+            self.script_requests.append((spec, system, user))
+            if script_queue is None:
+                return llm.LLMResult("기본 증거 대사입니다.", *llm.parse_model_spec(spec))
+            item = script_queue.pop(0)
+            if isinstance(item, Exception):
+                raise item
+            return llm.LLMResult(item, *llm.parse_model_spec(spec))
 
         def axis_caller_for(c, s):
             def axis_caller(spec, system, user, **kw):
@@ -434,6 +446,7 @@ class PipelineTest(unittest.TestCase):
             runner=getattr(self, "rag_db", None) or self.rag_unavailable)
         functions["generate"] = lambda c, s, log: pipeline.stage_generate(c, s, log, caller=caller)
         functions["axis"] = lambda c, s, log: pipeline.stage_axis(c, s, log, caller=axis_caller_for(c, s))
+        functions["script"] = lambda c, s, log: pipeline.stage_script(c, s, log, caller=script_caller)
         functions["load"] = lambda c, s, log: pipeline.stage_load(
             c, s, log, apply=lambda path, db: (applied.append((path, db)) if applied is not None else None) or [])
         return pipeline.run_pipeline(config, functions=functions, log=self.logs.append, **kwargs)
@@ -979,6 +992,59 @@ class PipelineTest(unittest.TestCase):
             self.config(generate={"enabled": False, "models": []})
         self.assertIn("stages.axis.model", str(ctx.exception))
         self.config(generate={"enabled": False, "models": []}, axis={"enabled": False})  # 축을 끄면 된다
+
+    def test_script_config_validation(self):
+        valid_cast = {"prosecutor": "naero", "defense": "nambul"}
+        self.config(script={"enabled": False})  # 꺼져 있으면 model · cast가 없어도 통과
+        with self.assertRaises(pipeline.PipelineError) as ctx:
+            self.config(script={"enabled": True, "cast": valid_cast})  # model 없음
+        self.assertIn("stages.script.model", str(ctx.exception))
+        for cast, message in (({"prosecutor": "naero"}, "defense"),
+                              ({"prosecutor": "naero", "defense": "naero"}, "같은 캐릭터"),
+                              ({"prosecutor": "naero", "defense": "law"}, "defense"),
+                              (None, "cast")):
+            with self.subTest(cast):
+                with self.assertRaises(pipeline.PipelineError) as ctx:
+                    self.config(script={"enabled": True, "model": "openai:a", "cast": cast})
+                self.assertIn(message, str(ctx.exception))
+        for changes, message in (({"model": "manual:x"}, "manual"), ({"maxRetries": -1}, "stages.script.maxRetries"),
+                                 ({"maxTokens": 0}, "stages.script.maxTokens"), ({"timeout": 0}, "stages.script.timeout"),
+                                 ({"delay": -1}, "stages.script.delay"), ({"temperature": "0.2"}, "stages.script.temperature")):
+            with self.subTest(changes):
+                with self.assertRaises(pipeline.PipelineError) as ctx:
+                    self.config(script={"enabled": True, "cast": valid_cast, **changes})
+                self.assertIn(message, str(ctx.exception))
+        self.config(script={"enabled": True, "model": "openai:a", "cast": valid_cast})  # 정상 설정은 통과
+
+    def test_script_stage_generates_evidence_lines_from_selected_judgment(self):
+        """BE-107: 판단 요소마다 증거조사 대사 한 줄, 검사(UP) 먼저 변호인(DOWN) 다음, 배역은 설정값 그대로 쓴다."""
+        config = self.config(generate={"models": ["openai:a"], "runs": 1},
+                             script={"enabled": True, "model": "openai:a",
+                                     "cast": {"prosecutor": "naero", "defense": "nambul"}})
+        script_lines = ["검사 측 증거1 대사입니다.", "검사 측 증거2 대사입니다.", "검사 측 증거3 대사입니다.",
+                        "변호인 측 증거1 대사입니다.", "변호인 측 증거2 대사입니다.", "변호인 측 증거3 대사입니다."]
+        state = self.run_with(config, {"openai:a": [self.output]}, until="script", script_answers=list(script_lines))
+        outputs = state["stages"]["script"]["outputs"]
+        self.assertEqual(outputs["count"], 6)
+        self.assertEqual(outputs["failed"], 0)
+        self.assertFalse(outputs["stopped"])
+        evidence = load_json(outputs["evidenceFile"])["evidence"]
+        self.assertEqual([e["factorId"] for e in evidence], [2, 3, 5, 7, 8, 9])
+        self.assertEqual([e["role"] for e in evidence], ["prosecutor"] * 3 + ["defense"] * 3)
+        self.assertEqual([e["character"] for e in evidence], ["naero"] * 3 + ["nambul"] * 3)
+        self.assertEqual([e["text"] for e in evidence], script_lines)
+        # system 프롬프트에 배역별(검사 · 변호인) 블록이 실제로 들어갔는지 확인
+        self.assertIn("검사", self.script_requests[0][1])
+        self.assertIn("변호인", self.script_requests[3][1])
+
+    def test_script_stage_requires_select_stage(self):
+        config = self.config(generate={"models": ["openai:a"], "runs": 1},
+                             script={"enabled": True, "model": "openai:a",
+                                     "cast": {"prosecutor": "naero", "defense": "nambul"}})
+        state = pipeline.load_state(config)
+        with self.assertRaises(pipeline.PipelineError) as ctx:
+            pipeline.stage_script(config, state, self.logs.append)
+        self.assertIn("select", str(ctx.exception))
 
     def test_load_sql_dir_parent_missing(self):
         config = self.config(generate={"models": ["openai:a"], "runs": 1},
