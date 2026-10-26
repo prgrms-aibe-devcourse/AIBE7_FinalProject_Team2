@@ -61,3 +61,15 @@
 
 - Alloy · node-exporter 실측 메모리(상한 192m · 64m)를 보고 COMMON-52(파이프라인) 메모리 재조정 때 함께 본다.
 - 대시보드 JSON은 Cloud에 Import한 것이라 파일과 자동 동기화되지 않는다 — 수정이 잦아지면 Grafana API로 올리는 스크립트를 검토한다.
+
+## 운영 반영 중 발견 (10/23, 후속 수정)
+
+- `MONITORING_AGENT=1` + `./deploy.sh --reapply`가 성공(스모크 통과)했는데 **alloy · node-exporter 컨테이너가 없었다.**
+  `deploy.sh`의 `start_and_check`가 `backend` · `web`(+ 파이프라인)만 서비스 이름으로 올리기 때문이다. 오버레이가 붙어
+  로그 볼륨은 생겼지만 에이전트를 띄우는 단계가 없었다 — COMMON-43(#168) 때는 에이전트를 손으로 한 번 띄우는 절차였고,
+  그 뒤 자동 배포에 이 단계가 들어간 적이 없다.
+- 수정: `start_monitoring_agent` 추가 — 사용자 경로 확인 뒤 `up -d --no-build --no-deps alloy node-exporter`.
+  파이프라인(`start_pipeline`)과 같은 기준으로 **실패해도 배포를 되돌리지 않고 경고만 남긴다**(사용자 화면 · API와 무관하고,
+  Alloy가 멈추면 Grafana Cloud 경보가 따로 알린다). `--no-deps`로 backend · web을 다시 건드리지 않는다.
+- 서버는 같은 파일 조합(기본 + 외부 DB + 모니터링)으로 두 서비스만 `--no-deps`로 한 번 올려 즉시 복구했다.
+- 확인(로컬, docker · curl · 스모크 스텁): `MONITORING_AGENT=1`이면 backend → web → `alloy node-exporter` 순으로 up, 없으면 기존과 같다.
