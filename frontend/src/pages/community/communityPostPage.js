@@ -20,7 +20,7 @@ export function renderCommunityPostPage(container, { api, navigate, postId }) {
     return undefined;
   }
 
-  const back = button('← 목록으로', () => (canGoBackInApp() ? history.back() : navigate('community')), 'cm-back');
+  const back = button('← 목록으로', () => (canGoBackInApp() ? history.back() : navigate('communityPosts')), 'cm-back');
   const toolbar = element('div', 'cm-toolbar');
   toolbar.append(back, openButton);
   const body = element('div', 'cm-detail');
@@ -32,8 +32,8 @@ export function renderCommunityPostPage(container, { api, navigate, postId }) {
   // 거르기 · 글쓰기 칸 · 많이 본 글은 목록 응답으로 채운다(글 상세와 따로 불러 글이 먼저 보이게 한다)
   api.getCommunityPosts?.().then((data) => {
     if (!active()) return;
-    filterHost.append(filterControls({ value: { category: undefined, caseId: null }, cases: data.cases, onChange: ({ category, caseId }) => navigate('community', { category: category ?? null, filterCaseId: caseId }) }));
-    side.append(composer({ api, navigate, cases: data.cases, closeButton, closeCompose, onPosted: (post) => { closeCompose(); navigate('community', { justPosted: post.postId }); } }),
+    filterHost.append(filterControls({ value: { category: undefined, caseId: null }, cases: data.cases, onChange: ({ category, caseId }) => navigate('communityPosts', { category: category ?? null, filterCaseId: caseId }) }));
+    side.append(composer({ api, navigate, cases: data.cases, closeButton, closeCompose, onPosted: (post) => { closeCompose(); navigate('communityPosts', { justPosted: post.postId }); } }),
       popularList(data.popular, navigate));
   }).catch(() => {});
 
@@ -45,7 +45,7 @@ export function renderCommunityPostPage(container, { api, navigate, postId }) {
       if (!active()) return;
       const box = element('div', 'cm-empty');
       box.append(element('p', '', error?.code === 'POST_NOT_FOUND' ? '글을 찾을 수 없어요. 지워졌거나 주소가 잘못됐어요.' : '글을 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요.'),
-        button('목록으로', () => navigate('community'), 'secondary-button'));
+        button('목록으로', () => navigate('communityPosts'), 'secondary-button'));
       body.replaceChildren(box);
       return;
     }

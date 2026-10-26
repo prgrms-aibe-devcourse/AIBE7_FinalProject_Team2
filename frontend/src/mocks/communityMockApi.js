@@ -72,6 +72,9 @@ function findPost(state, postId) {
   return post;
 }
 
+// 많이 본 글(목은 좋아요 순 셋)
+const popularOf = (posts) => [...posts].sort((a, b) => b.likeCount - a.likeCount).slice(0, 3).map(({ postId, title }) => ({ postId, title }));
+
 // GET /community/posts?category&caseId&sort&page — 글 목록(최신순 · 좋아요순 · 댓글순) + 많이 본 글 + 고를 수 있는 사건
 export async function getCommunityPosts({ category = null, caseId = null, sort = 'LATEST', page = 1 } = {}) {
   await delay();
@@ -87,13 +90,56 @@ export async function getCommunityPosts({ category = null, caseId = null, sort =
   }[sort] ?? byDate;
   list.sort(order);
   const end = Math.max(1, page) * PAGE_SIZE;
-  const popular = allPosts(state).map((post) => view(state, post)).sort((a, b) => b.likeCount - a.likeCount).slice(0, 3)
-    .map(({ postId, title }) => ({ postId, title }));
   return structuredClone({
     posts: list.slice(0, end),
     total: list.length,
     hasMore: list.length > end,
-    popular,
+    popular: popularOf(allPosts(state).map((post) => view(state, post))),
+    cases: cases.map(({ caseId: id, title }) => ({ caseId: id, title })),
+  });
+}
+
+// 커뮤니티 메인(FE-89) 칸 수
+export const HOT_SIZE = 3;
+export const RECOMMENDED_SIZE = 3;
+export const RANKING_SIZE = 10;
+const HOT_POSTS = 3;
+const RECOMMENDED_POSTS = 2;
+
+// 메인에 싣는 사건 요약: 기사 조각(제목 · 부제 · 본문 두 단락 또는 사진)과 사건 정보 확인에 쓰는 값
+const caseSummary = ({ caseId, title, crimeCategoryLabel, shortIntro, headline, deck, article, thumbnailUrl, participantCount, estimatedMinutes }) => ({
+  caseId, title, crimeCategoryLabel, shortIntro, headline, deck, article: article.slice(0, 2), thumbnailUrl, participantCount, estimatedMinutes,
+});
+// 사건 글: 좋아요 많은 순으로 몇 개만(댓글 내용은 싣지 않는다)
+const casePosts = (posts, size) => [...posts].sort((a, b) => b.likeCount - a.likeCount || b.createdAt.localeCompare(a.createdAt)).slice(0, size)
+  .map(({ postId, title, likeCount, commentCount, author }) => ({ postId, title, likeCount, commentCount, author }));
+
+// GET /community/home — 커뮤니티 메인(FE-89): 지금 이야기가 많은 사건 · 추천 사건 · 레벨 랭킹 + 많이 본 글 · 고를 수 있는 사건.
+// 이야기 수(talkCount)는 실제 API에서는 최근 하루 글 · 댓글 수다. 목은 날짜가 고정이라 모든 글 · 댓글을 센다.
+// 추천 사건은 이야기 많은 사건에 없는 사건을 이야기 수 · 판결한 사람 수 순으로 고른다(추천 기준은 BE와 확정한다).
+// 랭킹은 레벨 순(같으면 체험한 사건 수 순). 레벨은 사건 체험 · 커뮤니티 활동으로 오르며 성향과 무관하다. 목은 글쓴이 명함 값(seedAuthors)으로 센다
+export async function getCommunityHome() {
+  await delay();
+  const state = load();
+  const posts = allPosts(state).map((post) => view(state, post));
+  const byCase = cases.map((item) => {
+    const own = posts.filter((post) => post.caseId === item.caseId);
+    const talkCount = own.reduce((sum, post) => sum + 1 + post.commentCount, 0);
+    return { item, own, talkCount };
+  });
+  const hot = byCase.filter(({ talkCount }) => talkCount > 0)
+    .sort((a, b) => b.talkCount - a.talkCount || a.item.caseId - b.item.caseId).slice(0, HOT_SIZE);
+  const hotIds = new Set(hot.map(({ item }) => item.caseId));
+  const recommended = byCase.filter(({ item }) => !hotIds.has(item.caseId))
+    .sort((a, b) => b.talkCount - a.talkCount || b.item.participantCount - a.item.participantCount).slice(0, RECOMMENDED_SIZE);
+  const ranking = Object.keys(seedAuthors).map((nickname) => withCard({ nickname }))
+    .sort((a, b) => b.level - a.level || b.completedCount - a.completedCount || a.nickname.localeCompare(b.nickname, 'ko')).slice(0, RANKING_SIZE)
+    .map(({ nickname, level, completedCount, profileCard, shownType }, index) => ({ rank: index + 1, nickname, level, completedCount, profileCard, shownType }));
+  return structuredClone({
+    hotCases: hot.map(({ item, own, talkCount }) => ({ case: caseSummary(item), talkCount, postCount: own.length, posts: casePosts(own, HOT_POSTS) })),
+    recommendedCases: recommended.map(({ item, own }) => ({ case: caseSummary(item), postCount: own.length, posts: casePosts(own, RECOMMENDED_POSTS) })),
+    ranking,
+    popular: popularOf(posts),
     cases: cases.map(({ caseId: id, title }) => ({ caseId: id, title })),
   });
 }
