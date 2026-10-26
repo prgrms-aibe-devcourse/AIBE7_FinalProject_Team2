@@ -2,6 +2,7 @@ import { button, element } from '../../components/siteLayout.js';
 import { screenByStatus } from '../../utils/screenByStatus.js';
 import { caseStage, mountStagePage, scriptFor } from '../overview/overviewPage.js';
 import { caseInfoEar, caseNewspaper, earButton, paperFromCase } from '../../components/newspaperFront.js';
+import { evidencePhotosFromPaper } from '../../utils/newspaper.js';
 import { reducedMotion } from '../../utils/motion.js';
 import { TURN_MS } from '../../utils/pageTurn.js';
 import { openCaseReviewPopup } from '../caseReview/caseReviewPopup.js';
@@ -82,13 +83,13 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
   // FE-56: 새 체험은 시연 전까지 열지 않는다(목 · 실제 모두 이후 화면이 대본 사건 기준이라 막다른 길이 된다).
   // 지면은 그대로 읽게 두고, "시작하기" 자리에 누를 수 없는 "준비 중"과 안내를 둔다. 대본이 생기면(FE-33) drawStage로 간다.
   // 이미 하던 · 마친 체험(myStatus)이 있으면 막지 않는다: 오른쪽 귀 "이어서 하기" · "결과 다시 보기"와 우하단 버튼이 API 2 응답 상태로 이어서 볼 화면으로 보낸다
-  function drawPaper(data) {
+  function drawPaper(data, casePaper) {
     const action = ACTIONS[data.myStatus];
     const notice = element('p', 'paper-start-notice', action ? '' : '이 사건의 판결 체험은 준비 중이에요. 신문으로 돌아가 다른 사건을 골라 주세요.');
     notice.setAttribute('role', action ? 'alert' : 'status');
     const resume = action
       ? earButton(`${action.label} ▶`, `사건 ${String(data.caseId).padStart(2, '0')} · ${data.crimeCategoryLabel}`, () => start(resume, notice, action.failText), 'ear-right ear-go') : null;
-    const sheet = caseNewspaper({ paper: paperFromCase(data), info: data, navigate, ...(resume ? { earRight: resume } : {}) });
+    const sheet = caseNewspaper({ paper: paperFromCase(data, casePaper), info: data, navigate, ...(resume ? { earRight: resume } : {}) });
     let go;
     if (action) {
       go = button(`${action.label} ▶`, () => start(go, notice, action.failText), 'primary-button');
@@ -121,7 +122,7 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
   }
 
   // 대본이 있는 사건: 1막 무대를 첫 장면 앞에서 멈춰 둔다. 선택지로 체험을 시작하면 그 자리에서 1막이 이어진다
-  function drawStage(data, script) {
+  function drawStage(data, script, casePaper) {
     const { label, failText } = ACTIONS[data.myStatus] ?? NOT_STARTED;
     const info = { ...data };
     // 오른쪽 귀: 하던 체험이 있으면 "이어서 하기" · "결과 다시 보기", 처음 보는 사건이면 사건 번호 · 분류 그대로
@@ -145,7 +146,8 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
     } : undefined;
     let chosen = null;
     const { stage, setOverview, setAlreadySent } = caseStage({
-      caseId, api, navigate, script, info, paper: paperFromCase(data, script.paper), parked: true, prompt, ...(resume ? { earRight: resume } : {}),
+      caseId, api, navigate, script, info, paper: paperFromCase(data, casePaper, script.paper), evidencePhotos: evidencePhotosFromPaper(casePaper),
+      parked: true, prompt, ...(resume ? { earRight: resume } : {}),
     });
     // 지면 우하단 "시작하기": 누르면 내로 · 남불이 들어오며 1막이 처음부터 시작된다(진행 중이면 내로가 먼저 묻는다). 바로 이어 보기는 오른쪽 귀
     const dock = element('div', 'paper-start');
@@ -231,11 +233,12 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
     if (!active()) return;
     message('사건 정보를 불러오는 중…');
     try {
-      const data = await api.getCaseDetail(caseId);
+      // 지면 기사 · 증거조사 사진(API 17)은 함께 부르되, 못 받아도(PAPER_NOT_FOUND 등) 사건 디테일(API 16)만으로 화면을 그린다(FE-64)
+      const [data, casePaper] = await Promise.all([api.getCaseDetail(caseId), api.getCasePaper(caseId).catch(() => null)]);
       if (!active()) return;
       const script = scriptFor(caseId, data.title);
-      if (script) drawStage(data, script);
-      else drawPaper(data);
+      if (script) drawStage(data, script, casePaper);
+      else drawPaper(data, casePaper);
     } catch (error) {
       if (!active()) return;
       // CASE_NOT_FOUND는 withErrorRedirect가 S-14로 먼저 보낸다(app/errorRedirect.js). 여기 오는 것은 그 밖의 오류다

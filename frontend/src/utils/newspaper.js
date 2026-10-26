@@ -33,6 +33,27 @@ export function extraPhotosOf(extraPhotos) {
   return [origin ?? { src: commonStagePhotos.origin }, conclusion ?? { src: commonStagePhotos.conclusion }];
 }
 
+/** API 17(공개 신문 지면) extraPhotos({ origin, conclusion }, 각 { imageUrl, caption })를
+ * extraPhotosOf가 쓰는 발단 · 결론 배열 모양 [{src, caption}, {src, caption}]으로 바꾼다(FE-64).
+ * 그 역할의 사진이 없으면 그 자리는 undefined로 둬 공용 컷에 맡긴다. extraPhotos 자체가 없어도 같다 */
+export function extraPhotosFromApi(extraPhotos) {
+  const toSlot = (slot) => (slot?.imageUrl ? { src: slot.imageUrl, caption: slot.caption } : undefined);
+  return [toSlot(extraPhotos?.origin), toSlot(extraPhotos?.conclusion)];
+}
+
+/** 증거조사 두 칸(검사 · 변호인) 사진을 API 17 extraPhotos에서 연결한다(FE-64, BE-102 확인 반영) —
+ * 검사 측 = 결론 사진, 변호인 측 = 발단 사진(기사 지면 작은 사진과 같은 그림, 같은 사진을 두 번 받지 않는다).
+ * casePaper를 못 받았으면(지면 자체가 없음) undefined를 돌려줘 대본의 고정 사진을 그대로 쓰게 한다.
+ * casePaper는 받았지만 그 역할 사진이 없으면 그 칸은 비워 둬 evidenceBoard가 공용 컷으로 채우게 한다 */
+export function evidencePhotosFromPaper(casePaper) {
+  if (!casePaper) return undefined;
+  const extra = casePaper.extraPhotos ?? {};
+  const photos = {};
+  if (extra.conclusion?.imageUrl) photos['검사'] = extra.conclusion.imageUrl;
+  if (extra.origin?.imageUrl) photos['변호인'] = extra.origin.imageUrl;
+  return photos;
+}
+
 /** 사진이 없거나 불러오지 못하면 공용 컷으로 바꾼다. 공용 컷도 못 불러오면 깨진 이미지 대신 사진을 뺀다 */
 export function useCommonPhotoOnError(image, seed = 0, role) {
   image.addEventListener('error', () => {

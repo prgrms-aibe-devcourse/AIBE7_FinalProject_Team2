@@ -1,6 +1,6 @@
 import { button, element, mockTag, renderSiteFooter } from './siteLayout.js';
 import { API_MODE } from '../api/config.js';
-import { casePhoto, extraPhotosOf, todayLabel, useCommonPhotoOnError } from '../utils/newspaper.js';
+import { casePhoto, extraPhotosFromApi, extraPhotosOf, todayLabel, useCommonPhotoOnError } from '../utils/newspaper.js';
 
 // 신문 지면 공통 짜임 (FE-32). S-02 사건 목록(신문 1면)과, 사건을 고른 뒤 이어지는 사건 기사 지면(S-20 · 1막)이
 // 같은 제호 · 날짜 띠 · 탭 줄 · 배너 · [사진 | 기사 단]을 쓴다. 스타일은 caseList.css(.case-list-page)를 그대로 쓴다.
@@ -28,10 +28,23 @@ export function newspaperMasthead({ navigate, earRight, earLeft: givenLeft, titl
   return header;
 }
 
-// 사건 기사 지면에 실을 기사: 메인 책상 신문 · S-02와 같은 사건 데이터(API 1 · 16의 headline · deck · article · thumbnailUrl)에서 만든다.
-// 그래야 책상 위 신문 → 집어 든 신문 → 사건 기사 지면의 제목 · 본문 · 사진이 항상 같다. 사건 데이터가 없으면 대본 지면(fallback)을 쓴다
-export function paperFromCase(data, fallback = {}) {
+// 사건 기사 지면에 실을 기사(FE-64). API 17(casePaper)이 있으면 그 값(headline · deck · article · photo · caption ·
+// desk · extraPhotos)을 쓴다 — 관리자가 신문 지면을 만들어 둔 사건은 책상 위 신문 → 집어 든 신문 → 사건 기사 지면의
+// 제목 · 본문 · 사진이 항상 같다. casePaper를 못 받았으면(PAPER_NOT_FOUND · 조회 실패) 사건 데이터(API 1 · 16)와
+// 대본 지면(fallback, 사건 1의 재연 컷)으로 예전처럼 채운다. 사건 데이터 자체가 없으면 대본 지면만 쓴다
+export function paperFromCase(data, casePaper, fallback = {}) {
   if (!data) return fallback;
+  if (casePaper) {
+    return {
+      headline: casePaper.headline || data.headline || data.title,
+      deck: casePaper.deck || data.deck || data.shortIntro,
+      article: casePaper.article?.length ? casePaper.article : (data.article?.length ? data.article : [data.shortIntro].filter(Boolean)),
+      photo: casePaper.photo || casePhoto(data),
+      extraPhotos: extraPhotosOf(extraPhotosFromApi(casePaper.extraPhotos)),
+      caption: casePaper.caption || '사건 이해를 돕기 위한 연출 이미지',
+      desk: casePaper.desk || '사회부',
+    };
+  }
   return {
     headline: data.headline || data.title,
     deck: data.deck || data.shortIntro,
