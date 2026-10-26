@@ -1,0 +1,24 @@
+{{/*
+  Grafana Cloud 알림 템플릿 lawnambul-slack — Slack 메시지 양식 (COMMON-64, 10/26)
+  원본은 Grafana Cloud(Alerting → Contact points → Notification templates)다. 화면에서 고쳤으면 이 파일도 같이 고친다.
+  연락처 lawnambul-slack의 Optional Slack settings에서
+    Title     = {{ template "lawnambul.slack.title" . }}
+    Text Body = {{ template "lawnambul.slack.text" . }}
+  로 쓴다. 기본 양식은 "Value: A=0, C=1"만 보여 규칙의 summary · description이 메시지에 나오지 않는다.
+  시각은 tz "Asia/Seoul"로 바꿔 KST로 보여 준다(기본은 UTC).
+*/}}
+{{ define "lawnambul.slack.title" -}}
+{{ if eq .Status "firing" }}🔴 [발생 {{ .Alerts.Firing | len }}건]{{ else }}✅ [해결]{{ end }} {{ .CommonLabels.alertname }}{{ with .CommonLabels.severity }} · {{ . }}{{ end }}
+{{- end }}
+
+{{ define "lawnambul.slack.text" -}}
+{{ range .Alerts -}}
+{{ if eq .Status "firing" }}🔴 *발생*{{ else }}✅ *해결*{{ end }} · {{ .Labels.alertname }}
+*요약*: {{ .Annotations.summary }}
+{{ if eq .Status "firing" }}*내용*: {{ .Annotations.description }}
+{{ end }}*시작*: {{ .StartsAt | tz "Asia/Seoul" | date "01/02 15:04" }}{{ if eq .Status "resolved" }} → *해결*: {{ .EndsAt | tz "Asia/Seoul" | date "01/02 15:04" }}{{ end }} (KST)
+*심각도*: {{ .Labels.severity }} · *환경*: {{ .Labels.env }}{{ with .Labels.instance }} · *대상*: {{ . }}{{ end }}
+<{{ .GeneratorURL }}|규칙 보기>{{ if .SilenceURL }} · <{{ .SilenceURL }}|음소거>{{ end }}
+
+{{ end }}
+{{- end }}
