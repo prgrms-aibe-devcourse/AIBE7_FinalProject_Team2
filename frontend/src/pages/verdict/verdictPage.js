@@ -105,12 +105,15 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
     const factorButtons = [];
     const header = element('header', 'case-topbar');
     const back = button('사건 기록 다시 보기', () => navigate('review'), 'back-button');
-    header.append(element('strong', 'case-title', `판결 입력 · ${caseHeader.title}`), back);
+    const caseTitle = element('strong', 'case-title', `판결 입력 · ${caseHeader.title}`);
+    caseTitle.setAttribute('role', 'heading'); // 쪽(탭)마다 보이는 h1이 없던 것을 쪽 밖 머리글이 맡는다(FE-97). 모양은 그대로
+    caseTitle.setAttribute('aria-level', '1');
+    header.append(caseTitle, back);
     // 파일철(FE-43 · FE-48): 위로 튀어나온 색인 탭 다섯 장(사건 요약 → 참고 정보 → 판단 요소 → 최종 판결 → 확정). 한 번에 한 장만 보인다.
     // 다음 장은 종이 오른쪽 아래 말린 모서리로만 넘기고, 탭으로는 이미 펼쳐 본 장까지만 돌아갈 수 있다. 확정은 마지막 장의 서명으로 한다
     const layout = element('main', 'verdict-layout verdict-folder');
     const main = element('section', 'verdict-main folder-sheet');
-    main.append(element('h1', '', '당신의 판결'), element('p', 'verdict-intro muted', '지금까지 확인한 사건 정보와 양형기준을 참고해 판결해 주세요.'));
+    main.append(element('h2', 'folder-title', '당신의 판결'), element('p', 'verdict-intro muted', '지금까지 확인한 사건 정보와 양형기준을 참고해 판결해 주세요.'));
     // 형량 칸(공통): 징역이면 "징역 [ ]년 [ ]개월", 벌금이면 "벌금 [ ]만원"으로 바뀐다. 징역은 범위 막대 바로 위, 벌금은 벌금 슬라이더 위에 둔다
     const entry = element('div', 'sentence-entry');
     const entryType = element('strong', 'sentence-entry-type');
@@ -140,7 +143,9 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
         changed(key);
       });
       if (key === 'prisonMonths') field.addEventListener('change', carryMonths);
-      wrapper.append(name, field, element('span', '', unit));
+      const unitText = element('span', '', unit);
+      unitText.setAttribute('aria-hidden', 'true'); // 이름("징역 년")에 단위가 이미 있어 "징역 년년"으로 읽히던 것을 막는다(FE-97)
+      wrapper.append(name, field, unitText);
       parent.append(wrapper);
       inputs[key] = field;
     }
@@ -814,7 +819,9 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
         marker.classList.toggle('is-warning', prison && shown > trackMax);
       }
       feedback.replaceChildren();
-      if ((present && !inRange) || serverError === 'OUT_OF_ALLOWED_RANGE') {
+      const outOfRange = (present && !inRange) || serverError === 'OUT_OF_ALLOWED_RANGE';
+      if (outOfRange) for (const key of ['prisonYears', 'prisonMonths', 'fineAmount']) inputs[key].setAttribute('aria-invalid', 'true'); // 범위 초과도 잘못된 입력(FE-97)
+      if (outOfRange) {
         const warning = element('div', 'range-warning');
         warning.setAttribute('role', 'alert');
         const rangeText = prison ? `징역 ${formatMonths(option.allowedMin)} ~ ${formatMonths(option.allowedMax)}` : option.text;

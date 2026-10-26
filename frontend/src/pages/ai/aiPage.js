@@ -155,7 +155,7 @@ export async function renderAiPage(container, { caseId, caseHeader, api, navigat
       },
     });
     const main = element('div', 'review-main');
-    main.append(element('h1', 'page-heading visually-hidden', 'AI 판결'), stage, revealError);
+    main.append(element('h1', 'page-heading visually-hidden', 'AI 판결'), element('h2', 'visually-hidden', 'AI 판결 진행 화면'), stage, revealError); // h1 → h3 단계 건너뜀 방지(FE-97)
     const layout = element('main', 'review-layout');
     layout.append(main);
     root.replaceChildren(header, layout);
