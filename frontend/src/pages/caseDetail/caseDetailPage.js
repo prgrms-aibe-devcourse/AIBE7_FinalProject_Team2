@@ -3,6 +3,7 @@ import { screenByStatus } from '../../utils/screenByStatus.js';
 import { caseStage, mountStagePage, scriptFor } from '../overview/overviewPage.js';
 import { caseInfoEar, caseNewspaper, earButton, paperFromCase } from '../../components/newspaperFront.js';
 import { reducedMotion } from '../../utils/motion.js';
+import { TURN_MS } from '../../utils/pageTurn.js';
 import { openCaseReviewPopup } from '../caseReview/caseReviewPopup.js';
 
 // S-20 사건 디테일 (확장, IA v1.12 · FE-32). 신문 지면(S-02)에서 고른 기사를 한 장 넘기면 나오는 신문 안쪽 면이다
@@ -51,6 +52,11 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
     if (action) panel.append(action);
     if (action) clip.style.visibility = ''; // 오류 안내는 바로 보인다(불러오는 중은 숨겨 둔 채 다음 면이 내려앉기를 기다린다)
     clip.replaceChildren(panel);
+    // 넘김이 끝났는데도 자료가 안 왔으면 빈 책상 대신 불러오는 중 안내를 보인다(빠른 응답은 지금처럼 숨겨 둔 채 지면이 내려앉는다)
+    if (!action && from) setTimeout(() => {
+      if (!active() || clip.style.visibility !== 'hidden' || !clip.contains(panel)) return;
+      unfold(panel);
+    }, TURN_MS);
   }
 
   async function start(trigger, notice, failText) {

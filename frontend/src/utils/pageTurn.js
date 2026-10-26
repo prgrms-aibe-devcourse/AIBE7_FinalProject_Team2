@@ -5,7 +5,7 @@
 // 본뜬 지면은 장식이다(inert · aria-hidden, 눌러도 아무 일도 없다).
 import { reducedMotion } from './motion.js';
 
-const TURN_MS = 1000; // 기사 → 상세처럼 한 번 가는 이동. 자주 누르는 탭 바꾸기는 호출하는 쪽이 duration을 짧게 준다(0.5초)
+export const TURN_MS = 1000; // 기사 → 상세처럼 한 번 가는 이동. 자주 누르는 탭 바꾸기는 호출하는 쪽이 duration을 짧게 준다(0.5초)
 
 function div(className) {
   const node = document.createElement('div');
