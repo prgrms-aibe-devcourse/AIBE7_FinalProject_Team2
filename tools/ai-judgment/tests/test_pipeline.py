@@ -1028,14 +1028,32 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(outputs["count"], 6)
         self.assertEqual(outputs["failed"], 0)
         self.assertFalse(outputs["stopped"])
-        evidence = load_json(outputs["evidenceFile"])["evidence"]
+        self.assertTrue(outputs["publishable"])
+        evidence_data = load_json(outputs["evidenceFile"])
+        self.assertTrue(evidence_data["publishable"])
+        evidence = evidence_data["evidence"]
         self.assertEqual([e["factorId"] for e in evidence], [2, 3, 5, 7, 8, 9])
         self.assertEqual([e["role"] for e in evidence], ["prosecutor"] * 3 + ["defense"] * 3)
         self.assertEqual([e["character"] for e in evidence], ["naero"] * 3 + ["nambul"] * 3)
         self.assertEqual([e["text"] for e in evidence], script_lines)
+        # 대사 재료는 select 출력의 reason이 아니라 case.json의 label이다 (peanutboi710님 리뷰 1번, PR #277)
+        case_labels = {f["factorId"]: f["label"] for f in self.case["factors"]}
+        for i, e in enumerate(evidence):
+            self.assertIn(case_labels[e["factorId"]], self.script_requests[i][2])
         # system 프롬프트에 배역별(검사 · 변호인) 블록이 실제로 들어갔는지 확인
         self.assertIn("검사", self.script_requests[0][1])
         self.assertIn("변호인", self.script_requests[3][1])
+
+    def test_script_stage_marks_not_publishable_when_quota_exhausted(self):
+        config = self.config(generate={"models": ["openai:a"], "runs": 1},
+                             script={"enabled": True, "model": "openai:a",
+                                     "cast": {"prosecutor": "naero", "defense": "nambul"}})
+        script_lines = ["검사 측 증거1 대사입니다.", llm.LLMQuotaExhaustedError("일 한도 초과")]
+        state = self.run_with(config, {"openai:a": [self.output]}, until="script", script_answers=list(script_lines))
+        outputs = state["stages"]["script"]["outputs"]
+        self.assertTrue(outputs["stopped"])
+        self.assertFalse(outputs["publishable"])
+        self.assertFalse(load_json(outputs["evidenceFile"])["publishable"])
 
     def test_script_stage_requires_select_stage(self):
         config = self.config(generate={"models": ["openai:a"], "runs": 1},

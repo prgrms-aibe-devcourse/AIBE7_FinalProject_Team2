@@ -15,11 +15,25 @@
 ROLE → SKIN → SCENE CONTEXT → GUARDRAILS, SKIN은 사건 화면에서 빠진다)와 `docs/decisions/COMMON-65.md`를
 따른다. 블록 원문은 `tools/ai-judgment/prompts/script_*.md`에 있다.
 
+**대사 재료는 판단 요소의 `label`(사실 문장)이다 — `judgment_output`의 `reason`(AI가 그 요소를 어떻게
+저울질했는지)이 아니다**(peanutboi710님 리뷰, PR #277, 2026-10-26). `reason`은 AI 판결의 내부 근거라
+4막(판결 공개)까지 사용자에게 보이지 않는다. 증거조사는 2막이라, `reason`을 대사에 넣으면 판결이 새어
+나간다. 판단 요소의 방향(`direction` — 어느 측이 소개할지)만 `judgment_output`에서 가져오고, 실제 소개할
+사실(`label`)과 공개 시점(`revealStage`)은 `case.json`(사건 입력)에서 가져온다 — 2막(증거조사) 시점에
+이미 공개된 `OVERVIEW` · `DETAIL` 요소만 쓰고, 피고인 주장(`ARGUMENT`, 피고인신문에서 다룰 내용 — 범위 밖)은
+쓰지 않는다(`ordered_evidence_factors` 참고).
+
 **배역(`cast`)은 호출하는 쪽이 설정으로 넘긴다 — 이 모듈은 자동으로 정하지 않는다**(해송님 정정, 2026-10-24).
 `cast`는 `{"prosecutor": "naero" 또는 "nambul", "defense": 나머지 하나}` 형태다.
 
 항목(판단 요소) 단위로 모델을 한 번씩 불러 대사 한 줄을 받는다 — 막 전체를 한 번에 JSON으로 요청하지
-않는다(해송님 승인 방식, 형식 오류 · 환각 위험을 줄인다).
+않는다(해송님 승인 방식, 형식 오류 · 환각 위험을 줄인다). 같은 측의 두 번째 대사부터는 직전 같은 측 대사를
+SCENE CONTEXT에 함께 넘겨 측 전환이 자연스럽게 이어지도록 한다(`build_evidence_prompt` 참고, peanutboi710님
+리뷰 3번).
+
+**출력 계약**: `failed > 0`이거나 `stopped`인 결과(요소 일부가 끝내 생성되지 못했거나 호출 한도로 중간에
+멈춘 경우)는 증거 카드와 대사가 1:1로 어긋나므로 BE-108(관리자 검수) 전에는 공개하면 안 된다 —
+`evidence.json`의 `publishable` 필드로 표시한다(peanutboi710님 리뷰 7번).
 """
 
 import re
@@ -30,11 +44,16 @@ from llm import LLMError, LLMQuotaExhaustedError
 from llm import call as default_call
 
 ROLE_BY_DIRECTION = {"UP": "prosecutor", "DOWN": "defense"}
+ROLE_LABEL = {"prosecutor": "검사", "defense": "변호인"}
 CHARACTERS = ("naero", "nambul")
 MAX_LINES = 2
-BANNED_PATTERNS = {"정령": "정령", "명령": "명령", "배우": r"배우(?!자)", "천사": "천사", "악마": "악마",
-                   "MBTI": "MBTI", "로울": "로울", "로봉": "로봉", "로북": "로북", "엄벌": "엄벌",
-                   "중도": "중도", "자비": "자비"}
+MAX_CHARS = 100
+# 2막(증거조사) 시점에 이미 공개된 판단 요소만 증거로 쓴다 — ARGUMENT(피고인 주장)는 피고인신문 범위(범위 밖)
+REVEALED_BY_EVIDENCE = ("OVERVIEW", "DETAIL")
+# 세계관 고유어만 막는다 — 엄벌 · 중도 · 자비 · 명령은 일반 법률 용어(유족의 엄벌 탄원, 접근금지 명령 등)와
+# 겹쳐 정상 대사를 막았다(peanutboi710님 리뷰 2번, PR #277 — BE-107 댓글 5번에서 과하게 넓게 잡았던 것을 바로잡음)
+BANNED_PATTERNS = {"정령": "정령", "배우": r"배우(?!자)", "천사": "천사", "악마": "악마",
+                   "MBTI": "MBTI", "로울": "로울", "로봉": "로봉", "로북": "로북"}
 
 
 class ScriptGenerationError(Exception):
@@ -55,40 +74,67 @@ def cast_errors(cast):
     return errors
 
 
-def ordered_evidence_factors(judgment_output):
+def _number_tokens(text):
+    """쉼표를 뺀 숫자 토큰 집합 — "5,000"과 "5000"을 같은 숫자로, "1"과 "2023"은 다른 숫자로 본다
+    (부분 문자열 비교였던 이전 버전은 "1"이 "2023"에 포함된다고 오탐했다. peanutboi710님 리뷰 6번)."""
+    return {token.replace(",", "") for token in re.findall(r"\d[\d,]*", text or "")}
+
+
+def ordered_evidence_factors(case, judgment_output):
     """증거로 소개할 판단 요소 — 검사 측(UP) 먼저, 변호인 측(DOWN) 다음(case-1과 같은 순서).
 
-    `judgment_output`은 사건 입력(case.json)이 아니라 **select 단계가 고른 판결의 출력**이다
-    (`factorId` · `direction` · `reason`을 가진 쪽 — case.json의 `factors[]`는 `label`만 있고
-    아직 방향이 없다. `frontend/src/content/case-1/script.json`의 증거 카드가 "API 8
-    GET .../experience/verdict-form factors"를 근거로 적어 둔 것과 같다). 방향이 없는(선택 안 함)
-    요소는 증거로 소개하지 않는다. 근거(`reason`)가 없거나 빈 문자열인 요소도 제외한다 — 모델에게 넘길
-    내용이 없다(validate_output.py는 빈 reason을 경고로만 남기고 통과시키므로 여기서 다시 거른다)."""
-    factors = [
-        f for f in judgment_output.get("factors", [])
-        if f.get("direction") in ROLE_BY_DIRECTION
-        and isinstance(f.get("reason"), str)
-        and f["reason"].strip()
-    ]
+    방향(`direction`)은 `judgment_output`(select 단계가 고른 판결의 출력 — `factorId` · `direction` ·
+    `reason`을 가진 쪽)에서, 실제로 소개할 사실(`label`)과 공개 시점(`revealStage`)은 `case`(사건
+    입력 — case.json)의 `factors[]`에서 가져와 `factorId`로 합친다(`build_evidence_prompt`의 `label`
+    사용 이유는 모듈 docstring 참고). 방향이 없는(선택 안 함) 요소, `case`에 대응하는 요소가 없는 경우,
+    2막 시점에 아직 공개되지 않은 요소(`revealStage`가 `OVERVIEW` · `DETAIL`이 아님 — 예: 피고인 주장인
+    `ARGUMENT`), `label`이 없거나 빈 문자열인 요소는 증거로 소개하지 않는다."""
+    case_factors = {f["factorId"]: f for f in case.get("factors", [])}
+    factors = []
+    for f in judgment_output.get("factors", []):
+        direction = f.get("direction")
+        if direction not in ROLE_BY_DIRECTION:
+            continue
+        case_factor = case_factors.get(f.get("factorId"))
+        if not case_factor or case_factor.get("revealStage") not in REVEALED_BY_EVIDENCE:
+            continue
+        label = case_factor.get("label")
+        if not isinstance(label, str) or not label.strip():
+            continue
+        factors.append({"factorId": f["factorId"], "direction": direction, "label": label})
     return sorted(factors, key=lambda f: f["direction"] != "UP")
 
 
-def build_evidence_prompt(case, factor, cast):
-    """판단 요소 하나를 법정 증거로 소개하는 대사의 (system, user, role, character)를 만든다."""
+def build_evidence_prompt(case, factor, cast, *, is_first_for_role, previous_text=None):
+    """판단 요소 하나를 법정 증거로 소개하는 대사의 (system, user, role, character)를 만든다.
+
+    `is_first_for_role`이 참이면 이 대사가 그 측이 증거조사에서 처음 말하는 차례라는 뜻이고(case-1처럼
+    "{측} 측 증거입니다."로 시작하게 한다), 거짓이면 같은 측의 직전 대사(`previous_text`)를 SCENE
+    CONTEXT에 함께 넘겨 다시 소개하지 않고 자연스럽게 이어가게 한다(5-2 SCENE CONTEXT의 "앞뒤 대사",
+    peanutboi710님 리뷰 3번)."""
     role = ROLE_BY_DIRECTION[factor["direction"]]
+    role_label = ROLE_LABEL[role]
     character = cast[role]
     system = "\n\n".join([
         read_prompt(f"script_persona_{character}.md").rstrip(),
         read_prompt(f"script_role_{role}.md").rstrip(),
         read_prompt("script_guardrails.md").rstrip(),
     ])
-    user = (
-        "[SCENE CONTEXT]\n"
-        f"사건: {case['title']}\n"
-        f"사건 개요: {case['overview']}\n"
-        f"지금 소개할 판단 요소: {factor['reason']}\n\n"
-        "위 판단 요소 하나를 법정에서 증거로 소개하는 대사를 쓰세요."
-    )
+    scene_lines = [
+        "[SCENE CONTEXT]",
+        f"사건: {case['title']}",
+        f"사건 개요: {case['overview']}",
+        f"지금 소개할 사실: {factor['label']}",
+    ]
+    if is_first_for_role:
+        scene_lines.append(f"지금이 {role_label} 측이 증거조사에서 처음 말하는 차례입니다 — "
+                            f"\"{role_label} 측 증거입니다.\"로 시작하세요.")
+    else:
+        scene_lines.append(f"직전 {role_label} 측 대사: {previous_text}")
+        scene_lines.append(f"위 흐름을 이어서 말하되, \"{role_label} 측 증거입니다\"는 다시 말하지 마세요.")
+    scene_lines.append("")
+    scene_lines.append("위 사실 하나를 법정에서 증거로 소개하는 대사를 쓰세요.")
+    user = "\n".join(scene_lines)
     return system, user, role, character
 
 
@@ -99,31 +145,42 @@ def validate_line(text, factor):
     lines = [line for line in stripped.splitlines() if line.strip()]
     if not lines:
         errors.append("빈 응답입니다")
-    elif len(lines) > MAX_LINES:
-        errors.append(f"대사가 {MAX_LINES}줄을 넘습니다 ({len(lines)}줄)")
+    else:
+        if len(lines) > MAX_LINES:
+            errors.append(f"대사가 {MAX_LINES}줄을 넘습니다 ({len(lines)}줄)")
+        total_chars = sum(len(line) for line in lines)
+        if total_chars > MAX_CHARS:
+            errors.append(f"대사가 {MAX_CHARS}자를 넘습니다 ({total_chars}자)")
     for word, pattern in BANNED_PATTERNS.items():
         if re.search(pattern, stripped):
             errors.append(f"금지어 포함: {word}")
-    source = factor.get("reason", "")
-    for number in re.findall(r"\d+", stripped):
-        if number not in source:
+    source_numbers = _number_tokens(factor.get("label", ""))
+    for number in _number_tokens(stripped):
+        if number not in source_numbers:
             warnings.append(f"판단 요소 원문에 없는 숫자 '{number}'가 들어갔습니다 — 확인 필요")
     return {"ok": not errors, "errors": errors, "warnings": warnings}
 
 
 def generate_evidence_lines(case, judgment_output, cast, *, model, caller=default_call, max_retries=2,
                              temperature=None, max_tokens=2000, timeout=60, delay=0.0, log=None):
-    """판단 요소마다 증거조사 대사 한 줄을 생성한다. `case`는 제목 · 개요(SCENE CONTEXT)만 쓰고,
-    판단 요소(방향 · 이유)는 `judgment_output`(select 단계가 고른 판결 출력)에서 가져온다
-    (`ordered_evidence_factors` 설명 참고).
+    """판단 요소마다 증거조사 대사 한 줄을 생성한다. `case`는 제목 · 개요(SCENE CONTEXT)와 판단 요소의
+    `label`(실제 소개할 사실) · `revealStage`에 쓰고, 방향(`direction`)은 `judgment_output`(select
+    단계가 고른 판결 출력)에서 가져온다(`ordered_evidence_factors` 설명 참고).
+
+    같은 측(검사 · 변호인)의 두 번째 대사부터는 직전 같은 측 대사를 넘겨 측 전환이 이어지게 한다
+    (`build_evidence_prompt`의 `is_first_for_role` 참고).
 
     돌려주는 값: (lines, stopped) — lines는 순서대로 쌓인 결과 목록
     [{factorId, role, character, text, validation, attempts}], stopped는 호출 한도 소진으로
     남은 항목을 건너뛰었으면 True(axis 단계와 같은 정책 — 받은 것만으로 집계하고 멈춘다).
     """
     results, stopped = [], False
-    for factor in ordered_evidence_factors(judgment_output):
-        system, user, role, character = build_evidence_prompt(case, factor, cast)
+    last_text_by_role = {"prosecutor": None, "defense": None}
+    for factor in ordered_evidence_factors(case, judgment_output):
+        role = ROLE_BY_DIRECTION[factor["direction"]]
+        is_first_for_role = last_text_by_role[role] is None
+        system, user, role, character = build_evidence_prompt(
+            case, factor, cast, is_first_for_role=is_first_for_role, previous_text=last_text_by_role[role])
         text, validation, attempts = None, None, 0
         for attempt in range(max_retries + 1):
             attempts += 1
@@ -149,9 +206,12 @@ def generate_evidence_lines(case, judgment_output, cast, *, model, caller=defaul
                     + (" — 다시 요청합니다" if attempt < max_retries else " — 실패로 남깁니다"))
         if stopped:
             break
+        ok = bool(validation and validation["ok"])
+        if ok:
+            last_text_by_role[role] = text.strip()
         results.append({
             "factorId": factor["factorId"], "role": role, "character": character,
-            "text": (text or "").strip() if validation and validation["ok"] else None,
+            "text": text.strip() if ok else None,
             "validation": validation, "attempts": attempts,
         })
     return results, stopped

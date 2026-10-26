@@ -1139,8 +1139,9 @@ def stage_axis(config, state, log, caller=call):
 
 def stage_script(config, state, log, caller=call):
     """사건 대본 — 증거조사 대사 생성 (BE-107). 판단 요소마다 대사 한 줄을 만든다 — 검사 측(UP
-    방향) 먼저, 변호인 측(DOWN 방향) 다음(case-1 대본과 같은 순서). 판단 요소(방향 · 이유)는 select
-    단계가 고른 판결 출력에서 가져온다 — case.json의 factors는 아직 방향이 없는 입력값이라 쓰지 않는다
+    방향) 먼저, 변호인 측(DOWN 방향) 다음(case-1 대본과 같은 순서). 방향은 select 단계가 고른 판결
+    출력에서, 실제로 소개할 사실(label)은 case.json에서 가져온다 — select 출력의 reason(AI 판결의 내부
+    근거)을 대사 재료로 쓰지 않는다. 4막(판결 공개)까지 사용자에게 보이면 안 되기 때문이다
     (script_generation.ordered_evidence_factors 설명 참고). 배역(cast)은 설정에서 받는다 — 이
     단계가 자동으로 정하지 않는다(해송님 정정, 2026-10-24). 범위(지금은 증거조사만, 피고인신문 등은 범위
     밖인 이유)는 script_generation.py 모듈 docstring 참고."""
@@ -1166,16 +1167,22 @@ def stage_script(config, state, log, caller=call):
     if balance:
         log(f"⚠ {balance}")
     failed = [line for line in lines if not line["validation"]["ok"]]
+    # 일부 요소가 실패했거나 호출 한도로 중단됐으면 증거 카드와 대사가 1:1로 어긋난다 — BE-108(관리자
+    # 검수) 전에는 공개하면 안 된다(peanutboi710님 리뷰 7번, PR #277). evidence.json에 계약을 명시해 둔다
+    publishable = not stopped and not failed
     evidence_file = out_dir / "evidence.json"
     write_json(evidence_file, {"model": cfg["model"], "cast": cast, "createdAt": _now(),
-                               "evidence": lines, "balanceWarning": balance})
+                               "evidence": lines, "balanceWarning": balance, "publishable": publishable})
     if stopped:
         log(f"호출 한도 소진 → 판단 요소 {len(lines)}개까지만 생성했습니다")
     if failed:
         log(f"⚠ {len(failed)}개 요소는 끝내 생성하지 못했습니다(evidenceFile 참고) — 관리자 검수 전에 다시 돌려야 합니다")
+    if not publishable:
+        log("⚠ publishable: false — 증거 카드와 대사가 어긋날 수 있어 BE-108 검수 전에는 공개할 수 없습니다")
     log(f"결과: 판단 요소 {len(lines)}개 중 성공 {len(lines) - len(failed)}개")
     return {"evidenceFile": str(evidence_file), "model": cfg["model"], "cast": cast,
-            "count": len(lines), "failed": len(failed), "stopped": stopped, "balanceWarning": balance}
+            "count": len(lines), "failed": len(failed), "stopped": stopped, "balanceWarning": balance,
+            "publishable": publishable}
 
 
 def stage_load(config, state, log, apply=None):
