@@ -1,7 +1,8 @@
 import { button, element, mockTag } from '../../components/siteLayout.js';
 import { profileFace } from '../../components/personCards.js';
 import { normalizeDeco } from '../../utils/profileDeco.js';
-import { NOT_READY, authorButton, clip, communityShell, composer, filterControls, popularList, postLink } from './communityParts.js';
+import { scriptFor } from '../overview/overviewPage.js';
+import { NOT_READY, authorButton, clip, communityShell, composer, filterControls, popularList, postLink, svgIcon } from './communityParts.js';
 
 // S-18 커뮤니티 메인 (FE-89). 메인 책상의 노트북 · 헤더 "커뮤니티"로 들어온다. 글 목록은 /community/posts(communityPage.js)
 // 가운데: 지금 이야기가 많은 사건(한 장씩 넘기는 슬라이드) → 레벨 랭킹(시상대 + 4 ~ 10위 줄) → 추천 사건(신문 세 단).
@@ -42,7 +43,7 @@ export function renderCommunityHomePage(container, { api, navigate }) {
     }
     if (!active()) return;
     if (!filterHost.querySelector('.cm-filter-groups')) {
-      filterHost.append(filterControls({ value: { category: undefined, caseId: null }, cases: data.cases, onChange: ({ category, caseId }) => navigate('communityPosts', { category: category ?? null, filterCaseId: caseId }) }));
+      filterHost.append(filterControls({ value: { category: null, caseId: null }, cases: data.cases, onChange: ({ category, caseId }) => navigate('communityPosts', { category: category ?? null, filterCaseId: caseId }) }));
       side.append(composer({ api, navigate, cases: data.cases, closeButton, closeCompose, onPosted: (post) => { closeCompose(); navigate('communityPosts', { justPosted: post.postId }); } }),
         popularList(data.popular, navigate));
     }
@@ -130,7 +131,7 @@ export function renderCommunityHomePage(container, { api, navigate }) {
     const offset = looping ? 1 : 0; // 앞 복제본 한 장
     let shown = -1; // 지금 보는 장(트랙 자리)
     const position = () => Math.min(track.children.length - 1, Math.max(0, Math.round(track.scrollLeft / (track.clientWidth || 1))));
-    const go = (index, behavior) => track.scrollTo({ left: index * track.clientWidth, behavior });
+    const go = (index, behavior) => (behavior === 'instant' ? jumpTo(track, index * track.clientWidth) : track.scrollTo({ left: index * track.clientWidth, behavior }));
     const paint = () => {
       const index = position();
       if (index === shown) return;
@@ -161,7 +162,7 @@ export function renderCommunityHomePage(container, { api, navigate }) {
     const wrap = element('div', 'cm-hot-clip-wrap');
     const clipping = element('article', 'cm-hot-clipping');
     const kicker = element('p', 'cm-hot-kicker');
-    kicker.append(element('span', '', item.crimeCategoryLabel), element('span', '', `오늘 글 · 댓글 ${talkCount}개`));
+    kicker.append(element('span', '', item.crimeCategoryLabel), element('span', '', `최근 하루 글 · 댓글 ${talkCount}개`));
     clipping.append(kicker, element('h3', 'cm-hot-headline', item.headline), element('p', 'cm-hot-deck', item.deck));
     if (item.thumbnailUrl) {
       const photo = element('img', 'cm-hot-photo');
@@ -179,7 +180,9 @@ export function renderCommunityHomePage(container, { api, navigate }) {
     const people = element('span');
     people.append(element('b', '', `${item.participantCount.toLocaleString()}명`), ' 판결');
     facts.append(people, element('span', '', `약 ${item.estimatedMinutes}분`));
-    clipping.append(facts, routeLink('이 사건 판결하기', `/cases/${item.caseId}`, () => navigate('caseDetail', { caseId: item.caseId }), 'cm-hot-try'));
+    // 판결 체험 대본이 있는 사건만 "판결하기"(없는 사건은 사건 정보에서 "준비 중"이 나온다, caseListPage와 같은 기준)
+    const playable = Boolean(scriptFor(item.caseId, item.title));
+    clipping.append(facts, routeLink(playable ? '이 사건 판결하기' : '사건 보기', `/cases/${item.caseId}`, () => navigate('caseDetail', { caseId: item.caseId }), 'cm-hot-try'));
     wrap.append(clip(), clipping);
     const postsBox = element('div', 'cm-hot-posts');
     postsBox.append(element('p', 'cm-hot-posts-label', '이 사건 글'), briefList(posts));
@@ -242,7 +245,7 @@ export function renderCommunityHomePage(container, { api, navigate }) {
 
     const setWidth = () => rest.children[others.length].offsetLeft - rest.children[0].offsetLeft; // 한 벌(카드 + 간격) 폭
     const stepWidth = () => (rest.children[1].offsetLeft - rest.children[0].offsetLeft) * REST_STEP;
-    const jump = (left) => rest.scrollTo({ left, behavior: 'instant' });
+    const jump = (left) => jumpTo(rest, left);
     const recenter = () => {
       const set = setWidth();
       if (rest.scrollLeft < set * 0.5) jump(rest.scrollLeft + set);
@@ -294,10 +297,17 @@ export function renderCommunityHomePage(container, { api, navigate }) {
   return load();
 }
 
+// 소리 없이 자리만 옮긴다: CSS의 부드러운 스크롤(scroll-behavior: smooth)을 잠깐 끄고 값을 바꾼다. scrollTo의 behavior: 'instant'는 브라우저마다 달라(사파리) 쓰지 않는다
+function jumpTo(node, left) {
+  node.style.scrollBehavior = 'auto';
+  node.scrollLeft = left;
+  node.style.scrollBehavior = '';
+}
+
 function arrowButton(direction, label) {
   const node = element('button', 'cm-arrow');
   node.type = 'button';
   node.setAttribute('aria-label', label);
-  node.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="${direction === 'prev' ? 'M10 3 5 8l5 5' : 'm6 3 5 5-5 5'}"/></svg>`;
+  node.append(svgIcon('0 0 16 16', null, [[direction === 'prev' ? 'M10 3 5 8l5 5' : 'm6 3 5 5-5 5']]));
   return node;
 }

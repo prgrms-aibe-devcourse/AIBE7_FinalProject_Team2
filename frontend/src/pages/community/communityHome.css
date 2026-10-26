@@ -61,7 +61,7 @@
    카드가 이보다 작아질 자리면 줄이지 않고 좌우로 넘긴다(둘 중 하나라도 걸리면 넘김). 시상대 카드 폭은 랭킹 칸 폭(cqi)으로 계산한다 */
 .cm-rank { --podium-gap: 22px; --podium-max: 168px; --rest-fixed: 110px; container-type: inline-size; padding-block: 26px 30px; border-block: 1px solid var(--color-border); }
 .cm-rank { --podium-card: min(var(--podium-max), (100cqi - 2 * var(--podium-gap)) / 3); --rest-min: max(var(--rest-fixed), var(--podium-card) / 2); }
-.cm-podium { display: grid; grid-template-columns: repeat(3, minmax(0, var(--podium-max))); justify-content: center; align-items: end; gap: var(--podium-gap); margin: 6px 0 0; padding: 0; list-style: none; }
+.cm-podium { display: grid; grid-template-columns: repeat(3, minmax(0, var(--podium-card))); justify-content: center; align-items: end; gap: var(--podium-gap); margin: 6px 0 0; padding: 0; list-style: none; }
 .cm-podium li { display: grid; justify-items: center; gap: 8px; }
 .cm-podium li.is-1 { order: 2; } /* 읽는 순서는 1 · 2 · 3위, 보이는 자리는 2 · 1 · 3위 */
 .cm-podium li.is-2 { order: 1; }

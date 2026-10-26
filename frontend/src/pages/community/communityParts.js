@@ -59,15 +59,26 @@ const typeNameOf = (author) => author.shownType?.type.name ?? null;
 
 // 커뮤니티 이름 · 로고(임시). 이름은 확정 전이라 한 곳에서만 쓴다. 로고는 책상 위 스탠드 + 달(DESIGN.md 책상 물건 은유)이고, 최종 이미지 로고가 나오면 logoMark만 바꾼다
 export const COMMUNITY_NAME = '판사들의 밤';
-export function logoMark() {
+export const logoMark = () => svgIcon('0 0 40 40', 'cm-logo', [
+  ['M31 4.5a6.5 6.5 0 1 0 4.5 11A8 8 0 0 1 31 4.5Z', 'cm-logo-moon'],
+  ['M13 17 6 33h20l-4-12', 'cm-logo-light'],
+  ['M9 17a9 9 0 0 1 18 0Z', 'cm-logo-lamp'],
+  ['M18 17v12M12 33.5h12M8 36.5h20', 'cm-logo-line'],
+]);
+
+// 장식 SVG: paths는 [[path 값, 클래스], ...]. 읽지 않는다(aria-hidden). 값이 정해진 상수만 넣는다
+export function svgIcon(viewBox, className, paths) {
   const node = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  node.setAttribute('viewBox', '0 0 40 40');
+  node.setAttribute('viewBox', viewBox);
   node.setAttribute('aria-hidden', 'true');
-  node.classList.add('cm-logo');
-  node.innerHTML = '<path class="cm-logo-moon" d="M31 4.5a6.5 6.5 0 1 0 4.5 11A8 8 0 0 1 31 4.5Z"/>'
-    + '<path class="cm-logo-light" d="M13 17 6 33h20l-4-12"/>'
-    + '<path class="cm-logo-lamp" d="M9 17a9 9 0 0 1 18 0Z"/>'
-    + '<path class="cm-logo-line" d="M18 17v12M12 33.5h12M8 36.5h20"/>';
+  node.setAttribute('focusable', 'false');
+  if (className) node.classList.add(className);
+  node.append(...paths.map(([d, pathClass]) => {
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    line.setAttribute('d', d);
+    if (pathClass) line.classList.add(pathClass);
+    return line;
+  }));
   return node;
 }
 
