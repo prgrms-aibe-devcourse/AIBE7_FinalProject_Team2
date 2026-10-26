@@ -115,7 +115,7 @@
   .tp-date { font-size: 11px; }
   .tp-body { padding-top: 14px; }
   .tp-moves { padding-top: 8px; }
-  .tp-move { min-height: 36px; padding: 4px 12px; font-size: 13px; }
+  .tp-move { min-height: 44px; padding: 4px 12px; font-size: 13px; }
   .tp-intro, .tp-debate-head { grid-template-columns: minmax(0, 1fr); }
   .tp-intro { gap: 16px; }
   .tp-columns { column-count: 1; }
