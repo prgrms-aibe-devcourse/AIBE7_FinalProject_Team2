@@ -37,6 +37,7 @@
 .edit-fan-side { display: grid; gap: 20px; flex: 1 1 220px; min-width: 0; max-width: 360px; }
 /* 겹치기: 높이(y)는 같고 x만 --fan-step씩 어긋난다. 고른 카드가 맨 왼쪽 · 맨 앞(z-index는 JS) */
 .edit-fan-stack { position: relative; width: calc(200px + (var(--n, 1) - 1) * var(--fan-step)); height: 400px; }
+.edit-fan-empty { box-sizing: border-box; display: grid; place-content: center; width: 200px; height: 100%; margin: 0; padding: 16px; border: 2px dashed var(--color-border-strong); border-radius: 14px; color: var(--color-muted); font-size: var(--text-small); text-align: center; text-wrap: balance; } /* 카드 한 장 자리(200px)를 그대로 채운다 */
 .edit-fan-card { position: absolute; top: 0; left: calc(var(--i, 0) * var(--fan-step)); padding: 0; border: 0; border-radius: 14px; background: none; color: inherit; font: inherit; cursor: pointer; transition: transform .15s ease-out; }
 .edit-fan-card:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 3px; }
 .edit-fan-card[aria-pressed="true"] { cursor: default; }

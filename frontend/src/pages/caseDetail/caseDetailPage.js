@@ -3,6 +3,7 @@ import { screenByStatus } from '../../utils/screenByStatus.js';
 import { caseStage, mountStagePage, scriptFor } from '../overview/overviewPage.js';
 import { caseInfoEar, caseNewspaper, earButton, paperFromCase } from '../../components/newspaperFront.js';
 import { reducedMotion } from '../../utils/motion.js';
+import { TURN_MS } from '../../utils/pageTurn.js';
 import { openCaseReviewPopup } from '../caseReview/caseReviewPopup.js';
 
 // S-20 사건 디테일 (확장, IA v1.12 · FE-32). 신문 지면(S-02)에서 고른 기사를 한 장 넘기면 나오는 신문 안쪽 면이다
@@ -51,6 +52,11 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
     if (action) panel.append(action);
     if (action) clip.style.visibility = ''; // 오류 안내는 바로 보인다(불러오는 중은 숨겨 둔 채 다음 면이 내려앉기를 기다린다)
     clip.replaceChildren(panel);
+    // 넘김이 끝났는데도 자료가 안 왔으면 빈 책상 대신 불러오는 중 안내를 보인다(빠른 응답은 지금처럼 숨겨 둔 채 지면이 내려앉는다)
+    if (!action && from) setTimeout(() => {
+      if (!active() || clip.style.visibility !== 'hidden' || !clip.contains(panel)) return;
+      unfold(panel);
+    }, TURN_MS);
   }
 
   async function start(trigger, notice, failText) {
@@ -103,7 +109,8 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
     const deskBack = element('div', 'desk');
     deskBack.setAttribute('aria-hidden', 'true');
     root.className = 'case-list-page case-paper-page overview-page';
-    root.replaceChildren(deskBack, sheet, dock);
+    root.replaceChildren(deskBack, sheet);
+    sheet.append(dock); // 책상(배경)과 색이 겹치지 않게 지면 안, 우하단에 둔다(CSS sticky)
     unfold(sheet);
   }
 
@@ -140,7 +147,7 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
     const { stage, setOverview, setAlreadySent } = caseStage({
       caseId, api, navigate, script, info, paper: paperFromCase(data, script.paper), parked: true, prompt, ...(resume ? { earRight: resume } : {}),
     });
-    // 우하단 "시작하기": 누르면 내로 · 남불이 들어오며 1막이 처음부터 시작된다(진행 중이면 내로가 먼저 묻는다). 바로 이어 보기는 오른쪽 귀
+    // 지면 우하단 "시작하기": 누르면 내로 · 남불이 들어오며 1막이 처음부터 시작된다(진행 중이면 내로가 먼저 묻는다). 바로 이어 보기는 오른쪽 귀
     const dock = element('div', 'paper-start');
     const notice = element('p', 'paper-start-notice');
     notice.setAttribute('role', 'alert');
@@ -148,7 +155,7 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
     go.setAttribute('aria-label', `시작하기, ${data.title}`); // 화면 글자("시작하기")로 시작해야 음성 입력으로 누를 수 있다(WCAG 2.5.3)
     dock.append(notice, go);
     mountStagePage(root, { stage });
-    root.append(dock);
+    (stage.querySelector('.paper') ?? root).append(dock); // 책상(배경)과 색이 겹치지 않게 지면 안, 우하단에 둔다(CSS sticky)
     unfold(stage);
 
     // 이 지면에서 1막을 잇는다(사전 판단 전, STARTED). 묻는 장면이 맨 앞에 있으면 건너뛴다

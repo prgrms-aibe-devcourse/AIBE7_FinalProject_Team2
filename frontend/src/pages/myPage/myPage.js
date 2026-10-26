@@ -674,6 +674,10 @@ function typeFan(data, navigate, go) {
     const shown = shownSlot(slots);
     const order = shown ? [shown, ...SHOWN_SLOTS.filter((key) => key !== shown && slots[key])] : [];
     stack.style.setProperty('--n', String(Math.max(order.length, 1)));
+    if (!order.length) { // 성향카드가 한 장도 없으면 카드 자리를 점선 빈 칸으로 보여 준다
+      stack.replaceChildren(element('p', 'edit-fan-empty', '아직 성향카드가 없어요. 첫 성향 테스트를 하면 여기에 생겨요.'));
+      return;
+    }
     stack.replaceChildren(...order.map((key, index) => {
       const card = element('button', 'edit-fan-card');
       card.type = 'button';

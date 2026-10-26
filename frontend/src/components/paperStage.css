@@ -30,7 +30,7 @@
 /* 독자 의견 엽서(1막 사전 판단): 지면 위 팝업. 가장자리는 항공우편 줄무늬, 오른쪽 위에 우표 · 소인. 뒤 지면은 어둡게 가린다 */
 .stage-wrap.paper-mode .stage:has(> .board:not([hidden]))::after { content: ''; position: fixed; inset: 0; z-index: 25; background: color-mix(in srgb, var(--color-desk-shadow) 45%, transparent); animation: dlg-in .3s ease-out; }
 .stage-wrap.paper-mode .board, .stage-wrap.paper-mode .board.wide { position: fixed; z-index: 26; left: 50%; top: 46%; right: auto; bottom: auto; translate: -50% -50%; display: block; width: min(700px, calc(100vw - 32px)); height: auto; max-height: calc(100dvh - 150px);
-  padding: 9px; border: 0; border-radius: 12px; overflow: hidden; animation: none; transform: rotate(-.6deg);
+  padding: 9px; border: 0; border-radius: 12px; overflow: hidden; animation: none; rotate: -.6deg; /* transform이 아닌 rotate: 같은 규칙에 translate와 transform이 같이 있으면 빌드(lightningcss 압축)가 translate를 지운다 */
   background: repeating-linear-gradient(-45deg, var(--color-caution) 0 14px, var(--color-card) 14px 22px, var(--color-accent) 22px 36px, var(--color-card) 36px 44px);
   box-shadow: 0 24px 48px -16px color-mix(in srgb, var(--color-desk-shadow) 70%, transparent); }
 .stage-wrap.paper-mode .board[hidden] { display: none; }
@@ -117,13 +117,15 @@
   .case-paper-page .ear-button small { display: none; }
 }
 
-/* 체험 시작 전(S-20): 지면만 보이고 캐릭터 · 대사창 · 조작 줄은 숨는다. 우하단 "시작하기"로 시작 */
+/* 체험 시작 전(S-20): 지면만 보이고 캐릭터 · 대사창 · 조작 줄은 숨는다. 지면 우하단 "시작하기"로 시작 */
 .stage-wrap.paper-mode.parked :is(.spr, .dlg, .ctrl) { display: none; }
-.case-paper-page:has(.paper-start) { padding-bottom: calc(120px + var(--safe-bottom)); }
-.case-paper-page .paper-start { position: fixed; z-index: 20; right: calc(28px + env(safe-area-inset-right, 0px)); bottom: calc(24px + var(--safe-bottom)); display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.case-paper-page:has(.paper-start) { padding-bottom: calc(40px + var(--safe-bottom)); } /* 체험 전에는 대사창 자리가 없다: 지면 아래로는 40px까지만 스크롤된다 */
+.case-paper-page .paper:has(> .paper-start) { padding-bottom: 20px; } /* 시작하기 버튼의 하한: 지면 맨 아래에서 20px 위(margin은 지면 밖으로 새므로 padding) */
+.case-paper-page .paper-start { position: sticky; z-index: 20; bottom: calc(24px + var(--safe-bottom)); display: flex; flex-direction: column; align-items: flex-end; gap: 8px; width: fit-content; margin: 0 28px 0 auto; } /* 지면 안에서 화면 아래에 붙어 따라온다(책상 위로 나가지 않아 색이 겹치지 않는다) */
 .case-paper-page .paper-start .primary-button { min-height: 56px; padding: 0 28px; border-radius: 999px; font-size: 17px; box-shadow: 0 10px 24px -8px color-mix(in srgb, var(--color-desk-shadow) 70%, transparent); }
 .case-paper-page .paper-start-notice { max-width: 280px; margin: 0; padding: 6px 12px; border-radius: 8px; background: var(--color-card); color: var(--color-caution); font-size: var(--text-small); }
 .case-paper-page .paper-start-notice:empty { display: none; }
+@media (max-width: 680px) { .case-paper-page .paper-start { margin-right: 12px; } }
 /* 준비 중(FE-56, 대본 없는 사건): 누를 수 없는 회색 알약. 안내 문구는 주의색 대신 차분한 글자색 */
 .case-paper-page .paper-start .primary-button[aria-disabled="true"] { background: var(--color-surface-strong); border-color: var(--color-border-strong); color: var(--color-muted); box-shadow: none; cursor: default; }
 .case-paper-page .paper-start:has([aria-disabled="true"]) .paper-start-notice { color: var(--color-text); }
@@ -132,9 +134,6 @@
 .stage-wrap.paper-mode.entering .stage[data-scene] .spr.b { animation-delay: .12s; }
 .stage-wrap.paper-mode.entering :is(.dlg, .ctrl) { animation: dlg-in .3s ease-out .35s backwards; }
 @keyframes paper-enter { from { opacity: 0; transform: translateY(60%); } }
-@media (max-width: 680px) {
-  .case-paper-page .paper-start { right: calc(12px + env(safe-area-inset-right, 0px)); bottom: calc(14px + var(--safe-bottom)); }
-}
 /* 움직임 줄이기: 움직임(뛰어 들어옴 · 날아옴 · 내미는 팔)은 없애고, 나타났다는 단서(0.2초 투명도 페이드)는 남긴다 */
 @keyframes paper-fade { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
