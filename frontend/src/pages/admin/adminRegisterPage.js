@@ -1,6 +1,6 @@
 import { button, element } from '../../components/siteLayout.js';
 import { parseJudgmentText } from './adminJudgmentParse.js';
-import { COURT_LEVEL, CRIME_TYPE, IMPORT_STAGE, errorText } from './adminLabels.js';
+import { COURT_LEVEL, CRIME_TYPE, IMPORT_STAGE, IMPORT_STAGE_STATUS, errorText } from './adminLabels.js';
 import { checkField, labeledField } from './adminKit.js';
 import { PdfReadError } from './adminPdf.js';
 import { renderAdminShell } from './adminShell.js';
@@ -362,7 +362,10 @@ export function renderAdminRegisterPage(container, { navigate }) {
           const list = element('ol', 'admin-stages');
           data.stages.forEach((stage) => {
             const item = element('li', `admin-stage is-${stage.status.toLowerCase()}`);
-            item.append(element('span', 'admin-stage-mark', { DONE: '✓', RUNNING: '…', FAILED: '✕', SKIPPED: '–' }[stage.status] ?? '·'), IMPORT_STAGE[stage.name] ?? stage.name);
+            const [mark, word] = IMPORT_STAGE_STATUS[stage.status] ?? IMPORT_STAGE_STATUS.PENDING;
+            const markNode = element('span', 'admin-stage-mark', mark);
+            markNode.setAttribute('aria-hidden', 'true');
+            item.append(markNode, IMPORT_STAGE[stage.name] ?? stage.name, element('small', 'admin-stage-state', word));
             list.append(item);
           });
           // 생성이 끝나도 사건은 아직 없다(caseId). 적재까지 끝났을 때만 "등록을 마쳤어요"로 쓴다

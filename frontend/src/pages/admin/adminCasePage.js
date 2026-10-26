@@ -1,5 +1,5 @@
 import { button, element } from '../../components/siteLayout.js';
-import { labeledField } from './adminKit.js';
+import { confirmChange, labeledField } from './adminKit.js';
 import {
   AXIS_LABEL, AXIS_OPTIONS, CASE_STATUS, COURT_LEVEL, CRIME_TYPE, DIFFICULTY, PUBLISH_REASON, REVEAL_STAGE, REVIEW_STATUS, SUBJECT,
   errorText, formatDateTime,
@@ -10,17 +10,28 @@ import { renderAdminShell } from './adminShell.js';
 // S-19 사건 검수 상세 (A-6 ~ A-13).
 // 순서: 공개 준비(A-13) → 판결 후보(A-8 ~ A-10) → 판단 요소 가치관 축(A-12) → 사건 내용 수정(A-11) → 원본 판결문(A-7).
 // 상태를 바꾼 뒤에는 A-6을 다시 불러와 화면 전체를 다시 그린다(사건 상태 · 공개 조건이 함께 바뀌기 때문).
+// FE-105: 다시 그린 뒤 누른 자리(후보 · 판단 요소 줄 · 공개 · 사건 내용)로 돌아가 포커스를 두고, 펼쳐 둔 후보 상세는 다시 펼친다.
+// 완료 문구는 틀의 알림줄(notify)이 맡는다. 맨 위 "바로 가기"로 원본 판결문 등 각 부분으로 건너뛴다.
+// 후보 승인은 "자세히 보기"로 내용을 한 번 연 뒤에 할 수 있다(내용을 보지 않고 공개 판결로 정하지 않게)
 // 모든 값은 textContent로 넣는다(원문 · 모델 출력에 HTML이 섞여 있어도 실행되지 않게).
 const DIRECTION = { UP: '가중 ↑', DOWN: '감경 ↓' };
+const SECTIONS = [['publish', '공개'], ['candidates', '판결 후보'], ['factors', '판단 요소'], ['content', '사건 내용'], ['sources', '원본 판결문']];
 const CHECKLIST = [
   '사건 내용과 원본 판결문을 대조해 인명 · 지명 · 사건번호 등 비식별화를 확인했다',
   '공개할 AI 판결과 재판부 판결 후보의 내용을 확인했다',
   '적용 양형기준 버전과 권고 형량 범위를 확인했다',
 ];
 
-function section(title, ...children) {
+// key가 있으면 맨 위 "바로 가기"가 이 부분의 제목으로 건너뛴다
+function section(title, key, ...children) {
   const node = element('section', 'admin-section');
-  node.append(element('h2', '', title), ...children);
+  const heading = element('h2', '', title);
+  if (key) {
+    node.id = `admin-case-${key}`;
+    heading.tabIndex = -1;
+    heading.dataset.anchor = key;
+  }
+  node.append(heading, ...children);
   return node;
 }
 
@@ -97,8 +108,9 @@ export function renderAdminCasePage(container, { caseId, navigate }) {
     navigate,
     section: 'cases',
     title: `사건 #${caseId} 검수`,
-    draw: async ({ api, main, active, unauthorized, setTitle }) => {
-      let flash = null; // { text, kind: 'ok' | 'error' } — 다시 그린 뒤 맨 위에 보여 준다
+    draw: async ({ api, main, active, unauthorized, setTitle, notify }) => {
+      const opened = new Set(); // 상세를 펼쳐 둔 후보(judgmentId). 다시 그려도 펼친 채로 둔다
+      const viewed = new Set(); // 한 번이라도 상세를 연 후보. 승인은 이 후보만 할 수 있다
 
       function handleFailure(failure, fallback, target) {
         if (!active()) return;
@@ -106,18 +118,29 @@ export function renderAdminCasePage(container, { caseId, navigate }) {
         target.textContent = errorText(failure, fallback);
       }
 
-      // 상태를 바꾸는 동작: 버튼을 잠그고, 성공하면 A-6을 다시 불러온다
-      async function mutate(trigger, errorTarget, action, okText) {
+      // 상태를 바꾸는 동작: 버튼을 잠그고, 성공하면 A-6을 다시 불러와 그린 뒤 anchor 자리로 돌아가 알린다
+      async function mutate(trigger, errorTarget, action, okText, anchor) {
         trigger.disabled = true;
         errorTarget.textContent = '';
         try {
           await action();
-          flash = { text: okText, kind: 'ok' };
           await load();
+          if (!active()) return;
+          returnTo(anchor);
+          notify(okText);
         } catch (failure) {
           handleFailure(failure, '요청을 처리하지 못했어요.', errorTarget);
           if (active()) trigger.disabled = false;
         }
+      }
+
+      // 다시 그린 화면에서 누른 자리를 찾아 보이게 하고 포커스를 둔다. 자리가 사라졌으면(예: 공개 뒤) 그 부분 제목으로
+      function returnTo(anchor) {
+        const [key] = anchor.split(':');
+        const target = main.querySelector(`[data-anchor="${anchor}"]`) ?? main.querySelector(`[data-anchor="${key}"]`);
+        if (!target) return;
+        target.scrollIntoView?.({ block: 'nearest' });
+        target.focus({ preventScroll: true });
       }
 
       function errorLine() {
@@ -132,7 +155,7 @@ export function renderAdminCasePage(container, { caseId, navigate }) {
         const body = [];
         if (status === 'PUBLISHED') {
           body.push(element('p', 'admin-ok', '공개한 사건이에요. 판결 교체 · 내용 수정은 막혀 있고, 반려 · 가치관 축 확정은 할 수 있어요.'));
-          return section('공개', ...body);
+          return section('공개', 'publish', ...body);
         }
         const reasons = element('ul', 'admin-reasons');
         if (publishReadiness.ready) reasons.append(element('li', 'admin-ok', '공개 조건을 모두 채웠어요.'));
@@ -153,14 +176,14 @@ export function renderAdminCasePage(container, { caseId, navigate }) {
         });
         const error = errorLine();
         const publish = button('사건 공개하기', () => {
-          if (!window.confirm('이 사건을 사용자에게 공개할까요? 공개한 뒤에는 판결 교체 · 내용 수정을 할 수 없어요.')) return;
-          mutate(publish, error, () => api.publishCase(caseId), '사건을 공개했어요.');
+          if (!confirmChange('이 사건을 사용자에게 공개할까요?', '공개한 뒤에는 판결 교체 · 내용 수정을 할 수 없어요.')) return;
+          mutate(publish, error, () => api.publishCase(caseId), '사건을 공개했어요.', 'publish');
         }, 'primary-button');
         const sync = () => { publish.disabled = !publishReadiness.ready || boxes.some((box) => !box.checked); };
         boxes.forEach((box) => box.addEventListener('change', sync));
         sync();
         body.push(checks, error, publish);
-        return section('공개 준비', ...body);
+        return section('공개 준비', 'publish', ...body);
       }
 
       // ── 판결 후보 (A-8 ~ A-10)
@@ -192,8 +215,12 @@ export function renderAdminCasePage(container, { caseId, navigate }) {
         const badges = element('span', 'admin-badges');
         badges.append(element('span', `admin-badge is-${candidate.reviewStatus.toLowerCase()}`, REVIEW_STATUS[candidate.reviewStatus] ?? candidate.reviewStatus));
         if (candidate.isPublished) badges.append(element('span', 'admin-badge is-published', '공개 중'));
+        const id = candidate.judgmentId;
+        const name = element('strong', '', `#${id} · ${candidate.penaltyLabel}`);
+        name.tabIndex = -1; // 처리 뒤 이 후보로 돌아올 자리
+        name.dataset.anchor = `candidates:${id}`;
         head.append(
-          element('strong', '', `#${candidate.judgmentId} · ${candidate.penaltyLabel}`),
+          name,
           badges,
           element('span', 'admin-sub', `${candidate.modelName ? `${candidate.modelName} · ` : ''}${formatDateTime(candidate.createdAt)}`),
         );
@@ -201,39 +228,56 @@ export function renderAdminCasePage(container, { caseId, navigate }) {
         const panel = element('div', 'admin-candidate-panel');
         panel.hidden = true;
         const error = errorLine();
+        let approve = null;
+        let gate = null;
+        const setOpen = (open) => {
+          panel.hidden = !open;
+          toggle.textContent = open ? '접기' : '자세히 보기';
+          toggle.setAttribute('aria-expanded', String(open));
+          if (open) { opened.add(id); viewed.add(id); } else opened.delete(id);
+          if (approve) approve.disabled = !viewed.has(id);
+          if (gate) gate.hidden = viewed.has(id);
+        };
         const toggle = button('자세히 보기', async () => {
-          if (!panel.hidden) { panel.hidden = true; toggle.textContent = '자세히 보기'; toggle.setAttribute('aria-expanded', 'false'); return; }
+          if (!panel.hidden) { setOpen(false); return; }
           toggle.disabled = true;
           try {
-            const detail = await api.getJudgment(candidate.judgmentId);
+            const detail = await api.getJudgment(id);
             if (!active()) return;
             panel.replaceChildren(judgmentDetail(detail));
-            panel.hidden = false;
-            toggle.textContent = '접기';
-            toggle.setAttribute('aria-expanded', 'true');
+            setOpen(true);
           } catch (failure) {
             handleFailure(failure, '후보를 불러오지 못했어요.', error);
           } finally { toggle.disabled = false; }
         });
         toggle.setAttribute('aria-expanded', 'false');
+        toggle.setAttribute('aria-label', `#${id} 후보 자세히 보기`);
         const actions = element('div', 'admin-actions');
         actions.append(toggle);
+        const parts = [head, actions];
 
         const rejected = candidate.reviewStatus === 'REJECTED';
         if (!rejected && !candidate.isPublished && caseStatus !== 'PUBLISHED') {
-          const approve = button('승인 (공개 판결로 정하기)', () => {
-            if (!window.confirm('이 후보를 공개 판결로 정할까요? 같은 종류의 기존 공개 판결은 비공개로 바뀌어요.')) return;
-            mutate(approve, error, () => api.approveJudgment(candidate.judgmentId), `#${candidate.judgmentId} 후보를 승인했어요.`);
+          approve = button(`#${id} 승인 (공개 판결로 정하기)`, () => {
+            if (!confirmChange(`#${id} 후보를 공개 판결로 정할까요?`, '같은 종류의 기존 공개 판결은 비공개로 바뀌어요.')) return;
+            mutate(approve, error, () => api.approveJudgment(id), `#${id} 후보를 승인했어요.`, `candidates:${id}`);
           }, 'primary-button');
+          gate = element('p', 'admin-sub admin-approve-gate', '자세히 보기로 판결 내용을 확인하면 승인할 수 있어요.');
+          gate.id = `admin-approve-gate-${id}`;
+          approve.setAttribute('aria-describedby', gate.id);
+          approve.disabled = !viewed.has(id);
+          gate.hidden = viewed.has(id);
           actions.append(approve);
+          parts.push(gate);
         }
         if (!rejected && !candidate.isPublished) {
-          const reject = button('반려', () => {
+          const reject = button(`#${id} 반려`, () => {
             form.hidden = !form.hidden;
             if (!form.hidden) reason.focus();
           });
           const form = element('form', 'admin-reject');
           form.hidden = true;
+          form.noValidate = true; // 빈 사유는 아래 문구로 알린다
           const reason = element('textarea');
           Object.assign(reason, { rows: 2, maxLength: 500, required: true });
           const reasonLabel = labeledField('반려 사유 (1 ~ 500자, 되돌릴 수 없어요)', reason);
@@ -242,14 +286,15 @@ export function renderAdminCasePage(container, { caseId, navigate }) {
           form.append(reasonLabel, send);
           form.addEventListener('submit', (event) => {
             event.preventDefault();
-            if (!reason.value.trim()) { error.textContent = '반려 사유를 입력해 주세요.'; return; }
-            mutate(send, error, () => api.rejectJudgment(candidate.judgmentId, reason.value.trim()), `#${candidate.judgmentId} 후보를 반려했어요.`);
+            if (!reason.value.trim()) { error.textContent = '반려 사유를 입력해 주세요.'; reason.focus(); return; }
+            if (!confirmChange(`#${id} 후보를 반려할까요?`, '반려는 되돌릴 수 없어요.')) return;
+            mutate(send, error, () => api.rejectJudgment(id, reason.value.trim()), `#${id} 후보를 반려했어요.`, `candidates:${id}`);
           });
           actions.append(reject);
-          item.append(head, actions, form, error, panel);
-          return item;
+          parts.push(form);
         }
-        item.append(head, actions, error, panel);
+        item.append(...parts, error, panel);
+        if (opened.has(id)) toggle.click(); // 다시 그리기 전에 펼쳐 두었던 후보
         return item;
       }
 
@@ -264,12 +309,12 @@ export function renderAdminCasePage(container, { caseId, navigate }) {
           block.append(ul);
           return block;
         });
-        return section('판결 후보', ...blocks);
+        return section('판결 후보', 'candidates', ...blocks);
       }
 
       // ── 판단 요소 가치관 축 (A-12)
       function factorsSection(data) {
-        if (!data.factors.length) return section('판단 요소', element('p', 'admin-sub', '판단 요소가 없어요.'));
+        if (!data.factors.length) return section('판단 요소', 'factors', element('p', 'admin-sub', '판단 요소가 없어요.'));
         const table = element('table', 'admin-table');
         const head = element('tr');
         ['#', '판단 요소', '공개 단계', '가치관 축', '자동 분류 투표', '확정'].forEach((text) => head.append(element('th', '', text)));
@@ -301,7 +346,9 @@ export function renderAdminCasePage(container, { caseId, navigate }) {
             select.append(node);
           });
           const error = errorLine();
-          const save = button('확정', () => mutate(save, error, () => api.setValueAxis(factor.factorId, select.value || null), '가치관 축을 확정했어요.'));
+          select.dataset.anchor = `factors:${factor.factorId}`; // 확정 뒤 이 줄로 돌아온다
+          const save = button('확정', () => mutate(save, error, () => api.setValueAxis(factor.factorId, select.value || null), `"${factor.label}" 가치관 축을 확정했어요.`, `factors:${factor.factorId}`));
+          save.setAttribute('aria-label', `${factor.label} 가치관 축 확정`);
           const confirmCell = element('td');
           const confirmBox = element('div', 'admin-axis-confirm');
           confirmBox.append(select, save);
@@ -320,7 +367,7 @@ export function renderAdminCasePage(container, { caseId, navigate }) {
         table.append(thead, tbody);
         const wrap = element('div', 'admin-table-wrap');
         wrap.append(table);
-        return section('판단 요소 · 가치관 축', wrap);
+        return section('판단 요소 · 가치관 축', 'factors', wrap);
       }
 
       // ── 사건 내용 (A-11)
@@ -337,7 +384,7 @@ export function renderAdminCasePage(container, { caseId, navigate }) {
         ]);
         const note = element('p', 'admin-sub', '죄명 · 적용 법조문 · 법정형 · 판단 요소 구성 · 형벌 규칙은 여기서 바꾸지 않아요(파이프라인 · SQL 경로).');
         if (data.status === 'PUBLISHED') {
-          return section('사건 내용', readOnly, definitionList([
+          return section('사건 내용', 'content', readOnly, definitionList([
             ['제목', content.title], ['짧은 소개', content.shortIntro], ['개요', content.overview], ['키워드', keywords.join(', ')],
             ['난이도', DIFFICULTY[content.difficulty]], ['예상 시간(분)', content.estimatedMinutes], ['썸네일 주소', content.thumbnailUrl],
             ['권고 형량(개월)', `${content.recommendedMinMonths ?? '—'} ~ ${content.recommendedMaxMonths ?? '—'}`], ['권고 근거', content.recommendedBasis],
@@ -382,6 +429,7 @@ export function renderAdminCasePage(container, { caseId, navigate }) {
         const error = errorLine();
         const save = element('button', 'primary-button', '바뀐 내용 저장');
         save.type = 'submit';
+        save.dataset.anchor = 'content:save';
         form.append(error, save);
 
         // 바뀐 필드만 보낸다. 선택 필드를 비우면 null(지움), 키워드를 비우면 [] (A-11)
@@ -428,14 +476,14 @@ export function renderAdminCasePage(container, { caseId, navigate }) {
           if (!Object.keys(body).length) { error.textContent = '바뀐 내용이 없어요.'; return; }
           const invalid = validate(body);
           if (invalid) { error.textContent = invalid; return; }
-          mutate(save, error, () => api.updateCase(caseId, body), '사건 내용을 저장했어요.');
+          mutate(save, error, () => api.updateCase(caseId, body), '사건 내용을 저장했어요.', 'content:save');
         });
-        return section('사건 내용', readOnly, note, form);
+        return section('사건 내용', 'content', readOnly, note, form);
       }
 
       // ── 원본 판결문 (A-7) — 열 때마다 감사 로그가 남는다
       function sourcesSection(data) {
-        if (!data.sources.length) return section('원본 판결문', element('p', 'admin-sub', '연결된 원본 판결문이 없어요.'));
+        if (!data.sources.length) return section('원본 판결문', 'sources', element('p', 'admin-sub', '연결된 원본 판결문이 없어요.'));
         const list = element('ul', 'admin-sources');
         data.sources.forEach((source) => {
           const item = element('li');
@@ -470,7 +518,7 @@ export function renderAdminCasePage(container, { caseId, navigate }) {
           item.append(error, viewer);
           list.append(item);
         });
-        return section('원본 판결문', list);
+        return section('원본 판결문', 'sources', list);
       }
 
       function drawCase(data) {
@@ -479,15 +527,16 @@ export function renderAdminCasePage(container, { caseId, navigate }) {
         const back = button('← 목록', () => navigate('admin'), 'admin-back');
         const heading = element('h1', '', data.content.title);
         top.append(back, heading, element('span', `admin-badge is-${data.status.toLowerCase()}`, CASE_STATUS[data.status] ?? data.status));
-        const parts = [top];
-        if (flash) {
-          const note = element('p', flash.kind === 'ok' ? 'admin-flash' : 'admin-error', flash.text);
-          note.setAttribute('role', 'status');
-          parts.push(note);
-          flash = null;
-        }
-        parts.push(publishSection(data), candidatesSection(data), factorsSection(data), contentSection(data), sourcesSection(data));
-        main.replaceChildren(...parts);
+        // 바로 가기: 3천 px가 넘는 화면이라 대조할 원본 판결문 등으로 바로 건너뛴다(주소 해시 대신 포커스 이동)
+        const jump = element('nav', 'admin-jump');
+        jump.setAttribute('aria-label', '이 사건 바로 가기');
+        jump.append(element('span', 'admin-sub', '바로 가기'));
+        SECTIONS.forEach(([key, label]) => jump.append(button(label, () => {
+          const heading = main.querySelector(`[data-anchor="${key}"]`);
+          heading?.scrollIntoView({ block: 'start' });
+          heading?.focus({ preventScroll: true });
+        }, 'admin-jump-link')));
+        main.replaceChildren(top, jump, publishSection(data), candidatesSection(data), factorsSection(data), contentSection(data), sourcesSection(data));
       }
 
       async function load() {
@@ -507,7 +556,7 @@ export function renderAdminCasePage(container, { caseId, navigate }) {
         panel.setAttribute('role', 'alert');
         const text = failure?.code === 'CASE_NOT_FOUND' ? '사건을 찾을 수 없어요.' : errorText(failure, '사건을 불러오지 못했어요.');
         panel.append(element('p', '', text), button('목록으로', () => navigate('admin')));
-        main.replaceChildren(panel);
+        main.replaceChildren(element('h1', '', `사건 #${caseId}`), panel);
       }
     },
   });
