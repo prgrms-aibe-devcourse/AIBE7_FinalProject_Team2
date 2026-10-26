@@ -85,6 +85,9 @@ COMPOSE=(docker compose -f "$DEPLOY_DIR/docker-compose.prod.yml")
 # 외부 DB 모드 (BE-59): .env에 EXTERNAL_DB_URL이 있으면 postgres 컨테이너 대신 외부 PostgreSQL(Supabase → RDS)에 붙는다.
 # 오버레이를 빼먹으면 backend가 다시 같은 서버의 postgres로 붙어 "어느 DB에 썼는지"가 조용히 바뀌므로, 플래그로 자동으로 겹친다
 EXTERNAL_DB_URL_VALUE="$(env_value EXTERNAL_DB_URL | tr -d "\"' \r")"
+# 실제 사건 시드 경로: 아래 외부 DB 검사와 오버레이 판정이 같은 값(따옴표 · 공백 · CR 정리)을 보게 한 번만 읽는다.
+# 다르게 읽으면 REAL_SEED_DIR="" 같은 줄이 검사는 통과하고 오버레이만 붙는다 (BE-59)
+REAL_SEED_DIR_VALUE="$(env_value REAL_SEED_DIR | tr -d "\"' \r")"
 EXTERNAL_DB=0
 if [[ -n "$EXTERNAL_DB_URL_VALUE" ]]; then
   # 두 값이 없으면 compose가 뒤늦게 다른 이유처럼 실패하므로 먼저 막는다 (값은 출력하지 않는다)
@@ -99,11 +102,25 @@ if [[ -n "$EXTERNAL_DB_URL_VALUE" ]]; then
     *[?\&]sslmode=require|*[?\&]sslmode=require\&*|*[?\&]sslmode=verify-ca*|*[?\&]sslmode=verify-full*) ;;
     *) log "❌ EXTERNAL_DB_URL에 sslmode=require(또는 verify-ca · verify-full)가 없다 — 주소 끝에 ?sslmode=require를 붙인다"; exit 4 ;;
   esac
-  # 외부 DB(지금은 팀 공용 Supabase)에 실제 사건 시드를 올리지 않는다 — 비공개 데이터 · 사용 불가 데이터(LBox) 규칙
-  # (backend/SHARED-DEV-DB.md 규칙 6). RDS로 옮긴 뒤 실제 사건 시드를 쓸 때 이 검사를 다시 정한다
-  if [[ -n "$(env_value REAL_SEED_DIR)" ]]; then
-    log "❌ 외부 DB 모드에서는 실제 사건 시드(REAL_SEED_DIR)를 함께 쓰지 않는다. .env에서 REAL_SEED_DIR을 비운다"
-    exit 4
+  # 외부 DB(Supabase → RDS)에 실제 사건 시드는 팀 합의 표시가 있을 때만 올린다 (backend/SHARED-DEV-DB.md 규칙 6).
+  # 경로만 넣은 실수로 비공개 데이터가 외부 DB에 올라가지 않게, 사람이 EXTERNAL_DB_ALLOWS_REAL_SEED=1을 따로 넣어야 한다
+  if [[ -n "$REAL_SEED_DIR_VALUE" ]]; then
+    if [[ "$(env_value EXTERNAL_DB_ALLOWS_REAL_SEED | tr -d "\"' \r")" != "1" ]]; then
+      log "❌ 외부 DB 모드에서 실제 사건 시드(REAL_SEED_DIR)는 팀 합의 후 EXTERNAL_DB_ALLOWS_REAL_SEED=1을 넣었을 때만 쓴다. 합의 전이면 .env에서 REAL_SEED_DIR을 비운다"
+      exit 4
+    fi
+    # 폴더가 비어 있거나 경로가 틀리면 Flyway가 아무것도 넣지 않고 성공으로 끝나 알아차리기 어렵다 — 먼저 막는다
+    if ! ls "$REAL_SEED_DIR_VALUE"/*.sql >/dev/null 2>&1; then
+      log "❌ REAL_SEED_DIR(${REAL_SEED_DIR_VALUE})에 SQL 파일이 없다 — 서버에 비공개 시드를 먼저 받는다 (deploy/README.md \"운영 데이터\")"
+      exit 4
+    fi
+    # 사용 불가 데이터(LBox Open, 라이선스상 사용 불가 — 10/12)는 합의와 별개로 외부 DB에 올리지 않는다.
+    # 지금 시드에는 없다(BE-54에서 삭제). 다시 들어오면 여기서 막는다 (backend/run-shared-db.sh와 같은 검사)
+    if grep -qil "'LBOX'" "$REAL_SEED_DIR_VALUE"/*.sql; then
+      log "❌ 실제 사건 시드에 LBox 행('LBOX')이 있다 — 사용 불가 데이터라 외부 DB에 올리지 않는다 (SHARED-DEV-DB.md 규칙 6)"
+      exit 4
+    fi
+    log "외부 DB에 실제 사건 시드를 함께 적용한다 (팀 합의 표시 EXTERNAL_DB_ALLOWS_REAL_SEED=1)"
   fi
   # 오버레이의 depends_on: !override는 Compose 2.24.4부터 안다. 모르는 버전은 postgres 의존을 그대로 두거나 거부한다
   compose_version="$(docker compose version --short 2>/dev/null | sed 's/^v//')"
@@ -115,7 +132,7 @@ if [[ -n "$EXTERNAL_DB_URL_VALUE" ]]; then
   EXTERNAL_DB=1
 fi
 # 실제 사건 시드를 겹쳐 띄우는 서버면 같은 구성으로 다시 띄운다 (README "실제 사건 시드")
-if [[ -n "$(env_value REAL_SEED_DIR)" ]]; then
+if [[ -n "$REAL_SEED_DIR_VALUE" ]]; then
   COMPOSE+=(-f "$DEPLOY_DIR/docker-compose.real-seed.yml")
 fi
 # 모니터링 에이전트를 올린 서버면 그 오버레이도 함께 쓴다 (COMMON-43, PR #168 리뷰 반영).
