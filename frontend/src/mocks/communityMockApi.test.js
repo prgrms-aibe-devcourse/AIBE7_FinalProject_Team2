@@ -91,6 +91,8 @@ test('글에는 보는 사람이 그 사건 판결을 확정했는지가 붙는�
   assert.equal(await judged(), false);
   saveExperience({ status: 'VERDICT_CONFIRMED', lastReviewedStep: 4 });
   assert.equal(await judged(), true);
+  clearUser(); // 로그아웃하면 기록이 브라우저에 남아도 판결 전으로 본다
+  assert.equal(await judged(), false);
   assert.equal((await getCommunityPost(106)).viewerJudged, false); // 사건 없는 자유 글
 });
 

@@ -48,7 +48,7 @@ const DEFAULT_AUTHOR = { intro: '', level: 1, job: '수습 판사', completedCou
 const withCard = (author) => ({ ...DEFAULT_AUTHOR, ...seedAuthors[author.nickname], ...author });
 
 // 보는 사람이 이 사건 판결을 확정했는지(FE-93). 판결 전이면 화면이 남의 판결 카드를 접는다. 목 체험 기록은 사건 1 하나뿐이다. 필드 이름은 임시 — API 설계 때 BE와 확정한다
-const viewerJudged = (caseId) => caseId === 1 && VERDICT_DONE.includes(peekExperience()?.status);
+const viewerJudged = (caseId) => Boolean(currentUser()) && caseId === 1 && VERDICT_DONE.includes(peekExperience()?.status); // 로그아웃이면 판결 전(체험 기록은 브라우저에 남아도 사용자 것이 아니다)
 
 const caseTitle = (caseId) => cases.find((item) => item.caseId === caseId)?.title ?? null;
 const allPosts = (state) => [...state.posts, ...seedPosts];
