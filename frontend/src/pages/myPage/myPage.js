@@ -2,7 +2,7 @@ import { button, element, mockTag } from '../../components/siteLayout.js';
 import { API_MODE } from '../../api/config.js';
 import { appendEmptyAxis, renderAxisRow } from '../../components/axisRow.js';
 import { imageOf } from '../../components/stage.js';
-import { DEFAULT_NICKNAME, emptyWindow, nameOf, picture, profileCardParts, sashClasses, sashIcon, sashNote, sashes, svg, typeDecoClasses, typeFace, typePortrait } from '../../components/personCards.js';
+import { emptyWindow, myNickname, nameOf, picture, profileCardParts, sashClasses, sashIcon, sashNote, sashes, svg, typeDecoClasses, typeFace, typePortrait } from '../../components/personCards.js';
 import { AXES } from '../../utils/personalityAxes.js';
 import { KIND_TITLES, lenientPercent, axisChange, steadyBand, axisTrend, collectionOf, imageKinds, leanText, retakeAfterOrder } from '../../utils/myPageView.js';
 import { renderTrend, trendsOf } from '../../components/trendGraph.js';
@@ -174,7 +174,7 @@ const decoFor = (data) => shownDeco(currentDeco(), openOf(data));
 // 대표 이미지 카드의 속(그리는 일은 components/personCards.js). 카드 아래 성향: 카드 꾸미기에서 고른 것(기본 최근)
 function profileCardPartsOf(deco, data) {
   const typeName = selectedChoice(data)?.type.name ?? currentTypeOf(data)?.name;
-  return profileCardParts(deco, data.nickname || DEFAULT_NICKNAME, typeName);
+  return profileCardParts(deco, myNickname(data, currentUser()), typeName);
 }
 
 // 성향카드 꾸미기(FE-82): 성향카드 화면에서 고른 테두리 · 배경 · 책갈피를 카드에 입힌다(잠긴 것은 기본으로). 기본 배경은 원래 타로카드 모양이라 클래스를 붙이지 않는다
@@ -210,7 +210,7 @@ function renderTop(data, go) {
   const [profile, typeCardNode] = profileCardPair(data, go);
 
   const middle = element('div', 'my-top-middle');
-  middle.append(element('h2', 'my-nickname', data.nickname || DEFAULT_NICKNAME), renderStats(stats));
+  middle.append(element('h2', 'my-nickname', myNickname(data, currentUser())), renderStats(stats));
 
   section.append(profile, middle, typeCardNode);
   return section;
@@ -882,17 +882,32 @@ function portraitPicker(open, shownPortrait, onPick) {
   const head = element('h3', 'my-deco-kind', `기본 (${DEFAULT_PORTRAITS.length})`);
   head.append(element('span', 'my-deco-state is-open', '기본 제공'));
   field.append(head, first);
-  imageKinds(PORTRAIT_POOL.filter((src) => !DEFAULT_PORTRAITS.includes(src))).forEach((kind) => {
+  // 열린 종류는 펼쳐 두고, 잠긴 종류는 한 줄(이름 · 개수 · 여는 도전과제)로 접어 둔다(FE-100 — 잠긴 그림까지 다 펼치면 한 화면에 130장이 넘게 깔렸다).
+  // 접힌 줄을 누르면 잠긴 그림을 미리 볼 수 있다(무엇을 깨면 무엇이 열리는지 보는 재미는 남긴다)
+  const kinds = imageKinds(PORTRAIT_POOL.filter((src) => !DEFAULT_PORTRAITS.includes(src)));
+  const lockedKinds = [];
+  kinds.forEach((kind) => {
     const locked = !open.kinds.has(kind.key);
     const by = unlockerOf('kinds', kind.key)?.title ?? '';
-    const head = element('h3', 'my-deco-kind', `${kind.title} (${kind.items.length})`);
-    head.append(element('span', `my-deco-state${locked ? '' : ' is-open'}`, locked ? `잠김 · ${by}` : '열림'));
     const grid = element('div', 'my-deco-grid');
     kind.items.forEach(({ src }) => grid.append(decoOption({
       group: 'profile-portrait', value: src, checked: src === shownPortrait, locked, name: portraitLabel(src), lockedBy: by, onChange: pick(src),
     }, thumb(src))));
+    if (locked) { lockedKinds.push({ kind, by, grid }); return; }
+    const head = element('h3', 'my-deco-kind', `${kind.title} (${kind.items.length})`);
+    head.append(element('span', 'my-deco-state is-open', '열림'));
     field.append(head, grid);
   });
+  if (lockedKinds.length) {
+    field.append(element('h3', 'my-deco-kind is-locked-head', `잠긴 종류 (${lockedKinds.length})`));
+    lockedKinds.forEach(({ kind, by, grid }) => {
+      const fold = element('details', 'my-deco-fold');
+      const summary = element('summary', 'my-deco-fold-head');
+      summary.append(element('span', '', `${kind.title} (${kind.items.length})`), element('span', 'my-deco-state', `잠김 · ${by}`));
+      fold.append(summary, grid);
+      field.append(fold);
+    });
+  }
   return field;
 }
 
