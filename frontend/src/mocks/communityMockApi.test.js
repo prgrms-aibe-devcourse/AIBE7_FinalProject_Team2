@@ -84,6 +84,18 @@ test('내 판결은 판결을 확정한 뒤에만 붙일 수 있고, 붙이면 �
   assert.equal(saved.verdict.prisonMonths, 120);
 });
 
+test('글에는 보는 사람이 그 사건 판결을 확정했는지가 붙는다 — 판결 전이면 화면이 판결 카드를 접는다 (FE-93)', async () => {
+  const judged = async () => (await getCommunityPost(108)).viewerJudged; // 108은 사건 1의 판결 공유 글
+  assert.equal(await judged(), false);
+  saveExperience({ status: 'REVIEWED', lastReviewedStep: 4 });
+  assert.equal(await judged(), false);
+  saveExperience({ status: 'VERDICT_CONFIRMED', lastReviewedStep: 4 });
+  assert.equal(await judged(), true);
+  clearUser(); // 로그아웃하면 기록이 브라우저에 남아도 판결 전으로 본다
+  assert.equal(await judged(), false);
+  assert.equal((await getCommunityPost(106)).viewerJudged, false); // 사건 없는 자유 글
+});
+
 test('내 판결 조회는 체험 기록을 만들지 않는다', async () => {
   assert.equal(await getMyShareableVerdict(), null);
   assert.equal(localStorage.getItem('nlnb-mock-review'), null);

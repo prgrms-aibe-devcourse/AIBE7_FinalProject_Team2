@@ -1,3 +1,4 @@
+import { API_MODE } from '../../api/config.js';
 import { button, element, mockTag } from '../../components/siteLayout.js';
 import { profileFace } from '../../components/personCards.js';
 import { normalizeDeco } from '../../utils/profileDeco.js';
@@ -48,7 +49,7 @@ export function renderCommunityHomePage(container, { api, navigate }) {
         popularList(data.popular, navigate));
     }
     body.replaceChildren(
-      ...(data.hotCases.length ? [hotSection(data.hotCases)] : []),
+      data.hotCases.length ? hotSection(data.hotCases) : hotEmpty(),
       rankSection(data.ranking),
       ...(data.recommendedCases.length ? [recoSection(data.recommendedCases)] : []),
     );
@@ -92,6 +93,18 @@ export function renderCommunityHomePage(container, { api, navigate }) {
       return item;
     }));
     return list;
+  }
+
+  // ── 빈 상태(FE-93): 이야기가 모인 사건이 아직 없을 때. 오려 둔 기사가 없는 빈 스크랩 자리로, 사건 판결 · 글쓰기가 첫 기사를 만든다
+  function hotEmpty() {
+    const section = element('section', 'cm-hot');
+    section.setAttribute('aria-labelledby', 'cm-hot-title');
+    const box = element('div', 'cm-slot');
+    box.append(element('p', 'cm-slot-title', '아직 오려 둔 기사가 없어요'),
+      element('p', 'cm-slot-note', '사건을 판결하고 첫 생각을 남기면, 이야기가 모인 사건이 여기에 신문 기사로 걸려요.'),
+      routeLink('사건 목록 보기', '/cases', () => navigate('list'), 'cm-slot-link'));
+    section.append(sectionHead('지금 이야기가 많은 사건', 'cm-hot-title'), box);
+    return section;
   }
 
   // ── 지금 이야기가 많은 사건: 한 장씩 넘기는 슬라이드. 장마다 오려 낸 기사 조각 + 그 사건 글. 자동으로 넘기지 않는다
@@ -179,6 +192,7 @@ export function renderCommunityHomePage(container, { api, navigate }) {
     const facts = element('p', 'cm-hot-facts');
     const people = element('span');
     people.append(element('b', '', `${item.participantCount.toLocaleString()}명`), ' 판결');
+    if (API_MODE === 'mock') people.append(mockTag()); // 목 참여 수는 실제 반응이 아니다(FE-93)
     facts.append(people, element('span', '', `약 ${item.estimatedMinutes}분`));
     // 판결 체험 대본이 있는 사건만 "판결하기"(없는 사건은 사건 정보에서 "준비 중"이 나온다, caseListPage와 같은 기준)
     const playable = Boolean(scriptFor(item.caseId, item.title));
@@ -196,16 +210,16 @@ export function renderCommunityHomePage(container, { api, navigate }) {
     const section = element('section', 'cm-rank');
     section.setAttribute('aria-labelledby', 'cm-rank-title');
     section.append(sectionHead('레벨 랭킹', 'cm-rank-title', { tag: true, note: element('p', 'cm-home-note', '레벨은 사건 체험과 커뮤니티 활동으로 올라요.') }));
-    if (!ranking.length) {
-      section.append(element('p', 'cm-home-empty', '아직 랭킹이 없어요.'));
-      return section;
-    }
+    // 빈 자리(FE-93): 랭킹이 비었거나 셋보다 적으면 비어 있는 시상대 자리를 점선 카드로 남겨 둔다(꾸민 카드를 올릴 자리)
+    if (ranking.length < 3) section.append(element('p', 'cm-home-empty', ranking.length ? '아직 시상대에 빈 자리가 있어요. 사건을 판결하고 글을 남기면 레벨이 올라 이 자리에 카드가 올라요.' : '아직 시상대에 오른 판사가 없어요. 사건을 판결하고 글을 남기면 첫 카드가 올라요.'));
     const podium = element('ol', 'cm-podium');
-    podium.append(...ranking.slice(0, 3).map((person) => {
-      const item = element('li', `is-${person.rank}`);
-      const step = element('div', 'cm-step', `${person.rank}위`);
-      step.append(element('small', '', `Lv.${person.level}`));
-      item.append(rankCard(person), step);
+    podium.append(...[1, 2, 3].map((rank) => {
+      const person = ranking.find((entry) => entry.rank === rank);
+      const item = element('li', `is-${rank}`);
+      const step = element('div', 'cm-step', `${rank}위`);
+      if (person) step.append(element('small', '', `Lv.${person.level}`));
+      if (!person) item.setAttribute('aria-hidden', 'true'); // 빈 자리는 순위 글자까지 읽지 않는다(FE-93 리뷰)
+      item.append(person ? rankCard(person) : emptyRankCard(), step);
       return item;
     }));
     section.append(podium);
@@ -214,6 +228,12 @@ export function renderCommunityHomePage(container, { api, navigate }) {
     return section;
   }
 
+  // 비어 있는 시상대 자리: 카드 비율(7 : 14)의 점선 윤곽. 장식이라 읽지 않는다
+  function emptyRankCard() {
+    const box = element('div', 'cm-rank-card cm-rank-empty');
+    box.setAttribute('aria-hidden', 'true');
+    return box;
+  }
   function rankCard(person) {
     const box = element('div', 'cm-rank-card cm-cards'); // 커피 색은 카드 둘레에서만(community.css .cm-cards)
     box.append(profileFace(normalizeDeco(person.profileCard), person.nickname, person.shownType?.type.name ?? null));
@@ -276,8 +296,11 @@ export function renderCommunityHomePage(container, { api, navigate }) {
     columns.append(...recommended.map(({ case: item, postCount, posts }) => {
       const column = element('section', 'cm-reco-col');
       column.setAttribute('aria-label', item.title);
-      column.append(element('p', 'cm-reco-label', `${item.crimeCategoryLabel} · ${item.participantCount.toLocaleString()}명 판결`),
-        element('h3', 'cm-reco-title', item.title), element('p', 'cm-reco-intro', item.shortIntro), briefList(posts));
+      const label = element('p', 'cm-reco-label', `${item.crimeCategoryLabel} · ${item.participantCount.toLocaleString()}명 판결`);
+      if (API_MODE === 'mock') label.append(mockTag());
+      const title = element('h3', 'cm-reco-title');
+      title.append(routeLink(item.title, `/cases/${item.caseId}`, () => navigate('caseDetail', { caseId: item.caseId }), 'cm-reco-title-link'));
+      column.append(label, title, element('p', 'cm-reco-intro', item.shortIntro), briefList(posts));
       if (postCount) column.append(caseListLink(item.caseId, postCount));
       return column;
     }));

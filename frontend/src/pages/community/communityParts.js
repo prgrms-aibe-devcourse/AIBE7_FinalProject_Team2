@@ -214,11 +214,11 @@ export function nameCard(author) {
   return section;
 }
 
-// 내 판결 카드: 사건 · 내 형량 · 무겁게 / 가볍게 본 요소 수. 다른 판결(AI · 실제)은 담지 않는다
-export function verdictCard(verdict, caseTitle) {
+// 판결 카드: 사건 · 형량 · 무겁게 / 가볍게 본 요소 수. 다른 판결(AI · 실제)은 담지 않는다
+export function verdictCard(verdict, caseTitle, label = '내 판결') {
   const card = element('div', 'cm-verdict');
   const penalty = element('p', 'cm-verdict-penalty');
-  penalty.append(element('span', 'cm-verdict-label', '내 판결'), element('strong', '', formatPenalty(verdict)));
+  penalty.append(element('span', 'cm-verdict-label', label), element('strong', '', formatPenalty(verdict)));
   const extra = formatDispositions(verdict);
   if (extra) penalty.append(element('span', 'cm-verdict-extra', extra));
   card.append(penalty, element('p', 'cm-verdict-factors', `무겁게 본 요소 ${verdict.upCount}개 · 가볍게 본 요소 ${verdict.downCount}개`));
@@ -226,16 +226,31 @@ export function verdictCard(verdict, caseTitle) {
   return card;
 }
 
-// 판결 공유 글(상세): 내 판결 카드에 판결한 사람의 공개 성향카드를 클립으로 꽂는다. 성향이 없으면(성향 테스트 전) 내 판결 카드만 둔다
+// 판결 공유 글(상세): 글쓴이 판결 카드에 판결한 사람의 공개 성향카드를 클립으로 꽂는다. 성향이 없으면(성향 테스트 전) 내 판결 카드만 둔다
 export function verdictWithType(verdict, caseTitle, author) {
-  const card = verdictCard(verdict, caseTitle);
+  const card = verdictCard(verdict, caseTitle, '글쓴이 판결');
   if (!author.shownType) return card;
   const row = element('div', 'cm-verdict-row');
   card.append(element('p', 'cm-verdict-type', `판결한 사람의 성향 ${author.shownType.type.name}(${SLOT_NAMES[author.shownType.slot]})`));
   const holder = element('div', 'cm-cards cm-verdict-clip');
+  holder.setAttribute('aria-hidden', 'true'); // 장식 미니 카드: 성향 이름은 위 글자로 읽힌다
   holder.append(clip(), typeFace(author.shownType.type, undefined, normalizeTypeDeco(author.shownType.deco)));
   row.append(card, holder);
   return row;
+}
+
+// 판결 전 접기(FE-93): 이 사건을 아직 판결하지 않은 사람에게는 남의 형량을 먼저 보여 주지 않는다(PRODUCT 원칙 1 — 판단은 사용자의 것). 원하면 펼쳐 볼 수 있다
+export function foldedVerdict(post, makeCard) {
+  if (post.viewerJudged !== false) return makeCard();
+  const box = element('div', 'cm-verdict is-folded');
+  box.append(element('p', 'cm-verdict-fold-note', '이 사건을 판결하면 글쓴이 판결이 보여요. 내 판단을 먼저 해 보세요.'));
+  box.append(button('그래도 보기', () => {
+    const card = makeCard();
+    card.tabIndex = -1; // 펼친 자리로 포커스를 옮겨 화면 읽기 프로그램이 바로 읽는다
+    box.replaceWith(card);
+    card.focus();
+  }, 'cm-text-button'));
+  return box;
 }
 
 function tags(post) {
@@ -457,7 +472,7 @@ export function popularList(popular, navigate) {
     item.append(postLink(text, postId, navigate));
     list.append(item);
   });
-  box.append(title, list);
+  box.append(title, popular.length ? list : element('p', 'cm-hint', '아직 많이 본 글이 없어요.'));
   return box;
 }
 
@@ -588,7 +603,7 @@ export function composer({ api, navigate, cases, onPosted, closeButton, closeCom
     shareable = value;
     share.disabled = !value;
     shareNote.textContent = value
-      ? 'AI 판결 · 실제 판결은 붙지 않아요. 사건을 아직 안 본 사람도 볼 수 있어요.'
+      ? 'AI 판결 · 실제 판결은 붙지 않아요. 이 사건을 아직 판결하지 않은 사람에게는 접혀 보여요.'
       : '판결을 확정하면 내 판결을 붙일 수 있어요.';
   }).catch(() => { if (box.isConnected) shareNote.textContent = '내 판결을 불러오지 못했어요.'; });
   share.addEventListener('change', () => {

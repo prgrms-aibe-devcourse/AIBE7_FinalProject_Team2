@@ -338,7 +338,7 @@ html { scroll-padding-top: calc(var(--site-header-h, 64px) + 8px); }
 .site-header .motion-switch[aria-checked="true"] .switch-track { background: var(--color-banner-text); box-shadow: none; } /* 켜짐: 어두운 면 위라 종이색 채움 + 네이비 손잡이로 뒤집는다(DESIGN.md "스위치" · 어두운 면 규칙) */
 .site-header .motion-switch[aria-checked="true"] .switch-thumb { background: var(--color-banner-bg); translate: 16px 0; }
 /* 목데이터 표기(FE-56, siteLayout.js mockTag): 목 값 옆의 작은 점선 딱지. 글자색 · 테두리는 주변 글자색을 따라간다 */
-.mock-tag { display: inline-block; margin-left: 6px; padding: 0 5px; border: 1px dashed currentColor; border-radius: 3px; font: 600 11px/1.5 var(--font-body); letter-spacing: 0; vertical-align: middle; white-space: nowrap; opacity: .85; }
+.mock-tag { display: inline-block; margin-left: 6px; padding: 0 5px; border: 1px dashed currentColor; border-radius: 3px; font: 600 11px/1.5 var(--font-body); letter-spacing: 0; vertical-align: middle; white-space: nowrap; }
 .site-footer { padding: 24px 28px; border-top: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-muted); font-size: 13px; }
 /* 한 줄 헤더가 빠듯한 폭(721 ~ 1000px): 로고가 줄바꿈되지 않게 로고 · 메뉴 글자 · 간격을 폭에 맞춰 함께 줄인다(FE-87) */
 @media (min-width: 721px) and (max-width: 1000px) {
