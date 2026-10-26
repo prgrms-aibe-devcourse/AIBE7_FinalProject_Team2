@@ -2,7 +2,7 @@ import { button, element } from '../../components/siteLayout.js';
 import { screenByStatus } from '../../utils/screenByStatus.js';
 import { caseStage, mountStagePage, scriptFor } from '../overview/overviewPage.js';
 import { caseInfoEar, caseNewspaper, earButton, paperFromCase } from '../../components/newspaperFront.js';
-import { evidencePhotosFromPaper } from '../../utils/newspaper.js';
+import { evidencePhotosFromPaper, fetchCasePaper } from '../../utils/newspaper.js';
 import { reducedMotion } from '../../utils/motion.js';
 import { TURN_MS } from '../../utils/pageTurn.js';
 import { openCaseReviewPopup } from '../caseReview/caseReviewPopup.js';
@@ -233,8 +233,8 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
     if (!active()) return;
     message('사건 정보를 불러오는 중…');
     try {
-      // 지면 기사 · 증거조사 사진(API 17)은 함께 부르되, 못 받아도(PAPER_NOT_FOUND 등) 사건 디테일(API 16)만으로 화면을 그린다(FE-64)
-      const [data, casePaper] = await Promise.all([api.getCaseDetail(caseId), api.getCasePaper(caseId).catch(() => null)]);
+      // 지면 기사 · 증거조사 사진(API 17)은 함께 부르되, 못 받아도(PAPER_NOT_FOUND · 지연 등) 사건 디테일(API 16)만으로 화면을 그린다(FE-64)
+      const [data, casePaper] = await Promise.all([api.getCaseDetail(caseId), fetchCasePaper(api, caseId)]);
       if (!active()) return;
       const script = scriptFor(caseId, data.title);
       if (script) drawStage(data, script, casePaper);

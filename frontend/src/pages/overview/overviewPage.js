@@ -4,7 +4,7 @@ import { SCRIPTS } from '../../content/scripts.js';
 import { restartMock, jumpActMock } from '../../mocks/mockStageButtons.js';
 import courtFacts from '../../content/courtFacts.json';
 import { caseNewspaper, paperFromCase } from '../../components/newspaperFront.js';
-import { evidencePhotosFromPaper } from '../../utils/newspaper.js';
+import { evidencePhotosFromPaper, fetchCasePaper } from '../../utils/newspaper.js';
 import { reducedMotion } from '../../utils/motion.js';
 
 function element(tag, className, text) {
@@ -295,7 +295,7 @@ export async function renderOverviewPage(container, { caseId, api, navigate }) {
       // 대본이 있는 사건은 지면 기사 · 증거조사 사진을 S-20과 같은 사건 데이터(API 16 · 17)로 싣는다. 못 받으면 대본 지면으로(FE-64)
       const hasScript = scriptFor(caseId, data.case.title);
       const [detail, casePaper] = hasScript
-        ? await Promise.all([api.getCaseDetail(caseId).catch(() => null), api.getCasePaper(caseId).catch(() => null)])
+        ? await Promise.all([api.getCaseDetail(caseId).catch(() => null), fetchCasePaper(api, caseId)])
         : [null, null];
       if (active()) draw(data, detail, casePaper);
     } catch (error) { showError(error); }
