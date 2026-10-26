@@ -466,7 +466,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
   }
   function type(line) {
     clearInterval(typing);
-    if (reducedMotion()) { text.textContent = line; return; }
+    if (reducedMotion()) { finishTyping(); return; } // 한 번에 보여 주되 선택지 · 포커스 이동까지 같은 끝처리를 한다(리뷰 반영 — 안 하면 선택지만 있는 장면이 숨은 채 남는다)
     let shown = 0;
     text.textContent = '';
     typing = setInterval(() => {

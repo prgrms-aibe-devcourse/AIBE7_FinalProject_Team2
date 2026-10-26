@@ -508,6 +508,7 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
         markAiRevealIntro(caseId); // S-06에서 로딩 · 안내를 한 번 보여 준다 (7.7.4)
         if (active()) {
           signRow.classList.add('is-filed');
+          signPage.setAttribute('aria-busy', 'false'); // 바쁜 영역의 변경은 낭독이 보류될 수 있어, 접수 안내를 쓰기 전에 푼다(리뷰 반영)
           filedNote.textContent = '판결이 접수되었어요. AI 판결로 넘어가요.';
           if (!reducedMotion()) await new Promise((resolve) => { setTimeout(resolve, FILED_MS); });
         }
