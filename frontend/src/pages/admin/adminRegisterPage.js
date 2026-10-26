@@ -255,9 +255,11 @@ export function renderAdminRegisterPage(container, { navigate }) {
         formError.textContent = '';
         try {
           const { importId } = await api.createImport(body);
+          // 번호부터 남긴다 — 응답을 받은 직후 화면을 벗어나도(active()가 false) 서버에서는 작업이 이미 돌고 있다.
+          // 여기서 빠뜨리면 등록 작업 목록 API가 없어 번호를 되찾을 길이 없고, 끝난 생성을 아무도 적재할 수 없다(PR #285 리뷰)
+          rememberImport(importId);
           if (!active()) return;
           sourceBoxes.forEach((item) => { item.originalText.value = ''; }); // 시작된 뒤에는 원문을 화면에도 남기지 않는다
-          rememberImport(importId);
           watch(importId);
         } catch (failure) {
           if (!active()) return;
@@ -367,7 +369,8 @@ export function renderAdminRegisterPage(container, { navigate }) {
           const heading = data.status === 'FAILED' ? '등록에 실패했어요'
             : data.status !== 'SUCCEEDED' ? '파이프라인을 실행하는 중이에요'
               : data.caseId ? '등록을 마쳤어요' : '생성을 마쳤어요';
-          const parts = [element('h2', '', heading), list];
+          const title = element('h2', '', heading);
+          const parts = [title, list];
           if (data.status === 'RUNNING' || data.status === 'QUEUED') {
             const note = element('p', 'admin-sub', '이 화면을 닫아도 서버 실행은 계속돼요. 생성이 끝나면 이 화면에서 "사건으로 만들기"를 눌러야 검수 목록에 올라와요(같은 탭에서 다시 열면 여기로 돌아와요).');
             note.setAttribute('role', 'status');
@@ -401,7 +404,16 @@ export function renderAdminRegisterPage(container, { navigate }) {
             error.setAttribute('role', 'alert');
             parts.push(error, button('입력으로 돌아가기', () => backToForm(RETRY_NOTE)));
           }
+          // "사건으로 만들기"를 누르면 이 영역을 통째로 다시 그려서 누른 버튼이 사라진다 — 키보드 포커스가 문서 맨 앞으로 돌아간다.
+          // 이 영역 안의 버튼에 포커스가 있었을 때만 새 머리글로 옮긴다: 영역 밖(폼 · 사이드바)의 포커스는 빼앗지 않고,
+          // 2초마다 도는 폴링 갱신에서는 포커스가 버튼에 없으므로 같은 머리글을 되풀이해 읽지 않는다 (PR #285 리뷰)
+          const focused = document.activeElement;
+          const keepFocus = focused?.tagName === 'BUTTON' && progressArea.contains(focused);
           progressArea.replaceChildren(...parts);
+          if (keepFocus) {
+            title.tabIndex = -1;
+            title.focus({ preventScroll: true });
+          }
         }
 
         progressArea.replaceChildren(element('p', 'admin-message', '진행 상황을 불러오는 중이에요…'));
