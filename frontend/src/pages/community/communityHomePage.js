@@ -218,6 +218,7 @@ export function renderCommunityHomePage(container, { api, navigate }) {
       const item = element('li', `is-${rank}`);
       const step = element('div', 'cm-step', `${rank}위`);
       if (person) step.append(element('small', '', `Lv.${person.level}`));
+      if (!person) item.setAttribute('aria-hidden', 'true'); // 빈 자리는 순위 글자까지 읽지 않는다(FE-93 리뷰)
       item.append(person ? rankCard(person) : emptyRankCard(), step);
       return item;
     }));
