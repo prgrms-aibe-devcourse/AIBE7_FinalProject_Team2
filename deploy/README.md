@@ -463,6 +463,50 @@ systemctl list-timers lawnambul-cd.timer --no-pager            # NEXT가 보여�
 curl -s https://naelawnambul.today/api/v1/cases | head -c 200; echo   # total이 0이 아니면 성공
 ```
 
+### 외부 DB(Supabase · RDS)에 실제 사건 시드 올리기 (BE-59, 팀 합의 후)
+
+외부 DB 모드에서는 **위 5)의 손 Compose 명령을 쓰지 않는다.** `-f docker-compose.external-db.yml`이 빠져 backend가 같은 서버의 옛 postgres로 붙는다. `deploy.sh --reapply`가 오버레이를 모두 맞춰 준다.
+
+전제: 이 변경이 `main`에 배포돼 있어야 한다(지금 서버의 `deploy.sh`가 `EXTERNAL_DB_ALLOWS_REAL_SEED`를 알아야 함). 진행 중에는 팀에 main 머지를 잠시 멈춰 달라고 알린다(자동 배포가 중간에 끼지 않게).
+
+```bash
+cd /opt/lawnambul/app/deploy
+
+# 1) 시드 사본을 main이 고정한 커밋으로 맞춘다 (처음이면 위 "처음 한 번" 1) ~ 3))
+cd /opt/lawnambul/private-seed && git fetch -q origin
+PTR=$(git -C /opt/lawnambul/app ls-tree HEAD backend/private-seed | awk '{print $3}')
+git checkout -q --detach "$PTR" && git log -1 --format='%h %s'      # PTR 앞 7자리와 같아야 함
+find -L seed -type f -name '*.sql' | sort                             # SQL 목록(하위 폴더 포함 — Flyway도 하위 폴더까지 읽는다)
+grep -Ril --include='*.sql' "'LBOX'" seed/ || echo "LBox 없음 ✔"
+cd /opt/lawnambul/app/deploy
+
+# 2) 백업 (실패하면 여기서 멈춘다)
+./backup-db.sh before-real-seed
+
+# 3) .env에 두 줄 — ubuntu 사용자로 연다(주인 · 권한 600이 그대로 남는다). REAL_SEED_DIR= 빈 줄이 있으면 그 줄을 채운다
+sudo -u ubuntu nano .env
+#   REAL_SEED_DIR=/opt/lawnambul/private-seed/seed
+#   EXTERNAL_DB_ALLOWS_REAL_SEED=1
+grep -cE '^(REAL_SEED_DIR|EXTERNAL_DB_ALLOWS_REAL_SEED)=' .env      # 2
+ls -l .env                                                            # -rw------- ubuntu ubuntu
+
+# 4) 적용 — 로그에 "외부 DB에 실제 사건 시드를 함께 적용한다"와 ✅가 나와야 한다
+sudo -u ubuntu ./deploy.sh --reapply
+```
+
+확인:
+
+```bash
+C="docker compose -f docker-compose.prod.yml -f docker-compose.external-db.yml -f docker-compose.real-seed.yml"
+$C exec -T backend printenv FLYWAY_LOCATIONS                          # …,filesystem:/real-seed
+$C logs backend | grep -E 'Migrating schema|Successfully applied|ERROR'
+curl -s http://localhost/api/v1/cases | head -c 200; echo
+```
+
+- 공용 DB(Supabase)라 **팀원 로컬에도 실제 사건이 보인다.** 가상 사건 시드도 그대로 남아 함께 보인다.
+- `.env`에서 두 줄을 빼도 **이미 들어간 데이터는 지워지지 않는다.** RDS로 옮긴 뒤 Supabase의 실제 데이터는 따로 지운다(`SHARED-DEV-DB.md` 규칙 6).
+- RDS로 옮길 때도 같은 두 줄을 그대로 두고 `EXTERNAL_DB_*`만 바꾼 뒤 `--reapply`하면 새 DB에 시드가 들어간다.
+
 ### 시드가 바뀌었을 때 (비공개 저장소에 머지된 뒤)
 
 비공개 저장소에 머지해도 운영에 **자동으로 반영되지 않는다.** 운영 시드는 **공개 저장소 `main`이 서브모듈로 고정한 커밋**을 따른다. 그래서 순서는 이렇다.
@@ -559,7 +603,7 @@ git -C /opt/lawnambul/private-seed show origin/develop:loads/<파일>.sql \
 | 백업 | `backup-db.sh`가 외부 DB의 `public` 스키마를 덤프한다(`postgres:17-alpine` 클라이언트 컨테이너, 처음 한 번 이미지를 받음) |
 | 필요 버전 | Docker Compose **2.24.4 이상**(`!override`). `deploy.sh`가 먼저 확인한다 |
 
-`deploy.sh`가 배포 전에 멈추는 경우(종료 코드 4, 아무것도 바꾸지 않음): `EXTERNAL_DB_USERNAME` · `PASSWORD`가 없음 / URL에 `sslmode=require`(또는 `verify-ca` · `verify-full`)가 없음 / **`REAL_SEED_DIR`이 있음**(외부 공용 DB에 실제 사건 시드를 올리지 않는다 — `SHARED-DEV-DB.md` 규칙 6) / Compose가 2.24.4 미만.
+`deploy.sh`가 배포 전에 멈추는 경우(종료 코드 4, 아무것도 바꾸지 않음): `EXTERNAL_DB_USERNAME` · `PASSWORD`가 없음 / URL에 `sslmode=require`(또는 `verify-ca` · `verify-full`)가 없음 / **`REAL_SEED_DIR`이 있는데 `EXTERNAL_DB_ALLOWS_REAL_SEED=1`이 없음**(팀 합의 표시 — `SHARED-DEV-DB.md` 규칙 6) / `REAL_SEED_DIR` 폴더가 없거나 SQL 파일이 없음 / 하위 폴더를 끝까지 찾지 못함(권한 · 링크 순환) / 배포 계정이 못 읽는 SQL 파일이 있음 / 시드에 LBox 행(`'LBOX'`)이 있음 — **하위 폴더까지 검사한다**(Flyway `filesystem:` 위치가 하위 폴더까지 읽기 때문) / Compose가 2.24.4 미만.
 
 ### 켜기 (Supabase, 처음 한 번)
 
@@ -579,7 +623,7 @@ nano .env
 #   EXTERNAL_DB_URL=jdbc:postgresql://<세션 풀러 호스트>:5432/postgres?sslmode=require
 #   EXTERNAL_DB_USERNAME=postgres.<프로젝트 ref>
 #   EXTERNAL_DB_PASSWORD=<DM으로 받은 값>
-#   REAL_SEED_DIR=          ← 값을 지워 비운다 (외부 공용 DB에 실제 사건 시드를 올리지 않는다 — 안 비우면 deploy.sh가 멈춘다)
+#   REAL_SEED_DIR=          ← 값을 지워 비운다 (실제 사건 시드는 팀 합의 후 아래 "외부 DB에 실제 사건 시드 올리기"로 따로 올린다)
 #   (POSTGRES_PASSWORD는 지우지 않는다 — 되돌리기용 postgres 정의가 요구한다)
 
 # 3) 설정 다시 적용 (이미지는 그대로) — 로그에 "외부 DB 모드"와 ✅가 나와야 한다
