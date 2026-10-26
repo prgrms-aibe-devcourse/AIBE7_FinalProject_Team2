@@ -161,7 +161,8 @@ select id, member_id, last_seen_at from anonymous_user order by last_seen_at des
 | `--migrate`인데 develop이 아니거나 origin/develop과 다름 · 마이그레이션 폴더에 커밋 안 한 변경 | 중단 |
 | `--migrate`일 때 Flyway 위치 | 스크립트가 직접 정함 (`FLYWAY_LOCATIONS` 값은 무시) |
 | `--with-private-seed`인데 서브모듈이 비었거나 저장소가 가리키는 커밋과 다름 | 중단 |
-| `--with-private-seed`인데 시드에 LBox 행(`'LBOX'`)이 있음 | 중단 (사용 불가 데이터, 규칙 6) |
+| `--with-private-seed`인데 시드에 LBox 행(`'LBOX'`)이 있음(하위 폴더 포함) | 중단 (사용 불가 데이터, 규칙 6) |
+| `--with-private-seed`인데 시드 파일 · 하위 폴더를 읽지 못함 | 중단 (검사하지 못한 파일을 올리지 않는다) |
 | `--with-private-seed`를 `--migrate` 없이 씀 | 중단 |
 
 macOS 기본 bash(3.2)에서도 동작한다.

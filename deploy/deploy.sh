@@ -114,22 +114,38 @@ if [[ -n "$EXTERNAL_DB_URL_VALUE" ]]; then
       exit 4
     fi
     # 폴더가 비어 있거나 경로가 틀리면 Flyway가 아무것도 넣지 않고 성공으로 끝나 알아차리기 어렵다 — 먼저 막는다.
-    # 이름만 *.sql인 폴더는 세지 않고, 일반 파일만 모은다 (PR #281 CodeRabbit 리뷰)
+    # 검사 범위는 Flyway가 실제로 읽는 범위와 같아야 한다 — filesystem: 위치는 하위 폴더까지 재귀로 읽으므로
+    # 최상위 *.sql만 보면 하위 폴더의 V 마이그레이션이 LBox 검사 없이 외부 DB에 들어갈 수 있다 (PR #281 CodeRabbit 리뷰).
+    # find -L: 링크가 가리키는 파일도 포함한다. 이름만 *.sql인 폴더는 -type f로 뺀다.
+    # 탐색 실패(못 읽는 하위 폴더 · 링크 순환 등)는 "파일 없음"과 구분해 중단한다 — 결과를 임시 파일에 받아
+    # find 종료 코드를 직접 본다(process substitution은 find 실패를 숨긴다)
+    if [[ ! -d "$REAL_SEED_DIR_VALUE" ]]; then
+      log "❌ REAL_SEED_DIR(${REAL_SEED_DIR_VALUE}) 폴더가 없다 — 서버에 비공개 시드를 먼저 받는다 (deploy/README.md \"운영 데이터\")"
+      exit 4
+    fi
+    seed_list="$(mktemp)" || { log "❌ 실제 사건 시드 검사용 임시 파일을 만들지 못했다"; exit 4; }
+    if ! find -L "$REAL_SEED_DIR_VALUE" -type f -name '*.sql' -print0 > "$seed_list"; then
+      rm -f "$seed_list"
+      log "❌ REAL_SEED_DIR(${REAL_SEED_DIR_VALUE}) 아래 SQL 파일을 끝까지 찾지 못했다 — 하위 폴더 권한 · 링크를 확인한다"
+      exit 4
+    fi
     seed_sql_files=()
-    for seed_sql in "$REAL_SEED_DIR_VALUE"/*.sql; do
-      [[ -f "$seed_sql" ]] || continue
-      # 배포 계정이 못 읽는 파일이 있으면 아래 LBox 검사를 할 수 없다. 컨테이너(다른 uid)는 읽을 수 있을 수 있으므로
-      # 건너뛰지 않고 중단한다 — 검사하지 못한 파일이 외부 DB에 올라가지 않게 실패 쪽으로 닫는다 (PR #281 리뷰)
-      if [[ ! -r "$seed_sql" ]]; then
-        log "❌ 실제 사건 시드 파일을 읽을 수 없어 검사하지 못했다: ${seed_sql} — 파일 권한을 확인한다"
-        exit 4
-      fi
+    while IFS= read -r -d '' seed_sql; do
       seed_sql_files+=("$seed_sql")
-    done
+    done < "$seed_list"
+    rm -f "$seed_list"
     if (( ${#seed_sql_files[@]} == 0 )); then
       log "❌ REAL_SEED_DIR(${REAL_SEED_DIR_VALUE})에 SQL 파일이 없다 — 서버에 비공개 시드를 먼저 받는다 (deploy/README.md \"운영 데이터\")"
       exit 4
     fi
+    # 배포 계정이 못 읽는 파일이 있으면 아래 LBox 검사를 할 수 없다. 컨테이너(다른 uid)는 읽을 수 있을 수 있으므로
+    # 건너뛰지 않고 중단한다 — 검사하지 못한 파일이 외부 DB에 올라가지 않게 실패 쪽으로 닫는다 (PR #281 리뷰)
+    for seed_sql in "${seed_sql_files[@]}"; do
+      if [[ ! -r "$seed_sql" ]]; then
+        log "❌ 실제 사건 시드 파일을 읽을 수 없어 검사하지 못했다: ${seed_sql} — 파일 권한을 확인한다"
+        exit 4
+      fi
+    done
     # 사용 불가 데이터(LBox Open, 라이선스상 사용 불가 — 10/12)는 합의와 별개로 외부 DB에 올리지 않는다.
     # 지금 시드에는 없다(BE-54에서 삭제). 다시 들어오면 여기서 막는다 (backend/run-shared-db.sh와 같은 검사).
     # grep 종료 코드: 0 = LBox 있음, 1 = 없음, 2 이상 = 읽기 오류 → 1일 때만 통과한다(오류를 "없음"으로 보지 않는다, PR #281 리뷰)

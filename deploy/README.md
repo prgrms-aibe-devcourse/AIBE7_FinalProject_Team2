@@ -455,8 +455,8 @@ cd /opt/lawnambul/app/deploy
 cd /opt/lawnambul/private-seed && git fetch -q origin
 PTR=$(git -C /opt/lawnambul/app ls-tree HEAD backend/private-seed | awk '{print $3}')
 git checkout -q --detach "$PTR" && git log -1 --format='%h %s'      # PTR 앞 7자리와 같아야 함
-ls seed/*.sql                                                         # SQL 목록이 보여야 함
-grep -il "'LBOX'" seed/*.sql || echo "LBox 없음 ✔"
+find -L seed -type f -name '*.sql' | sort                             # SQL 목록(하위 폴더 포함 — Flyway도 하위 폴더까지 읽는다)
+grep -Ril --include='*.sql' "'LBOX'" seed/ || echo "LBox 없음 ✔"
 cd /opt/lawnambul/app/deploy
 
 # 2) 백업 (실패하면 여기서 멈춘다)
@@ -571,7 +571,7 @@ git -C /opt/lawnambul/private-seed show origin/develop:loads/<파일>.sql \
 | 백업 | `backup-db.sh`가 외부 DB의 `public` 스키마를 덤프한다(`postgres:17-alpine` 클라이언트 컨테이너, 처음 한 번 이미지를 받음) |
 | 필요 버전 | Docker Compose **2.24.4 이상**(`!override`). `deploy.sh`가 먼저 확인한다 |
 
-`deploy.sh`가 배포 전에 멈추는 경우(종료 코드 4, 아무것도 바꾸지 않음): `EXTERNAL_DB_USERNAME` · `PASSWORD`가 없음 / URL에 `sslmode=require`(또는 `verify-ca` · `verify-full`)가 없음 / **`REAL_SEED_DIR`이 있는데 `EXTERNAL_DB_ALLOWS_REAL_SEED=1`이 없음**(팀 합의 표시 — `SHARED-DEV-DB.md` 규칙 6) / `REAL_SEED_DIR`에 SQL 파일이 없음 / 시드에 LBox 행(`'LBOX'`)이 있음 / Compose가 2.24.4 미만.
+`deploy.sh`가 배포 전에 멈추는 경우(종료 코드 4, 아무것도 바꾸지 않음): `EXTERNAL_DB_USERNAME` · `PASSWORD`가 없음 / URL에 `sslmode=require`(또는 `verify-ca` · `verify-full`)가 없음 / **`REAL_SEED_DIR`이 있는데 `EXTERNAL_DB_ALLOWS_REAL_SEED=1`이 없음**(팀 합의 표시 — `SHARED-DEV-DB.md` 규칙 6) / `REAL_SEED_DIR` 폴더가 없거나 SQL 파일이 없음 / 하위 폴더를 끝까지 찾지 못함(권한 · 링크 순환) / 배포 계정이 못 읽는 SQL 파일이 있음 / 시드에 LBox 행(`'LBOX'`)이 있음 — **하위 폴더까지 검사한다**(Flyway `filesystem:` 위치가 하위 폴더까지 읽기 때문) / Compose가 2.24.4 미만.
 
 ### 켜기 (Supabase, 처음 한 번)
 
