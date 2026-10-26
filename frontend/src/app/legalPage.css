@@ -24,7 +24,16 @@
 .legal-draft { display: inline-block; margin-right: 6px; padding: 0 8px; border: 1px dashed var(--color-border-strong); border-radius: 4px; color: var(--color-text); font-size: var(--text-caption); font-weight: 700; }
 
 .legal-toc { margin: 24px 0; padding: 16px 20px; border-radius: 8px; background: var(--color-surface); }
-.legal-toc h2 { margin: 0 0 8px; font-size: 15px; color: var(--color-heading); }
+.legal-toc { scroll-margin-top: 72px; }
+/* 목차 접이식(FE-104): 좁은 화면은 접힌 채 시작한다. 제목 줄 전체가 누르는 자리(44px) */
+.legal-toc-fold > summary {
+  display: flex; align-items: center; gap: 8px; min-height: 44px; margin: -8px 0; font-size: 15px; font-weight: 800; color: var(--color-heading); cursor: pointer; list-style: none;
+}
+.legal-toc-fold > summary::-webkit-details-marker { display: none; }
+.legal-toc-fold > summary::after { content: ''; width: 7px; height: 7px; margin-left: auto; border: solid currentColor; border-width: 0 2px 2px 0; rotate: 45deg; translate: 0 -2px; transition: rotate .15s ease-out; }
+.legal-toc-fold[open] > summary::after { rotate: -135deg; translate: 0 2px; }
+.legal-toc-fold > summary:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 4px; border-radius: 4px; }
+.legal-toc-fold[open] > ol { margin-top: 12px; }
 .legal-toc ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px 24px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
 .legal-toc-item { min-height: 44px; padding: 4px 0; border: 0; background: none; color: var(--color-accent-text); font: 400 14px/1.5 var(--font-body); text-align: left; cursor: pointer; }
 @media (hover: hover) and (pointer: fine) { .legal-toc-item:hover { text-decoration: underline; } }
@@ -35,6 +44,11 @@
 .legal-section h2:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 4px; border-radius: 4px; } /* 목차로 이동한 자리를 키보드 사용자가 알아보게 */
 .legal-section p { margin: 0 0 .8em; }
 .legal-pending { color: var(--color-muted); }
+/* 조항 끝 "목차로"(FE-104): 본문보다 작은 보조 링크 */
+.legal-back { display: inline-flex; align-items: center; min-height: 44px; padding: 0 2px; border: 0; background: none; color: var(--color-accent-text); font: 700 13px/1 var(--font-body); cursor: pointer; }
+.legal-back::before { content: '↑'; margin-right: 4px; }
+@media (hover: hover) and (pointer: fine) { .legal-back:hover { text-decoration: underline; } }
+.legal-back:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
 
 .legal-actions { display: flex; justify-content: center; margin-top: 28px; }
 

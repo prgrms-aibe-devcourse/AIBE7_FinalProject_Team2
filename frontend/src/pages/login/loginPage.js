@@ -6,12 +6,13 @@ import { adminLogout, tryAdminLogin } from './adminLogin.js';
 import { canGoBackInApp } from '../../app/router.js';
 import { devJumpBar } from './loginDevJump.js';
 import { loginDesk } from './loginDesk.js';
+import { kakaoButton, setBusy } from './loginParts.js';
 
 // S-12 로그인 (FE-52, IA 4장 /login). 책상 위 펠트 패드(FE-69)에 카카오 로그인 버튼 + 아이디 · 비밀번호 폼.
 // 목 모드에서는 개발용 목업 로그인(mocks/authMockApi.js)이, 실제 모드에서는 카카오 로그인(realApi.js login, FE-74)이 받는다.
 // 실제 모드의 아이디 · 비밀번호는 관리자 로그인만 된다. 로그인하지 않아도 모든 판결 체험을 할 수 있다(REQ-003).
-// 로그인하면 닉네임을 이 브라우저에 두고(utils/session.js) 공통 헤더의 "로그인" 자리에 닉네임이 나온다. 회원가입(/signup)은 아직 없다
-const KAKAO_SVG = '<svg viewBox="0 0 18 18" aria-hidden="true" focusable="false"><path d="M9 1.6C4.6 1.6 1 4.4 1 7.9c0 2.2 1.5 4.2 3.7 5.3l-.9 3.4c-.1.3.3.6.5.4l4.1-2.7.6.1c4.4 0 8-2.8 8-6.3S13.4 1.6 9 1.6Z"/></svg>';
+// 로그인하면 닉네임을 이 브라우저에 두고(utils/session.js) 공통 헤더의 "로그인" 자리에 닉네임이 나온다.
+// FE-104: 아이디 · 비밀번호 폼은 실제 모드에서도 펼쳐 둔다(일반 회원가입이 생길 예정). 폼 아래 회원가입(signupPage.js) 링크
 const NOT_READY = '로그인은 아직 준비 중이에요. 로그인하지 않아도 모든 판결 체험을 할 수 있어요.';
 
 export function renderLoginPage(container, { api, navigate }) {
@@ -27,7 +28,7 @@ export function renderLoginPage(container, { api, navigate }) {
     { label: '입력 폼', run: () => showForm() },
     { label: '빈칸 오류', run: () => showForm().form.requestSubmit() },
     { label: '로그인 실패', run: () => showForm().showError('로그인하지 못했어요. 잠시 뒤 다시 시도해 주세요.') },
-    { label: '로그인 중(로딩)', run: () => { const { busy } = showForm(); setBusy(busy, true); } },
+    { label: '로그인 중(로딩)', run: () => { const { busy } = showForm(); setBusy(busy, true, busy[1]); } },
     { label: '로그인됨', run: () => showSignedIn({ nickname: '내로판사' }, false) },
     { label: '관리자 로그인됨', run: () => showSignedIn({ nickname: '운영자' }, true) },
     { label: '콜백 로딩', run: () => window.location.assign('/auth/callback?dev=loading') },
@@ -68,12 +69,7 @@ export function renderLoginPage(container, { api, navigate }) {
     error.setAttribute('role', 'alert');
     error.hidden = true;
 
-    const kakao = element('button', 'kakao-button');
-    kakao.type = 'button';
-    kakao.innerHTML = KAKAO_SVG;
-    kakao.append(element('span', '', '카카오 로그인'));
-    kakao.addEventListener('click', () => signIn({ method: 'kakao' }));
-
+    const kakao = kakaoButton('카카오 로그인', () => signIn({ method: 'kakao' }));
     const divider = element('p', 'login-divider', '또는');
 
     const form = element('form', 'login-form');
@@ -99,20 +95,23 @@ export function renderLoginPage(container, { api, navigate }) {
       signIn({ method: 'password', id: idInput.value.trim(), password: passwordInput.value });
     });
 
-    const signup = element('p', 'login-signup', '아직 계정이 없나요? ');
-    const signupButton = element('button', 'login-link', '회원가입');
-    signupButton.type = 'button';
-    signupButton.setAttribute('aria-disabled', 'true');
-    signupButton.setAttribute('aria-label', '회원가입 — 준비 중');
-    signup.append(signupButton);
+    // 회원가입은 지금 기록 항목을 바꿔(replace) 연다: 가입을 마치고 뒤로 가면 로그인 화면이 아니라 로그인 전에 보던 화면으로 돌아간다
+    const signup = element('p', 'login-signup', '처음이신가요?');
+    signup.append(button('회원가입', () => navigate('signup', {}, { replace: true }), 'login-link'));
+    // 로그인하지 않고 나가는 길(헤더 말고도 패드 안에서 바로)
+    const browse = element('p', 'login-browse');
+    browse.append(button('로그인 없이 사건 보러 가기', () => navigate('list'), 'login-link'));
 
-    parts.push(...(adminOnly ? [form] : [kakao, divider, form, signup]));
+    if (adminOnly) parts.push(form, browse);
+    else parts.push(kakao, divider, form, signup, browse);
     let pending = false; // return보다 앞에 둔다(뒤에 두면 초기화되지 않아 로그인 때 ReferenceError)
     peek(null);
     card.replaceChildren(...parts);
     return { form, showError, busy: [kakao, submit] };
 
-    function showError(message) {
+    // 오류 문구는 누른 버튼 가까이에 둔다: 카카오는 버튼 바로 아래, 아이디 · 비밀번호는 로그인 버튼 위
+    function showError(message, near = form) {
+      if (near === kakao) kakao.after(error); else form.insertBefore(error, submit);
       error.textContent = message;
       error.hidden = false;
     }
@@ -121,7 +120,7 @@ export function renderLoginPage(container, { api, navigate }) {
       if (pending) return;
       pending = true;
       const busy = [kakao, submit];
-      setBusy(busy, true);
+      setBusy(busy, true, request.method === 'kakao' ? kakao : submit);
       error.hidden = true;
       try {
         // 아이디 · 비밀번호는 관리자 계정인지 먼저 본다. 관리자면 마이페이지 자리가 관리자 페이지가 된다 (FE-53)
@@ -141,7 +140,7 @@ export function renderLoginPage(container, { api, navigate }) {
           return;
         }
         if (!api.login) {
-          showError(request.method === 'password' ? `아이디와 비밀번호를 확인해 주세요. ${NOT_READY}` : NOT_READY);
+          showError(request.method === 'password' ? `아이디와 비밀번호를 확인해 주세요. ${NOT_READY}` : NOT_READY, request.method === 'kakao' ? kakao : form);
           setBusy(busy, false);
           pending = false;
           return;
@@ -153,7 +152,7 @@ export function renderLoginPage(container, { api, navigate }) {
         if (canGoBackInApp()) history.back(); else navigate('landing', {}, { replace: true });
       } catch (failure) {
         if (!container.contains(root)) return;
-        if (failure?.code !== 'LOGIN_CANCELLED') showError(failure?.code === 'VALIDATION_ERROR' ? '아이디와 비밀번호를 확인해 주세요.' : '로그인하지 못했어요. 잠시 뒤 다시 시도해 주세요.');
+        if (failure?.code !== 'LOGIN_CANCELLED') showError(failureMessage(failure, request.method), request.method === 'kakao' ? kakao : form);
         setBusy(busy, false);
         pending = false;
       }
@@ -161,13 +160,11 @@ export function renderLoginPage(container, { api, navigate }) {
   }
 }
 
-// 요청 중에는 disabled 대신 aria-disabled를 쓴다: disabled가 되면 눌렀던 버튼의 포커스가 사라져 키보드 사용자가 처음부터 다시 Tab을 눌러야 한다.
-// 누름은 signIn의 pending 검사가 막고, 모양은 login.css의 [aria-disabled="true"]가 맡는다
-function setBusy(nodes, busy) {
-  nodes.forEach((node) => {
-    if (busy) node.setAttribute('aria-disabled', 'true');
-    else node.removeAttribute('aria-disabled');
-  });
+// 실패 원인별 문구: 연결 실패는 다시 시도, 틀린 입력은 확인, 그 밖은 일반 안내
+function failureMessage(failure, method) {
+  if (failure?.code === 'NETWORK_ERROR') return '서버에 연결하지 못했어요. 잠시 뒤 다시 시도해 주세요.';
+  if (failure?.code === 'VALIDATION_ERROR' && method === 'password') return '아이디와 비밀번호를 확인해 주세요.';
+  return '로그인하지 못했어요. 잠시 뒤 다시 시도해 주세요.';
 }
 
 // 라벨 + 입력칸 한 줄. 빈칸 안내(#login-error)를 입력칸 설명으로 잇는다

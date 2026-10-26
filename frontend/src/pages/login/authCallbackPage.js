@@ -27,9 +27,12 @@ export function renderAuthCallbackPage(container, { api, navigate }) {
     return;
   }
 
-  panel.setAttribute('role', 'status');
+  // 알림 역할은 안내 한 줄에만 둔다: 카드 전체(버튼 포함)를 알림으로 두면 화면 낭독기가 버튼까지 읽는다 (FE-104)
+  const waiting = element('p', 'login-lead', '잠시만 기다려 주세요.');
+  waiting.setAttribute('role', 'status');
+  document.title = `로그인하는 중 · ${siteTitle()}`; // 탭 제목도 상태를 알린다(라우터는 화면 이름 "로그인"으로 둔다)
   peek('cheek/idle-thinking');
-  panel.append(element('h1', '', '로그인하는 중…'), element('p', 'login-lead', '잠시만 기다려 주세요.'));
+  panel.append(element('h1', '', '로그인하는 중…'), waiting);
   if (devLoading) return undefined;
   return api.reissueToken().then(() => {
     if (!container.contains(root)) return; // 기다리는 사이 다른 화면으로 갔으면 이동하지 않는다
@@ -46,11 +49,12 @@ export function renderAuthCallbackPage(container, { api, navigate }) {
       button('처음으로', () => navigate('landing', {}, { replace: true }), 'secondary-button'),
     );
     peek('cheek/idle-sorry');
-    panel.setAttribute('role', 'alert');
-    panel.replaceChildren(
-      element('h1', '', '카카오 로그인을 마치지 못했어요'),
-      element('p', 'login-lead', '취소했거나 잠시 문제가 생겼어요. 로그인하지 않아도 모든 판결 체험을 할 수 있어요.'),
-      actions,
-    );
+    const reason = element('p', 'login-lead', '취소했거나 잠시 문제가 생겼어요. 로그인하지 않아도 모든 판결 체험을 할 수 있어요.');
+    reason.setAttribute('role', 'alert');
+    document.title = `로그인 실패 · ${siteTitle()}`;
+    panel.replaceChildren(element('h1', '', '카카오 로그인을 마치지 못했어요'), reason, actions);
   }
 }
+
+// 라우터가 붙인 "화면 이름 · 사이트 이름"에서 사이트 이름만 쓴다
+const siteTitle = () => document.title.split(' · ').pop();
