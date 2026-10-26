@@ -2,7 +2,7 @@ import { button, element } from '../../components/siteLayout.js';
 import { canGoBackInApp } from '../../app/router.js';
 import { currentUser } from '../../utils/session.js';
 import {
-  NOT_READY, authorButton, communityShell, composer, filterControls, formatDate, likeButton, loginHint, popularList, nameCard, postImages, postMeta, textField, verdictWithType,
+  NOT_READY, authorButton, communityShell, composer, filterControls, foldedVerdict, formatDate, likeButton, loginHint, popularList, nameCard, postImages, postMeta, textField, verdictWithType,
 } from './communityParts.js';
 
 // S-18 커뮤니티 글 상세 (FE-47, /community/posts/:postId). 목록과 같은 노트북 화면 틀에 글 전체 · 좋아요 · 댓글을 둔다.
@@ -63,7 +63,7 @@ export function renderCommunityPostPage(container, { api, navigate, postId }) {
     title.tabIndex = -1;
     node.append(postMeta(post, { full: true }), title, element('div', 'cm-article-body', post.body));
     if (post.images.length) node.append(postImages(post.images, { full: true }));
-    if (post.verdict) node.append(verdictWithType(post.verdict, post.caseTitle, post.author));
+    if (post.verdict) node.append(foldedVerdict(post, () => verdictWithType(post.verdict, post.caseTitle, post.author)));
     const actions = element('div', 'cm-actions');
     actions.append(likeButton(post, { api, onLoginNeeded: () => loginHint(node, navigate, '로그인하면 좋아요를 누를 수 있어요.') }));
     node.append(actions, nameCard(post.author));

@@ -1,6 +1,6 @@
 import { button, element } from '../../components/siteLayout.js';
 import {
-  NOT_READY, SORT_LABELS, communityShell, composer, filterControls, icon, likeButton, loginHint, popularList, postImages, postLink, postMeta, verdictCard,
+  NOT_READY, SORT_LABELS, communityShell, composer, filterControls, icon, likeButton, loginHint, popularList, postImages, postLink, postMeta, foldedVerdict, verdictCard,
 } from './communityParts.js';
 
 // S-18 커뮤니티 글 목록 (FE-47). /community/posts — 커뮤니티 메인(communityHomePage.js, FE-89)의 "모든 글 보기" · 거르기에서 들어온다.
@@ -120,7 +120,7 @@ export function renderCommunityPage(container, { api, navigate, category = null,
     title.append(link);
     item.append(postMeta(post), title, element('p', 'cm-excerpt', post.body.replace(/\s*\n+\s*/g, ' '))); // 목록에서는 문단을 한 줄로 이어 세 줄까지 보인다
     if (post.images.length) item.append(postImages(post.images));
-    if (post.verdict) item.append(verdictCard(post.verdict, post.caseTitle));
+    if (post.verdict) item.append(foldedVerdict(post, () => verdictCard(post.verdict, post.caseTitle, '글쓴이 판결')));
     const actions = element('div', 'cm-actions');
     const comments = postLink('', post.postId, navigate, 'cm-action');
     comments.append(icon('comment'), element('span', '', '댓글'), element('span', 'cm-count', String(post.commentCount)));

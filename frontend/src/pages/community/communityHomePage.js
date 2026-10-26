@@ -1,3 +1,4 @@
+import { API_MODE } from '../../api/config.js';
 import { button, element, mockTag } from '../../components/siteLayout.js';
 import { profileFace } from '../../components/personCards.js';
 import { normalizeDeco } from '../../utils/profileDeco.js';
@@ -179,6 +180,7 @@ export function renderCommunityHomePage(container, { api, navigate }) {
     const facts = element('p', 'cm-hot-facts');
     const people = element('span');
     people.append(element('b', '', `${item.participantCount.toLocaleString()}명`), ' 판결');
+    if (API_MODE === 'mock') people.append(mockTag()); // 목 참여 수는 실제 반응이 아니다(FE-93)
     facts.append(people, element('span', '', `약 ${item.estimatedMinutes}분`));
     // 판결 체험 대본이 있는 사건만 "판결하기"(없는 사건은 사건 정보에서 "준비 중"이 나온다, caseListPage와 같은 기준)
     const playable = Boolean(scriptFor(item.caseId, item.title));
@@ -276,8 +278,11 @@ export function renderCommunityHomePage(container, { api, navigate }) {
     columns.append(...recommended.map(({ case: item, postCount, posts }) => {
       const column = element('section', 'cm-reco-col');
       column.setAttribute('aria-label', item.title);
-      column.append(element('p', 'cm-reco-label', `${item.crimeCategoryLabel} · ${item.participantCount.toLocaleString()}명 판결`),
-        element('h3', 'cm-reco-title', item.title), element('p', 'cm-reco-intro', item.shortIntro), briefList(posts));
+      const label = element('p', 'cm-reco-label', `${item.crimeCategoryLabel} · ${item.participantCount.toLocaleString()}명 판결`);
+      if (API_MODE === 'mock') label.append(mockTag());
+      const title = element('h3', 'cm-reco-title');
+      title.append(routeLink(item.title, `/cases/${item.caseId}`, () => navigate('caseDetail', { caseId: item.caseId }), 'cm-reco-title-link'));
+      column.append(label, title, element('p', 'cm-reco-intro', item.shortIntro), briefList(posts));
       if (postCount) column.append(caseListLink(item.caseId, postCount));
       return column;
     }));
