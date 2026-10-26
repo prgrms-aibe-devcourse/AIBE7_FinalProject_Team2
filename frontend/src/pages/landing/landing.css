@@ -260,7 +260,7 @@
 }
 .landing-page .bubble { max-width: 82%; padding: 6px 10px; border-radius: 10px; background: var(--color-surface); }
 .landing-page .bubble.mine { align-self: flex-end; background: var(--color-range-fill); }
-.landing-page .bubble small { font-size: 10px; color: var(--color-border-strong); }
+.landing-page .bubble small { font-size: 10px; color: var(--color-muted); } /* FE-99: 옅은 테두리색은 3.5:1이라 보조 글자색으로 */
 .landing-page .laptop-body {
   position: absolute; left: 0; right: 0; top: 160px; bottom: 0; border-radius: 4px 4px 22px 22px;
   background: linear-gradient(170deg, var(--color-desk-metal-light), var(--color-desk-metal) 50%, var(--color-desk-metal-dark));
@@ -474,6 +474,15 @@
 @media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
   .landing-page .room-rug-wrap:not(.is-folded) .rug-flap:hover .rug-flap-leaf,
   .landing-page .room-rug-wrap:not(.is-folded):has(.rug-folder:hover) .rug-flap-leaf { animation: flap-lift 1.6s infinite; } /* 삐져나온 서류철에 올려도 같다 */
+}
+/* 마우스가 없는 기기(FE-99): 호버가 없어 귀퉁이를 찾기 어려우므로, 가끔 혼자 살짝 들썩여 "들출 수 있다"를 알린다 */
+@media (hover: none) and (prefers-reduced-motion: no-preference) {
+  .landing-page .room-rug-wrap:not(.is-folded) .rug-flap-leaf { animation: flap-idle 5s 1.5s infinite; }
+}
+@keyframes flap-idle {
+  0%, 76%, 100% { transform: none; }
+  84% { transform: rotate3d(1, -1, 0, 45deg); animation-timing-function: cubic-bezier(.65, 0, .35, 1); }
+  94% { transform: none; }
 }
 @keyframes flap-lift {
   0% { transform: none; animation-timing-function: cubic-bezier(.32, .72, 0, 1); }
@@ -711,8 +720,8 @@ html.feedback-gutter { scrollbar-gutter: stable; } /* 스크롤을 잠가도 스
 }
 
 /* 메인 맨 아래 이용약관 · 개인정보처리방침 입구 (FE-62) */
-.landing-page .footer-links { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 10px; }
-.landing-page .footer-link { padding: 4px 0; border: 0; background: none; color: inherit; font: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.landing-page .footer-links { display: flex; flex-wrap: wrap; gap: 0 16px; margin-top: 2px; }
+.landing-page .footer-link { min-height: 44px; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .landing-page .footer-link { touch-action: manipulation; }
 .landing-page .footer-link:hover { opacity: .75; }
 .landing-page .footer-link:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }

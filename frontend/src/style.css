@@ -333,6 +333,8 @@ html { scroll-padding-top: calc(var(--site-header-h, 64px) + 8px); }
 @media (hover: hover) and (pointer: fine) { .nav-button:hover { color: var(--color-banner-text); } }
 /* 로그인(FE-50): 메뉴 맨 오른쪽, 얇은 테두리로 계정 동작임을 구분한다. 테두리는 글자색을 따라가 네이비 · 흰 헤더 모두에 맞는다 */
 .site-header .login-button { flex: none; margin-left: 4px; padding: 6px 14px; min-height: 36px; border: 1px solid color-mix(in srgb, currentColor 45%, transparent); border-radius: 6px; }
+.site-header .login-button { position: relative; }
+.site-header .login-button::after { content: ''; position: absolute; inset: -4px -2px; } /* 보이는 테두리는 36px 그대로, 누르는 범위만 44px로(FE-99) */
 .site-header .login-button[aria-current="page"] { box-shadow: none; } /* 테두리 버튼이라 밑줄 대신 테두리로 충분하다 */
 .site-header .account-name { display: block; max-width: 9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } /* 로그인한 닉네임(FE-52). 길면 줄인다 */
 /* 연출 스위치(FE-50, utils/motion.js): "연출" 글자 + 작은 스위치. 모양은 환경 설정 스위치와 같고 꺼짐의 윤곽선만 글자색을 따라간다 */
