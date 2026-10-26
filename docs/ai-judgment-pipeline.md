@@ -23,6 +23,7 @@
 | v2.15 | 2026-10-23 | **select 판결 이유 임베딩 유사도 구현 (BE-55)** — 5장 ⑤ · 8장 구현 상태 갱신. `stages.select.semanticWeight`(기본 0, consensus 전용)로 켠다. 임베딩은 `select_semantic.py`(기존 `summary_tags.py`와 같은 패턴 — `gemini-embedding-001` · `SEMANTIC_SIMILARITY` · cosine), 실패 시 구조 점수만으로 조용히 되돌아간다. 가중치 값은 샘플 검증 전이라 기본 꺼짐. 근거는 [BE-55 의사결정 기록](decisions/BE-55.md) |
 | v2.16 | 2026-10-25 | **대본 증거조사 대사 생성 구현 (BE-107, COMMON-41 남은 항목)** — 5장에 ⑤-1 `script` 단계 추가(기본 꺼짐). select가 고른 판결의 판단 요소(방향 · 이유)마다 증거조사 대사 한 줄을 항목 단위로 생성한다(`tools/ai-judgment/script_generation.py`). 말투 · 배역 · 가드레일은 `docs/character/character-asset-architecture.md` 5-2(COMMON-65)를 따르고, 배역(`cast`)은 자동으로 정하지 않고 설정으로 받는다(해송님 정정, 2026-10-24). 피고인신문 등 나머지 대사는 범위 밖(8장) — 근거는 [BE-107 의사결정 기록](decisions/BE-107.md) |
 | v2.17 | 2026-10-26 | **대본 증거조사 대사 생성 리뷰 반영 (BE-107 PR #277, peanutboi710님)** — 5장 ⑤-1 갱신. ① 대사 재료를 select 출력의 `reason`(AI 판결의 내부 근거)에서 `case.json`의 `label`(사실 문장)로 바꾸고, 2막 시점에 아직 공개되지 않은 `ARGUMENT` 요소는 뺀다 — `reason`을 쓰면 4막 전에 판결이 새어 나간다. ② 금지어에서 엄벌 · 중도 · 자비 · 명령을 뺀다(정상적인 법률 용어와 겹쳐 오탐했다, BE-107 댓글 5번이 과하게 넓게 잡았던 것을 바로잡음). ③ 같은 측 두 번째 대사부터 직전 같은 측 대사를 SCENE CONTEXT로 넘겨 측 전환을 자연스럽게 잇는다. ④ 페르소나 블록에서 "법의 정령" · 이름 뜻처럼 증거 소개에 불필요한 내부 설정을 뺀다. ⑤ 길이 상한(100자)을 오류로 추가(줄바꿈 수만으로는 한 줄이 길어도 통과했다). ⑥ 숫자 검증을 부분 문자열 대신 쉼표 뺀 숫자 토큰 전체 일치로 바꾼다. ⑦ 실패 · 중단된 결과(`failed > 0` 또는 `stopped`)는 `evidence.json`의 `publishable: false`로 표시해 BE-108 전 공개를 막는다. 근거는 [BE-107 의사결정 기록](decisions/BE-107.md) "2차" |
+| v2.18 | 2026-10-26 | **대본 증거조사 대사 생성 CodeRabbit 리뷰 2건 추가 반영 (BE-107 PR #277)** — 5장 ⑤-1 갱신. ⑧ select 이후 `case.json`이 바뀌어도 그대로 모델을 부르던 문제를 `stage_load`와 같은 provenance 검사(`ensure_selection_matches_case`로 공통화)로 막는다. ⑨ SCENE CONTEXT의 사건 데이터(제목 · 개요 · 사실 · 직전 대사)를 지시문과 섞지 않고 `scene_data` JSON으로 묶어 넣는다 — 값 안에 줄바꿈 · 명령형 문장이 있어도 지시로 오인되지 않게 한다. 근거는 [BE-107 의사결정 기록](decisions/BE-107.md) "3차" |
 
 > 이 문서는 **개요**다. 명령 · 옵션 · 설정 값의 정확한 기준은 [`tools/ai-judgment/README.md`](../tools/ai-judgment/README.md)와 [`case-extractor/README.md`](../tools/ai-judgment/case-extractor/README.md)다. 문서와 코드가 다르면 도구 README와 코드를 따른다.
 > 이 문서는 사건 내용을 담지 않는다. 예시는 모두 설명용이다.
@@ -183,6 +184,15 @@ SKIN → SCENE CONTEXT → GUARDRAILS, SKIN은 사건 화면이라 뺀다)을 �
 **출력 계약**: 요소 일부가 끝내 생성되지 못했거나(`failed > 0`) 호출 한도로 중간에 멈췄으면(`stopped`)
 증거 카드와 대사가 1:1로 어긋난다. `evidence.json`의 `publishable` 필드가 `false`면 BE-108(관리자 검수)
 전에는 공개할 수 없다(peanutboi710님 리뷰 7번).
+
+**사건 입력 변경 감지**: `select`가 고른 뒤 `case.json`이 바뀌었는데 `--from script`로 다시 돌리면, 바뀐
+`label`로 모델을 부를 수 있다. `stage_load`의 provenance 검사(생성 때 실제로 보낸 프롬프트의 해시와 비교,
+#143 리뷰)를 `ensure_selection_matches_case`로 공통화해 `stage_script`도 같은 검사를 거친다 — 불일치하면
+모델을 부르기 전에 멈춘다(CodeRabbit 리뷰).
+
+**프롬프트 인젝션 방지**: SCENE CONTEXT의 사건 데이터(제목 · 개요 · 소개할 사실 · 직전 대사)는 지시문과
+섞어 일반 문장으로 넣지 않고 `scene_data`라는 이름의 JSON 객체로 묶는다. 값 안에 줄바꿈이나 명령형
+문장이 있어도 JSON 직렬화가 이스케이프하므로 지시로 오인되지 않는다(CodeRabbit 리뷰).
 
 **이번 범위는 증거조사뿐이다.** 피고인신문 질의응답 · 공소사실 · 모두진술 · 쟁점정리 · 1막 기사 해설 ·
 최종의견은 범위 밖이다 — `case-1` 대본의 질문 3개(계획 여부 · 범행 뒤 행동 · 공소사실 인정 여부)는 판단

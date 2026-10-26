@@ -1134,6 +1134,22 @@ class PipelineTest(unittest.TestCase):
         self.assertFalse(outputs["publishable"])
         self.assertFalse(load_json(outputs["evidenceFile"])["publishable"])
 
+    def test_script_stage_rejects_case_changed_after_selection(self):
+        """peanutboi710님 리뷰(PR #277, CodeRabbit): select 이후 case.json의 label이 바뀌면 그 사실로
+        모델을 부르기 전에 멈춰야 한다 — stage_load와 같은 provenance 검사를 쓴다."""
+        config = self.config(generate={"models": ["openai:a"], "runs": 1},
+                             script={"enabled": True, "model": "openai:a",
+                                     "cast": {"prosecutor": "naero", "defense": "nambul"}})
+        state = self.run_with(config, {"openai:a": [self.output]}, until="select")
+
+        changed_case = copy.deepcopy(self.case)
+        changed_case["factors"][0]["label"] = "select 이후 바뀐 사실"
+        write_json(self.raw_config["inputs"]["case"], changed_case)
+
+        with self.assertRaises(pipeline.PipelineError) as ctx:
+            self.run_with(config, {"openai:a": [self.output]}, start="script", script_answers=[])
+        self.assertIn("--from generate", str(ctx.exception))
+
     def test_script_stage_requires_select_stage(self):
         config = self.config(generate={"models": ["openai:a"], "runs": 1},
                              script={"enabled": True, "model": "openai:a",

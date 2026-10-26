@@ -1175,6 +1175,27 @@ def stage_axis(config, state, log, caller=call):
             "attempts": attempts, "failures": failures, "needsReview": needs_review, "changedFromExtract": changed}
 
 
+def ensure_selection_matches_case(config, state, selection):
+    """select가 고른 회차를 생성한 프롬프트와 지금 사건 입력(참고 자료 포함)이 같은지 확인한다. 생성 뒤에
+    사건 입력(제목 · 개요 · 판단 요소 label 등) · 참고 자료(references.json)가 바뀌었으면, 그 사이 멈추지
+    않고 진행하는 단계(load · script)가 달라진 사건 정보로 모델을 부르거나 적재하게 된다(#143 리뷰,
+    peanutboi710님 리뷰 PR #277 — stage_script도 stage_load와 같은 검사를 쓰도록 공통화함).
+
+    돌려주는 값은 다시 만든 프롬프트(생성 때 실제로 보낸 것과 같음, rag 참고 자료 포함) — stage_load가
+    적재 SQL에 그대로 쓴다."""
+    try:
+        prompt = build_prompt(generation_case(config, state))
+    except InputError as e:
+        raise PipelineError(str(e))
+    batch_file = Path(selection["runFile"]).parent.parent / "batch.json"
+    if not batch_file.exists():
+        raise PipelineError(f"고른 회차의 묶음 정보가 없어 프롬프트를 확인할 수 없습니다: {batch_file}. --from generate로 다시 생성하세요")
+    if load_json(batch_file).get("promptSha256") != prompt_digest(prompt):
+        raise PipelineError("생성 뒤에 사건 입력 또는 참고 자료가 바뀌어 고른 회차의 프롬프트와 다릅니다. "
+                            "--from generate로 다시 생성하세요(사건 입력 · 기준일을 바꿨으면 --from rag)")
+    return prompt
+
+
 def stage_script(config, state, log, caller=call):
     """사건 대본 — 증거조사 대사 생성 (BE-107). 판단 요소마다 대사 한 줄을 만든다 — 검사 측(UP
     방향) 먼저, 변호인 측(DOWN 방향) 다음(case-1 대본과 같은 순서). 방향은 select 단계가 고른 판결
@@ -1184,10 +1205,13 @@ def stage_script(config, state, log, caller=call):
     단계가 자동으로 정하지 않는다(해송님 정정, 2026-10-24). 범위(지금은 증거조사만, 피고인신문 등은 범위
     밖인 이유)는 script_generation.py 모듈 docstring 참고."""
     cfg = config["stages"]["script"]
-    case = load_json(input_file(config, state, "case"))
     selection = stage_output(state, "select")
     if not selection:
         raise PipelineError("script 단계는 select 단계가 고른 판결(방향 · 이유)이 있어야 합니다. select를 먼저 돌리세요")
+    # select 이후 case.json의 label · revealStage가 바뀌었으면, 바뀐 사실로 모델을 부르기 전에 멈춘다
+    # (peanutboi710님 리뷰 — select가 고른 방향과 지금 label이 서로 다른 시점의 사건 정보일 수 있다)
+    ensure_selection_matches_case(config, state, selection)
+    case = load_json(input_file(config, state, "case"))
     judgment_output = load_json(selection["outputFile"])
     cast = cfg["cast"]
     out_dir = PIPELINE_DIR / config["name"] / "script"
@@ -1228,21 +1252,10 @@ def stage_load(config, state, log, apply=None):
     selection = stage_output(state, "select")
     if not selection:
         raise PipelineError("select 단계 결과가 없습니다")
+    prompt = ensure_selection_matches_case(config, state, selection)
     case = load_json(input_file(config, state, "case"))
     run_record = load_json(selection["runFile"])
     output = run_record["output"]
-    try:
-        prompt = build_prompt(generation_case(config, state))  # 생성 때 실제로 보낸 프롬프트 (rag 참고 자료 포함)
-    except InputError as e:
-        raise PipelineError(str(e))
-    # 다시 만든 프롬프트가 고른 회차를 생성한 프롬프트와 같은지 확인한다. 생성 뒤에 사건 입력 · 참고 자료(references.json)가
-    # 바뀌었으면 실제로 보낸 것과 다른 프롬프트가 기록되므로 멈춘다 (#143 리뷰)
-    batch_file = Path(selection["runFile"]).parent.parent / "batch.json"
-    if not batch_file.exists():
-        raise PipelineError(f"고른 회차의 묶음 정보가 없어 프롬프트를 확인할 수 없습니다: {batch_file}. --from generate로 다시 생성하세요")
-    if load_json(batch_file).get("promptSha256") != prompt_digest(prompt):
-        raise PipelineError("생성 뒤에 사건 입력 또는 참고 자료가 바뀌어 고른 회차의 프롬프트와 다릅니다. "
-                            "--from generate로 다시 생성하세요(사건 입력 · 기준일을 바꿨으면 --from rag)")
 
     parts = []
     if cfg["case"]:
