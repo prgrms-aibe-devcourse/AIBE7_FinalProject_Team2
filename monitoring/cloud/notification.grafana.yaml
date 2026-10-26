@@ -34,6 +34,20 @@ policies:
         - grafana_folder
         - alertname
       routes:
+        # 생존 신호(Watchdog): 맨 앞에 둔다 — 먼저 맞는 경로 하나만 타므로, 뒤에 두면 아래 4h 경로로 가서 4시간마다 온다.
+        # 항상 발생 상태라 repeat_interval(24h)마다 한 번만 Slack에 나간다. 음소거 시간에 걸리면 다음 운영 시간에 나간다.
+        # → 운영일에 하루 넘게 생존 신호가 없으면 경보 경로(규칙 · 연락처 · 정책)가 멈춘 것이다(PR #286 리뷰, 10/26 규칙 0개 사고).
+        - receiver: lawnambul-slack
+          object_matchers:
+            - ['alertname', '=', 'Watchdog']
+            - ['grafana_folder', '=', 'lawnambul']
+          mute_time_intervals:
+            - 운영시간외
+          group_by:
+            - alertname
+          group_wait: 30s
+          group_interval: 5m
+          repeat_interval: 24h
         - receiver: lawnambul-slack
           object_matchers:
             - ['grafana_folder', '=', 'lawnambul']

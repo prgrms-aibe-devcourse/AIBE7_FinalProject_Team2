@@ -84,7 +84,7 @@ Alertmanager도 운영에서는 Grafana Cloud 쪽(Cloud Alerting)으로 옮긴�
 계산되므로 **backend가 죽으면 지표 자체가 끊겨 아무 경보도 안 울린다** — 가장 큰 장애에서 오히려
 조용해지는 구멍이었다(PR #262 리뷰, 머지 전 필수 수정). `Watchdog`은 `null` 수신자로 보내 외부에
 생존 신호를 전달하지 않아, 이 로컬 구성만으로는 "신호가 조용해졌다"는 걸 알아챌 외부 관찰자가 없다
-— 운영은 서버 밖(Grafana Cloud)에서 평가해, 서버 전체가 멈춰도 `BackendScrapeTargetMissing`이 알린다(Cloud에는 `Watchdog`을 두지 않았다 — 아래 "Grafana Cloud 운영 설정" 절).
+— 운영은 서버 밖(Grafana Cloud)에서 평가해, 서버 전체가 멈춰도 `BackendScrapeTargetMissing`이 알린다Cloud의 `Watchdog`은 하루 한 번 Slack에 생존 신호를 보내, 경보 경로 자체가 멈춘 것도 알 수 있게 했다(아래 "Grafana Cloud 운영 설정" 절).
 `AlertDeliveryFailing`은 **로컬 전용이다** — Cloud에는 옮기지 않았다(같은 절 참고).
 
 ### Slack 웹훅 설정
@@ -128,7 +128,7 @@ Alertmanager도 운영에서는 Grafana Cloud 쪽(Cloud Alerting)으로 옮긴�
 
 | 파일 | 내용 | 다시 넣는 법 |
 | --- | --- | --- |
-| `cloud/alert-rules.grafana.yaml` | 경보 규칙 8개(폴더 `lawnambul`, 그룹 `lawnambul-service`, 1분 평가). 화면 Export(YAML) 결과 그대로 | 화면 New alert rule에서 같은 값으로, 또는 API(아래) |
+| `cloud/alert-rules.grafana.yaml` | 경보 규칙 8개(폴더 `lawnambul`, 그룹 `lawnambul-service`) + 생존 신호 `Watchdog`(그룹 `lawnambul-meta`), 1분 평가. 화면 Export(YAML) 결과 그대로 | 화면 New alert rule에서 같은 값으로, 또는 API(아래) |
 | `cloud/notification.grafana.yaml` | 음소거 시간 `운영시간외` · 알림 정책 | Mute timings · Notification policies 화면에서 같은 값으로 |
 | `cloud/slack-template.tmpl` | Slack 메시지 양식(템플릿 `lawnambul-slack`) | Contact points → Notification templates → New |
 
@@ -151,7 +151,7 @@ Contact points → New → Slack → Webhook URL에 직접 넣고, Optional Slac
 | 모든 식에 `env="prod"` | 추가 | 로컬에서 Cloud로 시험 전송한 값이 섞이지 않게(Alloy가 `env` 라벨을 붙인다, COMMON-64) |
 | 데이터가 없을 때(No data) | **정상(OK)** | 비율 · 지연 식은 요청이 없으면 결과가 비는 게 당연하다. 장애로 보면 밤 · 주말마다 울린다 |
 | 서버 전체 정지 | `BackendScrapeTargetMissing`(`absent(up)`)이 잡는다 | 서버 · Alloy가 꺼지면 `up` 자체가 사라져 `BackendDown`(`up == 0`)은 울리지 않는다 |
-| `Watchdog` | **넣지 않음** | 항상 울리는 규칙이라 Slack으로 보내면 계속 쌓이고, 음소거하면 전송 경로를 증명하지 못한다. 전송 경로는 아래 시험으로 확인했다 |
+| `Watchdog` | **하루 한 번 Slack으로**(전용 경로 `repeat_interval 24h`) | 로컬처럼 항상 음소거하면 전송 경로를 증명하지 못하고, 그대로 보내면 4시간마다 쌓인다. 하루 한 번 `💚 [생존 신호]`로 보내 "운영일에 하루 넘게 안 오면 경보 경로 고장"으로 쓴다(PR #286 리뷰) |
 | `AlertDeliveryFailing` | 넣지 않음 | 로컬 Alertmanager 자신의 지표라 Cloud에는 값이 없다 |
 | 억제(`inhibit_rules`) | 넣지 않음 | 커넥션 고갈 때 `DbConnectionPoolNearExhaustion` · `DbConnectionPending`이 함께 올 수 있지만, 규칙 8개 규모라 감수했다. 필요하면 Grafana 억제 규칙으로 추가한다. 로컬에는 그대로 있다 |
 
@@ -161,12 +161,31 @@ Contact points → New → Slack → Webhook URL에 직접 넣고, Optional Slac
 ### 알림 경로 · 음소거
 
 - 기본 받는 곳: `lawnambul-slack`(처음엔 `empty` — 아무 데도 안 갔다)
+- **맨 앞 경로** `alertname=Watchdog`: 음소거 `운영시간외` · `repeat_interval 24h` — 먼저 맞는 경로 하나만 타므로 아래 폴더 경로보다 앞에 둔다
 - `grafana_folder=lawnambul` 하위 경로: 음소거 `운영시간외` · `group_wait 30s` · `group_interval 5m` · `repeat_interval 4h`
 - **음소거 `운영시간외`**: Asia/Seoul 평일 00:00 ~ 09:10 · 18:00 ~ 24:00, 토 · 일 종일
   - 서버가 평일 09:00 ~ 18:00에만 켜져 있어(주말 강제 종료) 꺼진 동안 `BackendScrapeTargetMissing`이 계속 울리는 것을 막는다
   - 아침은 **09:10까지** — 09:00 부팅 후 backend 준비까지 1분 남짓 걸려, 09:00에 풀면 매일 "발생 → 해결"이 온다
   - 시간대(`location`)를 비우면 UTC로 계산돼 9시간 어긋난다
   - 평일 공휴일에 서버를 끄면 음소거가 걸리지 않는다 → 그날만 Silence를 건다
+  - 반대로 **주말 · 저녁에 서버를 켜고 작업하면 알림이 오지 않는다**(음소거 시간이라서). 그동안 장애를 받아야 하면
+    Notification policies에서 `lawnambul` 경로의 음소거를 잠시 빼고, 끝나면 다시 건다
+
+### 운영 점검 (알림 경로가 살아 있는지)
+
+규칙 · 연락처가 통째로 사라지면 알림은 그냥 조용해진다 — 10/26에 실제로 그랬고 아무도 몰랐다(아래 "처음 연동에서 바뀐 것").
+그래서 **생존 신호 `Watchdog`이 운영일마다 한 번 Slack에 `💚 [생존 신호] 경보 경로 정상`을 보낸다.**
+전송 시각은 "마지막 전송 + 24시간"이고, 그 시각이 음소거(저녁 · 주말)에 걸리면 다음 운영 시간 시작(평일 09:10 무렵)에 나간다.
+**운영일에 하루 넘게 생존 신호가 없으면 경보 경로가 멈춘 것이다** — 아래를 바로 확인한다.
+
+| 언제 | 확인 | 방법 |
+| --- | --- | --- |
+| **매 운영일** | 생존 신호가 왔는지 | Slack 채널에 그날(또는 전날 저녁) `💚 [생존 신호]`가 있는지 |
+| 생존 신호가 없을 때 · 주 1회(월요일 오전) | 규칙 · 경로가 그대로인지 | Alert rules에 폴더 `lawnambul`의 서비스 규칙 8개(평소 Normal) + `Watchdog`(항상 Firing이 정상) · Notification policies의 경로 2개(`Watchdog` 24h · `lawnambul` 4h) · 기본 경로 `lawnambul-slack` |
+| 같이 | Slack 전송 경로 | Contact points → `lawnambul-slack` → Test → Slack 채널에 시험 메시지가 오는지 |
+| 설정을 바꾼 뒤 | 저장소 기록과 같은지 | 바꾼 것을 Export해 `monitoring/cloud/`에 반영 |
+
+생존 신호가 지키지 못하는 것: Grafana Cloud 자체 장애(평가가 통째로 멈춤)나 Slack 쪽 장애는 "신호가 안 온다"로만 드러난다. 그래서 위 매일 확인이 필요하다.
 
 ### 시험 결과 (10/26, 운영)
 
@@ -199,7 +218,7 @@ done
 
 COMMON-63에서는 `alert-rules.yml`을 Grafana의 "Convert Prometheus rules" API로 변환해 올리고
 (`docs/decisions/COMMON-63.md`), `Watchdog`은 항상 켜진 음소거로 막는 구성이었다. **10/26 확인 때 이 스택
-(`earnestbutterfly119`)에는 그 규칙 · 연락처 · 정책이 하나도 없었고**(규칙 0개, 연락처 `empty`뿐, 기본 경로 `empty`)
+(`<stack-slug>.grafana.net`)에는 그 규칙 · 연락처 · 정책이 하나도 없었고**(규칙 0개, 연락처 `empty`뿐, 기본 경로 `empty`)
 — 백엔드가 죽어도 알림이 가지 않는 상태였다. 위 구성으로 다시 만들고 실제 장애 시험까지 마쳤다(`docs/decisions/COMMON-64.md`).
 
 ## Promtail 대신 Grafana Alloy를 쓴 이유
