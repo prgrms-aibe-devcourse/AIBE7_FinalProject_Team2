@@ -114,7 +114,8 @@ export function guide(who, look, line) {
 }
 
 // 결과지 두 장(탭 · 패널). pages = [{ label, nodes }]. 철 위 탭을 누르거나 ← → 키로 넘긴다(WAI-ARIA tabs)
-export function resultPages(tabs, body, pages) {
+// onSwitch: 처음 그린 뒤 장이 바뀔 때마다(탭 · 키보드 · 귀) 부른다. 결과 공개 연출을 끝내는 데 쓴다(FE-95 리뷰 반영)
+export function resultPages(tabs, body, pages, { onSwitch } = {}) {
   const list = element('div', 'folder-tablist');
   list.setAttribute('role', 'tablist');
   list.setAttribute('aria-label', '결과지');
@@ -161,7 +162,9 @@ export function resultPages(tabs, body, pages) {
     list.insertBefore(bookmark, before);
     if (moved && !reducedMotion()) bookmark.animate([{ translate: '0 -40%', opacity: 0 }, { translate: '0 0', opacity: 1 }], { duration: 240, easing: 'cubic-bezier(.2, .8, .2, 1)' });
   }
+  let ready = false;
   function show(index, { focusPanel = false } = {}) {
+    if (ready) onSwitch?.(index);
     reached = Math.max(reached, index);
     placeBookmark();
     buttons.forEach((tab, i) => {
@@ -175,6 +178,7 @@ export function resultPages(tabs, body, pages) {
   tabs.replaceChildren(list);
   body.replaceChildren(...panels);
   show(0);
+  ready = true;
   return { show };
 }
 
