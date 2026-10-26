@@ -412,6 +412,10 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
     factorGroup.append(element('legend', 'visually-hidden', '판단 요소'));
     factorPage.append(element('h2', 'folder-title', '판단 요소'), factorGroup);
     factorGroup.append(element('p', 'muted', '요소마다 형량을 무겁게 했으면 "무겁게", 가볍게 했으면 "가볍게"를 눌러 주세요. 처음에는 모두 "고려 안 함"이에요.'));
+    // 고른 요소 수(FE-98): 33개 버튼에서 몇 개를 채워야 하는지 알 수 없었다. 몇 개를 골라야 한다는 뜻은 아니다(0개도 괜찮다)
+    const factorCount = element('p', 'factor-count');
+    factorCount.setAttribute('aria-live', 'polite');
+    factorGroup.append(factorCount);
     const factorList = element('ul', 'factor-list');
     for (const factor of form.factors) {
       const row = element('li', 'factor-row');
@@ -445,6 +449,9 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
     const cautions = element('ul', 'sign-cautions');
     ['서명하면 판결을 바꿀 수 없어요.', '서명하면 AI 판결과 실제 판결이 차례로 공개돼요.', '양형기준 권고 범위는 정답이 아니라 참고 기준이에요.']
       .forEach((text) => cautions.append(element('li', '', text)));
+    // 판단 요소를 하나도 안 골랐으면 서명 전에 한 줄로 알린다(FE-98). 막지는 않는다: 판단은 사용자의 것
+    const noFactorNote = element('p', 'sign-notice', '판단 요소를 하나도 고르지 않았어요. 그대로 서명할까요?');
+    noFactorNote.hidden = true;
     const reason = element('p', 'sign-reason');
     reason.id = `verdict-${caseId}-sign-reason`;
     reason.setAttribute('aria-live', 'polite');
@@ -461,7 +468,7 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
     signRow.append(element('span', 'sign-role', '재판장'), signature, element('span', 'sign-seal', '(서명)'));
     signPage.append(element('h2', 'folder-title', '판결 확정'),
       element('p', 'muted', '정한 내용을 확인하고 서명해 주세요.'), signSummary,
-      element('h3', 'sign-subtitle', '주의사항'), cautions, reason, signRow, submitError);
+      element('h3', 'sign-subtitle', '주의사항'), cautions, noFactorNote, reason, signRow, submitError);
     signature.addEventListener('click', sign);
     let signed = false;
     async function sign() {
@@ -844,6 +851,9 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
         toggle.setAttribute('aria-pressed', String((draft.factors[factorId] ?? 'NONE') === direction));
         row.classList.toggle('is-selected', Boolean(draft.factors[factorId]));
       }
+      const pickedCount = Object.keys(draft.factors).length;
+      factorCount.textContent = `고른 요소 ${pickedCount} / ${form.factors.length}`;
+      noFactorNote.hidden = pickedCount > 0;
       const disabledReason = !option ? '형벌 종류를 골라 주세요.' : pendingReduction ? '감경 후 형벌을 골라 주세요.'
         : !fixed && !present ? '형량을 입력해 주세요.'
         : (!fixed && !inRange) || serverError === 'OUT_OF_ALLOWED_RANGE' ? '선고할 수 있는 범위 안으로 형량을 조정해 주세요.'
