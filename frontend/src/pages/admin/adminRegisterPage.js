@@ -6,8 +6,9 @@ import { PdfReadError } from './adminPdf.js';
 import { renderAdminShell } from './adminShell.js';
 import sampleUrl from './samples/sample-judgment.pdf?url';
 
-// S-19 사건 등록 (A-14 · A-15). 원본 판결문을 넣으면 서버의 파이프라인이 비식별화 · 구조화 → AI 판결 생성 → 적재를 하고,
-// 끝나면 DRAFT 사건이 검수 목록에 생긴다. 실행은 오래 걸리므로 A-15를 2초마다 물어 단계별 진행을 보여 준다.
+// S-19 사건 등록 (A-14 · A-15 · A-14-1). 원본 판결문을 넣으면 서버의 파이프라인이 비식별화 · 구조화 → AI 판결을 만들고,
+// 그 결과를 관리자가 "사건으로 만들기"(적재, A-14-1)로 눌러 DRAFT 사건을 만든다 — 적재는 2초마다 불리는 조회(A-15)가 아니라
+// 명시적인 호출 하나로 둔다(BE-93 2차). 실행은 오래 걸리므로 A-15를 2초마다 물어 단계별 진행을 보여 준다.
 // 화면을 벗어나면(active()가 false) 폴링은 다음 확인에서 멈춘다. 원문은 화면 메모리에만 두고 브라우저 저장소에는 넣지 않는다. 등록이 시작되면 입력칸에서도 지운다.
 // 판결문은 파일(PDF · txt)을 올리거나, 원문 칸에 붙여넣거나 직접 입력한다. 어느 쪽이든 원문에서 항목(사건번호 등)을 읽어 아래 칸을 채운다
 const AUTO_FILL_DELAY_MS = 400; // 타자 칠 때마다 읽지 않고 멈춘 뒤에 읽는다
@@ -16,6 +17,14 @@ const MAX_SOURCES = 3;
 const MAX_ORIGINAL_LENGTH = 200000;
 const POLL_MS = 2000;
 const POLL_ERROR_LIMIT = 3; // 연속으로 이만큼 실패하면 멈추고 다시 확인하게 한다
+
+// 등록 작업 번호만 탭에 남겨 둔다 — 화면을 닫았다 다시 열어도 진행 상황과 적재 버튼으로 돌아올 수 있다.
+// 생성은 수십 분 걸리고 적재는 관리자가 눌러야 하므로, 이 값이 없으면 끝난 생성을 아무도 사건으로 만들 수 없다.
+// 판결문 원문은 저장하지 않는다(FR-5-3) — 작업 번호만으로는 사건 내용을 알 수 없다
+const IMPORT_KEY = 'nlnb-admin-import';
+const rememberImport = (importId) => { try { sessionStorage.setItem(IMPORT_KEY, String(importId)); } catch { /* 저장소를 못 쓰면 이 화면에서만 이어 간다 */ } };
+const forgetImport = () => { try { sessionStorage.removeItem(IMPORT_KEY); } catch { /* 지우지 못해도 화면 흐름은 그대로 */ } };
+const rememberedImport = () => { try { return sessionStorage.getItem(IMPORT_KEY); } catch { return null; } };
 
 export function renderAdminRegisterPage(container, { navigate }) {
   return renderAdminShell(container, {
@@ -222,12 +231,19 @@ export function renderAdminRegisterPage(container, { navigate }) {
       const submit = element('button', 'primary-button', '등록하고 파이프라인 실행');
       submit.type = 'submit';
       form.append(
-        element('p', 'admin-sub', '원본 판결문을 넣으면 서버가 비식별화 · 구조화하고 AI 판결 후보를 만들어 "적재됨" 상태로 검수 목록에 올려요. 몇 분 걸릴 수 있어요. 원문은 이 화면을 벗어나면 남지 않아요.'),
+        element('p', 'admin-sub', '원본 판결문을 넣으면 서버가 비식별화 · 구조화하고 AI 판결 후보를 만들어요. 몇 분 ~ 몇십 분 걸릴 수 있어요. 생성이 끝나면 "사건으로 만들기"를 눌러 검수 목록에 올려요. 원문은 이 화면을 벗어나면 남지 않아요.'),
         labeledField('범죄 유형', crimeType),
         sourcesWrap, addSource, formError, submit,
       );
       formArea.append(form);
       addSourceBox();
+
+      // 앞서 시작한 등록이 같은 탭에 남아 있으면 진행 상황 · 적재로 돌아간다(없는 작업이면 poll이 입력으로 돌려보낸다)
+      const pending = rememberedImport();
+      if (pending) {
+        submit.disabled = true;
+        watch(Number(pending));
+      }
 
       form.addEventListener('submit', async (event) => {
         event.preventDefault();
@@ -241,6 +257,7 @@ export function renderAdminRegisterPage(container, { navigate }) {
           const { importId } = await api.createImport(body);
           if (!active()) return;
           sourceBoxes.forEach((item) => { item.originalText.value = ''; }); // 시작된 뒤에는 원문을 화면에도 남기지 않는다
+          rememberImport(importId);
           watch(importId);
         } catch (failure) {
           if (!active()) return;
@@ -250,11 +267,25 @@ export function renderAdminRegisterPage(container, { navigate }) {
         }
       });
 
-      // ── 진행 상황 (A-15)
+      // ── 진행 상황 (A-15) · 적재 (A-14-1)
       function watch(importId) {
         formArea.hidden = true;
         progressArea.hidden = false;
         let failures = 0;
+        let latest = null; // 마지막으로 받은 응답(A-15 · A-14-1은 같은 형식이다)
+        let loadNote = ''; // 적재 진행 · 오류 안내
+        let loadBusy = false;
+        let loadBlocked = false; // 다시 눌러도 같은 결과인 거절 — 새로 생성해야 한다
+
+        // 입력으로 돌아간다. 원문은 등록을 시작할 때 화면에서 비웠고(내부 정보), 사건번호 · 법원명 같은 항목 칸은 그대로 남아 있다
+        function backToForm(note) {
+          forgetImport();
+          progressArea.hidden = true;
+          formArea.hidden = false;
+          submit.disabled = false;
+          formError.textContent = note;
+        }
+        const RETRY_NOTE = '원문은 화면에 남기지 않아요. 원문을 다시 넣어 주세요. 사건번호 · 법원명 등 항목은 그대로예요.';
 
         async function poll() {
           try {
@@ -266,6 +297,8 @@ export function renderAdminRegisterPage(container, { navigate }) {
           } catch (failure) {
             if (!active()) return;
             if (failure?.code === 'UNAUTHORIZED') { unauthorized(); return; }
+            // 작업이 사라졌으면(서버에서 지웠거나 탭에 남은 번호가 옛것) 다시 확인해도 같은 결과다 — 입력으로 돌려보낸다
+            if (failure?.code === 'IMPORT_NOT_FOUND') { backToForm('앞서 시작한 등록 작업을 찾을 수 없어요. 새로 등록해 주세요.'); return; }
             failures += 1;
             if (failures < POLL_ERROR_LIMIT && failure?.code === 'NETWORK_ERROR') { setTimeout(poll, POLL_MS); return; }
             // 서버 작업은 계속 돌고 있을 수 있다. 중복 등록을 막으려고 폼으로 돌려보내지 않고 다시 확인만 하게 한다
@@ -280,37 +313,78 @@ export function renderAdminRegisterPage(container, { navigate }) {
           }
         }
 
+        // 적재(A-14-1): 생성 결과를 사건(DRAFT)으로 만든다. 한 번의 명시적인 호출이라 실패하면 다시 누르면 된다
+        async function loadCase() {
+          if (loadBusy) return;
+          loadBusy = true;
+          loadNote = '사건으로 만드는 중이에요…';
+          draw(latest);
+          try {
+            const data = await api.loadImport(importId);
+            if (!active()) return;
+            loadBusy = false;
+            loadNote = '';
+            draw(data); // caseId가 채워져 돌아온다 → 검수 화면으로 이어진다
+          } catch (failure) {
+            if (!active()) return;
+            loadBusy = false;
+            if (failure?.code === 'UNAUTHORIZED') { unauthorized(); return; }
+            // 제목이 겹치거나(DUPLICATE_TITLE) 생성 결과 자체가 잘못되면(IMPORT_RESULT_INVALID) 같은 결과를 다시 받는다
+            loadBlocked = failure?.code === 'DUPLICATE_TITLE' || failure?.code === 'IMPORT_RESULT_INVALID';
+            loadNote = errorText(failure, '사건으로 만들지 못했어요. 잠시 뒤 다시 시도해 주세요.');
+            draw(latest);
+          }
+        }
+
         function draw(data) {
+          latest = data;
           const list = element('ol', 'admin-stages');
           data.stages.forEach((stage) => {
             const item = element('li', `admin-stage is-${stage.status.toLowerCase()}`);
             item.append(element('span', 'admin-stage-mark', { DONE: '✓', RUNNING: '…', FAILED: '✕', SKIPPED: '–' }[stage.status] ?? '·'), IMPORT_STAGE[stage.name] ?? stage.name);
             list.append(item);
           });
-          const parts = [element('h2', '', data.status === 'SUCCEEDED' ? '등록을 마쳤어요' : data.status === 'FAILED' ? '등록에 실패했어요' : '파이프라인을 실행하는 중이에요'), list];
+          // 생성이 끝나도 사건은 아직 없다(caseId). 적재까지 끝났을 때만 "등록을 마쳤어요"로 쓴다
+          const heading = data.status === 'FAILED' ? '등록에 실패했어요'
+            : data.status !== 'SUCCEEDED' ? '파이프라인을 실행하는 중이에요'
+              : data.caseId ? '등록을 마쳤어요' : '생성을 마쳤어요';
+          const parts = [element('h2', '', heading), list];
           if (data.status === 'RUNNING' || data.status === 'QUEUED') {
-            const note = element('p', 'admin-sub', '이 화면을 닫아도 서버 실행은 계속돼요. 끝나면 검수 목록의 "검수할 사건" 탭에 올라와요.');
+            const note = element('p', 'admin-sub', '이 화면을 닫아도 서버 실행은 계속돼요. 생성이 끝나면 이 화면에서 "사건으로 만들기"를 눌러야 검수 목록에 올라와요(같은 탭에서 다시 열면 여기로 돌아와요).');
             note.setAttribute('role', 'status');
             parts.push(note);
           }
-          if (data.status === 'SUCCEEDED') {
-            parts.push(element('p', 'admin-ok', `사건 #${data.caseId}을 "적재됨" 상태로 등록했어요. 내용을 검수해 주세요.`), button('검수 화면으로', () => navigate('adminCase', { caseId: data.caseId }), 'primary-button'));
+          if (data.status === 'SUCCEEDED' && data.caseId) {
+            parts.push(element('p', 'admin-ok', `사건 #${data.caseId}을 "적재됨" 상태로 만들었어요. AI · 재판부 판결 후보는 승인하기 전까지 공개되지 않아요. 내용을 검수해 주세요.`),
+              button('검수 화면으로', () => { forgetImport(); navigate('adminCase', { caseId: data.caseId }); }, 'primary-button'),
+              button('새 사건 등록하기', () => backToForm('새로 등록할 판결문을 넣어 주세요.'), 'secondary-button'));
+          }
+          if (data.status === 'SUCCEEDED' && !data.caseId) {
+            // 파이프라인 생성까지만 끝난 상태다 — 사건은 적재를 눌러야 만들어진다(A-15는 쓰기를 하지 않는다)
+            parts.push(element('p', 'admin-sub', '사건 내용 · 판단 요소 · AI 판결 후보를 만들었어요. 아직 사건으로 등록하지는 않았어요 — 아래 버튼을 누르면 "적재됨" 상태의 사건과 판결 후보를 만들어요.'));
+            if (loadNote) {
+              const note = element('p', loadBlocked ? 'admin-error' : 'admin-sub', loadNote);
+              note.setAttribute('role', loadBlocked ? 'alert' : 'status');
+              parts.push(note);
+            }
+            if (loadBlocked) {
+              parts.push(button('입력으로 돌아가기', () => backToForm(`같은 판결문으로 다시 생성하거나, 이미 있는 사건인지 확인해 주세요. ${RETRY_NOTE}`)));
+            } else {
+              const go = button('사건으로 만들기', () => loadCase(), 'primary-button');
+              go.disabled = loadBusy;
+              if (loadBusy) go.setAttribute('aria-busy', 'true');
+              parts.push(go);
+            }
           }
           if (data.status === 'FAILED') {
             const error = element('p', 'admin-error', data.message || '파이프라인 실행 중 오류가 났어요.');
             error.setAttribute('role', 'alert');
-            parts.push(error, button('입력으로 돌아가기', () => {
-              progressArea.hidden = true;
-              formArea.hidden = false;
-              submit.disabled = false;
-              // 원문은 시작할 때 화면에서 비웠다(내부 정보). 사건번호 · 법원 같은 항목 칸은 그대로 남아 있다
-              formError.textContent = '원문은 화면에 남기지 않아요. 원문을 다시 넣어 주세요. 사건번호 · 법원명 등 항목은 그대로예요.';
-            }));
+            parts.push(error, button('입력으로 돌아가기', () => backToForm(RETRY_NOTE)));
           }
           progressArea.replaceChildren(...parts);
         }
 
-        progressArea.replaceChildren(element('p', 'admin-message', '등록을 시작했어요.'));
+        progressArea.replaceChildren(element('p', 'admin-message', '진행 상황을 불러오는 중이에요…'));
         poll();
       }
     },

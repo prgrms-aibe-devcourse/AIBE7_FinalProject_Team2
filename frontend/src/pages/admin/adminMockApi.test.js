@@ -47,21 +47,66 @@ test('이미 등록한 사건번호는 거절한다', async () => {
   assert.equal(await code(api.createImport(request({ sources: [source({ caseNumber: '2099고합000' })] }))), 'DUPLICATE_SOURCE');
 });
 
-test('등록하면 단계가 차례로 끝나고 DRAFT 사건이 생긴다', async () => {
+test('등록하면 단계가 차례로 끝나지만 생성만으로는 사건이 생기지 않는다', async () => {
   const { importId, status } = await api.createImport(request());
   assert.equal(status, 'QUEUED');
   const first = await api.getImport(importId);
   assert.equal(first.status, 'RUNNING');
   assert.equal(first.stages[0].status, 'RUNNING');
-  assert.equal(first.stages.at(-1).status, 'PENDING');
+  assert.equal(first.stages.at(-1).status, 'SKIPPED'); // load는 서버가 A-14-1로 한다
 
   const done = await runToEnd(importId);
   assert.equal(done.status, 'SUCCEEDED');
-  assert.ok(done.stages.every((stage) => stage.status === 'DONE'));
-  const created = await api.getCase(done.caseId);
+  // 늘 건너뛰는 세 단계(contamination · rag · load)를 빼면 모두 끝나 있다
+  const skipped = done.stages.filter((stage) => stage.status === 'SKIPPED').map((stage) => stage.name);
+  assert.deepEqual(skipped, ['contamination', 'rag', 'load']);
+  assert.ok(done.stages.filter((stage) => !skipped.includes(stage.name)).every((stage) => stage.status === 'DONE'));
+  assert.equal(done.caseId, null); // 적재(A-14-1) 전에는 사건이 없다
+});
+
+test('적재하면 DRAFT 사건과 판결 후보가 생기고 caseId가 채워진다', async () => {
+  const { importId } = await api.createImport(request());
+  await runToEnd(importId);
+  const loaded = await api.loadImport(importId);
+  assert.equal(loaded.status, 'SUCCEEDED');
+  assert.ok(loaded.caseId);
+  const created = await api.getCase(loaded.caseId);
   assert.equal(created.status, 'DRAFT');
   assert.equal(created.sources[0].caseNumber, '2099고합900');
   assert.equal(created.candidates.AI.length, 1);
+  // 조회(A-15)도 같은 caseId를 그대로 돌려준다
+  assert.equal((await api.getImport(importId)).caseId, loaded.caseId);
+});
+
+test('생성이 끝나지 않았거나 이미 적재한 등록은 IMPORT_NOT_READY', async () => {
+  const { importId } = await api.createImport(request());
+  assert.equal(await code(api.loadImport(importId)), 'IMPORT_NOT_READY'); // 아직 생성 중
+  await runToEnd(importId);
+  await api.loadImport(importId);
+  assert.equal(await code(api.loadImport(importId)), 'IMPORT_NOT_READY'); // 두 번 적재하지 않는다
+});
+
+test('적재 거절: 제목이 겹치면 DUPLICATE_TITLE, 생성 결과가 잘못되면 IMPORT_RESULT_INVALID', async () => {
+  const dup = await api.createImport(request({ sources: [source({ originalText: '[제목중복] 원문' })] }));
+  await runToEnd(dup.importId);
+  assert.equal(await code(api.loadImport(dup.importId)), 'DUPLICATE_TITLE');
+
+  const bad = await api.createImport(request({ sources: [source({ caseNumber: '2099고합902', originalText: '[적재실패] 원문' })] }));
+  await runToEnd(bad.importId);
+  const failure = await api.loadImport(bad.importId).catch((error) => error);
+  assert.equal(failure.code, 'IMPORT_RESULT_INVALID');
+  assert.ok(failure.details?.[0]?.field); // 어느 값이 문제인지 화면에 그대로 쓴다
+});
+
+test('없는 등록 작업은 적재도 IMPORT_NOT_FOUND', async () => {
+  assert.equal(await code(api.loadImport(999)), 'IMPORT_NOT_FOUND');
+});
+
+test('로그인하지 않으면 적재할 수 없다', async () => {
+  const { importId } = await api.createImport(request());
+  await runToEnd(importId);
+  store.clear();
+  assert.equal(await code(api.loadImport(importId)), 'UNAUTHORIZED');
 });
 
 test('실행 중에는 다른 등록을 시작할 수 없다', async () => {
