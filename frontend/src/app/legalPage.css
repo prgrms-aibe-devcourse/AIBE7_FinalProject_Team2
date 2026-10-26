@@ -32,7 +32,7 @@
 
 .legal-section { padding: 20px 0; border-top: 1px solid var(--color-border); scroll-margin-top: 72px; } /* 목차로 내려와도 위의 고정 헤더에 가리지 않게 */
 .legal-section h2 { margin: 0 0 8px; font: 800 17px/1.5 var(--font-heading); color: var(--color-heading); }
-.legal-section h2:focus { outline: none; }
+.legal-section h2:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 4px; border-radius: 4px; } /* 목차로 이동한 자리를 키보드 사용자가 알아보게 */
 .legal-section p { margin: 0 0 .8em; }
 .legal-pending { color: var(--color-muted); }
 
