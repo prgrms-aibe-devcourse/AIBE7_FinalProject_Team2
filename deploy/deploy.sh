@@ -114,19 +114,32 @@ if [[ -n "$EXTERNAL_DB_URL_VALUE" ]]; then
       exit 4
     fi
     # 폴더가 비어 있거나 경로가 틀리면 Flyway가 아무것도 넣지 않고 성공으로 끝나 알아차리기 어렵다 — 먼저 막는다.
-    # 이름만 *.sql인 폴더는 세지 않고, 읽을 수 있는 일반 파일이 하나 이상 있어야 통과한다 (PR #281 CodeRabbit 리뷰)
-    seed_sql_found=0
+    # 이름만 *.sql인 폴더는 세지 않고, 일반 파일만 모은다 (PR #281 CodeRabbit 리뷰)
+    seed_sql_files=()
     for seed_sql in "$REAL_SEED_DIR_VALUE"/*.sql; do
-      [[ -f "$seed_sql" && -r "$seed_sql" ]] && { seed_sql_found=1; break; }
+      [[ -f "$seed_sql" ]] || continue
+      # 배포 계정이 못 읽는 파일이 있으면 아래 LBox 검사를 할 수 없다. 컨테이너(다른 uid)는 읽을 수 있을 수 있으므로
+      # 건너뛰지 않고 중단한다 — 검사하지 못한 파일이 외부 DB에 올라가지 않게 실패 쪽으로 닫는다 (PR #281 리뷰)
+      if [[ ! -r "$seed_sql" ]]; then
+        log "❌ 실제 사건 시드 파일을 읽을 수 없어 검사하지 못했다: ${seed_sql} — 파일 권한을 확인한다"
+        exit 4
+      fi
+      seed_sql_files+=("$seed_sql")
     done
-    if (( ! seed_sql_found )); then
+    if (( ${#seed_sql_files[@]} == 0 )); then
       log "❌ REAL_SEED_DIR(${REAL_SEED_DIR_VALUE})에 SQL 파일이 없다 — 서버에 비공개 시드를 먼저 받는다 (deploy/README.md \"운영 데이터\")"
       exit 4
     fi
     # 사용 불가 데이터(LBox Open, 라이선스상 사용 불가 — 10/12)는 합의와 별개로 외부 DB에 올리지 않는다.
-    # 지금 시드에는 없다(BE-54에서 삭제). 다시 들어오면 여기서 막는다 (backend/run-shared-db.sh와 같은 검사)
-    if grep -qils "'LBOX'" "$REAL_SEED_DIR_VALUE"/*.sql; then
+    # 지금 시드에는 없다(BE-54에서 삭제). 다시 들어오면 여기서 막는다 (backend/run-shared-db.sh와 같은 검사).
+    # grep 종료 코드: 0 = LBox 있음, 1 = 없음, 2 이상 = 읽기 오류 → 1일 때만 통과한다(오류를 "없음"으로 보지 않는다, PR #281 리뷰)
+    lbox_rc=0
+    grep -qil "'LBOX'" "${seed_sql_files[@]}" || lbox_rc=$?
+    if (( lbox_rc == 0 )); then
       log "❌ 실제 사건 시드에 LBox 행('LBOX')이 있다 — 사용 불가 데이터라 외부 DB에 올리지 않는다 (SHARED-DEV-DB.md 규칙 6)"
+      exit 4
+    elif (( lbox_rc != 1 )); then
+      log "❌ 실제 사건 시드의 LBox 검사를 끝내지 못했다(grep 종료 코드 ${lbox_rc}) — 파일을 읽을 수 있는지 확인한다"
       exit 4
     fi
     log "외부 DB에 실제 사건 시드를 함께 적용한다 (팀 합의 표시 EXTERNAL_DB_ALLOWS_REAL_SEED=1)"

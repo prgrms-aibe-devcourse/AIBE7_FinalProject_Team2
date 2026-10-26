@@ -132,9 +132,15 @@ if [ "$MODE" = migrate ]; then
     ls private-seed/seed/*.sql >/dev/null 2>&1 || fail "private-seed/seed에 SQL이 없다"
     # 사용 불가 데이터(LBox Open — 라이선스상 사용 불가, 10/12)는 합의와 별개로 외부 서비스에 올리지 않는다.
     # 지금 시드에는 없다(BE-54에서 삭제). 다시 들어오면 여기서 막는다
-    if grep -qil "'LBOX'" private-seed/seed/*.sql; then
-      fail "실제 사건 시드에 LBox 행('LBOX')이 있다 — 사용 불가 데이터라 공용 DB(외부 서비스)에 올리지 않는다(규칙 6)"
-    fi
+    # grep 종료 코드: 0 = LBox 있음, 1 = 없음, 2 이상 = 읽기 오류 → 1일 때만 통과한다.
+    # 읽기 오류를 "없음"으로 보면 검사하지 못한 파일이 올라간다 (PR #281 리뷰, deploy/deploy.sh와 같은 검사)
+    lbox_rc=0
+    grep -qil "'LBOX'" private-seed/seed/*.sql || lbox_rc=$?
+    case "$lbox_rc" in
+      1) ;;
+      0) fail "실제 사건 시드에 LBox 행('LBOX')이 있다 — 사용 불가 데이터라 공용 DB(외부 서비스)에 올리지 않는다(규칙 6)" ;;
+      *) fail "실제 사건 시드의 LBox 검사를 끝내지 못했다(grep 종료 코드 ${lbox_rc}) — private-seed/seed 파일을 읽을 수 있는지 확인한다" ;;
+    esac
     locations="${locations},filesystem:$(pwd)/private-seed/seed"
     seed_label="가상 + 실제 사건 시드 (팀 합의 후)"
   fi
