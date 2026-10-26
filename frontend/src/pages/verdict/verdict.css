@@ -114,7 +114,12 @@
 .verdict-page .sign-cautions { margin: 0 0 16px; padding-left: 1.2em; font-size: 14px; }
 .verdict-page .sign-reason { margin: 0 0 10px; color: var(--color-caution); font-size: 14px; font-weight: 700; }
 .verdict-page .sign-reason:empty { display: none; }
-.verdict-page .sign-row { display: flex; align-items: flex-end; justify-content: flex-end; gap: 12px; margin-top: 8px; }
+.verdict-page .sign-row { position: relative; display: flex; align-items: flex-end; justify-content: flex-end; gap: 12px; margin-top: 8px; }
+/* 판결 접수 도장(FE-97): 6막 독자 엽서의 "접수 완료" 소인과 같은 모양(겹줄 원 · 강조색). 확정되면 서명 끝에 찍힌다 */
+.verdict-page .sign-filed { position: absolute; right: -8px; bottom: 18px; display: none; place-items: center; width: 72px; height: 72px; border: 4px double var(--color-accent); border-radius: 50%; background: color-mix(in srgb, var(--color-paper) 70%, transparent); color: var(--color-accent); font: 900 14px/1.1 var(--font-heading); text-align: center; letter-spacing: .04em; rotate: -12deg; pointer-events: none; }
+.verdict-page .sign-row.is-filed .sign-filed { display: grid; }
+@media (prefers-reduced-motion: no-preference) { .verdict-page .sign-row.is-filed .sign-filed { animation: filed-stamp .42s cubic-bezier(.2, .8, .2, 1) both; } }
+@keyframes filed-stamp { from { opacity: 0; transform: scale(1.6); } 60% { opacity: 1; transform: scale(.94); } to { opacity: 1; transform: none; } }
 .verdict-page .sign-role, .verdict-page .sign-seal { flex: none; padding-bottom: 8px; white-space: nowrap; font: 700 15px/1 var(--font-heading); color: var(--color-heading); }
 .verdict-page .sign-seal { color: var(--color-muted); font-weight: 400; }
 /* 서명란: 밑줄 위를 누르면 서명 획이 그려진다 */

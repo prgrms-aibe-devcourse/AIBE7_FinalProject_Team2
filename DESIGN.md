@@ -422,6 +422,8 @@ components:
 | 판결 입력 하단 버튼 | 무대의 "다음" 버튼이 장을 넘기고(`다음 장 ▶`) 마지막 장에서는 `서명하고 제출 ▶`로 바뀐다. 서명 = 제출. 카드가 `layout.stageNext`로 라벨 · 안내 · 활성 여부를 넘기고 `stagenextchange` 이벤트로 알린다 | `stage.js` · `verdictPage.js` |
 | 겹친 카드 앞뒤 바꾸기(성향 공유) | 같은 크기 카드 두 장(내로 앞 · 남불 뒤)을 겹쳐 놓고, 뒤 카드는 오른쪽 아래(`--peek-x` 50px · `--peek-y` 22px)로 비스듬히(5deg) 삐져나온다. 앞 · 뒤 어느 카드를 눌러도 앞뒤가 바뀐다(0.36s, `z-index`도 전환). 호버는 뒤 카드만 6px 더 나온다. 키보드 · 낭독기용 투명 버튼이 뒤 카드를 덮는다 | `personality.css` `.result-portrait-set` · `personalityParts.js` `portraitPair` |
 | 철 돌리기 | 성향 테스트 검사지(가로) ↔ 결과지(세로). 제출 후 결과지는 눕힌 철을 돌려 세우고, 공유 화면의 "나도 해 보기"는 세운 철을 눕힌다. 떠나던 철의 자리 · 크기 · 스크롤 위치를 기억해 눈에 보이던 자리에서 시작한다(`folder-turn`, 1s). **모바일(≤ 720px)과 연출 끄기 · 동작 줄이기에서는 건너뛴다** | `personality.css` · `personalityParts.js` `canTurnFolder` |
+| 선고 도장(4 · 5막, FE-97) | 판결문이 놓이고 .45s 뒤 주문의 형량(4막 `.vp-penalty` · 5막 `.cp-penalty`, 같은 크기 `max(22px, 3cqw)`)이 도장처럼 찍힌다(`penalty-stamp` .55s: 1.35배 · -3deg → .96 → 제자리). AI · 실제 판결이 같은 무게로 공개되게 같은 움직임. 4막 합의 대기 장면("AI 판사들이 의견을 맞추고 있어요")은 1.1초 | `stage.css` · `aiPage.js` |
+| 판결 접수 도장(3막, FE-97) | 서명 획(.9s) → 확정이 되면 서명 끝에 "판결 접수" 도장(겹줄 원 · 강조색, 6막 엽서 "접수 완료" 소인과 같은 모양)이 찍히고(`filed-stamp` .42s) .9초 뒤 AI 판결로 넘어간다. 화면 읽기 프로그램에는 "판결이 접수되었어요"를 알린다 | `verdict.css` · `verdictPage.js` |
 | 종이 귀 접힘(성향 결과) | 호버 · 포커스에서 접힌 귀가 14px 커짐, 눌림 확대 없음. 판결 체험 폴더 말림과 모양이 비슷해 나중에 통일 예정 | `personality.css` `.result-turn-button` |
 | 고리 강조 | 테두리 고리 `box-shadow` | `courtSketch.css` |
 | 바닥 안내문 들썩임 · 치우기 | 종이 왼쪽 위 귀퉁이가 늘 들썩이고(호버 시 더 크게), 누르면 아래로 끌려가 치워져 밑의 남불이 드러남 | `landing.css` `.room-note` |

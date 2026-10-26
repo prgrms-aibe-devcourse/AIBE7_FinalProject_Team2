@@ -11,6 +11,7 @@ import { getBookmarkColor, selectedBookmarkFace } from '../../utils/bookmarkChar
 const penaltyLabels = { DEATH: '사형', LIFE: '무기징역', PRISON: '징역', FINE: '벌금' };
 // 해금 책갈피의 얼굴(내로)
 const SIGN_MS = 900; // 서명 획이 다 그려지는 시간(verdict.css .sign-ink와 같게). 그다음 확정을 보낸다
+const FILED_MS = 900; // 확정된 뒤 "판결 접수" 도장을 보여 주는 시간(verdict.css .sign-filed). 그다음 AI 판결로 넘어간다(FE-97)
 
 // 원문을 유지해 빈 칸, 0, 잘못 입력한 값을 구별한다.
 function parseInteger(raw) {
@@ -463,10 +464,15 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
     signature.insertAdjacentHTML('beforeend', `<svg class="sign-ink" viewBox="0 0 240 64" aria-hidden="true" focusable="false"><path pathLength="1" d="M8 44 C 22 14, 34 10, 36 30 S 30 58, 46 40 S 70 12, 74 30 S 72 52, 92 36 C 104 26, 110 22, 116 34 S 128 50, 140 30 C 150 16, 160 18, 158 34 S 170 52, 190 30 C 200 20, 214 22, 232 26"/></svg>`);
     signature.prepend(signHint);
     const signRow = element('div', 'sign-row');
-    signRow.append(element('span', 'sign-role', '재판장'), signature, element('span', 'sign-seal', '(서명)'));
+    // 판결 접수 도장(FE-97): 확정되면 서명 옆에 찍히고 한 박자 뒤 AI 판결로 넘어간다. 서명 직후 곧바로 "AI 판결을 기다리는 중"으로 바뀌어 내 결정이 로더에 묻혔다
+    const filed = element('span', 'sign-filed', '판결 접수');
+    filed.setAttribute('aria-hidden', 'true');
+    const filedNote = element('p', 'visually-hidden');
+    filedNote.setAttribute('role', 'status');
+    signRow.append(element('span', 'sign-role', '재판장'), signature, element('span', 'sign-seal', '(서명)'), filed);
     signPage.append(element('h2', 'folder-title', '판결 확정'),
       element('p', 'muted', '정한 내용을 확인하고 서명해 주세요.'), signSummary,
-      element('h3', 'sign-subtitle', '주의사항'), cautions, reason, signRow, submitError);
+      element('h3', 'sign-subtitle', '주의사항'), cautions, reason, signRow, filedNote, submitError);
     signature.addEventListener('click', sign);
     let signed = false;
     async function sign() {
@@ -500,6 +506,11 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
         await api.postVerdict(caseId, payload);
         clearDraft(caseId);
         markAiRevealIntro(caseId); // S-06에서 로딩 · 안내를 한 번 보여 준다 (7.7.4)
+        if (active()) {
+          signRow.classList.add('is-filed');
+          filedNote.textContent = '판결이 접수되었어요. AI 판결로 넘어가요.';
+          if (!reducedMotion()) await new Promise((resolve) => { setTimeout(resolve, FILED_MS); });
+        }
         if (active()) navigate('ai', {}, { keepScroll: true }); // 서명한 자리 그대로 AI 판결 무대로(맨 위로 튀지 않게)
       } catch (error) {
         if (!active()) return;

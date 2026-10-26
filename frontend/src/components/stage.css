@@ -167,6 +167,7 @@
 .stage-wrap .verdict-paper .vp-title { margin: .2em 0 .6em; text-align: center; letter-spacing: .6em; font: 900 max(18px, 2.2cqw) / 1.2 var(--font-heading); color: var(--color-heading); }
 .stage-wrap .verdict-paper .vp-case { padding-bottom: .5em; border-bottom: 1px solid var(--color-desk-sheet-line); white-space: pre-wrap; }
 .stage-wrap .verdict-paper h4 { margin: 1em 0 .3em; text-align: center; letter-spacing: .5em; font: 800 max(12px, 1.2cqw) var(--font-heading); color: var(--color-heading); }
+.stage-wrap .board .verdict-paper .vp-penalty { margin: .2em 0 .3em; text-align: center; font: 900 max(22px, 3cqw) / 1.2 var(--font-heading); color: var(--color-heading); } /* 5막 .cp-penalty와 같은 크기(FE-97) */
 .stage-wrap .verdict-paper .vp-order { text-align: center; font-weight: 700; }
 .stage-wrap .verdict-paper .vp-refs { margin-top: 1em; color: var(--muted); font-size: max(10px, .95cqw); }
 .stage-wrap .verdict-paper .vp-sign { display: flex; justify-content: flex-end; gap: 1.4em; margin-top: 1.2em; font: 700 max(11px, 1.05cqw) var(--font-heading); color: var(--color-heading); }
@@ -573,3 +574,10 @@
   .stage-wrap .act-jump { min-height: 44px; }
   .stage-wrap .stage-restart { min-height: 44px; }
 }
+
+/* 선고 도장(FE-97): 4막 AI 판결문 · 5막 판결문 주문의 형량이 판결문이 놓인 뒤 한 박자 늦게 도장처럼 찍힌다(크게 기울어 내려와 한 번 눌렸다 제자리).
+   두 판결이 같은 무게로 공개되게 같은 움직임을 쓴다. 움직임 줄이기 · 연출 끄기에서는 바로 보인다 */
+@media (prefers-reduced-motion: no-preference) {
+  .stage-wrap .verdict-paper .vp-penalty, .stage-wrap .court-paper .cp-penalty { transform-origin: 50% 60%; animation: penalty-stamp .55s cubic-bezier(.2, .8, .2, 1) .45s both; }
+}
+@keyframes penalty-stamp { from { opacity: 0; transform: scale(1.35) rotate(-3deg); } 55% { opacity: 1; transform: scale(.96) rotate(0deg); } to { opacity: 1; transform: none; } }
