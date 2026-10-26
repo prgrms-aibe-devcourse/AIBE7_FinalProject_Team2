@@ -322,9 +322,15 @@ export async function publishCase(caseId) {
   return detail(item);
 }
 
-// A-14 · A-15 사건 등록 (원본 판결문 → 파이프라인 실행). 초안 계약 — 백엔드(파이프라인 자바화) 구현 전 목이다.
-// 목은 getImport를 부를 때마다 단계를 하나씩 진행한다. 원문 텍스트에 [실패]가 있으면 비식별화 단계에서 실패한다.
+// A-14 · A-15 · A-14-1 사건 등록 (원본 판결문 → 파이프라인 실행 → 적재).
+// 목은 getImport를 부를 때마다 단계를 하나씩 진행한다. 생성이 끝나면(SUCCEEDED) 실제 서버와 같이 caseId가 아직 없고,
+// 관리자가 적재(A-14-1 loadImport)를 불러야 DRAFT 사건이 생긴다 — 조회가 쓰기를 하지 않는다(BE-93 2차).
+// 원문 텍스트의 표식으로 실패 경로를 확인할 수 있다: [실패] 비식별화 단계 실패 · [제목중복] 적재에서 DUPLICATE_TITLE
+// · [적재실패] 적재에서 IMPORT_RESULT_INVALID · [결과소실] 적재에서 IMPORT_NOT_READY(생성 결과가 사라진 경우).
+// 표식은 등록할 때 읽어 두고 원문 자체는 목에도 남기지 않는다(FR-5-3).
 const IMPORT_STAGES = ['extract', 'court', 'contamination', 'rag', 'generate', 'select', 'axis', 'load'];
+// 파이프라인 서비스가 늘 끄고 시작하는 단계(COMMON-50). 오류가 아니라 건너뜀이며, load는 서버가 A-14-1로 따로 한다
+const SKIPPED_STAGES = new Set(['contamination', 'rag', 'load']);
 const COURT_LEVELS = ['FIRST', 'APPEAL', 'SUPREME'];
 const MAX_ORIGINAL_LENGTH = 200000;
 
@@ -346,9 +352,12 @@ export async function createImport(request) {
   const known = new Set(state.cases.flatMap((item) => item.sources.map((source) => source.caseNumber)));
   if (sources.some((source) => known.has(source.caseNumber))) fail('DUPLICATE_SOURCE', '이미 등록한 사건번호예요.', { status: 409 });
 
+  const marked = (mark) => sources.some((source) => source.originalText.includes(mark));
   const entry = {
     importId: state.imports.length + 1, status: 'QUEUED', crimeType: request.crimeType, step: -1,
-    willFail: sources.some((source) => source.originalText.includes('[실패]')),
+    willFail: marked('[실패]'),
+    // 적재(A-14-1)에서 돌려줄 거절. 원문을 남기지 않으므로 등록할 때 표식만 읽어 둔다
+    loadFailure: marked('[제목중복]') ? 'DUPLICATE_TITLE' : marked('[적재실패]') ? 'IMPORT_RESULT_INVALID' : marked('[결과소실]') ? 'IMPORT_NOT_READY' : null,
     sources: sources.map(({ originalText, ...rest }) => { void originalText; return rest; }), // 원문은 목에도 남기지 않는다
     caseId: null, errorCode: null, message: null, createdAt: now(), finishedAt: null,
   };
@@ -358,6 +367,7 @@ export async function createImport(request) {
 
 function importView(entry) {
   const stages = IMPORT_STAGES.map((name, index) => {
+    if (SKIPPED_STAGES.has(name)) return { name, status: 'SKIPPED' }; // 실제 서버도 이 셋은 항상 SKIPPED다
     let status = 'PENDING';
     if (index < entry.step) status = 'DONE';
     else if (index === entry.step) status = entry.status === 'FAILED' ? 'FAILED' : entry.status === 'RUNNING' ? 'RUNNING' : 'DONE';
@@ -370,7 +380,45 @@ function importView(entry) {
   });
 }
 
-function finishImport(entry) {
+// 생성(파이프라인)만 끝낸다. 사건은 아직 만들지 않는다 — 적재는 관리자가 A-14-1로 누른다
+function succeedImport(entry) {
+  Object.assign(entry, { status: 'SUCCEEDED', finishedAt: now() });
+}
+
+function findImport(importId) {
+  return state.imports.find((item) => item.importId === Number(importId)) ?? fail('IMPORT_NOT_FOUND', '등록 작업을 찾을 수 없어요.', { status: 404 });
+}
+
+export async function getImport(importId) {
+  await delay();
+  requireLogin();
+  const entry = findImport(importId);
+  if (entry.status === 'QUEUED' || entry.status === 'RUNNING') {
+    entry.step += 1;
+    entry.status = 'RUNNING';
+    if (entry.willFail && entry.step === 0) {
+      Object.assign(entry, { status: 'FAILED', errorCode: 'EXTRACT_FAILED', message: '비식별화에 실패했어요. 원문을 확인한 뒤 다시 등록해 주세요.', finishedAt: now() });
+    } else if (entry.step >= IMPORT_STAGES.length) {
+      entry.step = IMPORT_STAGES.length - 1;
+      succeedImport(entry);
+    }
+  }
+  return importView(entry);
+}
+
+// A-14-1 적재 — 생성 결과를 사건(DRAFT)으로 만든다. 판결 후보 둘은 공개하지 않은 상태로 들어간다(A-9 승인 대기)
+export async function loadImport(importId) {
+  await delay();
+  requireLogin();
+  const entry = findImport(importId);
+  // 생성이 끝나지 않았거나 이미 적재한 등록은 거절한다(실제 서버와 같은 기준)
+  if (entry.status !== 'SUCCEEDED' || entry.caseId !== null) fail('IMPORT_NOT_READY', '아직 적재할 수 없어요.', { status: 409 });
+  // 생성 결과가 사라진 경우(파이프라인에서 작업이 없어짐). 다시 눌러도 소용없고 사유는 message로만 구분된다
+  if (entry.loadFailure === 'IMPORT_NOT_READY') fail('IMPORT_NOT_READY', '생성 결과가 사라졌습니다. 다시 등록해 주세요.', { status: 409 });
+  if (entry.loadFailure === 'DUPLICATE_TITLE') fail('DUPLICATE_TITLE', '같은 제목의 사건이 이미 있어요.', { status: 409 });
+  if (entry.loadFailure === 'IMPORT_RESULT_INVALID') {
+    fail('IMPORT_RESULT_INVALID', '생성 결과를 사건으로 만들 수 없어요.', { status: 422, details: [{ field: 'case.factors[2].label', reason: 'REQUIRED' }] });
+  }
   const caseId = Math.max(...state.cases.map((item) => item.caseId)) + 1;
   const judgmentId = Math.max(...state.judgments.map((item) => item.judgmentId)) + 1;
   const first = entry.sources[0];
@@ -380,22 +428,6 @@ function finishImport(entry) {
     factors: baseFactors(caseId * 100), penaltyRules: 1, createdAt: now(), updatedAt: now(),
   });
   state.judgments.push(judgment(judgmentId, caseId, 'AI', 168, { createdAt: now() }), judgment(judgmentId + 1, caseId, 'COURT', 144, { createdAt: now() }));
-  Object.assign(entry, { status: 'SUCCEEDED', caseId, finishedAt: now() });
-}
-
-export async function getImport(importId) {
-  await delay();
-  requireLogin();
-  const entry = state.imports.find((item) => item.importId === Number(importId)) ?? fail('IMPORT_NOT_FOUND', '등록 작업을 찾을 수 없어요.', { status: 404 });
-  if (entry.status === 'QUEUED' || entry.status === 'RUNNING') {
-    entry.step += 1;
-    entry.status = 'RUNNING';
-    if (entry.willFail && entry.step === 0) {
-      Object.assign(entry, { status: 'FAILED', errorCode: 'EXTRACT_FAILED', message: '비식별화에 실패했어요. 원문을 확인한 뒤 다시 등록해 주세요.', finishedAt: now() });
-    } else if (entry.step >= IMPORT_STAGES.length) {
-      entry.step = IMPORT_STAGES.length - 1;
-      finishImport(entry);
-    }
-  }
+  entry.caseId = caseId;
   return importView(entry);
 }

@@ -34,6 +34,8 @@ export const updateCase = (caseId, changes) => adminPatch(`/cases/${id(caseId)}`
 export const setValueAxis = (factorId, valueAxis) => adminPut(`/factors/${id(factorId)}/value-axis`, { valueAxis });
 export const publishCase = (caseId) => adminPost(`/cases/${id(caseId)}/publish`);
 
-// A-14 · A-15 사건 등록(원본 판결문 → 파이프라인 실행)
+// A-14 · A-15 · A-14-1 사건 등록(원본 판결문 → 파이프라인 실행 → 적재)
 export const createImport = (request) => adminPost('/case-imports', request);
 export const getImport = (importId) => adminGet(`/case-imports/${id(importId)}`);
+// A-14-1 적재: 생성이 끝난(SUCCEEDED) 등록을 사건(DRAFT)으로 만든다. A-15와 같은 형식에 caseId가 채워져 돌아온다(FE-72)
+export const loadImport = (importId) => adminPost(`/case-imports/${id(importId)}/load`);

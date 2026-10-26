@@ -1,4 +1,5 @@
-// FE-2 공통 진행 표시가 나오면 교체 예정.
+// 대본이 없는 사건의 대체 화면(2막 재판)에서만 쓴다(FE-98 정리). 대본이 있는 사건은 무대의 막 칩 · 절차 칩이 진행을 보여 준다.
+// 아래 단계 이름은 6막 이전 체계라 대본 없는 사건이 생기면 6막 체계로 바꾼다.
 export function renderProgressSidebar(container, { lastReviewedStep, openStep }) {
   const aside = document.createElement('aside');
   aside.className = 'progress-sidebar';

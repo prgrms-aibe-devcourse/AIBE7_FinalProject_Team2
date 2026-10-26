@@ -209,9 +209,14 @@
 .verdict-page .factor-label { font-size: 14px; }
 .verdict-page .factor-actions { display: flex; gap: 6px; flex-shrink: 0; }
 .verdict-page .factor-button { background: var(--color-card); border: 1px solid var(--color-border-strong); border-radius: 3px; padding: 8px 10px; min-height: 44px; color: var(--color-muted); font-size: 12px; }
-.verdict-page .factor-button[aria-pressed='true'] { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-on-accent); }
-.verdict-page .factor-button[data-direction='UP'][aria-pressed='true'] { background: var(--color-factor-heavy-tint); border-color: var(--color-factor-heavy); color: var(--color-factor-heavy); }
-.verdict-page .factor-button[data-direction='DOWN'][aria-pressed='true'] { background: var(--color-factor-light-tint); border-color: var(--color-factor-light); color: var(--color-factor-light); }
+/* 판단 요소 버튼 위계(FE-98): 기본 "고려 안 함"은 윤곽선만(조용한 기본), 고른 "무겁게 · 가볍게"는 방향 색으로 채운다.
+   예전에는 기본이 가장 진한 남색 채움이고 고른 쪽은 옅은 색이라 "아무것도 안 고려함"이 켜진 상태로 읽혔다 */
+.verdict-page .factor-button[aria-pressed='true'] { background: var(--color-surface); border-color: var(--color-border-strong); color: var(--color-text); font-weight: 700; }
+.verdict-page .factor-button[data-direction='UP'][aria-pressed='true'] { background: var(--color-factor-heavy); border-color: var(--color-factor-heavy); color: var(--color-on-accent); }
+.verdict-page .factor-button[data-direction='DOWN'][aria-pressed='true'] { background: var(--color-factor-light); border-color: var(--color-factor-light); color: var(--color-on-accent); }
+.verdict-page .factor-count { margin: 10px 0 0; color: var(--color-muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.verdict-page .sign-notice { margin: 14px 0 0; padding: 8px 12px; border-left: 3px solid var(--color-caution); background: color-mix(in srgb, var(--color-caution) 8%, var(--color-card)); color: var(--color-text); font-size: 14px; }
+.verdict-page .sign-notice[hidden] { display: none; }
 .verdict-page .verdict-sidebar { min-width: 0; }
 /* 2페이지 참고 정보: 상자 없이 종이 위 조판(겹줄 · 괘선으로 구분) */
 .verdict-page .verdict-sidebar :is(.law-info-box, .recommended-range) { padding: 0 0 18px; border: 0; border-radius: 0; background: none; }

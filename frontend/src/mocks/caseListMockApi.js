@@ -1,6 +1,7 @@
 import { mockCases } from './caseListMockData.js';
 import { mockOverview } from './overviewMockData.js';
 import { getItem, peek, read, restart, storageKey, validState } from './mockExperienceStore.js';
+import case1Script from '../content/case-1/script.json' with { type: 'json' };
 
 const delay = () => new Promise((resolve) => setTimeout(resolve, 250));
 const crimeTypes = ['MURDER', 'FRAUD', 'INJURY'];
@@ -64,6 +65,30 @@ export async function getCaseDetail(caseId) {
     chargeName: chargeNameOf(item),
     overview: known?.overview ?? item.shortIntro,
     myStatus: myStatusOf(caseId),
+  });
+}
+
+// API 17 — GET /cases/{caseId}/paper (공개 신문 지면: 헤드라인 · 본문 · 발단 · 결론 사진, FE-64).
+// 대본이 있는 사건 1만 대본의 지면 값을 API 17 모양(extraPhotos가 배열이 아니라 { origin, conclusion } 고정 자리)으로 바꿔 돌려준다.
+// 나머지 사건은 관리자가 아직 신문 지면을 만들지 않은 것으로 보아 실제 서버와 같은 PAPER_NOT_FOUND를 던진다.
+export async function getCasePaper(caseId) {
+  await delay();
+  const item = mockCases.find((entry) => entry.caseId === caseId);
+  if (!item) fail('CASE_NOT_FOUND', '사건을 찾을 수 없습니다.');
+  if (caseId !== case1Script.caseId) fail('PAPER_NOT_FOUND', '신문 지면을 아직 만들지 않았습니다.');
+  const { paper } = case1Script;
+  const [origin, conclusion] = paper.extraPhotos ?? [];
+  return structuredClone({
+    desk: paper.desk,
+    headline: paper.headline,
+    deck: paper.deck,
+    photo: paper.photo,
+    caption: paper.caption,
+    article: paper.article,
+    extraPhotos: {
+      origin: origin ? { imageUrl: origin.src, caption: origin.caption } : null,
+      conclusion: conclusion ? { imageUrl: conclusion.src, caption: conclusion.caption } : null,
+    },
   });
 }
 

@@ -134,7 +134,7 @@
 .test-fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
 .test-scenario { display: block; width: 100%; margin-bottom: 18px; padding: 0; }
 .test-scenario:focus { outline: none; }
-.test-scenario:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 4px; }
+/* 문항 글자는 눌러 쓰는 칸이 아니라 문항이 바뀔 때 낭독기를 옮겨 오는 자리다. 키보드로 넘기면 :focus-visible이 켜져 모바일에서 오류처럼 보이는 파란 사각형이 생겼다(FE-95). 신문 경로(.tp-headline)와 같이 윤곽을 두지 않는다 */
 .test-situation { display: block; color: var(--color-heading); font: 700 var(--text-title-2)/1.5 var(--font-heading); letter-spacing: -.01em; text-wrap: pretty; }
 
 /* 양 끝 행동 문장. 고른 쪽 문장에 테두리를 진하게 */
@@ -163,7 +163,7 @@
 
 .test-actions { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; margin-top: 26px; padding-top: 18px; border-top: 1px dashed var(--color-desk-sheet-line); }
 .test-hint { margin: 0; color: var(--color-muted); font-size: var(--text-caption); text-align: center; }
-@media (hover: none) { .test-hint-keys { display: none; } } /* 터치 기기에는 키보드 안내를 빼고 */
+@media (hover: none), (max-width: 720px) { .test-hint-keys { display: none; } } /* 터치 기기 · 좁은 화면에는 키보드 안내를 뺀다 */
 /* 아직 고르지 않은 "다음": 흐린 남색 대신 점선 빈칸 */
 .personality-page .test-actions .primary-button:disabled { opacity: 1; border: 1px dashed var(--color-border-strong); background: transparent; color: var(--color-muted); cursor: default; }
 
@@ -231,7 +231,7 @@
 /* 결과지 1장 맨 아래: 풀이 장으로 넘기기 */
 /* 종이 귀: 종이 오른쪽 아래 모서리가 접혀 넘어간다. 줄은 귀 높이만큼 자리만 잡고, 버튼(글자 + 귀)은 종이 모서리에 붙는다(.test-sheet가 기준).
    접힌 면은 종이 뒷면(어둡게 그늘), 잘려 나간 자리는 아래 서류철이 보인다. 호버 · 포커스에서 귀가 조금 더 말린다 */
-.result-turn { --fold: 52px; height: var(--fold); }
+.result-turn { --fold: 52px; height: var(--fold); margin-top: 16px; } /* 내용 끝과 "풀이 보기" · "결과 보기" 귀 사이에 숨 쉴 여백(FE-95) */
 .result-turn-button { position: absolute; right: -1px; bottom: -1px; display: flex; align-items: center; gap: 4px; height: var(--fold); padding: 0 0 0 12px; border: 0; background: none; color: var(--color-heading); font: 700 var(--text-body)/1 var(--font-heading); cursor: pointer; transition: none; }
 .result-turn-button:active { transform: none; scale: none; } /* 모서리에 붙은 귀가 눌림 확대로 떨어지지 않게 */
 .turn-label::after { content: ' →'; }
@@ -247,6 +247,32 @@
 .result-turn.is-prev .turn-label::before { content: '← '; }
 @media (prefers-reduced-motion: no-preference) { .turn-fold { transition: width .2s ease-out, height .2s ease-out; } }
 @media (hover: hover) and (pointer: fine) { .result-turn-button:hover .turn-fold, .result-turn-button:focus-visible .turn-fold { width: calc(var(--fold) + 14px); height: calc(var(--fold) + 14px); } }
+/* 종이 귀 일렁임(FE-95): 풀이를 놓치지 않게 "풀이 보기" 귀가, 그 풀이에서 돌아오는 "결과 보기" 귀가 가만히 있어도 3초마다 한 번 크게 일렁인다.
+   판결 체험의 폴더 말림(verdict.css folder-curl-idle)과 같은 값(scale 1.06 ↔ 1.3, rotate ±4deg). 모서리(바깥 아래 꼭짓점)를 축으로 움직인다.
+   앞 장 귀(.is-prev)는 좌우로 뒤집혀 있어(scaleX(-1)) 축을 따로 옮기고 회전 방향도 거꾸로 준다 */
+.result-turn:not(.is-prev) .turn-fold { transform-origin: 100% 100%; }
+@media (prefers-reduced-motion: no-preference) {
+  .result-turn:not(.is-prev) .turn-fold { animation: turn-fold-idle 3s ease-in-out infinite; }
+  .result-turn.is-prev .turn-fold { animation: turn-fold-idle-prev 3s ease-in-out infinite; }
+}
+@keyframes turn-fold-idle {
+  0% { scale: 1.06; rotate: 0deg; }
+  12% { scale: 1.3; rotate: -4deg; }
+  24% { scale: 1.12; rotate: 2deg; }
+  36% { scale: 1.24; rotate: -2deg; }
+  46% { scale: 1.1; rotate: 1deg; }
+  55% { scale: 1.06; rotate: 0deg; }
+  100% { scale: 1.06; rotate: 0deg; }
+}
+@keyframes turn-fold-idle-prev {
+  0% { transform: translate(calc(var(--fold) / -2), calc(var(--fold) / 2)) scale(1.06) rotate(0deg) translate(calc(var(--fold) / 2), calc(var(--fold) / -2)) scaleX(-1); }
+  12% { transform: translate(calc(var(--fold) / -2), calc(var(--fold) / 2)) scale(1.3) rotate(4deg) translate(calc(var(--fold) / 2), calc(var(--fold) / -2)) scaleX(-1); }
+  24% { transform: translate(calc(var(--fold) / -2), calc(var(--fold) / 2)) scale(1.12) rotate(-2deg) translate(calc(var(--fold) / 2), calc(var(--fold) / -2)) scaleX(-1); }
+  36% { transform: translate(calc(var(--fold) / -2), calc(var(--fold) / 2)) scale(1.24) rotate(2deg) translate(calc(var(--fold) / 2), calc(var(--fold) / -2)) scaleX(-1); }
+  46% { transform: translate(calc(var(--fold) / -2), calc(var(--fold) / 2)) scale(1.1) rotate(-1deg) translate(calc(var(--fold) / 2), calc(var(--fold) / -2)) scaleX(-1); }
+  55% { transform: translate(calc(var(--fold) / -2), calc(var(--fold) / 2)) scale(1.06) rotate(0deg) translate(calc(var(--fold) / 2), calc(var(--fold) / -2)) scaleX(-1); }
+  100% { transform: translate(calc(var(--fold) / -2), calc(var(--fold) / 2)) scale(1.06) rotate(0deg) translate(calc(var(--fold) / 2), calc(var(--fold) / -2)) scaleX(-1); }
+}
 .result-page:focus { outline: none; }
 .result-section:has(+ .result-turn) { border-bottom: 0; }
 
@@ -262,7 +288,20 @@
   .is-turning .test-folder { animation: folder-turn 1s cubic-bezier(.65, 0, .35, 1) both; } /* 탭은 도는 동안 숨었다가 나타난다 */
   .is-turning :is(.test-sheet > *, .test-folder-tabs) { animation: folder-content-in 1.35s ease-out both; }
   .is-turning .result-portrait { animation-delay: .95s; }
+  /* 결과 공개(FE-95): 철이 선 뒤 카드가 꽂히고 → 유형 이름을 도장처럼 찍고 → 한 줄 설명 → 나머지가 나타나며 4축 막대를 가운데 눈금에서 양쪽으로 긋는다.
+     --reveal-at은 personalityResultPage.js가 넣는다(철이 선 시점). 막 제출했을 때만(.is-revealing), 끝나면 클래스가 빠진다 */
+  .is-revealing .result-head h1 { transform-origin: 0 60%; animation: name-stamp .55s cubic-bezier(.2, .8, .2, 1) calc(var(--reveal-at, .15s) + .35s) both; }
+  .is-revealing .result-oneliner { animation: reveal-up .45s ease-out calc(var(--reveal-at, .15s) + .8s) both; }
+  .is-revealing .result-page > :not(.result-card) { animation: reveal-up .45s ease-out calc(var(--reveal-at, .15s) + 1s) both; }
+  .is-revealing .axis-bar { animation: axis-draw .6s cubic-bezier(.65, 0, .35, 1) calc(var(--reveal-at, .15s) + 1.15s + var(--axis-i, 0) * 90ms) both; }
+  .is-revealing .axis-row:nth-child(2) { --axis-i: 1; }
+  .is-revealing .axis-row:nth-child(3) { --axis-i: 2; }
+  .is-revealing .axis-row:nth-child(4) { --axis-i: 3; }
 }
+/* 도장: 크게 기울어 내려와 한 번 눌렸다가 제자리. 종이 위에 찍히는 결과 이름 */
+@keyframes name-stamp { from { opacity: 0; transform: scale(1.3) rotate(-3deg); } 55% { opacity: 1; transform: scale(.97) rotate(0deg); } to { opacity: 1; transform: none; } }
+@keyframes reveal-up { from { opacity: 0; translate: 0 8px; } }
+@keyframes axis-draw { from { clip-path: inset(0 50%); } to { clip-path: inset(0 0); } } /* 끝값도 inset으로: none과는 보간되지 않아 한 번에 툭 나타난다 */
 /* 시작 = 검사지의 눕힌 철 자리(세운 철 가운데가 147px 아래라 그만큼 올려 둔다). 잠깐 들었다가(30%) 돌린다 */
 /* 눕힌 철(검사지)과 같은 자리 · 크기에서 시작해 돌면서 세운 철 크기로 커진다. --turn-*는 setFolderTurnFrom(personalityParts.js)이 넣는다 */
 @keyframes folder-turn {
@@ -289,7 +328,8 @@
 
   .answer-grid { flex-direction: column; align-items: stretch; gap: 8px; margin-bottom: 18px; }
   .answer-cells { grid-template-columns: repeat(8, minmax(0, 1fr)); }
-  .answer-cell { height: 30px; }
+  .answer-cell { height: 44px; } /* 이전 문항으로 돌아가는 유일한 칸이라 손가락 높이로(FE-95) */
+  .folder-tab { min-height: 44px; }
 
   .test-question { grid-template-columns: minmax(0, 1fr); gap: 14px; }
   .test-question > .test-guide { position: static; flex-direction: row; align-items: center; gap: 10px; padding: 0; }
@@ -311,6 +351,7 @@
   .result-portrait { width: min(230px, 72%); }
   .result-portrait-set { width: min(230px, 72%); }
   .result-head h1 { font-size: var(--text-title-1); }
+  .is-revealing .result-head h1 { transform-origin: 50% 60%; } /* 가운데 정렬이라 도장도 가운데에서 찍힌다 */
   .axis-ends { flex-wrap: wrap; row-gap: 2px; } /* 좁으면 양쪽 비중이 덩어리째 두 줄로(오른쪽 것은 오른쪽 끝에) */
   .axis-ends span { white-space: nowrap; }
   .axis-ends .is-lenient { margin-left: auto; }

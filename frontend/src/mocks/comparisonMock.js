@@ -135,7 +135,7 @@ export function buildRuleSentences(matrix, factorTags) {
   const differences = [];
   const onlyMeMissed = joinUniqueTags(matrix.filter((row) => row.category === 'ONLY_ME_MISSED'), tag);
   if (onlyMeMissed) {
-    differences.push(`AI와 재판부는 ${onlyMeMissed}${objectParticle(onlyMeMissed)} 고려했지만, 내 판결에서는 고려하지 않았어요.`);
+    differences.push(`AI와 재판부는 ${onlyMeMissed}${objectParticle(onlyMeMissed)} 고려했고, 내 판결에는 들어가지 않았어요.`); // 내가 놓친 것처럼 틀지 않는다(FE-98). 서버 RuleSentences도 같은 문구로 맞춘다(BE 후속)
   }
   const diverged = joinUniqueTags(matrix.filter((row) => row.category === 'DIVERGED'), tag);
   if (diverged) differences.push(`${diverged}에 대한 판단이 세 판결 사이에서 엇갈렸어요.`);
