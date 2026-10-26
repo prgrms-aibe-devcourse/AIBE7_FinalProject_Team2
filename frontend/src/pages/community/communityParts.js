@@ -472,7 +472,7 @@ export function popularList(popular, navigate) {
     item.append(postLink(text, postId, navigate));
     list.append(item);
   });
-  box.append(title, list);
+  box.append(title, popular.length ? list : element('p', 'cm-hint', '아직 많이 본 글이 없어요.'));
   return box;
 }
 

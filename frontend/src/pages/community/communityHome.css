@@ -4,7 +4,15 @@
 .cm-home-section-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-bottom: 14px; }
 .cm-home-title { display: flex; align-items: center; gap: 8px; margin: 0; font: 700 var(--text-title-3)/1.4 var(--font-heading); color: var(--color-heading); }
 .cm-home-note { margin: 0; font-size: 13px; color: var(--color-muted); }
-.cm-home-empty { margin: 0; font-size: var(--text-small); color: var(--color-muted); }
+.cm-home-empty { margin: 0 0 14px; font-size: var(--text-small); color: var(--color-muted); }
+/* 빈 상태(FE-93): 빈 스크랩 자리 · 비어 있는 시상대 자리. 점선 테두리 + 옅은 면은 접힌 판결 칸(.cm-verdict.is-folded)과 같은 말투다 */
+.cm-slot { display: grid; justify-items: start; gap: 8px; padding: 28px 24px; border: 1px dashed var(--color-border-strong); border-radius: 8px; background: var(--color-surface); }
+.cm-slot p { margin: 0; }
+.cm-slot-title { font: 700 var(--text-title-3)/1.4 var(--font-heading); color: var(--color-heading); }
+.cm-slot-note { max-width: 36em; font-size: var(--text-small); color: var(--color-muted); }
+.cm-slot-link { margin-top: 4px; font-size: var(--text-small); font-weight: 700; color: var(--color-heading); text-underline-offset: 3px; }
+@media (hover: hover) and (pointer: fine) { .cm-slot-link:hover { text-decoration: underline; } }
+.cm-rank-empty { aspect-ratio: 7 / 14; border: 1px dashed var(--color-border-strong); border-radius: 14px; background: var(--color-surface); }
 .cm-home-more { display: inline-block; margin-top: 12px; font-size: var(--text-small); font-weight: 700; color: var(--color-heading); text-decoration: none; }
 /* 글자 링크는 호버에서 밑줄(DESIGN.md P4) */
 @media (hover: hover) and (pointer: fine) { .cm-home-head > a:hover, .cm-home-more:hover { text-decoration: underline; text-underline-offset: 3px; } }
