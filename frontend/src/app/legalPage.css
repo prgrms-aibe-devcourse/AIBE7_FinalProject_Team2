@@ -26,7 +26,7 @@
 .legal-toc { margin: 24px 0; padding: 16px 20px; border-radius: 8px; background: var(--color-surface); }
 .legal-toc h2 { margin: 0 0 8px; font-size: 15px; color: var(--color-heading); }
 .legal-toc ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px 24px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
-.legal-toc-item { min-height: 36px; padding: 4px 0; border: 0; background: none; color: var(--color-accent-text); font: 400 14px/1.5 var(--font-body); text-align: left; cursor: pointer; }
+.legal-toc-item { min-height: 44px; padding: 4px 0; border: 0; background: none; color: var(--color-accent-text); font: 400 14px/1.5 var(--font-body); text-align: left; cursor: pointer; }
 @media (hover: hover) and (pointer: fine) { .legal-toc-item:hover { text-decoration: underline; } }
 .legal-toc-item:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
 
