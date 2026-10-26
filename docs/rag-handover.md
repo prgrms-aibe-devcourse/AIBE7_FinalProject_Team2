@@ -15,6 +15,7 @@
 | v1.8 | 2026-10-16 | **5-7 RAG 끔 · 켬 생성 비교 완료** (BE-76, B 김현중) — 요소 방향은 그대로(13/13), 형량은 권고 범위 안에서 낮은 쪽으로 이동, 회차 일관성 0.97 → 0.92, 입력 토큰 약 2.6배. 5-4 점수 기준은 유지, 5-3 기준선(① 20그룹 · ② 2건)은 그대로 제안 |
 | v1.9 | 2026-10-16 | 5-6 BE-53 후속: 요약어 후보 DB 적재 · A-6 필드 완료 표시 (BE-80) |
 | v1.10 | 2026-10-20 | **6장 배포 체크리스트 · 한눈에 표 "운영 DB" 갱신** (COMMON-17, D 정민석) — 운영 DB에 R__40 · R__41 · 실제 사건 시드 적용(10/19), 비공개 시드 적용 방식 확정. RDS용 pgvector 확인은 7.1.2에서 |
+| v1.11 | 2026-10-23 | **5-6 BE-55 구현 완료** (C 백승호) — select `consensus`에 판결 이유 임베딩 유사도 반영(`select_semantic.py`, `stages.select.semanticWeight`, 기본 꺼짐). 근거는 [BE-55 의사결정 기록](decisions/BE-55.md) |
 
 > 반대 방향 인계(7.6.8 캐릭터 · 7.7.1 메인, B 김현중 → A 김해송)는 B가 따로 넘긴다(WBS v1.6).
 > 이 문서는 **사건 내용을 담지 않는다**(사건번호 · 사실관계 · 형량 없음). 판례 목록 · 원문은 비공개 저장소(`backend/private-seed`)에 있다.
@@ -199,7 +200,13 @@ python3 rag_store.py sql --out $P/work/rag-store --candidates $P/work/BE-50-prec
 
 - 판례 저장소는 develop에 있다. 임베딩은 `llm.embed`(배치 100, 차원 검사)를 그대로 쓰면 된다. task type은 비교 용도면 `SEMANTIC_SIMILARITY`(8-1)
 - **BE-53 (D) 구현** (2026-10-15): extract · court 퓨샷(`extract-v6` · `court-v2`), 요약어 후보(`summary_tags.py`, `stages.extract.summaryTags`, 기본 꺼짐). 요약어를 공개 기준 목록(`summary_tags.json`)과 `SEMANTIC_SIMILARITY`로 비교해 `report.json` `factorExtras[].summaryTagCandidates`에 남기고 요약어는 바꾸지 않는다. **기준 목록은 공개 값만**: 사건들이 함께 쓰는 목록이 문서 · BE-51(PR #97) · 비공개 시드 어디에도 없었다. 실제 사건 요약어(R__10)는 공개 저장소에 두지 않는 원칙(BE-17) 때문에 공개 목록에 넣지 않았다. 임베딩은 판례(R__40)와 같은 기준으로 가능하므로, 비공개 시드 추가 목록은 지금 두지 않는다(BE-53 리뷰 결정, 10/16: 실제 사건이 아직 몇 건뿐이고 비공개 시드 · 공개 도구를 함께 읽는 경로가 하나 더 생김). 실제 사건 적재가 쌓이면(관리자 후검수 연결 뒤) 다시 정한다. 기준 점수는 샘플 실측으로 0.90, 1 · 2순위 차 0.01 미만은 `ambiguous`로 제안하지 않는다(리뷰 결정, 실제 사건 요약어로 다시 정함). **남은 것**: ~~요약어 후보 DB 적재 · A-6 필드~~ → BE-80(V17 `factor.summary_tag_candidates`, 10/16). 관리자 화면(S-19) 표시만 남음(A)
-- BE-55 (C): select 판결 이유 임베딩은 그대로 남아 있다
+- **BE-55 (C 백승호) 구현 완료** (2026-10-23): select `consensus` 전략에 판결 이유(`reasoning`) 임베딩 유사도를
+  더했다(`tools/ai-judgment/select_semantic.py`, `gemini-embedding-001` · `SEMANTIC_SIMILARITY` · cosine,
+  BE-53 `summary_tags.py`와 같은 패턴). 판단 요소 방향이 동점일 때(흔한 경우 — 5-7 참고) "가장 가운데에
+  있는" 회차에 가산점을 준다. `stages.select.semanticWeight`(0 ~ 1, 기본 0)로 켠다 — **기본값은 꺼짐**이다,
+  이슈 설명의 예시 가중치(0.3)는 실제 사건으로 샘플 비교를 해 본 뒤 팀이 정할 값이라 아직 기본으로 올리지
+  않았다. 임베딩 실패 시 RAG · 요약어 후보와 같은 정책으로 조용히 기존 방식(구조 점수)으로 되돌아간다.
+  대안 비교는 [BE-55 의사결정 기록](decisions/BE-55.md)
 
 ### 5-7. RAG 끔 · 켬 생성 비교 시험 — 완료 (B 김현중, BE-76, 10/15 ~ 16)
 

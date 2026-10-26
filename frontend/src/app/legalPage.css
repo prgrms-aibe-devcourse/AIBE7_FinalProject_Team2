@@ -1,0 +1,46 @@
+/* S-10 이용약관 · S-11 개인정보처리방침 (FE-91 틀): 읽는 문서 한 장. 색은 style.css 역할 토큰만 쓴다 */
+.legal-page {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 32px 16px 56px;
+  color: var(--color-text);
+  font: var(--text-body)/1.75 var(--font-body);
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+}
+/* 약관 · 방침을 오가는 탭 줄 */
+.legal-switch { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid var(--color-border); }
+.legal-switch-item { position: relative; min-height: 44px; padding: 10px 16px; border: 0; background: transparent; color: var(--color-muted); font: 700 15px/1.2 var(--font-body); cursor: pointer; }
+.legal-switch-item[aria-current="page"] { color: var(--color-accent); cursor: default; opacity: 1; }
+.legal-switch-item[aria-current="page"]::after { content: ''; position: absolute; left: 12px; right: 12px; bottom: -1px; height: 2px; background: var(--color-accent); }
+@media (hover: hover) and (pointer: fine) { .legal-switch-item:not([aria-current]):hover { color: var(--color-text); } }
+.legal-switch-item:focus-visible { outline: 3px solid var(--color-focus); outline-offset: -3px; }
+
+.legal-doc { padding: 28px 24px 12px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-card); }
+.legal-head h1 { margin: 0 0 6px; font: 900 26px/1.3 var(--font-heading); color: var(--color-heading); }
+.legal-summary { margin: 0 0 12px; color: var(--color-muted); }
+.legal-meta { margin: 0; color: var(--color-muted); font-size: var(--text-small); }
+/* 아직 비어 있는 문서임을 숨기지 않고 밝힌다(목데이터 표기와 같은 점선 상자) */
+.legal-draft { display: inline-block; margin-right: 6px; padding: 0 8px; border: 1px dashed var(--color-border-strong); border-radius: 4px; color: var(--color-text); font-size: var(--text-caption); font-weight: 700; }
+
+.legal-toc { margin: 24px 0; padding: 16px 20px; border-radius: 8px; background: var(--color-surface); }
+.legal-toc h2 { margin: 0 0 8px; font-size: 15px; color: var(--color-heading); }
+.legal-toc ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px 24px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.legal-toc-item { min-height: 44px; padding: 4px 0; border: 0; background: none; color: var(--color-accent-text); font: 400 14px/1.5 var(--font-body); text-align: left; cursor: pointer; }
+@media (hover: hover) and (pointer: fine) { .legal-toc-item:hover { text-decoration: underline; } }
+.legal-toc-item:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+
+.legal-section { padding: 20px 0; border-top: 1px solid var(--color-border); scroll-margin-top: 72px; } /* 목차로 내려와도 위의 고정 헤더에 가리지 않게 */
+.legal-section h2 { margin: 0 0 8px; font: 800 17px/1.5 var(--font-heading); color: var(--color-heading); }
+.legal-section h2:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 4px; border-radius: 4px; } /* 목차로 이동한 자리를 키보드 사용자가 알아보게 */
+.legal-section p { margin: 0 0 .8em; }
+.legal-pending { color: var(--color-muted); }
+
+.legal-actions { display: flex; justify-content: center; margin-top: 28px; }
+
+@media (max-width: 680px) {
+  .legal-page { padding: 16px 12px 40px; }
+  .legal-doc { padding: 20px 16px 8px; }
+  .legal-head h1 { font-size: 22px; }
+  .legal-toc { padding: 12px 14px; }
+}

@@ -49,13 +49,23 @@ body:has(.community-page) { background: var(--color-desk-bezel); }
 }
 .cm-select:disabled { background: var(--color-surface-strong); color: var(--color-muted); }
 
+/* 사건 찾기: 검색창에 단어를 넣으면 아래에 맞는 사건이 뜨고, 하나를 고르면 그 사건만 거른다 */
+.cm-case-search { width: 100%; min-height: 40px; padding: 8px 10px; border: 1px solid var(--color-border-strong); border-radius: 6px; background: var(--color-card); color: var(--color-text); font: inherit; font-size: var(--text-small); }
+.cm-case-results { display: grid; gap: 2px; max-height: 220px; margin: 6px 0 0; padding: 4px; overflow-y: auto; list-style: none; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-card); }
+.cm-case-pick { width: 100%; padding: 8px 10px; border: 0; border-radius: 4px; background: transparent; color: var(--color-text); font: inherit; font-size: var(--text-small); text-align: left; transition: background-color .15s ease-out; }
+.cm-case-pick:hover { background: var(--color-surface); }
+.cm-case-empty { margin: 6px 0 0; padding: 0 2px; font-size: var(--text-small); color: var(--color-muted); }
+.cm-case-chosen { display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 10px; border: 1px solid var(--color-accent-tint); border-radius: 6px; background: var(--color-accent-tint); color: var(--color-accent-text); font-size: var(--text-small); font-weight: 700; }
+.cm-case-chosen span { min-width: 0; flex: 1; }
+.cm-case-clear { flex: none; min-height: 28px; padding: 2px 10px; border: 1px solid var(--color-border-strong); border-radius: 6px; background: var(--color-card); color: var(--color-text); font: inherit; font-size: var(--text-small); font-weight: 400; }
+
 /* ── 가운데: 타임라인 ── */
 .cm-main { min-width: 0; padding: 26px 36px 48px; }
 .cm-toolbar { display: flex; align-items: center; gap: 12px; min-height: 40px; margin-bottom: 8px; }
 .cm-count-line { margin: 0; font-size: var(--text-small); color: var(--color-muted); font-variant-numeric: tabular-nums; }
 .cm-sorts { display: flex; gap: 6px; margin-left: auto; }
 .cm-chip {
-  min-height: 34px; padding: 5px 13px; border: 1px solid var(--color-border); border-radius: 999px;
+  min-height: 34px; padding: 5px 13px; border: 1px solid var(--color-border); border-radius: 6px;
   background: var(--color-card); color: var(--color-text); font-size: var(--text-small);
   transition: background-color .15s ease-out, border-color .15s ease-out;
 }
@@ -205,10 +215,9 @@ textarea.cm-input { resize: vertical; min-height: 96px; line-height: 1.6; }
 /* ── 글쓴이 명함(FE-88) ── 카드는 마이페이지에서 꾸민 모양 그대로다(.cm-cards = 카드 칸 안에서만 커피 색, myPage.css). 카드 크기는 폭으로 정하고 안 글자 · 책갈피는 폭에 비례한다 */
 .cm-cards .my-card { cursor: default; }
 @media (hover: hover) and (pointer: fine) { .cm-cards .my-card:hover { transform: none; } }
-.cm-card-pair { display: flex; gap: 12px; }
+.cm-card-pair { display: flex; align-items: flex-start; gap: 12px; } /* flex-start: 줄 높이에 맞춰 늘어나지 않게(카드는 늘 7:14) */
 .cm-card-pair .my-card { flex: none; width: 150px; }
 /* 작은 카드: 위 · 아래 줄이 em 고정이라 그림 창이 눌린다. 카드가 작을수록 줄 · 여백 · 이중 테두리를 함께 줄인다 */
-.cm-pop .cm-card-pair .my-card, .cm-verdict-clip .my-card { grid-template-rows: 1.7em minmax(0, 1fr) 2.6em; gap: 4px; padding: 10px 8px 8px; }
 .cm-pop .cm-card-pair .my-card.is-type::before, .cm-verdict-clip .my-card.is-type::before { inset: 4px; border-width: 2px; border-radius: 8px; }
 
 /* ① 목록 · 댓글의 작은 명함: 프로필(앞) 카드 위에 성향 카드가 살짝 비스듬히 겹친다 */
@@ -241,15 +250,21 @@ textarea.cm-input { resize: vertical; min-height: 96px; line-height: 1.6; }
 .cm-author-stats dd { color: var(--color-heading); font-weight: 700; }
 
 /* ③ 작은 창: 닉네임 · 작은 명함을 누르면 펼쳐진다. 책상 위 물건이라 그림자를 쓴다(Placed-Object) */
-.cm-pop { position: fixed; margin: 0; inset: auto; width: 340px; max-width: calc(100vw - 16px); padding: 16px; border: 1px solid var(--color-border-strong); border-radius: 10px; background: var(--color-card); color: var(--color-text); font: var(--text-body)/1.65 var(--font-body); word-break: keep-all; overflow-wrap: anywhere;
+.cm-pop { position: fixed; margin: 0; inset: auto; width: 240px; max-width: calc(100vw - 16px); padding: 14px; border: 1px solid var(--color-border-strong); border-radius: 10px; background: var(--color-card); color: var(--color-text); font: var(--text-body)/1.65 var(--font-body); word-break: keep-all; overflow-wrap: anywhere;
   box-shadow: 0 2px 4px color-mix(in srgb, var(--color-desk-shadow) 18%, transparent), 0 14px 30px color-mix(in srgb, var(--color-desk-shadow) 22%, transparent); }
-.cm-pop:popover-open { display: grid; gap: 14px; }
+.cm-pop:popover-open { display: grid; align-content: start; gap: 12px; } /* 카드 두 장 위 · 소개 아래. 상자 폭은 카드 두 장에 맞춘다 */
+/* 사파리는 열린 popover의 아래 · 오른쪽 자리를 0으로 남겨 창이 화면 아래까지 늘어난다 → 높이는 내용만큼, 아래 · 오른쪽은 비워 둔다(자리는 openPop이 left · top으로 정한다) */
+.cm-pop:popover-open { right: auto; bottom: auto; height: fit-content; overflow: visible; } /* overflow: popover 기본값(auto)이면 책갈피 · 카드 그림자가 넘쳐 스크롤 막대가 생긴다. 내용이 짧아 스크롤할 일이 없다 */
+/* 넓은 화면인데 화면이 팝오버(약 346px)보다 낮을 때만 높이 상한과 세로 스크롤을 둔다(높으면 overflow: visible 그대로) */
+@media (min-width: 721px) and (max-height: 400px) { .cm-pop:popover-open { max-height: calc(100dvh - 16px); overflow: hidden auto; } }
 .cm-pop:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
-.cm-pop .cm-card-pair { gap: 6px; }
-.cm-pop .cm-card-pair .my-card { width: 84px; }
+/* 사파리는 aspect-ratio로 높이를 정하는 카드의 높이를 grid 안에서 크게 잡아 상자가 화면 끝까지 늘어난다 → 작은 창 카드는 높이까지 px로 준다(7:14 그대로) */
+.cm-pop .cm-card-pair { gap: 8px; }
+.cm-pop .cm-card-pair .my-card { width: 102px; height: 204px; }
+.cm-pop .cm-author-info { gap: 4px; }
 .cm-pop .cm-author-name { font-size: var(--text-title-3); }
-.cm-pop .cm-author-intro { font-size: var(--text-small); }
-.cm-pop .cm-author-stats { font-size: var(--text-caption); }
+.cm-pop .cm-author-intro { font-size: var(--text-small); line-height: 1.5; }
+.cm-pop .cm-author-stats { gap: 2px 12px; margin-top: 4px; font-size: var(--text-small); }
 @media (prefers-reduced-motion: no-preference) { .cm-pop:popover-open { animation: cm-pop-in .16s ease-out; } }
 @keyframes cm-pop-in { from { opacity: 0; translate: 0 -4px; } }
 
@@ -268,14 +283,12 @@ textarea.cm-input { resize: vertical; min-height: 96px; line-height: 1.6; }
 @media (max-width: 1023px) {
   .community-page { padding: 8px 8px 12px; }
   .community-screen { grid-template-columns: minmax(0, 1fr); border-radius: 10px; }
-  .cm-filters { position: static; padding: 22px 16px 0; border-right: 0; }
+  .cm-filters { position: static; padding: 22px 28px 18px; border-right: 0; border-bottom: 1px solid var(--color-border); } /* 위 칸(제목 · 거르기)과 아래 글 목록을 선으로 가른다(넓은 화면의 오른쪽 선과 같은 색) */
   .cm-filter-groups { grid-template-columns: minmax(0, 1fr); gap: 12px; margin-top: 16px; }
   .cm-filter-group:first-child .cm-filter-title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .cm-filter-list { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
-  .cm-filter { width: auto; flex: none; padding: 6px 13px; border: 1px solid var(--color-border); border-radius: 999px; }
+  .cm-filter { width: auto; flex: none; padding: 6px 13px; border: 1px solid var(--color-border); border-radius: 6px; }
   .cm-filter[aria-pressed="true"] { border-color: var(--color-accent-tint); }
-  .cm-filter-group:last-child { display: flex; align-items: center; gap: 10px; }
-  .cm-filter-group:last-child .cm-filter-title { margin: 0; flex: none; }
   .cm-main { padding: 20px 28px 36px; }
   .cm-toolbar { flex-wrap: wrap; }
   .cm-sorts { order: 3; width: 100%; margin-left: 0; overflow-x: auto; }
@@ -294,7 +307,7 @@ textarea.cm-input { resize: vertical; min-height: 96px; line-height: 1.6; }
 /* 모바일 */
 @media (max-width: 720px) {
   .community-page { padding: 6px 6px 10px; }
-  .cm-filters { padding: 18px 14px 0; }
+  .cm-filters { padding: 18px 14px 14px; }
   .cm-main { padding: 12px 14px 28px; }
   .cm-post { padding: 18px 0; }
   .cm-meta { row-gap: 8px; }
@@ -309,8 +322,9 @@ textarea.cm-input { resize: vertical; min-height: 96px; line-height: 1.6; }
   .cm-author-name { font-size: var(--text-title-3); }
 
   /* ③ 작은 창: 화면 아래에서 올라오는 판. 누른 자리 계산(left · top)은 쓰지 않는다(communityParts.js openPop) */
-  .cm-pop { inset: auto 0 0 0; width: auto; max-width: none; max-height: 80vh; overflow: auto; padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); border-width: 1px 0 0; border-radius: 14px 14px 0 0; }
-  .cm-pop .cm-card-pair .my-card { width: 96px; }
+  .cm-pop, .cm-pop:popover-open { inset: auto 0 0 0; width: auto; max-width: none; max-height: 85dvh; overflow: hidden auto; padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); border-width: 1px 0 0; border-radius: 14px 14px 0 0; }
+  .cm-pop .cm-card-pair { justify-content: center; }
+  .cm-pop .cm-card-pair .my-card { width: 112px; height: 224px; }
 
   /* 판결 공유 클립: 성향카드를 줄이고 판결 카드 오른쪽 여백도 함께 줄인다 */
   .cm-verdict-row .cm-verdict { padding-right: 76px; }

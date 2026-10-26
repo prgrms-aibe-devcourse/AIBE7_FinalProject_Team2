@@ -281,7 +281,7 @@ components:
 | 유형 탭 | px 고정 최소: 72 × 44px(768px 이하 칸을 나눠 꽉 채움) | 흐름 |
 | 남불 포스트잇 | px 고정: 184px 정사각(`aspect-ratio: 1`) | 절대: 지면 오른쪽 위(위 −16px · 오른쪽 22px, 3도). 720px 이하는 흐름 안 가로 띠 |
 | 오려 낸 기사(S-20) | px 상한 + 100%: `min(1040px, 100%)` | 상대: 가운데 |
-| 체험 시작 전 "시작하기" | 내용대로 | 화면 고정: 오른쪽 아래(28px · 24px + 안전 영역) |
+| 체험 시작 전 "시작하기" | 내용대로(`width: fit-content`) | 지면 안 오른쪽 아래, `position: sticky`로 화면 아래를 따라온다(`bottom` 24px + 안전 영역, 오른쪽 28px · 모바일 12px). 지면 맨 아래와는 20px, 지면 아래 여백은 40px을 지킨다(`paperStage.css`) |
 
 #### 판결 체험 무대 (1 ~ 6막)
 
@@ -407,7 +407,8 @@ components:
 | 8막 편지 | `translate -0.4u` + 그림자 | `stage.css` |
 | 폴더 탭 눌림 | `translateY(1px)` | `personality.css` · `verdict.css` |
 | 별 확대 | `scale 1.12` | `caseReview.css` |
-| 폴더 말림 | `folder-curl-wave` 애니메이션, 눌림 `scale .96` | `verdict.css` |
+| 폴더 말림 | `folder-curl-wave` 애니메이션, 눌림 `scale .96`. 쉬는 동안에도 3초 주기로 `folder-curl-idle`이 일렁인다(`scale` 1.06 ↔ 1.3, `rotate` ±4deg, 움직임 줄이기에서는 끔) | `verdict.css` |
+| 판결 입력 하단 버튼 | 무대의 "다음" 버튼이 장을 넘기고(`다음 장 ▶`) 마지막 장에서는 `서명하고 제출 ▶`로 바뀐다. 서명 = 제출. 카드가 `layout.stageNext`로 라벨 · 안내 · 활성 여부를 넘기고 `stagenextchange` 이벤트로 알린다 | `stage.js` · `verdictPage.js` |
 | 겹친 카드 앞뒤 바꾸기(성향 공유) | 같은 크기 카드 두 장(내로 앞 · 남불 뒤)을 겹쳐 놓고, 뒤 카드는 오른쪽 아래(`--peek-x` 50px · `--peek-y` 22px)로 비스듬히(5deg) 삐져나온다. 앞 · 뒤 어느 카드를 눌러도 앞뒤가 바뀐다(0.36s, `z-index`도 전환). 호버는 뒤 카드만 6px 더 나온다. 키보드 · 낭독기용 투명 버튼이 뒤 카드를 덮는다 | `personality.css` `.result-portrait-set` · `personalityParts.js` `portraitPair` |
 | 철 돌리기 | 성향 테스트 검사지(가로) ↔ 결과지(세로). 제출 후 결과지는 눕힌 철을 돌려 세우고, 공유 화면의 "나도 해 보기"는 세운 철을 눕힌다. 떠나던 철의 자리 · 크기 · 스크롤 위치를 기억해 눈에 보이던 자리에서 시작한다(`folder-turn`, 1s). **모바일(≤ 720px)과 연출 끄기 · 동작 줄이기에서는 건너뛴다** | `personality.css` · `personalityParts.js` `canTurnFolder` |
 | 종이 귀 접힘(성향 결과) | 호버 · 포커스에서 접힌 귀가 14px 커짐, 눌림 확대 없음. 판결 체험 폴더 말림과 모양이 비슷해 나중에 통일 예정 | `personality.css` `.result-turn-button` |
@@ -437,6 +438,12 @@ components:
 
 ### 점선 빈 칸 버튼 (`.my-retake-slot`)
 아직 없는 카드 자리를 카드와 같은 크기의 점선 칸으로 두고, 칸 전체를 "다음 행동" 버튼으로 쓴다(첫 테스트 하기 · 재심 청구 · 판결 체험하러 가기). `2px dashed --color-border-strong`, 모서리 14px(카드와 같음), 가운데에 ＋ 아이콘 · 제목 · 보조 문구. 호버는 P1(배경 `--color-surface`), 비활성은 `opacity .6`.
+
+### 성향카드 없음 (`.edit-fan-empty`, 내 정보 수정)
+성향카드가 하나도 없으면 겹친 카드 자리에 카드 크기(너비 200px, 높이 100%)의 점선 칸을 둔다. `2px dashed --color-border-strong`, 모서리 14px, 안내 글 "아직 성향카드가 없어요. 첫 성향 테스트를 하면 여기에 생겨요." 누르는 칸이 아니라서 호버는 없다.
+
+### 문서 페이지 (`legalPage.js`, 이용약관 · 개인정보처리방침)
+읽는 글 한 장이다. 폭 `760px`, 카드 안에 제목 · 요약 · "초안" 딱지(점선) · 목차 · `제N조` 조항 순서로 둔다. 위에 두 문서를 오가는 탭 줄이 있고(현재 문서는 `aria-current`), 목차를 누르면 그 조항으로 내려가며 움직임 줄이기에서는 바로 간다. 조항 본문은 `legalPage.js`의 `DOCUMENTS` 배열에서만 고친다. 비어 있으면 "이 조항은 준비 중이에요."가 나온다. 색은 역할 토큰만 쓴다(`legalPage.css`).
 
 ### 카드 고르기 (`.my-shown-pick`)
 누르면 하나만 선택된다(`aria-pressed`). 호버는 P3(카드 테두리가 `--color-heading`으로).
@@ -532,6 +539,7 @@ components:
 - **Don't** 집무실 밖 은유(왕관 등)로 표시를 만들지 않는다. 빨간 인주도 쓰지 않는다(빨강은 오류에만).
 - **Don't** 피해 · 폭력 장면이나 화난 표정을 그리지 않는다. 사건 · 피해자를 희화화하지 않는다.
 - **Don't** 호버를 `@media (hover: hover) and (pointer: fine)` 밖에 쓰지 않는다(터치에서 달라붙는다).
+- **Don't** 한 규칙에 `translate`와 `transform`을 같이 쓰지 않는다. 배포 빌드(Vite 8의 lightningcss 압축)가 `translate`를 지운다. 기울임은 `rotate:`, 크기는 `scale:`로 나눠 쓴다(FE-91).
 
 ## 현재 코드와 차이
 

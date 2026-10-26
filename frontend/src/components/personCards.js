@@ -30,10 +30,10 @@ export function picture(src, alt, className = '') {
   return image;
 }
 
-// 그림 위 · 아래 여백(둥근 위쪽이 머리를 깎지 않게)은 200px 카드 기준이라, 160px보다 작은 카드(커뮤니티 명함 · 작은 창)에서는 폭에 맞춰 줄인다
+// 그림 위 · 아래 여백(둥근 위쪽이 머리를 깎지 않게)은 200px 카드 기준이라 카드 폭에 비례시킨다(카드 칸도 비례하므로 어떤 크기에서도 같은 모양)
 const fitOptions = (extra = {}) => (win) => {
   const width = win.closest('.my-card')?.clientWidth || 200;
-  const scale = width >= 160 ? 1 : width / 200;
+  const scale = width / 200;
   return { top: Math.round(22 * scale), bottom: Math.max(2, Math.round(6 * scale)), ...extra };
 };
 
@@ -53,7 +53,7 @@ export function typePortrait(type) {
     image.addEventListener('error', showName, { once: true });
     image.src = type.imageUrl;
     portrait.append(image);
-    fitPortraitIn(portrait, image, fitOptions()); // 이미지마다 다른 투명 여백을 걷어 대표 이미지와 비슷한 크기로 맞춘다(FE-67)
+    fitPortraitIn(portrait, image, fitOptions({ centerWide: true })); // 이미지마다 다른 투명 여백을 걷어 대표 이미지와 비슷한 크기로 맞춘다(FE-67). 가로로 긴 그림은 프로필카드처럼 창 세로 가운데에
   } else showName();
   return portrait;
 }
