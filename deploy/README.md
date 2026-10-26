@@ -87,6 +87,27 @@ done
 
 되돌리기: `./deploy.sh --rollback` (직전 배포 이미지로, 자동 배포가 켜져 있으면 타이머를 먼저 멈춘다 — 아래 "운영 중 쓰는 명령"). 자동 배포를 켠 뒤에는 `.env`의 `IMAGE_TAG`를 손으로 고치지 않는다 — `deploy.sh`가 관리한다.
 
+### `.env`를 고칠 때 (주인 · 권한)
+
+`.env`는 **주인 `ubuntu`, 권한 600**(`-rw------- ubuntu ubuntu`)이어야 한다. `deploy.sh` · cd-agent · cron 백업이 모두 `ubuntu`로 돌기 때문에, 주인이 바뀌면 `.env`를 못 읽는다(10/26 실제로 백업 1회 실패). 드러나는 방식은 둘이 다르다.
+
+| 대상 | 주인이 바뀌면 | 어디서 보나 |
+|---|---|---|
+| cron 백업(`backup-db.sh`) | `❌ …을 읽을 수 없다 — 권한을 확인한다`를 남기고 종료 코드 2로 멈춘다 | `tail ~/backups/backup.log` — **백업이 안 생기면 여기부터 본다** |
+| 자동 배포(cd-agent) | 파일이 있는지만 확인하고 읽기 권한은 보지 않는다. 값을 빈 값으로 읽은 채 진행해 **조용히 실패할 수 있다** | `journalctl -u lawnambul-cd.service -n 50` |
+
+```bash
+cd /opt/lawnambul/app/deploy
+sudo -u ubuntu nano .env        # 다른 계정으로 접속했어도 ubuntu로 연다 → 주인 · 권한이 그대로 남는다
+ls -l .env                      # -rw------- 1 ubuntu ubuntu … 인지 확인
+```
+
+- **`sudo nano` · `sudo vi`로 열지 않는다.** 편집기가 새 파일로 바꿔 쓰면 주인이 `root`로 바뀐다.
+- **`chmod 666` · `777` 등으로 권한을 넓히지 않는다.** DB 비밀번호 · API 키가 서버의 모든 계정에 보인다.
+- 다른 팀원 계정에 수정이 필요하면 그 계정에 `sudo` 권한을 주고 위 명령으로 고치게 한다(파일 권한은 그대로).
+- 이미 바뀌었으면 되돌린다: `sudo chown ubuntu:ubuntu .env && sudo chmod 600 .env`
+- 값을 고친 뒤 반영은 `./deploy.sh --reapply`(이미지가 같아 자동 배포는 `.env`만 바뀐 것을 반영하지 않는다).
+
 ## 자동 배포(CD) (BE-60, WBS 7.1.3)
 
 운영 서버는 **`main`에 머지된 것만** 배포한다. GitHub Actions가 서버에 들어가지 않고, **서버가 2분마다 GHCR을 확인**해 스스로 배포한다.
@@ -489,15 +510,26 @@ git -C /opt/lawnambul/private-seed show origin/develop:loads/<파일>.sql \
 
 | 언제 | 방법 | 보관 |
 |---|---|---|
-| 매일 1번 | 서버 cron으로 `deploy/backup-db.sh` → `~/backups/lawnambul-YYYY-MM-DD.dump` | 7일 |
+| 하루 1번 (운영 시간 중 첫 정각+17분) | 서버 cron으로 `deploy/backup-db.sh` → `~/backups/lawnambul-YYYY-MM-DD.dump` | 7일 |
+| 평일 17:47 (퇴근 전) | 서버 cron으로 `deploy/backup-db.sh evening` → `~/backups/lawnambul-YYYY-MM-DD-1747-evening.dump` | 7일(같은 정리 규칙) |
 | 시드 갱신 · `loads/` 실행 · 위험한 마이그레이션 직전 | `./backup-db.sh <작업 이름>`을 손으로 한 번 | 7일(같은 정리 규칙) |
 | 7.1.2 RDS 전환 후(10/28) | RDS 자동 백업 | 7일 |
 
 ```bash
-# 매일 03:17 백업 (crontab -e 로 한 줄 추가). 결과는 ~/backups/backup.log
+# 09:17 ~ 17:17 매시 확인하고, 오늘 백업 파일이 없을 때만 한 번 만든다 (crontab -e 로 한 줄). 결과는 ~/backups/backup.log
+# 서버는 평일 09:00 ~ 18:00에만 켜져 있다(주말은 강제 종료) — 새벽 시각으로 두면 한 번도 돌지 않는다(10/26 확인).
+# 매시 확인하므로 아침에 늦게 켜지거나 9시대 백업이 실패해도 다음 시각에 다시 시도한다
 # umask 077: 백업 폴더 · 로그를 처음부터 나만 읽게 만든다(덤프 파일은 backup-db.sh가 umask 077로 만든다)
-17 3 * * * umask 077; mkdir -p $HOME/backups && /opt/lawnambul/app/deploy/backup-db.sh >> $HOME/backups/backup.log 2>&1
+17 9-17 * * * umask 077; mkdir -p $HOME/backups && { [ -f $HOME/backups/lawnambul-$(date +\%F).dump ] || /opt/lawnambul/app/deploy/backup-db.sh >> $HOME/backups/backup.log 2>&1; }
+# 퇴근 전 한 번 더: 아침 백업은 "어제 상태"라, 그날 작업분이 다음 날 아침까지 백업에 없다(PR #282 리뷰).
+# 이름 붙은 백업은 파일 이름이 달라 위 "오늘 파일" 확인에 걸리지 않고, 같은 7일 정리에 들어간다
+47 17 * * 1-5 umask 077; mkdir -p $HOME/backups && /opt/lawnambul/app/deploy/backup-db.sh evening >> $HOME/backups/backup.log 2>&1
 ```
+
+- crontab 안에서는 `%`를 `\%`로 쓴다(그대로 두면 cron이 줄바꿈으로 읽어 명령이 잘린다).
+- 서버가 꺼져 있는 주말 · 공휴일에는 백업이 없다. 그 사이에는 데이터도 바뀌지 않는다.
+- 확인: `ls -lh ~/backups/ && tail -3 ~/backups/backup.log` — 평일이면 오늘 날짜 파일이 있어야 하고, 18시 이후에는 `-evening` 파일도 있어야 한다.
+- 저장 위치를 바꾸려고 crontab에 `BACKUP_DIR=`을 두면 **첫 줄의 확인 경로(`$HOME/backups/…`)도 같이 고친다.** `backup-db.sh`는 `BACKUP_DIR`(기본 `~/backups`)에 저장하는데 확인 경로는 고정이라, 하나만 바꾸면 매시 백업을 새로 만든다.
 
 - `backup-db.sh`는 임시 파일에 먼저 덤프하고, `pg_dump`가 성공하고 `pg_restore --list`로 형식을 읽을 수 있을 때만 최종 이름으로 옮긴다. 실패하면 임시 파일을 지우고 실패 코드로 끝나서, 반쯤 만들어진 파일이 백업처럼 남지 않는다. 확인: `tail ~/backups/backup.log`
 
