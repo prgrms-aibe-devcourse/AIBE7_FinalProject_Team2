@@ -163,8 +163,10 @@ export function resultPages(tabs, body, pages, { onSwitch } = {}) {
     if (moved && !reducedMotion()) bookmark.animate([{ translate: '0 -40%', opacity: 0 }, { translate: '0 0', opacity: 1 }], { duration: 240, easing: 'cubic-bezier(.2, .8, .2, 1)' });
   }
   let ready = false;
+  let current = -1;
   function show(index, { focusPanel = false } = {}) {
-    if (ready) onSwitch?.(index);
+    if (ready && index !== current) onSwitch?.(index); // 같은 탭을 다시 눌러서는 장이 바뀐 게 아니다
+    current = index;
     reached = Math.max(reached, index);
     placeBookmark();
     buttons.forEach((tab, i) => {
