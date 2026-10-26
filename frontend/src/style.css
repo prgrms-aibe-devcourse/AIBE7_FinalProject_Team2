@@ -320,7 +320,9 @@ html { scroll-padding-top: calc(var(--site-header-h, 64px) + 8px); }
 /* 본문으로 건너뛰기(FE-99): 평소에는 보이지 않고 Tab으로 닿으면 헤더 왼쪽 위에 나타난다 */
 .skip-link:not(:focus) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .skip-link:focus { position: absolute; left: 16px; top: 8px; z-index: 60; padding: 8px 14px; border-radius: 4px; background: var(--color-card); color: var(--color-heading); font-weight: 700; outline: 3px solid var(--color-range-fill); outline-offset: 2px; }
-#route-view [tabindex="-1"]:focus { outline: none; }
+/* 프로그램 포커스 자리(제목 · 패널)는 윤곽을 숨긴다. 건너뛰기 대상인 <main>만 키보드로 닿았을 때 화면 안쪽 가장자리에 윤곽을 보인다 */
+#route-view [tabindex="-1"]:not(main):focus { outline: none; }
+#route-view main[tabindex="-1"]:focus-visible { outline: 3px solid var(--color-range-fill); outline-offset: -3px; }
 .site-nav { display: flex; align-items: center; gap: 8px; margin-left: auto; } /* 로고는 왼쪽, 메뉴 · 로그인은 오른쪽 */
 .site-header .nav-button[aria-current="page"] { color: var(--color-banner-text); box-shadow: inset 0 -2px 0 currentColor; } /* 지금 보고 있는 메뉴 */
 .site-header .nav-button[aria-disabled="true"] { cursor: default; opacity: .6; }

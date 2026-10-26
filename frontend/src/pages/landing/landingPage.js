@@ -532,7 +532,7 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
       if (!entry.isIntersecting) return;
       exitObserver.disconnect();
       setTimeout(() => { if (root.isConnected) slideOut(); }, EXIT_DELAY_MS);
-    }, { threshold: .6 });
+    }, { rootMargin: '0px 0px -100px 0px' }); // 문 윗변이 화면 아래에서 100px 들어오면. 비율 조건은 문이 화면보다 커지면 영영 안 나온다
     exitObserver.observe(exit);
     tail.addEventListener('focus', slideOut, { once: true });
   }
