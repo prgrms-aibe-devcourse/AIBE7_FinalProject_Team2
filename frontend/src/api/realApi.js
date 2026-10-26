@@ -12,6 +12,9 @@ export const getCases = (crimeType) =>
 // API 16 — 공개 사건 상세 (S-20 사건 디테일. 체험 없이 부를 수 있고, 쿠키는 읽기만 한다)
 export const getCaseDetail = (caseId) => get(`/cases/${encodeURIComponent(caseId)}`);
 
+// API 17 — 공개 신문 지면 (S-20 기사 지면 · 증거조사. FE-64). 헤드라인 · 본문 · 발단 · 결론 사진(extraPhotos.origin · conclusion, 고정 자리)
+export const getCasePaper = (caseId) => get(`/cases/${encodeURIComponent(caseId)}/paper`);
+
 // API 2 — 체험 시작 (있으면 기존 체험, 쿠키가 없으면 익명 ID 쿠키를 내려준다)
 export const startExperience = (caseId) => post(experience(caseId));
 
