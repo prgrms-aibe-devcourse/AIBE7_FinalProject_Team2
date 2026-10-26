@@ -317,6 +317,10 @@ h1 { font-family: var(--font-heading); color: var(--color-heading); letter-spaci
 html { scroll-padding-top: calc(var(--site-header-h, 64px) + 8px); }
 .site-header button { font: inherit; cursor: pointer; } /* 브라우저 기본 버튼 글꼴 대신 헤더 글꼴 */
 .site-header button:focus-visible { outline-color: var(--color-range-fill); }
+/* 본문으로 건너뛰기(FE-99): 평소에는 보이지 않고 Tab으로 닿으면 헤더 왼쪽 위에 나타난다 */
+.skip-link:not(:focus) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.skip-link:focus { position: absolute; left: 16px; top: 8px; z-index: 60; padding: 8px 14px; border-radius: 4px; background: var(--color-card); color: var(--color-heading); font-weight: 700; outline: 3px solid var(--color-range-fill); outline-offset: 2px; }
+#route-view [tabindex="-1"]:focus { outline: none; }
 .site-nav { display: flex; align-items: center; gap: 8px; margin-left: auto; } /* 로고는 왼쪽, 메뉴 · 로그인은 오른쪽 */
 .site-header .nav-button[aria-current="page"] { color: var(--color-banner-text); box-shadow: inset 0 -2px 0 currentColor; } /* 지금 보고 있는 메뉴 */
 .site-header .nav-button[aria-disabled="true"] { cursor: default; opacity: .6; }

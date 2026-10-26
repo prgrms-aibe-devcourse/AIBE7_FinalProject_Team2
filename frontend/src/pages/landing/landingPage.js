@@ -61,6 +61,7 @@ const FOLDED = 'rotate3d(1, -1, 0, 180deg)'; // 접힌 귀퉁이(landing.css .is
 const LIFT_MS = 380; // 신문을 집어 드는 시간(landing.css .is-held와 같게). 그 뒤 지면이 아래에서 올라온다
 // 6막에서 "메인으로" 올 때: 보던 지면이 줌아웃(제자리에서 .82배)과 페이드아웃을 함께 하며 책상이 드러난다
 const FADE_MS = 800;
+const EXIT_DELAY_MS = 1000; // 맨 아래 신문이 화면에 들어온 뒤 밀려 나오기까지
 
 // 서비스 소개(FE-50 → FE-87 집무실 바닥): 러그 = 체험에서 내가 하는 일, 스툴 = 끝에 얻는 것(세 판결 비교 미리보기).
 // 러그 위 서류는 체험에서 실제로 만나는 물건의 축소판이다(신문 스크랩 · 첫인상 엽서 · 판단 요소 파일철 · 판결문). 설명은 한 줄로 줄이고 물건이 말하게 한다.
@@ -149,8 +150,14 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
   // 배너 제목 → [사진 | 머리기사 단] → 추천 2건(지면 끝까지, FE-50). 사건 목록의 머리기사로 채운다(불러오기 전 · 실패 시 기본 문구)
   const news = span('news-art');
   news.setAttribute('aria-hidden', 'true');
+  // 바람에 들리는 오른쪽 아래 모서리의 뒷면(FE-99, landing.css .news-curl). 맨 앞 지면에만, 장식이다
+  const curlBack = () => {
+    const back = deco('news-curl');
+    back.append(deco('news-curl-face'));
+    return back;
+  };
   const newsSheets = span('news-sheets');
-  newsSheets.append(span(''), span(''));
+  newsSheets.append(span(''), span(''), span('')); // 밑에 깔린 종이 세 장(FE-99: 맨 앞 장 모서리가 들릴 때 밑에 겹이 보이게)
   const info = span('news-info');
   const infoLinks = span('news-info-links');
   infoLinks.append(span('', '← 메인으로'), span('', '판결 체험 신문')); // S-02 정보 줄(newspaperFront.js, FE-56)과 같게 왼쪽에 모은다
@@ -221,7 +228,7 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
 
   // 내로를 가린 포스트잇(FE-50, 놀이). 누르면 떼어져 날아가고 내로가 드러난다. 화면을 다시 그리면 다시 붙어 있다.
   // 떼는 동안 포커스를 잃지 않게 바로 아래 신문으로 옮긴다
-  const newsButton = deskObject('news', newsSheets, news);
+  const newsButton = deskObject('news', newsSheets, news, curlBack());
   const rescue = element('button', 'desk-rescue');
   rescue.type = 'button';
   rescue.append(span('', '포스트잇을 제거해'), span('', '귀여운 고양이를'), span('', '구해주세요'));
@@ -234,16 +241,16 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
   postcard.tabIndex = -1; // 펜과 같은 동작이라 Tab · 낭독기에는 펜 하나만 남긴다
   postcard.setAttribute('aria-hidden', 'true');
 
-  // 포스트잇을 맨 앞에 둬 첫 Tab이 포스트잇이다(가장 먼저 눌러 보길 바라는 놀이). 그리는 순서는 z-index가 정한다
+  // Tab 순서는 핵심 물건부터(신문 → 서류철 → 노트북 → 커피잔 → 펜 → 포스트잇, FE-99). 그리는 순서는 DOM이 아니라 landing.css의 z-index가 정한다
   world.append(
     deco('desk-wood'), deco('desk-pad'),
-    rescue,
-    postcard,
-    deskObject('pen', span('pen-art')),
-    deskObject('folder', folderArt),
     newsButton,
+    deskObject('folder', folderArt),
     deskObject('laptop', laptop),
     deskObject('mug', mug),
+    deskObject('pen', span('pen-art')),
+    postcard,
+    rescue,
     ...cheeks,
   );
 
@@ -346,7 +353,15 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
     mobileCounts[key] = text;
     mobileList.append(item);
   });
-  mobile.append(mobileHead, mobileList);
+  // 메뉴 카드 아래 빈 곳: 책상 위 내로가 카드 밑에서 고개만 내민다(장식)
+  const peek = element('div', 'desk-menu-peek');
+  peek.setAttribute('aria-hidden', 'true');
+  const peekCat = element('img', 'desk-menu-naero');
+  peekCat.src = '/images/characters/cheek/naero_idle-sorry.webp';
+  peekCat.alt = '';
+  peekCat.addEventListener('error', () => peek.remove(), { once: true });
+  peek.append(peekCat);
+  mobile.append(mobileHead, mobileList, peek);
 
   // ---- 서비스 소개: 판사의 집무실 바닥 (FE-87) ----
   // 책상(위)에서 카메라가 그대로 아래로 내려가며 방바닥을 내려다본다. 2D 평면 탑뷰라 원근 없이 그린다(문은 평면도 기호: 문짝 + 열리는 원호).
@@ -508,11 +523,27 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
   tailSheet.append(news.cloneNode(true)); // 책상 위 신문과 같은 지면. 머리기사가 채워지면 다시 본뜬다(paintNews)
   tail.append(tailSheet);
   exit.append(tail);
+  // 끝자락은 처음엔 벽(문) 밑에 숨어 있다가, 스크롤이 닿고 1초 뒤 슥 밀려 나온다(FE-99). 움직임 줄이기 · 키보드 포커스면 바로 보인다
+  const slideOut = () => { exitObserver?.disconnect(); tail.classList.add('is-out'); };
+  let exitObserver = null;
+  if (reducedMotion() || typeof IntersectionObserver === 'undefined') slideOut();
+  else {
+    exitObserver = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) return;
+      exitObserver.disconnect();
+      setTimeout(() => { if (root.isConnected) slideOut(); }, EXIT_DELAY_MS);
+    }, { threshold: .6 });
+    exitObserver.observe(exit);
+    tail.addEventListener('focus', slideOut, { once: true });
+  }
 
   room.append(chair, deco('room-desk-shade'), head, rugWrap, exit); // 의자는 책상 밑으로 밀어 넣어 위쪽이 책상에 가린다
   intro.append(room);
 
-  root.append(scene, mobile, intro, renderSiteFooter({ navigate })); // 공통 헤더는 라우터가 붙인다(FE-56)
+  // 본문 landmark(FE-99): 책상 · 메뉴 카드 · 서비스 소개가 본문이다. 푸터는 본문 밖에 둔다
+  const main = element('main', 'landing-main');
+  main.append(scene, mobile, intro);
+  root.append(main, renderSiteFooter({ navigate })); // 공통 헤더는 라우터가 붙인다(FE-56)
   container.replaceChildren(root);
   fit();
   if (section === 'intro') showIntro();
