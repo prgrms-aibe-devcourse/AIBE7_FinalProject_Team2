@@ -329,6 +329,25 @@ export function renderAdminRegisterPage(container, { navigate }) {
             if (!active()) return;
             loadBusy = false;
             if (failure?.code === 'UNAUTHORIZED') { unauthorized(); return; }
+            // 서버는 IMPORT_NOT_READY를 ① 이미 적재함 ② 생성이 안 끝남 ③ 생성 결과가 사라짐 세 경우에 쓴다(PR #285 리뷰).
+            // 어느 쪽인지는 화면이 알 수 없으므로 상태를 한 번 다시 묻는다 — ①이면 caseId가 채워져 그대로 검수 화면으로 이어진다
+            if (failure?.code === 'IMPORT_NOT_READY') {
+              const fresh = await api.getImport(importId).catch(() => null);
+              if (!active()) return;
+              if (fresh?.caseId) { loadNote = ''; draw(fresh); return; } // ① 다른 탭에서 이미 적재했거나 응답만 유실됐다
+              if (fresh && (fresh.status === 'QUEUED' || fresh.status === 'RUNNING')) { // ② 아직 생성 중이다 — 진행 상황으로 돌아가 다시 지켜본다
+                loadNote = '';
+                draw(fresh);
+                poll();
+                return;
+              }
+              // ③ 적재도 안 됐는데 생성도 끝난 상태 = 생성 결과가 사라졌다. 다시 눌러도 소용없으니 새로 등록하게 한다.
+              // 조회 자체가 실패했으면(fresh가 null) 일시적인 문제일 수 있어 버튼을 남긴다
+              loadBlocked = Boolean(fresh);
+              loadNote = errorText(failure, '사건으로 만들지 못했어요. 잠시 뒤 다시 시도해 주세요.');
+              draw(latest);
+              return;
+            }
             // 제목이 겹치거나(DUPLICATE_TITLE) 생성 결과 자체가 잘못되면(IMPORT_RESULT_INVALID) 같은 결과를 다시 받는다
             loadBlocked = failure?.code === 'DUPLICATE_TITLE' || failure?.code === 'IMPORT_RESULT_INVALID';
             loadNote = errorText(failure, '사건으로 만들지 못했어요. 잠시 뒤 다시 시도해 주세요.');
@@ -355,6 +374,7 @@ export function renderAdminRegisterPage(container, { navigate }) {
             parts.push(note);
           }
           if (data.status === 'SUCCEEDED' && data.caseId) {
+            forgetImport(); // 적재까지 끝났으면 번호를 들고 있을 이유가 없다 — 사이드바로 나갔다 다시 열면 새 등록 폼이 뜬다(PR #285 리뷰)
             parts.push(element('p', 'admin-ok', `사건 #${data.caseId}을 "적재됨" 상태로 만들었어요. AI · 재판부 판결 후보는 승인하기 전까지 공개되지 않아요. 내용을 검수해 주세요.`),
               button('검수 화면으로', () => { forgetImport(); navigate('adminCase', { caseId: data.caseId }); }, 'primary-button'),
               button('새 사건 등록하기', () => backToForm('새로 등록할 판결문을 넣어 주세요.'), 'secondary-button'));

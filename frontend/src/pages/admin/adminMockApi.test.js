@@ -98,6 +98,23 @@ test('적재 거절: 제목이 겹치면 DUPLICATE_TITLE, 생성 결과가 잘�
   assert.ok(failure.details?.[0]?.field); // 어느 값이 문제인지 화면에 그대로 쓴다
 });
 
+test('적재 뒤 다시 적재하면 IMPORT_NOT_READY지만 조회에는 caseId가 남는다 (화면이 완료로 잇는 근거, PR #285 리뷰)', async () => {
+  const { importId } = await api.createImport(request());
+  await runToEnd(importId);
+  const { caseId } = await api.loadImport(importId);
+  assert.equal(await code(api.loadImport(importId)), 'IMPORT_NOT_READY');
+  assert.equal((await api.getImport(importId)).caseId, caseId);
+});
+
+test('생성 결과가 사라지면 IMPORT_NOT_READY를 사유(message)와 함께 돌려준다', async () => {
+  const { importId } = await api.createImport(request({ sources: [source({ originalText: '[결과소실] 원문' })] }));
+  await runToEnd(importId);
+  const failure = await api.loadImport(importId).catch((error) => error);
+  assert.equal(failure.code, 'IMPORT_NOT_READY');
+  assert.match(failure.message, /다시 등록/);
+  assert.equal((await api.getImport(importId)).caseId, null); // 적재도 안 됐고 생성은 끝난 상태
+});
+
 test('없는 등록 작업은 적재도 IMPORT_NOT_FOUND', async () => {
   assert.equal(await code(api.loadImport(999)), 'IMPORT_NOT_FOUND');
 });

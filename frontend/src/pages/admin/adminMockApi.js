@@ -326,7 +326,8 @@ export async function publishCase(caseId) {
 // 목은 getImport를 부를 때마다 단계를 하나씩 진행한다. 생성이 끝나면(SUCCEEDED) 실제 서버와 같이 caseId가 아직 없고,
 // 관리자가 적재(A-14-1 loadImport)를 불러야 DRAFT 사건이 생긴다 — 조회가 쓰기를 하지 않는다(BE-93 2차).
 // 원문 텍스트의 표식으로 실패 경로를 확인할 수 있다: [실패] 비식별화 단계 실패 · [제목중복] 적재에서 DUPLICATE_TITLE
-// · [적재실패] 적재에서 IMPORT_RESULT_INVALID. 표식은 등록할 때 읽어 두고 원문 자체는 목에도 남기지 않는다(FR-5-3).
+// · [적재실패] 적재에서 IMPORT_RESULT_INVALID · [결과소실] 적재에서 IMPORT_NOT_READY(생성 결과가 사라진 경우).
+// 표식은 등록할 때 읽어 두고 원문 자체는 목에도 남기지 않는다(FR-5-3).
 const IMPORT_STAGES = ['extract', 'court', 'contamination', 'rag', 'generate', 'select', 'axis', 'load'];
 // 파이프라인 서비스가 늘 끄고 시작하는 단계(COMMON-50). 오류가 아니라 건너뜀이며, load는 서버가 A-14-1로 따로 한다
 const SKIPPED_STAGES = new Set(['contamination', 'rag', 'load']);
@@ -356,7 +357,7 @@ export async function createImport(request) {
     importId: state.imports.length + 1, status: 'QUEUED', crimeType: request.crimeType, step: -1,
     willFail: marked('[실패]'),
     // 적재(A-14-1)에서 돌려줄 거절. 원문을 남기지 않으므로 등록할 때 표식만 읽어 둔다
-    loadFailure: marked('[제목중복]') ? 'DUPLICATE_TITLE' : marked('[적재실패]') ? 'IMPORT_RESULT_INVALID' : null,
+    loadFailure: marked('[제목중복]') ? 'DUPLICATE_TITLE' : marked('[적재실패]') ? 'IMPORT_RESULT_INVALID' : marked('[결과소실]') ? 'IMPORT_NOT_READY' : null,
     sources: sources.map(({ originalText, ...rest }) => { void originalText; return rest; }), // 원문은 목에도 남기지 않는다
     caseId: null, errorCode: null, message: null, createdAt: now(), finishedAt: null,
   };
@@ -412,6 +413,8 @@ export async function loadImport(importId) {
   const entry = findImport(importId);
   // 생성이 끝나지 않았거나 이미 적재한 등록은 거절한다(실제 서버와 같은 기준)
   if (entry.status !== 'SUCCEEDED' || entry.caseId !== null) fail('IMPORT_NOT_READY', '아직 적재할 수 없어요.', { status: 409 });
+  // 생성 결과가 사라진 경우(파이프라인에서 작업이 없어짐). 다시 눌러도 소용없고 사유는 message로만 구분된다
+  if (entry.loadFailure === 'IMPORT_NOT_READY') fail('IMPORT_NOT_READY', '생성 결과가 사라졌습니다. 다시 등록해 주세요.', { status: 409 });
   if (entry.loadFailure === 'DUPLICATE_TITLE') fail('DUPLICATE_TITLE', '같은 제목의 사건이 이미 있어요.', { status: 409 });
   if (entry.loadFailure === 'IMPORT_RESULT_INVALID') {
     fail('IMPORT_RESULT_INVALID', '생성 결과를 사건으로 만들 수 없어요.', { status: 422, details: [{ field: 'case.factors[2].label', reason: 'REQUIRED' }] });

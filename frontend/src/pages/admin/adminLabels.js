@@ -79,7 +79,7 @@ export function errorText(error, fallback = '요청을 처리하지 못했어요
   if (code === 'IMPORT_IN_PROGRESS') return '다른 사건을 등록하는 중이에요. 끝난 뒤 다시 시도해 주세요.';
   if (code === 'IMPORT_NOT_FOUND') return '등록 작업을 찾을 수 없어요.';
   // 적재(A-14-1, FE-72). IMPORT_RESULT_INVALID의 details[].field는 생성 결과에서 비었거나 잘못된 값의 경로다(예: case.factors[2].label)
-  if (code === 'IMPORT_NOT_READY') return '아직 적재할 수 없어요. 생성이 끝났는지 확인해 주세요. 이미 적재한 등록일 수도 있어요.';
+  if (code === 'IMPORT_NOT_READY') return error.message || '아직 적재할 수 없어요. 생성이 끝났는지 확인해 주세요. 이미 적재한 등록일 수도 있어요.'; // 서버가 사유를 주면 그 문구가 더 정확하다(예: 생성 결과가 사라짐, PR #285 리뷰)
   if (code === 'IMPORT_RESULT_INVALID') {
     const fields = (error.details ?? []).map((item) => item.field).filter(Boolean);
     return `생성 결과를 사건으로 만들 수 없어요. 다시 생성해 주세요.${fields.length ? ` (문제가 된 값: ${fields.join(', ')})` : ''}`;
