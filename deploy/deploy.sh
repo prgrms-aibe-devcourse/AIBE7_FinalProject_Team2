@@ -88,6 +88,10 @@ EXTERNAL_DB_URL_VALUE="$(env_value EXTERNAL_DB_URL | tr -d "\"' \r")"
 # 실제 사건 시드 경로: 아래 외부 DB 검사와 오버레이 판정이 같은 값(따옴표 · 공백 · CR 정리)을 보게 한 번만 읽는다.
 # 다르게 읽으면 REAL_SEED_DIR="" 같은 줄이 검사는 통과하고 오버레이만 붙는다 (BE-59)
 REAL_SEED_DIR_VALUE="$(env_value REAL_SEED_DIR | tr -d "\"' \r")"
+# 검사한 경로를 Compose도 그대로 쓰게 한다 (PR #281 CodeRabbit 리뷰). Compose는 셸에 export된 값을 .env보다
+# 우선 적용하므로, 셸에 다른 REAL_SEED_DIR이 남아 있으면 검사하지 않은 폴더가 /real-seed에 붙을 수 있다.
+# 이 스크립트 프로세스에서만 덮어쓴다(호출한 셸에는 영향 없음) — 모니터링 값 unset과 같은 원칙
+export REAL_SEED_DIR="$REAL_SEED_DIR_VALUE"
 EXTERNAL_DB=0
 if [[ -n "$EXTERNAL_DB_URL_VALUE" ]]; then
   # 두 값이 없으면 compose가 뒤늦게 다른 이유처럼 실패하므로 먼저 막는다 (값은 출력하지 않는다)
@@ -109,14 +113,19 @@ if [[ -n "$EXTERNAL_DB_URL_VALUE" ]]; then
       log "❌ 외부 DB 모드에서 실제 사건 시드(REAL_SEED_DIR)는 팀 합의 후 EXTERNAL_DB_ALLOWS_REAL_SEED=1을 넣었을 때만 쓴다. 합의 전이면 .env에서 REAL_SEED_DIR을 비운다"
       exit 4
     fi
-    # 폴더가 비어 있거나 경로가 틀리면 Flyway가 아무것도 넣지 않고 성공으로 끝나 알아차리기 어렵다 — 먼저 막는다
-    if ! ls "$REAL_SEED_DIR_VALUE"/*.sql >/dev/null 2>&1; then
+    # 폴더가 비어 있거나 경로가 틀리면 Flyway가 아무것도 넣지 않고 성공으로 끝나 알아차리기 어렵다 — 먼저 막는다.
+    # 이름만 *.sql인 폴더는 세지 않고, 읽을 수 있는 일반 파일이 하나 이상 있어야 통과한다 (PR #281 CodeRabbit 리뷰)
+    seed_sql_found=0
+    for seed_sql in "$REAL_SEED_DIR_VALUE"/*.sql; do
+      [[ -f "$seed_sql" && -r "$seed_sql" ]] && { seed_sql_found=1; break; }
+    done
+    if (( ! seed_sql_found )); then
       log "❌ REAL_SEED_DIR(${REAL_SEED_DIR_VALUE})에 SQL 파일이 없다 — 서버에 비공개 시드를 먼저 받는다 (deploy/README.md \"운영 데이터\")"
       exit 4
     fi
     # 사용 불가 데이터(LBox Open, 라이선스상 사용 불가 — 10/12)는 합의와 별개로 외부 DB에 올리지 않는다.
     # 지금 시드에는 없다(BE-54에서 삭제). 다시 들어오면 여기서 막는다 (backend/run-shared-db.sh와 같은 검사)
-    if grep -qil "'LBOX'" "$REAL_SEED_DIR_VALUE"/*.sql; then
+    if grep -qils "'LBOX'" "$REAL_SEED_DIR_VALUE"/*.sql; then
       log "❌ 실제 사건 시드에 LBox 행('LBOX')이 있다 — 사용 불가 데이터라 외부 DB에 올리지 않는다 (SHARED-DEV-DB.md 규칙 6)"
       exit 4
     fi
