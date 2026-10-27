@@ -53,6 +53,8 @@ body {
   --palette-case-murder: #5b3a40;
   --palette-case-fraud: #2f4b66;
   --palette-case-injury: #4d5838;
+  --palette-case-robbery: #6a4a2b;
+  --palette-case-theft: #3f5a58;
   --palette-judge-me: #61538b;
   --palette-judge-ai: #0b6762;
   --palette-judge-court: #4f6526;
@@ -98,6 +100,8 @@ body {
   --color-case-murder: var(--palette-case-murder);
   --color-case-fraud: var(--palette-case-fraud);
   --color-case-injury: var(--palette-case-injury);
+  --color-case-robbery: var(--palette-case-robbery);
+  --color-case-theft: var(--palette-case-theft);
   --color-judge-me: var(--palette-judge-me);       /* 세 판결은 밝기가 같다. 선 · 라벨에만 쓰고 바탕을 칠하지 않는다 */
   --color-judge-ai: var(--palette-judge-ai);
   --color-judge-court: var(--palette-judge-court);

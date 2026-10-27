@@ -22,7 +22,7 @@
 }
 
 /* 가운데 접힌 자국은 두지 않는다(FE-41: 보관하며 생긴 선이라 펼친 지면에는 없다).
-   사건 기사 지면(S-20 · 1막, .case-paper)과 1면 아닌 유형 탭(살인 · 사기 · 상해, .inner-page)은 펼친 신문의 오른쪽 면이다: 왼쪽 끝이 제본 쪽으로 말려 들어가 그늘이 지고,
+   사건 기사 지면(S-20 · 1막, .case-paper)과 1면 아닌 유형 탭(살인 · 사기 · 상해 · 강도 · 절도, .inner-page)은 펼친 신문의 오른쪽 면이다: 왼쪽 끝이 제본 쪽으로 말려 들어가 그늘이 지고,
    그 밑으로 넘긴 왼쪽 면(앞 지면)의 가장자리가 겹쳐 보인다. 1면(S-02)에서 한 장을 넘기면(pageTurn.js) 이 면이 드러난다 */
 .case-list-page .paper:is(.case-paper, .inner-page) {
   box-shadow: -5px 2px 0 -1px var(--color-desk-news-sheet-1), -10px 4px 0 -2px var(--color-desk-news-sheet-2),
@@ -93,6 +93,8 @@
 .case-list-page .type-MURDER { background: var(--color-case-murder); }
 .case-list-page .type-FRAUD { background: var(--color-case-fraud); }
 .case-list-page .type-INJURY { background: var(--color-case-injury); }
+.case-list-page .type-ROBBERY { background: var(--color-case-robbery); }
+.case-list-page .type-THEFT { background: var(--color-case-theft); }
 .case-list-page .photo { display: block; width: 100%; height: auto; object-fit: cover; filter: var(--photo-filter); background: var(--color-border); }
 /* 사진 없는 작은 기사: 공용 재연 컷에 인쇄 망점 필터 — 흑백 · 강한 대비 + 망점 무늬를 곱해 옛 신문 사진처럼 */
 .case-list-page .halftone { position: relative; overflow: hidden; margin-bottom: 8px; }

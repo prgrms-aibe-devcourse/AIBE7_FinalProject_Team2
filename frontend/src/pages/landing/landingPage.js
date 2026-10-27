@@ -175,7 +175,7 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
   date.append(span('', '내Law남불'), span('', todayLabel()), span('', '참여 무료'));
   const tabs = span('news-tabs');
   const tabCount = span('news-count', '');
-  ['전체', '살인', '사기', '상해'].forEach((label, i) => tabs.append(span(i === 0 ? 'on' : '', label)));
+  ['전체', '살인', '사기', '상해', '강도', '절도'].forEach((label, i) => tabs.append(span(i === 0 ? 'on' : '', label)));
   tabs.append(tabCount);
   const banner = span('news-banner', '오늘의 지면을 펼쳐 보세요');
   const photo = element('img', 'news-photo');
