@@ -23,7 +23,7 @@ export const SELECT_STRATEGY = { consensus: '합의값에 가까운 회차', 'fi
 export const IMPORT_STATUS = { QUEUED: '대기 중', RUNNING: '실행 중', SUCCEEDED: '완료', FAILED: '실패' };
 export const IMPORT_STAGE = {
   extract: '비식별화 · 구조화', court: '재판부 판결 정리', contamination: '사전 학습 점검', rag: '참고 자료 검색',
-  generate: 'AI 판결 생성', select: '회차 선택', axis: '가치관 축 분류', load: '사건으로 만들기 (생성이 끝난 뒤 따로 눌러요)',
+  generate: 'AI 판결 생성', select: '회차 선택', axis: '가치관 축 분류', script: '증거조사 대사 생성', load: '사건으로 만들기 (생성이 끝난 뒤 따로 눌러요)',
 };
 // 단계 표시: 기호만으로는 "건너뜀(–)"과 "대기(·)"가 구분되지 않아 글로도 적는다 (FE-105)
 export const IMPORT_STAGE_STATUS = {

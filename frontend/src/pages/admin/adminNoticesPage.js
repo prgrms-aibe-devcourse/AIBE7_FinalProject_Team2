@@ -39,6 +39,7 @@ export function renderAdminNoticesPage(container, { navigate }) {
         form.addEventListener('submit', async (event) => {
           event.preventDefault();
           if (!title.value.trim() || !text.value.trim()) { error.textContent = '제목과 내용을 입력해 주세요.'; return; }
+          if (published.checked && !confirmChange(`"${title.value.trim()}" 공지를 바로 공개할까요?`, '사용자 화면에 바로 보여요.')) return;
           submit.disabled = true;
           error.textContent = '';
           try {
@@ -94,7 +95,7 @@ export function renderAdminNoticesPage(container, { navigate }) {
           data.items.forEach((word) => {
             const item = element('li');
             const remove = button('삭제', () => {
-              if (!window.confirm(`금칙어 "${word}"를 지울까요?`)) return;
+              if (!confirmChange(`금칙어 "${word}"를 지울까요?`, '지운 단어는 다시 등록하기 전까지 걸러지지 않아요.')) return;
               runAction({ trigger: remove, errorTarget: error, action: () => api.removeBannedWord(word), onDone: loadWords, doneText: `금칙어 "${word}"를 지웠어요.`, ...ctx });
             });
             remove.setAttribute('aria-label', `${word} 삭제`);

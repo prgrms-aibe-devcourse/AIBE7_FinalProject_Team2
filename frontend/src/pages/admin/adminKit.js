@@ -161,10 +161,10 @@ export function reasonForm({ label, submitText, maxLength = 200, extra = [], onS
 
 /**
  * 목록 화면의 공통 흐름: 불러오는 중 → 표 → 오류(다시 시도). 탭 · 쪽을 빠르게 바꿀 때 늦게 온 응답이 지금 화면을 덮지 않게 한다.
- * @param {{ body: HTMLElement, active: () => boolean, unauthorized: () => void }} ctx
+ * @param {{ body: HTMLElement, active: () => boolean, unauthorized: () => void, notFoundText?: string }} ctx 404 문구는 서버에 아직 없는 메뉴 기준이라, 이미 있는 API의 목록은 notFoundText로 바꾼다
  * @returns {(fetcher: () => Promise<any>, draw: (data) => void) => Promise<void>}
  */
-export function createLoader({ body, active, unauthorized }) {
+export function createLoader({ body, active, unauthorized, notFoundText = '서버에 아직 준비되지 않은 기능이에요.' }) {
   let seq = 0;
   return async function load(fetcher, draw) {
     const mine = ++seq;
@@ -179,7 +179,7 @@ export function createLoader({ body, active, unauthorized }) {
       if (failure?.code === 'UNAUTHORIZED') { unauthorized(); return; }
       const panel = element('div', 'admin-message');
       panel.setAttribute('role', 'alert');
-      panel.append(element('p', '', errorText(failure, failure?.status === 404 ? '서버에 아직 준비되지 않은 기능이에요.' : '불러오지 못했어요.')), button('다시 시도', () => load(fetcher, draw)));
+      panel.append(element('p', '', errorText(failure, failure?.status === 404 ? notFoundText : '불러오지 못했어요.')), button('다시 시도', () => load(fetcher, draw)));
       body.replaceChildren(panel);
     }
   };

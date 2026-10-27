@@ -32,7 +32,8 @@ export async function renderAdminShell(container, { navigate, title, section, dr
   skip.href = '#admin-main';
   skip.addEventListener('click', (event) => {
     event.preventDefault();
-    main.focus();
+    if (main.querySelector('h1')) focusHeading(main); // 화면 제목에 포커스 테두리가 보이고 낭독기도 제목을 읽는다. 아직 제목이 없으면(불러오는 중) 본문 자체로
+    else main.focus();
   });
   const header = element('header', 'admin-header');
   const brand = button('', () => navigate('landing'), 'admin-brand'); // 로고는 사용자 사이트 메인으로
@@ -53,6 +54,7 @@ export async function renderAdminShell(container, { navigate, title, section, dr
   toast.setAttribute('role', 'status');
   toast.hidden = true;
   let toastTimer = 0;
+  let toastTextTimer = 0;
   root.append(skip, header, body, toast);
   // 좁은 화면에서 메뉴는 옆으로 밀리는 한 줄이다: 지금 화면의 항목이 보이게 그 자리로 민다(페이지는 스크롤하지 않는다)
   const current = menu.querySelector('.is-active');
@@ -62,8 +64,10 @@ export async function renderAdminShell(container, { navigate, title, section, dr
 
   function notify(text) {
     clearTimeout(toastTimer);
-    toast.textContent = text;
+    clearTimeout(toastTextTimer);
+    // role=status 영역이 숨어 있는 동안 바뀐 글은 낭독되지 않는다: 먼저 보이게 하고, 글은 다음 task에서 쓴다
     toast.hidden = false;
+    toastTextTimer = setTimeout(() => { toast.textContent = text; }, 0);
     toastTimer = setTimeout(() => { toast.hidden = true; toast.textContent = ''; }, 6000);
   }
 

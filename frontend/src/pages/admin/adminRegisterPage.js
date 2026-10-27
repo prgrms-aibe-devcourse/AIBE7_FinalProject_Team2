@@ -365,7 +365,9 @@ export function renderAdminRegisterPage(container, { navigate }) {
             const [mark, word] = IMPORT_STAGE_STATUS[stage.status] ?? IMPORT_STAGE_STATUS.PENDING;
             const markNode = element('span', 'admin-stage-mark', mark);
             markNode.setAttribute('aria-hidden', 'true');
-            item.append(markNode, IMPORT_STAGE[stage.name] ?? stage.name, element('small', 'admin-stage-state', word));
+            // 사건으로 만들기(load)는 서버가 꺼 두고 SKIPPED로 내려 주지만 관리자가 따로 눌러야 하는 단계라, "건너뜀" 글을 붙이지 않는다
+            item.append(markNode, IMPORT_STAGE[stage.name] ?? stage.name);
+            if (stage.name !== 'load') item.append(element('small', 'admin-stage-state', word));
             list.append(item);
           });
           // 생성이 끝나도 사건은 아직 없다(caseId). 적재까지 끝났을 때만 "등록을 마쳤어요"로 쓴다

@@ -110,6 +110,7 @@ export function renderAdminCasePage(container, { caseId, navigate }) {
     title: `사건 #${caseId} 검수`,
     draw: async ({ api, main, active, unauthorized, setTitle, notify }) => {
       const opened = new Set(); // 상세를 펼쳐 둔 후보(judgmentId). 다시 그려도 펼친 채로 둔다
+      const details = new Map(); // 후보별로 그려 둔 상세 노드. 다시 그릴 때 요청 없이 그대로 복원한다(A-8을 또 부르지 않고 깜빡이지도 않게)
       const viewed = new Set(); // 한 번이라도 상세를 연 후보. 승인은 이 후보만 할 수 있다
 
       function handleFailure(failure, fallback, target) {
@@ -233,6 +234,7 @@ export function renderAdminCasePage(container, { caseId, navigate }) {
         const setOpen = (open) => {
           panel.hidden = !open;
           toggle.textContent = open ? '접기' : '자세히 보기';
+          toggle.setAttribute('aria-label', `#${id} 후보 ${open ? '접기' : '자세히 보기'}`);
           toggle.setAttribute('aria-expanded', String(open));
           if (open) { opened.add(id); viewed.add(id); } else opened.delete(id);
           if (approve) approve.disabled = !viewed.has(id);
@@ -244,7 +246,9 @@ export function renderAdminCasePage(container, { caseId, navigate }) {
           try {
             const detail = await api.getJudgment(id);
             if (!active()) return;
-            panel.replaceChildren(judgmentDetail(detail));
+            const node = judgmentDetail(detail);
+            details.set(id, node);
+            panel.replaceChildren(node);
             setOpen(true);
           } catch (failure) {
             handleFailure(failure, '후보를 불러오지 못했어요.', error);
@@ -294,7 +298,7 @@ export function renderAdminCasePage(container, { caseId, navigate }) {
           parts.push(form);
         }
         item.append(...parts, error, panel);
-        if (opened.has(id)) toggle.click(); // 다시 그리기 전에 펼쳐 두었던 후보
+        if (opened.has(id) && details.has(id)) { panel.replaceChildren(details.get(id)); setOpen(true); } // 다시 그리기 전에 펼쳐 두었던 후보
         return item;
       }
 

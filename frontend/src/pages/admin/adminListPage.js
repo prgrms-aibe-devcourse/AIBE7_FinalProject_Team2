@@ -29,7 +29,7 @@ export function renderAdminListPage(container, { navigate }) {
       const hint = element('p', 'admin-sub admin-filter-hint');
       const body = element('div', 'admin-list-body');
       main.replaceChildren(top, tabs, hint, body);
-      const load = createLoader({ body, active, unauthorized });
+      const load = createLoader({ body, active, unauthorized, notFoundText: '사건 목록을 찾지 못했어요. 주소나 서버 연결을 확인해 주세요.' }); // 서버에 있는 API라 "준비 안 됨"으로 말하지 않는다
 
       function drawTabs() {
         tabs.replaceChildren(tabBar(FILTERS, filter.key, (key) => {

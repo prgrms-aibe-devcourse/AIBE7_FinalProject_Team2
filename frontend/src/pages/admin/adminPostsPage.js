@@ -98,7 +98,7 @@ export function renderAdminPostsPage(container, { navigate }) {
               runAction({ trigger: toggle, errorTarget: commentError, action: () => api.hideComment(comment.commentId), onDone: () => showDetail(post.postId), doneText: '댓글을 숨겼어요.', ...ctx });
             })
             : button('복구', () => runAction({ trigger: toggle, errorTarget: commentError, action: () => api.restoreComment(comment.commentId), onDone: () => showDetail(post.postId), doneText: '댓글을 복구했어요.', ...ctx }));
-          toggle.setAttribute('aria-label', `${comment.authorNickname} 님 댓글 ${toggle.textContent}`);
+          toggle.setAttribute('aria-label', `${comment.authorNickname} 님 댓글 #${comment.commentId} ${toggle.textContent}`); // 같은 작성자의 댓글끼리 구별
           const line = element('div', 'admin-candidate-head');
           line.append(element('strong', '', comment.authorNickname), badge(comment.status === 'VISIBLE' ? '공개' : '숨김', comment.status === 'VISIBLE' ? 'approved' : 'pending'), element('span', 'admin-sub', `${formatDate(comment.createdAt)}${comment.reportCount ? ` · 신고 ${comment.reportCount}건` : ''}`), toggle);
           item.append(line, element('p', '', comment.content), commentError);
