@@ -36,7 +36,12 @@ DEFAULT_JOBS_DIR = TOOL_DIR / "out" / "jobs"
 ARTIFACT_DIRS = ("cases", "out/runs")
 
 # 파이프라인 단계 순서 (pipeline.py STAGES와 같아야 한다)
-STAGES = ("extract", "court", "contamination", "rag", "generate", "select", "axis", "load")
+STAGES = ("extract", "court", "contamination", "rag", "generate", "select", "axis", "script", "load")
+
+# pipeline.py에서 **기본값이 꺼짐**인 단계 (pipeline.py DEFAULT_CONFIG의 stages.script.enabled = False).
+# 나머지 단계는 설정에 없으면 돈다는 뜻이라, 이 목록을 따로 두지 않으면 요청하지 않은 대본 단계가
+# 영영 PENDING으로 남아 끝난 작업이 FAILED로 보인다 (BE-108에서 script를 STAGES에 넣으며 드러났다)
+DEFAULT_OFF_STAGES = ("script",)
 
 # 작업 상태 (API 명세 A-15와 같은 값)
 QUEUED, RUNNING, SUCCEEDED, FAILED = "QUEUED", "RUNNING", "SUCCEEDED", "FAILED"
@@ -158,6 +163,24 @@ def _axis_result(axis):
     votes = _read_json(Path(axis["votesFile"])) if axis.get("votesFile") else None
     result = {key: value for key, value in axis.items() if key != "votesFile"}
     result["factors"] = (votes or {}).get("factors") or []
+    return result
+
+
+def _script_result(script):
+    """사건 대본(증거조사 대사)을 **내용으로** 돌려준다 (BE-107 생성 → BE-108 적재).
+
+    단계 산출물에는 `evidenceFile`(컨테이너 안 경로)만 있어서 그대로 내보내면 부르는 쪽이 읽을 수 없다.
+    axis의 `votesFile`과 똑같은 이유로 파일을 읽어 evidence를 넣고 경로는 뺀다 — 백엔드가 쓸 수 없는
+    값이고 내부 경로를 밖으로 내보낼 이유도 없다.
+
+    `publishable`(생성 실패 · 호출 한도 중단으로 증거 카드와 대사가 어긋남)은 그대로 넘긴다.
+    적재할지 · 공개할지는 백엔드와 관리자가 판단한다(BE-108).
+    """
+    if not script:
+        return None
+    data = _read_json(Path(script["evidenceFile"])) if script.get("evidenceFile") else None
+    result = {key: value for key, value in script.items() if key != "evidenceFile"}
+    result["evidence"] = (data or {}).get("evidence") or []
     return result
 
 
@@ -394,8 +417,9 @@ class JobStore:
         entries = state.get("stages") or {}
         stages = []
         for stage in STAGES:
-            # 설정에 없으면 파이프라인 기본값(켜짐)이다. 서비스가 끄는 단계는 설정에 enabled=False로 들어가 있다
-            enabled = (configured.get(stage) or {}).get("enabled", True)
+            # 설정에 없으면 파이프라인 기본값이다 — 대부분 켜짐이지만 DEFAULT_OFF_STAGES는 꺼짐이다.
+            # 서비스가 끄는 단계(DISABLED_STAGES)는 설정에 enabled=False로 들어가 있다
+            enabled = (configured.get(stage) or {}).get("enabled", stage not in DEFAULT_OFF_STAGES)
             entry = entries.get(stage) or {}
             if not enabled and not entry:
                 status = SKIPPED
@@ -449,6 +473,8 @@ class JobStore:
             "selection": {k: selection.get(k) for k in ("modelSpec", "runIndex", "strategy", "reason", "warnings")}
             if selection else None,
             "axis": _axis_result(outputs.get("axis") or {}),
+            # 대본은 안 돌렸으면 None이다. 사건 · 판결만 있으면 적재는 그대로 되고, 대본은 나중에 들어와도 된다(BE-108)
+            "script": _script_result(outputs.get("script") or {}),
         }
         if result["case"] is None and result["judgment"] is None:
             raise JobNotFound(f"아직 결과가 없습니다: {job_id}")

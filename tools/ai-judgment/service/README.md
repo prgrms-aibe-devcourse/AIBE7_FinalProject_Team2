@@ -45,7 +45,7 @@
 | `GET /health` | 컨테이너 헬스체크. `{"status":"UP","runningJobId":...}` — 파이프라인을 돌려 보지는 않는다 |
 | `POST /jobs` | 작업 생성 + 시작. **202**와 함께 첫 상태를 돌려준다 (파이프라인은 수십 분 걸려 기다리지 않는다) |
 | `GET /jobs/{id}` | 작업 상태 + 단계별 진행 상황 |
-| `GET /jobs/{id}/result` | 생성 결과 (사건 · 재판부 판결 · AI 판결 · 가치관 축). **판결문 원문은 없다** |
+| `GET /jobs/{id}/result` | 생성 결과 (사건 · 재판부 판결 · AI 판결 · 가치관 축 · 대본). **판결문 원문은 없다** |
 | `GET /jobs/{id}/log?tail=200` | 파이프라인 출력 꼬리 (실패 원인 확인용, text/plain). `tail`은 1 ~ 2000 |
 | `POST /jobs/{id}/cancel` | 도는 작업을 프로세스 그룹째 멈춘다. 어디까지 갔는지는 남는다. **이미 끝난 작업은 건드리지 않는다** |
 | `DELETE /jobs/{id}` | 작업이 남긴 것을 모두 지운다 (원문 포함, 아래 "삭제가 지우는 것"). 도는 중이면 `409` |
@@ -79,6 +79,13 @@
 - `sources` 필수, 1 ~ 3개. `originalText`가 비면 `400`.
 - `models` 필수 (`generate` 단계가 쓸 모델). 없으면 `400`.
 - `stages`는 선택. 끈 단계를 다시 켜거나 단계 설정을 덮어쓸 때만 쓴다. 모르는 단계 이름이면 `400`.
+- **대본(`script`) 단계는 기본으로 돌지 않는다**(파이프라인 기본값이 꺼짐). 사건 등록에서 대본까지 만들려면
+  `stages.script.enabled = true`와 `model` · `cast`(배역)를 함께 보내고 `until`을 `script`로 둔다(BE-107 · BE-108).
+  돌리지 않으면 `result`의 `script`가 `null`이고, 사건 · 판결 적재는 그대로 된다.
+- `result`의 `script`는 `evidence`(판단 요소별 대사) · `publishable` · `model` · `cast` · `count` · `failed` ·
+  `balanceWarning`을 담는다. `publishable`이 `false`면 생성 실패 · 호출 한도 중단으로 **증거 카드와 대사가
+  1:1로 어긋난** 상태다 — 적재는 되지만 관리자가 승인할 수 없다(BE-108). 컨테이너 안 경로(`evidenceFile`)는
+  내보내지 않는다(가치관 축의 `votesFile`과 같은 이유).
   `load`는 여기서 켜도 되돌려 끈다.
 
 상태 값:

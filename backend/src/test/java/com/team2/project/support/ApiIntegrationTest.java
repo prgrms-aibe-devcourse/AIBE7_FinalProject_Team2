@@ -132,6 +132,7 @@ public abstract class ApiIntegrationTest {
 			jdbcTemplate.update("DELETE FROM factor WHERE case_id = ?", caseId);
 			jdbcTemplate.update("DELETE FROM case_source WHERE case_id = ?", caseId);
 			jdbcTemplate.update("DELETE FROM case_paper WHERE case_id = ?", caseId);	// 신문 지면(BE-92, FK)
+			jdbcTemplate.update("DELETE FROM case_script WHERE case_id = ?", caseId);	// 사건 대본(BE-108, FK)
 			jdbcTemplate.update("DELETE FROM case_incident_photo WHERE case_id = ?", caseId);	// 발단 · 결론 사진(BE-91, FK)
 			jdbcTemplate.update("DELETE FROM legal_case WHERE id = ?", caseId);
 		}
