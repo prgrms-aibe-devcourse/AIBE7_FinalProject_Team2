@@ -276,3 +276,52 @@
 }
 /* 목록을 받기 전에는 아래 안내 · 푸터를 감춰 둔다: 받은 뒤 본문이 길어지며 아래로 밀리는 것이 레이아웃 이동(CLS 0.12)으로 잡혔다(FE-102) */
 .case-list-page.is-loading :is(.paper-note, .site-footer) { visibility: hidden; }
+
+/* ── 면 넘기기 (FE-118) ── */
+/* 종이 귀: 지면 아래 양 모서리(다음 면 = 오른쪽, 앞 면 = 왼쪽). 줄은 귀 높이만큼 자리만 잡고 버튼은 지면 모서리에 붙는다(.paper가 기준, 성향 결과지 .result-turn과 같은 방식).
+   접혀 들린 밑으로 비치는 것은 서류철이 아니라 다음 장 신문이라 잘린 자리 색을 신문 겹장으로 바꾼다 */
+.case-list-page .face-turns { --fold-size: 52px; height: var(--fold-size); }
+.case-list-page .face-turn {
+  position: absolute; bottom: 0; right: 0; display: flex; align-items: flex-end; gap: 32px; height: var(--fold-size); padding: 0 0 0 12px;
+  border: 0; background: none; color: var(--color-heading); font: 700 15px/1 var(--font-heading); cursor: pointer; transition: none;
+}
+.case-list-page .face-turn:active { transform: none; scale: none; } /* 버튼째 줄면 모서리에서 떨어진다: 눌림은 귀만(folderParts.css) */
+.case-list-page .face-turn.is-prev { right: auto; left: 0; flex-direction: row-reverse; padding: 0 12px 0 0; }
+.case-list-page .face-turn-label { align-self: center; white-space: nowrap; }
+@media (hover: hover) and (pointer: fine) { .case-list-page .face-turn:hover .face-turn-label { text-decoration: underline; text-underline-offset: 4px; } }
+.case-list-page .face-turn:focus-visible { outline: 3px solid var(--color-focus); outline-offset: -3px; border-radius: 2px; }
+.case-list-page .face-turn .paper-fold::before { background: var(--color-desk-news-sheet-1); }
+
+/* 화면 양옆 화살표(마우스용 지름길, 넓은 화면만): 지면 바깥 여백에 세로 가운데로 떠 있다. 여백이 좁으면 지면 안쪽 여백(40px) 위에 걸친다 */
+.case-list-page .face-edge {
+  position: fixed; top: 50%; z-index: 30; translate: 0 -50%; width: 40px; height: 88px; padding: 0;
+  border: 1px solid var(--color-border-strong); border-radius: 6px; background: color-mix(in srgb, var(--color-paper) 90%, transparent);
+  color: var(--color-heading); font: 400 34px/1 var(--font-heading); cursor: pointer;
+  box-shadow: 0 6px 18px -6px color-mix(in srgb, var(--color-desk-shadow) 60%, transparent);
+  transition: background-color .18s ease-out, scale .12s ease-out;
+}
+.case-list-page .face-edge.is-prev { left: max(8px, calc((100vw - min(1280px, 100vw - 48px)) / 2 - 52px)); }
+.case-list-page .face-edge.is-next { right: max(8px, calc((100vw - min(1280px, 100vw - 48px)) / 2 - 52px)); }
+@media (hover: hover) and (pointer: fine) { .case-list-page .face-edge:hover { background-color: color-mix(in srgb, var(--color-desk-kraft) 16%, var(--color-paper)); } } /* P1 버튼: 배경만 한 단계(종이 위라 크라프트 틴트, 신문색과 거의 같은 surface-strong은 안 보인다) */
+.case-list-page .face-edge:active { scale: .96; } /* 전역 버튼 눌림과 같은 값 */
+/* 지면이 들어오는 중 · 사건으로 가는 중 · 목록을 받기 전에는 숨긴다. 모바일은 손가락 밀기와 귀로 넘긴다 */
+.case-list-page:is(.is-loading, .is-picking, .is-rising, .is-spreading, .is-unflipping) .face-edges { display: none; }
+@media (max-width: 768px) { .case-list-page .face-edges { display: none; } }
+
+/* ── 빈 칸 채움 지면 (FE-118) ── 기사가 모자라 비는 칸: 법정 상식(이중선 머리) · 광고(이중선 상자). 사건 기사와 달리 눌러도 사건으로 가지 않는다 */
+.case-list-page .filler { display: flex; flex-direction: column; min-width: 0; }
+.case-list-page .filler-label { margin: 0 0 8px; padding-bottom: 6px; border-bottom: 3px double var(--color-border-strong); font-size: var(--text-caption); font-weight: 700; letter-spacing: .08em; color: var(--color-label); }
+.case-list-page .filler-title { margin-bottom: 6px; font: 700 16px/1.42 var(--font-heading); letter-spacing: -.03em; color: var(--color-heading); word-break: keep-all; }
+.case-list-page .filler-text { margin: 0; font: 400 13px/1.6 var(--font-article); letter-spacing: -.02em; color: var(--color-text); word-break: keep-all; }
+.case-list-page .filler-ad { padding: 10px 12px 4px; border: 3px double var(--color-border-strong); background: color-mix(in srgb, var(--color-desk-kraft) 9%, var(--color-paper)); }
+.case-list-page .filler-ad .filler-label { border-bottom: 0; padding-bottom: 0; margin-bottom: 4px; }
+.case-list-page .filler-go { margin-top: auto; }
+.case-list-page .filler-column { gap: 18px; }
+.case-list-page .filler-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 22px; padding: 16px 0 24px; border-top: 3px double var(--color-border-strong); }
+/* 다른 사건 줄의 빈 칸: 넓은 화면 6칸 기준으로 만든 것 중 태블릿(3칸) · 모바일(2칸)에서 남는 뒤쪽 칸은 숨긴다(caseListPage.js emptySlots) */
+@media (max-width: 1100px) { .case-list-page .index-grid .filler:not(.fill-3) { display: none; } }
+@media (max-width: 768px) {
+  .case-list-page .index-grid .filler:not(.fill-2) { display: none; }
+  .case-list-page .index-grid .filler.fill-2 { display: flex; }
+  .case-list-page .filler-strip { grid-template-columns: 1fr; gap: 18px; }
+}

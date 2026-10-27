@@ -4,7 +4,7 @@ import { caseStage, mountStagePage, scriptFor } from '../overview/overviewPage.j
 import { caseInfoEar, caseNewspaper, earButton, paperFromCase } from '../../components/newspaperFront.js';
 import { evidencePhotosFromPaper, fetchCasePaper } from '../../utils/newspaper.js';
 import { reducedMotion } from '../../utils/motion.js';
-import { TURN_MS } from '../../utils/pageTurn.js';
+import { landArticle } from '../../utils/articleZoom.js';
 import { openCaseReviewPopup } from '../caseReview/caseReviewPopup.js';
 
 // S-20 사건 디테일 (확장, IA v1.12 · FE-32). 신문 지면(S-02)에서 고른 기사를 한 장 넘기면 나오는 신문 안쪽 면이다
@@ -15,7 +15,7 @@ import { openCaseReviewPopup } from '../caseReview/caseReviewPopup.js';
 // 대본이 없는 사건은 같은 지면을 캐릭터 · 대사 없이 보여 준다(drawPaper). 기사 본문이 없으면 짧은 소개 한 단락만 싣고,
 // 새 체험은 "준비 중"으로 막는다(FE-56, 하던 · 마친 체험은 이어서 볼 수 있다). 모든 사건 대본 제작은 FE-33.
 // 데이터는 API 16 하나(체험 없이 열린다). 버튼은 내 진행 상태(myStatus)로 나누고, 누르면 API 2 응답 상태로 이어서 볼 화면을 정한다(1-6).
-// S-02에서 기사를 골라 오면(from: 'paper') S-02의 신문 한 장이 넘어가며(utils/pageTurn.js) 이 면이 그 밑에서 드러난다.
+// S-02에서 기사를 골라 오면(from: 'paper') 누른 기사의 제목이 이 면의 큰 제목 자리로 커지며 날아온다(utils/articleZoom.js, FE-118). 본뜬 S-02 지면은 그동안 흐려지며 걷힌다.
 
 // 진행 상태별 버튼 문구 · 실패 안내 (S-02와 같은 말)
 const ACTIONS = {
@@ -23,6 +23,7 @@ const ACTIONS = {
   COMPLETED: { label: '결과 다시 보기', failText: '결과를 열지 못했어요. 잠시 후 다시 시도해 주세요.' },
 };
 const NOT_STARTED = { label: '시작하기', failText: '체험을 시작하지 못했어요. 잠시 후 다시 시도해 주세요.' };
+const SLOW_MS = 1000; // 신문에서 왔는데 이만큼 지나도 자료가 없으면 "불러오는 중"을 보인다
 
 export async function renderCaseDetailPage(container, { caseId, api, navigate, from }) {
   const root = element('div', 'case-detail-page');
@@ -30,7 +31,7 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
   desk.setAttribute('aria-hidden', 'true');
   const clip = element('article', 'detail-clip');
   root.append(desk, clip);
-  if (from) clip.style.visibility = 'hidden'; // 불러오는 동안 빈 종이가 먼저 보이지 않게 한다(다음 면은 내려앉으며 나타난다)
+  if (from) clip.style.visibility = 'hidden'; // 불러오는 동안 빈 종이가 먼저 보이지 않게 한다(그동안 본뜬 신문 지면이 화면을 덮고 있다)
   container.replaceChildren(root);
   const active = () => container.contains(root);
   let starting = false;
@@ -53,11 +54,11 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
     if (action) panel.append(action);
     if (action) clip.style.visibility = ''; // 오류 안내는 바로 보인다(불러오는 중은 숨겨 둔 채 다음 면이 내려앉기를 기다린다)
     clip.replaceChildren(panel);
-    // 넘김이 끝났는데도 자료가 안 왔으면 빈 책상 대신 불러오는 중 안내를 보인다(빠른 응답은 지금처럼 숨겨 둔 채 지면이 내려앉는다)
+    // 잠시 기다려도 자료가 안 왔으면 덮고 있던 신문 지면을 걷고 불러오는 중 안내를 보인다(빠른 응답은 숨겨 둔 채 바로 제목이 날아온다)
     if (!action && from) setTimeout(() => {
       if (!active() || clip.style.visibility !== 'hidden' || !clip.contains(panel)) return;
       unfold(panel);
-    }, TURN_MS);
+    }, SLOW_MS);
   }
 
   async function start(trigger, notice, failText) {
@@ -115,9 +116,11 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
     unfold(sheet);
   }
 
-  // 신문 한 장이 넘어가는 동안 이 면은 그 밑에 놓여 있다(넘기는 연출은 S-02가 시작). 자료가 늦게 와도 부드럽게 나타난다
+  // 신문에서 왔으면 본뜬 지면이 걷히며 이 면이 드러나고, 누른 기사의 제목이 이 면의 제목으로 내려앉는다(연출은 S-02가 시작, articleZoom.js).
+  // 받을 연출이 없으면(새로고침 · 움직임 줄이기 · 너무 늦음) 부드럽게 나타나기만 한다
   function unfold(node = clip) {
     clip.style.visibility = '';
+    if (from && landArticle(node.querySelector('.story-title'), node)) return;
     if (from && !reducedMotion()) node.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 220, easing: 'ease-out' });
   }
 
