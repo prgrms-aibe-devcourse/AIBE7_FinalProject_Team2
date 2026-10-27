@@ -64,7 +64,8 @@ export function renderCommunityPostPage(container, { api, navigate, postId }) {
     title.tabIndex = -1;
     // 글쓴이 서명(FE-94): 본문 끝에 닉네임으로 만든 서명을 둔다(장식, 낭독은 "○○의 서명")
     const signoff = element('div', 'cm-signoff');
-    signoff.append(signatureSvg(post.author.nickname, { label: `${post.author.nickname}의 서명` }));
+    const writer = post.author?.nickname; // 탈퇴한 회원 등으로 닉네임이 비어 오면 서명을 그리지 않는다("undefined의 서명"으로 읽히지 않게)
+    if (writer) signoff.append(signatureSvg(writer, { label: `${writer}의 서명` }));
     node.append(postMeta(post, { full: true }), title, element('div', 'cm-article-body', post.body), signoff);
     if (post.images.length) node.append(postImages(post.images, { full: true }));
     if (post.verdict) node.append(foldedVerdict(post, () => verdictWithType(post.verdict, post.caseTitle, post.author)));

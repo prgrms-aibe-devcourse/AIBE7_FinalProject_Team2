@@ -121,13 +121,17 @@ function clickable(box, label, action) {
     action();
   });
 }
+// hasTest: true(응시) · false(미응시) · null(마이페이지를 못 받아 모름). 모를 때는 테스트를 권하지 않으려고 첫 칸을 뺀다
 function resultAds(hasTest) {
   const ads = advertisements();
   const back = ads.querySelector('.sheet-ad.is-notice');
   back.querySelector('.sheet-ad-tag').textContent = '마이페이지';
   back.querySelector('.sheet-ad-title').textContent = '마이페이지로';
   back.querySelector('.sheet-ad-text').textContent = '내가 체험한 사건 목록으로 돌아가요. 다른 사건의 결과도 거기서 펼쳐 볼 수 있어요.';
-  if (hasTest) {
+  if (hasTest === null) {
+    ads.querySelector('.sheet-ad.is-lead')?.remove();
+    ads.classList.add('is-two');
+  } else if (hasTest) {
     const lead = ads.querySelector('.sheet-ad.is-lead');
     lead.querySelector('.sheet-ad-tag').textContent = '알림';
     lead.querySelector('.sheet-ad-title').textContent = '내 성향카드';
@@ -167,12 +171,12 @@ export async function renderMyResultPage(container, { caseId, caseHeader, api, n
     left.append(frontStory(caseHeader.title, leadOf(caseHeader.title, data.preToFinal, myNickname(myPage, currentUser()))), ...leanSections(record));
     const right = element('div', 'sheet-col is-right');
     right.append(...trendSections(myPage, record ?? {}));
-    const hasTest = Boolean(myPage) && trendsOf(myPage).some(({ points }) => points[0]?.isTest);
+    const hasTest = myPage ? trendsOf(myPage).some(({ points }) => points[0]?.isTest) : null; // null = 조회 실패(상태 불명)
     const ads = resultAds(hasTest);
     sheet.append(mast, left, right, ads);
-    openForReading(sheet, () => (hasTest ? navigate('me', { view: 'type' }) : navigate('testPaper')));
+    openForReading(sheet, () => (hasTest ? navigate('me', { view: 'type' }) : navigate('testPaper'))); // hasTest가 null이면 첫 칸이 없어 호출되지 않는다
     if (hasTest) sheet.querySelector('.sheet-ad.is-lead')?.setAttribute('aria-label', '내 성향카드 — 마이페이지에서 보기');
-    const today = ads.querySelector('.sheet-ad:not(.is-lead)');
+    const today = ads.querySelector('.sheet-ad.is-today');
     if (today) clickable(today, '오늘의 지면 — 다른 사건 보기', () => navigate('list'));
     const toMyPage = ads.querySelector('.sheet-ad.is-notice');
     if (toMyPage) clickable(toMyPage, '마이페이지로 — 내가 체험한 사건 목록', () => navigate('me', { view: 'cases' }));

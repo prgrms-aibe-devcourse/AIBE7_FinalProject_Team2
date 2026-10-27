@@ -95,7 +95,11 @@ export function renderSettings() {
         const locked = systemReducesMotion();
         rows.unshift(settingRow(
           { label: '화면 연출', hint: '화면 전환 · 책상 위 움직임 같은 연출을 보여 줘요. 끄면 바로 끝 모양으로 보여요.', note: locked ? '기기의 "동작 줄이기"가 켜져 있어 연출이 꺼져 있어요.' : '누르면 바로 적용돼요(위 헤더의 "연출"과 같은 스위치예요).' },
-          (id) => switchControl(id, !locked && motionSwitchOn(), (on) => setMotionSwitch(on), locked),
+          (id) => {
+            const node = switchControl(id, !locked && motionSwitchOn(), (on) => setMotionSwitch(on), locked);
+            node.classList.add('set-motion'); // follow()가 순서가 아니라 이 클래스로 찾는다
+            return node;
+          },
         ));
       }
       form.append(section(group.title, ...rows));
@@ -104,7 +108,7 @@ export function renderSettings() {
     // 맨 아래 오른쪽: 설정 초기화 · 저장하기(바꿀 수 있는 항목이 있을 때만)
     if (EDITABLE.length) {
       const reset = button('설정 초기화', () => {
-        build(pickEditable(defaultSettings()), '모든 설정을 처음 값으로 돌려 놨어요. 저장하기를 눌러야 적용돼요.');
+        build({ ...saved, ...pickEditable(defaultSettings()) }, '모든 설정을 처음 값으로 돌려 놨어요. 저장하기를 눌러야 적용돼요.');
         box.querySelector('.set-reset')?.focus();
       }, 'secondary-button set-reset');
       save.addEventListener('click', () => {
@@ -125,7 +129,7 @@ export function renderSettings() {
   // 헤더 스위치로 연출을 바꾸면 화면의 스위치도 그 값으로 맞춘다
   const follow = () => {
     if (!box.isConnected) return document.removeEventListener(MOTION_EVENT, follow);
-    const node = box.querySelector('.set-row .set-switch');
+    const node = box.querySelector('.set-motion');
     if (node && !node.disabled) node.setAttribute('aria-checked', String(motionSwitchOn()));
   };
   document.addEventListener(MOTION_EVENT, follow);
