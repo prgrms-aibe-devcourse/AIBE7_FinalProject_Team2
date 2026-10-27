@@ -36,3 +36,21 @@ test('모르는 직업은 400, 안 열린 직업은 409 JOB_LOCKED', async () =>
   await assert.rejects(() => putLevelJob('KING'), { status: 400, code: 'VALIDATION_ERROR' });
   await assert.rejects(() => putLevelJob('CHIEF_JUSTICE'), { status: 409, code: 'JOB_LOCKED' });
 });
+
+test('커뮤니티 경험치: 글 30(하루 3건) · 댓글 10 · 좋아요 2(글당 1회), 판결 공유 보너스는 사건당 1회', async () => {
+  const { awardMockXp } = await import('./levelMockApi.js');
+  await resetMockLevel();
+  const before = mockLevelView().xp;
+  assert.equal(awardMockXp('post', 1), 30);
+  assert.equal(awardMockXp('post', 1), 0); // 같은 글은 한 번
+  assert.equal(awardMockXp('post', 2), 30);
+  assert.equal(awardMockXp('post', 3), 30);
+  assert.equal(awardMockXp('post', 4), 0); // 하루 3건
+  assert.equal(awardMockXp('verdictBonus', 1), 20);
+  assert.equal(awardMockXp('verdictBonus', 1), 0);
+  assert.equal(awardMockXp('comment', 7), 10);
+  assert.equal(awardMockXp('like', 9), 2);
+  assert.equal(awardMockXp('like', 9), 0);
+  assert.equal(mockLevelView().xp, before + 30 * 3 + 20 + 10 + 2);
+  await resetMockLevel();
+});

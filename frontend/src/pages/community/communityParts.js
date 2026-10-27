@@ -94,10 +94,20 @@ export function clip() {
   return node;
 }
 
+// 글쓴이의 프로필카드(FE-116): 카드 아래 줄은 글쓴이가 고른 것(성향 · 서명 · 직업)이고, 레벨은 켰을 때만 윗줄에 붙는다
+export function authorFace(author) {
+  const { line = 'type', showLevel = false } = author.cardLine ?? {};
+  const extra = { level: showLevel && author.level != null ? `Lv.${author.level}` : null };
+  const deco = normalizeDeco(author.profileCard);
+  if (line === 'signature') return profileFace(deco, author.nickname, null, { ...extra, signer: author.nickname });
+  if (line === 'job' && author.job?.name) return profileFace(deco, author.nickname, author.job.name, extra);
+  return profileFace(deco, author.nickname, typeNameOf(author), extra);
+}
+
 // 프로필카드 · 성향카드 한 쌍(누를 수 없음). 크기는 부모(.cm-namecard · .cm-pop)가 정한다
 function cardPair(author) {
   const box = element('div', 'cm-cards cm-card-pair');
-  box.append(profileFace(normalizeDeco(author.profileCard), author.nickname, typeNameOf(author)));
+  box.append(authorFace(author));
   box.append(author.shownType
     ? typeFace(author.shownType.type, undefined, normalizeTypeDeco(author.shownType.deco))
     : typeFace(null, '"아직 성향 테스트를 안 했어요"'));
@@ -176,7 +186,7 @@ function openPop(author, from) {
 function authorInfo(author) {
   const box = element('div', 'cm-author-info');
   const stats = element('dl', 'cm-author-stats');
-  [['레벨', `Lv.${author.level}`], ['직업', author.job], ['체험한 사건', `${author.completedCount}건`]].forEach(([label, value]) => {
+  [['레벨', `Lv.${author.level}`], ['직업', author.job?.name ?? '무직'], ['체험한 사건', `${author.completedCount}건`]].forEach(([label, value]) => {
     const row = element('div');
     row.append(element('dt', '', label), element('dd', '', value));
     stats.append(row);

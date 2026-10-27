@@ -47,6 +47,6 @@ export function selectedChoice(data, chosen = getProfileCardType()) {
 
 export const getCardLine = () => getCardLineSettings().cardLine;
 export const getCardLevel = () => getCardLineSettings().cardLevel;
-/** 카드 아래 줄: 성향 · 서명 · 직업 중 하나, 레벨은 앞에 붙이거나 끈다. 서버에 보내지 않는다(profileSettings.js) */
+/** 카드 아래 줄: 성향 · 서명 · 직업 중 하나, 레벨은 앞에 붙이거나 끈다. 서버가 두 칸을 알 때만 서버에 보낸다(profileSettings.js). 저장되면 true, 거절되면 false */
 export const setCardLine = (cardLine) => updateCardLine({ cardLine });
 export const setCardLevel = (cardLevel) => updateCardLine({ cardLevel });
