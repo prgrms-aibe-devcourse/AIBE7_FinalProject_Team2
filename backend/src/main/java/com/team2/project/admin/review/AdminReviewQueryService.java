@@ -10,6 +10,7 @@ import com.team2.project.admin.review.dto.AdminCaseDetailResponse.Content;
 import com.team2.project.admin.review.dto.AdminCaseDetailResponse.FactorItem;
 import com.team2.project.admin.review.dto.AdminCaseDetailResponse.Guideline;
 import com.team2.project.admin.review.dto.AdminCaseDetailResponse.PublishReadinessResponse;
+import com.team2.project.admin.review.dto.AdminCaseDetailResponse.ScriptSummary;
 import com.team2.project.admin.review.dto.AdminCaseDetailResponse.Source;
 import com.team2.project.admin.review.dto.AdminCaseListResponse;
 import com.team2.project.admin.review.dto.AdminJudgmentResponse;
@@ -32,6 +33,7 @@ import com.team2.project.legalcase.domain.LegalCase;
 import com.team2.project.legalcase.domain.RevealStage;
 import com.team2.project.legalcase.domain.SentencingGuideline;
 import com.team2.project.legalcase.repository.CaseSourceRepository;
+import com.team2.project.legalcase.repository.CaseScriptRepository;
 import com.team2.project.legalcase.repository.FactorRepository;
 import com.team2.project.legalcase.repository.LegalCaseRepository;
 import com.team2.project.legalcase.repository.PenaltyRuleRepository;
@@ -71,6 +73,7 @@ public class AdminReviewQueryService {
 	private final JudgmentFactorRepository judgmentFactorRepository;
 	private final AiGenerationRepository generationRepository;
 	private final AdminAccountRepository adminAccountRepository;
+	private final CaseScriptRepository scriptRepository;
 	private final JudgmentViewAssembler assembler;
 	private final AdminAuditLogger auditLogger;
 
@@ -102,7 +105,11 @@ public class AdminReviewQueryService {
 			sourceRepository.findAllByCaseId(caseId).stream().map(AdminReviewQueryService::source).toList(),
 			factors.stream().map(AdminReviewQueryService::factor).toList(),
 			byKind,
-			new PublishReadinessResponse(readiness.ready(), readiness.reasons()));
+			new PublishReadinessResponse(readiness.ready(), readiness.reasons()),
+			// 대본은 공개를 막지 않는다. 화면이 경고로 쓰도록 있는지 · 검수 상태 · 공개 가능 여부만 알려 준다
+			scriptRepository.findByLegalCaseId(caseId)
+				.map(script -> new ScriptSummary(true, script.reviewState(), script.isPublishable()))
+				.orElse(ScriptSummary.NONE));
 	}
 
 	/**

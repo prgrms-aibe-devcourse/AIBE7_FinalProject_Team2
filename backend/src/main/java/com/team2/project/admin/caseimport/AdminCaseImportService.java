@@ -344,11 +344,21 @@ public class AdminCaseImportService {
 		List<PipelineJobRequest.Source> sources = request.sources().stream()
 			.map(source -> new PipelineJobRequest.Source(source.originalText(), source.note()))
 			.toList();
-		Map<String, Object> stages = null;
+		Map<String, Object> stages = new LinkedHashMap<>();
 		if (pipelineProperties.extractModel() != null && !pipelineProperties.extractModel().isBlank()) {
-			stages = Map.of("extract", Map.of("model", pipelineProperties.extractModel()));
+			stages.put("extract", Map.of("model", pipelineProperties.extractModel()));
 		}
-		return new PipelineJobRequest(sources, pipelineProperties.models(), stages, finalSourceIndex(request));
+		// 대본(BE-107 script 단계)은 파이프라인 기본값이 꺼짐이라 켜 달라고 보내야 돈다. 배역도 여기서 정한다 —
+		// 그 단계는 배역을 자동으로 고르지 않는다. until도 script로 올려야 거기까지 돈다(서비스 기본값은 axis)
+		String until = null;
+		if (pipelineProperties.scriptEnabled()) {
+			stages.put("script", Map.of("enabled", true, "model", pipelineProperties.scriptModel(),
+				"cast", Map.of("prosecutor", pipelineProperties.scriptProsecutor(),
+					"defense", pipelineProperties.scriptDefense())));
+			until = "script";
+		}
+		return new PipelineJobRequest(sources, pipelineProperties.models(),
+			stages.isEmpty() ? null : stages, finalSourceIndex(request), until);
 	}
 
 	/** 최종 확정 판결의 번호(0부터). 아무도 표시하지 않았으면 null — 파이프라인이 심급으로 정한다 */

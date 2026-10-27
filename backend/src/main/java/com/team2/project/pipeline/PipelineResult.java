@@ -22,6 +22,9 @@ import java.util.List;
  * @param judgment      회차 선택으로 고른 AI 판결
  * @param selection     어느 모델 · 몇 번째 회차를 왜 골랐는지 (ai_generation 기록용)
  * @param axis          판단 요소 가치관 축 투표 결과
+ * @param script        사건 대본 — 증거조사 대사 (BE-107 script 단계). 대본을 돌리지 않은 작업은 null이다.
+ *                      {@code evidence}(대사 배열) · {@code publishable} · {@code model} · {@code cast} ·
+ *                      {@code balanceWarning}이 들어 있다. 적재는 BE-108이 한다
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record PipelineResult(
@@ -31,7 +34,8 @@ public record PipelineResult(
 	JsonNode courtDraft,
 	JsonNode judgment,
 	Selection selection,
-	JsonNode axis
+	JsonNode axis,
+	JsonNode script
 ) {
 
 	/** @param warnings 검증 경고. 적재를 막지는 않고 ai_generation에 남겨 관리자가 보게 한다 */
