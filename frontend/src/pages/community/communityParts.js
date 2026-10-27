@@ -1,6 +1,7 @@
 import { button, element, mockTag } from '../../components/siteLayout.js';
 import { formatDispositions, formatPenalty } from '../../utils/judgmentFormat.js';
 import { currentUser } from '../../utils/session.js';
+import { eraseSignature, signatureSvg, signerSeed, writeSignature } from '../../components/signatureInk.js';
 import { profileFace, typeFace } from '../../components/personCards.js';
 import { normalizeDeco } from '../../utils/profileDeco.js';
 import { normalizeTypeDeco } from '../../utils/typeCardDeco.js';
@@ -495,7 +496,7 @@ export function composer({ api, navigate, cases, onPosted, closeButton, closeCom
   const box = element('section', 'cm-compose');
   box.setAttribute('aria-labelledby', 'cm-compose-title');
   const head = element('div', 'cm-compose-head');
-  const title = element('h2', 'cm-side-title', '생각 나누기');
+  const title = element('h2', 'cm-side-title', '편지 쓰기');
   title.id = 'cm-compose-title';
   head.append(title, closeButton);
   box.append(head);
@@ -508,6 +509,12 @@ export function composer({ api, navigate, cases, onPosted, closeButton, closeCom
 
   const form = element('form', 'cm-form');
   form.noValidate = true;
+  // 받는 사람 줄(FE-94): 고른 사건을 문장으로 보여 준다. 사건 없이 쓰면 모두에게 보내는 글이다
+  const recipient = element('p', 'cm-recipient');
+  const paintRecipient = () => {
+    const picked = caseSelect.selectedOptions[0];
+    recipient.replaceChildren('받는 사람 ', element('strong', '', caseSelect.value ? picked.text : '커뮤니티 모두'), caseSelect.value ? '을 본 사람들' : '에게');
+  };
 
   const categories = element('fieldset', 'cm-field cm-categories');
   categories.append(element('legend', 'cm-label', '말머리'));
@@ -533,6 +540,8 @@ export function composer({ api, navigate, cases, onPosted, closeButton, closeCom
   caseSelect.append(new Option('사건 없이 쓰기', ''));
   cases.forEach(({ caseId, title: text }) => caseSelect.append(new Option(text, String(caseId))));
   caseField.append(caseLabel, caseSelect);
+  caseSelect.addEventListener('change', paintRecipient);
+  paintRecipient();
 
   const titleField = textField({ id: 'cm-compose-title-input', label: '제목', max: TITLE_MAX, placeholder: '제목을 적어 주세요' });
   const bodyField = textField({ id: 'cm-compose-body', label: '내용', max: BODY_MAX, placeholder: '이 사건, 어떻게 보셨나요?', multiline: true });
@@ -614,17 +623,26 @@ export function composer({ api, navigate, cases, onPosted, closeButton, closeCom
       sharePreview.append(verdictCard(shareable.verdict, shareable.caseTitle));
     }
     caseSelect.disabled = share.checked;
+    paintRecipient();
   });
 
   const error = element('p', 'cm-error');
   error.setAttribute('role', 'alert');
-  const submit = element('button', 'primary-button cm-submit', '올리기');
+  // 서명란: 올릴 때 서명이 한 획으로 쓰이고 글이 올라간다. 올리지 못하면 서명을 지운다
+  const signField = element('div', 'cm-field cm-sign');
+  const signLine = element('div', 'cm-sign-line');
+  const signHint = element('span', 'cm-sign-hint', '올릴 때 서명이 남아요');
+  const nickname = currentUser()?.nickname ?? '';
+  const signature = signatureSvg(signerSeed(), { label: `${nickname}의 서명`, blank: true });
+  signLine.append(signHint, signature);
+  signField.append(element('span', 'cm-label', '서명'), signLine);
+  const submit = element('button', 'primary-button cm-submit', '서명하고 올리기');
   submit.type = 'submit';
   const actions = element('div', 'cm-form-actions');
   actions.append(error, submit);
   function showError(text) { error.textContent = text; }
 
-  form.append(categories, caseField, titleField.field, bodyField.field, photoField, verdictField, actions);
+  form.append(recipient, categories, caseField, titleField.field, bodyField.field, photoField, verdictField, signField, actions);
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     showError('');
@@ -633,6 +651,10 @@ export function composer({ api, navigate, cases, onPosted, closeButton, closeCom
     if (!titleText) { showError('제목을 적어 주세요.'); titleField.input.focus(); return; }
     if (!bodyText) { showError('내용을 적어 주세요.'); bodyField.input.focus(); return; }
     submit.disabled = true;
+    submit.textContent = '서명하는 중…';
+    signHint.hidden = true;
+    await writeSignature(signature);
+    if (!box.isConnected) return;
     submit.textContent = '올리는 중…';
     try {
       const post = await api.createCommunityPost({
@@ -650,7 +672,9 @@ export function composer({ api, navigate, cases, onPosted, closeButton, closeCom
         : failure?.code === 'VALIDATION_ERROR' ? '입력한 내용을 확인해 주세요.'
           : '글을 올리지 못했어요. 잠시 뒤 다시 시도해 주세요.');
       submit.disabled = false;
-      submit.textContent = '올리기';
+      submit.textContent = '서명하고 올리기';
+      eraseSignature(signature);
+      signHint.hidden = false;
     }
   });
   box.append(form);
