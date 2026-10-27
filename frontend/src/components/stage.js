@@ -461,10 +461,12 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
     typing = null;
     text.textContent = lineOf(steps[index]);
     choiceRow.hidden = !steps[index].choices; // 선택지는 대사를 다 읽은 뒤에 뜬다
+    // 키보드로 여기까지 온 사람은 선택지로 포커스를 옮겨 준다(FE-97). 예전에는 엔딩이 나와도 포커스가 대사창 밖에 남아 메인으로까지 Tab을 일곱 번 눌러야 했다
+    if (byKeyboard && asks(steps[index])) choiceRow.querySelector('button')?.focus({ preventScroll: true });
   }
   function type(line) {
     clearInterval(typing);
-    if (reducedMotion()) { text.textContent = line; return; }
+    if (reducedMotion()) { finishTyping(); return; } // 한 번에 보여 주되 선택지 · 포커스 이동까지 같은 끝처리를 한다(리뷰 반영 — 안 하면 선택지만 있는 장면이 숨은 채 남는다)
     let shown = 0;
     text.textContent = '';
     typing = setInterval(() => {

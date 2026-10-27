@@ -300,7 +300,7 @@ export function renderComparisonStage({ script, data, caseId, caseTitle, navigat
     sheet,
     fromRect,
     cameraFill: true, // 책상 없이 신문만 화면 가득(1막 지면처럼)
-    cameraMinScale: narrow ? 1.3 : 0, // 좁은 화면도 기사 일부를 크게(왼쪽 위부터)
+    cameraMinScale: 0, // 좁은 화면도 기사가 폭에 맞게 들어오게(FE-97: 예전에는 1.3배로 키워 기사 오른쪽이 화면 밖으로 잘렸다). 글자 크기는 stage.css 좁은 화면 --u로 키운다
     cameraMaxUnit: narrow ? 0 : 9.5, // 큰 화면: 본문 약 15px · 제목 약 26px 이상으로 키우지 않는다
     choices: { end: [
       { label: '메인으로', action: () => toDesk(), primary: true }, // 판사의 책상(데스크톱 메인)
@@ -423,7 +423,8 @@ export function mountStage(root, { caseHeader, badge, heading, stage, extra = []
   const header = element('header', 'case-topbar');
   header.append(element('strong', 'case-title', caseHeader.title), element('span', 'case-badge', badge));
   const main = element('div', 'review-main');
-  main.append(element('h1', 'page-heading visually-hidden', heading), stage, ...extra);
+  // 무대 안 상자 제목(h3)이 h1 바로 밑에서 단계를 건너뛰지 않게 보이지 않는 h2를 끼운다(FE-97)
+  main.append(element('h1', 'page-heading visually-hidden', heading), element('h2', 'visually-hidden', `${heading} 진행 화면`), stage, ...extra);
   const layout = element('main', 'review-layout');
   layout.append(main);
   root.replaceChildren(header, layout);
