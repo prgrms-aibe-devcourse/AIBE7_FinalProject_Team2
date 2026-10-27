@@ -1,0 +1,138 @@
+package com.team2.project.member.service;
+
+import com.team2.project.common.exception.BusinessException;
+import com.team2.project.common.exception.ErrorCode;
+import com.team2.project.member.domain.Member;
+import com.team2.project.member.domain.MemberPassword;
+import com.team2.project.member.repository.MemberPasswordRepository;
+import com.team2.project.member.repository.MemberRepository;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.Locale;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.regex.Pattern;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionTemplate;
+
+/**
+ * 아이디 · 비밀번호 회원가입(M-5) · 로그인(M-6) (확장 단계, BE-113 · docs/decisions/BE-113.md)
+ *
+ * - 비밀번호 해시 · 비교(Argon2, 일부러 느림) 동안 트랜잭션을 잡지 않는다(BE-67과 같은 이유). 회원 행 저장 ·
+ *   마지막 로그인 시각 · 익명 기록 연결만 짧은 트랜잭션으로 묶는다
+ * - 관리자 인증(AuthenticationManager)은 쓰지 않는다. PasswordEncoder를 직접 부르고, 토큰은 호출한 쪽이
+ *   MemberPrincipal.user(id)로 발급한다 → 회원 로그인으로 관리자 권한이 생기지 않는다 (결정 3)
+ * - 로그인 실패는 사유를 나누지 않는다(INVALID_CREDENTIALS). 없는 아이디도 더미 해시와 비교해 응답 시간을 맞춘다
+ * - 로그에는 아이디 · 비밀번호 원문을 남기지 않는다
+ */
+@Slf4j
+@Service
+public class LocalAccountService {
+
+	/** 저장 · 비교하는 아이디 형식(소문자로 바꾼 뒤). DB CHECK(ck_member_password_login_id)와 같다 */
+	private static final Pattern LOGIN_ID = Pattern.compile("[a-z0-9_]{4,20}");
+
+	/** 닉네임에 한글이 있으면 8자까지 (frontend/src/utils/nickname.js NICKNAME_MAX_HANGUL과 같게, 결정 2 · FE-114) */
+	private static final Pattern HANGUL = Pattern.compile("[가-힣]");
+	private static final int NICKNAME_MAX_HANGUL = 8;
+
+	private final MemberRepository memberRepository;
+	private final MemberPasswordRepository passwordRepository;
+	private final AnonymousLinkService anonymousLinkService;
+	private final PasswordEncoder passwordEncoder;
+	private final TransactionTemplate transactionTemplate;
+	private final Clock clock;
+
+	/** 없는 아이디로 로그인할 때 비교할 해시. 진짜 해시와 같은 인코더 · 설정이라 비교 시간이 같다 */
+	private final String dummyHash;
+
+	public LocalAccountService(MemberRepository memberRepository, MemberPasswordRepository passwordRepository,
+		AnonymousLinkService anonymousLinkService, PasswordEncoder passwordEncoder,
+		TransactionTemplate transactionTemplate, Clock clock) {
+		this.memberRepository = memberRepository;
+		this.passwordRepository = passwordRepository;
+		this.anonymousLinkService = anonymousLinkService;
+		this.passwordEncoder = passwordEncoder;
+		this.transactionTemplate = transactionTemplate;
+		this.clock = clock;
+		this.dummyHash = passwordEncoder.encode(UUID.randomUUID().toString());
+	}
+
+	/**
+	 * 가입하고 바로 로그인한다. 형식 검사(길이 · 허용 글자)는 요청 DTO가 먼저 한다
+	 *
+	 * @throws BusinessException DUPLICATE_ID(이미 있는 아이디, 동시 가입 포함) · VALIDATION_ERROR(닉네임 길이)
+	 */
+	public LocalLoginResult signup(String id, String password, String nickname, Optional<UUID> anonymousId) {
+		String loginId = normalize(id);
+		if (!LOGIN_ID.matcher(loginId).matches()) {
+			throw BusinessException.ofField(ErrorCode.VALIDATION_ERROR, "id");
+		}
+		validateNickname(nickname);
+		// 해시는 비싸서, 이미 있는 아이디면 해시 전에 끝낸다. 동시 가입은 아래 insertIfLoginIdAbsent가 막는다
+		if (passwordRepository.existsByLoginId(loginId)) {
+			throw new BusinessException(ErrorCode.DUPLICATE_ID);
+		}
+		String passwordHash = passwordEncoder.encode(password);	// 트랜잭션 밖
+
+		return transactionTemplate.execute(status -> {
+			Instant now = clock.instant();
+			Member member = memberRepository.save(Member.local(nickname));
+			// 0이면 그사이 같은 아이디로 먼저 가입됐다 → 예외로 회원 행까지 되돌린다 (결정 4)
+			if (passwordRepository.insertIfLoginIdAbsent(member.getId(), loginId, passwordHash) == 0) {
+				throw new BusinessException(ErrorCode.DUPLICATE_ID);
+			}
+			member.recordLogin(now);
+			Optional<UUID> issued = anonymousLinkService.link(member.getId(), anonymousId, now);
+			log.info("아이디 회원가입: memberId={}", member.getId());
+			return new LocalLoginResult(member.getId(), member.getNickname(), issued);
+		});
+	}
+
+	/**
+	 * 아이디 · 비밀번호를 확인하고 로그인 처리(마지막 로그인 시각 · 익명 기록 연결)를 한다
+	 *
+	 * @throws BusinessException INVALID_CREDENTIALS(아이디 없음 · 형식 틀림 · 비밀번호 틀림을 구분하지 않는다)
+	 */
+	public LocalLoginResult login(String id, String password, Optional<UUID> anonymousId) {
+		String loginId = normalize(id);
+		Optional<MemberPassword> found = LOGIN_ID.matcher(loginId).matches()
+			? passwordRepository.findByLoginId(loginId)
+			: Optional.empty();
+		// 없는 아이디도 더미 해시와 비교한다 — 응답 시간으로 아이디 존재 여부가 드러나지 않게 (결정 3)
+		boolean matches = passwordEncoder.matches(password, found.map(MemberPassword::getPasswordHash).orElse(dummyHash));
+		if (found.isEmpty() || !matches) {
+			log.info("아이디 로그인 실패");	// 입력값 원문 · 실패 사유는 남기지 않는다
+			throw new BusinessException(ErrorCode.INVALID_CREDENTIALS);
+		}
+		long memberId = found.get().getMemberId();
+
+		return transactionTemplate.execute(status -> {
+			Instant now = clock.instant();
+			Member member = memberRepository.findById(memberId)
+				.orElseThrow(() -> new BusinessException(ErrorCode.INVALID_CREDENTIALS));
+			member.recordLogin(now);
+			Optional<UUID> issued = anonymousLinkService.link(memberId, anonymousId, now);
+			log.info("아이디 로그인: memberId={}", memberId);
+			return new LocalLoginResult(memberId, member.getNickname(), issued);
+		});
+	}
+
+	/** 아이디는 소문자로 바꿔 저장 · 비교한다(Abc와 abc는 같은 아이디, 결정 2) */
+	private static String normalize(String id) {
+		return id == null ? "" : id.toLowerCase(Locale.ROOT);
+	}
+
+	/** 허용 글자 · 2~12자는 DTO가 본다. 한글이 섞이면 8자까지인 규칙만 여기서 본다 */
+	private static void validateNickname(String nickname) {
+		if (nickname == null || (HANGUL.matcher(nickname).find() && nickname.length() > NICKNAME_MAX_HANGUL)) {
+			throw BusinessException.ofField(ErrorCode.VALIDATION_ERROR, "nickname");
+		}
+	}
+
+	/** 가입 · 로그인 결과. issuedAnonymousId가 있으면 그 값을 익명 ID 쿠키로 바꿔 심는다 */
+	public record LocalLoginResult(long memberId, String nickname, Optional<UUID> issuedAnonymousId) {
+	}
+}

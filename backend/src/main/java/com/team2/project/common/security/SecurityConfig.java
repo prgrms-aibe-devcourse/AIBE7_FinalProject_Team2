@@ -71,6 +71,9 @@ public class SecurityConfig {
 	/** 리프레시 토큰 쿠키로만 인증하는 상태 변경 요청 — Origin 검증 대상 (BE-94 · WBS 7.4.3) */
 	public static final String REISSUE_PATH = "/api/v1/auth/token/reissue";
 	public static final String LOGOUT_PATH = "/api/v1/auth/logout";
+	/** 아이디 회원가입 · 로그인. 응답이 리프레시 토큰 쿠키를 심으므로 로그인 CSRF를 Origin 검증으로 막는다 (BE-113) */
+	public static final String MEMBER_SIGNUP_PATH = "/api/v1/auth/signup";
+	public static final String MEMBER_LOGIN_PATH = "/api/v1/auth/login";
 	private static final Set<String> SAFE_METHODS = Set.of("GET", "HEAD", "OPTIONS", "TRACE");
 	private static final ReferrerPolicy REFERRER_POLICY = ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN;
 
@@ -128,7 +131,8 @@ public class SecurityConfig {
 			// SecurityContext를 불러온 뒤 · 익명 인증 전에 Bearer 토큰을 확인한다
 			.addFilterBefore(new BearerTokenAuthenticationFilter(accessTokenVerifiers, errors, requestOnly),
 				AnonymousAuthenticationFilter.class)
-			// 재발급 · 로그아웃(리프레시 토큰 쿠키로만 인증)은 Origin 검증으로 CSRF를 막는다 (BE-94, C 결정)
+			// 재발급 · 로그아웃(리프레시 토큰 쿠키로만 인증)은 Origin 검증으로 CSRF를 막는다 (BE-94, C 결정).
+			// 아이디 회원가입 · 로그인도 리프레시 쿠키를 심으므로 같은 검증을 받는다(로그인 CSRF 방지, BE-113)
 			// RequestMatcher로 판정한다 — getRequestURI() 원시 비교는 context path 포함 · 미디코딩이라 우회될 수 있다(PR #218 리뷰)
 			.addFilterBefore(new OriginVerificationFilter(originProtectedRequests(), errors),
 				AnonymousAuthenticationFilter.class);
@@ -155,7 +159,9 @@ public class SecurityConfig {
 	private static RequestMatcher originProtectedRequests() {
 		return new OrRequestMatcher(
 			PathPatternRequestMatcher.pathPattern(HttpMethod.POST, REISSUE_PATH),
-			PathPatternRequestMatcher.pathPattern(HttpMethod.POST, LOGOUT_PATH));
+			PathPatternRequestMatcher.pathPattern(HttpMethod.POST, LOGOUT_PATH),
+			PathPatternRequestMatcher.pathPattern(HttpMethod.POST, MEMBER_SIGNUP_PATH),
+			PathPatternRequestMatcher.pathPattern(HttpMethod.POST, MEMBER_LOGIN_PATH));
 	}
 
 	/**
