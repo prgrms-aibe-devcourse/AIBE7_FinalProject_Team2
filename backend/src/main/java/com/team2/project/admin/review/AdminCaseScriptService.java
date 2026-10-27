@@ -49,7 +49,7 @@ public class AdminCaseScriptService {
 	 */
 	@Transactional
 	public CaseScriptResponse approve(Long caseId, AdminPrincipal admin, HttpServletRequest request) {
-		CaseScript script = findScript(caseId);
+		CaseScript script = lockAndFindScript(caseId);
 		if (!script.isPublishable()) {
 			throw new BusinessException(ErrorCode.INVALID_STATE,
 				"증거 카드와 대사가 어긋난 대본은 승인할 수 없습니다. 대본을 다시 생성해 주세요.");
@@ -68,7 +68,7 @@ public class AdminCaseScriptService {
 	 */
 	@Transactional
 	public CaseScriptResponse reject(Long caseId, String reason, AdminPrincipal admin, HttpServletRequest request) {
-		CaseScript script = findScript(caseId);
+		CaseScript script = lockAndFindScript(caseId);
 		script.reject(admin.adminId(), Instant.now(), reason);
 		auditLogger.record(admin, AdminAuditAction.CASE_SCRIPT_REJECT, AuditTargetType.CASE, caseId, Map.of(),
 			request);
@@ -88,7 +88,7 @@ public class AdminCaseScriptService {
 	@Transactional
 	public CaseScriptResponse editLine(Long caseId, int factorId, String text, AdminPrincipal admin,
 			HttpServletRequest request) {
-		CaseScript script = findScript(caseId);
+		CaseScript script = lockAndFindScript(caseId);
 		if (!script.editLine(factorId, text, Instant.now())) {
 			throw new BusinessException(ErrorCode.SCRIPT_LINE_NOT_FOUND);
 		}
@@ -123,6 +123,22 @@ public class AdminCaseScriptService {
 		if (!caseRepository.existsById(caseId)) {
 			throw new BusinessException(ErrorCode.CASE_NOT_FOUND);
 		}
+		return scriptRepository.findByLegalCaseId(caseId)
+			.orElseThrow(() -> new BusinessException(ErrorCode.SCRIPT_NOT_FOUND));
+	}
+
+	/**
+	 * 상태를 바꾸는 요청(승인 · 반려 · 대사 수정)은 <b>사건 행을 먼저 잠그고</b> 대본을 읽는다 —
+	 * A-9 · A-10이 쓰는 방식과 같다(`LegalCaseRepository.findByIdForUpdate`).
+	 *
+	 * <p>잠그지 않으면 이 PR이 세운 계약이 깨진다(PR #300 리뷰 3번): 관리자 A가 승인하려고 대본을 읽은 사이
+	 * 관리자 B가 대사를 고쳐 커밋하면, A가 커밋할 때 <b>A가 읽었던 옛 대사가 되살아나면서 APPROVED까지
+	 * 남는다</b>(Hibernate는 기본으로 행의 모든 칸을 다시 쓴다). 곧 검수하지 않은 대사가 공개된다.
+	 * 대본 행이 아니라 사건 행을 잠그는 이유는, 같은 사건의 판결 후보 승인(A-9)과도 차례가 지켜지기 때문이다.
+	 */
+	private CaseScript lockAndFindScript(Long caseId) {
+		caseRepository.findByIdForUpdate(caseId)
+			.orElseThrow(() -> new BusinessException(ErrorCode.CASE_NOT_FOUND));
 		return scriptRepository.findByLegalCaseId(caseId)
 			.orElseThrow(() -> new BusinessException(ErrorCode.SCRIPT_NOT_FOUND));
 	}

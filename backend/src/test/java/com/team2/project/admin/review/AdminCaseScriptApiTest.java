@@ -14,7 +14,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.team2.project.admin.domain.AdminAccount;
 import com.team2.project.admin.repository.AdminAccountRepository;
 import com.team2.project.support.ApiIntegrationTest;
+import tools.jackson.databind.json.JsonMapper;
 import jakarta.servlet.http.Cookie;
+import java.util.Map;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
@@ -38,6 +45,7 @@ class AdminCaseScriptApiTest extends ApiIntegrationTest {
 	private static final String PASSWORD = "correct-horse-battery";
 	private static final String CSRF_HEADER = "X-XSRF-TOKEN";
 	private static final String CSRF_COOKIE = "XSRF-TOKEN";
+	private static final JsonMapper MAPPER = JsonMapper.builder().build();	// 본문에 줄바꿈이 들어가 JSON으로 만든다
 
 	// 셋째 줄의 factorId 9는 사건에 없는 요소다 — label을 못 찾아도 응답이 깨지지 않는지 본다.
 	// 둘째 줄은 끝내 생성하지 못한 줄이라 text가 null이다(Map.copyOf를 쓰면 NPE가 나는 자리)
@@ -247,6 +255,58 @@ class AdminCaseScriptApiTest extends ApiIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("A-13-13: 길이는 파이프라인과 같은 방식으로 센다 — 줄바꿈은 글자 수에 넣지 않는다 (50자 + 50자는 통과)")
+	void editLine_countsCharsLikePipeline() throws Exception {
+		insertScript(true, false);
+
+		// 파이프라인은 sum(len(line))으로 센다. 줄바꿈까지 세면 101자가 되어 거절되던 자리 (PR #300 리뷰 2번)
+		String twoLines = "가".repeat(50) + "\n" + "나".repeat(50);
+		perform(patch(scriptUrl() + "/evidence/1").contentType(MediaType.APPLICATION_JSON)
+				.content(MAPPER.writeValueAsString(Map.of("text", twoLines))))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.evidence[0].text").value(twoLines));
+
+		// 글자 수 자체가 100을 넘으면(줄바꿈 빼고 101자) 거절한다
+		perform(patch(scriptUrl() + "/evidence/1").contentType(MediaType.APPLICATION_JSON)
+				.content(MAPPER.writeValueAsString(Map.of("text", "가".repeat(51) + "\n" + "나".repeat(50)))))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+	}
+
+	@Test
+	@DisplayName("승인과 대사 수정이 동시에 와도 고친 대사가 되살아나 사라지지 않는다 (사건 행 잠금으로 차례 처리)")
+	void approveAndEdit_concurrent_keepsEditedLine() throws Exception {
+		insertFullScript();	// 모든 줄에 대사가 있어야 한 줄을 고쳐도 publishable이 true로 남는다
+		String edited = "동시에 고친 대사입니다.";
+		ExecutorService pool = Executors.newFixedThreadPool(2);
+		CountDownLatch ready = new CountDownLatch(2);
+		try {
+			Callable<Integer> approve = () -> {
+				ready.countDown();
+				ready.await();
+				return perform(post(scriptUrl() + "/approve")).andReturn().getResponse().getStatus();
+			};
+			Callable<Integer> edit = () -> {
+				ready.countDown();
+				ready.await();
+				return perform(patch(scriptUrl() + "/evidence/1").contentType(MediaType.APPLICATION_JSON)
+					.content(MAPPER.writeValueAsString(Map.of("text", edited)))).andReturn().getResponse().getStatus();
+			};
+			List<Future<Integer>> futures = List.of(pool.submit(approve), pool.submit(edit));
+			for (Future<Integer> future : futures) {
+				assertThat(future.get()).isEqualTo(200);
+			}
+		} finally {
+			pool.shutdownNow();
+		}
+
+		// 어느 쪽이 먼저 들어가든 고친 대사는 남아야 한다. 잠그지 않으면 승인 쪽이 읽어 둔 옛 대사가 되살아난다
+		assertThat(firstLineText()).isEqualTo(edited);
+		// 수정이 나중이었다면 검수 대기로 돌아가 있고, 승인이 나중이었다면 승인 상태다 — 둘 다 "고친 대사 기준"이다
+		assertThat(reviewStatus()).isIn(java.util.Arrays.asList(null, "APPROVED"));
+	}
+
+	@Test
 	@DisplayName("A-6: 사건 상세에 대본 요약(exists · reviewStatus · publishable)이 붙는다. 공개 조건은 건드리지 않는다")
 	void caseDetail_carriesScriptSummary() throws Exception {
 		perform(get("/api/v1/admin/cases/" + caseId))
@@ -301,6 +361,18 @@ class AdminCaseScriptApiTest extends ApiIntegrationTest {
 		return "/api/v1/admin/cases/" + caseId + "/script";
 	}
 
+	/** 모든 줄에 대사가 있는 대본 (빈 줄이 없어 publishable이 계속 true다) */
+	private void insertFullScript() {
+		jdbcTemplate.update("""
+			INSERT INTO case_script (case_id, evidence, model, generated_at, stopped, cast_roles, publishable)
+			VALUES (?, ?::jsonb, 'google:gemini-2.5-flash', now(), false, ?::jsonb, true)""",
+			caseId, """
+			[{"factorId": 1, "role": "PROSECUTOR", "character": "나로", "text": "첫째 줄입니다.",
+			  "attempts": 1, "validation": {"warnings": []}},
+			 {"factorId": 2, "role": "DEFENSE", "character": "남불", "text": "둘째 줄입니다.",
+			  "attempts": 1, "validation": {"warnings": []}}]""", CAST);
+	}
+
 	/** 적재(A-14-1)가 넣는 모양 그대로 한 건 만든다 */
 	private void insertScript(boolean publishable, boolean stopped) {
 		jdbcTemplate.update("""
@@ -308,6 +380,11 @@ class AdminCaseScriptApiTest extends ApiIntegrationTest {
 			                         publishable)
 			VALUES (?, ?::jsonb, 'google:gemini-2.5-flash', now() - interval '1 hour', ?, ?::jsonb, ?::text, ?)""",
 			caseId, EVIDENCE, stopped, CAST, publishable ? null : "검사 쪽 대사가 변호인보다 두 배 깁니다", publishable);
+	}
+
+	private String firstLineText() {
+		return jdbcTemplate.queryForObject(
+			"SELECT evidence -> 0 ->> 'text' FROM case_script WHERE case_id = ?", String.class, caseId);
 	}
 
 	private String reviewStatus() {

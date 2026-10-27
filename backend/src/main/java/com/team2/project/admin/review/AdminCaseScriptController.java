@@ -54,8 +54,9 @@ public class AdminCaseScriptController {
 	public CaseScriptResponse editLine(@PathVariable Long caseId, @PathVariable int factorId,
 			@Valid @RequestBody CaseScriptLineRequest body, @AuthenticationPrincipal AdminPrincipal admin,
 			HttpServletRequest request) {
-		if (body.tooManyLines()) {
-			throw new BusinessException(ErrorCode.VALIDATION_ERROR, "대사는 2줄까지 쓸 수 있습니다.");
+		String violation = body.lengthViolation();
+		if (violation != null) {
+			throw new BusinessException(ErrorCode.VALIDATION_ERROR, violation);
 		}
 		return scriptService.editLine(caseId, factorId, body.text(), admin, request);
 	}
