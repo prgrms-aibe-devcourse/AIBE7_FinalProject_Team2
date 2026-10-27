@@ -351,7 +351,7 @@ html { scroll-padding-top: calc(var(--site-header-h, 64px) + 8px); }
 .site-header .motion-switch[aria-checked="true"] .switch-thumb { background: var(--color-banner-bg); translate: 16px 0; }
 /* 목데이터 표기(FE-56, siteLayout.js mockTag): 목 값 옆의 작은 점선 딱지. 글자색 · 테두리는 주변 글자색을 따라간다 */
 .mock-tag { display: inline-block; margin-left: 6px; padding: 0 5px; border: 1px dashed currentColor; border-radius: 3px; font: 600 11px/1.5 var(--font-body); letter-spacing: 0; vertical-align: middle; white-space: nowrap; }
-.site-footer { padding: 24px 28px; border-top: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-muted); font-size: 13px; }
+.site-footer { padding: 24px 28px; border-top: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-muted); font-size: 13px; word-break: keep-all; overflow-wrap: anywhere; text-wrap: pretty; } /* 단어 중간에서 끊기지 않게(FE-103), 너무 긴 낱말만 예외로 꺾는다 */
 /* 한 줄 헤더가 빠듯한 폭(721 ~ 1000px): 로고가 줄바꿈되지 않게 로고 · 메뉴 글자 · 간격을 폭에 맞춰 함께 줄인다(FE-87) */
 @media (min-width: 721px) and (max-width: 1000px) {
   .site-header { gap: clamp(6px, 1.2vw, 16px); padding-inline: clamp(14px, 2.6vw, 32px); }
