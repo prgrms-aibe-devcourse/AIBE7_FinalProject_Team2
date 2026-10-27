@@ -1,6 +1,5 @@
 package com.team2.project.personality.service;
 
-import com.team2.project.attendance.service.AttendanceService;
 import com.team2.project.experience.repository.ExperienceRepository;
 import com.team2.project.experience.service.AnonymousUserService;
 import com.team2.project.legalcase.domain.ValueAxis;
@@ -25,9 +24,11 @@ import com.team2.project.personality.repository.ExperiencePersonalityRepository;
 import com.team2.project.personality.repository.PersonalityResultRepository;
 import com.team2.project.personality.repository.PersonalityTypeRepository;
 import com.team2.project.level.service.LevelService;
+import com.team2.project.profile.domain.ProfileStats;
 import com.team2.project.profile.service.ProfileDecoService;
 import com.team2.project.profile.service.ProfileDecoService.ProfileDecoView;
 import com.team2.project.profile.service.ProfileSettingsService;
+import com.team2.project.profile.service.ProfileStatsReader;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -64,10 +65,10 @@ public class MyPageService {
 	private final PersonalityTypeRepository typeRepository;
 	private final ExperiencePersonalityRepository contributionRepository;
 	private final ExperienceRepository experienceRepository;
-	private final AttendanceService attendanceService;
 	private final ProfileDecoService profileDecoService;
 	private final ProfileSettingsService profileSettingsService;
 	private final LevelService levelService;
+	private final ProfileStatsReader statsReader;
 
 	@Transactional(readOnly = true)
 	public MyPageResponse get(Optional<UUID> anonymousId) {
@@ -122,10 +123,11 @@ public class MyPageService {
 
 		List<ExperienceItem> experiences = experienceRepository.findLatestPerCase(userId).stream()
 			.map(ExperienceItem::from).toList();
-		ProfileDecoView deco = profileDecoService.view(userId);
+		ProfileStats stats = statsReader.read(userId); // 꾸미기 · 도전과제와 레벨이 같은 통계를 쓰므로 한 번만 읽는다
+		ProfileDecoView deco = profileDecoService.view(userId, stats);
 		return new MyPageResponse(personality, initial, baselineRetake, judgment, history, experiences,
-			new Profile(attendanceService.countDays(userId)), deco.profileDeco(), deco.achievements(), deco.unlocked(),
-			profileSettingsService.view(userId), levelService.view(userId));
+			new Profile(stats.attendanceDays()), deco.profileDeco(), deco.achievements(), deco.unlocked(),
+			profileSettingsService.view(userId), levelService.view(userId, stats));
 	}
 
 	/** 흐름 · 종합 · 첫 판결에 나온 유형 코드를 한 번에 조회한다(사건마다 조회하지 않는다). 코드는 응답에 넣지 않는다(#119) */
