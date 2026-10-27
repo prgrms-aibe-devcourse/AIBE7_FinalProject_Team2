@@ -1,8 +1,8 @@
 // 환경 설정(FE-83): 마이페이지 "환경 설정" 화면의 틀. 화면 · 알림 항목을 한 단으로 쌓고, 맨 아래 오른쪽에 "설정 초기화"와 "저장하기"를 둔다.
-// 항목을 바꿔도 바로 저장되지 않는다. 고친 값은 화면에만 두었다가 "저장하기"를 눌러야 저장 · 적용된다(바꾼 것이 없으면 저장하기는 꺼져 있다).
-// "설정 초기화"는 모든 항목을 처음 값으로 되돌려 보여 줄 뿐이고, 이것도 저장하기를 눌러야 저장된다.
-// 화면 연출은 사이트 전체가 보는 스위치(utils/motion.js, 공통 헤더의 "연출"과 같은 값)를 그대로 쓴다. 나머지 항목은 값만 이 브라우저에 저장하고(utils/appSettings.js)
-// "곧 적용" 표시가 붙은 것은 아직 앱 동작에 연결되지 않았다. 서버 저장은 알림 API가 생긴 뒤 옮긴다
+// 화면 연출은 사이트 전체가 보는 스위치(utils/motion.js, 공통 헤더의 "연출"과 같은 값)라 헤더처럼 누르는 즉시 적용된다(FE-100 — 헤더는 즉시, 설정은 저장하기라 반영 시점이 둘이었다).
+// 나머지 항목은 값만 이 브라우저에 저장한다(utils/appSettings.js). 고친 값은 화면에만 두었다가 "저장하기"를 눌러야 저장된다(바꾼 것이 없으면 저장하기는 꺼져 있다).
+// "곧 적용"(soon) 항목은 아직 앱 동작에 연결되지 않아 눌러도 아무 일이 없으므로 꺼 둔다(FE-100, 지금 할 수 없는 조작은 비활성 + 설명).
+// 바꿀 수 있는 항목이 하나도 없으면 "설정 초기화 · 저장하기"도 두지 않는다. 서버 저장은 알림 API가 생긴 뒤 옮긴다
 import { button, element } from '../../components/siteLayout.js';
 import { SETTING_GROUPS, defaultSettings, getSettings, saveSettings } from '../../utils/appSettings.js';
 import { MOTION_EVENT, motionSwitchOn, setMotionSwitch, systemReducesMotion } from '../../utils/motion.js';
@@ -30,7 +30,7 @@ function switchControl(titleId, on, onToggle, disabled = false) {
 }
 
 // 여러 개 중 하나 고르기. 내 정보 수정의 초심 · 재심 · 최근 버튼(.edit-choice)과 같은 모양
-function choiceControl(titleId, options, value, onPick) {
+function choiceControl(titleId, options, value, onPick, disabled = false) {
   const group = element('div', 'set-choices');
   group.setAttribute('role', 'group');
   group.setAttribute('aria-labelledby', titleId);
@@ -40,6 +40,7 @@ function choiceControl(titleId, options, value, onPick) {
       onPick(id);
     }, 'secondary-button edit-choice');
     choice.setAttribute('aria-pressed', String(id === value));
+    choice.disabled = disabled;
     group.append(choice);
   });
   return group;
@@ -56,6 +57,7 @@ function settingRow({ label, hint, soon = false, note = '' }, makeControl) {
   title.append(name);
   if (soon) title.append(element('span', 'set-soon', '곧 적용'));
   text.append(title, element('p', 'edit-hint', hint));
+  if (soon) text.append(element('p', 'edit-hint set-soon-note', '아직 준비 중이라 바꿀 수 없어요.'));
   if (note) text.append(element('p', 'edit-hint', note));
   row.append(text, makeControl(id));
   return row;
@@ -67,16 +69,15 @@ function section(title, ...children) {
   return box;
 }
 
-// 지금 저장된 값 전체(화면 연출 포함)
-const savedValues = () => ({ motion: motionSwitchOn(), ...getSettings() });
-const sameValues = (a, b) => Object.keys(a).every((key) => a[key] === b[key]);
+// 저장하기로 다루는 값: "곧 적용"이 아닌 항목만(화면 연출은 즉시 적용이라 뺀다)
+const EDITABLE = SETTING_GROUPS.flatMap((group) => group.items).filter((item) => !item.soon).map((item) => item.key);
+const pickEditable = (values) => Object.fromEntries(EDITABLE.map((key) => [key, values[key]]));
+const sameValues = (a, b) => EDITABLE.every((key) => a[key] === b[key]);
 
 export function renderSettings() {
   const box = element('div', 'my-detail edit-page set-page');
-  let saved = savedValues(); // 마지막으로 저장한 값
-  let shown = null; // 지금 화면에 그려진 값
+  let saved = getSettings(); // 마지막으로 저장한 값
   const build = (draft, message = '') => {
-    shown = draft;
     const form = element('div', 'edit-form');
     const status = element('p', 'edit-status', message);
     status.setAttribute('role', 'status');
@@ -87,47 +88,45 @@ export function renderSettings() {
 
     SETTING_GROUPS.forEach((group) => {
       const rows = group.items.map((item) => settingRow(item, (id) => (item.type === 'switch'
-        ? switchControl(id, draft[item.key], change(item.key))
-        : choiceControl(id, item.options, draft[item.key], change(item.key)))));
+        ? switchControl(id, draft[item.key], change(item.key), item.soon)
+        : choiceControl(id, item.options, draft[item.key], change(item.key), item.soon))));
       if (group.id === 'display') {
-        // 화면 연출은 맨 위: 기기의 "동작 줄이기"가 켜져 있으면 바꿀 수 없다
+        // 화면 연출은 맨 위: 헤더 "연출"과 같은 스위치라 누르는 즉시 적용된다. 기기의 "동작 줄이기"가 켜져 있으면 바꿀 수 없다
         const locked = systemReducesMotion();
         rows.unshift(settingRow(
-          { label: '화면 연출', hint: '화면 전환 · 책상 위 움직임 같은 연출을 보여 줘요. 끄면 바로 끝 모양으로 보여요.', note: locked ? '기기의 "동작 줄이기"가 켜져 있어 연출이 꺼져 있어요.' : '' },
-          (id) => switchControl(id, !locked && draft.motion, change('motion'), locked),
+          { label: '화면 연출', hint: '화면 전환 · 책상 위 움직임 같은 연출을 보여 줘요. 끄면 바로 끝 모양으로 보여요.', note: locked ? '기기의 "동작 줄이기"가 켜져 있어 연출이 꺼져 있어요.' : '누르면 바로 적용돼요(위 헤더의 "연출"과 같은 스위치예요).' },
+          (id) => switchControl(id, !locked && motionSwitchOn(), (on) => setMotionSwitch(on), locked),
         ));
       }
       form.append(section(group.title, ...rows));
     });
 
-    // 맨 아래 오른쪽: 설정 초기화 · 저장하기
-    const reset = button('설정 초기화', () => {
-      build({ ...defaultSettings(), motion: systemReducesMotion() ? saved.motion : true }, '모든 설정을 처음 값으로 돌려 놨어요. 저장하기를 눌러야 적용돼요.');
-      box.querySelector('.set-reset')?.focus();
-    }, 'secondary-button set-reset');
-    save.addEventListener('click', () => {
-      saved.motion = draft.motion; // 바뀜 알림이 화면을 다시 그리지 않도록 먼저 맞춘다
-      setMotionSwitch(draft.motion);
-      const { motion: _motion, ...rest } = draft;
-      saved = { motion: draft.motion, ...saveSettings(rest) };
+    // 맨 아래 오른쪽: 설정 초기화 · 저장하기(바꿀 수 있는 항목이 있을 때만)
+    if (EDITABLE.length) {
+      const reset = button('설정 초기화', () => {
+        build(pickEditable(defaultSettings()), '모든 설정을 처음 값으로 돌려 놨어요. 저장하기를 눌러야 적용돼요.');
+        box.querySelector('.set-reset')?.focus();
+      }, 'secondary-button set-reset');
+      save.addEventListener('click', () => {
+        saved = saveSettings({ ...saved, ...draft });
+        sync();
+        status.textContent = '설정을 저장했어요.';
+      });
       sync();
-      status.textContent = '설정을 저장했어요.';
-    });
-    sync();
-    const actions = element('div', 'edit-actions edit-submit');
-    actions.append(reset, save);
-    form.append(actions, status);
+      const actions = element('div', 'edit-actions edit-submit');
+      actions.append(reset, save);
+      form.append(actions);
+    }
+    form.append(status);
 
-    box.replaceChildren(element('p', 'edit-intro', '화면 · 알림을 내 취향대로 바꿔요. 지금은 이 브라우저에만 저장돼요.'), form);
+    box.replaceChildren(element('p', 'edit-intro', EDITABLE.length ? '화면 · 알림을 내 취향대로 바꿔요. 지금은 이 브라우저에만 저장돼요.' : '화면 · 알림을 내 취향대로 바꿔요. 화면 연출은 바로 적용되고, 나머지는 준비 중이에요.'), form);
   };
   build({ ...saved });
-  // 헤더 스위치로 연출을 바꾸면 화면의 스위치와 저장값도 그 값으로 맞춘다(예전 값으로 되돌려 저장하지 않도록)
+  // 헤더 스위치로 연출을 바꾸면 화면의 스위치도 그 값으로 맞춘다
   const follow = () => {
     if (!box.isConnected) return document.removeEventListener(MOTION_EVENT, follow);
-    const on = motionSwitchOn();
-    if (on === saved.motion) return;
-    saved.motion = on;
-    build({ ...shown, motion: on });
+    const node = box.querySelector('.set-row .set-switch');
+    if (node && !node.disabled) node.setAttribute('aria-checked', String(motionSwitchOn()));
   };
   document.addEventListener(MOTION_EVENT, follow);
   return box;

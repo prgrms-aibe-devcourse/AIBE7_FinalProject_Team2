@@ -4,6 +4,7 @@
 .verdict-page .reduction-toggle,
 .verdict-page .reduction-option { display: flex; align-items: center; gap: 8px; }
 .verdict-page .reduction-toggle { font-weight: 700; margin-bottom: 8px; }
+@media (pointer: coarse) { .verdict-page :is(.reduction-toggle, .reduction-option, .suspension-toggle) { min-height: 44px; } } /* 터치에서 눌리는 칸 44px(FE-97). 마우스 화면은 흐름 목업 크기 그대로 */
 .verdict-page .reduction-choices { border: 0; padding: 0; margin: 14px 0 0; display: flex; flex-wrap: wrap; gap: 16px; }
 .verdict-page .reduction-auto { margin-top: 12px; font-weight: 700; }
 .verdict-page .fixed-penalty { min-height: 118px; padding: 14px 0; border-block: 1px dashed var(--color-desk-sheet-line); }
@@ -37,7 +38,7 @@
   transform: translateY(4px); transition: transform .16s cubic-bezier(.2, .8, .2, 1), background-color .16s ease;
 }
 .verdict-page .folder-tab[aria-selected='true'] { z-index: 2; background: var(--color-desk-kraft); transform: none; cursor: default; }
-.verdict-page .folder-tab-no { font: 900 13px/1 var(--font-heading); font-variant-numeric: tabular-nums; color: var(--color-label); }
+.verdict-page .folder-tab-no { font: 900 13px/1 var(--font-heading); font-variant-numeric: tabular-nums; color: var(--color-heading); } /* 탭 바탕(크라프트)과 청동 번호는 대비 2.0 ~ 2.7:1이었다(FE-97) */
 .verdict-page .folder-tab:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
 @media (hover: hover) and (pointer: fine) { .verdict-page .folder-tab[aria-selected='false']:hover { transform: translateY(1px); } }
 .verdict-page .folder-body {
@@ -113,7 +114,12 @@
 .verdict-page .sign-cautions { margin: 0 0 16px; padding-left: 1.2em; font-size: 14px; }
 .verdict-page .sign-reason { margin: 0 0 10px; color: var(--color-caution); font-size: 14px; font-weight: 700; }
 .verdict-page .sign-reason:empty { display: none; }
-.verdict-page .sign-row { display: flex; align-items: flex-end; justify-content: flex-end; gap: 12px; margin-top: 8px; }
+.verdict-page .sign-row { position: relative; display: flex; align-items: flex-end; justify-content: flex-end; gap: 12px; margin-top: 8px; }
+/* 판결 접수 도장(FE-97): 6막 독자 엽서의 "접수 완료" 소인과 같은 모양(겹줄 원 · 강조색). 확정되면 서명 끝에 찍힌다 */
+.verdict-page .sign-filed { position: absolute; right: -8px; bottom: 18px; display: none; place-items: center; width: 72px; height: 72px; border: 4px double var(--color-accent); border-radius: 50%; background: color-mix(in srgb, var(--color-paper) 70%, transparent); color: var(--color-accent); font: 900 14px/1.1 var(--font-heading); text-align: center; letter-spacing: .04em; rotate: -12deg; pointer-events: none; }
+.verdict-page .sign-row.is-filed .sign-filed { display: grid; }
+@media (prefers-reduced-motion: no-preference) { .verdict-page .sign-row.is-filed .sign-filed { animation: filed-stamp .42s cubic-bezier(.2, .8, .2, 1) both; } }
+@keyframes filed-stamp { from { opacity: 0; transform: scale(1.6); } 60% { opacity: 1; transform: scale(.94); } to { opacity: 1; transform: none; } }
 .verdict-page .sign-role, .verdict-page .sign-seal { flex: none; padding-bottom: 8px; white-space: nowrap; font: 700 15px/1 var(--font-heading); color: var(--color-heading); }
 .verdict-page .sign-seal { color: var(--color-muted); font-weight: 400; }
 /* 서명란: 밑줄 위를 누르면 서명 획이 그려진다 */
@@ -139,8 +145,8 @@
 .verdict-page .recommended-range .range-track { clear: both; }
 .verdict-page .sentence-entry .number-fields { gap: 8px; }
 /* 형량 칸 입력은 두 자리(년 · 개월)라 좁게, 벌금(만원)은 조금 넓게 */
-.verdict-page .sentence-entry .number-field input { width: 44px; min-height: 30px; padding: 3px 6px; text-align: right; }
-.verdict-page .sentence-entry .number-field input[name='fineAmount'] { width: 70px; }
+.verdict-page .sentence-entry .number-field input { width: 56px; min-height: 44px; padding: 3px 6px; text-align: right; font-size: 16px; } /* 16px Input Rule(iOS 확대 방지) · 44px 터치(FE-97) */
+.verdict-page .sentence-entry .number-field input[name='fineAmount'] { width: 96px; }
 .verdict-page .sentence-entry-type { color: var(--color-heading); }
 /* 범위 막대 = 형량 조절 막대(징역). 막대 위 입력값 글자는 우상단 입력칸이 대신한다 */
 .verdict-page .range-slider.is-sliding .range-track { cursor: pointer; touch-action: none; }
@@ -178,7 +184,7 @@
 .verdict-page input[type='checkbox'] { width: 18px; height: 18px; flex-shrink: 0; }
 .verdict-page .number-fields { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
 .verdict-page .number-field { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
-.verdict-page .number-field input { width: 110px; max-width: 100%; min-height: 46px; border: 1px solid var(--color-border-strong); border-radius: 4px; padding: 8px 12px; background: var(--color-card); }
+.verdict-page .number-field input { width: 110px; max-width: 100%; min-height: 46px; border: 1px solid var(--color-border-strong); border-radius: 4px; padding: 8px 12px; background: var(--color-card); font-size: 16px; }
 .verdict-page .number-field input[name='fineAmount'] { width: 180px; }
 .verdict-page input[aria-invalid='true'] { border-color: var(--color-accent); }
 .verdict-page .money-readable { color: var(--color-muted); font-size: 14px; }

@@ -13,3 +13,5 @@
 .set-switch[aria-checked="true"] .set-switch-track { background: var(--color-accent); box-shadow: none; }
 .set-switch[aria-checked="true"] .set-switch-thumb { translate: 20px 0; }
 @media (max-width: 720px) { .set-row { align-items: flex-start; } .set-choices { flex-wrap: wrap; justify-content: flex-end; } }
+.set-page .set-choices .edit-choice:disabled { opacity: .6; cursor: default; }
+.set-soon-note { color: var(--color-muted); } /* "곧 적용" 항목: 지금은 바꿀 수 없다는 설명(FE-100) */

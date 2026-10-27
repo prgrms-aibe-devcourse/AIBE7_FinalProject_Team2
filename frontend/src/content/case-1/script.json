@@ -843,7 +843,7 @@
         {
           "system": "AI 판사들이 의견을 맞추고 있어요",
           "law": "think",
-          "auto": 300,
+          "auto": 1100,
           "source": {
             "type": "fixed"
           }
