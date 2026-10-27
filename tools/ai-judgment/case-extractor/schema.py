@@ -14,9 +14,9 @@ sys.path.insert(0, str(PARENT_DIR))
 from common import NO_TERM_PENALTIES, PENALTY_TYPES, REDUCIBLE_TO, VALUE_AXES, format_months, format_won  # noqa: E402
 
 # 프롬프트나 스키마를 고치면 올린다. 보고서(report.json)에 기록된다.
-EXTRACT_PROMPT_VERSION = "extract-v6"  # v3: Claude 외 공급자 스키마 안내 (BE-35), v4: 사건 발생일 incidentDate (BE-38), v5: 판단 요소 가치관 축 valueAxis (BE-47), v6: 판단 요소 작성 예시 퓨샷 extract_fewshot.md (BE-53)
+EXTRACT_PROMPT_VERSION = "extract-v7"  # v3: Claude 외 공급자 스키마 안내 (BE-35), v4: 사건 발생일 incidentDate (BE-38), v5: 판단 요소 가치관 축 valueAxis (BE-47), v6: 판단 요소 작성 예시 퓨샷 extract_fewshot.md (BE-53), v7: 서비스 대상 조건 · 범죄 유형 ROBBERY · THEFT · 아동 나이 표현 (BE-111)
 
-CRIME_TYPES = ("MURDER", "FRAUD", "INJURY")  # ERD legal_case.crime_type
+CRIME_TYPES = ("MURDER", "FRAUD", "INJURY", "ROBBERY", "THEFT")  # ERD legal_case.crime_type
 REVEAL_STAGES = ("OVERVIEW", "DETAIL", "ARGUMENT", "LAW")  # ERD factor.reveal_stage
 # 가치관 축 값(VALUE_AXES)은 common.py 한 곳에 둔다 (ERD factor.value_axis, BE-47). 판결 체험에서 고르는 판단 요소를 사용자 성향과 매칭한다
 VALUE_AXIS_NAMES = {
