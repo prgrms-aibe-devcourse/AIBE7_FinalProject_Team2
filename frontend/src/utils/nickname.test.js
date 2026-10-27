@@ -3,12 +3,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { nicknameError } from './nickname.js';
 
-test('한글이 있으면 9자, 영문 · 숫자만이면 12자까지는 통과, 앞뒤 공백은 무시', () => {
-  ['판사', 'judge7', '익명의판사12', '  해송  ', '가'.repeat(9), 'a'.repeat(12)].forEach((value) => assert.equal(nicknameError(value), '', value));
+test('한글이 있으면 8자, 영문 · 숫자만이면 12자까지는 통과, 앞뒤 공백은 무시', () => {
+  ['판사', 'judge7', '익명의판사12', '  해송  ', '가'.repeat(8), 'a'.repeat(12)].forEach((value) => assert.equal(nicknameError(value), '', value));
 });
 
 test('한글이 있으면 10자부터, 영문 · 숫자만이면 13자부터 길다', () => {
-  assert.match(nicknameError('가'.repeat(10)), /9자 이하/);
+  assert.match(nicknameError('가'.repeat(9)), /8자 이하/);
   assert.match(nicknameError('a'.repeat(13)), /12자 이하/);
 });
 

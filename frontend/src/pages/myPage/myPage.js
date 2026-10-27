@@ -13,13 +13,14 @@ import { SCRIPTS } from '../../content/scripts.js';
 import { fitPortraitIn } from '../../utils/portraitFit.js';
 import { reducedMotion } from '../../utils/motion.js';
 import { clearUser, currentUser, isAdmin } from '../../utils/session.js';
+import { signerSeed } from '../../components/signatureInk.js';
 import { homeRoute } from '../admin/adminMenu.js';
 import { openCaseReviewPopup } from '../caseReview/caseReviewPopup.js';
 import { renderProfileEdit } from './myProfileEdit.js';
 import { renderSettings } from './mySettings.js';
 import { RETAKE_NOTES, openRetakeDialog, retakeAfter, retakeState } from './baselineRetake.js';
 import { SHOWN_SLOTS, setShownCard, shownSlot } from '../../utils/shownCard.js';
-import { selectedChoice, setProfileCardType, typeChoices } from '../../utils/profileCardType.js';
+import { getCardLevel, getCardLine, selectedChoice, setCardLevel, setCardLine, setProfileCardType, typeChoices } from '../../utils/profileCardType.js';
 import { DEFAULT_TYPE_DECO, TYPE_BACKGROUNDS, getTypeDeco, setTypeDeco, shownTypeDeco } from '../../utils/typeCardDeco.js';
 import { configureProfileSettings, hydrateProfileSettings } from '../../utils/profileSettings.js';
 
@@ -173,8 +174,13 @@ const decoFor = (data) => shownDeco(currentDeco(), openOf(data));
 
 // 대표 이미지 카드의 속(그리는 일은 components/personCards.js). 카드 아래 성향: 카드 꾸미기에서 고른 것(기본 최근)
 function profileCardPartsOf(deco, data) {
-  const typeName = selectedChoice(data)?.type.name ?? currentTypeOf(data)?.name;
-  return profileCardParts(deco, myNickname(data, currentUser()), typeName);
+  const nickname = myNickname(data, currentUser());
+  const stats = statsOf(data);
+  const line = getCardLine();
+  const level = getCardLevel() ? `Lv.${stats.level}` : null;
+  if (line === 'signature') return profileCardParts(deco, nickname, null, { level, signer: signerSeed() });
+  if (line === 'job') return profileCardParts(deco, nickname, stats.job, { level });
+  return profileCardParts(deco, nickname, selectedChoice(data)?.type.name ?? currentTypeOf(data)?.name, { level });
 }
 
 // 성향카드 꾸미기(FE-82): 성향카드 화면에서 고른 테두리 · 배경 · 책갈피를 카드에 입힌다(잠긴 것은 기본으로). 기본 배경은 원래 타로카드 모양이라 클래스를 붙이지 않는다
@@ -1080,13 +1086,45 @@ function previewCard(data, deco = decoFor(data)) {
 // 카드 아래 성향 고르기(FE-77): 초심 · 재심 · 최근 중 하나를 글자 라디오로. 같은 유형은 한 칸으로 묶인다. 공개 성향카드와는 별개의 값이다
 function typeChoiceSection(data, onPick) {
   const field = element('fieldset', 'my-deco');
-  field.append(element('legend', '', '카드 아래 성향'));
+  field.append(element('legend', '', '카드 아래'));
+  field.append(element('p', 'my-hint', '프로필카드 아래에 보일 것을 하나 고르세요. 레벨은 그 앞에 붙이거나 뺄 수 있어요.'));
+  const line = getCardLine();
+  const lines = element('div', 'my-type-choices');
+  [['type', '성향'], ['signature', '서명'], ['job', '직업']].forEach(([value, text]) => {
+    const label = element('label', 'my-type-choice');
+    const input = element('input');
+    input.type = 'radio';
+    input.name = 'profile-card-line';
+    input.value = value;
+    input.checked = line === value;
+    input.addEventListener('change', () => { setCardLine(value); onPick(); redraw(); });
+    label.append(input, element('span', '', text));
+    lines.append(label);
+  });
+  const levelLabel = element('label', 'my-type-choice');
+  const levelInput = element('input');
+  levelInput.type = 'checkbox';
+  levelInput.checked = getCardLevel();
+  levelInput.addEventListener('change', () => { setCardLevel(levelInput.checked); onPick(); });
+  levelLabel.append(levelInput, element('span', '', '레벨 앞에 붙이기'));
+  field.append(lines, levelLabel);
+  const typeBox = element('div');
+  field.append(typeBox);
+  const redraw = () => { typeBox.hidden = getCardLine() !== 'type'; };
+  redraw();
+  typeBox.append(typeChoiceList(data, onPick));
+  return field;
+}
+
+// 카드 아래가 성향일 때 초심 · 재심 · 최근 고르기
+function typeChoiceList(data, onPick) {
+  const field = element('div');
   const choices = typeChoices(data);
   if (choices.length === 0) {
     field.append(element('p', 'my-hint', '성향 테스트를 하면 카드 아래에 보여 줄 성향을 고를 수 있어요.'));
     return field;
   }
-  field.append(element('p', 'my-hint', '프로필카드 아래에 보일 성향이에요. 기본은 최근이고, 같은 유형은 한 칸으로 묶여요.'));
+  field.append(element('p', 'my-hint', '기본은 최근이고, 같은 유형은 한 칸으로 묶여요.'));
   const selected = selectedChoice(data);
   const list = element('div', 'my-type-choices');
   choices.forEach((choice, index) => {

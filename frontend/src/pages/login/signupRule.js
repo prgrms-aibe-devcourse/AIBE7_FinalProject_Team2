@@ -2,8 +2,7 @@
 // 서버 회원가입 API가 생기면 서버 규칙과 맞춘다(지금은 화면 쪽 안내용 규칙)
 export const ID_PATTERN = /^[a-z0-9_]{4,20}$/;
 export const PASSWORD_MIN = 8;
-export const NICKNAME_MIN = 2;
-export const NICKNAME_MAX = 12;
+import { nicknameError } from '../../utils/nickname.js';
 
 // values: { id, password, passwordConfirm, nickname, agreed }. 틀린 칸만 { 칸 이름: 문구 }로, 화면 위에서 아래 순서로 돌려준다(첫 칸에 포커스를 둔다)
 export function validateSignup({ id = '', password = '', passwordConfirm = '', nickname = '', agreed = false } = {}) {
@@ -20,9 +19,8 @@ export function validateSignup({ id = '', password = '', passwordConfirm = '', n
   if (!passwordConfirm) errors.passwordConfirm = '비밀번호를 한 번 더 입력해 주세요.';
   else if (password && passwordConfirm !== password) errors.passwordConfirm = '비밀번호가 서로 달라요.';
 
-  const name = nickname.trim();
-  if (!name) errors.nickname = '닉네임을 입력해 주세요.';
-  else if (name.length < NICKNAME_MIN || name.length > NICKNAME_MAX) errors.nickname = `닉네임은 ${NICKNAME_MIN}~${NICKNAME_MAX}자예요.`;
+  const nicknameMessage = nicknameError(nickname); // 마이페이지 닉네임 변경과 같은 규칙(한글이 있으면 8자까지)
+  if (nicknameMessage) errors.nickname = nicknameMessage;
 
   if (!agreed) errors.agreed = '이용약관과 개인정보처리방침에 동의해 주세요.';
   return errors;

@@ -2,9 +2,10 @@
 // 구성: 프로필(프로필카드 · 닉네임 · 한 줄 소개 · 성향카드 · 재심) · 계정 관리(로그인 방식 · 현재 아이디 · 가입일 · 최근 로그인 · 비밀번호 변경 · 로그아웃 · 회원 탈퇴) · 약관. 알림 등 앱 설정은 "환경 설정"에서 다룬다
 // 한 줄 소개는 서버(P-8 PATCH /profile-settings)에 저장한다(profileSettings.js, FE-81). 프로필카드 · 성향카드는 커뮤니티에서 항상 공개다(공개 범위 설정을 두지 않는다, 의도된 서비스 특징)
 import { button, element, mockTag } from '../../components/siteLayout.js';
+import { cardSignature } from '../../components/personCards.js';
 import { API_MODE } from '../../api/config.js';
 import { clearUser, currentUser, saveUser } from '../../utils/session.js';
-import { NICKNAME_HINT, NICKNAME_MAX, nicknameError } from '../../utils/nickname.js';
+import { NICKNAME_HINT, NICKNAME_MAX, lockNicknameLength, nicknameError } from '../../utils/nickname.js';
 import { BIO_MAX, getProfileSettings, updateProfileSettings } from '../../utils/profileSettings.js';
 
 const BIO_PLACEHOLDER = '사건 앞에서는 한 번 더 생각하는 판사입니다.';
@@ -61,6 +62,7 @@ export function renderProfileEdit({ api, navigate, go, data = {}, card, fan }) {
   input.type = 'text';
   input.value = user?.nickname ?? '';
   input.maxLength = NICKNAME_MAX;
+  lockNicknameLength(input);
   input.autocomplete = 'nickname';
   input.spellcheck = false;
   input.disabled = !user;
@@ -103,6 +105,7 @@ export function renderProfileEdit({ api, navigate, go, data = {}, card, fan }) {
     if (name && title) {
       title.textContent = name;
       profileCard.setAttribute('aria-label', profileCard.getAttribute('aria-label').replace(/^(프로필카드 열기: )[^,]*/, `$1${name}`));
+      profileCard.querySelector('.sig-ink')?.replaceWith(cardSignature(name)); // 카드 아래가 서명이면 닉네임에 맞춰 다시 그린다
     }
     bioCount.textContent = `${[...bio.value.trim()].length}/${BIO_MAX}`;
   };

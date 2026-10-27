@@ -47,3 +47,16 @@ test('typeChoices: 묶인 칸을 고르면 최근을 저장한다', () => {
   assert.equal(typeChoices(data(type('a', 'A형'), null, type('a', 'A형')))[0].pick, 'current');
   assert.equal(typeChoices(data(type('a', 'A형'), type('b', 'B형'), null))[0].pick, 'initial');
 });
+
+test('카드 아래 줄은 성향 · 레벨 없음이 기본이고 서버로 보내지 않는다', async () => {
+  const { getCardLevel, getCardLine, setCardLevel, setCardLine } = await import('./profileCardType.js');
+  const { resetProfileSettings } = await import('./profileSettings.js');
+  resetProfileSettings();
+  assert.equal(getCardLine(), 'type');
+  assert.equal(getCardLevel(), false);
+  setCardLine('signature');
+  setCardLevel(true);
+  assert.equal(getCardLine(), 'signature');
+  assert.equal(getCardLevel(), true);
+  resetProfileSettings();
+});

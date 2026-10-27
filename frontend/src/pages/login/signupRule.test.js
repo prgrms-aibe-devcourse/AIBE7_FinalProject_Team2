@@ -32,10 +32,11 @@ test('비밀번호 확인이 다르면 알린다', () => {
   assert.equal(validateSignup({ ...valid, passwordConfirm: 'judge12345' }).passwordConfirm, '비밀번호가 서로 달라요.');
 });
 
-test('닉네임은 앞뒤 공백을 빼고 2~12자', () => {
+test('닉네임은 앞뒤 공백을 빼고 2자 이상, 한글은 8자까지', () => {
   assert.ok(validateSignup({ ...valid, nickname: ' 내 ' }).nickname);
-  assert.ok(validateSignup({ ...valid, nickname: '가'.repeat(13) }).nickname);
-  assert.equal(validateSignup({ ...valid, nickname: '가'.repeat(12) }).nickname, undefined);
+  assert.ok(validateSignup({ ...valid, nickname: '가'.repeat(9) }).nickname);
+  assert.equal(validateSignup({ ...valid, nickname: '가'.repeat(8) }).nickname, undefined);
+  assert.equal(validateSignup({ ...valid, nickname: 'a'.repeat(12) }).nickname, undefined);
 });
 
 test('약관에 동의하지 않으면 가입할 수 없다', () => {

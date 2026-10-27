@@ -2,6 +2,7 @@ import { element } from './siteLayout.js';
 import { CHARACTER_NAMES } from '../utils/personalityAxes.js';
 import { SASH_COLORS, SASH_ICONS, SASH_STYLES, portraitLabel, sashColorOf } from '../utils/profileDeco.js';
 import { DEFAULT_TYPE_DECO } from '../utils/typeCardDeco.js';
+import { signatureSvg } from './signatureInk.js';
 import { fitPortraitIn } from '../utils/portraitFit.js';
 
 // 프로필카드 · 성향카드를 그리는 조각(FE-88). 마이페이지(myPage.js) · 내 결과(myResultPage.js) · 커뮤니티 글쓴이 명함(communityParts.js)이 함께 쓴다(FE-79).
@@ -107,25 +108,39 @@ export const sashNote = (deco) => {
 export const typeDecoClasses = (deco) => `deco-frame-${deco.frame}${deco.background === DEFAULT_TYPE_DECO.background ? '' : ` deco-bg-${deco.background}`} ${sashClasses(deco)}`;
 
 // 프로필카드의 속: 위 닉네임 · 그림 창(대표 이미지) · 아래 성향 이름. 테두리 · 배경 · 책갈피는 클래스(.deco-frame-* · .deco-bg-* · .deco-sash-*)로 입힌다
-export function profileCardParts(deco, nickname, typeName) {
+// 카드 아래 서명 그림. 크기는 CSS가 칸에 맞춰 정하니 서명 원래 비율만 남긴다. 내 정보 수정이 닉네임을 바꿀 때 다시 그리는 데도 쓴다
+export function cardSignature(seed) {
+  const ink = signatureSvg(seed);
+  const [, , w, h] = ink.getAttribute('viewBox').split(' ');
+  ink.setAttribute('width', w);
+  ink.setAttribute('height', h);
+  return ink;
+}
+
+// extra: { level: 'Lv.7' 같은 접두, signer: 서명 씨앗(주면 글자 대신 서명을 그린다), label: 서명일 때 낭독용 글 }
+export function profileCardParts(deco, nickname, typeName, { level = null, signer = null } = {}) {
   const src = deco.portrait;
   const caption = portraitLabel(src);
   const face = element('div', 'my-card-window');
   const faceImage = picture(src, `${caption} 대표 이미지`, 'my-profile-face');
   face.append(faceImage);
   fitPortraitIn(face, faceImage, fitOptions({ centerWide: true })); // 가로로 긴 그림(사건 사진 등)은 창 세로 가운데에, 서 있는 캐릭터는 발을 아래에
-  const result = element('p', `my-card-note${typeName ? '' : ' is-empty'}`, typeName ?? '성향 테스트 전');
+  const result = element('p', `my-card-note${typeName || signer ? '' : ' is-empty'}${signer ? ' is-signature' : ''}${level ? ' has-level' : ''}`);
+  if (level) result.append(element('span', 'my-card-level', level));
+  if (signer) result.append(cardSignature(signer));
+  else result.append(typeName ?? '성향 테스트 전');
+  const line = signer ? `${nickname}의 서명` : `성향 ${typeName ?? '테스트 전'}`;
   return {
     caption,
-    note: `${nickname}, 대표 이미지 ${caption}, 성향 ${typeName ?? '테스트 전'}${sashNote(deco)}`,
+    note: `${nickname}, 대표 이미지 ${caption}, ${level ? `${level} ` : ''}${line}${sashNote(deco)}`,
     classes: `is-profile deco-frame-${deco.frame} deco-bg-${deco.background} ${sashClasses(deco)}`,
     children: [element('p', 'my-card-name', nickname), face, result, ...sashes(deco)],
   };
 }
 
 // 누를 수 없는 프로필카드(커뮤니티 명함 · 작은 창). 크기는 부모가 정한다(카드 안 글자 · 책갈피는 카드 폭에 비례)
-export function profileFace(deco, nickname, typeName) {
-  const parts = profileCardParts(deco, nickname, typeName);
+export function profileFace(deco, nickname, typeName, extra) {
+  const parts = profileCardParts(deco, nickname, typeName, extra);
   const card = element('div', `my-card ${parts.classes} is-preview`);
   card.setAttribute('role', 'img');
   card.setAttribute('aria-label', `프로필카드: ${parts.note}`);
