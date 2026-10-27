@@ -379,7 +379,8 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
   const name = element('div', 'name');
   const text = element('div', 'txt');
   text.setAttribute('aria-hidden', 'true'); // 타이핑 중인 글자는 읽지 않고, 아래 live 영역이 문장 전체를 한 번 읽는다
-  const hint = element('div', 'nxt', window.matchMedia('(hover: none)').matches ? '▶ 탭' : '▶ 클릭 · Space'); // 터치 기기는 Space가 없다
+  const hintBase = window.matchMedia('(hover: none)').matches ? '▶ 탭' : '▶ 클릭 · Space'; // 터치 기기는 Space가 없다
+  const hint = element('div', 'nxt', hintBase);
   hint.setAttribute('aria-hidden', 'true');
   const choiceRow = element('div', 'dlg-choices');
   choiceRow.hidden = true;
@@ -654,7 +655,9 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
     next.textContent = step.next ? `${step.next} ▶` : '다음 ▶';
     next.disabled = input || asks(step) || (index === steps.length - 1 && !step.confirm); // 마지막 장면의 confirm은 화면이 다음 화면으로 보낸다
     skip.hidden = input || asks(step) || skipTarget(steps, index) === index;
+    status.classList.remove('is-blocked');
     status.textContent = input ? (again ? '엽서를 확인하고 "이어서 하기"를 눌러요' : '선택하고 제출하면 다음으로 넘어가요') : '';
+    hint.textContent = `${index + 1} / ${steps.length} · ${hintBase}`; // 이 화면의 몇 번째 장면인지(FE-103: 몇 번 더 넘기면 되는지 알린다). 조작 줄이 아니라 대사창에 둬 모바일 줄 구성은 그대로
     syncNext();
     if (input) (board.querySelector('[data-autofocus]') ?? board).focus(); // 입력 카드가 정한 첫 포커스(판결 파일철: 지금 장의 탭)
   }
@@ -701,6 +704,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
     next.textContent = driver.label();
     next.disabled = driver.enabled ? !driver.enabled() : false;
     status.textContent = driver.hint();
+    status.classList.toggle('is-blocked', Boolean(driver.blocked?.())); // 막힌 이유는 보통 안내보다 눈에 띄게(FE-103: 막힌 사용자가 이유를 아는 유일한 자리였다)
   }
   inputCards.forEach((name) => cards[name]?.addEventListener('stagenextchange', syncNext));
   next.addEventListener('click', (event) => {

@@ -18,9 +18,9 @@
 .verdict-page .range-no-overlap { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--color-desk-sheet-line); font-size: 13px; }
 .verdict-page .range-recommendation { margin: 8px 0 16px; font-size: 13px; }
 .verdict-page .range-track-with-ticks { margin-top: 34px; }
-.verdict-page .range-ticks { position: relative; height: 22px; margin-top: 6px; font-size: 11px; color: var(--color-muted); }
+.verdict-page .range-ticks { position: relative; height: 22px; margin-top: 6px; font-size: 12px; color: var(--color-muted); }
 .verdict-page .range-tick { position: absolute; top: 0; white-space: nowrap; max-width: 100%; }
-.verdict-page .range-input-label { top: auto; bottom: calc(100% + 6px); font-size: 11px; color: var(--color-accent-text); font-weight: 700; }
+.verdict-page .range-input-label { top: auto; bottom: calc(100% + 6px); font-size: 12px; color: var(--color-accent-text); font-weight: 700; }
 
 .verdict-page { word-break: keep-all; overflow-wrap: anywhere; }
 .verdict-page .case-topbar { justify-content: space-between; }
@@ -132,7 +132,7 @@
 .verdict-page .fine-tick.minor { height: 20%; }
 .verdict-page .fine-tick.mid { height: 50%; }
 .verdict-page .fine-tick.major { height: 100%; }
-.verdict-page .fine-labels { position: relative; height: 22px; margin-top: 6px; font-size: 11px; color: var(--color-muted); } /* 징역 눈금 줄(.range-ticks)과 같은 높이 */
+.verdict-page .fine-labels { position: relative; height: 22px; margin-top: 6px; font-size: 12px; color: var(--color-muted); } /* 징역 눈금 줄(.range-ticks)과 같은 높이 */
 .verdict-page .fine-labels span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
 .verdict-page .fine-labels span:first-child { transform: none; }
 .verdict-page .fine-labels span:last-child { transform: translateX(-100%); }

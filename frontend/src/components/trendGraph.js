@@ -131,14 +131,14 @@ function trendChart({ axis, points }, slots, retakeBetween) {
     hit.addEventListener('pointerdown', () => show(point, hit)); // 터치: 누르면 보이고, 그래프의 빈 곳을 누르면 닫힌다
     hit.addEventListener('pointerleave', (event) => { if (event.pointerType === 'mouse') tip.classList.remove('is-shown'); });
     // 키보드(FE-103): 점이 많아 Tab 자리는 그래프당 하나만 두고(roving tabindex) 좌우 방향키로 점을 옮긴다
-    hit.setAttribute('role', 'button');
+    hit.setAttribute('role', 'img'); // 누를 일이 없다(포커스만으로 말풍선이 뜬다). button이면 낭독기가 눌러 보게 한다(#301 리뷰)
     hit.setAttribute('aria-label', `${point.title} ${leanText(point.ratio, axis)}`);
     hit.tabIndex = hits.length === 0 ? 0 : -1;
     hit.addEventListener('focus', () => show(point, hit));
     hit.addEventListener('blur', () => tip.classList.remove('is-shown'));
     hit.addEventListener('keydown', (event) => {
       const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[event.key];
-      const next = step && hits[hits.indexOf(hit) + step];
+      const next = event.key === 'Home' ? hits[0] : event.key === 'End' ? hits.at(-1) : step && hits[hits.indexOf(hit) + step]; // Home · End: 처음 · 끝 점(점이 많은 그래프용)
       if (!next) return;
       event.preventDefault();
       hits.forEach((other) => { other.tabIndex = other === next ? 0 : -1; });
