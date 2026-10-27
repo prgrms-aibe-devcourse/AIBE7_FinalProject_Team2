@@ -15,7 +15,8 @@ import { renderTrend, trendsOf } from '../../components/trendGraph.js';
 import { AXES } from '../../utils/personalityAxes.js';
 import { TREND_RECENT, recordOf } from '../../utils/myPageView.js';
 import { story, masthead, frontStory, advertisements, openForReading } from '../comparison/comparisonStage.js';
-import { DEFAULT_NICKNAME, typeFace } from '../../components/personCards.js';
+import { myNickname, typeFace } from '../../components/personCards.js';
+import { currentUser } from '../../utils/session.js';
 
 const IS_MOCK = API_MODE === 'mock'; // 목 모드는 비교 · 성향 모두 목이라 기사 제목 옆에 표기한다
 
@@ -86,7 +87,8 @@ function leanSections(record) {
 //   최종 판결(preToFinal.finalJudgmentText, 서버 FinalJudgmentText: "사형" · "무기징역" · "징역 2년 6개월" · "벌금 …" · "징역 3년에 집행유예 5년")
 //   첫인상과 견준 방향(preToFinal.direction: HEAVIER · SAME · LIGHTER)
 // 형량(첫인상 구간 · 최종 판결)은 굵게 둔다. 값 바로 뒤에는 받침에 따라 갈리는 조사(이/가 · 을/를 · 으로/로)를 붙이지 않는다 — "~의", "~에", 쉼표 · "쪽"으로 잇는다.
-// 판사 이름은 마이페이지 프로필카드와 같은 값(닉네임, 없으면 "익명의 판사")이다
+// 판사 이름은 마이페이지 프로필카드와 같은 값(닉네임, 없으면 "익명의 판사")이다.
+// 이 지면의 주인공은 내 판결이라 헤드라인에 최종 판결을 싣는다(FE-100 — 예전 헤드라인 "…의 판결, 다시 펼치다"는 판결이 사진 아래 작은 글씨로 밀렸다)
 const DIRECTION_LINES = {
   HEAVIER: '사건 기록과 법정 공방을 모두 지켜본 뒤에는 첫인상보다 무거운 쪽으로 판결을 정했다.',
   SAME: '사건 기록과 법정 공방을 모두 지켜본 뒤에도 첫인상과 같은 구간 안에서 판결을 정했다.',
@@ -94,18 +96,48 @@ const DIRECTION_LINES = {
 };
 function leadOf(caseTitle, preToFinal, judge) {
   return {
-    headline: `${judge}의 판결, 다시 펼치다`,
-    deck: [`${caseTitle}, ${judge}의 판결은 `, bold(preToFinal.finalJudgmentText)],
+    headline: `${judge}의 판결은 ${preToFinal.finalJudgmentText}`,
+    deck: [`${caseTitle}, 기사만 읽고 고른 첫인상은 `, bold(preToFinal.preJudgment.label), ' 쪽이었다'],
     text: [
-      `기사만 읽었을 때 ${judge}의 첫인상은 `, bold(preToFinal.preJudgment.label), ' 쪽이었다. ',
       DIRECTION_LINES[preToFinal.direction] ?? '사건 기록과 법정 공방을 모두 지켜본 뒤 판결을 정했다.',
       ' 그 판결에 드러난 판결 성향과, 이 사건으로 달라진 성향을 함께 싣는다.',
     ],
   };
 }
 
+// 지면 아래 광고 · 알림 단(FE-100): 6막 지면의 광고를 빌리되, 이 지면을 읽는 사람(체험을 마친 나)에게 맞게 바꾼다.
+//   광고 → 성향 테스트를 했으면 "내 성향카드"(마이페이지 성향카드 화면), 안 했으면 "판결 성향 테스트" 그대로
+//   알림 "오늘의 지면" → 누르면 사건 목록(다른 사건 보기). 모양만 칸이고 누를 수 없던 자리를 살린다
+//   "첫인상 엽서 모집" → 이 사건을 이미 마친 사람에게는 맞지 않아, 같은 자리(세 번째 칸)를 "마이페이지로" 돌아가기 칸으로 바꾼다(FE-100, 버튼 대신 지면 모양 그대로)
+function clickable(box, label, action) {
+  box.classList.add('is-clickable');
+  box.setAttribute('role', 'button');
+  box.tabIndex = 0;
+  box.setAttribute('aria-label', label);
+  box.addEventListener('click', action);
+  box.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    action();
+  });
+}
+function resultAds(hasTest) {
+  const ads = advertisements();
+  const back = ads.querySelector('.sheet-ad.is-notice');
+  back.querySelector('.sheet-ad-tag').textContent = '마이페이지';
+  back.querySelector('.sheet-ad-title').textContent = '마이페이지로';
+  back.querySelector('.sheet-ad-text').textContent = '내가 체험한 사건 목록으로 돌아가요. 다른 사건의 결과도 거기서 펼쳐 볼 수 있어요.';
+  if (hasTest) {
+    const lead = ads.querySelector('.sheet-ad.is-lead');
+    lead.querySelector('.sheet-ad-tag').textContent = '알림';
+    lead.querySelector('.sheet-ad-title').textContent = '내 성향카드';
+    lead.querySelector('.sheet-ad-text').textContent = '이 판결까지 더해진 내 성향은? 초심부터 최근까지의 흐름을 마이페이지에서 펼쳐 보세요.';
+  }
+  return ads;
+}
+
 export async function renderMyResultPage(container, { caseId, caseHeader, api, navigate }) {
-  const root = element('div', 'comparison-page comparison-full my-result-page'); // 6막 읽기 지면과 같은 화면 틀(courtSketch.css)
+  const root = element('main', 'comparison-page comparison-full my-result-page'); // 6막 읽기 지면과 같은 화면 틀(courtSketch.css). 본문 landmark(FE-100)
   container.replaceChildren(root);
   const active = () => container.contains(root);
   let loading = false;
@@ -123,16 +155,27 @@ export async function renderMyResultPage(container, { caseId, caseHeader, api, n
     const sheet = element('article', 'sheet sheet-result');
     sheet.setAttribute('aria-label', '내 결과 지면');
     const mast = masthead();
-    // 왼쪽 귀: 6막은 신문을 뒤집어 사건 목록으로 가지만, 이 지면은 연출 없이 간다
-    mast.querySelector('.sheet-ear-left small').textContent = '오늘의 지면으로';
-    mast.querySelector('.sheet-ear-left').addEventListener('click', () => navigate('list'));
+    // 왼쪽 귀: 6막은 "다른 사건 보기"지만, 이 지면은 마이페이지에서 펼쳐 온 지면이라 들어온 곳(내가 체험한 사건)으로 돌아가는 자리다(FE-100).
+    // 다른 사건은 아래 "오늘의 지면" 알림이 맡는다. 오른쪽 귀의 "고민 중" 메모는 판결을 마친 지면이라 "판결 확정"으로 바꾼다
+    const earLeft = mast.querySelector('.sheet-ear-left');
+    earLeft.querySelector('b').textContent = '← 마이페이지';
+    earLeft.querySelector('small').textContent = '내가 체험한 사건으로';
+    earLeft.addEventListener('click', () => navigate('me', { view: 'cases' }));
+    mast.querySelector('.sheet-ear-memo').textContent = '판결 확정';
     // 왼쪽 · 오른쪽 단을 따로 쌓는다. 한 격자 줄에 두면 긴 흐름 그래프 높이만큼 왼쪽 기사 사이가 벌어진다(myResult.css)
     const left = element('div', 'sheet-col is-left');
-    left.append(frontStory(caseHeader.title, leadOf(caseHeader.title, data.preToFinal, myPage?.nickname || DEFAULT_NICKNAME)), ...leanSections(record));
+    left.append(frontStory(caseHeader.title, leadOf(caseHeader.title, data.preToFinal, myNickname(myPage, currentUser()))), ...leanSections(record));
     const right = element('div', 'sheet-col is-right');
     right.append(...trendSections(myPage, record ?? {}));
-    sheet.append(mast, left, right, advertisements());
-    openForReading(sheet, () => navigate('testPaper'));
+    const hasTest = Boolean(myPage) && trendsOf(myPage).some(({ points }) => points[0]?.isTest);
+    const ads = resultAds(hasTest);
+    sheet.append(mast, left, right, ads);
+    openForReading(sheet, () => (hasTest ? navigate('me', { view: 'type' }) : navigate('testPaper')));
+    if (hasTest) sheet.querySelector('.sheet-ad.is-lead')?.setAttribute('aria-label', '내 성향카드 — 마이페이지에서 보기');
+    const today = ads.querySelector('.sheet-ad:not(.is-lead)');
+    if (today) clickable(today, '오늘의 지면 — 다른 사건 보기', () => navigate('list'));
+    const toMyPage = ads.querySelector('.sheet-ad.is-notice');
+    if (toMyPage) clickable(toMyPage, '마이페이지로 — 내가 체험한 사건 목록', () => navigate('me', { view: 'cases' }));
 
     // 6막 읽기 화면과 같은 구조(.stage-wrap.reading-paper > .stage > .scene > .sheet)라 지면 스타일을 그대로 받는다
     const wrap = element('div', 'stage-wrap reading-paper');
@@ -140,7 +183,7 @@ export async function renderMyResultPage(container, { caseId, caseHeader, api, n
     const scene = element('div', 'scene');
     scene.append(sheet);
     stage.append(scene);
-    wrap.append(stage, button('마이페이지로', () => navigate('me', { view: 'cases' }), 'primary-button paper-to-main is-clickable'));
+    wrap.append(stage);
     const desk = element('div', 'desk');
     desk.setAttribute('aria-hidden', 'true');
     root.replaceChildren(desk, element('h1', 'visually-hidden', `내 결과 · ${caseHeader.title}`), wrap);

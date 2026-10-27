@@ -353,6 +353,16 @@ body[data-theme="coffee"] .site-footer { background: var(--palette-coffee-50); b
 .my-deco-state { color: var(--color-muted); font: 400 var(--text-small)/1.4 var(--font-body); white-space: nowrap; }
 .my-deco-state.is-open { color: var(--color-accent); font-weight: 700; }
 .my-deco-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 8px; }
+/* 잠긴 종류는 한 줄로 접는다(FE-100). 줄 전체가 누르는 자리(44px), 펼치면 잠긴 그림 미리 보기 */
+.my-deco-fold { border-top: 1px solid var(--color-border); }
+.my-deco-fold-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 44px; padding: 6px 2px; cursor: pointer; list-style: none; font: 600 var(--text-small)/1.4 var(--font-heading); color: var(--color-text); }
+.my-deco-fold-head::-webkit-details-marker { display: none; }
+.my-deco-fold-head::before { content: '▸'; margin-right: -4px; color: var(--color-muted); transition: rotate .15s ease-out; }
+.my-deco-fold[open] .my-deco-fold-head::before { rotate: 90deg; }
+.my-deco-fold-head > span:first-of-type { flex: 1; }
+.my-deco-fold-head:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+.my-deco-fold > .my-deco-grid { padding: 4px 0 14px; }
+.my-deco-kind.is-locked-head { margin-top: 28px; }
 .my-deco-option { position: relative; display: grid; justify-items: center; gap: 6px; cursor: pointer; }
 .my-deco-option input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; } /* 라디오는 숨기고 그림 · 견본이 선택칸이다. 키보드 방향키 · 포커스는 그대로 */
 .my-deco-option:has(input:focus-visible) :is(.my-deco-thumb, .my-mini-card) { outline: 3px solid var(--color-focus); outline-offset: 2px; }
@@ -447,6 +457,9 @@ body[data-theme="coffee"] .site-footer { background: var(--palette-coffee-50); b
   .my-top-middle { order: -1; grid-column: 1 / -1; padding-top: 0; }
   .my-nickname { font-size: var(--text-title-2); }
   .my-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 16px; }
+  /* 프로필카드 화면의 열린 개수는 값 옆에 목데이터 딱지까지 붙어 두 칸에 넣으면 이름이 한 글자씩 세로로 쪼개졌다 → 한 칸(FE-100) */
+  .my-profile-counts { grid-template-columns: minmax(0, 1fr); }
+  .my-profile-counts .my-stat dt { white-space: nowrap; }
   .my-row { grid-template-columns: minmax(0, 1fr) 104px 14px; gap: 12px; padding: 16px 4px; }
   .my-thumbs img:nth-child(n + 3) { display: none; }
   .my-thumbs img { width: 40px; height: 50px; }
