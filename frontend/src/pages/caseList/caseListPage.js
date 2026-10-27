@@ -4,6 +4,10 @@ import { scriptFor } from '../overview/overviewPage.js';
 import { casePhoto, commonCategoryOf, useCommonPhotoOnError } from '../../utils/newspaper.js';
 import { newspaperMasthead } from '../../components/newspaperFront.js';
 import { turnPage } from '../../utils/pageTurn.js';
+import { liftArticle } from '../../utils/articleZoom.js';
+import { emptySlots, faceIndexAfter, swipeStep } from '../../utils/newspaperFaces.js';
+import { paperFold } from '../../components/folderParts.js';
+import courtFacts from '../../content/courtFacts.json';
 import { reducedMotion } from '../../utils/motion.js';
 import { peelOff } from '../../utils/peelOff.js';
 import { takePaper } from '../../utils/paperHandoff.js';
@@ -11,7 +15,9 @@ import { spreadFromTail } from '../../utils/tailSpread.js';
 
 // S-02 사건 목록 — 신문 1면 (FE-18, 시안 v12 + 배치 조정). 유형 필터 · 오류 처리 로직은 FE-4 · FE-11과 같다.
 // 흐름 목업 ②(FE-32): 책상에서 집어 든 신문이다. 위에 남불의 안내 포스트잇(누르면 떼어짐, FE-50)이 있고, 기사를 누르면
-// 신문 한 장이 넘어가며(2.5D, utils/pageTurn.js) 그 밑에서 사건 정보(S-20)가 드러난다. 유형 탭을 누르면 같은 방식으로 한 장이 넘어가 다른 유형의 기사가 드러난다 — 체험 시작 · 이어서 하기는 S-20에서 한다(API 명세 5장 S-02 확장). Esc는 책상으로.
+// 그 기사의 제목이 사건 정보(S-20)의 큰 제목 자리로 커지며 날아간다(utils/articleZoom.js, FE-118) — 체험 시작 · 이어서 하기는 S-20에서 한다(API 명세 5장 S-02 확장). Esc는 책상으로.
+// 면 넘기기(FE-118): 유형 탭 하나가 신문 한 면이다(전체 = 1면, 그다음 살인 · 사기 · 상해 · 강도 · 절도). 탭 · 지면 아래 모서리의 종이 귀 · 양옆 화살표 · 키보드 ← → · 손가락 밀기로
+// 한 장이 넘어간다(2.5D, utils/pageTurn.js). 뒤 면으로는 오른쪽에서 왼쪽으로, 앞 면으로는 거꾸로 넘어온다. 기사를 누르는 것은 언제나 사건 정보로 가는 길이고, 넘김은 위의 조작으로만 한다.
 // 목록은 처음 판단(S-03) 전 화면이라 사건 정보는 S-03 개요 범위를 넘지 않는다: 제목 · 짧은 소개 · 키워드 · 분류 · 참여 수와,
 // 개요 범위 안에서 쓴 기사(headline · deck · article). S-04 이후에 공개되는 사실(다툼 기간 · 횟수 · 양형 요소 등)은 기사에도 쓰지 않는다.
 // 기사 제목 · 부제 · 본문은 headline · deck · article(API 1에 아직 없는 제안 필드, S-03 개요 수준)을 쓰고, 없으면 사건 제목 · 짧은 소개와
@@ -24,7 +30,9 @@ const tabs = [
   { crimeType: 'ROBBERY', label: '강도' },
   { crimeType: 'THEFT', label: '절도' },
 ];
-const TAB_TURN_MS = 500; // 탭은 훑어보며 자주 누르므로 기사 → 상세(1초)보다 짧게
+const TAB_TURN_MS = 500; // 면은 훑어보며 자주 넘기므로 한 장 넘기기 기본값(1초)보다 짧게
+const FACE_KEYS = tabs.map(({ crimeType }) => crimeType); // 면 순서(탭 순서와 같다)
+const faceName = ({ crimeType, label }) => (crimeType ? `${label}면` : '1면');
 const RECOMMENDED_COUNT = 2; // 머리기사 옆 추천 사건 수. 나머지는 "이번 호 다른 사건"으로 간다
 
 // 머리기사 단 안내 (모든 사건 공통)
@@ -44,6 +52,9 @@ const TYPE_NOTES = {
   THEFT: '[알아두기] 절도죄는 다른 사람의 재물을 그 사람의 허락 없이 가져갔을 때 성립합니다. 가져간 방법과 횟수에 따라 적용되는 죄가 달라지며, 적용 법률은 사건 기록의 적용 법률 단계에서 공개됩니다.',
 };
 const RECORD_NOTE = '사건에 어떤 사정이 있었는지는 체험을 시작하면 사건 기록에서 한 단계씩 확인할 수 있습니다.';
+// 빈 칸 채움 지면(FE-118): 기사가 모자라 비는 칸(추천 사건 반쪽 · 다른 사건 줄의 남는 칸 · 기사가 적은 면의 아래)을 사건이 아닌 작은 지면으로 채운다.
+// 법정 상식은 1막 막간과 같은 문장(content/courtFacts.json), 광고는 이 서비스의 판결 성향 테스트. 누르면 사건으로 가지 않는다(광고만 테스트로)
+const FILLER_STRIP = 3; // 다른 사건 줄이 아예 없는 면의 아래 · 추천 사건 반쪽에 까는 작은 지면 수
 // 진행 상태 배지 (FE-19, REQ-010 · FR-1-6). API 1의 myStatus 기준, 체험 전(null)이면 배지 없음
 const STATUS_VIEW = {
   IN_PROGRESS: { badge: '진행 중', tone: 'active' },
@@ -132,7 +143,11 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
   loading.setAttribute('role', 'status');
   main.append(renderTabs(null, { disabled: true }), loading); // 탭은 처음부터 보이되 목록을 받기 전에는 누를 수 없다(FE-102)
   const paperNote = element('p', 'paper-note', '이 지면의 사건과 기사는 판결 체험을 위해 재구성한 것이며, 사진은 AI로 생성한 연출 이미지입니다.');
-  paper.append(newspaperMasthead({ navigate, earRight }), main, paperNote, renderSiteFooter());
+  // 면 넘기기(FE-118): 지면 아래 양 모서리의 종이 귀(앞 면 · 다음 면)와 화면 양옆 화살표. 면을 그릴 때마다 앞 · 뒤 면 이름을 다시 단다(syncTurns)
+  const turns = element('nav', 'face-turns');
+  turns.setAttribute('aria-label', '면 넘기기');
+  const edges = element('div', 'face-edges'); // 마우스용 지름길(귀와 같은 동작이라 화면 낭독기 · 탭 순서에서는 뺀다)
+  paper.append(newspaperMasthead({ navigate, earRight }), main, paperNote, renderSiteFooter(), turns);
 
   // 남불의 안내. 지면 오른쪽 위에 붙인 정사각형 포스트잇(FE-56, 지면과 함께 움직인다). 누르면 떼어져 날아간다(FE-50, 메인 책상의 내로 포스트잇과 같은 놀이).
   // 책상으로 돌아가는 길은 정보 줄의 "← 메인으로"와 Esc가 맡는다
@@ -155,7 +170,7 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
     focusTarget: () => main.querySelector('button') ?? Object.assign(main, { tabIndex: -1 }),
   }); });
   paper.prepend(tip);
-  root.append(desk, paper);
+  root.append(desk, paper, edges);
   if (ghost) root.insertBefore(ghost, paper);
   // 뒤집고 왔으면 6막 지면과 같은 폭 · 같은 자리에 지면을 놓는다(같은 신문 한 장이 이어진다). 아래로 길어지는 부분은 화면 밖이다
   if (handed && root.classList.contains('is-unflipping')) {
@@ -220,12 +235,63 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
     layer.remove();
   }
 
-  // Esc: 신문을 내려놓고 책상으로(목업과 같은 한 단계 뒤로)
+  // Esc: 신문을 내려놓고 책상으로(목업과 같은 한 단계 뒤로). ← → : 앞 · 다음 면(글자를 쓰는 칸에서는 그 칸의 커서 이동이 먼저다)
   function onKey(event) {
     if (!active()) { document.removeEventListener('keydown', onKey); return; }
-    if (event.key === 'Escape' && !event.defaultPrevented && !picking) navigate('landing');
+    if (event.defaultPrevented || picking) return;
+    if (event.key === 'Escape') navigate('landing');
+    const arrow = { ArrowLeft: -1, ArrowRight: 1 }[event.key];
+    if (arrow && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.target.closest?.('input, textarea, select, [contenteditable]')) {
+      if (faceIndexAfter(FACE_KEYS, selected, arrow) < 0) return; // 넘길 면이 없으면(1면의 ←, 마지막 면의 →) 브라우저 기본 동작을 그대로 둔다
+      event.preventDefault(); // 면을 넘길 때는 같은 키의 기본 가로 스크롤이 함께 일어나지 않게 한다
+      turnFace(arrow);
+    }
   }
   document.addEventListener('keydown', onKey);
+
+  // 손가락 밀기: 왼쪽으로 밀면 다음 면, 오른쪽이면 앞 면. 세로 스크롤은 그대로 두려고 지켜보기만 한다(passive). 두 손가락은 확대라 무시
+  let touch = null;
+  paper.addEventListener('touchstart', (event) => {
+    touch = event.touches.length === 1 ? { x: event.touches[0].clientX, y: event.touches[0].clientY, at: event.timeStamp } : null;
+  }, { passive: true });
+  paper.addEventListener('touchend', (event) => {
+    const start = touch;
+    touch = null;
+    if (!start || event.touches.length) return;
+    const end = event.changedTouches[0];
+    const step = swipeStep({ dx: end.clientX - start.x, dy: end.clientY - start.y, ms: event.timeStamp - start.at });
+    if (step) turnFace(step);
+  }, { passive: true });
+  paper.addEventListener('touchcancel', () => { touch = null; }, { passive: true });
+
+  function turnFace(step) {
+    const index = faceIndexAfter(FACE_KEYS, selected, step);
+    if (index >= 0) switchTab(FACE_KEYS[index], { turned: true });
+  }
+  function syncTurns() {
+    const ears = [];
+    edges.replaceChildren();
+    [-1, 1].forEach((step) => {
+      const index = faceIndexAfter(FACE_KEYS, selected, step);
+      if (index < 0) return; // 1면 앞 · 마지막 면 뒤에는 넘길 장이 없다
+      const back = step < 0;
+      const name = faceName(tabs[index]);
+      const side = back ? 'is-prev' : 'is-next';
+      // 종이 귀: 다음 면은 오른쪽 아래, 앞 면은 왼쪽 아래 모서리. 글자는 귀 안쪽(성향 결과지의 "풀이 보기"와 같은 모양, components/folderParts.js)
+      const ear = button('', () => turnFace(step), `face-turn ${side}`);
+      ear.dataset.turn = side;
+      ear.setAttribute('aria-label', `${back ? '앞' : '다음'} 면, ${name}으로 넘기기`);
+      ear.append(element('span', 'face-turn-label', back ? `← ${name}` : `${name} →`), paperFold({ flipped: back }));
+      ears.push(ear);
+      const edge = button(back ? '‹' : '›', () => turnFace(step), `face-edge ${side}`);
+      edge.dataset.turn = side;
+      edge.tabIndex = -1;
+      edge.setAttribute('aria-hidden', 'true');
+      edge.title = `${name}으로 넘기기`;
+      edges.append(edge);
+    });
+    turns.replaceChildren(...ears);
+  }
 
   // 오류에서도 탭은 그대로 둔다(예전에는 main 전체를 바꿔 다른 유형으로 갈 수 없었다, FE-102). 목록 자리에만 오류 상자를 둔다
   function showError(retry) {
@@ -233,20 +299,25 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
     box.setAttribute('role', 'alert');
     box.append(element('p', '', '사건 목록을 불러오지 못했어요.'), element('p', 'muted', '네트워크 연결을 확인하고 다시 시도해 주세요.'), button('다시 시도', retry));
     main.replaceChildren(renderTabs(lastSummary), box);
+    syncTurns(); // 오류 면에서도 앞 · 뒤 면으로 넘어갈 수 있다
     tipLine.textContent = '지면을 다시 불러오면 마음이 가는 기사를 눌러 볼 수 있어요.';
     tip.disabled = false;
     tip.classList.remove('is-waiting');
     root.classList.remove('is-loading');
   }
 
-  // 기사 고르기: 지금 지면이 한 장 넘어가기 시작하고, 그 밑에 사건 정보(S-20)가 바로 놓인다
+  // 기사 고르기: 지금 지면을 본뜬 한 장을 띄워 두고 사건 정보(S-20)로 간다. 사건 정보가 그려지면 이 기사의 제목이 그 제목 자리로 날아간다(articleZoom.js)
   function pick(item, target) {
     if (picking) return;
     picking = true;
     target.classList.add('is-picked');
     root.classList.add('is-picking');
-    turnPage(paper, { scopeClass: 'case-list-page' });
+    liftArticle(flyingTitle(target, item), { page: paper, scopeClass: 'case-list-page' });
     navigate('caseDetail', { caseId: item.caseId, from: 'paper' });
+  }
+  // 날아갈 제목: 누른 기사 안의 제목, 없으면(머리기사 단 · 사진) 같은 사건의 머리기사 배너 제목
+  function flyingTitle(target, item) {
+    return target.querySelector('h2, h3') ?? (mates.get(item.caseId) ?? []).map((node) => node.querySelector('h2, h3')).find(Boolean) ?? null;
   }
   // 기사 전체를 누를 수 있게 한다(마우스). 키보드 · 화면 낭독기는 기사 안의 "사건 펼쳐 보기" 버튼으로 고른다
   function pickable(node, item) {
@@ -358,6 +429,25 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
     return pickable(article, item);
   }
 
+  // ---- 빈 칸 채움 지면 (FE-118) ----
+  function filler(kind, seed) {
+    const box = element('aside', `filler filler-${kind}`);
+    if (kind === 'ad') {
+      box.setAttribute('aria-label', '광고');
+      box.append(element('p', 'filler-label', '광고'), element('h3', 'filler-title', '나는 엄격한 판사일까, 관대한 판사일까?'),
+        element('p', 'filler-text', '몇 가지 사건 질문에 답하면 나의 판결 성향을 알려 드려요.'),
+        button('판결 성향 테스트 →', () => navigate('test'), 'start filler-go'));
+    } else {
+      box.setAttribute('aria-label', '법정 상식');
+      box.append(element('p', 'filler-label', '법정 상식'), element('p', 'filler-text', courtFacts[seed % courtFacts.length]));
+    }
+    return box;
+  }
+  // 빈 칸 수만큼: 둘 이상이면 맨 앞 하나는 광고, 나머지는 법정 상식(면마다 다른 문장부터 시작한다)
+  function fillers(count, seed) {
+    return Array.from({ length: count }, (_, i) => filler(count >= 2 && i === 0 ? 'ad' : 'fact', seed + i));
+  }
+
   // ---- 지면 ----
   // summary가 없으면(불러오는 중 · 처음부터 실패) 건수 없이 탭만 그린다. disabled면 누를 수 없다
   function renderTabs(summary, { disabled = false } = {}) {
@@ -424,10 +514,16 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
       grid.setAttribute('aria-label', '머리기사');
       grid.append(leadPhoto(lead), leadArticle(lead));
       parts.push(banner, grid);
+      const seed = FACE_KEYS.indexOf(selected) * 3; // 면마다 다른 법정 상식부터
       if (recommended.length) {
         const recs = element('section', 'recs');
         recs.setAttribute('aria-label', '추천 사건');
         recommended.forEach((item) => recs.append(recommendedArticle(item)));
+        if (recommended.length < RECOMMENDED_COUNT) { // 추천이 한 건뿐이면 비는 반쪽에 작은 지면 세 개를 세로로 쌓는다
+          const column = element('div', 'article filler-column');
+          column.append(...fillers(FILLER_STRIP, seed));
+          recs.append(column);
+        }
         parts.push(recs);
       }
 
@@ -438,11 +534,26 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
         head.append(element('h2', '', '이번 호 다른 사건'), element('span', '', `${rest.length}건 · 참여 많은 순`));
         const list = element('div', 'index-grid');
         rest.forEach((item) => list.append(indexArticle(item)));
+        // 마지막 줄의 빈 칸: 넓은 화면(6칸) 기준으로 만들고, 태블릿(3칸) · 모바일(2칸)에서 남는 칸은 CSS가 뒤에서부터 숨긴다(fill-3 · fill-2만 남긴다)
+        const { six, three, two } = emptySlots(rest.length);
+        fillers(six, seed + 1).forEach((node, i) => {
+          node.classList.add('article'); // 다른 사건 칸과 같은 칸 간격 · 구분선
+          if (i < three) node.classList.add('fill-3');
+          if (i < two) node.classList.add('fill-2');
+          list.append(node);
+        });
         index.append(head, list);
         parts.push(index);
+      } else {
+        // 다른 사건이 한 건도 없는 면(기사 3건 이하): 지면 아래가 비지 않게 읽을거리 한 줄을 깐다
+        const strip = element('section', 'filler-strip');
+        strip.setAttribute('aria-label', '읽을거리');
+        strip.append(...fillers(FILLER_STRIP, seed + 1));
+        parts.push(strip);
       }
     }
     main.replaceChildren(...parts);
+    syncTurns();
     paper.classList.toggle('inner-page', selected !== undefined); // 전체 탭만 1면, 유형 탭(살인 · 사기 · 상해 · 강도 · 절도)은 안쪽 면(오른쪽 면)
   }
 
@@ -461,13 +572,16 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
     }
   }
 
-  // 탭 바꾸기: 새 목록을 받으면 지금 지면을 한 장으로 떼어 넘기고, 그 밑에 새 목록을 바로 그린다(빠르게 연달아 눌러도 마지막 것만 남는다)
-  async function switchTab(crimeType) {
+  // 면 바꾸기: 새 목록을 받으면 지금 지면을 한 장으로 떼어 넘기고, 그 밑에 새 목록을 바로 그린다(빠르게 연달아 눌러도 마지막 것만 남는다).
+  // 뒤 면으로는 앞으로 넘기고, 앞 면으로는 거꾸로 넘어온다(back). turned: 탭이 아니라 귀 · 화살표 · 키보드 · 밀기로 넘겼다 — 새 면은 맨 위부터 읽는다
+  async function switchTab(crimeType, { turned = false } = {}) {
     if (!ready || picking || crimeType === selected) return;
     const mine = ++switching;
+    const back = FACE_KEYS.indexOf(crimeType) < FACE_KEYS.indexOf(selected);
     selected = crimeType;
     saveTypeToUrl(crimeType); // 새로고침 · 사건 정보에 다녀오기에서도 같은 면(FE-102)
-    const keepFocus = document.activeElement?.classList?.contains('tab'); // 키보드로 눌렀으면 새로 그린 같은 탭으로 포커스를 돌려준다
+    // 키보드로 탭 · 귀를 눌렀으면 새로 그린 면의 탭으로 포커스를 돌려준다(귀는 다시 그려지고, 새 면은 위에서부터 읽는다)
+    const keepFocus = document.activeElement?.classList?.contains('tab') || Boolean(document.activeElement?.dataset?.turn);
     let result = null;
     try {
       result = await api.getCases(crimeType);
@@ -475,9 +589,11 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
       result = null;
     }
     if (!active() || mine !== switching) return;
-    turnPage(paper, { scopeClass: 'case-list-page', duration: TAB_TURN_MS });
-    if (result) draw(result);
-    else showError(() => load(crimeType));
+    turnPage(paper, { scopeClass: 'case-list-page', duration: TAB_TURN_MS, back, draw: () => {
+      if (turned) window.scrollTo(0, 0); // 넘기는 한 장이 화면을 덮고 있는 동안 올린다
+      if (result) draw(result);
+      else showError(() => load(crimeType));
+    } });
     if (keepFocus) main.querySelector(`.tab[data-type="${crimeType ?? ''}"]`)?.focus({ preventScroll: true });
   }
 

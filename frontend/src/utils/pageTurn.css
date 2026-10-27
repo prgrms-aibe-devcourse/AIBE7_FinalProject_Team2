@@ -18,6 +18,13 @@
 /* 넘어가며 접히는 쪽(오른쪽 끝)이 어두워진다 */
 .page-turn-shade { position: absolute; inset: 0; opacity: 0; background: linear-gradient(90deg, transparent 15%, color-mix(in srgb, var(--color-desk-shadow) 75%, transparent) 100%); }
 .page-turn-shade.is-back { background: linear-gradient(270deg, transparent 15%, color-mix(in srgb, var(--color-desk-shadow) 75%, transparent) 100%); }
+/* 뒤로 넘기기(FE-118): 앞 면이 넘어와 덮을 때까지 그 밑에 그대로 두는 지금 면 */
+.page-turn-under { position: absolute; top: 0; height: 100dvh; overflow: hidden; }
+
+/* 기사 → 사건 정보 제목 확대 (utils/articleZoom.js, FE-118). 본뜬 신문 지면이 흐려지며 걷히는 동안 제목 글자가 새 제목 자리로 날아간다 */
+.article-zoom { position: fixed; inset: 0; z-index: 1000; overflow: hidden; pointer-events: none; clip-path: inset(var(--site-header-h, 0px) 0 0 0); } /* 공통 헤더 아래만 덮는다: 스크롤을 내린 채 누르면 본뜬 지면이 헤더 자리까지 올라와 내비를 가렸다 */
+.article-zoom .article-zoom-scope { position: absolute; inset: 0; min-height: 0; }
+.article-zoom-fly { position: absolute; margin: 0; transform-origin: 0 0; }
 
 /* 메인 책상 커피잔 → 마이페이지 (utils/coffeeDive.js). 커다란 잔이 우상단에서 날아와 서고, 책상이 마이페이지로 바뀐 뒤 오른쪽으로 빠져나간다. 잔 · 커피 색은 책상 그림과 같다.
    움직임 줄이기면 연출 자체를 하지 않는다(landingPage.js) */
