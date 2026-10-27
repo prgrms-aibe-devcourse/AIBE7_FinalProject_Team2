@@ -134,13 +134,14 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
   // 책상으로 돌아가는 길은 정보 줄의 "← 메인으로"와 Esc가 맡는다
   const tip = element('button', 'paper-tip');
   tip.type = 'button';
+  tip.disabled = true; // 감춰 둔 동안은 키보드 포커스도 받지 않는다(draw · showError에서 푼다)
   tip.classList.add('is-waiting'); // 건수를 받기 전에는 감춰 두었다가 한 번에 나타난다(문구가 바뀌며 깜빡이지 않게, FE-102)
   const face = element('img');
   face.src = NAMBUL_FACE;
   face.alt = '';
   face.addEventListener('error', () => face.remove(), { once: true });
   const tipText = element('span', 'paper-tip-text');
-  const tipLine = element('span', '', '마음이 가는 기사를 눌러 보세요!');
+  const tipLine = element('span', '', ''); // 문구는 draw · showError가 채운다(처음 값이 ?type=로 들어온 첫 화면에 남지 않게)
   tipText.append(element('b', '', '남불'), tipLine, element('span', 'visually-hidden', '(눌러서 떼기)'));
   tip.append(face, tipText);
   tip.addEventListener('click', () => { root.classList.add('tip-off'); peelOff(tip, {
@@ -229,6 +230,7 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
     box.append(element('p', '', '사건 목록을 불러오지 못했어요.'), element('p', 'muted', '네트워크 연결을 확인하고 다시 시도해 주세요.'), button('다시 시도', retry));
     main.replaceChildren(renderTabs(lastSummary), box);
     tipLine.textContent = '지면을 다시 불러오면 마음이 가는 기사를 눌러 볼 수 있어요.';
+    tip.disabled = false;
     tip.classList.remove('is-waiting');
     root.classList.remove('is-loading');
   }
@@ -249,8 +251,12 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
     const group = mates.get(item.caseId) ?? [];
     group.push(node);
     mates.set(item.caseId, group);
-    node.addEventListener('mouseenter', () => group.forEach((other) => { if (other !== node) other.classList.add('is-mate-hover'); }));
-    node.addEventListener('mouseleave', () => group.forEach((other) => other.classList.remove('is-mate-hover')));
+    const lightMates = () => group.forEach((other) => { if (other !== node) other.classList.add('is-mate-hover'); });
+    const dimMates = () => group.forEach((other) => other.classList.remove('is-mate-hover'));
+    node.addEventListener('mouseenter', lightMates);
+    node.addEventListener('mouseleave', dimMates);
+    node.addEventListener('focusin', lightMates); // 키보드로 제목에 가도 같은 사건이 함께 강조된다
+    node.addEventListener('focusout', dimMates);
     node.addEventListener('click', (event) => {
       if (event.target.closest('button')) return; // 버튼은 자기 동작으로 고른다
       pick(item, node);
@@ -387,9 +393,12 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
     lastSummary = summary;
     root.classList.remove('is-loading');
     mates.clear(); // 아래에서 다시 만드는 영역으로 새로 모은다
-    // 포스트잇 문구는 전체 지면 기준이라 전체 탭에서만 새로 쓴다(유형 탭에서는 처음 문구를 그대로 둔다). 오른쪽 귀는 어느 탭에서나 채운다(포스트잇을 떼면 드러난다)
-    if (selected === undefined) tipLine.textContent = tipMessage(summary.total, cases.filter((item) => !isSoon(item)).length);
+    // 포스트잇 문구: 전체 탭은 체험 가능 건수까지, 유형 탭은 그 유형 사건만 받아 체험 가능 건수를 셀 수 없으니 전체 건수만. 오른쪽 귀는 어느 탭에서나 채운다(포스트잇을 떼면 드러난다)
+    tipLine.textContent = selected === undefined
+      ? tipMessage(summary.total, cases.filter((item) => !isSoon(item)).length)
+      : `오늘 지면에 사건이 ${summary.total}건 실렸어요.`;
     earRight.replaceChildren(element('b', '', `오늘의 사건 ${summary.total}건`), element('span', '', byTypeText(summary)));
+    tip.disabled = false;
     tip.classList.remove('is-waiting');
 
     const parts = [renderTabs(summary)];
@@ -434,20 +443,21 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
   }
 
   let ready = false; // 처음 목록을 받은 뒤에야 탭이 눌린다(받는 도중 누르면 두 요청이 엇갈린다)
+  let switching = 0; // load · switchTab이 함께 쓰는 요청 번호: 더 새 요청이 있으면 늦게 온 응답은 버린다(재시도 중 탭을 눌러도 이전 유형이 덮지 않게)
   async function load(crimeType) {
+    const mine = ++switching;
     selected = crimeType;
     try {
       const data = await api.getCases(crimeType);
-      if (active()) draw(data);
+      if (active() && mine === switching) draw(data);
     } catch (error) {
-      if (active()) showError(() => load(crimeType));
+      if (active() && mine === switching) showError(() => load(crimeType));
     } finally {
       ready = true;
     }
   }
 
   // 탭 바꾸기: 새 목록을 받으면 지금 지면을 한 장으로 떼어 넘기고, 그 밑에 새 목록을 바로 그린다(빠르게 연달아 눌러도 마지막 것만 남는다)
-  let switching = 0;
   async function switchTab(crimeType) {
     if (!ready || picking || crimeType === selected) return;
     const mine = ++switching;
