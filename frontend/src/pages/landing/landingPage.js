@@ -1,5 +1,5 @@
 import { button, element, mockTag, renderSiteFooter } from '../../components/siteLayout.js';
-import { casePhoto, fallbackImages, todayLabel, useCommonPhotoOnError } from '../../utils/newspaper.js';
+import { casePhoto, commonCategoryOf, fallbackImages, todayLabel, useCommonPhotoOnError } from '../../utils/newspaper.js';
 import { holdPaper, takePaper } from '../../utils/paperHandoff.js';
 import { restingStyle, tailPose } from '../../utils/tailSpread.js';
 import { flyCoffee } from '../../utils/coffeeDive.js';
@@ -586,14 +586,14 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
     banner.textContent = top.headline || top.title;
     rugClip.head.textContent = top.headline || top.title; // 아래 집무실 러그의 신문 스크랩도 같은 머리기사
     rugClip.kicker.textContent = `머리기사 · ${top.crimeCategoryLabel}`;
-    useCommonPhotoOnError(rugClip.photo, Number(top.caseId) || 0);
+    useCommonPhotoOnError(rugClip.photo, Number(top.caseId) || 0, undefined, commonCategoryOf(top));
     rugClip.photo.src = casePhoto(top);
     deck.textContent = top.deck || top.shortIntro;
     kicker.textContent = `머리기사 · ${top.crimeCategoryLabel}`;
     earCount.textContent = `법정에 오른 사건 ${summary.total}건`;
     tabCount.textContent = `총 ${summary.total}건`;
     lead.textContent = top.article?.[0] || top.shortIntro;
-    useCommonPhotoOnError(photo, Number(top.caseId) || 0);
+    useCommonPhotoOnError(photo, Number(top.caseId) || 0, undefined, commonCategoryOf(top));
     photo.src = casePhoto(top);
     recs.replaceChildren(...others.slice(0, 2).map((item) => {
       const node = span('news-rec');
@@ -602,14 +602,14 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
       picture.alt = '';
       picture.width = 16; // 비율 힌트. 크기는 CSS가 정한다
       picture.height = 9;
-      useCommonPhotoOnError(picture, Number(item.caseId) || 0);
+      useCommonPhotoOnError(picture, Number(item.caseId) || 0, undefined, commonCategoryOf(item));
       picture.src = casePhoto(item);
       node.append(picture, element('b', '', item.headline || item.title), span('', item.article?.join(' ') || item.shortIntro));
       return node;
     }));
     mobileCounts.news.textContent = `사건 ${summary.total}건`;
     mobileNews.headline.textContent = top.headline || top.title;
-    useCommonPhotoOnError(mobileNews.photo, Number(top.caseId) || 0);
+    useCommonPhotoOnError(mobileNews.photo, Number(top.caseId) || 0, undefined, commonCategoryOf(top));
     mobileNews.photo.src = casePhoto(top);
     tailSheet.replaceChildren(news.cloneNode(true)); // 맨 아래 끝자락도 같은 머리기사로(눌러서 펼친 사건 목록 지면과 이어지게)
   }

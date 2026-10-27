@@ -149,7 +149,7 @@ const WORDS = {
   cheer: '응원', guide: '안내', react: '반응', read: '읽기', trio: '셋',
 };
 const CASE_PARTS = { origin: '발단', conclusion: '결론', reenact: '재연' };
-const COMMON_PARTS = { headline: '헤드라인', 'sub-1': '서브', 'detail-1': '디테일' };
+const COMMON_CATEGORIES = { property: '재산', body: '신체', life: '생명' };
 
 export function portraitLabel(src) {
   const kind = kindOfPortrait(src);
@@ -158,10 +158,8 @@ export function portraitLabel(src) {
   if (kind === 'cases') {
     const own = /^case-(\d+)-([a-z]+)$/.exec(file);
     if (own) return `사건 ${own[1]} · ${CASE_PARTS[own[2]] ?? own[2]}`;
-    const common = /^common-(\d+)$/.exec(file);
-    if (common) return `공용 컷 ${common[1]}`;
-    const reenact = /^reenact-common(-\d+)?_(.+)$/.exec(file);
-    if (reenact) return `공용 재연${reenact[1] ? ` ${reenact[1].slice(1)}` : ''} · ${COMMON_PARTS[reenact[2]] ?? reenact[2]}`;
+    const common = /^common-([a-z]+)-([a-z]+)$/.exec(file);
+    if (common) return `공용 ${COMMON_CATEGORIES[common[1]] ?? common[1]} · ${CASE_PARTS[common[2]] ?? common[2]}`;
     return file;
   }
   const cut = file.indexOf('_');

@@ -28,7 +28,7 @@ export const seedPosts = [
     author: { nickname: '말없는 판사', character: 'naero' },
     title: '신문 지면 넘기는 연출이 좋네요',
     body: '사건 목록이 신문으로 펼쳐지는 게 기억에 남아요. 기사 하나를 골라 오려 내는 느낌이라 사건에 더 집중하게 돼요.',
-    images: ['/images/cases/common-2.webp'], verdict: null,
+    images: ['/images/cases/common-body-origin.webp'], verdict: null,
     likeCount: 7, createdAt: '2026-10-17T19:40:00+09:00',
   },
   {
