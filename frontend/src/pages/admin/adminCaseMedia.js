@@ -173,7 +173,9 @@ export function mediaSection(ctx, data) {
         disabled: !editable,
         submitText: saved ? '교체하기' : '올리기',
         onUpload: async (file) => {
-          await api.uploadIncidentPhoto(caseId, { file, role, caption: caption.value.trim() || undefined, prompt: hint.value.trim() || undefined });
+          // 추천 문구는 발단(ORIGIN)만 지원한다(BE-91) — 결론(CONCLUSION) 업로드에는 함께 보내지 않는다
+          const prompt = role === 'ORIGIN' ? hint.value.trim() || undefined : undefined;
+          await api.uploadIncidentPhoto(caseId, { file, role, caption: caption.value.trim() || undefined, prompt });
           await after(`${PHOTO_ROLE[role]}을 올렸어요.`, 'media');
         },
       }),

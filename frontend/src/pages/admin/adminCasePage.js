@@ -566,12 +566,11 @@ export function renderAdminCasePage(container, { caseId, navigate }) {
           contentSection(data), sourcesSection(data));
       }
 
-      /** 없을 수 있는 값은 그 _NOT_FOUND만 null로 삼킨다. 로그인 만료 같은 오류는 그대로 올린다 */
+      /** 없을 수 있는 값은 그 _NOT_FOUND만 null로 삼킨다. 그 밖의 오류는 그대로 올린다 */
       function optional(promise, missingCode, fallback = null) {
         return promise.catch((failure) => {
           if (failure?.code === missingCode) return fallback;
-          if (failure?.code === 'UNAUTHORIZED') throw failure;
-          return fallback;	// 그 밖의 오류도 화면을 막지는 않는다 — 그 부분만 비워 둔다
+          throw failure;
         });
       }
 
