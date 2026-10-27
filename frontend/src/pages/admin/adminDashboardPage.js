@@ -25,7 +25,7 @@ function barChart(title, series) {
     bar.title = `${formatDate(point.date)} ${point.count}`;
     bars.append(bar);
   });
-  box.append(element('figcaption', '', title), bars);
+  box.append(element('figcaption', '', title), bars); // 막대 아래 기준선은 CSS(.admin-bars 아래 테두리)
   return box;
 }
 
@@ -35,7 +35,9 @@ export function renderAdminDashboardPage(container, { navigate }) {
     section: 'dashboard',
     title: '대시보드',
     draw: async ({ api, main, active, unauthorized }) => {
-      main.replaceChildren(pageTop('대시보드'), element('p', 'admin-message', '불러오는 중이에요.'));
+      const loading = element('p', 'admin-message', '불러오는 중이에요.');
+      loading.setAttribute('role', 'status');
+      main.replaceChildren(pageTop('대시보드'), loading);
       try {
         const data = await api.getDashboard();
         if (!active()) return;
