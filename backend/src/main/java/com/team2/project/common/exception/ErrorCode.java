@@ -50,6 +50,8 @@ public enum ErrorCode {
 	PAPER_NOT_FOUND(HttpStatus.NOT_FOUND, "신문 지면 콘텐츠가 없습니다."),
 	// 프로필 꾸미기 (확장 단계, BE-96). details에 잠긴 필드를 담는다
 	DECO_LOCKED(HttpStatus.CONFLICT, "아직 열리지 않은 꾸미기입니다."),
+	// 레벨 · 직업 (확장 단계, BE-106)
+	JOB_LOCKED(HttpStatus.CONFLICT, "아직 열리지 않은 직업입니다."),
 	// 사건 등록 API (확장 단계, BE-93, API 명세 A-14 · A-15)
 	DUPLICATE_SOURCE(HttpStatus.CONFLICT, "이미 등록한 사건번호입니다."),
 	IMPORT_IN_PROGRESS(HttpStatus.CONFLICT, "다른 사건을 등록하는 중입니다."),

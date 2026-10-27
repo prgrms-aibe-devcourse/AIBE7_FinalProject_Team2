@@ -6,11 +6,10 @@ import { restartMock, jumpActMock } from '../../mocks/mockStageButtons.js';
 import { getDraft, saveDraft, clearDraft } from './verdictDraft.js';
 import { markAiRevealIntro } from '../ai/aiRevealIntro.js';
 import { reducedMotion } from '../../utils/motion.js';
-import { getBookmarkColor, selectedBookmarkFace } from '../../utils/bookmarkCharacter.js';
+import { eraseSignature, signatureSvg, signerSeed, writeSignature } from '../../components/signatureInk.js';
+import { folderBookmark, paperFold } from '../../components/folderParts.js';
 
 const penaltyLabels = { DEATH: '사형', LIFE: '무기징역', PRISON: '징역', FINE: '벌금' };
-// 해금 책갈피의 얼굴(내로)
-const SIGN_MS = 900; // 서명 획이 다 그려지는 시간(verdict.css .sign-ink와 같게). 그다음 확정을 보낸다
 const FILED_MS = 900; // 확정된 뒤 "판결 접수" 도장을 보여 주는 시간(verdict.css .sign-filed). 그다음 AI 판결로 넘어간다(FE-97)
 
 // 원문을 유지해 빈 칸, 0, 잘못 입력한 값을 구별한다.
@@ -51,14 +50,6 @@ function element(tag, className, text) {
   if (className) node.className = className;
   if (text !== undefined) node.textContent = text;
   return node;
-}
-
-function picture(src) {
-  const image = element('img');
-  image.src = src;
-  image.alt = '';
-  image.addEventListener('error', () => image.remove(), { once: true });
-  return image;
 }
 
 function button(text, action, className = 'secondary-button') {
@@ -467,8 +458,9 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
     signature.type = 'button';
     signature.setAttribute('aria-describedby', reason.id);
     const signHint = element('span', 'sign-hint', '여기를 눌러 서명');
-    // 서명 획(장식): 손으로 흘려 쓴 한 줄. 눌렀을 때 획이 그려진다(움직임 줄이기면 바로 나타난다)
-    signature.insertAdjacentHTML('beforeend', `<svg class="sign-ink" viewBox="0 0 240 64" aria-hidden="true" focusable="false"><path pathLength="1" d="M8 44 C 22 14, 34 10, 36 30 S 30 58, 46 40 S 70 12, 74 30 S 72 52, 92 36 C 104 26, 110 22, 116 34 S 128 50, 140 30 C 150 16, 160 18, 158 34 S 170 52, 190 30 C 200 20, 214 22, 232 26"/></svg>`);
+    // 서명 획(장식, FE-94): 닉네임(로그인 안 했으면 이 브라우저의 임시 식별값)으로 만든 서명. 눌렀을 때 한 획으로 처음부터 끝까지 쓰인다(움직임 줄이기면 바로 나타난다)
+    const signInk = signatureSvg(signerSeed(), { blank: true });
+    signature.append(signInk);
     signature.prepend(signHint);
     const signRow = element('div', 'sign-row');
     // 판결 접수 도장(FE-97): 확정되면 서명 옆에 찍히고 한 박자 뒤 AI 판결로 넘어간다. 서명 직후 곧바로 "AI 판결을 기다리는 중"으로 바뀌어 내 결정이 로더에 묻혔다
@@ -507,8 +499,8 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       update();
       hold();
       requestAnimationFrame(hold);
-      // 서명이 다 그려진 뒤에 확정을 보낸다(되돌릴 수 없는 일이라 서명하는 순간을 눈으로 보게 한다)
-      if (!reducedMotion()) await new Promise((resolve) => { setTimeout(resolve, SIGN_MS); });
+      // 서명이 다 쓰인 뒤에 확정을 보낸다(되돌릴 수 없는 일이라 서명하는 순간을 눈으로 보게 한다). 서명 길이에 따라 0.8 ~ 1.2초
+      await writeSignature(signInk);
       try {
         await api.postVerdict(caseId, payload);
         clearDraft(caseId);
@@ -524,6 +516,7 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
         if (!active()) return;
         signed = false;
         signRow.classList.remove('is-signed'); // 확정하지 못했으면 서명을 지운다
+        eraseSignature(signInk);
         if (error?.code === 'INVALID_STATE') {
           showError(error);
         } else if (['OUT_OF_ALLOWED_RANGE', 'INVALID_SUSPENSION'].includes(error?.code)) {
@@ -611,9 +604,7 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
     const LAST = 4;
     // 진행 책갈피: 펼쳐 본 가장 뒤 장(reached)의 탭 바로 뒤에 끼워 둔 내로 얼굴 책갈피(장식). 잠금이 아니라 진행을 표시하므로
     // 늘 보이고, 뒤로 넘겨도 자리를 지킨다(마지막 장까지 오면 탭 줄 끝). 얼굴은 마이페이지 "만난 모습"에서 고른 것(FE-67)
-    const bookmark = element('span', `folder-bookmark bookmark-color-${getBookmarkColor()}`);
-    bookmark.setAttribute('aria-hidden', 'true');
-    bookmark.append(picture(selectedBookmarkFace()));
+    const bookmark = folderBookmark();
     const pages = [[summaryPage, '사건 요약'], [sidebar, '참고 정보'], [factorPage, '판단 요소'], [main, '최종 판결'], [signPage, '확정']].map(([panel, title], i) => {
       const tab = element('button', 'folder-tab');
       tab.type = 'button';
@@ -700,6 +691,7 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       const curl = element('button', 'folder-curl');
       curl.type = 'button';
       curl.setAttribute('aria-label', `다음 장으로 넘기기: ${pages[i + 1].title}`);
+      curl.append(paperFold());
       curl.addEventListener('click', () => goTo(i + 1, true)); // 최종 판결 → 확정도 판결이 다 정해져야 넘어간다
       panel.append(curl);
     });

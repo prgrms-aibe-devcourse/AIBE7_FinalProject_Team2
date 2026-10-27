@@ -5,7 +5,7 @@ import { get, logout, patch, post, put, reissueAccessToken } from './client.js';
 
 const experience = (caseId) => `/cases/${encodeURIComponent(caseId)}/experience`;
 
-// API 1 — 사건 목록 (crimeType: MURDER | FRAUD | INJURY, 없으면 전체)
+// API 1 — 사건 목록 (crimeType: MURDER | FRAUD | INJURY | ROBBERY | THEFT, 없으면 전체)
 export const getCases = (crimeType) =>
   get(crimeType === undefined ? '/cases' : `/cases?crimeType=${encodeURIComponent(crimeType)}`);
 

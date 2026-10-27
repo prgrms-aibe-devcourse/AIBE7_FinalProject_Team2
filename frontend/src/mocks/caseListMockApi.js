@@ -4,7 +4,7 @@ import { getItem, peek, read, restart, storageKey, validState } from './mockExpe
 import case1Script from '../content/case-1/script.json' with { type: 'json' };
 
 const delay = () => new Promise((resolve) => setTimeout(resolve, 250));
-const crimeTypes = ['MURDER', 'FRAUD', 'INJURY'];
+const crimeTypes = ['MURDER', 'FRAUD', 'INJURY', 'ROBBERY', 'THEFT'];
 // caseId 1 외 사건의 체험은 새로고침하면 사라지는 메모리 상태로만 둔다.
 const startedCases = new Map();
 
@@ -32,7 +32,7 @@ function myStatusOf(caseId) {
 }
 
 // 사건 1은 S-03 개요 목(API 4)과 같은 죄명을 쓰고, 나머지는 유형별 죄명(임의 데이터)
-const CHARGE_NAMES = { MURDER: '살인', FRAUD: '사기', INJURY: '상해' };
+const CHARGE_NAMES = { MURDER: '살인', FRAUD: '사기', INJURY: '상해', ROBBERY: '강도', THEFT: '절도' };
 const chargeNameOf = (item) =>
   item.caseId === mockOverview.case.caseId ? mockOverview.case.chargeName : CHARGE_NAMES[item.crimeType];
 

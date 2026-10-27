@@ -35,7 +35,7 @@ test('로그인하지 않으면 등록할 수 없다', async () => {
 });
 
 test('등록 요청 검증: 범죄 유형 · 판결문 수 · 심급 중복 · 사건번호 · 원문', async () => {
-  assert.equal(await code(api.createImport(request({ crimeType: 'THEFT' }))), 'VALIDATION_ERROR');
+  assert.equal(await code(api.createImport(request({ crimeType: 'ARSON' }))), 'VALIDATION_ERROR');
   assert.equal(await code(api.createImport(request({ sources: [] }))), 'VALIDATION_ERROR');
   assert.equal(await code(api.createImport(request({ sources: [source(), source({ caseNumber: 'a' })] }))), 'VALIDATION_ERROR'); // 같은 심급
   assert.equal(await code(api.createImport(request({ sources: [source({ caseNumber: '' })] }))), 'VALIDATION_ERROR');

@@ -21,6 +21,8 @@ const tabs = [
   { crimeType: 'MURDER', label: '살인' },
   { crimeType: 'FRAUD', label: '사기' },
   { crimeType: 'INJURY', label: '상해' },
+  { crimeType: 'ROBBERY', label: '강도' },
+  { crimeType: 'THEFT', label: '절도' },
 ];
 const TAB_TURN_MS = 500; // 탭은 훑어보며 자주 누르므로 기사 → 상세(1초)보다 짧게
 const RECOMMENDED_COUNT = 2; // 머리기사 옆 추천 사건 수. 나머지는 "이번 호 다른 사건"으로 간다
@@ -38,6 +40,8 @@ const TYPE_NOTES = {
   MURDER: '[알아두기] 살인죄는 사람의 생명을 빼앗았을 때 성립합니다. 어떤 법률이 적용되고 어느 범위에서 형을 정할 수 있는지는 사건 기록의 적용 법률 단계에서 공개됩니다.',
   FRAUD: '[알아두기] 사기죄는 사람을 속여 재물이나 재산상 이익을 얻었을 때 성립합니다. 처음부터 속일 생각이 있었는지는 겉으로 드러나지 않아, 거래 전후의 사정을 함께 보고 판단합니다.',
   INJURY: '[알아두기] 폭행은 사람의 몸에 힘을 가하는 것만으로 성립하고, 그로 인해 건강을 해친 결과가 생기면 상해가 문제 됩니다. 어떤 죄가 적용되는지는 사건 기록의 적용 법률 단계에서 공개됩니다.',
+  ROBBERY: '[알아두기] 강도죄는 폭행이나 협박으로 상대방이 저항하기 어렵게 만들어 재물을 빼앗았을 때 성립합니다. 그 과정에서 사람이 다쳤는지에 따라 적용되는 죄가 달라지며, 적용 법률은 사건 기록의 적용 법률 단계에서 공개됩니다.',
+  THEFT: '[알아두기] 절도죄는 다른 사람의 재물을 그 사람의 허락 없이 가져갔을 때 성립합니다. 가져간 방법과 횟수에 따라 적용되는 죄가 달라지며, 적용 법률은 사건 기록의 적용 법률 단계에서 공개됩니다.',
 };
 const RECORD_NOTE = '사건에 어떤 사정이 있었는지는 체험을 시작하면 사건 기록에서 한 단계씩 확인할 수 있습니다.';
 // 진행 상태 배지 (FE-19, REQ-010 · FR-1-6). API 1의 myStatus 기준, 체험 전(null)이면 배지 없음
@@ -439,7 +443,7 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
       }
     }
     main.replaceChildren(...parts);
-    paper.classList.toggle('inner-page', selected !== undefined); // 전체 탭만 1면, 유형 탭(살인 · 사기 · 상해)은 안쪽 면(오른쪽 면)
+    paper.classList.toggle('inner-page', selected !== undefined); // 전체 탭만 1면, 유형 탭(살인 · 사기 · 상해 · 강도 · 절도)은 안쪽 면(오른쪽 면)
   }
 
   let ready = false; // 처음 목록을 받은 뒤에야 탭이 눌린다(받는 도중 누르면 두 요청이 엇갈린다)

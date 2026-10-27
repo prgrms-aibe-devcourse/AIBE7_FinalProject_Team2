@@ -1,10 +1,11 @@
 import { button, element } from '../../components/siteLayout.js';
 import { POST_STATUS } from './adminLabels.js';
-import { PAGE_SIZE, badge, createLoader, dataTable, detailPanel, errorLine, formatDate, pageTop, pager, reasonForm, runAction, searchBar } from './adminKit.js';
+import { PAGE_SIZE, badge, confirmChange, createLoader, dataTable, detailPanel, errorLine, formatDate, pageTop, pager, reasonForm, runAction, searchBar } from './adminKit.js';
 import { renderAdminShell } from './adminShell.js';
 
 // 게시글 · 댓글 관리 (A-21 ~ A-27). 목록 · 검색 → 제목을 누르면 아래에 본문 · 댓글 · 숨김 / 복구 / 삭제.
 // 삭제는 되돌릴 수 없는 처리라 사유를 받고 확인을 한 번 더 묻는다(서버에서는 소프트 삭제).
+// FE-105: 숨김(글 · 댓글)도 사용자 화면에서 거두는 처리라 확인을 묻는다(확인 기준은 adminKit.js confirmChange). 처리 뒤에는 알림줄로 알린다
 const STATUS_KIND = { VISIBLE: 'approved', HIDDEN: 'pending', DELETED: 'rejected' };
 
 export function renderAdminPostsPage(container, { navigate }) {
@@ -12,7 +13,7 @@ export function renderAdminPostsPage(container, { navigate }) {
     navigate,
     section: 'posts',
     title: '게시글 · 댓글',
-    draw: async ({ api, main, active, unauthorized }) => {
+    draw: async ({ api, main, active, unauthorized, notify }) => {
       let query = {};
       let page = 0;
       const body = element('div', 'admin-list-body');
@@ -29,7 +30,7 @@ export function renderAdminPostsPage(container, { navigate }) {
       });
       main.replaceChildren(pageTop('게시글 · 댓글'), search, body, detail);
       const loader = createLoader({ body, active, unauthorized });
-      const ctx = { active, unauthorized };
+      const ctx = { active, unauthorized, notify };
 
       function load() {
         return loader(() => api.getPosts({ ...query, page, size: PAGE_SIZE }), (data) => {
@@ -39,7 +40,7 @@ export function renderAdminPostsPage(container, { navigate }) {
             { label: '작성일', cell: (row) => formatDate(row.createdAt) },
             { label: '댓글', cell: (row) => row.commentCount },
             { label: '신고', cell: (row) => (row.reportCount ? `${row.reportCount}건` : '—') },
-          ], data.items, '해당하는 게시글이 없어요.');
+          ], data.items, '해당하는 게시글이 없어요.', '게시글 목록');
           body.replaceChildren(table, ...(data.items.length ? [pager(data, (next) => { page = next; load(); })] : []));
         });
       }
@@ -55,21 +56,32 @@ export function renderAdminPostsPage(container, { navigate }) {
         const forms = [];
 
         if (post.status === 'VISIBLE') {
-          const hide = reasonForm({ label: '숨김 사유 (200자 이하)', submitText: '숨기기', onSubmit: async (reason) => { await api.hidePost(post.postId, reason); await refresh(); } });
+          const hide = reasonForm({
+            label: '숨김 사유 (200자 이하)', submitText: '숨기기',
+            onSubmit: async (reason) => {
+              if (!confirmChange(`"${post.title}" 글을 숨길까요?`, '사용자 화면에서 바로 사라져요. 복구로 되돌릴 수 있어요.')) return false;
+              await api.hidePost(post.postId, reason);
+              await refresh();
+              notify('게시글을 숨겼어요.');
+              return true;
+            },
+          });
           actions.append(button('숨기기', () => hide.toggle()));
           forms.push(hide.node);
         }
         if (post.status === 'HIDDEN') {
-          const restore = button('복구', () => runAction({ trigger: restore, errorTarget: error, action: () => api.restorePost(post.postId), onDone: refresh, ...ctx }), 'primary-button');
+          const restore = button('복구', () => runAction({ trigger: restore, errorTarget: error, action: () => api.restorePost(post.postId), onDone: refresh, doneText: '게시글을 복구했어요.', ...ctx }), 'primary-button');
           actions.append(restore);
         }
         if (post.status !== 'DELETED') {
           const remove = reasonForm({
             label: '삭제 사유 (200자 이하, 되돌릴 수 없어요)', submitText: '삭제하기',
             onSubmit: async (reason) => {
-              if (!window.confirm('이 게시글을 삭제할까요? 복구할 수 없어요.')) return;
+              if (!confirmChange(`"${post.title}" 글을 삭제할까요?`, '복구할 수 없어요.')) return false;
               await api.deletePost(post.postId, reason);
               await refresh();
+              notify('게시글을 삭제했어요.');
+              return true;
             },
           });
           actions.append(button('삭제', () => remove.toggle()));
@@ -81,8 +93,12 @@ export function renderAdminPostsPage(container, { navigate }) {
           const item = element('li', 'admin-comment');
           const commentError = errorLine();
           const toggle = comment.status === 'VISIBLE'
-            ? button('숨기기', () => runAction({ trigger: toggle, errorTarget: commentError, action: () => api.hideComment(comment.commentId), onDone: () => showDetail(post.postId), ...ctx }))
-            : button('복구', () => runAction({ trigger: toggle, errorTarget: commentError, action: () => api.restoreComment(comment.commentId), onDone: () => showDetail(post.postId), ...ctx }));
+            ? button('숨기기', () => {
+              if (!confirmChange(`${comment.authorNickname} 님의 댓글을 숨길까요?`, '사용자 화면에서 바로 사라져요. 복구로 되돌릴 수 있어요.')) return;
+              runAction({ trigger: toggle, errorTarget: commentError, action: () => api.hideComment(comment.commentId), onDone: () => showDetail(post.postId), doneText: '댓글을 숨겼어요.', ...ctx });
+            })
+            : button('복구', () => runAction({ trigger: toggle, errorTarget: commentError, action: () => api.restoreComment(comment.commentId), onDone: () => showDetail(post.postId), doneText: '댓글을 복구했어요.', ...ctx }));
+          toggle.setAttribute('aria-label', `${comment.authorNickname} 님 댓글 #${comment.commentId} ${toggle.textContent}`); // 같은 작성자의 댓글끼리 구별
           const line = element('div', 'admin-candidate-head');
           line.append(element('strong', '', comment.authorNickname), badge(comment.status === 'VISIBLE' ? '공개' : '숨김', comment.status === 'VISIBLE' ? 'approved' : 'pending'), element('span', 'admin-sub', `${formatDate(comment.createdAt)}${comment.reportCount ? ` · 신고 ${comment.reportCount}건` : ''}`), toggle);
           item.append(line, element('p', '', comment.content), commentError);

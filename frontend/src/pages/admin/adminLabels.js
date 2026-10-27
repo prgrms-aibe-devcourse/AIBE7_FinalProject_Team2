@@ -1,10 +1,10 @@
 // S-19 화면 문구 (API 명세 8-2의 코드 → 한국어)
 import { AXES } from '../../utils/personalityAxes.js';
 
-export const CASE_STATUS = { DRAFT: '적재됨 (손대기 전)', REVIEW: '검수 중', PUBLISHED: '공개됨' };
+export const CASE_STATUS = { DRAFT: '적재됨 (검수 전)', REVIEW: '검수 중', PUBLISHED: '공개됨' };
 export const REVIEW_STATUS = { PENDING: '검수 대기', APPROVED: '승인', REJECTED: '반려' };
 export const SUBJECT = { AI: 'AI 판결 후보', COURT: '재판부 판결 후보' };
-export const CRIME_TYPE = { MURDER: '살인', FRAUD: '사기', INJURY: '상해' };
+export const CRIME_TYPE = { MURDER: '살인', FRAUD: '사기', INJURY: '상해', ROBBERY: '강도', THEFT: '절도' };
 export const DIFFICULTY = { LOW: '쉬움', MID: '보통', HIGH: '어려움' };
 export const REVEAL_STAGE = { OVERVIEW: '개요(사전 판단)', DETAIL: '상세' };
 export const COURT_LEVEL = { FIRST: '1심', APPEAL: '2심', SUPREME: '대법원' };
@@ -23,7 +23,11 @@ export const SELECT_STRATEGY = { consensus: '합의값에 가까운 회차', 'fi
 export const IMPORT_STATUS = { QUEUED: '대기 중', RUNNING: '실행 중', SUCCEEDED: '완료', FAILED: '실패' };
 export const IMPORT_STAGE = {
   extract: '비식별화 · 구조화', court: '재판부 판결 정리', contamination: '사전 학습 점검', rag: '참고 자료 검색',
-  generate: 'AI 판결 생성', select: '회차 선택', axis: '가치관 축 분류', load: 'DB 적재 (서버가 따로 해요)',
+  generate: 'AI 판결 생성', select: '회차 선택', axis: '가치관 축 분류', script: '증거조사 대사 생성', load: '사건으로 만들기 (생성이 끝난 뒤 따로 눌러요)',
+};
+// 단계 표시: 기호만으로는 "건너뜀(–)"과 "대기(·)"가 구분되지 않아 글로도 적는다 (FE-105)
+export const IMPORT_STAGE_STATUS = {
+  DONE: ['✓', '완료'], RUNNING: ['…', '진행 중'], FAILED: ['✕', '실패'], SKIPPED: ['–', '건너뜀'], PENDING: ['·', '대기'],
 };
 
 // A-13 공개 조건 코드

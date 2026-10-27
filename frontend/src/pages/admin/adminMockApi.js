@@ -339,7 +339,7 @@ export async function createImport(request) {
   requireLogin();
   const invalid = (field) => fail('VALIDATION_ERROR', '입력값을 확인해 주세요.', { status: 400, details: [{ field, reason: 'INVALID' }] });
   const sources = request?.sources;
-  if (!['MURDER', 'FRAUD', 'INJURY'].includes(request?.crimeType)) invalid('crimeType');
+  if (!['MURDER', 'FRAUD', 'INJURY', 'ROBBERY', 'THEFT'].includes(request?.crimeType)) invalid('crimeType');
   if (!Array.isArray(sources) || sources.length < 1 || sources.length > 3) invalid('sources');
   sources.forEach((source, index) => {
     if (!COURT_LEVELS.includes(source?.courtLevel)) invalid(`sources[${index}].courtLevel`);

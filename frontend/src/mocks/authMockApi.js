@@ -6,7 +6,7 @@ const KAKAO_NICKNAME = '카카오 회원'; // 목업 카카오 로그인의 닉�
 const NICKNAME_MAX = 12;
 
 function fail(code, details = null) {
-  const messages = { VALIDATION_ERROR: '입력값을 확인해 주세요.' };
+  const messages = { VALIDATION_ERROR: '입력값을 확인해 주세요.', DUPLICATE_ID: '이미 쓰고 있는 아이디예요.' };
   throw { code, message: messages[code], currentStatus: null, details };
 }
 
@@ -23,6 +23,15 @@ export async function login({ method, id, password } = {}) {
   if (!mockNicknameOf(id ?? '')) fail('VALIDATION_ERROR', { field: 'id' });
   if (!password) fail('VALIDATION_ERROR', { field: 'password' });
   return { nickname: mockNicknameOf(id) };
+}
+
+// 목업 회원가입 (FE-104). 계정을 만들지 않고 닉네임만 돌려준다(가입하면 바로 로그인된 상태).
+// admin으로 시작하는 아이디는 이미 있는 아이디로 본다(중복 안내 화면 확인용). 응답 { nickname }
+export async function signup({ id, password, nickname } = {}) {
+  await delay();
+  if (!String(id ?? '').trim() || !password || !String(nickname ?? '').trim()) fail('VALIDATION_ERROR');
+  if (String(id).trim().startsWith('admin')) fail('DUPLICATE_ID', { field: 'id' });
+  return { nickname: String(nickname).trim() };
 }
 
 export async function logout() {
