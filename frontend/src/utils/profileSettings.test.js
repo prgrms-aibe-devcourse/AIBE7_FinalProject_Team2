@@ -91,3 +91,27 @@ test('서버가 거절하면 카드 아래 줄이 이전 값으로 돌아간다'
   assert.equal(await updateCardLine({ cardLine: 'job' }), false);
   assert.equal(getCardLineSettings().cardLine, 'type');
 });
+
+test('실패한 요청의 칸만 되돌리고 그 뒤에 바꾼 다른 칸은 지킨다', async () => {
+  const pending = [];
+  configureProfileSettings((patch) => new Promise((resolve, fail) => { pending.push({ resolve, fail, patch }); }));
+  hydrateProfileSettings({ shownCard: 'current', profileCardType: 'current', bio: '', cardLine: 'type', cardLevel: false });
+  const first = updateCardLine({ cardLine: 'job' });
+  const second = updateCardLine({ cardLevel: true }); // 첫 요청이 끝나기 전에 다른 칸을 바꾼다
+  await new Promise((resolve) => setImmediate(resolve)); // 첫 요청이 서버로 나간다
+  pending[0].fail({ status: 400 });
+  assert.equal(await first, false);
+  await new Promise((resolve) => setImmediate(resolve)); // 둘째 요청이 서버로 나간다
+  pending[1].resolve({ cardLine: 'type', cardLevel: true });
+  assert.equal(await second, true);
+  assert.deepEqual(getCardLineSettings(), { cardLine: 'type', cardLevel: true });
+});
+
+test('cardLine이 없는 응답을 받으면 서버 지원 상태를 해제하고 로컬 설정은 그대로 둔다', async () => {
+  const calls = server();
+  hydrateProfileSettings({ shownCard: 'current', profileCardType: 'current', bio: '', cardLine: 'job', cardLevel: true });
+  hydrateProfileSettings({ shownCard: 'current', profileCardType: 'current', bio: '' }); // 서버 롤백
+  assert.deepEqual(getCardLineSettings(), { cardLine: 'job', cardLevel: true });
+  assert.equal(await updateCardLine({ cardLine: 'signature' }), true);
+  assert.deepEqual(calls, []);
+});

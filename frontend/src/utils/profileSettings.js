@@ -46,10 +46,8 @@ export const getCardLineSettings = () => local;
 export function hydrateProfileSettings(settings) {
   if (!settings || inFlight > 0) return;
   values = normalize(settings);
-  if (settings.cardLine !== undefined) {
-    serverCardLine = true;
-    setLocal(pickLine(settings));
-  }
+  serverCardLine = settings.cardLine !== undefined; // 응답마다 다시 판단한다(서버가 바뀌거나 되돌려져도 모르는 칸을 보내지 않게). 없으면 로컬 설정은 그대로 둔다
+  if (serverCardLine) setLocal(pickLine(settings));
 }
 
 const pickLine = (settings) => ({ cardLine: CARD_LINES.includes(settings?.cardLine) ? settings.cardLine : LOCAL_DEFAULTS.cardLine, cardLevel: settings?.cardLevel === true });
@@ -73,8 +71,9 @@ export function updateCardLine(patch) {
       if (inFlight === 1 && saved?.cardLine !== undefined) setLocal(pickLine(saved));
       return true;
     } catch {
-      const keep = Object.keys(patch).filter((key) => local[key] !== patch[key]);
-      setLocal({ ...before, ...Object.fromEntries(keep.map((key) => [key, local[key]])) }); // 그 사이 새로 바꾼 칸은 건드리지 않는다
+      // 실패한 요청이 바꾼 칸만, 아직 그 값일 때 되돌린다(그 사이 새로 바꾼 칸 · 다른 칸은 건드리지 않는다)
+      const revert = Object.fromEntries(Object.keys(patch).filter((key) => local[key] === patch[key]).map((key) => [key, before[key]]));
+      setLocal({ ...local, ...revert });
       return false;
     } finally {
       inFlight -= 1;
