@@ -48,7 +48,11 @@ export function renderSignupPage(container, { api, navigate }) {
   function showForm() {
     const heading = element('h1', '', '회원가입');
     heading.id = 'signup-heading';
-    const parts = [heading, element('p', 'login-lead', '가입하면 이 브라우저에서 한 판결 기록이 계정으로 이어져요. 가입하지 않아도 모든 판결 체험을 할 수 있어요.')];
+    // 목 모드의 가입은 계정을 만들지 않으므로 판결 기록이 이어진다고 안내하지 않는다
+    const lead = API_MODE === 'mock'
+      ? '가입하지 않아도 모든 판결 체험을 할 수 있어요.'
+      : '가입하면 이 브라우저에서 한 판결 기록이 계정으로 이어져요. 가입하지 않아도 모든 판결 체험을 할 수 있어요.';
+    const parts = [heading, element('p', 'login-lead', lead)];
     if (API_MODE === 'mock') {
       parts.push(element('p', 'login-mock-note', '개발용 목업 가입이에요. 계정을 만들지 않고 닉네임으로 로그인한 상태만 되고, 입력값은 어디에도 보내거나 남기지 않아요(admin으로 시작하는 아이디는 이미 있는 아이디로 보여요).'));
     }

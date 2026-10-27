@@ -78,7 +78,7 @@
 .signup-agree { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
 .signup-agree-check { display: flex; align-items: center; gap: 10px; min-height: 44px; }
 .signup-agree-check input { flex: none; width: 20px; height: 20px; margin: 0; accent-color: var(--color-range-fill); cursor: pointer; }
-.signup-agree-check label { font-size: 14px; font-weight: 700; color: var(--felt-ink); cursor: pointer; word-break: keep-all; }
+.signup-agree-check label { flex: 1; display: flex; align-items: center; min-height: 44px; font-size: 14px; font-weight: 700; color: var(--felt-ink); cursor: pointer; word-break: keep-all; }
 .signup-agree-check input[aria-invalid="true"] { outline: 2px solid var(--color-danger-on-dark); outline-offset: 2px; }
 .signup-agree-links { display: flex; flex-wrap: wrap; gap: 0 16px; margin: 0 0 0 30px; font-size: var(--text-small); }
 .signup-doc-link { display: inline-flex; align-items: center; min-height: 44px; color: var(--felt-muted); text-decoration: underline; text-underline-offset: 3px; }
