@@ -177,6 +177,7 @@
 .result-portrait-set > .result-portrait { grid-area: 1 / 1; z-index: 1; width: 100%; cursor: pointer; transition: transform .36s cubic-bezier(.2, .8, .2, 1), z-index .36s; } /* z-index도 전환해 서로 지나칠 때 앞뒤가 중간에 바뀐다 */
 .result-portrait-set > .result-portrait.is-back { z-index: 0; transform: translate(var(--peek-x), var(--peek-y)) rotate(5deg); }
 .is-result .result-portrait-set > .result-portrait { animation: none; } /* 입장 연출은 카드 두 장이 아니라 묶음이 한 번에 받는다 */
+.result-portrait.is-back .result-meme { visibility: hidden; } /* 뒤 카드의 밈은 앞 카드와 같은 글이라, 삐죽 나온 자리에 잘려 보이거나 낭독기가 두 번 읽지 않게(FE-103) */
 .result-portrait.is-back::before { display: none; } /* 종이 클립은 앞 카드에만 */
 .result-swap { position: absolute; inset: 0; z-index: 2; padding: 0; border: 0; background: none; cursor: pointer; } /* 클릭은 카드가 받으므로 이 버튼은 포커스 · 낭독용 */
 .result-swap:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }

@@ -570,6 +570,7 @@ function caseLine(item, navigate, api) {
       button('독자 엽서 쓰기', (event) => openCaseReviewPopup({ caseId: item.caseId, api, navigate, from: event.currentTarget }), 'secondary-button'),
     );
   } else {
+    link.classList.add('is-continue'); // 버튼이 없는 줄은 제목이 유일한 입구라 링크로 보이게 밑줄을 둔다(FE-103)
     actions.append(element('p', 'my-case-hint', '사건 제목을 눌러 이어서 체험해요'));
   }
   line.append(info, actions);
@@ -710,10 +711,10 @@ function typeFan(data, navigate, go) {
   });
   // 첫 테스트 · 재심 청구: 상태에 따라 문구와 눌림만 바뀐다
   const state = retakeState(data);
-  const firstTest = button(tested ? '첫 성향 테스트 완료' : '첫 성향 테스트 하기', () => navigate('test'), 'secondary-button');
-  firstTest.disabled = tested;
-  const claim = button(retakeDone ? '재심 완료' : '재심 청구하기', () => openRetakeDialog({ data, navigate, from: claim }), 'secondary-button');
-  claim.disabled = state !== 'ready';
+  // 끝난 일은 비활성 버튼이 아니라 상태 글로 보인다(FE-103). 아직 못 누르는 "재심 청구하기"만 비활성 버튼
+  const firstTest = tested ? element('span', 'edit-status', '✓ 첫 성향 테스트 완료') : button('첫 성향 테스트 하기', () => navigate('test'), 'secondary-button');
+  const claim = retakeDone ? element('span', 'edit-status', '✓ 재심 완료') : button('재심 청구하기', () => openRetakeDialog({ data, navigate, from: claim }), 'secondary-button');
+  if (!retakeDone) claim.disabled = state !== 'ready';
   // 재심을 마친 뒤의 "체험 n건 뒤" 안내는 성향카드 화면에만 둔다
   const note = retakeDone ? null
     : tested ? `성향 테스트를 한 번 더 해서 성향카드를 다시 정해요. ${RETAKE_NOTES[state]}` : '재심은 첫 성향 테스트 뒤에 청구할 수 있어요.';
