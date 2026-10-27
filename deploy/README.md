@@ -18,6 +18,7 @@
 | `docker-compose.pipeline.yml` | 서버 전용 덧붙임 파일. AI 판결 파이프라인 서비스(관리자 사건 등록 A-14)와 backend의 `PIPELINE_SERVICE_URL` (COMMON-50). `.env`의 `PIPELINE_SERVICE=1`이면 `deploy.sh`가 자동으로 함께 쓴다. **켜기 전 메모리 확인 필요** — 아래 "AI 판결 파이프라인 서비스" |
 | `.env.example` | 환경변수 예시. `.env`로 복사해 쓴다 (`.env`는 커밋하지 않음) |
 | `smoke-test.sh` | `/` · 화면 주소 · `/api` · 캐시 정책 · Let's Encrypt 확인 경로 확인. CI와 서버에서 같은 스크립트를 쓴다 |
+| `verify-origin-headers.sh` | 배포 전 1회 수동 확인: Nginx `X-Forwarded-Proto` 전달 · `forward-headers-strategy: native`가 운영(또는 동일 TLS 종료 구성 스테이징)에 실제로 적용됐는지, 재발급 · 로그아웃 Origin 검증(`OriginVerificationFilter`)으로 확인한다. 로그인 없이도 쓸 수 있다 (BE-95) |
 | `deploy.sh` | 서버 배포 한 번: sha 이미지로 교체 → 준비 대기 → 스모크 테스트 → 실패하면 직전 이미지로 되돌림 (BE-60) |
 | `backup-db.sh` | 운영 DB 백업 한 번: 임시 파일로 `pg_dump` → `pg_restore --list` 확인 → 최종 이름으로 옮김 → 7일 지난 파일 정리 (COMMON-17, 아래 "운영 DB 백업") |
 | `cd-agent.sh` | 자동 배포 확인: GHCR의 `main` 이미지가 바뀌었으면 `deploy.sh` 실행 (BE-60) |
@@ -251,6 +252,7 @@ curl -sI https://www.naelawnambul.today | grep -i '^location'   # 301 → https:
 curl -sk --max-time 5 https://<탄력적 IP>/ ; echo "exit=$?"     # 연결 거절(exit 35)이 정상: 모르는 이름은 TLS를 끊는다
 curl -s http://localhost/version.json                    # 서버 안: 이동 없이 그대로 (deploy.sh 스모크 테스트 경로)
 ./smoke-test.sh https://naelawnambul.today               # https로 전체 스모크 테스트
+./verify-origin-headers.sh https://naelawnambul.today    # 재발급 · 로그아웃 Origin 검증 전제조건 (BE-95, 배포 전 1회)
 echo | openssl s_client -connect naelawnambul.today:443 -servername naelawnambul.today 2>/dev/null \
   | openssl x509 -noout -issuer -subject -ext subjectAltName -dates   # 발급자 Let's Encrypt · 만료일
 #   ↑ subjectAltName에 DNS:naelawnambul.today 와 DNS:www.naelawnambul.today 가 **둘 다** 있어야 한다 (PR #181 리뷰)
