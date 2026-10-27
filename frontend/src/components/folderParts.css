@@ -40,9 +40,10 @@
 :active > .paper-fold { --fold-hand: .85; }
 
 /* 들썩임: 3.2초마다 바람에 휙 들렸다가, 넘어갈 듯 말 듯 망설이고, 한 번 더 들썩인 뒤 떨어져 살짝 튀고 가라앉는다(약 45%는 쉼).
-   신문 모서리 넘김(FE-99)의 순서 · 가속을 귀 크기에 맞춰 줄였다(최대 1.4배). 움직임 줄이기에서는 쉬는 모양 그대로 · 호버 반응은 바로 */
+   신문 모서리 넘김(FE-99)의 순서 · 가속을 귀 크기에 맞춰 줄였다(최대 1.4배). 움직임 줄이기에서는 쉬는 모양 그대로 · 호버 반응은 바로.
+   @property를 모르는 브라우저(사파리 16.4 미만 등)는 값이 뚝뚝 바뀌므로 main.js가 단 `.has-css-property` 표시가 있을 때만 켠다(FE-110) */
 @media (prefers-reduced-motion: no-preference) {
-  .paper-fold { animation: paper-fold-lift 3.2s infinite; transition: --fold-hand .2s cubic-bezier(.2, .8, .2, 1); }
+  .has-css-property .paper-fold { animation: paper-fold-lift 3.2s infinite; transition: --fold-hand .2s cubic-bezier(.2, .8, .2, 1); }
 }
 @keyframes paper-fold-lift {
   0%, 55%, 100% { --fold-lift: 1; animation-timing-function: cubic-bezier(.3, 0, .25, 1); }

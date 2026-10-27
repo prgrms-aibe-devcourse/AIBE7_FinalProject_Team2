@@ -458,9 +458,7 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
     signature.type = 'button';
     signature.setAttribute('aria-describedby', reason.id);
     const signHint = element('span', 'sign-hint', '여기를 눌러 서명');
-    // 서명 획(장식, FE-94): 닉네임(로그인 안 했으면 이 브라우저의 임시 식별값)으로 만든 서명. 눌렀을 때 한 획으로 처음부터 끝까지 쓰인다(움직임 줄이기면 바로 나타난다)
-    const signInk = signatureSvg(signerSeed(), { blank: true });
-    signature.append(signInk);
+    // 서명 획(장식, FE-94)은 서명할 때 만든다: 닉네임(로그인 안 했으면 이 브라우저의 임시 식별값)으로 만든 서명이라, 화면만 열어서는 임시 식별값을 저장하지 않는다
     signature.prepend(signHint);
     const signRow = element('div', 'sign-row');
     // 판결 접수 도장(FE-97): 확정되면 서명 옆에 찍히고 한 박자 뒤 AI 판결로 넘어간다. 서명 직후 곧바로 "AI 판결을 기다리는 중"으로 바뀌어 내 결정이 로더에 묻혔다
@@ -490,6 +488,8 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       signed = true;
       submitting = true;
       submitError.textContent = '';
+      const signInk = signatureSvg(signerSeed(), { blank: true }); // 눌렀을 때 한 획으로 처음부터 끝까지 쓰인다(움직임 줄이기면 바로 나타난다)
+      signature.append(signInk);
       // 서명하는 동안 카드 안쪽 스크롤을 지금 자리에 묶어 둔다(정한 내용을 다시 그리거나 상태가 바뀌어도 위로 튀지 않게)
       const scroller = layout.closest('.scroll-body');
       const keep = scroller?.scrollTop ?? 0;
@@ -517,6 +517,7 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
         signed = false;
         signRow.classList.remove('is-signed'); // 확정하지 못했으면 서명을 지운다
         eraseSignature(signInk);
+        signInk.remove(); // 다시 서명할 때 새로 만든다
         if (error?.code === 'INVALID_STATE') {
           showError(error);
         } else if (['OUT_OF_ALLOWED_RANGE', 'INVALID_SUSPENSION'].includes(error?.code)) {
