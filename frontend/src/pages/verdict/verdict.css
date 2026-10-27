@@ -124,9 +124,8 @@
 .verdict-page .sign-line:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 4px; }
 .verdict-page .sign-hint { position: absolute; left: 0; right: 0; bottom: 10px; text-align: center; font: 400 20px/1 var(--font-hand); color: var(--color-muted); transition: opacity .2s ease-out; }
 @media (hover: hover) and (pointer: fine) { .verdict-page .sign-line:not([aria-disabled='true']):hover .sign-hint { color: var(--color-heading); } }
-.verdict-page .sign-ink { position: absolute; inset: 0 0 4px; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
-.verdict-page .sign-ink path { fill: none; stroke: var(--color-desk-note-pen); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; stroke-dashoffset: 1; }
-.verdict-page .sign-row.is-signed .sign-ink path { stroke-dashoffset: 0; transition: stroke-dashoffset .9s cubic-bezier(.45, .05, .55, .95); }
+.verdict-page .sign-line .sig-ink { position: absolute; left: 50%; bottom: 6px; translate: -50% 0; color: var(--color-desk-note-pen); pointer-events: none; } /* 서명은 components/signatureInk.js(FE-94) */
+.verdict-page .sign-line .sig-ink path { stroke-width: 3px; }
 .verdict-page .sign-row.is-signed .sign-hint { opacity: 0; }
 .verdict-page .sign-line[aria-disabled='true'] { cursor: progress; }
 .verdict-page .folder-title { margin: 0 0 6px; font: 900 24px/1.25 var(--font-heading); letter-spacing: -.02em; color: var(--color-heading); }
@@ -229,7 +228,6 @@
   .verdict-page :is(.folder-tab, .folder-curl, .sign-hint) { transition: none; }
   .verdict-page .is-flash { animation: none; outline: 3px solid var(--color-label); outline-offset: 4px; }
   .verdict-page .folder-curl:hover { animation: none; }
-  .verdict-page .sign-row.is-signed .sign-ink path { transition: none; }
 }
 @media (max-width: 600px) {
   .verdict-page .sentence-entry { float: none; display: flex; margin: 0 0 10px; }
