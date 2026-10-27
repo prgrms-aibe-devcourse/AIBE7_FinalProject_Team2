@@ -262,7 +262,7 @@ export async function renderOverviewPage(container, { caseId, api, navigate }) {
       // 1막 무대(신문 지면). 진행 표시는 지면 탭 줄의 막 칩이 맡는다. S-20(대본 있는 사건)과 같은 화면이다
       const { stage, setOverview } = caseStage({
         caseId, api, navigate, script, info: { ...(detail ?? {}), ...info, caseId },
-        paper: paperFromCase(detail, casePaper, script.paper), evidencePhotos: evidencePhotosFromPaper(casePaper),
+        paper: paperFromCase(detail, casePaper, script.paper, { ...info, caseId }), evidencePhotos: evidencePhotosFromPaper(casePaper),
       });
       setOverview(data);
       mountStagePage(root, { stage });

@@ -32,7 +32,9 @@ export function newspaperMasthead({ navigate, earRight, earLeft: givenLeft, titl
 // desk · extraPhotos)을 쓴다 — 관리자가 신문 지면을 만들어 둔 사건은 책상 위 신문 → 집어 든 신문 → 사건 기사 지면의
 // 제목 · 본문 · 사진이 항상 같다. casePaper를 못 받았으면(PAPER_NOT_FOUND · 조회 실패) 사건 데이터(API 1 · 16)와
 // 대본 지면(fallback, 사건 1의 재연 컷)으로 예전처럼 채운다. 둘 다 못 받았을 때만 대본 지면을 그대로 쓴다
-export function paperFromCase(data, casePaper, fallback = {}) {
+// info: 사건 상세(data)를 못 받았어도 개요 등에서 알던 사건 정보. 공용 컷의 범죄 분류 · 사건 번호를 읽는 데만 쓴다
+export function paperFromCase(data, casePaper, fallback = {}, info) {
+  const commonOf = data ?? info;
   // 둘 다 없을 때만 대본 지면을 그대로 쓴다. 사건 데이터(API 16)만 못 받은 경우에도 지면(API 17)이 있으면 그것으로 그린다 —
   // 여기서 대본으로 돌아가면 같은 화면의 증거조사 사진만 서버 사진이 되어 지면과 어긋난다(PR #284 리뷰)
   if (!data && !casePaper) return fallback;
@@ -48,7 +50,7 @@ export function paperFromCase(data, casePaper, fallback = {}) {
       article,
       // 대표 사진: 지면 → 사건 썸네일(없으면 사건 번호로 고정한 공용 컷) → 대본 지면. casePhoto는 사건 데이터가 없어도 공용 컷을 준다
       photo: casePaper.photo || (data ? casePhoto(data) : fallback.photo ?? casePhoto(data)),
-      extraPhotos: extraPhotosOf(extraPhotosFromApi(casePaper.extraPhotos), commonCategoryOf(data), Number(data?.caseId) || 0),
+      extraPhotos: extraPhotosOf(extraPhotosFromApi(casePaper.extraPhotos), commonCategoryOf(commonOf), Number(commonOf?.caseId) || 0),
       caption: casePaper.caption || fallback.caption || '사건 이해를 돕기 위한 연출 이미지',
       desk: casePaper.desk || fallback.desk || '사회부',
     };
@@ -58,7 +60,7 @@ export function paperFromCase(data, casePaper, fallback = {}) {
     deck: data.deck || data.shortIntro,
     article: data.article?.length ? data.article : [data.shortIntro].filter(Boolean),
     photo: casePhoto(data),
-    extraPhotos: extraPhotosOf(fallback.extraPhotos, commonCategoryOf(data), Number(data?.caseId) || 0), // 기사 속 작은 사진(대본 지면에만 있다, 사건 1의 재연 컷). 없는 사건은 범죄 분류에 맞는 공용 컷
+    extraPhotos: extraPhotosOf(fallback.extraPhotos, commonCategoryOf(commonOf), Number(commonOf?.caseId) || 0), // 기사 속 작은 사진(대본 지면에만 있다, 사건 1의 재연 컷). 없는 사건은 범죄 분류에 맞는 공용 컷
     caption: '사건 이해를 돕기 위한 연출 이미지',
     desk: '사회부', // S-02 기사와 같은 기자 줄
   };
