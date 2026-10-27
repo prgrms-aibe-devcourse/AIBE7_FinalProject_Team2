@@ -1,5 +1,7 @@
 import { button, element } from '../../components/siteLayout.js';
 import { confirmChange, labeledField } from './adminKit.js';
+import { mediaSection } from './adminCaseMedia.js';
+import { scriptSection } from './adminCaseScript.js';
 import {
   AXIS_LABEL, AXIS_OPTIONS, CASE_STATUS, COURT_LEVEL, CRIME_TYPE, DIFFICULTY, PUBLISH_REASON, REVEAL_STAGE, REVIEW_STATUS, SUBJECT,
   errorText, formatDateTime,
@@ -15,7 +17,8 @@ import { renderAdminShell } from './adminShell.js';
 // 후보 승인은 "자세히 보기"로 내용을 한 번 연 뒤에 할 수 있다(내용을 보지 않고 공개 판결로 정하지 않게)
 // 모든 값은 textContent로 넣는다(원문 · 모델 출력에 HTML이 섞여 있어도 실행되지 않게).
 const DIRECTION = { UP: '가중 ↑', DOWN: '감경 ↓' };
-const SECTIONS = [['publish', '공개'], ['candidates', '판결 후보'], ['factors', '판단 요소'], ['content', '사건 내용'], ['sources', '원본 판결문']];
+const SECTIONS = [['publish', '공개'], ['candidates', '판결 후보'], ['factors', '판단 요소'],
+  ['media', '사진 · 지면'], ['script', '대본'], ['content', '사건 내용'], ['sources', '원본 판결문']];
 const CHECKLIST = [
   '사건 내용과 원본 판결문을 대조해 인명 · 지명 · 사건번호 등 비식별화를 확인했다',
   '공개할 AI 판결과 재판부 판결 후보의 내용을 확인했다',
@@ -112,6 +115,8 @@ export function renderAdminCasePage(container, { caseId, navigate }) {
       const opened = new Set(); // 상세를 펼쳐 둔 후보(judgmentId). 다시 그려도 펼친 채로 둔다
       const details = new Map(); // 후보별로 그려 둔 상세 노드. 다시 그릴 때 요청 없이 그대로 복원한다(A-8을 또 부르지 않고 깜빡이지도 않게)
       const viewed = new Set(); // 한 번이라도 상세를 연 후보. 승인은 이 후보만 할 수 있다
+      // 사진(A-13-5) · 신문 지면(A-13-7) · 대본(A-13-10)은 A-6에 없어 따로 불러 둔다. 없으면 null이다
+      let media = { photos: [], paper: null, script: null };
 
       function handleFailure(failure, fallback, target) {
         if (!active()) return;
@@ -150,6 +155,16 @@ export function renderAdminCasePage(container, { caseId, navigate }) {
         return line;
       }
 
+      /** A-6 script 요약(BE-108)을 공개 준비 화면의 경고 한 줄로 바꾼다. 없으면 null */
+      function publishScriptWarning(summary) {
+        if (!summary?.exists) return null;	// 대본이 없는 사건(기존 사건은 모두 이 경우)은 알릴 것이 없다
+        if (summary.reviewStatus === 'APPROVED') return null;
+        if (summary.publishable === false) {
+          return '대본이 아직 검수를 통과하지 못했어요(증거 카드와 대사가 어긋남). 공개는 막지 않지만, 체험에서는 기존 화면으로 진행돼요.';
+        }
+        return '대본을 아직 승인하지 않았어요. 공개는 막지 않지만, 승인 전에는 체험에서 쓰이지 않아요.';
+      }
+
       // ── 공개 준비 (A-13)
       function publishSection(data) {
         const { status, publishReadiness, factors } = data;
@@ -164,6 +179,12 @@ export function renderAdminCasePage(container, { caseId, navigate }) {
         body.push(reasons);
         const axisAuto = factors.filter((factor) => factor.valueAxisStatus === 'AUTO').length;
         if (axisAuto) body.push(element('p', 'admin-warn', `가치관 축을 아직 확정하지 않은 판단 요소가 ${axisAuto}개 있어요. 공개는 막지 않지만 확인을 권해요.`));
+        // 대본은 공개를 막지 않는다(사건 내용이 아니라 체험 연출이다). 그래서 publishReadiness.reasons가
+        // 아니라 A-6의 script 요약을 읽어 경고로만 보여 준다(BE-108 결정)
+        const scriptWarning = publishScriptWarning(data.script);
+        if (scriptWarning) body.push(element('p', 'admin-warn', scriptWarning));
+        // 지면 · 대표사진도 공개 조건은 아니다. 없으면 사용자 화면이 공용 컷 · 기본 지면으로 돌아간다
+        if (!media.paper) body.push(element('p', 'admin-warn', '신문 지면을 아직 만들지 않았어요. 공개는 막지 않지만 메인 화면이 기본 지면으로 보여요.'));
 
         const checks = element('fieldset', 'admin-checklist');
         checks.append(element('legend', '', '공개 전 확인'));
@@ -540,13 +561,41 @@ export function renderAdminCasePage(container, { caseId, navigate }) {
           heading?.scrollIntoView({ block: 'start' });
           heading?.focus({ preventScroll: true });
         }, 'admin-jump-link')));
-        main.replaceChildren(top, jump, publishSection(data), candidatesSection(data), factorsSection(data), contentSection(data), sourcesSection(data));
+        main.replaceChildren(top, jump, publishSection(data), candidatesSection(data), factorsSection(data),
+          mediaSection(mediaCtx(), data), scriptSection(mediaCtx(), data),
+          contentSection(data), sourcesSection(data));
+      }
+
+      /** 없을 수 있는 값은 그 _NOT_FOUND만 null로 삼킨다. 로그인 만료 같은 오류는 그대로 올린다 */
+      function optional(promise, missingCode, fallback = null) {
+        return promise.catch((failure) => {
+          if (failure?.code === missingCode) return fallback;
+          if (failure?.code === 'UNAUTHORIZED') throw failure;
+          return fallback;	// 그 밖의 오류도 화면을 막지는 않는다 — 그 부분만 비워 둔다
+        });
       }
 
       async function load() {
-        const data = await api.getCase(caseId);
+        // 사건 상세와 함께 사진 · 지면 · 대본을 한 번에 불러온다(화면이 한 번만 깜빡이게)
+        const [data, photos, paper, script] = await Promise.all([
+          api.getCase(caseId),
+          optional(api.getIncidentPhotos(caseId), 'CASE_NOT_FOUND', []),
+          optional(api.getCasePaper(caseId), 'PAPER_NOT_FOUND'),
+          optional(api.getCaseScript(caseId), 'SCRIPT_NOT_FOUND'),
+        ]);
+        media = { photos: photos ?? [], paper, script };
         if (active()) drawCase(data);
       }
+
+      /** 사진 · 지면 · 대본을 바꾼 뒤: 다시 불러 그리고 누른 자리로 돌아가 알린다 (mutate와 같은 흐름) */
+      async function after(okText, anchor) {
+        await load();
+        if (!active()) return;
+        returnTo(anchor);
+        notify(okText);
+      }
+
+      const mediaCtx = () => ({ api, caseId, section, media, after, errorLine });
 
       const loading = element('p', 'admin-message', '사건을 불러오는 중이에요.');
       loading.setAttribute('role', 'status');
