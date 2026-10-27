@@ -19,7 +19,8 @@ export function nicknameError(value) {
 /** 입력칸 잠금: 한글이 섞이면 한글 한도를 넘게 쳐지지 않는다. 한글 조합 중에는 글자가 깨지지 않게 조합이 끝난 뒤 자른다 */
 export function lockNicknameLength(input) {
   const clamp = () => {
-    if (/[가-힣]/.test(input.value) && input.value.length > NICKNAME_MAX_HANGUL) input.value = input.value.slice(0, NICKNAME_MAX_HANGUL);
+    const trimmed = input.value.trim(); // 검증(nicknameError)과 같이 앞뒤 공백을 빼고 센다
+    if (/[가-힣]/.test(trimmed) && trimmed.length > NICKNAME_MAX_HANGUL) input.value = trimmed.slice(0, NICKNAME_MAX_HANGUL);
   };
   input.addEventListener('input', (event) => { if (!event.isComposing) clamp(); });
   input.addEventListener('compositionend', () => { clamp(); input.dispatchEvent(new Event('input')); });

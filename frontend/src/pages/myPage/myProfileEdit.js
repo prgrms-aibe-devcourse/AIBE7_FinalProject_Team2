@@ -99,12 +99,15 @@ export function renderProfileEdit({ api, navigate, go, data = {}, card, fan }) {
 
   // 프로필카드 미리보기: 마이페이지 첫 화면과 같은 카드(누르면 프로필카드 화면). 닉네임을 입력하는 대로 카드 이름이 바뀐다. 성향카드는 마이페이지 첫 화면에만 둔다
   const profileCard = card();
+  let shownName = profileCard.querySelector('.my-card-name')?.textContent ?? '';
   const syncPreview = () => {
     const name = input.value.trim() || user?.nickname;
     const title = profileCard.querySelector('.my-card-name');
     if (name && title) {
       title.textContent = name;
-      profileCard.setAttribute('aria-label', profileCard.getAttribute('aria-label').replace(/^(프로필카드 열기: )[^,]*/, `$1${name}`));
+      // 낭독 이름도 카드에 보이는 이름(서명의 "○○의 서명" 포함) 전부를 새 닉네임으로 바꾼다
+      if (shownName) profileCard.setAttribute('aria-label', profileCard.getAttribute('aria-label').split(shownName).join(name));
+      shownName = name;
       profileCard.querySelector('.sig-ink')?.replaceWith(cardSignature(name)); // 카드 아래가 서명이면 닉네임에 맞춰 다시 그린다
     }
     bioCount.textContent = `${[...bio.value.trim()].length}/${BIO_MAX}`;

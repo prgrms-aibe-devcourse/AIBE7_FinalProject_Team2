@@ -141,7 +141,7 @@ function statsOf(data) {
   const missing = (key) => data.profile?.[key] == null;
   const profile = Object.fromEntries(Object.keys(MOCK_PROFILE).map((key) => [key, missing(key) ? MOCK_PROFILE[key] : data.profile[key]]));
   const levelData = data.level;
-  if (levelData) { profile.level = levelData.level; profile.job = levelData.job.name; }
+  if (levelData) { profile.level = levelData.level ?? profile.level; profile.job = levelData.job?.name ?? profile.job; }
   const experiences = data.experiences ?? [];
   const groups = collectionOf(experiences, SCRIPTS);
   return {
@@ -179,9 +179,10 @@ function profileCardPartsOf(deco, data) {
   const nickname = myNickname(data, currentUser());
   const stats = statsOf(data);
   const line = getCardLine();
-  const level = getCardLevel() ? `Lv.${stats.level}` : null;
+  const known = Boolean(data.level); // 서버 레벨이 없으면 목 값(Lv.7 · 수습 판사)을 카드에 올리지 않는다
+  const level = known && getCardLevel() ? `Lv.${stats.level}` : null;
   if (line === 'signature') return profileCardParts(deco, nickname, null, { level, signer: signerSeed() });
-  if (line === 'job') return profileCardParts(deco, nickname, stats.job, { level });
+  if (line === 'job' && known) return profileCardParts(deco, nickname, stats.job, { level, lineLabel: '직업' });
   return profileCardParts(deco, nickname, selectedChoice(data)?.type.name ?? currentTypeOf(data)?.name, { level });
 }
 
@@ -1124,6 +1125,7 @@ function typeChoiceSection(data, onPick) {
 // 개발 서버 + 목 모드에서는 레벨 · 직업을 올려 보는 "개발용" 버튼이 함께 보인다(결과는 이 창 안에서 바로 다시 그린다)
 function jobSection(data, onPick) {
   const box = element('div');
+  let saving = false; // 저장 중에는 라디오를 잠가 요청이 겹치지 않게 한다
   const show = (level) => {
     data.level = level;
     if (cache) cache.level = level;
@@ -1146,14 +1148,22 @@ function jobSection(data, onPick) {
       input.name = 'profile-card-job';
       input.value = job.code;
       input.checked = job.selected;
-      input.disabled = !job.unlocked;
+      input.disabled = !job.unlocked || saving;
       input.addEventListener('change', async () => {
+        saving = true;
+        draw();
+        let message = '';
         try {
-          show(await apiRef.putLevelJob(job.code));
+          data.level = await apiRef.putLevelJob(job.code);
+          if (cache) cache.level = data.level;
+          onPick();
         } catch (error) {
-          draw();
-          box.append(element('p', 'my-hint', error?.code === 'JOB_LOCKED' ? '아직 열리지 않은 직업이에요.' : '직업을 저장하지 못했어요. 잠시 뒤 다시 시도해 주세요.'));
+          if (error?.code === 'JOB_LOCKED') data.level = await apiRef.getLevel().catch(() => data.level); // 표시한 해금 상태가 서버와 달랐다: 서버 값으로 다시 그린다(명세 L-2)
+          message = error?.code === 'JOB_LOCKED' ? '아직 열리지 않은 직업이에요.' : '직업을 저장하지 못했어요. 잠시 뒤 다시 시도해 주세요.';
         }
+        saving = false;
+        draw();
+        if (message) box.append(element('p', 'my-hint', message));
       });
       label.append(input, element('span', '', job.unlocked ? job.name : `${job.name} (Lv.${job.unlockLevel}에 열려요)`));
       list.append(label);
@@ -1161,10 +1171,11 @@ function jobSection(data, onPick) {
     box.append(list);
     if (import.meta.env?.DEV && apiRef?.setMockLevel) {
       const dev = element('div', 'my-profile-actions');
+      const run = (action) => async () => { try { show(await action()); } catch { /* 개발 전용: 실패하면 그대로 둔다 */ } };
       dev.append(
-        button('개발용: 레벨 +1', async () => show(await apiRef.setMockLevel(data.level.level + 1)), 'secondary-button is-dev'),
-        button('개발용: 다음 직업 해금', async () => show(await apiRef.unlockMockNextJob()), 'secondary-button is-dev'),
-        button('개발용: 레벨 처음으로', async () => show(await apiRef.resetMockLevel()), 'secondary-button is-dev'),
+        button('개발용: 레벨 +1', run(() => apiRef.setMockLevel(data.level.level + 1)), 'secondary-button is-dev'),
+        button('개발용: 다음 직업 해금', run(() => apiRef.unlockMockNextJob()), 'secondary-button is-dev'),
+        button('개발용: 레벨 처음으로', run(() => apiRef.resetMockLevel()), 'secondary-button is-dev'),
       );
       box.append(dev);
     }

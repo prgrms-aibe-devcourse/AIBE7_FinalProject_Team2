@@ -1,8 +1,9 @@
 // 회원가입 입력 규칙 (FE-104). 화면(signupPage.js)과 떼어 두어 node --test로 확인한다.
 // 서버 회원가입 API가 생기면 서버 규칙과 맞춘다(지금은 화면 쪽 안내용 규칙)
+import { nicknameError } from '../../utils/nickname.js';
+
 export const ID_PATTERN = /^[a-z0-9_]{4,20}$/;
 export const PASSWORD_MIN = 8;
-import { nicknameError } from '../../utils/nickname.js';
 
 // values: { id, password, passwordConfirm, nickname, agreed }. 틀린 칸만 { 칸 이름: 문구 }로, 화면 위에서 아래 순서로 돌려준다(첫 칸에 포커스를 둔다)
 export function validateSignup({ id = '', password = '', passwordConfirm = '', nickname = '', agreed = false } = {}) {

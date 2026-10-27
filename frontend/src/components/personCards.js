@@ -117,8 +117,8 @@ export function cardSignature(seed) {
   return ink;
 }
 
-// extra: { level: 'Lv.7' 같은 접두, signer: 서명 씨앗(주면 글자 대신 서명을 그린다), label: 서명일 때 낭독용 글 }
-export function profileCardParts(deco, nickname, typeName, { level = null, signer = null } = {}) {
+// extra: { level: 'Lv.7' 같은 접두, signer: 서명 씨앗(주면 글자 대신 서명을 그린다), lineLabel: 낭독용 줄 이름('성향' 기본, 직업이면 '직업') }
+export function profileCardParts(deco, nickname, typeName, { level = null, signer = null, lineLabel = '성향' } = {}) {
   const src = deco.portrait;
   const caption = portraitLabel(src);
   const face = element('div', 'my-card-window');
@@ -129,7 +129,7 @@ export function profileCardParts(deco, nickname, typeName, { level = null, signe
   if (level) result.append(element('span', 'my-card-level', level));
   if (signer) result.append(cardSignature(signer));
   else result.append(typeName ?? '성향 테스트 전');
-  const line = signer ? `${nickname}의 서명` : `성향 ${typeName ?? '테스트 전'}`;
+  const line = signer ? `${nickname}의 서명` : `${lineLabel} ${typeName ?? '테스트 전'}`;
   return {
     caption,
     note: `${nickname}, 대표 이미지 ${caption}, ${level ? `${level} ` : ''}${line}${sashNote(deco)}`,
