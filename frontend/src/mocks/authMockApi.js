@@ -6,9 +6,10 @@ const delay = () => new Promise((resolve) => setTimeout(resolve, 250));
 const KAKAO_NICKNAME = '카카오 회원'; // 목업 카카오 로그인의 닉네임
 const NICKNAME_MAX = 12;
 
-function fail(code, details = null) {
+// 오류 모양은 서버와 같다: details는 [{ field, reason }] 배열(API 명세 1-4, PR #306 리뷰). 칸이 없으면 null
+function fail(code, field = null) {
   const messages = { VALIDATION_ERROR: '입력값을 확인해 주세요.', DUPLICATE_ID: '이미 쓰고 있는 아이디예요.' };
-  throw { code, message: messages[code], currentStatus: null, details };
+  throw { code, message: messages[code], currentStatus: null, details: field ? [{ field, reason: code }] : null };
 }
 
 // 목업 닉네임: 아이디의 @ 앞부분(최대 12자)
@@ -20,9 +21,9 @@ export function mockNicknameOf(id) {
 export async function login({ method, id, password } = {}) {
   await delay();
   if (method === 'kakao') return { nickname: KAKAO_NICKNAME };
-  if (method !== 'password') fail('VALIDATION_ERROR', { field: 'method' });
-  if (!mockNicknameOf(id ?? '')) fail('VALIDATION_ERROR', { field: 'id' });
-  if (!password) fail('VALIDATION_ERROR', { field: 'password' });
+  if (method !== 'password') fail('VALIDATION_ERROR', 'method');
+  if (!mockNicknameOf(id ?? '')) fail('VALIDATION_ERROR', 'id');
+  if (!password) fail('VALIDATION_ERROR', 'password');
   return { nickname: mockNicknameOf(id) };
 }
 
@@ -31,7 +32,7 @@ export async function login({ method, id, password } = {}) {
 export async function signup({ id, password, nickname } = {}) {
   await delay();
   if (!String(id ?? '').trim() || !password || !String(nickname ?? '').trim()) fail('VALIDATION_ERROR');
-  if (String(id).trim().startsWith('admin')) fail('DUPLICATE_ID', { field: 'id' });
+  if (String(id).trim().startsWith('admin')) fail('DUPLICATE_ID', 'id');
   return { nickname: String(nickname).trim() };
 }
 

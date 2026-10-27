@@ -78,7 +78,7 @@ const withAccessToken = (pending) => completeLogin(pending, { reissue: reissueAc
 
 export function login({ method, id, password } = {}) {
   if (method === 'password') return withAccessToken(post('/auth/login', { id, password }));
-  if (method !== 'kakao') return Promise.reject({ code: 'VALIDATION_ERROR', message: '입력값을 확인해 주세요.', currentStatus: null, details: { field: 'method' } });
+  if (method !== 'kakao') return Promise.reject({ code: 'VALIDATION_ERROR', message: '입력값을 확인해 주세요.', currentStatus: null, details: [{ field: 'method', reason: 'VALIDATION_ERROR' }] });
   return new Promise((resolve, reject) => {
     const restored = (event) => {
       if (!event.persisted) return;

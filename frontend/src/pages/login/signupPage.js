@@ -34,7 +34,7 @@ export function renderSignupPage(container, { api, navigate }) {
   const jump = devJumpBar([
     { label: '입력 폼', run: () => showForm() },
     { label: '칸 오류', run: () => showForm().form.requestSubmit() },
-    { label: '아이디 중복', run: () => showForm().fill({ id: 'admin_naero' }).fieldError('id', '이미 쓰고 있는 아이디예요. 다른 아이디를 골라 주세요.') },
+    { label: '아이디 중복', run: () => showForm().fill({ id: 'admin_naero' }).fieldError('id', '이미 쓰고 있는 아이디예요. 다른 아이디를 골라 주세요. 방금 가입했다면 로그인해 주세요.') },
     { label: '가입 중(로딩)', run: () => { const { busy } = showForm(); setBusy(busy, true, busy[1], '가입하는 중…'); } },
     { label: '준비 중(실제 모드)', run: () => showForm().showError(NOT_READY) },
     { label: '이미 로그인', run: () => showSignedIn({ nickname: '내로판사' }, false) },
@@ -178,7 +178,9 @@ export function renderSignupPage(container, { api, navigate }) {
         if (failure?.code === TOKEN_NOT_ISSUED) {
           showError(SIGNED_UP_LOGIN_AGAIN);
         } else if (failure?.code === 'DUPLICATE_ID') {
-          fieldError('id', '이미 쓰고 있는 아이디예요. 다른 아이디를 골라 주세요.');
+          // 서버가 가입(커밋) 뒤 토큰 발급에서 실패하면 500이 나가고, 다시 누르면 이 409를 본다(BE-113 추후 재검토 · PR #306 리뷰).
+          // 그 사람은 이미 가입된 것이라 로그인으로 안내한다
+          fieldError('id', '이미 쓰고 있는 아이디예요. 다른 아이디를 골라 주세요. 방금 가입했다면 로그인해 주세요.');
           fields.id.input.focus();
         } else if (serverField) {
           fieldError(serverField, SERVER_FIELD_MESSAGE[serverField]);
