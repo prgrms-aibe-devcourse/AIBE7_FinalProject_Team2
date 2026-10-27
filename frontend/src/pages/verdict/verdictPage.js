@@ -140,7 +140,8 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       // 개월 칸은 change(칸을 떠날 때)가 아직 안 왔으니 12개월 넘김을 먼저 적용한다
       field.addEventListener('keydown', (event) => {
         if (event.key !== 'Enter' || event.isComposing) return;
-        event.preventDefault();
+        event.preventDefault(); // 막혀서 아무 일도 없는 경우에도 막는다: 칸이 든 카드의 폼 암묵적 제출을 하지 않게(#302 리뷰)
+        if (layout.stageNext?.enabled?.() === false) return; // 하단 "다음" 버튼이 비활성(서명 제출 중 등)이면 Enter도 지나가지 못하게
         if (key === 'prisonMonths') carryMonths();
         layout.stageNext?.run();
       });

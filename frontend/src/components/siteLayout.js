@@ -54,7 +54,7 @@ export function renderSiteHeader({ navigate }) {
 let narrow = null;
 let current = null;
 const placeLogin = () => {
-  if (!current) return;
+  if (!current?.nav.isConnected) return; // 떨어진 옛 헤더는 옮기지 않는다(#302 리뷰)
   if (narrow.matches) current.nav.before(current.login);
   else current.nav.after(current.login);
 };

@@ -100,7 +100,7 @@ export function openCaseReviewPopup({ caseId, api, navigate, from, hand = false 
   // 내용이 준비되면 팝업 자체가 아니라 첫 입력칸(별점)으로 포커스를 옮긴다(FE-103). 이미 다른 곳(닫기 확인 등)으로 옮겼으면 건드리지 않고, 보낸 엽서처럼 입력칸이 없으면 팝업에 그대로 둔다
   Promise.resolve(mounted).then(() => {
     if (closing || !layer.isConnected || document.activeElement !== dialog) return;
-    body.querySelector('.case-review-stars input:checked, .case-review-stars input, .case-review-field textarea')?.focus({ preventScroll: true });
+    (body.querySelector('.case-review-stars input:checked') ?? body.querySelector('.case-review-stars input') ?? body.querySelector('.case-review-field textarea'))?.focus({ preventScroll: true }); // 셀렉터 목록은 우선순위가 아니라 문서 순서라 ??로 차례대로 찾는다(#302 리뷰)
   }).catch(() => {});
   if (!reducedMotion()) {
     // 남불은 바로 손을 내밀고, 엽서는 내용이 준비되면(늦으면 READY_WAIT_MS 뒤) 날아온다
