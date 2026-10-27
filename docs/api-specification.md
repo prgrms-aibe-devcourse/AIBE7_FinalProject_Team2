@@ -55,6 +55,7 @@
 | v0.51 | 2026-10-22 | **사건 등록 적재 A-14-1 신설 (BE-93 2차)** — `POST /admin/case-imports/{importId}/load`. 생성 결과를 사건(DRAFT) · 섹션 · 형벌 규칙 · 판단 요소 · 원본 판결문 · AI · 재판부 판결 후보로 만든다. **A-15가 SUCCEEDED가 된 뒤 관리자가 따로 누른다**(번호는 A-16 ~ A-41 예약 때문에 A-14-1) — 2초마다 불리는 조회에서 적재하면 같은 사건이 여러 번 만들어질 수 있다. 적재가 끝나면 A-15의 `caseId`가 채워진다(1차에 비워 두었던 값). 에러 코드 `IMPORT_NOT_READY`(409) · `IMPORT_RESULT_INVALID`(422) 추가. 판결 후보는 **공개하지 않은 상태**로 들어가 A-9 승인을 기다린다. **(병합 메모) 이 줄의 번호는 PR #242 리베이스 도중 두 번 겹쳤다 — 처음 v0.47(BE-63과 겹침) → v0.50(COMMON-60) → 이번에 FE-77과 다시 겹쳐 v0.51로 재조정(COMMON-58, PR #244)** |
 | v0.52 | 2026-10-22 | **프로필 선택 설정 저장 P-8 신설 (BE-104, FE-77 후속)** — `PATCH /profile-settings`: 공개 성향카드(`shownCard`) · 프로필카드 아래 성향(`profileCardType`) · 한 줄 소개(`bio`)를 **보낸 칸만** 저장(P-7과 별개, 전체 덮어쓰기 아님). 값은 `initial` · `retake` · `current`, 소개는 앞뒤 공백을 뺀 0 ~ 40자 · 줄바꿈 없음. P-5 응답에 `profileSettings` 추가(저장 전이면 `current` · `current` · `""`). 공개 범위 칸은 두지 않는다(항상 공개, FE-77). ERD v1.37 `profile_setting`(V29). P-2 · P-5의 v0.50 서버 구현도 이 작업에서 했다(V28) **(병합 메모) 작업 중 COMMON-58(PR #244)이 BE-93 줄에 v0.51을 먼저 써서 v0.51 → v0.52로 다시 매겼다** |
 | v0.53 | 2026-10-22 | **API 17 공개 신문 지면 신설 (BE-102, BE-78 2차 검토 후속)** — `GET /cases/{caseId}/paper`. 관리자 신문 지면(A-13-6 ~ 8, BE-92)과 발단 · 결론 사진(A-13-4 · 5, BE-91 · BE-101)을 공개용으로 조립, 새로 저장하지 않는다. **`extraPhotos`는 A-13-6 ~ 8과 달리 배열이 아니라 `{ origin, conclusion }` 고정 자리** — 사진 한쪽이 없을 때 다른 쪽이 앞자리로 밀려 역할이 바뀌어 보이는 걸 막는다(FE-64 선행, BE-102 Jira 댓글로 제안 · 협의). 비공개 사건은 `CASE_NOT_FOUND`, 신문 지면 미생성은 `PAPER_NOT_FOUND`(1-5 설명을 공개 API도 쓰도록 정정) |
+| v0.54 | 2026-10-27 | **범죄 유형 `ROBBERY`(강도) · `THEFT`(절도) 추가 (BE-111)** — API 1 `crimeType` 값, `crimeCategoryLabel` 대응(강도 · 절도 → "재산범죄"), API 4 형량 구간 개수(강도 7개: 벌금형 제외 · 무기징역 추가, 절도 공통 7개), A-14 사건 등록 `crimeType` 값. DB 변경은 V31(D) |
 
 ---
 
@@ -211,7 +212,7 @@ json
 
 | 위치 | 이름 | 필수 | 설명 |
 | --- | --- | --- | --- |
-| query | `crimeType` |  | `MURDER` / `FRAUD` / `INJURY`. 없으면 전체 |
+| query | `crimeType` |  | `MURDER` / `FRAUD` / `INJURY` / `ROBBERY` / `THEFT`. 없으면 전체 |
 
 **응답 200**
 
@@ -222,7 +223,7 @@ json
 ```
 
 - `PUBLISHED` 사건만. `summary`는 필터와 관계없이 전체 기준(칩 옆 건수 표시용).
-- `crimeCategoryLabel`: `crime_type`별 표시용 분류명(예: `FRAUD` → "재산범죄"). DB 컬럼이 아니라 서버 코드 상수에서 만든다(ERD 3-1).
+- `crimeCategoryLabel`: `crime_type`별 표시용 분류명. `MURDER` → "생명범죄", `FRAUD` · `ROBBERY` · `THEFT` → "재산범죄", `INJURY` → "신체범죄". DB 컬럼이 아니라 서버 코드 상수에서 만든다(ERD 3-1).
 - `chargeName`: 죄명(`legal_case.charge_name`, 예: "살인"). 사건 상단 바(S-04~S-08)가 `caseId`로 이 목록에서 제목과 함께 찾아 쓴다(BE-79, D-01). 사건 개요(API 4) · API 16의 `chargeName`과 같은 값이다.
 - `thumbnailUrl`: `legal_case.thumbnail_url`. 없으면 `null`이고, 화면은 범죄 유형별 기본 이미지를 쓴다.
 - `participantCount`: `attempt_no = 1`이고 `COMPLETED`인 체험 수.
@@ -288,7 +289,7 @@ json
 {  "case": {    "caseId": 1,    "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",    "crimeType": "MURDER",    "crimeCategoryLabel": "생명범죄",    "chargeName": "살인",    "overview": "피고인이 빌린 돈을 갚지 못해 오래 다투던 지인이 집으로 찾아오자, 말다툼 끝에 집에 있던 흉기로 피해자를 살해하고 구호 조치 없이 집을 나간 사건이다."  },  "rangeOptions": [    { "rangeOptionId": 8, "label": "징역형 집행유예" },    { "rangeOptionId": 9, "label": "실형 3년 미만" },    { "rangeOptionId": 10, "label": "실형 3년 이상 ~ 5년 미만" },    { "rangeOptionId": 11, "label": "실형 5년 이상 ~ 10년 미만" },    { "rangeOptionId": 12, "label": "실형 10년 이상 ~ 20년 미만" },    { "rangeOptionId": 13, "label": "실형 20년 이상" },    { "rangeOptionId": 14, "label": "무기징역" },    { "rangeOptionId": 15, "label": "사형" }  ],  "preFactors": [    { "factorId": 1, "label": "돈 문제로 오래 다툼이 있었다" },    { "factorId": 2, "label": "다투던 중 흉기를 집어 들었다" },    { "factorId": 3, "label": "범행 뒤 현장을 떠났다" }  ]}
 ```
 
-- `rangeOptions`: 이 사건 `crime_type`의 `sentence_range_option`을 `display_order` 순으로. 사기 · 상해는 공통 7개, 살인은 벌금형을 빼고 무기징역 · 사형을 더한 8개다.
+- `rangeOptions`: 이 사건 `crime_type`의 `sentence_range_option`을 `display_order` 순으로. 사기 · 상해 · 절도는 공통 7개, 강도는 벌금형을 빼고 무기징역을 더한 7개, 살인은 벌금형을 빼고 무기징역 · 사형을 더한 8개다.
 - `preFactors`: `reveal_stage = OVERVIEW`인 요소의 `pre_label`. **확장(REQ-093)** — MVP 화면은 쓰지 않아도 된다.
 - 법정형 · 선고 가능 범위 · 권고 범위 · 실제 판결은 **넣지 않는다**(FR-2-8).
 
@@ -1480,7 +1481,7 @@ A-11과 같은 방식(보낸 필드만, `null` = 지움). `headline` · `article
 
 | 필드 | 규칙 |
 | --- | --- |
-| `crimeType` | 필수. `MURDER` · `FRAUD` · `INJURY` |
+| `crimeType` | 필수. `MURDER` · `FRAUD` · `INJURY` · `ROBBERY` · `THEFT` |
 | `sources` | 필수. 1 ~ 3건, 심급(`courtLevel`: `FIRST` · `APPEAL` · `SUPREME`)이 서로 달라야 한다 |
 | `sources[].caseNumber` | 필수, 50자 이하. 이미 등록된 사건번호면 409 `DUPLICATE_SOURCE` |
 | `sources[].originalText` | 필수, 200,000자 이하. 원본 판결문이라 요청 본문 로그에 남기지 않는다 |
