@@ -2,6 +2,7 @@
 // 화면은 api 객체로 주입받아 쓰므로, 목 ↔ 실제 전환은 VITE_API_MODE로 한다 (src/api/index.js).
 import { API_BASE_URL } from './config.js';
 import { get, logout, patch, post, put, reissueAccessToken } from './client.js';
+import { completeLogin } from './authFlow.js';
 
 const experience = (caseId) => `/cases/${encodeURIComponent(caseId)}/experience`;
 
@@ -63,12 +64,21 @@ export const patchProfileSettings = (settings) => patch('/profile-settings', set
 export const getLevel = () => get('/level');
 export const putLevelJob = (job) => put('/level/job', { job });
 
-// 회원 로그인 (FE-74, API 명세 10장). 목(mocks/authMockApi.js)과 같은 login · logout 이름을 쓴다
-// 카카오(M-3)는 fetch가 아니라 브라우저 이동이다. 카카오 → 서버 콜백(M-4) → 화면 /auth/callback으로 돌아온다(authCallbackPage.js).
-// 이동하는 동안 끝나지 않는 약속을 돌려준다. 카카오 화면에서 뒤로 와 이 화면이 그대로 복원되면(bfcache) LOGIN_CANCELLED로 끝내 버튼을 되살린다
-// 아이디 · 비밀번호 회원 로그인은 없다(관리자만, adminLogin.js)
-export function login({ method } = {}) {
-  if (method !== 'kakao') return Promise.reject({ code: 'VALIDATION_ERROR', message: '입력값을 확인해 주세요.', currentStatus: null, details: { field: 'method' } });
+// 회원 로그인 (FE-74 · FE-117, API 명세 10장). 목(mocks/authMockApi.js)과 같은 login · signup · logout 이름을 쓴다
+// - 카카오(M-3)는 fetch가 아니라 브라우저 이동이다. 카카오 → 서버 콜백(M-4) → 화면 /auth/callback으로 돌아온다(authCallbackPage.js).
+//   이동하는 동안 끝나지 않는 약속을 돌려준다. 카카오 화면에서 뒤로 와 이 화면이 그대로 복원되면(bfcache) LOGIN_CANCELLED로 끝내 버튼을 되살린다
+// - 아이디(M-6, BE-113): 서버는 리프레시 토큰 쿠키(NLNB_RT)만 심고 { nickname }을 준다. 카카오 콜백과 같이 바로 M-1 재발급으로
+//   첫 액세스 토큰을 받는다. 실패는 401 INVALID_CREDENTIALS(아이디 없음 · 비밀번호 틀림 · 형식 틀림을 나누지 않음) ·
+//   400 VALIDATION_ERROR(빈 값 · 길이 초과) · 403 FORBIDDEN(Origin) · 429 TOO_MANY_REQUESTS · 재발급 실패 TOKEN_NOT_ISSUED(api/authFlow.js)
+// - 관리자(@가 있는 아이디)는 여기로 오지 않는다(loginPage.js가 adminLogin.js로 보낸다, FE-117)
+
+// 아이디 가입 · 로그인 응답 뒤 M-1 재발급으로 첫 액세스 토큰을 받는다(api/authFlow.js).
+// 재발급이 실패하면 남은 리프레시 쿠키를 로그아웃으로 지우고 TOKEN_NOT_ISSUED로 알린다
+const withAccessToken = (pending) => completeLogin(pending, { reissue: reissueAccessToken, logout });
+
+export function login({ method, id, password } = {}) {
+  if (method === 'password') return withAccessToken(post('/auth/login', { id, password }));
+  if (method !== 'kakao') return Promise.reject({ code: 'VALIDATION_ERROR', message: '입력값을 확인해 주세요.', currentStatus: null, details: [{ field: 'method', reason: 'VALIDATION_ERROR' }] });
   return new Promise((resolve, reject) => {
     const restored = (event) => {
       if (!event.persisted) return;
@@ -79,6 +89,10 @@ export function login({ method } = {}) {
     window.location.assign(`${API_BASE_URL}/auth/oauth2/authorization/kakao`);
   });
 }
+
+// M-5 아이디 회원가입 (BE-113 · FE-117). 가입하면 바로 로그인된다(응답 · 쿠키는 아이디 로그인과 같다).
+// 중복 아이디는 409 DUPLICATE_ID, 형식 오류는 400 VALIDATION_ERROR(details에 칸 이름), Origin 검증 실패 403, 요청 제한 429
+export const signup = ({ id, password, nickname }) => withAccessToken(post('/auth/signup', { id, password, nickname }));
 
 // M-1 · M-2 — 재발급(콜백 화면이 첫 액세스 토큰을 받는다) · 로그아웃
 export const reissueToken = () => reissueAccessToken();
