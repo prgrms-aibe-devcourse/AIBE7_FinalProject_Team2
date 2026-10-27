@@ -175,12 +175,20 @@ def _script_result(script):
 
     `publishable`(생성 실패 · 호출 한도 중단으로 증거 카드와 대사가 어긋남)은 그대로 넘긴다.
     적재할지 · 공개할지는 백엔드와 관리자가 판단한다(BE-108).
+
+    파일에서 가져오는 값은 `evidence`와 `createdAt`뿐이다. `createdAt`(대본을 만든 시각)은 단계 산출물에
+    없고 증거 파일에만 있어서, 여기서 올려 주지 않으면 적재가 읽을 값이 사라진다(PR #300 리뷰).
+    나머지(`stopped` · `model` · `cast` · `balanceWarning` · `publishable`)는 **단계 산출물 쪽이 맞다** —
+    증거 파일에는 `stopped`가 아예 없어서 파일에서 가져오면 항상 false가 된다.
     """
     if not script:
         return None
     data = _read_json(Path(script["evidenceFile"])) if script.get("evidenceFile") else None
     result = {key: value for key, value in script.items() if key != "evidenceFile"}
     result["evidence"] = (data or {}).get("evidence") or []
+    created_at = (data or {}).get("createdAt")
+    if created_at:
+        result["createdAt"] = created_at
     return result
 
 
