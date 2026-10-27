@@ -57,6 +57,7 @@
 | v0.53 | 2026-10-22 | **API 17 공개 신문 지면 신설 (BE-102, BE-78 2차 검토 후속)** — `GET /cases/{caseId}/paper`. 관리자 신문 지면(A-13-6 ~ 8, BE-92)과 발단 · 결론 사진(A-13-4 · 5, BE-91 · BE-101)을 공개용으로 조립, 새로 저장하지 않는다. **`extraPhotos`는 A-13-6 ~ 8과 달리 배열이 아니라 `{ origin, conclusion }` 고정 자리** — 사진 한쪽이 없을 때 다른 쪽이 앞자리로 밀려 역할이 바뀌어 보이는 걸 막는다(FE-64 선행, BE-102 Jira 댓글로 제안 · 협의). 비공개 사건은 `CASE_NOT_FOUND`, 신문 지면 미생성은 `PAPER_NOT_FOUND`(1-5 설명을 공개 API도 쓰도록 정정) |
 | v0.54 | 2026-10-27 | **레벨 · 직업 API 신설 (BE-106)** — 11장 L-1 `GET /level`(레벨 · XP · 직업 목록) · L-2 `PUT /level/job`(카드에 보여 줄 직업 선택) · L-3 `POST /level/share-reward`(SNS 공유 보상). P-5 응답에 `level`(L-1과 같은 값) 추가, 1-5에 `JOB_LOCKED`(409) 추가. 레벨은 익명 ID 단위(회원 합산은 후속). 경험치 산식 · 직업 11등급 · 지급 상한은 11장과 [BE-106 결정 기록](decisions/BE-106.md) |
 | v0.55 | 2026-10-27 | 범죄 유형 강도 · 절도 추가 (BE-112 · ERD v1.40 · V31) — `crimeType` 값에 `ROBBERY`(강도) · `THEFT`(절도) 추가(API 1 쿼리 · 응답, 사건 등록). 분류명(`crimeCategoryLabel`)은 둘 다 "재산범죄". API 1 `summary.byCrimeType`은 공개 사건이 없어도 다섯 키를 모두 0으로 내려 준다. API 4 `rangeOptions`: 강도는 벌금형을 빼고 무기징역을 더한 7개, 절도는 공통 7개 |
+| v0.56 | 2026-10-27 | API 1 `crimeCategoryLabel` 설명에 범죄 유형별 분류명 대응을 모두 적음(생명 · 재산 · 신체범죄, 강도 · 절도는 재산범죄) (BE-111, BE-112 #297 리뷰 요청) |
 
 ---
 
@@ -225,7 +226,7 @@ json
 ```
 
 - `PUBLISHED` 사건만. `summary`는 필터와 관계없이 전체 기준(칩 옆 건수 표시용). `byCrimeType`은 공개 사건이 없는 유형도 0으로 모든 범죄 유형 키를 내려 준다(v0.55부터 5개).
-- `crimeCategoryLabel`: `crime_type`별 표시용 분류명(예: `FRAUD` → "재산범죄"). DB 컬럼이 아니라 서버 코드 상수에서 만든다(ERD 3-1).
+- `crimeCategoryLabel`: `crime_type`별 표시용 분류명. `MURDER` → "생명범죄", `FRAUD` · `ROBBERY` · `THEFT` → "재산범죄", `INJURY` → "신체범죄"(`ROBBERY` · `THEFT`는 v0.55). DB 컬럼이 아니라 서버 코드 상수(`CrimeType.categoryLabel`)에서 만든다(ERD 3-1).
 - `chargeName`: 죄명(`legal_case.charge_name`, 예: "살인"). 사건 상단 바(S-04~S-08)가 `caseId`로 이 목록에서 제목과 함께 찾아 쓴다(BE-79, D-01). 사건 개요(API 4) · API 16의 `chargeName`과 같은 값이다.
 - `thumbnailUrl`: `legal_case.thumbnail_url`. 없으면 `null`이고, 화면은 범죄 유형별 기본 이미지를 쓴다.
 - `participantCount`: `attempt_no = 1`이고 `COMPLETED`인 체험 수.
