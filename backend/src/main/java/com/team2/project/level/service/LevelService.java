@@ -13,6 +13,7 @@ import com.team2.project.level.domain.XpSource;
 import com.team2.project.level.dto.LevelStatus;
 import com.team2.project.level.repository.ProfileJobRepository;
 import com.team2.project.level.repository.XpEventRepository;
+import com.team2.project.profile.domain.ProfileStats;
 import com.team2.project.profile.service.ProfileStatsReader;
 import java.time.Clock;
 import java.time.LocalDate;
@@ -50,6 +51,12 @@ public class LevelService {
 	@Transactional(readOnly = true)
 	public LevelStatus view(UUID anonymousUserId) {
 		return status(anonymousUserId);
+	}
+
+	/** 이미 읽은 통계를 받는 쪽: 마이페이지가 꾸미기 · 도전과제와 함께 한 번만 읽어 넘긴다 (BE-106 리뷰) */
+	@Transactional(readOnly = true)
+	public LevelStatus view(UUID anonymousUserId, ProfileStats stats) {
+		return status(anonymousUserId, stats);
 	}
 
 	/** 쿠키가 없거나 DB에 없는 익명 ID면 Lv1 · 무직 (익명 ID를 새로 발급하지 않는다) */
@@ -97,6 +104,9 @@ public class LevelService {
 	 * 이벤트 경험치를 준다 (글 · 댓글 · 좋아요 · 공유 — 커뮤니티 BE가 부른다).
 	 * 같은 사용자의 요청을 행 잠금으로 차례로 처리해, 동시에 와도 상한을 넘기지 않는다.
 	 *
+	 * <p>{@code anonymousUserId}는 DB에 있는 익명 ID만 넘긴다. 없는 ID면 잠금 조회가 빈 결과로 지나가고 INSERT에서 FK 오류가 난다
+	 * (호출하는 쪽이 이미 확인한 사용자여야 한다). refKey · groupKey 형식은 {@link XpSource}를 따른다.
+	 *
 	 * @param refKey   지급 대상. 같은 (사용자, 수급처, 대상)은 한 번만 준다
 	 * @param groupKey 묶음 상한을 세는 키(좋아요 받기는 글 ID). 상한이 없으면 빈 문자열
 	 * @return 받은 XP (0이면 상한 · 중복으로 주지 않음)
@@ -116,7 +126,11 @@ public class LevelService {
 	}
 
 	private LevelStatus status(UUID userId) {
-		int xp = LevelXp.derived(statsReader.read(userId)) + xpEventRepository.sumAmount(userId);
+		return status(userId, statsReader.read(userId));
+	}
+
+	private LevelStatus status(UUID userId, ProfileStats stats) {
+		int xp = LevelXp.derived(stats) + xpEventRepository.sumAmount(userId);
 		Job selected = profileJobRepository.findById(userId).map(ProfileJob::getJob).orElse(null);
 		return LevelStatus.of(xp, selected);
 	}
