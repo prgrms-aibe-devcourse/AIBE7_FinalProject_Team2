@@ -309,7 +309,7 @@ Nginx가 **막은 요청(429)만** JSON 한 줄씩 따로 남기고, 모니터�
 | --- | --- |
 | 파일 | 웹 컨테이너 `/var/log/nginx-ratelimit/rate-limited.log` (`default.conf`의 `log_format rate_limited`, `if=$rate_limited`) |
 | 내용 | `time` · `status` · `route` · `method` · `path`(쿼리 제외) · `ip` |
-| Loki 라벨 | `job="web"`, `route` = `auth_token`(재발급 · 로그아웃) · `admin_login` · `oauth`(카카오 시작) · `api`(그 밖) — 값 4개로 고정. **경로 기준**이라 zone과 1:1이 아니다(전용 · 공통 어느 쪽에 걸려도 그 경로로 센다). `ip` · `path`는 라벨로 올리지 않는다(BE-71 카디널리티 규칙) |
+| Loki 라벨 | `job="web"`, `route` = `auth_token`(재발급 · 로그아웃) · `admin_login` · `oauth`(카카오 시작) · `member_auth`(아이디 로그인 · 가입, BE-113) · `api`(그 밖) — 값 5개로 고정. **경로 기준**이라 zone과 1:1이 아니다(전용 · 공통 어느 쪽에 걸려도 그 경로로 센다). `ip` · `path`는 라벨로 올리지 않는다(BE-71 카디널리티 규칙) |
 | 공유 | `docker-compose.monitoring-agent.yml`의 `web-ratelimit-logs` 볼륨(웹 쓰기 · Alloy 읽기 전용). 에이전트를 안 쓰는 서버는 컨테이너 안에만 남는다 |
 | 크기 상한 | `41-trim-rate-limit-log.sh`가 1분마다 보고 **10MB**(`.env`의 `RATE_LIMIT_LOG_MAX_BYTES`, 비우면 기본값 · 1보다 작으면 기본값)를 넘으면 비운다. 공격 중에도 디스크를 채우지 않는다. 비우기 직전 1분 안의 일부 줄은 Loki에 빠질 수 있다 |
 | 평소 접속 기록 | 그대로 stdout(`docker compose logs web`) |
@@ -370,8 +370,22 @@ docker compose -f docker-compose.prod.yml logs --tail 3 web
 
 ```bash
 # 전용 zone에서 막힌 기록
-docker compose -f docker-compose.prod.yml logs web 2>&1 | grep -E 'zone "(auth_token_per_ip|admin_login_per_ip|oauth_per_ip|oauth_all)"' | tail
+docker compose -f docker-compose.prod.yml logs web 2>&1 | grep -E 'zone "(auth_token_per_ip|admin_login_per_ip|oauth_per_ip|oauth_all|member_login_per_ip|member_signup_per_ip|member_auth_all)"' | tail
 ```
+
+### 아이디 로그인 · 회원가입 전용 제한 (BE-113)
+
+아이디 로그인(M-6) · 회원가입(M-5)에도 `/api` 공통 제한에 **더해** 전용 제한을 건다(`default.conf`의 `member_*` zone, `snippets/app.conf`의 전용 location). POST만 센다.
+
+| 경로 | zone | 값 | 이유 |
+| --- | --- | --- | --- |
+| `POST /api/v1/auth/login` | `member_login_per_ip` | IP별 분당 20번, 순간 20번 | 백엔드에 계정별 실패 잠금이 없어(docs/decisions/BE-113.md 결정 6) 비밀번호 대입을 늦춘다. 관리자(분당 5번)보다 넉넉한 이유는 같은 와이파이에서 여러 명이 동시에 로그인하기 때문 |
+| `POST /api/v1/auth/signup` | `member_signup_per_ip` | IP별 분당 10번, 순간 10번 | 가입은 중복 아이디(409)로 아이디가 있는지 드러나므로 대량 조회를 늦춘다 |
+| 두 경로 합계 | `member_auth_all` | 초당 10번, **넘으면 순간 20번까지 기다렸다가 보냄**(nodelay 없음) | 요청마다 Argon2 해시(m=19MiB)가 메모리를 쓴다. 여러 IP로 나눠 와도 백엔드에서 동시에 도는 해시 수를 묶는다(`oauth_all`과 같은 이유). 20번을 넘게 쌓이면 429 |
+
+- **관리자 로그인 zone과 따로 센다.** 회원 로그인이 관리자 로그인 한도(분당 5번)를 쓰지 않는다.
+- `Retry-After`: 로그인 3초 · 가입 6초. 429 로그 `route`는 둘 다 `member_auth`다.
+- 운영 이미지와 같은 `nginx:1.28-alpine`으로 확인: 같은 IP에서 로그인 POST 30번 중 약 21번 통과 · 나머지 429, 가입 15번 중 11번 통과, 그 직후에도 관리자 로그인 · 재발급은 영향 없음, GET은 전용 제한을 받지 않음.
 - **`KAKAO_CLIENT_ID`는 HTTPS(BE-75) 적용 뒤에만 넣는다.** state 쿠키 · `NLNB_RT` · `NLNB_AID`가 모두 `Secure`라 http에서는 브라우저가 저장하지 않아 로그인이 끝나지 않는다(PR #229 리뷰). 넣는 즉시 카카오 로그인 경로가 켜지므로, 화면 `/auth/callback`(FE 후속)이 배포되기 전에는 로그인 후 화면이 404로 보인다.
 
 ## Redis (BE-61, docs/tech-stack.md 2장 "Redis 운영 구성")
