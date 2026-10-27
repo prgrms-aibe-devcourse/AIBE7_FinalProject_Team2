@@ -1,6 +1,8 @@
 package com.team2.project.auth.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.everyItem;
+import static org.hamcrest.Matchers.is;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -14,7 +16,9 @@ import com.team2.project.common.web.RefreshTokenCookies;
 import com.team2.project.support.ApiIntegrationTest;
 import jakarta.servlet.http.Cookie;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -222,22 +226,27 @@ class LocalAuthControllerTest extends ApiIntegrationTest {
 	@Test
 	void 가입_입력이_규칙에_맞지_않으면_400이다() throws Exception {
 		String id = newLoginId();
-		List<String> invalidBodies = List.of(
-			signupBody("ab", PASSWORD, "닉네임"),							// 아이디 4자 미만
-			signupBody("admin@example.com", PASSWORD, "닉네임"),				// 아이디에 @ 불가 (화면 분기 기준)
-			signupBody(id, "short1", "닉네임"),							// 비밀번호 8자 미만
-			signupBody(id, "onlyletters", "닉네임"),						// 숫자 없음
-			signupBody(id, "12345678", "닉네임"),							// 영문 없음
-			signupBody(id, "a1" + "x".repeat(63), "닉네임"),				// 64자 초과
-			signupBody(id, PASSWORD, "가"),								// 닉네임 2자 미만
-			signupBody(id, PASSWORD, "닉 네임"),							// 공백 불가
-			signupBody(id, PASSWORD, "가나다라마바사아자"),					// 한글이 있으면 8자까지 (FE-114)
-			signupBody(id, PASSWORD, "abc가나다라마바"),					// 한글이 섞이면 영문이 있어도 8자까지
-			signupBody(id, PASSWORD, "abcdefghijklm"));					// 13자
-		for (String body : invalidBodies) {
-			mockMvc.perform(json(SIGNUP, body))
+		// 요청 본문 → 서버가 details[].field로 알려 줄 칸 이름. 화면(signupPage.js)은 이 이름으로 그 칸에 안내를 붙인다 (PR #306 리뷰)
+		// DTO 검사(@Valid)와 서비스 검사(한글 8자, BusinessException.ofField)가 같은 모양 [{ field, reason }]으로 내려가는지 함께 본다
+		Map<String, String> invalidBodies = new LinkedHashMap<>();
+		invalidBodies.put(signupBody("ab", PASSWORD, "닉네임"), "id");							// 아이디 4자 미만
+		invalidBodies.put(signupBody("admin@example.com", PASSWORD, "닉네임"), "id");				// 아이디에 @ 불가 (화면 분기 기준)
+		invalidBodies.put(signupBody(id, "short1", "닉네임"), "password");						// 비밀번호 8자 미만
+		invalidBodies.put(signupBody(id, "onlyletters", "닉네임"), "password");					// 숫자 없음
+		invalidBodies.put(signupBody(id, "12345678", "닉네임"), "password");						// 영문 없음
+		invalidBodies.put(signupBody(id, "a1" + "x".repeat(63), "닉네임"), "password");			// 64자 초과
+		invalidBodies.put(signupBody(id, PASSWORD, "가"), "nickname");							// 닉네임 2자 미만
+		invalidBodies.put(signupBody(id, PASSWORD, "닉 네임"), "nickname");						// 공백 불가
+		invalidBodies.put(signupBody(id, PASSWORD, "가나다라마바사아자"), "nickname");				// 한글이 있으면 8자까지 (FE-114, 서비스 검사)
+		invalidBodies.put(signupBody(id, PASSWORD, "abc가나다라마바"), "nickname");				// 한글이 섞이면 영문이 있어도 8자까지 (서비스 검사)
+		invalidBodies.put(signupBody(id, PASSWORD, "abcdefghijklm"), "nickname");				// 13자
+		for (Map.Entry<String, String> invalid : invalidBodies.entrySet()) {
+			mockMvc.perform(json(SIGNUP, invalid.getKey()))
 				.andExpect(status().isBadRequest())
-				.andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+				.andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+				.andExpect(jsonPath("$.details").isArray())
+				.andExpect(jsonPath("$.details[*].field", everyItem(is(invalid.getValue()))))
+				.andExpect(jsonPath("$.details[0].reason").isNotEmpty());
 		}
 		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM member_password WHERE login_id = ?",
 			Integer.class, id)).isZero();
