@@ -117,8 +117,8 @@
 .admin-candidate-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 .admin-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .admin-actions :is(.primary-button, .secondary-button) { min-height: 36px; padding: 4px 12px; }
-.admin-reject { display: grid; gap: 8px; margin-top: 10px; max-width: 520px; }
-.admin-reject .secondary-button { justify-self: start; min-height: 36px; padding: 4px 12px; }
+.admin-reject, .admin-inline-form { display: grid; gap: 8px; margin-top: 10px; max-width: 520px; }
+.admin-reject .secondary-button, .admin-inline-form .secondary-button { justify-self: start; min-height: 36px; padding: 4px 12px; }
 .admin-candidate-panel { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--color-border); }
 .admin-dl { display: grid; grid-template-columns: 140px 1fr; gap: 6px 12px; margin: 0; font-size: var(--text-small); }
 .admin-dl dt { color: var(--color-muted); font-weight: 700; }
@@ -213,7 +213,7 @@ button.admin-card:hover { border-color: var(--color-accent); }
 /* 손가락으로 누르는 화면: 버튼 · 고르기 · 메뉴를 44px 높이로 (FE-105) */
 @media (max-width: 720px), (pointer: coarse) {
   .admin-page :is(.primary-button, .secondary-button, .admin-tab, .admin-menu-item, .admin-jump-link, select) { min-height: 44px; }
-  .admin-page :is(.admin-actions, .admin-pager, .admin-reject, .admin-sources, .admin-mode-panel, .admin-source-box, .admin-search, .admin-user, .admin-comment, .admin-words, .admin-axis-confirm) :is(.primary-button, .secondary-button) { min-height: 44px; }
+  .admin-page :is(.admin-actions, .admin-pager, .admin-reject, .admin-inline-form, .admin-sources, .admin-mode-panel, .admin-source-box, .admin-search, .admin-user, .admin-comment, .admin-words, .admin-axis-confirm) :is(.primary-button, .secondary-button) { min-height: 44px; }
   .admin-link { padding: 11px 0; margin: -8px 0; } /* 표 줄 높이는 그대로 두고 누르는 범위만 넓힌다 */
   .admin-back, .admin-brand { min-height: 44px; }
   .admin-menu-item { display: flex; align-items: center; }
@@ -239,3 +239,22 @@ button.admin-card:hover { border-color: var(--color-accent); }
   .admin-main { padding: 20px 16px; }
   .admin-dl { grid-template-columns: 1fr; }
 }
+
+/* 사진 · 신문 지면 · 대본 검수 (A-13-1 ~ A-13-13, FE-106) */
+.admin-media-block { padding: 16px 0; border-top: 1px dashed var(--color-border); }
+.admin-media-block:first-of-type { border-top: 0; }
+.admin-media-block h3 { margin: 0 0 4px; font-size: var(--text-title-3, 1.05rem); }
+.admin-photo { margin: 8px 0; }
+/* 미리보기는 칸을 고정해 그림이 바뀌어도 아래 내용이 튀지 않게 한다 */
+.admin-photo img { display: block; width: 100%; max-width: 320px; aspect-ratio: 3 / 2; object-fit: cover; border: 1px solid var(--color-border); border-radius: 4px; background: var(--color-surface); }
+.admin-photo-slot { padding: 12px; margin-top: 12px; border: 1px solid var(--color-border); border-radius: 6px; }
+.admin-upload { display: grid; gap: 8px; margin-top: 8px; }
+.admin-prompt { display: grid; gap: 8px; margin: 8px 0; }
+.admin-prompt-text { width: 100%; resize: vertical; }
+.admin-paper-form { display: grid; gap: 12px; margin-top: 8px; }
+
+.admin-script-lines { display: grid; gap: 12px; margin: 12px 0; padding: 0; list-style: none; }
+.admin-script-line { padding: 12px; border: 1px solid var(--color-border); border-radius: 6px; }
+/* 대사는 읽는 글이라 본문 색 · 줄간격을 그대로 쓴다(옆의 판단 요소 문구는 admin-sub로 흐리다) */
+.admin-script-text { margin: 4px 0 8px; white-space: pre-wrap; }
+.admin-script-line .admin-warnings { margin-top: 8px; }

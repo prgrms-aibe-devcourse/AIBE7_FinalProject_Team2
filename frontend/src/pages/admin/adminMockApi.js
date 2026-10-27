@@ -1,4 +1,4 @@
-// 관리자 API 목 (API 명세 8장 A-1 ~ A-15). 7.4.7 구현 전에 S-19 화면을 만들고 확인하는 용도다.
+// 관리자 API 목 (API 명세 8장 A-1 ~ A-15, A-13-1 ~ A-13-13). 7.4.7 구현 전에 S-19 화면을 만들고 확인하는 용도다.
 // 사건 · 원문은 모두 가상 값이다. 상태는 메모리에만 두고(새로고침하면 처음으로), 로그인 여부만 sessionStorage에 둔다.
 // 원본 판결문 같은 내부 정보를 브라우저 저장소에 남기지 않기 위해서다.
 import { ADMIN, SESSION_KEY, delay, fail, now, requireLogin } from './adminMockBase.js';
@@ -83,6 +83,55 @@ const content = (title, extra = {}) => ({
 
 const ORIGINAL_TEXT = '가상지방법원\n판결\n\n사건 2099고합000 살인\n피고인 A\n\n주문\n피고인을 징역 12년에 처한다.\n\n이유\n(가상 원문입니다. 실제 판결문이 아닙니다.)';
 
+const PHOTO_BASE = 'https://example.invalid/case-photos';
+
+function incidentPhoto(photoId, role, caption) {
+  return { id: photoId, imageUrl: `${PHOTO_BASE}/incident-${role.toLowerCase()}-${photoId}.jpg`, caption,
+    role, displayOrder: role === 'ORIGIN' ? 0 : 1, createdAt: '2026-10-19T09:00:00+09:00' };
+}
+
+function mockPaper() {
+  return { desk: '사회부', headline: '빌린 돈 문제로 다투다 벌어진 사건', deck: '오랜 금전 다툼 끝에 벌어진 일이다',
+    photo: null, caption: '다투는 두 사람', article: ['첫 문단입니다.', '둘째 문단입니다.'],
+    updatedAt: '2026-10-19T09:00:00+09:00' };
+}
+
+/** 대사 한 줄. 파이프라인이 만드는 모양 그대로다(A-13-10) */
+function line(factorId, label, role, character, text, warnings = [], attempts = 1) {
+  return { factorId, label, role, character, text, attempts, validation: { ok: text !== null, warnings } };
+}
+
+/** 검수 거리가 있는 대본: 둘째 줄을 끝내 만들지 못해 publishable이 false다 */
+function draftScript() {
+  return {
+    evidence: [
+      line(1, '빌린 돈을 갚으라는 말에 화가 나 다툼이 시작됐다', 'PROSECUTOR', '나로', '돈을 갚으라는 말에 피고인이 먼저 언성을 높였습니다.'),
+      line(2, '다투던 중 흉기를 집어 들었다', 'DEFENSE', '남불', null, ['증거 카드에 없는 사실을 말했습니다'], 3),
+      line(3, '범행 뒤 현장을 떠났다', 'PROSECUTOR', '나로', '피고인은 구호 조치 없이 집을 나갔습니다.'),
+    ],
+    cast: { prosecutor: '나로', defense: '남불' },
+    model: 'google:gemini-2.5-flash', balanceWarning: '검사 쪽 대사가 변호인보다 두 배 깁니다',
+    publishable: false, stopped: false,
+    generatedAt: '2026-10-20T09:00:00+09:00', updatedAt: '2026-10-20T09:10:00+09:00',
+    reviewStatus: 'PENDING', isPublished: false, reviewedBy: null, reviewedAt: null, reviewNote: null,
+  };
+}
+
+/** 이미 승인해 공개 중인 대본 */
+function approvedScript() {
+  return {
+    evidence: [
+      line(1, '층간 소음으로 여러 번 다툼이 있었다', 'PROSECUTOR', '나로', '소음 문제로 다툼이 반복됐습니다.'),
+      line(2, '피고인이 먼저 문을 두드렸다', 'DEFENSE', '남불', '피고인은 대화를 하려 했을 뿐입니다.'),
+    ],
+    cast: { prosecutor: '나로', defense: '남불' },
+    model: 'google:gemini-2.5-flash', balanceWarning: null, publishable: true, stopped: false,
+    generatedAt: '2026-10-18T09:00:00+09:00', updatedAt: '2026-10-19T09:00:00+09:00',
+    reviewStatus: 'APPROVED', isPublished: true, reviewedBy: 'admin@example.com',
+    reviewedAt: '2026-10-19T09:00:00+09:00', reviewNote: null,
+  };
+}
+
 function createState() {
   return {
     cases: [
@@ -100,6 +149,12 @@ function createState() {
       },
     ],
     imports: [],
+    // 사건 사진(A-13-4 · 5) · 신문 지면(A-13-6 ~ 8) · 대본(A-13-10 ~ 13). 사건 번호를 키로 둔다
+    photos: { 13: [incidentPhoto(21, 'ORIGIN', '다툼이 격해진 순간'), incidentPhoto(22, 'CONCLUSION', '집을 나서는 뒷모습')] },
+    papers: { 13: mockPaper() },
+    // 12번은 검수 거리를 보여 주는 대본이다 — 생성하지 못한 줄이 있어 publishable이 false다(승인 버튼이 막힌다).
+    // 13번은 이미 승인해 공개 중인 대본이다
+    scripts: { 12: draftScript(), 13: approvedScript() },
     judgments: [
       judgment(501, 12, 'AI', 180),
       judgment(503, 12, 'AI', 168, { createdAt: '2026-10-20T09:05:00+09:00' }),
@@ -154,7 +209,16 @@ function detail(item) {
     caseId: item.caseId, status: item.status, content: item.content, sources: item.sources, factors: item.factors,
     candidates: { AI: list.filter((entry) => entry.subjectType === 'AI').map(summary), COURT: list.filter((entry) => entry.subjectType === 'COURT').map(summary) },
     publishReadiness: readiness(item),
+    // 대본 요약(BE-108). 공개를 막지 않고 경고로만 쓴다 — publishReadiness.reasons에는 넣지 않는다
+    script: scriptSummary(item.caseId),
   });
+}
+
+function scriptSummary(caseId) {
+  const script = state.scripts[caseId];
+  return script
+    ? { exists: true, reviewStatus: script.reviewStatus, publishable: script.publishable }
+    : { exists: false, reviewStatus: null, publishable: null };
 }
 
 function judgmentDetail(entry) {
@@ -430,4 +494,192 @@ export async function loadImport(importId) {
   state.judgments.push(judgment(judgmentId, caseId, 'AI', 168, { createdAt: now() }), judgment(judgmentId + 1, caseId, 'COURT', 144, { createdAt: now() }));
   entry.caseId = caseId;
   return importView(entry);
+}
+
+// ─────────────────────────────────────────────────────────────
+// A-13-1 ~ A-13-13 사건 사진 · 신문 지면 · 대본 검수 (FE-106)
+// 서버 규칙을 그대로 흉내 낸다 — 공개한 사건은 바꿀 수 없고, 거절 코드도 명세와 같은 값을 쓴다.
+// ─────────────────────────────────────────────────────────────
+
+const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;	// 8-1 공통 multipart 상한
+const ROLES = ['ORIGIN', 'CONCLUSION'];
+
+/** 공개한 사건은 사진 · 지면을 바꿀 수 없다 (A-11과 같은 규칙) */
+function requireEditable(item) {
+  if (item.status === 'PUBLISHED') invalidState(item, 'CASE_PUBLISHED');
+}
+
+function requireImage(file) {
+  if (!file || !file.size) fail('INVALID_IMAGE_FILE', '이미지 파일을 골라 주세요.', { status: 400 });
+  if (!IMAGE_TYPES.includes(file.type)) fail('INVALID_IMAGE_FILE', 'JPG · PNG · WebP만 올릴 수 있어요.', { status: 400 });
+  if (file.size > MAX_IMAGE_BYTES) fail('INVALID_IMAGE_FILE', '10MB 이하만 올릴 수 있어요.', { status: 400 });
+}
+
+// A-13-1 · A-13-2 프롬프트 추천
+export async function suggestRepresentativePrompt(caseId) {
+  await delay(); requireLogin();
+  const item = findCase(caseId);
+  return { prompt: `신문 지면에 쓸 삽화를 그려줘. ${item.content.overview.slice(0, 40)}… 어두운 실내에서 두 사람이 다투는 장면.`
+    + ' 등장인물은 얼굴 없는 회색 엑스트라로 그리고, 특정 인물을 알아볼 수 있게 그리지 않는다.' };
+}
+
+export async function suggestIncidentPrompt(caseId, hint) {
+  await delay(); requireLogin();
+  const item = findCase(caseId);
+  if (hint && hint.length > 500) fail('VALIDATION_ERROR', '힌트는 500자까지 쓸 수 있어요.', { status: 400 });
+  return { prompt: `사건이 시작된 장면을 그려줘. ${item.content.shortIntro} 얼굴 없는 회색 엑스트라로 그린다.${hint ? ` (${hint})` : ''}` };
+}
+
+// A-13-3 대표사진 교체 — 응답은 A-6과 같은 사건 상세다
+export async function uploadRepresentativePhoto(caseId, file) {
+  await delay(); requireLogin();
+  const item = findCase(caseId);
+  requireEditable(item);
+  requireImage(file);
+  item.content.thumbnailUrl = `${PHOTO_BASE}/representative-${item.caseId}-${Date.now()}.jpg`;
+  touch(item);
+  return detail(item);
+}
+
+// A-13-4 발단 · 결론 사진 업로드 (같은 역할로 다시 올리면 교체한다 — 역할별 1장)
+export async function uploadIncidentPhoto(caseId, { file, role, caption, prompt } = {}) {
+  await delay(); requireLogin();
+  const item = findCase(caseId);
+  requireEditable(item);
+  if (!ROLES.includes(role)) fail('VALIDATION_ERROR', '발단 · 결론 중 하나를 골라 주세요.', { status: 400 });
+  if (caption && caption.length > 200) fail('VALIDATION_ERROR', '설명은 200자까지 쓸 수 있어요.', { status: 400 });
+  requireImage(file);
+  void prompt;	// 서버는 기록만 하고 응답에 내려주지 않는다
+  const list = state.photos[item.caseId] ?? (state.photos[item.caseId] = []);
+  const kept = list.find((photo) => photo.role === role);
+  const saved = {
+    id: kept?.id ?? Math.floor(Math.random() * 1000) + 100,
+    imageUrl: `${PHOTO_BASE}/incident-${role.toLowerCase()}-${Date.now()}.jpg`,
+    caption: caption ?? null, role, displayOrder: role === 'ORIGIN' ? 0 : 1, createdAt: now(),
+  };
+  if (kept) list.splice(list.indexOf(kept), 1, saved); else list.push(saved);
+  touch(item);
+  return structuredClone(saved);
+}
+
+// A-13-5 목록 (공개한 사건도 조회는 된다)
+export async function getIncidentPhotos(caseId) {
+  await delay(); requireLogin();
+  const item = findCase(caseId);
+  const list = (state.photos[item.caseId] ?? []).slice().sort((a, b) => a.displayOrder - b.displayOrder);
+  return structuredClone(list);
+}
+
+// A-13-9 삭제
+export async function deleteIncidentPhoto(caseId, role) {
+  await delay(); requireLogin();
+  const item = findCase(caseId);
+  if (!ROLES.includes(role)) fail('VALIDATION_ERROR', '발단 · 결론 중 하나를 골라 주세요.', { status: 400 });
+  requireEditable(item);
+  const list = state.photos[item.caseId] ?? [];
+  const found = list.find((photo) => photo.role === role);
+  if (!found) fail('INCIDENT_PHOTO_NOT_FOUND', '그 자리의 사진이 없어요.', { status: 404 });
+  list.splice(list.indexOf(found), 1);
+  touch(item);
+  return null;	// 204
+}
+
+// A-13-6 ~ A-13-8 신문 지면
+const paperOf = (item) => state.papers[item.caseId] ?? fail('PAPER_NOT_FOUND', '아직 신문 지면을 만들지 않았어요.', { status: 404 });
+
+/** 지면 응답에는 대표사진 · 발단 · 결론 사진이 함께 들어간다(따로 저장하지 않고 그때그때 붙인다) */
+function paperView(item) {
+  const paper = state.papers[item.caseId];
+  return structuredClone({
+    ...paper,
+    photo: item.content.thumbnailUrl,
+    extraPhotos: (state.photos[item.caseId] ?? []).slice().sort((a, b) => a.displayOrder - b.displayOrder),
+  });
+}
+
+export async function generateCasePaper(caseId) {
+  await delay(); requireLogin();
+  const item = findCase(caseId);
+  requireEditable(item);
+  state.papers[item.caseId] = {
+    ...mockPaper(), headline: `${item.content.title.slice(0, 20)}`, deck: item.content.shortIntro,
+    article: [item.content.overview, '목 모드에서 지은 둘째 문단입니다.'], updatedAt: now(),
+  };
+  touch(item);
+  return paperView(item);
+}
+
+export async function getCasePaper(caseId) {
+  await delay(); requireLogin();
+  const item = findCase(caseId);
+  paperOf(item);
+  return paperView(item);
+}
+
+export async function updateCasePaper(caseId, changes) {
+  await delay(); requireLogin();
+  const item = findCase(caseId);
+  const paper = paperOf(item);
+  requireEditable(item);
+  if (changes.headline !== undefined && (!changes.headline || changes.headline.length > 200)) {
+    fail('VALIDATION_ERROR', '헤드라인은 1 ~ 200자로 써 주세요.', { status: 400 });
+  }
+  if (changes.article !== undefined && (!Array.isArray(changes.article) || !changes.article.length)) {
+    fail('VALIDATION_ERROR', '본문은 한 문단 이상이어야 해요.', { status: 400 });
+  }
+  Object.assign(paper, changes, { updatedAt: now() });
+  touch(item);
+  return paperView(item);
+}
+
+// A-13-10 ~ A-13-13 대본 검수
+const scriptOf = (item) => state.scripts[item.caseId] ?? fail('SCRIPT_NOT_FOUND', '이 사건에는 대본이 없어요.', { status: 404 });
+
+export async function getCaseScript(caseId) {
+  await delay(); requireLogin();
+  return structuredClone(scriptOf(findCase(caseId)));
+}
+
+export async function approveCaseScript(caseId) {
+  await delay(); requireLogin();
+  const item = findCase(caseId);
+  const script = scriptOf(item);
+  // 파이프라인이 어긋난다고 표시한 대본은 승인할 수 없다 (서버도 409로 막는다)
+  if (!script.publishable) {
+    fail('INVALID_STATE', '증거 카드와 대사가 어긋난 대본은 승인할 수 없어요. 대본을 다시 생성해 주세요.', { status: 409 });
+  }
+  Object.assign(script, { reviewStatus: 'APPROVED', isPublished: true, reviewedBy: ADMIN.email, reviewedAt: now(), reviewNote: null, updatedAt: now() });
+  return structuredClone(script);	// 대본 검수는 사건 상태를 바꾸지 않는다(touch하지 않는다)
+}
+
+export async function rejectCaseScript(caseId, reasonText) {
+  await delay(); requireLogin();
+  const script = scriptOf(findCase(caseId));
+  const note = (reasonText ?? '').trim();
+  if (!note || note.length > 500) fail('VALIDATION_ERROR', '반려 사유는 1 ~ 500자로 써 주세요.', { status: 400 });
+  Object.assign(script, { reviewStatus: 'REJECTED', isPublished: false, reviewedBy: ADMIN.email, reviewedAt: now(), reviewNote: note, updatedAt: now() });
+  return structuredClone(script);
+}
+
+/** A-13-13 대사 한 줄 수정. 길이는 파이프라인과 같은 방식으로 센다(줄바꿈은 글자 수에 넣지 않는다) */
+export async function updateCaseScriptLine(caseId, factorId, text) {
+  await delay(); requireLogin();
+  const script = scriptOf(findCase(caseId));
+  const value = (text ?? '').trim();
+  const lines = value.split('\n').filter((part) => part.trim());
+  if (!lines.length) fail('VALIDATION_ERROR', '대사를 입력해 주세요.', { status: 400 });
+  if (lines.length > 2) fail('VALIDATION_ERROR', '대사는 2줄까지 쓸 수 있어요.', { status: 400 });
+  const chars = lines.reduce((sum, part) => sum + part.length, 0);
+  if (chars > 100) fail('VALIDATION_ERROR', `대사는 줄바꿈을 빼고 100자까지 쓸 수 있어요. (지금 ${chars}자)`, { status: 400 });
+
+  const found = script.evidence.find((entry) => entry.factorId === Number(factorId));
+  if (!found) fail('SCRIPT_LINE_NOT_FOUND', '대본에 그 판단 요소의 대사가 없어요.', { status: 404 });
+  found.text = value;
+  found.validation = { ...found.validation, ok: true, manual: true };	// 사람이 고침
+  found.editedAt = now();
+  // 파이프라인과 같은 식으로 다시 계산한다: 멈춘 대본은 줄 자체가 모자라 올라가지 않는다
+  script.publishable = !script.stopped && script.evidence.every((entry) => Boolean(entry.text));
+  Object.assign(script, { reviewStatus: 'PENDING', isPublished: false, reviewedBy: null, reviewedAt: null, reviewNote: null, updatedAt: now() });
+  return structuredClone(script);
 }
