@@ -12,6 +12,8 @@ export const fallbackImages = {
   MURDER: '/images/case-murder.svg',
   FRAUD: '/images/case-fraud.svg',
   INJURY: '/images/case-injury.svg',
+  ROBBERY: '/images/case-robbery.svg',
+  THEFT: '/images/case-theft.svg',
 };
 
 // 공용 재연 컷(FE-32): 사건 사진이 없을 때 쓰는 샘플 연출 사진. 내로 · 남불이 기록을 읽는 장면이라 특정 사건 내용을 드러내지 않는다.

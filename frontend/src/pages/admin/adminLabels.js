@@ -4,7 +4,7 @@ import { AXES } from '../../utils/personalityAxes.js';
 export const CASE_STATUS = { DRAFT: '적재됨 (손대기 전)', REVIEW: '검수 중', PUBLISHED: '공개됨' };
 export const REVIEW_STATUS = { PENDING: '검수 대기', APPROVED: '승인', REJECTED: '반려' };
 export const SUBJECT = { AI: 'AI 판결 후보', COURT: '재판부 판결 후보' };
-export const CRIME_TYPE = { MURDER: '살인', FRAUD: '사기', INJURY: '상해' };
+export const CRIME_TYPE = { MURDER: '살인', FRAUD: '사기', INJURY: '상해', ROBBERY: '강도', THEFT: '절도' };
 export const DIFFICULTY = { LOW: '쉬움', MID: '보통', HIGH: '어려움' };
 export const REVEAL_STAGE = { OVERVIEW: '개요(사전 판단)', DETAIL: '상세' };
 export const COURT_LEVEL = { FIRST: '1심', APPEAL: '2심', SUPREME: '대법원' };
