@@ -13,6 +13,9 @@
 -- 나중에 V30을 받지 못하고 검증에 실패한다 → #294가 develop에 먼저 머지된 뒤 이 변경을 머지한다.
 
 -- ---------- 1) 범죄 유형 CHECK 4곳 (V1 · V2 · V11 · V24) ----------
+-- DROP CONSTRAINT에 IF EXISTS를 두지 않는다. 이름이 다른 환경에서 IF EXISTS로 건너뛰면 옛 CHECK(3개 값)가 남은 채
+-- 새 CHECK만 추가돼, 마이그레이션은 성공하고 강도 · 절도 저장이 나중에 실패한다. 적용할 때 바로 실패하는 쪽이
+-- 원인을 찾기 쉽다 (PR #297 리뷰). 공용 개발 DB는 적용 전 4개 이름이 있는지 확인한다(docs/decisions/BE-112.md).
 
 ALTER TABLE sentence_range_option DROP CONSTRAINT chk_sentence_range_option_crime_type;
 ALTER TABLE sentence_range_option ADD CONSTRAINT chk_sentence_range_option_crime_type
@@ -35,7 +38,9 @@ ALTER TABLE case_import ADD CONSTRAINT chk_case_import_crime_type
 -- - 강도: 법정형에 벌금이 없어 벌금형을 빼고 무기징역을 더한다 (7개, 강도상해 · 강도치상은 무기 또는 7년 이상)
 --         강도살인(사형 또는 무기)은 이번 범위가 아니라 사형 구간은 두지 않는다
 -- - 절도: 공통 7개 그대로 (단순 절도는 벌금형이 있다)
--- 강도를 먼저 넣어 ID가 강도 23 ~ 29, 절도 30 ~ 36이 되도록 유형 · 표시 순서대로 넣는다
+-- 강도를 먼저 넣어 ID가 강도 23 ~ 29, 절도 30 ~ 36이 되도록 유형 · 표시 순서대로 넣는다.
+-- ID는 아래 ORDER BY가 만드는 삽입 순서에 의존한다(PostgreSQL은 이 순서로 identity를 매기지만 SQL 표준이 보장하지는 않는다,
+-- V1도 같은 방식). JpaMappingTest가 강도 첫 ID 23을 확인하므로, 이 가정이 깨지면 그 테스트가 먼저 실패한다 (PR #297 리뷰)
 INSERT INTO sentence_range_option (crime_type, label, kind, min_months, max_months, display_order)
 SELECT s.crime_type, s.label, s.kind, s.min_months, s.max_months, s.display_order
 FROM (

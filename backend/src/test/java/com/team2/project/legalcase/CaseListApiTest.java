@@ -115,8 +115,8 @@ class CaseListApiTest extends ApiIntegrationTest {
 
 	@Test
 	void getCases_invalidCrimeType_returnsValidationError() throws Exception {
-		// 정의되지 않은 범죄 유형 (THEFT는 V31에서 정식 유형이 되어 방화로 바꿈)
-		mockMvc.perform(get("/api/v1/cases").param("crimeType", "ARSON"))
+		// 범죄 유형이 될 수 없는 값으로 둔다. 실제 죄명(THEFT · ARSON 등)을 쓰면 그 유형이 추가될 때 이 테스트가 깨진다 (PR #297 리뷰)
+		mockMvc.perform(get("/api/v1/cases").param("crimeType", "NOT_A_CRIME_TYPE"))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 	}

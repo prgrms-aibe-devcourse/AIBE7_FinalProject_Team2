@@ -4,10 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
@@ -205,23 +208,27 @@ class DbConstraintTest {
 	@ParameterizedTest(name = "{0}")
 	@ValueSource(strings = {"chk_sentence_range_option_crime_type", "chk_legal_case_crime_type",
 		"chk_rag_precedent_crime_type", "chk_case_import_crime_type"})
-	@DisplayName("범죄 유형 CHECK 4곳이 CrimeType enum 값을 모두 허용한다 (enum에만 추가하고 CHECK를 빠뜨리지 않게, V31)")
-	void crimeTypeCheck_allowsEveryEnumValue(String constraint) {
+	@DisplayName("범죄 유형 CHECK 4곳의 허용 값이 CrimeType enum 값과 정확히 같다 (enum에만 추가하거나 CHECK에 죽은 값이 남지 않게, V31)")
+	void crimeTypeCheck_allowsExactlyEnumValues(String constraint) {
 		String definition = jdbc.queryForObject(
 			"SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = ?", String.class, constraint);
 
-		for (CrimeType type : CrimeType.values()) {
-			assertThat(definition).as("%s에 %s가 없다", constraint, type).contains("'" + type.name() + "'");
-		}
+		// 정의에서 '...' 리터럴만 뽑아 집합으로 비교한다 (문자열 포함 검사는 한 방향만 보고, 다른 식에 우연히 들어가도 통과한다, PR #297 리뷰)
+		Set<String> allowed = Pattern.compile("'([^']+)'").matcher(definition).results()
+			.map(match -> match.group(1)).collect(Collectors.toSet());
+		Set<String> enumValues = Arrays.stream(CrimeType.values()).map(Enum::name).collect(Collectors.toSet());
+
+		assertThat(allowed).as("%s 정의: %s", constraint, definition).isEqualTo(enumValues);
 	}
 
 	@Test
 	@DisplayName("사건 범죄 유형은 강도 · 절도를 받고 정의되지 않은 값은 거절한다 (V31)")
 	void checkLegalCaseCrimeType_robberyAndTheftAccepted_unknownRejected() {
-		jdbc.update("UPDATE legal_case SET crime_type = 'ROBBERY' WHERE id = ?", caseId);
-		jdbc.update("UPDATE legal_case SET crime_type = 'THEFT' WHERE id = ?", caseId);
+		// 영향 행 수까지 확인한다 — 0행이면 허용 여부를 검증하지 않은 채 통과하게 된다 (PR #297 리뷰)
+		assertThat(jdbc.update("UPDATE legal_case SET crime_type = 'ROBBERY' WHERE id = ?", caseId)).isEqualTo(1);
+		assertThat(jdbc.update("UPDATE legal_case SET crime_type = 'THEFT' WHERE id = ?", caseId)).isEqualTo(1);
 
-		assertThatThrownBy(() -> jdbc.update("UPDATE legal_case SET crime_type = 'ARSON' WHERE id = ?", caseId))
+		assertThatThrownBy(() -> jdbc.update("UPDATE legal_case SET crime_type = 'NOT_A_CRIME_TYPE' WHERE id = ?", caseId))
 			.isInstanceOf(DataIntegrityViolationException.class)
 			.hasMessageContaining("chk_legal_case_crime_type");
 	}
