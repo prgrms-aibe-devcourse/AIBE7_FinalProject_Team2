@@ -11,6 +11,7 @@ import { folderBookmark, paperFold } from '../../components/folderParts.js';
 
 const penaltyLabels = { DEATH: '사형', LIFE: '무기징역', PRISON: '징역', FINE: '벌금' };
 const FILED_MS = 900; // 확정된 뒤 "판결 접수" 도장을 보여 주는 시간(verdict.css .sign-filed). 그다음 AI 판결로 넘어간다(FE-97)
+const REDUCTION_NOTE = '판사는 참작할 사정이 있으면 형을 줄여서 선고할 수 있어요(작량감경).';
 
 // 원문을 유지해 빈 칸, 0, 잘못 입력한 값을 구별한다.
 function parseInteger(raw) {
@@ -135,6 +136,15 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
         changed(key);
       });
       if (key === 'prisonMonths') field.addEventListener('change', carryMonths);
+      // 숫자 칸에서 Enter = 무대 "다음 장"(FE-103). 무대는 입력칸 위의 키를 받지 않아 칸에서 손을 못 떼고 마우스로 넘어가야 했다.
+      // 개월 칸은 change(칸을 떠날 때)가 아직 안 왔으니 12개월 넘김을 먼저 적용한다
+      field.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' || event.isComposing) return;
+        event.preventDefault(); // 막혀서 아무 일도 없는 경우에도 막는다: 칸이 든 카드의 폼 암묵적 제출을 하지 않게(#302 리뷰)
+        if (layout.stageNext?.enabled?.() === false) return; // 하단 "다음" 버튼이 비활성(서명 제출 중 등)이면 Enter도 지나가지 못하게
+        if (key === 'prisonMonths') carryMonths();
+        layout.stageNext?.run();
+      });
       const unitText = element('span', '', unit);
       unitText.setAttribute('aria-hidden', 'true'); // 이름("징역 년")에 단위가 이미 있어 "징역 년년"으로 읽히던 것을 막는다(FE-97)
       wrapper.append(name, field, unitText);
@@ -231,7 +241,8 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       reductionRadios.push({ type, label, radio });
     }
     // 감경 줄은 늘 보인다: 감경할 수 없는 형벌(징역 · 벌금 · 고르기 전)이면 체크박스 · 감경 후 형벌이 회색으로 눌리지 않는다
-    reductionArea.append(reductionLabel, element('p', 'muted', '판사는 참작할 사정이 있으면 형을 줄여서 선고할 수 있어요(작량감경).'), reductionChoices);
+    const reductionNote = element('p', 'muted', REDUCTION_NOTE);
+    reductionArea.append(reductionLabel, reductionNote, reductionChoices);
     penaltyGroup.append(reductionArea);
 
     const sentenceGroup = group('2. 형량 · 금액');
@@ -707,6 +718,7 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
         return now === LAST - 1 && !ready ? `확정 장으로 가려면 ${missingReason}` : `다음 장: ${pages[now + 1].title}`;
       },
       enabled: () => !submitting,
+      blocked: () => currentPage() === LAST - 1 && !ready, // 확정 장으로 못 넘어가는 이유를 hint가 말하는 중
       run: () => { if (currentPage() === LAST) sign(); else goTo(currentPage() + 1, true); },
     };
     showPage(0);
@@ -756,6 +768,9 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       reductionCheck.checked = draft.reducing;
       reductionCheck.disabled = !choices.length;
       reductionLabel.classList.toggle('is-disabled', !choices.length);
+      // 형벌을 고르기 전에는 누를 수 없는 이유를 알리고, 체크하기 전에는 감경 후 형벌 라디오를 감춘다(FE-103: 회색 칸이 고장 난 조작처럼 읽혔다)
+      reductionNote.textContent = option ? REDUCTION_NOTE : '형벌 종류를 먼저 고르면 감경 여부를 정할 수 있어요.';
+      reductionChoices.hidden = !draft.reducing;
       for (const { type, label, radio } of reductionRadios) {
         radio.disabled = !draft.reducing || !choices.includes(type); // 감경 후 형벌이 하나뿐이면 체크할 때 자동으로 골라진다
         radio.checked = draft.reducedTo === type;

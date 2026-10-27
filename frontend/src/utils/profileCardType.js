@@ -1,6 +1,6 @@
 // 프로필카드 아래에 보일 성향(FE-77): 초심 · 재심 · 최근 중 하나. 기본은 최근. 카드 꾸미기 창의 글자 라디오에서 고른다.
 // 공개 성향카드(shownCard.js)와는 별개의 값이다. 값은 서버(P-8 profileCardType)가 원본이고 profileSettings.js의 사본을 읽고 쓴다(FE-81)
-import { getProfileSettings, updateProfileSettings } from './profileSettings.js';
+import { getCardLineSettings, getProfileSettings, updateCardLine, updateProfileSettings } from './profileSettings.js';
 
 const SLOT_NAMES = { initial: '초심', retake: '재심', current: '최근' };
 const SLOT_ORDER = ['initial', 'retake', 'current'];
@@ -44,3 +44,9 @@ export function selectedChoice(data, chosen = getProfileCardType()) {
   const choices = typeChoices(data);
   return choices.find((choice) => choice.keys.includes(chosen)) ?? choices.find((choice) => choice.keys.includes('current')) ?? choices[0] ?? null;
 }
+
+export const getCardLine = () => getCardLineSettings().cardLine;
+export const getCardLevel = () => getCardLineSettings().cardLevel;
+/** 카드 아래 줄: 성향 · 서명 · 직업 중 하나, 레벨은 앞에 붙이거나 끈다. 서버에 보내지 않는다(profileSettings.js) */
+export const setCardLine = (cardLine) => updateCardLine({ cardLine });
+export const setCardLevel = (cardLevel) => updateCardLine({ cardLevel });

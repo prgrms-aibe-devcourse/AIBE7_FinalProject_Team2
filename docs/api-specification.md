@@ -56,7 +56,9 @@
 | v0.52 | 2026-10-22 | **프로필 선택 설정 저장 P-8 신설 (BE-104, FE-77 후속)** — `PATCH /profile-settings`: 공개 성향카드(`shownCard`) · 프로필카드 아래 성향(`profileCardType`) · 한 줄 소개(`bio`)를 **보낸 칸만** 저장(P-7과 별개, 전체 덮어쓰기 아님). 값은 `initial` · `retake` · `current`, 소개는 앞뒤 공백을 뺀 0 ~ 40자 · 줄바꿈 없음. P-5 응답에 `profileSettings` 추가(저장 전이면 `current` · `current` · `""`). 공개 범위 칸은 두지 않는다(항상 공개, FE-77). ERD v1.37 `profile_setting`(V29). P-2 · P-5의 v0.50 서버 구현도 이 작업에서 했다(V28) **(병합 메모) 작업 중 COMMON-58(PR #244)이 BE-93 줄에 v0.51을 먼저 써서 v0.51 → v0.52로 다시 매겼다** |
 | v0.53 | 2026-10-22 | **API 17 공개 신문 지면 신설 (BE-102, BE-78 2차 검토 후속)** — `GET /cases/{caseId}/paper`. 관리자 신문 지면(A-13-6 ~ 8, BE-92)과 발단 · 결론 사진(A-13-4 · 5, BE-91 · BE-101)을 공개용으로 조립, 새로 저장하지 않는다. **`extraPhotos`는 A-13-6 ~ 8과 달리 배열이 아니라 `{ origin, conclusion }` 고정 자리** — 사진 한쪽이 없을 때 다른 쪽이 앞자리로 밀려 역할이 바뀌어 보이는 걸 막는다(FE-64 선행, BE-102 Jira 댓글로 제안 · 협의). 비공개 사건은 `CASE_NOT_FOUND`, 신문 지면 미생성은 `PAPER_NOT_FOUND`(1-5 설명을 공개 API도 쓰도록 정정) |
 | v0.54 | 2026-10-27 | **레벨 · 직업 API 신설 (BE-106)** — 11장 L-1 `GET /level`(레벨 · XP · 직업 목록) · L-2 `PUT /level/job`(카드에 보여 줄 직업 선택) · L-3 `POST /level/share-reward`(SNS 공유 보상). P-5 응답에 `level`(L-1과 같은 값) 추가, 1-5에 `JOB_LOCKED`(409) 추가. 레벨은 익명 ID 단위(회원 합산은 후속). 경험치 산식 · 직업 11등급 · 지급 상한은 11장과 [BE-106 결정 기록](decisions/BE-106.md) |
-| v0.55 | 2026-10-27 | **사건 대본 검수 A-13-10 ~ A-13-12 신설 (BE-108)** — `GET /admin/cases/{caseId}/script` · `POST .../script/approve` · `POST .../script/reject`. 적재(A-14-1)가 넣은 증거조사 대본을 관리자가 보고 승인해야 공개된다(공개 서빙은 BE-109). **번호는 운영 메뉴 A-16 ~ A-41 예약 때문에 A-13 하위로 매겼다** — A-14-1과 같은 이유다. 검수 칸(`reviewStatus` · `isPublished` · `reviewedBy` · `reviewedAt` · `reviewNote`)은 판결 후보 A-8과 같은 이름 · 같은 형식이고, 대사마다 판단 요소 문구 `label`을 서버가 붙여 준다. 대사 한 줄 직접 수정 A-13-13(`PATCH .../script/evidence/{factorId}`)도 함께 — 고친 줄은 `validation.manual`로 표시하고 검수 상태를 대기로 되돌린다(해송님 요청). **A-6 응답에 `script` 요약(`exists` · `reviewStatus` · `publishable`) 추가** — 미승인 대본은 공개를 막지 않으므로 `publishReadiness.reasons`가 아니라 별도 칸으로 내려 공개 준비 화면이 경고로 쓴다. 에러 코드 `SCRIPT_NOT_FOUND` · `SCRIPT_LINE_NOT_FOUND`(404) 추가. ERD v1.40 `case_script`(V31) **(병합 메모) v0.54 · ERD v1.39 · 마이그레이션 V30은 BE-106(PR #297)이 먼저 가져가, 이 작업은 v0.55 · v1.40 · V31로 다시 매겼다. 열려 있는 PR #296(BE-111)도 v0.54를 쓰고 있어 그쪽이 다시 매겨야 한다** |
+| v0.55 | 2026-10-27 | 범죄 유형 강도 · 절도 추가 (BE-112 · ERD v1.40 · V31) — `crimeType` 값에 `ROBBERY`(강도) · `THEFT`(절도) 추가(API 1 쿼리 · 응답, 사건 등록). 분류명(`crimeCategoryLabel`)은 둘 다 "재산범죄". API 1 `summary.byCrimeType`은 공개 사건이 없어도 다섯 키를 모두 0으로 내려 준다. API 4 `rangeOptions`: 강도는 벌금형을 빼고 무기징역을 더한 7개, 절도는 공통 7개 |
+| v0.56 | 2026-10-27 | API 1 `crimeCategoryLabel` 설명에 범죄 유형별 분류명 대응을 모두 적음(생명 · 재산 · 신체범죄, 강도 · 절도는 재산범죄) (BE-111, BE-112 #297 리뷰 요청) |
+| v0.57 | 2026-10-27 | **사건 대본 검수 A-13-10 ~ A-13-12 신설 (BE-108)** — `GET /admin/cases/{caseId}/script` · `POST .../script/approve` · `POST .../script/reject`. 적재(A-14-1)가 넣은 증거조사 대본을 관리자가 보고 승인해야 공개된다(공개 서빙은 BE-109). **번호는 운영 메뉴 A-16 ~ A-41 예약 때문에 A-13 하위로 매겼다** — A-14-1과 같은 이유다. 검수 칸(`reviewStatus` · `isPublished` · `reviewedBy` · `reviewedAt` · `reviewNote`)은 판결 후보 A-8과 같은 이름 · 같은 형식이고, 대사마다 판단 요소 문구 `label`을 서버가 붙여 준다. 대사 한 줄 직접 수정 A-13-13(`PATCH .../script/evidence/{factorId}`)도 함께 — 고친 줄은 `validation.manual`로 표시하고 검수 상태를 대기로 되돌린다(해송님 요청). **A-6 응답에 `script` 요약(`exists` · `reviewStatus` · `publishable`) 추가** — 미승인 대본은 공개를 막지 않으므로 `publishReadiness.reasons`가 아니라 별도 칸으로 내려 공개 준비 화면이 경고로 쓴다. 에러 코드 `SCRIPT_NOT_FOUND` · `SCRIPT_LINE_NOT_FOUND`(404) 추가. ERD v1.41 `case_script`(V32) **(병합 메모) 번호를 두 번 옮겼다 — BE-106(V30 · v0.54 · v1.39)과 BE-112(V31 · v0.55 · v1.40) · BE-111(v0.56)이 먼저 머지돼, 이 작업은 V32 · v0.57 · v1.41로 다시 매겼다. 먼저 머지된 쪽이 번호를 갖는다** |
 
 ---
 
@@ -214,18 +216,18 @@ json
 
 | 위치 | 이름 | 필수 | 설명 |
 | --- | --- | --- | --- |
-| query | `crimeType` |  | `MURDER` / `FRAUD` / `INJURY`. 없으면 전체 |
+| query | `crimeType` |  | `MURDER` / `FRAUD` / `INJURY` / `ROBBERY` / `THEFT` (`ROBBERY` · `THEFT`는 v0.55). 없으면 전체 |
 
 **응답 200**
 
 json
 
 ```json
-{  "summary": { "total": 9, "byCrimeType": { "MURDER": 3, "FRAUD": 3, "INJURY": 3 } },  "cases": [    {      "caseId": 1,      "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",      "crimeType": "MURDER",      "crimeCategoryLabel": "생명범죄",      "chargeName": "살인",      "shortIntro": "빌린 돈 문제로 찾아온 지인과 다투다 흉기로 살해한 사건입니다.",      "keywords": ["돈 문제", "집으로 찾아옴"],      "difficulty": "HIGH",      "estimatedMinutes": 15,      "participantCount": 1284,      "thumbnailUrl": null,      "myStatus": "IN_PROGRESS"    }  ]}
+{  "summary": { "total": 9, "byCrimeType": { "MURDER": 3, "FRAUD": 3, "INJURY": 3, "ROBBERY": 0, "THEFT": 0 } },  "cases": [    {      "caseId": 1,      "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",      "crimeType": "MURDER",      "crimeCategoryLabel": "생명범죄",      "chargeName": "살인",      "shortIntro": "빌린 돈 문제로 찾아온 지인과 다투다 흉기로 살해한 사건입니다.",      "keywords": ["돈 문제", "집으로 찾아옴"],      "difficulty": "HIGH",      "estimatedMinutes": 15,      "participantCount": 1284,      "thumbnailUrl": null,      "myStatus": "IN_PROGRESS"    }  ]}
 ```
 
-- `PUBLISHED` 사건만. `summary`는 필터와 관계없이 전체 기준(칩 옆 건수 표시용).
-- `crimeCategoryLabel`: `crime_type`별 표시용 분류명(예: `FRAUD` → "재산범죄"). DB 컬럼이 아니라 서버 코드 상수에서 만든다(ERD 3-1).
+- `PUBLISHED` 사건만. `summary`는 필터와 관계없이 전체 기준(칩 옆 건수 표시용). `byCrimeType`은 공개 사건이 없는 유형도 0으로 모든 범죄 유형 키를 내려 준다(v0.55부터 5개).
+- `crimeCategoryLabel`: `crime_type`별 표시용 분류명. `MURDER` → "생명범죄", `FRAUD` · `ROBBERY` · `THEFT` → "재산범죄", `INJURY` → "신체범죄"(`ROBBERY` · `THEFT`는 v0.55). DB 컬럼이 아니라 서버 코드 상수(`CrimeType.categoryLabel`)에서 만든다(ERD 3-1).
 - `chargeName`: 죄명(`legal_case.charge_name`, 예: "살인"). 사건 상단 바(S-04~S-08)가 `caseId`로 이 목록에서 제목과 함께 찾아 쓴다(BE-79, D-01). 사건 개요(API 4) · API 16의 `chargeName`과 같은 값이다.
 - `thumbnailUrl`: `legal_case.thumbnail_url`. 없으면 `null`이고, 화면은 범죄 유형별 기본 이미지를 쓴다.
 - `participantCount`: `attempt_no = 1`이고 `COMPLETED`인 체험 수.
@@ -291,7 +293,7 @@ json
 {  "case": {    "caseId": 1,    "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",    "crimeType": "MURDER",    "crimeCategoryLabel": "생명범죄",    "chargeName": "살인",    "overview": "피고인이 빌린 돈을 갚지 못해 오래 다투던 지인이 집으로 찾아오자, 말다툼 끝에 집에 있던 흉기로 피해자를 살해하고 구호 조치 없이 집을 나간 사건이다."  },  "rangeOptions": [    { "rangeOptionId": 8, "label": "징역형 집행유예" },    { "rangeOptionId": 9, "label": "실형 3년 미만" },    { "rangeOptionId": 10, "label": "실형 3년 이상 ~ 5년 미만" },    { "rangeOptionId": 11, "label": "실형 5년 이상 ~ 10년 미만" },    { "rangeOptionId": 12, "label": "실형 10년 이상 ~ 20년 미만" },    { "rangeOptionId": 13, "label": "실형 20년 이상" },    { "rangeOptionId": 14, "label": "무기징역" },    { "rangeOptionId": 15, "label": "사형" }  ],  "preFactors": [    { "factorId": 1, "label": "돈 문제로 오래 다툼이 있었다" },    { "factorId": 2, "label": "다투던 중 흉기를 집어 들었다" },    { "factorId": 3, "label": "범행 뒤 현장을 떠났다" }  ]}
 ```
 
-- `rangeOptions`: 이 사건 `crime_type`의 `sentence_range_option`을 `display_order` 순으로. 사기 · 상해는 공통 7개, 살인은 벌금형을 빼고 무기징역 · 사형을 더한 8개다.
+- `rangeOptions`: 이 사건 `crime_type`의 `sentence_range_option`을 `display_order` 순으로. 사기 · 상해 · 절도는 공통 7개, 살인은 벌금형을 빼고 무기징역 · 사형을 더한 8개, 강도는 벌금형을 빼고 무기징역을 더한 7개다(강도 · 절도는 v0.55).
 - `preFactors`: `reveal_stage = OVERVIEW`인 요소의 `pre_label`. **확장(REQ-093)** — MVP 화면은 쓰지 않아도 된다.
 - 법정형 · 선고 가능 범위 · 권고 범위 · 실제 판결은 **넣지 않는다**(FR-2-8).
 
@@ -1584,7 +1586,7 @@ A-11과 같은 방식(보낸 필드만, `null` = 지움). `headline` · `article
 
 | 필드 | 규칙 |
 | --- | --- |
-| `crimeType` | 필수. `MURDER` · `FRAUD` · `INJURY` |
+| `crimeType` | 필수. `MURDER` · `FRAUD` · `INJURY` · `ROBBERY` · `THEFT` (`ROBBERY` · `THEFT`는 v0.55) |
 | `sources` | 필수. 1 ~ 3건, 심급(`courtLevel`: `FIRST` · `APPEAL` · `SUPREME`)이 서로 달라야 한다 |
 | `sources[].caseNumber` | 필수, 50자 이하. 이미 등록된 사건번호면 409 `DUPLICATE_SOURCE` |
 | `sources[].originalText` | 필수, 200,000자 이하. 원본 판결문이라 요청 본문 로그에 남기지 않는다 |

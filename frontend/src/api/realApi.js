@@ -58,6 +58,11 @@ export const putProfileDeco = (deco) => put('/profile-deco', deco);
 // P-8 — 프로필 선택 설정 부분 저장(FE-81, BE-104). 보낸 칸만 바꾸고, 응답은 세 값 전체 { shownCard, profileCardType, bio }
 export const patchProfileSettings = (settings) => patch('/profile-settings', settings);
 
+// 레벨 · 직업 L-1 · L-2 (BE-106, 명세 11장). 응답은 둘 다 { level, xp, currentLevelXp, nextLevelXp, job: { code, name }, jobs: [...] }.
+// 마이페이지(P-5)의 level도 같은 모양이다. 아직 안 열린 직업을 고르면 409 JOB_LOCKED
+export const getLevel = () => get('/level');
+export const putLevelJob = (job) => put('/level/job', { job });
+
 // 회원 로그인 (FE-74, API 명세 10장). 목(mocks/authMockApi.js)과 같은 login · logout 이름을 쓴다
 // 카카오(M-3)는 fetch가 아니라 브라우저 이동이다. 카카오 → 서버 콜백(M-4) → 화면 /auth/callback으로 돌아온다(authCallbackPage.js).
 // 이동하는 동안 끝나지 않는 약속을 돌려준다. 카카오 화면에서 뒤로 와 이 화면이 그대로 복원되면(bfcache) LOGIN_CANCELLED로 끝내 버튼을 되살린다

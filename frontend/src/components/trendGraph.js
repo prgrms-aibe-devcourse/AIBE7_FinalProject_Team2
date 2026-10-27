@@ -75,7 +75,7 @@ function trendChart({ axis, points }, slots, retakeBetween) {
   })();
   const xOf = (order) => (order === 'retake' ? retakeX : slotX(order));
   const yOf = (ratio) => plotBottom - ratio * (plotBottom - top);
-  const chart = svgNode('svg', { viewBox: `0 0 ${width} ${height}`, class: 'trend-svg', role: 'img' });
+  const chart = svgNode('svg', { viewBox: `0 0 ${width} ${height}`, class: 'trend-svg', role: 'group' }); // 점이 키보드로 닿으므로 img(자식을 숨김)가 아니라 group
   chart.setAttribute('aria-label', `${axis.label} 흐름: ${points.map((point) => `${point.title} ${leanText(point.ratio, axis)}`).join(', ')}`);
   const middle = yOf(0.5);
   chart.append(
@@ -117,6 +117,7 @@ function trendChart({ axis, points }, slots, retakeBetween) {
     tip.style.top = `${dot.top - box.top}px`;
     tip.classList.add('is-shown');
   };
+  const hits = [];
   points.forEach((point) => {
     const x = xOf(point.order);
     const y = yOf(point.ratio);
@@ -129,6 +130,21 @@ function trendChart({ axis, points }, slots, retakeBetween) {
     hit.addEventListener('pointerenter', () => show(point, hit));
     hit.addEventListener('pointerdown', () => show(point, hit)); // 터치: 누르면 보이고, 그래프의 빈 곳을 누르면 닫힌다
     hit.addEventListener('pointerleave', (event) => { if (event.pointerType === 'mouse') tip.classList.remove('is-shown'); });
+    // 키보드(FE-103): 점이 많아 Tab 자리는 그래프당 하나만 두고(roving tabindex) 좌우 방향키로 점을 옮긴다
+    hit.setAttribute('role', 'img'); // 누를 일이 없다(포커스만으로 말풍선이 뜬다). button이면 낭독기가 눌러 보게 한다(#301 리뷰)
+    hit.setAttribute('aria-label', `${point.title} ${leanText(point.ratio, axis)}`);
+    hit.tabIndex = hits.length === 0 ? 0 : -1;
+    hit.addEventListener('focus', () => show(point, hit));
+    hit.addEventListener('blur', () => tip.classList.remove('is-shown'));
+    hit.addEventListener('keydown', (event) => {
+      const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[event.key];
+      const next = event.key === 'Home' ? hits[0] : event.key === 'End' ? hits.at(-1) : step && hits[hits.indexOf(hit) + step]; // Home · End: 처음 · 끝 점(점이 많은 그래프용)
+      if (!next) return;
+      event.preventDefault();
+      hits.forEach((other) => { other.tabIndex = other === next ? 0 : -1; });
+      next.focus();
+    });
+    hits.push(hit);
     chart.append(hit);
   });
   chart.addEventListener('pointerdown', (event) => { if (!event.target.classList.contains('trend-hit')) tip.classList.remove('is-shown'); });
@@ -203,7 +219,7 @@ export function renderTrend(trends, history, judgment, { mock = false, focus, hi
   });
   const focused = slots.some((slot) => slot.isFocus);
   const hint = element('p', 'my-hint', hintText?.({ hasTest, focused })
-    ?? `${hasTest ? '초심(성향 테스트)과 ' : ''}최근 체험 ${TREND_RECENT}건까지 보여요. 가운데 줄이 반반이고, 숫자는 사건을 마친 순서, 최근은 최근 체험 3건의 평균이에요. 마름모는 기준점(초심${retake ? ' · 재심' : ''} · 최근)이라 체험 선과 잇지 않아요. 점을 누르거나 마우스를 올리면 사건과 비중이 보여요.`);
+    ?? `${hasTest ? '초심(성향 테스트)과 ' : ''}최근 체험 ${TREND_RECENT}건까지 보여요. 가운데 줄이 반반이고, 숫자는 사건을 마친 순서, 최근은 최근 체험 3건의 평균이에요. 마름모는 기준점(초심${retake ? ' · 재심' : ''} · 최근)이라 체험 선과 잇지 않아요. ${window.matchMedia('(hover: hover) and (pointer: fine)').matches ? '점에 마우스를 올리면' : '점을 누르면'} 사건과 비중이 보여요.`);
   if (mock) hint.append(mockTag());
   const grid = element('div', 'trend-grid');
   shown.forEach((trend) => grid.append(trendChart(trend, chartSlots, retakeBetween)));

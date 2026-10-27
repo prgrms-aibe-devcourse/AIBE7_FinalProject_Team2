@@ -2,6 +2,7 @@ import { AXES } from '../utils/personalityAxes.js';
 import { imageNumberOf, QUESTIONS, TYPES } from './personalityMockData.js';
 import { shareIdOfCode } from '../utils/personalityTypes.js';
 import { mockCases } from './caseListMockData.js';
+import { mockLevelView } from './levelMockApi.js';
 import { mockProfileSettings, mockProfileView, setStatsReader } from './profileDecoMockApi.js';
 
 // 판결 성향 테스트 · 마이페이지 목 API. 응답 모양은 API 명세 9장(성향 API, v0.20)의 P-1 ~ P-5를 따른다.
@@ -253,6 +254,7 @@ export async function getMyPage() {
     history: history.map((entry) => ({ ...historyLine(entry), type: judgmentOf([entry])?.type ?? null })),
     experiences: [...mockExperiences, ...extraExperiences],
     ...mockProfileView(profileStats()),
+    level: mockLevelView(),
     profileSettings: mockProfileSettings(),
   });
 }

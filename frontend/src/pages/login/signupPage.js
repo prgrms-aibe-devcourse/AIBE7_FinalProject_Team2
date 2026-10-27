@@ -6,7 +6,8 @@ import { canGoBackInApp } from '../../app/router.js';
 import { devJumpBar } from './loginDevJump.js';
 import { loginDesk } from './loginDesk.js';
 import { kakaoButton, setBusy } from './loginParts.js';
-import { NICKNAME_MAX, validateSignup } from './signupRule.js';
+import { NICKNAME_MAX, NICKNAME_MAX_HANGUL, lockNicknameLength } from '../../utils/nickname.js';
+import { validateSignup } from './signupRule.js';
 
 // 회원가입 (FE-104, /signup). 로그인(S-12)과 같은 책상 위 펠트 패드에 카카오로 시작하기 + 아이디 · 비밀번호 · 닉네임 가입 폼.
 // 목 모드는 목업 가입(mocks/authMockApi.js signup)이 받아 바로 로그인된 상태가 된다. 실제 모드는 서버 회원가입 API가 아직 없어(api.signup 없음)
@@ -71,9 +72,10 @@ export function renderSignupPage(container, { api, navigate }) {
       id: field(form, 'signup-id', '아이디', { type: 'text', autocomplete: 'username', hint: '영문 소문자 · 숫자 · 밑줄(_) 4~20자' }),
       password: field(form, 'signup-password', '비밀번호', { type: 'password', autocomplete: 'new-password', hint: '영문과 숫자를 섞어 8자 이상' }),
       passwordConfirm: field(form, 'signup-password-confirm', '비밀번호 확인', { type: 'password', autocomplete: 'new-password' }),
-      nickname: field(form, 'signup-nickname', '닉네임', { type: 'text', autocomplete: 'nickname', hint: `2~${NICKNAME_MAX}자 · 커뮤니티와 랭킹에 보여요`, maxLength: NICKNAME_MAX }),
+      nickname: field(form, 'signup-nickname', '닉네임', { type: 'text', autocomplete: 'nickname', hint: `2자 이상, 한글은 ${NICKNAME_MAX_HANGUL}자 · 영문 · 숫자는 ${NICKNAME_MAX}자까지 · 커뮤니티와 랭킹에 보여요`, maxLength: NICKNAME_MAX }),
       agreed: agreement(form),
     };
+    lockNicknameLength(fields.nickname.input);
     const submit = element('button', 'primary-button login-submit', '가입하기');
     submit.type = 'submit';
     form.append(error, submit);
