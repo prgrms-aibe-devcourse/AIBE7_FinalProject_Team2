@@ -95,7 +95,7 @@ const DOCUMENTS = {
       { title: '개인정보 처리의 위탁', body: [
         '서비스는 안정적인 운영을 위해 아래 업무를 외부에 맡기고 있어요. 맡기는 업체와 업무가 바뀌면 이 방침에 알려요.',
         '서버 운영과 이미지 저장: Amazon Web Services(AWS).',
-        '데이터베이스 보관: 현재 Supabase를 쓰고 있고, 10월 28일부터 AWS RDS로 옮겨요.',
+        '데이터베이스 보관: 현재 Supabase를 쓰고 있고, AWS로 옮길 예정이에요. 옮기는 시점이 정해지면 이 방침에 알려 드려요.',
         '운영 로그와 지표 모니터링: Grafana Cloud(IP 주소가 담긴 접속 로그가 포함될 수 있어요).',
         '로그인 인증: 카카오.',
         'AI 판결 생성: 외부 AI 모델 제공 사업자. 이때 보내는 내용은 비식별화된 사건 정보이고 이용자를 알아볼 수 있는 정보는 보내지 않아요.',
@@ -141,14 +141,13 @@ function renderLegalPage(container, { navigate }, key) {
   const root = element('main', 'legal-page'); // 라우터가 <main>을 두지 않아 본문 landmark를 여기서 만든다
   const article = element('article', 'legal-doc');
 
-  // 두 문서를 오가는 줄(현재 문서는 눌리지 않는다)
+  // 두 문서를 오가는 줄(현재 문서는 눌러도 그대로다)
   const switcher = element('nav', 'legal-switch');
   switcher.setAttribute('aria-label', '약관 · 방침');
   Object.values(DOCUMENTS).forEach((item) => {
-    const tab = button(item.title, () => navigate(item.route), 'legal-switch-item');
+    const tab = button(item.title, () => { if (item.route !== key) navigate(item.route); }, 'legal-switch-item');
     if (item.route === key) {
-      tab.setAttribute('aria-current', 'page');
-      tab.disabled = true;
+      tab.setAttribute('aria-current', 'page'); // disabled는 두지 않는다: 키보드 · 화면 낭독기가 "지금 문서"를 지나치지 않게(누르면 같은 화면을 다시 그릴 뿐)
     }
     switcher.append(tab);
   });
@@ -158,10 +157,18 @@ function renderLegalPage(container, { navigate }, key) {
   meta.append(element('span', 'legal-draft', '초안'), ' 법무 검토 전이라 바뀔 수 있어요 · 시행일: 정해지면 알려 드려요');
   head.append(element('h1', '', doc.title), element('p', 'legal-summary', doc.summary), meta);
 
-  // 목차: 누르면 그 조항으로 부드럽게 내려간다(움직임 줄이기면 바로)
+  // 목차: 누르면 그 조항으로 부드럽게 내려간다(움직임 줄이기면 바로).
+  // 접이식이라 좁은 화면에서는 접어 두고 첫 조항을 바로 보인다(펼친 목차가 본문 앞 한 화면 가까이 차지했다, FE-104). 넓은 화면은 펼쳐 둔다
   const toc = element('nav', 'legal-toc');
   toc.setAttribute('aria-label', `${doc.title} 목차`);
+  const tocFold = element('details', 'legal-toc-fold');
+  tocFold.open = !window.matchMedia?.('(max-width: 680px)').matches;
+  const tocSummary = element('summary', '', `목차 · ${doc.sections.length}개 조항`);
   const tocList = element('ol');
+  const scrollTo = (node, focusNode) => {
+    node.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' });
+    focusNode.focus({ preventScroll: true });
+  };
   const body = element('div', 'legal-body');
   doc.sections.forEach((section, index) => {
     const id = `legal-${key}-${index + 1}`;
@@ -173,17 +180,19 @@ function renderLegalPage(container, { navigate }, key) {
     target.append(heading);
     if (section.body.length) section.body.forEach((text) => target.append(element('p', '', text)));
     else target.append(element('p', 'legal-pending', '이 조항은 준비 중이에요.'));
+    // 긴 문서에서 다른 조항으로 가려면 목차로 돌아간다(펼쳐서 보여 준다)
+    target.append(button('목차로', () => { tocFold.open = true; scrollTo(toc, tocSummary); }, 'legal-back'));
     body.append(target);
 
     const item = element('li');
     item.append(button(`제${index + 1}조 ${section.title}`, () => {
-      target.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' });
       heading.setAttribute('tabindex', '-1');
-      heading.focus({ preventScroll: true });
+      scrollTo(target, heading);
     }, 'legal-toc-item'));
     tocList.append(item);
   });
-  toc.append(element('h2', '', '목차'), tocList);
+  tocFold.append(tocSummary, tocList);
+  toc.append(tocFold);
 
   article.append(head, toc, body);
   const actions = element('div', 'legal-actions');

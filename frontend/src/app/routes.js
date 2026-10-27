@@ -20,6 +20,7 @@ import { renderCourtPage } from '../pages/court/courtPage.js';
 import { renderLandingPage } from '../pages/landing/landingPage.js';
 import { renderAuthCallbackPage } from '../pages/login/authCallbackPage.js';
 import { renderLoginPage } from '../pages/login/loginPage.js';
+import { renderSignupPage } from '../pages/login/signupPage.js';
 import { renderMyPage } from '../pages/myPage/myPage.js';
 import { renderMyResultPage } from '../pages/myPage/myResultPage.js';
 import { renderOverviewPage } from '../pages/overview/overviewPage.js';
@@ -63,6 +64,8 @@ export const routes = [
   { name: 'communityPost', path: '/community/posts/:postId', render: renderCommunityPostPage, title: '커뮤니티' },
   // S-12 로그인 (FE-52): 목 모드는 개발용 목업 로그인, 실제 모드는 카카오 로그인(FE-74)
   { name: 'login', path: '/login', render: renderLoginPage, title: '로그인' },
+  // 회원가입 (FE-104): 목 모드는 목업 가입, 실제 모드는 서버 API가 생길 때까지 카카오로 시작하기만 된다
+  { name: 'signup', path: '/signup', render: renderSignupPage, title: '회원가입' },
   // 카카오 로그인 콜백 (FE-74): 서버(M-4)가 로그인을 마치고 보내는 주소. 주소는 서버 설정과 같아야 한다
   { name: 'authCallback', path: '/auth/callback', render: renderAuthCallbackPage, title: '로그인' },
   // 확장: S-19 관리자 검수 (FE-16). 관리자 코드는 사용자 화면 번들에 넣지 않으려고 필요할 때만 불러온다.
