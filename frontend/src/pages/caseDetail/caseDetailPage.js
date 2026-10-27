@@ -54,6 +54,7 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
     if (action) panel.append(action);
     if (action) clip.style.visibility = ''; // 오류 안내는 바로 보인다(불러오는 중은 숨겨 둔 채 다음 면이 내려앉기를 기다린다)
     clip.replaceChildren(panel);
+    if (action && from) landArticle(null, panel); // 오류 안내가 뜨면 덮고 있던 본뜬 신문도 바로 걷는다(안 걷으면 타이머 1.5초 동안 멈춘 옛 지면만 보인다)
     // 잠시 기다려도 자료가 안 왔으면 덮고 있던 신문 지면을 걷고 불러오는 중 안내를 보인다(빠른 응답은 숨겨 둔 채 바로 제목이 날아온다)
     if (!action && from) setTimeout(() => {
       if (!active() || clip.style.visibility !== 'hidden' || !clip.contains(panel)) return;

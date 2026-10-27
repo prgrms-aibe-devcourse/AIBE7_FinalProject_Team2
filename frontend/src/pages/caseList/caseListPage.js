@@ -241,7 +241,11 @@ export async function renderCaseListPage(container, { api, navigate, from }) {
     if (event.defaultPrevented || picking) return;
     if (event.key === 'Escape') navigate('landing');
     const arrow = { ArrowLeft: -1, ArrowRight: 1 }[event.key];
-    if (arrow && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.target.closest?.('input, textarea, select, [contenteditable]')) turnFace(arrow);
+    if (arrow && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.target.closest?.('input, textarea, select, [contenteditable]')) {
+      if (faceIndexAfter(FACE_KEYS, selected, arrow) < 0) return; // 넘길 면이 없으면(1면의 ←, 마지막 면의 →) 브라우저 기본 동작을 그대로 둔다
+      event.preventDefault(); // 면을 넘길 때는 같은 키의 기본 가로 스크롤이 함께 일어나지 않게 한다
+      turnFace(arrow);
+    }
   }
   document.addEventListener('keydown', onKey);
 
