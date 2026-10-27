@@ -2,12 +2,25 @@
 // 서버(P-8 PATCH /profile-settings, 조회는 P-5 profileSettings)가 원본이고, 이 모듈은 화면이 동기로 읽는 사본이다.
 // 바꾸면 사본을 먼저 바꾸고(바로 화면에 반영) 서버에 보낸다. 보내는 요청은 차례로 하나씩 가고, 거절되면 그 칸을 이전 값으로 돌린다.
 // 마이페이지를 받으면 서버 값으로 맞추되, 저장 중인 값이 있으면 오래된 응답이 덮어쓰지 않게 건너뛴다
+import { localStore } from './safeStorage.js';
 export const SLOTS = ['initial', 'retake', 'current'];
 export const BIO_MAX = 40;
+// 프로필카드 아래 줄(성향 · 서명 · 직업 중 하나)과 레벨 접두. 서버(P-8)가 아직 모르는 값이라 이 브라우저에만 저장하고 서버로 보내지 않는다(서버 확장은 후속)
+export const CARD_LINES = ['type', 'signature', 'job'];
+const LOCAL_KEY = 'naelaw:profile-card-line';
 
 const DEFAULTS = Object.freeze({ shownCard: 'current', profileCardType: 'current', bio: '' });
+const LOCAL_DEFAULTS = Object.freeze({ cardLine: 'type', cardLevel: false });
+
+function readLocal() {
+  try {
+    const saved = JSON.parse(localStore()?.getItem(LOCAL_KEY) ?? 'null');
+    return { cardLine: CARD_LINES.includes(saved?.cardLine) ? saved.cardLine : LOCAL_DEFAULTS.cardLine, cardLevel: saved?.cardLevel === true };
+  } catch { return { ...LOCAL_DEFAULTS }; }
+}
 
 let values = { ...DEFAULTS };
+let local = readLocal();
 let send = null; // (patch) => Promise<세 값 전체>. api가 없으면 null이라 이번 방문 동안만 바뀐다
 let inFlight = 0;
 let queue = Promise.resolve();
@@ -24,11 +37,18 @@ export function configureProfileSettings(sender) {
 }
 
 export const getProfileSettings = () => values;
+export const getCardLineSettings = () => local;
 
 /** 서버가 준 값(P-5 profileSettings)으로 맞춘다. 없으면(옛 서버) 그대로 두고, 저장 중이면 건너뛴다 */
 export function hydrateProfileSettings(settings) {
   if (!settings || inFlight > 0) return;
   values = normalize(settings);
+}
+
+/** 카드 아래 줄 설정(서버에 보내지 않는다) */
+export function updateCardLine(patch) {
+  local = { ...local, ...patch };
+  try { localStore()?.setItem(LOCAL_KEY, JSON.stringify(local)); } catch { /* 저장소를 못 쓰면 이번 방문 동안만 */ }
 }
 
 /** 보낸 칸만 바꾼다. 서버에 저장되면 true, 거절되면 그 칸을 이전 값으로 돌리고 false */
@@ -58,6 +78,8 @@ export function updateProfileSettings(patch) {
 /** 테스트 전용: 사본과 대기열을 처음 상태로 */
 export function resetProfileSettings() {
   values = { ...DEFAULTS };
+  local = { ...LOCAL_DEFAULTS };
+  try { localStore()?.removeItem(LOCAL_KEY); } catch { /* 무시 */ }
   send = null;
   inFlight = 0;
   queue = Promise.resolve();
