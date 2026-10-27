@@ -6,6 +6,7 @@ import '../pages/caseList/caseList.css';
 import '../pages/caseDetail/caseDetail.css';
 import '../components/paperStage.css'; // 신문 지면 무대: stage.css · caseList.css 뒤에 와야 한다
 import '../utils/pageTurn.css';
+import '../components/folderParts.css'; // 종이 귀 · 진행 책갈피(FE-96): 이것을 쓰는 판결 체험 · 성향 결과 CSS보다 앞에 와야 한다
 import '../pages/review/review.css';
 import '../pages/overview/overview.css';
 import '../pages/verdict/verdict.css';

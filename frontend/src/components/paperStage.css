@@ -92,7 +92,17 @@
   .stage-wrap.paper-mode .ctrl { flex-wrap: nowrap; bottom: calc(6px + var(--safe-bottom)); padding: 2px 8px; min-height: 44px; }
   .stage-wrap.paper-mode .ctrl :is(.primary-button, .secondary-button) { min-height: 44px; }
   .stage-wrap.paper-mode .ctrl .stage-restart { display: none; }
+  /* 조작 줄(FE-97): "◀ 이전" · "다음 ▶" 화살표가 글자 위로 접혀 줄이 87px로 커지고 대사창 아래 23px를 덮었다. 버튼은 접지 않고, 개발용 "이름표 끄기"(개발)는 모바일에서 뺀다 */
+  .stage-wrap.paper-mode .ctrl :is(.primary-button, .secondary-button) { flex: none; white-space: nowrap; }
+  .stage-wrap.paper-mode .ctrl .stage-skip + .stage-skip { display: none; }
+  /* 상태 문구("선택하고 제출하면 다음으로 넘어가요")가 버튼 사이 좁은 칸에서 네 줄로 접혀 조작 줄이 100px을 넘었다(FE-97). 문구가 있을 때만 위 한 줄로 올린다 */
+  .stage-wrap.paper-mode .ctrl:has(.sp:not(:empty)) { flex-wrap: wrap; border-radius: 22px; row-gap: 0; }
+  .stage-wrap.paper-mode .ctrl .sp:not(:empty) { order: -1; flex: 1 0 100%; padding: 4px 8px 0; font-size: 12px; line-height: 1.4; text-align: center; color: var(--color-muted); }
   .stage-wrap.paper-mode .board .range-options { grid-template-columns: 1fr; grid-template-rows: none; grid-auto-flow: row; }
+  /* 모바일 엽서(FE-97): 가운데 정렬(top 46%)이면 윗변이 두 줄짜리 사이트 헤더(약 113px) 밑으로 들어가고 아랫변이 조작 줄에 겹쳐, 제목 · 수신인이 잘리고 7 ~ 8번 선택지가 제출 칸 뒤에 숨었다.
+     그래서 헤더 바로 아래에서 시작하고 조작 줄 위에서 끝나게 높이를 정한다(안쪽 스크롤은 그대로) */
+  .stage-wrap.paper-mode .board, .stage-wrap.paper-mode .board.wide { --board-top: calc(var(--mobile-header, 114px) + 8px); --board-bottom: calc(98px + var(--safe-bottom)); top: var(--board-top); translate: -50% 0; max-height: calc(100dvh - var(--board-top) - var(--board-bottom)); }
+  .stage-wrap.paper-mode .board > .scroll-area { max-height: calc(100dvh - var(--board-top) - var(--board-bottom) - 18px); }
   .stage-wrap.paper-mode .board .scroll-body { padding: 18px 16px; }
   .stage-wrap.paper-mode .board .postcard-head h2 { font-size: 18px; }
   .stage-wrap.paper-mode .board .postcard-stamp { width: 50px; height: 60px; font-size: 11px; }

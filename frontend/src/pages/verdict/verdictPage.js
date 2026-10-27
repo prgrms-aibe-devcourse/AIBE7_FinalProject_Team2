@@ -7,10 +7,10 @@ import { getDraft, saveDraft, clearDraft } from './verdictDraft.js';
 import { markAiRevealIntro } from '../ai/aiRevealIntro.js';
 import { reducedMotion } from '../../utils/motion.js';
 import { eraseSignature, signatureSvg, signerSeed, writeSignature } from '../../components/signatureInk.js';
-import { getBookmarkColor, selectedBookmarkFace } from '../../utils/bookmarkCharacter.js';
+import { folderBookmark, paperFold } from '../../components/folderParts.js';
 
 const penaltyLabels = { DEATH: '사형', LIFE: '무기징역', PRISON: '징역', FINE: '벌금' };
-// 해금 책갈피의 얼굴(내로)
+const FILED_MS = 900; // 확정된 뒤 "판결 접수" 도장을 보여 주는 시간(verdict.css .sign-filed). 그다음 AI 판결로 넘어간다(FE-97)
 
 // 원문을 유지해 빈 칸, 0, 잘못 입력한 값을 구별한다.
 function parseInteger(raw) {
@@ -50,14 +50,6 @@ function element(tag, className, text) {
   if (className) node.className = className;
   if (text !== undefined) node.textContent = text;
   return node;
-}
-
-function picture(src) {
-  const image = element('img');
-  image.src = src;
-  image.alt = '';
-  image.addEventListener('error', () => image.remove(), { once: true });
-  return image;
 }
 
 function button(text, action, className = 'secondary-button') {
@@ -105,12 +97,15 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
     const factorButtons = [];
     const header = element('header', 'case-topbar');
     const back = button('사건 기록 다시 보기', () => navigate('review'), 'back-button');
-    header.append(element('strong', 'case-title', `판결 입력 · ${caseHeader.title}`), back);
+    const caseTitle = element('strong', 'case-title', `판결 입력 · ${caseHeader.title}`);
+    caseTitle.setAttribute('role', 'heading'); // 쪽(탭)마다 보이는 h1이 없던 것을 쪽 밖 머리글이 맡는다(FE-97). 모양은 그대로
+    caseTitle.setAttribute('aria-level', '1');
+    header.append(caseTitle, back);
     // 파일철(FE-43 · FE-48): 위로 튀어나온 색인 탭 다섯 장(사건 요약 → 참고 정보 → 판단 요소 → 최종 판결 → 확정). 한 번에 한 장만 보인다.
     // 다음 장은 종이 오른쪽 아래 말린 모서리로만 넘기고, 탭으로는 이미 펼쳐 본 장까지만 돌아갈 수 있다. 확정은 마지막 장의 서명으로 한다
     const layout = element('main', 'verdict-layout verdict-folder');
     const main = element('section', 'verdict-main folder-sheet');
-    main.append(element('h1', '', '당신의 판결'), element('p', 'verdict-intro muted', '지금까지 확인한 사건 정보와 양형기준을 참고해 판결해 주세요.'));
+    main.append(element('h2', 'folder-title', '당신의 판결'), element('p', 'verdict-intro muted', '지금까지 확인한 사건 정보와 양형기준을 참고해 판결해 주세요.'));
     // 형량 칸(공통): 징역이면 "징역 [ ]년 [ ]개월", 벌금이면 "벌금 [ ]만원"으로 바뀐다. 징역은 범위 막대 바로 위, 벌금은 벌금 슬라이더 위에 둔다
     const entry = element('div', 'sentence-entry');
     const entryType = element('strong', 'sentence-entry-type');
@@ -140,7 +135,9 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
         changed(key);
       });
       if (key === 'prisonMonths') field.addEventListener('change', carryMonths);
-      wrapper.append(name, field, element('span', '', unit));
+      const unitText = element('span', '', unit);
+      unitText.setAttribute('aria-hidden', 'true'); // 이름("징역 년")에 단위가 이미 있어 "징역 년년"으로 읽히던 것을 막는다(FE-97)
+      wrapper.append(name, field, unitText);
       parent.append(wrapper);
       inputs[key] = field;
     }
@@ -466,10 +463,15 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
     signature.append(signInk);
     signature.prepend(signHint);
     const signRow = element('div', 'sign-row');
-    signRow.append(element('span', 'sign-role', '재판장'), signature, element('span', 'sign-seal', '(서명)'));
+    // 판결 접수 도장(FE-97): 확정되면 서명 옆에 찍히고 한 박자 뒤 AI 판결로 넘어간다. 서명 직후 곧바로 "AI 판결을 기다리는 중"으로 바뀌어 내 결정이 로더에 묻혔다
+    const filed = element('span', 'sign-filed', '판결 접수');
+    filed.setAttribute('aria-hidden', 'true');
+    const filedNote = element('p', 'visually-hidden');
+    filedNote.setAttribute('role', 'status');
+    signRow.append(element('span', 'sign-role', '재판장'), signature, element('span', 'sign-seal', '(서명)'), filed);
     signPage.append(element('h2', 'folder-title', '판결 확정'),
       element('p', 'muted', '정한 내용을 확인하고 서명해 주세요.'), signSummary,
-      element('h3', 'sign-subtitle', '주의사항'), cautions, noFactorNote, reason, signRow, submitError);
+      element('h3', 'sign-subtitle', '주의사항'), cautions, noFactorNote, reason, signRow, filedNote, submitError);
     signature.addEventListener('click', sign);
     let signed = false;
     async function sign() {
@@ -503,6 +505,12 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
         await api.postVerdict(caseId, payload);
         clearDraft(caseId);
         markAiRevealIntro(caseId); // S-06에서 로딩 · 안내를 한 번 보여 준다 (7.7.4)
+        if (active()) {
+          signRow.classList.add('is-filed');
+          signPage.setAttribute('aria-busy', 'false'); // 바쁜 영역의 변경은 낭독이 보류될 수 있어, 접수 안내를 쓰기 전에 푼다(리뷰 반영)
+          filedNote.textContent = '판결이 접수되었어요. AI 판결로 넘어가요.';
+          if (!reducedMotion()) await new Promise((resolve) => { setTimeout(resolve, FILED_MS); });
+        }
         if (active()) navigate('ai', {}, { keepScroll: true }); // 서명한 자리 그대로 AI 판결 무대로(맨 위로 튀지 않게)
       } catch (error) {
         if (!active()) return;
@@ -596,9 +604,7 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
     const LAST = 4;
     // 진행 책갈피: 펼쳐 본 가장 뒤 장(reached)의 탭 바로 뒤에 끼워 둔 내로 얼굴 책갈피(장식). 잠금이 아니라 진행을 표시하므로
     // 늘 보이고, 뒤로 넘겨도 자리를 지킨다(마지막 장까지 오면 탭 줄 끝). 얼굴은 마이페이지 "만난 모습"에서 고른 것(FE-67)
-    const bookmark = element('span', `folder-bookmark bookmark-color-${getBookmarkColor()}`);
-    bookmark.setAttribute('aria-hidden', 'true');
-    bookmark.append(picture(selectedBookmarkFace()));
+    const bookmark = folderBookmark();
     const pages = [[summaryPage, '사건 요약'], [sidebar, '참고 정보'], [factorPage, '판단 요소'], [main, '최종 판결'], [signPage, '확정']].map(([panel, title], i) => {
       const tab = element('button', 'folder-tab');
       tab.type = 'button';
@@ -685,6 +691,7 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       const curl = element('button', 'folder-curl');
       curl.type = 'button';
       curl.setAttribute('aria-label', `다음 장으로 넘기기: ${pages[i + 1].title}`);
+      curl.append(paperFold());
       curl.addEventListener('click', () => goTo(i + 1, true)); // 최종 판결 → 확정도 판결이 다 정해져야 넘어간다
       panel.append(curl);
     });
@@ -823,7 +830,9 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
         marker.classList.toggle('is-warning', prison && shown > trackMax);
       }
       feedback.replaceChildren();
-      if ((present && !inRange) || serverError === 'OUT_OF_ALLOWED_RANGE') {
+      const outOfRange = (present && !inRange) || serverError === 'OUT_OF_ALLOWED_RANGE';
+      if (outOfRange) for (const key of ['prisonYears', 'prisonMonths', 'fineAmount']) inputs[key].setAttribute('aria-invalid', 'true'); // 범위 초과도 잘못된 입력(FE-97)
+      if (outOfRange) {
         const warning = element('div', 'range-warning');
         warning.setAttribute('role', 'alert');
         const rangeText = prison ? `징역 ${formatMonths(option.allowedMin)} ~ ${formatMonths(option.allowedMax)}` : option.text;

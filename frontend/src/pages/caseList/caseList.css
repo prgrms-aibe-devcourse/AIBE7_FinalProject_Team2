@@ -68,6 +68,10 @@
 .case-list-page .tab[aria-pressed="true"] { color: var(--color-accent); }
 .case-list-page .tab[aria-pressed="true"]::after { content: ''; position: absolute; left: 12px; right: 12px; bottom: 0; height: 2px; background: var(--color-accent); }
 .case-list-page .case-count { font-size: var(--text-caption); color: var(--color-muted); }
+.case-list-page .tab-count { margin-left: 5px; font: 400 var(--text-caption)/1 var(--font-body); color: var(--color-muted); } /* 탭 글자 옆 건수(FE-102) */
+.case-list-page .tab[aria-pressed="true"] .tab-count { color: var(--color-accent); }
+.case-list-page .tab:disabled { cursor: default; opacity: .6; } /* 처음 목록을 받는 동안 */
+.case-list-page .message-panel .muted { margin-top: 4px; }
 .case-list-page .empty { padding: 56px 0; text-align: center; color: var(--color-muted); }
 .case-list-page .paper-loading { padding: 96px 0; text-align: center; color: var(--color-muted); font: 700 15px/1.5 var(--font-article); } /* 목록을 받기 전 상태 문구(FE-56) */
 
@@ -166,11 +170,12 @@
   .case-list-page .mast { grid-template-columns: 1fr; padding: 6px 0 14px; }
   .case-list-page .ear, .case-list-page .mast .ear { display: none; }
   .case-list-page .brand h1 { font-size: 50px; }
-  .case-list-page .dateline { font-size: 11px; }
+  .case-list-page .dateline { font-size: var(--text-caption); }
   .case-list-page .dateline span:nth-child(3) { display: none; }
   .case-list-page .tabs { width: 100%; gap: 0; }
   .case-list-page .tab { flex: 1; min-width: 0; padding: 0 6px; }
-  .case-list-page .case-count { display: none; }
+  .case-list-page .tabs-zone { flex-wrap: wrap; justify-content: center; } /* 건수 요약은 모바일에서도 탭 아래 한 줄로(FE-102) */
+  .case-list-page .case-count { flex-basis: 100%; padding: 2px 0 8px; text-align: center; }
   .case-list-page .banner { padding: 16px 0 14px; text-align: left; }
   .case-list-page .banner h2 { font-size: 30px; line-height: 1.3; }
   .case-list-page .front-grid { display: flex; flex-direction: column; padding-top: 16px; }
@@ -208,10 +213,13 @@
 .case-list-page .paper-tip-text > span:not(.visually-hidden) { grid-column: 1 / -1; align-self: start; font: 400 21px/1.3 var(--font-hand); word-break: keep-all; }
 .case-list-page .visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .case-list-page .masthead { padding-top: 34px; } /* 메모지가 걸치는 자리 */
+/* 포스트잇이 오른쪽 귀를 덮는다. 떼기 전에는 귀를 감춰 테두리만 비치는 어정쩡한 모양을 없애고, 떼면 그 밑의 귀(건수)가 드러난다(FE-102) */
+@media (min-width: 721px) { .case-list-page:not(.tip-off) .mast .ear-right { visibility: hidden; } }
+.case-list-page .paper-tip.is-waiting { opacity: 0; pointer-events: none; } /* 건수를 받은 뒤 나타난다(문구가 바뀌며 깜빡이지 않게) */
 
 /* 기사 고르기: 마우스를 올리면 기사가 살짝 밝아지고 이어 읽기 줄에 밑줄이 생긴다. 고르면 지면이 한 장 넘어간다(utils/pageTurn.js) */
 .case-list-page .is-pickable { position: relative; cursor: pointer; transition: background-color .18s ease-out, outline-color .18s ease-out; }
-@media (hover: hover) and (pointer: fine) { .case-list-page .is-pickable:hover { background-color: color-mix(in srgb, var(--color-desk-kraft) 14%, transparent); outline: 2px solid var(--color-desk-kraft); outline-offset: 4px; } } /* outline은 사진보다 위에 그려진다(inset 그림자는 사진에 가려졌다) */
+@media (hover: hover) and (pointer: fine) { .case-list-page .is-pickable:hover, .case-list-page .is-pickable.is-mate-hover { background-color: color-mix(in srgb, var(--color-desk-kraft) 14%, transparent); outline: 2px solid var(--color-desk-kraft); outline-offset: 4px; } } /* outline은 사진보다 위에 그려진다(inset 그림자는 사진에 가려졌다) */
 .case-list-page .paper-tip { transition: opacity .25s ease-out; }
 .case-list-page.is-picking .paper-tip { opacity: 0; pointer-events: none; }
 .case-list-page .is-picked { outline: 3px solid var(--color-heading); outline-offset: 4px; }
@@ -243,6 +251,11 @@
 @media (max-width: 720px) {
   .case-list-page .paper-tip { position: relative; top: auto; right: auto; rotate: -.6deg; width: 100%; aspect-ratio: auto; margin: 10px 0 0; padding: 18px 12px 10px; }
   .case-list-page .paper-tip-text > span:not(.visually-hidden) { grid-column: 2; } /* 좁은 화면은 가로 띠로 둔다 */
+  /* 모바일 첫 화면의 약 30%를 차지하던 띠를 얼굴 + 한두 줄로 줄인다(FE-102) */
+  .case-list-page .paper-tip { grid-template-rows: auto; padding: 14px 12px 8px; gap: 0 10px; }
+  .case-list-page .paper-tip img { grid-row: 1; width: 30px; height: 30px; }
+  .case-list-page .paper-tip-text b { display: none; }
+  .case-list-page .paper-tip-text > span:not(.visually-hidden) { grid-row: 1; font-size: 18px; line-height: 1.25; }
   .case-list-page .masthead { padding-top: 0; }
   .case-list-page .paper { background: var(--color-paper); }
   .case-list-page .paper:is(.case-paper, .inner-page)::after { width: 24px; } /* 좁은 화면은 제본 그늘을 얇게(본문을 덮지 않게) */
@@ -251,3 +264,13 @@
   .case-list-page .is-pickable, .case-list-page .paper-tip { transition: none; }
   .case-list-page.is-arriving .paper, .case-list-page.is-revealing .paper > * { animation: none; }
 }
+
+/* 작은 글씨 하한(FE-102): 전역 .mock-tag(11px)는 이 지면에서 12px로 */
+.case-list-page .mock-tag { font-size: var(--text-caption); }
+/* 낮은 화면(노트북 등)에서는 제호를 한 단계 줄여 헤드라인이 첫 화면에 더 많이 들어오게 한다(FE-102) */
+@media (min-width: 1101px) and (max-height: 820px) {
+  .case-list-page .brand h1 { font-size: 76px; }
+  .case-list-page .mast { padding: 4px 0 12px; }
+}
+/* 목록을 받기 전에는 아래 안내 · 푸터를 감춰 둔다: 받은 뒤 본문이 길어지며 아래로 밀리는 것이 레이아웃 이동(CLS 0.12)으로 잡혔다(FE-102) */
+.case-list-page.is-loading :is(.paper-note, .site-footer) { visibility: hidden; }

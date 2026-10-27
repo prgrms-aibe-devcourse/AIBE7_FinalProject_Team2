@@ -316,7 +316,13 @@ h1 { font-family: var(--font-heading); color: var(--color-heading); letter-spaci
 /* 포커스 · scrollIntoView로 스크롤될 때 위에 붙은 헤더에 가리지 않게. 높이는 main.js가 잰 값(두 줄 헤더 · 성향검사 고정 헤더 포함) */
 html { scroll-padding-top: calc(var(--site-header-h, 64px) + 8px); }
 .site-header button { font: inherit; cursor: pointer; } /* 브라우저 기본 버튼 글꼴 대신 헤더 글꼴 */
-.site-header button:focus-visible { outline-color: var(--color-range-fill); }
+.site-header button:focus-visible { outline: 3px solid var(--color-range-fill); outline-offset: 2px; } /* 로그인 패드 · 메인 책상과 같은 3px 브론즈 링(FE-104, 기본 1px 링은 네이비 띠에서 얇다) */
+/* 본문으로 건너뛰기(FE-99): 평소에는 보이지 않고 Tab으로 닿으면 헤더 왼쪽 위에 나타난다 */
+.skip-link:not(:focus) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.skip-link:focus { position: absolute; left: 16px; top: 8px; z-index: 60; padding: 8px 14px; border-radius: 4px; background: var(--color-card); color: var(--color-heading); font-weight: 700; outline: 3px solid var(--color-range-fill); outline-offset: 2px; }
+/* 프로그램 포커스 자리(제목 · 패널)는 윤곽을 숨긴다. 건너뛰기 대상인 <main>만 키보드로 닿았을 때 화면 안쪽 가장자리에 윤곽을 보인다 */
+#route-view [tabindex="-1"]:not(main):focus { outline: none; }
+#route-view main[tabindex="-1"]:focus-visible { outline: 3px solid var(--color-range-fill); outline-offset: -3px; }
 .site-nav { display: flex; align-items: center; gap: 8px; margin-left: auto; } /* 로고는 왼쪽, 메뉴 · 로그인은 오른쪽 */
 .site-header .nav-button[aria-current="page"] { color: var(--color-banner-text); box-shadow: inset 0 -2px 0 currentColor; } /* 지금 보고 있는 메뉴 */
 .site-header .nav-button[aria-disabled="true"] { cursor: default; opacity: .6; }
@@ -329,6 +335,8 @@ html { scroll-padding-top: calc(var(--site-header-h, 64px) + 8px); }
 @media (hover: hover) and (pointer: fine) { .nav-button:hover { color: var(--color-banner-text); } }
 /* 로그인(FE-50): 메뉴 맨 오른쪽, 얇은 테두리로 계정 동작임을 구분한다. 테두리는 글자색을 따라가 네이비 · 흰 헤더 모두에 맞는다 */
 .site-header .login-button { flex: none; margin-left: 4px; padding: 6px 14px; min-height: 36px; border: 1px solid color-mix(in srgb, currentColor 45%, transparent); border-radius: 6px; }
+.site-header .login-button { position: relative; }
+.site-header .login-button::after { content: ''; position: absolute; inset: -4px -2px; } /* 보이는 테두리는 36px 그대로, 누르는 범위만 44px로(FE-99) */
 .site-header .login-button[aria-current="page"] { box-shadow: none; } /* 테두리 버튼이라 밑줄 대신 테두리로 충분하다 */
 .site-header .account-name { display: block; max-width: 9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } /* 로그인한 닉네임(FE-52). 길면 줄인다 */
 /* 연출 스위치(FE-50, utils/motion.js): "연출" 글자 + 작은 스위치. 모양은 환경 설정 스위치와 같고 꺼짐의 윤곽선만 글자색을 따라간다 */
@@ -359,36 +367,7 @@ html { scroll-padding-top: calc(var(--site-header-h, 64px) + 8px); }
   .site-nav .nav-button { padding: 8px; }
 }
 
-/* S-14 404 · 오류 화면 (FE-3) */
-/* 페이지 틀은 S-01 · S-02(landing.css의 :is(.landing-page, .case-list-page))와 같게 맞춘다. 헤더는 라우터가 위에 붙인다(FE-56) */
-.not-found-page {
-  max-width: var(--content-width);
-  margin: 0 auto;
-  border: 1px solid var(--color-border);
-  background: var(--color-bg);
-  color: var(--color-text);
-  font: var(--text-body)/1.75 var(--font-body);
-  overflow-wrap: anywhere;
-  word-break: keep-all;
-}
-.not-found-panel {
-  max-width: 480px;
-  margin: 48px auto;
-  padding: 48px 28px;
-  text-align: center;
-}
-.not-found-panel h1 { margin: 0 0 10px; font-size: 22px; }
-.not-found-panel p { margin: 0; color: var(--color-muted); }
-.not-found-actions {
-  display: flex;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 24px;
-}
-/* .message-panel button의 위 여백(20px)이 gap과 겹치지 않게 지운다 (버튼 간격은 gap만 쓴다).
-   .message-panel button과 우선순위가 같으면 선언 순서에 기대게 되므로, 부모 클래스를 붙여 확실히 이기게 한다 */
-.not-found-panel .not-found-actions button { margin-top: 0; }
+/* S-14 404 · 오류 화면: 로그인과 같은 책상 위 서류 한 장(FE-104) — 모양은 pages/login/login.css 아래쪽 */
 
 /* 섹션 본문 점 목록 (FE-14). utils/contentLines.js의 renderContent가 만든다.
    여러 화면(S-04, 이후 다른 화면)이 함께 쓸 수 있게 화면 클래스 없이 여기 둔다 */
