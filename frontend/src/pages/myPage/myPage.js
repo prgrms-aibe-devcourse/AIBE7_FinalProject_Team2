@@ -2,7 +2,7 @@ import { button, element, mockTag } from '../../components/siteLayout.js';
 import { API_MODE } from '../../api/config.js';
 import { appendEmptyAxis, renderAxisRow } from '../../components/axisRow.js';
 import { imageOf } from '../../components/stage.js';
-import { DEFAULT_NICKNAME, emptyWindow, nameOf, picture, profileCardParts, sashClasses, sashIcon, sashNote, sashes, svg, typeDecoClasses, typeFace, typePortrait } from '../../components/personCards.js';
+import { emptyWindow, myNickname, nameOf, picture, profileCardParts, sashClasses, sashIcon, sashNote, sashes, svg, typeDecoClasses, typeFace, typePortrait } from '../../components/personCards.js';
 import { AXES } from '../../utils/personalityAxes.js';
 import { KIND_TITLES, lenientPercent, axisChange, steadyBand, axisTrend, collectionOf, imageKinds, leanText, retakeAfterOrder } from '../../utils/myPageView.js';
 import { renderTrend, trendsOf } from '../../components/trendGraph.js';
@@ -174,7 +174,7 @@ const decoFor = (data) => shownDeco(currentDeco(), openOf(data));
 // 대표 이미지 카드의 속(그리는 일은 components/personCards.js). 카드 아래 성향: 카드 꾸미기에서 고른 것(기본 최근)
 function profileCardPartsOf(deco, data) {
   const typeName = selectedChoice(data)?.type.name ?? currentTypeOf(data)?.name;
-  return profileCardParts(deco, data.nickname || DEFAULT_NICKNAME, typeName);
+  return profileCardParts(deco, myNickname(data, currentUser()), typeName);
 }
 
 // 성향카드 꾸미기(FE-82): 성향카드 화면에서 고른 테두리 · 배경 · 책갈피를 카드에 입힌다(잠긴 것은 기본으로). 기본 배경은 원래 타로카드 모양이라 클래스를 붙이지 않는다
@@ -210,7 +210,7 @@ function renderTop(data, go) {
   const [profile, typeCardNode] = profileCardPair(data, go);
 
   const middle = element('div', 'my-top-middle');
-  middle.append(element('h2', 'my-nickname', data.nickname || DEFAULT_NICKNAME), renderStats(stats));
+  middle.append(element('h2', 'my-nickname', myNickname(data, currentUser())), renderStats(stats));
 
   section.append(profile, middle, typeCardNode);
   return section;
@@ -570,6 +570,7 @@ function caseLine(item, navigate, api) {
       button('독자 엽서 쓰기', (event) => openCaseReviewPopup({ caseId: item.caseId, api, navigate, from: event.currentTarget }), 'secondary-button'),
     );
   } else {
+    link.classList.add('is-continue'); // 버튼이 없는 줄은 제목이 유일한 입구라 링크로 보이게 밑줄을 둔다(FE-103)
     actions.append(element('p', 'my-case-hint', '사건 제목을 눌러 이어서 체험해요'));
   }
   line.append(info, actions);
@@ -710,10 +711,10 @@ function typeFan(data, navigate, go) {
   });
   // 첫 테스트 · 재심 청구: 상태에 따라 문구와 눌림만 바뀐다
   const state = retakeState(data);
-  const firstTest = button(tested ? '첫 성향 테스트 완료' : '첫 성향 테스트 하기', () => navigate('test'), 'secondary-button');
-  firstTest.disabled = tested;
-  const claim = button(retakeDone ? '재심 완료' : '재심 청구하기', () => openRetakeDialog({ data, navigate, from: claim }), 'secondary-button');
-  claim.disabled = state !== 'ready';
+  // 끝난 일은 비활성 버튼이 아니라 상태 글로 보인다(FE-103). 아직 못 누르는 "재심 청구하기"만 비활성 버튼
+  const firstTest = tested ? element('span', 'edit-status', '✓ 첫 성향 테스트 완료') : button('첫 성향 테스트 하기', () => navigate('test'), 'secondary-button');
+  const claim = retakeDone ? element('span', 'edit-status', '✓ 재심 완료') : button('재심 청구하기', () => openRetakeDialog({ data, navigate, from: claim }), 'secondary-button');
+  if (!retakeDone) claim.disabled = state !== 'ready';
   // 재심을 마친 뒤의 "체험 n건 뒤" 안내는 성향카드 화면에만 둔다
   const note = retakeDone ? null
     : tested ? `성향 테스트를 한 번 더 해서 성향카드를 다시 정해요. ${RETAKE_NOTES[state]}` : '재심은 첫 성향 테스트 뒤에 청구할 수 있어요.';
@@ -882,17 +883,32 @@ function portraitPicker(open, shownPortrait, onPick) {
   const head = element('h3', 'my-deco-kind', `기본 (${DEFAULT_PORTRAITS.length})`);
   head.append(element('span', 'my-deco-state is-open', '기본 제공'));
   field.append(head, first);
-  imageKinds(PORTRAIT_POOL.filter((src) => !DEFAULT_PORTRAITS.includes(src))).forEach((kind) => {
+  // 열린 종류는 펼쳐 두고, 잠긴 종류는 한 줄(이름 · 개수 · 여는 도전과제)로 접어 둔다(FE-100 — 잠긴 그림까지 다 펼치면 한 화면에 130장이 넘게 깔렸다).
+  // 접힌 줄을 누르면 잠긴 그림을 미리 볼 수 있다(무엇을 깨면 무엇이 열리는지 보는 재미는 남긴다)
+  const kinds = imageKinds(PORTRAIT_POOL.filter((src) => !DEFAULT_PORTRAITS.includes(src)));
+  const lockedKinds = [];
+  kinds.forEach((kind) => {
     const locked = !open.kinds.has(kind.key);
     const by = unlockerOf('kinds', kind.key)?.title ?? '';
-    const head = element('h3', 'my-deco-kind', `${kind.title} (${kind.items.length})`);
-    head.append(element('span', `my-deco-state${locked ? '' : ' is-open'}`, locked ? `잠김 · ${by}` : '열림'));
     const grid = element('div', 'my-deco-grid');
     kind.items.forEach(({ src }) => grid.append(decoOption({
       group: 'profile-portrait', value: src, checked: src === shownPortrait, locked, name: portraitLabel(src), lockedBy: by, onChange: pick(src),
     }, thumb(src))));
+    if (locked) { lockedKinds.push({ kind, by, grid }); return; }
+    const head = element('h3', 'my-deco-kind', `${kind.title} (${kind.items.length})`);
+    head.append(element('span', 'my-deco-state is-open', '열림'));
     field.append(head, grid);
   });
+  if (lockedKinds.length) {
+    field.append(element('h3', 'my-deco-kind is-locked-head', `잠긴 종류 (${lockedKinds.length})`));
+    lockedKinds.forEach(({ kind, by, grid }) => {
+      const fold = element('details', 'my-deco-fold');
+      const summary = element('summary', 'my-deco-fold-head');
+      summary.append(element('span', '', `${kind.title} (${kind.items.length})`), element('span', 'my-deco-state', `잠김 · ${by}`));
+      fold.append(summary, grid);
+      field.append(fold);
+    });
+  }
   return field;
 }
 

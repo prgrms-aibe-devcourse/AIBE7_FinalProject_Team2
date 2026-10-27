@@ -1,4 +1,4 @@
-import { button, element, renderSiteHeader } from '../../components/siteLayout.js';
+import { button, element } from '../../components/siteLayout.js';
 import { canGoBackInApp } from '../../app/router.js';
 import { screenByStatus } from '../../utils/screenByStatus.js';
 
@@ -15,7 +15,7 @@ const stars = (rating) => '★'.repeat(rating) + '☆'.repeat(5 - rating);
 export async function renderCaseReviewPage(container, { caseId, api, navigate }) {
   const root = element('div', 'case-review-page');
   const main = element('main', 'case-review-main');
-  root.append(renderSiteHeader({ navigate }), main);
+  root.append(main); // 공통 헤더는 라우터가 그린다(app/router.js). 여기서 또 그리면 헤더가 두 줄이 된다(FE-98)
   container.replaceChildren(root);
   const heading = element('h1', 'case-review-heading', '독자 엽서');
   // 들어온 곳(6막 · 사건 상세 · 커뮤니티 등)과 상관없이 맞는 문구: 앱 안의 이전 화면으로, 바로 들어왔으면 사건 목록으로 (PR #190 리뷰 반영)
@@ -61,9 +61,14 @@ export async function mountCaseReview(main, { caseId, api, navigate }) {
   const list = element('ul', 'case-review-list');
   const slot = element('div', 'case-review-slot');
   const listTitle = element('h2', 'case-review-subtitle', '다른 독자들의 엽서');
-  main.append(summary, slot, listTitle, list);
+  // 평균 별점 · 다른 독자의 엽서는 내가 엽서를 보낸 뒤에 보인다(FE-98): 먼저 보이면 남의 점수가 내 별점을 앞서 묶는다(PRODUCT.md 원칙 1)
+  const lockNote = element('p', 'case-review-note case-review-lock', '엽서를 보내면 평균 별점과 다른 독자들의 엽서가 보여요.');
+  const showOthers = (visible) => { summary.hidden = listTitle.hidden = list.hidden = !visible; lockNote.hidden = visible; };
+  main.append(lockNote, summary, slot, listTitle, list);
+  main.insertBefore(slot, lockNote); // 내 엽서(쓰기)가 위, 안내 문구가 그 아래
 
   paintSummary(data);
+  showOthers(Boolean(data.mine));
   if (data.mine) slot.append(sentCard(data.mine));
   else slot.append(formCard());
   data.reviews.forEach((review) => list.append(readerCard(review)));
@@ -150,6 +155,7 @@ export async function mountCaseReview(main, { caseId, api, navigate }) {
         const mine = await api.postCaseReview(caseId, { rating, comment });
         data = await api.getCaseReviews(caseId).catch(() => ({ ...data, mine }));
         paintSummary(data);
+        showOthers(true);
         const sent = sentCard(mine, true);
         slot.replaceChildren(sent);
         sent.focus({ preventScroll: true });

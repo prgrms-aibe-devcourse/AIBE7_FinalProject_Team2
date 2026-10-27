@@ -1,9 +1,10 @@
 import { button, element } from '../../components/siteLayout.js';
 import { errorText } from './adminLabels.js';
-import { badge, checkField, createLoader, dataTable, errorLine, formatDate, labeledField, pageTop, runAction, tabBar } from './adminKit.js';
+import { badge, checkField, confirmChange, createLoader, dataTable, errorLine, formatDate, labeledField, pageTop, runAction, tabBar } from './adminKit.js';
 import { renderAdminShell } from './adminShell.js';
 
 // 공지 · 설정 (A-36 ~ A-41). 공지 작성 · 공개 / 비공개 · 상단 고정, 금칙어 목록.
+// FE-105: 공개 · 비공개 전환은 사용자 화면이 바로 바뀌어 확인을 묻고, 상단 고정은 묻지 않는다(확인 기준은 adminKit.js confirmChange). 처리 뒤 알림줄로 알린다
 const TABS = [{ key: 'notices', label: '공지' }, { key: 'words', label: '금칙어' }];
 
 export function renderAdminNoticesPage(container, { navigate }) {
@@ -11,16 +12,16 @@ export function renderAdminNoticesPage(container, { navigate }) {
     navigate,
     section: 'notices',
     title: '공지 · 설정',
-    draw: async ({ api, main, active, unauthorized }) => {
+    draw: async ({ api, main, active, unauthorized, notify }) => {
       let tab = 'notices';
       const tabs = element('div');
       const body = element('div', 'admin-list-body');
       main.replaceChildren(pageTop('공지 · 설정'), tabs, body);
       const loader = createLoader({ body, active, unauthorized });
-      const ctx = { active, unauthorized };
+      const ctx = { active, unauthorized, notify };
 
       function drawTabs() {
-        tabs.replaceChildren(tabBar(TABS, tab, (key) => { tab = key; drawTabs(); loadTab(); }));
+        tabs.replaceChildren(tabBar(TABS, tab, (key) => { tab = key; drawTabs(); loadTab(); }, '공지 · 설정 보기'));
       }
       const loadTab = () => (tab === 'notices' ? loadNotices() : loadWords());
 
@@ -38,11 +39,14 @@ export function renderAdminNoticesPage(container, { navigate }) {
         form.addEventListener('submit', async (event) => {
           event.preventDefault();
           if (!title.value.trim() || !text.value.trim()) { error.textContent = '제목과 내용을 입력해 주세요.'; return; }
+          if (published.checked && !confirmChange(`"${title.value.trim()}" 공지를 바로 공개할까요?`, '사용자 화면에 바로 보여요.')) return;
           submit.disabled = true;
           error.textContent = '';
           try {
             await api.createNotice({ title: title.value.trim(), body: text.value.trim(), pinned: pinned.checked, published: published.checked });
-            if (active()) await loadNotices();
+            if (!active()) return;
+            await loadNotices();
+            notify(published.checked ? '공지를 등록하고 공개했어요.' : '공지를 등록했어요. 아직 비공개예요.');
           } catch (failure) {
             if (!active()) return;
             if (failure?.code === 'UNAUTHORIZED') { unauthorized(); return; }
@@ -65,14 +69,21 @@ export function renderAdminNoticesPage(container, { navigate }) {
               cell: (row) => {
                 const wrap = element('div', 'admin-actions');
                 const error = errorLine();
-                const change = (changes, trigger) => runAction({ trigger, errorTarget: error, action: () => api.updateNotice(row.noticeId, changes), onDone: loadNotices, ...ctx });
-                const publish = button(row.published ? '비공개로' : '공개하기', () => change({ published: !row.published }, publish));
-                const pin = button(row.pinned ? '고정 해제' : '상단 고정', () => change({ pinned: !row.pinned }, pin));
+                const change = (changes, trigger, doneText) => runAction({ trigger, errorTarget: error, action: () => api.updateNotice(row.noticeId, changes), onDone: loadNotices, doneText, ...ctx });
+                const publish = button(row.published ? '비공개로' : '공개하기', () => {
+                  const ask = row.published
+                    ? confirmChange(`"${row.title}" 공지를 비공개로 바꿀까요?`, '사용자 화면에서 바로 사라져요.')
+                    : confirmChange(`"${row.title}" 공지를 공개할까요?`, '사용자 화면에 바로 보여요.');
+                  if (ask) change({ published: !row.published }, publish, row.published ? '공지를 비공개로 바꿨어요.' : '공지를 공개했어요.');
+                });
+                const pin = button(row.pinned ? '고정 해제' : '상단 고정', () => change({ pinned: !row.pinned }, pin, row.pinned ? '상단 고정을 풀었어요.' : '공지를 상단에 고정했어요.'));
+                publish.setAttribute('aria-label', `${row.title} ${publish.textContent}`);
+                pin.setAttribute('aria-label', `${row.title} ${pin.textContent}`);
                 wrap.append(publish, pin, error);
                 return wrap;
               },
             },
-          ], data.items, '등록한 공지가 없어요.');
+          ], data.items, '등록한 공지가 없어요.', '공지 목록');
           body.replaceChildren(table, noticeForm());
         });
       }
@@ -84,8 +95,8 @@ export function renderAdminNoticesPage(container, { navigate }) {
           data.items.forEach((word) => {
             const item = element('li');
             const remove = button('삭제', () => {
-              if (!window.confirm(`금칙어 "${word}"를 지울까요?`)) return;
-              runAction({ trigger: remove, errorTarget: error, action: () => api.removeBannedWord(word), onDone: loadWords, ...ctx });
+              if (!confirmChange(`금칙어 "${word}"를 지울까요?`, '지운 단어는 다시 등록하기 전까지 걸러지지 않아요.')) return;
+              runAction({ trigger: remove, errorTarget: error, action: () => api.removeBannedWord(word), onDone: loadWords, doneText: `금칙어 "${word}"를 지웠어요.`, ...ctx });
             });
             remove.setAttribute('aria-label', `${word} 삭제`);
             item.append(element('span', '', word), remove);
@@ -100,7 +111,8 @@ export function renderAdminNoticesPage(container, { navigate }) {
           form.addEventListener('submit', (event) => {
             event.preventDefault();
             if (!input.value.trim()) { error.textContent = '금칙어를 입력해 주세요.'; return; }
-            runAction({ trigger: add, errorTarget: error, action: () => api.addBannedWord(input.value.trim()), onDone: loadWords, ...ctx });
+            const word = input.value.trim();
+            runAction({ trigger: add, errorTarget: error, action: () => api.addBannedWord(word), onDone: loadWords, doneText: `금칙어 "${word}"를 추가했어요.`, ...ctx });
           });
           body.replaceChildren(
             element('p', 'admin-sub', '게시글 · 댓글에 이 낱말이 들어 있으면 서버가 등록을 막거나 숨김 후보로 올려요(동작 방식은 서버 구현 때 정해요).'),

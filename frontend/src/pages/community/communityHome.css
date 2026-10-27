@@ -56,7 +56,7 @@
 .cm-hot-headline { margin: 0 0 6px; font: 900 26px/1.35 var(--font-heading); letter-spacing: -.02em; text-wrap: balance; }
 .cm-hot-deck { margin: 0 0 12px; font: 400 15px/1.6 var(--font-article); color: var(--palette-news-ink-soft); }
 .cm-hot-photo { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; margin-bottom: 12px; filter: grayscale(.35) sepia(.15); }
-.cm-hot-article { margin: 0 0 12px; columns: 2; column-gap: 18px; column-rule: 1px solid var(--palette-news-sheet-1); font: 400 14px/1.75 var(--font-article); text-align: justify; }
+.cm-hot-article { margin: 0 0 12px; columns: 2; column-gap: 18px; column-rule: 1px solid var(--palette-news-sheet-1); font: 400 14px/1.75 var(--font-article); text-wrap: pretty; } /* 양쪽 맞춤은 2단 좁은 폭에서 단어 사이가 벌어져 왼쪽 맞춤으로(FE-103) */
 .cm-hot-article p { margin: 0 0 .6em; }
 .cm-hot-facts { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; font-size: 13px; color: var(--palette-news-ink-soft); }
 .cm-hot-facts b { color: var(--palette-news-ink); }

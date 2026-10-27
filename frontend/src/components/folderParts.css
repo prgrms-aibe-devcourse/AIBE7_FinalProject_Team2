@@ -1,0 +1,66 @@
+/* 서류철 부품(FE-96): 판결 체험 파일철과 성향 결과지가 함께 쓰는 종이 귀 · 진행 책갈피. 만드는 함수는 folderParts.js */
+
+/* 종이 귀: 종이 아래 모서리가 접혀 들린 손잡이 그림. 손잡이(버튼)는 쓰는 곳이 만들고, 쉴 때 접힌 변 길이는 --fold-size로 정한다(요소 크기 = 누르는 자리).
+   메인 신문 모서리 넘김(FE-99 landing.css news-curl)과 같은 방식: 접힌 변 길이 d 하나만 움직이고, 잘려 나간 자리(서류철 크라프트)와 뒤집힌 뒷면이 같은 점을 쓴다.
+   그래서 귀를 통째로 키우거나 돌리지 않고 종이가 실제로 더 접혔다 펴진다. 접힌 변은 모서리 쪽으로 살짝 볼록한 곡선이고,
+   뒷면은 접힌 선에서 어둡고 → 밝아지고 → 끝에서 다시 약간 어두운 띠로 둥글게 말린 종이를 보인다.
+   d = --fold-size × --fold-lift(들썩임) × --fold-hand(호버 · 눌림). 그림은 요소 오른쪽 아래 꼭짓점에서 위 · 왼쪽으로 넘쳐 그린다(최대 2배).
+   앞 장 귀(.is-flipped)는 왼쪽 아래 모서리다: 그림을 왼쪽 아래 꼭짓점에 붙이고 좌우로 뒤집는다 */
+@property --fold-lift { syntax: '<number>'; inherits: true; initial-value: 1; }
+@property --fold-hand { syntax: '<number>'; inherits: true; initial-value: 1; }
+.paper-fold {
+  --fold-turn: 1;
+  --fold-d: calc(var(--fold-size, 56px) * var(--fold-lift) * var(--fold-hand));
+  position: relative; display: block; flex: none; width: var(--fold-size, 56px); height: var(--fold-size, 56px);
+  filter: drop-shadow(calc(-1px * var(--fold-turn)) -2px 3px color-mix(in srgb, var(--color-desk-shadow) 30%, transparent));
+}
+.paper-fold.is-flipped { --fold-turn: -1; }
+.paper-fold::before, .paper-fold::after { content: ''; position: absolute; right: 0; bottom: 0; width: calc(var(--fold-size, 56px) * 2); height: calc(var(--fold-size, 56px) * 2); }
+.paper-fold.is-flipped::before, .paper-fold.is-flipped::after { right: auto; left: 0; scale: -1 1; }
+.paper-fold::before { /* 잘려 나간 자리 = 서류철 */
+  background: var(--color-desk-kraft);
+  clip-path: polygon(100% calc(100% - var(--fold-d)),
+    calc(100% - var(--fold-d) * .197) calc(100% - var(--fold-d) * .697), calc(100% - var(--fold-d) * .429) calc(100% - var(--fold-d) * .429), calc(100% - var(--fold-d) * .697) calc(100% - var(--fold-d) * .197),
+    calc(100% - var(--fold-d)) 100%, 100% 100%);
+}
+.paper-fold::after { /* 뒤집혀 접힌 뒷면 */
+  clip-path: polygon(100% calc(100% - var(--fold-d)),
+    calc(100% - var(--fold-d) * .197) calc(100% - var(--fold-d) * .697), calc(100% - var(--fold-d) * .429) calc(100% - var(--fold-d) * .429), calc(100% - var(--fold-d) * .697) calc(100% - var(--fold-d) * .197),
+    calc(100% - var(--fold-d)) 100%, calc(100% - var(--fold-d)) calc(100% - var(--fold-d)));
+  background: linear-gradient(315deg,
+    color-mix(in srgb, var(--color-desk-kraft-shade) 42%, var(--color-desk-sheet)) calc(var(--fold-d) * .707),
+    var(--color-desk-sheet) calc(var(--fold-d) * .85),
+    color-mix(in srgb, var(--color-desk-kraft) 18%, var(--color-desk-sheet)) calc(var(--fold-d) * 1.15),
+    color-mix(in srgb, var(--color-desk-kraft-shade) 30%, var(--color-desk-sheet)) calc(var(--fold-d) * 1.414));
+}
+
+/* 손잡이 반응: 호버 · 포커스에서 귀가 더 접혀 들리고, 누르면 꾹 눌려 납작해진다. 들썩임(--fold-lift)과 다른 값(--fold-hand)을 곱해 겹쳐도 서로 끊지 않는다 */
+@media (hover: hover) and (pointer: fine) { :hover > .paper-fold { --fold-hand: 1.1; } }
+:focus-visible > .paper-fold { --fold-hand: 1.1; }
+:active > .paper-fold { --fold-hand: .85; }
+
+/* 들썩임: 3.2초마다 바람에 휙 들렸다가, 넘어갈 듯 말 듯 망설이고, 한 번 더 들썩인 뒤 떨어져 살짝 튀고 가라앉는다(약 45%는 쉼).
+   신문 모서리 넘김(FE-99)의 순서 · 가속을 귀 크기에 맞춰 줄였다(최대 1.4배). 움직임 줄이기에서는 쉬는 모양 그대로 · 호버 반응은 바로.
+   @property를 모르는 브라우저(사파리 16.4 미만 등)는 값이 뚝뚝 바뀌므로 main.js가 단 `.has-css-property` 표시가 있을 때만 켠다(FE-110) */
+@media (prefers-reduced-motion: no-preference) {
+  .has-css-property .paper-fold { animation: paper-fold-lift 3.2s infinite; transition: --fold-hand .2s cubic-bezier(.2, .8, .2, 1); }
+}
+@keyframes paper-fold-lift {
+  0%, 55%, 100% { --fold-lift: 1; animation-timing-function: cubic-bezier(.3, 0, .25, 1); }
+  12% { --fold-lift: 1.4; animation-timing-function: ease-in-out; }
+  18% { --fold-lift: 1.37; animation-timing-function: cubic-bezier(.45, 0, .55, 1); }
+  26% { --fold-lift: 1.18; animation-timing-function: cubic-bezier(.3, 0, .3, 1); }
+  33% { --fold-lift: 1.32; animation-timing-function: cubic-bezier(.55, 0, .8, .45); }
+  45% { --fold-lift: 1; animation-timing-function: cubic-bezier(.2, .6, .4, 1); }
+  50% { --fold-lift: 1.05; animation-timing-function: cubic-bezier(.5, 0, .8, .5); }
+}
+
+/* 진행 책갈피: 서류철 탭 사이에 끼운 리본 + 얼굴(장식). 탭 줄보다 살짝 솟고, 아래는 철 가장자리를 넘어 종이 위까지 걸친다.
+   리본 길이 · 걸치는 길이는 쓰는 곳이 정한다(--bookmark-length · --bookmark-hang). 리본 색은 style.css .bookmark-color-* */
+.folder-bookmark {
+  position: relative; z-index: 3; flex: none; align-self: flex-end; width: 28px; height: var(--bookmark-length, 36px); margin: 0 -8px calc(-1 * var(--bookmark-hang, 30px)); pointer-events: none;
+  background: var(--bookmark-color, var(--color-label)); border-radius: 6px 6px 0 0 / 11px 11px 0 0; /* 위로 길쭉한 둥근 머리 */
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% calc(100% - 4px), 0 100%);
+  filter: drop-shadow(0 2px 2px color-mix(in srgb, var(--color-desk-shadow) 35%, transparent));
+}
+.folder-bookmark img { position: absolute; left: 50%; top: 3px; width: 24px; height: 24px; translate: -50% 0; border-radius: 50%; background: var(--color-card); object-fit: cover; object-position: top; }

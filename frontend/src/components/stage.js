@@ -148,10 +148,10 @@ function element(tag, className, text) {
   return node;
 }
 // commonSeed를 주면(사건 사진) 불러오지 못할 때 공용 컷으로 바꾸고, 안 주면(아이콘 · 캐릭터) 그냥 뺀다
-function picture(src, className, alt = '', commonSeed, role) {
+function picture(src, className, alt = '', commonSeed, role, category) {
   const image = element('img', className);
   if (commonSeed === undefined) image.addEventListener('error', () => image.remove(), { once: true });
-  else useCommonPhotoOnError(image, commonSeed, role);
+  else useCommonPhotoOnError(image, commonSeed, role, category);
   image.src = src;
   image.alt = alt;
   return image;
@@ -253,7 +253,7 @@ function evidenceBoard(script, at) {
     // 변호인 측 = 발단사진, 검사 측 = 결론사진(기사 지면 작은 사진과 같은 그림). 사진이 없으면 그 자리의 공용 컷
     const role = side === '변호인' ? 'origin' : 'conclusion';
     const seed = side === '검사' ? 1 : 2;
-    column.append(picture(script.evidencePhotos?.[side] ?? commonPhotoAt(seed, role), 'evd-photo', '', seed, role));
+    column.append(picture(script.evidencePhotos?.[side] ?? commonPhotoAt(seed, role, script.commonCategory), 'evd-photo', '', seed, role, script.commonCategory));
     column.append(element('h4', '', `${side} 측 증거`));
     const list = element('ol', 'evd-list');
     script.evidence.forEach((item, i) => {
@@ -461,10 +461,12 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
     typing = null;
     text.textContent = lineOf(steps[index]);
     choiceRow.hidden = !steps[index].choices; // 선택지는 대사를 다 읽은 뒤에 뜬다
+    // 키보드로 여기까지 온 사람은 선택지로 포커스를 옮겨 준다(FE-97). 예전에는 엔딩이 나와도 포커스가 대사창 밖에 남아 메인으로까지 Tab을 일곱 번 눌러야 했다
+    if (byKeyboard && asks(steps[index])) choiceRow.querySelector('button')?.focus({ preventScroll: true });
   }
   function type(line) {
     clearInterval(typing);
-    if (reducedMotion()) { text.textContent = line; return; }
+    if (reducedMotion()) { finishTyping(); return; } // 한 번에 보여 주되 선택지 · 포커스 이동까지 같은 끝처리를 한다(리뷰 반영 — 안 하면 선택지만 있는 장면이 숨은 채 남는다)
     let shown = 0;
     text.textContent = '';
     typing = setInterval(() => {

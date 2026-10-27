@@ -184,6 +184,19 @@ body:has(.community-page) { background: var(--color-desk-bezel); }
   background: var(--color-card); color: var(--color-text); font: inherit; font-size: max(16px, var(--text-small)); caret-color: var(--color-accent);
 }
 textarea.cm-input { resize: vertical; min-height: 96px; line-height: 1.6; }
+/* 글쓰기 칸 편지화(FE-94): 기능은 그대로, 위 가장자리 장식 · 받는 사람 줄 · 줄 쳐진 내용칸 · 서명란만 더한다 */
+.cm-compose { position: relative; background: var(--color-surface); }
+.cm-compose::before { content: ''; position: absolute; inset: 0 0 auto; height: 6px; border-radius: 12px 12px 0 0; background: repeating-linear-gradient(90deg, var(--color-decor) 0 10px, transparent 10px 16px); opacity: .55; }
+.cm-recipient { margin: 0; padding: 0 0 10px; border-bottom: 1px solid var(--color-border); font-size: var(--text-small); color: var(--color-muted); }
+.cm-recipient strong { color: var(--color-text); font-weight: 600; }
+.cm-compose textarea.cm-input { line-height: 26px; background-image: repeating-linear-gradient(transparent 0 25px, color-mix(in srgb, var(--color-accent) 11%, transparent) 25px 26px); background-attachment: local; background-position: 0 9px; }
+.cm-sign-line { position: relative; display: flex; align-items: flex-end; min-height: 66px; padding-bottom: 2px; border-bottom: 1.5px solid var(--color-border-strong); }
+.cm-sign-hint { position: absolute; left: 0; bottom: 6px; font-size: var(--text-caption); color: var(--color-muted); }
+.cm-sign-hint[hidden] { display: none; }
+.cm-submit:disabled { cursor: progress; }
+/* 글 상세 끝 글쓴이 서명 */
+.cm-signoff { max-width: 68ch; margin: 14px 0 6px; }
+
 .cm-input::placeholder { color: var(--color-muted); }
 .cm-segments { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--color-border-strong); border-radius: 6px; overflow: hidden; }
 .cm-segment { position: relative; display: grid; place-items: center; min-height: 36px; font-size: var(--text-small); cursor: pointer; }

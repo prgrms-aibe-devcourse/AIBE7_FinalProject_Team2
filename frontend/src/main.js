@@ -7,6 +7,8 @@ import { loadApi } from './api/index.js';
 import { applyMotion } from './utils/motion.js';
 
 applyMotion(); // 연출 스위치 설정을 첫 화면 전에 <html data-motion>에 반영한다
+// 등록한 사용자 속성(@property)을 아는 브라우저에서만 종이 귀를 움직인다. 모르면 키프레임 사이가 이어지지 않고 뚝뚝 바뀐다(FE-96 · FE-110)
+if (globalThis.CSS?.registerProperty) document.documentElement.classList.add('has-css-property');
 
 const app = document.querySelector('#app');
 const headerHost = document.createElement('div');

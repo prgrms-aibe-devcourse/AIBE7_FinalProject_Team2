@@ -15,12 +15,30 @@
 .admin-page button, .admin-page input, .admin-page select, .admin-page textarea { font: inherit; }
 .admin-page button { cursor: pointer; }
 .admin-page button:disabled { cursor: default; opacity: .6; }
-.admin-page :is(button, input, select, textarea, summary):focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+.admin-page :is(a, button, input, select, textarea, summary, [tabindex="-1"]):focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+/* 입력칸은 16px: 16px보다 작으면 iOS 사파리가 입력할 때 화면을 확대한다 (FE-105) */
+.admin-page :is(input, select, textarea) { font-size: 16px; }
+.admin-main:focus { outline: none; } /* 본문 건너뛰기로 옮긴 포커스는 본문 전체에 테두리를 두르지 않는다 */
+.admin-visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* 본문 건너뛰기(FE-105): 평소에는 숨었다가 Tab으로 오면 머리줄 위에 나타난다 */
+.admin-skip { position: absolute; left: 12px; top: -60px; z-index: 30; padding: 10px 14px; border-radius: 4px; background: var(--color-card); color: var(--color-accent-text); font-weight: 700; }
+.admin-skip:focus { top: 8px; }
+.admin-page { position: relative; }
+
+/* 작업 완료 알림줄(FE-105): 화면 아래 가운데에 떠서 스크롤 위치와 상관없이 보인다. 몇 초 뒤 사라진다 */
+.admin-toast {
+  position: fixed; left: 50%; bottom: 24px; z-index: 40; translate: -50% 0; max-width: min(560px, calc(100vw - 32px)); margin: 0;
+  padding: 12px 18px; border-radius: 6px; background: var(--color-banner-bg); color: var(--color-banner-text); font-weight: 700; font-size: var(--text-small);
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--color-banner-bg) 30%, transparent);
+}
 
 .admin-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 28px; background: var(--color-banner-bg); color: var(--color-banner-text); }
 .admin-brand { border: 0; background: transparent; padding: 4px 0; color: inherit; font: 900 20px/1 var(--font-heading); letter-spacing: -.04em; }
 .admin-brand .law { color: var(--color-decor); }
 .admin-brand small { margin-left: 6px; font: 700 var(--text-small) var(--font-body); color: var(--color-banner-muted); letter-spacing: 0; }
+.admin-brand-wrap { display: flex; align-items: center; gap: 10px; }
+.admin-mock-label { padding: 1px 8px; border: 1px dashed var(--color-banner-muted); border-radius: 3px; color: var(--color-banner-muted); font-size: var(--text-caption); font-weight: 700; } /* 목 모드 표시 */
 .admin-user { display: flex; align-items: center; gap: 12px; font-size: var(--text-small); }
 .admin-user .secondary-button { min-height: 36px; padding: 4px 12px; }
 
@@ -34,7 +52,8 @@
 .admin-menu-item:hover { background: var(--color-accent-tint); }
 .admin-menu-item.is-soon { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; cursor: default; color: var(--color-muted); } /* 실제 모드에서 서버가 아직 없는 메뉴 */
 .admin-menu-item.is-soon:hover { background: transparent; }
-.admin-menu-item.is-soon small { font-size: var(--text-caption); }
+/* "준비 중"은 점선 꼬리표로 구분한다(색만 흐린 것보다 눈에 띄게). 키보드로는 닿되(aria-disabled) 눌러도 가지 않는다 */
+.admin-menu-item.is-soon small { padding: 0 6px; border: 1px dashed var(--color-border-strong); border-radius: 3px; font-size: var(--text-caption); white-space: nowrap; }
 .admin-menu-item.is-active { background: var(--color-accent-tint); color: var(--color-accent-text); font-weight: 700; }
 .admin-main { padding: 28px; min-width: 0; }
 .admin-main h1 { margin: 0 0 20px; font-size: var(--text-title-2); }
@@ -45,9 +64,8 @@
 .admin-message button { margin-top: 12px; }
 .admin-error { margin: 6px 0 0; color: var(--color-danger); font-size: var(--text-small); }
 .admin-error:empty { display: none; }
-.admin-warn { margin: 8px 0; padding: 10px 12px; border-left: 3px solid var(--color-caution-border); background: var(--color-caution-tint); color: var(--color-caution); font-size: var(--text-small); }
+.admin-warn { margin: 8px 0; padding: 10px 12px; border: 1px solid var(--color-caution-border); border-radius: 4px; background: var(--color-caution-tint); color: var(--color-caution); font-size: var(--text-small); }
 .admin-ok { color: var(--color-accent-text); }
-.admin-flash { margin: 0 0 16px; padding: 10px 14px; border-radius: 4px; background: var(--color-accent-tint); color: var(--color-accent-text); font-weight: 700; }
 .admin-sub { display: block; color: var(--color-muted); font-size: var(--text-caption); }
 
 /* 로그인 */
@@ -65,7 +83,8 @@
 .admin-table :is(th, td) { padding: 10px 8px; border-bottom: 1px solid var(--color-border); text-align: left; vertical-align: top; }
 .admin-table th { color: var(--color-muted); font-weight: 700; white-space: nowrap; }
 .admin-table tr.needs-review td { background: var(--color-caution-tint); }
-.admin-link { border: 0; background: transparent; padding: 0; color: var(--color-accent); font-weight: 700; text-align: left; text-decoration: underline; }
+.admin-link { display: inline-block; border: 0; background: transparent; padding: 3px 0; color: var(--color-accent); font-weight: 700; text-align: left; text-decoration: underline; } /* 표 안 제목: 누르는 높이를 글줄보다 조금 넓힌다 */
+.admin-filter-hint { margin: -8px 0 16px; }
 .admin-pager { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 16px; font-size: var(--text-small); }
 .admin-pager .secondary-button { min-height: 36px; padding: 4px 12px; }
 
@@ -73,6 +92,13 @@
 .admin-case-top { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
 .admin-case-top h1 { margin: 0; }
 .admin-back { border: 0; background: transparent; padding: 4px 0; color: var(--color-muted); }
+/* 사건 상세 바로 가기(FE-105): 3천 px가 넘는 화면이라 원본 판결문 등으로 건너뛴다 */
+.admin-jump { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin: 0 0 8px; }
+.admin-jump > .admin-sub { margin-right: 4px; }
+.admin-jump-link { min-height: 32px; padding: 2px 10px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-card); color: var(--color-text); font-size: var(--text-small); }
+.admin-jump-link:hover { border-color: var(--color-accent); }
+.admin-section { scroll-margin-top: 16px; }
+.admin-approve-gate { margin: 6px 0 0; }
 .admin-section { padding: 20px 0; border-top: 1px solid var(--color-border); }
 .admin-badges { display: inline-flex; gap: 6px; }
 .admin-table .admin-badge { margin-left: 6px; }
@@ -126,6 +152,7 @@
 .admin-stage.is-done .admin-stage-mark { color: var(--color-accent-text); }
 .admin-stage.is-running { color: var(--color-text); font-weight: 700; }
 .admin-stage.is-failed { color: var(--color-danger); font-weight: 700; }
+.admin-stage-state { color: var(--color-muted); font-size: var(--text-caption); font-weight: 400; } /* 기호 옆 상태 글(완료 · 건너뜀 · 대기 …) */
 
 /* 판결문 넣는 방법 (PDF · 텍스트 전문 · 직접 입력) */
 .admin-mode-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -134,14 +161,17 @@
 .admin-mode-panel .admin-sub { margin: 0; }
 .admin-mode-panel .secondary-button { min-height: 36px; padding: 4px 12px; }
 .admin-sample-link { color: var(--color-accent); font-size: var(--text-small); font-weight: 700; }
+/* 파일 고르기 버튼: 브라우저 기본 모양 대신 다른 보조 버튼과 같은 모양 */
+.admin-page input[type="file"] { font-size: var(--text-small); }
+.admin-page input[type="file"]::file-selector-button { min-height: 36px; margin-right: 10px; padding: 4px 12px; border: 1px solid var(--color-border-strong); border-radius: 4px; background: var(--color-card); color: var(--color-text); font: inherit; font-weight: 700; cursor: pointer; }
 .admin-import-status:empty { display: none; }
 .admin-register .is-auto { border-color: var(--color-accent); background: var(--color-accent-tint); }
 
 /* 생성 정보 · 요약어 후보 */
-.admin-verdict { margin: 0 0 8px; padding: 8px 12px; border-left: 3px solid var(--color-border-strong); background: var(--color-surface); font-size: var(--text-small); }
-.admin-verdict.is-ok { border-left-color: var(--color-accent); color: var(--color-accent-text); }
-.admin-verdict.is-warn { border-left-color: var(--color-caution-border); background: var(--color-caution-tint); color: var(--color-caution); }
-.admin-verdict.is-danger { border-left-color: var(--color-danger-border); background: var(--color-danger-tint); color: var(--color-danger); }
+.admin-verdict { margin: 0 0 8px; padding: 8px 12px; border: 1px solid var(--color-border-strong); border-radius: 4px; background: var(--color-surface); font-size: var(--text-small); }
+.admin-verdict.is-ok { border-color: var(--color-accent); color: var(--color-accent-text); }
+.admin-verdict.is-warn { border-color: var(--color-caution-border); background: var(--color-caution-tint); color: var(--color-caution); }
+.admin-verdict.is-danger { border-color: var(--color-danger-border); background: var(--color-danger-tint); color: var(--color-danger); }
 .admin-warnings { margin: 0; padding-left: 18px; font-size: var(--text-small); color: var(--color-caution); }
 .admin-generation > .admin-dl { margin-bottom: 4px; }
 .admin-tag-candidates { display: grid; gap: 2px; margin-top: 4px; font-size: var(--text-small); }
@@ -164,7 +194,7 @@
 .admin-words { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; padding: 0; list-style: none; }
 .admin-words li { display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px 4px 12px; border: 1px solid var(--color-border-strong); border-radius: 999px; font-size: var(--text-small); }
 .admin-words .secondary-button { min-height: 28px; padding: 0 10px; }
-.admin-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin-bottom: 24px; }
+.admin-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 24px; } /* 넓은 화면에서 6장이 한 줄에 든다(마지막 카드만 둘째 줄에 남지 않게) */
 .admin-card { display: grid; gap: 4px; padding: 16px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-card); color: var(--color-text); text-align: left; }
 button.admin-card:hover { border-color: var(--color-accent); }
 .admin-card strong { font-size: var(--text-title-2); }
@@ -173,17 +203,35 @@ button.admin-card:hover { border-color: var(--color-accent); }
 .admin-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-bottom: 8px; }
 .admin-chart { margin: 0; padding: 14px 16px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-card); }
 .admin-chart figcaption { margin-bottom: 10px; font-size: var(--text-small); font-weight: 700; }
-.admin-bars { display: flex; align-items: flex-end; gap: 8px; height: 120px; }
+.admin-bars { display: flex; align-items: flex-end; gap: 8px; height: 120px; border-bottom: 1px solid var(--color-border-strong); } /* 아래 기준선 */
 .admin-bar { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; gap: 2px; }
 .admin-bar span { display: block; width: 100%; min-height: 2px; border-radius: 2px 2px 0 0; background: var(--color-accent); }
 .admin-bar em { font-style: normal; font-size: var(--text-caption); }
 .admin-bar small { color: var(--color-muted); font-size: var(--text-caption); }
 .admin-recent { margin: 0 0 12px; padding-left: 18px; font-size: var(--text-small); }
 
+/* 손가락으로 누르는 화면: 버튼 · 고르기 · 메뉴를 44px 높이로 (FE-105) */
+@media (max-width: 720px), (pointer: coarse) {
+  .admin-page :is(.primary-button, .secondary-button, .admin-tab, .admin-menu-item, .admin-jump-link, select) { min-height: 44px; }
+  .admin-page :is(.admin-actions, .admin-pager, .admin-reject, .admin-sources, .admin-mode-panel, .admin-source-box, .admin-search, .admin-user, .admin-comment, .admin-words, .admin-axis-confirm) :is(.primary-button, .secondary-button) { min-height: 44px; }
+  .admin-link { padding: 11px 0; margin: -8px 0; } /* 표 줄 높이는 그대로 두고 누르는 범위만 넓힌다 */
+  .admin-back, .admin-brand { min-height: 44px; }
+  .admin-menu-item { display: flex; align-items: center; }
+}
+
 @media (max-width: 720px) {
   .admin-table { min-width: 640px; } /* 좁은 화면에서는 표를 찌그러뜨리지 않고 옆으로 밀어서 본다(.admin-table-wrap이 스크롤) */
-  .admin-body { grid-template-columns: 1fr; }
-  .admin-menu { display: flex; gap: 14px; overflow-x: auto; padding: 8px 12px; border-right: 0; border-bottom: 1px solid var(--color-border); }
+  .admin-body { grid-template-columns: 1fr; grid-template-rows: auto 1fr; } /* 내용이 짧아도 메뉴 줄이 남는 높이를 가져가지 않게 */
+  /* 메뉴는 옆으로 미는 한 줄. 양 끝에 그림자를 깔아 더 있다는 걸 보인다(끝까지 밀면 그 쪽 그림자가 가려진다) */
+  .admin-menu {
+    display: flex; gap: 14px; overflow-x: auto; padding: 8px 12px; border-right: 0; border-bottom: 1px solid var(--color-border);
+    background:
+      linear-gradient(to right, var(--color-surface) 30%, transparent) left / 32px 100% no-repeat local,
+      linear-gradient(to left, var(--color-surface) 30%, transparent) right / 32px 100% no-repeat local,
+      radial-gradient(farthest-side at 0 50%, color-mix(in srgb, var(--color-text) 18%, transparent), transparent) left / 12px 100% no-repeat scroll,
+      radial-gradient(farthest-side at 100% 50%, color-mix(in srgb, var(--color-text) 18%, transparent), transparent) right / 12px 100% no-repeat scroll,
+      var(--color-surface);
+  }
   .admin-menu-group { display: flex; align-items: center; gap: 4px; margin: 0; }
   .admin-menu-title { display: none; }
   .admin-menu-item { width: auto; white-space: nowrap; }

@@ -8,6 +8,9 @@ import { fitPortraitIn } from '../utils/portraitFit.js';
 // 모양은 personCards.css의 .my-card · .deco-frame-* · .deco-bg-* · .deco-sash-* 가 정한다. 커뮤니티에서는 카드를 .cm-cards 안에 놓아 같은 커피 색을 입힌다
 
 export const DEFAULT_NICKNAME = '익명의 판사'; // 로그인 · 닉네임 API 전까지 임시 문구
+// 마이페이지 · 내 결과에 쓰는 내 이름(FE-100): 서버 값(P-5 nickname)이 있으면 그 값, 없으면 로그인한 세션의 닉네임(헤더와 같은 이름), 둘 다 없으면 임시 문구.
+// 목 모드는 서버 닉네임이 없어 헤더는 "해송", 마이페이지는 "익명의 판사"로 갈렸고 내 정보 수정에서 바꾼 이름도 카드에 안 보였다
+export const myNickname = (data, session) => data?.nickname || session?.nickname || DEFAULT_NICKNAME;
 
 export const svg = (path, className) => {
   const node = document.createElementNS('http://www.w3.org/2000/svg', 'svg');

@@ -2,6 +2,7 @@
 // 로그인 · 로그아웃은 api(login · logout)가 하고, 성공하면 화면이 여기에 적고 지운다. 지금은 개발용 목업 로그인만 있다(mocks/authMockApi.js).
 // 실제 로그인(카카오 · 서버 세션)이 생기면 서버가 진짜 상태를 가지고, 이곳은 헤더용 표시값으로만 남긴다
 import { localStore } from './safeStorage.js';
+import { signatureOf } from './signature.js';
 
 const STORAGE_KEY = 'nlnb-session';
 let unsaved; // 저장소를 못 쓸 때 이번 방문 동안의 값(undefined = 저장소를 본다)
@@ -26,6 +27,7 @@ export function isAdmin(user = currentUser()) {
 export function saveUser({ nickname, role }, storage = localStore()) {
   const user = { nickname: String(nickname).trim() };
   if (role === 'admin') user.role = 'admin';
+  signatureOf(user.nickname); // 서명을 로그인할 때 한 번 만들어 둔다(FE-94): 글쓰기 · 3막 서명란은 만든 서명을 이어 쓴다
   try {
     storage.setItem(STORAGE_KEY, JSON.stringify(user)); // 저장소가 없으면(undefined) 여기서 던져 아래 catch로 간다
     unsaved = undefined;

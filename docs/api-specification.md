@@ -55,7 +55,8 @@
 | v0.51 | 2026-10-22 | **사건 등록 적재 A-14-1 신설 (BE-93 2차)** — `POST /admin/case-imports/{importId}/load`. 생성 결과를 사건(DRAFT) · 섹션 · 형벌 규칙 · 판단 요소 · 원본 판결문 · AI · 재판부 판결 후보로 만든다. **A-15가 SUCCEEDED가 된 뒤 관리자가 따로 누른다**(번호는 A-16 ~ A-41 예약 때문에 A-14-1) — 2초마다 불리는 조회에서 적재하면 같은 사건이 여러 번 만들어질 수 있다. 적재가 끝나면 A-15의 `caseId`가 채워진다(1차에 비워 두었던 값). 에러 코드 `IMPORT_NOT_READY`(409) · `IMPORT_RESULT_INVALID`(422) 추가. 판결 후보는 **공개하지 않은 상태**로 들어가 A-9 승인을 기다린다. **(병합 메모) 이 줄의 번호는 PR #242 리베이스 도중 두 번 겹쳤다 — 처음 v0.47(BE-63과 겹침) → v0.50(COMMON-60) → 이번에 FE-77과 다시 겹쳐 v0.51로 재조정(COMMON-58, PR #244)** |
 | v0.52 | 2026-10-22 | **프로필 선택 설정 저장 P-8 신설 (BE-104, FE-77 후속)** — `PATCH /profile-settings`: 공개 성향카드(`shownCard`) · 프로필카드 아래 성향(`profileCardType`) · 한 줄 소개(`bio`)를 **보낸 칸만** 저장(P-7과 별개, 전체 덮어쓰기 아님). 값은 `initial` · `retake` · `current`, 소개는 앞뒤 공백을 뺀 0 ~ 40자 · 줄바꿈 없음. P-5 응답에 `profileSettings` 추가(저장 전이면 `current` · `current` · `""`). 공개 범위 칸은 두지 않는다(항상 공개, FE-77). ERD v1.37 `profile_setting`(V29). P-2 · P-5의 v0.50 서버 구현도 이 작업에서 했다(V28) **(병합 메모) 작업 중 COMMON-58(PR #244)이 BE-93 줄에 v0.51을 먼저 써서 v0.51 → v0.52로 다시 매겼다** |
 | v0.53 | 2026-10-22 | **API 17 공개 신문 지면 신설 (BE-102, BE-78 2차 검토 후속)** — `GET /cases/{caseId}/paper`. 관리자 신문 지면(A-13-6 ~ 8, BE-92)과 발단 · 결론 사진(A-13-4 · 5, BE-91 · BE-101)을 공개용으로 조립, 새로 저장하지 않는다. **`extraPhotos`는 A-13-6 ~ 8과 달리 배열이 아니라 `{ origin, conclusion }` 고정 자리** — 사진 한쪽이 없을 때 다른 쪽이 앞자리로 밀려 역할이 바뀌어 보이는 걸 막는다(FE-64 선행, BE-102 Jira 댓글로 제안 · 협의). 비공개 사건은 `CASE_NOT_FOUND`, 신문 지면 미생성은 `PAPER_NOT_FOUND`(1-5 설명을 공개 API도 쓰도록 정정) |
-| v0.55 | 2026-10-27 | **범죄 유형 `ROBBERY`(강도) · `THEFT`(절도) 추가 (BE-111)** — API 1 `crimeType` 값, `crimeCategoryLabel` 대응(강도 · 절도 → "재산범죄"), API 4 형량 구간 개수(강도 7개: 벌금형 제외 · 무기징역 추가, 절도 공통 7개), A-14 사건 등록 `crimeType` 값. DB 변경은 V31(D) |
+| v0.54 | 2026-10-27 | **레벨 · 직업 API 신설 (BE-106)** — 11장 L-1 `GET /level`(레벨 · XP · 직업 목록) · L-2 `PUT /level/job`(카드에 보여 줄 직업 선택) · L-3 `POST /level/share-reward`(SNS 공유 보상). P-5 응답에 `level`(L-1과 같은 값) 추가, 1-5에 `JOB_LOCKED`(409) 추가. 레벨은 익명 ID 단위(회원 합산은 후속). 경험치 산식 · 직업 11등급 · 지급 상한은 11장과 [BE-106 결정 기록](decisions/BE-106.md) |
+| v0.55 | 2026-10-27 | 범죄 유형 강도 · 절도 추가 (BE-112 · ERD v1.40 · V31) — `crimeType` 값에 `ROBBERY`(강도) · `THEFT`(절도) 추가(API 1 쿼리 · 응답, 사건 등록). 분류명(`crimeCategoryLabel`)은 둘 다 "재산범죄". API 1 `summary.byCrimeType`은 공개 사건이 없어도 다섯 키를 모두 0으로 내려 준다. API 4 `rangeOptions`: 강도는 벌금형을 빼고 무기징역을 더한 7개, 절도는 공통 7개 |
 
 ---
 
@@ -148,6 +149,7 @@ json
 | 404 | `PAPER_NOT_FOUND` | (확장, BE-92) 신문 지면을 아직 생성한 적 없음. 관리자 API는 A-13-7 · A-13-8, 공개 API는 API 17(v0.53, BE-102) | 먼저 생성하도록 안내 (A-13-7 · A-13-8). API 17은 S-14로 |
 | 404 | `INCIDENT_PHOTO_NOT_FOUND` | (확장, 관리자 API, BE-78 2차 검토 · BE-101) 그 역할의 발단 · 결론 사진이 없음 | 목록 다시 불러오기 (A-13-9) |
 | 409 | `DECO_LOCKED` | (확장, BE-96) 아직 열리지 않은 꾸미기를 저장하려 함. `details`에 잠긴 필드(`reason: DECO_LOCKED`) | 화면에서 잠긴 항목은 고를 수 없게 막는다. 오면 마이페이지를 다시 불러온다 (P-7) |
+| 409 | `JOB_LOCKED` | (확장, BE-106) 아직 열리지 않은 직업을 고르려 함 | 화면에서 잠긴 직업은 고를 수 없게 막는다. 오면 레벨(L-1)을 다시 불러온다 (L-2) |
 | 409 | `DUPLICATE_SOURCE` | (확장, 관리자 API, BE-93) 이미 등록한 사건번호. `details`에 어느 항목인지 담는다 | 입력 안내 (A-14) |
 | 409 | `IMPORT_IN_PROGRESS` | (확장, 관리자 API, BE-93) 실행 중인 등록이 있음. 한 번에 하나만 돌린다(외부 AI 호출 한도 보호) | 끝난 뒤 다시 시도 안내 (A-14) |
 | 404 | `IMPORT_NOT_FOUND` | (확장, 관리자 API, BE-93) 등록 작업이 없음 | 목록으로 안내 (A-15) |
@@ -212,18 +214,18 @@ json
 
 | 위치 | 이름 | 필수 | 설명 |
 | --- | --- | --- | --- |
-| query | `crimeType` |  | `MURDER` / `FRAUD` / `INJURY` / `ROBBERY` / `THEFT`. 없으면 전체 |
+| query | `crimeType` |  | `MURDER` / `FRAUD` / `INJURY` / `ROBBERY` / `THEFT` (`ROBBERY` · `THEFT`는 v0.55). 없으면 전체 |
 
 **응답 200**
 
 json
 
 ```json
-{  "summary": { "total": 9, "byCrimeType": { "MURDER": 3, "FRAUD": 3, "INJURY": 3 } },  "cases": [    {      "caseId": 1,      "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",      "crimeType": "MURDER",      "crimeCategoryLabel": "생명범죄",      "chargeName": "살인",      "shortIntro": "빌린 돈 문제로 찾아온 지인과 다투다 흉기로 살해한 사건입니다.",      "keywords": ["돈 문제", "집으로 찾아옴"],      "difficulty": "HIGH",      "estimatedMinutes": 15,      "participantCount": 1284,      "thumbnailUrl": null,      "myStatus": "IN_PROGRESS"    }  ]}
+{  "summary": { "total": 9, "byCrimeType": { "MURDER": 3, "FRAUD": 3, "INJURY": 3, "ROBBERY": 0, "THEFT": 0 } },  "cases": [    {      "caseId": 1,      "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",      "crimeType": "MURDER",      "crimeCategoryLabel": "생명범죄",      "chargeName": "살인",      "shortIntro": "빌린 돈 문제로 찾아온 지인과 다투다 흉기로 살해한 사건입니다.",      "keywords": ["돈 문제", "집으로 찾아옴"],      "difficulty": "HIGH",      "estimatedMinutes": 15,      "participantCount": 1284,      "thumbnailUrl": null,      "myStatus": "IN_PROGRESS"    }  ]}
 ```
 
-- `PUBLISHED` 사건만. `summary`는 필터와 관계없이 전체 기준(칩 옆 건수 표시용).
-- `crimeCategoryLabel`: `crime_type`별 표시용 분류명. `MURDER` → "생명범죄", `FRAUD` · `ROBBERY` · `THEFT` → "재산범죄", `INJURY` → "신체범죄". DB 컬럼이 아니라 서버 코드 상수에서 만든다(ERD 3-1).
+- `PUBLISHED` 사건만. `summary`는 필터와 관계없이 전체 기준(칩 옆 건수 표시용). `byCrimeType`은 공개 사건이 없는 유형도 0으로 모든 범죄 유형 키를 내려 준다(v0.55부터 5개).
+- `crimeCategoryLabel`: `crime_type`별 표시용 분류명(예: `FRAUD` → "재산범죄"). DB 컬럼이 아니라 서버 코드 상수에서 만든다(ERD 3-1).
 - `chargeName`: 죄명(`legal_case.charge_name`, 예: "살인"). 사건 상단 바(S-04~S-08)가 `caseId`로 이 목록에서 제목과 함께 찾아 쓴다(BE-79, D-01). 사건 개요(API 4) · API 16의 `chargeName`과 같은 값이다.
 - `thumbnailUrl`: `legal_case.thumbnail_url`. 없으면 `null`이고, 화면은 범죄 유형별 기본 이미지를 쓴다.
 - `participantCount`: `attempt_no = 1`이고 `COMPLETED`인 체험 수.
@@ -289,7 +291,7 @@ json
 {  "case": {    "caseId": 1,    "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",    "crimeType": "MURDER",    "crimeCategoryLabel": "생명범죄",    "chargeName": "살인",    "overview": "피고인이 빌린 돈을 갚지 못해 오래 다투던 지인이 집으로 찾아오자, 말다툼 끝에 집에 있던 흉기로 피해자를 살해하고 구호 조치 없이 집을 나간 사건이다."  },  "rangeOptions": [    { "rangeOptionId": 8, "label": "징역형 집행유예" },    { "rangeOptionId": 9, "label": "실형 3년 미만" },    { "rangeOptionId": 10, "label": "실형 3년 이상 ~ 5년 미만" },    { "rangeOptionId": 11, "label": "실형 5년 이상 ~ 10년 미만" },    { "rangeOptionId": 12, "label": "실형 10년 이상 ~ 20년 미만" },    { "rangeOptionId": 13, "label": "실형 20년 이상" },    { "rangeOptionId": 14, "label": "무기징역" },    { "rangeOptionId": 15, "label": "사형" }  ],  "preFactors": [    { "factorId": 1, "label": "돈 문제로 오래 다툼이 있었다" },    { "factorId": 2, "label": "다투던 중 흉기를 집어 들었다" },    { "factorId": 3, "label": "범행 뒤 현장을 떠났다" }  ]}
 ```
 
-- `rangeOptions`: 이 사건 `crime_type`의 `sentence_range_option`을 `display_order` 순으로. 사기 · 상해 · 절도는 공통 7개, 강도는 벌금형을 빼고 무기징역을 더한 7개, 살인은 벌금형을 빼고 무기징역 · 사형을 더한 8개다.
+- `rangeOptions`: 이 사건 `crime_type`의 `sentence_range_option`을 `display_order` 순으로. 사기 · 상해 · 절도는 공통 7개, 살인은 벌금형을 빼고 무기징역 · 사형을 더한 8개, 강도는 벌금형을 빼고 무기징역을 더한 7개다(강도 · 절도는 v0.55).
 - `preFactors`: `reveal_stage = OVERVIEW`인 요소의 `pre_label`. **확장(REQ-093)** — MVP 화면은 쓰지 않아도 된다.
 - 법정형 · 선고 가능 범위 · 권고 범위 · 실제 판결은 **넣지 않는다**(FR-2-8).
 
@@ -1481,7 +1483,7 @@ A-11과 같은 방식(보낸 필드만, `null` = 지움). `headline` · `article
 
 | 필드 | 규칙 |
 | --- | --- |
-| `crimeType` | 필수. `MURDER` · `FRAUD` · `INJURY` · `ROBBERY` · `THEFT` |
+| `crimeType` | 필수. `MURDER` · `FRAUD` · `INJURY` · `ROBBERY` · `THEFT` (`ROBBERY` · `THEFT`는 v0.55) |
 | `sources` | 필수. 1 ~ 3건, 심급(`courtLevel`: `FIRST` · `APPEAL` · `SUPREME`)이 서로 달라야 한다 |
 | `sources[].caseNumber` | 필수, 50자 이하. 이미 등록된 사건번호면 409 `DUPLICATE_SOURCE` |
 | `sources[].originalText` | 필수, 200,000자 이하. 원본 판결문이라 요청 본문 로그에 남기지 않는다 |
@@ -1768,6 +1770,7 @@ json
 | `profileDeco` | 프로필 꾸미기(v0.42, BE-96). 저장한 적이 없거나 빈 마이페이지면 기본값(내로 스탠딩 · `basic` · `cream` · 책갈피 없음 · 내로 · `happy` · `generated` · `bronze`). **잠긴 값이어도 거절하지 않고 그대로** 내려 준다(표가 바뀌어 잠긴 경우 화면이 기본값으로 보여 준다). 필드는 P-7 요청과 같다 |
 | `achievements` | 도전과제 8개(서버 표가 원본, FE-68 순서). `stat`: `completed`(완료한 회차가 하나라도 있는 사건 수, 다시 하기를 시작해도 줄지 않는다) · `hasType`(성향 테스트 결과가 있으면 1) · `attendanceDays`(P-6) · `collected`(모은 일러스트). `value`는 목표에서 멈춘다. `status`: `CLEARED` · `IN_PROGRESS` · `PENDING`. **`collected` 도전과제는 BE-83 전까지 서버가 셀 수 없어 `PENDING` · `value: null` · `cleared: false`(잠김)**. `rewards`는 여섯 종류(`kinds` · `frames` · `backgrounds` · `sashStyles` · `sashColors`(`모양:색`) · `sashIcons`), 받지 않는 종류는 빈 배열. 제목 · 문구 · 그림은 화면이 `id`로 붙인다 |
 | `unlocked` | 지금 열린 것(여섯 종류). 처음부터 열린 것 + `CLEARED` 도전과제의 보상 |
+| `level` | 레벨 · 직업(v0.54, BE-106). 모양은 L-1 응답과 같다. 기록이 없거나 빈 마이페이지면 Lv1 · 0 XP · 무직 |
 | `profileSettings` | 프로필 선택 설정(v0.52, BE-104): 공개 성향카드(`shownCard`) · 프로필카드 아래 성향(`profileCardType`) · 한 줄 소개(`bio`). 저장은 P-8. 저장한 적이 없거나 빈 마이페이지면 `{ "shownCard": "current", "profileCardType": "current", "bio": "" }` |
 
 - 쿠키가 없거나 기록이 없으면 `404`가 아니라 **빈 마이페이지**(`personality`·`initialPersonality`·`judgmentPersonality` `null`, 목록 빈 배열)를 `200`으로 준다. 마이페이지는 "아직 없음"을 안내하는 화면이기 때문이다.
@@ -1942,3 +1945,103 @@ Origin이 이 서버 자신과 같은 출처인지)을 거친다 — 벗어나�
   - 다른 회원에 연결됨(공용 PC) → 덮어쓰지 않고, 이 회원에 연결된 **새 익명 ID를 `Set-Cookie`로** 내려준다
   - 쿠키 없음 · 모르는 값 → 이 회원에 연결된 새 익명 ID를 내려준다
 - 화면 경로(`/auth/callback`)는 환경변수로 바꿀 수 있고, 우리 사이트 안의 경로만 허용한다(열린 리다이렉트 방지)
+
+---
+
+## 11. (확장) 레벨 · 직업 API (BE-106)
+
+> 결정 기록 [`BE-106.md`](decisions/BE-106.md). 레벨은 **익명 ID 단위**다(출석 · 체험 · 업적과 같다). 로그인한 회원이 여러 기기를 쓰는 경우의 합산은 커뮤니티 · 로그인 연동 이슈에서 한다.
+
+### 11-1. 공통
+
+- **레벨 곡선**: 누적 XP(L) = 10000 × [1 − ln(1 + 0.08 × (100 − L)) / ln(1 + 0.08 × 99)]. Lv1 = 0 XP, Lv100 = 10000 XP. 초반이 빨리 오르고 뒤로 갈수록 느리다(레벨당 필요 XP: Lv1→2 41, Lv99→100 352).
+- **직업 11등급**: 10레벨마다 하나씩 열린다 — 무직(1) · 로스쿨생(10) · 연수원생(20) · 수습 판사(30) · 판사(40) · 부장판사(50) · 고등법원 판사(60) · 지방법원장(70) · 고등법원장(80) · 대법관(90) · 대법원장(100). 해금 누적 XP: 0 · 385 · 854 · 1,377 · 1,967 · 2,645 · 3,442 · 4,408 · 5,634 · 7,314 · 10,000.
+- **경험치 수급처** (레벨 구성은 커뮤니티 60 · 판결 체험 40을 목표로 한다. 판결 체험 쪽은 총량이 한정돼 있다)
+
+| 구분 | 수급처 | XP | 지급 조건 · 상한 |
+| --- | --- | --- | --- |
+| 판결 체험 | 사건 첫 완료 | 100 | 사건당 1회 |
+| | 성향 테스트 | 100 | 1회 |
+| | 출석 | 5 | 하루 1회(P-6) |
+| | 업적 달성 | 50 · 100 · 200 | 업적마다 1회. 쉬운 것(첫 사건 · 성향 · 출석 3일) 50, 중간(출석 7일 · 사건 3개 · 수집 5개) 100, 어려운 것(출석 30일 · 수집 20개) 200 |
+| | 일러스트 수집 | 10 | 서버가 셀 수 없어(BE-83 전) 아직 지급하지 않는다 |
+| | SNS 공유 | 100 | 완료한 사건만, 사건당 1회 · 하루 1회 (L-3) |
+| 커뮤니티 | 글 작성 | 30 | 하루 3건 |
+| | 판결 공유 글 보너스 | +20 | 사건당 1회 |
+| | 댓글 작성 | 10 | 하루 5건 |
+| | 좋아요 누르기 | 2 | 글당 1회 · 하루 10개 |
+| | 좋아요 받기 | 3 | 글당 10개 · 하루 30개 |
+
+- 판결 체험의 사건 · 성향 · 출석 · 업적 XP는 기존 기록에서 **그때그때 계산**한다(저장하지 않는다). 글 · 댓글 · 좋아요 · SNS 공유는 지급 원장(`xp_event`)에 쌓는다. 커뮤니티 API는 아직 없어, 서버 안의 `LevelService.award(...)`만 준비했다(커뮤니티 BE가 부른다).
+- 어뷰징 방어: 같은 (사용자, 수급처, 대상)은 한 번만(유니크), 하루(KST) · 묶음 상한은 서버가 센다, 같은 사용자의 요청은 행 잠금으로 차례로 처리한다. 삭제 · 숨김 시 회수는 이번에 하지 않는다(글 삭제 · 신고 기능과 운영 정책이 아직 없다).
+
+### L-1. 내 레벨 · 직업 — `GET /level`
+
+**응답 200**
+
+```json
+{
+  "level": 10,
+  "xp": 412,
+  "currentLevelXp": 385,
+  "nextLevelXp": 430,
+  "job": { "code": "LAW_STUDENT", "name": "로스쿨생" },
+  "jobs": [
+    { "code": "NONE", "name": "무직", "unlockLevel": 1, "unlockXp": 0, "unlocked": true, "selected": false },
+    { "code": "LAW_STUDENT", "name": "로스쿨생", "unlockLevel": 10, "unlockXp": 385, "unlocked": true, "selected": true },
+    { "code": "TRAINEE", "name": "연수원생", "unlockLevel": 20, "unlockXp": 854, "unlocked": false, "selected": false }
+  ]
+}
+```
+
+| 필드 | 설명 |
+| --- | --- |
+| `level` | 지금 레벨(1 ~ 100) |
+| `xp` | 누적 경험치 |
+| `currentLevelXp` · `nextLevelXp` | 지금 레벨에 닿은 누적 XP · 다음 레벨에 필요한 누적 XP. 최고 레벨이면 `nextLevelXp`는 `null`. 진행률 = (`xp` − `currentLevelXp`) / (`nextLevelXp` − `currentLevelXp`) |
+| `job` | 카드에 보여 줄 직업. 사용자가 고른 직업(L-2), 고른 적이 없으면 열린 가장 높은 직업 |
+| `jobs` | 직업 11개 전체(해금 순). `unlocked`: 지금 열렸는지, `selected`: 지금 카드에 보이는 직업인지(`job`과 같다) |
+
+- 쿠키가 없거나 기록이 없으면 `404`가 아니라 Lv1 · 0 XP · 무직을 `200`으로 준다. 익명 ID를 새로 발급하지 않는다.
+
+### L-2. 직업 선택 — `PUT /level/job`
+
+카드 하단에 보여 줄 직업을 고른다(프로필 카드 · 커뮤니티 명함에 쓸 데이터).
+
+**요청**
+
+```json
+{ "job": "LAW_STUDENT" }
+```
+
+**응답 200**: L-1과 같은 형식(저장 뒤의 값). 쿠키가 없었으면 `Set-Cookie`로 익명 ID를 발급한다(P-7 · P-8과 같다).
+
+| 거절 | 조건 |
+| --- | --- |
+| 400 `VALIDATION_ERROR` | `job`이 없거나 모르는 코드 |
+| 409 `JOB_LOCKED` | 아직 열리지 않은 직업(레벨이 모자람) |
+
+- 직업이 열린 뒤에는 레벨이 내려가지 않으므로 고른 직업이 다시 잠기는 일은 없다. 고른 적이 없으면 열린 가장 높은 직업이 자동으로 보인다.
+
+### L-3. SNS 공유 보상 — `POST /level/share-reward`
+
+**요청**
+
+```json
+{ "caseId": 1 }
+```
+
+**응답 200**
+
+```json
+{ "awardedXp": 100, "level": { "level": 10, "xp": 485, "…": "…" } }
+```
+
+- 서버는 실제 공유 여부를 알 수 없어 **화면이 공유를 마친 뒤 부른 것을 믿는다.** 그래서 **완료한 사건만** 받을 수 있고, **사건당 1회 · 하루 1회**로 총량을 묶는다(평생 받는 양이 완료한 사건 수를 넘지 않는다).
+- 이미 받았거나 오늘 상한을 채웠으면 `awardedXp`가 `0`인 `200`이다(오류가 아니다). `level`은 L-1과 같은 형식.
+- SNS 공유 화면은 아직 없다(REQ-086, 이후). 이 API는 서버 준비분이다.
+
+| 거절 | 조건 |
+| --- | --- |
+| 400 `VALIDATION_ERROR` | `caseId`가 없음 |
+| 404 `EXPERIENCE_NOT_FOUND` | 쿠키가 없거나, 그 사건을 완료한 기록이 없음 |

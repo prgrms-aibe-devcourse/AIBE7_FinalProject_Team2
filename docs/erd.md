@@ -42,6 +42,8 @@
 | v1.36 | 2026-10-22 | 성향 결과에 응시 시점 · 다시 정하기 추가 (**확장 단계**, FE-77 · API 명세 v0.50, 마이그레이션은 후속 BE 작업) — `personality_result`에 `completed_experience_count`(응시 시점에 완료한 사건 수, 이전 행은 NULL) · `is_baseline_retake`(성향카드 다시 정하기, 기본 false) 추가. 다시 정하기는 사용자당 1건(부분 유니크 인덱스). 처음 성향은 저장하지 않고 가장 오래된 행으로 정한다 |
 | v1.37 | 2026-10-22 | 사건 등록 적재 (**확장 단계**, BE-93 2차 · V27) — **표는 늘리지 않는다.** 생성 결과가 기존 사건 표(`legal_case` DRAFT · `case_section` · `penalty_rule` · `factor` · `case_source`)와 판결 표(`judgment` AI · COURT · `judgment_factor` · `ai_generation`)로 들어가고, 어느 등록에서 나왔는지는 `case_import.case_id`(V24)가 가리킨다. 판단 요소의 `display_order`에는 **파이프라인의 `factorId`를 그대로** 넣는다 — 판결의 작용 요소가 이 번호로 요소를 찾는다. 판결 후보는 `is_published = false` · `ai_generation.review_status = 'PENDING'`으로 들어가 A-9 승인을 기다린다. 감사 로그 행동 `CASE_IMPORT_LOAD` 추가 (결정: `docs/decisions/BE-93.md`). **(병합 메모) 이 줄의 번호는 PR #242 리베이스 도중 두 번 겹쳤다 — 처음 V26 · v1.35(BE-101과 겹침) → V27 · v1.36(COMMON-60) → 이번에 FE-77과 다시 겹쳐 v1.37로 재조정, 마이그레이션 번호 V27은 그대로(COMMON-58, PR #244)** |
 | v1.38 | 2026-10-22 | 프로필 선택 설정 테이블 추가 (**확장 단계**, BE-104 · V29 · API 명세 v0.52) — `profile_setting` 신설(익명 사용자당 한 줄: 공개 성향카드 `shown_card` · 프로필카드 아래 성향 `profile_card_type` · 한 줄 소개 `bio` · `updated_at`). 프로필 꾸미기와 나눈 테이블(부분 저장). v1.36의 `personality_result` 두 칸은 V28로 반영. 11장 추가 **(병합 메모) 작업 중 COMMON-58(PR #244)이 BE-93 줄에 v1.37을 먼저 써서 v1.37 → v1.38로 다시 매겼다(마이그레이션 V29는 그대로)** |
+| v1.39 | 2026-10-27 | 레벨 · 직업 테이블 추가 (**확장 단계**, BE-106 · V30 · API 명세 v0.54) — `xp_event`(이벤트 경험치 지급 원장: 사용자 · 수급처 · 대상 유니크, 일일 · 묶음 상한 집계용 인덱스)와 `profile_job`(사용자가 고른 직업) 신설. 사건 완료 · 성향 · 출석 · 업적 XP는 기존 테이블에서 계산해 저장하지 않는다. 12장 추가 |
+| v1.40 | 2026-10-27 | 범죄 유형 추가: 강도 · 절도 (BE-112 · V31 · API 명세 v0.55) — `crime_type`에 `ROBBERY`(강도 — 강도치상 · 강도상해 포함) · `THEFT`(절도 — 특수절도 · 특가법 절도 포함) 추가, 화면 분류명은 둘 다 재산범죄. 범죄 유형 CHECK 4곳(`sentence_range_option` · `legal_case` · `rag_precedent` · `case_import`) 교체. `sentence_range_option`에 강도 7개(벌금형 제외 + 무기징역, ID 23 ~ 29) · 절도 7개(공통, ID 30 ~ 36) 추가. 상해치사 · 폭행치사는 `INJURY`에 포함. 양형기준 버전은 살인만 자동 연결(강도 · 절도는 없음) |
 
 ---
 
@@ -80,7 +82,7 @@ erDiagram
     LEGAL_CASE {
         bigint id PK
         varchar title "사건 제목"
-        varchar crime_type "MURDER FRAUD INJURY"
+        varchar crime_type "MURDER FRAUD INJURY ROBBERY THEFT"
         varchar charge_name "죄명"
         text overview "S-03 개요"
         varchar thumbnail_url "S-02 카드 이미지"
@@ -188,7 +190,7 @@ erDiagram
 | --- | --- | --- | --- | --- |
 | id | bigint PK | ✓ |  |  |
 | title | varchar(100) | ✓ | 사건 제목 | REQ-006 |
-| crime_type | varchar(20) | ✓ | `MURDER` / `FRAUD` / `INJURY` | FR-1-2 |
+| crime_type | varchar(20) | ✓ | `MURDER` / `FRAUD` / `INJURY` / `ROBBERY` / `THEFT` (`ROBBERY` · `THEFT`는 v1.40) | FR-1-2 |
 | charge_name | varchar(100) | ✓ | 죄명 (예: 사기) | REQ-015 |
 | short_intro | varchar(200) | ✓ | 목록 카드용 짧은 소개 | REQ-006 |
 | keywords | jsonb |  | 목록 카드용 중립 키워드 배열 | FR-1-5 |
@@ -209,7 +211,7 @@ erDiagram
 | created_at, updated_at | timestamptz | ✓ |  |  |
 - 권고 범위는 MVP에서 팀이 계산해 입력한 값을 그대로 쓴다. 자동 계산 로직은 확장 단계(결정 #4).
 - `title`은 유일하다(`uk_legal_case_title`, V7 · BE-15, v1.12). 적재 SQL이 제목으로 사건을 찾아 환경마다 id가 달라도 같은 SQL을 쓰기 위해서다. 모델이 만든 중립 제목이 다른 공개 · 검토 중 사건과 겹치면 자동 적재가 멈춘다(BE-31).
-- 화면에 보이는 범죄 분류명(예: "사기 / **재산범죄**")은 컬럼으로 두지 않고 `crime_type`별 코드 상수로 둔다(`MURDER` → 생명범죄, `FRAUD` → 재산범죄, `INJURY` → 신체범죄). API는 `crimeCategoryLabel`로 내려준다(v1.3).
+- 화면에 보이는 범죄 분류명(예: "사기 / **재산범죄**")은 컬럼으로 두지 않고 `crime_type`별 코드 상수로 둔다(`MURDER` → 생명범죄, `FRAUD` · `ROBBERY` · `THEFT` → 재산범죄, `INJURY` → 신체범죄). API는 `crimeCategoryLabel`로 내려준다(v1.3).
 
 #### `case_section` — 사건 정보 섹션
 
@@ -368,7 +370,7 @@ S-05에서 보여 줄 형벌 선택지, 그리고 **선고 가능 범위 밖 판
 | id | bigint PK | ✓ |  |
 | job_id | varchar(32) | ✓ | 파이프라인 서비스의 작업 ID. 유니크 |
 | status | varchar(20) | ✓ | `QUEUED` · `RUNNING` · `SUCCEEDED` · `FAILED` |
-| crime_type | varchar(20) | ✓ | `MURDER` · `FRAUD` · `INJURY` |
+| crime_type | varchar(20) | ✓ | `MURDER` · `FRAUD` · `INJURY` · `ROBBERY` · `THEFT` |
 | case_id | bigint FK |  | 적재가 끝나면 채워진다 (BE-93 2차). 1차에는 `SUCCEEDED`여도 NULL |
 | error_code | varchar(50) |  |  |
 | message | varchar(500) |  | 실패 사유. **원문 · 모델 출력을 담지 않는다** |
@@ -421,10 +423,11 @@ S-03의 객관식 선택지. 범죄 유형별로 정의한다(FR-2-8).
 | id | bigint PK | ✓ |  |
 | crime_type | varchar(20) | ✓ |  |
 | label | varchar(50) | ✓ | 예: 실형 3년 이상 ~ 5년 미만 |
-| kind | varchar(20) | ✓ | `FINE` / `SUSPENDED` / `PRISON` / `LIFE` / `DEATH` (`LIFE` · `DEATH`는 v1.4, 살인 등 법정형에 있는 범죄 유형만) |
+| kind | varchar(20) | ✓ | `FINE` / `SUSPENDED` / `PRISON` / `LIFE` / `DEATH` (`LIFE` · `DEATH`는 v1.4, 살인 등 법정형에 있는 범죄 유형만 — 강도는 `LIFE`만, v1.40) |
 | min_months | int |  | 실형 구간 하한 |
 | max_months | int |  | 실형 구간 상한 |
 | display_order | int | ✓ |  |
+- 범죄 유형별 구간: 사기 · 상해 · 절도는 공통 7개, 살인은 벌금형을 빼고 무기징역 · 사형을 더한 8개, 강도는 벌금형을 빼고 무기징역을 더한 7개(법정형에 벌금이 없고, 강도살인은 범위 밖이라 사형 없음, v1.40).
 - `kind`와 개월 범위가 있어야 S-08에서 "처음 생각보다 가벼운/무거운 판결"을 계산할 수 있다.
 - 법정형에 벌금이 없는 범죄 유형(살인)은 `FINE` 구간을 두지 않는다. 살인은 집행유예부터 사형까지 8개다(요구사항 FR-2-8, v1.4).
 - 무겁기 순서: `FINE` < `SUSPENDED` < `PRISON`(개월 순) < `LIFE` < `DEATH` (v1.4). 최종 판결은 `reduced_to`가 있으면 그 값으로 비교한다.
@@ -786,7 +789,7 @@ IA 9장의 규칙을 어느 테이블·제약이 책임지는지 정리한다.
 | 15 | 사형 | DEATH | NULL | NULL | 9 |
 
 → 살인은 법정형에 벌금이 없어 `FINE` 구간을 빼고 `LIFE` · `DEATH`를 더해 8개다(요구사항 FR-2-8).
-→ `id` · `display_order`는 V1 마이그레이션이 넣은 실제 값이다. V1은 모든 범죄 유형의 구간을 사기(1 ~ 7) → 살인(8 ~ 15) → 상해(16 ~ 22) 순서로 넣고, 공통 7개 구간의 순서(벌금형 = 1)를 그대로 쓴 뒤 살인에서 벌금형(1)만 빼므로 살인의 `display_order`는 2부터 시작한다. 화면은 `display_order` 오름차순으로 보여 주면 된다.
+→ `id` · `display_order`는 V1 마이그레이션이 넣은 실제 값이다. V1은 모든 범죄 유형의 구간을 사기(1 ~ 7) → 살인(8 ~ 15) → 상해(16 ~ 22) 순서로 넣고(V31이 강도 23 ~ 29 → 절도 30 ~ 36을 이어 붙인다), 공통 7개 구간의 순서(벌금형 = 1)를 그대로 쓴 뒤 살인에서 벌금형(1)만 빼므로 살인의 `display_order`는 2부터 시작한다. 화면은 `display_order` 오름차순으로 보여 주면 된다.
 
 **factor**
 
@@ -987,3 +990,40 @@ erDiagram
 - 저장 기록이 없으면 서버가 기본값을 내려 준다(행을 미리 만들지 않는다). 처음 저장은 기본값에서 시작해 보낸 칸만 바꾼다.
 - `retake`는 재심 결과가 없어도 저장할 수 있다(화면이 대신 고른다). 공개 범위 칸은 두지 않는다(항상 공개, FE-77).
 - **로그인 이관**: 프로필 꾸미기와 같이 행을 옮기지 않는다. 회원 화면이 생기면 연결된 익명 ID 중 `updated_at`이 가장 최근인 행을 쓴다.
+
+## 12. (확장 단계) 레벨 · 직업 테이블 (v1.39, BE-106)
+
+> **V30 마이그레이션.** 레벨은 저장하지 않고 XP 합계로 계산한다(API 명세 11장). 결정 기록 [`BE-106.md`](decisions/BE-106.md)
+
+```mermaid
+erDiagram
+    anonymous_user ||--o{ xp_event : "경험치 지급"
+    anonymous_user ||--o| profile_job : "고른 직업"
+```
+
+**xp_event** — 이벤트로 들어오는 경험치의 원장(글 · 댓글 · 좋아요 · SNS 공유). 한 줄 = 한 번의 지급
+
+| 컬럼 | 타입 | NOT NULL | 설명 |
+| --- | --- | --- | --- |
+| id | bigint PK | ✓ | identity |
+| anonymous_user_id | uuid FK | ✓ | XP를 받은 사용자(`anonymous_user.id`). 좋아요 받기는 글쓴이 |
+| source | varchar(20) | ✓ | `POST` · `SHARE_POST` · `COMMENT` · `LIKE_GIVEN` · `LIKE_RECEIVED` · `SNS_SHARE`, CHECK |
+| ref_key | varchar(80) | ✓ | 지급 대상(글 ID · 사건 ID 등). (`anonymous_user_id`, `source`, `ref_key`) 유니크 — 같은 대상으로 두 번 받지 않는다 |
+| group_key | varchar(80) | ✓ | 묶음 상한을 세는 키(좋아요 받기는 글 ID). 기본 `''` |
+| amount | int | ✓ | 받은 XP(> 0, CHECK) |
+| awarded_on | date | ✓ | 일일 상한을 세는 한국 시간 날짜 |
+| created_at | timestamptz | ✓ | 기본 `now()` |
+
+- 인덱스: (`anonymous_user_id`, `source`, `awarded_on`) 일일 상한 · (`anonymous_user_id`, `source`, `group_key`) 묶음 상한.
+- **저장하지 않는 XP**: 사건 완료(100) · 성향 테스트(100) · 출석(5) · 업적(50 · 100 · 200)은 `experience` · `personality_result` · `attendance`와 업적 표에서 그때그때 계산한다. 같은 기록을 두 곳에 두어 어긋나는 것을 막기 위해서다.
+- 회수(삭제 · 숨김)는 하지 않는다. 필요해지면 음수 `amount` 행을 허용하도록 CHECK를 바꾼다.
+
+**profile_job** — 사용자가 카드에 보여 주려고 고른 직업
+
+| 컬럼 | 타입 | NOT NULL | 설명 |
+| --- | --- | --- | --- |
+| anonymous_user_id | uuid PK FK | ✓ | `anonymous_user.id`. 사용자당 한 줄 |
+| job | varchar(30) | ✓ | 직업 코드 11개 중 하나(CHECK). 열린 직업만 서버가 받는다 |
+| updated_at | timestamptz | ✓ | 기본 `now()` |
+
+- 행이 없으면 열린 가장 높은 직업을 보여 준다.

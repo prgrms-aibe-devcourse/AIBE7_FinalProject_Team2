@@ -12,7 +12,7 @@
 | `adminJudgmentParse.js` | 원문에서 사건번호 · 법원명 · 선고일 · 심급 · 범죄 유형을 읽어 폼을 채운다 |
 | `samples/sample-judgment.pdf` | 가상 판결문 예시 PDF(2쪽). 등록 화면의 "예시 PDF 내려받기"와 PDF 읽기 테스트가 쓴다. 실제 판결문이 아니다 |
 | `adminFormat.js` | 요약어 후보(A-6)와 생성 정보(A-8 `generation`)를 화면용으로 푸는 순수 함수. 테스트 있음 |
-| `adminMenu.js` · `adminKit.js` | 왼쪽 메뉴 목록 · 운영 메뉴 화면이 함께 쓰는 부품(검색줄 · 표 · 쪽 나누기 · 사유 폼 · 목록 불러오기) |
+| `adminMenu.js` · `adminKit.js` | 왼쪽 메뉴 목록 · 관리자 화면이 함께 쓰는 부품(보기 바꾸기 줄 · 검색줄 · 표 · 쪽 나누기 · 사유 폼 · 목록 불러오기 · 상태 바꾸기 확인 `confirmChange` · 표 안 링크 `routeLink` · 제목 포커스) |
 | `adminDashboardPage.js` · `adminMembersPage.js` · `adminPostsPage.js` · `adminReportsPage.js` · `adminAccountsPage.js` · `adminNoticesPage.js` | 운영 메뉴(A-16 ~ A-41 초안): 대시보드 · 회원 · 게시글 · 댓글 · 신고 · 관리자 계정 · 감사 로그 · 공지 · 금칙어. **서버 API가 없어 목으로만 동작** |
 | `adminClient.js` | 관리자 API 전용 fetch. 세션 쿠키 · CSRF 헤더(`X-XSRF-TOKEN`) · 403이면 토큰을 새로 받아 한 번 재시도. 공용 `src/api/client.js`는 쓰지 않는다 |
 | `adminRealApi.js` · `adminMockApi.js` (운영 메뉴는 `adminOps*Api.js`를 다시 내보낸다) | 실제 · 목 API (함수 이름 · 응답 형식 같음). `adminApi.js`가 `VITE_API_MODE`로 고른다 |
@@ -24,7 +24,9 @@
 - **사용자 화면과 분리한다.** 사용자 api(`src/api`)와 에러 이동(`app/errorRedirect.js`)을 쓰지 않는다. 관리자 코드 · CSS는 `/admin`으로 들어올 때만 불러온다(`routes.js` 동적 import).
 - **내부 정보를 밖에 남기지 않는다.** 원본 판결문 · 생성 정보는 화면에만 그리고 브라우저 저장소에 넣지 않는다. 요청은 `cache: 'no-store'`. 목도 상태를 메모리에만 두고 로그인 여부만 `sessionStorage`에 둔다.
 - 값은 모두 `textContent`로 넣는다(원문 · 모델 출력에 HTML이 섞여도 실행되지 않음).
-- 상태를 바꾼 뒤에는 A-6을 다시 불러와 전체를 다시 그린다(사건 상태 · 공개 조건이 함께 바뀜).
+- 상태를 바꾼 뒤에는 A-6을 다시 불러와 전체를 다시 그린다(사건 상태 · 공개 조건이 함께 바뀜). 다시 그린 뒤 누른 자리로 돌아가 포커스를 두고, 펼친 후보는 다시 펼친다(FE-105).
+- 후보 승인은 그 후보의 "자세히 보기"를 한 번 연 뒤에만 된다(내용을 보지 않고 공개 판결로 정하지 않게, FE-105).
+- 위험 작업 확인 기준 · 완료 알림줄(`ctx.notify`) · 포커스 규칙은 [DESIGN.md](../../../../DESIGN.md) "관리자 화면 규칙"을 따른다.
 - 사건 등록(FE-45)은 파이프라인을 서버가 실행하는 방식이다. 판단 요소 구성 · 형벌 규칙은 여전히 파이프라인 · SQL 경로이고 이 화면은 검수 · 수정 · 공개 · 등록 시작만 한다.
 - 요약어 후보는 **제안만** 보여 준다. 요약어 수정 API가 없어서 바꾸는 버튼은 없다.
 

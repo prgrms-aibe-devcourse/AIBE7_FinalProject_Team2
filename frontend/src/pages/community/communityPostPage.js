@@ -1,6 +1,7 @@
 import { button, element } from '../../components/siteLayout.js';
 import { canGoBackInApp } from '../../app/router.js';
 import { currentUser } from '../../utils/session.js';
+import { signatureSvg } from '../../components/signatureInk.js';
 import {
   NOT_READY, authorButton, communityShell, composer, filterControls, foldedVerdict, formatDate, likeButton, loginHint, popularList, nameCard, postImages, postMeta, textField, verdictWithType,
 } from './communityParts.js';
@@ -61,7 +62,11 @@ export function renderCommunityPostPage(container, { api, navigate, postId }) {
     const title = element('h1', 'cm-article-title', post.title);
     title.id = 'cm-article-title';
     title.tabIndex = -1;
-    node.append(postMeta(post, { full: true }), title, element('div', 'cm-article-body', post.body));
+    // 글쓴이 서명(FE-94): 본문 끝에 닉네임으로 만든 서명을 둔다(장식, 낭독은 "○○의 서명")
+    const signoff = element('div', 'cm-signoff');
+    const writer = post.author?.nickname; // 탈퇴한 회원 등으로 닉네임이 비어 오면 서명을 그리지 않는다("undefined의 서명"으로 읽히지 않게)
+    if (writer) signoff.append(signatureSvg(writer, { label: `${writer}의 서명` }));
+    node.append(postMeta(post, { full: true }), title, element('div', 'cm-article-body', post.body), signoff);
     if (post.images.length) node.append(postImages(post.images, { full: true }));
     if (post.verdict) node.append(foldedVerdict(post, () => verdictWithType(post.verdict, post.caseTitle, post.author)));
     const actions = element('div', 'cm-actions');
