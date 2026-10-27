@@ -1,6 +1,7 @@
-// 개발용 목업 로그인 (FE-52, S-12). 사용자 로그인 API가 아직 없어(카카오 로그인 검토 중) 화면 · 헤더 상태를 확인하려고 둔다.
+// 개발용 목업 로그인 (FE-52, S-12). 목 모드에서 화면 · 헤더 상태를 확인하려고 둔다. 실제 모드는 realApi.js의
+// 같은 이름(login · signup · logout, FE-74 · FE-117)을 쓴다.
 // 어떤 아이디 · 비밀번호든 로그인된다. 계정을 저장하거나 비밀번호를 어디에도 보내지 · 남기지 않는다.
-// 실제 API가 생기면 같은 이름(login · logout)으로 realApi.js에 붙이고 이 파일은 목 모드에서만 쓴다
+// @가 있는 아이디는 로그인 화면이 목 관리자 로그인으로 보내므로(adminLoginRule.js) 여기로 오지 않는다
 const delay = () => new Promise((resolve) => setTimeout(resolve, 250));
 const KAKAO_NICKNAME = '카카오 회원'; // 목업 카카오 로그인의 닉네임
 const NICKNAME_MAX = 12;
