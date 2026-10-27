@@ -13,8 +13,7 @@ import { validateSignup } from './signupRule.js';
 // 회원가입 (FE-104, /signup). 로그인(S-12)과 같은 책상 위 펠트 패드에 카카오로 시작하기 + 아이디 · 비밀번호 · 닉네임 가입 폼.
 // 목 모드는 목업 가입(mocks/authMockApi.js signup)이, 실제 모드는 회원가입 API(M-5, realApi.js signup — FE-117)가 받아
 // 가입하면 바로 로그인된 상태가 된다. 카카오로 시작하기는 카카오 로그인(FE-74)으로 가입된다.
-// api.signup이 없는 환경(예전 빌드 등)에서는 입력 검사까지만 하고 준비 중이라고 알린다
-const NOT_READY = '아이디 회원가입은 아직 준비 중이에요. 지금은 카카오로 시작할 수 있어요.';
+// FE-117: 목 · 실제 모드 모두 api.signup · api.login이 있어 예전의 "준비 중" 안내 분기는 지웠다 (PR #308 리뷰)
 const NETWORK = '서버에 연결하지 못했어요. 잠시 뒤 다시 시도해 주세요.';
 const TOO_MANY = '요청이 너무 많아요. 잠시 뒤 다시 시도해 주세요.';
 // 계정은 만들어졌는데 첫 토큰을 받지 못했다(api/authFlow.js). "가입하지 못했어요"라고 하면 다시 눌러 409(이미 쓰는 아이디)를 보게 된다
@@ -36,7 +35,7 @@ export function renderSignupPage(container, { api, navigate }) {
     { label: '칸 오류', run: () => showForm().form.requestSubmit() },
     { label: '아이디 중복', run: () => showForm().fill({ id: 'admin_naero' }).fieldError('id', '이미 쓰고 있는 아이디예요. 다른 아이디를 골라 주세요. 방금 가입했다면 로그인해 주세요.') },
     { label: '가입 중(로딩)', run: () => { const { busy } = showForm(); setBusy(busy, true, busy[1], '가입하는 중…'); } },
-    { label: '준비 중(실제 모드)', run: () => showForm().showError(NOT_READY) },
+    { label: '가입됨 · 로그인 필요', run: () => showForm().showSignedUpLoginAgain() },
     { label: '이미 로그인', run: () => showSignedIn({ nickname: '내로판사' }, false) },
   ]);
   if (jump) main.append(jump);
@@ -111,8 +110,16 @@ export function renderSignupPage(container, { api, navigate }) {
     let pending = false;
     peek(null);
     card.replaceChildren(...parts);
-    const helpers = { form, showError, fieldError, fill, busy: [kakao, submit] };
+    const helpers = { form, showError, fieldError, fill, showSignedUpLoginAgain, busy: [kakao, submit] };
     return helpers;
+
+    // 가입은 됐는데 첫 토큰을 받지 못했을 때(TOKEN_NOT_ISSUED): 안내 옆에 로그인 화면으로 가는 버튼을 둔다 (PR #308 리뷰).
+    // 가입하기를 다시 누르면 409(이미 쓰는 아이디)가 나오므로 한 단계를 줄인다. 버튼은 안내 문구 안에 있어 다음 안내가 나오면 함께 사라진다
+    function showSignedUpLoginAgain() {
+      showError(SIGNED_UP_LOGIN_AGAIN);
+      error.append(' ', button('로그인 화면으로', () => navigate('login', {}, { replace: true }), 'login-link'));
+      return helpers;
+    }
 
     function readValues() {
       return {
@@ -139,7 +146,7 @@ export function renderSignupPage(container, { api, navigate }) {
       return helpers;
     }
 
-    // 칸에 매이지 않는 안내(준비 중 · 연결 실패): 카카오는 버튼 바로 아래, 가입 폼은 가입하기 버튼 위
+    // 칸에 매이지 않는 안내(연결 실패 · 요청 제한 · 가입됨): 카카오는 버튼 바로 아래, 가입 폼은 가입하기 버튼 위
     function showError(message, near = form) {
       if (near === kakao) kakao.after(error); else form.insertBefore(error, submit);
       error.textContent = message;
@@ -158,10 +165,6 @@ export function renderSignupPage(container, { api, navigate }) {
         fields[first].input.focus();
         return;
       }
-      if (!api.signup) {
-        showError(NOT_READY);
-        return;
-      }
       pending = true;
       setBusy([kakao, submit], true, submit, '가입하는 중…');
       try {
@@ -176,7 +179,7 @@ export function renderSignupPage(container, { api, navigate }) {
           ? failure.details.find((detail) => Object.hasOwn(SERVER_FIELD_MESSAGE, detail?.field ?? ''))?.field
           : null;
         if (failure?.code === TOKEN_NOT_ISSUED) {
-          showError(SIGNED_UP_LOGIN_AGAIN);
+          showSignedUpLoginAgain();
         } else if (failure?.code === 'DUPLICATE_ID') {
           // 서버가 가입(커밋) 뒤 토큰 발급에서 실패하면 500이 나가고, 다시 누르면 이 409를 본다(BE-113 추후 재검토 · PR #306 리뷰).
           // 그 사람은 이미 가입된 것이라 로그인으로 안내한다
@@ -199,10 +202,6 @@ export function renderSignupPage(container, { api, navigate }) {
     async function startWithKakao() {
       if (pending) return;
       error.hidden = true;
-      if (!api.login) {
-        showError(NOT_READY, kakao);
-        return;
-      }
       pending = true;
       setBusy([kakao, submit], true, kakao);
       try {

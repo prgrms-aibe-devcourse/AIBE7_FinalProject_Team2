@@ -14,7 +14,7 @@ export const TOKEN_NOT_ISSUED = 'TOKEN_NOT_ISSUED';
 export async function completeLogin(pending, { reissue, logout }) {
   const body = await pending;
   try {
-    await reissue();
+    await reissueOnceMore(reissue);
   } catch (cause) {
     // 재발급이 실패하면(연결 오류 · 429 · 5xx 등) 화면은 로그인하지 못한 것으로 보여 준다. 그런데 서버가 이미 심은 리프레시 쿠키가
     // 남아 있으면, 공용 PC에서 "로그인 안 됐네" 하고 떠난 뒤에도 그 브라우저에 로그인이 살아 있게 된다 → 로그아웃(M-2)으로 쿠키를 지운다.
@@ -29,4 +29,17 @@ export async function completeLogin(pending, { reissue, logout }) {
     };
   }
   return { nickname: body?.nickname };
+}
+
+// 재발급이 401이면 한 번만 다시 부른다 (PR #308 리뷰).
+// client.js는 진행 중인 재발급 약속을 함께 쓴다(reissuing ??=). 로그인 직전에 다른 요청의 401 재시도가 재발급을 시작해 뒀다면,
+// 그 요청은 새 리프레시 쿠키가 심기기 전에 나간 것이라 401로 끝난다 → 그 결과만 보고 실패로 처리하면 로그인은 됐는데 로그아웃된다.
+// 그 약속이 끝난 뒤 다시 부르면 새 쿠키로 나간다. 401이 아닌 실패(연결 오류 · 429 · 5xx)는 다시 불러도 같아 바로 넘긴다
+async function reissueOnceMore(reissue) {
+  try {
+    await reissue();
+  } catch (failure) {
+    if (failure?.status !== 401) throw failure;
+    await reissue();
+  }
 }

@@ -14,8 +14,8 @@ import { kakaoButton, setBusy } from './loginParts.js';
 // 아이디 · 비밀번호(FE-117): 아이디에 @가 있으면 관리자 로그인(A-2), 없으면 회원 아이디 로그인(M-6)으로만 보낸다(adminLoginRule.js).
 // 로그인하지 않아도 모든 판결 체험을 할 수 있다(REQ-003).
 // 로그인하면 닉네임을 이 브라우저에 두고(utils/session.js) 공통 헤더의 "로그인" 자리에 닉네임이 나온다.
-// FE-104: 아이디 · 비밀번호 폼은 실제 모드에서도 펼쳐 둔다(일반 회원가입이 생길 예정). 폼 아래 회원가입(signupPage.js) 링크
-const NOT_READY = '로그인은 아직 준비 중이에요. 로그인하지 않아도 모든 판결 체험을 할 수 있어요.';
+// FE-104: 아이디 · 비밀번호 폼 아래 회원가입(signupPage.js) 링크.
+// FE-117: 목 · 실제 모드 모두 api.login이 있어 예전의 "관리자 입력칸만 보여 주고 준비 중 안내"(adminOnly) 분기는 지웠다 (PR #308 리뷰)
 
 export function renderLoginPage(container, { api, navigate }) {
   const { root, main, card, peek } = loginDesk(container);
@@ -55,12 +55,10 @@ export function renderLoginPage(container, { api, navigate }) {
     card.replaceChildren(heading, element('p', 'login-lead', `${nickname} 님으로 로그인한 상태예요.`), actions);
   }
 
-  // 사용자 로그인이 없는 실제 모드(api.login 없음)에서는 카카오 · 회원가입 없이 관리자 로그인 입력칸만 보여 주고, 일반 로그인은 준비 중이라고 알린다 (FE-53)
   function showForm() {
-    const adminOnly = !api.login;
     const heading = element('h1', '', '로그인');
     heading.id = 'login-heading';
-    const lead = element('p', 'login-lead', adminOnly ? NOT_READY : '로그인하지 않아도 모든 판결 체험을 할 수 있어요.');
+    const lead = element('p', 'login-lead', '로그인하지 않아도 모든 판결 체험을 할 수 있어요.');
     const parts = [heading, lead];
     if (API_MODE === 'mock') {
       parts.push(element('p', 'login-mock-note', '개발용 목업 로그인이에요. 아무 아이디 · 비밀번호로 들어가지고(@가 있는 아이디는 관리자), 입력값은 어디에도 보내거나 남기지 않아요.'));
@@ -76,7 +74,8 @@ export function renderLoginPage(container, { api, navigate }) {
 
     const form = element('form', 'login-form');
     form.noValidate = true; // 빈칸 안내는 아래 문구로 직접 한다(브라우저 말풍선 대신)
-    const idInput = field(form, 'login-id', '아이디', { type: 'text', autocomplete: 'username' });
+    // 회원이 이메일을 넣으면 관리자 로그인으로 간다(@ 분기) — 입력 전에 알려 둔다 (PR #308 리뷰 · FE-117 결정 기록)
+    const idInput = field(form, 'login-id', '아이디', { type: 'text', autocomplete: 'username', hint: '회원 아이디에는 @가 없어요. 관리자는 이메일로 로그인해요.' });
     const passwordInput = field(form, 'login-password', '비밀번호', { type: 'password', autocomplete: 'current-password' });
     const submit = element('button', 'primary-button login-submit', '로그인');
     submit.type = 'submit';
@@ -104,8 +103,7 @@ export function renderLoginPage(container, { api, navigate }) {
     const browse = element('p', 'login-browse');
     browse.append(button('로그인 없이 사건 보러 가기', () => navigate('list'), 'login-link'));
 
-    if (adminOnly) parts.push(form, browse);
-    else parts.push(kakao, divider, form, signup, browse);
+    parts.push(kakao, divider, form, signup, browse);
     let pending = false; // return보다 앞에 둔다(뒤에 두면 초기화되지 않아 로그인 때 ReferenceError)
     peek(null);
     card.replaceChildren(...parts);
@@ -138,12 +136,6 @@ export function renderLoginPage(container, { api, navigate }) {
           return;
         }
         // 여기부터는 회원 로그인(카카오 · 아이디). @가 없는 입력은 관리자 API로 가지 않는다
-        if (!api.login) {
-          showError(request.method === 'password' ? `아이디와 비밀번호를 확인해 주세요. ${NOT_READY}` : NOT_READY, request.method === 'kakao' ? kakao : form);
-          setBusy(busy, false);
-          pending = false;
-          return;
-        }
         const { nickname } = await api.login(request);
         saveUser({ nickname }); // 화면을 떠났어도 로그인 표시는 남긴다(위 관리자와 같은 이유)
         if (!container.contains(root)) return;
@@ -172,7 +164,7 @@ function failureMessage(failure, method) {
   return '로그인하지 못했어요. 잠시 뒤 다시 시도해 주세요.';
 }
 
-// 라벨 + 입력칸 한 줄. 빈칸 안내(#login-error)를 입력칸 설명으로 잇는다
+// 라벨 + 입력칸 한 줄(+ 안내 문구). 안내 문구 · 빈칸 안내(#login-error)를 입력칸 설명으로 잇는다. 안내 모양은 가입 화면과 같다(signup-hint)
 function field(form, id, label, attributes) {
   const row = element('div', 'login-field');
   const caption = element('label', '', label);
@@ -183,9 +175,17 @@ function field(form, id, label, attributes) {
   Object.assign(input, { type: attributes.type, autocomplete: attributes.autocomplete });
   input.spellcheck = false; // 아이디 · 비밀번호에 맞춤법 밑줄이 뜨지 않게
   input.autocapitalize = 'off'; // 모바일에서 아이디 첫 글자가 대문자가 되지 않게
-  input.setAttribute('aria-describedby', 'login-error');
   input.addEventListener('input', () => input.removeAttribute('aria-invalid'));
   row.append(caption, input);
+  const described = [];
+  if (attributes.hint) {
+    const help = element('p', 'signup-hint', attributes.hint);
+    help.id = `${id}-hint`;
+    row.append(help);
+    described.push(help.id);
+  }
+  described.push('login-error');
+  input.setAttribute('aria-describedby', described.join(' '));
   form.append(row);
   return input;
 }

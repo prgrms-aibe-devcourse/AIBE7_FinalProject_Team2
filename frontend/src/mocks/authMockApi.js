@@ -12,9 +12,10 @@ function fail(code, field = null) {
   throw { code, message: messages[code], currentStatus: null, details: field ? [{ field, reason: code }] : null };
 }
 
-// 목업 닉네임: 아이디의 @ 앞부분(최대 12자)
+// 목업 닉네임: 아이디 그대로(최대 12자). @가 있는 아이디는 로그인 화면이 목 관리자 로그인으로 보내 여기 오지 않으므로
+// 예전의 "@ 앞부분만" 처리는 지웠다 (FE-117 · PR #308 리뷰)
 export function mockNicknameOf(id) {
-  return String(id).trim().split('@')[0].slice(0, NICKNAME_MAX);
+  return String(id).trim().slice(0, NICKNAME_MAX);
 }
 
 // method: 'kakao' | 'password'. 응답 { nickname }
