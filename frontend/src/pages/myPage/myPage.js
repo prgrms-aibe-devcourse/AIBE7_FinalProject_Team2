@@ -13,6 +13,7 @@ import { SCRIPTS } from '../../content/scripts.js';
 import { fitPortraitIn } from '../../utils/portraitFit.js';
 import { fitOneLine } from '../../utils/fitText.js';
 import { lockScroll, unlockScroll } from '../../utils/scrollLock.js';
+import { progressOf } from '../../utils/levelProgress.js';
 import { reducedMotion } from '../../utils/motion.js';
 import { clearUser, currentUser, isAdmin } from '../../utils/session.js';
 import { signerSeed } from '../../components/signatureInk.js';
@@ -219,14 +220,12 @@ function profileCardPair(data, go) {
 // 경험치 진행률(FE-116): 지금 레벨에 닿은 XP부터 다음 레벨에 필요한 XP까지. 서버 L-1의 xp · currentLevelXp · nextLevelXp를 쓴다. 최고 레벨이면 막대가 가득 차고 안내만 바뀐다
 function levelProgress(level, go) {
   if (!level) return null;
-  const top = level.nextLevelXp == null;
-  const span = top ? 1 : level.nextLevelXp - level.currentLevelXp;
-  const done = top ? 1 : Math.min(span, Math.max(0, level.xp - level.currentLevelXp));
+  const { top, percent } = progressOf(level);
   const text = top ? '최고 레벨이에요.' : `Lv.${level.level + 1}까지 ${level.nextLevelXp - level.xp} XP`;
   // 누르면 경험치 페이지(FE-120). 막대는 장식이라 숨기고 진행 상황은 버튼 이름이 읽어 준다(버튼 안에 진행 막대 역할을 둘 수 없다)
   const box = element('button', 'my-level-progress');
   box.type = 'button';
-  box.setAttribute('aria-label', `경험치 자세히 보기. ${text} 지금 ${Math.round((done / span) * 100)}%`);
+  box.setAttribute('aria-label', `경험치 자세히 보기. ${text} 지금 ${percent}%`);
   box.addEventListener('click', () => go('level'));
   const caption = element('span', 'my-level-caption', text);
   if (IS_MOCK) caption.append(mockTag());
@@ -234,7 +233,7 @@ function levelProgress(level, go) {
   const bar = element('span', 'my-achievement-bar');
   bar.setAttribute('aria-hidden', 'true');
   const fill = element('span');
-  fill.style.width = `${Math.round((done / span) * 100)}%`;
+  fill.style.width = `${percent}%`;
   bar.append(fill);
   box.append(caption, bar);
   return box;
@@ -1271,17 +1270,22 @@ function openDecoDialog({ open, data, onPick, opener, forType = false }) {
   body.append(preview, pickers);
   dialog.append(head, body);
   dialog.addEventListener('click', (event) => { if (event.target === dialog) dialog.close(); });
-  dialog.addEventListener('close', () => { unlockScroll(...DECO_SCROLL_CLASSES); dialog.remove(); opener?.focus(); });
+  const unlock = () => { removal.disconnect(); unlockScroll(...DECO_SCROLL_CLASSES); };
+  dialog.addEventListener('close', () => { unlock(); dialog.remove(); opener?.focus(); });
+  // 열린 채로 화면이 바뀌어 창이 close 없이 지워져도(뒤로 가기 · 화면 전환) 스크롤 잠금이 남지 않게 한다
+  const removal = new MutationObserver(() => { if (!dialog.isConnected) unlock(); });
   // 넓은 화면에서는 고르기 칸만 스크롤되니, 미리 보기 카드 위에서 굴려도 창이 스크롤되게 넘겨 준다(안 그러면 뒤 화면이 스크롤된다, FE-120).
   // 좁은 화면은 창 전체가 스크롤되어(고르기 칸이 내용만큼 늘어나 넘칠 것이 없다) 그대로 둔다
   preview.addEventListener('wheel', (event) => {
     if (pickers.scrollHeight <= pickers.clientHeight) return;
     event.preventDefault();
-    pickers.scrollBy({ top: event.deltaY });
+    const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? pickers.clientHeight : 1; // 휠 단위: 픽셀 · 줄 · 쪽
+    pickers.scrollBy({ top: event.deltaY * unit });
   }, { passive: false });
   preview.replaceChildren(forType ? typeFace(currentTypeOf(data), undefined, shown) : previewCard(data, shown));
   (document.querySelector('.my-page') ?? document.body).append(dialog);
   lockScroll(...DECO_SCROLL_CLASSES);
+  removal.observe(document.body, { childList: true, subtree: true });
   dialog.showModal();
 }
 

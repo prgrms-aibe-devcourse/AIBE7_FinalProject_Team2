@@ -3,6 +3,7 @@
 // 레벨 · 직업 값은 서버 L-1(data.level)이고, 얻는 방법 표는 API 명세 11장 수급처 표를 그대로 옮긴 고정 문구다(값이 바뀌면 명세와 함께 고친다)
 import { element, mockTag } from '../../components/siteLayout.js';
 import { API_MODE } from '../../api/config.js';
+import { progressOf } from '../../utils/levelProgress.js';
 
 const IS_MOCK = API_MODE === 'mock';
 const TOP_LEVEL = 100;
@@ -24,9 +25,7 @@ const SOURCES = [
 ];
 
 function heroBlock(level) {
-  const top = level.nextLevelXp == null;
-  const span = top ? 1 : level.nextLevelXp - level.currentLevelXp;
-  const done = top ? 1 : Math.min(span, Math.max(0, level.xp - level.currentLevelXp));
+  const { top, span, done, percent } = progressOf(level);
   const box = element('section', 'lv-hero');
   const now = element('p', 'lv-now');
   now.append(element('b', '', `Lv.${level.level}`), element('span', '', level.job?.name ?? '무직'));
@@ -38,7 +37,7 @@ function heroBlock(level) {
   bar.setAttribute('aria-valuenow', String(done));
   bar.setAttribute('aria-valuetext', top ? '최고 레벨' : `${done} / ${span} XP`);
   const fill = element('span');
-  fill.style.width = `${Math.round((done / span) * 100)}%`;
+  fill.style.width = `${percent}%`;
   bar.append(fill);
   const ends = element('p', 'lv-ends');
   ends.append(element('span', '', `Lv.${level.level} · ${won(level.currentLevelXp)} XP`), element('span', '', top ? '최고 레벨' : `Lv.${level.level + 1} · ${won(level.nextLevelXp)} XP`));
@@ -50,7 +49,7 @@ function heroBlock(level) {
   return box;
 }
 
-// 직업이 열리는 레벨 표. 지금 직업(열린 것 중 가장 높은 것)에 "지금"을 달고, 잠긴 직업은 남은 경험치를 보여 준다
+// 직업이 열리는 레벨 표. 지금 카드에 보이는 직업(selected, 위쪽 직업명과 같다)에 "지금"을 달고, 잠긴 직업은 남은 경험치를 보여 준다
 function jobsBlock(level) {
   const section = element('section', 'lv-section');
   section.append(element('h2', 'lv-title', '직업은 이렇게 열려요'), element('p', 'my-hint', `레벨이 오르면 직업이 하나씩 열리고, 한 번 열린 직업은 다시 잠기지 않아요. 최고 레벨은 Lv.${TOP_LEVEL}이에요.`));
@@ -62,7 +61,7 @@ function jobsBlock(level) {
   table.append(thead);
   const body = element('tbody');
   const jobs = level.jobs ?? [];
-  const nowCode = jobs.filter((job) => job.unlocked).at(-1)?.code;
+  const nowCode = jobs.find((job) => job.selected)?.code;
   jobs.forEach((job) => {
     const isNow = job.code === nowCode;
     const row = element('tr', `${job.unlocked ? 'is-open' : 'is-locked'}${isNow ? ' is-now' : ''}`);
