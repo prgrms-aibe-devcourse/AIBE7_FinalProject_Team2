@@ -1,5 +1,6 @@
 import { button, element } from '../../components/siteLayout.js';
 import { screenByStatus } from '../../utils/screenByStatus.js';
+import { TYPE_NOTES } from '../../content/typeNotes.js';
 import { caseStage, mountStagePage, scriptFor } from '../overview/overviewPage.js';
 import { caseInfoEar, caseNewspaper, earButton, paperFromCase } from '../../components/newspaperFront.js';
 import { evidencePhotosFromPaper, fetchCasePaper } from '../../utils/newspaper.js';
@@ -23,6 +24,17 @@ const ACTIONS = {
   COMPLETED: { label: '결과 다시 보기', failText: '결과를 열지 못했어요. 잠시 후 다시 시도해 주세요.' },
 };
 const NOT_STARTED = { label: '시작하기', failText: '체험을 시작하지 못했어요. 잠시 후 다시 시도해 주세요.' };
+// 시작하기 도장(FE-119): 지면 위에 찍힌 모양이지만 실제 <button>이다. 위쪽 작은 글자는 장식이라 낭독하지 않는다(이름은 호출하는 쪽이 aria-label로 준다)
+function stampButton(label, onClick) {
+  const node = element('button', 'stamp-button');
+  node.type = 'button';
+  const caption = element('small', '', '사건 접수');
+  caption.setAttribute('aria-hidden', 'true');
+  node.append(caption, element('span', 'stamp-label', label));
+  if (onClick) node.addEventListener('click', onClick);
+  return node;
+}
+const SIMILAR_COUNT = 2; // 같은 유형의 다른 사건 수
 const SLOW_MS = 1000; // 신문에서 왔는데 이만큼 지나도 자료가 없으면 "불러오는 중"을 보인다
 
 export async function renderCaseDetailPage(container, { caseId, api, navigate, from }) {
@@ -35,6 +47,36 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
   container.replaceChildren(root);
   const active = () => container.contains(root);
   let starting = false;
+
+  // 제목 칸 아래 왼쪽 빈 자리(FE-119): 범죄 유형별 [알아두기](사건과 무관한 일반 설명)와 같은 유형의 다른 사건 둘. 둘 다 이미 있는 데이터라 새로 쓴 문장이 없다.
+  // 다른 사건은 목록 API(API 1)를 한 번 더 불러 채운다 — 늦거나 못 받아도 화면은 그대로이고 그 칸만 비어 있다
+  function similarBlock(data) {
+    const wrap = element('aside', 'story-extra');
+    wrap.setAttribute('aria-label', '함께 읽기');
+    const note = TYPE_NOTES[data.crimeType];
+    if (note) {
+      const box = element('div', 'extra-note');
+      box.append(element('p', 'extra-label', '알아두기'), element('p', 'extra-text', note.replace(/^\[알아두기\]\s*/, '')));
+      wrap.append(box);
+    }
+    api.getCases(data.crimeType).then(({ cases }) => {
+      if (!active()) return;
+      const others = cases.filter((item) => item.caseId !== data.caseId).sort((a, b) => b.participantCount - a.participantCount).slice(0, SIMILAR_COUNT);
+      if (!others.length) return;
+      const box = element('div', 'extra-similar');
+      const list = element('ul', 'extra-list');
+      others.forEach((item) => {
+        const link = button(item.headline || item.title, () => navigate('caseDetail', { caseId: item.caseId }), 'extra-link');
+        link.setAttribute('aria-label', `${item.headline || item.title}, 사건 정보 보기`);
+        const row = element('li');
+        row.append(link);
+        list.append(row);
+      });
+      box.append(element('p', 'extra-label', `같은 유형의 다른 사건 · ${data.crimeCategoryLabel ?? ''}`.replace(/ · $/, '')), list);
+      wrap.append(box);
+    }).catch(() => {});
+    return wrap;
+  }
 
   // 새로고침 · 뒤로 가기로 다시 들어왔을 때 펼침 연출을 되풀이하지 않게, 주소 기록에 남은 출발 위치를 지운다
   if (from) history.replaceState({ ...history.state, extras: {} }, '');
@@ -86,18 +128,17 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
   // 이미 하던 · 마친 체험(myStatus)이 있으면 막지 않는다: 오른쪽 귀 "이어서 하기" · "결과 다시 보기"와 우하단 버튼이 API 2 응답 상태로 이어서 볼 화면으로 보낸다
   function drawPaper(data, casePaper) {
     const action = ACTIONS[data.myStatus];
-    const notice = element('p', 'paper-start-notice', action ? '' : '이 사건의 판결 체험은 준비 중이에요. 신문으로 돌아가 다른 사건을 골라 주세요.');
-    notice.setAttribute('role', action ? 'alert' : 'status');
+    const notice = element('p', 'paper-start-notice', ''); // 시작하지 못했을 때의 오류만 채운다. 준비 중은 점선 도장 하나로 알리고 설명 상자는 두지 않는다(FE-119)
+    notice.setAttribute('role', 'alert');
     const resume = action
       ? earButton(`${action.label} ▶`, `사건 ${String(data.caseId).padStart(2, '0')} · ${data.crimeCategoryLabel}`, () => start(resume, notice, action.failText), 'ear-right ear-go') : null;
     const sheet = caseNewspaper({ paper: paperFromCase(data, casePaper), info: data, navigate, ...(resume ? { earRight: resume } : {}) });
     let go;
     if (action) {
-      go = button(`${action.label} ▶`, () => start(go, notice, action.failText), 'primary-button');
+      go = stampButton(action.label, () => start(go, notice, action.failText));
       go.setAttribute('aria-label', `${action.label}, ${data.title}`); // 화면 글자로 시작해야 음성 입력으로 누를 수 있다(WCAG 2.5.3)
     } else {
-      go = element('button', 'primary-button', '준비 중');
-      go.type = 'button';
+      go = stampButton('준비 중');
       go.setAttribute('aria-disabled', 'true');
       go.setAttribute('aria-label', `준비 중, ${data.title} 체험`);
     }
@@ -112,7 +153,8 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
     deskBack.setAttribute('aria-hidden', 'true');
     root.className = 'case-list-page case-paper-page overview-page';
     root.replaceChildren(deskBack, sheet);
-    sheet.append(dock); // 책상(배경)과 색이 겹치지 않게 지면 안, 우하단에 둔다(CSS sticky)
+    const top = sheet.querySelector('.story-top') ?? sheet;
+    top.append(dock, similarBlock(data)); // 도장은 사건 메모 밑 오른쪽 칸, 알아두기 · 같은 유형 사건은 제목 칸 아래 왼쪽 빈 자리
     unfold(sheet);
   }
 
@@ -156,11 +198,11 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
     const dock = element('div', 'paper-start');
     const notice = element('p', 'paper-start-notice');
     notice.setAttribute('role', 'alert');
-    const go = button('시작하기 ▶', () => begin(go, { fromStart: true }), 'primary-button');
+    const go = stampButton('시작하기', () => begin(go, { fromStart: true }));
     go.setAttribute('aria-label', `시작하기, ${data.title}`); // 화면 글자("시작하기")로 시작해야 음성 입력으로 누를 수 있다(WCAG 2.5.3)
     dock.append(notice, go);
     mountStagePage(root, { stage });
-    (stage.querySelector('.paper') ?? root).append(dock); // 책상(배경)과 색이 겹치지 않게 지면 안, 우하단에 둔다(CSS sticky)
+    (stage.querySelector('.story-top') ?? stage.querySelector('.paper') ?? root).append(dock, similarBlock(data)); // 도장은 사건 메모 밑 오른쪽 칸, 알아두기 · 같은 유형 사건은 제목 칸 아래 왼쪽 빈 자리
     unfold(stage);
 
     // 이 지면에서 1막을 잇는다(사전 판단 전, STARTED). 묻는 장면이 맨 앞에 있으면 건너뛴다

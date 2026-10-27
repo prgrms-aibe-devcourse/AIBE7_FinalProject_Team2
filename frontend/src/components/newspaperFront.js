@@ -102,18 +102,19 @@ function pullQuote(paragraph) {
   return quote;
 }
 // 지면 목차: 신문의 다른 면으로 간다. 앱 기능을 신문의 면에 빗댄다 — 1면 = 오늘의 사건 목록, 3면 사회 = 지금 이 사건,
-// 오피니언 = 판결 성향 테스트, 독자 = 마이페이지. 지금 면은 aria-current로 표시하고 누르지 않는다
+// 8면 = 색인(사건 목록의 색인 면), 10면 = 성향테스트(신문 버전 /test/paper). 지금 면은 aria-current로 표시하고 누르지 않는다.
+// params는 navigate에 넘기는 값이다(색인 면으로 열기 · 신문을 넘겨 들어오기)
 const PAGES = [
   { page: '1면', name: '오늘의 지면', route: 'list' },
   { page: '3면', name: '사회', current: true },
-  { page: '8면', name: '오피니언 · 판결 성향 테스트', route: 'test' },
-  { page: '10면', name: '독자 · 마이페이지', route: 'me' },
+  { page: '8면', name: '색인', route: 'list', params: { openAt: 'INDEX' } },
+  { page: '10면', name: '성향테스트', route: 'testPaper', params: { from: 'paper' } },
 ];
 function pageIndex(navigate) {
   const nav = element('nav', 'page-index');
   nav.setAttribute('aria-label', '신문 목차');
-  PAGES.forEach(({ page, name, route, current }) => {
-    const item = route ? button('', () => navigate(route), 'page-index-item') : element('span', 'page-index-item is-current');
+  PAGES.forEach(({ page, name, route, params, current }) => {
+    const item = route ? button('', () => navigate(route, params), 'page-index-item') : element('span', 'page-index-item is-current');
     if (current) item.setAttribute('aria-current', 'page');
     item.append(element('b', '', page), element('span', '', name));
     nav.append(item);

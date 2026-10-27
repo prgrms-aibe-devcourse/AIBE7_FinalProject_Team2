@@ -127,18 +127,48 @@
   .case-paper-page .ear-button small { display: none; }
 }
 
-/* 체험 시작 전(S-20): 지면만 보이고 캐릭터 · 대사창 · 조작 줄은 숨는다. 지면 우하단 "시작하기"로 시작 */
+/* 체험 시작 전(S-20): 지면만 보이고 캐릭터 · 대사창 · 조작 줄은 숨는다. 제목 줄 오른쪽에 찍힌 "시작하기" 도장(FE-119)으로 시작하고, 지면 오른쪽 아래 종이 귀 "다음 장"도 같은 동작이다(FE-109) */
 .stage-wrap.paper-mode.parked :is(.spr, .dlg, .ctrl) { display: none; }
 .case-paper-page:has(.paper-start) { padding-bottom: calc(40px + var(--safe-bottom)); } /* 체험 전에는 대사창 자리가 없다: 지면 아래로는 40px까지만 스크롤된다 */
-.case-paper-page .paper:has(> .paper-start) { padding-bottom: 20px; } /* 시작하기 버튼의 하한: 지면 맨 아래에서 20px 위(margin은 지면 밖으로 새므로 padding) */
-.case-paper-page .paper-start { position: sticky; z-index: 20; bottom: calc(24px + var(--safe-bottom)); display: flex; flex-direction: column; align-items: flex-end; gap: 8px; width: fit-content; margin: 0 28px 0 auto; } /* 지면 안에서 화면 아래에 붙어 따라온다(책상 위로 나가지 않아 색이 겹치지 않는다) */
-.case-paper-page .paper-start .primary-button { min-height: 56px; padding: 0 28px; border-radius: 999px; font-size: 17px; box-shadow: 0 10px 24px -8px color-mix(in srgb, var(--color-desk-shadow) 70%, transparent); }
+/* 시작하기 도장(FE-119): 제목 줄(.story-top) 격자의 오른쪽 칸, 사건 메모 바로 밑에 놓는다. 지면 위에 찍힌 도장이라 화면을 따라오지 않는다.
+   2행: 왼쪽 칸에는 알아두기 · 같은 유형의 다른 사건(.story-extra), 오른쪽 칸에는 도장. 노트북 화면에서도 스크롤 없이 보인다 */
+.case-paper-page .story-top .story-head { grid-row: 1; }
+.case-paper-page .story-top .story-memo { grid-row: 1; }
+.case-paper-page .paper-start { grid-column: 2; grid-row: 2; align-self: center; justify-self: center; display: flex; flex-direction: column; align-items: center; gap: 10px; width: fit-content; padding-top: 22px; } /* 왼쪽 빈 자리 블록(위 여백 22px)과 가운데 높이를 맞추고 살짝 아래로 */
+.case-paper-page .stamp-button {
+  min-width: 156px; padding: 10px 22px 9px; border: 4px double var(--color-accent); border-radius: 6px; background: color-mix(in srgb, var(--color-paper) 92%, transparent); color: var(--color-accent);
+  font: 900 24px/1.2 var(--font-heading); letter-spacing: -.02em; text-align: center; cursor: pointer; rotate: -5deg;
+  transition: rotate .25s cubic-bezier(.2, .8, .2, 1), background-color .18s ease-out, color .18s ease-out, scale .12s ease-out;
+}
+.case-paper-page .stamp-button small { display: block; font: 700 11px/1.4 var(--font-body); letter-spacing: .1em; color: var(--color-label); transition: color .18s ease-out; }
+@media (hover: hover) and (pointer: fine) {
+  .case-paper-page .stamp-button:not([aria-disabled="true"]):hover { background: var(--color-accent); color: var(--color-paper); } /* P1: 바탕만 한 단계(기울기는 평소 그대로 -5도) */
+  .case-paper-page .stamp-button:not([aria-disabled="true"]):hover small { color: var(--color-range-fill); }
+}
+.case-paper-page .stamp-button:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 3px; }
+.case-paper-page .stamp-button:not([aria-disabled="true"]):active { scale: .96; }
+.case-paper-page .stamp-button:disabled { opacity: .6; cursor: default; }
 .case-paper-page .paper-start-notice { max-width: 280px; margin: 0; padding: 6px 12px; border-radius: 8px; background: var(--color-card); color: var(--color-caution); font-size: var(--text-small); }
 .case-paper-page .paper-start-notice:empty { display: none; }
-@media (max-width: 680px) { .case-paper-page .paper-start { margin-right: 12px; } }
-/* 준비 중(FE-56, 대본 없는 사건): 누를 수 없는 회색 알약. 안내 문구는 주의색 대신 차분한 글자색 */
-.case-paper-page .paper-start .primary-button[aria-disabled="true"] { background: var(--color-surface-strong); border-color: var(--color-border-strong); color: var(--color-muted); box-shadow: none; cursor: default; }
-.case-paper-page .paper-start:has([aria-disabled="true"]) .paper-start-notice { color: var(--color-text); }
+/* 준비 중(FE-56, 대본 없는 사건): 누를 수 없는 점선 도장(찍히지 않은 자리). 안내 문구는 주의색 대신 차분한 글자색 */
+.case-paper-page .stamp-button[aria-disabled="true"] { border-style: dashed; border-color: var(--color-border-strong); background: transparent; color: var(--color-muted); rotate: -3deg; cursor: default; }
+.case-paper-page .stamp-button[aria-disabled="true"] small { color: var(--color-muted); }
+/* 제목 칸 아래 왼쪽 빈 자리: 알아두기(일반 법률 설명) | 같은 유형의 다른 사건. 신문 사이드 박스처럼 이중 선 머리 */
+.case-paper-page .story-extra { grid-column: 1; grid-row: 2; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 28px; align-self: start; padding-top: 22px; }
+.case-paper-page .story-extra:empty { display: none; }
+.case-paper-page .extra-label { margin: 0 0 8px; padding-bottom: 6px; border-bottom: 3px double var(--color-border-strong); font-size: var(--text-caption); font-weight: 700; letter-spacing: .08em; color: var(--color-label); }
+.case-paper-page .extra-text { margin: 0; font: 400 13px/1.65 var(--font-article); letter-spacing: -.02em; color: var(--color-text); word-break: keep-all; text-align: justify; }
+.case-paper-page .extra-list { margin: 0; padding: 0; list-style: none; }
+.case-paper-page .extra-list li + li { border-top: 1px dotted var(--color-border-strong); }
+.case-paper-page .extra-link { display: block; width: 100%; min-height: 44px; padding: 6px 0; border: 0; background: transparent; color: var(--color-heading); font: 700 15px/1.45 var(--font-heading); letter-spacing: -.03em; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; } /* 제목은 한 줄만, 길면 … */
+@media (hover: hover) and (pointer: fine) { .case-paper-page .extra-link:hover { text-decoration: underline; text-underline-offset: 3px; } } /* P4 글자 링크 */
+.case-paper-page .extra-link:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+@media (max-width: 768px) { /* 한 단으로 쌓이면 도장은 메모 밑 흐름에서 칸을 꽉 채우고 똑바로 선다 */
+  .case-paper-page .story-top .story-head, .case-paper-page .story-top .story-memo, .case-paper-page .paper-start, .case-paper-page .story-extra { grid-column: auto; grid-row: auto; }
+  .case-paper-page .story-extra { grid-template-columns: 1fr; gap: 14px; }
+  .case-paper-page .paper-start { align-items: stretch; justify-self: stretch; }
+  .case-paper-page .stamp-button { rotate: 0deg; }
+}
 /* 시작하면 내로 · 남불이 아래에서 뛰어 들어오고, 대사창이 뒤따라 뜬다 */
 .stage-wrap.paper-mode.entering .stage[data-scene] .spr { animation: paper-enter .55s cubic-bezier(.2, .8, .2, 1) backwards; }
 .stage-wrap.paper-mode.entering .stage[data-scene] .spr.b { animation-delay: .12s; }
@@ -162,7 +192,7 @@
 .case-paper-page .tabs-zone { border-bottom: 1px solid var(--color-border-strong); }
 .case-paper-page .story { padding: 30px 0 32px; }
 /* A안: [제목 · 부제 · 기자 줄 | 사건 메모] */
-.case-paper-page .story-top { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 48px; align-items: start; padding-bottom: 24px; border-bottom: 1px solid var(--color-text); }
+.case-paper-page .story-top { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 0 48px; align-items: start; padding-bottom: 24px; border-bottom: 1px solid var(--color-text); }
 .case-paper-page .story-title { margin: 0 0 14px; font: 900 clamp(34px, 4.4vw, 58px) / 1.18 var(--font-heading); letter-spacing: -.035em; color: var(--color-heading); text-wrap: balance; word-break: keep-all; }
 .case-paper-page .story-deck { margin: 0; max-width: 34em; font: 600 clamp(17px, 1.6vw, 21px) / 1.55 var(--font-heading); color: var(--color-muted); word-break: keep-all; text-wrap: pretty; }
 .case-paper-page .story-byline { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 22px 0 0; font-size: var(--text-caption); color: var(--color-muted); }
@@ -189,7 +219,7 @@
 /* 인용구: 기사 첫 문장을 굵게 한 번 더(단 사이 쉼) */
 .case-paper-page .story-quote { break-inside: avoid; margin: .6em 0 1.1em; padding: 12px 0; border-top: 2px solid var(--color-heading); border-bottom: 1px solid var(--color-heading); font: 700 19px/1.5 var(--font-heading); color: var(--color-heading); letter-spacing: -.02em; word-break: keep-all; text-wrap: balance; }
 @media (max-width: 1100px) {
-  .case-paper-page .story-top { grid-template-columns: minmax(0, 1fr) 220px; gap: 28px; }
+  .case-paper-page .story-top { grid-template-columns: minmax(0, 1fr) 220px; gap: 0 28px; }
   .case-paper-page .story-main { grid-template-columns: minmax(0, 1fr); }
   .case-paper-page .story-media { grid-template-columns: 1fr 1fr; padding-right: 0; border-right: 0; }
 }
