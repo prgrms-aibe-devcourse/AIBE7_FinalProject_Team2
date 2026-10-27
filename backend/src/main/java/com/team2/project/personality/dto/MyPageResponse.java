@@ -4,6 +4,7 @@ import com.team2.project.experience.domain.Experience;
 import com.team2.project.experience.domain.ExperienceStatus;
 import com.team2.project.legalcase.domain.CrimeType;
 import com.team2.project.legalcase.domain.ValueAxis;
+import com.team2.project.level.dto.LevelStatus;
 import com.team2.project.profile.domain.AchievementProgress;
 import com.team2.project.profile.domain.ProfileDecoValues;
 import com.team2.project.profile.domain.ProfileSettingsValues;
@@ -30,14 +31,16 @@ public record MyPageResponse(
 	ProfileDecoValues profileDeco,		// 꾸미기 저장값(없으면 기본값). 잠긴 값이어도 그대로 (BE-96)
 	List<AchievementProgress> achievements,	// 도전과제 진행도 · 상태 · 보상 (서버 표가 원본, BE-96)
 	Rewards unlocked,				// 지금 열린 것: 처음부터 열린 것 + 달성한 도전과제의 보상 (BE-96)
-	ProfileSettingsValues profileSettings) {	// 공개 성향카드 · 프로필카드 아래 성향 · 한 줄 소개(없으면 기본값, v0.52 BE-104)
+	ProfileSettingsValues profileSettings,	// 공개 성향카드 · 프로필카드 아래 성향 · 한 줄 소개(없으면 기본값, v0.52 BE-104)
+	LevelStatus level) {			// 레벨 · 직업 (L-1과 같은 값, BE-106)
 
 	private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
 	public static MyPageResponse empty() {
 		ProfileDecoView deco = ProfileDecoService.emptyView();
 		return new MyPageResponse(null, null, BaselineRetake.NONE, null, List.of(), List.of(), Profile.EMPTY,
-			deco.profileDeco(), deco.achievements(), deco.unlocked(), ProfileSettingsValues.DEFAULTS);
+			deco.profileDeco(), deco.achievements(), deco.unlocked(), ProfileSettingsValues.DEFAULTS,
+			LevelStatus.initial());
 	}
 
 	/**

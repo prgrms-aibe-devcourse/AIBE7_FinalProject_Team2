@@ -24,6 +24,7 @@ import com.team2.project.personality.dto.PersonalityTypeResponse;
 import com.team2.project.personality.repository.ExperiencePersonalityRepository;
 import com.team2.project.personality.repository.PersonalityResultRepository;
 import com.team2.project.personality.repository.PersonalityTypeRepository;
+import com.team2.project.level.service.LevelService;
 import com.team2.project.profile.service.ProfileDecoService;
 import com.team2.project.profile.service.ProfileDecoService.ProfileDecoView;
 import com.team2.project.profile.service.ProfileSettingsService;
@@ -66,6 +67,7 @@ public class MyPageService {
 	private final AttendanceService attendanceService;
 	private final ProfileDecoService profileDecoService;
 	private final ProfileSettingsService profileSettingsService;
+	private final LevelService levelService;
 
 	@Transactional(readOnly = true)
 	public MyPageResponse get(Optional<UUID> anonymousId) {
@@ -123,7 +125,7 @@ public class MyPageService {
 		ProfileDecoView deco = profileDecoService.view(userId);
 		return new MyPageResponse(personality, initial, baselineRetake, judgment, history, experiences,
 			new Profile(attendanceService.countDays(userId)), deco.profileDeco(), deco.achievements(), deco.unlocked(),
-			profileSettingsService.view(userId));
+			profileSettingsService.view(userId), levelService.view(userId));
 	}
 
 	/** 흐름 · 종합 · 첫 판결에 나온 유형 코드를 한 번에 조회한다(사건마다 조회하지 않는다). 코드는 응답에 넣지 않는다(#119) */
