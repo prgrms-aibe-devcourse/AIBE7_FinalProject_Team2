@@ -1,4 +1,4 @@
--- V32__member_local_login.sql (확장 단계, BE-113)
+-- V33__member_local_login.sql (확장 단계, BE-113)
 -- 아이디 · 비밀번호 회원가입 · 로그인. 회원 행은 그대로 두고 비밀번호 정보만 별도 테이블에 둔다
 -- → 카카오 회원 행 · 기존 쿼리는 영향이 없다 (docs/decisions/BE-113.md 결정 1)
 

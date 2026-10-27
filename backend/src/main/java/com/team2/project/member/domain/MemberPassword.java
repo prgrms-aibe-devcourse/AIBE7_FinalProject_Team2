@@ -10,7 +10,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * 아이디 회원의 로그인 정보 (확장 단계, BE-113, V32)
+ * 아이디 회원의 로그인 정보 (확장 단계, BE-113, V33)
  *
  * 회원 1 : 로그인 정보 0..1 (PK = member_id). 카카오 회원은 행이 없다.
  * 행은 MemberPasswordRepository.insertIfLoginIdAbsent(ON CONFLICT DO NOTHING)로만 만든다 —
