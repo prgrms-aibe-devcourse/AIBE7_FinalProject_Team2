@@ -65,8 +65,11 @@ body[data-theme="coffee"] .site-footer { background: var(--palette-coffee-50); b
 
 /* ── 위쪽: 프로필카드 | 닉네임 · 수치 | 성향카드 (좌우 대칭, 같은 크기의 세로로 긴 카드) ── */
 .my-top { display: grid; grid-template-columns: 200px minmax(0, 1fr) 200px; gap: 28px; align-items: start; padding-bottom: 36px; }
-.my-top-middle { align-self: stretch; display: flex; flex-direction: column; justify-content: flex-start; gap: 20px; padding-top: 6px; min-width: 0; }
-.my-nickname { margin: 0; font: 900 var(--text-display)/1.25 var(--font-heading); letter-spacing: -.03em; color: var(--color-heading); text-wrap: balance; }
+.my-top-middle { align-self: stretch; display: flex; flex-direction: column; justify-content: flex-start; gap: 20px; padding-top: 6px; min-width: 0; container-type: inline-size; }
+/* 닉네임은 한 줄: 한글 8자가 가운데 칸 폭에 들어가게 칸 폭에 비례해 줄이고(최대 크기는 그대로), 그래도 넘치면 ... */
+.my-nickname { margin: 0; font: 900 var(--text-display)/1.25 var(--font-heading); font-size: min(var(--text-display), 11.5cqi); letter-spacing: -.03em; color: var(--color-heading); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.my-level-progress { display: grid; gap: 6px; margin-top: 10px; }
+.my-level-caption { margin: 0; color: var(--color-muted); font-size: var(--text-small); font-variant-numeric: tabular-nums; }
 .my-stats { display: grid; gap: 0; margin: 0; padding: 0; border-top: 1px solid var(--color-border-strong); }
 .my-stat { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 9px 2px; border-bottom: 1px solid var(--color-border); }
 .my-stat dt { color: var(--color-muted); font-size: var(--text-small); }

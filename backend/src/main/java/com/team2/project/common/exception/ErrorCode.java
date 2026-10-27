@@ -48,6 +48,8 @@ public enum ErrorCode {
 	INCIDENT_PHOTO_NOT_FOUND(HttpStatus.NOT_FOUND, "그 역할의 사진이 없습니다."),
 	// 신문 지면 콘텐츠 생성 API (확장 단계, BE-92)
 	PAPER_NOT_FOUND(HttpStatus.NOT_FOUND, "신문 지면 콘텐츠가 없습니다."),
+	SCRIPT_NOT_FOUND(HttpStatus.NOT_FOUND, "사건 대본이 없습니다."),
+	SCRIPT_LINE_NOT_FOUND(HttpStatus.NOT_FOUND, "대본에 그 판단 요소의 대사가 없습니다."),
 	// 프로필 꾸미기 (확장 단계, BE-96). details에 잠긴 필드를 담는다
 	DECO_LOCKED(HttpStatus.CONFLICT, "아직 열리지 않은 꾸미기입니다."),
 	// 레벨 · 직업 (확장 단계, BE-106)

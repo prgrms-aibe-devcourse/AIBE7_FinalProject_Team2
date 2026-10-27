@@ -58,6 +58,7 @@
 | v0.54 | 2026-10-27 | **레벨 · 직업 API 신설 (BE-106)** — 11장 L-1 `GET /level`(레벨 · XP · 직업 목록) · L-2 `PUT /level/job`(카드에 보여 줄 직업 선택) · L-3 `POST /level/share-reward`(SNS 공유 보상). P-5 응답에 `level`(L-1과 같은 값) 추가, 1-5에 `JOB_LOCKED`(409) 추가. 레벨은 익명 ID 단위(회원 합산은 후속). 경험치 산식 · 직업 11등급 · 지급 상한은 11장과 [BE-106 결정 기록](decisions/BE-106.md) |
 | v0.55 | 2026-10-27 | 범죄 유형 강도 · 절도 추가 (BE-112 · ERD v1.40 · V31) — `crimeType` 값에 `ROBBERY`(강도) · `THEFT`(절도) 추가(API 1 쿼리 · 응답, 사건 등록). 분류명(`crimeCategoryLabel`)은 둘 다 "재산범죄". API 1 `summary.byCrimeType`은 공개 사건이 없어도 다섯 키를 모두 0으로 내려 준다. API 4 `rangeOptions`: 강도는 벌금형을 빼고 무기징역을 더한 7개, 절도는 공통 7개 |
 | v0.56 | 2026-10-27 | API 1 `crimeCategoryLabel` 설명에 범죄 유형별 분류명 대응을 모두 적음(생명 · 재산 · 신체범죄, 강도 · 절도는 재산범죄) (BE-111, BE-112 #297 리뷰 요청) |
+| v0.57 | 2026-10-27 | **사건 대본 검수 A-13-10 ~ A-13-12 신설 (BE-108)** — `GET /admin/cases/{caseId}/script` · `POST .../script/approve` · `POST .../script/reject`. 적재(A-14-1)가 넣은 증거조사 대본을 관리자가 보고 승인해야 공개된다(공개 서빙은 BE-109). **번호는 운영 메뉴 A-16 ~ A-41 예약 때문에 A-13 하위로 매겼다** — A-14-1과 같은 이유다. 검수 칸(`reviewStatus` · `isPublished` · `reviewedBy` · `reviewedAt` · `reviewNote`)은 판결 후보 A-8과 같은 이름 · 같은 형식이고, 대사마다 판단 요소 문구 `label`을 서버가 붙여 준다. 대사 한 줄 직접 수정 A-13-13(`PATCH .../script/evidence/{factorId}`)도 함께 — 고친 줄은 `validation.manual`로 표시하고 검수 상태를 대기로 되돌린다(해송님 요청). **A-6 응답에 `script` 요약(`exists` · `reviewStatus` · `publishable`) 추가** — 미승인 대본은 공개를 막지 않으므로 `publishReadiness.reasons`가 아니라 별도 칸으로 내려 공개 준비 화면이 경고로 쓴다. 에러 코드 `SCRIPT_NOT_FOUND` · `SCRIPT_LINE_NOT_FOUND`(404) 추가. ERD v1.41 `case_script`(V32) **(병합 메모) 번호를 두 번 옮겼다 — BE-106(V30 · v0.54 · v1.39)과 BE-112(V31 · v0.55 · v1.40) · BE-111(v0.56)이 먼저 머지돼, 이 작업은 V32 · v0.57 · v1.41로 다시 매겼다. 먼저 머지된 쪽이 번호를 갖는다** |
 
 ---
 
@@ -1081,7 +1082,8 @@ API 1 · 2 · 16 · 17은 상태와 관계없이 부를 수 있다. 표에 없�
       { "judgmentId": 502, "reviewStatus": "PENDING", "isPublished": false, "penaltyLabel": "징역 12년", "modelName": null, "createdAt": "2026-10-20T09:00:00+09:00" }
     ]
   },
-  "publishReadiness": { "ready": false, "reasons": ["NO_PUBLISHED_AI", "NO_PUBLISHED_COURT"] }
+  "publishReadiness": { "ready": false, "reasons": ["NO_PUBLISHED_AI", "NO_PUBLISHED_COURT"] },
+  "script": { "exists": true, "reviewStatus": "PENDING", "publishable": false }
 }
 ```
 
@@ -1091,6 +1093,7 @@ API 1 · 2 · 16 · 17은 상태와 관계없이 부를 수 있다. 표에 없�
 - `penaltyLabel`은 API 14 `preToFinal.finalJudgmentText`(예: "징역 15년")와 같은 규칙으로 만든다.
 - `factors[].summaryTagCandidates`(BE-80): 요약어 후보(ERD `factor.summary_tag_candidates`). 후보 계산을 켜지 않고 적재한 요소는 `null`. **제안일 뿐 요약어(`summaryTag`)를 바꾸지 않는다** — `suggested`가 있으면 관리자가 요약어를 그 값으로 맞출지 판단한다(요약어 수정 API는 아직 없음). `ambiguous: true`면 1 · 2순위가 붙어 제안하지 않은 것이다.
 - `publishReadiness.reasons`는 A-13의 공개 조건 코드(A-13 표)다. 비어 있으면 `ready = true`.
+- `script`는 사건 대본 요약이다(BE-108). **공개 조건이 아니라 경고용 값이다** — 미승인 대본은 사건 공개를 막지 않으므로(대본은 사건 내용이 아니라 체험 연출이다) `publishReadiness.reasons`에 넣지 않고 따로 내려준다. 대본이 없으면 `{ "exists": false, "reviewStatus": null, "publishable": null }`이고, 기존 사건은 모두 이 경우다. 내용은 A-13-10으로 본다.
 - 원문(`original_text`)은 크기가 커서 A-7로 따로 받는다.
 
 | 거절 | 조건 |
@@ -1453,6 +1456,107 @@ A-11과 같은 방식(보낸 필드만, `null` = 지움). `headline` · `article
 | 404 `CASE_NOT_FOUND` | 사건이 없음 |
 | 404 `PAPER_NOT_FOUND` | 아직 생성한 적 없음(먼저 A-13-6으로 생성해야 한다) |
 | 409 `INVALID_STATE` | 이미 `PUBLISHED`(`CASE_PUBLISHED`) |
+
+### A-13-10. 사건 대본 조회 — `GET /admin/cases/{caseId}/script`
+
+> **신설 (BE-108).** 증거조사에서 검사 · 변호인이 주고받는 대사. 파이프라인 `script` 단계(BE-107)가 만들고 적재(A-14-1)가 넣는다. **담는 것은 증거조사 대사뿐이다** — 1막 기사 해설 · 피고인신문 · 최종의견은 파이프라인 범위 밖이다(COMMON-65 · FE-33). 공개 서빙은 BE-109에서 FE-33과 정한다.
+
+```json
+{
+  "evidence": [
+    { "factorId": 1, "label": "계약서에 서명했다", "role": "PROSECUTOR", "character": "나로",
+      "text": "계약서에 서명한 사실은 분명합니다.", "attempts": 1, "validation": { "warnings": [] } },
+    { "factorId": 2, "label": "돈을 돌려주지 않았다", "role": "DEFENSE", "character": "남불",
+      "text": null, "attempts": 3, "validation": { "warnings": ["증거 카드에 없는 사실을 말했습니다"] } }
+  ],
+  "cast": { "prosecutor": "나로", "defense": "남불" },
+  "model": "google:gemini-2.5-flash",
+  "balanceWarning": null,
+  "publishable": false,
+  "stopped": false,
+  "generatedAt": "2026-10-27T09:00:00+09:00",
+  "updatedAt": "2026-10-27T09:12:00+09:00",
+  "reviewStatus": "PENDING",
+  "isPublished": false,
+  "reviewedBy": null,
+  "reviewedAt": null,
+  "reviewNote": null
+}
+```
+
+- `evidence[]`는 파이프라인이 만든 모양 그대로이고, **`label`만 서버가 더해 준다** — 어느 사실에 대한 대사인지는 사건의 판단 요소에 있다(파이프라인 `factorId` = `factor.display_order`, ERD v1.37). 화면이 A-6을 다시 불러 번호를 맞추지 않아도 된다. 요소가 지워졌거나 못 찾으면 그 줄의 `label`은 `null`이다.
+- **생성에 실패한 줄은 `text`가 `null`**이다. `attempts`는 그 줄을 몇 번 만들어 봤는지, `validation.warnings`는 그 줄에 대한 경고다(어느 대사의 경고인지 줄 안에 있어 따로 연결할 필요가 없다).
+- `publishable`이 `false`면 승인할 수 없다(A-13-11). 이유는 둘이고 둘 다 내려 준다 — 끝내 생성하지 못한 줄이 있거나(`text: null`), 호출 한도로 중간에 멈췄거나(`stopped: true`). 화면이 "다시 생성"과 "이어서 생성"을 구분해 안내할 수 있다.
+- `generatedAt`은 파이프라인이 만든 시각이고 `updatedAt`은 적재 · 검수 시각이다. 시각은 모두 KST 오프셋.
+- 검수 칸 다섯 개는 **A-8과 같은 이름 · 같은 형식**이다(검수 기록이 없으면 `reviewStatus: "PENDING"`, `reviewedBy`는 관리자 이메일). 화면이 판결 후보 검수 영역과 같은 부품을 쓸 수 있게 맞췄다.
+- **`isPublished`는 사건 공개 여부와 별개다.** 공개한 사건에 대본만 늦게 들어와 승인될 수도 있고, 공개 전에 대본만 승인돼 있을 수도 있다.
+
+| 거절 | 조건 |
+| --- | --- |
+| 404 `CASE_NOT_FOUND` | 사건이 없음 |
+| 404 `SCRIPT_NOT_FOUND` | 사건은 있는데 대본이 아직 없음 (A-13-7의 `PAPER_NOT_FOUND`와 같은 구분) |
+
+### A-13-11. 사건 대본 승인 — `POST /admin/cases/{caseId}/script/approve`
+
+승인 = 이 대본을 공개한다. 요청 본문 없음. 응답은 A-13-10과 같은 형식(`reviewStatus: "APPROVED"` · `isPublished: true`).
+
+- **`publishable`이 `false`면 거절한다.** 증거 카드와 대사가 1:1로 맞지 않는 상태로 공개하면 체험이 깨진다(BE-107 계약). DB에도 같은 제약을 두었다(`chk_case_script_publishable_approved`).
+- **사건 상태(`legal_case.status`)는 바꾸지 않는다.** 판결 후보 승인(A-9)은 DRAFT → REVIEW로 올리지만, 대본은 사건 내용이 아니라 체험 연출이라 사건 공개 흐름과 따로 둔다.
+- 감사 로그 `CASE_SCRIPT_APPROVE`.
+
+| 거절 | 조건 |
+| --- | --- |
+| 404 `CASE_NOT_FOUND` · `SCRIPT_NOT_FOUND` | A-13-10과 같음 |
+| 409 `INVALID_STATE` | `publishable: false` — 대본을 다시 생성해야 한다 |
+
+### A-13-12. 사건 대본 반려 — `POST /admin/cases/{caseId}/script/reject`
+
+```json
+{ "reason": "검사 쪽 대사가 변호인보다 두 배 깁니다." }
+```
+
+| 필드 | 규칙 |
+| --- | --- |
+| `reason` | 필수, 앞뒤 공백을 잘라 1 ~ 500자 (A-10과 같다) |
+
+응답은 A-13-10과 같은 형식(`reviewStatus: "REJECTED"` · `isPublished: false` · `reviewNote`에 사유).
+
+- **승인한 대본도 반려로 내릴 수 있다.** 판결 후보 반려(A-10)는 공개 중인 후보를 막지만(교체할 다른 후보가 있다), 대본은 사건마다 하나뿐이라 막으면 잘못 승인한 대본을 되돌릴 방법이 없어진다.
+- 감사 로그 `CASE_SCRIPT_REJECT`.
+
+| 거절 | 조건 |
+| --- | --- |
+| 400 `VALIDATION_ERROR` | 사유 빈 값 · 500자 초과 |
+| 404 `CASE_NOT_FOUND` · `SCRIPT_NOT_FOUND` | A-13-10과 같음 |
+
+### A-13-13. 사건 대본 대사 수정 — `PATCH /admin/cases/{caseId}/script/evidence/{factorId}`
+
+> **신설 (BE-108).** 숫자 하나 · 말투 때문에 모델을 수십 번 다시 부르는 것보다 싸다. 신문 지면 수정(A-13-8)과 같은 자리의 기능이다.
+
+```json
+{ "text": "그 돈은 빌린 것이 아니라 받은 것입니다." }
+```
+
+| 필드 | 규칙 |
+| --- | --- |
+| `text` | 필수. 앞뒤 공백을 잘라 1 ~ 100자, 2줄 이하 (파이프라인 `script_generation.py`의 `MAX_CHARS` · `MAX_LINES`와 같은 값) |
+
+- `{factorId}`는 **파이프라인 번호**(= `factor.display_order`)다. 대사는 판단 요소마다 한 줄이고 어느 측이 말하는지는 요소의 방향에서 정해지므로, 이 번호 하나로 줄이 정해진다.
+- 금지어 · 원문에 없는 숫자 같은 **의미 검사는 하지 않는다.** 그 판단을 사람이 하라고 두는 기능이다.
+- 고친 줄은 `validation`이 `{ ok: true, manual: true, warnings: [...] }`가 되고 `editedAt`이 붙는다. **경고는 남긴다** — 사람이 보고 판단할 값이다. 화면은 `manual`로 "사람이 고침"을 표시한다.
+- **고치면 검수 기록이 지워져 다시 대기가 된다.** 내용이 바뀌었는데 지난 승인이 남아 있으면 검수하지 않은 대사가 공개된다.
+- **`publishable`을 다시 계산한다.** 파이프라인과 같은 식(`not stopped and not failed`)을 다시 적용한다 — 빈 대사를 사람이 채워 모든 줄이 차면 승인할 수 있게 올라가고, 호출 한도로 멈춘 대본(`stopped: true`)은 **줄 자체가 모자라** 고쳐도 올라가지 않는다(그때는 다시 생성해야 한다).
+- 감사 로그 `CASE_SCRIPT_UPDATE`. **고친 대사 본문은 남기지 않는다**(어느 요소를 고쳤는지만) — 원문 · 모델 출력과 같은 취급이다.
+- `balanceWarning`은 **고치기 전 기준**으로 남는다(검사 · 변호인 분량은 파이프라인이 생성할 때 한 번 재는 값이다). 화면은 "수정 전 기준"으로 읽으면 된다.
+- 길이는 파이프라인과 같은 방식으로 센다 — **줄바꿈은 글자 수에 넣지 않는다**. 50자 + 50자 두 줄은 통과한다.
+
+응답은 A-13-10과 같은 형식.
+
+| 거절 | 조건 |
+| --- | --- |
+| 400 `VALIDATION_ERROR` | 빈 값 · 100자 초과 · 3줄 이상 |
+| 404 `CASE_NOT_FOUND` · `SCRIPT_NOT_FOUND` | A-13-10과 같음 |
+| 404 `SCRIPT_LINE_NOT_FOUND` | 대본에 그 판단 요소의 대사가 없음 |
 
 ### A-14. 사건 등록 시작 — `POST /admin/case-imports`
 

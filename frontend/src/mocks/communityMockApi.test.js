@@ -158,7 +158,7 @@ test('메인: 새 글 · 댓글이 이야기 수에 더해진다', async () => {
   assert.equal(after, before + 2);
 });
 
-test('메인 랭킹: 레벨 순 열 명, 순위 · 레벨 · 프로필카드 · 공개 성향만 싣는다', async () => {
+test('메인 랭킹: 레벨 순 열 명, 순위 · 레벨 · 직업 · 카드 아래 줄 · 프로필카드 · 공개 성향만 싣는다', async () => {
   const { ranking } = await getCommunityHome();
   assert.equal(ranking.length, RANKING_SIZE);
   assert.deepEqual(ranking.map((item) => item.rank), Array.from({ length: RANKING_SIZE }, (_, i) => i + 1));
@@ -166,5 +166,6 @@ test('메인 랭킹: 레벨 순 열 명, 순위 · 레벨 · 프로필카드 · 
     const [a, b] = [ranking[i - 1], ranking[i]];
     assert.ok(a.level > b.level || (a.level === b.level && a.completedCount >= b.completedCount));
   }
-  assert.deepEqual(Object.keys(ranking[0]).sort(), ['completedCount', 'level', 'nickname', 'profileCard', 'rank', 'shownType']);
+  assert.deepEqual(Object.keys(ranking[0]).sort(), ['cardLine', 'completedCount', 'job', 'level', 'nickname', 'profileCard', 'rank', 'shownType']);
+  assert.ok(ranking.every((item) => item.job.code && item.job.name && ['type', 'signature', 'job'].includes(item.cardLine.line)));
 });

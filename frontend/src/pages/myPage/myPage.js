@@ -212,6 +212,30 @@ function profileCardPair(data, go) {
   return [profile, typeCardNode];
 }
 
+// 경험치 진행률(FE-116): 지금 레벨에 닿은 XP부터 다음 레벨에 필요한 XP까지. 서버 L-1의 xp · currentLevelXp · nextLevelXp를 쓴다. 최고 레벨이면 막대가 가득 차고 안내만 바뀐다
+function levelProgress(level) {
+  if (!level) return null;
+  const top = level.nextLevelXp == null;
+  const span = top ? 1 : level.nextLevelXp - level.currentLevelXp;
+  const done = top ? 1 : Math.min(span, Math.max(0, level.xp - level.currentLevelXp));
+  const box = element('div', 'my-level-progress');
+  const text = top ? '최고 레벨이에요.' : `Lv.${level.level + 1}까지 ${level.nextLevelXp - level.xp} XP`;
+  const caption = element('p', 'my-level-caption', text);
+  if (IS_MOCK) caption.append(mockTag());
+  const bar = element('div', 'my-achievement-bar');
+  bar.setAttribute('role', 'progressbar');
+  bar.setAttribute('aria-label', '경험치 진행률');
+  bar.setAttribute('aria-valuemin', '0');
+  bar.setAttribute('aria-valuemax', String(span));
+  bar.setAttribute('aria-valuenow', String(done));
+  bar.setAttribute('aria-valuetext', top ? '최고 레벨' : `${done} / ${span} XP`);
+  const fill = element('span');
+  fill.style.width = `${Math.round((done / span) * 100)}%`;
+  bar.append(fill);
+  box.append(caption, bar);
+  return box;
+}
+
 // 첫 화면 위쪽: [프로필카드(대표 이미지 · 꾸미기) | 닉네임 · 수치 | 성향카드(타로카드: 이름 · 성향 이미지 · 대사 한 줄)]
 function renderTop(data, go) {
   const section = element('section', 'my-top');
@@ -220,6 +244,8 @@ function renderTop(data, go) {
 
   const middle = element('div', 'my-top-middle');
   middle.append(element('h2', 'my-nickname', myNickname(data, currentUser())), renderStats(stats));
+  const progress = levelProgress(data.level);
+  if (progress) middle.append(progress);
 
   section.append(profile, middle, typeCardNode);
   return section;
@@ -1100,7 +1126,7 @@ function typeChoiceSection(data, onPick) {
     input.name = 'profile-card-line';
     input.value = value;
     input.checked = line === value;
-    input.addEventListener('change', () => { setCardLine(value); onPick(); redraw(); });
+    input.addEventListener('change', () => { saveSettingsOr(setCardLine(value)); onPick(); redraw(); });
     label.append(input, element('span', '', text));
     lines.append(label);
   });
@@ -1108,7 +1134,7 @@ function typeChoiceSection(data, onPick) {
   const levelInput = element('input');
   levelInput.type = 'checkbox';
   levelInput.checked = getCardLevel();
-  levelInput.addEventListener('change', () => { setCardLevel(levelInput.checked); onPick(); });
+  levelInput.addEventListener('change', () => { saveSettingsOr(setCardLevel(levelInput.checked)); onPick(); });
   levelLabel.append(levelInput, element('span', '', '레벨 앞에 붙이기'));
   field.append(lines, levelLabel);
   const typeBox = element('div');

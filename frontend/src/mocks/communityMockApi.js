@@ -4,6 +4,8 @@ import { peek as peekExperience, readJudgment } from './mockExperienceStore.js';
 import { mockCases as cases } from './caseListMockData.js';
 import { seedAuthors, seedComments, seedPosts } from './communityMockData.js';
 import { DEFAULT_DECO } from '../utils/profileDeco.js';
+import { getCardLineSettings } from '../utils/profileSettings.js';
+import { awardMockXp, mockLevelView } from './levelMockApi.js';
 
 // 커뮤니티 목 — FE-47 (S-18). 서버 API가 아직 명세에 없어 화면 확인용으로만 둔다.
 // 다른 사람의 글 · 댓글은 고정 값(communityMockData.js), 내가 쓴 글 · 댓글 · 좋아요는 브라우저 localStorage에 둔다.
@@ -44,8 +46,15 @@ function me() {
 }
 
 // 글쓴이 명함(FE-88): 글 · 댓글의 author에 프로필카드 꾸미기 + 공개 성향카드를 붙인다. 내 글은 목에 내 꾸미기가 없어 기본 카드다(실제 API는 서버가 채운다)
-const DEFAULT_AUTHOR = { intro: '', level: 1, job: '수습 판사', completedCount: 0, profileCard: { ...DEFAULT_DECO }, shownType: null };
-const withCard = (author) => ({ ...DEFAULT_AUTHOR, ...seedAuthors[author.nickname], ...author });
+const DEFAULT_AUTHOR = { intro: '', level: 1, job: { code: 'NONE', name: '무직' }, cardLine: { line: 'type', showLevel: false }, completedCount: 0, profileCard: { ...DEFAULT_DECO }, shownType: null };
+// 내 글 · 내 댓글은 내 레벨 · 직업 · 카드 아래 줄 설정을 쓴다(실제 API는 서버가 채운다)
+function myCard(author) {
+  if (author.nickname !== currentUser()?.nickname) return {};
+  const { level, job } = mockLevelView();
+  const { cardLine, cardLevel } = getCardLineSettings();
+  return { level, job, cardLine: { line: cardLine, showLevel: cardLevel } };
+}
+const withCard = (author) => ({ ...DEFAULT_AUTHOR, ...seedAuthors[author.nickname], ...myCard(author), ...author });
 
 // 보는 사람이 이 사건 판결을 확정했는지(FE-93). 판결 전이면 화면이 남의 판결 카드를 접는다. 목 체험 기록은 사건 1 하나뿐이다. 필드 이름은 임시 — API 설계 때 BE와 확정한다
 const viewerJudged = (caseId) => Boolean(currentUser()) && caseId === 1 && VERDICT_DONE.includes(peekExperience()?.status); // 로그아웃이면 판결 전(체험 기록은 브라우저에 남아도 사용자 것이 아니다)
@@ -138,7 +147,7 @@ export async function getCommunityHome() {
     .sort((a, b) => b.talkCount - a.talkCount || b.item.participantCount - a.item.participantCount).slice(0, RECOMMENDED_SIZE);
   const ranking = Object.keys(seedAuthors).map((nickname) => withCard({ nickname }))
     .sort((a, b) => b.level - a.level || b.completedCount - a.completedCount || a.nickname.localeCompare(b.nickname, 'ko')).slice(0, RANKING_SIZE)
-    .map(({ nickname, level, completedCount, profileCard, shownType }, index) => ({ rank: index + 1, nickname, level, completedCount, profileCard, shownType }));
+    .map(({ nickname, level, job, cardLine, completedCount, profileCard, shownType }, index) => ({ rank: index + 1, nickname, level, job, cardLine, completedCount, profileCard, shownType }));
   return structuredClone({
     hotCases: hot.map(({ item, own, talkCount }) => ({ case: caseSummary(item), talkCount, postCount: own.length, posts: casePosts(own, HOT_POSTS) })),
     recommendedCases: recommended.map(({ item, own }) => ({ case: caseSummary(item), postCount: own.length, posts: casePosts(own, RECOMMENDED_POSTS) })),
@@ -205,6 +214,8 @@ export async function createCommunityPost({ category, caseId = null, title, body
     likeCount: 0, createdAt: new Date().toISOString(), mine: true,
   };
   store({ ...state, posts: [post, ...state.posts], nextId: state.nextId + 1 });
+  awardMockXp('post', post.postId);
+  if (verdict) awardMockXp('verdictBonus', post.caseId);
   return structuredClone(view(load(), post));
 }
 
@@ -219,6 +230,7 @@ export async function toggleCommunityLike(postId) {
   else liked[postId] = true;
   const next = { ...state, liked };
   store(next);
+  if (liked[postId]) awardMockXp('like', postId);
   const { likeCount } = view(next, findPost(next, postId));
   return { liked: Boolean(liked[postId]), likeCount };
 }
@@ -233,6 +245,7 @@ export async function createCommunityComment(postId, { body } = {}) {
   if (!text || text.length > COMMENT_MAX) fail('VALIDATION_ERROR', '입력값을 확인해 주세요.', [{ field: 'body', reason: `MUST_BE_1_TO_${COMMENT_MAX}_CHARS` }]);
   const comment = { commentId: state.nextId, author, body: text, createdAt: new Date().toISOString(), mine: true };
   store({ ...state, comments: { ...state.comments, [postId]: [...(state.comments[postId] ?? []), comment] }, nextId: state.nextId + 1 });
+  awardMockXp('comment', comment.commentId);
   return structuredClone({ ...comment, author: withCard(comment.author) });
 }
 

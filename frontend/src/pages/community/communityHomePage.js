@@ -1,9 +1,7 @@
 import { API_MODE } from '../../api/config.js';
 import { button, element, mockTag } from '../../components/siteLayout.js';
-import { profileFace } from '../../components/personCards.js';
-import { normalizeDeco } from '../../utils/profileDeco.js';
 import { scriptFor } from '../overview/overviewPage.js';
-import { NOT_READY, authorButton, clip, communityShell, composer, filterControls, popularList, postLink, svgIcon } from './communityParts.js';
+import { NOT_READY, authorButton, authorFace, clip, communityShell, composer, filterControls, popularList, postLink, svgIcon } from './communityParts.js';
 
 // S-18 커뮤니티 메인 (FE-89). 메인 책상의 노트북 · 헤더 "커뮤니티"로 들어온다. 글 목록은 /community/posts(communityPage.js)
 // 가운데: 지금 이야기가 많은 사건(한 장씩 넘기는 슬라이드) → 레벨 랭킹(시상대 + 4 ~ 10위 줄) → 추천 사건(신문 세 단).
@@ -236,7 +234,7 @@ export function renderCommunityHomePage(container, { api, navigate }) {
   }
   function rankCard(person) {
     const box = element('div', 'cm-rank-card cm-cards'); // 커피 색은 카드 둘레에서만(community.css .cm-cards)
-    box.append(profileFace(normalizeDeco(person.profileCard), person.nickname, person.shownType?.type.name ?? null));
+    box.append(authorFace(person));
     return box;
   }
 

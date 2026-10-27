@@ -23,6 +23,9 @@ const levelOf = (xp) => {
 };
 const highestJobAt = (level) => JOBS.filter((job) => job.unlockLevel <= level).at(-1);
 
+/** 다른 사람(커뮤니티 목 글쓴이)의 직업 { code, name }: 그 레벨에서 열린 가장 높은 직업 */
+export const mockJobAt = (level) => { const { code, name } = highestJobAt(level); return { code, name }; };
+
 const read = () => {
   try {
     return JSON.parse(localStorage.getItem(KEY)) ?? {};
@@ -38,8 +41,25 @@ const write = (value) => {
   }
 };
 let memory = null; // 저장소를 못 쓰는 환경(테스트 등)에서도 이번 방문 동안 값을 지킨다
-const state = () => ({ xp: xpAt(START_LEVEL), job: null, ...(memory ?? read()) });
+const state = () => ({ xp: xpAt(START_LEVEL), job: null, daily: null, given: [], ...(memory ?? read()) });
 const save = (next) => { memory = next; write(next); };
+
+// 커뮤니티 경험치(명세 11장 수급처 표): 글 30(하루 3건) · 판결 공유 글 보너스 +20(사건당 1회) · 댓글 10(하루 5건) · 좋아요 누르기 2(글당 1회, 하루 10개).
+// 커뮤니티 API는 서버에 아직 없어 목 커뮤니티가 글 · 댓글 · 좋아요 때 직접 부른다(서버는 BE가 LevelService.award로 지급한다)
+const COMMUNITY_XP = { post: { xp: 30, perDay: 3 }, comment: { xp: 10, perDay: 5 }, like: { xp: 2, perDay: 10 }, verdictBonus: { xp: 20, perDay: Infinity } };
+const today = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' });
+
+/** 개발 전용: 커뮤니티 활동으로 경험치를 준다. key는 같은 대상 중복 방지(글 · 좋아요는 대상, 보너스는 사건). 받은 XP를 돌려준다(상한이면 0) */
+export function awardMockXp(source, key = null) {
+  const rule = COMMUNITY_XP[source];
+  const current = state();
+  const day = today();
+  const daily = current.daily?.day === day ? current.daily : { day };
+  const givenKey = key == null ? null : `${source}:${key}`;
+  if (!rule || (givenKey && current.given.includes(givenKey)) || (daily[source] ?? 0) >= rule.perDay) return 0;
+  save({ ...current, xp: Math.min(TOTAL_XP, current.xp + rule.xp), daily: { ...daily, [source]: (daily[source] ?? 0) + 1 }, given: givenKey ? [...current.given, givenKey] : current.given });
+  return rule.xp;
+}
 
 /** L-1 응답. 고른 적이 없으면 열린 가장 높은 직업이 카드에 보인다 */
 export function mockLevelView() {
@@ -92,6 +112,6 @@ export async function unlockMockNextJob() {
 /** 개발 전용: 처음 상태(Lv.7 · 고른 직업 없음)로 */
 export async function resetMockLevel() {
   await delay();
-  save({ xp: xpAt(START_LEVEL), job: null });
+  save({ xp: xpAt(START_LEVEL), job: null, daily: null, given: [] });
   return mockLevelView();
 }
