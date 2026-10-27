@@ -62,6 +62,35 @@ class PreJudgmentApiTest extends ApiIntegrationTest {
 	}
 
 	@Test
+	void getOverview_robberyCase_returnsRangeOptionsWithoutFineAndWithLife() throws Exception {
+		long caseId = insertCase("ROBBERY", "PUBLISHED");
+		Cookie cookie = startAndGetCookie(caseId);
+		List<Long> robberyOptions = rangeOptionIds("ROBBERY");
+
+		// 강도 (V31): 법정형에 벌금이 없어 벌금형을 빼고 무기징역을 더한 7개. 강도살인은 범위 밖이라 사형은 없다
+		mockMvc.perform(get(overviewUrl(caseId)).cookie(cookie))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.rangeOptions.length()").value(7))
+				.andExpect(jsonPath("$.rangeOptions[0].rangeOptionId").value(robberyOptions.get(0)))
+				.andExpect(jsonPath("$.rangeOptions[?(@.label == '무기징역')]").isNotEmpty())
+				.andExpect(jsonPath("$.rangeOptions[?(@.label == '벌금형')]").isEmpty())
+				.andExpect(jsonPath("$.rangeOptions[?(@.label == '사형')]").isEmpty());
+	}
+
+	@Test
+	void getOverview_theftCase_returnsCommonRangeOptions() throws Exception {
+		long caseId = insertCase("THEFT", "PUBLISHED");
+		Cookie cookie = startAndGetCookie(caseId);
+
+		// 절도 (V31): 공통 7개 그대로 (벌금형 있음, 무기징역 · 사형 없음)
+		mockMvc.perform(get(overviewUrl(caseId)).cookie(cookie))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.rangeOptions.length()").value(7))
+				.andExpect(jsonPath("$.rangeOptions[?(@.label == '벌금형')]").isNotEmpty())
+				.andExpect(jsonPath("$.rangeOptions[?(@.label == '무기징역')]").isEmpty());
+	}
+
+	@Test
 	void getOverview_doesNotExposeLawOrPenaltyInformation() throws Exception {
 		long caseId = insertCase("MURDER", "PUBLISHED");
 		Cookie cookie = startAndGetCookie(caseId);
@@ -228,11 +257,26 @@ class PreJudgmentApiTest extends ApiIntegrationTest {
 	void submit_rangeOptionOfOtherCrimeType_returnsInvalidRangeOptionAndChangesNothing() throws Exception {
 		long caseId = insertCase("MURDER", "PUBLISHED");
 		Cookie cookie = startAndGetCookie(caseId);
-		// 벌금형은 사기 · 상해 구간이고 살인에는 없다
+		// 벌금형은 사기 · 상해 · 절도 구간이고 살인에는 없다
 		long fraudFine = jdbcTemplate.queryForObject(
 				"SELECT id FROM sentence_range_option WHERE crime_type = 'FRAUD' AND label = '벌금형'", Long.class);
 
 		submit(caseId, cookie, "{\"rangeOptionId\": %d}".formatted(fraudFine))
+				.andExpect(status().isUnprocessableContent())
+				.andExpect(jsonPath("$.code").value("INVALID_RANGE_OPTION"));
+
+		assertNothingSaved(caseId);
+	}
+
+	@Test
+	void submit_rangeOptionOfOtherCrimeType_isRejectedForTheftCase() throws Exception {
+		long caseId = insertCase("THEFT", "PUBLISHED");
+		Cookie cookie = startAndGetCookie(caseId);
+		// 강도 전용 무기징역 구간을 절도 사건에 제출하면 거절된다 (유형별 구간 검증이 새 유형에도 적용되는지, V31)
+		long robberyLifeId = jdbcTemplate.queryForObject(
+				"SELECT id FROM sentence_range_option WHERE crime_type = 'ROBBERY' AND kind = 'LIFE'", Long.class);
+
+		submit(caseId, cookie, "{\"rangeOptionId\": %d}".formatted(robberyLifeId))
 				.andExpect(status().isUnprocessableContent())
 				.andExpect(jsonPath("$.code").value("INVALID_RANGE_OPTION"));
 

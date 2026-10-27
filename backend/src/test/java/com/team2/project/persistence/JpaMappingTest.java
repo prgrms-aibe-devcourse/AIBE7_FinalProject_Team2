@@ -239,6 +239,24 @@ class JpaMappingTest {
 	}
 
 	@Test
+	@DisplayName("강도는 벌금형 없이 무기징역을 더한 7개, 절도는 공통 7개다 (V31)")
+	void findAllByCrimeType_robberyAndTheftRangeOptions_matchV31FixedData() {
+		List<SentenceRangeOption> robbery = rangeOptionRepository.findAllByCrimeTypeOrderByDisplayOrderAsc(CrimeType.ROBBERY);
+		List<SentenceRangeOption> theft = rangeOptionRepository.findAllByCrimeTypeOrderByDisplayOrderAsc(CrimeType.THEFT);
+
+		// 강도: 법정형에 벌금이 없고, 강도살인은 범위 밖이라 사형도 없다. 기존 22행 뒤 ID 23부터
+		assertThat(robbery).hasSize(7).first().extracting(SentenceRangeOption::getId).isEqualTo(23L);
+		assertThat(robbery).extracting(SentenceRangeOption::getKind)
+			.doesNotContain(RangeKind.FINE, RangeKind.DEATH).contains(RangeKind.LIFE);
+		// 절도: 벌금형부터 실형 20년 이상까지 공통 구간 그대로
+		assertThat(theft).hasSize(7).extracting(SentenceRangeOption::getKind)
+			.contains(RangeKind.FINE).doesNotContain(RangeKind.LIFE, RangeKind.DEATH);
+		assertThat(theft).extracting(SentenceRangeOption::getLabel)
+			.containsExactly("벌금형", "징역형 집행유예", "실형 3년 미만", "실형 3년 이상 ~ 5년 미만",
+				"실형 5년 이상 ~ 10년 미만", "실형 10년 이상 ~ 20년 미만", "실형 20년 이상");
+	}
+
+	@Test
 	@DisplayName("공개된 AI · 재판부 판결만 조회한다")
 	void findPublishedJudgment_unpublished_isExcluded() {
 		Judgment court = judgmentRepository.findPublishedJudgment(caseId, SubjectType.COURT).orElseThrow();

@@ -16,11 +16,14 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
+
+import com.team2.project.legalcase.domain.CrimeType;
 
 /**
  * DB 제약(부분 유니크 인덱스 · 유니크 · CHECK)이 실제 PostgreSQL에서 잘못된 데이터를 거절하는지 검증한다 (BE-5).
@@ -195,6 +198,32 @@ class DbConstraintTest {
 		assertThatThrownBy(() -> jdbc.update("UPDATE factor SET value_axis_status = 'REVIEWED' WHERE id = ?", factorId))
 			.isInstanceOf(DataIntegrityViolationException.class)
 			.hasMessageContaining("chk_factor_value_axis_status");
+	}
+
+	// ---------- 범죄 유형 CHECK (V1 · V2 · V11 · V24 → V31) ----------
+
+	@ParameterizedTest(name = "{0}")
+	@ValueSource(strings = {"chk_sentence_range_option_crime_type", "chk_legal_case_crime_type",
+		"chk_rag_precedent_crime_type", "chk_case_import_crime_type"})
+	@DisplayName("범죄 유형 CHECK 4곳이 CrimeType enum 값을 모두 허용한다 (enum에만 추가하고 CHECK를 빠뜨리지 않게, V31)")
+	void crimeTypeCheck_allowsEveryEnumValue(String constraint) {
+		String definition = jdbc.queryForObject(
+			"SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = ?", String.class, constraint);
+
+		for (CrimeType type : CrimeType.values()) {
+			assertThat(definition).as("%s에 %s가 없다", constraint, type).contains("'" + type.name() + "'");
+		}
+	}
+
+	@Test
+	@DisplayName("사건 범죄 유형은 강도 · 절도를 받고 정의되지 않은 값은 거절한다 (V31)")
+	void checkLegalCaseCrimeType_robberyAndTheftAccepted_unknownRejected() {
+		jdbc.update("UPDATE legal_case SET crime_type = 'ROBBERY' WHERE id = ?", caseId);
+		jdbc.update("UPDATE legal_case SET crime_type = 'THEFT' WHERE id = ?", caseId);
+
+		assertThatThrownBy(() -> jdbc.update("UPDATE legal_case SET crime_type = 'ARSON' WHERE id = ?", caseId))
+			.isInstanceOf(DataIntegrityViolationException.class)
+			.hasMessageContaining("chk_legal_case_crime_type");
 	}
 
 	// ---------- penalty_rule ----------

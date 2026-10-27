@@ -78,6 +78,20 @@ class CaseImportLoaderTest extends ApiIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("절도 사건도 적재된다 — 양형기준 데이터가 살인만 있어 양형기준 없이 만들어진다 (BE-112, V31)")
+	void load_theftCase_isLoadedWithoutGuideline() {
+		CaseImport caseImport = caseImport(CrimeType.THEFT);
+		// 추출 결과(case.json)의 범죄 유형도 THEFT로 바꿔 넣는다 (CaseContentMapper가 enum으로 읽는다)
+		JsonNode theftContent = node(caseJson().replace("\"crimeType\": \"MURDER\"", "\"crimeType\": \"THEFT\""));
+
+		LegalCase legalCase = loader.load(caseImport, resultWith(theftContent));
+
+		assertThat(legalCase.getCrimeType()).isEqualTo(CrimeType.THEFT);
+		assertThat(jdbcTemplate.queryForObject("SELECT guideline_id FROM legal_case WHERE id = ?", Long.class,
+			legalCase.getId())).isNull();
+	}
+
+	@Test
 	@DisplayName("판단 요소의 display_order는 배열 순서가 아니라 factorId다 (판결이 이 번호로 요소를 찾는다)")
 	void load_factorDisplayOrderIsFactorId() {
 		LegalCase legalCase = loader.load(caseImport(), result());
@@ -230,7 +244,11 @@ class CaseImportLoaderTest extends ApiIntegrationTest {
 	}
 
 	private CaseImport caseImport() {
-		CaseImport entity = CaseImport.start(UUID.randomUUID().toString().replace("-", ""), CrimeType.MURDER);
+		return caseImport(CrimeType.MURDER);
+	}
+
+	private CaseImport caseImport(CrimeType crimeType) {
+		CaseImport entity = CaseImport.start(UUID.randomUUID().toString().replace("-", ""), crimeType);
 		entity.addSource(CaseImportSource.of(CourtLevel.FIRST, "2099고합001", "가상지방법원",
 			LocalDate.of(2025, 1, 10), true, null, "판결문 전문입니다", null));
 		return entity;
