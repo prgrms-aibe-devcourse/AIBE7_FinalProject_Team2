@@ -74,12 +74,31 @@ class CaseListApiTest extends ApiIntegrationTest {
 	}
 
 	@Test
-	void getCases_summary_countsAllThreeCrimeTypesEvenWhenEmpty() throws Exception {
+	void getCases_summary_countsAllCrimeTypesEvenWhenEmpty() throws Exception {
 		mockMvc.perform(get("/api/v1/cases"))
 				.andExpect(jsonPath("$.summary.total").isNumber())
 				.andExpect(jsonPath("$.summary.byCrimeType.MURDER").isNumber())
 				.andExpect(jsonPath("$.summary.byCrimeType.FRAUD").isNumber())
-				.andExpect(jsonPath("$.summary.byCrimeType.INJURY").isNumber());
+				.andExpect(jsonPath("$.summary.byCrimeType.INJURY").isNumber())
+				// 강도 · 절도 (V31): 공개 사건이 없어도 0으로 내려 준다
+				.andExpect(jsonPath("$.summary.byCrimeType.ROBBERY").isNumber())
+				.andExpect(jsonPath("$.summary.byCrimeType.THEFT").isNumber());
+	}
+
+	@Test
+	void getCases_robberyAndTheft_areFilterableAsPropertyCrime() throws Exception {
+		long robbery = insertCase("ROBBERY", "PUBLISHED");
+		long theft = insertCase("THEFT", "PUBLISHED");
+
+		// 강도 · 절도는 화면 분류명이 둘 다 "재산범죄"다 (V31)
+		mockMvc.perform(get("/api/v1/cases"))
+				.andExpect(jsonPath(CASE_BY_ID.formatted(robbery) + ".crimeCategoryLabel").value("재산범죄"))
+				.andExpect(jsonPath(CASE_BY_ID.formatted(theft) + ".crimeCategoryLabel").value("재산범죄"));
+
+		mockMvc.perform(get("/api/v1/cases").param("crimeType", "ROBBERY"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath(CASE_BY_ID.formatted(robbery)).isNotEmpty())
+				.andExpect(jsonPath("$.cases[?(@.crimeType != 'ROBBERY')]").isEmpty());
 	}
 
 	@Test
@@ -96,7 +115,8 @@ class CaseListApiTest extends ApiIntegrationTest {
 
 	@Test
 	void getCases_invalidCrimeType_returnsValidationError() throws Exception {
-		mockMvc.perform(get("/api/v1/cases").param("crimeType", "THEFT"))
+		// 범죄 유형이 될 수 없는 값으로 둔다. 실제 죄명(THEFT · ARSON 등)을 쓰면 그 유형이 추가될 때 이 테스트가 깨진다 (PR #297 리뷰)
+		mockMvc.perform(get("/api/v1/cases").param("crimeType", "NOT_A_CRIME_TYPE"))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 	}
