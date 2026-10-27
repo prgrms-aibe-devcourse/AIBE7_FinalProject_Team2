@@ -39,6 +39,16 @@ function findPreBucket(preJudgment, rangeOptions) {
   return { option, bucket: rangeBuckets[option.rangeOptionId] ?? rangeBuckets[4] };
 }
 
+// 이 사건 독자들이 기사만 읽고 고른 첫인상 분포(6막 독자 의견란의 막대그래프). 목 전용 — API 14에는 아직 없다. 구간 순서대로 고정 비율(합 100)
+const CROWD_PERCENTS = [8, 13, 19, 26, 19, 9, 4, 2];
+const CROWD_TOTAL = 1284;
+function buildCrowd(rangeOptions) {
+  return {
+    total: CROWD_TOTAL,
+    options: rangeOptions.map((option, index) => ({ rangeOptionId: option.rangeOptionId, label: option.label, percent: CROWD_PERCENTS[index] ?? 0 })),
+  };
+}
+
 export function buildPreToFinal(myJudgment, preJudgment, rangeOptions) {
   const { option, bucket } = findPreBucket(preJudgment, rangeOptions);
   const direction = directionFromBucket(finalWeight(myJudgment), bucket);
@@ -48,6 +58,7 @@ export function buildPreToFinal(myJudgment, preJudgment, rangeOptions) {
     finalJudgmentText,
     direction,
     summaryText: directionTexts[direction],
+    crowd: buildCrowd(rangeOptions),
   };
 }
 
