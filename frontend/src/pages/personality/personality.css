@@ -36,10 +36,7 @@
 .folder-tab::before { content: ''; position: absolute; inset: 0; z-index: -1; border: 1px solid var(--color-desk-kraft-shade); border-bottom: 0; border-radius: 10px 10px 0 0; background: var(--color-desk-kraft-back);
   box-shadow: inset 0 -8px 8px -8px color-mix(in srgb, var(--color-desk-shadow) 35%, transparent); transform: perspective(18px) rotateX(2.2deg); transform-origin: 50% 100%; transition: background-color .16s ease-out; }
 .folder-tab[aria-selected='true'] { z-index: 2; transform: none; cursor: default; }
-/* 진행 책갈피: 탭 사이에 끼운 리본 + 얼굴. 철 상단(인덱스 탭 제외)보다 6px만 솟고, 아래는 철 가장자리를 넘어 종이 위까지 30px 걸친다(판결 체험 파일철 .folder-bookmark와 같은 모양). 리본 색은 style.css .bookmark-color-* */
-.folder-bookmark { position: relative; z-index: 3; flex: none; align-self: flex-end; width: 28px; height: 36px; margin: 0 -8px -30px; pointer-events: none; background: var(--bookmark-color, var(--color-label)); border-radius: 20% 20% 0 0 / 30% 30% 0 0; /* 위로 길쭉한 타원: 가로 20%(5.6px) · 세로 30%(10.8px) */ clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 88%, 0 100%);
-  filter: drop-shadow(0 2px 2px color-mix(in srgb, var(--color-desk-shadow) 35%, transparent)); }
-.folder-bookmark img { position: absolute; left: 50%; top: 3px; width: 24px; height: 24px; translate: -50% 0; border-radius: 50%; background: var(--color-card); object-fit: cover; object-position: top; }
+/* 진행 책갈피는 공용(components/folderParts.css): 철 상단(인덱스 탭 제외)보다 6px만 솟고, 종이 위까지 30px 걸친다(기본 길이 그대로) */
 .folder-tab[aria-selected='true']::before { inset: 0 0 -1px; background: var(--color-desk-kraft); box-shadow: inset 0 1px 0 color-mix(in srgb, var(--color-desk-sheet) 45%, transparent); } /* 아래 1px: 철 위 테두리를 덮어 이어 보이게 */
 @media (hover: hover) and (pointer: fine) { .folder-tab[aria-selected='false']:hover { transform: translateY(1px); } }
 .folder-tab:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
@@ -229,50 +226,18 @@
 .share-note { margin: 12px 0 0; color: var(--color-muted); font-size: var(--text-small); overflow-wrap: anywhere; }
 .share-note:empty { display: none; }
 /* 결과지 1장 맨 아래: 풀이 장으로 넘기기 */
-/* 종이 귀: 종이 오른쪽 아래 모서리가 접혀 넘어간다. 줄은 귀 높이만큼 자리만 잡고, 버튼(글자 + 귀)은 종이 모서리에 붙는다(.test-sheet가 기준).
-   접힌 면은 종이 뒷면(어둡게 그늘), 잘려 나간 자리는 아래 서류철이 보인다. 호버 · 포커스에서 귀가 조금 더 말린다 */
-.result-turn { --fold: 52px; height: var(--fold); margin-top: 16px; } /* 내용 끝과 "풀이 보기" · "결과 보기" 귀 사이에 숨 쉴 여백(FE-95) */
-.result-turn-button { position: absolute; right: -1px; bottom: -1px; display: flex; align-items: center; gap: 4px; height: var(--fold); padding: 0 0 0 12px; border: 0; background: none; color: var(--color-heading); font: 700 var(--text-body)/1 var(--font-heading); cursor: pointer; transition: none; }
-.result-turn-button:active { transform: none; scale: none; } /* 모서리에 붙은 귀가 눌림 확대로 떨어지지 않게 */
+/* 종이 귀(components/folderParts.css)로 장을 넘긴다. 줄은 귀 높이만큼 자리만 잡고, 버튼(글자 + 귀)은 종이 모서리에 붙는다(.test-sheet가 기준).
+   글자가 붙어 있어 귀는 52px. 귀가 크게 들썩이거나 호버로 더 접혀도(접힌 길이 1.4 · 1.54배) 화살표를 덮지 않게 글자와 32px 띄운다 */
+.result-turn { --fold-size: 52px; height: var(--fold-size); margin-top: 16px; } /* 내용 끝과 "풀이 보기" · "결과 보기" 귀 사이에 숨 쉴 여백(FE-95) */
+.result-turn-button { position: absolute; right: -1px; bottom: -1px; display: flex; align-items: flex-end; gap: 32px; height: var(--fold-size); padding: 0 0 0 12px; border: 0; background: none; color: var(--color-heading); font: 700 var(--text-body)/1 var(--font-heading); cursor: pointer; transition: none; }
+.result-turn-button:active { transform: none; scale: none; } /* 버튼째 줄면 모서리에서 떨어진다: 눌림은 귀만(folderParts.css) */
+.turn-label { align-self: center; }
 .turn-label::after { content: ' →'; }
-.turn-fold { position: relative; align-self: flex-end; flex: none; width: var(--fold); height: var(--fold); filter: drop-shadow(-1px -2px 3px color-mix(in srgb, var(--color-desk-shadow) 30%, transparent)); }
-.turn-fold::before, .turn-fold::after { content: ''; position: absolute; inset: 0; }
-.turn-fold::before { clip-path: polygon(0 0, 100% 0, 0 100%); background: linear-gradient(to bottom right, var(--color-desk-sheet) 15%, color-mix(in srgb, var(--color-desk-kraft) 45%, var(--color-desk-sheet))); } /* 접힌 뒷면 */
-.turn-fold::after { clip-path: polygon(100% 0, 100% 100%, 0 100%); background: var(--color-desk-kraft); } /* 잘려 나간 자리 = 서류철 */
 .result-turn-button:focus-visible { outline: 3px solid var(--color-focus); outline-offset: -3px; border-radius: 2px; }
-/* 이전 장 귀: 왼쪽 아래 모서리. 귀를 좌우로 뒤집고 글자는 귀 오른쪽에 둔다 */
+/* 이전 장 귀: 왼쪽 아래 모서리. 귀는 좌우로 뒤집힌 것(paperFold flipped)을 쓰고 글자는 귀 오른쪽에 둔다 */
 .result-turn.is-prev .result-turn-button { right: auto; left: -1px; flex-direction: row-reverse; padding: 0 12px 0 0; }
-.result-turn.is-prev .turn-fold { transform: scaleX(-1); }
 .result-turn.is-prev .turn-label::after { content: none; }
 .result-turn.is-prev .turn-label::before { content: '← '; }
-@media (prefers-reduced-motion: no-preference) { .turn-fold { transition: width .2s ease-out, height .2s ease-out; } }
-@media (hover: hover) and (pointer: fine) { .result-turn-button:hover .turn-fold, .result-turn-button:focus-visible .turn-fold { width: calc(var(--fold) + 14px); height: calc(var(--fold) + 14px); } }
-/* 종이 귀 일렁임(FE-95): 풀이를 놓치지 않게 "풀이 보기" 귀가, 그 풀이에서 돌아오는 "결과 보기" 귀가 가만히 있어도 3초마다 한 번 크게 일렁인다.
-   판결 체험의 폴더 말림(verdict.css folder-curl-idle)과 같은 값(scale 1.06 ↔ 1.3, rotate ±4deg). 모서리(바깥 아래 꼭짓점)를 축으로 움직인다.
-   앞 장 귀(.is-prev)는 좌우로 뒤집혀 있어(scaleX(-1)) 축을 따로 옮기고 회전 방향도 거꾸로 준다 */
-.result-turn:not(.is-prev) .turn-fold { transform-origin: 100% 100%; }
-@media (prefers-reduced-motion: no-preference) {
-  .result-turn:not(.is-prev) .turn-fold { animation: turn-fold-idle 3s ease-in-out infinite; }
-  .result-turn.is-prev .turn-fold { animation: turn-fold-idle-prev 3s ease-in-out infinite; }
-}
-@keyframes turn-fold-idle {
-  0% { scale: 1.06; rotate: 0deg; }
-  12% { scale: 1.3; rotate: -4deg; }
-  24% { scale: 1.12; rotate: 2deg; }
-  36% { scale: 1.24; rotate: -2deg; }
-  46% { scale: 1.1; rotate: 1deg; }
-  55% { scale: 1.06; rotate: 0deg; }
-  100% { scale: 1.06; rotate: 0deg; }
-}
-@keyframes turn-fold-idle-prev {
-  0% { transform: translate(calc(var(--fold) / -2), calc(var(--fold) / 2)) scale(1.06) rotate(0deg) translate(calc(var(--fold) / 2), calc(var(--fold) / -2)) scaleX(-1); }
-  12% { transform: translate(calc(var(--fold) / -2), calc(var(--fold) / 2)) scale(1.3) rotate(4deg) translate(calc(var(--fold) / 2), calc(var(--fold) / -2)) scaleX(-1); }
-  24% { transform: translate(calc(var(--fold) / -2), calc(var(--fold) / 2)) scale(1.12) rotate(-2deg) translate(calc(var(--fold) / 2), calc(var(--fold) / -2)) scaleX(-1); }
-  36% { transform: translate(calc(var(--fold) / -2), calc(var(--fold) / 2)) scale(1.24) rotate(2deg) translate(calc(var(--fold) / 2), calc(var(--fold) / -2)) scaleX(-1); }
-  46% { transform: translate(calc(var(--fold) / -2), calc(var(--fold) / 2)) scale(1.1) rotate(-1deg) translate(calc(var(--fold) / 2), calc(var(--fold) / -2)) scaleX(-1); }
-  55% { transform: translate(calc(var(--fold) / -2), calc(var(--fold) / 2)) scale(1.06) rotate(0deg) translate(calc(var(--fold) / 2), calc(var(--fold) / -2)) scaleX(-1); }
-  100% { transform: translate(calc(var(--fold) / -2), calc(var(--fold) / 2)) scale(1.06) rotate(0deg) translate(calc(var(--fold) / 2), calc(var(--fold) / -2)) scaleX(-1); }
-}
 .result-page:focus { outline: none; }
 .result-section:has(+ .result-turn) { border-bottom: 0; }
 

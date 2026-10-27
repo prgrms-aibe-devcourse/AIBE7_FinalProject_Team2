@@ -66,38 +66,14 @@
 .verdict-page .is-flash { border-radius: 4px; animation: field-flash .7s ease-out 2; }
 @keyframes field-flash { 0%, 100% { background-color: transparent; box-shadow: 0 0 0 0 transparent; } 40% { background-color: color-mix(in srgb, var(--color-label) 16%, transparent); box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-label) 16%, transparent); } }
 
-/* 진행 책갈피: 펼쳐 본 장의 탭 뒤에 끼운 리본 + 내로 얼굴. 탭 줄보다 살짝 솟고, 아래는 서류철 가장자리를 넘어 종이 위까지 걸친다
+/* 진행 책갈피(components/folderParts.css): 펼쳐 본 장의 탭 뒤에 끼운 리본 + 내로 얼굴. 리본이 길어 종이 위로 34px 걸친다
    (탭 줄을 서류철보다 위에 그려야 걸친 부분이 보인다) */
 .verdict-page .folder-tabs { position: relative; z-index: 2; }
-.verdict-page .folder-bookmark {
-  position: relative; z-index: 3; flex: none; align-self: flex-end; width: 22px; height: 60px; margin: 0 -6px -34px; pointer-events: none;
-  background: var(--bookmark-color, var(--color-label)); clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 88%, 0 100%); /* 리본 색은 마이페이지 책갈피 설정(FE-68) */
-  filter: drop-shadow(0 2px 2px color-mix(in srgb, var(--color-desk-shadow) 35%, transparent));
-}
-.verdict-page .folder-bookmark img { position: absolute; left: 50%; top: 3px; width: 18px; height: 18px; translate: -50% 0; border-radius: 50%; background: var(--color-card); object-fit: cover; object-position: top; }
+.verdict-page .folder-bookmark { --bookmark-length: 60px; --bookmark-hang: 34px; }
 
-/* 말린 모서리(다음 장으로 넘기기): 종이 오른쪽 아래가 대각선으로 접혀 들려 있다. 접힌 자리에는 아래 서류철(크라프트)이 보이고,
-   들린 자락은 종이 뒷면(조금 어둡게)이다. 가만히 있어도 주기적으로 일렁이고, 마우스를 올리면 바람에 날리듯 계속 넘실거린다 */
-.verdict-page .folder-curl {
-  position: absolute; right: -1px; bottom: -1px; width: 64px; height: 64px; padding: 0; border: 0; background: none; cursor: pointer;
-  transform-origin: 100% 100%; transition: scale .18s cubic-bezier(.2, .8, .2, 1);
-}
-.verdict-page .folder-curl::before { content: ''; position: absolute; inset: 0; background: var(--color-desk-kraft); clip-path: polygon(100% 0, 100% 100%, 0 100%); }
-.verdict-page .folder-curl::after {
-  content: ''; position: absolute; inset: 0; clip-path: polygon(0 0, 100% 0, 0 100%);
-  background: linear-gradient(135deg, color-mix(in srgb, var(--color-desk-sheet) 82%, var(--color-desk-shadow)) 10%, var(--color-desk-sheet) 46%, color-mix(in srgb, var(--color-desk-sheet) 72%, var(--color-desk-shadow)) 50%);
-}
-.verdict-page .folder-curl:active { scale: .96; }
+/* 말린 모서리(다음 장으로 넘기기): 종이 오른쪽 아래의 종이 귀(components/folderParts.css)를 누르는 버튼. 글자가 없어 귀를 64px로 크게 둔다 */
+.verdict-page .folder-curl { position: absolute; right: -1px; bottom: -1px; --fold-size: 64px; padding: 0; border: 0; background: none; cursor: pointer; }
 .verdict-page .folder-curl:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
-@media (hover: hover) and (pointer: fine) {
-  .verdict-page .folder-curl:hover { animation: folder-curl-wave 1.4s ease-in-out infinite; }
-}
-/* 가만히 있어도 3초마다 한 번 크게 일렁여 "넘길 수 있는 귀"라는 걸 알린다(움직임 줄이기에서는 정지) */
-@media (prefers-reduced-motion: no-preference) {
-  .verdict-page .folder-curl { animation: folder-curl-idle 3s ease-in-out infinite; }
-}
-@keyframes folder-curl-idle { 0%, 55%, 100% { scale: 1.06; rotate: 0deg; } 12% { scale: 1.3; rotate: -4deg; } 24% { scale: 1.12; rotate: 2deg; } 36% { scale: 1.24; rotate: -2deg; } 46% { scale: 1.1; rotate: 1deg; } }
-@keyframes folder-curl-wave { 0%, 100% { scale: 1.06; rotate: 0deg; } 35% { scale: 1.16; rotate: -2deg; } 70% { scale: 1.1; rotate: 1deg; } }
 
 /* 첫 장: 사건 요약(사건 개요 · 핵심 사실) */
 .verdict-page .summary-block { margin-top: 18px; }
@@ -232,9 +208,8 @@
 /* 터치 화면: 판단 요소 · 집행유예 년 버튼도 44px */
 @media (pointer: coarse) { .verdict-page .factor-button { min-height: 44px; } }
 @media (prefers-reduced-motion: reduce) {
-  .verdict-page :is(.folder-tab, .folder-curl, .sign-hint) { transition: none; }
+  .verdict-page :is(.folder-tab, .sign-hint) { transition: none; }
   .verdict-page .is-flash { animation: none; outline: 3px solid var(--color-label); outline-offset: 4px; }
-  .verdict-page .folder-curl:hover { animation: none; }
   .verdict-page .sign-row.is-signed .sign-ink path { transition: none; }
 }
 @media (max-width: 600px) {
