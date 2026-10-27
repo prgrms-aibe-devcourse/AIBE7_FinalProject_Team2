@@ -48,7 +48,7 @@ const VIEWS = {
 };
 // 프로필카드에서 들어가는 화면은 뒤로 가기가 프로필카드로 간다(FE-68)
 const PARENTS = { achievements: 'profile', bookmark: 'profile' };
-// 닉네임 아래 프로필 수치. 레벨 · 직업은 목 데이터(API 전, data.profile이 오면 그 값을 쓴다). 출석 일수는 서버 값(P-5 profile.attendanceDays)이다. 완료한 사건 · 모은 일러스트는 지금 기록에서 센다
+// 닉네임 아래 프로필 수치. 레벨 · 직업은 서버 값(P-5 level, BE-106)이고, 없을 때만 목 값으로 채운다(옛 data.profile이 오면 그 값). 출석 일수는 서버 값(P-5 profile.attendanceDays)이다. 완료한 사건 · 모은 일러스트는 지금 기록에서 센다
 const MOCK_PROFILE = { level: 7, job: '수습 판사', attendanceDays: 0 };
 const IS_MOCK = API_MODE === 'mock'; // 목 모드에서는 체험 기록 · 성향 평균도 목(mocks/personalityMockApi.js)이라 함께 표기한다(FE-56)
 // 개발 서버 + 목 모드에서만 public/images의 webp 전부를 컬렉션 아래에 펼친다(FE-67). 빌드에서는 이 분기가 통째로 빠진다
@@ -140,13 +140,15 @@ function cardButton(className, label, ...children) {
 function statsOf(data) {
   const missing = (key) => data.profile?.[key] == null;
   const profile = Object.fromEntries(Object.keys(MOCK_PROFILE).map((key) => [key, missing(key) ? MOCK_PROFILE[key] : data.profile[key]]));
+  const levelData = data.level;
+  if (levelData) { profile.level = levelData.level; profile.job = levelData.job.name; }
   const experiences = data.experiences ?? [];
   const groups = collectionOf(experiences, SCRIPTS);
   return {
     ...profile,
     completed: experiences.filter((item) => item.status === 'COMPLETED').length,
     collected: groups.reduce((sum, group) => sum + group.cast.length + group.items.length, 0),
-    mocked: { level: missing('level'), job: missing('job'), attendanceDays: IS_MOCK || missing('attendanceDays'), completed: IS_MOCK, collected: IS_MOCK },
+    mocked: { level: IS_MOCK || (!levelData && missing('level')), job: IS_MOCK || (!levelData && missing('job')), attendanceDays: IS_MOCK || missing('attendanceDays'), completed: IS_MOCK, collected: IS_MOCK },
   };
 }
 
@@ -1109,11 +1111,66 @@ function typeChoiceSection(data, onPick) {
   levelLabel.append(levelInput, element('span', '', '레벨 앞에 붙이기'));
   field.append(lines, levelLabel);
   const typeBox = element('div');
-  field.append(typeBox);
-  const redraw = () => { typeBox.hidden = getCardLine() !== 'type'; };
+  const jobBox = element('div');
+  field.append(typeBox, jobBox);
+  const redraw = () => { typeBox.hidden = getCardLine() !== 'type'; jobBox.hidden = getCardLine() !== 'job'; };
   redraw();
   typeBox.append(typeChoiceList(data, onPick));
+  jobBox.append(jobSection(data, onPick));
   return field;
+}
+
+// 카드 아래가 직업일 때 직업 고르기(BE-106 L-2). 레벨이 모자라 안 열린 직업은 누를 수 없고 열리는 레벨을 알려 준다.
+// 개발 서버 + 목 모드에서는 레벨 · 직업을 올려 보는 "개발용" 버튼이 함께 보인다(결과는 이 창 안에서 바로 다시 그린다)
+function jobSection(data, onPick) {
+  const box = element('div');
+  const show = (level) => {
+    data.level = level;
+    if (cache) cache.level = level;
+    draw();
+    onPick();
+  };
+  const draw = () => {
+    const level = data.level;
+    box.replaceChildren();
+    if (!level) {
+      box.append(element('p', 'my-hint', '직업 정보를 아직 받지 못했어요.'));
+      return;
+    }
+    box.append(element('p', 'my-hint', `지금 Lv.${level.level}이에요. 직업은 레벨이 오르면 하나씩 열리고, 한 번 열리면 다시 잠기지 않아요.`));
+    const list = element('div', 'my-type-choices');
+    level.jobs.forEach((job) => {
+      const label = element('label', 'my-type-choice');
+      const input = element('input');
+      input.type = 'radio';
+      input.name = 'profile-card-job';
+      input.value = job.code;
+      input.checked = job.selected;
+      input.disabled = !job.unlocked;
+      input.addEventListener('change', async () => {
+        try {
+          show(await apiRef.putLevelJob(job.code));
+        } catch (error) {
+          draw();
+          box.append(element('p', 'my-hint', error?.code === 'JOB_LOCKED' ? '아직 열리지 않은 직업이에요.' : '직업을 저장하지 못했어요. 잠시 뒤 다시 시도해 주세요.'));
+        }
+      });
+      label.append(input, element('span', '', job.unlocked ? job.name : `${job.name} (Lv.${job.unlockLevel}에 열려요)`));
+      list.append(label);
+    });
+    box.append(list);
+    if (import.meta.env?.DEV && apiRef?.setMockLevel) {
+      const dev = element('div', 'my-profile-actions');
+      dev.append(
+        button('개발용: 레벨 +1', async () => show(await apiRef.setMockLevel(data.level.level + 1)), 'secondary-button is-dev'),
+        button('개발용: 다음 직업 해금', async () => show(await apiRef.unlockMockNextJob()), 'secondary-button is-dev'),
+        button('개발용: 레벨 처음으로', async () => show(await apiRef.resetMockLevel()), 'secondary-button is-dev'),
+      );
+      box.append(dev);
+    }
+  };
+  draw();
+  return box;
 }
 
 // 카드 아래가 성향일 때 초심 · 재심 · 최근 고르기
