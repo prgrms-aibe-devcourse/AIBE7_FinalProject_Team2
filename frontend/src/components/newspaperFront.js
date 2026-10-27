@@ -105,17 +105,20 @@ function pullQuote(paragraph) {
 // 8면 = 색인(사건 목록의 색인 면), 10면 = 성향테스트(신문 버전 /test/paper). 지금 면은 aria-current로 표시하고 누르지 않는다.
 // params는 navigate에 넘기는 값이다(색인 면으로 열기 · 신문을 넘겨 들어오기)
 const PAGES = [
-  { page: '1면', name: '오늘의 지면', route: 'list' },
-  { page: '3면', name: '사회', current: true },
-  { page: '8면', name: '색인', route: 'list', params: { openAt: 'INDEX' } },
-  { page: '10면', name: '성향테스트', route: 'testPaper', params: { from: 'paper' } },
+  { key: 'front', page: '1면', name: '오늘의 지면', route: 'list' },
+  { key: 'case', page: '3면', name: '사회' },
+  { key: 'index', page: '8면', name: '색인', route: 'list', params: { openAt: 'INDEX' } },
+  { key: 'test', page: '10면', name: '성향테스트', route: 'testPaper', params: { from: 'paper' } },
 ];
-function pageIndex(navigate) {
+// current: 지금 면의 key(사건 정보 = 'case', 성향 테스트 = 'test'). 지금 면은 누르지 않는다. 사건 정보 · 신문 성향 테스트가 같은 목차를 쓴다(FE-122)
+export function pageIndex(navigate, current = 'case') {
   const nav = element('nav', 'page-index');
   nav.setAttribute('aria-label', '신문 목차');
-  PAGES.forEach(({ page, name, route, params, current }) => {
-    const item = route ? button('', () => navigate(route, params), 'page-index-item') : element('span', 'page-index-item is-current');
-    if (current) item.setAttribute('aria-current', 'page');
+  PAGES.forEach(({ key, page, name, route, params }) => {
+    const here = key === current;
+    // 지금 면은 누르지 않고 표시만, 갈 곳이 없는 면(성향 테스트 지면에서의 3면 사회 — 어느 사건인지 모른다)은 글자만 둔다
+    const item = !here && route ? button('', () => navigate(route, params), 'page-index-item') : element('span', `page-index-item${here ? ' is-current' : ''}`);
+    if (here) item.setAttribute('aria-current', 'page');
     item.append(element('b', '', page), element('span', '', name));
     nav.append(item);
   });
@@ -144,6 +147,19 @@ function caseMemo(info) {
   return memo;
 }
 
+// 안쪽 면 머리글: 1면 제호(큰 글씨) 대신 작은 제호 + 면 이름 · 날짜 · 쪽수. 양 끝은 귀. 지면이 넘어갔다는 게 한눈에 보이게 한다
+// (사건 정보 지면 · 신문 성향 테스트 지면이 함께 쓴다, FE-122). meta: 제호 아래 한 줄("사회면 · 날짜 · 3면")
+export function innerPageHead({ earLeft, earRight, meta }) {
+  const runner = element('header', 'page-head');
+  const title = element('div', 'page-head-title');
+  const wordmark = element('p', 'page-head-brand');
+  wordmark.setAttribute('aria-label', '내Law남불');
+  wordmark.append(element('span', '', '내'), element('span', 'law', 'Law'), element('span', '', '남불'));
+  title.append(wordmark, element('p', 'page-head-meta', meta));
+  runner.append(earLeft, title, earRight);
+  return runner;
+}
+
 /**
  * 사건 기사 지면(S-20 · 1막 무대의 장면). S-02 1면과 같은 짜임에 이 사건 기사 하나를 머리기사로 싣는다.
  * 무대 카메라가 맞추는 자리(data-focus): head(배너 제목) · photo(사진) · body(기사 단).
@@ -155,17 +171,10 @@ export function caseNewspaper({ paper, info, navigate, earRight = caseInfoEar(in
   const sheet = element('div', 'paper case-paper');
   const earLeft = earButton('← 다른 사건 보기', '오늘의 지면으로 돌아가요', () => navigate('list'), 'ear-left');
 
-  // 안쪽 면 머리글: 1면 제호(큰 글씨) 대신 작은 제호 + 면 이름 · 날짜 · 쪽수. 양 끝은 귀 버튼. 지면이 넘어갔다는 게 한눈에 보이게 한다
-  const runner = element('header', 'page-head');
-  const title = element('div', 'page-head-title');
-  const wordmark = element('p', 'page-head-brand');
-  wordmark.setAttribute('aria-label', '내Law남불');
-  wordmark.append(element('span', '', '내'), element('span', 'law', 'Law'), element('span', '', '남불'));
-  title.append(wordmark, element('p', 'page-head-meta', `사회면 · ${todayLabel()} · 3면`));
-  runner.append(earLeft, title, earRight);
+  const runner = innerPageHead({ earLeft, earRight, meta: `사회면 · ${todayLabel()} · 3면` });
 
   const tabsZone = element('div', 'tabs-zone');
-  tabsZone.append(pageIndex(navigate));
+  tabsZone.append(pageIndex(navigate, 'case'));
 
   // 기사(A안, 실제 신문 기사 면): [제목 · 부제 · 기자 줄 | 사건 메모] → [사진 · 작은 사진 | 본문 두 단(첫 글자 크게 · 인용구 · 작은 사진)]
   const article = element('article', 'story');

@@ -50,7 +50,7 @@ export const routes = [
   // 확장: 판결 성향 테스트 · 마이페이지 (S-15 ~ S-17). 공유된 결과(/test/types/{shareId}, 해시 주소)는 유형 설명만 보여 준다(FR-8-6)
   { name: 'test', path: '/test', render: renderPersonalityPage, title: '판결 성향 테스트' },
   // FE-55: 6막 신문의 성향 테스트 광고에서 신문을 넘겨 들어오는 오피니언 면(문항 · 결과는 /test와 같다)
-  { name: 'testPaper', path: '/test/paper', render: renderPersonalityPaperPage, title: '판결 성향 테스트' },
+  { name: 'testPaper', path: '/test/paper', render: renderPersonalityPaperPage, ownsFooter: true, title: '판결 성향 테스트' }, // 법적 고지는 지면 안 맨 아래(FE-122)
   { name: 'testResult', path: '/test/result', render: renderPersonalityResultPage, title: '판결 성향 결과' },
   { name: 'testType', path: '/test/types/:shareId', render: renderPersonalitySharedPage, title: '판결 성향 유형' },
   // 마이페이지도 공통 헤더를 쓰고 색만 커피색으로 덮어쓴다(FE-66, myPage.css)
