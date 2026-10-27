@@ -148,10 +148,10 @@ function element(tag, className, text) {
   return node;
 }
 // commonSeed를 주면(사건 사진) 불러오지 못할 때 공용 컷으로 바꾸고, 안 주면(아이콘 · 캐릭터) 그냥 뺀다
-function picture(src, className, alt = '', commonSeed, role) {
+function picture(src, className, alt = '', commonSeed, role, category) {
   const image = element('img', className);
   if (commonSeed === undefined) image.addEventListener('error', () => image.remove(), { once: true });
-  else useCommonPhotoOnError(image, commonSeed, role);
+  else useCommonPhotoOnError(image, commonSeed, role, category);
   image.src = src;
   image.alt = alt;
   return image;
@@ -253,7 +253,7 @@ function evidenceBoard(script, at) {
     // 변호인 측 = 발단사진, 검사 측 = 결론사진(기사 지면 작은 사진과 같은 그림). 사진이 없으면 그 자리의 공용 컷
     const role = side === '변호인' ? 'origin' : 'conclusion';
     const seed = side === '검사' ? 1 : 2;
-    column.append(picture(script.evidencePhotos?.[side] ?? commonPhotoAt(seed, role), 'evd-photo', '', seed, role));
+    column.append(picture(script.evidencePhotos?.[side] ?? commonPhotoAt(seed, role, script.commonCategory), 'evd-photo', '', seed, role, script.commonCategory));
     column.append(element('h4', '', `${side} 측 증거`));
     const list = element('ol', 'evd-list');
     script.evidence.forEach((item, i) => {

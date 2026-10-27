@@ -4,7 +4,7 @@ import { SCRIPTS } from '../../content/scripts.js';
 import { restartMock, jumpActMock } from '../../mocks/mockStageButtons.js';
 import courtFacts from '../../content/courtFacts.json';
 import { caseNewspaper, paperFromCase } from '../../components/newspaperFront.js';
-import { evidencePhotosFromPaper, fetchCasePaper } from '../../utils/newspaper.js';
+import { commonCategoryOf, evidencePhotosFromPaper, fetchCasePaper } from '../../utils/newspaper.js';
 import { reducedMotion } from '../../utils/motion.js';
 
 function element(tag, className, text) {
@@ -64,7 +64,7 @@ export function caseStage({ caseId, api, navigate, script, info, paper = script.
   const acts = { ...script.acts, '1a': { ...script.acts['1a'], steps: [...first, ...script.acts['1a'].steps] } };
   const sheet = caseNewspaper({ paper, info, navigate, ...(earRight ? { earRight } : {}) });
   const stage = renderStage({
-    script: { ...script, acts, ...(evidencePhotos ? { evidencePhotos } : {}) }, order: ['1a', '1b'], cards, inputCards: ['preJudgment'], sheet, layout: 'paper', parked,
+    script: { ...script, acts, commonCategory: commonCategoryOf(info), ...(evidencePhotos ? { evidencePhotos } : {}) }, order: ['1a', '1b'], cards, inputCards: ['preJudgment'], sheet, layout: 'paper', parked,
     choices: prompt ? { prompt: prompt.choices } : {},
     onRestart: restartMock(caseId), onJump: jumpActMock(caseId),
   });

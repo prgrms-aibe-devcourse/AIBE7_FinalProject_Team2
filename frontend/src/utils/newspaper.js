@@ -16,23 +16,35 @@ export const fallbackImages = {
   THEFT: '/images/case-theft.svg',
 };
 
-// 공용 재연 컷(FE-32): 사건 사진이 없을 때 쓰는 샘플 연출 사진. 내로 · 남불이 기록을 읽는 장면이라 특정 사건 내용을 드러내지 않는다.
-// 원본은 이미지 레포 character/cuts/reenact/common(PNG 약 2MB) → 1000px webp로 줄여 public에 둔다. 사건 번호로 돌려 쓴다
-export const commonPhotos = ['/images/cases/common-1.webp', '/images/cases/common-2.webp', '/images/cases/common-3.webp'];
+// 공용 재연 컷(FE-32 · FE-65): 사건 사진이 없을 때 쓰는 샘플 연출 사진. 내로 · 남불이 기록을 읽는 장면이라 특정 사건 내용을 드러내지 않는다.
+// 범죄 분류 3종(property 재산 · body 신체 · life 생명) × 자리 3장(reenact 대표 · origin 발단 · conclusion 결론) = 9장.
+// 원본은 이미지 레포 character/cuts/reenact/common/reenact-common-{분류}_cut_{headline|origin|conclusion}.png → 1200px webp로 줄여 public에 둔다
+const COMMON_CATEGORIES = ['property', 'body', 'life'];
+const COMMON_ROLES = ['reenact', 'origin', 'conclusion'];
+export const commonPhotos = Object.fromEntries(COMMON_CATEGORIES.map((category) => [
+  category,
+  Object.fromEntries(COMMON_ROLES.map((role) => [role, `/images/cases/common-${category}-${role}.webp`])),
+]));
 
-// 발단 · 결론 자리(기사 지면 작은 사진 · 증거조사 사진)용 공용 컷. 전용 컷이 나오면 이 두 경로의 파일만 바꾼다(지금은 임시로 common-2 · 3)
-export const commonStagePhotos = { origin: '/images/cases/common-2.webp', conclusion: '/images/cases/common-3.webp' };
+const COMMON_CATEGORY_BY_LABEL = { 재산범죄: 'property', 신체범죄: 'body', 생명범죄: 'life' };
+const COMMON_CATEGORY_BY_CRIME_TYPE = { FRAUD: 'property', ROBBERY: 'property', THEFT: 'property', INJURY: 'body', MURDER: 'life' };
 
-/** 공용 재연 컷 한 장(seed로 고정 — 같은 자리는 늘 같은 컷). role('origin' | 'conclusion')을 주면 그 자리 전용 컷 */
-export function commonPhotoAt(seed = 0, role) {
-  if (commonStagePhotos[role]) return commonStagePhotos[role];
-  return commonPhotos[Math.abs(Number(seed) || 0) % commonPhotos.length];
+/** 사건(목록 · 상세 항목)의 공용 컷 분류. 범죄 분류 라벨 → 죄명 순으로 읽고, 모르면 undefined(순환 fallback) */
+export function commonCategoryOf(item) {
+  return COMMON_CATEGORY_BY_LABEL[item?.crimeCategoryLabel] ?? COMMON_CATEGORY_BY_CRIME_TYPE[item?.crimeType];
 }
 
-/** 기사 속 작은 사진 두 자리(발단 · 결론). 비어 있는 자리는 공용 컷으로 채운다 */
-export function extraPhotosOf(extraPhotos) {
+/** 공용 재연 컷 한 장. 분류(category)에 맞는 세트에서 자리(role: reenact | origin | conclusion)의 컷을 준다.
+ * 분류를 모르면 최후의 fallback으로 seed(사건 번호)를 분류 세트에 돌려 쓴다 — 같은 자리는 늘 같은 컷 */
+export function commonPhotoAt(seed = 0, role = 'reenact', category) {
+  const set = commonPhotos[category] ?? commonPhotos[COMMON_CATEGORIES[Math.abs(Number(seed) || 0) % COMMON_CATEGORIES.length]];
+  return set[role] ?? set.reenact;
+}
+
+/** 기사 속 작은 사진 두 자리(발단 · 결론). 비어 있는 자리는 분류에 맞는 공용 컷으로 채운다 */
+export function extraPhotosOf(extraPhotos, category) {
   const [origin, conclusion] = extraPhotos ?? [];
-  return [origin ?? { src: commonStagePhotos.origin }, conclusion ?? { src: commonStagePhotos.conclusion }];
+  return [origin ?? { src: commonPhotoAt(0, 'origin', category) }, conclusion ?? { src: commonPhotoAt(0, 'conclusion', category) }];
 }
 
 /** API 17(공개 신문 지면) extraPhotos({ origin, conclusion }, 각 { imageUrl, caption })를
@@ -76,17 +88,16 @@ export function evidencePhotosFromPaper(casePaper) {
 }
 
 /** 사진이 없거나 불러오지 못하면 공용 컷으로 바꾼다. 공용 컷도 못 불러오면 깨진 이미지 대신 사진을 뺀다 */
-export function useCommonPhotoOnError(image, seed = 0, role) {
+export function useCommonPhotoOnError(image, seed = 0, role, category) {
   image.addEventListener('error', () => {
     if (image.dataset.fallback) { image.remove(); return; }
     image.dataset.fallback = 'true';
-    image.src = commonPhotoAt(seed, role);
+    image.src = commonPhotoAt(seed, role, category);
   });
 }
 
-/** 사건 사진: 썸네일이 있으면 그것, 없으면 공용 재연 컷(사건 번호로 고정 — 새로고침해도 같은 사진) */
+/** 사건 사진: 서버가 정해 준 썸네일이 있으면 그것, 없으면 사건의 범죄 분류에 맞는 공용 재연 컷(분류를 모르면 사건 번호로 고정 — 새로고침해도 같은 사진) */
 export function casePhoto(item) {
   if (item?.thumbnailUrl) return item.thumbnailUrl;
-  const id = Number(item?.caseId) || 0;
-  return commonPhotos[id % commonPhotos.length];
+  return commonPhotoAt(Number(item?.caseId) || 0, 'reenact', commonCategoryOf(item));
 }
