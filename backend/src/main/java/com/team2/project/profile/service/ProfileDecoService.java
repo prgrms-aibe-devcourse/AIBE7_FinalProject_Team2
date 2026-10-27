@@ -53,7 +53,13 @@ public class ProfileDecoService {
 	 */
 	@Transactional(readOnly = true)
 	public ProfileDecoView view(UUID anonymousUserId) {
-		List<AchievementProgress> progress = AchievementJudge.progress(statsReader.read(anonymousUserId));
+		return view(anonymousUserId, statsReader.read(anonymousUserId));
+	}
+
+	/** 이미 읽은 통계를 받는 쪽: 마이페이지가 레벨과 함께 한 번만 읽어 넘긴다 (BE-106 리뷰) */
+	@Transactional(readOnly = true)
+	public ProfileDecoView view(UUID anonymousUserId, ProfileStats stats) {
+		List<AchievementProgress> progress = AchievementJudge.progress(stats);
 		ProfileDecoValues saved = profileDecoRepository.findById(anonymousUserId)
 			.map(ProfileDeco::values)
 			.orElse(ProfileDecoCatalog.DEFAULTS);

@@ -2,7 +2,7 @@ import { button, element } from '../../components/siteLayout.js';
 import { imageOf } from '../../components/stage.js';
 import { CHARACTER_NAMES } from '../../utils/personalityAxes.js';
 import { reducedMotion } from '../../utils/motion.js';
-import { getBookmarkColor, selectedBookmarkFace } from '../../utils/bookmarkCharacter.js';
+import { folderBookmark, paperFold } from '../../components/folderParts.js';
 
 // S-15 · S-16 · 공유된 결과(/test/types/{shareId})가 함께 쓰는 조각 (FE-42).
 // 화면 = 메인 책상의 서류철(성향 테스트)을 들어 올려 펼친 모습: 펠트 위 크라프트 철, 철 안에 종이 한 장.
@@ -114,7 +114,8 @@ export function guide(who, look, line) {
 }
 
 // 결과지 두 장(탭 · 패널). pages = [{ label, nodes }]. 철 위 탭을 누르거나 ← → 키로 넘긴다(WAI-ARIA tabs)
-export function resultPages(tabs, body, pages) {
+// onSwitch: 처음 그린 뒤 장이 바뀔 때마다(탭 · 키보드 · 귀) 부른다. 결과 공개 연출을 끝내는 데 쓴다(FE-95 리뷰 반영)
+export function resultPages(tabs, body, pages, { onSwitch } = {}) {
   const list = element('div', 'folder-tablist');
   list.setAttribute('role', 'tablist');
   list.setAttribute('aria-label', '결과지');
@@ -146,13 +147,7 @@ export function resultPages(tabs, body, pages) {
   });
   // 진행 책갈피(판결 체험 파일철과 같다): 펼쳐 본 가장 뒤 장(reached)의 탭 바로 뒤에 끼운 리본 + 마이페이지에서 고른 얼굴(장식).
   // 잠금이 아니라 진행 표시라 늘 보이고, 앞 장으로 돌아와도 자리를 지킨다. 리본 색 · 얼굴은 마이페이지 책갈피 설정(FE-67 · FE-68)
-  const bookmark = element('span', `folder-bookmark bookmark-color-${getBookmarkColor()}`);
-  bookmark.setAttribute('aria-hidden', 'true');
-  const face = element('img');
-  face.alt = '';
-  face.src = selectedBookmarkFace();
-  face.addEventListener('error', () => face.remove(), { once: true });
-  bookmark.append(face);
+  const bookmark = folderBookmark();
   let reached = 0;
   function placeBookmark() {
     const before = buttons[reached + 1] ?? null; // 마지막 장이면 탭 줄 끝
@@ -161,7 +156,11 @@ export function resultPages(tabs, body, pages) {
     list.insertBefore(bookmark, before);
     if (moved && !reducedMotion()) bookmark.animate([{ translate: '0 -40%', opacity: 0 }, { translate: '0 0', opacity: 1 }], { duration: 240, easing: 'cubic-bezier(.2, .8, .2, 1)' });
   }
+  let ready = false;
+  let current = -1;
   function show(index, { focusPanel = false } = {}) {
+    if (ready && index !== current) onSwitch?.(index); // 같은 탭을 다시 눌러서는 장이 바뀐 게 아니다
+    current = index;
     reached = Math.max(reached, index);
     placeBookmark();
     buttons.forEach((tab, i) => {
@@ -175,6 +174,7 @@ export function resultPages(tabs, body, pages) {
   tabs.replaceChildren(list);
   body.replaceChildren(...panels);
   show(0);
+  ready = true;
   return { show };
 }
 
@@ -182,9 +182,7 @@ export function resultPages(tabs, body, pages) {
 export function turnPage(label, run, { prev = false } = {}) {
   const row = element('div', `result-turn${prev ? ' is-prev' : ''}`);
   const turn = button('', run, 'result-turn-button');
-  const fold = element('span', 'turn-fold');
-  fold.setAttribute('aria-hidden', 'true');
-  turn.append(element('span', 'turn-label', label), fold);
+  turn.append(element('span', 'turn-label', label), paperFold({ flipped: prev }));
   row.append(turn);
   return row;
 }

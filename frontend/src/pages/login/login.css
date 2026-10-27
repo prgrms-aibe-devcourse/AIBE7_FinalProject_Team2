@@ -1,7 +1,8 @@
 /* S-12 로그인 (FE-52) · 책상 위 펠트 패드 (FE-69).
    메인 책상(S-01, landing.css .desk-wood · .desk-pad)과 같은 나뭇결 위에 네이비 펠트 데스크 패드를 놓고, 그 위에 로그인 상자를 그린다.
    카카오 콜백(authCallbackPage.js)도 같은 모양을 쓴다. 색은 style.css 역할 토큰과 ④ 책상 토큰만 쓴다.
-   구성: 공통 헤더 → 나뭇결 책상 → 펠트 패드(제목 · 안내 · [목업 안내] · 카카오 로그인 · 또는 · 아이디 · 비밀번호 · 로그인 · 회원가입) + 펜(장식) */
+   구성: 공통 헤더 → 나뭇결 책상 → 펠트 패드(제목 · 안내 · [목업 안내] · 카카오 로그인 · 또는 · 아이디 · 비밀번호 · 로그인 · 회원가입 링크) + 펜(장식).
+   회원가입 화면(signupPage.js)도 같은 패드에 카카오로 시작하기 · 아이디 가입 폼을 놓는다 */
 
 .login-page {
   min-height: 100vh; color: var(--color-text); font: var(--text-body)/1.6 var(--font-body);
@@ -67,8 +68,23 @@
 .login-submit { width: 100%; margin-top: 6px; }
 
 .login-signup { margin: 20px 0 0; text-align: center; color: var(--felt-muted); font-size: 14px; }
-.login-link { padding: 4px; border: 0; background: transparent; color: var(--felt-ink); font: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
-.login-link[aria-disabled="true"] { cursor: default; opacity: .6; }
+.login-link { min-height: 44px; padding: 4px 8px; border: 0; cursor: pointer; background: transparent; color: var(--felt-ink); font: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+.login-browse { margin: 12px 0 0; text-align: center; font-size: 14px; }
+@media (hover: hover) and (pointer: fine) { .login-link:hover { text-decoration-thickness: 2px; } }
+
+/* 회원가입(FE-104, signupPage.js): 로그인과 같은 패드 · 입력칸. 칸 아래 도움말은 흐린 글자, 틀리면 그 아래 오류 글자 */
+.signup-hint { margin: 0; color: var(--felt-muted); font-size: var(--text-small); line-height: 1.5; word-break: keep-all; }
+.signup-field-error { font-size: var(--text-small); }
+.signup-agree { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
+.signup-agree-check { display: flex; align-items: center; gap: 10px; min-height: 44px; }
+.signup-agree-check input { flex: none; width: 20px; height: 20px; margin: 0; accent-color: var(--color-range-fill); cursor: pointer; }
+.signup-agree-check label { flex: 1; display: flex; align-items: center; min-height: 44px; font-size: 14px; font-weight: 700; color: var(--felt-ink); cursor: pointer; word-break: keep-all; }
+.signup-agree-check input[aria-invalid="true"] { outline: 2px solid var(--color-danger-on-dark); outline-offset: 2px; }
+.signup-agree-links { display: flex; flex-wrap: wrap; gap: 0 16px; margin: 0 0 0 30px; font-size: var(--text-small); }
+.signup-doc-link { display: inline-flex; align-items: center; min-height: 44px; color: var(--felt-muted); text-decoration: underline; text-underline-offset: 3px; }
+.signup-doc-link:focus-visible { outline: 3px solid var(--color-range-fill); outline-offset: 2px; border-radius: 2px; }
+@media (hover: hover) and (pointer: fine) { .signup-doc-link:hover { color: var(--felt-ink); } }
+.kakao-button + .login-error { margin-top: 10px; }
 
 .login-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 
@@ -96,8 +112,41 @@
   .login-pen { display: none; } /* 좁은 화면에서는 패드가 화면을 거의 채워 펜 자리가 없다 */
 }
 
+/* S-14 404 (FE-104, app/notFoundPage.js): 같은 책상 위에 펠트 패드 대신 "찾지 못한 서류" 한 장을 놓는다.
+   종이라 글자 · 버튼은 공통 색(어두운 글자 · 네이비 주 버튼)으로 되돌리고, 펜이 종이 옆에 오도록 책상 폭을 종이에 맞춘다 */
+.not-found-page .login-desk { width: min(560px, 100%); }
+.login-card.not-found-sheet {
+  --felt-ink: var(--color-heading);
+  --felt-muted: var(--color-muted);
+  padding: 44px 40px 36px; border-radius: 4px; color: var(--color-text); rotate: -.6deg;
+  background: var(--color-desk-sheet); border-top: 6px solid var(--color-desk-kraft); /* 위 가장자리 크라프트 띠 = 서류철에서 빠져나온 한 장 */
+  box-shadow: 2px 4px 6px color-mix(in srgb, var(--color-desk-shadow) 35%, transparent), 8px 20px 30px color-mix(in srgb, var(--color-desk-shadow) 30%, transparent);
+}
+.not-found-sheet h1 { color: var(--color-heading); }
+.not-found-lead { margin: 0 0 20px; color: var(--color-muted); font-size: 15px; word-break: keep-all; text-wrap: pretty; }
+/* 찾은 주소: 서류철 꼬리표(크라프트 띠). 긴 주소는 줄을 바꾼다 */
+.not-found-label { display: inline-flex; flex-wrap: wrap; align-items: baseline; justify-content: center; gap: 4px 8px; max-width: 100%; margin: 0 auto 24px; padding: 6px 12px; border-radius: 3px; background: var(--color-desk-kraft); color: var(--color-text); font-size: var(--text-small); }
+.not-found-label span { font-weight: 700; }
+.not-found-label code { font: 600 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+.not-found-sheet .primary-button { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-on-accent); }
+.not-found-sheet .secondary-button { background: var(--color-card); border-color: var(--color-border-strong); color: var(--color-text); }
+.not-found-sheet :is(button):focus-visible { outline-color: var(--color-focus); }
+@media (hover: hover) and (pointer: fine) {
+  .not-found-sheet .primary-button:hover { background: var(--color-accent-hover); border-color: var(--color-accent-hover); }
+  .not-found-sheet .secondary-button:hover { background: var(--color-surface); }
+}
+@media (max-width: 720px) {
+  .login-card.not-found-sheet { padding: 32px 20px 26px; rotate: 0deg; }
+}
+
 /* 개발용 화면 넘어가기(FE-69, 목 모드만). 폴리싱이 끝나면 loginDevJump.js와 함께 뺀다 */
 .login-dev-jump { position: fixed; right: 12px; bottom: 12px; z-index: 50; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; max-width: min(460px, calc(100vw - 24px)); padding: 8px 10px; border: 1px dashed var(--color-border-strong); border-radius: 6px; background: var(--color-surface); font-size: var(--text-small); }
 .login-dev-jump-title { width: 100%; color: var(--color-muted); font-weight: 700; }
 .login-dev-jump-button { min-height: 32px; padding: 0 10px; border: 1px solid var(--color-border-strong); border-radius: 4px; background: var(--color-card); color: var(--color-text); font: inherit; cursor: pointer; }
 .login-dev-jump-button:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 1px; }
+/* 좁은 화면에서는 떠 있으면 폼 아래쪽(로그인 버튼 · 안내)을 가리므로 패드 아래에 놓는다 (FE-104) */
+@media (max-width: 720px) {
+  .login-main { flex-wrap: wrap; }
+  .login-dev-jump { position: static; max-width: none; width: 100%; margin-top: 16px; }
+  .login-page > .login-dev-jump { width: auto; margin: 0 16px 24px; }
+}

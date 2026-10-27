@@ -1,10 +1,11 @@
 import { button, element } from '../../components/siteLayout.js';
 import { ADMIN_ROLE, AUDIT_ACTION, errorText } from './adminLabels.js';
-import { PAGE_SIZE, badge, createLoader, dataTable, errorLine, formatDate, labeledField, pageTop, pager, runAction, tabBar } from './adminKit.js';
+import { PAGE_SIZE, badge, confirmChange, createLoader, dataTable, errorLine, formatDate, labeledField, pageTop, pager, runAction, tabBar } from './adminKit.js';
 import { renderAdminShell } from './adminShell.js';
 
 // 관리자 계정 · 감사 로그 (A-31 ~ A-35). 계정 추가 · 활성 / 비활성, 관리자 행동 기록 열람.
 // 비밀번호는 화면에서 다루지 않는다 — 계정을 만들면 서버가 초대 절차로 처리한다(방식은 서버 구현 때 정한다).
+// FE-105: 처리 뒤 알림줄로 알리고, 자기 계정 줄에는 왜 비활성화할 수 없는지 글로 적는다(마우스를 올려야 보이는 title만으로는 부족)
 const TABS = [{ key: 'accounts', label: '관리자 계정' }, { key: 'audit', label: '감사 로그' }];
 
 export function renderAdminAccountsPage(container, { navigate }) {
@@ -12,7 +13,7 @@ export function renderAdminAccountsPage(container, { navigate }) {
     navigate,
     section: 'accounts',
     title: '관리자 계정',
-    draw: async ({ api, main, active, unauthorized, admin }) => {
+    draw: async ({ api, main, active, unauthorized, admin, notify }) => {
       let tab = 'accounts';
       let auditAction = '';
       let page = 0;
@@ -20,10 +21,10 @@ export function renderAdminAccountsPage(container, { navigate }) {
       const body = element('div', 'admin-list-body');
       main.replaceChildren(pageTop('관리자 계정'), tabs, body);
       const loader = createLoader({ body, active, unauthorized });
-      const ctx = { active, unauthorized };
+      const ctx = { active, unauthorized, notify };
 
       function drawTabs() {
-        tabs.replaceChildren(tabBar(TABS, tab, (key) => { tab = key; page = 0; drawTabs(); loadTab(); }));
+        tabs.replaceChildren(tabBar(TABS, tab, (key) => { tab = key; page = 0; drawTabs(); loadTab(); }, '관리자 계정 보기'));
       }
       const loadTab = () => (tab === 'accounts' ? loadAccounts() : loadAudit());
 
@@ -45,7 +46,9 @@ export function renderAdminAccountsPage(container, { navigate }) {
           error.textContent = '';
           try {
             await api.createAccount({ email: email.value.trim(), displayName: name.value.trim(), role: role.value });
-            if (active()) await loadAccounts();
+            if (!active()) return;
+            await loadAccounts();
+            notify('관리자 계정을 추가했어요.');
           } catch (failure) {
             if (!active()) return;
             if (failure?.code === 'UNAUTHORIZED') { unauthorized(); return; }
@@ -73,16 +76,18 @@ export function renderAdminAccountsPage(container, { navigate }) {
                 const error = errorLine();
                 const self = admin && row.email === admin.email;
                 const toggle = button(row.active ? '비활성화' : '다시 사용', () => {
-                  if (row.active && !window.confirm(`${row.displayName} 계정을 비활성화할까요? 로그인 중이면 바로 로그아웃돼요.`)) return;
-                  runAction({ trigger: toggle, errorTarget: error, action: () => api.setAccountActive(row.adminId, !row.active), onDone: loadAccounts, ...ctx });
+                  if (row.active && !confirmChange(`${row.displayName} 계정을 비활성화할까요?`, '로그인 중이면 바로 로그아웃돼요.')) return;
+                  runAction({ trigger: toggle, errorTarget: error, action: () => api.setAccountActive(row.adminId, !row.active), onDone: loadAccounts, doneText: row.active ? `${row.displayName} 계정을 비활성화했어요.` : `${row.displayName} 계정을 다시 쓸 수 있게 했어요.`, ...ctx });
                 });
+                toggle.setAttribute('aria-label', `${row.displayName} ${toggle.textContent}`);
                 toggle.disabled = Boolean(self && row.active); // 자기 자신은 잠글 수 없다
-                if (self) toggle.title = '자기 자신의 계정은 비활성화할 수 없어요.';
-                wrap.append(toggle, error);
+                wrap.append(toggle);
+                if (self && row.active) wrap.append(element('span', 'admin-sub', '내 계정은 비활성화할 수 없어요.'));
+                wrap.append(error);
                 return wrap;
               },
             },
-          ], data.items);
+          ], data.items, '해당하는 항목이 없어요.', '관리자 계정 목록');
           body.replaceChildren(table, addForm());
         });
       }
@@ -100,7 +105,7 @@ export function renderAdminAccountsPage(container, { navigate }) {
             { label: '관리자', cell: (row) => row.adminEmail },
             { label: '행동', cell: (row) => AUDIT_ACTION[row.action] ?? row.action },
             { label: '대상', cell: (row) => (row.targetType ? `${row.targetType} #${row.targetId}` : '—') },
-          ], data.items, '기록이 없어요.');
+          ], data.items, '기록이 없어요.', '감사 로그');
           body.replaceChildren(bar, table, ...(data.items.length ? [pager(data, (next) => { page = next; loadAudit(); })] : []));
         });
       }

@@ -99,7 +99,7 @@ test('imageKinds: 사건별이 아니라 종류(폴더)별로 정해진 순서�
 });
 
 test('imageKinds: 사건 고유 이미지는 사건 이미지 종류 안에서 사건별로, 공용 컷은 따로 나눈다', () => {
-  const [cases] = imageKinds(['/images/cases/case-1-origin.webp', '/images/cases/case-1.webp', '/images/cases/case-2-origin.webp', '/images/cases/common-1.webp', '/images/cases/reenact-common_headline.webp'], { caseNames: { 1: '빌린 돈 사건' } });
+  const [cases] = imageKinds(['/images/cases/case-1-origin.webp', '/images/cases/case-1.webp', '/images/cases/case-2-origin.webp', '/images/cases/common-property-reenact.webp', '/images/cases/common-life-origin.webp'], { caseNames: { 1: '빌린 돈 사건' } });
   assert.deepEqual(cases.groups.map((group) => group.title), ['빌린 돈 사건', '사건 2', '공용 컷']);
   assert.equal(cases.groups[0].items.length, 2);
   assert.equal(cases.groups[2].items.length, 2);

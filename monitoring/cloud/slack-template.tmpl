@@ -1,0 +1,33 @@
+{{/*
+  Grafana Cloud 알림 템플릿 lawnambul-slack — Slack 메시지 양식 (COMMON-64, 10/26)
+  원본은 Grafana Cloud(Alerting → Contact points → Notification templates)다. 화면에서 고쳤으면 이 파일도 같이 고친다.
+  연락처 lawnambul-slack의 Optional Slack settings에서
+    Title     = {{ template "lawnambul.slack.title" . }}
+    Text Body = {{ template "lawnambul.slack.text" . }}
+  로 쓴다. 기본 양식은 "Value: A=0, C=1"만 보여 규칙의 summary · description이 메시지에 나오지 않는다.
+  시각은 tz "Asia/Seoul"로 바꿔 KST로 보여 준다(기본은 UTC).
+  환경(env) · 대상(instance)은 {{ with }}로 감싼다 — sum() 등으로 집계하는 규칙(HighErrorRate · HighLatencyP95 ·
+  HighAiCallFailureRate)은 결과에 라벨이 남지 않아, 그대로 찍으면 "환경: " 빈 칸이 나온다(PR #286 리뷰).
+  Watchdog(생존 신호)은 "발생"으로 보이면 장애로 오해하므로 💚 [생존 신호]로 따로 찍는다.
+*/}}
+{{ define "lawnambul.slack.title" -}}
+{{ if eq .CommonLabels.alertname "Watchdog" }}💚 [생존 신호] 경보 경로 정상{{ else }}{{ if eq .Status "firing" }}🔴 [발생 {{ .Alerts.Firing | len }}건]{{ else }}✅ [해결]{{ end }} {{ .CommonLabels.alertname }}{{ with .CommonLabels.severity }} · {{ . }}{{ end }}{{ end }}
+{{- end }}
+
+{{ define "lawnambul.slack.text" -}}
+{{ range .Alerts -}}
+{{ if eq .Labels.alertname "Watchdog" -}}
+💚 *생존 신호* · {{ .Annotations.summary }}
+{{ .Annotations.description }}
+
+{{ else -}}
+{{ if eq .Status "firing" }}🔴 *발생*{{ else }}✅ *해결*{{ end }} · {{ .Labels.alertname }}
+*요약*: {{ .Annotations.summary }}
+{{ if eq .Status "firing" }}*내용*: {{ .Annotations.description }}
+{{ end }}*시작*: {{ .StartsAt | tz "Asia/Seoul" | date "01/02 15:04" }}{{ if eq .Status "resolved" }} → *해결*: {{ .EndsAt | tz "Asia/Seoul" | date "01/02 15:04" }}{{ end }} (KST)
+*심각도*: {{ .Labels.severity }}{{ with .Labels.env }} · *환경*: {{ . }}{{ end }}{{ with .Labels.instance }} · *대상*: {{ . }}{{ end }}
+<{{ .GeneratorURL }}|규칙 보기>{{ if .SilenceURL }} · <{{ .SilenceURL }}|음소거>{{ end }}
+
+{{ end -}}
+{{ end }}
+{{- end }}

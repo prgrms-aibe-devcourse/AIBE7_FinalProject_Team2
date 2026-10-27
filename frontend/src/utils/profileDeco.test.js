@@ -187,6 +187,7 @@ test('portraitLabel: 파일 이름을 읽기 쉬운 이름으로 바꾼다', () 
   assert.equal(portraitLabel('/images/characters/adult/law-book_deliver-neutral.webp'), '로(책) · 발표 보통');
   assert.equal(portraitLabel('/images/characters/personality/07.webp'), '성향 07');
   assert.equal(portraitLabel('/images/cases/case-1-origin.webp'), '사건 1 · 발단');
-  assert.equal(portraitLabel('/images/cases/reenact-common-2_headline.webp'), '공용 재연 2 · 헤드라인');
-  assert.equal(portraitLabel('/images/cases/common-3.webp'), '공용 컷 3');
+  assert.equal(portraitLabel('/images/cases/common-body-reenact.webp'), '공용 신체 · 재연');
+  assert.equal(portraitLabel('/images/cases/common-life-origin.webp'), '공용 생명 · 발단');
+  assert.equal(portraitLabel('/images/cases/common-property-conclusion.webp'), '공용 재산 · 결론');
 });

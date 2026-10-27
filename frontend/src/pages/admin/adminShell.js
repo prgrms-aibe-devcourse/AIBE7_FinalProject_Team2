@@ -1,6 +1,7 @@
 import { button, element } from '../../components/siteLayout.js';
+import { API_MODE } from '../../api/config.js';
 import { loadAdminApi } from './adminApi.js';
-import { labeledField } from './adminKit.js';
+import { focusHeading, labeledField } from './adminKit.js';
 import { errorText } from './adminLabels.js';
 import { ADMIN_MENU, isMenuReady } from './adminMenu.js';
 import { clearUser, isAdmin } from '../../utils/session.js';
@@ -9,29 +10,66 @@ import './admin.css';
 // S-19 관리자 화면 틀: 로그인 확인(A-4) → 없으면 로그인 폼(A-1 · A-2) → 있으면 화면을 그린다.
 // 사용자 사이트 헤더 · 푸터 대신 관리자 전용 머리줄을 쓴다(사용자 메뉴로 내부 정보 화면이 이어지지 않게).
 // 화면 도중 세션이 끝나 401이 오면 ctx.unauthorized()로 로그인 폼을 다시 보여 준다.
+// FE-105: 본문 건너뛰기 링크, 작업 완료 알림(ctx.notify — 화면 아래에 떠 있는 알림줄이라 스크롤 위치와 상관없이 보인다),
+// 목 모드 "목데이터" 표시, 틀 오류에 다시 시도, 화면에 들어오면 제목(h1)으로 포커스
 
 /**
  * @param {HTMLElement} container
  * @param {{ navigate: Function, title: string, section?: string, draw: (ctx) => Promise<void> }} options
  *   section  왼쪽 메뉴에서 눌린 것으로 표시할 항목(adminMenu.js의 key)
- *   draw(ctx)  ctx = { api, admin, main, active, unauthorized, setTitle }
+ *   draw(ctx)  ctx = { api, admin, main, active, unauthorized, setTitle, status, notify }
  */
 export async function renderAdminShell(container, { navigate, title, section, draw }) {
   const root = element('div', 'admin-page');
   container.replaceChildren(root);
   const active = () => container.contains(root);
+  setTitle(title); // 틀 오류 · 로그인 전에도 탭 제목으로 어느 화면인지 알 수 있게
   const api = await loadAdminApi();
   if (!active()) return;
 
+  // 본문 건너뛰기: 해시 이동 대신 포커스만 옮긴다(주소가 바뀌면 라우터가 화면을 다시 그린다)
+  const skip = element('a', 'admin-skip', '본문으로 건너뛰기');
+  skip.href = '#admin-main';
+  skip.addEventListener('click', (event) => {
+    event.preventDefault();
+    if (main.querySelector('h1')) focusHeading(main); // 화면 제목에 포커스 테두리가 보이고 낭독기도 제목을 읽는다. 아직 제목이 없으면(불러오는 중) 본문 자체로
+    else main.focus();
+  });
   const header = element('header', 'admin-header');
   const brand = button('', () => navigate('landing'), 'admin-brand'); // 로고는 사용자 사이트 메인으로
   brand.append('내', element('span', 'law', 'Law'), '남불 ', element('small', '', '관리자'));
+  const brandWrap = element('div', 'admin-brand-wrap');
+  brandWrap.append(brand);
+  if (API_MODE === 'mock') brandWrap.append(element('span', 'admin-mock-label', '목데이터')); // 목 모드 숫자 · 목록은 모두 예시 값이다
   const user = element('div', 'admin-user');
-  header.append(brand, user);
+  header.append(brandWrap, user);
   const main = element('main', 'admin-main');
+  main.id = 'admin-main';
+  main.tabIndex = -1;
   const body = element('div', 'admin-body');
-  body.append(drawMenu(), main);
-  root.append(header, body);
+  const menu = drawMenu();
+  body.append(menu, main);
+  // 작업 완료 알림: 화면을 다시 그려도 남아 있게 main 밖에 둔다. 다음 알림이 오거나 몇 초 뒤에 사라진다
+  const toast = element('p', 'admin-toast');
+  toast.setAttribute('role', 'status');
+  toast.hidden = true;
+  let toastTimer = 0;
+  let toastTextTimer = 0;
+  root.append(skip, header, body, toast);
+  // 좁은 화면에서 메뉴는 옆으로 밀리는 한 줄이다: 지금 화면의 항목이 보이게 그 자리로 민다(페이지는 스크롤하지 않는다)
+  const current = menu.querySelector('.is-active');
+  if (current && menu.scrollWidth > menu.clientWidth) {
+    menu.scrollLeft = Math.max(0, current.getBoundingClientRect().left - menu.getBoundingClientRect().left - 16);
+  }
+
+  function notify(text) {
+    clearTimeout(toastTimer);
+    clearTimeout(toastTextTimer);
+    // role=status 영역이 숨어 있는 동안 바뀐 글은 낭독되지 않는다: 먼저 보이게 하고, 글은 다음 task에서 쓴다
+    toast.hidden = false;
+    toastTextTimer = setTimeout(() => { toast.textContent = text; }, 0);
+    toastTimer = setTimeout(() => { toast.hidden = true; toast.textContent = ''; }, 6000);
+  }
 
   // 왼쪽 메뉴: 로그인 전에는 숨긴다(showLogin이 body.dataset.locked로 가린다)
   function drawMenu() {
@@ -67,6 +105,14 @@ export async function renderAdminShell(container, { navigate, title, section, dr
     main.replaceChildren(panel);
   }
 
+  // 틀을 그리지 못했을 때(관리자 정보 확인 · 화면 그리기 실패): 화면 제목 + 이유 + 다시 시도
+  function failed(text, retry) {
+    const panel = element('div', 'admin-message');
+    panel.setAttribute('role', 'alert');
+    panel.append(element('p', '', text), button('다시 시도', retry));
+    main.replaceChildren(element('h1', '', title), panel);
+  }
+
   function showLogin(notice) {
     if (isAdmin()) clearUser(); // 로그아웃 · 세션 만료로 로그인 폼이 뜨면 사용자 사이트의 관리자 표시도 거둔다
     body.dataset.locked = '1';
@@ -93,6 +139,7 @@ export async function renderAdminShell(container, { navigate, title, section, dr
       if (submit.disabled) return;
       if (!email.value.trim() || !password.value) {
         error.textContent = '이메일과 비밀번호를 입력해 주세요.';
+        (email.value.trim() ? password : email).focus(); // 비어 있는 첫 칸으로
         return;
       }
       submit.disabled = true;
@@ -140,25 +187,31 @@ export async function renderAdminShell(container, { navigate, title, section, dr
     user.replaceChildren(element('span', '', admin.displayName || admin.email), button('로그아웃', logout, 'secondary-button'));
     setTitle(title);
     const ctx = {
-      api, admin, main, active, setTitle, status,
+      api, admin, main, active, setTitle, status, notify,
       unauthorized: () => showLogin('세션이 끝났어요. 다시 로그인해 주세요.'),
     };
     try {
       await draw(ctx);
+      // 화면에 들어오면 제목으로 포커스: 로그인 뒤 · 메뉴로 옮겨 온 뒤 키보드 위치가 문서 처음(body)에 남지 않게
+      const focused = document.activeElement;
+      if (active() && (!focused || focused === document.body || !root.contains(focused))) focusHeading(main);
     } catch (failure) {
       if (!active()) return;
       if (failure?.code === 'UNAUTHORIZED') ctx.unauthorized();
-      else status(errorText(failure, '화면을 불러오지 못했어요.'), 'alert');
+      else failed(errorText(failure, '화면을 불러오지 못했어요.'), () => enter(admin));
     }
   }
 
-  status('관리자 정보를 확인하는 중이에요.');
-  try {
-    const admin = await api.me();
-    if (active()) await enter(admin);
-  } catch (failure) {
-    if (!active()) return;
-    if (failure?.code === 'UNAUTHORIZED') showLogin();
-    else status(errorText(failure, '관리자 정보를 확인하지 못했어요.'), 'alert');
+  async function start() {
+    status('관리자 정보를 확인하는 중이에요.');
+    try {
+      const admin = await api.me();
+      if (active()) await enter(admin);
+    } catch (failure) {
+      if (!active()) return;
+      if (failure?.code === 'UNAUTHORIZED') showLogin();
+      else failed(errorText(failure, '관리자 정보를 확인하지 못했어요.'), start);
+    }
   }
+  await start();
 }

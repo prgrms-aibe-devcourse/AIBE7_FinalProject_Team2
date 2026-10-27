@@ -6,6 +6,7 @@ import '../pages/caseList/caseList.css';
 import '../pages/caseDetail/caseDetail.css';
 import '../components/paperStage.css'; // 신문 지면 무대: stage.css · caseList.css 뒤에 와야 한다
 import '../utils/pageTurn.css';
+import '../components/folderParts.css'; // 종이 귀 · 진행 책갈피(FE-96): 이것을 쓰는 판결 체험 · 성향 결과 CSS보다 앞에 와야 한다
 import '../pages/review/review.css';
 import '../pages/overview/overview.css';
 import '../pages/verdict/verdict.css';
@@ -15,6 +16,7 @@ import '../pages/comparison/comparison.css';
 import '../pages/personality/personality.css';
 import '../pages/personality/personalityPaper.css';
 import '../components/personCards.css'; // 성향카드 · 프로필카드 부품(FE-79): 이 카드를 덮어쓰는 마이페이지 · 커뮤니티 CSS보다 앞에 와야 한다
+import '../components/signatureInk.css'; // 서명 그림(FE-94): 커뮤니티 · 3막이 같이 쓴다. 굵기 · 색은 쓰는 화면 CSS가 덮어쓴다
 import '../pages/myPage/myPage.css';
 import '../pages/myPage/myProfileEdit.css'; // 내 정보 수정(FE-77)
 import '../pages/myPage/mySettings.css'; // 환경 설정(FE-83)
