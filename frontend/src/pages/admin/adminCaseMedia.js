@@ -17,7 +17,7 @@ const ACCEPT = 'image/jpeg,image/png,image/webp';
 const MAX_MB = 10;
 
 /** 파일 고르기 + 올리기 한 벌. onPick은 File을 받아 Promise를 돌려준다 */
-function uploadRow(label, { onUpload, disabled, submitText = '올리기' }) {
+function uploadRow(label, { onUpload, onFailure, disabled, submitText = '올리기' }) {
   const input = element('input');
   Object.assign(input, { type: 'file', accept: ACCEPT, disabled });
   const field = labeledField(label, input, `JPG · PNG · WebP, ${MAX_MB}MB 이하`);
@@ -31,7 +31,7 @@ function uploadRow(label, { onUpload, disabled, submitText = '올리기' }) {
     try {
       await onUpload(file);
     } catch (failure) {
-      error.textContent = errorText(failure, '사진을 올리지 못했어요.');
+      onFailure(failure, '사진을 올리지 못했어요.', error);
       send.disabled = false;
     }
   }, 'secondary-button');
@@ -41,12 +41,13 @@ function uploadRow(label, { onUpload, disabled, submitText = '올리기' }) {
   return wrap;
 }
 
-/** 추천 프롬프트 상자. 받아서 보여 주고, 복사 버튼을 단다(관리자가 그림 도구에 붙여 넣는다) */
-function promptBox({ label, onSuggest, hintField }) {
+/** 추천 프롬프트 상자. 받아서 보여 주고, 복사 버튼을 단다(관리자가 그림 도구에 붙여 넣는다). promptRef가 있으면 받은 문구를 읽을 길을 터 준다(업로드 기록용) */
+function promptBox({ label, onSuggest, hintField, promptRef }) {
   const box = element('div', 'admin-prompt');
   const output = element('textarea', 'admin-prompt-text');
   Object.assign(output, { rows: 3, readOnly: true, hidden: true });
   output.setAttribute('aria-label', `${label} 추천 문구`);
+  if (promptRef) promptRef.read = () => output.value;
   const error = element('p', 'admin-error');
   error.setAttribute('role', 'alert');
   const copy = button('복사', async () => {
@@ -99,7 +100,7 @@ function photoPreview(url, alt) {
  * @param ctx.after  바꾼 뒤 부르는 함수(사건을 다시 불러 그리고 알림줄을 띄운다)
  */
 export function mediaSection(ctx, data) {
-  const { api, caseId, section, media, after } = ctx;
+  const { api, caseId, section, media, after, handleFailure } = ctx;
   const editable = data.status !== 'PUBLISHED';
   const parts = [];
 
@@ -116,6 +117,7 @@ export function mediaSection(ctx, data) {
     promptBox({ label: '대표사진', onSuggest: () => api.suggestRepresentativePrompt(caseId) }),
     uploadRow('대표사진 파일', {
       disabled: !editable,
+      onFailure: handleFailure,
       submitText: data.content.thumbnailUrl ? '교체하기' : '올리기',
       onUpload: async (file) => {
         await api.uploadRepresentativePhoto(caseId, file);
@@ -128,6 +130,7 @@ export function mediaSection(ctx, data) {
   // ── 발단 · 결론 사진 (A-13-2 · A-13-4 · A-13-5 · A-13-9). 역할마다 한 장 고정 자리다
   const hint = element('input');
   Object.assign(hint, { type: 'text', maxLength: 500, placeholder: '예: 다투는 장면을 더 강조해줘' });
+  const incidentPrompt = { read: () => '' }; // 추천 문구 상자가 실제로 받은 문구(또는 고친 값)를 여기로 읽는다
   const incident = element('div', 'admin-media-block');
   incident.append(
     element('h3', '', '발단 · 결론 사진'),
@@ -136,6 +139,7 @@ export function mediaSection(ctx, data) {
       label: '발단 사진',
       hintField: labeledField('추천에 덧붙일 말 (선택, 500자 이하)', hint),
       onSuggest: () => api.suggestIncidentPrompt(caseId, hint.value.trim() || undefined),
+      promptRef: incidentPrompt,
     }),
   );
 
@@ -158,7 +162,7 @@ export function mediaSection(ctx, data) {
       api.deleteIncidentPhoto(caseId, role)
         .then(() => after(`${PHOTO_ROLE[role]}을 지웠어요.`, 'media'))
         .catch((failure) => {
-          error.textContent = errorText(failure, '사진을 지우지 못했어요.');
+          handleFailure(failure, '사진을 지우지 못했어요.', error);
           remove.disabled = false;
         });
     });
@@ -171,10 +175,11 @@ export function mediaSection(ctx, data) {
       labeledField('사진 설명 (선택, 200자 이하)', caption),
       uploadRow(`${PHOTO_ROLE[role]} 파일`, {
         disabled: !editable,
+        onFailure: handleFailure,
         submitText: saved ? '교체하기' : '올리기',
         onUpload: async (file) => {
           // 추천 문구는 발단(ORIGIN)만 지원한다(BE-91) — 결론(CONCLUSION) 업로드에는 함께 보내지 않는다
-          const prompt = role === 'ORIGIN' ? hint.value.trim() || undefined : undefined;
+          const prompt = role === 'ORIGIN' ? incidentPrompt.read().trim() || undefined : undefined;
           await api.uploadIncidentPhoto(caseId, { file, role, caption: caption.value.trim() || undefined, prompt });
           await after(`${PHOTO_ROLE[role]}을 올렸어요.`, 'media');
         },
@@ -193,7 +198,7 @@ export function mediaSection(ctx, data) {
 
 /** 신문 지면: 없으면 생성 버튼, 있으면 수정 폼. 저장은 보낸 칸만 보낸다(A-11과 같은 방식) */
 function paperBlock(ctx, data, editable) {
-  const { api, caseId, media, after } = ctx;
+  const { api, caseId, media, after, handleFailure } = ctx;
   const block = element('div', 'admin-media-block');
   block.append(element('h3', '', '신문 지면'));
   const error = element('p', 'admin-error');
@@ -207,7 +212,7 @@ function paperBlock(ctx, data, editable) {
       api.generateCasePaper(caseId)
         .then(() => after('신문 지면을 만들었어요.', 'media'))
         .catch((failure) => {
-          error.textContent = errorText(failure, '신문 지면을 만들지 못했어요.');
+          handleFailure(failure, '신문 지면을 만들지 못했어요.', error);
           generate.disabled = false;
         });
     }, 'primary-button');
@@ -253,7 +258,7 @@ function paperBlock(ctx, data, editable) {
     api.updateCasePaper(caseId, changes)
       .then(() => after('신문 지면을 저장했어요.', 'media:paper'))
       .catch((failure) => {
-        error.textContent = errorText(failure, '지면을 저장하지 못했어요.');
+        handleFailure(failure, '지면을 저장하지 못했어요.', error);
         save.disabled = false;
       });
   });

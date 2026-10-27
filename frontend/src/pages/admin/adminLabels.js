@@ -30,13 +30,13 @@ export const IMPORT_STAGE_STATUS = {
   DONE: ['✓', '완료'], RUNNING: ['…', '진행 중'], FAILED: ['✕', '실패'], SKIPPED: ['–', '건너뜀'], PENDING: ['·', '대기'],
 };
 
-// A-13 공개 조건 코드
 // 사건 사진 역할 (A-13-4 · A-13-5 · A-13-9). 사건마다 역할별로 한 장씩이다
 export const PHOTO_ROLE = { ORIGIN: '발단 사진', CONCLUSION: '결론 사진' };
 
 // 대본 대사의 측 (A-13-10). 서버는 코드값으로 주고 화면에서 바꿔 쓴다
 export const SCRIPT_SIDE = { PROSECUTOR: '검사', DEFENSE: '변호인' };
 
+// A-13 공개 조건 코드
 export const PUBLISH_REASON = {
   NO_PUBLISHED_AI: '공개할 AI 판결을 승인해야 해요.',
   NO_PUBLISHED_COURT: '공개할 재판부 판결을 승인해야 해요.',

@@ -160,9 +160,9 @@ export function renderAdminCasePage(container, { caseId, navigate }) {
         if (!summary?.exists) return null;	// 대본이 없는 사건(기존 사건은 모두 이 경우)은 알릴 것이 없다
         if (summary.reviewStatus === 'APPROVED') return null;
         if (summary.publishable === false) {
-          return '대본이 아직 검수를 통과하지 못했어요(증거 카드와 대사가 어긋남). 공개는 막지 않지만, 체험에서는 기존 화면으로 진행돼요.';
+          return '대본이 아직 검수를 통과하지 못했어요(증거 카드와 대사가 어긋남). 공개는 막지 않지만, 공개 대본으로는 정해지지 않아요.';
         }
-        return '대본을 아직 승인하지 않았어요. 공개는 막지 않지만, 승인 전에는 체험에서 쓰이지 않아요.';
+        return '대본을 아직 승인하지 않았어요. 공개는 막지 않지만, 승인 전에는 공개 대본으로 정해지지 않아요. (사용자 체험 연결은 BE-109 이후예요)';
       }
 
       // ── 공개 준비 (A-13)
@@ -588,13 +588,20 @@ export function renderAdminCasePage(container, { caseId, navigate }) {
 
       /** 사진 · 지면 · 대본을 바꾼 뒤: 다시 불러 그리고 누른 자리로 돌아가 알린다 (mutate와 같은 흐름) */
       async function after(okText, anchor) {
-        await load();
+        try {
+          await load();
+        } catch (failure) {
+          if (!active()) return;
+          if (failure?.code === 'UNAUTHORIZED') { unauthorized(); return; }
+          notify('저장은 됐지만 화면을 새로 불러오지 못했어요. 새로고침해 주세요.');
+          return;
+        }
         if (!active()) return;
         returnTo(anchor);
         notify(okText);
       }
 
-      const mediaCtx = () => ({ api, caseId, section, media, after, errorLine });
+      const mediaCtx = () => ({ api, caseId, section, media, after, errorLine, handleFailure });
 
       const loading = element('p', 'admin-message', '사건을 불러오는 중이에요.');
       loading.setAttribute('role', 'status');

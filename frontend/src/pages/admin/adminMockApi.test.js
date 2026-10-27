@@ -220,10 +220,6 @@ test('A-13-6: 지면에는 대표사진 · 발단 · 결론 사진이 함께 붙
 });
 
 test('A-13-10: 대본이 없는 사건은 SCRIPT_NOT_FOUND, A-6 요약도 exists false', async () => {
-  const { caseId } = await api.getCase(12);
-  assert.equal(caseId, 12);
-  await api.deleteIncidentPhoto(12, 'ORIGIN').catch(() => null);
-
   // 목 기본 상태에서 12번에는 대본이 있다. 대본이 없는 사건을 만들어 확인한다
   const { importId } = await api.createImport(request({ sources: [source({ caseNumber: '2099고합950' })] }));
   await runToEnd(importId);

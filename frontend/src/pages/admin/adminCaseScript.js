@@ -1,6 +1,6 @@
 import { button, element } from '../../components/siteLayout.js';
 import { confirmChange, labeledField } from './adminKit.js';
-import { REVIEW_STATUS, SCRIPT_SIDE, errorText, formatDateTime } from './adminLabels.js';
+import { REVIEW_STATUS, SCRIPT_SIDE, formatDateTime } from './adminLabels.js';
 
 // 사건 대본 검수 (A-13-10 ~ A-13-13, FE-106). 사건 검수 상세에 붙는 부분이다.
 //
@@ -42,7 +42,7 @@ function blockedReason(script) {
 
 /** 대사 한 줄. 고치기를 펼치면 그 자리에서 수정한다(A-13-13) */
 function lineItem(ctx, script, line) {
-  const { api, caseId, after } = ctx;
+  const { api, caseId, after, handleFailure } = ctx;
   const item = element('li', 'admin-script-line');
   const manual = line.validation?.manual === true;
   const warnings = line.validation?.warnings ?? [];
@@ -64,7 +64,7 @@ function lineItem(ctx, script, line) {
 
   const error = element('p', 'admin-error');
   error.setAttribute('role', 'alert');
-  const form = element('form', 'admin-reject');
+  const form = element('form', 'admin-inline-form');
   form.hidden = true;
   form.noValidate = true;
   const input = element('textarea');
@@ -102,7 +102,7 @@ function lineItem(ctx, script, line) {
     api.updateCaseScriptLine(caseId, line.factorId, value)
       .then(() => after('대사를 고쳤어요. 다시 검수해 주세요.', `script:${line.factorId}`))
       .catch((failure) => {
-        error.textContent = errorText(failure, '대사를 고치지 못했어요.');
+        handleFailure(failure, '대사를 고치지 못했어요.', error);
         send.disabled = false;
       });
   });
@@ -125,7 +125,7 @@ function lineItem(ctx, script, line) {
  * @param ctx.media.script  A-13-10 응답(없으면 null — 기존 사건은 모두 이 경우다)
  */
 export function scriptSection(ctx, data) {
-  const { api, caseId, section, media, after, errorLine } = ctx;
+  const { api, caseId, section, media, after, errorLine, handleFailure } = ctx;
   const script = media.script;
 
   if (!script) {
@@ -168,13 +168,13 @@ export function scriptSection(ctx, data) {
   // ── 승인 · 반려 (대본 전체 한 번. 다시 생성하면 검수 기록이 지워져 줄 단위 기록은 의미를 잃는다)
   const actions = element('div', 'admin-actions');
   const approve = button('승인 (공개 대본으로 정하기)', () => {
-    if (!confirmChange('이 대본을 공개할까요?', '승인하면 체험에서 이 대사가 쓰여요.')) return;
+    if (!confirmChange('이 대본을 공개할까요?', '승인하면 공개 대본으로 정해져요. 사용자 체험 연결은 BE-109 이후예요.')) return;
     approve.disabled = true;
     error.textContent = '';
     api.approveCaseScript(caseId)
       .then(() => after('대본을 승인했어요.', 'script'))
       .catch((failure) => {
-        error.textContent = errorText(failure, '승인하지 못했어요.');
+        handleFailure(failure, '승인하지 못했어요.', error);
         approve.disabled = false;
       });
   }, 'primary-button');
@@ -199,12 +199,12 @@ export function scriptSection(ctx, data) {
     const note = reason.value.trim();
     if (!note) { error.textContent = '반려 사유를 입력해 주세요.'; reason.focus(); return; }
     // 승인한 대본을 반려로 내리면 공개가 내려간다 — 사용자가 보던 것을 거두는 작업이라 묻는다
-    if (script.isPublished && !confirmChange('공개 중인 대본을 반려할까요?', '체험에서 이 대사가 바로 빠져요.')) return;
+    if (script.isPublished && !confirmChange('공개 중인 대본을 반려할까요?', '공개 대본 자리에서 바로 빠져요.')) return;
     rejectSend.disabled = true;
     api.rejectCaseScript(caseId, note)
       .then(() => after('대본을 반려했어요.', 'script'))
       .catch((failure) => {
-        error.textContent = errorText(failure, '반려하지 못했어요.');
+        handleFailure(failure, '반려하지 못했어요.', error);
         rejectSend.disabled = false;
       });
   });

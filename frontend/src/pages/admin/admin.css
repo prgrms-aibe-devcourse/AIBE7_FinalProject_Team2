@@ -117,8 +117,8 @@
 .admin-candidate-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 .admin-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .admin-actions :is(.primary-button, .secondary-button) { min-height: 36px; padding: 4px 12px; }
-.admin-reject { display: grid; gap: 8px; margin-top: 10px; max-width: 520px; }
-.admin-reject .secondary-button { justify-self: start; min-height: 36px; padding: 4px 12px; }
+.admin-reject, .admin-inline-form { display: grid; gap: 8px; margin-top: 10px; max-width: 520px; }
+.admin-reject .secondary-button, .admin-inline-form .secondary-button { justify-self: start; min-height: 36px; padding: 4px 12px; }
 .admin-candidate-panel { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--color-border); }
 .admin-dl { display: grid; grid-template-columns: 140px 1fr; gap: 6px 12px; margin: 0; font-size: var(--text-small); }
 .admin-dl dt { color: var(--color-muted); font-weight: 700; }
@@ -213,7 +213,7 @@ button.admin-card:hover { border-color: var(--color-accent); }
 /* 손가락으로 누르는 화면: 버튼 · 고르기 · 메뉴를 44px 높이로 (FE-105) */
 @media (max-width: 720px), (pointer: coarse) {
   .admin-page :is(.primary-button, .secondary-button, .admin-tab, .admin-menu-item, .admin-jump-link, select) { min-height: 44px; }
-  .admin-page :is(.admin-actions, .admin-pager, .admin-reject, .admin-sources, .admin-mode-panel, .admin-source-box, .admin-search, .admin-user, .admin-comment, .admin-words, .admin-axis-confirm) :is(.primary-button, .secondary-button) { min-height: 44px; }
+  .admin-page :is(.admin-actions, .admin-pager, .admin-reject, .admin-inline-form, .admin-sources, .admin-mode-panel, .admin-source-box, .admin-search, .admin-user, .admin-comment, .admin-words, .admin-axis-confirm) :is(.primary-button, .secondary-button) { min-height: 44px; }
   .admin-link { padding: 11px 0; margin: -8px 0; } /* 표 줄 높이는 그대로 두고 누르는 범위만 넓힌다 */
   .admin-back, .admin-brand { min-height: 44px; }
   .admin-menu-item { display: flex; align-items: center; }
