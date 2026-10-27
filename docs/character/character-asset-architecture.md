@@ -25,6 +25,7 @@
 | v0.19 | 2026-10-15 | 4-3 "감정을 같은 무게로" 철회, 7-3 #17 생성 방식을 수작업으로 정정(PR #149 리뷰 결정) |
 | v0.20 | 2026-10-20 | COMMON-36 사전 검토 — 4-3에 재연 컷 편향 검토 결정(규칙 변경 없음, 로그 기반 점검, 재검토 기준) 한 줄 추가 |
 | v0.21 | 2026-10-21 | 화면 ID를 6막 체계로 갱신(FE-58, BE-82 매핑: 옛 S-06 ~ S-09 → S-05 ~ S-08). 작성 이력의 ID는 옛 뜻 그대로 |
+| v0.22 | 2026-10-24 | 말투 정리(BE-107 대사 파이프라인 논의) — 5-2 로 말투 "합쇼체"를 "~입니다 존댓말"로 표기 정정, ROLE에 진행 해설(narrator) 추가, 피고인 답변 최소 응답 규칙 추가 |
 
 > 캐릭터 **결정**은 [캐릭터 인수인계](character-main-handover.md) 2-1절(10/13 변경)과 [성향 테스트 콘텐츠](../personality-test-content.md) 6장이 기준이다. 이 문서는 그 결정을 **어떤 단위로 나눠 만들고, 어떻게 조합하고, 어디에 두는지**만 정한다.
 > 기획 원문은 `Claude outputs/character/plan/character-law-ai-judge-plan.md` v0.3(커밋 안 함, 이하 "기획")이다. 이 문서에 필요한 내용은 옮겨 적었다. 프롬프트 원문은 `Claude outputs/character/prompts/naero_nambul_main_image_prompts.md`(메인 이미지 최종) · `naero_nambul_sheet_prompts_deformation11.md`(데포르메 11종)다.
@@ -481,7 +482,7 @@ S-02 기사 사진 · 사건 디테일 사진은 **실제 사건**을 바탕으�
 | --- | --- | --- | --- |
 | 이름 뜻 | "내가 하면 로맨스" — 내 쪽 시선 | "남이 하면 불륜" — 남 쪽 시선 | 법(Law) |
 | 성격 | 차분 · 관찰형. 질문으로 생각을 끌어낸다 | 뜨겁고 솔직함. 반대쪽 시선을 던지고 리액션이 크다 | 말수가 적고 정중함. 저울로 마음을 보인다 |
-| 말투 | 해요체, 짧은 질문을 자주 | 해요체, 감탄 · 짧은 외침을 섞음 | 합쇼체(✅ 10/13 확정), 짧은 문장 |
+| 말투 | 해요체, 짧은 질문을 자주 | 해요체, 감탄 · 짧은 외침을 섞음 | "~입니다" 존댓말(✅ 10/13 확정, 10/24 표기 정정), 짧은 문장 |
 | 무대 밖 | 배역이 끝나면 기본 말투로 돌아온다 | 같음 | 판결 확정 전에는 판결 내용을 말하지 않는다 |
 
 **ROLE 블록**
@@ -489,12 +490,15 @@ S-02 기사 사진 · 사건 디테일 사진은 **실제 사건**을 바탕으�
 | 역할 | 말하는 것 | 말하지 않는 것 |
 | --- | --- | --- |
 | 안내 (`guide`, 무대 밖) | 지금 할 일 · 화면 사용법 · 질문 | 판결 방향, 공개 전 사실 |
-| 사건 역할 (`actor`) | 공개된 사실관계를 배역 입장에서 소개 | 사실관계에 없는 감정 · 사건 꾸며 내기 |
+| 진행 해설 (`narrator`) | 절차 진행 · 쟁점 안내(해요체) | 판결 방향, 공개 전 사실 |
+| 사건 역할 (`actor`) | 공개된 사실관계를 배역 입장에서 소개. 피고인(A씨 역) 답변은 기록에 있는 사실에 대한 **최소 응답**("…네." · "…아닙니다.")만 | 사실관계에 없는 감정 · 동기 · 사건 꾸며 내기, 반성 같은 내면 대신 말하기 |
 | 검사 (`prosecutor`) | 공소 사실 · 가중 쪽 주장 요약 | 피고인 인격 비난 |
 | 변호인 (`defense`) | 감경 쪽 주장 · 피고인 측 사정 요약 | 피해자 탓하기 |
 | 판사 (`judge`) | 쟁점 정리 · 판단할 것 안내 | 결론 · 형량 제시(사용자가 판사다) |
 
 - **검사 · 변호인 대사는 분량 · 어조를 맞춘다.** 같은 막에서 한쪽만 길거나 강하면 안 된다(검사기로 확인).
+- **피고인 신문은 예 · 아니오로 답할 수 있는 질문으로 쓴다.** 답변은 최소 응답으로 두고(사건 1: "공소사실을 인정합니까?" → "…네, 인정합니다."), 최후진술도 기록에 없는 감정을 만들지 않는다(사건 1: "…이상입니다."). 동기 · 반성 같은 내면은 대사로 지어내지 않는다.
+- 말투 층위(10/24): 내로 · 남불 · 진행 해설 = 해요체, 로 = "~입니다" 존댓말. 배역 연기 중 대사(검사 · 변호인 · 판사 · A씨 역)는 "~입니다" 존댓말이다(사건 1 대본 기준).
 
 **GUARDRAILS** (공통, 기획 5-5 · 6-3)
 
@@ -636,7 +640,7 @@ frontend/public/images/characters/
 | 레이어 (`layers/`) | 4:5 | 투명 webp 800 × 1000, 같은 기준점 | 투명 PNG 2048 × 2560 | 투명 |
 | 시트 | 16:9 | 넣지 않음 | 투명 PNG | 투명 |
 
-> **실제 웹 폴더(10/20, COMMON-48)**: 위 구조 대신 파일 수가 적어 평면으로 두었다. `frontend/public/images/characters/` 아래 `scene/{캐릭터}_{장면}-{감정}.webp`(800 × 1000) · `cheek/{캐릭터}_idle-{sorry|thinking}.webp`(800 × 1000) · `icon/generated/{캐릭터}_face-{감정}.webp`(128 × 128, 새로 생성한 얼굴 · 책갈피 고르기에서 씀) · `icon/cropped/{캐릭터}_face-{감정}.webp`(128 × 128, `scene/` 장면 컷에서 머리를 잘라 만든 임시 얼굴, 12장) · `icon/cropped/law-*_icon.webp`(마스코트 로 컷에서 머리를 잘라 만든 로 아이콘, 원래 `mascot/`에 있었음, FE-67) · `icon/cropped/law-*_icon-adult.webp`(성인 비율 로 아이콘, 원래 `law/`에 있었음, FE-68) · `mascot/{로}_{idle|think|deliver|icon}.webp`(투명 여백을 잘라 높이 560, 아이콘은 머리 128 × 128) · `mascot/{trio_idle|trio_think|compare_trio-thinking}.webp`(1600 × 900) · `roles/{캐릭터}_{judge|prosecutor|defense|actor|case-1}.webp`(높이 560) · `standing/*.webp`(높이 800) · `personality/{01~32}.webp` · `deform/` · `law/`(성인 비율 로. 지금 판결 화면은 `mascot/`을 읽지만 성인 비율 로도 쓸 예정이라 지우지 않고 보존) · `cheek-slim/`(옛 볼따구 컷, 800 × 1000) · `adult/`(성인 비율 로 컷 · 합의 · 비교 컷, 아직 화면에서 쓰지 않지만 사용 예정으로 보존). 공용 재연 컷은 `public/images/cases/reenact-common{,-2}_{headline|sub-1|detail-1}.webp`(1200 × 675). 변환 기준은 품질 85, 원본은 이미지 저장소 `NaeLawNamBul_Images`.
+> **실제 웹 폴더(10/20, COMMON-48)**: 위 구조 대신 파일 수가 적어 평면으로 두었다. `frontend/public/images/characters/` 아래 `scene/{캐릭터}_{장면}-{감정}.webp`(800 × 1000) · `cheek/{캐릭터}_idle-{sorry|thinking}.webp`(800 × 1000) · `icon/generated/{캐릭터}_face-{감정}.webp`(128 × 128, 새로 생성한 얼굴 · 책갈피 고르기에서 씀) · `icon/cropped/{캐릭터}_face-{감정}.webp`(128 × 128, `scene/` 장면 컷에서 머리를 잘라 만든 임시 얼굴, 12장) · `icon/cropped/law-*_icon.webp`(마스코트 로 컷에서 머리를 잘라 만든 로 아이콘, 원래 `mascot/`에 있었음, FE-67) · `icon/cropped/law-*_icon-adult.webp`(성인 비율 로 아이콘, 원래 `law/`에 있었음, FE-68) · `mascot/{로}_{idle|think|deliver|icon}.webp`(투명 여백을 잘라 높이 560, 아이콘은 머리 128 × 128) · `mascot/{trio_idle|trio_think|compare_trio-thinking}.webp`(1600 × 900) · `roles/{캐릭터}_{judge|prosecutor|defense|actor|case-1}.webp`(높이 560) · `standing/*.webp`(높이 800) · `personality/{01~32}.webp` · `deform/` · `law/`(성인 비율 로. 지금 판결 화면은 `mascot/`을 읽지만 성인 비율 로도 쓸 예정이라 지우지 않고 보존) · `cheek-slim/`(옛 볼따구 컷, 800 × 1000) · `adult/`(성인 비율 로 컷 · 합의 · 비교 컷, 아직 화면에서 쓰지 않지만 사용 예정으로 보존). 공용 재연 컷은 `public/images/cases/common-{property|body|life}-{reenact|origin|conclusion}.webp`(1200 × 675, 범죄 분류 재산 · 신체 · 생명 × 자리 3장, FE-65 10/27). 변환 기준은 품질 85, 원본은 이미지 저장소 `NaeLawNamBul_Images`.
 
 - **생성 배경은 모두 투명이다(10/15).** 투명 출력이 안 되는 환경에서만 크로마 그린 `#00B140`으로 뽑아 배경을 지운다. 10/14까지 만든 시트 · 재연 컷은 신문지색 배경 그대로 쓴다.
 - 원본 PNG는 용량 때문에 레포에 넣지 않는다. 레포 밖 `~/Documents/NaeLawNamBul/character/`와 공개 레포 `NaeLawNamBul_Images`에 둔다.

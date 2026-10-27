@@ -2,9 +2,10 @@
 // 구성: 프로필(프로필카드 · 닉네임 · 한 줄 소개 · 성향카드 · 재심) · 계정 관리(로그인 방식 · 현재 아이디 · 가입일 · 최근 로그인 · 비밀번호 변경 · 로그아웃 · 회원 탈퇴) · 약관. 알림 등 앱 설정은 "환경 설정"에서 다룬다
 // 한 줄 소개는 서버(P-8 PATCH /profile-settings)에 저장한다(profileSettings.js, FE-81). 프로필카드 · 성향카드는 커뮤니티에서 항상 공개다(공개 범위 설정을 두지 않는다, 의도된 서비스 특징)
 import { button, element, mockTag } from '../../components/siteLayout.js';
+import { cardSignature } from '../../components/personCards.js';
 import { API_MODE } from '../../api/config.js';
 import { clearUser, currentUser, saveUser } from '../../utils/session.js';
-import { NICKNAME_HINT, NICKNAME_MAX, nicknameError } from '../../utils/nickname.js';
+import { NICKNAME_HINT, NICKNAME_MAX, lockNicknameLength, nicknameError } from '../../utils/nickname.js';
 import { BIO_MAX, getProfileSettings, updateProfileSettings } from '../../utils/profileSettings.js';
 
 const BIO_PLACEHOLDER = '사건 앞에서는 한 번 더 생각하는 판사입니다.';
@@ -61,6 +62,7 @@ export function renderProfileEdit({ api, navigate, go, data = {}, card, fan }) {
   input.type = 'text';
   input.value = user?.nickname ?? '';
   input.maxLength = NICKNAME_MAX;
+  lockNicknameLength(input);
   input.autocomplete = 'nickname';
   input.spellcheck = false;
   input.disabled = !user;
@@ -97,12 +99,16 @@ export function renderProfileEdit({ api, navigate, go, data = {}, card, fan }) {
 
   // 프로필카드 미리보기: 마이페이지 첫 화면과 같은 카드(누르면 프로필카드 화면). 닉네임을 입력하는 대로 카드 이름이 바뀐다. 성향카드는 마이페이지 첫 화면에만 둔다
   const profileCard = card();
+  let shownName = profileCard.querySelector('.my-card-name')?.textContent ?? '';
   const syncPreview = () => {
     const name = input.value.trim() || user?.nickname;
     const title = profileCard.querySelector('.my-card-name');
     if (name && title) {
       title.textContent = name;
-      profileCard.setAttribute('aria-label', profileCard.getAttribute('aria-label').replace(/^(프로필카드 열기: )[^,]*/, `$1${name}`));
+      // 낭독 이름도 카드에 보이는 이름(서명의 "○○의 서명" 포함) 전부를 새 닉네임으로 바꾼다
+      if (shownName) profileCard.setAttribute('aria-label', profileCard.getAttribute('aria-label').split(shownName).join(name));
+      shownName = name;
+      profileCard.querySelector('.sig-ink')?.replaceWith(cardSignature(name)); // 카드 아래가 서명이면 닉네임에 맞춰 다시 그린다
     }
     bioCount.textContent = `${[...bio.value.trim()].length}/${BIO_MAX}`;
   };
@@ -115,11 +121,10 @@ export function renderProfileEdit({ api, navigate, go, data = {}, card, fan }) {
 
   // 계정 관리 위쪽, 읽기 전용 정보: 서버가 아이디 · 가입일 · 최근 로그인을 주기 전까지는 자리만 둔다
   const facts = element('dl', 'edit-facts');
+  // 서버 값이 없는 세 줄(FE-103)은 같은 문구를 세 번 쓰지 않고 한 줄로 묶는다
   facts.append(
     fact('로그인 방식', user ? (IS_MOCK ? '개발용 목업 로그인' : '카카오 로그인') : '로그인 전 (이 브라우저의 익명 ID)'),
-    fact('현재 아이디', user ? '서버 연동 후 표시돼요' : '로그인 전 (이 브라우저의 익명 ID)'),
-    fact('가입일', user ? '서버 연동 후 표시돼요' : '—'),
-    fact('최근 로그인', user ? '서버 연동 후 표시돼요' : '—'),
+    user ? fact('아이디 · 가입일 · 최근 로그인', '서버 연동 후 표시돼요') : fact('현재 아이디', '로그인 전 (이 브라우저의 익명 ID)'),
   );
 
   // 계정 관리: 비밀번호 변경 · 로그아웃 · 회원 탈퇴. 비밀번호 API가 없어 자리만 두고, 탈퇴는 한 번 더 확인한다

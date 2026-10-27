@@ -1,10 +1,10 @@
 // S-19 화면 문구 (API 명세 8-2의 코드 → 한국어)
 import { AXES } from '../../utils/personalityAxes.js';
 
-export const CASE_STATUS = { DRAFT: '적재됨 (손대기 전)', REVIEW: '검수 중', PUBLISHED: '공개됨' };
+export const CASE_STATUS = { DRAFT: '적재됨 (검수 전)', REVIEW: '검수 중', PUBLISHED: '공개됨' };
 export const REVIEW_STATUS = { PENDING: '검수 대기', APPROVED: '승인', REJECTED: '반려' };
 export const SUBJECT = { AI: 'AI 판결 후보', COURT: '재판부 판결 후보' };
-export const CRIME_TYPE = { MURDER: '살인', FRAUD: '사기', INJURY: '상해' };
+export const CRIME_TYPE = { MURDER: '살인', FRAUD: '사기', INJURY: '상해', ROBBERY: '강도', THEFT: '절도' };
 export const DIFFICULTY = { LOW: '쉬움', MID: '보통', HIGH: '어려움' };
 export const REVEAL_STAGE = { OVERVIEW: '개요(사전 판단)', DETAIL: '상세' };
 export const COURT_LEVEL = { FIRST: '1심', APPEAL: '2심', SUPREME: '대법원' };
@@ -23,7 +23,11 @@ export const SELECT_STRATEGY = { consensus: '합의값에 가까운 회차', 'fi
 export const IMPORT_STATUS = { QUEUED: '대기 중', RUNNING: '실행 중', SUCCEEDED: '완료', FAILED: '실패' };
 export const IMPORT_STAGE = {
   extract: '비식별화 · 구조화', court: '재판부 판결 정리', contamination: '사전 학습 점검', rag: '참고 자료 검색',
-  generate: 'AI 판결 생성', select: '회차 선택', axis: '가치관 축 분류', load: 'DB 적재',
+  generate: 'AI 판결 생성', select: '회차 선택', axis: '가치관 축 분류', script: '증거조사 대사 생성', load: '사건으로 만들기 (생성이 끝난 뒤 따로 눌러요)',
+};
+// 단계 표시: 기호만으로는 "건너뜀(–)"과 "대기(·)"가 구분되지 않아 글로도 적는다 (FE-105)
+export const IMPORT_STAGE_STATUS = {
+  DONE: ['✓', '완료'], RUNNING: ['…', '진행 중'], FAILED: ['✕', '실패'], SKIPPED: ['–', '건너뜀'], PENDING: ['·', '대기'],
 };
 
 // A-13 공개 조건 코드
@@ -78,6 +82,13 @@ export function errorText(error, fallback = '요청을 처리하지 못했어요
   if (code === 'DUPLICATE_SOURCE') return '이미 등록한 사건번호예요.';
   if (code === 'IMPORT_IN_PROGRESS') return '다른 사건을 등록하는 중이에요. 끝난 뒤 다시 시도해 주세요.';
   if (code === 'IMPORT_NOT_FOUND') return '등록 작업을 찾을 수 없어요.';
+  // 적재(A-14-1, FE-72). IMPORT_RESULT_INVALID의 details[].field는 생성 결과에서 비었거나 잘못된 값의 경로다(예: case.factors[2].label)
+  if (code === 'IMPORT_NOT_READY') return error.message || '아직 적재할 수 없어요. 생성이 끝났는지 확인해 주세요. 이미 적재한 등록일 수도 있어요.'; // 서버가 사유를 주면 그 문구가 더 정확하다(예: 생성 결과가 사라짐, PR #285 리뷰)
+  if (code === 'IMPORT_RESULT_INVALID') {
+    const fields = (error.details ?? []).map((item) => item.field).filter(Boolean);
+    return `생성 결과를 사건으로 만들 수 없어요. 다시 생성해 주세요.${fields.length ? ` (문제가 된 값: ${fields.join(', ')})` : ''}`;
+  }
+  if (code === 'IMPORT_UNAVAILABLE') return '사건 등록 기능을 지금 쓸 수 없어요. 파이프라인 서비스 상태를 확인한 뒤 다시 시도해 주세요.';
   if (code?.endsWith('_NOT_FOUND') && error.message) return error.message; // 구체적인 _NOT_FOUND 분기보다 뒤에 둔다
   if (code === 'VALIDATION_ERROR') return error.message || '입력값을 확인해 주세요.';
   if (code === 'FORBIDDEN') return '권한이 없거나 보안 토큰이 만료됐어요. 새로고침 뒤 다시 시도해 주세요.';

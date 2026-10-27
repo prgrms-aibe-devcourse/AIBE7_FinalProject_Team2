@@ -5,7 +5,7 @@
 // 본뜬 지면은 장식이다(inert · aria-hidden, 눌러도 아무 일도 없다).
 import { reducedMotion } from './motion.js';
 
-const TURN_MS = 1000; // 기사 → 상세처럼 한 번 가는 이동. 자주 누르는 탭 바꾸기는 호출하는 쪽이 duration을 짧게 준다(0.5초)
+export const TURN_MS = 1000; // 기사 → 상세처럼 한 번 가는 이동. 자주 누르는 탭 바꾸기는 호출하는 쪽이 duration을 짧게 준다(0.5초)
 
 function div(className) {
   const node = document.createElement('div');
@@ -50,7 +50,7 @@ export function turnPage(page, { scopeClass, duration = TURN_MS }) {
   const timing = { duration, fill: 'forwards' };
   const shots = [
     leaf.animate([{ transform: 'rotateY(0deg)' }, { transform: 'rotateY(-180deg)' }], { ...timing, easing: 'cubic-bezier(.55, .05, .3, 1)' }),
-    leaf.animate([{ opacity: 1 }, { opacity: 1, offset: 0.82 }, { opacity: 0 }], timing), // 다 넘어간 뒤 화면 왼쪽 끝에 남는 뒷면 자락을 지운다
+    leaf.animate([{ opacity: 1 }, { opacity: 1, offset: 0.55 }, { opacity: 0, offset: 0.85 }, { opacity: 0 }], timing), // 넘어가는 끝자락(easing이 느려지는 구간)에 화면 왼쪽 끝에 남는 뒷면 자락을 일찍 지운다
     frontShade.animate([{ opacity: 0 }, { opacity: 0.7, offset: 0.55 }, { opacity: 0.7 }], timing),
     backShade.animate([{ opacity: 0.8 }, { opacity: 0 }], timing),
     dim.animate([{ opacity: 0 }, { opacity: 0.45, offset: 0.4 }, { opacity: 0 }], timing),

@@ -3,7 +3,7 @@ import { SCRIPTS } from '../../content/scripts.js';
 import { renderComparisonStage, mountNewspaperStage } from './comparisonStage.js';
 
 const directionSymbols = { UP: '↑', DOWN: '↓' };
-const categoryLabels = { ALL_SAME: '셋 모두 같게 본 요소', ONLY_ME_MISSED: '나만 고려하지 않은 요소', DIVERGED: '판단이 엇갈린 요소' };
+const categoryLabels = { ALL_SAME: '셋 모두 같게 본 요소', ONLY_ME_MISSED: 'AI · 재판부만 고려한 요소', DIVERGED: '판단이 엇갈린 요소' };
 const subjectLabels = { USER: '내 판결', AI: 'AI 판결', COURT: '실제 판결' };
 
 function element(tag, className, text) {

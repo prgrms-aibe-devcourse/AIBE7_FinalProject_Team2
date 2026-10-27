@@ -5,12 +5,15 @@ import { get, logout, patch, post, put, reissueAccessToken } from './client.js';
 
 const experience = (caseId) => `/cases/${encodeURIComponent(caseId)}/experience`;
 
-// API 1 — 사건 목록 (crimeType: MURDER | FRAUD | INJURY, 없으면 전체)
+// API 1 — 사건 목록 (crimeType: MURDER | FRAUD | INJURY | ROBBERY | THEFT, 없으면 전체)
 export const getCases = (crimeType) =>
   get(crimeType === undefined ? '/cases' : `/cases?crimeType=${encodeURIComponent(crimeType)}`);
 
 // API 16 — 공개 사건 상세 (S-20 사건 디테일. 체험 없이 부를 수 있고, 쿠키는 읽기만 한다)
 export const getCaseDetail = (caseId) => get(`/cases/${encodeURIComponent(caseId)}`);
+
+// API 17 — 공개 신문 지면 (S-20 기사 지면 · 증거조사. FE-64). 헤드라인 · 본문 · 발단 · 결론 사진(extraPhotos.origin · conclusion, 고정 자리)
+export const getCasePaper = (caseId) => get(`/cases/${encodeURIComponent(caseId)}/paper`);
 
 // API 2 — 체험 시작 (있으면 기존 체험, 쿠키가 없으면 익명 ID 쿠키를 내려준다)
 export const startExperience = (caseId) => post(experience(caseId));
@@ -54,6 +57,11 @@ export const putProfileDeco = (deco) => put('/profile-deco', deco);
 
 // P-8 — 프로필 선택 설정 부분 저장(FE-81, BE-104). 보낸 칸만 바꾸고, 응답은 세 값 전체 { shownCard, profileCardType, bio }
 export const patchProfileSettings = (settings) => patch('/profile-settings', settings);
+
+// 레벨 · 직업 L-1 · L-2 (BE-106, 명세 11장). 응답은 둘 다 { level, xp, currentLevelXp, nextLevelXp, job: { code, name }, jobs: [...] }.
+// 마이페이지(P-5)의 level도 같은 모양이다. 아직 안 열린 직업을 고르면 409 JOB_LOCKED
+export const getLevel = () => get('/level');
+export const putLevelJob = (job) => put('/level/job', { job });
 
 // 회원 로그인 (FE-74, API 명세 10장). 목(mocks/authMockApi.js)과 같은 login · logout 이름을 쓴다
 // 카카오(M-3)는 fetch가 아니라 브라우저 이동이다. 카카오 → 서버 콜백(M-4) → 화면 /auth/callback으로 돌아온다(authCallbackPage.js).

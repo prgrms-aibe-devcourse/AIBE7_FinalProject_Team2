@@ -398,13 +398,25 @@ class PipelineTest(unittest.TestCase):
         write_json(path, raw)
         return pipeline.load_config(path)
 
-    def run_with(self, config, answers, applied=None, court_answers=None, caller=None, axis_answers=None, **kwargs):
+    def run_with(self, config, answers, applied=None, court_answers=None, caller=None, axis_answers=None,
+                script_answers=None, **kwargs):
         caller = caller or fake_caller(answers)
         functions = dict(pipeline.STAGE_FUNCTIONS)
         court_queue = list(court_answers or [])
         self.court_requests = getattr(self, "court_requests", [])
         axis_queue = None if axis_answers is None else list(axis_answers)
         self.axis_requests = getattr(self, "axis_requests", [])
+        script_queue = None if script_answers is None else list(script_answers)
+        self.script_requests = getattr(self, "script_requests", [])
+
+        def script_caller(spec, system, user, **kw):
+            self.script_requests.append((spec, system, user))
+            if script_queue is None:
+                return llm.LLMResult("기본 증거 대사입니다.", *llm.parse_model_spec(spec))
+            item = script_queue.pop(0)
+            if isinstance(item, Exception):
+                raise item
+            return llm.LLMResult(item, *llm.parse_model_spec(spec))
 
         def axis_caller_for(c, s):
             def axis_caller(spec, system, user, **kw):
@@ -434,6 +446,7 @@ class PipelineTest(unittest.TestCase):
             runner=getattr(self, "rag_db", None) or self.rag_unavailable)
         functions["generate"] = lambda c, s, log: pipeline.stage_generate(c, s, log, caller=caller)
         functions["axis"] = lambda c, s, log: pipeline.stage_axis(c, s, log, caller=axis_caller_for(c, s))
+        functions["script"] = lambda c, s, log: pipeline.stage_script(c, s, log, caller=script_caller)
         functions["load"] = lambda c, s, log: pipeline.stage_load(
             c, s, log, apply=lambda path, db: (applied.append((path, db)) if applied is not None else None) or [])
         return pipeline.run_pipeline(config, functions=functions, log=self.logs.append, **kwargs)
@@ -806,6 +819,85 @@ class PipelineTest(unittest.TestCase):
             pipeline.select_run(case, groups, ["gemini:b"], "manual", "openai__a/run-001")
         self.assertEqual(state["stages"]["generate"]["status"], "done")
 
+    def _tied_candidate(self, run_index, reasoning):
+        """요소 방향은 self.output과 똑같아(구조 점수 동점) reasoning만 다른 후보 (BE-55 테스트용)."""
+        return {"modelSpec": "openai:a", "runIndex": run_index,
+                "output": {**self.output, "reasoning": reasoning},
+                "validation": {"ok": True, "warnings": []}}
+
+    def test_select_consensus_semantic_weight_breaks_tie(self):
+        """구조(요소 방향) 점수가 완전히 동점일 때, semanticWeight > 0이면 reasoning이 서로 더 비슷한
+        후보 쪽으로 선택이 바뀐다(동점이면 항상 1번 회차를 고르던 것과 달라진다)."""
+        groups = {"openai:a": [self._tied_candidate(1, "이유A"), self._tied_candidate(2, "이유B"),
+                                self._tied_candidate(3, "이유C")]}
+        vectors = {"이유A": [1.0, 0.0], "이유B": [0.0, 1.0], "이유C": [0.0, 0.9]}
+        embed_fn = lambda texts: [vectors[t] for t in texts]  # noqa: E731
+
+        without, reason_without, _ = pipeline.select_run(self.case, groups, ["openai:a"], "consensus")
+        self.assertEqual(without["runIndex"], 1)  # 동점이면 앞선 회차(semanticWeight 기본 0, 기존 동작)
+        self.assertNotIn("유사도", reason_without)
+
+        with_weight, reason_with, score = pipeline.select_run(
+            self.case, groups, ["openai:a"], "consensus", semantic_weight=0.3, embed_fn=embed_fn)
+        self.assertEqual(with_weight["runIndex"], 2)  # B · C가 서로 비슷해 A 대신 선택됨(동률이면 앞선 B)
+        self.assertIn("유사도", reason_with)
+        self.assertIsInstance(score, float)
+
+    def test_select_consensus_semantic_weight_falls_back_on_embed_failure(self):
+        """임베딩 호출이 실패하면(한도 초과 등) 가중치 없이 기존 방식(구조 점수)으로 조용히 선택한다."""
+        groups = {"openai:a": [self._tied_candidate(1, "이유A"), self._tied_candidate(2, "이유B")]}
+
+        def failing_embed(texts):
+            raise llm.LLMQuotaExhaustedError("일 한도 초과")
+
+        logs = []
+        record, reason, score = pipeline.select_run(
+            self.case, groups, ["openai:a"], "consensus", semantic_weight=0.3,
+            embed_fn=failing_embed, log=logs.append)
+        self.assertEqual(record["runIndex"], 1)  # 구조 점수 동점 → 앞선 회차로 fallback
+        self.assertNotIn("유사도", reason)
+        self.assertTrue(any("임베딩 실패" in line for line in logs))
+
+    def test_select_consensus_semantic_weight_logs_when_not_comparable(self):
+        """후보가 1개뿐이면 reasoning_similarity_scores가 None을 돌려주는데(예외가 아니다), 이때도
+        가중치가 적용되지 않았음을 로그로 남긴다."""
+        groups = {"openai:a": [self._tied_candidate(1, "이유A")]}
+        logs = []
+        record, reason, score = pipeline.select_run(
+            self.case, groups, ["openai:a"], "consensus", semantic_weight=0.3, log=logs.append)
+        self.assertEqual(record["runIndex"], 1)
+        self.assertNotIn("유사도", reason)
+        self.assertTrue(any("유사도 비교 불가" in line for line in logs))
+
+    def test_validate_config_rejects_semantic_weight_on_non_consensus_strategy(self):
+        with self.assertRaises(pipeline.PipelineError):
+            self.config(select={"strategy": "first-valid", "semanticWeight": 0.3})
+
+    def test_validate_config_invalid_semantic_weight_type_does_not_crash(self):
+        """semanticWeight가 숫자가 아니면(타입 오류) strategy 비교에서 TypeError가 나지 않고
+        option_errors의 타입 오류만 보고한다."""
+        with self.assertRaises(pipeline.PipelineError) as ctx:
+            self.config(select={"strategy": "first-valid", "semanticWeight": "0.3"})
+        self.assertIn("semanticWeight", str(ctx.exception))
+
+    def test_select_semantic_weight_external_send_notice(self):
+        """semanticWeight > 0이면 판결 이유가 gemini(임베딩)로 전송된다는 안내가 나온다 (0이면 안 나온다)."""
+        def stop(*args, **kwargs):
+            raise pipeline.PipelineError("테스트 중단")
+
+        functions = {stage: stop for stage in pipeline.STAGES}
+
+        config = self.config(select={"semanticWeight": 0.3})
+        with self.assertRaises(pipeline.PipelineError):
+            pipeline.run_pipeline(config, functions=functions, until="select", log=self.logs.append)
+        self.assertTrue(any(line.startswith("외부 전송") and "판결 이유" in line for line in self.logs))
+
+        self.logs.clear()
+        config = self.config(select={"semanticWeight": 0})
+        with self.assertRaises(pipeline.PipelineError):
+            pipeline.run_pipeline(config, functions=functions, until="select", log=self.logs.append)
+        self.assertFalse(any("판결 이유" in line for line in self.logs if line.startswith("외부 전송")))
+
     def test_changed_case_uses_new_batch(self):
         config = self.config(generate={"models": ["openai:a"], "runs": 1})
         state = self.run_with(config, {"openai:a": [self.output]}, until="generate")
@@ -979,6 +1071,93 @@ class PipelineTest(unittest.TestCase):
             self.config(generate={"enabled": False, "models": []})
         self.assertIn("stages.axis.model", str(ctx.exception))
         self.config(generate={"enabled": False, "models": []}, axis={"enabled": False})  # 축을 끄면 된다
+
+    def test_script_config_validation(self):
+        valid_cast = {"prosecutor": "naero", "defense": "nambul"}
+        self.config(script={"enabled": False})  # 꺼져 있으면 model · cast가 없어도 통과
+        with self.assertRaises(pipeline.PipelineError) as ctx:
+            self.config(script={"enabled": True, "cast": valid_cast})  # model 없음
+        self.assertIn("stages.script.model", str(ctx.exception))
+        for cast, message in (({"prosecutor": "naero"}, "defense"),
+                              ({"prosecutor": "naero", "defense": "naero"}, "같은 캐릭터"),
+                              ({"prosecutor": "naero", "defense": "law"}, "defense"),
+                              (None, "cast")):
+            with self.subTest(cast):
+                with self.assertRaises(pipeline.PipelineError) as ctx:
+                    self.config(script={"enabled": True, "model": "openai:a", "cast": cast})
+                self.assertIn(message, str(ctx.exception))
+        for changes, message in (({"model": "manual:x"}, "manual"), ({"maxRetries": -1}, "stages.script.maxRetries"),
+                                 ({"maxTokens": 0}, "stages.script.maxTokens"), ({"timeout": 0}, "stages.script.timeout"),
+                                 ({"delay": -1}, "stages.script.delay"), ({"temperature": "0.2"}, "stages.script.temperature")):
+            with self.subTest(changes):
+                with self.assertRaises(pipeline.PipelineError) as ctx:
+                    self.config(script={"enabled": True, "cast": valid_cast, **changes})
+                self.assertIn(message, str(ctx.exception))
+        self.config(script={"enabled": True, "model": "openai:a", "cast": valid_cast})  # 정상 설정은 통과
+
+    def test_script_stage_generates_evidence_lines_from_selected_judgment(self):
+        """BE-107: 판단 요소마다 증거조사 대사 한 줄, 검사(UP) 먼저 변호인(DOWN) 다음, 배역은 설정값 그대로 쓴다."""
+        config = self.config(generate={"models": ["openai:a"], "runs": 1},
+                             script={"enabled": True, "model": "openai:a",
+                                     "cast": {"prosecutor": "naero", "defense": "nambul"}})
+        script_lines = ["검사 측 증거1 대사입니다.", "검사 측 증거2 대사입니다.", "검사 측 증거3 대사입니다.",
+                        "변호인 측 증거1 대사입니다.", "변호인 측 증거2 대사입니다.", "변호인 측 증거3 대사입니다."]
+        state = self.run_with(config, {"openai:a": [self.output]}, until="script", script_answers=list(script_lines))
+        outputs = state["stages"]["script"]["outputs"]
+        self.assertEqual(outputs["count"], 6)
+        self.assertEqual(outputs["failed"], 0)
+        self.assertFalse(outputs["stopped"])
+        self.assertTrue(outputs["publishable"])
+        evidence_data = load_json(outputs["evidenceFile"])
+        self.assertTrue(evidence_data["publishable"])
+        evidence = evidence_data["evidence"]
+        self.assertEqual([e["factorId"] for e in evidence], [2, 3, 5, 7, 8, 9])
+        self.assertEqual([e["role"] for e in evidence], ["prosecutor"] * 3 + ["defense"] * 3)
+        self.assertEqual([e["character"] for e in evidence], ["naero"] * 3 + ["nambul"] * 3)
+        self.assertEqual([e["text"] for e in evidence], script_lines)
+        # 대사 재료는 select 출력의 reason이 아니라 case.json의 label이다 (peanutboi710님 리뷰 1번, PR #277)
+        case_labels = {f["factorId"]: f["label"] for f in self.case["factors"]}
+        for i, e in enumerate(evidence):
+            self.assertIn(case_labels[e["factorId"]], self.script_requests[i][2])
+        # system 프롬프트에 배역별(검사 · 변호인) 블록이 실제로 들어갔는지 확인
+        self.assertIn("검사", self.script_requests[0][1])
+        self.assertIn("변호인", self.script_requests[3][1])
+
+    def test_script_stage_marks_not_publishable_when_quota_exhausted(self):
+        config = self.config(generate={"models": ["openai:a"], "runs": 1},
+                             script={"enabled": True, "model": "openai:a",
+                                     "cast": {"prosecutor": "naero", "defense": "nambul"}})
+        script_lines = ["검사 측 증거1 대사입니다.", llm.LLMQuotaExhaustedError("일 한도 초과")]
+        state = self.run_with(config, {"openai:a": [self.output]}, until="script", script_answers=list(script_lines))
+        outputs = state["stages"]["script"]["outputs"]
+        self.assertTrue(outputs["stopped"])
+        self.assertFalse(outputs["publishable"])
+        self.assertFalse(load_json(outputs["evidenceFile"])["publishable"])
+
+    def test_script_stage_rejects_case_changed_after_selection(self):
+        """peanutboi710님 리뷰(PR #277, CodeRabbit): select 이후 case.json의 label이 바뀌면 그 사실로
+        모델을 부르기 전에 멈춰야 한다 — stage_load와 같은 provenance 검사를 쓴다."""
+        config = self.config(generate={"models": ["openai:a"], "runs": 1},
+                             script={"enabled": True, "model": "openai:a",
+                                     "cast": {"prosecutor": "naero", "defense": "nambul"}})
+        state = self.run_with(config, {"openai:a": [self.output]}, until="select")
+
+        changed_case = copy.deepcopy(self.case)
+        changed_case["factors"][0]["label"] = "select 이후 바뀐 사실"
+        write_json(self.raw_config["inputs"]["case"], changed_case)
+
+        with self.assertRaises(pipeline.PipelineError) as ctx:
+            self.run_with(config, {"openai:a": [self.output]}, start="script", script_answers=[])
+        self.assertIn("--from generate", str(ctx.exception))
+
+    def test_script_stage_requires_select_stage(self):
+        config = self.config(generate={"models": ["openai:a"], "runs": 1},
+                             script={"enabled": True, "model": "openai:a",
+                                     "cast": {"prosecutor": "naero", "defense": "nambul"}})
+        state = pipeline.load_state(config)
+        with self.assertRaises(pipeline.PipelineError) as ctx:
+            pipeline.stage_script(config, state, self.logs.append)
+        self.assertIn("select", str(ctx.exception))
 
     def test_load_sql_dir_parent_missing(self):
         config = self.config(generate={"models": ["openai:a"], "runs": 1},

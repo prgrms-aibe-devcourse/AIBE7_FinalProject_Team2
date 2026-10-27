@@ -419,6 +419,59 @@ class JobStoreTest(unittest.TestCase):
         self.assertEqual(axis["factors"][0]["factorId"], 7)
         self.assertNotIn("votesFile", axis)	# 컨테이너 내부 경로는 내보내지 않는다
 
+    def test_result_reads_script_evidence_instead_of_sending_a_path(self):
+        """대본도 축과 같다 — 대사 내용을 보내야 적재(BE-108)가 쓸 수 있다. 경로만 보내면 읽을 수 없다"""
+        job_id = self.store.create(self._request())
+        evidence = self.tool_dir / "cases" / "evidence.json"
+        evidence.parent.mkdir(parents=True, exist_ok=True)
+        evidence.write_text(json.dumps({
+            "model": "google:gemini-2.5-flash", "publishable": True, "createdAt": "2026-10-27T09:00:00+09:00",
+            "evidence": [{"factorId": 3, "side": "검사", "line": "피고인은 흉기를 미리 준비했습니다"}],
+        }, ensure_ascii=False), encoding="utf-8")
+        self._write_state(job_id, {
+            "extract": {"status": "done", "outputs": {"case": str(evidence)}},
+            "script": {"status": "done", "outputs": {"evidenceFile": str(evidence), "count": 1,
+                                                     "failed": 0, "publishable": True, "stopped": False}},
+        })
+
+        script = self.store.result(job_id)["script"]
+
+        self.assertEqual(script["evidence"][0]["factorId"], 3)
+        self.assertTrue(script["publishable"])		# 적재 · 공개 판단에 쓰는 계약 값은 그대로 넘긴다
+        self.assertNotIn("evidenceFile", script)	# 컨테이너 내부 경로는 내보내지 않는다
+        # 생성 시각은 증거 파일에만 있다 — 여기서 올려 주지 않으면 적재가 generated_at을 영영 비워 둔다 (PR #300 리뷰)
+        self.assertEqual(script["createdAt"], "2026-10-27T09:00:00+09:00")
+        # stopped는 단계 산출물 쪽 값을 쓴다. 증거 파일에는 이 키가 없어서 파일에서 가져오면 항상 false가 된다
+        self.assertFalse(script["stopped"])
+
+    def test_result_script_without_created_at_in_file(self):
+        """증거 파일에 createdAt이 없어도 나머지는 그대로 간다 — 적재는 생성 시각만 비워 두고 계속한다 (BE-108)"""
+        job_id = self.store.create(self._request())
+        evidence = self.tool_dir / "cases" / "evidence.json"
+        evidence.parent.mkdir(parents=True, exist_ok=True)
+        evidence.write_text(json.dumps({"evidence": [{"factorId": 1}]}, ensure_ascii=False), encoding="utf-8")
+        self._write_state(job_id, {
+            "extract": {"status": "done", "outputs": {"case": str(evidence)}},
+            "script": {"status": "done", "outputs": {"evidenceFile": str(evidence), "publishable": False,
+                                                     "stopped": True}},
+        })
+
+        script = self.store.result(job_id)["script"]
+
+        self.assertNotIn("createdAt", script)
+        self.assertTrue(script["stopped"])
+        self.assertEqual(script["evidence"][0]["factorId"], 1)
+
+    def test_result_without_script_stage(self):
+        """대본을 안 돌린 작업은 script가 None이다 — 사건 · 판결만으로도 적재는 그대로 된다 (BE-108)"""
+        job_id = self.store.create(self._request())
+        case_file = self.tool_dir / "cases" / "case.json"
+        case_file.parent.mkdir(parents=True, exist_ok=True)
+        case_file.write_text(json.dumps({"title": "사건"}, ensure_ascii=False), encoding="utf-8")
+        self._write_state(job_id, {"extract": {"status": "done", "outputs": {"case": str(case_file)}}})
+
+        self.assertIsNone(self.store.result(job_id)["script"])
+
     def test_result_before_pipeline_produced_anything(self):
         job_id = self.store.create(self._request())
 

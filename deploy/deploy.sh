@@ -85,6 +85,13 @@ COMPOSE=(docker compose -f "$DEPLOY_DIR/docker-compose.prod.yml")
 # 외부 DB 모드 (BE-59): .env에 EXTERNAL_DB_URL이 있으면 postgres 컨테이너 대신 외부 PostgreSQL(Supabase → RDS)에 붙는다.
 # 오버레이를 빼먹으면 backend가 다시 같은 서버의 postgres로 붙어 "어느 DB에 썼는지"가 조용히 바뀌므로, 플래그로 자동으로 겹친다
 EXTERNAL_DB_URL_VALUE="$(env_value EXTERNAL_DB_URL | tr -d "\"' \r")"
+# 실제 사건 시드 경로: 아래 외부 DB 검사와 오버레이 판정이 같은 값(따옴표 · 공백 · CR 정리)을 보게 한 번만 읽는다.
+# 다르게 읽으면 REAL_SEED_DIR="" 같은 줄이 검사는 통과하고 오버레이만 붙는다 (BE-59)
+REAL_SEED_DIR_VALUE="$(env_value REAL_SEED_DIR | tr -d "\"' \r")"
+# 검사한 경로를 Compose도 그대로 쓰게 한다 (PR #281 CodeRabbit 리뷰). Compose는 셸에 export된 값을 .env보다
+# 우선 적용하므로, 셸에 다른 REAL_SEED_DIR이 남아 있으면 검사하지 않은 폴더가 /real-seed에 붙을 수 있다.
+# 이 스크립트 프로세스에서만 덮어쓴다(호출한 셸에는 영향 없음) — 모니터링 값 unset과 같은 원칙
+export REAL_SEED_DIR="$REAL_SEED_DIR_VALUE"
 EXTERNAL_DB=0
 if [[ -n "$EXTERNAL_DB_URL_VALUE" ]]; then
   # 두 값이 없으면 compose가 뒤늦게 다른 이유처럼 실패하므로 먼저 막는다 (값은 출력하지 않는다)
@@ -99,11 +106,59 @@ if [[ -n "$EXTERNAL_DB_URL_VALUE" ]]; then
     *[?\&]sslmode=require|*[?\&]sslmode=require\&*|*[?\&]sslmode=verify-ca*|*[?\&]sslmode=verify-full*) ;;
     *) log "❌ EXTERNAL_DB_URL에 sslmode=require(또는 verify-ca · verify-full)가 없다 — 주소 끝에 ?sslmode=require를 붙인다"; exit 4 ;;
   esac
-  # 외부 DB(지금은 팀 공용 Supabase)에 실제 사건 시드를 올리지 않는다 — 비공개 데이터 · 사용 불가 데이터(LBox) 규칙
-  # (backend/SHARED-DEV-DB.md 규칙 6). RDS로 옮긴 뒤 실제 사건 시드를 쓸 때 이 검사를 다시 정한다
-  if [[ -n "$(env_value REAL_SEED_DIR)" ]]; then
-    log "❌ 외부 DB 모드에서는 실제 사건 시드(REAL_SEED_DIR)를 함께 쓰지 않는다. .env에서 REAL_SEED_DIR을 비운다"
-    exit 4
+  # 외부 DB(Supabase → RDS)에 실제 사건 시드는 팀 합의 표시가 있을 때만 올린다 (backend/SHARED-DEV-DB.md 규칙 6).
+  # 경로만 넣은 실수로 비공개 데이터가 외부 DB에 올라가지 않게, 사람이 EXTERNAL_DB_ALLOWS_REAL_SEED=1을 따로 넣어야 한다
+  if [[ -n "$REAL_SEED_DIR_VALUE" ]]; then
+    if [[ "$(env_value EXTERNAL_DB_ALLOWS_REAL_SEED | tr -d "\"' \r")" != "1" ]]; then
+      log "❌ 외부 DB 모드에서 실제 사건 시드(REAL_SEED_DIR)는 팀 합의 후 EXTERNAL_DB_ALLOWS_REAL_SEED=1을 넣었을 때만 쓴다. 합의 전이면 .env에서 REAL_SEED_DIR을 비운다"
+      exit 4
+    fi
+    # 폴더가 비어 있거나 경로가 틀리면 Flyway가 아무것도 넣지 않고 성공으로 끝나 알아차리기 어렵다 — 먼저 막는다.
+    # 검사 범위는 Flyway가 실제로 읽는 범위와 같아야 한다 — filesystem: 위치는 하위 폴더까지 재귀로 읽으므로
+    # 최상위 *.sql만 보면 하위 폴더의 V 마이그레이션이 LBox 검사 없이 외부 DB에 들어갈 수 있다 (PR #281 CodeRabbit 리뷰).
+    # find -L: 링크가 가리키는 파일도 포함한다. 이름만 *.sql인 폴더는 -type f로 뺀다.
+    # 탐색 실패(못 읽는 하위 폴더 · 링크 순환 등)는 "파일 없음"과 구분해 중단한다 — 결과를 임시 파일에 받아
+    # find 종료 코드를 직접 본다(process substitution은 find 실패를 숨긴다)
+    if [[ ! -d "$REAL_SEED_DIR_VALUE" ]]; then
+      log "❌ REAL_SEED_DIR(${REAL_SEED_DIR_VALUE}) 폴더가 없다 — 서버에 비공개 시드를 먼저 받는다 (deploy/README.md \"운영 데이터\")"
+      exit 4
+    fi
+    seed_list="$(mktemp)" || { log "❌ 실제 사건 시드 검사용 임시 파일을 만들지 못했다"; exit 4; }
+    if ! find -L "$REAL_SEED_DIR_VALUE" -type f -name '*.sql' -print0 > "$seed_list"; then
+      rm -f "$seed_list"
+      log "❌ REAL_SEED_DIR(${REAL_SEED_DIR_VALUE}) 아래 SQL 파일을 끝까지 찾지 못했다 — 하위 폴더 권한 · 링크를 확인한다"
+      exit 4
+    fi
+    seed_sql_files=()
+    while IFS= read -r -d '' seed_sql; do
+      seed_sql_files+=("$seed_sql")
+    done < "$seed_list"
+    rm -f "$seed_list"
+    if (( ${#seed_sql_files[@]} == 0 )); then
+      log "❌ REAL_SEED_DIR(${REAL_SEED_DIR_VALUE})에 SQL 파일이 없다 — 서버에 비공개 시드를 먼저 받는다 (deploy/README.md \"운영 데이터\")"
+      exit 4
+    fi
+    # 배포 계정이 못 읽는 파일이 있으면 아래 LBox 검사를 할 수 없다. 컨테이너(다른 uid)는 읽을 수 있을 수 있으므로
+    # 건너뛰지 않고 중단한다 — 검사하지 못한 파일이 외부 DB에 올라가지 않게 실패 쪽으로 닫는다 (PR #281 리뷰)
+    for seed_sql in "${seed_sql_files[@]}"; do
+      if [[ ! -r "$seed_sql" ]]; then
+        log "❌ 실제 사건 시드 파일을 읽을 수 없어 검사하지 못했다: ${seed_sql} — 파일 권한을 확인한다"
+        exit 4
+      fi
+    done
+    # 사용 불가 데이터(LBox Open, 라이선스상 사용 불가 — 10/12)는 합의와 별개로 외부 DB에 올리지 않는다.
+    # 지금 시드에는 없다(BE-54에서 삭제). 다시 들어오면 여기서 막는다 (backend/run-shared-db.sh와 같은 검사).
+    # grep 종료 코드: 0 = LBox 있음, 1 = 없음, 2 이상 = 읽기 오류 → 1일 때만 통과한다(오류를 "없음"으로 보지 않는다, PR #281 리뷰)
+    lbox_rc=0
+    grep -qil "'LBOX'" "${seed_sql_files[@]}" || lbox_rc=$?
+    if (( lbox_rc == 0 )); then
+      log "❌ 실제 사건 시드에 LBox 행('LBOX')이 있다 — 사용 불가 데이터라 외부 DB에 올리지 않는다 (SHARED-DEV-DB.md 규칙 6)"
+      exit 4
+    elif (( lbox_rc != 1 )); then
+      log "❌ 실제 사건 시드의 LBox 검사를 끝내지 못했다(grep 종료 코드 ${lbox_rc}) — 파일을 읽을 수 있는지 확인한다"
+      exit 4
+    fi
+    log "외부 DB에 실제 사건 시드를 함께 적용한다 (팀 합의 표시 EXTERNAL_DB_ALLOWS_REAL_SEED=1)"
   fi
   # 오버레이의 depends_on: !override는 Compose 2.24.4부터 안다. 모르는 버전은 postgres 의존을 그대로 두거나 거부한다
   compose_version="$(docker compose version --short 2>/dev/null | sed 's/^v//')"
@@ -115,7 +170,7 @@ if [[ -n "$EXTERNAL_DB_URL_VALUE" ]]; then
   EXTERNAL_DB=1
 fi
 # 실제 사건 시드를 겹쳐 띄우는 서버면 같은 구성으로 다시 띄운다 (README "실제 사건 시드")
-if [[ -n "$(env_value REAL_SEED_DIR)" ]]; then
+if [[ -n "$REAL_SEED_DIR_VALUE" ]]; then
   COMPOSE+=(-f "$DEPLOY_DIR/docker-compose.real-seed.yml")
 fi
 # 모니터링 에이전트를 올린 서버면 그 오버레이도 함께 쓴다 (COMMON-43, PR #168 리뷰 반영).
@@ -124,6 +179,7 @@ fi
 # 따옴표 · 캐리지리턴 · 공백을 지우고 판정한다: .env에 MONITORING_AGENT="1"처럼 따옴표를 쓰면
 # env_value가 "1"을 그대로 돌려줘 == "1" 비교에 걸리지 않고, 이 분기가 막으려던 "조용히 빠짐"이 재발한다 (PR #168 리뷰 반영)
 MONITORING_AGENT_VALUE="$(env_value MONITORING_AGENT | tr -d "\"' \r")"
+MONITORING_ENABLED=0
 case "$MONITORING_AGENT_VALUE" in
   1)
     # 검사한 값(.env)과 Compose가 실제로 쓰는 값을 같게 만든다 (PR #268 CodeRabbit 리뷰).
@@ -152,6 +208,7 @@ case "$MONITORING_AGENT_VALUE" in
       }
     done
     COMPOSE+=(-f "$DEPLOY_DIR/docker-compose.monitoring-agent.yml")
+    MONITORING_ENABLED=1
     ;;
   ""|0) ;;
   *) log "❌ MONITORING_AGENT는 1 또는 빈 값이어야 한다: $MONITORING_AGENT_VALUE"; exit 4 ;;
@@ -253,6 +310,21 @@ start_pipeline() {
   log "파이프라인 서비스 반영됨"
 }
 
+# 모니터링 에이전트(Alloy · node-exporter)를 띄운다 (COMMON-64, MONITORING_AGENT=1인 서버만).
+# 위 start_and_check는 backend · web만 이름으로 올리므로, 오버레이를 붙여도 이 둘은 따로 올리지 않으면 뜨지 않는다
+# (COMMON-64 운영 반영 때 실제로 발견 — 오버레이 · 볼륨은 붙었는데 에이전트 컨테이너가 없었다).
+# --no-deps: backend · web을 다시 건드리지 않는다. 설정(alloy-agent.alloy) · 이미지가 바뀌었을 때만 다시 만들어진다.
+# 파이프라인과 같은 기준으로 **실패해도 배포를 되돌리지 않고 경고만 남긴다** — 사용자 화면 · API와 무관하고,
+# Alloy가 멈추면 Grafana Cloud 경보(no data · BackendScrapeTargetMissing)가 따로 알린다
+start_monitoring_agent() {
+  (( MONITORING_ENABLED )) || return 0
+  if ! "${COMPOSE[@]}" up -d --no-build --no-deps alloy node-exporter; then
+    log "⚠ 모니터링 에이전트(alloy · node-exporter)를 띄우지 못했다. 서비스는 정상 — 사람이 확인 (deploy/README.md \"모니터링 에이전트\")"
+    return 0
+  fi
+  log "모니터링 에이전트 반영됨"
+}
+
 # 지정한 태그로 띄우고 확인한다. 성공 0 · 실패 1
 # 순서가 중요하다: 백엔드를 먼저 바꾸고, 준비된 뒤에 웹을 바꾼다.
 #   한 번에 up 하면 Compose가 웹을 먼저 내려 두고 새 백엔드를 기다려서(depends_on: service_healthy), 배포 중에는 화면까지 안 열린다.
@@ -281,6 +353,7 @@ start_and_check() {
   fi
   # 사용자 경로(web · backend)가 확인된 뒤에 올린다. 되돌림 때도 같은 함수를 타므로 파이프라인도 함께 직전 태그로 돌아간다
   start_pipeline
+  start_monitoring_agent
   return 0
 }
 

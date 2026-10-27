@@ -293,7 +293,7 @@
           "delay": 500,
           "proc": 0,
           "section": 2,
-          "text": "재판을 시작합니다. 재판장은 당신이에요. 먼저 피고인 A씨가 본인이 맞는지 확인합니다.",
+          "text": "재판을 시작해요. 재판장은 당신이에요. 먼저 피고인 A씨가 본인이 맞는지 확인할게요.",
           "source": {
             "type": "fixed"
           }
@@ -554,7 +554,7 @@
               "row": "front"
             }
           },
-          "text": "이제 피고인에게 직접 묻습니다. 남불이 변호인석에서 일어나 A씨 자리에 서고, 검사 내로가 물어요.",
+          "text": "이제 피고인에게 직접 물어볼 차례예요. 남불이 변호인석에서 일어나 A씨 자리에 서고, 검사 내로가 질문해요.",
           "source": {
             "type": "fixed"
           }
@@ -573,7 +573,7 @@
         {
           "say": "nambul",
           "role": "A씨 역",
-          "text": "아닙니다. 돈 이야기를 하다가 말다툼이 커졌고, 그러다 그렇게 됐습니다.",
+          "text": "…아닙니다.",
           "source": {
             "type": "ai",
             "basis": [
@@ -606,7 +606,7 @@
         {
           "say": "naero",
           "role": "검사",
-          "text": "지금 그 일을 어떻게 생각합니까?",
+          "text": "공소사실을 인정합니까?",
           "source": {
             "type": "ai",
             "basis": [
@@ -618,7 +618,7 @@
           "say": "nambul",
           "role": "A씨 역",
           "confirm": 3,
-          "text": "제가 한 일을 모두 인정합니다. 깊이 반성하고 있습니다.",
+          "text": "…네, 인정합니다.",
           "source": {
             "type": "ai",
             "basis": [
@@ -653,9 +653,18 @@
               "row": "front"
             }
           },
+          "text": "변호인도 추가 질문 없습니다.",
+          "source": {
+            "type": "fixed"
+          }
+        },
+        {
+          "say": "narrator",
+          "cameo": "naero",
+          "hideCast": true,
           "confirm": 4,
           "next": "판결로",
-          "text": "변호인도 추가 질문 없습니다.",
+          "text": "재판은 여기까지예요. 이제 재판장, 당신이 판결할 차례예요.",
           "source": {
             "type": "fixed"
           }
@@ -729,7 +738,7 @@
               "row": "front"
             }
           },
-          "text": "제가 한 일을 깊이 반성하고 있습니다.",
+          "text": "…이상입니다.",
           "source": {
             "type": "ai",
             "basis": [
@@ -834,7 +843,7 @@
         {
           "system": "AI 판사들이 의견을 맞추고 있어요",
           "law": "think",
-          "auto": 300,
+          "auto": 1100,
           "source": {
             "type": "fixed"
           }
@@ -877,24 +886,6 @@
                 "fineAmount",
                 "suspensionMonths",
                 "summary"
-              ]
-            }
-          }
-        },
-        {
-          "say": "naero",
-          "role": "안내",
-          "text": "AI 판사는 {penalty을} 선고했어요.",
-          "source": {
-            "type": "api",
-            "api": "API 10 · GET /cases/{caseId}/experience/judgments/ai",
-            "fills": {
-              "penalty을": [
-                "penaltyType",
-                "reducedTo",
-                "prisonMonths",
-                "fineAmount",
-                "suspensionMonths"
               ]
             }
           }
@@ -1108,14 +1099,14 @@
             "naero": "read-thinking",
             "nambul": "idle-neutral"
           },
-          "text": "{vsCourt}",
+          "text": "{vsAi}",
           "source": {
             "type": "api",
             "api": "API 14 · GET /cases/{caseId}/experience/comparison",
             "fills": {
-              "vsCourt": [
+              "vsAi": [
                 "judgments.USER",
-                "judgments.COURT"
+                "judgments.AI"
               ]
             }
           }
@@ -1127,14 +1118,14 @@
             "naero": "idle-neutral",
             "nambul": "guide-neutral"
           },
-          "text": "{vsAi}",
+          "text": "{vsCourt}",
           "source": {
             "type": "api",
             "api": "API 14 · GET /cases/{caseId}/experience/comparison",
             "fills": {
-              "vsAi": [
+              "vsCourt": [
                 "judgments.USER",
-                "judgments.AI"
+                "judgments.COURT"
               ]
             }
           }

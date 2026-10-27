@@ -12,6 +12,7 @@ import { renderAiPage } from '../pages/ai/aiPage.js';
 import { renderCaseListPage } from '../pages/caseList/caseListPage.js';
 import { renderCaseDetailPage } from '../pages/caseDetail/caseDetailPage.js';
 import { renderCaseReviewPage } from '../pages/caseReview/caseReviewPage.js';
+import { renderCommunityHomePage } from '../pages/community/communityHomePage.js';
 import { renderCommunityPage } from '../pages/community/communityPage.js';
 import { renderCommunityPostPage } from '../pages/community/communityPostPage.js';
 import { renderComparisonPage } from '../pages/comparison/comparisonPage.js';
@@ -19,6 +20,7 @@ import { renderCourtPage } from '../pages/court/courtPage.js';
 import { renderLandingPage } from '../pages/landing/landingPage.js';
 import { renderAuthCallbackPage } from '../pages/login/authCallbackPage.js';
 import { renderLoginPage } from '../pages/login/loginPage.js';
+import { renderSignupPage } from '../pages/login/signupPage.js';
 import { renderMyPage } from '../pages/myPage/myPage.js';
 import { renderMyResultPage } from '../pages/myPage/myResultPage.js';
 import { renderOverviewPage } from '../pages/overview/overviewPage.js';
@@ -56,10 +58,14 @@ export const routes = [
   // 내 결과 (FE-75): 마이페이지 "내 결과 보기". 6막 세 판결 비교 지면 모양에 내 판단 · 내 성향을 싣는다(읽기 전용, 마친 체험만)
   { name: 'myResult', path: '/me/cases/:caseId', render: renderMyResultPage, needsHeader: true, title: '내 결과' },
   // S-18 커뮤니티 (FE-47): 메인 책상의 노트북으로 들어온다. 커뮤니티 API가 없어 목 모드에서만 동작한다(실제 모드는 "준비 중")
-  { name: 'community', path: '/community', render: renderCommunityPage, title: '커뮤니티' },
+  // /community는 메인(이야기 많은 사건 · 레벨 랭킹 · 추천 사건, FE-89), 글 목록은 /community/posts
+  { name: 'community', path: '/community', render: renderCommunityHomePage, title: '커뮤니티' },
+  { name: 'communityPosts', path: '/community/posts', render: renderCommunityPage, title: '커뮤니티 글 목록' },
   { name: 'communityPost', path: '/community/posts/:postId', render: renderCommunityPostPage, title: '커뮤니티' },
   // S-12 로그인 (FE-52): 목 모드는 개발용 목업 로그인, 실제 모드는 카카오 로그인(FE-74)
   { name: 'login', path: '/login', render: renderLoginPage, title: '로그인' },
+  // 회원가입 (FE-104): 목 모드는 목업 가입, 실제 모드는 서버 API가 생길 때까지 카카오로 시작하기만 된다
+  { name: 'signup', path: '/signup', render: renderSignupPage, title: '회원가입' },
   // 카카오 로그인 콜백 (FE-74): 서버(M-4)가 로그인을 마치고 보내는 주소. 주소는 서버 설정과 같아야 한다
   { name: 'authCallback', path: '/auth/callback', render: renderAuthCallbackPage, title: '로그인' },
   // 확장: S-19 관리자 검수 (FE-16). 관리자 코드는 사용자 화면 번들에 넣지 않으려고 필요할 때만 불러온다.

@@ -47,11 +47,16 @@ from llm import (DEFAULT_MAX_ATTEMPTS, DEFAULT_MAX_WAIT, LLMError, LLMQuotaExhau
                  check_retry, configure_retry, free_tier_model_list, has_free_tier, model_provider,
                  parse_model_spec)
 from to_seed_sql import NAME_MAX_LENGTH, build_sql
+from script_generation import balance_warning, generate_evidence_lines
+from script_generation import cast_errors as script_cast_errors
+from select_semantic import DEFAULT_WEIGHT as DEFAULT_SEMANTIC_WEIGHT
+from select_semantic import option_errors as select_semantic_option_errors
+from select_semantic import reasoning_similarity_scores
 from summary_tags import DEFAULT_MIN_SCORE, DEFAULT_TOP_K, SummaryTagError, annotate_report, load_vocabulary, skipped_report
 from summary_tags import option_errors as summary_tag_option_errors
 from validate_output import parse_output
 
-STAGES = ("extract", "court", "contamination", "rag", "generate", "select", "axis", "load")
+STAGES = ("extract", "court", "contamination", "rag", "generate", "select", "axis", "script", "load")
 PIPELINE_DIR = TOOL_DIR / "out" / "pipeline"
 PUBLIC_ROOT = TOOL_DIR.parent.parent  # 공개 저장소 루트
 PRIVATE_SEED_DIR = PUBLIC_ROOT / "backend" / "private-seed"
@@ -108,12 +113,18 @@ DEFAULT_CONFIG = {
             "enabled": True, "models": [], "runs": 3, "maxRetries": 3,
             "temperature": None, "maxTokens": 16000, "timeout": 300, "delay": 0.0,
         },
-        "select": {"enabled": True, "strategy": "consensus", "model": None, "run": None},
+        # semanticWeight(BE-55): consensus 전략일 때만 쓴다. 0(기본)이면 기존 동작과 같다 — select_semantic.py 설명 참고
+        "select": {"enabled": True, "strategy": "consensus", "model": None, "run": None,
+                   "semanticWeight": DEFAULT_SEMANTIC_WEIGHT},
         # 가치관 축 분류 투표 (BE-49). 같은 모델로 runs회 묻고 요소별로 표를 센다. 최다표가 runs의 과반이 아니면(동률 · 유효 응답 부족 포함) 확인 필요.
         # model이 null이면 generate.models의 첫 모델(free: 제외)을 쓴다(비식별화한 사건 내용이라 generate와 같은 공급자로 보낸다).
         # 응답 형식이 틀리면 그 회차를 최대 maxRetries번 다시 묻고, 그래도 틀리면 집계에서 뺀다
         "axis": {"enabled": True, "model": None, "runs": 5, "maxRetries": 2, "temperature": None, "maxTokens": 4000,
                  "timeout": 120, "delay": 0.0},
+        # 사건 대본 — 증거조사 대사 생성 (BE-107). 기본 꺼짐(새 기능, 배역이 사건마다 정해지지 않았다).
+        # cast는 자동으로 정하지 않는다 — 켤 때마다 넣는다(해송님 정정, 2026-10-24). 범위는 script_generation.py 참고
+        "script": {"enabled": False, "model": None, "cast": None, "maxRetries": 2, "temperature": None,
+                   "maxTokens": 2000, "timeout": 60, "delay": 0.0},
         "load": {
             # court: 재판부 판결 초안이 있으면 비공개로 함께 적재한다 (BE-38)
             "enabled": True, "case": True, "court": True, "applyToDb": True,
@@ -450,7 +461,13 @@ def validate_config(config):
         errors.append(f"stages.select.strategy는 {' · '.join(SELECT_STRATEGIES)} 중 하나다")
     if select["strategy"] == "manual" and not select["run"]:
         errors.append("manual 선택은 stages.select.run에 '공급자__모델/run-003' 형식으로 회차를 적는다")
+    semantic_weight_errors = select_semantic_option_errors(select)
+    errors += semantic_weight_errors
+    weight = select.get("semanticWeight", DEFAULT_SEMANTIC_WEIGHT)
+    if not semantic_weight_errors and select["strategy"] != "consensus" and weight > 0:
+        errors.append("stages.select.semanticWeight는 strategy가 consensus일 때만 쓴다 (다른 전략에서는 조용히 무시된다)")
     errors += axis_errors(config)
+    errors += script_errors(config)
     errors += rag_option_errors({k: v for k, v in stages["rag"].items() if k != "enabled"})
     if stages["load"]["db"]["mode"] not in ("docker", "psql"):
         errors.append("stages.load.db.mode는 docker · psql 중 하나다")
@@ -497,6 +514,35 @@ def axis_errors(config):
     temperature = cfg.get("temperature")
     if temperature is not None and (not is_finite_number(temperature) or temperature < 0):
         errors.append("stages.axis.temperature는 null 또는 0 이상 유한한 숫자다")
+    return errors
+
+
+def script_errors(config):
+    """사건 대본 증거조사 대사 생성 설정(stages.script) 검사 (BE-107)."""
+    cfg = config["stages"]["script"]
+    errors = []
+    if not cfg["enabled"]:
+        return errors
+    model = cfg.get("model")
+    if not isinstance(model, str) or is_free_token(model):
+        errors.append("stages.script.model은 '공급자:모델ID' 문자열이다 (free: 자동 선택은 쓰지 않는다)")
+    else:
+        try:
+            if parse_model_spec(model)[0] == "manual":
+                errors.append(f"파이프라인은 API 공급자만 쓴다 (manual 불가): {model}")
+        except LLMError as e:
+            errors.append(str(e))
+    errors += script_cast_errors(cfg.get("cast") or {})
+    for key, minimum in (("maxRetries", 0), ("maxTokens", 1), ("timeout", 1)):
+        value = cfg.get(key)
+        if not isinstance(value, int) or isinstance(value, bool) or value < minimum:
+            errors.append(f"stages.script.{key}는 {minimum} 이상 정수다")
+    delay = cfg.get("delay")
+    if not is_finite_number(delay) or delay < 0:
+        errors.append("stages.script.delay는 0 이상 유한한 숫자다 (초)")
+    temperature = cfg.get("temperature")
+    if temperature is not None and (not is_finite_number(temperature) or temperature < 0):
+        errors.append("stages.script.temperature는 null 또는 0 이상 유한한 숫자다")
     return errors
 
 
@@ -932,8 +978,13 @@ def _candidate_key(record):
     return f"{model_slug(record['modelSpec'])}/run-{record['runIndex']:03d}"
 
 
-def select_run(case, groups, models, strategy, manual_run=None):
-    """검증을 통과한 회차 중 하나를 고른다. (기록, 고른 이유, 점수) — 점수는 consensus일 때만."""
+def select_run(case, groups, models, strategy, manual_run=None, semantic_weight=0.0, embed_fn=None, log=None):
+    """검증을 통과한 회차 중 하나를 고른다. (기록, 고른 이유, 점수) — 점수는 consensus일 때만.
+
+    semantic_weight(BE-55, consensus 전용): 0보다 크면 판결 이유(reasoning) 임베딩 유사도를 요소-방향
+    일치율과 섞어서 고른다(select_semantic.py). 0(기본)이면 이 로직을 타지 않아 기존 동작과 같다.
+    embed_fn은 테스트에서 네트워크 대신 넣는 함수다. log는 임베딩을 건너뛸 때 알리는 선택적 콜백이다.
+    """
     candidates = [r for spec in models for r in groups.get(spec, []) if r["validation"]["ok"]]
     if strategy == "manual":
         wanted = manual_run.replace(".json", "")
@@ -958,10 +1009,32 @@ def select_run(case, groups, models, strategy, manual_run=None):
     factor_ids = sorted(int(f["factorId"]) for f in case.get("factors", []))
     table = direction_table(candidates, factor_ids)
     consensus = {fid: _majority(values) for fid, values in table.items() if values}
-    scores = {id(r): sum(table[fid][order[id(r)]] == consensus[fid] for fid in consensus) for r in candidates}
-    best = max(candidates, key=lambda r: (scores[id(r)], -len(r["validation"]["warnings"]), -order[id(r)]))
-    return best, (f"판단 요소 다수 의견 일치 {scores[id(best)]}/{len(consensus)} "
-                  f"(후보 {len(candidates)}개 중 최고, 동점이면 경고 적은 · 앞선 회차)"), scores[id(best)]
+    structural = {id(r): sum(table[fid][order[id(r)]] == consensus[fid] for fid in consensus) for r in candidates}
+
+    semantic = None
+    if semantic_weight > 0:
+        try:
+            semantic = reasoning_similarity_scores(candidates, embed_fn=embed_fn) if embed_fn \
+                else reasoning_similarity_scores(candidates)
+        except LLMError as exc:
+            if log:
+                log(f"⚠ 판결 이유 임베딩 실패, 유사도 가중치 없이 선택합니다: {str(exc)[:200]}")
+            semantic = None
+        else:
+            if semantic is None and log:
+                log("⚠ 판결 이유 유사도 비교 불가(후보 1개 또는 빈 reasoning), 유사도 가중치 없이 선택합니다")
+
+    if semantic is not None:
+        max_structural = len(consensus) or 1
+        blended = {id(r): (1 - semantic_weight) * (structural[id(r)] / max_structural) + semantic_weight * semantic[id(r)]
+                   for r in candidates}
+        best = max(candidates, key=lambda r: (blended[id(r)], -len(r["validation"]["warnings"]), -order[id(r)]))
+        return best, (f"판단 요소 다수 의견 일치 {structural[id(best)]}/{len(consensus)} + 판결 이유 유사도 "
+                      f"{semantic[id(best)]:.3f} (가중치 {semantic_weight}, 혼합 점수 {blended[id(best)]:.3f})"), blended[id(best)]
+
+    best = max(candidates, key=lambda r: (structural[id(r)], -len(r["validation"]["warnings"]), -order[id(r)]))
+    return best, (f"판단 요소 다수 의견 일치 {structural[id(best)]}/{len(consensus)} "
+                  f"(후보 {len(candidates)}개 중 최고, 동점이면 경고 적은 · 앞선 회차)"), structural[id(best)]
 
 
 def stage_select(config, state, log):
@@ -974,7 +1047,8 @@ def stage_select(config, state, log):
         if cfg["model"] not in models:
             raise PipelineError(f"select.model({cfg['model']})이 생성 대상 모델에 없습니다")
         models = [cfg["model"]]
-    record, reason, score = select_run(case, groups, models, cfg["strategy"], cfg["run"])
+    record, reason, score = select_run(case, groups, models, cfg["strategy"], cfg["run"],
+                                        semantic_weight=cfg.get("semanticWeight", 0.0), log=log)
     key = _candidate_key(record)
     log(f"선택: {key} — {reason}")
     return {
@@ -1101,26 +1175,87 @@ def stage_axis(config, state, log, caller=call):
             "attempts": attempts, "failures": failures, "needsReview": needs_review, "changedFromExtract": changed}
 
 
-def stage_load(config, state, log, apply=None):
-    cfg = config["stages"]["load"]
-    selection = stage_output(state, "select")
-    if not selection:
-        raise PipelineError("select 단계 결과가 없습니다")
-    case = load_json(input_file(config, state, "case"))
-    run_record = load_json(selection["runFile"])
-    output = run_record["output"]
+def ensure_selection_matches_case(config, state, selection):
+    """select가 고른 회차를 생성한 프롬프트와 지금 사건 입력(참고 자료 포함)이 같은지 확인한다. 생성 뒤에
+    사건 입력(제목 · 개요 · 판단 요소 label 등) · 참고 자료(references.json)가 바뀌었으면, 그 사이 멈추지
+    않고 진행하는 단계(load · script)가 달라진 사건 정보로 모델을 부르거나 적재하게 된다(#143 리뷰,
+    peanutboi710님 리뷰 PR #277 — stage_script도 stage_load와 같은 검사를 쓰도록 공통화함).
+
+    돌려주는 값은 다시 만든 프롬프트(생성 때 실제로 보낸 것과 같음, rag 참고 자료 포함) — stage_load가
+    적재 SQL에 그대로 쓴다."""
     try:
-        prompt = build_prompt(generation_case(config, state))  # 생성 때 실제로 보낸 프롬프트 (rag 참고 자료 포함)
+        prompt = build_prompt(generation_case(config, state))
     except InputError as e:
         raise PipelineError(str(e))
-    # 다시 만든 프롬프트가 고른 회차를 생성한 프롬프트와 같은지 확인한다. 생성 뒤에 사건 입력 · 참고 자료(references.json)가
-    # 바뀌었으면 실제로 보낸 것과 다른 프롬프트가 기록되므로 멈춘다 (#143 리뷰)
     batch_file = Path(selection["runFile"]).parent.parent / "batch.json"
     if not batch_file.exists():
         raise PipelineError(f"고른 회차의 묶음 정보가 없어 프롬프트를 확인할 수 없습니다: {batch_file}. --from generate로 다시 생성하세요")
     if load_json(batch_file).get("promptSha256") != prompt_digest(prompt):
         raise PipelineError("생성 뒤에 사건 입력 또는 참고 자료가 바뀌어 고른 회차의 프롬프트와 다릅니다. "
                             "--from generate로 다시 생성하세요(사건 입력 · 기준일을 바꿨으면 --from rag)")
+    return prompt
+
+
+def stage_script(config, state, log, caller=call):
+    """사건 대본 — 증거조사 대사 생성 (BE-107). 판단 요소마다 대사 한 줄을 만든다 — 검사 측(UP
+    방향) 먼저, 변호인 측(DOWN 방향) 다음(case-1 대본과 같은 순서). 방향은 select 단계가 고른 판결
+    출력에서, 실제로 소개할 사실(label)은 case.json에서 가져온다 — select 출력의 reason(AI 판결의 내부
+    근거)을 대사 재료로 쓰지 않는다. 4막(판결 공개)까지 사용자에게 보이면 안 되기 때문이다
+    (script_generation.ordered_evidence_factors 설명 참고). 배역(cast)은 설정에서 받는다 — 이
+    단계가 자동으로 정하지 않는다(해송님 정정, 2026-10-24). 범위(지금은 증거조사만, 피고인신문 등은 범위
+    밖인 이유)는 script_generation.py 모듈 docstring 참고."""
+    cfg = config["stages"]["script"]
+    selection = stage_output(state, "select")
+    if not selection:
+        raise PipelineError("script 단계는 select 단계가 고른 판결(방향 · 이유)이 있어야 합니다. select를 먼저 돌리세요")
+    # select 이후 case.json의 label · revealStage가 바뀌었으면, 바뀐 사실로 모델을 부르기 전에 멈춘다
+    # (peanutboi710님 리뷰 — select가 고른 방향과 지금 label이 서로 다른 시점의 사건 정보일 수 있다)
+    ensure_selection_matches_case(config, state, selection)
+    case = load_json(input_file(config, state, "case"))
+    judgment_output = load_json(selection["outputFile"])
+    cast = cfg["cast"]
+    out_dir = PIPELINE_DIR / config["name"] / "script"
+    if out_dir.exists():
+        shutil.rmtree(out_dir)  # 이전 실행 결과와 섞지 않는다 (axis 단계와 같은 정책)
+    log(f"대본 증거조사 생성: {cfg['model']} (배역 — 검사: {cast['prosecutor']} · 변호인: {cast['defense']})")
+    lines, stopped = generate_evidence_lines(
+        case, judgment_output, cast, model=cfg["model"], caller=caller, max_retries=cfg["maxRetries"],
+        temperature=cfg["temperature"], max_tokens=cfg["maxTokens"], timeout=cfg["timeout"],
+        delay=cfg["delay"], log=log)
+    for line in lines:
+        for warning in line["validation"]["warnings"]:
+            log(f"⚠ [요소 {line['factorId']}] {warning}")
+    balance = balance_warning(lines)
+    if balance:
+        log(f"⚠ {balance}")
+    failed = [line for line in lines if not line["validation"]["ok"]]
+    # 일부 요소가 실패했거나 호출 한도로 중단됐으면 증거 카드와 대사가 1:1로 어긋난다 — BE-108(관리자
+    # 검수) 전에는 공개하면 안 된다(peanutboi710님 리뷰 7번, PR #277). evidence.json에 계약을 명시해 둔다
+    publishable = not stopped and not failed
+    evidence_file = out_dir / "evidence.json"
+    write_json(evidence_file, {"model": cfg["model"], "cast": cast, "createdAt": _now(),
+                               "evidence": lines, "balanceWarning": balance, "publishable": publishable})
+    if stopped:
+        log(f"호출 한도 소진 → 판단 요소 {len(lines)}개까지만 생성했습니다")
+    if failed:
+        log(f"⚠ {len(failed)}개 요소는 끝내 생성하지 못했습니다(evidenceFile 참고) — 관리자 검수 전에 다시 돌려야 합니다")
+    if not publishable:
+        log("⚠ publishable: false — 증거 카드와 대사가 어긋날 수 있어 BE-108 검수 전에는 공개할 수 없습니다")
+    log(f"결과: 판단 요소 {len(lines)}개 중 성공 {len(lines) - len(failed)}개")
+    return {"evidenceFile": str(evidence_file), "model": cfg["model"], "cast": cast,
+            "count": len(lines), "failed": len(failed), "stopped": stopped, "balanceWarning": balance,
+            "publishable": publishable}
+
+
+def stage_load(config, state, log, apply=None):
+    cfg = config["stages"]["load"]
+    selection = stage_output(state, "select")
+    if not selection:
+        raise PipelineError("select 단계 결과가 없습니다")
+    prompt = ensure_selection_matches_case(config, state, selection)
+    case = load_json(input_file(config, state, "case"))
+    run_record = load_json(selection["runFile"])
+    output = run_record["output"]
 
     parts = []
     if cfg["case"]:
@@ -1305,6 +1440,7 @@ STAGE_FUNCTIONS = {
     "generate": stage_generate,
     "select": stage_select,
     "axis": stage_axis,
+    "script": stage_script,
     "load": stage_load,
 }
 
@@ -1349,11 +1485,17 @@ def run_pipeline(config, start=None, until=None, skip=(), rerun=False, log=print
         log(f"외부 전송: 비식별화한 사건 내용이 {', '.join(providers)}로 전송됩니다")
     if "rag" in steps:
         log("외부 전송: 참고 자료 검색어로 비식별화한 사건 개요가 gemini(임베딩)로 전송됩니다")
+    if "select" in steps and config["stages"]["select"].get("semanticWeight", 0) > 0:
+        log("외부 전송: semanticWeight > 0이라 판결 이유(reasoning) 본문이 gemini(임베딩)로 전송됩니다")
     if "axis" in steps:
         # 무료 모델(free:)은 점검 단계에서 다시 정해지므로 지금 모델을 모를 수 있다. 그때는 생성 공급자로 안내한다(축 모델은 그중 하나)
         axis_spec = axis_model(config, state)
         log(f"외부 전송: 가치관 축 분류 단계에서 비식별화한 사건 개요 · 판단 요소가 "
             f"{providers_text(axis_spec) if axis_spec else ', '.join(providers)}로 전송됩니다")
+    if "script" in steps:
+        case_title = load_json(input_file(config, state, "case"))["title"]
+        log(f"외부 전송: 대본 증거조사 단계에서 비식별화한 사건 제목({case_title}) · 개요 · 판단 요소가 "
+            f"{providers_text(config['stages']['script']['model'])}로 전송됩니다")
     for notice in free_tier_notices(config, steps):
         log(notice)
     for stage in steps:

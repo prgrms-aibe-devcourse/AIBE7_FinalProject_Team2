@@ -43,5 +43,6 @@ API 10 ~ 14는 백엔드 구현 전에는 404가 온다. 구현되면 그대로 
 | --- | --- |
 | `getMyPage()` | P-5 마이페이지. 꾸미기(`profileDeco`) · 도전과제(`achievements`) · 열린 항목(`unlocked`) · 출석 일수(`profile.attendanceDays`)가 함께 온다 |
 | `putProfileDeco(deco)` | P-7 꾸미기 전체 저장. 400 `VALIDATION_ERROR` · 409 `DECO_LOCKED`는 `details`에 필드별 사유 |
+| `getLevel()` · `putLevelJob(job)` | L-1 · L-2 레벨 · 직업(BE-106). 응답은 둘 다 `{ level, xp, currentLevelXp, nextLevelXp, job: { code, name }, jobs: [...] }`이고 마이페이지(P-5)의 `level`도 같은 모양. 안 열린 직업은 409 `JOB_LOCKED` |
 | `patchProfileSettings(settings)` | P-8 프로필 선택 설정 부분 저장(공개 성향카드 `shownCard` · 프로필카드 아래 성향 `profileCardType` · 한 줄 소개 `bio`). 보낸 칸만 바꾸고 응답은 세 값 전체. 400 `VALIDATION_ERROR`. 조회는 `getMyPage()`의 `profileSettings` |
 | `postAttendance()` | P-6 출석 기록. 앱 시작 때 한 번, 항상 204 (`main.js`) |

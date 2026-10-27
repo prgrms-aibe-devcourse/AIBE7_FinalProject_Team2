@@ -6,11 +6,12 @@ import { restartMock, jumpActMock } from '../../mocks/mockStageButtons.js';
 import { getDraft, saveDraft, clearDraft } from './verdictDraft.js';
 import { markAiRevealIntro } from '../ai/aiRevealIntro.js';
 import { reducedMotion } from '../../utils/motion.js';
-import { getBookmarkColor, selectedBookmarkFace } from '../../utils/bookmarkCharacter.js';
+import { eraseSignature, signatureSvg, signerSeed, writeSignature } from '../../components/signatureInk.js';
+import { folderBookmark, paperFold } from '../../components/folderParts.js';
 
 const penaltyLabels = { DEATH: '사형', LIFE: '무기징역', PRISON: '징역', FINE: '벌금' };
-// 해금 책갈피의 얼굴(내로)
-const SIGN_MS = 900; // 서명 획이 다 그려지는 시간(verdict.css .sign-ink와 같게). 그다음 확정을 보낸다
+const FILED_MS = 900; // 확정된 뒤 "판결 접수" 도장을 보여 주는 시간(verdict.css .sign-filed). 그다음 AI 판결로 넘어간다(FE-97)
+const REDUCTION_NOTE = '판사는 참작할 사정이 있으면 형을 줄여서 선고할 수 있어요(작량감경).';
 
 // 원문을 유지해 빈 칸, 0, 잘못 입력한 값을 구별한다.
 function parseInteger(raw) {
@@ -50,14 +51,6 @@ function element(tag, className, text) {
   if (className) node.className = className;
   if (text !== undefined) node.textContent = text;
   return node;
-}
-
-function picture(src) {
-  const image = element('img');
-  image.src = src;
-  image.alt = '';
-  image.addEventListener('error', () => image.remove(), { once: true });
-  return image;
 }
 
 function button(text, action, className = 'secondary-button') {
@@ -105,12 +98,15 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
     const factorButtons = [];
     const header = element('header', 'case-topbar');
     const back = button('사건 기록 다시 보기', () => navigate('review'), 'back-button');
-    header.append(element('strong', 'case-title', `판결 입력 · ${caseHeader.title}`), back);
+    const caseTitle = element('strong', 'case-title', `판결 입력 · ${caseHeader.title}`);
+    caseTitle.setAttribute('role', 'heading'); // 쪽(탭)마다 보이는 h1이 없던 것을 쪽 밖 머리글이 맡는다(FE-97). 모양은 그대로
+    caseTitle.setAttribute('aria-level', '1');
+    header.append(caseTitle, back);
     // 파일철(FE-43 · FE-48): 위로 튀어나온 색인 탭 다섯 장(사건 요약 → 참고 정보 → 판단 요소 → 최종 판결 → 확정). 한 번에 한 장만 보인다.
     // 다음 장은 종이 오른쪽 아래 말린 모서리로만 넘기고, 탭으로는 이미 펼쳐 본 장까지만 돌아갈 수 있다. 확정은 마지막 장의 서명으로 한다
     const layout = element('main', 'verdict-layout verdict-folder');
     const main = element('section', 'verdict-main folder-sheet');
-    main.append(element('h1', '', '당신의 판결'), element('p', 'verdict-intro muted', '지금까지 확인한 사건 정보와 양형기준을 참고해 판결해 주세요.'));
+    main.append(element('h2', 'folder-title', '당신의 판결'), element('p', 'verdict-intro muted', '지금까지 확인한 사건 정보와 양형기준을 참고해 판결해 주세요.'));
     // 형량 칸(공통): 징역이면 "징역 [ ]년 [ ]개월", 벌금이면 "벌금 [ ]만원"으로 바뀐다. 징역은 범위 막대 바로 위, 벌금은 벌금 슬라이더 위에 둔다
     const entry = element('div', 'sentence-entry');
     const entryType = element('strong', 'sentence-entry-type');
@@ -140,7 +136,18 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
         changed(key);
       });
       if (key === 'prisonMonths') field.addEventListener('change', carryMonths);
-      wrapper.append(name, field, element('span', '', unit));
+      // 숫자 칸에서 Enter = 무대 "다음 장"(FE-103). 무대는 입력칸 위의 키를 받지 않아 칸에서 손을 못 떼고 마우스로 넘어가야 했다.
+      // 개월 칸은 change(칸을 떠날 때)가 아직 안 왔으니 12개월 넘김을 먼저 적용한다
+      field.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' || event.isComposing) return;
+        event.preventDefault(); // 막혀서 아무 일도 없는 경우에도 막는다: 칸이 든 카드의 폼 암묵적 제출을 하지 않게(#302 리뷰)
+        if (layout.stageNext?.enabled?.() === false) return; // 하단 "다음" 버튼이 비활성(서명 제출 중 등)이면 Enter도 지나가지 못하게
+        if (key === 'prisonMonths') carryMonths();
+        layout.stageNext?.run();
+      });
+      const unitText = element('span', '', unit);
+      unitText.setAttribute('aria-hidden', 'true'); // 이름("징역 년")에 단위가 이미 있어 "징역 년년"으로 읽히던 것을 막는다(FE-97)
+      wrapper.append(name, field, unitText);
       parent.append(wrapper);
       inputs[key] = field;
     }
@@ -234,7 +241,8 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       reductionRadios.push({ type, label, radio });
     }
     // 감경 줄은 늘 보인다: 감경할 수 없는 형벌(징역 · 벌금 · 고르기 전)이면 체크박스 · 감경 후 형벌이 회색으로 눌리지 않는다
-    reductionArea.append(reductionLabel, element('p', 'muted', '판사는 참작할 사정이 있으면 형을 줄여서 선고할 수 있어요(작량감경).'), reductionChoices);
+    const reductionNote = element('p', 'muted', REDUCTION_NOTE);
+    reductionArea.append(reductionLabel, reductionNote, reductionChoices);
     penaltyGroup.append(reductionArea);
 
     const sentenceGroup = group('2. 형량 · 금액');
@@ -412,6 +420,10 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
     factorGroup.append(element('legend', 'visually-hidden', '판단 요소'));
     factorPage.append(element('h2', 'folder-title', '판단 요소'), factorGroup);
     factorGroup.append(element('p', 'muted', '요소마다 형량을 무겁게 했으면 "무겁게", 가볍게 했으면 "가볍게"를 눌러 주세요. 처음에는 모두 "고려 안 함"이에요.'));
+    // 고른 요소 수(FE-98): 33개 버튼에서 몇 개를 채워야 하는지 알 수 없었다. 몇 개를 골라야 한다는 뜻은 아니다(0개도 괜찮다)
+    const factorCount = element('p', 'factor-count');
+    factorCount.setAttribute('aria-live', 'polite');
+    factorGroup.append(factorCount);
     const factorList = element('ul', 'factor-list');
     for (const factor of form.factors) {
       const row = element('li', 'factor-row');
@@ -445,6 +457,9 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
     const cautions = element('ul', 'sign-cautions');
     ['서명하면 판결을 바꿀 수 없어요.', '서명하면 AI 판결과 실제 판결이 차례로 공개돼요.', '양형기준 권고 범위는 정답이 아니라 참고 기준이에요.']
       .forEach((text) => cautions.append(element('li', '', text)));
+    // 판단 요소를 하나도 안 골랐으면 서명 전에 한 줄로 알린다(FE-98). 막지는 않는다: 판단은 사용자의 것
+    const noFactorNote = element('p', 'sign-notice', '판단 요소를 하나도 고르지 않았어요. 그대로 서명할까요?');
+    noFactorNote.hidden = true;
     const reason = element('p', 'sign-reason');
     reason.id = `verdict-${caseId}-sign-reason`;
     reason.setAttribute('aria-live', 'polite');
@@ -454,14 +469,18 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
     signature.type = 'button';
     signature.setAttribute('aria-describedby', reason.id);
     const signHint = element('span', 'sign-hint', '여기를 눌러 서명');
-    // 서명 획(장식): 손으로 흘려 쓴 한 줄. 눌렀을 때 획이 그려진다(움직임 줄이기면 바로 나타난다)
-    signature.insertAdjacentHTML('beforeend', `<svg class="sign-ink" viewBox="0 0 240 64" aria-hidden="true" focusable="false"><path pathLength="1" d="M8 44 C 22 14, 34 10, 36 30 S 30 58, 46 40 S 70 12, 74 30 S 72 52, 92 36 C 104 26, 110 22, 116 34 S 128 50, 140 30 C 150 16, 160 18, 158 34 S 170 52, 190 30 C 200 20, 214 22, 232 26"/></svg>`);
+    // 서명 획(장식, FE-94)은 서명할 때 만든다: 닉네임(로그인 안 했으면 이 브라우저의 임시 식별값)으로 만든 서명이라, 화면만 열어서는 임시 식별값을 저장하지 않는다
     signature.prepend(signHint);
     const signRow = element('div', 'sign-row');
-    signRow.append(element('span', 'sign-role', '재판장'), signature, element('span', 'sign-seal', '(서명)'));
+    // 판결 접수 도장(FE-97): 확정되면 서명 옆에 찍히고 한 박자 뒤 AI 판결로 넘어간다. 서명 직후 곧바로 "AI 판결을 기다리는 중"으로 바뀌어 내 결정이 로더에 묻혔다
+    const filed = element('span', 'sign-filed', '판결 접수');
+    filed.setAttribute('aria-hidden', 'true');
+    const filedNote = element('p', 'visually-hidden');
+    filedNote.setAttribute('role', 'status');
+    signRow.append(element('span', 'sign-role', '재판장'), signature, element('span', 'sign-seal', '(서명)'), filed);
     signPage.append(element('h2', 'folder-title', '판결 확정'),
       element('p', 'muted', '정한 내용을 확인하고 서명해 주세요.'), signSummary,
-      element('h3', 'sign-subtitle', '주의사항'), cautions, reason, signRow, submitError);
+      element('h3', 'sign-subtitle', '주의사항'), cautions, noFactorNote, reason, signRow, filedNote, submitError);
     signature.addEventListener('click', sign);
     let signed = false;
     async function sign() {
@@ -480,6 +499,8 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       signed = true;
       submitting = true;
       submitError.textContent = '';
+      const signInk = signatureSvg(signerSeed(), { blank: true }); // 눌렀을 때 한 획으로 처음부터 끝까지 쓰인다(움직임 줄이기면 바로 나타난다)
+      signature.append(signInk);
       // 서명하는 동안 카드 안쪽 스크롤을 지금 자리에 묶어 둔다(정한 내용을 다시 그리거나 상태가 바뀌어도 위로 튀지 않게)
       const scroller = layout.closest('.scroll-body');
       const keep = scroller?.scrollTop ?? 0;
@@ -489,17 +510,25 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       update();
       hold();
       requestAnimationFrame(hold);
-      // 서명이 다 그려진 뒤에 확정을 보낸다(되돌릴 수 없는 일이라 서명하는 순간을 눈으로 보게 한다)
-      if (!reducedMotion()) await new Promise((resolve) => { setTimeout(resolve, SIGN_MS); });
+      // 서명이 다 쓰인 뒤에 확정을 보낸다(되돌릴 수 없는 일이라 서명하는 순간을 눈으로 보게 한다). 서명 길이에 따라 0.8 ~ 1.2초
+      await writeSignature(signInk);
       try {
         await api.postVerdict(caseId, payload);
         clearDraft(caseId);
         markAiRevealIntro(caseId); // S-06에서 로딩 · 안내를 한 번 보여 준다 (7.7.4)
+        if (active()) {
+          signRow.classList.add('is-filed');
+          signPage.setAttribute('aria-busy', 'false'); // 바쁜 영역의 변경은 낭독이 보류될 수 있어, 접수 안내를 쓰기 전에 푼다(리뷰 반영)
+          filedNote.textContent = '판결이 접수되었어요. AI 판결로 넘어가요.';
+          if (!reducedMotion()) await new Promise((resolve) => { setTimeout(resolve, FILED_MS); });
+        }
         if (active()) navigate('ai', {}, { keepScroll: true }); // 서명한 자리 그대로 AI 판결 무대로(맨 위로 튀지 않게)
       } catch (error) {
         if (!active()) return;
         signed = false;
         signRow.classList.remove('is-signed'); // 확정하지 못했으면 서명을 지운다
+        eraseSignature(signInk);
+        signInk.remove(); // 다시 서명할 때 새로 만든다
         if (error?.code === 'INVALID_STATE') {
           showError(error);
         } else if (['OUT_OF_ALLOWED_RANGE', 'INVALID_SUSPENSION'].includes(error?.code)) {
@@ -587,9 +616,7 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
     const LAST = 4;
     // 진행 책갈피: 펼쳐 본 가장 뒤 장(reached)의 탭 바로 뒤에 끼워 둔 내로 얼굴 책갈피(장식). 잠금이 아니라 진행을 표시하므로
     // 늘 보이고, 뒤로 넘겨도 자리를 지킨다(마지막 장까지 오면 탭 줄 끝). 얼굴은 마이페이지 "만난 모습"에서 고른 것(FE-67)
-    const bookmark = element('span', `folder-bookmark bookmark-color-${getBookmarkColor()}`);
-    bookmark.setAttribute('aria-hidden', 'true');
-    bookmark.append(picture(selectedBookmarkFace()));
+    const bookmark = folderBookmark();
     const pages = [[summaryPage, '사건 요약'], [sidebar, '참고 정보'], [factorPage, '판단 요소'], [main, '최종 판결'], [signPage, '확정']].map(([panel, title], i) => {
       const tab = element('button', 'folder-tab');
       tab.type = 'button';
@@ -636,6 +663,7 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
     // 탭 잠금 · 책갈피를 지금 상태에 맞춘다(장을 넘길 때 · 판결 값이 바뀔 때)
     function refreshTabs() {
       pages.forEach(({ tab }, i) => tab.setAttribute('aria-disabled', String(!canOpen(i))));
+      layout.dispatchEvent(new Event('stagenextchange')); // 무대 하단 버튼의 글자 · 눌림을 지금 장에 맞춘다
       const before = pages[reached + 1]?.tab ?? null; // 마지막 장이면 탭 줄 끝
       if (bookmark.parentNode !== tabList || bookmark.nextSibling !== before) {
         const moved = bookmark.parentNode === tabList;
@@ -675,9 +703,24 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       const curl = element('button', 'folder-curl');
       curl.type = 'button';
       curl.setAttribute('aria-label', `다음 장으로 넘기기: ${pages[i + 1].title}`);
+      curl.append(paperFold());
       curl.addEventListener('click', () => goTo(i + 1, true)); // 최종 판결 → 확정도 판결이 다 정해져야 넘어간다
       panel.append(curl);
     });
+    // 무대 하단 "다음" 버튼이 이 파일철을 조작한다(stage.js nextDriver): 다음 장으로 넘기고, 마지막 장에서는 서명(제출)을 한다.
+    // 못 넘길 때는 말린 모서리와 같이 움찔 · 반짝이며 이유를 알린다(goTo). 종이 귀는 같은 일을 하는 보조 손잡이다
+    const currentPage = () => pages.findIndex(({ panel }) => !panel.hidden);
+    layout.stageNext = {
+      label: () => (currentPage() === LAST ? '서명하고 제출 ▶' : '다음 장 ▶'),
+      hint: () => {
+        const now = currentPage();
+        if (now === LAST) return '서명하면 판결이 제출돼요';
+        return now === LAST - 1 && !ready ? `확정 장으로 가려면 ${missingReason}` : `다음 장: ${pages[now + 1].title}`;
+      },
+      enabled: () => !submitting,
+      blocked: () => currentPage() === LAST - 1 && !ready, // 확정 장으로 못 넘어가는 이유를 hint가 말하는 중
+      run: () => { if (currentPage() === LAST) sign(); else goTo(currentPage() + 1, true); },
+    };
     showPage(0);
     const folderBody = element('div', 'folder-body');
     folderBody.append(...pages.map(({ panel }) => panel));
@@ -725,6 +768,9 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       reductionCheck.checked = draft.reducing;
       reductionCheck.disabled = !choices.length;
       reductionLabel.classList.toggle('is-disabled', !choices.length);
+      // 형벌을 고르기 전에는 누를 수 없는 이유를 알리고, 체크하기 전에는 감경 후 형벌 라디오를 감춘다(FE-103: 회색 칸이 고장 난 조작처럼 읽혔다)
+      reductionNote.textContent = option ? REDUCTION_NOTE : '형벌 종류를 먼저 고르면 감경 여부를 정할 수 있어요.';
+      reductionChoices.hidden = !draft.reducing;
       for (const { type, label, radio } of reductionRadios) {
         radio.disabled = !draft.reducing || !choices.includes(type); // 감경 후 형벌이 하나뿐이면 체크할 때 자동으로 골라진다
         radio.checked = draft.reducedTo === type;
@@ -800,7 +846,9 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
         marker.classList.toggle('is-warning', prison && shown > trackMax);
       }
       feedback.replaceChildren();
-      if ((present && !inRange) || serverError === 'OUT_OF_ALLOWED_RANGE') {
+      const outOfRange = (present && !inRange) || serverError === 'OUT_OF_ALLOWED_RANGE';
+      if (outOfRange) for (const key of ['prisonYears', 'prisonMonths', 'fineAmount']) inputs[key].setAttribute('aria-invalid', 'true'); // 범위 초과도 잘못된 입력(FE-97)
+      if (outOfRange) {
         const warning = element('div', 'range-warning');
         warning.setAttribute('role', 'alert');
         const rangeText = prison ? `징역 ${formatMonths(option.allowedMin)} ~ ${formatMonths(option.allowedMax)}` : option.text;
@@ -830,6 +878,9 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
         toggle.setAttribute('aria-pressed', String((draft.factors[factorId] ?? 'NONE') === direction));
         row.classList.toggle('is-selected', Boolean(draft.factors[factorId]));
       }
+      const pickedCount = Object.keys(draft.factors).length;
+      factorCount.textContent = `고른 요소 ${pickedCount} / ${form.factors.length}`;
+      noFactorNote.hidden = pickedCount > 0;
       const disabledReason = !option ? '형벌 종류를 골라 주세요.' : pendingReduction ? '감경 후 형벌을 골라 주세요.'
         : !fixed && !present ? '형량을 입력해 주세요.'
         : (!fixed && !inRange) || serverError === 'OUT_OF_ALLOWED_RANGE' ? '선고할 수 있는 범위 안으로 형량을 조정해 주세요.'

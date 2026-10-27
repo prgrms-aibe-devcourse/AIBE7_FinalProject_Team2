@@ -1,0 +1,3 @@
+/* 서명 그림 (FE-94). 선 굵기는 화면 픽셀 그대로(non-scaling-stroke: 쓰는 연출이 대시를 쓰지 않아 안전하다). 색은 쓰는 곳이 color로 정한다 */
+.sig-ink { display: block; max-width: 100%; overflow: visible; color: var(--color-accent); }
+.sig-ink path { fill: none; stroke: currentColor; stroke-width: 2.2px; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }

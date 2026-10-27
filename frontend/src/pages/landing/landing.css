@@ -36,6 +36,9 @@
 .landing-page :where(.desk-world, .desk-menu) :where(span, strong, em, b, small) { display: block; }
 
 
+/* 본문 landmark(FE-99): 레이아웃에는 영향이 없다(기존처럼 위에서 아래로 쌓인다) */
+.landing-page .landing-main { display: block; }
+
 /* ── 무대 ── */
 /* 첫 화면은 책상만 꽉 차게(FE-87): 장면 높이 = 화면 높이(헤더 제외). 그림은 landingPage.js fit()이 장면 안에 들어가게 줄이고(--desk-scale),
    남는 쪽으로 책상을 늘린다(넓으면 --dx, 높으면 신문 --ng · 여백 --r, 기준 px. 여유 정도 --t로 소품 크기 · 기울기). 소품 순서는 그대로. 아래 집무실은 언제나 첫 화면 밖에서 시작한다 */
@@ -49,7 +52,7 @@
    아직 실제 폰으로 확인하지 못했다. 끊기면 그림자는 전환하지 말고 처음부터 두거나, 그림자 층을 따로 두고 opacity만 올린다 */
 .landing-page .obj-news.is-held > * { filter: drop-shadow(0 34px 26px color-mix(in srgb, var(--color-desk-shadow) 55%, transparent)); }
 /* 책상 위 내로 · 남불(장식, 볼을 괴고 엎드림) */
-.landing-page .desk-cheek { position: absolute; z-index: 3; width: auto; pointer-events: none; filter: var(--shadow-rest); scale: calc(1 + var(--k, 0) * .6); }
+.landing-page .desk-cheek { position: absolute; z-index: 10; width: auto; pointer-events: none; filter: var(--shadow-rest); scale: calc(1 + var(--k, 0) * .6); }
 .landing-page .cheek-naero { transform-origin: 50% 0; } /* 패드 윗변 위 나무에 엎드려 있다(포스트잇에 가려 있음) */
 .landing-page .desk-world {
   --news-lift: calc((712px + var(--ng, 0px)) * var(--t, 0) * .15); /* 신문이 커진 만큼의 절반을 위로 올려 위아래 가운데를 지킨다(포스트잇 · 내로도 같이) */
@@ -106,9 +109,9 @@
   position: absolute; border: 0;
   display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
   box-shadow: -4px 6px 10px color-mix(in srgb, var(--color-desk-shadow) 35%, transparent);
-  left: calc(875px + var(--dx, 0px) + var(--t, 0) * 40px); top: calc(var(--r, 0px) * .1); z-index: 4; /* 패드 윗변 위 나무에서 신문 윗부분에 걸친다(내로를 가린다) */ width: var(--postit); height: var(--postit); padding: 22px 14px 10px;
+  left: calc(875px + var(--dx, 0px) + var(--t, 0) * 40px); top: calc(var(--r, 0px) * .1); z-index: 11; /* 패드 윗변 위 나무에서 신문 윗부분에 걸친다(내로를 가린다) */ width: var(--postit); height: var(--postit); padding: 22px 14px 10px;
   background: linear-gradient(180deg, color-mix(in srgb, var(--color-desk-shadow) 7%, var(--paper)) 0 16%, var(--paper) 16%);
-  transform: rotate(4deg); cursor: pointer; scale: calc(1.15 + var(--k, 0) * .55); transform-origin: 50% 0; /* 가장 먼저 눈에 띄도록 크게(신문 제호를 덮어도 된다) */
+  transform: rotate(4deg); cursor: pointer; scale: calc(1 + var(--k, 0) * .4); transform-origin: 50% 0; /* 놀이가 첫 화면의 주인공이 되지 않게 줄였다(FE-99). 신문 제호는 덜 가린다 */
   color: var(--color-desk-note-pen); font: 400 30px/1.15 var(--font-hand);
 }
 .landing-page .desk-rescue:focus-visible { outline: 3px solid var(--color-range-fill); outline-offset: 6px; }
@@ -118,6 +121,13 @@
   position: absolute; display: block; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer;
 }
 .landing-page .desk-object.is-soon { cursor: default; }
+/* 그리는 순서(FE-99): Tab 순서를 위해 DOM 순서를 바꿨으므로 겹침 순서는 여기서 정한다. 엽서 < 펜 < 서류철 < 신문 < 노트북 < 커피잔 < 내로 < 포스트잇 */
+.landing-page .obj-postcard { z-index: 1; }
+.landing-page .obj-pen { z-index: 2; }
+.landing-page .obj-folder { z-index: 3; }
+.landing-page .obj-news { z-index: 4; }
+.landing-page .obj-laptop { z-index: 5; }
+.landing-page .obj-mug { z-index: 6; }
 .landing-page .desk-object:focus-visible { outline: 3px solid var(--color-range-fill); outline-offset: 8px; border-radius: 6px; }
 .landing-page .desk-object > * { filter: var(--shadow-rest); transition: filter .2s ease-out; }
 /* 마우스를 올리면 물건이 밝아진다(FE-50). 평면 일러스트라 움직이지 않고, 밝기와 그림자로만 반응한다. 키보드 포커스는 테두리로 보인다.
@@ -155,9 +165,10 @@
   left: calc(529px + var(--dx, 0px)); top: calc(122px + var(--r, 0px) * .5 - var(--news-lift)); width: 596px; height: calc(712px + var(--ng, 0px));
   scale: calc(1 + var(--t, 0) * .3); transform-origin: 50% 0; transform: rotate(-1.5deg); } /* 책상에 툭 던져 둔 듯 살짝 돌린다(FE-50) */
 .landing-page .news-sheets { position: absolute; inset: 0; }
-.landing-page .news-sheets span { position: absolute; inset: 0; border-radius: 2px; }
-.landing-page .news-sheets span:nth-child(1) { transform: translate(6px, 5px) rotate(.6deg); background: var(--color-desk-news-sheet-1); }
-.landing-page .news-sheets span:nth-child(2) { transform: translate(3px, 2px) rotate(-.4deg); background: var(--color-desk-news-sheet-2); }
+.landing-page .news-sheets > span { position: absolute; inset: 0; border-radius: 2px; }
+.landing-page .news-sheets > span:nth-child(1) { transform: translate(6px, 5px) rotate(.6deg); background: var(--color-desk-news-sheet-1); }
+.landing-page .news-sheets > span:nth-child(2) { transform: translate(3px, 2px) rotate(-.4deg); background: var(--color-desk-news-sheet-2); }
+.landing-page .news-sheets > span:nth-child(3) { transform: translate(1px, 0); background: var(--color-desk-news-sheet-2); }
 .landing-page .news-art {
   position: absolute; inset: 0; overflow: hidden; padding: 4px 22px 18px; font-size: 10px; color: var(--color-text);
   display: flex; flex-direction: column; /* 남는 세로는 아래 기사 두 건(.news-recs)이 채운다. 사진은 3:2를 지켜야 해서 늘리지 않는다 */
@@ -198,6 +209,45 @@
 .landing-page .news-rec span { font: 400 1em/1.5 var(--font-article); text-align: justify; word-break: break-all; color: var(--color-desk-news-ink-soft);
   display: -webkit-box; -webkit-line-clamp: var(--rec-lines, 4); -webkit-box-orient: vertical; overflow: hidden; } /* 신문이 길어지면 줄이 늘어난다(landingPage.js) */
 
+/* 신문 모서리 넘김(FE-99): 이름표를 늘리지 않고 "눌러 볼 물건"이 신문임을 움직임으로 알린다. 옆에서 바람이 불어 맨 앞 지면의 오른쪽 아래 모서리(최대 약 40%)가
+   휙 들려 곡선으로 말렸다가, 넘어갈 듯 말 듯 망설이고, 한 번 더 들썩인 뒤 떨어져 살짝 튀고 가라앉는다. 맨 앞 장만 들린다(밑 종이는 그대로). 잠시 쉬었다 되풀이한다. 원근 없이 납작한 2D 그림이다(책상의 다른 물건과 같은 규칙).
+   --d(px, 접힌 변 길이) 하나만 움직이고, 종이를 오려 내는 모양(clip-path)과 뒤집힌 뒷면(.news-curl)이 같은 점을 쓴다.
+   접힌 변은 모서리 쪽으로 살짝 볼록한 곡선이고, 뒷면은 접힌 선에서 어둡고 → 밝아지고 → 끝에서 다시 약간 어두운 띠로 둥글게 말린 종이를 보인다 */
+@property --d { syntax: '<number>'; inherits: true; initial-value: 0; }
+@keyframes news-curl-d {
+  0%, 42%, 87%, 100% { --d: 0; animation-timing-function: cubic-bezier(.3, 0, .25, 1); }
+  52% { --d: 235; animation-timing-function: ease-in-out; }
+  57% { --d: 219; animation-timing-function: cubic-bezier(.45, 0, .55, 1); }
+  63% { --d: 106; animation-timing-function: cubic-bezier(.3, 0, .3, 1); }
+  69% { --d: 188; animation-timing-function: cubic-bezier(.55, 0, .8, .45); }
+  79% { --d: 0; animation-timing-function: cubic-bezier(.2, .6, .4, 1); }
+  83% { --d: 16; animation-timing-function: cubic-bezier(.5, 0, .8, .5); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .landing-page .desk-object.obj-news:not(.is-held) { animation: news-curl-d 4.2s infinite; }
+  /* 종이를 접힌 곡선까지만 남긴다(오른쪽 아래 모서리를 오려 냄) */
+  .landing-page .obj-news:not(.is-held) .news-art {
+    clip-path: polygon(0 0, 100% 0, 100% calc(100% - var(--d) * 1px),
+      calc(100% - var(--d) * .197px) calc(100% - var(--d) * .697px), calc(100% - var(--d) * .429px) calc(100% - var(--d) * .429px), calc(100% - var(--d) * .697px) calc(100% - var(--d) * .197px),
+      calc(100% - var(--d) * 1px) 100%, 0 100%);
+  }
+  .landing-page .obj-news:not(.is-held) .news-curl { display: block; }
+}
+/* 뒤집혀 접힌 모서리(뒷면). 종이 오른쪽 아래 260px 상자 안에 그린다(상자 모서리 = 종이 모서리). 상자 밖으로는 안 나가므로 접힘은 d ≤ 260.
+   버튼의 직계 자식이라 책상 소품 그림자를 받는다 */
+.landing-page .news-curl { position: absolute; right: 0; bottom: 0; width: 260px; height: 260px; pointer-events: none; display: none; --curl-paper: var(--color-paper); }
+.landing-page .news-curl-face {
+  position: absolute; inset: 0;
+  clip-path: polygon(100% calc(100% - var(--d) * 1px),
+    calc(100% - var(--d) * .197px) calc(100% - var(--d) * .697px), calc(100% - var(--d) * .429px) calc(100% - var(--d) * .429px), calc(100% - var(--d) * .697px) calc(100% - var(--d) * .197px),
+    calc(100% - var(--d) * 1px) 100%, calc(100% - var(--d) * 1px) calc(100% - var(--d) * 1px));
+  background: linear-gradient(315deg,
+    color-mix(in srgb, var(--color-desk-shadow) 38%, var(--curl-paper)) calc(var(--d) * .707px),
+    var(--curl-paper) calc(var(--d) * .85px),
+    color-mix(in srgb, var(--color-desk-shadow) 6%, var(--curl-paper)) calc(var(--d) * 1.15px),
+    color-mix(in srgb, var(--color-desk-shadow) 22%, var(--curl-paper)) calc(var(--d) * 1.414px));
+}
+
 /* 노트북 → 커뮤니티 (바닥 오른쪽 아래 모서리를 기준으로 -29도 돌려 놓는다).
    그대로 뒤집으면(left 0) 왼쪽 정렬된 첫 말풍선이 책상 밖으로 잘려서 30px 안쪽에 둔다 */
 .landing-page .obj-laptop { left: calc(30px + var(--dx, 0px) * .5); top: calc(13px + var(--r, 0px) * .1); scale: calc(1 + var(--t, 0) * .4); transform-origin: 487px 372px; width: 491px; height: 580px; } /* 커질 때는 신문 쪽 모서리(그림 오른쪽 아래)를 고정하고 왼쪽 위로만 넓어진다 */
@@ -210,7 +260,7 @@
 }
 .landing-page .bubble { max-width: 82%; padding: 6px 10px; border-radius: 10px; background: var(--color-surface); }
 .landing-page .bubble.mine { align-self: flex-end; background: var(--color-range-fill); }
-.landing-page .bubble small { font-size: 10px; color: var(--color-border-strong); }
+.landing-page .bubble small { font-size: 10px; color: var(--color-muted); } /* FE-99: 옅은 테두리색은 3.5:1이라 보조 글자색으로 */
 .landing-page .laptop-body {
   position: absolute; left: 0; right: 0; top: 160px; bottom: 0; border-radius: 4px 4px 22px 22px;
   background: linear-gradient(170deg, var(--color-desk-metal-light), var(--color-desk-metal) 50%, var(--color-desk-metal-dark));
@@ -425,6 +475,15 @@
   .landing-page .room-rug-wrap:not(.is-folded) .rug-flap:hover .rug-flap-leaf,
   .landing-page .room-rug-wrap:not(.is-folded):has(.rug-folder:hover) .rug-flap-leaf { animation: flap-lift 1.6s infinite; } /* 삐져나온 서류철에 올려도 같다 */
 }
+/* 마우스가 없는 기기(FE-99): 호버가 없어 귀퉁이를 찾기 어려우므로, 가끔 혼자 살짝 들썩여 "들출 수 있다"를 알린다 */
+@media (hover: none) and (prefers-reduced-motion: no-preference) {
+  .landing-page .room-rug-wrap:not(.is-folded) .rug-flap-leaf { animation: flap-idle 5s 1.5s infinite; }
+}
+@keyframes flap-idle {
+  0%, 76%, 100% { transform: none; }
+  84% { transform: rotate3d(1, -1, 0, 45deg); animation-timing-function: cubic-bezier(.65, 0, .35, 1); }
+  94% { transform: none; }
+}
 @keyframes flap-lift {
   0% { transform: none; animation-timing-function: cubic-bezier(.32, .72, 0, 1); }
   30% { transform: rotate3d(1, -1, 0, 55deg); animation-timing-function: cubic-bezier(.65, 0, .35, 1); }
@@ -463,7 +522,7 @@
 }
 .landing-page .paper-title { display: block; font: 900 calc(19 * var(--u))/1.35 var(--font-heading); letter-spacing: -.03em; color: var(--color-heading); text-wrap: balance; }
 .landing-page .paper-step { display: flex; align-items: center; gap: calc(10 * var(--u)); margin-bottom: calc(10 * var(--u)); }
-.landing-page .paper-cap { margin-top: calc(8 * var(--u)); font: 400 calc(13 * var(--u))/1.5 var(--font-article); color: var(--color-desk-news-ink); text-wrap: pretty; }
+.landing-page .paper-cap { margin-top: calc(8 * var(--u)); font: 400 max(12px, calc(13 * var(--u)))/1.5 var(--font-article); color: var(--color-desk-news-ink); text-wrap: pretty; }
 /* 체크 칸(엽서 · 판단 요소 공통). 고른 칸은 체크 표시 */
 .landing-page .paper-box { position: relative; flex: none; width: calc(15 * var(--u)); height: calc(15 * var(--u)); border: 1.5px solid var(--color-border-strong); background: var(--color-card); }
 .landing-page .paper-box.is-on::after { content: ''; position: absolute; left: 30%; top: 0; width: 32%; height: 64%; border: solid var(--color-heading); border-width: 0 2.5px 2.5px 0; transform: rotate(45deg); }
@@ -475,13 +534,13 @@
 /* 신문 스크랩: 신문지 + 제호 아래 겹줄. 머리기사 한 조각(책상 신문과 같은 머리기사 · 사진) */
 .landing-page .paper-clip { display: flex; flex-direction: column; background: var(--color-desk-news); border-top: 5px double var(--color-border-strong); }
 .landing-page .paper-clip .clip-photo { order: 1; } /* 설명을 사진 위로: 아래쪽 사진만 첫인상 엽서에 덮인다 */
-.landing-page .clip-kicker { font: 700 calc(11 * var(--u))/1 var(--font-body); color: var(--color-label); }
+.landing-page .clip-kicker { font: 700 max(11px, calc(11 * var(--u)))/1 var(--font-body); color: var(--color-label); }
 .landing-page .clip-head { margin-top: calc(6 * var(--u)); padding-right: 14%; /* 오른쪽 위는 엽서가 겹쳐 덮는 자리 */ font: 900 calc(19 * var(--u))/1.35 var(--font-heading); letter-spacing: -.03em; color: var(--color-heading); text-wrap: balance; }
 .landing-page .clip-photo { display: block; width: 100%; height: auto; aspect-ratio: 4 / 3; margin-top: calc(12 * var(--u)); object-fit: cover; filter: var(--photo-filter) grayscale(1); }
 /* 첫인상 엽서: 판결 체험 2막 엽서와 같은 우표 */
 .landing-page .paper-postcard { background: var(--color-desk-sheet); padding-right: calc(64 * var(--u)); }
 .landing-page .paper-q { font: 700 calc(16 * var(--u))/1.4 var(--font-heading); color: var(--color-heading); }
-.landing-page .paper-choices { display: flex; gap: calc(14 * var(--u)); margin-top: calc(8 * var(--u)); font-size: calc(14 * var(--u)); }
+.landing-page .paper-choices { display: flex; gap: calc(14 * var(--u)); margin-top: calc(8 * var(--u)); font-size: max(12px, calc(14 * var(--u))); }
 .landing-page .paper-choices > span { display: flex; align-items: center; gap: calc(6 * var(--u)); }
 .landing-page .paper-stamp {
   position: absolute; right: calc(14 * var(--u)); top: calc(14 * var(--u)); display: grid; place-items: center; width: calc(38 * var(--u)); height: calc(46 * var(--u));
@@ -494,13 +553,13 @@
 .landing-page .paper-folder .paper-cap { color: var(--color-text); }
 /* 판단 요소 표: 요소마다 무겁게 · 해당 없음 · 가볍게 중 하나 */
 .landing-page .factor-table { display: grid; gap: calc(5 * var(--u)); }
-.landing-page .factor-row { display: grid; grid-template-columns: minmax(0, 1fr) repeat(3, calc(50 * var(--u))); align-items: center; justify-items: center; font: 700 calc(13 * var(--u))/1.2 var(--font-body); color: var(--color-heading); }
-.landing-page .factor-row.is-head { font: 400 calc(11 * var(--u))/1.2 var(--font-body); color: var(--color-text); }
+.landing-page .factor-row { display: grid; grid-template-columns: minmax(0, 1fr) repeat(3, calc(50 * var(--u))); align-items: center; justify-items: center; font: 700 max(12px, calc(13 * var(--u)))/1.2 var(--font-body); color: var(--color-heading); }
+.landing-page .factor-row.is-head { font: 400 max(11px, calc(11 * var(--u)))/1.2 var(--font-body); color: var(--color-text); }
 .landing-page .factor-name { justify-self: start; }
 /* 판결문: 밝은 종이 + 위 겹줄. 주문에 손으로 형량을 적고 확정 도장 */
 .landing-page .paper-sheet { background: var(--color-card); border-top: 5px double var(--color-heading); }
 .landing-page .sheet-title { margin-top: calc(4 * var(--u)); text-align: center; font: 900 calc(18 * var(--u))/1.3 var(--font-heading); letter-spacing: .3em; color: var(--color-heading); }
-.landing-page .sheet-label { margin-top: calc(10 * var(--u)); font: 700 calc(12 * var(--u))/1 var(--font-body); color: var(--color-muted); }
+.landing-page .sheet-label { margin-top: calc(10 * var(--u)); font: 700 max(11px, calc(12 * var(--u)))/1 var(--font-body); color: var(--color-muted); }
 .landing-page .sheet-order { margin-top: calc(8 * var(--u)); font: 400 calc(15 * var(--u))/1.7 var(--font-article); color: var(--color-text); }
 .landing-page .sheet-hand { display: inline-block; min-width: 2.2em; border-bottom: 1.5px solid var(--color-heading); text-align: center; font: 400 calc(26 * var(--u))/1 var(--font-hand); color: var(--color-heading); }
 .landing-page .paper-sheet .paper-cap { margin-top: calc(14 * var(--u)); padding-right: 22%; } /* 오른쪽 아래는 확정 도장 자리 */
@@ -511,7 +570,7 @@
 .landing-page .paper-verdict { background: var(--color-desk-sheet); overflow: hidden; }
 .landing-page .paper-verdict .paper-title { margin-top: calc(4 * var(--u)); }
 /* 누구의 판결인지: 세 판결 의미 색(선 · 라벨에만) */
-.landing-page .verdict-who { display: block; font: 700 calc(11 * var(--u))/1 var(--font-body); }
+.landing-page .verdict-who { display: block; font: 700 max(11px, calc(11 * var(--u)))/1 var(--font-body); }
 .landing-page .verdict-who.is-ai { color: var(--color-judge-ai); }
 .landing-page .verdict-who.is-court { color: var(--color-judge-court); }
 /* 형량 막대(0 ~ 10년). 실제 판결은 흐리게 가린다 */
@@ -519,14 +578,14 @@
 .landing-page .bar-dot { position: absolute; top: 50%; width: calc(14 * var(--u)); height: calc(14 * var(--u)); border-radius: 50%; transform: translate(-50%, -50%); }
 .landing-page .verdict-bar.is-ai .bar-dot { background: var(--color-judge-ai); }
 .landing-page .verdict-bar.is-court .bar-dot { background: var(--color-judge-court); }
-.landing-page .bar-ticks { display: flex; justify-content: space-between; font: 400 calc(10 * var(--u))/1 var(--font-body); color: var(--color-muted); }
+.landing-page .bar-ticks { display: flex; justify-content: space-between; font: 400 max(11px, calc(10 * var(--u)))/1 var(--font-body); color: var(--color-muted); }
 .landing-page .verdict-value { margin-top: calc(6 * var(--u)); font: 900 calc(18 * var(--u))/1.3 var(--font-heading); color: var(--color-heading); }
-.landing-page .verdict-note { display: inline-block; font: 400 calc(12 * var(--u))/1 var(--font-body); color: var(--color-muted); }
-.landing-page .verdict-value .mock-tag { display: inline-block; vertical-align: 3px; font-size: calc(11 * var(--u)); } /* 방 안의 span은 블록이라 글자 옆에 붙게 되돌린다 */
+.landing-page .verdict-note { display: inline-block; font: 400 max(11px, calc(12 * var(--u)))/1 var(--font-body); color: var(--color-muted); }
+.landing-page .verdict-value .mock-tag { display: inline-block; vertical-align: 3px; font-size: max(11px, calc(11 * var(--u))); } /* 방 안의 span은 블록이라 글자 옆에 붙게 되돌린다 */
 .landing-page .verdict-reading.is-covered { filter: blur(3px); opacity: .5; }
 .landing-page .paper-verdict .verdict-seal {
   position: absolute; left: -10px; right: -10px; top: 58%; margin: 0; padding: calc(5 * var(--u)) 0; transform: rotate(-3deg);
-  background: var(--color-desk-kraft); text-align: center; font: 700 calc(13 * var(--u))/1.4 var(--font-heading); letter-spacing: .02em; color: var(--color-heading);
+  background: var(--color-desk-kraft); text-align: center; font: 700 max(12px, calc(13 * var(--u)))/1.4 var(--font-heading); letter-spacing: .02em; color: var(--color-heading);
   box-shadow: 0 1px 2px color-mix(in srgb, var(--color-desk-shadow) 30%, transparent);
 }
 
@@ -548,6 +607,9 @@
   position: relative; width: calc(596px * var(--news-zoom)); height: calc(712px * .2 * var(--news-zoom) + var(--wall)); /* 벽에 가린 만큼 더 둬서 보이는 부분이 20%. 아래는 바깥 칸(.room-exit)이 벽 선에서 자른다 */
   margin-top: 14px; padding: 0; border: 0; background: none; cursor: pointer; transform: rotate(-1.5deg); transform-origin: 50% 100%; /* 누르면 이 기울기에서 시작해 바로 서며 커진다(utils/tailSpread.js) */
 }
+/* 처음엔 벽(문) 밑에 숨어 있다가 .is-out이 붙으면 슥 밀려 나온다(landingPage.js, 화면에 들어오고 1초 뒤). translate는 기울기(transform)와 따로 쓴다 */
+.landing-page .room-news:not(.is-out) { translate: 0 calc(142px * var(--news-zoom) + 24px); pointer-events: none; }
+.landing-page .room-news { transition: translate .9s cubic-bezier(.25, .55, .4, 1); /* 시작은 조금 빠르게, 끝이 길게 늘어지지 않게 */ }
 .landing-page .room-news-sheet { position: absolute; left: 0; top: 0; width: 596px; height: 712px; zoom: var(--news-zoom); filter: var(--placed-shadow, drop-shadow(3px 6px 6px color-mix(in srgb, var(--color-desk-shadow) 45%, transparent))); transition: filter .2s ease-out; }
 .landing-page :where(.room-news-sheet) :where(span, strong, em, b, small) { display: block; } /* 책상 그림과 같은 블록 규칙(우선순위 0). .room 밖(body)에 본뜬 한 장에도 걸려야 해서 span까지 포함한다 */
 .landing-page .room-news:focus-visible { outline-color: var(--color-range-fill); outline-offset: 4px; }
@@ -575,13 +637,13 @@ body:has(.landing-page) #route-header::before { content: ''; position: absolute;
 
 @media (prefers-reduced-motion: reduce) {
   .landing-page .room-note-paper { animation: none; }
-  .landing-page .desk-object, .landing-page .desk-object > *, .landing-page .room-news-sheet { transition: none; }
+  .landing-page .desk-object, .landing-page .desk-object > *, .landing-page .room-news-sheet, .landing-page .room-news { transition: none; }
 }
 
 @media (max-width: 720px) {
   .landing-page .desk-scene { display: none; }
   /* 좁은 화면도 첫 화면은 메뉴로 채운다(FE-87). 메뉴는 가운데에 두고, 아래 집무실은 첫 화면 밖으로 밀린다 */
-  .landing-page .desk-menu { position: relative; z-index: 2; display: flex; flex-direction: column; justify-content: center; min-height: calc(100svh - var(--site-header-h, 0px)); padding: 24px 16px 28px; background: var(--color-banner-bg); }
+  .landing-page .desk-menu { position: relative; z-index: 2; display: flex; flex-direction: column; justify-content: flex-start; /* 위쪽에 맞추고 남는 아래는 내로가 채운다(FE-99) */ min-height: calc(100svh - var(--site-header-h, 0px)); padding: 24px 16px 0; background: var(--color-banner-bg); }
   .landing-page .desk-menu-title { font: 900 26px/1.3 var(--font-heading); letter-spacing: -.04em; color: var(--color-banner-text); }
   .landing-page .desk-menu-head p:not(.desk-menu-title) { margin-top: 8px; font-size: 14px; color: var(--color-banner-muted); }
   .landing-page .desk-menu-list { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px; }
@@ -610,12 +672,21 @@ body:has(.landing-page) #route-header::before { content: ''; position: absolute;
   .landing-page .desk-menu-item .mug-art::after { border-width: 4px; border-radius: 0 8px 8px 0; }
   .landing-page .desk-menu-item .mug-coffee { margin: 0; opacity: 1; }
   .landing-page .desk-menu-item.is-soon { opacity: .55; cursor: default; }
+  /* 카드 밑 빈 곳: 내로가 고개만 내민다(장식, 밑이 잘린다). 카드가 길어지면 이 칸이 줄어든다 */
+  .landing-page .desk-menu-peek { flex: 1 1 0; min-height: 96px; max-height: 190px; margin-top: 16px; overflow: hidden; display: flex; justify-content: flex-end; align-items: flex-end; padding-right: 12%; }
+  .landing-page .desk-menu-naero { display: block; width: auto; height: 190px; margin-bottom: -56px; filter: var(--shadow-rest, none); }
   .landing-page .desk-menu-item:focus-visible { outline-color: var(--color-range-fill); }
   /* 좁은 화면: 같은 방을 세로로 쌓는다. 벽은 얇게, 서류 · 판결문은 한 줄에 하나 */
   .landing-page .room { --ch: 46vw; } /* 좁은 화면: 책상 대신 메뉴 카드 밑으로 의자를 넣는다 */
   /* 좁은 화면은 러그가 세로로 길어져 술이 위 · 아래 짧은 변으로 간다 */
   .landing-page .room-rug-wrap { --rw: calc(100cqw - 32px); --peek-x: calc(var(--fw) * .09); --peek-y: calc(var(--fw) * .34); margin: 52px 16px 0; transform: none; }
-  .landing-page .room-rug { --pt: 40px; --W: min(300px, (100cqw - 92px) / 1.94); padding: var(--pt) 30px 44px; }
+  /* 서류는 한 장씩 세로로 쌓는다(FE-99). 가로로 겹쳐 놓으면 종이 폭이 W의 절반 남짓이라 글자가 5px대로 줄었다. 왼쪽 · 오른쪽으로 번갈아 기울여 놓는다 */
+  .landing-page .room-rug { --pt: 40px; --W: min(300px, (100cqw - 90px) / 1.2); display: flex; flex-direction: column; gap: calc(var(--W) * .14); height: auto; padding: var(--pt) 24px calc(var(--fold) * .62); }
+  .landing-page .room-paper { position: relative; left: auto; top: auto; flex: none; }
+  .landing-page .room-paper:nth-child(odd) { align-self: flex-start; }
+  .landing-page .room-paper:nth-child(even) { align-self: flex-end; }
+  .landing-page .room-paper:nth-child(5) { align-self: flex-end; }
+  .landing-page .room-paper:nth-child(6) { align-self: flex-start; } /* 오른쪽 아래 귀퉁이는 접히는 자리라 비운다 */
   .landing-page .room-rug::before, .landing-page .room-rug::after { top: auto; left: 6px; right: 6px; width: auto; height: 14px; background: repeating-linear-gradient(90deg, var(--fringe) 0 2px, transparent 2px 6px); }
   .landing-page .room-rug::before { bottom: 100%; }
   .landing-page .room-rug::after { top: 100%; }
@@ -649,8 +720,8 @@ html.feedback-gutter { scrollbar-gutter: stable; } /* 스크롤을 잠가도 스
 }
 
 /* 메인 맨 아래 이용약관 · 개인정보처리방침 입구 (FE-62) */
-.landing-page .footer-links { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 10px; }
-.landing-page .footer-link { padding: 4px 0; border: 0; background: none; color: inherit; font: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.landing-page .footer-links { display: flex; flex-wrap: wrap; gap: 0 16px; margin-top: 2px; }
+.landing-page .footer-link { min-height: 44px; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .landing-page .footer-link { touch-action: manipulation; }
 .landing-page .footer-link:hover { opacity: .75; }
 .landing-page .footer-link:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }

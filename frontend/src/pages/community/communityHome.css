@@ -1,0 +1,144 @@
+/* S-18 커뮤니티 메인 (FE-89, communityHomePage.js). 틀(왼쪽 거르기 · 가운데 · 오른쪽 글쓰기 칸)과 글쓴이 명함은 community.css를 그대로 쓴다 */
+.cm-home-head { display: flex; align-items: center; gap: 12px; min-height: 40px; margin-bottom: 18px; }
+.cm-home-head > a { font-size: var(--text-small); font-weight: 700; color: var(--color-heading); text-decoration: none; }
+.cm-home-section-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-bottom: 14px; }
+.cm-home-title { display: flex; align-items: center; gap: 8px; margin: 0; font: 700 var(--text-title-3)/1.4 var(--font-heading); color: var(--color-heading); }
+.cm-home-note { margin: 0; font-size: 13px; color: var(--color-muted); }
+.cm-home-empty { margin: 0 0 14px; font-size: var(--text-small); color: var(--color-muted); }
+/* 빈 상태(FE-93): 빈 스크랩 자리 · 비어 있는 시상대 자리. 점선 테두리 + 옅은 면은 접힌 판결 칸(.cm-verdict.is-folded)과 같은 말투다 */
+.cm-slot { display: grid; justify-items: start; gap: 8px; padding: 28px 24px; border: 1px dashed var(--color-border-strong); border-radius: 8px; background: var(--color-surface); }
+.cm-slot p { margin: 0; }
+.cm-slot-title { font: 700 var(--text-title-3)/1.4 var(--font-heading); color: var(--color-heading); }
+.cm-slot-note { max-width: 36em; font-size: var(--text-small); color: var(--color-muted); }
+.cm-slot-link { margin-top: 4px; font-size: var(--text-small); font-weight: 700; color: var(--color-heading); text-underline-offset: 3px; }
+@media (hover: hover) and (pointer: fine) { .cm-slot-link:hover { text-decoration: underline; } }
+.cm-rank-empty { aspect-ratio: 7 / 14; border: 1px dashed var(--color-border-strong); border-radius: 14px; background: var(--color-surface); }
+.cm-home-more { display: inline-block; margin-top: 12px; font-size: var(--text-small); font-weight: 700; color: var(--color-heading); text-decoration: none; }
+/* 글자 링크는 호버에서 밑줄(DESIGN.md P4) */
+@media (hover: hover) and (pointer: fine) { .cm-home-head > a:hover, .cm-home-more:hover { text-decoration: underline; text-underline-offset: 3px; } }
+
+/* 화살표 버튼(슬라이드 · 4 ~ 10위 줄) */
+.cm-arrow { display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 1px solid var(--color-border-strong); border-radius: 4px; background: var(--color-card); color: var(--color-heading); }
+.cm-arrow:disabled { opacity: .6; cursor: default; } /* DESIGN.md P6 비활성 */
+/* 버튼 호버는 배경색만 한 단계(DESIGN.md P1): 흰 면의 화살표는 어둡게, 진한 판결하기 버튼은 밝게 */
+@media (hover: hover) and (pointer: fine) {
+  .cm-arrow:hover:not(:disabled) { background: var(--color-surface); }
+  .cm-hot-try:hover { background: color-mix(in srgb, var(--color-heading) 86%, var(--color-card)); }
+}
+.cm-arrow svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+/* 사건 글 몇 개: 명함 버튼 · 제목 · 좋아요 · 댓글 수 */
+.cm-brief-list { margin: 0; padding: 0; list-style: none; }
+.cm-brief { padding: 14px 0; border-bottom: 1px solid var(--color-border); }
+.cm-brief:first-child { padding-top: 0; }
+.cm-brief .cm-who-type { display: none; } /* 성향 이름은 명함 창에서 본다(목록을 짧게) */
+.cm-brief-title { margin: 8px 0 4px; font: 700 16px/1.45 var(--font-heading); }
+.cm-brief-title a { color: var(--color-heading); text-decoration: none; }
+@media (hover: hover) and (pointer: fine) { .cm-brief-title a:hover { text-decoration: underline; text-underline-offset: 3px; } }
+.cm-brief-counts { display: flex; gap: 12px; margin: 0; font-size: 13px; color: var(--color-muted); font-variant-numeric: tabular-nums; }
+
+/* ── 지금 이야기가 많은 사건: 한 장씩 넘기는 슬라이드. 장마다 오려 낸 기사 조각 + 그 사건 글 ── */
+.cm-hot { margin-bottom: 40px; }
+.cm-hot-nav { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+.cm-hot-count { min-width: 44px; font-size: 13px; color: var(--color-muted); text-align: center; font-variant-numeric: tabular-nums; }
+.cm-hot-track { display: grid; grid-auto-flow: column; grid-auto-columns: 100%; overflow-x: auto; scroll-snap-type: x mandatory; scroll-behavior: smooth; scrollbar-width: none; padding-top: 16px; }
+.cm-hot-track::-webkit-scrollbar { display: none; }
+.cm-hot-slide { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); scroll-snap-align: start; padding: 0 4px 6px; }
+.cm-hot-clip-wrap { position: relative; align-self: start; rotate: -.6deg; } /* 기사 조각은 내용 길이만큼(옆 글 목록 높이에 맞춰 늘이지 않는다) */
+.cm-hot-slide.is-alt .cm-hot-clip-wrap { rotate: .5deg; }
+.cm-hot-clip-wrap .cm-clip { top: -14px; left: 34px; }
+.cm-hot-clipping {
+  position: relative; padding: 22px 24px 20px; background: var(--palette-news); color: var(--palette-news-ink);
+  clip-path: polygon(0 1%, 4% 0, 18% .8%, 33% 0, 51% .6%, 68% 0, 84% .9%, 100% 0, 99.4% 22%, 100% 47%, 99.3% 73%, 100% 100%, 82% 99.2%, 64% 100%, 47% 99.3%, 29% 100%, 12% 99.1%, 0 100%, .7% 76%, 0 51%, .6% 26%);
+}
+.cm-hot-kicker { display: flex; gap: 10px; margin: 0 0 10px; padding-bottom: 8px; border-bottom: 2px solid var(--palette-news-ink); font: 700 13px/1.4 var(--font-heading); }
+.cm-hot-kicker span:last-child { margin-left: auto; font-weight: 400; color: var(--palette-news-ink-soft); }
+.cm-hot-headline { margin: 0 0 6px; font: 900 26px/1.35 var(--font-heading); letter-spacing: -.02em; text-wrap: balance; }
+.cm-hot-deck { margin: 0 0 12px; font: 400 15px/1.6 var(--font-article); color: var(--palette-news-ink-soft); }
+.cm-hot-photo { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; margin-bottom: 12px; filter: grayscale(.35) sepia(.15); }
+.cm-hot-article { margin: 0 0 12px; columns: 2; column-gap: 18px; column-rule: 1px solid var(--palette-news-sheet-1); font: 400 14px/1.75 var(--font-article); text-wrap: pretty; } /* 양쪽 맞춤은 2단 좁은 폭에서 단어 사이가 벌어져 왼쪽 맞춤으로(FE-103) */
+.cm-hot-article p { margin: 0 0 .6em; }
+.cm-hot-facts { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; font-size: 13px; color: var(--palette-news-ink-soft); }
+.cm-hot-facts b { color: var(--palette-news-ink); }
+.cm-hot-try { display: inline-flex; margin-top: 14px; padding: 8px 14px; border-radius: 4px; background: var(--color-heading); color: var(--color-card); font-size: var(--text-small); font-weight: 700; text-decoration: none; }
+.cm-hot-posts { min-width: 0; padding: 4px 0 0 28px; }
+.cm-hot-posts-label { margin: 0 0 10px; font-size: 13px; color: var(--color-label); }
+
+/* ── 레벨 랭킹: 위 셋은 시상대(가운데 1위가 가장 높다), 아래 일곱은 작은 카드 한 줄 ── */
+/* 4 ~ 10위 카드 최소 폭 = 두 기준 중 큰 값: ① 시상대 카드(2 · 3위)의 절반 ② 고정 110px.
+   카드가 이보다 작아질 자리면 줄이지 않고 좌우로 넘긴다(둘 중 하나라도 걸리면 넘김). 시상대 카드 폭은 랭킹 칸 폭(cqi)으로 계산한다 */
+.cm-rank { --podium-gap: 22px; --podium-max: 168px; --rest-fixed: 110px; container-type: inline-size; padding-block: 26px 30px; border-block: 1px solid var(--color-border); }
+.cm-rank { --podium-card: min(var(--podium-max), (100cqi - 2 * var(--podium-gap)) / 3); --rest-min: max(var(--rest-fixed), var(--podium-card) / 2); }
+.cm-podium { display: grid; grid-template-columns: repeat(3, minmax(0, var(--podium-card))); justify-content: center; align-items: end; gap: var(--podium-gap); margin: 6px 0 0; padding: 0; list-style: none; }
+.cm-podium li { display: grid; justify-items: center; gap: 8px; }
+.cm-podium li.is-1 { order: 2; } /* 읽는 순서는 1 · 2 · 3위, 보이는 자리는 2 · 1 · 3위 */
+.cm-podium li.is-2 { order: 1; }
+.cm-podium li.is-3 { order: 3; }
+.cm-podium .cm-rank-card { width: 100%; }
+.cm-podium li.is-1 .cm-rank-card { width: 112%; }
+/* 시상대 단: 받침대 대신 종이 위 괘선 단(높이로 순위를 보인다) */
+.cm-step { display: grid; place-content: center; width: 100%; border-top: 2px solid var(--color-heading); background: var(--color-surface); font: 700 15px/1 var(--font-heading); color: var(--color-heading); text-align: center; font-variant-numeric: tabular-nums; }
+.is-1 > .cm-step { height: 100px; }
+.is-2 > .cm-step { height: 76px; }
+.is-3 > .cm-step { height: 60px; }
+.cm-step small { display: block; margin-top: 4px; font: 400 12px/1 var(--font-body); color: var(--color-muted); }
+/* 4 ~ 10위 줄: 화살표 칸 | 카드 줄 | 화살표 칸. 화살표는 카드 줄 밖의 제 칸에 있어 카드와 겹치지 않는다 */
+.cm-rest-wrap { display: grid; grid-template-columns: 34px minmax(0, 1fr) 34px; align-items: center; gap: 10px; max-width: 944px; margin: 26px auto 0; padding-top: 18px; border-top: 1px dashed var(--color-border); }
+.cm-rest-wrap.is-fit { grid-template-columns: minmax(0, 1fr); } /* 다 들어가면 화살표를 빼고 카드 줄만 */
+.cm-rest-wrap.is-fit .cm-arrow, .cm-rest-wrap.is-fit .is-clone { display: none; } /* 다 들어가면 돌아가는 복제본도 뺀다 */
+/* 좌우로만 넘긴다(위아래 스크롤 없음). 아래 여백 14px은 긴 책갈피 꼬리 자리. 간격 12px은 communityHomePage.js REST_GAP과 같다 */
+.cm-rest { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(var(--rest-min), 1fr); gap: 12px; margin: 0; padding: 0 0 14px; list-style: none;
+  overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scrollbar-width: none; scroll-behavior: smooth; }
+.cm-rest::-webkit-scrollbar { display: none; } /* 막대는 숨기고 화살표 · 손가락 밀기로 넘긴다 */
+/* 넘길 수 있으면 양쪽 끝을 흐리게(끝없이 돌아가므로 양쪽 다 더 있다) */
+.cm-rest { --fade-l: 0px; --fade-r: 0px; mask-image: linear-gradient(90deg, transparent 0, #000 var(--fade-l), #000 calc(100% - var(--fade-r)), transparent 100%); }
+.cm-rest.more-left { --fade-l: 40px; }
+.cm-rest.more-right { --fade-r: 56px; }
+.cm-rest li { display: grid; justify-items: center; align-content: start; gap: 6px; }
+.cm-rest .cm-rank-card { width: 100%; }
+.cm-rank-no { font: 700 13px/1 var(--font-heading); color: var(--color-label); font-variant-numeric: tabular-nums; }
+.cm-rank-no small { margin-left: 4px; font: 400 12px/1 var(--font-body); color: var(--color-muted); }
+.cm-rank-card .my-card { width: 100%; }
+.cm-rank-card .my-card.is-profile .my-card-name, .cm-rank-card .my-card.is-profile .my-card-note { font-size: max(11px, 9.1cqi); } /* 단상 카드가 작아져도 닉네임 · 성향 이름은 11px 아래로 내려가지 않는다 */
+.cm-rank-card .my-card.is-profile .my-card-note.is-empty { opacity: 1; } /* 성향 테스트 전 문구: 흐리면 대비 3:1대 */
+
+/* ── 추천 사건: 슬라이드에 없는 사건, 신문 지면처럼 세 단 ── */
+.cm-reco-block { padding-block: 34px 0; }
+.cm-reco { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 2px solid var(--color-heading); }
+.cm-reco-col { min-width: 0; padding: 16px 20px 6px; }
+.cm-reco-col + .cm-reco-col { border-left: 1px solid var(--color-border); }
+.cm-reco-col:first-child { padding-left: 0; }
+.cm-reco-col:last-child { padding-right: 0; }
+.cm-reco-label { margin: 0 0 4px; font-size: 12px; color: var(--color-label); }
+.cm-reco-title-link { color: inherit; text-decoration: none; }
+@media (hover: hover) { .cm-reco-title-link:hover { text-decoration: underline; text-underline-offset: 3px; } }
+.cm-reco-title { margin: 0 0 6px; font: 700 18px/1.4 var(--font-heading); color: var(--color-heading); text-wrap: balance; }
+.cm-reco-intro { margin: 0 0 12px; font-size: 13px; line-height: 1.6; color: var(--color-muted); }
+.cm-reco .cm-brief { padding: 10px 0; }
+.cm-reco .cm-brief-title { font-size: 15px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cm-hot-track, .cm-rest { scroll-behavior: auto; }
+}
+/* 가운데 칸이 좁은 넓은 화면(1024 ~ 1279px): 슬라이드는 기사 위 · 글 아래로 쌓는다 */
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .cm-hot-slide { grid-template-columns: minmax(0, 1fr); gap: 22px; }
+  .cm-hot-posts { padding-left: 0; }
+}
+/* 좁은 화면(community.css와 같은 경계) */
+@media (max-width: 1023px) {
+  .cm-hot-slide { grid-template-columns: minmax(0, 1fr); gap: 22px; }
+  .cm-hot-posts { padding-left: 0; }
+  .cm-hot-photo { aspect-ratio: auto; height: 240px; }
+}
+/* 모바일 */
+@media (max-width: 720px) {
+  .cm-hot-headline { font-size: 22px; }
+  .cm-hot-article { columns: 1; }
+  .cm-rank { --podium-gap: 10px; --podium-max: 100cqi; } /* 모바일 시상대는 칸을 3등분(상한 없음) */
+  .cm-podium { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .cm-podium li.is-1 .cm-rank-card { width: 106%; }
+  .cm-reco { grid-template-columns: minmax(0, 1fr); }
+  .cm-reco-col, .cm-reco-col:first-child, .cm-reco-col:last-child { padding: 16px 0 6px; }
+  .cm-reco-col + .cm-reco-col { border-left: 0; border-top: 1px solid var(--color-border); }
+}

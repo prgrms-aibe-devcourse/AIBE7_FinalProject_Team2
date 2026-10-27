@@ -71,7 +71,9 @@
       "enabled": true,
       "strategy": "consensus",
       "model": null,
-      "run": null
+      "run": null,
+      "_semanticWeightComment": "BE-55: consensus 전략일 때만 쓴다. 0(기본)이면 기존 동작과 같다 — 0보다 크면 동점 여부와 관계없이 판단 요소 방향 일치율(구조 점수)과 판결 이유(reasoning) 임베딩 유사도를 가중 합산해서 고르므로, 근소한 차이에서도 구조 점수의 우선순위가 달라질 수 있다. 0 ~ 1, 샘플로 비교해 정한다(docs/decisions/BE-55.md)",
+      "semanticWeight": 0
     },
     "axis": {
       "enabled": true,
@@ -81,6 +83,17 @@
       "maxRetries": 2,
       "temperature": null,
       "maxTokens": 4000,
+      "delay": 0
+    },
+    "script": {
+      "enabled": false,
+      "_comment": "사건 대본 증거조사 대사 생성 (BE-107). 기본 꺼짐 — 배역(cast)은 사건마다 정해지지 않았으니 켤 때마다 넣는다(해송님 정정, 2026-10-24). 피고인신문 등 나머지 대사는 범위 밖(ai-judgment-pipeline.md 5장 ⑤-1)",
+      "model": null,
+      "cast": { "prosecutor": "naero", "defense": "nambul" },
+      "maxRetries": 2,
+      "temperature": null,
+      "maxTokens": 2000,
+      "timeout": 60,
       "delay": 0
     },
     "load": {

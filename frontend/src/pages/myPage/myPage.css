@@ -12,6 +12,7 @@
   --color-accent-tint: var(--palette-coffee-50);
 }
 .my-page {
+  min-height: calc(100svh - var(--site-header-h, 64px)); /* "불러오는 중" 때와 다 그려진 뒤의 높이가 같게 — 안 그러면 진입할 때 화면이 한 번에 밀린다(FE-103, CLS 0.42) */
   /* 메인 컬러 = 커피색: 이 화면 안에서만 역할 토큰을 덮어쓴다(다른 화면은 네이비 그대로) */
   --color-bg: var(--palette-coffee-25);
   --color-card: var(--palette-coffee-cream); /* 카드 · 입력칸은 거품처럼 한 단계 밝게 */
@@ -64,8 +65,11 @@ body[data-theme="coffee"] .site-footer { background: var(--palette-coffee-50); b
 
 /* ── 위쪽: 프로필카드 | 닉네임 · 수치 | 성향카드 (좌우 대칭, 같은 크기의 세로로 긴 카드) ── */
 .my-top { display: grid; grid-template-columns: 200px minmax(0, 1fr) 200px; gap: 28px; align-items: start; padding-bottom: 36px; }
-.my-top-middle { align-self: stretch; display: flex; flex-direction: column; justify-content: flex-start; gap: 20px; padding-top: 6px; min-width: 0; }
-.my-nickname { margin: 0; font: 900 var(--text-display)/1.25 var(--font-heading); letter-spacing: -.03em; color: var(--color-heading); text-wrap: balance; }
+.my-top-middle { align-self: stretch; display: flex; flex-direction: column; justify-content: flex-start; gap: 20px; padding-top: 6px; min-width: 0; container-type: inline-size; }
+/* 닉네임은 한 줄: 한글 8자가 가운데 칸 폭에 들어가게 칸 폭에 비례해 줄이고(최대 크기는 그대로), 그래도 넘치면 ... */
+.my-nickname { margin: 0; font: 900 var(--text-display)/1.25 var(--font-heading); font-size: min(var(--text-display), 11.5cqi); letter-spacing: -.03em; color: var(--color-heading); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.my-level-progress { display: grid; gap: 6px; margin-top: 10px; }
+.my-level-caption { margin: 0; color: var(--color-muted); font-size: var(--text-small); font-variant-numeric: tabular-nums; }
 .my-stats { display: grid; gap: 0; margin: 0; padding: 0; border-top: 1px solid var(--color-border-strong); }
 .my-stat { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 9px 2px; border-bottom: 1px solid var(--color-border); }
 .my-stat dt { color: var(--color-muted); font-size: var(--text-small); }
@@ -160,7 +164,7 @@ body[data-theme="coffee"] .site-footer { background: var(--palette-coffee-50); b
 .trend-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .trend-chart { position: relative; margin: 0; padding: 12px 12px 4px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-card); }
 .trend-title { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin: 0 0 8px; font-weight: 700; color: var(--color-heading); }
-.trend-ends { display: grid; justify-items: end; color: var(--color-muted); font-size: 11px; font-weight: 400; line-height: 1.4; }
+.trend-ends { display: grid; justify-items: end; color: var(--color-muted); font-size: 12px; font-weight: 400; line-height: 1.4; }
 .trend-svg { display: block; width: 100%; height: auto; overflow: visible; }
 /* 이 축에 점수가 없는 박스: 축 이름은 두고 위아래 끝 표시만 숨기며(자리는 남김), 그래프 자리(가로 : 세로 = CHART 320 : 160)를 비워 다른 그래프와 같은 크기로 두고, 안내를 박스 정중앙에 둔다 */
 .trend-chart.is-empty .trend-ends { visibility: hidden; }
@@ -169,7 +173,7 @@ body[data-theme="coffee"] .site-footer { background: var(--palette-coffee-50); b
 .trend-zone.is-lenient { fill: color-mix(in srgb, var(--color-label) 7%, transparent); }
 .trend-zone.is-strict { fill: color-mix(in srgb, var(--color-heading) 6%, transparent); }
 .trend-grid-line { stroke: var(--color-border-strong); stroke-opacity: .75; stroke-width: 1; stroke-dasharray: 4 3; } /* 75 · 50 · 75 세 줄만 있는 점선. 100(끝) 선은 두지 않는다 */
-.trend-tick { fill: var(--color-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.trend-tick { fill: var(--color-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .trend-line { fill: none; stroke: var(--color-accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .trend-dot { fill: var(--color-accent); stroke: var(--color-card); stroke-width: 2; }
 .trend-dot.is-test { fill: var(--color-card); stroke: var(--color-accent); stroke-width: 1.5; } /* 속 빈 마름모는 윤곽이 바깥으로 나와, 안쪽을 먹는 최근 마름모와 보이는 크기를 맞춘다(trendGraph.js BASE_R) */
@@ -183,6 +187,7 @@ body[data-theme="coffee"] .site-footer { background: var(--palette-coffee-50); b
 .trend-dot.is-focus { fill: var(--color-label); }
 .trend-table tr.is-focus :is(th, td) { font-weight: 700; }
 .trend-hit { fill: transparent; cursor: default; }
+.trend-hit:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 1px; } /* 키보드로 고른 점(FE-103) */
 .trend-tip {
   position: absolute; z-index: 2; display: grid; gap: 2px; width: max-content; max-width: 220px; padding: 6px 10px; border-radius: 6px;
   background: var(--color-heading); color: var(--color-card); font-size: var(--text-small); line-height: 1.4; pointer-events: none;
@@ -353,6 +358,16 @@ body[data-theme="coffee"] .site-footer { background: var(--palette-coffee-50); b
 .my-deco-state { color: var(--color-muted); font: 400 var(--text-small)/1.4 var(--font-body); white-space: nowrap; }
 .my-deco-state.is-open { color: var(--color-accent); font-weight: 700; }
 .my-deco-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 8px; }
+/* 잠긴 종류는 한 줄로 접는다(FE-100). 줄 전체가 누르는 자리(44px), 펼치면 잠긴 그림 미리 보기 */
+.my-deco-fold { border-top: 1px solid var(--color-border); }
+.my-deco-fold-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 44px; padding: 6px 2px; cursor: pointer; list-style: none; font: 600 var(--text-small)/1.4 var(--font-heading); color: var(--color-text); }
+.my-deco-fold-head::-webkit-details-marker { display: none; }
+.my-deco-fold-head::before { content: '▸'; margin-right: -4px; color: var(--color-muted); transition: rotate .15s ease-out; }
+.my-deco-fold[open] .my-deco-fold-head::before { rotate: 90deg; }
+.my-deco-fold-head > span:first-of-type { flex: 1; }
+.my-deco-fold-head:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+.my-deco-fold > .my-deco-grid { padding: 4px 0 14px; }
+.my-deco-kind.is-locked-head { margin-top: 28px; }
 .my-deco-option { position: relative; display: grid; justify-items: center; gap: 6px; cursor: pointer; }
 .my-deco-option input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; } /* 라디오는 숨기고 그림 · 견본이 선택칸이다. 키보드 방향키 · 포커스는 그대로 */
 .my-deco-option:has(input:focus-visible) :is(.my-deco-thumb, .my-mini-card) { outline: 3px solid var(--color-focus); outline-offset: 2px; }
@@ -428,6 +443,7 @@ body[data-theme="coffee"] .site-footer { background: var(--palette-coffee-50); b
 .my-case p { margin: 0; }
 .my-case-title { font-weight: 700; }
 .my-case-link { color: inherit; text-decoration: none; }
+.my-case-link.is-continue { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; } /* 체험 중인 사건: 제목이 유일한 입구(FE-103) */
 .my-case-link:hover { text-decoration: underline; text-underline-offset: 3px; }
 .my-case-link:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; border-radius: 2px; text-decoration: underline; text-underline-offset: 3px; }
 .my-case-hint { width: 0; min-width: 100%; color: var(--color-muted); font-size: var(--text-small); text-align: center; text-wrap: balance; } /* 체험 중인 사건: 버튼 자리 안내. 폭은 칸에 맞춰(0 + min 100%) 칸 폭을 키우지 않고 가운데에 둔다 */
@@ -447,6 +463,9 @@ body[data-theme="coffee"] .site-footer { background: var(--palette-coffee-50); b
   .my-top-middle { order: -1; grid-column: 1 / -1; padding-top: 0; }
   .my-nickname { font-size: var(--text-title-2); }
   .my-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 16px; }
+  /* 프로필카드 화면의 열린 개수는 값 옆에 목데이터 딱지까지 붙어 두 칸에 넣으면 이름이 한 글자씩 세로로 쪼개졌다 → 한 칸(FE-100) */
+  .my-profile-counts { grid-template-columns: minmax(0, 1fr); }
+  .my-profile-counts .my-stat dt { white-space: nowrap; }
   .my-row { grid-template-columns: minmax(0, 1fr) 104px 14px; gap: 12px; padding: 16px 4px; }
   .my-thumbs img:nth-child(n + 3) { display: none; }
   .my-thumbs img { width: 40px; height: 50px; }
@@ -464,7 +483,8 @@ body[data-theme="coffee"] .site-footer { background: var(--palette-coffee-50); b
   .change-row .change-detail { grid-row: 3; grid-column: 2; justify-self: end; } /* 좁은 화면은 비중을 막대 아래 오른쪽으로 */
   .my-card.is-detail { width: 200px; } /* 모바일 2열 카드처럼 100%로 늘지 않게 */
   .my-type-shift { flex-direction: column; gap: 8px; } /* 세 장은 한 줄에 안 들어가 세로로 쌓고 화살표를 아래로 돌린다 */
-  .my-type-shift .my-card.is-detail, .my-retake-slot { width: 160px; } /* 글자 · 책갈피는 카드 폭에 비례(cqi) */
+  .my-type-shift .my-card.is-detail { width: 160px; } /* 글자 · 책갈피는 카드 폭에 비례(cqi) */
+  .my-retake-slot { width: min(100%, 280px); aspect-ratio: auto; min-height: 112px; padding: 14px 16px; } /* 세로로 쌓이면 카드 비율(7:14)을 따르지 않고 가로로 눕힌다(FE-103, 칸 하나가 화면 한 장 높이였다) */
   .my-type-shift-arrow { width: 20px; height: 20px; margin-bottom: 0; rotate: 90deg; }
   .trend-grid { grid-template-columns: minmax(0, 1fr); }
   .trend-table { overflow-x: auto; } /* 네 축 표는 좁은 화면에서 표만 옆으로 민다 */

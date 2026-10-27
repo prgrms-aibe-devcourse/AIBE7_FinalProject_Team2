@@ -148,10 +148,10 @@ function element(tag, className, text) {
   return node;
 }
 // commonSeed를 주면(사건 사진) 불러오지 못할 때 공용 컷으로 바꾸고, 안 주면(아이콘 · 캐릭터) 그냥 뺀다
-function picture(src, className, alt = '', commonSeed, role) {
+function picture(src, className, alt = '', commonSeed, role, category) {
   const image = element('img', className);
   if (commonSeed === undefined) image.addEventListener('error', () => image.remove(), { once: true });
-  else useCommonPhotoOnError(image, commonSeed, role);
+  else useCommonPhotoOnError(image, commonSeed, role, category);
   image.src = src;
   image.alt = alt;
   return image;
@@ -253,7 +253,7 @@ function evidenceBoard(script, at) {
     // 변호인 측 = 발단사진, 검사 측 = 결론사진(기사 지면 작은 사진과 같은 그림). 사진이 없으면 그 자리의 공용 컷
     const role = side === '변호인' ? 'origin' : 'conclusion';
     const seed = side === '검사' ? 1 : 2;
-    column.append(picture(script.evidencePhotos?.[side] ?? commonPhotoAt(seed, role), 'evd-photo', '', seed, role));
+    column.append(picture(script.evidencePhotos?.[side] ?? commonPhotoAt(seed, role, script.commonCategory), 'evd-photo', '', seed, role, script.commonCategory));
     column.append(element('h4', '', `${side} 측 증거`));
     const list = element('ol', 'evd-list');
     script.evidence.forEach((item, i) => {
@@ -379,7 +379,8 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
   const name = element('div', 'name');
   const text = element('div', 'txt');
   text.setAttribute('aria-hidden', 'true'); // 타이핑 중인 글자는 읽지 않고, 아래 live 영역이 문장 전체를 한 번 읽는다
-  const hint = element('div', 'nxt', window.matchMedia('(hover: none)').matches ? '▶ 탭' : '▶ 클릭 · Space'); // 터치 기기는 Space가 없다
+  const hintBase = window.matchMedia('(hover: none)').matches ? '▶ 탭' : '▶ 클릭 · Space'; // 터치 기기는 Space가 없다
+  const hint = element('div', 'nxt', hintBase);
   hint.setAttribute('aria-hidden', 'true');
   const choiceRow = element('div', 'dlg-choices');
   choiceRow.hidden = true;
@@ -461,10 +462,12 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
     typing = null;
     text.textContent = lineOf(steps[index]);
     choiceRow.hidden = !steps[index].choices; // 선택지는 대사를 다 읽은 뒤에 뜬다
+    // 키보드로 여기까지 온 사람은 선택지로 포커스를 옮겨 준다(FE-97). 예전에는 엔딩이 나와도 포커스가 대사창 밖에 남아 메인으로까지 Tab을 일곱 번 눌러야 했다
+    if (byKeyboard && asks(steps[index])) choiceRow.querySelector('button')?.focus({ preventScroll: true });
   }
   function type(line) {
     clearInterval(typing);
-    if (reducedMotion()) { text.textContent = line; return; }
+    if (reducedMotion()) { finishTyping(); return; } // 한 번에 보여 주되 선택지 · 포커스 이동까지 같은 끝처리를 한다(리뷰 반영 — 안 하면 선택지만 있는 장면이 숨은 채 남는다)
     let shown = 0;
     text.textContent = '';
     typing = setInterval(() => {
@@ -652,7 +655,10 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
     next.textContent = step.next ? `${step.next} ▶` : '다음 ▶';
     next.disabled = input || asks(step) || (index === steps.length - 1 && !step.confirm); // 마지막 장면의 confirm은 화면이 다음 화면으로 보낸다
     skip.hidden = input || asks(step) || skipTarget(steps, index) === index;
+    status.classList.remove('is-blocked');
     status.textContent = input ? (again ? '엽서를 확인하고 "이어서 하기"를 눌러요' : '선택하고 제출하면 다음으로 넘어가요') : '';
+    hint.textContent = `${index + 1} / ${steps.length} · ${hintBase}`; // 이 화면의 몇 번째 장면인지(FE-103: 몇 번 더 넘기면 되는지 알린다). 조작 줄이 아니라 대사창에 둬 모바일 줄 구성은 그대로
+    syncNext();
     if (input) (board.querySelector('[data-autofocus]') ?? board).focus(); // 입력 카드가 정한 첫 포커스(판결 파일철: 지금 장의 탭)
   }
 
@@ -690,7 +696,22 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
   }
   // 버튼의 click은 키보드(Space · Enter)로 눌러도 오지만 detail이 0이다
   prev.addEventListener('click', (event) => { byKeyboard = event.detail === 0; go(-1); });
-  next.addEventListener('click', (event) => { byKeyboard = event.detail === 0; go(1); });
+  // 입력 카드가 stageNext({ label, hint, enabled, run })를 주면 하단 "다음"은 장면을 넘기지 않고 카드를 조작한다(판결 파일철: 다음 장 · 서명)
+  const nextDriver = () => (inputCards.includes(steps[index].card) ? cards[steps[index].card]?.stageNext ?? null : null);
+  function syncNext() {
+    const driver = nextDriver();
+    if (!driver) return;
+    next.textContent = driver.label();
+    next.disabled = driver.enabled ? !driver.enabled() : false;
+    status.textContent = driver.hint();
+    status.classList.toggle('is-blocked', Boolean(driver.blocked?.())); // 막힌 이유는 보통 안내보다 눈에 띄게(FE-103: 막힌 사용자가 이유를 아는 유일한 자리였다)
+  }
+  inputCards.forEach((name) => cards[name]?.addEventListener('stagenextchange', syncNext));
+  next.addEventListener('click', (event) => {
+    byKeyboard = event.detail === 0;
+    const driver = nextDriver();
+    if (driver) driver.run(); else go(1);
+  });
   skip.addEventListener('click', () => { if (busy) return; finishTyping(); index = skipTarget(steps, index); render(); });
   dialog.addEventListener('click', () => { byKeyboard = false; go(1); });
   // 장면 클릭 = 다음. 지면 안의 버튼 · 링크 · 카드(신문 지면 무대의 막 칩 · 메뉴 · 독자 의견 칸)는 제 동작만 한다

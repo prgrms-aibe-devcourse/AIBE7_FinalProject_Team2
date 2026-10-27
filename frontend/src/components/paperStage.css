@@ -30,7 +30,7 @@
 /* 독자 의견 엽서(1막 사전 판단): 지면 위 팝업. 가장자리는 항공우편 줄무늬, 오른쪽 위에 우표 · 소인. 뒤 지면은 어둡게 가린다 */
 .stage-wrap.paper-mode .stage:has(> .board:not([hidden]))::after { content: ''; position: fixed; inset: 0; z-index: 25; background: color-mix(in srgb, var(--color-desk-shadow) 45%, transparent); animation: dlg-in .3s ease-out; }
 .stage-wrap.paper-mode .board, .stage-wrap.paper-mode .board.wide { position: fixed; z-index: 26; left: 50%; top: 46%; right: auto; bottom: auto; translate: -50% -50%; display: block; width: min(700px, calc(100vw - 32px)); height: auto; max-height: calc(100dvh - 150px);
-  padding: 9px; border: 0; border-radius: 12px; overflow: hidden; animation: none; transform: rotate(-.6deg);
+  padding: 9px; border: 0; border-radius: 12px; overflow: hidden; animation: none; rotate: -.6deg; /* transform이 아닌 rotate: 같은 규칙에 translate와 transform이 같이 있으면 빌드(lightningcss 압축)가 translate를 지운다 */
   background: repeating-linear-gradient(-45deg, var(--color-caution) 0 14px, var(--color-card) 14px 22px, var(--color-accent) 22px 36px, var(--color-card) 36px 44px);
   box-shadow: 0 24px 48px -16px color-mix(in srgb, var(--color-desk-shadow) 70%, transparent); }
 .stage-wrap.paper-mode .board[hidden] { display: none; }
@@ -92,7 +92,17 @@
   .stage-wrap.paper-mode .ctrl { flex-wrap: nowrap; bottom: calc(6px + var(--safe-bottom)); padding: 2px 8px; min-height: 44px; }
   .stage-wrap.paper-mode .ctrl :is(.primary-button, .secondary-button) { min-height: 44px; }
   .stage-wrap.paper-mode .ctrl .stage-restart { display: none; }
+  /* 조작 줄(FE-97): "◀ 이전" · "다음 ▶" 화살표가 글자 위로 접혀 줄이 87px로 커지고 대사창 아래 23px를 덮었다. 버튼은 접지 않고, 개발용 "이름표 끄기"(개발)는 모바일에서 뺀다 */
+  .stage-wrap.paper-mode .ctrl :is(.primary-button, .secondary-button) { flex: none; white-space: nowrap; }
+  .stage-wrap.paper-mode .ctrl .stage-skip + .stage-skip { display: none; }
+  /* 상태 문구("선택하고 제출하면 다음으로 넘어가요")가 버튼 사이 좁은 칸에서 네 줄로 접혀 조작 줄이 100px을 넘었다(FE-97). 문구가 있을 때만 위 한 줄로 올린다 */
+  .stage-wrap.paper-mode .ctrl:has(.sp:not(:empty)) { flex-wrap: wrap; border-radius: 22px; row-gap: 0; }
+  .stage-wrap.paper-mode .ctrl .sp:not(:empty) { order: -1; flex: 1 0 100%; padding: 4px 8px 0; font-size: 12px; line-height: 1.4; text-align: center; color: var(--color-muted); }
   .stage-wrap.paper-mode .board .range-options { grid-template-columns: 1fr; grid-template-rows: none; grid-auto-flow: row; }
+  /* 모바일 엽서(FE-97): 가운데 정렬(top 46%)이면 윗변이 두 줄짜리 사이트 헤더(약 113px) 밑으로 들어가고 아랫변이 조작 줄에 겹쳐, 제목 · 수신인이 잘리고 7 ~ 8번 선택지가 제출 칸 뒤에 숨었다.
+     그래서 헤더 바로 아래에서 시작하고 조작 줄 위에서 끝나게 높이를 정한다(안쪽 스크롤은 그대로) */
+  .stage-wrap.paper-mode .board, .stage-wrap.paper-mode .board.wide { --board-top: calc(var(--mobile-header, 114px) + 8px); --board-bottom: calc(98px + var(--safe-bottom)); top: var(--board-top); translate: -50% 0; max-height: calc(100dvh - var(--board-top) - var(--board-bottom)); }
+  .stage-wrap.paper-mode .board > .scroll-area { max-height: calc(100dvh - var(--board-top) - var(--board-bottom) - 18px); }
   .stage-wrap.paper-mode .board .scroll-body { padding: 18px 16px; }
   .stage-wrap.paper-mode .board .postcard-head h2 { font-size: 18px; }
   .stage-wrap.paper-mode .board .postcard-stamp { width: 50px; height: 60px; font-size: 11px; }
@@ -117,13 +127,15 @@
   .case-paper-page .ear-button small { display: none; }
 }
 
-/* 체험 시작 전(S-20): 지면만 보이고 캐릭터 · 대사창 · 조작 줄은 숨는다. 우하단 "시작하기"로 시작 */
+/* 체험 시작 전(S-20): 지면만 보이고 캐릭터 · 대사창 · 조작 줄은 숨는다. 지면 우하단 "시작하기"로 시작 */
 .stage-wrap.paper-mode.parked :is(.spr, .dlg, .ctrl) { display: none; }
-.case-paper-page:has(.paper-start) { padding-bottom: calc(120px + var(--safe-bottom)); }
-.case-paper-page .paper-start { position: fixed; z-index: 20; right: calc(28px + env(safe-area-inset-right, 0px)); bottom: calc(24px + var(--safe-bottom)); display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.case-paper-page:has(.paper-start) { padding-bottom: calc(40px + var(--safe-bottom)); } /* 체험 전에는 대사창 자리가 없다: 지면 아래로는 40px까지만 스크롤된다 */
+.case-paper-page .paper:has(> .paper-start) { padding-bottom: 20px; } /* 시작하기 버튼의 하한: 지면 맨 아래에서 20px 위(margin은 지면 밖으로 새므로 padding) */
+.case-paper-page .paper-start { position: sticky; z-index: 20; bottom: calc(24px + var(--safe-bottom)); display: flex; flex-direction: column; align-items: flex-end; gap: 8px; width: fit-content; margin: 0 28px 0 auto; } /* 지면 안에서 화면 아래에 붙어 따라온다(책상 위로 나가지 않아 색이 겹치지 않는다) */
 .case-paper-page .paper-start .primary-button { min-height: 56px; padding: 0 28px; border-radius: 999px; font-size: 17px; box-shadow: 0 10px 24px -8px color-mix(in srgb, var(--color-desk-shadow) 70%, transparent); }
 .case-paper-page .paper-start-notice { max-width: 280px; margin: 0; padding: 6px 12px; border-radius: 8px; background: var(--color-card); color: var(--color-caution); font-size: var(--text-small); }
 .case-paper-page .paper-start-notice:empty { display: none; }
+@media (max-width: 680px) { .case-paper-page .paper-start { margin-right: 12px; } }
 /* 준비 중(FE-56, 대본 없는 사건): 누를 수 없는 회색 알약. 안내 문구는 주의색 대신 차분한 글자색 */
 .case-paper-page .paper-start .primary-button[aria-disabled="true"] { background: var(--color-surface-strong); border-color: var(--color-border-strong); color: var(--color-muted); box-shadow: none; cursor: default; }
 .case-paper-page .paper-start:has([aria-disabled="true"]) .paper-start-notice { color: var(--color-text); }
@@ -132,9 +144,6 @@
 .stage-wrap.paper-mode.entering .stage[data-scene] .spr.b { animation-delay: .12s; }
 .stage-wrap.paper-mode.entering :is(.dlg, .ctrl) { animation: dlg-in .3s ease-out .35s backwards; }
 @keyframes paper-enter { from { opacity: 0; transform: translateY(60%); } }
-@media (max-width: 680px) {
-  .case-paper-page .paper-start { right: calc(12px + env(safe-area-inset-right, 0px)); bottom: calc(14px + var(--safe-bottom)); }
-}
 /* 움직임 줄이기: 움직임(뛰어 들어옴 · 날아옴 · 내미는 팔)은 없애고, 나타났다는 단서(0.2초 투명도 페이드)는 남긴다 */
 @keyframes paper-fade { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {

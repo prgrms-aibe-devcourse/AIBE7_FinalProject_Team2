@@ -105,7 +105,7 @@ python3 extract_case.py raw.pdf --name my-case --model gemini:<모델ID> --model
 `report.json`에는 다음이 들어간다.
 
 - `status`: `NEEDS_REVIEW`(오류 없음, 검수 필요) 또는 `ERROR`
-- `eligibility`: 서비스 대상 판결인지 모델이 판정한 값(`eligible`, 어긋난 조건 `reasons`). 기준은 `docs/cases/README.md` 1장 선정 조건(최종 확정 · 살인/사기/상해 단일 범행 · 형 선고 · 양형기준 적용과 근거 · 자백). false면 경고를 내고, 파이프라인은 기본으로 멈춘다
+- `eligibility`: 서비스 대상 판결인지 모델이 판정한 값(`eligible`, 어긋난 조건 `reasons`). 기준은 `docs/cases/README.md` 1장 선정 조건(미확정 사정 없음 · 대상 죄종 단일 범행 · 성범죄 아님 · 형 선고 · 양형기준 적용과 근거, BE-111). 확정 여부는 판결문만으로 판단하지 않고 팀이 상급심 기록으로 따로 확인한다. false면 경고를 내고, 파이프라인은 기본으로 멈춘다
 - `premasked`: 로컬에서 미리 가린 항목과 개수
 - `deidentifiedItems`: 모델이 비식별화한 항목 종류 (`legal_case.deidentified_items` 후보)
 - `factorExtras`: 판단 요소별 `preLabel` · `summaryTag` · `valueAxis` (`case.json` 형식에는 없지만 `factor` 시드에 필요). `valueAxis`는 사용자 성향 매칭용 가치관 축 4개 중 하나이거나, 어느 축에도 맞지 않으면 null이다(extract-v5, BE-47). 모델이 고른 축이 `summaryTag`와 어긋나 보이거나 null이면 `warnings`에 남기고, 최종 값은 관리자가 바꿀 수 있다. 파이프라인에서 요약어 후보(`stages.extract.summaryTags`)를 켜면 요소마다 `summaryTagCandidates`(비슷한 기존 요약어 · 점수)가 더해진다(BE-53, [도구 README](../README.md) "요약어 후보")

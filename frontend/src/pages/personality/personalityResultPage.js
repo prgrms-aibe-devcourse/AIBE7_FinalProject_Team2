@@ -50,6 +50,19 @@ export async function renderPersonalityResultPage(container, { api, navigate }) 
       if (event.animationName === 'folder-content-in') root.classList.remove('is-turning'); // 마지막 연출(글자 나타남)이 끝나면
     });
   }
+  // 결과 공개(FE-95): 검사지를 막 제출했을 때만 유형 이름을 도장처럼 찍고 4축을 그린다(personality.css name-stamp · axis-draw).
+  // 결과 주소로 바로 오거나 탭을 오갈 때는 하지 않는다. 다 끝나면 클래스를 떼어, 탭을 넘겼다 돌아와도(display: none → 보임) 다시 돌지 않게 한다
+  const revealing = Boolean(turnFrom);
+  const startedAt = performance.now();
+  if (revealing) {
+    root.classList.add('is-revealing');
+    const REVEAL = /^(name-stamp|reveal-up|axis-draw)$/;
+    root.addEventListener('animationend', (event) => {
+      if (!REVEAL.test(event.animationName)) return;
+      const pending = root.getAnimations({ subtree: true }).some((item) => REVEAL.test(item.animationName ?? '') && item.playState !== 'finished');
+      if (!pending) root.classList.remove('is-revealing');
+    });
+  }
   const active = () => container.contains(root);
 
   async function load() {
@@ -70,6 +83,11 @@ export async function renderPersonalityResultPage(container, { api, navigate }) 
   }
 
   function draw({ type, axisScores }) {
+    // 결과를 불러오는 동안 철은 이미 돌고 있다. 철이 다 선 뒤(1.05s)에 시작하도록 지난 시간만큼 뺀다. 철을 돌리지 않으면(모바일 · 바로 옴) 곧바로
+    if (revealing) {
+      const standAt = root.classList.contains('is-turning') ? 1.05 : 0.15;
+      root.style.setProperty('--reveal-at', `${Math.max(0.15, standAt - (performance.now() - startedAt) / 1000).toFixed(2)}s`);
+    }
     const card = typeCard(type);
 
     const graph = element('section', 'result-section');
@@ -99,7 +117,10 @@ export async function renderPersonalityResultPage(container, { api, navigate }) 
     const pages = resultPages(tabs, body, [
       { label: '결과', nodes: [card, graph, tolerance, turnPage('풀이 보기', () => flipTo(1))] },
       { label: '풀이', nodes: [typeCard(type, { other: true }), ...descriptionSections(type), noticeBlock(), actions, shareNote, turnPage('결과 보기', () => flipTo(0), { prev: true })] },
-    ]);
+    ], {
+      // 공개 연출 중에 장을 넘기면 연출을 끝낸다: 숨겨진 장의 연출은 멈추고, 풀이 장이 같은 연출(.is-revealing)을 새로 받지 않게(리뷰 반영)
+      onSwitch: () => root.classList.remove('is-revealing'),
+    });
   }
 
   await load();

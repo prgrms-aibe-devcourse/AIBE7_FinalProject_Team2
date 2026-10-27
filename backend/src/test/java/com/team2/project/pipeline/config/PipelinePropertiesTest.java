@@ -48,6 +48,6 @@ class PipelinePropertiesTest extends ApiIntegrationTest {
 	}
 
 	private static PipelineProperties blank(java.util.List<String> models) {
-		return new PipelineProperties("http://pipeline:8000", models, null, java.time.Duration.ofSeconds(30));
+		return new PipelineProperties("http://pipeline:8000", models, null, java.time.Duration.ofSeconds(30), null, null, null);
 	}
 }

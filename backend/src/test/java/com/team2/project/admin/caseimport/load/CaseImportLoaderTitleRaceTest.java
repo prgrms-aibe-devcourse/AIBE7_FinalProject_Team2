@@ -13,6 +13,7 @@ import com.team2.project.judgment.repository.JudgmentFactorRepository;
 import com.team2.project.judgment.repository.JudgmentRepository;
 import com.team2.project.legalcase.domain.CrimeType;
 import com.team2.project.legalcase.repository.CaseSectionRepository;
+import com.team2.project.legalcase.repository.CaseScriptRepository;
 import com.team2.project.legalcase.repository.CaseSourceRepository;
 import com.team2.project.legalcase.repository.FactorRepository;
 import com.team2.project.legalcase.repository.LegalCaseRepository;
@@ -44,6 +45,7 @@ class CaseImportLoaderTitleRaceTest {
 
 		CaseImportLoader loader = new CaseImportLoader(caseRepository, mock(CaseSectionRepository.class),
 			mock(PenaltyRuleRepository.class), mock(FactorRepository.class), mock(CaseSourceRepository.class),
+			mock(CaseScriptRepository.class),
 			mock(JudgmentRepository.class), mock(JudgmentFactorRepository.class), mock(AiGenerationRepository.class),
 			mock(SentencingGuidelineRepository.class), new CaseContentMapper(), new JudgmentMapper());
 
@@ -62,6 +64,7 @@ class CaseImportLoaderTitleRaceTest {
 
 		CaseImportLoader loader = new CaseImportLoader(caseRepository, mock(CaseSectionRepository.class),
 			mock(PenaltyRuleRepository.class), mock(FactorRepository.class), mock(CaseSourceRepository.class),
+			mock(CaseScriptRepository.class),
 			mock(JudgmentRepository.class), mock(JudgmentFactorRepository.class), mock(AiGenerationRepository.class),
 			mock(SentencingGuidelineRepository.class), new CaseContentMapper(), new JudgmentMapper());
 
@@ -96,6 +99,6 @@ class CaseImportLoaderTitleRaceTest {
 			mapper.readTree("""
 				{"penaltyType": "PRISON", "prisonMonths": 168, "summary": "요약", "reasoning": "이유",
 				 "factors": []}"""),
-			new PipelineResult.Selection("gemini:test", 1, "consensus", "합의", List.of()), null);
+			new PipelineResult.Selection("gemini:test", 1, "consensus", "합의", List.of()), null, null);
 	}
 }

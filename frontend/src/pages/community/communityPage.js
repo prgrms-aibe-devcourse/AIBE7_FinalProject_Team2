@@ -1,9 +1,9 @@
 import { button, element } from '../../components/siteLayout.js';
 import {
-  NOT_READY, SORT_LABELS, communityShell, composer, filterControls, icon, likeButton, loginHint, popularList, postImages, postLink, postMeta, verdictCard,
+  NOT_READY, SORT_LABELS, communityShell, composer, filterControls, icon, likeButton, loginHint, popularList, postImages, postLink, postMeta, foldedVerdict, verdictCard,
 } from './communityParts.js';
 
-// S-18 커뮤니티 목록 (FE-47). 메인 책상의 노트북에서 들어온다(utils/laptopBoot.js).
+// S-18 커뮤니티 글 목록 (FE-47). /community/posts — 커뮤니티 메인(communityHomePage.js, FE-89)의 "모든 글 보기" · 거르기에서 들어온다.
 // 가운데 한 줄 타임라인(정렬 · 글 · 더 보기), 왼쪽 말머리 · 사건 거르기, 오른쪽 늘 열려 있는 글쓰기 칸.
 // 거르기 값은 기록 항목에 넣어 두어(history.state) 상세에서 뒤로 오면 같은 목록이 보인다. 바꿀 때는 화면을 다시 그리지 않아 쓰던 글이 남는다
 const DEFAULT_FILTERS = { category: null, caseId: null, sort: 'LATEST' };
@@ -79,7 +79,7 @@ export function renderCommunityPage(container, { api, navigate, category = null,
     if (!caseList) {
       caseList = data.cases;
       filterHost.append(filterControls({ value: filters, cases: caseList, onChange: onFilter }));
-      side.append(composer({ api, navigate, cases: data.cases, closeButton, closeCompose, onPosted: (post) => { closeCompose(); navigate('community', { justPosted: post.postId }); } }),
+      side.append(composer({ api, navigate, cases: data.cases, closeButton, closeCompose, onPosted: (post) => { closeCompose(); navigate('communityPosts', { justPosted: post.postId }); } }),
         popularList(data.popular, navigate));
     }
     count.textContent = `글 ${data.total}개`;
@@ -107,7 +107,7 @@ export function renderCommunityPage(container, { api, navigate, category = null,
     const usedSelect = value.caseId !== filters.caseId;
     change({ ...filters, ...value });
     filterHost.querySelector('.cm-filter-groups')?.replaceWith(filterControls({ value: filters, cases: caseList ?? [], onChange: onFilter }));
-    if (refocus) filterHost.querySelector(usedSelect ? '.cm-select' : '.cm-filter[aria-pressed="true"]')?.focus({ preventScroll: true });
+    if (refocus) filterHost.querySelector(usedSelect ? '.cm-case-clear, .cm-case-search' : '.cm-filter[aria-pressed="true"]')?.focus({ preventScroll: true });
   }
 
   function postItem(post) {
@@ -120,7 +120,7 @@ export function renderCommunityPage(container, { api, navigate, category = null,
     title.append(link);
     item.append(postMeta(post), title, element('p', 'cm-excerpt', post.body.replace(/\s*\n+\s*/g, ' '))); // 목록에서는 문단을 한 줄로 이어 세 줄까지 보인다
     if (post.images.length) item.append(postImages(post.images));
-    if (post.verdict) item.append(verdictCard(post.verdict, post.caseTitle));
+    if (post.verdict) item.append(foldedVerdict(post, () => verdictCard(post.verdict, post.caseTitle, '글쓴이 판결')));
     const actions = element('div', 'cm-actions');
     const comments = postLink('', post.postId, navigate, 'cm-action');
     comments.append(icon('comment'), element('span', '', '댓글'), element('span', 'cm-count', String(post.commentCount)));

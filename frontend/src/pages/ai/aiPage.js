@@ -115,7 +115,8 @@ export async function renderAiPage(container, { caseId, caseHeader, api, navigat
     if (judgment.suspensionMonths) order.push(`다만 이 판결 확정일부터 ${formatMonths(judgment.suspensionMonths)}간 위 형의 집행을 유예한다.`);
     paper.append(element('p', 'vp-kind', 'AI 판결'), element('h3', 'vp-title', '판결'),
       element('p', 'vp-case', `사건  ${caseHeader.title}`),
-      element('h4', '', '주문'), ...order.map((line) => element('p', 'vp-order', line)),
+      // 형량을 5막 판결문(.cp-penalty)처럼 크게 한 줄로 먼저 보이고, 주문 문장은 그 아래에(FE-97: AI 선고가 작은 글씨라 5막보다 가볍게 보였다)
+      element('h4', '', '주문'), element('p', 'vp-penalty', formatPenalty(judgment)), ...order.map((line) => element('p', 'vp-order', line)),
       element('h4', '', '이유'), element('p', '', judgment.reasoning));
     if (references.length) paper.append(element('p', 'vp-refs', `참고한 자료 · ${references.join(', ')}`));
     const sign = element('p', 'vp-sign');
@@ -155,7 +156,7 @@ export async function renderAiPage(container, { caseId, caseHeader, api, navigat
       },
     });
     const main = element('div', 'review-main');
-    main.append(element('h1', 'page-heading visually-hidden', 'AI 판결'), stage, revealError);
+    main.append(element('h1', 'page-heading visually-hidden', 'AI 판결'), element('h2', 'visually-hidden', 'AI 판결 진행 화면'), stage, revealError); // h1 → h3 단계 건너뜀 방지(FE-97)
     const layout = element('main', 'review-layout');
     layout.append(main);
     root.replaceChildren(header, layout);

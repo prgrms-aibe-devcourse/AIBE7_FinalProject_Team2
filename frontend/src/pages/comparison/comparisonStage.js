@@ -3,7 +3,7 @@
 // 지면은 화면보다 크고, 장면마다 카메라가 기사 하나(대본 focus)로 옮겨 간다. 5막 법정이 1면 사진 속으로 빠져나오며 시작한다(대본 from: "photo").
 // FE-32: 무대 상자 없이 화면 전체가 카메라 틀이다(mountNewspaperStage — 넓은 화면은 무대가 화면을 가득 채우고, 좁은 화면은 지면 안 무대)
 // 세 판결은 같은 크기 · 같은 무게로 싣고 어느 쪽이 맞았는지 말하지 않는다(PRODUCT.md 원칙 1).
-// 마지막 장면에서 다음 행동을 고른다: 다른 사건 보기 · 여기 남아있기(지면 읽기 → 메인으로) · 메인으로 · 공유하기.
+// 마지막 장면에서 다음 행동을 고른다: 메인으로 · 여기 남아있기(지면 읽기 → 다른 사건 보기 · 메인으로) · 엽서 쓰기 · 공유하기. "다른 사건 보기"는 읽기 모드의 신문 귀로만 나온다(FE-98 확인).
 // S-07(5막)에서 비교를 공개한 뒤 무대를 이어 받고(주소만 S-08로), 재진입(S-08 주소)에서도 같은 무대를 연다
 import { formatPenalty, formatDispositions } from '../../utils/judgmentFormat.js';
 import { formatMonths } from '../../components/recommendedRangeBar.js';
@@ -196,7 +196,7 @@ export function letterStory(data, openReview) {
     element('p', 'sheet-letter-a', preToFinal.preJudgment.label),
     element('p', 'sheet-letter-by', '— 기사만 읽고 보낸 첫인상 엽서'), element('div', 'sheet-letter-lines'), letterMark);
   letter.append(element('p', 'sheet-letter-hint', '엽서를 눌러 이 사건에 독자 엽서 쓰기 ✎'));
-  const note = editorNote(data.preToCourt?.direction);
+  const note = editorNote(data.preToFinal?.direction);
   if (note) {
     const edit = element('p', 'sheet-letter-edit');
     edit.append(element('b', '', '편집부 의견'), note);
@@ -247,7 +247,7 @@ export function advertisements() {
   };
   ads.append(
     ad('is-lead', '광고', '판결 성향 테스트', '나는 엄하게 보는 편일까, 사정을 살피는 편일까? 3분이면 끝나는 판결 성향 테스트.'),
-    ad('', '알림', '오늘의 지면', '다른 사건도 판결을 기다리고 있어요. 신문을 펼쳐 다음 사건을 골라 보세요.'),
+    ad('is-today', '알림', '오늘의 지면', '다른 사건도 판결을 기다리고 있어요. 신문을 펼쳐 다음 사건을 골라 보세요.'),
     ad('is-notice', '첫인상 엽서 모집', '첫인상을 보내 주세요', '기사만 읽고 보낸 엽서는 다음 날 독자 의견란에 실립니다.'),
     element('p', 'sheet-ads-note', '이 지면의 사건과 기사는 판결 체험을 위해 재구성한 것이며, 사진은 AI로 생성한 연출 이미지입니다.'),
   );
@@ -289,7 +289,7 @@ export function renderComparisonStage({ script, data, caseId, caseTitle, navigat
     'AI 판결과 형량이 같아요! 그래도 이유까지 같은지는 따로 봐야 해요.', (head) => `${head} 다른 자리에서 보면 다르게 보이기도 해요!`);
   const act = script.acts['6'];
   const pre = data.preToFinal.preJudgment.label;
-  const editor = editorNote(data.preToCourt?.direction); // 편집부 의견을 못 만들면(direction이 없거나 모르는 값) 그 대사는 건너뛴다
+  const editor = editorNote(data.preToFinal?.direction); // 편집부 의견을 못 만들면(direction이 없거나 모르는 값) 그 대사는 건너뛴다
   const steps = act.steps.filter((step) => editor || !step.text?.includes('{editor}'))
     .map((step) => (step.text ? { ...step, text: step.text.replace('{vsCourt}', vsCourt).replace('{vsAi}', vsAi).replace('{pre}', pre).replace('{editor}', editor ?? '') } : step));
   const narrow = window.matchMedia('(max-width: 680px)').matches;
@@ -300,7 +300,7 @@ export function renderComparisonStage({ script, data, caseId, caseTitle, navigat
     sheet,
     fromRect,
     cameraFill: true, // 책상 없이 신문만 화면 가득(1막 지면처럼)
-    cameraMinScale: narrow ? 1.3 : 0, // 좁은 화면도 기사 일부를 크게(왼쪽 위부터)
+    cameraMinScale: 0, // 좁은 화면도 기사가 폭에 맞게 들어오게(FE-97: 예전에는 1.3배로 키워 기사 오른쪽이 화면 밖으로 잘렸다). 글자 크기는 stage.css 좁은 화면 --u로 키운다
     cameraMaxUnit: narrow ? 0 : 9.5, // 큰 화면: 본문 약 15px · 제목 약 26px 이상으로 키우지 않는다
     choices: { end: [
       { label: '메인으로', action: () => toDesk(), primary: true }, // 판사의 책상(데스크톱 메인)
@@ -423,7 +423,8 @@ export function mountStage(root, { caseHeader, badge, heading, stage, extra = []
   const header = element('header', 'case-topbar');
   header.append(element('strong', 'case-title', caseHeader.title), element('span', 'case-badge', badge));
   const main = element('div', 'review-main');
-  main.append(element('h1', 'page-heading visually-hidden', heading), stage, ...extra);
+  // 무대 안 상자 제목(h3)이 h1 바로 밑에서 단계를 건너뛰지 않게 보이지 않는 h2를 끼운다(FE-97)
+  main.append(element('h1', 'page-heading visually-hidden', heading), element('h2', 'visually-hidden', `${heading} 진행 화면`), stage, ...extra);
   const layout = element('main', 'review-layout');
   layout.append(main);
   root.replaceChildren(header, layout);

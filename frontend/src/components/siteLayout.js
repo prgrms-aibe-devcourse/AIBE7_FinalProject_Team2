@@ -42,8 +42,44 @@ export function renderSiteHeader({ navigate }) {
     ...(import.meta.env?.DEV ? [modeSwitch()] : []),
   );
   // 로그인 자리는 메뉴 밖 맨 오른쪽. 좁은 화면에서는 로고와 같은 줄에 남고 메뉴가 아랫줄로 내려간다(style.css)
-  header.append(logo, nav, account(navigate, here));
+  const login = account(navigate, here);
+  header.append(skipLink(), logo, nav, login);
+  keepTabOrderWithLayout(nav, login);
   return header;
+}
+
+// Tab 순서 = 시각 순서(FE-103): 좁은 화면에서는 로그인이 윗줄(로고 옆)이라 메뉴보다 앞에 두고, 넓은 화면에서는 맨 오른쪽이라 메뉴 뒤에 둔다.
+// CSS order만으로는 Tab 순서가 DOM을 따라가므로 breakpoint(style.css 720px)를 넘나들 때 DOM 자리를 옮긴다.
+// 헤더는 화면마다 새로 그리므로 폭 변화 감지는 한 번만 걸고 지금 보이는 헤더만 옮긴다(헤더마다 걸면 옛 헤더를 붙잡은 리스너가 쌓인다, #301 리뷰)
+let narrow = null;
+let current = null;
+const placeLogin = () => {
+  if (!current?.nav.isConnected) return; // 떨어진 옛 헤더는 옮기지 않는다(#302 리뷰)
+  if (narrow.matches) current.nav.before(current.login);
+  else current.nav.after(current.login);
+};
+function keepTabOrderWithLayout(nav, login) {
+  current = { nav, login };
+  if (!narrow) { // 모듈을 불러올 때가 아니라 처음 그릴 때 만든다(matchMedia가 없는 테스트 환경에서도 안전)
+    narrow = window.matchMedia('(max-width: 720px)');
+    narrow.addEventListener('change', placeLogin);
+  }
+  placeLogin();
+}
+
+// 본문으로 건너뛰기(FE-99): Tab 첫 자리. 주소 해시는 건드리지 않고(라우터가 주소를 쓴다) 본문 영역(없으면 화면 영역)으로 포커스만 옮긴다
+function skipLink() {
+  const link = element('a', 'skip-link', '본문으로 건너뛰기');
+  link.href = '#route-view';
+  link.addEventListener('click', (event) => {
+    event.preventDefault();
+    const view = document.getElementById('route-view');
+    const target = view?.querySelector('main') ?? view;
+    if (!target) return;
+    target.tabIndex = -1;
+    target.focus();
+  });
+  return link;
 }
 
 // 로그인 자리: 닉네임이 길면 줄여 보이고(…), 낭독기에는 전체 닉네임과 갈 곳을 읽는다

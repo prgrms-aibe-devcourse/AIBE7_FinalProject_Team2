@@ -1,8 +1,9 @@
 import { button, element } from '../../components/siteLayout.js';
 import { canGoBackInApp } from '../../app/router.js';
 import { currentUser } from '../../utils/session.js';
+import { signatureSvg } from '../../components/signatureInk.js';
 import {
-  NOT_READY, authorButton, communityShell, composer, filterControls, formatDate, likeButton, loginHint, popularList, nameCard, postImages, postMeta, textField, verdictWithType,
+  NOT_READY, authorButton, communityShell, composer, filterControls, foldedVerdict, formatDate, likeButton, loginHint, popularList, nameCard, postImages, postMeta, textField, verdictWithType,
 } from './communityParts.js';
 
 // S-18 커뮤니티 글 상세 (FE-47, /community/posts/:postId). 목록과 같은 노트북 화면 틀에 글 전체 · 좋아요 · 댓글을 둔다.
@@ -20,7 +21,7 @@ export function renderCommunityPostPage(container, { api, navigate, postId }) {
     return undefined;
   }
 
-  const back = button('← 목록으로', () => (canGoBackInApp() ? history.back() : navigate('community')), 'cm-back');
+  const back = button('← 목록으로', () => (canGoBackInApp() ? history.back() : navigate('communityPosts')), 'cm-back');
   const toolbar = element('div', 'cm-toolbar');
   toolbar.append(back, openButton);
   const body = element('div', 'cm-detail');
@@ -32,8 +33,8 @@ export function renderCommunityPostPage(container, { api, navigate, postId }) {
   // 거르기 · 글쓰기 칸 · 많이 본 글은 목록 응답으로 채운다(글 상세와 따로 불러 글이 먼저 보이게 한다)
   api.getCommunityPosts?.().then((data) => {
     if (!active()) return;
-    filterHost.append(filterControls({ value: { category: undefined, caseId: null }, cases: data.cases, onChange: ({ category, caseId }) => navigate('community', { category: category ?? null, filterCaseId: caseId }) }));
-    side.append(composer({ api, navigate, cases: data.cases, closeButton, closeCompose, onPosted: (post) => { closeCompose(); navigate('community', { justPosted: post.postId }); } }),
+    filterHost.append(filterControls({ value: { category: undefined, caseId: null }, cases: data.cases, onChange: ({ category, caseId }) => navigate('communityPosts', { category: category ?? null, filterCaseId: caseId }) }));
+    side.append(composer({ api, navigate, cases: data.cases, closeButton, closeCompose, onPosted: (post) => { closeCompose(); navigate('communityPosts', { justPosted: post.postId }); } }),
       popularList(data.popular, navigate));
   }).catch(() => {});
 
@@ -45,7 +46,7 @@ export function renderCommunityPostPage(container, { api, navigate, postId }) {
       if (!active()) return;
       const box = element('div', 'cm-empty');
       box.append(element('p', '', error?.code === 'POST_NOT_FOUND' ? '글을 찾을 수 없어요. 지워졌거나 주소가 잘못됐어요.' : '글을 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요.'),
-        button('목록으로', () => navigate('community'), 'secondary-button'));
+        button('목록으로', () => navigate('communityPosts'), 'secondary-button'));
       body.replaceChildren(box);
       return;
     }
@@ -61,9 +62,13 @@ export function renderCommunityPostPage(container, { api, navigate, postId }) {
     const title = element('h1', 'cm-article-title', post.title);
     title.id = 'cm-article-title';
     title.tabIndex = -1;
-    node.append(postMeta(post, { full: true }), title, element('div', 'cm-article-body', post.body));
+    // 글쓴이 서명(FE-94): 본문 끝에 닉네임으로 만든 서명을 둔다(장식, 낭독은 "○○의 서명")
+    const signoff = element('div', 'cm-signoff');
+    const writer = post.author?.nickname; // 탈퇴한 회원 등으로 닉네임이 비어 오면 서명을 그리지 않는다("undefined의 서명"으로 읽히지 않게)
+    if (writer) signoff.append(signatureSvg(writer, { label: `${writer}의 서명` }));
+    node.append(postMeta(post, { full: true }), title, element('div', 'cm-article-body', post.body), signoff);
     if (post.images.length) node.append(postImages(post.images, { full: true }));
-    if (post.verdict) node.append(verdictWithType(post.verdict, post.caseTitle, post.author));
+    if (post.verdict) node.append(foldedVerdict(post, () => verdictWithType(post.verdict, post.caseTitle, post.author)));
     const actions = element('div', 'cm-actions');
     actions.append(likeButton(post, { api, onLoginNeeded: () => loginHint(node, navigate, '로그인하면 좋아요를 누를 수 있어요.') }));
     node.append(actions, nameCard(post.author));

@@ -71,7 +71,7 @@ class AdminCaseImportServiceTest {
 
 	private AdminCaseImportService newService() {
 		return new AdminCaseImportService(importRepository, caseSourceRepository, pipelineClient,
-			new PipelineProperties("http://pipeline:8000", List.of("gemini:test"), null, Duration.ofSeconds(30)),
+			new PipelineProperties("http://pipeline:8000", List.of("gemini:test"), null, Duration.ofSeconds(30), null, null, null),
 			auditLogger, mock(com.team2.project.admin.caseimport.load.CaseImportLoader.class),
 			new NoOpTransactionManager());
 	}

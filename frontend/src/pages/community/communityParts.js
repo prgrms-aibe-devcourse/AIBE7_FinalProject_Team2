@@ -1,6 +1,7 @@
 import { button, element, mockTag } from '../../components/siteLayout.js';
 import { formatDispositions, formatPenalty } from '../../utils/judgmentFormat.js';
 import { currentUser } from '../../utils/session.js';
+import { eraseSignature, signatureSvg, signerSeed, writeSignature } from '../../components/signatureInk.js';
 import { profileFace, typeFace } from '../../components/personCards.js';
 import { normalizeDeco } from '../../utils/profileDeco.js';
 import { normalizeTypeDeco } from '../../utils/typeCardDeco.js';
@@ -57,7 +58,32 @@ const typeImage = (author) => author.shownType?.type.imageUrl ?? null;
 const SLOT_NAMES = { initial: '초심', retake: '재심', current: '최근' };
 const typeNameOf = (author) => author.shownType?.type.name ?? null;
 
-function clip() {
+// 커뮤니티 이름 · 로고(임시). 이름은 확정 전이라 한 곳에서만 쓴다. 로고는 책상 위 스탠드 + 달(DESIGN.md 책상 물건 은유)이고, 최종 이미지 로고가 나오면 logoMark만 바꾼다
+export const COMMUNITY_NAME = '판사들의 밤';
+export const logoMark = () => svgIcon('0 0 40 40', 'cm-logo', [
+  ['M31 4.5a6.5 6.5 0 1 0 4.5 11A8 8 0 0 1 31 4.5Z', 'cm-logo-moon'],
+  ['M13 17 6 33h20l-4-12', 'cm-logo-light'],
+  ['M9 17a9 9 0 0 1 18 0Z', 'cm-logo-lamp'],
+  ['M18 17v12M12 33.5h12M8 36.5h20', 'cm-logo-line'],
+]);
+
+// 장식 SVG: paths는 [[path 값, 클래스], ...]. 읽지 않는다(aria-hidden). 값이 정해진 상수만 넣는다
+export function svgIcon(viewBox, className, paths) {
+  const node = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  node.setAttribute('viewBox', viewBox);
+  node.setAttribute('aria-hidden', 'true');
+  node.setAttribute('focusable', 'false');
+  if (className) node.classList.add(className);
+  node.append(...paths.map(([d, pathClass]) => {
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    line.setAttribute('d', d);
+    if (pathClass) line.classList.add(pathClass);
+    return line;
+  }));
+  return node;
+}
+
+export function clip() {
   const node = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   node.setAttribute('viewBox', '0 0 22 52');
   node.setAttribute('aria-hidden', 'true');
@@ -68,10 +94,20 @@ function clip() {
   return node;
 }
 
+// 글쓴이의 프로필카드(FE-116): 카드 아래 줄은 글쓴이가 고른 것(성향 · 서명 · 직업)이고, 레벨은 켰을 때만 윗줄에 붙는다
+export function authorFace(author) {
+  const { line = 'type', showLevel = false } = author.cardLine ?? {};
+  const extra = { level: showLevel && author.level != null ? `Lv.${author.level}` : null };
+  const deco = normalizeDeco(author.profileCard);
+  if (line === 'signature') return profileFace(deco, author.nickname, null, { ...extra, signer: author.nickname });
+  if (line === 'job' && author.job?.name) return profileFace(deco, author.nickname, author.job.name, extra);
+  return profileFace(deco, author.nickname, typeNameOf(author), extra);
+}
+
 // 프로필카드 · 성향카드 한 쌍(누를 수 없음). 크기는 부모(.cm-namecard · .cm-pop)가 정한다
 function cardPair(author) {
   const box = element('div', 'cm-cards cm-card-pair');
-  box.append(profileFace(normalizeDeco(author.profileCard), author.nickname, typeNameOf(author)));
+  box.append(authorFace(author));
   box.append(author.shownType
     ? typeFace(author.shownType.type, undefined, normalizeTypeDeco(author.shownType.deco))
     : typeFace(null, '"아직 성향 테스트를 안 했어요"'));
@@ -150,7 +186,7 @@ function openPop(author, from) {
 function authorInfo(author) {
   const box = element('div', 'cm-author-info');
   const stats = element('dl', 'cm-author-stats');
-  [['레벨', `Lv.${author.level}`], ['직업', author.job], ['체험한 사건', `${author.completedCount}건`]].forEach(([label, value]) => {
+  [['레벨', `Lv.${author.level}`], ['직업', author.job?.name ?? '무직'], ['체험한 사건', `${author.completedCount}건`]].forEach(([label, value]) => {
     const row = element('div');
     row.append(element('dt', '', label), element('dd', '', value));
     stats.append(row);
@@ -189,11 +225,11 @@ export function nameCard(author) {
   return section;
 }
 
-// 내 판결 카드: 사건 · 내 형량 · 무겁게 / 가볍게 본 요소 수. 다른 판결(AI · 실제)은 담지 않는다
-export function verdictCard(verdict, caseTitle) {
+// 판결 카드: 사건 · 형량 · 무겁게 / 가볍게 본 요소 수. 다른 판결(AI · 실제)은 담지 않는다
+export function verdictCard(verdict, caseTitle, label = '내 판결') {
   const card = element('div', 'cm-verdict');
   const penalty = element('p', 'cm-verdict-penalty');
-  penalty.append(element('span', 'cm-verdict-label', '내 판결'), element('strong', '', formatPenalty(verdict)));
+  penalty.append(element('span', 'cm-verdict-label', label), element('strong', '', formatPenalty(verdict)));
   const extra = formatDispositions(verdict);
   if (extra) penalty.append(element('span', 'cm-verdict-extra', extra));
   card.append(penalty, element('p', 'cm-verdict-factors', `무겁게 본 요소 ${verdict.upCount}개 · 가볍게 본 요소 ${verdict.downCount}개`));
@@ -201,16 +237,31 @@ export function verdictCard(verdict, caseTitle) {
   return card;
 }
 
-// 판결 공유 글(상세): 내 판결 카드에 판결한 사람의 공개 성향카드를 클립으로 꽂는다. 성향이 없으면(성향 테스트 전) 내 판결 카드만 둔다
+// 판결 공유 글(상세): 글쓴이 판결 카드에 판결한 사람의 공개 성향카드를 클립으로 꽂는다. 성향이 없으면(성향 테스트 전) 내 판결 카드만 둔다
 export function verdictWithType(verdict, caseTitle, author) {
-  const card = verdictCard(verdict, caseTitle);
+  const card = verdictCard(verdict, caseTitle, '글쓴이 판결');
   if (!author.shownType) return card;
   const row = element('div', 'cm-verdict-row');
   card.append(element('p', 'cm-verdict-type', `판결한 사람의 성향 ${author.shownType.type.name}(${SLOT_NAMES[author.shownType.slot]})`));
   const holder = element('div', 'cm-cards cm-verdict-clip');
+  holder.setAttribute('aria-hidden', 'true'); // 장식 미니 카드: 성향 이름은 위 글자로 읽힌다
   holder.append(clip(), typeFace(author.shownType.type, undefined, normalizeTypeDeco(author.shownType.deco)));
   row.append(card, holder);
   return row;
+}
+
+// 판결 전 접기(FE-93): 이 사건을 아직 판결하지 않은 사람에게는 남의 형량을 먼저 보여 주지 않는다(PRODUCT 원칙 1 — 판단은 사용자의 것). 원하면 펼쳐 볼 수 있다
+export function foldedVerdict(post, makeCard) {
+  if (post.viewerJudged !== false) return makeCard();
+  const box = element('div', 'cm-verdict is-folded');
+  box.append(element('p', 'cm-verdict-fold-note', '이 사건을 판결하면 글쓴이 판결이 보여요. 내 판단을 먼저 해 보세요.'));
+  box.append(button('그래도 보기', () => {
+    const card = makeCard();
+    card.tabIndex = -1; // 펼친 자리로 포커스를 옮겨 화면 읽기 프로그램이 바로 읽는다
+    box.replaceWith(card);
+    card.focus();
+  }, 'cm-text-button'));
+  return box;
 }
 
 function tags(post) {
@@ -299,8 +350,17 @@ export function communityShell({ navigate }) {
   root.append(screen);
 
   const head = element('div', 'cm-head');
-  const title = element('h1', 'cm-title', '커뮤니티');
-  title.append(mockTag());
+  // 제목을 누르면 커뮤니티 메인으로(주소가 있는 진짜 링크: 새 탭 열기 · 주소 복사가 된다, postLink와 같은 방식)
+  const title = element('h1', 'cm-title');
+  const home = element('a', 'cm-title-link');
+  home.append(logoMark(), element('span', '', COMMUNITY_NAME));
+  home.href = '/community';
+  home.addEventListener('click', (event) => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    navigate('community');
+  });
+  title.append(home, mockTag());
   head.append(title, element('p', 'cm-sub', '같은 기록, 다른 생각'));
   filters.append(head);
 
@@ -368,15 +428,45 @@ export function filterControls({ value, cases, onChange }) {
   group.append(groupTitle, list);
 
   const caseGroup = element('div', 'cm-filter-group');
-  const select = element('select', 'cm-select');
-  select.id = 'cm-filter-case';
-  const label = element('label', 'cm-filter-title', '사건');
-  label.htmlFor = select.id;
-  select.append(new Option('모든 사건', ''));
-  cases.forEach(({ caseId, title }) => select.append(new Option(title, String(caseId))));
-  select.value = value.caseId ? String(value.caseId) : '';
-  select.addEventListener('change', () => onChange({ ...value, caseId: select.value ? Number(select.value) : null }));
-  caseGroup.append(label, select);
+  const picked = value.caseId ? (cases.find((item) => item.caseId === value.caseId) ?? { caseId: value.caseId, title: '선택한 사건' }) : null; // 목록에 없는 사건으로 걸러 왔어도 거르는 중 표시와 해제 버튼은 보인다
+  if (picked) {
+    const label = element('span', 'cm-filter-title', '사건');
+    const chosen = element('div', 'cm-case-chosen');
+    const clear = button('해제', () => onChange({ ...value, caseId: null }), 'cm-case-clear');
+    clear.setAttribute('aria-label', `사건 ${picked.title} 거르기 해제`);
+    chosen.append(element('span', '', picked.title), clear);
+    caseGroup.append(label, chosen);
+  } else {
+    // 입력은 아래 목록만 다시 그리고, 사건을 고를 때만 거르기를 바꾼다(거르기를 바꾸면 이 칸이 새로 그려져 입력이 사라진다)
+    const search = element('input', 'cm-case-search');
+    search.type = 'search';
+    search.id = 'cm-filter-case';
+    search.placeholder = '사건 이름으로 찾기';
+    search.autocomplete = 'off';
+    search.setAttribute('aria-controls', 'cm-case-results');
+    const label = element('label', 'cm-filter-title', '사건');
+    label.htmlFor = search.id;
+    const results = element('div');
+    results.id = 'cm-case-results';
+    const status = element('p', 'visually-hidden'); // 낭독은 개수만(한 글자마다 사건 제목을 다 읽지 않게)
+    status.setAttribute('role', 'status');
+    search.addEventListener('input', () => {
+      const word = search.value.trim().toLowerCase();
+      if (!word) { results.replaceChildren(); status.textContent = ''; return; }
+      const found = cases.filter(({ title }) => title.toLowerCase().includes(word));
+      found.sort((a, b) => Number(b.title.toLowerCase().startsWith(word)) - Number(a.title.toLowerCase().startsWith(word))); // 제목이 단어로 시작하는 사건을 위로(나머지는 원래 순서 유지: 정렬은 안정 정렬)
+      status.textContent = found.length ? `사건 ${found.length}건` : '맞는 사건이 없어요';
+      if (!found.length) { results.replaceChildren(element('p', 'cm-case-empty', '맞는 사건이 없어요')); return; }
+      const list = element('ul', 'cm-case-results');
+      found.forEach(({ caseId, title }) => {
+        const item = element('li');
+        item.append(button(title, () => onChange({ ...value, caseId }), 'cm-case-pick'));
+        list.append(item);
+      });
+      results.replaceChildren(list);
+    });
+    caseGroup.append(label, search, status, results);
+  }
   box.append(group, caseGroup);
   return box;
 }
@@ -393,7 +483,7 @@ export function popularList(popular, navigate) {
     item.append(postLink(text, postId, navigate));
     list.append(item);
   });
-  box.append(title, list);
+  box.append(title, popular.length ? list : element('p', 'cm-hint', '아직 많이 본 글이 없어요.'));
   return box;
 }
 
@@ -416,7 +506,7 @@ export function composer({ api, navigate, cases, onPosted, closeButton, closeCom
   const box = element('section', 'cm-compose');
   box.setAttribute('aria-labelledby', 'cm-compose-title');
   const head = element('div', 'cm-compose-head');
-  const title = element('h2', 'cm-side-title', '생각 나누기');
+  const title = element('h2', 'cm-side-title', '편지 쓰기');
   title.id = 'cm-compose-title';
   head.append(title, closeButton);
   box.append(head);
@@ -429,6 +519,12 @@ export function composer({ api, navigate, cases, onPosted, closeButton, closeCom
 
   const form = element('form', 'cm-form');
   form.noValidate = true;
+  // 받는 사람 줄(FE-94): 고른 사건을 문장으로 보여 준다. 사건 없이 쓰면 모두에게 보내는 글이다
+  const recipient = element('p', 'cm-recipient');
+  const paintRecipient = () => {
+    const picked = caseSelect.selectedOptions[0];
+    recipient.replaceChildren('받는 사람 ', element('strong', '', caseSelect.value ? picked.text : '커뮤니티 모두'), caseSelect.value ? '을 본 사람들' : '에게');
+  };
 
   const categories = element('fieldset', 'cm-field cm-categories');
   categories.append(element('legend', 'cm-label', '말머리'));
@@ -454,6 +550,8 @@ export function composer({ api, navigate, cases, onPosted, closeButton, closeCom
   caseSelect.append(new Option('사건 없이 쓰기', ''));
   cases.forEach(({ caseId, title: text }) => caseSelect.append(new Option(text, String(caseId))));
   caseField.append(caseLabel, caseSelect);
+  caseSelect.addEventListener('change', paintRecipient);
+  paintRecipient();
 
   const titleField = textField({ id: 'cm-compose-title-input', label: '제목', max: TITLE_MAX, placeholder: '제목을 적어 주세요' });
   const bodyField = textField({ id: 'cm-compose-body', label: '내용', max: BODY_MAX, placeholder: '이 사건, 어떻게 보셨나요?', multiline: true });
@@ -524,7 +622,7 @@ export function composer({ api, navigate, cases, onPosted, closeButton, closeCom
     shareable = value;
     share.disabled = !value;
     shareNote.textContent = value
-      ? 'AI 판결 · 실제 판결은 붙지 않아요. 사건을 아직 안 본 사람도 볼 수 있어요.'
+      ? 'AI 판결 · 실제 판결은 붙지 않아요. 이 사건을 아직 판결하지 않은 사람에게는 접혀 보여요.'
       : '판결을 확정하면 내 판결을 붙일 수 있어요.';
   }).catch(() => { if (box.isConnected) shareNote.textContent = '내 판결을 불러오지 못했어요.'; });
   share.addEventListener('change', () => {
@@ -535,17 +633,26 @@ export function composer({ api, navigate, cases, onPosted, closeButton, closeCom
       sharePreview.append(verdictCard(shareable.verdict, shareable.caseTitle));
     }
     caseSelect.disabled = share.checked;
+    paintRecipient();
   });
 
   const error = element('p', 'cm-error');
   error.setAttribute('role', 'alert');
-  const submit = element('button', 'primary-button cm-submit', '올리기');
+  // 서명란: 올릴 때 서명이 한 획으로 쓰이고 글이 올라간다. 올리지 못하면 서명을 지운다
+  const signField = element('div', 'cm-field cm-sign');
+  const signLine = element('div', 'cm-sign-line');
+  const signHint = element('span', 'cm-sign-hint', '올릴 때 서명이 남아요');
+  const nickname = currentUser()?.nickname ?? '';
+  const signature = signatureSvg(signerSeed(), { label: `${nickname}의 서명`, blank: true });
+  signLine.append(signHint, signature);
+  signField.append(element('span', 'cm-label', '서명'), signLine);
+  const submit = element('button', 'primary-button cm-submit', '서명하고 올리기');
   submit.type = 'submit';
   const actions = element('div', 'cm-form-actions');
   actions.append(error, submit);
   function showError(text) { error.textContent = text; }
 
-  form.append(categories, caseField, titleField.field, bodyField.field, photoField, verdictField, actions);
+  form.append(recipient, categories, caseField, titleField.field, bodyField.field, photoField, verdictField, signField, actions);
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     showError('');
@@ -554,6 +661,10 @@ export function composer({ api, navigate, cases, onPosted, closeButton, closeCom
     if (!titleText) { showError('제목을 적어 주세요.'); titleField.input.focus(); return; }
     if (!bodyText) { showError('내용을 적어 주세요.'); bodyField.input.focus(); return; }
     submit.disabled = true;
+    submit.textContent = '서명하는 중…';
+    signHint.hidden = true;
+    await writeSignature(signature);
+    if (!box.isConnected) return;
     submit.textContent = '올리는 중…';
     try {
       const post = await api.createCommunityPost({
@@ -571,7 +682,9 @@ export function composer({ api, navigate, cases, onPosted, closeButton, closeCom
         : failure?.code === 'VALIDATION_ERROR' ? '입력한 내용을 확인해 주세요.'
           : '글을 올리지 못했어요. 잠시 뒤 다시 시도해 주세요.');
       submit.disabled = false;
-      submit.textContent = '올리기';
+      submit.textContent = '서명하고 올리기';
+      eraseSignature(signature);
+      signHint.hidden = false;
     }
   });
   box.append(form);

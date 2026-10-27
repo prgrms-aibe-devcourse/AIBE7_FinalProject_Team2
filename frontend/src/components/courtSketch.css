@@ -119,6 +119,7 @@
 .comparison-full .stage-wrap .name img { width: 26px; height: 26px; min-width: 0; min-height: 0; }
 .comparison-full .stage-wrap .nxt { font-size: 12px; }
 .comparison-full .stage-wrap .dlg-choices :is(.primary-button, .secondary-button) { min-height: 40px; font-size: 14px; }
+@media (pointer: coarse), (max-width: 680px) { .comparison-full .stage-wrap .dlg-choices :is(.primary-button, .secondary-button) { min-height: 44px; } } /* 엔딩 선택지 터치 44px(FE-97) */
 /* 6막 마지막 선택지(다른 사건 보기 · 여기 남아있기 …)는 넓은 화면에서 오른쪽으로(지면 무대 선택지와 같게, paperStage.css) */
 @media (min-width: 681px) { .comparison-full .stage-wrap .dlg-choices { justify-content: flex-end; } }
 .comparison-full .stage-wrap .stage[data-scene="sheet"] .spr, .comparison-full .stage-wrap .stage[data-scene="sheet"] .spr.role {

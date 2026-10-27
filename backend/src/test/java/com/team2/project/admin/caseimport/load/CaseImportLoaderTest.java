@@ -17,6 +17,7 @@ import com.team2.project.pipeline.PipelineResult;
 import com.team2.project.support.ApiIntegrationTest;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -54,7 +55,8 @@ class CaseImportLoaderTest extends ApiIntegrationTest {
 				DELETE FROM ai_generation WHERE judgment_id IN (SELECT id FROM judgment WHERE case_id = ?)""", caseId);
 			jdbcTemplate.update("""
 				DELETE FROM judgment_factor WHERE judgment_id IN (SELECT id FROM judgment WHERE case_id = ?)""", caseId);
-			for (String table : List.of("judgment", "case_source", "factor", "penalty_rule", "case_section")) {
+			for (String table : List.of("judgment", "case_source", "factor", "penalty_rule", "case_section",
+				"case_script")) {
 				jdbcTemplate.update("DELETE FROM " + table + " WHERE case_id = ?", caseId);
 			}
 			jdbcTemplate.update("DELETE FROM legal_case WHERE id = ?", caseId);
@@ -75,6 +77,20 @@ class CaseImportLoaderTest extends ApiIntegrationTest {
 		assertThat(count("penalty_rule", caseId)).isEqualTo(1);
 		assertThat(count("factor", caseId)).isEqualTo(2);
 		assertThat(count("case_source", caseId)).isEqualTo(1);
+	}
+
+	@Test
+	@DisplayName("절도 사건도 적재된다 — 양형기준 데이터가 살인만 있어 양형기준 없이 만들어진다 (BE-112, V31)")
+	void load_theftCase_isLoadedWithoutGuideline() {
+		CaseImport caseImport = caseImport(CrimeType.THEFT);
+		// 추출 결과(case.json)의 범죄 유형도 THEFT로 바꿔 넣는다 (CaseContentMapper가 enum으로 읽는다)
+		JsonNode theftContent = node(caseJson().replace("\"crimeType\": \"MURDER\"", "\"crimeType\": \"THEFT\""));
+
+		LegalCase legalCase = loader.load(caseImport, resultWith(theftContent));
+
+		assertThat(legalCase.getCrimeType()).isEqualTo(CrimeType.THEFT);
+		assertThat(jdbcTemplate.queryForObject("SELECT guideline_id FROM legal_case WHERE id = ?", Long.class,
+			legalCase.getId())).isNull();
 	}
 
 	@Test
@@ -157,7 +173,7 @@ class CaseImportLoaderTest extends ApiIntegrationTest {
 	void load_judgmentPointsToUnknownFactor() {
 		PipelineResult broken = new PipelineResult("job", node(caseJson()), node(reportJson()),
 			node(courtDraftJson()), node(aiJudgmentJson().replace("\"factorId\": 7", "\"factorId\": 99")),
-			new PipelineResult.Selection("gemini:test", 1, "consensus", "합의", List.of()), null);
+			new PipelineResult.Selection("gemini:test", 1, "consensus", "합의", List.of()), null, null);
 
 		assertThatThrownBy(() -> loader.load(caseImport(), broken))
 			.isInstanceOf(BusinessException.class)
@@ -174,7 +190,7 @@ class CaseImportLoaderTest extends ApiIntegrationTest {
 				{"runs": 5, "factors": [
 				  {"factorId": 7, "valueAxis": "PRINCIPLE_RELATION",
 				   "valueAxisVotes": {"runs": 5, "counts": {"PRINCIPLE_RELATION": 4, "FAULT_STANDARD": 1},
-				                      "needsReview": false, "requestedRuns": 5}}]}"""));
+				                      "needsReview": false, "requestedRuns": 5}}]}"""), null);
 
 		LegalCase legalCase = loader.load(caseImport(), withVotes);
 
@@ -230,10 +246,46 @@ class CaseImportLoaderTest extends ApiIntegrationTest {
 	}
 
 	private CaseImport caseImport() {
-		CaseImport entity = CaseImport.start(UUID.randomUUID().toString().replace("-", ""), CrimeType.MURDER);
+		return caseImport(CrimeType.MURDER);
+	}
+
+	private CaseImport caseImport(CrimeType crimeType) {
+		CaseImport entity = CaseImport.start(UUID.randomUUID().toString().replace("-", ""), crimeType);
 		entity.addSource(CaseImportSource.of(CourtLevel.FIRST, "2099고합001", "가상지방법원",
 			LocalDate.of(2025, 1, 10), true, null, "판결문 전문입니다", null));
 		return entity;
+	}
+
+	@Test
+	@DisplayName("대본(script)이 함께 오면 case_script에 비공개 · 검수 대기로 들어간다 (BE-108)")
+	void load_savesScript() {
+		CaseImport caseImport = caseImport();
+
+		LegalCase legalCase = loader.load(caseImport, resultWithScript(node(scriptJson())));
+
+		Long caseId = legalCase.getId();
+		assertThat(count("case_script", caseId)).isEqualTo(1);
+		Map<String, Object> row = jdbcTemplate.queryForMap("SELECT * FROM case_script WHERE case_id = ?", caseId);
+		assertThat(row.get("model")).isEqualTo("google:gemini-2.5-flash");
+		assertThat(row.get("publishable")).isEqualTo(true);
+		assertThat(row.get("stopped")).isEqualTo(false);
+		assertThat(row.get("balance_warning")).isNull();
+		assertThat(row.get("generated_at")).isNotNull();	// createdAt을 읽어 둔다 (적재 시각과 다르다)
+		assertThat(row.get("review_status")).isNull();		// 비어 있으면 검수 대기 (judgment V16과 같은 방식)
+		assertThat(String.valueOf(row.get("evidence"))).contains("계약서").contains("\"factorId\"");
+		assertThat(String.valueOf(row.get("cast_roles"))).contains("나로");
+	}
+
+	@Test
+	@DisplayName("대본이 없거나 대사가 비어 있으면 대본만 건너뛰고 사건은 그대로 만든다 (대본은 나중에 따로 들어올 수 있다)")
+	void load_withoutScript_stillCreatesCase() {
+		LegalCase noScript = loader.load(caseImport(), result());
+		assertThat(count("case_script", noScript.getId())).isZero();
+
+		LegalCase emptyEvidence = loader.load(caseImport(), resultWithScript(node("""
+			{"evidence": [], "publishable": false, "model": "google:gemini-2.5-flash"}""")));
+		assertThat(count("case_script", emptyEvidence.getId())).isZero();
+		assertThat(emptyEvidence.getStatus()).isEqualTo(CaseStatus.DRAFT);
 	}
 
 	private PipelineResult result() {
@@ -243,7 +295,23 @@ class CaseImportLoaderTest extends ApiIntegrationTest {
 	private PipelineResult resultWith(JsonNode caseContent) {
 		return new PipelineResult("job", caseContent, node(reportJson()), node(courtDraftJson()),
 			node(aiJudgmentJson()),
-			new PipelineResult.Selection("gemini:test", 1, "consensus", "합의", List.of()), null);
+			new PipelineResult.Selection("gemini:test", 1, "consensus", "합의", List.of()), null, null);
+	}
+
+	private PipelineResult resultWithScript(JsonNode script) {
+		return new PipelineResult("job", node(caseJson()), node(reportJson()), node(courtDraftJson()),
+			node(aiJudgmentJson()),
+			new PipelineResult.Selection("gemini:test", 1, "consensus", "합의", List.of()), null, script);
+	}
+
+	/** script 단계 산출물(BE-107). 적재는 evidence · model · cast · publishable · createdAt · stopped만 본다 */
+	private static String scriptJson() {
+		return """
+			{"evidence": [{"factorId": 1, "role": "PROSECUTOR", "character": "나로",
+			               "text": "계약서에 서명한 사실은 분명합니다.", "attempts": 1, "validation": {"warnings": []}}],
+			 "cast": {"prosecutor": "나로", "defense": "남불"},
+			 "model": "google:gemini-2.5-flash", "publishable": true, "stopped": false,
+			 "balanceWarning": null, "createdAt": "2026-10-27T09:00:00+09:00"}""";
 	}
 
 	private static JsonNode node(String json) {

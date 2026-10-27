@@ -37,6 +37,7 @@
 .edit-fan-side { display: grid; gap: 20px; flex: 1 1 220px; min-width: 0; max-width: 360px; }
 /* 겹치기: 높이(y)는 같고 x만 --fan-step씩 어긋난다. 고른 카드가 맨 왼쪽 · 맨 앞(z-index는 JS) */
 .edit-fan-stack { position: relative; width: calc(200px + (var(--n, 1) - 1) * var(--fan-step)); height: 400px; }
+.edit-fan-empty { box-sizing: border-box; display: grid; place-content: center; width: 200px; height: 100%; margin: 0; padding: 16px; border: 2px dashed var(--color-border-strong); border-radius: 14px; color: var(--color-muted); font-size: var(--text-small); text-align: center; text-wrap: balance; } /* 카드 한 장 자리(200px)를 그대로 채운다 */
 .edit-fan-card { position: absolute; top: 0; left: calc(var(--i, 0) * var(--fan-step)); padding: 0; border: 0; border-radius: 14px; background: none; color: inherit; font: inherit; cursor: pointer; transition: transform .15s ease-out; }
 .edit-fan-card:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 3px; }
 .edit-fan-card[aria-pressed="true"] { cursor: default; }
@@ -50,4 +51,5 @@
 @media (max-width: 380px) { .edit-fan { --fan-step: 36px; } } /* 아주 좁은 화면: 세 장(200 + 2 × 36 = 272px)이 가로로 넘치지 않게 */
 @media (max-width: 720px) { .edit-fact { grid-template-columns: minmax(0, 1fr); gap: 2px; } }
 /* 할 수 없거나 끝난 버튼(첫 성향 테스트 완료 · 재심 완료 · 준비 중)은 흐리게 하고 눌림 표시를 뺀다. 전역 .secondary-button에는 비활성 모양이 없다 */
+.edit-status { display: inline-flex; align-items: center; min-height: 44px; padding: 0 4px; color: var(--color-label); font-weight: 700; } /* 끝난 일 표시(FE-103): 눌러지지 않는 버튼처럼 보이지 않게 글로 */
 .edit-page .secondary-button:disabled { opacity: .6; cursor: default; background: var(--color-card); }

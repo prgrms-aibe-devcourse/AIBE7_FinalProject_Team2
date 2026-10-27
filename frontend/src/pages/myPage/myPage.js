@@ -2,7 +2,7 @@ import { button, element, mockTag } from '../../components/siteLayout.js';
 import { API_MODE } from '../../api/config.js';
 import { appendEmptyAxis, renderAxisRow } from '../../components/axisRow.js';
 import { imageOf } from '../../components/stage.js';
-import { DEFAULT_NICKNAME, emptyWindow, nameOf, picture, profileCardParts, sashClasses, sashIcon, sashNote, sashes, svg, typeDecoClasses, typeFace, typePortrait } from '../../components/personCards.js';
+import { emptyWindow, myNickname, nameOf, picture, profileCardParts, sashClasses, sashIcon, sashNote, sashes, svg, typeDecoClasses, typeFace, typePortrait } from '../../components/personCards.js';
 import { AXES } from '../../utils/personalityAxes.js';
 import { KIND_TITLES, lenientPercent, axisChange, steadyBand, axisTrend, collectionOf, imageKinds, leanText, retakeAfterOrder } from '../../utils/myPageView.js';
 import { renderTrend, trendsOf } from '../../components/trendGraph.js';
@@ -13,13 +13,14 @@ import { SCRIPTS } from '../../content/scripts.js';
 import { fitPortraitIn } from '../../utils/portraitFit.js';
 import { reducedMotion } from '../../utils/motion.js';
 import { clearUser, currentUser, isAdmin } from '../../utils/session.js';
+import { signerSeed } from '../../components/signatureInk.js';
 import { homeRoute } from '../admin/adminMenu.js';
 import { openCaseReviewPopup } from '../caseReview/caseReviewPopup.js';
 import { renderProfileEdit } from './myProfileEdit.js';
 import { renderSettings } from './mySettings.js';
 import { RETAKE_NOTES, openRetakeDialog, retakeAfter, retakeState } from './baselineRetake.js';
 import { SHOWN_SLOTS, setShownCard, shownSlot } from '../../utils/shownCard.js';
-import { selectedChoice, setProfileCardType, typeChoices } from '../../utils/profileCardType.js';
+import { getCardLevel, getCardLine, selectedChoice, setCardLevel, setCardLine, setProfileCardType, typeChoices } from '../../utils/profileCardType.js';
 import { DEFAULT_TYPE_DECO, TYPE_BACKGROUNDS, getTypeDeco, setTypeDeco, shownTypeDeco } from '../../utils/typeCardDeco.js';
 import { configureProfileSettings, hydrateProfileSettings } from '../../utils/profileSettings.js';
 
@@ -47,7 +48,7 @@ const VIEWS = {
 };
 // 프로필카드에서 들어가는 화면은 뒤로 가기가 프로필카드로 간다(FE-68)
 const PARENTS = { achievements: 'profile', bookmark: 'profile' };
-// 닉네임 아래 프로필 수치. 레벨 · 직업은 목 데이터(API 전, data.profile이 오면 그 값을 쓴다). 출석 일수는 서버 값(P-5 profile.attendanceDays)이다. 완료한 사건 · 모은 일러스트는 지금 기록에서 센다
+// 닉네임 아래 프로필 수치. 레벨 · 직업은 서버 값(P-5 level, BE-106)이고, 없을 때만 목 값으로 채운다(옛 data.profile이 오면 그 값). 출석 일수는 서버 값(P-5 profile.attendanceDays)이다. 완료한 사건 · 모은 일러스트는 지금 기록에서 센다
 const MOCK_PROFILE = { level: 7, job: '수습 판사', attendanceDays: 0 };
 const IS_MOCK = API_MODE === 'mock'; // 목 모드에서는 체험 기록 · 성향 평균도 목(mocks/personalityMockApi.js)이라 함께 표기한다(FE-56)
 // 개발 서버 + 목 모드에서만 public/images의 webp 전부를 컬렉션 아래에 펼친다(FE-67). 빌드에서는 이 분기가 통째로 빠진다
@@ -139,13 +140,15 @@ function cardButton(className, label, ...children) {
 function statsOf(data) {
   const missing = (key) => data.profile?.[key] == null;
   const profile = Object.fromEntries(Object.keys(MOCK_PROFILE).map((key) => [key, missing(key) ? MOCK_PROFILE[key] : data.profile[key]]));
+  const levelData = data.level;
+  if (levelData) { profile.level = levelData.level ?? profile.level; profile.job = levelData.job?.name ?? profile.job; }
   const experiences = data.experiences ?? [];
   const groups = collectionOf(experiences, SCRIPTS);
   return {
     ...profile,
     completed: experiences.filter((item) => item.status === 'COMPLETED').length,
     collected: groups.reduce((sum, group) => sum + group.cast.length + group.items.length, 0),
-    mocked: { level: missing('level'), job: missing('job'), attendanceDays: IS_MOCK || missing('attendanceDays'), completed: IS_MOCK, collected: IS_MOCK },
+    mocked: { level: IS_MOCK || (!levelData && missing('level')), job: IS_MOCK || (!levelData && missing('job')), attendanceDays: IS_MOCK || missing('attendanceDays'), completed: IS_MOCK, collected: IS_MOCK },
   };
 }
 
@@ -173,8 +176,14 @@ const decoFor = (data) => shownDeco(currentDeco(), openOf(data));
 
 // 대표 이미지 카드의 속(그리는 일은 components/personCards.js). 카드 아래 성향: 카드 꾸미기에서 고른 것(기본 최근)
 function profileCardPartsOf(deco, data) {
-  const typeName = selectedChoice(data)?.type.name ?? currentTypeOf(data)?.name;
-  return profileCardParts(deco, data.nickname || DEFAULT_NICKNAME, typeName);
+  const nickname = myNickname(data, currentUser());
+  const stats = statsOf(data);
+  const line = getCardLine();
+  const known = Boolean(data.level); // 서버 레벨이 없으면 목 값(Lv.7 · 수습 판사)을 카드에 올리지 않는다
+  const level = known && getCardLevel() ? `Lv.${stats.level}` : null;
+  if (line === 'signature') return profileCardParts(deco, nickname, null, { level, signer: signerSeed() });
+  if (line === 'job' && known) return profileCardParts(deco, nickname, stats.job, { level, lineLabel: '직업' });
+  return profileCardParts(deco, nickname, selectedChoice(data)?.type.name ?? currentTypeOf(data)?.name, { level });
 }
 
 // 성향카드 꾸미기(FE-82): 성향카드 화면에서 고른 테두리 · 배경 · 책갈피를 카드에 입힌다(잠긴 것은 기본으로). 기본 배경은 원래 타로카드 모양이라 클래스를 붙이지 않는다
@@ -203,6 +212,30 @@ function profileCardPair(data, go) {
   return [profile, typeCardNode];
 }
 
+// 경험치 진행률(FE-116): 지금 레벨에 닿은 XP부터 다음 레벨에 필요한 XP까지. 서버 L-1의 xp · currentLevelXp · nextLevelXp를 쓴다. 최고 레벨이면 막대가 가득 차고 안내만 바뀐다
+function levelProgress(level) {
+  if (!level) return null;
+  const top = level.nextLevelXp == null;
+  const span = top ? 1 : level.nextLevelXp - level.currentLevelXp;
+  const done = top ? 1 : Math.min(span, Math.max(0, level.xp - level.currentLevelXp));
+  const box = element('div', 'my-level-progress');
+  const text = top ? '최고 레벨이에요.' : `Lv.${level.level + 1}까지 ${level.nextLevelXp - level.xp} XP`;
+  const caption = element('p', 'my-level-caption', text);
+  if (IS_MOCK) caption.append(mockTag());
+  const bar = element('div', 'my-achievement-bar');
+  bar.setAttribute('role', 'progressbar');
+  bar.setAttribute('aria-label', '경험치 진행률');
+  bar.setAttribute('aria-valuemin', '0');
+  bar.setAttribute('aria-valuemax', String(span));
+  bar.setAttribute('aria-valuenow', String(done));
+  bar.setAttribute('aria-valuetext', top ? '최고 레벨' : `${done} / ${span} XP`);
+  const fill = element('span');
+  fill.style.width = `${Math.round((done / span) * 100)}%`;
+  bar.append(fill);
+  box.append(caption, bar);
+  return box;
+}
+
 // 첫 화면 위쪽: [프로필카드(대표 이미지 · 꾸미기) | 닉네임 · 수치 | 성향카드(타로카드: 이름 · 성향 이미지 · 대사 한 줄)]
 function renderTop(data, go) {
   const section = element('section', 'my-top');
@@ -210,7 +243,9 @@ function renderTop(data, go) {
   const [profile, typeCardNode] = profileCardPair(data, go);
 
   const middle = element('div', 'my-top-middle');
-  middle.append(element('h2', 'my-nickname', data.nickname || DEFAULT_NICKNAME), renderStats(stats));
+  middle.append(element('h2', 'my-nickname', myNickname(data, currentUser())), renderStats(stats));
+  const progress = levelProgress(data.level);
+  if (progress) middle.append(progress);
 
   section.append(profile, middle, typeCardNode);
   return section;
@@ -570,6 +605,7 @@ function caseLine(item, navigate, api) {
       button('독자 엽서 쓰기', (event) => openCaseReviewPopup({ caseId: item.caseId, api, navigate, from: event.currentTarget }), 'secondary-button'),
     );
   } else {
+    link.classList.add('is-continue'); // 버튼이 없는 줄은 제목이 유일한 입구라 링크로 보이게 밑줄을 둔다(FE-103)
     actions.append(element('p', 'my-case-hint', '사건 제목을 눌러 이어서 체험해요'));
   }
   line.append(info, actions);
@@ -674,6 +710,10 @@ function typeFan(data, navigate, go) {
     const shown = shownSlot(slots);
     const order = shown ? [shown, ...SHOWN_SLOTS.filter((key) => key !== shown && slots[key])] : [];
     stack.style.setProperty('--n', String(Math.max(order.length, 1)));
+    if (!order.length) { // 성향카드가 한 장도 없으면 카드 자리를 점선 빈 칸으로 보여 준다
+      stack.replaceChildren(element('p', 'edit-fan-empty', '아직 성향카드가 없어요. 첫 성향 테스트를 하면 여기에 생겨요.'));
+      return;
+    }
     stack.replaceChildren(...order.map((key, index) => {
       const card = element('button', 'edit-fan-card');
       card.type = 'button';
@@ -706,10 +746,10 @@ function typeFan(data, navigate, go) {
   });
   // 첫 테스트 · 재심 청구: 상태에 따라 문구와 눌림만 바뀐다
   const state = retakeState(data);
-  const firstTest = button(tested ? '첫 성향 테스트 완료' : '첫 성향 테스트 하기', () => navigate('test'), 'secondary-button');
-  firstTest.disabled = tested;
-  const claim = button(retakeDone ? '재심 완료' : '재심 청구하기', () => openRetakeDialog({ data, navigate, from: claim }), 'secondary-button');
-  claim.disabled = state !== 'ready';
+  // 끝난 일은 비활성 버튼이 아니라 상태 글로 보인다(FE-103). 아직 못 누르는 "재심 청구하기"만 비활성 버튼
+  const firstTest = tested ? element('span', 'edit-status', '✓ 첫 성향 테스트 완료') : button('첫 성향 테스트 하기', () => navigate('test'), 'secondary-button');
+  const claim = retakeDone ? element('span', 'edit-status', '✓ 재심 완료') : button('재심 청구하기', () => openRetakeDialog({ data, navigate, from: claim }), 'secondary-button');
+  if (!retakeDone) claim.disabled = state !== 'ready';
   // 재심을 마친 뒤의 "체험 n건 뒤" 안내는 성향카드 화면에만 둔다
   const note = retakeDone ? null
     : tested ? `성향 테스트를 한 번 더 해서 성향카드를 다시 정해요. ${RETAKE_NOTES[state]}` : '재심은 첫 성향 테스트 뒤에 청구할 수 있어요.';
@@ -878,17 +918,32 @@ function portraitPicker(open, shownPortrait, onPick) {
   const head = element('h3', 'my-deco-kind', `기본 (${DEFAULT_PORTRAITS.length})`);
   head.append(element('span', 'my-deco-state is-open', '기본 제공'));
   field.append(head, first);
-  imageKinds(PORTRAIT_POOL.filter((src) => !DEFAULT_PORTRAITS.includes(src))).forEach((kind) => {
+  // 열린 종류는 펼쳐 두고, 잠긴 종류는 한 줄(이름 · 개수 · 여는 도전과제)로 접어 둔다(FE-100 — 잠긴 그림까지 다 펼치면 한 화면에 130장이 넘게 깔렸다).
+  // 접힌 줄을 누르면 잠긴 그림을 미리 볼 수 있다(무엇을 깨면 무엇이 열리는지 보는 재미는 남긴다)
+  const kinds = imageKinds(PORTRAIT_POOL.filter((src) => !DEFAULT_PORTRAITS.includes(src)));
+  const lockedKinds = [];
+  kinds.forEach((kind) => {
     const locked = !open.kinds.has(kind.key);
     const by = unlockerOf('kinds', kind.key)?.title ?? '';
-    const head = element('h3', 'my-deco-kind', `${kind.title} (${kind.items.length})`);
-    head.append(element('span', `my-deco-state${locked ? '' : ' is-open'}`, locked ? `잠김 · ${by}` : '열림'));
     const grid = element('div', 'my-deco-grid');
     kind.items.forEach(({ src }) => grid.append(decoOption({
       group: 'profile-portrait', value: src, checked: src === shownPortrait, locked, name: portraitLabel(src), lockedBy: by, onChange: pick(src),
     }, thumb(src))));
+    if (locked) { lockedKinds.push({ kind, by, grid }); return; }
+    const head = element('h3', 'my-deco-kind', `${kind.title} (${kind.items.length})`);
+    head.append(element('span', 'my-deco-state is-open', '열림'));
     field.append(head, grid);
   });
+  if (lockedKinds.length) {
+    field.append(element('h3', 'my-deco-kind is-locked-head', `잠긴 종류 (${lockedKinds.length})`));
+    lockedKinds.forEach(({ kind, by, grid }) => {
+      const fold = element('details', 'my-deco-fold');
+      const summary = element('summary', 'my-deco-fold-head');
+      summary.append(element('span', '', `${kind.title} (${kind.items.length})`), element('span', 'my-deco-state', `잠김 · ${by}`));
+      fold.append(summary, grid);
+      field.append(fold);
+    });
+  }
   return field;
 }
 
@@ -1060,13 +1115,110 @@ function previewCard(data, deco = decoFor(data)) {
 // 카드 아래 성향 고르기(FE-77): 초심 · 재심 · 최근 중 하나를 글자 라디오로. 같은 유형은 한 칸으로 묶인다. 공개 성향카드와는 별개의 값이다
 function typeChoiceSection(data, onPick) {
   const field = element('fieldset', 'my-deco');
-  field.append(element('legend', '', '카드 아래 성향'));
+  field.append(element('legend', '', '카드 아래'));
+  field.append(element('p', 'my-hint', '프로필카드 아래에 보일 것을 하나 고르세요. 레벨은 그 앞에 붙이거나 뺄 수 있어요.'));
+  const line = getCardLine();
+  const lines = element('div', 'my-type-choices');
+  [['type', '성향'], ['signature', '서명'], ['job', '직업']].forEach(([value, text]) => {
+    const label = element('label', 'my-type-choice');
+    const input = element('input');
+    input.type = 'radio';
+    input.name = 'profile-card-line';
+    input.value = value;
+    input.checked = line === value;
+    input.addEventListener('change', () => { saveSettingsOr(setCardLine(value)); onPick(); redraw(); });
+    label.append(input, element('span', '', text));
+    lines.append(label);
+  });
+  const levelLabel = element('label', 'my-type-choice');
+  const levelInput = element('input');
+  levelInput.type = 'checkbox';
+  levelInput.checked = getCardLevel();
+  levelInput.addEventListener('change', () => { saveSettingsOr(setCardLevel(levelInput.checked)); onPick(); });
+  levelLabel.append(levelInput, element('span', '', '레벨 앞에 붙이기'));
+  field.append(lines, levelLabel);
+  const typeBox = element('div');
+  const jobBox = element('div');
+  field.append(typeBox, jobBox);
+  const redraw = () => { typeBox.hidden = getCardLine() !== 'type'; jobBox.hidden = getCardLine() !== 'job'; };
+  redraw();
+  typeBox.append(typeChoiceList(data, onPick));
+  jobBox.append(jobSection(data, onPick));
+  return field;
+}
+
+// 카드 아래가 직업일 때 직업 고르기(BE-106 L-2). 레벨이 모자라 안 열린 직업은 누를 수 없고 열리는 레벨을 알려 준다.
+// 개발 서버 + 목 모드에서는 레벨 · 직업을 올려 보는 "개발용" 버튼이 함께 보인다(결과는 이 창 안에서 바로 다시 그린다)
+function jobSection(data, onPick) {
+  const box = element('div');
+  let saving = false; // 저장 중에는 라디오를 잠가 요청이 겹치지 않게 한다
+  const show = (level) => {
+    data.level = level;
+    if (cache) cache.level = level;
+    draw();
+    onPick();
+  };
+  const draw = () => {
+    const level = data.level;
+    box.replaceChildren();
+    if (!level) {
+      box.append(element('p', 'my-hint', '직업 정보를 아직 받지 못했어요.'));
+      return;
+    }
+    box.append(element('p', 'my-hint', `지금 Lv.${level.level}이에요. 직업은 레벨이 오르면 하나씩 열리고, 한 번 열리면 다시 잠기지 않아요.`));
+    const list = element('div', 'my-type-choices');
+    level.jobs.forEach((job) => {
+      const label = element('label', 'my-type-choice');
+      const input = element('input');
+      input.type = 'radio';
+      input.name = 'profile-card-job';
+      input.value = job.code;
+      input.checked = job.selected;
+      input.disabled = !job.unlocked || saving;
+      input.addEventListener('change', async () => {
+        saving = true;
+        draw();
+        let message = '';
+        try {
+          data.level = await apiRef.putLevelJob(job.code);
+          if (cache) cache.level = data.level;
+          onPick();
+        } catch (error) {
+          if (error?.code === 'JOB_LOCKED') data.level = await apiRef.getLevel().catch(() => data.level); // 표시한 해금 상태가 서버와 달랐다: 서버 값으로 다시 그린다(명세 L-2)
+          message = error?.code === 'JOB_LOCKED' ? '아직 열리지 않은 직업이에요.' : '직업을 저장하지 못했어요. 잠시 뒤 다시 시도해 주세요.';
+        }
+        saving = false;
+        draw();
+        if (message) box.append(element('p', 'my-hint', message));
+      });
+      label.append(input, element('span', '', job.unlocked ? job.name : `${job.name} (Lv.${job.unlockLevel}에 열려요)`));
+      list.append(label);
+    });
+    box.append(list);
+    if (import.meta.env?.DEV && apiRef?.setMockLevel) {
+      const dev = element('div', 'my-profile-actions');
+      const run = (action) => async () => { try { show(await action()); } catch { /* 개발 전용: 실패하면 그대로 둔다 */ } };
+      dev.append(
+        button('개발용: 레벨 +1', run(() => apiRef.setMockLevel(data.level.level + 1)), 'secondary-button is-dev'),
+        button('개발용: 다음 직업 해금', run(() => apiRef.unlockMockNextJob()), 'secondary-button is-dev'),
+        button('개발용: 레벨 처음으로', run(() => apiRef.resetMockLevel()), 'secondary-button is-dev'),
+      );
+      box.append(dev);
+    }
+  };
+  draw();
+  return box;
+}
+
+// 카드 아래가 성향일 때 초심 · 재심 · 최근 고르기
+function typeChoiceList(data, onPick) {
+  const field = element('div');
   const choices = typeChoices(data);
   if (choices.length === 0) {
     field.append(element('p', 'my-hint', '성향 테스트를 하면 카드 아래에 보여 줄 성향을 고를 수 있어요.'));
     return field;
   }
-  field.append(element('p', 'my-hint', '프로필카드 아래에 보일 성향이에요. 기본은 최근이고, 같은 유형은 한 칸으로 묶여요.'));
+  field.append(element('p', 'my-hint', '기본은 최근이고, 같은 유형은 한 칸으로 묶여요.'));
   const selected = selectedChoice(data);
   const list = element('div', 'my-type-choices');
   choices.forEach((choice, index) => {
