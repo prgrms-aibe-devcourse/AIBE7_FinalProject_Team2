@@ -41,10 +41,11 @@ export function commonPhotoAt(seed = 0, role = 'reenact', category) {
   return set[role] ?? set.reenact;
 }
 
-/** 기사 속 작은 사진 두 자리(발단 · 결론). 비어 있는 자리는 분류에 맞는 공용 컷으로 채운다 */
-export function extraPhotosOf(extraPhotos, category) {
+/** 기사 속 작은 사진 두 자리(발단 · 결론). 비어 있는 자리는 분류에 맞는 공용 컷으로 채운다.
+ * 분류를 모를 때는 casePhoto와 같은 seed(사건 번호)를 넘겨 대표 사진과 같은 세트로 맞춘다 */
+export function extraPhotosOf(extraPhotos, category, seed = 0) {
   const [origin, conclusion] = extraPhotos ?? [];
-  return [origin ?? { src: commonPhotoAt(0, 'origin', category) }, conclusion ?? { src: commonPhotoAt(0, 'conclusion', category) }];
+  return [origin ?? { src: commonPhotoAt(seed, 'origin', category) }, conclusion ?? { src: commonPhotoAt(seed, 'conclusion', category) }];
 }
 
 /** API 17(공개 신문 지면) extraPhotos({ origin, conclusion }, 각 { imageUrl, caption })를

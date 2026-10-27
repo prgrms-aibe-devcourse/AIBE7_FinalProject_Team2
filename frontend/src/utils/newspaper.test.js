@@ -40,6 +40,7 @@ test('casePhoto: 서버가 준 썸네일이 우선, 없으면 범죄 분류의 �
 test('extraPhotosOf: 비어 있는 자리는 분류에 맞는 발단 · 결론 공용 컷으로 채운다', () => {
   assert.deepEqual(extraPhotosOf(undefined, 'life').map((p) => p.src), [commonPhotos.life.origin, commonPhotos.life.conclusion]);
   assert.deepEqual(extraPhotosOf(undefined).map((p) => p.src), [commonPhotos.property.origin, commonPhotos.property.conclusion]);
+  assert.deepEqual(extraPhotosOf(undefined, undefined, 4).map((p) => p.src), [commonPhotos.body.origin, commonPhotos.body.conclusion]); // 분류를 모르면 casePhoto와 같은 seed(사건 번호)
   assert.equal(extraPhotosOf([{ src: '/a.webp' }], 'body')[0].src, '/a.webp');
   assert.equal(extraPhotosOf([{ src: '/a.webp' }], 'body')[1].src, commonPhotos.body.conclusion);
 });

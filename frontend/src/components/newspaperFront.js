@@ -48,7 +48,7 @@ export function paperFromCase(data, casePaper, fallback = {}) {
       article,
       // 대표 사진: 지면 → 사건 썸네일(없으면 사건 번호로 고정한 공용 컷) → 대본 지면. casePhoto는 사건 데이터가 없어도 공용 컷을 준다
       photo: casePaper.photo || (data ? casePhoto(data) : fallback.photo ?? casePhoto(data)),
-      extraPhotos: extraPhotosOf(extraPhotosFromApi(casePaper.extraPhotos), commonCategoryOf(data)),
+      extraPhotos: extraPhotosOf(extraPhotosFromApi(casePaper.extraPhotos), commonCategoryOf(data), Number(data?.caseId) || 0),
       caption: casePaper.caption || fallback.caption || '사건 이해를 돕기 위한 연출 이미지',
       desk: casePaper.desk || fallback.desk || '사회부',
     };
@@ -58,7 +58,7 @@ export function paperFromCase(data, casePaper, fallback = {}) {
     deck: data.deck || data.shortIntro,
     article: data.article?.length ? data.article : [data.shortIntro].filter(Boolean),
     photo: casePhoto(data),
-    extraPhotos: extraPhotosOf(fallback.extraPhotos, commonCategoryOf(data)), // 기사 속 작은 사진(대본 지면에만 있다, 사건 1의 재연 컷). 없는 사건은 범죄 분류에 맞는 공용 컷
+    extraPhotos: extraPhotosOf(fallback.extraPhotos, commonCategoryOf(data), Number(data?.caseId) || 0), // 기사 속 작은 사진(대본 지면에만 있다, 사건 1의 재연 컷). 없는 사건은 범죄 분류에 맞는 공용 컷
     caption: '사건 이해를 돕기 위한 연출 이미지',
     desk: '사회부', // S-02 기사와 같은 기자 줄
   };
