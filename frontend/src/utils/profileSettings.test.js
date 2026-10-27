@@ -1,7 +1,7 @@
 // npm test : 프로필 선택 설정 사본(FE-81). 바로 반영하고 서버에는 차례로 보내며, 거절되면 그 칸만 돌린다
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { configureProfileSettings, getProfileSettings, hydrateProfileSettings, resetProfileSettings, updateProfileSettings } from './profileSettings.js';
+import { configureProfileSettings, getProfileSettings, getCardLineSettings, hydrateProfileSettings, resetProfileSettings, updateCardLine, updateProfileSettings } from './profileSettings.js';
 
 beforeEach(() => resetProfileSettings());
 
@@ -66,4 +66,28 @@ test('연속으로 바꾸면 차례로 한 번씩 보내고, 첫 요청이 거�
   assert.deepEqual([await first, await second], [false, true]);
   assert.deepEqual(calls, [{ shownCard: 'initial' }, { profileCardType: 'retake' }]);
   assert.deepEqual(getProfileSettings(), { shownCard: 'current', profileCardType: 'retake', bio: '' });
+});
+
+test('서버가 cardLine을 모르면(P-5에 없음) 카드 아래 줄은 서버로 가지 않는다', async () => {
+  const calls = server();
+  hydrateProfileSettings({ shownCard: 'current', profileCardType: 'current', bio: '' });
+  assert.equal(await updateCardLine({ cardLine: 'job' }), true);
+  assert.deepEqual(calls, []);
+  assert.equal(getCardLineSettings().cardLine, 'job');
+});
+
+test('P-5에 cardLine이 오면 서버 값을 따르고 이후 바꾼 값은 서버로 간다', async () => {
+  const calls = server({ shownCard: 'current', profileCardType: 'current', bio: '', cardLine: 'signature', cardLevel: true });
+  hydrateProfileSettings({ shownCard: 'current', profileCardType: 'current', bio: '', cardLine: 'signature', cardLevel: true });
+  assert.deepEqual(getCardLineSettings(), { cardLine: 'signature', cardLevel: true });
+  assert.equal(await updateCardLine({ cardLevel: false }), true);
+  assert.deepEqual(calls, [{ cardLevel: false }]);
+  assert.equal(getCardLineSettings().cardLevel, false);
+});
+
+test('서버가 거절하면 카드 아래 줄이 이전 값으로 돌아간다', async () => {
+  configureProfileSettings(async () => { throw { status: 400 }; });
+  hydrateProfileSettings({ shownCard: 'current', profileCardType: 'current', bio: '', cardLine: 'type', cardLevel: false });
+  assert.equal(await updateCardLine({ cardLine: 'job' }), false);
+  assert.equal(getCardLineSettings().cardLine, 'type');
 });

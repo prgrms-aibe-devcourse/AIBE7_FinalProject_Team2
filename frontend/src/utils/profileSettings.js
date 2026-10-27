@@ -5,7 +5,9 @@
 import { localStore } from './safeStorage.js';
 export const SLOTS = ['initial', 'retake', 'current'];
 export const BIO_MAX = 40;
-// 프로필카드 아래 줄(성향 · 서명 · 직업 중 하나)과 레벨 접두. 서버(P-8)가 아직 모르는 값이라 이 브라우저에만 저장하고 서버로 보내지 않는다(서버 확장은 후속)
+// 프로필카드 아래 줄(성향 · 서명 · 직업 중 하나, cardLine)과 레벨 접두(cardLevel).
+// 서버(P-8)가 이 두 칸을 아직 모르면 이 브라우저에만 저장하고 서버로 보내지 않는다(모르는 칸을 보내면 400).
+// 서버가 마이페이지(P-5 profileSettings)에 cardLine을 실어 보내기 시작하면 그것을 서버 지원 신호로 보고 서버 값을 따르며 PATCH에도 함께 보낸다
 export const CARD_LINES = ['type', 'signature', 'job'];
 const LOCAL_KEY = 'naelaw:profile-card-line';
 
@@ -21,6 +23,7 @@ function readLocal() {
 
 let values = { ...DEFAULTS };
 let local = readLocal();
+let serverCardLine = false; // P-5 profileSettings에 cardLine이 오면 true(서버가 두 칸을 안다)
 let send = null; // (patch) => Promise<세 값 전체>. api가 없으면 null이라 이번 방문 동안만 바뀐다
 let inFlight = 0;
 let queue = Promise.resolve();
@@ -43,12 +46,42 @@ export const getCardLineSettings = () => local;
 export function hydrateProfileSettings(settings) {
   if (!settings || inFlight > 0) return;
   values = normalize(settings);
+  if (settings.cardLine !== undefined) {
+    serverCardLine = true;
+    setLocal(pickLine(settings));
+  }
 }
 
-/** 카드 아래 줄 설정(서버에 보내지 않는다) */
-export function updateCardLine(patch) {
-  local = { ...local, ...patch };
+const pickLine = (settings) => ({ cardLine: CARD_LINES.includes(settings?.cardLine) ? settings.cardLine : LOCAL_DEFAULTS.cardLine, cardLevel: settings?.cardLevel === true });
+function setLocal(next) {
+  local = next;
   try { localStore()?.setItem(LOCAL_KEY, JSON.stringify(local)); } catch { /* 저장소를 못 쓰면 이번 방문 동안만 */ }
+}
+
+/**
+ * 카드 아래 줄 설정을 바꾼다. 서버가 두 칸을 아는 경우에만 서버에 보내고(차례 · 거절 시 이전 값 복귀는 updateProfileSettings와 같다),
+ * 모르면 이 브라우저에만 저장한다. 저장되면 true, 거절되면 false
+ */
+export function updateCardLine(patch) {
+  const before = local;
+  setLocal({ ...local, ...patch });
+  if (!send || !serverCardLine) return Promise.resolve(true);
+  inFlight += 1;
+  const run = queue.then(async () => {
+    try {
+      const saved = await send(patch);
+      if (inFlight === 1 && saved?.cardLine !== undefined) setLocal(pickLine(saved));
+      return true;
+    } catch {
+      const keep = Object.keys(patch).filter((key) => local[key] !== patch[key]);
+      setLocal({ ...before, ...Object.fromEntries(keep.map((key) => [key, local[key]])) }); // 그 사이 새로 바꾼 칸은 건드리지 않는다
+      return false;
+    } finally {
+      inFlight -= 1;
+    }
+  });
+  queue = run;
+  return run;
 }
 
 /** 보낸 칸만 바꾼다. 서버에 저장되면 true, 거절되면 그 칸을 이전 값으로 돌리고 false */
@@ -82,5 +115,6 @@ export function resetProfileSettings() {
   try { localStore()?.removeItem(LOCAL_KEY); } catch { /* 무시 */ }
   send = null;
   inFlight = 0;
+  serverCardLine = false;
   queue = Promise.resolve();
 }
