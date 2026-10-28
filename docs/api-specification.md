@@ -236,7 +236,7 @@ json
 - `chargeName`: 죄명(`legal_case.charge_name`, 예: "살인"). 사건 상단 바(S-04~S-08)가 `caseId`로 이 목록에서 제목과 함께 찾아 쓴다(BE-79, D-01). 사건 개요(API 4) · API 16의 `chargeName`과 같은 값이다.
 - `thumbnailUrl`: `legal_case.thumbnail_url`. 없으면 `null`이고, 화면은 범죄 유형별 기본 이미지를 쓴다.
 - `participantCount`: `attempt_no = 1`이고 `COMPLETED`인 체험 수.
-- (v0.60, BE-116) `scriptReady`: 이 사건에 **승인된 공개 대본**이 있는가(`true` / `false`). 기준은 API 18이 200을 주는 조건과 같다(사건 `PUBLISHED` + 대본 `reviewStatus: APPROVED`) — 대본이 없거나 검수 대기 · 반려면 `false`다. 화면(S-02)은 이 값으로 체험 가능한 사건을 먼저 보이고, `false`는 "준비 중"으로 다룬다. 사용자와 무관한 값이다.
+- (v0.60, BE-116) `scriptReady`: 이 사건에 **승인된 공개 대본**이 있는가(`true` / `false`). 기준은 API 18이 200을 주는 조건과 같다(사건 `PUBLISHED` + 대본 `reviewStatus: APPROVED`) — 대본이 없거나 검수 대기 · 반려면 `false`다. 화면(S-02)은 이 값으로 체험 가능한 사건을 먼저 보이고, `false`는 "준비 중"으로 다룬다. 사용자와 무관한 값이다. **화면 정책이며 서버는 막지 않는다** — API 2(체험 시작)는 `scriptReady`를 보지 않는다. 또 대사를 직접 수정(A-13-13)하면 검수 기록이 지워져 `true → false`로 바뀔 수 있다(이때 API 18도 404).
 - 정렬: `published_at` 최신순 고정 (정렬 선택은 이후 단계, REQ-009).
 - (v0.27, FE-19 · REQ-010) `myStatus`: 이 사건에 대한 **내 최신 회차** 체험 상태를 목록 배지용 두 값으로 묶은 것.
 
