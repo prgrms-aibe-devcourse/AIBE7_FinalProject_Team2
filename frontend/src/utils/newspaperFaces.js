@@ -28,14 +28,14 @@ export function emptySlots(count) {
 }
 
 /**
- * 지금 보여 줄 면 목록. 사건이 0건인 범죄 유형 면은 숨기되(FE-119), 지금 보고 있는 면은 건수가 0이어도 남긴다(보던 면이 사라지지 않게).
- * 건수를 아직 모르면(목록을 받기 전) 전부 보인다. 1면 · 색인 · 성향 테스트 · 오피니언처럼 범죄 유형이 아닌 면은 건수와 상관없이 늘 있다
- * @param {{ crimeType?: string, special?: boolean }[]} faces 전체 면(순서대로)
- * @param {Record<string, number> | undefined} byCrimeType 유형별 사건 수
+ * 지금 보여 줄 면 목록. 0건이면 숨기는 면(hideWhenEmpty — 범죄 유형 면)은 건수가 0일 때 빼되(FE-119), 지금 보고 있는 면은 건수가 0이어도 남긴다(보던 면이 사라지지 않게).
+ * 건수를 아직 모르면(목록을 받기 전) 전부 보인다. 1면 · 색인 · 성향 테스트 · 오피니언처럼 숨기지 않는 면은 건수와 상관없이 늘 있다(FE-123 면 정의: pages/caseList/faces.js)
+ * @param {{ key?: string, hideWhenEmpty?: boolean, count: (summary: object) => number | null }[]} faces 전체 면(순서대로)
+ * @param {object | null | undefined} summary API 1의 건수 요약
  * @param {string | undefined} selected 지금 보고 있는 면
  */
-export function visibleFaces(faces, byCrimeType, selected) {
-  return faces.filter(({ crimeType, special }) => !crimeType || special || !byCrimeType || crimeType === selected || (byCrimeType[crimeType] ?? 0) > 0);
+export function visibleFaces(faces, summary, selected) {
+  return faces.filter((face) => !face.hideWhenEmpty || !summary || face.key === selected || face.count(summary) > 0);
 }
 
 /** 한 면에 먼저 보이는 기사 수(머리기사 1 + 추천 2 + 다른 사건 6). 넘치는 기사는 1면에서는 빼고, 유형 면에서는 "이 면 더 보기"로 편다 */
