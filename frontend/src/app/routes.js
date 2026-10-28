@@ -25,6 +25,7 @@ import { renderMyPage } from '../pages/myPage/myPage.js';
 import { renderMyResultPage } from '../pages/myPage/myResultPage.js';
 import { renderOverviewPage } from '../pages/overview/overviewPage.js';
 import { renderPersonalityPage } from '../pages/personality/personalityPage.js';
+import { renderPersonalityPaperResultPage } from '../pages/personality/personalityPaperResultPage.js';
 import { renderPersonalityPaperPage } from '../pages/personality/personalityPaperPage.js';
 import { renderPersonalityResultPage } from '../pages/personality/personalityResultPage.js';
 import { renderPersonalitySharedPage } from '../pages/personality/personalitySharedPage.js';
@@ -51,6 +52,8 @@ export const routes = [
   { name: 'test', path: '/test', render: renderPersonalityPage, title: '판결 성향 테스트' },
   // FE-55: 6막 신문의 성향 테스트 광고에서 신문을 넘겨 들어오는 오피니언 면(문항 · 결과는 /test와 같다)
   { name: 'testPaper', path: '/test/paper', render: renderPersonalityPaperPage, ownsFooter: true, title: '판결 성향 테스트' }, // 법적 고지는 지면 안 맨 아래(FE-122)
+  // 신문 성향 테스트 결과 (FE-126): 신문 테스트를 마치면 오는 지면. 내용은 /test/result와 같고 모양만 신문이다
+  { name: 'testPaperResult', path: '/test/paper/result', render: renderPersonalityPaperResultPage, ownsFooter: true, title: '판결 성향 결과' },
   { name: 'testResult', path: '/test/result', render: renderPersonalityResultPage, title: '판결 성향 결과' },
   { name: 'testType', path: '/test/types/:shareId', render: renderPersonalitySharedPage, title: '판결 성향 유형' },
   // 마이페이지도 공통 헤더를 쓰고 색만 커피색으로 덮어쓴다(FE-66, myPage.css)

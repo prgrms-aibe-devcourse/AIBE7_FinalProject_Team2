@@ -5,8 +5,7 @@
 /* 루트에 perspective · overflow: clip을 두지 않는다 — 책상 배경(.desk, position: fixed)이 루트에 잘려 위쪽에 흰 띠가 생긴다. 원근은 넘어오는 동안 지면 자신의 변환(tp-turn-in)에만 넣는다 */
 /* 본문 글자 크기 단위: 지면 안쪽 폭(1200px 기준)이 줄면 같이 줄어든다 */
 .tp-sheet { --u: min(10px, calc((100vw - 128px) / 120)); transform-origin: 0 50%; }
-/* 짧은 문항 화면이 사건 목록처럼 길어지지 않게: 최소 높이는 화면의 1.2배(법적 고지는 맨 아래) */
-.case-list-page .paper.tp-sheet:not(.case-paper) { min-height: calc((100dvh - 32px) * 1.2); }
+/* 최소 높이는 사건 목록 신문과 같다(caseList.css: 화면 + 120px, 신문 폭 × 1.4 중 큰 쪽, FE-126) */
 .tp-page .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 /* 신문을 넘겨 들어온다(사건 정보 · 사건 목록 · 6막에서): 왼쪽 가장자리를 축으로 넘어와 바닥에 내려앉는다 */
 .tp-sheet.is-turning-in { animation: tp-turn-in .65s cubic-bezier(.2, .8, .2, 1) both; }
@@ -82,6 +81,36 @@
 .tp-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .tp-hint { margin: 0; color: var(--color-muted); font-size: max(12px, calc(var(--u) * 1.2)); text-align: center; }
 
+/* 신문 성향 테스트 결과(personalityPaperResultPage.js, FE-126): 큰 제목 = 유형 이름 | 캐릭터 사진 · 가치관 4축 · 관용 지수 | 두 단 해설 + 다른 캐릭터 · 안내 | 다음 행동 */
+.tpr-banner { padding-bottom: calc(var(--u) * 1.6); border-bottom: 1px solid var(--color-text); text-align: center; }
+.tpr-kicker { margin: 0 0 calc(var(--u) * .6); color: var(--color-label); font: 700 max(12px, calc(var(--u) * 1.2)) / 1.4 var(--font-body); letter-spacing: .2em; }
+.tpr-name { margin: 0 0 calc(var(--u) * .8); font-size: max(32px, calc(var(--u) * 6.4)); }
+.tpr-oneliner { margin: 0; }
+.tpr-label { margin: 0 0 calc(var(--u) * 1); padding-bottom: calc(var(--u) * .6); border-bottom: 3px double var(--color-text); font: 700 max(14px, calc(var(--u) * 1.5)) / 1.4 var(--font-heading); color: var(--color-heading); }
+.tpr-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); gap: calc(var(--u) * 3.2); padding: calc(var(--u) * 2.4) 0; border-bottom: 1px solid var(--color-text); }
+.tpr-photo-frame { aspect-ratio: 4 / 5; align-items: center; }
+.tpr-photo-frame img { height: 100%; width: 100%; object-fit: contain; }
+.tpr-nameplate { font: 900 max(20px, calc(var(--u) * 2.6)) / 1 var(--font-heading); color: var(--color-heading); }
+.tpr-graph { display: flex; flex-direction: column; gap: calc(var(--u) * 2.4); }
+.tpr-graph .axis-list { gap: calc(var(--u) * 1.8); }
+.tpr-graph .axis-row { display: grid; grid-template-columns: 8em minmax(0, 1fr); grid-template-rows: auto 20px; column-gap: 12px; align-items: center; }
+.tpr-graph .axis-label { grid-row: 2; grid-column: 1; margin: 0; line-height: 20px; font-family: var(--font-heading); }
+.tpr-graph .axis-ends { grid-row: 1; grid-column: 2; }
+.tpr-graph .axis-bar { grid-row: 2; grid-column: 2; margin-top: 0; border-radius: 0; }
+.tpr-graph .axis-empty { grid-row: 2; grid-column: 2; margin: 0; color: var(--color-muted); }
+.tpr-graph .axis-row::after { left: calc(8em + 12px + (100% - 8em - 12px) / 2); bottom: 1px; }
+.tpr-graph .axis-row:has(.axis-empty)::after { display: none; }
+.tpr-graph .tolerance-title { margin: 0 0 calc(var(--u) * 1); padding-bottom: calc(var(--u) * .6); border-bottom: 3px double var(--color-text); font: 700 max(14px, calc(var(--u) * 1.5)) / 1.4 var(--font-heading); }
+.tpr-story { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: calc(var(--u) * 3.2); padding: calc(var(--u) * 2.4) 0; border-bottom: 1px solid var(--color-text); }
+.tpr-columns { display: grid; grid-template-columns: 1fr 1fr; gap: calc(var(--u) * 2.4); }
+.tpr-column + .tpr-column { padding-left: calc(var(--u) * 2.4); border-left: 1px solid var(--color-border); }
+.tpr-side { display: flex; flex-direction: column; gap: calc(var(--u) * 1.6); }
+.tpr-other .tpr-photo-frame { aspect-ratio: 4 / 3; }
+.tpr-notice p { margin: 0 0 calc(var(--u) * .6); color: var(--color-muted); font: 400 max(12px, calc(var(--u) * 1.2)) / 1.6 var(--font-article); word-break: keep-all; }
+.tpr-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding-top: calc(var(--u) * 2.4); }
+.tpr-more { display: flex; flex-wrap: wrap; gap: 8px; }
+.tpr-share-note { min-height: 1.5em; margin: 8px 0 0; color: var(--color-muted); font-size: max(13px, calc(var(--u) * 1.3)); }
+
 /* 답한 만큼 차는 막대: 좁은 화면에서만(번호 칸 대신) */
 .tp-progress-bar { display: none; }
 
@@ -119,5 +148,12 @@
   .tp-degree { font-size: 12px; }
   .tp-ballot-ends { margin-top: 0; font-size: 12px; }
   .tp-hint { display: none; }
+  .tpr-top, .tpr-story, .tpr-columns { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .tpr-column + .tpr-column { padding-left: 0; border-left: 0; }
+  .tpr-portrait { max-width: 280px; margin: 0 auto; }
+  .tpr-name { font-size: 30px; }
+  .tpr-graph .axis-row { grid-template-columns: 6.5em minmax(0, 1fr); }
+  .tpr-graph .axis-row::after { left: calc(6.5em + 12px + (100% - 6.5em - 12px) / 2); }
+  .tpr-actions > .primary-button { width: 100%; }
 }
 @media (prefers-reduced-motion: reduce) { .tp-sheet.is-turning-in { animation: none; } }

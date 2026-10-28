@@ -1,5 +1,6 @@
 import { button, element, mockTag, renderSiteFooter } from './siteLayout.js';
 import { API_MODE } from '../api/config.js';
+import { leaveByTurn } from '../utils/pageTurn.js';
 import { casePhoto, commonCategoryOf, extraPhotosFromApi, extraPhotosOf, todayLabel, useCommonPhotoOnError } from '../utils/newspaper.js';
 
 // 신문 지면 공통 짜임 (FE-32). S-02 사건 목록(신문 1면)과, 사건을 고른 뒤 이어지는 사건 기사 지면(S-20 · 1막)이
@@ -102,23 +103,28 @@ function pullQuote(paragraph) {
   return quote;
 }
 // 지면 목차: 신문의 다른 면으로 간다. 앱 기능을 신문의 면에 빗댄다 — 1면 = 오늘의 사건 목록, 3면 사회 = 지금 이 사건,
-// 8면 = 색인(사건 목록의 색인 면), 10면 = 성향테스트(신문 버전 /test/paper). 지금 면은 aria-current로 표시하고 누르지 않는다.
+// 8면 = 색인(사건 목록의 색인 면), 10면 = 성향테스트(신문 버전 /test/paper), 12면 = 오피니언(사건 목록의 오피니언 면, FE-126). 지금 면은 aria-current로 표시하고 누르지 않는다.
 // params는 navigate에 넘기는 값이다(색인 면으로 열기 · 신문을 넘겨 들어오기)
 const PAGES = [
   { key: 'front', page: '1면', name: '오늘의 지면', route: 'list' },
   { key: 'case', page: '3면', name: '사회' },
   { key: 'index', page: '8면', name: '색인', route: 'list', params: { openAt: 'INDEX' } },
   { key: 'test', page: '10면', name: '성향테스트', route: 'testPaper', params: { from: 'paper' } },
+  { key: 'opinion', page: '12면', name: '오피니언', route: 'list', params: { openAt: 'OPINION' } },
 ];
 // current: 지금 면의 key(사건 정보 = 'case', 성향 테스트 = 'test'). 지금 면은 누르지 않는다. 사건 정보 · 신문 성향 테스트가 같은 목차를 쓴다(FE-122)
-export function pageIndex(navigate, current = 'case') {
+// turn(go, { back }): 지면을 넘기며 가게 할 때(FE-126, 신문 성향 테스트 · 사건 정보 지면). back = 앞 쪽 면(목차에서 지금 면보다 앞)으로 간다 — 그 면이 넘어와 지금 지면을 덮는다
+export function pageIndex(navigate, current = 'case', { turn } = {}) {
+  const here = PAGES.findIndex(({ key }) => key === current);
   const nav = element('nav', 'page-index');
   nav.setAttribute('aria-label', '신문 목차');
-  PAGES.forEach(({ key, page, name, route, params }) => {
-    const here = key === current;
+  PAGES.forEach(({ key, page, name, route, params }, i) => {
+    const isHere = i === here;
+    // 넘기며 갈 때는 도착 지면이 스스로 넘겨 들어오지 않게 from을 뺀다(지금 지면이 넘어가며 밑의 면이 드러난다)
+    const go = () => navigate(route, turn && params?.from ? { ...params, from: undefined } : params);
     // 지금 면은 누르지 않고 표시만, 갈 곳이 없는 면(성향 테스트 지면에서의 3면 사회 — 어느 사건인지 모른다)은 글자만 둔다
-    const item = !here && route ? button('', () => navigate(route, params), 'page-index-item') : element('span', `page-index-item${here ? ' is-current' : ''}`);
-    if (here) item.setAttribute('aria-current', 'page');
+    const item = !isHere && route ? button('', () => (turn ? turn(go, { back: i < here }) : go()), 'page-index-item') : element('span', `page-index-item${isHere ? ' is-current' : ''}`);
+    if (isHere) item.setAttribute('aria-current', 'page');
     item.append(element('b', '', page), element('span', '', name));
     nav.append(item);
   });
@@ -169,12 +175,14 @@ export function innerPageHead({ earLeft, earRight, meta }) {
  */
 export function caseNewspaper({ paper, info, navigate, earRight = caseInfoEar(info) }) {
   const sheet = element('div', 'paper case-paper');
-  const earLeft = earButton('← 다른 사건 보기', '오늘의 지면으로 돌아가요', () => navigate('list'), 'ear-left');
+  // 다른 면으로 갈 때 지면을 넘긴다(FE-126): 이 지면은 사건 정보 · 1막 무대가 함께 쓰며 화면 루트 class가 같다
+  const turnAway = leaveByTurn(sheet, 'case-list-page case-paper-page overview-page');
+  const earLeft = earButton('← 다른 사건 보기', '오늘의 지면으로 돌아가요', () => turnAway(() => navigate('list')), 'ear-left');
 
   const runner = innerPageHead({ earLeft, earRight, meta: `사회면 · ${todayLabel()} · 3면` });
 
   const tabsZone = element('div', 'tabs-zone');
-  tabsZone.append(pageIndex(navigate, 'case'));
+  tabsZone.append(pageIndex(navigate, 'case', { turn: turnAway }));
 
   // 기사(A안, 실제 신문 기사 면): [제목 · 부제 · 기자 줄 | 사건 메모] → [사진 · 작은 사진 | 본문 두 단(첫 글자 크게 · 인용구 · 작은 사진)]
   const article = element('article', 'story');

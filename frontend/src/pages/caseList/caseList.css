@@ -212,12 +212,16 @@
 .case-list-page .visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .case-list-page .masthead { padding-top: 34px; } /* 메모지가 걸치는 자리 */
 /* 포스트잇이 오른쪽 귀를 덮는다. 떼기 전에는 귀를 감춰 테두리만 비치는 어정쩡한 모양을 없애고, 떼면 그 밑의 귀(건수)가 드러난다(FE-102) */
-@media (min-width: 721px) { .case-list-page:not(.tip-off) .mast .ear-right { visibility: hidden; } }
+@media (min-width: 721px) { .case-list-page .paper.has-tip .mast .ear-right { visibility: hidden; } } /* 포스트잇은 1면에만 붙어 있다(FE-126). 다른 면에서는 귀가 보인다 */
+.case-list-page .paper-tip[hidden] { display: none; }
 .case-list-page .paper-tip.is-waiting { opacity: 0; pointer-events: none; } /* 건수를 받은 뒤 나타난다(문구가 바뀌며 깜빡이지 않게) */
 
 /* 기사 고르기: 마우스를 올리면 기사가 살짝 밝아지고 이어 읽기 줄에 밑줄이 생긴다. 고르면 지면이 한 장 넘어간다(utils/pageTurn.js) */
-.case-list-page .is-pickable { position: relative; cursor: pointer; transition: background-color .18s ease-out, outline-color .18s ease-out; }
-@media (hover: hover) and (pointer: fine) { .case-list-page .is-pickable:hover, .case-list-page .is-pickable.is-mate-hover { background-color: color-mix(in srgb, var(--color-desk-kraft) 14%, transparent); outline: 2px solid var(--color-desk-kraft); outline-offset: 4px; } } /* outline은 사진보다 위에 그려진다(inset 그림자는 사진에 가려졌다) */
+.case-list-page .is-pickable { position: relative; cursor: pointer; }
+/* 호버 상자(FE-126): 칸의 글 · 사진에서 바깥으로 10px인 상자 하나로 모든 칸이 같다. 자리(--pick-inset)는 올릴 때 칸 padding을 재서 정한다(hoverBox.js).
+   상자는 글 · 사진 위에 겹쳐 그리고(사진에 가려지지 않게) 크라프트 틴트는 곱하기로 얹어 글자를 덮지 않는다 */
+.case-list-page .is-pickable::after { content: ''; position: absolute; inset: var(--pick-inset, -10px); border: 2px solid transparent; background-color: transparent; mix-blend-mode: multiply; pointer-events: none; transition: background-color .18s ease-out, border-color .18s ease-out; }
+@media (hover: hover) and (pointer: fine) { .case-list-page .is-pickable:hover::after, .case-list-page .is-pickable.is-mate-hover::after { border-color: var(--color-desk-kraft); background-color: color-mix(in srgb, var(--color-desk-kraft) 14%, transparent); } }
 .case-list-page .paper-tip { transition: opacity .25s ease-out; }
 .case-list-page.is-picking .paper-tip { opacity: 0; pointer-events: none; }
 .case-list-page .is-picked { outline: 3px solid var(--color-heading); outline-offset: 4px; }
@@ -244,7 +248,7 @@
 .case-list-page.is-spreading:not(.is-going) .paper { visibility: hidden; }
 
 @media (hover: none) {
-  .case-list-page .is-pickable:hover { background-color: transparent; outline: 0; }
+  .case-list-page .is-pickable:hover::after { border-color: transparent; background-color: transparent; }
 }
 @media (max-width: 720px) {
   .case-list-page .paper-tip { position: relative; top: auto; right: auto; rotate: -.6deg; width: 100%; aspect-ratio: auto; margin: 10px 0 0; padding: 18px 12px 10px; }
@@ -259,7 +263,7 @@
   .case-list-page .paper:is(.case-paper, .inner-page)::after { width: 24px; } /* 좁은 화면은 제본 그늘을 얇게(본문을 덮지 않게) */
 }
 @media (prefers-reduced-motion: reduce) {
-  .case-list-page .is-pickable, .case-list-page .paper-tip { transition: none; }
+  .case-list-page .is-pickable::after, .case-list-page .paper-tip { transition: none; }
   .case-list-page.is-arriving .paper, .case-list-page.is-revealing .paper > * { animation: none; }
 }
 
@@ -335,37 +339,155 @@
 .case-list-page .more-inner { min-height: 0; overflow: hidden; visibility: hidden; transition: visibility 0s linear .55s; } /* 닫힌 동안은 키보드 포커스도 받지 않는다 */
 .case-list-page .more-fold.is-open .more-inner { visibility: visible; transition-delay: 0s; }
 .case-list-page .more-inner .index-grid { padding-top: 18px; }
-.case-list-page .more-inner .article { opacity: 0; translate: 0 14px; transition: opacity .4s ease-out .12s, translate .45s cubic-bezier(.22, 1, .36, 1) .12s, background-color .18s ease-out, outline-color .18s ease-out; }
+.case-list-page .more-inner .article { opacity: 0; translate: 0 14px; transition: opacity .4s ease-out .12s, translate .45s cubic-bezier(.22, 1, .36, 1) .12s; }
 .case-list-page .more-fold.is-open .more-inner .article { opacity: 1; translate: 0 0; }
 
 /* 색인면: 전체 사건을 제목만 주르륵 */
 .case-list-page .face-index { padding: 18px 0 28px; }
 .case-list-page .face-search { width: 100%; max-width: 420px; min-height: 44px; padding: 0 14px; border: 1px solid var(--color-border-strong); border-radius: 4px; background: var(--color-card); color: var(--color-text); font: inherit; }
 .case-list-page .face-search-count { margin: 8px 0 14px; font-size: var(--text-caption); color: var(--color-muted); }
-.case-list-page .face-index-list { margin: 0; padding: 0; list-style: none; columns: 2; column-gap: 44px; column-rule: 1px solid var(--color-border); }
-.case-list-page .index-row { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 4px 2px; border-bottom: 1px dotted var(--color-border-strong); break-inside: avoid; }
+.case-list-page .face-index-list { position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(10, minmax(49px, auto)); grid-auto-flow: column; align-content: start; column-gap: 44px; margin: 0; padding: 0; list-style: none; } /* 한 장 20건 = 왼쪽 10줄 · 오른쪽 10줄(세로로 채운다). 10줄 높이를 미리 잡아 사건이 적어도 목록 자리가 지면을 차지하고 아래 여백 채움이 줄어든다 */
+.case-list-page .face-index-list::before { content: ''; position: absolute; top: 0; bottom: 0; left: 50%; border-left: 1px solid var(--color-border); } /* 두 단 사이 세로줄 */
+.case-list-page .index-row { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 4px 10px; border-bottom: 1px dotted var(--color-border-strong); } /* 좌우 10px: 호버 상자(글에서 10px 바깥)가 줄 폭 안에 딱 들어 단 밖으로 넘지 않는다 */
 .case-list-page .index-row[hidden] { display: none; }
-.case-list-page .index-row .row-category { flex: none; font-size: var(--text-caption); font-weight: 700; color: var(--color-label); }
-.case-list-page .index-row h3 { flex: 1; min-width: 0; margin: 0; font: 700 16px/1.42 var(--font-heading); letter-spacing: -.03em; color: var(--color-heading); word-break: keep-all; }
+.case-list-page .index-row h3 { flex: 1; min-width: 0; margin: 0; font: 700 16px/1.42 var(--font-heading); letter-spacing: -.03em; color: var(--color-heading); }
 .case-list-page .index-row { position: relative; }
 .case-list-page .index-row .status-stamp { position: absolute; right: 10px; top: 50%; translate: 0 -50%; margin: 0; opacity: .85; mix-blend-mode: multiply; pointer-events: none; } /* 색인은 줄 오른쪽에 글자 위로 겹쳐 찍는다(진짜 도장처럼, 제목 폭을 줄이지 않는다) */
-.case-list-page .row-title { display: block; min-height: 44px; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; letter-spacing: inherit; text-align: left; word-break: keep-all; cursor: pointer; }
+.case-list-page .row-title { display: block; width: 100%; min-height: 44px; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; letter-spacing: inherit; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; } /* 제목은 한 줄, 넘치면 말줄임(FE-126). 전체 제목은 title · aria-label */
 @media (hover: hover) and (pointer: fine) { .case-list-page .index-row:hover .row-title, .case-list-page .row-title:hover { text-decoration: underline; text-underline-offset: 3px; } } /* P4 글자 링크 */
-.case-list-page .row-title:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
-.case-list-page .index-row.is-pickable { outline-offset: -2px; }
+.case-list-page .row-title:focus-visible { outline: 3px solid var(--color-focus); outline-offset: -3px; }
 
-/* 성향 테스트 · 오피니언 면: 자리만 잡은 껍데기 */
-.case-list-page .face-stub { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; min-height: 320px; margin: 24px 0; padding: 44px 32px; border: 2px dashed var(--color-border-strong); text-align: center; }
-.case-list-page .face-stub h2 { font: 900 30px/1.3 var(--font-heading); letter-spacing: -.03em; color: var(--color-heading); }
-.case-list-page .face-stub p:not(.filler-label) { max-width: 34em; margin: 0; font: 400 15px/1.7 var(--font-article); color: var(--color-muted); word-break: keep-all; }
-.case-list-page .face-stub .filler-label { margin: 0; }
+/* 색인 쪽 번호(FE-126): 한 장 20건을 넘을 때만. 지금 쪽은 먹색으로 채운다 */
+.case-list-page .face-pager { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; margin-top: 16px; }
+.case-list-page .face-pager[hidden] { display: none; }
+.case-list-page .face-page { min-width: 40px; min-height: 40px; padding: 0 10px; border: 1px solid var(--color-border-strong); border-radius: 3px; background: var(--color-paper); color: var(--color-heading); font: 700 14px/1 var(--font-heading); cursor: pointer; }
+.case-list-page .face-page[aria-current="page"] { border-color: var(--color-heading); background: var(--color-heading); color: var(--color-paper); }
+.case-list-page .face-page:disabled { border-style: dashed; color: var(--color-muted); cursor: default; }
+.case-list-page .face-page:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+@media (hover: hover) and (pointer: fine) { .case-list-page .face-page:not(:disabled):not([aria-current]):hover { background-color: color-mix(in srgb, var(--color-desk-kraft) 16%, var(--color-paper)); } }
 
+/* 색인 사건 종류 버튼(FE-126): 검색창 아래 한 줄. 누른 종류는 먹색으로 채운다 */
+.case-list-page .face-kinds { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.case-list-page .face-kind { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 12px; border: 1px solid var(--color-border-strong); border-radius: 3px; background: var(--color-paper); color: var(--color-heading); font: 700 14px/1 var(--font-heading); letter-spacing: -.02em; cursor: pointer; }
+.case-list-page .face-kind-count { font: 400 var(--text-caption)/1 var(--font-article); color: var(--color-muted); }
+.case-list-page .face-kind[aria-pressed="true"] { border-color: var(--color-heading); background: var(--color-heading); color: var(--color-paper); }
+.case-list-page .face-kind[aria-pressed="true"] .face-kind-count { color: inherit; opacity: .75; }
+.case-list-page .face-kind:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+@media (hover: hover) and (pointer: fine) { .case-list-page .face-kind[aria-pressed="false"]:hover { background-color: color-mix(in srgb, var(--color-desk-kraft) 16%, var(--color-paper)); } }
+
+/* 성향 테스트 면(FE-126): 소개 기사(그림) + 네 개의 저울 | 열여섯 유형 갤러리 | 입구 광고 */
+.case-list-page .pf-top { grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); }
+.case-list-page .pf-story { padding: 0 26px 0 0; }
+.case-list-page .pf-figure { margin: 0 0 12px; }
+.case-list-page .pf-figure-image { display: block; width: 100%; height: 190px; object-fit: contain; mix-blend-mode: multiply; } /* 흰 바탕 그림을 종이 위에 찍은 것처럼 */
+.case-list-page .pf-story .dense { columns: 2; column-gap: 22px; column-rule: 1px solid var(--color-border); }
+.case-list-page .pf-side { display: flex; flex-direction: column; gap: 18px; padding-left: 22px; border-left: 1px solid var(--color-border); }
+.case-list-page .pf-scale-list { margin: 0; }
+.case-list-page .pf-scale-row { padding: 8px 0 9px; border-bottom: 1px dotted var(--color-border-strong); }
+.case-list-page .pf-scale-row dt { margin-bottom: 6px; font: 700 15px/1.4 var(--font-heading); color: var(--color-heading); }
+.case-list-page .pf-scale-ends { display: grid; grid-template-columns: auto minmax(24px, 1fr) auto; align-items: center; gap: 8px; margin: 0; font: 400 13px/1.4 var(--font-article); color: var(--color-text); }
+.case-list-page .pf-scale-beam { height: 0; border-top: 1px solid var(--color-border-strong); }
+.case-list-page .pf-scale-note { margin: 10px 0 0; font-size: var(--text-caption); color: var(--color-muted); word-break: keep-all; }
+.case-list-page .pf-gallery { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); margin: 0 0 8px; padding: 0; list-style: none; }
+.case-list-page .pf-card { position: relative; display: flex; flex-direction: column; padding: 12px 10px 14px; border-left: 1px dashed var(--color-border-strong); border-bottom: 1px dotted var(--color-border-strong); }
+.case-list-page .pf-card:nth-child(8n + 1) { padding-left: 0; border-left: 0; }
+.case-list-page .pf-card:nth-child(8n) { padding-right: 0; }
+.case-list-page .pf-card-image { display: block; width: 100%; height: 120px; margin-bottom: 8px; object-fit: contain; mix-blend-mode: multiply; }
+.case-list-page .pf-meter { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; margin: 0 0 4px; font: 700 11px/1.4 var(--font-article); color: var(--color-label); }
+.case-list-page .pf-pips { display: inline-flex; gap: 2px; }
+.case-list-page .pf-pips > span { width: 8px; height: 8px; border: 1px solid var(--color-border-strong); }
+.case-list-page .pf-pips > .is-on { border-color: var(--color-label); background: var(--color-label); }
+.case-list-page .pf-card h3 { margin: 0 0 4px; font: 700 15px/1.36 var(--font-heading); letter-spacing: -.04em; color: var(--color-heading); }
+.case-list-page .pf-card-name { display: block; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; letter-spacing: inherit; text-align: left; word-break: keep-all; cursor: pointer; }
+.case-list-page .pf-card-name:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+.case-list-page .pf-card-line { display: -webkit-box; margin: 0; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 3; font: 400 12px/1.5 var(--font-article); color: var(--color-muted); word-break: keep-all; } /* 한 줄 설명은 세 줄까지(전체는 유형 설명 지면) */
+.case-list-page .pf-card.is-mine { background: color-mix(in srgb, var(--color-desk-kraft) 12%, transparent); }
+.case-list-page .pf-mine { position: absolute; right: 4px; top: 8px; margin: 0; opacity: .85; mix-blend-mode: multiply; pointer-events: none; }
+.case-list-page .pf-ad { margin: 0; }
+
+/* 오피니언 면(FE-126): 사설 제목 배너 | 사설 본문(그림 · 인용, 3단) + 남불의 한마디 · 지난 사설 | 독자 투고 */
+.case-list-page .op-label { margin: 0 0 6px; font: 700 var(--text-caption)/1.4 var(--font-article); letter-spacing: .3em; color: var(--color-label); }
+.case-list-page .op-banner h2 { font-size: 46px; }
+.case-list-page .op-top { grid-template-columns: minmax(0, 3fr) minmax(0, 1fr); padding-top: 20px; }
+.case-list-page .op-editorial { padding: 0 26px 0 0; }
+.case-list-page .op-figure { break-inside: avoid; margin: 0 0 12px; }
+.case-list-page .op-figure-image { display: block; width: 100%; height: 200px; object-fit: contain; mix-blend-mode: multiply; }
+.case-list-page .op-editorial .dense { columns: 3; column-gap: 24px; column-rule: 1px solid var(--color-border); }
+.case-list-page .op-editorial .dense p { margin-bottom: 8px; font-size: 14px; line-height: 1.7; }
+.case-list-page .op-quote { break-inside: avoid; margin: 6px 0 14px; padding: 12px 4px; border-top: 3px double var(--color-border-strong); border-bottom: 3px double var(--color-border-strong); font: 700 18px/1.5 var(--font-heading); letter-spacing: -.03em; color: var(--color-heading); text-align: center; word-break: keep-all; }
+.case-list-page .op-side { display: flex; flex-direction: column; gap: 28px; padding-left: 22px; border-left: 1px solid var(--color-border); }
+.case-list-page .op-column-face { float: left; width: 72px; height: 72px; margin: 2px 12px 4px 0; border-radius: 50%; object-fit: cover; }
+.case-list-page .op-column-line { margin: 0; font: 400 15px/1.7 var(--font-article); color: var(--color-text); word-break: keep-all; }
+.case-list-page .op-shelf { margin: 0; padding: 0; list-style: none; counter-reset: shelf; }
+.case-list-page .op-shelf li { counter-increment: shelf; border-bottom: 1px dotted var(--color-border-strong); }
+.case-list-page .op-shelf-item { display: flex; gap: 8px; width: 100%; min-height: 44px; padding: 8px 0; border: 0; background: transparent; color: var(--color-muted); font: 700 14px/1.45 var(--font-heading); letter-spacing: -.03em; text-align: left; word-break: keep-all; cursor: pointer; }
+.case-list-page .op-shelf-item::before { content: counter(shelf); flex: none; font: 400 var(--text-caption)/1.9 var(--font-article); color: var(--color-label); }
+.case-list-page .op-shelf-item[aria-current="true"] { color: var(--color-heading); text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 4px; }
+.case-list-page .op-shelf-item:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+@media (hover: hover) and (pointer: fine) { .case-list-page .op-shelf-item:hover { color: var(--color-heading); } }
+.case-list-page .op-letter-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.case-list-page .op-letter-grid > * { padding: 10px 14px 6px; } /* 투고 칸과 안내 칸이 같은 상자 크기 */
+.case-list-page .op-letter-grid > .op-letter + .op-letter::before { content: ''; position: absolute; top: 0; bottom: 0; left: -8px; border-left: 1px dashed var(--color-border-strong); } /* 투고 사이 점선은 칸 밖 틈에 */
+.case-list-page .op-letter { position: relative; }
+.case-list-page .op-letter { display: flex; flex-direction: column; }
+.case-list-page .op-letter h3 { margin-bottom: 6px; font: 700 16px/1.42 var(--font-heading); letter-spacing: -.03em; color: var(--color-heading); }
+.case-list-page .op-letter-title { display: block; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; letter-spacing: inherit; text-align: left; word-break: keep-all; cursor: pointer; }
+.case-list-page .op-letter-title:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+@media (hover: hover) and (pointer: fine) { .case-list-page .op-letter.is-pickable:hover .op-letter-title { text-decoration: underline; text-underline-offset: 3px; } }
+.case-list-page .op-letter-text { margin: 0 0 8px; font: 400 13px/1.6 var(--font-article); color: var(--color-text); word-break: keep-all; }
+.case-list-page .op-letter .byline { margin-top: auto; }
+.case-list-page .op-send.filler-ad { border: 3px double var(--color-border-strong); }
+
+@media (max-width: 1100px) {
+  .case-list-page .pf-figure-image { height: 160px; }
+  .case-list-page .pf-gallery { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .case-list-page .pf-card { display: grid; grid-template-columns: 56px minmax(0, 1fr); grid-template-rows: auto auto 1fr; column-gap: 10px; align-content: start; } /* 중간 화면은 그림을 왼쪽에 둔 가로 칸 4 × 4 */
+  .case-list-page .pf-card, .case-list-page .pf-card:nth-child(8n + 1), .case-list-page .pf-card:nth-child(8n) { padding: 8px 10px 9px; border-left: 1px dashed var(--color-border-strong); }
+  .case-list-page .pf-card:nth-child(4n + 1) { padding-left: 0; border-left: 0; }
+  .case-list-page .pf-card:nth-child(4n) { padding-right: 0; }
+  .case-list-page .pf-card-image { grid-row: 1 / 4; height: 76px; margin: 0; }
+  .case-list-page .pf-banner h2 { font-size: 44px; } /* 성향 테스트 면만(다른 면 배너는 그대로) */
+  .case-list-page .pf-story { display: grid; grid-template-columns: minmax(0, 1fr) 40%; column-gap: 16px; align-content: start; } /* 중간 화면은 그림을 오른쪽에 두어 소개 문구와 나란히 */
+  .case-list-page .pf-story > * { grid-column: 1 / -1; }
+  .case-list-page .pf-story > .pf-figure { grid-column: 2; grid-row: 2 / 4; margin: 0; }
+  .case-list-page .pf-story > .lead-intro { grid-column: 1; grid-row: 2; }
+  .case-list-page .pf-story > .byline { grid-column: 1; grid-row: 3; align-self: start; }
+  .case-list-page .pf-story > .start { justify-self: end; }
+  .case-list-page .pf-figure-image { height: 100px; }
+  .case-list-page .pf-card-line { display: block; white-space: nowrap; text-overflow: ellipsis; } /* 한 줄만 */
+  .case-list-page .pf-scale-row { display: grid; grid-template-columns: 7.5em minmax(0, 1fr); align-items: center; gap: 8px; } /* 중간 화면은 축 이름과 양 끝을 한 줄에: 신문 최소 높이 안에 들게 */
+  .case-list-page .pf-scale-row dt { margin: 0; font-size: 14px; }
+  .case-list-page .pf-scale-note { display: none; }
+  .case-list-page .pf-ad .filler-text { display: none; }
+  .case-list-page .op-banner h2 { font-size: 38px; }
+  .case-list-page .op-top { grid-template-columns: minmax(0, 2.2fr) minmax(0, 1fr); }
+  .case-list-page .op-editorial .dense { columns: 2; }
+  .case-list-page .op-figure-image { height: 110px; }
+  .case-list-page .op-editorial .dense p { font-size: 13.5px; line-height: 1.65; }
+}
 @media (max-width: 768px) {
   .case-list-page .paper:not(.case-paper) { --paper-w: 100vw; }
   .case-list-page .tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; } /* 면이 아홉이라 모바일은 가로로 밀어 고른다 */
   .case-list-page .tab { flex: none; padding: 0 12px; }
-  .case-list-page .face-index-list { columns: 1; }
-  .case-list-page .face-stub { padding: 32px 18px; }
+  .case-list-page .face-index-list { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-auto-flow: row; }
+  .case-list-page .face-index-list::before { content: none; }
+  .case-list-page .pf-top, .case-list-page .op-top { display: flex; flex-direction: column; gap: 22px; }
+  .case-list-page .pf-story, .case-list-page .op-editorial { padding: 0; }
+  .case-list-page .pf-story .dense, .case-list-page .op-editorial .dense { columns: 1; }
+  .case-list-page .pf-side, .case-list-page .op-side { padding: 16px 0 0; border-left: 0; border-top: 1px solid var(--color-border-strong); }
+  .case-list-page .pf-gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .case-list-page .pf-card:nth-child(n) { padding: 12px 10px 14px; border-left: 1px dashed var(--color-border-strong); }
+  .case-list-page .pf-card:nth-child(2n + 1) { padding-left: 0; border-left: 0; }
+  .case-list-page .pf-card:nth-child(2n) { padding-right: 0; }
+  .case-list-page .op-banner h2 { font-size: 28px; }
+  .case-list-page .op-figure-image { height: 180px; }
+  .case-list-page .op-letter-grid { grid-template-columns: 1fr; }
+  .case-list-page .op-letter-grid > .op-letter::before { content: none; }
+  .case-list-page .op-letter + .op-letter { border-top: 1px dashed var(--color-border-strong); }
+}
+@media (max-width: 480px) {
+  .case-list-page .pf-card { display: flex; } /* 모바일 2열은 칸이 좁아 그림을 다시 위로 */
+  .case-list-page .pf-card-image { height: 100px; margin-bottom: 8px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .case-list-page .more-body, .case-list-page .more-arrow, .case-list-page .more-inner, .case-list-page .more-inner .article { transition: none; }

@@ -2,8 +2,9 @@ import { button, element, renderSiteFooter } from '../../components/siteLayout.j
 import { earButton, innerPageHead, pageIndex } from '../../components/newspaperFront.js';
 import { todayLabel } from '../../utils/newspaper.js';
 import { imageOf } from '../../components/stage.js';
-import { PERSONALITY_LINES } from '../../content/personalityLines.js';
+import { PAPER_QUESTIONS, toPaperQuestions } from '../../content/paperQuestions.js';
 import { sheetMessage } from './personalityParts.js';
+import { leaveByTurn } from '../../utils/pageTurn.js';
 import { reducedMotion } from '../../utils/motion.js';
 import { canGoBackInApp } from '../../app/router.js';
 import { createTestFlow } from './personalityFlow.js';
@@ -12,6 +13,8 @@ import { createTestFlow } from './personalityFlow.js';
 // 지면 문법은 6막 신문(stage.css .sheet)과 같다: 제호 띠 · 이중 괘선 · 명조 기사체 · 흑백 지면 사진.
 // 문항 하나 = 찬반 토론 지면 한 판(A · B 두 단이 맞선다), 답 = 아래 독자 설문 응모권의 다섯 칸.
 // 문항 · 답 · 제출은 기존 성향 테스트(personalityPage.js, /test)와 같은 api를 쓰고, 결과는 기존 결과 화면(/test/result)으로 간다.
+// FE-126: 문항 문구는 이 지면만 사건사고 단신으로 바꿔 싣는다(content/paperQuestions.js — 문항 id · 축 · A/B 방향은 그대로라 점수 뜻이 같다).
+// 지면은 다른 신문처럼 최소 높이(신문 폭 × 1.4)를 지킨다.
 // 고르는 방법(진행 규칙)도 같은 personalityFlow.js를 쓴다: 칸을 누르거나 숫자 1 ~ 5를 치면 다음 문항으로 넘어가고, 마지막 문항은 "결과 보기"를 눌러야 제출된다.
 const SCALE = [
   { value: 0, degree: '매우', side: 'A' },
@@ -42,17 +45,18 @@ export async function renderPersonalityPaperPage(container, { api, navigate, fro
   desk.setAttribute('aria-hidden', 'true');
   const sheet = element('article', 'paper inner-page tp-sheet');
   sheet.setAttribute('aria-label', '신문 10면 오피니언 · 판결 성향 테스트');
+  const turnAway = leaveByTurn(sheet, 'case-list-page tp-page');
   if (from === 'paper' && !reducedMotion()) sheet.classList.add('is-turning-in');
   if (from) history.replaceState({ ...history.state, extras: {} }, ''); // 새로고침 · 뒤로 가기로는 넘기는 연출을 되풀이하지 않는다
 
   // 안쪽 면 머리글(S-20과 같다): 왼쪽 귀 "이전으로"(앱 안의 이전 화면으로, 링크로 바로 들어왔으면 메인), 오른쪽 귀 "메인으로", 제호 아래 면 이름 · 날짜 · 쪽수, 그 밑 지면 목차
   const runner = innerPageHead({
-    earLeft: earButton('← 이전으로', '앞에 보던 화면으로 돌아가요', () => (canGoBackInApp() ? history.back() : navigate('landing')), 'ear-left'),
+    earLeft: earButton('← 이전으로', '앞에 보던 화면으로 돌아가요', () => (canGoBackInApp() ? turnAway(() => history.back()) : navigate('landing')), 'ear-left'),
     earRight: earButton('메인으로', '책상으로 돌아가요', () => navigate('landing'), 'ear-right'),
     meta: `오피니언면 · ${todayLabel()} · 10면`,
   });
   const tabsZone = element('div', 'tabs-zone');
-  tabsZone.append(pageIndex(navigate, 'test'));
+  tabsZone.append(pageIndex(navigate, 'test', { turn: turnAway })); // 다른 면으로 갈 때 지면을 넘긴다(FE-126)
   const body = element('div', 'tp-body');
   sheet.append(runner, tabsZone, body, renderSiteFooter()); // 법적 고지는 다른 신문 지면처럼 지면 맨 아래 줄(라우터의 바깥 푸터는 ownsFooter로 끈다)
   root.append(element('h1', 'visually-hidden', '판결 성향 테스트'), desk, sheet);
@@ -68,6 +72,7 @@ export async function renderPersonalityPaperPage(container, { api, navigate, fro
     sheetMessage(body, '지면을 펼치는 중이에요.');
     try {
       ({ questions } = await api.getPersonalityQuestions());
+      questions = toPaperQuestions(questions);
     } catch {
       if (active()) sheetMessage(body, '문항을 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요.', { retry: load, alert: true });
       return;
@@ -83,13 +88,13 @@ export async function renderPersonalityPaperPage(container, { api, navigate, fro
     const lead = element('div', 'tp-intro-lead');
     const text = element('div', 'tp-columns');
     [
-      `일상에서 마주칠 만한 ${questions.length}가지 상황을 실었다. 법을 몰라도 괜찮다. 약 3분이면 끝난다.`,
-      '상황마다 두 행동이 맞선다. 내 마음이 더 가까운 쪽을 응모권의 다섯 칸 가운데 골라 체크하면 된다.',
+      `이번 주 지면에 들어온 사건사고 제보 ${questions.length}건을 실었다. 주차장 접촉 사고부터 거짓 후기, 비상벨 장난까지. 법을 몰라도 괜찮다. 약 3분이면 끝난다.`,
+      '제보마다 두 대응이 맞선다. 내가 그 자리에 있었다면 어느 쪽에 더 가까울지, 응모권의 다섯 칸 가운데 골라 체크하면 된다.',
       '정답은 없다. 어느 유형이 옳다는 뜻도 아니다. 잘잘못을 따질 때 무엇을 먼저 보는지, 그 순서를 보여 줄 뿐이다.',
     ].forEach((line) => text.append(element('p', 'tp-text', line)));
     lead.append(
       element('h2', 'tp-headline', '잘잘못을 따질 때, 나는 무엇을 먼저 볼까'),
-      element('p', 'tp-deck', `${questions.length}가지 상황에 답하면 내가 중요하게 보는 가치에 맞는 판결 성향 유형이 나온다`),
+      element('p', 'tp-deck', `사건사고 ${questions.length}건에 답하면 내가 중요하게 보는 가치에 맞는 판결 성향 유형이 나온다`),
       text,
     );
     const coupon = element('div', 'tp-coupon tp-coupon-start');
@@ -144,7 +149,7 @@ export async function renderPersonalityPaperPage(container, { api, navigate, fro
     return stack;
   }
   const lineOf = (question, i) => {
-    const { who = i < questions.length / 2 ? 'naero' : 'nambul', line } = PERSONALITY_LINES[question.id] ?? {};
+    const { who = i < questions.length / 2 ? 'naero' : 'nambul', line } = PAPER_QUESTIONS[question.id] ?? {};
     return { who, line };
   };
   function quoteOf(question, i) {
@@ -258,7 +263,7 @@ export async function renderPersonalityPaperPage(container, { api, navigate, fro
     }
     if (active()) {
       flow.stopKeys();
-      navigate('testResult');
+      navigate('testPaperResult', { from: 'paper' }); // 신문 지면 결과로(내용은 /test/result와 같다)
     }
   }
 
