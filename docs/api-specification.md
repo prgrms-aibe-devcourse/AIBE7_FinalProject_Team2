@@ -58,6 +58,9 @@
 | v0.54 | 2026-10-27 | **레벨 · 직업 API 신설 (BE-106)** — 11장 L-1 `GET /level`(레벨 · XP · 직업 목록) · L-2 `PUT /level/job`(카드에 보여 줄 직업 선택) · L-3 `POST /level/share-reward`(SNS 공유 보상). P-5 응답에 `level`(L-1과 같은 값) 추가, 1-5에 `JOB_LOCKED`(409) 추가. 레벨은 익명 ID 단위(회원 합산은 후속). 경험치 산식 · 직업 11등급 · 지급 상한은 11장과 [BE-106 결정 기록](decisions/BE-106.md) |
 | v0.55 | 2026-10-27 | 범죄 유형 강도 · 절도 추가 (BE-112 · ERD v1.40 · V31) — `crimeType` 값에 `ROBBERY`(강도) · `THEFT`(절도) 추가(API 1 쿼리 · 응답, 사건 등록). 분류명(`crimeCategoryLabel`)은 둘 다 "재산범죄". API 1 `summary.byCrimeType`은 공개 사건이 없어도 다섯 키를 모두 0으로 내려 준다. API 4 `rangeOptions`: 강도는 벌금형을 빼고 무기징역을 더한 7개, 절도는 공통 7개 |
 | v0.56 | 2026-10-27 | API 1 `crimeCategoryLabel` 설명에 범죄 유형별 분류명 대응을 모두 적음(생명 · 재산 · 신체범죄, 강도 · 절도는 재산범죄) (BE-111, BE-112 #297 리뷰 요청) |
+| v0.57 | 2026-10-27 | **사건 대본 검수 A-13-10 ~ A-13-12 신설 (BE-108)** — `GET /admin/cases/{caseId}/script` · `POST .../script/approve` · `POST .../script/reject`. 적재(A-14-1)가 넣은 증거조사 대본을 관리자가 보고 승인해야 공개된다(공개 서빙은 BE-109). **번호는 운영 메뉴 A-16 ~ A-41 예약 때문에 A-13 하위로 매겼다** — A-14-1과 같은 이유다. 검수 칸(`reviewStatus` · `isPublished` · `reviewedBy` · `reviewedAt` · `reviewNote`)은 판결 후보 A-8과 같은 이름 · 같은 형식이고, 대사마다 판단 요소 문구 `label`을 서버가 붙여 준다. 대사 한 줄 직접 수정 A-13-13(`PATCH .../script/evidence/{factorId}`)도 함께 — 고친 줄은 `validation.manual`로 표시하고 검수 상태를 대기로 되돌린다(해송님 요청). **A-6 응답에 `script` 요약(`exists` · `reviewStatus` · `publishable`) 추가** — 미승인 대본은 공개를 막지 않으므로 `publishReadiness.reasons`가 아니라 별도 칸으로 내려 공개 준비 화면이 경고로 쓴다. 에러 코드 `SCRIPT_NOT_FOUND` · `SCRIPT_LINE_NOT_FOUND`(404) 추가. ERD v1.41 `case_script`(V32) **(병합 메모) 번호를 두 번 옮겼다 — BE-106(V30 · v0.54 · v1.39)과 BE-112(V31 · v0.55 · v1.40) · BE-111(v0.56)이 먼저 머지돼, 이 작업은 V32 · v0.57 · v1.41로 다시 매겼다. 먼저 머지된 쪽이 번호를 갖는다** |
+| v0.58 | 2026-10-27 | **아이디 회원가입 M-5 · 아이디 로그인 M-6 신설 (BE-113 · FE-117, ERD v1.42 · V33)** — `POST /auth/signup` · `POST /auth/login`. 둘 다 성공하면 리프레시 토큰 쿠키(`NLNB_RT`)만 심고 `{ nickname }`을 돌려주며, 화면은 M-1 재발급으로 액세스 토큰을 받는다(카카오 로그인과 같은 흐름). Origin 검증 대상에 추가(로그인 CSRF 방지). 1-5에 409 `DUPLICATE_ID` 추가, `INVALID_CREDENTIALS`를 회원 로그인에도 쓴다, `TOO_MANY_REQUESTS` 전용 제한에 M-5 · M-6 추가(`Retry-After` 6 · 3초). 관리자 로그인(A-2)은 바뀌지 않는다 |
+| v0.59 | 2026-10-27 | **API 18 공개 사건 대본 신설 (BE-109)** — `GET /cases/{caseId}/script`. A-13-10 ~ 12(BE-108)가 적재 · 검수한 대본에서 **승인된 것만** 공개용으로 가져다 준다(새로 저장하지 않음, API 17과 같은 원칙) — 2막 증거조사 대사(`factorId` · `side` · `character` · `card` · `text`)와 배역(`cast`)만 담는다. **나머지 막(1막 해설 · 공소사실 · 쟁점 정리 · 피고인신문 · 검사의견 · 최종변론 · 최후진술)은 이 API에 넣지 않는다** — 파이프라인이 만들지 않아 BE-107 후속 확장으로 분리했고, 그중 사건별 대사가 필요한 막은 당분간 "증거조사 중심 축약판"으로 둔다(FE-33 담당자 해송님 합의, BE-109 Jira 댓글). `side`는 A-13-10의 `role`을 대문자 코드값(`PROSECUTOR` · `DEFENSE`)으로 바꿔 내려준다 — 다른 공개 API와 형식을 맞추려는 것(화면 한글 변환은 프론트 몫). `card`는 A-13-10의 `label`과 같은 값(판단 요소 문구) — 파이프라인 사건에는 정적 증거 카드가 없어 이 문구가 카드 역할을 한다. 검수용 값(`manual` · `editedAt` · `validation` · `attempts`)은 내려주지 않는다. **배열 순서가 곧 재생 순서다**(별도 정렬 필드 없음). 비공개 사건은 `CASE_NOT_FOUND`, 대본이 없거나 아직 승인 전이면 `SCRIPT_NOT_FOUND`(API 17과 같은 모양 — 빈 배열 대신 404를 쓰는 이유는 "대본 없음"과 "대사 0줄"을 구분하기 위해서다). **(병합 메모) BE-113(PR #306 · v0.58)이 먼저 develop에 머지돼, 이 작업은 v0.59로 다시 매겼다** |
 
 ---
 
@@ -134,7 +137,7 @@ json
 | 422 | `OUT_OF_ALLOWED_RANGE` | 형량이 선고할 수 있는 범위 밖 | S-05c 경고 유지 (정상 화면이면 버튼이 비활성이라 오지 않음) |
 | 422 | `INVALID_SUSPENSION` | 집행유예를 허용하지 않는 형벌 · 형량인데 값이 있음, 기간이 1 ~ 5년 밖 | 입력 안내 |
 | 401 | `UNAUTHORIZED` | (확장, 관리자 API) 로그인하지 않음 · 세션 만료 | 관리자 로그인 화면 |
-| 401 | `INVALID_CREDENTIALS` | (확장, 관리자 API) 로그인 실패. 계정 없음 · 비활성 · 비밀번호 불일치를 구분하지 않는다 | 로그인 실패 안내 |
+| 401 | `INVALID_CREDENTIALS` | (확장, 관리자 API · v0.58 회원 M-6) 로그인 실패. 계정 없음 · 비활성 · 비밀번호 불일치를 구분하지 않는다. M-6은 아이디 형식이 틀린 경우도 같은 코드다 | 로그인 실패 안내 |
 | 401 | `TOKEN_EXPIRED` | (확장, 회원 토큰) 액세스 토큰 만료 | 토큰 재발급 후 다시 요청 |
 | 401 | `TOKEN_INVALID` | (확장, 회원 토큰) 형식 · 서명 등이 잘못된 토큰, 아직 토큰을 확인할 수 없음 | 토큰을 지우고 다시 로그인 |
 | 403 | `FORBIDDEN` | (확장, 관리자 API) 권한 없음, CSRF 토큰 없음 · 불일치 | CSRF 토큰을 다시 받아 재시도 · 일반 오류 안내 |
@@ -142,6 +145,7 @@ json
 | 404 | `FACTOR_NOT_FOUND` | (확장, 관리자 API) 판단 요소가 없음 | 상세 다시 불러오기 |
 | 404 | `PERSONALITY_RESULT_NOT_FOUND` | (확장, 성향 API) 성향 테스트 결과가 없음 (쿠키 없음 포함) | S-15 테스트 안내 |
 | 404 | `PERSONALITY_TYPE_NOT_FOUND` | (확장, 성향 API) 공유 주소의 유형이 없음 | 공유 결과 없음 안내 · 테스트 권유 |
+| 409 | `DUPLICATE_ID` | (확장, 회원 M-5, v0.58) 이미 쓰는 아이디(대소문자만 다른 아이디 포함). 동시에 같은 아이디로 가입해도 한 명만 만들어지고 나머지는 이 코드다 | 아이디 칸에 안내. "방금 가입했다면 로그인" 안내도 함께 (가입 직후 서버 오류 뒤 다시 누른 경우) |
 | 409 | `DUPLICATE_TITLE` | (확장, 관리자 API) 사건 제목이 다른 사건과 겹침 | 입력 안내 |
 | 409 | `PUBLISH_NOT_READY` | (확장, 관리자 API) 공개 조건 미충족. `details`에 조건 코드 | 남은 조건 안내 (A-13) |
 | 502 | `PROMPT_GENERATION_FAILED` | (확장, 관리자 API, BE-91 · BE-92) Gemini 호출 실패, 또는 설정(`GEMINI_API_KEY`) 없음 | 다시 시도 안내 (A-13-1 · A-13-2 · A-13-6) |
@@ -158,7 +162,7 @@ json
 | 422 | `IMPORT_RESULT_INVALID` | (확장, 관리자 API, BE-93 2차) 생성 결과를 사건으로 만들 수 없음. `details`에 어느 값이 문제인지 담는다(예: `case.factors[2].label`) | 다시 생성하도록 안내 (A-14-1) |
 | 502 | `IMPORT_UNAVAILABLE` | (확장, 관리자 API, BE-93) 파이프라인 서비스에 닿지 못함, 또는 설정(`PIPELINE_SERVICE_URL`) 없음. **이 서비스를 켜지 않은 서버에서는 사건 등록만 꺼지고 나머지는 정상이다**(COMMON-50) | 다시 시도 · 관리자 문의 안내 (A-14) |
 | 409 | `BASELINE_RETAKE_USED` | (확장, 성향 API, v0.50) 성향카드 다시 정하기를 이미 씀 | 화면은 다 쓰면 버튼을 막는다. 오면 "재심은 이미 한 번 청구했어요" 안내 후 마이페이지를 다시 불러온다 (P-2) |
-| 429 | `TOO_MANY_REQUESTS` | (확장, BE-63) 같은 IP에서 `/api` 요청이 너무 많음(평균 초당 20번 · 순간 40번 초과). (v0.47) 아래 경로는 이에 더해 **더 엄격한 전용 제한**을 받는다: M-1 재발급 · M-2 로그아웃(IP별 둘을 합쳐 분당 30번 · 순간 30번), A-2 관리자 로그인(IP별 분당 5번 · 순간 5번), M-3 카카오 로그인 시작(IP별 분당 30번 · 순간 30번 + 전체 합계). 전용 제한은 POST(M-3은 GET)만 센다. **백엔드가 아니라 운영 Nginx가 돌려준다** — 형식은 1-4와 같고 `Retry-After`(초) 헤더가 붙는다: 공통 `1`, M-1 · M-2 · M-3 `2`, A-2 `12`. M-1이 429여도 리프레시 토큰은 그대로라 로그아웃된 것이 아니다. 로컬 개발(Vite)에는 Nginx가 없어 나오지 않는다 | 일반 오류 안내. 자동으로 다시 보내지 않는다 |
+| 429 | `TOO_MANY_REQUESTS` | (확장, BE-63) 같은 IP에서 `/api` 요청이 너무 많음(평균 초당 20번 · 순간 40번 초과). (v0.47) 아래 경로는 이에 더해 **더 엄격한 전용 제한**을 받는다: M-1 재발급 · M-2 로그아웃(IP별 둘을 합쳐 분당 30번 · 순간 30번), A-2 관리자 로그인(IP별 분당 5번 · 순간 5번), M-3 카카오 로그인 시작(IP별 분당 30번 · 순간 30번 + 전체 합계), (v0.58) M-6 아이디 로그인(IP별 분당 20번 · 순간 20번) · M-5 아이디 회원가입(IP별 분당 10번 · 순간 10번) + 두 경로 전체 합계(초당 10번, 넘으면 순간 20번까지 기다렸다가 처리). 전용 제한은 POST(M-3은 GET)만 센다. **백엔드가 아니라 운영 Nginx가 돌려준다** — 형식은 1-4와 같고 `Retry-After`(초) 헤더가 붙는다: 공통 `1`, M-1 · M-2 · M-3 `2`, A-2 `12`, M-6 `3`, M-5 `6`. M-1이 429여도 리프레시 토큰은 그대로라 로그아웃된 것이 아니다. 로컬 개발(Vite)에는 Nginx가 없어 나오지 않는다 | 일반 오류 안내. 자동으로 다시 보내지 않는다 |
 | 500 | `INTERNAL_ERROR` | 서버 오류 | 일반 오류 안내 |
 - "이미 제출함"과 "순서가 맞지 않음"을 따로 나누지 않고 `INVALID_STATE` 하나로 둔다. 화면이 할 일은 둘 다 "`currentStatus`의 화면으로 이동"으로 같기 때문이다.
 - 관리자 오류는 쿠키 유무만으로 결정하지 않는다. 먼저 요청을 거절한 보안 필터의 오류를 반환하므로 미인증 POST도 CSRF 검사 실패 시 403일 수 있다. 인증·인가 구분과 응답 우선순위는 **8-1의 BE-88 검증 기준**을 따른다.
@@ -202,6 +206,7 @@ json
 | 15 | GET | `/cases/{caseId}/experience/comparison/analysis` | AI 비교 분석 | `COMPLETED` | — | S-08 | 확장 |
 | 16 | GET | `/cases/{caseId}` | 공개 사건 상세 (체험 없이) | — | — | S-20 | 확장 (v0.29) |
 | 17 | GET | `/cases/{caseId}/paper` | 공개 신문 지면 (헤드라인 · 본문 · 발단 · 결론 사진) | — | — | S-20 | 확장 (v0.53) |
+| 18 | GET | `/cases/{caseId}/script` | 공개 사건 대본 (승인된 2막 증거조사 대사) | — | — | S-20 | 확장 (v0.59) |
 
 **공개(11, 13)와 조회(12, 14)를 나눈 이유**: 상태를 바꾸는 요청은 POST로 두고, 조회는 몇 번을 불러도 상태가 바뀌지 않게 한다. 결과 화면을 새로고침하면 조회만 다시 부르면 된다. 공개 요청은 이미 공개된 상태에서 다시 와도 거절하지 않고 성공으로 돌려준다(시퀀스 7장).
 
@@ -756,7 +761,7 @@ S-20 사건 디테일(정보 구조 v1.12)이 체험을 만들기 전에 부르�
 - 쿠키는 **읽기만** 하고 발급하지 않는다(발급은 API 2 · P-2, 1-2). 쿠키가 없거나 형식이 틀리거나 체험 전이면 `myStatus`는 `null`이다.
 - 버튼 분기(정보 구조 S-20): `myStatus`가 `null`이면 **체험 시작**(API 2로 체험을 만든 뒤 S-03), `IN_PROGRESS`면 **이어서 하기**, `COMPLETED`면 **결과 다시 보기**. 이어서 하기 · 결과 다시 보기도 API 2를 불러 응답 `status`로 이동한다(1-6). 세부 상태(7단계)는 이 API에 내보내지 않는다.
 - 캐시: `myStatus`가 사용자마다 달라 API 1과 같은 규칙이다(지금은 `no-store`, HTTP 캐시를 켤 때는 `private` + `Vary: Cookie`).
-- 대본(판결 체험 무대, REQ-089)은 이 API에 넣지 않는다. 서버에서 내려줄지는 별도로 정한다(#138 · #141).
+- 대본(판결 체험 무대, REQ-089)은 이 API에 넣지 않는다. 승인된 대본의 증거조사 대사는 API 18(BE-109)에서 따로 준다.
 
 | 거절 | 조건 |
 | --- | --- |
@@ -799,6 +804,43 @@ FE-64가 쓰는 API(S-20 기사 지면 · 증거조사). 관리자 신문 지면
 | --- | --- |
 | 404 `CASE_NOT_FOUND` | 사건 없음 · 비공개 |
 | 404 `PAPER_NOT_FOUND` | 사건은 공개됐지만 관리자가 신문 지면을 아직 생성한 적 없음 |
+| 400 `VALIDATION_ERROR` | `caseId`가 숫자가 아님 |
+
+---
+
+### API 18. (확장) 공개 사건 대본 — `GET /cases/{caseId}/script`
+
+> **신설 (BE-109).** A-13-10 ~ 12(BE-108)가 적재 · 검수한 대본에서 **승인된 것만** 공개용으로 가져다 조립한다 — 새로 저장하지 않는다(API 17과 같은 원칙). 담는 것은 **2막 증거조사 대사뿐**이다 — 나머지 막(1막 해설 · 공소사실 · 쟁점 정리 · 피고인신문 · 검사의견 · 최종변론 · 최후진술)은 파이프라인이 만들지 않아(COMMON-65) 이 API에 넣지 않는다. 그중 사건마다 달라지지 않는 부분만 FE-33이 공통 틀로 채우고, 공소사실 · 피고인신문처럼 사건별 대사가 필요한 막은 당분간 "증거조사 중심 축약판"으로 둔다 — 자세한 내용은 [BE-109 결정 기록](decisions/BE-109.md) 참고. 설계 근거: BE-109 Jira 댓글(승호님 제안 · 해송님 FE-33 담당 합의, 2026-10-27).
+
+**요청**: 본문 없음.
+
+**응답 200**
+
+```json
+{
+  "evidence": [
+    { "factorId": 1, "side": "PROSECUTOR", "character": "naero", "card": "계약서에 서명했다",
+      "text": "계약서에 서명한 사실은 분명합니다." },
+    { "factorId": 2, "side": "DEFENSE", "character": "nambul", "card": "돈을 돌려주지 않았다",
+      "text": "그 돈은 빌린 것이 아니라 받은 것입니다." }
+  ],
+  "cast": { "prosecutor": "naero", "defense": "nambul" }
+}
+```
+
+- `character` · `cast`는 저장된 **코드값**(`naero` · `nambul` 등)을 그대로 내려준다. 화면에 보일 한글 이름(나로 · 남불)으로 바꾸는 것은 프론트 몫이다.
+- `side`는 A-13-10의 `role`을 **대문자 코드값**(`PROSECUTOR` · `DEFENSE`)으로 바꿔 내려준다 — 다른 공개 API가 모두 코드값이라 맞췄다. 화면 한글(검사 · 변호인)로 바꾸는 것은 프론트 몫이다.
+- `card`는 A-13-10의 `label`과 같은 값(= 사건의 판단 요소 문구). 파이프라인 사건에는 정적 증거 카드가 없어 이 문구가 카드 역할을 그대로 한다 — 요소가 지워졌으면 `null`이다.
+- **검수용 값(`manual` · `editedAt` · `validation` · `attempts`)은 내려주지 않는다.** 사람이 고친 줄도 같은 응답에 그대로 나오면 충분하다.
+- **배열 순서가 곧 재생 순서다.** 별도 정렬 필드를 두지 않는다.
+- `cast`는 A-13-10과 같은 값(`{ prosecutor, defense }`).
+- **승인(`reviewStatus: APPROVED`)한 대본만 내려준다.** 검수 전 · 반려된 대본은 없는 것으로 본다 — 사건이 `PUBLISHED`여도 대본이 미승인이면 `SCRIPT_NOT_FOUND`다(API 16 · 17과 달리 사건 공개 여부만으로는 판단하지 않는다).
+- 한 캐릭터가 두 배역을 번갈아 맡는 장면(피고인신문)은 이번 응답에 들어오지 않는다 — 그 장면이 서버 데이터로 들어오는 때에 `cast` 확장이 필요하다(FE-60 "추후 재검토").
+
+| 거절 | 조건 |
+| --- | --- |
+| 404 `CASE_NOT_FOUND` | 사건 없음 · 비공개 |
+| 404 `SCRIPT_NOT_FOUND` | 대본이 없거나, 아직 검수 대기 · 반려 상태(= 승인 전) — 빈 배열 대신 404를 쓰는 이유는 "대본 없음"과 "대사 0줄"을 구분하기 위해서다(A-13-7 `PAPER_NOT_FOUND`와 같은 구분) |
 | 400 `VALIDATION_ERROR` | `caseId`가 숫자가 아님 |
 
 ---
@@ -1081,7 +1123,8 @@ API 1 · 2 · 16 · 17은 상태와 관계없이 부를 수 있다. 표에 없�
       { "judgmentId": 502, "reviewStatus": "PENDING", "isPublished": false, "penaltyLabel": "징역 12년", "modelName": null, "createdAt": "2026-10-20T09:00:00+09:00" }
     ]
   },
-  "publishReadiness": { "ready": false, "reasons": ["NO_PUBLISHED_AI", "NO_PUBLISHED_COURT"] }
+  "publishReadiness": { "ready": false, "reasons": ["NO_PUBLISHED_AI", "NO_PUBLISHED_COURT"] },
+  "script": { "exists": true, "reviewStatus": "PENDING", "publishable": false }
 }
 ```
 
@@ -1091,6 +1134,7 @@ API 1 · 2 · 16 · 17은 상태와 관계없이 부를 수 있다. 표에 없�
 - `penaltyLabel`은 API 14 `preToFinal.finalJudgmentText`(예: "징역 15년")와 같은 규칙으로 만든다.
 - `factors[].summaryTagCandidates`(BE-80): 요약어 후보(ERD `factor.summary_tag_candidates`). 후보 계산을 켜지 않고 적재한 요소는 `null`. **제안일 뿐 요약어(`summaryTag`)를 바꾸지 않는다** — `suggested`가 있으면 관리자가 요약어를 그 값으로 맞출지 판단한다(요약어 수정 API는 아직 없음). `ambiguous: true`면 1 · 2순위가 붙어 제안하지 않은 것이다.
 - `publishReadiness.reasons`는 A-13의 공개 조건 코드(A-13 표)다. 비어 있으면 `ready = true`.
+- `script`는 사건 대본 요약이다(BE-108). **공개 조건이 아니라 경고용 값이다** — 미승인 대본은 사건 공개를 막지 않으므로(대본은 사건 내용이 아니라 체험 연출이다) `publishReadiness.reasons`에 넣지 않고 따로 내려준다. 대본이 없으면 `{ "exists": false, "reviewStatus": null, "publishable": null }`이고, 기존 사건은 모두 이 경우다. 내용은 A-13-10으로 본다.
 - 원문(`original_text`)은 크기가 커서 A-7로 따로 받는다.
 
 | 거절 | 조건 |
@@ -1453,6 +1497,107 @@ A-11과 같은 방식(보낸 필드만, `null` = 지움). `headline` · `article
 | 404 `CASE_NOT_FOUND` | 사건이 없음 |
 | 404 `PAPER_NOT_FOUND` | 아직 생성한 적 없음(먼저 A-13-6으로 생성해야 한다) |
 | 409 `INVALID_STATE` | 이미 `PUBLISHED`(`CASE_PUBLISHED`) |
+
+### A-13-10. 사건 대본 조회 — `GET /admin/cases/{caseId}/script`
+
+> **신설 (BE-108).** 증거조사에서 검사 · 변호인이 주고받는 대사. 파이프라인 `script` 단계(BE-107)가 만들고 적재(A-14-1)가 넣는다. **담는 것은 증거조사 대사뿐이다** — 1막 기사 해설 · 피고인신문 · 최종의견은 파이프라인 범위 밖이다(COMMON-65 · FE-33). 공개 서빙은 API 18(BE-109)이 승인된 대본만 가져다 준다.
+
+```json
+{
+  "evidence": [
+    { "factorId": 1, "label": "계약서에 서명했다", "role": "PROSECUTOR", "character": "naero",
+      "text": "계약서에 서명한 사실은 분명합니다.", "attempts": 1, "validation": { "warnings": [] } },
+    { "factorId": 2, "label": "돈을 돌려주지 않았다", "role": "DEFENSE", "character": "nambul",
+      "text": null, "attempts": 3, "validation": { "warnings": ["증거 카드에 없는 사실을 말했습니다"] } }
+  ],
+  "cast": { "prosecutor": "naero", "defense": "nambul" },
+  "model": "google:gemini-2.5-flash",
+  "balanceWarning": null,
+  "publishable": false,
+  "stopped": false,
+  "generatedAt": "2026-10-27T09:00:00+09:00",
+  "updatedAt": "2026-10-27T09:12:00+09:00",
+  "reviewStatus": "PENDING",
+  "isPublished": false,
+  "reviewedBy": null,
+  "reviewedAt": null,
+  "reviewNote": null
+}
+```
+
+- `evidence[]`는 파이프라인이 만든 모양 그대로이고, **`label`만 서버가 더해 준다** — 어느 사실에 대한 대사인지는 사건의 판단 요소에 있다(파이프라인 `factorId` = `factor.display_order`, ERD v1.37). 화면이 A-6을 다시 불러 번호를 맞추지 않아도 된다. 요소가 지워졌거나 못 찾으면 그 줄의 `label`은 `null`이다.
+- **생성에 실패한 줄은 `text`가 `null`**이다. `attempts`는 그 줄을 몇 번 만들어 봤는지, `validation.warnings`는 그 줄에 대한 경고다(어느 대사의 경고인지 줄 안에 있어 따로 연결할 필요가 없다).
+- `publishable`이 `false`면 승인할 수 없다(A-13-11). 이유는 둘이고 둘 다 내려 준다 — 끝내 생성하지 못한 줄이 있거나(`text: null`), 호출 한도로 중간에 멈췄거나(`stopped: true`). 화면이 "다시 생성"과 "이어서 생성"을 구분해 안내할 수 있다.
+- `generatedAt`은 파이프라인이 만든 시각이고 `updatedAt`은 적재 · 검수 시각이다. 시각은 모두 KST 오프셋.
+- 검수 칸 다섯 개는 **A-8과 같은 이름 · 같은 형식**이다(검수 기록이 없으면 `reviewStatus: "PENDING"`, `reviewedBy`는 관리자 이메일). 화면이 판결 후보 검수 영역과 같은 부품을 쓸 수 있게 맞췄다.
+- **`isPublished`는 사건 공개 여부와 별개다.** 공개한 사건에 대본만 늦게 들어와 승인될 수도 있고, 공개 전에 대본만 승인돼 있을 수도 있다.
+
+| 거절 | 조건 |
+| --- | --- |
+| 404 `CASE_NOT_FOUND` | 사건이 없음 |
+| 404 `SCRIPT_NOT_FOUND` | 사건은 있는데 대본이 아직 없음 (A-13-7의 `PAPER_NOT_FOUND`와 같은 구분) |
+
+### A-13-11. 사건 대본 승인 — `POST /admin/cases/{caseId}/script/approve`
+
+승인 = 이 대본을 공개한다. 요청 본문 없음. 응답은 A-13-10과 같은 형식(`reviewStatus: "APPROVED"` · `isPublished: true`).
+
+- **`publishable`이 `false`면 거절한다.** 증거 카드와 대사가 1:1로 맞지 않는 상태로 공개하면 체험이 깨진다(BE-107 계약). DB에도 같은 제약을 두었다(`chk_case_script_publishable_approved`).
+- **사건 상태(`legal_case.status`)는 바꾸지 않는다.** 판결 후보 승인(A-9)은 DRAFT → REVIEW로 올리지만, 대본은 사건 내용이 아니라 체험 연출이라 사건 공개 흐름과 따로 둔다.
+- 감사 로그 `CASE_SCRIPT_APPROVE`.
+
+| 거절 | 조건 |
+| --- | --- |
+| 404 `CASE_NOT_FOUND` · `SCRIPT_NOT_FOUND` | A-13-10과 같음 |
+| 409 `INVALID_STATE` | `publishable: false` — 대본을 다시 생성해야 한다 |
+
+### A-13-12. 사건 대본 반려 — `POST /admin/cases/{caseId}/script/reject`
+
+```json
+{ "reason": "검사 쪽 대사가 변호인보다 두 배 깁니다." }
+```
+
+| 필드 | 규칙 |
+| --- | --- |
+| `reason` | 필수, 앞뒤 공백을 잘라 1 ~ 500자 (A-10과 같다) |
+
+응답은 A-13-10과 같은 형식(`reviewStatus: "REJECTED"` · `isPublished: false` · `reviewNote`에 사유).
+
+- **승인한 대본도 반려로 내릴 수 있다.** 판결 후보 반려(A-10)는 공개 중인 후보를 막지만(교체할 다른 후보가 있다), 대본은 사건마다 하나뿐이라 막으면 잘못 승인한 대본을 되돌릴 방법이 없어진다.
+- 감사 로그 `CASE_SCRIPT_REJECT`.
+
+| 거절 | 조건 |
+| --- | --- |
+| 400 `VALIDATION_ERROR` | 사유 빈 값 · 500자 초과 |
+| 404 `CASE_NOT_FOUND` · `SCRIPT_NOT_FOUND` | A-13-10과 같음 |
+
+### A-13-13. 사건 대본 대사 수정 — `PATCH /admin/cases/{caseId}/script/evidence/{factorId}`
+
+> **신설 (BE-108).** 숫자 하나 · 말투 때문에 모델을 수십 번 다시 부르는 것보다 싸다. 신문 지면 수정(A-13-8)과 같은 자리의 기능이다.
+
+```json
+{ "text": "그 돈은 빌린 것이 아니라 받은 것입니다." }
+```
+
+| 필드 | 규칙 |
+| --- | --- |
+| `text` | 필수. 앞뒤 공백을 잘라 1 ~ 100자, 2줄 이하 (파이프라인 `script_generation.py`의 `MAX_CHARS` · `MAX_LINES`와 같은 값) |
+
+- `{factorId}`는 **파이프라인 번호**(= `factor.display_order`)다. 대사는 판단 요소마다 한 줄이고 어느 측이 말하는지는 요소의 방향에서 정해지므로, 이 번호 하나로 줄이 정해진다.
+- 금지어 · 원문에 없는 숫자 같은 **의미 검사는 하지 않는다.** 그 판단을 사람이 하라고 두는 기능이다.
+- 고친 줄은 `validation`이 `{ ok: true, manual: true, warnings: [...] }`가 되고 `editedAt`이 붙는다. **경고는 남긴다** — 사람이 보고 판단할 값이다. 화면은 `manual`로 "사람이 고침"을 표시한다.
+- **고치면 검수 기록이 지워져 다시 대기가 된다.** 내용이 바뀌었는데 지난 승인이 남아 있으면 검수하지 않은 대사가 공개된다.
+- **`publishable`을 다시 계산한다.** 파이프라인과 같은 식(`not stopped and not failed`)을 다시 적용한다 — 빈 대사를 사람이 채워 모든 줄이 차면 승인할 수 있게 올라가고, 호출 한도로 멈춘 대본(`stopped: true`)은 **줄 자체가 모자라** 고쳐도 올라가지 않는다(그때는 다시 생성해야 한다).
+- 감사 로그 `CASE_SCRIPT_UPDATE`. **고친 대사 본문은 남기지 않는다**(어느 요소를 고쳤는지만) — 원문 · 모델 출력과 같은 취급이다.
+- `balanceWarning`은 **고치기 전 기준**으로 남는다(검사 · 변호인 분량은 파이프라인이 생성할 때 한 번 재는 값이다). 화면은 "수정 전 기준"으로 읽으면 된다.
+- 길이는 파이프라인과 같은 방식으로 센다 — **줄바꿈은 글자 수에 넣지 않는다**. 50자 + 50자 두 줄은 통과한다.
+
+응답은 A-13-10과 같은 형식.
+
+| 거절 | 조건 |
+| --- | --- |
+| 400 `VALIDATION_ERROR` | 빈 값 · 100자 초과 · 3줄 이상 |
+| 404 `CASE_NOT_FOUND` · `SCRIPT_NOT_FOUND` | A-13-10과 같음 |
+| 404 `SCRIPT_LINE_NOT_FOUND` | 대본에 그 판단 요소의 대사가 없음 |
 
 ### A-14. 사건 등록 시작 — `POST /admin/case-imports`
 
@@ -1887,16 +2032,17 @@ json
 
 ---
 
-## 10. (확장) 회원 인증 API (7.4.2 BE-62 · 7.4.3 BE-94)
+## 10. (확장) 회원 인증 API (7.4.2 BE-62 · 7.4.3 BE-94 · BE-113)
 
 카카오 로그인(7.4.2, BE-62)이 성공 처리에서 발급한 액세스 · 리프레시 토큰 중, **리프레시 토큰만 `NLNB_RT`
 쿠키**(`HttpOnly` · `Secure` · `SameSite=Strict` · `Path=/api/v1/auth`)로 받는다. 액세스 토큰은 화면이 메모리에만
 들고 있고, 아래 재발급 API로 다시 받는다(docs/tech-stack.md 3장 "리프레시 토큰 쿠키").
 
-> 번호(v0.41): 회원 인증 API는 **M-N**을 쓴다. 처음 붙였던 A-16 · A-17은 8-4 운영 메뉴 API가 예약한 A-16 ~ A-41과 겹쳐 M-1 · M-2로 바꿨다(BE-94의 재발급 · 로그아웃). M-3 · M-4는 카카오 로그인(BE-62)이다.
+> 번호(v0.41): 회원 인증 API는 **M-N**을 쓴다. 처음 붙였던 A-16 · A-17은 8-4 운영 메뉴 API가 예약한 A-16 ~ A-41과 겹쳐 M-1 · M-2로 바꿨다(BE-94의 재발급 · 로그아웃). M-3 · M-4는 카카오 로그인(BE-62), M-5 · M-6은 아이디 회원가입 · 로그인(BE-113, v0.58)이다.
 
 M-1 · M-2는 **`Authorization` 헤더를 보지 않고 리프레시 토큰 쿠키로만 인증**한다. 상태를 바꾸는 요청이라 Origin 검증(요청의
-Origin이 이 서버 자신과 같은 출처인지)을 거친다 — 벗어나면 403 `FORBIDDEN`.
+Origin이 이 서버 자신과 같은 출처인지)을 거친다 — 벗어나면 403 `FORBIDDEN`. M-5 · M-6도 응답이 리프레시 토큰 쿠키를 심으므로
+같은 Origin 검증을 받는다(다른 사이트가 공격자 계정으로 로그인시키는 로그인 CSRF 방지, v0.58).
 
 ### M-1. 토큰 재발급 — `POST /api/v1/auth/token/reissue`
 
@@ -1946,6 +2092,64 @@ Origin이 이 서버 자신과 같은 출처인지)을 거친다 — 벗어나�
   - 다른 회원에 연결됨(공용 PC) → 덮어쓰지 않고, 이 회원에 연결된 **새 익명 ID를 `Set-Cookie`로** 내려준다
   - 쿠키 없음 · 모르는 값 → 이 회원에 연결된 새 익명 ID를 내려준다
 - 화면 경로(`/auth/callback`)는 환경변수로 바꿀 수 있고, 우리 사이트 안의 경로만 허용한다(열린 리다이렉트 방지)
+
+### M-5. 아이디 회원가입 — `POST /api/v1/auth/signup` (BE-113)
+
+**요청**
+
+```json
+{ "id": "naero_01", "password": "judge1234", "nickname": "내로판사" }
+```
+
+| 필드 | 규칙 |
+| --- | --- |
+| `id` | 필수. 영문 · 숫자 · 밑줄 4 ~ 20자. 서버가 **소문자로 바꿔 저장 · 비교**한다(`Naero`와 `naero`는 같은 아이디). `@`를 쓸 수 없다 — 화면은 `@`가 있으면 관리자 로그인(A-2)으로 보낸다 |
+| `password` | 필수. 8 ~ 64자, 영문과 숫자를 하나 이상씩 포함. 64자는 비밀번호 해시(Argon2) 비용 상한이다. 서버는 일방향 해시로만 저장한다 |
+| `nickname` | 필수. 한글 · 영문 · 숫자 2자 이상, 한글이 있으면 8자 · 영문 · 숫자만이면 12자까지. 공백 · 기호 불가. **중복을 허용한다**(표시 이름, 결정 기록 BE-113 결정 2) |
+
+**응답 200**: 가입하면 **바로 로그인된다.**
+
+```json
+{ "nickname": "내로판사" }
+```
+
+- `Set-Cookie`로 `NLNB_RT`(M-1과 같은 쿠키)를 심는다. 액세스 토큰은 본문에 없다 → 화면이 **M-1 재발급을 바로 한 번 불러** 받는다(M-4와 같은 흐름)
+- 익명 ID 쿠키(`NLNB_AID`) 연결 규칙은 M-4와 같다. 새 익명 ID를 발급하면 `Set-Cookie`로 바꿔 심는다
+- 쿠키는 회원 저장 · 토큰 발급이 모두 끝난 뒤에만 심는다. 카카오 계정과는 합쳐지지 않는 별개 회원이다
+
+| 거절 | 조건 |
+| --- | --- |
+| 400 `VALIDATION_ERROR` | 위 규칙 위반. `details`에 칸 이름이 실린다: `[{ "field": "id" \| "password" \| "nickname", "reason": "..." }]` |
+| 409 `DUPLICATE_ID` | 이미 쓰는 아이디(대소문자만 다른 아이디 포함, 동시 가입 포함) |
+| 403 `FORBIDDEN` | Origin(없으면 Referer)이 이 서버와 다른 출처 |
+| 429 `TOO_MANY_REQUESTS` | 운영 Nginx 전용 제한(1-5). `Retry-After: 6` |
+
+### M-6. 아이디 로그인 — `POST /api/v1/auth/login` (BE-113)
+
+**요청**
+
+```json
+{ "id": "naero_01", "password": "judge1234" }
+```
+
+- `id`는 대소문자를 가리지 않는다(서버가 소문자로 바꿔 찾는다). 관리자 계정(이메일)은 이 API로 로그인할 수 없다 — 관리자는 A-2
+
+**응답 200**
+
+```json
+{ "nickname": "내로판사" }
+```
+
+- 쿠키 · 익명 ID 연결 · 화면의 M-1 재발급은 M-5와 같다. 발급되는 권한은 항상 일반 회원(`USER`)이다
+
+| 거절 | 조건 |
+| --- | --- |
+| 401 `INVALID_CREDENTIALS` | 아이디 없음 · 비밀번호 불일치 · 아이디 형식 틀림(예: 이메일). **구분하지 않고**, 없는 아이디도 같은 시간이 걸리게 비교한다(계정 존재를 알 수 없게). 카카오 회원도 이 코드다 |
+| 400 `VALIDATION_ERROR` | `id` · `password`가 비었거나 `id` 20자 · `password` 64자 초과 |
+| 403 `FORBIDDEN` | Origin(없으면 Referer)이 이 서버와 다른 출처 |
+| 429 `TOO_MANY_REQUESTS` | 운영 Nginx 전용 제한(1-5). `Retry-After: 3` |
+
+- 비밀번호 변경 · 찾기 · 탈퇴 API는 아직 없다(BE-113 범위 밖). 계정 단위 로그인 실패 잠금도 없고 IP별 요청 제한만 있다
 
 ---
 

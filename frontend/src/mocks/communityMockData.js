@@ -1,6 +1,7 @@
 import { TYPES, imageNumberOf } from './personalityMockData.js';
 import { shareIdOfCode } from '../utils/personalityTypes.js';
 import { DEFAULT_DECO } from '../utils/profileDeco.js';
+import { mockJobAt } from './levelMockApi.js';
 
 // 커뮤니티(S-18, FE-47) 목 데이터. 실제 사용자 글이 아니다 — 화면은 "목데이터"로 표기한다.
 // 판결 공유 글에는 글쓴이 자신의 판결만 담는다(AI 판결 · 실제 판결은 넣지 않는다, 앵커링 방지).
@@ -96,7 +97,8 @@ export const seedPosts = [
 
 // 글쓴이 명함(FE-88): 글 · 댓글의 author에 붙는 프로필카드 꾸미기 + 공개 성향카드. 실제 API(커뮤니티)가 생기면 같은 모양으로 내려받을 값이다.
 // profileCard = 프로필카드 꾸미기(P-7과 같은 칸), shownType = 공개 도장이 찍힌 성향카드 한 장(slot: initial · retake · current, type = P-4 유형 모양, deco = 성향카드 꾸미기).
-// level · job · completedCount는 마이페이지(MOCK_PROFILE)처럼 아직 서버 값이 없어 목이다
+// level · job({ code, name }, 서버 L-1과 같은 모양) · cardLine({ line: 'type' | 'signature' | 'job', showLevel }, 프로필카드 아래 줄) · completedCount는 커뮤니티 API가 아직 없어 목이다.
+// 실제 API가 생기면 글쓴이 · 랭킹 응답에 같은 모양으로 오도록 BE에 요청한다(FE-116)
 const typeOf = (code) => {
   const { name, meme, character } = TYPES[code];
   return { name, meme, character, shareId: shareIdOfCode(code), imageUrl: `/images/characters/personality/${String(imageNumberOf(code)).padStart(2, '0')}.webp` };
@@ -106,34 +108,34 @@ const card = (portrait, patch) => ({ ...DEFAULT_DECO, portrait, ...patch });
 const shown = (slot, code, patch = {}) => ({ slot, type: typeOf(code), deco: { ...BASIC_TYPE_DECO, ...patch } });
 
 export const seedAuthors = {
-  '새벽의 배심원': { intro: '첫인상은 늘 한 번 의심해 봐요.', level: 7, job: '수습 판사', completedCount: 12,
+  '새벽의 배심원': { intro: '첫인상은 늘 한 번 의심해 봐요.', level: 52, job: mockJobAt(52), cardLine: { line: 'signature', showLevel: true }, completedCount: 12,
     profileCard: card('/images/characters/roles/naero_judge.webp', { frame: 'gold', sashStyle: 'short', sashColorShort: 'wine', sashIconLeft: 'scale', sashIconRight: 'star' }),
     shownType: shown('current', 'ENFJ') },
-  '밤샘 방청객': { intro: '질문이 많은 사람입니다.', level: 2, job: '방청객', completedCount: 1,
+  '밤샘 방청객': { intro: '질문이 많은 사람입니다.', level: 12, job: mockJobAt(12), cardLine: { line: 'job', showLevel: false }, completedCount: 1,
     profileCard: card('/images/characters/scene/nambul_guide-happy.webp', { frame: 'stitch', background: 'linen', sashStyle: 'short', sashColorShort: 'green', sashIconLeft: 'cup', sashIconRight: 'heart' }),
     shownType: shown('current', 'INFP', { sashStyle: 'long', sashColorLong: 'wine' }) },
-  '말없는 판사': { intro: '말은 적게, 기록은 꼼꼼히.', level: 9, job: '부장 판사', completedCount: 21,
+  '말없는 판사': { intro: '말은 적게, 기록은 꼼꼼히.', level: 71, job: mockJobAt(71), cardLine: { line: 'job', showLevel: true }, completedCount: 21,
     profileCard: card('/images/characters/roles/naero_prosecutor.webp', { frame: 'navy', background: 'news' }),
     shownType: shown('initial', 'ISTJ', { frame: 'gold' }) },
-  '오후의 서기': { intro: '기록은 끝까지 읽고 말하는 편이에요.', level: 4, job: '서기', completedCount: 5,
+  '오후의 서기': { intro: '기록은 끝까지 읽고 말하는 편이에요.', level: 23, job: mockJobAt(23), cardLine: { line: 'type', showLevel: true }, completedCount: 5,
     profileCard: card('/images/characters/scene/nambul_read-thinking.webp', { frame: 'wood', background: 'latte', sashStyle: 'long', sashColorLong: 'navy' }),
     shownType: shown('initial', 'INTP', { frame: 'gold', background: 'tarot' }) },
-  '창가의 방청석': { intro: '양쪽 다 들어 보고 정할게요.', level: 3, job: '방청객', completedCount: 3,
+  '창가의 방청석': { intro: '양쪽 다 들어 보고 정할게요.', level: 17, job: mockJobAt(17), cardLine: { line: 'signature', showLevel: false }, completedCount: 3,
     profileCard: card('/images/characters/scene/naero_react-surprised.webp', { frame: 'navy', background: 'news' }),
     shownType: shown('retake', 'ENTJ', { frame: 'navy', sashStyle: 'short', sashColorShort: 'gold', sashIconLeft: 'gavel' }) },
-  '첫 재판': { intro: '오늘이 첫 재판이에요.', level: 1, job: '수습 판사', completedCount: 1,
+  '첫 재판': { intro: '오늘이 첫 재판이에요.', level: 1, job: mockJobAt(1), cardLine: { line: 'type', showLevel: false }, completedCount: 1,
     profileCard: card('/images/characters/roles/nambul_defense.webp'),
     shownType: shown('current', 'ESFJ') },
-  '조용한 저울': { intro: '저울이 기울기 전에 한 번 더.', level: 6, job: '판사', completedCount: 9,
+  '조용한 저울': { intro: '저울이 기울기 전에 한 번 더.', level: 44, job: mockJobAt(44), cardLine: { line: 'type', showLevel: false }, completedCount: 9,
     profileCard: card('/images/characters/scene/naero_guide-happy.webp', { frame: 'gold', background: 'latte' }),
     shownType: shown('current', 'INFJ', { background: 'cream', frame: 'wood' }) },
-  '종이 냄새': { intro: '신문 지면 넘기는 소리가 좋아요.', level: 5, job: '서기', completedCount: 7,
+  '종이 냄새': { intro: '신문 지면 넘기는 소리가 좋아요.', level: 31, job: mockJobAt(31), cardLine: { line: 'job', showLevel: false }, completedCount: 7,
     profileCard: card('/images/characters/scene/nambul_idle-neutral.webp', { background: 'news', sashStyle: 'long', sashColorLong: 'gold' }),
     shownType: shown('retake', 'ISFP') },
-  '늦은 오후 판사': { intro: '결론은 천천히 내려요.', level: 8, job: '부장 판사', completedCount: 16,
+  '늦은 오후 판사': { intro: '결론은 천천히 내려요.', level: 63, job: mockJobAt(63), cardLine: { line: 'signature', showLevel: true }, completedCount: 16,
     profileCard: card('/images/characters/roles/nambul_judge.webp', { frame: 'wood', background: 'latte' }),
     shownType: shown('current', 'ESTJ', { frame: 'navy' }) },
-  '서류 넘기는 손': { intro: '기사부터 꼼꼼히 읽는 편이에요.', level: 2, job: '방청객', completedCount: 2,
+  '서류 넘기는 손': { intro: '기사부터 꼼꼼히 읽는 편이에요.', level: 9, job: mockJobAt(9), cardLine: { line: 'type', showLevel: true }, completedCount: 2,
     profileCard: card('/images/characters/scene/naero_read-thinking.webp', { frame: 'stitch' }),
     shownType: null },
 };

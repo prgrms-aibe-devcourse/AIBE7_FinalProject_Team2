@@ -4,12 +4,12 @@ import assert from 'node:assert/strict';
 import { mockProfileSettings, patchProfileSettings } from './profileDecoMockApi.js';
 
 test('저장한 적이 없으면 최근 · 최근 · 소개 없음', () => {
-  assert.deepEqual(mockProfileSettings(), { shownCard: 'current', profileCardType: 'current', bio: '' });
+  assert.deepEqual(mockProfileSettings(), { shownCard: 'current', profileCardType: 'current', bio: '', cardLine: 'type', cardLevel: false });
 });
 
 test('보낸 칸만 바꾸고 응답은 세 값 전체, 소개는 앞뒤 공백을 뺀다', async () => {
-  assert.deepEqual(await patchProfileSettings({ shownCard: 'retake' }), { shownCard: 'retake', profileCardType: 'current', bio: '' });
-  assert.deepEqual(await patchProfileSettings({ bio: '  판결은 신중하게  ' }), { shownCard: 'retake', profileCardType: 'current', bio: '판결은 신중하게' });
+  assert.deepEqual(await patchProfileSettings({ shownCard: 'retake' }), { shownCard: 'retake', profileCardType: 'current', bio: '', cardLine: 'type', cardLevel: false });
+  assert.deepEqual(await patchProfileSettings({ bio: '  판결은 신중하게  ' }), { shownCard: 'retake', profileCardType: 'current', bio: '판결은 신중하게', cardLine: 'type', cardLevel: false });
   assert.equal((await patchProfileSettings({ bio: '' })).bio, ''); // 지우기
   assert.equal(mockProfileSettings().shownCard, 'retake'); // 앞서 저장한 칸 유지
 });

@@ -87,7 +87,7 @@ function leanSections(record) {
 //   최종 판결(preToFinal.finalJudgmentText, 서버 FinalJudgmentText: "사형" · "무기징역" · "징역 2년 6개월" · "벌금 …" · "징역 3년에 집행유예 5년")
 //   첫인상과 견준 방향(preToFinal.direction: HEAVIER · SAME · LIGHTER)
 // 형량(첫인상 구간 · 최종 판결)은 굵게 둔다. 값 바로 뒤에는 받침에 따라 갈리는 조사(이/가 · 을/를 · 으로/로)를 붙이지 않는다 — "~의", "~에", 쉼표 · "쪽"으로 잇는다.
-// 판사 이름은 마이페이지 프로필카드와 같은 값(닉네임, 없으면 "익명의 판사")이다.
+// 판사 이름은 마이페이지 프로필카드와 같은 값(닉네임, 없으면 "익명의판사")이다.
 // 이 지면의 주인공은 내 판결이라 헤드라인에 최종 판결을 싣는다(FE-100 — 예전 헤드라인 "…의 판결, 다시 펼치다"는 판결이 사진 아래 작은 글씨로 밀렸다)
 const DIRECTION_LINES = {
   HEAVIER: '사건 기록과 법정 공방을 모두 지켜본 뒤에는 첫인상보다 무거운 쪽으로 판결을 정했다.',
@@ -158,14 +158,13 @@ export async function renderMyResultPage(container, { caseId, caseHeader, api, n
     const record = recordOf(myPage, caseId);
     const sheet = element('article', 'sheet sheet-result');
     sheet.setAttribute('aria-label', '내 결과 지면');
-    const mast = masthead();
+    const mast = masthead(caseId);
     // 왼쪽 귀: 6막은 "다른 사건 보기"지만, 이 지면은 마이페이지에서 펼쳐 온 지면이라 들어온 곳(내가 체험한 사건)으로 돌아가는 자리다(FE-100).
-    // 다른 사건은 아래 "오늘의 지면" 알림이 맡는다. 오른쪽 귀의 "고민 중" 메모는 판결을 마친 지면이라 "판결 확정"으로 바꾼다
+    // 다른 사건은 아래 "오늘의 지면" 알림이 맡는다. 오른쪽 귀는 사건 번호 · "판결 확정"이다(6막 지면과 같다)
     const earLeft = mast.querySelector('.sheet-ear-left');
     earLeft.querySelector('b').textContent = '← 마이페이지';
     earLeft.querySelector('small').textContent = '내가 체험한 사건으로';
     earLeft.addEventListener('click', () => navigate('me', { view: 'cases' }));
-    mast.querySelector('.sheet-ear-memo').textContent = '판결 확정';
     // 왼쪽 · 오른쪽 단을 따로 쌓는다. 한 격자 줄에 두면 긴 흐름 그래프 높이만큼 왼쪽 기사 사이가 벌어진다(myResult.css)
     const left = element('div', 'sheet-col is-left');
     left.append(frontStory(caseHeader.title, leadOf(caseHeader.title, data.preToFinal, myNickname(myPage, currentUser()))), ...leanSections(record));

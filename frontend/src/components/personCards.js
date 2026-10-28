@@ -2,14 +2,16 @@ import { element } from './siteLayout.js';
 import { CHARACTER_NAMES } from '../utils/personalityAxes.js';
 import { SASH_COLORS, SASH_ICONS, SASH_STYLES, portraitLabel, sashColorOf } from '../utils/profileDeco.js';
 import { DEFAULT_TYPE_DECO } from '../utils/typeCardDeco.js';
+import { signatureSvg } from './signatureInk.js';
 import { fitPortraitIn } from '../utils/portraitFit.js';
+import { fitOneLine } from '../utils/fitText.js';
 
 // 프로필카드 · 성향카드를 그리는 조각(FE-88). 마이페이지(myPage.js) · 내 결과(myResultPage.js) · 커뮤니티 글쓴이 명함(communityParts.js)이 함께 쓴다(FE-79).
 // 모양은 personCards.css의 .my-card · .deco-frame-* · .deco-bg-* · .deco-sash-* 가 정한다. 커뮤니티에서는 카드를 .cm-cards 안에 놓아 같은 커피 색을 입힌다
 
-export const DEFAULT_NICKNAME = '익명의 판사'; // 로그인 · 닉네임 API 전까지 임시 문구
+export const DEFAULT_NICKNAME = '익명의판사'; // 로그인 · 닉네임 API 전까지 임시 문구
 // 마이페이지 · 내 결과에 쓰는 내 이름(FE-100): 서버 값(P-5 nickname)이 있으면 그 값, 없으면 로그인한 세션의 닉네임(헤더와 같은 이름), 둘 다 없으면 임시 문구.
-// 목 모드는 서버 닉네임이 없어 헤더는 "해송", 마이페이지는 "익명의 판사"로 갈렸고 내 정보 수정에서 바꾼 이름도 카드에 안 보였다
+// 목 모드는 서버 닉네임이 없어 헤더는 "해송", 마이페이지는 "익명의판사"로 갈렸고 내 정보 수정에서 바꾼 이름도 카드에 안 보였다
 export const myNickname = (data, session) => data?.nickname || session?.nickname || DEFAULT_NICKNAME;
 
 export const svg = (path, className) => {
@@ -43,18 +45,28 @@ const fitOptions = (extra = {}) => (win) => {
 export const nameOf = (list, id) => list.find((item) => item.id === id)?.name ?? id;
 
 // 성향 이미지: 이미지(imageUrl)가 아직 없거나 불러오지 못하면 캐릭터 이름을 대신 둔다(personalityParts.js와 같은 규칙)
-export function typePortrait(type) {
+// 성향카드 캐릭터를 바꾸면 같은 유형의 다른 캐릭터 그림으로 본다. 이미지 번호 = 유형 번호 + 16 × (내로 0 · 남불 1). 번호 모양이 아니면 원래 그림을 둔다
+export function typeImageOf(type, character) {
+  const match = String(type.imageUrl ?? '').match(/^(.*\/)(\d+)(\.\w+)$/);
+  if (!character || character === type.character || !match) return type.imageUrl;
+  const number = ((Number(match[2]) - 1) % 16) + 1 + (character === 'NAMBUL' ? 16 : 0);
+  return `${match[1]}${String(number).padStart(2, '0')}${match[3]}`;
+}
+
+export function typePortrait(type, character = null) {
   const portrait = element('div', 'my-card-window');
-  const characterName = CHARACTER_NAMES[type.character] ?? type.character;
+  const shownCharacter = character ?? type.character;
+  const characterName = CHARACTER_NAMES[shownCharacter] ?? shownCharacter;
   const showName = () => {
     portrait.replaceChildren(element('strong', '', characterName));
     portrait.setAttribute('aria-label', `${characterName} 캐릭터 (이미지 준비 중)`);
   };
-  if (type.imageUrl) {
+  const imageUrl = typeImageOf(type, character);
+  if (imageUrl) {
     const image = element('img');
     image.alt = `${characterName} 캐릭터`;
     image.addEventListener('error', showName, { once: true });
-    image.src = type.imageUrl;
+    image.src = imageUrl;
     portrait.append(image);
     fitPortraitIn(portrait, image, fitOptions({ centerWide: true })); // 이미지마다 다른 투명 여백을 걷어 대표 이미지와 비슷한 크기로 맞춘다(FE-67). 가로로 긴 그림은 프로필카드처럼 창 세로 가운데에
   } else showName();
@@ -107,25 +119,39 @@ export const sashNote = (deco) => {
 export const typeDecoClasses = (deco) => `deco-frame-${deco.frame}${deco.background === DEFAULT_TYPE_DECO.background ? '' : ` deco-bg-${deco.background}`} ${sashClasses(deco)}`;
 
 // 프로필카드의 속: 위 닉네임 · 그림 창(대표 이미지) · 아래 성향 이름. 테두리 · 배경 · 책갈피는 클래스(.deco-frame-* · .deco-bg-* · .deco-sash-*)로 입힌다
-export function profileCardParts(deco, nickname, typeName) {
+// 카드 아래 서명 그림. 크기는 CSS가 칸에 맞춰 정하니 서명 원래 비율만 남긴다. 내 정보 수정이 닉네임을 바꿀 때 다시 그리는 데도 쓴다
+export function cardSignature(seed) {
+  const ink = signatureSvg(seed);
+  const [, , w, h] = ink.getAttribute('viewBox').split(' ');
+  ink.setAttribute('width', w);
+  ink.setAttribute('height', h);
+  return ink;
+}
+
+// extra: { level: 'Lv.7' 같은 접두, signer: 서명 씨앗(주면 글자 대신 서명을 그린다), lineLabel: 낭독용 줄 이름('성향' 기본, 직업이면 '직업') }
+export function profileCardParts(deco, nickname, typeName, { level = null, signer = null, lineLabel = '성향' } = {}) {
   const src = deco.portrait;
   const caption = portraitLabel(src);
   const face = element('div', 'my-card-window');
   const faceImage = picture(src, `${caption} 대표 이미지`, 'my-profile-face');
   face.append(faceImage);
   fitPortraitIn(face, faceImage, fitOptions({ centerWide: true })); // 가로로 긴 그림(사건 사진 등)은 창 세로 가운데에, 서 있는 캐릭터는 발을 아래에
-  const result = element('p', `my-card-note${typeName ? '' : ' is-empty'}`, typeName ?? '성향 테스트 전');
+  const result = element('p', `my-card-note${typeName || signer ? '' : ' is-empty'}${signer ? ' is-signature' : ''}${level ? ' has-level' : ''}`);
+  if (level) result.append(element('span', 'my-card-level', level));
+  if (signer) result.append(cardSignature(signer));
+  else result.append(typeName ?? '성향 테스트 전');
+  const line = signer ? `${nickname}의 서명` : `${lineLabel} ${typeName ?? '테스트 전'}`;
   return {
     caption,
-    note: `${nickname}, 대표 이미지 ${caption}, 성향 ${typeName ?? '테스트 전'}${sashNote(deco)}`,
+    note: `${nickname}, 대표 이미지 ${caption}, ${level ? `${level} ` : ''}${line}${sashNote(deco)}`,
     classes: `is-profile deco-frame-${deco.frame} deco-bg-${deco.background} ${sashClasses(deco)}`,
-    children: [element('p', 'my-card-name', nickname), face, result, ...sashes(deco)],
+    children: [fitOneLine(element('p', 'my-card-name', nickname)), face, result, ...sashes(deco)],
   };
 }
 
 // 누를 수 없는 프로필카드(커뮤니티 명함 · 작은 창). 크기는 부모가 정한다(카드 안 글자 · 책갈피는 카드 폭에 비례)
-export function profileFace(deco, nickname, typeName) {
-  const parts = profileCardParts(deco, nickname, typeName);
+export function profileFace(deco, nickname, typeName, extra) {
+  const parts = profileCardParts(deco, nickname, typeName, extra);
   const card = element('div', `my-card ${parts.classes} is-preview`);
   card.setAttribute('role', 'img');
   card.setAttribute('aria-label', `프로필카드: ${parts.note}`);
@@ -138,6 +164,6 @@ export function typeFace(type, emptyNote = '"성향 테스트로 카드를 뽑�
   const card = element('div', `my-card is-type is-detail${type ? '' : ' is-empty'}${deco ? ` ${typeDecoClasses(deco)}` : ''}`);
   card.setAttribute('role', 'group');
   card.setAttribute('aria-label', `${type ? `성향카드: ${type.name}` : '성향카드: 아직 몰라요'}${deco ? sashNote(deco) : ''}`);
-  card.append(element('p', 'my-card-name', type ? type.name : '아직 몰라요'), type ? typePortrait(type) : emptyWindow(), element('p', 'my-card-note my-type-quote', type ? type.meme : emptyNote), ...(deco ? sashes(deco) : []));
+  card.append(element('p', 'my-card-name', type ? type.name : '아직 몰라요'), type ? typePortrait(type, deco?.character) : emptyWindow(), element('p', 'my-card-note my-type-quote', type ? type.meme : emptyNote), ...(deco ? sashes(deco) : []));
   return card;
 }

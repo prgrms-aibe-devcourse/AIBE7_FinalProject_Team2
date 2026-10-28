@@ -9,7 +9,9 @@ let unsaved; // 저장소를 못 쓸 때 이번 방문 동안의 값
 // 성향카드 배경: 프로필카드 배경에 더해 "기본"(원래 타로카드 모양)이 있다. 기본은 처음부터 열려 있고 기본 값이다. 모양은 myPage.css의 .deco-bg-{id}
 export const TYPE_BACKGROUNDS = [{ id: 'classic', name: '기본' }, ...BACKGROUNDS];
 const { portrait: _portrait, ...PLAIN } = DEFAULT_DECO;
-export const DEFAULT_TYPE_DECO = { ...PLAIN, background: 'classic' };
+// 성향카드 캐릭터: 내로 · 남불 두 장이 둘 다 늘 열려 있다. null이면 성향 결과의 캐릭터 그대로 보인다(이미지 번호 규칙은 mocks/personalityMockData.js)
+export const TYPE_CHARACTERS = ['NAERO', 'NAMBUL'];
+export const DEFAULT_TYPE_DECO = { ...PLAIN, background: 'classic', character: null };
 
 /** 저장된 값을 화면이 쓰는 모양으로. 모르는 값 · 빠진 값은 기본으로 본다. 잠겼는지는 보지 않는다(shownTypeDeco가 한다) */
 export const normalizeTypeDeco = (deco) => ({
@@ -20,13 +22,14 @@ export const normalizeTypeDeco = (deco) => ({
   sashColorLong: pickId(SASH_COLORS.long, deco?.sashColorLong, DEFAULT_TYPE_DECO.sashColorLong),
   sashIconLeft: pickId(SASH_ICONS, deco?.sashIconLeft, DEFAULT_TYPE_DECO.sashIconLeft),
   sashIconRight: pickId(SASH_ICONS, deco?.sashIconRight, DEFAULT_TYPE_DECO.sashIconRight),
+  character: TYPE_CHARACTERS.includes(deco?.character) ? deco.character : null,
 });
 
 /** 화면에 쓸 꾸미기. 잠긴 것은 기본으로 보여 준다(저장값은 두어서 다시 열리면 돌아온다). 규칙은 프로필카드(shownDeco)와 같고, 배경 "기본"만 늘 열려 있다 */
 export function shownTypeDeco(deco, open) {
   const { portrait: _unused, background: _bg, ...shown } = shownDeco({ ...deco, portrait: DEFAULT_PORTRAITS[0] }, open);
   const background = deco.background === DEFAULT_TYPE_DECO.background || open.backgrounds.has(deco.background) ? deco.background : DEFAULT_TYPE_DECO.background;
-  return { ...shown, background };
+  return { ...shown, background, character: deco.character ?? null };
 }
 
 export function getTypeDeco(storage = localStore()) {

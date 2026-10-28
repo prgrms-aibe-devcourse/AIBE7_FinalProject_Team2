@@ -20,6 +20,7 @@ import '../components/signatureInk.css'; // 서명 그림(FE-94): 커뮤니티 �
 import '../pages/myPage/myPage.css';
 import '../pages/myPage/myProfileEdit.css'; // 내 정보 수정(FE-77)
 import '../pages/myPage/mySettings.css'; // 환경 설정(FE-83)
+import '../pages/myPage/myLevel.css'; // 경험치 페이지(FE-120)
 import '../pages/login/login.css';
 import '../pages/caseReview/caseReview.css';
 import '../pages/community/community.css';

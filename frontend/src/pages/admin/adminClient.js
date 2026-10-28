@@ -2,6 +2,7 @@
 // - 세션 쿠키(NLNB_ADMIN_SESSION)를 함께 보낸다(credentials: 'include').
 // - 상태를 바꾸는 요청(POST · PATCH · PUT · DELETE)은 쿠키 XSRF-TOKEN 값을 헤더 X-XSRF-TOKEN에 담는다.
 //   쿠키가 없으면 A-1(GET /admin/auth/csrf)로 먼저 받는다. 403이 오면 토큰을 새로 받아 한 번만 다시 보낸다.
+// - 본문이 FormData면 multipart로 보낸다(사진 업로드 A-13-3 · A-13-4).
 // - 실패하면 사용자 API와 같은 에러 본문 { code, message, currentStatus, details, status }를 throw한다.
 import { API_BASE_URL } from '../../api/config.js';
 
@@ -20,7 +21,10 @@ function fallbackError(code, message, status) {
 
 async function send(method, endpoint, body) {
   const headers = { Accept: 'application/json' };
-  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  // 사진 업로드(A-13-3 · A-13-4)는 multipart다. Content-Type을 우리가 정하면 경계 문자열(boundary)이
+  // 빠져 서버가 본문을 파싱하지 못하므로, FormData일 때는 브라우저가 알아서 붙이게 둔다 (FE-106)
+  const isForm = typeof FormData !== 'undefined' && body instanceof FormData;
+  if (body !== undefined && !isForm) headers['Content-Type'] = 'application/json';
   if (method !== 'GET') {
     const token = readCookie(CSRF_COOKIE);
     if (token) headers[csrfHeaderName] = token;
@@ -32,7 +36,7 @@ async function send(method, endpoint, body) {
       credentials: 'include',
       cache: 'no-store', // 원본 판결문 등 내부 정보를 브라우저 캐시에 남기지 않는다
       headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: body === undefined ? undefined : (isForm ? body : JSON.stringify(body)),
     });
   } catch {
     throw fallbackError('NETWORK_ERROR', '서버에 연결할 수 없어요. 잠시 뒤 다시 시도해 주세요.', 0);

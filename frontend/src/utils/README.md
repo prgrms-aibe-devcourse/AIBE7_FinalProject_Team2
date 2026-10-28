@@ -10,6 +10,9 @@
 | `personalityAxes.js` | 가치관 4축(키 · 라벨 · 엄격 / 관대 글자). S-15 ~ S-17 화면과 성향 목 채점이 쓴다 |
 | `motion.js` | 연출 켜기 · 끄기 (FE-50). `reducedMotion()`은 헤더의 "연출" 스위치(이 브라우저에 저장)나 기기의 동작 줄이기가 켜져 있으면 참이다. 모든 JS 연출이 이것을 본다. 스위치를 끄면 `<html data-motion="off">`가 되고 `style.css`가 CSS 애니메이션 · 전환 길이를 0으로 만든다 |
 | `session.js` | 로그인한 사용자 (FE-52). 공통 헤더가 바로 읽도록 닉네임만 이 브라우저(`nlnb-session`)에 둔다. 로그인 · 로그아웃 자체는 `api.login` · `api.logout`(지금은 목업만)이 하고, 성공하면 화면이 `saveUser` · `clearUser`를 부른다 |
+| `pageTurn.js` | 신문 한 장 넘기기(FE-32, 2.5D). 지금 지면을 본뜬 한 장이 왼쪽 가장자리를 축으로 넘어가고, 그 밑에 `draw()`가 다음 면을 그린다. `back`이면 거꾸로 앞 면이 왼쪽에서 넘어와 덮는다(FE-118). S-02 면 넘기기 전용 |
+| `articleZoom.js` | 기사 → 사건 정보 제목 확대(FE-118, 공유 요소 전환). S-02가 `liftArticle`로 지면을 본떠 띄우고, S-20이 `landArticle(제목)`으로 받으면 원래 제목 자리에서 새 제목 자리로 글자가 날아간다. 받지 않으면 1.5초 뒤 스스로 걷힌다 |
+| `newspaperFaces.js` | S-02 면 넘기기 · 빈 칸 계산(FE-118): 앞 · 뒤 면 `faceIndexAfter`, 손가락 밀기 판정 `swipeStep`, "이번 호 다른 사건" 빈 칸 수 `emptySlots`. DOM을 쓰지 않아 node 테스트로 확인한다 |
 | `koreanParticle.js` | 한글 단어 뒤 목적격 조사(을 · 를) 판정. 백엔드 `KoreanParticle`과 같은 규칙 (FE-15, S-08) |
 
 ## screenByStatus

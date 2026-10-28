@@ -26,7 +26,23 @@ public record AdminCaseDetailResponse(
 	List<Source> sources,
 	List<FactorItem> factors,
 	Map<String, List<Candidate>> candidates,
-	PublishReadinessResponse publishReadiness) {
+	PublishReadinessResponse publishReadiness,
+	ScriptSummary script) {
+
+	/**
+	 * 사건 대본 요약 (BE-108, FE 요청 2026-10-27). 공개 준비 화면이 <b>경고로</b> 쓰는 값이다.
+	 *
+	 * <p>일부러 {@code publishReadiness.reasons}에 넣지 않았다 — 그 목록은 "공개 불가 사유"로 읽히는데,
+	 * 미승인 대본은 사건 공개를 막지 않는다(대본은 사건 내용이 아니라 체험 연출이다).
+	 *
+	 * @param exists       대본이 적재돼 있는지. false면 나머지 두 값은 null이다(기존 사건은 모두 이 경우)
+	 * @param reviewStatus 검수 상태(A-13-10과 같은 값). 기록이 없으면 PENDING
+	 * @param publishable  파이프라인이 공개 가능하다고 본 결과. false면 승인 자체가 막힌다
+	 */
+	public record ScriptSummary(boolean exists, ReviewStatus reviewStatus, Boolean publishable) {
+
+		public static final ScriptSummary NONE = new ScriptSummary(false, null, null);
+	}
 
 	public record Content(
 		String title,

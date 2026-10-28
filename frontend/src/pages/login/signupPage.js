@@ -1,18 +1,25 @@
 import { button, element } from '../../components/siteLayout.js';
 import { API_MODE } from '../../api/index.js';
+import { TOKEN_NOT_ISSUED } from '../../api/authFlow.js';
 import { currentUser, isAdmin, saveUser } from '../../utils/session.js';
 import { homeRoute } from '../admin/adminMenu.js';
 import { canGoBackInApp } from '../../app/router.js';
 import { devJumpBar } from './loginDevJump.js';
 import { loginDesk } from './loginDesk.js';
 import { kakaoButton, setBusy } from './loginParts.js';
-import { NICKNAME_MAX, validateSignup } from './signupRule.js';
+import { NICKNAME_MAX, NICKNAME_MAX_HANGUL, lockNicknameLength } from '../../utils/nickname.js';
+import { validateSignup } from './signupRule.js';
 
 // 회원가입 (FE-104, /signup). 로그인(S-12)과 같은 책상 위 펠트 패드에 카카오로 시작하기 + 아이디 · 비밀번호 · 닉네임 가입 폼.
-// 목 모드는 목업 가입(mocks/authMockApi.js signup)이 받아 바로 로그인된 상태가 된다. 실제 모드는 서버 회원가입 API가 아직 없어(api.signup 없음)
-// 입력 검사까지만 하고 준비 중이라고 알린다. 카카오로 시작하기는 실제 모드에서도 카카오 로그인(FE-74)으로 가입된다
-const NOT_READY = '아이디 회원가입은 아직 준비 중이에요. 지금은 카카오로 시작할 수 있어요.';
+// 목 모드는 목업 가입(mocks/authMockApi.js signup)이, 실제 모드는 회원가입 API(M-5, realApi.js signup — FE-117)가 받아
+// 가입하면 바로 로그인된 상태가 된다. 카카오로 시작하기는 카카오 로그인(FE-74)으로 가입된다.
+// FE-117: 목 · 실제 모드 모두 api.signup · api.login이 있어 예전의 "준비 중" 안내 분기는 지웠다 (PR #308 리뷰)
 const NETWORK = '서버에 연결하지 못했어요. 잠시 뒤 다시 시도해 주세요.';
+const TOO_MANY = '요청이 너무 많아요. 잠시 뒤 다시 시도해 주세요.';
+// 계정은 만들어졌는데 첫 토큰을 받지 못했다(api/authFlow.js). "가입하지 못했어요"라고 하면 다시 눌러 409(이미 쓰는 아이디)를 보게 된다
+const SIGNED_UP_LOGIN_AGAIN = '가입은 됐어요. 로그인 화면에서 방금 만든 아이디로 로그인해 주세요.';
+// 서버 형식 검사(400 VALIDATION_ERROR)가 칸 이름을 알려 주면 그 칸에 붙이는 문구. 화면 검사를 통과했는데 서버가 거절한 경우라 드물다
+const SERVER_FIELD_MESSAGE = { id: '아이디 형식을 다시 확인해 주세요.', password: '비밀번호 형식을 다시 확인해 주세요.', nickname: '닉네임 형식을 다시 확인해 주세요.' };
 
 export function renderSignupPage(container, { api, navigate }) {
   const { root, main, card, peek } = loginDesk(container);
@@ -26,9 +33,9 @@ export function renderSignupPage(container, { api, navigate }) {
   const jump = devJumpBar([
     { label: '입력 폼', run: () => showForm() },
     { label: '칸 오류', run: () => showForm().form.requestSubmit() },
-    { label: '아이디 중복', run: () => showForm().fill({ id: 'admin_naero' }).fieldError('id', '이미 쓰고 있는 아이디예요. 다른 아이디를 골라 주세요.') },
+    { label: '아이디 중복', run: () => showForm().fill({ id: 'admin_naero' }).fieldError('id', '이미 쓰고 있는 아이디예요. 다른 아이디를 골라 주세요. 방금 가입했다면 로그인해 주세요.') },
     { label: '가입 중(로딩)', run: () => { const { busy } = showForm(); setBusy(busy, true, busy[1], '가입하는 중…'); } },
-    { label: '준비 중(실제 모드)', run: () => showForm().showError(NOT_READY) },
+    { label: '가입됨 · 로그인 필요', run: () => showForm().showSignedUpLoginAgain() },
     { label: '이미 로그인', run: () => showSignedIn({ nickname: '내로판사' }, false) },
   ]);
   if (jump) main.append(jump);
@@ -69,11 +76,12 @@ export function renderSignupPage(container, { api, navigate }) {
     form.noValidate = true; // 칸마다 아래 문구로 직접 안내한다(브라우저 말풍선 대신)
     const fields = {
       id: field(form, 'signup-id', '아이디', { type: 'text', autocomplete: 'username', hint: '영문 소문자 · 숫자 · 밑줄(_) 4~20자' }),
-      password: field(form, 'signup-password', '비밀번호', { type: 'password', autocomplete: 'new-password', hint: '영문과 숫자를 섞어 8자 이상' }),
+      password: field(form, 'signup-password', '비밀번호', { type: 'password', autocomplete: 'new-password', hint: '영문과 숫자를 섞어 8~64자' }),
       passwordConfirm: field(form, 'signup-password-confirm', '비밀번호 확인', { type: 'password', autocomplete: 'new-password' }),
-      nickname: field(form, 'signup-nickname', '닉네임', { type: 'text', autocomplete: 'nickname', hint: `2~${NICKNAME_MAX}자 · 커뮤니티와 랭킹에 보여요`, maxLength: NICKNAME_MAX }),
+      nickname: field(form, 'signup-nickname', '닉네임', { type: 'text', autocomplete: 'nickname', hint: `2자 이상, 한글은 ${NICKNAME_MAX_HANGUL}자 · 영문 · 숫자는 ${NICKNAME_MAX}자까지 · 커뮤니티와 랭킹에 보여요`, maxLength: NICKNAME_MAX }),
       agreed: agreement(form),
     };
+    lockNicknameLength(fields.nickname.input);
     const submit = element('button', 'primary-button login-submit', '가입하기');
     submit.type = 'submit';
     form.append(error, submit);
@@ -102,8 +110,16 @@ export function renderSignupPage(container, { api, navigate }) {
     let pending = false;
     peek(null);
     card.replaceChildren(...parts);
-    const helpers = { form, showError, fieldError, fill, busy: [kakao, submit] };
+    const helpers = { form, showError, fieldError, fill, showSignedUpLoginAgain, busy: [kakao, submit] };
     return helpers;
+
+    // 가입은 됐는데 첫 토큰을 받지 못했을 때(TOKEN_NOT_ISSUED): 안내 옆에 로그인 화면으로 가는 버튼을 둔다 (PR #308 리뷰).
+    // 가입하기를 다시 누르면 409(이미 쓰는 아이디)가 나오므로 한 단계를 줄인다. 버튼은 안내 문구 안에 있어 다음 안내가 나오면 함께 사라진다
+    function showSignedUpLoginAgain() {
+      showError(SIGNED_UP_LOGIN_AGAIN);
+      error.append(' ', button('로그인 화면으로', () => navigate('login', {}, { replace: true }), 'login-link'));
+      return helpers;
+    }
 
     function readValues() {
       return {
@@ -130,7 +146,7 @@ export function renderSignupPage(container, { api, navigate }) {
       return helpers;
     }
 
-    // 칸에 매이지 않는 안내(준비 중 · 연결 실패): 카카오는 버튼 바로 아래, 가입 폼은 가입하기 버튼 위
+    // 칸에 매이지 않는 안내(연결 실패 · 요청 제한 · 가입됨): 카카오는 버튼 바로 아래, 가입 폼은 가입하기 버튼 위
     function showError(message, near = form) {
       if (near === kakao) kakao.after(error); else form.insertBefore(error, submit);
       error.textContent = message;
@@ -149,22 +165,31 @@ export function renderSignupPage(container, { api, navigate }) {
         fields[first].input.focus();
         return;
       }
-      if (!api.signup) {
-        showError(NOT_READY);
-        return;
-      }
       pending = true;
       setBusy([kakao, submit], true, submit, '가입하는 중…');
       try {
         const { nickname } = await api.signup({ id: values.id.trim(), password: values.password, nickname: values.nickname.trim() });
+        saveUser({ nickname }); // 화면을 떠났어도 로그인 표시는 남긴다 — 서버는 이미 가입 · 로그인됐다
         if (!container.contains(root)) return; // 기다리는 사이 다른 화면으로 갔으면 이동하지 않는다
-        saveUser({ nickname });
         finish();
       } catch (failure) {
         if (!container.contains(root)) return;
-        if (failure?.code === 'DUPLICATE_ID') {
-          fieldError('id', '이미 쓰고 있는 아이디예요. 다른 아이디를 골라 주세요.');
+        // 서버 details는 [{ field, reason }]. 아는 칸 이름일 때만 그 칸에 붙인다(hasOwn: toString 같은 기본 속성 이름에 걸리지 않게)
+        const serverField = failure?.code === 'VALIDATION_ERROR' && Array.isArray(failure.details)
+          ? failure.details.find((detail) => Object.hasOwn(SERVER_FIELD_MESSAGE, detail?.field ?? ''))?.field
+          : null;
+        if (failure?.code === TOKEN_NOT_ISSUED) {
+          showSignedUpLoginAgain();
+        } else if (failure?.code === 'DUPLICATE_ID') {
+          // 서버가 가입(커밋) 뒤 토큰 발급에서 실패하면 500이 나가고, 다시 누르면 이 409를 본다(BE-113 추후 재검토 · PR #306 리뷰).
+          // 그 사람은 이미 가입된 것이라 로그인으로 안내한다
+          fieldError('id', '이미 쓰고 있는 아이디예요. 다른 아이디를 골라 주세요. 방금 가입했다면 로그인해 주세요.');
           fields.id.input.focus();
+        } else if (serverField) {
+          fieldError(serverField, SERVER_FIELD_MESSAGE[serverField]);
+          fields[serverField].input.focus();
+        } else if (failure?.code === 'TOO_MANY_REQUESTS') {
+          showError(TOO_MANY);
         } else {
           showError(failure?.code === 'NETWORK_ERROR' ? NETWORK : '가입하지 못했어요. 잠시 뒤 다시 시도해 주세요.');
         }
@@ -177,16 +202,12 @@ export function renderSignupPage(container, { api, navigate }) {
     async function startWithKakao() {
       if (pending) return;
       error.hidden = true;
-      if (!api.login) {
-        showError(NOT_READY, kakao);
-        return;
-      }
       pending = true;
       setBusy([kakao, submit], true, kakao);
       try {
         const { nickname } = await api.login({ method: 'kakao' });
+        saveUser({ nickname }); // 목 모드만 여기 온다(실제 카카오는 브라우저 이동). 가입 폼과 같은 순서로 둔다
         if (!container.contains(root)) return;
-        saveUser({ nickname });
         finish();
       } catch (failure) {
         if (!container.contains(root)) return;

@@ -44,6 +44,8 @@
 | v1.38 | 2026-10-22 | 프로필 선택 설정 테이블 추가 (**확장 단계**, BE-104 · V29 · API 명세 v0.52) — `profile_setting` 신설(익명 사용자당 한 줄: 공개 성향카드 `shown_card` · 프로필카드 아래 성향 `profile_card_type` · 한 줄 소개 `bio` · `updated_at`). 프로필 꾸미기와 나눈 테이블(부분 저장). v1.36의 `personality_result` 두 칸은 V28로 반영. 11장 추가 **(병합 메모) 작업 중 COMMON-58(PR #244)이 BE-93 줄에 v1.37을 먼저 써서 v1.37 → v1.38로 다시 매겼다(마이그레이션 V29는 그대로)** |
 | v1.39 | 2026-10-27 | 레벨 · 직업 테이블 추가 (**확장 단계**, BE-106 · V30 · API 명세 v0.54) — `xp_event`(이벤트 경험치 지급 원장: 사용자 · 수급처 · 대상 유니크, 일일 · 묶음 상한 집계용 인덱스)와 `profile_job`(사용자가 고른 직업) 신설. 사건 완료 · 성향 · 출석 · 업적 XP는 기존 테이블에서 계산해 저장하지 않는다. 12장 추가 |
 | v1.40 | 2026-10-27 | 범죄 유형 추가: 강도 · 절도 (BE-112 · V31 · API 명세 v0.55) — `crime_type`에 `ROBBERY`(강도 — 강도치상 · 강도상해 포함) · `THEFT`(절도 — 특수절도 · 특가법 절도 포함) 추가, 화면 분류명은 둘 다 재산범죄. 범죄 유형 CHECK 4곳(`sentence_range_option` · `legal_case` · `rag_precedent` · `case_import`) 교체. `sentence_range_option`에 강도 7개(벌금형 제외 + 무기징역, ID 23 ~ 29) · 절도 7개(공통, ID 30 ~ 36) 추가. 상해치사 · 폭행치사는 `INJURY`에 포함. 양형기준 버전은 살인만 자동 연결(강도 · 절도는 없음) |
+| v1.41 | 2026-10-27 | 사건 대본 테이블 추가 (**확장 단계**, BE-108 · V32 · API 명세 v0.57) — `case_script` 신설(사건마다 1건: 증거조사 대사 `evidence` jsonb · 배역 `cast_roles` · 생성 정보 `model` · `generated_at` · `stopped` · 공개 가능 여부 `publishable` · 검수 칸 4개). 대사를 칸으로 펼치지 않고 jsonb 한 칸에 두는 이유는 `case_paper.article`과 같다(형식을 정하는 쪽이 파이프라인이다). `cast`는 SQL 예약어라 칸 이름을 `cast_roles`로 두었다. 검수는 `judgment`(V16)와 같은 방식으로 `APPROVED` · `REJECTED`만 저장하고 비어 있으면 대기로 읽는다. 감사 로그 행동 `CASE_SCRIPT_APPROVE` · `CASE_SCRIPT_REJECT` 추가 (결정: `docs/decisions/BE-108.md`) **(병합 메모) 작업 중 BE-106(V30 · v1.39)과 BE-112(V31 · v1.40)가 먼저 머지돼 V32 · v1.41로 다시 매겼다** |
+| v1.42 | 2026-10-27 | 아이디 회원 추가 (**확장 단계**, BE-113 · V33 · API 명세 v0.58) — `member.provider`에 `LOCAL` 허용(CHECK `ck_member_provider` 변경), `member.nickname`(NULL 허용, 카카오 회원은 NULL) 추가, `member_password` 신설(회원 1 : 0..1, 소문자 로그인 아이디 유일 · 일방향 비밀번호 해시). 아이디 회원의 `provider_user_id`는 UUID. 카카오 회원 행 · 기존 조회는 바뀌지 않는다 |
 
 ---
 
@@ -368,6 +370,43 @@ S-05에서 보여 줄 형벌 선택지, 그리고 **선고 가능 범위 밖 판
 - 유니크 제약: `case_id` — 사건마다 신문 지면은 1건. 재생성은 새 행을 만들지 않고 덮어쓴다.
 - Gemini `generateContent` 한 번 호출로 `{headline, deck, caption, article}` JSON을 받아 그대로 채운다(`CasePaperService`).
 
+#### `case_script` — 사건 대본 (BE-108, COMMON-65)
+
+증거조사에서 검사 · 변호인이 주고받는 대사. 사건마다 1건. 파이프라인 `script` 단계(BE-107)가 만들고
+적재(A-14-1)가 넣으며, 관리자가 승인한 대본만 공개된다(서빙은 BE-109).
+
+**`legal_case`에 칸을 더하지 않고 표를 따로 둔 이유**: 대본은 사건 내용과 생애주기가 다르다. 사건이 공개된
+뒤에 대본만 늦게 들어오거나, 대본만 반려돼 다시 만들 수 있다. 한 표에 넣으면 "사건은 공개인데 대본은 검수
+중"을 나타낼 자리가 없다.
+
+**대사를 jsonb 한 칸에 두는 이유**: 서버는 대본 안을 들여다보지 않는다(검색 · 집계 대상이 아니다). 형식을
+정하는 쪽은 파이프라인이고, 칸으로 펼쳐 적으면 파이프라인이 필드를 늘릴 때마다 스키마가 따라 깨진다 —
+`case_paper.article`과 같은 관례다.
+
+| 컬럼 | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| id | bigint PK | ✓ |  |
+| case_id | bigint FK | ✓ | 유니크 — 사건마다 1건 |
+| evidence | jsonb | ✓ | 판단 요소별 대사 배열. 한 줄 = `{factorId, role, character, text, attempts, validation}`. **생성하지 못한 줄은 `text`가 null**이다 |
+| model | varchar(100) |  | 어느 모델로 만들었는지 (예: `google:gemini-2.5-flash`) |
+| generated_at | timestamptz |  | 파이프라인이 만든 시각(`createdAt`). 적재 시각 `created_at`과 다르다 |
+| stopped | boolean | ✓ | 호출 한도로 중간에 멈췄는지. 기본 false |
+| cast_roles | jsonb |  | 배역 `{prosecutor, defense}`. `cast`는 SQL 예약어라 이름을 바꿨다 |
+| balance_warning | text |  | 검사 · 변호인 분량이 치우쳤다는 경고. **길이를 제한하지 않는다** — 모델 문장이 들어오는 칸을 varchar로 두면 한 번 넘칠 때 적재 전체가 막힌다(BE-93 1차에서 겪음) |
+| publishable | boolean | ✓ | 파이프라인이 "증거 카드와 대사가 1:1로 맞는다"고 본 결과. false면 승인할 수 없다 |
+| review_status | varchar(20) |  | `APPROVED` · `REJECTED`만 저장. **비어 있으면 검수 대기**(`judgment` V16과 같은 방식), CHECK |
+| reviewed_by_admin_id | bigint FK |  | `admin_account.id`. 계정을 지우면 NULL (`ON DELETE SET NULL`) |
+| reviewed_at | timestamptz |  |  |
+| review_note | varchar(500) |  | 반려 사유. 반려일 때만 둔다(CHECK) |
+| created_at | timestamptz | ✓ | 적재 시각 |
+| updated_at | timestamptz | ✓ |  |
+
+- **`publishable = false`는 승인할 수 없다**: `CHECK (review_status <> 'APPROVED' OR publishable)`. 증거 카드와 대사가 어긋난 상태로 공개하면 체험이 깨지므로 데이터로도 막아 둔다(BE-107 PR #277 리뷰 7번의 계약).
+- `publishable`이 false인 이유는 둘이다 — 끝내 생성하지 못한 줄이 있거나(`evidence[].text`가 null), 호출 한도로 멈췄거나(`stopped`). 검수 화면이 둘을 구분해 안내한다.
+- **대본 검수는 사건 상태를 바꾸지 않는다.** 판결 후보 승인(A-9)은 `legal_case.status`를 DRAFT → REVIEW로 올리지만, 대본은 사건 내용이 아니라 체험 연출이라 사건 공개 흐름과 따로 둔다.
+- `evidence[].factorId`는 **`factor.display_order`** 와 맞춘다(적재가 파이프라인 `factorId`를 그대로 넣는다, v1.37). A-13-10이 이 번호로 판단 요소 문구를 찾아 대사마다 붙여 준다.
+- 다시 생성해 덮어쓰는 경로는 아직 없다(적재는 사건을 새로 만든다). 생기면 유니크 제약 덕에 행이 둘로 늘지 않는다.
+
 #### `case_import` · `case_import_source` — 사건 등록 작업 (BE-93, A-14 · A-15)
 
 관리자가 판결문을 넣으면 백엔드가 AI 판결 파이프라인 서비스(COMMON-50)에 작업을 맡기고 이 표로 추적한다.
@@ -454,18 +493,38 @@ S-03의 객관식 선택지. 범죄 유형별로 정의한다(FR-2-8).
 - **연결 규칙 (v1.30, BE-62)**: 아직 연결 안 됨 → 이 회원에 연결 / 같은 회원 → 그대로 / **다른 회원에 연결됨(공용 PC) → 덮어쓰지 않고 이 회원에 연결된 새 익명 ID를 발급**(그대로 두면 이후 체험이 앞 사람 계정으로 쌓인다) / 쿠키 없음 · 모르는 값 → 새 익명 ID 발급. 연결은 `member_id IS NULL`일 때만 바꾸는 조건부 UPDATE라 동시에 와도 꼬이지 않는다
 - 기존 체험의 `experience.member_id`는 일괄로 채우지 않는다(`anonymous_user`를 거쳐 찾는다).
 
-#### `member` — 회원 (확장 단계, v1.33 · BE-62 · V25)
+#### `member` — 회원 (확장 단계, v1.33 · BE-62 · V25, v1.42 · BE-113 · V33)
 
 | 컬럼 | 타입 | 필수 | 설명 |
 | --- | --- | --- | --- |
 | id | bigint PK | ✓ | 자동 증가. 토큰의 subject(`MemberPrincipal.memberId`) |
-| provider | varchar(20) | ✓ | 로그인 공급자. `KAKAO`만(CHECK `ck_member_provider`) |
-| provider_user_id | varchar(64) | ✓ | 공급자 회원번호(카카오 `id`, 숫자 문자열) |
+| provider | varchar(20) | ✓ | 로그인 공급자. `KAKAO` · `LOCAL`(아이디 회원, v1.42)(CHECK `ck_member_provider`) |
+| provider_user_id | varchar(64) | ✓ | 공급자 회원번호(카카오 `id`, 숫자 문자열). `LOCAL`은 가입할 때 만든 **UUID** — 로그인 아이디는 여기 두지 않고 `member_password.login_id`에만 둔다 |
 | created_at | timestamptz | ✓ |  |
 | last_login_at | timestamptz |  | 마지막 로그인 성공 시각 |
+| nickname | varchar(12) |  | 표시 이름(v1.42). `LOCAL` 회원만 가입 때 채우고 카카오 회원은 NULL(화면은 "카카오 회원"). **중복 허용**(유니크 없음). 변경 API는 아직 없다 |
 
 - `(provider, provider_user_id)` 유일(`uq_member_provider_user`). 행은 `INSERT ... ON CONFLICT DO NOTHING`으로 만들어, 같은 계정의 첫 로그인이 동시에 와도 한 행만 생긴다.
-- **개인정보를 저장하지 않는다**: 카카오 동의항목(닉네임 · 이메일 · 프로필)을 요청하지 않고 회원번호만 쓴다. 표시 이름 등이 필요해지면 그때 동의항목과 함께 칼럼을 추가한다.
+- **카카오 회원은 개인정보를 저장하지 않는다**: 카카오 동의항목(닉네임 · 이메일 · 프로필)을 요청하지 않고 회원번호만 쓴다.
+- **아이디 회원(`LOCAL`, v1.42)** 은 아이디 · 비밀번호 해시(`member_password`) · 닉네임을 저장한다(이용약관 · 개인정보처리방침 FE-117). 카카오 계정과 아이디 계정은 **합치지 않는다** — 같은 사람이어도 다른 회원이다.
+
+#### `member_password` — 아이디 회원 로그인 정보 (확장 단계, v1.42 · BE-113 · V33)
+
+```mermaid
+erDiagram
+    member ||--o| member_password : "아이디 로그인 (LOCAL만)"
+```
+
+| 컬럼 | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| member_id | bigint PK FK → member | ✓ | 회원 1명에 0 또는 1행. 카카오 회원은 행이 없다 |
+| login_id | varchar(20) | ✓ | 로그인 아이디. **소문자로 바꿔 저장**(`Naero` = `naero`). 유일(`uq_member_password_login_id`), 형식 CHECK `ck_member_password_login_id`(`^[a-z0-9_]{4,20}$`) — `@`가 없어 화면이 관리자(이메일)와 구분한다 |
+| password_hash | varchar(255) | ✓ | `{argon2}` 접두어가 붙은 일방향 해시(BE-90 인코더). 원문은 저장하지 않는다 |
+| changed_at | timestamptz | ✓ | 비밀번호를 정한 시각(DB 기본값 `now()`). 비밀번호 변경 기능이 생기면 갱신한다 |
+
+- 행은 `INSERT ... ON CONFLICT (login_id) DO NOTHING`으로만 넣는다. 같은 아이디로 동시에 가입하면 한쪽만 들어가고, 0행이면 서버가 회원 행까지 되돌리고 409 `DUPLICATE_ID`를 돌려준다(유니크 위반 예외로 트랜잭션이 깨지지 않게).
+- 회원 행 · 비밀번호 행 · 익명 기록 연결은 한 트랜잭션이다. 비밀번호 해시 계산은 트랜잭션 밖에서 한다(BE-67과 같은 이유).
+- 회원 탈퇴가 생기면 `member` 행을 지우기 전에 이 행을 지운다(FK에 `ON DELETE` 동작 없음, `anonymous_user.member_id`와 함께 BE-62 추후 재검토).
 
 #### `experience` — 체험 (익명 사용자 × 사건 × 회차)
 

@@ -11,16 +11,21 @@ import { PORTRAIT_POOL } from '../../content/portraitPool.js';
 import { BOOKMARK_CHARACTERS, BOOKMARK_FACES, BOOKMARK_LAWS, BOOKMARK_NAMES, BOOKMARK_STYLES, FACE_NAMES, STYLE_NAMES, applyBookmark, getBookmarkCharacter, getBookmarkFaceName, getBookmarkStyle, bookmarkFace, BOOKMARK_COLORS, getBookmarkColor, selectedBookmarkFace } from '../../utils/bookmarkCharacter.js';
 import { SCRIPTS } from '../../content/scripts.js';
 import { fitPortraitIn } from '../../utils/portraitFit.js';
+import { fitOneLine } from '../../utils/fitText.js';
+import { lockScroll, unlockScroll } from '../../utils/scrollLock.js';
+import { progressOf } from '../../utils/levelProgress.js';
 import { reducedMotion } from '../../utils/motion.js';
 import { clearUser, currentUser, isAdmin } from '../../utils/session.js';
+import { signerSeed } from '../../components/signatureInk.js';
 import { homeRoute } from '../admin/adminMenu.js';
 import { openCaseReviewPopup } from '../caseReview/caseReviewPopup.js';
 import { renderProfileEdit } from './myProfileEdit.js';
 import { renderSettings } from './mySettings.js';
+import { renderLevelPage } from './myLevel.js';
 import { RETAKE_NOTES, openRetakeDialog, retakeAfter, retakeState } from './baselineRetake.js';
 import { SHOWN_SLOTS, setShownCard, shownSlot } from '../../utils/shownCard.js';
-import { selectedChoice, setProfileCardType, typeChoices } from '../../utils/profileCardType.js';
-import { DEFAULT_TYPE_DECO, TYPE_BACKGROUNDS, getTypeDeco, setTypeDeco, shownTypeDeco } from '../../utils/typeCardDeco.js';
+import { getCardLevel, getCardLine, selectedChoice, setCardLevel, setCardLine, setProfileCardType, typeChoices } from '../../utils/profileCardType.js';
+import { DEFAULT_TYPE_DECO, TYPE_BACKGROUNDS, TYPE_CHARACTERS, getTypeDeco, setTypeDeco, shownTypeDeco } from '../../utils/typeCardDeco.js';
 import { configureProfileSettings, hydrateProfileSettings } from '../../utils/profileSettings.js';
 
 // S-17 마이페이지 (WBS 7.6.6). GET /my-page 한 번 호출로 받고, 기록이 없어도 404가 아니라 빈 200이다(명세 P-5).
@@ -42,12 +47,13 @@ const VIEWS = {
   cases: '내가 체험한 사건',
   edit: '내 정보 수정',
   settings: '환경 설정',
+  level: '경험치',
   achievements: '도전과제',
   bookmark: '책갈피 설정',
 };
 // 프로필카드에서 들어가는 화면은 뒤로 가기가 프로필카드로 간다(FE-68)
 const PARENTS = { achievements: 'profile', bookmark: 'profile' };
-// 닉네임 아래 프로필 수치. 레벨 · 직업은 목 데이터(API 전, data.profile이 오면 그 값을 쓴다). 출석 일수는 서버 값(P-5 profile.attendanceDays)이다. 완료한 사건 · 모은 일러스트는 지금 기록에서 센다
+// 닉네임 아래 프로필 수치. 레벨 · 직업은 서버 값(P-5 level, BE-106)이고, 없을 때만 목 값으로 채운다(옛 data.profile이 오면 그 값). 출석 일수는 서버 값(P-5 profile.attendanceDays)이다. 완료한 사건 · 모은 일러스트는 지금 기록에서 센다
 const MOCK_PROFILE = { level: 7, job: '수습 판사', attendanceDays: 0 };
 const IS_MOCK = API_MODE === 'mock'; // 목 모드에서는 체험 기록 · 성향 평균도 목(mocks/personalityMockApi.js)이라 함께 표기한다(FE-56)
 // 개발 서버 + 목 모드에서만 public/images의 webp 전부를 컬렉션 아래에 펼친다(FE-67). 빌드에서는 이 분기가 통째로 빠진다
@@ -139,13 +145,15 @@ function cardButton(className, label, ...children) {
 function statsOf(data) {
   const missing = (key) => data.profile?.[key] == null;
   const profile = Object.fromEntries(Object.keys(MOCK_PROFILE).map((key) => [key, missing(key) ? MOCK_PROFILE[key] : data.profile[key]]));
+  const levelData = data.level;
+  if (levelData) { profile.level = levelData.level ?? profile.level; profile.job = levelData.job?.name ?? profile.job; }
   const experiences = data.experiences ?? [];
   const groups = collectionOf(experiences, SCRIPTS);
   return {
     ...profile,
     completed: experiences.filter((item) => item.status === 'COMPLETED').length,
     collected: groups.reduce((sum, group) => sum + group.cast.length + group.items.length, 0),
-    mocked: { level: missing('level'), job: missing('job'), attendanceDays: IS_MOCK || missing('attendanceDays'), completed: IS_MOCK, collected: IS_MOCK },
+    mocked: { level: IS_MOCK || (!levelData && missing('level')), job: IS_MOCK || (!levelData && missing('job')), attendanceDays: IS_MOCK || missing('attendanceDays'), completed: IS_MOCK, collected: IS_MOCK },
   };
 }
 
@@ -173,8 +181,14 @@ const decoFor = (data) => shownDeco(currentDeco(), openOf(data));
 
 // 대표 이미지 카드의 속(그리는 일은 components/personCards.js). 카드 아래 성향: 카드 꾸미기에서 고른 것(기본 최근)
 function profileCardPartsOf(deco, data) {
-  const typeName = selectedChoice(data)?.type.name ?? currentTypeOf(data)?.name;
-  return profileCardParts(deco, myNickname(data, currentUser()), typeName);
+  const nickname = myNickname(data, currentUser());
+  const stats = statsOf(data);
+  const line = getCardLine();
+  const known = Boolean(data.level); // 서버 레벨이 없으면 목 값(Lv.7 · 수습 판사)을 카드에 올리지 않는다
+  const level = known && getCardLevel() ? `Lv.${stats.level}` : null;
+  if (line === 'signature') return profileCardParts(deco, nickname, null, { level, signer: signerSeed() });
+  if (line === 'job' && known) return profileCardParts(deco, nickname, stats.job, { level, lineLabel: '직업' });
+  return profileCardParts(deco, nickname, selectedChoice(data)?.type.name ?? currentTypeOf(data)?.name, { level });
 }
 
 // 성향카드 꾸미기(FE-82): 성향카드 화면에서 고른 테두리 · 배경 · 책갈피를 카드에 입힌다(잠긴 것은 기본으로). 기본 배경은 원래 타로카드 모양이라 클래스를 붙이지 않는다
@@ -203,6 +217,28 @@ function profileCardPair(data, go) {
   return [profile, typeCardNode];
 }
 
+// 경험치 진행률(FE-116): 지금 레벨에 닿은 XP부터 다음 레벨에 필요한 XP까지. 서버 L-1의 xp · currentLevelXp · nextLevelXp를 쓴다. 최고 레벨이면 막대가 가득 차고 안내만 바뀐다
+function levelProgress(level, go) {
+  if (!level) return null;
+  const { top, percent } = progressOf(level);
+  const text = top ? '최고 레벨이에요.' : `Lv.${level.level + 1}까지 ${level.nextLevelXp - level.xp} XP`;
+  // 누르면 경험치 페이지(FE-120). 막대는 장식이라 숨기고 진행 상황은 버튼 이름이 읽어 준다(버튼 안에 진행 막대 역할을 둘 수 없다)
+  const box = element('button', 'my-level-progress');
+  box.type = 'button';
+  box.setAttribute('aria-label', `경험치 자세히 보기. ${text} 지금 ${percent}%`);
+  box.addEventListener('click', () => go('level'));
+  const caption = element('span', 'my-level-caption', text);
+  if (IS_MOCK) caption.append(mockTag());
+  caption.append(element('span', 'my-level-more', '경험치 보기 ›'));
+  const bar = element('span', 'my-achievement-bar');
+  bar.setAttribute('aria-hidden', 'true');
+  const fill = element('span');
+  fill.style.width = `${percent}%`;
+  bar.append(fill);
+  box.append(caption, bar);
+  return box;
+}
+
 // 첫 화면 위쪽: [프로필카드(대표 이미지 · 꾸미기) | 닉네임 · 수치 | 성향카드(타로카드: 이름 · 성향 이미지 · 대사 한 줄)]
 function renderTop(data, go) {
   const section = element('section', 'my-top');
@@ -210,7 +246,9 @@ function renderTop(data, go) {
   const [profile, typeCardNode] = profileCardPair(data, go);
 
   const middle = element('div', 'my-top-middle');
-  middle.append(element('h2', 'my-nickname', myNickname(data, currentUser())), renderStats(stats));
+  middle.append(fitOneLine(element('h2', 'my-nickname', myNickname(data, currentUser()))), renderStats(stats));
+  const progress = levelProgress(data.level, go);
+  if (progress) middle.append(progress);
 
   section.append(profile, middle, typeCardNode);
   return section;
@@ -725,9 +763,12 @@ function typeFan(data, navigate, go) {
   side.append(
     editGroup('커뮤니티에 보일 성향카드', bar, '고른 카드가 맨 앞에 놓이고 "공개" 도장이 찍혀요. 프로필카드와 성향카드는 커뮤니티에서 항상 다른 사람에게 보여요.'),
     editGroup('성향 테스트 하러 가기', tests, note),
-    editGroup('성향카드 확인 및 꾸미기', button('성향카드에서 보기', () => go('type'), 'secondary-button')),
   );
-  box.append(stack, side);
+  const main = element('div', 'edit-fan-main'); // 겹친 카드 아래에 성향카드 화면으로 가는 버튼(프로필카드 아래 버튼과 같은 자리)
+  const view = button('성향카드에서 보기', () => go('type'), 'secondary-button');
+  view.disabled = !Object.values(slots).some(Boolean); // 카드가 한 장도 없으면 점선 비활성(보기 화면이 비어 있다)
+  main.append(stack, view);
+  box.append(main, side);
   return box;
 }
 
@@ -953,6 +994,24 @@ function swatchPicker(type, open, shown, onPick, base = PLAIN_DECO, legendClass 
   return field;
 }
 
+// 성향카드 캐릭터 고르기(성향카드 꾸미기 맨 위): 내로 · 남불 둘 다 늘 열려 있다. 안 골랐으면 성향 결과의 캐릭터가 골라진 것으로 본다
+function characterPicker(type, shown, onPick) {
+  const field = element('fieldset', 'my-deco');
+  field.append(element('legend', '', '캐릭터'));
+  const row = element('div', 'my-deco-grid');
+  TYPE_CHARACTERS.forEach((id, index) => {
+    const thumb = element('span', 'my-deco-thumb');
+    thumb.append(picture(DEFAULT_PORTRAITS[index], ''));
+    row.append(decoOption({
+      group: 'type-character', value: id, checked: id === (shown.character ?? type?.character), locked: false, name: nameOf(CHARACTER_LIST, id),
+      onChange: () => { setTypeDeco({ character: id }); onPick(); },
+    }, thumb));
+  });
+  field.append(row);
+  return field;
+}
+const CHARACTER_LIST = [{ id: 'NAERO', name: '내로' }, { id: 'NAMBUL', name: '남불' }];
+
 // 짧은 책갈피의 한쪽(좌 · 우) 아이콘 고르기
 function sashIconPicker(side, open, deco, onPick, target) {
   const key = side === 'left' ? 'sashIconLeft' : 'sashIconRight';
@@ -1004,7 +1063,6 @@ function sashSection(open, onPick, target = PROFILE_TARGET) {
     };
     const parts = [
       element('h2', 'my-deco-title', '카드 책갈피'),
-      element('p', 'my-hint', '카드 윗변 좌우에 거는 띠예요. 모양을 먼저 고르고, 색은 모양마다 따로 골라요. 책갈피 설정(얼굴 · 리본)과는 별개예요.'),
       swatchPicker('sashStyle', open, deco.sashStyle, repaint, deco, 'is-sub', target),
     ];
     if (deco.sashStyle !== 'none') parts.push(sashColorPicker(open, deco, repaint, target));
@@ -1080,13 +1138,109 @@ function previewCard(data, deco = decoFor(data)) {
 // 카드 아래 성향 고르기(FE-77): 초심 · 재심 · 최근 중 하나를 글자 라디오로. 같은 유형은 한 칸으로 묶인다. 공개 성향카드와는 별개의 값이다
 function typeChoiceSection(data, onPick) {
   const field = element('fieldset', 'my-deco');
-  field.append(element('legend', '', '카드 아래 성향'));
+  field.append(element('legend', '', '카드 아래'));
+  const line = getCardLine();
+  const lines = element('div', 'my-type-choices');
+  [['type', '성향'], ['signature', '서명'], ['job', '직업']].forEach(([value, text]) => {
+    const label = element('label', 'my-type-choice');
+    const input = element('input');
+    input.type = 'radio';
+    input.name = 'profile-card-line';
+    input.value = value;
+    input.checked = line === value;
+    input.addEventListener('change', () => { saveSettingsOr(setCardLine(value)); onPick(); redraw(); });
+    label.append(input, element('span', '', text));
+    lines.append(label);
+  });
+  const levelLabel = element('label', 'my-type-choice');
+  const levelInput = element('input');
+  levelInput.type = 'checkbox';
+  levelInput.checked = getCardLevel();
+  levelInput.addEventListener('change', () => { saveSettingsOr(setCardLevel(levelInput.checked)); onPick(); });
+  levelLabel.append(levelInput, element('span', '', '레벨 앞에 붙이기'));
+  field.append(lines, levelLabel);
+  const typeBox = element('div');
+  const jobBox = element('div');
+  field.append(typeBox, jobBox);
+  const redraw = () => { typeBox.hidden = getCardLine() !== 'type'; jobBox.hidden = getCardLine() !== 'job'; };
+  redraw();
+  typeBox.append(typeChoiceList(data, onPick));
+  jobBox.append(jobSection(data, onPick));
+  return field;
+}
+
+// 카드 아래가 직업일 때 직업 고르기(BE-106 L-2). 레벨이 모자라 안 열린 직업은 누를 수 없고 열리는 레벨을 알려 준다.
+// 개발 서버 + 목 모드에서는 레벨 · 직업을 올려 보는 "개발용" 버튼이 함께 보인다(결과는 이 창 안에서 바로 다시 그린다)
+function jobSection(data, onPick) {
+  const box = element('div');
+  let saving = false; // 저장 중에는 라디오를 잠가 요청이 겹치지 않게 한다
+  const show = (level) => {
+    data.level = level;
+    if (cache) cache.level = level;
+    draw();
+    onPick();
+  };
+  const draw = () => {
+    const level = data.level;
+    box.replaceChildren();
+    if (!level) {
+      box.append(element('p', 'my-hint', '직업 정보를 아직 받지 못했어요.'));
+      return;
+    }
+    box.append(element('p', 'my-hint', `지금 Lv.${level.level}이에요. 직업은 레벨이 오르면 하나씩 열리고, 한 번 열리면 다시 잠기지 않아요.`));
+    const list = element('div', 'my-type-choices');
+    level.jobs.forEach((job) => {
+      const label = element('label', 'my-type-choice');
+      const input = element('input');
+      input.type = 'radio';
+      input.name = 'profile-card-job';
+      input.value = job.code;
+      input.checked = job.selected;
+      input.disabled = !job.unlocked || saving;
+      input.addEventListener('change', async () => {
+        saving = true;
+        draw();
+        let message = '';
+        try {
+          data.level = await apiRef.putLevelJob(job.code);
+          if (cache) cache.level = data.level;
+          onPick();
+        } catch (error) {
+          if (error?.code === 'JOB_LOCKED') data.level = await apiRef.getLevel().catch(() => data.level); // 표시한 해금 상태가 서버와 달랐다: 서버 값으로 다시 그린다(명세 L-2)
+          message = error?.code === 'JOB_LOCKED' ? '아직 열리지 않은 직업이에요.' : '직업을 저장하지 못했어요. 잠시 뒤 다시 시도해 주세요.';
+        }
+        saving = false;
+        draw();
+        if (message) box.append(element('p', 'my-hint', message));
+      });
+      label.append(input, element('span', '', job.unlocked ? job.name : `${job.name} (Lv.${job.unlockLevel}에 열려요)`));
+      list.append(label);
+    });
+    box.append(list);
+    if (import.meta.env?.DEV && apiRef?.setMockLevel) {
+      const dev = element('div', 'my-profile-actions');
+      const run = (action) => async () => { try { show(await action()); } catch { /* 개발 전용: 실패하면 그대로 둔다 */ } };
+      dev.append(
+        button('개발용: 레벨 +1', run(() => apiRef.setMockLevel(data.level.level + 1)), 'secondary-button is-dev'),
+        button('개발용: 다음 직업 해금', run(() => apiRef.unlockMockNextJob()), 'secondary-button is-dev'),
+        button('개발용: 레벨 처음으로', run(() => apiRef.resetMockLevel()), 'secondary-button is-dev'),
+      );
+      box.append(dev);
+    }
+  };
+  draw();
+  return box;
+}
+
+// 카드 아래가 성향일 때 초심 · 재심 · 최근 고르기
+function typeChoiceList(data, onPick) {
+  const field = element('div');
   const choices = typeChoices(data);
   if (choices.length === 0) {
     field.append(element('p', 'my-hint', '성향 테스트를 하면 카드 아래에 보여 줄 성향을 고를 수 있어요.'));
     return field;
   }
-  field.append(element('p', 'my-hint', '프로필카드 아래에 보일 성향이에요. 기본은 최근이고, 같은 유형은 한 칸으로 묶여요.'));
+  field.append(element('p', 'my-hint', '기본은 최근이고, 같은 유형은 한 칸으로 묶여요.'));
   const selected = selectedChoice(data);
   const list = element('div', 'my-type-choices');
   choices.forEach((choice, index) => {
@@ -1107,6 +1261,7 @@ function typeChoiceSection(data, onPick) {
 // 카드 꾸미기 창: 테두리 · 배경 · 카드 책갈피 · 카드 아래 성향을 고른다. 창 안에도 미리 보기를 두고, 고를 때마다 화면 쪽 미리 보기(onPick)도 다시 그린다.
 // 마이페이지 커피색 토큰이 적용되도록 .my-page 안에 붙이고, 닫으면 지우고 연 버튼으로 포커스를 돌려준다(Esc · 바깥 · 닫기)
 // forType: 성향카드 꾸미기(FE-82). 같은 창에 미리 보기만 성향카드로, 카드 아래 성향 고르기는 빼고 보여 준다
+const DECO_SCROLL_CLASSES = ['deco-open', 'deco-gutter'];
 function openDecoDialog({ open, data, onPick, opener, forType = false }) {
   const target = forType ? TYPE_TARGET : PROFILE_TARGET;
   const dialog = element('dialog', 'my-deco-dialog');
@@ -1126,6 +1281,7 @@ function openDecoDialog({ open, data, onPick, opener, forType = false }) {
   const pickers = element('div', 'my-deco-dialog-pickers');
   pickers.append(
     element('p', 'my-hint', '도전과제를 깨면 테두리 · 배경 · 카드 책갈피가 더 열려요. 고르면 바로 저장돼요.'),
+    ...(forType ? [characterPicker(currentTypeOf(data), shown, paint)] : []),
     swatchPicker('frame', open, shown.frame, paint, target.base, '', target),
     swatchPicker('background', open, shown.background, paint, target.base, '', target),
     sashSection(open, paint, target),
@@ -1134,9 +1290,22 @@ function openDecoDialog({ open, data, onPick, opener, forType = false }) {
   body.append(preview, pickers);
   dialog.append(head, body);
   dialog.addEventListener('click', (event) => { if (event.target === dialog) dialog.close(); });
-  dialog.addEventListener('close', () => { dialog.remove(); opener?.focus(); });
+  const unlock = () => { removal.disconnect(); unlockScroll(...DECO_SCROLL_CLASSES); };
+  dialog.addEventListener('close', () => { unlock(); dialog.remove(); opener?.focus(); });
+  // 열린 채로 화면이 바뀌어 창이 close 없이 지워져도(뒤로 가기 · 화면 전환) 스크롤 잠금이 남지 않게 한다
+  const removal = new MutationObserver(() => { if (!dialog.isConnected) unlock(); });
+  // 넓은 화면에서는 고르기 칸만 스크롤되니, 미리 보기 카드 위에서 굴려도 창이 스크롤되게 넘겨 준다(안 그러면 뒤 화면이 스크롤된다, FE-120).
+  // 좁은 화면은 창 전체가 스크롤되어(고르기 칸이 내용만큼 늘어나 넘칠 것이 없다) 그대로 둔다
+  preview.addEventListener('wheel', (event) => {
+    if (pickers.scrollHeight <= pickers.clientHeight) return;
+    event.preventDefault();
+    const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? pickers.clientHeight : 1; // 휠 단위: 픽셀 · 줄 · 쪽
+    pickers.scrollBy({ top: event.deltaY * unit });
+  }, { passive: false });
   preview.replaceChildren(forType ? typeFace(currentTypeOf(data), undefined, shown) : previewCard(data, shown));
   (document.querySelector('.my-page') ?? document.body).append(dialog);
+  lockScroll(...DECO_SCROLL_CLASSES);
+  removal.observe(document.body, { childList: true, subtree: true });
   dialog.showModal();
 }
 
@@ -1277,6 +1446,7 @@ function renderView(view, data, navigate, go, api) {
     cases: () => renderCases(data.experiences ?? [], navigate, api),
     edit: () => renderProfileEdit({ api, navigate, go, data, card: () => profileCardOf(data, go), fan: () => typeFan(data, navigate, go) }),
     settings: () => renderSettings(),
+    level: () => renderLevelPage(data),
   }[view]();
   return [head, body];
 }

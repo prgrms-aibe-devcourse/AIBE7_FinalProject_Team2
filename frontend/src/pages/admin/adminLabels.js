@@ -30,6 +30,12 @@ export const IMPORT_STAGE_STATUS = {
   DONE: ['✓', '완료'], RUNNING: ['…', '진행 중'], FAILED: ['✕', '실패'], SKIPPED: ['–', '건너뜀'], PENDING: ['·', '대기'],
 };
 
+// 사건 사진 역할 (A-13-4 · A-13-5 · A-13-9). 사건마다 역할별로 한 장씩이다
+export const PHOTO_ROLE = { ORIGIN: '발단 사진', CONCLUSION: '결론 사진' };
+
+// 대본 대사의 측 (A-13-10). 서버는 코드값으로 주고 화면에서 바꿔 쓴다
+export const SCRIPT_SIDE = { PROSECUTOR: '검사', DEFENSE: '변호인' };
+
 // A-13 공개 조건 코드
 export const PUBLISH_REASON = {
   NO_PUBLISHED_AI: '공개할 AI 판결을 승인해야 해요.',
@@ -88,6 +94,14 @@ export function errorText(error, fallback = '요청을 처리하지 못했어요
     const fields = (error.details ?? []).map((item) => item.field).filter(Boolean);
     return `생성 결과를 사건으로 만들 수 없어요. 다시 생성해 주세요.${fields.length ? ` (문제가 된 값: ${fields.join(', ')})` : ''}`;
   }
+  // 사진 · 신문 지면 · 대본 (A-13-1 ~ A-13-13, FE-106)
+  if (code === 'INVALID_IMAGE_FILE') return error.message || 'JPG · PNG · WebP 파일을 10MB 이하로 올려 주세요.';
+  if (code === 'FILE_UPLOAD_FAILED') return '사진을 저장하지 못했어요. 잠시 뒤 다시 시도해 주세요.';
+  if (code === 'PROMPT_GENERATION_FAILED') return '추천 문구를 받지 못했어요. 직접 써서 사진을 만들어도 괜찮아요.';
+  if (code === 'INCIDENT_PHOTO_NOT_FOUND') return '그 자리의 사진이 없어요.';
+  if (code === 'PAPER_NOT_FOUND') return '아직 신문 지면을 만들지 않았어요.';
+  if (code === 'SCRIPT_NOT_FOUND') return '이 사건에는 대본이 없어요.';
+  if (code === 'SCRIPT_LINE_NOT_FOUND') return '그 판단 요소의 대사가 없어요. 화면을 새로 불러 주세요.';
   if (code === 'IMPORT_UNAVAILABLE') return '사건 등록 기능을 지금 쓸 수 없어요. 파이프라인 서비스 상태를 확인한 뒤 다시 시도해 주세요.';
   if (code?.endsWith('_NOT_FOUND') && error.message) return error.message; // 구체적인 _NOT_FOUND 분기보다 뒤에 둔다
   if (code === 'VALIDATION_ERROR') return error.message || '입력값을 확인해 주세요.';
