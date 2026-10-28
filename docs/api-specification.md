@@ -61,6 +61,7 @@
 | v0.57 | 2026-10-27 | **사건 대본 검수 A-13-10 ~ A-13-12 신설 (BE-108)** — `GET /admin/cases/{caseId}/script` · `POST .../script/approve` · `POST .../script/reject`. 적재(A-14-1)가 넣은 증거조사 대본을 관리자가 보고 승인해야 공개된다(공개 서빙은 BE-109). **번호는 운영 메뉴 A-16 ~ A-41 예약 때문에 A-13 하위로 매겼다** — A-14-1과 같은 이유다. 검수 칸(`reviewStatus` · `isPublished` · `reviewedBy` · `reviewedAt` · `reviewNote`)은 판결 후보 A-8과 같은 이름 · 같은 형식이고, 대사마다 판단 요소 문구 `label`을 서버가 붙여 준다. 대사 한 줄 직접 수정 A-13-13(`PATCH .../script/evidence/{factorId}`)도 함께 — 고친 줄은 `validation.manual`로 표시하고 검수 상태를 대기로 되돌린다(해송님 요청). **A-6 응답에 `script` 요약(`exists` · `reviewStatus` · `publishable`) 추가** — 미승인 대본은 공개를 막지 않으므로 `publishReadiness.reasons`가 아니라 별도 칸으로 내려 공개 준비 화면이 경고로 쓴다. 에러 코드 `SCRIPT_NOT_FOUND` · `SCRIPT_LINE_NOT_FOUND`(404) 추가. ERD v1.41 `case_script`(V32) **(병합 메모) 번호를 두 번 옮겼다 — BE-106(V30 · v0.54 · v1.39)과 BE-112(V31 · v0.55 · v1.40) · BE-111(v0.56)이 먼저 머지돼, 이 작업은 V32 · v0.57 · v1.41로 다시 매겼다. 먼저 머지된 쪽이 번호를 갖는다** |
 | v0.58 | 2026-10-27 | **아이디 회원가입 M-5 · 아이디 로그인 M-6 신설 (BE-113 · FE-117, ERD v1.42 · V33)** — `POST /auth/signup` · `POST /auth/login`. 둘 다 성공하면 리프레시 토큰 쿠키(`NLNB_RT`)만 심고 `{ nickname }`을 돌려주며, 화면은 M-1 재발급으로 액세스 토큰을 받는다(카카오 로그인과 같은 흐름). Origin 검증 대상에 추가(로그인 CSRF 방지). 1-5에 409 `DUPLICATE_ID` 추가, `INVALID_CREDENTIALS`를 회원 로그인에도 쓴다, `TOO_MANY_REQUESTS` 전용 제한에 M-5 · M-6 추가(`Retry-After` 6 · 3초). 관리자 로그인(A-2)은 바뀌지 않는다 |
 | v0.59 | 2026-10-27 | **API 18 공개 사건 대본 신설 (BE-109)** — `GET /cases/{caseId}/script`. A-13-10 ~ 12(BE-108)가 적재 · 검수한 대본에서 **승인된 것만** 공개용으로 가져다 준다(새로 저장하지 않음, API 17과 같은 원칙) — 2막 증거조사 대사(`factorId` · `side` · `character` · `card` · `text`)와 배역(`cast`)만 담는다. **나머지 막(1막 해설 · 공소사실 · 쟁점 정리 · 피고인신문 · 검사의견 · 최종변론 · 최후진술)은 이 API에 넣지 않는다** — 파이프라인이 만들지 않아 BE-107 후속 확장으로 분리했고, 그중 사건별 대사가 필요한 막은 당분간 "증거조사 중심 축약판"으로 둔다(FE-33 담당자 해송님 합의, BE-109 Jira 댓글). `side`는 A-13-10의 `role`을 대문자 코드값(`PROSECUTOR` · `DEFENSE`)으로 바꿔 내려준다 — 다른 공개 API와 형식을 맞추려는 것(화면 한글 변환은 프론트 몫). `card`는 A-13-10의 `label`과 같은 값(판단 요소 문구) — 파이프라인 사건에는 정적 증거 카드가 없어 이 문구가 카드 역할을 한다. 검수용 값(`manual` · `editedAt` · `validation` · `attempts`)은 내려주지 않는다. **배열 순서가 곧 재생 순서다**(별도 정렬 필드 없음). 비공개 사건은 `CASE_NOT_FOUND`, 대본이 없거나 아직 승인 전이면 `SCRIPT_NOT_FOUND`(API 17과 같은 모양 — 빈 배열 대신 404를 쓰는 이유는 "대본 없음"과 "대사 0줄"을 구분하기 위해서다). **(병합 메모) BE-113(PR #306 · v0.58)이 먼저 develop에 머지돼, 이 작업은 v0.59로 다시 매겼다** |
+| v0.60 | 2026-10-28 | **API 1 · API 16에 `scriptReady` 추가 (BE-116)** — 그 사건에 **승인된 공개 대본**(API 18이 200을 주는 조건)이 있는가. 목록이 사건마다 API 18을 부르지(N번 요청) 않고 "체험 가능 / 준비 중"을 알 수 있다. 필드 추가만이라 기존 클라이언트와 호환 (`docs/decisions/BE-116.md`) |
 
 ---
 
@@ -227,7 +228,7 @@ json
 json
 
 ```json
-{  "summary": { "total": 9, "byCrimeType": { "MURDER": 3, "FRAUD": 3, "INJURY": 3, "ROBBERY": 0, "THEFT": 0 } },  "cases": [    {      "caseId": 1,      "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",      "crimeType": "MURDER",      "crimeCategoryLabel": "생명범죄",      "chargeName": "살인",      "shortIntro": "빌린 돈 문제로 찾아온 지인과 다투다 흉기로 살해한 사건입니다.",      "keywords": ["돈 문제", "집으로 찾아옴"],      "difficulty": "HIGH",      "estimatedMinutes": 15,      "participantCount": 1284,      "thumbnailUrl": null,      "myStatus": "IN_PROGRESS"    }  ]}
+{  "summary": { "total": 9, "byCrimeType": { "MURDER": 3, "FRAUD": 3, "INJURY": 3, "ROBBERY": 0, "THEFT": 0 } },  "cases": [    {      "caseId": 1,      "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",      "crimeType": "MURDER",      "crimeCategoryLabel": "생명범죄",      "chargeName": "살인",      "shortIntro": "빌린 돈 문제로 찾아온 지인과 다투다 흉기로 살해한 사건입니다.",      "keywords": ["돈 문제", "집으로 찾아옴"],      "difficulty": "HIGH",      "estimatedMinutes": 15,      "participantCount": 1284,      "thumbnailUrl": null,      "scriptReady": true,      "myStatus": "IN_PROGRESS"    }  ]}
 ```
 
 - `PUBLISHED` 사건만. `summary`는 필터와 관계없이 전체 기준(칩 옆 건수 표시용). `byCrimeType`은 공개 사건이 없는 유형도 0으로 모든 범죄 유형 키를 내려 준다(v0.55부터 5개).
@@ -235,6 +236,7 @@ json
 - `chargeName`: 죄명(`legal_case.charge_name`, 예: "살인"). 사건 상단 바(S-04~S-08)가 `caseId`로 이 목록에서 제목과 함께 찾아 쓴다(BE-79, D-01). 사건 개요(API 4) · API 16의 `chargeName`과 같은 값이다.
 - `thumbnailUrl`: `legal_case.thumbnail_url`. 없으면 `null`이고, 화면은 범죄 유형별 기본 이미지를 쓴다.
 - `participantCount`: `attempt_no = 1`이고 `COMPLETED`인 체험 수.
+- (v0.60, BE-116) `scriptReady`: 이 사건에 **승인된 공개 대본**이 있는가(`true` / `false`). 기준은 API 18이 200을 주는 조건과 같다(사건 `PUBLISHED` + 대본 `reviewStatus: APPROVED`) — 대본이 없거나 검수 대기 · 반려면 `false`다. 화면(S-02)은 이 값으로 체험 가능한 사건을 먼저 보이고, `false`는 "준비 중"으로 다룬다. 사용자와 무관한 값이다.
 - 정렬: `published_at` 최신순 고정 (정렬 선택은 이후 단계, REQ-009).
 - (v0.27, FE-19 · REQ-010) `myStatus`: 이 사건에 대한 **내 최신 회차** 체험 상태를 목록 배지용 두 값으로 묶은 것.
 
@@ -753,10 +755,10 @@ S-20 사건 디테일(정보 구조 v1.12)이 체험을 만들기 전에 부르�
 **응답 200**
 
 ```json
-{  "caseId": 1,  "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",  "crimeType": "MURDER",  "crimeCategoryLabel": "생명범죄",  "chargeName": "살인",  "shortIntro": "빌린 돈 문제로 찾아온 지인과 다투다 흉기로 살해한 사건입니다.",  "keywords": ["돈 문제", "지인", "흉기"],  "difficulty": "MID",  "estimatedMinutes": 15,  "participantCount": 42,  "thumbnailUrl": null,  "overview": "피고인이 빌린 돈을 갚지 못해 오래 다투던 지인이 집으로 찾아오자, …",  "myStatus": null}
+{  "caseId": 1,  "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",  "crimeType": "MURDER",  "crimeCategoryLabel": "생명범죄",  "chargeName": "살인",  "shortIntro": "빌린 돈 문제로 찾아온 지인과 다투다 흉기로 살해한 사건입니다.",  "keywords": ["돈 문제", "지인", "흉기"],  "difficulty": "MID",  "estimatedMinutes": 15,  "participantCount": 42,  "thumbnailUrl": null,  "overview": "피고인이 빌린 돈을 갚지 못해 오래 다투던 지인이 집으로 찾아오자, …",  "scriptReady": true,  "myStatus": null}
 ```
 
-- 필드는 API 1 카드와 같고(`chargeName` 포함, v0.32), `overview`(사건 개요, API 4의 `case.overview`와 같은 값)를 더한다. `participantCount` · `myStatus` 기준도 API 1과 같다.
+- 필드는 API 1 카드와 같고(`chargeName` 포함, v0.32), `overview`(사건 개요, API 4의 `case.overview`와 같은 값)를 더한다. `participantCount` · `myStatus` 기준도 API 1과 같다. (v0.60, BE-116) `scriptReady`도 API 1과 같은 값 · 같은 기준이다 — `false`면 S-20은 시작 대신 "준비 중"을 보인다(API 18을 따로 불러 확인하지 않아도 된다).
 - **법정형 · 선고 가능 범위 · 권고 범위 · 판결 · 섹션 본문은 넣지 않는다**(FR-2-8, API 4와 같은 기준). 섹션은 체험 중 API 6이 단계별로 연다.
 - 쿠키는 **읽기만** 하고 발급하지 않는다(발급은 API 2 · P-2, 1-2). 쿠키가 없거나 형식이 틀리거나 체험 전이면 `myStatus`는 `null`이다.
 - 버튼 분기(정보 구조 S-20): `myStatus`가 `null`이면 **체험 시작**(API 2로 체험을 만든 뒤 S-03), `IN_PROGRESS`면 **이어서 하기**, `COMPLETED`면 **결과 다시 보기**. 이어서 하기 · 결과 다시 보기도 API 2를 불러 응답 `status`로 이동한다(1-6). 세부 상태(7단계)는 이 API에 내보내지 않는다.
@@ -834,6 +836,7 @@ FE-64가 쓰는 API(S-20 기사 지면 · 증거조사). 관리자 신문 지면
 - **검수용 값(`manual` · `editedAt` · `validation` · `attempts`)은 내려주지 않는다.** 사람이 고친 줄도 같은 응답에 그대로 나오면 충분하다.
 - **배열 순서가 곧 재생 순서다.** 별도 정렬 필드를 두지 않는다.
 - `cast`는 A-13-10과 같은 값(`{ prosecutor, defense }`).
+- (v0.60, BE-116) 이 조건은 API 1 · API 16의 `scriptReady`와 같다 — `scriptReady: true`인 사건만 이 API가 200이다. 목록은 이 API를 사건마다 부르지 말고 `scriptReady`를 본다.
 - **승인(`reviewStatus: APPROVED`)한 대본만 내려준다.** 검수 전 · 반려된 대본은 없는 것으로 본다 — 사건이 `PUBLISHED`여도 대본이 미승인이면 `SCRIPT_NOT_FOUND`다(API 16 · 17과 달리 사건 공개 여부만으로는 판단하지 않는다).
 - 한 캐릭터가 두 배역을 번갈아 맡는 장면(피고인신문)은 이번 응답에 들어오지 않는다 — 그 장면이 서버 데이터로 들어오는 때에 `cast` 확장이 필요하다(FE-60 "추후 재검토").
 

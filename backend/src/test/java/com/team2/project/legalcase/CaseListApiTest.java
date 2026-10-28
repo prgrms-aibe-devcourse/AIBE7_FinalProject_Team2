@@ -121,6 +121,32 @@ class CaseListApiTest extends ApiIntegrationTest {
 				.andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 	}
 
+	// ---- 대본 준비 여부 scriptReady (BE-116) — API 18이 200을 주는 조건(승인된 대본)과 같다 ----
+
+	@Test
+	void getCases_scriptReady_onlyApprovedScript() throws Exception {
+		long approved = insertCase("FRAUD", "PUBLISHED");
+		insertScriptWithReview(approved, "APPROVED");
+		long pending = insertCase("FRAUD", "PUBLISHED");
+		insertScriptWithReview(pending, null);
+		long rejected = insertCase("FRAUD", "PUBLISHED");
+		insertScriptWithReview(rejected, "REJECTED");
+		long noScript = insertCase("FRAUD", "PUBLISHED");
+
+		mockMvc.perform(get("/api/v1/cases"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath(CASE_BY_ID.formatted(approved) + ".scriptReady").value(true))
+				.andExpect(jsonPath(CASE_BY_ID.formatted(pending) + ".scriptReady").value(false))
+				.andExpect(jsonPath(CASE_BY_ID.formatted(rejected) + ".scriptReady").value(false))
+				.andExpect(jsonPath(CASE_BY_ID.formatted(noScript) + ".scriptReady").value(false));
+
+		// API 18과 같은 결론인지 — 목록이 true인 사건만 대본이 200이다
+		mockMvc.perform(get("/api/v1/cases/" + approved + "/script")).andExpect(status().isOk());
+		for (long caseId : new long[] {pending, rejected, noScript}) {
+			mockMvc.perform(get("/api/v1/cases/" + caseId + "/script")).andExpect(status().isNotFound());
+		}
+	}
+
 	// ---- 진행 상태 배지 myStatus (FE-19, REQ-010 · FR-1-6) ----
 
 	@Test
