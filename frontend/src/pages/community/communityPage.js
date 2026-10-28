@@ -1,17 +1,17 @@
 import { button, element } from '../../components/siteLayout.js';
 import {
-  NOT_READY, SORT_LABELS, communityShell, composer, filterControls, icon, likeButton, loginHint, popularList, postImages, postLink, postMeta, foldedVerdict, verdictCard,
+  NOT_READY, SORT_LABELS, communityShell, filterControls, icon, likeButton, loginHint, popularList, postImages, postLink, postMeta, foldedVerdict, verdictCard,
 } from './communityParts.js';
 
 // S-18 커뮤니티 글 목록 (FE-47). /community/posts — 커뮤니티 메인(communityHomePage.js, FE-89)의 "모든 글 보기" · 거르기에서 들어온다.
-// 가운데 한 줄 타임라인(정렬 · 글 · 더 보기), 왼쪽 말머리 · 사건 거르기, 오른쪽 늘 열려 있는 글쓰기 칸.
+// 가운데 한 줄 타임라인(정렬 · 글 · 더 보기), 왼쪽 말머리 · 사건 거르기 · 많이 본 글. 글쓰기는 "글쓰기" 버튼으로 가는 별도 화면(communityWritePage.js).
 // 거르기 값은 기록 항목에 넣어 두어(history.state) 상세에서 뒤로 오면 같은 목록이 보인다. 바꿀 때는 화면을 다시 그리지 않아 쓰던 글이 남는다
 const DEFAULT_FILTERS = { category: null, caseId: null, sort: 'LATEST' };
 
 // caseId는 라우터가 사건 경로용으로 덮어쓰므로 사건 거르기 값은 filterCaseId로 받는다(PR #200 리뷰 반영)
 export function renderCommunityPage(container, { api, navigate, category = null, filterCaseId: caseId = null, sort = 'LATEST', justPosted = null }) {
   const shell = communityShell({ navigate });
-  const { root, filters: filterHost, main, side, openButton, closeButton, closeCompose } = shell;
+  const { root, filters: filterHost, main } = shell;
   container.replaceChildren(root);
   const active = () => container.contains(root);
 
@@ -35,7 +35,7 @@ export function renderCommunityPage(container, { api, navigate, category = null,
   const sorts = element('div', 'cm-sorts');
   sorts.setAttribute('role', 'group');
   sorts.setAttribute('aria-label', '정렬');
-  toolbar.append(count, sorts, openButton);
+  toolbar.append(count, sorts);
   const timeline = element('div', 'cm-timeline');
   const more = element('div', 'cm-more');
   main.append(element('h2', 'visually-hidden', '글 목록'), toolbar, timeline, more);
@@ -79,8 +79,7 @@ export function renderCommunityPage(container, { api, navigate, category = null,
     if (!caseList) {
       caseList = data.cases;
       filterHost.append(filterControls({ value: filters, cases: caseList, onChange: onFilter }));
-      side.append(composer({ api, navigate, cases: data.cases, closeButton, closeCompose, onPosted: (post) => { closeCompose(); navigate('communityPosts', { justPosted: post.postId }); } }),
-        popularList(data.popular, navigate));
+      filterHost.append(popularList(data.popular, navigate));
     }
     count.textContent = `글 ${data.total}개`;
     const firstNew = append ? timeline.children.length : 0;

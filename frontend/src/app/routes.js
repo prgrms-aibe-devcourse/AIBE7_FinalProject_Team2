@@ -15,6 +15,7 @@ import { renderCaseReviewPage } from '../pages/caseReview/caseReviewPage.js';
 import { renderCommunityHomePage } from '../pages/community/communityHomePage.js';
 import { renderCommunityPage } from '../pages/community/communityPage.js';
 import { renderCommunityPostPage } from '../pages/community/communityPostPage.js';
+import { renderCommunityWritePage } from '../pages/community/communityWritePage.js';
 import { renderComparisonPage } from '../pages/comparison/comparisonPage.js';
 import { renderCourtPage } from '../pages/court/courtPage.js';
 import { renderLandingPage } from '../pages/landing/landingPage.js';
@@ -61,6 +62,7 @@ export const routes = [
   // /community는 메인(이야기 많은 사건 · 레벨 랭킹 · 추천 사건, FE-89), 글 목록은 /community/posts
   { name: 'community', path: '/community', render: renderCommunityHomePage, title: '커뮤니티' },
   { name: 'communityPosts', path: '/community/posts', render: renderCommunityPage, title: '커뮤니티 글 목록' },
+  { name: 'communityWrite', path: '/community/write', render: renderCommunityWritePage, title: '커뮤니티 글쓰기' },
   { name: 'communityPost', path: '/community/posts/:postId', render: renderCommunityPostPage, title: '커뮤니티' },
   // S-12 로그인 (FE-52): 목 모드는 개발용 목업 로그인, 실제 모드는 카카오 로그인(FE-74)
   { name: 'login', path: '/login', render: renderLoginPage, title: '로그인' },

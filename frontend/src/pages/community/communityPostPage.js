@@ -3,16 +3,16 @@ import { canGoBackInApp } from '../../app/router.js';
 import { currentUser } from '../../utils/session.js';
 import { signatureSvg } from '../../components/signatureInk.js';
 import {
-  NOT_READY, authorButton, communityShell, composer, filterControls, foldedVerdict, formatDate, likeButton, loginHint, popularList, nameCard, postImages, postMeta, textField, verdictWithType,
+  NOT_READY, authorButton, communityShell, filterControls, foldedVerdict, formatDate, likeButton, loginHint, popularList, nameCard, postImages, postMeta, textField, verdictWithType,
 } from './communityParts.js';
 
 // S-18 커뮤니티 글 상세 (FE-47, /community/posts/:postId). 목록과 같은 노트북 화면 틀에 글 전체 · 좋아요 · 댓글을 둔다.
-// 왼쪽 거르기를 누르면 그 조건의 목록으로 간다. 오른쪽 글쓰기 칸은 목록과 같다
+// 왼쪽 거르기를 누르면 그 조건의 목록으로 간다. 글쓰기는 "글쓰기" 버튼으로 가는 별도 화면이다
 const COMMENT_MAX = 500;
 
 export function renderCommunityPostPage(container, { api, navigate, postId }) {
   const shell = communityShell({ navigate });
-  const { root, filters: filterHost, main, side, openButton, closeButton, closeCompose } = shell;
+  const { root, filters: filterHost, main } = shell;
   container.replaceChildren(root);
   const active = () => container.contains(root);
 
@@ -23,19 +23,18 @@ export function renderCommunityPostPage(container, { api, navigate, postId }) {
 
   const back = button('← 목록으로', () => (canGoBackInApp() ? history.back() : navigate('communityPosts')), 'cm-back');
   const toolbar = element('div', 'cm-toolbar');
-  toolbar.append(back, openButton);
+  toolbar.append(back);
   const body = element('div', 'cm-detail');
   main.append(toolbar, body);
   const loading = element('p', 'cm-note', '글을 불러오고 있어요…');
   loading.setAttribute('role', 'status');
   body.append(loading);
 
-  // 거르기 · 글쓰기 칸 · 많이 본 글은 목록 응답으로 채운다(글 상세와 따로 불러 글이 먼저 보이게 한다)
+  // 거르기 · 많이 본 글은 목록 응답으로 채운다(글 상세와 따로 불러 글이 먼저 보이게 한다)
   api.getCommunityPosts?.().then((data) => {
     if (!active()) return;
     filterHost.append(filterControls({ value: { category: undefined, caseId: null }, cases: data.cases, onChange: ({ category, caseId }) => navigate('communityPosts', { category: category ?? null, filterCaseId: caseId }) }));
-    side.append(composer({ api, navigate, cases: data.cases, closeButton, closeCompose, onPosted: (post) => { closeCompose(); navigate('communityPosts', { justPosted: post.postId }); } }),
-      popularList(data.popular, navigate));
+    filterHost.append(popularList(data.popular, navigate));
   }).catch(() => {});
 
   return (async () => {

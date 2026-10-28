@@ -1,18 +1,18 @@
 import { API_MODE } from '../../api/config.js';
 import { button, element, mockTag } from '../../components/siteLayout.js';
 import { scriptFor } from '../overview/overviewPage.js';
-import { NOT_READY, authorButton, authorFace, clip, communityShell, composer, filterControls, popularList, postLink, svgIcon } from './communityParts.js';
+import { NOT_READY, authorButton, authorFace, clip, communityShell, filterControls, popularList, postLink, svgIcon } from './communityParts.js';
 
 // S-18 커뮤니티 메인 (FE-89). 메인 책상의 노트북 · 헤더 "커뮤니티"로 들어온다. 글 목록은 /community/posts(communityPage.js)
 // 가운데: 지금 이야기가 많은 사건(한 장씩 넘기는 슬라이드) → 레벨 랭킹(시상대 + 4 ~ 10위 줄) → 추천 사건(신문 세 단).
-// 왼쪽 거르기 · 오른쪽 글쓰기 칸은 글 목록과 같은 틀(communityShell)이다. 거르기를 고르면 그 조건의 글 목록으로 간다
+// 왼쪽 거르기 · 많이 본 글은 글 목록과 같은 틀(communityShell)이다. 거르기를 고르면 그 조건의 글 목록으로 간다
 const REST_GAP = 12; // .cm-rest 카드 간격(community.css와 같다)
 const REST_INSET = 46; // 4 ~ 10위 첫 카드를 왼쪽 흐림 칸(.more-left 40px)보다 조금 안쪽에 둔다. 화살표는 세 장씩 넘겨 이 간격이 유지된다
 const REST_STEP = 3; // 화살표 한 번에 넘기는 카드 수
 const SETTLE_MS = 140; // 슬라이드 · 4 ~ 10위 줄이 멈췄다고 보는 시간(넘기는 중에 되돌리면 튄다)
 
 export function renderCommunityHomePage(container, { api, navigate }) {
-  const { root, filters: filterHost, main, side, openButton, closeButton, closeCompose } = communityShell({ navigate });
+  const { root, filters: filterHost, main } = communityShell({ navigate });
   container.replaceChildren(root);
   const active = () => container.contains(root);
 
@@ -21,10 +21,8 @@ export function renderCommunityHomePage(container, { api, navigate }) {
     return undefined;
   }
 
-  const head = element('div', 'cm-home-head');
-  head.append(routeLink('모든 글 보기', '/community/posts', () => navigate('communityPosts')), openButton);
   const body = element('div', 'cm-home-body');
-  main.append(head, body);
+  main.append(body);
 
   async function load() {
     const loading = element('p', 'cm-note', '커뮤니티를 불러오고 있어요…');
@@ -42,9 +40,8 @@ export function renderCommunityHomePage(container, { api, navigate }) {
     }
     if (!active()) return;
     if (!filterHost.querySelector('.cm-filter-groups')) {
-      filterHost.append(filterControls({ value: { category: null, caseId: null }, cases: data.cases, onChange: ({ category, caseId }) => navigate('communityPosts', { category: category ?? null, filterCaseId: caseId }) }));
-      side.append(composer({ api, navigate, cases: data.cases, closeButton, closeCompose, onPosted: (post) => { closeCompose(); navigate('communityPosts', { justPosted: post.postId }); } }),
-        popularList(data.popular, navigate));
+      filterHost.append(filterControls({ value: { category: undefined, caseId: null }, cases: data.cases, onChange: ({ category, caseId }) => navigate('communityPosts', { category: category ?? null, filterCaseId: caseId }) }));
+      filterHost.append(popularList(data.popular, navigate));
     }
     body.replaceChildren(
       data.hotCases.length ? hotSection(data.hotCases) : hotEmpty(),
