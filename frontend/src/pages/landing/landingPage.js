@@ -280,7 +280,8 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
     bootLaptop(() => (root.isConnected ? navigate('community') : undefined)); // 커뮤니티가 다 그려질 때까지 눈을 감고 기다린다(laptopBoot.js)
   }
   // 서류철: 성향 테스트 철이 화면 아래에서 올라온다(personality.css folder-rise). 헤더 · 서비스 소개 버튼으로 가면 연출 없이 바로 간다
-  const ACTIONS = { news: lift, mug: sip, laptop: openLaptop, folder: () => navigate('test', { from: 'desk' }), pen: openFeedbackDialog, postcard: openFeedbackDialog };
+  const ACTIONS = { news: lift, mug: sip, laptop: openLaptop, folder: () => navigate('test', { from: 'desk', deskY: Math.round(window.scrollY) }), // deskY: 뒤에 남는 책상을 누른 때의 스크롤 자리에 둔다(personalityParts.js)
+    pen: openFeedbackDialog, postcard: openFeedbackDialog };
 
   // 기준 좌표계가 장면(첫 화면) 안에 들어가게 줄이고, 남는 쪽으로 책상을 늘린다(위 SCENE_WIDTH 주석)
   const fit = () => {

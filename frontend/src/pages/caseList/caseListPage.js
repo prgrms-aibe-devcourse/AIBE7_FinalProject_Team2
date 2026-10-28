@@ -181,7 +181,10 @@ export async function renderCaseListPage(container, { api, navigate, from, openA
   paper.prepend(tip);
   root.append(desk, paper, edges);
   if (ghost) root.insertBefore(ghost, paper);
-  if (ghost && deskY > 0) ghost.scrollTop = deskY; // 라우터가 스크롤을 맨 위로 올린 뒤라, 뒤에 남긴 메인을 신문을 누른 때의 스크롤 자리에 둔다(안 그러면 메인이 위로 튄다)
+  if (deskY > 0) { // 라우터가 스크롤을 두고 갔다: 새 화면은 맨 위로 올리고, 뒤에 남긴 메인은 신문을 누른 때의 스크롤 자리에 둔다(안 그러면 메인이 위로 튄다)
+    window.scrollTo(0, 0);
+    if (ghost) ghost.scrollTop = deskY;
+  }
   // 뒤집고 왔으면 6막 지면과 같은 폭 · 같은 자리에 지면을 놓는다(같은 신문 한 장이 이어진다). 아래로 길어지는 부분은 화면 밖이다
   if (handed && root.classList.contains('is-unflipping')) {
     const top = Math.max(0, handed.rect.top);

@@ -42,7 +42,7 @@ function preload(src) {
 // 답안 칸의 펜 체크 표시
 const CHECK_SVG = '<svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M4 10.5 L8.2 14.5 L16 5.5"/></svg>';
 
-export async function renderPersonalityPage(container, { api, navigate, from, baseline = false }) {
+export async function renderPersonalityPage(container, { api, navigate, from, baseline = false, deskY = 0 }) {
   // 검사지는 철을 가로로 눕혀 둔다. 문항과 표지 그림을 먼저 받아 두고 철을 그려, 올라오는 동안 시작 화면이 이미 보이게 한다(personality.css)
   let root, label, body;
   const active = () => container.contains(root);
@@ -56,7 +56,7 @@ export async function renderPersonalityPage(container, { api, navigate, from, ba
   // 공유된 결과지에서 "나도 해 보기"로 왔으면 세운 철이 눕는다. 값은 한 번만 읽어 새로고침으로는 되풀이하지 않는다(책상에서 올라올 때는 올라오는 연출이 먼저)
   const turnFrom = rise ? null : takeFolderTurn();
   const openFolder = () => {
-    ({ root, label, body } = renderFolder(container, { navigate, sheetLabel: '문항지', orientation: 'landscape', rise }));
+    ({ root, label, body } = renderFolder(container, { navigate, sheetLabel: '문항지', orientation: 'landscape', rise, deskY }));
     root.classList.add('is-test');
     if (turnFrom && canTurnFolder()) {
       setFolderTurnFrom(root.querySelector('.test-folder'), turnFrom);

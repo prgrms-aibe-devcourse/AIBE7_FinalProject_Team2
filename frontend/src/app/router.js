@@ -153,12 +153,15 @@ export function createRouter({ view, headerHost, footerHost, routes }) {
       document.title = `${route.title} · ${SITE_TITLE}`;
       return undefined;
     }
-    if (!keepScroll) window.scrollTo(0, 0);
+    // deskY: 메인 책상에서 물건을 눌러 왔다. 새 화면이 뒤에 책상을 남기고 직접 맨 위로 올리므로, 그 전에 책상이 위로 튀지 않게 여기서는 올리지 않는다(못 올렸으면 다 그린 뒤 올린다)
+    const holdScroll = extras.deskY > 0;
+    if (!keepScroll && !holdScroll) window.scrollTo(0, 0);
     const y = window.scrollY;
     const drawing = show(route, caseId, extras, path, 'navigate'); // 코드로 호출한 이동은 뒤로 · 앞으로 가기가 아니다
     // keepScroll: 새 화면은 처음에 "불러오는 중"만 있어 문서가 짧아지며 스크롤이 0으로 깎인다 — 다 그린 뒤 원래 자리로 돌린다
     const mine = token; // show()가 token을 올린 직후 값 — 그려지는 사이 다른 화면으로 갔다면 복원하지 않는다
     if (keepScroll) drawing?.then?.(() => { if (token === mine) window.scrollTo(0, y); });
+    else if (holdScroll) drawing?.then?.(() => { if (token === mine) window.scrollTo(0, 0); });
     return drawing;
   }
 
