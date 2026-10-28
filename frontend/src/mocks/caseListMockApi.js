@@ -31,6 +31,9 @@ function myStatusOf(caseId) {
   return started ? toMyStatus(started.status) : null;
 }
 
+// 승인된 공개 대본이 있는 사건 (BE-116 scriptReady). 목에서는 대본이 있는 사건 1만 true — getCasePaper와 같은 기준
+export const scriptReadyOf = (caseId) => caseId === case1Script.caseId;
+
 // 사건 1은 S-03 개요 목(API 4)과 같은 죄명을 쓰고, 나머지는 유형별 죄명(임의 데이터)
 const CHARGE_NAMES = { MURDER: '살인', FRAUD: '사기', INJURY: '상해', ROBBERY: '강도', THEFT: '절도' };
 const chargeNameOf = (item) =>
@@ -49,7 +52,7 @@ export async function getCases(crimeType) {
     summary: { total: mockCases.length, byCrimeType },
     cases: mockCases
       .filter((item) => !crimeType || item.crimeType === crimeType)
-      .map((item) => ({ ...item, chargeName: chargeNameOf(item), myStatus: myStatusOf(item.caseId) })),
+      .map((item) => ({ ...item, chargeName: chargeNameOf(item), scriptReady: scriptReadyOf(item.caseId), myStatus: myStatusOf(item.caseId) })),
   });
 }
 
@@ -64,6 +67,7 @@ export async function getCaseDetail(caseId) {
     ...item,
     chargeName: chargeNameOf(item),
     overview: known?.overview ?? item.shortIntro,
+    scriptReady: scriptReadyOf(caseId),
     myStatus: myStatusOf(caseId),
   });
 }

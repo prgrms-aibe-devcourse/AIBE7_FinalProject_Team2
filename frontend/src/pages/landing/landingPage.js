@@ -262,7 +262,8 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
     if (reducedMotion()) { navigate('list', { from: 'desk' }); return; }
     lifting = true;
     target.classList.add('is-held');
-    setTimeout(() => { if (root.isConnected) navigate('list', { from: 'desk' }); }, LIFT_MS);
+    const deskY = Math.round(window.scrollY); // 지면이 올라오는 동안 뒤의 책상이 이 자리에 그대로 있게 넘긴다(caseListPage.js)
+    setTimeout(() => { if (root.isConnected) navigate('list', { from: 'desk', deskY }); }, LIFT_MS);
   }
   // 커피잔: 커다란 잔이 우상단에서 날아와 서고(coffeeDive), 날아오는 도중 마이페이지로 넘어간다. 책상이 다 바뀌면 잔이 오른쪽으로 빠져나간다. 움직임 줄이기면 바로 간다
   function sip() {
@@ -279,7 +280,8 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
     bootLaptop(() => (root.isConnected ? navigate('community') : undefined)); // 커뮤니티가 다 그려질 때까지 눈을 감고 기다린다(laptopBoot.js)
   }
   // 서류철: 성향 테스트 철이 화면 아래에서 올라온다(personality.css folder-rise). 헤더 · 서비스 소개 버튼으로 가면 연출 없이 바로 간다
-  const ACTIONS = { news: lift, mug: sip, laptop: openLaptop, folder: () => navigate('test', { from: 'desk' }), pen: openFeedbackDialog, postcard: openFeedbackDialog };
+  const ACTIONS = { news: lift, mug: sip, laptop: openLaptop, folder: () => navigate('test', { from: 'desk', deskY: Math.round(window.scrollY) }), // deskY: 뒤에 남는 책상을 누른 때의 스크롤 자리에 둔다(personalityParts.js)
+    pen: openFeedbackDialog, postcard: openFeedbackDialog };
 
   // 기준 좌표계가 장면(첫 화면) 안에 들어가게 줄이고, 남는 쪽으로 책상을 늘린다(위 SCENE_WIDTH 주석)
   const fit = () => {
@@ -348,7 +350,7 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
     } else item.append(element('strong', '', label), text);
     if (key === 'mug') item.addEventListener('click', sip);
     else if (key === 'pen') item.addEventListener('click', openFeedbackDialog);
-    else if (route) item.addEventListener('click', () => navigate(route, key === 'news' || key === 'folder' ? { from: 'desk' } : {}));
+    else if (route) item.addEventListener('click', () => navigate(route, key === 'news' || key === 'folder' ? { from: 'desk', deskY: Math.round(window.scrollY) } : {}));
     else item.setAttribute('aria-disabled', 'true');
     mobileCounts[key] = text;
     mobileList.append(item);

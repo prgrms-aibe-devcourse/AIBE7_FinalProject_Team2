@@ -45,3 +45,9 @@ test('setTypeDeco: 고른 칸만 바꿔 저장하고, 다시 읽으면 그대로
 test('저장소가 깨져 있으면 기본으로 본다', () => {
   assert.deepEqual(getTypeDeco({ getItem: () => '{깨짐' }), DEFAULT_TYPE_DECO);
 });
+
+test('성향카드 캐릭터: 내로 · 남불만 받고 나머지는 결과 그대로(null)로 본다', () => {
+  assert.equal(normalizeTypeDeco({ character: 'NAMBUL' }).character, 'NAMBUL');
+  assert.equal(normalizeTypeDeco({ character: 'LAW' }).character, null);
+  assert.equal(normalizeTypeDeco(null).character, null);
+});

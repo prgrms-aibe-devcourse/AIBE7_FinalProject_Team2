@@ -5,7 +5,7 @@
 ```text
 브라우저 ──▶ web (Nginx :80) ──┬─ /            → 정적 파일 (Vite 빌드, 실제 모드)
                                ├─ /cases/...   → index.html (SPA fallback, 라우터가 화면 선택)
-                               └─ /api/...     → backend (Spring Boot :8080) ──┬─▶ postgres (:5432)
+                               └─ /api/...     → backend (Spring Boot :8080) ──┬─▶ PostgreSQL (AWS RDS :5432, 10/28~)
                                                                                └─▶ redis (:6379, DB 0 캐시 · DB 1 토큰)
 ```
 
@@ -18,8 +18,10 @@
 | `docker-compose.pipeline.yml` | 서버 전용 덧붙임 파일. AI 판결 파이프라인 서비스(관리자 사건 등록 A-14)와 backend의 `PIPELINE_SERVICE_URL` (COMMON-50). `.env`의 `PIPELINE_SERVICE=1`이면 `deploy.sh`가 자동으로 함께 쓴다. **켜기 전 메모리 확인 필요** — 아래 "AI 판결 파이프라인 서비스" |
 | `.env.example` | 환경변수 예시. `.env`로 복사해 쓴다 (`.env`는 커밋하지 않음) |
 | `smoke-test.sh` | `/` · 화면 주소 · `/api` · 캐시 정책 · Let's Encrypt 확인 경로 확인. CI와 서버에서 같은 스크립트를 쓴다 |
+| `verify-origin-headers.sh` | Nginx `X-Forwarded-Proto` 전달 · `forward-headers-strategy: native`가 실제로 적용됐는지, 재발급 · 로그아웃 Origin 검증(`OriginVerificationFilter`)으로 확인한다. BASE_URL에 지금 떠 있는 배포만 확인하므로 운영에서는 배포 **직후**마다(`smoke-test.sh` 다음 줄) 돌리고, 동일 TLS 종료 구성의 스테이징이 있으면 배포 **전**에도 미리 돌려볼 수 있다. https 주소만 받고, 로그인 없이도 쓸 수 있다 (BE-95) |
 | `deploy.sh` | 서버 배포 한 번: sha 이미지로 교체 → 준비 대기 → 스모크 테스트 → 실패하면 직전 이미지로 되돌림 (BE-60) |
 | `backup-db.sh` | 운영 DB 백업 한 번: 임시 파일로 `pg_dump` → `pg_restore --list` 확인 → 최종 이름으로 옮김 → 7일 지난 파일 정리 (COMMON-17, 아래 "운영 DB 백업") |
+| `env-set.sh` | `.env` 값 한 줄씩 바꾸기 · 점검(`--secret` 비밀값 숨김 입력, `--check`). 붙여 넣기 신호(ESC) 제거 · 키별 형식 검사 · 같은 키 한 줄 · 권한 600 유지 (BE-59, 아래 "`.env`를 고칠 때") |
 | `cd-agent.sh` | 자동 배포 확인: GHCR의 `main` 이미지가 바뀌었으면 `deploy.sh` 실행 (BE-60) |
 | `cd/lawnambul-cd.service` · `.timer` | `cd-agent.sh`를 2분마다 부르는 systemd 설정 (서버에 한 번 설치) |
 | `../frontend/Dockerfile` | 웹 이미지 (Vite 빌드 → Nginx). 커밋 해시를 `/version.json`에 넣는다 |
@@ -96,9 +98,25 @@ done
 | cron 백업(`backup-db.sh`) | `❌ …을 읽을 수 없다 — 권한을 확인한다`를 남기고 종료 코드 2로 멈춘다 | `tail ~/backups/backup.log` — **백업이 안 생기면 여기부터 본다** |
 | 자동 배포(cd-agent) | 파일이 있는지만 확인하고 읽기 권한은 보지 않는다. 값을 빈 값으로 읽은 채 진행해 **조용히 실패할 수 있다** | `journalctl -u lawnambul-cd.service -n 50` |
 
+**값 하나를 바꿀 때는 `env-set.sh`를 쓴다**(BE-59). 10/28 RDS 전환 때 nano로 비밀값을 붙여 넣다 터미널 신호가 섞여 인증이 실패했다 — 아래 "RDS 전환" 문제 표.
+
 ```bash
 cd /opt/lawnambul/app/deploy
+./env-set.sh EXTERNAL_DB_USERNAME lawnambul_app     # 일반 값 (이름이 *PASSWORD · *_KEY · *SECRET · *TOKEN이면 거절 → --secret)
+./env-set.sh --secret OPENAI_API_KEY                # 비밀값: 실행 → 입력 칸이 뜬 뒤 값을 복사해 붙여 넣는다 (화면 · 셸 기록에 안 남음)
+./env-set.sh --clear ADMIN_BOOTSTRAP_PASSWORD       # 값 비우기 (줄은 남김)
+./env-set.sh --check                                # 권한 600 · ESC 섞임 · 같은 키 두 줄 · 키 형식 (값은 출력하지 않음)
+```
+
+- 있는 키는 그 자리에서 바꾸고, 없으면 끝에 붙이고, 같은 키가 여러 줄이면 하나만 남긴다. 같은 폴더 임시 파일(600)에 쓴 뒤 바꿔치기한다.
+- 형식이 틀리면 저장하지 않는다: `EXTERNAL_DB_URL`(jdbc · `sslmode=require` 이상) · `GEMINI_API_KEY`(`AIza…` 또는 새 형식 `AQ.…`) · `OPENAI_API_KEY`(`sk-…`) · `*PASSWORD`(12자 이상, `$` · `#` · 따옴표 · 공백 · `\` 금지) · `PIPELINE_SERVICE` 등 표시값(`1`). 모든 값에 공백 · 따옴표 · `$` · 제어 문자 금지.
+- `.env` 주인과 실행 사용자가 다르면 멈춘다(다른 계정이면 `sudo -u ubuntu ./env-set.sh …`).
+
+여러 줄을 한꺼번에 볼 때는 nano로 연다.
+
+```bash
 sudo -u ubuntu nano .env        # 다른 계정으로 접속했어도 ubuntu로 연다 → 주인 · 권한이 그대로 남는다
+./env-set.sh --check            # 저장한 뒤 꼭 점검한다
 ls -l .env                      # -rw------- 1 ubuntu ubuntu … 인지 확인
 ```
 
@@ -251,6 +269,7 @@ curl -sI https://www.naelawnambul.today | grep -i '^location'   # 301 → https:
 curl -sk --max-time 5 https://<탄력적 IP>/ ; echo "exit=$?"     # 연결 거절(exit 35)이 정상: 모르는 이름은 TLS를 끊는다
 curl -s http://localhost/version.json                    # 서버 안: 이동 없이 그대로 (deploy.sh 스모크 테스트 경로)
 ./smoke-test.sh https://naelawnambul.today               # https로 전체 스모크 테스트
+./verify-origin-headers.sh https://naelawnambul.today    # 재발급 · 로그아웃 Origin 검증 전제조건 (BE-95, 배포 전 1회)
 echo | openssl s_client -connect naelawnambul.today:443 -servername naelawnambul.today 2>/dev/null \
   | openssl x509 -noout -issuer -subject -ext subjectAltName -dates   # 발급자 Let's Encrypt · 만료일
 #   ↑ subjectAltName에 DNS:naelawnambul.today 와 DNS:www.naelawnambul.today 가 **둘 다** 있어야 한다 (PR #181 리뷰)
@@ -309,7 +328,7 @@ Nginx가 **막은 요청(429)만** JSON 한 줄씩 따로 남기고, 모니터�
 | --- | --- |
 | 파일 | 웹 컨테이너 `/var/log/nginx-ratelimit/rate-limited.log` (`default.conf`의 `log_format rate_limited`, `if=$rate_limited`) |
 | 내용 | `time` · `status` · `route` · `method` · `path`(쿼리 제외) · `ip` |
-| Loki 라벨 | `job="web"`, `route` = `auth_token`(재발급 · 로그아웃) · `admin_login` · `oauth`(카카오 시작) · `api`(그 밖) — 값 4개로 고정. **경로 기준**이라 zone과 1:1이 아니다(전용 · 공통 어느 쪽에 걸려도 그 경로로 센다). `ip` · `path`는 라벨로 올리지 않는다(BE-71 카디널리티 규칙) |
+| Loki 라벨 | `job="web"`, `route` = `auth_token`(재발급 · 로그아웃) · `admin_login` · `oauth`(카카오 시작) · `member_auth`(아이디 로그인 · 가입, BE-113) · `api`(그 밖) — 값 5개로 고정. **경로 기준**이라 zone과 1:1이 아니다(전용 · 공통 어느 쪽에 걸려도 그 경로로 센다). `ip` · `path`는 라벨로 올리지 않는다(BE-71 카디널리티 규칙) |
 | 공유 | `docker-compose.monitoring-agent.yml`의 `web-ratelimit-logs` 볼륨(웹 쓰기 · Alloy 읽기 전용). 에이전트를 안 쓰는 서버는 컨테이너 안에만 남는다 |
 | 크기 상한 | `41-trim-rate-limit-log.sh`가 1분마다 보고 **10MB**(`.env`의 `RATE_LIMIT_LOG_MAX_BYTES`, 비우면 기본값 · 1보다 작으면 기본값)를 넘으면 비운다. 공격 중에도 디스크를 채우지 않는다. 비우기 직전 1분 안의 일부 줄은 Loki에 빠질 수 있다 |
 | 평소 접속 기록 | 그대로 stdout(`docker compose logs web`) |
@@ -370,8 +389,22 @@ docker compose -f docker-compose.prod.yml logs --tail 3 web
 
 ```bash
 # 전용 zone에서 막힌 기록
-docker compose -f docker-compose.prod.yml logs web 2>&1 | grep -E 'zone "(auth_token_per_ip|admin_login_per_ip|oauth_per_ip|oauth_all)"' | tail
+docker compose -f docker-compose.prod.yml logs web 2>&1 | grep -E 'zone "(auth_token_per_ip|admin_login_per_ip|oauth_per_ip|oauth_all|member_login_per_ip|member_signup_per_ip|member_auth_all)"' | tail
 ```
+
+### 아이디 로그인 · 회원가입 전용 제한 (BE-113)
+
+아이디 로그인(M-6) · 회원가입(M-5)에도 `/api` 공통 제한에 **더해** 전용 제한을 건다(`default.conf`의 `member_*` zone, `snippets/app.conf`의 전용 location). POST만 센다.
+
+| 경로 | zone | 값 | 이유 |
+| --- | --- | --- | --- |
+| `POST /api/v1/auth/login` | `member_login_per_ip` | IP별 분당 20번, 순간 20번 | 백엔드에 계정별 실패 잠금이 없어(docs/decisions/BE-113.md 결정 6) 비밀번호 대입을 늦춘다. 관리자(분당 5번)보다 넉넉한 이유는 같은 와이파이에서 여러 명이 동시에 로그인하기 때문 |
+| `POST /api/v1/auth/signup` | `member_signup_per_ip` | IP별 분당 10번, 순간 10번 | 가입은 중복 아이디(409)로 아이디가 있는지 드러나므로 대량 조회를 늦춘다 |
+| 두 경로 합계 | `member_auth_all` | 초당 10번, **넘으면 순간 20번까지 기다렸다가 보냄**(nodelay 없음) | 요청마다 Argon2 해시(m=19MiB)가 메모리를 쓴다. 여러 IP로 나눠 와도 백엔드에서 동시에 도는 해시 수를 묶는다(`oauth_all`과 같은 이유). 20번을 넘게 쌓이면 429 |
+
+- **관리자 로그인 zone과 따로 센다.** 회원 로그인이 관리자 로그인 한도(분당 5번)를 쓰지 않는다.
+- `Retry-After`: 로그인 3초 · 가입 6초. 429 로그 `route`는 둘 다 `member_auth`다.
+- 운영 이미지와 같은 `nginx:1.28-alpine`으로 확인: 같은 IP에서 로그인 POST 30번 중 약 21번 통과 · 나머지 429, 가입 15번 중 11번 통과, 그 직후에도 관리자 로그인 · 재발급은 영향 없음, GET은 전용 제한을 받지 않음.
 - **`KAKAO_CLIENT_ID`는 HTTPS(BE-75) 적용 뒤에만 넣는다.** state 쿠키 · `NLNB_RT` · `NLNB_AID`가 모두 `Secure`라 http에서는 브라우저가 저장하지 않아 로그인이 끝나지 않는다(PR #229 리뷰). 넣는 즉시 카카오 로그인 경로가 켜지므로, 화면 `/auth/callback`(FE 후속)이 배포되기 전에는 로그인 후 화면이 404로 보인다.
 
 ## Redis (BE-61, docs/tech-stack.md 2장 "Redis 운영 구성")
@@ -533,17 +566,46 @@ git checkout -q --detach "$PTR" && git log -1 --format='바꾼 뒤 %h %s'
 
 파이프라인이 만든 `loads/<시각>-<name>.sql`은 Flyway가 읽지 않는 **한 번 실행하는 파일**이다. 사건은 `DRAFT`, AI 판결은 비공개로 들어가 사용자에게 보이지 않고, 관리자 후검수(A-11 ~ A-13)로 공개한다.
 
+10/28부터 운영 DB는 RDS(외부 DB 모드)라 같은 서버 postgres 컨테이너가 없다. `postgres:17-alpine` 클라이언트 컨테이너로 붙고, 접속 값은 **`.env`에서 읽는다**(비밀번호를 손으로 붙여 넣지 않는다 — 10/28 붙여 넣은 값이 달라 인증 실패).
+
 ```bash
-# loads/는 서버 작업 폴더에 받지 않고(seed/ 고정 커밋을 건드리지 않음), 비공개 저장소 develop에서 파일 하나만 꺼내 실행한다
-cd /opt/lawnambul/private-seed && git fetch -q origin develop
-git ls-tree --name-only origin/develop loads/                 # 실행할 파일 이름 확인
-# 백업 후 실행 (컨테이너 안 psql로, 접속 정보는 컨테이너 환경변수를 쓴다)
+# 0) 직전 백업 + RDS 수동 스냅샷 (콘솔 → RDS → 데이터베이스 → 작업 → 스냅샷 생성, 이름 예: before-loads-1028 → "사용 가능"까지 대기)
 cd /opt/lawnambul/app/deploy
 ./backup-db.sh before-load
-git -C /opt/lawnambul/private-seed show origin/develop:loads/<파일>.sql \
-  | docker compose -f docker-compose.prod.yml exec -T postgres \
-      sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+
+# 1) 대상 파일 (서버 작업 폴더에 받지 않고 develop에서 꺼낸다 — seed/ 고정 커밋을 건드리지 않음)
+cd /opt/lawnambul/private-seed && git fetch -q origin develop
+git log -1 --format='%h %s' origin/develop
+git ls-tree --name-only origin/develop loads/                    # 이번에 넣을 파일만 고른다 (예전 날짜 파일이 같이 있다)
+FILES=$(git ls-tree --name-only origin/develop loads/ | grep '^loads/20261028-.*\.sql$')   # ← 이번 날짜로 바꾼다
+echo "$FILES" | wc -l
+
+# 2) 접속 함수 (값은 .env에서 읽고 출력하지 않는다)
+E=/opt/lawnambul/app/deploy/.env
+# deploy.sh · backup-db.sh · 아래 "되살리기"와 같은 기준: 같은 키가 여러 줄이면 마지막 줄, 따옴표 · 공백 · CR 제거
+envv() { grep "^$1=" "$E" | tail -1 | cut -d= -f2- | tr -d "\"' \r"; }
+U="$(envv EXTERNAL_DB_URL)"; U="${U#jdbc:postgresql://}"; HP="${U%%/*}"; DBN="${U#*/}"; DBN="${DBN%%\?*}"
+H="${HP%:*}"; P="${HP##*:}"; [[ "$P" == "$HP" ]] && P=5432   # 주소에 포트가 없으면 5432
+export PGPASSWORD="$(envv EXTERNAL_DB_PASSWORD)"
+q() { docker run --rm -i -e PGPASSWORD postgres:17-alpine psql -At -v ON_ERROR_STOP=1 \
+        "host=$H port=$P dbname=$DBN user=$(envv EXTERNAL_DB_USERNAME) sslmode=require" "$@"; }
+echo "select status, count(*) from legal_case group by status order by 1;" | q     # 적재 전
+
+# 3) 실행 — 하나라도 실패하면 멈춘다
+# pipefail: git show(파일 읽기)가 실패해도 멈춘다. 없으면 q(psql)의 종료 코드만 보여 빈 입력을 성공으로 센다
+set -o pipefail
+ok=0; n=$(echo "$FILES" | wc -l)
+for f in $FILES; do
+  if git show "origin/develop:$f" | q -q > /dev/null; then ok=$((ok+1)); echo "✅ $f"; else echo "❌ $f — 중단"; break; fi
+done
+echo "성공: $ok / $n"
+echo "select status, count(*) from legal_case group by status order by 1;" | q     # DRAFT가 넣은 건수만큼 늘어야 함
+set +o pipefail; unset PGPASSWORD H P; unset -f q envv
 ```
+
+- 10/28 실적: `20261028-` 21건 → 21/21 성공, `PUBLISHED 1 · DRAFT 21`.
+- 서버 사본은 partial clone(`--filter=blob:none`)이라 `git show`가 그때 파일을 받아 온다(`remote: Enumerating objects …`가 보이는 게 정상). **받은 내용은 `.git/objects`에 압축돼 남는다** — 작업 폴더에 파일을 만들지 않을 뿐 서버에 남지 않는 것은 아니다. 그래서 `.git`은 다른 계정이 못 읽게 막아 둔다: `chmod -R o-rwx /opt/lawnambul/private-seed/.git`(10/28 적용. 컨테이너는 `seed/`만 읽어 영향 없음).
+- 실패한 파일의 오류를 보려면 그 파일만 `q -q` 대신 `q`로 다시 실행한다.
 
 - **파일 전체가 한 트랜잭션이다.** 파이프라인이 파일을 `BEGIN;` … `COMMIT;`으로 감싸 만들고(`tools/ai-judgment/pipeline.py`), `ON_ERROR_STOP=1`이라 중간에 실패하면 psql이 멈추며 전부 취소된다. 그래서 `psql -1`을 따로 주지 않는다(파일 안 `BEGIN`과 겹친다). 실패하면 원인을 고친 뒤 같은 파일을 다시 실행하면 된다 — 같은 제목의 사건 · 같은 실행(`runKey`)의 AI 판결은 건너뛰어 중복되지 않는다.
 
@@ -557,7 +619,8 @@ git -C /opt/lawnambul/private-seed show origin/develop:loads/<파일>.sql \
 | 하루 1번 (운영 시간 중 첫 정각+17분) | 서버 cron으로 `deploy/backup-db.sh` → `~/backups/lawnambul-YYYY-MM-DD.dump` | 7일 |
 | 평일 17:47 (퇴근 전) | 서버 cron으로 `deploy/backup-db.sh evening` → `~/backups/lawnambul-YYYY-MM-DD-1747-evening.dump` | 7일(같은 정리 규칙) |
 | 시드 갱신 · `loads/` 실행 · 위험한 마이그레이션 직전 | `./backup-db.sh <작업 이름>`을 손으로 한 번 | 7일(같은 정리 규칙) |
-| 7.1.2 RDS 전환 후(10/28) | RDS 자동 백업 | 7일 |
+| RDS(10/28 ~) | RDS 자동 백업(매일 1회, 백업 기간은 콘솔 설정) · 위 `backup-db.sh`(외부 DB 모드라 RDS를 덤프)도 그대로 돈다 | 7일 |
+| `loads/` 실행 · 큰 데이터 변경 직전(RDS) | RDS 수동 스냅샷(콘솔 → 작업 → 스냅샷 생성) | 지울 때까지 (안 쓰면 지운다 — 저장 용량 요금) |
 
 ```bash
 # 09:17 ~ 17:17 매시 확인하고, 오늘 백업 파일이 없을 때만 한 번 만든다 (crontab -e 로 한 줄). 결과는 ~/backups/backup.log
@@ -578,8 +641,30 @@ git -C /opt/lawnambul/private-seed show origin/develop:loads/<파일>.sql \
 - `backup-db.sh`는 임시 파일에 먼저 덤프하고, `pg_dump`가 성공하고 `pg_restore --list`로 형식을 읽을 수 있을 때만 최종 이름으로 옮긴다. 실패하면 임시 파일을 지우고 실패 코드로 끝나서, 반쯤 만들어진 파일이 백업처럼 남지 않는다. 확인: `tail ~/backups/backup.log`
 
 - 백업 파일에는 관리자 비밀번호 해시 등 운영 데이터가 있으므로 권한 600, 서버 밖으로 옮기지 않는다.
-- **한계**: 같은 서버 디스크에 둔다. 서버(EBS)가 통째로 사라지면 백업도 같이 사라진다. 서버 밖 보관(S3 등)은 IAM 권한이 없어 지금은 하지 않고, RDS 전환으로 해결한다.
+- **한계**: `backup-db.sh` 파일은 같은 서버 디스크에 둔다. 서버(EBS)가 통째로 사라지면 그 파일도 같이 사라진다. 10/28 RDS 전환 뒤에는 RDS 자동 백업 · 스냅샷이 서버 밖 보관 역할을 한다.
 - 되살리기: 타이머 정지 · 백엔드 중지 후 **한 트랜잭션으로** 복구한다. 중간에 실패하면 전부 취소돼 반쯤 복구된 상태가 남지 않는다.
+  **덤프를 만든 곳으로 되살린다** — `.env`에 `EXTERNAL_DB_URL`이 있으면(10/28부터 운영) `backup-db.sh`는 RDS를 덤프했으므로 RDS로, 없으면 같은 서버 postgres 컨테이너로 되살린다.
+
+  외부 DB(RDS) 모드 — `backup-db.sh`와 같은 클라이언트 컨테이너로 RDS에 복원하고, backend는 `--reapply`로 외부 DB 오버레이를 포함해 다시 올린다(그냥 `up`하면 로컬 DB로 붙을 수 있다):
+
+  ```bash
+  cd /opt/lawnambul/app/deploy
+  sudo systemctl stop lawnambul-cd.timer
+  docker compose -f docker-compose.prod.yml -f docker-compose.external-db.yml stop backend
+  # 접속 값은 .env에서 읽고 출력하지 않는다(deploy.sh와 같은 기준: 같은 키는 마지막 줄)
+  envv() { grep "^$1=" .env | tail -1 | cut -d= -f2- | tr -d "\"' \r"; }
+  U="$(envv EXTERNAL_DB_URL)"; U="${U#jdbc:postgresql://}"; HP="${U%%/*}"; DBN="${U#*/}"; DBN="${DBN%%\?*}"
+  H="${HP%:*}"; P="${HP##*:}"; [[ "$P" == "$HP" ]] && P=5432
+  export PGPASSWORD="$(envv EXTERNAL_DB_PASSWORD)"
+  docker run --rm -i -e PGPASSWORD postgres:17-alpine \
+    pg_restore --clean --if-exists --single-transaction --exit-on-error --no-owner --no-privileges \
+    -d "host=$H port=$P dbname=$DBN user=$(envv EXTERNAL_DB_USERNAME) sslmode=require" < ~/backups/<백업>.dump
+  unset PGPASSWORD; unset -f envv
+  ./deploy.sh --reapply    # 같은 이미지로 외부 DB 오버레이까지 다시 적용 + 스모크 테스트
+  sudo systemctl start lawnambul-cd.timer
+  ```
+
+  같은 서버 DB 모드(`EXTERNAL_DB_URL`이 없을 때):
 
   ```bash
   sudo systemctl stop lawnambul-cd.timer
@@ -592,7 +677,7 @@ git -C /opt/lawnambul/private-seed show origin/develop:loads/<파일>.sql \
 
 ## 외부 DB 모드 (BE-59, WBS 7.1.2)
 
-같은 서버의 postgres 컨테이너 대신 **외부 PostgreSQL**에 붙는다. **10/22 ~ 10/28 오전은 Supabase 공용 DB**(`backend/SHARED-DEV-DB.md`, 테스트 데이터만)에 붙고, **10/28 오후부터는** 같은 구성에서 **접속 값만 RDS로 바꾼다.** postgres 컨테이너(512m)가 빠져 서버 메모리 여유가 생긴다.
+같은 서버의 postgres 컨테이너 대신 **외부 PostgreSQL**에 붙는다. 10/22 ~ 10/28 오전은 Supabase 공용 DB(`backend/SHARED-DEV-DB.md`)에 붙었고, **10/28 11:22부터 운영은 AWS RDS**다(같은 구성에서 접속 값만 바꿈 — 아래 "RDS 전환"). postgres 컨테이너(512m)가 빠져 서버 메모리 여유가 생긴다.
 
 | 항목 | 내용 |
 | --- | --- |
@@ -661,9 +746,105 @@ cp -p ~/backups/env-*-before-external-db.bak .env   # 또는 .env에서 EXTERNAL
 
 되돌리면 **외부 DB에 쓰인 데이터는 같은 서버 DB에 없다**(옮기지 않는다). `--reapply`가 실패해도 자동으로 되돌리지 않는다 — 되돌릴 대상이 이미지가 아니라 사람이 바꾼 `.env`이기 때문이다.
 
-### RDS 전환 때 (10/28 오후, BE-59)
+### RDS 전환 (BE-59, 10/28 완료)
 
-같은 오버레이를 그대로 쓰고 `.env`의 `EXTERNAL_DB_*`만 RDS 값으로 바꾼 뒤 `./deploy.sh --reapply`. 데이터를 옮길지(Supabase → RDS)는 그때 정한다. 옮긴다면 `./backup-db.sh before-rds`로 뜬 덤프(`public`만)를 RDS에 복원하는데, pgvector 확장은 스키마 밖이라 **먼저 `CREATE EXTENSION vector;`** 를 하고 `pg_restore --no-owner --no-privileges`로 넣는다. RDS도 `sslmode=require` 이상으로 붙는다.
+같은 오버레이에서 `.env`의 `EXTERNAL_DB_*`만 RDS 값으로 바꾸고 `./deploy.sh --reapply`했다. **Supabase 데이터는 옮기지 않았다** — 빈 RDS에 Flyway(스키마) · 비공개 시드 `R__` 6개 · `loads/` 실제 판례만 넣었다(실데이터만, 이유는 `docs/decisions/BE-59.md` "2차"). 엔드포인트 · 비밀번호 · 보안 그룹 ID는 저장소에 쓰지 않는다(서버 `.env`와 담당자 비밀번호 관리자에만).
+
+| 항목 | 설정 |
+| --- | --- |
+| 엔진 | PostgreSQL 17 (`vector` 0.8 설치 가능 — 확장은 마스터로 미리 만든다) |
+| 클래스 · 저장소 | `db.t4g.micro`(프리 티어 템플릿), 단일 AZ, gp3 20GiB(자동 확장 끔) |
+| 연결 | 퍼블릭 액세스 **없음**. 콘솔 "EC2 컴퓨팅 리소스에 연결"이 만든 보안 그룹 한 쌍(RDS 쪽 · EC2 쪽)으로만 붙는다 — **둘 다 지우지 않는다** |
+| 보호 | 저장 암호화, 삭제 방지 켬, 자동 백업 7일 |
+| DB · 계정 | DB `lawnambul`. 마스터 `lawnambul`(관리용: 확장 · 계정) / 앱 `lawnambul_app`(backend · Flyway · 백업 · `loads/`) |
+| 비밀번호 | 둘 다 Mac에서 `openssl rand -hex 24`(48자, `$` 없음) → 비밀번호 관리자 |
+
+#### 1) 앱 계정 만들기 (처음 한 번, 서버에서 마스터로)
+
+```bash
+R=<RDS 엔드포인트>
+printf '\e[?1004l'                               # 창 전환 신호 끄기 (아래 문제 표 1번)
+read -rs -p '마스터 비밀번호: ' PGPASSWORD && echo
+PGPASSWORD="${PGPASSWORD//$'\e[O'/}"; PGPASSWORD="${PGPASSWORD//$'\e[I'/}"; PGPASSWORD="${PGPASSWORD//$'\e[200~'/}"; PGPASSWORD="${PGPASSWORD//$'\e[201~'/}"; export PGPASSWORD
+echo "길이 ${#PGPASSWORD} / hex 아닌 글자 $(printf '%s' "$PGPASSWORD" | tr -d '0-9a-f' | wc -c)"   # 48 / 0
+read -rs -p '앱 계정 비밀번호: ' APPPW && echo   # 같은 정리 · 길이 확인을 한다
+APPPW="${APPPW//$'\e[O'/}"; APPPW="${APPPW//$'\e[I'/}"; APPPW="${APPPW//$'\e[200~'/}"; APPPW="${APPPW//$'\e[201~'/}"
+echo "길이 ${#APPPW} / hex 아닌 글자 $(printf '%s' "$APPPW" | tr -d '0-9a-f' | wc -c)"           # 48 / 0
+
+# 확장은 마스터만 만들 수 있다 → 미리 만들면 V11의 CREATE EXTENSION IF NOT EXISTS가 권한 없이 넘어간다
+# GRANT lawnambul_app TO lawnambul: 마스터가 스키마 주인을 앱 계정으로 바꾸려면 그 역할의 구성원이어야 한다
+printf "%s\n" \
+  "CREATE EXTENSION IF NOT EXISTS vector;" \
+  "CREATE ROLE lawnambul_app LOGIN PASSWORD '${APPPW}';" \
+  "GRANT CONNECT, TEMP ON DATABASE lawnambul TO lawnambul_app;" \
+  "GRANT lawnambul_app TO lawnambul;" \
+  "ALTER SCHEMA public OWNER TO lawnambul_app;" \
+| docker run --rm -i -e PGPASSWORD postgres:17-alpine psql -v ON_ERROR_STOP=1 "host=$R port=5432 dbname=lawnambul user=lawnambul sslmode=require"
+
+# 앱 계정으로 확인 → lawnambul_app / public|lawnambul_app / vector|0.8.x / 생성 권한 OK
+printf '%s\n' "select current_user;" \
+  "select nspname, pg_get_userbyid(nspowner) from pg_namespace where nspname = 'public';" \
+  "select extname, extversion from pg_extension where extname = 'vector';" \
+  "create table _perm_check(id int); drop table _perm_check; select '생성 권한 OK';" \
+| docker run --rm -i -e PGPASSWORD="$APPPW" postgres:17-alpine psql -At -v ON_ERROR_STOP=1 "host=$R port=5432 dbname=lawnambul user=lawnambul_app sslmode=require"
+unset PGPASSWORD APPPW
+```
+
+#### 2) `.env` 바꾸기 → 적용
+
+```bash
+cd /opt/lawnambul/app/deploy
+./backup-db.sh before-rds                                   # Supabase 마지막 백업
+install -m 600 .env ~/.env.before-rds.$(date +%m%d)          # 되돌리기용 사본은 저장소 폴더 밖(홈)에 둔다
+
+./env-set.sh EXTERNAL_DB_URL 'jdbc:postgresql://<RDS 엔드포인트>:5432/lawnambul?sslmode=require'
+./env-set.sh EXTERNAL_DB_USERNAME lawnambul_app
+./env-set.sh --secret EXTERNAL_DB_PASSWORD                  # 앱 계정 비밀번호
+./env-set.sh REAL_SEED_DIR /opt/lawnambul/private-seed/seed  # 비공개 시드 R__ (위 "외부 DB에 실제 사건 시드")
+./env-set.sh EXTERNAL_DB_ALLOWS_REAL_SEED 1
+./env-set.sh ADMIN_BOOTSTRAP_EMAIL '<관리자 이메일>'          # 새 DB에는 관리자가 없다 (확인 후 비운다)
+./env-set.sh --secret ADMIN_BOOTSTRAP_PASSWORD
+./env-set.sh --check
+./deploy.sh --reapply                                       # 빈 DB라 Flyway가 처음부터 돈다 (10/28: 38개, 약 2초)
+```
+
+10/28에는 같은 `.env` 수정에서 파이프라인(`PIPELINE_SERVICE=1` · `PIPELINE_EXTRACT_MODEL` · `OPENAI_API_KEY` · `GEMINI_API_KEY`, COMMON-52)도 함께 켰다. 키는 넣기 전에 무료 조회로 확인했다: `curl -s -o /dev/null -w '%{http_code}' -H @<(printf 'x-goog-api-key: %s\n' "$k") https://generativelanguage.googleapis.com/v1beta/models` → 200 (OpenAI는 `https://api.openai.com/v1/models`, `Authorization: Bearer`).
+
+#### 3) 확인 → 정리
+
+```bash
+docker ps --format '{{.Names}}\t{{.Status}}\t{{.Ports}}'     # backend가 방금 시작 · healthy
+docker logs lawnambul-backend-1 2>&1 | grep -E 'Successfully applied|now at version|ERROR'
+curl -s -o /dev/null -w '%{http_code}\n' http://localhost/api/v1/cases       # 200 (localhost:8080은 호스트에 안 열려 000이 정상)
+```
+
+위 "`loads/` 넣기" 2)의 `q` 함수로 DB를 직접 본다.
+
+```sql
+select count(*) from pg_stat_activity where usename = 'lawnambul_app' and pid <> pg_backend_pid();  -- backend 연결 풀 (10/28: 5)
+select status, count(*) from legal_case group by status;   -- 실데이터만 (10/28 시드 직후: PUBLISHED 1)
+select count(*) from member;                               -- 0 (Supabase 회원은 옮기지 않음, 재가입)
+select count(*) from admin_account;                        -- 1 (관리자는 member가 아니라 여기)
+```
+
+사이트에서 관리자 로그인을 확인한 뒤 부트스트랩 값을 비운다.
+
+```bash
+./env-set.sh --clear ADMIN_BOOTSTRAP_EMAIL && ./env-set.sh --clear ADMIN_BOOTSTRAP_PASSWORD && ./deploy.sh --reapply
+```
+
+되돌리기: `install -m 600 ~/.env.before-rds.<MMDD> .env && ./deploy.sh --reapply` → Supabase로 돌아간다(RDS에 쓰인 데이터는 RDS에만 남는다). Supabase를 지운 뒤에는 되돌릴 곳이 없다 — 그때부터는 RDS 스냅샷 · 자동 백업으로 복구한다.
+
+#### RDS 전환 때 실제로 막힌 것
+
+| 증상 | 원인 · 조치 |
+| --- | --- |
+| 비밀번호가 맞는데 `password authentication failed` · 길이가 48이 아님(54 등) | ① **창 전환 신호**: 비밀번호를 복사하러 다른 창에 다녀오면 터미널이 `ESC[O` · `ESC[I`를 입력에 끼운다. `printf '%s' "$PGPASSWORD" \| tr -d '0-9a-f' \| od -c`로 섞인 글자만 본다 → 위처럼 지우거나 `printf '\e[?1004l'`로 끈다. ② **붙여 넣기 신호** `ESC[200~` · `ESC[201~`(bash가 프롬프트마다 다시 켠다) — `bind 'set enable-bracketed-paste off'`. ③ **클립보드가 바뀜**: 값을 복사한 뒤 채팅에서 명령어를 복사하면 명령어가 붙여 넣어진다(28 · 15 · 247자 등). 명령을 먼저 실행하고 입력 칸이 뜬 뒤 값을 복사한다. `env-set.sh --secret`은 ①② 제거와 형식 검사를 한다 |
+| Mac 터미널에서 `zsh: unknown file attribute` · `wc: #: open` | zsh는 대화형에서 `#` 뒤를 주석으로 보지 않는다. Mac에서는 주석 없이 실행한다 |
+| `curl http://localhost:8080/...` → `000` | 정상. backend 8080은 호스트에 열지 않는다. `http://localhost/api/...`(web 경유) |
+| `member` 0명인데 관리자 로그인은 됨 | 관리자는 `admin_account` 테이블이다. `pg_stat_user_tables.n_live_tup`은 통계 추정치라 새 DB에서 0으로 나올 수 있다 → `count(*)`로 본다 |
+| Gemini 키가 `AQ.`로 시작 | AI Studio 새 형식이다. 헤더(`x-goog-api-key`) · 쿼리(`key=`) 방식 모두 200 확인(10/28) |
+| `git show` 때마다 `remote: Enumerating objects` | 서버 사본이 partial clone이라 정상(위 "`loads/` 넣기") |
 
 ### 문제가 생겼을 때
 
@@ -945,7 +1126,7 @@ Grafana Cloud 경보가 no data로 울리기 시작하므로, 끄기 전에 Graf
 
 | 작업 | 바꿀 곳 |
 | --- | --- |
-| 7.1.2 RDS 전환 · 시크릿 | (BE-59 1차 반영) 외부 DB 모드 오버레이(`docker-compose.external-db.yml`)로 postgres 의존을 뺐다 — RDS는 `.env`의 `EXTERNAL_DB_*`만 바꾸고 `./deploy.sh --reapply` (위 "외부 DB 모드"). 남은 것: 비밀값을 시크릿 저장소로 옮길지, `deploy.sh`의 마이그레이션 비교(지금은 외부 DB 모드에서 건너뜀)를 외부 DB로도 할지, 안정되면 `docker-compose.prod.yml`에서 postgres 정의를 지울지 |
+| 7.1.2 RDS 전환 · 시크릿 | (BE-59, **10/28 RDS 전환 완료** — 위 "RDS 전환") 남은 것: Supabase 프로젝트 삭제 · 공용 DB 파일 정리(COMMON-59 "종료"), 비밀값을 시크릿 저장소(SSM 등)로 옮길지, `sslmode=verify-full`(RDS CA 인증서), `deploy.sh`의 마이그레이션 비교를 외부 DB로도 할지, 안정되면 `docker-compose.prod.yml`에서 postgres 정의를 지울지, DB 지표(CloudWatch · `postgres_exporter`) 경보 |
 | 7.4.3 JWT (C) | 토큰은 `@Qualifier(RedisConfig.TOKEN)` 템플릿(DB 1)에 TTL과 함께 저장 |
 | 백엔드 healthcheck 추가 (BE-66 이후) | Actuator(관리 포트 8081)에는 Redis 헬스체크가 자동으로 붙고, 커넥션 팩토리 두 개가 `redis` 아래 묶인다. **실측(BE-61, Boot 4.1.1)**: Redis를 끄면 `/actuator/health`는 **DOWN(503)**, `/actuator/health/liveness` · `/readiness`는 **UP**, API는 정상. liveness · readiness는 추가 설정 없이 이미 열려 있다. 그래서 컨테이너 healthcheck · 재시작 조건에는 **`/actuator/health`가 아니라 `/actuator/health/liveness`** 를 쓴다(전체 상태를 쓰면 Redis 장애 때 백엔드까지 재시작된다) |
 | HTTPS 안정화 후 (BE-75 후속) | 갱신이 한 번 이상 정상으로 돈 뒤 `https.conf.template`에 HSTS를 짧은 `max-age`부터 추가 |

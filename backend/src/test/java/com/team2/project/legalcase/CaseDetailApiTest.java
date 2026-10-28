@@ -47,6 +47,24 @@ class CaseDetailApiTest extends ApiIntegrationTest {
 	}
 
 	@Test
+	void getCase_scriptReady_matchesApi18() throws Exception {
+		long approved = insertCase("FRAUD", "PUBLISHED");
+		insertScriptWithReview(approved, "APPROVED");
+		long pending = insertCase("FRAUD", "PUBLISHED");
+		insertScriptWithReview(pending, null);
+		long rejected = insertCase("FRAUD", "PUBLISHED");
+		insertScriptWithReview(rejected, "REJECTED");
+		long noScript = insertCase("FRAUD", "PUBLISHED");
+
+		mockMvc.perform(get(caseUrl(approved))).andExpect(jsonPath("$.scriptReady").value(true));
+		mockMvc.perform(get(caseUrl(approved) + "/script")).andExpect(status().isOk());
+		for (long caseId : new long[] {pending, rejected, noScript}) {
+			mockMvc.perform(get(caseUrl(caseId))).andExpect(jsonPath("$.scriptReady").value(false));
+			mockMvc.perform(get(caseUrl(caseId) + "/script")).andExpect(status().isNotFound());
+		}
+	}
+
+	@Test
 	void getCase_hidesValuesBeforeVerdict() throws Exception {
 		// 체험 전 화면이라 판결을 미리 알려 주는 값은 없다 (API 4와 같은 기준, 섹션 본문은 API 6에서 단계별로)
 		long caseId = insertCase("MURDER", "PUBLISHED");

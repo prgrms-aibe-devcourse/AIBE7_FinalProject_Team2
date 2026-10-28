@@ -133,7 +133,7 @@ img.my-sash-icon.is-missing { visibility: hidden; }
 .my-icon-chip img.my-sash-icon { width: 19px; height: 19px; }
 .my-mini-card .my-sash-icon { display: none; } /* 견본은 작아서 아이콘을 그리지 않는다 */
 .my-card:not(.deco-sash-none) .my-card-name { padding-inline: calc(var(--sash-x) + var(--sash-w) - 4.04cqi); } /* 위 닉네임이 책갈피에 가리지 않게 */
-.my-card.is-profile .my-card-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; align-self: center; } /* 닉네임은 한 줄, 길면 ... */
+.my-card.is-profile .my-card-name { overflow: hidden; white-space: nowrap; display: block; align-self: center; } /* 닉네임은 한 줄, 길면 글자를 줄여 다 보인다(말줄임 없음, fitText.js) */
 .my-card.is-profile .my-card-note { font: 900 9.1cqi/1.3 var(--font-heading); letter-spacing: -.02em; } /* 하단 성향 이름은 성향카드 상단 이름(.my-card-name)과 같은 글꼴 */
 .my-card.is-profile { --note-max: calc(100cqi - 14.14cqi); } /* 아래 줄 폭 상한: 카드 안 여백(7.07cqi) 사이. 얇고 긴 띠는 아래까지 내려오니 그 띠 안쪽으로 줄인다 */
 .my-card.is-profile.sash-style-long:not(.deco-sash-none) { --note-max: calc(100cqi - 2 * (var(--sash-x) + var(--sash-w) + 2.5cqi)); }

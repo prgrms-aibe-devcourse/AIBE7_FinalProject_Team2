@@ -11,7 +11,9 @@ import com.team2.project.legalcase.domain.CrimeType;
 import com.team2.project.legalcase.dto.CaseDetailResponse;
 import com.team2.project.legalcase.dto.CaseListResponse;
 import com.team2.project.legalcase.dto.PublicCasePaperResponse;
+import com.team2.project.legalcase.dto.PublicCaseScriptResponse;
 import com.team2.project.legalcase.service.CasePaperQueryService;
+import com.team2.project.legalcase.service.CaseScriptQueryService;
 import com.team2.project.legalcase.service.LegalCaseService;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -26,6 +28,7 @@ public class LegalCaseController {
 
 	private final LegalCaseService legalCaseService;
 	private final CasePaperQueryService casePaperQueryService;
+	private final CaseScriptQueryService caseScriptQueryService;
 	private final AnonymousIdCookie anonymousIdCookie;
 
 	/**
@@ -54,5 +57,16 @@ public class LegalCaseController {
 	@GetMapping("/{caseId}/paper")
 	public PublicCasePaperResponse getCasePaper(@PathVariable Long caseId) {
 		return casePaperQueryService.getCasePaper(caseId);
+	}
+
+	/**
+	 * API 18. 공개 사건 대본 (BE-109). BE-107이 만들고 BE-108에서 승인한 2막 증거조사 대사만 준다 —
+	 * 나머지 막은 사건에 상관없는 공통 틀로 FE-33이 채운다(해송님 · 승호님 합의, 2026-10-27). 비공개
+	 * 사건은 CASE_NOT_FOUND, 대본이 없거나 아직 승인 전이면 SCRIPT_NOT_FOUND(API 17과 같은 모양) —
+	 * 프론트는 404를 받으면 대본 없는 사건과 같이 MVP 화면으로 간다(scripts.js 원칙).
+	 */
+	@GetMapping("/{caseId}/script")
+	public PublicCaseScriptResponse getCaseScript(@PathVariable Long caseId) {
+		return caseScriptQueryService.getCaseScript(caseId);
 	}
 }

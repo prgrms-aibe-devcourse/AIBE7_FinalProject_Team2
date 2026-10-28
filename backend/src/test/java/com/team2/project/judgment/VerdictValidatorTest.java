@@ -20,6 +20,7 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.Arguments;
 
 class VerdictValidatorTest {
@@ -75,6 +76,24 @@ class VerdictValidatorTest {
 		assertThat(result.fineAmount()).isEqualTo(request.fineAmount());
 		assertThat(result.suspensionMonths()).isEqualTo(request.suspensionMonths());
 		assertThat(result.factors()).hasSize(request.factors().size());
+	}
+
+	@ParameterizedTest
+	@CsvSource({"7, false", "8, true", "180, true", "181, false"})
+	void validate_prisonWithMandatoryMitigation_checksInputRange(int months, boolean allowed) {
+		// R-20: 정수 개월 입력 범위. 감경 경로의 합집합이며 단일 처단형을 뜻하지 않는다.
+		var options = List.of(new Option(PenaltyType.PRISON, 8L, 180L, true));
+		var request = req("PRISON", null, months, null, null);
+		assertThat(FACTORY.getValidator().validate(request)).isEmpty();
+		if (allowed) {
+			assertThat(validator.validate(request, options, IDS).prisonMonths()).isEqualTo(months);
+		} else {
+			assertThatThrownBy(() -> validator.validate(request, options, IDS))
+				.isInstanceOfSatisfying(InvalidJudgmentException.class, exception -> {
+					assertThat(exception.getReason()).isEqualTo(Reason.OUT_OF_ALLOWED_RANGE);
+					assertThat(exception.getField()).isEqualTo("prisonMonths");
+				});
+		}
 	}
 
 	static Stream<Arguments> failures() {

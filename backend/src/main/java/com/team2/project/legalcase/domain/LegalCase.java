@@ -102,6 +102,15 @@ public class LegalCase {
 		this.publishedAt = at;
 	}
 
+	/**
+	 * 공개 취소 (A-13-14, BE-118). 사용자 화면에서 숨기고 검수 중(REVIEW)으로 돌린다. 행은 지우지 않는다.
+	 * 공개 시각은 지운다 — 다시 공개하면 그때 시각이 새로 기록된다. 상태 확인은 호출하는 쪽(관리자 서비스)이 한다
+	 */
+	public void unpublish() {
+		this.status = CaseStatus.REVIEW;
+		this.publishedAt = null;
+	}
+
 	// 관리자 사건 내용 수정 (A-11). 값 검사는 AdminCaseEditService가 API 명세 A-11 표대로 먼저 한다
 	public void changeTitle(String title) {
 		this.title = title;

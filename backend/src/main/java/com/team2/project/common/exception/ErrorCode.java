@@ -61,6 +61,8 @@ public enum ErrorCode {
 	IMPORT_UNAVAILABLE(HttpStatus.BAD_GATEWAY, "사건 등록을 지금 쓸 수 없습니다."),
 	IMPORT_NOT_READY(HttpStatus.CONFLICT, "아직 적재할 수 없는 등록 작업입니다."),
 	IMPORT_RESULT_INVALID(HttpStatus.UNPROCESSABLE_CONTENT, "생성 결과를 사건으로 만들 수 없습니다."),
+	// 아이디 회원가입 (확장 단계, BE-113, API 명세 M-5). 로그인 실패는 INVALID_CREDENTIALS를 함께 쓴다
+	DUPLICATE_ID(HttpStatus.CONFLICT, "이미 사용 중인 아이디입니다."),
 	INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "서버 오류가 발생했습니다.");
 
 	private final HttpStatus status;

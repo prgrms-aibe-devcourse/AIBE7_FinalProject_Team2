@@ -45,6 +45,9 @@
 | v1.39 | 2026-10-27 | 레벨 · 직업 테이블 추가 (**확장 단계**, BE-106 · V30 · API 명세 v0.54) — `xp_event`(이벤트 경험치 지급 원장: 사용자 · 수급처 · 대상 유니크, 일일 · 묶음 상한 집계용 인덱스)와 `profile_job`(사용자가 고른 직업) 신설. 사건 완료 · 성향 · 출석 · 업적 XP는 기존 테이블에서 계산해 저장하지 않는다. 12장 추가 |
 | v1.40 | 2026-10-27 | 범죄 유형 추가: 강도 · 절도 (BE-112 · V31 · API 명세 v0.55) — `crime_type`에 `ROBBERY`(강도 — 강도치상 · 강도상해 포함) · `THEFT`(절도 — 특수절도 · 특가법 절도 포함) 추가, 화면 분류명은 둘 다 재산범죄. 범죄 유형 CHECK 4곳(`sentence_range_option` · `legal_case` · `rag_precedent` · `case_import`) 교체. `sentence_range_option`에 강도 7개(벌금형 제외 + 무기징역, ID 23 ~ 29) · 절도 7개(공통, ID 30 ~ 36) 추가. 상해치사 · 폭행치사는 `INJURY`에 포함. 양형기준 버전은 살인만 자동 연결(강도 · 절도는 없음) |
 | v1.41 | 2026-10-27 | 사건 대본 테이블 추가 (**확장 단계**, BE-108 · V32 · API 명세 v0.57) — `case_script` 신설(사건마다 1건: 증거조사 대사 `evidence` jsonb · 배역 `cast_roles` · 생성 정보 `model` · `generated_at` · `stopped` · 공개 가능 여부 `publishable` · 검수 칸 4개). 대사를 칸으로 펼치지 않고 jsonb 한 칸에 두는 이유는 `case_paper.article`과 같다(형식을 정하는 쪽이 파이프라인이다). `cast`는 SQL 예약어라 칸 이름을 `cast_roles`로 두었다. 검수는 `judgment`(V16)와 같은 방식으로 `APPROVED` · `REJECTED`만 저장하고 비어 있으면 대기로 읽는다. 감사 로그 행동 `CASE_SCRIPT_APPROVE` · `CASE_SCRIPT_REJECT` 추가 (결정: `docs/decisions/BE-108.md`) **(병합 메모) 작업 중 BE-106(V30 · v1.39)과 BE-112(V31 · v1.40)가 먼저 머지돼 V32 · v1.41로 다시 매겼다** |
+| v1.42 | 2026-10-27 | 아이디 회원 추가 (**확장 단계**, BE-113 · V33 · API 명세 v0.58) — `member.provider`에 `LOCAL` 허용(CHECK `ck_member_provider` 변경), `member.nickname`(NULL 허용, 카카오 회원은 NULL) 추가, `member_password` 신설(회원 1 : 0..1, 소문자 로그인 아이디 유일 · 일방향 비밀번호 해시). 아이디 회원의 `provider_user_id`는 UUID. 카카오 회원 행 · 기존 조회는 바뀌지 않는다 |
+| v1.43 | 2026-10-28 | 형벌 규칙 계산 기준 정리 (BE-117) — `penalty_rule`의 `statutory_max`를 "범행 당시 개별 처벌조항 + 형법 총칙을 반영한 가중 · 감경 전 법정형 상한"으로, `allowed_min` · `allowed_max`를 "가능한 감경 경로들의 합집합"(필요적 감경은 항상, 임의적 감경은 적용 · 미적용 모두)으로 정의. 정수 개월 하한 올림, 신 · 구법 확인, `statutory_max`와 `allowed_max`는 따로 검수. 스키마 변경 없음 |
+| v1.44 | 2026-10-28 | 사건 공개 취소 (**확장 단계**, BE-118 · V34 · API 명세 v0.61) — **표 · 칸은 늘리지 않는다.** 공개 취소(A-13-14)는 `legal_case.status`를 `PUBLISHED → REVIEW`로 돌리고 `published_at`을 지운다(숨김, 행은 지우지 않는다). `admin_audit_log.action` CHECK에 `CASE_UNPUBLISH` 추가(V34, V32까지의 값을 모두 다시 나열). 같은 김에 `action` 설명을 V32까지 늘어난 값으로 갱신. |
 
 ---
 
@@ -208,7 +211,7 @@ erDiagram
 | guideline_id | bigint FK |  | 적용 양형기준 버전 | REQ-080 |
 | incident_date | date |  | 사건 발생일 (양형기준 버전 판단 근거). 자동 파이프라인은 모델이 찾은 날짜를 판결문 원문 · 선고일과 대조해 확인된 값만 넣고, 원문에 날짜가 없으면 비운다(v1.12, BE-38) | FR-3-5-1 |
 | status | varchar(20) | ✓ | `DRAFT` / `REVIEW` / `PUBLISHED`. `PUBLISHED`만 사용자에게 노출 | REQ-047, 075 |
-| published_at | timestamptz |  |  |  |
+| published_at | timestamptz |  | 공개 시각(A-13). 공개 취소(A-13-14)하면 지우고, 다시 공개하면 새로 기록한다 |  |
 | created_at, updated_at | timestamptz | ✓ |  |  |
 - 권고 범위는 MVP에서 팀이 계산해 입력한 값을 그대로 쓴다. 자동 계산 로직은 확장 단계(결정 #4).
 - `title`은 유일하다(`uk_legal_case_title`, V7 · BE-15, v1.12). 적재 SQL이 제목으로 사건을 찾아 환경마다 id가 달라도 같은 SQL을 쓰기 위해서다. 모델이 만든 중립 제목이 다른 공개 · 검토 중 사건과 겹치면 자동 적재가 멈춘다(BE-31).
@@ -253,18 +256,26 @@ S-05에서 보여 줄 형벌 선택지, 그리고 **선고 가능 범위 밖 판
 | case_id | bigint FK | ✓ |  |
 | penalty_type | varchar(20) | ✓ | 법정형에서 고르는 형벌: `DEATH`(사형) / `LIFE`(무기징역) / `PRISON`(유기징역) / `FINE`(벌금). 법정형에 있는 형벌만 행을 둔다. `DEATH` · `LIFE`는 v1.4. 무죄(`NOT_GUILTY`)는 MVP에서 뺐다(v1.3, 요구사항 15장) |
 | statutory_min | bigint |  | 법정형 하한 (징역: 개월, 벌금: 원). 없으면 NULL. `DEATH` · `LIFE`는 NULL |
-| statutory_max | bigint |  | 법정형 상한. `DEATH` · `LIFE`는 NULL |
-| allowed_min | bigint |  | **선고 가능 하한** — 법정형 하한에 사실관계로 인정되는 법률상 감경(자수 · 심신미약 등)과 작량감경(재판상 감경, 형법 제53조)을 모두 적용했을 때의 값 |
-| allowed_max | bigint |  | **선고 가능 상한** — 법정형 상한. 누범 등 사실관계로 정해지는 가중이 있으면 반영한 값 |
+| statutory_max | bigint |  | **범행 당시 적용되는 개별 처벌조항과 형법 총칙을 반영한, 사건별 가중·감경 전의 법정형 상한** (징역: 개월, 벌금: 원). 개별 조문에 상한 숫자가 없더라도 총칙을 확인한다. `DEATH` · `LIFE`는 NULL |
+| allowed_min | bigint |  | **선고 가능 하한** — 해당 형벌의 법률상 가능한 감경 경로들에서 허용되는 최소 형량. 정수 개월 입력 하한은 아래 합집합·단위 정책을 따른다 |
+| allowed_max | bigint |  | **선고 가능 상한** — 사건별 가중 및 필요적 감경을 반영한 경로들에서 사용자가 선택할 수 있는 최대 형량. `statutory_max`와 독립적으로 검수한다. `DEATH` · `LIFE` 행의 감경 범위는 아래 설명을 따른다 |
 | allowed_basis | varchar(300) |  | 선고 가능 범위 산출 근거 (예: 작량감경 시 하한 1/2) |
 | suspension_allowed | boolean | ✓ | 이 형벌에 집행유예 입력을 보여 줄지 |
 | display_order | int | ✓ | 형벌 표시 순서. **법조문 표기 순서대로 무거운 형벌부터** `DEATH` → `LIFE` → `PRISON` → `FINE`(v1.9). API 8 · S-05 형벌 버튼이 이 순서를 그대로 쓴다 |
 
 > **`DEATH` · `LIFE` 행 (v1.4)**: `allowed_min` ~ `allowed_max`는 그 형벌을 고른 뒤 **작량감경해 징역으로 선고할 때의 범위**(개월)다. 무기징역은 10년 ~ 50년(120 ~ 600, 형법 제55조 제1항 제2호), 사형은 20년 ~ 50년(240 ~ 600, 같은 항 제1호). 법률상 감경 사유도 있으면 그만큼 더 넓힌다. 사형을 감경해 무기징역으로 선고하는 경우는 형법 규정이라 코드 상수로 판단한다. 두 행 모두 `suspension_allowed = false`(감경해도 징역 10년 이상).
 
+- **상한 저장 기준 (2026-10-27 정리)**: `statutory_max`는 개별 처벌조항의 숫자만 옮기는 칸이 아니다. 형법 제42조의 일반 유기징역 상한은 30년(360개월)이지만, 범행 당시 적용 법령 · 특별법 · 가중 규정에 따른 예외를 확인하고 사건별 가중·감경 전의 상한과 가중 후 선고 가능 상한을 구분한다. 모든 사건의 상한을 일괄 360으로 채우지 않는다.
+- `statutory_max`와 `allowed_max`를 자동으로 같은 값으로 맞추지 않는다. 가중 근거가 있으면 `allowed_max`가 더 클 수 있고, 필요적 감경이 있으면 더 작을 수 있다. 실제 재판부가 임의적 감경으로 정한 처단형 상한을 그대로 복사하지 않는다.
+- **선고 가능 범위 산출 정책**: 해당 형벌 선택에서 법률상 가능한 감경 경로들의 합집합을 기준으로 한다. 필요적 감경은 모든 해당 경로에 반영하고, 임의적 감경(자수 감경 · 작량감경 등)은 적용·미적용 경로를 함께 고려한다. 유기징역 감경 시 각 경로의 하한과 상한을 모두 감경한다(형법 제55조 · 제56조). 서비스 입력 범위 전체가 하나의 법률상 처단형을 뜻하지는 않는다.
+- 징역은 정수 개월로 입력하므로 계산상 하한에 월 미만 부분이 있으면, 그 하한 이상인 가장 작은 정수 개월을 `allowed_min`에 저장한다. 이는 입력 단위에 따른 제한이며 법률상 하한 자체를 변경하지 않는다.
+- 범행 시점과 형법 제1조 · 부칙 등에 따른 신·구법 적용 여부를 확인해 필요적·임의적 감경을 판단한다. 현행 법령을 모든 사건에 일괄 적용하지 않는다.
+- 저장소는 NULL을 허용하지만, 유기징역 상한을 확인하지 못한 값은 **검수 대기**이지 상한이 없다는 뜻이 아니다. 개별 조문에 상한 숫자가 없다는 이유만으로 NULL을 확정하지 않는다. `statutory_min`의 기존 "조문에 하한이 없으면 NULL" 기준과 `DEATH` · `LIFE`의 두 statutory 컬럼 NULL 조건은 유지한다.
+- 추출 지침은 [`extract_system.md`](../tools/ai-judgment/case-extractor/prompts/extract_system.md)의 같은 기준을 따른다. 추출기 테스트의 유기징역 예시(`statutoryMax = 360`, `allowedMax = 360`)는 이 정의와 일치하지만, 둘이 항상 같아야 한다는 검증 사례는 아니다. 숫자 예시나 구조 검증 통과만으로 실제 사건의 형벌 규칙 검수가 완료되지는 않는다.
+
 - 예 1 (사기, 조문상 하한 없음): `PRISON` 법정형 NULL ~ 120 / 선고 가능 1 ~ 120, `FINE` 법정형 NULL ~ 20,000,000 / 선고 가능 25,000 ~ 20,000,000
     - `statutory_min`이 NULL이면 조문에 하한이 없다는 뜻이다. 이때도 형법의 일반 하한(징역 1개월, 제42조 / 벌금 5만 원, 제45조)이 적용된다.
-    - 징역은 1개월보다 낮게 선고할 수 없어 1이다. 벌금은 감경하면 5만 원 미만으로 할 수 있고(제45조 단서) 감경 시 1/2이 되므로(제55조 제1항 제6호) 25,000이다. **사건 등록 시 법조문으로 다시 확인한다.**
+    - 징역은 1개월보다 낮게 선고할 수 없어 1이다. 벌금은 감경하면 5만 원 미만으로 할 수 있고(제45조 단서) 감경할 때마다 하한도 1/2이 되므로(제55조 제1항 제6호, 대법원 78도246 전원합의체) 작량감경만 있는 이 예는 25,000이다. 법률상 감경 사유도 있으면 그만큼 더 줄어든다(1회 + 작량감경이면 12,500). **사건 등록 시 법조문으로 다시 확인한다.**
 - 예 2 (법정형 1년 이상 10년 이하, 법률상 감경 사유 없음): `PRISON` 법정형 12 ~ 120 / 선고 가능 6 ~ 120 (작량감경 1/2). 법률상 감경 사유도 있으면 3 ~ 120
 - 예 3 (살인, 사형 · 무기 또는 5년 이상 징역, 법률상 감경 · 가중 사유 없음, v1.4): `PRISON` 법정형 60 ~ 360 / 선고 가능 30 ~ 360, `LIFE` 법정형 NULL / 감경 시 120 ~ 600, `DEATH` 법정형 NULL / 감경 시 240 ~ 600. 유기징역을 고르면 징역 상한은 30년이고, 무기 · 사형을 고른 뒤 감경하면 50년이 된다
 - **재판부가 실제로 감경했는지와 관계없이** 가장 넓은 범위를 쓴다. 판결 전 화면에서 재판부의 감경 여부가 드러나지 않게 하기 위해서다.
@@ -484,18 +495,38 @@ S-03의 객관식 선택지. 범죄 유형별로 정의한다(FR-2-8).
 - **연결 규칙 (v1.30, BE-62)**: 아직 연결 안 됨 → 이 회원에 연결 / 같은 회원 → 그대로 / **다른 회원에 연결됨(공용 PC) → 덮어쓰지 않고 이 회원에 연결된 새 익명 ID를 발급**(그대로 두면 이후 체험이 앞 사람 계정으로 쌓인다) / 쿠키 없음 · 모르는 값 → 새 익명 ID 발급. 연결은 `member_id IS NULL`일 때만 바꾸는 조건부 UPDATE라 동시에 와도 꼬이지 않는다
 - 기존 체험의 `experience.member_id`는 일괄로 채우지 않는다(`anonymous_user`를 거쳐 찾는다).
 
-#### `member` — 회원 (확장 단계, v1.33 · BE-62 · V25)
+#### `member` — 회원 (확장 단계, v1.33 · BE-62 · V25, v1.42 · BE-113 · V33)
 
 | 컬럼 | 타입 | 필수 | 설명 |
 | --- | --- | --- | --- |
 | id | bigint PK | ✓ | 자동 증가. 토큰의 subject(`MemberPrincipal.memberId`) |
-| provider | varchar(20) | ✓ | 로그인 공급자. `KAKAO`만(CHECK `ck_member_provider`) |
-| provider_user_id | varchar(64) | ✓ | 공급자 회원번호(카카오 `id`, 숫자 문자열) |
+| provider | varchar(20) | ✓ | 로그인 공급자. `KAKAO` · `LOCAL`(아이디 회원, v1.42)(CHECK `ck_member_provider`) |
+| provider_user_id | varchar(64) | ✓ | 공급자 회원번호(카카오 `id`, 숫자 문자열). `LOCAL`은 가입할 때 만든 **UUID** — 로그인 아이디는 여기 두지 않고 `member_password.login_id`에만 둔다 |
 | created_at | timestamptz | ✓ |  |
 | last_login_at | timestamptz |  | 마지막 로그인 성공 시각 |
+| nickname | varchar(12) |  | 표시 이름(v1.42). `LOCAL` 회원만 가입 때 채우고 카카오 회원은 NULL(화면은 "카카오 회원"). **중복 허용**(유니크 없음). 변경 API는 아직 없다 |
 
 - `(provider, provider_user_id)` 유일(`uq_member_provider_user`). 행은 `INSERT ... ON CONFLICT DO NOTHING`으로 만들어, 같은 계정의 첫 로그인이 동시에 와도 한 행만 생긴다.
-- **개인정보를 저장하지 않는다**: 카카오 동의항목(닉네임 · 이메일 · 프로필)을 요청하지 않고 회원번호만 쓴다. 표시 이름 등이 필요해지면 그때 동의항목과 함께 칼럼을 추가한다.
+- **카카오 회원은 개인정보를 저장하지 않는다**: 카카오 동의항목(닉네임 · 이메일 · 프로필)을 요청하지 않고 회원번호만 쓴다.
+- **아이디 회원(`LOCAL`, v1.42)** 은 아이디 · 비밀번호 해시(`member_password`) · 닉네임을 저장한다(이용약관 · 개인정보처리방침 FE-117). 카카오 계정과 아이디 계정은 **합치지 않는다** — 같은 사람이어도 다른 회원이다.
+
+#### `member_password` — 아이디 회원 로그인 정보 (확장 단계, v1.42 · BE-113 · V33)
+
+```mermaid
+erDiagram
+    member ||--o| member_password : "아이디 로그인 (LOCAL만)"
+```
+
+| 컬럼 | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| member_id | bigint PK FK → member | ✓ | 회원 1명에 0 또는 1행. 카카오 회원은 행이 없다 |
+| login_id | varchar(20) | ✓ | 로그인 아이디. **소문자로 바꿔 저장**(`Naero` = `naero`). 유일(`uq_member_password_login_id`), 형식 CHECK `ck_member_password_login_id`(`^[a-z0-9_]{4,20}$`) — `@`가 없어 화면이 관리자(이메일)와 구분한다 |
+| password_hash | varchar(255) | ✓ | `{argon2}` 접두어가 붙은 일방향 해시(BE-90 인코더). 원문은 저장하지 않는다 |
+| changed_at | timestamptz | ✓ | 비밀번호를 정한 시각(DB 기본값 `now()`). 비밀번호 변경 기능이 생기면 갱신한다 |
+
+- 행은 `INSERT ... ON CONFLICT (login_id) DO NOTHING`으로만 넣는다. 같은 아이디로 동시에 가입하면 한쪽만 들어가고, 0행이면 서버가 회원 행까지 되돌리고 409 `DUPLICATE_ID`를 돌려준다(유니크 위반 예외로 트랜잭션이 깨지지 않게).
+- 회원 행 · 비밀번호 행 · 익명 기록 연결은 한 트랜잭션이다. 비밀번호 해시 계산은 트랜잭션 밖에서 한다(BE-67과 같은 이유).
+- 회원 탈퇴가 생기면 `member` 행을 지우기 전에 이 행을 지운다(FK에 `ON DELETE` 동작 없음, `anonymous_user.member_id`와 함께 BE-62 추후 재검토).
 
 #### `experience` — 체험 (익명 사용자 × 사건 × 회차)
 
@@ -634,7 +665,7 @@ AI 판결 1건을 어떤 조건으로 만들었는지 남긴다(REQ-047, 079). M
 | id | bigint PK | ✓ |  |
 | admin_id | bigint FK |  | `admin_account.id`. 로그인 실패는 입력이 실제 계정과 일치할 때만 그 계정, 아니면 NULL. 계정이 지워지면 NULL이 된다(`ON DELETE SET NULL`) |
 | actor_email | varchar(254) |  | 그때의 계정 이메일(소문자, CHECK). 계정이 지워져도 누구였는지 남긴다. **로그인 실패 때 입력한 값은 원문으로 남기지 않는다** — 이메일 칸에 비밀번호를 잘못 넣으면 평문으로 남기 때문이다. 입력이 실제 계정과 일치할 때만 그 계정 이메일, 아니면 NULL(`detail`에 `{"knownAccount": false}`) |
-| action | varchar(30) | ✓ | `LOGIN_SUCCESS` · `LOGIN_FAILURE` · `LOGOUT` · `SOURCE_VIEW` · `JUDGMENT_APPROVE` · `JUDGMENT_REJECT` · `CASE_UPDATE` · `VALUE_AXIS_CONFIRM` · `CASE_PUBLISH` (CHECK) |
+| action | varchar(30) | ✓ | `LOGIN_SUCCESS` · `LOGIN_FAILURE` · `LOGOUT` · `SOURCE_VIEW` · `JUDGMENT_APPROVE` · `JUDGMENT_REJECT` · `CASE_UPDATE` · `VALUE_AXIS_CONFIRM` · `CASE_PUBLISH` · `CASE_PHOTO_UPLOAD` · `CASE_PHOTO_DELETE` · `CASE_PAPER_GENERATE` · `CASE_PAPER_UPDATE` · `CASE_IMPORT` · `CASE_IMPORT_LOAD` · `CASE_SCRIPT_APPROVE` · `CASE_SCRIPT_REJECT` · `CASE_SCRIPT_UPDATE` · `CASE_UNPUBLISH` (CHECK, 마지막 변경 V34). 코드 enum `AdminAuditAction`과 같은 값이다 |
 | target_type | varchar(20) |  | `CASE` · `JUDGMENT` · `FACTOR` · `CASE_SOURCE`. `target_id`와 둘 다 있거나 둘 다 없다(CHECK) |
 | target_id | bigint |  | 대상 행 ID (FK 없음 — 대상이 지워져도 기록은 남긴다) |
 | detail | jsonb |  | 판단에 필요한 값만(반려 사유 · 바꾼 필드 이름 등). **비밀번호 · 원문 내용 · 토큰은 넣지 않는다** |

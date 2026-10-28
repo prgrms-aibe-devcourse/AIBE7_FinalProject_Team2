@@ -1,4 +1,6 @@
-import { button, element } from '../../components/siteLayout.js';
+import { button, element, renderSiteFooter } from '../../components/siteLayout.js';
+import { earButton, innerPageHead, pageIndex } from '../../components/newspaperFront.js';
+import { todayLabel } from '../../utils/newspaper.js';
 import { imageOf } from '../../components/stage.js';
 import { PERSONALITY_LINES } from '../../content/personalityLines.js';
 import { sheetMessage } from './personalityParts.js';
@@ -35,33 +37,25 @@ function photo(cuts, caption) {
 }
 
 export async function renderPersonalityPaperPage(container, { api, navigate, from }) {
-  const root = element('div', 'tp-page');
-  const sheet = element('article', 'tp-sheet');
-  sheet.setAttribute('aria-label', '다음 날 신문 오피니언 면');
+  const root = element('div', 'case-list-page tp-page'); // 사건 목록 · 사건 정보와 같은 신문 스타일 범위(책상 · 종이 · 안쪽 면)
+  const desk = element('div', 'desk');
+  desk.setAttribute('aria-hidden', 'true');
+  const sheet = element('article', 'paper inner-page tp-sheet');
+  sheet.setAttribute('aria-label', '신문 10면 오피니언 · 판결 성향 테스트');
   if (from === 'paper' && !reducedMotion()) sheet.classList.add('is-turning-in');
   if (from) history.replaceState({ ...history.state, extras: {} }, ''); // 새로고침 · 뒤로 가기로는 넘기는 연출을 되풀이하지 않는다
 
-  const mast = element('header', 'tp-mast');
-  const info = element('div', 'tp-info');
-  info.append(element('span', '', '판결 체험 신문'), element('span', '', '오피니언'));
-  const flag = element('div', 'tp-flag');
-  const brand = element('span', 'tp-brand');
-  brand.append('내', element('span', 'law', 'Law'), '남불');
-  flag.append(element('span', 'tp-section', '오피니언'), brand);
-  const date = element('div', 'tp-date');
-  const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
-  date.append(element('span', '', new Intl.DateTimeFormat('ko-KR', { dateStyle: 'full' }).format(tomorrow)), element('span', '', '2면'));
-  // 날짜 아래 이동 줄(표지 · 문항 모두): 왼쪽 이전으로(앱 안의 이전 화면으로, 링크로 바로 들어왔으면 메인), 오른쪽 메인으로
-  const moves = element('nav', 'tp-moves');
-  moves.setAttribute('aria-label', '화면 이동');
-  moves.append(
-    button('← 이전으로', () => (canGoBackInApp() ? history.back() : navigate('landing')), 'tp-move'),
-    button('메인으로', () => navigate('landing'), 'tp-move'),
-  );
-  mast.append(info, flag, date, moves);
+  // 안쪽 면 머리글(S-20과 같다): 왼쪽 귀 "이전으로"(앱 안의 이전 화면으로, 링크로 바로 들어왔으면 메인), 오른쪽 귀 "메인으로", 제호 아래 면 이름 · 날짜 · 쪽수, 그 밑 지면 목차
+  const runner = innerPageHead({
+    earLeft: earButton('← 이전으로', '앞에 보던 화면으로 돌아가요', () => (canGoBackInApp() ? history.back() : navigate('landing')), 'ear-left'),
+    earRight: earButton('메인으로', '책상으로 돌아가요', () => navigate('landing'), 'ear-right'),
+    meta: `오피니언면 · ${todayLabel()} · 10면`,
+  });
+  const tabsZone = element('div', 'tabs-zone');
+  tabsZone.append(pageIndex(navigate, 'test'));
   const body = element('div', 'tp-body');
-  sheet.append(mast, body);
-  root.append(element('h1', 'visually-hidden', '판결 성향 테스트'), sheet);
+  sheet.append(runner, tabsZone, body, renderSiteFooter()); // 법적 고지는 다른 신문 지면처럼 지면 맨 아래 줄(라우터의 바깥 푸터는 ownsFooter로 끈다)
+  root.append(element('h1', 'visually-hidden', '판결 성향 테스트'), desk, sheet);
   container.replaceChildren(root);
   window.scrollTo(0, 0);
 

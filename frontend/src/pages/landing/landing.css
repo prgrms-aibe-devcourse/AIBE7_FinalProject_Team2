@@ -209,22 +209,22 @@
 .landing-page .news-rec span { font: 400 1em/1.5 var(--font-article); text-align: justify; word-break: break-all; color: var(--color-desk-news-ink-soft);
   display: -webkit-box; -webkit-line-clamp: var(--rec-lines, 4); -webkit-box-orient: vertical; overflow: hidden; } /* 신문이 길어지면 줄이 늘어난다(landingPage.js) */
 
-/* 신문 모서리 넘김(FE-99): 이름표를 늘리지 않고 "눌러 볼 물건"이 신문임을 움직임으로 알린다. 옆에서 바람이 불어 맨 앞 지면의 오른쪽 아래 모서리(최대 약 40%)가
+/* 신문 모서리 넘김(FE-99): 이름표를 늘리지 않고 "눌러 볼 물건"이 신문임을 움직임으로 알린다. 옆에서 바람이 불어 맨 앞 지면의 오른쪽 아래 모서리(최대 약 20%)가
    휙 들려 곡선으로 말렸다가, 넘어갈 듯 말 듯 망설이고, 한 번 더 들썩인 뒤 떨어져 살짝 튀고 가라앉는다. 맨 앞 장만 들린다(밑 종이는 그대로). 잠시 쉬었다 되풀이한다. 원근 없이 납작한 2D 그림이다(책상의 다른 물건과 같은 규칙).
    --d(px, 접힌 변 길이) 하나만 움직이고, 종이를 오려 내는 모양(clip-path)과 뒤집힌 뒷면(.news-curl)이 같은 점을 쓴다.
    접힌 변은 모서리 쪽으로 살짝 볼록한 곡선이고, 뒷면은 접힌 선에서 어둡고 → 밝아지고 → 끝에서 다시 약간 어두운 띠로 둥글게 말린 종이를 보인다 */
 @property --d { syntax: '<number>'; inherits: true; initial-value: 0; }
 @keyframes news-curl-d {
   0%, 42%, 87%, 100% { --d: 0; animation-timing-function: cubic-bezier(.3, 0, .25, 1); }
-  52% { --d: 235; animation-timing-function: ease-in-out; }
-  57% { --d: 219; animation-timing-function: cubic-bezier(.45, 0, .55, 1); }
-  63% { --d: 106; animation-timing-function: cubic-bezier(.3, 0, .3, 1); }
-  69% { --d: 188; animation-timing-function: cubic-bezier(.55, 0, .8, .45); }
+  52% { --d: 118; animation-timing-function: ease-in-out; }
+  57% { --d: 110; animation-timing-function: cubic-bezier(.45, 0, .55, 1); }
+  63% { --d: 53; animation-timing-function: cubic-bezier(.3, 0, .3, 1); }
+  69% { --d: 94; animation-timing-function: cubic-bezier(.55, 0, .8, .45); }
   79% { --d: 0; animation-timing-function: cubic-bezier(.2, .6, .4, 1); }
-  83% { --d: 16; animation-timing-function: cubic-bezier(.5, 0, .8, .5); }
+  83% { --d: 8; animation-timing-function: cubic-bezier(.5, 0, .8, .5); }
 }
 @media (prefers-reduced-motion: no-preference) {
-  .landing-page .desk-object.obj-news:not(.is-held) { animation: news-curl-d 4.2s infinite; }
+  .landing-page .desk-object.obj-news:not(.is-held) { animation: news-curl-d 6.3s infinite; }
   /* 종이를 접힌 곡선까지만 남긴다(오른쪽 아래 모서리를 오려 냄) */
   .landing-page .obj-news:not(.is-held) .news-art {
     clip-path: polygon(0 0, 100% 0, 100% calc(100% - var(--d) * 1px),
@@ -432,8 +432,8 @@
   --rw: min(1180px, 100cqw - 96px); /* 러그 폭(cqw = 방 폭). 양 끝 술이 벽에 가리지 않게 옆을 비운다 */
   --fw: calc(var(--rw) * .48); /* 서류철 폭: 러그 폭의 48%(책상 위 서류철보다 조금 크게) */
   --fold: calc(var(--rw) * .36); /* 접히는 귀퉁이(직각 삼각형 한 변) — 서류철 크기에 비례 */
-  --peek-x: calc(var(--fw) * .103); /* 서류철이 러그 밖으로 삐져나온 정도(서류철 폭 대비) */
-  --peek-y: calc(var(--fw) * .124);
+  --peek-x: calc(var(--fw) * .123); /* 서류철이 러그 밖으로 삐져나온 정도(서류철 폭 대비) */
+  --peek-y: calc(var(--fw) * .144);
   position: relative; width: var(--rw); margin: 64px auto 0; transform: rotate(-.6deg);
 }
 /* 러그 밑에 깔린 성향 테스트 서류철: 오른쪽 아래로 조금 삐져나온다 */
@@ -518,7 +518,7 @@
 /* 좁은 방(860px 이하): 같은 자리, 러그 안에 들어가게 W만 줄인다 */
 @container (max-width: 860px) {
   .landing-page .room-rug { --W: min(300px, (100cqw - 196px) / 1.94); }
-  .landing-page .room-rug-wrap { --peek-x: calc(var(--fw) * .13); --peek-y: calc(var(--fw) * .15); }
+  .landing-page .room-rug-wrap { --peek-x: calc(var(--fw) * .15); --peek-y: calc(var(--fw) * .17); }
 }
 .landing-page .paper-title { display: block; font: 900 calc(19 * var(--u))/1.35 var(--font-heading); letter-spacing: -.03em; color: var(--color-heading); text-wrap: balance; }
 .landing-page .paper-step { display: flex; align-items: center; gap: calc(10 * var(--u)); margin-bottom: calc(10 * var(--u)); }
@@ -679,7 +679,7 @@ body:has(.landing-page) #route-header::before { content: ''; position: absolute;
   /* 좁은 화면: 같은 방을 세로로 쌓는다. 벽은 얇게, 서류 · 판결문은 한 줄에 하나 */
   .landing-page .room { --ch: 46vw; } /* 좁은 화면: 책상 대신 메뉴 카드 밑으로 의자를 넣는다 */
   /* 좁은 화면은 러그가 세로로 길어져 술이 위 · 아래 짧은 변으로 간다 */
-  .landing-page .room-rug-wrap { --rw: calc(100cqw - 32px); --peek-x: calc(var(--fw) * .09); --peek-y: calc(var(--fw) * .34); margin: 52px 16px 0; transform: none; }
+  .landing-page .room-rug-wrap { --rw: calc(100cqw - 32px); --peek-x: calc(var(--fw) * .11); --peek-y: calc(var(--fw) * .36); margin: 52px 16px 0; transform: none; }
   /* 서류는 한 장씩 세로로 쌓는다(FE-99). 가로로 겹쳐 놓으면 종이 폭이 W의 절반 남짓이라 글자가 5px대로 줄었다. 왼쪽 · 오른쪽으로 번갈아 기울여 놓는다 */
   .landing-page .room-rug { --pt: 40px; --W: min(300px, (100cqw - 90px) / 1.2); display: flex; flex-direction: column; gap: calc(var(--W) * .14); height: auto; padding: var(--pt) 24px calc(var(--fold) * .62); }
   .landing-page .room-paper { position: relative; left: auto; top: auto; flex: none; }

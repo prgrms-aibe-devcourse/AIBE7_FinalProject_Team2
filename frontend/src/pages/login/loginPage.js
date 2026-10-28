@@ -1,8 +1,9 @@
 import { button, element } from '../../components/siteLayout.js';
 import { API_MODE } from '../../api/index.js';
+import { TOKEN_NOT_ISSUED } from '../../api/authFlow.js';
 import { clearUser, currentUser, isAdmin, saveUser } from '../../utils/session.js';
 import { homeRoute } from '../admin/adminMenu.js';
-import { adminLogout, tryAdminLogin } from './adminLogin.js';
+import { adminLogout, loginTarget, tryAdminLogin } from './adminLogin.js';
 import { canGoBackInApp } from '../../app/router.js';
 import { devJumpBar } from './loginDevJump.js';
 import { loginDesk } from './loginDesk.js';
@@ -10,10 +11,11 @@ import { kakaoButton, setBusy } from './loginParts.js';
 
 // S-12 로그인 (FE-52, IA 4장 /login). 책상 위 펠트 패드(FE-69)에 카카오 로그인 버튼 + 아이디 · 비밀번호 폼.
 // 목 모드에서는 개발용 목업 로그인(mocks/authMockApi.js)이, 실제 모드에서는 카카오 로그인(realApi.js login, FE-74)이 받는다.
-// 실제 모드의 아이디 · 비밀번호는 관리자 로그인만 된다. 로그인하지 않아도 모든 판결 체험을 할 수 있다(REQ-003).
+// 아이디 · 비밀번호(FE-117): 아이디에 @가 있으면 관리자 로그인(A-2), 없으면 회원 아이디 로그인(M-6)으로만 보낸다(adminLoginRule.js).
+// 로그인하지 않아도 모든 판결 체험을 할 수 있다(REQ-003).
 // 로그인하면 닉네임을 이 브라우저에 두고(utils/session.js) 공통 헤더의 "로그인" 자리에 닉네임이 나온다.
-// FE-104: 아이디 · 비밀번호 폼은 실제 모드에서도 펼쳐 둔다(일반 회원가입이 생길 예정). 폼 아래 회원가입(signupPage.js) 링크
-const NOT_READY = '로그인은 아직 준비 중이에요. 로그인하지 않아도 모든 판결 체험을 할 수 있어요.';
+// FE-104: 아이디 · 비밀번호 폼 아래 회원가입(signupPage.js) 링크.
+// FE-117: 목 · 실제 모드 모두 api.login이 있어 예전의 "관리자 입력칸만 보여 주고 준비 중 안내"(adminOnly) 분기는 지웠다 (PR #308 리뷰)
 
 export function renderLoginPage(container, { api, navigate }) {
   const { root, main, card, peek } = loginDesk(container);
@@ -53,15 +55,13 @@ export function renderLoginPage(container, { api, navigate }) {
     card.replaceChildren(heading, element('p', 'login-lead', `${nickname} 님으로 로그인한 상태예요.`), actions);
   }
 
-  // 사용자 로그인이 없는 실제 모드(api.login 없음)에서는 카카오 · 회원가입 없이 관리자 로그인 입력칸만 보여 주고, 일반 로그인은 준비 중이라고 알린다 (FE-53)
   function showForm() {
-    const adminOnly = !api.login;
     const heading = element('h1', '', '로그인');
     heading.id = 'login-heading';
-    const lead = element('p', 'login-lead', adminOnly ? NOT_READY : '로그인하지 않아도 모든 판결 체험을 할 수 있어요.');
+    const lead = element('p', 'login-lead', '로그인하지 않아도 모든 판결 체험을 할 수 있어요.');
     const parts = [heading, lead];
     if (API_MODE === 'mock') {
-      parts.push(element('p', 'login-mock-note', '개발용 목업 로그인이에요. 아무 아이디 · 비밀번호로 들어가지고(admin으로 시작하는 아이디는 관리자), 입력값은 어디에도 보내거나 남기지 않아요.'));
+      parts.push(element('p', 'login-mock-note', '개발용 목업 로그인이에요. 아무 아이디 · 비밀번호로 들어가지고(@가 있는 아이디는 관리자), 입력값은 어디에도 보내거나 남기지 않아요.'));
     }
 
     const error = element('p', 'login-error');
@@ -74,7 +74,8 @@ export function renderLoginPage(container, { api, navigate }) {
 
     const form = element('form', 'login-form');
     form.noValidate = true; // 빈칸 안내는 아래 문구로 직접 한다(브라우저 말풍선 대신)
-    const idInput = field(form, 'login-id', '아이디', { type: 'text', autocomplete: 'username' });
+    // 회원이 이메일을 넣으면 관리자 로그인으로 간다(@ 분기) — 입력 전에 알려 둔다 (PR #308 리뷰 · FE-117 결정 기록)
+    const idInput = field(form, 'login-id', '아이디', { type: 'text', autocomplete: 'username', hint: '회원 아이디에는 @가 없어요. 관리자는 이메일로 로그인해요.' });
     const passwordInput = field(form, 'login-password', '비밀번호', { type: 'password', autocomplete: 'current-password' });
     const submit = element('button', 'primary-button login-submit', '로그인');
     submit.type = 'submit';
@@ -102,8 +103,7 @@ export function renderLoginPage(container, { api, navigate }) {
     const browse = element('p', 'login-browse');
     browse.append(button('로그인 없이 사건 보러 가기', () => navigate('list'), 'login-link'));
 
-    if (adminOnly) parts.push(form, browse);
-    else parts.push(kakao, divider, form, signup, browse);
+    parts.push(kakao, divider, form, signup, browse);
     let pending = false; // return보다 앞에 둔다(뒤에 두면 초기화되지 않아 로그인 때 ReferenceError)
     peek(null);
     card.replaceChildren(...parts);
@@ -123,31 +123,22 @@ export function renderLoginPage(container, { api, navigate }) {
       setBusy(busy, true, request.method === 'kakao' ? kakao : submit);
       error.hidden = true;
       try {
-        // 아이디 · 비밀번호는 관리자 계정인지 먼저 본다. 관리자면 마이페이지 자리가 관리자 페이지가 된다 (FE-53)
-        // 관리자 로그인이 불안정해도 일반 로그인은 막지 않는다: 일반 로그인이 있으면 관리자 쪽 오류는 넘기고, 관리자 입력칸만 있을 때(adminOnly)만 알린다
-        let admin = null;
-        if (request.method === 'password') {
-          try {
-            admin = await tryAdminLogin(request.id, request.password);
-          } catch (failure) {
-            if (adminOnly || API_MODE === 'real') throw failure; // 실제 모드는 아이디 · 비밀번호 회원 로그인이 없어 관리자 쪽 오류를 그대로 알린다
-          }
-        }
-        if (!container.contains(root)) return; // 기다리는 사이 다른 화면으로 갔으면 이동하지 않는다
-        if (admin) {
+        // 아이디에 @가 있으면 관리자 로그인만, 없으면 회원 로그인만 시도한다(FE-117, adminLoginRule.js loginTarget). 둘 다 부르지 않는다.
+        // 관리자면 마이페이지 자리가 관리자 페이지가 된다 (FE-53)
+        // 로그인 표시(saveUser)는 화면을 떠났는지와 상관없이 남긴다 — 서버는 이미 로그인됐으므로, 건너뛰면 헤더만 로그아웃으로 보인다.
+        // 화면을 떠났으면 이동만 하지 않는다
+        if (loginTarget(request) === 'admin') {
+          const admin = await tryAdminLogin(request.id, request.password);
+          if (!admin) throw { code: 'INVALID_CREDENTIALS' };
           saveUser({ nickname: admin.displayName || admin.email, role: 'admin' });
+          if (!container.contains(root)) return; // 기다리는 사이 다른 화면으로 갔으면 이동하지 않는다
           navigate(homeRoute(), {}, { replace: true });
           return;
         }
-        if (!api.login) {
-          showError(request.method === 'password' ? `아이디와 비밀번호를 확인해 주세요. ${NOT_READY}` : NOT_READY, request.method === 'kakao' ? kakao : form);
-          setBusy(busy, false);
-          pending = false;
-          return;
-        }
+        // 여기부터는 회원 로그인(카카오 · 아이디). @가 없는 입력은 관리자 API로 가지 않는다
         const { nickname } = await api.login(request);
+        saveUser({ nickname }); // 화면을 떠났어도 로그인 표시는 남긴다(위 관리자와 같은 이유)
         if (!container.contains(root)) return;
-        saveUser({ nickname });
         // 보던 화면에서 로그인 자리를 눌러 왔으면 그 화면으로 돌아간다(진행 상태는 서버 · 쿠키에 있어 그대로다). 바로 /login으로 왔으면 메인으로
         if (canGoBackInApp()) history.back(); else navigate('landing', {}, { replace: true });
       } catch (failure) {
@@ -160,14 +151,20 @@ export function renderLoginPage(container, { api, navigate }) {
   }
 }
 
-// 실패 원인별 문구: 연결 실패는 다시 시도, 틀린 입력은 확인, 그 밖은 일반 안내
+// 실패 원인별 문구: 연결 실패는 다시 시도, 틀린 입력은 확인, 요청 제한은 잠시 기다리기, 그 밖은 일반 안내.
+// 아이디가 없는지 · 비밀번호가 틀렸는지는 서버도 나누지 않으므로(BE-113 결정 3) 화면도 한 문구로 알린다
 function failureMessage(failure, method) {
   if (failure?.code === 'NETWORK_ERROR') return '서버에 연결하지 못했어요. 잠시 뒤 다시 시도해 주세요.';
-  if (failure?.code === 'VALIDATION_ERROR' && method === 'password') return '아이디와 비밀번호를 확인해 주세요.';
+  if (failure?.code === 'TOO_MANY_REQUESTS') return '로그인 시도가 너무 많아요. 잠시 뒤 다시 시도해 주세요.';
+  // 아이디 · 비밀번호는 맞았는데 첫 토큰을 받지 못했다(api/authFlow.js). 남은 쿠키는 지웠으니 다시 로그인하면 된다
+  if (failure?.code === TOKEN_NOT_ISSUED) return '로그인을 마치지 못했어요. 잠시 뒤 다시 로그인해 주세요.';
+  if (method === 'password' && (failure?.code === 'INVALID_CREDENTIALS' || failure?.code === 'VALIDATION_ERROR')) {
+    return '아이디 또는 비밀번호가 맞지 않아요. 다시 확인해 주세요.';
+  }
   return '로그인하지 못했어요. 잠시 뒤 다시 시도해 주세요.';
 }
 
-// 라벨 + 입력칸 한 줄. 빈칸 안내(#login-error)를 입력칸 설명으로 잇는다
+// 라벨 + 입력칸 한 줄(+ 안내 문구). 안내 문구 · 빈칸 안내(#login-error)를 입력칸 설명으로 잇는다. 안내 모양은 가입 화면과 같다(signup-hint)
 function field(form, id, label, attributes) {
   const row = element('div', 'login-field');
   const caption = element('label', '', label);
@@ -178,9 +175,17 @@ function field(form, id, label, attributes) {
   Object.assign(input, { type: attributes.type, autocomplete: attributes.autocomplete });
   input.spellcheck = false; // 아이디 · 비밀번호에 맞춤법 밑줄이 뜨지 않게
   input.autocapitalize = 'off'; // 모바일에서 아이디 첫 글자가 대문자가 되지 않게
-  input.setAttribute('aria-describedby', 'login-error');
   input.addEventListener('input', () => input.removeAttribute('aria-invalid'));
   row.append(caption, input);
+  const described = [];
+  if (attributes.hint) {
+    const help = element('p', 'signup-hint', attributes.hint);
+    help.id = `${id}-hint`;
+    row.append(help);
+    described.push(help.id);
+  }
+  described.push('login-error');
+  input.setAttribute('aria-describedby', described.join(' '));
   form.append(row);
   return input;
 }

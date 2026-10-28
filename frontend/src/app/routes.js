@@ -15,6 +15,7 @@ import { renderCaseReviewPage } from '../pages/caseReview/caseReviewPage.js';
 import { renderCommunityHomePage } from '../pages/community/communityHomePage.js';
 import { renderCommunityPage } from '../pages/community/communityPage.js';
 import { renderCommunityPostPage } from '../pages/community/communityPostPage.js';
+import { renderCommunityWritePage } from '../pages/community/communityWritePage.js';
 import { renderComparisonPage } from '../pages/comparison/comparisonPage.js';
 import { renderCourtPage } from '../pages/court/courtPage.js';
 import { renderLandingPage } from '../pages/landing/landingPage.js';
@@ -50,7 +51,7 @@ export const routes = [
   // 확장: 판결 성향 테스트 · 마이페이지 (S-15 ~ S-17). 공유된 결과(/test/types/{shareId}, 해시 주소)는 유형 설명만 보여 준다(FR-8-6)
   { name: 'test', path: '/test', render: renderPersonalityPage, title: '판결 성향 테스트' },
   // FE-55: 6막 신문의 성향 테스트 광고에서 신문을 넘겨 들어오는 오피니언 면(문항 · 결과는 /test와 같다)
-  { name: 'testPaper', path: '/test/paper', render: renderPersonalityPaperPage, title: '판결 성향 테스트' },
+  { name: 'testPaper', path: '/test/paper', render: renderPersonalityPaperPage, ownsFooter: true, title: '판결 성향 테스트' }, // 법적 고지는 지면 안 맨 아래(FE-122)
   { name: 'testResult', path: '/test/result', render: renderPersonalityResultPage, title: '판결 성향 결과' },
   { name: 'testType', path: '/test/types/:shareId', render: renderPersonalitySharedPage, title: '판결 성향 유형' },
   // 마이페이지도 공통 헤더를 쓰고 색만 커피색으로 덮어쓴다(FE-66, myPage.css)
@@ -61,6 +62,7 @@ export const routes = [
   // /community는 메인(이야기 많은 사건 · 레벨 랭킹 · 추천 사건, FE-89), 글 목록은 /community/posts
   { name: 'community', path: '/community', render: renderCommunityHomePage, title: '커뮤니티' },
   { name: 'communityPosts', path: '/community/posts', render: renderCommunityPage, title: '커뮤니티 글 목록' },
+  { name: 'communityWrite', path: '/community/write', render: renderCommunityWritePage, title: '커뮤니티 글쓰기' },
   { name: 'communityPost', path: '/community/posts/:postId', render: renderCommunityPostPage, title: '커뮤니티' },
   // S-12 로그인 (FE-52): 목 모드는 개발용 목업 로그인, 실제 모드는 카카오 로그인(FE-74)
   { name: 'login', path: '/login', render: renderLoginPage, title: '로그인' },

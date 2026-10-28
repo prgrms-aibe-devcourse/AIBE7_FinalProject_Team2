@@ -11,6 +11,9 @@ import { PORTRAIT_POOL } from '../../content/portraitPool.js';
 import { BOOKMARK_CHARACTERS, BOOKMARK_FACES, BOOKMARK_LAWS, BOOKMARK_NAMES, BOOKMARK_STYLES, FACE_NAMES, STYLE_NAMES, applyBookmark, getBookmarkCharacter, getBookmarkFaceName, getBookmarkStyle, bookmarkFace, BOOKMARK_COLORS, getBookmarkColor, selectedBookmarkFace } from '../../utils/bookmarkCharacter.js';
 import { SCRIPTS } from '../../content/scripts.js';
 import { fitPortraitIn } from '../../utils/portraitFit.js';
+import { fitOneLine } from '../../utils/fitText.js';
+import { lockScroll, unlockScroll } from '../../utils/scrollLock.js';
+import { progressOf } from '../../utils/levelProgress.js';
 import { reducedMotion } from '../../utils/motion.js';
 import { clearUser, currentUser, isAdmin } from '../../utils/session.js';
 import { signerSeed } from '../../components/signatureInk.js';
@@ -18,10 +21,11 @@ import { homeRoute } from '../admin/adminMenu.js';
 import { openCaseReviewPopup } from '../caseReview/caseReviewPopup.js';
 import { renderProfileEdit } from './myProfileEdit.js';
 import { renderSettings } from './mySettings.js';
+import { renderLevelPage } from './myLevel.js';
 import { RETAKE_NOTES, openRetakeDialog, retakeAfter, retakeState } from './baselineRetake.js';
 import { SHOWN_SLOTS, setShownCard, shownSlot } from '../../utils/shownCard.js';
 import { getCardLevel, getCardLine, selectedChoice, setCardLevel, setCardLine, setProfileCardType, typeChoices } from '../../utils/profileCardType.js';
-import { DEFAULT_TYPE_DECO, TYPE_BACKGROUNDS, getTypeDeco, setTypeDeco, shownTypeDeco } from '../../utils/typeCardDeco.js';
+import { DEFAULT_TYPE_DECO, TYPE_BACKGROUNDS, TYPE_CHARACTERS, getTypeDeco, setTypeDeco, shownTypeDeco } from '../../utils/typeCardDeco.js';
 import { configureProfileSettings, hydrateProfileSettings } from '../../utils/profileSettings.js';
 
 // S-17 마이페이지 (WBS 7.6.6). GET /my-page 한 번 호출로 받고, 기록이 없어도 404가 아니라 빈 200이다(명세 P-5).
@@ -43,6 +47,7 @@ const VIEWS = {
   cases: '내가 체험한 사건',
   edit: '내 정보 수정',
   settings: '환경 설정',
+  level: '경험치',
   achievements: '도전과제',
   bookmark: '책갈피 설정',
 };
@@ -213,24 +218,22 @@ function profileCardPair(data, go) {
 }
 
 // 경험치 진행률(FE-116): 지금 레벨에 닿은 XP부터 다음 레벨에 필요한 XP까지. 서버 L-1의 xp · currentLevelXp · nextLevelXp를 쓴다. 최고 레벨이면 막대가 가득 차고 안내만 바뀐다
-function levelProgress(level) {
+function levelProgress(level, go) {
   if (!level) return null;
-  const top = level.nextLevelXp == null;
-  const span = top ? 1 : level.nextLevelXp - level.currentLevelXp;
-  const done = top ? 1 : Math.min(span, Math.max(0, level.xp - level.currentLevelXp));
-  const box = element('div', 'my-level-progress');
+  const { top, percent } = progressOf(level);
   const text = top ? '최고 레벨이에요.' : `Lv.${level.level + 1}까지 ${level.nextLevelXp - level.xp} XP`;
-  const caption = element('p', 'my-level-caption', text);
+  // 누르면 경험치 페이지(FE-120). 막대는 장식이라 숨기고 진행 상황은 버튼 이름이 읽어 준다(버튼 안에 진행 막대 역할을 둘 수 없다)
+  const box = element('button', 'my-level-progress');
+  box.type = 'button';
+  box.setAttribute('aria-label', `경험치 자세히 보기. ${text} 지금 ${percent}%`);
+  box.addEventListener('click', () => go('level'));
+  const caption = element('span', 'my-level-caption', text);
   if (IS_MOCK) caption.append(mockTag());
-  const bar = element('div', 'my-achievement-bar');
-  bar.setAttribute('role', 'progressbar');
-  bar.setAttribute('aria-label', '경험치 진행률');
-  bar.setAttribute('aria-valuemin', '0');
-  bar.setAttribute('aria-valuemax', String(span));
-  bar.setAttribute('aria-valuenow', String(done));
-  bar.setAttribute('aria-valuetext', top ? '최고 레벨' : `${done} / ${span} XP`);
+  caption.append(element('span', 'my-level-more', '경험치 보기 ›'));
+  const bar = element('span', 'my-achievement-bar');
+  bar.setAttribute('aria-hidden', 'true');
   const fill = element('span');
-  fill.style.width = `${Math.round((done / span) * 100)}%`;
+  fill.style.width = `${percent}%`;
   bar.append(fill);
   box.append(caption, bar);
   return box;
@@ -243,8 +246,8 @@ function renderTop(data, go) {
   const [profile, typeCardNode] = profileCardPair(data, go);
 
   const middle = element('div', 'my-top-middle');
-  middle.append(element('h2', 'my-nickname', myNickname(data, currentUser())), renderStats(stats));
-  const progress = levelProgress(data.level);
+  middle.append(fitOneLine(element('h2', 'my-nickname', myNickname(data, currentUser()))), renderStats(stats));
+  const progress = levelProgress(data.level, go);
   if (progress) middle.append(progress);
 
   section.append(profile, middle, typeCardNode);
@@ -760,9 +763,12 @@ function typeFan(data, navigate, go) {
   side.append(
     editGroup('커뮤니티에 보일 성향카드', bar, '고른 카드가 맨 앞에 놓이고 "공개" 도장이 찍혀요. 프로필카드와 성향카드는 커뮤니티에서 항상 다른 사람에게 보여요.'),
     editGroup('성향 테스트 하러 가기', tests, note),
-    editGroup('성향카드 확인 및 꾸미기', button('성향카드에서 보기', () => go('type'), 'secondary-button')),
   );
-  box.append(stack, side);
+  const main = element('div', 'edit-fan-main'); // 겹친 카드 아래에 성향카드 화면으로 가는 버튼(프로필카드 아래 버튼과 같은 자리)
+  const view = button('성향카드에서 보기', () => go('type'), 'secondary-button');
+  view.disabled = !Object.values(slots).some(Boolean); // 카드가 한 장도 없으면 점선 비활성(보기 화면이 비어 있다)
+  main.append(stack, view);
+  box.append(main, side);
   return box;
 }
 
@@ -988,6 +994,24 @@ function swatchPicker(type, open, shown, onPick, base = PLAIN_DECO, legendClass 
   return field;
 }
 
+// 성향카드 캐릭터 고르기(성향카드 꾸미기 맨 위): 내로 · 남불 둘 다 늘 열려 있다. 안 골랐으면 성향 결과의 캐릭터가 골라진 것으로 본다
+function characterPicker(type, shown, onPick) {
+  const field = element('fieldset', 'my-deco');
+  field.append(element('legend', '', '캐릭터'));
+  const row = element('div', 'my-deco-grid');
+  TYPE_CHARACTERS.forEach((id, index) => {
+    const thumb = element('span', 'my-deco-thumb');
+    thumb.append(picture(DEFAULT_PORTRAITS[index], ''));
+    row.append(decoOption({
+      group: 'type-character', value: id, checked: id === (shown.character ?? type?.character), locked: false, name: nameOf(CHARACTER_LIST, id),
+      onChange: () => { setTypeDeco({ character: id }); onPick(); },
+    }, thumb));
+  });
+  field.append(row);
+  return field;
+}
+const CHARACTER_LIST = [{ id: 'NAERO', name: '내로' }, { id: 'NAMBUL', name: '남불' }];
+
 // 짧은 책갈피의 한쪽(좌 · 우) 아이콘 고르기
 function sashIconPicker(side, open, deco, onPick, target) {
   const key = side === 'left' ? 'sashIconLeft' : 'sashIconRight';
@@ -1039,7 +1063,6 @@ function sashSection(open, onPick, target = PROFILE_TARGET) {
     };
     const parts = [
       element('h2', 'my-deco-title', '카드 책갈피'),
-      element('p', 'my-hint', '카드 윗변 좌우에 거는 띠예요. 모양을 먼저 고르고, 색은 모양마다 따로 골라요. 책갈피 설정(얼굴 · 리본)과는 별개예요.'),
       swatchPicker('sashStyle', open, deco.sashStyle, repaint, deco, 'is-sub', target),
     ];
     if (deco.sashStyle !== 'none') parts.push(sashColorPicker(open, deco, repaint, target));
@@ -1116,7 +1139,6 @@ function previewCard(data, deco = decoFor(data)) {
 function typeChoiceSection(data, onPick) {
   const field = element('fieldset', 'my-deco');
   field.append(element('legend', '', '카드 아래'));
-  field.append(element('p', 'my-hint', '프로필카드 아래에 보일 것을 하나 고르세요. 레벨은 그 앞에 붙이거나 뺄 수 있어요.'));
   const line = getCardLine();
   const lines = element('div', 'my-type-choices');
   [['type', '성향'], ['signature', '서명'], ['job', '직업']].forEach(([value, text]) => {
@@ -1239,6 +1261,7 @@ function typeChoiceList(data, onPick) {
 // 카드 꾸미기 창: 테두리 · 배경 · 카드 책갈피 · 카드 아래 성향을 고른다. 창 안에도 미리 보기를 두고, 고를 때마다 화면 쪽 미리 보기(onPick)도 다시 그린다.
 // 마이페이지 커피색 토큰이 적용되도록 .my-page 안에 붙이고, 닫으면 지우고 연 버튼으로 포커스를 돌려준다(Esc · 바깥 · 닫기)
 // forType: 성향카드 꾸미기(FE-82). 같은 창에 미리 보기만 성향카드로, 카드 아래 성향 고르기는 빼고 보여 준다
+const DECO_SCROLL_CLASSES = ['deco-open', 'deco-gutter'];
 function openDecoDialog({ open, data, onPick, opener, forType = false }) {
   const target = forType ? TYPE_TARGET : PROFILE_TARGET;
   const dialog = element('dialog', 'my-deco-dialog');
@@ -1258,6 +1281,7 @@ function openDecoDialog({ open, data, onPick, opener, forType = false }) {
   const pickers = element('div', 'my-deco-dialog-pickers');
   pickers.append(
     element('p', 'my-hint', '도전과제를 깨면 테두리 · 배경 · 카드 책갈피가 더 열려요. 고르면 바로 저장돼요.'),
+    ...(forType ? [characterPicker(currentTypeOf(data), shown, paint)] : []),
     swatchPicker('frame', open, shown.frame, paint, target.base, '', target),
     swatchPicker('background', open, shown.background, paint, target.base, '', target),
     sashSection(open, paint, target),
@@ -1266,9 +1290,22 @@ function openDecoDialog({ open, data, onPick, opener, forType = false }) {
   body.append(preview, pickers);
   dialog.append(head, body);
   dialog.addEventListener('click', (event) => { if (event.target === dialog) dialog.close(); });
-  dialog.addEventListener('close', () => { dialog.remove(); opener?.focus(); });
+  const unlock = () => { removal.disconnect(); unlockScroll(...DECO_SCROLL_CLASSES); };
+  dialog.addEventListener('close', () => { unlock(); dialog.remove(); opener?.focus(); });
+  // 열린 채로 화면이 바뀌어 창이 close 없이 지워져도(뒤로 가기 · 화면 전환) 스크롤 잠금이 남지 않게 한다
+  const removal = new MutationObserver(() => { if (!dialog.isConnected) unlock(); });
+  // 넓은 화면에서는 고르기 칸만 스크롤되니, 미리 보기 카드 위에서 굴려도 창이 스크롤되게 넘겨 준다(안 그러면 뒤 화면이 스크롤된다, FE-120).
+  // 좁은 화면은 창 전체가 스크롤되어(고르기 칸이 내용만큼 늘어나 넘칠 것이 없다) 그대로 둔다
+  preview.addEventListener('wheel', (event) => {
+    if (pickers.scrollHeight <= pickers.clientHeight) return;
+    event.preventDefault();
+    const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? pickers.clientHeight : 1; // 휠 단위: 픽셀 · 줄 · 쪽
+    pickers.scrollBy({ top: event.deltaY * unit });
+  }, { passive: false });
   preview.replaceChildren(forType ? typeFace(currentTypeOf(data), undefined, shown) : previewCard(data, shown));
   (document.querySelector('.my-page') ?? document.body).append(dialog);
+  lockScroll(...DECO_SCROLL_CLASSES);
+  removal.observe(document.body, { childList: true, subtree: true });
   dialog.showModal();
 }
 
@@ -1409,6 +1446,7 @@ function renderView(view, data, navigate, go, api) {
     cases: () => renderCases(data.experiences ?? [], navigate, api),
     edit: () => renderProfileEdit({ api, navigate, go, data, card: () => profileCardOf(data, go), fan: () => typeFan(data, navigate, go) }),
     settings: () => renderSettings(),
+    level: () => renderLevelPage(data),
   }[view]();
   return [head, body];
 }
