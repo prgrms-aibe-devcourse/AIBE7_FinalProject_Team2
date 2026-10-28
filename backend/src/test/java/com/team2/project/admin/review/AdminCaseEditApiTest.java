@@ -323,6 +323,7 @@ class AdminCaseEditApiTest extends ApiIntegrationTest {
 	void publishedCase_photoChangeNeedsUnpublish() throws Exception {
 		makePublishable();
 		insertIncidentPhoto(caseId, "ORIGIN", "https://cdn.example.com/origin.jpg", "발단");
+		jdbcTemplate.update("UPDATE legal_case SET thumbnail_url = '/images/cases/origin.webp' WHERE id = ?", caseId);
 		perform(post(caseUrl() + "/publish")).andExpect(status().isOk());
 
 		// 공개 중에는 세 경로 모두 막힌다. 업로드는 파일을 S3에 올리기 전에 사건 상태부터 본다
@@ -336,13 +337,18 @@ class AdminCaseEditApiTest extends ApiIntegrationTest {
 				.andExpect(jsonPath("$.currentStatus").value("PUBLISHED"))
 				.andExpect(jsonPath("$.details[0].reason").value("CASE_PUBLISHED"));
 		}
+		// 거절되면 아무것도 바뀌지 않는다 — 대표사진(thumbnail_url)도, 감사 로그도
 		assertThat(countIncidentPhotos()).isEqualTo(1);
+		assertThat(jdbcTemplate.queryForObject("SELECT thumbnail_url FROM legal_case WHERE id = ?", String.class,
+			caseId)).isEqualTo("/images/cases/origin.webp");
+		assertThat(photoAuditActions()).isEmpty();
 
 		// 공개 취소(A-13-14)하면 사진 API가 다시 열린다 — 이것이 공개 뒤 사진을 고치는 유일한 경로다
 		perform(post(caseUrl() + "/unpublish").contentType(MediaType.APPLICATION_JSON)
 			.content("{\"reason\": \"발단 사진 교체\"}")).andExpect(status().isOk());
 		perform(delete(photosUrl() + "/incident/ORIGIN")).andExpect(status().isNoContent());
 		assertThat(countIncidentPhotos()).isZero();
+		assertThat(photoAuditActions()).containsExactly("CASE_PHOTO_DELETE");
 
 		// 사진은 공개 조건(PublishReadiness)이 아니라, 사진을 지운 채로도 다시 공개된다
 		perform(post(caseUrl() + "/publish"))
@@ -384,6 +390,12 @@ class AdminCaseEditApiTest extends ApiIntegrationTest {
 	private int countIncidentPhotos() {
 		return jdbcTemplate.queryForObject("SELECT count(*) FROM case_incident_photo WHERE case_id = ?", Integer.class,
 			caseId);
+	}
+
+	private List<String> photoAuditActions() {
+		return jdbcTemplate.queryForList("""
+			SELECT action FROM admin_audit_log WHERE actor_email = ? AND action LIKE 'CASE_PHOTO_%'""", String.class,
+			admin.getEmail());
 	}
 
 	private static String axisUrl(long factorId) {
