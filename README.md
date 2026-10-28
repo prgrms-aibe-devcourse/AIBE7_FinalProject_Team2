@@ -72,7 +72,7 @@ ls backend/private-seed/seed                # R__10 · R__20 · R__30 세 파일
 
 로컬 DB를 비우고 처음부터 다시 만들려면 `docker compose down -v && docker compose up -d`를 실행한다. (볼륨이 삭제된다 — 로컬 Redis 데이터도 함께 지워진다)
 
-> **(한시 운영, COMMON-59) 팀 공용 개발 DB**: RDS 전환(10/28) 전까지 팀이 같은 실데이터로 화면 · API를 확인할 수 있게 Supabase 공용 DB를 둔다. 로컬 백엔드를 이 DB에 붙이는 방법 · 팀 규칙(마이그레이션은 담당자만 적용 등)은 [backend/SHARED-DEV-DB.md](backend/SHARED-DEV-DB.md)를 따른다. 평소 로컬 개발은 위 절차 그대로다.
+> **(종료 예정, COMMON-59) 팀 공용 개발 DB**: 10/28 운영이 RDS로 옮겨져 Supabase 공용 DB는 지운다(새로 접속하지 않는다). 아래 문서는 종료 절차까지만 쓴다. RDS 전환 전까지 팀이 같은 실데이터로 화면 · API를 확인할 수 있게 Supabase 공용 DB를 뒀다. 로컬 백엔드를 이 DB에 붙이는 방법 · 팀 규칙(마이그레이션은 담당자만 적용 등)은 [backend/SHARED-DEV-DB.md](backend/SHARED-DEV-DB.md)를 따른다. 평소 로컬 개발은 위 절차 그대로다.
 
 테스트는 개발 DB와 분리된 **테스트 전용 PostgreSQL(55432) · Redis(56379)** 에 연결한다(BE-87).
 컨테이너 준비·macOS/Linux 및 Windows 명령·IDE 설정·정리 절차는 [backend/TESTING.md](backend/TESTING.md)를 따른다.
