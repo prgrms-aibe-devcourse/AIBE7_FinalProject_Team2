@@ -180,15 +180,20 @@ def _script_result(script):
     없고 증거 파일에만 있어서, 여기서 올려 주지 않으면 적재가 읽을 값이 사라진다(PR #300 리뷰).
     나머지(`stopped` · `model` · `cast` · `balanceWarning` · `publishable`)는 **단계 산출물 쪽이 맞다** —
     증거 파일에는 `stopped`가 아예 없어서 파일에서 가져오면 항상 false가 된다.
+
+    대본 전체(BE-121, `stages.script.full`)를 만들었으면 `scriptFile`도 같은 이유로 경로를 빼고 내용을
+    `fullScript`로 넣는다. 적재(`case_script` 확장)는 BE-126이다 — 그전까지 백엔드는 이 값을 읽지 않는다.
     """
     if not script:
         return None
     data = _read_json(Path(script["evidenceFile"])) if script.get("evidenceFile") else None
-    result = {key: value for key, value in script.items() if key != "evidenceFile"}
+    result = {key: value for key, value in script.items() if key not in ("evidenceFile", "scriptFile")}
     result["evidence"] = (data or {}).get("evidence") or []
     created_at = (data or {}).get("createdAt")
     if created_at:
         result["createdAt"] = created_at
+    if script.get("scriptFile"):
+        result["fullScript"] = _read_json(Path(script["scriptFile"]))
     return result
 
 

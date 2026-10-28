@@ -1,6 +1,6 @@
 {
   "_comment": "무료 등급이 있는 모델 목록 (BE-45, 공급자 추가 BE-84). '무료 등급이 있다'는 뜻이지, 지금 쓰는 키가 무료라는 뜻이 아니다 (결제를 연결한 프로젝트의 키는 같은 모델도 유료). 목록은 자주 바뀌므로 쓰기 전에 source에서 다시 확인하고 checkedAt을 고친다. 공급자에게 직접 물어보려면 `python3 list_models.py <공급자>`를 쓴다(OpenAI 호환 공급자만). llm.py(has_free_tier)와 pipeline.py의 전송 안내가 읽는다. `free:<공급자>` 자동 선택은 아래 models만 쓰므로, 판결 생성에 쓸 수 있는 범용 텍스트 모델만 models에 넣는다(임베딩 · 음성 · 코드 · 비전 · 안전 분류 모델은 넣지 않는다). previewModels는 공급자가 예고 없이 내릴 수 있다고 안내한 모델이라 자동 선택에서 빼고, 직접 지정할 때만 쓴다.",
-  "checkedAt": "2026-10-16",
+  "checkedAt": "2026-10-28",
   "gemini": {
     "source": "https://ai.google.dev/gemini-api/docs/pricing",
     "limitsSource": "https://aistudio.google.com/rate-limit",
@@ -12,11 +12,10 @@
       "gemini-3.5-flash",
       "gemini-3.5-flash-lite",
       "gemini-3.1-flash-lite",
-      "gemini-3-flash-preview",
-      "gemini-2.5-pro",
-      "gemini-2.5-flash",
-      "gemini-2.5-flash-lite"
+      "gemini-3-flash-preview"
     ],
+    "unavailableToNewUsers": ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite"],
+    "unavailableNote": "목록 API(models.list)에는 나오지만 새 사용자 키로 부르면 404(no longer available to new users)다. 2026-10-28 호출로 확인. 자동 선택에서 뺐다",
     "embeddingModels": ["gemini-embedding-2"],
     "notWithFreeTier": ["gemini-3.1-pro-preview", "gemini-omni-1.1-flash"],
     "limits": "분당 · 일당 한도는 문서에 없다. 한도는 프로젝트 단위(API 키 단위 아님)로 걸리고, 일 한도는 태평양 시간 자정에 초기화된다",

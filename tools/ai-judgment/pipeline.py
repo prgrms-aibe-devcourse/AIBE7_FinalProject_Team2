@@ -47,6 +47,7 @@ from llm import (DEFAULT_MAX_ATTEMPTS, DEFAULT_MAX_WAIT, LLMError, LLMQuotaExhau
                  check_retry, configure_retry, free_tier_model_list, has_free_tier, model_provider,
                  parse_model_spec)
 from to_seed_sql import NAME_MAX_LENGTH, build_sql
+from script_assembler import build_script, classification_errors, generate_units
 from script_generation import balance_warning, generate_evidence_lines
 from script_generation import cast_errors as script_cast_errors
 from select_semantic import DEFAULT_WEIGHT as DEFAULT_SEMANTIC_WEIGHT
@@ -86,7 +87,8 @@ DEFAULT_CONFIG = {
     "allowFreeTierForJudgment": False,
     # extract를 건너뛸 때 쓸 파일 (extract를 돌리면 그 결과가 우선)
     # courtDraft: 재판부 판결(BE-14 형식) 파일. court 단계를 끄고 사람이 쓴 판결을 넣을 때 쓴다 (BE-38)
-    "inputs": {"case": None, "court": None, "report": None, "source": None, "courtDraft": None},
+    # paper: 1막 해설(U1)에 쓸 신문 기사 JSON(headline · deck · article). 없으면 U1을 건너뛴다 (BE-121, script_assembler.py)
+    "inputs": {"case": None, "court": None, "report": None, "source": None, "courtDraft": None, "paper": None},
     "stages": {
         # model: Claude는 모델 ID(또는 anthropic:모델ID), 다른 공급자는 openai:모델ID · gemini:모델ID (BE-35). maxTokens는 Claude 외 공급자의 출력 상한
         # 목록으로 주면 앞 모델이 과부하 · 한도로 막혔을 때(재시도를 다 쓴 뒤) 다음 모델로 넘어간다 (BE-45)
@@ -123,8 +125,12 @@ DEFAULT_CONFIG = {
                  "timeout": 120, "delay": 0.0},
         # 사건 대본 — 증거조사 대사 생성 (BE-107). 기본 꺼짐(새 기능, 배역이 사건마다 정해지지 않았다).
         # cast는 자동으로 정하지 않는다 — 켤 때마다 넣는다(해송님 정정, 2026-10-24). 범위는 script_generation.py 참고
+        # full: 증거조사뿐 아니라 대본 전체(U0 설계도 · U1 · U2 · U4)를 만들고 script.json으로 조립한다 (BE-121). classification
+        # (분위기 · 쟁점 · 피해자 측 · 부가 인물 · 민감 플래그)이 필요하다 — 자동 분류(BE-123) 전까지는 설정으로 넣는다.
+        # unitMaxTokens · unitTimeout은 여러 줄을 한 번에 받는 U0 · U1 · U2 · U4용(maxTokens · timeout은 증거조사 한 줄용)
         "script": {"enabled": False, "model": None, "cast": None, "maxRetries": 2, "temperature": None,
-                   "maxTokens": 2000, "timeout": 60, "delay": 0.0},
+                   "maxTokens": 2000, "timeout": 60, "delay": 0.0,
+                   "full": False, "classification": None, "unitMaxTokens": 6000, "unitTimeout": 150},
         "load": {
             # court: 재판부 판결 초안이 있으면 비공개로 함께 적재한다 (BE-38)
             "enabled": True, "case": True, "court": True, "applyToDb": True,
@@ -210,7 +216,7 @@ def free_models_errors(config):
     for key in ("include", "exclude"):
         value = cfg.get(key)
         if value is not None and (not isinstance(value, list) or not all(isinstance(m, str) and m.strip() for m in value)):
-            errors.append(f"freeModels.{key}는 모델 ID 문자열 목록이다 (공급자 접두어 없이, 예: gemini-2.5-flash)")
+            errors.append(f"freeModels.{key}는 모델 ID 문자열 목록이다 (공급자 접두어 없이, 예: gemini-3.5-flash)")
     if errors:
         return errors
     known = {spec.partition(":")[0] for spec in free_tier_model_list()}
@@ -533,7 +539,11 @@ def script_errors(config):
         except LLMError as e:
             errors.append(str(e))
     errors += script_cast_errors(cfg.get("cast") or {})
-    for key, minimum in (("maxRetries", 0), ("maxTokens", 1), ("timeout", 1)):
+    if not isinstance(cfg.get("full"), bool):
+        errors.append("stages.script.full은 true 또는 false다")
+    elif cfg["full"]:
+        errors += classification_errors(cfg.get("classification"))
+    for key, minimum in (("maxRetries", 0), ("maxTokens", 1), ("timeout", 1), ("unitMaxTokens", 1), ("unitTimeout", 1)):
         value = cfg.get(key)
         if not isinstance(value, int) or isinstance(value, bool) or value < minimum:
             errors.append(f"stages.script.{key}는 {minimum} 이상 정수다")
@@ -1217,11 +1227,23 @@ def stage_script(config, state, log, caller=call):
     out_dir = PIPELINE_DIR / config["name"] / "script"
     if out_dir.exists():
         shutil.rmtree(out_dir)  # 이전 실행 결과와 섞지 않는다 (axis 단계와 같은 정책)
-    log(f"대본 증거조사 생성: {cfg['model']} (배역 — 검사: {cast['prosecutor']} · 변호인: {cast['defense']})")
-    lines, stopped = generate_evidence_lines(
-        case, judgment_output, cast, model=cfg["model"], caller=caller, max_retries=cfg["maxRetries"],
-        temperature=cfg["temperature"], max_tokens=cfg["maxTokens"], timeout=cfg["timeout"],
-        delay=cfg["delay"], log=log)
+    generated = None
+    if cfg["full"]:
+        log(f"대본 전체 생성: {cfg['model']} (배역 — 검사 · 판사: {cast['prosecutor']} · 변호인 · 피고인 역: {cast['defense']})")
+        paper_path = resolve_path(config, config["inputs"].get("paper"))
+        paper = load_json(paper_path) if paper_path and paper_path.exists() else None
+        generated = generate_units(
+            case, judgment_output, cast, cfg["classification"], model=cfg["model"], paper=paper, caller=caller,
+            max_retries=cfg["maxRetries"], temperature=cfg["temperature"], max_tokens=cfg["unitMaxTokens"],
+            evidence_max_tokens=cfg["maxTokens"], timeout=cfg["unitTimeout"], evidence_timeout=cfg["timeout"],
+            delay=cfg["delay"], log=log)
+        lines, stopped = generated["evidence"], generated["stopped"]
+    else:
+        log(f"대본 증거조사 생성: {cfg['model']} (배역 — 검사: {cast['prosecutor']} · 변호인: {cast['defense']})")
+        lines, stopped = generate_evidence_lines(
+            case, judgment_output, cast, model=cfg["model"], caller=caller, max_retries=cfg["maxRetries"],
+            temperature=cfg["temperature"], max_tokens=cfg["maxTokens"], timeout=cfg["timeout"],
+            delay=cfg["delay"], log=log)
     for line in lines:
         for warning in line["validation"]["warnings"]:
             log(f"⚠ [요소 {line['factorId']}] {warning}")
@@ -1242,9 +1264,22 @@ def stage_script(config, state, log, caller=call):
     if not publishable:
         log("⚠ publishable: false — 증거 카드와 대사가 어긋날 수 있어 BE-108 검수 전에는 공개할 수 없습니다")
     log(f"결과: 판단 요소 {len(lines)}개 중 성공 {len(lines) - len(failed)}개")
-    return {"evidenceFile": str(evidence_file), "model": cfg["model"], "cast": cast,
-            "count": len(lines), "failed": len(failed), "stopped": stopped, "balanceWarning": balance,
-            "publishable": publishable}
+    outputs = {"evidenceFile": str(evidence_file), "model": cfg["model"], "cast": cast,
+               "count": len(lines), "failed": len(failed), "stopped": stopped, "balanceWarning": balance,
+               "publishable": publishable}
+    if generated:
+        # evidence.json은 BE-108 적재 계약 그대로 두고, 대본 전체는 따로 쓴다(case_script 확장은 BE-126)
+        script = build_script(case, cast, cfg["classification"], generated, model=cfg["model"])
+        script_file = out_dir / "script.json"
+        write_json(script_file, {**script, "createdAt": _now()})
+        for unit, warnings in script["warnings"].items():
+            for warning in warnings:
+                log(f"⚠ [{unit}] {warning}")
+        if script["pending"]:
+            log(f"⚠ 만들지 못한 단위: {', '.join(script['pending'])} — 대본 전체는 공개할 수 없습니다")
+        outputs.update({"scriptFile": str(script_file), "pending": script["pending"],
+                        "scriptPublishable": script["publishable"]})
+    return outputs
 
 
 def stage_load(config, state, log, apply=None):

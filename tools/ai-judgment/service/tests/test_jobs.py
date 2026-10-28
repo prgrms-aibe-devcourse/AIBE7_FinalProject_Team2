@@ -462,6 +462,26 @@ class JobStoreTest(unittest.TestCase):
         self.assertTrue(script["stopped"])
         self.assertEqual(script["evidence"][0]["factorId"], 1)
 
+    def test_result_sends_full_script_content_not_path(self):
+        """대본 전체(BE-121)도 경로가 아니라 내용(fullScript)으로 보낸다. 대본 전체를 안 만들었으면 키가 없다"""
+        job_id = self.store.create(self._request())
+        folder = self.tool_dir / "cases"
+        folder.mkdir(parents=True, exist_ok=True)
+        evidence, full = folder / "evidence.json", folder / "script.json"
+        evidence.write_text(json.dumps({"evidence": []}), encoding="utf-8")
+        full.write_text(json.dumps({"acts": {"2": {"steps": []}}, "pending": ["U1"]}), encoding="utf-8")
+        self._write_state(job_id, {
+            "extract": {"status": "done", "outputs": {"case": str(evidence)}},
+            "script": {"status": "done", "outputs": {"evidenceFile": str(evidence), "scriptFile": str(full),
+                                                     "pending": ["U1"], "publishable": True, "stopped": False}},
+        })
+
+        script = self.store.result(job_id)["script"]
+
+        self.assertNotIn("scriptFile", script)	# 컨테이너 내부 경로는 내보내지 않는다
+        self.assertEqual(script["fullScript"]["pending"], ["U1"])
+        self.assertEqual(script["pending"], ["U1"])
+
     def test_result_without_script_stage(self):
         """대본을 안 돌린 작업은 script가 None이다 — 사건 · 판결만으로도 적재는 그대로 된다 (BE-108)"""
         job_id = self.store.create(self._request())

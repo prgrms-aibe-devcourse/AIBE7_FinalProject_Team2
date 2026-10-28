@@ -503,7 +503,7 @@ python3 compare.py <켬 batchDir>
 
 ### 무료 등급이 있는 모델 목록 (BE-45)
 
-목록은 `free_models.json`(확인일 2026-10-16)에 있고, `llm.py`(`has_free_tier`)와 파이프라인 전송 안내가 읽는다. **"무료 등급이 있는 모델"이지 "지금 키가 무료"라는 뜻이 아니다** — 결제를 연결한 프로젝트의 키는 같은 모델도 유료다. 그래서 호출을 막지는 않고 안내만 한다.
+목록은 `free_models.json`(확인일 2026-10-28)에 있고, `llm.py`(`has_free_tier`)와 파이프라인 전송 안내가 읽는다. **"무료 등급이 있는 모델"이지 "지금 키가 무료"라는 뜻이 아니다** — 결제를 연결한 프로젝트의 키는 같은 모델도 유료다. 그래서 호출을 막지는 않고 안내만 한다.
 
 - **목록 밖 모델은 경고되지 않는다.** `has_free_tier`는 `models`에 **정확히 등록된 모델명**만 본다. 예를 들어 NVIDIA API Trial 키는 키 자체가 체험 약관 대상이라 `nim:` 모델이면 목록에 없어도 같은 약관(입력을 제품 개선에 사용)이 적용되지만, extract·court에 목록 밖 NIM 모델이나 Groq `previewModels`를 직접 지정하면 "원문이 외부로 나간다"는 경고가 뜨지 않는다. `free_models.json`에 모델을 추가하지 않은 채 쓰는 경우 이 경고에 의존하지 말 것.
 
@@ -511,8 +511,10 @@ python3 compare.py <켬 batchDir>
 
 | 무료 등급 있음 | 무료 등급 없음 |
 | --- | --- |
-| `gemini-3.8-flash` · `gemini-3.7-flash` · `gemini-3.6-flash` · `gemini-3.5-flash` · `gemini-3.5-flash-lite` · `gemini-3.1-flash-lite` · `gemini-3-flash-preview` · `gemini-2.5-pro` · `gemini-2.5-flash` · `gemini-2.5-flash-lite` | `gemini-3.1-pro-preview` · `gemini-omni-1.1-flash` |
+| `gemini-3.8-flash` · `gemini-3.7-flash` · `gemini-3.6-flash` · `gemini-3.5-flash` · `gemini-3.5-flash-lite` · `gemini-3.1-flash-lite` · `gemini-3-flash-preview` | `gemini-3.1-pro-preview` · `gemini-omni-1.1-flash` |
 | 임베딩: `gemini-embedding-2` | |
+
+- **새 사용자는 2.5 계열을 못 쓴다**(BE-128, 2026-10-28 확인). `gemini-2.5-pro` · `gemini-2.5-flash` · `gemini-2.5-flash-lite`는 목록 API에는 나오지만 새 키로 부르면 404(no longer available to new users)라 `models`에서 빼고 `unavailableToNewUsers`에 남겼다.
 
 - **한도(분당 · 일당)는 문서에 표가 없다.** [AI Studio 한도 화면](https://aistudio.google.com/rate-limit)에서 계정별로 확인한다. 한도는 **프로젝트 단위**(API 키 단위가 아님)로 걸리고 일 한도는 **태평양 시간 자정**에 초기화된다(한국 시간으로는 여름 오후 4시 · 겨울 오후 5시경). 위 `delay` 계산(60 ÷ 분당 한도)에 이 값을 쓴다.
 - **데이터 사용**: 무료 등급은 입력 · 응답을 제품 개선에 쓰고 사람이 검토할 수 있다. 유료 등급은 쓰지 않는다([약관](https://ai.google.dev/gemini-api/terms)).
@@ -540,14 +542,14 @@ python3 compare.py <켬 batchDir>
 - JSON 모드(`response_format`)를 지원하지 않는 모델이 있다. 400이 오면 오류에 안내가 붙는다.
 
 - **다른 공급자(OpenAI · Anthropic)**: 이번에 공식 문서로 확인하지 않았다. 목록이 비어 있다는 것이지 무료 등급이 없다는 보증이 아니다. 확인하면 `free_models.json`에 `"<공급자>": {"source": …, "models": […]}`를 추가한다(공급자 이름은 `llm.py`의 `PROVIDERS`와 같게).
-- **목록은 자주 바뀐다.** 쓰기 전에 `source`에서 다시 확인하고 `checkedAt`을 고친다. 이 목록은 공식 문서 요약 도구로 가져온 값이므로, 팀이 쓸 모델은 가격 문서에서 직접 한 번 더 확인한다. 같은 주제를 다룬 블로그 중에는 "Pro 모델은 2026-04-01부터 무료 등급에서 빠졌다"는 글이 있으나, 공식 가격 문서에는 `gemini-2.5-pro`가 무료로 표시되어 있어 공식 문서를 따랐다.
+- **목록은 자주 바뀐다.** 쓰기 전에 `source`에서 다시 확인하고 `checkedAt`을 고친다. 이 목록은 공식 문서 요약 도구로 가져온 값이므로, 팀이 쓸 모델은 가격 문서에서 직접 한 번 더 확인한다. 가격 문서에 무료로 표시돼도 새 사용자가 부를 수 없는 모델이 있다(위 2.5 계열). 목록을 고칠 때는 문서와 함께 실제 호출(작은 요청 한 번)로도 확인한다.
 
 ### 무료 모델 자동 사용 (BE-45)
 
 `stages.generate.models`(점검 `stages.contamination.models`도 같음)에 `"free:<공급자>"`를 적으면, 모델 이름을 일일이 적지 않아도 `free_models.json`의 그 공급자 무료 모델을 파이프라인이 알아서 쓴다.
 
 ```json
-"freeModels": { "max": 3, "include": null, "exclude": ["gemini-2.5-pro"] },
+"freeModels": { "max": 3, "include": null, "exclude": ["gemini-3-flash-preview"] },
 "stages": { "generate": { "models": ["free:gemini"], "runs": 3, "delay": 13 } }
 ```
 
@@ -581,7 +583,7 @@ python3 compare.py <켬 batchDir>
 
 ```json
 "allowFreeTierForJudgment": true,
-"freeModels": { "max": 2, "exclude": ["gemini-2.5-pro"] },
+"freeModels": { "max": 2, "exclude": ["gemini-3-flash-preview"] },
 "stages": {
   "extract": { "model": ["claude-opus-5-5", "free:gemini"] },
   "court": { "model": null }
