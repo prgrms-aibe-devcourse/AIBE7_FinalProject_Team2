@@ -232,7 +232,7 @@
 @keyframes list-fade-in { from { opacity: 0; } }
 /* 메인 책상에서 들고 오면(FE-50) 지면이 화면 아래에서 들린 기울기(-3도) 그대로 올라오며 바로 서고, 뒤에 남긴 책상(.paper-ghost)은 흐려진다 */
 .case-list-page.is-rising { overflow: clip; } /* 아래에 내려가 있는 지면이 쪽을 늘리지 않게 */
-.case-list-page .paper-ghost { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.case-list-page .paper-ghost { position: fixed; inset: var(--site-header-h, 0px) 0 0; /* 공통 헤더 아래부터: 메인이 헤더 높이만큼 위로 튀지 않게 */ z-index: 0; overflow: hidden; pointer-events: none; }
 .case-list-page.is-rising .paper-ghost { animation: paper-ghost-out .8s ease-in .15s forwards; }
 .case-list-page.is-rising .paper { animation: paper-rise .9s cubic-bezier(.22, 1, .36, 1) backwards; will-change: transform; }
 /* 지면이 다 그려질 때까지(.is-going 전) 지면은 화면 아래에, 책상은 그대로 멈춰 둔다 — 지면 전체가 한 번에 올라온다 */

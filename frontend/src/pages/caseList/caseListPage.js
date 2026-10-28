@@ -1,11 +1,11 @@
 import { button, element, mockTag, renderSiteFooter } from '../../components/siteLayout.js';
 import { API_MODE } from '../../api/config.js';
 import { scriptFor } from '../overview/overviewPage.js';
-import { casePhoto, commonCategoryOf, commonPhotoAt, useCommonPhotoOnError } from '../../utils/newspaper.js';
+import { casePhoto, commonCategoryOf, commonPhotoAt, commonPhotos, useCommonPhotoOnError } from '../../utils/newspaper.js';
 import { newspaperMasthead } from '../../components/newspaperFront.js';
 import { turnPage } from '../../utils/pageTurn.js';
 import { liftArticle } from '../../utils/articleZoom.js';
-import { createFillerDeck, emptySlots, faceIndexAfter, FILL_GAP, FRONT_LIMIT, layoutCases, planFiller, swipeStep, visibleFaces } from '../../utils/newspaperFaces.js';
+import { createFillerDeck, emptySlots, faceIndexAfter, FILL_GAP, FRONT_LIMIT, layoutCases, planFiller, RECOMMENDED, swipeStep, visibleFaces } from '../../utils/newspaperFaces.js';
 import courtFacts from '../../content/courtFacts.json';
 import { TYPE_NOTES } from '../../content/typeNotes.js';
 import { reducedMotion } from '../../utils/motion.js';
@@ -16,7 +16,7 @@ import { spreadFromTail } from '../../utils/tailSpread.js';
 // S-02 사건 목록 — 신문 1면 (FE-18, 시안 v12 + 배치 조정). 유형 필터 · 오류 처리 로직은 FE-4 · FE-11과 같다.
 // 흐름 목업 ②(FE-32): 책상에서 집어 든 신문이다. 위에 남불의 안내 포스트잇(누르면 떼어짐, FE-50)이 있고, 기사를 누르면
 // 그 기사의 제목이 사건 정보(S-20)의 큰 제목 자리로 커지며 날아간다(utils/articleZoom.js, FE-118) — 체험 시작 · 이어서 하기는 S-20에서 한다(API 명세 5장 S-02 확장). Esc는 책상으로.
-// 면 넘기기(FE-118): 유형 탭 하나가 신문 한 면이다(전체 = 1면, 그다음 살인 · 사기 · 상해 · 강도 · 절도). 탭 · 키보드 ← → · 손가락 밀기로(종이 귀 · 양옆 화살표는 FE-119에서 뺐다)
+// 면 넘기기(FE-118): 유형 탭 하나가 신문 한 면이다(전체 = 1면, 그다음 살인 · 사기 · 상해 · 강도 · 절도). 탭 · 양옆 화살표 · 키보드 ← → · 손가락 밀기로(종이 귀는 FE-119에서 뺐다)
 // 한 장이 넘어간다(2.5D, utils/pageTurn.js). 뒤 면으로는 오른쪽에서 왼쪽으로, 앞 면으로는 거꾸로 넘어온다. 기사를 누르는 것은 언제나 사건 정보로 가는 길이고, 넘김은 위의 조작으로만 한다.
 // 목록은 처음 판단(S-03) 전 화면이라 사건 정보는 S-03 개요 범위를 넘지 않는다: 제목 · 짧은 소개 · 키워드 · 분류 · 참여 수와,
 // 개요 범위 안에서 쓴 기사(headline · deck · article). S-04 이후에 공개되는 사실(다툼 기간 · 횟수 · 양형 요소 등)은 기사에도 쓰지 않는다.
@@ -54,8 +54,8 @@ const RECORD_NOTE = '사건에 어떤 사정이 있었는지는 체험을 시작
 // 빈 칸 채움 지면(FE-118): 기사가 모자라 비는 칸(추천 사건 반쪽 · 다른 사건 줄의 남는 칸 · 기사가 적은 면의 아래)을 사건이 아닌 작은 지면으로 채운다.
 // 법정 상식은 1막 막간과 같은 문장(content/courtFacts.json), 광고는 이 서비스의 판결 성향 테스트. 누르면 사건으로 가지 않는다(광고만 테스트로)
 const FILLER_STRIP = 3; // 추천 사건이 한 건뿐일 때 비는 반쪽에 쌓는 작은 지면 수
-const PHOTO_CATEGORIES = ['life', 'body', 'property']; // 사진 지면: 공용 재연 컷 분류 · 자리를 돌려 가며 쓴다
-const PHOTO_ROLES = ['reenact', 'origin', 'conclusion'];
+const PHOTO_CATEGORIES = Object.keys(commonPhotos); // 사진 지면: 공용 재연 컷 분류 · 자리를 돌려 가며 쓴다(utils/newspaper.js의 목록을 그대로 따른다)
+const PHOTO_ROLES = Object.keys(commonPhotos[PHOTO_CATEGORIES[0]]);
 // 진행 상태 표시 (FE-19, REQ-010 · FR-1-6). API 1의 myStatus 기준, 체험 전(null)이면 표시 없음
 const STATUS_VIEW = {
   IN_PROGRESS: { badge: '진행 중', tone: 'active' },
@@ -103,7 +103,7 @@ function dense(paragraphs) {
 }
 
 // S-02 사건 목록
-export async function renderCaseListPage(container, { api, navigate, from, openAt }) {
+export async function renderCaseListPage(container, { api, navigate, from, openAt, deskY = 0 }) {
   const root = element('div', 'case-list-page is-loading'); // 목록을 받기 전: 아래 푸터 · 안내를 감춰 둔다(받은 뒤 아래로 밀려 CLS 0.12가 났다, FE-102)
   // 메인 책상에서 신문을 들고 온 경우(FE-50): 책상 화면을 뒤에 남겨 두었다가 지면이 아래에서 올라오는 동안 흐려지며 걷는다(성향 검사 서류철과 같은 방식)
   // 맨 아래 신문 끝자락에서 왔으면(from: 'tail', FE-87) 같은 방식으로 메인을 뒤에 남기고, 지면은 끝자락 자리에서 커지며 나온다
@@ -181,6 +181,7 @@ export async function renderCaseListPage(container, { api, navigate, from, openA
   paper.prepend(tip);
   root.append(desk, paper, edges);
   if (ghost) root.insertBefore(ghost, paper);
+  if (ghost && deskY > 0) ghost.scrollTop = deskY; // 라우터가 스크롤을 맨 위로 올린 뒤라, 뒤에 남긴 메인을 신문을 누른 때의 스크롤 자리에 둔다(안 그러면 메인이 위로 튄다)
   // 뒤집고 왔으면 6막 지면과 같은 폭 · 같은 자리에 지면을 놓는다(같은 신문 한 장이 이어진다). 아래로 길어지는 부분은 화면 밖이다
   if (handed && root.classList.contains('is-unflipping')) {
     const top = Math.max(0, handed.rect.top);
@@ -497,6 +498,11 @@ export async function renderCaseListPage(container, { api, navigate, from, openA
     const bar = element('div', 'tabs');
     bar.setAttribute('role', 'group');
     bar.setAttribute('aria-label', '신문 면');
+    // 면 넘김 단축키(← →)는 화면에 안내가 없어 낭독기 사용자가 알 수 없다: 눈에는 보이지 않는 안내를 면 묶음의 설명으로 단다
+    const hint = element('span', 'visually-hidden', '왼쪽 · 오른쪽 화살표 키로 앞뒤 면으로 넘길 수 있어요.');
+    hint.id = 'face-keys-hint';
+    bar.setAttribute('aria-describedby', hint.id);
+    zone.append(hint);
     visibleFaces(tabs, summary?.byCrimeType, selected).forEach(({ crimeType, label, special }) => {
       // 1면은 9건만 싣고, 색인 · 성향 테스트 · 오피니언은 사건 수가 아니라 건수를 달지 않는다
       let count = null;
@@ -609,7 +615,8 @@ export async function renderCaseListPage(container, { api, navigate, from, openA
     root.classList.remove('is-loading');
     mates.clear(); // 아래에서 다시 만드는 영역으로 새로 모은다
     // 포스트잇 문구: 1면은 체험 가능 건수까지, 그 밖의 면은 그 면 사건만 받는 면이 있어 체험 가능 건수를 셀 수 없으니 전체 건수만. 오른쪽 귀는 어느 면에서나 "오늘의 사건 n건"만 채운다(포스트잇을 떼면 드러난다)
-    tipLine.textContent = selected === undefined || !isCrimeFace(selected)
+    // 전체 사건 목록을 받는 면(1면 · 색인)만 체험 가능 건수와 "눌러 보세요"를 말한다. 성향 테스트 · 오피니언은 기사가 없는 면이라 눌러 보라고 하지 않는다
+    tipLine.textContent = selected === undefined || selected === 'INDEX'
       ? tipMessage(summary.total, cases.filter((item) => !isSoon(item)).length)
       : `오늘 지면에 사건이 ${summary.total}건 실렸어요.`;
     earRight.replaceChildren(element('b', '', `오늘의 사건 ${summary.total}건`));
@@ -642,7 +649,7 @@ export async function renderCaseListPage(container, { api, navigate, from, openA
         const recs = element('section', 'recs');
         recs.setAttribute('aria-label', '추천 사건');
         recommended.forEach((item) => recs.append(recommendedArticle(item)));
-        if (recommended.length < 2) { // 추천이 한 건뿐이면 비는 반쪽에 작은 지면 세 개를 세로로 쌓는다
+        if (recommended.length < RECOMMENDED) { // 추천이 한 건뿐이면 비는 반쪽에 작은 지면 세 개를 세로로 쌓는다
           const column = element('div', 'article filler-column');
           column.append(...fillers(FILLER_STRIP));
           recs.append(column);

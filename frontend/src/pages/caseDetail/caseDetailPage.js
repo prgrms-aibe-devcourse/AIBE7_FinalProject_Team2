@@ -26,12 +26,10 @@ const ACTIONS = {
 const NOT_STARTED = { label: '시작하기', failText: '체험을 시작하지 못했어요. 잠시 후 다시 시도해 주세요.' };
 // 시작하기 도장(FE-119): 지면 위에 찍힌 모양이지만 실제 <button>이다. 위쪽 작은 글자는 장식이라 낭독하지 않는다(이름은 호출하는 쪽이 aria-label로 준다)
 function stampButton(label, onClick) {
-  const node = element('button', 'stamp-button');
-  node.type = 'button';
+  const node = button('', onClick, 'stamp-button');
   const caption = element('small', '', '사건 접수');
   caption.setAttribute('aria-hidden', 'true');
   node.append(caption, element('span', 'stamp-label', label));
-  if (onClick) node.addEventListener('click', onClick);
   return node;
 }
 const SIMILAR_COUNT = 2; // 같은 유형의 다른 사건 수

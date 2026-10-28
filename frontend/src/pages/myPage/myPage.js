@@ -21,7 +21,7 @@ import { renderSettings } from './mySettings.js';
 import { RETAKE_NOTES, openRetakeDialog, retakeAfter, retakeState } from './baselineRetake.js';
 import { SHOWN_SLOTS, setShownCard, shownSlot } from '../../utils/shownCard.js';
 import { getCardLevel, getCardLine, selectedChoice, setCardLevel, setCardLine, setProfileCardType, typeChoices } from '../../utils/profileCardType.js';
-import { DEFAULT_TYPE_DECO, TYPE_BACKGROUNDS, getTypeDeco, setTypeDeco, shownTypeDeco } from '../../utils/typeCardDeco.js';
+import { DEFAULT_TYPE_DECO, TYPE_BACKGROUNDS, TYPE_CHARACTERS, getTypeDeco, setTypeDeco, shownTypeDeco } from '../../utils/typeCardDeco.js';
 import { configureProfileSettings, hydrateProfileSettings } from '../../utils/profileSettings.js';
 
 // S-17 마이페이지 (WBS 7.6.6). GET /my-page 한 번 호출로 받고, 기록이 없어도 404가 아니라 빈 200이다(명세 P-5).
@@ -760,9 +760,12 @@ function typeFan(data, navigate, go) {
   side.append(
     editGroup('커뮤니티에 보일 성향카드', bar, '고른 카드가 맨 앞에 놓이고 "공개" 도장이 찍혀요. 프로필카드와 성향카드는 커뮤니티에서 항상 다른 사람에게 보여요.'),
     editGroup('성향 테스트 하러 가기', tests, note),
-    editGroup('성향카드 확인 및 꾸미기', button('성향카드에서 보기', () => go('type'), 'secondary-button')),
   );
-  box.append(stack, side);
+  const main = element('div', 'edit-fan-main'); // 겹친 카드 아래에 성향카드 화면으로 가는 버튼(프로필카드 아래 버튼과 같은 자리)
+  const view = button('성향카드에서 보기', () => go('type'), 'secondary-button');
+  view.disabled = !Object.values(slots).some(Boolean); // 카드가 한 장도 없으면 점선 비활성(보기 화면이 비어 있다)
+  main.append(stack, view);
+  box.append(main, side);
   return box;
 }
 
@@ -988,6 +991,24 @@ function swatchPicker(type, open, shown, onPick, base = PLAIN_DECO, legendClass 
   return field;
 }
 
+// 성향카드 캐릭터 고르기(성향카드 꾸미기 맨 위): 내로 · 남불 둘 다 늘 열려 있다. 안 골랐으면 성향 결과의 캐릭터가 골라진 것으로 본다
+function characterPicker(type, shown, onPick) {
+  const field = element('fieldset', 'my-deco');
+  field.append(element('legend', '', '캐릭터'));
+  const row = element('div', 'my-deco-grid');
+  TYPE_CHARACTERS.forEach((id, index) => {
+    const thumb = element('span', 'my-deco-thumb');
+    thumb.append(picture(DEFAULT_PORTRAITS[index], ''));
+    row.append(decoOption({
+      group: 'type-character', value: id, checked: id === (shown.character ?? type?.character), locked: false, name: nameOf(CHARACTER_LIST, id),
+      onChange: () => { setTypeDeco({ character: id }); onPick(); },
+    }, thumb));
+  });
+  field.append(row);
+  return field;
+}
+const CHARACTER_LIST = [{ id: 'NAERO', name: '내로' }, { id: 'NAMBUL', name: '남불' }];
+
 // 짧은 책갈피의 한쪽(좌 · 우) 아이콘 고르기
 function sashIconPicker(side, open, deco, onPick, target) {
   const key = side === 'left' ? 'sashIconLeft' : 'sashIconRight';
@@ -1039,7 +1060,6 @@ function sashSection(open, onPick, target = PROFILE_TARGET) {
     };
     const parts = [
       element('h2', 'my-deco-title', '카드 책갈피'),
-      element('p', 'my-hint', '카드 윗변 좌우에 거는 띠예요. 모양을 먼저 고르고, 색은 모양마다 따로 골라요. 책갈피 설정(얼굴 · 리본)과는 별개예요.'),
       swatchPicker('sashStyle', open, deco.sashStyle, repaint, deco, 'is-sub', target),
     ];
     if (deco.sashStyle !== 'none') parts.push(sashColorPicker(open, deco, repaint, target));
@@ -1116,7 +1136,6 @@ function previewCard(data, deco = decoFor(data)) {
 function typeChoiceSection(data, onPick) {
   const field = element('fieldset', 'my-deco');
   field.append(element('legend', '', '카드 아래'));
-  field.append(element('p', 'my-hint', '프로필카드 아래에 보일 것을 하나 고르세요. 레벨은 그 앞에 붙이거나 뺄 수 있어요.'));
   const line = getCardLine();
   const lines = element('div', 'my-type-choices');
   [['type', '성향'], ['signature', '서명'], ['job', '직업']].forEach(([value, text]) => {
@@ -1258,6 +1277,7 @@ function openDecoDialog({ open, data, onPick, opener, forType = false }) {
   const pickers = element('div', 'my-deco-dialog-pickers');
   pickers.append(
     element('p', 'my-hint', '도전과제를 깨면 테두리 · 배경 · 카드 책갈피가 더 열려요. 고르면 바로 저장돼요.'),
+    ...(forType ? [characterPicker(currentTypeOf(data), shown, paint)] : []),
     swatchPicker('frame', open, shown.frame, paint, target.base, '', target),
     swatchPicker('background', open, shown.background, paint, target.base, '', target),
     sashSection(open, paint, target),
