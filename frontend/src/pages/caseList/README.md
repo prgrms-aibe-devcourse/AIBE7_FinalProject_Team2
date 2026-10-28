@@ -49,7 +49,7 @@
 | `tip({ total, playable })` | 포스트잇 문구. 전체 목록을 받는 면만 체험 가능 건수(`tipMessage`)를 말한다 | 전체 건수만 |
 | `fill` | 면 아래 세로 여백을 읽을거리로 채운다. 전용 내용으로 높이가 차는 면은 `false` | `true` |
 
-1. **이미 있는 모양의 면**(예: 새 범죄 유형): `FACES`의 넘김 순서 자리에 `crimeFace('KEY', '이름')`처럼 한 줄을 더한다. 탭 · 화살표 · ← → · 밀기 · 주소 `?type=` · `openAt`이 모두 이 목록을 따른다.
+1. **이미 있는 모양의 면**(예: 새 범죄 유형): `FACES`의 넘김 순서 자리에 `crimeFace('KEY', '이름')`처럼 한 줄을 더한다. 탭 · 화살표 · ← → · 밀기 · 주소 `?type=` · `openAt`이 모두 이 목록을 따른다. **새 범죄 유형이면 먼저 API 쪽이 그 유형을 알아야 한다**: API 1의 허용 유형과 `summary.byCrimeType` 건수 요약에 키가 없으면 면이 0건으로 숨고(`hideWhenEmpty`), 주소로 직접 열어도 `getCases('KEY')`가 거부된다(목은 `mocks/caseListMockApi.js`의 `crimeTypes`). 범죄 유형이 아닌 면(`apiType` 없음)은 이 선행 작업이 필요 없다.
 2. **새 모양의 면**(예: 오피니언에 실제 사설): `caseListPage.js`의 `FACE_VIEWS`에 `이름: (face, ordered) => [지면 조각들]`을 더하고, 면 정의의 `view`를 그 이름으로 바꾼다. `ordered`는 정렬된 사건(체험 가능 → 참여 많은 순)이고, 기사처럼 누르면 사건 정보로 가게 하려면 `pickable(node, item)`을 쓴다. 칸이 비면 `fillers(n)`으로 채운다.
 3. 그 면이 전용 내용으로 높이를 채우면 `fill: false`로 세로 여백 채움을 끈다(신문 최소 높이는 그대로).
 4. `faces.test.js`에 순서 · 건수 · 문구 기대값을 고친다.
