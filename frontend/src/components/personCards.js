@@ -4,6 +4,7 @@ import { SASH_COLORS, SASH_ICONS, SASH_STYLES, portraitLabel, sashColorOf } from
 import { DEFAULT_TYPE_DECO } from '../utils/typeCardDeco.js';
 import { signatureSvg } from './signatureInk.js';
 import { fitPortraitIn } from '../utils/portraitFit.js';
+import { fitOneLine } from '../utils/fitText.js';
 
 // 프로필카드 · 성향카드를 그리는 조각(FE-88). 마이페이지(myPage.js) · 내 결과(myResultPage.js) · 커뮤니티 글쓴이 명함(communityParts.js)이 함께 쓴다(FE-79).
 // 모양은 personCards.css의 .my-card · .deco-frame-* · .deco-bg-* · .deco-sash-* 가 정한다. 커뮤니티에서는 카드를 .cm-cards 안에 놓아 같은 커피 색을 입힌다
@@ -44,18 +45,28 @@ const fitOptions = (extra = {}) => (win) => {
 export const nameOf = (list, id) => list.find((item) => item.id === id)?.name ?? id;
 
 // 성향 이미지: 이미지(imageUrl)가 아직 없거나 불러오지 못하면 캐릭터 이름을 대신 둔다(personalityParts.js와 같은 규칙)
-export function typePortrait(type) {
+// 성향카드 캐릭터를 바꾸면 같은 유형의 다른 캐릭터 그림으로 본다. 이미지 번호 = 유형 번호 + 16 × (내로 0 · 남불 1). 번호 모양이 아니면 원래 그림을 둔다
+export function typeImageOf(type, character) {
+  const match = String(type.imageUrl ?? '').match(/^(.*\/)(\d+)(\.\w+)$/);
+  if (!character || character === type.character || !match) return type.imageUrl;
+  const number = ((Number(match[2]) - 1) % 16) + 1 + (character === 'NAMBUL' ? 16 : 0);
+  return `${match[1]}${String(number).padStart(2, '0')}${match[3]}`;
+}
+
+export function typePortrait(type, character = null) {
   const portrait = element('div', 'my-card-window');
-  const characterName = CHARACTER_NAMES[type.character] ?? type.character;
+  const shownCharacter = character ?? type.character;
+  const characterName = CHARACTER_NAMES[shownCharacter] ?? shownCharacter;
   const showName = () => {
     portrait.replaceChildren(element('strong', '', characterName));
     portrait.setAttribute('aria-label', `${characterName} 캐릭터 (이미지 준비 중)`);
   };
-  if (type.imageUrl) {
+  const imageUrl = typeImageOf(type, character);
+  if (imageUrl) {
     const image = element('img');
     image.alt = `${characterName} 캐릭터`;
     image.addEventListener('error', showName, { once: true });
-    image.src = type.imageUrl;
+    image.src = imageUrl;
     portrait.append(image);
     fitPortraitIn(portrait, image, fitOptions({ centerWide: true })); // 이미지마다 다른 투명 여백을 걷어 대표 이미지와 비슷한 크기로 맞춘다(FE-67). 가로로 긴 그림은 프로필카드처럼 창 세로 가운데에
   } else showName();
@@ -134,7 +145,7 @@ export function profileCardParts(deco, nickname, typeName, { level = null, signe
     caption,
     note: `${nickname}, 대표 이미지 ${caption}, ${level ? `${level} ` : ''}${line}${sashNote(deco)}`,
     classes: `is-profile deco-frame-${deco.frame} deco-bg-${deco.background} ${sashClasses(deco)}`,
-    children: [element('p', 'my-card-name', nickname), face, result, ...sashes(deco)],
+    children: [fitOneLine(element('p', 'my-card-name', nickname)), face, result, ...sashes(deco)],
   };
 }
 
@@ -153,6 +164,6 @@ export function typeFace(type, emptyNote = '"성향 테스트로 카드를 뽑�
   const card = element('div', `my-card is-type is-detail${type ? '' : ' is-empty'}${deco ? ` ${typeDecoClasses(deco)}` : ''}`);
   card.setAttribute('role', 'group');
   card.setAttribute('aria-label', `${type ? `성향카드: ${type.name}` : '성향카드: 아직 몰라요'}${deco ? sashNote(deco) : ''}`);
-  card.append(element('p', 'my-card-name', type ? type.name : '아직 몰라요'), type ? typePortrait(type) : emptyWindow(), element('p', 'my-card-note my-type-quote', type ? type.meme : emptyNote), ...(deco ? sashes(deco) : []));
+  card.append(element('p', 'my-card-name', type ? type.name : '아직 몰라요'), type ? typePortrait(type, deco?.character) : emptyWindow(), element('p', 'my-card-note my-type-quote', type ? type.meme : emptyNote), ...(deco ? sashes(deco) : []));
   return card;
 }

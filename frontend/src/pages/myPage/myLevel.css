@@ -1,0 +1,32 @@
+/* 경험치 페이지(FE-120, myLevel.js): 마이페이지 커피 스코프 안의 한 화면. 막대(.my-achievement-bar)는 첫 화면 것을 키워 쓴다 */
+.lv-page { display: grid; gap: 36px; }
+.lv-hero { display: grid; gap: 10px; padding: 24px 28px 22px; border: 1px solid var(--color-border-strong); border-radius: 14px; background: var(--color-card); }
+.lv-now { display: flex; align-items: baseline; gap: 14px; margin: 0; }
+.lv-now b { font: 900 var(--text-display)/1.1 var(--font-heading); color: var(--color-heading); font-variant-numeric: tabular-nums; }
+.lv-now span { font: 700 var(--text-title-3)/1.3 var(--font-heading); color: var(--color-label); }
+.lv-bar { height: 16px; border-radius: 8px; }
+.lv-ends { display: flex; justify-content: space-between; gap: 12px; margin: 0; color: var(--color-muted); font-size: var(--text-caption); font-variant-numeric: tabular-nums; }
+.lv-total { margin: 4px 0 0; color: var(--color-text); font-size: var(--text-small); font-variant-numeric: tabular-nums; }
+.lv-next { margin: 6px 0 0; padding-top: 12px; border-top: 1px dashed var(--color-border-strong); color: var(--color-heading); font: 700 var(--text-small)/1.5 var(--font-heading); }
+.lv-section > .my-hint { margin: 0 0 14px; }
+.lv-title { margin: 0 0 4px; font: 700 var(--text-title-2)/1.3 var(--font-heading); color: var(--color-heading); }
+.lv-table-wrap { overflow-x: auto; }
+.lv-table { width: 100%; border-collapse: collapse; font-size: var(--text-small); font-variant-numeric: tabular-nums; }
+.lv-table th, .lv-table td { padding: 11px 12px; border-bottom: 1px solid var(--color-border); text-align: left; vertical-align: top; }
+.lv-table thead th { border-bottom: 1px solid var(--color-border-strong); color: var(--color-muted); font-weight: 600; white-space: nowrap; }
+.lv-table tbody th { color: var(--color-heading); font-weight: 700; white-space: nowrap; }
+.lv-table .lv-num { text-align: right; white-space: nowrap; }
+.lv-table thead th:nth-child(3) { text-align: right; }
+.lv-state { white-space: nowrap; color: var(--color-muted); }
+.lv-table tr.is-locked { color: var(--color-muted); }
+.lv-table tr.is-now { background: var(--color-surface); }
+.lv-table tr.is-now td, .lv-table tr.is-now th { font-weight: 700; color: var(--color-heading); }
+.lv-table tr.is-now .lv-state { color: var(--color-accent); }
+.lv-table .lv-group { border-right: 1px solid var(--color-border); vertical-align: top; }
+.lv-table tr.is-group-start > * { border-top: 1px solid var(--color-border-strong); }
+.lv-table .lv-rule { color: var(--color-muted); }
+@media (max-width: 720px) {
+  .lv-hero { padding: 18px 16px; }
+  .lv-now b { font-size: var(--text-title-1); }
+  .lv-table th, .lv-table td { padding: 9px 8px; }
+}

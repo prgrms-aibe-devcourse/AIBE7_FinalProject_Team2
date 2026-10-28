@@ -48,7 +48,7 @@
 /* 내 결과 지면의 글자를 6막 지면보다 조금 키운다(1.12배). 지면 글자 크기는 --u(지면 폭 단위)에서 나오므로 글 요소만 --u를 키워 쓰고,
    지면 폭 · 단 · 간격은 원래 --u 그대로다(--u-base). 그래프 · 막대 줄의 px 글자도 같은 비율로 키운다 */
 .my-result-page .stage-wrap .sheet-result { --u-base: var(--u); --text-up: 1.12; }
-.my-result-page .stage-wrap .sheet-result :is(.sheet-info, .sheet-date, .sheet-brand, .sheet-headline, .sheet-head, .sheet-deck, .sheet-text, .sheet-figure figcaption, .sheet-ear-memo, .sheet-ad-tag, .sheet-ad-title, .sheet-ad-text, .sheet-ads-note) {
+.my-result-page .stage-wrap .sheet-result :is(.sheet-info, .sheet-date, .sheet-brand, .sheet-headline, .sheet-head, .sheet-deck, .sheet-text, .sheet-figure figcaption, .sheet-ad-tag, .sheet-ad-title, .sheet-ad-text, .sheet-ads-note) {
   --u: calc(var(--u-base) * var(--text-up));
 }
 .my-result-page .sheet-result :is(.my-hint, .axis-empty) { font-size: calc(var(--text-small) * var(--text-up)); } /* 막대 위 비중 글자(.axis-ends)는 원래 크기 그대로 */
@@ -57,9 +57,6 @@
 /* 오늘의 지면 · 마이페이지로 칸도 누를 수 있다(FE-100) */
 .my-result-page .stage-wrap.reading-paper .sheet-ad.is-clickable { cursor: pointer; }
 
-/* 광고 세 칸(FE-100): 폭을 똑같이(6막은 첫 칸이 1.3배) 하고 세 칸 모두 같은 진한 테두리(첫 칸처럼 3px 실선)로 맞춘다. 좁은 화면은 한 줄씩 쌓는다 */
-.my-result-page .stage-wrap .sheet-ads { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+/* 광고 세 칸(FE-100): 폭 · 테두리 · 제목 크기는 6막과 같이 stage.css(FE-120)가 정한다. 칸 수만 다르다 */
 @media (min-width: 681px) { .my-result-page .stage-wrap .sheet-ads.is-two { grid-template-columns: repeat(2, minmax(0, 1fr)); } } /* 성향 테스트 칸을 뺀 두 칸(마이페이지 조회 실패). 모바일은 한 열 그대로 */
-.my-result-page .stage-wrap .sheet-ads .sheet-ad { border: 3px solid var(--color-text); }
-.my-result-page .stage-wrap .sheet-ads .sheet-ad.is-lead .sheet-ad-title { font-size: calc(var(--u) * 2.4); } /* 칸이 같은 폭이라 첫 칸 제목도 같은 크기로 */
 @media (max-width: 680px) { .my-result-page .stage-wrap .sheet-ads { grid-template-columns: minmax(0, 1fr); } }

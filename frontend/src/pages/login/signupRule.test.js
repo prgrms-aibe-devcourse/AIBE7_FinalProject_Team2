@@ -28,6 +28,13 @@ test('비밀번호는 영문과 숫자를 섞어 8자 이상이어야 한다', (
   assert.ok(validateSignup({ ...valid, password: '12345678', passwordConfirm: '12345678' }).password);
 });
 
+test('비밀번호는 64자까지다 — 서버 규칙(BE-113)과 같게 (FE-117)', () => {
+  const max = `a1${'x'.repeat(62)}`;
+  assert.equal(validateSignup({ ...valid, password: max, passwordConfirm: max }).password, undefined);
+  const over = `${max}y`;
+  assert.equal(validateSignup({ ...valid, password: over, passwordConfirm: over }).password, '비밀번호는 64자까지 쓸 수 있어요.');
+});
+
 test('비밀번호 확인이 다르면 알린다', () => {
   assert.equal(validateSignup({ ...valid, passwordConfirm: 'judge12345' }).passwordConfirm, '비밀번호가 서로 달라요.');
 });

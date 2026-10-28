@@ -31,11 +31,17 @@
 .edit-profile { display: grid; gap: 14px; }
 .edit-profile-row { display: flex; align-items: flex-start; gap: 24px; }
 .edit-profile-row > .edit-profile { flex: 1 1 0; min-width: 0; }
-.edit-profile-row > .my-card { flex: none; width: 200px; } /* 마이페이지 첫 화면의 모바일 규칙(.my-card 폭 100%, 2열 카드용)을 받지 않게 데스크톱과 같은 폭으로 묶는다 */
+.edit-card-col { flex: none; display: grid; gap: 14px; justify-items: center; width: 200px; }
+.edit-card-col > .my-card { width: 200px; } /* 마이페이지 첫 화면의 모바일 규칙(.my-card 폭 100%, 2열 카드용)을 받지 않게 데스크톱과 같은 폭으로 묶는다 */
+.edit-signature { display: grid; place-items: center; box-sizing: border-box; width: 100%; max-width: 360px; min-height: 96px; padding: 12px 16px; border: 1px solid var(--color-border-strong); border-radius: 10px; }
 /* 성향카드 줄: 왼쪽 겹친 카드, 오른쪽 칸 묶음(제목 → 조작 → 설명) 세 개. 묶음 사이는 칸 안보다 넓게 띄운다 */
 .edit-fan { --fan-step: 56px; display: flex; flex-wrap: wrap; align-items: flex-start; gap: 24px; margin-top: 8px; }
 .edit-fan-side { display: grid; gap: 20px; flex: 1 1 220px; min-width: 0; max-width: 360px; }
 /* 겹치기: 높이(y)는 같고 x만 --fan-step씩 어긋난다. 고른 카드가 맨 왼쪽 · 맨 앞(z-index는 JS) */
+.edit-fan-main { display: grid; gap: 14px; justify-items: start; }
+.edit-card-col > .secondary-button, .edit-fan-main > .secondary-button { width: 174px; } /* 두 카드 아래 버튼은 같은 폭 */
+.edit-fan-main > .secondary-button { margin-inline-start: 13px; } /* 맨 앞 카드 한 장(200px) 아래 가운데: (200 - 174) / 2 */
+.edit-fan-main > .secondary-button:disabled { border-style: dashed; } /* 성향카드가 없으면 빈 칸(점선)과 같은 점선 */
 .edit-fan-stack { position: relative; width: calc(200px + (var(--n, 1) - 1) * var(--fan-step)); height: 400px; }
 .edit-fan-empty { box-sizing: border-box; display: grid; place-content: center; width: 200px; height: 100%; margin: 0; padding: 16px; border: 2px dashed var(--color-border-strong); border-radius: 14px; color: var(--color-muted); font-size: var(--text-small); text-align: center; text-wrap: balance; } /* 카드 한 장 자리(200px)를 그대로 채운다 */
 .edit-fan-card { position: absolute; top: 0; left: calc(var(--i, 0) * var(--fan-step)); padding: 0; border: 0; border-radius: 14px; background: none; color: inherit; font: inherit; cursor: pointer; transition: transform .15s ease-out; }
@@ -47,7 +53,7 @@
 @media (hover: hover) and (pointer: fine) { .edit-choice:not(:disabled):not([aria-pressed="true"]):hover { border-color: var(--color-heading); background: color-mix(in srgb, var(--color-desk-kraft) 16%, var(--color-card)); } }
 .edit-field > .edit-confirm { justify-self: stretch; } /* 탈퇴 확인 상자는 칸 폭을 다 쓴다 */
 .edit-count { font-variant-numeric: tabular-nums; }
-@media (max-width: 720px) { .edit-profile-row { flex-direction: column; align-items: center; } .edit-fan { justify-content: center; } .edit-profile-row > .edit-profile, .edit-fan-side { width: 100%; max-width: none; } }
+@media (max-width: 720px) { .edit-profile-row { flex-direction: column; align-items: center; } .edit-fan { flex-direction: column; align-items: center; } .edit-fan-main { width: 200px; } .edit-profile-row > .edit-profile, .edit-fan-side { width: 100%; max-width: none; } }
 @media (max-width: 380px) { .edit-fan { --fan-step: 36px; } } /* 아주 좁은 화면: 세 장(200 + 2 × 36 = 272px)이 가로로 넘치지 않게 */
 @media (max-width: 720px) { .edit-fact { grid-template-columns: minmax(0, 1fr); gap: 2px; } }
 /* 할 수 없거나 끝난 버튼(첫 성향 테스트 완료 · 재심 완료 · 준비 중)은 흐리게 하고 눌림 표시를 뺀다. 전역 .secondary-button에는 비활성 모양이 없다 */

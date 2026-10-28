@@ -262,7 +262,8 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
     if (reducedMotion()) { navigate('list', { from: 'desk' }); return; }
     lifting = true;
     target.classList.add('is-held');
-    setTimeout(() => { if (root.isConnected) navigate('list', { from: 'desk' }); }, LIFT_MS);
+    const deskY = Math.round(window.scrollY); // 지면이 올라오는 동안 뒤의 책상이 이 자리에 그대로 있게 넘긴다(caseListPage.js)
+    setTimeout(() => { if (root.isConnected) navigate('list', { from: 'desk', deskY }); }, LIFT_MS);
   }
   // 커피잔: 커다란 잔이 우상단에서 날아와 서고(coffeeDive), 날아오는 도중 마이페이지로 넘어간다. 책상이 다 바뀌면 잔이 오른쪽으로 빠져나간다. 움직임 줄이기면 바로 간다
   function sip() {
