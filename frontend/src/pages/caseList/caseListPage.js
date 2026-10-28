@@ -5,7 +5,8 @@ import { casePhoto, commonCategoryOf, commonPhotoAt, commonPhotos, useCommonPhot
 import { newspaperMasthead } from '../../components/newspaperFront.js';
 import { turnPage } from '../../utils/pageTurn.js';
 import { liftArticle } from '../../utils/articleZoom.js';
-import { createFillerDeck, emptySlots, faceIndexAfter, FILL_GAP, FRONT_LIMIT, layoutCases, planFiller, RECOMMENDED, swipeStep, visibleFaces } from '../../utils/newspaperFaces.js';
+import { createFillerDeck, emptySlots, faceIndexAfter, FILL_GAP, layoutCases, planFiller, RECOMMENDED, swipeStep, visibleFaces } from '../../utils/newspaperFaces.js';
+import { FACES, faceKeyOf, faceOf } from './faces.js';
 import courtFacts from '../../content/courtFacts.json';
 import { TYPE_NOTES } from '../../content/typeNotes.js';
 import { reducedMotion } from '../../utils/motion.js';
@@ -23,23 +24,8 @@ import { spreadFromTail } from '../../utils/tailSpread.js';
 // 기사 제목 · 부제 · 본문은 headline · deck · article(API 1에 아직 없는 제안 필드, S-03 개요 수준)을 쓰고, 없으면 사건 제목 · 짧은 소개와
 // 사건과 무관한 고정 문구(머리기사 안내 · 알아두기)로 채운다. (논의기록 2026-10-08 S02 v11 시안 기준)
 // 탭 하나가 신문 한 면이다(FE-119). 1면(헤드, 9건만) → 범죄 유형 면(사건이 0건이면 숨김) → 색인(전체 제목 목록 · 검색) → 성향 테스트 · 오피니언(껍데기).
-// crimeType은 면의 열쇠이기도 하다: 범죄 유형이 아닌 면(special)은 API에 유형으로 보내지 않고 전체 목록을 받는다
-const tabs = [
-  { crimeType: undefined, label: '1면' },
-  { crimeType: 'MURDER', label: '살인' },
-  { crimeType: 'FRAUD', label: '사기' },
-  { crimeType: 'INJURY', label: '상해' },
-  { crimeType: 'ROBBERY', label: '강도' },
-  { crimeType: 'THEFT', label: '절도' },
-  { crimeType: 'INDEX', label: '색인', special: true },
-  { crimeType: 'TEST', label: '성향 테스트', special: true },
-  { crimeType: 'OPINION', label: '오피니언', special: true },
-];
-const CRIME_TABS = tabs.filter(({ crimeType, special }) => crimeType && !special);
-const isCrimeFace = (key) => CRIME_TABS.some(({ crimeType }) => crimeType === key);
-const apiTypeOf = (key) => (isCrimeFace(key) ? key : undefined); // 범죄 유형이 아닌 면은 전체 목록을 받는다
+// 면마다 다른 정책(API 유형 · 탭 건수 · 숨김 · 포스트잇 문구 · 여백 채움 · 본문 모양)은 면 정의(faces.js, FE-123)에 있고, 이 파일은 selected(면 열쇠)로 그 정의를 찾아 따른다
 const TAB_TURN_MS = 500; // 면은 훑어보며 자주 넘기므로 한 장 넘기기 기본값(1초)보다 짧게
-const faceName = ({ crimeType, label }) => (isCrimeFace(crimeType) ? `${label}면` : label);
 const MORE_LABEL = '이 면 더 보기';
 
 // 머리기사 단 안내 (모든 사건 공통)
@@ -73,21 +59,11 @@ function stampMark(item) {
 }
 const statusViewOf = (item) => STATUS_VIEW[item.myStatus] ?? (scriptFor(item.caseId, item.title) ? NOT_STARTED : SOON);
 const isSoon = (item) => statusViewOf(item) === SOON;
-// 지금 눌러서 체험을 시작할 수 있는 사건 수에 맞춘 포스트잇 문구(FE-102 — 모두 열린 것처럼 "눌러 보세요"만 권하지 않는다)
-function tipMessage(total, playable) {
-  const base = `오늘 지면에 사건이 ${total}건 실렸어요.`;
-  if (playable >= total) return `${base} 마음이 가는 기사를 눌러 보세요!`;
-  if (playable > 0) return `${base} 지금 체험할 수 있는 기사는 ${playable}건이에요.`;
-  return `${base} 체험은 곧 열려요. 기사는 미리 읽어 볼 수 있어요.`;
-}
-const typeFromUrl = () => {
-  const found = new URLSearchParams(window.location.search).get('type');
-  return tabs.some(({ crimeType }) => crimeType && crimeType === found) ? found : undefined; // 면 열쇠(범죄 유형 · 색인 · 성향 테스트 · 오피니언)
-};
+const typeFromUrl = () => faceKeyOf(new URLSearchParams(window.location.search).get('type')); // 면 열쇠(범죄 유형 · 색인 · 성향 테스트 · 오피니언)
 // 탭 선택을 주소(?type=)에 남긴다. 사건 정보에 다녀오거나 새로고침해도 같은 면으로 돌아온다(화면을 다시 그리지 않는 replaceState)
-function saveTypeToUrl(crimeType) {
+function saveTypeToUrl(key) {
   const url = new URL(window.location.href);
-  if (crimeType) url.searchParams.set('type', crimeType); else url.searchParams.delete('type');
+  if (key) url.searchParams.set('type', key); else url.searchParams.delete('type');
   window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
 }
 const PICK_LABEL = '사건 펼쳐 보기';
@@ -117,7 +93,7 @@ export async function renderCaseListPage(container, { api, navigate, from, openA
   // 컨테이너가 다른 화면으로 바뀌면 이전 요청은 그 화면을 덮어쓰지 않는다.
   const active = () => container.contains(root);
   // openAt: 다른 화면에서 특정 면으로 열 때(S-20 지면 목차의 8면 색인, FE-119). 주소 ?type=에도 남기고, 새로고침으로 되풀이되지 않게 기록의 넘김값은 비운다
-  const openFace = tabs.some(({ crimeType }) => crimeType && crimeType === openAt) ? openAt : undefined;
+  const openFace = faceKeyOf(openAt);
   if (openAt) history.replaceState({ ...history.state, extras: {} }, '');
   if (openFace) saveTypeToUrl(openFace);
   let selected = openFace ?? typeFromUrl();
@@ -252,7 +228,7 @@ export async function renderCaseListPage(container, { api, navigate, from, openA
     if (event.key === 'Escape') navigate('landing');
     const arrow = { ArrowLeft: -1, ArrowRight: 1 }[event.key];
     if (arrow && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.target.closest?.('input, textarea, select, [contenteditable]')) {
-      if (faceIndexAfter(shownFaces().map(({ crimeType }) => crimeType), selected, arrow) < 0) return; // 넘길 면이 없으면(1면의 ←, 마지막 면의 →) 브라우저 기본 동작을 그대로 둔다
+      if (faceIndexAfter(shownKeys(), selected, arrow) < 0) return; // 넘길 면이 없으면(1면의 ←, 마지막 면의 →) 브라우저 기본 동작을 그대로 둔다
       event.preventDefault(); // 면을 넘길 때는 같은 키의 기본 가로 스크롤이 함께 일어나지 않게 한다
       turnFace(arrow);
     }
@@ -275,24 +251,25 @@ export async function renderCaseListPage(container, { api, navigate, from, openA
   paper.addEventListener('touchcancel', () => { touch = null; }, { passive: true });
 
   // 지금 보이는 면(0건 면은 숨김)을 순서대로. 키보드 · 밀기 넘기기가 이 목록을 따른다
-  const shownFaces = () => visibleFaces(tabs, lastSummary?.byCrimeType, selected);
+  const shownFaces = () => visibleFaces(FACES, lastSummary, selected);
+  const shownKeys = () => shownFaces().map(({ key }) => key);
   function syncEdges() {
     edges.replaceChildren();
     const faces = shownFaces();
     [-1, 1].forEach((step) => {
-      const index = faceIndexAfter(faces.map(({ crimeType }) => crimeType), selected, step);
+      const index = faceIndexAfter(faces.map(({ key }) => key), selected, step);
       if (index < 0) return; // 1면 앞 · 마지막 면 뒤에는 넘길 장이 없다
       const edge = button(step < 0 ? '‹' : '›', () => turnFace(step), `face-edge ${step < 0 ? 'is-prev' : 'is-next'}`);
       edge.tabIndex = -1;
       edge.setAttribute('aria-hidden', 'true');
-      edge.title = `${faceName(faces[index])} 넘기기`;
+      edge.title = `${faces[index].name} 넘기기`;
       edges.append(edge);
     });
   }
   function turnFace(step) {
     const faces = shownFaces();
-    const index = faceIndexAfter(faces.map(({ crimeType }) => crimeType), selected, step);
-    if (index >= 0) switchTab(faces[index].crimeType, { turned: true });
+    const index = faceIndexAfter(faces.map(({ key }) => key), selected, step);
+    if (index >= 0) switchTab(faces[index].key, { turned: true });
   }
 
   // 오류에서도 탭은 그대로 둔다(예전에는 main 전체를 바꿔 다른 유형으로 갈 수 없었다, FE-102). 목록 자리에만 오류 상자를 둔다
@@ -391,7 +368,7 @@ export async function renderCaseListPage(container, { api, navigate, from, openA
     article.setAttribute('aria-label', '머리기사');
     const body = item.article?.length ? item.article : [item.shortIntro, ...LEAD_GUIDE];
     article.append(
-      kicker(item, selected ? undefined : '머리기사'),
+      kicker(item, faceOf(selected).front ? '머리기사' : undefined),
       element('p', 'lead-intro', item.deck || (item.headline ? item.title : item.shortIntro)),
       element('p', 'byline', '사회부'),
       dense(body),
@@ -469,7 +446,7 @@ export async function renderCaseListPage(container, { api, navigate, from, openA
   function mountFill(fill, base) {
     fillWatch?.disconnect();
     fillWatch = null;
-    if (typeof ResizeObserver === 'undefined') return;
+    if (!fill || typeof ResizeObserver === 'undefined') return; // 여백을 채우지 않는 면(fill: false)이면 이전 면의 관찰만 끊는다
     let last = '';
     const plan = () => {
       if (!active() || !fill.isConnected) { fillWatch?.disconnect(); return; }
@@ -503,17 +480,15 @@ export async function renderCaseListPage(container, { api, navigate, from, openA
     hint.id = 'face-keys-hint';
     bar.setAttribute('aria-describedby', hint.id);
     zone.append(hint);
-    visibleFaces(tabs, summary?.byCrimeType, selected).forEach(({ crimeType, label, special }) => {
-      // 1면은 9건만 싣고, 색인 · 성향 테스트 · 오피니언은 사건 수가 아니라 건수를 달지 않는다
-      let count = null;
-      if (summary && !special) count = crimeType ? summary.byCrimeType[crimeType] ?? 0 : Math.min(summary.total, FRONT_LIMIT);
-      const tab = button(label, () => switchTab(crimeType), 'tab');
-      tab.dataset.type = crimeType ?? '';
+    visibleFaces(FACES, summary, selected).forEach(({ key, label, count: countOf }) => {
+      const count = summary ? countOf(summary) : null; // 1면은 9건까지, 색인 · 성향 테스트 · 오피니언은 건수를 달지 않는다(faces.js)
+      const tab = button(label, () => switchTab(key), 'tab');
+      tab.dataset.type = key ?? '';
       if (count !== null) { // 건수를 글자로도 보인다(모바일 포함, 예전에는 낭독 이름에만 있었다)
         tab.append(element('span', 'tab-count', String(count)));
         tab.setAttribute('aria-label', `${label} ${count}건`);
       }
-      tab.setAttribute('aria-pressed', String(crimeType === selected));
+      tab.setAttribute('aria-pressed', String(key === selected));
       if (disabled) { tab.disabled = true; }
       bar.append(tab);
     });
@@ -596,95 +571,102 @@ export async function renderCaseListPage(container, { api, navigate, from, openA
   }
 
   // 성향 테스트 · 오피니언 면: 자리와 링크만 있는 껍데기(내용은 후속)
-  function stubFace(face) {
-    const box = element('section', `face-stub face-stub-${face.toLowerCase()}`);
-    if (face === 'TEST') {
-      box.setAttribute('aria-label', '판결 성향 테스트');
-      box.append(element('p', 'filler-label', '성향 테스트'), element('h2', '', '나는 엄격한 판사일까, 관대한 판사일까?'),
-        element('p', '', '몇 가지 사건 질문에 답하면 나의 판결 성향을 알려 드려요. 이 면에는 곧 테스트 소개가 실려요.'),
-        button('판결 성향 테스트 하러 가기 →', () => navigate('testPaper', { from: 'paper' }), 'secondary-button'));
-    } else {
-      box.setAttribute('aria-label', '오피니언');
-      box.append(element('p', 'filler-label', '오피니언'), element('h2', '', '편집부 사설 · 독자 의견'), element('p', '', '이 면은 준비 중이에요. 편집부 사설과 독자 의견이 실릴 자리예요.'));
-    }
+  function testFace() {
+    const box = element('section', 'face-stub face-stub-test');
+    box.setAttribute('aria-label', '판결 성향 테스트');
+    box.append(element('p', 'filler-label', '성향 테스트'), element('h2', '', '나는 엄격한 판사일까, 관대한 판사일까?'),
+      element('p', '', '몇 가지 사건 질문에 답하면 나의 판결 성향을 알려 드려요. 이 면에는 곧 테스트 소개가 실려요.'),
+      button('판결 성향 테스트 하러 가기 →', () => navigate('testPaper', { from: 'paper' }), 'secondary-button'));
+    return box;
+  }
+  function opinionFace() {
+    const box = element('section', 'face-stub face-stub-opinion');
+    box.setAttribute('aria-label', '오피니언');
+    box.append(element('p', 'filler-label', '오피니언'), element('h2', '', '편집부 사설 · 독자 의견'), element('p', '', '이 면은 준비 중이에요. 편집부 사설과 독자 의견이 실릴 자리예요.'));
     return box;
   }
 
+  // 기사 면(1면 · 범죄 유형 면): 머리기사 배너 · 머리기사 · 추천 사건 · 이번 호 다른 사건(+ 이 면 더 보기)
+  function casesFace(face, ordered) {
+    if (!ordered.length) return [element('p', 'empty', '해당하는 사건이 없어요.')];
+    const parts = [];
+    const { lead, recommended, rest, more } = layoutCases(ordered, { front: face.front }); // 1면은 9건만, 유형 면은 넘치는 기사를 더보기로
+
+    const banner = element('div', 'banner');
+    banner.append(element('h2', '', headlineOf(lead)));
+    pickable(banner, lead);
+    // 1행: 메인 사진 | 머리기사, 2행: 추천 사건 2건(지면 전체 폭을 반반)
+    const grid = element('section', 'front-grid');
+    grid.setAttribute('aria-label', '머리기사');
+    grid.append(leadPhoto(lead), leadArticle(lead));
+    parts.push(banner, grid);
+    if (recommended.length) {
+      const recs = element('section', 'recs');
+      recs.setAttribute('aria-label', '추천 사건');
+      recommended.forEach((item) => recs.append(recommendedArticle(item)));
+      if (recommended.length < RECOMMENDED) { // 추천이 한 건뿐이면 비는 반쪽에 작은 지면 세 개를 세로로 쌓는다
+        const column = element('div', 'article filler-column');
+        column.append(...fillers(FILLER_STRIP));
+        recs.append(column);
+      }
+      parts.push(recs);
+    }
+
+    if (rest.length) {
+      const index = element('section', 'index');
+      index.setAttribute('aria-label', '이번 호 다른 사건');
+      const head = element('div', 'index-head');
+      head.append(element('h2', '', '이번 호 다른 사건'), element('span', '', `${rest.length + more.length}건 · 참여 많은 순`));
+      index.append(head, indexGrid(rest));
+      if (more.length) index.append(moreFold(more));
+      parts.push(index);
+    }
+    return parts;
+  }
+
+  // 면 정의(faces.js)의 view 이름 → 그 면의 본문 조각들. ordered는 정렬된 사건(체험 가능 → 참여 많은 순)이다. 새 모양의 면은 여기에 하나를 더한다(README "면 추가하기")
+  const FACE_VIEWS = {
+    cases: casesFace,
+    index: (face, ordered) => [indexFace(ordered)],
+    test: () => [testFace()],
+    opinion: () => [opinionFace()],
+  };
+
   function draw({ summary, cases }) {
+    const face = faceOf(selected);
     lastSummary = summary;
     root.classList.remove('is-loading');
     mates.clear(); // 아래에서 다시 만드는 영역으로 새로 모은다
-    // 포스트잇 문구: 1면은 체험 가능 건수까지, 그 밖의 면은 그 면 사건만 받는 면이 있어 체험 가능 건수를 셀 수 없으니 전체 건수만. 오른쪽 귀는 어느 면에서나 "오늘의 사건 n건"만 채운다(포스트잇을 떼면 드러난다)
-    // 전체 사건 목록을 받는 면(1면 · 색인)만 체험 가능 건수와 "눌러 보세요"를 말한다. 성향 테스트 · 오피니언은 기사가 없는 면이라 눌러 보라고 하지 않는다
-    tipLine.textContent = selected === undefined || selected === 'INDEX'
-      ? tipMessage(summary.total, cases.filter((item) => !isSoon(item)).length)
-      : `오늘 지면에 사건이 ${summary.total}건 실렸어요.`;
+    // 포스트잇 문구는 면 정의가 정한다(faces.js tip): 전체 사건 목록을 받는 면(1면 · 색인)만 체험 가능 건수와 "눌러 보세요"를 말하고, 나머지는 전체 건수만.
+    // 오른쪽 귀는 어느 면에서나 "오늘의 사건 n건"만 채운다(포스트잇을 떼면 드러난다)
+    tipLine.textContent = face.tip({ total: summary.total, playable: cases.filter((item) => !isSoon(item)).length });
     earRight.replaceChildren(element('b', '', `오늘의 사건 ${summary.total}건`));
     tip.disabled = false;
     tip.classList.remove('is-waiting');
 
-    const parts = [renderTabs(summary)];
     // 지금 체험할 수 있는 사건이 먼저, 그다음 참여 많은 순: 첫 사건이 머리기사, 다음 2건이 추천 사건, 나머지는 다른 사건
     // (눌러 보라고 권하는 자리인 머리기사 · 추천에 "준비 중" 사건이 앞서지 않게, FE-102)
     const ordered = [...cases].sort((a, b) => Number(isSoon(a)) - Number(isSoon(b)) || b.participantCount - a.participantCount);
-    deck = createFillerDeck(tabs.findIndex(({ crimeType }) => crimeType === selected) * 3); // 면마다 다른 법정 상식 · 사진부터
-    if (selected === 'INDEX') {
-      parts.push(indexFace(ordered));
-    } else if (selected === 'TEST' || selected === 'OPINION') {
-      parts.push(stubFace(selected));
-    } else if (!cases.length) {
-      parts.push(element('p', 'empty', '해당하는 사건이 없어요.'));
-    } else {
-      const { lead, recommended, rest, more } = layoutCases(ordered, { front: selected === undefined }); // 1면은 9건만, 유형 면은 넘치는 기사를 더보기로
-
-      const banner = element('div', 'banner');
-      banner.append(element('h2', '', headlineOf(lead)));
-      pickable(banner, lead);
-      // 1행: 메인 사진 | 머리기사, 2행: 추천 사건 2건(지면 전체 폭을 반반)
-      const grid = element('section', 'front-grid');
-      grid.setAttribute('aria-label', '머리기사');
-      grid.append(leadPhoto(lead), leadArticle(lead));
-      parts.push(banner, grid);
-      if (recommended.length) {
-        const recs = element('section', 'recs');
-        recs.setAttribute('aria-label', '추천 사건');
-        recommended.forEach((item) => recs.append(recommendedArticle(item)));
-        if (recommended.length < RECOMMENDED) { // 추천이 한 건뿐이면 비는 반쪽에 작은 지면 세 개를 세로로 쌓는다
-          const column = element('div', 'article filler-column');
-          column.append(...fillers(FILLER_STRIP));
-          recs.append(column);
-        }
-        parts.push(recs);
-      }
-
-      if (rest.length) {
-        const index = element('section', 'index');
-        index.setAttribute('aria-label', '이번 호 다른 사건');
-        const head = element('div', 'index-head');
-        head.append(element('h2', '', '이번 호 다른 사건'), element('span', '', `${rest.length + more.length}건 · 참여 많은 순`));
-        index.append(head, indexGrid(rest));
-        if (more.length) index.append(moreFold(more));
-        parts.push(index);
-      }
-    }
-    const fill = element('div', 'face-fill'); // 면 아래 세로 여백 칸(내용은 mountFill이 높이를 재서 채운다)
-    fill.setAttribute('aria-label', '읽을거리');
-    main.replaceChildren(...parts, fill);
+    deck = createFillerDeck(FACES.indexOf(face) * 3); // 면마다 다른 법정 상식 · 사진부터
+    const parts = [renderTabs(summary), ...FACE_VIEWS[face.view](face, ordered)];
+    const fill = face.fill ? element('div', 'face-fill') : null; // 면 아래 세로 여백 칸(내용은 mountFill이 높이를 재서 채운다)
+    fill?.setAttribute('aria-label', '읽을거리');
+    main.replaceChildren(...parts, ...(fill ? [fill] : []));
     mountFill(fill, deck.fork());
     syncEdges();
-    paper.classList.toggle('inner-page', selected !== undefined); // 1면만 1면, 나머지 면(유형 면 · 색인 · 성향 테스트 · 오피니언)은 안쪽 면(오른쪽 면)
+    paper.classList.toggle('inner-page', !face.front); // 1면만 1면, 나머지 면(유형 면 · 색인 · 성향 테스트 · 오피니언)은 안쪽 면(오른쪽 면)
   }
 
   let ready = false; // 처음 목록을 받은 뒤에야 탭이 눌린다(받는 도중 누르면 두 요청이 엇갈린다)
   let switching = 0; // load · switchTab이 함께 쓰는 요청 번호: 더 새 요청이 있으면 늦게 온 응답은 버린다(재시도 중 탭을 눌러도 이전 유형이 덮지 않게)
-  async function load(crimeType) {
+  async function load(key) {
     const mine = ++switching;
-    selected = crimeType;
+    selected = key;
     try {
-      const data = await api.getCases(apiTypeOf(crimeType));
+      const data = await api.getCases(faceOf(key).apiType);
       if (active() && mine === switching) draw(data);
     } catch (error) {
-      if (active() && mine === switching) showError(() => load(crimeType));
+      if (active() && mine === switching) showError(() => load(key));
     } finally {
       ready = true;
     }
@@ -692,18 +674,18 @@ export async function renderCaseListPage(container, { api, navigate, from, openA
 
   // 면 바꾸기: 새 목록을 받으면 지금 지면을 한 장으로 떼어 넘기고, 그 밑에 새 목록을 바로 그린다(빠르게 연달아 눌러도 마지막 것만 남는다).
   // 뒤 면으로는 앞으로 넘기고, 앞 면으로는 거꾸로 넘어온다(back). turned: 탭이 아니라 키보드 · 밀기로 넘겼다 — 새 면은 맨 위부터 읽는다
-  async function switchTab(crimeType, { turned = false } = {}) {
-    if (!ready || picking || crimeType === selected) return;
+  async function switchTab(key, { turned = false } = {}) {
+    if (!ready || picking || key === selected) return;
     const mine = ++switching;
-    const order = shownFaces().map((face) => face.crimeType);
-    const back = order.indexOf(crimeType) < order.indexOf(selected);
-    selected = crimeType;
-    saveTypeToUrl(crimeType); // 새로고침 · 사건 정보에 다녀오기에서도 같은 면(FE-102)
+    const order = shownKeys();
+    const back = order.indexOf(key) < order.indexOf(selected);
+    selected = key;
+    saveTypeToUrl(key); // 새로고침 · 사건 정보에 다녀오기에서도 같은 면(FE-102)
     // 키보드로 탭을 눌렀으면 새로 그린 같은 탭으로 포커스를 돌려준다
     const keepFocus = document.activeElement?.classList?.contains('tab');
     let result = null;
     try {
-      result = await api.getCases(apiTypeOf(crimeType));
+      result = await api.getCases(faceOf(key).apiType);
     } catch (error) {
       result = null;
     }
@@ -711,9 +693,9 @@ export async function renderCaseListPage(container, { api, navigate, from, openA
     turnPage(paper, { scopeClass: 'case-list-page', duration: TAB_TURN_MS, back, draw: () => {
       if (turned) window.scrollTo(0, 0); // 넘기는 한 장이 화면을 덮고 있는 동안 올린다
       if (result) draw(result);
-      else showError(() => load(crimeType));
+      else showError(() => load(key));
     } });
-    if (keepFocus) main.querySelector(`.tab[data-type="${crimeType ?? ''}"]`)?.focus({ preventScroll: true });
+    if (keepFocus) main.querySelector(`.tab[data-type="${key ?? ''}"]`)?.focus({ preventScroll: true });
   }
 
   const loaded = load(selected);
