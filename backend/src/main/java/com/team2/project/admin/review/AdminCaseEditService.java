@@ -27,7 +27,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 사건 내용 수정 · 가치관 축 확정 · 사건 공개 (API 명세 8-2 A-11 ~ A-13, BE-43 · WBS 7.4.7).
+ * 사건 내용 수정 · 가치관 축 확정 · 사건 공개 · 공개 취소 (API 명세 8-2 A-11 ~ A-13 · A-13-14, BE-43 · BE-118 · WBS 7.4.7).
  * 한 트랜잭션에서 사건 행 잠금 → 상태 확인 → 변경 → 감사 로그(record, 같은 트랜잭션). 사건이 DRAFT면 REVIEW로 바꾼다(공개는 제외)
  */
 @Service
@@ -141,6 +141,27 @@ public class AdminCaseEditService {
 		legalCase.publish(clock.instant());
 		caseRepository.saveAndFlush(legalCase);
 		auditLogger.record(admin, AdminAuditAction.CASE_PUBLISH, AuditTargetType.CASE, caseId, null, request);
+		caseRepository.flush();
+		return queryService.getCase(caseId);
+	}
+
+	/**
+	 * A-13-14 사건 공개 취소 (BE-118). PUBLISHED → REVIEW, 공개 시각을 지운다. 사용자 API는 PUBLISHED만 읽으므로
+	 * 목록 · 상세 · 체험 · 결과에서 바로 사라진다. 행 · 판결 · 사용자 체험 기록은 지우지 않는다(숨김, 1단계).
+	 * 다시 공개하려면 A-13을 다시 부른다(공개 조건을 다시 판정)
+	 */
+	@Transactional
+	public AdminCaseDetailResponse unpublish(Long caseId, String reason, AdminPrincipal admin, HttpServletRequest request) {
+		LegalCase legalCase = lockCase(caseId);
+		if (!legalCase.isPublished()) {
+			throw AdminReviewDecisionService.invalidState(legalCase, AdminReviewDecisionService.CASE_NOT_PUBLISHED);
+		}
+		legalCase.unpublish();
+		caseRepository.saveAndFlush(legalCase);
+
+		Map<String, Object> detail = new LinkedHashMap<>();
+		detail.put("reason", reason);
+		auditLogger.record(admin, AdminAuditAction.CASE_UNPUBLISH, AuditTargetType.CASE, caseId, detail, request);
 		caseRepository.flush();
 		return queryService.getCase(caseId);
 	}
