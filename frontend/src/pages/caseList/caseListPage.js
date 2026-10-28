@@ -1,6 +1,7 @@
 import { button, element, mockTag, renderSiteFooter } from '../../components/siteLayout.js';
 import { API_MODE } from '../../api/config.js';
 import { scriptFor } from '../overview/overviewPage.js';
+import { isScriptReady } from '../../utils/scriptReady.js';
 import { casePhoto, commonCategoryOf, commonPhotoAt, commonPhotos, useCommonPhotoOnError } from '../../utils/newspaper.js';
 import { newspaperMasthead } from '../../components/newspaperFront.js';
 import { turnPage } from '../../utils/pageTurn.js';
@@ -49,7 +50,7 @@ const STATUS_VIEW = {
 };
 const NOT_STARTED = { badge: null, tone: null };
 // FE-119: 진행 상태는 글자 배지가 아니라 지면에 찍힌 작은 도장으로 구분한다. 진행 중 · 완료만 찍고, 체험 전 · 준비 중 사건에는 아무것도 찍지 않는다(준비 중은 S-20 도장에서 알린다).
-// 체험 대본이 없는 사건(FE-33 전)은 "준비 중"으로 치되(SOON, 정렬에만 쓴다 — 머리기사 · 추천에 앞서지 않게), 기사 · 사건 정보(S-20)는 읽을 수 있고 새 체험 시작은 S-20에서 막는다(FE-56).
+// 체험할 수 없는 사건(서버 scriptReady가 false, FE-125 · 값이 없으면 로컬 대본 기준)은 "준비 중"으로 치되(SOON, 정렬에만 쓴다 — 머리기사 · 추천에 앞서지 않게), 기사 · 사건 정보(S-20)는 읽을 수 있고 새 체험 시작은 S-20에서 막는다(FE-56).
 // 이미 하던 · 마친 체험(myStatus)이 있으면 대본과 상관없이 그 상태를 그대로 보인다(이어서 하기 · 결과 보기는 S-20에서 열린다)
 const SOON = { badge: '준비 중', tone: 'soon' };
 const stampOf = (item) => STATUS_VIEW[item.myStatus] ?? null;
@@ -57,7 +58,7 @@ function stampMark(item) {
   const { badge, tone } = stampOf(item);
   return element('span', `status-stamp status-${tone}`, badge);
 }
-const statusViewOf = (item) => STATUS_VIEW[item.myStatus] ?? (scriptFor(item.caseId, item.title) ? NOT_STARTED : SOON);
+const statusViewOf = (item) => STATUS_VIEW[item.myStatus] ?? (isScriptReady(item, scriptFor(item.caseId, item.title)) ? NOT_STARTED : SOON);
 const isSoon = (item) => statusViewOf(item) === SOON;
 const typeFromUrl = () => faceKeyOf(new URLSearchParams(window.location.search).get('type')); // 면 열쇠(범죄 유형 · 색인 · 성향 테스트 · 오피니언)
 // 탭 선택을 주소(?type=)에 남긴다. 사건 정보에 다녀오거나 새로고침해도 같은 면으로 돌아온다(화면을 다시 그리지 않는 replaceState)

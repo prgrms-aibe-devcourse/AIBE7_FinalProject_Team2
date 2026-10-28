@@ -5,6 +5,7 @@
 | 파일 | 내용 |
 | --- | --- |
 | `contentLines.js` | 섹션 본문을 그린다. 줄바꿈이 있으면 줄마다 점 목록, 없으면 문단 하나 (FE-14, S-04) |
+| `scriptReady.js` | `isScriptReady(item, localScript)`: 체험할 수 있는 사건인가 (FE-125). 서버 `scriptReady`(API 1 · 16)가 있으면 그 값, 없으면 로컬 대본 유무. 사건 목록 · S-20 · 커뮤니티 메인이 같은 기준을 쓴다 |
 | `screenByStatus.js` | 체험 상태(`status`)에 따라 **이어서 볼 화면**을 정하는 표. API 명세서 1-6 "체험 상태 → 화면"과 같은 값이다 |
 | `newspaper.js` | 신문 콘셉트 화면(S-01 · S-02)이 함께 쓰는 지면 날짜 줄 `todayLabel`과 유형별 대체 이미지 `fallbackImages` (7.7.1) |
 | `personalityAxes.js` | 가치관 4축(키 · 라벨 · 엄격 / 관대 글자). S-15 ~ S-17 화면과 성향 목 채점이 쓴다 |
