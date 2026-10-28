@@ -1,7 +1,9 @@
 package com.team2.project.admin.review;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -22,10 +24,11 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
-import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.test.web.servlet.request.AbstractMockHttpServletRequestBuilder;
 
 /**
  * 사건 내용 수정 · 가치관 축 확정 · 사건 공개 · 공개 취소 A-11 ~ A-13 · A-13-14 (API 명세 8-2, BE-43 · BE-118).
@@ -313,6 +316,41 @@ class AdminCaseEditApiTest extends ApiIntegrationTest {
 			admin.getEmail())).hasSize(1);
 	}
 
+	// --- BE-103 (공개 뒤 사진 교체 절차) ---
+
+	@Test
+	@DisplayName("BE-103: 공개한 사건은 사진 업로드 · 삭제가 409 CASE_PUBLISHED, 공개 취소해야 열리고 사진을 지운 채로도 다시 공개된다")
+	void publishedCase_photoChangeNeedsUnpublish() throws Exception {
+		makePublishable();
+		insertIncidentPhoto(caseId, "ORIGIN", "https://cdn.example.com/origin.jpg", "발단");
+		perform(post(caseUrl() + "/publish")).andExpect(status().isOk());
+
+		// 공개 중에는 세 경로 모두 막힌다. 업로드는 파일을 S3에 올리기 전에 사건 상태부터 본다
+		for (AbstractMockHttpServletRequestBuilder<?> blocked : List.<AbstractMockHttpServletRequestBuilder<?>>of(
+			multipart(photosUrl() + "/representative").file(imageFile()),
+			multipart(photosUrl() + "/incident").file(imageFile()).param("role", "CONCLUSION"),
+			delete(photosUrl() + "/incident/ORIGIN"))) {
+			perform(blocked)
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.code").value("INVALID_STATE"))
+				.andExpect(jsonPath("$.currentStatus").value("PUBLISHED"))
+				.andExpect(jsonPath("$.details[0].reason").value("CASE_PUBLISHED"));
+		}
+		assertThat(countIncidentPhotos()).isEqualTo(1);
+
+		// 공개 취소(A-13-14)하면 사진 API가 다시 열린다 — 이것이 공개 뒤 사진을 고치는 유일한 경로다
+		perform(post(caseUrl() + "/unpublish").contentType(MediaType.APPLICATION_JSON)
+			.content("{\"reason\": \"발단 사진 교체\"}")).andExpect(status().isOk());
+		perform(delete(photosUrl() + "/incident/ORIGIN")).andExpect(status().isNoContent());
+		assertThat(countIncidentPhotos()).isZero();
+
+		// 사진은 공개 조건(PublishReadiness)이 아니라, 사진을 지운 채로도 다시 공개된다
+		perform(post(caseUrl() + "/publish"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.status").value("PUBLISHED"))
+			.andExpect(jsonPath("$.publishReadiness.ready").value(true));
+	}
+
 	@Test
 	@DisplayName("상태를 바꾸는 요청은 CSRF 토큰이 없으면 403")
 	void csrfRequired() throws Exception {
@@ -326,12 +364,26 @@ class AdminCaseEditApiTest extends ApiIntegrationTest {
 
 	// --- 도움 함수 ---
 
-	private ResultActions perform(MockHttpServletRequestBuilder request) throws Exception {
+	private ResultActions perform(AbstractMockHttpServletRequestBuilder<?> request) throws Exception {
 		return mockMvc.perform(request.session(session).cookie(csrf).header(CSRF_HEADER, csrf.getValue()));
 	}
 
 	private String caseUrl() {
 		return "/api/v1/admin/cases/" + caseId;
+	}
+
+	private String photosUrl() {
+		return caseUrl() + "/photos";
+	}
+
+	/** 내용은 보지 않는다 — 공개 중이면 S3에 올리기 전에 거절되므로 비어 있지만 않으면 된다 */
+	private static MockMultipartFile imageFile() {
+		return new MockMultipartFile("file", "photo.jpg", MediaType.IMAGE_JPEG_VALUE, new byte[] {1, 2, 3});
+	}
+
+	private int countIncidentPhotos() {
+		return jdbcTemplate.queryForObject("SELECT count(*) FROM case_incident_photo WHERE case_id = ?", Integer.class,
+			caseId);
 	}
 
 	private static String axisUrl(long factorId) {
