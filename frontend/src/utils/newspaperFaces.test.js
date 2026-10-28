@@ -47,15 +47,18 @@ test('좁은 화면에서 채울 칸은 넓은 화면에서 채울 칸보다 많
   }
 });
 
-const FACE_LIST = [{ crimeType: undefined }, { crimeType: 'MURDER' }, { crimeType: 'FRAUD' }, { crimeType: 'THEFT' }, { crimeType: 'INDEX', special: true }];
-const keys = (list) => list.map(({ crimeType }) => crimeType);
+const crime = (key) => ({ key, hideWhenEmpty: true, count: (summary) => summary.byCrimeType[key] ?? 0 });
+const always = (key) => ({ key, count: () => null });
+const FACE_LIST = [always(undefined), crime('MURDER'), crime('FRAUD'), crime('THEFT'), always('INDEX')];
+const keys = (list) => list.map(({ key }) => key);
+const summaryOf = (byCrimeType) => ({ total: 3, byCrimeType });
 
-test('사건이 0건인 범죄 유형 면은 숨기고, 1면 · 색인 같은 면은 남긴다', () => {
-  assert.deepEqual(keys(visibleFaces(FACE_LIST, { MURDER: 3, FRAUD: 0 }, undefined)), [undefined, 'MURDER', 'INDEX']);
+test('0건이면 숨기는 면은 건수가 0일 때 빼고, 1면 · 색인 같은 면은 남긴다', () => {
+  assert.deepEqual(keys(visibleFaces(FACE_LIST, summaryOf({ MURDER: 3, FRAUD: 0 }), undefined)), [undefined, 'MURDER', 'INDEX']);
 });
 
 test('지금 보고 있는 면은 0건이어도 남긴다', () => {
-  assert.deepEqual(keys(visibleFaces(FACE_LIST, { MURDER: 3 }, 'THEFT')), [undefined, 'MURDER', 'THEFT', 'INDEX']);
+  assert.deepEqual(keys(visibleFaces(FACE_LIST, summaryOf({ MURDER: 3 }), 'THEFT')), [undefined, 'MURDER', 'THEFT', 'INDEX']);
 });
 
 test('건수를 아직 모르면 모든 면을 보인다', () => {
