@@ -4,6 +4,7 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -15,6 +16,7 @@ import com.team2.project.common.exception.BusinessException;
 import com.team2.project.common.exception.ErrorCode;
 import com.team2.project.experience.repository.CaseParticipantCount;
 import com.team2.project.experience.repository.ExperienceRepository;
+import com.team2.project.legalcase.domain.CaseScript;
 import com.team2.project.legalcase.domain.CrimeType;
 import com.team2.project.legalcase.domain.LegalCase;
 import com.team2.project.legalcase.dto.CaseDetailResponse;
@@ -22,6 +24,7 @@ import com.team2.project.legalcase.dto.CaseListResponse;
 import com.team2.project.legalcase.dto.CaseListResponse.CaseItem;
 import com.team2.project.legalcase.dto.CaseListResponse.MyStatus;
 import com.team2.project.legalcase.dto.CaseListResponse.Summary;
+import com.team2.project.legalcase.repository.CaseScriptRepository;
 import com.team2.project.legalcase.repository.LegalCaseRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -34,6 +37,7 @@ public class LegalCaseService {
 
 	private final LegalCaseRepository legalCaseRepository;
 	private final ExperienceRepository experienceRepository;
+	private final CaseScriptRepository scriptRepository;
 
 	/**
 	 * 공개된 사건 목록. MVP는 사건이 몇 개 안 되므로 공개 사건을 한 번에 읽어
@@ -47,11 +51,12 @@ public class LegalCaseService {
 		Map<Long, Long> participantCounts = experienceRepository.countCompletedFirstAttemptsByCase().stream()
 				.collect(Collectors.toMap(CaseParticipantCount::getCaseId, CaseParticipantCount::getParticipantCount));
 		Map<Long, MyStatus> myStatuses = myStatuses(anonymousUserId);
+		Set<Long> scriptReadyCaseIds = scriptRepository.findApprovedCaseIds();	// 사건마다 조회하지 않고 한 번에
 
 		List<CaseItem> items = published.stream()
 				.filter(legalCase -> crimeType == null || legalCase.getCrimeType() == crimeType)
 				.map(legalCase -> CaseItem.of(legalCase, participantCounts.getOrDefault(legalCase.getId(), 0L),
-						myStatuses.get(legalCase.getId())))
+						scriptReadyCaseIds.contains(legalCase.getId()), myStatuses.get(legalCase.getId())))
 				.toList();
 		return new CaseListResponse(summarize(published), items);
 	}
@@ -71,7 +76,9 @@ public class LegalCaseService {
 				.flatMap(id -> experienceRepository.findLatest(id, caseId))
 				.map(experience -> MyStatus.from(experience.getStatus()))
 				.orElse(null);
-		return CaseDetailResponse.of(legalCase, experienceRepository.countCompletedFirstAttempts(caseId), myStatus);
+		boolean scriptReady = scriptRepository.findByLegalCaseId(caseId).filter(CaseScript::isPublic).isPresent();	// API 18과 같은 조건
+		return CaseDetailResponse.of(legalCase, experienceRepository.countCompletedFirstAttempts(caseId), scriptReady,
+				myStatus);
 	}
 
 	/**
