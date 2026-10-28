@@ -60,6 +60,7 @@
 | v0.56 | 2026-10-27 | API 1 `crimeCategoryLabel` 설명에 범죄 유형별 분류명 대응을 모두 적음(생명 · 재산 · 신체범죄, 강도 · 절도는 재산범죄) (BE-111, BE-112 #297 리뷰 요청) |
 | v0.57 | 2026-10-27 | **사건 대본 검수 A-13-10 ~ A-13-12 신설 (BE-108)** — `GET /admin/cases/{caseId}/script` · `POST .../script/approve` · `POST .../script/reject`. 적재(A-14-1)가 넣은 증거조사 대본을 관리자가 보고 승인해야 공개된다(공개 서빙은 BE-109). **번호는 운영 메뉴 A-16 ~ A-41 예약 때문에 A-13 하위로 매겼다** — A-14-1과 같은 이유다. 검수 칸(`reviewStatus` · `isPublished` · `reviewedBy` · `reviewedAt` · `reviewNote`)은 판결 후보 A-8과 같은 이름 · 같은 형식이고, 대사마다 판단 요소 문구 `label`을 서버가 붙여 준다. 대사 한 줄 직접 수정 A-13-13(`PATCH .../script/evidence/{factorId}`)도 함께 — 고친 줄은 `validation.manual`로 표시하고 검수 상태를 대기로 되돌린다(해송님 요청). **A-6 응답에 `script` 요약(`exists` · `reviewStatus` · `publishable`) 추가** — 미승인 대본은 공개를 막지 않으므로 `publishReadiness.reasons`가 아니라 별도 칸으로 내려 공개 준비 화면이 경고로 쓴다. 에러 코드 `SCRIPT_NOT_FOUND` · `SCRIPT_LINE_NOT_FOUND`(404) 추가. ERD v1.41 `case_script`(V32) **(병합 메모) 번호를 두 번 옮겼다 — BE-106(V30 · v0.54 · v1.39)과 BE-112(V31 · v0.55 · v1.40) · BE-111(v0.56)이 먼저 머지돼, 이 작업은 V32 · v0.57 · v1.41로 다시 매겼다. 먼저 머지된 쪽이 번호를 갖는다** |
 | v0.58 | 2026-10-27 | **아이디 회원가입 M-5 · 아이디 로그인 M-6 신설 (BE-113 · FE-117, ERD v1.42 · V33)** — `POST /auth/signup` · `POST /auth/login`. 둘 다 성공하면 리프레시 토큰 쿠키(`NLNB_RT`)만 심고 `{ nickname }`을 돌려주며, 화면은 M-1 재발급으로 액세스 토큰을 받는다(카카오 로그인과 같은 흐름). Origin 검증 대상에 추가(로그인 CSRF 방지). 1-5에 409 `DUPLICATE_ID` 추가, `INVALID_CREDENTIALS`를 회원 로그인에도 쓴다, `TOO_MANY_REQUESTS` 전용 제한에 M-5 · M-6 추가(`Retry-After` 6 · 3초). 관리자 로그인(A-2)은 바뀌지 않는다 |
+| v0.59 | 2026-10-27 | **API 18 공개 사건 대본 신설 (BE-109)** — `GET /cases/{caseId}/script`. A-13-10 ~ 12(BE-108)가 적재 · 검수한 대본에서 **승인된 것만** 공개용으로 가져다 준다(새로 저장하지 않음, API 17과 같은 원칙) — 2막 증거조사 대사(`factorId` · `side` · `character` · `card` · `text`)와 배역(`cast`)만 담는다. **나머지 막(1막 해설 · 공소사실 · 쟁점 정리 · 피고인신문 · 검사의견 · 최종변론 · 최후진술)은 이 API에 넣지 않는다** — 파이프라인이 만들지 않아 BE-107 후속 확장으로 분리했고, 그중 사건별 대사가 필요한 막은 당분간 "증거조사 중심 축약판"으로 둔다(FE-33 담당자 해송님 합의, BE-109 Jira 댓글). `side`는 A-13-10의 `role`을 대문자 코드값(`PROSECUTOR` · `DEFENSE`)으로 바꿔 내려준다 — 다른 공개 API와 형식을 맞추려는 것(화면 한글 변환은 프론트 몫). `card`는 A-13-10의 `label`과 같은 값(판단 요소 문구) — 파이프라인 사건에는 정적 증거 카드가 없어 이 문구가 카드 역할을 한다. 검수용 값(`manual` · `editedAt` · `validation` · `attempts`)은 내려주지 않는다. **배열 순서가 곧 재생 순서다**(별도 정렬 필드 없음). 비공개 사건은 `CASE_NOT_FOUND`, 대본이 없거나 아직 승인 전이면 `SCRIPT_NOT_FOUND`(API 17과 같은 모양 — 빈 배열 대신 404를 쓰는 이유는 "대본 없음"과 "대사 0줄"을 구분하기 위해서다). **(병합 메모) BE-113(PR #306 · v0.58)이 먼저 develop에 머지돼, 이 작업은 v0.59로 다시 매겼다** |
 
 ---
 
@@ -205,6 +206,7 @@ json
 | 15 | GET | `/cases/{caseId}/experience/comparison/analysis` | AI 비교 분석 | `COMPLETED` | — | S-08 | 확장 |
 | 16 | GET | `/cases/{caseId}` | 공개 사건 상세 (체험 없이) | — | — | S-20 | 확장 (v0.29) |
 | 17 | GET | `/cases/{caseId}/paper` | 공개 신문 지면 (헤드라인 · 본문 · 발단 · 결론 사진) | — | — | S-20 | 확장 (v0.53) |
+| 18 | GET | `/cases/{caseId}/script` | 공개 사건 대본 (승인된 2막 증거조사 대사) | — | — | S-20 | 확장 (v0.59) |
 
 **공개(11, 13)와 조회(12, 14)를 나눈 이유**: 상태를 바꾸는 요청은 POST로 두고, 조회는 몇 번을 불러도 상태가 바뀌지 않게 한다. 결과 화면을 새로고침하면 조회만 다시 부르면 된다. 공개 요청은 이미 공개된 상태에서 다시 와도 거절하지 않고 성공으로 돌려준다(시퀀스 7장).
 
@@ -759,7 +761,7 @@ S-20 사건 디테일(정보 구조 v1.12)이 체험을 만들기 전에 부르�
 - 쿠키는 **읽기만** 하고 발급하지 않는다(발급은 API 2 · P-2, 1-2). 쿠키가 없거나 형식이 틀리거나 체험 전이면 `myStatus`는 `null`이다.
 - 버튼 분기(정보 구조 S-20): `myStatus`가 `null`이면 **체험 시작**(API 2로 체험을 만든 뒤 S-03), `IN_PROGRESS`면 **이어서 하기**, `COMPLETED`면 **결과 다시 보기**. 이어서 하기 · 결과 다시 보기도 API 2를 불러 응답 `status`로 이동한다(1-6). 세부 상태(7단계)는 이 API에 내보내지 않는다.
 - 캐시: `myStatus`가 사용자마다 달라 API 1과 같은 규칙이다(지금은 `no-store`, HTTP 캐시를 켤 때는 `private` + `Vary: Cookie`).
-- 대본(판결 체험 무대, REQ-089)은 이 API에 넣지 않는다. 서버에서 내려줄지는 별도로 정한다(#138 · #141).
+- 대본(판결 체험 무대, REQ-089)은 이 API에 넣지 않는다. 승인된 대본의 증거조사 대사는 API 18(BE-109)에서 따로 준다.
 
 | 거절 | 조건 |
 | --- | --- |
@@ -802,6 +804,43 @@ FE-64가 쓰는 API(S-20 기사 지면 · 증거조사). 관리자 신문 지면
 | --- | --- |
 | 404 `CASE_NOT_FOUND` | 사건 없음 · 비공개 |
 | 404 `PAPER_NOT_FOUND` | 사건은 공개됐지만 관리자가 신문 지면을 아직 생성한 적 없음 |
+| 400 `VALIDATION_ERROR` | `caseId`가 숫자가 아님 |
+
+---
+
+### API 18. (확장) 공개 사건 대본 — `GET /cases/{caseId}/script`
+
+> **신설 (BE-109).** A-13-10 ~ 12(BE-108)가 적재 · 검수한 대본에서 **승인된 것만** 공개용으로 가져다 조립한다 — 새로 저장하지 않는다(API 17과 같은 원칙). 담는 것은 **2막 증거조사 대사뿐**이다 — 나머지 막(1막 해설 · 공소사실 · 쟁점 정리 · 피고인신문 · 검사의견 · 최종변론 · 최후진술)은 파이프라인이 만들지 않아(COMMON-65) 이 API에 넣지 않는다. 그중 사건마다 달라지지 않는 부분만 FE-33이 공통 틀로 채우고, 공소사실 · 피고인신문처럼 사건별 대사가 필요한 막은 당분간 "증거조사 중심 축약판"으로 둔다 — 자세한 내용은 [BE-109 결정 기록](decisions/BE-109.md) 참고. 설계 근거: BE-109 Jira 댓글(승호님 제안 · 해송님 FE-33 담당 합의, 2026-10-27).
+
+**요청**: 본문 없음.
+
+**응답 200**
+
+```json
+{
+  "evidence": [
+    { "factorId": 1, "side": "PROSECUTOR", "character": "naero", "card": "계약서에 서명했다",
+      "text": "계약서에 서명한 사실은 분명합니다." },
+    { "factorId": 2, "side": "DEFENSE", "character": "nambul", "card": "돈을 돌려주지 않았다",
+      "text": "그 돈은 빌린 것이 아니라 받은 것입니다." }
+  ],
+  "cast": { "prosecutor": "naero", "defense": "nambul" }
+}
+```
+
+- `character` · `cast`는 저장된 **코드값**(`naero` · `nambul` 등)을 그대로 내려준다. 화면에 보일 한글 이름(나로 · 남불)으로 바꾸는 것은 프론트 몫이다.
+- `side`는 A-13-10의 `role`을 **대문자 코드값**(`PROSECUTOR` · `DEFENSE`)으로 바꿔 내려준다 — 다른 공개 API가 모두 코드값이라 맞췄다. 화면 한글(검사 · 변호인)로 바꾸는 것은 프론트 몫이다.
+- `card`는 A-13-10의 `label`과 같은 값(= 사건의 판단 요소 문구). 파이프라인 사건에는 정적 증거 카드가 없어 이 문구가 카드 역할을 그대로 한다 — 요소가 지워졌으면 `null`이다.
+- **검수용 값(`manual` · `editedAt` · `validation` · `attempts`)은 내려주지 않는다.** 사람이 고친 줄도 같은 응답에 그대로 나오면 충분하다.
+- **배열 순서가 곧 재생 순서다.** 별도 정렬 필드를 두지 않는다.
+- `cast`는 A-13-10과 같은 값(`{ prosecutor, defense }`).
+- **승인(`reviewStatus: APPROVED`)한 대본만 내려준다.** 검수 전 · 반려된 대본은 없는 것으로 본다 — 사건이 `PUBLISHED`여도 대본이 미승인이면 `SCRIPT_NOT_FOUND`다(API 16 · 17과 달리 사건 공개 여부만으로는 판단하지 않는다).
+- 한 캐릭터가 두 배역을 번갈아 맡는 장면(피고인신문)은 이번 응답에 들어오지 않는다 — 그 장면이 서버 데이터로 들어오는 때에 `cast` 확장이 필요하다(FE-60 "추후 재검토").
+
+| 거절 | 조건 |
+| --- | --- |
+| 404 `CASE_NOT_FOUND` | 사건 없음 · 비공개 |
+| 404 `SCRIPT_NOT_FOUND` | 대본이 없거나, 아직 검수 대기 · 반려 상태(= 승인 전) — 빈 배열 대신 404를 쓰는 이유는 "대본 없음"과 "대사 0줄"을 구분하기 위해서다(A-13-7 `PAPER_NOT_FOUND`와 같은 구분) |
 | 400 `VALIDATION_ERROR` | `caseId`가 숫자가 아님 |
 
 ---
@@ -1461,17 +1500,17 @@ A-11과 같은 방식(보낸 필드만, `null` = 지움). `headline` · `article
 
 ### A-13-10. 사건 대본 조회 — `GET /admin/cases/{caseId}/script`
 
-> **신설 (BE-108).** 증거조사에서 검사 · 변호인이 주고받는 대사. 파이프라인 `script` 단계(BE-107)가 만들고 적재(A-14-1)가 넣는다. **담는 것은 증거조사 대사뿐이다** — 1막 기사 해설 · 피고인신문 · 최종의견은 파이프라인 범위 밖이다(COMMON-65 · FE-33). 공개 서빙은 BE-109에서 FE-33과 정한다.
+> **신설 (BE-108).** 증거조사에서 검사 · 변호인이 주고받는 대사. 파이프라인 `script` 단계(BE-107)가 만들고 적재(A-14-1)가 넣는다. **담는 것은 증거조사 대사뿐이다** — 1막 기사 해설 · 피고인신문 · 최종의견은 파이프라인 범위 밖이다(COMMON-65 · FE-33). 공개 서빙은 API 18(BE-109)이 승인된 대본만 가져다 준다.
 
 ```json
 {
   "evidence": [
-    { "factorId": 1, "label": "계약서에 서명했다", "role": "PROSECUTOR", "character": "나로",
+    { "factorId": 1, "label": "계약서에 서명했다", "role": "PROSECUTOR", "character": "naero",
       "text": "계약서에 서명한 사실은 분명합니다.", "attempts": 1, "validation": { "warnings": [] } },
-    { "factorId": 2, "label": "돈을 돌려주지 않았다", "role": "DEFENSE", "character": "남불",
+    { "factorId": 2, "label": "돈을 돌려주지 않았다", "role": "DEFENSE", "character": "nambul",
       "text": null, "attempts": 3, "validation": { "warnings": ["증거 카드에 없는 사실을 말했습니다"] } }
   ],
-  "cast": { "prosecutor": "나로", "defense": "남불" },
+  "cast": { "prosecutor": "naero", "defense": "nambul" },
   "model": "google:gemini-2.5-flash",
   "balanceWarning": null,
   "publishable": false,
