@@ -482,6 +482,31 @@ class JobStoreTest(unittest.TestCase):
         self.assertEqual(script["fullScript"]["pending"], ["U1"])
         self.assertEqual(script["pending"], ["U1"])
 
+    def test_result_sends_classification_content_not_path(self):
+        """사건 분류(BE-123)도 경로가 아니라 내용으로 보낸다(표 · 플래그 근거 포함). 분류를 안 돌렸으면 None이다"""
+        job_id = self.store.create(self._request())
+        folder = self.tool_dir / "cases"
+        folder.mkdir(parents=True, exist_ok=True)
+        case_file, saved = folder / "case.json", folder / "classification.json"
+        case_file.write_text(json.dumps({"title": "사건"}, ensure_ascii=False), encoding="utf-8")
+        saved.write_text(json.dumps({"votes": {"mood": {"counts": {"cold": 3}, "needsReview": False}},
+                                     "flags": {"CAPITAL_PENALTY": {"ai": 0, "rule": ["사형"], "on": True, "needsReview": False}},
+                                     "recovery": "none"}, ensure_ascii=False), encoding="utf-8")
+        classification = {"mood": "cold", "issue": "denied", "victim": "mixed", "thirdParty": True,
+                          "sensitiveFlags": ["CAPITAL_PENALTY"]}
+        self._write_state(job_id, {
+            "extract": {"status": "done", "outputs": {"case": str(case_file)}},
+            "classify": {"status": "done", "outputs": {"classificationFile": str(saved), "classification": classification,
+                                                       "needsReview": []}},
+        })
+
+        result = self.store.result(job_id)
+
+        self.assertNotIn("classificationFile", result["classify"])	# 컨테이너 내부 경로는 내보내지 않는다
+        self.assertEqual(result["classify"]["classification"], classification)
+        self.assertEqual(result["classify"]["flags"]["CAPITAL_PENALTY"]["rule"], ["사형"])
+        self.assertEqual(result["classify"]["recovery"], "none")
+
     def test_result_without_script_stage(self):
         """대본을 안 돌린 작업은 script가 None이다 — 사건 · 판결만으로도 적재는 그대로 된다 (BE-108)"""
         job_id = self.store.create(self._request())
@@ -491,6 +516,7 @@ class JobStoreTest(unittest.TestCase):
         self._write_state(job_id, {"extract": {"status": "done", "outputs": {"case": str(case_file)}}})
 
         self.assertIsNone(self.store.result(job_id)["script"])
+        self.assertIsNone(self.store.result(job_id)["classify"])
 
     def test_result_before_pipeline_produced_anything(self):
         job_id = self.store.create(self._request())

@@ -399,7 +399,7 @@ class PipelineTest(unittest.TestCase):
         return pipeline.load_config(path)
 
     def run_with(self, config, answers, applied=None, court_answers=None, caller=None, axis_answers=None,
-                script_answers=None, **kwargs):
+                script_answers=None, classify_answers=None, **kwargs):
         caller = caller or fake_caller(answers)
         functions = dict(pipeline.STAGE_FUNCTIONS)
         court_queue = list(court_answers or [])
@@ -408,6 +408,18 @@ class PipelineTest(unittest.TestCase):
         self.axis_requests = getattr(self, "axis_requests", [])
         script_queue = None if script_answers is None else list(script_answers)
         self.script_requests = getattr(self, "script_requests", [])
+        classify_queue = list(classify_answers or [])
+        self.classify_requests = getattr(self, "classify_requests", [])
+
+        def classify_caller(spec, system, user, **kw):
+            # 사건 분류 (BE-123). 응답을 순서대로 낸다(dict는 JSON으로)
+            self.classify_requests.append((spec, user))
+            item = classify_queue.pop(0)
+            if isinstance(item, Exception):
+                raise item
+            text = item if isinstance(item, str) else json.dumps(item, ensure_ascii=False)
+            return llm.LLMResult(text, *llm.parse_model_spec(spec), usage={"inputTokens": 100, "outputTokens": 20,
+                                                                            "totalTokens": 120})
 
         def script_caller(spec, system, user, **kw):
             self.script_requests.append((spec, system, user))
@@ -446,6 +458,7 @@ class PipelineTest(unittest.TestCase):
             runner=getattr(self, "rag_db", None) or self.rag_unavailable)
         functions["generate"] = lambda c, s, log: pipeline.stage_generate(c, s, log, caller=caller)
         functions["axis"] = lambda c, s, log: pipeline.stage_axis(c, s, log, caller=axis_caller_for(c, s))
+        functions["classify"] = lambda c, s, log: pipeline.stage_classify(c, s, log, caller=classify_caller)
         functions["script"] = lambda c, s, log: pipeline.stage_script(c, s, log, caller=script_caller)
         functions["load"] = lambda c, s, log: pipeline.stage_load(
             c, s, log, apply=lambda path, db: (applied.append((path, db)) if applied is not None else None) or [])
@@ -1171,6 +1184,54 @@ class PipelineTest(unittest.TestCase):
                     self.config(script={**base, **changes})
                 self.assertIn(message, str(ctx.exception))
         self.config(script={**base, "full": True, "classification": {"mood": "tragic", "issue": "admitted", "victim": "punish"}})
+
+    CLASSIFY_ANSWER = {"mood": "impulsive", "issues": ["admitted"], "victimWill": "punish", "recovery": "partial",
+                       "thirdParty": False, "sensitiveFlags": ["PROFANITY_QUOTED"]}
+
+    def test_classify_stage_votes_and_counts_tokens(self):
+        """BE-123: runs회 묻고 표를 센다. 형식이 틀린 회차는 다시 묻고, 토큰은 응답마다 더한다. 판결 정보는 보내지 않는다."""
+        config = self.config(generate={"models": ["openai:a"], "runs": 1}, classify={"enabled": True, "runs": 3})
+        answers = [self.CLASSIFY_ANSWER, "JSON 아님", {**self.CLASSIFY_ANSWER, "mood": "cold"}, self.CLASSIFY_ANSWER]
+        state = self.run_with(config, {"openai:a": [self.output]}, until="classify", classify_answers=answers)
+        outputs = state["stages"]["classify"]["outputs"]
+        self.assertEqual(outputs["classification"]["mood"], "impulsive")
+        self.assertEqual(outputs["classification"]["issue"], "admitted")
+        self.assertEqual(outputs["runs"], 3)
+        self.assertEqual(outputs["attempts"], 4)
+        self.assertEqual(outputs["failures"], 1)
+        self.assertEqual(outputs["tokens"], {"inputTokens": 400, "outputTokens": 80, "totalTokens": 480})
+        saved = load_json(outputs["classificationFile"])
+        self.assertEqual(saved["votes"]["mood"]["counts"], {"impulsive": 2, "cold": 1})
+        self.assertEqual(saved["recovery"], "partial")
+        self.assertEqual(outputs["model"], "openai:a")  # model이 없으면 생성 모델(axis와 같은 규칙)
+        sent = self.classify_requests[0][1]
+        self.assertIn(self.case["overview"], sent)
+        self.assertNotIn(self.output["reasoning"], sent)  # 판결 이유는 보내지 않는다
+        self.assertTrue(any(line.startswith("외부 전송: 사건 분류 단계") for line in self.logs))
+
+    def test_script_full_uses_classify_output_when_not_configured(self):
+        """BE-123: stages.script.classification이 없으면 classify 결과를 쓴다(설정 값이 있으면 그쪽이 우선)."""
+        config = self.config(generate={"models": ["openai:a"], "runs": 1}, classify={"enabled": True, "runs": 1},
+                             script={"enabled": True, "model": "openai:a", "full": True,
+                                     "cast": {"prosecutor": "naero", "defense": "nambul"}})
+        state = self.run_with(config, {"openai:a": [self.output]}, until="classify",
+                              classify_answers=[self.CLASSIFY_ANSWER])
+        with mock.patch.object(pipeline, "generate_units", side_effect=lambda *a, **k: {
+                "units": {}, "paper": None, "evidence": [], "stopped": True, "pending": ["U0"]}) as gen:
+            pipeline.stage_script(config, state, self.logs.append)
+        self.assertEqual(gen.call_args.args[3]["mood"], "impulsive")
+        # 모델이 잡은 플래그 + 규칙(사건 법정형의 사형 · 무기)으로 잡은 플래그
+        self.assertEqual(gen.call_args.args[3]["sensitiveFlags"], ["PROFANITY_QUOTED", "CAPITAL_PENALTY"])
+
+    def test_script_full_without_any_classification_fails(self):
+        base = {"enabled": True, "model": "openai:a", "full": True, "cast": {"prosecutor": "naero", "defense": "nambul"}}
+        with self.assertRaises(pipeline.PipelineError) as ctx:
+            self.config(script=base)  # 분류 설정도 classify 단계도 없음
+        self.assertIn("classification", str(ctx.exception))
+        self.config(script=base, classify={"enabled": True})  # classify가 켜져 있으면 통과
+        with self.assertRaises(pipeline.PipelineError) as ctx:
+            self.config(classify={"enabled": True, "runs": 0})
+        self.assertIn("stages.classify.runs", str(ctx.exception))
 
     def test_script_stage_marks_not_publishable_when_quota_exhausted(self):
         config = self.config(generate={"models": ["openai:a"], "runs": 1},
