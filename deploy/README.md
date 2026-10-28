@@ -582,11 +582,13 @@ echo "$FILES" | wc -l
 
 # 2) 접속 함수 (값은 .env에서 읽고 출력하지 않는다)
 E=/opt/lawnambul/app/deploy/.env
-envv() { grep "^$1=" "$E" | tail -1 | cut -d= -f2-; }   # deploy.sh와 같은 기준: 같은 키가 여러 줄이면 마지막 줄
+# deploy.sh · backup-db.sh · 아래 "되살리기"와 같은 기준: 같은 키가 여러 줄이면 마지막 줄, 따옴표 · 공백 · CR 제거
+envv() { grep "^$1=" "$E" | tail -1 | cut -d= -f2- | tr -d "\"' \r"; }
 U="$(envv EXTERNAL_DB_URL)"; U="${U#jdbc:postgresql://}"; HP="${U%%/*}"; DBN="${U#*/}"; DBN="${DBN%%\?*}"
+H="${HP%:*}"; P="${HP##*:}"; [[ "$P" == "$HP" ]] && P=5432   # 주소에 포트가 없으면 5432
 export PGPASSWORD="$(envv EXTERNAL_DB_PASSWORD)"
 q() { docker run --rm -i -e PGPASSWORD postgres:17-alpine psql -At -v ON_ERROR_STOP=1 \
-        "host=${HP%:*} port=${HP##*:} dbname=$DBN user=$(envv EXTERNAL_DB_USERNAME) sslmode=require" "$@"; }
+        "host=$H port=$P dbname=$DBN user=$(envv EXTERNAL_DB_USERNAME) sslmode=require" "$@"; }
 echo "select status, count(*) from legal_case group by status order by 1;" | q     # 적재 전
 
 # 3) 실행 — 하나라도 실패하면 멈춘다
@@ -598,7 +600,7 @@ for f in $FILES; do
 done
 echo "성공: $ok / $n"
 echo "select status, count(*) from legal_case group by status order by 1;" | q     # DRAFT가 넣은 건수만큼 늘어야 함
-set +o pipefail; unset PGPASSWORD; unset -f q envv
+set +o pipefail; unset PGPASSWORD H P; unset -f q envv
 ```
 
 - 10/28 실적: `20261028-` 21건 → 21/21 성공, `PUBLISHED 1 · DRAFT 21`.
