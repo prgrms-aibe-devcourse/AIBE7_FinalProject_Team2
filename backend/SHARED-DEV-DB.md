@@ -184,7 +184,12 @@ macOS 기본 bash(3.2)에서도 동작한다.
 
 ## 종료 (RDS 전환 후)
 
-0. **운영을 먼저 RDS로 옮긴다**(BE-59, `deploy/README.md` "외부 DB 모드 > RDS 전환") — **10/28 완료.** 지우기 전에 서버에서 운영이 RDS에 붙어 있는지 다시 본다: `grep '^EXTERNAL_DB_URL=' /opt/lawnambul/app/deploy/.env | grep -c rds.amazonaws.com` → 1. 0이면 지우지 않는다(운영이 멈춘다).
+0. **운영을 먼저 RDS로 옮긴다**(BE-59, `deploy/README.md` "외부 DB 모드 > RDS 전환") — **10/28 완료.** 지우기 전에 서버에서 아래 **세 가지를 모두** 확인한다. 하나라도 아니면 지우지 않는다(운영이 멈춘다).
+   - `.env`가 RDS를 가리킨다 — `deploy.sh`와 같은 기준(같은 키가 여러 줄이면 **마지막 줄**, 따옴표 · 공백 제거)으로 본다. 값은 출력하지 않는다:
+     `grep -E '^EXTERNAL_DB_URL=' /opt/lawnambul/app/deploy/.env | tail -1 | cut -d= -f2- | tr -d "\"' \r" | grep -c 'rds\.amazonaws\.com'` → **1**
+   - 그 `.env`로 `./deploy.sh --reapply`가 **성공**했다(스모크 테스트 통과까지). `.env`만 바꾸고 다시 적용하지 않으면 backend는 예전 값으로 떠 있다.
+   - **지금 떠 있는 backend**가 RDS에 붙어 있다(값은 출력하지 않고 건수만):
+     `docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$(docker ps -q --filter label=com.docker.compose.project=lawnambul --filter label=com.docker.compose.service=backend)" | grep -c '^DB_URL=jdbc:postgresql://[^/]*rds\.amazonaws\.com'` → **1**
 1. 팀원: `backend/.env.supabase`를 지운다.
 2. 담당자: Supabase Settings → General → **Delete project**.
 3. RDS는 Flyway로 새로 적용한다(BE-59). Supabase의 테스트 데이터는 옮기지 않는다.

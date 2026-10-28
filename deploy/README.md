@@ -582,7 +582,7 @@ echo "$FILES" | wc -l
 
 # 2) 접속 함수 (값은 .env에서 읽고 출력하지 않는다)
 E=/opt/lawnambul/app/deploy/.env
-envv() { grep "^$1=" "$E" | head -1 | cut -d= -f2-; }
+envv() { grep "^$1=" "$E" | tail -1 | cut -d= -f2-; }   # deploy.sh와 같은 기준: 같은 키가 여러 줄이면 마지막 줄
 U="$(envv EXTERNAL_DB_URL)"; U="${U#jdbc:postgresql://}"; HP="${U%%/*}"; DBN="${U#*/}"; DBN="${DBN%%\?*}"
 export PGPASSWORD="$(envv EXTERNAL_DB_PASSWORD)"
 q() { docker run --rm -i -e PGPASSWORD postgres:17-alpine psql -At -v ON_ERROR_STOP=1 \
@@ -590,13 +590,15 @@ q() { docker run --rm -i -e PGPASSWORD postgres:17-alpine psql -At -v ON_ERROR_S
 echo "select status, count(*) from legal_case group by status order by 1;" | q     # 적재 전
 
 # 3) 실행 — 하나라도 실패하면 멈춘다
+# pipefail: git show(파일 읽기)가 실패해도 멈춘다. 없으면 q(psql)의 종료 코드만 보여 빈 입력을 성공으로 센다
+set -o pipefail
 ok=0; n=$(echo "$FILES" | wc -l)
 for f in $FILES; do
   if git show "origin/develop:$f" | q -q > /dev/null; then ok=$((ok+1)); echo "✅ $f"; else echo "❌ $f — 중단"; break; fi
 done
 echo "성공: $ok / $n"
 echo "select status, count(*) from legal_case group by status order by 1;" | q     # DRAFT가 넣은 건수만큼 늘어야 함
-unset PGPASSWORD; unset -f q envv
+set +o pipefail; unset PGPASSWORD; unset -f q envv
 ```
 
 - 10/28 실적: `20261028-` 21건 → 21/21 성공, `PUBLISHED 1 · DRAFT 21`.
@@ -639,6 +641,28 @@ unset PGPASSWORD; unset -f q envv
 - 백업 파일에는 관리자 비밀번호 해시 등 운영 데이터가 있으므로 권한 600, 서버 밖으로 옮기지 않는다.
 - **한계**: `backup-db.sh` 파일은 같은 서버 디스크에 둔다. 서버(EBS)가 통째로 사라지면 그 파일도 같이 사라진다. 10/28 RDS 전환 뒤에는 RDS 자동 백업 · 스냅샷이 서버 밖 보관 역할을 한다.
 - 되살리기: 타이머 정지 · 백엔드 중지 후 **한 트랜잭션으로** 복구한다. 중간에 실패하면 전부 취소돼 반쯤 복구된 상태가 남지 않는다.
+  **덤프를 만든 곳으로 되살린다** — `.env`에 `EXTERNAL_DB_URL`이 있으면(10/28부터 운영) `backup-db.sh`는 RDS를 덤프했으므로 RDS로, 없으면 같은 서버 postgres 컨테이너로 되살린다.
+
+  외부 DB(RDS) 모드 — `backup-db.sh`와 같은 클라이언트 컨테이너로 RDS에 복원하고, backend는 `--reapply`로 외부 DB 오버레이를 포함해 다시 올린다(그냥 `up`하면 로컬 DB로 붙을 수 있다):
+
+  ```bash
+  cd /opt/lawnambul/app/deploy
+  sudo systemctl stop lawnambul-cd.timer
+  docker compose -f docker-compose.prod.yml -f docker-compose.external-db.yml stop backend
+  # 접속 값은 .env에서 읽고 출력하지 않는다(deploy.sh와 같은 기준: 같은 키는 마지막 줄)
+  envv() { grep "^$1=" .env | tail -1 | cut -d= -f2- | tr -d "\"' \r"; }
+  U="$(envv EXTERNAL_DB_URL)"; U="${U#jdbc:postgresql://}"; HP="${U%%/*}"; DBN="${U#*/}"; DBN="${DBN%%\?*}"
+  H="${HP%:*}"; P="${HP##*:}"; [[ "$P" == "$HP" ]] && P=5432
+  export PGPASSWORD="$(envv EXTERNAL_DB_PASSWORD)"
+  docker run --rm -i -e PGPASSWORD postgres:17-alpine \
+    pg_restore --clean --if-exists --single-transaction --exit-on-error --no-owner --no-privileges \
+    -d "host=$H port=$P dbname=$DBN user=$(envv EXTERNAL_DB_USERNAME) sslmode=require" < ~/backups/<백업>.dump
+  unset PGPASSWORD; unset -f envv
+  ./deploy.sh --reapply    # 같은 이미지로 외부 DB 오버레이까지 다시 적용 + 스모크 테스트
+  sudo systemctl start lawnambul-cd.timer
+  ```
+
+  같은 서버 DB 모드(`EXTERNAL_DB_URL`이 없을 때):
 
   ```bash
   sudo systemctl stop lawnambul-cd.timer

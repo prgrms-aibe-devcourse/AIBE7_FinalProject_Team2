@@ -28,7 +28,7 @@ file_mode() { stat -c %a "$1" 2>/dev/null || stat -f %Lp "$1"; }
 # 이름이 비밀값처럼 보이면 명령줄 입력을 막는다 (셸 기록 · ps에 남는다)
 is_secret_name() { [[ "$1" =~ (PASSWORD|_KEY|SECRET|TOKEN)$ ]]; }
 
-# 키별 형식 (값을 넣을 때 검사, --check에서도 검사). 모르는 키는 공통 규칙만 본다
+# 키별 형식 (값을 넣을 때 검사, --check에서도 검사). 모르는 키 · 패턴이 없는 키는 공통 규칙만 본다
 key_pattern() {
   case "$1" in
     EXTERNAL_DB_URL)   echo '^jdbc:postgresql://[^/@[:space:]]+/[^?[:space:]]+\?(.*&)?sslmode=(require|verify-ca|verify-full)(&.*)?$' ;;
@@ -138,7 +138,11 @@ cmd_check() {
   [[ -f "$ENV_FILE" ]] || die "$ENV_FILE 이 없다"
   local bad=0 key val n reason
   echo "== 파일: $ENV_FILE"
-  echo "   주인 $(file_owner "$ENV_FILE") · 권한 $(file_mode "$ENV_FILE")"
+  local owner me
+  owner="$(file_owner "$ENV_FILE")"; me="$(id -un)"
+  echo "   주인 $owner · 권한 $(file_mode "$ENV_FILE")"
+  # 값을 넣을 때(preflight)와 같은 기준: 주인이 바뀌면(sudo로 고침 등) 백업 · 자동 배포가 읽지 못한다
+  [[ "$owner" == "$me" ]] || { echo "❌ .env 주인($owner)과 실행 사용자($me)가 다르다"; bad=1; }
   [[ "$(file_mode "$ENV_FILE")" == "600" ]] || { echo "❌ 권한이 600이 아니다"; bad=1; }
   n="$(LC_ALL=C grep -c $'\e' "$ENV_FILE" || true)"
   [[ "$n" == "0" ]] || { echo "❌ ESC 문자가 있는 줄 ${n}개 (붙여 넣기 신호가 섞임)"; bad=1; }
@@ -149,9 +153,10 @@ cmd_check() {
   if [[ -n "$n" ]]; then echo "$n" | sed 's/^/❌ /'; bad=1; else echo "   없음"; fi
   echo "== 형식 (값은 출력하지 않는다)"
   while IFS= read -r key; do
-    val="$(grep -E "^${key}=" "$ENV_FILE" | head -1 | cut -d= -f2- || true)"
+    # deploy.sh(env_value)처럼 같은 키가 여러 줄이면 마지막 줄이 실제 값이다
+    val="$(grep -E "^${key}=" "$ENV_FILE" | tail -1 | cut -d= -f2- || true)"
     [[ -n "$val" ]] || continue
-    [[ -n "$(key_pattern "$key")" ]] || continue
+    # 형식 패턴이 없는 키도 공통 규칙($ · 따옴표 · 공백 · 제어 문자)은 본다 — 키별 패턴은 check_value 안에서만 고른다
     if reason="$(check_value "$key" "$val")"; then
       printf '   ✅ %-30s 길이 %s\n' "$key" "${#val}"
     else
