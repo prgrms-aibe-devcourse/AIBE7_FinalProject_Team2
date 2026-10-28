@@ -18,7 +18,7 @@ body:has(.community-page) { background: var(--color-desk-bezel); }
 
 .community-screen {
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr) 340px;
+  grid-template-columns: 220px minmax(0, 1fr);
   max-width: 1400px;
   min-height: calc(100vh - var(--site-header-h, 64px) - 32px);
   margin: 0 auto;
@@ -76,7 +76,8 @@ body:has(.community-page) { background: var(--color-desk-bezel); }
   transition: background-color .15s ease-out, border-color .15s ease-out;
 }
 .cm-chip[aria-pressed="true"] { border-color: var(--color-accent); background: var(--color-accent); color: var(--color-on-accent); font-weight: 700; }
-.cm-compose-open { display: none; align-items: center; gap: 6px; }
+.cm-filters { display: flex; flex-direction: column; }
+.cm-compose-open { order: 9; display: inline-flex; align-items: center; justify-content: center; gap: 6px; margin-top: 28px; }
 .cm-back { padding: 6px 0; border: 0; background: none; color: var(--color-accent); font-weight: 700; }
 
 .cm-post { padding: 22px 0; border-bottom: 1px solid var(--color-border); }
@@ -161,17 +162,11 @@ body:has(.community-page) { background: var(--color-desk-bezel); }
 .cm-comment-empty { padding: 16px 0; color: var(--color-muted); }
 .cm-comment-form { margin-top: 18px; }
 
-/* ── 오른쪽: 글쓰기 칸 · 많이 본 글 ── */
-.cm-side {
-  position: sticky; top: calc(var(--site-header-h, 64px) + 14px); align-self: start;
-  max-height: calc(100vh - var(--site-header-h, 64px) - 28px); overflow: auto; overscroll-behavior: contain;
-  padding: 26px 24px 32px; border-left: 1px solid var(--color-border);
-}
+/* ── 글쓰기 페이지(/community/write): 가운데 열 폭을 그대로 쓴다(고정 폭 없음) · 많이 본 글(왼쪽 열 아래) ── */
 .cm-compose { padding: 18px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-card); }
 .cm-compose-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .cm-side-title { display: flex; align-items: center; margin: 0; font: 700 var(--text-body)/1.4 var(--font-heading); color: var(--color-heading); }
 .cm-side-title .mock-tag { color: var(--color-label); }
-.cm-compose-close { display: none; place-items: center; width: 40px; height: 40px; border: 0; border-radius: 6px; background: transparent; color: var(--color-text); }
 .cm-compose-note { margin: 0 0 14px; color: var(--color-muted); font-size: var(--text-small); }
 .cm-compose-login { width: 100%; }
 .cm-form { display: grid; gap: 14px; }
@@ -313,15 +308,9 @@ textarea.cm-input { resize: vertical; min-height: 96px; line-height: 1.6; }
   .cm-main { padding: 20px 28px 36px; }
   .cm-toolbar { flex-wrap: wrap; }
   .cm-sorts { order: 3; width: 100%; margin-left: 0; overflow-x: auto; }
-  .cm-compose-open { display: inline-flex; margin-left: auto; min-height: 40px; padding: 8px 14px; }
-  .cm-side { display: none; }
-  .cm-side.is-open {
-    position: fixed; inset: 0; z-index: 60; display: block; align-self: stretch; max-height: none; padding: 16px; /* align-self: 그리드 칸의 start가 남으면 창이 내용 높이로 줄어든다 */
-    border: 0; background: var(--color-bg); overflow: auto;
-  }
-  .cm-side.is-open .cm-compose { border: 0; padding: 0; }
-  .cm-side.is-open .cm-compose-close { display: grid; }
-  .cm-side.is-open .cm-popular { display: none; }
+  .cm-filters { position: relative; top: auto; } /* 넓은 화면의 sticky top 값이 relative로 남아 칸이 밀리지 않게 */
+  .cm-compose-open { position: absolute; top: 18px; right: 16px; margin: 0; min-height: 40px; padding: 8px 14px; } /* 좁은 화면은 왼쪽 열(위 칸)의 오른쪽 위 */
+  .cm-filters .cm-popular { display: none; } /* 좁은 화면은 위 칸이 거르기만 남게 한다 */
   .cm-article-title { font-size: var(--text-title-2); }
 }
 
