@@ -87,7 +87,8 @@ DEFAULT_CONFIG = {
     "allowFreeTierForJudgment": False,
     # extract를 건너뛸 때 쓸 파일 (extract를 돌리면 그 결과가 우선)
     # courtDraft: 재판부 판결(BE-14 형식) 파일. court 단계를 끄고 사람이 쓴 판결을 넣을 때 쓴다 (BE-38)
-    # paper: 1막 해설(U1)에 쓸 신문 기사 JSON(headline · deck · article). 없으면 U1을 건너뛴다 (BE-121, script_assembler.py)
+    # paper: 1막 신문 기사 JSON(headline · deck · caption · article). 없으면 대본 전체 생성(stages.script.full)이 기사를 먼저
+    # 만든다. 관리자가 고친 기사로 다시 돌릴 때만 넣는다 (BE-121, script_assembler.py)
     "inputs": {"case": None, "court": None, "report": None, "source": None, "courtDraft": None, "paper": None},
     "stages": {
         # model: Claude는 모델 ID(또는 anthropic:모델ID), 다른 공급자는 openai:모델ID · gemini:모델ID (BE-35). maxTokens는 Claude 외 공급자의 출력 상한

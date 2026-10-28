@@ -1125,7 +1125,7 @@ class PipelineTest(unittest.TestCase):
 
     def test_script_stage_full_writes_script_beside_evidence(self):
         """BE-121: full이면 U0 · U2 · U3 · U4를 만들어 script.json을 쓴다. evidence.json(BE-108 적재 계약)은 그대로 둔다.
-        기사(inputs.paper)가 없으면 U1은 건너뛰고 pending에 남는다."""
+        기사(inputs.paper)가 없으면 대본 단계가 기사를 먼저 만들고 1막 해설까지 만든다."""
         classification = {"mood": "impulsive", "issue": "admitted", "victim": "punish", "thirdParty": False,
                           "sensitiveFlags": ["MENTAL_HEALTH"]}
         config = self.config(generate={"models": ["openai:a"], "runs": 1},
@@ -1141,21 +1141,24 @@ class PipelineTest(unittest.TestCase):
                              "issues": {"p": "정리", "ul": ["쟁점"]}}}
         closing = {"prosecutor": "검사 측 의견입니다.", "defense": "변호인 측 최종변론입니다."}
         evidence_lines = [f"증거 대사 {i}입니다." for i in range(6)]
-        answers = [json.dumps(design, ensure_ascii=False), json.dumps(opening, ensure_ascii=False), *evidence_lines,
-                   json.dumps(closing, ensure_ascii=False)]
+        paper = {"headline": "제목", "deck": "부제", "caption": "설명", "article": ["문단1", "문단2"]}
+        intro = {"lines": ["하나예요.", "둘이에요.", "셋이에요.", "넷이에요.", "다섯이에요."]}
+        answers = [json.dumps(v, ensure_ascii=False) for v in (paper, design, intro, opening)] + evidence_lines \
+            + [json.dumps(closing, ensure_ascii=False)]
         state = self.run_with(config, {"openai:a": [self.output]}, until="script", script_answers=answers)
         outputs = state["stages"]["script"]["outputs"]
         self.assertTrue(outputs["publishable"])  # 증거조사는 다 만들었다
-        self.assertEqual(outputs["pending"], ["U1"])
-        self.assertFalse(outputs["scriptPublishable"])
+        self.assertEqual(outputs["pending"], [])
+        self.assertTrue(outputs["scriptPublishable"])
         evidence_data = load_json(outputs["evidenceFile"])
         self.assertEqual([e["text"] for e in evidence_data["evidence"]], evidence_lines)
         script = load_json(outputs["scriptFile"])
-        self.assertEqual(sorted(script["acts"]), ["2", "3"])
+        self.assertEqual(sorted(script["acts"]), ["1a", "2", "3"])
+        self.assertEqual(script["paper"]["headline"], "제목")
         self.assertEqual(script["sensitiveNotice"], "이 사건에는 정신건강과 관련된 내용이 나와요.")
         self.assertEqual(script["acts"]["2"]["look"], {"nambul": "role:prosecutor", "naero": "role:defense"})
         # 증거조사 프롬프트에도 민감 가드가 들어갔다
-        self.assertIn("정신", self.script_requests[2][1])
+        self.assertIn("정신", self.script_requests[4][1])
 
     def test_script_full_config_requires_classification(self):
         base = {"enabled": True, "model": "openai:a", "cast": {"prosecutor": "naero", "defense": "nambul"}}

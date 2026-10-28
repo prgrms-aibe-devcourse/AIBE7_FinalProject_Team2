@@ -207,9 +207,36 @@ class GenerateTest(unittest.TestCase):
         index = texts.index("행위 사실을 인정합니까?")
         self.assertEqual(texts[index + 1], "…아닙니다.")
 
-    def test_without_paper_skips_intro_and_is_not_publishable(self):
-        _, _, script = self.generate(answers(paper=False), paper=None)
-        self.assertEqual(script["pending"], ["U1"])
+    def test_generates_paper_first_when_not_given(self):
+        generated_paper = {"headline": " 말다툼 끝 지인 숨져 ", "deck": "", "caption": "재연 일러스트",
+                           "article": [" 문단1 ", "문단2"]}
+        caller, generated, script = self.generate([generated_paper, *answers()], paper=None)
+        self.assertFalse(caller.responses)
+        self.assertEqual(script["pending"], [])
+        self.assertTrue(script["publishable"])
+        self.assertEqual(script["paper"], {"desk": "사회부", "headline": "말다툼 끝 지인 숨져", "deck": None,
+                                           "caption": "재연 일러스트", "article": ["문단1", "문단2"]})
+        # 1막 해설은 방금 만든 기사를 짚는다
+        self.assertIn("말다툼 끝 지인 숨져", caller.calls[2]["user"])
+
+    def test_paper_prompt_is_neutral_and_overview_only(self):
+        cls = {**CLS, "sensitiveFlags": ["MENTAL_HEALTH"]}
+        system, user = sa.paper_request(CASE, cls)
+        self.assertNotIn("BASE PERSONA", system)
+        self.assertNotIn("CASE GUIDE", system)  # 분위기 블록을 넣지 않는다(기사는 중립)
+        self.assertNotIn("100자 이내", system)  # 대사 길이 줄은 기사와 맞지 않아 뺀다
+        self.assertIn("GUARDRAILS", system)
+        self.assertTrue(system.endswith(sa.read_prompt("script/sensitive/mental_health.md").strip()))
+        self.assertIn("흉기를 집어 들었다", user)  # OVERVIEW
+        for hidden in ("수사 초기부터", "우발적 범행이라고", "감경영역", "권고 범위", "말다툼 끝에 흉기를 집어 들었다."):
+            self.assertNotIn(hidden, user)  # DETAIL · ARGUMENT · LAW · 섹션은 1막 기사에 넣지 않는다
+
+    def test_paper_failure_skips_intro_and_is_not_publishable(self):
+        bad = {"headline": "", "article": ["하나"]}
+        caller, generated, script = self.generate([bad, bad, DESIGN, OPENING, *EVIDENCE, CLOSING], paper=None)
+        self.assertEqual(generated["units"]["PAPER"]["attempts"], 2)
+        self.assertEqual(script["pending"], ["PAPER", "U1"])
+        self.assertIsNone(script["paper"])
         self.assertNotIn("1a", script["acts"])
         self.assertIn("2", script["acts"])
         self.assertFalse(script["publishable"])

@@ -8,9 +8,10 @@ BE-119가 만든 블록(`prompts/script/`)을 사건 분류에 맞게 골라 조
 생성 단위:
 
 - U0 설계도: 피고인 입장 · 쟁점 3개 · 신문 질문 3개 · 어조. 다른 단위의 입력이고 화면에 그대로 나오지 않는다.
-- U1 1막 해설: 신문 기사를 함께 읽는 대사 5줄. **기사(`paper`)가 있을 때만** 만든다 — 기사는 백엔드
-  (`CasePaperService`)가 사건 적재 뒤에 만들어 파이프라인 시점에는 보통 없다. 기사 없이 개요로 만들면 대사가
-  실제 기사와 어긋나므로, 없으면 건너뛰고 `pending`에 남긴다.
+- PAPER 신문 기사: 1막에 싣는 기사. 1막 해설이 이 기사를 짚으므로 대본과 함께 만든다(백엔드 `CasePaperService`와
+  같은 형식). 입력은 1막 시점에 공개된 `OVERVIEW`만 — 판결 · `LAW` · 상세 사실은 넣지 않는다(BE-127). 분위기 블록은
+  넣지 않는다(기사는 중립, 2026-10-28 결정). 호출하는 쪽이 기사를 넘기면(`paper`) 만들지 않고 그것을 쓴다.
+- U1 1막 해설: 기사를 함께 읽는 대사 5줄. 기사가 없으면(생성 실패) 건너뛰고 `pending`에 남긴다.
 - U2 재판 도입부: 모두진술(공소사실 · 변호인 입장) · 쟁점 정리 · 피고인신문 질문 2개를 한 호출로 —
   쟁점과 질문이 서로 맞아야 해서다. 신문 마지막 질문과 답은 조립 단계에서 붙인다(`LAST_QUESTION`).
 - U3 증거조사: BE-107(`script_generation.generate_evidence_lines`) 그대로, CASE GUIDE · 민감 가드만 더한다.
@@ -20,7 +21,7 @@ BE-119가 만든 블록(`prompts/script/`)을 사건 분류에 맞게 골라 조
 사건마다 바뀌는 대사가 없고(고정 문구 · API 값) 배역만 따르는 공통 틀이라 여기서 만들지 않는다(FE-33 · FE-128).
 
 공개 범위: 판결 정보와 `LAW`(양형기준 권고형) · `SUMMARY`는 어느 단위에도 넣지 않는다(판결 입력 전 앵커링).
-U1은 기사만, U2 · U4는 `OVERVIEW` · `DETAIL` · `ARGUMENT`까지 쓴다(`UNIT_STAGES`).
+기사는 `OVERVIEW`, U1은 기사만, U0 · U2 · U4는 `OVERVIEW` · `DETAIL` · `ARGUMENT`까지 쓴다(`UNIT_STAGES`).
 
 검수 조건 전체(README "검수 조건" 표)는 BE-122다. 여기서는 형식(키 · 개수)과 BE-107 `validate_line`의 길이 ·
 금지어 검사만 하고, 틀리면 그 단위를 다시 요청한다.
@@ -33,7 +34,7 @@ import time
 from common import read_prompt
 from llm import LLMError, LLMQuotaExhaustedError
 from llm import call as default_call
-from script_generation import generate_evidence_lines, validate_line
+from script_generation import BANNED_PATTERNS, generate_evidence_lines, validate_line
 
 MOODS = ("tragic", "impulsive", "cold", "betrayal", "calculated", "tense")
 ISSUES = ("admitted", "intent_disputed", "denied", "mental_state", "defense_claim")
@@ -65,10 +66,13 @@ LAST_QUESTION = {"admitted": "공소사실을 인정합니까?", "denied": "공�
                  "defense_claim": "행위 사실을 인정합니까?"}
 
 # 단위별로 넣는 공개 단계 (사건 섹션 `stage` · 판단 요소 `revealStage`). LAW · SUMMARY는 넣지 않는다
-UNIT_STAGES = {"U0": ("OVERVIEW", "DETAIL", "ARGUMENT"), "U2": ("OVERVIEW", "DETAIL", "ARGUMENT"),
+UNIT_STAGES = {"PAPER": ("OVERVIEW",), "U0": ("OVERVIEW", "DETAIL", "ARGUMENT"), "U2": ("OVERVIEW", "DETAIL", "ARGUMENT"),
                "U4": ("OVERVIEW", "DETAIL", "ARGUMENT")}
 
 NAMES = {"naero": "내로", "nambul": "남불"}
+PAPER_DESK = "사회부"  # 백엔드 CasePaperService.DEFAULT_DESK와 같다
+# 백엔드 A-13-8(기사 수정)과 같은 길이 규칙
+PAPER_LIMITS = {"headline": 200, "deck": 300, "caption": 200}
 SLOT = {"A": 10, "B": 50, "stand": 30}  # case-1 2 · 3막 자리. 묶음 기준이라 배역이 바뀌어도 같은 쪽에 선다
 OUTPUT_HEADING = "# 출력 형식"
 
@@ -124,10 +128,14 @@ def sensitive_blocks(cls):
             for flag in cls.get("sensitiveFlags", [])]
 
 
-def guardrail_rules():
+def guardrail_rules(dialogue=True):
     """공통 GUARDRAILS에서 `# 출력 형식` 절을 뺀 규칙. 출력 형식은 U3(대사 한 줄) 기준이라 U0 · U1 · U2 · U4는
-    단위별 출력 지시를 쓴다(README "출력 형식")."""
-    return read_prompt("script_guardrails.md").split(OUTPUT_HEADING)[0].strip()
+    단위별 출력 지시를 쓴다(README "출력 형식"). 기사(`dialogue=False`)는 대사 길이 줄("- 대사는 …")도 뺀다 —
+    문단으로 쓰는 기사와 맞지 않는다."""
+    rules = read_prompt("script_guardrails.md").split(OUTPUT_HEADING)[0].strip()
+    if dialogue:
+        return rules
+    return "\n".join(line for line in rules.splitlines() if not line.startswith("- 대사는"))
 
 
 def build_system(unit, cls, roles):
@@ -320,6 +328,47 @@ QUESTION_RULES = (
 )
 
 
+def paper_request(case, cls):
+    """신문 기사. 페르소나 · 분위기 없이 편집자 ROLE + 공통 가드(대사 길이 줄 제외) + 민감 가드."""
+    system = "\n\n".join(part.strip() for part in [
+        read_prompt("script_role_paper.md"), guardrail_rules(dialogue=False), *sensitive_blocks(cls)])
+    data = {"case_title": case.get("title"), "charge": case.get("chargeName"), "overview": case.get("overview"),
+            "facts": public_case(case, UNIT_STAGES["PAPER"])["facts"]}
+    return system, build_user("1막 신문 기사 — 사용자가 사건을 처음 만나는 지면.", data, [
+        "아래 형식의 JSON 객체 하나로 답하세요.",
+        '{"headline":"...","deck":"...","caption":"...","article":["문단1","문단2"]}',
+        "- headline: 신문 헤드라인 한 줄. 사건 당사자의 실명 · 지역 등 구체적인 신상은 넣지 말고, 선정적이지 않은 중립적인 문구로 쓴다.",
+        "- deck: 헤드라인을 보충하는 부제 한 줄.",
+        "- caption: 사건 대표사진 아래 들어갈 짧은 설명 한 줄. 사진은 연출 이미지다.",
+        "- article: 본문 문단 2 ~ 4개로 나눈 배열. 각 문단은 2 ~ 3문장. scene_data에 있는 내용만 쓴다.",
+    ])
+
+
+def check_paper(value):
+    if not isinstance(value, dict):
+        return ["JSON 객체가 아닙니다"]
+    errors = []
+    if not isinstance(value.get("headline"), str) or not value["headline"].strip():
+        errors.append("headline이 비었습니다")
+    for key, limit in PAPER_LIMITS.items():
+        if value.get(key) is not None and (not isinstance(value[key], str) or len(value[key].strip()) > limit):
+            errors.append(f"{key}는 {limit}자 이내 문자열이다")
+    article = value.get("article")
+    if not (isinstance(article, list) and 2 <= len(article) <= 4
+            and all(isinstance(p, str) and p.strip() for p in article)):
+        errors.append("article은 빈 문단 없는 문단 2 ~ 4개다")
+    text = json.dumps(value, ensure_ascii=False)
+    errors += [f"금지어 포함: {word}" for word, pattern in BANNED_PATTERNS.items() if re.search(pattern, text)]
+    return errors
+
+
+def normalize_paper(value):
+    """백엔드 parse · normalize와 같게: 앞뒤 공백을 지우고, 빈 deck · caption은 None."""
+    blank_to_none = lambda v: (v.strip() or None) if isinstance(v, str) else None  # noqa: E731
+    return {"desk": PAPER_DESK, "headline": value["headline"].strip(), "deck": blank_to_none(value.get("deck")),
+            "caption": blank_to_none(value.get("caption")), "article": [p.strip() for p in value["article"]]}
+
+
 def design_request(case, cls):
     data = public_case(case, UNIT_STAGES["U0"])
     return build_system("U0", cls, ["narrator"]), build_user(
@@ -376,15 +425,19 @@ def closing_request(case, cls, cast, design, opening):
 def generate_units(case, judgment_output, cast, cls, *, model, paper=None, caller=default_call, max_retries=2,
                    temperature=None, max_tokens=6000, evidence_max_tokens=2000, timeout=150, evidence_timeout=60,
                    delay=0.0, log=None):
-    """U0 → U1 → U2 → U3 → U4 순서로 생성한다. 앞 단위가 실패하면 그에 기대는 뒤 단위는 건너뛴다
+    """기사(PAPER) → U0 → U1 → U2 → U3 → U4 순서로 생성한다. `paper`를 넘기면 기사는 만들지 않고 그것을 쓴다. 앞 단위가 실패하면 그에 기대는 뒤 단위는 건너뛴다
     (U2 · U4는 U0 설계도, U4는 U2 입장이 필요하다). 호출 한도가 소진되면 그 자리에서 멈춘다.
 
-    돌려주는 값: {"units": {단위: ask_unit 결과}, "evidence": [...], "stopped": bool, "pending": [건너뛴 단위]}"""
+    돌려주는 값: {"units": {단위: ask_unit 결과}, "paper": 기사 또는 None, "evidence": [...], "stopped": bool,
+    "pending": [건너뛴 단위]}"""
     opts = dict(model=model, caller=caller, max_retries=max_retries, temperature=temperature,
                 max_tokens=max_tokens, timeout=timeout, delay=delay, log=log)
     source = json.dumps(public_case(case, UNIT_STAGES["U0"]), ensure_ascii=False)
     units, evidence, pending, stopped = {}, [], [], False
     try:
+        if not paper:
+            units["PAPER"] = ask_unit("PAPER", *paper_request(case, cls), check_paper, lambda v: [], "", **opts)
+            paper = normalize_paper(units["PAPER"]["value"]) if units["PAPER"]["value"] else None
         units["U0"] = ask_unit("U0", *design_request(case, cls), check_design,
                                lambda v: [q["q"] for q in v["questions"][:3]], source, **opts)
         design = units["U0"]["value"]
@@ -395,7 +448,7 @@ def generate_units(case, judgment_output, cast, cls, *, model, paper=None, calle
         else:
             pending.append("U1")
             if log:
-                log("기사(paper)가 없어 1막 해설(U1)은 건너뜁니다 — 기사를 만든 뒤 다시 생성합니다")
+                log("기사를 만들지 못해 1막 해설(U1)은 건너뜁니다")
         if design:
             units["U2"] = ask_unit("U2", *opening_request(case, cls, cast, design), check_opening, opening_lines,
                                    source, **opts)
@@ -417,8 +470,9 @@ def generate_units(case, judgment_output, cast, cls, *, model, paper=None, calle
         if log:
             log(f"⚠ 호출 한도 소진 — 남은 단위는 건너뜁니다: {e}")
         stopped = True
-        pending += [u for u in ("U0", "U1", "U2", "U4") if u not in units and u not in pending]
-    return {"units": units, "evidence": evidence, "stopped": stopped, "pending": pending}
+        pending += [u for u in ("PAPER", "U0", "U1", "U2", "U4")
+                    if u not in units and u not in pending and not (u == "PAPER" and paper)]
+    return {"units": units, "paper": paper, "evidence": evidence, "stopped": stopped, "pending": pending}
 
 
 # ---------------------------------------------------------------- 대본 조립
@@ -552,6 +606,7 @@ def build_script(case, cast, cls, generated, *, model):
     return {
         "caseId": case.get("caseId"), "title": case.get("title"), "model": model,
         "cast": dict(cast), "classification": cls, "sensitiveNotice": notice, "design": design,
+        "paper": generated.get("paper"),
         "cards": _cards(case, opening) if opening else None,
         "evidence": [{"side": "검사" if line["role"] == "prosecutor" else "변호인",
                       "text": labels.get(line["factorId"])} for line in evidence],
