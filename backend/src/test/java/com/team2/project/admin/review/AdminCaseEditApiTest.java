@@ -258,7 +258,30 @@ class AdminCaseEditApiTest extends ApiIntegrationTest {
 		perform(post(caseUrl() + "/publish"))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.status").value("PUBLISHED"));
+		assertThat(jdbcTemplate.queryForObject("SELECT published_at IS NOT NULL FROM legal_case WHERE id = ?", Boolean.class,
+			caseId)).isTrue();	// 다시 공개하면 새 시각으로 채워진다
 		mockMvc.perform(get("/api/v1/cases/" + caseId)).andExpect(status().isOk());
+	}
+
+	@Test
+	@DisplayName("A-13-14: 이미 끝낸 체험도 공개 취소 뒤에는 내 체험 · 비교 결과가 404 CASE_NOT_FOUND (체험 기록은 남는다)")
+	void unpublish_hidesFinishedExperience() throws Exception {
+		makePublishable();
+		perform(post(caseUrl() + "/publish")).andExpect(status().isOk());
+		UUID anonymousId = UUID.randomUUID();
+		insertExperience(anonymousId, caseId, 1, "COMPLETED");
+		Cookie user = new Cookie(COOKIE, anonymousId.toString());
+		mockMvc.perform(get(experienceUrl(caseId)).cookie(user)).andExpect(status().isOk());
+
+		perform(post(caseUrl() + "/unpublish").contentType(MediaType.APPLICATION_JSON).content("{\"reason\": \"사유\"}"))
+			.andExpect(status().isOk());
+
+		for (String url : List.of(experienceUrl(caseId), experienceUrl(caseId) + "/comparison")) {
+			mockMvc.perform(get(url).cookie(user))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.code").value("CASE_NOT_FOUND"));
+		}
+		assertThat(countExperiences(caseId)).isEqualTo(1);	// 숨김이라 지우지 않는다
 	}
 
 	@Test
