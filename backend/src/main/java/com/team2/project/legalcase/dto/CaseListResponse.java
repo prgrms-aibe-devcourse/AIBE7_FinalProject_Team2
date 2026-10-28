@@ -32,6 +32,8 @@ public record CaseListResponse(Summary summary, List<CaseItem> cases) {
 	 * @param myStatus 이 사건에 대한 내 최신 회차 상태. 익명 ID 쿠키가 없거나 체험 전이면 null.
 	 *                 사용자마다 다른 값이라 사건 목록을 캐시할 때(6.5.3)는 이 필드를 빼고 요청마다 붙인다 (기술 스택 2장).
 	 *                 HTTP 캐시를 켤 때도 public 금지 — private + Vary: Cookie (API 명세 API 1, CaseListApiTest가 no-store를 고정)
+	 * @param scriptReady 승인된 공개 대본이 있는가 (BE-116). API 18이 200을 주는 조건과 같다 —
+	 *                    목록이 사건마다 API 18을 부르지 않고 "체험 가능"을 알 수 있게 한다
 	 */
 	public record CaseItem(
 			Long caseId,
@@ -45,9 +47,11 @@ public record CaseListResponse(Summary summary, List<CaseItem> cases) {
 			Integer estimatedMinutes,
 			long participantCount,
 			String thumbnailUrl,
+			boolean scriptReady,
 			MyStatus myStatus) {
 
-		public static CaseItem of(LegalCase legalCase, long participantCount, MyStatus myStatus) {
+		public static CaseItem of(LegalCase legalCase, long participantCount, boolean scriptReady,
+				MyStatus myStatus) {
 			CrimeType crimeType = legalCase.getCrimeType();
 			List<String> keywords = legalCase.getKeywords() == null ? List.of() : legalCase.getKeywords();
 			return new CaseItem(
@@ -62,6 +66,7 @@ public record CaseListResponse(Summary summary, List<CaseItem> cases) {
 					legalCase.getEstimatedMinutes(),
 					participantCount,
 					legalCase.getThumbnailUrl(),
+					scriptReady,
 					myStatus);
 		}
 	}

@@ -61,6 +61,15 @@ public abstract class ApiIntegrationTest {
 		return id;
 	}
 
+	/** 대본(BE-108) 한 건. reviewStatus가 null이면 검수 대기. 내용은 비워 두고 "승인 여부"만 본다 */
+	protected void insertScriptWithReview(long caseId, String reviewStatus) {
+		jdbcTemplate.update("""
+				INSERT INTO case_script (case_id, evidence, model, generated_at, stopped, cast_roles, publishable,
+				                         review_status)
+				VALUES (?, '[]'::jsonb, 'test', now(), false, '{}'::jsonb, true, ?)
+				""", caseId, reviewStatus);
+	}
+
 	/** 신문 지면(BE-92). 사건당 1건 */
 	protected void insertCasePaper(long caseId, String headline) {
 		jdbcTemplate.update("""
