@@ -569,8 +569,14 @@ class JobCleanupTest(unittest.TestCase):
                               popen=lambda command, **kwargs: FakeProcess(pid=0))
         self.now = datetime.datetime(2026, 10, 28, 12, 0, tzinfo=datetime.timezone.utc)
 
-    def _job(self, finished_days_ago=None, created_days_ago=0, status=SUCCEEDED, pid=None):
-        """작업 하나를 만들고 메타의 시각 · 상태를 원하는 대로 고쳐 둔다"""
+    def _job(self, finished_days_ago=None, created_days_ago=None, status=SUCCEEDED, pid=None):
+        """작업 하나를 만들고 메타의 시각 · 상태를 원하는 대로 고쳐 둔다.
+
+        만든 시각을 따로 주지 않으면 끝난 시각과 같게 둔다 — 나이는 가장 늦은 기록으로 보기 때문에,
+        만든 시각이 끝난 시각보다 늦으면(실제로는 없는 순서) 오래된 작업도 최근 작업으로 보인다
+        """
+        if created_days_ago is None:
+            created_days_ago = finished_days_ago or 0
         job_id = self.store.create({"sources": [{"originalText": "판결문 본문"}],
                                     "models": ["gemini:gemini-3.7-flash"]})
         meta_path = self.jobs_dir / job_id / "job.json"
@@ -630,6 +636,80 @@ class JobCleanupTest(unittest.TestCase):
 
         self.assertEqual(self.store.cleanup(retention_days=7, now=self.now), [broken])
 
+    def test_keeps_a_rerun_job_whose_meta_was_not_settled_yet(self):
+        """끝난 지 오래된 작업을 다시 돌리면(BE-107 `--from script`) 방금 만든 결과를 지우면 안 된다 (PR #326 리뷰).
+
+        다시 돌린 프로세스가 끝났는데 아직 아무도 status()를 부르지 않은 상태 — 메타는 RUNNING인데 프로세스는 없다
+        """
+        job_id = self._job(finished_days_ago=8, created_days_ago=10)
+        self.store.start(job_id)  # 가짜 프로세스는 바로 끝난다(pid=0, returncode=0)
+
+        meta = json.loads((self.jobs_dir / job_id / "job.json").read_text(encoding="utf-8"))
+        self.assertIsNone(meta["finishedAt"], "다시 돌린 작업에 지난번 finishedAt이 남았다")
+        self.assertEqual(self.store.cleanup(retention_days=7, now=self.now), [])
+        self.assertTrue((self.jobs_dir / job_id).exists())
+
+    def test_recent_pipeline_output_keeps_a_job_with_old_meta(self):
+        """메타의 시각이 오래돼도 state.json · 로그가 최근에 쓰였으면 최근에 돈 작업이다"""
+        job_id = self._job(finished_days_ago=8)
+        state = self.store.state_path(job_id)
+        state.parent.mkdir(parents=True, exist_ok=True)
+        state.write_text("{}", encoding="utf-8")
+        recent = (self.now - datetime.timedelta(days=1)).timestamp()
+        os.utime(state, (recent, recent))
+
+        self.assertEqual(self.store.cleanup(retention_days=7, now=self.now), [])
+
+    def test_meta_that_is_not_an_object_does_not_stop_the_sweep(self):
+        """job.json이 JSON 배열 · 문자열이어도 정리 순회가 멈추면 안 된다 (PR #326 리뷰)"""
+        odd, normal = self._job(finished_days_ago=30), self._job(finished_days_ago=30)
+        (self.jobs_dir / odd / "job.json").write_text('["목록"]', encoding="utf-8")
+        old = (self.now - datetime.timedelta(days=30)).timestamp()
+        os.utime(self.jobs_dir / odd, (old, old))
+
+        self.assertEqual(self.store.cleanup(retention_days=7, now=self.now), sorted((odd, normal)))
+
+    def test_keeps_a_running_job_even_if_its_meta_is_broken(self):
+        """메타가 깨져 jobId를 몰라도 폴더 이름으로 프로세스 핸들을 찾는다 — 도는 작업의 파일을 지우면 안 된다"""
+        job_id = self._job(finished_days_ago=30)
+        self.store._processes[job_id] = FakeProcess(pid=0, returncode=None)  # 아직 도는 중
+        (self.jobs_dir / job_id / "job.json").write_text("{부서진 JSON", encoding="utf-8")
+        old = (self.now - datetime.timedelta(days=30)).timestamp()
+        os.utime(self.jobs_dir / job_id, (old, old))
+
+        self.assertEqual(self.store.cleanup(retention_days=7, now=self.now), [])
+        with self.assertRaises(JobConflict):
+            self.store.delete(job_id)
+        self.assertTrue((self.jobs_dir / job_id).exists())
+
+    def test_check_and_delete_run_under_the_start_lock(self):
+        """확인과 삭제 사이에 같은 작업이 다시 시작되지 못하게 start와 같은 잠금 안에서 지운다 (PR #326 리뷰)"""
+        self._job(finished_days_ago=8)
+        held = []
+        original = self.store._delete
+
+        def delete(job_id):
+            held.append(self.store._start_lock.locked())
+            return original(job_id)
+
+        with mock.patch.object(self.store, "_delete", side_effect=delete):
+            self.store.cleanup(retention_days=7, now=self.now)
+
+        self.assertEqual(held, [True])
+
+    def test_failed_run_folder_removal_keeps_the_job_for_the_next_sweep(self):
+        """회차 결과 폴더를 못 지웠는데 성공으로 끝나면 작업 폴더가 사라져 다음 주기에 다시 찾지 못한다"""
+        job_id = self._job(finished_days_ago=8)
+        runs = self.tool_dir / "out" / "runs" / f"{self.store.pipeline_name(job_id)}-1"
+        runs.mkdir(parents=True)
+
+        with mock.patch.object(jobs_module.shutil, "rmtree", side_effect=PermissionError("권한 없음")):
+            self.assertEqual(self.store.cleanup(retention_days=7, now=self.now), [])
+
+        self.assertTrue((self.jobs_dir / job_id).exists(), "산출물을 못 지웠는데 작업 폴더가 지워졌다")
+        self.assertEqual(self.store.cleanup(retention_days=7, now=self.now), [job_id])  # 다음 주기에 마저 지운다
+        self.assertFalse(runs.exists())
+
     def test_zero_or_negative_retention_turns_cleanup_off(self):
         job_id = self._job(finished_days_ago=365)
 
@@ -639,14 +719,14 @@ class JobCleanupTest(unittest.TestCase):
     def test_one_failure_does_not_stop_the_rest(self):
         first, second = self._job(finished_days_ago=8), self._job(finished_days_ago=8)
         failing = {sorted((first, second))[0]}
-        original = self.store.delete
+        original = self.store._delete
 
         def delete(job_id):
             if job_id in failing:
                 raise OSError("지울 수 없습니다")
             return original(job_id)
 
-        with mock.patch.object(self.store, "delete", side_effect=delete):
+        with mock.patch.object(self.store, "_delete", side_effect=delete):
             deleted = self.store.cleanup(retention_days=7, now=self.now)
 
         self.assertEqual(deleted, [j for j in sorted((first, second)) if j not in failing])
