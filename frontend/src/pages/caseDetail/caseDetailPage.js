@@ -5,6 +5,7 @@ import { caseStage, mountStagePage, scriptFor } from '../overview/overviewPage.j
 import { caseInfoEar, caseNewspaper, earButton, paperFromCase } from '../../components/newspaperFront.js';
 import { evidencePhotosFromPaper, fetchCasePaper } from '../../utils/newspaper.js';
 import { reducedMotion } from '../../utils/motion.js';
+import { isScriptReady } from '../../utils/scriptReady.js';
 import { landArticle } from '../../utils/articleZoom.js';
 import { openCaseReviewPopup } from '../caseReview/caseReviewPopup.js';
 
@@ -122,11 +123,11 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
   }
 
   // 대본이 없는 사건: 대본 사건과 같은 신문 지면(안쪽 면)을 캐릭터 · 대사 없이 보여 준다. 기사 본문이 없으면 짧은 소개 한 단락만 싣는다(paperFromCase).
-  // FE-56: 새 체험은 시연 전까지 열지 않는다(목 · 실제 모두 이후 화면이 대본 사건 기준이라 막다른 길이 된다).
-  // 지면은 그대로 읽게 두고, "시작하기" 자리에 누를 수 없는 "준비 중"과 안내를 둔다. 대본이 생기면(FE-33) drawStage로 간다.
+  // FE-56: 서버가 체험할 수 없다고 한 사건(scriptReady false, FE-125)은 새 체험을 열지 않는다. 지면은 그대로 읽게 두고, "시작하기" 자리에 누를 수 없는 "준비 중"을 둔다.
+  // 서버는 준비됐다는데 프론트에 대본 무대가 없으면(ready) "시작하기"는 열되 지면은 이 모양이다. 무대는 FE-33이 서버 대본으로 채운다.
   // 이미 하던 · 마친 체험(myStatus)이 있으면 막지 않는다: 오른쪽 귀 "이어서 하기" · "결과 다시 보기"와 우하단 버튼이 API 2 응답 상태로 이어서 볼 화면으로 보낸다
-  function drawPaper(data, casePaper) {
-    const action = ACTIONS[data.myStatus];
+  function drawPaper(data, casePaper, ready = false) {
+    const action = ACTIONS[data.myStatus] ?? (ready ? NOT_STARTED : undefined);
     const notice = element('p', 'paper-start-notice', ''); // 시작하지 못했을 때의 오류만 채운다. 준비 중은 점선 도장 하나로 알리고 설명 상자는 두지 않는다(FE-119)
     notice.setAttribute('role', 'alert');
     const resume = action
@@ -281,8 +282,9 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
       const [data, casePaper] = await Promise.all([api.getCaseDetail(caseId), fetchCasePaper(api, caseId)]);
       if (!active()) return;
       const script = scriptFor(caseId, data.title);
-      if (script) drawStage(data, script, casePaper);
-      else drawPaper(data, casePaper);
+      const ready = isScriptReady(data, script); // 서버 scriptReady 우선(FE-125), 없으면 로컬 대본
+      if (ready && script) drawStage(data, script, casePaper);
+      else drawPaper(data, casePaper, ready);
     } catch (error) {
       if (!active()) return;
       // CASE_NOT_FOUND는 withErrorRedirect가 S-14로 먼저 보낸다(app/errorRedirect.js). 여기 오는 것은 그 밖의 오류다

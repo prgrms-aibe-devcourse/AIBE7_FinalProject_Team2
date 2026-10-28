@@ -1,6 +1,7 @@
 import { API_MODE } from '../../api/config.js';
 import { button, element, mockTag } from '../../components/siteLayout.js';
 import { scriptFor } from '../overview/overviewPage.js';
+import { isScriptReady } from '../../utils/scriptReady.js';
 import { NOT_READY, authorButton, authorFace, clip, communityShell, filterControls, popularList, postLink, svgIcon } from './communityParts.js';
 
 // S-18 커뮤니티 메인 (FE-89). 메인 책상의 노트북 · 헤더 "커뮤니티"로 들어온다. 글 목록은 /community/posts(communityPage.js)
@@ -189,8 +190,8 @@ export function renderCommunityHomePage(container, { api, navigate }) {
     people.append(element('b', '', `${item.participantCount.toLocaleString()}명`), ' 판결');
     if (API_MODE === 'mock') people.append(mockTag()); // 목 참여 수는 실제 반응이 아니다(FE-93)
     facts.append(people, element('span', '', `약 ${item.estimatedMinutes}분`));
-    // 판결 체험 대본이 있는 사건만 "판결하기"(없는 사건은 사건 정보에서 "준비 중"이 나온다, caseListPage와 같은 기준)
-    const playable = Boolean(scriptFor(item.caseId, item.title));
+    // 체험할 수 있는 사건(scriptReady, FE-125)만 "판결하기"(없는 사건은 사건 정보에서 "준비 중"이 나온다, caseListPage와 같은 기준)
+    const playable = isScriptReady(item, scriptFor(item.caseId, item.title));
     clipping.append(facts, routeLink(playable ? '이 사건 판결하기' : '사건 보기', `/cases/${item.caseId}`, () => navigate('caseDetail', { caseId: item.caseId }), 'cm-hot-try'));
     wrap.append(clip(), clipping);
     const postsBox = element('div', 'cm-hot-posts');
