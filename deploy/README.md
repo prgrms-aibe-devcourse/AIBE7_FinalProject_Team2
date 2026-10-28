@@ -18,7 +18,7 @@
 | `docker-compose.pipeline.yml` | 서버 전용 덧붙임 파일. AI 판결 파이프라인 서비스(관리자 사건 등록 A-14)와 backend의 `PIPELINE_SERVICE_URL` (COMMON-50). `.env`의 `PIPELINE_SERVICE=1`이면 `deploy.sh`가 자동으로 함께 쓴다. **켜기 전 메모리 확인 필요** — 아래 "AI 판결 파이프라인 서비스" |
 | `.env.example` | 환경변수 예시. `.env`로 복사해 쓴다 (`.env`는 커밋하지 않음) |
 | `smoke-test.sh` | `/` · 화면 주소 · `/api` · 캐시 정책 · Let's Encrypt 확인 경로 확인. CI와 서버에서 같은 스크립트를 쓴다 |
-| `verify-origin-headers.sh` | 배포 전 1회 수동 확인: Nginx `X-Forwarded-Proto` 전달 · `forward-headers-strategy: native`가 운영(또는 동일 TLS 종료 구성 스테이징)에 실제로 적용됐는지, 재발급 · 로그아웃 Origin 검증(`OriginVerificationFilter`)으로 확인한다. 로그인 없이도 쓸 수 있다 (BE-95) |
+| `verify-origin-headers.sh` | Nginx `X-Forwarded-Proto` 전달 · `forward-headers-strategy: native`가 실제로 적용됐는지, 재발급 · 로그아웃 Origin 검증(`OriginVerificationFilter`)으로 확인한다. BASE_URL에 지금 떠 있는 배포만 확인하므로 운영에서는 배포 **직후**마다(`smoke-test.sh` 다음 줄) 돌리고, 동일 TLS 종료 구성의 스테이징이 있으면 배포 **전**에도 미리 돌려볼 수 있다. https 주소만 받고, 로그인 없이도 쓸 수 있다 (BE-95) |
 | `deploy.sh` | 서버 배포 한 번: sha 이미지로 교체 → 준비 대기 → 스모크 테스트 → 실패하면 직전 이미지로 되돌림 (BE-60) |
 | `backup-db.sh` | 운영 DB 백업 한 번: 임시 파일로 `pg_dump` → `pg_restore --list` 확인 → 최종 이름으로 옮김 → 7일 지난 파일 정리 (COMMON-17, 아래 "운영 DB 백업") |
 | `cd-agent.sh` | 자동 배포 확인: GHCR의 `main` 이미지가 바뀌었으면 `deploy.sh` 실행 (BE-60) |
