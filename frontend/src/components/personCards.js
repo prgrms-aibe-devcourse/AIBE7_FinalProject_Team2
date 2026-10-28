@@ -4,6 +4,7 @@ import { SASH_COLORS, SASH_ICONS, SASH_STYLES, portraitLabel, sashColorOf } from
 import { DEFAULT_TYPE_DECO } from '../utils/typeCardDeco.js';
 import { signatureSvg } from './signatureInk.js';
 import { fitPortraitIn } from '../utils/portraitFit.js';
+import { fitOneLine } from '../utils/fitText.js';
 
 // 프로필카드 · 성향카드를 그리는 조각(FE-88). 마이페이지(myPage.js) · 내 결과(myResultPage.js) · 커뮤니티 글쓴이 명함(communityParts.js)이 함께 쓴다(FE-79).
 // 모양은 personCards.css의 .my-card · .deco-frame-* · .deco-bg-* · .deco-sash-* 가 정한다. 커뮤니티에서는 카드를 .cm-cards 안에 놓아 같은 커피 색을 입힌다
@@ -134,7 +135,7 @@ export function profileCardParts(deco, nickname, typeName, { level = null, signe
     caption,
     note: `${nickname}, 대표 이미지 ${caption}, ${level ? `${level} ` : ''}${line}${sashNote(deco)}`,
     classes: `is-profile deco-frame-${deco.frame} deco-bg-${deco.background} ${sashClasses(deco)}`,
-    children: [element('p', 'my-card-name', nickname), face, result, ...sashes(deco)],
+    children: [fitOneLine(element('p', 'my-card-name', nickname)), face, result, ...sashes(deco)],
   };
 }
 

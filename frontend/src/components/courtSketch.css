@@ -154,7 +154,7 @@
 /* 무대를 보는 동안 화면 자체는 스크롤하지 않는다(모바일 브라우저 바가 들락날락하며 아래 받침을 가리지 않게) */
 html:has(.comparison-full .stage-wrap:not(.reading-paper)) { overflow: hidden; }
 
-/* 여기 남아있기: 카메라를 멈추고 지면을 펼친 채 스크롤해 읽는다. 맨 아래 "메인으로" */
+/* 여기 남아있기: 카메라를 멈추고 지면을 펼친 채 스크롤해 읽는다. 맨 아래 광고 단의 "공유하기" · "메인으로"(FE-120: 떠 있던 "메인으로" 알약은 없앴다) */
 .comparison-full .stage-wrap.reading-paper .stage { position: relative; inset: auto; height: auto; overflow: visible; }
 .comparison-full .stage-wrap.reading-paper .scene, .comparison-full .stage-wrap.reading-paper .stage[data-scene] .scene { position: relative; inset: auto; overflow: visible; cursor: default; }
 /* 조작 줄(FE-48): 1막 신문 무대(paper-mode)와 6막이 같은 모양 — 화면 맨 아래 가로 전체 종이 띠, 캐릭터보다 위(캐릭터 발은 띠 뒤로).
@@ -178,38 +178,39 @@ html:has(.comparison-full .stage-wrap:not(.reading-paper)) { overflow: hidden; }
 .stage-wrap .sheet-brand-row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: calc(var(--u) * 1.6); }
 .stage-wrap .sheet-ear { display: none; }
 .comparison-full .stage-wrap.reading-paper .sheet-ear { display: flex; }
-.stage-wrap .sheet-ear-left { flex-direction: column; justify-content: center; justify-self: start; min-height: 64px; padding: 8px 16px; border: 3px double var(--color-border-strong);
-  background: transparent; color: var(--color-text); text-align: center; cursor: pointer; font: inherit; }
-.stage-wrap .sheet-ear-left b { font: 700 15px/1.4 var(--font-heading); color: var(--color-heading); }
-.stage-wrap .sheet-ear-left small { font-size: var(--text-caption); color: var(--muted); }
-.stage-wrap .sheet-ear-left:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
-.stage-wrap .sheet-ear-right { justify-self: end; }
-/* 오른쪽 귀: 아직 정하지 않은 자리 — 메모만 붙여 둔다(누르지 않는다) */
-.stage-wrap .sheet-ear-memo { padding: 8px 14px 9px; rotate: 3deg; background: var(--color-desk-note); color: var(--color-desk-note-pen); font: 400 20px/1.1 var(--font-hand);
-  box-shadow: -3px 4px 8px color-mix(in srgb, var(--color-desk-shadow) 30%, transparent); }
-/* 우하단 "메인으로": 읽는 동안에만 떠 있다(지면 맨 아래 "메인으로" 구역 대신) */
-.stage-wrap .paper-to-main { display: none; }
-.comparison-full .stage-wrap.reading-paper .paper-to-main {
-  display: inline-flex; align-items: center; position: fixed; z-index: 20; right: calc(24px + env(safe-area-inset-right, 0px)); bottom: calc(20px + env(safe-area-inset-bottom, 0px));
-  min-height: 52px; padding: 0 26px; border-radius: 999px; font-size: 16px; box-shadow: 0 10px 24px -10px color-mix(in srgb, var(--color-desk-shadow) 70%, transparent);
-}
+/* 두 귀는 같은 폭으로 고정한다(S-02 · S-20 제호 줄과 같은 190px, 1100px 이하 150px — DESIGN.md "사건 목록 · 사건 기사"). 글자 길이로 폭이 달라지지 않게(FE-120) */
+.stage-wrap :is(.sheet-ear-left, .sheet-ear-right) { box-sizing: border-box; width: 190px; height: 64px; overflow: hidden; } /* 높이도 고정: 글자가 줄바뀜해도 귀가 늘어나지 않게 */
+.stage-wrap :is(.sheet-ear-left, .sheet-ear-right) :is(b, small) { white-space: nowrap; }
+@media (max-width: 1100px) { .stage-wrap :is(.sheet-ear-left, .sheet-ear-right) { width: 150px; } }
+/* 왼쪽 귀(다른 사건 보기)는 눌리는 칸이라 진한 면 + 종이색 글자(FE-120) */
+.stage-wrap .sheet-ear-left { flex-direction: column; justify-content: center; justify-self: start; padding: 6px 10px; border: 4px double var(--color-on-accent); outline: 2px solid var(--color-heading);
+  background: var(--color-heading); color: var(--color-on-accent); text-align: center; cursor: pointer; font: inherit; }
+.stage-wrap .sheet-ear-left b { font: 700 15px/1.4 var(--font-heading); color: var(--color-on-accent); }
+.stage-wrap .sheet-ear-left small { font-size: var(--text-caption); color: color-mix(in srgb, var(--color-on-accent) 80%, transparent); }
+.stage-wrap .sheet-ear-left:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 3px; }
+/* 오른쪽 귀: 이 지면의 사건 번호(FE-120). 누르지 않는 칸이라 왼쪽 귀보다 옅은 테두리 */
+.stage-wrap .sheet-ear-right { flex-direction: column; justify-content: center; justify-self: end; padding: 6px 10px; border: 3px double var(--color-border-strong); text-align: center; }
+.stage-wrap .sheet-ear-right b { font: 700 15px/1.4 var(--font-heading); color: var(--color-heading); }
+.stage-wrap .sheet-ear-right small { font-size: var(--text-caption); color: var(--muted); }
 /* 누를 수 있는 칸은 마우스를 올리면 표시한다 */
 @media (hover: hover) and (pointer: fine) {
   .comparison-full .stage-wrap.reading-paper .is-clickable { transition: box-shadow .15s ease-out, background-color .15s ease-out; }
-  .comparison-full .stage-wrap.reading-paper .sheet-ear-left:hover { background: color-mix(in srgb, var(--color-desk-kraft) 16%, transparent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-label) 35%, transparent); }
-  .comparison-full .stage-wrap.reading-paper .paper-to-main:hover { box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-label) 45%, transparent), 0 10px 24px -10px color-mix(in srgb, var(--color-desk-shadow) 70%, transparent); }
+  .comparison-full .stage-wrap.reading-paper .sheet-ear-left:hover { background: var(--color-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-label) 35%, transparent); }
 }
 @media (max-width: 680px) {
   .stage-wrap .sheet-brand-row { grid-template-columns: 1fr 1fr; }
   .stage-wrap .sheet-brand-row .sheet-brand { grid-column: 1 / -1; order: -1; }
-  .stage-wrap .sheet-ear-left { min-height: 44px; padding: 6px 10px; }
-  .stage-wrap .sheet-ear-left small { display: none; }
-  .comparison-full .stage-wrap.reading-paper .paper-to-main { right: calc(12px + env(safe-area-inset-right, 0px)); bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+  .stage-wrap :is(.sheet-ear-left, .sheet-ear-right) { width: 100%; height: 44px; padding: 4px 8px; }
+  .stage-wrap :is(.sheet-ear-left, .sheet-ear-right) small { display: none; }
 }
 /* FE-55: 읽는 지면에서 "판결 성향 테스트" 광고는 눌러서 성향 테스트 면으로 넘어간다 */
 .comparison-full .stage-wrap.reading-paper .sheet-ad.is-clickable { cursor: pointer; }
 .comparison-full .stage-wrap.reading-paper .sheet-ad.is-clickable:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 3px; }
 @media (hover: hover) and (pointer: fine) { .comparison-full .stage-wrap.reading-paper .sheet-ad.is-clickable:hover { background: color-mix(in srgb, var(--color-desk-kraft) 16%, transparent); } }
+/* 6막 광고 단의 "메인으로"(FE-120): 왼쪽 귀와 같은 진한 면 + 종이색 글자. 호버는 진한 면 위라 밝아진다(P1) */
+.comparison-full .stage-wrap .sheet-ad.is-main { background: var(--color-heading); }
+.comparison-full .stage-wrap .sheet-ad.is-main :is(.sheet-ad-tag, .sheet-ad-title, .sheet-ad-text) { color: var(--color-on-accent); }
+@media (hover: hover) and (pointer: fine) { .comparison-full .stage-wrap.reading-paper .sheet-ad.is-main.is-clickable:hover { background: var(--color-accent); } }
 /* 다른 사건 보기(플립): 신문이 옆으로 선 순간부터 앞면 기사를 감춰 빈 뒷면만 보인다(comparisonStage.js foldToList) */
 .comparison-full .stage-wrap.reading-paper .sheet.is-flipped > * { visibility: hidden; }
 /* 리뷰하기(FE-55): 1막 엽서처럼 남불이 앞으로 나서며 엽서를 건넨다(paperStage.css nambul-hand) */
