@@ -23,8 +23,10 @@ function buildPath(path, caseId, shareId, postId) {
 
 const validPostId = (value) => Number.isSafeInteger(value) && value > 0;
 
+// deskY(책상에서 누른 때의 스크롤 자리)는 연출용이라 같은 이동인지 가릴 때 뺀다 — 안 그러면 스크롤만 달리해 다시 눌렀을 때 같은 화면이 한 번 더 열린다
 function sameExtras(a, b) {
   const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  keys.delete('deskY');
   return [...keys].every((key) => a[key] === b[key]);
 }
 

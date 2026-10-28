@@ -2,6 +2,7 @@ import { button, element } from '../../components/siteLayout.js';
 import { imageOf } from '../../components/stage.js';
 import { CHARACTER_NAMES } from '../../utils/personalityAxes.js';
 import { reducedMotion } from '../../utils/motion.js';
+import { holdDeskScroll } from '../../utils/deskScroll.js';
 import { folderBookmark, paperFold } from '../../components/folderParts.js';
 
 // S-15 · S-16 · 공유된 결과(/test/types/{shareId})가 함께 쓰는 조각 (FE-42).
@@ -42,10 +43,7 @@ export function renderFolder(container, { navigate, sheetLabel, orientation = 'p
     window.setTimeout(drop, 2000); // animationend가 오지 않아도 걷는다
   }
   container.replaceChildren(root);
-  if (deskY > 0) { // 라우터가 스크롤을 두고 갔다: 새 화면은 맨 위로 올리고, 뒤에 남긴 책상은 서류철을 누른 때의 스크롤 자리에 둔다
-    window.scrollTo(0, 0);
-    if (ghost) ghost.scrollTop = deskY;
-  }
+  holdDeskScroll(ghost, deskY);
   return { root, tabs, label, body };
 }
 

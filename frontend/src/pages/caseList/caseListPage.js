@@ -12,6 +12,7 @@ import { reducedMotion } from '../../utils/motion.js';
 import { peelOff } from '../../utils/peelOff.js';
 import { takePaper } from '../../utils/paperHandoff.js';
 import { spreadFromTail } from '../../utils/tailSpread.js';
+import { holdDeskScroll } from '../../utils/deskScroll.js';
 
 // S-02 사건 목록 — 신문 1면 (FE-18, 시안 v12 + 배치 조정). 유형 필터 · 오류 처리 로직은 FE-4 · FE-11과 같다.
 // 흐름 목업 ②(FE-32): 책상에서 집어 든 신문이다. 위에 남불의 안내 포스트잇(누르면 떼어짐, FE-50)이 있고, 기사를 누르면
@@ -181,10 +182,7 @@ export async function renderCaseListPage(container, { api, navigate, from, openA
   paper.prepend(tip);
   root.append(desk, paper, edges);
   if (ghost) root.insertBefore(ghost, paper);
-  if (deskY > 0) { // 라우터가 스크롤을 두고 갔다: 새 화면은 맨 위로 올리고, 뒤에 남긴 메인은 신문을 누른 때의 스크롤 자리에 둔다(안 그러면 메인이 위로 튄다)
-    window.scrollTo(0, 0);
-    if (ghost) ghost.scrollTop = deskY;
-  }
+  holdDeskScroll(ghost, deskY); // 안 그러면 뒤에 남긴 메인이 위로 튄다
   // 뒤집고 왔으면 6막 지면과 같은 폭 · 같은 자리에 지면을 놓는다(같은 신문 한 장이 이어진다). 아래로 길어지는 부분은 화면 밖이다
   if (handed && root.classList.contains('is-unflipping')) {
     const top = Math.max(0, handed.rect.top);

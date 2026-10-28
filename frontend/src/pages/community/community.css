@@ -299,7 +299,7 @@ textarea.cm-input { resize: vertical; min-height: 96px; line-height: 1.6; }
 @media (max-width: 1023px) {
   .community-page { padding: 8px 8px 12px; }
   .community-screen { grid-template-columns: minmax(0, 1fr); border-radius: 10px; }
-  .cm-filters { position: static; padding: 22px 28px 18px; border-right: 0; border-bottom: 1px solid var(--color-border); } /* 위 칸(제목 · 거르기)과 아래 글 목록을 선으로 가른다(넓은 화면의 오른쪽 선과 같은 색) */
+  .cm-filters { position: relative; top: auto; padding: 22px 28px 18px; border-right: 0; border-bottom: 1px solid var(--color-border); } /* 위 칸(제목 · 거르기)과 아래 글 목록을 선으로 가른다(넓은 화면의 오른쪽 선과 같은 색) */
   .cm-filter-groups { grid-template-columns: minmax(0, 1fr); gap: 12px; margin-top: 16px; }
   .cm-filter-group:first-child .cm-filter-title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .cm-filter-list { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
@@ -308,7 +308,7 @@ textarea.cm-input { resize: vertical; min-height: 96px; line-height: 1.6; }
   .cm-main { padding: 20px 28px 36px; }
   .cm-toolbar { flex-wrap: wrap; }
   .cm-sorts { order: 3; width: 100%; margin-left: 0; overflow-x: auto; }
-  .cm-filters { position: relative; top: auto; } /* 넓은 화면의 sticky top 값이 relative로 남아 칸이 밀리지 않게 */
+  .cm-filters .cm-title { padding-right: 112px; } /* 오른쪽 위 글쓰기 버튼 자리 — 제목 링크가 버튼 밑으로 깔리지 않게 */
   .cm-compose-open { position: absolute; top: 18px; right: 16px; margin: 0; min-height: 40px; padding: 8px 14px; } /* 좁은 화면은 왼쪽 열(위 칸)의 오른쪽 위 */
   .cm-filters .cm-popular { display: none; } /* 좁은 화면은 위 칸이 거르기만 남게 한다 */
   .cm-article-title { font-size: var(--text-title-2); }

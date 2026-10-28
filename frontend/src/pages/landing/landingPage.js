@@ -350,7 +350,7 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
     } else item.append(element('strong', '', label), text);
     if (key === 'mug') item.addEventListener('click', sip);
     else if (key === 'pen') item.addEventListener('click', openFeedbackDialog);
-    else if (route) item.addEventListener('click', () => navigate(route, key === 'news' || key === 'folder' ? { from: 'desk' } : {}));
+    else if (route) item.addEventListener('click', () => navigate(route, key === 'news' || key === 'folder' ? { from: 'desk', deskY: Math.round(window.scrollY) } : {}));
     else item.setAttribute('aria-disabled', 'true');
     mobileCounts[key] = text;
     mobileList.append(item);
