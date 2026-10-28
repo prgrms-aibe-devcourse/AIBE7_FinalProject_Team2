@@ -28,7 +28,8 @@ import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 /**
- * 사건 내용 수정 · 가치관 축 확정 · 사건 공개 A-11 ~ A-13 (API 명세 8-2, BE-43). 실제 로그인 세션 + CSRF 토큰.
+ * 사건 내용 수정 · 가치관 축 확정 · 사건 공개 · 공개 취소 A-11 ~ A-13 · A-13-14 (API 명세 8-2, BE-43 · BE-118).
+ * 실제 로그인 세션 + CSRF 토큰.
  */
 class AdminCaseEditApiTest extends ApiIntegrationTest {
 
@@ -220,10 +221,104 @@ class AdminCaseEditApiTest extends ApiIntegrationTest {
 			.andExpect(jsonPath("$.details[0].reason").value("CASE_PUBLISHED"));
 	}
 
+	// --- A-13-14 ---
+
+	@Test
+	@DisplayName("A-13-14: 공개 취소하면 REVIEW · published_at 지움 · 사유 감사 로그, 사용자 목록 · 상세에서 사라지고 다시 공개할 수 있다")
+	void unpublish() throws Exception {
+		makePublishable();
+		perform(post(caseUrl() + "/publish")).andExpect(status().isOk());
+		mockMvc.perform(get("/api/v1/cases/" + caseId)).andExpect(status().isOk());
+
+		perform(post(caseUrl() + "/unpublish").contentType(MediaType.APPLICATION_JSON).content("{\"reason\": \"  권리자 요청  \"}"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.status").value("REVIEW"))
+			.andExpect(jsonPath("$.publishReadiness.ready").value(true));
+		assertThat(caseStatus()).isEqualTo("REVIEW");
+		assertThat(jdbcTemplate.queryForObject("SELECT published_at IS NULL FROM legal_case WHERE id = ?", Boolean.class,
+			caseId)).isTrue();
+		assertThat(jdbcTemplate.queryForObject("""
+			SELECT detail->>'reason' FROM admin_audit_log WHERE actor_email = ? AND action = 'CASE_UNPUBLISH'
+			  AND target_type = 'CASE' AND target_id = ?""", String.class, admin.getEmail(), caseId)).isEqualTo("권리자 요청");
+		// 판결은 그대로 공개 판결로 남는다(행을 지우지 않는다)
+		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM judgment WHERE case_id = ? AND is_published", Long.class,
+			caseId)).isEqualTo(2);
+
+		// 사용자 API는 PUBLISHED만 읽는다
+		mockMvc.perform(get("/api/v1/cases/" + caseId))
+			.andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.code").value("CASE_NOT_FOUND"));
+		mockMvc.perform(get("/api/v1/cases"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.cases[?(@.caseId == %d)]".formatted(caseId)).isEmpty());
+
+		// 고친 뒤 다시 공개할 수 있다
+		perform(patch(caseUrl()).contentType(MediaType.APPLICATION_JSON).content("{\"shortIntro\": \"고친 소개\"}"))
+			.andExpect(status().isOk());
+		perform(post(caseUrl() + "/publish"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.status").value("PUBLISHED"));
+		assertThat(jdbcTemplate.queryForObject("SELECT published_at IS NOT NULL FROM legal_case WHERE id = ?", Boolean.class,
+			caseId)).isTrue();	// 다시 공개하면 새 시각으로 채워진다
+		mockMvc.perform(get("/api/v1/cases/" + caseId)).andExpect(status().isOk());
+	}
+
+	@Test
+	@DisplayName("A-13-14: 이미 끝낸 체험도 공개 취소 뒤에는 내 체험 · 비교 결과가 404 CASE_NOT_FOUND (체험 기록은 남는다)")
+	void unpublish_hidesFinishedExperience() throws Exception {
+		makePublishable();
+		perform(post(caseUrl() + "/publish")).andExpect(status().isOk());
+		UUID anonymousId = UUID.randomUUID();
+		insertExperience(anonymousId, caseId, 1, "COMPLETED");
+		Cookie user = new Cookie(COOKIE, anonymousId.toString());
+		mockMvc.perform(get(experienceUrl(caseId)).cookie(user)).andExpect(status().isOk());
+
+		perform(post(caseUrl() + "/unpublish").contentType(MediaType.APPLICATION_JSON).content("{\"reason\": \"사유\"}"))
+			.andExpect(status().isOk());
+
+		for (String url : List.of(experienceUrl(caseId), experienceUrl(caseId) + "/comparison")) {
+			mockMvc.perform(get(url).cookie(user))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.code").value("CASE_NOT_FOUND"));
+		}
+		assertThat(countExperiences(caseId)).isEqualTo(1);	// 숨김이라 지우지 않는다
+	}
+
+	@Test
+	@DisplayName("A-13-14: 공개 중이 아니면 409 CASE_NOT_PUBLISHED, 사유 없음 · 공백 · 200자 초과는 400, 없는 사건은 404")
+	void unpublish_rejections() throws Exception {
+		perform(post(caseUrl() + "/unpublish").contentType(MediaType.APPLICATION_JSON).content("{\"reason\": \"사유\"}"))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.code").value("INVALID_STATE"))
+			.andExpect(jsonPath("$.currentStatus").value("DRAFT"))
+			.andExpect(jsonPath("$.details[0].reason").value("CASE_NOT_PUBLISHED"));
+
+		jdbcTemplate.update("UPDATE legal_case SET status = 'PUBLISHED', published_at = now() WHERE id = ?", caseId);
+		for (String body : List.of("{}", "{\"reason\": null}", "{\"reason\": \"   \"}",
+			"{\"reason\": \"" + "가".repeat(201) + "\"}")) {
+			perform(post(caseUrl() + "/unpublish").contentType(MediaType.APPLICATION_JSON).content(body))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+				.andExpect(jsonPath("$.details[0].field").value("reason"));
+		}
+		assertThat(caseStatus()).isEqualTo("PUBLISHED");	// 거절되면 아무것도 바뀌지 않는다
+		perform(post(caseUrl() + "/unpublish").contentType(MediaType.APPLICATION_JSON).content("{\"reason\": \"" + "가".repeat(200) + "\"}"))
+			.andExpect(status().isOk());
+
+		perform(post("/api/v1/admin/cases/-1/unpublish").contentType(MediaType.APPLICATION_JSON).content("{\"reason\": \"사유\"}"))
+			.andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.code").value("CASE_NOT_FOUND"));
+		assertThat(jdbcTemplate.queryForList("""
+			SELECT action FROM admin_audit_log WHERE actor_email = ? AND action = 'CASE_UNPUBLISH'""", String.class,
+			admin.getEmail())).hasSize(1);
+	}
+
 	@Test
 	@DisplayName("상태를 바꾸는 요청은 CSRF 토큰이 없으면 403")
 	void csrfRequired() throws Exception {
 		mockMvc.perform(post(caseUrl() + "/publish").session(session)).andExpect(status().isForbidden());
+		mockMvc.perform(post(caseUrl() + "/unpublish").session(session).contentType(MediaType.APPLICATION_JSON)
+			.content("{\"reason\": \"사유\"}")).andExpect(status().isForbidden());
 		mockMvc.perform(patch(caseUrl()).session(session).contentType(MediaType.APPLICATION_JSON)
 			.content("{\"shortIntro\": \"고침\"}")).andExpect(status().isForbidden());
 		assertThat(caseStatus()).isEqualTo("DRAFT");
@@ -241,6 +336,15 @@ class AdminCaseEditApiTest extends ApiIntegrationTest {
 
 	private static String axisUrl(long factorId) {
 		return "/api/v1/admin/factors/" + factorId + "/value-axis";
+	}
+
+	/** 공개 조건(A-13)을 모두 채운다: 공개 AI · 재판부 판결, 형벌 규칙 */
+	private void makePublishable() {
+		judgment("AI");
+		judgment("COURT");
+		jdbcTemplate.update("""
+			INSERT INTO penalty_rule (case_id, penalty_type, allowed_min, allowed_max, suspension_allowed, display_order)
+			VALUES (?, 'PRISON', 60, 360, true, 1)""", caseId);
 	}
 
 	private void judgment(String subjectType) {

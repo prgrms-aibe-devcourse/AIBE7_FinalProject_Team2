@@ -1,6 +1,8 @@
 # 공용 개발 DB (Supabase, RDS 전환 전 1주 한정)
 
 > COMMON-59 · 기간: 2026-10-22 ~ 10/28 오전 (10/28 오후 운영 RDS 전환(BE-59) 뒤 삭제)
+>
+> **⚠️ 10/28 11:22 운영이 RDS로 옮겨졌다 — 이 DB는 이제 운영과 무관하고, 아래 "종료" 절차로 지운다.** 새로 접속하지 말고, 로컬 개발은 원래 로컬 Docker DB로 돌아간다(아래 "로컬 DB로 돌아갈 때"). 운영 DB에는 Supabase 데이터를 옮기지 않았다(`deploy/README.md` "RDS 전환").
 
 각자 로컬 Docker DB와 목데이터로만 보면 사람마다 결과가 달라 화면 · API 검증이 모호하다.
 RDS는 요금 제한으로 10/28 오후부터 쓰므로, 10/22 ~ 10/28 오전 동안 **팀 4명이 같은 DB에 붙어 같은 실데이터로 확인**한다.
@@ -182,7 +184,12 @@ macOS 기본 bash(3.2)에서도 동작한다.
 
 ## 종료 (RDS 전환 후)
 
-0. **운영을 먼저 RDS로 옮긴다**(BE-59, `deploy/README.md` "외부 DB 모드 > RDS 전환 때"). 운영이 아직 이 DB에 붙어 있는 동안 프로젝트를 지우면 운영 서비스가 멈춘다.
+0. **운영을 먼저 RDS로 옮긴다**(BE-59, `deploy/README.md` "외부 DB 모드 > RDS 전환") — **10/28 완료.** 지우기 전에 서버에서 아래 **세 가지를 모두** 확인한다. 하나라도 아니면 지우지 않는다(운영이 멈춘다).
+   - `.env`가 RDS를 가리킨다 — `deploy.sh`와 같은 기준(같은 키가 여러 줄이면 **마지막 줄**, 따옴표 · 공백 제거)으로 본다. 값은 출력하지 않는다:
+     `grep -E '^EXTERNAL_DB_URL=' /opt/lawnambul/app/deploy/.env | tail -1 | cut -d= -f2- | tr -d "\"' \r" | grep -c 'rds\.amazonaws\.com'` → **1**
+   - 그 `.env`로 `./deploy.sh --reapply`가 **성공**했다(스모크 테스트 통과까지). `.env`만 바꾸고 다시 적용하지 않으면 backend는 예전 값으로 떠 있다.
+   - **지금 떠 있는 backend**가 RDS에 붙어 있다(값은 출력하지 않고 건수만):
+     `docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$(docker ps -q --filter label=com.docker.compose.project=lawnambul --filter label=com.docker.compose.service=backend)" | grep -c '^DB_URL=jdbc:postgresql://[^/]*rds\.amazonaws\.com'` → **1**
 1. 팀원: `backend/.env.supabase`를 지운다.
 2. 담당자: Supabase Settings → General → **Delete project**.
 3. RDS는 Flyway로 새로 적용한다(BE-59). Supabase의 테스트 데이터는 옮기지 않는다.

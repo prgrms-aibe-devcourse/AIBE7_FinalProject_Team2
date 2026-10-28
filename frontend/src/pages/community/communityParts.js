@@ -16,7 +16,6 @@ const TITLE_MAX = 60;
 const BODY_MAX = 2000;
 const IMAGE_MAX = 3;
 const IMAGE_EDGE = 1280; // 첨부 사진은 긴 변을 이 크기로 줄여 보낸다(목은 브라우저 저장소에 둔다)
-const NARROW = '(max-width: 1023px)'; // community.css와 같은 경계. 이보다 좁으면 글쓰기 칸이 화면을 덮는 창으로 열린다
 const SHEET = '(max-width: 720px)'; // community.css 모바일 경계. 이보다 좁으면 글쓴이 작은 창이 아래에서 올라오는 판이 된다
 
 // 아이콘(한 가지 선 굵기 · 24 격자). 글자 · 이모지로 대신하지 않는다
@@ -335,18 +334,15 @@ export function loginHint(host, navigate, text) {
 }
 
 // ---- 노트북 화면 틀 ----
-// 왼쪽: 제목 · 말머리 · 사건 거르기 / 가운데: 화면마다 다름 / 오른쪽: 늘 열려 있는 글쓰기 칸 + 많이 본 글(목데이터).
-// 좁은 화면에서는 한 열이 되고, 글쓰기 칸은 "글쓰기" 버튼으로 여는 창이 된다
-export function communityShell({ navigate }) {
+// 왼쪽: 제목 · 말머리 · 사건 거르기 · 많이 본 글(목데이터) · 글쓰기 버튼 / 가운데: 화면마다 다름. 글쓰기는 칸이 아니라 "글쓰기" 버튼으로 가는 별도 화면이다(/community/write, 글쓰기 페이지).
+// 좁은 화면에서는 한 열이 된다
+export function communityShell({ navigate, withCompose = true }) {
   const root = element('div', 'community-page');
   const screen = element('div', 'community-screen');
   const filters = element('aside', 'cm-filters');
   filters.setAttribute('aria-label', '글 거르기');
   const main = element('main', 'cm-main');
-  const side = element('aside', 'cm-side');
-  side.setAttribute('aria-label', '글쓰기');
-  side.id = 'cm-compose';
-  screen.append(filters, main, side);
+  screen.append(filters, main);
   root.append(screen);
 
   const head = element('div', 'cm-head');
@@ -364,51 +360,14 @@ export function communityShell({ navigate }) {
   head.append(title, element('p', 'cm-sub', '같은 기록, 다른 생각'));
   filters.append(head);
 
-  // 좁은 화면: 글쓰기 칸을 창으로 연다(열려 있는 동안 뒤 화면은 조작되지 않는다)
-  const openButton = button('', () => openCompose(), 'cm-compose-open primary-button');
-  openButton.append(icon('pen'), element('span', '', '글쓰기'));
-  openButton.setAttribute('aria-controls', side.id);
-  openButton.setAttribute('aria-expanded', 'false');
-  const closeButton = button('', () => closeCompose(), 'cm-compose-close');
-  closeButton.append(icon('close'));
-  closeButton.setAttribute('aria-label', '글쓰기 닫기');
-  const narrow = window.matchMedia(NARROW);
-  const onKey = (event) => { if (event.key === 'Escape') closeCompose(); };
-  // 창 밖은 모두 조작되지 않게 한다: 창에서 body까지 올라가며 형제 요소(공통 헤더 · 푸터 포함)에 inert를 건다(PR #200 리뷰 반영)
-  let inertNodes = [];
-  function openCompose() {
-    side.classList.add('is-open');
-    side.setAttribute('role', 'dialog');
-    side.setAttribute('aria-modal', 'true');
-    inertNodes = [];
-    for (let node = side; node && node !== document.body; node = node.parentElement) {
-      for (const sibling of node.parentElement?.children ?? []) {
-        if (sibling !== node && !sibling.inert) { sibling.inert = true; inertNodes.push(sibling); }
-      }
-    }
-    openButton.setAttribute('aria-expanded', 'true');
-    document.addEventListener('keydown', onKey);
-    side.querySelector('input, textarea, button:not(.cm-compose-close)')?.focus();
+  // 글쓰기 버튼: 왼쪽 열 맨 아래(거르기 · 많이 본 글이 나중에 붙어도 CSS order로 맨 아래), 좁은 화면은 그 열 오른쪽 위. 글쓰기 페이지 자신에는 두지 않는다
+  if (withCompose) {
+    const openButton = button('', () => navigate('communityWrite'), 'cm-compose-open primary-button');
+    openButton.append(icon('pen'), element('span', '', '글쓰기'));
+    filters.append(openButton);
   }
-  function closeCompose() {
-    if (!side.classList.contains('is-open')) return;
-    side.classList.remove('is-open');
-    side.removeAttribute('role');
-    side.removeAttribute('aria-modal');
-    inertNodes.forEach((node) => { node.inert = false; });
-    inertNodes = [];
-    openButton.setAttribute('aria-expanded', 'false');
-    document.removeEventListener('keydown', onKey);
-    if (root.isConnected) openButton.focus();
-  }
-  // 넓은 화면으로 바뀌면 창을 닫는다(넓은 화면에서는 늘 열려 있는 칸이다). 화면을 떠난 뒤 처음 불리면 스스로 떨어진다
-  const onWidth = () => {
-    if (!root.isConnected) { narrow.removeEventListener('change', onWidth); document.removeEventListener('keydown', onKey); return; }
-    if (!narrow.matches) closeCompose();
-  };
-  narrow.addEventListener('change', onWidth);
 
-  return { root, filters, main, side, openButton, closeButton, closeCompose };
+  return { root, filters, main };
 }
 
 // 말머리 · 사건 거르기. value는 { category, caseId }. onChange는 바뀐 값으로 부른다
@@ -499,21 +458,21 @@ export function postLink(text, postId, navigate, className = '') {
   return link;
 }
 
-// ---- 글쓰기 칸 ----
+// ---- 글쓰기(글쓰기 페이지) ----
 // 말머리 · 사건 · 제목 · 본문 · 사진(최대 3장) · 내 판결 붙이기. 로그아웃 상태면 로그인 안내만 둔다.
 // 올리면 onPosted(새 글)를 부른다
-export function composer({ api, navigate, cases, onPosted, closeButton, closeCompose }) {
+export function composer({ api, navigate, cases, onPosted }) {
   const box = element('section', 'cm-compose');
   box.setAttribute('aria-labelledby', 'cm-compose-title');
   const head = element('div', 'cm-compose-head');
   const title = element('h2', 'cm-side-title', '편지 쓰기');
   title.id = 'cm-compose-title';
-  head.append(title, closeButton);
+  head.append(title);
   box.append(head);
 
   if (!currentUser()) {
     box.append(element('p', 'cm-compose-note', '로그인하면 글을 쓰고 댓글 · 좋아요를 남길 수 있어요.'),
-      button('로그인하기', () => { closeCompose(); navigate('login'); }, 'primary-button cm-compose-login'));
+      button('로그인하기', () => navigate('login'), 'primary-button cm-compose-login'));
     return box;
   }
 

@@ -2,6 +2,7 @@ import { button, element } from '../../components/siteLayout.js';
 import { imageOf } from '../../components/stage.js';
 import { CHARACTER_NAMES } from '../../utils/personalityAxes.js';
 import { reducedMotion } from '../../utils/motion.js';
+import { holdDeskScroll } from '../../utils/deskScroll.js';
 import { folderBookmark, paperFold } from '../../components/folderParts.js';
 
 // S-15 · S-16 · 공유된 결과(/test/types/{shareId})가 함께 쓰는 조각 (FE-42).
@@ -13,8 +14,8 @@ import { folderBookmark, paperFold } from '../../components/folderParts.js';
 // 공유 화면에는 개인 응답 · 축 점수를 넣지 않는다(FR-8-6).
 // 4글자 코드(INTP 등)와 축 글자(E · I 등)는 화면에 보이지 않는다(상표 우려, 10/13). 공유 주소는 해시 값({shareId})이다.
 
-// 서류철 틀. sheetLabel = 종이 머리 칸의 서식 이름(문항지 · 결과지 등). rise = 메인 책상의 서류철을 눌러 들고 왔는지(철이 아래에서 올라온다, FE-50). 반환: { root, tabs, label, body }
-export function renderFolder(container, { navigate, sheetLabel, orientation = 'portrait', rise = false }) {
+// 서류철 틀. sheetLabel = 종이 머리 칸의 서식 이름(문항지 · 결과지 등). rise = 메인 책상의 서류철을 눌러 들고 왔는지(철이 아래에서 올라온다, FE-50) · deskY = 그때 책상의 스크롤 자리. 반환: { root, tabs, label, body }
+export function renderFolder(container, { navigate, sheetLabel, orientation = 'portrait', rise = false, deskY = 0 }) {
   const root = element('div', `personality-page is-${orientation}`);
   const desk = element('div', 'personality-desk');
   desk.setAttribute('aria-hidden', 'true');
@@ -42,6 +43,7 @@ export function renderFolder(container, { navigate, sheetLabel, orientation = 'p
     window.setTimeout(drop, 2000); // animationend가 오지 않아도 걷는다
   }
   container.replaceChildren(root);
+  holdDeskScroll(ghost, deskY);
   return { root, tabs, label, body };
 }
 

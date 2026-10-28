@@ -2,6 +2,7 @@ import { currentUser } from '../utils/session.js';
 import { getBookmarkCharacter } from '../utils/bookmarkCharacter.js';
 import { peek as peekExperience, readJudgment } from './mockExperienceStore.js';
 import { mockCases as cases } from './caseListMockData.js';
+import { scriptReadyOf } from './caseListMockApi.js';
 import { seedAuthors, seedComments, seedPosts } from './communityMockData.js';
 import { DEFAULT_DECO } from '../utils/profileDeco.js';
 import { getCardLineSettings } from '../utils/profileSettings.js';
@@ -120,8 +121,8 @@ const HOT_POSTS = 3;
 const RECOMMENDED_POSTS = 2;
 
 // 메인에 싣는 사건 요약: 기사 조각(제목 · 부제 · 본문 두 단락 또는 사진)과 사건 정보 확인에 쓰는 값
-const caseSummary = ({ caseId, title, crimeCategoryLabel, shortIntro, headline, deck, article, thumbnailUrl, participantCount, estimatedMinutes, scriptReady }) => ({
-  caseId, title, crimeCategoryLabel, shortIntro, headline, deck, article: article.slice(0, 2), thumbnailUrl, participantCount, estimatedMinutes, scriptReady,
+const caseSummary = ({ caseId, title, crimeCategoryLabel, shortIntro, headline, deck, article, thumbnailUrl, participantCount, estimatedMinutes }) => ({
+  caseId, title, crimeCategoryLabel, shortIntro, headline, deck, article: article.slice(0, 2), thumbnailUrl, participantCount, estimatedMinutes, scriptReady: scriptReadyOf(caseId),
 });
 // 사건 글: 좋아요 많은 순으로 몇 개만(댓글 내용은 싣지 않는다)
 const casePosts = (posts, size) => [...posts].sort((a, b) => b.likeCount - a.likeCount || b.createdAt.localeCompare(a.createdAt)).slice(0, size)
