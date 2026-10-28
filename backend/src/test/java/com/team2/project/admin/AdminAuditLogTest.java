@@ -289,6 +289,18 @@ class AdminAuditLogTest extends ApiIntegrationTest {
 			.hasMessageContaining("chk_admin_audit_log_target");
 	}
 
+	/**
+	 * enum의 모든 행동을 DB CHECK가 받는다 (BE-118). CHECK는 마이그레이션마다 전체 목록으로 다시 만들어서,
+	 * 앞 마이그레이션이 더한 값을 빠뜨리면 그 행동의 기록이 운영에서야 실패한다 — 여기서 먼저 잡는다
+	 */
+	@Test
+	void constraints_acceptEveryAuditAction() {
+		for (AdminAuditAction action : AdminAuditAction.values()) {
+			assertThat(jdbcTemplate.update("INSERT INTO admin_audit_log (action) VALUES (?)", action.name()))
+				.as(action.name()).isEqualTo(1);
+		}
+	}
+
 	/** 계정을 지워도 기록은 남고 admin_id만 비워진다(누구였는지는 actor_email로 남는다) */
 	@Test
 	void accountDeleted_logKeptWithEmail() throws Exception {

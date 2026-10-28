@@ -46,6 +46,7 @@
 | v1.40 | 2026-10-27 | 범죄 유형 추가: 강도 · 절도 (BE-112 · V31 · API 명세 v0.55) — `crime_type`에 `ROBBERY`(강도 — 강도치상 · 강도상해 포함) · `THEFT`(절도 — 특수절도 · 특가법 절도 포함) 추가, 화면 분류명은 둘 다 재산범죄. 범죄 유형 CHECK 4곳(`sentence_range_option` · `legal_case` · `rag_precedent` · `case_import`) 교체. `sentence_range_option`에 강도 7개(벌금형 제외 + 무기징역, ID 23 ~ 29) · 절도 7개(공통, ID 30 ~ 36) 추가. 상해치사 · 폭행치사는 `INJURY`에 포함. 양형기준 버전은 살인만 자동 연결(강도 · 절도는 없음) |
 | v1.41 | 2026-10-27 | 사건 대본 테이블 추가 (**확장 단계**, BE-108 · V32 · API 명세 v0.57) — `case_script` 신설(사건마다 1건: 증거조사 대사 `evidence` jsonb · 배역 `cast_roles` · 생성 정보 `model` · `generated_at` · `stopped` · 공개 가능 여부 `publishable` · 검수 칸 4개). 대사를 칸으로 펼치지 않고 jsonb 한 칸에 두는 이유는 `case_paper.article`과 같다(형식을 정하는 쪽이 파이프라인이다). `cast`는 SQL 예약어라 칸 이름을 `cast_roles`로 두었다. 검수는 `judgment`(V16)와 같은 방식으로 `APPROVED` · `REJECTED`만 저장하고 비어 있으면 대기로 읽는다. 감사 로그 행동 `CASE_SCRIPT_APPROVE` · `CASE_SCRIPT_REJECT` 추가 (결정: `docs/decisions/BE-108.md`) **(병합 메모) 작업 중 BE-106(V30 · v1.39)과 BE-112(V31 · v1.40)가 먼저 머지돼 V32 · v1.41로 다시 매겼다** |
 | v1.42 | 2026-10-27 | 아이디 회원 추가 (**확장 단계**, BE-113 · V33 · API 명세 v0.58) — `member.provider`에 `LOCAL` 허용(CHECK `ck_member_provider` 변경), `member.nickname`(NULL 허용, 카카오 회원은 NULL) 추가, `member_password` 신설(회원 1 : 0..1, 소문자 로그인 아이디 유일 · 일방향 비밀번호 해시). 아이디 회원의 `provider_user_id`는 UUID. 카카오 회원 행 · 기존 조회는 바뀌지 않는다 |
+| v1.44 | 2026-10-28 | 사건 공개 취소 (**확장 단계**, BE-118 · V34 · API 명세 v0.60) — **표 · 칸은 늘리지 않는다.** 공개 취소(A-13-14)는 `legal_case.status`를 `PUBLISHED → REVIEW`로 돌리고 `published_at`을 지운다(숨김, 행은 지우지 않는다). `admin_audit_log.action` CHECK에 `CASE_UNPUBLISH` 추가(V34, V32까지의 값을 모두 다시 나열). 같은 김에 `action` 설명을 V32까지 늘어난 값으로 갱신. (v1.43은 BE-117 PR #318이 쓴다) |
 
 ---
 
@@ -209,7 +210,7 @@ erDiagram
 | guideline_id | bigint FK |  | 적용 양형기준 버전 | REQ-080 |
 | incident_date | date |  | 사건 발생일 (양형기준 버전 판단 근거). 자동 파이프라인은 모델이 찾은 날짜를 판결문 원문 · 선고일과 대조해 확인된 값만 넣고, 원문에 날짜가 없으면 비운다(v1.12, BE-38) | FR-3-5-1 |
 | status | varchar(20) | ✓ | `DRAFT` / `REVIEW` / `PUBLISHED`. `PUBLISHED`만 사용자에게 노출 | REQ-047, 075 |
-| published_at | timestamptz |  |  |  |
+| published_at | timestamptz |  | 공개 시각(A-13). 공개 취소(A-13-14)하면 지우고, 다시 공개하면 새로 기록한다 |  |
 | created_at, updated_at | timestamptz | ✓ |  |  |
 - 권고 범위는 MVP에서 팀이 계산해 입력한 값을 그대로 쓴다. 자동 계산 로직은 확장 단계(결정 #4).
 - `title`은 유일하다(`uk_legal_case_title`, V7 · BE-15, v1.12). 적재 SQL이 제목으로 사건을 찾아 환경마다 id가 달라도 같은 SQL을 쓰기 위해서다. 모델이 만든 중립 제목이 다른 공개 · 검토 중 사건과 겹치면 자동 적재가 멈춘다(BE-31).
@@ -655,7 +656,7 @@ AI 판결 1건을 어떤 조건으로 만들었는지 남긴다(REQ-047, 079). M
 | id | bigint PK | ✓ |  |
 | admin_id | bigint FK |  | `admin_account.id`. 로그인 실패는 입력이 실제 계정과 일치할 때만 그 계정, 아니면 NULL. 계정이 지워지면 NULL이 된다(`ON DELETE SET NULL`) |
 | actor_email | varchar(254) |  | 그때의 계정 이메일(소문자, CHECK). 계정이 지워져도 누구였는지 남긴다. **로그인 실패 때 입력한 값은 원문으로 남기지 않는다** — 이메일 칸에 비밀번호를 잘못 넣으면 평문으로 남기 때문이다. 입력이 실제 계정과 일치할 때만 그 계정 이메일, 아니면 NULL(`detail`에 `{"knownAccount": false}`) |
-| action | varchar(30) | ✓ | `LOGIN_SUCCESS` · `LOGIN_FAILURE` · `LOGOUT` · `SOURCE_VIEW` · `JUDGMENT_APPROVE` · `JUDGMENT_REJECT` · `CASE_UPDATE` · `VALUE_AXIS_CONFIRM` · `CASE_PUBLISH` (CHECK) |
+| action | varchar(30) | ✓ | `LOGIN_SUCCESS` · `LOGIN_FAILURE` · `LOGOUT` · `SOURCE_VIEW` · `JUDGMENT_APPROVE` · `JUDGMENT_REJECT` · `CASE_UPDATE` · `VALUE_AXIS_CONFIRM` · `CASE_PUBLISH` · `CASE_PHOTO_UPLOAD` · `CASE_PHOTO_DELETE` · `CASE_PAPER_GENERATE` · `CASE_PAPER_UPDATE` · `CASE_IMPORT` · `CASE_IMPORT_LOAD` · `CASE_SCRIPT_APPROVE` · `CASE_SCRIPT_REJECT` · `CASE_SCRIPT_UPDATE` · `CASE_UNPUBLISH` (CHECK, 마지막 변경 V34). 코드 enum `AdminAuditAction`과 같은 값이다 |
 | target_type | varchar(20) |  | `CASE` · `JUDGMENT` · `FACTOR` · `CASE_SOURCE`. `target_id`와 둘 다 있거나 둘 다 없다(CHECK) |
 | target_id | bigint |  | 대상 행 ID (FK 없음 — 대상이 지워져도 기록은 남긴다) |
 | detail | jsonb |  | 판단에 필요한 값만(반려 사유 · 바꾼 필드 이름 등). **비밀번호 · 원문 내용 · 토큰은 넣지 않는다** |

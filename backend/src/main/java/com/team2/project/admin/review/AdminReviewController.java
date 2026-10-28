@@ -5,6 +5,7 @@ import com.team2.project.admin.review.dto.AdminCaseListResponse;
 import com.team2.project.admin.review.dto.AdminJudgmentResponse;
 import com.team2.project.admin.review.dto.AdminRejectRequest;
 import com.team2.project.admin.review.dto.AdminSourceTextResponse;
+import com.team2.project.admin.review.dto.AdminUnpublishRequest;
 import com.team2.project.admin.review.dto.AdminValueAxisResponse;
 import com.team2.project.admin.service.AdminPrincipal;
 import com.team2.project.common.exception.BusinessException;
@@ -114,6 +115,13 @@ public class AdminReviewController {
 	public AdminCaseDetailResponse publish(@PathVariable Long caseId, @AuthenticationPrincipal AdminPrincipal admin,
 		HttpServletRequest request) {
 		return caseEditService.publish(caseId, admin, request);
+	}
+
+	/** A-13-14 사건 공개 취소 (사유 필수) */
+	@PostMapping("/cases/{caseId}/unpublish")
+	public AdminCaseDetailResponse unpublish(@PathVariable Long caseId, @Valid @RequestBody AdminUnpublishRequest body,
+		@AuthenticationPrincipal AdminPrincipal admin, HttpServletRequest request) {
+		return caseEditService.unpublish(caseId, body.reason(), admin, request);
 	}
 
 	private static Set<CaseStatus> statuses(String value) {

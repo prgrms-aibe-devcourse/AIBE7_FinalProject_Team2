@@ -19,5 +19,6 @@ public enum AdminAuditAction {
 	CASE_SCRIPT_APPROVE,	// 사건 대본 승인 (BE-108). 승인해야 공개된다 — 사건 공개와는 별개다
 	CASE_SCRIPT_REJECT,	// 사건 대본 반려 (BE-108)
 	CASE_SCRIPT_UPDATE,	// 사건 대본 대사 직접 수정 (BE-108, A-13-13). 고치면 검수 대기로 돌아간다
-	CASE_PHOTO_DELETE	// 발단 · 결론 사진 삭제 (BE-78 2차 검토, BE-101, A-13-9)
+	CASE_PHOTO_DELETE,	// 발단 · 결론 사진 삭제 (BE-78 2차 검토, BE-101, A-13-9)
+	CASE_UNPUBLISH		// 사건 공개 취소 (BE-118, A-13-14). 사유를 남긴다
 }

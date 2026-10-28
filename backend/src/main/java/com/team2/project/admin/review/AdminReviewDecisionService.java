@@ -36,6 +36,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class AdminReviewDecisionService {
 
 	static final String CASE_PUBLISHED = "CASE_PUBLISHED";
+	static final String CASE_NOT_PUBLISHED = "CASE_NOT_PUBLISHED";	// 공개 취소(A-13-14)는 공개 중인 사건만
 	static final String CANDIDATE_REJECTED = "CANDIDATE_REJECTED";
 	static final String CANDIDATE_PUBLISHED = "CANDIDATE_PUBLISHED";
 
