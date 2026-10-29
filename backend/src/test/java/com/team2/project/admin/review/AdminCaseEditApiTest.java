@@ -1,7 +1,9 @@
 package com.team2.project.admin.review;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -22,10 +24,11 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
-import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.test.web.servlet.request.AbstractMockHttpServletRequestBuilder;
 
 /**
  * 사건 내용 수정 · 가치관 축 확정 · 사건 공개 · 공개 취소 A-11 ~ A-13 · A-13-14 (API 명세 8-2, BE-43 · BE-118).
@@ -149,6 +152,45 @@ class AdminCaseEditApiTest extends ApiIntegrationTest {
 		perform(patch("/api/v1/admin/cases/-1").contentType(MediaType.APPLICATION_JSON).content("{\"shortIntro\": \"고침\"}"))
 			.andExpect(status().isNotFound())
 			.andExpect(jsonPath("$.code").value("CASE_NOT_FOUND"));
+	}
+
+	@Test
+	@DisplayName("A-11: 배역 · 민감 플래그를 고친다 — 상세에 보이고, 감사 로그에는 바꾼 값까지 남긴다 (BE-125)")
+	void edit_castAndSensitiveFlags() throws Exception {
+		perform(patch(caseUrl()).contentType(MediaType.APPLICATION_JSON).content("""
+				{"castRoles": {"prosecutor": "nambul", "defense": "naero"},
+				 "sensitiveFlags": ["MENTAL_HEALTH", "CAPITAL_PENALTY", "MENTAL_HEALTH"]}"""))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.status").value("REVIEW"))
+			.andExpect(jsonPath("$.content.castRoles.prosecutor").value("nambul"))
+			.andExpect(jsonPath("$.content.castRoles.defense").value("naero"))
+			.andExpect(jsonPath("$.content.sensitiveFlags.length()").value(2))	// 겹친 값은 하나로
+			.andExpect(jsonPath("$.content.sensitiveFlags[1]").value("CAPITAL_PENALTY"));	// 관리자는 가드 전용도 본다
+		assertThat(jdbcTemplate.queryForObject("""
+			SELECT detail::text FROM admin_audit_log WHERE actor_email = ? AND action = 'CASE_UPDATE'""",
+			String.class, admin.getEmail())).contains("castRoles", "nambul", "MENTAL_HEALTH");
+
+		// 모두 끌 때는 [] (null은 "분류하지 않음"이라 받지 않는다)
+		perform(patch(caseUrl()).contentType(MediaType.APPLICATION_JSON).content("{\"sensitiveFlags\": []}"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.content.sensitiveFlags.length()").value(0))
+			.andExpect(jsonPath("$.content.castRoles.defense").value("naero"));	// 보내지 않은 배역은 그대로
+	}
+
+	@Test
+	@DisplayName("A-11: 배역 · 민감 플래그가 규칙에 맞지 않으면 400 (BE-125)")
+	void edit_invalidCastAndFlags() throws Exception {
+		for (String body : List.of("{\"castRoles\": null}", "{\"castRoles\": {\"prosecutor\": \"naero\", \"defense\": \"naero\"}}",
+			"{\"castRoles\": {\"prosecutor\": \"naero\"}}", "{\"castRoles\": {\"prosecutor\": \"나로\", \"defense\": \"남불\"}}",
+			"{\"castRoles\": \"naero\"}", "{\"sensitiveFlags\": null}", "{\"sensitiveFlags\": [\"NOT_A_FLAG\"]}",
+			"{\"sensitiveFlags\": [\"MENTAL_HEALTH\", null]}", "{\"sensitiveFlags\": \"MENTAL_HEALTH\"}")) {
+			perform(patch(caseUrl()).contentType(MediaType.APPLICATION_JSON).content(body))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+		}
+		assertThat(caseStatus()).isEqualTo("DRAFT");
+		assertThat(jdbcTemplate.queryForObject("SELECT cast_roles::text FROM legal_case WHERE id = ?", String.class,
+			caseId)).isNull();
 	}
 
 	// --- A-12 ---
@@ -313,6 +355,47 @@ class AdminCaseEditApiTest extends ApiIntegrationTest {
 			admin.getEmail())).hasSize(1);
 	}
 
+	// --- BE-103 (공개 뒤 사진 교체 절차) ---
+
+	@Test
+	@DisplayName("BE-103: 공개한 사건은 사진 업로드 · 삭제가 409 CASE_PUBLISHED, 공개 취소해야 열리고 사진을 지운 채로도 다시 공개된다")
+	void publishedCase_photoChangeNeedsUnpublish() throws Exception {
+		makePublishable();
+		insertIncidentPhoto(caseId, "ORIGIN", "https://cdn.example.com/origin.jpg", "발단");
+		jdbcTemplate.update("UPDATE legal_case SET thumbnail_url = '/images/cases/origin.webp' WHERE id = ?", caseId);
+		perform(post(caseUrl() + "/publish")).andExpect(status().isOk());
+
+		// 공개 중에는 세 경로 모두 막힌다. 업로드는 파일을 S3에 올리기 전에 사건 상태부터 본다
+		for (AbstractMockHttpServletRequestBuilder<?> blocked : List.<AbstractMockHttpServletRequestBuilder<?>>of(
+			multipart(photosUrl() + "/representative").file(imageFile()),
+			multipart(photosUrl() + "/incident").file(imageFile()).param("role", "CONCLUSION"),
+			delete(photosUrl() + "/incident/ORIGIN"))) {
+			perform(blocked)
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.code").value("INVALID_STATE"))
+				.andExpect(jsonPath("$.currentStatus").value("PUBLISHED"))
+				.andExpect(jsonPath("$.details[0].reason").value("CASE_PUBLISHED"));
+		}
+		// 거절되면 아무것도 바뀌지 않는다 — 대표사진(thumbnail_url)도, 감사 로그도
+		assertThat(countIncidentPhotos()).isEqualTo(1);
+		assertThat(jdbcTemplate.queryForObject("SELECT thumbnail_url FROM legal_case WHERE id = ?", String.class,
+			caseId)).isEqualTo("/images/cases/origin.webp");
+		assertThat(photoAuditActions()).isEmpty();
+
+		// 공개 취소(A-13-14)하면 사진 API가 다시 열린다 — 이것이 공개 뒤 사진을 고치는 유일한 경로다
+		perform(post(caseUrl() + "/unpublish").contentType(MediaType.APPLICATION_JSON)
+			.content("{\"reason\": \"발단 사진 교체\"}")).andExpect(status().isOk());
+		perform(delete(photosUrl() + "/incident/ORIGIN")).andExpect(status().isNoContent());
+		assertThat(countIncidentPhotos()).isZero();
+		assertThat(photoAuditActions()).containsExactly("CASE_PHOTO_DELETE");
+
+		// 사진은 공개 조건(PublishReadiness)이 아니라, 사진을 지운 채로도 다시 공개된다
+		perform(post(caseUrl() + "/publish"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.status").value("PUBLISHED"))
+			.andExpect(jsonPath("$.publishReadiness.ready").value(true));
+	}
+
 	@Test
 	@DisplayName("상태를 바꾸는 요청은 CSRF 토큰이 없으면 403")
 	void csrfRequired() throws Exception {
@@ -326,12 +409,32 @@ class AdminCaseEditApiTest extends ApiIntegrationTest {
 
 	// --- 도움 함수 ---
 
-	private ResultActions perform(MockHttpServletRequestBuilder request) throws Exception {
+	private ResultActions perform(AbstractMockHttpServletRequestBuilder<?> request) throws Exception {
 		return mockMvc.perform(request.session(session).cookie(csrf).header(CSRF_HEADER, csrf.getValue()));
 	}
 
 	private String caseUrl() {
 		return "/api/v1/admin/cases/" + caseId;
+	}
+
+	private String photosUrl() {
+		return caseUrl() + "/photos";
+	}
+
+	/** 내용은 보지 않는다 — 공개 중이면 S3에 올리기 전에 거절되므로 비어 있지만 않으면 된다 */
+	private static MockMultipartFile imageFile() {
+		return new MockMultipartFile("file", "photo.jpg", MediaType.IMAGE_JPEG_VALUE, new byte[] {1, 2, 3});
+	}
+
+	private int countIncidentPhotos() {
+		return jdbcTemplate.queryForObject("SELECT count(*) FROM case_incident_photo WHERE case_id = ?", Integer.class,
+			caseId);
+	}
+
+	private List<String> photoAuditActions() {
+		return jdbcTemplate.queryForList("""
+			SELECT action FROM admin_audit_log WHERE actor_email = ? AND action LIKE 'CASE_PHOTO_%'""", String.class,
+			admin.getEmail());
 	}
 
 	private static String axisUrl(long factorId) {

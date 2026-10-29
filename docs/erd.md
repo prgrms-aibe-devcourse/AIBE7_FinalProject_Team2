@@ -48,6 +48,9 @@
 | v1.42 | 2026-10-27 | 아이디 회원 추가 (**확장 단계**, BE-113 · V33 · API 명세 v0.58) — `member.provider`에 `LOCAL` 허용(CHECK `ck_member_provider` 변경), `member.nickname`(NULL 허용, 카카오 회원은 NULL) 추가, `member_password` 신설(회원 1 : 0..1, 소문자 로그인 아이디 유일 · 일방향 비밀번호 해시). 아이디 회원의 `provider_user_id`는 UUID. 카카오 회원 행 · 기존 조회는 바뀌지 않는다 |
 | v1.43 | 2026-10-28 | 형벌 규칙 계산 기준 정리 (BE-117) — `penalty_rule`의 `statutory_max`를 "범행 당시 개별 처벌조항 + 형법 총칙을 반영한 가중 · 감경 전 법정형 상한"으로, `allowed_min` · `allowed_max`를 "가능한 감경 경로들의 합집합"(필요적 감경은 항상, 임의적 감경은 적용 · 미적용 모두)으로 정의. 정수 개월 하한 올림, 신 · 구법 확인, `statutory_max`와 `allowed_max`는 따로 검수. 스키마 변경 없음 |
 | v1.44 | 2026-10-28 | 사건 공개 취소 (**확장 단계**, BE-118 · V34 · API 명세 v0.61) — **표 · 칸은 늘리지 않는다.** 공개 취소(A-13-14)는 `legal_case.status`를 `PUBLISHED → REVIEW`로 돌리고 `published_at`을 지운다(숨김, 행은 지우지 않는다). `admin_audit_log.action` CHECK에 `CASE_UNPUBLISH` 추가(V34, V32까지의 값을 모두 다시 나열). 같은 김에 `action` 설명을 V32까지 늘어난 값으로 갱신. |
+| v1.45 | 2026-10-29 | 수집 상태 · 도전과제 해금 기록 테이블 추가 (**확장 단계**, BE-83 · V35 · API 명세 v0.63) — `collection_item`(익명 사용자 × 종류 × 항목 id, 처음 얻은 사건 · 획득 시각 · 확인 시각) · `achievement_unlock`(익명 사용자 × 도전과제 id, 해금 시각 · 확인 시각) 신설. 두 테이블 모두 `anonymous_user` FK `ON DELETE CASCADE`. V35는 배포 시점에 이미 달성한 도전과제를 "본 것"으로 한 번 채운다. 모은 일러스트 수는 `collection_item` 행 수로 계산한다(10장 갱신). 13장 추가 |
+| v1.46 | 2026-10-29 | 프로필카드 아래 줄 설정 칸 추가 (**확장 단계**, BE-114 · V36 · API 명세 v0.65) — `profile_setting`에 `card_line`(`type` · `signature` · `job`, 기본 `type`, CHECK) · `card_level`(boolean, 기본 `false`) 칸 추가. 기존 행은 기본값. 11장 갱신 |
+| v1.47 | 2026-10-29 | 사건 배역 · 민감 플래그 (**확장 단계**, BE-125 · V37 · API 명세 v0.66) — `legal_case.cast_roles`(jsonb, `{"prosecutor": "naero", "defense": "nambul"}`) · `sensitive_flags`(jsonb 문자열 배열) 추가. 두 칸 모두 DB CHECK를 두지 않고 코드(`CastRoles` · `SensitiveFlag`)가 검사한다. 새 사건은 적재할 때 배정한다 — 대본이 함께 오면 그 배역, 아니면 같은 범죄 유형에서 피고인 역을 덜 맡은 캐릭터(같으면 마지막 배정의 반대). 이미 있는 사건의 초기값은 비공개 시드 저장소의 UPDATE로 넣는다 (`docs/decisions/BE-125.md`) |
 
 ---
 
@@ -210,11 +213,14 @@ erDiagram
 | recommended_basis | text |  | 권고 범위 산출 근거 문구 | REQ-035 |
 | guideline_id | bigint FK |  | 적용 양형기준 버전 | REQ-080 |
 | incident_date | date |  | 사건 발생일 (양형기준 버전 판단 근거). 자동 파이프라인은 모델이 찾은 날짜를 판결문 원문 · 선고일과 대조해 확인된 값만 넣고, 원문에 날짜가 없으면 비운다(v1.12, BE-38) | FR-3-5-1 |
+| cast_roles | jsonb |  | (확장) 배역 `{"prosecutor": "naero", "defense": "nambul"}` — 묶음 A(판사 · 검사) · 묶음 B(변호인 · 피고인 역)를 누가 맡는지. `case_script.cast_roles`와 같은 모양. 비어 있으면 배정 전 (v1.47, BE-125) | COMMON-65 |
+| sensitive_flags | jsonb |  | (확장) 민감 플래그 이름 배열 (예: `["MENTAL_HEALTH"]`). 파이프라인 분류(BE-123)가 켜고 관리자가 고친다. `null`은 분류 전, `[]`는 분류했고 켜진 것 없음. 공개 API는 사용자 안내 대상 6종만 내보낸다 (v1.47, BE-125) | FR-1-5 |
 | status | varchar(20) | ✓ | `DRAFT` / `REVIEW` / `PUBLISHED`. `PUBLISHED`만 사용자에게 노출 | REQ-047, 075 |
 | published_at | timestamptz |  | 공개 시각(A-13). 공개 취소(A-13-14)하면 지우고, 다시 공개하면 새로 기록한다 |  |
 | created_at, updated_at | timestamptz | ✓ |  |  |
 - 권고 범위는 MVP에서 팀이 계산해 입력한 값을 그대로 쓴다. 자동 계산 로직은 확장 단계(결정 #4).
 - `title`은 유일하다(`uk_legal_case_title`, V7 · BE-15, v1.12). 적재 SQL이 제목으로 사건을 찾아 환경마다 id가 달라도 같은 SQL을 쓰기 위해서다. 모델이 만든 중립 제목이 다른 공개 · 검토 중 사건과 겹치면 자동 적재가 멈춘다(BE-31).
+- 배역 배정(v1.47, BE-125): 적재할 때 같은 범죄 유형에서 피고인 역(`defense`)을 덜 맡은 캐릭터가 맡고, 같으면 그 유형의 마지막 배정(가장 큰 `id`)의 반대, 첫 사건이면 `defense = nambul`이다. 대본이 함께 적재되면 대본을 만든 배역을 그대로 쓴다(대사에 캐릭터가 들어가 있다). 같은 유형이 동시에 적재돼도 겹치지 않도록 유형별 권고 잠금(`pg_advisory_xact_lock`)을 건다. 관리자는 A-11로 고친다.
 - 화면에 보이는 범죄 분류명(예: "사기 / **재산범죄**")은 컬럼으로 두지 않고 `crime_type`별 코드 상수로 둔다(`MURDER` → 생명범죄, `FRAUD` · `ROBBERY` · `THEFT` → 재산범죄, `INJURY` → 신체범죄). API는 `crimeCategoryLabel`로 내려준다(v1.3).
 
 #### `case_section` — 사건 정보 섹션
@@ -942,7 +948,7 @@ IA 9장의 규칙을 어느 테이블·제약이 책임지는지 정리한다.
 | 이름 | `pk_` · `fk_{테이블}_{참조 테이블}` · `uk_{테이블}_{내용}` · `chk_{테이블}_{내용}` · `idx_{테이블}_{컬럼}` |
 | FK 인덱스 | FK 컬럼마다 인덱스를 만든다. 유니크 제약의 첫 컬럼과 겹치면 생략한다 |
 | FK 삭제 동작 | 기본값(`NO ACTION`) |
-| jsonb 형식 (v1.7) | 아래 컬럼은 반드시 **배열**로 넣는다. 엔티티가 배열 타입으로 읽어서, 형식이 다르면 그 사건의 조회 전체가 실패한다<br>• `legal_case.keywords` · `deidentified_items`, `judgment.reference_tags`: 문자열 배열<br>• `case_section.data`: 배열. 원소는 섹션마다 다르다 — DAMAGE `{label, value}` · LAW_TERM `{term, desc}` 객체, SUMMARY 문자열<br>• `judgment.extra_dispositions`: 객체 배열 `{type, value}`, `type`은 `COMMUNITY_SERVICE` · `CONFISCATION`만 |
+| jsonb 형식 (v1.7) | 아래 컬럼은 반드시 **배열**로 넣는다. 엔티티가 배열 타입으로 읽어서, 형식이 다르면 그 사건의 조회 전체가 실패한다<br>• `legal_case.keywords` · `deidentified_items` · `sensitive_flags`(v1.47), `judgment.reference_tags`: 문자열 배열<br>• `legal_case.cast_roles`(v1.47): 객체 `{prosecutor, defense}`, 값은 `naero` · `nambul` 하나씩<br>• `case_section.data`: 배열. 원소는 섹션마다 다르다 — DAMAGE `{label, value}` · LAW_TERM `{term, desc}` 객체, SUMMARY 문자열<br>• `judgment.extra_dispositions`: 객체 배열 `{type, value}`, `type`은 `COMMUNITY_SERVICE` · `CONFISCATION`만 |
 | 본문 줄바꿈 (v1.9) | `case_section.content`의 항목은 줄바꿈(`\n`)으로 나눈다. PostgreSQL에서는 `E'첫 항목\n둘째 항목'`처럼 쓴다. 문장 끝에 마침표를 두어 줄바꿈을 그리지 않는 곳에서도 한 문단으로 읽히게 한다 |
 | 적용 방식 | SQL 파일을 직접 실행하지 않고 서버 기동 시 Flyway가 적용한다. `ddl-auto`는 모든 환경에서 `validate` |
 | 수정 규칙 | develop에 Merge된 파일은 수정하지 않는다. 오픈 전 불가피하면 팀 합의 후 DB 초기화하고 수정, 오픈 후에는 새 마이그레이션만 추가한다 |
@@ -1034,11 +1040,11 @@ erDiagram
 | updated_at | timestamptz | ✓ | 마지막 저장 시각(기본값 `now()`). 로그인 이관 때 가장 최근 꾸미기를 고르는 기준 |
 
 - **값 목록 · 잠금은 서버 코드(`ProfileDecoCatalog`)가 검사한다.** 도전과제 · 보상 표가 아직 임시안이라 CHECK 제약을 두지 않는다(표가 바뀔 때마다 마이그레이션이 필요해지지 않게).
-- **도전과제 진행도는 저장하지 않는다.** 완료한 사건 수(`experience`) · 성향 테스트 여부(`personality_result`) · 출석 일수(`attendance`, 9장)로 그때그때 계산한다. 모은 일러스트 수는 BE-83 전까지 계산하지 않는다.
+- **도전과제 진행도는 저장하지 않는다.** 완료한 사건 수(`experience`) · 성향 테스트 여부(`personality_result`) · 출석 일수(`attendance`, 9장) · 모은 일러스트 수(`collection_item` 행 수, 13장 · v1.45)로 그때그때 계산한다. 해금 기록(`achievement_unlock`, 13장)만 남긴다.
 - 저장 기록이 없으면 서버가 기본값을 내려 준다(행을 미리 만들지 않는다).
 - **로그인 이관**: 행을 옮기지 않는다. 회원에 연결된 익명 ID들(`anonymous_user.member_id`) 중 `updated_at`이 가장 최근인 꾸미기를 쓴다.
 
-## 11. (확장 단계) 프로필 선택 설정 테이블 (v1.38, BE-104)
+## 11. (확장 단계) 프로필 선택 설정 테이블 (v1.38, BE-104 · 칸 추가 v1.46, BE-114)
 
 > **V29 마이그레이션.** 공개 성향카드 · 프로필카드 아래 성향 · 한 줄 소개(FE-77)를 서버에 저장한다. 저장은 API 명세 P-8 `PATCH /profile-settings`(보낸 칸만), 조회는 P-5 `profileSettings`. 결정 기록 [`BE-104.md`](decisions/BE-104.md)
 
@@ -1053,6 +1059,8 @@ erDiagram
 | shown_card | varchar(10) | ✓ | 공개 성향카드 `initial`(초심) · `retake`(재심) · `current`(최근). 기본 `current`, CHECK |
 | profile_card_type | varchar(10) | ✓ | 프로필카드 아래 성향. 값은 `shown_card`와 같고 별개의 선택이다. 기본 `current`, CHECK |
 | bio | varchar(40) | ✓ | 한 줄 소개(앞뒤 공백 없음 · 줄바꿈 없음, CHECK). 빈 문자열 = 소개 없음, 기본 `''` |
+| card_line | varchar(10) | ✓ | (V36, BE-114) 프로필카드 아래에 보일 줄 `type`(성향) · `signature`(한 줄 소개) · `job`(직업). 기본 `type`, CHECK |
+| card_level | boolean | ✓ | (V36, BE-114) 레벨을 `card_line` 윗줄에 붙일지. 기본 `false` |
 | updated_at | timestamptz | ✓ | 마지막 저장 시각(기본값 `now()`) |
 
 - **프로필 꾸미기(`profile_deco`, 10장)와 테이블을 나눈다.** 꾸미기는 전체 저장(P-7)이고 이 세 값은 화면마다 따로 바뀌는 부분 저장(P-8)이라, 한쪽 저장이 다른 쪽을 덮어쓰지 않게 한다.
@@ -1084,7 +1092,7 @@ erDiagram
 | created_at | timestamptz | ✓ | 기본 `now()` |
 
 - 인덱스: (`anonymous_user_id`, `source`, `awarded_on`) 일일 상한 · (`anonymous_user_id`, `source`, `group_key`) 묶음 상한.
-- **저장하지 않는 XP**: 사건 완료(100) · 성향 테스트(100) · 출석(5) · 업적(50 · 100 · 200)은 `experience` · `personality_result` · `attendance`와 업적 표에서 그때그때 계산한다. 같은 기록을 두 곳에 두어 어긋나는 것을 막기 위해서다.
+- **저장하지 않는 XP**: 사건 완료(100) · 성향 테스트(100) · 출석(5) · 모은 일러스트 · 의상(1장 10, v1.45 BE-83) · 업적(50 · 100 · 200)은 `experience` · `personality_result` · `attendance` · `collection_item`과 업적 표에서 그때그때 계산한다. 같은 기록을 두 곳에 두어 어긋나는 것을 막기 위해서다.
 - 회수(삭제 · 숨김)는 하지 않는다. 필요해지면 음수 `amount` 행을 허용하도록 CHECK를 바꾼다.
 
 **profile_job** — 사용자가 카드에 보여 주려고 고른 직업
@@ -1096,3 +1104,42 @@ erDiagram
 | updated_at | timestamptz | ✓ | 기본 `now()` |
 
 - 행이 없으면 열린 가장 높은 직업을 보여 준다.
+
+## 13. (확장 단계) 수집 상태 · 도전과제 해금 기록 테이블 (v1.45, BE-83)
+
+> **V35 마이그레이션.** 마이페이지 컬렉션의 획득 시점 · "새로 얻음"과 도전과제 "새로 열림"(FE-132)을 서버에 남긴다. 기록은 API 명세 P-9 `POST /collection`, 확인은 P-10 · P-11, 조회는 P-5. 결정 기록 [`BE-83.md`](decisions/BE-83.md)
+
+```mermaid
+erDiagram
+    anonymous_user ||--o{ collection_item : "모은 그림"
+    legal_case ||--o{ collection_item : "처음 얻은 사건"
+    anonymous_user ||--o{ achievement_unlock : "해금"
+```
+
+**collection_item** — 모은 일러스트 · 의상. 같은 그림이면 같은 줄(그림별 key)
+
+| 컬럼 | 타입 | NOT NULL | 설명 |
+| --- | --- | --- | --- |
+| anonymous_user_id | uuid PK FK | ✓ | `anonymous_user.id` (`ON DELETE CASCADE`) |
+| kind | varchar(20) PK | ✓ | `illustration` · `cast`. 이후 `background` · `time`이 더해질 수 있어 CHECK를 두지 않는다(값은 서버 코드가 검사) |
+| item_id | varchar(64) PK | ✓ | 일러스트 id(`case-1-origin`) · 의상 `{who}:{role}`(`naero:judge`). 화면이 정하고 서버는 형식만 본다 |
+| case_id | bigint FK | ✓ | 처음 얻은 사건(`legal_case.id`, `ON DELETE CASCADE`). 체험 완료 검증 기준 |
+| acquired_at | timestamptz | ✓ | 서버 시각(기본 `now()`). 백필이면 그 사건의 첫 완료 시각 |
+| seen_at | timestamptz | | 확인 시각. `NULL`이면 "새로 얻음" |
+
+- 인덱스: (`anonymous_user_id`, `case_id`, `kind`) 사건당 상한 검사용.
+- 이미 가진 항목은 `INSERT … ON CONFLICT DO NOTHING`으로 건너뛰어 처음 사건 · 시각이 남는다.
+
+**achievement_unlock** — 도전과제 해금 기록. 판정은 저장하지 않고 계산하며, 새로 `CLEARED`가 된 것만 남긴다
+
+| 컬럼 | 타입 | NOT NULL | 설명 |
+| --- | --- | --- | --- |
+| anonymous_user_id | uuid PK FK | ✓ | `anonymous_user.id` (`ON DELETE CASCADE`) |
+| achievement_id | varchar(40) PK | ✓ | `ProfileDecoCatalog.ACHIEVEMENTS`의 id |
+| unlocked_at | timestamptz | ✓ | 서버가 처음 판정해 기록한 시각 |
+| seen_at | timestamptz | | 확인 시각. `NULL`이면 "새로 열림" |
+
+- 기록이 있으면 표가 바뀌어 다시 미달이 되어도 `CLEARED`로 본다(열렸던 도전과제는 다시 잠기지 않는다).
+- V35가 배포 시점에 이미 달성한 도전과제(`first-case` · `cases-3` · `personality` · `attend-*`)를 `seen_at`을 채워 한 번 넣는다. 수집 도전과제는 배포 시점 수집 수가 0이라 넣지 않는다.
+- **FK를 `ON DELETE CASCADE`로 둔 이유**: 익명 사용자에 딸린 기록이라 함께 지워져야 하고, 운영에서는 익명 사용자를 지우지 않는다. 마이페이지 조회가 해금을 기록하므로, 테스트 정리 코드가 이 테이블을 따로 지우지 않아도 되게 한다.
+- **로그인 이관**: 행을 옮기지 않는다. 회원에 연결된 익명 ID들을 읽을 때 합친다(항목은 합집합, 시각은 이른 쪽, 한쪽이라도 봤으면 본 것). 구현은 출석 · 꾸미기와 함께 별도로 붙인다.

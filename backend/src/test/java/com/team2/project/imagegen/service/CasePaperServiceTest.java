@@ -12,6 +12,7 @@ import com.team2.project.imagegen.ImageGenException;
 import com.team2.project.legalcase.domain.CasePaper;
 import com.team2.project.legalcase.domain.Factor;
 import com.team2.project.legalcase.domain.LegalCase;
+import com.team2.project.legalcase.domain.RevealStage;
 import com.team2.project.legalcase.repository.CasePaperRepository;
 import com.team2.project.legalcase.repository.FactorRepository;
 import java.lang.reflect.Constructor;
@@ -42,7 +43,7 @@ class CasePaperServiceTest {
 	@DisplayName("Gemini가 돌려준 JSON을 파싱해 headline · deck · caption · article을 채운다")
 	void generatePaper_parsesJsonResponse() {
 		LegalCase legalCase = legalCase(1L, "사건 개요", "살인");
-		when(factorRepository.findAllByCaseId(1L)).thenReturn(List.of(factor("세부 사정 1")));
+		when(factorRepository.findAllByCaseIdAndRevealStage(1L, RevealStage.OVERVIEW)).thenReturn(List.of(factor("세부 사정 1")));
 		when(paperRepository.findByLegalCaseId(1L)).thenReturn(Optional.empty());
 		when(paperRepository.save(org.mockito.ArgumentMatchers.any())).thenAnswer(inv -> inv.getArgument(0));
 		contentClient.nextResponse = "{\"headline\":\"헤드라인\",\"deck\":\"부제\",\"caption\":\"캡션\","
@@ -59,10 +60,27 @@ class CasePaperServiceTest {
 	}
 
 	@Test
+	@DisplayName("기사 재료는 개요(OVERVIEW) 요소만 쓴다 — 상세 · 주장 · 양형기준 요소는 요청하지도 않는다 (BE-127)")
+	void generatePaper_usesOnlyOverviewFactors() {
+		LegalCase legalCase = legalCase(1L, "사건 개요", "살인");
+		when(factorRepository.findAllByCaseIdAndRevealStage(1L, RevealStage.OVERVIEW))
+			.thenReturn(List.of(factor("개요 요소")));
+		// 전체 조회가 호출되면 공개 전 요소가 기사에 실린다 — 호출되지 않아야 한다
+		when(factorRepository.findAllByCaseId(1L)).thenReturn(List.of(factor("개요 요소"), factor("양형기준 권고형 요소")));
+		contentClient.nextResponse = "{\"headline\":\"H\",\"deck\":null,\"caption\":null,\"article\":[\"문단\"]}";
+
+		service.generateContent(legalCase);
+
+		assertThat(contentClient.lastInstruction).contains("세부 사정: 개요 요소").doesNotContain("양형기준 권고형 요소");
+		org.mockito.Mockito.verify(factorRepository, org.mockito.Mockito.never()).findAllByCaseId(1L);
+		org.mockito.Mockito.verify(factorRepository).findAllByCaseIdAndRevealStage(1L, RevealStage.OVERVIEW);
+	}
+
+	@Test
 	@DisplayName("```json 코드블록으로 감싸 보내도 그대로 파싱한다")
 	void generatePaper_stripsCodeFence() {
 		LegalCase legalCase = legalCase(1L, "개요", "상해");
-		when(factorRepository.findAllByCaseId(1L)).thenReturn(List.of());
+		when(factorRepository.findAllByCaseIdAndRevealStage(1L, RevealStage.OVERVIEW)).thenReturn(List.of());
 		when(paperRepository.findByLegalCaseId(1L)).thenReturn(Optional.empty());
 		when(paperRepository.save(org.mockito.ArgumentMatchers.any())).thenAnswer(inv -> inv.getArgument(0));
 		contentClient.nextResponse = "```json\n{\"headline\":\"H\",\"deck\":null,\"caption\":null,"
@@ -79,7 +97,7 @@ class CasePaperServiceTest {
 	void generatePaper_overwritesExisting() {
 		LegalCase legalCase = legalCase(1L, "개요", "사기");
 		CasePaper existing = CasePaper.of(legalCase, "사회면", "예전 헤드라인", "예전 부제", "예전 캡션", List.of("예전 문단"));
-		when(factorRepository.findAllByCaseId(1L)).thenReturn(List.of());
+		when(factorRepository.findAllByCaseIdAndRevealStage(1L, RevealStage.OVERVIEW)).thenReturn(List.of());
 		when(paperRepository.findByLegalCaseId(1L)).thenReturn(Optional.of(existing));
 		contentClient.nextResponse = "{\"headline\":\"새 헤드라인\",\"deck\":\"새 부제\",\"caption\":\"새 캡션\","
 			+ "\"article\":[\"새 문단\"]}";
@@ -95,7 +113,7 @@ class CasePaperServiceTest {
 	@DisplayName("JSON으로 파싱할 수 없는 응답은 PROMPT_GENERATION_FAILED로 실패한다")
 	void generatePaper_invalidJson_fails() {
 		LegalCase legalCase = legalCase(1L, "개요", "살인");
-		when(factorRepository.findAllByCaseId(1L)).thenReturn(List.of());
+		when(factorRepository.findAllByCaseIdAndRevealStage(1L, RevealStage.OVERVIEW)).thenReturn(List.of());
 		contentClient.nextResponse = "이건 JSON이 아닙니다";
 
 		assertThatThrownBy(() -> service.generateContent(legalCase)).isInstanceOf(BusinessException.class)
@@ -106,7 +124,7 @@ class CasePaperServiceTest {
 	@DisplayName("headline · article이 빠진 응답은 실패한다")
 	void generatePaper_missingRequiredFields_fails() {
 		LegalCase legalCase = legalCase(1L, "개요", "살인");
-		when(factorRepository.findAllByCaseId(1L)).thenReturn(List.of());
+		when(factorRepository.findAllByCaseIdAndRevealStage(1L, RevealStage.OVERVIEW)).thenReturn(List.of());
 		contentClient.nextResponse = "{\"deck\":\"부제\"}";
 
 		assertThatThrownBy(() -> service.generateContent(legalCase)).isInstanceOf(BusinessException.class)
@@ -117,7 +135,7 @@ class CasePaperServiceTest {
 	@DisplayName("headline · deck · caption이 DB 컬럼 길이(200 · 300 · 200)를 넘으면 실패한다")
 	void generatePaper_tooLongFields_fail() {
 		LegalCase legalCase = legalCase(1L, "개요", "살인");
-		when(factorRepository.findAllByCaseId(1L)).thenReturn(List.of());
+		when(factorRepository.findAllByCaseIdAndRevealStage(1L, RevealStage.OVERVIEW)).thenReturn(List.of());
 		contentClient.nextResponse = "{\"headline\":\"" + "가".repeat(201) + "\",\"article\":[\"문단\"]}";
 
 		assertThatThrownBy(() -> service.generateContent(legalCase)).isInstanceOf(BusinessException.class)
@@ -128,7 +146,7 @@ class CasePaperServiceTest {
 	@DisplayName("article에 빈 문단이 섞여 있으면 실패한다")
 	void generatePaper_blankArticleElement_fails() {
 		LegalCase legalCase = legalCase(1L, "개요", "살인");
-		when(factorRepository.findAllByCaseId(1L)).thenReturn(List.of());
+		when(factorRepository.findAllByCaseIdAndRevealStage(1L, RevealStage.OVERVIEW)).thenReturn(List.of());
 		contentClient.nextResponse = "{\"headline\":\"헤드라인\",\"article\":[\"문단1\",\"  \"]}";
 
 		assertThatThrownBy(() -> service.generateContent(legalCase)).isInstanceOf(BusinessException.class)
@@ -139,7 +157,7 @@ class CasePaperServiceTest {
 	@DisplayName("모르는 필드가 섞여 있어도 나머지 필드로 파싱한다")
 	void generatePaper_ignoresUnknownFields() {
 		LegalCase legalCase = legalCase(1L, "개요", "살인");
-		when(factorRepository.findAllByCaseId(1L)).thenReturn(List.of());
+		when(factorRepository.findAllByCaseIdAndRevealStage(1L, RevealStage.OVERVIEW)).thenReturn(List.of());
 		contentClient.nextResponse = "{\"headline\":\"헤드라인\",\"article\":[\"문단\"],\"extra\":\"모델이 덧붙인 필드\"}";
 
 		CasePaperService.GeneratedPaper generated = service.generateContent(legalCase);
@@ -152,7 +170,7 @@ class CasePaperServiceTest {
 	void disabled_wrapsAsBusinessException() {
 		contentClient.enabled = false;
 		LegalCase legalCase = legalCase(1L, "개요", "살인");
-		when(factorRepository.findAllByCaseId(1L)).thenReturn(List.of());
+		when(factorRepository.findAllByCaseIdAndRevealStage(1L, RevealStage.OVERVIEW)).thenReturn(List.of());
 
 		assertThatThrownBy(() -> service.generateContent(legalCase)).isInstanceOf(BusinessException.class)
 			.extracting(e -> ((BusinessException) e).getErrorCode()).isEqualTo(ErrorCode.PROMPT_GENERATION_FAILED);

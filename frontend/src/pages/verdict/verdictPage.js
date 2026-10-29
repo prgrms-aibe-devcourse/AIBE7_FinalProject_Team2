@@ -729,7 +729,7 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
     const candidate = SCRIPTS[caseId];
     const script = candidate?.title === caseHeader.title ? candidate : undefined;
     if (script) {
-      // 3막 당신이 판사(흐름 목업): 검사 의견 → 최종변론 → 최후진술을 지나 판결 장면에서 이 화면(입력 · 참고 정보)을
+      // 3막 당신이 판사(흐름 목업): 검사 의견 → 최종변론을 지나 판결 장면에서 이 화면(입력 · 참고 정보)을
       // 무대 입력 카드로 띄운다. 입력 · 확정 · 오류 처리는 아래 그대로이고, 확정하면 AI 판결(S-06)으로 간다
       root.classList.add('has-stage');
       const stageLayout = element('div', 'review-layout');

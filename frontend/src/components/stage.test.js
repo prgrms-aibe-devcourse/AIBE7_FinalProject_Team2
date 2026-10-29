@@ -36,11 +36,13 @@ test('시작 의상과 다른 배역의 대사가 뒤에 나와도, 그 대사 �
   assert.equal(spoken.chips.naero, 'A씨 역');
 });
 
-test('대사 · 이유 없이 의상을 바꾸지 않는다: 3막 최후진술에서 입은 A씨 역 의상을 판결 장면까지 유지(FE-48)', () => {
+test('3막은 최후진술 없이 검사 의견 → 최종변론 → 판결이고, 변호인 의상으로 판결 장면까지 간다(FE-131)', () => {
   const verdict = flatten(script.acts, ['3']);
-  const from = verdict.findIndex((s) => s.say === 'nambul' && s.role === 'A씨 역');
-  assert.ok(from >= 0);
-  verdict.slice(from).forEach((s) => assert.equal(s.look.nambul, 'role:actor', `${s.text ?? s.card} 장면에서 갈아입었다`));
+  assert.deepEqual(script.acts['3'].procedures, ['검사 의견', '최종변론', '판결']);
+  assert.ok(!verdict.some((s) => s.role === 'A씨 역'), '"…이상입니다." 한마디를 위해 의상을 바꾸고 가운데로 나오는 장면은 없다(10/28 결정)');
+  verdict.forEach((s) => assert.equal(s.look.nambul, 'role:defense', `${s.text ?? s.card} 장면에서 갈아입었다`));
+  assert.equal(verdict.at(-1).card, 'verdict');
+  assert.deepEqual(verdict.map((s) => s.proc), [0, 1, 2, 2], '절차 번호는 세 단계(0 ~ 2)를 가리킨다');
 });
 
 test('한 사건 안에서 같은 배역(검사 · 변호인 · 판사 · 사건 속 인물)은 한 캐릭터만 맡는다(10/16 결정)', () => {

@@ -63,6 +63,12 @@
 | v0.59 | 2026-10-27 | **API 18 공개 사건 대본 신설 (BE-109)** — `GET /cases/{caseId}/script`. A-13-10 ~ 12(BE-108)가 적재 · 검수한 대본에서 **승인된 것만** 공개용으로 가져다 준다(새로 저장하지 않음, API 17과 같은 원칙) — 2막 증거조사 대사(`factorId` · `side` · `character` · `card` · `text`)와 배역(`cast`)만 담는다. **나머지 막(1막 해설 · 공소사실 · 쟁점 정리 · 피고인신문 · 검사의견 · 최종변론 · 최후진술)은 이 API에 넣지 않는다** — 파이프라인이 만들지 않아 BE-107 후속 확장으로 분리했고, 그중 사건별 대사가 필요한 막은 당분간 "증거조사 중심 축약판"으로 둔다(FE-33 담당자 해송님 합의, BE-109 Jira 댓글). `side`는 A-13-10의 `role`을 대문자 코드값(`PROSECUTOR` · `DEFENSE`)으로 바꿔 내려준다 — 다른 공개 API와 형식을 맞추려는 것(화면 한글 변환은 프론트 몫). `card`는 A-13-10의 `label`과 같은 값(판단 요소 문구) — 파이프라인 사건에는 정적 증거 카드가 없어 이 문구가 카드 역할을 한다. 검수용 값(`manual` · `editedAt` · `validation` · `attempts`)은 내려주지 않는다. **배열 순서가 곧 재생 순서다**(별도 정렬 필드 없음). 비공개 사건은 `CASE_NOT_FOUND`, 대본이 없거나 아직 승인 전이면 `SCRIPT_NOT_FOUND`(API 17과 같은 모양 — 빈 배열 대신 404를 쓰는 이유는 "대본 없음"과 "대사 0줄"을 구분하기 위해서다). **(병합 메모) BE-113(PR #306 · v0.58)이 먼저 develop에 머지돼, 이 작업은 v0.59로 다시 매겼다** |
 | v0.60 | 2026-10-28 | **API 1 · API 16에 `scriptReady` 추가 (BE-116)** — 그 사건에 **승인된 공개 대본**(API 18이 200을 주는 조건)이 있는가. 목록이 사건마다 API 18을 부르지(N번 요청) 않고 "체험 가능 / 준비 중"을 알 수 있다. 필드 추가만이라 기존 클라이언트와 호환 (`docs/decisions/BE-116.md`) |
 | v0.61 | 2026-10-28 | **사건 공개 취소 A-13-14 신설 (BE-118, ERD v1.44 · V34)** — `POST /admin/cases/{caseId}/unpublish`, 사유(`reason`, 1 ~ 200자) 필수. 공개한 사건을 사용자 화면에서 **숨긴다**(`PUBLISHED → REVIEW`, `published_at` 지움). 사건 · 판결 · 사용자 체험 기록은 지우지 않고, 사용자 API는 `PUBLISHED`만 읽으므로 목록 · 상세 · 체험 · 결과에서 바로 사라진다. 고친 뒤 A-13으로 다시 공개한다. 공개 중이 아니면 409 `INVALID_STATE`(사유 코드 `CASE_NOT_PUBLISHED` 추가). 감사 로그 `CASE_UNPUBLISH`(사유 포함). 8-2 "공개 취소 없음" · 8-3 #2를 갱신. 권리 요청에 따른 삭제(파기)는 정책을 정한 뒤 2단계로 둔다 |
+| v0.62 | 2026-10-28 | **공개 뒤 사진 교체 절차 확정 (BE-103, BE-78 2차 검토 후속 3번)** — 공개 중 사진만 바꾸는 경로는 **두지 않는다**. A-13-3 · A-13-4 · A-13-9의 409(`CASE_PUBLISHED`)를 그대로 두고, 고쳐야 하면 A-13-14(공개 취소) → 교체 → A-13(다시 공개)으로 한다(BE-118이 사유 필수 · 감사 로그를 갖춘 경로를 이미 제공). 공개가 곧 사진 승인이라는 BE-78 원칙과 8-3 #1(공개 뒤 수정 금지)을 함께 지키려는 선택이다. 절차의 대가(내린 동안 완료 체험 결과도 404, 다시 공개하면 `published_at`이 새로 기록돼 사건 목록 맨 위로)를 A-13-3에 적고 8-3 #9로 남겼다. **API · 스키마 · 운영 코드 변경 없음**(결정이 "현재 동작 유지"라 동작을 고정하는 테스트만 추가했다) (`docs/decisions/BE-103.md`). 같은 김에 A-13-3의 감사 로그 값 `CASE_PHOTO_GENERATE` → `CASE_PHOTO_UPLOAD` 정정(`AdminAuditAction`에 없는 값이었다) |
+| v0.63 | 2026-10-29 | **수집 상태 저장 · 도전과제 해금 기록 추가 (BE-83, FE-132 · ERD V35)** — P-9 `POST /collection`(완료한 사건의 일러스트 · 의상 기록, 멱등, 백필 `backfill`) · P-10 `POST /collection/seen`(컬렉션 "봤음") · P-11 `POST /achievements/seen`(도전과제 "봤음") 신설. P-5 응답에 `collection`(모은 수 · 항목 · `isNew`) 추가, `achievements[]`에 `unlockedAt` · `isNew` 추가, **수집 도전과제 `PENDING` 해제**(`collected` = 일러스트 + 의상 수). 한 번 해금된 도전과제는 표가 바뀌어도 `CLEARED` 유지. `level` XP에 모은 항목 1장당 10 추가. 1-5에 409 `COLLECTION_LIMIT_EXCEEDED` 추가(`docs/decisions/BE-83.md`) |
+| v0.64 | 2026-10-29 | **요청 오류 에러 코드 구분 (BE-132)** — 없는 주소 · 지원하지 않는 메서드 · Content-Type이 모두 400대 상태는 맞지만 `code`가 `VALIDATION_ERROR`("요청 값이 올바르지 않습니다.")로 내려오던 것을 나눈다: 404 `NOT_FOUND` · 405 `METHOD_NOT_ALLOWED` · 415 `UNSUPPORTED_MEDIA_TYPE`(1-5). HTTP 상태 코드 · 405 `Allow` 헤더는 그대로이고, 입력값 오류(400)와 도메인 404(`CASE_NOT_FOUND` 등)는 바뀌지 않는다 **(병합 메모) v0.63은 BE-83(PR #335)이 쓴다. 이 PR이 먼저 머지되면 번호를 다시 매긴다** |
+| v0.65 | 2026-10-29 | **프로필카드 아래 줄 설정 추가 (BE-114, FE-116)** — P-8 요청 · 응답과 P-5 `profileSettings`에 `cardLine`(`type` · `signature` · `job` 중 하나, 기본 `type`: 프로필카드 아래에 보일 줄) · `cardLevel`(boolean, 기본 `false`: 레벨을 그 줄 윗줄에 붙일지) 두 칸 추가. 모르는 값 · 타입이 다르면 기존 칸과 같이 400 `VALIDATION_ERROR`. ERD v1.46 `profile_setting`(V36) |
+| v0.66 | 2026-10-29 | **담당 문서 최신화 (B, 7.0.2 준비)** — 8장 머리말을 "계약 초안(v0.17)"에서 "구현됨(BE-41 ~ 43)"으로, 확정된 항목의 ⚠️ 정리(DRAFT → REVIEW는 8-3 #3, 공개 뒤 교체 · 수정 금지는 8-3 #1, `raw_output`은 8-3 #6), 8-3 #1을 ✅ 확정(공개 중 409, 고칠 때는 공개 취소 → 수정 → 다시 공개, BE-103과 같은 절차). 9장 머리말 · 9-2 각 항목을 구현(BE-72) · 화면 연동 기준으로 ✅ 확정. 형식 변경 없음. 8-2 제목의 "초안" 삭제(#334 리뷰) |
+| v0.67 | 2026-10-29 | **사건 배역 · 민감 플래그 (BE-125, ERD v1.47 · V37)** — API 16에 `cast`(배역 `{prosecutor, defense}`) · `sensitiveFlags`(사용자 안내 대상 플래그만) 추가. 값이 없으면 **필드를 뺀다**(배정 전 · 안내할 플래그 없음 → 화면 기본 동작). A-6 `content`에 `castRoles` · `sensitiveFlags`(가드 전용 포함 전체), A-11에 같은 두 필드 수정 추가 — 자동 분류 · 자동 배정을 관리자가 바로잡는 경로. 감사 로그 `CASE_UPDATE`에 두 필드는 바꾼 값까지 남긴다. 필드 추가만이라 기존 클라이언트와 호환 (`docs/decisions/BE-125.md`) |
 
 ---
 
@@ -128,6 +134,9 @@ json
 | HTTP | code | 언제 | 화면 대응 |
 | --- | --- | --- | --- |
 | 400 | `VALIDATION_ERROR` | 필수값 누락, 형식 오류 (음수, 잘못된 열거값 등) | 개발 오류. 일반 오류 안내 |
+| 404 | `NOT_FOUND` | (v0.64, BE-132) 없는 API 주소. 사건 · 체험처럼 대상이 없는 경우는 각자의 코드(`CASE_NOT_FOUND` 등)를 쓴다 | 개발 오류. 일반 오류 안내 |
+| 405 | `METHOD_NOT_ALLOWED` | (v0.64, BE-132) 그 주소가 지원하지 않는 HTTP 메서드. `Allow` 헤더에 쓸 수 있는 메서드가 있다 | 개발 오류 |
+| 415 | `UNSUPPORTED_MEDIA_TYPE` | (v0.64, BE-132) 지원하지 않는 `Content-Type`(본문이 있는 API는 `application/json`) | 개발 오류 |
 | 404 | `CASE_NOT_FOUND` | 사건이 없거나 `PUBLISHED`가 아님 | S-14 |
 | 404 | `EXPERIENCE_NOT_FOUND` | 이 사건의 내 체험이 없음 (쿠키 없음 포함) | S-02로 이동 |
 | 409 | `INVALID_STATE` | 지금 상태에서 할 수 없는 요청 (이미 제출 · 확정, 순서가 맞지 않음, 아직 공개 전) | `currentStatus`의 화면으로 이동 |
@@ -157,6 +166,7 @@ json
 | 404 | `INCIDENT_PHOTO_NOT_FOUND` | (확장, 관리자 API, BE-78 2차 검토 · BE-101) 그 역할의 발단 · 결론 사진이 없음 | 목록 다시 불러오기 (A-13-9) |
 | 409 | `DECO_LOCKED` | (확장, BE-96) 아직 열리지 않은 꾸미기를 저장하려 함. `details`에 잠긴 필드(`reason: DECO_LOCKED`) | 화면에서 잠긴 항목은 고를 수 없게 막는다. 오면 마이페이지를 다시 불러온다 (P-7) |
 | 409 | `JOB_LOCKED` | (확장, BE-106) 아직 열리지 않은 직업을 고르려 함 | 화면에서 잠긴 직업은 고를 수 없게 막는다. 오면 레벨(L-1)을 다시 불러온다 (L-2) |
+| 409 | `COLLECTION_LIMIT_EXCEEDED` | (확장, BE-83, v0.63) 모을 수 있는 수를 넘음 — 일러스트는 한 사건에서 처음 얻은 수 5, 의상은 사용자당 12. `details`에 넘친 종류(`field: items.kind`, `reason: illustration` · `cast`) | 개발 오류(콘텐츠 규칙보다 넉넉한 값이라 정상 화면이면 오지 않음) (P-9) |
 | 409 | `DUPLICATE_SOURCE` | (확장, 관리자 API, BE-93) 이미 등록한 사건번호. `details`에 어느 항목인지 담는다 | 입력 안내 (A-14) |
 | 409 | `IMPORT_IN_PROGRESS` | (확장, 관리자 API, BE-93) 실행 중인 등록이 있음. 한 번에 하나만 돌린다(외부 AI 호출 한도 보호) | 끝난 뒤 다시 시도 안내 (A-14) |
 | 404 | `IMPORT_NOT_FOUND` | (확장, 관리자 API, BE-93) 등록 작업이 없음 | 목록으로 안내 (A-15) |
@@ -680,7 +690,7 @@ json
       "세 판결 모두 흉기 사용을 형량을 높이는 요소로, 범행 인정 · 반성을 형량을 낮추는 요소로 봤어요."
     ],
     "differences": [
-      "AI와 재판부는 피해 회복 공탁을 고려했지만, 내 판결에서는 고려하지 않았어요.",
+      "AI와 재판부는 피해 회복 공탁을 고려했고, 내 판결에는 들어가지 않았어요.",
       "피해자의 부양 가족에 대한 판단이 세 판결 사이에서 엇갈렸어요."
     ]
   },
@@ -756,7 +766,7 @@ S-20 사건 디테일(정보 구조 v1.12)이 체험을 만들기 전에 부르�
 **응답 200**
 
 ```json
-{  "caseId": 1,  "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",  "crimeType": "MURDER",  "crimeCategoryLabel": "생명범죄",  "chargeName": "살인",  "shortIntro": "빌린 돈 문제로 찾아온 지인과 다투다 흉기로 살해한 사건입니다.",  "keywords": ["돈 문제", "지인", "흉기"],  "difficulty": "MID",  "estimatedMinutes": 15,  "participantCount": 42,  "thumbnailUrl": null,  "overview": "피고인이 빌린 돈을 갚지 못해 오래 다투던 지인이 집으로 찾아오자, …",  "scriptReady": true,  "myStatus": null}
+{  "caseId": 1,  "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",  "crimeType": "MURDER",  "crimeCategoryLabel": "생명범죄",  "chargeName": "살인",  "shortIntro": "빌린 돈 문제로 찾아온 지인과 다투다 흉기로 살해한 사건입니다.",  "keywords": ["돈 문제", "지인", "흉기"],  "difficulty": "MID",  "estimatedMinutes": 15,  "participantCount": 42,  "thumbnailUrl": null,  "overview": "피고인이 빌린 돈을 갚지 못해 오래 다투던 지인이 집으로 찾아오자, …",  "scriptReady": true,  "myStatus": null,  "cast": { "prosecutor": "naero", "defense": "nambul" },  "sensitiveFlags": ["MENTAL_HEALTH"]}
 ```
 
 - 필드는 API 1 카드와 같고(`chargeName` 포함, v0.32), `overview`(사건 개요, API 4의 `case.overview`와 같은 값)를 더한다. `participantCount` · `myStatus` 기준도 API 1과 같다. (v0.60, BE-116) `scriptReady`도 API 1과 같은 값 · 같은 기준이다 — `false`면 S-20은 시작 대신 "준비 중"을 보인다(API 18을 따로 불러 확인하지 않아도 된다).
@@ -765,6 +775,8 @@ S-20 사건 디테일(정보 구조 v1.12)이 체험을 만들기 전에 부르�
 - 버튼 분기(정보 구조 S-20): `myStatus`가 `null`이면 **체험 시작**(API 2로 체험을 만든 뒤 S-03), `IN_PROGRESS`면 **이어서 하기**, `COMPLETED`면 **결과 다시 보기**. 이어서 하기 · 결과 다시 보기도 API 2를 불러 응답 `status`로 이동한다(1-6). 세부 상태(7단계)는 이 API에 내보내지 않는다.
 - 캐시: `myStatus`가 사용자마다 달라 API 1과 같은 규칙이다(지금은 `no-store`, HTTP 캐시를 켤 때는 `private` + `Vary: Cookie`).
 - 대본(판결 체험 무대, REQ-089)은 이 API에 넣지 않는다. 승인된 대본의 증거조사 대사는 API 18(BE-109)에서 따로 준다.
+- (v0.67, BE-125) `cast`: 이 사건의 배역(`legal_case.cast_roles`). `prosecutor`(묶음 A, 판사 · 검사) · `defense`(묶음 B, 변호인 · 피고인 역)가 각각 `naero` · `nambul` 중 하나다. 배정 전 사건은 **필드가 없다** — 화면은 기본 배치(내로 판사 · 검사, 남불 변호인 · 피고인)를 쓴다(FE-128). 새로 적재하는 사건은 대본이 함께 오면 대본을 만든 배역을 사건 배역으로 쓰므로 API 18의 `cast`와 같다. 다만 관리자가 A-11로 배역을 바꾸면 이미 만든 대본은 그대로라 둘이 달라질 수 있다(대본 재생성은 BE-129).
+- (v0.67, BE-125) `sensitiveFlags`: **사용자에게 안내하는 플래그만** 준다 — `VULNERABLE_VICTIM` · `MENTAL_HEALTH` · `SELF_HARM` · `SEXUAL_OFFENSE` · `DOMESTIC_VIOLENCE` · `HATE_CRIME`. 대본 가드 전용 플래그(`CAPITAL_PENALTY` 등)는 판결 전에 형량을 짐작하게 할 수 있어 내보내지 않는다. 안내할 것이 없으면 **필드가 없다**. 안내 문구는 화면이 정한다(FE-129, 파이프라인 `script_assembler.sensitive_notice`와 같은 규칙).
 
 | 거절 | 조건 |
 | --- | --- |
@@ -892,7 +904,7 @@ API 1 · 2 · 16 · 17은 상태와 관계없이 부를 수 있다. 표에 없�
 | 1 | 체험 상태 확인을 API 3으로 먼저 할지, 각 API의 `INVALID_STATE`로 처리할지 | **확정 (v0.3)**: 각 API의 `INVALID_STATE`로 처리 (요청 수 절약, 1-6 · 5장) | 프론트 라우팅 구조 (기술 스택 5장) |
 | 2 | 쿠키 이름 · 기간, 프론트 · API 도메인 구조 | 도메인 구조 **확정 (v0.3)**: 같은 도메인, Nginx `/api` 프록시(기술 스택 8장). 쿠키 `NLNB_AID` · 1년은 제안 유지(요구사항 15장) | CORS · SameSite 설정 |
 | 3 | `preToFinal.direction` 세부 비교 규칙 | **확정 (BE-11, 2026-10-06)**: 형벌 종류를 `FINE < SUSPENDED < PRISON < LIFE < DEATH` 순(`sentence_range_option.kind` 선언 순서)으로 먼저 비교한다. 종류가 다르면 그 순서로 `HEAVIER`/`LIGHTER`, 같은 종류가 `PRISON`이면 구간의 `min_months`/`max_months`(상한 미만 기준)로 더 비교하고, 그 외 종류는 세분하지 않고 `SAME`이다. 감경이 있으면 최종 선고 형벌(`reducedTo`)로 비교한다 | S-08 한 줄 요약 문구 |
-| 4 | 규칙 문장(`ruleSentences`) 문장 틀 | **확정 (BE-26 · BE-11, 2026-10-06)**: 요소 라벨(완전한 서술문)이 아니라 요약어(`factor.summary_tag`)로 만든다. `ALL_SAME`은 방향별로 요약어를 모아 "세 판결 모두 {↑ 요약어들}을 형량을 높이는 요소로[, {↓ 요약어들}을 형량을 낮추는 요소로] 봤어요.", `ONLY_ME_MISSED`는 "AI와 재판부는 {요약어들}을 고려했지만, 내 판결에서는 고려하지 않았어요.", `DIVERGED`는 "{요약어들}에 대한 판단이 세 판결 사이에서 엇갈렸어요."로 한 문장씩 만든다. 해당 분류가 없으면 각각 "세 판결이 똑같이 본 판단 요소는 없어요." / "세 판결 사이에 판단이 엇갈린 점은 없어요."를 넣는다 | S-08 공통점 · 차이점 |
+| 4 | 규칙 문장(`ruleSentences`) 문장 틀 | **확정 (BE-26 · BE-11, 2026-10-06)**: 요소 라벨(완전한 서술문)이 아니라 요약어(`factor.summary_tag`)로 만든다. `ALL_SAME`은 방향별로 요약어를 모아 "세 판결 모두 {↑ 요약어들}을 형량을 높이는 요소로[, {↓ 요약어들}을 형량을 낮추는 요소로] 봤어요.", `ONLY_ME_MISSED`는 "AI와 재판부는 {요약어들}을 고려했고, 내 판결에는 들어가지 않았어요."(BE-110, 2026-10-29: 사용자를 놓친 쪽으로 읽히지 않도록 문구 변경), `DIVERGED`는 "{요약어들}에 대한 판단이 세 판결 사이에서 엇갈렸어요."로 한 문장씩 만든다. 해당 분류가 없으면 각각 "세 판결이 똑같이 본 판단 요소는 없어요." / "세 판결 사이에 판단이 엇갈린 점은 없어요."를 넣는다 | S-08 공통점 · 차이점 |
 | 5 | 무죄 선택 처리 (요구사항 15장) | **확정 (v0.3)**: MVP에서 무죄 선택지를 뺀다. 이후 도입 여부는 추후 검토 | API 8 · 9 · 14 |
 | 6 | API 15 재조회 간격 · 최대 횟수, AI 생성 시간 초과 기준 | ~~3초 간격, 최대 10회 / 30초~~ — v0.14: API 15 보류로 대상 없음 | 확장 단계 |
 | 7 | 내 판결 한 줄 요약(`summary`) 규칙 문장 틀 · 태그 수 제한 | **확정 (COMMON-16 · BE-26, 2026-10-06)**: 423줄 문장 틀(`{↑ 태그들}을 무겁게 보고 {↓ 태그들}을 감안한 판단` 등)을 확정. 방향별 태그 수는 **제한하지 않는다**(BE-26) — 요소마다 서로 다른 요약어가 붙어 많이 고르면 문장이 길어질 수 있지만, S-08에서 실제로 문제가 되면 상한(예: 최대 3개 + "외 N개")을 다시 검토한다 | S-08 판결 카드 |
@@ -984,9 +996,9 @@ API 1 · 2 · 16 · 17은 상태와 관계없이 부를 수 있다. 표에 없�
 
 로그인한 관리자 정보(A-2 성공 응답과 같은 형식). 로그인하지 않았으면 401 `UNAUTHORIZED`.
 
-### 8-2. 검수 API 계약 (초안, 7.4.7 · BE-33 · BE-41 ~ BE-43)
+### 8-2. 검수 API 계약 (7.4.7 · BE-33 · BE-41 ~ BE-43)
 
-> **계약 초안이다(v0.17).** 관리자 화면(7.5.7 · FE-16, A)이 목 데이터로 먼저 만들 수 있도록 경로 · 요청 · 응답 형태를 먼저 정한다(WBS R16). 구현(10/21 ~ 23)하면서 필드가 바뀌면 이 절을 고치고 화면 담당에게 알린다. ⚠️ 표시는 팀 확인이 필요한 항목이다(8-3).
+> **구현됨 (BE-41 ~ BE-43, 10/14).** 처음에는 관리자 화면(7.5.7 · FE-16, A)이 목 데이터로 먼저 만들 수 있도록 경로 · 요청 · 응답 형태를 먼저 정한 계약 초안이었다(v0.17, WBS R16). 지금은 구현 · 화면 연동까지 끝났고, 필드가 바뀌면 이 절을 고치고 화면 담당에게 알린다. ⚠️ 표시는 아직 팀 확인이 필요한 항목이다(8-3).
 
 **검수 흐름**
 
@@ -994,7 +1006,7 @@ API 1 · 2 · 16 · 17은 상태와 관계없이 부를 수 있다. 표에 없�
 사건이 DRAFT로 들어옴                관리자 (S-19)
 (오프라인 시드 적재 · 사건 등록 A-14)
 사건 DRAFT ─┬─ 판단 요소 축 확정 (A-12) ───────────────┐
-            ├─ 사건 내용 수정 (A-11) ──────────────────┤ 처음 바꾸는 순간 DRAFT → REVIEW ⚠️
+            ├─ 사건 내용 수정 (A-11) ──────────────────┤ 처음 바꾸는 순간 DRAFT → REVIEW
             ├─ AI 판결 후보 승인 · 반려 (A-9 · A-10) ──┤
             └─ 재판부 판결 후보 승인 · 반려 (A-9 · A-10)┘
                                                        ↓
@@ -1004,7 +1016,7 @@ API 1 · 2 · 16 · 17은 상태와 관계없이 부를 수 있다. 표에 없�
 ```
 
 - **승인 = 그 사건의 공개 판결로 정한다.** 사건마다 공개 AI 판결 1개 · 공개 재판부 판결 1개(`uk_judgment_published`)라서, 승인하면 같은 주체의 기존 공개 판결은 비공개로 바뀐다(행은 지우지 않는다, REQ-079).
-- **공개한 사건은 판결 교체(승인) · 내용 수정을 막는다** ⚠️. 반려는 사용자 화면에 영향이 없으므로 공개한 사건에서도 허용한다(공개 중인 후보만 막는다, A-10). 이미 체험한 사용자의 비교 결과(S-08)가 바뀌지 않게 하기 위해서다(REQ-046 "모든 사용자에게 같은 AI 판결"). 판단 요소의 가치관 축(A-12)은 체험 완료 시점에 고정 저장되므로(성향 산식 3-4) 공개 뒤에도 고칠 수 있다.
+- **공개한 사건은 판결 교체(승인) · 내용 수정을 막는다**(8-3 #1). 반려는 사용자 화면에 영향이 없으므로 공개한 사건에서도 허용한다(공개 중인 후보만 막는다, A-10). 이미 체험한 사용자의 비교 결과(S-08)가 바뀌지 않게 하기 위해서다(REQ-046 "모든 사용자에게 같은 AI 판결"). 판단 요소의 가치관 축(A-12)은 체험 완료 시점에 고정 저장되므로(성향 산식 3-4) 공개 뒤에도 고칠 수 있다.
 - **공개 취소(A-13-14, BE-118)는 숨김이다.** `PUBLISHED → REVIEW`로 돌려 사용자 화면에서 내린다. 사건 · 판결 · 사용자 체험 기록은 지우지 않는다. 권리 요청에 따른 삭제(파기)는 정책을 정한 뒤 2단계로 둔다 ⚠️.
 - 원본 판결문 정보(`case_source`)는 이 API에서만 내려 준다(ERD 5장 원칙, 기술 스택 3장).
 - **동시 요청**: 상태를 바꾸는 요청(A-9 ~ A-13 · A-13-14)은 트랜잭션을 시작하면 먼저 그 사건의 `legal_case` 행을 잠근다(`SELECT … FOR UPDATE`). 그 뒤에 사건 상태 · 후보 상태를 확인한다. 한 관리자가 "아직 공개 전"을 확인한 사이 다른 관리자가 공개해 버리는 경합을 막는다(사용자 API의 조건부 갱신 원칙과 같은 수준).
@@ -1093,7 +1105,9 @@ API 1 · 2 · 16 · 17은 상태와 관계없이 부를 수 있다. 표에 없�
     "recommendedBasis": "…",
     "incidentDate": "2024-03-02",
     "guideline": { "guidelineId": 4, "versionName": "2023 수정 (…)" },
-    "deidentifiedItems": ["인명", "지명", "사건번호"]
+    "deidentifiedItems": ["인명", "지명", "사건번호"],
+    "castRoles": { "prosecutor": "naero", "defense": "nambul" },
+    "sensitiveFlags": ["MENTAL_HEALTH", "CAPITAL_PENALTY"]
   },
   "sources": [
     {
@@ -1186,7 +1200,7 @@ API 1 · 2 · 16 · 17은 상태와 관계없이 부를 수 있다. 표에 없�
 
 - 검수 정보(`reviewStatus` · `reviewedBy` · `reviewedAt` · `reviewNote`)는 AI · 재판부 후보 모두 최상위에 둔다. `generation`(생성 조건)은 AI 후보일 때만 있고 재판부 후보는 `null`.
 - 판단 요소별 방향 · 근거는 `judgment.factors[]`(`direction` · `evidence`)에 있다.
-- `raw_output`(모델 원본 출력)은 크기가 커서 내려 주지 않는다 ⚠️.
+- `raw_output`(모델 원본 출력)은 크기가 커서 내려 주지 않는다(8-3 #6).
 - `reviewNote`는 반려 사유(A-10). `judgment.review_note`(V16, ERD v1.22)에 둔다.
 - `reviewStatus`는 `judgment.review_status`가 있으면 그 값, 없으면 공개 중이면 `APPROVED` · 아니면 `PENDING`이다(시드 · 파이프라인은 검수 칸을 채우지 않는다). A-5 대기 수 · A-6 후보 목록도 같은 규칙이다.
 - `reviewedBy`는 관리자 화면에서 검수했으면 그 관리자 이메일, 그 전 시드 · 오프라인 검수는 `ai_generation.reviewed_by`(이름)다. `reviewedAt`도 같은 순서로 고른다.
@@ -1209,12 +1223,12 @@ API 1 · 2 · 16 · 17은 상태와 관계없이 부를 수 있다. 표에 없�
 - 그래도 유니크 위반이 나면(잠금 밖 경로 등) 500이 아니라 409 `INVALID_STATE`로 바꿔 돌려준다.
 
 - 이미 승인돼 공개 중인 후보를 다시 승인하면 아무것도 바꾸지 않고 200(중복 클릭 대비).
-- 사건이 `DRAFT`면 `REVIEW`로 바꾼다 ⚠️.
+- 사건이 `DRAFT`면 `REVIEW`로 바꾼다(8-3 #3).
 
 | 거절 | 조건 |
 | --- | --- |
 | 404 `JUDGMENT_NOT_FOUND` | 판결이 없거나 `USER` |
-| 409 `INVALID_STATE` | 사건이 이미 `PUBLISHED`(`CASE_PUBLISHED`, 공개 뒤 교체 금지 ⚠️), 후보가 `REJECTED`(`CANDIDATE_REJECTED`), 동시 승인으로 유니크 위반 |
+| 409 `INVALID_STATE` | 사건이 이미 `PUBLISHED`(`CASE_PUBLISHED`, 공개 뒤 교체 금지), 후보가 `REJECTED`(`CANDIDATE_REJECTED`), 동시 승인으로 유니크 위반 |
 | 403 `FORBIDDEN` | CSRF 토큰 없음 · 불일치 |
 
 ### A-10. 판결 후보 반려 — `POST /admin/judgments/{judgmentId}/reject`
@@ -1229,7 +1243,7 @@ API 1 · 2 · 16 · 17은 상태와 관계없이 부를 수 있다. 표에 없�
 - 반려는 되돌리지 않는다. 다시 쓰려면 파이프라인으로 새 후보를 만든다(REQ-079, user-flow 3-6).
 - 승인했다가 교체로 비공개가 된 후보(`APPROVED` · 비공개)도 반려할 수 있다. `review_status`는 이력이 아니라 현재 검수 판단이며, 이전 승인은 감사 로그(`JUDGMENT_APPROVE`)로 확인한다.
 - **공개한 사건에서도 반려할 수 있다.** 파이프라인을 다시 돌리면 공개한 사건에도 비공개 후보가 쌓이는데(ERD `ai_generation` 아래 설명), 반려까지 막으면 이 후보들이 계속 `PENDING`으로 남는다. 반려는 사용자 화면에 영향이 없다. 공개 중인 후보만 막는다.
-- 사건이 `DRAFT`면 `REVIEW`로 바꾼다 ⚠️.
+- 사건이 `DRAFT`면 `REVIEW`로 바꾼다(8-3 #3).
 
 | 거절 | 조건 |
 | --- | --- |
@@ -1259,17 +1273,20 @@ API 1 · 2 · 16 · 17은 상태와 관계없이 부를 수 있다. 표에 없�
 | `thumbnailUrl` | 300자 이하 · `null`. `http(s)://` 주소나 `/`로 시작하는 서비스 경로만(`javascript:` · `data:` · `//host`는 거절) |
 | `recommendedMinMonths` · `recommendedMaxMonths` | 1 이상 · `null`. 바꾼 뒤의 하한 · 상한이 둘 다 있으면 하한 ≤ 상한 |
 | `recommendedBasis` | 문자열 · `null` |
+| `castRoles` | (v0.67, BE-125) `{"prosecutor": …, "defense": …}`. 키는 이 둘만, 값은 `naero` · `nambul`을 하나씩. `null`은 거절(배정을 지우면 범죄 유형별 균형 계산에서 빠진다) |
+| `sensitiveFlags` | (v0.67, BE-125) 플래그 이름 배열(`SensitiveFlag` 12종). 모르는 이름 · `null` 원소는 거절, 겹치면 하나로 줄인다. 모두 끌 때는 `[]`. `null`은 거절(`null`은 "분류 전"이라 되돌리지 않는다) |
 
 - 죄명 · 적용 법조문 · 법정형 · 판단 요소 구성 · 형벌 규칙은 이 API로 바꾸지 않는다(파이프라인 · SQL 경로, WBS 7-5 8순위).
 - 제목 중복은 저장 전에 확인하고, 그 사이 다른 요청이 같은 제목을 저장해 유니크 위반이 나도 `DUPLICATE_TITLE`로 돌려준다.
-- 감사 로그 `CASE_UPDATE`에는 바꾼 필드 이름만 남긴다(`{"fields": ["shortIntro", "keywords"]}`). 값은 사건 본문이라 남기지 않는다.
-- 사건이 `DRAFT`면 `REVIEW`로 바꾼다 ⚠️.
+- 감사 로그 `CASE_UPDATE`에는 바꾼 필드 이름만 남긴다(`{"fields": ["shortIntro", "keywords"]}`). 값은 사건 본문이라 남기지 않는다. 단 `castRoles` · `sensitiveFlags`는 짧고 자동 결과를 사람이 뒤집은 기록이라 바꾼 값까지 남긴다(`{"fields": ["castRoles"], "castRoles": {…}}`, v0.67).
+- 배역을 바꿔도 이미 만든 대본(`case_script`)은 다시 만들지 않는다 — 대사에 캐릭터가 들어가 있어 사건 배역과 어긋난다. 대본을 다시 만드는 경로는 BE-129에서 정한다.
+- 사건이 `DRAFT`면 `REVIEW`로 바꾼다(8-3 #3).
 
 | 거절 | 조건 |
 | --- | --- |
 | 400 `VALIDATION_ERROR` | 위 규칙 위반(필수 필드 · `keywords`에 `null` 포함), 모르는 필드, 빈 본문 |
 | 404 `CASE_NOT_FOUND` | 사건이 없음 |
-| 409 `INVALID_STATE` | 사건이 `PUBLISHED`(`CASE_PUBLISHED`, 공개 뒤 수정 금지 ⚠️) |
+| 409 `INVALID_STATE` | 사건이 `PUBLISHED`(`CASE_PUBLISHED`, 공개 뒤 수정 금지) |
 | 409 `DUPLICATE_TITLE` | 제목이 다른 사건과 겹침 |
 
 ### A-12. 판단 요소 가치관 축 확정 — `PUT /admin/factors/{factorId}/value-axis`
@@ -1282,7 +1299,7 @@ API 1 · 2 · 16 · 17은 상태와 관계없이 부를 수 있다. 표에 없�
 - 성공하면 `value_axis_status = CONFIRMED`(ERD v1.15). 투표 기록(`value_axis_votes`)은 그대로 둔다.
 - 사건이 `PUBLISHED`여도 고칠 수 있다(이미 끝난 체험의 성향은 바뀌지 않는다, 성향 산식 3-4).
 - 감사 로그 `VALUE_AXIS_CONFIRM`에 사건 ID와 이전 · 바꾼 축을 남긴다(`{"caseId": 1, "from": "FAULT_STANDARD", "to": null}`).
-- 사건이 `DRAFT`면 `REVIEW`로 바꾼다 ⚠️.
+- 사건이 `DRAFT`면 `REVIEW`로 바꾼다(8-3 #3).
 
 성공 200:
 
@@ -1365,7 +1382,7 @@ API 1 · 2 · 16 · 17은 상태와 관계없이 부를 수 있다. 표에 없�
 | --- | --- |
 | `file` | 필수. `image/jpeg` · `image/png` · `image/webp`만 허용, 최대 10MB(8-1 공통 multipart 상한) |
 
-- 공개한 사건은 바꿀 수 없다(A-11과 같은 규칙). 감사 로그 `CASE_PHOTO_GENERATE`(`detail.type = "REPRESENTATIVE"`)를 남긴다.
+- 공개한 사건은 바꿀 수 없다(A-11과 같은 규칙). 감사 로그 `CASE_PHOTO_UPLOAD`(`detail.type = "REPRESENTATIVE"`)를 남긴다(v0.62에서 정정 — `CASE_PHOTO_GENERATE`라는 값은 `AdminAuditAction`에 없다).
 
 | 거절 | 조건 |
 | --- | --- |
@@ -1373,6 +1390,17 @@ API 1 · 2 · 16 · 17은 상태와 관계없이 부를 수 있다. 표에 없�
 | 404 `CASE_NOT_FOUND` | 사건이 없음 |
 | 409 `INVALID_STATE` | 이미 `PUBLISHED`(`CASE_PUBLISHED`) |
 | 502 `FILE_UPLOAD_FAILED` | S3 업로드 실패, 또는 설정 없음(`S3_BUCKET_NAME`) |
+
+#### 공개 뒤에 사진을 고쳐야 하면 — A-13-14(공개 취소) → 사진 교체 → A-13(다시 공개)
+
+> v0.62, BE-103 결정(`docs/decisions/BE-103.md`). 사진 API 전체(A-13-3 · A-13-4 · A-13-9)에 해당한다.
+
+- **공개 중에 사진만 바꾸는 경로는 두지 않는다.** 공개가 곧 사진 승인이라(BE-78 "승인은 사건 공개로 갈음한다") 그 경로를 열면 검수를 거치지 않은 사진이 바로 사용자에게 보인다. 공개 뒤 내용 수정 · 판결 교체를 막는 8-3 #1과도 같은 기준이다.
+- 내리는 동안 그 사건은 목록 · 상세 · 체험에서 사라지고 **이미 끝낸 체험의 결과도 404**가 된다(A-13-14). 교체할 파일을 먼저 준비한 뒤 내리고, 교체가 끝나면 바로 다시 공개한다.
+- 다시 공개하면 `published_at`이 새로 기록돼 **사건 목록(API 1, 공개일 내림차순)에서 맨 위로 올라온다.** 사진 한 장 때문에 "새 사건"처럼 보이는 것을 감수하는 절차다.
+- 사진은 공개 조건(`publishReadiness`)에 들어가지 않으므로, 사진을 바꾸거나 지운 것 때문에 다시 공개가 막히지는 않는다.
+- 공개 취소 사유(`reason`)에 사진 교체 때문임을 적는다(예: `"대표사진 교체"`) — 감사 로그에서 권리 요청으로 내린 사건과 구분된다.
+- 내린 김에 판결(A-9) · 내용(A-11)까지 바꾸지 않는다(8-3 #8 운영 규칙). 사진만 바꾼다.
 
 ### A-13-4. 사건 발단 · 결론 사진 업로드 — `POST /admin/cases/{caseId}/photos/incident` (multipart/form-data)
 
@@ -1399,7 +1427,7 @@ API 1 · 2 · 16 · 17은 상태와 관계없이 부를 수 있다. 표에 없�
 - `displayOrder`는 1단계 동안 `role`과 함께 유지하는 옛 순번 칸이다(`ORIGIN` = 0, `CONCLUSION` = 1). 다음 단계에서 뺀다 — 화면은 `role`을 본다.
 - S3 객체 키(`s3_key`)는 내부 기록용이라 응답에 내려주지 않는다. `prompt`는 관리자가 보냈을 때만 들어가고, 응답에는 내려주지 않는다(A-13-5 목록도 마찬가지 — 내부 기록 확인은 DB로 한다).
 - 교체 때 이전 S3 객체는 지우지 않는다 — 업로드 키에 시각이 붙어 매번 새 키이므로 캐시로 옛 사진이 다시 보이지 않는다.
-- 공개한 사건은 추가 · 교체할 수 없다. 감사 로그 `CASE_PHOTO_UPLOAD`(`detail.type = "INCIDENT"`, `detail.role`, `detail.photoId`)를 남긴다.
+- 공개한 사건은 추가 · 교체할 수 없다(고쳐야 하면 A-13-3의 "공개 뒤에 사진을 고쳐야 하면" 절차). 감사 로그 `CASE_PHOTO_UPLOAD`(`detail.type = "INCIDENT"`, `detail.role`, `detail.photoId`)를 남긴다.
 
 | 거절 | 조건 |
 | --- | --- |
@@ -1432,7 +1460,7 @@ API 1 · 2 · 16 · 17은 상태와 관계없이 부를 수 있다. 표에 없�
 
 본문 없음. `{role}`(`ORIGIN` 또는 `CONCLUSION`)에 해당하는 사진 한 장을 지운다. 성공하면 204(본문 없음). S3 객체는 지우지 않는다(A-13-4와 같은 원칙 — 재업로드 때 새 키를 쓰므로 운영에 지장 없다, 정리는 후속 과제).
 
-- 공개한 사건은 지울 수 없다(업로드와 같은 규칙). 감사 로그 `CASE_PHOTO_DELETE`(`detail.role`)를 남긴다.
+- 공개한 사건은 지울 수 없다(업로드와 같은 규칙, 고쳐야 하면 A-13-3의 "공개 뒤에 사진을 고쳐야 하면" 절차). 감사 로그 `CASE_PHOTO_DELETE`(`detail.role`)를 남긴다.
 
 | 거절 | 조건 |
 | --- | --- |
@@ -1763,7 +1791,7 @@ A-11과 같은 방식(보낸 필드만, `null` = 지움). `headline` · `article
 
 | # | 항목 | 이 초안의 제안 | 확인할 사람 |
 | --- | --- | --- | --- |
-| 1 | 공개 뒤 판결 교체 · 내용 수정 | 막는다(409). 바꿔야 하면 새 사건으로 적재 | 팀 |
+| 1 | 공개 뒤 판결 교체 · 내용 수정 | ✅ 공개 중에는 막는다(409 `CASE_PUBLISHED`). 고쳐야 하면 공개 취소(A-13-14) → 수정 → 다시 공개(A-13) — 사진 교체(#9, BE-103)와 같은 절차. 공개 취소 뒤 판결 교체는 #8(BE-130) | 팀 |
 | 2 | 공개 취소 | ✅ 숨김으로 둔다(A-13-14, BE-118) — `PUBLISHED → REVIEW`, 기록은 지우지 않는다. 권리 요청에 따른 삭제(파기)는 정책을 정한 뒤 2단계 (10/28 팀 결정) | 팀 |
 | 3 | `REVIEW` 상태 | ✅ 관리자가 처음 바꾸는 순간(A-9 ~ A-12) 자동으로 `DRAFT → REVIEW`. "누가 손대기 시작한 사건"을 목록에서 구분하는 용도. `REVIEW → DRAFT`로 되돌리는 경로는 두지 않는다 (#111 리뷰, A 동의) | A 김해송 (S-19 목록) |
 | 4 | 재판부 후보 검수 상태 · 반려 사유 저장 | ✅ V16(BE-41)에서 `judgment`에 `review_status` · `reviewed_by_admin_id` · `reviewed_at` · `review_note`를 두어 AI · 재판부를 같은 방식으로 검수한다(ERD v1.22). 응답 필드는 그대로 | B |
@@ -1771,6 +1799,7 @@ A-11과 같은 방식(보낸 필드만, `null` = 지움). `headline` · `article
 | 6 | 모델 원본 출력(`raw_output`) | ✅ 내려 주지 않는다. 필요하면 A-8에 쿼리 옵션으로 추가 (#111 리뷰, A 동의) | A 김해송 (S-19 상세) |
 | 7 | 관리자 OAuth(BE-40, D)와 체인 | ✅ **제외(BE-40)** — 관리자 로그인은 이메일 · 비밀번호(세션, BE-39 · BE-67 · BE-68)로 충분해 제외 (B 김현중 확인, 10/20). ~~관리자 체인에 `oauth2Login` 자리 연결은 B, 성공 처리 · 허용 목록은 D (#108, WBS v1.9 7-2-1)~~ | D 정민석 |
 | 8 | 공개 취소 뒤 판결 교체 | ⚠️ 미정. 공개 취소하면 `REVIEW`라서 판결 교체(A-9) · 내용 수정(A-11)이 다시 열린다. 판결을 바꿔 다시 공개하면 이미 체험한 사용자의 비교 결과(S-08)가 바뀐다(#1의 이유와 충돌). 1단계는 막지 않고 운영 규칙("내린 사건의 판결은 바꾸지 않고, 바꿔야 하면 새 사건으로 적재")으로 둔다 — 코드로 막을지 팀 확인 (BE-118) | 팀 |
+| 9 | 공개 뒤 사진 교체 | ✅ 별도 경로를 두지 않는다(BE-103) — 공개 중 사진 업로드 · 삭제는 그대로 409(`CASE_PUBLISHED`)로 막고, 고쳐야 하면 A-13-14(공개 취소) → 교체 → A-13(다시 공개)으로 한다. 공개가 곧 사진 승인이라(BE-78) 예외 경로를 열면 검수 없는 사진이 노출된다. 절차의 대가(내린 동안 완료 체험 결과도 404, 다시 공개하면 목록 맨 위로)는 A-13-3에 적었다 | 팀 |
 
 ---
 
@@ -1816,7 +1845,7 @@ A-11과 같은 방식(보낸 필드만, `null` = 지움). `headline` · `article
 
 ## 9. (확장) 성향 API (7.6.4)
 
-> 판결 성향 테스트(S-15 · S-16) · 공유 결과 · 마이페이지(S-17)용 API다. 테이블은 [ERD 8장](erd.md)(V15, #124), 채점 · 체험 성향 · 종합은 [성향 산식](personality-scoring.md), 문구는 [성향 테스트 콘텐츠](personality-test-content.md)를 따른다. 9-2 확인 항목은 구현 전에 A와 맞춘다.
+> 판결 성향 테스트(S-15 · S-16) · 공유 결과 · 마이페이지(S-17)용 API다. 테이블은 [ERD 8장](erd.md)(V15, #124), 채점 · 체험 성향 · 종합은 [성향 산식](personality-scoring.md), 문구는 [성향 테스트 콘텐츠](personality-test-content.md)를 따른다. 9-2 확인 항목은 구현(BE-72)과 화면 실제 API 연동으로 확정했다.
 
 ### 9-1. 공통
 
@@ -1859,7 +1888,10 @@ json
 | P-5 | GET | `/my-page` | 마이페이지 (테스트 결과 · 판결 성향 · 체험 목록 · 출석 일수) | S-17 |
 | P-6 | POST | `/attendance` | 출석 기록 (하루 한 번, v0.41) | 사이트 진입 |
 | P-7 | PUT | `/profile-deco` | 프로필 꾸미기 저장 (v0.42) | S-17 |
-| P-8 | PATCH | `/profile-settings` | 프로필 선택 설정 저장 — 공개 성향카드 · 프로필카드 아래 성향 · 한 줄 소개, 보낸 칸만 (v0.52) | S-17 |
+| P-8 | PATCH | `/profile-settings` | 프로필 선택 설정 저장 — 공개 성향카드 · 프로필카드 아래 성향 · 한 줄 소개 · 카드 아래 줄 · 레벨 표시, 보낸 칸만 (v0.52, v0.65) | S-17 |
+| P-9 | POST | `/collection` | 수집 기록 — 완료한 사건에서 얻은 일러스트 · 의상 (v0.63) | S-09 · S-17 |
+| P-10 | POST | `/collection/seen` | 컬렉션 "봤음" (v0.63) | S-17 |
+| P-11 | POST | `/achievements/seen` | 도전과제 "봤음" (v0.63) | S-17 |
 
 ---
 
@@ -1933,7 +1965,7 @@ json
 json
 
 ```json
-{  "personality": { "type": { "shareId": "Qm7xK2pa", "…": "…" }, "axisScores": { "…": "…" }, "testedAt": "2026-10-14T14:00:00+09:00", "completedExperienceCount": 4 },  "initialPersonality": { "source": "TEST", "type": { "shareId": "Qm7xK2pa", "…": "…" }, "axisScores": { "…": "…" }, "testedAt": "2026-10-10T20:00:00+09:00", "completedExperienceCount": 0 },  "baselineRetake": { "available": false, "result": { "type": { "…": "…" }, "axisScores": { "…": "…" }, "testedAt": "2026-10-14T14:00:00+09:00", "completedExperienceCount": 4 } },  "judgmentPersonality": {    "axisScores": { "APOLOGY_SINCERITY": 0.75, "FAULT_STANDARD": 0.11, "PRINCIPLE_RELATION": 0.83, "ORDER_OPPORTUNITY": null },    "type": null,    "experienceCount": 3  },  "history": [    { "caseId": 1, "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건", "completedAt": "2026-10-14T15:00:00+09:00", "axisScores": { "APOLOGY_SINCERITY": 1.0, "FAULT_STANDARD": 0.0, "PRINCIPLE_RELATION": 1.0, "ORDER_OPPORTUNITY": null }, "type": null }  ],  "experiences": [    { "caseId": 1, "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건", "crimeType": "MURDER", "status": "COMPLETED", "attemptNo": 1, "updatedAt": "2026-10-14T15:00:00+09:00" }  ],  "profile": { "attendanceDays": 3 },  "profileDeco": { "portrait": "/images/characters/standing/naero.webp", "frame": "wood", "background": "cream", "sashStyle": "long", "sashColorShort": "wine", "sashColorLong": "wine", "sashIconLeft": "none", "sashIconRight": "none", "bookmarkCharacter": "naero", "bookmarkFace": "happy", "bookmarkFaceStyle": "generated", "bookmarkColor": "bronze" },  "achievements": [    { "id": "first-case", "stat": "completed", "goal": 1, "value": 1, "cleared": true, "status": "CLEARED", "rewards": { "kinds": ["characters/scene"], "frames": ["wood"], "backgrounds": [], "sashStyles": ["long"], "sashColors": ["long:wine"], "sashIcons": [] } },    { "id": "collect-5", "stat": "collected", "goal": 5, "value": null, "cleared": false, "status": "PENDING", "rewards": { "kinds": ["cases"], "frames": [], "backgrounds": ["news"], "sashStyles": [], "sashColors": [], "sashIcons": ["naero", "nambul"] } },    { "…": "…" }  ],  "unlocked": { "kinds": ["characters/roles", "characters/standing", "characters/scene"], "frames": ["basic", "wood"], "backgrounds": ["cream"], "sashStyles": ["none", "short", "long"], "sashColors": ["short:wine", "long:wine"], "sashIcons": ["none", "star"] },  "profileSettings": { "shownCard": "current", "profileCardType": "initial", "bio": "판결은 신중하게" }}
+{  "personality": { "type": { "shareId": "Qm7xK2pa", "…": "…" }, "axisScores": { "…": "…" }, "testedAt": "2026-10-14T14:00:00+09:00", "completedExperienceCount": 4 },  "initialPersonality": { "source": "TEST", "type": { "shareId": "Qm7xK2pa", "…": "…" }, "axisScores": { "…": "…" }, "testedAt": "2026-10-10T20:00:00+09:00", "completedExperienceCount": 0 },  "baselineRetake": { "available": false, "result": { "type": { "…": "…" }, "axisScores": { "…": "…" }, "testedAt": "2026-10-14T14:00:00+09:00", "completedExperienceCount": 4 } },  "judgmentPersonality": {    "axisScores": { "APOLOGY_SINCERITY": 0.75, "FAULT_STANDARD": 0.11, "PRINCIPLE_RELATION": 0.83, "ORDER_OPPORTUNITY": null },    "type": null,    "experienceCount": 3  },  "history": [    { "caseId": 1, "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건", "completedAt": "2026-10-14T15:00:00+09:00", "axisScores": { "APOLOGY_SINCERITY": 1.0, "FAULT_STANDARD": 0.0, "PRINCIPLE_RELATION": 1.0, "ORDER_OPPORTUNITY": null }, "type": null }  ],  "experiences": [    { "caseId": 1, "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건", "crimeType": "MURDER", "status": "COMPLETED", "attemptNo": 1, "updatedAt": "2026-10-14T15:00:00+09:00" }  ],  "profile": { "attendanceDays": 3 },  "profileDeco": { "portrait": "/images/characters/standing/naero.webp", "frame": "wood", "background": "cream", "sashStyle": "long", "sashColorShort": "wine", "sashColorLong": "wine", "sashIconLeft": "none", "sashIconRight": "none", "bookmarkCharacter": "naero", "bookmarkFace": "happy", "bookmarkFaceStyle": "generated", "bookmarkColor": "bronze" },  "achievements": [    { "id": "first-case", "stat": "completed", "goal": 1, "value": 1, "cleared": true, "status": "CLEARED", "rewards": { "kinds": ["characters/scene"], "frames": ["wood"], "backgrounds": [], "sashStyles": ["long"], "sashColors": ["long:wine"], "sashIcons": [] }, "unlockedAt": "2026-10-14T15:00:10+09:00", "isNew": false },    { "id": "collect-5", "stat": "collected", "goal": 5, "value": 3, "cleared": false, "status": "IN_PROGRESS", "rewards": { "kinds": ["cases"], "frames": [], "backgrounds": ["news"], "sashStyles": [], "sashColors": [], "sashIcons": ["naero", "nambul"] }, "unlockedAt": null, "isNew": false },    { "…": "…" }  ],  "unlocked": { "kinds": ["characters/roles", "characters/standing", "characters/scene"], "frames": ["basic", "wood"], "backgrounds": ["cream"], "sashStyles": ["none", "short", "long"], "sashColors": ["short:wine", "long:wine"], "sashIcons": ["none", "star"] },  "collection": { "collected": 3, "items": [ { "kind": "illustration", "itemId": "case-1-origin", "caseId": 1, "acquiredAt": "2026-10-14T15:00:10+09:00", "isNew": true }, { "kind": "cast", "itemId": "naero:judge", "caseId": 1, "acquiredAt": "2026-10-14T15:00:10+09:00", "isNew": true }, { "…": "…" } ] },  "profileSettings": { "shownCard": "current", "profileCardType": "initial", "bio": "판결은 신중하게", "cardLine": "type", "cardLevel": false }}
 ```
 
 | 필드 | 설명 |
@@ -1946,10 +1978,11 @@ json
 | `experiences` | 체험한 사건. 사건마다 최근 회차 하나, 최근 순. `status`로 결과 다시 보기(`COMPLETED`) · 이어 하기를 나눈다(1-6) |
 | `profile.attendanceDays` | 누적 출석 일수(P-6, v0.41). 기록이 없거나 빈 마이페이지면 `0`. 로그인 전에는 기기(익명 ID)마다 따로 센다 |
 | `profileDeco` | 프로필 꾸미기(v0.42, BE-96). 저장한 적이 없거나 빈 마이페이지면 기본값(내로 스탠딩 · `basic` · `cream` · 책갈피 없음 · 내로 · `happy` · `generated` · `bronze`). **잠긴 값이어도 거절하지 않고 그대로** 내려 준다(표가 바뀌어 잠긴 경우 화면이 기본값으로 보여 준다). 필드는 P-7 요청과 같다 |
-| `achievements` | 도전과제 8개(서버 표가 원본, FE-68 순서). `stat`: `completed`(완료한 회차가 하나라도 있는 사건 수, 다시 하기를 시작해도 줄지 않는다) · `hasType`(성향 테스트 결과가 있으면 1) · `attendanceDays`(P-6) · `collected`(모은 일러스트). `value`는 목표에서 멈춘다. `status`: `CLEARED` · `IN_PROGRESS` · `PENDING`. **`collected` 도전과제는 BE-83 전까지 서버가 셀 수 없어 `PENDING` · `value: null` · `cleared: false`(잠김)**. `rewards`는 여섯 종류(`kinds` · `frames` · `backgrounds` · `sashStyles` · `sashColors`(`모양:색`) · `sashIcons`), 받지 않는 종류는 빈 배열. 제목 · 문구 · 그림은 화면이 `id`로 붙인다 |
+| `achievements` | 도전과제 8개(서버 표가 원본, FE-68 순서). `stat`: `completed`(완료한 회차가 하나라도 있는 사건 수, 다시 하기를 시작해도 줄지 않는다) · `hasType`(성향 테스트 결과가 있으면 1) · `attendanceDays`(P-6) · `collected`(모은 일러스트 + 의상 수, v0.63 BE-83). `value`는 목표에서 멈춘다. `status`: `CLEARED` · `IN_PROGRESS` · `PENDING`(서버가 셀 수 없는 값 — v0.63부터 나오지 않지만 값은 남긴다. v0.63 전에는 `collected` 도전과제가 `PENDING`이었다). **`unlockedAt` · `isNew`(v0.63)**: 해금 기록이 있으면 해금 시각과 "새로 열림" 여부(아직 P-11로 보지 않았으면 `true`), 없으면 `null` · `false`. **한 번 해금된 도전과제는 표가 바뀌어 다시 미달이 되어도 `CLEARED` · `value = goal`로 남고 보상도 계속 열려 있다**(BE-96 원칙). 해금 시각은 서버가 처음 판정해 기록한 때다 — 마이페이지 조회 · P-9가 막 달성한 도전과제를 기록한다. `rewards`는 여섯 종류(`kinds` · `frames` · `backgrounds` · `sashStyles` · `sashColors`(`모양:색`) · `sashIcons`), 받지 않는 종류는 빈 배열. 제목 · 문구 · 그림은 화면이 `id`로 붙인다 |
 | `unlocked` | 지금 열린 것(여섯 종류). 처음부터 열린 것 + `CLEARED` 도전과제의 보상 |
+| `collection` | 모은 일러스트 · 의상(v0.63, BE-83). `collected`는 `items` 수(일러스트 + 의상, 도전과제 `collected`와 같은 값). `items`는 최근에 얻은 순: `kind`(`illustration` · `cast`) · `itemId` · `caseId`(처음 얻은 사건) · `acquiredAt` · `isNew`(아직 P-10으로 보지 않았으면 `true`, "새로 얻음"). 기록이 없거나 빈 마이페이지면 `{ "collected": 0, "items": [] }` |
 | `level` | 레벨 · 직업(v0.54, BE-106). 모양은 L-1 응답과 같다. 기록이 없거나 빈 마이페이지면 Lv1 · 0 XP · 무직 |
-| `profileSettings` | 프로필 선택 설정(v0.52, BE-104): 공개 성향카드(`shownCard`) · 프로필카드 아래 성향(`profileCardType`) · 한 줄 소개(`bio`). 저장은 P-8. 저장한 적이 없거나 빈 마이페이지면 `{ "shownCard": "current", "profileCardType": "current", "bio": "" }` |
+| `profileSettings` | 프로필 선택 설정(v0.52, BE-104): 공개 성향카드(`shownCard`) · 프로필카드 아래 성향(`profileCardType`) · 한 줄 소개(`bio`). 저장은 P-8. 저장한 적이 없거나 빈 마이페이지면 `{ "shownCard": "current", "profileCardType": "current", "bio": "", "cardLine": "type", "cardLevel": false }`(`cardLine` · `cardLevel`은 v0.65, BE-114) |
 
 - 쿠키가 없거나 기록이 없으면 `404`가 아니라 **빈 마이페이지**(`personality`·`initialPersonality`·`judgmentPersonality` `null`, 목록 빈 배열)를 `200`으로 준다. 마이페이지는 "아직 없음"을 안내하는 화면이기 때문이다.
 - `judgmentPersonality` · `history`는 체험 성향 저장(7.6.7, BE-64)이 붙은 뒤부터 채워진다. 그 전에는 각각 `null` · 빈 배열이다.
@@ -2009,7 +2042,7 @@ json
 - 검사 순서는 400 → 409이고, 하나라도 걸리면 **아무것도 저장하지 않는다.**
 - **이미 저장해 둔 값은 다시 거절하지 않는다**(v0.43, BE-98): 저장값과 같고 저장할 때도 쓰이던 칸은 잠김 검사를 건너뛴다. 표가 바뀌어 저장값이 잠겨도 다른 칸은 저장할 수 있다. 저장할 때 쓰이지 않던 칸(예: 책갈피 없음일 때의 짧은 책갈피 색)은 값이 같아도 쓰이게 되면 다시 검사한다. 형식 · 값 목록(400)은 늘 전체를 본다.
 - 잠김은 **지금 화면에 쓰이는 칸만** 본다: 대표 이미지(기본 두 장 `standing/naero` · `standing/nambul`은 늘 허용) · 테두리 · 배경 · 책갈피 모양, 고른 모양의 색(`모양:색`), 짧은 책갈피일 때 좌우 아이콘. 쓰이지 않는 칸(고르지 않은 모양의 색 등)은 기본값이 잠겨 있어도 거절하지 않는다.
-- 수집 도전과제 보상(대표 이미지 `cases` · `characters/law` · `characters/adult`, 배경 `news`, 아이콘 `naero` · `nambul`, 책갈피 색 `green`)은 BE-83 전까지 열리지 않는다.
+- 수집 도전과제 보상(대표 이미지 `cases` · `characters/law` · `characters/adult`, 배경 `news`, 아이콘 `naero` · `nambul`, 책갈피 색 `green`)은 일러스트 · 의상을 5장 · 20장 모으면 열린다(v0.63, BE-83. 그 전에는 열 수 없었다).
 
 ---
 
@@ -2029,19 +2062,21 @@ json
 | --- | --- |
 | `shownCard` | **공개 성향카드**: 성향카드 화면의 "공개" 도장 칸. 커뮤니티에서 다른 사람에게 보여 줄 카드. `initial`(초심) · `retake`(재심) · `current`(최근) |
 | `profileCardType` | **프로필카드 아래 성향**: 카드 꾸미기 창에서 고른 칸. 값은 `shownCard`와 같다. 공개 성향카드와는 **별개의 값**이다 |
+| `cardLine` | **프로필카드 아래 줄**(v0.65, BE-114): 카드 아래에 보일 줄. `type`(성향) · `signature`(한 줄 소개) · `job`(직업) 중 하나. 기본 `type` |
+| `cardLevel` | **레벨 표시**(v0.65, BE-114): 레벨을 `cardLine` 윗줄에 붙일지. boolean(`true` · `false`), 문자열 `"true"`는 400. 기본 `false` |
 | `bio` | **한 줄 소개**. 문자열, 앞뒤 공백을 뺀 뒤 **0 ~ 40자**(유니코드 글자 기준, 이모지도 한 글자), 줄바꿈 · 제어 문자(탭 · NUL 등) 없음. 빈 문자열 `""`은 소개 지우기. HTML은 거르지 않고 그대로 저장한다 — 화면은 `textContent`로만 그린다(서버 HTML 걸러 내기는 금칙어와 함께 추후, `docs/decisions/BE-104.md`) |
 
-**응답 200**: 저장 뒤의 세 값 전체(P-5 `profileSettings`와 같은 모양). 쿠키가 없었으면 익명 ID를 새로 발급해 `Set-Cookie`로 내려준다(P-7과 같다).
+**응답 200**: 저장 뒤의 다섯 값 전체(P-5 `profileSettings`와 같은 모양). 쿠키가 없었으면 익명 ID를 새로 발급해 `Set-Cookie`로 내려준다(P-7과 같다).
 
 json
 
 ```json
-{  "shownCard": "retake",  "profileCardType": "current",  "bio": "판결은 신중하게"}
+{  "shownCard": "retake",  "profileCardType": "current",  "bio": "판결은 신중하게",  "cardLine": "job",  "cardLevel": true}
 ```
 
 | 거절 | 조건 |
 | --- | --- |
-| 400 `VALIDATION_ERROR` | 본문이 객체가 아님 · 바꿀 칸이 하나도 없음 · 모르는 칸(`details`에 그 이름) · 값이 `null` · 문자열이 아님 · `shownCard` · `profileCardType`이 세 값 밖 · `bio`가 40자 초과 · 줄바꿈 · 제어 문자 포함 |
+| 400 `VALIDATION_ERROR` | 본문이 객체가 아님 · 바꿀 칸이 하나도 없음 · 모르는 칸(`details`에 그 이름) · 값이 `null` · 문자열이 아님 · `shownCard` · `profileCardType`이 세 값 밖 · `bio`가 40자 초과 · 줄바꿈 · 제어 문자 포함 · `cardLine`이 세 값 밖 · `cardLevel`이 boolean이 아님 |
 
 - **보낸 칸만 바꾼다.** 세 값은 화면마다 따로 바뀌므로(공개 도장 · 카드 꾸미기 창 · 내 정보 수정), 한 곳에서 저장할 때 다른 두 값을 보내지 않아도 된다. 오래된 화면이 다른 칸을 옛 값으로 덮어쓰지 않게 하려는 것이다(P-7은 꾸미기를 한 화면에서 함께 저장해 전체 저장).
 - 보내지 않은 칸과 `null`은 다르다: 보내지 않으면 그대로 두고, `null`은 400이다(지우려면 `bio: ""`).
@@ -2052,15 +2087,117 @@ json
 
 ---
 
+### P-9. 수집 기록 — `POST /collection`
+
+> 확장 단계(BE-83, v0.63). 사건 체험을 마치고 얻은 일러스트 · 의상(만난 모습)을 남긴다. **획득 조건은 화면(`collectionOf` · `castOf`)이 판정하고, 서버는 항목 · 획득 시각(서버 시각) · 확인 여부만 저장한다.** 조회는 P-5 `collection`. 결정 기록 [`BE-83.md`](decisions/BE-83.md)
+
+**요청**
+
+json
+
+```json
+{  "caseId": 1,  "backfill": false,  "items": [    { "kind": "illustration", "itemId": "case-1-origin" },    { "kind": "cast", "itemId": "naero:judge" }  ]}
+```
+
+| 필드 | 값 |
+| --- | --- |
+| `caseId` | 이 항목들을 얻은 사건. 이 사용자가 **완료한 회차가 하나라도 있어야** 한다(다시 하기 중이어도 된다) |
+| `backfill` | 생략하면 `false`. **기존 사용자 백필**: 이미 완료한 사건인데 `collection`에 항목이 빠져 있으면 화면이 마이페이지 진입 때 `true`로 보낸다. `true`면 획득 시각을 **그 사건의 첫 완료 시각**으로, "본 것"으로 남기고("새로 얻음"이 한꺼번에 뜨지 않게), 이 요청으로 해금된 도전과제도 "본 것"으로 남긴다 |
+| `items` | 1 ~ 20개. `kind`: `illustration`(투명 배경 일러스트) · `cast`(역할 의상). `itemId`: 소문자 · 숫자로 시작하고 소문자 · 숫자 · `:` · `_` · `-`로 64자까지. 일러스트는 일러스트 id(예: `case-1-origin`), 의상은 `{who}:{role}`(예: `naero:judge`). 서버는 의미 없는 문자열로만 다룬다 |
+
+**응답 200**
+
+json
+
+```json
+{  "added": [    { "kind": "illustration", "itemId": "case-1-origin", "caseId": 1, "acquiredAt": "2026-10-29T10:40:00+09:00", "isNew": true }  ],  "collected": 5,  "newlyUnlocked": ["collect-5"]}
+```
+
+| 필드 | 설명 |
+| --- | --- |
+| `added` | 이번 요청으로 **새로 저장된 항목만**(P-5 `collection.items`와 같은 모양). 이미 가진 항목은 빠진다 |
+| `collected` | 저장 뒤 모은 수(일러스트 + 의상) |
+| `newlyUnlocked` | 이번 요청으로 해금이 새로 기록된 도전과제 id(예: 5장째에 `collect-5`) |
+
+| 거절 | 조건 |
+| --- | --- |
+| 400 `VALIDATION_ERROR` | `caseId` 없음 · 0 이하, `items`가 비었거나 20개 초과, 모르는 `kind`, `itemId` 형식 오류. `details`에 필드별 사유 |
+| 404 `EXPERIENCE_NOT_FOUND` | 쿠키가 없음 · 모르는 익명 ID · 이 사건의 체험이 없음 (익명 ID를 새로 발급하지 않는다) |
+| 404 `CASE_NOT_FOUND` | 사건이 없음 |
+| 409 `INVALID_STATE` | 체험은 있지만 아직 완료하지 않음. `currentStatus`에 최근 회차 상태 |
+| 409 `COLLECTION_LIMIT_EXCEEDED` | 일러스트: 이 사건에서 처음 얻은 수가 5를 넘음, 의상: 사용자당 12를 넘음. 이미 가진 항목은 세지 않는다 |
+
+- **멱등**이다. 같은 요청을 다시 보내도 결과가 같다(`added`만 빈다). 같은 그림을 다른 사건에서 다시 보내도 **처음 얻은 사건 · 시각이 남는다**(그림별 key, 사건별이 아니다).
+- 하나라도 걸리면 **아무것도 저장하지 않는다.**
+- 서버는 대본을 몰라 가짜 `itemId`를 막지 못한다. 그래서 상한으로 총량만 묶는다. 다른 사용자와 비교하는 기능(랭킹 등)에 `collected`를 쓰기 전에 서버 목록 검증으로 바꿀지 다시 본다(`docs/decisions/BE-83.md`).
+- **로그인 합쳐 읽기는 아직 없다.** 출석(P-6) · 꾸미기(P-7)처럼 익명 ID 하나 기준이고, 회원에 연결된 익명 ID들을 합쳐 읽는 것은 함께 별도로 붙인다.
+
+---
+
+### P-10. 컬렉션 "봤음" — `POST /collection/seen`
+
+> 확장 단계(BE-83, v0.63). "새로 얻음" 표시를 지운다.
+
+**요청** — 둘 중 하나만 보낸다
+
+json
+
+```json
+{ "items": [ { "kind": "illustration", "itemId": "case-1-origin" } ] }
+```
+
+json
+
+```json
+{ "kind": "cast" }
+```
+
+| 필드 | 값 |
+| --- | --- |
+| `items` | 본 항목(P-9 `items`와 같은 모양, 100개까지) |
+| `kind` | 그 종류 전부(`illustration` · `cast`). 컬렉션 탭을 열었을 때 |
+
+**응답 204** (본문 없음)
+
+- 쿠키가 없거나 모르는 익명 ID · 이미 본 항목 · 없는 항목은 조용히 건너뛴다(멱등).
+
+| 거절 | 조건 |
+| --- | --- |
+| 400 `VALIDATION_ERROR` | `items` · `kind`를 둘 다 보내거나 둘 다 안 보냄, 형식 오류 |
+
+---
+
+### P-11. 도전과제 "봤음" — `POST /achievements/seen`
+
+> 확장 단계(BE-83, v0.63). "새로 열림" 표시를 지운다.
+
+**요청**
+
+json
+
+```json
+{ "achievementIds": ["collect-5", "first-case"] }
+```
+
+**응답 204** (본문 없음)
+
+- `achievementIds`는 1 ~ 20개(P-5 `achievements[].id`). 쿠키가 없거나 모르는 익명 ID · 이미 본 것 · 아직 해금되지 않은 id는 조용히 건너뛴다(멱등).
+
+| 거절 | 조건 |
+| --- | --- |
+| 400 `VALIDATION_ERROR` | 목록이 비었거나 20개 초과, 빈 문자열 · 40자 초과 id |
+
+---
+
 ### 9-2. 성향 API 확인 항목
 
 | # | 항목 | 이 계약의 제안 | 확인할 사람 |
 | --- | --- | --- | --- |
-| 1 | 목 API와 달라지는 점 | 응답에서 `typeCode` 제거(`type.shareId`로 구분), 문항의 `a` · `b`(글자 포함) → `optionA` · `optionB`(문장만), 유형의 `daily` · `verdict` → `dailyDescription` · `verdictDescription`, `character`는 `NAERO` · `NAMBUL` 코드, 결과에 `testedAt` 추가, 내 결과 없음은 `null` 대신 404 | A 김해송 (목 → 실제 API 전환) |
-| 2 | 마이페이지 경로 | `GET /my-page` 하나로 묶는다(화면 한 번 진입에 한 번 호출) | A |
-| 3 | `experiences` 범위 | 사건마다 최근 회차 하나. 회차별 전체 이력이 필요하면 추가 | A |
-| 4 | 이미지 경로 | `/images/characters/personality/{이미지 번호}.webp`, 이미지 번호(`01 ~ 32`)는 성향 이미지 번호표 기준으로 **유형마다 화면에 보이는 이미지 하나**(기본 캐릭터, 예: ISTJ는 남불 `18.webp`). **한 번 정한 번호는 바꾸지 않는다**(공유 미리보기 · 캐시가 깨지지 않게, #121 리뷰) | A |
-| 5 | `shareId` 값 | 16개를 시드에 고정값으로 넣는다(바꾸면 공유한 링크가 깨진다). 목 API의 해시 값과는 다르다. v0.28: OG 빌드용 값(shareId · 유형 번호 · 이미지 번호 · 유형명 · `oneLiner`)은 `frontend/og/personality-types.json`에 두고, 시드와 같은지 백엔드 테스트(`PersonalityContentSeedTest`)가 확인한다(BE-73) | B (시드) |
+| 1 | 목 API와 달라지는 점 | ✅ 응답에서 `typeCode` 제거(`type.shareId`로 구분), 문항의 `a` · `b`(글자 포함) → `optionA` · `optionB`(문장만), 유형의 `daily` · `verdict` → `dailyDescription` · `verdictDescription`, `character`는 `NAERO` · `NAMBUL` 코드, 결과에 `testedAt` 추가, 내 결과 없음은 `null` 대신 404 | A 김해송 (목 → 실제 API 전환) |
+| 2 | 마이페이지 경로 | ✅ `GET /my-page` 하나로 묶는다(화면 한 번 진입에 한 번 호출) | A |
+| 3 | `experiences` 범위 | ✅ 사건마다 최근 회차 하나. 회차별 전체 이력이 필요하면 추가 | A |
+| 4 | 이미지 경로 | ✅ `/images/characters/personality/{이미지 번호}.webp`, 이미지 번호(`01 ~ 32`)는 성향 이미지 번호표 기준으로 **유형마다 화면에 보이는 이미지 하나**(기본 캐릭터, 예: ISTJ는 남불 `18.webp`). **한 번 정한 번호는 바꾸지 않는다**(공유 미리보기 · 캐시가 깨지지 않게, #121 리뷰) | A |
+| 5 | `shareId` 값 | ✅ 16개를 시드에 고정값으로 넣는다(바꾸면 공유한 링크가 깨진다). 목 API의 해시 값과는 다르다. v0.28: OG 빌드용 값(shareId · 유형 번호 · 이미지 번호 · 유형명 · `oneLiner`)은 `frontend/og/personality-types.json`에 두고, 시드와 같은지 백엔드 테스트(`PersonalityContentSeedTest`)가 확인한다(BE-73) | B (시드) |
 
 ---
 
@@ -2201,7 +2338,7 @@ Origin이 이 서버 자신과 같은 출처인지)을 거친다 — 벗어나�
 | | 성향 테스트 | 100 | 1회 |
 | | 출석 | 5 | 하루 1회(P-6) |
 | | 업적 달성 | 50 · 100 · 200 | 업적마다 1회. 쉬운 것(첫 사건 · 성향 · 출석 3일) 50, 중간(출석 7일 · 사건 3개 · 수집 5개) 100, 어려운 것(출석 30일 · 수집 20개) 200 |
-| | 일러스트 수집 | 10 | 서버가 셀 수 없어(BE-83 전) 아직 지급하지 않는다 |
+| | 일러스트 · 의상 수집 | 10 | 모은 항목 1장마다. `collection_item` 행 수로 계산한다(v0.63, BE-83) |
 | | SNS 공유 | 100 | 완료한 사건만, 사건당 1회 · 하루 1회 (L-3) |
 | 커뮤니티 | 글 작성 | 30 | 하루 3건 |
 | | 판결 공유 글 보너스 | +20 | 사건당 1회 |

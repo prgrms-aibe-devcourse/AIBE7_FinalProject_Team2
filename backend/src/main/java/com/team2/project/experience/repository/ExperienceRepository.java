@@ -62,6 +62,12 @@ public interface ExperienceRepository extends JpaRepository<Experience, Long> {
 		+ "and e.status = com.team2.project.experience.domain.ExperienceStatus.COMPLETED")
 	boolean existsCompleted(@Param("anonymousUserId") UUID anonymousUserId, @Param("caseId") Long caseId);
 
+	/** 그 사건의 첫 완료 시각 (수집 백필의 획득 시각, BE-83). 완료한 회차가 없거나 시각이 비어 있으면 null */
+	@Query("select min(e.completedAt) from Experience e where e.anonymousUser.id = :anonymousUserId "
+		+ "and e.legalCase.id = :caseId "
+		+ "and e.status = com.team2.project.experience.domain.ExperienceStatus.COMPLETED")
+	Instant findFirstCompletedAt(@Param("anonymousUserId") UUID anonymousUserId, @Param("caseId") Long caseId);
+
 	/** 체험의 현재 상태만 다시 읽는다 (조건부 갱신이 실패했을 때 currentStatus 응답용) */
 	@Query("select e.status from Experience e where e.id = :id")
 	Optional<ExperienceStatus> findStatusById(@Param("id") Long id);

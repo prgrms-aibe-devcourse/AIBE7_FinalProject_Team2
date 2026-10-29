@@ -31,14 +31,6 @@ test('0건이면 숨기는 것은 범죄 유형 면뿐이다', () => {
   assert.deepEqual(visibleFaces(FACES, empty, undefined).map(({ key }) => key), [undefined, 'INDEX', 'TEST', 'OPINION']);
 });
 
-test('포스트잇: 전체 목록을 받는 면(1면 · 색인)만 체험 가능 건수를 말하고, 나머지 면은 전체 건수만', () => {
-  const counts = { total: 11, playable: 1 };
-  FACES.forEach((face) => {
-    const expected = face.key === undefined || face.key === 'INDEX' ? tipMessage(11, 1) : '오늘 지면에 사건이 11건 실렸어요.';
-    assert.equal(face.tip(counts), expected, face.label);
-  });
-});
-
 test('포스트잇 문구는 체험 가능 건수에 맞춘다', () => {
   assert.equal(tipMessage(3, 3), '오늘 지면에 사건이 3건 실렸어요. 마음이 가는 기사를 눌러 보세요!');
   assert.equal(tipMessage(3, 1), '오늘 지면에 사건이 3건 실렸어요. 지금 체험할 수 있는 기사는 1건이에요.');

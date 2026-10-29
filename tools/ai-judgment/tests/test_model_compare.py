@@ -219,9 +219,9 @@ class ProviderTest(unittest.TestCase):
 
     def test_has_free_tier(self):
         free = llm.free_tier_models()
-        self.assertIn("gemini:gemini-2.5-flash", free)
-        self.assertTrue(llm.has_free_tier("gemini:gemini-2.5-flash"))
-        self.assertTrue(llm.has_free_tier(" Gemini : gemini-2.5-flash "))
+        self.assertIn("gemini:gemini-3.5-flash", free)
+        self.assertTrue(llm.has_free_tier("gemini:gemini-3.5-flash"))
+        self.assertTrue(llm.has_free_tier(" Gemini : gemini-3.5-flash "))
         self.assertFalse(llm.has_free_tier("gemini:gemini-3.1-pro-preview"))  # 무료 등급이 없는 모델
         self.assertFalse(llm.has_free_tier("claude-opus-5-5"))  # 공급자 없는 이름
         self.assertFalse(llm.has_free_tier("openai:gpt-x"))

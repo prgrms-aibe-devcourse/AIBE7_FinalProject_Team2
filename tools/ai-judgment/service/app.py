@@ -12,15 +12,43 @@ deploy/docker-compose.pipeline.yml). 그래서 이 서비스 자체에는 인증
 
 from __future__ import annotations
 
+import contextlib
 import logging
+import threading
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 
-from jobs import MAX_LOG_TAIL, JobConflict, JobError, JobNotFound, JobStore
+from jobs import MAX_LOG_TAIL, JobConflict, JobError, JobNotFound, JobStore, run_cleanup_loop
 
-app = FastAPI(title="AI 판결 파이프라인 서비스", version="1.0.0", docs_url=None, redoc_url=None)
+# uvicorn은 자기 로거(uvicorn*)만 설정하고 루트에는 핸들러를 두지 않는다. 그대로 두면 jobs.py가 남기는
+# INFO 기록 — 어떤 작업을 왜 지웠는지(COMMON-51) — 가 아무 데도 찍히지 않는다. 서비스 진입점에서 한 번
+# 맞춘다. uvicorn이 로깅을 먼저 설정한 뒤 이 모듈을 불러오므로 서로 덮어쓰지 않는다
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s - %(message)s")
+
+logger = logging.getLogger(__name__)
 store = JobStore()
+
+
+@contextlib.asynccontextmanager
+async def lifespan(app):
+    """서비스가 떠 있는 동안 오래된 작업 정리 스레드를 함께 둔다 (COMMON-51).
+
+    작업 하나를 지우는 데 파일 삭제가 몇 번 드는 정도라 별도 스케줄러(APScheduler 등)를 들이지 않는다.
+    워커가 1개라(Dockerfile `--workers 1`) 스레드도 하나뿐이다. 정리 자체는 jobs.py에 있다
+    """
+    stop = threading.Event()
+    thread = threading.Thread(target=run_cleanup_loop, args=(store, stop), name="job-cleanup", daemon=True)
+    thread.start()
+    try:
+        yield
+    finally:
+        stop.set()
+        thread.join(timeout=5)
+
+
+app = FastAPI(title="AI 판결 파이프라인 서비스", version="1.0.0", docs_url=None, redoc_url=None,
+              lifespan=lifespan)
 
 
 def _handle(call):
@@ -65,7 +93,7 @@ def _discard(job_id):
     try:
         store.delete(job_id)
     except Exception:  # noqa: BLE001 - 정리 실패가 원래 오류를 덮지 않게 한다
-        logging.getLogger(__name__).warning("시작하지 못한 작업을 지우지 못했습니다: %s", job_id)
+        logger.warning("시작하지 못한 작업을 지우지 못했습니다: %s", job_id)
 
 
 @app.get("/jobs/{job_id}")

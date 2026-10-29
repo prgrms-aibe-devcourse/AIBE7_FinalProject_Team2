@@ -539,6 +539,40 @@ class ListingEligibilitySourceTest(unittest.TestCase):
                          ("2099노45", "APPEAL", "2099-09-03"))
         self.assertEqual(extract_source_info("머리 정보 없음")["caseNumber"], None)
 
+    def test_extractSourceInfo_courtNameFromHeadOnly(self):
+        # BE-131: 법원명은 판결문 머리에서만 찾는다. 본문의 판례 인용 법원명을 잡지 않는다
+        body = "\n".join(["범죄사실", "피고인은 …", "(대법원 2099. 1. 1. 선고 2099도1 판결 참조)"] + ["양형의 이유"] * 30)
+        cases = {
+            "띄어 쓴 머리": "- 1 -\n서 울 가 상 지 방 법 원\n판 결\n사건 2099고합1 살인\n" + body,
+            "지원": "가상지방법원 가상지원\n판결\n사건 2099고단2 상해\n" + body,
+            # 한 줄에 한 자씩 나온 머리는 공백을 지운 앞부분에서 찾으므로 알려진 지역명만 받는다(COURT_REGIONS)
+            "한 줄에 한 자": "- 1 -\n" + "\n".join("수원지방법원") + "\n판\n결\n사건 2099고합3 살인\n" + body,
+        }
+        expected = {"띄어 쓴 머리": "서울가상지방법원", "지원": "가상지방법원가상지원", "한 줄에 한 자": "수원지방법원"}
+        for name, text in cases.items():
+            self.assertEqual(extract_source_info(text)["courtName"], expected[name], name)
+        # 공백을 지운 앞부분에서 앞 글자가 지역명에 딸려 오는 경우는 틀린 값 대신 비운다 (#333 리뷰)
+        for head in ("판결문\n서울가상지방법원 판결", "\n".join("대한민국") + "\n" + "\n".join("서울가상지방법원"),
+                     "판\n결\n" + "\n".join("가상지방법원")):
+            self.assertIsNone(extract_source_info(head + "\n사건 2099고합8 살인\n" + body)["courtName"], head)
+        # 약칭 머리(국가법령정보센터 형식)는 정식 이름으로 풀어 쓴다
+        self.assertEqual(extract_source_info("가상지법 2099. 1. 1. 선고 2099고합4 판결 [살인]\n" + body)["courtName"],
+                         "가상지방법원")
+        self.assertEqual(extract_source_info("가상고법 2099. 1. 1. 선고 2099노5 판결 [살인]\n" + body)["courtName"],
+                         "가상고등법원")
+        # 머리 순서: 약칭 머리 뒤에 원심 법원 줄이 따로 나와도 앞의 머리를 쓴다 (CodeRabbit 리뷰)
+        self.assertEqual(extract_source_info("가상고법 2099. 1. 1. 선고 2099노9 판결\n원심판결\n가상지방법원\n" + body)
+                         ["courtName"], "가상고등법원")
+        # 지원명이 다음 줄에 따로 있으면 붙인다
+        self.assertEqual(extract_source_info("가상지방법원\n가상지원\n판결\n사건 2099고단10 상해\n" + body)["courtName"],
+                         "가상지방법원가상지원")
+        # 한 줄로 된 상고심 머리
+        self.assertEqual(extract_source_info("대법원 2099. 1. 1. 선고 2099도11 판결 [살인]\n" + body)["courtName"], "대법원")
+        # 상고심 머리 "대 법 원"은 그대로 대법원
+        self.assertEqual(extract_source_info("대 법 원\n판 결\n사건 2099도6 살인\n" + body)["courtName"], "대법원")
+        # 머리에 법원명이 없으면 본문의 "대법원"을 잡지 않고 비워 둔다
+        self.assertIsNone(extract_source_info("판결\n사건 2099고합7 살인\n" + body)["courtName"])
+
     def test_extractSourceInfo_courtLevelBySign(self):
         # 사건 부호 → 심급 (1심 · 항소심 · 상고심, 군사법원 감 · 전자 부호 포함)
         expected = {"2099고합1": "FIRST", "2099고단5": "FIRST", "2099노45": "APPEAL", "2099감노2": "APPEAL",
