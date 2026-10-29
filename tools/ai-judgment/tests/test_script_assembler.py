@@ -256,6 +256,32 @@ class GenerateTest(unittest.TestCase):
         self.assertEqual(len(generated["evidence"]), 3)
         self.assertFalse(script["publishable"])
 
+    def test_sentencing_demand_in_closing_is_retried(self):
+        """검사 의견에 구형(형량)이 들어가면 판결 입력 직전 앵커링이 된다(PR #329 YOLO-NIM 리뷰) — 오류로 다시 요청한다."""
+        leaked = {"prosecutor": "검사 측 의견입니다. 피고인에게 징역 5년에 처해 주시기 바랍니다.", "defense": CLOSING["defense"]}
+        _, generated, _ = self.generate([*answers()[:-1], leaked, CLOSING])
+        self.assertEqual(generated["units"]["U4"]["attempts"], 2)
+        self.assertEqual(generated["units"]["U4"]["value"], CLOSING)
+        for text in ("검사 측 의견입니다. 구형은 따로 말씀드리지 않겠습니다.", "벌금 500만 원을 구합니다."):
+            self.assertTrue(sa.sentencing_errors("검사 의견", text), text)
+        # 전과 · 선고 이력 같은 사실은 막지 않는다
+        for text in ("피고인은 징역 10개월을 선고받은 전력이 있습니다.", "벌금형 전력이 13회 있습니다.", "엄한 처벌을 구합니다."):
+            self.assertEqual(sa.sentencing_errors("검사 의견", text), [], text)
+        self.assertIn("구형", sa.closing_request(CASE, CLS, CAST, DESIGN, OPENING)[1])  # 지시문에도 금지가 들어간다
+        leaked_opening = {**OPENING, "indict": ["공소사실을 말씀드리겠습니다.", "징역 3년에 처해 주십시오."]}
+        self.assertTrue(sa.check_opening(leaked_opening))
+
+    def test_design_last_question_must_match_fixed_question(self):
+        """화면의 마지막 질문은 고정 문구라, 설계도의 세 번째 질문(답의 근거)이 다르면 답의 뜻이 달라진다(PR #329 YOLO-NIM 리뷰)."""
+        self.assertEqual(sa.check_design(DESIGN, "admitted"), [])
+        wrong = {**DESIGN, "questions": [*DESIGN["questions"][:2], {"q": "행위 사실을 인정합니까?", "a": "예"}]}
+        self.assertTrue(sa.check_design(wrong, "admitted"))  # 인정 사건의 고정 질문은 "공소사실을 인정합니까?"
+        self.assertEqual(sa.check_design(wrong, "intent_disputed"), [])  # 고의 다툼의 고정 질문은 "행위 사실을 인정합니까?"
+        self.assertEqual(sa.check_design(wrong), [])  # issue를 주지 않으면 형식만 본다
+        caller, generated, _ = self.generate([wrong, DESIGN, INTRO, OPENING, *EVIDENCE, CLOSING])
+        self.assertEqual(generated["units"]["U0"]["attempts"], 2)  # 틀린 세 번째 질문은 다시 요청한다
+        self.assertIn("공소사실을 인정합니까?", sa.design_request(CASE, CLS)[1])
+
     def test_long_line_is_retried(self):
         long_closing = {"prosecutor": "가" * 120, "defense": "변호인 측 최종변론입니다."}
         _, generated, _ = self.generate([*answers()[:-1], long_closing, CLOSING])
