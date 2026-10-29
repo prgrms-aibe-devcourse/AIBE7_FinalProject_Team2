@@ -295,6 +295,25 @@ class DbConstraintTest {
 			Arguments.of("없는 상태", "chk_experience_status", "1, 0, 'FINISHED'"));
 	}
 
+	// ---------- profile_setting ----------
+
+	@Test
+	@DisplayName("프로필카드 아래 줄은 type · signature · job만 허용하고 기본은 type · 레벨 없음이다 (BE-114)")
+	void checkProfileSettingCardLine_unknownValue_isRejected() {
+		jdbc.update("INSERT INTO profile_setting (anonymous_user_id) VALUES (?)", anonymousId);
+		assertThat(jdbc.queryForObject("SELECT card_line FROM profile_setting WHERE anonymous_user_id = ?", String.class, anonymousId))
+			.isEqualTo("type");
+		assertThat(jdbc.queryForObject("SELECT card_level FROM profile_setting WHERE anonymous_user_id = ?", Boolean.class, anonymousId))
+			.isFalse();
+		for (String line : List.of("signature", "job", "type")) {
+			jdbc.update("UPDATE profile_setting SET card_line = ? WHERE anonymous_user_id = ?", line, anonymousId);
+		}
+
+		assertThatThrownBy(() -> jdbc.update("UPDATE profile_setting SET card_line = 'level' WHERE anonymous_user_id = ?", anonymousId))
+			.isInstanceOf(DataIntegrityViolationException.class)
+			.hasMessageContaining("chk_profile_setting_card_line");
+	}
+
 	// ---------- 도우미 ----------
 
 	private Long insertCase(String title) {

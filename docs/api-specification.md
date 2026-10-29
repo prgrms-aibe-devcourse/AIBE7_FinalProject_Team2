@@ -69,6 +69,7 @@
 | v0.65 | 2026-10-29 | **프로필카드 아래 줄 설정 추가 (BE-114, FE-116)** — P-8 요청 · 응답과 P-5 `profileSettings`에 `cardLine`(`type` · `signature` · `job` 중 하나, 기본 `type`: 프로필카드 아래에 보일 줄) · `cardLevel`(boolean, 기본 `false`: 레벨을 그 줄 윗줄에 붙일지) 두 칸 추가. 모르는 값 · 타입이 다르면 기존 칸과 같이 400 `VALIDATION_ERROR`. ERD v1.46 `profile_setting`(V36) |
 | v0.66 | 2026-10-29 | **담당 문서 최신화 (B, 7.0.2 준비)** — 8장 머리말을 "계약 초안(v0.17)"에서 "구현됨(BE-41 ~ 43)"으로, 확정된 항목의 ⚠️ 정리(DRAFT → REVIEW는 8-3 #3, 공개 뒤 교체 · 수정 금지는 8-3 #1, `raw_output`은 8-3 #6), 8-3 #1을 ✅ 확정(공개 중 409, 고칠 때는 공개 취소 → 수정 → 다시 공개, BE-103과 같은 절차). 9장 머리말 · 9-2 각 항목을 구현(BE-72) · 화면 연동 기준으로 ✅ 확정. 형식 변경 없음. 8-2 제목의 "초안" 삭제(#334 리뷰) |
 | v0.67 | 2026-10-29 | **사건 배역 · 민감 플래그 (BE-125, ERD v1.47 · V37)** — API 16에 `cast`(배역 `{prosecutor, defense}`) · `sensitiveFlags`(사용자 안내 대상 플래그만) 추가. 값이 없으면 **필드를 뺀다**(배정 전 · 안내할 플래그 없음 → 화면 기본 동작). A-6 `content`에 `castRoles` · `sensitiveFlags`(가드 전용 포함 전체), A-11에 같은 두 필드 수정 추가 — 자동 분류 · 자동 배정을 관리자가 바로잡는 경로. 감사 로그 `CASE_UPDATE`에 두 필드는 바꾼 값까지 남긴다. 필드 추가만이라 기존 클라이언트와 호환 (`docs/decisions/BE-125.md`) |
+| v0.68 | 2026-10-29 | **커뮤니티 API 신설 (BE-115, FE-47 · FE-88 · FE-89 · FE-116)** — 12장 C-1 `GET /community/posts`(목록 · 많이 본 글) · C-2 `GET /community/posts/{postId}`(상세 + 댓글) · C-3 `POST /community/posts`(글쓰기, 판결 공유) · C-4 `POST …/like`(좋아요 켜고 끄기) · C-5 `POST …/comments`(댓글) · C-6 `GET /community/home`(이야기 많은 사건 · 추천 사건 · 레벨 랭킹) · C-7 `GET /community/shareable-verdict`(붙일 수 있는 내 판결). 읽기는 누구나, 쓰기는 로그인 회원만(401 `UNAUTHORIZED`). 글쓴이 명함에 `level` · `job` · `cardLine`. 글 · 댓글 · 좋아요 때 경험치 지급(11-1 그대로). 에러 코드 `POST_NOT_FOUND` 추가. 사진 올리기 · 글 삭제 · 닉네임 설정은 후속. ERD v1.48(V38) |
 
 ---
 
@@ -147,7 +148,7 @@ json
 | 422 | `INVALID_PENALTY_TYPE` | 이 사건에서 허용되지 않은 형벌, 허용되지 않은 감경 조합(`reducedTo`) | 개발 오류 |
 | 422 | `OUT_OF_ALLOWED_RANGE` | 형량이 선고할 수 있는 범위 밖 | S-05c 경고 유지 (정상 화면이면 버튼이 비활성이라 오지 않음) |
 | 422 | `INVALID_SUSPENSION` | 집행유예를 허용하지 않는 형벌 · 형량인데 값이 있음, 기간이 1 ~ 5년 밖 | 입력 안내 |
-| 401 | `UNAUTHORIZED` | (확장, 관리자 API) 로그인하지 않음 · 세션 만료 | 관리자 로그인 화면 |
+| 401 | `UNAUTHORIZED` | (확장, 관리자 API · v0.68 커뮤니티 쓰기) 로그인하지 않음 · 세션 만료 | 관리자 로그인 화면 · 커뮤니티는 로그인 안내 |
 | 401 | `INVALID_CREDENTIALS` | (확장, 관리자 API · v0.58 회원 M-6) 로그인 실패. 계정 없음 · 비활성 · 비밀번호 불일치를 구분하지 않는다. M-6은 아이디 형식이 틀린 경우도 같은 코드다 | 로그인 실패 안내 |
 | 401 | `TOKEN_EXPIRED` | (확장, 회원 토큰) 액세스 토큰 만료 | 토큰 재발급 후 다시 요청 |
 | 401 | `TOKEN_INVALID` | (확장, 회원 토큰) 형식 · 서명 등이 잘못된 토큰, 아직 토큰을 확인할 수 없음 | 토큰을 지우고 다시 로그인 |
@@ -169,6 +170,7 @@ json
 | 409 | `COLLECTION_LIMIT_EXCEEDED` | (확장, BE-83, v0.63) 모을 수 있는 수를 넘음 — 일러스트는 한 사건에서 처음 얻은 수 5, 의상은 사용자당 12. `details`에 넘친 종류(`field: items.kind`, `reason: illustration` · `cast`) | 개발 오류(콘텐츠 규칙보다 넉넉한 값이라 정상 화면이면 오지 않음) (P-9) |
 | 409 | `DUPLICATE_SOURCE` | (확장, 관리자 API, BE-93) 이미 등록한 사건번호. `details`에 어느 항목인지 담는다 | 입력 안내 (A-14) |
 | 409 | `IMPORT_IN_PROGRESS` | (확장, 관리자 API, BE-93) 실행 중인 등록이 있음. 한 번에 하나만 돌린다(외부 AI 호출 한도 보호) | 끝난 뒤 다시 시도 안내 (A-14) |
+| 404 | `POST_NOT_FOUND` | (확장, 커뮤니티 BE-115, v0.68) 글이 없음 | 목록으로 돌아가 다시 불러오기 (C-2 · C-4 · C-5) |
 | 404 | `IMPORT_NOT_FOUND` | (확장, 관리자 API, BE-93) 등록 작업이 없음 | 목록으로 안내 (A-15) |
 | 409 | `IMPORT_NOT_READY` | (확장, 관리자 API, BE-93 2차) 아직 적재할 수 없음 — 생성이 끝나지 않았거나 이미 적재한 등록 | 진행 상황 확인 안내 (A-14-1) |
 | 422 | `IMPORT_RESULT_INVALID` | (확장, 관리자 API, BE-93 2차) 생성 결과를 사건으로 만들 수 없음. `details`에 어느 값이 문제인지 담는다(예: `case.factors[2].label`) | 다시 생성하도록 안내 (A-14-1) |
@@ -2346,7 +2348,7 @@ Origin이 이 서버 자신과 같은 출처인지)을 거친다 — 벗어나�
 | | 좋아요 누르기 | 2 | 글당 1회 · 하루 10개 |
 | | 좋아요 받기 | 3 | 글당 10개 · 하루 30개 |
 
-- 판결 체험의 사건 · 성향 · 출석 · 업적 XP는 기존 기록에서 **그때그때 계산**한다(저장하지 않는다). 글 · 댓글 · 좋아요 · SNS 공유는 지급 원장(`xp_event`)에 쌓는다. 커뮤니티 API는 아직 없어, 서버 안의 `LevelService.award(...)`만 준비했다(커뮤니티 BE가 부른다).
+- 판결 체험의 사건 · 성향 · 출석 · 업적 XP는 기존 기록에서 **그때그때 계산**한다(저장하지 않는다). 글 · 댓글 · 좋아요 · SNS 공유는 지급 원장(`xp_event`)에 쌓는다. 커뮤니티 API(12장, v0.68 BE-115)가 글 · 댓글 · 좋아요 때 `LevelService.award(...)`로 지급한다.
 - 어뷰징 방어: 같은 (사용자, 수급처, 대상)은 한 번만(유니크), 하루(KST) · 묶음 상한은 서버가 센다, 같은 사용자의 요청은 행 잠금으로 차례로 처리한다. 삭제 · 숨김 시 회수는 이번에 하지 않는다(글 삭제 · 신고 기능과 운영 정책이 아직 없다).
 
 ### L-1. 내 레벨 · 직업 — `GET /level`
@@ -2419,3 +2421,179 @@ Origin이 이 서버 자신과 같은 출처인지)을 거친다 — 벗어나�
 | --- | --- |
 | 400 `VALIDATION_ERROR` | `caseId`가 없음 |
 | 404 `EXPERIENCE_NOT_FOUND` | 쿠키가 없거나, 그 사건을 완료한 기록이 없음 |
+
+## 12. (확장) 커뮤니티 API (BE-115)
+
+> 결정 기록 [`BE-115.md`](decisions/BE-115.md). 화면 목 `frontend/src/mocks/communityMockApi.js`(FE-47 · FE-88 · FE-89 · FE-116)의 함수 · 응답 모양을 그대로 따른다. ERD v1.48 `community_post` · `community_comment` · `community_like`(V37).
+
+### 12-1. 공통
+
+- **읽기는 누구나, 쓰기(글 · 댓글 · 좋아요)는 로그인한 회원만** 한다. 쓰기는 `Authorization: Bearer {액세스 토큰}`이 있어야 하고, 없으면 `401 UNAUTHORIZED`다(목의 임시 코드 `LOGIN_REQUIRED` 대신 이 코드를 쓴다). 익명 ID 쿠키는 읽기만 하고 발급하지 않는다.
+- **글쓴이와 명함 기준**: 글쓴이는 회원이다. 명함(레벨 · 직업 · 꾸미기 · 카드 아래 줄 · 성향 · 소개)과 경험치는 지금 구조대로 **익명 ID 단위**라, 쓴 요청에서 회원에 연결된 익명 ID 하나를 골라 함께 남긴다 — 쿠키의 익명 ID가 이 회원에 연결돼 있으면 그것, 아니면 이 회원에 연결된 익명 ID 중 가장 최근에 접속한 것. 마이페이지 · 레벨을 회원 기준으로 옮기면(후속) 이 규칙만 바뀐다.
+- **글쓴이 명함 `author`** (글 · 댓글 · 메인의 사건 글이 같은 모양)
+
+```json
+{
+  "nickname": "새벽의 배심원",
+  "intro": "첫인상은 늘 한 번 의심해 봐요.",
+  "level": 52,
+  "job": { "code": "PRESIDING_JUDGE", "name": "부장판사" },
+  "cardLine": { "line": "signature", "showLevel": true },
+  "completedCount": 12,
+  "profileCard": { "portrait": "/images/characters/standing/naero.webp", "frame": "gold", "…": "…" },
+  "shownType": { "slot": "current", "type": { "shareId": "Qm7xK2pa", "name": "…", "…": "…" }, "deco": null }
+}
+```
+
+| 필드 | 값 |
+| --- | --- |
+| `nickname` | 회원 닉네임. 닉네임이 없는 회원(카카오)은 **`방청객 {회원 ID}`** — 사람마다 다르고 바뀌지 않는다(닉네임 설정 기능은 후속) |
+| `intro` | 한 줄 소개(P-8 `bio`). 없으면 `""` |
+| `level` · `job` | L-1과 같은 값 · 형식 |
+| `cardLine` | 프로필카드 아래 줄(P-8 `cardLine` · `cardLevel`, v0.65): `line`은 `type` · `signature` · `job`, `showLevel`은 레벨을 윗줄에 붙일지 |
+| `completedCount` | 끝까지 체험한 사건 수 |
+| `profileCard` | 프로필카드 꾸미기(P-7과 같은 칸). 저장 전이면 기본값 |
+| `shownType` | 공개 성향카드. `slot`은 실제로 보여 주는 칸(`initial` 초심 · `retake` 재심 · `current` 최근), 고른 칸(P-8 `shownCard`)이 비면 최근 → 초심 → 재심 순으로 대신 고른다. `type`은 유형 공통 형식(9-1). `deco`(성향카드 꾸미기)는 아직 서버에 없어 늘 `null` — 화면이 기본 꾸미기로 그린다. 보여 줄 성향이 없으면 `shownType: null` |
+
+- **글 `post`** (목록 · 상세 · 작성 응답이 같은 모양)
+
+```json
+{
+  "postId": 108, "category": "VERDICT", "caseId": 1, "caseTitle": "빌린 돈 문제로 찾아온 지인을 살해한 사건",
+  "author": { "…": "…" },
+  "title": "처음엔 무겁게 봤는데, 다 읽고 나니 생각이 바뀌었어요", "body": "…", "images": [],
+  "verdict": { "penaltyType": "PRISON", "reducedTo": null, "prisonMonths": 144, "fineAmount": null, "suspensionMonths": null, "upCount": 3, "downCount": 1 },
+  "likeCount": 24, "liked": false, "commentCount": 3, "mine": false, "viewerJudged": true,
+  "createdAt": "2026-10-19T21:14:00+09:00"
+}
+```
+
+| 필드 | 값 |
+| --- | --- |
+| `category` | 말머리 `VERDICT`(판결 공유) · `QUESTION`(질문) · `FREE`(자유) |
+| `caseId` · `caseTitle` | 이야기하는 사건. 사건이 없으면 둘 다 `null`, 사건이 공개 취소됐으면 `caseTitle`만 `null` |
+| `images` | 사진 주소. **사진 올리기는 후속**이라 늘 빈 배열 |
+| `verdict` | 판결 공유 글에 붙인 내 판결. 붙인 시점의 값을 남긴다(뒤에 다시 체험해도 바뀌지 않는다). 판결한 사람 자신의 판결만 담고 AI 판결 · 실제 판결은 넣지 않는다(앵커링 방지). 없으면 `null` |
+| `liked` · `mine` | 보는 사람이 좋아요를 눌렀는가 · 쓴 글인가. 로그인 전이면 둘 다 `false` |
+| `viewerJudged` | 보는 사람이 이 글의 사건 판결을 확정했는가(체험 상태 `VERDICT_CONFIRMED` 이후). 로그인 전이면 쿠키의 익명 ID로 본다. 판결 전이면 화면이 남의 판결 카드를 접는다(FE-93) |
+
+- **글자 수**: 앞뒤 공백을 뺀 뒤 유니코드 글자 기준. 제목 1 ~ 60자(줄바꿈 · 제어 문자 없음), 본문 1 ~ 2,000자 · 댓글 1 ~ 500자(줄바꿈 · 탭은 되고 그 밖의 제어 문자는 안 됨). HTML은 거르지 않고 그대로 저장한다 — 화면은 `textContent`로만 그린다(P-8 `bio`와 같다).
+- **경험치**(11-1 수급처 그대로, `LevelService.award`): 글 작성 30(하루 3건) · 판결 공유 글 보너스 20(사건당 1회) · 댓글 10(하루 5건) · 좋아요 누르기 2(글당 1회 · 하루 10개) · 좋아요 받기 3(글당 10개 · 하루 30개). 상한을 넘겨도 쓰기는 그대로 되고 경험치만 주지 않는다. **내 글에 누른 좋아요는 경험치를 주지 않는다.** 좋아요를 껐다 다시 켜도 다시 주지 않는다.
+- 글 삭제 · 수정 · 신고, 사진 올리기, 닉네임 설정은 이번 범위 밖이다(후속).
+
+### C-1. 글 목록 — `GET /community/posts?category&caseId&sort&page`
+
+| 쿼리 | 값 |
+| --- | --- |
+| `category` | 말머리로 거르기(생략하면 전체). 모르는 값이면 400 |
+| `caseId` | 사건으로 거르기(생략하면 전체) |
+| `sort` | `LATEST`(기본, 최신순) · `LIKES`(좋아요순) · `COMMENTS`(댓글순). 같으면 최신순. 모르는 값이면 400 |
+| `page` | 1부터. **첫 글부터 `page`쪽 끝까지**(쪽마다 6개) 내려 준다 — 화면의 "더 보기"가 `page`를 늘려 다시 부르는 방식(목과 같다). 1 ~ 50으로 맞춘다 |
+
+**응답 200**
+
+```json
+{
+  "posts": [ { "…": "글" } ],
+  "total": 21, "hasMore": true,
+  "popular": [ { "postId": 108, "title": "…" } ],
+  "cases": [ { "caseId": 1, "title": "…" } ]
+}
+```
+
+- `popular`: 많이 본 글 셋. 조회 수는 세지 않아 **좋아요 순**(같으면 최신)으로 고른다. 거르기 조건과 상관없이 전체에서 고른다.
+- `cases`: 공개 사건 전체(사건 고르기 · 거르기용).
+
+### C-2. 글 상세 — `GET /community/posts/{postId}`
+
+**응답 200**: 글 + `comments`(오래된 순)
+
+```json
+{ "postId": 108, "…": "…", "comments": [ { "commentId": 31, "author": { "…": "…" }, "body": "…", "createdAt": "2026-10-19T22:00:00+09:00", "mine": false } ] }
+```
+
+| 거절 | 조건 |
+| --- | --- |
+| 404 `POST_NOT_FOUND` | 글이 없음 |
+
+### C-3. 글쓰기 — `POST /community/posts` (로그인)
+
+**요청**
+
+```json
+{ "category": "VERDICT", "caseId": 1, "title": "…", "body": "…", "images": [], "shareVerdict": true }
+```
+
+| 필드 | 값 |
+| --- | --- |
+| `category` | 말머리(필수) |
+| `caseId` | 이야기하는 공개 사건. 생략 · `null`이면 사건 없음 |
+| `title` · `body` | 12-1 글자 수 |
+| `images` | 생략하거나 빈 배열만 받는다(사진 올리기는 후속). 값이 있으면 400 |
+| `shareVerdict` | `true`면 **서버가 내 판결을 붙인다**(화면은 판결 값을 보내지 않는다). `caseId`를 보냈으면 그 사건, 아니면 가장 최근에 확정한 판결이고, 글의 사건은 그 판결의 사건으로 맞춘다 |
+
+**응답 201**: 쓴 글(글 모양, `mine: true`)
+
+| 거절 | 조건 |
+| --- | --- |
+| 401 `UNAUTHORIZED` | 로그인하지 않음 |
+| 400 `VALIDATION_ERROR` | 틀린 칸을 **모두** `details`에 담는다: `category`(`MUST_BE_ONE_OF_CATEGORIES`) · `caseId`(`CASE_NOT_FOUND`, 없거나 공개 전 사건) · `title`(`MUST_BE_1_TO_60_CHARS`) · `body`(`MUST_BE_1_TO_2000_CHARS`) · `images`(`NOT_SUPPORTED_YET`). 이 검사를 통과한 뒤 `shareVerdict`인데 붙일 판결이 없으면 `shareVerdict`(`VERDICT_NOT_CONFIRMED`) |
+
+- 400이면 아무것도 저장하지 않는다.
+
+### C-4. 좋아요 켜고 끄기 — `POST /community/posts/{postId}/like` (로그인)
+
+**응답 200**
+
+```json
+{ "liked": true, "likeCount": 25 }
+```
+
+- 누를 때마다 켜고 끈다. 회원 한 명이 글 하나에 하나. 동시에 두 번 눌러도 수가 어긋나지 않는다.
+
+| 거절 | 조건 |
+| --- | --- |
+| 401 `UNAUTHORIZED` | 로그인하지 않음 |
+| 404 `POST_NOT_FOUND` | 글이 없음 |
+
+### C-5. 댓글 — `POST /community/posts/{postId}/comments` (로그인)
+
+**요청** `{ "body": "…" }` → **응답 201**: 쓴 댓글(C-2 `comments` 한 줄 모양, `mine: true`)
+
+| 거절 | 조건 |
+| --- | --- |
+| 401 `UNAUTHORIZED` | 로그인하지 않음 |
+| 400 `VALIDATION_ERROR` | `body`(`MUST_BE_1_TO_500_CHARS`) |
+| 404 `POST_NOT_FOUND` | 글이 없음 |
+
+### C-6. 커뮤니티 메인 — `GET /community/home`
+
+> **응답은 한동안 그대로 온다**(서버 캐시, 기본 1시간, 설정 `community.home-cache-ttl`로 최대 하루까지 늘릴 수 있다). 새 글 · 댓글 · 레벨이 메인의 이야기 많은 사건 · 랭킹에 늦게 반영된다. 로그인 여부와 상관없이 모두가 같은 응답을 받는다. 글 목록 · 상세(C-1 · C-2)는 캐시하지 않는다.
+
+**응답 200**
+
+```json
+{
+  "hotCases": [ { "case": { "caseId": 1, "title": "…", "crimeCategoryLabel": "살인", "shortIntro": "…", "headline": "…", "deck": "…", "article": ["…", "…"], "thumbnailUrl": "…", "participantCount": 120, "estimatedMinutes": 15, "scriptReady": true }, "talkCount": 7, "postCount": 12, "posts": [ { "postId": 108, "title": "…", "likeCount": 24, "commentCount": 3, "author": { "…": "…" } } ] } ],
+  "recommendedCases": [ { "case": { "…": "…" }, "postCount": 2, "posts": [ "…" ] } ],
+  "ranking": [ { "rank": 1, "nickname": "…", "level": 71, "job": { "…": "…" }, "cardLine": { "…": "…" }, "completedCount": 21, "profileCard": { "…": "…" }, "shownType": { "…": "…" } } ],
+  "popular": [ { "postId": 108, "title": "…" } ],
+  "cases": [ { "caseId": 1, "title": "…" } ]
+}
+```
+
+- **이야기 많은 사건 `hotCases`**: 최근 하루의 이야기 수(`talkCount` = 그 사건 글 + 그 사건 글에 달린 댓글)가 1 이상인 사건을 많은 순으로 셋(같으면 사건 ID 순). 사건 글은 좋아요 순으로 셋.
+- **추천 사건 `recommendedCases`**: 이야기 많은 사건에 없는 공개 사건을 이야기 수 → 판결한 사람 수 순으로 셋. 사건 글은 둘. `talkCount`는 없다.
+- `case`: 신문 지면(API 17)의 `headline` · `deck` · `article` 앞 두 단락과 사건 목록(API 1)의 값. 지면이 없으면 `headline` · `deck`은 `null`, `article`은 빈 배열. `postCount`는 그 사건 글 수(전체 기간).
+- **레벨 랭킹 `ranking`**: 글이나 댓글을 쓴 회원을 레벨 → 체험한 사건 수 → 닉네임 순으로 열 명. 명함은 그 회원이 가장 최근에 쓴 글 · 댓글의 익명 ID 기준. 레벨은 사건 체험 · 커뮤니티 활동으로 오르며 성향과 무관하다. 명함에서 `intro`만 뺀 값이다.
+
+### C-7. 붙일 수 있는 내 판결 — `GET /community/shareable-verdict`
+
+**응답 200** — 가장 최근에 확정한 내 판결(공개 사건만)
+
+```json
+{ "caseId": 1, "caseTitle": "…", "verdict": { "penaltyType": "PRISON", "reducedTo": null, "prisonMonths": 144, "fineAmount": null, "suspensionMonths": null, "upCount": 3, "downCount": 1 } }
+```
+
+- 판결을 확정하기 전이거나 쿠키가 없으면 **204**(본문 없음). 목의 `null` 응답과 같은 뜻이다.
+- 로그인했으면 12-1의 명함 기준 익명 ID, 아니면 쿠키의 익명 ID로 찾는다. 글쓰기(C-3)가 붙이는 판결과 같은 기준이다.
