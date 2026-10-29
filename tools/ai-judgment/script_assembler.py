@@ -182,7 +182,7 @@ def public_case(case, stages):
 
 def strip_line_prefix(text):
     """일부 응답이 줄 앞에 붙이는 번호 · 화자("①남불:", "1. 내로 -")를 뗀다."""
-    return re.sub(r"^\s*(?:[①-⑳]\s*|\d+[.)]\s*)?(?:(?:남불|내로)\s*[:：\-–]\s*)?", "", text or "").strip()
+    return re.sub(r"^\s*(?:[①-⑳]\s*|\d+[.)]\s+)?(?:(?:남불|내로)\s*[:：\-–]\s*)?", "", text or "").strip()
 
 
 def normalize_answer(answer):

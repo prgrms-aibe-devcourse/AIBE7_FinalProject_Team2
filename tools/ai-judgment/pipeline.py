@@ -47,7 +47,7 @@ from llm import (DEFAULT_MAX_ATTEMPTS, DEFAULT_MAX_WAIT, LLMError, LLMQuotaExhau
                  check_retry, configure_retry, free_tier_model_list, has_free_tier, model_provider,
                  parse_model_spec)
 from to_seed_sql import NAME_MAX_LENGTH, build_sql
-from script_assembler import build_script, classification_errors, generate_units
+from script_assembler import build_script, check_paper, classification_errors, generate_units, normalize_paper
 from script_generation import balance_warning, generate_evidence_lines
 from script_generation import cast_errors as script_cast_errors
 from select_semantic import DEFAULT_WEIGHT as DEFAULT_SEMANTIC_WEIGHT
@@ -1207,6 +1207,25 @@ def ensure_selection_matches_case(config, state, selection):
     return prompt
 
 
+def load_paper(config):
+    """`inputs.paper`(관리자가 고친 기사로 다시 돌릴 때)를 읽어 검사한다. 설정했는데 파일이 없거나 기사 형식이 아니면 멈춘다 —
+    조용히 무시하면 넘긴 기사 대신 새 기사가 생성돼 1막 해설이 의도와 다른 기사를 따라간다(PR #331 리뷰).
+    설정하지 않았으면 None(기사를 새로 만든다)."""
+    path = resolve_path(config, config["inputs"].get("paper"))
+    if path is None:
+        return None
+    if not path.exists():
+        raise PipelineError(f"inputs.paper 파일이 없습니다: {path}")
+    try:
+        paper = load_json(path)
+    except ValueError as e:
+        raise PipelineError(f"inputs.paper를 JSON으로 읽을 수 없습니다: {e}")
+    errors = check_paper(paper)
+    if errors:
+        raise PipelineError("inputs.paper가 기사 형식(headline · deck · caption · article 2 ~ 4문단)이 아닙니다: " + " · ".join(errors))
+    return normalize_paper(paper)
+
+
 def stage_script(config, state, log, caller=call):
     """사건 대본 — 증거조사 대사 생성 (BE-107). 판단 요소마다 대사 한 줄을 만든다 — 검사 측(UP
     방향) 먼저, 변호인 측(DOWN 방향) 다음(case-1 대본과 같은 순서). 방향은 select 단계가 고른 판결
@@ -1231,8 +1250,7 @@ def stage_script(config, state, log, caller=call):
     generated = None
     if cfg["full"]:
         log(f"대본 전체 생성: {cfg['model']} (배역 — 검사 · 판사: {cast['prosecutor']} · 변호인 · 피고인 역: {cast['defense']})")
-        paper_path = resolve_path(config, config["inputs"].get("paper"))
-        paper = load_json(paper_path) if paper_path and paper_path.exists() else None
+        paper = load_paper(config)
         generated = generate_units(
             case, judgment_output, cast, cfg["classification"], model=cfg["model"], paper=paper, caller=caller,
             max_retries=cfg["maxRetries"], temperature=cfg["temperature"], max_tokens=cfg["unitMaxTokens"],
