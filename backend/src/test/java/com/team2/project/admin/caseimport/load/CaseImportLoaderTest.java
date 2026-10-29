@@ -375,6 +375,33 @@ class CaseImportLoaderTest extends ApiIntegrationTest {
 		}
 	}
 
+	@Test
+	@DisplayName("대본의 배역을 쓰는 적재도 그 범죄 유형의 배정 잠금을 기다린다 — 규칙으로 배정하는 적재와 같은 잠금이다 (BE-125)")
+	void load_scriptCastWaitsForCastLock() throws Exception {
+		PipelineResult withScript = resultOf(theftContent(), node("""
+			{"evidence": [{"factorId": 7, "role": "prosecutor", "character": "nambul", "text": "계획적이었습니다."}],
+			 "cast": {"prosecutor": "nambul", "defense": "naero"},
+			 "model": "openai:test", "publishable": true}"""), null);
+		CaseImport theft = caseImport(CrimeType.THEFT);
+
+		ExecutorService pool = Executors.newSingleThreadExecutor();
+		try (java.sql.Connection holder = jdbcTemplate.getDataSource().getConnection()) {
+			holder.setAutoCommit(false);
+			try (java.sql.Statement lock = holder.createStatement()) {
+				lock.execute("SELECT pg_advisory_xact_lock(hashtext('legal_case_cast:THEFT'))");
+			}
+			Future<LegalCase> loading = pool.submit(() -> loader.load(theft, withScript));
+
+			assertThatThrownBy(() -> loading.get(1500, TimeUnit.MILLISECONDS))
+				.isInstanceOf(java.util.concurrent.TimeoutException.class);
+			holder.commit();
+			assertThat(castOf(loading.get(30, TimeUnit.SECONDS).getId()))
+				.isEqualTo(Map.of("prosecutor", "nambul", "defense", "naero"));
+		} finally {
+			pool.shutdownNow();
+		}
+	}
+
 	/** 지금 DB 상태에서 그 유형에 n건을 차례로 배정하면 나올 피고인 역 (규칙 자체는 CaseCastAssignerTest가 본다) */
 	private String[] expectedSequence(String crimeType, int n) {
 		long naero = 0;

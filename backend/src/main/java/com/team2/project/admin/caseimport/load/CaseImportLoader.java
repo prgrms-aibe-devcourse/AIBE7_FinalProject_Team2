@@ -165,6 +165,8 @@ public class CaseImportLoader {
 		if (script != null && !script.isNull() && script.hasNonNull("cast")) {
 			Optional<Map<String, String>> scriptCast = CastRoles.parse(Json.toMap(script.get("cast")));
 			if (scriptCast.isPresent()) {
+				// 규칙으로 배정하는 같은 유형의 적재가 세는 도중에 이 배역이 끼어들지 못하게 같은 잠금을 잡는다
+				castAssigner.lock(legalCase.getCrimeType());
 				return scriptCast.get();
 			}
 			log.warn("대본의 배역을 읽지 못해 범죄 유형별 규칙으로 배정합니다 (jobId={})", result.jobId());

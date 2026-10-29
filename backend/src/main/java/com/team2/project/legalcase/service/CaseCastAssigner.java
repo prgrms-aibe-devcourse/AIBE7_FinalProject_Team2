@@ -35,8 +35,8 @@ public class CaseCastAssigner {
 
 	@Transactional(propagation = Propagation.MANDATORY)
 	public Map<String, String> assign(CrimeType crimeType) {
+		lock(crimeType);
 		String type = crimeType.name();
-		caseRepository.lockCastAssignment(type);
 
 		Map<String, Long> counts = new HashMap<>();
 		for (Object[] row : caseRepository.countDefenseByCrimeType(type)) {
@@ -46,6 +46,15 @@ public class CaseCastAssigner {
 		long nambul = counts.getOrDefault(CastRoles.NAMBUL, 0L);
 		String last = naero == nambul ? caseRepository.findLastDefenseByCrimeType(type) : null;
 		return CastRoles.withDefense(nextDefense(naero, nambul, last));
+	}
+
+	/**
+	 * 그 범죄 유형의 배정 잠금만 잡는다. 규칙을 거치지 않고 배역을 정하는 쪽(대본의 배역을 그대로 쓰는 적재)도
+	 * 이 잠금을 잡아야, 규칙으로 배정하는 적재가 세는 도중에 그 사건이 끼어들지 못한다.
+	 */
+	@Transactional(propagation = Propagation.MANDATORY)
+	public void lock(CrimeType crimeType) {
+		caseRepository.lockCastAssignment(crimeType.name());
 	}
 
 	/**
