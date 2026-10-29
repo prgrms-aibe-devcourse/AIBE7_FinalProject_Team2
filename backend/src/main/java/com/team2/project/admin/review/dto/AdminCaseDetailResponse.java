@@ -44,6 +44,11 @@ public record AdminCaseDetailResponse(
 		public static final ScriptSummary NONE = new ScriptSummary(false, null, null);
 	}
 
+	/**
+	 * @param castRoles      배역 {@code {prosecutor, defense}} (BE-125). 배정 전이면 null
+	 * @param sensitiveFlags 민감 플래그 전체 (BE-125). 공개 API와 달리 가드 전용 플래그도 보인다. null이면 분류하지
+	 *                       않은 사건, []면 분류했고 켜진 것이 없는 사건
+	 */
 	public record Content(
 		String title,
 		CrimeType crimeType,
@@ -61,7 +66,9 @@ public record AdminCaseDetailResponse(
 		String recommendedBasis,
 		LocalDate incidentDate,
 		Guideline guideline,
-		List<String> deidentifiedItems) {
+		List<String> deidentifiedItems,
+		Map<String, String> castRoles,
+		List<String> sensitiveFlags) {
 	}
 
 	public record Guideline(Long guidelineId, String versionName) {

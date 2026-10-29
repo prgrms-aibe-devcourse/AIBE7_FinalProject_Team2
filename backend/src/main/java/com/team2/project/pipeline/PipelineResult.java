@@ -25,6 +25,8 @@ import java.util.List;
  * @param script        사건 대본 — 증거조사 대사 (BE-107 script 단계). 대본을 돌리지 않은 작업은 null이다.
  *                      {@code evidence}(대사 배열) · {@code publishable} · {@code model} · {@code cast} ·
  *                      {@code balanceWarning}이 들어 있다. 적재는 BE-108이 한다
+ * @param classify      사건 분류 (BE-123 classify 단계). 분류를 돌리지 않은 작업은 null이다. 적재는
+ *                      {@code classification.sensitiveFlags}만 읽어 legal_case.sensitive_flags에 넣는다(BE-125)
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record PipelineResult(
@@ -35,7 +37,8 @@ public record PipelineResult(
 	JsonNode judgment,
 	Selection selection,
 	JsonNode axis,
-	JsonNode script
+	JsonNode script,
+	JsonNode classify
 ) {
 
 	/** @param warnings 검증 경고. 적재를 막지는 않고 ai_generation에 남겨 관리자가 보게 한다 */
