@@ -351,7 +351,6 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
   const procs = element('div', 'proc');
   procs.setAttribute('aria-label', '재판 순서');
   const sys = element('div', 'sysline');
-  sys.setAttribute('aria-live', 'polite'); // 지문(막 안내 · 민감 사건 안내)이 바뀌면 읽어 준다(FE-129)
   const flash = element('div', 'flash');
   const court = courtSet();
   // 4막 AI 판사 셋: 자리는 고정(로봉 · 로울 · 로북). 자리마다 세 자세 그림을 겹쳐 두고 보일 그림만 켠다(0.3초 겹쳐 바뀜).
@@ -639,7 +638,8 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
       cameo.dataset.who = cameoWho;
       if (cameoWho) { if (enterDelay) cameo.hidden = true; else popCameo(cameoWho); } else hideCameo();
     }
-    live.textContent = parked ? '' : line || caption;
+    // 스크린 리더 알림: 대사가 없으면 지문을 읽는다. 민감 사건 안내(FE-129)는 대사가 있는 장면(2막 시작)에 붙으므로 안내를 먼저 읽고 대사를 잇는다
+    live.textContent = parked ? '' : step.notice && line ? `${caption} ${line}` : line || caption;
     const options = choices[step.choices] ?? [];
     const note = element('p', 'dlg-note');
     note.setAttribute('role', 'status');
