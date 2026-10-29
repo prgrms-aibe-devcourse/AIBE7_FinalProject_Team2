@@ -13,6 +13,7 @@ import com.team2.project.community.service.AuthorCardAssembler.Writer;
 import com.team2.project.experience.repository.CaseParticipantCount;
 import com.team2.project.experience.repository.ExperienceRepository;
 import com.team2.project.legalcase.domain.CasePaper;
+import com.team2.project.legalcase.domain.CasePhotoUrls;
 import com.team2.project.legalcase.domain.LegalCase;
 import com.team2.project.legalcase.repository.CasePaperRepository;
 import com.team2.project.legalcase.repository.CaseScriptRepository;
@@ -123,7 +124,7 @@ public class CommunityHomeService {
 			: paper.getArticle().stream().limit(ARTICLE_PARAGRAPHS).toList();
 		return new CaseSummary(legalCase.getId(), legalCase.getTitle(), legalCase.getCrimeType().getCategoryLabel(),
 			legalCase.getShortIntro(), paper == null ? null : paper.getHeadline(), paper == null ? null : paper.getDeck(),
-			article, legalCase.getThumbnailUrl(), participantCount, legalCase.getEstimatedMinutes(), scriptReady);
+			article, CasePhotoUrls.thumbnail(legalCase.getId(), legalCase.getThumbnailUrl()), participantCount, legalCase.getEstimatedMinutes(), scriptReady);
 	}
 
 	private static List<CasePost> casePostsOf(List<CommunityPost> posts, Map<Writer, AuthorCard> cards) {
