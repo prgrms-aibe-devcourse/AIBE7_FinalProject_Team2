@@ -27,10 +27,12 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
-/** 커뮤니티 API C-1 ~ C-7 (API 명세 12장, BE-115) */
+/** 커뮤니티 API C-1 ~ C-7 (API 명세 12장, BE-115). 메인(C-6) 캐시는 끄고 본다(캐시는 CommunityHomeCacheTest) */
+@TestPropertySource(properties = "community.home-cache-ttl=0")
 class CommunityApiTest extends ApiIntegrationTest {
 
 	private static final String POSTS = "/api/v1/community/posts";

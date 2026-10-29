@@ -14,7 +14,7 @@ import com.team2.project.community.dto.PostView;
 import com.team2.project.community.dto.ShareableVerdictResponse;
 import com.team2.project.community.service.CommunityActorResolver;
 import com.team2.project.community.service.CommunityActorResolver.Viewer;
-import com.team2.project.community.service.CommunityHomeService;
+import com.team2.project.community.service.CommunityHomeCache;
 import com.team2.project.community.service.CommunityService;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.Optional;
@@ -34,7 +34,8 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 커뮤니티 (API 명세 12장 C-1 ~ C-7, BE-115). 읽기는 누구나, 쓰기는 로그인한 회원만(Authorization: Bearer).
  * 쓰기 경로는 SecurityConfig가 먼저 막고(401 UNAUTHORIZED), 여기서도 회원이 없으면 같은 401로 끝낸다.
- * 익명 ID 쿠키는 읽기만 한다 — 발급하지 않는다(명함 · 경험치 기준 익명 ID는 CommunityActorResolver가 회원에서 고른다)
+ * 익명 ID 쿠키는 발급하지 않고 읽기만 한다. 명함 · 경험치 기준 익명 ID는 CommunityActorResolver가 회원에서 고르고,
+ * 연결된 익명 ID가 없는 회원이면 그 회원에 연결된 익명 ID를 새로 만든다(쿠키로 내려 주지는 않는다)
  */
 @RestController
 @RequestMapping("/api/v1/community")
@@ -42,7 +43,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class CommunityController {
 
 	private final CommunityService communityService;
-	private final CommunityHomeService communityHomeService;
+	private final CommunityHomeCache communityHomeCache;
 	private final CommunityActorResolver actorResolver;
 	private final AnonymousIdCookie anonymousIdCookie;
 
@@ -85,10 +86,10 @@ public class CommunityController {
 		return communityService.comment(memberId(member), anonymousIdCookie.read(request), postId, body);
 	}
 
-	/** C-6 커뮤니티 메인 */
+	/** C-6 커뮤니티 메인 — 계산한 응답을 일정 시간 그대로 준다(CommunityHomeCache) */
 	@GetMapping("/home")
 	public CommunityHomeResponse home() {
-		return communityHomeService.home();
+		return communityHomeCache.home();
 	}
 
 	/** C-7 글에 붙일 수 있는 내 판결 — 200, 판결 확정 전이면 204 */
