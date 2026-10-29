@@ -295,7 +295,47 @@ class DbConstraintTest {
 			Arguments.of("없는 상태", "chk_experience_status", "1, 0, 'FINISHED'"));
 	}
 
+	// ---------- profile_setting ----------
+
+	@Test
+	@DisplayName("프로필카드 아래 줄은 type · signature · job만 허용하고 기본은 type · 레벨 없음이다 (BE-114)")
+	void checkProfileSettingCardLine_unknownValue_isRejected() {
+		jdbc.update("INSERT INTO profile_setting (anonymous_user_id) VALUES (?)", anonymousId);
+		assertThat(jdbc.queryForObject("SELECT card_line FROM profile_setting WHERE anonymous_user_id = ?", String.class, anonymousId))
+			.isEqualTo("type");
+		assertThat(jdbc.queryForObject("SELECT card_level FROM profile_setting WHERE anonymous_user_id = ?", Boolean.class, anonymousId))
+			.isFalse();
+		for (String line : List.of("signature", "job", "type")) {
+			jdbc.update("UPDATE profile_setting SET card_line = ? WHERE anonymous_user_id = ?", line, anonymousId);
+		}
+
+		assertThatThrownBy(() -> jdbc.update("UPDATE profile_setting SET card_line = 'level' WHERE anonymous_user_id = ?", anonymousId))
+			.isInstanceOf(DataIntegrityViolationException.class)
+			.hasMessageContaining("chk_profile_setting_card_line");
+	}
+
+	// ---------- member ----------
+
+	@Test
+	@DisplayName("닉네임은 대소문자를 구분하지 않고 겹칠 수 없고, 닉네임이 없는(NULL) 회원은 몇 명이든 된다 (BE-139)")
+	void uniqueMemberNickname_duplicate_isRejected() {
+		String nickname = "uq" + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+		insertMember(nickname);
+		insertMember(null);
+		insertMember(null);
+
+		assertThatThrownBy(() -> insertMember(nickname.toUpperCase()))	// 시험이 끝나면 트랜잭션째 되돌린다
+			.isInstanceOf(DataIntegrityViolationException.class)
+			.hasMessageContaining("uq_member_nickname");
+	}
+
 	// ---------- 도우미 ----------
+
+	private Long insertMember(String nickname) {
+		return jdbc.queryForObject(
+			"INSERT INTO member (provider, provider_user_id, nickname) VALUES ('LOCAL', ?, ?) RETURNING id",
+			Long.class, UUID.randomUUID().toString(), nickname);
+	}
 
 	private Long insertCase(String title) {
 		return jdbc.queryForObject("""

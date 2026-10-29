@@ -12,7 +12,9 @@ import com.team2.project.judgment.repository.AiGenerationRepository;
 import com.team2.project.judgment.repository.JudgmentFactorRepository;
 import com.team2.project.judgment.repository.JudgmentRepository;
 import com.team2.project.legalcase.domain.CaseSource;
+import com.team2.project.legalcase.domain.CastRoles;
 import com.team2.project.legalcase.domain.CrimeType;
+import com.team2.project.legalcase.domain.SensitiveFlag;
 import com.team2.project.legalcase.domain.Factor;
 import com.team2.project.legalcase.domain.CaseScript;
 import com.team2.project.legalcase.domain.LegalCase;
@@ -24,15 +26,19 @@ import com.team2.project.legalcase.repository.FactorRepository;
 import com.team2.project.legalcase.repository.LegalCaseRepository;
 import com.team2.project.legalcase.repository.PenaltyRuleRepository;
 import com.team2.project.legalcase.repository.SentencingGuidelineRepository;
+import com.team2.project.legalcase.service.CaseCastAssigner;
 import com.team2.project.pipeline.PipelineResult;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -65,6 +71,7 @@ public class CaseImportLoader {
 	private final SentencingGuidelineRepository guidelineRepository;
 	private final CaseContentMapper caseContentMapper;
 	private final JudgmentMapper judgmentMapper;
+	private final CaseCastAssigner castAssigner;
 
 	/** 범죄 유형 → 양형기준 분류. 지금은 살인만 적재돼 있고 나머지는 양형기준 없이 만들어진다 */
 	private static final Map<CrimeType, String> GUIDELINE_CATEGORIES = Map.of(CrimeType.MURDER, "살인범죄");
@@ -88,6 +95,8 @@ public class CaseImportLoader {
 		LocalDate incidentDate = incidentDate(caseImport);
 		LegalCase legalCase = caseContentMapper.toCase(content, report, incidentDate,
 			guidelineFor(content, caseImport, incidentDate));
+		legalCase.assignCast(castFor(legalCase, result));
+		legalCase.changeSensitiveFlags(sensitiveFlags(result));
 		saveCase(legalCase);
 
 		sectionRepository.saveAll(caseContentMapper.sections(legalCase, content));
@@ -142,6 +151,76 @@ public class CaseImportLoader {
 			"factors", "reason", "judgment"));
 		aiGenerationRepository.save(AiGeneration.pending(judgment, modelName(result), promptVersion(result),
 			Map.of(), Json.toMap(output), generationReport(result)));
+	}
+
+	/**
+	 * 사건 배역 (BE-125).
+	 *
+	 * <p>대본이 함께 왔으면 <b>대본을 만든 배역을 그대로 쓴다</b> — 대본에는 캐릭터 이름이 들어가 있어(누가 검사석에서
+	 * 말하는지) 사건 배역이 다르면 화면과 대사가 어긋난다. 대본에 배역이 있는데 읽을 수 없으면 규칙으로 덮지 않고
+	 * 배정하지 않는다(null). 대본이 없으면 범죄 유형별 균형 규칙으로 정한다({@link CaseCastAssigner}).
+	 * 2단계 등록(분류까지 → 적재하며 배정 → 그 배역으로 대본, BE-129)에서는 이쪽이다.
+	 */
+	private Map<String, String> castFor(LegalCase legalCase, PipelineResult result) {
+		JsonNode script = result.script();
+		if (script != null && !script.isNull() && script.hasNonNull("cast")) {
+			Optional<Map<String, String>> scriptCast = CastRoles.parse(Json.toMap(script.get("cast")));
+			if (scriptCast.isEmpty()) {
+				// 대사에는 대본의 배역 이름이 이미 들어 있다. 규칙으로 덮으면 화면과 대사가 어긋나므로 배정하지 않고
+				// (null) 생성 기록에 남겨 관리자가 A-11로 정하게 한다
+				log.warn("대본의 배역을 읽지 못해 배정하지 않습니다 (jobId={})", result.jobId());
+				return null;
+			}
+			// 규칙으로 배정하는 같은 유형의 적재가 세는 도중에 이 배역이 끼어들지 못하게 같은 잠금을 잡는다
+			castAssigner.lock(legalCase.getCrimeType());
+			return scriptCast.get();
+		}
+		return castAssigner.assign(legalCase.getCrimeType());
+	}
+
+	/** 대본에 배역이 있는데 읽을 수 없는 형식인지 (castFor가 배정하지 않은 경우, 생성 기록에 남긴다) */
+	private static boolean unreadableScriptCast(PipelineResult result) {
+		JsonNode script = result.script();
+		return script != null && !script.isNull() && script.hasNonNull("cast")
+			&& CastRoles.parse(Json.toMap(script.get("cast"))).isEmpty();
+	}
+
+	/**
+	 * 민감 플래그 (BE-125). 분류(classify)를 돌리지 않은 작업이면 null(분류 안 함)로 둔다 — []로 두면
+	 * "분류했는데 아무것도 켜지지 않음"과 구분할 수 없다.
+	 *
+	 * <p>모르는 플래그도 <b>이름 그대로 저장한다</b>(적재를 막지 않는다, BE-93 "모르는 필드는 지나가게"). 파이프라인에
+	 * 플래그가 늘었는데 {@link SensitiveFlag}가 따라가지 못해도 기록이 남고, 안내 여부는 enum에 더할 때 정해진다.
+	 */
+	private static List<String> sensitiveFlags(PipelineResult result) {
+		JsonNode classify = result.classify();
+		if (classify == null || classify.isNull()) {
+			return null;
+		}
+		JsonNode classification = classify.get("classification");
+		if (classification == null || !classification.isObject()) {
+			log.warn("분류 결과에 classification이 없어 민감 플래그를 비워 둡니다 (jobId={})", result.jobId());
+			return null;
+		}
+		JsonNode flagsNode = classification.get("sensitiveFlags");
+		if (flagsNode == null || !flagsNode.isArray()) {
+			// 없거나 배열이 아닌 값을 []로 읽으면 "분류했고 켜진 것 없음"으로 저장돼 안내가 빠진다
+			log.warn("분류 결과에 sensitiveFlags 배열이 없어 미분류로 둡니다 (jobId={})", result.jobId());
+			return null;
+		}
+		Set<String> flags = new LinkedHashSet<>();
+		for (String name : Json.stringArray(classification, "sensitiveFlags")) {
+			if (name.isBlank()) {
+				continue;
+			}
+			if (SensitiveFlag.find(name).isEmpty()) {
+				// 버리면 대본은 그 플래그의 가드로 만들어졌는데 사건에는 기록이 없어 안내가 빠진다. 이름 그대로 저장하고
+				// 공개 API가 아는 안내 대상만 내보낸다
+				log.warn("SensitiveFlag에 없는 민감 플래그를 그대로 저장합니다: {} (jobId={})", name, result.jobId());
+			}
+			flags.add(name);
+		}
+		return List.copyOf(flags);
 	}
 
 	/**
@@ -208,6 +287,9 @@ public class CaseImportLoader {
 		}
 		if (result.axis() != null && !result.axis().isNull()) {
 			report.put("axis", Json.toMap(result.axis()));
+		}
+		if (unreadableScriptCast(result)) {
+			report.put("castWarning", "대본의 배역을 읽지 못해 사건 배역을 정하지 않았습니다. 관리자가 정해 주세요.");
 		}
 		return report;
 	}

@@ -12,7 +12,9 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -74,6 +76,17 @@ public class LegalCase {
 	private SentencingGuideline guideline;	// 적용 양형기준 버전
 
 	private LocalDate incidentDate;			// 사건 발생일
+
+	/** 배역 {@code {prosecutor, defense}} (BE-125, {@link CastRoles}). 비어 있으면 아직 배정하지 않은 사건 */
+	@JdbcTypeCode(SqlTypes.JSON)
+	private Map<String, String> castRoles;
+
+	/**
+	 * 민감 플래그 이름 배열 (BE-125, {@link SensitiveFlag}). 비어 있으면(null) 분류하지 않은 사건, []면 분류했고 켜진 것이 없는 사건.
+	 * 공개 API는 안내 대상만 내보낸다
+	 */
+	@JdbcTypeCode(SqlTypes.JSON)
+	private List<String> sensitiveFlags;
 
 	@Enumerated(EnumType.STRING)
 	private CaseStatus status;
@@ -147,6 +160,16 @@ public class LegalCase {
 
 	public void changeRecommendedBasis(String recommendedBasis) {
 		this.recommendedBasis = recommendedBasis;
+	}
+
+	/** 배역 배정 · 수정 (BE-125). 값 검사는 호출하는 쪽이 {@link CastRoles#parse}로 먼저 한다. null이면 배정을 지운다 */
+	public void assignCast(Map<String, String> castRoles) {
+		this.castRoles = castRoles == null ? null : new LinkedHashMap<>(castRoles);
+	}
+
+	/** 민감 플래그 기록 · 수정 (BE-125). 값 검사는 호출하는 쪽이 한다. null이면 "분류하지 않음"으로 돌린다 */
+	public void changeSensitiveFlags(List<String> sensitiveFlags) {
+		this.sensitiveFlags = sensitiveFlags == null ? null : List.copyOf(sensitiveFlags);
 	}
 
 	/** 사용자에게 노출되는 사건인지 */

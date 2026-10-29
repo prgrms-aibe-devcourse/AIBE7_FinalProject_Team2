@@ -71,6 +71,8 @@ public enum ErrorCode {
 	DUPLICATE_NICKNAME(HttpStatus.CONFLICT, "이미 사용 중인 닉네임입니다."),
 	// 수집 상태 저장 (확장 단계, BE-83). details에 넘친 종류(items.kind)를 담는다
 	COLLECTION_LIMIT_EXCEEDED(HttpStatus.CONFLICT, "모을 수 있는 수를 넘었습니다."),
+	// 커뮤니티 (확장 단계, BE-115, API 명세 12장)
+	POST_NOT_FOUND(HttpStatus.NOT_FOUND, "글을 찾을 수 없습니다."),
 	INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "서버 오류가 발생했습니다.");
 
 	private final HttpStatus status;

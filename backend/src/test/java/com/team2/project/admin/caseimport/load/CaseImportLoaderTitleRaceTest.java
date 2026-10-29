@@ -19,6 +19,7 @@ import com.team2.project.legalcase.repository.FactorRepository;
 import com.team2.project.legalcase.repository.LegalCaseRepository;
 import com.team2.project.legalcase.repository.PenaltyRuleRepository;
 import com.team2.project.legalcase.repository.SentencingGuidelineRepository;
+import com.team2.project.legalcase.service.CaseCastAssigner;
 import com.team2.project.pipeline.PipelineResult;
 import java.sql.SQLException;
 import java.util.List;
@@ -47,7 +48,8 @@ class CaseImportLoaderTitleRaceTest {
 			mock(PenaltyRuleRepository.class), mock(FactorRepository.class), mock(CaseSourceRepository.class),
 			mock(CaseScriptRepository.class),
 			mock(JudgmentRepository.class), mock(JudgmentFactorRepository.class), mock(AiGenerationRepository.class),
-			mock(SentencingGuidelineRepository.class), new CaseContentMapper(), new JudgmentMapper());
+			mock(SentencingGuidelineRepository.class), new CaseContentMapper(), new JudgmentMapper(),
+			new CaseCastAssigner(caseRepository));
 
 		assertThatThrownBy(() -> loader.load(caseImport(), result()))
 			.isInstanceOf(BusinessException.class)
@@ -66,7 +68,8 @@ class CaseImportLoaderTitleRaceTest {
 			mock(PenaltyRuleRepository.class), mock(FactorRepository.class), mock(CaseSourceRepository.class),
 			mock(CaseScriptRepository.class),
 			mock(JudgmentRepository.class), mock(JudgmentFactorRepository.class), mock(AiGenerationRepository.class),
-			mock(SentencingGuidelineRepository.class), new CaseContentMapper(), new JudgmentMapper());
+			mock(SentencingGuidelineRepository.class), new CaseContentMapper(), new JudgmentMapper(),
+			new CaseCastAssigner(caseRepository));
 
 		assertThatThrownBy(() -> loader.load(caseImport(), result()))
 			.isInstanceOf(DataIntegrityViolationException.class);
@@ -99,6 +102,6 @@ class CaseImportLoaderTitleRaceTest {
 			mapper.readTree("""
 				{"penaltyType": "PRISON", "prisonMonths": 168, "summary": "요약", "reasoning": "이유",
 				 "factors": []}"""),
-			new PipelineResult.Selection("gemini:test", 1, "consensus", "합의", List.of()), null, null);
+			new PipelineResult.Selection("gemini:test", 1, "consensus", "합의", List.of()), null, null, null);
 	}
 }

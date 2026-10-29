@@ -50,7 +50,9 @@
 | v1.44 | 2026-10-28 | 사건 공개 취소 (**확장 단계**, BE-118 · V34 · API 명세 v0.61) — **표 · 칸은 늘리지 않는다.** 공개 취소(A-13-14)는 `legal_case.status`를 `PUBLISHED → REVIEW`로 돌리고 `published_at`을 지운다(숨김, 행은 지우지 않는다). `admin_audit_log.action` CHECK에 `CASE_UNPUBLISH` 추가(V34, V32까지의 값을 모두 다시 나열). 같은 김에 `action` 설명을 V32까지 늘어난 값으로 갱신. |
 | v1.45 | 2026-10-29 | 수집 상태 · 도전과제 해금 기록 테이블 추가 (**확장 단계**, BE-83 · V35 · API 명세 v0.63) — `collection_item`(익명 사용자 × 종류 × 항목 id, 처음 얻은 사건 · 획득 시각 · 확인 시각) · `achievement_unlock`(익명 사용자 × 도전과제 id, 해금 시각 · 확인 시각) 신설. 두 테이블 모두 `anonymous_user` FK `ON DELETE CASCADE`. V35는 배포 시점에 이미 달성한 도전과제를 "본 것"으로 한 번 채운다. 모은 일러스트 수는 `collection_item` 행 수로 계산한다(10장 갱신). 13장 추가 |
 | v1.46 | 2026-10-29 | 프로필카드 아래 줄 설정 칸 추가 (**확장 단계**, BE-114 · V36 · API 명세 v0.65) — `profile_setting`에 `card_line`(`type` · `signature` · `job`, 기본 `type`, CHECK) · `card_level`(boolean, 기본 `false`) 칸 추가. 기존 행은 기본값. 11장 갱신 |
-| v1.49 | 2026-10-29 | 닉네임 중복 금지 (**확장 단계**, BE-139 · V39 · API 명세 v0.69) — `member`에 `uq_member_nickname`(`lower(nickname)` 유니크 인덱스, `nickname IS NOT NULL`인 행만) 추가. 칸은 그대로. 겹치던 기존 닉네임은 먼저 가입한 회원만 남기고 나머지를 NULL로 비운다 **(병합 메모) v1.48은 BE-115 커뮤니티 테이블 몫이다** |
+| v1.47 | 2026-10-29 | 사건 배역 · 민감 플래그 (**확장 단계**, BE-125 · V37 · API 명세 v0.66) — `legal_case.cast_roles`(jsonb, `{"prosecutor": "naero", "defense": "nambul"}`) · `sensitive_flags`(jsonb 문자열 배열) 추가. 두 칸 모두 DB CHECK를 두지 않고 코드(`CastRoles` · `SensitiveFlag`)가 검사한다. 새 사건은 적재할 때 배정한다 — 대본이 함께 오면 그 배역, 아니면 같은 범죄 유형에서 피고인 역을 덜 맡은 캐릭터(같으면 마지막 배정의 반대). 이미 있는 사건의 초기값은 비공개 시드 저장소의 UPDATE로 넣는다 (`docs/decisions/BE-125.md`) |
+| v1.48 | 2026-10-29 | 커뮤니티 테이블 추가 (**확장 단계**, BE-115 · V38 · API 명세 v0.68) — `community_post`(글쓴이 회원 · 명함 기준 익명 ID · 말머리 · 사건 · 제목 · 본문 · 판결 공유 jsonb · 좋아요 · 댓글 수) · `community_comment` · `community_like`(회원 × 글 하나) 신설. 14장 추가 |
+| v1.49 | 2026-10-29 | 닉네임 중복 금지 (**확장 단계**, BE-139 · V39 · API 명세 v0.69) — `member`에 `uq_member_nickname`(`lower(nickname)` 유니크 인덱스, `nickname IS NOT NULL`인 행만) 추가. 칸은 그대로. 겹치던 기존 닉네임은 먼저 가입한 회원만 남기고 나머지를 NULL로 비운다 |
 
 ---
 
@@ -213,11 +215,14 @@ erDiagram
 | recommended_basis | text |  | 권고 범위 산출 근거 문구 | REQ-035 |
 | guideline_id | bigint FK |  | 적용 양형기준 버전 | REQ-080 |
 | incident_date | date |  | 사건 발생일 (양형기준 버전 판단 근거). 자동 파이프라인은 모델이 찾은 날짜를 판결문 원문 · 선고일과 대조해 확인된 값만 넣고, 원문에 날짜가 없으면 비운다(v1.12, BE-38) | FR-3-5-1 |
+| cast_roles | jsonb |  | (확장) 배역 `{"prosecutor": "naero", "defense": "nambul"}` — 묶음 A(판사 · 검사) · 묶음 B(변호인 · 피고인 역)를 누가 맡는지. `case_script.cast_roles`와 같은 모양. 비어 있으면 배정 전 (v1.47, BE-125) | COMMON-65 |
+| sensitive_flags | jsonb |  | (확장) 민감 플래그 이름 배열 (예: `["MENTAL_HEALTH"]`). 파이프라인 분류(BE-123)가 켜고 관리자가 고친다. `null`은 분류 전, `[]`는 분류했고 켜진 것 없음. 공개 API는 사용자 안내 대상 6종만 내보낸다 (v1.47, BE-125) | FR-1-5 |
 | status | varchar(20) | ✓ | `DRAFT` / `REVIEW` / `PUBLISHED`. `PUBLISHED`만 사용자에게 노출 | REQ-047, 075 |
 | published_at | timestamptz |  | 공개 시각(A-13). 공개 취소(A-13-14)하면 지우고, 다시 공개하면 새로 기록한다 |  |
 | created_at, updated_at | timestamptz | ✓ |  |  |
 - 권고 범위는 MVP에서 팀이 계산해 입력한 값을 그대로 쓴다. 자동 계산 로직은 확장 단계(결정 #4).
 - `title`은 유일하다(`uk_legal_case_title`, V7 · BE-15, v1.12). 적재 SQL이 제목으로 사건을 찾아 환경마다 id가 달라도 같은 SQL을 쓰기 위해서다. 모델이 만든 중립 제목이 다른 공개 · 검토 중 사건과 겹치면 자동 적재가 멈춘다(BE-31).
+- 배역 배정(v1.47, BE-125): 적재할 때 같은 범죄 유형에서 피고인 역(`defense`)을 덜 맡은 캐릭터가 맡고, 같으면 그 유형의 마지막 배정(가장 큰 `id`)의 반대, 첫 사건이면 `defense = nambul`이다. 대본이 함께 적재되면 대본을 만든 배역을 그대로 쓴다(대사에 캐릭터가 들어가 있다). 같은 유형이 동시에 적재돼도 겹치지 않도록 유형별 권고 잠금(`pg_advisory_xact_lock`)을 건다. 관리자는 A-11로 고친다.
 - 화면에 보이는 범죄 분류명(예: "사기 / **재산범죄**")은 컬럼으로 두지 않고 `crime_type`별 코드 상수로 둔다(`MURDER` → 생명범죄, `FRAUD` · `ROBBERY` · `THEFT` → 재산범죄, `INJURY` → 신체범죄). API는 `crimeCategoryLabel`로 내려준다(v1.3).
 
 #### `case_section` — 사건 정보 섹션
@@ -945,7 +950,7 @@ IA 9장의 규칙을 어느 테이블·제약이 책임지는지 정리한다.
 | 이름 | `pk_` · `fk_{테이블}_{참조 테이블}` · `uk_{테이블}_{내용}` · `chk_{테이블}_{내용}` · `idx_{테이블}_{컬럼}` |
 | FK 인덱스 | FK 컬럼마다 인덱스를 만든다. 유니크 제약의 첫 컬럼과 겹치면 생략한다 |
 | FK 삭제 동작 | 기본값(`NO ACTION`) |
-| jsonb 형식 (v1.7) | 아래 컬럼은 반드시 **배열**로 넣는다. 엔티티가 배열 타입으로 읽어서, 형식이 다르면 그 사건의 조회 전체가 실패한다<br>• `legal_case.keywords` · `deidentified_items`, `judgment.reference_tags`: 문자열 배열<br>• `case_section.data`: 배열. 원소는 섹션마다 다르다 — DAMAGE `{label, value}` · LAW_TERM `{term, desc}` 객체, SUMMARY 문자열<br>• `judgment.extra_dispositions`: 객체 배열 `{type, value}`, `type`은 `COMMUNITY_SERVICE` · `CONFISCATION`만 |
+| jsonb 형식 (v1.7) | 아래 컬럼은 반드시 **배열**로 넣는다. 엔티티가 배열 타입으로 읽어서, 형식이 다르면 그 사건의 조회 전체가 실패한다<br>• `legal_case.keywords` · `deidentified_items` · `sensitive_flags`(v1.47), `judgment.reference_tags`: 문자열 배열<br>• `legal_case.cast_roles`(v1.47): 객체 `{prosecutor, defense}`, 값은 `naero` · `nambul` 하나씩<br>• `case_section.data`: 배열. 원소는 섹션마다 다르다 — DAMAGE `{label, value}` · LAW_TERM `{term, desc}` 객체, SUMMARY 문자열<br>• `judgment.extra_dispositions`: 객체 배열 `{type, value}`, `type`은 `COMMUNITY_SERVICE` · `CONFISCATION`만 |
 | 본문 줄바꿈 (v1.9) | `case_section.content`의 항목은 줄바꿈(`\n`)으로 나눈다. PostgreSQL에서는 `E'첫 항목\n둘째 항목'`처럼 쓴다. 문장 끝에 마침표를 두어 줄바꿈을 그리지 않는 곳에서도 한 문단으로 읽히게 한다 |
 | 적용 방식 | SQL 파일을 직접 실행하지 않고 서버 기동 시 Flyway가 적용한다. `ddl-auto`는 모든 환경에서 `validate` |
 | 수정 규칙 | develop에 Merge된 파일은 수정하지 않는다. 오픈 전 불가피하면 팀 합의 후 DB 초기화하고 수정, 오픈 후에는 새 마이그레이션만 추가한다 |
@@ -1140,3 +1145,61 @@ erDiagram
 - V35가 배포 시점에 이미 달성한 도전과제(`first-case` · `cases-3` · `personality` · `attend-*`)를 `seen_at`을 채워 한 번 넣는다. 수집 도전과제는 배포 시점 수집 수가 0이라 넣지 않는다.
 - **FK를 `ON DELETE CASCADE`로 둔 이유**: 익명 사용자에 딸린 기록이라 함께 지워져야 하고, 운영에서는 익명 사용자를 지우지 않는다. 마이페이지 조회가 해금을 기록하므로, 테스트 정리 코드가 이 테이블을 따로 지우지 않아도 되게 한다.
 - **로그인 이관**: 행을 옮기지 않는다. 회원에 연결된 익명 ID들을 읽을 때 합친다(항목은 합집합, 시각은 이른 쪽, 한쪽이라도 봤으면 본 것). 구현은 출석 · 꾸미기와 함께 별도로 붙인다.
+
+## 14. (확장 단계) 커뮤니티 테이블 (v1.48, BE-115)
+
+> **V38 마이그레이션.** 커뮤니티 글 · 댓글 · 좋아요(FE-47 · FE-88 · FE-89). API 명세 12장 C-1 ~ C-7. 결정 기록 [`BE-115.md`](decisions/BE-115.md)
+
+```mermaid
+erDiagram
+    member ||--o{ community_post : "글쓴이"
+    anonymous_user ||--o{ community_post : "명함 기준"
+    legal_case |o--o{ community_post : "이야기하는 사건"
+    community_post ||--o{ community_comment : "댓글"
+    member ||--o{ community_comment : "댓글쓴이"
+    anonymous_user ||--o{ community_comment : "명함 기준"
+    community_post ||--o{ community_like : "좋아요"
+    member ||--o{ community_like : "누른 회원"
+```
+
+**community_post** — 글. 쓰기는 로그인 회원만
+
+| 컬럼 | 타입 | NOT NULL | 설명 |
+| --- | --- | --- | --- |
+| id | bigserial PK | ✓ | |
+| member_id | bigint FK | ✓ | 글쓴이(`member.id`) |
+| anonymous_user_id | uuid FK | ✓ | 명함 · 경험치 기준 익명 ID(`anonymous_user.id`). 쓴 요청에서 회원에 연결된 익명 ID |
+| category | varchar(10) | ✓ | `VERDICT` · `QUESTION` · `FREE`, CHECK |
+| case_id | bigint FK | | 이야기하는 사건(`legal_case.id`). 없으면 NULL |
+| title | varchar(60) | ✓ | 제목(앞뒤 공백 없음) |
+| body | varchar(2000) | ✓ | 본문 |
+| verdict | jsonb | | 판결 공유 글에 붙인 내 판결(붙인 시점 값). `case_id`가 있어야 한다(CHECK `chk_community_post_verdict_case`) |
+| like_count · comment_count | integer | ✓ | 좋아요 · 댓글 수(기본 0, 0 이상 CHECK). 목록 정렬 · 쪽 나누기용으로 글에 함께 센다 |
+| created_at | timestamptz | ✓ | 쓴 시각 |
+
+- 인덱스: (`created_at` DESC, `id` DESC) 최신순, (`case_id`, `created_at` DESC) 사건 거르기 · 이야기 수, (`member_id`, `created_at` DESC) 랭킹 후보.
+
+**community_comment** — 댓글
+
+| 컬럼 | 타입 | NOT NULL | 설명 |
+| --- | --- | --- | --- |
+| id | bigserial PK | ✓ | |
+| post_id | bigint FK | ✓ | `community_post.id` (`ON DELETE CASCADE`) |
+| member_id | bigint FK | ✓ | 댓글쓴이 |
+| anonymous_user_id | uuid FK | ✓ | 명함 · 경험치 기준 익명 ID |
+| body | varchar(500) | ✓ | |
+| created_at | timestamptz | ✓ | |
+
+- 인덱스: (`post_id`, `id`) 상세의 오래된 순, (`created_at` DESC) 이야기 수, (`member_id`, `created_at` DESC) 랭킹 후보.
+
+**community_like** — 좋아요. 회원 한 명이 글 하나에 하나
+
+| 컬럼 | 타입 | NOT NULL | 설명 |
+| --- | --- | --- | --- |
+| post_id | bigint PK FK | ✓ | `community_post.id` (`ON DELETE CASCADE`) |
+| member_id | bigint PK FK | ✓ | 누른 회원 |
+| created_at | timestamptz | ✓ | |
+
+- **글쓴이는 회원, 명함은 익명 ID**: 레벨 · 직업 · 꾸미기 · 카드 아래 줄이 아직 익명 ID 단위(9 ~ 13장)라 글마다 명함 기준 익명 ID를 함께 남긴다. 마이페이지 · 레벨을 회원 기준으로 옮기면 이 칸을 쓰지 않게 된다(후속).
+- 좋아요 · 댓글 수는 넣고 뺄 때 같은 트랜잭션에서 한 문장 UPDATE로 더하고 뺀다(동시에 눌러도 어긋나지 않는다). 좋아요는 `INSERT … ON CONFLICT DO NOTHING`으로 넣는다.
+- 글 삭제 · 숨김은 아직 없다. 댓글 · 좋아요의 `ON DELETE CASCADE`는 글 삭제가 생길 때를 위한 것이다.

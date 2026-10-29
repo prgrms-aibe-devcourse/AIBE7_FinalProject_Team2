@@ -206,7 +206,9 @@ public class AdminReviewQueryService {
 			legalCase.getRecommendedBasis(),
 			legalCase.getIncidentDate(),
 			guideline == null ? null : new Guideline(guideline.getId(), guideline.getVersionName()),
-			legalCase.getDeidentifiedItems());
+			legalCase.getDeidentifiedItems(),
+			legalCase.getCastRoles(),
+			legalCase.getSensitiveFlags());
 	}
 
 	private static Source source(CaseSource source) {
