@@ -17,6 +17,14 @@ public final class Nickname {
 	private Nickname() {
 	}
 
+	/** 닉네임이 없는 회원(카카오)의 표시 이름 앞말. 뒤에 회원 번호를 붙여 사람마다 다르고 바뀌지 않는다 (BE-115) */
+	public static final String AUTO_NAME_PREFIX = "방청객 ";
+
+	/** 화면 · 커뮤니티에 보이는 이름: 닉네임이 있으면 그 값, 없으면 자동 이름 `방청객 {회원 ID}` */
+	public static String displayName(long memberId, String nickname) {
+		return nickname == null || nickname.isBlank() ? AUTO_NAME_PREFIX + memberId : nickname;
+	}
+
 	/** 형식에 맞지 않으면 400 VALIDATION_ERROR(details: nickname) */
 	public static void validate(String nickname) {
 		if (nickname == null || !FORMAT.matcher(nickname).matches()

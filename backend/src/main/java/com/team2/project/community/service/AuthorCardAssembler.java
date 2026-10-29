@@ -5,6 +5,7 @@ import com.team2.project.community.dto.AuthorCard.CardLine;
 import com.team2.project.level.dto.LevelStatus;
 import com.team2.project.level.service.LevelService;
 import com.team2.project.member.domain.Member;
+import com.team2.project.member.domain.Nickname;
 import com.team2.project.member.repository.MemberRepository;
 import com.team2.project.profile.domain.ProfileDeco;
 import com.team2.project.profile.domain.ProfileDecoCatalog;
@@ -35,9 +36,6 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class AuthorCardAssembler {
 
-	/** 닉네임이 없는 회원(카카오 회원)의 표시 이름 앞말. 뒤에 회원 번호를 붙여 사람마다 다르고 바뀌지 않는다 */
-	static final String AUTO_NAME_PREFIX = "방청객 ";
-
 	private final MemberRepository memberRepository;
 	private final ProfileSettingsService profileSettingsService;
 	private final ProfileStatsReader statsReader;
@@ -57,14 +55,10 @@ public class AuthorCardAssembler {
 		}
 		Set<Long> memberIds = distinct.stream().map(Writer::memberId).collect(Collectors.toSet());
 		Map<Long, String> names = memberRepository.findAllById(memberIds).stream()
-			.collect(Collectors.toMap(Member::getId, member -> displayName(member.getId(), member.getNickname())));
+			.collect(Collectors.toMap(Member::getId, member -> Nickname.displayName(member.getId(), member.getNickname())));
 		return distinct.stream().collect(Collectors.toMap(Function.identity(),
-			writer -> card(writer, names.getOrDefault(writer.memberId(), displayName(writer.memberId(), null))),
+			writer -> card(writer, names.getOrDefault(writer.memberId(), Nickname.displayName(writer.memberId(), null))),
 			(a, b) -> a, LinkedHashMap::new));
-	}
-
-	static String displayName(long memberId, String nickname) {
-		return nickname == null || nickname.isBlank() ? AUTO_NAME_PREFIX + memberId : nickname;
 	}
 
 	private AuthorCard card(Writer writer, String name) {

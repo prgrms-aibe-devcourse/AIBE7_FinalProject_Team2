@@ -12,7 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 닉네임 설정 · 수정 (확장 단계, BE-139, API 명세 M-7). 카카오 회원 · 아이디 회원 공통.
+ * 닉네임 설정 · 수정(M-7)과 내 회원 정보 조회(M-8) (확장 단계, BE-139). 카카오 회원 · 아이디 회원 공통.
  * 형식은 가입과 같고(Nickname), 중복은 대소문자 구분 없이 막는다(DB 유니크 uq_member_nickname + 먼저 검사).
  * 변경 횟수 제한 · 금칙어 검사는 아직 없다(금칙어 기능 A-39 ~ A-41이 생기면 붙인다)
  */
