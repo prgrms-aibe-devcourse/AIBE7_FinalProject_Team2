@@ -118,12 +118,13 @@ class MemberNicknameApiTest extends ApiIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("형식이 틀리면 400 VALIDATION_ERROR(details nickname): 없음 · 문자열 아님 · 1자 · 13자 · 공백 · 기호 · 한글 9자 · 자동 이름")
+	@DisplayName("형식이 틀리면 400 VALIDATION_ERROR(details nickname): 없음 · 문자열 아님 · 1자 · 13자 · 공백 · 기호 · 한글 9자 · 자동 이름 · 방청객으로 시작")
 	void invalidFormat_rejected() throws Exception {
 		long id = newMember("KAKAO", null);
 		for (String json : List.of("{}", "{\"nickname\":null}", "{\"nickname\":1}", "{\"nickname\":\"가\"}",
 			"{\"nickname\":\"abcdefghijklm\"}", "{\"nickname\":\"닉 네임\"}", "{\"nickname\":\"닉네임!\"}",
-			"{\"nickname\":\"가나다라마바사아자\"}", "{\"nickname\":\"방청객 " + id + "\"}")) {
+			"{\"nickname\":\"가나다라마바사아자\"}", "{\"nickname\":\"방청객 " + id + "\"}",
+			"{\"nickname\":\"방청객123\"}", "{\"nickname\":\"방청객\"}")) {	// 자동 이름을 흉내 내는 "방청객" 시작 닉네임도 막는다
 			changeNickname(id, json).andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
 				.andExpect(jsonPath("$.details[0].field").value("nickname"));

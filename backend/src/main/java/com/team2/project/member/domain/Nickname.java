@@ -10,6 +10,9 @@ import java.util.regex.Pattern;
  */
 public final class Nickname {
 
+	/** 자동 이름 `방청객 {회원 ID}`를 흉내 내지 못하게 이 말로 시작하는 닉네임은 쓸 수 없다 (PR #343 리뷰). 금칙어 기능(A-39 ~ A-41)이 생기면 거기로 옮긴다 */
+	private static final String RESERVED_PREFIX = "방청객";
+
 	private static final Pattern FORMAT = Pattern.compile("[가-힣A-Za-z0-9]{2,12}");
 	private static final Pattern HANGUL = Pattern.compile("[가-힣]");
 	private static final int MAX_WITH_HANGUL = 8;
@@ -28,7 +31,7 @@ public final class Nickname {
 	/** 형식에 맞지 않으면 400 VALIDATION_ERROR(details: nickname) */
 	public static void validate(String nickname) {
 		if (nickname == null || !FORMAT.matcher(nickname).matches()
-			|| (HANGUL.matcher(nickname).find() && nickname.length() > MAX_WITH_HANGUL)) {
+			|| (HANGUL.matcher(nickname).find() && nickname.length() > MAX_WITH_HANGUL) || nickname.startsWith(RESERVED_PREFIX)) {
 			throw BusinessException.ofField(ErrorCode.VALIDATION_ERROR, "nickname");
 		}
 	}
