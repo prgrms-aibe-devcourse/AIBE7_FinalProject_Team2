@@ -12,13 +12,16 @@ import tools.jackson.databind.JsonNode;
  * <ul>
  *   <li>본문이 객체가 아니거나, 칸이 하나도 없거나, 모르는 칸이 있으면 400</li>
  *   <li>shownCard · profileCardType: initial · retake · current 중 하나(문자열). null이면 400</li>
+ *   <li>cardLine: type · signature · job 중 하나(문자열). null이면 400</li>
+ *   <li>cardLevel: boolean. 문자열 "true" 같은 값 · null이면 400</li>
  *   <li>bio: 문자열. 앞뒤 공백을 뺀 뒤 0 ~ 40자, 줄바꿈 · 제어 문자(탭 · NUL 등)가 있으면 400. 빈 문자열은 소개 지우기. null이면 400</li>
  * </ul>
  * 아직 재심이 없는데 retake를 골라도 받는다 — 화면이 고른 칸이 비면 대신 고르는 규칙을 이미 쓴다(shownSlot · selectedChoice)
  */
-public record ProfileSettingsPatch(Optional<String> shownCard, Optional<String> profileCardType, Optional<String> bio) {
+public record ProfileSettingsPatch(Optional<String> shownCard, Optional<String> profileCardType, Optional<String> bio,
+		Optional<String> cardLine, Optional<Boolean> cardLevel) {
 
-	private static final Set<String> FIELDS = Set.of("shownCard", "profileCardType", "bio");
+	private static final Set<String> FIELDS = Set.of("shownCard", "profileCardType", "bio", "cardLine", "cardLevel");
 
 	public static ProfileSettingsPatch parse(JsonNode body) {
 		if (body == null || !body.isObject() || body.isEmpty()) {
@@ -29,7 +32,7 @@ public record ProfileSettingsPatch(Optional<String> shownCard, Optional<String> 
 				throw BusinessException.ofField(ErrorCode.VALIDATION_ERROR, entry.getKey());
 			}
 		});
-		return new ProfileSettingsPatch(slot(body, "shownCard"), slot(body, "profileCardType"), bio(body));
+		return new ProfileSettingsPatch(slot(body, "shownCard"), slot(body, "profileCardType"), bio(body), cardLine(body), cardLevel(body));
 	}
 
 	private static Optional<String> slot(JsonNode body, String field) {
@@ -41,6 +44,28 @@ public record ProfileSettingsPatch(Optional<String> shownCard, Optional<String> 
 			throw BusinessException.ofField(ErrorCode.VALIDATION_ERROR, field);
 		}
 		return Optional.of(value.asString());
+	}
+
+	private static Optional<String> cardLine(JsonNode body) {
+		if (!body.has("cardLine")) {
+			return Optional.empty();
+		}
+		JsonNode value = body.get("cardLine");
+		if (!value.isString() || !ProfileSettingsValues.CARD_LINES.contains(value.asString())) {
+			throw BusinessException.ofField(ErrorCode.VALIDATION_ERROR, "cardLine");
+		}
+		return Optional.of(value.asString());
+	}
+
+	private static Optional<Boolean> cardLevel(JsonNode body) {
+		if (!body.has("cardLevel")) {
+			return Optional.empty();
+		}
+		JsonNode value = body.get("cardLevel");
+		if (!value.isBoolean()) {
+			throw BusinessException.ofField(ErrorCode.VALIDATION_ERROR, "cardLevel");
+		}
+		return Optional.of(value.asBoolean());
 	}
 
 	private static Optional<String> bio(JsonNode body) {
