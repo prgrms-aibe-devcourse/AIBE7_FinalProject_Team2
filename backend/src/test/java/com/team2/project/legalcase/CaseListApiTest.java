@@ -33,6 +33,17 @@ class CaseListApiTest extends ApiIntegrationTest {
 	}
 
 	@Test
+	void getCases_storedThumbnailWinsOverRuleAddress() throws Exception {
+		long caseId = insertCase("FRAUD", "PUBLISHED");
+		jdbcTemplate.update("UPDATE legal_case SET thumbnail_url = ? WHERE id = ?", "https://example.test/thumb.jpg", caseId);
+
+		mockMvc.perform(get("/api/v1/cases"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.cases[?(@.caseId == %d)].thumbnailUrl".formatted(caseId))
+						.value("https://example.test/thumb.jpg"));
+	}
+
+	@Test
 	void getCases_returnsCardFields() throws Exception {
 		long caseId = insertCase("FRAUD", "PUBLISHED");
 
@@ -46,7 +57,8 @@ class CaseListApiTest extends ApiIntegrationTest {
 				.andExpect(jsonPath(CASE_BY_ID.formatted(caseId) + ".difficulty").value("MID"))
 				.andExpect(jsonPath(CASE_BY_ID.formatted(caseId) + ".estimatedMinutes").value(10))
 				.andExpect(jsonPath(CASE_BY_ID.formatted(caseId) + ".participantCount").value(0))
-				.andExpect(jsonPath("$.cases[?(@.caseId == %d)].thumbnailUrl".formatted(caseId)).value((Object) null));
+				.andExpect(jsonPath("$.cases[?(@.caseId == %d)].thumbnailUrl".formatted(caseId))
+				.value("/images/cases/case-%d-reenact.webp".formatted(caseId)));	// 저장된 값 없음 → 규칙 주소(BE-141)
 	}
 
 	@Test

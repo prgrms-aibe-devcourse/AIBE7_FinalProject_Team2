@@ -612,6 +612,8 @@ tools/character-assets/                     ← 캐릭터 에셋 제작 도구 (
 
 ### 6-4. 이미지 경로
 
+> **폴더 · 이름 · 변환 규칙의 기준은 [image-storage-rules.md](image-storage-rules.md)다.** 아래 트리는 기획 7-2의 목표 구조이고 실제 웹 폴더와 다르다(6-5 아래 "실제 웹 폴더" 참고).
+
 기획 7-2 구조를 따르고, 역할 의상 하위 폴더를 더했다.
 
 ```
@@ -622,7 +624,7 @@ frontend/public/images/characters/
 │   │   └── {outfit}/{scene}-{emotion}.webp     ← 역할 의상 (prosecutor · defense · judge · actor)
 │   ├── layers/{style}-{deform}/{kind}-{item}-{direction}.webp
 │   └── icon/{style}-{deform}/face-{emotion}.webp
-├── reenact/case-{caseId}/{headline | sub-1 | detail-1}.webp   ← 사건 재연 컷 ⚠️
+├── (재연 컷은 `public/images/cases/`: case-{id}-{reenact | origin | conclusion}.webp)   ← 이름 · 변환 대응은 [image-storage-rules.md](image-storage-rules.md)
 └── personality/{01 ~ 32}.webp          ← 성향 이미지(내로 01 ~ 16 · 남불 17 ~ 32, 유형 번호 + 16). 유형 ↔ 이미지 대응 · 화면에 보이는 이미지는 번호표
 ```
 
@@ -636,7 +638,7 @@ frontend/public/images/characters/
 | 종류 | 비율 | 웹 (`public/`) | 원본 | 생성 배경 |
 | --- | --- | --- | --- | --- |
 | 장면 컷 (`base/`) | 4:5 | 투명 webp 800 × 1000, 품질 85 | 투명 PNG 2048 × 2560 | 투명 |
-| 재연 컷 (`reenact/`) | 16:9 (필요하면 4:3) | webp 1600 × 900 · 1200 × 900 | 투명 PNG | 투명(캐릭터 + 소품만), 신문 느낌은 후보정, 흑백 필터로 확인 |
+| 재연 컷 (`reenact/`) | 16:9 | webp 1200 × 675 (실제 `cases/`) | **배경 포함 PNG**(10/29부터 기본). 10/29 이전 63장은 투명 PNG(폴백) | **배경 포함**(10/29부터, 프롬프트 모음 9-7 `BG-scene`). 이전 63장만 투명 컷 + 공용 배경 합성, 자세한 규칙은 [이미지 적재 규칙](image-storage-rules.md) |
 | 아이콘 (`icon/`) | 1:1 | 투명 webp 128 × 128 (64 px 축소 확인) | 투명 PNG 512 × 512 | 투명 |
 | 레이어 (`layers/`) | 4:5 | 투명 webp 800 × 1000, 같은 기준점 | 투명 PNG 2048 × 2560 | 투명 |
 | 시트 | 16:9 | 넣지 않음 | 투명 PNG | 투명 |

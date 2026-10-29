@@ -490,6 +490,9 @@ class CommunityApiTest extends ApiIntegrationTest {
 				.containsExactly(2);
 			assertThat((List<String>) JsonPath.read(body, "$.hotCases[?(@.case.caseId == " + caseId + ")].case.headline"))
 				.containsExactly("시험 헤드라인");
+			// 저장된 사진이 없으면 사건 번호 규칙 주소(BE-141)
+			assertThat((List<String>) JsonPath.read(body, "$.hotCases[?(@.case.caseId == " + caseId + ")].case.thumbnailUrl"))
+				.containsExactly("/images/cases/case-" + caseId + "-reenact.webp");
 		}
 		assertThat((List<Object>) JsonPath.read(body, "$.recommendedCases[*].talkCount")).isEmpty();
 		List<String> ranked = JsonPath.read(body, "$.ranking[*].nickname");
