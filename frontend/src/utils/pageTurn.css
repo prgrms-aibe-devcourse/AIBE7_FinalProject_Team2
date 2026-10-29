@@ -1,5 +1,5 @@
 /* 신문 한 장 넘기기 (utils/pageTurn.js). 화면 전체를 덮는 장식 층이라 눌러도 아래 화면이 받는다 */
-.page-turn { position: fixed; inset: 0; z-index: 1000; overflow: hidden; pointer-events: none; perspective: 2600px; perspective-origin: 50% 40%; }
+.page-turn { position: fixed; inset: 0; z-index: 1000; overflow: hidden; pointer-events: none; perspective: 2600px; perspective-origin: 50% 40%; clip-path: inset(var(--site-header-h, 0px) 0 0 0); } /* 공통 헤더(위에 붙어 있다)는 덮지 않는다(FE-126): 헤더 아래부터만 보인다. 자리 계산은 화면 기준 그대로 */
 .page-turn-dim { position: absolute; inset: 0; background: color-mix(in srgb, var(--color-desk-shadow) 60%, transparent); opacity: 0; }
 .page-turn-leaf { position: absolute; top: 0; height: 100dvh; transform-origin: left center; transform-style: preserve-3d; will-change: transform; }
 .page-turn-face {

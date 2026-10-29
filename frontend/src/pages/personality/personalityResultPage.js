@@ -11,7 +11,7 @@ import { AXES } from '../../utils/personalityAxes.js';
 
 // 공유 주소는 유형 설명만 열린다(개인 응답 · 점수 없음, FR-8-6). 이미지 공유(링크 미리보기)는 OG(COMMON-32)가 맡는다
 // 공유 주소는 서버가 준 해시 값(shareId)이다. 유형 코드는 주소에도 드러나지 않는다
-async function share(shareId, type, note) {
+export async function share(shareId, type, note) {
   const url = `${window.location.origin}/test/types/${shareId}`;
   note.textContent = '';
   if (navigator.share) {
