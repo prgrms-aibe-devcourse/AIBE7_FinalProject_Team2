@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import datetime
 import json
+import logging
 import os
 import re
 import shutil
@@ -68,6 +69,18 @@ JOB_ID_PATTERN = re.compile(r"^[0-9a-f]{32}$")
 # 로그 꼬리 요청의 상한 (log 참고)
 MAX_LOG_TAIL = 2000
 
+# 끝난 작업을 자동으로 지우기까지의 보관 기간 (COMMON-51). PIPELINE_JOB_RETENTION_DAYS로 바꾼다.
+# 백엔드가 검수 뒤 DELETE /jobs/{id}를 부르는 것이 정상 경로이고, 이 정리는 그 호출이 빠졌을 때를 위한
+# **마지막 안전장치**다 (FR-5-3 "원본 판결문 정보는 내부 전용"). 기본 7일은 운영에서 실제 검수 소요
+# 시간을 보기 전의 보수적인 값이다 — 관찰한 뒤 환경변수로 조정한다 (docs/decisions/COMMON-51.md)
+DEFAULT_RETENTION_DAYS = 7
+
+# 정리를 다시 도는 간격. 보관 기간이 날 단위라 시간 단위면 충분하다 — 간격을 짧게 해도 지워지는 시점이
+# 의미 있게 빨라지지 않는다
+CLEANUP_INTERVAL_SECONDS = 6 * 60 * 60
+
+logger = logging.getLogger(__name__)
+
 
 class JobError(Exception):
     """작업 요청이 잘못됐을 때 (호출한 쪽 잘못). HTTP 400으로 바꾼다"""
@@ -85,10 +98,42 @@ def _now():
     return datetime.datetime.now(datetime.timezone.utc).astimezone().isoformat(timespec="seconds")
 
 
+def _parse_time(value):
+    """작업 메타의 시각 문자열을 datetime으로. 읽을 수 없으면 None.
+
+    시간대가 없는 값(손으로 고친 메타 등)은 **현지 시간**으로 본다 — `_now()`가 현지 시간대로 쓰기 때문이다
+    """
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    return parsed.astimezone() if parsed.tzinfo is None else parsed
+
+
 def _read_json(path):
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
+        return None
+
+
+def _read_meta(path):
+    """작업 폴더의 job.json. 없거나 깨졌거나 **객체가 아니면** 빈 메타로 본다 (PR #326 리뷰 반영).
+
+    `_read_json(...) or {}`만으로는 `"문자열"` · `[1, 2]`처럼 JSON으로는 올바른 값이 그대로 돌아와,
+    뒤의 `meta.get(...)`이 AttributeError를 내고 정리 순회 · 도는 작업 확인이 통째로 멈춘다
+    """
+    meta = _read_json(path / "job.json")
+    return meta if isinstance(meta, dict) else {}
+
+
+def _mtime(path):
+    """파일 수정 시각 (UTC). 없으면 None"""
+    try:
+        return datetime.datetime.fromtimestamp(path.stat().st_mtime, tz=datetime.timezone.utc)
+    except OSError:
         return None
 
 
@@ -190,6 +235,22 @@ def _script_result(script):
     if created_at:
         result["createdAt"] = created_at
     return result
+
+
+def run_cleanup_loop(store, stop, interval=CLEANUP_INTERVAL_SECONDS):
+    """서비스가 내려갈 때까지 주기적으로 정리한다 (COMMON-51). 시작하자마자 한 번 돈다.
+
+    `stop`은 `threading.Event`다 — 내려가라는 신호를 받으면 기다리던 중에도 바로 돌아온다.
+    **한 번 실패해도 끝내지 않는다**: 다음 주기에 다시 지우면 되고, 정리가 조용히 멈추면 판결문 원문이
+    남는 것을 아무도 모르게 된다 (FR-5-3). 이 함수는 HTTP 층을 모른다 — app.py가 스레드로 띄운다
+    """
+    while True:
+        try:
+            store.cleanup()
+        except Exception:  # noqa: BLE001 - 정리 실패로 스레드가 끝나면 안 된다
+            logger.exception("오래된 작업 정리에 실패했습니다")
+        if stop.wait(interval):
+            return
 
 
 class JobStore:
@@ -334,7 +395,7 @@ class JobStore:
                 raise JobConflict(f"이미 실행 중인 작업이 있습니다: {running}")
 
             path = self.job_dir(job_id)
-            meta = _read_json(path / "job.json") or {}
+            meta = _read_meta(path)
             log_file = path / "log.txt"
             command = [sys.executable, str(PIPELINE_SCRIPT), "run", str(path / "config.json")]
             until = meta.get("until") or "axis"
@@ -350,14 +411,20 @@ class JobStore:
             finally:
                 handle.close()
             self._processes[job_id] = process
-            # 메타를 쓰고 나서야 잠금을 놓는다 — 다음 요청의 running_job_id가 이 작업을 보게 하려면 필요하다
-            meta.update(status=RUNNING, pid=process.pid, startedAt=_now())
+            # 메타를 쓰고 나서야 잠금을 놓는다 — 다음 요청의 running_job_id가 이 작업을 보게 하려면 필요하다.
+            # 다시 돌리는 작업이면 지난번 finishedAt을 지운다 — 남겨 두면 끝난 지 오래된 작업으로 보여
+            # 자동 정리가 방금 만든 결과를 지울 수 있다 (PR #326 리뷰 반영, BE-107 `--from script` 재실행)
+            meta.update(status=RUNNING, pid=process.pid, startedAt=_now(), finishedAt=None)
             _write_json(path / "job.json", meta)
             return meta
 
-    def _job_alive(self, meta):
-        """그 작업의 프로세스가 살아 있는지. 이 프로세스가 띄운 작업이면 핸들로 본다 (_alive 참고)"""
-        return _alive(meta.get("pid"), self._processes.get(meta.get("jobId")))
+    def _job_alive(self, meta, job_id=None):
+        """그 작업의 프로세스가 살아 있는지. 이 프로세스가 띄운 작업이면 핸들로 본다 (_alive 참고)
+
+        핸들은 **폴더 이름(job_id)으로도** 찾는다 (PR #326 리뷰 반영). job.json이 깨져 메타에 jobId가 없어도
+        도는 작업을 "끝난 작업"으로 잘못 보고 지우지 않기 위해서다
+        """
+        return _alive(meta.get("pid"), self._processes.get(job_id or meta.get("jobId")))
 
     def cancel(self, job_id):
         """도는 작업을 멈춘다. state.json은 그대로 남아 어디까지 갔는지 볼 수 있다.
@@ -366,8 +433,8 @@ class JobStore:
         FAILED로 덮어써서, 끝난 결과를 되돌릴 수 없게 망가뜨렸다.
         """
         path = self.job_dir(job_id)
-        meta = _read_json(path / "job.json") or {}
-        if not self._job_alive(meta):
+        meta = _read_meta(path)
+        if not self._job_alive(meta, job_id):
             return meta
         _terminate(meta.get("pid"))
         meta.update(status=FAILED, finishedAt=_now(), error="관리자가 중단했습니다")
@@ -381,15 +448,15 @@ class JobStore:
         if not self.jobs_dir.is_dir():
             return None
         for path in sorted(self.jobs_dir.iterdir()):
-            meta = _read_json(path / "job.json") or {}
-            if meta.get("status") == RUNNING and self._job_alive(meta):
+            meta = _read_meta(path)
+            if meta.get("status") == RUNNING and self._job_alive(meta, path.name):
                 return meta.get("jobId")
         return None
 
     def status(self, job_id):
         """작업 상태 + 단계별 진행 상황 (API 명세 A-15와 같은 모양)"""
         path = self.job_dir(job_id)
-        meta = _read_json(path / "job.json") or {}
+        meta = _read_meta(path)
         config = _read_json(path / "config.json") or {}
         state = _read_json(self.state_path(job_id)) or {"stages": {}}
         stages = self._stage_list(config, state)
@@ -519,10 +586,18 @@ class JobStore:
 
         3 · 4는 state.json의 outputs 경로가 아니라 **작업 이름으로 훑어서** 지운다. 단계가 파일을 쓰다가
         중간에 실패하면 outputs에 경로가 기록되지 않아, 경로만 보고 지우면 원문이 남기 때문이다.
+
+        **확인과 삭제를 `start`와 같은 잠금으로 묶는다** (PR #326 리뷰 반영). 묶지 않으면 "도는 중 아님"을
+        확인한 뒤 지우는 사이에 같은 작업이 다시 시작돼, 파이프라인이 막 지워지는 `cases/`를 읽게 된다.
         """
+        with self._start_lock:
+            self._delete(job_id)
+
+    def _delete(self, job_id):
+        """delete의 본체. **`_start_lock`을 잡은 채로만 부른다** (cleanup도 같은 잠금 안에서 부른다)"""
         path = self.job_dir(job_id)
-        meta = _read_json(path / "job.json") or {}
-        if self._job_alive(meta):
+        meta = _read_meta(path)
+        if self._job_alive(meta, job_id):
             raise JobConflict("실행 중인 작업은 지울 수 없습니다 (먼저 중단하세요)")
         self._processes.pop(job_id, None)
         self._remove_artifacts(job_id)
@@ -530,6 +605,78 @@ class JobStore:
         if state_dir.is_dir():
             shutil.rmtree(state_dir)
         shutil.rmtree(path)  # 작업 폴더는 마지막에 — 앞에서 실패하면 흔적이 남아 다시 지울 수 있다
+
+    def cleanup(self, retention_days=None, now=None):
+        """보관 기간이 지난 작업을 지운다 (COMMON-51). 지운 작업 ID 목록을 돌려준다.
+
+        백엔드가 검수를 마치고 `DELETE /jobs/{id}`를 부르는 것이 정상 경로다. 그런데 백엔드가 그 호출 전에
+        재시작 · 교체되거나, 검수가 미완으로 남거나, 호출이 실패하고 재시도되지 않으면 **판결문 원문이
+        볼륨에 무기한 남는다.** 이 정리가 그 경우의 마지막 안전장치다 (FR-5-3).
+
+        규칙:
+          - **도는 작업은 건드리지 않는다.** 며칠째 도는 작업도 마찬가지다(끝나야 지울 수 있다).
+          - 나이는 **마지막 기록**으로 본다 — `finishedAt` · `startedAt` · `createdAt` · `log.txt` · `state.json`
+            중 가장 늦은 값이다(`_last_touched`). 셋 다 없으면 작업 폴더 수정 시각을 쓴다. 메타가 없거나 깨진
+            폴더도 원문을 담고 있을 수 있어, 읽을 값이 없다고 건너뛰면 그 폴더만 영영 남는다.
+          - 지우는 범위는 `delete`와 같다(작업 폴더 · state · cases · runs). 같은 함수를 그대로 쓴다.
+          - 한 작업의 "살아 있는지 확인 → 나이 확인 → 삭제"를 `start`와 같은 잠금으로 묶는다. 그 사이에
+            같은 작업이 다시 시작되지 못한다.
+          - 한 건이 실패해도 나머지는 계속 지운다. 다음 주기에 다시 시도한다.
+        """
+        days = self._retention_days() if retention_days is None else retention_days
+        if days <= 0:  # 0 이하 = 자동 정리를 끈다 (운영에서 잠시 꺼 둘 수 있게)
+            return []
+        if not self.jobs_dir.is_dir():
+            return []
+        cutoff = (now or datetime.datetime.now(datetime.timezone.utc)) - datetime.timedelta(days=days)
+
+        deleted = []
+        for path in sorted(self.jobs_dir.iterdir()):
+            if not path.is_dir():
+                continue
+            with self._start_lock:
+                meta = _read_meta(path)
+                if self._job_alive(meta, path.name):
+                    continue
+                when = self._last_touched(path, meta)
+                if when is None or when > cutoff:
+                    continue
+                try:
+                    self._delete(path.name)
+                except (JobNotFound, JobConflict, OSError) as e:
+                    # 작업 ID 형식이 아닌 폴더(JobNotFound)는 우리 것이 아니므로 그대로 둔다
+                    logger.warning("오래된 작업을 지우지 못했습니다: %s (%s)", path.name, e)
+                    continue
+            deleted.append(path.name)
+            logger.info("오래된 작업을 지웠습니다: %s (마지막 기록 %s, 보관 %d일)", path.name,
+                        when.isoformat(timespec="seconds"), days)
+        return deleted
+
+    @staticmethod
+    def _retention_days():
+        """PIPELINE_JOB_RETENTION_DAYS (없거나 숫자가 아니면 기본값)"""
+        raw = os.environ.get("PIPELINE_JOB_RETENTION_DAYS")
+        if raw is None or raw.strip() == "":
+            return DEFAULT_RETENTION_DAYS
+        try:
+            return int(raw)
+        except ValueError:
+            # 오타 하나로 정리가 조용히 멈추지 않게, 기본값으로 돌아가고 로그를 남긴다
+            logger.warning("PIPELINE_JOB_RETENTION_DAYS 값이 정수가 아닙니다 (%r). 기본 %d일을 씁니다",
+                           raw, DEFAULT_RETENTION_DAYS)
+            return DEFAULT_RETENTION_DAYS
+
+    def _last_touched(self, path, meta):
+        """그 작업에 마지막으로 뭔가 기록된 시각. 아무것도 없으면 폴더 수정 시각으로 본다.
+
+        메타의 시각 하나만 믿지 않고 **가장 늦은 값**을 쓴다 (PR #326 리뷰 반영). 다시 돌린 작업이 끝났는데
+        아직 아무도 `status()`를 부르지 않으면 메타에는 옛 시각만 남아 있다. 로그 · state.json은 파이프라인이
+        도는 동안 계속 갱신되므로, 메타가 늦거나 깨져도 "최근에 돈 작업"을 알아본다
+        """
+        candidates = [_parse_time(meta.get(key)) for key in ("finishedAt", "startedAt", "createdAt")]
+        candidates += [_mtime(path / "log.txt"), _mtime(self.state_path(path.name))]
+        candidates = [when for when in candidates if when is not None]
+        return max(candidates) if candidates else _mtime(path)
 
     def _remove_artifacts(self, job_id):
         """ARTIFACT_DIRS에서 이 작업 이름으로 시작하는 파일 · 폴더를 지운다.
@@ -543,6 +690,11 @@ class JobStore:
                 continue
             for target in base.glob(f"{prefix}*"):
                 if target.is_dir():
-                    shutil.rmtree(target, ignore_errors=True)
+                    # 실패를 숨기지 않는다 (PR #326 리뷰 반영). 숨기면 delete가 성공으로 끝나 작업 폴더까지
+                    # 지워지고, 정리는 작업 폴더만 훑으므로 남은 회차 결과를 다시 찾지 못한다
+                    try:
+                        shutil.rmtree(target)
+                    except FileNotFoundError:
+                        pass  # 그새 이미 지워졌다
                 else:
                     target.unlink(missing_ok=True)
