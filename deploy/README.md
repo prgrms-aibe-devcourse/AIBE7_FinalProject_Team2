@@ -298,7 +298,18 @@ sudo certbot certificates                                # 서버의 인증서 �
 
 - 익명 ID 쿠키 `NLNB_AID`는 항상 `Secure`다(`AnonymousIdCookie.java`, API 명세 1-2). 브라우저는 **http에서 `Secure` 쿠키를 저장하지 않는다** (`localhost`만 예외). 그래서 **https로 열어야 체험 시작 이후 흐름(익명 ID가 필요한 API)이 동작한다.** 관리자 세션 쿠키(`SESSION_COOKIE_SECURE`)도 같다.
 - IP · http(`http://<탄력적 IP>`)로는 여전히 위 흐름이 동작하지 않는다. 사용자에게는 도메인 주소만 안내한다.
-- **HSTS는 아직 켜지 않았다.** 갱신이 한 번 이상 문제없이 도는 것을 본 뒤 짧은 `max-age`부터 켠다 (결정 기록 "추후 재검토").
+- **HSTS는 1일(`max-age=86400`)로 켜 두었다** (COMMON-67). 값은 Nginx 한 곳(`frontend/nginx/default.conf`의 `$hsts_header`)에서만 정하고, https 응답(화면 · 정적 파일 · `/api`)에만 붙는다. 백엔드(Spring Security)는 HSTS를 끈다 — COMMON-67 전에는 백엔드가 API 응답에 1년 HSTS를 붙이고 있었다.
+- **보안 헤더**: Nginx가 직접 내려주는 응답(화면 · 정적 파일 · `version.json` · 429)에 `X-Content-Type-Options: nosniff` · `X-Frame-Options: DENY` · `Referrer-Policy: strict-origin-when-cross-origin`을 붙인다(`snippets/security-headers.conf`). `/api` 응답은 백엔드가 같은 헤더를 붙인다. 스모크 테스트 "[보안 헤더]"가 확인한다(CI는 실패로, 서버 되돌림 때는 경고만).
+- **HSTS 늘리기**: 첫 인증서 자동 갱신이 문제없이 돈 뒤(아래 확인) `$hsts_header`를 1주(`604800`) → 1년(`31536000`)으로 늘린다. 늘릴 때 `includeSubDomains`를 함께 판단한다.
+
+```bash
+# 갱신이 정상으로 돌았는지 (서버). 마지막 갱신 시각 · 새 만료일을 본다
+sudo journalctl -u certbot.timer -u certbot.service --since "-90 days" | tail -20
+sudo certbot certificates            # Expiry Date가 발급 후 90일보다 늘었으면 갱신된 것
+# 운영 헤더 확인
+curl -sI https://naelawnambul.today/ | grep -iE "strict|x-frame|x-content|referrer"
+curl -sI https://naelawnambul.today/api/v1/cases | grep -iE "strict"   # 한 줄만 나와야 한다(중복 없음)
+```
 - 카카오 로그인(BE-62) 운영 앱의 Redirect URI는 `https://naelawnambul.today/...`로 등록한다.
 
 ## Rate limit (BE-63, WBS 7.4.6 1차)
@@ -1129,4 +1140,4 @@ Grafana Cloud 경보가 no data로 울리기 시작하므로, 끄기 전에 Graf
 | 7.1.2 RDS 전환 · 시크릿 | (BE-59, **10/28 RDS 전환 완료** — 위 "RDS 전환") 남은 것: Supabase 프로젝트 삭제 · 공용 DB 파일 정리(COMMON-59 "종료"), 비밀값을 시크릿 저장소(SSM 등)로 옮길지, `sslmode=verify-full`(RDS CA 인증서), `deploy.sh`의 마이그레이션 비교를 외부 DB로도 할지, 안정되면 `docker-compose.prod.yml`에서 postgres 정의를 지울지, DB 지표(CloudWatch · `postgres_exporter`) 경보 |
 | 7.4.3 JWT (C) | 토큰은 `@Qualifier(RedisConfig.TOKEN)` 템플릿(DB 1)에 TTL과 함께 저장 |
 | 백엔드 healthcheck 추가 (BE-66 이후) | Actuator(관리 포트 8081)에는 Redis 헬스체크가 자동으로 붙고, 커넥션 팩토리 두 개가 `redis` 아래 묶인다. **실측(BE-61, Boot 4.1.1)**: Redis를 끄면 `/actuator/health`는 **DOWN(503)**, `/actuator/health/liveness` · `/readiness`는 **UP**, API는 정상. liveness · readiness는 추가 설정 없이 이미 열려 있다. 그래서 컨테이너 healthcheck · 재시작 조건에는 **`/actuator/health`가 아니라 `/actuator/health/liveness`** 를 쓴다(전체 상태를 쓰면 Redis 장애 때 백엔드까지 재시작된다) |
-| HTTPS 안정화 후 (BE-75 후속) | 갱신이 한 번 이상 정상으로 돈 뒤 `https.conf.template`에 HSTS를 짧은 `max-age`부터 추가 |
+| HTTPS 안정화 후 (BE-75 · COMMON-67 후속) | 첫 인증서 자동 갱신이 정상으로 돈 뒤 `frontend/nginx/default.conf`의 `$hsts_header`를 1일 → 1주 → 1년으로 늘린다(위 "HTTPS로 풀리는 것 · 남은 것") |
