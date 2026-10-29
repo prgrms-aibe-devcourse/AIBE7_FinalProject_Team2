@@ -49,6 +49,41 @@ test('로그인 표시만 있고 토큰이 없으면(새로고침 직후) 보내
   assert.deepEqual(calls.map((c) => [c.url.replace('/api/v1', ''), c.auth]), [['/auth/token/reissue', undefined], ['/cases/1/experience', 'Bearer B']]);
 });
 
+test('먼저 한 재발급이 401이면 서버 로그아웃으로 쿠키를 정리한 뒤 요청을 보낸다 — 손님 요청이 이전 회원의 익명 ID에 쌓이지 않게 (PR #347 리뷰)', async () => {
+  saveUser({ nickname: '카카오 회원' });
+  stubFetch((url) => {
+    if (url.endsWith('/auth/token/reissue')) return invalid;
+    return url.endsWith('/auth/logout') ? { status: 204 } : { status: 200, body: { ok: true } };
+  });
+  assert.deepEqual(await request('POST', '/cases/1/experience'), { ok: true });
+  assert.deepEqual(calls.map((c) => c.url.replace('/api/v1', '')), ['/auth/token/reissue', '/auth/logout', '/cases/1/experience']);
+  assert.equal(currentUser(), null);
+});
+
+test('쿠키를 정리하지 못하면(로그아웃 실패) 요청도 보내지 않는다', async () => {
+  saveUser({ nickname: '카카오 회원' });
+  stubFetch((url) => {
+    if (url.endsWith('/auth/token/reissue')) return invalid;
+    if (url.endsWith('/auth/logout')) throw new TypeError('offline');
+    return { status: 200, body: { ok: true } };
+  });
+  await assert.rejects(request('POST', '/cases/1/experience'), { code: 'NETWORK_ERROR' });
+  assert.deepEqual(calls.map((c) => c.url.replace('/api/v1', '')), ['/auth/token/reissue', '/auth/logout']);
+});
+
+test('재발급은 탭 사이 잠금(Web Locks) 안에서 부른다 — 한 탭씩 차례로', async () => {
+  saveUser({ nickname: '카카오 회원' });
+  const order = [];
+  Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { locks: { request: async (name, task) => { order.push(`lock:${name}`); const result = await task(); order.push('unlock'); return result; } } } });
+  try {
+    stubFetch((url) => { order.push('fetch'); return url.endsWith('/auth/token/reissue') ? reissued('A') : { status: 200, body: { ok: true } }; });
+    await request('GET', '/cases');
+    assert.deepEqual(order, ['lock:nlnb-token-reissue', 'fetch', 'unlock', 'fetch']);
+  } finally {
+    delete globalThis.navigator; // 시험이 끝나면 Node 기본으로 돌린다
+  }
+});
+
 test('먼저 한 재발급이 연결 오류여도 요청은 그대로 보낸다', async () => {
   saveUser({ nickname: '카카오 회원' });
   stubFetch((url) => { if (url.endsWith('/auth/token/reissue')) throw new TypeError('offline'); return { status: 200, body: { ok: true } }; });
