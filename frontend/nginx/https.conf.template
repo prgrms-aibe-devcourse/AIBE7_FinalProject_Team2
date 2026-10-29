@@ -63,8 +63,8 @@ server {
     http2 on;
     server_name __SERVER_DOMAIN__;
 
-    # HSTS(브라우저에 "앞으로 https만" 기억시키기)는 아직 켜지 않는다. 인증서 갱신이 한 번 이상 문제없이 도는 것을 본 뒤
-    # 짧은 max-age부터 켠다 — 켠 뒤 인증서가 깨지면 사용자가 max-age 동안 접속하지 못한다 (docs/decisions/BE-75.md)
+    # HSTS(브라우저에 "앞으로 https만" 기억시키기)는 app.conf의 location들이 붙인다(1일부터, COMMON-67).
+    # https에서만 값이 있는 $hsts_header(default.conf)를 쓰므로 여기서 따로 정하지 않는다 (docs/decisions/COMMON-67.md)
 
     # http server와 같은 앱 설정 (/api 프록시 · Rate limit · SPA fallback)
     include /etc/nginx/snippets/app.conf;

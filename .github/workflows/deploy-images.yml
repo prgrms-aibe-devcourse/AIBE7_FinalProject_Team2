@@ -163,7 +163,8 @@ jobs:
       - name: Smoke test
         # SMOKE_REQUIRE_ACME=1: Let's Encrypt 확인 경로가 404인지 실패로 검사한다 (BE-75). 서버의 deploy.sh는 되돌림 때
         # BE-75 이전 이미지도 검사하므로 경고만 하고, 새 이미지만 검사하는 CI에서 막는다 (deploy/smoke-test.sh)
-        run: SMOKE_REQUIRE_ACME=1 ./deploy/smoke-test.sh http://localhost
+        # SMOKE_REQUIRE_SECURITY_HEADERS=1: 화면 응답의 보안 헤더(COMMON-67)도 실패로 검사한다. 되돌림 때는 경고만이라 같은 이유로 CI에서만 켠다
+        run: SMOKE_REQUIRE_ACME=1 SMOKE_REQUIRE_SECURITY_HEADERS=1 ./deploy/smoke-test.sh http://localhost
 
       # 배포 확인용 버전 파일 (BE-60): 이 커밋이 들어 있고, 캐시 금지여야 verify-deploy job이 운영 반영을 판단할 수 있다
       - name: Check version.json

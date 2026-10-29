@@ -1,6 +1,7 @@
 package com.team2.project.auth.oauth;
 
 import com.team2.project.common.redis.RedisConfig;
+import com.team2.project.common.security.SecurityHeaders;
 import com.team2.project.common.security.token.TokenIssuer;
 import com.team2.project.common.web.AnonymousIdCookie;
 import com.team2.project.common.web.RefreshTokenCookies;
@@ -23,7 +24,6 @@ import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.context.RequestAttributeSecurityContextRepository;
-import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -72,8 +72,7 @@ public class KakaoOAuthConfig {
 			.securityContext(context -> context.securityContextRepository(new RequestAttributeSecurityContextRepository()))
 			// 상태 변경 API가 없고(GET 이동만), 로그인 CSRF는 state(쿠키 대조)로 막는다
 			.csrf(AbstractHttpConfigurer::disable)
-			.headers(headers -> headers.referrerPolicy(referrer ->
-				referrer.policy(ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN)))
+			.headers(SecurityHeaders::apply)	// 다른 체인과 같은 보안 헤더 · HSTS 끔 (COMMON-67)
 			.formLogin(AbstractHttpConfigurer::disable)
 			.httpBasic(AbstractHttpConfigurer::disable)
 			.logout(AbstractHttpConfigurer::disable)
