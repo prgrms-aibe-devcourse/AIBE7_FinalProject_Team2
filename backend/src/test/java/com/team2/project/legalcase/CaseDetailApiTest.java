@@ -65,6 +65,40 @@ class CaseDetailApiTest extends ApiIntegrationTest {
 	}
 
 	@Test
+	void getCase_castAndNoticeFlags() throws Exception {
+		// BE-125: 배역은 그대로, 민감 플래그는 사용자 안내 대상만 (사형 · 무기형 같은 가드 전용 값은 형량을 짐작하게 한다)
+		long caseId = insertCase("MURDER", "PUBLISHED");
+		jdbcTemplate.update("""
+				UPDATE legal_case SET cast_roles = '{"prosecutor": "nambul", "defense": "naero"}'::jsonb,
+				sensitive_flags = '["CAPITAL_PENALTY", "MENTAL_HEALTH", "SUBSTANCE", "SELF_HARM"]'::jsonb WHERE id = ?""",
+				caseId);
+
+		mockMvc.perform(get(caseUrl(caseId)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.cast.prosecutor").value("nambul"))
+				.andExpect(jsonPath("$.cast.defense").value("naero"))
+				.andExpect(jsonPath("$.sensitiveFlags.length()").value(2))
+				.andExpect(jsonPath("$.sensitiveFlags[0]").value("MENTAL_HEALTH"))
+				.andExpect(jsonPath("$.sensitiveFlags[1]").value("SELF_HARM"));
+	}
+
+	@Test
+	void getCase_withoutCastOrNoticeFlags_omitsFields() throws Exception {
+		// 배정 전 · 분류 전 · 가드 전용 플래그만 있는 사건은 필드를 빼 화면이 기본 동작을 한다 (BE-125)
+		long unassigned = insertCase("FRAUD", "PUBLISHED");
+		long guardOnly = insertCase("FRAUD", "PUBLISHED");
+		jdbcTemplate.update("UPDATE legal_case SET sensitive_flags = '[\"PROFANITY_QUOTED\"]'::jsonb WHERE id = ?",
+				guardOnly);
+
+		for (long caseId : new long[] {unassigned, guardOnly}) {
+			mockMvc.perform(get(caseUrl(caseId)))
+					.andExpect(status().isOk())
+					.andExpect(jsonPath("$.cast").doesNotExist())
+					.andExpect(jsonPath("$.sensitiveFlags").doesNotExist());
+		}
+	}
+
+	@Test
 	void getCase_hidesValuesBeforeVerdict() throws Exception {
 		// 체험 전 화면이라 판결을 미리 알려 주는 값은 없다 (API 4와 같은 기준, 섹션 본문은 API 6에서 단계별로)
 		long caseId = insertCase("MURDER", "PUBLISHED");

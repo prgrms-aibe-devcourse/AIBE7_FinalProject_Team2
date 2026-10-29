@@ -11,7 +11,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/** 커뮤니티 댓글 (BE-115, V37). 글쓴이 · 명함 기준은 글과 같다 */
+/** 커뮤니티 댓글 (BE-115, V38). 글쓴이 · 명함 기준은 글과 같다 */
 @Entity
 @Table(name = "community_comment")
 @Getter

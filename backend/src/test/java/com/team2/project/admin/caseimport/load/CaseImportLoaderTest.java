@@ -13,12 +13,19 @@ import com.team2.project.legalcase.domain.CaseStatus;
 import com.team2.project.legalcase.domain.CourtLevel;
 import com.team2.project.legalcase.domain.CrimeType;
 import com.team2.project.legalcase.domain.LegalCase;
+import com.team2.project.legalcase.service.CaseCastAssigner;
 import com.team2.project.pipeline.PipelineResult;
 import com.team2.project.support.ApiIntegrationTest;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -173,7 +180,7 @@ class CaseImportLoaderTest extends ApiIntegrationTest {
 	void load_judgmentPointsToUnknownFactor() {
 		PipelineResult broken = new PipelineResult("job", node(caseJson()), node(reportJson()),
 			node(courtDraftJson()), node(aiJudgmentJson().replace("\"factorId\": 7", "\"factorId\": 99")),
-			new PipelineResult.Selection("gemini:test", 1, "consensus", "합의", List.of()), null, null);
+			new PipelineResult.Selection("gemini:test", 1, "consensus", "합의", List.of()), null, null, null);
 
 		assertThatThrownBy(() -> loader.load(caseImport(), broken))
 			.isInstanceOf(BusinessException.class)
@@ -190,7 +197,7 @@ class CaseImportLoaderTest extends ApiIntegrationTest {
 				{"runs": 5, "factors": [
 				  {"factorId": 7, "valueAxis": "PRINCIPLE_RELATION",
 				   "valueAxisVotes": {"runs": 5, "counts": {"PRINCIPLE_RELATION": 4, "FAULT_STANDARD": 1},
-				                      "needsReview": false, "requestedRuns": 5}}]}"""), null);
+				                      "needsReview": false, "requestedRuns": 5}}]}"""), null, null);
 
 		LegalCase legalCase = loader.load(caseImport(), withVotes);
 
@@ -288,6 +295,192 @@ class CaseImportLoaderTest extends ApiIntegrationTest {
 		assertThat(emptyEvidence.getStatus()).isEqualTo(CaseStatus.DRAFT);
 	}
 
+	// ---------------------------------------------------------------- 배역 · 민감 플래그 (BE-125)
+
+	@Test
+	@DisplayName("분류 결과의 민감 플래그를 사건에 적는다 — 모르는 값도 이름 그대로, 겹친 값은 하나로 (BE-125)")
+	void load_savesSensitiveFlags() {
+		LegalCase legalCase = loader.load(caseImport(), resultOf(node(caseJson()), null, node("""
+			{"model": "openai:test", "runs": 3, "needsReview": ["MENTAL_HEALTH"],
+			 "classification": {"mood": "tragic", "issue": "mental_state", "victim": "forgive", "thirdParty": true,
+			                    "sensitiveFlags": ["MENTAL_HEALTH", "CAPITAL_PENALTY", "NOT_A_FLAG", "MENTAL_HEALTH"]}}""")));
+
+		assertThat(jdbcTemplate.queryForObject("SELECT sensitive_flags::text FROM legal_case WHERE id = ?",
+			String.class, legalCase.getId())).isEqualTo("[\"MENTAL_HEALTH\", \"CAPITAL_PENALTY\", \"NOT_A_FLAG\"]");
+	}
+
+	@Test
+	@DisplayName("분류를 돌리지 않은 등록은 민감 플래그를 비워 둔다(null) — '켜진 것 없음([])'과 구분한다")
+	void load_withoutClassify_leavesFlagsUnset() {
+		LegalCase notClassified = loader.load(caseImport(), result());
+		LegalCase noFlags = loader.load(caseImport(), resultOf(node(caseJson()), null, node("""
+			{"classification": {"mood": "calculated", "sensitiveFlags": []}}""")));
+
+		assertThat(jdbcTemplate.queryForObject("SELECT sensitive_flags::text FROM legal_case WHERE id = ?",
+			String.class, notClassified.getId())).isNull();
+		assertThat(jdbcTemplate.queryForObject("SELECT sensitive_flags::text FROM legal_case WHERE id = ?",
+			String.class, noFlags.getId())).isEqualTo("[]");
+	}
+
+	@Test
+	@DisplayName("분류 결과에 sensitiveFlags가 없거나 배열이 아니면 '켜진 것 없음([])'이 아니라 분류 전(null)으로 둔다 (BE-125)")
+	void load_malformedSensitiveFlags_leavesFlagsUnset() {
+		LegalCase missing = loader.load(caseImport(), resultOf(node(caseJson()), null, node("""
+			{"classification": {"mood": "calculated"}}""")));
+		LegalCase notArray = loader.load(caseImport(), resultOf(node(caseJson()), null, node("""
+			{"classification": {"mood": "calculated", "sensitiveFlags": "MENTAL_HEALTH"}}""")));
+
+		for (LegalCase legalCase : List.of(missing, notArray)) {
+			assertThat(jdbcTemplate.queryForObject("SELECT sensitive_flags::text FROM legal_case WHERE id = ?",
+				String.class, legalCase.getId())).isNull();
+		}
+	}
+
+	@Test
+	@DisplayName("대본이 함께 오면 대본을 만든 배역을 사건 배역으로 쓴다 — 대사에 캐릭터 이름이 들어가 있다 (BE-125)")
+	void load_scriptCastWins() {
+		LegalCase legalCase = loader.load(caseImport(), resultOf(node(caseJson()), node("""
+			{"evidence": [{"factorId": 7, "role": "prosecutor", "character": "nambul", "text": "계획적이었습니다."}],
+			 "cast": {"prosecutor": "nambul", "defense": "naero"},
+			 "model": "openai:test", "publishable": true}"""), null));
+
+		assertThat(castOf(legalCase.getId())).isEqualTo(Map.of("prosecutor", "nambul", "defense", "naero"));
+	}
+
+	@Test
+	@DisplayName("대본에 배역이 있는데 읽을 수 없으면 규칙으로 덮지 않고 배정하지 않는다 — 생성 기록에 남긴다 (BE-125)")
+	void load_unreadableScriptCast_leavesCastUnassigned() {
+		LegalCase legalCase = loader.load(caseImport(), resultOf(node(caseJson()), node("""
+			{"evidence": [{"factorId": 7, "role": "prosecutor", "character": "nambul", "text": "계획적이었습니다."}],
+			 "cast": {"prosecutor": "nambul", "defense": "naero", "codefendant": "naero"},
+			 "model": "openai:test", "publishable": true}"""), null));
+
+		assertThat(jdbcTemplate.queryForObject("SELECT cast_roles::text FROM legal_case WHERE id = ?",
+			String.class, legalCase.getId())).isNull();
+		assertThat(jdbcTemplate.queryForObject("""
+			SELECT g.generation_report->>'castWarning' FROM ai_generation g
+			JOIN judgment j ON j.id = g.judgment_id WHERE j.case_id = ?""", String.class, legalCase.getId()))
+			.contains("배역");
+	}
+
+	@Test
+	@DisplayName("대본이 없으면 같은 범죄 유형의 배정 수 · 마지막 배정을 보고 정한다 (BE-125)")
+	void load_assignsCastByCrimeType() {
+		String[] expected = expectedSequence("THEFT", 2);
+
+		LegalCase first = loader.load(caseImport(CrimeType.THEFT), resultWith(theftContent()));
+		LegalCase second = loader.load(caseImport(CrimeType.THEFT), resultWith(theftContent()));
+
+		assertThat(castOf(first.getId())).containsEntry("defense", expected[0]);
+		assertThat(castOf(second.getId())).containsEntry("defense", expected[1]);
+		assertThat(castOf(second.getId()).get("prosecutor")).isNotEqualTo(castOf(second.getId()).get("defense"));
+	}
+
+	@Test
+	@DisplayName("같은 범죄 유형이 동시에 적재돼도 차례로 적재한 것과 같은 배역이 나온다 — 둘이 같은 배정을 받지 않는다 (BE-125)")
+	void load_concurrentSameCrimeType() throws Exception {
+		String[] expected = expectedSequence("THEFT", 2);
+		List<PipelineResult> results = List.of(resultWith(theftContent()), resultWith(theftContent()));
+		List<CaseImport> imports = List.of(caseImport(CrimeType.THEFT), caseImport(CrimeType.THEFT));
+
+		CountDownLatch start = new CountDownLatch(1);
+		ExecutorService pool = Executors.newFixedThreadPool(2);
+		try {
+			List<Future<LegalCase>> futures = new ArrayList<>();
+			for (int i = 0; i < 2; i++) {
+				int index = i;
+				futures.add(pool.submit(() -> {
+					start.await();
+					return loader.load(imports.get(index), results.get(index));
+				}));
+			}
+			start.countDown();
+			List<String> defenses = new ArrayList<>();
+			for (Future<LegalCase> future : futures) {
+				defenses.add(castOf(future.get(30, TimeUnit.SECONDS).getId()).get("defense"));
+			}
+			assertThat(defenses).containsExactlyInAnyOrder(expected);
+		} finally {
+			pool.shutdownNow();
+		}
+	}
+
+	@Test
+	@DisplayName("대본의 배역을 쓰는 적재도 그 범죄 유형의 배정 잠금을 기다린다 — 규칙으로 배정하는 적재와 같은 잠금이다 (BE-125)")
+	void load_scriptCastWaitsForCastLock() throws Exception {
+		PipelineResult withScript = resultOf(theftContent(), node("""
+			{"evidence": [{"factorId": 7, "role": "prosecutor", "character": "nambul", "text": "계획적이었습니다."}],
+			 "cast": {"prosecutor": "nambul", "defense": "naero"},
+			 "model": "openai:test", "publishable": true}"""), null);
+		CaseImport theft = caseImport(CrimeType.THEFT);
+
+		ExecutorService pool = Executors.newSingleThreadExecutor();
+		try (java.sql.Connection holder = jdbcTemplate.getDataSource().getConnection()) {
+			holder.setAutoCommit(false);
+			try (java.sql.Statement lock = holder.createStatement()) {
+				lock.execute("SELECT pg_advisory_xact_lock(hashtext('legal_case_cast:THEFT'))");
+			}
+			Future<LegalCase> loading = pool.submit(() -> loader.load(theft, withScript));
+
+			assertThatThrownBy(() -> loading.get(1500, TimeUnit.MILLISECONDS))
+				.isInstanceOf(java.util.concurrent.TimeoutException.class);
+			holder.commit();
+			assertThat(castOf(loading.get(30, TimeUnit.SECONDS).getId()))
+				.isEqualTo(Map.of("prosecutor", "nambul", "defense", "naero"));
+		} finally {
+			pool.shutdownNow();
+		}
+	}
+
+	/** 지금 DB 상태에서 그 유형에 n건을 차례로 배정하면 나올 피고인 역 (규칙 자체는 CaseCastAssignerTest가 본다) */
+	private String[] expectedSequence(String crimeType, int n) {
+		long naero = 0;
+		long nambul = 0;
+		for (Map<String, Object> row : jdbcTemplate.queryForList("""
+			SELECT cast_roles->>'defense' AS defense, count(*) AS cnt FROM legal_case
+			WHERE crime_type = ? AND cast_roles IS NOT NULL GROUP BY 1""", crimeType)) {
+			long cnt = ((Number) row.get("cnt")).longValue();
+			if ("naero".equals(row.get("defense"))) {
+				naero = cnt;
+			} else if ("nambul".equals(row.get("defense"))) {
+				nambul = cnt;
+			}
+		}
+		List<String> last = jdbcTemplate.queryForList("""
+			SELECT cast_roles->>'defense' FROM legal_case WHERE crime_type = ? AND cast_roles IS NOT NULL
+			ORDER BY id DESC LIMIT 1""", String.class, crimeType);
+		String previous = last.isEmpty() ? null : last.get(0);
+		String[] sequence = new String[n];
+		for (int i = 0; i < n; i++) {
+			previous = CaseCastAssigner.nextDefense(naero, nambul, previous);
+			sequence[i] = previous;
+			if ("naero".equals(previous)) {
+				naero++;
+			} else {
+				nambul++;
+			}
+		}
+		return sequence;
+	}
+
+	private Map<String, String> castOf(Long caseId) {
+		String json = jdbcTemplate.queryForObject("SELECT cast_roles::text FROM legal_case WHERE id = ?", String.class,
+			caseId);
+		Map<String, String> cast = new java.util.LinkedHashMap<>();
+		node(json).properties().forEach(entry -> cast.put(entry.getKey(), entry.getValue().asText()));
+		return cast;
+	}
+
+	private JsonNode theftContent() {
+		return node(caseJson().replace("\"crimeType\": \"MURDER\"", "\"crimeType\": \"THEFT\""));
+	}
+
+	private PipelineResult resultOf(JsonNode caseContent, JsonNode script, JsonNode classify) {
+		return new PipelineResult("job", caseContent, node(reportJson()), node(courtDraftJson()),
+			node(aiJudgmentJson()),
+			new PipelineResult.Selection("gemini:test", 1, "consensus", "합의", List.of()), null, script, classify);
+	}
+
 	private PipelineResult result() {
 		return resultWith(node(caseJson()));
 	}
@@ -295,13 +488,13 @@ class CaseImportLoaderTest extends ApiIntegrationTest {
 	private PipelineResult resultWith(JsonNode caseContent) {
 		return new PipelineResult("job", caseContent, node(reportJson()), node(courtDraftJson()),
 			node(aiJudgmentJson()),
-			new PipelineResult.Selection("gemini:test", 1, "consensus", "합의", List.of()), null, null);
+			new PipelineResult.Selection("gemini:test", 1, "consensus", "합의", List.of()), null, null, null);
 	}
 
 	private PipelineResult resultWithScript(JsonNode script) {
 		return new PipelineResult("job", node(caseJson()), node(reportJson()), node(courtDraftJson()),
 			node(aiJudgmentJson()),
-			new PipelineResult.Selection("gemini:test", 1, "consensus", "합의", List.of()), null, script);
+			new PipelineResult.Selection("gemini:test", 1, "consensus", "합의", List.of()), null, script, null);
 	}
 
 	/** script 단계 산출물(BE-107). 적재는 evidence · model · cast · publishable · createdAt · stopped만 본다 */

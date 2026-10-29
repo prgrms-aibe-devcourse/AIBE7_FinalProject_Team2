@@ -1,5 +1,5 @@
--- V37__create_community.sql
--- 커뮤니티 글 · 댓글 · 좋아요 (BE-115, FE-47 · FE-88 · FE-89 · FE-116 · API 명세 12장 v0.66 · ERD v1.47).
+-- V38__create_community.sql
+-- 커뮤니티 글 · 댓글 · 좋아요 (BE-115, FE-47 · FE-88 · FE-89 · FE-116 · API 명세 12장 v0.68 · ERD v1.48).
 --
 -- 쓰기(글 · 댓글 · 좋아요)는 로그인한 회원만 한다. 글쓴이는 member_id로 정하고, 명함(레벨 · 직업 · 꾸미기 · 카드 아래 줄)과
 -- 경험치는 지금 구조대로 익명 ID 기준이라 쓴 요청의 익명 ID(anonymous_user_id)를 함께 남긴다(docs/decisions/BE-115.md).

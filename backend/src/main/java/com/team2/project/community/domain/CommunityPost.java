@@ -16,7 +16,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 /**
- * 커뮤니티 글 (BE-115, V37). 글쓴이는 회원(memberId)이고, 명함 · 경험치는 쓴 요청의 익명 ID(anonymousUserId) 기준이다.
+ * 커뮤니티 글 (BE-115, V38). 글쓴이는 회원(memberId)이고, 명함 · 경험치는 쓴 요청의 익명 ID(anonymousUserId) 기준이다.
  * 좋아요 수 · 댓글 수는 목록 정렬 · 쪽 나누기용으로 함께 센다 — 바꾸는 것은 저장소의 원자적 UPDATE만 한다
  */
 @Entity
