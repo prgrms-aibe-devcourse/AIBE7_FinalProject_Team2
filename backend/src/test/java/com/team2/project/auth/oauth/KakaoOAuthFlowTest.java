@@ -2,6 +2,7 @@ package com.team2.project.auth.oauth;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -122,6 +123,21 @@ class KakaoOAuthFlowTest extends ApiIntegrationTest {
 		redisKeys.add(key);
 		assertThat(tokenRedis.hasKey(key)).isTrue();
 		assertThat(tokenRedis.getExpire(key)).isPositive();
+	}
+
+	@Test
+	void 카카오_체인도_HSTS를_붙이지_않고_다른_보안_헤더는_붙인다() throws Exception {
+		// 카카오 체인은 client-id가 있어야 켜져서(KakaoOAuthEnabled) 이 테스트 클래스에서만 확인할 수 있다.
+		// 사용자 · 관리자 체인은 UserSecurityChainTest가 확인한다. HSTS는 Nginx가 붙인다 (COMMON-67, PR #337 리뷰)
+		MvcResult result = mockMvc.perform(get(START).secure(true))
+			.andExpect(status().is3xxRedirection())
+			.andExpect(header().doesNotExist("Strict-Transport-Security"))
+			.andExpect(header().string("Referrer-Policy", "strict-origin-when-cross-origin"))
+			.andExpect(header().string("X-Content-Type-Options", "nosniff"))
+			.andExpect(header().string("X-Frame-Options", "DENY"))
+			.andReturn();
+		// 사용자 체인이 아니라 카카오 체인이 응답했는지 (꺼져 있으면 카카오로 보내지 않는다)
+		assertThat(result.getResponse().getRedirectedUrl()).startsWith("https://kauth.kakao.com/oauth/authorize");
 	}
 
 	@Test

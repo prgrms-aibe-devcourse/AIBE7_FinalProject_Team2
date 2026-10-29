@@ -300,7 +300,7 @@ sudo certbot certificates                                # 서버의 인증서 �
 - IP · http(`http://<탄력적 IP>`)로는 여전히 위 흐름이 동작하지 않는다. 사용자에게는 도메인 주소만 안내한다.
 - **HSTS는 1일(`max-age=86400`)로 켜 두었다** (COMMON-67). 값은 Nginx 한 곳(`frontend/nginx/default.conf`의 `$hsts_header`)에서만 정하고, https 응답(화면 · 정적 파일 · `/api`)에만 붙는다. 백엔드(Spring Security)는 HSTS를 끈다 — COMMON-67 전에는 백엔드가 API 응답에 1년 HSTS를 붙이고 있었다.
 - **보안 헤더**: Nginx가 직접 내려주는 응답(화면 · 정적 파일 · `version.json` · 429)에 `X-Content-Type-Options: nosniff` · `X-Frame-Options: DENY` · `Referrer-Policy: strict-origin-when-cross-origin`을 붙인다(`snippets/security-headers.conf`). `/api` 응답은 백엔드가 같은 헤더를 붙인다. 스모크 테스트 "[보안 헤더]"가 확인한다(CI는 실패로, 서버 되돌림 때는 경고만).
-- **HSTS 늘리기**: 첫 인증서 자동 갱신이 문제없이 돈 뒤(아래 확인) `$hsts_header`를 1주(`604800`) → 1년(`31536000`)으로 늘린다. 늘릴 때 `includeSubDomains`를 함께 판단한다.
+- **HSTS 늘리기**: 첫 인증서 자동 갱신이 문제없이 돈 뒤(아래 확인) `$hsts_header`를 지금 값 1일(`86400`) → 1주(`604800`) → 1년(`31536000`)으로 차례로 늘린다. 늘릴 때 `includeSubDomains`를 함께 판단한다.
 
 ```bash
 # 갱신이 정상으로 돌았는지 (서버). 마지막 갱신 시각 · 새 만료일을 본다
