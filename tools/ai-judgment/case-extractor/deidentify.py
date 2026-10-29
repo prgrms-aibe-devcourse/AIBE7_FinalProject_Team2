@@ -114,13 +114,45 @@ COURT_LEVELS = (
 )
 
 
+# 법원명은 판결문 머리에서만 찾는다 (BE-131). 본문에는 판례 인용 등으로 다른 법원명(대법원 등)이 나오고,
+# 머리의 법원명은 "○ ○ 지 방 법 원"처럼 글자 사이를 띄어 쓴 경우가 많아 COURT로는 못 찾는다.
+HEAD_LINES = 15      # 머리로 보는 앞쪽 줄 수 (빈 줄 제외)
+HEAD_CHARS = 120     # 줄 단위로 못 찾았을 때 공백을 지우고 찾아볼 앞쪽 글자 수
+COURT_LOWER = r"[가-힣]{2,6}(?:지방|고등|가정|행정)법원(?:[가-힣]{2,6}지원)?"
+COURT_LINE = re.compile(COURT_LOWER + r"|대법원")
+# 국가법령정보센터 등의 머리 줄: "○○지법 2099. 1. 1. 선고 …", "○○고법 …", "○○지법○○지원 …" (공백을 지운 줄의 앞부분)
+COURT_ABBREVIATION = re.compile(r"([가-힣]{2,6})(지법|고법)([가-힣]{2,6}지원)?(?=\d|선고|$)")
+COURT_ABBREVIATION_FULL = {"지법": "지방법원", "고법": "고등법원"}
+
+
+def extract_court_name(text):
+    """판결문 머리에서 법원명을 찾는다. 못 찾으면 None (본문의 다른 법원명을 잡는 것보다 비워 두는 편이 안전하다).
+
+    1. 앞쪽 줄 중 공백을 지운 줄 전체가 법원명인 줄 (띄어 쓴 머리 "○ ○ 지 방 법 원" 포함)
+    2. 약칭으로 시작하는 줄 ("○○지법 … 선고") → 정식 이름으로 풀어 쓴다
+    3. 그래도 없으면 공백을 모두 지운 앞쪽 HEAD_CHARS 글자 안에서 찾는다 (PDF에서 머리 글자가 한 줄에 한 자씩 나온 경우).
+       대법원은 빼고 찾는다 — 상고심 머리는 1에서 잡히고, 여기서 나오는 대법원은 본문의 판례 인용이다
+    """
+    lines = [re.sub(r"\s", "", line) for line in text.splitlines()]
+    head = [line for line in lines if line][:HEAD_LINES]
+    for line in head:
+        if COURT_LINE.fullmatch(line):
+            return line
+    for line in head:
+        abbreviation = COURT_ABBREVIATION.match(line)
+        if abbreviation:
+            region, kind, branch = abbreviation.groups()
+            return region + COURT_ABBREVIATION_FULL[kind] + (branch or "")
+    court = re.search(COURT_LOWER, "".join(lines)[:HEAD_CHARS])
+    return court.group(0) if court else None
+
+
 def extract_source_info(text):
     """판결문 원문에서 사건번호 · 법원명 · 선고일 · 심급을 꺼낸다. 못 찾은 값은 None (설정 파일로 직접 넣는다).
 
-    판결문 머리(사건 · 법원 · 선고)가 앞에 오므로 각각 처음 나온 값을 쓴다.
+    판결문 머리(사건 · 법원 · 선고)가 앞에 오므로 각각 처음 나온 값을 쓴다. 법원명은 머리에서만 찾는다(extract_court_name).
     """
     case_number = CASE_NUMBER.search(text)
-    court = COURT.search(text)
     decided = DECIDED_AT.search(text)
     number = re.sub(r"\s", "", case_number.group(0)) if case_number else None
     level = None
@@ -131,7 +163,7 @@ def extract_source_info(text):
                 break
     return {
         "caseNumber": number,
-        "courtName": re.sub(r"\s", "", court.group(0)) if court else None,
+        "courtName": extract_court_name(text),
         "decidedAt": (f"{decided.group(1)}-{int(decided.group(2)):02d}-{int(decided.group(3)):02d}"
                       if decided else None),
         "courtLevel": level,

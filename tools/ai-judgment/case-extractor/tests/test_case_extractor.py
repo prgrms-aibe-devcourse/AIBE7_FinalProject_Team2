@@ -539,6 +539,27 @@ class ListingEligibilitySourceTest(unittest.TestCase):
                          ("2099노45", "APPEAL", "2099-09-03"))
         self.assertEqual(extract_source_info("머리 정보 없음")["caseNumber"], None)
 
+    def test_extractSourceInfo_courtNameFromHeadOnly(self):
+        # BE-131: 법원명은 판결문 머리에서만 찾는다. 본문의 판례 인용 법원명을 잡지 않는다
+        body = "\n".join(["범죄사실", "피고인은 …", "(대법원 2099. 1. 1. 선고 2099도1 판결 참조)"] + ["양형의 이유"] * 30)
+        cases = {
+            "띄어 쓴 머리": "- 1 -\n서 울 가 상 지 방 법 원\n판 결\n사건 2099고합1 살인\n" + body,
+            "지원": "가상지방법원 가상지원\n판결\n사건 2099고단2 상해\n" + body,
+            "한 줄에 한 자": "\n".join("가상지방법원") + "\n판\n결\n사건 2099고합3 살인\n" + body,
+        }
+        for name, text in cases.items():
+            expected = "가상지방법원가상지원" if name == "지원" else ("서울가상지방법원" if name == "띄어 쓴 머리" else "가상지방법원")
+            self.assertEqual(extract_source_info(text)["courtName"], expected, name)
+        # 약칭 머리(국가법령정보센터 형식)는 정식 이름으로 풀어 쓴다
+        self.assertEqual(extract_source_info("가상지법 2099. 1. 1. 선고 2099고합4 판결 [살인]\n" + body)["courtName"],
+                         "가상지방법원")
+        self.assertEqual(extract_source_info("가상고법 2099. 1. 1. 선고 2099노5 판결 [살인]\n" + body)["courtName"],
+                         "가상고등법원")
+        # 상고심 머리 "대 법 원"은 그대로 대법원
+        self.assertEqual(extract_source_info("대 법 원\n판 결\n사건 2099도6 살인\n" + body)["courtName"], "대법원")
+        # 머리에 법원명이 없으면 본문의 "대법원"을 잡지 않고 비워 둔다
+        self.assertIsNone(extract_source_info("판결\n사건 2099고합7 살인\n" + body)["courtName"])
+
     def test_extractSourceInfo_courtLevelBySign(self):
         # 사건 부호 → 심급 (1심 · 항소심 · 상고심, 군사법원 감 · 전자 부호 포함)
         expected = {"2099고합1": "FIRST", "2099고단5": "FIRST", "2099노45": "APPEAL", "2099감노2": "APPEAL",
