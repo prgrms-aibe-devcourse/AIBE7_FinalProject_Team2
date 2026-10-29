@@ -38,3 +38,8 @@ test('닉네임을 정하지 않은 회원의 표시 이름(방청객 {회원 ID
   // 자동 이름은 공백이 있어 닉네임 형식 검사에 걸린다 — 닉네임 칸에 그대로 두고 저장할 수 없다
   assert.notEqual(nicknameError('방청객 1024'), '');
 });
+
+test("'방청객'으로 시작하는 닉네임은 서버처럼 거절한다 — 자동 이름 흉내 방지 (BE-139 리뷰)", () => {
+  ['방청객', '방청객99', '방청객가나'].forEach((value) => assert.match(nicknameError(value), /방청객/, value));
+  ['판사', '나는방청객'].forEach((value) => assert.equal(nicknameError(value), '', value)); // 앞에 오지 않으면 괜찮다
+});

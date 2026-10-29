@@ -1,6 +1,7 @@
 import { button, element, mockTag } from '../../components/siteLayout.js';
 import { formatDispositions, formatPenalty } from '../../utils/judgmentFormat.js';
 import { API_MODE } from '../../api/config.js';
+import { composeErrorText } from './composeError.js';
 import { currentUser } from '../../utils/session.js';
 import { eraseSignature, signatureSvg, signerSeed, writeSignature } from '../../components/signatureInk.js';
 import { profileFace, typeFace } from '../../components/personCards.js';
@@ -640,9 +641,7 @@ export function composer({ api, navigate, cases, onPosted }) {
       if (box.isConnected) onPosted(post);
     } catch (failure) {
       if (!box.isConnected) return;
-      showError(failure?.code === 'UNAUTHORIZED' ? '로그인이 풀렸어요. 다시 로그인해 주세요.'
-        : failure?.code === 'VALIDATION_ERROR' ? '입력한 내용을 확인해 주세요.'
-          : '글을 올리지 못했어요. 잠시 뒤 다시 시도해 주세요.');
+      showError(composeErrorText(failure));
       submit.disabled = false;
       submit.textContent = '서명하고 올리기';
       eraseSignature(signature);

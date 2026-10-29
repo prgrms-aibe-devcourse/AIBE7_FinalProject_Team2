@@ -9,14 +9,11 @@ import { API_MODE } from '../../api/config.js';
 import { clearUser, currentUser, saveUser } from '../../utils/session.js';
 import { NICKNAME_HINT, NICKNAME_MAX, isUnnamed, lockNicknameLength, nicknameError } from '../../utils/nickname.js';
 import { BIO_MAX, getProfileSettings, updateProfileSettings } from '../../utils/profileSettings.js';
+import { isNicknameChanged, planMeSync, saveNickname, saveStatus } from './nicknameSave.js';
 
 const BIO_PLACEHOLDER = '사건 앞에서는 한 번 더 생각하는 판사입니다.';
 
 const IS_MOCK = API_MODE === 'mock';
-
-// 중복(409) · 형식(400)은 닉네임 칸 아래에 고칠 방법으로, 그 밖의 실패는 저장 결과 줄에 알린다
-const NICKNAME_TAKEN = '이미 쓰고 있는 닉네임이에요. 다른 닉네임을 골라 주세요.';
-const NICKNAME_REJECTED = '서버가 이 닉네임을 받지 못했어요. 한글 · 영문 · 숫자로 다시 적어 주세요.';
 
 // 서버 시각(+09:00)을 화면 문구로. 값이 없으면 빈 줄 대신 "기록 없음"
 const formatWhen = (iso) => {
@@ -76,6 +73,7 @@ export function renderProfileEdit({ api, navigate, go, data = {}, card, fan }) {
   input.type = 'text';
   const unnamed = isUnnamed(user?.nickname); // 아직 닉네임을 정하지 않았으면(카카오 회원) 칸은 비워 둔다 — 표시 이름 '방청객 {회원 ID}'는 닉네임 형식이 아니다
   let savedNickname = unnamed ? '' : user?.nickname ?? ''; // 서버에 있는 닉네임. 바뀌지 않았으면 다시 저장하지 않는다
+  let nicknameTouched = false; // 저장을 한 번이라도 시작했으면 늦게 온 회원 정보(M-8)로 닉네임 · 로그인 표시를 덮지 않는다
   input.value = savedNickname;
   if (unnamed) input.placeholder = '아직 정하지 않았어요';
   input.maxLength = NICKNAME_MAX;
@@ -152,8 +150,10 @@ export function renderProfileEdit({ api, navigate, go, data = {}, card, fan }) {
   const facts = element('dl', 'edit-facts');
   const showMe = Boolean(user) && !IS_MOCK && Boolean(api.getMe);
   // 서버 값이 없는 동안(FE-103)은 같은 문구를 세 번 쓰지 않고 한 줄로 묶는다
+  // 서버 회원 정보를 기다리는 동안에는 로그인 방식도 단정하지 않는다(아이디 회원이 잠깐 "카카오 로그인"으로 보이지 않게)
+  const loginMethod = !user ? '로그인 전 (이 브라우저의 익명 ID)' : IS_MOCK ? '개발용 목업 로그인' : showMe ? '불러오는 중이에요' : '카카오 로그인';
   facts.append(
-    fact('로그인 방식', user ? (IS_MOCK ? '개발용 목업 로그인' : '카카오 로그인') : '로그인 전 (이 브라우저의 익명 ID)'),
+    fact('로그인 방식', loginMethod),
     user ? fact('아이디 · 가입일 · 최근 로그인', showMe ? '불러오는 중이에요' : '서버 연동 후 표시돼요') : fact('현재 아이디', '로그인 전 (이 브라우저의 익명 ID)'),
   );
 
@@ -208,8 +208,7 @@ export function renderProfileEdit({ api, navigate, go, data = {}, card, fan }) {
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     status.textContent = '';
-    const wantedNickname = input.value.trim();
-    const nicknameChanged = Boolean(user) && wantedNickname !== savedNickname; // 아직 정하지 않은 채 비워 둔 칸은 바꾸지 않은 것이다
+    const nicknameChanged = Boolean(user) && isNicknameChanged(input.value, savedNickname); // 아직 정하지 않은 채 비워 둔 칸은 바꾸지 않은 것이다
     const message = nicknameChanged ? nicknameError(input.value) : '';
     error.textContent = message;
     input.setAttribute('aria-invalid', message ? 'true' : 'false');
@@ -221,28 +220,23 @@ export function renderProfileEdit({ api, navigate, go, data = {}, card, fan }) {
     if (bioMessage) { bio.focus(); return; }
     save.disabled = true; // 저장하는 동안 다시 누르지 못하게
     // 닉네임(M-7): 서버가 저장하고 중복이면 409. 성공하면 이 브라우저의 로그인 표시값도 바꾼다. 실패해도 한 줄 소개는 따로 저장한다
-    let nicknameSaved = true;
-    let nicknameFailure = '';
-    if (nicknameChanged) {
-      try {
-        const result = await api.putNickname(wantedNickname);
-        savedNickname = result?.nickname ?? wantedNickname;
-        input.value = savedNickname;
-        saveUser({ nickname: savedNickname, role: user.role });
-      } catch (failure) {
-        nicknameSaved = false;
-        const fieldMessage = failure?.code === 'DUPLICATE_NICKNAME' ? NICKNAME_TAKEN : failure?.code === 'VALIDATION_ERROR' ? NICKNAME_REJECTED : '';
-        error.textContent = fieldMessage;
-        input.setAttribute('aria-invalid', fieldMessage ? 'true' : 'false');
-        nicknameFailure = fieldMessage ? '닉네임을 저장하지 못했어요.' : '닉네임을 저장하지 못했어요. 잠시 뒤 다시 시도해 주세요.';
-        if (fieldMessage) input.focus();
-      }
+    if (nicknameChanged) nicknameTouched = true; // 저장을 시작했다 — 이후 늦게 온 회원 정보는 계정 정보 줄만 채운다
+    const nicknameResult = nicknameChanged ? await saveNickname({ api, wanted: input.value, saved: savedNickname }) : { changed: false };
+    let nicknameStatusText = '';
+    if (nicknameResult.changed && nicknameResult.ok) {
+      savedNickname = nicknameResult.nickname;
+      input.value = savedNickname;
+      saveUser({ nickname: savedNickname, role: user.role });
+    } else if (nicknameResult.changed) {
+      error.textContent = nicknameResult.fieldMessage;
+      input.setAttribute('aria-invalid', nicknameResult.fieldMessage ? 'true' : 'false');
+      nicknameStatusText = nicknameResult.statusText;
+      if (nicknameResult.fieldMessage) input.focus();
     }
     const bioSaved = bioNext === getProfileSettings().bio || await updateProfileSettings({ bio: bioNext });
     save.disabled = false;
     if (!bioSaved) bio.value = getProfileSettings().bio; // 거절되면 서버에 있는 값으로 돌린다
-    if (!nicknameSaved) status.textContent = bioSaved ? `${nicknameFailure} 한 줄 소개는 저장했어요.` : `${nicknameFailure} 한 줄 소개도 저장하지 못했어요.`;
-    else status.textContent = bioSaved ? '저장했어요.' : '한 줄 소개를 저장하지 못했어요. 잠시 뒤 다시 시도해 주세요.';
+    status.textContent = saveStatus({ nicknameStatusText, bioSaved });
   });
 
   // 서버 회원 정보(M-8)가 오면 계정 정보 줄과 닉네임 칸을 서버 값으로 채운다. 못 받으면 자리 문구를 그대로 둔다
@@ -255,13 +249,13 @@ export function renderProfileEdit({ api, navigate, go, data = {}, card, fan }) {
         fact('가입일', formatWhen(me.createdAt)),
         fact('최근 로그인', formatWhen(me.lastLoginAt)),
       );
-      // 다른 곳에서 바꾼 닉네임이면 아직 고치지 않은 칸만 서버 값으로 맞춘다
-      const serverNickname = me.nickname ?? '';
-      if (input.value.trim() === savedNickname && serverNickname !== savedNickname) {
-        savedNickname = serverNickname;
-        input.value = serverNickname;
+      // 저장을 시작했다면 방금 저장한 값이 더 새롭다. 아니면 다른 곳에서 바꾼 닉네임을 아직 고치지 않은 칸에만 맞추고, 로그인 표시는 지금 값과 비교한다
+      const plan = planMeSync({ me, inputValue: input.value, savedNickname, touched: nicknameTouched, currentNickname: currentUser()?.nickname });
+      if (plan.savedNickname !== undefined) {
+        savedNickname = plan.savedNickname;
+        input.value = plan.inputValue;
       }
-      if (me.displayName && me.displayName !== user.nickname) saveUser({ nickname: me.displayName, role: user.role });
+      if (plan.sessionNickname) saveUser({ nickname: plan.sessionNickname, role: user.role });
     }).catch(() => {});
   }
 
