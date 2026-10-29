@@ -26,7 +26,7 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.CannotCreateTransactionException;
 
 /**
- * 로그아웃 중 익명 ID 연결 확인이 실패해도 로그아웃은 204로 끝나고, 익명 ID 쿠키는 안전한 쪽(지움)으로 처리한다 (BE-137 리뷰).
+ * 로그아웃 중 익명 ID 연결 확인이 실패해도(어떤 실행 중 예외든) 로그아웃은 204로 끝나고, 익명 ID 쿠키는 안전한 쪽(지움)으로 처리한다 (BE-137 리뷰 · PR #340 리뷰).
  * 남겨 두면 다음 사람 기록이 회원 계정에 쌓일 수 있고, 손님 값이었다면 다음 행동 때 새 익명 ID를 받는 것으로 끝난다
  */
 class LogoutAnonymousCheckFailureTest extends ApiIntegrationTest {
@@ -62,6 +62,18 @@ class LogoutAnonymousCheckFailureTest extends ApiIntegrationTest {
 	void dataAccessFailure_logoutSucceeds_clearsAnonymousCookie() throws Exception {
 		IssuedTokens tokens = tokenIssuer.issue(MemberPrincipal.user(41));
 		doThrow(new DataAccessResourceFailureException("DB 오류")).when(anonymousLinkService).isLinkedToMember(any());
+
+		MvcResult result = logout(new Cookie(RefreshTokenCookies.NAME, tokens.refreshToken()));
+
+		assertThat(anonymousCookieDeletions(result)).isEqualTo(1);
+		assertThat(refreshTokens.find(tokens.refreshToken())).isEmpty();
+	}
+
+	@Test
+	@DisplayName("DB 계열이 아닌 예외(코드 오류 등)여도 로그아웃은 204, 리프레시는 폐기되고 익명 ID 쿠키는 지운다 (PR #340 리뷰)")
+	void unexpectedRuntimeException_logoutSucceeds_clearsAnonymousCookie() throws Exception {
+		IssuedTokens tokens = tokenIssuer.issue(MemberPrincipal.user(43));
+		doThrow(new IllegalStateException("예상하지 못한 오류")).when(anonymousLinkService).isLinkedToMember(any());
 
 		MvcResult result = logout(new Cookie(RefreshTokenCookies.NAME, tokens.refreshToken()));
 

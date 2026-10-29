@@ -16,9 +16,7 @@ import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
-import org.springframework.transaction.TransactionException;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -81,8 +79,9 @@ public class AuthController {
 
 	/**
 	 * 로그아웃 때 익명 ID 쿠키를 지울지. 회원에 연결된 값이면 지운다.
-	 * 연결 여부를 확인하지 못하면(DB 오류 · 연결 풀 고갈) 지운다 — 남겨 두면 다음 사람 기록이 회원 계정에 쌓일 수 있고,
-	 * 손님 값이었다면 다음 행동 때 새 익명 ID를 받는 것으로 끝난다. 로그아웃 자체는 실패시키지 않는다(리프레시는 이미 폐기됨)
+	 * 연결 여부를 확인하지 못하면(DB 오류 · 연결 풀 고갈 등 어떤 실행 중 예외든) 지운다 — 남겨 두면 다음 사람 기록이
+	 * 회원 계정에 쌓일 수 있고, 손님 값이었다면 다음 행동 때 새 익명 ID를 받는 것으로 끝난다.
+	 * 로그아웃 자체는 실패시키지 않는다(리프레시는 이미 폐기됨). 그래서 DB 계열만이 아니라 RuntimeException 전체를 받는다 (PR #340 리뷰)
 	 */
 	private boolean shouldClearAnonymousId(Optional<UUID> anonymousId) {
 		if (anonymousId.isEmpty()) {
@@ -90,8 +89,9 @@ public class AuthController {
 		}
 		try {
 			return anonymousLinkService.isLinkedToMember(anonymousId);
-		} catch (DataAccessException | TransactionException e) {
-			log.warn("로그아웃 중 익명 ID 연결 확인 실패 — 안전하게 쿠키를 지운다: {}", e.getMessage());
+		} catch (RuntimeException e) {
+			// 예상하지 못한 예외(코드 오류 등)도 여기서 삼키므로 종류와 스택을 남겨 원인을 찾을 수 있게 한다
+			log.warn("로그아웃 중 익명 ID 연결 확인 실패 — 안전하게 쿠키를 지운다 ({})", e.getClass().getSimpleName(), e);
 			return true;
 		}
 	}
