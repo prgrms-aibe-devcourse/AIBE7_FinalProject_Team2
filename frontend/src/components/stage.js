@@ -92,13 +92,15 @@ export function flatten(acts, order) {
   return steps;
 }
 
-// 민감 사건 안내 (FE-129): 2막 시작 장면에 지문(system 캡션) 한 줄을 단다. 캐릭터 대사가 아니라 화면 아래 지문이고,
-// 그 장면에 이미 지문 · 암전 문구가 있으면 건드리지 않는다. 안내할 내용이 없으면(notice 빈 값) 그대로 돌려준다
+// 민감 사건 안내 (FE-129): 2막 시작 대사보다 먼저, 안내 문구만 나오는 빈 무대 장면 하나를 앞에 끼운다(캐릭터 · 대사 없음).
+// 장면 정보(절차 번호 · 섹션 · 모습)는 2막 첫 장면에서 이어받아, "② 모두진술부터 열기"처럼 섹션으로 시작해도 이 장면이 먼저 나온다.
+// 첫 장면에 이미 지문 · 암전 문구가 있으면 건드리지 않는다. 안내할 내용이 없으면(notice 빈 값) 그대로 돌려준다
 export function attachNotice(steps, notice, actId = '2') {
   if (!notice) return steps;
   const at = steps.findIndex((step) => step.actId === actId);
   if (at < 0 || steps[at].system || steps[at].blackout) return steps;
-  return steps.map((step, i) => (i === at ? { ...step, system: notice, notice: true } : step));
+  const { say, text, textAgain, role, cameo, delay, card, ev, confirm, next, auto, choices, board, source, ...base } = steps[at];
+  return [...steps.slice(0, at), { ...base, hideCast: true, system: notice }, ...steps.slice(at)];
 }
 
 // 대사 건너뛰기: 같은 막에서 다음 보드 장면, 없으면 막의 마지막 장면으로 간다.
@@ -285,7 +287,7 @@ function evidenceBoard(script, at) {
 // (테스트 기간 · 목 데이터 전용, 이 화면에 없는 막은 화면이 넘겨 준다). 반환한 요소의 enterPhoto()는 신문 사진 속으로 들어가는 연출.
 // choices: 대사창 안 선택지 { 이름: [{ label, action(note), primary }] } — 대본 step.choices로 고른다(타이핑이 끝나면 뜬다, note는 결과 안내 줄).
 // sheet: 대본 scene "sheet"에서 쓰는 큰 지면(6막은 화면이 넘겨 주고, 없으면 대본 paper로 1막 사건 기사를 만든다).
-// notice: 민감 사건 안내 한 줄(FE-129) — 2막 시작 장면에 지문으로 단다(attachNotice).
+// notice: 민감 사건 안내 한 줄(FE-129) — 2막 시작 대사보다 먼저 안내만 나오는 장면으로 끼운다(attachNotice).
 // 장면의 focus 기사로 카메라가 옮겨 가고, 첫 장면의 from 요소가 무대를 채운 데서 빠져나온다.
 // fromRect: 첫 장면의 from 요소를 이 화면 사각형(앞 막 무대 자리)에서 시작한다(6막). cameraFill · cameraMinScale · cameraMaxUnit은 sheetCamera 옵션.
 // layout 'paper': 무대 상자 없이 지면(sheet)이 화면 전체가 된다(S-20 · 1막, S-02 신문과 같은 짜임). 막 칩 · 보드는 지면의
@@ -579,7 +581,6 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
     const caption = step.blackout ?? step.system ?? '';
     sys.textContent = caption;
     sys.hidden = !caption;
-    sys.classList.toggle('notice', Boolean(step.notice) && !step.blackout); // 민감 사건 안내(FE-129)는 캐릭터에 가리지 않게 위쪽에
     sys.classList.toggle('on-dark', dark);
 
     // 증거판은 칸마다 따로 스크롤하고, 나머지 카드는 카드 전체가 스크롤된다
@@ -638,8 +639,8 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
       cameo.dataset.who = cameoWho;
       if (cameoWho) { if (enterDelay) cameo.hidden = true; else popCameo(cameoWho); } else hideCameo();
     }
-    // 스크린 리더 알림: 대사가 없으면 지문을 읽는다. 민감 사건 안내(FE-129)는 대사가 있는 장면(2막 시작)에 붙으므로 안내를 먼저 읽고 대사를 잇는다
-    live.textContent = parked ? '' : step.notice && line ? `${caption} ${line}` : line || caption;
+    // 스크린 리더 알림: 대사가 없으면 지문을 읽는다(민감 사건 안내도 대사 없는 장면이라 이 알림 영역이 읽는다)
+    live.textContent = parked ? '' : line || caption;
     const options = choices[step.choices] ?? [];
     const note = element('p', 'dlg-note');
     note.setAttribute('role', 'status');

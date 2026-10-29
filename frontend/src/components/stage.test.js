@@ -91,15 +91,19 @@ test('대본 키는 화면의 6막 칩(ACT_GROUPS)과 하나씩 맞는다(FE-59)
   assert.deepEqual(ACT_GROUPS.flatMap(({ ids }) => ids).sort(), Object.keys(script.acts).sort());
 });
 
-test('민감 사건 안내(FE-129): 2막 첫 장면에만 지문으로 붙고, 안내가 없으면 그대로다', () => {
+test('민감 사건 안내(FE-129): 2막 대사보다 먼저 안내만 나오는 장면이 하나 앞에 끼고, 안내가 없으면 그대로다', () => {
   const notice = '이 사건에는 정신건강과 관련된 내용이 나와요.';
   const all = flatten(script.acts, ['1a', '2', '3']);
   const attached = attachNotice(all, notice);
   const first = attached.findIndex((step) => step.actId === '2');
+  assert.equal(attached.length, all.length + 1);
   assert.equal(attached[first].system, notice);
-  assert.equal(attached[first].notice, true); // 화면이 위쪽 자리(.notice)에 놓는 표시
+  assert.equal(attached[first].say, undefined, '캐릭터 대사가 없다');
+  assert.equal(attached[first].text, undefined);
+  assert.equal(attached[first].hideCast, true, '빈 무대');
+  assert.equal(attached[first + 1].text, all[first].text, '원래 첫 장면이 바로 뒤에 이어진다');
+  assert.equal(attached[first].section, all[first].section, '섹션으로 시작해도 안내 장면이 먼저 나온다');
   assert.equal(attached.filter((step) => step.system === notice).length, 1);
-  assert.equal(attached.length, all.length);
   assert.equal(attachNotice(all, ''), all); // 안내가 없으면 같은 배열
   assert.equal(attachNotice(flatten(script.acts, ['1a']), notice).some((step) => step.system === notice), false); // 2막이 없는 화면
 });

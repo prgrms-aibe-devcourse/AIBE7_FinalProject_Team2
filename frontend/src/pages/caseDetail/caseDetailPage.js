@@ -54,12 +54,11 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
     const wrap = element('aside', 'story-extra');
     wrap.setAttribute('aria-label', '함께 읽기');
     const note = TYPE_NOTES[data.crimeType];
-    const notice = sensitiveNotice(data.sensitiveFlags); // 민감 사건 안내(FE-129): 같은 알아두기 칸에 함께, 일반 설명 아래 점선으로 나눠 한 줄
+    const notice = sensitiveNotice(data.sensitiveFlags); // 민감 사건 안내(FE-129): 있으면 일반 설명을 대신해 같은 칸에 이 한 줄만 보인다
     if (note || notice) {
       const box = element('div', 'extra-note');
       box.append(element('p', 'extra-label', '알아두기'));
-      if (note) box.append(element('p', 'extra-text', note.replace(/^\[알아두기\]\s*/, '')));
-      if (notice) box.append(element('p', 'extra-text extra-notice', notice));
+      box.append(notice ? element('p', 'extra-text extra-notice', notice) : element('p', 'extra-text', note.replace(/^\[알아두기\]\s*/, '')));
       wrap.append(box);
     }
     api.getCases(data.crimeType).then(({ cases }) => {
