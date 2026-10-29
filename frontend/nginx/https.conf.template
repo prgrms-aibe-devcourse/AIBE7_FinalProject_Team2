@@ -54,6 +54,11 @@ server {
     server_name www.__SERVER_DOMAIN__;
     server_tokens off;
 
+    # www에도 HSTS를 붙인다 (PR #337 리뷰). 예전 백엔드 HSTS(1년 · includeSubDomains)를 받은 브라우저는 루트의
+    # 새 값(includeSubDomains 없음)으로 정책이 바뀌어 www 보호가 빠진다. 이 301에 값이 있으면 https://www를 한 번
+    # 지난 브라우저는 다음 http://www도 https로 바꿔 요청한다. 값은 루트와 같은 $hsts_header(default.conf)
+    add_header Strict-Transport-Security $hsts_header always;
+
     return 301 https://__SERVER_DOMAIN__$request_uri;
 }
 

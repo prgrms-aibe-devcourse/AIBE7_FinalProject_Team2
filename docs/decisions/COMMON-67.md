@@ -32,6 +32,7 @@
 
 ## 확인
 - Nginx 1.28 이미지 · 자체 서명 인증서로 http · https 양쪽을 띄워 확인: https 화면 · 정적 파일 · `/api`에 `strict-transport-security: max-age=86400` 한 번, 화면 · 정적 파일 · 404 · `version.json`에 보안 헤더 3개, http에는 HSTS 없음, `nginx -t` 통과.
+- `https://www` → 루트 301에도 HSTS가 한 번 붙고, `http://www`에는 붙지 않는다(자체 서명 인증서로 템플릿을 띄워 확인, PR #337 리뷰).
 - 백엔드: https 요청에 HSTS가 없고 다른 보안 헤더는 그대로 — 사용자 · 관리자 체인은 `UserSecurityChainTest`, 카카오 로그인 체인은 `KakaoOAuthFlowTest`(client-id가 있어야 켜지는 체인이라 따로 확인, PR #337 리뷰).
 
 ## 이번에 하지 않은 것
@@ -39,5 +40,6 @@
 
 ## 추후 재검토가 필요하면
 - **첫 인증서 자동 갱신이 문제없이 돈 뒤**(`certbot certificates`의 만료일이 늘었는지) `$hsts_header`를 지금 값 1일 → 1주 → 1년으로 차례로 늘린다(deploy/README.md "HTTPS로 풀리는 것 · 남은 것"). 1년으로 늘릴 때 `includeSubDomains`를 판단한다.
+- **www 보호 공백**: 예전 백엔드 HSTS(1년 · `includeSubDomains`)를 받은 브라우저는 루트의 새 값으로 정책이 바뀌어 www 보호가 빠진다. `https://www` 301에도 HSTS를 붙여, https://www를 한 번 지난 브라우저는 다시 보호된다(PR #337 리뷰). 다만 https://www를 거치지 않은 브라우저의 첫 `http://www` 요청은 보호되지 않는다 — 이를 막으려면 루트에 `includeSubDomains`가 필요하므로, 1년으로 늘릴 때 함께 판단한다(그때 http만 쓰는 하위 도메인이 없는지 확인).
 - **`/api`에서 Nginx가 직접 만드는 502 · 504 응답**에는 HSTS만 붙고 nosniff · DENY · Referrer-Policy는 붙지 않는다(`api-proxy.conf`는 HSTS만 받는다). 화면이 아닌 오류 응답이라 이번에는 두고, 오류 응답을 화면으로 보여 주게 되면 `error_page` location에 `security-headers.conf`를 include한다 (PR #337 리뷰).
 - 화면에서 iframe(예: 외부 임베드)을 쓰게 되면 `X-Frame-Options`를 `SAMEORIGIN` 또는 CSP `frame-ancestors`로 바꾼다.
