@@ -192,7 +192,7 @@ class LocalAuthControllerTest extends ApiIntegrationTest {
 			for (int i = 0; i < threads; i++) {
 				Callable<MvcResult> call = () -> {
 					start.await();
-					return mockMvc.perform(json(SIGNUP, signupBody(id, PASSWORD, "동시가입"))).andReturn();
+					return mockMvc.perform(json(SIGNUP, signupBody(id, PASSWORD, uniqueNickname()))).andReturn();
 				};
 				futures.add(pool.submit(call));
 			}
@@ -218,7 +218,7 @@ class LocalAuthControllerTest extends ApiIntegrationTest {
 		// 진 쪽의 회원 행은 되돌려졌다 — 비밀번호 행 없는 LOCAL 회원이 남지 않는다
 		assertThat(jdbcTemplate.queryForObject("""
 			SELECT count(*) FROM member m
-			WHERE m.provider = 'LOCAL' AND m.nickname = '동시가입'
+			WHERE m.provider = 'LOCAL' AND m.nickname LIKE 'cc%'
 			  AND NOT EXISTS (SELECT 1 FROM member_password p WHERE p.member_id = m.id)
 			""", Integer.class)).isZero();
 	}
@@ -250,6 +250,25 @@ class LocalAuthControllerTest extends ApiIntegrationTest {
 		}
 		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM member_password WHERE login_id = ?",
 			Integer.class, id)).isZero();
+	}
+
+	/** 시험마다 겹치지 않는 닉네임(영문 소문자 · 숫자 12자) — 닉네임은 중복 금지(BE-139) */
+	private static String uniqueNickname() {
+		return "cc" + UUID.randomUUID().toString().replace("-", "").substring(0, 10);
+	}
+
+	@Test
+	void 이미_쓰는_닉네임으로_가입하면_409이고_대소문자만_달라도_같다() throws Exception {
+		String nickname = uniqueNickname();
+		signup(newLoginId(), nickname);
+
+		String other = newLoginId();
+		mockMvc.perform(json(SIGNUP, signupBody(other, PASSWORD, nickname.toUpperCase())))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.code").value("DUPLICATE_NICKNAME"));
+		// 거절된 가입은 회원도 비밀번호도 남기지 않는다
+		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM member_password WHERE login_id = ?", Integer.class,
+			other)).isZero();
 	}
 
 	@Test
