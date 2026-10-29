@@ -235,7 +235,9 @@ def _qa(value, count):
                     for v in value[:count]))
 
 
-def check_design(value):
+def check_design(value, issue=None):
+    """설계도 형식 검사. `issue`를 주면 세 번째 질문이 화면의 고정 마지막 질문(`LAST_QUESTION`)과 같은지도 본다 — 답(`a`)이 다른
+    질문에 대한 것이면 화면의 "…네, 인정합니다."가 뜻하는 바가 달라진다(PR #329 YOLO-NIM 리뷰)."""
     if not isinstance(value, dict):
         return ["JSON 객체가 아닙니다"]
     errors = []
@@ -243,6 +245,8 @@ def check_design(value):
         errors.append("issues는 문자열 3개다")
     if not _qa(value.get("questions"), 3):
         errors.append("questions는 {q, a} 3개다")
+    elif issue and value["questions"][2]["q"].strip() != LAST_QUESTION[issue]:
+        errors.append(f"세 번째 질문은 정확히 \"{LAST_QUESTION[issue]}\"다")
     return errors
 
 
@@ -264,6 +268,8 @@ def check_opening(value):
     cards = value.get("cards")
     if not (isinstance(cards, dict) and all(isinstance(cards.get(k), dict) for k in ("indict", "plea", "issues"))):
         errors.append("cards에 indict · plea · issues 객체가 있어야 한다")
+    for key, label in (("indict", "공소사실"), ("plea", "변호인 입장"), ("issues_narr", "쟁점 해설")):
+        errors += sentencing_errors(label, " ".join(v for v in (value.get(key) or []) if isinstance(v, str)))
     return errors
 
 
@@ -271,7 +277,7 @@ def check_closing(value):
     if not isinstance(value, dict) or not all(isinstance(value.get(k), str) and value[k].strip()
                                               for k in ("prosecutor", "defense")):
         return ["prosecutor · defense 문자열이 있어야 한다"]
-    return []
+    return sentencing_errors("검사 의견", value["prosecutor"]) + sentencing_errors("최종변론", value["defense"])
 
 
 def opening_lines(value):
@@ -369,6 +375,18 @@ def normalize_paper(value):
             "caption": blank_to_none(value.get("caption")), "article": [p.strip() for p in value["article"]]}
 
 
+# 검사 의견에 구형(형량)이 들어가면 사용자가 판결을 입력하기 직전에 앵커링이 된다(PR #329 YOLO-NIM 리뷰). 실제 재판의 검사 의견은
+# 구형을 포함하므로 모델이 그대로 따라 할 가능성이 높다. 전과 사실("징역 10개월을 선고받은 전력")은 막지 않도록 "처해 주십시오" 같은
+# 요구 문형이 뒤따르는 경우만 잡는다
+NO_SENTENCING = ("- 구형 · 형량 · 벌금액(\"징역 몇 년\" · \"벌금 얼마\")을 말하지 않는다. 사용자가 판결을 입력하기 전이라 앵커링이 된다. "
+                 "전과 · 선고 이력 같은 사실은 데이터대로 말해도 된다.")
+SENTENCING_PATTERN = r"구형|(?:징역|금고|벌금)[^.\n]{0,15}\d[^.\n]{0,15}(?:처해|처하|구합니다|구하|선고해|내려)"
+
+
+def sentencing_errors(label, text):
+    return [f"{label}에 구형 · 형량이 들어갔습니다(판결 입력 전 앵커링)"] if re.search(SENTENCING_PATTERN, text or "") else []
+
+
 def design_request(case, cls):
     data = public_case(case, UNIT_STAGES["U0"])
     return build_system("U0", cls, ["narrator"]), build_user(
@@ -377,8 +395,8 @@ def design_request(case, cls):
             '{"plea":"인정 | 일부 부인 | 전면 부인 | 고의 부인 | 방어 주장 중 하나","issues":["쟁점 1","쟁점 2","쟁점 3"],'
             '"questions":[{"q":"예 · 아니오로 답할 질문","a":"예 또는 아니요"}, … 3개],"tone":"이 사건 해설 어조 한 줄"}',
             "- 쟁점은 3개, 각 15자 안팎. 판결 방향을 담지 않는다.",
-            "- 질문 3개의 마지막은 공소사실(또는 행위 사실) 인정 여부다. 답(a)은 \"예\" 또는 \"아니요\" 한 단어로, "
-            "사건 데이터에 있는 사실만으로 정한다.",
+            f"- 질문 3개의 마지막(세 번째) q는 정확히 \"{LAST_QUESTION[cls['issue']]}\"로 쓴다(화면에 나오는 마지막 질문이 이 문구라서 "
+            "답이 이 질문에 대한 것이어야 한다). 답(a)은 \"예\" 또는 \"아니요\" 한 단어로, 사건 데이터에 있는 사실만으로 정한다.",
             *QUESTION_RULES,
         ])
 
@@ -408,6 +426,7 @@ def opening_request(case, cls, cast, design):
             "- 질문은 design.questions의 앞 두 개만 쓴다(마지막 인정 여부 질문은 따로 붙는다).",
             *QUESTION_RULES,
             "- 변호인 입장은 공개된 사실 · 입장 한 줄까지만 쓴다.",
+            NO_SENTENCING,
             "- 공소사실 첫 대사는 \"공소사실을 말씀드리겠습니다.\"로 시작한다.",
         ])
 
@@ -418,6 +437,7 @@ def closing_request(case, cls, cast, design, opening):
         "3막 내 판결 — 판결 직전 검사 의견 · 최종변론.", data, [
             f"검사({NAMES[cast['prosecutor']]}) 의견 한 줄, 변호인({NAMES[cast['defense']]}) 최종변론 한 줄. 각 두 줄 이내.",
             "검사 의견은 \"검사 측 의견입니다.\"로, 최종변론은 \"변호인 측 최종변론입니다.\"로 시작한다.",
+            NO_SENTENCING,
             '출력은 JSON 객체 하나: {"prosecutor":"...","defense":"..."}',
         ])
 
@@ -438,7 +458,7 @@ def generate_units(case, judgment_output, cast, cls, *, model, paper=None, calle
         if not paper:
             units["PAPER"] = ask_unit("PAPER", *paper_request(case, cls), check_paper, lambda v: [], "", **opts)
             paper = normalize_paper(units["PAPER"]["value"]) if units["PAPER"]["value"] else None
-        units["U0"] = ask_unit("U0", *design_request(case, cls), check_design,
+        units["U0"] = ask_unit("U0", *design_request(case, cls), lambda value: check_design(value, cls["issue"]),
                                lambda v: [q["q"] for q in v["questions"][:3]], source, **opts)
         design = units["U0"]["value"]
         if paper:
