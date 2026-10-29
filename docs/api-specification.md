@@ -244,7 +244,7 @@ json
 json
 
 ```json
-{  "summary": { "total": 9, "byCrimeType": { "MURDER": 3, "FRAUD": 3, "INJURY": 3, "ROBBERY": 0, "THEFT": 0 } },  "cases": [    {      "caseId": 1,      "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",      "crimeType": "MURDER",      "crimeCategoryLabel": "생명범죄",      "chargeName": "살인",      "shortIntro": "빌린 돈 문제로 찾아온 지인과 다투다 흉기로 살해한 사건입니다.",      "keywords": ["돈 문제", "집으로 찾아옴"],      "difficulty": "HIGH",      "estimatedMinutes": 15,      "participantCount": 1284,      "thumbnailUrl": null,      "scriptReady": true,      "myStatus": "IN_PROGRESS"    }  ]}
+{  "summary": { "total": 9, "byCrimeType": { "MURDER": 3, "FRAUD": 3, "INJURY": 3, "ROBBERY": 0, "THEFT": 0 } },  "cases": [    {      "caseId": 1,      "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",      "crimeType": "MURDER",      "crimeCategoryLabel": "생명범죄",      "chargeName": "살인",      "shortIntro": "빌린 돈 문제로 찾아온 지인과 다투다 흉기로 살해한 사건입니다.",      "keywords": ["돈 문제", "집으로 찾아옴"],      "difficulty": "HIGH",      "estimatedMinutes": 15,      "participantCount": 1284,      "thumbnailUrl": "/images/cases/case-1-reenact.webp",      "scriptReady": true,      "myStatus": "IN_PROGRESS"    }  ]}
 ```
 
 - `PUBLISHED` 사건만. `summary`는 필터와 관계없이 전체 기준(칩 옆 건수 표시용). `byCrimeType`은 공개 사건이 없는 유형도 0으로 모든 범죄 유형 키를 내려 준다(v0.55부터 5개).
@@ -771,7 +771,7 @@ S-20 사건 디테일(정보 구조 v1.12)이 체험을 만들기 전에 부르�
 **응답 200**
 
 ```json
-{  "caseId": 1,  "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",  "crimeType": "MURDER",  "crimeCategoryLabel": "생명범죄",  "chargeName": "살인",  "shortIntro": "빌린 돈 문제로 찾아온 지인과 다투다 흉기로 살해한 사건입니다.",  "keywords": ["돈 문제", "지인", "흉기"],  "difficulty": "MID",  "estimatedMinutes": 15,  "participantCount": 42,  "thumbnailUrl": null,  "overview": "피고인이 빌린 돈을 갚지 못해 오래 다투던 지인이 집으로 찾아오자, …",  "scriptReady": true,  "myStatus": null,  "cast": { "prosecutor": "naero", "defense": "nambul" },  "sensitiveFlags": ["MENTAL_HEALTH"]}
+{  "caseId": 1,  "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",  "crimeType": "MURDER",  "crimeCategoryLabel": "생명범죄",  "chargeName": "살인",  "shortIntro": "빌린 돈 문제로 찾아온 지인과 다투다 흉기로 살해한 사건입니다.",  "keywords": ["돈 문제", "지인", "흉기"],  "difficulty": "MID",  "estimatedMinutes": 15,  "participantCount": 42,  "thumbnailUrl": "/images/cases/case-1-reenact.webp",  "overview": "피고인이 빌린 돈을 갚지 못해 오래 다투던 지인이 집으로 찾아오자, …",  "scriptReady": true,  "myStatus": null,  "cast": { "prosecutor": "naero", "defense": "nambul" },  "sensitiveFlags": ["MENTAL_HEALTH"]}
 ```
 
 - 필드는 API 1 카드와 같고(`chargeName` 포함, v0.32), `overview`(사건 개요, API 4의 `case.overview`와 같은 값)를 더한다. `participantCount` · `myStatus` 기준도 API 1과 같다. (v0.60, BE-116) `scriptReady`도 API 1과 같은 값 · 같은 기준이다 — `false`면 S-20은 시작 대신 "준비 중"을 보인다(API 18을 따로 불러 확인하지 않아도 된다).
@@ -817,7 +817,7 @@ FE-64가 쓰는 API(S-20 기사 지면 · 증거조사). 관리자 신문 지면
 - **`extraPhotos`는 배열이 아니라 `{ origin, conclusion }` 고정 자리다.** 그 역할의 사진 행이 없으면 그 자리는 규칙 주소 `/images/cases/case-{caseId}-{origin|conclusion}.webp`에 `caption: null`이다(BE-141, 예: 발단만 올렸으면 `{ "origin": {...}, "conclusion": { "imageUrl": "/images/cases/case-1-conclusion.webp", "caption": null } }`) — 자리가 `null`이 되는 일은 없다 — 배열로 내려주면 한쪽이 비었을 때 다른 쪽이 앞자리로 밀려 역할이 뒤바뀌어 보일 수 있어서다(BE-101에서 역할 칸을 둔 것과 같은 이유). A-13-6 ~ 8의 `extraPhotos`(배열, `role` 포함)와는 형태가 다르다 — 관리자 화면은 목록 · 정리가 필요해 배열로, 공개 화면은 항상 같은 자리만 보면 돼서 고정 자리로 했다.
 - `prompt` · `s3Key` · `id` · `displayOrder` 등 내부 기록용 값은 내려주지 않는다.
 - 증거조사 `evidencePhotos`(검사 측 = 결론, 변호인 측 = 발단, FE-63)는 이 `extraPhotos.origin` · `.conclusion`을 그대로 연결해 쓴다 — 같은 사진을 두 번 받지 않는다.
-- 공용 컷(사진 파일이 없거나 로딩 실패)으로 바꾸는 처리는 프론트가 한다(FE-63). 서버가 내려주는 규칙 주소의 파일이 없으면 404가 나고, 이때 프론트가 공용 컷으로 바꾼다.
+- 공용 컷(사진 파일이 없거나 로딩 실패)으로 바꾸는 처리는 프론트가 한다(FE-63). 서버가 내려주는 규칙 주소의 파일이 없으면, Nginx의 화면 주소 fallback(`location /`의 `try_files … /index.html`)이 `index.html`을 **200**으로 돌려준다(404가 아니다). 브라우저가 이를 이미지로 해석하지 못해 `error` 이벤트가 나고, 이때 프론트가 공용 컷으로 바꾼다. 상태 코드로 파일 유무를 확인하는 클라이언트는 이 방식으로는 감지하지 못한다.
 - 공개(`PUBLISHED`)된 사건만 응답한다(API 16과 같은 기준).
 
 | 거절 | 조건 |
