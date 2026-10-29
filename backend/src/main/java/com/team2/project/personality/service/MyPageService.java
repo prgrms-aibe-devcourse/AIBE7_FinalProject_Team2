@@ -42,14 +42,16 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionException;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * P-5 마이페이지 (API 명세 9장). 종합 · 흐름은 각 사건의 첫 회차 체험 기여(experience_personality)로 계산한다(성향 산식 4장).
@@ -79,15 +81,33 @@ public class MyPageService {
 	private final ProfileStatsReader statsReader;
 	private final AchievementUnlockRecorder unlockRecorder;
 	private final CollectionService collectionService;
+	private final PlatformTransactionManager transactionManager;
 
-	@Transactional(readOnly = true)
+	/**
+	 * 메서드 전체에 트랜잭션을 걸지 않고 단계마다 짧게 연다 (PR #335 리뷰).
+	 * 조회 트랜잭션이 연결을 잡은 채 해금 기록(별도 트랜잭션)이 두 번째 연결을 기다리면, 풀(운영 5개)이 모자랄 때
+	 * 요청들이 서로 연결을 기다리며 대기 시간만큼 멈춘다. 순서대로 열고 닫아 연결을 한 번에 하나만 쓴다:
+	 * 사용자 찾기(접속 시각 갱신) → 통계 읽기 → 해금 기록(있을 때만) → 읽기 전용으로 조회 조립
+	 */
 	public MyPageResponse get(Optional<UUID> anonymousId) {
-		return anonymousUserService.findAndTouch(anonymousId)
-			.map(user -> build(user.getId()))
-			.orElseGet(MyPageResponse::empty);	// 쿠키가 없거나 모르는 ID면 빈 마이페이지 (404가 아니다)
+		Optional<UUID> userId = anonymousUserService.findAndTouch(anonymousId).map(user -> user.getId());
+		if (userId.isEmpty()) {
+			return MyPageResponse.empty();	// 쿠키가 없거나 모르는 ID면 빈 마이페이지 (404가 아니다)
+		}
+		UUID id = userId.get();
+		// 꾸미기 · 도전과제와 레벨이 같은 통계를 쓰므로 한 번만 읽는다
+		ProfileStats stats = recordNewUnlocks(id, readOnly(() -> statsReader.read(id)));
+		return readOnly(() -> build(id, stats));
 	}
 
-	private MyPageResponse build(UUID userId) {
+	/** 읽기 전용 트랜잭션 하나로 실행한다 (open-in-view가 꺼져 있어 지연 로딩에 트랜잭션이 필요하다) */
+	private <T> T readOnly(Supplier<T> work) {
+		TransactionTemplate template = new TransactionTemplate(transactionManager);
+		template.setReadOnly(true);
+		return template.execute(status -> work.get());
+	}
+
+	private MyPageResponse build(UUID userId, ProfileStats stats) {
 		PersonalityResultResponse personality = resultRepository.findByAnonymousUser_IdAndCurrentTrue(userId)
 			.map(PersonalityResultResponse::from).orElse(null);
 		Optional<PersonalityResult> firstTest = resultRepository.findFirstByAnonymousUser_IdOrderByCreatedAtAscIdAsc(userId);
@@ -133,8 +153,6 @@ public class MyPageService {
 
 		List<ExperienceItem> experiences = experienceRepository.findLatestPerCase(userId).stream()
 			.map(ExperienceItem::from).toList();
-		ProfileStats stats = statsReader.read(userId); // 꾸미기 · 도전과제와 레벨이 같은 통계를 쓰므로 한 번만 읽는다
-		stats = recordNewUnlocks(userId, stats);
 		ProfileDecoView deco = profileDecoService.view(userId, stats);
 		return new MyPageResponse(personality, initial, baselineRetake, judgment, history, experiences,
 			new Profile(stats.attendanceDays()), deco.profileDeco(), deco.achievements(), deco.unlocked(),
@@ -143,7 +161,7 @@ public class MyPageService {
 
 	/**
 	 * 막 달성한 도전과제의 해금을 남기고(BE-83) 같은 응답에 해금 시각 · "새로 열림"으로 내려 준다.
-	 * 조회는 읽기 전용 트랜잭션이라 기록은 별도 트랜잭션(별도 DB 연결)에서 하므로, 새로 남길 것이 있을 때만 연다(대부분의 조회는 없다).
+	 * 조회 트랜잭션 밖에서 호출되므로 기록 트랜잭션이 이때 쓰는 유일한 연결이다(get 참고). 새로 남길 것이 있을 때만 연다(대부분의 조회는 없다).
 	 * 기록에 실패해도 조회는 그대로 내려 준다 — 판정은 계산값이라 화면은 같고, 다음 조회 때 다시 기록한다
 	 */
 	private ProfileStats recordNewUnlocks(UUID userId, ProfileStats stats) {

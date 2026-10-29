@@ -301,6 +301,30 @@ class CollectionApiTest extends ApiIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("컬렉션 봤음(P-10): 종류가 섞인 항목 지정도 지정한 항목만 본 것으로 (종류별 일괄 UPDATE, 중복 · 없는 항목 무시, PR #335 리뷰)")
+	void markSeen_mixedKinds_marksOnlyListedItems() throws Exception {
+		long caseId = insertCase("MURDER", "PUBLISHED");
+		UUID userId = completedUser(caseId);
+		Cookie cookie = cookieOf(userId);
+		record(cookie, body(caseId, false, item("illustration", "case-1-origin"), item("illustration", "case-1-verdict"),
+			item("cast", "naero:judge"), item("cast", "nambul:judge"))).andExpect(status().isOk());
+
+		// 일러스트 1 · 의상 1을 한 요청에, 같은 항목 중복 · 얻지 않은 항목도 섞어 보낸다
+		mockMvc.perform(post(COLLECTION_SEEN).cookie(cookie).contentType(MediaType.APPLICATION_JSON)
+				.content("{\"items\":[" + String.join(",", item("illustration", "case-1-origin"),
+					item("cast", "naero:judge"), item("cast", "naero:judge"), item("cast", "never:owned")) + "]}"))
+			.andExpect(status().isNoContent());
+
+		mockMvc.perform(get(MY_PAGE).cookie(cookie))
+			.andExpect(jsonPath("$.collection.items[?(@.itemId == 'case-1-origin')].isNew", contains(false)))
+			.andExpect(jsonPath("$.collection.items[?(@.itemId == 'naero:judge')].isNew", contains(false)))
+			// 지정하지 않은 항목은 그대로 새 항목
+			.andExpect(jsonPath("$.collection.items[?(@.itemId == 'case-1-verdict')].isNew", contains(true)))
+			.andExpect(jsonPath("$.collection.items[?(@.itemId == 'nambul:judge')].isNew", contains(true)));
+		assertThat(countItems(userId)).isEqualTo(4);	// 얻지 않은 항목은 새로 생기지 않는다
+	}
+
+	@Test
 	@DisplayName("백필: 획득 시각은 그 사건의 첫 완료 시각, \"본 것\"으로 저장하고 새로 열린 도전과제도 \"본 것\"")
 	void backfill() throws Exception {
 		long caseId = insertCase("MURDER", "PUBLISHED");

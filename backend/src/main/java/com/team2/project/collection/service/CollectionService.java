@@ -31,6 +31,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -104,8 +105,11 @@ public class CollectionService {
 				collectionItemRepository.markSeenByKind(user.getId(), request.kind(), now);
 				return;
 			}
-			request.items().forEach(item ->
-				collectionItemRepository.markSeen(user.getId(), item.kind(), item.itemId(), now));
+			// 종류별로 묶어 종류마다 UPDATE 한 번 (일러스트 · 의상이라 많아야 2번, PR #335 리뷰)
+			request.items().stream()
+				.collect(Collectors.groupingBy(Item::kind, LinkedHashMap::new,
+					Collectors.mapping(Item::itemId, Collectors.toSet())))
+				.forEach((kind, itemIds) -> collectionItemRepository.markSeen(user.getId(), kind, itemIds, now));
 		});
 	}
 

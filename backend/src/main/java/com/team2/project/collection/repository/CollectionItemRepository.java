@@ -3,6 +3,7 @@ package com.team2.project.collection.repository;
 import com.team2.project.collection.domain.CollectionItem;
 import com.team2.project.collection.domain.CollectionItemId;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -46,13 +47,16 @@ public interface CollectionItemRepository extends JpaRepository<CollectionItem, 
 	/** 마이페이지(P-5) 컬렉션: 최근에 얻은 순 */
 	List<CollectionItem> findByIdAnonymousUserIdOrderByAcquiredAtDescIdKindAscIdItemIdAsc(UUID anonymousUserId);
 
-	/** 항목 하나를 "봤음"으로. 이미 봤거나 없는 항목이면 0 (멱등) */
+	/**
+	 * 같은 종류의 항목들을 한 번에 "봤음"으로. 이미 봤거나 없는 항목은 건너뛴다 (멱등).
+	 * 항목마다 UPDATE를 보내지 않고 종류별로 한 번만 보낸다 (PR #335 리뷰)
+	 */
 	@Modifying
 	@Query("update CollectionItem c set c.seenAt = :now "
-		+ "where c.id.anonymousUserId = :anonymousUserId and c.id.kind = :kind and c.id.itemId = :itemId "
+		+ "where c.id.anonymousUserId = :anonymousUserId and c.id.kind = :kind and c.id.itemId in :itemIds "
 		+ "and c.seenAt is null")
 	int markSeen(@Param("anonymousUserId") UUID anonymousUserId, @Param("kind") String kind,
-		@Param("itemId") String itemId, @Param("now") Instant now);
+		@Param("itemIds") Collection<String> itemIds, @Param("now") Instant now);
 
 	/** 종류 하나를 전부 "봤음"으로 (컬렉션 탭을 열었을 때) */
 	@Modifying
