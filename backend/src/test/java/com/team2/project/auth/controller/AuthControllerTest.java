@@ -9,10 +9,16 @@ import com.team2.project.common.security.token.IssuedTokens;
 import com.team2.project.common.security.token.MemberPrincipal;
 import com.team2.project.common.security.token.TokenIssuer;
 import com.team2.project.common.security.token.jwt.RefreshTokenStore;
+import com.team2.project.common.web.AnonymousIdCookie;
 import com.team2.project.common.web.RefreshTokenCookies;
 import com.team2.project.support.ApiIntegrationTest;
 import jakarta.servlet.http.Cookie;
 import java.net.URI;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
@@ -38,6 +44,49 @@ class AuthControllerTest extends ApiIntegrationTest {
 	private Cookie refreshCookie(long memberId) {
 		IssuedTokens tokens = tokenIssuer.issue(MemberPrincipal.user(memberId));
 		return new Cookie(RefreshTokenCookies.NAME, tokens.refreshToken());
+	}
+
+	// ---- 로그아웃 익명 ID 테스트용 데이터 (BE-137) ----
+
+	private final List<Long> memberIds = new ArrayList<>();
+	private final List<UUID> anonymousIds = new ArrayList<>();
+
+	private long insertMember() {
+		Long id = jdbcTemplate.queryForObject(
+			"INSERT INTO member (provider, provider_user_id) VALUES ('KAKAO', ?) RETURNING id", Long.class,
+			"be137-" + UUID.randomUUID());
+		memberIds.add(id);
+		return id;
+	}
+
+	/** memberId가 null이면 손님(연결 안 된) 익명 사용자 */
+	private UUID insertAnonymousUser(Long memberId) {
+		UUID id = UUID.randomUUID();
+		jdbcTemplate.update("INSERT INTO anonymous_user (id, member_id) VALUES (?, ?)", id, memberId);
+		anonymousIds.add(id);
+		return id;
+	}
+
+	@AfterEach
+	void deleteLogoutData() {
+		anonymousIds.forEach(id -> jdbcTemplate.update("DELETE FROM anonymous_user WHERE id = ?", id));
+		memberIds.forEach(id -> {
+			jdbcTemplate.update("DELETE FROM anonymous_user WHERE member_id = ?", id);
+			jdbcTemplate.update("DELETE FROM member WHERE id = ?", id);
+		});
+		anonymousIds.clear();
+		memberIds.clear();
+	}
+
+	private static Cookie anonymousCookie(UUID id) {
+		return new Cookie(AnonymousIdCookie.NAME, id.toString());
+	}
+
+	/** 응답의 Set-Cookie 중 익명 ID 쿠키를 지우는 것 */
+	private static List<String> anonymousCookieDeletions(MvcResult result) {
+		return result.getResponse().getHeaders(HttpHeaders.SET_COOKIE).stream()
+			.filter(header -> header.startsWith(AnonymousIdCookie.NAME + "="))
+			.toList();
 	}
 
 	// ---- 재발급 ----
@@ -142,6 +191,73 @@ class AuthControllerTest extends ApiIntegrationTest {
 	void logout_noCookie_stillNoContent_idempotent() throws Exception {
 		mockMvc.perform(post(LOGOUT).header(HttpHeaders.ORIGIN, SAME_ORIGIN))
 			.andExpect(status().isNoContent());
+	}
+
+	@Test
+	@DisplayName("로그아웃: 회원에 연결된 익명 ID면 그 쿠키도 지운다 — 공용 PC 다음 사람 기록이 회원 계정에 쌓이지 않게 (BE-137)")
+	void logout_linkedAnonymousId_clearsAnonymousCookie_keepsRecordsLinked() throws Exception {
+		long memberId = insertMember();
+		UUID anonymousId = insertAnonymousUser(memberId);
+
+		MvcResult result = mockMvc.perform(post(LOGOUT)
+				.cookie(refreshCookie(memberId), anonymousCookie(anonymousId))
+				.header(HttpHeaders.ORIGIN, SAME_ORIGIN))
+			.andExpect(status().isNoContent())
+			.andReturn();
+
+		// 발급 때와 같은 이름 · Path로 Max-Age=0을 보내야 브라우저가 지운다
+		assertThat(anonymousCookieDeletions(result)).singleElement().satisfies(header -> assertThat(header)
+			.startsWith(AnonymousIdCookie.NAME + "=;").contains("Max-Age=0", "Path=/", "HttpOnly", "Secure"));
+		// 이전 기록은 회원 계정에 그대로 남는다 (연결을 끊지 않는다)
+		assertThat(jdbcTemplate.queryForObject("SELECT member_id FROM anonymous_user WHERE id = ?", Long.class,
+			anonymousId)).isEqualTo(memberId);
+	}
+
+	@Test
+	@DisplayName("로그아웃: 리프레시 쿠키가 이미 없어도(만료 뒤 로그아웃) 연결된 익명 ID는 지운다 (BE-137)")
+	void logout_linkedAnonymousId_withoutRefreshCookie_stillClearsAnonymousCookie() throws Exception {
+		UUID anonymousId = insertAnonymousUser(insertMember());
+
+		MvcResult result = mockMvc.perform(post(LOGOUT).cookie(anonymousCookie(anonymousId))
+				.header(HttpHeaders.ORIGIN, SAME_ORIGIN))
+			.andExpect(status().isNoContent())
+			.andReturn();
+
+		assertThat(anonymousCookieDeletions(result)).hasSize(1);
+	}
+
+	@Test
+	@DisplayName("로그아웃: 손님(연결 안 된) 익명 ID · DB에 없는 값 · 형식이 틀린 값은 지우지 않는다 (BE-137)")
+	void logout_unlinkedOrUnknownAnonymousId_keepsAnonymousCookie() throws Exception {
+		UUID guest = insertAnonymousUser(null);
+
+		for (Cookie cookie : List.of(anonymousCookie(guest), anonymousCookie(UUID.randomUUID()),
+			new Cookie(AnonymousIdCookie.NAME, "not-a-uuid"))) {
+			MvcResult result = mockMvc.perform(post(LOGOUT).cookie(cookie).header(HttpHeaders.ORIGIN, SAME_ORIGIN))
+				.andExpect(status().isNoContent())
+				.andReturn();
+			assertThat(anonymousCookieDeletions(result)).as("쿠키 값 %s", cookie.getValue()).isEmpty();
+		}
+		assertThat(jdbcTemplate.queryForObject("SELECT member_id FROM anonymous_user WHERE id = ?", Long.class,
+			guest)).isNull();
+	}
+
+	@Test
+	@DisplayName("로그아웃으로 익명 쿠키를 지운 브라우저가 체험을 시작하면, 회원과 연결 안 된 새 익명 ID를 받는다 (BE-137)")
+	void afterLogout_startingExperience_issuesNewUnlinkedAnonymousId() throws Exception {
+		long memberId = insertMember();
+		UUID before = insertAnonymousUser(memberId);
+		mockMvc.perform(post(LOGOUT).cookie(anonymousCookie(before)).header(HttpHeaders.ORIGIN, SAME_ORIGIN))
+			.andExpect(status().isNoContent());
+
+		// 브라우저는 지운 쿠키를 보내지 않는다 → 체험 시작이 새 익명 ID를 발급한다(BE-97 "행동했을 때만 발급")
+		long caseId = insertCase("MURDER", "PUBLISHED");
+		Cookie issued = startAndGetCookie(caseId);
+
+		UUID after = UUID.fromString(issued.getValue());
+		assertThat(after).isNotEqualTo(before);
+		assertThat(jdbcTemplate.queryForObject("SELECT member_id FROM anonymous_user WHERE id = ?", Long.class,
+			after)).isNull();
 	}
 
 	@Test

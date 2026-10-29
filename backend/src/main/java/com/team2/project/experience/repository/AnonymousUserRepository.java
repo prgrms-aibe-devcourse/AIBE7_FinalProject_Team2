@@ -41,4 +41,7 @@ public interface AnonymousUserRepository extends JpaRepository<AnonymousUser, UU
 	@Modifying
 	@Query("update AnonymousUser a set a.memberId = :memberId where a.id = :id and a.memberId is null")
 	int linkIfUnlinked(@Param("id") UUID id, @Param("memberId") long memberId);
+
+	/** 이 익명 ID가 어느 회원에 연결되어 있는가 (로그아웃 때 쿠키를 지울지, BE-137) */
+	boolean existsByIdAndMemberIdIsNotNull(UUID id);
 }

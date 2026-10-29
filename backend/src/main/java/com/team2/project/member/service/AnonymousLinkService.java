@@ -22,7 +22,8 @@ import org.springframework.transaction.annotation.Transactional;
  * - 쿠키가 없거나 DB에 없는 값 → 이 회원에 연결된 새 익명 ID를 발급한다
  * 같은 회원이 다른 브라우저에서 로그인하면 그 브라우저의 익명 ID도 연결된다(회원 1 : 익명 N).
  *
- * 회원 행 처리와 같은 트랜잭션 안에서만 부른다(MANDATORY) — 회원 처리가 실패하면 연결도 되돌린다
+ * 연결(link)은 회원 행 처리와 같은 트랜잭션 안에서만 부른다(MANDATORY) — 회원 처리가 실패하면 연결도 되돌린다.
+ * 연결 여부 조회(isLinkedToMember, 로그아웃 BE-137)는 읽기 전용으로 따로 불린다
  */
 @Slf4j
 @Service
@@ -49,5 +50,15 @@ public class AnonymousLinkService {
 		}
 		AnonymousUser fresh = anonymousUserRepository.save(AnonymousUser.issueFor(memberId, now));
 		return Optional.of(fresh.getId());
+	}
+
+	/**
+	 * 쿠키의 익명 ID가 회원에 연결되어 있는가 (로그아웃, BE-137).
+	 * 연결된 익명 ID를 로그아웃 뒤에도 쓰면 같은 브라우저의 다음 사람 기록이 그 회원 계정으로 쌓인다(공용 PC).
+	 * 쿠키가 없거나 DB에 없거나 연결 안 된(손님) 익명 ID면 false — 손님 기록은 로그아웃과 관계없이 그대로 둔다
+	 */
+	@Transactional(readOnly = true)
+	public boolean isLinkedToMember(Optional<UUID> anonymousId) {
+		return anonymousId.map(anonymousUserRepository::existsByIdAndMemberIdIsNotNull).orElse(false);
 	}
 }
