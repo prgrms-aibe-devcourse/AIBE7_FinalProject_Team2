@@ -560,6 +560,14 @@ class ListingEligibilitySourceTest(unittest.TestCase):
                          "가상지방법원")
         self.assertEqual(extract_source_info("가상고법 2099. 1. 1. 선고 2099노5 판결 [살인]\n" + body)["courtName"],
                          "가상고등법원")
+        # 머리 순서: 약칭 머리 뒤에 원심 법원 줄이 따로 나와도 앞의 머리를 쓴다 (CodeRabbit 리뷰)
+        self.assertEqual(extract_source_info("가상고법 2099. 1. 1. 선고 2099노9 판결\n원심판결\n가상지방법원\n" + body)
+                         ["courtName"], "가상고등법원")
+        # 지원명이 다음 줄에 따로 있으면 붙인다
+        self.assertEqual(extract_source_info("가상지방법원\n가상지원\n판결\n사건 2099고단10 상해\n" + body)["courtName"],
+                         "가상지방법원가상지원")
+        # 한 줄로 된 상고심 머리
+        self.assertEqual(extract_source_info("대법원 2099. 1. 1. 선고 2099도11 판결 [살인]\n" + body)["courtName"], "대법원")
         # 상고심 머리 "대 법 원"은 그대로 대법원
         self.assertEqual(extract_source_info("대 법 원\n판 결\n사건 2099도6 살인\n" + body)["courtName"], "대법원")
         # 머리에 법원명이 없으면 본문의 "대법원"을 잡지 않고 비워 둔다

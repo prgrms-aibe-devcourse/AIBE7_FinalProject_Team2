@@ -122,6 +122,10 @@ COURT_LOWER = r"[가-힣]{2,6}(?:지방|고등|가정|행정)법원(?:[가-힣]{
 COURT_LINE = re.compile(COURT_LOWER + r"|대법원")
 # 국가법령정보센터 등의 머리 줄: "○○지법 2099. 1. 1. 선고 …", "○○고법 …", "○○지법○○지원 …" (공백을 지운 줄의 앞부분)
 COURT_ABBREVIATION = re.compile(r"([가-힣]{2,6})(지법|고법)([가-힣]{2,6}지원)?(?=\d|선고|$)")
+# 한 줄로 된 상고심 머리: "대법원 2099. 1. 1. 선고 2099도1 판결" (공백을 지운 줄의 앞부분)
+SUPREME_HEAD = re.compile(r"대법원(?=\d|선고)")
+# 법원명 다음 줄에 따로 적힌 지원명: "○○지방법원" / "○○지원"
+BRANCH_LINE = re.compile(r"[가-힣]{2,6}지원")
 COURT_ABBREVIATION_FULL = {"지법": "지방법원", "고법": "고등법원"}
 # 3단계(공백을 모두 지운 앞부분)에서만 쓰는 지역명 목록. 줄 경계가 사라져 앞 글자("판결" 등)가 지역명에 딸려 오므로
 # 알려진 지역명으로 시작하는 법원명만 받는다. 목록에 없는 지역이면 비운다 (#333 리뷰)
@@ -134,8 +138,10 @@ COURT_IN_FLAT_HEAD = re.compile(
 def extract_court_name(text):
     """판결문 머리에서 법원명을 찾는다. 못 찾으면 None (본문의 다른 법원명을 잡는 것보다 비워 두는 편이 안전하다).
 
-    1. 앞쪽 줄 중 공백을 지운 줄 전체가 법원명인 줄 (띄어 쓴 머리 "○ ○ 지 방 법 원" 포함)
-    2. 약칭으로 시작하는 줄 ("○○지법 … 선고") → 정식 이름으로 풀어 쓴다
+    1 · 2는 앞쪽 줄을 위에서부터 한 번 훑으며 먼저 나온 줄을 쓴다 — 머리 뒤에 원심판결 법원명 줄이 따로 나와도
+    앞의 머리를 고른다(CodeRabbit 리뷰).
+    1. 공백을 지운 줄 전체가 법원명인 줄 (띄어 쓴 머리 "○ ○ 지 방 법 원" 포함). 다음 줄이 지원명뿐이면 붙인다
+    2. 약칭 · 상고심으로 시작하는 줄 ("○○지법 … 선고", "대법원 … 선고") → 정식 이름으로 풀어 쓴다
     3. 그래도 없으면 공백을 모두 지운 앞쪽 HEAD_CHARS 글자 안에서 **알려진 지역명으로 시작하는** 법원명만 찾는다
        (PDF에서 머리 글자가 한 줄에 한 자씩 나온 경우). 줄 경계가 사라져 "판결" 등이 지역명에 딸려 오기 때문에
        지역명을 목록으로 제한한다(COURT_REGIONS). 대법원은 빼고 찾는다 — 상고심 머리는 1에서 잡히고, 여기서 나오는
@@ -143,14 +149,18 @@ def extract_court_name(text):
     """
     lines = [re.sub(r"\s", "", line) for line in text.splitlines()]
     head = [line for line in lines if line][:HEAD_LINES]
-    for line in head:
+    for i, line in enumerate(head):
         if COURT_LINE.fullmatch(line):
+            following = head[i + 1] if i + 1 < len(head) else ""
+            if line != "대법원" and not line.endswith("지원") and BRANCH_LINE.fullmatch(following):
+                return line + following
             return line
-    for line in head:
         abbreviation = COURT_ABBREVIATION.match(line)
         if abbreviation:
             region, kind, branch = abbreviation.groups()
             return region + COURT_ABBREVIATION_FULL[kind] + (branch or "")
+        if SUPREME_HEAD.match(line):
+            return "대법원"
     court = COURT_IN_FLAT_HEAD.search("".join(lines)[:HEAD_CHARS])
     return court.group(0) if court else None
 
