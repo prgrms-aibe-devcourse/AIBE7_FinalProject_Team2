@@ -593,17 +593,23 @@ export async function renderCaseListPage(container, { api, navigate, from, openA
     function drawPager(pages) {
       pager.hidden = pages <= 1;
       if (pages <= 1) { pager.replaceChildren(); return; }
+      const focusRole = pager.contains(document.activeElement) ? document.activeElement.dataset.role : null;
       const prev = button('이전', () => goPage(page - 1), 'face-page face-page-step');
+      prev.dataset.role = 'prev';
       prev.disabled = page === 1;
       const next = button('다음', () => goPage(page + 1), 'face-page face-page-step');
+      next.dataset.role = 'next';
       next.disabled = page === pages;
       const numbers = Array.from({ length: pages }, (_, i) => {
         const node = button(String(i + 1), () => goPage(i + 1), 'face-page');
+        node.dataset.role = String(i + 1);
         node.setAttribute('aria-label', `${i + 1}쪽`);
         if (i + 1 === page) node.setAttribute('aria-current', 'page');
         return node;
       });
       pager.replaceChildren(prev, ...numbers, next);
+      // 버튼을 새로 그리면 누른 버튼의 포커스가 사라지므로 같은 자리 버튼으로 돌려준다(끝 쪽이라 막힌 이전 · 다음은 지금 쪽 번호로)
+      if (focusRole) (pager.querySelector(`[data-role="${focusRole}"]:not(:disabled)`) ?? pager.querySelector('[aria-current]'))?.focus({ preventScroll: true });
     }
     function apply() {
       const query = search.value.trim().toLowerCase();

@@ -127,13 +127,22 @@ export function turnPage(page, { scopeClass, duration = TURN_MS, back = false, d
 }
 
 // 다른 화면의 지면이 다 그려질 때까지 기다린다(지금 지면이 아닌 새 .paper, 그 화면이 불러오는 중이 아닐 때). 못 찾으면 null
+// 화면이 바뀌었는데 신문 지면이 아예 없으면(메인 · 8막 · 마이페이지 등) 넘길 곳이 아니므로 timeout을 기다리지 않고 바로 null
+const NO_PAPER_MS = 50;
 function nextPaper(old, timeout) {
   const started = performance.now();
+  const view = document.getElementById('route-view');
+  let changedAt = null;
+  const watcher = view ? new MutationObserver(() => { changedAt ??= performance.now(); }) : null;
+  watcher?.observe(view, { childList: true });
   return new Promise((resolve) => {
+    const finish = (value) => { watcher?.disconnect(); resolve(value); };
     const look = () => {
-      const found = [...document.querySelectorAll('.paper')].find((node) => node !== old && node.isConnected && !node.closest('.page-turn, .is-loading'));
-      if (found) resolve(found);
-      else if (performance.now() - started > timeout) resolve(null);
+      const papers = [...document.querySelectorAll('.paper')].filter((node) => node !== old && node.isConnected && !node.closest('.page-turn'));
+      const ready = papers.find((node) => !node.closest('.is-loading'));
+      if (ready) finish(ready);
+      else if (changedAt !== null && !papers.length && performance.now() - changedAt > NO_PAPER_MS) finish(null);
+      else if (performance.now() - started > timeout) finish(null);
       else requestAnimationFrame(look);
     };
     requestAnimationFrame(look);
