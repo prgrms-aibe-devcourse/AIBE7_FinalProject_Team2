@@ -71,7 +71,9 @@
 | v0.67 | 2026-10-29 | **사건 배역 · 민감 플래그 (BE-125, ERD v1.47 · V37)** — API 16에 `cast`(배역 `{prosecutor, defense}`) · `sensitiveFlags`(사용자 안내 대상 플래그만) 추가. 값이 없으면 **필드를 뺀다**(배정 전 · 안내할 플래그 없음 → 화면 기본 동작). A-6 `content`에 `castRoles` · `sensitiveFlags`(가드 전용 포함 전체), A-11에 같은 두 필드 수정 추가 — 자동 분류 · 자동 배정을 관리자가 바로잡는 경로. 감사 로그 `CASE_UPDATE`에 두 필드는 바꾼 값까지 남긴다. 필드 추가만이라 기존 클라이언트와 호환 (`docs/decisions/BE-125.md`) |
 | v0.68 | 2026-10-29 | **커뮤니티 API 신설 (BE-115, FE-47 · FE-88 · FE-89 · FE-116)** — 12장 C-1 `GET /community/posts`(목록 · 많이 본 글) · C-2 `GET /community/posts/{postId}`(상세 + 댓글) · C-3 `POST /community/posts`(글쓰기, 판결 공유) · C-4 `POST …/like`(좋아요 켜고 끄기) · C-5 `POST …/comments`(댓글) · C-6 `GET /community/home`(이야기 많은 사건 · 추천 사건 · 레벨 랭킹) · C-7 `GET /community/shareable-verdict`(붙일 수 있는 내 판결). 읽기는 누구나, 쓰기는 로그인 회원만(401 `UNAUTHORIZED`). 글쓴이 명함에 `level` · `job` · `cardLine`. 글 · 댓글 · 좋아요 때 경험치 지급(11-1 그대로). 에러 코드 `POST_NOT_FOUND` 추가. 사진 올리기 · 글 삭제 · 닉네임 설정은 후속. ERD v1.48(V38) |
 | v0.69 | 2026-10-29 | **닉네임 설정 M-7 · 내 회원 정보 M-8 신설 · 닉네임 중복 금지 (BE-139, ERD v1.49 · V39)** — `GET /members/me`(M-8, 닉네임 · 표시 이름 · 로그인 방식 · 아이디 · 가입일 · 최근 로그인) · `PUT /members/me/nickname`: 로그인한 회원(카카오 · 아이디 공통)이 닉네임을 정하거나 바꾼다. 형식은 M-5와 같고, **대소문자를 구분하지 않고 중복을 막는다**(409 `DUPLICATE_NICKNAME`). M-5 가입도 같은 중복 검사를 받는다(M-5의 "중복을 허용한다" 삭제). 변경 횟수 제한 · 금칙어 검사는 아직 없다. 닉네임이 없는 회원의 커뮤니티 이름은 `방청객 {회원 ID}`(BE-115). 에러 코드 `DUPLICATE_NICKNAME` 추가 |
-| v0.70 | 2026-10-29 | **닉네임 후속 (BE-139 리뷰 반영, FE-137)** — M-5 · M-7: `방청객`으로 시작하는 닉네임 금지(자동 이름 흉내 방지). M-5 · M-6 응답 `nickname`은 항상 표시 이름 문자열(닉네임이 없으면 `방청객 {회원 ID}`). 12장 글쓴이 `nickname` 설명에서 "닉네임 설정은 후속" 삭제(M-7로 생김) · M-5 설명의 버전을 v0.69로 정정 |
+| v0.70 | 2026-10-29 | **로그아웃 시 익명 ID 쿠키 해제 (BE-137)** — M-2: 쿠키의 익명 ID가 회원에 연결되어 있으면 `NLNB_AID`도 `Set-Cookie`(`Max-Age=0`)로 지운다. 공용 PC에서 로그아웃한 뒤 다음 사람의 체험 · 판결이 그 회원 계정으로 쌓이지 않게 한다. 새 익명 ID는 이때 발급하지 않고 다음 행동(API 2 체험 시작 등) 때 발급된다. 연결 안 된(손님) 익명 ID는 지우지 않는다 |
+| v0.71 | 2026-10-29 | **사건 사진 주소 규칙 기본값 (BE-141)** — API 1 · 2 · 16 · 17과 커뮤니티 홈(C-6)의 `thumbnailUrl` · 사진 URL이 저장된 값이 없으면 규칙 주소 `/images/cases/case-{caseId}-{reenact\|origin\|conclusion}.webp`로 채워진다(저장된 값이 있으면 그것이 우선, 관리자 사진 업로드 A-13-3 ~ 5는 그대로). API 17 `extraPhotos.origin` · `conclusion`은 사진 행이 없어도 `null`이 아니라 규칙 주소(캡션 `null`)다 |
+| v0.72 | 2026-10-29 | **닉네임 후속 (BE-139 리뷰 반영, FE-137)** — M-5 · M-7: `방청객`으로 시작하는 닉네임 금지(자동 이름 흉내 방지). M-5 · M-6 응답 `nickname`은 항상 표시 이름 문자열(닉네임이 없으면 `방청객 {회원 ID}`). 12장 글쓴이 `nickname` 설명에서 "닉네임 설정은 후속" 삭제(M-7로 생김) · M-5 설명의 버전을 v0.69로 정정 |
 
 ---
 
@@ -96,7 +98,8 @@
 | --- | --- |
 | 이름 | `NLNB_AID` |
 | 값 | `anonymous_user.id` (UUID) |
-| 발급 시점 | 체험 시작(`POST /cases/{caseId}/experience`) · (확장) 성향 테스트 제출(P-2) 때 쿠키가 없거나 DB에 없는 값이면 새로 발급 |
+| 발급 시점 | 체험 시작(`POST /cases/{caseId}/experience`) · (확장) 성향 테스트 제출(P-2) · 꾸미기 등 행동 API 때 쿠키가 없거나 DB에 없는 값이면 새로 발급. (확장, BE-62) 로그인 때 쿠키 값이 다른 회원에 연결됐거나 없으면 이 회원에 연결된 새 값 |
+| 삭제 시점 | (확장, v0.70 · BE-137) 로그아웃(M-2) 때 회원에 연결된 값이면 지운다. 손님 값은 지우지 않는다 |
 | 속성 | `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/` |
 | 유효 기간 | 1년 (요구사항 15장 "익명 ID 유지 방식 · 기간" 결정 시 확정) |
 - **프론트와 API는 같은 도메인으로 배포한다**(6장 #2 확정, 기술 스택 8장). EC2의 Nginx가 프론트 빌드 파일을 서빙하고 `/api` 요청을 백엔드 컨테이너로 프록시하므로 `SameSite=Lax` 그대로 쓰고 CORS 설정은 필요 없다.
@@ -244,13 +247,13 @@ json
 json
 
 ```json
-{  "summary": { "total": 9, "byCrimeType": { "MURDER": 3, "FRAUD": 3, "INJURY": 3, "ROBBERY": 0, "THEFT": 0 } },  "cases": [    {      "caseId": 1,      "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",      "crimeType": "MURDER",      "crimeCategoryLabel": "생명범죄",      "chargeName": "살인",      "shortIntro": "빌린 돈 문제로 찾아온 지인과 다투다 흉기로 살해한 사건입니다.",      "keywords": ["돈 문제", "집으로 찾아옴"],      "difficulty": "HIGH",      "estimatedMinutes": 15,      "participantCount": 1284,      "thumbnailUrl": null,      "scriptReady": true,      "myStatus": "IN_PROGRESS"    }  ]}
+{  "summary": { "total": 9, "byCrimeType": { "MURDER": 3, "FRAUD": 3, "INJURY": 3, "ROBBERY": 0, "THEFT": 0 } },  "cases": [    {      "caseId": 1,      "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",      "crimeType": "MURDER",      "crimeCategoryLabel": "생명범죄",      "chargeName": "살인",      "shortIntro": "빌린 돈 문제로 찾아온 지인과 다투다 흉기로 살해한 사건입니다.",      "keywords": ["돈 문제", "집으로 찾아옴"],      "difficulty": "HIGH",      "estimatedMinutes": 15,      "participantCount": 1284,      "thumbnailUrl": "/images/cases/case-1-reenact.webp",      "scriptReady": true,      "myStatus": "IN_PROGRESS"    }  ]}
 ```
 
 - `PUBLISHED` 사건만. `summary`는 필터와 관계없이 전체 기준(칩 옆 건수 표시용). `byCrimeType`은 공개 사건이 없는 유형도 0으로 모든 범죄 유형 키를 내려 준다(v0.55부터 5개).
 - `crimeCategoryLabel`: `crime_type`별 표시용 분류명. `MURDER` → "생명범죄", `FRAUD` · `ROBBERY` · `THEFT` → "재산범죄", `INJURY` → "신체범죄"(`ROBBERY` · `THEFT`는 v0.55). DB 컬럼이 아니라 서버 코드 상수(`CrimeType.categoryLabel`)에서 만든다(ERD 3-1).
 - `chargeName`: 죄명(`legal_case.charge_name`, 예: "살인"). 사건 상단 바(S-04~S-08)가 `caseId`로 이 목록에서 제목과 함께 찾아 쓴다(BE-79, D-01). 사건 개요(API 4) · API 16의 `chargeName`과 같은 값이다.
-- `thumbnailUrl`: `legal_case.thumbnail_url`. 없으면 `null`이고, 화면은 범죄 유형별 기본 이미지를 쓴다.
+- `thumbnailUrl`: `legal_case.thumbnail_url`. **없으면 규칙 주소 `/images/cases/case-{caseId}-reenact.webp`를 내려준다**(BE-141). 그 파일이 없으면 화면이 범죄 유형별 공용 컷으로 바꾼다.
 - `participantCount`: `attempt_no = 1`이고 `COMPLETED`인 체험 수.
 - (v0.60, BE-116) `scriptReady`: 이 사건에 **승인된 공개 대본**이 있는가(`true` / `false`). 기준은 API 18이 200을 주는 조건과 같다(사건 `PUBLISHED` + 대본 `reviewStatus: APPROVED`) — 대본이 없거나 검수 대기 · 반려면 `false`다. 화면(S-02)은 이 값으로 체험 가능한 사건을 먼저 보이고, `false`는 "준비 중"으로 다룬다. 사용자와 무관한 값이다. **화면 정책이며 서버는 막지 않는다** — API 2(체험 시작)는 `scriptReady`를 보지 않는다. 또 대사를 직접 수정(A-13-13)하면 검수 기록이 지워져 `true → false`로 바뀔 수 있다(이때 API 18도 404).
 - 정렬: `published_at` 최신순 고정 (정렬 선택은 이후 단계, REQ-009).
@@ -771,7 +774,7 @@ S-20 사건 디테일(정보 구조 v1.12)이 체험을 만들기 전에 부르�
 **응답 200**
 
 ```json
-{  "caseId": 1,  "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",  "crimeType": "MURDER",  "crimeCategoryLabel": "생명범죄",  "chargeName": "살인",  "shortIntro": "빌린 돈 문제로 찾아온 지인과 다투다 흉기로 살해한 사건입니다.",  "keywords": ["돈 문제", "지인", "흉기"],  "difficulty": "MID",  "estimatedMinutes": 15,  "participantCount": 42,  "thumbnailUrl": null,  "overview": "피고인이 빌린 돈을 갚지 못해 오래 다투던 지인이 집으로 찾아오자, …",  "scriptReady": true,  "myStatus": null,  "cast": { "prosecutor": "naero", "defense": "nambul" },  "sensitiveFlags": ["MENTAL_HEALTH"]}
+{  "caseId": 1,  "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",  "crimeType": "MURDER",  "crimeCategoryLabel": "생명범죄",  "chargeName": "살인",  "shortIntro": "빌린 돈 문제로 찾아온 지인과 다투다 흉기로 살해한 사건입니다.",  "keywords": ["돈 문제", "지인", "흉기"],  "difficulty": "MID",  "estimatedMinutes": 15,  "participantCount": 42,  "thumbnailUrl": "/images/cases/case-1-reenact.webp",  "overview": "피고인이 빌린 돈을 갚지 못해 오래 다투던 지인이 집으로 찾아오자, …",  "scriptReady": true,  "myStatus": null,  "cast": { "prosecutor": "naero", "defense": "nambul" },  "sensitiveFlags": ["MENTAL_HEALTH"]}
 ```
 
 - 필드는 API 1 카드와 같고(`chargeName` 포함, v0.32), `overview`(사건 개요, API 4의 `case.overview`와 같은 값)를 더한다. `participantCount` · `myStatus` 기준도 API 1과 같다. (v0.60, BE-116) `scriptReady`도 API 1과 같은 값 · 같은 기준이다 — `false`면 S-20은 시작 대신 "준비 중"을 보인다(API 18을 따로 불러 확인하지 않아도 된다).
@@ -813,11 +816,11 @@ FE-64가 쓰는 API(S-20 기사 지면 · 증거조사). 관리자 신문 지면
 }
 ```
 
-- `photo`는 A-13-3으로 올린 사건 대표사진(`legal_case.thumbnail_url`). 아직 안 올렸으면 `null`.
-- **`extraPhotos`는 배열이 아니라 `{ origin, conclusion }` 고정 자리다.** 그 역할의 사진이 없으면 그 자리는 `null`이다(예: 발단만 올렸으면 `{ "origin": {...}, "conclusion": null }`) — 배열로 내려주면 한쪽이 비었을 때 다른 쪽이 앞자리로 밀려 역할이 뒤바뀌어 보일 수 있어서다(BE-101에서 역할 칸을 둔 것과 같은 이유). A-13-6 ~ 8의 `extraPhotos`(배열, `role` 포함)와는 형태가 다르다 — 관리자 화면은 목록 · 정리가 필요해 배열로, 공개 화면은 항상 같은 자리만 보면 돼서 고정 자리로 했다.
+- `photo`는 A-13-3으로 올린 사건 대표사진(`legal_case.thumbnail_url`). 아직 안 올렸으면 규칙 주소 `/images/cases/case-{caseId}-reenact.webp`(BE-141).
+- **`extraPhotos`는 배열이 아니라 `{ origin, conclusion }` 고정 자리다.** 그 역할의 사진 행이 없으면 그 자리는 규칙 주소 `/images/cases/case-{caseId}-{origin|conclusion}.webp`에 `caption: null`이다(BE-141, 예: 발단만 올렸으면 `{ "origin": {...}, "conclusion": { "imageUrl": "/images/cases/case-1-conclusion.webp", "caption": null } }`) — 자리가 `null`이 되는 일은 없다 — 배열로 내려주면 한쪽이 비었을 때 다른 쪽이 앞자리로 밀려 역할이 뒤바뀌어 보일 수 있어서다(BE-101에서 역할 칸을 둔 것과 같은 이유). A-13-6 ~ 8의 `extraPhotos`(배열, `role` 포함)와는 형태가 다르다 — 관리자 화면은 목록 · 정리가 필요해 배열로, 공개 화면은 항상 같은 자리만 보면 돼서 고정 자리로 했다.
 - `prompt` · `s3Key` · `id` · `displayOrder` 등 내부 기록용 값은 내려주지 않는다.
 - 증거조사 `evidencePhotos`(검사 측 = 결론, 변호인 측 = 발단, FE-63)는 이 `extraPhotos.origin` · `.conclusion`을 그대로 연결해 쓴다 — 같은 사진을 두 번 받지 않는다.
-- 공용 컷(사진이 없거나 로딩 실패)으로 바꾸는 처리는 프론트가 한다(FE-63). 서버는 fallback을 내려주지 않는다.
+- 공용 컷(사진 파일이 없거나 로딩 실패)으로 바꾸는 처리는 프론트가 한다(FE-63). 서버가 내려주는 규칙 주소의 파일이 없으면, Nginx의 화면 주소 fallback(`location /`의 `try_files … /index.html`)이 `index.html`을 **200**으로 돌려준다(404가 아니다). 브라우저가 이를 이미지로 해석하지 못해 `error` 이벤트가 나고, 이때 프론트가 공용 컷으로 바꾼다. 상태 코드로 파일 유무를 확인하는 클라이언트는 이 방식으로는 감지하지 못한다.
 - 공개(`PUBLISHED`)된 사건만 응답한다(API 16과 같은 기준).
 
 | 거절 | 조건 |
@@ -2240,6 +2243,14 @@ Origin이 이 서버 자신과 같은 출처인지)을 거친다 — 벗어나�
 
 - 리프레시 토큰이 있으면 Redis 저장소에서 지우고(그 뒤 재발급은 전부 실패한다), `NLNB_RT` 쿠키를 `Set-Cookie`로
   지운다. 이미 나간 액세스 토큰은 블랙리스트를 두지 않아 자연 만료(기본 15분)까지는 유효하다.
+- 익명 ID 쿠키(`NLNB_AID`)가 **회원에 연결된** 익명 ID면 이 쿠키도 `Set-Cookie`(`Max-Age=0`, 발급 때와 같은 `Path=/`)로
+  지운다(v0.70, BE-137). 로그인 때 회원에 연결한 익명 ID가 남으면 로그아웃 뒤 같은 브라우저(공용 PC)의 다음 사람
+  체험 · 판결이 그 회원 계정으로 쌓이기 때문이다. 리프레시 쿠키가 이미 없어도(만료 뒤 로그아웃) 지운다.
+  - 새 익명 ID는 이때 발급하지 않는다. 다음 행동(API 2 체험 시작 · P-2 성향 테스트 등) 때 회원과 연결 안 된 새 익명 ID가 발급된다.
+    그전까지 마이페이지 등은 빈 상태로 보인다
+  - 연결 안 된(손님) 익명 ID · DB에 없는 값은 지우지 않는다. 이전 기록은 회원 계정에 그대로 남는다(연결을 끊지 않는다)
+  - 연결 여부를 확인하지 못하면(DB 오류) 지운다. 이때도 응답은 204다
+  - 화면이 따로 할 일은 없다. 쿠키는 `HttpOnly`라 화면이 읽지 못하고, 브라우저가 응답의 `Set-Cookie`로 지운다
 
 | 거절 | 조건 |
 | --- | --- |
@@ -2279,7 +2290,7 @@ Origin이 이 서버 자신과 같은 출처인지)을 거친다 — 벗어나�
 | --- | --- |
 | `id` | 필수. 영문 · 숫자 · 밑줄 4 ~ 20자. 서버가 **소문자로 바꿔 저장 · 비교**한다(`Naero`와 `naero`는 같은 아이디). `@`를 쓸 수 없다 — 화면은 `@`가 있으면 관리자 로그인(A-2)으로 보낸다 |
 | `password` | 필수. 8 ~ 64자, 영문과 숫자를 하나 이상씩 포함. 64자는 비밀번호 해시(Argon2) 비용 상한이다. 서버는 일방향 해시로만 저장한다 |
-| `nickname` | 필수. 한글 · 영문 · 숫자 2자 이상, 한글이 있으면 8자 · 영문 · 숫자만이면 12자까지. 공백 · 기호 불가. **중복을 허용하지 않는다**(대소문자 구분 없음, v0.69 BE-139. 처음 BE-113 가입은 허용했다 — 결정 기록 BE-113 결정 2를 BE-139가 바꿨다). `방청객`으로 시작하는 닉네임은 쓸 수 없다(자동 이름 `방청객 {회원 ID}` 흉내 방지, v0.70) |
+| `nickname` | 필수. 한글 · 영문 · 숫자 2자 이상, 한글이 있으면 8자 · 영문 · 숫자만이면 12자까지. 공백 · 기호 불가. **중복을 허용하지 않는다**(대소문자 구분 없음, v0.69 BE-139. 처음 BE-113 가입은 허용했다 — 결정 기록 BE-113 결정 2를 BE-139가 바꿨다). `방청객`으로 시작하는 닉네임은 쓸 수 없다(자동 이름 `방청객 {회원 ID}` 흉내 방지, v0.72) |
 
 **응답 200**: 가입하면 **바로 로그인된다.**
 
@@ -2287,7 +2298,7 @@ Origin이 이 서버 자신과 같은 출처인지)을 거친다 — 벗어나�
 { "nickname": "내로판사" }
 ```
 
-- `nickname`은 화면에 보일 표시 이름이다(v0.70): 닉네임이 있으면 그 값, 없으면(V39가 겹치던 닉네임을 비운 아이디 회원) `방청객 {회원 ID}` — 항상 문자열이다. 가입 응답은 늘 방금 정한 닉네임이다.
+- `nickname`은 화면에 보일 표시 이름이다(v0.72): 닉네임이 있으면 그 값, 없으면(V39가 겹치던 닉네임을 비운 아이디 회원) `방청객 {회원 ID}` — 항상 문자열이다. 가입 응답은 늘 방금 정한 닉네임이다.
 
 - `Set-Cookie`로 `NLNB_RT`(M-1과 같은 쿠키)를 심는다. 액세스 토큰은 본문에 없다 → 화면이 **M-1 재발급을 바로 한 번 불러** 받는다(M-4와 같은 흐름)
 - 익명 ID 쿠키(`NLNB_AID`) 연결 규칙은 M-4와 같다. 새 익명 ID를 발급하면 `Set-Cookie`로 바꿔 심는다
@@ -2317,7 +2328,7 @@ Origin이 이 서버 자신과 같은 출처인지)을 거친다 — 벗어나�
 { "nickname": "내로판사" }
 ```
 
-- `nickname`은 표시 이름이다(M-5와 같다, v0.70).
+- `nickname`은 표시 이름이다(M-5와 같다, v0.72).
 - 쿠키 · 익명 ID 연결 · 화면의 M-1 재발급은 M-5와 같다. 발급되는 권한은 항상 일반 회원(`USER`)이다
 
 | 거절 | 조건 |

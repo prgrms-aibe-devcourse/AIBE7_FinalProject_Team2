@@ -1,6 +1,7 @@
 import { API_MODE } from '../../api/config.js';
 import { button, element, mockTag } from '../../components/siteLayout.js';
 import { scriptFor } from '../overview/overviewPage.js';
+import { commonCategoryOf, useCommonPhotoOnError } from '../../utils/newspaper.js';
 import { isScriptReady } from '../../utils/scriptReady.js';
 import { NOT_READY, authorButton, authorFace, clip, communityShell, filterControls, popularList, postLink, svgIcon } from './communityParts.js';
 
@@ -175,6 +176,7 @@ export function renderCommunityHomePage(container, { api, navigate }) {
     clipping.append(kicker, element('h3', 'cm-hot-headline', item.headline), element('p', 'cm-hot-deck', item.deck));
     if (item.thumbnailUrl) {
       const photo = element('img', 'cm-hot-photo');
+      useCommonPhotoOnError(photo, Number(item.caseId) || 0, undefined, commonCategoryOf(item)); // 사진 파일이 없으면 공용 컷 (src보다 먼저, BE-141)
       photo.src = item.thumbnailUrl;
       photo.alt = '';
       photo.decoding = 'async';
