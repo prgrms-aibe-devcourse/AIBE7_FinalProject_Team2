@@ -57,31 +57,34 @@
 /* 대사 → 1막과 같은 만평 말풍선(꼬리는 말풍선 위쪽, 말하는 캐릭터 쪽) */
 .stage-wrap:not(.paper-mode) .dlg { background: var(--color-paper); border: 2px solid var(--color-text); border-radius: 22px; box-shadow: 0 14px 28px -16px color-mix(in srgb, var(--color-desk-shadow) 65%, transparent); }
 .stage-wrap:not(.paper-mode) .dlg::before, .stage-wrap:not(.paper-mode) .dlg::after { content: ''; position: absolute; display: none; pointer-events: none; }
-.stage-wrap:not(.paper-mode) .dlg:is([data-speaker="naero"], [data-speaker="nambul"])::before,
-.stage-wrap:not(.paper-mode) .dlg:is([data-speaker="naero"], [data-speaker="nambul"])::after { display: block; }
+.stage-wrap:not(.paper-mode) .dlg:is([data-side="left"], [data-side="right"])::before,
+.stage-wrap:not(.paper-mode) .dlg:is([data-side="left"], [data-side="right"])::after { display: block; }
 .stage-wrap:not(.paper-mode) .dlg::before { top: -22px; width: 26px; height: 22px; background: var(--color-text); clip-path: polygon(0 100%, 100% 100%, 20% 0); }
 .stage-wrap:not(.paper-mode) .dlg::after { top: -17px; width: 21px; height: 19px; background: var(--color-paper); clip-path: polygon(0 100%, 100% 100%, 22% 0); }
 /* 꼬리는 이름표(대사창 위 가장자리) 바로 안쪽에 두어 겹치지 않게 한다(FE-48: 이름표가 "남불 A씨 역"처럼 길어지면 15% 자리와 겹쳤다) */
-.stage-wrap:not(.paper-mode) .dlg[data-speaker="naero"]::before { left: 23%; }
-.stage-wrap:not(.paper-mode) .dlg[data-speaker="naero"]::after { left: calc(23% + 3px); }
-.stage-wrap:not(.paper-mode) .dlg[data-speaker="nambul"]::before { right: 23%; scale: -1 1; }
-.stage-wrap:not(.paper-mode) .dlg[data-speaker="nambul"]::after { right: calc(23% + 3px); scale: -1 1; }
-.stage-wrap:not(.paper-mode) .stage.card .dlg[data-speaker="naero"]::before { left: 21%; }
-.stage-wrap:not(.paper-mode) .stage.card .dlg[data-speaker="naero"]::after { left: calc(21% + 3px); }
-.stage-wrap:not(.paper-mode) .stage.card .dlg[data-speaker="nambul"]::before { right: 21%; }
-.stage-wrap:not(.paper-mode) .stage.card .dlg[data-speaker="nambul"]::after { right: calc(21% + 3px); }
+.stage-wrap:not(.paper-mode) .dlg[data-side="left"]::before { left: 23%; }
+.stage-wrap:not(.paper-mode) .dlg[data-side="left"]::after { left: calc(23% + 3px); }
+.stage-wrap:not(.paper-mode) .dlg[data-side="right"]::before { right: 23%; scale: -1 1; }
+.stage-wrap:not(.paper-mode) .dlg[data-side="right"]::after { right: calc(23% + 3px); scale: -1 1; }
+.stage-wrap:not(.paper-mode) .stage.card .dlg[data-side="left"]::before { left: 21%; }
+.stage-wrap:not(.paper-mode) .stage.card .dlg[data-side="left"]::after { left: calc(21% + 3px); }
+.stage-wrap:not(.paper-mode) .stage.card .dlg[data-side="right"]::before { right: 21%; }
+.stage-wrap:not(.paper-mode) .stage.card .dlg[data-side="right"]::after { right: calc(21% + 3px); }
 
 /* 볼따구(해설): 작은 내로 · 남불이 무대 가운데에서 조금 왼쪽 아래, 대사창 위에 볼을 괴고 걸친다(꼬리 없음).
    내로는 가운데에서 조금 왼쪽, 남불은 가운데에서 오른쪽 · 조금 더 아래(대칭으로 두지 않는다). 이름표는 다른 대사와 같은 자리 */
 .stage-wrap .cameo { position: absolute; z-index: 30; height: 47.5%; width: auto; translate: -50% 0; transform-origin: 50% 100%; pointer-events: none; /* FE-48: 2.5배, 발밑에서 뿅 */
   filter: drop-shadow(0 4px 6px color-mix(in srgb, var(--color-desk-shadow) 30%, transparent)); }
-.stage-wrap .cameo-naero { left: 40%; bottom: calc(3% + 21% - 3.4cqw); }
-.stage-wrap .cameo-nambul { left: 62%; bottom: calc(3% + 21% - 4.6cqw); } /* 가운데에서 오른쪽(가운데 피고인석 A씨 역과 겹치지 않게) */
+.stage-wrap .cameo-naero { bottom: calc(3% + 21% - 3.4cqw); } /* 높이는 캐릭터 그림마다 */
+.stage-wrap .cameo-nambul { bottom: calc(3% + 21% - 4.6cqw); }
+/* 가로 자리는 묶음 쪽(FE-128): A는 가운데 왼쪽, B는 가운데에서 오른쪽(B가 가운데 피고인석에 서 있을 때 겹치지 않게) */
+.stage-wrap .cameo.at-left { left: 40%; }
+.stage-wrap .cameo.at-right { left: 62%; }
 .stage-wrap .cameo[hidden] { display: none; }
 /* 가운데 피고인석(stand)에 선 캐릭터가 말하면 꼬리도 가운데 */
 .stage-wrap:not(.paper-mode) .dlg[data-spot="stand"]::before { left: calc(50% - 13px); right: auto; scale: 1 1; }
 .stage-wrap:not(.paper-mode) .dlg[data-spot="stand"]::after { left: calc(50% - 10px); right: auto; scale: 1 1; }
-.stage-wrap:not(.paper-mode) .dlg[data-speaker="nambul"] .name { left: auto; right: 2cqw; }
+.stage-wrap:not(.paper-mode) .dlg[data-side="right"] .name { left: auto; right: 2cqw; }
 .stage-wrap:not(.paper-mode) .name { border: 2px solid var(--color-text); background: var(--color-paper); color: var(--color-heading); box-shadow: none; font-family: var(--font-hand); font-weight: 400; font-size: max(18px, 1.9cqw); line-height: 1.1; }
 .stage-wrap:not(.paper-mode) .name i { font: 700 max(11px, .95cqw)/1 var(--font-body); color: var(--role, var(--color-muted)); opacity: 1; }
 .stage-wrap:not(.paper-mode) .txt { font-weight: 500; }
@@ -126,12 +129,12 @@
   --l: calc(50% - var(--dock-w) / 2 - 84px); --r: calc(50% + var(--dock-w) / 2 + 84px); bottom: calc(-32px + var(--safe-bottom)); height: min(250px, 32vh); } /* 1막 신문 무대와 같은 크기 · 높이(FE-48) */
 .comparison-full .stage-wrap .stage[data-scene="sheet"] .spr.near { translate: -50% 0; }
 /* 말풍선 꼬리: 1막처럼 옆으로 — 말하는 캐릭터(말풍선 양옆 아래)를 가리킨다 */
-.comparison-full .stage-wrap .dlg:is([data-speaker="naero"], [data-speaker="nambul"])::before { top: auto; bottom: 22px; width: 30px; height: 30px; clip-path: polygon(100% 0, 100% 100%, 0 78%); }
-.comparison-full .stage-wrap .dlg:is([data-speaker="naero"], [data-speaker="nambul"])::after { top: auto; bottom: 25px; width: 27px; height: 24px; clip-path: polygon(100% 0, 100% 100%, 0 80%); }
-.comparison-full .stage-wrap .dlg[data-speaker="naero"]::before { left: -30px; right: auto; }
-.comparison-full .stage-wrap .dlg[data-speaker="naero"]::after { left: -25px; right: auto; }
-.comparison-full .stage-wrap .dlg[data-speaker="nambul"]::before { left: auto; right: -30px; }
-.comparison-full .stage-wrap .dlg[data-speaker="nambul"]::after { left: auto; right: -25px; }
+.comparison-full .stage-wrap .dlg:is([data-side="left"], [data-side="right"])::before { top: auto; bottom: 22px; width: 30px; height: 30px; clip-path: polygon(100% 0, 100% 100%, 0 78%); }
+.comparison-full .stage-wrap .dlg:is([data-side="left"], [data-side="right"])::after { top: auto; bottom: 25px; width: 27px; height: 24px; clip-path: polygon(100% 0, 100% 100%, 0 80%); }
+.comparison-full .stage-wrap .dlg[data-side="left"]::before { left: -30px; right: auto; }
+.comparison-full .stage-wrap .dlg[data-side="left"]::after { left: -25px; right: auto; }
+.comparison-full .stage-wrap .dlg[data-side="right"]::before { left: auto; right: -30px; }
+.comparison-full .stage-wrap .dlg[data-side="right"]::after { left: auto; right: -25px; }
 @media (max-width: 680px) {
   .comparison-full .stage-wrap { --dock-w: calc(100vw - 20px); }
   .comparison-full .stage-wrap .ctrl { flex-wrap: nowrap; bottom: calc(6px + var(--safe-bottom)); padding: 2px 8px; min-height: 44px; }
@@ -142,14 +145,14 @@
   .comparison-full .stage-wrap .txt { font-size: 15px; }
   .comparison-full .stage-wrap .stage[data-scene="sheet"] .spr, .comparison-full .stage-wrap .stage[data-scene="sheet"] .spr.role { --l: 46px; --r: calc(100% - 46px); bottom: calc(172px + var(--safe-bottom)); height: 92px; }
   /* 좁은 화면: 캐릭터가 말풍선 위 양 끝에 서므로 꼬리는 위로, 말하는 쪽 이름표 바로 옆에서 */
-  .comparison-full .stage-wrap:not(.paper-mode) .dlg:is([data-speaker="naero"], [data-speaker="nambul"])::before,
-  .comparison-full .stage-wrap:not(.paper-mode) .dlg:is([data-speaker="naero"], [data-speaker="nambul"])::after { display: block !important; }
-  .comparison-full .stage-wrap .dlg:is([data-speaker="naero"], [data-speaker="nambul"])::before { top: -22px; bottom: auto; width: 26px; height: 22px; clip-path: polygon(0 100%, 100% 100%, 20% 0); }
-  .comparison-full .stage-wrap .dlg:is([data-speaker="naero"], [data-speaker="nambul"])::after { top: -17px; bottom: auto; width: 21px; height: 19px; clip-path: polygon(0 100%, 100% 100%, 22% 0); }
-  .comparison-full .stage-wrap .dlg[data-speaker="naero"]::before { left: 84px; }
-  .comparison-full .stage-wrap .dlg[data-speaker="naero"]::after { left: 87px; }
-  .comparison-full .stage-wrap .dlg[data-speaker="nambul"]::before { right: 84px; }
-  .comparison-full .stage-wrap .dlg[data-speaker="nambul"]::after { right: 87px; }
+  .comparison-full .stage-wrap:not(.paper-mode) .dlg:is([data-side="left"], [data-side="right"])::before,
+  .comparison-full .stage-wrap:not(.paper-mode) .dlg:is([data-side="left"], [data-side="right"])::after { display: block !important; }
+  .comparison-full .stage-wrap .dlg:is([data-side="left"], [data-side="right"])::before { top: -22px; bottom: auto; width: 26px; height: 22px; clip-path: polygon(0 100%, 100% 100%, 20% 0); }
+  .comparison-full .stage-wrap .dlg:is([data-side="left"], [data-side="right"])::after { top: -17px; bottom: auto; width: 21px; height: 19px; clip-path: polygon(0 100%, 100% 100%, 22% 0); }
+  .comparison-full .stage-wrap .dlg[data-side="left"]::before { left: 84px; }
+  .comparison-full .stage-wrap .dlg[data-side="left"]::after { left: 87px; }
+  .comparison-full .stage-wrap .dlg[data-side="right"]::before { right: 84px; }
+  .comparison-full .stage-wrap .dlg[data-side="right"]::after { right: 87px; }
 }
 /* 무대를 보는 동안 화면 자체는 스크롤하지 않는다(모바일 브라우저 바가 들락날락하며 아래 받침을 가리지 않게) */
 html:has(.comparison-full .stage-wrap:not(.reading-paper)) { overflow: hidden; }
@@ -215,3 +218,4 @@ html:has(.comparison-full .stage-wrap:not(.reading-paper)) { overflow: hidden; }
 .comparison-full .stage-wrap.reading-paper .sheet.is-flipped > * { visibility: hidden; }
 /* 리뷰하기(FE-55): 1막 엽서처럼 남불이 앞으로 나서며 엽서를 건넨다(paperStage.css nambul-hand) */
 .comparison-full .stage-wrap .spr.b.delivering { animation: nambul-hand .75s cubic-bezier(.3, .7, .2, 1); }
+.comparison-full .stage-wrap .spr.b[data-seat="left"].delivering { animation-name: nambul-hand-right; } /* 남불이 왼쪽(묶음 A)이면 오른쪽으로(FE-128) */

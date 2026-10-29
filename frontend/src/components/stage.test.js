@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { ACT_GROUPS, flatten, skipTarget } from './stage.js';
+import { ACT_GROUPS, DEFAULT_CAST, castOf, flatten, seatFor, sideOf, skipTarget } from './stage.js';
 
 const script = JSON.parse(readFileSync(new URL('../content/case-1/script.json', import.meta.url)));
 const steps = flatten(script.acts, ['1a', '1b']);
@@ -89,4 +89,50 @@ test('자리는 이름("stand") 또는 슬롯 { slot, row }이고, 다음 장면
 test('대본 키는 화면의 6막 칩(ACT_GROUPS)과 하나씩 맞는다(FE-59)', () => {
   assert.equal(ACT_GROUPS.length, 6);
   assert.deepEqual(ACT_GROUPS.flatMap(({ ids }) => ids).sort(), Object.keys(script.acts).sort());
+});
+
+// 묶음 자리(FE-128). 사건 1 대본의 내로 · 남불을 통째로 맞바꾸면 "남불이 판사 · 검사(A)"인 대본이 된다
+const SWAPPED_CAST = { prosecutor: 'nambul', defense: 'naero' };
+const swapped = JSON.parse(JSON.stringify(script).replaceAll('"naero"', '"@@"').replaceAll('"nambul"', '"naero"').replaceAll('"@@"', '"nambul"'));
+const ALL_ACTS = ['1a', '1b', '2', '3', '4', '5', '6'];
+
+test('배역: 대본 cast가 없거나 맞지 않으면 기본 배역(내로 A · 남불 B)', () => {
+  assert.deepEqual(castOf(undefined), DEFAULT_CAST);
+  assert.deepEqual(castOf({ prosecutor: 'naero', defense: 'naero' }), DEFAULT_CAST);
+  assert.deepEqual(castOf({ prosecutor: 'law', defense: 'nambul' }), DEFAULT_CAST);
+  assert.deepEqual(castOf(SWAPPED_CAST), SWAPPED_CAST);
+  assert.equal(sideOf('naero'), 'left');
+  assert.equal(sideOf('naero', SWAPPED_CAST), 'right');
+});
+
+test('자리: 역할 의상이면 의상 자리, 피고인 역 · 평상복 · 볼따구는 묶음 쪽', () => {
+  assert.equal(seatFor('nambul', 'role:judge', SWAPPED_CAST), 'left');
+  assert.equal(seatFor('naero', 'role:defense', SWAPPED_CAST), 'right');
+  assert.equal(seatFor('naero', 'role:actor', SWAPPED_CAST), 'right'); // 5막 피고인 역: 이름(내로 = 왼쪽)이 아니라 B 쪽
+  assert.equal(seatFor('nambul', 'idle-neutral', SWAPPED_CAST), 'left'); // 4막 평상복
+  assert.equal(seatFor('naero', 'cheek-slim:idle-thinking'), 'left'); // 기본 배역이면 지금과 같다
+  assert.equal(seatFor('nambul', 'role:actor'), 'right');
+});
+
+test('배역을 맞바꾼 대본은 모든 장면에서 자리도 그대로 맞바뀐다(겹침 · 엇갈림 없음)', () => {
+  const before = flatten(script.acts, ALL_ACTS);
+  const after = flatten(swapped.acts, ALL_ACTS);
+  assert.equal(after.length, before.length);
+  before.forEach((step, i) => {
+    const other = after[i];
+    assert.equal(seatFor('naero', other.look.naero, SWAPPED_CAST), seatFor('nambul', step.look.nambul), `${step.actId}막 ${i}: 내로가 원래 남불 자리에`);
+    assert.equal(seatFor('nambul', other.look.nambul, SWAPPED_CAST), seatFor('naero', step.look.naero), `${step.actId}막 ${i}: 남불이 원래 내로 자리에`);
+  });
+});
+
+test('5막 판사 · 피고인과 3 → 4막: 맞바꾼 대본에서도 두 캐릭터가 다른 쪽에 서고 막이 바뀌어도 쪽이 그대로다', () => {
+  const after = flatten(swapped.acts, ALL_ACTS);
+  after.filter((step) => step.actId === '5').forEach((step) => {
+    assert.notEqual(seatFor('naero', step.look.naero, SWAPPED_CAST), seatFor('nambul', step.look.nambul, SWAPPED_CAST));
+  });
+  const lastOf3 = after.filter((step) => step.actId === '3').at(-1);
+  const firstOf4 = after.find((step) => step.actId === '4');
+  ['naero', 'nambul'].forEach((who) => {
+    assert.equal(seatFor(who, firstOf4.look[who], SWAPPED_CAST), seatFor(who, lastOf3.look[who], SWAPPED_CAST), `${who}: 3 → 4막에서 자리를 바꾸지 않는다`);
+  });
 });

@@ -40,7 +40,8 @@
 .stage-wrap .bg.dark { background: var(--color-heading); }
 
 /* 캐릭터 = 그림 + 역할 이름표(한 묶음, stage.js). 자리는 캐릭터 가운데 기준(left): 내로 왼쪽(--l) · 남불 오른쪽(--r),
-   data-seat는 역할 의상이 정한 자리: 검사 · 판사 왼쪽(검사편) · 변호인 오른쪽 변호인석(누가 맡든 같다). 의상이 없으면 내로 · 남불 기본 자리.
+   data-seat는 stage.js가 늘 정한다: 역할 의상이면 의상 자리(검사 · 판사 왼쪽 · 변호인 오른쪽, 누가 맡든 같다), 그 밖(피고인 역 · 평상복 · 볼따구)은
+   그 캐릭터의 묶음 쪽(A 판사 · 검사 왼쪽 · B 변호인 · 피고인 오른쪽, FE-128). 배역이 기본(내로 A)이면 내로 왼쪽 · 남불 오른쪽 그대로다.
    data-spot="stand"면 가운데 피고인석(피고인신문). 장면 · 보드에 따라 --l · --r과 키만 바꾼다.
    슬롯: 대본 spots가 { slot, row }를 주면 무대 폭을 60등분한 칸 번호(0~60, 가운데 = 30)에 선다. row는 앞줄(front) · 뒷줄(back, 조금 작고 앞줄 뒤에 겹친다) */
 .stage-wrap .spr { --l: 16%; --r: 84%; position: absolute; bottom: 25%; height: 62%; left: var(--l); translate: -50% 0; transform-origin: bottom center;
@@ -295,7 +296,7 @@
 .stage-wrap .stage[data-scene="sheet"] .spr { --l: 8%; --r: 92%; height: 40%; bottom: 25%; transition: left .7s ease-in-out, translate .45s cubic-bezier(.3, .7, .2, 1), opacity .3s; }
 .stage-wrap .stage[data-scene="sheet"] .spr.role { height: 36%; }
 .stage-wrap .stage[data-scene="sheet"] .spr.near { translate: calc(-50% + 1.6cqw) 0; }
-.stage-wrap .stage[data-scene="sheet"] .spr.b.near { translate: calc(-50% - 1.6cqw) 0; }
+.stage-wrap .stage[data-scene="sheet"] .spr[data-seat="right"].near { translate: calc(-50% - 1.6cqw) 0; }
 /* 입력 보드(1막 엽서의 사전 판단)가 뜨면 양 끝으로 작게 */
 .stage-wrap .stage.bmode .spr { --l: 8%; --r: 92%; height: 34%; bottom: 25%; }
 .stage-wrap .stage.bmode .spr.role { height: 29%; }
@@ -505,7 +506,7 @@
   .stage-wrap .sheet-ads-note { font-size: 12px; }
   .stage-wrap .stage[data-scene="sheet"] .spr, .stage-wrap .stage[data-scene="sheet"] .spr.role { --l: 12%; --r: 88%; height: 24%; bottom: 2%; }
   .stage-wrap .stage[data-scene="sheet"] .spr.near { translate: calc(-50% + 8px) 0; }
-  .stage-wrap .stage[data-scene="sheet"] .spr.b.near { translate: calc(-50% - 8px) 0; }
+  .stage-wrap .stage[data-scene="sheet"] .spr[data-seat="right"].near { translate: calc(-50% - 8px) 0; }
   .stage-wrap .stage.bmode .scene { display: none; }
   /* 세로로 쌓이면 칸 높이가 정해지지 않으므로, 칸 안 스크롤 대신 목록을 다 펼친다 */
   .stage-wrap .evd { grid-template-columns: 1fr; grid-template-rows: auto; }
