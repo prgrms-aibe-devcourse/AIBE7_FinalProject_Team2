@@ -61,6 +61,11 @@ public class Member {
 		return new Member(AuthProvider.LOCAL, UUID.randomUUID().toString(), nickname);
 	}
 
+	/** 닉네임을 바꾼다. 형식 · 중복 검사는 서비스가 먼저 한다 */
+	public void changeNickname(String nickname) {
+		this.nickname = nickname;
+	}
+
 	/** 로그인 성공 시각 기록 */
 	public void recordLogin(Instant now) {
 		this.lastLoginAt = now;

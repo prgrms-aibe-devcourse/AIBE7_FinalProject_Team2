@@ -314,7 +314,28 @@ class DbConstraintTest {
 			.hasMessageContaining("chk_profile_setting_card_line");
 	}
 
+	// ---------- member ----------
+
+	@Test
+	@DisplayName("닉네임은 대소문자를 구분하지 않고 겹칠 수 없고, 닉네임이 없는(NULL) 회원은 몇 명이든 된다 (BE-139)")
+	void uniqueMemberNickname_duplicate_isRejected() {
+		String nickname = "uq" + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+		insertMember(nickname);
+		insertMember(null);
+		insertMember(null);
+
+		assertThatThrownBy(() -> insertMember(nickname.toUpperCase()))	// 시험이 끝나면 트랜잭션째 되돌린다
+			.isInstanceOf(DataIntegrityViolationException.class)
+			.hasMessageContaining("uq_member_nickname");
+	}
+
 	// ---------- 도우미 ----------
+
+	private Long insertMember(String nickname) {
+		return jdbc.queryForObject(
+			"INSERT INTO member (provider, provider_user_id, nickname) VALUES ('LOCAL', ?, ?) RETURNING id",
+			Long.class, UUID.randomUUID().toString(), nickname);
+	}
 
 	private Long insertCase(String title) {
 		return jdbc.queryForObject("""
