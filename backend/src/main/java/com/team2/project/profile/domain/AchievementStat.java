@@ -8,7 +8,7 @@ public enum AchievementStat {
 	COMPLETED("completed"),		// 완료한 회차가 하나라도 있는 사건 수
 	HAS_TYPE("hasType"),		// 성향 테스트 현재 결과가 있으면 1
 	ATTENDANCE_DAYS("attendanceDays"),	// 누적 출석 일수 (BE-97)
-	COLLECTED("collected");		// 모은 일러스트 수 — BE-83 전까지 서버가 계산하지 못한다(PENDING)
+	COLLECTED("collected");		// 모은 일러스트 + 의상 수 (collection_item 행 수, BE-83)
 
 	private final String key;
 

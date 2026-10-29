@@ -1,5 +1,6 @@
 package com.team2.project.personality.service;
 
+import com.team2.project.collection.service.CollectionService;
 import com.team2.project.experience.repository.ExperienceRepository;
 import com.team2.project.experience.service.AnonymousUserService;
 import com.team2.project.legalcase.domain.ValueAxis;
@@ -24,7 +25,10 @@ import com.team2.project.personality.repository.ExperiencePersonalityRepository;
 import com.team2.project.personality.repository.PersonalityResultRepository;
 import com.team2.project.personality.repository.PersonalityTypeRepository;
 import com.team2.project.level.service.LevelService;
+import com.team2.project.profile.domain.AchievementJudge;
 import com.team2.project.profile.domain.ProfileStats;
+import com.team2.project.profile.domain.UnlockMark;
+import com.team2.project.profile.service.AchievementUnlockRecorder;
 import com.team2.project.profile.service.ProfileDecoService;
 import com.team2.project.profile.service.ProfileDecoService.ProfileDecoView;
 import com.team2.project.profile.service.ProfileSettingsService;
@@ -41,6 +45,8 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -50,6 +56,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 흐름의 사건별 유형(history[].type)은 그 체험 하나만으로 낸 종합의 유형이다(같은 산식, API 명세 v0.49, BE-100).
  * 처음 성향(초심)은 가장 오래된 응시 행, 테스트 전이면 처음 3건(FIRST_COUNT) 평균이다. 재심은 사용자당 1건(API 명세 v0.50, BE-104)
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class MyPageService {
@@ -69,6 +76,8 @@ public class MyPageService {
 	private final ProfileSettingsService profileSettingsService;
 	private final LevelService levelService;
 	private final ProfileStatsReader statsReader;
+	private final AchievementUnlockRecorder unlockRecorder;
+	private final CollectionService collectionService;
 
 	@Transactional(readOnly = true)
 	public MyPageResponse get(Optional<UUID> anonymousId) {
@@ -124,10 +133,29 @@ public class MyPageService {
 		List<ExperienceItem> experiences = experienceRepository.findLatestPerCase(userId).stream()
 			.map(ExperienceItem::from).toList();
 		ProfileStats stats = statsReader.read(userId); // 꾸미기 · 도전과제와 레벨이 같은 통계를 쓰므로 한 번만 읽는다
+		stats = recordNewUnlocks(userId, stats);
 		ProfileDecoView deco = profileDecoService.view(userId, stats);
 		return new MyPageResponse(personality, initial, baselineRetake, judgment, history, experiences,
 			new Profile(stats.attendanceDays()), deco.profileDeco(), deco.achievements(), deco.unlocked(),
-			profileSettingsService.view(userId), levelService.view(userId, stats));
+			collectionService.view(userId), profileSettingsService.view(userId), levelService.view(userId, stats));
+	}
+
+	/**
+	 * 막 달성한 도전과제의 해금을 남기고(BE-83) 같은 응답에 해금 시각 · "새로 열림"으로 내려 준다.
+	 * 조회는 읽기 전용 트랜잭션이라 기록은 별도 트랜잭션(별도 DB 연결)에서 하므로, 새로 남길 것이 있을 때만 연다(대부분의 조회는 없다).
+	 * 기록에 실패해도 조회는 그대로 내려 준다 — 판정은 계산값이라 화면은 같고, 다음 조회 때 다시 기록한다
+	 */
+	private ProfileStats recordNewUnlocks(UUID userId, ProfileStats stats) {
+		if (AchievementJudge.unrecordedClears(stats).isEmpty()) {
+			return stats;
+		}
+		try {
+			Map<String, UnlockMark> added = unlockRecorder.recordSeparately(userId, stats);
+			return added.isEmpty() ? stats : stats.withUnlocks(added);
+		} catch (DataAccessException e) {
+			log.warn("도전과제 해금 기록 실패 — 다음 조회 때 다시 기록한다: {}", e.getMessage());
+			return stats;
+		}
 	}
 
 	/** 흐름 · 종합 · 첫 판결에 나온 유형 코드를 한 번에 조회한다(사건마다 조회하지 않는다). 코드는 응답에 넣지 않는다(#119) */
