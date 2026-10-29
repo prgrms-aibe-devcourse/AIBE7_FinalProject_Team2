@@ -47,11 +47,11 @@ test('없는 글은 POST_NOT_FOUND', async () => {
   await assert.rejects(createCommunityComment(99999, { body: '댓글' }), { code: 'POST_NOT_FOUND' });
 });
 
-test('로그아웃 상태면 쓰기 · 댓글 · 좋아요는 LOGIN_REQUIRED, 읽기는 된다', async () => {
+test('로그아웃 상태면 쓰기 · 댓글 · 좋아요는 UNAUTHORIZED, 읽기는 된다', async () => {
   clearUser();
-  await assert.rejects(createCommunityPost(post()), { code: 'LOGIN_REQUIRED' });
-  await assert.rejects(toggleCommunityLike(108), { code: 'LOGIN_REQUIRED' });
-  await assert.rejects(createCommunityComment(108, { body: '댓글' }), { code: 'LOGIN_REQUIRED' });
+  await assert.rejects(createCommunityPost(post()), { code: 'UNAUTHORIZED' });
+  await assert.rejects(toggleCommunityLike(108), { code: 'UNAUTHORIZED' });
+  await assert.rejects(createCommunityComment(108, { body: '댓글' }), { code: 'UNAUTHORIZED' });
   assert.ok((await getCommunityPost(108)).title);
 });
 

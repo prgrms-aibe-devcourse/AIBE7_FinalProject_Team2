@@ -1,9 +1,15 @@
-// 닉네임 검사. shortcut: 서버 규칙(길이 · 허용 글자)이 아직 없어 화면이 임시로 정한 값이다 — 닉네임 API 명세가 정해지면 그 규칙으로 바꾼다
+// 닉네임 검사. 서버 규칙(API 명세 M-5 · M-7, BE-113 · BE-139)과 같은 형식을 화면에서 먼저 확인한다. 중복(409 DUPLICATE_NICKNAME)은 서버만 안다
 // 한글이 하나라도 있으면 8자, 영문 · 숫자만이면 12자까지(한글이 글자 폭이 넓어 카드에서 같은 폭을 맞춘다). 공백은 쓸 수 없다(공백 수만 다른 비슷한 닉네임을 구분하기 어렵다)
 export const NICKNAME_MIN = 2;
 export const NICKNAME_MAX = 12; // 입력칸 한도(영문 · 숫자). 한글이 섞이면 NICKNAME_MAX_HANGUL로 검사한다
 export const NICKNAME_MAX_HANGUL = 8;
 export const NICKNAME_HINT = `한글 · 영문 · 숫자로 ${NICKNAME_MIN}자 이상 써요. 한글이 있으면 ${NICKNAME_MAX_HANGUL}자, 영문 · 숫자만이면 ${NICKNAME_MAX}자까지예요. 공백은 쓸 수 없어요.`;
+
+/**
+ * 닉네임을 아직 정하지 않은 회원의 표시 이름인가: 서버 자동 이름 '방청객 {회원 ID}'(M-8 displayName)와 카카오 로그인 직후의 임시 표시 '카카오 회원'.
+ * 둘 다 공백이 있어 닉네임 형식이 아니다 — 닉네임 칸에 채워 넣지 않는다
+ */
+export const isUnnamed = (nickname) => /^(방청객 \d+|카카오 회원)$/.test(String(nickname ?? '').trim());
 
 /** 문제가 있으면 고치는 방법을 담은 안내 문구, 괜찮으면 빈 문자열 */
 export function nicknameError(value) {

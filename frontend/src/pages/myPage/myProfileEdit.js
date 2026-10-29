@@ -1,4 +1,5 @@
-// 내 정보 수정(FE-77): 마이페이지 "내 정보 수정" 화면의 내부 틀. 서버 닉네임 · 탈퇴 API가 아직 없어 저장은 이 브라우저의 로그인 표시값(session.js)에만 반영한다.
+// 내 정보 수정(FE-77): 마이페이지 "내 정보 수정" 화면의 내부 틀. 닉네임은 서버(M-7 PUT /members/me/nickname, BE-139)에 저장하고 성공하면 이 브라우저의 로그인 표시값(session.js)도 바꾼다.
+// 계정 정보(로그인 방식 · 아이디 · 가입일 · 최근 로그인)와 정하지 않은 닉네임은 서버 회원 정보(M-8 GET /members/me)로 채운다. 탈퇴 API는 아직 없다(FE-137).
 // 구성: 프로필(프로필카드 · 닉네임 · 한 줄 소개 · 성향카드 · 재심) · 계정 관리(로그인 방식 · 현재 아이디 · 가입일 · 최근 로그인 · 비밀번호 변경 · 로그아웃 · 회원 탈퇴) · 약관. 알림 등 앱 설정은 "환경 설정"에서 다룬다
 // 한 줄 소개는 서버(P-8 PATCH /profile-settings)에 저장한다(profileSettings.js, FE-81). 프로필카드 · 성향카드는 커뮤니티에서 항상 공개다(공개 범위 설정을 두지 않는다, 의도된 서비스 특징)
 import { button, element, mockTag } from '../../components/siteLayout.js';
@@ -6,12 +7,24 @@ import { cardSignature } from '../../components/personCards.js';
 import { signatureSvg, signerSeed } from '../../components/signatureInk.js';
 import { API_MODE } from '../../api/config.js';
 import { clearUser, currentUser, saveUser } from '../../utils/session.js';
-import { NICKNAME_HINT, NICKNAME_MAX, lockNicknameLength, nicknameError } from '../../utils/nickname.js';
+import { NICKNAME_HINT, NICKNAME_MAX, isUnnamed, lockNicknameLength, nicknameError } from '../../utils/nickname.js';
 import { BIO_MAX, getProfileSettings, updateProfileSettings } from '../../utils/profileSettings.js';
 
 const BIO_PLACEHOLDER = '사건 앞에서는 한 번 더 생각하는 판사입니다.';
 
 const IS_MOCK = API_MODE === 'mock';
+
+// 중복(409) · 형식(400)은 닉네임 칸 아래에 고칠 방법으로, 그 밖의 실패는 저장 결과 줄에 알린다
+const NICKNAME_TAKEN = '이미 쓰고 있는 닉네임이에요. 다른 닉네임을 골라 주세요.';
+const NICKNAME_REJECTED = '서버가 이 닉네임을 받지 못했어요. 한글 · 영문 · 숫자로 다시 적어 주세요.';
+
+// 서버 시각(+09:00)을 화면 문구로. 값이 없으면 빈 줄 대신 "기록 없음"
+const formatWhen = (iso) => {
+  const date = iso ? new Date(iso) : null;
+  return date && !Number.isNaN(date.getTime())
+    ? date.toLocaleString('ko-KR', { dateStyle: 'long', timeStyle: 'short', timeZone: 'Asia/Seoul' })
+    : '기록 없음';
+};
 
 function section(title, ...children) {
   const box = element('section', 'edit-section');
@@ -61,7 +74,10 @@ export function renderProfileEdit({ api, navigate, go, data = {}, card, fan }) {
   input.id = 'edit-nickname';
   input.name = 'nickname';
   input.type = 'text';
-  input.value = user?.nickname ?? '';
+  const unnamed = isUnnamed(user?.nickname); // 아직 닉네임을 정하지 않았으면(카카오 회원) 칸은 비워 둔다 — 표시 이름 '방청객 {회원 ID}'는 닉네임 형식이 아니다
+  let savedNickname = unnamed ? '' : user?.nickname ?? ''; // 서버에 있는 닉네임. 바뀌지 않았으면 다시 저장하지 않는다
+  input.value = savedNickname;
+  if (unnamed) input.placeholder = '아직 정하지 않았어요';
   input.maxLength = NICKNAME_MAX;
   lockNicknameLength(input);
   input.autocomplete = 'nickname';
@@ -132,12 +148,13 @@ export function renderProfileEdit({ api, navigate, go, data = {}, card, fan }) {
   const cardColumn = element('div', 'edit-card-col');
   cardColumn.append(profileCard, button('프로필카드에서 보기', () => go('profile'), 'secondary-button'));
 
-  // 계정 관리 위쪽, 읽기 전용 정보: 서버가 아이디 · 가입일 · 최근 로그인을 주기 전까지는 자리만 둔다
+  // 계정 관리 위쪽, 읽기 전용 정보: 실제 모드는 서버 회원 정보(M-8)가 오면 채운다. 목 모드에는 이 API가 없어 자리만 둔다
   const facts = element('dl', 'edit-facts');
-  // 서버 값이 없는 세 줄(FE-103)은 같은 문구를 세 번 쓰지 않고 한 줄로 묶는다
+  const showMe = Boolean(user) && !IS_MOCK && Boolean(api.getMe);
+  // 서버 값이 없는 동안(FE-103)은 같은 문구를 세 번 쓰지 않고 한 줄로 묶는다
   facts.append(
     fact('로그인 방식', user ? (IS_MOCK ? '개발용 목업 로그인' : '카카오 로그인') : '로그인 전 (이 브라우저의 익명 ID)'),
-    user ? fact('아이디 · 가입일 · 최근 로그인', '서버 연동 후 표시돼요') : fact('현재 아이디', '로그인 전 (이 브라우저의 익명 ID)'),
+    user ? fact('아이디 · 가입일 · 최근 로그인', showMe ? '불러오는 중이에요' : '서버 연동 후 표시돼요') : fact('현재 아이디', '로그인 전 (이 브라우저의 익명 ID)'),
   );
 
   // 계정 관리: 비밀번호 변경 · 로그아웃 · 회원 탈퇴. 비밀번호 API가 없어 자리만 두고, 탈퇴는 한 번 더 확인한다
@@ -191,7 +208,9 @@ export function renderProfileEdit({ api, navigate, go, data = {}, card, fan }) {
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     status.textContent = '';
-    const message = user ? nicknameError(input.value) : '';
+    const wantedNickname = input.value.trim();
+    const nicknameChanged = Boolean(user) && wantedNickname !== savedNickname; // 아직 정하지 않은 채 비워 둔 칸은 바꾸지 않은 것이다
+    const message = nicknameChanged ? nicknameError(input.value) : '';
     error.textContent = message;
     input.setAttribute('aria-invalid', message ? 'true' : 'false');
     const bioNext = bio.value.trim();
@@ -200,13 +219,51 @@ export function renderProfileEdit({ api, navigate, go, data = {}, card, fan }) {
     bio.setAttribute('aria-invalid', bioMessage ? 'true' : 'false');
     if (message) { input.focus(); return; } // 첫 오류 칸으로 초점
     if (bioMessage) { bio.focus(); return; }
-    if (user) saveUser({ nickname: input.value, role: user.role }); // 서버 닉네임 API 전: 이 브라우저의 로그인 표시값만 바꾼다
     save.disabled = true; // 저장하는 동안 다시 누르지 못하게
+    // 닉네임(M-7): 서버가 저장하고 중복이면 409. 성공하면 이 브라우저의 로그인 표시값도 바꾼다. 실패해도 한 줄 소개는 따로 저장한다
+    let nicknameSaved = true;
+    let nicknameFailure = '';
+    if (nicknameChanged) {
+      try {
+        const result = await api.putNickname(wantedNickname);
+        savedNickname = result?.nickname ?? wantedNickname;
+        input.value = savedNickname;
+        saveUser({ nickname: savedNickname, role: user.role });
+      } catch (failure) {
+        nicknameSaved = false;
+        const fieldMessage = failure?.code === 'DUPLICATE_NICKNAME' ? NICKNAME_TAKEN : failure?.code === 'VALIDATION_ERROR' ? NICKNAME_REJECTED : '';
+        error.textContent = fieldMessage;
+        input.setAttribute('aria-invalid', fieldMessage ? 'true' : 'false');
+        nicknameFailure = fieldMessage ? '닉네임을 저장하지 못했어요.' : '닉네임을 저장하지 못했어요. 잠시 뒤 다시 시도해 주세요.';
+        if (fieldMessage) input.focus();
+      }
+    }
     const bioSaved = bioNext === getProfileSettings().bio || await updateProfileSettings({ bio: bioNext });
     save.disabled = false;
     if (!bioSaved) bio.value = getProfileSettings().bio; // 거절되면 서버에 있는 값으로 돌린다
-    status.textContent = bioSaved ? '저장했어요.' : '한 줄 소개를 저장하지 못했어요. 잠시 뒤 다시 시도해 주세요.';
+    if (!nicknameSaved) status.textContent = bioSaved ? `${nicknameFailure} 한 줄 소개는 저장했어요.` : `${nicknameFailure} 한 줄 소개도 저장하지 못했어요.`;
+    else status.textContent = bioSaved ? '저장했어요.' : '한 줄 소개를 저장하지 못했어요. 잠시 뒤 다시 시도해 주세요.';
   });
+
+  // 서버 회원 정보(M-8)가 오면 계정 정보 줄과 닉네임 칸을 서버 값으로 채운다. 못 받으면 자리 문구를 그대로 둔다
+  if (showMe) {
+    api.getMe().then((me) => {
+      if (!box.isConnected || !me) return;
+      facts.replaceChildren(
+        fact('로그인 방식', me.provider === 'KAKAO' ? '카카오 로그인' : '아이디 로그인'),
+        fact('아이디', me.loginId ?? '카카오 로그인은 아이디가 없어요'),
+        fact('가입일', formatWhen(me.createdAt)),
+        fact('최근 로그인', formatWhen(me.lastLoginAt)),
+      );
+      // 다른 곳에서 바꾼 닉네임이면 아직 고치지 않은 칸만 서버 값으로 맞춘다
+      const serverNickname = me.nickname ?? '';
+      if (input.value.trim() === savedNickname && serverNickname !== savedNickname) {
+        savedNickname = serverNickname;
+        input.value = serverNickname;
+      }
+      if (me.displayName && me.displayName !== user.nickname) saveUser({ nickname: me.displayName, role: user.role });
+    }).catch(() => {});
+  }
 
   const head = element('p', 'edit-intro', '프로필과 계정을 관리해요. 알림 같은 앱 설정은 환경 설정에서 바꿀 수 있어요.');
   if (IS_MOCK) head.append(mockTag());
