@@ -1,0 +1,114 @@
+package com.team2.project.community.controller;
+
+import com.team2.project.common.exception.BusinessException;
+import com.team2.project.common.exception.ErrorCode;
+import com.team2.project.common.security.token.MemberPrincipal;
+import com.team2.project.common.web.AnonymousIdCookie;
+import com.team2.project.community.dto.CommentView;
+import com.team2.project.community.dto.CommunityHomeResponse;
+import com.team2.project.community.dto.CreateCommentRequest;
+import com.team2.project.community.dto.CreatePostRequest;
+import com.team2.project.community.dto.LikeResponse;
+import com.team2.project.community.dto.PostListResponse;
+import com.team2.project.community.dto.PostView;
+import com.team2.project.community.dto.ShareableVerdictResponse;
+import com.team2.project.community.service.CommunityActorResolver;
+import com.team2.project.community.service.CommunityActorResolver.Viewer;
+import com.team2.project.community.service.CommunityHomeService;
+import com.team2.project.community.service.CommunityService;
+import jakarta.servlet.http.HttpServletRequest;
+import java.util.Optional;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
+
+/**
+ * 커뮤니티 (API 명세 12장 C-1 ~ C-7, BE-115). 읽기는 누구나, 쓰기는 로그인한 회원만(Authorization: Bearer).
+ * 쓰기 경로는 SecurityConfig가 먼저 막고(401 UNAUTHORIZED), 여기서도 회원이 없으면 같은 401로 끝낸다.
+ * 익명 ID 쿠키는 읽기만 한다 — 발급하지 않는다(명함 · 경험치 기준 익명 ID는 CommunityActorResolver가 회원에서 고른다)
+ */
+@RestController
+@RequestMapping("/api/v1/community")
+@RequiredArgsConstructor
+public class CommunityController {
+
+	private final CommunityService communityService;
+	private final CommunityHomeService communityHomeService;
+	private final CommunityActorResolver actorResolver;
+	private final AnonymousIdCookie anonymousIdCookie;
+
+	/** C-1 글 목록 */
+	@GetMapping("/posts")
+	public PostListResponse posts(@RequestParam(required = false) String category,
+		@RequestParam(required = false) Long caseId, @RequestParam(required = false) String sort,
+		@RequestParam(defaultValue = "1") int page, @AuthenticationPrincipal MemberPrincipal member,
+		HttpServletRequest request) {
+		return communityService.list(category, caseId, sort, page, viewer(member, request));
+	}
+
+	/** C-2 글 + 댓글 */
+	@GetMapping("/posts/{postId}")
+	public PostView post(@PathVariable long postId, @AuthenticationPrincipal MemberPrincipal member,
+		HttpServletRequest request) {
+		return communityService.detail(postId, viewer(member, request));
+	}
+
+	/** C-3 글쓰기 — 201 + 쓴 글 */
+	@PostMapping("/posts")
+	@ResponseStatus(HttpStatus.CREATED)
+	public PostView create(@RequestBody CreatePostRequest body, @AuthenticationPrincipal MemberPrincipal member,
+		HttpServletRequest request) {
+		return communityService.create(memberId(member), anonymousIdCookie.read(request), body);
+	}
+
+	/** C-4 좋아요 켜고 끄기 */
+	@PostMapping("/posts/{postId}/like")
+	public LikeResponse like(@PathVariable long postId, @AuthenticationPrincipal MemberPrincipal member,
+		HttpServletRequest request) {
+		return communityService.toggleLike(memberId(member), anonymousIdCookie.read(request), postId);
+	}
+
+	/** C-5 댓글 — 201 + 쓴 댓글 */
+	@PostMapping("/posts/{postId}/comments")
+	@ResponseStatus(HttpStatus.CREATED)
+	public CommentView comment(@PathVariable long postId, @RequestBody CreateCommentRequest body,
+		@AuthenticationPrincipal MemberPrincipal member, HttpServletRequest request) {
+		return communityService.comment(memberId(member), anonymousIdCookie.read(request), postId, body);
+	}
+
+	/** C-6 커뮤니티 메인 */
+	@GetMapping("/home")
+	public CommunityHomeResponse home() {
+		return communityHomeService.home();
+	}
+
+	/** C-7 글에 붙일 수 있는 내 판결 — 200, 판결 확정 전이면 204 */
+	@GetMapping("/shareable-verdict")
+	public ResponseEntity<ShareableVerdictResponse> shareableVerdict(@AuthenticationPrincipal MemberPrincipal member,
+		HttpServletRequest request) {
+		return communityService.shareableVerdict(viewer(member, request))
+			.map(ResponseEntity::ok)
+			.orElseGet(() -> ResponseEntity.noContent().build());
+	}
+
+	private Viewer viewer(MemberPrincipal member, HttpServletRequest request) {
+		return actorResolver.viewer(Optional.ofNullable(member).map(MemberPrincipal::memberId),
+			anonymousIdCookie.read(request));
+	}
+
+	private static long memberId(MemberPrincipal member) {
+		if (member == null) {
+			throw new BusinessException(ErrorCode.UNAUTHORIZED);
+		}
+		return member.memberId();
+	}
+}
