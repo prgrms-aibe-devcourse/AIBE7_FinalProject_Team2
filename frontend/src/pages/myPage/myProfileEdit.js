@@ -115,8 +115,9 @@ export function renderProfileEdit({ api, navigate, go, data = {}, card, fan }) {
   // 프로필카드 미리보기: 마이페이지 첫 화면과 같은 카드(누르면 프로필카드 화면). 닉네임을 입력하는 대로 카드 이름이 바뀐다. 성향카드는 마이페이지 첫 화면에만 둔다
   const profileCard = card();
   let shownName = profileCard.querySelector('.my-card-name')?.textContent ?? '';
+  let displayName = user?.nickname; // 칸이 비었을 때 미리보기가 쓰는 표시 이름. 서버 회원 정보(M-8)가 다른 값을 주면 바뀐다
   const syncPreview = () => {
-    const name = input.value.trim() || user?.nickname;
+    const name = input.value.trim() || displayName;
     const title = profileCard.querySelector('.my-card-name');
     if (name && title) {
       title.textContent = name;
@@ -135,7 +136,7 @@ export function renderProfileEdit({ api, navigate, go, data = {}, card, fan }) {
   const signature = element('div', 'edit-field');
   const signatureBox = element('div', 'edit-signature');
   const paintSignature = () => {
-    const seed = input.value.trim() || signerSeed(user);
+    const seed = input.value.trim() || signerSeed({ nickname: displayName });
     signatureBox.replaceChildren(signatureSvg(seed, { label: `${seed}의 서명` }));
   };
   input.addEventListener('input', paintSignature);
@@ -221,12 +222,16 @@ export function renderProfileEdit({ api, navigate, go, data = {}, card, fan }) {
     save.disabled = true; // 저장하는 동안 다시 누르지 못하게
     // 닉네임(M-7): 서버가 저장하고 중복이면 409. 성공하면 이 브라우저의 로그인 표시값도 바꾼다. 실패해도 한 줄 소개는 따로 저장한다
     if (nicknameChanged) nicknameTouched = true; // 저장을 시작했다 — 이후 늦게 온 회원 정보는 계정 정보 줄만 채운다
-    const nicknameResult = nicknameChanged ? await saveNickname({ api, wanted: input.value, saved: savedNickname }) : { changed: false };
+    const submitted = input.value; // 요청을 보낸 닉네임. 기다리는 동안 새로 입력했을 수 있다
+    const nicknameResult = nicknameChanged ? await saveNickname({ api, wanted: submitted, saved: savedNickname }) : { changed: false };
     let nicknameStatusText = '';
     if (nicknameResult.changed && nicknameResult.ok) {
-      savedNickname = nicknameResult.nickname;
-      input.value = savedNickname;
-      saveUser({ nickname: savedNickname, role: user.role });
+      savedNickname = nicknameResult.nickname; // 서버에 저장된 값은 언제나 갱신하고, 칸은 그 사이 새로 입력하지 않았을 때만 맞춘다(새 입력을 지우지 않는다)
+      displayName = savedNickname;
+      if (input.value === submitted) input.value = savedNickname;
+      if (currentUser()) saveUser({ nickname: savedNickname, role: user.role }); // 기다리는 사이 로그아웃했으면 로그인 표시를 되살리지 않는다
+      syncPreview();
+      paintSignature();
     } else if (nicknameResult.changed) {
       error.textContent = nicknameResult.fieldMessage;
       input.setAttribute('aria-invalid', nicknameResult.fieldMessage ? 'true' : 'false');
@@ -255,7 +260,13 @@ export function renderProfileEdit({ api, navigate, go, data = {}, card, fan }) {
         savedNickname = plan.savedNickname;
         input.value = plan.inputValue;
       }
-      if (plan.sessionNickname) saveUser({ nickname: plan.sessionNickname, role: user.role });
+      if (plan.sessionNickname) {
+        displayName = plan.sessionNickname;
+        saveUser({ nickname: plan.sessionNickname, role: user.role });
+      }
+      // 값을 코드로 바꾸면 input 이벤트가 나지 않으므로 카드 이름 · 서명 미리보기를 직접 다시 그린다
+      syncPreview();
+      paintSignature();
     }).catch(() => {});
   }
 
