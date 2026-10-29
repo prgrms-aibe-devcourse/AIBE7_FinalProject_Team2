@@ -1527,7 +1527,7 @@ export async function renderMyPage(container, { api, navigate, view, from }) {
     cache = null;
     const title = element('h1', 'visually-hidden', '마이페이지');
     title.tabIndex = -1;
-    main.replaceChildren(title, ...renderGuestTop(navigate));
+    main.replaceChildren(title, ...renderGuestTop(navigate, api));
   };
   if (!currentUser()) {
     if (shown) history.replaceState({ ...history.state, extras: {} }, ''); // 항목 화면 주소로 왔으면 첫 화면 주소로 바꿔 둔다(뒤로 가기가 막히지 않게)

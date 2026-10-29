@@ -87,6 +87,18 @@ export const getMyShareableVerdict = () => get('/community/shareable-verdict');
 export const getMe = () => get('/members/me');
 export const putNickname = (nickname) => put('/members/me/nickname', { nickname });
 
+// 일러스트 총 개수 I-1 (BE-142, 명세 13장). 로그인 · 쿠키 없이 부른다. 응답 { total, byKind }: 사건 컷 · 캐릭터(아이콘 포함) 일러스트 전부의 장수
+export const getIllustrationSummary = () => get('/illustrations/summary');
+
+// 첫 로그인 가져오기 M-9 ~ M-11 (BE-140 결정, FE-138). 서버에는 아직 없어 M-9는 404(또는 204)이고, 그때는 null이라 화면이 안내 창을 띄우지 않는다.
+// 후보 응답 { experienceCount, preJudgmentCount }: 이 브라우저의 익명 ID에 쌓인 체험 · 첫인상 엽서 수. M-10 가져오기(이동) · M-11 초기화(익명 ID 쿠키를 지움)
+export const getAnonymousImport = () => get('/members/me/anonymous-import').catch((failure) => {
+  if (failure?.status === 404) return null;
+  throw failure;
+});
+export const importAnonymous = () => post('/members/me/anonymous-import');
+export const discardAnonymous = () => post('/members/me/anonymous-import/discard');
+
 // 레벨 · 직업 L-1 · L-2 (BE-106, 명세 11장). 응답은 둘 다 { level, xp, currentLevelXp, nextLevelXp, job: { code, name }, jobs: [...] }.
 // 마이페이지(P-5)의 level도 같은 모양이다. 아직 안 열린 직업을 고르면 409 JOB_LOCKED
 export const getLevel = () => get('/level');
