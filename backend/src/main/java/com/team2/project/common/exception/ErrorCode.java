@@ -14,6 +14,10 @@ import org.springframework.http.HttpStatus;
 public enum ErrorCode {
 
 	VALIDATION_ERROR(HttpStatus.BAD_REQUEST, "요청 값이 올바르지 않습니다."),
+	// 요청 자체가 맞지 않음 (BE-132). Spring MVC가 던지는 예외를 상태 코드로 나눈다(ApiExceptionAdvice.handleExceptionInternal)
+	NOT_FOUND(HttpStatus.NOT_FOUND, "요청한 주소를 찾을 수 없습니다."),
+	METHOD_NOT_ALLOWED(HttpStatus.METHOD_NOT_ALLOWED, "지원하지 않는 요청 방식입니다."),
+	UNSUPPORTED_MEDIA_TYPE(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "지원하지 않는 요청 형식입니다."),
 	CASE_NOT_FOUND(HttpStatus.NOT_FOUND, "사건을 찾을 수 없습니다."),
 	EXPERIENCE_NOT_FOUND(HttpStatus.NOT_FOUND, "이 사건의 체험 기록이 없습니다."),
 	INVALID_STATE(HttpStatus.CONFLICT, "지금 단계에서는 할 수 없는 요청입니다."),
