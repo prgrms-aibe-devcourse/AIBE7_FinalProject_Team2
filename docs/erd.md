@@ -48,6 +48,7 @@
 | v1.42 | 2026-10-27 | 아이디 회원 추가 (**확장 단계**, BE-113 · V33 · API 명세 v0.58) — `member.provider`에 `LOCAL` 허용(CHECK `ck_member_provider` 변경), `member.nickname`(NULL 허용, 카카오 회원은 NULL) 추가, `member_password` 신설(회원 1 : 0..1, 소문자 로그인 아이디 유일 · 일방향 비밀번호 해시). 아이디 회원의 `provider_user_id`는 UUID. 카카오 회원 행 · 기존 조회는 바뀌지 않는다 |
 | v1.43 | 2026-10-28 | 형벌 규칙 계산 기준 정리 (BE-117) — `penalty_rule`의 `statutory_max`를 "범행 당시 개별 처벌조항 + 형법 총칙을 반영한 가중 · 감경 전 법정형 상한"으로, `allowed_min` · `allowed_max`를 "가능한 감경 경로들의 합집합"(필요적 감경은 항상, 임의적 감경은 적용 · 미적용 모두)으로 정의. 정수 개월 하한 올림, 신 · 구법 확인, `statutory_max`와 `allowed_max`는 따로 검수. 스키마 변경 없음 |
 | v1.44 | 2026-10-28 | 사건 공개 취소 (**확장 단계**, BE-118 · V34 · API 명세 v0.61) — **표 · 칸은 늘리지 않는다.** 공개 취소(A-13-14)는 `legal_case.status`를 `PUBLISHED → REVIEW`로 돌리고 `published_at`을 지운다(숨김, 행은 지우지 않는다). `admin_audit_log.action` CHECK에 `CASE_UNPUBLISH` 추가(V34, V32까지의 값을 모두 다시 나열). 같은 김에 `action` 설명을 V32까지 늘어난 값으로 갱신. |
+| v1.45 | 2026-10-29 | 사건 배역 · 민감 플래그 (**확장 단계**, BE-125 · V35 · API 명세 v0.63) — `legal_case.cast_roles`(jsonb, `{"prosecutor": "naero", "defense": "nambul"}`) · `sensitive_flags`(jsonb 문자열 배열) 추가. 두 칸 모두 DB CHECK를 두지 않고 코드(`CastRoles` · `SensitiveFlag`)가 검사한다. 새 사건은 적재할 때 배정한다 — 대본이 함께 오면 그 배역, 아니면 같은 범죄 유형에서 피고인 역을 덜 맡은 캐릭터(같으면 마지막 배정의 반대). 이미 있는 사건의 초기값은 비공개 시드 저장소의 UPDATE로 넣는다 (`docs/decisions/BE-125.md`) |
 
 ---
 
@@ -210,11 +211,14 @@ erDiagram
 | recommended_basis | text |  | 권고 범위 산출 근거 문구 | REQ-035 |
 | guideline_id | bigint FK |  | 적용 양형기준 버전 | REQ-080 |
 | incident_date | date |  | 사건 발생일 (양형기준 버전 판단 근거). 자동 파이프라인은 모델이 찾은 날짜를 판결문 원문 · 선고일과 대조해 확인된 값만 넣고, 원문에 날짜가 없으면 비운다(v1.12, BE-38) | FR-3-5-1 |
+| cast_roles | jsonb |  | (확장) 배역 `{"prosecutor": "naero", "defense": "nambul"}` — 묶음 A(판사 · 검사) · 묶음 B(변호인 · 피고인 역)를 누가 맡는지. `case_script.cast_roles`와 같은 모양. 비어 있으면 배정 전 (v1.45, BE-125) | COMMON-65 |
+| sensitive_flags | jsonb |  | (확장) 민감 플래그 이름 배열 (예: `["MENTAL_HEALTH"]`). 파이프라인 분류(BE-123)가 켜고 관리자가 고친다. `null`은 분류 전, `[]`는 분류했고 켜진 것 없음. 공개 API는 사용자 안내 대상 6종만 내보낸다 (v1.45, BE-125) | FR-1-5 |
 | status | varchar(20) | ✓ | `DRAFT` / `REVIEW` / `PUBLISHED`. `PUBLISHED`만 사용자에게 노출 | REQ-047, 075 |
 | published_at | timestamptz |  | 공개 시각(A-13). 공개 취소(A-13-14)하면 지우고, 다시 공개하면 새로 기록한다 |  |
 | created_at, updated_at | timestamptz | ✓ |  |  |
 - 권고 범위는 MVP에서 팀이 계산해 입력한 값을 그대로 쓴다. 자동 계산 로직은 확장 단계(결정 #4).
 - `title`은 유일하다(`uk_legal_case_title`, V7 · BE-15, v1.12). 적재 SQL이 제목으로 사건을 찾아 환경마다 id가 달라도 같은 SQL을 쓰기 위해서다. 모델이 만든 중립 제목이 다른 공개 · 검토 중 사건과 겹치면 자동 적재가 멈춘다(BE-31).
+- 배역 배정(v1.45, BE-125): 적재할 때 같은 범죄 유형에서 피고인 역(`defense`)을 덜 맡은 캐릭터가 맡고, 같으면 그 유형의 마지막 배정(가장 큰 `id`)의 반대, 첫 사건이면 `defense = nambul`이다. 대본이 함께 적재되면 대본을 만든 배역을 그대로 쓴다(대사에 캐릭터가 들어가 있다). 같은 유형이 동시에 적재돼도 겹치지 않도록 유형별 권고 잠금(`pg_advisory_xact_lock`)을 건다. 관리자는 A-11로 고친다.
 - 화면에 보이는 범죄 분류명(예: "사기 / **재산범죄**")은 컬럼으로 두지 않고 `crime_type`별 코드 상수로 둔다(`MURDER` → 생명범죄, `FRAUD` · `ROBBERY` · `THEFT` → 재산범죄, `INJURY` → 신체범죄). API는 `crimeCategoryLabel`로 내려준다(v1.3).
 
 #### `case_section` — 사건 정보 섹션
@@ -942,7 +946,7 @@ IA 9장의 규칙을 어느 테이블·제약이 책임지는지 정리한다.
 | 이름 | `pk_` · `fk_{테이블}_{참조 테이블}` · `uk_{테이블}_{내용}` · `chk_{테이블}_{내용}` · `idx_{테이블}_{컬럼}` |
 | FK 인덱스 | FK 컬럼마다 인덱스를 만든다. 유니크 제약의 첫 컬럼과 겹치면 생략한다 |
 | FK 삭제 동작 | 기본값(`NO ACTION`) |
-| jsonb 형식 (v1.7) | 아래 컬럼은 반드시 **배열**로 넣는다. 엔티티가 배열 타입으로 읽어서, 형식이 다르면 그 사건의 조회 전체가 실패한다<br>• `legal_case.keywords` · `deidentified_items`, `judgment.reference_tags`: 문자열 배열<br>• `case_section.data`: 배열. 원소는 섹션마다 다르다 — DAMAGE `{label, value}` · LAW_TERM `{term, desc}` 객체, SUMMARY 문자열<br>• `judgment.extra_dispositions`: 객체 배열 `{type, value}`, `type`은 `COMMUNITY_SERVICE` · `CONFISCATION`만 |
+| jsonb 형식 (v1.7) | 아래 컬럼은 반드시 **배열**로 넣는다. 엔티티가 배열 타입으로 읽어서, 형식이 다르면 그 사건의 조회 전체가 실패한다<br>• `legal_case.keywords` · `deidentified_items` · `sensitive_flags`(v1.45), `judgment.reference_tags`: 문자열 배열<br>• `legal_case.cast_roles`(v1.45): 객체 `{prosecutor, defense}`, 값은 `naero` · `nambul` 하나씩<br>• `case_section.data`: 배열. 원소는 섹션마다 다르다 — DAMAGE `{label, value}` · LAW_TERM `{term, desc}` 객체, SUMMARY 문자열<br>• `judgment.extra_dispositions`: 객체 배열 `{type, value}`, `type`은 `COMMUNITY_SERVICE` · `CONFISCATION`만 |
 | 본문 줄바꿈 (v1.9) | `case_section.content`의 항목은 줄바꿈(`\n`)으로 나눈다. PostgreSQL에서는 `E'첫 항목\n둘째 항목'`처럼 쓴다. 문장 끝에 마침표를 두어 줄바꿈을 그리지 않는 곳에서도 한 문단으로 읽히게 한다 |
 | 적용 방식 | SQL 파일을 직접 실행하지 않고 서버 기동 시 Flyway가 적용한다. `ddl-auto`는 모든 환경에서 `validate` |
 | 수정 규칙 | develop에 Merge된 파일은 수정하지 않는다. 오픈 전 불가피하면 팀 합의 후 DB 초기화하고 수정, 오픈 후에는 새 마이그레이션만 추가한다 |

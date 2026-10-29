@@ -154,6 +154,45 @@ class AdminCaseEditApiTest extends ApiIntegrationTest {
 			.andExpect(jsonPath("$.code").value("CASE_NOT_FOUND"));
 	}
 
+	@Test
+	@DisplayName("A-11: 배역 · 민감 플래그를 고친다 — 상세에 보이고, 감사 로그에는 바꾼 값까지 남긴다 (BE-125)")
+	void edit_castAndSensitiveFlags() throws Exception {
+		perform(patch(caseUrl()).contentType(MediaType.APPLICATION_JSON).content("""
+				{"castRoles": {"prosecutor": "nambul", "defense": "naero"},
+				 "sensitiveFlags": ["MENTAL_HEALTH", "CAPITAL_PENALTY", "MENTAL_HEALTH"]}"""))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.status").value("REVIEW"))
+			.andExpect(jsonPath("$.content.castRoles.prosecutor").value("nambul"))
+			.andExpect(jsonPath("$.content.castRoles.defense").value("naero"))
+			.andExpect(jsonPath("$.content.sensitiveFlags.length()").value(2))	// 겹친 값은 하나로
+			.andExpect(jsonPath("$.content.sensitiveFlags[1]").value("CAPITAL_PENALTY"));	// 관리자는 가드 전용도 본다
+		assertThat(jdbcTemplate.queryForObject("""
+			SELECT detail::text FROM admin_audit_log WHERE actor_email = ? AND action = 'CASE_UPDATE'""",
+			String.class, admin.getEmail())).contains("castRoles", "nambul", "MENTAL_HEALTH");
+
+		// 모두 끌 때는 [] (null은 "분류하지 않음"이라 받지 않는다)
+		perform(patch(caseUrl()).contentType(MediaType.APPLICATION_JSON).content("{\"sensitiveFlags\": []}"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.content.sensitiveFlags.length()").value(0))
+			.andExpect(jsonPath("$.content.castRoles.defense").value("naero"));	// 보내지 않은 배역은 그대로
+	}
+
+	@Test
+	@DisplayName("A-11: 배역 · 민감 플래그가 규칙에 맞지 않으면 400 (BE-125)")
+	void edit_invalidCastAndFlags() throws Exception {
+		for (String body : List.of("{\"castRoles\": null}", "{\"castRoles\": {\"prosecutor\": \"naero\", \"defense\": \"naero\"}}",
+			"{\"castRoles\": {\"prosecutor\": \"naero\"}}", "{\"castRoles\": {\"prosecutor\": \"나로\", \"defense\": \"남불\"}}",
+			"{\"castRoles\": \"naero\"}", "{\"sensitiveFlags\": null}", "{\"sensitiveFlags\": [\"NOT_A_FLAG\"]}",
+			"{\"sensitiveFlags\": [\"MENTAL_HEALTH\", null]}", "{\"sensitiveFlags\": \"MENTAL_HEALTH\"}")) {
+			perform(patch(caseUrl()).contentType(MediaType.APPLICATION_JSON).content(body))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+		}
+		assertThat(caseStatus()).isEqualTo("DRAFT");
+		assertThat(jdbcTemplate.queryForObject("SELECT cast_roles::text FROM legal_case WHERE id = ?", String.class,
+			caseId)).isNull();
+	}
+
 	// --- A-12 ---
 
 	@Test

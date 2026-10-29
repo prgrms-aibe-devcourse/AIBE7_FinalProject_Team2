@@ -40,7 +40,10 @@ public class AdminCaseEditService {
 	private final AdminAuditLogger auditLogger;
 	private final Clock clock;
 
-	/** A-11 사건 내용 수정. 보낸 필드만 바꾼다. 공개한 사건은 고칠 수 없다 */
+	/**
+	 * A-11 사건 내용 수정. 보낸 필드만 바꾼다. 공개한 사건은 고칠 수 없다.
+	 * 배역 · 민감 플래그(BE-125)도 여기서 고친다 — 자동 분류 · 자동 배정을 관리자가 바로잡는 경로다
+	 */
 	@Transactional
 	public AdminCaseDetailResponse edit(Long caseId, Map<String, Object> body, AdminPrincipal admin,
 		HttpServletRequest request) {
@@ -87,6 +90,12 @@ public class AdminCaseEditService {
 		if (edit.has("recommendedBasis")) {
 			legalCase.changeRecommendedBasis(edit.get("recommendedBasis"));
 		}
+		if (edit.has("castRoles")) {
+			legalCase.assignCast(edit.<Map<String, String>>get("castRoles"));
+		}
+		if (edit.has("sensitiveFlags")) {
+			legalCase.changeSensitiveFlags(edit.<List<String>>get("sensitiveFlags"));
+		}
 		legalCase.startReview();
 		try {
 			caseRepository.saveAndFlush(legalCase);
@@ -100,6 +109,12 @@ public class AdminCaseEditService {
 
 		Map<String, Object> detail = new LinkedHashMap<>();
 		detail.put("fields", List.copyOf(edit.changes().keySet()));	// 값은 남기지 않는다(본문은 사건 내용이라 길다)
+		// 배역 · 민감 플래그는 짧고, 자동 분류 · 배정을 사람이 뒤집은 기록이라 바꾼 값까지 남긴다 (BE-125)
+		for (String field : List.of("castRoles", "sensitiveFlags")) {
+			if (edit.has(field)) {
+				detail.put(field, edit.get(field));
+			}
+		}
 		auditLogger.record(admin, AdminAuditAction.CASE_UPDATE, AuditTargetType.CASE, caseId, detail, request);
 		caseRepository.flush();
 		return queryService.getCase(caseId);

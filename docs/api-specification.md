@@ -64,6 +64,7 @@
 | v0.60 | 2026-10-28 | **API 1 · API 16에 `scriptReady` 추가 (BE-116)** — 그 사건에 **승인된 공개 대본**(API 18이 200을 주는 조건)이 있는가. 목록이 사건마다 API 18을 부르지(N번 요청) 않고 "체험 가능 / 준비 중"을 알 수 있다. 필드 추가만이라 기존 클라이언트와 호환 (`docs/decisions/BE-116.md`) |
 | v0.61 | 2026-10-28 | **사건 공개 취소 A-13-14 신설 (BE-118, ERD v1.44 · V34)** — `POST /admin/cases/{caseId}/unpublish`, 사유(`reason`, 1 ~ 200자) 필수. 공개한 사건을 사용자 화면에서 **숨긴다**(`PUBLISHED → REVIEW`, `published_at` 지움). 사건 · 판결 · 사용자 체험 기록은 지우지 않고, 사용자 API는 `PUBLISHED`만 읽으므로 목록 · 상세 · 체험 · 결과에서 바로 사라진다. 고친 뒤 A-13으로 다시 공개한다. 공개 중이 아니면 409 `INVALID_STATE`(사유 코드 `CASE_NOT_PUBLISHED` 추가). 감사 로그 `CASE_UNPUBLISH`(사유 포함). 8-2 "공개 취소 없음" · 8-3 #2를 갱신. 권리 요청에 따른 삭제(파기)는 정책을 정한 뒤 2단계로 둔다 |
 | v0.62 | 2026-10-28 | **공개 뒤 사진 교체 절차 확정 (BE-103, BE-78 2차 검토 후속 3번)** — 공개 중 사진만 바꾸는 경로는 **두지 않는다**. A-13-3 · A-13-4 · A-13-9의 409(`CASE_PUBLISHED`)를 그대로 두고, 고쳐야 하면 A-13-14(공개 취소) → 교체 → A-13(다시 공개)으로 한다(BE-118이 사유 필수 · 감사 로그를 갖춘 경로를 이미 제공). 공개가 곧 사진 승인이라는 BE-78 원칙과 8-3 #1(공개 뒤 수정 금지)을 함께 지키려는 선택이다. 절차의 대가(내린 동안 완료 체험 결과도 404, 다시 공개하면 `published_at`이 새로 기록돼 사건 목록 맨 위로)를 A-13-3에 적고 8-3 #9로 남겼다. **API · 스키마 · 운영 코드 변경 없음**(결정이 "현재 동작 유지"라 동작을 고정하는 테스트만 추가했다) (`docs/decisions/BE-103.md`). 같은 김에 A-13-3의 감사 로그 값 `CASE_PHOTO_GENERATE` → `CASE_PHOTO_UPLOAD` 정정(`AdminAuditAction`에 없는 값이었다) |
+| v0.63 | 2026-10-29 | **사건 배역 · 민감 플래그 (BE-125, ERD v1.45 · V35)** — API 16에 `cast`(배역 `{prosecutor, defense}`) · `sensitiveFlags`(사용자 안내 대상 플래그만) 추가. 값이 없으면 **필드를 뺀다**(배정 전 · 안내할 플래그 없음 → 화면 기본 동작). A-6 `content`에 `castRoles` · `sensitiveFlags`(가드 전용 포함 전체), A-11에 같은 두 필드 수정 추가 — 자동 분류 · 자동 배정을 관리자가 바로잡는 경로. 감사 로그 `CASE_UPDATE`에 두 필드는 바꾼 값까지 남긴다. 필드 추가만이라 기존 클라이언트와 호환 (`docs/decisions/BE-125.md`) |
 
 ---
 
@@ -757,7 +758,7 @@ S-20 사건 디테일(정보 구조 v1.12)이 체험을 만들기 전에 부르�
 **응답 200**
 
 ```json
-{  "caseId": 1,  "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",  "crimeType": "MURDER",  "crimeCategoryLabel": "생명범죄",  "chargeName": "살인",  "shortIntro": "빌린 돈 문제로 찾아온 지인과 다투다 흉기로 살해한 사건입니다.",  "keywords": ["돈 문제", "지인", "흉기"],  "difficulty": "MID",  "estimatedMinutes": 15,  "participantCount": 42,  "thumbnailUrl": null,  "overview": "피고인이 빌린 돈을 갚지 못해 오래 다투던 지인이 집으로 찾아오자, …",  "scriptReady": true,  "myStatus": null}
+{  "caseId": 1,  "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",  "crimeType": "MURDER",  "crimeCategoryLabel": "생명범죄",  "chargeName": "살인",  "shortIntro": "빌린 돈 문제로 찾아온 지인과 다투다 흉기로 살해한 사건입니다.",  "keywords": ["돈 문제", "지인", "흉기"],  "difficulty": "MID",  "estimatedMinutes": 15,  "participantCount": 42,  "thumbnailUrl": null,  "overview": "피고인이 빌린 돈을 갚지 못해 오래 다투던 지인이 집으로 찾아오자, …",  "scriptReady": true,  "myStatus": null,  "cast": { "prosecutor": "naero", "defense": "nambul" },  "sensitiveFlags": ["MENTAL_HEALTH"]}
 ```
 
 - 필드는 API 1 카드와 같고(`chargeName` 포함, v0.32), `overview`(사건 개요, API 4의 `case.overview`와 같은 값)를 더한다. `participantCount` · `myStatus` 기준도 API 1과 같다. (v0.60, BE-116) `scriptReady`도 API 1과 같은 값 · 같은 기준이다 — `false`면 S-20은 시작 대신 "준비 중"을 보인다(API 18을 따로 불러 확인하지 않아도 된다).
@@ -766,6 +767,8 @@ S-20 사건 디테일(정보 구조 v1.12)이 체험을 만들기 전에 부르�
 - 버튼 분기(정보 구조 S-20): `myStatus`가 `null`이면 **체험 시작**(API 2로 체험을 만든 뒤 S-03), `IN_PROGRESS`면 **이어서 하기**, `COMPLETED`면 **결과 다시 보기**. 이어서 하기 · 결과 다시 보기도 API 2를 불러 응답 `status`로 이동한다(1-6). 세부 상태(7단계)는 이 API에 내보내지 않는다.
 - 캐시: `myStatus`가 사용자마다 달라 API 1과 같은 규칙이다(지금은 `no-store`, HTTP 캐시를 켤 때는 `private` + `Vary: Cookie`).
 - 대본(판결 체험 무대, REQ-089)은 이 API에 넣지 않는다. 승인된 대본의 증거조사 대사는 API 18(BE-109)에서 따로 준다.
+- (v0.63, BE-125) `cast`: 이 사건의 배역(`legal_case.cast_roles`). `prosecutor`(묶음 A, 판사 · 검사) · `defense`(묶음 B, 변호인 · 피고인 역)가 각각 `naero` · `nambul` 중 하나다. 배정 전 사건은 **필드가 없다** — 화면은 기본 배치(내로 판사 · 검사, 남불 변호인 · 피고인)를 쓴다(FE-128). 새로 적재하는 사건은 대본이 함께 오면 대본을 만든 배역을 사건 배역으로 쓰므로 API 18의 `cast`와 같다. 다만 관리자가 A-11로 배역을 바꾸면 이미 만든 대본은 그대로라 둘이 달라질 수 있다(대본 재생성은 BE-129).
+- (v0.63, BE-125) `sensitiveFlags`: **사용자에게 안내하는 플래그만** 준다 — `VULNERABLE_VICTIM` · `MENTAL_HEALTH` · `SELF_HARM` · `SEXUAL_OFFENSE` · `DOMESTIC_VIOLENCE` · `HATE_CRIME`. 대본 가드 전용 플래그(`CAPITAL_PENALTY` 등)는 판결 전에 형량을 짐작하게 할 수 있어 내보내지 않는다. 안내할 것이 없으면 **필드가 없다**. 안내 문구는 화면이 정한다(FE-129, 파이프라인 `script_assembler.sensitive_notice`와 같은 규칙).
 
 | 거절 | 조건 |
 | --- | --- |
@@ -1094,7 +1097,9 @@ API 1 · 2 · 16 · 17은 상태와 관계없이 부를 수 있다. 표에 없�
     "recommendedBasis": "…",
     "incidentDate": "2024-03-02",
     "guideline": { "guidelineId": 4, "versionName": "2023 수정 (…)" },
-    "deidentifiedItems": ["인명", "지명", "사건번호"]
+    "deidentifiedItems": ["인명", "지명", "사건번호"],
+    "castRoles": { "prosecutor": "naero", "defense": "nambul" },
+    "sensitiveFlags": ["MENTAL_HEALTH", "CAPITAL_PENALTY"]
   },
   "sources": [
     {
@@ -1260,10 +1265,13 @@ API 1 · 2 · 16 · 17은 상태와 관계없이 부를 수 있다. 표에 없�
 | `thumbnailUrl` | 300자 이하 · `null`. `http(s)://` 주소나 `/`로 시작하는 서비스 경로만(`javascript:` · `data:` · `//host`는 거절) |
 | `recommendedMinMonths` · `recommendedMaxMonths` | 1 이상 · `null`. 바꾼 뒤의 하한 · 상한이 둘 다 있으면 하한 ≤ 상한 |
 | `recommendedBasis` | 문자열 · `null` |
+| `castRoles` | (v0.63, BE-125) `{"prosecutor": …, "defense": …}`. 키는 이 둘만, 값은 `naero` · `nambul`을 하나씩. `null`은 거절(배정을 지우면 범죄 유형별 균형 계산에서 빠진다) |
+| `sensitiveFlags` | (v0.63, BE-125) 플래그 이름 배열(`SensitiveFlag` 12종). 모르는 이름 · `null` 원소는 거절, 겹치면 하나로 줄인다. 모두 끌 때는 `[]`. `null`은 거절(`null`은 "분류 전"이라 되돌리지 않는다) |
 
 - 죄명 · 적용 법조문 · 법정형 · 판단 요소 구성 · 형벌 규칙은 이 API로 바꾸지 않는다(파이프라인 · SQL 경로, WBS 7-5 8순위).
 - 제목 중복은 저장 전에 확인하고, 그 사이 다른 요청이 같은 제목을 저장해 유니크 위반이 나도 `DUPLICATE_TITLE`로 돌려준다.
-- 감사 로그 `CASE_UPDATE`에는 바꾼 필드 이름만 남긴다(`{"fields": ["shortIntro", "keywords"]}`). 값은 사건 본문이라 남기지 않는다.
+- 감사 로그 `CASE_UPDATE`에는 바꾼 필드 이름만 남긴다(`{"fields": ["shortIntro", "keywords"]}`). 값은 사건 본문이라 남기지 않는다. 단 `castRoles` · `sensitiveFlags`는 짧고 자동 결과를 사람이 뒤집은 기록이라 바꾼 값까지 남긴다(`{"fields": ["castRoles"], "castRoles": {…}}`, v0.63).
+- 배역을 바꿔도 이미 만든 대본(`case_script`)은 다시 만들지 않는다 — 대사에 캐릭터가 들어가 있어 사건 배역과 어긋난다. 대본을 다시 만드는 경로는 BE-129에서 정한다.
 - 사건이 `DRAFT`면 `REVIEW`로 바꾼다 ⚠️.
 
 | 거절 | 조건 |
