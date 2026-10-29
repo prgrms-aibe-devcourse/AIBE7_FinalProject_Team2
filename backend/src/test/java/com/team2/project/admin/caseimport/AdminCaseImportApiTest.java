@@ -311,7 +311,7 @@ class AdminCaseImportApiTest extends ApiIntegrationTest {
 	void loadImport_resultNotLoadable() throws Exception {
 		long importId = finishedImport();
 		when(pipelineClient.getResult(any())).thenReturn(new PipelineResult("job", null, null, null, null,
-			null, null, null));
+			null, null, null, null));
 
 		perform(post(URL + "/" + importId + "/load"))
 			.andExpect(status().isUnprocessableEntity())
@@ -323,7 +323,7 @@ class AdminCaseImportApiTest extends ApiIntegrationTest {
 	void loadImport_doesNotCreateCaseOnFailure() throws Exception {
 		long importId = finishedImport();
 		when(pipelineClient.getResult(any())).thenReturn(new PipelineResult("job", null, null, null, null,
-			null, null, null));
+			null, null, null, null));
 		int before = jdbcTemplate.queryForObject("SELECT count(*) FROM legal_case", Integer.class);
 
 		perform(post(URL + "/" + importId + "/load")).andExpect(status().isUnprocessableEntity());

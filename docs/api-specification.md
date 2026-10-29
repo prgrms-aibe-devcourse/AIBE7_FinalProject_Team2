@@ -68,7 +68,8 @@
 | v0.64 | 2026-10-29 | **요청 오류 에러 코드 구분 (BE-132)** — 없는 주소 · 지원하지 않는 메서드 · Content-Type이 모두 400대 상태는 맞지만 `code`가 `VALIDATION_ERROR`("요청 값이 올바르지 않습니다.")로 내려오던 것을 나눈다: 404 `NOT_FOUND` · 405 `METHOD_NOT_ALLOWED` · 415 `UNSUPPORTED_MEDIA_TYPE`(1-5). HTTP 상태 코드 · 405 `Allow` 헤더는 그대로이고, 입력값 오류(400)와 도메인 404(`CASE_NOT_FOUND` 등)는 바뀌지 않는다 **(병합 메모) v0.63은 BE-83(PR #335)이 쓴다. 이 PR이 먼저 머지되면 번호를 다시 매긴다** |
 | v0.65 | 2026-10-29 | **프로필카드 아래 줄 설정 추가 (BE-114, FE-116)** — P-8 요청 · 응답과 P-5 `profileSettings`에 `cardLine`(`type` · `signature` · `job` 중 하나, 기본 `type`: 프로필카드 아래에 보일 줄) · `cardLevel`(boolean, 기본 `false`: 레벨을 그 줄 윗줄에 붙일지) 두 칸 추가. 모르는 값 · 타입이 다르면 기존 칸과 같이 400 `VALIDATION_ERROR`. ERD v1.46 `profile_setting`(V36) |
 | v0.66 | 2026-10-29 | **담당 문서 최신화 (B, 7.0.2 준비)** — 8장 머리말을 "계약 초안(v0.17)"에서 "구현됨(BE-41 ~ 43)"으로, 확정된 항목의 ⚠️ 정리(DRAFT → REVIEW는 8-3 #3, 공개 뒤 교체 · 수정 금지는 8-3 #1, `raw_output`은 8-3 #6), 8-3 #1을 ✅ 확정(공개 중 409, 고칠 때는 공개 취소 → 수정 → 다시 공개, BE-103과 같은 절차). 9장 머리말 · 9-2 각 항목을 구현(BE-72) · 화면 연동 기준으로 ✅ 확정. 형식 변경 없음. 8-2 제목의 "초안" 삭제(#334 리뷰) |
-| v0.67 | 2026-10-29 | **로그아웃 시 익명 ID 쿠키 해제 (BE-137)** — M-2: 쿠키의 익명 ID가 회원에 연결되어 있으면 `NLNB_AID`도 `Set-Cookie`(`Max-Age=0`)로 지운다. 공용 PC에서 로그아웃한 뒤 다음 사람의 체험 · 판결이 그 회원 계정으로 쌓이지 않게 한다. 새 익명 ID는 이때 발급하지 않고 다음 행동(API 2 체험 시작 등) 때 발급된다. 연결 안 된(손님) 익명 ID는 지우지 않는다 |
+| v0.67 | 2026-10-29 | **사건 배역 · 민감 플래그 (BE-125, ERD v1.47 · V37)** — API 16에 `cast`(배역 `{prosecutor, defense}`) · `sensitiveFlags`(사용자 안내 대상 플래그만) 추가. 값이 없으면 **필드를 뺀다**(배정 전 · 안내할 플래그 없음 → 화면 기본 동작). A-6 `content`에 `castRoles` · `sensitiveFlags`(가드 전용 포함 전체), A-11에 같은 두 필드 수정 추가 — 자동 분류 · 자동 배정을 관리자가 바로잡는 경로. 감사 로그 `CASE_UPDATE`에 두 필드는 바꾼 값까지 남긴다. 필드 추가만이라 기존 클라이언트와 호환 (`docs/decisions/BE-125.md`) |
+| v0.68 | 2026-10-29 | **로그아웃 시 익명 ID 쿠키 해제 (BE-137)** — M-2: 쿠키의 익명 ID가 회원에 연결되어 있으면 `NLNB_AID`도 `Set-Cookie`(`Max-Age=0`)로 지운다. 공용 PC에서 로그아웃한 뒤 다음 사람의 체험 · 판결이 그 회원 계정으로 쌓이지 않게 한다. 새 익명 ID는 이때 발급하지 않고 다음 행동(API 2 체험 시작 등) 때 발급된다. 연결 안 된(손님) 익명 ID는 지우지 않는다 |
 
 ---
 
@@ -94,7 +95,7 @@
 | 이름 | `NLNB_AID` |
 | 값 | `anonymous_user.id` (UUID) |
 | 발급 시점 | 체험 시작(`POST /cases/{caseId}/experience`) · (확장) 성향 테스트 제출(P-2) · 꾸미기 등 행동 API 때 쿠키가 없거나 DB에 없는 값이면 새로 발급. (확장, BE-62) 로그인 때 쿠키 값이 다른 회원에 연결됐거나 없으면 이 회원에 연결된 새 값 |
-| 삭제 시점 | (확장, v0.67 · BE-137) 로그아웃(M-2) 때 회원에 연결된 값이면 지운다. 손님 값은 지우지 않는다 |
+| 삭제 시점 | (확장, v0.68 · BE-137) 로그아웃(M-2) 때 회원에 연결된 값이면 지운다. 손님 값은 지우지 않는다 |
 | 속성 | `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/` |
 | 유효 기간 | 1년 (요구사항 15장 "익명 ID 유지 방식 · 기간" 결정 시 확정) |
 - **프론트와 API는 같은 도메인으로 배포한다**(6장 #2 확정, 기술 스택 8장). EC2의 Nginx가 프론트 빌드 파일을 서빙하고 `/api` 요청을 백엔드 컨테이너로 프록시하므로 `SameSite=Lax` 그대로 쓰고 CORS 설정은 필요 없다.
@@ -767,7 +768,7 @@ S-20 사건 디테일(정보 구조 v1.12)이 체험을 만들기 전에 부르�
 **응답 200**
 
 ```json
-{  "caseId": 1,  "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",  "crimeType": "MURDER",  "crimeCategoryLabel": "생명범죄",  "chargeName": "살인",  "shortIntro": "빌린 돈 문제로 찾아온 지인과 다투다 흉기로 살해한 사건입니다.",  "keywords": ["돈 문제", "지인", "흉기"],  "difficulty": "MID",  "estimatedMinutes": 15,  "participantCount": 42,  "thumbnailUrl": null,  "overview": "피고인이 빌린 돈을 갚지 못해 오래 다투던 지인이 집으로 찾아오자, …",  "scriptReady": true,  "myStatus": null}
+{  "caseId": 1,  "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",  "crimeType": "MURDER",  "crimeCategoryLabel": "생명범죄",  "chargeName": "살인",  "shortIntro": "빌린 돈 문제로 찾아온 지인과 다투다 흉기로 살해한 사건입니다.",  "keywords": ["돈 문제", "지인", "흉기"],  "difficulty": "MID",  "estimatedMinutes": 15,  "participantCount": 42,  "thumbnailUrl": null,  "overview": "피고인이 빌린 돈을 갚지 못해 오래 다투던 지인이 집으로 찾아오자, …",  "scriptReady": true,  "myStatus": null,  "cast": { "prosecutor": "naero", "defense": "nambul" },  "sensitiveFlags": ["MENTAL_HEALTH"]}
 ```
 
 - 필드는 API 1 카드와 같고(`chargeName` 포함, v0.32), `overview`(사건 개요, API 4의 `case.overview`와 같은 값)를 더한다. `participantCount` · `myStatus` 기준도 API 1과 같다. (v0.60, BE-116) `scriptReady`도 API 1과 같은 값 · 같은 기준이다 — `false`면 S-20은 시작 대신 "준비 중"을 보인다(API 18을 따로 불러 확인하지 않아도 된다).
@@ -776,6 +777,8 @@ S-20 사건 디테일(정보 구조 v1.12)이 체험을 만들기 전에 부르�
 - 버튼 분기(정보 구조 S-20): `myStatus`가 `null`이면 **체험 시작**(API 2로 체험을 만든 뒤 S-03), `IN_PROGRESS`면 **이어서 하기**, `COMPLETED`면 **결과 다시 보기**. 이어서 하기 · 결과 다시 보기도 API 2를 불러 응답 `status`로 이동한다(1-6). 세부 상태(7단계)는 이 API에 내보내지 않는다.
 - 캐시: `myStatus`가 사용자마다 달라 API 1과 같은 규칙이다(지금은 `no-store`, HTTP 캐시를 켤 때는 `private` + `Vary: Cookie`).
 - 대본(판결 체험 무대, REQ-089)은 이 API에 넣지 않는다. 승인된 대본의 증거조사 대사는 API 18(BE-109)에서 따로 준다.
+- (v0.67, BE-125) `cast`: 이 사건의 배역(`legal_case.cast_roles`). `prosecutor`(묶음 A, 판사 · 검사) · `defense`(묶음 B, 변호인 · 피고인 역)가 각각 `naero` · `nambul` 중 하나다. 배정 전 사건은 **필드가 없다** — 화면은 기본 배치(내로 판사 · 검사, 남불 변호인 · 피고인)를 쓴다(FE-128). 새로 적재하는 사건은 대본이 함께 오면 대본을 만든 배역을 사건 배역으로 쓰므로 API 18의 `cast`와 같다. 다만 관리자가 A-11로 배역을 바꾸면 이미 만든 대본은 그대로라 둘이 달라질 수 있다(대본 재생성은 BE-129).
+- (v0.67, BE-125) `sensitiveFlags`: **사용자에게 안내하는 플래그만** 준다 — `VULNERABLE_VICTIM` · `MENTAL_HEALTH` · `SELF_HARM` · `SEXUAL_OFFENSE` · `DOMESTIC_VIOLENCE` · `HATE_CRIME`. 대본 가드 전용 플래그(`CAPITAL_PENALTY` 등)는 판결 전에 형량을 짐작하게 할 수 있어 내보내지 않는다. 안내할 것이 없으면 **필드가 없다**. 안내 문구는 화면이 정한다(FE-129, 파이프라인 `script_assembler.sensitive_notice`와 같은 규칙).
 
 | 거절 | 조건 |
 | --- | --- |
@@ -1104,7 +1107,9 @@ API 1 · 2 · 16 · 17은 상태와 관계없이 부를 수 있다. 표에 없�
     "recommendedBasis": "…",
     "incidentDate": "2024-03-02",
     "guideline": { "guidelineId": 4, "versionName": "2023 수정 (…)" },
-    "deidentifiedItems": ["인명", "지명", "사건번호"]
+    "deidentifiedItems": ["인명", "지명", "사건번호"],
+    "castRoles": { "prosecutor": "naero", "defense": "nambul" },
+    "sensitiveFlags": ["MENTAL_HEALTH", "CAPITAL_PENALTY"]
   },
   "sources": [
     {
@@ -1270,10 +1275,13 @@ API 1 · 2 · 16 · 17은 상태와 관계없이 부를 수 있다. 표에 없�
 | `thumbnailUrl` | 300자 이하 · `null`. `http(s)://` 주소나 `/`로 시작하는 서비스 경로만(`javascript:` · `data:` · `//host`는 거절) |
 | `recommendedMinMonths` · `recommendedMaxMonths` | 1 이상 · `null`. 바꾼 뒤의 하한 · 상한이 둘 다 있으면 하한 ≤ 상한 |
 | `recommendedBasis` | 문자열 · `null` |
+| `castRoles` | (v0.67, BE-125) `{"prosecutor": …, "defense": …}`. 키는 이 둘만, 값은 `naero` · `nambul`을 하나씩. `null`은 거절(배정을 지우면 범죄 유형별 균형 계산에서 빠진다) |
+| `sensitiveFlags` | (v0.67, BE-125) 플래그 이름 배열(`SensitiveFlag` 12종). 모르는 이름 · `null` 원소는 거절, 겹치면 하나로 줄인다. 모두 끌 때는 `[]`. `null`은 거절(`null`은 "분류 전"이라 되돌리지 않는다) |
 
 - 죄명 · 적용 법조문 · 법정형 · 판단 요소 구성 · 형벌 규칙은 이 API로 바꾸지 않는다(파이프라인 · SQL 경로, WBS 7-5 8순위).
 - 제목 중복은 저장 전에 확인하고, 그 사이 다른 요청이 같은 제목을 저장해 유니크 위반이 나도 `DUPLICATE_TITLE`로 돌려준다.
-- 감사 로그 `CASE_UPDATE`에는 바꾼 필드 이름만 남긴다(`{"fields": ["shortIntro", "keywords"]}`). 값은 사건 본문이라 남기지 않는다.
+- 감사 로그 `CASE_UPDATE`에는 바꾼 필드 이름만 남긴다(`{"fields": ["shortIntro", "keywords"]}`). 값은 사건 본문이라 남기지 않는다. 단 `castRoles` · `sensitiveFlags`는 짧고 자동 결과를 사람이 뒤집은 기록이라 바꾼 값까지 남긴다(`{"fields": ["castRoles"], "castRoles": {…}}`, v0.67).
+- 배역을 바꿔도 이미 만든 대본(`case_script`)은 다시 만들지 않는다 — 대사에 캐릭터가 들어가 있어 사건 배역과 어긋난다. 대본을 다시 만드는 경로는 BE-129에서 정한다.
 - 사건이 `DRAFT`면 `REVIEW`로 바꾼다(8-3 #3).
 
 | 거절 | 조건 |
@@ -2230,7 +2238,7 @@ Origin이 이 서버 자신과 같은 출처인지)을 거친다 — 벗어나�
 - 리프레시 토큰이 있으면 Redis 저장소에서 지우고(그 뒤 재발급은 전부 실패한다), `NLNB_RT` 쿠키를 `Set-Cookie`로
   지운다. 이미 나간 액세스 토큰은 블랙리스트를 두지 않아 자연 만료(기본 15분)까지는 유효하다.
 - 익명 ID 쿠키(`NLNB_AID`)가 **회원에 연결된** 익명 ID면 이 쿠키도 `Set-Cookie`(`Max-Age=0`, 발급 때와 같은 `Path=/`)로
-  지운다(v0.67, BE-137). 로그인 때 회원에 연결한 익명 ID가 남으면 로그아웃 뒤 같은 브라우저(공용 PC)의 다음 사람
+  지운다(v0.68, BE-137). 로그인 때 회원에 연결한 익명 ID가 남으면 로그아웃 뒤 같은 브라우저(공용 PC)의 다음 사람
   체험 · 판결이 그 회원 계정으로 쌓이기 때문이다. 리프레시 쿠키가 이미 없어도(만료 뒤 로그아웃) 지운다.
   - 새 익명 ID는 이때 발급하지 않는다. 다음 행동(API 2 체험 시작 · P-2 성향 테스트 등) 때 회원과 연결 안 된 새 익명 ID가 발급된다.
     그전까지 마이페이지 등은 빈 상태로 보인다
