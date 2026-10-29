@@ -48,6 +48,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.TransactionException;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -152,7 +153,8 @@ public class MyPageService {
 		try {
 			Map<String, UnlockMark> added = unlockRecorder.recordSeparately(userId, stats);
 			return added.isEmpty() ? stats : stats.withUnlocks(added);
-		} catch (DataAccessException e) {
+		} catch (DataAccessException | TransactionException e) {
+			// TransactionException: 커넥션 풀이 모자라 새 트랜잭션을 못 열거나(CannotCreateTransactionException) 커밋에 실패한 경우
 			log.warn("도전과제 해금 기록 실패 — 다음 조회 때 다시 기록한다: {}", e.getMessage());
 			return stats;
 		}
