@@ -545,11 +545,16 @@ class ListingEligibilitySourceTest(unittest.TestCase):
         cases = {
             "띄어 쓴 머리": "- 1 -\n서 울 가 상 지 방 법 원\n판 결\n사건 2099고합1 살인\n" + body,
             "지원": "가상지방법원 가상지원\n판결\n사건 2099고단2 상해\n" + body,
-            "한 줄에 한 자": "\n".join("가상지방법원") + "\n판\n결\n사건 2099고합3 살인\n" + body,
+            # 한 줄에 한 자씩 나온 머리는 공백을 지운 앞부분에서 찾으므로 알려진 지역명만 받는다(COURT_REGIONS)
+            "한 줄에 한 자": "- 1 -\n" + "\n".join("수원지방법원") + "\n판\n결\n사건 2099고합3 살인\n" + body,
         }
+        expected = {"띄어 쓴 머리": "서울가상지방법원", "지원": "가상지방법원가상지원", "한 줄에 한 자": "수원지방법원"}
         for name, text in cases.items():
-            expected = "가상지방법원가상지원" if name == "지원" else ("서울가상지방법원" if name == "띄어 쓴 머리" else "가상지방법원")
-            self.assertEqual(extract_source_info(text)["courtName"], expected, name)
+            self.assertEqual(extract_source_info(text)["courtName"], expected[name], name)
+        # 공백을 지운 앞부분에서 앞 글자가 지역명에 딸려 오는 경우는 틀린 값 대신 비운다 (#333 리뷰)
+        for head in ("판결문\n서울가상지방법원 판결", "\n".join("대한민국") + "\n" + "\n".join("서울가상지방법원"),
+                     "판\n결\n" + "\n".join("가상지방법원")):
+            self.assertIsNone(extract_source_info(head + "\n사건 2099고합8 살인\n" + body)["courtName"], head)
         # 약칭 머리(국가법령정보센터 형식)는 정식 이름으로 풀어 쓴다
         self.assertEqual(extract_source_info("가상지법 2099. 1. 1. 선고 2099고합4 판결 [살인]\n" + body)["courtName"],
                          "가상지방법원")

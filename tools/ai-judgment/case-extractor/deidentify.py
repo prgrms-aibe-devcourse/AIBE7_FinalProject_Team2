@@ -123,6 +123,12 @@ COURT_LINE = re.compile(COURT_LOWER + r"|대법원")
 # 국가법령정보센터 등의 머리 줄: "○○지법 2099. 1. 1. 선고 …", "○○고법 …", "○○지법○○지원 …" (공백을 지운 줄의 앞부분)
 COURT_ABBREVIATION = re.compile(r"([가-힣]{2,6})(지법|고법)([가-힣]{2,6}지원)?(?=\d|선고|$)")
 COURT_ABBREVIATION_FULL = {"지법": "지방법원", "고법": "고등법원"}
+# 3단계(공백을 모두 지운 앞부분)에서만 쓰는 지역명 목록. 줄 경계가 사라져 앞 글자("판결" 등)가 지역명에 딸려 오므로
+# 알려진 지역명으로 시작하는 법원명만 받는다. 목록에 없는 지역이면 비운다 (#333 리뷰)
+COURT_REGIONS = ("서울중앙", "서울동부", "서울남부", "서울북부", "서울서부", "서울", "의정부", "인천", "수원", "춘천",
+                 "대전", "청주", "대구", "부산", "울산", "창원", "광주", "전주", "제주")
+COURT_IN_FLAT_HEAD = re.compile(
+    "(?:" + "|".join(COURT_REGIONS) + r")(?:지방|고등|가정|행정)법원(?:[가-힣]{2,4}지원)?")
 
 
 def extract_court_name(text):
@@ -130,8 +136,10 @@ def extract_court_name(text):
 
     1. 앞쪽 줄 중 공백을 지운 줄 전체가 법원명인 줄 (띄어 쓴 머리 "○ ○ 지 방 법 원" 포함)
     2. 약칭으로 시작하는 줄 ("○○지법 … 선고") → 정식 이름으로 풀어 쓴다
-    3. 그래도 없으면 공백을 모두 지운 앞쪽 HEAD_CHARS 글자 안에서 찾는다 (PDF에서 머리 글자가 한 줄에 한 자씩 나온 경우).
-       대법원은 빼고 찾는다 — 상고심 머리는 1에서 잡히고, 여기서 나오는 대법원은 본문의 판례 인용이다
+    3. 그래도 없으면 공백을 모두 지운 앞쪽 HEAD_CHARS 글자 안에서 **알려진 지역명으로 시작하는** 법원명만 찾는다
+       (PDF에서 머리 글자가 한 줄에 한 자씩 나온 경우). 줄 경계가 사라져 "판결" 등이 지역명에 딸려 오기 때문에
+       지역명을 목록으로 제한한다(COURT_REGIONS). 대법원은 빼고 찾는다 — 상고심 머리는 1에서 잡히고, 여기서 나오는
+       대법원은 본문의 판례 인용이다
     """
     lines = [re.sub(r"\s", "", line) for line in text.splitlines()]
     head = [line for line in lines if line][:HEAD_LINES]
@@ -143,7 +151,7 @@ def extract_court_name(text):
         if abbreviation:
             region, kind, branch = abbreviation.groups()
             return region + COURT_ABBREVIATION_FULL[kind] + (branch or "")
-    court = re.search(COURT_LOWER, "".join(lines)[:HEAD_CHARS])
+    court = COURT_IN_FLAT_HEAD.search("".join(lines)[:HEAD_CHARS])
     return court.group(0) if court else None
 
 
