@@ -117,6 +117,7 @@
 
 /* 보드(카드): 크기는 가운데 공간(양쪽 캐릭터 사이 · 대사창 위)에 고정, 짧은 내용은 가운데로 모은다 */
 .stage-wrap .board { position: absolute; left: 24%; right: 24%; top: 5%; bottom: 27%; display: flex; flex-direction: column; justify-content: center; background: var(--paper); border: 2px solid var(--navy); border-radius: 8px; padding: 2.2cqw 2.6cqw; overflow: hidden; box-shadow: 0 6px 0 color-mix(in srgb, var(--color-text) 18%, transparent); animation: stage-pop .25s; outline: none; }
+.stage-wrap .board[hidden] { display: none; } /* 카드가 없는 장면은 보드를 숨긴다. .board의 display: flex가 hidden을 덮어 빈 카드가 남는다(FE-130) — 신문 지면은 paperStage.css에 같은 규칙이 있다 */
 .stage-wrap .stage.hasproc .board { top: 9%; }
 .stage-wrap .board.wide { left: 14%; right: 14%; top: 4%; bottom: 4%; }
 .stage-wrap .board > .scroll-area { flex: 0 1 auto; }
