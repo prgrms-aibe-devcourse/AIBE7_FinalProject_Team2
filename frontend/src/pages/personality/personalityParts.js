@@ -191,7 +191,7 @@ export function turnPage(label, run, { prev = false } = {}) {
 
 // 같은 유형의 다른 캐릭터 그림. 이미지 번호는 내로 01 ~ 16 · 남불 17 ~ 32라 ±16이 짝이다. 번호를 못 읽으면 이미지 없이 이름표로 간다
 const OTHER_CHARACTER = { NAERO: 'NAMBUL', NAMBUL: 'NAERO' };
-function withOtherCharacter(type) {
+export function withOtherCharacter(type) {
   const other = OTHER_CHARACTER[type.character];
   const match = type.imageUrl?.match(/^(.*\/)(\d{2})(\.webp)$/);
   if (!other || !match) return { ...type, character: other ?? type.character, imageUrl: null };
