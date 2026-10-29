@@ -41,7 +41,7 @@ class CaseDetailApiTest extends ApiIntegrationTest {
 				.andExpect(jsonPath("$.difficulty").value("MID"))
 				.andExpect(jsonPath("$.estimatedMinutes").value(10))
 				.andExpect(jsonPath("$.participantCount").value(0))
-				.andExpect(jsonPath("$.thumbnailUrl").value((Object) null))
+				.andExpect(jsonPath("$.thumbnailUrl").value("/images/cases/case-%d-reenact.webp".formatted(caseId)))	// 저장된 값 없음 → 규칙 주소(BE-141)
 				.andExpect(jsonPath("$.overview").value("테스트 개요"))
 				.andExpect(jsonPath("$.myStatus").value((Object) null));
 	}

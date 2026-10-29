@@ -69,6 +69,7 @@
 | v0.65 | 2026-10-29 | **프로필카드 아래 줄 설정 추가 (BE-114, FE-116)** — P-8 요청 · 응답과 P-5 `profileSettings`에 `cardLine`(`type` · `signature` · `job` 중 하나, 기본 `type`: 프로필카드 아래에 보일 줄) · `cardLevel`(boolean, 기본 `false`: 레벨을 그 줄 윗줄에 붙일지) 두 칸 추가. 모르는 값 · 타입이 다르면 기존 칸과 같이 400 `VALIDATION_ERROR`. ERD v1.46 `profile_setting`(V36) |
 | v0.66 | 2026-10-29 | **담당 문서 최신화 (B, 7.0.2 준비)** — 8장 머리말을 "계약 초안(v0.17)"에서 "구현됨(BE-41 ~ 43)"으로, 확정된 항목의 ⚠️ 정리(DRAFT → REVIEW는 8-3 #3, 공개 뒤 교체 · 수정 금지는 8-3 #1, `raw_output`은 8-3 #6), 8-3 #1을 ✅ 확정(공개 중 409, 고칠 때는 공개 취소 → 수정 → 다시 공개, BE-103과 같은 절차). 9장 머리말 · 9-2 각 항목을 구현(BE-72) · 화면 연동 기준으로 ✅ 확정. 형식 변경 없음. 8-2 제목의 "초안" 삭제(#334 리뷰) |
 | v0.67 | 2026-10-29 | **사건 배역 · 민감 플래그 (BE-125, ERD v1.47 · V37)** — API 16에 `cast`(배역 `{prosecutor, defense}`) · `sensitiveFlags`(사용자 안내 대상 플래그만) 추가. 값이 없으면 **필드를 뺀다**(배정 전 · 안내할 플래그 없음 → 화면 기본 동작). A-6 `content`에 `castRoles` · `sensitiveFlags`(가드 전용 포함 전체), A-11에 같은 두 필드 수정 추가 — 자동 분류 · 자동 배정을 관리자가 바로잡는 경로. 감사 로그 `CASE_UPDATE`에 두 필드는 바꾼 값까지 남긴다. 필드 추가만이라 기존 클라이언트와 호환 (`docs/decisions/BE-125.md`) |
+| v0.68 | 2026-10-29 | **사건 사진 주소 규칙 기본값 (BE-141)** — API 1 · 2 · 16 · 17의 사진 URL이 저장된 값이 없으면 규칙 주소 `/images/cases/case-{caseId}-{reenact\|origin\|conclusion}.webp`로 채워진다(저장된 값이 있으면 그것이 우선, 관리자 사진 업로드 A-13-3 ~ 5는 그대로). API 17 `extraPhotos.origin` · `conclusion`은 사진 행이 없어도 `null`이 아니라 규칙 주소(캡션 `null`)다 |
 
 ---
 
@@ -245,7 +246,7 @@ json
 - `PUBLISHED` 사건만. `summary`는 필터와 관계없이 전체 기준(칩 옆 건수 표시용). `byCrimeType`은 공개 사건이 없는 유형도 0으로 모든 범죄 유형 키를 내려 준다(v0.55부터 5개).
 - `crimeCategoryLabel`: `crime_type`별 표시용 분류명. `MURDER` → "생명범죄", `FRAUD` · `ROBBERY` · `THEFT` → "재산범죄", `INJURY` → "신체범죄"(`ROBBERY` · `THEFT`는 v0.55). DB 컬럼이 아니라 서버 코드 상수(`CrimeType.categoryLabel`)에서 만든다(ERD 3-1).
 - `chargeName`: 죄명(`legal_case.charge_name`, 예: "살인"). 사건 상단 바(S-04~S-08)가 `caseId`로 이 목록에서 제목과 함께 찾아 쓴다(BE-79, D-01). 사건 개요(API 4) · API 16의 `chargeName`과 같은 값이다.
-- `thumbnailUrl`: `legal_case.thumbnail_url`. 없으면 `null`이고, 화면은 범죄 유형별 기본 이미지를 쓴다.
+- `thumbnailUrl`: `legal_case.thumbnail_url`. **없으면 규칙 주소 `/images/cases/case-{caseId}-reenact.webp`를 내려준다**(BE-141). 그 파일이 없으면 화면이 범죄 유형별 공용 컷으로 바꾼다.
 - `participantCount`: `attempt_no = 1`이고 `COMPLETED`인 체험 수.
 - (v0.60, BE-116) `scriptReady`: 이 사건에 **승인된 공개 대본**이 있는가(`true` / `false`). 기준은 API 18이 200을 주는 조건과 같다(사건 `PUBLISHED` + 대본 `reviewStatus: APPROVED`) — 대본이 없거나 검수 대기 · 반려면 `false`다. 화면(S-02)은 이 값으로 체험 가능한 사건을 먼저 보이고, `false`는 "준비 중"으로 다룬다. 사용자와 무관한 값이다. **화면 정책이며 서버는 막지 않는다** — API 2(체험 시작)는 `scriptReady`를 보지 않는다. 또 대사를 직접 수정(A-13-13)하면 검수 기록이 지워져 `true → false`로 바뀔 수 있다(이때 API 18도 404).
 - 정렬: `published_at` 최신순 고정 (정렬 선택은 이후 단계, REQ-009).
@@ -808,11 +809,11 @@ FE-64가 쓰는 API(S-20 기사 지면 · 증거조사). 관리자 신문 지면
 }
 ```
 
-- `photo`는 A-13-3으로 올린 사건 대표사진(`legal_case.thumbnail_url`). 아직 안 올렸으면 `null`.
-- **`extraPhotos`는 배열이 아니라 `{ origin, conclusion }` 고정 자리다.** 그 역할의 사진이 없으면 그 자리는 `null`이다(예: 발단만 올렸으면 `{ "origin": {...}, "conclusion": null }`) — 배열로 내려주면 한쪽이 비었을 때 다른 쪽이 앞자리로 밀려 역할이 뒤바뀌어 보일 수 있어서다(BE-101에서 역할 칸을 둔 것과 같은 이유). A-13-6 ~ 8의 `extraPhotos`(배열, `role` 포함)와는 형태가 다르다 — 관리자 화면은 목록 · 정리가 필요해 배열로, 공개 화면은 항상 같은 자리만 보면 돼서 고정 자리로 했다.
+- `photo`는 A-13-3으로 올린 사건 대표사진(`legal_case.thumbnail_url`). 아직 안 올렸으면 규칙 주소 `/images/cases/case-{caseId}-reenact.webp`(BE-141).
+- **`extraPhotos`는 배열이 아니라 `{ origin, conclusion }` 고정 자리다.** 그 역할의 사진 행이 없으면 그 자리는 규칙 주소 `/images/cases/case-{caseId}-{origin|conclusion}.webp`에 `caption: null`이다(BE-141, 예: 발단만 올렸으면 `{ "origin": {...}, "conclusion": { "imageUrl": "/images/cases/case-1-conclusion.webp", "caption": null } }`) — 자리가 `null`이 되는 일은 없다 — 배열로 내려주면 한쪽이 비었을 때 다른 쪽이 앞자리로 밀려 역할이 뒤바뀌어 보일 수 있어서다(BE-101에서 역할 칸을 둔 것과 같은 이유). A-13-6 ~ 8의 `extraPhotos`(배열, `role` 포함)와는 형태가 다르다 — 관리자 화면은 목록 · 정리가 필요해 배열로, 공개 화면은 항상 같은 자리만 보면 돼서 고정 자리로 했다.
 - `prompt` · `s3Key` · `id` · `displayOrder` 등 내부 기록용 값은 내려주지 않는다.
 - 증거조사 `evidencePhotos`(검사 측 = 결론, 변호인 측 = 발단, FE-63)는 이 `extraPhotos.origin` · `.conclusion`을 그대로 연결해 쓴다 — 같은 사진을 두 번 받지 않는다.
-- 공용 컷(사진이 없거나 로딩 실패)으로 바꾸는 처리는 프론트가 한다(FE-63). 서버는 fallback을 내려주지 않는다.
+- 공용 컷(사진 파일이 없거나 로딩 실패)으로 바꾸는 처리는 프론트가 한다(FE-63). 서버가 내려주는 규칙 주소의 파일이 없으면 404가 나고, 이때 프론트가 공용 컷으로 바꾼다.
 - 공개(`PUBLISHED`)된 사건만 응답한다(API 16과 같은 기준).
 
 | 거절 | 조건 |

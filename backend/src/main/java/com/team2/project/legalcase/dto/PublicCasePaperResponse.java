@@ -2,6 +2,8 @@ package com.team2.project.legalcase.dto;
 
 import com.team2.project.legalcase.domain.CaseIncidentPhoto;
 import com.team2.project.legalcase.domain.CasePaper;
+import com.team2.project.legalcase.domain.CasePhotoUrls;
+import com.team2.project.legalcase.domain.IncidentPhotoRole;
 import java.util.List;
 
 /**
@@ -15,22 +17,28 @@ import java.util.List;
 public record PublicCasePaperResponse(String desk, String headline, String deck, String photo, String caption,
 		List<String> article, ExtraPhotos extraPhotos) {
 
-	public static PublicCasePaperResponse of(CasePaper paper, String photo, CaseIncidentPhoto origin,
+	public static PublicCasePaperResponse of(Long caseId, CasePaper paper, String photo, CaseIncidentPhoto origin,
 			CaseIncidentPhoto conclusion) {
-		return new PublicCasePaperResponse(paper.getDesk(), paper.getHeadline(), paper.getDeck(), photo,
-			paper.getCaption(), paper.getArticle(), ExtraPhotos.of(origin, conclusion));
+		return new PublicCasePaperResponse(paper.getDesk(), paper.getHeadline(), paper.getDeck(),
+			CasePhotoUrls.thumbnail(caseId, photo), paper.getCaption(), paper.getArticle(),
+			ExtraPhotos.of(caseId, origin, conclusion));
 	}
 
-	/** 발단(origin) · 결론(conclusion) 고정 자리. 그 역할의 사진이 없으면 그 자리는 null */
+	/**
+	 * 발단(origin) · 결론(conclusion) 고정 자리. 그 역할의 사진 행이 없으면 규칙 주소(BE-141, {@link CasePhotoUrls})를
+	 * 넣는다 — 캡션은 없다. 자리가 비는 일은 없다
+	 */
 	public record ExtraPhotos(PhotoSlot origin, PhotoSlot conclusion) {
-		static ExtraPhotos of(CaseIncidentPhoto origin, CaseIncidentPhoto conclusion) {
-			return new ExtraPhotos(PhotoSlot.from(origin), PhotoSlot.from(conclusion));
+		static ExtraPhotos of(Long caseId, CaseIncidentPhoto origin, CaseIncidentPhoto conclusion) {
+			return new ExtraPhotos(PhotoSlot.from(caseId, IncidentPhotoRole.ORIGIN, origin),
+				PhotoSlot.from(caseId, IncidentPhotoRole.CONCLUSION, conclusion));
 		}
 	}
 
 	public record PhotoSlot(String imageUrl, String caption) {
-		static PhotoSlot from(CaseIncidentPhoto photo) {
-			return photo == null ? null : new PhotoSlot(photo.getImageUrl(), photo.getCaption());
+		static PhotoSlot from(Long caseId, IncidentPhotoRole role, CaseIncidentPhoto photo) {
+			return photo == null ? new PhotoSlot(CasePhotoUrls.incident(caseId, role), null)
+				: new PhotoSlot(photo.getImageUrl(), photo.getCaption());
 		}
 	}
 }

@@ -30,7 +30,7 @@ class CasePaperApiTest extends ApiIntegrationTest {
 				.andExpect(jsonPath("$.desk").value("사회부"))
 				.andExpect(jsonPath("$.headline").value("테스트 헤드라인"))
 				.andExpect(jsonPath("$.deck").value("테스트 부제"))
-				.andExpect(jsonPath("$.photo").value((Object) null))	// thumbnail_url 미설정
+				.andExpect(jsonPath("$.photo").value("/images/cases/case-%d-reenact.webp".formatted(caseId)))	// thumbnail_url 미설정 → 규칙 주소(BE-141)
 				.andExpect(jsonPath("$.caption").value("테스트 캡션"))
 				.andExpect(jsonPath("$.article[0]").value("문단1"))
 				.andExpect(jsonPath("$.extraPhotos.origin.imageUrl").value("https://example.test/origin.jpg"))
@@ -40,8 +40,9 @@ class CasePaperApiTest extends ApiIntegrationTest {
 	}
 
 	@Test
-	void getCasePaper_missingRole_isNullNotShifted() throws Exception {
-		// 발단만 올리고 결론은 안 올린 경우 — 배열이었다면 결론이 0번 자리로 밀려 발단처럼 보일 수 있었다
+	void getCasePaper_missingRole_usesRuleAddressNotShifted() throws Exception {
+		// 발단만 올리고 결론은 안 올린 경우 — 배열이었다면 결론이 0번 자리로 밀려 발단처럼 보일 수 있었다.
+		// 없는 자리는 비우지 않고 규칙 주소를 넣는다(BE-141)
 		long caseId = insertCase("MURDER", "PUBLISHED");
 		insertCasePaper(caseId, "테스트 헤드라인");
 		insertIncidentPhoto(caseId, "ORIGIN", "https://example.test/origin.jpg", "발단 캡션");
@@ -49,18 +50,21 @@ class CasePaperApiTest extends ApiIntegrationTest {
 		mockMvc.perform(get(paperUrl(caseId)))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.extraPhotos.origin.imageUrl").value("https://example.test/origin.jpg"))
-				.andExpect(jsonPath("$.extraPhotos.conclusion").value((Object) null));
+				.andExpect(jsonPath("$.extraPhotos.conclusion.imageUrl")
+						.value("/images/cases/case-%d-conclusion.webp".formatted(caseId)))
+				.andExpect(jsonPath("$.extraPhotos.conclusion.caption").value((Object) null));
 	}
 
 	@Test
-	void getCasePaper_noExtraPhotosAtAll_bothSlotsNull() throws Exception {
+	void getCasePaper_noExtraPhotosAtAll_bothSlotsUseRuleAddress() throws Exception {
 		long caseId = insertCase("MURDER", "PUBLISHED");
 		insertCasePaper(caseId, "테스트 헤드라인");
 
 		mockMvc.perform(get(paperUrl(caseId)))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.extraPhotos.origin").value((Object) null))
-				.andExpect(jsonPath("$.extraPhotos.conclusion").value((Object) null));
+				.andExpect(jsonPath("$.extraPhotos.origin.imageUrl").value("/images/cases/case-%d-origin.webp".formatted(caseId)))
+				.andExpect(jsonPath("$.extraPhotos.conclusion.imageUrl")
+						.value("/images/cases/case-%d-conclusion.webp".formatted(caseId)));
 	}
 
 	@Test

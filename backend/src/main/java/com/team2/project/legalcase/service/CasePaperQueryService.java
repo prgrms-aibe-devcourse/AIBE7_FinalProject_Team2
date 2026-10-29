@@ -39,6 +39,6 @@ public class CasePaperQueryService {
 		CaseIncidentPhoto conclusion = incidentPhotoRepository
 			.findByLegalCaseIdAndRole(caseId, IncidentPhotoRole.CONCLUSION).orElse(null);
 
-		return PublicCasePaperResponse.of(paper, legalCase.getThumbnailUrl(), origin, conclusion);
+		return PublicCasePaperResponse.of(caseId, paper, legalCase.getThumbnailUrl(), origin, conclusion);
 	}
 }
