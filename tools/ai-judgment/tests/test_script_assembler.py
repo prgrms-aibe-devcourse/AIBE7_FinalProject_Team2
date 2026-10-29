@@ -132,6 +132,9 @@ class NormalizeTest(unittest.TestCase):
     def test_strip_line_prefix_only_with_separator(self):
         self.assertEqual(sa.strip_line_prefix("①남불: 기사 제목부터 봐요."), "기사 제목부터 봐요.")
         self.assertEqual(sa.strip_line_prefix("2. 내로 - 그날이에요."), "그날이에요.")
+        # 숫자로 시작하는 정상 대사는 자르지 않는다(소수 · 금액)
+        self.assertEqual(sa.strip_line_prefix("3.5억 원을 받았다고 해요."), "3.5억 원을 받았다고 해요.")
+        self.assertEqual(sa.strip_line_prefix("2)5천만 원이에요."), "2)5천만 원이에요.")
         self.assertEqual(sa.strip_line_prefix("내로 생각엔 이래요."), "내로 생각엔 이래요.")
 
     def test_sensitive_notice_joins_notice_flags_only(self):

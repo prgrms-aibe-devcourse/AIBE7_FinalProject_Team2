@@ -1173,6 +1173,27 @@ class PipelineTest(unittest.TestCase):
         # 증거조사 프롬프트에도 민감 가드가 들어갔다
         self.assertIn("정신", self.script_requests[4][1])
 
+    def test_load_paper_validates_configured_article(self):
+        """inputs.paper를 설정했는데 파일이 없거나 기사 형식이 아니면 멈춘다 — 조용히 무시하면 새 기사가 생성돼 1막 해설이
+        넘긴 기사와 다른 기사를 따라간다(PR #331 리뷰). 설정하지 않았으면 None."""
+        classification = {"mood": "tragic", "issue": "admitted", "victim": "punish"}
+        config = self.config(script={"enabled": True, "model": "openai:a", "full": True, "classification": classification,
+                                     "cast": {"prosecutor": "naero", "defense": "nambul"}})
+        self.assertIsNone(pipeline.load_paper(config))
+        path = self.dir / "paper.json"
+        config["inputs"]["paper"] = str(path)
+        with self.assertRaises(pipeline.PipelineError) as ctx:
+            pipeline.load_paper(config)
+        self.assertIn("파일이 없습니다", str(ctx.exception))
+        for bad in ("[1, 2]", '"문자열"', '{"headline": "", "article": ["하나"]}', "{깨진 JSON"):
+            with self.subTest(bad):
+                path.write_text(bad, encoding="utf-8")
+                with self.assertRaises(pipeline.PipelineError):
+                    pipeline.load_paper(config)
+        write_json(path, {"headline": " 제목 ", "deck": "", "caption": "설명", "article": [" 문단1 ", "문단2"]})
+        self.assertEqual(pipeline.load_paper(config), {"desk": "사회부", "headline": "제목", "deck": None,
+                                                       "caption": "설명", "article": ["문단1", "문단2"]})
+
     def test_script_full_config_requires_classification(self):
         base = {"enabled": True, "model": "openai:a", "cast": {"prosecutor": "naero", "defense": "nambul"}}
         for changes, message in (({"full": True}, "classification"), ({"full": "yes"}, "stages.script.full"),
