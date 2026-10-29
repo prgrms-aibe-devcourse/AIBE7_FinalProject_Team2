@@ -55,7 +55,7 @@ import org.springframework.security.web.util.matcher.RequestMatcher;
  *   (RequestAttributeSecurityContextRepository: 인증 정보는 그 요청 안에서만)
  * - 익명 ID 쿠키(NLNB_AID)는 지금처럼 컨트롤러가 읽는다. CSRF 토큰은 쓰지 않는다(익명 쿠키는 SameSite=Lax로 받아들인 위험, 기술 스택 3장)
  * - Authorization: Bearer가 있으면 BearerTokenAuthenticationFilter가 검증한다. 잘못됐거나 만료면 401(경로가 permitAll이어도)
- * - 지금은 모두 permitAll. 회원 전용 API를 만들 때 그 경로에 authenticated()를 추가한다
+ * - 회원 전용: 내 회원 정보(/api/v1/members/me/**, BE-139)는 authenticated() — 로그인 전이면 401. 나머지는 permitAll. 회원 전용 API를 만들 때 그 경로에 authenticated()를 추가한다
  *
  * 공통: 막힌 요청은 공통 에러 응답(JsonSecurityErrorHandler). 보안 헤더는 Spring Security 기본값 + Referrer-Policy.
  * CORS는 설정하지 않는다(프론트와 API가 같은 출처: 운영 Nginx /api 프록시, 로컬 Vite 프록시. API 명세 6장 #2).
@@ -73,6 +73,8 @@ public class SecurityConfig {
 	/** 아이디 회원가입 · 로그인. 응답이 리프레시 토큰 쿠키를 심으므로 로그인 CSRF를 Origin 검증으로 막는다 (BE-113) */
 	public static final String MEMBER_SIGNUP_PATH = "/api/v1/auth/signup";
 	public static final String MEMBER_LOGIN_PATH = "/api/v1/auth/login";
+	/** 내 회원 정보(닉네임 설정 등)는 로그인한 회원만 (BE-139) */
+	public static final String MEMBER_ME_PATTERN = "/api/v1/members/me/**";
 	private static final Set<String> SAFE_METHODS = Set.of("GET", "HEAD", "OPTIONS", "TRACE");
 
 	@Value("${server.servlet.session.cookie.secure:true}")
@@ -116,7 +118,9 @@ public class SecurityConfig {
 		ObjectProvider<AccessTokenVerifier> accessTokenVerifiers) throws Exception {
 		SecurityContextRepository requestOnly = new RequestAttributeSecurityContextRepository();
 		http
-			.authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
+			.authorizeHttpRequests(auth -> auth
+				.requestMatchers(MEMBER_ME_PATTERN).authenticated()
+				.anyRequest().permitAll())
 			.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 			.securityContext(context -> context.securityContextRepository(requestOnly))
 			.csrf(AbstractHttpConfigurer::disable)

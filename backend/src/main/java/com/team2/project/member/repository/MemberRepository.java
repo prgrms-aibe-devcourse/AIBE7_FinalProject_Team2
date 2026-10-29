@@ -10,6 +10,12 @@ import org.springframework.data.repository.query.Param;
 
 public interface MemberRepository extends JpaRepository<Member, Long> {
 
+	/** 대소문자를 구분하지 않고 이미 쓰는 닉네임인가 (uq_member_nickname과 같은 기준) */
+	boolean existsByNicknameIgnoreCase(String nickname);
+
+	/** 나를 뺀 다른 회원이 쓰는 닉네임인가 (내 닉네임의 대소문자만 바꾸는 것은 허용) */
+	boolean existsByNicknameIgnoreCaseAndIdNot(String nickname, Long id);
+
 	Optional<Member> findByProviderAndProviderUserId(AuthProvider provider, String providerUserId);
 
 	/**

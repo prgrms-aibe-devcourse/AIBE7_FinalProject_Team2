@@ -50,6 +50,7 @@
 | v1.44 | 2026-10-28 | 사건 공개 취소 (**확장 단계**, BE-118 · V34 · API 명세 v0.61) — **표 · 칸은 늘리지 않는다.** 공개 취소(A-13-14)는 `legal_case.status`를 `PUBLISHED → REVIEW`로 돌리고 `published_at`을 지운다(숨김, 행은 지우지 않는다). `admin_audit_log.action` CHECK에 `CASE_UNPUBLISH` 추가(V34, V32까지의 값을 모두 다시 나열). 같은 김에 `action` 설명을 V32까지 늘어난 값으로 갱신. |
 | v1.45 | 2026-10-29 | 수집 상태 · 도전과제 해금 기록 테이블 추가 (**확장 단계**, BE-83 · V35 · API 명세 v0.63) — `collection_item`(익명 사용자 × 종류 × 항목 id, 처음 얻은 사건 · 획득 시각 · 확인 시각) · `achievement_unlock`(익명 사용자 × 도전과제 id, 해금 시각 · 확인 시각) 신설. 두 테이블 모두 `anonymous_user` FK `ON DELETE CASCADE`. V35는 배포 시점에 이미 달성한 도전과제를 "본 것"으로 한 번 채운다. 모은 일러스트 수는 `collection_item` 행 수로 계산한다(10장 갱신). 13장 추가 |
 | v1.46 | 2026-10-29 | 프로필카드 아래 줄 설정 칸 추가 (**확장 단계**, BE-114 · V36 · API 명세 v0.65) — `profile_setting`에 `card_line`(`type` · `signature` · `job`, 기본 `type`, CHECK) · `card_level`(boolean, 기본 `false`) 칸 추가. 기존 행은 기본값. 11장 갱신 |
+| v1.49 | 2026-10-29 | 닉네임 중복 금지 (**확장 단계**, BE-139 · V39 · API 명세 v0.69) — `member`에 `uq_member_nickname`(`lower(nickname)` 유니크 인덱스, `nickname IS NOT NULL`인 행만) 추가. 칸은 그대로. 겹치던 기존 닉네임은 먼저 가입한 회원만 남기고 나머지를 NULL로 비운다 **(병합 메모) v1.48은 BE-115 커뮤니티 테이블 몫이다** |
 
 ---
 
@@ -506,7 +507,7 @@ S-03의 객관식 선택지. 범죄 유형별로 정의한다(FR-2-8).
 | provider_user_id | varchar(64) | ✓ | 공급자 회원번호(카카오 `id`, 숫자 문자열). `LOCAL`은 가입할 때 만든 **UUID** — 로그인 아이디는 여기 두지 않고 `member_password.login_id`에만 둔다 |
 | created_at | timestamptz | ✓ |  |
 | last_login_at | timestamptz |  | 마지막 로그인 성공 시각 |
-| nickname | varchar(12) |  | 표시 이름(v1.42). `LOCAL` 회원만 가입 때 채우고 카카오 회원은 NULL(화면은 "카카오 회원"). **중복 허용**(유니크 없음). 변경 API는 아직 없다 |
+| nickname | varchar(12) |  | 표시 이름(v1.42). 아이디 회원은 가입 때 채우고 카카오 회원은 NULL(커뮤니티에는 `방청객 {회원 ID}`로 보임). **중복 금지**(v1.49, 대소문자 구분 없음 — `uq_member_nickname`, NULL은 겹쳐도 된다). 설정 · 변경은 API 명세 M-7 |
 
 - `(provider, provider_user_id)` 유일(`uq_member_provider_user`). 행은 `INSERT ... ON CONFLICT DO NOTHING`으로 만들어, 같은 계정의 첫 로그인이 동시에 와도 한 행만 생긴다.
 - **카카오 회원은 개인정보를 저장하지 않는다**: 카카오 동의항목(닉네임 · 이메일 · 프로필)을 요청하지 않고 회원번호만 쓴다.
