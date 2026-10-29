@@ -26,6 +26,16 @@ class CaseDetailApiTest extends ApiIntegrationTest {
 	}
 
 	@Test
+	void getCase_storedThumbnailWinsOverRuleAddress() throws Exception {
+		long caseId = insertCase("FRAUD", "PUBLISHED");
+		jdbcTemplate.update("UPDATE legal_case SET thumbnail_url = ? WHERE id = ?", "https://example.test/thumb.jpg", caseId);
+
+		mockMvc.perform(get(caseUrl(caseId)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.thumbnailUrl").value("https://example.test/thumb.jpg"));
+	}
+
+	@Test
 	void getCase_returnsCardFieldsWithChargeAndOverview() throws Exception {
 		long caseId = insertCase("FRAUD", "PUBLISHED");
 

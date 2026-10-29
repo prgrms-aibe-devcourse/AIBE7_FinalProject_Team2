@@ -40,6 +40,21 @@ class CasePaperApiTest extends ApiIntegrationTest {
 	}
 
 	@Test
+	void getCasePaper_storedThumbnailWinsAndBlankIncidentUrlUsesRuleAddress() throws Exception {
+		long caseId = insertCase("MURDER", "PUBLISHED");
+		insertCasePaper(caseId, "테스트 헤드라인");
+		jdbcTemplate.update("UPDATE legal_case SET thumbnail_url = ? WHERE id = ?", "https://example.test/thumb.jpg", caseId);
+		insertIncidentPhoto(caseId, "ORIGIN", "", "발단 캡션");
+
+		mockMvc.perform(get(paperUrl(caseId)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.photo").value("https://example.test/thumb.jpg"))
+				// 주소가 빈 사진 행은 규칙 주소(캡션은 그대로) — 대표 사진과 같은 기준
+				.andExpect(jsonPath("$.extraPhotos.origin.imageUrl").value("/images/cases/case-%d-origin.webp".formatted(caseId)))
+				.andExpect(jsonPath("$.extraPhotos.origin.caption").value("발단 캡션"));
+	}
+
+	@Test
 	void getCasePaper_missingRole_usesRuleAddressNotShifted() throws Exception {
 		// 발단만 올리고 결론은 안 올린 경우 — 배열이었다면 결론이 0번 자리로 밀려 발단처럼 보일 수 있었다.
 		// 없는 자리는 비우지 않고 규칙 주소를 넣는다(BE-141)

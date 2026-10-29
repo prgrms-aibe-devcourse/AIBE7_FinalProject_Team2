@@ -37,8 +37,11 @@ public record PublicCasePaperResponse(String desk, String headline, String deck,
 
 	public record PhotoSlot(String imageUrl, String caption) {
 		static PhotoSlot from(Long caseId, IncidentPhotoRole role, CaseIncidentPhoto photo) {
-			return photo == null ? new PhotoSlot(CasePhotoUrls.incident(caseId, role), null)
-				: new PhotoSlot(photo.getImageUrl(), photo.getCaption());
+			// 행이 없거나 주소가 비어 있으면 규칙 주소 — 대표 사진(thumbnail)과 같은 기준이다
+			if (photo == null || photo.getImageUrl() == null || photo.getImageUrl().isBlank()) {
+				return new PhotoSlot(CasePhotoUrls.incident(caseId, role), photo == null ? null : photo.getCaption());
+			}
+			return new PhotoSlot(photo.getImageUrl(), photo.getCaption());
 		}
 	}
 }
