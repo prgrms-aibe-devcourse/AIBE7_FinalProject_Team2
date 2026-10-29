@@ -27,9 +27,9 @@ import re
 from axis_vote import escape_tag_data
 from common import read_prompt
 from script_assembler import ISSUES, MOODS, SENSITIVE_FLAGS, VICTIMS
+from validate_output import parse_output
 
 NOTICE_FLAGS = tuple(flag for flag, (_, notice) in SENSITIVE_FLAGS.items() if notice)  # 사용자에게 안내하는 플래그
-from validate_output import parse_output
 
 ISSUE_PRIORITY = ("mental_state", "defense_claim", "intent_disputed", "denied", "admitted")
 RECOVERY = ("done", "partial", "none", "unknown")
@@ -39,20 +39,31 @@ RULE_ONLY_FLAGS = ("CAPITAL_PENALTY",)
 AI_FLAGS = tuple(f for f in SENSITIVE_FLAGS if f not in RULE_ONLY_FLAGS)
 HIDDEN_STAGES = ("LAW", "SUMMARY")  # 분류에 쓰지 않는 공개 단계(양형기준 · 최종 정리)
 
-# 규칙(키워드). 부정문("학대 정황은 없다")을 가리지 못하므로 일부러 좁게 잡고, 규칙만 잡은 플래그는 확인 필요로 둔다
+# 규칙(키워드). 규칙만 잡은 플래그는 켜진 채 대본에 쓰이므로(`needsReview`는 관리자 확인용일 뿐) **오탐이 잦은 낱말은 넣지 않고
+# 모델에 맡긴다**(PR #331 jms0326 리뷰: 피고인의 "고령", "혐오감", "소년원", "교회 앞 주차장"이 플래그를 잘못 켰다).
+# - 문장 단위로 보고, 부정문("…관련이 없다", "정황은 발견되지 않았다")은 건너뛴다(`NEGATION`)
+# - 피해자 쪽 속성은 같은 문장에서 "피해" 가까이에 있을 때만 잡는다(`_victim_context`)
+_VICTIM_TRAITS = r"아동|영아|유아|발달장애|지적장애|장애인|치매|고령|노인|미성년"
+
+
+def _victim_context(traits):
+    return rf"피해[^.\n]{{0,20}}(?:{traits})|(?:{traits})[^.\n]{{0,20}}피해"
+
+
 RULE_KEYWORDS = {
-    "VULNERABLE_VICTIM": r"아동|영아|유아|발달장애|지적장애|장애인|치매|고령|노인|미성년",
+    "VULNERABLE_VICTIM": _victim_context(_VICTIM_TRAITS),
     "MENTAL_HEALTH": r"우울증|조현병|정신질환|정신과|정신감정|심신미약|심신상실|환청|망상|치료감호|공황장애",
     "SELF_HARM": r"자살|(?<![가-힣])자해|극단적 선택|목숨을 끊|사망하려|죽으려",  # "빙자해"의 "자해"는 빼려고 앞 글자를 본다
     "PROFANITY_QUOTED": r"욕설|모욕",
-    "NATIONALITY_RELIGION": r"국적|외국인|종교|예배|교회|성당|사찰|헌금",
+    "NATIONALITY_RELIGION": r"국적|외국인|종교|예배|성당|사찰|헌금",  # "교회"는 일반 장소(교회 앞 주차장)에도 걸려 뺀다. 교회 헌금 사건은 "헌금"이 잡는다
     "OVERSEAS": r"해외|국외",
     "SEXUAL_OFFENSE": r"강간|강제추행|성폭력|성범죄|성매매|불법촬영|추행",
     "DOMESTIC_VIOLENCE": r"가정폭력|아동학대|스토킹|데이트폭력",
-    "JUVENILE_DEFENDANT": r"소년|미성년자인 피고인",  # "10대"는 피해자 나이 · 성인 10대 후반에도 걸려 모델에 맡긴다
+    "JUVENILE_DEFENDANT": r"소년법|소년부|미성년자인 피고인",  # "소년원 송치 전력"은 미성년 피고인이라는 뜻이 아니다. "10대"는 모델에 맡긴다
     "SUBSTANCE": r"마약|필로폰|대마|향정신성|마약류",
-    "HATE_CRIME": r"혐오|차별",
+    "HATE_CRIME": r"혐오 범죄|혐오 표현|혐오를 이유|차별을 이유|인종 차별",  # "혐오감을 주는 말"은 잡지 않는다
 }
+NEGATION = r"없다|없었다|없는|않았다|않는다|아니다|확인되지|발견되지|인정되지|관련이 없|무관"
 CAPITAL_PATTERN = r"사형|무기"
 
 
@@ -120,9 +131,10 @@ def rule_flags(case):
     """규칙으로 잡은 플래그 → 맞은 낱말 목록. 사형 · 무기형은 법정형 문구로 정한다."""
     sections, factors = case_text_parts(case)
     text = "\n".join([case.get("overview") or "", *(s["content"] for s in sections), *(f["label"] for f in factors)])
+    sentences = [x for x in re.split(r"(?<=[.다])\s+|\n", text) if x.strip() and not re.search(NEGATION, x)]
     hits = {}
     for flag, pattern in RULE_KEYWORDS.items():
-        found = sorted(set(re.findall(pattern, text)))
+        found = sorted({m.group(0) for sentence in sentences for m in re.finditer(pattern, sentence)})
         if found:
             hits[flag] = found
     capital = sorted(set(re.findall(CAPITAL_PATTERN, case.get("statutoryPenaltyText") or "")))

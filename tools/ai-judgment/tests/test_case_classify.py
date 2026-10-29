@@ -12,7 +12,7 @@ TOOL_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(TOOL_DIR))
 
 import case_classify as cc  # noqa: E402
-from script_assembler import classification_errors  # noqa: E402
+from script_assembler import ISSUES, classification_errors  # noqa: E402
 
 CASE = {
     "title": "가상 사건", "chargeName": "살인", "statutoryPenaltyText": "사형, 무기 또는 5년 이상의 징역",
@@ -92,6 +92,31 @@ class RuleTest(unittest.TestCase):
         self.assertNotIn("VULNERABLE_VICTIM", hits)  # LAW 섹션의 "아동"은 보지 않는다
         self.assertNotIn("OVERSEAS", hits)  # LAW 요소의 "해외"도 보지 않는다
         self.assertIn("SELF_HARM", cc.rule_flags({**CASE, "overview": "범행 뒤 자해하면서 도주했다."}))
+
+
+    def test_rule_does_not_flag_common_false_positives(self):
+        """규칙만 잡은 플래그는 켜진 채 대본에 쓰인다 — 흔한 판결문 표현이 안내 대상을 잘못 켜면 안 된다(PR #331 jms0326 리뷰)."""
+        for text, flag in (("피고인은 고령으로 건강이 좋지 않다는 점을 참작해 달라고 주장한다.", "VULNERABLE_VICTIM"),  # 피고인의 고령
+                           ("피해자에게 혐오감을 주는 말을 반복했다.", "HATE_CRIME"),
+                           ("학대 정황은 발견되지 않았고 성범죄와는 관련이 없다.", "SEXUAL_OFFENSE"),  # 부정문
+                           ("피고인은 소년원 송치 전력이 있다.", "JUVENILE_DEFENDANT"),
+                           ("피고인은 교회 앞 주차장에서 피해자를 기다렸다.", "NATIONALITY_RELIGION")):
+            with self.subTest(text):
+                self.assertNotIn(flag, cc.rule_flags({"overview": text, "sections": [], "factors": []}))
+
+    def test_rule_still_flags_real_cases(self):
+        for text, flag in (("피해자는 고령의 노인이었다.", "VULNERABLE_VICTIM"), ("피해 아동은 발달장애가 있었다.", "VULNERABLE_VICTIM"),
+                           ("피고인은 교회 헌금함을 훔쳤다.", "NATIONALITY_RELIGION"), ("혐오 표현을 반복했다.", "HATE_CRIME"),
+                           ("소년법에 따라 처리됐다.", "JUVENILE_DEFENDANT"), ("피고인은 자살을 시도했다.", "SELF_HARM")):
+            with self.subTest(text):
+                self.assertIn(flag, cc.rule_flags({"overview": text, "sections": [], "factors": []}))
+
+
+class IssueTest(unittest.TestCase):
+    def test_issue_priority_covers_all_issues(self):
+        # 쟁점이 늘면(예: "죄명 다툼" 후속) 우선순위에도 넣어야 한다. 빠지면 pick_issue가 StopIteration으로 분류 단계를 멈춘다
+        self.assertEqual(set(cc.ISSUE_PRIORITY), set(ISSUES))
+        self.assertEqual(len(cc.ISSUE_PRIORITY), len(ISSUES))
 
 
 class AggregateTest(unittest.TestCase):
