@@ -1123,6 +1123,93 @@ class PipelineTest(unittest.TestCase):
         self.assertIn("검사", self.script_requests[0][1])
         self.assertIn("변호인", self.script_requests[3][1])
 
+    def test_script_stage_full_writes_script_beside_evidence(self):
+        """BE-121: full이면 U0 · U2 · U3 · U4를 만들어 script.json을 쓴다. evidence.json(BE-108 적재 계약)은 그대로 둔다.
+        기사(inputs.paper)가 없으면 대본 단계가 기사를 먼저 만들고 1막 해설까지 만든다."""
+        classification = {"mood": "impulsive", "issue": "admitted", "victim": "punish", "thirdParty": False,
+                          "sensitiveFlags": ["MENTAL_HEALTH"]}
+        config = self.config(generate={"models": ["openai:a"], "runs": 1},
+                             script={"enabled": True, "model": "openai:a", "full": True, "classification": classification,
+                                     "cast": {"prosecutor": "nambul", "defense": "naero"}})
+        design = {"plea": "인정", "issues": ["경위", "행동", "회복"],
+                  "questions": [{"q": "질문 1입니까?", "a": "아니요"}, {"q": "질문 2입니까?", "a": "예"},
+                                {"q": "공소사실을 인정합니까?", "a": "예"}]}
+        opening = {"indict": ["공소사실을 말씀드리겠습니다.", "적용 법조입니다."], "plea": ["인정합니다.", "살펴 주십시오."],
+                   "issues_narr": ["쟁점이에요.", "눈여겨보세요."],
+                   "questions": [{"q": "질문 1입니까?", "a": "아니요"}, {"q": "질문 2입니까?", "a": "네"}],
+                   "cards": {"indict": {"ul": ["요약"], "law": "법조"}, "plea": {"b": "인정", "ul": ["주장"]},
+                             "issues": {"p": "정리", "ul": ["쟁점"]}}}
+        closing = {"prosecutor": "검사 측 의견입니다.", "defense": "변호인 측 최종변론입니다."}
+        evidence_lines = [f"증거 대사 {i}입니다." for i in range(6)]
+        paper = {"headline": "제목", "deck": "부제", "caption": "설명", "article": ["문단1", "문단2"]}
+        intro = {"lines": ["하나예요.", "둘이에요.", "셋이에요.", "넷이에요.", "다섯이에요."]}
+        answers = [json.dumps(v, ensure_ascii=False) for v in (paper, design, intro, opening)] + evidence_lines \
+            + [json.dumps(closing, ensure_ascii=False)]
+        state = self.run_with(config, {"openai:a": [self.output]}, until="script", script_answers=answers)
+        outputs = state["stages"]["script"]["outputs"]
+        self.assertTrue(outputs["publishable"])  # 증거조사는 다 만들었다
+        self.assertEqual(outputs["pending"], [])
+        self.assertTrue(outputs["scriptPublishable"])
+        evidence_data = load_json(outputs["evidenceFile"])
+        self.assertEqual([e["text"] for e in evidence_data["evidence"]], evidence_lines)
+        script = load_json(outputs["scriptFile"])
+        self.assertEqual(sorted(script["acts"]), ["1a", "2", "3"])
+        self.assertEqual(script["paper"]["headline"], "제목")
+        self.assertEqual(script["sensitiveNotice"], "이 사건에는 정신건강과 관련된 내용이 나와요.")
+        self.assertEqual(script["acts"]["2"]["look"], {"nambul": "role:prosecutor", "naero": "role:defense"})
+        # 증거조사 프롬프트에도 민감 가드가 들어갔다
+        self.assertIn("정신", self.script_requests[4][1])
+
+    def test_load_paper_validates_configured_article(self):
+        """inputs.paper를 설정했는데 파일이 없거나 기사 형식이 아니면 멈춘다 — 조용히 무시하면 새 기사가 생성돼 1막 해설이
+        넘긴 기사와 다른 기사를 따라간다(PR #331 리뷰). 설정하지 않았으면 None."""
+        classification = {"mood": "tragic", "issue": "admitted", "victim": "punish"}
+        config = self.config(script={"enabled": True, "model": "openai:a", "full": True, "classification": classification,
+                                     "cast": {"prosecutor": "naero", "defense": "nambul"}})
+        self.assertIsNone(pipeline.load_paper(config))
+        path = self.dir / "paper.json"
+        config["inputs"]["paper"] = str(path)
+        with self.assertRaises(pipeline.PipelineError) as ctx:
+            pipeline.load_paper(config)
+        self.assertIn("파일이 없습니다", str(ctx.exception))
+        for bad in ("[1, 2]", '"문자열"', '{"headline": "", "article": ["하나"]}', "{깨진 JSON"):
+            with self.subTest(bad):
+                path.write_text(bad, encoding="utf-8")
+                with self.assertRaises(pipeline.PipelineError):
+                    pipeline.load_paper(config)
+        write_json(path, {"headline": " 제목 ", "deck": "", "caption": "설명", "article": [" 문단1 ", "문단2"]})
+        self.assertEqual(pipeline.load_paper(config), {"desk": "사회부", "headline": "제목", "deck": None,
+                                                       "caption": "설명", "article": ["문단1", "문단2"]})
+
+    def test_bad_paper_input_keeps_previous_script_output(self):
+        """inputs.paper 검증은 이전 결과를 지우기 전에 한다 — 입력 오류가 지난 evidence.json을 날리면 안 된다(PR #329 CodeRabbit 리뷰)."""
+        cast = {"prosecutor": "naero", "defense": "nambul"}
+        config = self.config(generate={"models": ["openai:a"], "runs": 1},
+                             script={"enabled": True, "model": "openai:a", "cast": cast})
+        state = self.run_with(config, {"openai:a": [self.output]}, until="script",
+                              script_answers=[f"증거 대사 {i}입니다." for i in range(6)])
+        evidence_file = Path(state["stages"]["script"]["outputs"]["evidenceFile"])
+        self.assertTrue(evidence_file.exists())
+        classification = {"mood": "tragic", "issue": "admitted", "victim": "punish"}
+        full = self.config(generate={"models": ["openai:a"], "runs": 1},
+                           script={"enabled": True, "model": "openai:a", "full": True, "classification": classification, "cast": cast})
+        full["inputs"]["paper"] = str(self.dir / "missing-paper.json")
+        with self.assertRaises(pipeline.PipelineError):
+            pipeline.stage_script(full, pipeline.load_state(full), self.logs.append)
+        self.assertTrue(evidence_file.exists())  # 지난 결과가 남아 있다
+
+    def test_script_full_config_requires_classification(self):
+        base = {"enabled": True, "model": "openai:a", "cast": {"prosecutor": "naero", "defense": "nambul"}}
+        for changes, message in (({"full": True}, "classification"), ({"full": "yes"}, "stages.script.full"),
+                                 ({"full": True, "classification": {"mood": "x", "issue": "admitted", "victim": "punish"}},
+                                  "classification.mood"),
+                                 ({"unitTimeout": 0}, "stages.script.unitTimeout")):
+            with self.subTest(changes):
+                with self.assertRaises(pipeline.PipelineError) as ctx:
+                    self.config(script={**base, **changes})
+                self.assertIn(message, str(ctx.exception))
+        self.config(script={**base, "full": True, "classification": {"mood": "tragic", "issue": "admitted", "victim": "punish"}})
+
     def test_script_stage_marks_not_publishable_when_quota_exhausted(self):
         config = self.config(generate={"models": ["openai:a"], "runs": 1},
                              script={"enabled": True, "model": "openai:a",
@@ -1757,12 +1844,12 @@ class PipelineTest(unittest.TestCase):
         return [line for line in self.logs if line.startswith(("주의", "무료 등급", "⚠"))]
 
     def test_free_tier_notice_for_judgment_stages_is_strong(self):
-        config = self.config(extract={"enabled": True, "model": ["claude-opus-5-5", "gemini:gemini-2.5-flash"]},
+        config = self.config(extract={"enabled": True, "model": ["claude-opus-5-5", "gemini:gemini-3.5-flash"]},
                              court={"enabled": True, "model": "gemini:gemini-3.1-pro-preview"})
         notices = self.run_notices(config, until="court")
         self.assertEqual(len(notices), 1)  # court 모델은 무료 등급이 없는 모델이라 안내가 없다
         self.assertIn("비식별화", notices[0])
-        self.assertIn("gemini:gemini-2.5-flash", notices[0])
+        self.assertIn("gemini:gemini-3.5-flash", notices[0])
         self.assertIn("유료 키", notices[0])
         self.assertNotIn("claude-opus-5-5", notices[0])
 

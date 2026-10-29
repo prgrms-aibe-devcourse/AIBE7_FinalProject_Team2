@@ -107,6 +107,10 @@
   `balanceWarning`을 담는다. `publishable`이 `false`면 생성 실패 · 호출 한도 중단으로 **증거 카드와 대사가
   1:1로 어긋난** 상태다 — 적재는 되지만 관리자가 승인할 수 없다(BE-108). 컨테이너 안 경로(`evidenceFile`)는
   내보내지 않는다(가치관 축의 `votesFile`과 같은 이유).
+- 대본 전체(1막 해설 · 2막 재판 · 3막 의견, BE-121)까지 만들려면 `stages.script.full = true`와 `classification`
+  (분위기 · 쟁점 · 피해자 측 · 부가 인물 · 민감 플래그)을 함께 보낸다. 1막 신문 기사도 이 단계가 먼저 만든다. 그러면
+  `result.script`에 `fullScript`(case-1 형식 대본 · `paper` 기사 포함) · `pending`(만들지 못한 단위) · `scriptPublishable`이 더해진다. 컨테이너 안 경로(`scriptFile`)는 내보내지 않는다.
+  적재(`case_script` 확장)는 BE-126이라 지금 백엔드는 `fullScript`를 읽지 않는다.
   `load`는 여기서 켜도 되돌려 끈다.
 
 상태 값:
