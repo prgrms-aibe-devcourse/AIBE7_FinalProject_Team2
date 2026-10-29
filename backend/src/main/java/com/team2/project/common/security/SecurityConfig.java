@@ -33,7 +33,6 @@ import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.web.csrf.CsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
-import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy;
 import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 import org.springframework.security.web.util.matcher.OrRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
@@ -75,7 +74,6 @@ public class SecurityConfig {
 	public static final String MEMBER_SIGNUP_PATH = "/api/v1/auth/signup";
 	public static final String MEMBER_LOGIN_PATH = "/api/v1/auth/login";
 	private static final Set<String> SAFE_METHODS = Set.of("GET", "HEAD", "OPTIONS", "TRACE");
-	private static final ReferrerPolicy REFERRER_POLICY = ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN;
 
 	@Value("${server.servlet.session.cookie.secure:true}")
 	private boolean secureCookie;
@@ -98,7 +96,7 @@ public class SecurityConfig {
 				.csrfTokenRepository(adminCsrfTokenRepository)
 				.csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
 				.requireCsrfProtectionMatcher(stateChanging()))
-			.headers(headers -> headers.referrerPolicy(referrer -> referrer.policy(REFERRER_POLICY)))
+			.headers(SecurityHeaders::apply)
 			.formLogin(AbstractHttpConfigurer::disable)
 			.httpBasic(AbstractHttpConfigurer::disable)
 			.logout(AbstractHttpConfigurer::disable)
@@ -122,7 +120,7 @@ public class SecurityConfig {
 			.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 			.securityContext(context -> context.securityContextRepository(requestOnly))
 			.csrf(AbstractHttpConfigurer::disable)
-			.headers(headers -> headers.referrerPolicy(referrer -> referrer.policy(REFERRER_POLICY)))
+			.headers(SecurityHeaders::apply)
 			.formLogin(AbstractHttpConfigurer::disable)
 			.httpBasic(AbstractHttpConfigurer::disable)
 			.logout(AbstractHttpConfigurer::disable)

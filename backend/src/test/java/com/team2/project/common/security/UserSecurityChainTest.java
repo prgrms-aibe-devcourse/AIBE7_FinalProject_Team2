@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -105,6 +106,23 @@ class UserSecurityChainTest extends ApiIntegrationTest {
 	}
 
 	// ---- 사용자 체인 ----
+
+	@Test
+	@DisplayName("https 요청이어도 백엔드는 HSTS를 붙이지 않는다 — 운영 Nginx가 한 값으로 붙인다 (COMMON-67). 다른 보안 헤더는 그대로")
+	void secureRequest_noHsts_otherHeadersKept() throws Exception {
+		// 사용자 체인
+		mockMvc.perform(get(WHOAMI).secure(true))
+			.andExpect(status().isOk())
+			.andExpect(header().doesNotExist("Strict-Transport-Security"))
+			.andExpect(header().string("Referrer-Policy", REFERRER))
+			.andExpect(header().string("X-Content-Type-Options", "nosniff"))
+			.andExpect(header().string("X-Frame-Options", "DENY"));
+		// 관리자 체인 (CSRF 토큰 발급은 로그인 없이 열린 경로)
+		mockMvc.perform(get(SecurityConfig.CSRF_PATH).secure(true))
+			.andExpect(header().doesNotExist("Strict-Transport-Security"))
+			.andExpect(header().string("Referrer-Policy", REFERRER));
+		// 카카오 로그인 체인은 client-id가 있어야 켜져 KakaoOAuthFlowTest가 확인한다 (PR #337 리뷰)
+	}
 
 	@Test
 	void noToken_anonymous_noSession_referrerPolicy() throws Exception {
