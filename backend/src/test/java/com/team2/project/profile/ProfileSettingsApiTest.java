@@ -62,7 +62,9 @@ class ProfileSettingsApiTest extends ApiIntegrationTest {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.profileSettings.shownCard").value("current"))
 			.andExpect(jsonPath("$.profileSettings.profileCardType").value("current"))
-			.andExpect(jsonPath("$.profileSettings.bio").value(""));
+			.andExpect(jsonPath("$.profileSettings.bio").value(""))
+			.andExpect(jsonPath("$.profileSettings.cardLine").value("type"))
+			.andExpect(jsonPath("$.profileSettings.cardLevel").value(false));
 		mockMvc.perform(get(MY_PAGE))
 			.andExpect(jsonPath("$.profileSettings.shownCard").value("current"))
 			.andExpect(jsonPath("$.profileSettings.bio").value(""));
@@ -113,6 +115,27 @@ class ProfileSettingsApiTest extends ApiIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("P-8: cardLine · cardLevel을 저장하고 다른 칸은 그대로 둔다. 마이페이지에도 보인다")
+	void patch_cardLine_cardLevel() throws Exception {
+		Cookie cookie = newUser();
+		patchSettings(cookie, "{\"bio\":\"판결은 신중하게\"}").andExpect(status().isOk());
+		patchSettings(cookie, "{\"cardLine\":\"job\"}")
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.cardLine").value("job"))
+			.andExpect(jsonPath("$.cardLevel").value(false))
+			.andExpect(jsonPath("$.bio").value("판결은 신중하게"));
+		patchSettings(cookie, "{\"cardLevel\":true}")
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.cardLine").value("job"))
+			.andExpect(jsonPath("$.cardLevel").value(true));
+
+		mockMvc.perform(get(MY_PAGE).cookie(cookie))
+			.andExpect(jsonPath("$.profileSettings.cardLine").value("job"))
+			.andExpect(jsonPath("$.profileSettings.cardLevel").value(true));
+		assertThat(countSettings(cookie)).isEqualTo(1);
+	}
+
+	@Test
 	@DisplayName("P-8: 형식이 틀리면 400 VALIDATION_ERROR이고 아무것도 저장하지 않는다")
 	void patch_invalid_rejected() throws Exception {
 		Cookie cookie = newUser();
@@ -123,6 +146,12 @@ class ProfileSettingsApiTest extends ApiIntegrationTest {
 			"{\"profileCardType\":null}",				// null은 "보내지 않음"과 다르다
 			"{\"shownCard\":1}",						// 문자열이 아님
 			"{\"bio\":null}",
+			"{\"cardLine\":\"level\"}",				// 모르는 값
+			"{\"cardLine\":null}",
+			"{\"cardLine\":1}",
+			"{\"cardLevel\":\"true\"}",				// boolean이 아님
+			"{\"cardLevel\":1}",
+			"{\"cardLevel\":null}",
 			"{\"bio\":\"" + "가".repeat(41) + "\"}",	// 41자
 			"{\"bio\":\"첫 줄\\n둘째 줄\"}",			// 줄바꿈
 			"{\"bio\":\"a\\u0000b\"}",				// NUL(DB에 저장할 수 없어 500이 나던 값)

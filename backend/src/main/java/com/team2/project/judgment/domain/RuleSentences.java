@@ -40,7 +40,7 @@ public record RuleSentences(List<String> common, List<String> differences) {
 		String onlyMeMissed = joinTags(matrix, MatrixCategory.ONLY_ME_MISSED, null);
 		if (!onlyMeMissed.isEmpty()) {
 			differences.add("AI와 재판부는 " + onlyMeMissed + KoreanParticle.objectParticle(onlyMeMissed)
-				+ " 고려했지만, 내 판결에서는 고려하지 않았어요.");
+				+ " 고려했고, 내 판결에는 들어가지 않았어요.");
 		}
 		String diverged = joinTags(matrix, MatrixCategory.DIVERGED, null);
 		if (!diverged.isEmpty()) {

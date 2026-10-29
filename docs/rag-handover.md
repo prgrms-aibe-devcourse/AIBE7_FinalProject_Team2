@@ -249,7 +249,7 @@ python3 rag_store.py sql --out $P/work/rag-store --candidates $P/work/BE-50-prec
 - [x] LBox 행 삭제(5-1, BE-54) — 운영 DB에는 지금 R__40(53건)을 반영한다
 - [x] 양형기준 R__41 반영 — **V13 다음에** 들어가야 한다. 같은 (`crime_category`, `version_name`) 버전이 이미 두 번 있는 DB면 V13 유니크 추가가 실패하므로 먼저 정리한다 — **10/19 운영 반영**(237건, 새 DB라 중복 버전 없음)
 - [x] pgvector 확장(지금 운영, Docker): `pgvector/pgvector:pg17` 이미지라 따로 할 일 없음 — 10/19 R__40 · R__41 적용으로 확인
-- [x] pgvector 확장(7.1.2 RDS 전환 때): 앱 계정에는 `rds_superuser`를 주지 않는다(PR #199 리뷰). 마스터(관리자) 계정으로 대상 DB에 `CREATE EXTENSION IF NOT EXISTS vector;`를 **먼저** 실행해 둔다 — 그러면 V11의 같은 문장은 이미 있는 확장이라 권한 없이 넘어간다. 대상 RDS PostgreSQL 버전에서 `vector`가 허용(`rds.allowed_extensions`) · trusted 확장인지 먼저 확인한다. 앱 계정(Flyway 겸용)에는 그 DB · 스키마의 테이블 생성 · 변경 · 읽기 · 쓰기 권한만 준다 — **10/28 RDS 전환에서 적용**(V11 · R__40 · R__41이 들어간 것으로 확인)
+- [x] pgvector 확장(7.1.2 RDS 전환 때): 앱 계정에는 `rds_superuser`를 주지 않는다(PR #199 리뷰). 마스터(관리자) 계정으로 대상 DB에 `CREATE EXTENSION IF NOT EXISTS vector;`를 **먼저** 실행해 둔다 — 그러면 V11의 같은 문장은 이미 있는 확장이라 권한 없이 넘어간다. 대상 RDS PostgreSQL 버전에서 `vector`가 허용(`rds.allowed_extensions`) · trusted 확장인지 먼저 확인한다. 앱 계정(Flyway 겸용)에는 DB의 `CONNECT · TEMP` 권한을 주고 `public` 스키마 주인을 앱 계정으로 바꾼다(실제 명령은 `deploy/README.md` "RDS 전환") — **10/28 RDS 전환에서 적용**(V11 · R__40 · R__41이 들어간 것으로 확인)
 - [x] 비공개 시드 적용 여부와 방식(COMMON-17) — 서버에 비공개 저장소 `seed/`를 읽기 전용 Deploy key로 받아(공개 `main`의 서브모듈 커밋으로 고정) 컨테이너에 읽기 전용으로 연결(`deploy/README.md` "운영 데이터", `docs/decisions/COMMON-17.md`). 10/19 R__40 · R__41 포함 적용
 - [ ] RAG를 켤 거면 `GEMINI_API_KEY` 주입(없으면 RAG만 꺼진 채 정상 기동) — 10/28 운영 파이프라인 컨테이너에는 Gemini 키가 연결됐지만, 서비스 경로의 rag 단계는 로컬 DB 전용이라 꺼져 있다(`2026-10-23` M3 확인, COMMON-50 "추후 재검토"). 운영에서 RAG를 켤지는 팀 결정 대기
 

@@ -34,15 +34,28 @@ DEFAULT_JOBS_DIR = TOOL_DIR / "out" / "jobs"
 #   cases/job-<id>.case.json · .court_judgment_internal.json · .report.json
 #   out/runs/job-<id>-<해시>/            ← generate 회차 결과 (pipeline.py RUNS_DIR)
 # out/pipeline/job-<id>/ (state · references · contamination · axis)는 state_path로 따로 지운다
+def _classify_result(classify):
+    """사건 분류 결과(BE-123)를 **내용으로** 돌려준다. 축 투표와 같은 이유로 `classificationFile` 경로는 빼고 파일의
+    표 · 플래그 근거(votes · flags · recovery)를 넣는다. 적재(legal_case 민감 플래그 컬럼)는 BE-125다."""
+    if not classify:
+        return None
+    data = _read_json(Path(classify["classificationFile"])) if classify.get("classificationFile") else None
+    result = {key: value for key, value in classify.items() if key != "classificationFile"}
+    for key in ("votes", "flags", "recovery"):
+        if data and key in data:
+            result[key] = data[key]
+    return result
+
+
 ARTIFACT_DIRS = ("cases", "out/runs")
 
 # 파이프라인 단계 순서 (pipeline.py STAGES와 같아야 한다)
-STAGES = ("extract", "court", "contamination", "rag", "generate", "select", "axis", "script", "load")
+STAGES = ("extract", "court", "contamination", "rag", "generate", "select", "axis", "classify", "script", "load")
 
-# pipeline.py에서 **기본값이 꺼짐**인 단계 (pipeline.py DEFAULT_CONFIG의 stages.script.enabled = False).
+# pipeline.py에서 **기본값이 꺼짐**인 단계 (pipeline.py DEFAULT_CONFIG의 stages.script · classify.enabled = False).
 # 나머지 단계는 설정에 없으면 돈다는 뜻이라, 이 목록을 따로 두지 않으면 요청하지 않은 대본 단계가
 # 영영 PENDING으로 남아 끝난 작업이 FAILED로 보인다 (BE-108에서 script를 STAGES에 넣으며 드러났다)
-DEFAULT_OFF_STAGES = ("script",)
+DEFAULT_OFF_STAGES = ("classify", "script")
 
 # 작업 상태 (API 명세 A-15와 같은 값)
 QUEUED, RUNNING, SUCCEEDED, FAILED = "QUEUED", "RUNNING", "SUCCEEDED", "FAILED"
@@ -225,15 +238,20 @@ def _script_result(script):
     없고 증거 파일에만 있어서, 여기서 올려 주지 않으면 적재가 읽을 값이 사라진다(PR #300 리뷰).
     나머지(`stopped` · `model` · `cast` · `balanceWarning` · `publishable`)는 **단계 산출물 쪽이 맞다** —
     증거 파일에는 `stopped`가 아예 없어서 파일에서 가져오면 항상 false가 된다.
+
+    대본 전체(BE-121, `stages.script.full`)를 만들었으면 `scriptFile`도 같은 이유로 경로를 빼고 내용을
+    `fullScript`로 넣는다. 적재(`case_script` 확장)는 BE-126이다 — 그전까지 백엔드는 이 값을 읽지 않는다.
     """
     if not script:
         return None
     data = _read_json(Path(script["evidenceFile"])) if script.get("evidenceFile") else None
-    result = {key: value for key, value in script.items() if key != "evidenceFile"}
+    result = {key: value for key, value in script.items() if key not in ("evidenceFile", "scriptFile")}
     result["evidence"] = (data or {}).get("evidence") or []
     created_at = (data or {}).get("createdAt")
     if created_at:
         result["createdAt"] = created_at
+    if script.get("scriptFile"):
+        result["fullScript"] = _read_json(Path(script["scriptFile"]))
     return result
 
 
@@ -548,6 +566,7 @@ class JobStore:
             "selection": {k: selection.get(k) for k in ("modelSpec", "runIndex", "strategy", "reason", "warnings")}
             if selection else None,
             "axis": _axis_result(outputs.get("axis") or {}),
+            "classify": _classify_result(outputs.get("classify") or {}),
             # 대본은 안 돌렸으면 None이다. 사건 · 판결만 있으면 적재는 그대로 되고, 대본은 나중에 들어와도 된다(BE-108)
             "script": _script_result(outputs.get("script") or {}),
         }

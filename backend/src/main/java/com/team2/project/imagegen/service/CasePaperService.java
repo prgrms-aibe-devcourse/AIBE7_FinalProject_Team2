@@ -10,6 +10,7 @@ import com.team2.project.imagegen.ImageGenException;
 import com.team2.project.legalcase.domain.CasePaper;
 import com.team2.project.legalcase.domain.Factor;
 import com.team2.project.legalcase.domain.LegalCase;
+import com.team2.project.legalcase.domain.RevealStage;
 import com.team2.project.legalcase.repository.CasePaperRepository;
 import com.team2.project.legalcase.repository.FactorRepository;
 import java.util.List;
@@ -68,7 +69,10 @@ public class CasePaperService {
 	}
 
 	private String buildInstruction(LegalCase legalCase) {
-		String factorText = factorRepository.findAllByCaseId(legalCase.getId()).stream()
+		// 1막 시점에 공개된 개요(OVERVIEW) 요소만 쓴다. 상세 · 주장 · 양형기준(LAW) 요소를 넣으면 공개 전 사실과 권고형이
+		// 기사에 실리고, 기사를 따라 말하는 1막 해설까지 판결 입력 전 앵커링이 된다(BE-127). 파이프라인의 기사 생성
+		// (tools/ai-judgment/script_assembler.py PAPER)과 같은 기준이다
+		String factorText = factorRepository.findAllByCaseIdAndRevealStage(legalCase.getId(), RevealStage.OVERVIEW).stream()
 			.map(Factor::getLabel)
 			.collect(Collectors.joining(" / "));
 		return "다음 사건을 메인 화면 신문 지면에 실으려고 해. 아래 JSON 형식으로만 응답해줘(다른 설명 없이 JSON만,"

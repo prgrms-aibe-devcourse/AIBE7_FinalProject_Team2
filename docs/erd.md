@@ -48,6 +48,8 @@
 | v1.42 | 2026-10-27 | 아이디 회원 추가 (**확장 단계**, BE-113 · V33 · API 명세 v0.58) — `member.provider`에 `LOCAL` 허용(CHECK `ck_member_provider` 변경), `member.nickname`(NULL 허용, 카카오 회원은 NULL) 추가, `member_password` 신설(회원 1 : 0..1, 소문자 로그인 아이디 유일 · 일방향 비밀번호 해시). 아이디 회원의 `provider_user_id`는 UUID. 카카오 회원 행 · 기존 조회는 바뀌지 않는다 |
 | v1.43 | 2026-10-28 | 형벌 규칙 계산 기준 정리 (BE-117) — `penalty_rule`의 `statutory_max`를 "범행 당시 개별 처벌조항 + 형법 총칙을 반영한 가중 · 감경 전 법정형 상한"으로, `allowed_min` · `allowed_max`를 "가능한 감경 경로들의 합집합"(필요적 감경은 항상, 임의적 감경은 적용 · 미적용 모두)으로 정의. 정수 개월 하한 올림, 신 · 구법 확인, `statutory_max`와 `allowed_max`는 따로 검수. 스키마 변경 없음 |
 | v1.44 | 2026-10-28 | 사건 공개 취소 (**확장 단계**, BE-118 · V34 · API 명세 v0.61) — **표 · 칸은 늘리지 않는다.** 공개 취소(A-13-14)는 `legal_case.status`를 `PUBLISHED → REVIEW`로 돌리고 `published_at`을 지운다(숨김, 행은 지우지 않는다). `admin_audit_log.action` CHECK에 `CASE_UNPUBLISH` 추가(V34, V32까지의 값을 모두 다시 나열). 같은 김에 `action` 설명을 V32까지 늘어난 값으로 갱신. |
+| v1.45 | 2026-10-29 | 수집 상태 · 도전과제 해금 기록 테이블 추가 (**확장 단계**, BE-83 · V35 · API 명세 v0.63) — `collection_item`(익명 사용자 × 종류 × 항목 id, 처음 얻은 사건 · 획득 시각 · 확인 시각) · `achievement_unlock`(익명 사용자 × 도전과제 id, 해금 시각 · 확인 시각) 신설. 두 테이블 모두 `anonymous_user` FK `ON DELETE CASCADE`. V35는 배포 시점에 이미 달성한 도전과제를 "본 것"으로 한 번 채운다. 모은 일러스트 수는 `collection_item` 행 수로 계산한다(10장 갱신). 13장 추가 |
+| v1.46 | 2026-10-29 | 프로필카드 아래 줄 설정 칸 추가 (**확장 단계**, BE-114 · V36 · API 명세 v0.65) — `profile_setting`에 `card_line`(`type` · `signature` · `job`, 기본 `type`, CHECK) · `card_level`(boolean, 기본 `false`) 칸 추가. 기존 행은 기본값. 11장 갱신 |
 
 ---
 
@@ -1034,11 +1036,11 @@ erDiagram
 | updated_at | timestamptz | ✓ | 마지막 저장 시각(기본값 `now()`). 로그인 이관 때 가장 최근 꾸미기를 고르는 기준 |
 
 - **값 목록 · 잠금은 서버 코드(`ProfileDecoCatalog`)가 검사한다.** 도전과제 · 보상 표가 아직 임시안이라 CHECK 제약을 두지 않는다(표가 바뀔 때마다 마이그레이션이 필요해지지 않게).
-- **도전과제 진행도는 저장하지 않는다.** 완료한 사건 수(`experience`) · 성향 테스트 여부(`personality_result`) · 출석 일수(`attendance`, 9장)로 그때그때 계산한다. 모은 일러스트 수는 BE-83 전까지 계산하지 않는다.
+- **도전과제 진행도는 저장하지 않는다.** 완료한 사건 수(`experience`) · 성향 테스트 여부(`personality_result`) · 출석 일수(`attendance`, 9장) · 모은 일러스트 수(`collection_item` 행 수, 13장 · v1.45)로 그때그때 계산한다. 해금 기록(`achievement_unlock`, 13장)만 남긴다.
 - 저장 기록이 없으면 서버가 기본값을 내려 준다(행을 미리 만들지 않는다).
 - **로그인 이관**: 행을 옮기지 않는다. 회원에 연결된 익명 ID들(`anonymous_user.member_id`) 중 `updated_at`이 가장 최근인 꾸미기를 쓴다.
 
-## 11. (확장 단계) 프로필 선택 설정 테이블 (v1.38, BE-104)
+## 11. (확장 단계) 프로필 선택 설정 테이블 (v1.38, BE-104 · 칸 추가 v1.46, BE-114)
 
 > **V29 마이그레이션.** 공개 성향카드 · 프로필카드 아래 성향 · 한 줄 소개(FE-77)를 서버에 저장한다. 저장은 API 명세 P-8 `PATCH /profile-settings`(보낸 칸만), 조회는 P-5 `profileSettings`. 결정 기록 [`BE-104.md`](decisions/BE-104.md)
 
@@ -1053,6 +1055,8 @@ erDiagram
 | shown_card | varchar(10) | ✓ | 공개 성향카드 `initial`(초심) · `retake`(재심) · `current`(최근). 기본 `current`, CHECK |
 | profile_card_type | varchar(10) | ✓ | 프로필카드 아래 성향. 값은 `shown_card`와 같고 별개의 선택이다. 기본 `current`, CHECK |
 | bio | varchar(40) | ✓ | 한 줄 소개(앞뒤 공백 없음 · 줄바꿈 없음, CHECK). 빈 문자열 = 소개 없음, 기본 `''` |
+| card_line | varchar(10) | ✓ | (V36, BE-114) 프로필카드 아래에 보일 줄 `type`(성향) · `signature`(한 줄 소개) · `job`(직업). 기본 `type`, CHECK |
+| card_level | boolean | ✓ | (V36, BE-114) 레벨을 `card_line` 윗줄에 붙일지. 기본 `false` |
 | updated_at | timestamptz | ✓ | 마지막 저장 시각(기본값 `now()`) |
 
 - **프로필 꾸미기(`profile_deco`, 10장)와 테이블을 나눈다.** 꾸미기는 전체 저장(P-7)이고 이 세 값은 화면마다 따로 바뀌는 부분 저장(P-8)이라, 한쪽 저장이 다른 쪽을 덮어쓰지 않게 한다.
@@ -1084,7 +1088,7 @@ erDiagram
 | created_at | timestamptz | ✓ | 기본 `now()` |
 
 - 인덱스: (`anonymous_user_id`, `source`, `awarded_on`) 일일 상한 · (`anonymous_user_id`, `source`, `group_key`) 묶음 상한.
-- **저장하지 않는 XP**: 사건 완료(100) · 성향 테스트(100) · 출석(5) · 업적(50 · 100 · 200)은 `experience` · `personality_result` · `attendance`와 업적 표에서 그때그때 계산한다. 같은 기록을 두 곳에 두어 어긋나는 것을 막기 위해서다.
+- **저장하지 않는 XP**: 사건 완료(100) · 성향 테스트(100) · 출석(5) · 모은 일러스트 · 의상(1장 10, v1.45 BE-83) · 업적(50 · 100 · 200)은 `experience` · `personality_result` · `attendance` · `collection_item`과 업적 표에서 그때그때 계산한다. 같은 기록을 두 곳에 두어 어긋나는 것을 막기 위해서다.
 - 회수(삭제 · 숨김)는 하지 않는다. 필요해지면 음수 `amount` 행을 허용하도록 CHECK를 바꾼다.
 
 **profile_job** — 사용자가 카드에 보여 주려고 고른 직업
@@ -1096,3 +1100,42 @@ erDiagram
 | updated_at | timestamptz | ✓ | 기본 `now()` |
 
 - 행이 없으면 열린 가장 높은 직업을 보여 준다.
+
+## 13. (확장 단계) 수집 상태 · 도전과제 해금 기록 테이블 (v1.45, BE-83)
+
+> **V35 마이그레이션.** 마이페이지 컬렉션의 획득 시점 · "새로 얻음"과 도전과제 "새로 열림"(FE-132)을 서버에 남긴다. 기록은 API 명세 P-9 `POST /collection`, 확인은 P-10 · P-11, 조회는 P-5. 결정 기록 [`BE-83.md`](decisions/BE-83.md)
+
+```mermaid
+erDiagram
+    anonymous_user ||--o{ collection_item : "모은 그림"
+    legal_case ||--o{ collection_item : "처음 얻은 사건"
+    anonymous_user ||--o{ achievement_unlock : "해금"
+```
+
+**collection_item** — 모은 일러스트 · 의상. 같은 그림이면 같은 줄(그림별 key)
+
+| 컬럼 | 타입 | NOT NULL | 설명 |
+| --- | --- | --- | --- |
+| anonymous_user_id | uuid PK FK | ✓ | `anonymous_user.id` (`ON DELETE CASCADE`) |
+| kind | varchar(20) PK | ✓ | `illustration` · `cast`. 이후 `background` · `time`이 더해질 수 있어 CHECK를 두지 않는다(값은 서버 코드가 검사) |
+| item_id | varchar(64) PK | ✓ | 일러스트 id(`case-1-origin`) · 의상 `{who}:{role}`(`naero:judge`). 화면이 정하고 서버는 형식만 본다 |
+| case_id | bigint FK | ✓ | 처음 얻은 사건(`legal_case.id`, `ON DELETE CASCADE`). 체험 완료 검증 기준 |
+| acquired_at | timestamptz | ✓ | 서버 시각(기본 `now()`). 백필이면 그 사건의 첫 완료 시각 |
+| seen_at | timestamptz | | 확인 시각. `NULL`이면 "새로 얻음" |
+
+- 인덱스: (`anonymous_user_id`, `case_id`, `kind`) 사건당 상한 검사용.
+- 이미 가진 항목은 `INSERT … ON CONFLICT DO NOTHING`으로 건너뛰어 처음 사건 · 시각이 남는다.
+
+**achievement_unlock** — 도전과제 해금 기록. 판정은 저장하지 않고 계산하며, 새로 `CLEARED`가 된 것만 남긴다
+
+| 컬럼 | 타입 | NOT NULL | 설명 |
+| --- | --- | --- | --- |
+| anonymous_user_id | uuid PK FK | ✓ | `anonymous_user.id` (`ON DELETE CASCADE`) |
+| achievement_id | varchar(40) PK | ✓ | `ProfileDecoCatalog.ACHIEVEMENTS`의 id |
+| unlocked_at | timestamptz | ✓ | 서버가 처음 판정해 기록한 시각 |
+| seen_at | timestamptz | | 확인 시각. `NULL`이면 "새로 열림" |
+
+- 기록이 있으면 표가 바뀌어 다시 미달이 되어도 `CLEARED`로 본다(열렸던 도전과제는 다시 잠기지 않는다).
+- V35가 배포 시점에 이미 달성한 도전과제(`first-case` · `cases-3` · `personality` · `attend-*`)를 `seen_at`을 채워 한 번 넣는다. 수집 도전과제는 배포 시점 수집 수가 0이라 넣지 않는다.
+- **FK를 `ON DELETE CASCADE`로 둔 이유**: 익명 사용자에 딸린 기록이라 함께 지워져야 하고, 운영에서는 익명 사용자를 지우지 않는다. 마이페이지 조회가 해금을 기록하므로, 테스트 정리 코드가 이 테이블을 따로 지우지 않아도 되게 한다.
+- **로그인 이관**: 행을 옮기지 않는다. 회원에 연결된 익명 ID들을 읽을 때 합친다(항목은 합집합, 시각은 이른 쪽, 한쪽이라도 봤으면 본 것). 구현은 출석 · 꾸미기와 함께 별도로 붙인다.

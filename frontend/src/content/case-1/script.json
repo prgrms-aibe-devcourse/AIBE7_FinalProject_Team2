@@ -677,7 +677,6 @@
       "procedures": [
         "검사 의견",
         "최종변론",
-        "최후진술",
         "판결"
       ],
       "look": {
@@ -720,52 +719,16 @@
           }
         },
         {
-          "say": "nambul",
-          "role": "A씨 역",
-          "proc": 2,
-          "look": {
-            "nambul": "role:actor"
-          },
-          "tags": {
-            "nambul": "A씨 역"
-          },
-          "spots": {
-            "nambul": "stand"
-          },
-          "slots": {
-            "nambul": {
-              "slot": 30,
-              "row": "front"
-            }
-          },
-          "text": "…이상입니다.",
-          "source": {
-            "type": "ai",
-            "basis": [
-              "API 6 · GET /cases/{caseId}/experience/review sections"
-            ]
-          }
-        },
-        {
           "say": "naero",
           "role": "검사",
-          "proc": 3,
-          "spots": {
-            "nambul": ""
-          },
-          "slots": {
-            "nambul": {
-              "slot": 50,
-              "row": "front"
-            }
-          },
+          "proc": 2,
           "text": "재판장님, 이제 판결을 내려 주십시오. 형벌의 종류와 형량, 그리고 양형에 고려한 요소를 정해 주십시오.",
           "source": {
             "type": "fixed"
           }
         },
         {
-          "proc": 3,
+          "proc": 2,
           "card": "verdict",
           "look": {
             "naero": "read-thinking"

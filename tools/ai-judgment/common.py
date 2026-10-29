@@ -13,6 +13,7 @@ PROMPT_DIR = TOOL_DIR / "prompts"
 PROMPT_VERSION = "judgment-v3"  # v3: 유사 판례 · 양형기준 RAG 참고 자료 형식, 형식 예시(퓨샷) (BE-54)
 CONTAMINATION_PROMPT_VERSION = "contamination-v2"
 AXIS_PROMPT_VERSION = "axis-v1"  # 판단 요소 가치관 축 분류 투표 (BE-49)
+CLASSIFY_PROMPT_VERSION = "classify-v1"  # 사건 자동 분류 투표 (BE-123)
 
 # 법정형에서 고르는 형벌 (ERD v1.4 penalty_type). 무죄는 MVP에서 뺐다.
 PENALTY_TYPES = ("DEATH", "LIFE", "PRISON", "FINE")

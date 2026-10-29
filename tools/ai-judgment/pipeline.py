@@ -40,13 +40,15 @@ from rag_context import option_errors as rag_option_errors
 from court_seed_sql import CourtSeedError, build_court_sql
 from check_contamination import DEFAULT_CRITERIA, aggregate, build_contamination_prompt, classify, criteria_with
 from axis_vote import AxisVoteError, aggregate_votes, apply_votes, build_axis_prompt, parse_axis_answer
-from common import AXIS_PROMPT_VERSION, TOOL_DIR, load_json, write_json
+from case_classify import ClassifyError, aggregate_classification, build_classify_prompt, parse_classify_answer, rule_flags
+from common import AXIS_PROMPT_VERSION, CLASSIFY_PROMPT_VERSION, TOOL_DIR, load_json, write_json
 from compare import _majority, direction_table, load_runs
 from generate import RUNS_DIR, GenerateError, generate_runs, model_slug, prompt_digest
 from llm import (DEFAULT_MAX_ATTEMPTS, DEFAULT_MAX_WAIT, LLMError, LLMQuotaExhaustedError, api_key, call,
                  check_retry, configure_retry, free_tier_model_list, has_free_tier, model_provider,
                  parse_model_spec)
 from to_seed_sql import NAME_MAX_LENGTH, build_sql
+from script_assembler import build_script, check_paper, classification_errors, generate_units, normalize_paper
 from script_generation import balance_warning, generate_evidence_lines
 from script_generation import cast_errors as script_cast_errors
 from select_semantic import DEFAULT_WEIGHT as DEFAULT_SEMANTIC_WEIGHT
@@ -56,7 +58,7 @@ from summary_tags import DEFAULT_MIN_SCORE, DEFAULT_TOP_K, SummaryTagError, anno
 from summary_tags import option_errors as summary_tag_option_errors
 from validate_output import parse_output
 
-STAGES = ("extract", "court", "contamination", "rag", "generate", "select", "axis", "script", "load")
+STAGES = ("extract", "court", "contamination", "rag", "generate", "select", "axis", "classify", "script", "load")
 PIPELINE_DIR = TOOL_DIR / "out" / "pipeline"
 PUBLIC_ROOT = TOOL_DIR.parent.parent  # 공개 저장소 루트
 PRIVATE_SEED_DIR = PUBLIC_ROOT / "backend" / "private-seed"
@@ -86,7 +88,9 @@ DEFAULT_CONFIG = {
     "allowFreeTierForJudgment": False,
     # extract를 건너뛸 때 쓸 파일 (extract를 돌리면 그 결과가 우선)
     # courtDraft: 재판부 판결(BE-14 형식) 파일. court 단계를 끄고 사람이 쓴 판결을 넣을 때 쓴다 (BE-38)
-    "inputs": {"case": None, "court": None, "report": None, "source": None, "courtDraft": None},
+    # paper: 1막 신문 기사 JSON(headline · deck · caption · article). 없으면 대본 전체 생성(stages.script.full)이 기사를 먼저
+    # 만든다. 관리자가 고친 기사로 다시 돌릴 때만 넣는다 (BE-121, script_assembler.py)
+    "inputs": {"case": None, "court": None, "report": None, "source": None, "courtDraft": None, "paper": None},
     "stages": {
         # model: Claude는 모델 ID(또는 anthropic:모델ID), 다른 공급자는 openai:모델ID · gemini:모델ID (BE-35). maxTokens는 Claude 외 공급자의 출력 상한
         # 목록으로 주면 앞 모델이 과부하 · 한도로 막혔을 때(재시도를 다 쓴 뒤) 다음 모델로 넘어간다 (BE-45)
@@ -121,10 +125,20 @@ DEFAULT_CONFIG = {
         # 응답 형식이 틀리면 그 회차를 최대 maxRetries번 다시 묻고, 그래도 틀리면 집계에서 뺀다
         "axis": {"enabled": True, "model": None, "runs": 5, "maxRetries": 2, "temperature": None, "maxTokens": 4000,
                  "timeout": 120, "delay": 0.0},
+        # 사건 자동 분류 (BE-123, case_classify.py): 분위기 · 쟁점 · 피해자 측 · 부가 인물 · 민감 플래그를 같은 모델에 runs회 묻고
+        # 표를 센다. 결과는 대본 전체 생성(stages.script.full)의 classification이 된다(설정에 직접 넣으면 그 값이 우선).
+        # 기본 꺼짐(새 기능). model이 null이면 axis와 같이 generate.models의 첫 모델(free: 제외). runs 3: 21건 실측에서 1회와 3 · 5회의
+        # 축 결과가 거의 같았고, 회차를 늘리면 한두 회차만 잡은 민감 플래그를 거르는 데만 쓰였다(docs/decisions/BE-123.md)
+        "classify": {"enabled": False, "model": None, "runs": 3, "maxRetries": 2, "temperature": None, "maxTokens": 4000,
+                     "timeout": 120, "delay": 0.0},
         # 사건 대본 — 증거조사 대사 생성 (BE-107). 기본 꺼짐(새 기능, 배역이 사건마다 정해지지 않았다).
         # cast는 자동으로 정하지 않는다 — 켤 때마다 넣는다(해송님 정정, 2026-10-24). 범위는 script_generation.py 참고
+        # full: 증거조사뿐 아니라 대본 전체(U0 설계도 · U1 · U2 · U4)를 만들고 script.json으로 조립한다 (BE-121). classification
+        # (분위기 · 쟁점 · 피해자 측 · 부가 인물 · 민감 플래그)이 필요하다 — 자동 분류(BE-123) 전까지는 설정으로 넣는다.
+        # unitMaxTokens · unitTimeout은 여러 줄을 한 번에 받는 U0 · U1 · U2 · U4용(maxTokens · timeout은 증거조사 한 줄용)
         "script": {"enabled": False, "model": None, "cast": None, "maxRetries": 2, "temperature": None,
-                   "maxTokens": 2000, "timeout": 60, "delay": 0.0},
+                   "maxTokens": 2000, "timeout": 60, "delay": 0.0,
+                   "full": False, "classification": None, "unitMaxTokens": 6000, "unitTimeout": 150},
         "load": {
             # court: 재판부 판결 초안이 있으면 비공개로 함께 적재한다 (BE-38)
             "enabled": True, "case": True, "court": True, "applyToDb": True,
@@ -210,7 +224,7 @@ def free_models_errors(config):
     for key in ("include", "exclude"):
         value = cfg.get(key)
         if value is not None and (not isinstance(value, list) or not all(isinstance(m, str) and m.strip() for m in value)):
-            errors.append(f"freeModels.{key}는 모델 ID 문자열 목록이다 (공급자 접두어 없이, 예: gemini-2.5-flash)")
+            errors.append(f"freeModels.{key}는 모델 ID 문자열 목록이다 (공급자 접두어 없이, 예: gemini-3.5-flash)")
     if errors:
         return errors
     known = {spec.partition(":")[0] for spec in free_tier_model_list()}
@@ -467,6 +481,7 @@ def validate_config(config):
     if not semantic_weight_errors and select["strategy"] != "consensus" and weight > 0:
         errors.append("stages.select.semanticWeight는 strategy가 consensus일 때만 쓴다 (다른 전략에서는 조용히 무시된다)")
     errors += axis_errors(config)
+    errors += axis_errors(config, "classify")
     errors += script_errors(config)
     errors += rag_option_errors({k: v for k, v in stages["rag"].items() if k != "enabled"})
     if stages["load"]["db"]["mode"] not in ("docker", "psql"):
@@ -488,14 +503,14 @@ def is_finite_number(value):
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
-def axis_errors(config):
-    """가치관 축 분류 투표 설정(stages.axis) 검사 (BE-49)."""
-    cfg = config["stages"]["axis"]
+def axis_errors(config, stage="axis"):
+    """같은 모델에 runs회 묻는 투표 단계 설정 검사: 가치관 축(stages.axis, BE-49) · 사건 분류(stages.classify, BE-123)."""
+    cfg = config["stages"][stage]
     errors = []
     model = cfg.get("model")
     if model is not None:
         if not isinstance(model, str) or is_free_token(model):
-            errors.append("stages.axis.model은 null 또는 '공급자:모델ID' 문자열이다 (free: 자동 선택은 쓰지 않는다)")
+            errors.append(f"stages.{stage}.model은 null 또는 '공급자:모델ID' 문자열이다 (free: 자동 선택은 쓰지 않는다)")
         else:
             try:
                 if parse_model_spec(model)[0] == "manual":
@@ -503,17 +518,17 @@ def axis_errors(config):
             except LLMError as e:
                 errors.append(str(e))
     elif cfg["enabled"] and not config["stages"]["generate"]["models"]:
-        errors.append("stages.axis.model이 없으면 generate.models의 첫 모델을 쓴다. 둘 다 없으니 stages.axis.model을 넣거나 axis를 끈다")
+        errors.append(f"stages.{stage}.model이 없으면 generate.models의 첫 모델을 쓴다. 둘 다 없으니 stages.{stage}.model을 넣거나 {stage}를 끈다")
     for key, minimum in (("runs", 1), ("maxRetries", 0), ("maxTokens", 1), ("timeout", 1)):
         value = cfg.get(key)
         if not isinstance(value, int) or isinstance(value, bool) or value < minimum:
-            errors.append(f"stages.axis.{key}는 {minimum} 이상 정수다")
+            errors.append(f"stages.{stage}.{key}는 {minimum} 이상 정수다")
     delay = cfg.get("delay")
     if not is_finite_number(delay) or delay < 0:  # JSON의 NaN · Infinity는 time.sleep에서 터진다
-        errors.append("stages.axis.delay는 0 이상 유한한 숫자다 (초)")
+        errors.append(f"stages.{stage}.delay는 0 이상 유한한 숫자다 (초)")
     temperature = cfg.get("temperature")
     if temperature is not None and (not is_finite_number(temperature) or temperature < 0):
-        errors.append("stages.axis.temperature는 null 또는 0 이상 유한한 숫자다")
+        errors.append(f"stages.{stage}.temperature는 null 또는 0 이상 유한한 숫자다")
     return errors
 
 
@@ -533,7 +548,12 @@ def script_errors(config):
         except LLMError as e:
             errors.append(str(e))
     errors += script_cast_errors(cfg.get("cast") or {})
-    for key, minimum in (("maxRetries", 0), ("maxTokens", 1), ("timeout", 1)):
+    if not isinstance(cfg.get("full"), bool):
+        errors.append("stages.script.full은 true 또는 false다")
+    elif cfg["full"] and not (cfg.get("classification") is None and config["stages"]["classify"]["enabled"]):
+        # 분류를 설정에 넣지 않았으면 classify 단계 결과를 쓴다(BE-123). 둘 다 없으면 블록을 고를 수 없다
+        errors += classification_errors(cfg.get("classification"))
+    for key, minimum in (("maxRetries", 0), ("maxTokens", 1), ("timeout", 1), ("unitMaxTokens", 1), ("unitTimeout", 1)):
         value = cfg.get(key)
         if not isinstance(value, int) or isinstance(value, bool) or value < minimum:
             errors.append(f"stages.script.{key}는 {minimum} 이상 정수다")
@@ -1096,13 +1116,59 @@ def rag_report(config, state):
                                          "guidelineFactors", "precedents", "excludedSuspects", "warnings")}
 
 
-def axis_model(config, state):
-    """가치관 축 분류 모델: stages.axis.model, 없으면 생성에 쓰는 첫 모델(free:는 지금 쓰는 무료 모델로 펼친 뒤).
-    한 모델만 쓴다(같은 모델로 runs회)."""
-    model = config["stages"]["axis"].get("model")
+def axis_model(config, state, stage="axis"):
+    """투표 단계(가치관 축 · 사건 분류) 모델: stages.<stage>.model, 없으면 생성에 쓰는 첫 모델(free:는 지금 쓰는 무료 모델로
+    펼친 뒤). 한 모델만 쓴다(같은 모델로 runs회)."""
+    model = config["stages"][stage].get("model")
     if model:
         return model
     return next(iter(active_models(config, state, include_kept=False)), None)
+
+
+def vote_runs(spec, system, user, cfg, parse, parse_error, out_dir, log, caller, record_answer=lambda answer: answer):
+    """같은 프롬프트를 runs회 묻고 유효 응답을 모은다 — 가치관 축(BE-49) · 사건 분류(BE-123) 공통.
+
+    회차마다 응답을 `parse`로 검사하고, 틀리면(`parse_error`) 또는 호출이 실패하면 maxRetries번까지 다시 묻는다. 호출 한도가
+    바닥나면 남은 회차를 멈추고 받은 응답만 돌려준다. 회차 기록은 out_dir/run-<회차>-<시도>.json에 남긴다.
+
+    돌려주는 값: (answers, failures, attempts, usage) — usage는 응답마다의 토큰 기록(llm.LLMResult.usage) 목록"""
+    answers, failures, attempts, stopped, usage = [], 0, 0, False, []
+    for run in range(1, cfg["runs"] + 1):
+        for retry in range(cfg["maxRetries"] + 1):
+            if attempts and cfg["delay"]:
+                time.sleep(cfg["delay"])
+            attempts += 1
+            record = {"modelSpec": spec, "run": run, "attempt": retry + 1, "createdAt": _now()}
+            try:
+                result = caller(spec, system, user, temperature=cfg["temperature"], max_tokens=cfg["maxTokens"],
+                                timeout=cfg["timeout"])
+                record.update(meta=result.meta() if hasattr(result, "meta") else {}, rawText=result.text)
+                usage.append(getattr(result, "usage", None) or {})
+                answer = parse(result.text)
+            except LLMQuotaExhaustedError as e:
+                record["error"] = f"호출 한도 소진: {e}"
+                stopped = True
+            except LLMError as e:
+                record["error"] = f"호출 실패: {e}"
+            except parse_error as e:
+                record["error"] = f"형식 오류: {e}"
+            else:
+                record["answer"] = record_answer(answer)
+                answers.append(answer)
+            write_json(out_dir / f"run-{run:03d}-{retry + 1}.json", record)
+            if "error" not in record or stopped:
+                break
+            failures += 1
+            log(f"[{run}회차] {record['error'].splitlines()[0]}" + (" — 다시 묻습니다" if retry < cfg["maxRetries"] else " — 집계에서 뺍니다"))
+        if stopped:
+            log(f"호출 한도 소진 → 남은 회차는 호출하지 않습니다 (유효 응답 {len(answers)}개로 집계)")
+            break
+    return answers, failures, attempts, usage
+
+
+def token_totals(usage):
+    """응답별 토큰 기록 → 합계 {inputTokens, outputTokens, totalTokens} (값이 없는 공급자는 0으로 센다)."""
+    return {key: sum((u or {}).get(key) or 0 for u in usage) for key in ("inputTokens", "outputTokens", "totalTokens")}
 
 
 def stage_axis(config, state, log, caller=call):
@@ -1124,36 +1190,9 @@ def stage_axis(config, state, log, caller=call):
     if out_dir.exists():
         shutil.rmtree(out_dir)  # 이전 실행의 회차와 섞지 않는다 (투표는 이번 실행의 응답만 센다)
     log(f"가치관 축 분류: {spec} {cfg['runs']}회 투표 (요소 {len(factor_ids)}개)")
-    answers, failures, attempts, stopped = [], 0, 0, False
-    for run in range(1, cfg["runs"] + 1):
-        for retry in range(cfg["maxRetries"] + 1):
-            if attempts and cfg["delay"]:
-                time.sleep(cfg["delay"])
-            attempts += 1
-            record = {"modelSpec": spec, "run": run, "attempt": retry + 1, "createdAt": _now()}
-            try:
-                result = caller(spec, system, user, temperature=cfg["temperature"], max_tokens=cfg["maxTokens"],
-                                timeout=cfg["timeout"])
-                record.update(meta=result.meta() if hasattr(result, "meta") else {}, rawText=result.text)
-                answer = parse_axis_answer(result.text, factor_ids)
-            except LLMQuotaExhaustedError as e:
-                record["error"] = f"호출 한도 소진: {e}"
-                stopped = True
-            except LLMError as e:
-                record["error"] = f"호출 실패: {e}"
-            except AxisVoteError as e:
-                record["error"] = f"형식 오류: {e}"
-            else:
-                record["answer"] = {str(k): v for k, v in answer.items()}
-                answers.append(answer)
-            write_json(out_dir / f"run-{run:03d}-{retry + 1}.json", record)
-            if "error" not in record or stopped:
-                break
-            failures += 1
-            log(f"[{run}회차] {record['error'].splitlines()[0]}" + (" — 다시 묻습니다" if retry < cfg["maxRetries"] else " — 집계에서 뺍니다"))
-        if stopped:
-            log(f"호출 한도 소진 → 남은 회차는 호출하지 않습니다 (유효 응답 {len(answers)}개로 집계)")
-            break
+    answers, failures, attempts, _usage = vote_runs(
+        spec, system, user, cfg, lambda text: parse_axis_answer(text, factor_ids), AxisVoteError, out_dir, log, caller,
+        record_answer=lambda answer: {str(k): v for k, v in answer.items()})
     if not answers:
         raise PipelineError("가치관 축 분류에서 유효한 응답을 받지 못했습니다. 설정을 확인하거나 --skip axis로 추출기 값을 씁니다",
                             {"model": spec, "attempts": attempts})
@@ -1173,6 +1212,44 @@ def stage_axis(config, state, log, caller=call):
     log(f"결과: 확인 필요 {len(needs_review)}개 · 추출기 값과 다름 {len(changed)}개 (요소 {len(factor_ids)}개)")
     return {"votesFile": str(votes_file), "model": spec, "runs": len(answers), "requestedRuns": cfg["runs"],
             "attempts": attempts, "failures": failures, "needsReview": needs_review, "changedFromExtract": changed}
+
+
+def stage_classify(config, state, log, caller=call):
+    """사건을 분위기 · 쟁점 유형 · 피해자 측 · 부가 인물 · 민감 플래그로 분류한다 (BE-123, case_classify.py).
+
+    같은 모델에 runs회 묻고 축마다 표를 센다(가치관 축 투표와 같은 방식). 민감 플래그는 규칙(키워드)과 합친다. 결과의
+    classification이 대본 전체 생성(stages.script.full)의 입력이 된다. 판결 정보는 보내지 않는다."""
+    cfg = config["stages"]["classify"]
+    spec = axis_model(config, state, "classify")
+    if not spec:
+        raise PipelineError("사건 분류 모델이 없습니다. stages.classify.model을 넣거나 classify를 끈다")
+    case = load_json(input_file(config, state, "case"))
+    system, user = build_classify_prompt(case)
+    api_key(parse_model_spec(spec)[0])
+    out_dir = PIPELINE_DIR / config["name"] / "classify"
+    if out_dir.exists():
+        shutil.rmtree(out_dir)  # 이전 실행의 회차와 섞지 않는다
+    log(f"사건 분류: {spec} {cfg['runs']}회 투표")
+    answers, failures, attempts, usage = vote_runs(spec, system, user, cfg, parse_classify_answer, ClassifyError,
+                                                   out_dir, log, caller)
+    if not answers:
+        raise PipelineError("사건 분류에서 유효한 응답을 받지 못했습니다. 설정을 확인하거나 stages.script.classification을 직접 넣습니다",
+                            {"model": spec, "attempts": attempts})
+    result = aggregate_classification(answers, rule_flags(case), requested_runs=cfg["runs"])
+    tokens = token_totals(usage)
+    classification_file = out_dir / "classification.json"
+    write_json(classification_file, {"promptVersion": CLASSIFY_PROMPT_VERSION, "model": spec, "createdAt": _now(),
+                                     "tokens": tokens, **result})
+    c = result["classification"]
+    log(f"결과: 분위기 {c['mood']} · 쟁점 {c['issue']} · 피해자 측 {c['victim']} · 부가 인물 {'있음' if c['thirdParty'] else '없음'}"
+        f" · 민감 플래그 {', '.join(c['sensitiveFlags']) or '없음'} (토큰 {tokens['totalTokens']})")
+    for item in result["needsReview"]:
+        log(f"⚠ {item}: 표가 갈렸거나 규칙만 잡았습니다 → 관리자 확인 필요")
+    if len(answers) < cfg["runs"]:
+        log(f"⚠ 유효 응답 {len(answers)}/{cfg['runs']}개로 집계했습니다")
+    return {"classificationFile": str(classification_file), "model": spec, "runs": len(answers),
+            "requestedRuns": cfg["runs"], "attempts": attempts, "failures": failures, "classification": c,
+            "needsReview": result["needsReview"], "tokens": tokens}
 
 
 def ensure_selection_matches_case(config, state, selection):
@@ -1196,6 +1273,25 @@ def ensure_selection_matches_case(config, state, selection):
     return prompt
 
 
+def load_paper(config):
+    """`inputs.paper`(관리자가 고친 기사로 다시 돌릴 때)를 읽어 검사한다. 설정했는데 파일이 없거나 기사 형식이 아니면 멈춘다 —
+    조용히 무시하면 넘긴 기사 대신 새 기사가 생성돼 1막 해설이 의도와 다른 기사를 따라간다(PR #331 리뷰).
+    설정하지 않았으면 None(기사를 새로 만든다)."""
+    path = resolve_path(config, config["inputs"].get("paper"))
+    if path is None:
+        return None
+    if not path.exists():
+        raise PipelineError(f"inputs.paper 파일이 없습니다: {path}")
+    try:
+        paper = load_json(path)
+    except ValueError as e:
+        raise PipelineError(f"inputs.paper를 JSON으로 읽을 수 없습니다: {e}")
+    errors = check_paper(paper)
+    if errors:
+        raise PipelineError("inputs.paper가 기사 형식(headline · deck · caption · article 2 ~ 4문단)이 아닙니다: " + " · ".join(errors))
+    return normalize_paper(paper)
+
+
 def stage_script(config, state, log, caller=call):
     """사건 대본 — 증거조사 대사 생성 (BE-107). 판단 요소마다 대사 한 줄을 만든다 — 검사 측(UP
     방향) 먼저, 변호인 측(DOWN 방향) 다음(case-1 대본과 같은 순서). 방향은 select 단계가 고른 판결
@@ -1214,14 +1310,30 @@ def stage_script(config, state, log, caller=call):
     case = load_json(input_file(config, state, "case"))
     judgment_output = load_json(selection["outputFile"])
     cast = cfg["cast"]
+    # 입력 검사는 이전 결과를 지우기 전에 끝낸다 — 기사 경로가 틀렸다고 지난 evidence.json · script.json까지 사라지면 입력만 고쳐서는
+    # 되돌릴 수 없다(PR #329 CodeRabbit 리뷰)
+    paper = load_paper(config) if cfg["full"] else None
     out_dir = PIPELINE_DIR / config["name"] / "script"
     if out_dir.exists():
         shutil.rmtree(out_dir)  # 이전 실행 결과와 섞지 않는다 (axis 단계와 같은 정책)
-    log(f"대본 증거조사 생성: {cfg['model']} (배역 — 검사: {cast['prosecutor']} · 변호인: {cast['defense']})")
-    lines, stopped = generate_evidence_lines(
-        case, judgment_output, cast, model=cfg["model"], caller=caller, max_retries=cfg["maxRetries"],
-        temperature=cfg["temperature"], max_tokens=cfg["maxTokens"], timeout=cfg["timeout"],
-        delay=cfg["delay"], log=log)
+    generated = None
+    classification = cfg["classification"] or stage_output(state, "classify").get("classification")
+    if cfg["full"] and not classification:
+        raise PipelineError("대본 전체 생성에는 사건 분류가 필요합니다. classify 단계를 켜거나 stages.script.classification을 넣으세요")
+    if cfg["full"]:
+        log(f"대본 전체 생성: {cfg['model']} (배역 — 검사 · 판사: {cast['prosecutor']} · 변호인 · 피고인 역: {cast['defense']})")
+        generated = generate_units(
+            case, judgment_output, cast, classification, model=cfg["model"], paper=paper, caller=caller,
+            max_retries=cfg["maxRetries"], temperature=cfg["temperature"], max_tokens=cfg["unitMaxTokens"],
+            evidence_max_tokens=cfg["maxTokens"], timeout=cfg["unitTimeout"], evidence_timeout=cfg["timeout"],
+            delay=cfg["delay"], log=log)
+        lines, stopped = generated["evidence"], generated["stopped"]
+    else:
+        log(f"대본 증거조사 생성: {cfg['model']} (배역 — 검사: {cast['prosecutor']} · 변호인: {cast['defense']})")
+        lines, stopped = generate_evidence_lines(
+            case, judgment_output, cast, model=cfg["model"], caller=caller, max_retries=cfg["maxRetries"],
+            temperature=cfg["temperature"], max_tokens=cfg["maxTokens"], timeout=cfg["timeout"],
+            delay=cfg["delay"], log=log)
     for line in lines:
         for warning in line["validation"]["warnings"]:
             log(f"⚠ [요소 {line['factorId']}] {warning}")
@@ -1242,9 +1354,22 @@ def stage_script(config, state, log, caller=call):
     if not publishable:
         log("⚠ publishable: false — 증거 카드와 대사가 어긋날 수 있어 BE-108 검수 전에는 공개할 수 없습니다")
     log(f"결과: 판단 요소 {len(lines)}개 중 성공 {len(lines) - len(failed)}개")
-    return {"evidenceFile": str(evidence_file), "model": cfg["model"], "cast": cast,
-            "count": len(lines), "failed": len(failed), "stopped": stopped, "balanceWarning": balance,
-            "publishable": publishable}
+    outputs = {"evidenceFile": str(evidence_file), "model": cfg["model"], "cast": cast,
+               "count": len(lines), "failed": len(failed), "stopped": stopped, "balanceWarning": balance,
+               "publishable": publishable}
+    if generated:
+        # evidence.json은 BE-108 적재 계약 그대로 두고, 대본 전체는 따로 쓴다(case_script 확장은 BE-126)
+        script = build_script(case, cast, classification, generated, model=cfg["model"])
+        script_file = out_dir / "script.json"
+        write_json(script_file, {**script, "createdAt": _now()})
+        for unit, warnings in script["warnings"].items():
+            for warning in warnings:
+                log(f"⚠ [{unit}] {warning}")
+        if script["pending"]:
+            log(f"⚠ 만들지 못한 단위: {', '.join(script['pending'])} — 대본 전체는 공개할 수 없습니다")
+        outputs.update({"scriptFile": str(script_file), "pending": script["pending"],
+                        "scriptPublishable": script["publishable"]})
+    return outputs
 
 
 def stage_load(config, state, log, apply=None):
@@ -1440,6 +1565,7 @@ STAGE_FUNCTIONS = {
     "generate": stage_generate,
     "select": stage_select,
     "axis": stage_axis,
+    "classify": stage_classify,
     "script": stage_script,
     "load": stage_load,
 }
@@ -1492,6 +1618,10 @@ def run_pipeline(config, start=None, until=None, skip=(), rerun=False, log=print
         axis_spec = axis_model(config, state)
         log(f"외부 전송: 가치관 축 분류 단계에서 비식별화한 사건 개요 · 판단 요소가 "
             f"{providers_text(axis_spec) if axis_spec else ', '.join(providers)}로 전송됩니다")
+    if "classify" in steps:
+        classify_spec = axis_model(config, state, "classify")
+        log(f"외부 전송: 사건 분류 단계에서 비식별화한 사건 개요 · 사건 기록 · 판단 요소가 "
+            f"{providers_text(classify_spec) if classify_spec else ', '.join(providers)}로 전송됩니다")
     if "script" in steps:
         case_title = load_json(input_file(config, state, "case"))["title"]
         log(f"외부 전송: 대본 증거조사 단계에서 비식별화한 사건 제목({case_title}) · 개요 · 판단 요소가 "

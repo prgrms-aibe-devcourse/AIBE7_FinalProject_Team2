@@ -1,5 +1,6 @@
 package com.team2.project.personality.dto;
 
+import com.team2.project.collection.dto.CollectionView;
 import com.team2.project.experience.domain.Experience;
 import com.team2.project.experience.domain.ExperienceStatus;
 import com.team2.project.legalcase.domain.CrimeType;
@@ -29,8 +30,9 @@ public record MyPageResponse(
 	List<ExperienceItem> experiences,
 	Profile profile,
 	ProfileDecoValues profileDeco,		// 꾸미기 저장값(없으면 기본값). 잠긴 값이어도 그대로 (BE-96)
-	List<AchievementProgress> achievements,	// 도전과제 진행도 · 상태 · 보상 (서버 표가 원본, BE-96)
+	List<AchievementProgress> achievements,	// 도전과제 진행도 · 상태 · 보상 (서버 표가 원본, BE-96) · 해금 시각 · 새로 열림 (BE-83)
 	Rewards unlocked,				// 지금 열린 것: 처음부터 열린 것 + 달성한 도전과제의 보상 (BE-96)
+	CollectionView collection,		// 모은 일러스트 · 의상 (BE-83). 기록이 없으면 0 · 빈 배열
 	ProfileSettingsValues profileSettings,	// 공개 성향카드 · 프로필카드 아래 성향 · 한 줄 소개(없으면 기본값, v0.52 BE-104)
 	LevelStatus level) {			// 레벨 · 직업 (L-1과 같은 값, BE-106)
 
@@ -39,7 +41,7 @@ public record MyPageResponse(
 	public static MyPageResponse empty() {
 		ProfileDecoView deco = ProfileDecoService.emptyView();
 		return new MyPageResponse(null, null, BaselineRetake.NONE, null, List.of(), List.of(), Profile.EMPTY,
-			deco.profileDeco(), deco.achievements(), deco.unlocked(), ProfileSettingsValues.DEFAULTS,
+			deco.profileDeco(), deco.achievements(), deco.unlocked(), CollectionView.EMPTY, ProfileSettingsValues.DEFAULTS,
 			LevelStatus.initial());
 	}
 
