@@ -4,7 +4,7 @@
 //   화면은 목이든 실제든 같은 방식(error.code · error.currentStatus)으로 에러를 처리한다.
 // - 액세스 토큰(FE-74): 있으면 Authorization에 싣고, 401이면 M-1 재발급을 한 번 한 뒤 같은 요청을 다시 보낸다.
 import { API_BASE_URL } from './config.js';
-import { clearUser, currentUser } from '../utils/session.js';
+import { clearUser, currentUser, isAdmin } from '../utils/session.js';
 
 // 회원 액세스 토큰. 메모리에만 둔다(API 명세 10장) — 새로고침하면 사라지고, 401이 오면 재발급으로 다시 받는다
 let accessToken = null;
@@ -24,6 +24,11 @@ function fallbackError(code, message, status) {
  * @param {object} [body] JSON 본문 (POST · PUT · PATCH)
  */
 export async function request(method, endpoint, body) {
+  // 회원 로그인 표시는 있는데 토큰이 없으면(새로고침 직후) 보내기 전에 먼저 재발급한다(FE-138, BE-140 선행).
+  // 로그인 없이도 되는 API(체험 · 성향 테스트)는 토큰 없이 가면 401이 아니라 손님 요청으로 처리되어, 회원의 기록이 이 브라우저의 익명 쪽에 쌓이기 때문이다.
+  // 재발급이 실패해도(연결 오류 등) 요청은 그대로 보낸다 — 401이면 reissueAccessToken이 로그인 표시를 지운다.
+  // 관리자 표시는 회원 토큰이 아니라(관리자는 세션) 재발급하지 않는다 — 재발급 401이 관리자 로그인 표시를 지우게 된다
+  if (accessToken === null && currentUser() && !isAdmin() && !endpoint.startsWith('/auth/')) await reissueAccessToken().catch(() => {});
   const sentWith = accessToken;
   try {
     return await send(method, endpoint, body);

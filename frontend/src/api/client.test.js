@@ -30,16 +30,38 @@ test('재발급하면 이후 요청에 액세스 토큰을 싣는다', async () 
   assert.equal(calls[1].auth, 'Bearer A');
 });
 
-test('401이면 한 번 재발급하고 같은 요청을 새 토큰으로 다시 보낸다', async () => {
-  saveUser({ nickname: '카카오 회원' }); // 새로고침 뒤: 토큰은 없고 로그인 표시만 있다
-  let first = true;
-  stubFetch((url) => {
+test('토큰이 만료돼 401이면 한 번 재발급하고 같은 요청을 새 토큰으로 다시 보낸다', async () => {
+  saveUser({ nickname: '카카오 회원' });
+  stubFetch((url) => (url.endsWith('/auth/token/reissue') ? reissued('A') : { status: 200, body: {} }));
+  await reissueAccessToken(); // 토큰 A를 들고 있다가 만료됐다
+  stubFetch((url, init) => {
     if (url.endsWith('/auth/token/reissue')) return reissued('B');
-    if (first) { first = false; return invalid; }
-    return { status: 200, body: { ok: true } };
+    return init.headers.Authorization === 'Bearer B' ? { status: 200, body: { ok: true } } : invalid;
   });
   assert.deepEqual(await request('GET', '/my-page'), { ok: true });
-  assert.deepEqual(calls.map((c) => [c.url.replace('/api/v1', ''), c.auth]), [['/my-page', undefined], ['/auth/token/reissue', undefined], ['/my-page', 'Bearer B']]);
+  assert.deepEqual(calls.map((c) => [c.url.replace('/api/v1', ''), c.auth]), [['/my-page', 'Bearer A'], ['/auth/token/reissue', 'Bearer A'], ['/my-page', 'Bearer B']]);
+});
+
+test('로그인 표시만 있고 토큰이 없으면(새로고침 직후) 보내기 전에 먼저 재발급한다 — 로그인 없이도 되는 API가 손님 요청이 되지 않게 (FE-138)', async () => {
+  saveUser({ nickname: '카카오 회원' });
+  stubFetch((url) => (url.endsWith('/auth/token/reissue') ? reissued('B') : { status: 200, body: { ok: true } }));
+  assert.deepEqual(await request('POST', '/cases/1/experience'), { ok: true });
+  assert.deepEqual(calls.map((c) => [c.url.replace('/api/v1', ''), c.auth]), [['/auth/token/reissue', undefined], ['/cases/1/experience', 'Bearer B']]);
+});
+
+test('먼저 한 재발급이 연결 오류여도 요청은 그대로 보낸다', async () => {
+  saveUser({ nickname: '카카오 회원' });
+  stubFetch((url) => { if (url.endsWith('/auth/token/reissue')) throw new TypeError('offline'); return { status: 200, body: { ok: true } }; });
+  assert.deepEqual(await request('GET', '/cases'), { ok: true });
+  assert.deepEqual(currentUser(), { nickname: '카카오 회원' }); // 연결 오류는 로그인 표시를 지우지 않는다
+});
+
+test('관리자 로그인 표시는 회원 토큰을 재발급하지 않는다(관리자는 세션)', async () => {
+  saveUser({ nickname: '관리자', role: 'admin' });
+  stubFetch(() => ({ status: 200, body: {} }));
+  await request('GET', '/cases');
+  assert.equal(calls.length, 1);
+  assert.equal(currentUser()?.role, 'admin');
 });
 
 test('동시에 401을 받아도 재발급은 한 번만 부른다', async () => {
@@ -57,7 +79,7 @@ test('재발급이 401이면 원래 오류를 던지고 로그인 표시를 지�
   saveUser({ nickname: '카카오 회원' });
   stubFetch(() => invalid);
   await assert.rejects(request('GET', '/my-page'), { status: 401 });
-  assert.equal(calls.length, 2); // 원래 요청 + 재발급, 다시 보내지 않는다
+  assert.equal(calls.length, 2); // 먼저 한 재발급(401) + 원래 요청, 다시 보내지 않는다
   assert.equal(currentUser(), null);
 });
 
