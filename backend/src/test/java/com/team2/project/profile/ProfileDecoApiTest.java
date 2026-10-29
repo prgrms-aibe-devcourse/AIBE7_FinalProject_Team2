@@ -79,7 +79,7 @@ class ProfileDecoApiTest extends ApiIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("빈 마이페이지: 기본 꾸미기 · 도전과제 8개(수집은 PENDING) · 처음부터 열린 것")
+	@DisplayName("빈 마이페이지: 기본 꾸미기 · 도전과제 8개(수집도 0부터, BE-83) · 처음부터 열린 것 · 빈 컬렉션")
 	void emptyMyPage() throws Exception {
 		mockMvc.perform(get(MY_PAGE))
 			.andExpect(status().isOk())
@@ -88,9 +88,13 @@ class ProfileDecoApiTest extends ApiIntegrationTest {
 			.andExpect(jsonPath("$.achievements[0].id").value("first-case"))
 			.andExpect(jsonPath("$.achievements[0].stat").value("completed"))
 			.andExpect(jsonPath("$.achievements[0].status").value("IN_PROGRESS"))
+			.andExpect(jsonPath("$.achievements[0].isNew").value(false))
+			.andExpect(jsonPath("$.achievements[0].unlockedAt").isEmpty())
 			.andExpect(jsonPath("$.achievements[3].id").value("collect-5"))
-			.andExpect(jsonPath("$.achievements[3].status").value("PENDING"))
-			.andExpect(jsonPath("$.achievements[3].value").isEmpty())
+			.andExpect(jsonPath("$.achievements[3].status").value("IN_PROGRESS"))
+			.andExpect(jsonPath("$.achievements[3].value").value(0))
+			.andExpect(jsonPath("$.collection.collected").value(0))
+			.andExpect(jsonPath("$.collection.items.length()").value(0))
 			.andExpect(jsonPath("$.achievements[3].rewards.backgrounds[0]").value("news"))
 			.andExpect(jsonPath("$.unlocked.frames.length()").value(1))
 			.andExpect(jsonPath("$.unlocked.frames[0]").value("basic"));
@@ -126,7 +130,7 @@ class ProfileDecoApiTest extends ApiIntegrationTest {
 		UUID id = newUser();
 		Map<String, String> body = defaults();
 		body.put("frame", "wood");
-		body.put("portrait", "/images/cases/case-1-origin.webp");	// 수집 보상: BE-83 전까지 잠김
+		body.put("portrait", "/images/cases/case-1-origin.webp");	// 수집 보상: 5장을 모으기 전까지 잠김
 
 		putDeco(new Cookie(COOKIE, id.toString()), body)
 			.andExpect(status().isConflict())

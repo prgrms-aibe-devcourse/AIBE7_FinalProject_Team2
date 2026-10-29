@@ -1,4 +1,4 @@
--- V35__legal_case_cast_sensitive_flags.sql (BE-125)
+-- V37__legal_case_cast_sensitive_flags.sql (BE-125)
 -- 사건마다 배역(내로 · 남불 중 누가 판사 · 검사인가)과 민감 플래그를 기록한다.
 --
 -- cast_roles: {"prosecutor": "naero", "defense": "nambul"} 모양. case_script.cast_roles(V32) · 파이프라인

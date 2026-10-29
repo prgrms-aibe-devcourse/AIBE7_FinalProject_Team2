@@ -105,12 +105,22 @@ class ApiExceptionAdviceTest {
 	}
 
 	@Test
-	@DisplayName("지원하지 않는 메서드는 HTTP 상태(405)를 유지하고 VALIDATION_ERROR, Allow 헤더도 그대로 돌려준다 (리뷰 반영)")
+	@DisplayName("지원하지 않는 메서드는 405 METHOD_NOT_ALLOWED, Allow 헤더도 그대로 돌려준다 (BE-132)")
 	void handleSpringWeb_methodNotAllowed_keepsStatusAndAllowHeader() throws Exception {
 		mockMvc.perform(delete("/test/unexpected"))
 			.andExpect(status().isMethodNotAllowed())
-			.andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+			.andExpect(jsonPath("$.code").value("METHOD_NOT_ALLOWED"))
+			.andExpect(jsonPath("$.message").value(ErrorCode.METHOD_NOT_ALLOWED.getMessage()))
 			.andExpect(header().string("Allow", containsString("GET")));
+	}
+
+	@Test
+	@DisplayName("지원하지 않는 Content-Type은 415 UNSUPPORTED_MEDIA_TYPE (BE-132)")
+	void handleSpringWeb_unsupportedMediaType_returnsOwnCode() throws Exception {
+		mockMvc.perform(post("/test/body").contentType(MediaType.TEXT_PLAIN).content("x"))
+			.andExpect(status().isUnsupportedMediaType())
+			.andExpect(jsonPath("$.code").value("UNSUPPORTED_MEDIA_TYPE"))
+			.andExpect(jsonPath("$.details").value(nullValue()));
 	}
 
 	@Test

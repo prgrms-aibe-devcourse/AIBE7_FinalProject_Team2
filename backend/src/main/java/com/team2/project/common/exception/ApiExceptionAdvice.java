@@ -4,6 +4,7 @@ import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BindException;
@@ -64,8 +65,8 @@ public class ApiExceptionAdvice extends ResponseEntityExceptionHandler {
 
 	/**
 	 * ResponseEntityExceptionHandler가 처리하는 모든 Spring MVC 예외의 공통 통로.
-	 * BindException(@Valid 포함)은 필드별 사유를 details에 담는다. 4xx는 VALIDATION_ERROR,
-	 * 5xx는 INTERNAL_ERROR로 통일한다 (API 명세에 이 예외들에 대응하는 별도 코드가 없음, 1-5).
+	 * BindException(@Valid 포함)은 필드별 사유를 details에 담는다. 4xx는 상태 코드로 에러 코드를 고르고(codeFor),
+	 * 5xx는 INTERNAL_ERROR로 통일한다.
 	 * headers는 그대로 돌려준다 — 405 응답의 Allow처럼 HTTP 명세가 요구하는 헤더가 여기 들어 있다 (리뷰 반영).
 	 */
 	@Override
@@ -81,7 +82,25 @@ public class ApiExceptionAdvice extends ResponseEntityExceptionHandler {
 				.toList()
 			: null;
 		log.debug("요청 처리 중 오류: {}", ex.getMessage());
-		return ResponseEntity.status(statusCode).headers(headers).body(ErrorResponse.of(ErrorCode.VALIDATION_ERROR, details));
+		return ResponseEntity.status(statusCode).headers(headers).body(ErrorResponse.of(codeFor(statusCode), details));
+	}
+
+	/**
+	 * Spring MVC 4xx 예외의 에러 코드 (BE-132). 없는 주소(NoResourceFoundException) · 지원하지 않는 메서드 · Content-Type은
+	 * 입력값 문제가 아니라 요청 자체가 맞지 않는 것이라 따로 나눈다. 그 밖의 4xx(형식 · 헤더 · 바인딩 오류 등)는 VALIDATION_ERROR다.
+	 * HTTP 상태 코드는 바꾸지 않고 code · message만 고른다
+	 */
+	private static ErrorCode codeFor(HttpStatusCode statusCode) {
+		HttpStatus status = HttpStatus.resolve(statusCode.value());
+		if (status == null) {
+			return ErrorCode.VALIDATION_ERROR;	// 표준에 없는 4xx
+		}
+		return switch (status) {
+			case NOT_FOUND -> ErrorCode.NOT_FOUND;
+			case METHOD_NOT_ALLOWED -> ErrorCode.METHOD_NOT_ALLOWED;
+			case UNSUPPORTED_MEDIA_TYPE -> ErrorCode.UNSUPPORTED_MEDIA_TYPE;
+			default -> ErrorCode.VALIDATION_ERROR;
+		};
 	}
 
 	private ResponseEntity<ErrorResponse> validationError(List<FieldErrorDetail> details) {

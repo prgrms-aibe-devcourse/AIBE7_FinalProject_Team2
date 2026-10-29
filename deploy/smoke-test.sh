@@ -9,7 +9,8 @@
 # 2) /api 가 백엔드 JSON을 돌려주는지 — 없는 API 주소도 HTML이 아니라 JSON이어야 한다
 #    (Nginx가 /api를 index.html로 떨어뜨리면 프론트가 "서버 응답을 해석할 수 없어요"를 띄운다, FE-2 리뷰)
 # 3) 정적 파일 캐시 정책 — assets는 오래 캐시, index.html은 캐시 안 함
-# 4) Let's Encrypt 확인 경로가 SPA fallback으로 새지 않는지 (BE-75) — index.html이 나가면 인증서 발급 · 갱신이 실패한다
+# 4) 화면 응답에 보안 헤더가 붙는지 (COMMON-67)
+# 5) Let's Encrypt 확인 경로가 SPA fallback으로 새지 않는지 (BE-75) — index.html이 나가면 인증서 발급 · 갱신이 실패한다
 
 set -uo pipefail
 
@@ -91,6 +92,22 @@ if [[ "$CACHE_CONTROL" == *no-cache* ]]; then
 else
   fail "index.html Cache-Control: ${CACHE_CONTROL:-없음} (no-cache여야 새 배포가 바로 보인다)"
 fi
+
+echo "[보안 헤더]"
+# Nginx가 직접 내려주는 화면(index.html)에 보안 헤더가 붙는지 (COMMON-67, snippets/security-headers.conf).
+# /api 응답은 백엔드(Spring Security)가 붙이므로 여기서는 화면만 본다
+# - 기본은 경고만 남긴다: deploy.sh는 되돌릴 때 이 새 스크립트로 COMMON-67 이전 이미지(헤더 없음)를 검사하므로,
+#   실패로 치면 되돌림까지 실패한다. CI(deploy-images.yml)는 SMOKE_REQUIRE_SECURITY_HEADERS=1로 새 이미지에 대해 실패로 친다
+request "/"
+for expected in "x-content-type-options: nosniff" "x-frame-options: DENY" "referrer-policy: strict-origin-when-cross-origin"; do
+  if tr -d '\r' < "$HEADER_FILE" | grep -qi "^${expected}$"; then
+    pass "/ → ${expected}"
+  elif [[ "${SMOKE_REQUIRE_SECURITY_HEADERS:-}" == "1" ]]; then
+    fail "/ → '${expected}' 헤더가 없음 (snippets/security-headers.conf include 확인)"
+  else
+    echo "  ⚠ / → '${expected}' 헤더가 없다 — COMMON-67 이전 이미지면 정상, 아니면 security-headers.conf include를 확인한다"
+  fi
+done
 
 echo "[HTTPS 준비]"
 # 없는 확인 파일은 404여야 한다. 200 + HTML이면 SPA fallback이 이 경로를 가로챈 것 (snippets/acme-challenge.conf)

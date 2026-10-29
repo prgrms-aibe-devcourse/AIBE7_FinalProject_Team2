@@ -11,7 +11,7 @@ import java.util.Optional;
  * <p>값 목록의 기준은 파이프라인 {@code tools/ai-judgment/script_assembler.py}의 {@code SENSITIVE_FLAGS}다.
  * 그쪽에 플래그를 더하면 여기에도 더한다(두 목록이 같은지는 {@code SensitiveFlagContractTest}가 본다). 여기 없는 값도 적재할 때
  * 이름 그대로 저장되지만 공개 API로는 나가지 않고, 관리자 수정(A-11)에서는 거절된다.
- * DB에는 CHECK가 없다(V35 머리말).
+ * DB에는 CHECK가 없다(V37 머리말).
  *
  * <p>{@code notice}는 사용자에게 안내하는 플래그인지다(사건 상세 알아두기 · 2막 시작 지문, FE-129). 나머지는
  * 대본 생성 가드 전용이라 공개 API로 내보내지 않는다 — 예를 들어 "사형 · 무기형 사건"을 사용자에게 미리

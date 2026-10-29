@@ -3,6 +3,9 @@ package com.team2.project.level.domain;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.team2.project.profile.domain.ProfileStats;
+import com.team2.project.profile.domain.UnlockMark;
+import java.time.Instant;
+import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -33,6 +36,20 @@ class LevelXpTest {
 	@DisplayName("서버가 셀 수 없는 일러스트 수집(null)은 0 — 수집 업적도 주지 않는다")
 	void collectedPending() {
 		assertThat(LevelXp.derived(new ProfileStats(0, false, 0, null))).isZero();
-		assertThat(LevelXp.derived(new ProfileStats(0, false, 0, 5))).isEqualTo(100);
+	}
+
+	@Test
+	@DisplayName("모은 일러스트 · 의상은 1장에 10 (BE-83). 5장이면 50 + 업적 collect-5 100")
+	void collectedItems() {
+		assertThat(LevelXp.derived(new ProfileStats(0, false, 0, 4))).isEqualTo(40);
+		assertThat(LevelXp.derived(new ProfileStats(0, false, 0, 5))).isEqualTo(50 + 100);
+	}
+
+	@Test
+	@DisplayName("해금 기록이 있는 업적은 계산값이 미달이어도 XP가 그대로다 (BE-83)")
+	void unlockedAchievementKeepsXp() {
+		ProfileStats stats = new ProfileStats(0, false, 0, 0,
+			Map.of("cases-3", new UnlockMark(Instant.parse("2026-10-29T00:00:00Z"), true)));
+		assertThat(LevelXp.derived(stats)).isEqualTo(100);
 	}
 }

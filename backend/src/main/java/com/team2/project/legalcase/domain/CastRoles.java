@@ -12,7 +12,7 @@ import java.util.Set;
  * 캐릭터가 맡고 사건마다 내로 · 남불이 번갈아 맡는다(COMMON-65 · character-profile-worldview 5-2).
  * 파이프라인 stages.script.cast · case_script.cast_roles와 같은 키 · 값을 쓴다.
  *
- * <p>DB는 모양을 검사하지 않으므로(V35) 저장하기 전에 {@link #parse}로 확인한다.
+ * <p>DB는 모양을 검사하지 않으므로(V37) 저장하기 전에 {@link #parse}로 확인한다.
  */
 public final class CastRoles {
 
