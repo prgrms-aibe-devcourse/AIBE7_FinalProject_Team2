@@ -202,6 +202,12 @@ public class CaseImportLoader {
 			log.warn("분류 결과에 classification이 없어 민감 플래그를 비워 둡니다 (jobId={})", result.jobId());
 			return null;
 		}
+		JsonNode flagsNode = classification.get("sensitiveFlags");
+		if (flagsNode == null || !flagsNode.isArray()) {
+			// 없거나 배열이 아닌 값을 []로 읽으면 "분류했고 켜진 것 없음"으로 저장돼 안내가 빠진다
+			log.warn("분류 결과에 sensitiveFlags 배열이 없어 미분류로 둡니다 (jobId={})", result.jobId());
+			return null;
+		}
 		Set<String> flags = new LinkedHashSet<>();
 		for (String name : Json.stringArray(classification, "sensitiveFlags")) {
 			if (name.isBlank()) {

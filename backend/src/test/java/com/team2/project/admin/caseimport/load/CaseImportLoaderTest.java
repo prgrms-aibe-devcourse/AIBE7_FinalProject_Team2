@@ -323,6 +323,20 @@ class CaseImportLoaderTest extends ApiIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("분류 결과에 sensitiveFlags가 없거나 배열이 아니면 '켜진 것 없음([])'이 아니라 분류 전(null)으로 둔다 (BE-125)")
+	void load_malformedSensitiveFlags_leavesFlagsUnset() {
+		LegalCase missing = loader.load(caseImport(), resultOf(node(caseJson()), null, node("""
+			{"classification": {"mood": "calculated"}}""")));
+		LegalCase notArray = loader.load(caseImport(), resultOf(node(caseJson()), null, node("""
+			{"classification": {"mood": "calculated", "sensitiveFlags": "MENTAL_HEALTH"}}""")));
+
+		for (LegalCase legalCase : List.of(missing, notArray)) {
+			assertThat(jdbcTemplate.queryForObject("SELECT sensitive_flags::text FROM legal_case WHERE id = ?",
+				String.class, legalCase.getId())).isNull();
+		}
+	}
+
+	@Test
 	@DisplayName("대본이 함께 오면 대본을 만든 배역을 사건 배역으로 쓴다 — 대사에 캐릭터 이름이 들어가 있다 (BE-125)")
 	void load_scriptCastWins() {
 		LegalCase legalCase = loader.load(caseImport(), resultOf(node(caseJson()), node("""
