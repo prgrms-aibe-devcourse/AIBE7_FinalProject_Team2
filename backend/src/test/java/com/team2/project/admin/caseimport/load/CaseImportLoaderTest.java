@@ -298,7 +298,7 @@ class CaseImportLoaderTest extends ApiIntegrationTest {
 	// ---------------------------------------------------------------- 배역 · 민감 플래그 (BE-125)
 
 	@Test
-	@DisplayName("분류 결과의 민감 플래그를 사건에 적는다 — 모르는 값은 버리고 겹친 값은 하나로 (BE-125)")
+	@DisplayName("분류 결과의 민감 플래그를 사건에 적는다 — 모르는 값도 이름 그대로, 겹친 값은 하나로 (BE-125)")
 	void load_savesSensitiveFlags() {
 		LegalCase legalCase = loader.load(caseImport(), resultOf(node(caseJson()), null, node("""
 			{"model": "openai:test", "runs": 3, "needsReview": ["MENTAL_HEALTH"],
@@ -306,7 +306,7 @@ class CaseImportLoaderTest extends ApiIntegrationTest {
 			                    "sensitiveFlags": ["MENTAL_HEALTH", "CAPITAL_PENALTY", "NOT_A_FLAG", "MENTAL_HEALTH"]}}""")));
 
 		assertThat(jdbcTemplate.queryForObject("SELECT sensitive_flags::text FROM legal_case WHERE id = ?",
-			String.class, legalCase.getId())).isEqualTo("[\"MENTAL_HEALTH\", \"CAPITAL_PENALTY\"]");
+			String.class, legalCase.getId())).isEqualTo("[\"MENTAL_HEALTH\", \"CAPITAL_PENALTY\", \"NOT_A_FLAG\"]");
 	}
 
 	@Test
@@ -331,6 +331,22 @@ class CaseImportLoaderTest extends ApiIntegrationTest {
 			 "model": "openai:test", "publishable": true}"""), null));
 
 		assertThat(castOf(legalCase.getId())).isEqualTo(Map.of("prosecutor", "nambul", "defense", "naero"));
+	}
+
+	@Test
+	@DisplayName("대본에 배역이 있는데 읽을 수 없으면 규칙으로 덮지 않고 배정하지 않는다 — 생성 기록에 남긴다 (BE-125)")
+	void load_unreadableScriptCast_leavesCastUnassigned() {
+		LegalCase legalCase = loader.load(caseImport(), resultOf(node(caseJson()), node("""
+			{"evidence": [{"factorId": 7, "role": "prosecutor", "character": "nambul", "text": "계획적이었습니다."}],
+			 "cast": {"prosecutor": "nambul", "defense": "naero", "codefendant": "naero"},
+			 "model": "openai:test", "publishable": true}"""), null));
+
+		assertThat(jdbcTemplate.queryForObject("SELECT cast_roles::text FROM legal_case WHERE id = ?",
+			String.class, legalCase.getId())).isNull();
+		assertThat(jdbcTemplate.queryForObject("""
+			SELECT g.generation_report->>'castWarning' FROM ai_generation g
+			JOIN judgment j ON j.id = g.judgment_id WHERE j.case_id = ?""", String.class, legalCase.getId()))
+			.contains("배역");
 	}
 
 	@Test

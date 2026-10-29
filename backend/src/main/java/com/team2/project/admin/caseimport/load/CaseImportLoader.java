@@ -157,29 +157,40 @@ public class CaseImportLoader {
 	 * 사건 배역 (BE-125).
 	 *
 	 * <p>대본이 함께 왔으면 <b>대본을 만든 배역을 그대로 쓴다</b> — 대본에는 캐릭터 이름이 들어가 있어(누가 검사석에서
-	 * 말하는지) 사건 배역이 다르면 화면과 대사가 어긋난다. 대본이 없으면 범죄 유형별 균형 규칙으로 정한다
-	 * ({@link CaseCastAssigner}). 2단계 등록(분류까지 → 적재하며 배정 → 그 배역으로 대본, BE-129)에서는 이쪽이다.
+	 * 말하는지) 사건 배역이 다르면 화면과 대사가 어긋난다. 대본에 배역이 있는데 읽을 수 없으면 규칙으로 덮지 않고
+	 * 배정하지 않는다(null). 대본이 없으면 범죄 유형별 균형 규칙으로 정한다({@link CaseCastAssigner}).
+	 * 2단계 등록(분류까지 → 적재하며 배정 → 그 배역으로 대본, BE-129)에서는 이쪽이다.
 	 */
 	private Map<String, String> castFor(LegalCase legalCase, PipelineResult result) {
 		JsonNode script = result.script();
 		if (script != null && !script.isNull() && script.hasNonNull("cast")) {
 			Optional<Map<String, String>> scriptCast = CastRoles.parse(Json.toMap(script.get("cast")));
-			if (scriptCast.isPresent()) {
-				// 규칙으로 배정하는 같은 유형의 적재가 세는 도중에 이 배역이 끼어들지 못하게 같은 잠금을 잡는다
-				castAssigner.lock(legalCase.getCrimeType());
-				return scriptCast.get();
+			if (scriptCast.isEmpty()) {
+				// 대사에는 대본의 배역 이름이 이미 들어 있다. 규칙으로 덮으면 화면과 대사가 어긋나므로 배정하지 않고
+				// (null) 생성 기록에 남겨 관리자가 A-11로 정하게 한다
+				log.warn("대본의 배역을 읽지 못해 배정하지 않습니다 (jobId={})", result.jobId());
+				return null;
 			}
-			log.warn("대본의 배역을 읽지 못해 범죄 유형별 규칙으로 배정합니다 (jobId={})", result.jobId());
+			// 규칙으로 배정하는 같은 유형의 적재가 세는 도중에 이 배역이 끼어들지 못하게 같은 잠금을 잡는다
+			castAssigner.lock(legalCase.getCrimeType());
+			return scriptCast.get();
 		}
 		return castAssigner.assign(legalCase.getCrimeType());
+	}
+
+	/** 대본에 배역이 있는데 읽을 수 없는 형식인지 (castFor가 배정하지 않은 경우, 생성 기록에 남긴다) */
+	private static boolean unreadableScriptCast(PipelineResult result) {
+		JsonNode script = result.script();
+		return script != null && !script.isNull() && script.hasNonNull("cast")
+			&& CastRoles.parse(Json.toMap(script.get("cast"))).isEmpty();
 	}
 
 	/**
 	 * 민감 플래그 (BE-125). 분류(classify)를 돌리지 않은 작업이면 null(분류 안 함)로 둔다 — []로 두면
 	 * "분류했는데 아무것도 켜지지 않음"과 구분할 수 없다.
 	 *
-	 * <p>모르는 플래그는 버리고 로그만 남긴다(적재를 막지 않는다, BE-93 "모르는 필드는 지나가게"). 파이프라인에
-	 * 플래그가 늘면 {@link SensitiveFlag}에 더해야 저장된다.
+	 * <p>모르는 플래그도 <b>이름 그대로 저장한다</b>(적재를 막지 않는다, BE-93 "모르는 필드는 지나가게"). 파이프라인에
+	 * 플래그가 늘었는데 {@link SensitiveFlag}가 따라가지 못해도 기록이 남고, 안내 여부는 enum에 더할 때 정해진다.
 	 */
 	private static List<String> sensitiveFlags(PipelineResult result) {
 		JsonNode classify = result.classify();
@@ -193,11 +204,15 @@ public class CaseImportLoader {
 		}
 		Set<String> flags = new LinkedHashSet<>();
 		for (String name : Json.stringArray(classification, "sensitiveFlags")) {
-			if (SensitiveFlag.find(name).isPresent()) {
-				flags.add(name);
-			} else {
-				log.warn("모르는 민감 플래그를 버립니다: {} (jobId={})", name, result.jobId());
+			if (name.isBlank()) {
+				continue;
 			}
+			if (SensitiveFlag.find(name).isEmpty()) {
+				// 버리면 대본은 그 플래그의 가드로 만들어졌는데 사건에는 기록이 없어 안내가 빠진다. 이름 그대로 저장하고
+				// 공개 API가 아는 안내 대상만 내보낸다
+				log.warn("SensitiveFlag에 없는 민감 플래그를 그대로 저장합니다: {} (jobId={})", name, result.jobId());
+			}
+			flags.add(name);
 		}
 		return List.copyOf(flags);
 	}
@@ -266,6 +281,9 @@ public class CaseImportLoader {
 		}
 		if (result.axis() != null && !result.axis().isNull()) {
 			report.put("axis", Json.toMap(result.axis()));
+		}
+		if (unreadableScriptCast(result)) {
+			report.put("castWarning", "대본의 배역을 읽지 못해 사건 배역을 정하지 않았습니다. 관리자가 정해 주세요.");
 		}
 		return report;
 	}
