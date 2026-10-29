@@ -70,10 +70,12 @@ def case_text_parts(case):
 def build_classify_prompt(case):
     """(system, user). 값은 판결문에서 뽑은 데이터라 태그로 감싸고 꺾쇠를 이스케이프한다(axis_vote와 같은 이유)."""
     sections, factors = case_text_parts(case)
-    lines = ["# 사건", "", f"- 죄명: {case.get('chargeName') or '-'}", "", "## 사건 개요", "",
+    charge = escape_tag_data(case.get("chargeName") or "-")
+    lines = ["# 사건", "", f"- 죄명: <charge>{charge}</charge>", "", "## 사건 개요", "",
              "<overview>", escape_tag_data(case.get("overview") or "(없음)"), "</overview>", "", "## 사건 기록", ""]
     for s in sections:
-        lines += [f"<section title=\"{escape_tag_data(s.get('title') or '')}\">", escape_tag_data(s["content"]), "</section>"]
+        title = escape_tag_data(s.get("title") or "").replace('"', "&quot;")  # 속성 값이라 따옴표도 바꾼다
+        lines += [f"<section title=\"{title}\">", escape_tag_data(s["content"]), "</section>"]
     lines += ["", "## 판단 요소", ""]
     lines += [f"- <factor>{escape_tag_data(f['label'])}</factor>" for f in factors]
     lines += ["", "---", "", "위 사건을 시스템 지시의 분류 축대로 분류해, 시스템 지시의 JSON 형식으로만 답한다.", ""]
