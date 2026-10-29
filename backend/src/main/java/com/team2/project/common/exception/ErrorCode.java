@@ -67,6 +67,8 @@ public enum ErrorCode {
 	IMPORT_RESULT_INVALID(HttpStatus.UNPROCESSABLE_CONTENT, "생성 결과를 사건으로 만들 수 없습니다."),
 	// 아이디 회원가입 (확장 단계, BE-113, API 명세 M-5). 로그인 실패는 INVALID_CREDENTIALS를 함께 쓴다
 	DUPLICATE_ID(HttpStatus.CONFLICT, "이미 사용 중인 아이디입니다."),
+	// 닉네임 (확장 단계, BE-139, API 명세 M-5 · M-7)
+	DUPLICATE_NICKNAME(HttpStatus.CONFLICT, "이미 사용 중인 닉네임입니다."),
 	// 수집 상태 저장 (확장 단계, BE-83). details에 넘친 종류(items.kind)를 담는다
 	COLLECTION_LIMIT_EXCEEDED(HttpStatus.CONFLICT, "모을 수 있는 수를 넘었습니다."),
 	// 커뮤니티 (확장 단계, BE-115, API 명세 12장)

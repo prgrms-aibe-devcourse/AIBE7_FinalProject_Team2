@@ -52,6 +52,7 @@
 | v1.46 | 2026-10-29 | 프로필카드 아래 줄 설정 칸 추가 (**확장 단계**, BE-114 · V36 · API 명세 v0.65) — `profile_setting`에 `card_line`(`type` · `signature` · `job`, 기본 `type`, CHECK) · `card_level`(boolean, 기본 `false`) 칸 추가. 기존 행은 기본값. 11장 갱신 |
 | v1.47 | 2026-10-29 | 사건 배역 · 민감 플래그 (**확장 단계**, BE-125 · V37 · API 명세 v0.66) — `legal_case.cast_roles`(jsonb, `{"prosecutor": "naero", "defense": "nambul"}`) · `sensitive_flags`(jsonb 문자열 배열) 추가. 두 칸 모두 DB CHECK를 두지 않고 코드(`CastRoles` · `SensitiveFlag`)가 검사한다. 새 사건은 적재할 때 배정한다 — 대본이 함께 오면 그 배역, 아니면 같은 범죄 유형에서 피고인 역을 덜 맡은 캐릭터(같으면 마지막 배정의 반대). 이미 있는 사건의 초기값은 비공개 시드 저장소의 UPDATE로 넣는다 (`docs/decisions/BE-125.md`) |
 | v1.48 | 2026-10-29 | 커뮤니티 테이블 추가 (**확장 단계**, BE-115 · V38 · API 명세 v0.68) — `community_post`(글쓴이 회원 · 명함 기준 익명 ID · 말머리 · 사건 · 제목 · 본문 · 판결 공유 jsonb · 좋아요 · 댓글 수) · `community_comment` · `community_like`(회원 × 글 하나) 신설. 14장 추가 |
+| v1.49 | 2026-10-29 | 닉네임 중복 금지 (**확장 단계**, BE-139 · V39 · API 명세 v0.69) — `member`에 `uq_member_nickname`(`lower(nickname)` 유니크 인덱스, `nickname IS NOT NULL`인 행만) 추가. 칸은 그대로. 겹치던 기존 닉네임은 먼저 가입한 회원만 남기고 나머지를 NULL로 비운다 |
 
 ---
 
@@ -511,7 +512,7 @@ S-03의 객관식 선택지. 범죄 유형별로 정의한다(FR-2-8).
 | provider_user_id | varchar(64) | ✓ | 공급자 회원번호(카카오 `id`, 숫자 문자열). `LOCAL`은 가입할 때 만든 **UUID** — 로그인 아이디는 여기 두지 않고 `member_password.login_id`에만 둔다 |
 | created_at | timestamptz | ✓ |  |
 | last_login_at | timestamptz |  | 마지막 로그인 성공 시각 |
-| nickname | varchar(12) |  | 표시 이름(v1.42). `LOCAL` 회원만 가입 때 채우고 카카오 회원은 NULL(화면은 "카카오 회원"). **중복 허용**(유니크 없음). 변경 API는 아직 없다 |
+| nickname | varchar(12) |  | 표시 이름(v1.42). 아이디 회원은 가입 때 채우고 카카오 회원은 NULL(커뮤니티에는 `방청객 {회원 ID}`로 보임). **중복 금지**(v1.49, 대소문자 구분 없음 — `uq_member_nickname`, NULL은 겹쳐도 된다). 설정 · 변경은 API 명세 M-7 |
 
 - `(provider, provider_user_id)` 유일(`uq_member_provider_user`). 행은 `INSERT ... ON CONFLICT DO NOTHING`으로 만들어, 같은 계정의 첫 로그인이 동시에 와도 한 행만 생긴다.
 - **카카오 회원은 개인정보를 저장하지 않는다**: 카카오 동의항목(닉네임 · 이메일 · 프로필)을 요청하지 않고 회원번호만 쓴다.
