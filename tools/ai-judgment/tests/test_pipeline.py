@@ -1194,6 +1194,23 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(pipeline.load_paper(config), {"desk": "사회부", "headline": "제목", "deck": None,
                                                        "caption": "설명", "article": ["문단1", "문단2"]})
 
+    def test_bad_paper_input_keeps_previous_script_output(self):
+        """inputs.paper 검증은 이전 결과를 지우기 전에 한다 — 입력 오류가 지난 evidence.json을 날리면 안 된다(PR #329 CodeRabbit 리뷰)."""
+        cast = {"prosecutor": "naero", "defense": "nambul"}
+        config = self.config(generate={"models": ["openai:a"], "runs": 1},
+                             script={"enabled": True, "model": "openai:a", "cast": cast})
+        state = self.run_with(config, {"openai:a": [self.output]}, until="script",
+                              script_answers=[f"증거 대사 {i}입니다." for i in range(6)])
+        evidence_file = Path(state["stages"]["script"]["outputs"]["evidenceFile"])
+        self.assertTrue(evidence_file.exists())
+        classification = {"mood": "tragic", "issue": "admitted", "victim": "punish"}
+        full = self.config(generate={"models": ["openai:a"], "runs": 1},
+                           script={"enabled": True, "model": "openai:a", "full": True, "classification": classification, "cast": cast})
+        full["inputs"]["paper"] = str(self.dir / "missing-paper.json")
+        with self.assertRaises(pipeline.PipelineError):
+            pipeline.stage_script(full, pipeline.load_state(full), self.logs.append)
+        self.assertTrue(evidence_file.exists())  # 지난 결과가 남아 있다
+
     def test_script_full_config_requires_classification(self):
         base = {"enabled": True, "model": "openai:a", "cast": {"prosecutor": "naero", "defense": "nambul"}}
         for changes, message in (({"full": True}, "classification"), ({"full": "yes"}, "stages.script.full"),

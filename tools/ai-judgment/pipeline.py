@@ -1310,6 +1310,9 @@ def stage_script(config, state, log, caller=call):
     case = load_json(input_file(config, state, "case"))
     judgment_output = load_json(selection["outputFile"])
     cast = cfg["cast"]
+    # 입력 검사는 이전 결과를 지우기 전에 끝낸다 — 기사 경로가 틀렸다고 지난 evidence.json · script.json까지 사라지면 입력만 고쳐서는
+    # 되돌릴 수 없다(PR #329 CodeRabbit 리뷰)
+    paper = load_paper(config) if cfg["full"] else None
     out_dir = PIPELINE_DIR / config["name"] / "script"
     if out_dir.exists():
         shutil.rmtree(out_dir)  # 이전 실행 결과와 섞지 않는다 (axis 단계와 같은 정책)
@@ -1319,7 +1322,6 @@ def stage_script(config, state, log, caller=call):
         raise PipelineError("대본 전체 생성에는 사건 분류가 필요합니다. classify 단계를 켜거나 stages.script.classification을 넣으세요")
     if cfg["full"]:
         log(f"대본 전체 생성: {cfg['model']} (배역 — 검사 · 판사: {cast['prosecutor']} · 변호인 · 피고인 역: {cast['defense']})")
-        paper = load_paper(config)
         generated = generate_units(
             case, judgment_output, cast, classification, model=cfg["model"], paper=paper, caller=caller,
             max_retries=cfg["maxRetries"], temperature=cfg["temperature"], max_tokens=cfg["unitMaxTokens"],
