@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { ACT_GROUPS, DEFAULT_CAST, castOf, flatten, seatFor, sideOf, skipTarget } from './stage.js';
+import { ACT_GROUPS, DEFAULT_CAST, castOf, flatten, flipFor, seatFor, sideOf, skipTarget } from './stage.js';
 
 const script = JSON.parse(readFileSync(new URL('../content/case-1/script.json', import.meta.url)));
 const steps = flatten(script.acts, ['1a', '1b']);
@@ -135,4 +135,23 @@ test('5막 판사 · 피고인과 3 → 4막: 맞바꾼 대본에서도 두 캐�
   ['naero', 'nambul'].forEach((who) => {
     assert.equal(seatFor(who, firstOf4.look[who], SWAPPED_CAST), seatFor(who, lastOf3.look[who], SWAPPED_CAST), `${who}: 3 → 4막에서 자리를 바꾸지 않는다`);
   });
+});
+
+test('바라보는 방향(FE-128): 서 있는 곳에서 가운데를 보게 뒤집는다 — 원본은 내로 오른쪽 · 남불 왼쪽을 본다', () => {
+  assert.equal(flipFor('naero', 'left'), false, '내로는 왼쪽에 서면 원본(오른쪽)대로 가운데를 본다');
+  assert.equal(flipFor('naero', 'right'), true);
+  assert.equal(flipFor('nambul', 'right'), false, '남불은 오른쪽에 서면 원본(왼쪽)대로 가운데를 본다');
+  assert.equal(flipFor('nambul', 'left'), true);
+  ['naero', 'nambul'].forEach((who) => assert.equal(flipFor(who, 30), false, `${who}: 가운데(피고인석)는 원본 방향`));
+  assert.equal(flipFor('naero', 5), false);
+  assert.equal(flipFor('naero', 55), true);
+  assert.equal(flipFor('nambul', 5), true);
+  assert.equal(flipFor('nambul', 55), false);
+  assert.equal(flipFor('naero', undefined), false, '자리를 모르면 뒤집지 않는다');
+});
+
+test('사건 1(기본 배역)은 어느 장면에서도 뒤집히지 않는다 (피고인석 제외) — 원래 화면 그대로', () => {
+  const seatsOf = (acts, cast) => acts.flatMap((id) => flatten(script.acts, [id])).flatMap((step) => ['naero', 'nambul'].map((who) => ({ who, seat: seatFor(who, step.look[who], cast), stand: step.spots[who] === 'stand' })));
+  const ids = Object.keys(script.acts);
+  seatsOf(ids, DEFAULT_CAST).filter((s) => !s.stand).forEach((s) => assert.equal(flipFor(s.who, s.seat), false, `기본 배역 ${s.who} ${s.seat}`));
 });

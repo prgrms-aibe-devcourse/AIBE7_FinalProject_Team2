@@ -55,6 +55,7 @@
 .stage-wrap .spr[data-row="back"] { z-index: 1; scale: .88; }
 .stage-wrap .spr.role { height: 52%; }
 .stage-wrap .spr-img { display: block; height: 100%; width: auto; transform-origin: bottom center; transition: filter .3s, transform .3s; }
+.stage-wrap .spr[data-flip="1"] .spr-img { scale: -1 1; } /* 가운데를 보게 좌우 뒤집기(FE-128). 이름표는 spr 안 형제라 뒤집히지 않는다 */
 .stage-wrap .spr.dim .spr-img { filter: brightness(.8) saturate(.85); transform: scale(.97); }
 .stage-wrap .spr.hide { opacity: 0; pointer-events: none; }
 .stage-wrap [data-role="narrator"] { --role: var(--color-role-narrator); }

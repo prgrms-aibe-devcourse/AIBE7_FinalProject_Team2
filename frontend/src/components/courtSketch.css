@@ -81,6 +81,7 @@
 .stage-wrap .cameo.at-left { left: 40%; }
 .stage-wrap .cameo.at-right { left: 62%; }
 .stage-wrap .cameo[hidden] { display: none; }
+.stage-wrap .cameo[data-flip="1"] { transform: scaleX(-1); } /* 볼따구도 가운데를 본다(FE-128). 나타날 때 scale 애니메이션과 겹치지 않게 transform으로 */
 /* 가운데 피고인석(stand)에 선 캐릭터가 말하면 꼬리도 가운데 */
 .stage-wrap:not(.paper-mode) .dlg[data-spot="stand"]::before { left: calc(50% - 13px); right: auto; scale: 1 1; }
 .stage-wrap:not(.paper-mode) .dlg[data-spot="stand"]::after { left: calc(50% - 10px); right: auto; scale: 1 1; }

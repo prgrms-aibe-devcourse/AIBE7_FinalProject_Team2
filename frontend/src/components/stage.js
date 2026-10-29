@@ -60,6 +60,16 @@ export function castOf(cast) {
 export const sideOf = (who, cast = DEFAULT_CAST) => (castOf(cast).prosecutor === who ? 'left' : 'right');
 /** 이 장면에서 서는 쪽: 역할 의상(피고인 역 제외)이면 의상 자리, 그 밖은 묶음 쪽 */
 export const seatFor = (who, look, cast = DEFAULT_CAST) => (look?.startsWith('role:') && SEAT[look.slice(5)]) || sideOf(who, cast);
+// 바라보는 방향(FE-128): 원본 그림은 내로가 오른쪽, 남불이 왼쪽을 본다(캐릭터 이미지 규칙). 서 있는 곳에서 **가운데를 보도록** 좌우를 뒤집는다 —
+// 왼쪽에 서면 오른쪽을, 오른쪽에 서면 왼쪽을 본다. 가운데(피고인석 stand · 슬롯 30)에서는 원본 방향 그대로다.
+// 이 규칙은 그림이 규칙대로 그려져 있다는 전제다(어긋난 그림은 이미지 쪽에서 바로잡는다)
+export const FACING = { naero: 'right', nambul: 'left' };
+/** x: 슬롯 0~60(30 = 가운데) 또는 쪽('left' · 'right'). 뒤집어야 하면 true */
+export function flipFor(who, x) {
+  const at = x === 'left' ? 0 : x === 'right' ? 60 : x;
+  if (!Number.isFinite(at) || at === 30) return false;
+  return (at < 30 ? 'right' : 'left') !== FACING[who];
+}
 let chipsOff = false; // 개발 전용: 역할 이름표 끄기(이름표가 필요한지 판단용). 화면을 다시 그려도 유지한다
 const FACES = ['neutral', 'happy', 'surprised', 'thinking', 'sorry', 'cheer'];
 const iconOf = (who, look) => {
@@ -411,6 +421,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
     cameo.getAnimations().forEach((animation) => animation.cancel());
     cameo.src = imageOf(who, CAMEO_LOOK);
     cameo.className = `cameo cameo-${who} at-${sideOf(who, cast)}`; // 높이는 캐릭터 그림, 가로 자리는 묶음 쪽(FE-128)
+    cameo.dataset.flip = flipFor(who, sideOf(who, cast)) ? '1' : ''; // 볼따구도 가운데를 본다
     cameo.hidden = false;
     if (!reducedMotion()) cameo.animate([{ scale: '0' }, { scale: '1.12', offset: .7 }, { scale: '1' }], { duration: 220, easing: 'cubic-bezier(.2, .8, .2, 1)' }); // 0 크기에서 뿅
   }
@@ -542,6 +553,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
       if (at && Number.isFinite(at.slot)) { figures[who].dataset.slot = ''; figures[who].style.setProperty('--slot', at.slot); } else { delete figures[who].dataset.slot; figures[who].style.removeProperty('--slot'); }
       if (at?.row) figures[who].dataset.row = at.row; else delete figures[who].dataset.row;
       figures[who].dataset.seat = seatFor(who, look, cast); // 묶음 자리(FE-128). 피고인석(stand) · 슬롯은 위 spot · slot이 덮는다
+      figures[who].dataset.flip = flipFor(who, spot === 'stand' ? 30 : at && Number.isFinite(at.slot) ? at.slot : figures[who].dataset.seat) ? '1' : ''; // 가운데를 보게
       chips[who].textContent = step.chips[who];
       chips[who].dataset.role = ROLE_COLOR[step.chips[who]] ?? 'actor';
       chips[who].hidden = !step.chips[who];
