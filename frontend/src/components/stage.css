@@ -110,6 +110,7 @@
 
 .stage-wrap .sysline { position: absolute; left: 0; right: 0; top: 44%; text-align: center; color: var(--navy); font-weight: 800; font-size: max(14px, 2cqw); padding: 0 10%; }
 .stage-wrap .sysline.on-dark { color: var(--color-on-accent); }
+.stage-wrap .sysline.notice { top: 17%; font-weight: 700; font-size: max(13px, 1.6cqw); line-height: 1.5; } /* 민감 사건 안내(FE-129): 가운데는 캐릭터가 서 있어 가린다 → 재판 순서 띠 아래 벽 쪽 */
 .stage-wrap .stage:has(.laws:not([hidden])) .sysline { top: 8%; } /* AI 판사가 서 있으면 문구는 머리 위로 */
 .stage-wrap .flash { position: absolute; inset: 0; background: var(--color-card); opacity: 0; pointer-events: none; }
 .stage-wrap .flash.on { animation: stage-flash .35s; }

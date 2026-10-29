@@ -4,6 +4,7 @@ import { renderProgressSidebar } from './progressSidebar.js';
 import { renderContent } from '../../utils/contentLines.js';
 import { renderStage } from '../../components/stage.js';
 import { SCRIPTS } from '../../content/scripts.js';
+import { sensitiveNotice } from '../../content/sensitiveNotice.js';
 import { restartMock, jumpActMock } from '../../mocks/mockStageButtons.js';
 
 // 양측 주장 카드 위 안내 (정보 구조 S-04 v1.10, FE-14). 서버 응답에 없는 화면 고정 문구다.
@@ -21,6 +22,8 @@ export async function renderReviewPage(container, { caseId, caseHeader, api, nav
   // 컨테이너가 다른 화면으로 바뀌면 이전 요청은 그 화면을 덮어쓰지 않는다.
   const active = () => container.contains(root);
   let loading = false;
+  // 민감 사건 안내(FE-129): API 16의 sensitiveFlags로 2막 시작 지문 한 줄을 만든다. 화면을 여는 즉시 받아 두고, 못 받으면 안내 없이 진행한다
+  const noticeReady = api.getCaseDetail(caseId).then((detail) => sensitiveNotice(detail?.sensitiveFlags)).catch(() => '');
 
   function element(tag, className, text) {
     const node = document.createElement(tag);
@@ -99,7 +102,7 @@ export async function renderReviewPage(container, { caseId, caseHeader, api, nav
   }
   // 2막 재판(흐름 목업, REQ-089). 서버 순서(섹션 ② → ③ → ④)는 그대로 두고, 대본의 confirm 장면을 떠날 때 "읽었습니다"를 보낸다.
   // 사건 요약(개요 · 핵심 사실)은 3막 내 판결(S-05) 파일철 첫 장이 보여 준다(FE-48)
-  function drawStage(data, script) {
+  function drawStage(data, script, notice = '') {
     root.classList.add('has-stage');
     const header = element('header', 'case-topbar');
     header.append(button('← 목록', () => navigate('list'), 'back-button'),
@@ -108,6 +111,7 @@ export async function renderReviewPage(container, { caseId, caseHeader, api, nav
     main.append(element('h1', 'page-heading visually-hidden', '재판'), renderStage({
       script,
       order: ['2'],
+      notice,
       start: (step) => step.section === data.openStep,
       onRestart: restartMock(caseId),
       onJump: jumpActMock(caseId),
@@ -132,7 +136,7 @@ export async function renderReviewPage(container, { caseId, caseHeader, api, nav
     // 사건 번호는 DB마다 다를 수 있어 번호만으로 고르지 않는다. 대본의 제목이 사건 제목과 같을 때만 무대를 쓴다(S-03과 같은 규칙)
     const candidate = SCRIPTS[caseId];
     const script = candidate?.title === caseHeader.title ? candidate : undefined;
-    if (script) { drawStage(data, script); return; }
+    if (script) { noticeReady.then((notice) => { if (active()) drawStage(data, script, notice); }); return; }
     const current = data.openStep ?? 4;
     const header = element('header', 'case-topbar');
     header.append(button('← 목록', () => navigate('list'), 'back-button'),

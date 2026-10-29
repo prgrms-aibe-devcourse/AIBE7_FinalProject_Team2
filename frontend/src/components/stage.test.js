@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { ACT_GROUPS, flatten, skipTarget } from './stage.js';
+import { ACT_GROUPS, attachNotice, flatten, skipTarget } from './stage.js';
 
 const script = JSON.parse(readFileSync(new URL('../content/case-1/script.json', import.meta.url)));
 const steps = flatten(script.acts, ['1a', '1b']);
@@ -89,4 +89,23 @@ test('자리는 이름("stand") 또는 슬롯 { slot, row }이고, 다음 장면
 test('대본 키는 화면의 6막 칩(ACT_GROUPS)과 하나씩 맞는다(FE-59)', () => {
   assert.equal(ACT_GROUPS.length, 6);
   assert.deepEqual(ACT_GROUPS.flatMap(({ ids }) => ids).sort(), Object.keys(script.acts).sort());
+});
+
+test('민감 사건 안내(FE-129): 2막 첫 장면에만 지문으로 붙고, 안내가 없으면 그대로다', () => {
+  const notice = '이 사건에는 정신건강과 관련된 내용이 나와요.';
+  const all = flatten(script.acts, ['1a', '2', '3']);
+  const attached = attachNotice(all, notice);
+  const first = attached.findIndex((step) => step.actId === '2');
+  assert.equal(attached[first].system, notice);
+  assert.equal(attached[first].notice, true); // 화면이 위쪽 자리(.notice)에 놓는 표시
+  assert.equal(attached.filter((step) => step.system === notice).length, 1);
+  assert.equal(attached.length, all.length);
+  assert.equal(attachNotice(all, ''), all); // 안내가 없으면 같은 배열
+  assert.equal(attachNotice(flatten(script.acts, ['1a']), notice).some((step) => step.system === notice), false); // 2막이 없는 화면
+});
+
+test('민감 사건 안내: 2막 첫 장면에 이미 지문이 있으면 덮어쓰지 않는다', () => {
+  const acts = { 2: { look: { naero: 'role:prosecutor', nambul: 'role:defense' }, steps: [{ say: 'narrator', text: '재판을 시작해요.', system: '법정에 들어갑니다' }, { say: 'naero', text: '네.' }] } };
+  const steps = flatten(acts, ['2']);
+  assert.equal(attachNotice(steps, '안내')[0].system, '법정에 들어갑니다');
 });

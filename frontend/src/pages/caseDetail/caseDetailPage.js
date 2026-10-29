@@ -1,6 +1,7 @@
 import { button, element } from '../../components/siteLayout.js';
 import { screenByStatus } from '../../utils/screenByStatus.js';
 import { TYPE_NOTES } from '../../content/typeNotes.js';
+import { sensitiveNotice } from '../../content/sensitiveNotice.js';
 import { caseStage, mountStagePage, scriptFor } from '../overview/overviewPage.js';
 import { caseInfoEar, caseNewspaper, earButton, paperFromCase } from '../../components/newspaperFront.js';
 import { evidencePhotosFromPaper, fetchCasePaper } from '../../utils/newspaper.js';
@@ -53,9 +54,12 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
     const wrap = element('aside', 'story-extra');
     wrap.setAttribute('aria-label', '함께 읽기');
     const note = TYPE_NOTES[data.crimeType];
-    if (note) {
+    const notice = sensitiveNotice(data.sensitiveFlags); // 민감 사건 안내(FE-129): 같은 알아두기 칸에 함께, 일반 설명 아래 점선으로 나눠 한 줄
+    if (note || notice) {
       const box = element('div', 'extra-note');
-      box.append(element('p', 'extra-label', '알아두기'), element('p', 'extra-text', note.replace(/^\[알아두기\]\s*/, '')));
+      box.append(element('p', 'extra-label', '알아두기'));
+      if (note) box.append(element('p', 'extra-text', note.replace(/^\[알아두기\]\s*/, '')));
+      if (notice) box.append(element('p', 'extra-text extra-notice', notice));
       wrap.append(box);
     }
     api.getCases(data.crimeType).then(({ cases }) => {

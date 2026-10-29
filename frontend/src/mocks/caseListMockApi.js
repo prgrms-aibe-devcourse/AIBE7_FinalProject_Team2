@@ -56,6 +56,9 @@ export async function getCases(crimeType) {
   });
 }
 
+// 민감 사건 안내 확인용 목(FE-129): 사건 4만 안내 대상 플래그가 있다. 실제 서버는 안내 대상 플래그만 sensitiveFlags로 내리고, 없으면 필드를 뺀다
+const mockSensitiveFlags = { 4: ['MENTAL_HEALTH'] };
+
 // API 16 — GET /cases/{caseId} (S-20 사건 디테일). API 1 카드 값 + 죄명 · 사건 개요 · 내 상태.
 // 사건 1은 S-03 개요 목(API 4)과 같은 죄명 · 개요를 쓰고, 나머지 사건은 유형별 죄명 · 짧은 소개로 채운다(임의 데이터)
 export async function getCaseDetail(caseId) {
@@ -68,6 +71,7 @@ export async function getCaseDetail(caseId) {
     chargeName: chargeNameOf(item),
     overview: known?.overview ?? item.shortIntro,
     scriptReady: scriptReadyOf(caseId),
+    ...(mockSensitiveFlags[caseId] ? { sensitiveFlags: mockSensitiveFlags[caseId] } : {}),
     myStatus: myStatusOf(caseId),
   });
 }

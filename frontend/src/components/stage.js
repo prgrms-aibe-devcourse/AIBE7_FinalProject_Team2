@@ -92,6 +92,15 @@ export function flatten(acts, order) {
   return steps;
 }
 
+// 민감 사건 안내 (FE-129): 2막 시작 장면에 지문(system 캡션) 한 줄을 단다. 캐릭터 대사가 아니라 화면 아래 지문이고,
+// 그 장면에 이미 지문 · 암전 문구가 있으면 건드리지 않는다. 안내할 내용이 없으면(notice 빈 값) 그대로 돌려준다
+export function attachNotice(steps, notice, actId = '2') {
+  if (!notice) return steps;
+  const at = steps.findIndex((step) => step.actId === actId);
+  if (at < 0 || steps[at].system || steps[at].blackout) return steps;
+  return steps.map((step, i) => (i === at ? { ...step, system: notice, notice: true } : step));
+}
+
 // 대사 건너뛰기: 같은 막에서 다음 보드 장면, 없으면 막의 마지막 장면으로 간다.
 // 서버 확인(confirm)이 걸린 장면은 건너뛰지 않는다 — 건너뛰면 "읽었습니다" 순서가 어긋난다.
 export function skipTarget(steps, index) {
@@ -276,6 +285,7 @@ function evidenceBoard(script, at) {
 // (테스트 기간 · 목 데이터 전용, 이 화면에 없는 막은 화면이 넘겨 준다). 반환한 요소의 enterPhoto()는 신문 사진 속으로 들어가는 연출.
 // choices: 대사창 안 선택지 { 이름: [{ label, action(note), primary }] } — 대본 step.choices로 고른다(타이핑이 끝나면 뜬다, note는 결과 안내 줄).
 // sheet: 대본 scene "sheet"에서 쓰는 큰 지면(6막은 화면이 넘겨 주고, 없으면 대본 paper로 1막 사건 기사를 만든다).
+// notice: 민감 사건 안내 한 줄(FE-129) — 2막 시작 장면에 지문으로 단다(attachNotice).
 // 장면의 focus 기사로 카메라가 옮겨 가고, 첫 장면의 from 요소가 무대를 채운 데서 빠져나온다.
 // fromRect: 첫 장면의 from 요소를 이 화면 사각형(앞 막 무대 자리)에서 시작한다(6막). cameraFill · cameraMinScale · cameraMaxUnit은 sheetCamera 옵션.
 // layout 'paper': 무대 상자 없이 지면(sheet)이 화면 전체가 된다(S-20 · 1막, S-02 신문과 같은 짜임). 막 칩 · 보드는 지면의
@@ -283,13 +293,13 @@ function evidenceBoard(script, at) {
 // 캐릭터 · 대사창 · 조작 줄은 화면 아래에 고정된다. 카메라는 화면을 굴린다(paperCamera)
 // parked: 지면만 보여 주고 캐릭터 · 대사창 · 조작 줄은 숨긴 채 기다린다(S-20 사건 정보 — 체험 시작 전). 화면이 wrap.release()로 풀면
 // 내로 · 남불이 들어오며 첫 대사가 시작된다.
-export function renderStage({ script, order, cards = {}, inputCards = [], choices = {}, start, onConfirm, onRestart, onJump, sheet: given, layout = 'box', parked: parkedAtStart = false, cameraFill = false, cameraMinScale = 0, cameraMaxUnit = 0, fromRect }) {
+export function renderStage({ script, order, cards = {}, inputCards = [], choices = {}, start, onConfirm, onRestart, onJump, sheet: given, layout = 'box', parked: parkedAtStart = false, cameraFill = false, cameraMinScale = 0, cameraMaxUnit = 0, fromRect, notice = '' }) {
   const paperMode = layout === 'paper' && Boolean(given);
   let parked = parkedAtStart;
   let again = false; // 이미 지나온 체험을 다시 보는 중(S-20 "시작하기"): 대본 textAgain이 있으면 그 문장을 쓴다
   const lineOf = (step) => (again && step.textAgain) || step.text || '';
   const asks = (step) => Boolean(step.choices && choices[step.choices]); // 선택지로만 넘어가는 장면
-  const steps = flatten(script.acts, order);
+  const steps = attachNotice(flatten(script.acts, order), notice);
   let index = Math.max(0, start ? steps.findIndex(start) : 0);
   const jumpAct = takeJump();
   const jumped = steps.findIndex((step) => step.actId === jumpAct);
@@ -341,6 +351,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
   const procs = element('div', 'proc');
   procs.setAttribute('aria-label', '재판 순서');
   const sys = element('div', 'sysline');
+  sys.setAttribute('aria-live', 'polite'); // 지문(막 안내 · 민감 사건 안내)이 바뀌면 읽어 준다(FE-129)
   const flash = element('div', 'flash');
   const court = courtSet();
   // 4막 AI 판사 셋: 자리는 고정(로봉 · 로울 · 로북). 자리마다 세 자세 그림을 겹쳐 두고 보일 그림만 켠다(0.3초 겹쳐 바뀜).
@@ -569,6 +580,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
     const caption = step.blackout ?? step.system ?? '';
     sys.textContent = caption;
     sys.hidden = !caption;
+    sys.classList.toggle('notice', Boolean(step.notice) && !step.blackout); // 민감 사건 안내(FE-129)는 캐릭터에 가리지 않게 위쪽에
     sys.classList.toggle('on-dark', dark);
 
     // 증거판은 칸마다 따로 스크롤하고, 나머지 카드는 카드 전체가 스크롤된다
