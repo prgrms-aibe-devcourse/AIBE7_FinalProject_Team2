@@ -49,6 +49,7 @@ from llm import (DEFAULT_MAX_ATTEMPTS, DEFAULT_MAX_WAIT, LLMError, LLMQuotaExhau
                  parse_model_spec)
 from to_seed_sql import NAME_MAX_LENGTH, build_sql
 from script_assembler import build_script, check_paper, classification_errors, generate_units, normalize_paper
+from script_repair import repair_units
 from script_generation import balance_warning, generate_evidence_lines
 from script_generation import cast_errors as script_cast_errors
 from select_semantic import DEFAULT_WEIGHT as DEFAULT_SEMANTIC_WEIGHT
@@ -136,9 +137,10 @@ DEFAULT_CONFIG = {
         # full: 증거조사뿐 아니라 대본 전체(U0 설계도 · U1 · U2 · U4)를 만들고 script.json으로 조립한다 (BE-121). classification
         # (분위기 · 쟁점 · 피해자 측 · 부가 인물 · 민감 플래그)이 필요하다 — 자동 분류(BE-123) 전까지는 설정으로 넣는다.
         # unitMaxTokens · unitTimeout은 여러 줄을 한 번에 받는 U0 · U1 · U2 · U4용(maxTokens · timeout은 증거조사 한 줄용)
+        # repairRetries: 대본 전체(full)의 검수 오류(BE-122)가 난 줄 하나를 고쳐 쓰는 최대 횟수. 0이면 고치지 않는다
         "script": {"enabled": False, "model": None, "cast": None, "maxRetries": 2, "temperature": None,
                    "maxTokens": 2000, "timeout": 60, "delay": 0.0,
-                   "full": False, "classification": None, "unitMaxTokens": 6000, "unitTimeout": 150},
+                   "full": False, "classification": None, "unitMaxTokens": 6000, "unitTimeout": 150, "repairRetries": 2},
         "load": {
             # court: 재판부 판결 초안이 있으면 비공개로 함께 적재한다 (BE-38)
             "enabled": True, "case": True, "court": True, "applyToDb": True,
@@ -553,7 +555,8 @@ def script_errors(config):
     elif cfg["full"] and not (cfg.get("classification") is None and config["stages"]["classify"]["enabled"]):
         # 분류를 설정에 넣지 않았으면 classify 단계 결과를 쓴다(BE-123). 둘 다 없으면 블록을 고를 수 없다
         errors += classification_errors(cfg.get("classification"))
-    for key, minimum in (("maxRetries", 0), ("maxTokens", 1), ("timeout", 1), ("unitMaxTokens", 1), ("unitTimeout", 1)):
+    for key, minimum in (("maxRetries", 0), ("maxTokens", 1), ("timeout", 1), ("unitMaxTokens", 1), ("unitTimeout", 1),
+                         ("repairRetries", 0)):
         value = cfg.get(key)
         if not isinstance(value, int) or isinstance(value, bool) or value < minimum:
             errors.append(f"stages.script.{key}는 {minimum} 이상 정수다")
@@ -1327,6 +1330,15 @@ def stage_script(config, state, log, caller=call):
             max_retries=cfg["maxRetries"], temperature=cfg["temperature"], max_tokens=cfg["unitMaxTokens"],
             evidence_max_tokens=cfg["maxTokens"], timeout=cfg["unitTimeout"], evidence_timeout=cfg["timeout"],
             delay=cfg["delay"], log=log)
+        if cfg["repairRetries"] and any(i["severity"] == "error" for i in generated.get("review", [])):
+            # 검수 오류가 난 줄만 고쳐 쓰고, 남으면 그 단위(U1 · U4)만 다시 만든다(BE-122 2차, script_repair.py)
+            generated = repair_units(
+                case, judgment_output, cast, classification, generated, model=cfg["model"], caller=caller,
+                retries=cfg["repairRetries"], max_retries=cfg["maxRetries"], temperature=cfg["temperature"],
+                max_tokens=cfg["unitMaxTokens"], evidence_max_tokens=cfg["maxTokens"], timeout=cfg["unitTimeout"],
+                evidence_timeout=cfg["timeout"], delay=cfg["delay"], log=log)
+            fixed = [r for r in generated["repairs"] if r["ok"]]
+            log(f"검수 오류 고쳐 쓰기: {len(generated['repairs'])}건 중 {len(fixed)}건 해결")
         lines, stopped = generated["evidence"], generated["stopped"]
     else:
         log(f"대본 증거조사 생성: {cfg['model']} (배역 — 검사: {cast['prosecutor']} · 변호인: {cast['defense']})")

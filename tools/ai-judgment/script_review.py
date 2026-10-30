@@ -85,7 +85,20 @@ SENTENCING_PATTERN = r"구형|(?:징역|금고|벌금)[^.\n]{0,15}\d[^.\n]{0,15}
 SENTENCING = re.compile(SENTENCING_PATTERN)
 # 형량 문형("징역 2년" · "벌금 500만 원"). 값이 권고형 · AI 판결 형량과 같고 입력에 같은 문형이 없으면 누출이다. 숫자만 비교하면
 # 입력 어딘가에 같은 한 자리 숫자("2")가 있을 때 "징역 2년"(AI 판결 24개월)을 놓친다(PR #352 해송님 리뷰)
-PENALTY = re.compile(r"(?P<kind>징역|금고|벌금|집행유예)\s*(?P<n>\d[\d,]*)\s*(?P<unit>년|개월|만\s*원|억\s*원|원)")
+PENALTY = re.compile(r"(?:징역|금고|벌금|집행유예)\s*(?P<n>\d[\d,]*)\s*(?P<unit>년|개월|월|만\s*원|억\s*원|원)"
+                     r"|(?P<n2>\d[\d,]*)\s*(?P<unit2>년|개월)\s*형(?![가-힣]*사)")  # "2년형" (형사 · 형사재판은 아니다)
+
+
+def penalty_values(text):
+    """형량 문형을 (쓴 말, 숫자, 값)으로. 값은 개월 수 또는 원이라 "징역 10월"과 "징역 10개월"이 같은 값이다."""
+    found = []
+    for m in PENALTY.finditer(text or ""):
+        raw = (m.group("n") or m.group("n2")).replace(",", "")
+        n, unit = int(raw), re.sub(r"\s", "", m.group("unit") or m.group("unit2"))
+        value = {"년": ("months", n * 12), "개월": ("months", n), "월": ("months", n), "만원": ("won", n * 10_000),
+                 "억원": ("won", n * 100_000_000), "원": ("won", n)}[unit]
+        found.append((m.group(0), raw, value))
+    return found
 # 판결 전에 공개되지 않는 단계 (BE-119 공개 범위)
 HIDDEN_STAGES = ("LAW", "SUMMARY")
 
@@ -233,18 +246,18 @@ def line_issues(unit, path, text, kind, ctx, *, factor=None):
     issues += [issue("BANNED_WORD", f"금지어 포함: {word}") for word, pattern in BANNED_PATTERNS.items()
                if re.search(pattern, text)]
 
-    # 형량 문형: 값이 권고형 · AI 판결 형량과 같으면, 입력에 같은 숫자가 있어도 누출이다(입력에 같은 문형이 있을 때만 통과)
-    flat = lambda t: re.sub(r"[\s,]", "", t or "")  # noqa: E731
+    # 형량 문형("징역 2년"): 판결 입력 전에는 값이 무엇이든 형량을 말하는 것 자체가 앵커링이다(구형 금지 지시와 같은 이유).
+    # 입력에 같은 값의 형량이 있으면(전과 사실 "징역 10월을 선고받은 전력") 통과한다. 처음에는 권고형 · AI 판결과 값이 같을 때만
+    # 잡았는데, 다른 값의 형량("징역 2년은 과합니다")을 놓쳤다(PR #355 해송님 실측)
+    allowed = {value for _, _, value in penalty_values(source)}
+    leak_values = {("months", m) for m in ctx["leak_months"]} | {("won", w) for w in ctx["leak_won"]}
     leaked_numbers = set()
-    for m in PENALTY.finditer(text):
-        n = int(m.group("n").replace(",", ""))
-        unit_name = re.sub(r"\s", "", m.group("unit"))
-        months = {"년": n * 12, "개월": n}.get(unit_name)
-        won = {"만원": n * 10_000, "억원": n * 100_000_000, "원": n}.get(unit_name)
-        hit = months in ctx["leak_months"] if months is not None else won in ctx["leak_won"]
-        if hit and flat(m.group(0)) not in flat(source):
-            issues.append(issue("VERDICT_LEAK", f"판결 · 권고형과 같은 형량 '{m.group(0)}'가 들어갔습니다(판결 입력 전 앵커링)"))
-            leaked_numbers.add(m.group("n").replace(",", ""))
+    for words, raw, value in penalty_values(text):
+        if value in allowed:
+            continue
+        same = "판결 · 권고형과 같은 " if value in leak_values else ""
+        issues.append(issue("VERDICT_LEAK", f"{same}형량 '{words}'가 들어갔습니다(판결 입력 전 앵커링)"))
+        leaked_numbers.add(raw)
 
     # 숫자: 입력에 없는 숫자. 공개 전 정보(양형기준 · 정리 · 판결 형량)의 숫자면 누출로 본다
     known = _number_tokens(source)
@@ -270,7 +283,7 @@ def line_issues(unit, path, text, kind, ctx, *, factor=None):
         issues.append(issue("VERDICT_LEAK", f"공개 전 정보의 낱말 '{leaked[0]}'가 들어갔습니다"))
 
     if kind != "design":
-        if CLAIM.search(text) and _is_fact_claim(text, ctx, factor):
+        if CLAIM.search(text) and _is_fact_claim(text, ctx, factor, indictment=unit == "U2" and path.startswith("/indict/")):
             issues.append(issue("FACT_AS_CLAIM", "사실로 적힌 내용을 주장 문형으로 소개했습니다 — 사실은 주장으로 낮추지 않습니다"))
         emotions = [w for w in EMOTION_WORDS if w in text and w not in source]
         if emotions:
@@ -278,11 +291,15 @@ def line_issues(unit, path, text, kind, ctx, *, factor=None):
     return issues
 
 
-def _is_fact_claim(text, ctx, factor):
+def _is_fact_claim(text, ctx, factor, *, indictment=False):
     if factor is not None:  # U3: 한 줄이 판단 요소 하나를 소개하고, 2막 증거는 모두 개요 · 상세 사실이다
         return factor.get("revealStage") in ("OVERVIEW", "DETAIL")
-    facts = [f for f in ctx["facts"] if overlap(f, text) >= 0.6]
     claims = [c for c in ctx["claims"] if overlap(c, text) >= 0.6]
+    if indictment:
+        # 공소사실은 검사가 사실로 말하는 줄이다. 피고인 주장을 옮긴 게 아니면 "주장" 문형 자체가 사실을 낮춘 것이다 —
+        # 요소 라벨과 낱말 겹침으로는 바꿔 말한 공소사실을 놓쳤다(PR #352 해송님 리뷰)
+        return not claims
+    facts = [f for f in ctx["facts"] if overlap(f, text) >= 0.6]
     return bool(facts) and not claims
 
 
@@ -438,35 +455,45 @@ def review_failed(error):
             "message": f"검수를 돌리지 못했습니다({type(error).__name__}: {error}) — 값 모양을 확인한 뒤 다시 검사합니다"}
 
 
-def review_script(case, judgment_output, generated, *, strip_prefix=lambda s: s):
-    """생성 결과(`script_assembler.generate_units`의 반환값) 전체를 검사한다. 만들지 못한 단위(값 없음)는 건너뛴다 —
-    그건 `pending`이 이미 알린다. 돌려주는 값: 검사 결과 목록(위 형식), 단위 순서(U0 → U4)."""
+def unit_context(unit, case, judgment_output, generated):
+    """U0 · U1 · U2 · U4 검사 입력(`build_context`). 단위가 실제로 받은 데이터와 비교한다 — 검사(review_script)와 줄 고쳐 쓰기
+    (script_repair, BE-122 2차)가 같은 기준을 쓴다."""
     from script_assembler import UNIT_STAGES, public_case  # script_assembler가 이 모듈을 쓰므로 여기서 읽는다
 
-    units = generated.get("units", {})
-    value = lambda unit: (units.get(unit) or {}).get("value")  # noqa: E731
-    public = lambda stages: json.dumps(public_case(case, stages), ensure_ascii=False)  # noqa: E731
-    issues = []
-    if value("U0"):
-        ctx = build_context(case, judgment_output, public(UNIT_STAGES["U0"]), UNIT_STAGES["U0"])
-        issues += review_unit("U0", value("U0"), ctx)
-    if value("U1"):
+    if unit == "U1":
         # U1은 기사만 받는다. 기사는 개요(OVERVIEW)로 만들고, 기사에 "주장"으로 실린 문장은 해설도 주장으로 옮겨야 맞다
         paper = generated.get("paper") or {}
         # 제목 · 부제는 문장부호 없이 끝나므로 칸(문단)마다 따로 쪼갠다
         pieces = [v for v in paper.values() if isinstance(v, str)]
         pieces += [p for v in paper.values() if isinstance(v, list) for p in v if isinstance(p, str)]
         claims = [s for piece in pieces for s in sentences(piece) if "주장" in s]
-        ctx = build_context(case, judgment_output, json.dumps(paper, ensure_ascii=False), ("OVERVIEW",),
-                            extra_claims=claims)
-        issues += review_unit("U1", value("U1"), ctx, strip_prefix=strip_prefix)
+        return build_context(case, judgment_output, json.dumps(paper, ensure_ascii=False), ("OVERVIEW",),
+                             extra_claims=claims)
+    stages = UNIT_STAGES[unit]
+    return build_context(case, judgment_output, json.dumps(public_case(case, stages), ensure_ascii=False), stages)
+
+
+def review_script(case, judgment_output, generated, *, strip_prefix=lambda s: s):
+    """생성 결과(`script_assembler.generate_units`의 반환값) 전체를 검사한다. 만들지 못한 단위(값 없음)는 건너뛴다 —
+    그건 `pending`이 이미 알린다. 돌려주는 값: 검사 결과 목록(위 형식), 단위 순서(U0 → U4)."""
+    units = generated.get("units", {})
+    value = lambda unit: (units.get(unit) or {}).get("value")  # noqa: E731
+    issues = []
+    for unit in ("U0", "U1", "U2"):
+        if value(unit):
+            issues += review_unit(unit, value(unit), unit_context(unit, case, judgment_output, generated),
+                                  strip_prefix=strip_prefix if unit == "U1" else (lambda s: s))
+    if value("U1"):
         issues += one_sided_issues(value("U1"), case, judgment_output, strip_prefix)
     if value("U2"):
-        ctx = build_context(case, judgment_output, public(UNIT_STAGES["U2"]), UNIT_STAGES["U2"])
-        issues += review_unit("U2", value("U2"), ctx)
         issues += issue_question_issues(value("U0"), value("U2"))
     issues += review_evidence(generated.get("evidence", []), case, judgment_output)
     if value("U4"):
-        ctx = build_context(case, judgment_output, public(UNIT_STAGES["U4"]), UNIT_STAGES["U4"])
-        issues += review_unit("U4", value("U4"), ctx)
-    return issues
+        issues += review_unit("U4", value("U4"), unit_context("U4", case, judgment_output, generated))
+    return _in_unit_order(issues)
+
+
+def _in_unit_order(issues):
+    """단위 순서(U0 → U4)로. 같은 단위 안에서는 검사한 순서를 지킨다."""
+    order = {unit: i for i, unit in enumerate(("U0", "U1", "U2", "U3", "U4"))}
+    return sorted(issues, key=lambda issue: order.get(issue["unit"], len(order)))

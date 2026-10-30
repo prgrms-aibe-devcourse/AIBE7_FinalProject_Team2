@@ -1175,6 +1175,42 @@ class PipelineTest(unittest.TestCase):
         # 증거조사 프롬프트에도 민감 가드가 들어갔다
         self.assertIn("정신", self.script_requests[4][1])
 
+    def test_script_stage_repairs_review_errors(self):
+        """BE-122 2차: 검수 오류가 난 줄만 고쳐 쓰고 다시 검사한다. 고친 기록(repairs)은 script.json에 남는다.
+        repairRetries가 0이면 고치지 않는다."""
+        classification = {"mood": "impulsive", "issue": "admitted", "victim": "punish", "thirdParty": False,
+                          "sensitiveFlags": []}
+        design = {"plea": "인정", "issues": ["경위", "행동", "회복"],
+                  "questions": [{"q": "질문 가입니까?", "a": "아니요"}, {"q": "질문 나입니까?", "a": "예"},
+                                {"q": "공소사실을 인정합니까?", "a": "예"}]}
+        opening = {"indict": ["공소사실을 말씀드리겠습니다.", "적용 법조입니다."], "plea": ["인정합니다.", "살펴 주십시오."],
+                   "issues_narr": ["쟁점이에요.", "눈여겨보세요."],
+                   "questions": [{"q": "질문 가입니까?", "a": "아니요"}, {"q": "질문 나입니까?", "a": "네"}],
+                   "cards": {"indict": {"ul": ["요약"], "law": "법조"}, "plea": {"b": "인정", "ul": ["주장"]},
+                             "issues": {"p": "정리", "ul": ["쟁점"]}}}
+        bad_closing = {"prosecutor": "검사 측 의견입니다.", "defense": "변호인 측 최종변론입니다. 피고인은 77번 사과했습니다."}
+        paper = {"headline": "제목", "deck": "부제", "caption": "설명", "article": ["문단1", "문단2"]}
+        intro = {"lines": ["하나예요.", "둘이에요.", "셋이에요.", "넷이에요.", "다섯이에요."]}
+        evidence_lines = [f"증거 대사 {name}입니다." for name in ("가", "나", "다", "라", "마", "바")]
+        answers = [json.dumps(v, ensure_ascii=False) for v in (paper, design, intro, opening)] + evidence_lines \
+            + [json.dumps(bad_closing, ensure_ascii=False)]
+        fixed_text = "변호인 측 최종변론입니다. 피고인은 여러 차례 사과했습니다."
+        for retries, extra, publishable in ((2, [json.dumps({"text": fixed_text}, ensure_ascii=False)], True), (0, [], False)):
+            with self.subTest(repairRetries=retries):
+                # 실행 이름을 나눠야 앞 실행의 단계 결과(state.json)를 이어 쓰지 않는다
+                config = self.config({"name": f"repair-{retries}"}, generate={"models": ["openai:a"], "runs": 1},
+                                     script={"enabled": True, "model": "openai:a", "full": True,
+                                             "classification": classification, "repairRetries": retries,
+                                             "cast": {"prosecutor": "naero", "defense": "nambul"}})
+                state = self.run_with(config, {"openai:a": [self.output]}, until="script", script_answers=answers + extra)
+                outputs = state["stages"]["script"]["outputs"]
+                script = load_json(outputs["scriptFile"])
+                self.assertEqual(outputs["scriptPublishable"], publishable)
+                self.assertEqual(outputs["reviewErrors"], 0 if publishable else 1)
+                self.assertEqual(len(script["repairs"]), 1 if retries else 0)
+                if retries:
+                    self.assertEqual(script["acts"]["3"]["steps"][1]["text"], fixed_text)
+
     def test_load_paper_validates_configured_article(self):
         """inputs.paper를 설정했는데 파일이 없거나 기사 형식이 아니면 멈춘다 — 조용히 무시하면 새 기사가 생성돼 1막 해설이
         넘긴 기사와 다른 기사를 따라간다(PR #331 리뷰). 설정하지 않았으면 None."""
@@ -1218,7 +1254,8 @@ class PipelineTest(unittest.TestCase):
         for changes, message in (({"full": True}, "classification"), ({"full": "yes"}, "stages.script.full"),
                                  ({"full": True, "classification": {"mood": "x", "issue": "admitted", "victim": "punish"}},
                                   "classification.mood"),
-                                 ({"unitTimeout": 0}, "stages.script.unitTimeout")):
+                                 ({"unitTimeout": 0}, "stages.script.unitTimeout"),
+                                 ({"repairRetries": -1}, "stages.script.repairRetries")):
             with self.subTest(changes):
                 with self.assertRaises(pipeline.PipelineError) as ctx:
                     self.config(script={**base, **changes})

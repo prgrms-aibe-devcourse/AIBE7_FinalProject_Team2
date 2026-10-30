@@ -114,7 +114,8 @@
   (분위기 · 쟁점 · 피해자 측 · 부가 인물 · 민감 플래그)을 함께 보내거나, `classify` 단계를 켠다(설정 값이 우선). 1막 신문 기사도 이 단계가 먼저 만든다. 그러면
   `result.script`에 `fullScript`(case-1 형식 대본 · `paper` 기사 포함) · `pending`(만들지 못한 단위) · `scriptPublishable`이 더해진다. 컨테이너 안 경로(`scriptFile`)는 내보내지 않는다.
   검수 조건 결과(BE-122)는 `fullScript.review`(목록, 형식은 `prompts/script/README.md` "검수 결과 형식")와 건수
-  `reviewErrors` · `reviewWarnings`로 온다. 오류가 하나라도 있으면 `scriptPublishable`이 `false`다.
+  `reviewErrors` · `reviewWarnings`로 온다. 오류가 하나라도 있으면 `scriptPublishable`이 `false`다. 오류는 먼저 그 줄만
+  고쳐 쓰고(`stages.script.repairRetries`, 기본 2), 한 일은 `fullScript.repairs`에 남는다(BE-122 2차, 같은 README "고쳐 쓰기").
   적재(`case_script` 확장)는 BE-126이라 지금 백엔드는 `fullScript`를 읽지 않는다.
   `load`는 여기서 켜도 되돌려 끈다.
 
