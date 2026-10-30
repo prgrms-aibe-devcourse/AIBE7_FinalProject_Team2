@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { ACT_GROUPS, DEFAULT_CAST, attachNotice, castOf, flatten, flipFor, placeFor, seatFor, sideOf, skipTarget } from './stage.js';
+import { ACT_GROUPS, DEFAULT_CAST, attachNotice, castOf, glideMs, flatten, flipFor, placeFor, seatFor, sideOf, skipTarget } from './stage.js';
 
 const script = JSON.parse(readFileSync(new URL('../content/case-1/script.json', import.meta.url)));
 const steps = flatten(script.acts, ['1a', '1b']);
@@ -212,4 +212,12 @@ test('민감 사건 안내: 이어 보기로 시작하는 장면(예: ③)이 �
   assert.ok(at > 0, '막 첫 장면 앞이 아니라 ③ 앞');
   const none = attachNotice(all, notice, '2', (step) => step.section === 99);
   assert.equal(none.findIndex((step) => step.system === notice), 0, '맞는 장면이 없으면 막의 첫 장면 앞');
+});
+
+test('지면 굴리기(FE-140): 거리에 비례해 시간이 늘고 상한 · 하한이 있으며, 키보드는 조금 더 빠르다', () => {
+  assert.equal(glideMs(0), 420, '아주 가까워도 하한');
+  assert.ok(glideMs(300) > glideMs(100), '멀수록 길다');
+  assert.equal(glideMs(100000), 1000, '아주 멀어도 상한');
+  assert.equal(glideMs(-600), glideMs(600), '방향과 상관없다');
+  assert.ok(glideMs(600, true) < glideMs(600), '키보드는 더 짧다');
 });

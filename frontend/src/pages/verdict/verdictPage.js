@@ -482,6 +482,32 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       element('p', 'muted', '정한 내용을 확인하고 서명해 주세요.'), signSummary,
       element('h3', 'sign-subtitle', '주의사항'), cautions, noFactorNote, reason, signRow, filedNote, submitError);
     signature.addEventListener('click', sign);
+    // 서명란이 카드 · 화면 안에 다 보이는지. 아래 고정 조작 줄이 가리는 만큼(약 90px)은 보이는 곳이 아니다
+    function signRowVisible() {
+      const box = signRow.getBoundingClientRect();
+      const frame = layout.closest('.scroll-body')?.getBoundingClientRect();
+      const top = Math.max(frame?.top ?? 0, 0);
+      const bottom = Math.min(frame?.bottom ?? Infinity, window.innerHeight - 90);
+      return box.top >= top && box.bottom <= bottom;
+    }
+    // 서명란을 가운데로 굴리고 멈출 때까지(최대 0.8초) 기다린다. 이미 보이면 기다리지 않는다. 움직임 줄이기면 바로 옮긴다
+    async function revealSignRow() {
+      if (signRowVisible()) return;
+      const reduce = reducedMotion();
+      signRow.scrollIntoView({ block: 'center', inline: 'nearest', behavior: reduce ? 'auto' : 'smooth' });
+      if (reduce) return;
+      const scroller = layout.closest('.scroll-body');
+      const position = () => `${scroller?.scrollTop ?? 0}|${window.scrollY}`;
+      let last = position();
+      let still = 0;
+      const until = performance.now() + 800;
+      while (still < 4 && performance.now() < until) {
+        await new Promise((resolve) => { requestAnimationFrame(resolve); });
+        const now = position();
+        still = now === last ? still + 1 : 0;
+        last = now;
+      }
+    }
     let signed = false;
     async function sign() {
       if (submitting || signed || !active()) return;
@@ -499,6 +525,8 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       signed = true;
       submitting = true;
       submitError.textContent = '';
+      await revealSignRow(); // "서명하고 제출"은 무대 아래 버튼이라 서명란이 카드 아래에 가려져 있을 수 있다 — 서명이 쓰이는 자리가 보이게 먼저 굴린다(FE-140)
+      if (!active()) return;
       const signInk = signatureSvg(signerSeed(), { blank: true }); // 눌렀을 때 한 획으로 처음부터 끝까지 쓰인다(움직임 줄이기면 바로 나타난다)
       signature.append(signInk);
       // 서명하는 동안 카드 안쪽 스크롤을 지금 자리에 묶어 둔다(정한 내용을 다시 그리거나 상태가 바뀌어도 위로 튀지 않게)
