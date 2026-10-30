@@ -150,9 +150,7 @@ public abstract class ApiIntegrationTest {
 			jdbcTemplate.update("DELETE FROM experience WHERE case_id = ?", caseId);
 		}
 		userIds.forEach(id -> {
-			jdbcTemplate.update("DELETE FROM attendance WHERE anonymous_user_id = ?", id);	// 출석 기록(BE-97, FK)
-			jdbcTemplate.update("DELETE FROM profile_deco WHERE anonymous_user_id = ?", id);	// 꾸미기(BE-96, FK)
-			jdbcTemplate.update("DELETE FROM profile_setting WHERE anonymous_user_id = ?", id);	// 프로필 선택 설정(BE-104, FK)
+			jdbcTemplate.update("DELETE FROM personality_result WHERE anonymous_user_id = ?", id);
 			jdbcTemplate.update("DELETE FROM anonymous_user WHERE id = ?", id);
 		});
 		for (Long caseId : createdCaseIds) {
