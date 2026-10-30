@@ -12,8 +12,14 @@ export const ADMIN_MENU = [
   { group: '시스템', items: [{ key: 'accounts', label: '관리자 계정', route: 'adminAccounts', serverReady: false }, { key: 'notices', label: '공지 · 설정', route: 'adminNotices', serverReady: false }] },
 ];
 
-// 지금 모드에서 누를 수 있는 항목인지
-export const isMenuReady = (item) => API_MODE !== 'real' || item.serverReady !== false;
+// 지금 모드에서 누를 수 있는 항목인지. mode는 테스트에서 실제 모드를 흉내 낼 때만 넘긴다
+export const isMenuReady = (item, mode = API_MODE) => mode !== 'real' || item.serverReady !== false;
+
+// 화면(section = 메뉴 key)이 지금 모드에서 서버를 불러도 되는지(FE-143). 메뉴에 없는 key는 준비된 것으로 본다
+export function isSectionReady(section, mode = API_MODE) {
+  const item = ADMIN_MENU.flatMap((group) => group.items).find((entry) => entry.key === section);
+  return !item || isMenuReady(item, mode);
+}
 
 // 머리줄 로고가 가는 곳: 실제 모드에서는 서버가 있는 사건 검수
 export const homeRoute = () => (API_MODE === 'real' ? 'admin' : 'adminDashboard');
