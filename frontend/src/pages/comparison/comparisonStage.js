@@ -7,7 +7,7 @@
 // S-07(5막)에서 비교를 공개한 뒤 무대를 이어 받고(주소만 S-08로), 재진입(S-08 주소)에서도 같은 무대를 연다
 import { formatPenalty, formatDispositions } from '../../utils/judgmentFormat.js';
 import { formatMonths } from '../../components/recommendedRangeBar.js';
-import { renderStage, courtSet, imageOf } from '../../components/stage.js';
+import { renderStage, courtSet, imageOf, courtPhotoCast } from '../../components/stage.js';
 import { openCaseReviewPopup } from '../caseReview/caseReviewPopup.js';
 import { restartMock, jumpActMock } from '../../mocks/mockStageButtons.js';
 import { editorNote } from '../../utils/preJudgmentCompare.js';
@@ -54,14 +54,23 @@ function diffLine(mine, other, name, same, differ) {
   return differ(`${name}과는 형벌이 달라요.`);
 }
 
-// 1면 사진: 5막 마지막 법정 그대로(판사 역 내로 · 피고인 역 남불). 지면에서는 흑백 사진이고, 시작 장면에서만 색이 남아 있다
-function courtPhoto() {
+// 1면 사진: 5막 마지막 법정 그대로(묶음 A 판사 왼쪽 · 묶음 B 피고인 역 오른쪽, 대본 배역 script.cast를 따른다, FE-141).
+// 지면에서는 흑백 사진이고, 시작 장면에서만 색이 남아 있다
+const CAST_NAME = { naero: '내로', nambul: '남불' };
+function courtPhoto(cast) {
   const figure = element('figure', 'sheet-figure');
   const photo = element('div', 'sheet-photo');
   photo.dataset.focus = 'photo';
-  photo.append(courtSet(), picture(imageOf('naero', 'role:judge'), 'sheet-photo-n'), picture(imageOf('nambul', 'role:actor'), 'sheet-photo-b'));
+  const [judge, actor] = courtPhotoCast(cast);
+  const people = [judge, actor].map(({ who, look, side, flip }) => {
+    const image = picture(imageOf(who, look), `sheet-photo-${side === 'left' ? 'a' : 'b'}`);
+    if (flip) image.dataset.flip = '1'; // 무대처럼 가운데를 본다(FE-128)
+    return image;
+  });
+  photo.append(courtSet(), ...people);
   photo.setAttribute('role', 'img');
-  photo.setAttribute('aria-label', '선고가 열린 법정. 판사 역의 내로와 피고인 역의 남불');
+  const and = CAST_NAME[judge.who] === '남불' ? '과' : '와'; // 받침이 있으면 "과"
+  photo.setAttribute('aria-label', `선고가 열린 법정. 판사 역의 ${CAST_NAME[judge.who]}${and} 피고인 역의 ${CAST_NAME[actor.who]}`);
   figure.append(photo, element('figcaption', '', '선고가 열린 법정(판결 체험 재연)'));
   return figure;
 }
@@ -108,7 +117,7 @@ function newspaper(data, script, caseTitle, caseId, navigate, openReview) {
     return part;
   });
 
-  sheet.append(masthead(caseId), frontStory(caseTitle), letterStory(data, openReview),
+  sheet.append(masthead(caseId), frontStory(caseTitle, undefined, script.cast), letterStory(data, openReview),
     story('verdicts', '세 판결, 나란히', verdicts),
     castStory(script, navigate),
     story('factors', '판단 요소, 어디서 갈렸나', table),
@@ -141,8 +150,9 @@ export function masthead(caseId) {
 }
 
 // 1면: 헤드라인 · 법정 사진 · 리드. leadText: { headline, deck, text }를 넘기면 그 문구로 바꾼다(내 결과 지면, FE-75).
+// cast: 대본 배역(script.cast). 없으면 기본 배역(내로 판사 · 남불 피고인 역)
 // deck · text는 글자와 요소(굵은 형량 등)의 배열이다
-export function frontStory(caseTitle, leadText) {
+export function frontStory(caseTitle, leadText, cast) {
   const front = element('section', 'sheet-story sheet-front');
   front.dataset.focus = 'front';
   const lead = element('div', 'sheet-lead');
@@ -152,7 +162,7 @@ export function frontStory(caseTitle, leadText) {
   text.append(...(leadText?.text ?? ['같은 사건 기록을 놓고 세 쪽이 각자 형량을 정했다. 무엇을 무겁게 보고 무엇을 가볍게 봤는지, 지면 곳곳에 나눠 실었다.']));
   lead.append(deck, text);
   const frontBody = element('div', 'sheet-front-body');
-  frontBody.append(courtPhoto(), lead);
+  frontBody.append(courtPhoto(cast), lead);
   front.append(element('h2', 'sheet-headline', leadText?.headline ?? '같은 사건, 세 개의 판결'), frontBody);
   return front;
 }

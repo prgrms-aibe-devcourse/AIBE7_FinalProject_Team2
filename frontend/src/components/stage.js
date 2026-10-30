@@ -84,6 +84,17 @@ export function placeFor(who, look, spot, cast = DEFAULT_CAST) {
   const x = spot === 'stand' ? 30 : slot ?? (seat === 'left' ? 0 : 60);
   return { seat, flip: flipFor(who, x), side: x === 30 ? seat : x < 30 ? 'left' : 'right', center: x === 30 && (spot === 'stand' || slot === 30) };
 }
+/**
+ * 6막 1면 사진(5막 마지막 법정 그대로, FE-141): 묶음 A가 판사로 왼쪽, 묶음 B가 피고인 역으로 오른쪽에 서고 무대처럼 가운데를 본다.
+ * 대본 배역(script.cast)을 따르므로 남불이 판사인 사건에서도 5막 마지막 화면과 같다
+ */
+export function courtPhotoCast(cast) {
+  const { prosecutor, defense } = castOf(cast);
+  return [
+    { who: prosecutor, look: 'role:judge', side: 'left', flip: flipFor(prosecutor, 'left') },
+    { who: defense, look: 'role:actor', side: 'right', flip: flipFor(defense, 'right') },
+  ];
+}
 let chipsOff = false; // 개발 전용: 역할 이름표 끄기(이름표가 필요한지 판단용). 화면을 다시 그려도 유지한다
 const FACES = ['neutral', 'happy', 'surprised', 'thinking', 'sorry', 'cheer'];
 const iconOf = (who, look) => {
@@ -167,10 +178,41 @@ function takeJump() {
 }
 
 
+// 지면 굴리기(FE-140): 브라우저 기본 부드러운 스크롤(behavior: 'smooth')은 거리와 상관없이 짧고 빠르게 끝나(특히 사파리) 기사 사이를 "휙" 옮겨 다닌다.
+// 거리에 비례해 시간을 정하고 처음 · 끝이 느린 곡선(easeInOutCubic)으로 직접 굴린다. 도중에 다음 장면으로 넘어가면 지금 자리에서 새 목표로 이어 굴려
+// (줄 서지 않는다) 연달아 넘겨도 따라오느라 느려지지 않고, 사용자가 휠 · 터치로 굴리면 바로 멈춘다. 움직임 줄이기면 바로 옮긴다.
+// 화면 스크롤은 메인 스레드 일이라 한 프레임에 scrollTo 한 번만 부른다(레이아웃을 읽지 않는다)
+const GLIDE_MIN_MS = 420;
+const GLIDE_MAX_MS = 1000;
+const easeInOutCubic = (t) => (t < .5 ? 4 * t * t * t : 1 - ((-2 * t + 2) ** 3) / 2);
+export const glideMs = (distance, quick = false) => Math.round(Math.min(GLIDE_MAX_MS, Math.max(GLIDE_MIN_MS, 300 + Math.abs(distance) * 0.55)) * (quick ? 0.7 : 1));
+function createGlider(alive = () => true) {
+  let frame = 0;
+  const stop = () => { cancelAnimationFrame(frame); frame = 0; };
+  function to(top, { quick = false } = {}) {
+    stop();
+    const from = window.scrollY;
+    const distance = top - from;
+    if (reducedMotion() || Math.abs(distance) < 2) { window.scrollTo(0, top); return; }
+    const duration = glideMs(distance, quick);
+    const start = performance.now();
+    const tick = (now) => {
+      if (!alive()) { frame = 0; return; } // 무대가 떠난 뒤(다른 화면으로 이동)에는 새 화면의 스크롤을 건드리지 않는다
+      const t = Math.min(1, (now - start) / duration);
+      window.scrollTo(0, from + distance * easeInOutCubic(t));
+      frame = t < 1 ? requestAnimationFrame(tick) : 0;
+    };
+    frame = requestAnimationFrame(tick);
+    ['wheel', 'touchstart'].forEach((type) => window.addEventListener(type, stop, { once: true, passive: true })); // 사용자가 굴리면 그 손을 따른다
+  }
+  return { to, stop };
+}
+
 // 신문 지면 무대(layout 'paper')의 카메라: 지면이 곧 화면이라 옮기지 않고, 고른 기사만 또렷하게 두고 그 기사가 보이게 화면을 굴린다.
 // 아래쪽에 고정된 대사창(dock)이 가리는 부분을 빼고 그 위 공간 가운데에 맞춘다(기사가 그 공간보다 길면 기사 위쪽에 맞춘다)
 function paperCamera(sheet, dockTop, byKeyboard = () => false) {
   let at = null;
+  const glider = createGlider(() => sheet.isConnected);
   function show(target) {
     requestAnimationFrame(() => {
       const box = target.getBoundingClientRect();
@@ -178,8 +220,7 @@ function paperCamera(sheet, dockTop, byKeyboard = () => false) {
       const room = Math.max(0, dockTop() - head - 24); // 헤더가 두 줄로 커져도 음수가 되지 않게
       const top = box.height < room ? box.top - head - (room - box.height) / 2 : box.top - head - 24;
       const y = window.scrollY + top;
-      window.scrollTo({ top: y < 200 ? 0 : y, // 지면 맨 위 근처 기사는 머리글(제호)까지 보이게 맨 위로
-        behavior: reducedMotion() || byKeyboard() ? 'auto' : 'smooth' }); // 키보드로 넘길 때는 즉시(연달아 눌러도 화면이 따라오느라 느려지지 않게)
+      glider.to(y < 200 ? 0 : y, { quick: byKeyboard() }); // 지면 맨 위 근처 기사는 머리글(제호)까지 보이게 맨 위로. 키보드로 연달아 넘길 때는 조금 더 빠르게
     });
   }
   function go(name) {
@@ -357,6 +398,8 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
   let enterTimer = null;
   let lastFocus = null;
   let hadCard = false; // 앞 장면에도 카드가 있었는지(엽서 건네기는 카드가 처음 뜰 때만)
+  let wasInput = false; // 앞 장면이 입력 카드(엽서)였는지
+  let putDown = false; // 신문 지면의 엽서(입력 카드)를 잠깐 내려놓고 지면을 보는 중(FE-140)
 
   const wrap = element('section', paperMode ? 'stage-wrap paper-mode' : 'stage-wrap');
   wrap.classList.toggle('parked', parked);
@@ -499,7 +542,35 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
   acts.append(peekSlot);
   peeks.naero.setAttribute('aria-hidden', 'true');
   controls.insertBefore(peeks.naero, prev);
-  wrap.append(acts, stage, controls, live);
+  // 엽서 내려놓기(FE-140, 신문 지면 무대): 엽서가 지면을 가려서 사건 정보를 다시 보려면 엽서를 접어 둘 수 있어야 한다. 쓰던 내용은 그대로 두고
+  // 숨기기만 한다(DOM을 지우지 않는다). 내려놓은 동안 지면은 다시 읽고 굴릴 수 있고, 같은 버튼으로 엽서를 다시 펼친다
+  const rest = element('button', 'postcard-rest');
+  rest.type = 'button';
+  rest.hidden = true;
+  rest.addEventListener('click', () => setPutDown(!putDown));
+  // 넓은 화면에서는 아래 버튼 대신 엽서 왼쪽 위의 ✕로 내려놓는다(CSS가 폭에 따라 하나만 보인다). 엽서 바깥(어두운 배경)을 눌러도 내려놓는다
+  // 엽서를 던진 남불 옆의 작은 엽서(넓은 화면에서 알약 버튼 대신, CSS가 폭에 따라 하나만 보인다). 남불 그림 안에 두어 화면 너비가 바뀌어도 남불을 따라간다
+  const mini = element('button', 'postcard-mini', '엽서 다시 펼치기');
+  mini.type = 'button';
+  mini.hidden = true;
+  mini.addEventListener('click', () => setPutDown(false));
+  // 하단 조작 줄(z 28)보다 위에 보여야 해서 남불 그림(z 19) 안이 아니라 무대 바깥에 두고, 남불 그림의 자리를 읽어 곁에 붙인다
+  // 창 크기를 바꾸면 남불 그림이 자리를 옮기는 동안(전환) 값이 계속 바뀌므로, 엽서가 보이는 동안은 프레임마다 따라간다(읽기 한 번 · 쓰기 두 번)
+  let miniFrame = 0;
+  function placeMini() {
+    miniFrame = 0;
+    if (!wrap.isConnected || mini.hidden) return;
+    const box = figures.nambul.getBoundingClientRect();
+    mini.style.left = `${figures.nambul.dataset.seat === 'left' ? box.right + 8 : box.left - 8 - mini.offsetWidth}px`; // 오른쪽에 선 남불은 왼쪽, 왼쪽에 선 남불은 오른쪽
+    mini.style.top = `${box.bottom - box.height * 0.38 - mini.offsetHeight}px`;
+    miniFrame = requestAnimationFrame(placeMini);
+  }
+  const close = element('button', 'postcard-close', '✕');
+  close.type = 'button';
+  close.setAttribute('aria-label', '엽서 내려놓기');
+  close.addEventListener('click', () => setPutDown(true));
+  stage.addEventListener('click', (event) => { if (paperMode && wasInput && !putDown && event.target === stage) setPutDown(true); });
+  wrap.append(acts, stage, controls, live, rest, mini);
   // 신문 지면 무대: 막 칩은 지면의 탭 줄로 옮긴다
   // 신문 지면 무대에는 막 칩이 없다(지면 탭 줄은 신문의 다른 면 목차, newspaperFront.js). 막 칩은 상자 무대(2 ~ 6막)에서만 보인다
   if (paperMode) acts.hidden = true;
@@ -530,6 +601,31 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
       text.textContent = line.slice(0, shown);
       if (shown >= line.length) finishTyping();
     }, 22);
+  }
+
+  // 엽서가 열려 있는 동안만 뒤 지면 · 조작부 · 공통 헤더를 비활성으로 둔다(내려놓은 동안은 읽을 수 있게 푼다)
+  function syncModal(input) {
+    const open = input && !putDown;
+    stage.classList.toggle('postcard-down', input && putDown);
+    sheet.inert = open;
+    controls.inert = open; // 조작부(◀ 이전 등)로 Tab 포커스가 빠져나가지 않게(aria-modal만으로는 가둬지지 않는다)
+    const siteHeader = document.getElementById('route-header'); // 무대 밖 공통 헤더(FE-56)도 같이 막는다. 화면이 바뀌면 라우터가 푼다
+    if (siteHeader) siteHeader.inert = open;
+    if (open) { board.setAttribute('role', 'dialog'); board.setAttribute('aria-label', '첫인상 엽서'); } // aria-modal은 두지 않는다: 낭독기가 모달 밖 "내려놓기" 버튼에 닿지 못한다
+    else { board.removeAttribute('role'); board.removeAttribute('aria-label'); }
+    rest.hidden = !input;
+    mini.hidden = !(input && putDown);
+    cancelAnimationFrame(miniFrame);
+    placeMini();
+    rest.textContent = putDown ? '엽서 다시 펼치기 ▴' : '엽서 내려놓고 사건 보기 ▾';
+    rest.setAttribute('aria-expanded', String(!putDown));
+  }
+  function setPutDown(value) {
+    if (value === putDown) return;
+    putDown = value;
+    syncModal(true);
+    if (putDown) (mini.offsetParent ? mini : rest).focus({ preventScroll: true }); // 넓은 화면은 알약(rest)이 숨어 있어 보이는 작은 엽서로 포커스를 준다
+    else (board.querySelector('[data-autofocus]') ?? board).focus({ preventScroll: true });
   }
 
   function render() {
@@ -630,14 +726,12 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
     // 증거판은 칸마다 따로 스크롤하고, 나머지 카드는 카드 전체가 스크롤된다
     board.replaceChildren(...(entry ? [step.card === 'evidence' ? entry : scrollArea(entry, '카드 내용')] : []));
     board.hidden = !entry;
-    // 신문 지면 무대의 엽서(입력 카드)는 대화창이다: 열려 있는 동안 뒤 지면은 비활성(포커스 · 읽기 제외)
+    // 신문 지면 무대의 엽서(입력 카드)는 대화창이다: 열려 있는 동안 뒤 지면은 비활성(포커스 · 읽기 제외). "엽서 내려놓기"로 잠깐 풀 수 있다(FE-140)
     if (paperMode) {
-      if (input) { board.setAttribute('role', 'dialog'); board.setAttribute('aria-modal', 'true'); board.setAttribute('aria-label', '첫인상 엽서'); }
-      else { board.removeAttribute('role'); board.removeAttribute('aria-modal'); board.removeAttribute('aria-label'); }
-      sheet.inert = Boolean(input);
-      controls.inert = Boolean(input); // 조작부(◀ 이전 등)로 Tab 포커스가 빠져나가지 않게(aria-modal만으로는 가둬지지 않는다)
-      const siteHeader = document.getElementById('route-header'); // 무대 밖 공통 헤더(FE-56)도 같이 막는다. 화면이 바뀌면 라우터가 푼다
-      if (siteHeader) siteHeader.inert = Boolean(input);
+      if (!input || !wasInput) putDown = false; // 엽서가 새로 뜨면 펼친 채로 시작한다
+      wasInput = input;
+      syncModal(input);
+      if (input) board.append(close);
     }
     board.classList.toggle('wide', input);
     board.classList.toggle('fill', step.card === 'evidence'); // 증거판은 보드를 꽉 채운다(가운데 정렬 없음)
@@ -720,7 +814,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
     status.textContent = input ? (again ? '엽서를 확인하고 "이어서 하기"를 눌러요' : '선택하고 제출하면 다음으로 넘어가요') : '';
     hint.textContent = `${index + 1} / ${steps.length} · ${hintBase}`; // 이 화면의 몇 번째 장면인지(FE-103: 몇 번 더 넘기면 되는지 알린다). 조작 줄이 아니라 대사창에 둬 모바일 줄 구성은 그대로
     syncNext();
-    if (input) (board.querySelector('[data-autofocus]') ?? board).focus(); // 입력 카드가 정한 첫 포커스(판결 파일철: 지금 장의 탭)
+    if (input && !putDown) (board.querySelector('[data-autofocus]') ?? board).focus(); // 입력 카드가 정한 첫 포커스(판결 파일철: 지금 장의 탭)
   }
 
   async function go(delta) {
@@ -785,6 +879,13 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
     if (event.defaultPrevented || event.target.closest('input, textarea, select, [role="slider"]')) return;
     // 보드를 클릭하면 보드가 포커스를 받는다. 입력 카드는 제출로만 넘어가니 이전(←)만 받고, 다른 보드에서는 Space만 스크롤에 양보한다
     if (event.target.closest('.board') && ((stage.classList.contains('bmode') && event.key !== 'ArrowLeft') || event.key === ' ')) return;
+    // 엽서를 내려놓은 동안 → · Enter는 다음 장면이 아니라 엽서를 다시 펼친다(다음 버튼은 눌러도 넘어가지 않는다)
+    if (paperMode && wasInput && putDown && (event.key === 'ArrowRight' || event.key === 'Enter')) {
+      if (event.key === 'Enter' && event.target.closest('a, button')) return; // 포커스가 링크 · 버튼(지면의 메뉴 등)에 있으면 그 Enter는 그 버튼의 것이다
+      event.preventDefault();
+      setPutDown(false);
+      return;
+    }
     if (event.key === 'ArrowRight' || event.key === ' ' || event.key === 'Enter') {
       if (event.target.closest('button') && event.key !== 'ArrowRight') return; // 버튼 위의 Space · Enter는 버튼이 처리한다
       event.preventDefault();
