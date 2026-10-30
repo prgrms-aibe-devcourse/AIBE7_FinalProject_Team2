@@ -2391,7 +2391,7 @@ Origin이 이 서버 자신과 같은 출처인지)을 거친다 — 벗어나�
 | 거절 | 조건 |
 | --- | --- |
 | 401 `UNAUTHORIZED` | 로그인하지 않음 |
-| 400 `VALIDATION_ERROR` | `nickname`이 없음 · 문자열이 아님 · 형식 위반(`details`: `field: nickname`). `reason`(v0.76, BE-134): `NotBlank`(없음 · 빈 값) · `Pattern`(한글 · 영문 · 숫자 밖의 글자, 공백) · `Size`(2 ~ 12자 밖) · `SizeWithHangul`(한글이 들어가 8자 초과) · `Reserved`(`방청객`으로 시작). M-7은 처음 걸린 하나만 실린다. M-5 가입은 요청 검사(`@NotBlank` · `@Size` · `@Pattern`)가 먼저라 한 칸에 여러 사유가 함께 실릴 수 있고(예: 빈 닉네임), 그 검사를 통과한 뒤의 `SizeWithHangul` · `Reserved`는 하나다. 문자열로 읽을 수 없는 값(객체 · 배열 등)은 본문 해석 단계의 400이라 `details`가 `null`이다 |
+| 400 `VALIDATION_ERROR` | `nickname`이 없음 · 문자열이 아님 · 형식 위반(`details`: `field: nickname`). `reason`(v0.76, BE-134): `NotBlank`(없음 · 빈 값 · 공백만 있는 값) · `Pattern`(공백 아닌 글자가 있는데 한글 · 영문 · 숫자 밖의 글자나 공백이 섞임, 예: `닉 네임` · `닉네임!`) · `Size`(2 ~ 12자 밖) · `SizeWithHangul`(한글이 들어가 8자 초과) · `Reserved`(`방청객`으로 시작). M-7은 처음 걸린 하나만 실린다. M-5 가입은 요청 검사(`@NotBlank` · `@Size` · `@Pattern`)가 먼저라 한 칸에 여러 사유가 함께 실릴 수 있고(예: 빈 닉네임), 그 검사를 통과한 뒤의 `SizeWithHangul` · `Reserved`는 하나다. 문자열로 읽을 수 없는 값(객체 · 배열 등)은 본문 해석 단계의 400이라 `details`가 `null`이다 |
 | 409 `DUPLICATE_NICKNAME` | 다른 회원이 쓰는 닉네임(동시 요청 포함 — 한 명만 된다) |
 
 ## 11. (확장) 레벨 · 직업 API (BE-106)
