@@ -40,19 +40,23 @@
 .stage-wrap.paper-mode .postcard-rest { position: fixed; z-index: 28; left: 50%; bottom: calc(66px + var(--safe-bottom)); translate: -50% 0; min-height: 44px; padding: 8px 18px; border: 1px solid var(--color-border-strong); border-radius: 999px; background: var(--color-card); color: var(--color-text); font: 700 14px/1.2 var(--font-body); box-shadow: 0 6px 16px -8px color-mix(in srgb, var(--color-desk-shadow) 60%, transparent); cursor: pointer; }
 .stage-wrap.paper-mode .postcard-rest[hidden] { display: none; }
 /* 엽서 폭(700px + 양옆 16px)보다 넓은 화면: 열려 있을 땐 아래 버튼 대신 엽서 왼쪽 위 ✕, 내려놓은 뒤에만 아래 버튼(다시 펼치기)을 보인다 */
-.stage-wrap.paper-mode .board > .postcard-close { position: absolute; top: 7px; left: 7px; z-index: 2; display: none; width: 24px; height: 24px; padding: 0; border: 1px solid var(--color-border-strong); border-radius: 6px; background: var(--color-card); color: var(--color-text); font: 700 12px/1 var(--font-body); cursor: pointer; }
+.stage-wrap.paper-mode .postcard-mini { display: none; }
+.stage-wrap.paper-mode .board > .postcard-close { position: absolute; top: 7px; left: 7px; z-index: 2; display: none; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; background: var(--color-heading); color: var(--color-card); font: 900 14px/1 var(--font-body); box-shadow: 0 2px 6px -2px color-mix(in srgb, var(--color-desk-shadow) 70%, transparent); cursor: pointer; }
 .stage-wrap.paper-mode .board > .postcard-close:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
 @media (hover: hover) and (pointer: fine) { .stage-wrap.paper-mode .board > .postcard-close:hover { border-color: var(--color-heading); } }
 @media (min-width: 733px) {
   .stage-wrap.paper-mode .board > .postcard-close { display: block; }
   .stage-wrap.paper-mode:not(:has(.stage.postcard-down)) .postcard-rest { display: none; }
-  /* 내려놓은 뒤: 알약 버튼 대신 남불 옆의 작은 엽서(글자는 낭독기용으로만 남긴다). 누르면 엽서가 다시 펼쳐진다 */
-  .stage-wrap.paper-mode .postcard-rest { left: auto; translate: none; bottom: calc(96px + var(--safe-bottom)); width: 68px; height: 46px; min-height: 0; padding: 0; border: 0; border-radius: 4px; font-size: 0; rotate: -4deg;
+  /* 내려놓은 뒤: 알약 버튼 대신 엽서를 던진 남불 옆의 작은 엽서(남불 그림 안에 있어 화면 너비와 상관없이 남불 곁이다). 누르면 엽서가 다시 펼쳐진다 */
+  .stage-wrap.paper-mode .postcard-rest { display: none; }
+  .stage-wrap.paper-mode .spr .postcard-mini { position: absolute; bottom: 38%; right: calc(100% + 8px); z-index: 3; display: block; width: 68px; height: 46px; padding: 0; border: 0; border-radius: 4px; font-size: 0; rotate: -4deg; cursor: pointer;
     background: repeating-linear-gradient(-45deg, var(--color-caution) 0 5px, var(--color-card) 5px 8px, var(--color-accent) 8px 13px, var(--color-card) 13px 16px); box-shadow: 0 8px 14px -8px color-mix(in srgb, var(--color-desk-shadow) 70%, transparent); }
-  .stage-wrap.paper-mode .postcard-rest::before { content: ''; position: absolute; inset: 4px; border-radius: 2px; background: var(--color-card); }
-  .stage-wrap.paper-mode .postcard-rest::after { content: '엽서'; position: absolute; inset: 0; display: grid; place-items: center; color: var(--color-heading); font: 900 12px/1 var(--font-heading); }
-  .stage-wrap.paper-mode .postcard-rest.at-right { right: 250px; }
-  .stage-wrap.paper-mode .postcard-rest.at-left { left: 250px; }
+  .stage-wrap.paper-mode .spr[data-seat="left"] .postcard-mini { right: auto; left: calc(100% + 8px); } /* 왼쪽에 선 남불은 오른쪽으로 던지니 엽서도 오른쪽 */
+  .stage-wrap.paper-mode .postcard-mini::before { content: ''; position: absolute; inset: 4px; border-radius: 2px; background: var(--color-card); }
+  .stage-wrap.paper-mode .postcard-mini::after { content: '엽서'; position: absolute; inset: 0; display: grid; place-items: center; color: var(--color-heading); font: 900 12px/1 var(--font-heading); }
+  .stage-wrap.paper-mode .postcard-mini:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+  .stage-wrap.paper-mode .postcard-mini[hidden] { display: none; }
+}
 }
 .stage-wrap.paper-mode .postcard-rest:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
 @media (hover: hover) and (pointer: fine) { .stage-wrap.paper-mode .postcard-rest:hover { border-color: var(--color-heading); } }

@@ -547,21 +547,19 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
   const rest = element('button', 'postcard-rest');
   rest.type = 'button';
   rest.hidden = true;
-  rest.classList.add(`at-${sideOf('nambul', cast)}`); // 넓은 화면에서는 이 버튼이 남불 옆의 작은 엽서가 된다(CSS)
   rest.addEventListener('click', () => setPutDown(!putDown));
   // 넓은 화면에서는 아래 버튼 대신 엽서 왼쪽 위의 ✕로 내려놓는다(CSS가 폭에 따라 하나만 보인다). 엽서 바깥(어두운 배경)을 눌러도 내려놓는다
+  // 엽서를 던진 남불 옆의 작은 엽서(넓은 화면에서 알약 버튼 대신, CSS가 폭에 따라 하나만 보인다). 남불 그림 안에 두어 화면 너비가 바뀌어도 남불을 따라간다
+  const mini = element('button', 'postcard-mini', '엽서 다시 펼치기');
+  mini.type = 'button';
+  mini.hidden = true;
+  mini.addEventListener('click', () => setPutDown(false));
+  figures.nambul.append(mini);
   const close = element('button', 'postcard-close', '✕');
   close.type = 'button';
   close.setAttribute('aria-label', '엽서 내려놓기');
   close.addEventListener('click', () => setPutDown(true));
   stage.addEventListener('click', (event) => { if (paperMode && wasInput && !putDown && event.target === stage) setPutDown(true); });
-  // 내려놓은 동안 첫 클릭(다음 버튼 포함)은 엽서를 다시 펼치기만 하고 동작은 다음 클릭부터 한다
-  wrap.addEventListener('click', (event) => {
-    if (!paperMode || !wasInput || !putDown || rest.contains(event.target)) return;
-    event.stopPropagation();
-    event.preventDefault();
-    setPutDown(false);
-  }, true);
   wrap.append(acts, stage, controls, live, rest);
   // 신문 지면 무대: 막 칩은 지면의 탭 줄로 옮긴다
   // 신문 지면 무대에는 막 칩이 없다(지면 탭 줄은 신문의 다른 면 목차, newspaperFront.js). 막 칩은 상자 무대(2 ~ 6막)에서만 보인다
@@ -606,6 +604,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
     if (open) { board.setAttribute('role', 'dialog'); board.setAttribute('aria-label', '첫인상 엽서'); } // aria-modal은 두지 않는다: 낭독기가 모달 밖 "내려놓기" 버튼에 닿지 못한다
     else { board.removeAttribute('role'); board.removeAttribute('aria-label'); }
     rest.hidden = !input;
+    mini.hidden = !(input && putDown);
     rest.textContent = putDown ? '엽서 다시 펼치기 ▴' : '엽서 내려놓고 사건 보기 ▾';
     rest.setAttribute('aria-expanded', String(!putDown));
   }
