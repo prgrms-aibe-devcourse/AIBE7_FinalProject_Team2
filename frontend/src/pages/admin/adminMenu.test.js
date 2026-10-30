@@ -24,13 +24,36 @@ test('메뉴에 없는 화면(section 없음 등)은 준비된 것으로 본다'
   assert.equal(isSectionReady('unknown', 'real'), true);
 });
 
-// PR #360 리뷰: 화면이 넘기는 section이 메뉴 key와 어긋나면(오타 등) 그 화면은 조용히 준비된 것으로 열려 404 요청이 다시 나간다
-test('관리자 화면 파일이 renderAdminShell에 넘기는 section은 모두 메뉴 key다', () => {
+// PR #360 리뷰: 화면이 넘기는 section이 메뉴 key와 어긋나면(오타 등) 그 화면은 조용히 준비된 것으로 열려 404 요청이 다시 나간다.
+// 화면 파일마다 기대하는 section을 고정하고, renderAdminShell을 부르는 파일은 모두 이 표에 있어야 한다(새 화면을 더하면 여기도 더한다)
+const EXPECTED_SECTION = {
+  'adminDashboardPage.js': 'dashboard',
+  'adminListPage.js': 'cases',
+  'adminCasePage.js': 'cases',
+  'adminRegisterPage.js': 'register',
+  'adminMembersPage.js': 'members',
+  'adminPostsPage.js': 'posts',
+  'adminReportsPage.js': 'reports',
+  'adminAccountsPage.js': 'accounts',
+  'adminNoticesPage.js': 'notices',
+};
+
+test('관리자 화면 파일마다 renderAdminShell에 넘기는 section이 그 화면의 메뉴 key다', () => {
   const keys = new Set(ADMIN_MENU.flatMap((group) => group.items).map((item) => item.key));
   const dir = new URL('./', import.meta.url);
-  const sections = readdirSync(dir)
-    .filter((name) => name.endsWith('Page.js'))
-    .flatMap((name) => [...readFileSync(new URL(name, dir), 'utf8').matchAll(/\bsection: '([^']+)'/g)].map((match) => [name, match[1]]));
-  assert.ok(sections.length >= 8, '화면 파일에서 section 값을 찾지 못했다');
-  sections.forEach(([name, section]) => assert.ok(keys.has(section), `${name}: section '${section}'이 메뉴 key가 아니다`));
+  const shellPages = readdirSync(dir)
+    .filter((name) => name.endsWith('.js') && !name.endsWith('.test.js') && name !== 'adminShell.js')
+    .filter((name) => readFileSync(new URL(name, dir), 'utf8').includes('renderAdminShell('));
+  assert.deepEqual(shellPages.sort(), Object.keys(EXPECTED_SECTION).sort(), 'renderAdminShell을 부르는 화면이 표와 다르다');
+  shellPages.forEach((name) => {
+    const source = readFileSync(new URL(name, dir), 'utf8');
+    const calls = source.split('renderAdminShell(').length - 1;
+    // 따옴표 종류와 상관없이 section 값을 읽는다. 호출마다 section이 하나씩 있어야 한다
+    const sections = [...source.matchAll(/\bsection:\s*(['"`])([^'"`]*)\1/g)].map((match) => match[2]);
+    assert.equal(sections.length, calls, `${name}: renderAdminShell 호출 ${calls}번에 section ${sections.length}개`);
+    sections.forEach((section) => {
+      assert.ok(keys.has(section), `${name}: section '${section}'이 메뉴 key가 아니다`);
+      assert.equal(section, EXPECTED_SECTION[name], `${name}: section이 '${EXPECTED_SECTION[name]}'이 아니라 '${section}'이다`);
+    });
+  });
 });
