@@ -93,13 +93,17 @@
   "models": ["gemini:gemini-3.7-flash"],
   "stages": { "contamination": { "enabled": true, "runs": 3 } },
   "incidentDate": "2023-04-01",
-  "indictmentDate": "2023-09-15"
+  "indictmentDate": "2023-09-15",
+  "crimeType": "MURDER"
 }
 ```
 
 - `sources` 필수, 1 ~ 3개. `originalText`가 비면 `400`.
 - `models` 필수 (`generate` 단계가 쓸 모델). 없으면 `400`.
 - `stages`는 선택. 끈 단계를 다시 켜거나 단계 설정을 덮어쓸 때만 쓴다. 모르는 단계 이름이면 `400`.
+- `crimeType`은 선택(BE-138). 관리자가 고른 범죄 유형(`MURDER` · `FRAUD` · `INJURY` · `ROBBERY` · `THEFT`, 다른 값이면 `400`)으로,
+  `extract`가 판결문에서 읽은 유형과 다르면 그 단계에서 실패로 멈춘다(판결 · 대본을 만들기 전). 모델에게는 보내지 않는다 —
+  모델이 판결문만 보고 고른 값과 비교해야 어긋남이 드러나서다.
 - **대본(`script`) 단계는 기본으로 돌지 않는다**(파이프라인 기본값이 꺼짐). 사건 등록에서 대본까지 만들려면
   `stages.script.enabled = true`와 `model` · `cast`(배역)를 함께 보내고 `until`을 `script`로 둔다(BE-107 · BE-108).
   돌리지 않으면 `result`의 `script`가 `null`이고, 사건 · 판결 적재는 그대로 된다.

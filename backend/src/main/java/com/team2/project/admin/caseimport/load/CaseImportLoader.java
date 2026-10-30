@@ -5,6 +5,7 @@ import com.team2.project.admin.caseimport.domain.CaseImport;
 import com.team2.project.admin.caseimport.domain.CaseImportSource;
 import com.team2.project.common.exception.BusinessException;
 import com.team2.project.common.exception.ErrorCode;
+import com.team2.project.common.exception.FieldErrorDetail;
 import com.team2.project.common.exception.UniqueViolations;
 import com.team2.project.judgment.domain.AiGeneration;
 import com.team2.project.judgment.domain.Judgment;
@@ -92,6 +93,8 @@ public class CaseImportLoader {
 				"같은 제목의 사건이 이미 있습니다. 제목을 바꾼 뒤 다시 등록해 주세요.");
 		}
 
+		// 양형기준을 요청 값으로 찾기(guidelineFor) 전에 본다 — 어긋난 사건이 다른 오류로 먼저 끝나지 않게 (PR #356 리뷰)
+		requireRequestedCrimeType(caseImport, content);
 		LocalDate incidentDate = incidentDate(caseImport);
 		LegalCase legalCase = caseContentMapper.toCase(content, report, incidentDate,
 			guidelineFor(content, caseImport, incidentDate));
@@ -108,6 +111,25 @@ public class CaseImportLoader {
 		saveAiJudgment(legalCase, factors, result);
 		saveScript(legalCase, result);
 		return legalCase;
+	}
+
+	/**
+	 * 등록 요청의 범죄 유형과 판결문에서 읽은 유형(case.json)이 같은지 본다 (BE-138). 다르면 적재하지 않는다 —
+	 * 양형기준은 요청 값으로, 사건 유형 · 배역 균형 · 사전판단 선택지는 읽은 값으로 정해져 서로 어긋난다.
+	 *
+	 * <p>파이프라인이 extract 직후에 같은 비교로 먼저 멈추므로(요청에 crimeType을 보낸다) 여기는 안전망이다 — 범죄 유형을
+	 * 보내지 않던 때 만든 작업이나 로컬 실행 결과가 들어와도 어긋난 채 적재되지 않게 한다. 요청 값으로 덮어쓰지 않는 이유는
+	 * 관리자가 유형을 잘못 골랐을 때 양형기준 · 판례까지 틀린 채 들어가기 때문이다. 어느 쪽이 맞는지는 사람이 정한다.
+	 */
+	private static void requireRequestedCrimeType(CaseImport caseImport, JsonNode content) {
+		CrimeType requested = caseImport.getCrimeType();
+		CrimeType extracted = Json.requiredEnum(CrimeType.class, Json.text(content, "crimeType"), "case.crimeType");
+		if (requested != extracted) {
+			throw new BusinessException(ErrorCode.IMPORT_RESULT_INVALID,
+				"범죄 유형이 다릅니다: 등록 요청은 " + requested + ", 판결문에서 읽은 유형은 " + extracted
+					+ "입니다. 판결문을 확인해 맞는 유형으로 다시 등록해 주세요.",
+				null, List.of(new FieldErrorDetail("case.crimeType", ErrorCode.IMPORT_RESULT_INVALID.name())));
+		}
 	}
 
 	/**

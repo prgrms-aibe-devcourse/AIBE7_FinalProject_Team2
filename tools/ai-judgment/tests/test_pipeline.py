@@ -2008,6 +2008,75 @@ class PipelineTest(unittest.TestCase):
         sources = fake_module.run.call_args[0][0]
         self.assertEqual([p.name for p in sources], ["a.txt", "b.txt"])
 
+    def test_extract_stops_when_crime_type_differs_from_request(self):
+        """BE-138: 등록 요청의 범죄 유형(crimeType)과 판결문에서 읽은 유형이 다르면 비싼 단계 전에 멈춘다. 요청 값으로 덮어쓰지
+        않는다. 같거나 요청에 유형이 없으면(로컬 실행) 그대로 진행하고, 읽은 유형을 출력에 남긴다."""
+        write_json(self.dir / "r.json", report_for(self.case))
+        fake_module = mock.MagicMock()
+        fake_module.run.return_value = (self.raw_config["inputs"]["case"], self.raw_config["inputs"]["court"],
+                                        str(self.dir / "r.json"), self.raw_config["inputs"]["source"])
+        fake_module.ExtractError = RuntimeError
+        extracted = self.case["crimeType"]
+        other = next(t for t in pipeline.CRIME_TYPES if t != extracted)
+        with mock.patch.dict(sys.modules, {"extract_case": fake_module}):
+            with self.assertRaises(pipeline.PipelineError) as ctx:
+                pipeline.stage_extract(self.config({"crimeType": other}, extract={"enabled": True}), {"stages": {}},
+                                       self.logs.append)
+            self.assertIn(f"등록 요청은 {other}, 판결문에서 읽은 유형은 {extracted}", str(ctx.exception))
+            self.assertEqual(ctx.exception.args[1]["crimeType"], extracted)  # 멈춰도 읽은 유형은 출력에 남는다
+            for config in (self.config({"crimeType": extracted}, extract={"enabled": True}),
+                           self.config(extract={"enabled": True})):
+                self.assertEqual(pipeline.stage_extract(config, {"stages": {}}, self.logs.append)["crimeType"], extracted)
+        with self.assertRaises(pipeline.PipelineError) as ctx:
+            self.config({"crimeType": "ARSON"})
+        self.assertIn("crimeType", str(ctx.exception))
+
+    def test_resume_without_extract_checks_crime_type(self):
+        """BE-138 (PR #356 리뷰): extract를 돌리지 않는 실행(--from · 끝난 extract 건너뜀)도 뒤 단계 전에 유형을 비교한다."""
+        extracted = self.case["crimeType"]
+        other = next(t for t in pipeline.CRIME_TYPES if t != extracted)
+        config = self.config({"crimeType": other}, generate={"models": ["openai:a"], "runs": 1, "maxRetries": 0})
+        with self.assertRaises(pipeline.PipelineError) as ctx:
+            self.run_with(config, {"openai:a": [self.output]}, start="generate")
+        self.assertIn(f"등록 요청은 {other}, 판결문에서 읽은 유형은 {extracted}", str(ctx.exception))
+        self.assertEqual(pipeline.load_state(config)["stages"], {})  # 판결 생성 · 적재는 시작하지 않는다
+        config = self.config({"crimeType": extracted}, generate={"models": ["openai:a"], "runs": 1, "maxRetries": 0})
+        state = self.run_with(config, {"openai:a": [self.output]}, start="generate")
+        self.assertEqual(state["stages"]["load"]["status"], "done")
+
+    def test_crime_type_missing_in_case_says_unread(self):
+        """PR #356 리뷰: 추출 결과에 유형이 없으면 "읽은 유형은 None"이 아니라 읽지 못했다고 알린다."""
+        case = dict(self.case)
+        case.pop("crimeType", None)
+        write_json(self.dir / "no-type.json", case)
+        with self.assertRaises(pipeline.PipelineError) as ctx:
+            pipeline.require_crime_type({"crimeType": "MURDER"}, self.dir / "no-type.json")
+        self.assertIn("범죄 유형을 읽지 못했습니다(등록 요청은 MURDER)", str(ctx.exception))
+        self.assertNotIn("None", str(ctx.exception))
+        pipeline.require_crime_type({}, self.dir / "no-type.json")  # 요청에 유형이 없으면(로컬 실행) 비교하지 않는다
+
+    def test_script_notice_before_extract_does_not_need_case(self):
+        """PR #356 리뷰: 등록 요청(A-14)처럼 extract와 script를 한 번에 돌리면 시작할 때 case.json이 없다.
+        대본 외부 전송 안내가 사건 제목을 읽으려다 extract 전에 멈추면 안 된다."""
+        config = self.config(extract={"enabled": True}, script={
+            "enabled": True, "model": "openai:a", "cast": {"prosecutor": "naero", "defense": "nambul"}})
+        config["inputs"]["case"] = None
+        ran = []
+        functions = {stage: (lambda s: lambda *args: ran.append(s) or {})(stage) for stage in pipeline.STAGES}
+        pipeline.run_pipeline(config, until="script", log=self.logs.append, functions=functions)
+        self.assertEqual(ran[0], "extract")
+        self.assertIn("script", ran)
+        self.assertTrue(any("대본 증거조사 단계에서 비식별화한 사건 제목 · 개요" in line for line in self.logs))
+
+    def test_crime_types_match_extractor_and_service(self):
+        """범죄 유형 목록은 파이프라인(common) · 추출기 스키마 · 서비스가 따로 갖는다 — 늘릴 때 한 곳만 고치면 이 테스트가 깨진다."""
+        sys.path.insert(0, str(pipeline.EXTRACTOR_DIR))
+        sys.path.insert(0, str(TOOL_DIR / "service"))
+        import jobs  # noqa: E402
+        import schema  # noqa: E402
+        self.assertEqual(pipeline.CRIME_TYPES, schema.CRIME_TYPES)
+        self.assertEqual(pipeline.CRIME_TYPES, jobs.CRIME_TYPES)
+
 
 if __name__ == "__main__":
     unittest.main()
