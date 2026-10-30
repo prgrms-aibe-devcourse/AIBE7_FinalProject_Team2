@@ -110,12 +110,26 @@ test('동시에 401을 받아도 재발급은 한 번만 부른다', async () =>
   assert.equal(calls.filter((c) => c.url.endsWith('/auth/token/reissue')).length, 1);
 });
 
-test('재발급이 401이면 원래 오류를 던지고 로그인 표시를 지운다', async () => {
+test('재발급이 401이면 쿠키를 정리하고 보낸 원래 요청의 오류를 던지며 로그인 표시를 지운다', async () => {
   saveUser({ nickname: '카카오 회원' });
-  stubFetch(() => invalid);
+  stubFetch((url) => (url.endsWith('/auth/logout') ? { status: 204 } : invalid));
   await assert.rejects(request('GET', '/my-page'), { status: 401 });
-  assert.equal(calls.length, 2); // 먼저 한 재발급(401) + 원래 요청, 다시 보내지 않는다
+  // 먼저 한 재발급(401) → 로그아웃으로 쿠키 정리 → 손님으로 원래 요청, 그 401은 다시 시도하지 않는다
+  assert.deepEqual(calls.map((c) => c.url.replace('/api/v1', '')), ['/auth/token/reissue', '/auth/logout', '/my-page']);
   assert.equal(currentUser(), null);
+});
+
+test('동시에 나간 요청들이 먼저 한 재발급 401을 받아도 로그아웃(쿠키 정리)은 한 번만 부른다', async () => {
+  saveUser({ nickname: '카카오 회원' });
+  stubFetch((url) => {
+    if (url.endsWith('/auth/token/reissue')) return new Promise((resolve) => setTimeout(() => resolve(invalid), 5));
+    if (url.endsWith('/auth/logout')) return new Promise((resolve) => setTimeout(() => resolve({ status: 204 }), 5));
+    return { status: 200, body: {} };
+  });
+  await Promise.all([request('GET', '/a'), request('GET', '/b'), request('GET', '/c')]);
+  assert.equal(calls.filter((c) => c.url.endsWith('/auth/token/reissue')).length, 1);
+  assert.equal(calls.filter((c) => c.url.endsWith('/auth/logout')).length, 1);
+  assert.equal(calls.filter((c) => /\/(a|b|c)$/.test(c.url)).length, 3);
 });
 
 test('재발급이 연결 오류면 로그인 표시는 남긴다', async () => {

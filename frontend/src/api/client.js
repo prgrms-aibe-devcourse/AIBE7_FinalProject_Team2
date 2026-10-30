@@ -33,7 +33,7 @@ export async function request(method, endpoint, body) {
     try {
       await reissueAccessToken();
     } catch (failure) {
-      if (failure?.status === 401) await logout();
+      if (failure?.status === 401) await cleanupOnce();
     }
   }
   const sentWith = accessToken;
@@ -67,6 +67,10 @@ export function reissueAccessToken() {
     .finally(() => { reissuing = null; });
   return reissuing;
 }
+
+// 먼저 한 재발급이 401일 때의 쿠키 정리(로그아웃). 같은 때 나간 요청들이 각자 부르지 않고 진행 중인 하나를 함께 기다린다(PR #347 리뷰)
+let loggingOut = null;
+const cleanupOnce = () => (loggingOut ??= logout().finally(() => { loggingOut = null; }));
 
 // 탭 사이 재발급 직렬화(PR #347 리뷰). 리프레시 토큰은 한 번 쓰면 사라지고(로테이션) 쿠키는 탭이 함께 쓰므로, 두 탭이 같은 쿠키로 동시에 재발급하면 하나가 401을 받아
 // 로그인 표시(localStorage, 탭 공용)를 지운다. Web Locks로 한 탭씩 차례로 부르면 뒤 탭은 앞 탭이 바꿔 둔 새 쿠키로 재발급한다.

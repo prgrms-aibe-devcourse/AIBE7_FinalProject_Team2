@@ -1553,7 +1553,11 @@ export async function renderMyPage(container, { api, navigate, view, from }) {
   } catch (error) {
     if (!active()) return;
     reveal();
-    if (error?.status === 401 || !currentUser()) { paintGuest(); return; } // 로그인이 풀렸다(재발급도 실패하면 client.js가 로그인 표시를 지운다)
+    if (error?.status === 401 || !currentUser()) {
+      clearUser(); // 최종 401이면 서버는 회원으로 보지 않는다 — 재발급이 실패했다면 client.js가 이미 지웠고, 아니어도 표시를 화면과 맞춘다(다음 방문이 같은 요청을 되풀이하지 않게)
+      paintGuest();
+      return;
+    }
     if (cache) return; // 지난 기록은 그대로 보여 준다
     const panel = element('div', 'message-panel');
     panel.setAttribute('role', 'alert');

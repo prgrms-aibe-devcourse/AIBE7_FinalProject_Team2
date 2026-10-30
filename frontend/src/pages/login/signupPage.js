@@ -174,9 +174,10 @@ export function renderSignupPage(container, { api, navigate }) {
       try {
         const { nickname } = await api.signup({ id: values.id.trim(), password: values.password, nickname: values.nickname.trim() });
         saveUser({ nickname }); // 화면을 떠났어도 로그인 표시는 남긴다 — 서버는 이미 가입 · 로그인됐다
-        // 첫 로그인이라 이 브라우저의 체험 기록 · 첫인상 엽서를 가져올지 먼저 고르게 한다(FE-138). 창을 닫으면 로그인하지 않기로 한 것이라 이 화면에 남는다
+        // 첫 로그인이라 이 브라우저의 체험 기록 · 첫인상 엽서를 가져올지 먼저 고르게 한다(FE-138). 창을 닫으면 로그인하지 않기로 한 것이다.
+        // 계정은 이미 만들어졌으므로 가입 폼을 다시 열지 않고(다시 가입하면 아이디 중복이다) 로그인 화면으로 보낸다
         if (await offerAnonymousImport(api) === 'declined') {
-          if (container.contains(root)) { setBusy([kakao, submit], false); pending = false; }
+          if (container.contains(root)) navigate('login', {}, { replace: true });
           return;
         }
         if (!container.contains(root)) return; // 기다리는 사이 다른 화면으로 갔으면 이동하지 않는다

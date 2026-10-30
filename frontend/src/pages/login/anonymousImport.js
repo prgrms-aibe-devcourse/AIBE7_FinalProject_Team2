@@ -88,6 +88,8 @@ function showImportDialog(candidate, { importIt, discard, decline }) {
     });
     document.body.append(dialog);
     dialog.showModal();
-    importButton.focus();
+    // 첫 포커스는 버튼이 아니라 제목이다: 습관적인 Enter 한 번으로 가져오기가 실행되지 않게 하고, 낭독기가 내용부터 읽게 한다(PR #347 리뷰)
+    title.tabIndex = -1;
+    title.focus();
   });
 }
