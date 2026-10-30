@@ -624,7 +624,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
     if (value === putDown) return;
     putDown = value;
     syncModal(true);
-    if (putDown) rest.focus({ preventScroll: true });
+    if (putDown) (mini.offsetParent ? mini : rest).focus({ preventScroll: true }); // 넓은 화면은 알약(rest)이 숨어 있어 보이는 작은 엽서로 포커스를 준다
     else (board.querySelector('[data-autofocus]') ?? board).focus({ preventScroll: true });
   }
 
@@ -880,7 +880,12 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
     // 보드를 클릭하면 보드가 포커스를 받는다. 입력 카드는 제출로만 넘어가니 이전(←)만 받고, 다른 보드에서는 Space만 스크롤에 양보한다
     if (event.target.closest('.board') && ((stage.classList.contains('bmode') && event.key !== 'ArrowLeft') || event.key === ' ')) return;
     // 엽서를 내려놓은 동안 → · Enter는 다음 장면이 아니라 엽서를 다시 펼친다(다음 버튼은 눌러도 넘어가지 않는다)
-    if (paperMode && wasInput && putDown && (event.key === 'ArrowRight' || event.key === 'Enter')) { event.preventDefault(); setPutDown(false); return; }
+    if (paperMode && wasInput && putDown && (event.key === 'ArrowRight' || event.key === 'Enter')) {
+      if (event.key === 'Enter' && event.target.closest('a, button')) return; // 포커스가 링크 · 버튼(지면의 메뉴 등)에 있으면 그 Enter는 그 버튼의 것이다
+      event.preventDefault();
+      setPutDown(false);
+      return;
+    }
     if (event.key === 'ArrowRight' || event.key === ' ' || event.key === 'Enter') {
       if (event.target.closest('button') && event.key !== 'ArrowRight') return; // 버튼 위의 Space · Enter는 버튼이 처리한다
       event.preventDefault();
