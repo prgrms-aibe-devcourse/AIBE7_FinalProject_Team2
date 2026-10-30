@@ -29,7 +29,8 @@ def generated(units=None, evidence=None, paper=PAPER):
     values = {"U0": DESIGN, "U1": INTRO, "U2": OPENING, "U4": CLOSING, **(units or {})}
     lines = evidence if evidence is not None else [
         {"factorId": f, "role": r, "text": t} for f, r, t in zip((2, 3, 7), ("prosecutor", "prosecutor", "defense"), EVIDENCE)]
-    return {"units": {u: {"value": v} for u, v in values.items()}, "paper": paper, "evidence": lines,
+    return {"units": {u: {"value": v, "errors": [], "warnings": [], "attempts": 1} for u, v in values.items()},
+            "paper": paper, "evidence": lines,
             "stopped": False, "pending": []}
 
 
@@ -166,6 +167,14 @@ class WarningCheckTest(unittest.TestCase):
         self.assertIn(("U2", "/plea/0", "FACT_AS_CLAIM"), codes(review(units={"U2": fact})))
         claim = {**OPENING, "plea": ["피고인은 우발적 범행이라고 주장합니다.", OPENING["plea"][1]]}
         self.assertNotIn("FACT_AS_CLAIM", [c for _, _, c in codes(review(units={"U2": claim}))])
+
+    def test_indictment_claim_is_flagged_without_label_overlap(self):
+        """공소사실은 검사가 사실로 말하는 줄이다. 바꿔 말해 요소 라벨과 겹치지 않아도 "주장"으로 낮추면 경고(PR #352 해송님 리뷰의
+        미탐). 피고인 주장을 옮긴 공소사실 줄은 통과한다."""
+        lowered = {**OPENING, "indict": ["공소사실을 말씀드리겠습니다. 피고인은 칼을 쥐었다고 주장합니다.", OPENING["indict"][1]]}
+        self.assertIn(("U2", "/indict/0", "FACT_AS_CLAIM"), codes(review(units={"U2": lowered})))
+        quoted = {**OPENING, "indict": ["공소사실을 말씀드리겠습니다. 피고인은 우발적 범행이라고 주장합니다.", OPENING["indict"][1]]}
+        self.assertNotIn("FACT_AS_CLAIM", [c for _, _, c in codes(review(units={"U2": quoted}))])
 
     def test_claims_are_compared_by_sentence(self):
         """주장 섹션은 문장 단위로 비교하고(본문 전체와 비교하면 겹침이 낮아 주장을 사실로 봤다), U1은 기사에 "주장"으로 실린

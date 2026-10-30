@@ -385,10 +385,32 @@ def sentencing_errors(label, text):
     return [f"{label}에 구형 · 형량이 들어갔습니다(판결 입력 전 앵커링)"] if re.search(SENTENCING_PATTERN, text or "") else []
 
 
+# 단위별 (ROLE, SCENE CONTEXT 첫 줄). 단위를 만들 때와 줄 하나를 고쳐 쓸 때(script_repair, BE-122) 같은 블록 · 장면을 쓴다
+UNIT_SCENES = {
+    "U0": (("narrator",), "대본 설계도 — 2막 재판의 쟁점과 피고인신문 방향을 정한다."),
+    "U1": (("guide",), "1막 첫인상 — 신문 기사를 함께 읽는 장면(법정 밖). 사용자는 기사 내용만 안다."),
+    "U2": (("prosecutor", "defense", "narrator"), "2막 재판 도입부 — 모두진술(공소사실 · 변호인 입장), 쟁점 정리, 피고인신문."),
+    "U4": (("prosecutor", "defense"), "3막 내 판결 — 판결 직전 검사 의견 · 최종변론."),
+}
+
+
+def unit_prompt(unit, case, cls, *, design=None, opening=None, paper=None):
+    """단위의 (system, scene, scene_data). U1은 `paper`, U2는 `design`, U4는 `design` · `opening`이 필요하다."""
+    roles, scene = UNIT_SCENES[unit]
+    if unit == "U1":
+        data = {"headline": paper.get("headline"), "deck": paper.get("deck"), "article": paper.get("article")}
+    elif unit == "U2":
+        data = {**public_case(case, UNIT_STAGES["U2"]), "design": design}
+    elif unit == "U4":
+        data = {**public_case(case, UNIT_STAGES["U4"]), "trial_plea": opening.get("plea"), "issues": design.get("issues")}
+    else:
+        data = public_case(case, UNIT_STAGES[unit])
+    return build_system(unit, cls, list(roles)), scene, data
+
+
 def design_request(case, cls):
-    data = public_case(case, UNIT_STAGES["U0"])
-    return build_system("U0", cls, ["narrator"]), build_user(
-        "대본 설계도 — 2막 재판의 쟁점과 피고인신문 방향을 정한다.", data, [
+    system, scene, data = unit_prompt("U0", case, cls)
+    return system, build_user(scene, data, [
             "아래 형식의 JSON 객체 하나로 답하세요.",
             '{"plea":"인정 | 일부 부인 | 전면 부인 | 고의 부인 | 방어 주장 중 하나","issues":["쟁점 1","쟁점 2","쟁점 3"],'
             '"questions":[{"q":"예 · 아니오로 답할 질문","a":"예 또는 아니요"}, … 3개],"tone":"이 사건 해설 어조 한 줄"}',
@@ -400,9 +422,8 @@ def design_request(case, cls):
 
 
 def intro_request(paper, cls):
-    data = {"headline": paper.get("headline"), "deck": paper.get("deck"), "article": paper.get("article")}
-    return build_system("U1", cls, ["guide"]), build_user(
-        "1막 첫인상 — 신문 기사를 함께 읽는 장면(법정 밖). 사용자는 기사 내용만 안다.", data, [
+    system, scene, data = unit_prompt("U1", None, cls, paper=paper)
+    return system, build_user(scene, data, [
             "기사를 짚는 대사 5줄을 쓰세요. 순서: ① 남불 제목 소개 ② 남불 본문 첫 내용 ③ 내로 이어지는 내용 "
             "④ 남불 이어지는 내용 ⑤ 남불 마무리(서두르지 말고 생각해 보자는 권유, 사건의 무게에 맞는 어조).",
             "기사에 있는 내용만 쓴다. 대사 앞에 번호 · 화자 이름을 붙이지 않는다.",
@@ -411,9 +432,8 @@ def intro_request(paper, cls):
 
 
 def opening_request(case, cls, cast, design):
-    data = {**public_case(case, UNIT_STAGES["U2"]), "design": design}
-    return build_system("U2", cls, ["prosecutor", "defense", "narrator"]), build_user(
-        "2막 재판 도입부 — 모두진술(공소사실 · 변호인 입장), 쟁점 정리, 피고인신문.", data, [
+    system, scene, data = unit_prompt("U2", case, cls, design=design)
+    return system, build_user(scene, data, [
             f"검사는 {NAMES[cast['prosecutor']]}, 변호인 · 피고인 역은 {NAMES[cast['defense']]}다. 진행 해설(issues_narr)은 해요체다.",
             "출력은 JSON 객체 하나:",
             '{"indict":["검사 공소사실 1","검사 공소사실 2(적용 법조 포함)"],"plea":["변호인 입장 1","변호인 입장 2"],'
@@ -430,9 +450,8 @@ def opening_request(case, cls, cast, design):
 
 
 def closing_request(case, cls, cast, design, opening):
-    data = {**public_case(case, UNIT_STAGES["U4"]), "trial_plea": opening.get("plea"), "issues": design.get("issues")}
-    return build_system("U4", cls, ["prosecutor", "defense"]), build_user(
-        "3막 내 판결 — 판결 직전 검사 의견 · 최종변론.", data, [
+    system, scene, data = unit_prompt("U4", case, cls, design=design, opening=opening)
+    return system, build_user(scene, data, [
             f"검사({NAMES[cast['prosecutor']]}) 의견 한 줄, 변호인({NAMES[cast['defense']]}) 최종변론 한 줄. 각 두 줄 이내.",
             "검사 의견은 \"검사 측 의견입니다.\"로, 최종변론은 \"변호인 측 최종변론입니다.\"로 시작한다.",
             NO_SENTENCING,
@@ -639,5 +658,5 @@ def build_script(case, cast, cls, generated, *, model):
                       "text": labels.get(line["factorId"])} for line in evidence],
         "acts": acts, "pending": pending, "publishable": publishable,
         "warnings": {u: r["warnings"] for u, r in units.items() if r["warnings"]},
-        "review": review,
+        "review": review, "repairs": generated.get("repairs", []),
     }

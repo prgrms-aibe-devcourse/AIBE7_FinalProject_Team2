@@ -270,7 +270,7 @@ def line_issues(unit, path, text, kind, ctx, *, factor=None):
         issues.append(issue("VERDICT_LEAK", f"공개 전 정보의 낱말 '{leaked[0]}'가 들어갔습니다"))
 
     if kind != "design":
-        if CLAIM.search(text) and _is_fact_claim(text, ctx, factor):
+        if CLAIM.search(text) and _is_fact_claim(text, ctx, factor, indictment=unit == "U2" and path.startswith("/indict/")):
             issues.append(issue("FACT_AS_CLAIM", "사실로 적힌 내용을 주장 문형으로 소개했습니다 — 사실은 주장으로 낮추지 않습니다"))
         emotions = [w for w in EMOTION_WORDS if w in text and w not in source]
         if emotions:
@@ -278,11 +278,15 @@ def line_issues(unit, path, text, kind, ctx, *, factor=None):
     return issues
 
 
-def _is_fact_claim(text, ctx, factor):
+def _is_fact_claim(text, ctx, factor, *, indictment=False):
     if factor is not None:  # U3: 한 줄이 판단 요소 하나를 소개하고, 2막 증거는 모두 개요 · 상세 사실이다
         return factor.get("revealStage") in ("OVERVIEW", "DETAIL")
-    facts = [f for f in ctx["facts"] if overlap(f, text) >= 0.6]
     claims = [c for c in ctx["claims"] if overlap(c, text) >= 0.6]
+    if indictment:
+        # 공소사실은 검사가 사실로 말하는 줄이다. 피고인 주장을 옮긴 게 아니면 "주장" 문형 자체가 사실을 낮춘 것이다 —
+        # 요소 라벨과 낱말 겹침으로는 바꿔 말한 공소사실을 놓쳤다(PR #352 해송님 리뷰)
+        return not claims
+    facts = [f for f in ctx["facts"] if overlap(f, text) >= 0.6]
     return bool(facts) and not claims
 
 
@@ -438,35 +442,45 @@ def review_failed(error):
             "message": f"검수를 돌리지 못했습니다({type(error).__name__}: {error}) — 값 모양을 확인한 뒤 다시 검사합니다"}
 
 
-def review_script(case, judgment_output, generated, *, strip_prefix=lambda s: s):
-    """생성 결과(`script_assembler.generate_units`의 반환값) 전체를 검사한다. 만들지 못한 단위(값 없음)는 건너뛴다 —
-    그건 `pending`이 이미 알린다. 돌려주는 값: 검사 결과 목록(위 형식), 단위 순서(U0 → U4)."""
+def unit_context(unit, case, judgment_output, generated):
+    """U0 · U1 · U2 · U4 검사 입력(`build_context`). 단위가 실제로 받은 데이터와 비교한다 — 검사(review_script)와 줄 고쳐 쓰기
+    (script_repair, BE-122 2차)가 같은 기준을 쓴다."""
     from script_assembler import UNIT_STAGES, public_case  # script_assembler가 이 모듈을 쓰므로 여기서 읽는다
 
-    units = generated.get("units", {})
-    value = lambda unit: (units.get(unit) or {}).get("value")  # noqa: E731
-    public = lambda stages: json.dumps(public_case(case, stages), ensure_ascii=False)  # noqa: E731
-    issues = []
-    if value("U0"):
-        ctx = build_context(case, judgment_output, public(UNIT_STAGES["U0"]), UNIT_STAGES["U0"])
-        issues += review_unit("U0", value("U0"), ctx)
-    if value("U1"):
+    if unit == "U1":
         # U1은 기사만 받는다. 기사는 개요(OVERVIEW)로 만들고, 기사에 "주장"으로 실린 문장은 해설도 주장으로 옮겨야 맞다
         paper = generated.get("paper") or {}
         # 제목 · 부제는 문장부호 없이 끝나므로 칸(문단)마다 따로 쪼갠다
         pieces = [v for v in paper.values() if isinstance(v, str)]
         pieces += [p for v in paper.values() if isinstance(v, list) for p in v if isinstance(p, str)]
         claims = [s for piece in pieces for s in sentences(piece) if "주장" in s]
-        ctx = build_context(case, judgment_output, json.dumps(paper, ensure_ascii=False), ("OVERVIEW",),
-                            extra_claims=claims)
-        issues += review_unit("U1", value("U1"), ctx, strip_prefix=strip_prefix)
+        return build_context(case, judgment_output, json.dumps(paper, ensure_ascii=False), ("OVERVIEW",),
+                             extra_claims=claims)
+    stages = UNIT_STAGES[unit]
+    return build_context(case, judgment_output, json.dumps(public_case(case, stages), ensure_ascii=False), stages)
+
+
+def review_script(case, judgment_output, generated, *, strip_prefix=lambda s: s):
+    """생성 결과(`script_assembler.generate_units`의 반환값) 전체를 검사한다. 만들지 못한 단위(값 없음)는 건너뛴다 —
+    그건 `pending`이 이미 알린다. 돌려주는 값: 검사 결과 목록(위 형식), 단위 순서(U0 → U4)."""
+    units = generated.get("units", {})
+    value = lambda unit: (units.get(unit) or {}).get("value")  # noqa: E731
+    issues = []
+    for unit in ("U0", "U1", "U2"):
+        if value(unit):
+            issues += review_unit(unit, value(unit), unit_context(unit, case, judgment_output, generated),
+                                  strip_prefix=strip_prefix if unit == "U1" else (lambda s: s))
+    if value("U1"):
         issues += one_sided_issues(value("U1"), case, judgment_output, strip_prefix)
     if value("U2"):
-        ctx = build_context(case, judgment_output, public(UNIT_STAGES["U2"]), UNIT_STAGES["U2"])
-        issues += review_unit("U2", value("U2"), ctx)
         issues += issue_question_issues(value("U0"), value("U2"))
     issues += review_evidence(generated.get("evidence", []), case, judgment_output)
     if value("U4"):
-        ctx = build_context(case, judgment_output, public(UNIT_STAGES["U4"]), UNIT_STAGES["U4"])
-        issues += review_unit("U4", value("U4"), ctx)
-    return issues
+        issues += review_unit("U4", value("U4"), unit_context("U4", case, judgment_output, generated))
+    return _in_unit_order(issues)
+
+
+def _in_unit_order(issues):
+    """단위 순서(U0 → U4)로. 같은 단위 안에서는 검사한 순서를 지킨다."""
+    order = {unit: i for i, unit in enumerate(("U0", "U1", "U2", "U3", "U4"))}
+    return sorted(issues, key=lambda issue: order.get(issue["unit"], len(order)))
