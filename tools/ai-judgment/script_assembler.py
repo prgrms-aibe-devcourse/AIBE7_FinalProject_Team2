@@ -36,7 +36,7 @@ from common import read_prompt
 from llm import LLMError, LLMQuotaExhaustedError
 from llm import call as default_call
 from script_generation import BANNED_PATTERNS, generate_evidence_lines, validate_line
-from script_review import SENTENCING_PATTERN, has_errors, review_script
+from script_review import SENTENCING_PATTERN, has_errors, review_failed, review_script
 
 MOODS = ("tragic", "impulsive", "cold", "betrayal", "calculated", "tense")
 ISSUES = ("admitted", "intent_disputed", "denied", "mental_state", "defense_claim")
@@ -491,7 +491,12 @@ def generate_units(case, judgment_output, cast, cls, *, model, paper=None, calle
         pending += [u for u in ("PAPER", "U0", "U1", "U2", "U4")
                     if u not in units and u not in pending and not (u == "PAPER" and paper)]
     generated = {"units": units, "paper": paper, "evidence": evidence, "stopped": stopped, "pending": pending}
-    generated["review"] = review_script(case, judgment_output, generated, strip_prefix=strip_line_prefix)
+    try:
+        generated["review"] = review_script(case, judgment_output, generated, strip_prefix=strip_line_prefix)
+    except Exception as e:  # noqa: BLE001 — 검사 실패로 이미 만든 단위(대본 한 건에 약 3만 토큰)를 잃지 않는다(PR #352 리뷰)
+        if log:
+            log(f"⚠ 검수를 돌리지 못했습니다 — 생성 결과는 남기고 공개할 수 없게 둡니다: {e!r}")
+        generated["review"] = [review_failed(e)]
     return generated
 
 

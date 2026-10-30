@@ -18,6 +18,7 @@
   README "재생성 범위": 실패한 줄만 고쳐 쓰기 → 그 단위 재생성 → 대본 전체는 다시 만들지 않는다. U2는 쟁점이 모두진술 ·
   신문과 한 호출이라 단위째 다시 만들면 U4까지 어긋나므로 늘 `line`이다(BE-119).
 - `factorId`: U3 결과에만 있다. 그 대사가 소개하는 판단 요소.
+- 검사 자체가 돌지 못하면(`REVIEW_FAILED`) `unit` · `path`가 `""`이고 `fix`는 `null`인 결과 하나만 남는다.
 
 휴리스틱(문장 비교)인 검사는 모두 경고다. 오류는 원문 대조 · 공개 범위 · 형식처럼 기계적으로 판단할 수 있는 것만 둔다.
 """
@@ -45,6 +46,7 @@ CODES = {
     "ISSUE_QUESTION_MISMATCH": WARNING,  # 신문 질문이 설계도(쟁점에 맞춘 질문)와 다르거나 정신상태를 물음
     "EVIDENCE_FILLER": WARNING,        # 증거조사 둘째 줄 군더더기
     "REPEATED_LINE": WARNING,          # 같은 단위 안에서 같은 말 되풀이
+    "REVIEW_FAILED": ERROR,            # 검사 자체가 돌지 못함(값 모양이 어긋남) — 검수 못 한 대본은 공개하지 않는다
 }
 
 # 해요체로 말하는 배역(안내 · 진행 해설, `script_role_guide.md` · `script_role_narrator.md`). 검사 · 변호인은 "~습니다"가 맞다
@@ -81,13 +83,18 @@ LEAK_TERMS = ("권고형", "권고 범위", "권고범위", "양형기준", "감
 # 전과 사실("징역 10개월을 선고받은 전력")은 막지 않도록 요구 문형이 뒤따르는 경우만 잡는다(PR #329 리뷰)
 SENTENCING_PATTERN = r"구형|(?:징역|금고|벌금)[^.\n]{0,15}\d[^.\n]{0,15}(?:처해|처하|구합니다|구하|선고해|내려)"
 SENTENCING = re.compile(SENTENCING_PATTERN)
+# 형량 문형("징역 2년" · "벌금 500만 원"). 값이 권고형 · AI 판결 형량과 같고 입력에 같은 문형이 없으면 누출이다. 숫자만 비교하면
+# 입력 어딘가에 같은 한 자리 숫자("2")가 있을 때 "징역 2년"(AI 판결 24개월)을 놓친다(PR #352 해송님 리뷰)
+PENALTY = re.compile(r"(?P<kind>징역|금고|벌금|집행유예)\s*(?P<n>\d[\d,]*)\s*(?P<unit>년|개월|만\s*원|억\s*원|원)")
 # 판결 전에 공개되지 않는 단계 (BE-119 공개 범위)
 HIDDEN_STAGES = ("LAW", "SUMMARY")
 
 CLAIM = re.compile(r"주장(?:합니다|해요|했|한다|하고|하며|하는|하던|이에요|입니다)")
 # 피고인신문에서 묻지 않는 정신상태 · 진단 · 치료 이력(쟁점 블록 `issue/mental_state.md` U0 · U2 — 답변으로 내면 · 병력을
 # 말하게 된다). 블록은 정신상태 사건에만 들어가지만, 다른 쟁점의 사건에서 이런 질문이 나와도 같은 이유로 확인한다
-MENTAL_QUESTION = re.compile(r"정신|진단|치료|병원|약을|복용|우울|조현|망상|심신|환청|상담")
+# 병력을 가리키는 낱말만 둔다. "약을 · 복용"은 약물이 사건 수단이거나 범행 뒤 행동인 사건의 사실 질문까지 걸었다(PR #352 리뷰),
+# "정신" 하나만으로는 "정신을 잃었다" 같은 사실과 겹친다
+MENTAL_QUESTION = re.compile(r"정신과|정신(?:질환|병|건강|상태|감정)|진단|치료|병원|우울|조현|망상|심신|환청|상담")
 # 증거조사 둘째 줄이 사실을 더하지 않고 당부만 붙이는 경우(BE-119 "남은 것": "이 사정도 함께 살펴 주시기 바랍니다")
 FILLER = re.compile(r"(?:살펴|고려해|참고해|감안해|헤아려)\s*주(?:시기|시길)\s*바랍니다|살펴\s*주십시오|함께\s*살펴")
 
@@ -164,21 +171,35 @@ def korean_numerals(text):
 
 # ---------------------------------------------------------------- 단위별 대사 목록
 
+def _items(value, key):
+    """`value[key]`가 목록이면 그 목록, 아니면 빈 목록. 형식 검사(check_*)가 보지 않는 모양(모델이 더한 키 등)에서 멈추지 않게 한다."""
+    items = value.get(key) if isinstance(value, dict) else None
+    return items if isinstance(items, list) else []
+
+
+def _question(item):
+    return item.get("q") if isinstance(item, dict) else None
+
+
 def unit_lines(unit, value, strip_prefix=lambda s: s):
     """블록 값에서 검사할 줄을 (path, text, kind)로 꺼낸다. kind: guide · narrator · prosecutor · defense(화면 대사),
     design(설계도 — 화면에 그대로 나오지 않음), card(공소사실 · 쟁점 카드 글)."""
     lines = []
     if unit == "U0":
-        lines += [(f"/issues/{i}", v, "design") for i, v in enumerate(value.get("issues", [])[:3])]
-        lines += [(f"/questions/{i}/q", v.get("q"), "design") for i, v in enumerate(value.get("questions", [])[:3])]
+        lines += [(f"/issues/{i}", v, "design") for i, v in enumerate(_items(value, "issues")[:3])]
+        lines += [(f"/questions/{i}/q", _question(v), "design") for i, v in enumerate(_items(value, "questions")[:3])]
     elif unit == "U1":
-        lines += [(f"/lines/{i}", strip_prefix(v), "guide") for i, v in enumerate(value.get("lines", [])[:5])]
+        lines += [(f"/lines/{i}", strip_prefix(v) if isinstance(v, str) else None, "guide")
+                  for i, v in enumerate(_items(value, "lines")[:5])]
     elif unit == "U2":
         for key, kind in (("indict", "prosecutor"), ("plea", "defense"), ("issues_narr", "narrator")):
-            lines += [(f"/{key}/{i}", v, kind) for i, v in enumerate(value.get(key, [])[:2])]
-        lines += [(f"/questions/{i}/q", v.get("q"), "prosecutor") for i, v in enumerate(value.get("questions", [])[:2])]
-        for card, body in (value.get("cards") or {}).items():
-            for key, item in (body or {}).items():
+            lines += [(f"/{key}/{i}", v, kind) for i, v in enumerate(_items(value, key)[:2])]
+        lines += [(f"/questions/{i}/q", _question(v), "prosecutor") for i, v in enumerate(_items(value, "questions")[:2])]
+        cards = value.get("cards")
+        for card, body in (cards.items() if isinstance(cards, dict) else ()):
+            if not isinstance(body, dict):  # check_opening은 indict · plea · issues만 본다 — 모델이 더한 키는 건너뛴다
+                continue
+            for key, item in body.items():
                 if isinstance(item, list):
                     lines += [(f"/cards/{card}/{key}/{i}", v, "card") for i, v in enumerate(item) if isinstance(v, str)]
                 elif isinstance(item, str):
@@ -186,6 +207,11 @@ def unit_lines(unit, value, strip_prefix=lambda s: s):
     elif unit == "U4":
         lines += [("/prosecutor", value.get("prosecutor"), "prosecutor"), ("/defense", value.get("defense"), "defense")]
     return lines
+
+
+def sentences(text):
+    """문장 단위로 쪼갠다(문장부호 · 줄바꿈 기준). 섹션 본문 전체와 대사를 비교하면 겹침 비율이 낮아져서다."""
+    return [s.strip() for s in re.split(r"(?<=[.!?…])\s+|\n+", text or "") if s.strip()]
 
 
 # ---------------------------------------------------------------- 줄 검사
@@ -207,10 +233,23 @@ def line_issues(unit, path, text, kind, ctx, *, factor=None):
     issues += [issue("BANNED_WORD", f"금지어 포함: {word}") for word, pattern in BANNED_PATTERNS.items()
                if re.search(pattern, text)]
 
+    # 형량 문형: 값이 권고형 · AI 판결 형량과 같으면, 입력에 같은 숫자가 있어도 누출이다(입력에 같은 문형이 있을 때만 통과)
+    flat = lambda t: re.sub(r"[\s,]", "", t or "")  # noqa: E731
+    leaked_numbers = set()
+    for m in PENALTY.finditer(text):
+        n = int(m.group("n").replace(",", ""))
+        unit_name = re.sub(r"\s", "", m.group("unit"))
+        months = {"년": n * 12, "개월": n}.get(unit_name)
+        won = {"만원": n * 10_000, "억원": n * 100_000_000, "원": n}.get(unit_name)
+        hit = months in ctx["leak_months"] if months is not None else won in ctx["leak_won"]
+        if hit and flat(m.group(0)) not in flat(source):
+            issues.append(issue("VERDICT_LEAK", f"판결 · 권고형과 같은 형량 '{m.group(0)}'가 들어갔습니다(판결 입력 전 앵커링)"))
+            leaked_numbers.add(m.group("n").replace(",", ""))
+
     # 숫자: 입력에 없는 숫자. 공개 전 정보(양형기준 · 정리 · 판결 형량)의 숫자면 누출로 본다
     known = _number_tokens(source)
     hidden_numbers = ctx["leak_numbers"] | _number_tokens(ctx["hidden"])
-    for number in sorted(_number_tokens(text) - known):
+    for number in sorted(_number_tokens(text) - known - leaked_numbers):
         if number in hidden_numbers:
             issues.append(issue("VERDICT_LEAK", f"공개 전 정보(양형기준 · 판결)의 숫자 '{number}'가 들어갔습니다"))
         else:
@@ -282,17 +321,32 @@ def _leak_numbers(case, judgment_output):
     return numbers
 
 
-def build_context(case, judgment_output, source, stages):
-    """단위 하나의 검사 입력. `source`는 그 단위가 실제로 받은 데이터(문자열), `stages`는 그 단위에 공개된 단계."""
+def _leak_amounts(case, judgment_output):
+    """(형량 개월 수 집합, 벌금 원 집합). 권고형 상 · 하한과 AI 판결의 징역 · 집행유예 · 벌금."""
+    months = [(case.get("recommended") or {}).get(k) for k in ("minMonths", "maxMonths")]
+    months += [(judgment_output or {}).get(k) for k in ("prisonMonths", "suspensionMonths")]
+    fine = (judgment_output or {}).get("fineAmount")
+    return ({m for m in months if isinstance(m, int) and m > 0},
+            {fine} if isinstance(fine, int) and fine > 0 else set())
+
+
+def build_context(case, judgment_output, source, stages, *, extra_claims=()):
+    """단위 하나의 검사 입력. `source`는 그 단위가 실제로 받은 데이터(문자열), `stages`는 그 단위에 공개된 단계.
+    주장(`claims`)은 문장 단위로 둔다 — 섹션 본문 전체와 비교하면 겹침 비율이 낮아 주장 소개를 사실로 잘못 본다(PR #352 리뷰)."""
     hidden = [s.get("content") or "" for s in case.get("sections", []) if s.get("stage") in HIDDEN_STAGES]
     hidden += [f.get("label") or "" for f in case.get("factors", []) if f.get("revealStage") in HIDDEN_STAGES]
     public = [f for f in case.get("factors", []) if f.get("revealStage") in stages and f.get("label")]
+    claims = [f["label"] for f in public if f.get("revealStage") == "ARGUMENT"]
+    if "ARGUMENT" in stages:
+        for section in case.get("sections", []):
+            if section.get("stage") == "ARGUMENT":
+                claims += sentences(section.get("content"))
+    leak_months, leak_won = _leak_amounts(case, judgment_output)
     return {
         "source": source, "hidden": " ".join(hidden), "leak_numbers": _leak_numbers(case, judgment_output),
+        "leak_months": leak_months, "leak_won": leak_won,
         "facts": [f["label"] for f in public if f.get("revealStage") in ("OVERVIEW", "DETAIL")],
-        "claims": [f["label"] for f in public if f.get("revealStage") == "ARGUMENT"]
-                  + [s.get("content") or "" for s in case.get("sections", [])
-                     if s.get("stage") == "ARGUMENT" and "ARGUMENT" in stages],
+        "claims": claims + list(extra_claims),
     }
 
 
@@ -347,7 +401,7 @@ def one_sided_issues(value, case, judgment_output, strip_prefix=lambda s: s):
             sides[direction].append(f["label"])
     if not sides["UP"] or not sides["DOWN"]:
         return []
-    text = " ".join(strip_prefix(v) for v in value.get("lines", []) if isinstance(v, str))
+    text = " ".join(strip_prefix(v) for v in _items(value, "lines") if isinstance(v, str))
     mentioned = {side for side, labels in sides.items() if any(overlap(label, text) >= 0.5 for label in labels)}
     if len(mentioned) == 1:
         missing = "유리한(감경)" if "UP" in mentioned else "불리한(가중)"
@@ -362,10 +416,10 @@ def issue_question_issues(design, opening):
     - 설계도(U0)가 쟁점에 맞춰 정한 앞 두 질문을 U2가 그대로 옮겼는가 — U2 지시는 "design.questions의 앞 두 개만 쓴다"다.
       옮기지 않으면 쟁점과 이어진 질문이 아니게 된다.
     - 정신상태 · 진단 · 치료 이력을 묻는가 — 쟁점 블록이 막는 질문이다(BE-119, BE-121 시험)."""
-    planned = [qa.get("q") for qa in (design or {}).get("questions", [])[:2] if isinstance(qa, dict)]
+    planned = [_question(qa) for qa in _items(design, "questions")[:2]]
     result = []
-    for i, qa in enumerate((opening or {}).get("questions", [])[:2]):
-        question = qa.get("q") if isinstance(qa, dict) else None
+    for i, qa in enumerate(_items(opening, "questions")[:2]):
+        question = _question(qa)
         if not isinstance(question, str):
             continue
         path = f"/questions/{i}/q"
@@ -376,6 +430,12 @@ def issue_question_issues(design, opening):
             result.append(make_issue("U2", path, "ISSUE_QUESTION_MISMATCH",
                                      "정신상태 · 진단 · 치료 이력을 묻는 질문입니다 — 신문은 범행 경위 · 범행 뒤 행동 같은 사실만 묻습니다"))
     return result
+
+
+def review_failed(error):
+    """검사 자체가 돌지 못했을 때 남기는 결과 하나. 오류라 대본은 공개할 수 없다 — 검수를 못 한 대본을 내보내지 않는다."""
+    return {"unit": "", "path": "", "code": "REVIEW_FAILED", "severity": CODES["REVIEW_FAILED"], "fix": None,
+            "message": f"검수를 돌리지 못했습니다({type(error).__name__}: {error}) — 값 모양을 확인한 뒤 다시 검사합니다"}
 
 
 def review_script(case, judgment_output, generated, *, strip_prefix=lambda s: s):
@@ -391,10 +451,15 @@ def review_script(case, judgment_output, generated, *, strip_prefix=lambda s: s)
         ctx = build_context(case, judgment_output, public(UNIT_STAGES["U0"]), UNIT_STAGES["U0"])
         issues += review_unit("U0", value("U0"), ctx)
     if value("U1"):
-        # U1은 기사만 받는다. 기사는 개요(OVERVIEW)로 만든다
-        paper = json.dumps(generated.get("paper") or {}, ensure_ascii=False)
-        issues += review_unit("U1", value("U1"), build_context(case, judgment_output, paper, ("OVERVIEW",)),
-                              strip_prefix=strip_prefix)
+        # U1은 기사만 받는다. 기사는 개요(OVERVIEW)로 만들고, 기사에 "주장"으로 실린 문장은 해설도 주장으로 옮겨야 맞다
+        paper = generated.get("paper") or {}
+        # 제목 · 부제는 문장부호 없이 끝나므로 칸(문단)마다 따로 쪼갠다
+        pieces = [v for v in paper.values() if isinstance(v, str)]
+        pieces += [p for v in paper.values() if isinstance(v, list) for p in v if isinstance(p, str)]
+        claims = [s for piece in pieces for s in sentences(piece) if "주장" in s]
+        ctx = build_context(case, judgment_output, json.dumps(paper, ensure_ascii=False), ("OVERVIEW",),
+                            extra_claims=claims)
+        issues += review_unit("U1", value("U1"), ctx, strip_prefix=strip_prefix)
         issues += one_sided_issues(value("U1"), case, judgment_output, strip_prefix)
     if value("U2"):
         ctx = build_context(case, judgment_output, public(UNIT_STAGES["U2"]), UNIT_STAGES["U2"])

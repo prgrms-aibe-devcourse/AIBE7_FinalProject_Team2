@@ -6,6 +6,7 @@
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 TOOL_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(TOOL_DIR))
@@ -80,6 +81,22 @@ class LineCheckTest(unittest.TestCase):
         leak = {**CLOSING, "prosecutor": "검사 측 의견입니다. 150개월은 되어야 합니다."}
         self.assertIn(("U4", "/prosecutor", "VERDICT_LEAK"), codes(review(judgment=judged, units={"U4": leak})))
 
+    def test_penalty_with_same_value_leaks_even_if_digit_is_in_source(self):
+        """AI 판결이 24개월이면 "징역 2년"은 누출이다 — 입력 어딘가에 "2"가 있어도(PR #352 해송님 리뷰).
+        입력에 같은 형량 문형이 있으면(전과 사실) 누출이 아니다."""
+        case = {**CASE, "overview": "2명이 말다툼 끝에 흉기를 들었다. 피고인은 징역 10개월을 선고받은 전력이 있다."}
+        judged = {**JUDGMENT_OUTPUT, "prisonMonths": 24, "suspensionMonths": 10}
+        anchor = {**CLOSING, "defense": "변호인 측 최종변론입니다. 징역 2년은 과합니다."}
+        issues = review(case=case, judgment=judged, units={"U4": anchor})
+        self.assertEqual(codes(issues, sr.ERROR), [("U4", "/defense", "VERDICT_LEAK")])
+        self.assertIn("징역 2년", issues[0]["message"])
+        record = {**CLOSING, "prosecutor": "검사 측 의견입니다. 피고인은 징역 10개월을 선고받은 전력이 있습니다."}
+        self.assertEqual(codes(review(case=case, judgment=judged, units={"U4": record}), sr.ERROR), [])
+        fine = {**CLOSING, "defense": "변호인 측 최종변론입니다. 벌금 500만 원 정도가 맞습니다."}
+        judged_fine = {**JUDGMENT_OUTPUT, "fineAmount": 5_000_000}
+        self.assertIn(("U4", "/defense", "VERDICT_LEAK"),
+                      codes(review(case=CASE_WITH_NUMBERS, judgment=judged_fine, units={"U4": fine})))
+
     def test_numbers_from_source_pass(self):
         ok = {**CLOSING, "prosecutor": "검사 측 의견입니다. 피고인은 500만 원을 갚지 않았습니다."}
         self.assertEqual(codes(review(case=CASE_WITH_NUMBERS, units={"U4": ok}), sr.ERROR), [])
@@ -150,6 +167,21 @@ class WarningCheckTest(unittest.TestCase):
         claim = {**OPENING, "plea": ["피고인은 우발적 범행이라고 주장합니다.", OPENING["plea"][1]]}
         self.assertNotIn("FACT_AS_CLAIM", [c for _, _, c in codes(review(units={"U2": claim}))])
 
+    def test_claims_are_compared_by_sentence(self):
+        """주장 섹션은 문장 단위로 비교하고(본문 전체와 비교하면 겹침이 낮아 주장을 사실로 봤다), U1은 기사에 "주장"으로 실린
+        문장을 주장으로 본다(PR #352 해송님 리뷰)."""
+        case = {**CASE, "sections": [*CASE["sections"],
+                                     {"stage": "ARGUMENT", "sectionType": "DEFENSE", "title": "변호인 주장",
+                                      "content": "피고인은 다투던 중 흉기를 집어 들었으나 겁을 주려 했을 뿐이다. 범행 뒤 "
+                                                 "자수할 생각이었다. 유족에게 사과 편지를 보냈다."}],
+                "factors": [*CASE["factors"], {"factorId": 31, "label": "다투던 중 흉기를 집어 들었다", "revealStage": "OVERVIEW"}]}
+        defense = {**CLOSING, "defense": "변호인 측 최종변론입니다. 피고인은 겁을 주려 했을 뿐이라고 주장하며 흉기를 집어 들었습니다."}
+        self.assertNotIn("FACT_AS_CLAIM", [c for _, _, c in codes(review(case=case, units={"U4": defense}))])
+        paper = {**PAPER, "article": ["피고인은 다투던 중 흉기를 집어 들었다고 주장했다.", "문단2"]}
+        intro = {"lines": [*INTRO["lines"][:2], "피고인은 다투던 중 흉기를 집어 들었다고 주장해요.", *INTRO["lines"][3:]]}
+        self.assertNotIn("FACT_AS_CLAIM", [c for _, _, c in codes(review(case=case, units={"U1": intro}, paper=paper))])
+        self.assertIn("FACT_AS_CLAIM", [c for _, _, c in codes(review(case=case, units={"U1": intro}))])  # 기사엔 주장 아님
+
     def test_emotion_not_in_source(self):
         line = {**CLOSING, "prosecutor": "검사 측 의견입니다. 유족이 받은 상처가 큽니다."}
         issues = review(units={"U4": line})
@@ -179,6 +211,11 @@ class WarningCheckTest(unittest.TestCase):
         issues = review(units={"U0": design, "U2": mental})
         self.assertEqual(codes(issues), [("U2", "/questions/0/q", "ISSUE_QUESTION_MISMATCH")])
         self.assertIn("정신상태", issues[0]["message"])
+        # 약물이 범행 뒤 행동인 사실 질문은 걸지 않는다(PR #352 리뷰)
+        drug_q = {"q": "그 뒤 자신도 약물을 복용했습니까?", "a": "예"}
+        drug = review(units={"U0": {**DESIGN, "questions": [drug_q, *DESIGN["questions"][1:]]},
+                             "U2": {**OPENING, "questions": [drug_q, OPENING["questions"][1]]}})
+        self.assertNotIn("ISSUE_QUESTION_MISMATCH", [c for _, _, c in codes(drug)])
 
     def test_evidence_filler_and_repeat(self):
         evidence = [{"factorId": 2, "role": "prosecutor", "text": "검사 측 증거입니다. 흉기를 집어 들었습니다.\n이 사정도 함께 살펴 주시기 바랍니다."},
@@ -200,6 +237,25 @@ class AssemblerIntegrationTest(unittest.TestCase):
         self.assertEqual(script["pending"], [])
         self.assertEqual(codes(script["review"], sr.ERROR), [("U4", "/defense", "NUMBER_NOT_IN_SOURCE")])
         self.assertFalse(script["publishable"])
+
+    def test_unexpected_shape_does_not_lose_generated_units(self):
+        """형식 검사가 보지 않는 모양(cards에 모델이 더한 문자열 키, 질문이 문자열 목록)에서도 검사가 멈추지 않는다(CodeRabbit ·
+        PR #352 리뷰). 검사 자체가 실패해도 생성 결과는 남고 REVIEW_FAILED 오류로 공개만 막는다."""
+        odd = {**OPENING, "cards": {**OPENING["cards"], "law": "형법 제250조 제1항"}}
+        self.assertEqual(codes(review(units={"U2": odd}), sr.ERROR), [])
+        # 질문이 객체가 아니면 그 줄은 빈 줄로 보고(LINE_MISSING) 멈추지 않는다
+        self.assertEqual(sr.unit_lines("U2", {"questions": ["질문입니까?"], "cards": "카드"}),
+                         [("/questions/0/q", None, "prosecutor")])
+        self.assertEqual(sr.unit_lines("U0", {"issues": "쟁점", "questions": "질문"}), [])
+        logs = []
+        with mock.patch.object(sa, "review_script", side_effect=AttributeError("'str' object has no attribute 'get'")):
+            generated_ = sa.generate_units(CASE, JUDGMENT_OUTPUT, CAST, CLS, model="openai:a", paper=PAPER,
+                                           caller=FakeCaller(answers()), log=logs.append)
+        script = sa.build_script(CASE, CAST, CLS, generated_, model="openai:a")
+        self.assertEqual(sorted(script["acts"]), ["1a", "2", "3"])  # 만든 단위는 그대로 남는다
+        self.assertEqual([(i["unit"], i["code"], i["fix"]) for i in script["review"]], [("", "REVIEW_FAILED", None)])
+        self.assertFalse(script["publishable"])
+        self.assertTrue(any("검수를 돌리지 못했습니다" in line for line in logs))
 
     def test_clean_script_stays_publishable(self):
         caller = FakeCaller(answers())
