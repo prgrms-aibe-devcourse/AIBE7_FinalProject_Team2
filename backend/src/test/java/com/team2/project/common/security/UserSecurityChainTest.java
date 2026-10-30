@@ -208,8 +208,9 @@ class UserSecurityChainTest extends ApiIntegrationTest {
 
 	@Test
 	void userPost_withToken_noCsrfNeeded() throws Exception {
-		// 가짜 토큰의 회원 7은 DB에 없어 체험을 만들 수 없다(체험의 주인이 회원, BE-140). CSRF만 보므로 회원 행이 필요 없는 POST를 쓴다
-		mockMvc.perform(post("/api/v1/attendance").header(HttpHeaders.AUTHORIZATION, bearer("member-7")))
+		// 가짜 토큰의 회원 7은 DB에 없어 회원 행이 필요한 쓰기(출석 · 체험)는 FK 오류가 난다(BE-140). 실제 회원을 만들어 쓴다
+		long memberId = registerMember();
+		mockMvc.perform(post("/api/v1/attendance").header(HttpHeaders.AUTHORIZATION, bearer("member-" + memberId)))
 			.andExpect(status().isNoContent());
 	}
 
