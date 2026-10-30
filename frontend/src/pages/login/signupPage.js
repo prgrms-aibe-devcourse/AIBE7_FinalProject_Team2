@@ -9,6 +9,7 @@ import { loginDesk } from './loginDesk.js';
 import { kakaoButton, setBusy } from './loginParts.js';
 import { NICKNAME_MAX, NICKNAME_MAX_HANGUL, lockNicknameLength } from '../../utils/nickname.js';
 import { validateSignup } from './signupRule.js';
+import { offerAnonymousImport } from './anonymousImport.js';
 
 // 회원가입 (FE-104, /signup). 로그인(S-12)과 같은 책상 위 펠트 패드에 카카오로 시작하기 + 아이디 · 비밀번호 · 닉네임 가입 폼.
 // 목 모드는 목업 가입(mocks/authMockApi.js signup)이, 실제 모드는 회원가입 API(M-5, realApi.js signup — FE-117)가 받아
@@ -173,6 +174,12 @@ export function renderSignupPage(container, { api, navigate }) {
       try {
         const { nickname } = await api.signup({ id: values.id.trim(), password: values.password, nickname: values.nickname.trim() });
         saveUser({ nickname }); // 화면을 떠났어도 로그인 표시는 남긴다 — 서버는 이미 가입 · 로그인됐다
+        // 첫 로그인이라 이 브라우저의 체험 기록 · 첫인상 엽서를 가져올지 먼저 고르게 한다(FE-138). 창을 닫으면 로그인하지 않기로 한 것이다.
+        // 계정은 이미 만들어졌으므로 가입 폼을 다시 열지 않고(다시 가입하면 아이디 중복이다) 로그인 화면으로 보낸다
+        if (await offerAnonymousImport(api) === 'declined') {
+          if (container.contains(root)) navigate('login', {}, { replace: true });
+          return;
+        }
         if (!container.contains(root)) return; // 기다리는 사이 다른 화면으로 갔으면 이동하지 않는다
         finish();
       } catch (failure) {
@@ -213,6 +220,10 @@ export function renderSignupPage(container, { api, navigate }) {
       try {
         const { nickname } = await api.login({ method: 'kakao' });
         saveUser({ nickname }); // 목 모드만 여기 온다(실제 카카오는 브라우저 이동). 가입 폼과 같은 순서로 둔다
+        if (await offerAnonymousImport(api) === 'declined') {
+          if (container.contains(root)) { setBusy([kakao, submit], false); pending = false; }
+          return;
+        }
         if (!container.contains(root)) return;
         finish();
       } catch (failure) {
