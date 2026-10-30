@@ -2,7 +2,7 @@ import { button, element } from '../../components/siteLayout.js';
 import { API_MODE } from '../../api/config.js';
 import { loadAdminApi } from './adminApi.js';
 import { focusHeading, labeledField, pageTop } from './adminKit.js';
-import { errorText } from './adminLabels.js';
+import { NOT_READY_TEXT, errorText } from './adminLabels.js';
 import { ADMIN_MENU, isMenuReady, isSectionReady } from './adminMenu.js';
 import { clearUser, isAdmin } from '../../utils/session.js';
 import './admin.css';
@@ -118,7 +118,7 @@ export async function renderAdminShell(container, { navigate, title, section, dr
   function drawNotReady() {
     const panel = element('div', 'admin-message');
     panel.setAttribute('role', 'status');
-    panel.append(element('p', '', '서버에 아직 준비되지 않은 기능이에요.'));
+    panel.append(element('p', '', NOT_READY_TEXT));
     main.replaceChildren(pageTop(title), panel);
   }
 

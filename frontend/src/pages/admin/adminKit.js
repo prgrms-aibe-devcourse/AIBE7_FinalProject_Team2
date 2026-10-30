@@ -1,7 +1,7 @@
 // 관리자 화면(회원 · 게시글 · 신고 · 관리자 계정 · 공지 · 사건 등록 · 사건 검수)이 함께 쓰는 작은 부품.
 // 값은 모두 textContent로 넣는다(회원이 쓴 글에 HTML이 섞여도 실행되지 않게).
 import { button, element } from '../../components/siteLayout.js';
-import { errorText } from './adminLabels.js';
+import { NOT_READY_TEXT, errorText } from './adminLabels.js';
 
 export const PAGE_SIZE = 20;
 
@@ -164,7 +164,7 @@ export function reasonForm({ label, submitText, maxLength = 200, extra = [], onS
  * @param {{ body: HTMLElement, active: () => boolean, unauthorized: () => void, notFoundText?: string }} ctx 404 문구는 서버에 아직 없는 메뉴 기준이라, 이미 있는 API의 목록은 notFoundText로 바꾼다
  * @returns {(fetcher: () => Promise<any>, draw: (data) => void) => Promise<void>}
  */
-export function createLoader({ body, active, unauthorized, notFoundText = '서버에 아직 준비되지 않은 기능이에요.' }) {
+export function createLoader({ body, active, unauthorized, notFoundText = NOT_READY_TEXT }) {
   let seq = 0;
   return async function load(fetcher, draw) {
     const mine = ++seq;
