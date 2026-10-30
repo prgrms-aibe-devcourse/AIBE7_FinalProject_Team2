@@ -224,7 +224,7 @@ function caseSheet(paper) {
   mast.append(info, brand, date);
   const head = element('section', 'sheet-story sheet-head-block');
   head.dataset.focus = 'head';
-  head.append(element('h2', 'sheet-headline', paper.headline), element('p', 'sheet-deck', paper.deck));
+  head.append(element('h2', 'sheet-headline', paper.headline), ...(paper.deck ? [element('p', 'sheet-deck', paper.deck)] : [])); // 부제가 본문과 같으면 비운다(FE-144)
   const figure = element('figure', 'sheet-figure sheet-story');
   figure.dataset.focus = 'photo';
   figure.append(picture(paper.photo, 'sheet-case-photo', '', 0), element('figcaption', '', paper.caption));
