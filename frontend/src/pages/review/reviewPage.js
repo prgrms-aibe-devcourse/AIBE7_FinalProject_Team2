@@ -91,7 +91,7 @@ export async function renderReviewPage(container, { caseId, caseHeader, api, nav
         navigate('verdict'); // 판결 전 정리 화면은 없앴다. 그 내용은 3막 파일철의 "사건 요약" 장에 있다(FE-48)
       } else {
         const data = await api.getReview(caseId);
-        if (active()) draw(data, true);
+        if (active()) await draw(data, true);
       }
     } catch (error) {
       if (error?.code === 'STEP_OUT_OF_ORDER') {
@@ -139,11 +139,15 @@ export async function renderReviewPage(container, { caseId, caseHeader, api, nav
     layout.append(main);
     root.replaceChildren(header, layout);
   }
-  function draw(data, moveFocus = false) {
+  async function draw(data, moveFocus = false) {
     // 사건 번호는 DB마다 다를 수 있어 번호만으로 고르지 않는다. 대본의 제목이 사건 제목과 같을 때만 무대를 쓴다(S-03과 같은 규칙)
     const candidate = SCRIPTS[caseId];
     const script = candidate?.title === caseHeader.title ? candidate : undefined;
-    if (script) { loadNotice().then((notice) => { if (active()) drawStage(data, script, notice); }); return; }
+    if (script) {
+      const notice = await loadNotice(); // 무대를 그리다 난 오류도 호출한 쪽(load · confirm)의 오류 처리로 전달된다
+      if (active()) drawStage(data, script, notice);
+      return;
+    }
     const current = data.openStep ?? 4;
     const header = element('header', 'case-topbar');
     header.append(button('← 목록', () => navigate('list'), 'back-button'),
@@ -226,7 +230,7 @@ export async function renderReviewPage(container, { caseId, caseHeader, api, nav
     root.replaceChildren(message);
     try {
       const data = await api.getReview(caseId);
-      if (active()) draw(data);
+      if (active()) await draw(data);
     } catch (error) { showError(error); }
     finally { loading = false; }
   }

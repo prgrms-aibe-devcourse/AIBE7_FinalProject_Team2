@@ -95,10 +95,13 @@ export function flatten(acts, order) {
 // 민감 사건 안내 (FE-129): 2막 시작 대사보다 먼저, 안내 문구만 나오는 빈 무대 장면 하나를 앞에 끼운다(캐릭터 · 대사 없음).
 // 장면 정보(절차 번호 · 섹션 · 모습)는 2막 첫 장면에서 이어받아, "② 모두진술부터 열기"처럼 섹션으로 시작해도 이 장면이 먼저 나온다.
 // 별도 장면이라 첫 장면의 지문 · 암전 문구를 덮어쓰지 않으므로 그 문구가 있어도 안내는 빠지지 않는다(안내 누락 방지, 리뷰 반영).
-// 안내할 내용이 없으면(notice 빈 값) 그대로 돌려준다
-export function attachNotice(steps, notice, actId = '2') {
+// matchesStart: 이어 보기(예: ③ 쟁점 정리에서 시작)면 그 시작 장면 앞에 끼워, 어느 지점에서 열어도 안내가 먼저 나온다(리뷰 반영).
+// 맞는 장면이 없거나 넘기지 않으면 막의 첫 장면 앞이다. 안내할 내용이 없으면(notice 빈 값) 그대로 돌려준다
+export function attachNotice(steps, notice, actId = '2', matchesStart) {
   if (!notice) return steps;
-  const at = steps.findIndex((step) => step.actId === actId);
+  const inAct = (step) => step.actId === actId;
+  const found = matchesStart ? steps.findIndex((step) => inAct(step) && matchesStart(step)) : -1;
+  const at = found >= 0 ? found : steps.findIndex(inAct);
   if (at < 0) return steps;
   const { say, text, textAgain, role, cameo, delay, card, ev, confirm, next, auto, choices, board, source, system, blackout, ...base } = steps[at];
   return [...steps.slice(0, at), { ...base, hideCast: true, system: notice }, ...steps.slice(at)];
@@ -302,7 +305,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
   let again = false; // 이미 지나온 체험을 다시 보는 중(S-20 "시작하기"): 대본 textAgain이 있으면 그 문장을 쓴다
   const lineOf = (step) => (again && step.textAgain) || step.text || '';
   const asks = (step) => Boolean(step.choices && choices[step.choices]); // 선택지로만 넘어가는 장면
-  const steps = attachNotice(flatten(script.acts, order), notice);
+  const steps = attachNotice(flatten(script.acts, order), notice, '2', start);
   let index = Math.max(0, start ? steps.findIndex(start) : 0);
   const jumpAct = takeJump();
   const jumped = steps.findIndex((step) => step.actId === jumpAct);

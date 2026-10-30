@@ -118,3 +118,17 @@ test('민감 사건 안내: 2막 첫 장면에 지문이 있어도 안내가 앞
   assert.equal(attached[1].system, '법정에 들어갑니다', '원래 지문은 그대로');
   assert.equal(attached[1].text, '재판을 시작해요.');
 });
+
+test('민감 사건 안내: 이어 보기로 시작하는 장면(예: ③)이 있으면 그 장면 앞에 끼어, 시작해도 안내가 먼저 나온다', () => {
+  const all = flatten(script.acts, ['2']);
+  const notice = '안내';
+  const start = (step) => step.section === 3;
+  const attached = attachNotice(all, notice, '2', start);
+  const at = attached.findIndex((step) => step.system === notice);
+  assert.equal(attached[at].section, 3);
+  assert.equal(attached.findIndex(start), at, '시작 장면 찾기가 안내 장면을 먼저 잡는다');
+  assert.equal(attached[at + 1].section, 3);
+  assert.ok(at > 0, '막 첫 장면 앞이 아니라 ③ 앞');
+  const none = attachNotice(all, notice, '2', (step) => step.section === 99);
+  assert.equal(none.findIndex((step) => step.system === notice), 0, '맞는 장면이 없으면 막의 첫 장면 앞');
+});
