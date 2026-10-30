@@ -10,10 +10,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.jayway.jsonpath.JsonPath;
-import com.team2.project.common.security.token.AccessTokenVerifier;
-import com.team2.project.common.security.token.MemberPrincipal;
-import com.team2.project.common.security.token.TokenException;
 import com.team2.project.support.ApiIntegrationTest;
+import com.team2.project.support.FakeMemberTokens;
 import jakarta.servlet.http.Cookie;
 import java.util.ArrayList;
 import java.util.List;
@@ -22,9 +20,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Primary;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
@@ -32,6 +28,7 @@ import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 /** 커뮤니티 API C-1 ~ C-7 (API 명세 12장, BE-115). 메인(C-6) 캐시는 끄고 본다(캐시는 CommunityHomeCacheTest) */
+@Import(FakeMemberTokens.class)
 @TestPropertySource(properties = "community.home-cache-ttl=0")
 class CommunityApiTest extends ApiIntegrationTest {
 
@@ -39,27 +36,11 @@ class CommunityApiTest extends ApiIntegrationTest {
 	private static final String HOME = "/api/v1/community/home";
 	private static final String SHAREABLE = "/api/v1/community/shareable-verdict";
 
-	/** 시험용 토큰: "member-{회원 ID}" → 그 회원으로 인증 */
-	@TestConfiguration
-	static class TestBeans {
-
-		@Bean
-		@Primary
-		AccessTokenVerifier fakeAccessTokenVerifier() {
-			return token -> {
-				if (token.startsWith("member-")) {
-					return MemberPrincipal.user(Long.parseLong(token.substring("member-".length())));
-				}
-				throw TokenException.invalid("알 수 없는 토큰");
-			};
-		}
-	}
-
 	/** 시험 회원: 회원 ID + 그 회원에 연결된 익명 ID(쿠키) */
 	private record User(long memberId, UUID anonymousId) {
 
 		String bearer() {
-			return "Bearer member-" + memberId;
+			return ApiIntegrationTest.bearer(memberId);
 		}
 
 		Cookie cookie() {
@@ -68,7 +49,9 @@ class CommunityApiTest extends ApiIntegrationTest {
 	}
 
 	private final List<Long> memberIds = new ArrayList<>();
+	private final List<UUID> guestIds = new ArrayList<>();
 	private long caseId;
+	private int factorOrder;	// 같은 사건에 판결을 여러 개 붙여도 요소 순서가 겹치지 않게
 
 	@BeforeEach
 	void setUpCase() {
@@ -77,39 +60,44 @@ class CommunityApiTest extends ApiIntegrationTest {
 
 	@AfterEach
 	void deleteCommunityData() {
-		// 부모의 정리(사건 · 체험 · 그 체험의 익명 사용자)보다 먼저 돈다. 회원 · 익명 사용자를 가리키는 행부터 지운다
+		// 부모의 정리(사건 · 체험 · 회원)보다 먼저 돈다. 회원에 연결된 익명 ID와 그 데이터부터 지운다
 		for (Long memberId : memberIds) {
-			List<UUID> anonymousIds = jdbcTemplate.queryForList(
-				"SELECT id FROM anonymous_user WHERE member_id = ?", UUID.class, memberId);
-			jdbcTemplate.update("DELETE FROM community_like WHERE member_id = ?", memberId);
-			jdbcTemplate.update("DELETE FROM community_comment WHERE member_id = ?", memberId);
 			jdbcTemplate.update("DELETE FROM community_like WHERE post_id IN (SELECT id FROM community_post WHERE member_id = ?)",
 				memberId);
 			jdbcTemplate.update("DELETE FROM community_comment WHERE post_id IN (SELECT id FROM community_post WHERE member_id = ?)",
 				memberId);
-			jdbcTemplate.update("DELETE FROM community_post WHERE member_id = ?", memberId);
-			for (UUID id : anonymousIds) {
-				jdbcTemplate.update("DELETE FROM xp_event WHERE anonymous_user_id = ?", id);
-				jdbcTemplate.update("""
-					DELETE FROM judgment_factor WHERE judgment_id IN
-					    (SELECT j.id FROM judgment j JOIN experience e ON e.id = j.experience_id WHERE e.anonymous_user_id = ?)""", id);
-				jdbcTemplate.update(
-					"DELETE FROM judgment WHERE experience_id IN (SELECT id FROM experience WHERE anonymous_user_id = ?)", id);
-				jdbcTemplate.update("DELETE FROM experience WHERE anonymous_user_id = ?", id);
-				jdbcTemplate.update("DELETE FROM attendance WHERE anonymous_user_id = ?", id);
-				jdbcTemplate.update("DELETE FROM profile_setting WHERE anonymous_user_id = ?", id);
-				jdbcTemplate.update("DELETE FROM anonymous_user WHERE id = ?", id);
+			for (UUID id : jdbcTemplate.queryForList("SELECT id FROM anonymous_user WHERE member_id = ?", UUID.class, memberId)) {
+				deleteAnonymous(id);
 			}
-			jdbcTemplate.update("DELETE FROM member WHERE id = ?", memberId);
+		}
+		for (UUID id : guestIds) {
+			deleteAnonymous(id);
 		}
 		memberIds.clear();
+		guestIds.clear();
 	}
 
+	/** 익명 ID와 그 데이터(체험 · 판결). 시험이 만든 글은 부모가 회원과 함께 지운다 */
+	private void deleteAnonymous(UUID id) {
+		jdbcTemplate.update("DELETE FROM community_like WHERE post_id IN (SELECT id FROM community_post WHERE anonymous_user_id = ?)", id);
+		jdbcTemplate.update("DELETE FROM community_comment WHERE anonymous_user_id = ?", id);
+		jdbcTemplate.update("DELETE FROM community_post WHERE anonymous_user_id = ?", id);
+		jdbcTemplate.update("""
+			DELETE FROM judgment_factor WHERE judgment_id IN
+			    (SELECT j.id FROM judgment j JOIN experience e ON e.id = j.experience_id WHERE e.anonymous_user_id = ?)""", id);
+		jdbcTemplate.update(
+			"DELETE FROM judgment WHERE experience_id IN (SELECT id FROM experience WHERE anonymous_user_id = ?)", id);
+		jdbcTemplate.update("DELETE FROM experience WHERE anonymous_user_id = ?", id);
+		jdbcTemplate.update("DELETE FROM anonymous_user WHERE id = ?", id);
+	}
+
+	/** 회원 + 그 회원에 연결된 익명 ID(글 · 댓글의 anonymous_user_id 칸용, 명함 · 경험치는 회원 키라 쓰지 않는다) */
 	private User newUser(String provider, String nickname) {
-		Long memberId = jdbcTemplate.queryForObject(
-			"INSERT INTO member (provider, provider_user_id, nickname) VALUES (?, ?, ?) RETURNING id",
-			Long.class, provider, UUID.randomUUID().toString(), nickname);
+		long memberId = registerMember();
 		memberIds.add(memberId);
+		if (nickname != null) {
+			jdbcTemplate.update("UPDATE member SET provider = ?, nickname = ? WHERE id = ?", provider, nickname, memberId);
+		}
 		UUID anonymousId = UUID.randomUUID();
 		jdbcTemplate.update("INSERT INTO anonymous_user (id, member_id) VALUES (?, ?)", anonymousId, memberId);
 		return new User(memberId, anonymousId);
@@ -145,8 +133,8 @@ class CommunityApiTest extends ApiIntegrationTest {
 
 	private int xp(User user, String source) {
 		return jdbcTemplate.queryForObject(
-			"SELECT coalesce(sum(amount), 0) FROM xp_event WHERE anonymous_user_id = ? AND source = ?",
-			Integer.class, user.anonymousId(), source);
+			"SELECT coalesce(sum(amount), 0) FROM member_xp_event WHERE member_id = ? AND source = ?",
+			Integer.class, user.memberId(), source);
 	}
 
 	private int countPosts(User user) {
@@ -154,17 +142,33 @@ class CommunityApiTest extends ApiIntegrationTest {
 			user.memberId());
 	}
 
-	/** 판결을 확정한 체험 + 내 최종 판결(징역 60개월, 높이는 요소 1 · 낮추는 요소 2) */
+	/** 회원이 판결을 확정한 체험 + 내 최종 판결(징역 60개월, 높이는 요소 1 · 낮추는 요소 2) */
 	private void confirmVerdict(User user, long targetCaseId) {
 		Long experienceId = jdbcTemplate.queryForObject("""
+			INSERT INTO experience (member_id, case_id, attempt_no, status, completed_at)
+			VALUES (?, ?, 1, 'VERDICT_CONFIRMED', now()) RETURNING id""", Long.class, user.memberId(), targetCaseId);
+		attachFinalJudgment(experienceId, targetCaseId);
+	}
+
+	/** 손님(쿠키의 익명 ID)이 판결을 확정한 체험 + 최종 판결. 만든 익명 ID는 시험이 끝나면 지운다 */
+	private UUID confirmGuestVerdict(long targetCaseId) {
+		UUID guestId = UUID.randomUUID();
+		guestIds.add(guestId);
+		jdbcTemplate.update("INSERT INTO anonymous_user (id) VALUES (?)", guestId);
+		Long experienceId = jdbcTemplate.queryForObject("""
 			INSERT INTO experience (anonymous_user_id, case_id, attempt_no, status) VALUES (?, ?, 1, 'VERDICT_CONFIRMED')
-			RETURNING id""", Long.class, user.anonymousId(), targetCaseId);
+			RETURNING id""", Long.class, guestId, targetCaseId);
+		attachFinalJudgment(experienceId, targetCaseId);
+		return guestId;
+	}
+
+	private void attachFinalJudgment(long experienceId, long targetCaseId) {
 		Long judgmentId = jdbcTemplate.queryForObject("""
 			INSERT INTO judgment (case_id, subject_type, timing, experience_id, penalty_type, prison_months, is_published)
 			VALUES (?, 'USER', 'FINAL', ?, 'PRISON', 60, true) RETURNING id""", Long.class, targetCaseId, experienceId);
 		String[] directions = {"UP", "DOWN", "DOWN"};
 		for (int i = 0; i < directions.length; i++) {
-			long factorId = insertFactor(targetCaseId, "OVERVIEW", "요소 " + i, null, i + 1);
+			long factorId = insertFactor(targetCaseId, "OVERVIEW", "요소 " + i, null, ++factorOrder);
 			jdbcTemplate.update("INSERT INTO judgment_factor (judgment_id, factor_id, direction) VALUES (?, ?, ?)",
 				judgmentId, factorId, directions[i]);
 		}
@@ -279,8 +283,8 @@ class CommunityApiTest extends ApiIntegrationTest {
 	void authorCard_reflectsProfileSettings() throws Exception {
 		User author = newUser("말없는 판사");
 		jdbcTemplate.update("""
-			INSERT INTO profile_setting (anonymous_user_id, bio, card_line, card_level) VALUES (?, '말은 적게', 'job', true)""",
-			author.anonymousId());
+			INSERT INTO member_profile_setting (member_id, bio, card_line, card_level) VALUES (?, '말은 적게', 'job', true)""",
+			author.memberId());
 		write(author, "{\"category\":\"FREE\",\"title\":\"제목\",\"body\":\"본문\"}")
 			.andExpect(status().isCreated())
 			.andExpect(jsonPath("$.author.intro").value("말은 적게"))
@@ -289,7 +293,7 @@ class CommunityApiTest extends ApiIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("명함 기준 익명 ID: 쿠키가 이 회원 것이 아니면 회원에 연결된 익명 ID를 쓴다(경험치도 거기에)")
+	@DisplayName("글에 남기는 익명 ID: 쿠키가 이 회원 것이 아니면 회원에 연결된 익명 ID를 남긴다. 경험치는 회원이 받는다")
 	void writer_cookieOfOtherMember_usesLinkedAnonymousId() throws Exception {
 		User author = newUser("글쓴이");
 		User other = newUser("다른 사람");
@@ -352,7 +356,7 @@ class CommunityApiTest extends ApiIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("viewerJudged: 보는 사람이 그 사건 판결을 확정했을 때만 true (로그인 전에도 쿠키로 본다)")
+	@DisplayName("viewerJudged: 로그인한 보는 사람이 그 사건 판결을 확정했을 때만 true")
 	void viewerJudged_followsViewer() throws Exception {
 		User author = newUser("글쓴이");
 		long postId = writePost(author, "판결 이야기");
@@ -360,8 +364,46 @@ class CommunityApiTest extends ApiIntegrationTest {
 		confirmVerdict(viewer, caseId);
 
 		mockMvc.perform(get(POSTS + "/" + postId)).andExpect(jsonPath("$.viewerJudged").value(false));
-		mockMvc.perform(get(POSTS + "/" + postId).cookie(viewer.cookie())).andExpect(jsonPath("$.viewerJudged").value(true));
+		mockMvc.perform(as(get(POSTS + "/" + postId), viewer)).andExpect(jsonPath("$.viewerJudged").value(true));
 		mockMvc.perform(as(get(POSTS + "/" + postId), author)).andExpect(jsonPath("$.viewerJudged").value(false));
+	}
+
+	@Test
+	@DisplayName("viewerJudged: 손님(토큰 없이 쿠키만)은 쿠키의 익명 ID가 가진 체험으로 본다")
+	void viewerJudged_guestUsesOwnCookie() throws Exception {
+		User author = newUser("글쓴이");
+		long postId = writePost(author, "판결 이야기");
+		UUID guestId = confirmGuestVerdict(caseId);
+
+		mockMvc.perform(get(POSTS + "/" + postId).cookie(new Cookie(COOKIE, guestId.toString())))
+			.andExpect(jsonPath("$.viewerJudged").value(true));
+		mockMvc.perform(get(POSTS + "/" + postId).cookie(new Cookie(COOKIE, UUID.randomUUID().toString())))
+			.andExpect(jsonPath("$.viewerJudged").value(false));
+		mockMvc.perform(get(POSTS + "/" + postId)).andExpect(jsonPath("$.viewerJudged").value(false));
+	}
+
+	@Test
+	@DisplayName("로그인한 보는 사람의 viewerJudged · 붙일 판결은 회원의 체험에서 온다 — 쿠키의 익명 ID 체험은 보지 않는다")
+	void loggedInViewer_usesMemberExperiencesNotCookie() throws Exception {
+		User author = newUser("글쓴이");
+		long postId = writePost(author, "판결 이야기");
+		UUID guestId = confirmGuestVerdict(caseId);
+		Cookie guestCookie = new Cookie(COOKIE, guestId.toString());
+		User withoutVerdict = newUser("체험 없는 회원");
+		User judged = newUser("판결한 회원");
+		confirmVerdict(judged, caseId);
+
+		// 쿠키에 판결이 있어도 회원에게 없으면 없다
+		mockMvc.perform(get(POSTS + "/" + postId).header(HttpHeaders.AUTHORIZATION, withoutVerdict.bearer()).cookie(guestCookie))
+			.andExpect(jsonPath("$.viewerJudged").value(false));
+		mockMvc.perform(get(SHAREABLE).header(HttpHeaders.AUTHORIZATION, withoutVerdict.bearer()).cookie(guestCookie))
+			.andExpect(status().isNoContent());
+		// 쿠키에 판결이 없어도 회원에게 있으면 있다
+		mockMvc.perform(get(POSTS + "/" + postId).header(HttpHeaders.AUTHORIZATION, judged.bearer())
+				.cookie(new Cookie(COOKIE, UUID.randomUUID().toString())))
+			.andExpect(jsonPath("$.viewerJudged").value(true));
+		mockMvc.perform(get(SHAREABLE).header(HttpHeaders.AUTHORIZATION, judged.bearer()))
+			.andExpect(status().isOk()).andExpect(jsonPath("$.caseId").value(caseId));
 	}
 
 	// ---------- 좋아요 ----------
