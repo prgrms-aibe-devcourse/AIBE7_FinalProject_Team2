@@ -15,6 +15,7 @@ import { handPaper } from '../../utils/paperHandoff.js';
 import { castOf } from '../../utils/myPageView.js';
 import { reducedMotion } from '../../utils/motion.js';
 import { mockTag } from '../../components/siteLayout.js';
+import { API_MODE } from '../../api/config.js';
 
 const SUBJECTS = [['USER', '내 판결'], ['AI', 'AI 판결'], ['COURT', '실제 판결']];
 const DIRECTIONS = { UP: ['무겁게', 'up'], DOWN: ['가볍게', 'down'] };
@@ -227,7 +228,8 @@ function crowdBars(preToFinal) {
   if (!crowd?.options?.length) return null;
   const box = element('div', 'sheet-crowd');
   const head = element('p', 'sheet-crowd-head', `이 사건 독자 ${crowd.total.toLocaleString('ko-KR')}명의 첫인상`);
-  head.append(mockTag());
+  // 지금 crowd는 목에만 있지만, API 14에 실제 값이 들어와도 "목데이터"가 붙지 않도록 목 모드에서만 붙인다(FE-142 리뷰)
+  if (API_MODE === 'mock') head.append(mockTag());
   const list = element('ul', 'sheet-crowd-list');
   crowd.options.forEach((option) => {
     const mine = option.rangeOptionId === preToFinal.preJudgment.rangeOptionId;
