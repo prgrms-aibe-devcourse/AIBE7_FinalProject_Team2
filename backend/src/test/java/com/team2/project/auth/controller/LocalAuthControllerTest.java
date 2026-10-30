@@ -385,7 +385,11 @@ class LocalAuthControllerTest extends ApiIntegrationTest {
 		mockMvc.perform(json(SIGNUP, signupBody(id, PASSWORD, "방청객99")))
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
-			.andExpect(jsonPath("$.details[0].field").value("nickname"));
+			.andExpect(jsonPath("$.details[0].field").value("nickname"))
+			.andExpect(jsonPath("$.details[0].reason").value("Reserved"));	// BE-134
+		mockMvc.perform(json(SIGNUP, signupBody(id, PASSWORD, "가나다라마바사아자")))	// 한글 9자: DTO @Size(12)는 통과, 서비스가 거절
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.details[0].reason").value("SizeWithHangul"));
 		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM member_password WHERE login_id = ?", Integer.class, id)).isZero();
 	}
 

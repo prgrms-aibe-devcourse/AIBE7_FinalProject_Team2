@@ -1,9 +1,11 @@
 import { ACT_JUMP_KEY } from '../components/stage.js';
 import { API_MODE } from '../api/config.js';
 
+// 배포 빌드(VITE_API_MODE=real, DEV 아님)는 아래 두 함수의 첫 조건이 빌드 시점에 true로 접혀 목 저장소 import가 번들에서 빠진다(FE-135, api/config.js 설명)
+
 // 무대의 "처음부터 다시"(목 데이터 전용): 목 저장소를 사건 시작 전으로 되돌리고 S-03을 새로 연다. 실제 API에서는 버튼을 달지 않는다
 export function restartMock(caseId) {
-  if (API_MODE !== 'mock') return undefined;
+  if ((import.meta.env?.VITE_API_MODE === 'real' && !import.meta.env?.DEV) || API_MODE !== 'mock') return undefined;
   return async () => {
     const { restart } = await import('./mockExperienceStore.js');
     restart();
@@ -16,7 +18,7 @@ export function restartMock(caseId) {
 // 대본 키(ACT_GROUPS) → 화면 주소
 const ACT_SCREENS = { '1a': 'impression', '1b': 'impression', 2: 'trial', 3: 'verdict', 4: 'ai-verdict', 5: 'court-verdict', 6: 'compare' };
 export function jumpActMock(caseId) {
-  if (API_MODE !== 'mock') return undefined;
+  if ((import.meta.env?.VITE_API_MODE === 'real' && !import.meta.env?.DEV) || API_MODE !== 'mock') return undefined;
   return async (act) => {
     const { jumpToAct } = await import('./mockExperienceStore.js');
     jumpToAct(act);

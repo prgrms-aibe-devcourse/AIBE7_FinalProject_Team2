@@ -77,7 +77,8 @@
 | v0.73 | 2026-10-29 | **일러스트 총 개수 API 신설 (BE-142, FE-138)** — 13장 I-1 `GET /api/v1/illustrations/summary`(공개). 사건 컷 · 캐릭터(아이콘 포함) 일러스트의 총 장수와 종류별 장수. 로그인 전 마이페이지 안내("일러스트 N장")용. 이미지는 프론트에만 있어 백엔드는 목록 파일(`illustration-images.txt`)로 세고, 테스트가 이미지 폴더와의 어긋남을 막는다(`docs/decisions/BE-142.md`) |
 | v0.74 | 2026-10-30 | **아이디 회원가입 약관 동의 서버 검증 · 동의 기록 (BE-133, ERD v1.51 · V44)** — M-5 요청에 `agreed`(필수, JSON `true`만) 추가. 없음 · `null` · `false` · 문자열 `"true"` · 숫자 `1`이면 400 `VALIDATION_ERROR`(`details`: `agreed` · `AssertTrue`) — 형식 검사라 409(중복 아이디 · 닉네임)보다 먼저다. 가입하면 서버가 동의 시각 · 약관 버전을 회원에 남긴다(응답은 그대로). 카카오 로그인(M-3 · M-4)으로 처음 가입하는 경로는 이번 범위 밖(결정 기록 BE-133) |
 | v0.75 | 2026-10-30 | **수집 항목 화이트리스트 (BE-136)** — P-9 `itemId`를 모을 수 있는 목록으로 거른다: 일러스트는 `case-{공개 사건 id}-{origin \| conclusion \| reenact}`(요청한 사건과 달라도 된다 — 그림별 key), 의상은 역할 의상 그림이 있는 `{who}:{role}`(사건 전용 의상 `{who}:case-{n}`은 그 사건에서만). 목록에 없으면 400 `VALIDATION_ERROR`(`details`: `items[i].itemId` · `NOT_COLLECTIBLE`), 하나라도 있으면 아무것도 저장하지 않는다. 의상의 사용자당 상한 12 삭제(목록이 곧 전체) — 409 `COLLECTION_LIMIT_EXCEEDED`는 일러스트 사건당 5만 남는다. (v0.74는 BE-133 PR이 쓴다) |
-| v0.76 | 2026-10-30 | **사건 등록 범죄 유형 일치 검사 (BE-138)** — A-14 요청의 `crimeType`을 파이프라인에 넘겨, 파이프라인이 판결문에서 읽은 유형과 다르면 **판결 · 대본을 만들기 전에(extract 직후) 멈춘다**. A-15는 `FAILED`가 되고 `message`에 두 유형을 적는다(예: "범죄 유형이 다릅니다: 등록 요청은 FRAUD, 판결문에서 읽은 유형은 MURDER입니다. …"). 요청 값으로 덮어쓰지 않는다 — 관리자가 유형을 잘못 고르면 양형기준 · 판례 · 사전판단 선택지가 모두 틀린 채 들어가기 때문이다. 맞는 유형으로 다시 등록한다. A-14-1 적재도 같은 비교를 한 번 더 해 다르면 422 `IMPORT_RESULT_INVALID`(`details[].field`: `case.crimeType`)로 거절한다(범죄 유형을 보내지 않던 때의 작업 대비). 요청 · 응답 형식은 그대로다 |
+| v0.76 | 2026-10-30 | **닉네임 거절 사유 이름 (BE-134)** — M-5 · M-7의 닉네임 400 `details[].reason`을 사유별 이름으로(M-7은 하나, M-5는 요청 검사 사유가 여럿일 수 있다): `NotBlank` · `Pattern` · `Size`(요청 DTO 검사와 같은 이름) · `SizeWithHangul`(한글이 들어가 8자 초과) · `Reserved`(`방청객`으로 시작). 예전에는 서비스 검사(한글 8자 · 방청객)가 모두 `VALIDATION_ERROR`였다. 칸 이름 · 에러 코드는 그대로. (v0.74는 BE-133 PR #349가 쓴다) |
+| v0.77 | 2026-10-30 | **사건 등록 범죄 유형 일치 검사 (BE-138)** — A-14 요청의 `crimeType`을 파이프라인에 넘겨, 파이프라인이 판결문에서 읽은 유형과 다르면 **판결 · 대본을 만들기 전에(extract 직후) 멈춘다**. A-15는 `FAILED`가 되고 `message`에 두 유형을 적는다(예: "범죄 유형이 다릅니다: 등록 요청은 FRAUD, 판결문에서 읽은 유형은 MURDER입니다. …"). 요청 값으로 덮어쓰지 않는다 — 관리자가 유형을 잘못 고르면 양형기준 · 판례 · 사전판단 선택지가 모두 틀린 채 들어가기 때문이다. 맞는 유형으로 다시 등록한다. A-14-1 적재도 같은 비교를 한 번 더 해 다르면 422 `IMPORT_RESULT_INVALID`(`details[].field`: `case.crimeType`)로 거절한다(범죄 유형을 보내지 않던 때의 작업 대비). 요청 · 응답 형식은 그대로다 (v0.76은 BE-134가 쓴다) |
 
 ---
 
@@ -1700,7 +1701,7 @@ A-11과 같은 방식(보낸 필드만, `null` = 지움). `headline` · `article
 
 | 필드 | 규칙 |
 | --- | --- |
-| `crimeType` | 필수. `MURDER` · `FRAUD` · `INJURY` · `ROBBERY` · `THEFT` (`ROBBERY` · `THEFT`는 v0.55). (v0.76, BE-138) 파이프라인이 판결문에서 읽은 유형과 비교한다 — 다르면 판결 · 대본을 만들기 전에 멈추고 A-15가 `FAILED`, `message`에 두 유형을 적는다. 맞는 유형으로 다시 등록한다 |
+| `crimeType` | 필수. `MURDER` · `FRAUD` · `INJURY` · `ROBBERY` · `THEFT` (`ROBBERY` · `THEFT`는 v0.55). (v0.77, BE-138) 파이프라인이 판결문에서 읽은 유형과 비교한다 — 다르면 판결 · 대본을 만들기 전에 멈추고 A-15가 `FAILED`, `message`에 두 유형을 적는다. 맞는 유형으로 다시 등록한다 |
 | `sources` | 필수. 1 ~ 3건, 심급(`courtLevel`: `FIRST` · `APPEAL` · `SUPREME`)이 서로 달라야 한다 |
 | `sources[].caseNumber` | 필수, 50자 이하. 이미 등록된 사건번호면 409 `DUPLICATE_SOURCE` |
 | `sources[].originalText` | 필수, 200,000자 이하. 원본 판결문이라 요청 본문 로그에 남기지 않는다 |
@@ -1789,7 +1790,7 @@ A-11과 같은 방식(보낸 필드만, `null` = 지움). `headline` · `article
 | 404 `IMPORT_NOT_FOUND` | 등록 작업이 없음 |
 | 409 `IMPORT_NOT_READY` | 생성이 아직 끝나지 않았거나, 이미 적재한 등록 |
 | 409 `DUPLICATE_TITLE` | 같은 제목의 사건이 이미 있음. 제목을 바꿔 다시 등록한다 |
-| 422 `IMPORT_RESULT_INVALID` | 생성 결과를 사건으로 만들 수 없음. `details[].field`에 어느 값이 문제인지 담는다 (예: `case.factors[2].label`, `report.factorExtras[factorId=5].summaryTag`). (v0.76, BE-138) 등록 요청의 범죄 유형과 판결문에서 읽은 유형이 다르면 `case.crimeType` |
+| 422 `IMPORT_RESULT_INVALID` | 생성 결과를 사건으로 만들 수 없음. `details[].field`에 어느 값이 문제인지 담는다 (예: `case.factors[2].label`, `report.factorExtras[factorId=5].summaryTag`). (v0.77, BE-138) 등록 요청의 범죄 유형과 판결문에서 읽은 유형이 다르면 `case.crimeType` |
 | 502 `IMPORT_UNAVAILABLE` | 생성 결과를 가져오지 못함 |
 
 - 감사 로그 `CASE_IMPORT_LOAD`를 남긴다(만들어진 사건 번호와 등록 번호만).
@@ -2393,7 +2394,7 @@ Origin이 이 서버 자신과 같은 출처인지)을 거친다 — 벗어나�
 | 거절 | 조건 |
 | --- | --- |
 | 401 `UNAUTHORIZED` | 로그인하지 않음 |
-| 400 `VALIDATION_ERROR` | `nickname`이 없음 · 문자열이 아님 · 형식 위반(`details`: `field: nickname`) |
+| 400 `VALIDATION_ERROR` | `nickname`이 없음 · 문자열이 아님 · 형식 위반(`details`: `field: nickname`). `reason`(v0.76, BE-134): `NotBlank`(없음 · 빈 값 · 공백만 있는 값) · `Pattern`(공백 아닌 글자가 있는데 한글 · 영문 · 숫자 밖의 글자나 공백이 섞임, 예: `닉 네임` · `닉네임!`) · `Size`(2 ~ 12자 밖) · `SizeWithHangul`(한글이 들어가 8자 초과) · `Reserved`(`방청객`으로 시작). M-7은 처음 걸린 하나만 실린다. M-5 가입은 요청 검사(`@NotBlank` · `@Size` · `@Pattern`)가 먼저라 한 칸에 여러 사유가 함께 실릴 수 있고(예: 빈 닉네임), 그 검사를 통과한 뒤의 `SizeWithHangul` · `Reserved`는 하나다. 문자열로 읽을 수 없는 값(객체 · 배열 등)은 본문 해석 단계의 400이라 `details`가 `null`이다 |
 | 409 `DUPLICATE_NICKNAME` | 다른 회원이 쓰는 닉네임(동시 요청 포함 — 한 명만 된다) |
 
 ## 11. (확장) 레벨 · 직업 API (BE-106)

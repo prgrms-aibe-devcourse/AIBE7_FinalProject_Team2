@@ -1,11 +1,11 @@
 package com.team2.project.profile.controller;
 
 import com.team2.project.common.web.AnonymousIdCookie;
+import com.team2.project.common.web.Requester;
 import com.team2.project.profile.domain.ProfileSettingsPatch;
 import com.team2.project.profile.domain.ProfileSettingsValues;
 import com.team2.project.profile.service.ProfileSettingsService;
 import com.team2.project.profile.service.ProfileSettingsService.SaveResult;
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -25,10 +25,10 @@ public class ProfileSettingsController {
 
 	/** 보낸 칸만 저장 — 200 + 저장 뒤 세 값 전체. 쿠키가 없었으면 Set-Cookie로 익명 ID 발급 */
 	@PatchMapping("/profile-settings")
-	public ProfileSettingsValues patch(@RequestBody JsonNode body, HttpServletRequest request,
+	public ProfileSettingsValues patch(@RequestBody JsonNode body, Requester requester,
 		HttpServletResponse response) {
 		ProfileSettingsPatch patch = ProfileSettingsPatch.parse(body);	// 형식 검사를 익명 ID 발급보다 먼저 한다
-		SaveResult result = profileSettingsService.patch(anonymousIdCookie.read(request), patch);
+		SaveResult result = profileSettingsService.patch(requester.anonymousId(), patch);
 		if (result.issuedCookieId() != null) {
 			anonymousIdCookie.write(response, result.issuedCookieId());
 		}

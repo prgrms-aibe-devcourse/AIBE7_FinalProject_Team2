@@ -9,6 +9,7 @@ import { devJumpBar } from './loginDevJump.js';
 import { loginDesk } from './loginDesk.js';
 import { kakaoButton, setBusy } from './loginParts.js';
 import { offerAnonymousImport } from './anonymousImport.js';
+import { credentialInputsToMark, isCredentialFailure } from './loginRule.js';
 
 // S-12 로그인 (FE-52, IA 4장 /login). 책상 위 펠트 패드(FE-69)에 카카오 로그인 버튼 + 아이디 · 비밀번호 폼.
 // 목 모드에서는 개발용 목업 로그인(mocks/authMockApi.js)이, 실제 모드에서는 카카오 로그인(realApi.js login, FE-74)이 받는다.
@@ -75,8 +76,8 @@ export function renderLoginPage(container, { api, navigate }) {
 
     const form = element('form', 'login-form');
     form.noValidate = true; // 빈칸 안내는 아래 문구로 직접 한다(브라우저 말풍선 대신)
-    // 회원이 이메일을 넣으면 관리자 로그인으로 간다(@ 분기) — 입력 전에 알려 둔다 (PR #308 리뷰 · FE-117 결정 기록)
-    const idInput = field(form, 'login-id', '아이디', { type: 'text', autocomplete: 'username', hint: '회원 아이디에는 @가 없어요. 관리자는 이메일로 로그인해요.' });
+    // 안내는 회원 기준으로만 둔다(FE-134). 관리자가 이메일로 같은 칸에 로그인한다는 것은 공개 화면에 적지 않는다 — pages/login/README.md
+    const idInput = field(form, 'login-id', '아이디', { type: 'text', autocomplete: 'username', hint: '가입할 때 만든 아이디를 입력해 주세요.' });
     const passwordInput = field(form, 'login-password', '비밀번호', { type: 'password', autocomplete: 'current-password' });
     const submit = element('button', 'primary-button login-submit', '로그인');
     submit.type = 'submit';
@@ -123,6 +124,8 @@ export function renderLoginPage(container, { api, navigate }) {
       const busy = [kakao, submit];
       setBusy(busy, true, request.method === 'kakao' ? kakao : submit);
       error.hidden = true;
+      // 카카오로 넘어가면 지난 아이디 · 비밀번호 실패 표시를 지운다 — 돌아와도(LOGIN_CANCELLED) 문구 없이 칸만 빨갛게 남지 않게 (PR #354 리뷰)
+      if (request.method === 'kakao') [idInput, passwordInput].forEach((input) => input.removeAttribute('aria-invalid'));
       try {
         // 아이디에 @가 있으면 관리자 로그인만, 없으면 회원 로그인만 시도한다(FE-117, adminLoginRule.js loginTarget). 둘 다 부르지 않는다.
         // 관리자면 마이페이지 자리가 관리자 페이지가 된다 (FE-53)
@@ -150,6 +153,10 @@ export function renderLoginPage(container, { api, navigate }) {
       } catch (failure) {
         if (!container.contains(root)) return;
         if (failure?.code !== 'LOGIN_CANCELLED') showError(failureMessage(failure, request.method), request.method === 'kakao' ? kakao : form);
+        // 아이디 · 비밀번호가 틀렸으면 두 칸을 잘못된 입력으로 표시한다(FE-133). 기다리는 사이 고친 칸은 빼고(PR #354 리뷰), 다시 입력하면 그 칸은 풀린다(field)
+        const inputs = { id: idInput, password: passwordInput };
+        credentialInputsToMark(failure, request, { id: idInput.value, password: passwordInput.value })
+          .forEach((name) => inputs[name].setAttribute('aria-invalid', 'true'));
         setBusy(busy, false);
         pending = false;
       }
@@ -164,7 +171,7 @@ function failureMessage(failure, method) {
   if (failure?.code === 'TOO_MANY_REQUESTS') return '로그인 시도가 너무 많아요. 잠시 뒤 다시 시도해 주세요.';
   // 아이디 · 비밀번호는 맞았는데 첫 토큰을 받지 못했다(api/authFlow.js). 남은 쿠키는 지웠으니 다시 로그인하면 된다
   if (failure?.code === TOKEN_NOT_ISSUED) return '로그인을 마치지 못했어요. 잠시 뒤 다시 로그인해 주세요.';
-  if (method === 'password' && (failure?.code === 'INVALID_CREDENTIALS' || failure?.code === 'VALIDATION_ERROR')) {
+  if (isCredentialFailure(failure, method)) {
     return '아이디 또는 비밀번호가 맞지 않아요. 다시 확인해 주세요.';
   }
   return '로그인하지 못했어요. 잠시 뒤 다시 시도해 주세요.';

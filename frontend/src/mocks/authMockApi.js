@@ -2,7 +2,7 @@
 // 같은 이름(login · signup · logout, FE-74 · FE-117)을 쓴다.
 // 어떤 아이디 · 비밀번호든 로그인된다. 계정을 저장하거나 비밀번호를 어디에도 보내지 · 남기지 않는다.
 // @가 있는 아이디는 로그인 화면이 목 관리자 로그인으로 보내므로(adminLoginRule.js) 여기로 오지 않는다
-import { nicknameError } from '../utils/nickname.js';
+import { nicknameReason } from '../utils/nickname.js';
 
 const delay = () => new Promise((resolve) => setTimeout(resolve, 250));
 const KAKAO_NICKNAME = '카카오 회원'; // 목업 카카오 로그인의 닉네임
@@ -11,9 +11,10 @@ const NICKNAME_MAX = 12;
 const isTakenNickname = (nickname) => String(nickname).trim().startsWith('중복');
 
 // 오류 모양은 서버와 같다: details는 [{ field, reason }] 배열(API 명세 1-4, PR #306 리뷰). 칸이 없으면 null
-function fail(code, field = null) {
+// reason: details의 사유. 없으면 code와 같다(서버의 BusinessException.ofField). 닉네임은 서버처럼 사유 이름(BE-134)
+function fail(code, field = null, reason = code) {
   const messages = { VALIDATION_ERROR: '입력값을 확인해 주세요.', DUPLICATE_ID: '이미 쓰고 있는 아이디예요.', DUPLICATE_NICKNAME: '이미 쓰고 있는 닉네임이에요.' };
-  throw { code, message: messages[code], currentStatus: null, details: field ? [{ field, reason: code }] : null };
+  throw { code, message: messages[code], currentStatus: null, details: field ? [{ field, reason }] : null };
 }
 
 // 목업 닉네임: 아이디 그대로(최대 12자). @가 있는 아이디는 로그인 화면이 목 관리자 로그인으로 보내 여기 오지 않으므로
@@ -48,7 +49,8 @@ export async function signup({ id, password, nickname, agreed } = {}) {
 export async function putNickname(nickname) {
   await delay();
   const value = String(nickname ?? '');
-  if (nicknameError(value) || value !== value.trim()) fail('VALIDATION_ERROR', 'nickname');
+  const reason = nicknameReason(value); // 서버(Nickname.validate)와 같은 사유 이름 (BE-134)
+  if (reason) fail('VALIDATION_ERROR', 'nickname', reason);
   if (isTakenNickname(value)) fail('DUPLICATE_NICKNAME', 'nickname');
   return { nickname: value };
 }

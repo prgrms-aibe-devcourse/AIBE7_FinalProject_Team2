@@ -1,9 +1,6 @@
 package com.team2.project.community.controller;
 
-import com.team2.project.common.exception.BusinessException;
-import com.team2.project.common.exception.ErrorCode;
-import com.team2.project.common.security.token.MemberPrincipal;
-import com.team2.project.common.web.AnonymousIdCookie;
+import com.team2.project.common.web.Requester;
 import com.team2.project.community.dto.CommentView;
 import com.team2.project.community.dto.CommunityHomeResponse;
 import com.team2.project.community.dto.CreateCommentRequest;
@@ -16,12 +13,9 @@ import com.team2.project.community.service.CommunityActorResolver;
 import com.team2.project.community.service.CommunityActorResolver.Viewer;
 import com.team2.project.community.service.CommunityHomeCache;
 import com.team2.project.community.service.CommunityService;
-import jakarta.servlet.http.HttpServletRequest;
-import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -45,45 +39,40 @@ public class CommunityController {
 	private final CommunityService communityService;
 	private final CommunityHomeCache communityHomeCache;
 	private final CommunityActorResolver actorResolver;
-	private final AnonymousIdCookie anonymousIdCookie;
 
 	/** C-1 글 목록 */
 	@GetMapping("/posts")
 	public PostListResponse posts(@RequestParam(required = false) String category,
 		@RequestParam(required = false) Long caseId, @RequestParam(required = false) String sort,
-		@RequestParam(defaultValue = "1") int page, @AuthenticationPrincipal MemberPrincipal member,
-		HttpServletRequest request) {
-		return communityService.list(category, caseId, sort, page, viewer(member, request));
+		@RequestParam(defaultValue = "1") int page, Requester requester) {
+		return communityService.list(category, caseId, sort, page, viewer(requester));
 	}
 
 	/** C-2 글 + 댓글 */
 	@GetMapping("/posts/{postId}")
-	public PostView post(@PathVariable long postId, @AuthenticationPrincipal MemberPrincipal member,
-		HttpServletRequest request) {
-		return communityService.detail(postId, viewer(member, request));
+	public PostView post(@PathVariable long postId, Requester requester) {
+		return communityService.detail(postId, viewer(requester));
 	}
 
 	/** C-3 글쓰기 — 201 + 쓴 글 */
 	@PostMapping("/posts")
 	@ResponseStatus(HttpStatus.CREATED)
-	public PostView create(@RequestBody CreatePostRequest body, @AuthenticationPrincipal MemberPrincipal member,
-		HttpServletRequest request) {
-		return communityService.create(memberId(member), anonymousIdCookie.read(request), body);
+	public PostView create(@RequestBody CreatePostRequest body, Requester requester) {
+		return communityService.create(requester.requireMember(), requester.anonymousId(), body);
 	}
 
 	/** C-4 좋아요 켜고 끄기 */
 	@PostMapping("/posts/{postId}/like")
-	public LikeResponse like(@PathVariable long postId, @AuthenticationPrincipal MemberPrincipal member,
-		HttpServletRequest request) {
-		return communityService.toggleLike(memberId(member), anonymousIdCookie.read(request), postId);
+	public LikeResponse like(@PathVariable long postId, Requester requester) {
+		return communityService.toggleLike(requester.requireMember(), requester.anonymousId(), postId);
 	}
 
 	/** C-5 댓글 — 201 + 쓴 댓글 */
 	@PostMapping("/posts/{postId}/comments")
 	@ResponseStatus(HttpStatus.CREATED)
 	public CommentView comment(@PathVariable long postId, @RequestBody CreateCommentRequest body,
-		@AuthenticationPrincipal MemberPrincipal member, HttpServletRequest request) {
-		return communityService.comment(memberId(member), anonymousIdCookie.read(request), postId, body);
+		Requester requester) {
+		return communityService.comment(requester.requireMember(), requester.anonymousId(), postId, body);
 	}
 
 	/** C-6 커뮤니티 메인 — 계산한 응답을 일정 시간 그대로 준다(CommunityHomeCache) */
@@ -94,22 +83,13 @@ public class CommunityController {
 
 	/** C-7 글에 붙일 수 있는 내 판결 — 200, 판결 확정 전이면 204 */
 	@GetMapping("/shareable-verdict")
-	public ResponseEntity<ShareableVerdictResponse> shareableVerdict(@AuthenticationPrincipal MemberPrincipal member,
-		HttpServletRequest request) {
-		return communityService.shareableVerdict(viewer(member, request))
+	public ResponseEntity<ShareableVerdictResponse> shareableVerdict(Requester requester) {
+		return communityService.shareableVerdict(viewer(requester))
 			.map(ResponseEntity::ok)
 			.orElseGet(() -> ResponseEntity.noContent().build());
 	}
 
-	private Viewer viewer(MemberPrincipal member, HttpServletRequest request) {
-		return actorResolver.viewer(Optional.ofNullable(member).map(MemberPrincipal::memberId),
-			anonymousIdCookie.read(request));
-	}
-
-	private static long memberId(MemberPrincipal member) {
-		if (member == null) {
-			throw new BusinessException(ErrorCode.UNAUTHORIZED);
-		}
-		return member.memberId();
+	private Viewer viewer(Requester requester) {
+		return actorResolver.viewer(requester.memberId(), requester.anonymousId());
 	}
 }

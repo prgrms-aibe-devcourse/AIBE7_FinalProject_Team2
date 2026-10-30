@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.team2.project.common.exception.ApiExceptionAdvice;
 import com.team2.project.common.web.AnonymousIdCookie;
+import com.team2.project.common.web.RequesterArgumentResolver;
 import com.team2.project.experience.domain.ExperienceStatus;
 import com.team2.project.experience.domain.InvalidExperienceStateException;
 import com.team2.project.judgment.dto.RevealResponse;
@@ -36,8 +37,8 @@ class JudgmentResultControllerTest {
 	@BeforeEach
 	void setUp() {
 		mockMvc = MockMvcBuilders
-			.standaloneSetup(new JudgmentResultController(resultService, revealService, comparisonService,
-				new AnonymousIdCookie()))
+			.standaloneSetup(new JudgmentResultController(resultService, revealService, comparisonService))
+			.setCustomArgumentResolvers(new RequesterArgumentResolver(new AnonymousIdCookie()))
 			.setControllerAdvice(new ApiExceptionAdvice())
 			.build();
 	}

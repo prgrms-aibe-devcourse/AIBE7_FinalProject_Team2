@@ -1,6 +1,6 @@
 package com.team2.project.judgment.controller;
 
-import com.team2.project.common.web.AnonymousIdCookie;
+import com.team2.project.common.web.Requester;
 import com.team2.project.judgment.dto.AiJudgmentResponse;
 import com.team2.project.judgment.dto.ComparisonResponse;
 import com.team2.project.judgment.dto.CourtJudgmentResponse;
@@ -8,7 +8,6 @@ import com.team2.project.judgment.dto.RevealResponse;
 import com.team2.project.judgment.service.ComparisonService;
 import com.team2.project.judgment.service.JudgmentResultService;
 import com.team2.project.judgment.service.RevealService;
-import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -30,35 +29,34 @@ public class JudgmentResultController {
 	private final JudgmentResultService judgmentResultService;
 	private final RevealService revealService;
 	private final ComparisonService comparisonService;
-	private final AnonymousIdCookie anonymousIdCookie;
 
 	/** API 10. AI 판결 (S-06) */
 	@GetMapping("/judgments/ai")
-	public AiJudgmentResponse getAiJudgment(@PathVariable Long caseId, HttpServletRequest request) {
-		return judgmentResultService.getAiJudgment(caseId, anonymousIdCookie.read(request));
+	public AiJudgmentResponse getAiJudgment(@PathVariable Long caseId, Requester requester) {
+		return judgmentResultService.getAiJudgment(caseId, requester.anonymousId());
 	}
 
 	/** API 11. 실제 판결 공개 (본문 없음) */
 	@PostMapping("/court-reveal")
-	public RevealResponse revealCourt(@PathVariable Long caseId, HttpServletRequest request) {
-		return revealService.revealCourt(caseId, anonymousIdCookie.read(request));
+	public RevealResponse revealCourt(@PathVariable Long caseId, Requester requester) {
+		return revealService.revealCourt(caseId, requester.anonymousId());
 	}
 
 	/** API 12. 실제 판결 (S-07) */
 	@GetMapping("/judgments/court")
-	public CourtJudgmentResponse getCourtJudgment(@PathVariable Long caseId, HttpServletRequest request) {
-		return judgmentResultService.getCourtJudgment(caseId, anonymousIdCookie.read(request));
+	public CourtJudgmentResponse getCourtJudgment(@PathVariable Long caseId, Requester requester) {
+		return judgmentResultService.getCourtJudgment(caseId, requester.anonymousId());
 	}
 
 	/** API 13. 비교 공개 (본문 없음) */
 	@PostMapping("/comparison-reveal")
-	public RevealResponse revealComparison(@PathVariable Long caseId, HttpServletRequest request) {
-		return revealService.revealComparison(caseId, anonymousIdCookie.read(request));
+	public RevealResponse revealComparison(@PathVariable Long caseId, Requester requester) {
+		return revealService.revealComparison(caseId, requester.anonymousId());
 	}
 
 	/** API 14. 세 판결 비교 (S-08) */
 	@GetMapping("/comparison")
-	public ComparisonResponse getComparison(@PathVariable Long caseId, HttpServletRequest request) {
-		return comparisonService.getComparison(caseId, anonymousIdCookie.read(request));
+	public ComparisonResponse getComparison(@PathVariable Long caseId, Requester requester) {
+		return comparisonService.getComparison(caseId, requester.anonymousId());
 	}
 }

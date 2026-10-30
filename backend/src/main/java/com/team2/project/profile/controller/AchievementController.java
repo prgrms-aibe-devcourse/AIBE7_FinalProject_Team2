@@ -1,9 +1,8 @@
 package com.team2.project.profile.controller;
 
-import com.team2.project.common.web.AnonymousIdCookie;
+import com.team2.project.common.web.Requester;
 import com.team2.project.profile.dto.AchievementSeenRequest;
 import com.team2.project.profile.service.AchievementSeenService;
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -20,12 +19,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class AchievementController {
 
 	private final AchievementSeenService achievementSeenService;
-	private final AnonymousIdCookie anonymousIdCookie;
 
 	/** P-11 도전과제 "봤음" — 204 (멱등) */
 	@PostMapping("/achievements/seen")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
-	public void markSeen(@Valid @RequestBody AchievementSeenRequest body, HttpServletRequest request) {
-		achievementSeenService.markSeen(anonymousIdCookie.read(request), body.achievementIds());
+	public void markSeen(@Valid @RequestBody AchievementSeenRequest body, Requester requester) {
+		achievementSeenService.markSeen(requester.anonymousId(), body.achievementIds());
 	}
 }
