@@ -9,6 +9,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -22,7 +23,8 @@ import lombok.NoArgsConstructor;
  * 동시에 두 번 와도 유니크 위반 없이 한 행만 생긴다.
  *
  * 아이디 회원(LOCAL, BE-113): {@link #local(String)}으로 만든다. provider_user_id는 UUID이고,
- * 로그인 아이디 · 비밀번호 해시는 member_password({@link MemberPassword})에 둔다
+ * 로그인 아이디 · 비밀번호 해시는 member_password({@link MemberPassword})에 둔다.
+ * 가입할 때 약관 동의 시각 · 버전을 남긴다(BE-133, V44). 카카오 회원 · BE-133 전 가입자는 둘 다 NULL
  */
 @Entity
 @Table(name = "member")
@@ -50,15 +52,30 @@ public class Member {
 	@Column(length = 12)
 	private String nickname;
 
+	/** 이용약관 · 개인정보처리방침에 동의한 시각 (BE-133). 아이디 가입 때만 채운다 */
+	private Instant termsAgreedAt;
+
+	/** 동의한 약관 버전({@link TermsVersion}). terms_agreed_at과 함께 있거나 함께 없다(CHECK ck_member_terms_agreement) */
+	@Column(length = 20)
+	private String termsVersion;
+
 	private Member(AuthProvider provider, String providerUserId, String nickname) {
 		this.provider = provider;
 		this.providerUserId = providerUserId;
 		this.nickname = nickname;
 	}
 
-	/** 아이디 회원을 새로 만든다. 공급자 회원번호 자리에는 바뀌지 않는 UUID를 넣는다 (BE-113 결정 1) */
-	public static Member local(String nickname) {
-		return new Member(AuthProvider.LOCAL, UUID.randomUUID().toString(), nickname);
+	/**
+	 * 아이디 회원을 새로 만든다. 공급자 회원번호 자리에는 바뀌지 않는 UUID를 넣는다 (BE-113 결정 1).
+	 * 약관 동의는 호출한 쪽이 확인한 뒤 부른다 — 동의 시각과 지금 약관 버전을 함께 남긴다 (BE-133)
+	 */
+	public static Member local(String nickname, Instant termsAgreedAt) {
+		// 동의 시각 없이는 만들 수 없다 — 비면 버전만 채워져 CHECK(ck_member_terms_agreement) 위반이 INSERT 때 500으로 나오므로 여기서 먼저 막는다 (PR #349 리뷰)
+		Objects.requireNonNull(termsAgreedAt, "termsAgreedAt");
+		Member member = new Member(AuthProvider.LOCAL, UUID.randomUUID().toString(), nickname);
+		member.termsAgreedAt = termsAgreedAt;
+		member.termsVersion = TermsVersion.CURRENT;
+		return member;
 	}
 
 	/** 닉네임을 바꾼다. 형식 · 중복 검사는 서비스가 먼저 한다 */

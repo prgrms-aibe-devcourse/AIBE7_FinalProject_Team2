@@ -27,7 +27,7 @@ test('오류 details는 서버처럼 칸 이름이 든 배열이고, 칸이 없�
     assert.deepEqual(failure.details, [{ field: 'password', reason: 'VALIDATION_ERROR' }]);
     return true;
   });
-  await assert.rejects(signup({ id: 'admin_naero', password: 'judge1234', nickname: '내로판사' }), (failure) => {
+  await assert.rejects(signup({ id: 'admin_naero', password: 'judge1234', nickname: '내로판사', agreed: true }), (failure) => {
     assert.equal(failure.code, 'DUPLICATE_ID');
     assert.deepEqual(failure.details, [{ field: 'id', reason: 'DUPLICATE_ID' }]);
     return true;
@@ -39,7 +39,7 @@ test('오류 details는 서버처럼 칸 이름이 든 배열이고, 칸이 없�
 });
 
 test("닉네임이 '중복'으로 시작하면 가입 · 닉네임 설정은 이미 쓰는 닉네임이다 (BE-139 흉내)", async () => {
-  await assert.rejects(signup({ id: 'naero_01', password: 'judge1234', nickname: '중복판사' }), (failure) => {
+  await assert.rejects(signup({ id: 'naero_01', password: 'judge1234', nickname: '중복판사', agreed: true }), (failure) => {
     assert.equal(failure.code, 'DUPLICATE_NICKNAME');
     assert.deepEqual(failure.details, [{ field: 'nickname', reason: 'DUPLICATE_NICKNAME' }]);
     return true;
@@ -56,4 +56,15 @@ test('닉네임 설정은 형식이 맞으면 { nickname }을 돌려주고 틀�
       return true;
     }, JSON.stringify(value));
   }
+});
+
+test('가입은 약관에 동의(agreed: true)해야 한다 — 없거나 false면 서버처럼 칸 이름 agreed로 거절, 중복 검사보다 먼저 (BE-133)', async () => {
+  for (const agreed of [undefined, false, 'true']) {
+    await assert.rejects(signup({ id: 'admin_naero', password: 'judge1234', nickname: '내로판사', agreed }), (failure) => {
+      assert.equal(failure.code, 'VALIDATION_ERROR');
+      assert.deepEqual(failure.details, [{ field: 'agreed', reason: 'VALIDATION_ERROR' }]);
+      return true;
+    }, String(agreed));
+  }
+  assert.deepEqual(await signup({ id: 'naero_01', password: 'judge1234', nickname: '내로판사', agreed: true }), { nickname: '내로판사' });
 });

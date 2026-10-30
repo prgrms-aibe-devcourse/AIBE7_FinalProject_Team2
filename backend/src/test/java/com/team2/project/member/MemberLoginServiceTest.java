@@ -77,6 +77,15 @@ class MemberLoginServiceTest extends ApiIntegrationTest {
 	}
 
 	@Test
+	void 카카오_첫_로그인으로_만든_회원은_약관_동의_기록이_없다() {
+		// 카카오 첫 가입은 동의를 묻는 단계가 없어 동의 시각 · 버전이 NULL이다 (BE-133 범위 밖, 후속 이슈에서 정한다)
+		long memberId = login(newKakaoId(), Optional.empty()).memberId();
+		assertThat(jdbcTemplate.queryForMap("SELECT terms_agreed_at, terms_version FROM member WHERE id = ?", memberId))
+			.containsEntry("terms_agreed_at", null)
+			.containsEntry("terms_version", null);
+	}
+
+	@Test
 	void 연결_안_된_익명_기록은_이_회원에_연결하고_새로_발급하지_않는다() {
 		UUID anonymousId = insertAnonymous(null);
 		LoginResult result = login(newKakaoId(), Optional.of(anonymousId));

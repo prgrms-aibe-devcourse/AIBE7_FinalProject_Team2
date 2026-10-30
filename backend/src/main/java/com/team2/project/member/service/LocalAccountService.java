@@ -60,11 +60,18 @@ public class LocalAccountService {
 	}
 
 	/**
-	 * 가입하고 바로 로그인한다. 형식 검사(길이 · 허용 글자)는 요청 DTO가 먼저 한다
+	 * 가입하고 바로 로그인한다. 형식 검사(길이 · 허용 글자) · 약관 동의는 요청 DTO가 먼저 한다.
+	 * 가입한 시각을 약관 동의 시각으로 남긴다(BE-133)
 	 *
-	 * @throws BusinessException DUPLICATE_ID(이미 있는 아이디, 동시 가입 포함) · DUPLICATE_NICKNAME(이미 쓰는 닉네임, BE-139) · VALIDATION_ERROR(닉네임 형식)
+	 * @param agreed 이용약관 · 개인정보처리방침 동의. false면 아무것도 저장하지 않는다
+	 * @throws BusinessException DUPLICATE_ID(이미 있는 아이디, 동시 가입 포함) · DUPLICATE_NICKNAME(이미 쓰는 닉네임, BE-139) · VALIDATION_ERROR(닉네임 형식 · 약관 미동의)
 	 */
-	public LocalLoginResult signup(String id, String password, String nickname, Optional<UUID> anonymousId) {
+	public LocalLoginResult signup(String id, String password, String nickname, boolean agreed,
+		Optional<UUID> anonymousId) {
+		// DTO가 이미 막지만, 동의 없이 동의 기록이 남는 일이 없게 서비스도 한 번 더 본다 (BE-133)
+		if (!agreed) {
+			throw BusinessException.ofField(ErrorCode.VALIDATION_ERROR, "agreed");
+		}
 		String loginId = normalize(id);
 		if (!LOGIN_ID.matcher(loginId).matches()) {
 			throw BusinessException.ofField(ErrorCode.VALIDATION_ERROR, "id");
@@ -81,7 +88,7 @@ public class LocalAccountService {
 
 		return transactionTemplate.execute(status -> {
 			Instant now = clock.instant();
-			Member member = saveLocalMember(nickname);
+			Member member = saveLocalMember(nickname, now);
 			// 0이면 그사이 같은 아이디로 먼저 가입됐다 → 예외로 회원 행까지 되돌린다 (결정 4)
 			if (passwordRepository.insertIfLoginIdAbsent(member.getId(), loginId, passwordHash) == 0) {
 				throw new BusinessException(ErrorCode.DUPLICATE_ID);
@@ -131,9 +138,9 @@ public class LocalAccountService {
 	 * 회원 행 저장. 같은 닉네임으로 동시에 가입하면 한쪽이 유니크(uq_member_nickname) 위반이 된다 → DUPLICATE_NICKNAME.
 	 * 회원 행의 다른 유니크(공급자 + 회원번호)는 새 UUID라 겹칠 수 없어, 이 저장의 유니크 위반은 닉네임뿐이다
 	 */
-	private Member saveLocalMember(String nickname) {
+	private Member saveLocalMember(String nickname, Instant termsAgreedAt) {
 		try {
-			return memberRepository.save(Member.local(nickname));
+			return memberRepository.save(Member.local(nickname, termsAgreedAt));
 		} catch (DataIntegrityViolationException e) {
 			if (UniqueViolations.isUniqueViolation(e)) {
 				throw new BusinessException(ErrorCode.DUPLICATE_NICKNAME);
