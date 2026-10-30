@@ -37,7 +37,9 @@
 | `form-action` | `'self'` | 폼은 모두 JS로 제출(같은 출처 API). 카카오 로그인은 폼이 아니라 같은 출처 링크 → 서버 리다이렉트라 영향 없음 |
 | `frame-ancestors` | `'none'` | `X-Frame-Options: DENY`와 같은 뜻 |
 
-- `/api` 응답에는 붙이지 않는다(JSON 응답이라 의미가 없고, 보안 헤더 4종처럼 백엔드 담당 영역이다).
+- 붙는 곳은 `security-headers.conf`를 include하는 응답 전부다: 화면(`/`) · `/assets/` · `/version.json` · Nginx가 직접 만드는 429 JSON(`@api_rate_limited`). 백엔드가 내려주는 `/api` 응답에는 붙이지 않는다(JSON 응답이라 의미가 없고, 기존 보안 헤더처럼 백엔드 영역이다). 429 JSON에 붙는 것은 문서로 읽히지 않아 영향이 없다.
+- S3 주소는 SDK 기본값인 가상 호스트 방식(`https://<버킷>.s3.ap-northeast-2.amazonaws.com/…`)만 허용했다. 버킷 이름에 점(`.`)이 있거나 경로 방식(`forcePathStyle`)으로 바꾸면 `https://s3.ap-northeast-2.amazonaws.com`이 필요하다.
+- 오디오 · 영상 · iframe · 웹 매니페스트는 쓰지 않아 `default-src 'self'`로 둔다.
 
 ## 확인
 - 로컬에서 web 이미지를 빌드해 띄움: `nginx -t` 통과, `/` · `/assets/` 응답에 `Content-Security-Policy-Report-Only` 한 번, 스모크 테스트 `SMOKE_REQUIRE_SECURITY_HEADERS=1`로 통과.
