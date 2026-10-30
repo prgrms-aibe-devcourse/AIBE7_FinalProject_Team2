@@ -29,7 +29,7 @@
 | `script-src` | `'self'` | 빌드된 `index.html`은 모듈 스크립트 파일만 부른다. 인라인 `<script>` · `eval` · `new Function` 없음(번들 확인). pdf.js도 `isEvalSupported: false` |
 | `style-src` | `'self'` `https://fonts.googleapis.com` `https://cdn.jsdelivr.net` | 글꼴 CSS — Google Fonts(나눔명조 · 나눔펜 · Noto Serif KR), Pretendard(jsDelivr) |
 | `font-src` | `'self'` `https://fonts.gstatic.com` `https://cdn.jsdelivr.net` | 위 글꼴 CSS가 부르는 글꼴 파일 |
-| `img-src` | `'self'` `https://*.s3.ap-northeast-2.amazonaws.com` | 정적 이미지(`/images`) + 관리자가 만든 사건 사진(S3 서울 리전, `CasePhotoService` → `S3Client.utilities().getUrl()`의 버킷 주소). 버킷 이름은 서버 `.env`에만 있어 와일드카드로 둔다. `data:` · `blob:` 이미지는 쓰지 않는다 |
+| `img-src` | `'self'` `https://*.s3.ap-northeast-2.amazonaws.com` | 정적 이미지(`/images`) + 관리자가 만든 사건 사진(S3 서울 리전, `CasePhotoService` → `S3Client.utilities().getUrl()`의 버킷 주소). 버킷 이름은 서버 `.env`에만 있어 와일드카드로 둔다. 운영(실제 API) 기준 `data:` · `blob:` 이미지는 쓰지 않는다 — 목 모드의 커뮤니티 글쓰기 사진은 `data:`를 쓴다(아래 "추후 재검토") |
 | `connect-src` | `'self'` | API는 같은 출처 `/api/v1`(`VITE_API_BASE_URL` 기본값) |
 | `worker-src` | `'self'` | 관리자 사건 등록 PDF 읽기 — pdf.js 워커 파일(빌드 산출물, `adminPdfLoader.js`) |
 | `object-src` | `'none'` | 플러그인 콘텐츠 없음 |
@@ -44,14 +44,16 @@
 ## 확인
 - 로컬에서 web 이미지를 빌드해 띄움: `nginx -t` 통과, `/` · `/assets/` 응답에 `Content-Security-Policy-Report-Only` 한 번, 스모크 테스트 `SMOKE_REQUIRE_SECURITY_HEADERS=1`로 통과.
 - 같은 이미지로 메인 · 사건 목록 · 사건 상세 · 성향 테스트(일반 · 신문) · 로그인 · 가입 · 커뮤니티 · 마이페이지 · 관리자 로그인 화면을 열어 콘솔에 CSP 위반이 없음을 확인했다. 정책에 없는 외부 이미지를 일부러 불러 위반이 콘솔에 남는 것도 확인했다(감지가 동작함).
+- `paperHandoff`처럼 CSSOM(`style.cssText`)으로 스타일을 준 노드를 복제해 붙여도 위반이 없음을 로컬 이미지(Chromium)에서 확인했다. 사파리는 운영 확인 목록에 넣었다(PR #362 리뷰).
 - 백엔드 없이 띄워 API 데이터가 있어야 나오는 것(S3 사건 사진 · 체험 무대 · 관리자 PDF 워커)은 확인하지 못했다 → 1단계 운영 확인에서 본다.
 
 ## 다음 단계 (2단계 전환 조건)
-1. 이 PR이 main으로 나간 뒤 운영에서 주요 화면을 돌며 콘솔의 `Content Security Policy` 위반을 모은다: 메인 · 사건 목록/상세 · 체험 전 단계(1 ~ 6막) · 성향 테스트 · 마이페이지 · 커뮤니티(사진 포함) · 로그인/가입 · 카카오 로그인 · 관리자(사건 검수 · 사건 등록 PDF 읽기 · 사진 생성).
+1. 이 PR이 main으로 나간 뒤 운영에서 주요 화면을 돌며 콘솔의 `Content Security Policy` 위반을 모은다: 메인 · 사건 목록/상세 · 체험 전 단계(1 ~ 6막) · 성향 테스트 · 마이페이지 · 사건 목록에서 사건을 눌러 1막 지면으로 넘어가는 전환(`paperHandoff`, 사파리 포함) · 커뮤니티 · 로그인/가입 · 카카오 로그인 · 관리자(사건 검수 · 사건 등록 PDF 읽기 · 사진 생성).
 2. 위반이 있으면 정책을 보정하고 이 표를 고친다.
 3. 위반이 없으면 `add_header Content-Security-Policy-Report-Only` → `Content-Security-Policy`로 이름만 바꾼다(스모크 테스트는 두 이름 모두 통과).
 
 ## 추후 재검토가 필요하면
+- **커뮤니티 사진 올리기를 실제 API로 켤 때**: 글쓰기 사진은 `shrinkImage`가 `canvas.toDataURL()`로 만든 `data:` 주소를 미리보기 · 본문 이미지로 쓴다(`communityParts.js`). 지금은 `PHOTO_UPLOAD = API_MODE === 'mock'`이라 운영에는 사진 칸이 없어 위반이 나지 않는다. 켤 때 `img-src`에 `data:`(또는 `blob:`)를 더한다 — 로컬 이미지에서 `data:` 이미지가 `img-src` 위반으로 남는 것을 확인했다(PR #362 리뷰).
 - 외부 스크립트(분석 도구 · 지도 · 카카오 SDK 등)나 외부 이미지 출처를 새로 쓰게 되면 이 표와 `security-headers.conf`를 함께 고친다. 2단계 뒤에는 고치지 않으면 화면에서 막힌다.
 - 사진을 CloudFront 등 다른 주소로 내려주게 되면 `img-src`를 바꾼다.
 - 사용자 브라우저의 위반까지 모아야 하면 `report-to` 수집 엔드포인트를 검토한다.
