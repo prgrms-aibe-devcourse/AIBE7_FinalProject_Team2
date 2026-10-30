@@ -8,6 +8,7 @@ import { canGoBackInApp } from '../../app/router.js';
 import { devJumpBar } from './loginDevJump.js';
 import { loginDesk } from './loginDesk.js';
 import { kakaoButton, setBusy } from './loginParts.js';
+import { offerAnonymousImport } from './anonymousImport.js';
 
 // S-12 로그인 (FE-52, IA 4장 /login). 책상 위 펠트 패드(FE-69)에 카카오 로그인 버튼 + 아이디 · 비밀번호 폼.
 // 목 모드에서는 개발용 목업 로그인(mocks/authMockApi.js)이, 실제 모드에서는 카카오 로그인(realApi.js login, FE-74)이 받는다.
@@ -138,6 +139,11 @@ export function renderLoginPage(container, { api, navigate }) {
         // 여기부터는 회원 로그인(카카오 · 아이디). @가 없는 입력은 관리자 API로 가지 않는다
         const { nickname } = await api.login(request);
         saveUser({ nickname }); // 화면을 떠났어도 로그인 표시는 남긴다(위 관리자와 같은 이유)
+        // 이 브라우저의 체험 기록 · 첫인상 엽서가 있으면 가져올지 먼저 고르게 한다(FE-138). 창을 닫으면 로그인하지 않기로 한 것이라 이 화면에 남는다
+        if (await offerAnonymousImport(api) === 'declined') {
+          if (container.contains(root)) { setBusy(busy, false); pending = false; }
+          return;
+        }
         if (!container.contains(root)) return;
         // 보던 화면에서 로그인 자리를 눌러 왔으면 그 화면으로 돌아간다(진행 상태는 서버 · 쿠키에 있어 그대로다). 바로 /login으로 왔으면 메인으로
         if (canGoBackInApp()) history.back(); else navigate('landing', {}, { replace: true });

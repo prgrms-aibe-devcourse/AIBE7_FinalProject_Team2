@@ -455,11 +455,47 @@ html.deco-gutter { scrollbar-gutter: stable; } /* 스크롤을 잠가도 스크�
 .my-case-hint { width: 0; min-width: 100%; color: var(--color-muted); font-size: var(--text-small); text-align: center; text-wrap: balance; } /* 체험 중인 사건: 버튼 자리 안내. 폭은 칸에 맞춰(0 + min 100%) 칸 폭을 키우지 않고 가운데에 둔다 */
 .my-case-status { color: var(--color-muted); font-size: var(--text-small); }
 
+/* 로그인 전 첫 화면(FE-138, myGuest.js): 왼쪽은 샘플 프로필카드(.my-card)가 0.6초마다 바뀌어 들어서고(자리 .my-guest-slot, 카드 크기는 .my-card 규칙),
+   오른쪽은 성향카드 기본 디자인(.my-card.is-type)의 "?" 카드(.my-guest-card)다. 창 안에는 성향 카드 그림이 뿌옇게 겹쳐 바뀌고(.my-guest-haze), 누르면 로그인 화면으로 간다 */
+.my-guest-slot { display: block; width: 200px; padding: 0; border: 0; border-radius: 14px; background: none; font: inherit; color: inherit; cursor: pointer; transition: transform .15s ease-out; } /* 왼쪽 카드 자리는 누르는 버튼: 호버 · 눌림 · 포커스는 일반 카드(.my-card)와 같고, 안의 카드는 따로 움직이지 않는다 */
+.my-guest-slot > .my-card { width: 100%; pointer-events: none; transform: none; }
+.my-guest-slot:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 3px; }
+.my-guest-slot:active { transform: translateY(1px); }
+@media (hover: hover) and (pointer: fine) { .my-guest-slot:hover { transform: translateY(-3px); } }
+.my-card.my-guest-card > .my-card-name, .my-card.my-guest-card > .my-card-note { margin-block: 0; padding-block: 0; align-items: center; } /* 위 · 아래 문구는 각자 칸의 높이 가운데 */
+.my-card.my-guest-card > .my-card-name { margin-top: 4.5cqi; } /* 카드 가장자리가 아니라 안쪽 이중 테두리(안쪽 9px)와 창 사이의 가운데 */
+.my-card.my-guest-card > .my-card-note { margin-bottom: 4.5cqi; }
+.my-card.my-guest-card > .my-card-note.my-type-quote { border-top: 0; font: 900 9.1cqi/1.3 var(--font-heading); letter-spacing: -.02em; } /* 아래 문구도 위 이름과 같은 글자, 가운데 맞춤을 위해 구분선은 없앤다 */
+.my-guest-card { overflow: hidden; } /* 아래 빛줄기가 카드 밖으로 나가지 않게 */
+.my-guest-card::after { /* 눌러 보라고 지나가는 빛줄기: 종이 카드에 박 인쇄가 반짝이듯 4.2초마다 한 번 대각선으로 훑는다(transform만 움직인다) */
+  content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: linear-gradient(105deg, transparent 38%, color-mix(in srgb, var(--color-card) 34%, transparent) 50%, transparent 62%);
+  transform: translateX(-130%); animation: guest-shine 4.2s ease-in-out infinite;
+}
+@keyframes guest-shine { 0%, 62% { transform: translateX(-130%); } 100% { transform: translateX(130%); } }
+@media (hover: hover) and (pointer: fine) {
+  .my-guest-card:hover { --frame-ring: 0 0 0 3px color-mix(in srgb, var(--deco-gold) 85%, transparent); } /* 호버: 금빛 테두리가 둘러지고 카드가 올라간다(.my-card:hover) */
+  .my-guest-card:hover .my-card-window strong { transform: scale(1.08); }
+}
+.my-guest-card .my-card-window { overflow: hidden; }
+.my-guest-card .my-card-window strong { position: relative; font-size: 44cqi; opacity: .8; transition: transform .15s ease-out; }
+.my-guest-haze { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; object-position: center; filter: blur(4px); opacity: 0; transition: opacity 1.2s ease-in-out; pointer-events: none; } /* 크기 · 자리는 fitPortraitIn이 px로 정한다(.is-fitted). 맞추지 못하면 이 contain으로 가운데에 담긴다 */
+.my-guest-haze.is-on { opacity: .4; } /* 뿌옇게: 흐리게(blur) + 반투명 */
+.my-guest { gap: 16px; }
+.my-guest-title { margin: 0; font: 900 var(--text-title-1)/1.3 var(--font-heading); letter-spacing: -.02em; color: var(--color-heading); text-wrap: balance; word-break: keep-all; } /* 한국어는 어절 단위로 끊는다 */
+.my-guest-stats { margin: 0; color: var(--color-muted); font-size: var(--text-small); font-variant-numeric: tabular-nums; text-wrap: pretty; } /* 숫자만 굵게 */
+.my-guest-stat { display: block; }
+.my-guest-stats b { color: var(--color-heading); }
+.my-guest-list { display: grid; gap: 8px; margin: 0; padding-left: 1.2em; color: var(--color-text); text-wrap: pretty; }
+.my-guest-note { max-width: 62ch; text-wrap: pretty; }
+
 @media (prefers-reduced-motion: reduce) {
   .my-row { transition: none; }
   .my-card { transition: none; }
   .my-card:hover, .my-card:active { transform: none; }
   .trend-tip { transition: none; }
+  .my-guest-haze, .my-guest-slot, .my-guest-card .my-card-window strong { transition: none; }
+  .my-guest-card::after { animation: none; display: none; }
 }
 
 @media (max-width: 720px) {
@@ -467,6 +503,8 @@ html.deco-gutter { scrollbar-gutter: stable; } /* 스크롤을 잠가도 스크�
   .my-top { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; padding-bottom: 28px; }
   .my-card { width: 100%; }
   .my-top-middle { order: -1; grid-column: 1 / -1; padding-top: 0; }
+  .my-guest-slot { width: 100%; }
+  .my-guest-title { font-size: var(--text-title-2); }
   .my-nickname { font-size: var(--text-title-2); }
   .my-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 16px; }
   /* 프로필카드 화면의 열린 개수는 값 옆에 목데이터 딱지까지 붙어 두 칸에 넣으면 이름이 한 글자씩 세로로 쪼개졌다 → 한 칸(FE-100) */

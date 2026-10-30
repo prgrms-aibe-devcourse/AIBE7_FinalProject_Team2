@@ -89,7 +89,7 @@ public class LocalAccountService {
 			member.recordLogin(now);
 			Optional<UUID> issued = anonymousLinkService.link(member.getId(), anonymousId, now);
 			log.info("아이디 회원가입: memberId={}", member.getId());
-			return new LocalLoginResult(member.getId(), member.getNickname(), issued);
+			return new LocalLoginResult(member.getId(), Nickname.displayName(member.getId(), member.getNickname()), issued);
 		});
 	}
 
@@ -118,7 +118,7 @@ public class LocalAccountService {
 			member.recordLogin(now);
 			Optional<UUID> issued = anonymousLinkService.link(memberId, anonymousId, now);
 			log.info("아이디 로그인: memberId={}", memberId);
-			return new LocalLoginResult(memberId, member.getNickname(), issued);
+			return new LocalLoginResult(memberId, Nickname.displayName(memberId, member.getNickname()), issued);
 		});
 	}
 
@@ -143,6 +143,7 @@ public class LocalAccountService {
 	}
 
 	/** 가입 · 로그인 결과. issuedAnonymousId가 있으면 그 값을 익명 ID 쿠키로 바꿔 심는다 */
+	/** nickname은 화면에 보일 표시 이름이다: 닉네임이 있으면 그 값, 없으면(닉네임을 비운 회원) `방청객 {회원 ID}` — 항상 문자열 (PR #343 리뷰) */
 	public record LocalLoginResult(long memberId, String nickname, Optional<UUID> issuedAnonymousId) {
 	}
 }

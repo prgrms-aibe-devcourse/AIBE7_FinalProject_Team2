@@ -129,6 +129,21 @@ export function flatten(acts, order) {
   return steps;
 }
 
+// 민감 사건 안내 (FE-129): 2막 시작 대사보다 먼저, 안내 문구만 나오는 빈 무대 장면 하나를 앞에 끼운다(캐릭터 · 대사 없음).
+// 장면 정보(절차 번호 · 섹션 · 모습)는 2막 첫 장면에서 이어받아, "② 모두진술부터 열기"처럼 섹션으로 시작해도 이 장면이 먼저 나온다.
+// 별도 장면이라 첫 장면의 지문 · 암전 문구를 덮어쓰지 않으므로 그 문구가 있어도 안내는 빠지지 않는다(안내 누락 방지, 리뷰 반영).
+// matchesStart: 이어 보기(예: ③ 쟁점 정리에서 시작)면 그 시작 장면 앞에 끼워, 어느 지점에서 열어도 안내가 먼저 나온다(리뷰 반영).
+// 맞는 장면이 없거나 넘기지 않으면 막의 첫 장면 앞이다. 안내할 내용이 없으면(notice 빈 값) 그대로 돌려준다
+export function attachNotice(steps, notice, actId = '2', matchesStart) {
+  if (!notice) return steps;
+  const inAct = (step) => step.actId === actId;
+  const found = matchesStart ? steps.findIndex((step) => inAct(step) && matchesStart(step)) : -1;
+  const at = found >= 0 ? found : steps.findIndex(inAct);
+  if (at < 0) return steps;
+  const { say, text, textAgain, role, cameo, delay, card, ev, confirm, next, auto, choices, board, source, system, blackout, ...base } = steps[at];
+  return [...steps.slice(0, at), { ...base, hideCast: true, system: notice }, ...steps.slice(at)];
+}
+
 // 대사 건너뛰기: 같은 막에서 다음 보드 장면, 없으면 막의 마지막 장면으로 간다.
 // 서버 확인(confirm)이 걸린 장면은 건너뛰지 않는다 — 건너뛰면 "읽었습니다" 순서가 어긋난다.
 export function skipTarget(steps, index) {
@@ -313,6 +328,7 @@ function evidenceBoard(script, at) {
 // (테스트 기간 · 목 데이터 전용, 이 화면에 없는 막은 화면이 넘겨 준다). 반환한 요소의 enterPhoto()는 신문 사진 속으로 들어가는 연출.
 // choices: 대사창 안 선택지 { 이름: [{ label, action(note), primary }] } — 대본 step.choices로 고른다(타이핑이 끝나면 뜬다, note는 결과 안내 줄).
 // sheet: 대본 scene "sheet"에서 쓰는 큰 지면(6막은 화면이 넘겨 주고, 없으면 대본 paper로 1막 사건 기사를 만든다).
+// notice: 민감 사건 안내 한 줄(FE-129) — 2막 시작 대사보다 먼저 안내만 나오는 장면으로 끼운다(attachNotice).
 // 장면의 focus 기사로 카메라가 옮겨 가고, 첫 장면의 from 요소가 무대를 채운 데서 빠져나온다.
 // fromRect: 첫 장면의 from 요소를 이 화면 사각형(앞 막 무대 자리)에서 시작한다(6막). cameraFill · cameraMinScale · cameraMaxUnit은 sheetCamera 옵션.
 // layout 'paper': 무대 상자 없이 지면(sheet)이 화면 전체가 된다(S-20 · 1막, S-02 신문과 같은 짜임). 막 칩 · 보드는 지면의
@@ -320,14 +336,14 @@ function evidenceBoard(script, at) {
 // 캐릭터 · 대사창 · 조작 줄은 화면 아래에 고정된다. 카메라는 화면을 굴린다(paperCamera)
 // parked: 지면만 보여 주고 캐릭터 · 대사창 · 조작 줄은 숨긴 채 기다린다(S-20 사건 정보 — 체험 시작 전). 화면이 wrap.release()로 풀면
 // 내로 · 남불이 들어오며 첫 대사가 시작된다.
-export function renderStage({ script, order, cards = {}, inputCards = [], choices = {}, start, onConfirm, onRestart, onJump, sheet: given, layout = 'box', parked: parkedAtStart = false, cameraFill = false, cameraMinScale = 0, cameraMaxUnit = 0, fromRect }) {
+export function renderStage({ script, order, cards = {}, inputCards = [], choices = {}, start, onConfirm, onRestart, onJump, sheet: given, layout = 'box', parked: parkedAtStart = false, cameraFill = false, cameraMinScale = 0, cameraMaxUnit = 0, fromRect, notice = '' }) {
   const paperMode = layout === 'paper' && Boolean(given);
   let parked = parkedAtStart;
   let again = false; // 이미 지나온 체험을 다시 보는 중(S-20 "시작하기"): 대본 textAgain이 있으면 그 문장을 쓴다
   const lineOf = (step) => (again && step.textAgain) || step.text || '';
   const asks = (step) => Boolean(step.choices && choices[step.choices]); // 선택지로만 넘어가는 장면
   const cast = castOf(script.cast); // 묶음 자리(FE-128)
-  const steps = flatten(script.acts, order);
+  const steps = attachNotice(flatten(script.acts, order), notice, '2', start);
   let index = Math.max(0, start ? steps.findIndex(start) : 0);
   const jumpAct = takeJump();
   const jumped = steps.findIndex((step) => step.actId === jumpAct);
@@ -671,6 +687,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
       cameo.dataset.who = cameoWho;
       if (cameoWho) { if (enterDelay) cameo.hidden = true; else popCameo(cameoWho); } else hideCameo();
     }
+    // 스크린 리더 알림: 대사가 없으면 지문을 읽는다(민감 사건 안내도 대사 없는 장면이라 이 알림 영역이 읽는다)
     live.textContent = parked ? '' : line || caption;
     const options = choices[step.choices] ?? [];
     const note = element('p', 'dlg-note');

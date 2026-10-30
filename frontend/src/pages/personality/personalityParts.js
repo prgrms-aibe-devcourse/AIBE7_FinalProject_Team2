@@ -1,4 +1,5 @@
 import { button, element } from '../../components/siteLayout.js';
+import { currentUser } from '../../utils/session.js';
 import { imageOf } from '../../components/stage.js';
 import { CHARACTER_NAMES } from '../../utils/personalityAxes.js';
 import { reducedMotion } from '../../utils/motion.js';
@@ -283,12 +284,17 @@ export function descriptionSections(type) {
   return [daily, verdict];
 }
 
-export function noticeBlock() {
+// 로그인 전에 한 결과의 안내(FE-138): 처음 로그인할 때 성향 테스트 결과는 계정으로 가져오지 않는다(BE-140 결정 — 체험 기록 · 첫인상 엽서만 가져온다)
+export const GUEST_RESULT_NOTE = '로그인하지 않고 한 결과예요. 처음 로그인할 때 성향 테스트 결과는 계정으로 옮겨지지 않으니, 로그인한 뒤 새로 하면 돼요.';
+
+// own: 내가 한 결과 화면(결과지 · 신문 결과)일 때만 로그인 전 안내를 붙인다. 공유 주소로 본 남의 유형에는 붙이지 않는다
+export function noticeBlock({ own = false } = {}) {
   const notice = element('section', 'result-notice');
   notice.setAttribute('aria-label', '결과 안내');
   [
     '이 결과는 일상 가치관을 기준으로 한 비교이며, 실제 법적 판단과는 다를 수 있어요.',
     '이 판결 성향 유형은 성격 유형 검사와 별개예요. 알고 있는 성격 유형과 다르게 나올 수 있어요.',
+    ...(own && !currentUser() ? [GUEST_RESULT_NOTE] : []),
   ].forEach((text) => notice.append(element('p', '', text)));
   return notice;
 }

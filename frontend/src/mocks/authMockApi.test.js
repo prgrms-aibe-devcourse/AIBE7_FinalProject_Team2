@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { login, mockNicknameOf, signup } from './authMockApi.js';
+import { login, mockNicknameOf, putNickname, signup } from './authMockApi.js';
 
 test('닉네임은 아이디 그대로(앞뒤 공백 제외)이고 12자까지만 쓴다', () => {
   assert.equal(mockNicknameOf('  naero_01 '), 'naero_01');
@@ -36,4 +36,24 @@ test('오류 details는 서버처럼 칸 이름이 든 배열이고, 칸이 없�
     assert.equal(failure.details, null);
     return true;
   });
+});
+
+test("닉네임이 '중복'으로 시작하면 가입 · 닉네임 설정은 이미 쓰는 닉네임이다 (BE-139 흉내)", async () => {
+  await assert.rejects(signup({ id: 'naero_01', password: 'judge1234', nickname: '중복판사' }), (failure) => {
+    assert.equal(failure.code, 'DUPLICATE_NICKNAME');
+    assert.deepEqual(failure.details, [{ field: 'nickname', reason: 'DUPLICATE_NICKNAME' }]);
+    return true;
+  });
+  await assert.rejects(putNickname('중복판사'), { code: 'DUPLICATE_NICKNAME' });
+});
+
+test('닉네임 설정은 형식이 맞으면 { nickname }을 돌려주고 틀리면 입력값 오류다', async () => {
+  assert.deepEqual(await putNickname('내로판사'), { nickname: '내로판사' });
+  for (const value of ['', '가', '닉 네임', '가'.repeat(9), ' 판사 ']) {
+    await assert.rejects(putNickname(value), (failure) => {
+      assert.equal(failure.code, 'VALIDATION_ERROR');
+      assert.deepEqual(failure.details, [{ field: 'nickname', reason: 'VALIDATION_ERROR' }]);
+      return true;
+    }, JSON.stringify(value));
+  }
 });

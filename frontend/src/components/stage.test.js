@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { ACT_GROUPS, DEFAULT_CAST, castOf, flatten, flipFor, placeFor, seatFor, sideOf, skipTarget } from './stage.js';
+import { ACT_GROUPS, DEFAULT_CAST, attachNotice, castOf, flatten, flipFor, placeFor, seatFor, sideOf, skipTarget } from './stage.js';
 
 const script = JSON.parse(readFileSync(new URL('../content/case-1/script.json', import.meta.url)));
 const steps = flatten(script.acts, ['1a', '1b']);
@@ -170,4 +170,46 @@ test('서는 곳(placeFor): 자리 · 뒤집기 · 꼬리 방향이 서로 맞�
   const slotCenter = placeFor('nambul', 'idle-neutral', { slot: 30, row: 'front' }, DEFAULT_CAST);
   assert.deepEqual([slotCenter.flip, slotCenter.center], [false, true]);
   assert.equal(castOf(undefined), DEFAULT_CAST, 'script.cast가 없으면 기본 배역');
+});
+
+test('민감 사건 안내(FE-129): 2막 대사보다 먼저 안내만 나오는 장면이 하나 앞에 끼고, 안내가 없으면 그대로다', () => {
+  const notice = '이 사건에는 정신건강과 관련된 내용이 나와요.';
+  const all = flatten(script.acts, ['1a', '2', '3']);
+  const attached = attachNotice(all, notice);
+  const first = attached.findIndex((step) => step.actId === '2');
+  assert.equal(attached.length, all.length + 1);
+  assert.equal(attached[first].system, notice);
+  assert.equal(attached[first].say, undefined, '캐릭터 대사가 없다');
+  assert.equal(attached[first].text, undefined);
+  assert.equal(attached[first].hideCast, true, '빈 무대');
+  assert.equal(attached[first + 1].text, all[first].text, '원래 첫 장면이 바로 뒤에 이어진다');
+  assert.equal(attached[first].section, all[first].section, '섹션으로 시작해도 안내 장면이 먼저 나온다');
+  assert.equal(attached.filter((step) => step.system === notice).length, 1);
+  assert.equal(attachNotice(all, ''), all); // 안내가 없으면 같은 배열
+  assert.equal(attachNotice(flatten(script.acts, ['1a']), notice).some((step) => step.system === notice), false); // 2막이 없는 화면
+});
+
+test('민감 사건 안내: 2막 첫 장면에 지문이 있어도 안내가 앞에 끼고 원래 지문은 그대로 이어진다(안내 누락 방지)', () => {
+  const acts = { 2: { look: { naero: 'role:prosecutor', nambul: 'role:defense' }, steps: [{ say: 'narrator', text: '재판을 시작해요.', system: '법정에 들어갑니다' }, { say: 'naero', text: '네.' }] } };
+  const steps = flatten(acts, ['2']);
+  const attached = attachNotice(steps, '안내');
+  assert.equal(attached.length, 3);
+  assert.equal(attached[0].system, '안내');
+  assert.equal(attached[0].text, undefined);
+  assert.equal(attached[1].system, '법정에 들어갑니다', '원래 지문은 그대로');
+  assert.equal(attached[1].text, '재판을 시작해요.');
+});
+
+test('민감 사건 안내: 이어 보기로 시작하는 장면(예: ③)이 있으면 그 장면 앞에 끼어, 시작해도 안내가 먼저 나온다', () => {
+  const all = flatten(script.acts, ['2']);
+  const notice = '안내';
+  const start = (step) => step.section === 3;
+  const attached = attachNotice(all, notice, '2', start);
+  const at = attached.findIndex((step) => step.system === notice);
+  assert.equal(attached[at].section, 3);
+  assert.equal(attached.findIndex(start), at, '시작 장면 찾기가 안내 장면을 먼저 잡는다');
+  assert.equal(attached[at + 1].section, 3);
+  assert.ok(at > 0, '막 첫 장면 앞이 아니라 ③ 앞');
+  const none = attachNotice(all, notice, '2', (step) => step.section === 99);
+  assert.equal(none.findIndex((step) => step.system === notice), 0, '맞는 장면이 없으면 막의 첫 장면 앞');
 });

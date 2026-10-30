@@ -1,7 +1,7 @@
 // npm test : 닉네임 검사 (내 정보 수정, FE-77)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { lockNicknameLength, nicknameError } from './nickname.js';
+import { isUnnamed, lockNicknameLength, nicknameError } from './nickname.js';
 
 test('한글이 있으면 8자, 영문 · 숫자만이면 12자까지는 통과, 앞뒤 공백은 무시', () => {
   ['판사', 'judge7', '익명의판사12', '  해송  ', '가'.repeat(8), 'a'.repeat(12)].forEach((value) => assert.equal(nicknameError(value), '', value));
@@ -30,4 +30,16 @@ test('입력 잠금은 앞뒤 공백을 빼고 센다(공백 붙은 붙여넣기
   input.value = '  가나다  ';
   handlers.input({ isComposing: false });
   assert.equal(input.value, '  가나다  '); // 한도 안이면 건드리지 않는다
+});
+
+test('닉네임을 정하지 않은 회원의 표시 이름(방청객 {회원 ID} · 카카오 회원)은 닉네임이 아니다 (FE-137)', () => {
+  ['방청객 1024', '방청객 7', '카카오 회원', ' 방청객 12 '].forEach((value) => assert.equal(isUnnamed(value), true, value));
+  ['판사', '방청객', '방청객1024', '방청객 가', 'judge7', '', null, undefined].forEach((value) => assert.equal(isUnnamed(value), false, String(value)));
+  // 자동 이름은 공백이 있어 닉네임 형식 검사에 걸린다 — 닉네임 칸에 그대로 두고 저장할 수 없다
+  assert.notEqual(nicknameError('방청객 1024'), '');
+});
+
+test("'방청객'으로 시작하는 닉네임은 서버처럼 거절한다 — 자동 이름 흉내 방지 (BE-139 리뷰)", () => {
+  ['방청객', '방청객99', '방청객가나'].forEach((value) => assert.match(nicknameError(value), /방청객/, value));
+  ['판사', '나는방청객'].forEach((value) => assert.equal(nicknameError(value), '', value)); // 앞에 오지 않으면 괜찮다
 });

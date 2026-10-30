@@ -4,7 +4,7 @@
 //   화면은 목이든 실제든 같은 방식(error.code · error.currentStatus)으로 에러를 처리한다.
 // - 액세스 토큰(FE-74): 있으면 Authorization에 싣고, 401이면 M-1 재발급을 한 번 한 뒤 같은 요청을 다시 보낸다.
 import { API_BASE_URL } from './config.js';
-import { clearUser, currentUser } from '../utils/session.js';
+import { clearUser, currentUser, isAdmin } from '../utils/session.js';
 
 // 회원 액세스 토큰. 메모리에만 둔다(API 명세 10장) — 새로고침하면 사라지고, 401이 오면 재발급으로 다시 받는다
 let accessToken = null;
@@ -24,6 +24,18 @@ function fallbackError(code, message, status) {
  * @param {object} [body] JSON 본문 (POST · PUT · PATCH)
  */
 export async function request(method, endpoint, body) {
+  // 회원 로그인 표시는 있는데 토큰이 없으면(새로고침 직후) 보내기 전에 먼저 재발급한다(FE-138, BE-140 선행).
+  // 로그인 없이도 되는 API(체험 · 성향 테스트)는 토큰 없이 가면 401이 아니라 손님 요청으로 처리되어, 회원의 기록이 이 브라우저의 익명 쪽에 쌓이기 때문이다.
+  // 재발급이 실패해도(연결 오류 등) 요청은 그대로 보낸다. 401이면 로그인이 끝난 것이다: reissueAccessToken이 로그인 표시를 지우고, 여기서 서버 로그아웃으로
+  // 쿠키(NLNB_RT · 회원에 연결된 NLNB_AID, BE-137)를 정리한다 — 그대로 보내면 손님 체험 · 성향 결과가 이전 회원의 익명 ID에 쌓인다(PR #347 리뷰).
+  // 정리하지 못하면(로그아웃 실패) 요청도 보내지 않는다. 관리자 표시는 회원 토큰이 아니라(관리자는 세션) 재발급하지 않는다 — 재발급 401이 관리자 로그인 표시를 지우게 된다
+  if (accessToken === null && currentUser() && !isAdmin() && !endpoint.startsWith('/auth/')) {
+    try {
+      await reissueAccessToken();
+    } catch (failure) {
+      if (failure?.status === 401) await cleanupOnce();
+    }
+  }
   const sentWith = accessToken;
   try {
     return await send(method, endpoint, body);
@@ -42,7 +54,7 @@ export async function request(method, endpoint, body) {
 // 401(쿠키 없음 · 만료 · 로그아웃됨)이면 로그인이 끝난 것이라 이 브라우저의 로그인 표시도 지운다. 연결 오류 등은 지우지 않는다
 export function reissueAccessToken() {
   const startedIn = session;
-  reissuing ??= send('POST', '/auth/token/reissue', {})
+  reissuing ??= underReissueLock(() => send('POST', '/auth/token/reissue', {}))
     .then((data) => {
       if (startedIn === session) accessToken = data.accessToken; // 기다리는 사이 로그아웃했으면 토큰을 다시 채우지 않는다
       return data;
@@ -54,6 +66,18 @@ export function reissueAccessToken() {
     })
     .finally(() => { reissuing = null; });
   return reissuing;
+}
+
+// 먼저 한 재발급이 401일 때의 쿠키 정리(로그아웃). 같은 때 나간 요청들이 각자 부르지 않고 진행 중인 하나를 함께 기다린다(PR #347 리뷰)
+let loggingOut = null;
+const cleanupOnce = () => (loggingOut ??= logout().finally(() => { loggingOut = null; }));
+
+// 탭 사이 재발급 직렬화(PR #347 리뷰). 리프레시 토큰은 한 번 쓰면 사라지고(로테이션) 쿠키는 탭이 함께 쓰므로, 두 탭이 같은 쿠키로 동시에 재발급하면 하나가 401을 받아
+// 로그인 표시(localStorage, 탭 공용)를 지운다. Web Locks로 한 탭씩 차례로 부르면 뒤 탭은 앞 탭이 바꿔 둔 새 쿠키로 재발급한다.
+// 지원하지 않는 브라우저(오래된 사파리 · 보안 컨텍스트가 아닌 주소)는 잠금 없이 부른다(같은 탭의 중복은 reissuing이 막는다)
+function underReissueLock(task) {
+  const locks = globalThis.navigator?.locks;
+  return locks?.request ? locks.request('nlnb-token-reissue', task) : task();
 }
 
 // M-2 로그아웃. 서버 응답과 상관없이 들고 있던 액세스 토큰은 버린다

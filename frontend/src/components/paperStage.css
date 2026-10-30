@@ -161,6 +161,7 @@
 .case-paper-page .story-extra:empty { display: none; }
 .case-paper-page .extra-label { margin: 0 0 8px; padding-bottom: 6px; border-bottom: 3px double var(--color-border-strong); font-size: var(--text-caption); font-weight: 700; letter-spacing: .08em; color: var(--color-label); }
 .case-paper-page .extra-text { margin: 0; font: 400 13px/1.65 var(--font-article); letter-spacing: -.02em; color: var(--color-text); word-break: keep-all; text-align: justify; }
+.case-paper-page .extra-notice { font-weight: 700; } /* 민감 사건 안내(FE-129): 있으면 일반 설명을 대신한다 */
 .case-paper-page .extra-list { margin: 0; padding: 0; list-style: none; }
 .case-paper-page .extra-list li + li { border-top: 1px dotted var(--color-border-strong); }
 .case-paper-page .extra-link { display: block; width: 100%; min-height: 44px; padding: 6px 0; border: 0; background: transparent; color: var(--color-heading); font: 700 15px/1.45 var(--font-heading); letter-spacing: -.03em; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; } /* 제목은 한 줄만, 길면 … */

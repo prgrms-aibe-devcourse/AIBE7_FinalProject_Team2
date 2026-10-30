@@ -100,6 +100,7 @@ export function measureOpaqueBox(img) {
 /**
  * 창(windowEl) 안의 그림(img)을 위 계산대로 맞춘다. 창이 그려지거나 크기가 바뀔 때마다 다시 맞춘다(반응형).
  * 재지 못하면 CSS의 기본(창 안에 contain)으로 보인다. 맞추는 동안은 가려 두어 크기가 튀어 보이지 않게 한다.
+ * 돌려주는 함수를 부르면 크기 관찰을 멈춘다(그림을 떼어 낼 때 — 창이 사라지면 저절로 멈추지만, 창이 남은 채 그림만 갈아 끼우는 곳은 불러야 쌓이지 않는다).
  */
 export function fitPortraitIn(windowEl, img, options) {
   let box;
@@ -121,4 +122,5 @@ export function fitPortraitIn(windowEl, img, options) {
     if (box) apply();
     else img.classList.remove('is-fitting'); // 못 쟀으면 기본 모양(contain) 그대로
   }, () => img.classList.remove('is-fitting'));
+  return () => observer.disconnect();
 }

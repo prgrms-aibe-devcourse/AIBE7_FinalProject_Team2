@@ -122,7 +122,7 @@ export function renderCommunityPostPage(container, { api, navigate, postId }) {
         input.dispatchEvent(new Event('input'));
       } catch (failure) {
         if (!active()) return;
-        error.textContent = failure?.code === 'LOGIN_REQUIRED' ? '로그인이 풀렸어요. 다시 로그인해 주세요.' : '댓글을 달지 못했어요. 잠시 뒤 다시 시도해 주세요.';
+        error.textContent = failure?.code === 'UNAUTHORIZED' ? '로그인이 풀렸어요. 다시 로그인해 주세요.' : '댓글을 달지 못했어요. 잠시 뒤 다시 시도해 주세요.';
       } finally {
         submit.disabled = false;
       }
