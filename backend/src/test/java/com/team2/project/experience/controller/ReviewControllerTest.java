@@ -15,6 +15,7 @@ import com.team2.project.common.exception.ApiExceptionAdvice;
 import com.team2.project.common.exception.BusinessException;
 import com.team2.project.common.exception.ErrorCode;
 import com.team2.project.common.web.AnonymousIdCookie;
+import com.team2.project.common.web.RequesterArgumentResolver;
 import com.team2.project.experience.domain.ExperienceStatus;
 import com.team2.project.experience.domain.InvalidExperienceStateException;
 import com.team2.project.experience.domain.ReviewStepOutOfOrderException;
@@ -42,7 +43,8 @@ class ReviewControllerTest {
 
 	@BeforeEach
 	void setUp() {
-		mockMvc = MockMvcBuilders.standaloneSetup(new ReviewController(service, new AnonymousIdCookie()))
+		mockMvc = MockMvcBuilders.standaloneSetup(new ReviewController(service))
+			.setCustomArgumentResolvers(new RequesterArgumentResolver(new AnonymousIdCookie()))
 			.setControllerAdvice(new ApiExceptionAdvice())
 			.build();
 	}

@@ -1,6 +1,7 @@
 package com.team2.project.personality.controller;
 
 import com.team2.project.common.web.AnonymousIdCookie;
+import com.team2.project.common.web.Requester;
 import com.team2.project.personality.dto.MyPageResponse;
 import com.team2.project.personality.dto.PersonalityQuestionsResponse;
 import com.team2.project.personality.dto.PersonalityResultResponse;
@@ -9,7 +10,6 @@ import com.team2.project.personality.dto.PersonalityTypeResponse;
 import com.team2.project.personality.service.MyPageService;
 import com.team2.project.personality.service.PersonalityService;
 import com.team2.project.personality.service.PersonalityService.SubmitResult;
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -43,9 +43,9 @@ public class PersonalityController {
 	/** P-2 응답 제출 — 201, 쿠키가 없었으면 Set-Cookie로 익명 ID 발급 */
 	@PostMapping("/personality/results")
 	@ResponseStatus(HttpStatus.CREATED)
-	public PersonalityResultResponse submit(@Valid @RequestBody PersonalitySubmitRequest body, HttpServletRequest request,
+	public PersonalityResultResponse submit(@Valid @RequestBody PersonalitySubmitRequest body, Requester requester,
 		HttpServletResponse response) {
-		SubmitResult result = personalityService.submit(anonymousIdCookie.read(request), body);
+		SubmitResult result = personalityService.submit(requester.anonymousId(), body);
 		if (result.issuedCookieId() != null) {
 			anonymousIdCookie.write(response, result.issuedCookieId());
 		}
@@ -54,8 +54,8 @@ public class PersonalityController {
 
 	/** P-3 내 현재 결과 */
 	@GetMapping("/personality/results/me")
-	public PersonalityResultResponse getMine(HttpServletRequest request) {
-		return personalityService.getMine(anonymousIdCookie.read(request));
+	public PersonalityResultResponse getMine(Requester requester) {
+		return personalityService.getMine(requester.anonymousId());
 	}
 
 	/** P-4 공유용 유형 설명 (공개, 쿠키를 읽지 않는다) */
@@ -66,7 +66,7 @@ public class PersonalityController {
 
 	/** P-5 마이페이지 */
 	@GetMapping("/my-page")
-	public MyPageResponse getMyPage(HttpServletRequest request) {
-		return myPageService.get(anonymousIdCookie.read(request));
+	public MyPageResponse getMyPage(Requester requester) {
+		return myPageService.get(requester.anonymousId());
 	}
 }
