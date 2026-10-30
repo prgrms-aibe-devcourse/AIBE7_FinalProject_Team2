@@ -94,12 +94,13 @@ export function flatten(acts, order) {
 
 // 민감 사건 안내 (FE-129): 2막 시작 대사보다 먼저, 안내 문구만 나오는 빈 무대 장면 하나를 앞에 끼운다(캐릭터 · 대사 없음).
 // 장면 정보(절차 번호 · 섹션 · 모습)는 2막 첫 장면에서 이어받아, "② 모두진술부터 열기"처럼 섹션으로 시작해도 이 장면이 먼저 나온다.
-// 첫 장면에 이미 지문 · 암전 문구가 있으면 건드리지 않는다. 안내할 내용이 없으면(notice 빈 값) 그대로 돌려준다
+// 별도 장면이라 첫 장면의 지문 · 암전 문구를 덮어쓰지 않으므로 그 문구가 있어도 안내는 빠지지 않는다(안내 누락 방지, 리뷰 반영).
+// 안내할 내용이 없으면(notice 빈 값) 그대로 돌려준다
 export function attachNotice(steps, notice, actId = '2') {
   if (!notice) return steps;
   const at = steps.findIndex((step) => step.actId === actId);
-  if (at < 0 || steps[at].system || steps[at].blackout) return steps;
-  const { say, text, textAgain, role, cameo, delay, card, ev, confirm, next, auto, choices, board, source, ...base } = steps[at];
+  if (at < 0) return steps;
+  const { say, text, textAgain, role, cameo, delay, card, ev, confirm, next, auto, choices, board, source, system, blackout, ...base } = steps[at];
   return [...steps.slice(0, at), { ...base, hideCast: true, system: notice }, ...steps.slice(at)];
 }
 

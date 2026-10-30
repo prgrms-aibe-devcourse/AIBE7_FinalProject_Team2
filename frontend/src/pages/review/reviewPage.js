@@ -22,8 +22,15 @@ export async function renderReviewPage(container, { caseId, caseHeader, api, nav
   // 컨테이너가 다른 화면으로 바뀌면 이전 요청은 그 화면을 덮어쓰지 않는다.
   const active = () => container.contains(root);
   let loading = false;
-  // 민감 사건 안내(FE-129): API 16의 sensitiveFlags로 2막 시작 지문 한 줄을 만든다. 화면을 여는 즉시 받아 두고, 못 받으면 안내 없이 진행한다
-  const noticeReady = api.getCaseDetail(caseId).then((detail) => sensitiveNotice(detail?.sensitiveFlags)).catch(() => '');
+  // 민감 사건 안내(FE-129): API 16의 sensitiveFlags로 2막 시작 안내 한 줄을 만든다. 무대를 그리는 분기(대본이 있는 사건)에서만 부르고,
+  // 실패하거나 NOTICE_WAIT_MS 안에 못 받으면 안내 없이 진행한다(응답이 없어도 무대가 로딩에 멈추지 않게, 리뷰 반영)
+  const NOTICE_WAIT_MS = 3000;
+  function loadNotice() {
+    let timer;
+    const timeout = new Promise((resolve) => { timer = setTimeout(() => resolve(''), NOTICE_WAIT_MS); });
+    const notice = api.getCaseDetail(caseId).then((detail) => sensitiveNotice(detail?.sensitiveFlags)).catch(() => '');
+    return Promise.race([notice, timeout]).finally(() => clearTimeout(timer));
+  }
 
   function element(tag, className, text) {
     const node = document.createElement(tag);
@@ -136,7 +143,7 @@ export async function renderReviewPage(container, { caseId, caseHeader, api, nav
     // 사건 번호는 DB마다 다를 수 있어 번호만으로 고르지 않는다. 대본의 제목이 사건 제목과 같을 때만 무대를 쓴다(S-03과 같은 규칙)
     const candidate = SCRIPTS[caseId];
     const script = candidate?.title === caseHeader.title ? candidate : undefined;
-    if (script) { noticeReady.then((notice) => { if (active()) drawStage(data, script, notice); }); return; }
+    if (script) { loadNotice().then((notice) => { if (active()) drawStage(data, script, notice); }); return; }
     const current = data.openStep ?? 4;
     const header = element('header', 'case-topbar');
     header.append(button('← 목록', () => navigate('list'), 'back-button'),

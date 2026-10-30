@@ -108,8 +108,13 @@ test('민감 사건 안내(FE-129): 2막 대사보다 먼저 안내만 나오는
   assert.equal(attachNotice(flatten(script.acts, ['1a']), notice).some((step) => step.system === notice), false); // 2막이 없는 화면
 });
 
-test('민감 사건 안내: 2막 첫 장면에 이미 지문이 있으면 덮어쓰지 않는다', () => {
+test('민감 사건 안내: 2막 첫 장면에 지문이 있어도 안내가 앞에 끼고 원래 지문은 그대로 이어진다(안내 누락 방지)', () => {
   const acts = { 2: { look: { naero: 'role:prosecutor', nambul: 'role:defense' }, steps: [{ say: 'narrator', text: '재판을 시작해요.', system: '법정에 들어갑니다' }, { say: 'naero', text: '네.' }] } };
   const steps = flatten(acts, ['2']);
-  assert.equal(attachNotice(steps, '안내')[0].system, '법정에 들어갑니다');
+  const attached = attachNotice(steps, '안내');
+  assert.equal(attached.length, 3);
+  assert.equal(attached[0].system, '안내');
+  assert.equal(attached[0].text, undefined);
+  assert.equal(attached[1].system, '법정에 들어갑니다', '원래 지문은 그대로');
+  assert.equal(attached[1].text, '재판을 시작해요.');
 });
