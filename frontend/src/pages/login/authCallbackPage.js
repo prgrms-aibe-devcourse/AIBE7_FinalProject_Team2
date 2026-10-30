@@ -2,6 +2,7 @@ import { button, element } from '../../components/siteLayout.js';
 import { loginDesk } from './loginDesk.js';
 import { saveUser } from '../../utils/session.js';
 import { devJumpBar } from './loginDevJump.js';
+import { offerAnonymousImport } from './anonymousImport.js';
 
 // 카카오 로그인 콜백 화면 /auth/callback (FE-74, API 명세 10장 M-4). 서버가 카카오 로그인을 마치고 브라우저를 이리로 보낸다.
 // - 성공: 리프레시 토큰 쿠키만 심겨 있으므로 M-1 재발급을 한 번 불러 첫 액세스 토큰을 받고, 로그인 표시를 남긴 뒤 메인으로 간다
@@ -40,6 +41,8 @@ export function renderAuthCallbackPage(container, { api, navigate }) {
     const me = await Promise.resolve(api.getMe?.()).catch(() => null);
     if (!container.contains(root)) return; // 기다리는 사이 다른 화면으로 갔으면 이동하지 않는다
     saveUser({ nickname: me?.displayName || KAKAO_MEMBER_NICKNAME });
+    await offerAnonymousImport(api); // 이 브라우저의 체험 기록 · 첫인상 엽서가 있으면 가져올지 먼저 고르게 한다(FE-138)
+    if (!container.contains(root)) return;
     navigate('landing', {}, { replace: true });
   }, () => {
     if (container.contains(root)) showFailure();

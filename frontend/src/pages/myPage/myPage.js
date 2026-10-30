@@ -22,6 +22,7 @@ import { openCaseReviewPopup } from '../caseReview/caseReviewPopup.js';
 import { renderProfileEdit } from './myProfileEdit.js';
 import { renderSettings } from './mySettings.js';
 import { renderLevelPage } from './myLevel.js';
+import { renderGuestTop } from './myGuest.js';
 import { RETAKE_NOTES, openRetakeDialog, retakeAfter, retakeState } from './baselineRetake.js';
 import { SHOWN_SLOTS, setShownCard, shownSlot } from '../../utils/shownCard.js';
 import { getCardLevel, getCardLine, selectedChoice, setCardLevel, setCardLine, setProfileCardType, typeChoices } from '../../utils/profileCardType.js';
@@ -36,7 +37,8 @@ import { configureProfileSettings, hydrateProfileSettings } from '../../utils/pr
 // 꾸미기 값 · 도전과제 진행도 · 열린 항목은 서버가 원본이다(FE-71, BE-96). 고르면 바로 화면에 쓰고 PUT /profile-deco로 저장하며, 거절(409 DECO_LOCKED 등)되면 서버 값으로 되돌린다.
 // 항목 화면은 주소가 같고 view만 다르다(뒤로 가기로 첫 화면에 돌아온다).
 // 종합 · 변화 흐름은 체험 → 성향 저장(7.6.7, BE-64) 뒤부터 채워지므로 그 전에는 null · 빈 배열로 와서 안내만 보인다.
-// 로그인 전에는 익명 ID 기준이다(REQ-108).
+// 로그인 전에는 서버를 부르지 않고 첫 화면의 틀과 로그인 안내만 보여 준다(FE-138, myGuest.js). 항목 화면 주소로 와도 같은 화면이다.
+// 로그인한 채로 불러오다가 로그인이 풀리면(401) 같은 안내로 바꾼다 — 서버가 마이페이지를 로그인 전용으로 바꿔도(BE-140) 깨지지 않는다
 const STATUS_LABELS = { COMPLETED: '체험 완료' };
 // 목 모드의 "내가 체험한 사건" 목록에서만 체험 중으로 보여 줄 사건(체험 중 모양 확인용). 첫 화면 수치 · 컬렉션 · 성향 기록은 그대로 완료로 센다
 const MOCK_IN_PROGRESS = new Set([3, 6, 8]);
@@ -1453,8 +1455,7 @@ function renderView(view, data, navigate, go, api) {
 
 // 맨 아래 안내. 로그인했으면(FE-52) 누구로 로그인했는지와 로그아웃. 기록은 아직 로그인과 이어지지 않아 익명 ID 기준이다
 function accountNote(api, navigate) {
-  const user = currentUser();
-  if (!user) return element('p', 'my-note', '로그인하기 전에는 이 브라우저(익명 ID)를 기준으로 기록해요. 쿠키를 지우면 기록을 찾을 수 없어요.');
+  const user = currentUser(); // 로그인 전이면 첫 화면이 myGuest.js라 여기 오지 않는다
   const note = element('div', 'my-note my-account');
   note.append(
     element('p', '', `${user.nickname} 님으로 로그인했어요. 기록은 아직 이 브라우저(익명 ID)를 기준으로 남아요.`),
@@ -1521,6 +1522,20 @@ export async function renderMyPage(container, { api, navigate, view, from }) {
     main.prepend(notice);
   };
 
+  // 로그인 전(FE-138): 서버를 부르지 않는다. 지난 로그인의 기록(cache)도 보여 주지 않는다
+  const paintGuest = () => {
+    cache = null;
+    const title = element('h1', 'visually-hidden', '마이페이지');
+    title.tabIndex = -1;
+    main.replaceChildren(title, ...renderGuestTop(navigate, api));
+  };
+  if (!currentUser()) {
+    if (shown) history.replaceState({ ...history.state, extras: {} }, ''); // 항목 화면 주소로 왔으면 첫 화면 주소로 바꿔 둔다(뒤로 가기가 막히지 않게)
+    paintGuest();
+    reveal();
+    return;
+  }
+
   if (cache) paint(cache);
   else {
     const loading = element('p', 'message-panel', '불러오는 중이에요.');
@@ -1535,9 +1550,14 @@ export async function renderMyPage(container, { api, navigate, view, from }) {
   let data;
   try {
     data = await loadMyPage(api);
-  } catch {
+  } catch (error) {
     if (!active()) return;
     reveal();
+    if (error?.status === 401 || !currentUser()) {
+      clearUser(); // 최종 401이면 서버는 회원으로 보지 않는다 — 재발급이 실패했다면 client.js가 이미 지웠고, 아니어도 표시를 화면과 맞춘다(다음 방문이 같은 요청을 되풀이하지 않게)
+      paintGuest();
+      return;
+    }
     if (cache) return; // 지난 기록은 그대로 보여 준다
     const panel = element('div', 'message-panel');
     panel.setAttribute('role', 'alert');

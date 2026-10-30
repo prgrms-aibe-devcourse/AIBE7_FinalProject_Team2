@@ -3,7 +3,7 @@ import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createCommunityComment, createCommunityPost, getCommunityHome, getCommunityPost, getCommunityPosts, getMe,
-  getMyShareableVerdict, putNickname, toggleCommunityLike,
+  getMyShareableVerdict, putNickname, toggleCommunityLike, getAnonymousImport, importAnonymous, discardAnonymous, getIllustrationSummary,
 } from './realApi.js';
 import { logout } from './client.js';
 
@@ -79,4 +79,24 @@ test('닉네임 중복은 409 DUPLICATE_NICKNAME, 형식은 400 VALIDATION_ERROR
   await assert.rejects(putNickname('내로판사'), { code: 'DUPLICATE_NICKNAME', status: 409 });
   stubFetch(() => ({ status: 400, body: { code: 'VALIDATION_ERROR', message: '', details: [{ field: 'nickname', reason: 'VALIDATION_ERROR' }] } }));
   await assert.rejects(putNickname('가'), (failure) => failure.code === 'VALIDATION_ERROR' && failure.details[0].field === 'nickname');
+});
+
+test('첫 로그인 가져오기: 주소 · 방식, 서버에 아직 없으면(404) 후보 없음(null)', async () => {
+  stubFetch(() => ({ status: 200, body: { experienceCount: 2, preJudgmentCount: 1 } }));
+  assert.deepEqual(await getAnonymousImport(), { experienceCount: 2, preJudgmentCount: 1 });
+  assert.deepEqual([last().method, last().url], ['GET', '/api/v1/members/me/anonymous-import']);
+  await importAnonymous();
+  assert.deepEqual([last().method, last().url], ['POST', '/api/v1/members/me/anonymous-import']);
+  await discardAnonymous();
+  assert.deepEqual([last().method, last().url], ['POST', '/api/v1/members/me/anonymous-import/discard']);
+  stubFetch(() => ({ status: 404, body: { code: 'NOT_FOUND', message: '없어요' } }));
+  assert.equal(await getAnonymousImport(), null);
+  stubFetch(() => ({ status: 500, body: { code: 'INTERNAL_ERROR', message: '오류' } }));
+  await assert.rejects(getAnonymousImport(), { status: 500 });
+});
+
+test('일러스트 총 개수는 GET /illustrations/summary로 받는다', async () => {
+  stubFetch(() => ({ status: 200, body: { total: 212, byKind: { cases: 76 } } }));
+  assert.deepEqual(await getIllustrationSummary(), { total: 212, byKind: { cases: 76 } });
+  assert.deepEqual([last().method, last().url], ['GET', '/api/v1/illustrations/summary']);
 });

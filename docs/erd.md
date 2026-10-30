@@ -53,7 +53,7 @@
 | v1.47 | 2026-10-29 | 사건 배역 · 민감 플래그 (**확장 단계**, BE-125 · V37 · API 명세 v0.67) — `legal_case.cast_roles`(jsonb, `{"prosecutor": "naero", "defense": "nambul"}`) · `sensitive_flags`(jsonb 문자열 배열) 추가. 두 칸 모두 DB CHECK를 두지 않고 코드(`CastRoles` · `SensitiveFlag`)가 검사한다. 새 사건은 적재할 때 배정한다 — 대본이 함께 오면 그 배역, 아니면 같은 범죄 유형에서 피고인 역을 덜 맡은 캐릭터(같으면 마지막 배정의 반대). 이미 있는 사건의 초기값은 비공개 시드 저장소의 UPDATE로 넣는다 (`docs/decisions/BE-125.md`) |
 | v1.48 | 2026-10-29 | 커뮤니티 테이블 추가 (**확장 단계**, BE-115 · V38 · API 명세 v0.68) — `community_post`(글쓴이 회원 · 명함 기준 익명 ID · 말머리 · 사건 · 제목 · 본문 · 판결 공유 jsonb · 좋아요 · 댓글 수) · `community_comment` · `community_like`(회원 × 글 하나) 신설. 14장 추가 |
 | v1.49 | 2026-10-29 | 닉네임 중복 금지 (**확장 단계**, BE-139 · V39 · API 명세 v0.69) — `member`에 `uq_member_nickname`(`lower(nickname)` 유니크 인덱스, `nickname IS NOT NULL`인 행만) 추가. 칸은 그대로. 겹치던 기존 닉네임은 먼저 가입한 회원만 남기고 나머지를 NULL로 비운다 |
-| v1.50 | 2026-10-30 | 약관 동의 기록 (**확장 단계**, BE-133 · V40 · API 명세 v0.73) — `member`에 `terms_agreed_at`(timestamptz) · `terms_version`(varchar 20) 추가, 둘 다 NULL 허용. CHECK `ck_member_terms_agreement`(둘이 함께 있거나 함께 없다). 아이디 가입(M-5) 때만 채우고, 기존 회원 · 카카오 회원은 NULL(동의 기록 없음) |
+| v1.50 | 2026-10-30 | 약관 동의 기록 (**확장 단계**, BE-133 · V40 · API 명세 v0.74) — `member`에 `terms_agreed_at`(timestamptz) · `terms_version`(varchar 20) 추가, 둘 다 NULL 허용. CHECK `ck_member_terms_agreement`(둘이 함께 있거나 함께 없다). 아이디 가입(M-5) 때만 채우고, 기존 회원 · 카카오 회원은 NULL(동의 기록 없음) |
 
 ---
 

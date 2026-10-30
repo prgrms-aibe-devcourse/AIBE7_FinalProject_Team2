@@ -1,4 +1,4 @@
--- V40__member_terms_agreement.sql (확장 단계, BE-133 · API 명세 M-5 v0.73 · ERD v1.50)
+-- V40__member_terms_agreement.sql (확장 단계, BE-133 · API 명세 M-5 v0.74 · ERD v1.50)
 -- 아이디 회원가입(M-5)의 약관 동의 기록. 가입할 때 동의한 시각과 그때의 약관 버전을 남긴다
 --
 -- 칸만 추가하고 NULL을 허용한다(BE-60 "main으로 가는 마이그레이션은 추가만"). 배포 중 구버전 코드가 회원을 만들어도 두 칸이 함께 NULL이라 CHECK를 통과한다.

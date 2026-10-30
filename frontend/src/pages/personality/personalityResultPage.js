@@ -116,7 +116,7 @@ export async function renderPersonalityResultPage(container, { api, navigate }) 
     };
     const pages = resultPages(tabs, body, [
       { label: '결과', nodes: [card, graph, tolerance, turnPage('풀이 보기', () => flipTo(1))] },
-      { label: '풀이', nodes: [typeCard(type, { other: true }), ...descriptionSections(type), noticeBlock(), actions, shareNote, turnPage('결과 보기', () => flipTo(0), { prev: true })] },
+      { label: '풀이', nodes: [typeCard(type, { other: true }), ...descriptionSections(type), noticeBlock({ own: true }), actions, shareNote, turnPage('결과 보기', () => flipTo(0), { prev: true })] },
     ], {
       // 공개 연출 중에 장을 넘기면 연출을 끝낸다: 숨겨진 장의 연출은 멈추고, 풀이 장이 같은 연출(.is-revealing)을 새로 받지 않게(리뷰 반영)
       onSwitch: () => root.classList.remove('is-revealing'),

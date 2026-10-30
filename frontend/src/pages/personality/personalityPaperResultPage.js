@@ -98,7 +98,7 @@ export async function renderPersonalityPaperResultPage(container, { api, navigat
       columns.append(section);
     });
     const side = element('aside', 'tpr-side');
-    const notice = noticeBlock();
+    const notice = noticeBlock({ own: true });
     notice.className = 'tpr-notice';
     side.append(portrait(withOtherCharacter(type), 'tpr-other'), notice);
     story.append(columns, side);
