@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { ACT_GROUPS, DEFAULT_CAST, castOf, flatten, flipFor, seatFor, sideOf, skipTarget } from './stage.js';
+import { ACT_GROUPS, DEFAULT_CAST, castOf, flatten, flipFor, placeFor, seatFor, sideOf, skipTarget } from './stage.js';
 
 const script = JSON.parse(readFileSync(new URL('../content/case-1/script.json', import.meta.url)));
 const steps = flatten(script.acts, ['1a', '1b']);
@@ -154,4 +154,20 @@ test('사건 1(기본 배역)은 어느 장면에서도 뒤집히지 않는다 (
   const seatsOf = (acts, cast) => acts.flatMap((id) => flatten(script.acts, [id])).flatMap((step) => ['naero', 'nambul'].map((who) => ({ who, seat: seatFor(who, step.look[who], cast), stand: step.spots[who] === 'stand' })));
   const ids = Object.keys(script.acts);
   seatsOf(ids, DEFAULT_CAST).filter((s) => !s.stand).forEach((s) => assert.equal(flipFor(s.who, s.seat), false, `기본 배역 ${s.who} ${s.seat}`));
+});
+
+test('서는 곳(placeFor): 자리 · 뒤집기 · 꼬리 방향이 서로 맞게 한 곳에서 정해진다 (script.cast를 거쳐, 슬롯 · 피고인석 포함)', () => {
+  const cast = castOf({ prosecutor: 'nambul', defense: 'naero' }); // 대본의 script.cast에서 읽은 값
+  const left = placeFor('nambul', 'idle-neutral', undefined, cast);
+  assert.deepEqual([left.seat, left.flip, left.side], ['left', true, 'left'], 'A(남불)는 왼쪽에 서고 가운데를 보게 뒤집히고 꼬리도 왼쪽');
+  const right = placeFor('naero', 'idle-neutral', undefined, cast);
+  assert.deepEqual([right.seat, right.flip, right.side], ['right', true, 'right']);
+  const stand = placeFor('naero', 'role:actor', 'stand', cast);
+  assert.deepEqual([stand.flip, stand.center], [false, true], '피고인석은 원본 방향 · 꼬리는 가운데');
+  // 왼쪽 자리의 화자가 오른쪽 숫자 슬롯에 서면 꼬리 · 뒤집기도 슬롯을 따른다(리뷰 반영)
+  const slotRight = placeFor('naero', 'idle-neutral', { slot: 55, row: 'front' }, DEFAULT_CAST);
+  assert.deepEqual([slotRight.seat, slotRight.side, slotRight.flip], ['left', 'right', true]);
+  const slotCenter = placeFor('nambul', 'idle-neutral', { slot: 30, row: 'front' }, DEFAULT_CAST);
+  assert.deepEqual([slotCenter.flip, slotCenter.center], [false, true]);
+  assert.equal(castOf(undefined), DEFAULT_CAST, 'script.cast가 없으면 기본 배역');
 });
