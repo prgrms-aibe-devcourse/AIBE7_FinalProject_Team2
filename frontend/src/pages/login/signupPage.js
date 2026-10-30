@@ -7,7 +7,7 @@ import { canGoBackInApp } from '../../app/router.js';
 import { devJumpBar } from './loginDevJump.js';
 import { loginDesk } from './loginDesk.js';
 import { kakaoButton, setBusy } from './loginParts.js';
-import { NICKNAME_MAX, NICKNAME_MAX_HANGUL, lockNicknameLength } from '../../utils/nickname.js';
+import { NICKNAME_CLAMPED, NICKNAME_MAX, NICKNAME_MAX_HANGUL, lockNicknameLength } from '../../utils/nickname.js';
 import { validateSignup } from './signupRule.js';
 import { offerAnonymousImport } from './anonymousImport.js';
 
@@ -83,10 +83,21 @@ export function renderSignupPage(container, { api, navigate }) {
       id: field(form, 'signup-id', '아이디', { type: 'text', autocomplete: 'username', hint: '영문 소문자 · 숫자 · 밑줄(_) 4~20자' }),
       password: field(form, 'signup-password', '비밀번호', { type: 'password', autocomplete: 'new-password', hint: '영문과 숫자를 섞어 8~64자' }),
       passwordConfirm: field(form, 'signup-password-confirm', '비밀번호 확인', { type: 'password', autocomplete: 'new-password' }),
-      nickname: field(form, 'signup-nickname', '닉네임', { type: 'text', autocomplete: 'nickname', hint: `2자 이상, 한글은 ${NICKNAME_MAX_HANGUL}자 · 영문 · 숫자는 ${NICKNAME_MAX}자까지 · 커뮤니티와 랭킹에 보여요`, maxLength: NICKNAME_MAX }),
+      nickname: field(form, 'signup-nickname', '닉네임', { type: 'text', autocomplete: 'nickname', hint: `2자 이상 · 한글이 들어가면 ${NICKNAME_MAX_HANGUL}자, 영문 · 숫자만이면 ${NICKNAME_MAX}자까지 · 커뮤니티와 랭킹에 보여요`, maxLength: NICKNAME_MAX }),
       agreed: agreement(form),
     };
-    lockNicknameLength(fields.nickname.input);
+    // 한글이 섞여 뒤를 자르면 칸 아래에 알린다(BE-134). 오류가 아니라 aria-invalid는 붙이지 않는다.
+    // 화면 문구는 칸 안내 줄에, 스크린리더에는 미리 둔 aria-live 영역으로 바로 알린다(PR #354 리뷰) — 다시 입력하면 지운다(잠금보다 먼저 단다)
+    const nicknameLive = element('p', 'login-live');
+    nicknameLive.setAttribute('aria-live', 'polite');
+    form.append(nicknameLive);
+    fields.nickname.input.addEventListener('input', () => { nicknameLive.textContent = ''; });
+    lockNicknameLength(fields.nickname.input, { onClamp: () => {
+      fields.nickname.note.textContent = NICKNAME_CLAMPED;
+      fields.nickname.note.classList.add('is-notice'); // 오류 줄 자리지만 안내 색으로(오류 표시는 fieldError가 지운다)
+      fields.nickname.note.hidden = false;
+      nicknameLive.textContent = NICKNAME_CLAMPED;
+    } });
     const submit = element('button', 'primary-button login-submit', '가입하기');
     submit.type = 'submit';
     form.append(error, submit);
@@ -144,6 +155,7 @@ export function renderSignupPage(container, { api, navigate }) {
     // message가 없으면 그 칸 안내를 지운다
     function fieldError(name, message) {
       const { input, note } = fields[name];
+      note.classList.remove('is-notice'); // 닉네임 잘림 안내(BE-134)였으면 오류 모양으로 되돌린다
       note.textContent = message ?? '';
       note.hidden = !message;
       if (message) input.setAttribute('aria-invalid', 'true');

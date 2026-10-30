@@ -10,7 +10,9 @@ import com.team2.project.common.security.token.MemberPrincipal;
 import com.team2.project.common.security.token.TokenException;
 import com.team2.project.support.ApiIntegrationTest;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
@@ -121,16 +123,30 @@ class MemberNicknameApiTest extends ApiIntegrationTest {
 	@DisplayName("형식이 틀리면 400 VALIDATION_ERROR(details nickname): 없음 · 문자열 아님 · 1자 · 13자 · 공백 · 기호 · 한글 9자 · 자동 이름 · 방청객으로 시작")
 	void invalidFormat_rejected() throws Exception {
 		long id = newMember("KAKAO", null);
-		for (String json : List.of("{}", "{\"nickname\":null}", "{\"nickname\":1}", "{\"nickname\":\"가\"}",
-			"{\"nickname\":\"abcdefghijklm\"}", "{\"nickname\":\"닉 네임\"}", "{\"nickname\":\"닉네임!\"}",
-			"{\"nickname\":\"가나다라마바사아자\"}", "{\"nickname\":\"방청객 " + id + "\"}",
-			"{\"nickname\":\"방청객123\"}", "{\"nickname\":\"방청객\"}")) {	// 자동 이름을 흉내 내는 "방청객" 시작 닉네임도 막는다
-			changeNickname(id, json).andExpect(status().isBadRequest())
+		// 본문 → details[0].reason (BE-134: DTO 검사와 같은 모양의 사유 이름. 예전에는 모두 VALIDATION_ERROR였다)
+		Map<String, String> invalid = new LinkedHashMap<>();
+		invalid.put("{}", "NotBlank");
+		invalid.put("{\"nickname\":null}", "NotBlank");
+		invalid.put("{\"nickname\":\"가\"}", "Size");
+		invalid.put("{\"nickname\":\"abcdefghijklm\"}", "Size");							// 영문 13자
+		invalid.put("{\"nickname\":\"닉 네임\"}", "Pattern");
+		invalid.put("{\"nickname\":\"닉네임!\"}", "Pattern");
+		invalid.put("{\"nickname\":\"가나다라마바사아자\"}", "SizeWithHangul");				// 한글 9자
+		invalid.put("{\"nickname\":\"가나다abcdef\"}", "SizeWithHangul");					// 한글이 섞인 9자
+		invalid.put("{\"nickname\":\"방청객 " + id + "\"}", "Pattern");					// 자동 이름(공백)
+		invalid.put("{\"nickname\":\"방청객123\"}", "Reserved");							// 자동 이름을 흉내 내는 "방청객" 시작
+		invalid.put("{\"nickname\":\"방청객\"}", "Reserved");
+		for (Map.Entry<String, String> entry : invalid.entrySet()) {
+			changeNickname(id, entry.getKey()).andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
-				.andExpect(jsonPath("$.details[0].field").value("nickname"));
+				.andExpect(jsonPath("$.details[0].field").value("nickname"))
+				.andExpect(jsonPath("$.details[0].reason").value(entry.getValue()));
 		}
+		changeNickname(id, "{\"nickname\":1}").andExpect(status().isBadRequest())	// 문자열이 아님
+			.andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 		assertThat(nicknameOf(id)).isNull();
 		changeNickname(id, "{\"nickname\":\"가나다라마바사아\"}").andExpect(status().isOk());	// 한글 8자 경계
+		changeNickname(id, "{\"nickname\":\"가나다abcde\"}").andExpect(status().isOk());		// 한글이 섞인 8자 경계
 	}
 
 	@Test
