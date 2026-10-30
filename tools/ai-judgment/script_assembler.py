@@ -23,8 +23,9 @@ BE-119가 만든 블록(`prompts/script/`)을 사건 분류에 맞게 골라 조
 공개 범위: 판결 정보와 `LAW`(양형기준 권고형) · `SUMMARY`는 어느 단위에도 넣지 않는다(판결 입력 전 앵커링).
 기사는 `OVERVIEW`, U1은 기사만, U0 · U2 · U4는 `OVERVIEW` · `DETAIL` · `ARGUMENT`까지 쓴다(`UNIT_STAGES`).
 
-검수 조건 전체(README "검수 조건" 표)는 BE-122다. 여기서는 형식(키 · 개수)과 BE-107 `validate_line`의 길이 ·
-금지어 검사만 하고, 틀리면 그 단위를 다시 요청한다.
+단위를 받을 때는 형식(키 · 개수)과 BE-107 `validate_line`의 길이 · 금지어만 보고, 틀리면 그 단위를 다시 요청한다.
+README "검수 조건" 표 전체는 생성이 끝난 뒤 `script_review.review_script`가 보고 결과 목록을 `review`로 남긴다(BE-122).
+오류가 하나라도 있으면 대본은 공개할 수 없다(`publishable: false`).
 """
 
 import json
@@ -35,6 +36,7 @@ from common import read_prompt
 from llm import LLMError, LLMQuotaExhaustedError
 from llm import call as default_call
 from script_generation import BANNED_PATTERNS, generate_evidence_lines, validate_line
+from script_review import SENTENCING_PATTERN, has_errors, review_failed, review_script
 
 MOODS = ("tragic", "impulsive", "cold", "betrayal", "calculated", "tense")
 ISSUES = ("admitted", "intent_disputed", "denied", "mental_state", "defense_claim")
@@ -376,13 +378,9 @@ def normalize_paper(value):
 
 
 # 검사 의견에 구형(형량)이 들어가면 사용자가 판결을 입력하기 직전에 앵커링이 된다(PR #329 YOLO-NIM 리뷰). 실제 재판의 검사 의견은
-# 구형을 포함하므로 모델이 그대로 따라 할 가능성이 높다. 전과 사실("징역 10개월을 선고받은 전력")은 막지 않도록 "처해 주십시오" 같은
-# 요구 문형이 뒤따르는 경우만 잡는다
+# 구형을 포함하므로 모델이 그대로 따라 할 가능성이 높다. 잡는 문형(SENTENCING_PATTERN)은 script_review가 갖는다
 NO_SENTENCING = ("- 구형 · 형량 · 벌금액(\"징역 몇 년\" · \"벌금 얼마\")을 말하지 않는다. 사용자가 판결을 입력하기 전이라 앵커링이 된다. "
                  "전과 · 선고 이력 같은 사실은 데이터대로 말해도 된다.")
-SENTENCING_PATTERN = r"구형|(?:징역|금고|벌금)[^.\n]{0,15}\d[^.\n]{0,15}(?:처해|처하|구합니다|구하|선고해|내려)"
-
-
 def sentencing_errors(label, text):
     return [f"{label}에 구형 · 형량이 들어갔습니다(판결 입력 전 앵커링)"] if re.search(SENTENCING_PATTERN, text or "") else []
 
@@ -449,7 +447,7 @@ def generate_units(case, judgment_output, cast, cls, *, model, paper=None, calle
     (U2 · U4는 U0 설계도, U4는 U2 입장이 필요하다). 호출 한도가 소진되면 그 자리에서 멈춘다.
 
     돌려주는 값: {"units": {단위: ask_unit 결과}, "paper": 기사 또는 None, "evidence": [...], "stopped": bool,
-    "pending": [건너뛴 단위]}"""
+    "pending": [건너뛴 단위], "review": 검수 조건 결과 목록(script_review 형식)}"""
     opts = dict(model=model, caller=caller, max_retries=max_retries, temperature=temperature,
                 max_tokens=max_tokens, timeout=timeout, delay=delay, log=log)
     source = json.dumps(public_case(case, UNIT_STAGES["U0"]), ensure_ascii=False)
@@ -492,7 +490,14 @@ def generate_units(case, judgment_output, cast, cls, *, model, paper=None, calle
         stopped = True
         pending += [u for u in ("PAPER", "U0", "U1", "U2", "U4")
                     if u not in units and u not in pending and not (u == "PAPER" and paper)]
-    return {"units": units, "paper": paper, "evidence": evidence, "stopped": stopped, "pending": pending}
+    generated = {"units": units, "paper": paper, "evidence": evidence, "stopped": stopped, "pending": pending}
+    try:
+        generated["review"] = review_script(case, judgment_output, generated, strip_prefix=strip_line_prefix)
+    except Exception as e:  # noqa: BLE001 — 검사 실패로 이미 만든 단위(대본 한 건에 약 3만 토큰)를 잃지 않는다(PR #352 리뷰)
+        if log:
+            log(f"⚠ 검수를 돌리지 못했습니다 — 생성 결과는 남기고 공개할 수 없게 둡니다: {e!r}")
+        generated["review"] = [review_failed(e)]
+    return generated
 
 
 # ---------------------------------------------------------------- 대본 조립
@@ -621,8 +626,10 @@ def build_script(case, cast, cls, generated, *, model):
         acts["3"] = _verdict_act(cast, closing)
     failed = sorted(u for u, r in units.items() if not r["value"])
     pending = sorted(set(generated["pending"]) | set(failed))
+    review = generated.get("review", [])
     publishable = (not generated["stopped"] and not pending
-                   and all(line.get("text") for line in generated["evidence"]) and bool(evidence))
+                   and all(line.get("text") for line in generated["evidence"]) and bool(evidence)
+                   and not has_errors(review))
     return {
         "caseId": case.get("caseId"), "title": case.get("title"), "model": model,
         "cast": dict(cast), "classification": cls, "sensitiveNotice": notice, "design": design,
@@ -632,4 +639,5 @@ def build_script(case, cast, cls, generated, *, model):
                       "text": labels.get(line["factorId"])} for line in evidence],
         "acts": acts, "pending": pending, "publishable": publishable,
         "warnings": {u: r["warnings"] for u, r in units.items() if r["warnings"]},
+        "review": review,
     }
