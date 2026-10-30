@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { ACT_GROUPS, DEFAULT_CAST, attachNotice, castOf, glideMs, flatten, flipFor, placeFor, seatFor, sideOf, skipTarget } from './stage.js';
+import { ACT_GROUPS, DEFAULT_CAST, attachNotice, castOf, courtPhotoCast, glideMs, flatten, flipFor, placeFor, seatFor, sideOf, skipTarget } from './stage.js';
 
 const script = JSON.parse(readFileSync(new URL('../content/case-1/script.json', import.meta.url)));
 const steps = flatten(script.acts, ['1a', '1b']);
@@ -220,4 +220,18 @@ test('지면 굴리기(FE-140): 거리에 비례해 시간이 늘고 상한 · �
   assert.equal(glideMs(100000), 1000, '아주 멀어도 상한');
   assert.equal(glideMs(-600), glideMs(600), '방향과 상관없다');
   assert.ok(glideMs(600, true) < glideMs(600), '키보드는 더 짧다');
+});
+
+test('6막 1면 사진(FE-141): 5막 마지막 법정처럼 대본 배역의 묶음 A가 판사로 왼쪽, B가 피고인 역으로 오른쪽', () => {
+  const swapped = courtPhotoCast({ prosecutor: 'nambul', defense: 'naero' });
+  assert.deepEqual(swapped.map(({ who, look, side }) => [who, look, side]), [['nambul', 'role:judge', 'left'], ['naero', 'role:actor', 'right']]);
+  assert.deepEqual(swapped.map(({ flip }) => flip), [true, true], '남불이 왼쪽 · 내로가 오른쪽이면 가운데를 보게 뒤집는다');
+  // 5막 마지막 장면의 자리와 같다
+  const court = flatten(script.acts, ['5']).at(-1);
+  const cast = { prosecutor: 'nambul', defense: 'naero' };
+  const fiveSide = { nambul: seatFor('nambul', 'role:judge', cast), naero: seatFor('naero', 'role:actor', cast) };
+  swapped.forEach(({ who, side }) => assert.equal(side, fiveSide[who], `${who}: 5막과 같은 쪽`));
+  assert.ok(court, '5막이 있다');
+  const base = courtPhotoCast(undefined);
+  assert.deepEqual(base.map(({ who, flip }) => [who, flip]), [['naero', false], ['nambul', false]], '기본 배역(사건 1)은 화면이 그대로');
 });

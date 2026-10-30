@@ -84,6 +84,17 @@ export function placeFor(who, look, spot, cast = DEFAULT_CAST) {
   const x = spot === 'stand' ? 30 : slot ?? (seat === 'left' ? 0 : 60);
   return { seat, flip: flipFor(who, x), side: x === 30 ? seat : x < 30 ? 'left' : 'right', center: x === 30 && (spot === 'stand' || slot === 30) };
 }
+/**
+ * 6막 1면 사진(5막 마지막 법정 그대로, FE-141): 묶음 A가 판사로 왼쪽, 묶음 B가 피고인 역으로 오른쪽에 서고 무대처럼 가운데를 본다.
+ * 대본 배역(script.cast)을 따르므로 남불이 판사인 사건에서도 5막 마지막 화면과 같다
+ */
+export function courtPhotoCast(cast) {
+  const { prosecutor, defense } = castOf(cast);
+  return [
+    { who: prosecutor, look: 'role:judge', side: 'left', flip: flipFor(prosecutor, 'left') },
+    { who: defense, look: 'role:actor', side: 'right', flip: flipFor(defense, 'right') },
+  ];
+}
 let chipsOff = false; // 개발 전용: 역할 이름표 끄기(이름표가 필요한지 판단용). 화면을 다시 그려도 유지한다
 const FACES = ['neutral', 'happy', 'surprised', 'thinking', 'sorry', 'cheer'];
 const iconOf = (who, look) => {
