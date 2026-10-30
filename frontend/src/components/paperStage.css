@@ -49,7 +49,7 @@
   .stage-wrap.paper-mode:not(:has(.stage.postcard-down)) .postcard-rest { display: none; }
   /* 내려놓은 뒤: 알약 버튼 대신 엽서를 던진 남불 옆의 작은 엽서(남불 그림 안에 있어 화면 너비와 상관없이 남불 곁이다). 누르면 엽서가 다시 펼쳐진다 */
   .stage-wrap.paper-mode .postcard-rest { display: none; }
-  .stage-wrap.paper-mode .spr .postcard-mini { position: absolute; bottom: calc(112px + var(--safe-bottom)); right: calc(100% + 8px); z-index: 3; display: block; width: 84px; height: 57px; padding: 0; border: 0; border-radius: 4px; font-size: 0; rotate: -4deg; cursor: pointer;
+  .stage-wrap.paper-mode .spr .postcard-mini { position: absolute; bottom: 38%; right: calc(100% + 8px); z-index: 40; display: block; width: 84px; height: 57px; padding: 0; border: 0; border-radius: 4px; font-size: 0; rotate: -4deg; cursor: pointer;
     background: repeating-linear-gradient(-45deg, var(--color-caution) 0 5px, var(--color-card) 5px 8px, var(--color-accent) 8px 13px, var(--color-card) 13px 16px); box-shadow: 0 8px 14px -8px color-mix(in srgb, var(--color-desk-shadow) 70%, transparent); }
   .stage-wrap.paper-mode .spr[data-seat="left"] .postcard-mini { right: auto; left: calc(100% + 8px); } /* 왼쪽에 선 남불은 오른쪽으로 던지니 엽서도 오른쪽 */
   .stage-wrap.paper-mode .postcard-mini::before { content: ''; position: absolute; inset: 4px; border-radius: 2px; background: var(--color-card); }
