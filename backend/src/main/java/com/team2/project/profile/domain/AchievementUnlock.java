@@ -14,7 +14,7 @@ import lombok.NoArgsConstructor;
  * 저장은 AchievementUnlockRepository.insertIfAbsent로 한다(동시에 두 번 판정돼도 한 줄)
  */
 @Entity
-@Table(name = "achievement_unlock")
+@Table(name = "member_achievement_unlock")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class AchievementUnlock {

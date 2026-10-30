@@ -8,7 +8,6 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -33,8 +32,8 @@ public class AchievementUnlockRecorder {
 	 * @return 이번에 새로 남긴 해금 (도전과제 id → 기록)
 	 */
 	@Transactional
-	public Map<String, UnlockMark> record(UUID anonymousUserId, ProfileStats stats, boolean seen) {
-		return insertNew(anonymousUserId, stats, seen);
+	public Map<String, UnlockMark> record(long memberId, ProfileStats stats, boolean seen) {
+		return insertNew(memberId, stats, seen);
 	}
 
 	/**
@@ -44,16 +43,16 @@ public class AchievementUnlockRecorder {
 	 * 닫은 뒤 이것을 부르고, 그다음 응답을 조립한다 (PR #335 리뷰, MyPageUnlockFailureTest가 연결 수를 확인)
 	 */
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
-	public Map<String, UnlockMark> recordSeparately(UUID anonymousUserId, ProfileStats stats) {
-		return insertNew(anonymousUserId, stats, false);
+	public Map<String, UnlockMark> recordSeparately(long memberId, ProfileStats stats) {
+		return insertNew(memberId, stats, false);
 	}
 
-	private Map<String, UnlockMark> insertNew(UUID anonymousUserId, ProfileStats stats, boolean seen) {
+	private Map<String, UnlockMark> insertNew(long memberId, ProfileStats stats, boolean seen) {
 		Instant now = clock.instant();
 		Map<String, UnlockMark> added = new LinkedHashMap<>();
 		for (String achievementId : AchievementJudge.unrecordedClears(stats)) {
 			// 0이면 같은 순간 다른 요청이 먼저 남겼다 — 그쪽 기록(처음 시각)이 맞으므로 여기서는 더하지 않는다
-			if (repository.insertIfAbsent(anonymousUserId, achievementId, now, seen ? now : null) == 1) {
+			if (repository.insertIfAbsent(memberId, achievementId, now, seen ? now : null) == 1) {
 				added.put(achievementId, new UnlockMark(now, seen));
 			}
 		}

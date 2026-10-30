@@ -1,5 +1,6 @@
 package com.team2.project.community.service;
 
+import com.team2.project.common.owner.Owner;
 import com.team2.project.community.dto.AuthorCard;
 import com.team2.project.community.dto.AuthorCard.CardLine;
 import com.team2.project.level.dto.LevelStatus;
@@ -28,7 +29,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 글쓴이 명함 조립 (BE-115). 이름은 회원, 나머지(레벨 · 직업 · 꾸미기 · 카드 아래 줄 · 성향 · 소개)는 쓴 요청의 익명 ID 기준이다.
+ * 글쓴이 명함 조립 (BE-115). 이름과 나머지(레벨 · 직업 · 꾸미기 · 카드 아래 줄 · 성향 · 소개)는 모두 회원 기준이다(BE-140, 예전에는 쓴 요청의 익명 ID).
  * 한 응답 안에서 같은 글쓴이는 한 번만 계산한다. 글쓴이마다 열 개 남짓 조회하므로 목록이 길어지거나 랭킹 후보가 많아지면
  * 미리 계산해 두는 쪽으로 바꾼다(docs/decisions/BE-115.md)
  */
@@ -43,7 +44,7 @@ public class AuthorCardAssembler {
 	private final ProfileDecoRepository profileDecoRepository;
 	private final ShownTypeResolver shownTypeResolver;
 
-	/** 글 · 댓글을 쓴 사람: 회원 + 명함 기준 익명 ID */
+	/** 글 · 댓글을 쓴 사람: 회원 + 글에 남긴 익명 ID(명함은 회원 기준이라 쓰지 않는다, 되돌림 때 이전 코드가 읽는다) */
 	public record Writer(long memberId, UUID anonymousUserId) {
 	}
 
@@ -62,13 +63,13 @@ public class AuthorCardAssembler {
 	}
 
 	private AuthorCard card(Writer writer, String name) {
-		UUID id = writer.anonymousUserId();
+		long id = writer.memberId();
 		ProfileSettingsValues settings = profileSettingsService.view(id);
 		ProfileStats stats = statsReader.read(id);
 		LevelStatus level = levelService.view(id, stats);
 		ProfileDecoValues deco = profileDecoRepository.findById(id).map(ProfileDeco::values).orElse(ProfileDecoCatalog.DEFAULTS);
 		return new AuthorCard(name, settings.bio(), level.level(), level.job(),
 			new CardLine(settings.cardLine(), settings.cardLevel()), stats.completed(), deco,
-			shownTypeResolver.resolve(id, settings.shownCard()));
+			shownTypeResolver.resolve(new Owner.MemberOwner(id), settings.shownCard()));
 	}
 }

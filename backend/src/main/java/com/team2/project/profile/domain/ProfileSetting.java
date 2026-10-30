@@ -4,20 +4,19 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
-import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/** 프로필 선택 설정 (BE-104, V29 · cardLine · cardLevel은 BE-114, V36). 익명 사용자당 한 줄. 보낸 칸만 바꾼다(PATCH) — 검증은 ProfileSettingsPatch가 먼저 한다 */
+/** 프로필 선택 설정 (BE-104, V29 · cardLine · cardLevel은 BE-114, V36). 회원당 한 줄(BE-140에서 member_profile_setting, V41). 보낸 칸만 바꾼다(PATCH) — 검증은 ProfileSettingsPatch가 먼저 한다 */
 @Entity
-@Table(name = "profile_setting")
+@Table(name = "member_profile_setting")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ProfileSetting {
 
 	@Id
-	private UUID anonymousUserId;
+	private Long memberId;
 
 	private String shownCard;
 	private String profileCardType;
@@ -28,9 +27,9 @@ public class ProfileSetting {
 	private Instant updatedAt;
 
 	/** 처음 저장: 기본값에서 시작해 보낸 칸만 바꾼다 */
-	public static ProfileSetting of(UUID anonymousUserId, ProfileSettingsPatch patch, Instant now) {
+	public static ProfileSetting of(long memberId, ProfileSettingsPatch patch, Instant now) {
 		ProfileSetting setting = new ProfileSetting();
-		setting.anonymousUserId = anonymousUserId;
+		setting.memberId = memberId;
 		setting.shownCard = ProfileSettingsValues.DEFAULTS.shownCard();
 		setting.profileCardType = ProfileSettingsValues.DEFAULTS.profileCardType();
 		setting.bio = ProfileSettingsValues.DEFAULTS.bio();

@@ -24,6 +24,6 @@ public class AchievementController {
 	@PostMapping("/achievements/seen")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
 	public void markSeen(@Valid @RequestBody AchievementSeenRequest body, Requester requester) {
-		achievementSeenService.markSeen(requester.anonymousId(), body.achievementIds());
+		achievementSeenService.markSeen(requester.requireMember(), body.achievementIds());
 	}
 }

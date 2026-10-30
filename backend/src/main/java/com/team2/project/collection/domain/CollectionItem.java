@@ -14,7 +14,7 @@ import lombok.NoArgsConstructor;
  * 엔티티는 스키마 검증(ddl-auto: validate)과 조회용이다 (출석 Attendance와 같은 방식)
  */
 @Entity
-@Table(name = "collection_item")
+@Table(name = "member_collection_item")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class CollectionItem {

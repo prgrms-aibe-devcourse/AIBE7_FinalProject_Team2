@@ -13,7 +13,7 @@ import lombok.NoArgsConstructor;
  * 엔티티는 스키마 검증(ddl-auto: validate)용이다
  */
 @Entity
-@Table(name = "xp_event")
+@Table(name = "member_xp_event")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class XpEvent {

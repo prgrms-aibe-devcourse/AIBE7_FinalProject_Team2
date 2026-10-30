@@ -2,7 +2,6 @@ package com.team2.project.level.repository;
 
 import com.team2.project.level.domain.XpEvent;
 import java.time.LocalDate;
-import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -17,24 +16,24 @@ public interface XpEventRepository extends JpaRepository<XpEvent, Long> {
 	 */
 	@Modifying
 	@Query(value = """
-		insert into xp_event (anonymous_user_id, source, ref_key, group_key, amount, awarded_on)
+		insert into member_xp_event (member_id, source, ref_key, group_key, amount, awarded_on)
 		values (:userId, :source, :refKey, :groupKey, :amount, :awardedOn)
-		on conflict (anonymous_user_id, source, ref_key) do nothing
+		on conflict (member_id, source, ref_key) do nothing
 		""", nativeQuery = true)
-	int insertIfAbsent(@Param("userId") UUID userId, @Param("source") String source, @Param("refKey") String refKey,
+	int insertIfAbsent(@Param("userId") long userId, @Param("source") String source, @Param("refKey") String refKey,
 		@Param("groupKey") String groupKey, @Param("amount") int amount, @Param("awardedOn") LocalDate awardedOn);
 
 	/** 원장 합계. 기록이 없으면 0 */
-	@Query(value = "select coalesce(sum(amount), 0) from xp_event where anonymous_user_id = :userId", nativeQuery = true)
-	int sumAmount(@Param("userId") UUID userId);
+	@Query(value = "select coalesce(sum(amount), 0) from member_xp_event where member_id = :userId", nativeQuery = true)
+	int sumAmount(@Param("userId") long userId);
 
 	/** 그날 받은 횟수 (일일 상한) */
-	@Query(value = "select count(*) from xp_event where anonymous_user_id = :userId and source = :source and awarded_on = :day",
+	@Query(value = "select count(*) from member_xp_event where member_id = :userId and source = :source and awarded_on = :day",
 		nativeQuery = true)
-	int countOnDay(@Param("userId") UUID userId, @Param("source") String source, @Param("day") LocalDate day);
+	int countOnDay(@Param("userId") long userId, @Param("source") String source, @Param("day") LocalDate day);
 
 	/** 같은 묶음에서 받은 횟수 (묶음 상한) */
-	@Query(value = "select count(*) from xp_event where anonymous_user_id = :userId and source = :source and group_key = :groupKey",
+	@Query(value = "select count(*) from member_xp_event where member_id = :userId and source = :source and group_key = :groupKey",
 		nativeQuery = true)
-	int countInGroup(@Param("userId") UUID userId, @Param("source") String source, @Param("groupKey") String groupKey);
+	int countInGroup(@Param("userId") long userId, @Param("source") String source, @Param("groupKey") String groupKey);
 }

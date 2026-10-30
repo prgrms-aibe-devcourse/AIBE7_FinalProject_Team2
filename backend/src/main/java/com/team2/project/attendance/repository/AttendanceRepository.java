@@ -3,7 +3,6 @@ package com.team2.project.attendance.repository;
 import com.team2.project.attendance.domain.Attendance;
 import com.team2.project.attendance.domain.AttendanceId;
 import java.time.LocalDate;
-import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -18,12 +17,12 @@ public interface AttendanceRepository extends JpaRepository<Attendance, Attendan
 	 */
 	@Modifying
 	@Query(value = """
-		insert into attendance (anonymous_user_id, attended_on)
-		values (:anonymousUserId, :attendedOn)
-		on conflict (anonymous_user_id, attended_on) do nothing
+		insert into member_attendance (member_id, attended_on)
+		values (:memberId, :attendedOn)
+		on conflict (member_id, attended_on) do nothing
 		""", nativeQuery = true)
-	int insertIfAbsent(@Param("anonymousUserId") UUID anonymousUserId, @Param("attendedOn") LocalDate attendedOn);
+	int insertIfAbsent(@Param("memberId") long memberId, @Param("attendedOn") LocalDate attendedOn);
 
 	/** 누적 출석 일수 */
-	long countByIdAnonymousUserId(UUID anonymousUserId);
+	long countByIdMemberId(long memberId);
 }
