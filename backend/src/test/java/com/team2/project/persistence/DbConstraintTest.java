@@ -295,7 +295,202 @@ class DbConstraintTest {
 			Arguments.of("없는 상태", "chk_experience_status", "1, 0, 'FINISHED'"));
 	}
 
+	// ---------- profile_setting ----------
+
+	@Test
+	@DisplayName("프로필카드 아래 줄은 type · signature · job만 허용하고 기본은 type · 레벨 없음이다 (BE-114)")
+	void checkProfileSettingCardLine_unknownValue_isRejected() {
+		jdbc.update("INSERT INTO profile_setting (anonymous_user_id) VALUES (?)", anonymousId);
+		assertThat(jdbc.queryForObject("SELECT card_line FROM profile_setting WHERE anonymous_user_id = ?", String.class, anonymousId))
+			.isEqualTo("type");
+		assertThat(jdbc.queryForObject("SELECT card_level FROM profile_setting WHERE anonymous_user_id = ?", Boolean.class, anonymousId))
+			.isFalse();
+		for (String line : List.of("signature", "job", "type")) {
+			jdbc.update("UPDATE profile_setting SET card_line = ? WHERE anonymous_user_id = ?", line, anonymousId);
+		}
+
+		assertThatThrownBy(() -> jdbc.update("UPDATE profile_setting SET card_line = 'level' WHERE anonymous_user_id = ?", anonymousId))
+			.isInstanceOf(DataIntegrityViolationException.class)
+			.hasMessageContaining("chk_profile_setting_card_line");
+	}
+
+	// ---------- member ----------
+
+	@Test
+	@DisplayName("닉네임은 대소문자를 구분하지 않고 겹칠 수 없고, 닉네임이 없는(NULL) 회원은 몇 명이든 된다 (BE-139)")
+	void uniqueMemberNickname_duplicate_isRejected() {
+		String nickname = "uq" + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+		insertMember(nickname);
+		insertMember(null);
+		insertMember(null);
+
+		assertThatThrownBy(() -> insertMember(nickname.toUpperCase()))	// 시험이 끝나면 트랜잭션째 되돌린다
+			.isInstanceOf(DataIntegrityViolationException.class)
+			.hasMessageContaining("uq_member_nickname");
+	}
+
+	// ---------- BE-140: 회원 기준 소유 (V40 ~ V43) ----------
+
+	@Test
+	@DisplayName("체험의 주인은 익명 ID · 회원 ID 중 정확히 하나다 — 둘 다 없거나 둘 다 있으면 거절한다 (BE-140 V40)")
+	void checkExperienceOwner_exactlyOne() {
+		Long memberId = insertMember(null);
+		jdbc.update("INSERT INTO experience (member_id, case_id) VALUES (?, ?)", memberId, otherCaseId);	// 회원만: 된다
+
+		assertThatThrownBy(() -> jdbc.update("INSERT INTO experience (case_id) VALUES (?)", otherCaseId))
+			.isInstanceOf(DataIntegrityViolationException.class)
+			.hasMessageContaining("chk_experience_owner");
+	}
+
+	@Test
+	@DisplayName("체험의 주인이 둘 다 있으면 거절한다 (BE-140 V40)")
+	void checkExperienceOwner_bothRejected() {
+		Long memberId = insertMember(null);
+
+		assertThatThrownBy(() -> jdbc.update(
+			"INSERT INTO experience (anonymous_user_id, member_id, case_id) VALUES (?, ?, ?)", anonymousId, memberId, otherCaseId))
+			.isInstanceOf(DataIntegrityViolationException.class)
+			.hasMessageContaining("chk_experience_owner");
+	}
+
+	@Test
+	@DisplayName("같은 회원이 같은 사건을 같은 회차로 두 번 시작할 수 없다. 익명 체험과는 겹쳐도 된다 (BE-140 V40 부분 유니크)")
+	void uniqueExperience_sameMemberCaseAttempt_isRejected() {
+		Long memberId = insertMember(null);
+		jdbc.update("INSERT INTO experience (member_id, case_id) VALUES (?, ?)", memberId, caseId);	// 같은 사건의 익명 체험(setUp)과 공존
+		jdbc.update("INSERT INTO experience (member_id, case_id, attempt_no) VALUES (?, ?, 2)", memberId, caseId);
+		jdbc.update("INSERT INTO experience (member_id, case_id) VALUES (?, ?)", insertMember(null), caseId);	// 다른 회원
+
+		assertThatThrownBy(() -> jdbc.update("INSERT INTO experience (member_id, case_id) VALUES (?, ?)", memberId, caseId))
+			.isInstanceOf(DataIntegrityViolationException.class)
+			.hasMessageContaining("uk_experience_member_case_attempt");
+	}
+
+	@Test
+	@DisplayName("성향 테스트 결과도 주인이 정확히 하나다 (BE-140 V40)")
+	void checkPersonalityResultOwner_exactlyOne() {
+		jdbc.update(personalityResultInsert("member_id"), insertMember(null));	// 회원만: 된다
+
+		assertThatThrownBy(() -> jdbc.update(personalityResultInsert("member_id, anonymous_user_id"), insertMember(null), anonymousId))
+			.isInstanceOf(DataIntegrityViolationException.class)
+			.hasMessageContaining("chk_personality_result_owner");
+	}
+
+	@Test
+	@DisplayName("회원마다 현재 성향 결과는 하나다 (BE-140 V40 부분 유니크)")
+	void uniquePersonalityResult_currentPerMember() {
+		Long memberId = insertMember(null);
+		jdbc.update(personalityResultInsert("member_id"), memberId);
+		jdbc.update(personalityResultInsert("member_id"), insertMember(null));	// 다른 회원
+
+		assertThatThrownBy(() -> jdbc.update(personalityResultInsert("member_id"), memberId))
+			.isInstanceOf(DataIntegrityViolationException.class)
+			.hasMessageContaining("ux_personality_result_current_member");
+	}
+
+	@Test
+	@DisplayName("회원 프로필 설정은 익명 쪽과 같은 기본값 · 제약을 갖는다 (BE-140 V41)")
+	void memberProfileSetting_defaultsAndChecks() {
+		Long memberId = insertMember(null);
+		jdbc.update("INSERT INTO member_profile_setting (member_id) VALUES (?)", memberId);
+		assertThat(jdbc.queryForMap("SELECT shown_card, profile_card_type, bio, card_line, card_level FROM member_profile_setting WHERE member_id = ?", memberId))
+			.containsEntry("shown_card", "current").containsEntry("profile_card_type", "current").containsEntry("bio", "")
+			.containsEntry("card_line", "type").containsEntry("card_level", false);
+
+		assertThatThrownBy(() -> jdbc.update("UPDATE member_profile_setting SET card_line = 'level' WHERE member_id = ?", memberId))
+			.isInstanceOf(DataIntegrityViolationException.class)
+			.hasMessageContaining("chk_member_profile_setting_card_line");
+	}
+
+	@Test
+	@DisplayName("회원 경험치는 같은 출처 · 대상으로 두 번 받을 수 없다 (BE-140 V41)")
+	void uniqueMemberXpEvent_sameRef_isRejected() {
+		Long memberId = insertMember(null);
+		String insert = "INSERT INTO member_xp_event (member_id, source, ref_key, amount, awarded_on) VALUES (?, 'POST', ?, 10, current_date)";
+		jdbc.update(insert, memberId, "post:1");
+		jdbc.update(insert, memberId, "post:2");
+		jdbc.update(insert, insertMember(null), "post:1");	// 다른 회원
+
+		assertThatThrownBy(() -> jdbc.update(insert, memberId, "post:1"))
+			.isInstanceOf(DataIntegrityViolationException.class)
+			.hasMessageContaining("uq_member_xp_event_ref");
+	}
+
+	@Test
+	@DisplayName("회원을 지우면 회원 키 테이블의 기록도 함께 지워진다 (BE-140 V41 ON DELETE CASCADE)")
+	void memberTables_cascadeOnMemberDelete() {
+		Long memberId = insertMember(null);
+		jdbc.update("INSERT INTO member_attendance (member_id, attended_on) VALUES (?, current_date)", memberId);
+		jdbc.update("INSERT INTO member_profile_job (member_id, job) VALUES (?, 'NONE')", memberId);
+		jdbc.update("INSERT INTO member_collection_item (member_id, kind, item_id, case_id) VALUES (?, 'illustration', 'case-1-origin', ?)", memberId, caseId);
+		jdbc.update("INSERT INTO member_achievement_unlock (member_id, achievement_id) VALUES (?, 'first-case')", memberId);
+
+		jdbc.update("DELETE FROM member WHERE id = ?", memberId);
+
+		for (String table : List.of("member_attendance", "member_profile_job", "member_collection_item", "member_achievement_unlock")) {
+			assertThat(jdbc.queryForObject("SELECT count(*) FROM " + table + " WHERE member_id = ?", Integer.class, memberId)).as(table).isZero();
+		}
+	}
+
+	@ParameterizedTest(name = "{0}")
+	@MethodSource("anonymousImportViolations")
+	@DisplayName("첫 로그인 가져오기 결정은 IMPORTED · DISCARDED뿐이고, 버렸으면 옮긴 수가 0이다 (BE-140 V42)")
+	void checkMemberAnonymousImport(String description, String decision, int count) {
+		Long memberId = insertMember(null);
+		jdbc.update("INSERT INTO member_anonymous_import (member_id, anonymous_user_id, decision, experience_count) VALUES (?, ?, 'IMPORTED', 3)",
+			insertMember(null), anonymousId);	// 옮긴 결정: 된다
+
+		assertThatThrownBy(() -> jdbc.update(
+			"INSERT INTO member_anonymous_import (member_id, anonymous_user_id, decision, experience_count) VALUES (?, ?, ?, ?)",
+			memberId, anonymousId, decision, count))
+			.isInstanceOf(DataIntegrityViolationException.class)
+			.hasMessageContaining(description);
+	}
+
+	static Stream<Arguments> anonymousImportViolations() {
+		return Stream.of(
+			Arguments.of("chk_member_anonymous_import_decision", "LATER", 0),
+			Arguments.of("chk_member_anonymous_import_count", "DISCARDED", 2),
+			Arguments.of("chk_member_anonymous_import_count", "IMPORTED", -1));
+	}
+
+	@Test
+	@DisplayName("커뮤니티 글 · 댓글의 작성자는 회원 또는 익명 ID 중 적어도 하나다 (BE-140 V43)")
+	void checkCommunityAuthor_atLeastOne() {
+		Long memberId = insertMember(null);
+		Long postId = jdbc.queryForObject("INSERT INTO community_post (member_id, category, title, body) VALUES (?, 'FREE', '제목', '본문') RETURNING id",
+			Long.class, memberId);	// 회원만: 된다
+		jdbc.update("INSERT INTO community_post (anonymous_user_id, category, title, body) VALUES (?, 'FREE', '제목', '본문')", anonymousId);	// 익명만: 된다
+		jdbc.update("INSERT INTO community_comment (post_id, member_id, body) VALUES (?, ?, '댓글')", postId, memberId);
+
+		assertThatThrownBy(() -> jdbc.update("INSERT INTO community_comment (post_id, body) VALUES (?, '댓글')", postId))
+			.isInstanceOf(DataIntegrityViolationException.class)
+			.hasMessageContaining("chk_community_comment_author");
+	}
+
+	@Test
+	@DisplayName("작성자가 없는 커뮤니티 글은 거절한다 (BE-140 V43)")
+	void checkCommunityPostAuthor_noneRejected() {
+		assertThatThrownBy(() -> jdbc.update("INSERT INTO community_post (category, title, body) VALUES ('FREE', '제목', '본문')"))
+			.isInstanceOf(DataIntegrityViolationException.class)
+			.hasMessageContaining("chk_community_post_author");
+	}
+
+	/** 성향 테스트 결과 한 행. owners는 주인 칸 이름(쉼표로 여럿), 값은 칸마다 ? 하나씩 넘긴다 */
+	private static String personalityResultInsert(String owners) {
+		String values = Arrays.stream(owners.split(",")).map(owner -> "?").collect(Collectors.joining(", "));
+		return "INSERT INTO personality_result (" + owners + ", type_code, axis_scores, answers) VALUES (" + values + ", "
+			+ "(SELECT code FROM personality_type ORDER BY code LIMIT 1), "
+			+ "'{\"APOLOGY_SINCERITY\":0.5,\"FAULT_STANDARD\":0.5,\"PRINCIPLE_RELATION\":0.5,\"ORDER_OPPORTUNITY\":0.5}'::jsonb, '[]'::jsonb)";
+	}
+
 	// ---------- 도우미 ----------
+
+	private Long insertMember(String nickname) {
+		return jdbc.queryForObject(
+			"INSERT INTO member (provider, provider_user_id, nickname) VALUES ('LOCAL', ?, ?) RETURNING id",
+			Long.class, UUID.randomUUID().toString(), nickname);
+	}
 
 	private Long insertCase(String title) {
 		return jdbc.queryForObject("""

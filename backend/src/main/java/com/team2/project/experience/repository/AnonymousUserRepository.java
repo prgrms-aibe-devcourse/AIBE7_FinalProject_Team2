@@ -25,6 +25,9 @@ public interface AnonymousUserRepository extends JpaRepository<AnonymousUser, UU
 	@Query("update AnonymousUser a set a.lastSeenAt = :now where a.id = :id and a.lastSeenAt < :threshold")
 	int touchIfStale(@Param("id") UUID id, @Param("now") Instant now, @Param("threshold") Instant threshold);
 
+	/** 회원에 연결된 익명 ID 중 가장 최근에 접속한 것 (커뮤니티 명함 기준, BE-115). 없으면 empty */
+	Optional<AnonymousUser> findFirstByMemberIdOrderByLastSeenAtDesc(Long memberId);
+
 	/**
 	 * 같은 사용자의 요청을 차례로 처리하기 위한 행 잠금 (SELECT ... FOR UPDATE). 트랜잭션이 끝날 때 풀린다.
 	 * 성향 재응시(P-2)가 동시에 오면 둘 다 "현재 결과 내리기 → 저장"을 해서 부분 유니크 위반이 나므로 막는다 (#124 리뷰)
@@ -41,4 +44,7 @@ public interface AnonymousUserRepository extends JpaRepository<AnonymousUser, UU
 	@Modifying
 	@Query("update AnonymousUser a set a.memberId = :memberId where a.id = :id and a.memberId is null")
 	int linkIfUnlinked(@Param("id") UUID id, @Param("memberId") long memberId);
+
+	/** 이 익명 ID가 어느 회원에 연결되어 있는가 (로그아웃 때 쿠키를 지울지, BE-137) */
+	boolean existsByIdAndMemberIdIsNotNull(UUID id);
 }

@@ -41,7 +41,7 @@ from court_seed_sql import CourtSeedError, build_court_sql
 from check_contamination import DEFAULT_CRITERIA, aggregate, build_contamination_prompt, classify, criteria_with
 from axis_vote import AxisVoteError, aggregate_votes, apply_votes, build_axis_prompt, parse_axis_answer
 from case_classify import ClassifyError, aggregate_classification, build_classify_prompt, parse_classify_answer, rule_flags
-from common import AXIS_PROMPT_VERSION, CLASSIFY_PROMPT_VERSION, TOOL_DIR, load_json, write_json
+from common import AXIS_PROMPT_VERSION, CLASSIFY_PROMPT_VERSION, CRIME_TYPES, TOOL_DIR, load_json, write_json
 from compare import _majority, direction_table, load_runs
 from generate import RUNS_DIR, GenerateError, generate_runs, model_slug, prompt_digest
 from llm import (DEFAULT_MAX_ATTEMPTS, DEFAULT_MAX_WAIT, LLMError, LLMQuotaExhaustedError, api_key, call,
@@ -49,6 +49,7 @@ from llm import (DEFAULT_MAX_ATTEMPTS, DEFAULT_MAX_WAIT, LLMError, LLMQuotaExhau
                  parse_model_spec)
 from to_seed_sql import NAME_MAX_LENGTH, build_sql
 from script_assembler import build_script, check_paper, classification_errors, generate_units, normalize_paper
+from script_repair import repair_units
 from script_generation import balance_warning, generate_evidence_lines
 from script_generation import cast_errors as script_cast_errors
 from select_semantic import DEFAULT_WEIGHT as DEFAULT_SEMANTIC_WEIGHT
@@ -77,6 +78,9 @@ DEFAULT_CONFIG = {
     "incidentDate": None,
     # 공소제기일 YYYY-MM-DD (BE-54). 양형기준 버전 기준일은 이 값 → 없으면 발생일 (docs/sentencing-guideline-rag.md 6장)
     "indictmentDate": None,
+    # 관리자가 등록 요청에서 고른 범죄 유형 (BE-138). 주면 extract가 판결문에서 읽은 유형(case.json crimeType)과 비교해 다르면
+    # 멈춘다 — 양형기준 · 배역 배정 · 사전판단이 서로 다른 유형을 쓰지 않게 비싼 단계(판결 · 대본) 전에 잡는다
+    "crimeType": None,
     # LLM 호출 재시도 (BE-36). 과부하(503 · 529) · 한도(429) · 서버 오류 때 요청 한 건을 보내는 최대 횟수(첫 시도 포함)와
     # 한 번에 기다릴 최대 시간(초). 무료 등급이면 각 단계의 delay(호출 사이 대기)도 함께 둔다 (README "무료 등급 한도 대응")
     "retry": {"maxAttempts": DEFAULT_MAX_ATTEMPTS, "maxWait": DEFAULT_MAX_WAIT},
@@ -136,9 +140,10 @@ DEFAULT_CONFIG = {
         # full: 증거조사뿐 아니라 대본 전체(U0 설계도 · U1 · U2 · U4)를 만들고 script.json으로 조립한다 (BE-121). classification
         # (분위기 · 쟁점 · 피해자 측 · 부가 인물 · 민감 플래그)이 필요하다 — 자동 분류(BE-123) 전까지는 설정으로 넣는다.
         # unitMaxTokens · unitTimeout은 여러 줄을 한 번에 받는 U0 · U1 · U2 · U4용(maxTokens · timeout은 증거조사 한 줄용)
+        # repairRetries: 대본 전체(full)의 검수 오류(BE-122)가 난 줄 하나를 고쳐 쓰는 최대 횟수. 0이면 고치지 않는다
         "script": {"enabled": False, "model": None, "cast": None, "maxRetries": 2, "temperature": None,
                    "maxTokens": 2000, "timeout": 60, "delay": 0.0,
-                   "full": False, "classification": None, "unitMaxTokens": 6000, "unitTimeout": 150},
+                   "full": False, "classification": None, "unitMaxTokens": 6000, "unitTimeout": 150, "repairRetries": 2},
         "load": {
             # court: 재판부 판결 초안이 있으면 비공개로 함께 적재한다 (BE-38)
             "enabled": True, "case": True, "court": True, "applyToDb": True,
@@ -432,6 +437,8 @@ def validate_config(config):
             datetime.date.fromisoformat(config["indictmentDate"])
         except (TypeError, ValueError):
             errors.append("indictmentDate는 YYYY-MM-DD다")
+    if config.get("crimeType") is not None and config["crimeType"] not in CRIME_TYPES:
+        errors.append(f"crimeType은 {' · '.join(CRIME_TYPES)} 중 하나다")
     if stages["extract"]["enabled"] and not config["sources"]:
         errors.append("extract를 쓰려면 sources에 판결문 경로를 넣는다")
     extract_model = stages["extract"]["model"]
@@ -553,7 +560,8 @@ def script_errors(config):
     elif cfg["full"] and not (cfg.get("classification") is None and config["stages"]["classify"]["enabled"]):
         # 분류를 설정에 넣지 않았으면 classify 단계 결과를 쓴다(BE-123). 둘 다 없으면 블록을 고를 수 없다
         errors += classification_errors(cfg.get("classification"))
-    for key, minimum in (("maxRetries", 0), ("maxTokens", 1), ("timeout", 1), ("unitMaxTokens", 1), ("unitTimeout", 1)):
+    for key, minimum in (("maxRetries", 0), ("maxTokens", 1), ("timeout", 1), ("unitMaxTokens", 1), ("unitTimeout", 1),
+                         ("repairRetries", 0)):
         value = cfg.get(key)
         if not isinstance(value, int) or isinstance(value, bool) or value < minimum:
             errors.append(f"stages.script.{key}는 {minimum} 이상 정수다")
@@ -734,7 +742,24 @@ def stage_extract(config, state, log):
     if eligibility.get("eligible") is False and cfg["requireEligible"]:
         raise PipelineError("서비스 대상이 아닌 판결로 판정됐습니다 (stages.extract.requireEligible=false로 무시 가능): "
                             + " / ".join(eligibility.get("reasons", [])), outputs)
+    outputs["crimeType"] = load_json(case_path).get("crimeType")
+    require_crime_type(config, case_path, outputs)
     return outputs
+
+
+def require_crime_type(config, case_path, outputs=None):
+    """등록 요청의 범죄 유형(설정 crimeType)과 case.json의 유형이 다르면 멈춘다 (BE-138). 요청에 유형이 없으면(로컬 실행) 비교하지 않는다.
+
+    요청 값으로 덮어쓰지 않는다 — 관리자가 유형을 잘못 골랐으면 양형기준 · 판례 · 사전판단이 모두 틀린 채로 적재된다.
+    어느 쪽이 맞는지는 사람이 정하고, 맞는 유형으로 다시 등록한다."""
+    requested = config.get("crimeType")
+    extracted = load_json(case_path).get("crimeType")
+    if requested and not extracted:
+        raise PipelineError(f"판결문에서 범죄 유형을 읽지 못했습니다(등록 요청은 {requested}). "
+                            "판결문을 확인해 다시 등록해 주세요", outputs or {})
+    if requested and extracted != requested:
+        raise PipelineError(f"범죄 유형이 다릅니다: 등록 요청은 {requested}, 판결문에서 읽은 유형은 {extracted}입니다. "
+                            "판결문을 확인해 맞는 유형으로 다시 등록해 주세요", outputs or {})
 
 
 def attach_summary_tags(report_path, report, options, log, embed_fn=None):
@@ -1327,6 +1352,15 @@ def stage_script(config, state, log, caller=call):
             max_retries=cfg["maxRetries"], temperature=cfg["temperature"], max_tokens=cfg["unitMaxTokens"],
             evidence_max_tokens=cfg["maxTokens"], timeout=cfg["unitTimeout"], evidence_timeout=cfg["timeout"],
             delay=cfg["delay"], log=log)
+        if cfg["repairRetries"] and any(i["severity"] == "error" for i in generated.get("review", [])):
+            # 검수 오류가 난 줄만 고쳐 쓰고, 남으면 그 단위(U1 · U4)만 다시 만든다(BE-122 2차, script_repair.py)
+            generated = repair_units(
+                case, judgment_output, cast, classification, generated, model=cfg["model"], caller=caller,
+                retries=cfg["repairRetries"], max_retries=cfg["maxRetries"], temperature=cfg["temperature"],
+                max_tokens=cfg["unitMaxTokens"], evidence_max_tokens=cfg["maxTokens"], timeout=cfg["unitTimeout"],
+                evidence_timeout=cfg["timeout"], delay=cfg["delay"], log=log)
+            fixed = [r for r in generated["repairs"] if r["ok"]]
+            log(f"검수 오류 고쳐 쓰기: {len(generated['repairs'])}건 중 {len(fixed)}건 해결")
         lines, stopped = generated["evidence"], generated["stopped"]
     else:
         log(f"대본 증거조사 생성: {cfg['model']} (배역 — 검사: {cast['prosecutor']} · 변호인: {cast['defense']})")
@@ -1367,8 +1401,15 @@ def stage_script(config, state, log, caller=call):
                 log(f"⚠ [{unit}] {warning}")
         if script["pending"]:
             log(f"⚠ 만들지 못한 단위: {', '.join(script['pending'])} — 대본 전체는 공개할 수 없습니다")
+        # 검수 조건(BE-122): 오류가 있으면 공개할 수 없고, 경고는 관리자가 본다. 목록 전체는 script.json의 review에 있다
+        review_errors = [i for i in script["review"] if i["severity"] == "error"]
+        for issue in script["review"]:
+            log(f"{'✗' if issue['severity'] == 'error' else '⚠'} [{issue['unit']}{issue['path']}] {issue['code']}: {issue['message']}")
+        if review_errors:
+            log(f"⚠ 검수 오류 {len(review_errors)}건 — 고치기 전에는 대본 전체를 공개할 수 없습니다")
         outputs.update({"scriptFile": str(script_file), "pending": script["pending"],
-                        "scriptPublishable": script["publishable"]})
+                        "scriptPublishable": script["publishable"], "reviewErrors": len(review_errors),
+                        "reviewWarnings": len(script["review"]) - len(review_errors)})
     return outputs
 
 
@@ -1598,6 +1639,10 @@ def run_pipeline(config, start=None, until=None, skip=(), rerun=False, log=print
     if not steps:
         log("돌릴 단계가 없습니다 (모두 끝났거나 꺼짐). 다시 돌리려면 --from <단계>")
         return state
+    if "extract" not in steps and config.get("crimeType"):
+        # 이어서 돌리거나(끝난 extract 건너뜀) --from으로 뒤 단계부터 시작해도 같은 비교를 한다. 서비스는 작업마다 처음부터
+        # 돌아 extract에서 비교하므로 로컬 실행 경로다 (PR #356 리뷰)
+        require_crime_type(config, input_file(config, state, "case"))
     if "contamination" not in steps:  # 점검 단계는 시작할 때 스스로 무료 모델 목록을 처음부터 펼친다
         resolve_free_models(config, state, log, fresh=rerun or start == "contamination")
     providers = sorted({free_token_provider(m) if is_free_token(m) else parse_model_spec(m)[0]
@@ -1623,8 +1668,9 @@ def run_pipeline(config, start=None, until=None, skip=(), rerun=False, log=print
         log(f"외부 전송: 사건 분류 단계에서 비식별화한 사건 개요 · 사건 기록 · 판단 요소가 "
             f"{providers_text(classify_spec) if classify_spec else ', '.join(providers)}로 전송됩니다")
     if "script" in steps:
-        case_title = load_json(input_file(config, state, "case"))["title"]
-        log(f"외부 전송: 대본 증거조사 단계에서 비식별화한 사건 제목({case_title}) · 개요 · 판단 요소가 "
+        # extract가 이번에 돌면 아직 case.json이 없다(등록 요청 A-14가 그렇다). 그때는 제목 없이 안내한다 (PR #356 리뷰)
+        case_title = "" if "extract" in steps else f"({load_json(input_file(config, state, 'case'))['title']})"
+        log(f"외부 전송: 대본 증거조사 단계에서 비식별화한 사건 제목{case_title} · 개요 · 판단 요소가 "
             f"{providers_text(config['stages']['script']['model'])}로 전송됩니다")
     for notice in free_tier_notices(config, steps):
         log(notice)

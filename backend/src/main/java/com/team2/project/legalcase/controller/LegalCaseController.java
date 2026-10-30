@@ -6,7 +6,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.team2.project.common.web.AnonymousIdCookie;
+import com.team2.project.common.web.Requester;
 import com.team2.project.legalcase.domain.CrimeType;
 import com.team2.project.legalcase.dto.CaseDetailResponse;
 import com.team2.project.legalcase.dto.CaseListResponse;
@@ -16,7 +16,6 @@ import com.team2.project.legalcase.service.CasePaperQueryService;
 import com.team2.project.legalcase.service.CaseScriptQueryService;
 import com.team2.project.legalcase.service.LegalCaseService;
 
-import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -29,15 +28,14 @@ public class LegalCaseController {
 	private final LegalCaseService legalCaseService;
 	private final CasePaperQueryService casePaperQueryService;
 	private final CaseScriptQueryService caseScriptQueryService;
-	private final AnonymousIdCookie anonymousIdCookie;
 
 	/**
 	 * API 1. 사건 목록. 익명 ID 쿠키가 있으면 사건마다 내 진행 상태(myStatus)를 붙인다 (FE-19).
 	 * 목록은 둘러보기 화면이라 쿠키를 새로 발급하지 않는다 — 발급은 체험 시작(API 2)에서만.
 	 */
 	@GetMapping
-	public CaseListResponse getCases(@RequestParam(required = false) CrimeType crimeType, HttpServletRequest request) {
-		return legalCaseService.getCases(crimeType, anonymousIdCookie.read(request));
+	public CaseListResponse getCases(@RequestParam(required = false) CrimeType crimeType, Requester requester) {
+		return legalCaseService.getCases(crimeType, requester.anonymousId());
 	}
 
 	/**
@@ -45,8 +43,8 @@ public class LegalCaseController {
 	 * 법정형 · 권고 범위 · 판결은 넣지 않는다(FR-2-8). 쿠키는 읽기만 하고 발급하지 않는다(API 1과 같음).
 	 */
 	@GetMapping("/{caseId}")
-	public CaseDetailResponse getCase(@PathVariable Long caseId, HttpServletRequest request) {
-		return legalCaseService.getCase(caseId, anonymousIdCookie.read(request));
+	public CaseDetailResponse getCase(@PathVariable Long caseId, Requester requester) {
+		return legalCaseService.getCase(caseId, requester.anonymousId());
 	}
 
 	/**

@@ -16,6 +16,8 @@ import java.util.Map;
  * @param finalSourceIndex 최종 확정 판결의 번호(0부터). 없으면 파이프라인이 심급으로 정한다
  * @param until            어느 단계까지 돌릴지. 비우면 서비스 기본값(axis)이라 대본은 돌지 않는다 —
  *                         대본까지 만들려면 {@code script}를 보낸다(BE-108)
+ * @param crimeType        관리자가 고른 범죄 유형(CrimeType 이름). 파이프라인이 판결문에서 읽은 유형과 다르면 판결 ·
+ *                         대본을 만들기 전에 멈춘다(BE-138). 모델에게 보내지는 않는다 — 비교에만 쓴다
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record PipelineJobRequest(
@@ -23,7 +25,8 @@ public record PipelineJobRequest(
 	List<String> models,
 	Map<String, Object> stages,
 	Integer finalSourceIndex,
-	String until
+	String until,
+	String crimeType
 ) {
 
 	@JsonInclude(JsonInclude.Include.NON_NULL)

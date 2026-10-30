@@ -2,8 +2,10 @@ package com.team2.project.member.service;
 
 import com.team2.project.common.exception.BusinessException;
 import com.team2.project.common.exception.ErrorCode;
+import com.team2.project.common.exception.UniqueViolations;
 import com.team2.project.member.domain.Member;
 import com.team2.project.member.domain.MemberPassword;
+import com.team2.project.member.domain.Nickname;
 import com.team2.project.member.repository.MemberPasswordRepository;
 import com.team2.project.member.repository.MemberRepository;
 import java.time.Clock;
@@ -13,6 +15,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -33,10 +36,6 @@ public class LocalAccountService {
 
 	/** 저장 · 비교하는 아이디 형식(소문자로 바꾼 뒤). DB CHECK(ck_member_password_login_id)와 같다 */
 	private static final Pattern LOGIN_ID = Pattern.compile("[a-z0-9_]{4,20}");
-
-	/** 닉네임에 한글이 있으면 8자까지 (frontend/src/utils/nickname.js NICKNAME_MAX_HANGUL과 같게, 결정 2 · FE-114) */
-	private static final Pattern HANGUL = Pattern.compile("[가-힣]");
-	private static final int NICKNAME_MAX_HANGUL = 8;
 
 	private final MemberRepository memberRepository;
 	private final MemberPasswordRepository passwordRepository;
@@ -61,25 +60,35 @@ public class LocalAccountService {
 	}
 
 	/**
-	 * 가입하고 바로 로그인한다. 형식 검사(길이 · 허용 글자)는 요청 DTO가 먼저 한다
+	 * 가입하고 바로 로그인한다. 형식 검사(길이 · 허용 글자) · 약관 동의는 요청 DTO가 먼저 한다.
+	 * 가입한 시각을 약관 동의 시각으로 남긴다(BE-133)
 	 *
-	 * @throws BusinessException DUPLICATE_ID(이미 있는 아이디, 동시 가입 포함) · VALIDATION_ERROR(닉네임 길이)
+	 * @param agreed 이용약관 · 개인정보처리방침 동의. false면 아무것도 저장하지 않는다
+	 * @throws BusinessException DUPLICATE_ID(이미 있는 아이디, 동시 가입 포함) · DUPLICATE_NICKNAME(이미 쓰는 닉네임, BE-139) · VALIDATION_ERROR(닉네임 형식 · 약관 미동의)
 	 */
-	public LocalLoginResult signup(String id, String password, String nickname, Optional<UUID> anonymousId) {
+	public LocalLoginResult signup(String id, String password, String nickname, boolean agreed,
+		Optional<UUID> anonymousId) {
+		// DTO가 이미 막지만, 동의 없이 동의 기록이 남는 일이 없게 서비스도 한 번 더 본다 (BE-133)
+		if (!agreed) {
+			throw BusinessException.ofField(ErrorCode.VALIDATION_ERROR, "agreed");
+		}
 		String loginId = normalize(id);
 		if (!LOGIN_ID.matcher(loginId).matches()) {
 			throw BusinessException.ofField(ErrorCode.VALIDATION_ERROR, "id");
 		}
-		validateNickname(nickname);
+		Nickname.validate(nickname);
 		// 해시는 비싸서, 이미 있는 아이디면 해시 전에 끝낸다. 동시 가입은 아래 insertIfLoginIdAbsent가 막는다
 		if (passwordRepository.existsByLoginId(loginId)) {
 			throw new BusinessException(ErrorCode.DUPLICATE_ID);
+		}
+		if (memberRepository.existsByNicknameIgnoreCase(nickname)) {
+			throw new BusinessException(ErrorCode.DUPLICATE_NICKNAME);
 		}
 		String passwordHash = passwordEncoder.encode(password);	// 트랜잭션 밖
 
 		return transactionTemplate.execute(status -> {
 			Instant now = clock.instant();
-			Member member = memberRepository.save(Member.local(nickname));
+			Member member = saveLocalMember(nickname, now);
 			// 0이면 그사이 같은 아이디로 먼저 가입됐다 → 예외로 회원 행까지 되돌린다 (결정 4)
 			if (passwordRepository.insertIfLoginIdAbsent(member.getId(), loginId, passwordHash) == 0) {
 				throw new BusinessException(ErrorCode.DUPLICATE_ID);
@@ -87,7 +96,7 @@ public class LocalAccountService {
 			member.recordLogin(now);
 			Optional<UUID> issued = anonymousLinkService.link(member.getId(), anonymousId, now);
 			log.info("아이디 회원가입: memberId={}", member.getId());
-			return new LocalLoginResult(member.getId(), member.getNickname(), issued);
+			return new LocalLoginResult(member.getId(), Nickname.displayName(member.getId(), member.getNickname()), issued);
 		});
 	}
 
@@ -116,7 +125,7 @@ public class LocalAccountService {
 			member.recordLogin(now);
 			Optional<UUID> issued = anonymousLinkService.link(memberId, anonymousId, now);
 			log.info("아이디 로그인: memberId={}", memberId);
-			return new LocalLoginResult(memberId, member.getNickname(), issued);
+			return new LocalLoginResult(memberId, Nickname.displayName(memberId, member.getNickname()), issued);
 		});
 	}
 
@@ -125,14 +134,23 @@ public class LocalAccountService {
 		return id == null ? "" : id.toLowerCase(Locale.ROOT);
 	}
 
-	/** 허용 글자 · 2~12자는 DTO가 본다. 한글이 섞이면 8자까지인 규칙만 여기서 본다 */
-	private static void validateNickname(String nickname) {
-		if (nickname == null || (HANGUL.matcher(nickname).find() && nickname.length() > NICKNAME_MAX_HANGUL)) {
-			throw BusinessException.ofField(ErrorCode.VALIDATION_ERROR, "nickname");
+	/**
+	 * 회원 행 저장. 같은 닉네임으로 동시에 가입하면 한쪽이 유니크(uq_member_nickname) 위반이 된다 → DUPLICATE_NICKNAME.
+	 * 회원 행의 다른 유니크(공급자 + 회원번호)는 새 UUID라 겹칠 수 없어, 이 저장의 유니크 위반은 닉네임뿐이다
+	 */
+	private Member saveLocalMember(String nickname, Instant termsAgreedAt) {
+		try {
+			return memberRepository.save(Member.local(nickname, termsAgreedAt));
+		} catch (DataIntegrityViolationException e) {
+			if (UniqueViolations.isUniqueViolation(e)) {
+				throw new BusinessException(ErrorCode.DUPLICATE_NICKNAME);
+			}
+			throw e;
 		}
 	}
 
 	/** 가입 · 로그인 결과. issuedAnonymousId가 있으면 그 값을 익명 ID 쿠키로 바꿔 심는다 */
+	/** nickname은 화면에 보일 표시 이름이다: 닉네임이 있으면 그 값, 없으면(닉네임을 비운 회원) `방청객 {회원 ID}` — 항상 문자열 (PR #343 리뷰) */
 	public record LocalLoginResult(long memberId, String nickname, Optional<UUID> issuedAnonymousId) {
 	}
 }

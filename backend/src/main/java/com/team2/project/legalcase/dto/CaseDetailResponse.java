@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.team2.project.legalcase.domain.CasePhotoUrls;
 import com.team2.project.legalcase.domain.CrimeType;
 import com.team2.project.legalcase.domain.Difficulty;
 import com.team2.project.legalcase.domain.LegalCase;
@@ -57,7 +58,7 @@ public record CaseDetailResponse(
 				legalCase.getDifficulty(),
 				legalCase.getEstimatedMinutes(),
 				participantCount,
-				legalCase.getThumbnailUrl(),
+				CasePhotoUrls.thumbnail(legalCase.getId(), legalCase.getThumbnailUrl()),
 				legalCase.getOverview(),
 				scriptReady,
 				myStatus,

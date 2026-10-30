@@ -38,7 +38,10 @@ public class AchievementUnlockRecorder {
 	}
 
 	/**
-	 * 별도 트랜잭션에서 기록한다(마이페이지 P-5 조회). 조회는 읽기 전용 트랜잭션이라 같은 트랜잭션에서 INSERT할 수 없다
+	 * 새 트랜잭션에서 기록한다(마이페이지 P-5 조회). 조회 조립은 읽기 전용이라 같은 트랜잭션에서 INSERT할 수 없다.
+	 * <p>다른 트랜잭션 안에서 부르지 않는다. 바깥 트랜잭션이 연결을 잡은 채 이 트랜잭션이 연결을 하나 더 요청하면,
+	 * 풀(운영 5개)만큼 동시에 오는 조회가 서로 두 번째 연결을 기다리며 멈춘다. MyPageService.get은 읽기 트랜잭션을
+	 * 닫은 뒤 이것을 부르고, 그다음 응답을 조립한다 (PR #335 리뷰, MyPageUnlockFailureTest가 연결 수를 확인)
 	 */
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
 	public Map<String, UnlockMark> recordSeparately(UUID anonymousUserId, ProfileStats stats) {

@@ -4,8 +4,7 @@ import com.team2.project.collection.dto.CollectionRecordRequest;
 import com.team2.project.collection.dto.CollectionRecordResponse;
 import com.team2.project.collection.dto.CollectionSeenRequest;
 import com.team2.project.collection.service.CollectionService;
-import com.team2.project.common.web.AnonymousIdCookie;
-import jakarta.servlet.http.HttpServletRequest;
+import com.team2.project.common.web.Requester;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -22,18 +21,17 @@ import org.springframework.web.bind.annotation.RestController;
 public class CollectionController {
 
 	private final CollectionService collectionService;
-	private final AnonymousIdCookie anonymousIdCookie;
 
 	/** P-9 수집 기록 — 200 + 새로 저장된 항목 · 모은 수 · 새로 해금된 도전과제 */
 	@PostMapping("/collection")
-	public CollectionRecordResponse record(@Valid @RequestBody CollectionRecordRequest body, HttpServletRequest request) {
-		return collectionService.record(anonymousIdCookie.read(request), body);
+	public CollectionRecordResponse record(@Valid @RequestBody CollectionRecordRequest body, Requester requester) {
+		return collectionService.record(requester.anonymousId(), body);
 	}
 
 	/** P-10 컬렉션 "봤음" — 204 (멱등) */
 	@PostMapping("/collection/seen")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
-	public void markSeen(@Valid @RequestBody CollectionSeenRequest body, HttpServletRequest request) {
-		collectionService.markSeen(anonymousIdCookie.read(request), body);
+	public void markSeen(@Valid @RequestBody CollectionSeenRequest body, Requester requester) {
+		collectionService.markSeen(requester.anonymousId(), body);
 	}
 }

@@ -69,6 +69,16 @@
 | v0.65 | 2026-10-29 | **프로필카드 아래 줄 설정 추가 (BE-114, FE-116)** — P-8 요청 · 응답과 P-5 `profileSettings`에 `cardLine`(`type` · `signature` · `job` 중 하나, 기본 `type`: 프로필카드 아래에 보일 줄) · `cardLevel`(boolean, 기본 `false`: 레벨을 그 줄 윗줄에 붙일지) 두 칸 추가. 모르는 값 · 타입이 다르면 기존 칸과 같이 400 `VALIDATION_ERROR`. ERD v1.46 `profile_setting`(V36) |
 | v0.66 | 2026-10-29 | **담당 문서 최신화 (B, 7.0.2 준비)** — 8장 머리말을 "계약 초안(v0.17)"에서 "구현됨(BE-41 ~ 43)"으로, 확정된 항목의 ⚠️ 정리(DRAFT → REVIEW는 8-3 #3, 공개 뒤 교체 · 수정 금지는 8-3 #1, `raw_output`은 8-3 #6), 8-3 #1을 ✅ 확정(공개 중 409, 고칠 때는 공개 취소 → 수정 → 다시 공개, BE-103과 같은 절차). 9장 머리말 · 9-2 각 항목을 구현(BE-72) · 화면 연동 기준으로 ✅ 확정. 형식 변경 없음. 8-2 제목의 "초안" 삭제(#334 리뷰) |
 | v0.67 | 2026-10-29 | **사건 배역 · 민감 플래그 (BE-125, ERD v1.47 · V37)** — API 16에 `cast`(배역 `{prosecutor, defense}`) · `sensitiveFlags`(사용자 안내 대상 플래그만) 추가. 값이 없으면 **필드를 뺀다**(배정 전 · 안내할 플래그 없음 → 화면 기본 동작). A-6 `content`에 `castRoles` · `sensitiveFlags`(가드 전용 포함 전체), A-11에 같은 두 필드 수정 추가 — 자동 분류 · 자동 배정을 관리자가 바로잡는 경로. 감사 로그 `CASE_UPDATE`에 두 필드는 바꾼 값까지 남긴다. 필드 추가만이라 기존 클라이언트와 호환 (`docs/decisions/BE-125.md`) |
+| v0.68 | 2026-10-29 | **커뮤니티 API 신설 (BE-115, FE-47 · FE-88 · FE-89 · FE-116)** — 12장 C-1 `GET /community/posts`(목록 · 많이 본 글) · C-2 `GET /community/posts/{postId}`(상세 + 댓글) · C-3 `POST /community/posts`(글쓰기, 판결 공유) · C-4 `POST …/like`(좋아요 켜고 끄기) · C-5 `POST …/comments`(댓글) · C-6 `GET /community/home`(이야기 많은 사건 · 추천 사건 · 레벨 랭킹) · C-7 `GET /community/shareable-verdict`(붙일 수 있는 내 판결). 읽기는 누구나, 쓰기는 로그인 회원만(401 `UNAUTHORIZED`). 글쓴이 명함에 `level` · `job` · `cardLine`. 글 · 댓글 · 좋아요 때 경험치 지급(11-1 그대로). 에러 코드 `POST_NOT_FOUND` 추가. 사진 올리기 · 글 삭제 · 닉네임 설정은 후속. ERD v1.48(V38) |
+| v0.69 | 2026-10-29 | **닉네임 설정 M-7 · 내 회원 정보 M-8 신설 · 닉네임 중복 금지 (BE-139, ERD v1.49 · V39)** — `GET /members/me`(M-8, 닉네임 · 표시 이름 · 로그인 방식 · 아이디 · 가입일 · 최근 로그인) · `PUT /members/me/nickname`: 로그인한 회원(카카오 · 아이디 공통)이 닉네임을 정하거나 바꾼다. 형식은 M-5와 같고, **대소문자를 구분하지 않고 중복을 막는다**(409 `DUPLICATE_NICKNAME`). M-5 가입도 같은 중복 검사를 받는다(M-5의 "중복을 허용한다" 삭제). 변경 횟수 제한 · 금칙어 검사는 아직 없다. 닉네임이 없는 회원의 커뮤니티 이름은 `방청객 {회원 ID}`(BE-115). 에러 코드 `DUPLICATE_NICKNAME` 추가 |
+| v0.70 | 2026-10-29 | **로그아웃 시 익명 ID 쿠키 해제 (BE-137)** — M-2: 쿠키의 익명 ID가 회원에 연결되어 있으면 `NLNB_AID`도 `Set-Cookie`(`Max-Age=0`)로 지운다. 공용 PC에서 로그아웃한 뒤 다음 사람의 체험 · 판결이 그 회원 계정으로 쌓이지 않게 한다. 새 익명 ID는 이때 발급하지 않고 다음 행동(API 2 체험 시작 등) 때 발급된다. 연결 안 된(손님) 익명 ID는 지우지 않는다 |
+| v0.71 | 2026-10-29 | **사건 사진 주소 규칙 기본값 (BE-141)** — API 1 · 2 · 16 · 17과 커뮤니티 홈(C-6)의 `thumbnailUrl` · 사진 URL이 저장된 값이 없으면 규칙 주소 `/images/cases/case-{caseId}-{reenact\|origin\|conclusion}.webp`로 채워진다(저장된 값이 있으면 그것이 우선, 관리자 사진 업로드 A-13-3 ~ 5는 그대로). API 17 `extraPhotos.origin` · `conclusion`은 사진 행이 없어도 `null`이 아니라 규칙 주소(캡션 `null`)다 |
+| v0.72 | 2026-10-29 | **닉네임 후속 (BE-139 리뷰 반영, FE-137)** — M-5 · M-7: `방청객`으로 시작하는 닉네임 금지(자동 이름 흉내 방지). M-5 · M-6 응답 `nickname`은 항상 표시 이름 문자열(닉네임이 없으면 `방청객 {회원 ID}`). 12장 글쓴이 `nickname` 설명에서 "닉네임 설정은 후속" 삭제(M-7로 생김) · M-5 설명의 버전을 v0.69로 정정 |
+| v0.73 | 2026-10-29 | **일러스트 총 개수 API 신설 (BE-142, FE-138)** — 13장 I-1 `GET /api/v1/illustrations/summary`(공개). 사건 컷 · 캐릭터(아이콘 포함) 일러스트의 총 장수와 종류별 장수. 로그인 전 마이페이지 안내("일러스트 N장")용. 이미지는 프론트에만 있어 백엔드는 목록 파일(`illustration-images.txt`)로 세고, 테스트가 이미지 폴더와의 어긋남을 막는다(`docs/decisions/BE-142.md`) |
+| v0.74 | 2026-10-30 | **아이디 회원가입 약관 동의 서버 검증 · 동의 기록 (BE-133, ERD v1.51 · V44)** — M-5 요청에 `agreed`(필수, JSON `true`만) 추가. 없음 · `null` · `false` · 문자열 `"true"` · 숫자 `1`이면 400 `VALIDATION_ERROR`(`details`: `agreed` · `AssertTrue`) — 형식 검사라 409(중복 아이디 · 닉네임)보다 먼저다. 가입하면 서버가 동의 시각 · 약관 버전을 회원에 남긴다(응답은 그대로). 카카오 로그인(M-3 · M-4)으로 처음 가입하는 경로는 이번 범위 밖(결정 기록 BE-133) |
+| v0.75 | 2026-10-30 | **수집 항목 화이트리스트 (BE-136)** — P-9 `itemId`를 모을 수 있는 목록으로 거른다: 일러스트는 `case-{공개 사건 id}-{origin \| conclusion \| reenact}`(요청한 사건과 달라도 된다 — 그림별 key), 의상은 역할 의상 그림이 있는 `{who}:{role}`(사건 전용 의상 `{who}:case-{n}`은 그 사건에서만). 목록에 없으면 400 `VALIDATION_ERROR`(`details`: `items[i].itemId` · `NOT_COLLECTIBLE`), 하나라도 있으면 아무것도 저장하지 않는다. 의상의 사용자당 상한 12 삭제(목록이 곧 전체) — 409 `COLLECTION_LIMIT_EXCEEDED`는 일러스트 사건당 5만 남는다. (v0.74는 BE-133 PR이 쓴다) |
+| v0.76 | 2026-10-30 | **닉네임 거절 사유 이름 (BE-134)** — M-5 · M-7의 닉네임 400 `details[].reason`을 사유별 이름으로(M-7은 하나, M-5는 요청 검사 사유가 여럿일 수 있다): `NotBlank` · `Pattern` · `Size`(요청 DTO 검사와 같은 이름) · `SizeWithHangul`(한글이 들어가 8자 초과) · `Reserved`(`방청객`으로 시작). 예전에는 서비스 검사(한글 8자 · 방청객)가 모두 `VALIDATION_ERROR`였다. 칸 이름 · 에러 코드는 그대로. (v0.74는 BE-133 PR #349가 쓴다) |
+| v0.77 | 2026-10-30 | **사건 등록 범죄 유형 일치 검사 (BE-138)** — A-14 요청의 `crimeType`을 파이프라인에 넘겨, 파이프라인이 판결문에서 읽은 유형과 다르면 **판결 · 대본을 만들기 전에(extract 직후) 멈춘다**. A-15는 `FAILED`가 되고 `message`에 두 유형을 적는다(예: "범죄 유형이 다릅니다: 등록 요청은 FRAUD, 판결문에서 읽은 유형은 MURDER입니다. …"). 요청 값으로 덮어쓰지 않는다 — 관리자가 유형을 잘못 고르면 양형기준 · 판례 · 사전판단 선택지가 모두 틀린 채 들어가기 때문이다. 맞는 유형으로 다시 등록한다. A-14-1 적재도 같은 비교를 한 번 더 해 다르면 422 `IMPORT_RESULT_INVALID`(`details[].field`: `case.crimeType`)로 거절한다(범죄 유형을 보내지 않던 때의 작업 대비). 이때 등록은 `FAILED`가 되어 같은 사건번호로 다시 등록할 수 있다. 요청 · 응답 형식은 그대로다 (v0.76은 BE-134가 쓴다) |
 
 ---
 
@@ -93,7 +103,8 @@
 | --- | --- |
 | 이름 | `NLNB_AID` |
 | 값 | `anonymous_user.id` (UUID) |
-| 발급 시점 | 체험 시작(`POST /cases/{caseId}/experience`) · (확장) 성향 테스트 제출(P-2) 때 쿠키가 없거나 DB에 없는 값이면 새로 발급 |
+| 발급 시점 | 체험 시작(`POST /cases/{caseId}/experience`) · (확장) 성향 테스트 제출(P-2) · 꾸미기 등 행동 API 때 쿠키가 없거나 DB에 없는 값이면 새로 발급. (확장, BE-62) 로그인 때 쿠키 값이 다른 회원에 연결됐거나 없으면 이 회원에 연결된 새 값 |
+| 삭제 시점 | (확장, v0.70 · BE-137) 로그아웃(M-2) 때 회원에 연결된 값이면 지운다. 손님 값은 지우지 않는다 |
 | 속성 | `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/` |
 | 유효 기간 | 1년 (요구사항 15장 "익명 ID 유지 방식 · 기간" 결정 시 확정) |
 - **프론트와 API는 같은 도메인으로 배포한다**(6장 #2 확정, 기술 스택 8장). EC2의 Nginx가 프론트 빌드 파일을 서빙하고 `/api` 요청을 백엔드 컨테이너로 프록시하므로 `SameSite=Lax` 그대로 쓰고 CORS 설정은 필요 없다.
@@ -147,7 +158,7 @@ json
 | 422 | `INVALID_PENALTY_TYPE` | 이 사건에서 허용되지 않은 형벌, 허용되지 않은 감경 조합(`reducedTo`) | 개발 오류 |
 | 422 | `OUT_OF_ALLOWED_RANGE` | 형량이 선고할 수 있는 범위 밖 | S-05c 경고 유지 (정상 화면이면 버튼이 비활성이라 오지 않음) |
 | 422 | `INVALID_SUSPENSION` | 집행유예를 허용하지 않는 형벌 · 형량인데 값이 있음, 기간이 1 ~ 5년 밖 | 입력 안내 |
-| 401 | `UNAUTHORIZED` | (확장, 관리자 API) 로그인하지 않음 · 세션 만료 | 관리자 로그인 화면 |
+| 401 | `UNAUTHORIZED` | (확장, 관리자 API · v0.68 커뮤니티 쓰기) 로그인하지 않음 · 세션 만료 | 관리자 로그인 화면 · 커뮤니티는 로그인 안내 |
 | 401 | `INVALID_CREDENTIALS` | (확장, 관리자 API · v0.58 회원 M-6) 로그인 실패. 계정 없음 · 비활성 · 비밀번호 불일치를 구분하지 않는다. M-6은 아이디 형식이 틀린 경우도 같은 코드다 | 로그인 실패 안내 |
 | 401 | `TOKEN_EXPIRED` | (확장, 회원 토큰) 액세스 토큰 만료 | 토큰 재발급 후 다시 요청 |
 | 401 | `TOKEN_INVALID` | (확장, 회원 토큰) 형식 · 서명 등이 잘못된 토큰, 아직 토큰을 확인할 수 없음 | 토큰을 지우고 다시 로그인 |
@@ -156,6 +167,7 @@ json
 | 404 | `FACTOR_NOT_FOUND` | (확장, 관리자 API) 판단 요소가 없음 | 상세 다시 불러오기 |
 | 404 | `PERSONALITY_RESULT_NOT_FOUND` | (확장, 성향 API) 성향 테스트 결과가 없음 (쿠키 없음 포함) | S-15 테스트 안내 |
 | 404 | `PERSONALITY_TYPE_NOT_FOUND` | (확장, 성향 API) 공유 주소의 유형이 없음 | 공유 결과 없음 안내 · 테스트 권유 |
+| 409 | `DUPLICATE_NICKNAME` | (확장, 회원 M-5 · M-7, v0.69) 이미 쓰는 닉네임(대소문자만 달라도 같다). 동시에 같은 닉네임을 정해도 한 명만 되고 나머지는 이 코드다 | 닉네임 칸에 안내 |
 | 409 | `DUPLICATE_ID` | (확장, 회원 M-5, v0.58) 이미 쓰는 아이디(대소문자만 다른 아이디 포함). 동시에 같은 아이디로 가입해도 한 명만 만들어지고 나머지는 이 코드다 | 아이디 칸에 안내. "방금 가입했다면 로그인" 안내도 함께 (가입 직후 서버 오류 뒤 다시 누른 경우) |
 | 409 | `DUPLICATE_TITLE` | (확장, 관리자 API) 사건 제목이 다른 사건과 겹침 | 입력 안내 |
 | 409 | `PUBLISH_NOT_READY` | (확장, 관리자 API) 공개 조건 미충족. `details`에 조건 코드 | 남은 조건 안내 (A-13) |
@@ -166,9 +178,10 @@ json
 | 404 | `INCIDENT_PHOTO_NOT_FOUND` | (확장, 관리자 API, BE-78 2차 검토 · BE-101) 그 역할의 발단 · 결론 사진이 없음 | 목록 다시 불러오기 (A-13-9) |
 | 409 | `DECO_LOCKED` | (확장, BE-96) 아직 열리지 않은 꾸미기를 저장하려 함. `details`에 잠긴 필드(`reason: DECO_LOCKED`) | 화면에서 잠긴 항목은 고를 수 없게 막는다. 오면 마이페이지를 다시 불러온다 (P-7) |
 | 409 | `JOB_LOCKED` | (확장, BE-106) 아직 열리지 않은 직업을 고르려 함 | 화면에서 잠긴 직업은 고를 수 없게 막는다. 오면 레벨(L-1)을 다시 불러온다 (L-2) |
-| 409 | `COLLECTION_LIMIT_EXCEEDED` | (확장, BE-83, v0.63) 모을 수 있는 수를 넘음 — 일러스트는 한 사건에서 처음 얻은 수 5, 의상은 사용자당 12. `details`에 넘친 종류(`field: items.kind`, `reason: illustration` · `cast`) | 개발 오류(콘텐츠 규칙보다 넉넉한 값이라 정상 화면이면 오지 않음) (P-9) |
+| 409 | `COLLECTION_LIMIT_EXCEEDED` | (확장, BE-83, v0.63) 모을 수 있는 수를 넘음 — 일러스트는 한 사건에서 처음 얻은 수 5. `details`에 넘친 종류(`field: items.kind`, `reason: illustration`). 의상 사용자당 12는 v0.75(BE-136)에서 삭제 | 개발 오류(콘텐츠 규칙보다 넉넉한 값이라 정상 화면이면 오지 않음) (P-9) |
 | 409 | `DUPLICATE_SOURCE` | (확장, 관리자 API, BE-93) 이미 등록한 사건번호. `details`에 어느 항목인지 담는다 | 입력 안내 (A-14) |
 | 409 | `IMPORT_IN_PROGRESS` | (확장, 관리자 API, BE-93) 실행 중인 등록이 있음. 한 번에 하나만 돌린다(외부 AI 호출 한도 보호) | 끝난 뒤 다시 시도 안내 (A-14) |
+| 404 | `POST_NOT_FOUND` | (확장, 커뮤니티 BE-115, v0.68) 글이 없음 | 목록으로 돌아가 다시 불러오기 (C-2 · C-4 · C-5) |
 | 404 | `IMPORT_NOT_FOUND` | (확장, 관리자 API, BE-93) 등록 작업이 없음 | 목록으로 안내 (A-15) |
 | 409 | `IMPORT_NOT_READY` | (확장, 관리자 API, BE-93 2차) 아직 적재할 수 없음 — 생성이 끝나지 않았거나 이미 적재한 등록 | 진행 상황 확인 안내 (A-14-1) |
 | 422 | `IMPORT_RESULT_INVALID` | (확장, 관리자 API, BE-93 2차) 생성 결과를 사건으로 만들 수 없음. `details`에 어느 값이 문제인지 담는다(예: `case.factors[2].label`) | 다시 생성하도록 안내 (A-14-1) |
@@ -239,13 +252,13 @@ json
 json
 
 ```json
-{  "summary": { "total": 9, "byCrimeType": { "MURDER": 3, "FRAUD": 3, "INJURY": 3, "ROBBERY": 0, "THEFT": 0 } },  "cases": [    {      "caseId": 1,      "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",      "crimeType": "MURDER",      "crimeCategoryLabel": "생명범죄",      "chargeName": "살인",      "shortIntro": "빌린 돈 문제로 찾아온 지인과 다투다 흉기로 살해한 사건입니다.",      "keywords": ["돈 문제", "집으로 찾아옴"],      "difficulty": "HIGH",      "estimatedMinutes": 15,      "participantCount": 1284,      "thumbnailUrl": null,      "scriptReady": true,      "myStatus": "IN_PROGRESS"    }  ]}
+{  "summary": { "total": 9, "byCrimeType": { "MURDER": 3, "FRAUD": 3, "INJURY": 3, "ROBBERY": 0, "THEFT": 0 } },  "cases": [    {      "caseId": 1,      "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",      "crimeType": "MURDER",      "crimeCategoryLabel": "생명범죄",      "chargeName": "살인",      "shortIntro": "빌린 돈 문제로 찾아온 지인과 다투다 흉기로 살해한 사건입니다.",      "keywords": ["돈 문제", "집으로 찾아옴"],      "difficulty": "HIGH",      "estimatedMinutes": 15,      "participantCount": 1284,      "thumbnailUrl": "/images/cases/case-1-reenact.webp",      "scriptReady": true,      "myStatus": "IN_PROGRESS"    }  ]}
 ```
 
 - `PUBLISHED` 사건만. `summary`는 필터와 관계없이 전체 기준(칩 옆 건수 표시용). `byCrimeType`은 공개 사건이 없는 유형도 0으로 모든 범죄 유형 키를 내려 준다(v0.55부터 5개).
 - `crimeCategoryLabel`: `crime_type`별 표시용 분류명. `MURDER` → "생명범죄", `FRAUD` · `ROBBERY` · `THEFT` → "재산범죄", `INJURY` → "신체범죄"(`ROBBERY` · `THEFT`는 v0.55). DB 컬럼이 아니라 서버 코드 상수(`CrimeType.categoryLabel`)에서 만든다(ERD 3-1).
 - `chargeName`: 죄명(`legal_case.charge_name`, 예: "살인"). 사건 상단 바(S-04~S-08)가 `caseId`로 이 목록에서 제목과 함께 찾아 쓴다(BE-79, D-01). 사건 개요(API 4) · API 16의 `chargeName`과 같은 값이다.
-- `thumbnailUrl`: `legal_case.thumbnail_url`. 없으면 `null`이고, 화면은 범죄 유형별 기본 이미지를 쓴다.
+- `thumbnailUrl`: `legal_case.thumbnail_url`. **없으면 규칙 주소 `/images/cases/case-{caseId}-reenact.webp`를 내려준다**(BE-141). 그 파일이 없으면 화면이 범죄 유형별 공용 컷으로 바꾼다.
 - `participantCount`: `attempt_no = 1`이고 `COMPLETED`인 체험 수.
 - (v0.60, BE-116) `scriptReady`: 이 사건에 **승인된 공개 대본**이 있는가(`true` / `false`). 기준은 API 18이 200을 주는 조건과 같다(사건 `PUBLISHED` + 대본 `reviewStatus: APPROVED`) — 대본이 없거나 검수 대기 · 반려면 `false`다. 화면(S-02)은 이 값으로 체험 가능한 사건을 먼저 보이고, `false`는 "준비 중"으로 다룬다. 사용자와 무관한 값이다. **화면 정책이며 서버는 막지 않는다** — API 2(체험 시작)는 `scriptReady`를 보지 않는다. 또 대사를 직접 수정(A-13-13)하면 검수 기록이 지워져 `true → false`로 바뀔 수 있다(이때 API 18도 404).
 - 정렬: `published_at` 최신순 고정 (정렬 선택은 이후 단계, REQ-009).
@@ -766,7 +779,7 @@ S-20 사건 디테일(정보 구조 v1.12)이 체험을 만들기 전에 부르�
 **응답 200**
 
 ```json
-{  "caseId": 1,  "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",  "crimeType": "MURDER",  "crimeCategoryLabel": "생명범죄",  "chargeName": "살인",  "shortIntro": "빌린 돈 문제로 찾아온 지인과 다투다 흉기로 살해한 사건입니다.",  "keywords": ["돈 문제", "지인", "흉기"],  "difficulty": "MID",  "estimatedMinutes": 15,  "participantCount": 42,  "thumbnailUrl": null,  "overview": "피고인이 빌린 돈을 갚지 못해 오래 다투던 지인이 집으로 찾아오자, …",  "scriptReady": true,  "myStatus": null,  "cast": { "prosecutor": "naero", "defense": "nambul" },  "sensitiveFlags": ["MENTAL_HEALTH"]}
+{  "caseId": 1,  "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",  "crimeType": "MURDER",  "crimeCategoryLabel": "생명범죄",  "chargeName": "살인",  "shortIntro": "빌린 돈 문제로 찾아온 지인과 다투다 흉기로 살해한 사건입니다.",  "keywords": ["돈 문제", "지인", "흉기"],  "difficulty": "MID",  "estimatedMinutes": 15,  "participantCount": 42,  "thumbnailUrl": "/images/cases/case-1-reenact.webp",  "overview": "피고인이 빌린 돈을 갚지 못해 오래 다투던 지인이 집으로 찾아오자, …",  "scriptReady": true,  "myStatus": null,  "cast": { "prosecutor": "naero", "defense": "nambul" },  "sensitiveFlags": ["MENTAL_HEALTH"]}
 ```
 
 - 필드는 API 1 카드와 같고(`chargeName` 포함, v0.32), `overview`(사건 개요, API 4의 `case.overview`와 같은 값)를 더한다. `participantCount` · `myStatus` 기준도 API 1과 같다. (v0.60, BE-116) `scriptReady`도 API 1과 같은 값 · 같은 기준이다 — `false`면 S-20은 시작 대신 "준비 중"을 보인다(API 18을 따로 불러 확인하지 않아도 된다).
@@ -808,11 +821,11 @@ FE-64가 쓰는 API(S-20 기사 지면 · 증거조사). 관리자 신문 지면
 }
 ```
 
-- `photo`는 A-13-3으로 올린 사건 대표사진(`legal_case.thumbnail_url`). 아직 안 올렸으면 `null`.
-- **`extraPhotos`는 배열이 아니라 `{ origin, conclusion }` 고정 자리다.** 그 역할의 사진이 없으면 그 자리는 `null`이다(예: 발단만 올렸으면 `{ "origin": {...}, "conclusion": null }`) — 배열로 내려주면 한쪽이 비었을 때 다른 쪽이 앞자리로 밀려 역할이 뒤바뀌어 보일 수 있어서다(BE-101에서 역할 칸을 둔 것과 같은 이유). A-13-6 ~ 8의 `extraPhotos`(배열, `role` 포함)와는 형태가 다르다 — 관리자 화면은 목록 · 정리가 필요해 배열로, 공개 화면은 항상 같은 자리만 보면 돼서 고정 자리로 했다.
+- `photo`는 A-13-3으로 올린 사건 대표사진(`legal_case.thumbnail_url`). 아직 안 올렸으면 규칙 주소 `/images/cases/case-{caseId}-reenact.webp`(BE-141).
+- **`extraPhotos`는 배열이 아니라 `{ origin, conclusion }` 고정 자리다.** 그 역할의 사진 행이 없으면 그 자리는 규칙 주소 `/images/cases/case-{caseId}-{origin|conclusion}.webp`에 `caption: null`이다(BE-141, 예: 발단만 올렸으면 `{ "origin": {...}, "conclusion": { "imageUrl": "/images/cases/case-1-conclusion.webp", "caption": null } }`) — 자리가 `null`이 되는 일은 없다 — 배열로 내려주면 한쪽이 비었을 때 다른 쪽이 앞자리로 밀려 역할이 뒤바뀌어 보일 수 있어서다(BE-101에서 역할 칸을 둔 것과 같은 이유). A-13-6 ~ 8의 `extraPhotos`(배열, `role` 포함)와는 형태가 다르다 — 관리자 화면은 목록 · 정리가 필요해 배열로, 공개 화면은 항상 같은 자리만 보면 돼서 고정 자리로 했다.
 - `prompt` · `s3Key` · `id` · `displayOrder` 등 내부 기록용 값은 내려주지 않는다.
 - 증거조사 `evidencePhotos`(검사 측 = 결론, 변호인 측 = 발단, FE-63)는 이 `extraPhotos.origin` · `.conclusion`을 그대로 연결해 쓴다 — 같은 사진을 두 번 받지 않는다.
-- 공용 컷(사진이 없거나 로딩 실패)으로 바꾸는 처리는 프론트가 한다(FE-63). 서버는 fallback을 내려주지 않는다.
+- 공용 컷(사진 파일이 없거나 로딩 실패)으로 바꾸는 처리는 프론트가 한다(FE-63). 서버가 내려주는 규칙 주소의 파일이 없으면, Nginx의 화면 주소 fallback(`location /`의 `try_files … /index.html`)이 `index.html`을 **200**으로 돌려준다(404가 아니다). 브라우저가 이를 이미지로 해석하지 못해 `error` 이벤트가 나고, 이때 프론트가 공용 컷으로 바꾼다. 상태 코드로 파일 유무를 확인하는 클라이언트는 이 방식으로는 감지하지 못한다.
 - 공개(`PUBLISHED`)된 사건만 응답한다(API 16과 같은 기준).
 
 | 거절 | 조건 |
@@ -1688,7 +1701,7 @@ A-11과 같은 방식(보낸 필드만, `null` = 지움). `headline` · `article
 
 | 필드 | 규칙 |
 | --- | --- |
-| `crimeType` | 필수. `MURDER` · `FRAUD` · `INJURY` · `ROBBERY` · `THEFT` (`ROBBERY` · `THEFT`는 v0.55) |
+| `crimeType` | 필수. `MURDER` · `FRAUD` · `INJURY` · `ROBBERY` · `THEFT` (`ROBBERY` · `THEFT`는 v0.55). (v0.77, BE-138) 파이프라인이 판결문에서 읽은 유형과 비교한다 — 다르면 판결 · 대본을 만들기 전에 멈추고 A-15가 `FAILED`, `message`에 두 유형을 적는다. 맞는 유형으로 다시 등록한다 |
 | `sources` | 필수. 1 ~ 3건, 심급(`courtLevel`: `FIRST` · `APPEAL` · `SUPREME`)이 서로 달라야 한다 |
 | `sources[].caseNumber` | 필수, 50자 이하. 이미 등록된 사건번호면 409 `DUPLICATE_SOURCE` |
 | `sources[].originalText` | 필수, 200,000자 이하. 원본 판결문이라 요청 본문 로그에 남기지 않는다 |
@@ -1777,7 +1790,7 @@ A-11과 같은 방식(보낸 필드만, `null` = 지움). `headline` · `article
 | 404 `IMPORT_NOT_FOUND` | 등록 작업이 없음 |
 | 409 `IMPORT_NOT_READY` | 생성이 아직 끝나지 않았거나, 이미 적재한 등록 |
 | 409 `DUPLICATE_TITLE` | 같은 제목의 사건이 이미 있음. 제목을 바꿔 다시 등록한다 |
-| 422 `IMPORT_RESULT_INVALID` | 생성 결과를 사건으로 만들 수 없음. `details[].field`에 어느 값이 문제인지 담는다 (예: `case.factors[2].label`, `report.factorExtras[factorId=5].summaryTag`) |
+| 422 `IMPORT_RESULT_INVALID` | 생성 결과를 사건으로 만들 수 없음. `details[].field`에 어느 값이 문제인지 담는다 (예: `case.factors[2].label`, `report.factorExtras[factorId=5].summaryTag`). (v0.77, BE-138) 등록 요청의 범죄 유형과 판결문에서 읽은 유형이 다르면 `case.crimeType`. 이 거절은 같은 결과로 다시 눌러도 늘 같으므로 등록을 `FAILED`로 닫는다(A-15 `errorCode` `IMPORT_RESULT_INVALID`, `message`에 두 유형) — 맞는 유형으로 다시 등록하면 `DUPLICATE_SOURCE`에 막히지 않는다 |
 | 502 `IMPORT_UNAVAILABLE` | 생성 결과를 가져오지 못함 |
 
 - 감사 로그 `CASE_IMPORT_LOAD`를 남긴다(만들어진 사건 번호와 등록 번호만).
@@ -2103,7 +2116,7 @@ json
 | --- | --- |
 | `caseId` | 이 항목들을 얻은 사건. 이 사용자가 **완료한 회차가 하나라도 있어야** 한다(다시 하기 중이어도 된다) |
 | `backfill` | 생략하면 `false`. **기존 사용자 백필**: 이미 완료한 사건인데 `collection`에 항목이 빠져 있으면 화면이 마이페이지 진입 때 `true`로 보낸다. `true`면 획득 시각을 **그 사건의 첫 완료 시각**으로, "본 것"으로 남기고("새로 얻음"이 한꺼번에 뜨지 않게), 이 요청으로 해금된 도전과제도 "본 것"으로 남긴다 |
-| `items` | 1 ~ 20개. `kind`: `illustration`(투명 배경 일러스트) · `cast`(역할 의상). `itemId`: 소문자 · 숫자로 시작하고 소문자 · 숫자 · `:` · `_` · `-`로 64자까지. 일러스트는 일러스트 id(예: `case-1-origin`), 의상은 `{who}:{role}`(예: `naero:judge`). 서버는 의미 없는 문자열로만 다룬다 |
+| `items` | 1 ~ 20개. `kind`: `illustration`(투명 배경 일러스트) · `cast`(역할 의상). `itemId`: 소문자 · 숫자로 시작하고 소문자 · 숫자 · `:` · `_` · `-`로 64자까지. 일러스트는 일러스트 id(예: `case-1-origin`), 의상은 `{who}:{role}`(예: `naero:judge`). **모을 수 있는 목록에 있어야 한다**(v0.75, BE-136): 일러스트는 `case-{사건 id}-{origin \| conclusion \| reenact}`이고 그 사건이 공개 중이어야 한다(요청한 `caseId`와 달라도 된다 — 같은 그림을 여러 사건이 쓰는 그림별 key). 의상은 역할 의상 그림(`characters/roles/{who}_{role}.webp`, 일러스트 목록 BE-142)이 있는 것만이고, 사건 전용 의상(`{who}:case-{n}`)은 `caseId`가 n일 때만 |
 
 **응답 200**
 
@@ -2121,15 +2134,15 @@ json
 
 | 거절 | 조건 |
 | --- | --- |
-| 400 `VALIDATION_ERROR` | `caseId` 없음 · 0 이하, `items`가 비었거나 20개 초과, 모르는 `kind`, `itemId` 형식 오류. `details`에 필드별 사유 |
+| 400 `VALIDATION_ERROR` | `caseId` 없음 · 0 이하, `items`가 비었거나 20개 초과, 모르는 `kind`, `itemId` 형식 오류. `details`에 필드별 사유. **목록에 없는 `itemId`**(v0.75): `details`에 `{ "field": "items[i].itemId", "reason": "NOT_COLLECTIBLE" }`(요청 순서의 i). 쿠키 · 체험 확인보다 먼저 거절한다 |
 | 404 `EXPERIENCE_NOT_FOUND` | 쿠키가 없음 · 모르는 익명 ID · 이 사건의 체험이 없음 (익명 ID를 새로 발급하지 않는다) |
 | 404 `CASE_NOT_FOUND` | 사건이 없음 |
 | 409 `INVALID_STATE` | 체험은 있지만 아직 완료하지 않음. `currentStatus`에 최근 회차 상태 |
-| 409 `COLLECTION_LIMIT_EXCEEDED` | 일러스트: 이 사건에서 처음 얻은 수가 5를 넘음, 의상: 사용자당 12를 넘음. 이미 가진 항목은 세지 않는다 |
+| 409 `COLLECTION_LIMIT_EXCEEDED` | 일러스트: 이 사건에서 처음 얻은 수가 5를 넘음(다른 사건의 그림도 받으므로 한 사건에서 모을 수 있는 수를 묶는다). 이미 가진 항목은 세지 않는다. 의상은 상한이 없다(v0.75) |
 
 - **멱등**이다. 같은 요청을 다시 보내도 결과가 같다(`added`만 빈다). 같은 그림을 다른 사건에서 다시 보내도 **처음 얻은 사건 · 시각이 남는다**(그림별 key, 사건별이 아니다).
 - 하나라도 걸리면 **아무것도 저장하지 않는다.**
-- 서버는 대본을 몰라 가짜 `itemId`를 막지 못한다. 그래서 상한으로 총량만 묶는다. 다른 사용자와 비교하는 기능(랭킹 등)에 `collected`를 쓰기 전에 서버 목록 검증으로 바꿀지 다시 본다(`docs/decisions/BE-83.md`).
+- 가짜 `itemId`는 모을 수 있는 목록으로 거른다(v0.75, BE-136 — 커뮤니티 레벨 랭킹 C-6이 서버 레벨을 쓰므로). 대본이 서버에 없어 "그 사건에서 실제로 본 그림인가"까지는 보지 않고, 다른 공개 사건의 그림은 사건당 상한 5 안에서 받는다(`docs/decisions/BE-136.md`).
 - **로그인 합쳐 읽기는 아직 없다.** 출석(P-6) · 꾸미기(P-7)처럼 익명 ID 하나 기준이고, 회원에 연결된 익명 ID들을 합쳐 읽는 것은 함께 별도로 붙인다.
 
 ---
@@ -2235,6 +2248,14 @@ Origin이 이 서버 자신과 같은 출처인지)을 거친다 — 벗어나�
 
 - 리프레시 토큰이 있으면 Redis 저장소에서 지우고(그 뒤 재발급은 전부 실패한다), `NLNB_RT` 쿠키를 `Set-Cookie`로
   지운다. 이미 나간 액세스 토큰은 블랙리스트를 두지 않아 자연 만료(기본 15분)까지는 유효하다.
+- 익명 ID 쿠키(`NLNB_AID`)가 **회원에 연결된** 익명 ID면 이 쿠키도 `Set-Cookie`(`Max-Age=0`, 발급 때와 같은 `Path=/`)로
+  지운다(v0.70, BE-137). 로그인 때 회원에 연결한 익명 ID가 남으면 로그아웃 뒤 같은 브라우저(공용 PC)의 다음 사람
+  체험 · 판결이 그 회원 계정으로 쌓이기 때문이다. 리프레시 쿠키가 이미 없어도(만료 뒤 로그아웃) 지운다.
+  - 새 익명 ID는 이때 발급하지 않는다. 다음 행동(API 2 체험 시작 · P-2 성향 테스트 등) 때 회원과 연결 안 된 새 익명 ID가 발급된다.
+    그전까지 마이페이지 등은 빈 상태로 보인다
+  - 연결 안 된(손님) 익명 ID · DB에 없는 값은 지우지 않는다. 이전 기록은 회원 계정에 그대로 남는다(연결을 끊지 않는다)
+  - 연결 여부를 확인하지 못하면(DB 오류) 지운다. 이때도 응답은 204다
+  - 화면이 따로 할 일은 없다. 쿠키는 `HttpOnly`라 화면이 읽지 못하고, 브라우저가 응답의 `Set-Cookie`로 지운다
 
 | 거절 | 조건 |
 | --- | --- |
@@ -2267,14 +2288,15 @@ Origin이 이 서버 자신과 같은 출처인지)을 거친다 — 벗어나�
 **요청**
 
 ```json
-{ "id": "naero_01", "password": "judge1234", "nickname": "내로판사" }
+{ "id": "naero_01", "password": "judge1234", "nickname": "내로판사", "agreed": true }
 ```
 
 | 필드 | 규칙 |
 | --- | --- |
 | `id` | 필수. 영문 · 숫자 · 밑줄 4 ~ 20자. 서버가 **소문자로 바꿔 저장 · 비교**한다(`Naero`와 `naero`는 같은 아이디). `@`를 쓸 수 없다 — 화면은 `@`가 있으면 관리자 로그인(A-2)으로 보낸다 |
 | `password` | 필수. 8 ~ 64자, 영문과 숫자를 하나 이상씩 포함. 64자는 비밀번호 해시(Argon2) 비용 상한이다. 서버는 일방향 해시로만 저장한다 |
-| `nickname` | 필수. 한글 · 영문 · 숫자 2자 이상, 한글이 있으면 8자 · 영문 · 숫자만이면 12자까지. 공백 · 기호 불가. **중복을 허용한다**(표시 이름, 결정 기록 BE-113 결정 2) |
+| `nickname` | 필수. 한글 · 영문 · 숫자 2자 이상, 한글이 있으면 8자 · 영문 · 숫자만이면 12자까지. 공백 · 기호 불가. **중복을 허용하지 않는다**(대소문자 구분 없음, v0.69 BE-139. 처음 BE-113 가입은 허용했다 — 결정 기록 BE-113 결정 2를 BE-139가 바꿨다). `방청객`으로 시작하는 닉네임은 쓸 수 없다(자동 이름 `방청객 {회원 ID}` 흉내 방지, v0.72) |
+| `agreed` | 필수(v0.74, BE-133). 이용약관 · 개인정보처리방침 동의. **`true`만 받는다** — 화면의 필수 동의 체크와 같다. 서버는 가입한 시각을 동의 시각으로, 그때의 약관 버전과 함께 회원에 남긴다(ERD `member.terms_agreed_at` · `terms_version`) |
 
 **응답 200**: 가입하면 **바로 로그인된다.**
 
@@ -2282,14 +2304,17 @@ Origin이 이 서버 자신과 같은 출처인지)을 거친다 — 벗어나�
 { "nickname": "내로판사" }
 ```
 
+- `nickname`은 화면에 보일 표시 이름이다(v0.72): 닉네임이 있으면 그 값, 없으면(V39가 겹치던 닉네임을 비운 아이디 회원) `방청객 {회원 ID}` — 항상 문자열이다. 가입 응답은 늘 방금 정한 닉네임이다.
+
 - `Set-Cookie`로 `NLNB_RT`(M-1과 같은 쿠키)를 심는다. 액세스 토큰은 본문에 없다 → 화면이 **M-1 재발급을 바로 한 번 불러** 받는다(M-4와 같은 흐름)
 - 익명 ID 쿠키(`NLNB_AID`) 연결 규칙은 M-4와 같다. 새 익명 ID를 발급하면 `Set-Cookie`로 바꿔 심는다
 - 쿠키는 회원 저장 · 토큰 발급이 모두 끝난 뒤에만 심는다. 카카오 계정과는 합쳐지지 않는 별개 회원이다
 
 | 거절 | 조건 |
 | --- | --- |
-| 400 `VALIDATION_ERROR` | 위 규칙 위반. `details`에 칸 이름이 실린다: `[{ "field": "id" \| "password" \| "nickname", "reason": "..." }]` |
+| 400 `VALIDATION_ERROR` | 위 규칙 위반. `details`에 칸 이름이 실린다: `[{ "field": "id" \| "password" \| "nickname" \| "agreed", "reason": "..." }]`. `agreed`가 JSON `true`가 아니면(없음 · `null` · `false` · 문자열 `"true"` · 숫자 `1`) `reason` `AssertTrue`(v0.74). 400이면 아무것도 저장하지 않는다 |
 | 409 `DUPLICATE_ID` | 이미 쓰는 아이디(대소문자만 다른 아이디 포함, 동시 가입 포함) |
+| 409 `DUPLICATE_NICKNAME` | (v0.69) 이미 쓰는 닉네임(대소문자만 달라도 같다, 동시 가입 포함). 아이디보다 나중에 검사한다 |
 | 403 `FORBIDDEN` | Origin(없으면 Referer)이 이 서버와 다른 출처 |
 | 429 `TOO_MANY_REQUESTS` | 운영 Nginx 전용 제한(1-5). `Retry-After: 6` |
 
@@ -2309,6 +2334,7 @@ Origin이 이 서버 자신과 같은 출처인지)을 거친다 — 벗어나�
 { "nickname": "내로판사" }
 ```
 
+- `nickname`은 표시 이름이다(M-5와 같다, v0.72).
 - 쿠키 · 익명 ID 연결 · 화면의 M-1 재발급은 M-5와 같다. 발급되는 권한은 항상 일반 회원(`USER`)이다
 
 | 거절 | 조건 |
@@ -2321,6 +2347,55 @@ Origin이 이 서버 자신과 같은 출처인지)을 거친다 — 벗어나�
 - 비밀번호 변경 · 찾기 · 탈퇴 API는 아직 없다(BE-113 범위 밖). 계정 단위 로그인 실패 잠금도 없고 IP별 요청 제한만 있다
 
 ---
+
+### M-8. 내 회원 정보 — `GET /api/v1/members/me` (BE-139)
+
+> 로그인한 회원만(`Authorization: Bearer`). 화면 "내 정보 수정"의 계정 관리와 헤더 표시 이름에 쓴다. 개인정보는 저장하지 않으므로(BE-62) 이름 · 이메일은 없다.
+
+**응답 200**
+
+```json
+{ "nickname": null, "displayName": "방청객 1024", "provider": "KAKAO", "loginId": null,
+  "createdAt": "2026-10-27T14:00:00+09:00", "lastLoginAt": "2026-10-29T09:30:00+09:00" }
+```
+
+| 필드 | 값 |
+| --- | --- |
+| `nickname` | 닉네임. 아직 정하지 않았으면(카카오 회원) `null` |
+| `displayName` | 화면 · 커뮤니티에 보이는 이름. 닉네임이 있으면 그 값, 없으면 **`방청객 {회원 ID}`**(커뮤니티 글쓴이 이름과 같다) |
+| `provider` | 로그인 방식 `KAKAO` · `LOCAL`(아이디) |
+| `loginId` | 아이디 회원의 로그인 아이디(소문자). 카카오 회원은 `null` |
+| `createdAt` · `lastLoginAt` | 가입 시각 · 최근 로그인 시각(`+09:00`). 최근 로그인 기록이 없으면 `lastLoginAt`은 `null` |
+
+| 거절 | 조건 |
+| --- | --- |
+| 401 `UNAUTHORIZED` | 로그인하지 않음 · 토큰은 유효한데 회원 행이 없음 |
+
+### M-7. 닉네임 설정 — `PUT /api/v1/members/me/nickname` (BE-139)
+
+> 로그인한 회원만(`Authorization: Bearer`). 카카오 회원 · 아이디 회원 공통이다. 카카오 회원은 닉네임이 없다(NULL) — 커뮤니티에는 `방청객 {회원 ID}`로 보이다가, 정하면 그 이름으로 바뀐다. 결정 기록 [`BE-139.md`](decisions/BE-139.md)
+
+**요청**
+
+```json
+{ "nickname": "내로판사" }
+```
+
+- 형식은 M-5와 같다: 한글 · 영문 · 숫자 2자 이상, 한글이 있으면 8자 · 영문 · 숫자만이면 12자까지, 공백 · 기호 불가. 앞뒤 공백을 다듬지 않는다(공백이 있으면 400).
+- **중복 금지**: 대소문자를 구분하지 않는다(`Naero`와 `naero`는 같은 닉네임). **내 닉네임의 대소문자만 바꾸는 것은 된다.** 닉네임이 없는(NULL) 회원은 겹쳐도 된다.
+- 변경 횟수 제한은 아직 없다. 금칙어 검사는 **`방청객`으로 시작하는 닉네임만 금지**한다(v0.72, 자동 이름 흉내 방지, 400 `VALIDATION_ERROR`). 일반 금칙어 검사는 아직 없다(금칙어 기능 A-39 ~ A-41이 생기면 붙인다).
+
+**응답 200**
+
+```json
+{ "nickname": "내로판사" }
+```
+
+| 거절 | 조건 |
+| --- | --- |
+| 401 `UNAUTHORIZED` | 로그인하지 않음 |
+| 400 `VALIDATION_ERROR` | `nickname`이 없음 · 문자열이 아님 · 형식 위반(`details`: `field: nickname`). `reason`(v0.76, BE-134): `NotBlank`(없음 · 빈 값 · 공백만 있는 값) · `Pattern`(공백 아닌 글자가 있는데 한글 · 영문 · 숫자 밖의 글자나 공백이 섞임, 예: `닉 네임` · `닉네임!`) · `Size`(2 ~ 12자 밖) · `SizeWithHangul`(한글이 들어가 8자 초과) · `Reserved`(`방청객`으로 시작). M-7은 처음 걸린 하나만 실린다. M-5 가입은 요청 검사(`@NotBlank` · `@Size` · `@Pattern`)가 먼저라 한 칸에 여러 사유가 함께 실릴 수 있고(예: 빈 닉네임), 그 검사를 통과한 뒤의 `SizeWithHangul` · `Reserved`는 하나다. 문자열로 읽을 수 없는 값(객체 · 배열 등)은 본문 해석 단계의 400이라 `details`가 `null`이다 |
+| 409 `DUPLICATE_NICKNAME` | 다른 회원이 쓰는 닉네임(동시 요청 포함 — 한 명만 된다) |
 
 ## 11. (확장) 레벨 · 직업 API (BE-106)
 
@@ -2346,7 +2421,7 @@ Origin이 이 서버 자신과 같은 출처인지)을 거친다 — 벗어나�
 | | 좋아요 누르기 | 2 | 글당 1회 · 하루 10개 |
 | | 좋아요 받기 | 3 | 글당 10개 · 하루 30개 |
 
-- 판결 체험의 사건 · 성향 · 출석 · 업적 XP는 기존 기록에서 **그때그때 계산**한다(저장하지 않는다). 글 · 댓글 · 좋아요 · SNS 공유는 지급 원장(`xp_event`)에 쌓는다. 커뮤니티 API는 아직 없어, 서버 안의 `LevelService.award(...)`만 준비했다(커뮤니티 BE가 부른다).
+- 판결 체험의 사건 · 성향 · 출석 · 업적 XP는 기존 기록에서 **그때그때 계산**한다(저장하지 않는다). 글 · 댓글 · 좋아요 · SNS 공유는 지급 원장(`xp_event`)에 쌓는다. 커뮤니티 API(12장, v0.68 BE-115)가 글 · 댓글 · 좋아요 때 `LevelService.award(...)`로 지급한다.
 - 어뷰징 방어: 같은 (사용자, 수급처, 대상)은 한 번만(유니크), 하루(KST) · 묶음 상한은 서버가 센다, 같은 사용자의 요청은 행 잠금으로 차례로 처리한다. 삭제 · 숨김 시 회수는 이번에 하지 않는다(글 삭제 · 신고 기능과 운영 정책이 아직 없다).
 
 ### L-1. 내 레벨 · 직업 — `GET /level`
@@ -2419,3 +2494,203 @@ Origin이 이 서버 자신과 같은 출처인지)을 거친다 — 벗어나�
 | --- | --- |
 | 400 `VALIDATION_ERROR` | `caseId`가 없음 |
 | 404 `EXPERIENCE_NOT_FOUND` | 쿠키가 없거나, 그 사건을 완료한 기록이 없음 |
+
+## 12. (확장) 커뮤니티 API (BE-115)
+
+> 결정 기록 [`BE-115.md`](decisions/BE-115.md). 화면 목 `frontend/src/mocks/communityMockApi.js`(FE-47 · FE-88 · FE-89 · FE-116)의 함수 · 응답 모양을 그대로 따른다. ERD v1.48 `community_post` · `community_comment` · `community_like`(V37).
+
+### 12-1. 공통
+
+- **읽기는 누구나, 쓰기(글 · 댓글 · 좋아요)는 로그인한 회원만** 한다. 쓰기는 `Authorization: Bearer {액세스 토큰}`이 있어야 하고, 없으면 `401 UNAUTHORIZED`다(목의 임시 코드 `LOGIN_REQUIRED` 대신 이 코드를 쓴다). 익명 ID 쿠키는 읽기만 하고 발급하지 않는다.
+- **글쓴이와 명함 기준**: 글쓴이는 회원이다. 명함(레벨 · 직업 · 꾸미기 · 카드 아래 줄 · 성향 · 소개)과 경험치는 지금 구조대로 **익명 ID 단위**라, 쓴 요청에서 회원에 연결된 익명 ID 하나를 골라 함께 남긴다 — 쿠키의 익명 ID가 이 회원에 연결돼 있으면 그것, 아니면 이 회원에 연결된 익명 ID 중 가장 최근에 접속한 것. 마이페이지 · 레벨을 회원 기준으로 옮기면(후속) 이 규칙만 바뀐다.
+- **글쓴이 명함 `author`** (글 · 댓글 · 메인의 사건 글이 같은 모양)
+
+```json
+{
+  "nickname": "새벽의 배심원",
+  "intro": "첫인상은 늘 한 번 의심해 봐요.",
+  "level": 52,
+  "job": { "code": "PRESIDING_JUDGE", "name": "부장판사" },
+  "cardLine": { "line": "signature", "showLevel": true },
+  "completedCount": 12,
+  "profileCard": { "portrait": "/images/characters/standing/naero.webp", "frame": "gold", "…": "…" },
+  "shownType": { "slot": "current", "type": { "shareId": "Qm7xK2pa", "name": "…", "…": "…" }, "deco": null }
+}
+```
+
+| 필드 | 값 |
+| --- | --- |
+| `nickname` | 회원 닉네임. 닉네임이 없는 회원(카카오)은 **`방청객 {회원 ID}`** — 사람마다 다르고 바뀌지 않는다(닉네임은 M-7로 정할 수 있고, 정하면 그 이름으로 바뀐다) |
+| `intro` | 한 줄 소개(P-8 `bio`). 없으면 `""` |
+| `level` · `job` | L-1과 같은 값 · 형식 |
+| `cardLine` | 프로필카드 아래 줄(P-8 `cardLine` · `cardLevel`, v0.65): `line`은 `type` · `signature` · `job`, `showLevel`은 레벨을 윗줄에 붙일지 |
+| `completedCount` | 끝까지 체험한 사건 수 |
+| `profileCard` | 프로필카드 꾸미기(P-7과 같은 칸). 저장 전이면 기본값 |
+| `shownType` | 공개 성향카드. `slot`은 실제로 보여 주는 칸(`initial` 초심 · `retake` 재심 · `current` 최근), 고른 칸(P-8 `shownCard`)이 비면 최근 → 초심 → 재심 순으로 대신 고른다. `type`은 유형 공통 형식(9-1). `deco`(성향카드 꾸미기)는 아직 서버에 없어 늘 `null` — 화면이 기본 꾸미기로 그린다. 보여 줄 성향이 없으면 `shownType: null` |
+
+- **글 `post`** (목록 · 상세 · 작성 응답이 같은 모양)
+
+```json
+{
+  "postId": 108, "category": "VERDICT", "caseId": 1, "caseTitle": "빌린 돈 문제로 찾아온 지인을 살해한 사건",
+  "author": { "…": "…" },
+  "title": "처음엔 무겁게 봤는데, 다 읽고 나니 생각이 바뀌었어요", "body": "…", "images": [],
+  "verdict": { "penaltyType": "PRISON", "reducedTo": null, "prisonMonths": 144, "fineAmount": null, "suspensionMonths": null, "upCount": 3, "downCount": 1 },
+  "likeCount": 24, "liked": false, "commentCount": 3, "mine": false, "viewerJudged": true,
+  "createdAt": "2026-10-19T21:14:00+09:00"
+}
+```
+
+| 필드 | 값 |
+| --- | --- |
+| `category` | 말머리 `VERDICT`(판결 공유) · `QUESTION`(질문) · `FREE`(자유) |
+| `caseId` · `caseTitle` | 이야기하는 사건. 사건이 없으면 둘 다 `null`, 사건이 공개 취소됐으면 `caseTitle`만 `null` |
+| `images` | 사진 주소. **사진 올리기는 후속**이라 늘 빈 배열 |
+| `verdict` | 판결 공유 글에 붙인 내 판결. 붙인 시점의 값을 남긴다(뒤에 다시 체험해도 바뀌지 않는다). 판결한 사람 자신의 판결만 담고 AI 판결 · 실제 판결은 넣지 않는다(앵커링 방지). 없으면 `null` |
+| `liked` · `mine` | 보는 사람이 좋아요를 눌렀는가 · 쓴 글인가. 로그인 전이면 둘 다 `false` |
+| `viewerJudged` | 보는 사람이 이 글의 사건 판결을 확정했는가(체험 상태 `VERDICT_CONFIRMED` 이후). 로그인 전이면 쿠키의 익명 ID로 본다. 판결 전이면 화면이 남의 판결 카드를 접는다(FE-93) |
+
+- **글자 수**: 앞뒤 공백을 뺀 뒤 유니코드 글자 기준. 제목 1 ~ 60자(줄바꿈 · 제어 문자 없음), 본문 1 ~ 2,000자 · 댓글 1 ~ 500자(줄바꿈 · 탭은 되고 그 밖의 제어 문자는 안 됨). HTML은 거르지 않고 그대로 저장한다 — 화면은 `textContent`로만 그린다(P-8 `bio`와 같다).
+- **경험치**(11-1 수급처 그대로, `LevelService.award`): 글 작성 30(하루 3건) · 판결 공유 글 보너스 20(사건당 1회) · 댓글 10(하루 5건) · 좋아요 누르기 2(글당 1회 · 하루 10개) · 좋아요 받기 3(글당 10개 · 하루 30개). 상한을 넘겨도 쓰기는 그대로 되고 경험치만 주지 않는다. **내 글에 누른 좋아요는 경험치를 주지 않는다.** 좋아요를 껐다 다시 켜도 다시 주지 않는다.
+- 글 삭제 · 수정 · 신고, 사진 올리기는 이번 범위 밖이다(후속). 닉네임 설정은 M-7(BE-139)로 생겼다.
+
+### C-1. 글 목록 — `GET /community/posts?category&caseId&sort&page`
+
+| 쿼리 | 값 |
+| --- | --- |
+| `category` | 말머리로 거르기(생략하면 전체). 모르는 값이면 400 |
+| `caseId` | 사건으로 거르기(생략하면 전체) |
+| `sort` | `LATEST`(기본, 최신순) · `LIKES`(좋아요순) · `COMMENTS`(댓글순). 같으면 최신순. 모르는 값이면 400 |
+| `page` | 1부터. **첫 글부터 `page`쪽 끝까지**(쪽마다 6개) 내려 준다 — 화면의 "더 보기"가 `page`를 늘려 다시 부르는 방식(목과 같다). 1 ~ 50으로 맞춘다 |
+
+**응답 200**
+
+```json
+{
+  "posts": [ { "…": "글" } ],
+  "total": 21, "hasMore": true,
+  "popular": [ { "postId": 108, "title": "…" } ],
+  "cases": [ { "caseId": 1, "title": "…" } ]
+}
+```
+
+- `popular`: 많이 본 글 셋. 조회 수는 세지 않아 **좋아요 순**(같으면 최신)으로 고른다. 거르기 조건과 상관없이 전체에서 고른다.
+- `cases`: 공개 사건 전체(사건 고르기 · 거르기용).
+
+### C-2. 글 상세 — `GET /community/posts/{postId}`
+
+**응답 200**: 글 + `comments`(오래된 순)
+
+```json
+{ "postId": 108, "…": "…", "comments": [ { "commentId": 31, "author": { "…": "…" }, "body": "…", "createdAt": "2026-10-19T22:00:00+09:00", "mine": false } ] }
+```
+
+| 거절 | 조건 |
+| --- | --- |
+| 404 `POST_NOT_FOUND` | 글이 없음 |
+
+### C-3. 글쓰기 — `POST /community/posts` (로그인)
+
+**요청**
+
+```json
+{ "category": "VERDICT", "caseId": 1, "title": "…", "body": "…", "images": [], "shareVerdict": true }
+```
+
+| 필드 | 값 |
+| --- | --- |
+| `category` | 말머리(필수) |
+| `caseId` | 이야기하는 공개 사건. 생략 · `null`이면 사건 없음 |
+| `title` · `body` | 12-1 글자 수 |
+| `images` | 생략하거나 빈 배열만 받는다(사진 올리기는 후속). 값이 있으면 400 |
+| `shareVerdict` | `true`면 **서버가 내 판결을 붙인다**(화면은 판결 값을 보내지 않는다). `caseId`를 보냈으면 그 사건, 아니면 가장 최근에 확정한 판결이고, 글의 사건은 그 판결의 사건으로 맞춘다 |
+
+**응답 201**: 쓴 글(글 모양, `mine: true`)
+
+| 거절 | 조건 |
+| --- | --- |
+| 401 `UNAUTHORIZED` | 로그인하지 않음 |
+| 400 `VALIDATION_ERROR` | 틀린 칸을 **모두** `details`에 담는다: `category`(`MUST_BE_ONE_OF_CATEGORIES`) · `caseId`(`CASE_NOT_FOUND`, 없거나 공개 전 사건) · `title`(`MUST_BE_1_TO_60_CHARS`) · `body`(`MUST_BE_1_TO_2000_CHARS`) · `images`(`NOT_SUPPORTED_YET`). 이 검사를 통과한 뒤 `shareVerdict`인데 붙일 판결이 없으면 `shareVerdict`(`VERDICT_NOT_CONFIRMED`) |
+
+- 400이면 아무것도 저장하지 않는다.
+
+### C-4. 좋아요 켜고 끄기 — `POST /community/posts/{postId}/like` (로그인)
+
+**응답 200**
+
+```json
+{ "liked": true, "likeCount": 25 }
+```
+
+- 누를 때마다 켜고 끈다. 회원 한 명이 글 하나에 하나. 동시에 두 번 눌러도 수가 어긋나지 않는다.
+
+| 거절 | 조건 |
+| --- | --- |
+| 401 `UNAUTHORIZED` | 로그인하지 않음 |
+| 404 `POST_NOT_FOUND` | 글이 없음 |
+
+### C-5. 댓글 — `POST /community/posts/{postId}/comments` (로그인)
+
+**요청** `{ "body": "…" }` → **응답 201**: 쓴 댓글(C-2 `comments` 한 줄 모양, `mine: true`)
+
+| 거절 | 조건 |
+| --- | --- |
+| 401 `UNAUTHORIZED` | 로그인하지 않음 |
+| 400 `VALIDATION_ERROR` | `body`(`MUST_BE_1_TO_500_CHARS`) |
+| 404 `POST_NOT_FOUND` | 글이 없음 |
+
+### C-6. 커뮤니티 메인 — `GET /community/home`
+
+> **응답은 한동안 그대로 온다**(서버 캐시, 기본 1시간, 설정 `community.home-cache-ttl`로 최대 하루까지 늘릴 수 있다). 새 글 · 댓글 · 레벨이 메인의 이야기 많은 사건 · 랭킹에 늦게 반영된다. 로그인 여부와 상관없이 모두가 같은 응답을 받는다. 글 목록 · 상세(C-1 · C-2)는 캐시하지 않는다.
+
+**응답 200**
+
+```json
+{
+  "hotCases": [ { "case": { "caseId": 1, "title": "…", "crimeCategoryLabel": "살인", "shortIntro": "…", "headline": "…", "deck": "…", "article": ["…", "…"], "thumbnailUrl": "…", "participantCount": 120, "estimatedMinutes": 15, "scriptReady": true }, "talkCount": 7, "postCount": 12, "posts": [ { "postId": 108, "title": "…", "likeCount": 24, "commentCount": 3, "author": { "…": "…" } } ] } ],
+  "recommendedCases": [ { "case": { "…": "…" }, "postCount": 2, "posts": [ "…" ] } ],
+  "ranking": [ { "rank": 1, "nickname": "…", "level": 71, "job": { "…": "…" }, "cardLine": { "…": "…" }, "completedCount": 21, "profileCard": { "…": "…" }, "shownType": { "…": "…" } } ],
+  "popular": [ { "postId": 108, "title": "…" } ],
+  "cases": [ { "caseId": 1, "title": "…" } ]
+}
+```
+
+- **이야기 많은 사건 `hotCases`**: 최근 하루의 이야기 수(`talkCount` = 그 사건 글 + 그 사건 글에 달린 댓글)가 1 이상인 사건을 많은 순으로 셋(같으면 사건 ID 순). 사건 글은 좋아요 순으로 셋.
+- **추천 사건 `recommendedCases`**: 이야기 많은 사건에 없는 공개 사건을 이야기 수 → 판결한 사람 수 순으로 셋. 사건 글은 둘. `talkCount`는 없다.
+- `case`: 신문 지면(API 17)의 `headline` · `deck` · `article` 앞 두 단락과 사건 목록(API 1)의 값. 지면이 없으면 `headline` · `deck`은 `null`, `article`은 빈 배열. `postCount`는 그 사건 글 수(전체 기간).
+- **레벨 랭킹 `ranking`**: 글이나 댓글을 쓴 회원을 레벨 → 체험한 사건 수 → 닉네임 순으로 열 명. 명함은 그 회원이 가장 최근에 쓴 글 · 댓글의 익명 ID 기준. 레벨은 사건 체험 · 커뮤니티 활동으로 오르며 성향과 무관하다. 명함에서 `intro`만 뺀 값이다.
+
+### C-7. 붙일 수 있는 내 판결 — `GET /community/shareable-verdict`
+
+**응답 200** — 가장 최근에 확정한 내 판결(공개 사건만)
+
+```json
+{ "caseId": 1, "caseTitle": "…", "verdict": { "penaltyType": "PRISON", "reducedTo": null, "prisonMonths": 144, "fineAmount": null, "suspensionMonths": null, "upCount": 3, "downCount": 1 } }
+```
+
+- 판결을 확정하기 전이거나 쿠키가 없으면 **204**(본문 없음). 목의 `null` 응답과 같은 뜻이다.
+- 로그인했으면 12-1의 명함 기준 익명 ID, 아니면 쿠키의 익명 ID로 찾는다. 글쓰기(C-3)가 붙이는 판결과 같은 기준이다.
+
+## 13. (확장) 일러스트 API (BE-142)
+
+> 결정 기록 [`BE-142.md`](decisions/BE-142.md). 로그인 전 마이페이지(FE-138)의 "일러스트 N장" 안내에 쓴다.
+
+### I-1. 일러스트 총 개수 — `GET /api/v1/illustrations/summary`
+
+누구나 부를 수 있다(로그인 · 쿠키 불필요, 쿠키는 읽지도 발급하지도 않는다).
+
+**응답 200**
+
+```json
+{ "total": 212, "byKind": { "cases": 76, "characters/adult": 9, "characters/icon/cropped": 18, "characters/icon/generated": 12, "characters/personality": 32 } }
+```
+
+| 필드 | 설명 |
+| --- | --- |
+| `total` | 일러스트 총 장수. **사건 컷(`images/cases`)과 캐릭터 이미지(`images/characters`, 아이콘 포함)의 모든 `.webp`**다. 루트의 대체 SVG · 배경(`desk-felt.webp`)은 세지 않는다 |
+| `byKind` | 종류별 장수. 키는 `images/` 아래 폴더 경로(`cases`, `characters/scene`, `characters/icon/cropped` …), 값의 합이 `total`이다(예시는 일부만) |
+
+- 모을 수 있는(컬렉션) 일러스트 수가 아니라 **서비스에 있는 일러스트 전부**의 수다.
+- 이미지는 프론트(`frontend/public/images`)에만 있다. 백엔드는 목록 파일(`backend/src/main/resources/illustration-images.txt`)의 줄 수로 세며, 이미지를 더하거나 지운 뒤 `tools/illustrations/update-manifest.sh`로 목록을 갱신한다. 이미지 폴더와 목록이 어긋나면 백엔드 테스트(`IllustrationCatalogTest`)가 실패한다.
+- 서버를 다시 띄울 때까지 값이 바뀌지 않는다(시작할 때 목록을 읽어 둔다).
+- **저장소 기준이다(감수한 한계).** 사건 사진은 DB 저장값(관리자 업로드)이 우선이지만(BE-141) 이 값은 DB를 보지 않고 공개 여부도 따지지 않는다(비공개 사건 컷 · 공용 컷 포함, DB에만 있는 이미지는 미포함). 가능한 한 DB 기준으로 저장소를 최신화하는 것이 원칙이며, 관리자가 DB에 올릴 때 저장소에도 같은 파일을 올리면 어긋나지 않는다. DB 기준으로 바꾸는 일은 필수가 아닌 후속 이슈 BE-143이다.

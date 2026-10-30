@@ -10,6 +10,14 @@ import org.springframework.data.repository.query.Param;
 
 public interface MemberRepository extends JpaRepository<Member, Long> {
 
+	/** 대소문자를 구분하지 않고 이미 쓰는 닉네임인가. `lower(nickname)`으로 비교해 uq_member_nickname 인덱스를 탄다(Spring Data의 IgnoreCase는 upper()라 못 탄다, PR #343 리뷰) */
+	@Query("select count(m) > 0 from Member m where lower(m.nickname) = lower(:nickname)")
+	boolean existsByNicknameIgnoreCase(@Param("nickname") String nickname);
+
+	/** 나를 뺀 다른 회원이 쓰는 닉네임인가 (내 닉네임의 대소문자만 바꾸는 것은 허용) */
+	@Query("select count(m) > 0 from Member m where lower(m.nickname) = lower(:nickname) and m.id <> :id")
+	boolean existsByNicknameIgnoreCaseAndIdNot(@Param("nickname") String nickname, @Param("id") Long id);
+
 	Optional<Member> findByProviderAndProviderUserId(AuthProvider provider, String providerUserId);
 
 	/**

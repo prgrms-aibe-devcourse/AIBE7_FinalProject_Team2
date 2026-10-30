@@ -1,5 +1,7 @@
 import { button, element, mockTag } from '../../components/siteLayout.js';
 import { formatDispositions, formatPenalty } from '../../utils/judgmentFormat.js';
+import { API_MODE } from '../../api/config.js';
+import { composeErrorText } from './composeError.js';
 import { currentUser } from '../../utils/session.js';
 import { eraseSignature, signatureSvg, signerSeed, writeSignature } from '../../components/signatureInk.js';
 import { profileFace, typeFace } from '../../components/personCards.js';
@@ -8,7 +10,9 @@ import { normalizeTypeDeco } from '../../utils/typeCardDeco.js';
 
 // S-18 커뮤니티 (FE-47) 목록 · 상세가 함께 쓰는 틀과 조각: 노트북 화면 틀(왼쪽 거르기 · 가운데 · 오른쪽 글쓰기), 글 한 편, 내 판결 카드, 글쓰기 칸.
 // 판결 공유는 내 판결만 담는다(AI · 실제 판결은 넣지 않는다, 앵커링 방지 — PRODUCT.md).
-// 커뮤니티 API가 아직 명세에 없어 목 모드에서만 동작한다(mocks/communityMockApi.js). 실제 모드에는 api.getCommunityPosts가 없어 "준비 중"으로 안내한다
+// 목 모드(mocks/communityMockApi.js)와 실제 모드(api/realApi.js, BE-115)가 같은 함수 이름을 쓴다. api.getCommunityPosts가 없는 구현이면 "준비 중"으로 안내한다
+// 사진 올리기는 서버에 아직 없어(후속) 실제 모드에서는 글쓰기 사진 칸을 두지 않는다(서버는 images가 있으면 400이다)
+const PHOTO_UPLOAD = API_MODE === 'mock';
 export const CATEGORY_LABELS = { VERDICT: '판결 공유', QUESTION: '질문', FREE: '자유' };
 export const SORT_LABELS = { LATEST: '최신순', LIKES: '좋아요순', COMMENTS: '댓글순' };
 export const NOT_READY = '커뮤니티는 아직 준비 중이에요. 곧 열려요.';
@@ -216,7 +220,7 @@ export function nameCard(author) {
   const section = element('section', 'cm-namecard');
   const title = element('h2', 'cm-namecard-title', '글쓴이 명함');
   title.id = 'cm-namecard-title';
-  title.append(mockTag());
+  if (API_MODE === 'mock') title.append(mockTag()); // 목 모드에서만 — 실제 모드는 C-2 응답의 명함이다(FE-142)
   section.setAttribute('aria-labelledby', title.id);
   const body = element('div', 'cm-namecard-body');
   body.append(cardPair(author), authorInfo(author));
@@ -315,7 +319,7 @@ export function likeButton(post, { api, onLoginNeeded }) {
       state = await api.toggleCommunityLike(post.postId);
     } catch (error) {
       state = before;
-      if (error?.code === 'LOGIN_REQUIRED') onLoginNeeded(node);
+      if (error?.code === 'UNAUTHORIZED') onLoginNeeded(node);
     } finally {
       busy = false;
       if (node.isConnected) paint();
@@ -356,7 +360,8 @@ export function communityShell({ navigate, withCompose = true }) {
     event.preventDefault();
     navigate('community');
   });
-  title.append(home, mockTag());
+  title.append(home);
+  if (API_MODE === 'mock') title.append(mockTag()); // 목 모드에서만(FE-142)
   head.append(title, element('p', 'cm-sub', '같은 기록, 다른 생각'));
   filters.append(head);
 
@@ -435,7 +440,7 @@ export function popularList(popular, navigate) {
   box.setAttribute('aria-labelledby', 'cm-popular-title');
   const title = element('h2', 'cm-side-title', '많이 본 글');
   title.id = 'cm-popular-title';
-  title.append(mockTag());
+  if (API_MODE === 'mock') title.append(mockTag()); // 목 모드에서만 — 실제 모드는 C-1 · C-6 응답의 많이 본 글이다(FE-142)
   const list = element('ol', 'cm-popular-list');
   popular.forEach(({ postId, title: text }) => {
     const item = element('li');
@@ -611,7 +616,7 @@ export function composer({ api, navigate, cases, onPosted }) {
   actions.append(error, submit);
   function showError(text) { error.textContent = text; }
 
-  form.append(recipient, categories, caseField, titleField.field, bodyField.field, photoField, verdictField, signField, actions);
+  form.append(recipient, categories, caseField, titleField.field, bodyField.field, ...(PHOTO_UPLOAD ? [photoField] : []), verdictField, signField, actions);
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     showError('');
@@ -637,9 +642,7 @@ export function composer({ api, navigate, cases, onPosted }) {
       if (box.isConnected) onPosted(post);
     } catch (failure) {
       if (!box.isConnected) return;
-      showError(failure?.code === 'LOGIN_REQUIRED' ? '로그인이 풀렸어요. 다시 로그인해 주세요.'
-        : failure?.code === 'VALIDATION_ERROR' ? '입력한 내용을 확인해 주세요.'
-          : '글을 올리지 못했어요. 잠시 뒤 다시 시도해 주세요.');
+      showError(composeErrorText(failure));
       submit.disabled = false;
       submit.textContent = '서명하고 올리기';
       eraseSignature(signature);

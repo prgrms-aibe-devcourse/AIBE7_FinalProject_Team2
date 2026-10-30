@@ -36,7 +36,7 @@ export function picture(src, alt, className = '') {
 }
 
 // 그림 위 · 아래 여백(둥근 위쪽이 머리를 깎지 않게)은 200px 카드 기준이라 카드 폭에 비례시킨다(카드 칸도 비례하므로 어떤 크기에서도 같은 모양)
-const fitOptions = (extra = {}) => (win) => {
+export const fitOptions = (extra = {}) => (win) => {
   const width = win.closest('.my-card')?.clientWidth || 200;
   const scale = width / 200;
   return { top: Math.round(22 * scale), bottom: Math.max(2, Math.round(6 * scale)), ...extra };

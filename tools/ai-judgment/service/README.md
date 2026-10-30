@@ -93,13 +93,17 @@
   "models": ["gemini:gemini-3.7-flash"],
   "stages": { "contamination": { "enabled": true, "runs": 3 } },
   "incidentDate": "2023-04-01",
-  "indictmentDate": "2023-09-15"
+  "indictmentDate": "2023-09-15",
+  "crimeType": "MURDER"
 }
 ```
 
 - `sources` 필수, 1 ~ 3개. `originalText`가 비면 `400`.
 - `models` 필수 (`generate` 단계가 쓸 모델). 없으면 `400`.
 - `stages`는 선택. 끈 단계를 다시 켜거나 단계 설정을 덮어쓸 때만 쓴다. 모르는 단계 이름이면 `400`.
+- `crimeType`은 선택(BE-138). 관리자가 고른 범죄 유형(`MURDER` · `FRAUD` · `INJURY` · `ROBBERY` · `THEFT`, 다른 값이면 `400`)으로,
+  `extract`가 판결문에서 읽은 유형과 다르면 그 단계에서 실패로 멈춘다(판결 · 대본을 만들기 전). 모델에게는 보내지 않는다 —
+  모델이 판결문만 보고 고른 값과 비교해야 어긋남이 드러나서다.
 - **대본(`script`) 단계는 기본으로 돌지 않는다**(파이프라인 기본값이 꺼짐). 사건 등록에서 대본까지 만들려면
   `stages.script.enabled = true`와 `model` · `cast`(배역)를 함께 보내고 `until`을 `script`로 둔다(BE-107 · BE-108).
   돌리지 않으면 `result`의 `script`가 `null`이고, 사건 · 판결 적재는 그대로 된다.
@@ -113,6 +117,9 @@
 - 대본 전체(1막 해설 · 2막 재판 · 3막 의견, BE-121)까지 만들려면 `stages.script.full = true`와 `classification`
   (분위기 · 쟁점 · 피해자 측 · 부가 인물 · 민감 플래그)을 함께 보내거나, `classify` 단계를 켠다(설정 값이 우선). 1막 신문 기사도 이 단계가 먼저 만든다. 그러면
   `result.script`에 `fullScript`(case-1 형식 대본 · `paper` 기사 포함) · `pending`(만들지 못한 단위) · `scriptPublishable`이 더해진다. 컨테이너 안 경로(`scriptFile`)는 내보내지 않는다.
+  검수 조건 결과(BE-122)는 `fullScript.review`(목록, 형식은 `prompts/script/README.md` "검수 결과 형식")와 건수
+  `reviewErrors` · `reviewWarnings`로 온다. 오류가 하나라도 있으면 `scriptPublishable`이 `false`다. 오류는 먼저 그 줄만
+  고쳐 쓰고(`stages.script.repairRetries`, 기본 2), 한 일은 `fullScript.repairs`에 남는다(BE-122 2차, 같은 README "고쳐 쓰기").
   적재(`case_script` 확장)는 BE-126이라 지금 백엔드는 `fullScript`를 읽지 않는다.
   `load`는 여기서 켜도 되돌려 끈다.
 

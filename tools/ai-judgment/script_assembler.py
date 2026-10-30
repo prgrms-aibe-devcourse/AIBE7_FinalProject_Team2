@@ -23,8 +23,9 @@ BE-119가 만든 블록(`prompts/script/`)을 사건 분류에 맞게 골라 조
 공개 범위: 판결 정보와 `LAW`(양형기준 권고형) · `SUMMARY`는 어느 단위에도 넣지 않는다(판결 입력 전 앵커링).
 기사는 `OVERVIEW`, U1은 기사만, U0 · U2 · U4는 `OVERVIEW` · `DETAIL` · `ARGUMENT`까지 쓴다(`UNIT_STAGES`).
 
-검수 조건 전체(README "검수 조건" 표)는 BE-122다. 여기서는 형식(키 · 개수)과 BE-107 `validate_line`의 길이 ·
-금지어 검사만 하고, 틀리면 그 단위를 다시 요청한다.
+단위를 받을 때는 형식(키 · 개수)과 BE-107 `validate_line`의 길이 · 금지어만 보고, 틀리면 그 단위를 다시 요청한다.
+README "검수 조건" 표 전체는 생성이 끝난 뒤 `script_review.review_script`가 보고 결과 목록을 `review`로 남긴다(BE-122).
+오류가 하나라도 있으면 대본은 공개할 수 없다(`publishable: false`).
 """
 
 import json
@@ -35,6 +36,7 @@ from common import read_prompt
 from llm import LLMError, LLMQuotaExhaustedError
 from llm import call as default_call
 from script_generation import BANNED_PATTERNS, generate_evidence_lines, validate_line
+from script_review import SENTENCING_PATTERN, has_errors, review_failed, review_script
 
 MOODS = ("tragic", "impulsive", "cold", "betrayal", "calculated", "tense")
 ISSUES = ("admitted", "intent_disputed", "denied", "mental_state", "defense_claim")
@@ -280,6 +282,16 @@ def check_closing(value):
     return sentencing_errors("검사 의견", value["prosecutor"]) + sentencing_errors("최종변론", value["defense"])
 
 
+def unit_warnings(unit, value, case, paper):
+    """`ask_unit`이 단위를 받을 때 남기는 경고(BE-107 `validate_line`)를 값으로 다시 계산한다. 줄을 고쳐 쓰거나 단위를 다시
+    만든 뒤 경고가 바뀐 대사와 어긋나지 않게 한다(script_repair, PR #355 리뷰). 입력은 generate_units와 같다."""
+    lines_of = {"U0": lambda v: [q["q"] for q in v["questions"][:3]],
+                "U1": lambda v: [strip_line_prefix(x) for x in v["lines"][:5]],
+                "U2": opening_lines, "U4": lambda v: [v["prosecutor"], v["defense"]]}[unit]
+    source = json.dumps(paper if unit == "U1" else public_case(case, UNIT_STAGES["U0"]), ensure_ascii=False)
+    return _line_errors(lines_of(value), source)[1]
+
+
 def opening_lines(value):
     return [*value["indict"][:2], *value["plea"][:2], *value["issues_narr"][:2],
             *[q["q"] for q in value["questions"][:2]]]
@@ -376,21 +388,39 @@ def normalize_paper(value):
 
 
 # 검사 의견에 구형(형량)이 들어가면 사용자가 판결을 입력하기 직전에 앵커링이 된다(PR #329 YOLO-NIM 리뷰). 실제 재판의 검사 의견은
-# 구형을 포함하므로 모델이 그대로 따라 할 가능성이 높다. 전과 사실("징역 10개월을 선고받은 전력")은 막지 않도록 "처해 주십시오" 같은
-# 요구 문형이 뒤따르는 경우만 잡는다
+# 구형을 포함하므로 모델이 그대로 따라 할 가능성이 높다. 잡는 문형(SENTENCING_PATTERN)은 script_review가 갖는다
 NO_SENTENCING = ("- 구형 · 형량 · 벌금액(\"징역 몇 년\" · \"벌금 얼마\")을 말하지 않는다. 사용자가 판결을 입력하기 전이라 앵커링이 된다. "
                  "전과 · 선고 이력 같은 사실은 데이터대로 말해도 된다.")
-SENTENCING_PATTERN = r"구형|(?:징역|금고|벌금)[^.\n]{0,15}\d[^.\n]{0,15}(?:처해|처하|구합니다|구하|선고해|내려)"
-
-
 def sentencing_errors(label, text):
     return [f"{label}에 구형 · 형량이 들어갔습니다(판결 입력 전 앵커링)"] if re.search(SENTENCING_PATTERN, text or "") else []
 
 
+# 단위별 (ROLE, SCENE CONTEXT 첫 줄). 단위를 만들 때와 줄 하나를 고쳐 쓸 때(script_repair, BE-122) 같은 블록 · 장면을 쓴다
+UNIT_SCENES = {
+    "U0": (("narrator",), "대본 설계도 — 2막 재판의 쟁점과 피고인신문 방향을 정한다."),
+    "U1": (("guide",), "1막 첫인상 — 신문 기사를 함께 읽는 장면(법정 밖). 사용자는 기사 내용만 안다."),
+    "U2": (("prosecutor", "defense", "narrator"), "2막 재판 도입부 — 모두진술(공소사실 · 변호인 입장), 쟁점 정리, 피고인신문."),
+    "U4": (("prosecutor", "defense"), "3막 내 판결 — 판결 직전 검사 의견 · 최종변론."),
+}
+
+
+def unit_prompt(unit, case, cls, *, design=None, opening=None, paper=None):
+    """단위의 (system, scene, scene_data). U1은 `paper`, U2는 `design`, U4는 `design` · `opening`이 필요하다."""
+    roles, scene = UNIT_SCENES[unit]
+    if unit == "U1":
+        data = {"headline": paper.get("headline"), "deck": paper.get("deck"), "article": paper.get("article")}
+    elif unit == "U2":
+        data = {**public_case(case, UNIT_STAGES["U2"]), "design": design}
+    elif unit == "U4":
+        data = {**public_case(case, UNIT_STAGES["U4"]), "trial_plea": opening.get("plea"), "issues": design.get("issues")}
+    else:
+        data = public_case(case, UNIT_STAGES[unit])
+    return build_system(unit, cls, list(roles)), scene, data
+
+
 def design_request(case, cls):
-    data = public_case(case, UNIT_STAGES["U0"])
-    return build_system("U0", cls, ["narrator"]), build_user(
-        "대본 설계도 — 2막 재판의 쟁점과 피고인신문 방향을 정한다.", data, [
+    system, scene, data = unit_prompt("U0", case, cls)
+    return system, build_user(scene, data, [
             "아래 형식의 JSON 객체 하나로 답하세요.",
             '{"plea":"인정 | 일부 부인 | 전면 부인 | 고의 부인 | 방어 주장 중 하나","issues":["쟁점 1","쟁점 2","쟁점 3"],'
             '"questions":[{"q":"예 · 아니오로 답할 질문","a":"예 또는 아니요"}, … 3개],"tone":"이 사건 해설 어조 한 줄"}',
@@ -402,9 +432,8 @@ def design_request(case, cls):
 
 
 def intro_request(paper, cls):
-    data = {"headline": paper.get("headline"), "deck": paper.get("deck"), "article": paper.get("article")}
-    return build_system("U1", cls, ["guide"]), build_user(
-        "1막 첫인상 — 신문 기사를 함께 읽는 장면(법정 밖). 사용자는 기사 내용만 안다.", data, [
+    system, scene, data = unit_prompt("U1", None, cls, paper=paper)
+    return system, build_user(scene, data, [
             "기사를 짚는 대사 5줄을 쓰세요. 순서: ① 남불 제목 소개 ② 남불 본문 첫 내용 ③ 내로 이어지는 내용 "
             "④ 남불 이어지는 내용 ⑤ 남불 마무리(서두르지 말고 생각해 보자는 권유, 사건의 무게에 맞는 어조).",
             "기사에 있는 내용만 쓴다. 대사 앞에 번호 · 화자 이름을 붙이지 않는다.",
@@ -413,9 +442,8 @@ def intro_request(paper, cls):
 
 
 def opening_request(case, cls, cast, design):
-    data = {**public_case(case, UNIT_STAGES["U2"]), "design": design}
-    return build_system("U2", cls, ["prosecutor", "defense", "narrator"]), build_user(
-        "2막 재판 도입부 — 모두진술(공소사실 · 변호인 입장), 쟁점 정리, 피고인신문.", data, [
+    system, scene, data = unit_prompt("U2", case, cls, design=design)
+    return system, build_user(scene, data, [
             f"검사는 {NAMES[cast['prosecutor']]}, 변호인 · 피고인 역은 {NAMES[cast['defense']]}다. 진행 해설(issues_narr)은 해요체다.",
             "출력은 JSON 객체 하나:",
             '{"indict":["검사 공소사실 1","검사 공소사실 2(적용 법조 포함)"],"plea":["변호인 입장 1","변호인 입장 2"],'
@@ -432,9 +460,8 @@ def opening_request(case, cls, cast, design):
 
 
 def closing_request(case, cls, cast, design, opening):
-    data = {**public_case(case, UNIT_STAGES["U4"]), "trial_plea": opening.get("plea"), "issues": design.get("issues")}
-    return build_system("U4", cls, ["prosecutor", "defense"]), build_user(
-        "3막 내 판결 — 판결 직전 검사 의견 · 최종변론.", data, [
+    system, scene, data = unit_prompt("U4", case, cls, design=design, opening=opening)
+    return system, build_user(scene, data, [
             f"검사({NAMES[cast['prosecutor']]}) 의견 한 줄, 변호인({NAMES[cast['defense']]}) 최종변론 한 줄. 각 두 줄 이내.",
             "검사 의견은 \"검사 측 의견입니다.\"로, 최종변론은 \"변호인 측 최종변론입니다.\"로 시작한다.",
             NO_SENTENCING,
@@ -449,7 +476,7 @@ def generate_units(case, judgment_output, cast, cls, *, model, paper=None, calle
     (U2 · U4는 U0 설계도, U4는 U2 입장이 필요하다). 호출 한도가 소진되면 그 자리에서 멈춘다.
 
     돌려주는 값: {"units": {단위: ask_unit 결과}, "paper": 기사 또는 None, "evidence": [...], "stopped": bool,
-    "pending": [건너뛴 단위]}"""
+    "pending": [건너뛴 단위], "review": 검수 조건 결과 목록(script_review 형식)}"""
     opts = dict(model=model, caller=caller, max_retries=max_retries, temperature=temperature,
                 max_tokens=max_tokens, timeout=timeout, delay=delay, log=log)
     source = json.dumps(public_case(case, UNIT_STAGES["U0"]), ensure_ascii=False)
@@ -492,7 +519,14 @@ def generate_units(case, judgment_output, cast, cls, *, model, paper=None, calle
         stopped = True
         pending += [u for u in ("PAPER", "U0", "U1", "U2", "U4")
                     if u not in units and u not in pending and not (u == "PAPER" and paper)]
-    return {"units": units, "paper": paper, "evidence": evidence, "stopped": stopped, "pending": pending}
+    generated = {"units": units, "paper": paper, "evidence": evidence, "stopped": stopped, "pending": pending}
+    try:
+        generated["review"] = review_script(case, judgment_output, generated, strip_prefix=strip_line_prefix)
+    except Exception as e:  # noqa: BLE001 — 검사 실패로 이미 만든 단위(대본 한 건에 약 3만 토큰)를 잃지 않는다(PR #352 리뷰)
+        if log:
+            log(f"⚠ 검수를 돌리지 못했습니다 — 생성 결과는 남기고 공개할 수 없게 둡니다: {e!r}")
+        generated["review"] = [review_failed(e)]
+    return generated
 
 
 # ---------------------------------------------------------------- 대본 조립
@@ -621,8 +655,10 @@ def build_script(case, cast, cls, generated, *, model):
         acts["3"] = _verdict_act(cast, closing)
     failed = sorted(u for u, r in units.items() if not r["value"])
     pending = sorted(set(generated["pending"]) | set(failed))
+    review = generated.get("review", [])
     publishable = (not generated["stopped"] and not pending
-                   and all(line.get("text") for line in generated["evidence"]) and bool(evidence))
+                   and all(line.get("text") for line in generated["evidence"]) and bool(evidence)
+                   and not has_errors(review))
     return {
         "caseId": case.get("caseId"), "title": case.get("title"), "model": model,
         "cast": dict(cast), "classification": cls, "sensitiveNotice": notice, "design": design,
@@ -632,4 +668,5 @@ def build_script(case, cast, cls, generated, *, model):
                       "text": labels.get(line["factorId"])} for line in evidence],
         "acts": acts, "pending": pending, "publishable": publishable,
         "warnings": {u: r["warnings"] for u, r in units.items() if r["warnings"]},
+        "review": review, "repairs": generated.get("repairs", []),
     }

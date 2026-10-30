@@ -1,6 +1,7 @@
 package com.team2.project.auth.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.hamcrest.Matchers.everyItem;
 import static org.hamcrest.Matchers.is;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -8,11 +9,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.jayway.jsonpath.JsonPath;
+import com.team2.project.common.exception.BusinessException;
+import com.team2.project.common.exception.ErrorCode;
 import com.team2.project.common.security.token.AccessTokenVerifier;
 import com.team2.project.common.security.token.MemberPrincipal;
 import com.team2.project.common.security.token.jwt.RefreshTokenStore;
 import com.team2.project.common.web.AnonymousIdCookie;
 import com.team2.project.common.web.RefreshTokenCookies;
+import com.team2.project.member.domain.TermsVersion;
+import com.team2.project.member.service.LocalAccountService;
 import com.team2.project.support.ApiIntegrationTest;
 import jakarta.servlet.http.Cookie;
 import java.util.ArrayList;
@@ -30,6 +35,7 @@ import java.util.concurrent.Future;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MvcResult;
@@ -53,6 +59,9 @@ class LocalAuthControllerTest extends ApiIntegrationTest {
 
 	@Autowired
 	private AccessTokenVerifier accessTokenVerifier;
+
+	@Autowired
+	private LocalAccountService localAccountService;
 
 	private final List<String> loginIds = new ArrayList<>();
 	private final List<UUID> anonymousIds = new ArrayList<>();
@@ -82,9 +91,15 @@ class LocalAuthControllerTest extends ApiIntegrationTest {
 		return id;
 	}
 
+	/** 약관에 동의한 가입 요청 — 화면이 보내는 모양 (BE-133) */
 	private static String signupBody(String id, String password, String nickname) {
+		return signupBody(id, password, nickname, ",\"agreed\":true");
+	}
+
+	/** agreedPart: 본문 끝에 붙일 동의 칸(빈 문자열이면 칸 없음) */
+	private static String signupBody(String id, String password, String nickname, String agreedPart) {
 		return """
-			{"id":"%s","password":"%s","nickname":"%s"}""".formatted(id, password, nickname);
+			{"id":"%s","password":"%s","nickname":"%s"%s}""".formatted(id, password, nickname, agreedPart);
 	}
 
 	private static String loginBody(String id, String password) {
@@ -192,7 +207,7 @@ class LocalAuthControllerTest extends ApiIntegrationTest {
 			for (int i = 0; i < threads; i++) {
 				Callable<MvcResult> call = () -> {
 					start.await();
-					return mockMvc.perform(json(SIGNUP, signupBody(id, PASSWORD, "동시가입"))).andReturn();
+					return mockMvc.perform(json(SIGNUP, signupBody(id, PASSWORD, uniqueNickname()))).andReturn();
 				};
 				futures.add(pool.submit(call));
 			}
@@ -218,7 +233,7 @@ class LocalAuthControllerTest extends ApiIntegrationTest {
 		// 진 쪽의 회원 행은 되돌려졌다 — 비밀번호 행 없는 LOCAL 회원이 남지 않는다
 		assertThat(jdbcTemplate.queryForObject("""
 			SELECT count(*) FROM member m
-			WHERE m.provider = 'LOCAL' AND m.nickname = '동시가입'
+			WHERE m.provider = 'LOCAL' AND m.nickname LIKE 'cc%'
 			  AND NOT EXISTS (SELECT 1 FROM member_password p WHERE p.member_id = m.id)
 			""", Integer.class)).isZero();
 	}
@@ -253,12 +268,130 @@ class LocalAuthControllerTest extends ApiIntegrationTest {
 	}
 
 	@Test
+	void 가입_약관에_동의하지_않으면_400이고_아무것도_저장하지_않는다() throws Exception {
+		String id = newLoginId();
+		// 동의 칸 → 서버가 details[].reason으로 알려 줄 사유. 칸 이름은 늘 agreed라 화면이 동의 줄에 안내를 붙인다 (BE-133)
+		Map<String, String> notAgreed = new LinkedHashMap<>();
+		notAgreed.put(",\"agreed\":false", "AssertTrue");		// 동의하지 않음
+		notAgreed.put(",\"agreed\":null", "AssertTrue");		// 값 없음
+		notAgreed.put("", "AssertTrue");						// 칸 없음 (BE-133 전 화면 · API 직접 호출)
+		notAgreed.put(",\"agreed\":\"true\"", "AssertTrue");	// 문자열 — 불리언으로 바꿔 받지 않는다 (PR #349 리뷰)
+		notAgreed.put(",\"agreed\":1", "AssertTrue");			// 숫자
+		for (Map.Entry<String, String> body : notAgreed.entrySet()) {
+			mockMvc.perform(json(SIGNUP, signupBody(id, PASSWORD, uniqueNickname(), body.getKey())))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+				.andExpect(jsonPath("$.details[*].field", everyItem(is("agreed"))))
+				.andExpect(jsonPath("$.details[0].reason").value(body.getValue()));
+		}
+		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM member_password WHERE login_id = ?",
+			Integer.class, id)).isZero();
+	}
+
+	@Test
+	void 서비스도_약관_미동의_가입을_거절한다() {
+		// DTO 검사를 거치지 않는 호출 경로가 생겨도 동의 없이 동의 기록이 남지 않는다 (BE-133, 서비스 이중 확인)
+		String id = newLoginId();
+		assertThatThrownBy(() -> localAccountService.signup(id, PASSWORD, uniqueNickname(), false, Optional.empty()))
+			.isInstanceOfSatisfying(BusinessException.class, failure -> {
+				assertThat(failure.getErrorCode()).isEqualTo(ErrorCode.VALIDATION_ERROR);
+				assertThat(failure.getDetails().stream().map(detail -> detail.field()).toList()).containsExactly("agreed");
+			});
+		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM member_password WHERE login_id = ?",
+			Integer.class, id)).isZero();
+	}
+
+	@Test
+	void 가입_약관_미동의는_중복_아이디보다_먼저_거절한다() throws Exception {
+		// Jira BE-133 재현: 이미 있는 아이디로 동의 없이 보내면 409가 아니라 400 (입력 검사가 먼저)
+		String id = newLoginId();
+		signup(id, uniqueNickname());
+		mockMvc.perform(json(SIGNUP, signupBody(id, PASSWORD, uniqueNickname(), ",\"agreed\":false")))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+			.andExpect(jsonPath("$.details[0].field").value("agreed"));
+	}
+
+	@Test
+	void 가입하면_약관_동의_시각과_버전을_남긴다() throws Exception {
+		String id = newLoginId();
+		signup(id, uniqueNickname());
+		Map<String, Object> row = jdbcTemplate.queryForMap(
+			"SELECT terms_agreed_at, terms_version, terms_agreed_at = last_login_at AS same_time FROM member WHERE id = ?",
+			memberIdOf(id));
+		assertThat(row.get("terms_agreed_at")).isNotNull();
+		assertThat(row.get("terms_version")).isEqualTo(TermsVersion.CURRENT);
+		assertThat(row.get("same_time")).isEqualTo(true);	// 가입한 그 시각(같은 트랜잭션의 now)
+	}
+
+	@Test
+	void 약관_동의_시각과_버전은_한쪽만_비울_수_없다() throws Exception {
+		// DB CHECK ck_member_terms_agreement (V44). 둘 다 NULL(카카오 · 기존 회원)은 된다
+		String id = newLoginId();
+		signup(id, uniqueNickname());
+		Long memberId = memberIdOf(id);
+		assertThatThrownBy(() -> jdbcTemplate.update("UPDATE member SET terms_version = NULL WHERE id = ?", memberId))
+			.isInstanceOf(DataIntegrityViolationException.class);
+		assertThatThrownBy(() -> jdbcTemplate.update("UPDATE member SET terms_agreed_at = NULL WHERE id = ?", memberId))
+			.isInstanceOf(DataIntegrityViolationException.class);
+		assertThat(jdbcTemplate.update(
+			"UPDATE member SET terms_agreed_at = NULL, terms_version = NULL WHERE id = ?", memberId)).isOne();
+	}
+
+	/** 시험마다 겹치지 않는 닉네임(영문 소문자 · 숫자 12자) — 닉네임은 중복 금지(BE-139) */
+	private static String uniqueNickname() {
+		return "cc" + UUID.randomUUID().toString().replace("-", "").substring(0, 10);
+	}
+
+	@Test
+	void 이미_쓰는_닉네임으로_가입하면_409이고_대소문자만_달라도_같다() throws Exception {
+		String nickname = uniqueNickname();
+		signup(newLoginId(), nickname);
+
+		String other = newLoginId();
+		mockMvc.perform(json(SIGNUP, signupBody(other, PASSWORD, nickname.toUpperCase())))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.code").value("DUPLICATE_NICKNAME"));
+		// 거절된 가입은 회원도 비밀번호도 남기지 않는다
+		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM member_password WHERE login_id = ?", Integer.class,
+			other)).isZero();
+	}
+
+	@Test
 	void 닉네임_경계값은_통과한다() throws Exception {
 		signup(newLoginId(), "가나다라마바사아");		// 한글 8자
 		signup(newLoginId(), "abcdefghijkl");		// 영문 12자
 	}
 
 	// ---- 로그인 ----
+
+	@Test
+	void 닉네임이_비워진_아이디_회원이_로그인하면_표시_이름_방청객_회원ID를_준다() throws Exception {
+		String id = newLoginId();
+		signup(id, "비워진회원");
+		long memberId = memberIdOf(id);
+		jdbcTemplate.update("UPDATE member SET nickname = NULL WHERE id = ?", memberId);	// V39가 겹치던 닉네임을 비운 회원
+
+		MvcResult result = mockMvc.perform(json(LOGIN, loginBody(id, PASSWORD)))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.nickname").value("방청객 " + memberId))	// null이 아니라 항상 문자열
+			.andReturn();
+		remember(result);
+	}
+
+	@Test
+	void 방청객으로_시작하는_닉네임으로는_가입할_수_없다() throws Exception {
+		String id = newLoginId();
+		mockMvc.perform(json(SIGNUP, signupBody(id, PASSWORD, "방청객99")))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+			.andExpect(jsonPath("$.details[0].field").value("nickname"))
+			.andExpect(jsonPath("$.details[0].reason").value("Reserved"));	// BE-134
+		mockMvc.perform(json(SIGNUP, signupBody(id, PASSWORD, "가나다라마바사아자")))	// 한글 9자: DTO @Size(12)는 통과, 서비스가 거절
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.details[0].reason").value("SizeWithHangul"));
+		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM member_password WHERE login_id = ?", Integer.class, id)).isZero();
+	}
 
 	@Test
 	void 로그인하면_리프레시_쿠키와_닉네임을_주고_대문자로_입력해도_된다() throws Exception {

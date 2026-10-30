@@ -15,7 +15,7 @@
 | `communityMockData.js` 글쓴이 | 커뮤니티 글쓴이 · 랭킹 모양 (FE-116) | `level` · `job { code, name }` · `cardLine { line, showLevel }`를 서버 계약 모양으로 둔다. 커뮤니티 API가 생기면 같은 모양으로 오도록 BE에 요청 중. 내 글은 내 레벨 · 직업 · 카드 아래 줄 설정을 쓴다 |
 | `profileDecoMockApi.js` · `profileDecoMockData.js` | P-5 꾸미기 부분 · P-6 · P-7 (BE-96 · BE-97, FE-71) | 서버가 하는 일을 흉내 낸다: 출석 기록(하루 한 번, 이전 11일 + 기록한 날), 꾸미기 전체 저장(값 목록 · 대표 이미지 형식 400 → 잠김 409), 마이페이지에 붙는 `profileDeco` · `achievements` · `unlocked`. 도전과제 · 보상 표(서버 쪽 표)는 `profileDecoMockData.js`에 있고 서버 표를 바꾸면 같이 고친다. 수집 도전과제는 서버처럼 `PENDING`이다. 저장값 · 출석 날짜는 `localStorage`(`nlnb-mock-profile-deco` · `nlnb-mock-attendance`) |
 | `authMockApi.js` | 사용자 로그인 (아직 API 없음, FE-52) | 개발용 목업 로그인 · 로그아웃. 어떤 아이디 · 비밀번호든 로그인되고 닉네임은 아이디의 @ 앞부분, 카카오는 "카카오 판사". 계정 · 비밀번호는 저장하지 않는다. 로그인 상태(닉네임)는 화면이 `utils/session.js`에 둔다 |
-| `communityMockApi.js` · `communityMockData.js` | 커뮤니티 (아직 API 없음, FE-47) | 글 목록(말머리 · 사건 거르기, 최신 · 좋아요 · 댓글순, 쪽마다 6개) · 글 상세 · 글쓰기(사진 최대 3장 · 내 판결 붙이기) · 좋아요 켜고 끄기 · 댓글. 다른 사람 글은 고정 값, 내가 쓴 글 · 댓글 · 좋아요는 `localStorage`(`nlnb-mock-community`). 쓰기 · 댓글 · 좋아요는 목업 로그인이 필요하고(`LOGIN_REQUIRED`), 내 판결은 S-05 판결 확정 뒤에만 붙는다(AI · 실제 판결은 붙지 않는다). 커뮤니티 메인(FE-89): 이야기 많은 사건 셋 · 추천 사건 셋 · 레벨 랭킹 열 명(`getCommunityHome`) |
+| `communityMockApi.js` · `communityMockData.js` | 커뮤니티 (실제 API는 BE-115 · FE-137, 목은 화면 확인용) | 글 목록(말머리 · 사건 거르기, 최신 · 좋아요 · 댓글순, 쪽마다 6개) · 글 상세 · 글쓰기(사진 최대 3장 · 내 판결 붙이기) · 좋아요 켜고 끄기 · 댓글. 다른 사람 글은 고정 값, 내가 쓴 글 · 댓글 · 좋아요는 `localStorage`(`nlnb-mock-community`). 쓰기 · 댓글 · 좋아요는 목업 로그인이 필요하고(`UNAUTHORIZED`, 서버와 같은 코드), 내 판결은 S-05 판결 확정 뒤에만 붙는다(AI · 실제 판결은 붙지 않는다). 커뮤니티 메인(FE-89): 이야기 많은 사건 셋 · 추천 사건 셋 · 레벨 랭킹 열 명(`getCommunityHome`) |
 | `mockExperienceStore.js` | — | 체험 상태를 브라우저 `localStorage`(`nlnb-mock-review`)에 저장하는 목 전용 저장소 |
 
 `reviewMockApi.js`의 `resetMock()` · `setMockStatus(status)`는 `preview.html`에서 체험 상태를 강제로 바꿔 화면을 확인할 때 쓴다. 실제 API에는 없는 목 전용 함수다.
@@ -27,6 +27,7 @@
 - 응답은 실제 네트워크처럼 0.25초 지연시킨다.
 - 실제 체험 진행 상태는 서버가 관리한다. `mockExperienceStore.js`와 위 두 함수는 목 전용이다.
 - 화면은 `api` 객체로 주입받아 쓰므로, 실제 API로 바꿀 때는 화면 코드가 아니라 이 객체를 교체한다. (`preview.html`이 목 API들을 합쳐서 주입한다)
+- **배포 빌드(`VITE_API_MODE=real`)에는 이 폴더의 파일이 들어가지 않는다(FE-135).** 목을 고르는 곳(`api/index.js` · `pages/admin/adminApi.js` · `mockStageButtons.js`)이 그 자리에서 `import.meta.env?.VITE_API_MODE` · `DEV`를 읽어 빌드 때 분기를 접는다. 목을 고르는 코드를 새로 더할 때도 같은 조건을 그 자리에 써야 한다(`API_MODE`만 보면 목이 다시 번들에 들어가 배포 빌드가 실패한다). 배포 빌드는 `vite.config.js`의 `no-mocks-in-real-build`가 청크마다 담긴 모듈 경로를 보고, 목 모듈(이 폴더 · 이름에 Mock이 든 파일, 예: `pages/admin/adminMockApi.js`)이 있으면 빌드를 멈춘다 — 실제 코드가 목을 정적으로 import 해도 걸린다. 예외는 `mockStageButtons.js`(실제 화면이 쓰는 껍데기) 하나다. CI(`frontend-ci.yml`)도 파일 이름으로 한 번 더 본다
 
 ## 확인 방법
 

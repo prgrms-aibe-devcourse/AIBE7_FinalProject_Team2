@@ -177,6 +177,8 @@ export function imageKinds(paths, { labels = {}, caseNames = {} } = {}) {
 
 // 컬렉션 — 체험을 마친 사건마다 만난 모습(역할 의상)과 대본에 나온 일러스트를 모은다. 같은 그림은 한 장으로 센다.
 // 대본이 없는 사건은 모을 것이 없으므로 건너뛴다.
+// 사진 주소는 화면에 박힌 대본(저장소 파일) 기준이다 — 가능한 한 DB 기준으로 저장소를 최신화한다. 사건 사진은 DB 저장값(관리자 업로드)이 우선이지만(BE-141)
+// 이 컬렉션은 DB 값을 보지 않으므로, 관리자가 DB에 사진을 올릴 때 같은 파일을 저장소에도 올리면 어긋나지 않는다. 조금 다른 것은 감수한다(필수가 아닌 후속 이슈 BE-143).
 export function collectionOf(experiences, scripts) {
   return (experiences ?? [])
     .filter((item) => item.status === 'COMPLETED' && scripts?.[item.caseId])

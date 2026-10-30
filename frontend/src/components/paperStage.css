@@ -9,7 +9,8 @@
 .case-paper-page .paper { margin-bottom: 0; }
 #app:has(.case-paper-page) > #route-footer { display: none; } /* 법적 고지는 지면 안 맨 아래 줄에 있다 */
 .stage-wrap.paper-mode .stage { position: relative; aspect-ratio: auto; overflow: visible; border: 0; border-radius: 0; background: none; user-select: auto; }
-.stage-wrap.paper-mode .scene { position: static; inset: auto; aspect-ratio: auto; overflow: visible; border: 0; cursor: pointer; }
+.stage-wrap.paper-mode .scene { position: static; inset: auto; aspect-ratio: auto; overflow: visible; border: 0; cursor: auto; } /* 지면 무대는 빈 곳을 눌러도 넘어가지 않으니 눌러지는 듯한 손 모양을 두지 않는다(FE-140) */
+.stage-wrap.paper-mode .stage:has(> .board:not([hidden])) { cursor: pointer; } /* 열린 엽서의 바깥(어두운 배경)은 눌러 내려놓는 자리다 */
 .stage-wrap.paper-mode .bg { display: none; }
 .stage-wrap.paper-mode .stage.bmode .scene { display: block; }
 /* 지금 읽는 기사만 또렷하게 */
@@ -29,12 +30,36 @@
 /* 독자 의견 칸(1막 엽서 카드). 카드가 없으면 칸째 숨는다 */
 /* 독자 의견 엽서(1막 사전 판단): 지면 위 팝업. 가장자리는 항공우편 줄무늬, 오른쪽 위에 우표 · 소인. 뒤 지면은 어둡게 가린다 */
 .stage-wrap.paper-mode .stage:has(> .board:not([hidden]))::after { content: ''; position: fixed; inset: 0; z-index: 25; background: color-mix(in srgb, var(--color-desk-shadow) 45%, transparent); animation: dlg-in .3s ease-out; }
-.stage-wrap.paper-mode .board, .stage-wrap.paper-mode .board.wide { position: fixed; z-index: 26; left: 50%; top: 46%; right: auto; bottom: auto; translate: -50% -50%; display: block; width: min(700px, calc(100vw - 32px)); height: auto; max-height: calc(100dvh - 150px);
+.stage-wrap.paper-mode .board, .stage-wrap.paper-mode .board.wide { position: fixed; z-index: 26; left: 50%; top: 46%; right: auto; bottom: auto; translate: -50% -50%; display: block; width: min(700px, calc(100vw - 32px)); height: auto; max-height: calc(100dvh - 190px); /* 아래에 "엽서 내려놓기" 버튼 자리(FE-140) */
   padding: 9px; border: 0; border-radius: 12px; overflow: hidden; animation: none; rotate: -.6deg; /* transform이 아닌 rotate: 같은 규칙에 translate와 transform이 같이 있으면 빌드(lightningcss 압축)가 translate를 지운다 */
   background: repeating-linear-gradient(-45deg, var(--color-caution) 0 14px, var(--color-card) 14px 22px, var(--color-accent) 22px 36px, var(--color-card) 36px 44px);
   box-shadow: 0 24px 48px -16px color-mix(in srgb, var(--color-desk-shadow) 70%, transparent); }
 .stage-wrap.paper-mode .board[hidden] { display: none; }
-.stage-wrap.paper-mode .board > .scroll-area { border-radius: 3px; max-height: calc(100dvh - 168px); background: color-mix(in srgb, var(--color-desk-kraft) 10%, var(--color-card)); }
+/* 엽서 내려놓기(FE-140): 엽서를 숨기고(내용은 그대로) 지면을 읽는다. 버튼은 엽서가 열려 있어도 내려놓았어도 같은 자리에 있다 */
+.stage-wrap.paper-mode .stage.postcard-down > .board { display: none; }
+.stage-wrap.paper-mode .stage.postcard-down:has(> .board)::after { display: none; }
+.stage-wrap.paper-mode .postcard-rest { position: fixed; z-index: 28; left: 50%; bottom: calc(66px + var(--safe-bottom)); translate: -50% 0; min-height: 44px; padding: 8px 18px; border: 1px solid var(--color-border-strong); border-radius: 999px; background: var(--color-card); color: var(--color-text); font: 700 14px/1.2 var(--font-body); box-shadow: 0 6px 16px -8px color-mix(in srgb, var(--color-desk-shadow) 60%, transparent); cursor: pointer; }
+.stage-wrap.paper-mode .postcard-rest[hidden] { display: none; }
+/* 엽서 폭(700px + 양옆 16px)보다 넓은 화면: 열려 있을 땐 아래 버튼 대신 엽서 왼쪽 위 ✕, 내려놓은 뒤에만 아래 버튼(다시 펼치기)을 보인다 */
+.stage-wrap.paper-mode .postcard-mini { display: none; }
+.stage-wrap.paper-mode .board > .postcard-close { position: absolute; top: 6px; left: 6px; z-index: 2; display: none; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 6px; background: var(--color-heading); color: var(--color-card); font: 900 16px/1 var(--font-body); box-shadow: 0 2px 6px -2px color-mix(in srgb, var(--color-desk-shadow) 70%, transparent); cursor: pointer; }
+.stage-wrap.paper-mode .board > .postcard-close:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+@media (hover: hover) and (pointer: fine) { .stage-wrap.paper-mode .board > .postcard-close:hover { border-color: var(--color-heading); } }
+@media (min-width: 733px) {
+  .stage-wrap.paper-mode .board > .postcard-close { display: block; }
+  .stage-wrap.paper-mode:not(:has(.stage.postcard-down)) .postcard-rest { display: none; }
+  /* 내려놓은 뒤: 알약 버튼 대신 엽서를 던진 남불 옆의 작은 엽서(자리는 스크립트가 남불 그림을 따라 잡는다 — 화면 너비와 상관없이 남불 곁, 하단 조작 줄(z 28)보다 위(z 29)). 누르면 엽서가 다시 펼쳐진다 */
+  .stage-wrap.paper-mode .postcard-rest { display: none; }
+  .stage-wrap.paper-mode .postcard-mini { position: fixed; z-index: 29; display: block; width: 84px; height: 57px; padding: 0; border: 0; border-radius: 4px; font-size: 0; rotate: -4deg; cursor: pointer;
+    background: repeating-linear-gradient(-45deg, var(--color-caution) 0 5px, var(--color-card) 5px 8px, var(--color-accent) 8px 13px, var(--color-card) 13px 16px); box-shadow: 0 8px 14px -8px color-mix(in srgb, var(--color-desk-shadow) 70%, transparent); }
+  .stage-wrap.paper-mode .postcard-mini::before { content: ''; position: absolute; inset: 4px; border-radius: 2px; background: var(--color-card); }
+  .stage-wrap.paper-mode .postcard-mini::after { content: '엽서'; position: absolute; inset: 0; display: grid; place-items: center; color: var(--color-heading); font: 900 14px/1 var(--font-heading); }
+  .stage-wrap.paper-mode .postcard-mini:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+  .stage-wrap.paper-mode .postcard-mini[hidden] { display: none; }
+}
+.stage-wrap.paper-mode .postcard-rest:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+@media (hover: hover) and (pointer: fine) { .stage-wrap.paper-mode .postcard-rest:hover { border-color: var(--color-heading); } }
+.stage-wrap.paper-mode .board > .scroll-area { border-radius: 3px; max-height: calc(100dvh - 208px); background: color-mix(in srgb, var(--color-desk-kraft) 10%, var(--color-card)); }
 .stage-wrap.paper-mode .board .scroll-body { padding: 26px 30px 24px; }
 .stage-wrap.paper-mode .board .postcard-head { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px dashed var(--color-border-strong); }
 .stage-wrap.paper-mode .board .postcard-head h2 { margin: 0 0 4px; font: 900 22px/1.3 var(--font-heading); letter-spacing: .08em; color: var(--color-heading); }
@@ -60,6 +85,9 @@
 /* 건네기: 남불이 앞으로 나서며 엽서를 내밀고(0.7초), 엽서는 남불 손에서 날아와 가운데에서 펼쳐진다 */
 .stage-wrap.paper-mode .spr.b.delivering { animation: nambul-hand .75s cubic-bezier(.3, .7, .2, 1); }
 @keyframes nambul-hand { 35% { transform: translate(-46%, -10%) rotate(-7deg); } 60% { transform: translate(-40%, -6%) rotate(-4deg); } }
+/* 배역이 바뀌어 남불이 왼쪽(묶음 A)에 서면 가운데 쪽(오른쪽)으로 손을 내민다(FE-128) */
+.stage-wrap.paper-mode .spr.b[data-seat="left"].delivering { animation-name: nambul-hand-right; }
+@keyframes nambul-hand-right { 35% { transform: translate(46%, -10%) rotate(7deg); } 60% { transform: translate(40%, -6%) rotate(4deg); } }
 .stage-wrap.paper-mode .board.delivering { animation: postcard-in .7s cubic-bezier(.25, .8, .25, 1) .22s backwards; }
 @keyframes postcard-in { from { opacity: 0; transform: translate(var(--from-x), var(--from-y)) scale(.3) rotate(-14deg); } 25% { opacity: 1; } }
 /* 화면 아래 고정: 대사창 · 조작 줄, 그 양옆에 내로 · 남불(발이 화면 아래 끝). 읽는 공간(대사창 위)을 가리지 않는다. 좁은 화면은 대사창 위 양 끝 */
@@ -158,6 +186,7 @@
 .case-paper-page .story-extra:empty { display: none; }
 .case-paper-page .extra-label { margin: 0 0 8px; padding-bottom: 6px; border-bottom: 3px double var(--color-border-strong); font-size: var(--text-caption); font-weight: 700; letter-spacing: .08em; color: var(--color-label); }
 .case-paper-page .extra-text { margin: 0; font: 400 13px/1.65 var(--font-article); letter-spacing: -.02em; color: var(--color-text); word-break: keep-all; text-align: justify; }
+.case-paper-page .extra-notice { font-weight: 700; } /* 민감 사건 안내(FE-129): 있으면 일반 설명을 대신한다 */
 .case-paper-page .extra-list { margin: 0; padding: 0; list-style: none; }
 .case-paper-page .extra-list li + li { border-top: 1px dotted var(--color-border-strong); }
 .case-paper-page .extra-link { display: block; width: 100%; min-height: 44px; padding: 6px 0; border: 0; background: transparent; color: var(--color-heading); font: 700 15px/1.45 var(--font-heading); letter-spacing: -.03em; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; } /* 제목은 한 줄만, 길면 … */
@@ -277,12 +306,12 @@
 .stage-wrap.paper-mode .dlg::before, .stage-wrap.paper-mode .dlg::after { content: ''; position: absolute; bottom: 22px; width: 30px; height: 30px; pointer-events: none; }
 .stage-wrap.paper-mode .dlg::before { background: var(--color-text); clip-path: polygon(100% 0, 100% 100%, 0 78%); }
 .stage-wrap.paper-mode .dlg::after { width: 27px; height: 24px; bottom: 25px; background: var(--color-paper); clip-path: polygon(100% 0, 100% 100%, 0 80%); }
-.stage-wrap.paper-mode .dlg[data-speaker="naero"]::before { left: -30px; }
-.stage-wrap.paper-mode .dlg[data-speaker="naero"]::after { left: -25px; }
-.stage-wrap.paper-mode .dlg[data-speaker="nambul"]::before { right: -30px; scale: -1 1; }
-.stage-wrap.paper-mode .dlg[data-speaker="nambul"]::after { right: -25px; scale: -1 1; }
-.stage-wrap.paper-mode .dlg[data-speaker="none"]::before, .stage-wrap.paper-mode .dlg[data-speaker="none"]::after, .stage-wrap.paper-mode .dlg:not([data-speaker])::before, .stage-wrap.paper-mode .dlg:not([data-speaker])::after { display: none; }
-.stage-wrap.paper-mode .dlg[data-speaker="nambul"] .name { left: auto; right: 22px; }
+.stage-wrap.paper-mode .dlg[data-side="left"]::before { left: -30px; }
+.stage-wrap.paper-mode .dlg[data-side="left"]::after { left: -25px; }
+.stage-wrap.paper-mode .dlg[data-side="right"]::before { right: -30px; scale: -1 1; }
+.stage-wrap.paper-mode .dlg[data-side="right"]::after { right: -25px; scale: -1 1; }
+.stage-wrap.paper-mode .dlg[data-side="none"]::before, .stage-wrap.paper-mode .dlg[data-side="none"]::after, .stage-wrap.paper-mode .dlg:not([data-side])::before, .stage-wrap.paper-mode .dlg:not([data-side])::after { display: none; }
+.stage-wrap.paper-mode .dlg[data-side="right"] .name { left: auto; right: 22px; }
 .stage-wrap.paper-mode .name { top: -18px; left: 22px; gap: 6px; padding: 2px 14px 2px 3px; border: 2px solid var(--color-text); background: var(--color-paper); color: var(--color-heading); box-shadow: none; font: 400 22px/1.15 var(--font-hand); }
 .stage-wrap.paper-mode .name img { width: 28px; height: 28px; }
 .stage-wrap.paper-mode .name i { font: 700 12px/1 var(--font-body); color: var(--color-muted); }

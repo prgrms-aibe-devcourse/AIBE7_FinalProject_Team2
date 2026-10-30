@@ -16,6 +16,9 @@
 | v2.7 | 2026-10-15 | 추가 생성 목록 H(제작 목록) 블록 — 데포르메 묶음 시트 · 의상 시트 · 역할 의상 정식 컷 · 마스코트 로 컷(v2.8에서 10장으로 옮김) |
 | v2.8 | 2026-10-15 | **10장 이관 묶음 완성 프롬프트** — 1차 · 2차 지시서(`items.js`)와 같은 문장으로 정리(10-1 ~ 10-10), 9-16에 마스코트 로 IDENTITY 3종 추가 |
 | v2.9 | 2026-10-15 | 9-17 · 10-4 CASE RULES에서 "양쪽 감정을 같은 무게로" 문장 삭제(PR #149 리뷰 결정), 10장 지시서(`items.js`)는 쓰지 않는 것으로 정정 |
+| v3.0 | 2026-10-29 | **사건 재연 컷 63장 작업 교훈 반영** — 7-1에 사물 문제 3행, 7-2에 사물 점검, 9-7 `PROPS RULES` 블록, 9-8 · 9-17 AVOID 덧붙임 |
+| v3.1 | 2026-10-29 | **사건 재연 컷은 배경 포함이 기본**(10/29 결정) — 투명 컷 + 배경 합성은 63장을 합성해 보니 어색한 컷이 많아 폐기. 1-3 · 9-7 `BG` · `reenact` · `PROPS RULES` · 9-17 수정. 캐릭터 컷 · 시트 · 아이콘은 그대로 투명 |
+| v3.2 | 2026-10-30 | **바라보는 방향 규칙**(FE-128): 내로 단일 이미지는 오른쪽, 남불은 왼쪽을 본다(1-2 · 7-2). 무대는 서 있는 곳에서 가운데를 보도록 좌우를 뒤집는다 |
 
 > 기준 결정: `character-main-handover.md` v2의 10/13 변경 절 (기본 = 마스코트형 약 3.5등신 · 란마풍 등은 변형 · 모든 캐릭터 무성 · 소품 제한 해제 · 화난 표정 금지)
 > 이 문서는 **복사해서 바로 쓰는 프롬프트 모음**이다. 설계 배경은 `character-law-ai-judge-plan.md` v0.3을 본다(`Claude outputs/character/plan/`, 커밋 안 함).
@@ -63,11 +66,12 @@
 - 내로: 네이비 털, 노란 눈(큰 눈동자), 분홍 코, 입 안은 반다나 색, 빨간 반다나는 항상 보임
 - 남불: 불꽃은 머리에만, 몸은 녹슨 적갈색, 코 없음, 눈동자 항상 보임, 얼굴 가면 없음
 - 로: 얼굴 없음, 머리 오브젝트(저울 또는 법봉), 남색 법복 · 흰 장갑, 감정은 머리 오브젝트와 자세로만, 봉인 판결 봉투가 대표 소품
+- **바라보는 방향**(FE-128, 10/30): 내로의 단일 캐릭터 이미지(스탠딩 · 의상 · 장면 · 볼따구 · 데포르메)는 **모두 오른쪽**, 남불은 **모두 왼쪽**을 본다. 정면 컷도 얼굴 · 몸 · 손짓을 이 방향으로 살짝 돌린다. 무대가 사건마다 배역이 바뀌어 서는 쪽이 달라질 때 가운데를 보도록 좌우를 뒤집기 때문이다(뒤집기는 코드가 하고, 그림은 이 방향만 지키면 된다). 판사 의상도 같다. 로(법봉 · 저울 · 법전)와 사건 재연 컷은 해당 없음
 - 모두 무성(내로 · 남불은 어떤 성별 역할도 하는 배우). 로의 남성형 체형은 5장의 시안에서만 쓰는 스킨이다.
 
 ### 1-3. 생성 요령
 
-- **10/15부터 모든 이미지를 투명 배경으로 뽑는다**(시트 · 재연 컷 포함, 9-7 `BG` 블록). 신문지색 · 신문 느낌은 후보정으로 넣는다. 투명 출력이 안 되는 환경에서만 **크로마 그린 `#00B140` 단색 배경**으로 뽑아 배경을 지운다(그때는 캐릭터에 초록을 쓰지 않는다). 아래 2 ~ 5장 원문의 신문지색 · 크로마 그린 문장은 기록이다.
+- **10/15부터 이미지를 투명 배경으로 뽑는다**(캐릭터 컷 · 시트 · 아이콘, 9-7 `BG` 블록). **단, 사건 재연 컷은 10/29부터 배경 포함이 기본이다**(9-7 `BG-scene` 블록). 신문지색 · 신문 느낌은 후보정으로 넣는다. 투명 출력이 안 되는 환경에서만 **크로마 그린 `#00B140` 단색 배경**으로 뽑아 배경을 지운다(그때는 캐릭터에 초록을 쓰지 않는다). 아래 2 ~ 5장 원문의 신문지색 · 크로마 그린 문장은 기록이다.
 - 장면 컷은 투명 PNG(2048 × 2560)와 웹용 WebP(800 × 1000)로 쓴다.
 - 기존 시트나 메인 이미지를 **참조 이미지로 같이 첨부**하면 일관성이 크게 좋아진다. 첨부 시 맨 위에 한 줄을 붙인다.
 
@@ -707,6 +711,9 @@ DEFORMATION — Japanese-made Western-cartoon-inspired deformation (graphic and 
 | 로가 키 크고 가늘며 질감이 3D처럼 나옴 | 5등신 · 주름 · 금속 광택 표현 | 3장의 DEFORMATION + MATERIAL RULES, 로브 주름 금지, 소재는 평면 색 면 |
 | 법봉 머리 위로 더듬이가 남 | 손잡이를 머리 위로 세운 설명 | 손잡이는 머리 아래 목처럼, `nothing sticking out of the top` |
 | 법봉이 위협적으로 보임 | 휘두르는 자세 | `never swung or struck`, 가만히 선 자세 |
+| 문 · 창문 · 선반이 허공에 떠 있음(사건 재연 컷) | 달린 사물만 그리고 지지물을 생략함 | 9-7 `PROPS RULES`: 문틀 · 벽 같은 지지물까지 함께 그림 |
+| 책상 · 카운터의 다리 · 의자가 빠짐(사건 재연 컷) | 가구 아래쪽을 생략함 | 9-7 `PROPS RULES`: 상판과 다리, 앉는 자리의 의자를 함께 그림 |
+| 의자 · 스툴 같은 복잡한 사물의 모양이 이상함(사건 재연 컷) | 구조가 복잡한 사물을 모델이 자주 틀림 | 9-7 `PROPS RULES`: 단순한 형태로 쓰고 **형태를 다시 확인(double-check)하게 명시** |
 
 ### 7-2. 검수
 
@@ -716,7 +723,9 @@ DEFORMATION — Japanese-made Western-cartoon-inspired deformation (graphic and 
 - [ ] 로: 얼굴 · 목(저울) 없음, 법복 형태 유지, 소재가 평면 색 면, 감정은 머리 오브젝트와 자세로 표현
 - [ ] 로(법봉): 머리 위로 튀어나온 것 없음, 손잡이가 목 역할, 휘두르는 자세 없음
 - [ ] 캐릭터 어디에도 초록 없음, 손발이 잘리지 않음
+- [ ] 바라보는 방향: 내로는 오른쪽, 남불은 왼쪽(판사 의상 포함, 1-2). 반대면 좌우를 뒤집어 저장한다
 - [ ] 같은 세트로 놓았을 때 4종의 높이 · 그림체가 어긋나지 않음
+- [ ] 사건 재연 컷: 문 · 창 같은 달린 사물이 지지물과 함께 있고, 책상 · 카운터에 다리 · 의자가 있으며, 의자 · 스툴 모양이 자연스러움
 
 ---
 
@@ -923,13 +932,22 @@ No face, no eyes, no mouth, no neck, no human head. The head is a thick, closed 
 
 ### 9-7. SCENE 블록
 
-**10/15부터 배경은 모두 투명이다.** SCENE 블록 뒤에 `BG` 블록을 붙인다. 신문지색 · 신문 느낌은 후보정으로 넣는다.
+**배경은 이미지 종류에 따라 다르다.** 캐릭터 컷 · 시트 · 아이콘은 10/15부터 투명이고 `BG` 블록을 붙인다(신문지색 · 신문 느낌은 후보정). **사건 재연 컷은 10/29부터 배경 포함이 기본**이라 `BG` 대신 아래 `BG-scene`을 붙인다.
 
 **`BG`** — 배경 (모든 이미지 공통)
 
 ```
 BACKGROUND — fully transparent background (PNG with alpha). No background color, no floor, no ground line, no shadow, no frame, no border. Aspect ratio {4:5 vertical | 16:9 landscape | 1:1}.
 ```
+
+**`BG-scene`** — 사건 재연 컷의 배경 (10/29 기본)
+
+```
+BACKGROUND — a complete, fully drawn setting behind and around the characters: {place and time of day}. The characters stand or sit inside the scene on its floor, with everything in the scene drawn complete and physically supported (doors set in their frames and walls, furniture standing on the floor). Warm, flat 2D style matching the characters; light direction consistent between the characters and the setting; soft, subtle contact shadows under the characters and furniture. No text, no signs with writing. Aspect ratio 16:9 landscape.
+```
+
+- 장소 문구는 공용 배경 번호표(`사건별_재연컷_프롬프트_복붙용` 공용 배경 B01 ~ B16)의 장소를 쓴다. 같은 장소의 분위기를 맞추려면 **그 배경 이미지를 참조 이미지로 같이 첨부**하고 "use the attached background image as the exact setting"을 덧붙인다.
+- 이유: 투명 컷에 배경을 합성한 63장은 문 · 문틀이 배경 앞에 따로 선 패널처럼 보이고, 빛 방향 · 그림자가 맞지 않는 컷이 많았다(10/29). 투명 배경 조건이 허공에 뜬 문 · 다리 없는 책상 같은 사물 문제의 원인이기도 했다. 이미 만든 투명 컷 + 합성본은 배경 포함본이 나올 때까지 폴백이다.
 
 - 투명 출력이 안 되는 환경에서만 `Background: perfectly flat uniform solid green #00B140, no gradient, no floor, no shadow. Do not use green anywhere on the character or props.`로 바꾸고 배경을 지운다.
 
@@ -962,10 +980,18 @@ SCENE — a clean character sheet: panels separated by empty space only (no fram
 **`reenact`** — 사건 재연 컷 (16:9)
 
 ```
-SCENE — a newspaper-photo-like moment that shows only the situation and relationship of a real case: {situation}. Naero plays {role A} and Nambul plays {role B}, shown through role outfits and props; their faces and colors stay the same. Draw only the characters and the few props listed: no room, no walls, no floor, no scenery. No victims' injuries, no weapons, no crime in progress, no blood, no bodies; nothing that hints at the verdict.
+SCENE — a newspaper-photo-like moment that shows only the situation and relationship of a real case: {situation}. Naero plays {role A} and Nambul plays {role B}, shown through role outfits and props; their faces and colors stay the same. Draw the characters and the few props listed inside the setting given by the `BG-scene` block. No victims' injuries, no weapons, no crime in progress, no blood, no bodies; nothing that hints at the verdict.
 ```
 
 - 극적인 연출은 9-17을 붙인다.
+- **사물이 나오는 컷은 `PROPS RULES`를 `reenact` 뒤에 붙인다**(사건 재연 컷 63장 작업 교훈, 10/29). 배경 포함이 기본이 된 뒤에는 배경이 지지물 역할을 하므로 달린 사물 · 가구 문장은 배경 속에 자연스럽게 놓이게 하는 쪽으로 줄여 쓰고, 의자 · 스툴 같은 복합 사물 형태 확인(double-check) 문장은 그대로 둔다. 투명 컷으로 뽑을 때(폴백)만 지지물을 함께 그리라는 문장을 쓴다.
+
+```
+PROPS RULES — every object must be complete and physically supported. Anything mounted (a door, window, shelf, lamp, clock) is drawn together with what it is attached to (door frame and the wall around it, window frame, ceiling), only the small part needed, not a whole room. Furniture is drawn complete: a desk or counter shows its top and all its legs, and a chair or stool is always included where someone sits or works. Keep props simple (a plain four-legged stool, a plain chair, no ornate shapes). Before finalizing, double-check the shape of every chair, stool and other multi-part object: legs, seat and back must connect correctly and the count of legs must make sense.
+```
+
+- 아래가 화면에서 잘리는 구도면 다리 · 의자 문구는 `legs may be cropped by the frame`으로 바꾼다.
+- 이미 뽑은 컷은 프롬프트로 고치지 못한다. 이상하면 그 컷만 다시 뽑는다(배경 포함으로).
 - 9-9 ~ 9-15 완성 프롬프트와 제작 목록 5장 예시는 10/14 기록이라 옛 배경 문장(신문지색 · 크로마 그린)이 들어 있다. 다시 쓸 때는 배경 문장을 `BG` 블록으로 바꾼다.
 
 ### 9-8. AVOID 블록
@@ -1176,6 +1202,7 @@ CASE RULES — a dramatic, tense, newspaper-photo-like moment that shows the sit
 - STYLE `editorial`의 Mood 줄은 `Mood: dramatic and tense like a TV drama still, while the drawing stays warm, flat and slightly vintage.`로 바꾼다.
 - 의상은 사건마다 정한다(셔츠 + 청바지 고정이 아님). 내로의 반다나는 역할 의상에서 계속 뺀다.
 - AVOID 덧붙임: `injuries, weapons, knives, kitchen tools, blood, bodies, a crime in progress, grabbing, pushing, hitting, raising a fist at a person, tears, mocking anyone`
+- 사물 AVOID 덧붙임: `floating doors or windows without a frame or wall, desks or counters without legs, missing chairs, deformed or distorted chairs and stools`
 - 사건 1 완성 프롬프트(재연 컷 3장)는 10-4, 같은 의상의 배역 컷은 10-10.
 
 ## 10. 이관 묶음 완성 프롬프트 (10/15)

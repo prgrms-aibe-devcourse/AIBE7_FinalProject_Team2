@@ -4,6 +4,7 @@ import com.team2.project.legalcase.domain.CaseStatus;
 import com.team2.project.legalcase.domain.CrimeType;
 import com.team2.project.legalcase.domain.LegalCase;
 import jakarta.persistence.LockModeType;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -25,6 +26,11 @@ public interface LegalCaseRepository extends JpaRepository<LegalCase, Long> {
 	@Query("select c from LegalCase c where c.status = com.team2.project.legalcase.domain.CaseStatus.PUBLISHED "
 		+ "and c.crimeType = :crimeType order by c.publishedAt desc nulls last, c.id desc")
 	List<LegalCase> findAllPublishedByCrimeType(@Param("crimeType") CrimeType crimeType);
+
+	/** 주어진 id 중 공개 중인 사건의 id (수집 화이트리스트 BE-136 — 일러스트가 가리키는 사건 확인) */
+	@Query("select c.id from LegalCase c where c.status = com.team2.project.legalcase.domain.CaseStatus.PUBLISHED "
+		+ "and c.id in :ids")
+	List<Long> findPublishedIdsIn(@Param("ids") Collection<Long> ids);
 
 	/** 공개 사건 1건 (비공개 사건은 없는 것으로 본다, CASE_NOT_FOUND) */
 	default Optional<LegalCase> findPublishedById(Long caseId) {

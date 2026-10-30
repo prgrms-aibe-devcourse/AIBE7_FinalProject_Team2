@@ -36,4 +36,12 @@ public class BusinessException extends RuntimeException {
 		return new BusinessException(errorCode, errorCode.getMessage(), null,
 			List.of(new FieldErrorDetail(field, errorCode.name())));
 	}
+
+	/**
+	 * 필드 하나에 대한 입력 검증 에러, 사유를 직접 정한다. 요청 DTO 검사(@Valid)의 사유가 어노테이션 이름(Size · Pattern)이므로
+	 * 서비스가 하는 검사도 같은 모양의 이름을 주면 화면이 칸 · 사유를 한 가지 방식으로 읽는다 (BE-134)
+	 */
+	public static BusinessException ofField(ErrorCode errorCode, String field, String reason) {
+		return new BusinessException(errorCode, errorCode.getMessage(), null, List.of(new FieldErrorDetail(field, reason)));
+	}
 }

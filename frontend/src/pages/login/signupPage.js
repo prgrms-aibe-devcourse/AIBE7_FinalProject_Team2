@@ -7,8 +7,9 @@ import { canGoBackInApp } from '../../app/router.js';
 import { devJumpBar } from './loginDevJump.js';
 import { loginDesk } from './loginDesk.js';
 import { kakaoButton, setBusy } from './loginParts.js';
-import { NICKNAME_MAX, NICKNAME_MAX_HANGUL, lockNicknameLength } from '../../utils/nickname.js';
+import { NICKNAME_CLAMPED, NICKNAME_MAX, NICKNAME_MAX_HANGUL, lockNicknameLength } from '../../utils/nickname.js';
 import { validateSignup } from './signupRule.js';
+import { offerAnonymousImport } from './anonymousImport.js';
 
 // 회원가입 (FE-104, /signup). 로그인(S-12)과 같은 책상 위 펠트 패드에 카카오로 시작하기 + 아이디 · 비밀번호 · 닉네임 가입 폼.
 // 목 모드는 목업 가입(mocks/authMockApi.js signup)이, 실제 모드는 회원가입 API(M-5, realApi.js signup — FE-117)가 받아
@@ -19,7 +20,10 @@ const TOO_MANY = '요청이 너무 많아요. 잠시 뒤 다시 시도해 주세
 // 계정은 만들어졌는데 첫 토큰을 받지 못했다(api/authFlow.js). "가입하지 못했어요"라고 하면 다시 눌러 409(이미 쓰는 아이디)를 보게 된다
 const SIGNED_UP_LOGIN_AGAIN = '가입은 됐어요. 로그인 화면에서 방금 만든 아이디로 로그인해 주세요.';
 // 서버 형식 검사(400 VALIDATION_ERROR)가 칸 이름을 알려 주면 그 칸에 붙이는 문구. 화면 검사를 통과했는데 서버가 거절한 경우라 드물다
-const SERVER_FIELD_MESSAGE = { id: '아이디 형식을 다시 확인해 주세요.', password: '비밀번호 형식을 다시 확인해 주세요.', nickname: '닉네임 형식을 다시 확인해 주세요.' };
+// 이미 쓰는 닉네임(409 DUPLICATE_NICKNAME, BE-139: 대소문자만 달라도 같다)
+const DUPLICATE_NICKNAME = '이미 쓰고 있는 닉네임이에요. 다른 닉네임을 골라 주세요.';
+// agreed: 서버도 약관 동의를 확인한다(BE-133). 화면 검사를 통과한 뒤라 거의 없지만, 오면 동의 줄에 붙인다
+const SERVER_FIELD_MESSAGE = { id: '아이디 형식을 다시 확인해 주세요.', password: '비밀번호 형식을 다시 확인해 주세요.', nickname: '닉네임 형식을 다시 확인해 주세요.', agreed: '이용약관과 개인정보처리방침에 동의해 주세요.' };
 
 export function renderSignupPage(container, { api, navigate }) {
   const { root, main, card, peek } = loginDesk(container);
@@ -34,6 +38,7 @@ export function renderSignupPage(container, { api, navigate }) {
     { label: '입력 폼', run: () => showForm() },
     { label: '칸 오류', run: () => showForm().form.requestSubmit() },
     { label: '아이디 중복', run: () => showForm().fill({ id: 'admin_naero' }).fieldError('id', '이미 쓰고 있는 아이디예요. 다른 아이디를 골라 주세요. 방금 가입했다면 로그인해 주세요.') },
+    { label: '닉네임 중복', run: () => showForm().fill({ nickname: '중복판사' }).fieldError('nickname', DUPLICATE_NICKNAME) },
     { label: '가입 중(로딩)', run: () => { const { busy } = showForm(); setBusy(busy, true, busy[1], '가입하는 중…'); } },
     { label: '가입됨 · 로그인 필요', run: () => showForm().showSignedUpLoginAgain() },
     { label: '이미 로그인', run: () => showSignedIn({ nickname: '내로판사' }, false) },
@@ -78,10 +83,21 @@ export function renderSignupPage(container, { api, navigate }) {
       id: field(form, 'signup-id', '아이디', { type: 'text', autocomplete: 'username', hint: '영문 소문자 · 숫자 · 밑줄(_) 4~20자' }),
       password: field(form, 'signup-password', '비밀번호', { type: 'password', autocomplete: 'new-password', hint: '영문과 숫자를 섞어 8~64자' }),
       passwordConfirm: field(form, 'signup-password-confirm', '비밀번호 확인', { type: 'password', autocomplete: 'new-password' }),
-      nickname: field(form, 'signup-nickname', '닉네임', { type: 'text', autocomplete: 'nickname', hint: `2자 이상, 한글은 ${NICKNAME_MAX_HANGUL}자 · 영문 · 숫자는 ${NICKNAME_MAX}자까지 · 커뮤니티와 랭킹에 보여요`, maxLength: NICKNAME_MAX }),
+      nickname: field(form, 'signup-nickname', '닉네임', { type: 'text', autocomplete: 'nickname', hint: `2자 이상 · 한글이 들어가면 ${NICKNAME_MAX_HANGUL}자, 영문 · 숫자만이면 ${NICKNAME_MAX}자까지 · 커뮤니티와 랭킹에 보여요`, maxLength: NICKNAME_MAX }),
       agreed: agreement(form),
     };
-    lockNicknameLength(fields.nickname.input);
+    // 한글이 섞여 뒤를 자르면 칸 아래에 알린다(BE-134). 오류가 아니라 aria-invalid는 붙이지 않는다.
+    // 화면 문구는 칸 안내 줄에, 스크린리더에는 미리 둔 aria-live 영역으로 바로 알린다(PR #354 리뷰) — 다시 입력하면 지운다(잠금보다 먼저 단다)
+    const nicknameLive = element('p', 'login-live');
+    nicknameLive.setAttribute('aria-live', 'polite');
+    form.append(nicknameLive);
+    fields.nickname.input.addEventListener('input', () => { nicknameLive.textContent = ''; });
+    lockNicknameLength(fields.nickname.input, { onClamp: () => {
+      fields.nickname.note.textContent = NICKNAME_CLAMPED;
+      fields.nickname.note.classList.add('is-notice'); // 오류 줄 자리지만 안내 색으로(오류 표시는 fieldError가 지운다)
+      fields.nickname.note.hidden = false;
+      nicknameLive.textContent = NICKNAME_CLAMPED;
+    } });
     const submit = element('button', 'primary-button login-submit', '가입하기');
     submit.type = 'submit';
     form.append(error, submit);
@@ -139,6 +155,7 @@ export function renderSignupPage(container, { api, navigate }) {
     // message가 없으면 그 칸 안내를 지운다
     function fieldError(name, message) {
       const { input, note } = fields[name];
+      note.classList.remove('is-notice'); // 닉네임 잘림 안내(BE-134)였으면 오류 모양으로 되돌린다
       note.textContent = message ?? '';
       note.hidden = !message;
       if (message) input.setAttribute('aria-invalid', 'true');
@@ -168,8 +185,14 @@ export function renderSignupPage(container, { api, navigate }) {
       pending = true;
       setBusy([kakao, submit], true, submit, '가입하는 중…');
       try {
-        const { nickname } = await api.signup({ id: values.id.trim(), password: values.password, nickname: values.nickname.trim() });
+        const { nickname } = await api.signup({ id: values.id.trim(), password: values.password, nickname: values.nickname.trim(), agreed: values.agreed });
         saveUser({ nickname }); // 화면을 떠났어도 로그인 표시는 남긴다 — 서버는 이미 가입 · 로그인됐다
+        // 첫 로그인이라 이 브라우저의 체험 기록 · 첫인상 엽서를 가져올지 먼저 고르게 한다(FE-138). 창을 닫으면 로그인하지 않기로 한 것이다.
+        // 계정은 이미 만들어졌으므로 가입 폼을 다시 열지 않고(다시 가입하면 아이디 중복이다) 로그인 화면으로 보낸다
+        if (await offerAnonymousImport(api) === 'declined') {
+          if (container.contains(root)) navigate('login', {}, { replace: true });
+          return;
+        }
         if (!container.contains(root)) return; // 기다리는 사이 다른 화면으로 갔으면 이동하지 않는다
         finish();
       } catch (failure) {
@@ -185,6 +208,9 @@ export function renderSignupPage(container, { api, navigate }) {
           // 그 사람은 이미 가입된 것이라 로그인으로 안내한다
           fieldError('id', '이미 쓰고 있는 아이디예요. 다른 아이디를 골라 주세요. 방금 가입했다면 로그인해 주세요.');
           fields.id.input.focus();
+        } else if (failure?.code === 'DUPLICATE_NICKNAME') {
+          fieldError('nickname', DUPLICATE_NICKNAME);
+          fields.nickname.input.focus();
         } else if (serverField) {
           fieldError(serverField, SERVER_FIELD_MESSAGE[serverField]);
           fields[serverField].input.focus();
@@ -207,6 +233,10 @@ export function renderSignupPage(container, { api, navigate }) {
       try {
         const { nickname } = await api.login({ method: 'kakao' });
         saveUser({ nickname }); // 목 모드만 여기 온다(실제 카카오는 브라우저 이동). 가입 폼과 같은 순서로 둔다
+        if (await offerAnonymousImport(api) === 'declined') {
+          if (container.contains(root)) { setBusy([kakao, submit], false); pending = false; }
+          return;
+        }
         if (!container.contains(root)) return;
         finish();
       } catch (failure) {

@@ -1,8 +1,7 @@
 package com.team2.project.attendance.controller;
 
 import com.team2.project.attendance.service.AttendanceService;
-import com.team2.project.common.web.AnonymousIdCookie;
-import jakarta.servlet.http.HttpServletRequest;
+import com.team2.project.common.web.Requester;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -17,12 +16,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class AttendanceController {
 
 	private final AttendanceService attendanceService;
-	private final AnonymousIdCookie anonymousIdCookie;
 
 	/** 오늘 출석 기록 — 쿠키가 없어도 · 이미 출석했어도 204 (익명 ID를 새로 발급하지 않는다) */
 	@PostMapping("/attendance")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
-	public void record(HttpServletRequest request) {
-		attendanceService.record(anonymousIdCookie.read(request));
+	public void record(Requester requester) {
+		attendanceService.record(requester.anonymousId());
 	}
 }

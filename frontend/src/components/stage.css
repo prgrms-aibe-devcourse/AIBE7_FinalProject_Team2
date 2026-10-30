@@ -40,7 +40,8 @@
 .stage-wrap .bg.dark { background: var(--color-heading); }
 
 /* 캐릭터 = 그림 + 역할 이름표(한 묶음, stage.js). 자리는 캐릭터 가운데 기준(left): 내로 왼쪽(--l) · 남불 오른쪽(--r),
-   data-seat는 역할 의상이 정한 자리: 검사 · 판사 왼쪽(검사편) · 변호인 오른쪽 변호인석(누가 맡든 같다). 의상이 없으면 내로 · 남불 기본 자리.
+   data-seat는 stage.js가 늘 정한다: 역할 의상이면 의상 자리(검사 · 판사 왼쪽 · 변호인 오른쪽, 누가 맡든 같다), 그 밖(피고인 역 · 평상복 · 볼따구)은
+   그 캐릭터의 묶음 쪽(A 판사 · 검사 왼쪽 · B 변호인 · 피고인 오른쪽, FE-128). 배역이 기본(내로 A)이면 내로 왼쪽 · 남불 오른쪽 그대로다.
    data-spot="stand"면 가운데 피고인석(피고인신문). 장면 · 보드에 따라 --l · --r과 키만 바꾼다.
    슬롯: 대본 spots가 { slot, row }를 주면 무대 폭을 60등분한 칸 번호(0~60, 가운데 = 30)에 선다. row는 앞줄(front) · 뒷줄(back, 조금 작고 앞줄 뒤에 겹친다) */
 .stage-wrap .spr { --l: 16%; --r: 84%; position: absolute; bottom: 25%; height: 62%; left: var(--l); translate: -50% 0; transform-origin: bottom center;
@@ -54,6 +55,7 @@
 .stage-wrap .spr[data-row="back"] { z-index: 1; scale: .88; }
 .stage-wrap .spr.role { height: 52%; }
 .stage-wrap .spr-img { display: block; height: 100%; width: auto; transform-origin: bottom center; transition: filter .3s, transform .3s; }
+.stage-wrap .spr[data-flip="1"] .spr-img { scale: -1 1; } /* 가운데를 보게 좌우 뒤집기(FE-128). 이름표는 spr 안 형제라 뒤집히지 않는다 */
 .stage-wrap .spr.dim .spr-img { filter: brightness(.8) saturate(.85); transform: scale(.97); }
 .stage-wrap .spr.hide { opacity: 0; pointer-events: none; }
 .stage-wrap [data-role="narrator"] { --role: var(--color-role-narrator); }
@@ -246,8 +248,9 @@
 .stage-wrap .sheet-photo[data-live] { filter: none; transition: none; }
 .stage-wrap .sheet-photo img { position: absolute; bottom: 25%; height: 52%; width: auto; }
 /* 사진 속 인물 자리는 5막 무대의 자리(왼쪽 16% · 오른쪽 84%, 역할 의상 키 52%)와 같다 — 6막이 이 사진을 가득 채운 데서 시작하면 5막 화면 그대로 보인다 */
-.stage-wrap .sheet-photo .sheet-photo-n { left: 16%; translate: -50% 0; }
+.stage-wrap .sheet-photo .sheet-photo-a { left: 16%; translate: -50% 0; } /* 묶음 A(판사) — 대본 배역을 따른다(FE-141) */
 .stage-wrap .sheet-photo .sheet-photo-b { left: 84%; translate: -50% 0; }
+.stage-wrap .sheet-photo img[data-flip="1"] { scale: -1 1; } /* 무대처럼 가운데를 본다(FE-128) */
 /* 세 판결: 같은 크기 · 같은 무게. 판결마다 색은 위 선 · 이름에만 */
 .stage-wrap .sheet-verdict-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: calc(var(--u) * 1.6); }
 /* 세 판결은 위아래로: 왼쪽에 누구 · 형량, 오른쪽에 한 줄 요약 */
@@ -295,7 +298,7 @@
 .stage-wrap .stage[data-scene="sheet"] .spr { --l: 8%; --r: 92%; height: 40%; bottom: 25%; transition: left .7s ease-in-out, translate .45s cubic-bezier(.3, .7, .2, 1), opacity .3s; }
 .stage-wrap .stage[data-scene="sheet"] .spr.role { height: 36%; }
 .stage-wrap .stage[data-scene="sheet"] .spr.near { translate: calc(-50% + 1.6cqw) 0; }
-.stage-wrap .stage[data-scene="sheet"] .spr.b.near { translate: calc(-50% - 1.6cqw) 0; }
+.stage-wrap .stage[data-scene="sheet"] .spr[data-seat="right"].near { translate: calc(-50% - 1.6cqw) 0; }
 /* 입력 보드(1막 엽서의 사전 판단)가 뜨면 양 끝으로 작게 */
 .stage-wrap .stage.bmode .spr { --l: 8%; --r: 92%; height: 34%; bottom: 25%; }
 .stage-wrap .stage.bmode .spr.role { height: 29%; }
@@ -476,7 +479,7 @@
   /* 좁은 화면: 1면 사진을 5막 무대(4:3)와 같은 구도로 — 6막이 이 사진에서 빠져나올 때 이어 보이게 */
   .stage-wrap .sheet-photo { aspect-ratio: 4 / 3; }
   .stage-wrap .sheet-photo img { bottom: 4%; height: 62%; }
-  .stage-wrap .sheet-photo .sheet-photo-n { left: 25%; }
+  .stage-wrap .sheet-photo .sheet-photo-a { left: 25%; }
   .stage-wrap .sheet-photo .sheet-photo-b { left: 75%; }
   .stage-wrap .sheet-letters { padding-top: 12px; border-top: 1px solid var(--color-text); }
   .stage-wrap :is(.sheet-info, .sheet-date) { font-size: 10px; }
@@ -505,7 +508,7 @@
   .stage-wrap .sheet-ads-note { font-size: 12px; }
   .stage-wrap .stage[data-scene="sheet"] .spr, .stage-wrap .stage[data-scene="sheet"] .spr.role { --l: 12%; --r: 88%; height: 24%; bottom: 2%; }
   .stage-wrap .stage[data-scene="sheet"] .spr.near { translate: calc(-50% + 8px) 0; }
-  .stage-wrap .stage[data-scene="sheet"] .spr.b.near { translate: calc(-50% - 8px) 0; }
+  .stage-wrap .stage[data-scene="sheet"] .spr[data-seat="right"].near { translate: calc(-50% - 8px) 0; }
   .stage-wrap .stage.bmode .scene { display: none; }
   /* 세로로 쌓이면 칸 높이가 정해지지 않으므로, 칸 안 스크롤 대신 목록을 다 펼친다 */
   .stage-wrap .evd { grid-template-columns: 1fr; grid-template-rows: auto; }

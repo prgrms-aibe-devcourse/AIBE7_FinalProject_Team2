@@ -10,7 +10,7 @@ import { awardMockXp, mockLevelView } from './levelMockApi.js';
 
 // 커뮤니티 목 — FE-47 (S-18). 서버 API가 아직 명세에 없어 화면 확인용으로만 둔다.
 // 다른 사람의 글 · 댓글은 고정 값(communityMockData.js), 내가 쓴 글 · 댓글 · 좋아요는 브라우저 localStorage에 둔다.
-// 읽기는 누구나, 쓰기 · 댓글 · 좋아요는 로그인해야 한다(목업 로그인, utils/session.js). 오류 코드 LOGIN_REQUIRED는 임시 이름 — API 설계 때 BE와 확정한다
+// 읽기는 누구나, 쓰기 · 댓글 · 좋아요는 로그인해야 한다(목업 로그인, utils/session.js). 로그인 전 쓰기의 오류 코드는 서버와 같은 UNAUTHORIZED(401)다(FE-137, 예전 임시 이름 LOGIN_REQUIRED)
 const KEY = 'nlnb-mock-community';
 const delay = () => new Promise((resolve) => setTimeout(resolve, 250));
 export const CATEGORIES = ['VERDICT', 'QUESTION', 'FREE'];
@@ -42,7 +42,7 @@ function store(state) {
 
 function me() {
   const user = currentUser();
-  if (!user) fail('LOGIN_REQUIRED', '로그인한 뒤 이용할 수 있습니다.');
+  if (!user) fail('UNAUTHORIZED', '로그인한 뒤 이용할 수 있습니다.');
   return { nickname: user.nickname, character: getBookmarkCharacter() };
 }
 

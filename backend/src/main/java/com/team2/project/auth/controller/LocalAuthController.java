@@ -42,12 +42,12 @@ public class LocalAuthController {
 	private final AnonymousIdCookie anonymousIdCookie;
 	private final Clock clock;
 
-	/** 가입하고 바로 로그인한다. 중복 아이디는 409 DUPLICATE_ID */
+	/** 가입하고 바로 로그인한다. 중복 아이디는 409 DUPLICATE_ID, 약관에 동의하지 않으면 400(DTO 검사, BE-133) */
 	@PostMapping("/signup")
 	public LoginResponse signup(@Valid @RequestBody SignupRequest body, HttpServletRequest request,
 		HttpServletResponse response) {
 		LocalLoginResult result = localAccountService.signup(body.id(), body.password(), body.nickname(),
-			anonymousIdCookie.read(request));
+			body.isAgreed(), anonymousIdCookie.read(request));
 		return complete(result, response);
 	}
 

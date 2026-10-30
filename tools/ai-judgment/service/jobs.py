@@ -51,6 +51,8 @@ ARTIFACT_DIRS = ("cases", "out/runs")
 
 # 파이프라인 단계 순서 (pipeline.py STAGES와 같아야 한다)
 STAGES = ("extract", "court", "contamination", "rag", "generate", "select", "axis", "classify", "script", "load")
+# 범죄 유형 (common.CRIME_TYPES와 같아야 한다 — 서비스는 파이프라인 모듈을 불러오지 않는다, BE-138)
+CRIME_TYPES = ("MURDER", "FRAUD", "INJURY", "ROBBERY", "THEFT")
 
 # pipeline.py에서 **기본값이 꺼짐**인 단계 (pipeline.py DEFAULT_CONFIG의 stages.script · classify.enabled = False).
 # 나머지 단계는 설정에 없으면 돈다는 뜻이라, 이 목록을 따로 두지 않으면 요청하지 않은 대본 단계가
@@ -393,7 +395,11 @@ class JobStore:
             "sources": config_sources,
             "stages": stages,
         }
-        for key in ("incidentDate", "indictmentDate", "finalSourceIndex", "allowFreeTierForJudgment"):
+        crime_type = request.get("crimeType")
+        if crime_type is not None and crime_type not in CRIME_TYPES:
+            raise JobError(f"crimeType은 {' · '.join(CRIME_TYPES)} 중 하나입니다")
+        # crimeType: 관리자가 고른 범죄 유형. extract 결과와 다르면 파이프라인이 멈춘다 (BE-138)
+        for key in ("incidentDate", "indictmentDate", "finalSourceIndex", "allowFreeTierForJudgment", "crimeType"):
             if request.get(key) is not None:
                 config[key] = request[key]
         return config
