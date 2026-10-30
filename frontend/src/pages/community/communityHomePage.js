@@ -70,7 +70,7 @@ export function renderCommunityHomePage(container, { api, navigate }) {
     const box = element('div', 'cm-home-section-head');
     const title = element('h2', 'cm-home-title', titleText);
     title.id = id;
-    if (tag) title.append(mockTag());
+    if (tag && API_MODE === 'mock') title.append(mockTag()); // 목 모드에서만 — 실제 모드는 C-6 응답이다(FE-142)
     box.append(title);
     if (note) box.append(note);
     return box;
@@ -110,7 +110,7 @@ export function renderCommunityHomePage(container, { api, navigate }) {
     section.setAttribute('aria-roledescription', '슬라이드 묶음');
     section.setAttribute('aria-labelledby', 'cm-hot-title');
     const note = element('p', 'cm-home-note', '최근 하루 글 · 댓글 기준');
-    note.append(mockTag());
+    if (API_MODE === 'mock') note.append(mockTag()); // 목 모드에서만(FE-142)
     const sectionTop = sectionHead('지금 이야기가 많은 사건', 'cm-hot-title', { note });
     const nav = element('div', 'cm-hot-nav');
     const prev = arrowButton('prev', '이전 사건');
