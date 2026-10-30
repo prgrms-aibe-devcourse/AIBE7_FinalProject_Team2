@@ -1,7 +1,7 @@
 package com.team2.project.member.domain;
 
 /**
- * 회원가입 때 동의 기록(member.terms_version)에 남기는 약관 버전 (확장 단계, BE-133 · V40)
+ * 회원가입 때 동의 기록(member.terms_version)에 남기는 약관 버전 (확장 단계, BE-133 · V44)
  *
  * 가입 화면의 동의 한 줄은 이용약관과 개인정보처리방침을 함께 묻는다 → 두 문서를 한 버전으로 묶는다.
  * 문서(frontend/src/app/legalPage.js)를 바꾸면 이 값도 함께 올린다. 이미 동의한 회원의 값은 바꾸지 않는다(그때 동의한 버전이다).

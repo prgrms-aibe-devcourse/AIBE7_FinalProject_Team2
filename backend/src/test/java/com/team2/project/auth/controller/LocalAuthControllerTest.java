@@ -326,7 +326,7 @@ class LocalAuthControllerTest extends ApiIntegrationTest {
 
 	@Test
 	void 약관_동의_시각과_버전은_한쪽만_비울_수_없다() throws Exception {
-		// DB CHECK ck_member_terms_agreement (V40). 둘 다 NULL(카카오 · 기존 회원)은 된다
+		// DB CHECK ck_member_terms_agreement (V44). 둘 다 NULL(카카오 · 기존 회원)은 된다
 		String id = newLoginId();
 		signup(id, uniqueNickname());
 		Long memberId = memberIdOf(id);

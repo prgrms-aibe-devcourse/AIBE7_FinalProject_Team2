@@ -23,7 +23,7 @@ import lombok.NoArgsConstructor;
  *
  * 아이디 회원(LOCAL, BE-113): {@link #local(String)}으로 만든다. provider_user_id는 UUID이고,
  * 로그인 아이디 · 비밀번호 해시는 member_password({@link MemberPassword})에 둔다.
- * 가입할 때 약관 동의 시각 · 버전을 남긴다(BE-133, V40). 카카오 회원 · BE-133 전 가입자는 둘 다 NULL
+ * 가입할 때 약관 동의 시각 · 버전을 남긴다(BE-133, V44). 카카오 회원 · BE-133 전 가입자는 둘 다 NULL
  */
 @Entity
 @Table(name = "member")

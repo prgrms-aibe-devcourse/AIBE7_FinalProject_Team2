@@ -53,7 +53,7 @@
 | v1.47 | 2026-10-29 | 사건 배역 · 민감 플래그 (**확장 단계**, BE-125 · V37 · API 명세 v0.67) — `legal_case.cast_roles`(jsonb, `{"prosecutor": "naero", "defense": "nambul"}`) · `sensitive_flags`(jsonb 문자열 배열) 추가. 두 칸 모두 DB CHECK를 두지 않고 코드(`CastRoles` · `SensitiveFlag`)가 검사한다. 새 사건은 적재할 때 배정한다 — 대본이 함께 오면 그 배역, 아니면 같은 범죄 유형에서 피고인 역을 덜 맡은 캐릭터(같으면 마지막 배정의 반대). 이미 있는 사건의 초기값은 비공개 시드 저장소의 UPDATE로 넣는다 (`docs/decisions/BE-125.md`) |
 | v1.48 | 2026-10-29 | 커뮤니티 테이블 추가 (**확장 단계**, BE-115 · V38 · API 명세 v0.68) — `community_post`(글쓴이 회원 · 명함 기준 익명 ID · 말머리 · 사건 · 제목 · 본문 · 판결 공유 jsonb · 좋아요 · 댓글 수) · `community_comment` · `community_like`(회원 × 글 하나) 신설. 14장 추가 |
 | v1.49 | 2026-10-29 | 닉네임 중복 금지 (**확장 단계**, BE-139 · V39 · API 명세 v0.69) — `member`에 `uq_member_nickname`(`lower(nickname)` 유니크 인덱스, `nickname IS NOT NULL`인 행만) 추가. 칸은 그대로. 겹치던 기존 닉네임은 먼저 가입한 회원만 남기고 나머지를 NULL로 비운다 |
-| v1.50 | 2026-10-30 | 약관 동의 기록 (**확장 단계**, BE-133 · V40 · API 명세 v0.74) — `member`에 `terms_agreed_at`(timestamptz) · `terms_version`(varchar 20) 추가, 둘 다 NULL 허용. CHECK `ck_member_terms_agreement`(둘이 함께 있거나 함께 없다). 아이디 가입(M-5) 때만 채우고, 기존 회원 · 카카오 회원은 NULL(동의 기록 없음) |
+| v1.51 | 2026-10-30 | 약관 동의 기록 (**확장 단계**, BE-133 · V44 · API 명세 v0.74, v1.50 · V40 ~ V43은 BE-140 PR #351) — `member`에 `terms_agreed_at`(timestamptz) · `terms_version`(varchar 20) 추가, 둘 다 NULL 허용. CHECK `ck_member_terms_agreement`(둘이 함께 있거나 함께 없다). 아이디 가입(M-5) 때만 채우고, 기존 회원 · 카카오 회원은 NULL(동의 기록 없음) |
 
 ---
 
@@ -504,7 +504,7 @@ S-03의 객관식 선택지. 범죄 유형별로 정의한다(FR-2-8).
 - **연결 규칙 (v1.30, BE-62)**: 아직 연결 안 됨 → 이 회원에 연결 / 같은 회원 → 그대로 / **다른 회원에 연결됨(공용 PC) → 덮어쓰지 않고 이 회원에 연결된 새 익명 ID를 발급**(그대로 두면 이후 체험이 앞 사람 계정으로 쌓인다) / 쿠키 없음 · 모르는 값 → 새 익명 ID 발급. 연결은 `member_id IS NULL`일 때만 바꾸는 조건부 UPDATE라 동시에 와도 꼬이지 않는다
 - 기존 체험의 `experience.member_id`는 일괄로 채우지 않는다(`anonymous_user`를 거쳐 찾는다).
 
-#### `member` — 회원 (확장 단계, v1.33 · BE-62 · V25, v1.42 · BE-113 · V33, v1.50 · BE-133 · V40)
+#### `member` — 회원 (확장 단계, v1.33 · BE-62 · V25, v1.42 · BE-113 · V33, v1.51 · BE-133 · V44)
 
 | 컬럼 | 타입 | 필수 | 설명 |
 | --- | --- | --- | --- |
@@ -514,13 +514,13 @@ S-03의 객관식 선택지. 범죄 유형별로 정의한다(FR-2-8).
 | created_at | timestamptz | ✓ |  |
 | last_login_at | timestamptz |  | 마지막 로그인 성공 시각 |
 | nickname | varchar(12) |  | 표시 이름(v1.42). 아이디 회원은 가입 때 채우고 카카오 회원은 NULL(커뮤니티에는 `방청객 {회원 ID}`로 보임). **중복 금지**(v1.49, 대소문자 구분 없음 — `uq_member_nickname`, NULL은 겹쳐도 된다). 설정 · 변경은 API 명세 M-7 |
-| terms_agreed_at | timestamptz |  | 이용약관 · 개인정보처리방침에 동의한 시각(v1.50). 아이디 가입(M-5) 때 가입 시각으로 채운다. 카카오 회원 · BE-133 전 가입자는 NULL |
-| terms_version | varchar(20) |  | 동의한 약관 버전(v1.50, 코드 `TermsVersion.CURRENT`). 문서를 바꿔도 이미 동의한 값은 바꾸지 않는다 |
+| terms_agreed_at | timestamptz |  | 이용약관 · 개인정보처리방침에 동의한 시각(v1.51). 아이디 가입(M-5) 때 가입 시각으로 채운다. 카카오 회원 · BE-133 전 가입자는 NULL |
+| terms_version | varchar(20) |  | 동의한 약관 버전(v1.51, 코드 `TermsVersion.CURRENT`). 문서를 바꿔도 이미 동의한 값은 바꾸지 않는다 |
 
 - `(provider, provider_user_id)` 유일(`uq_member_provider_user`). 행은 `INSERT ... ON CONFLICT DO NOTHING`으로 만들어, 같은 계정의 첫 로그인이 동시에 와도 한 행만 생긴다.
 - **카카오 회원은 개인정보를 저장하지 않는다**: 카카오 동의항목(닉네임 · 이메일 · 프로필)을 요청하지 않고 회원번호만 쓴다.
 - **아이디 회원(`LOCAL`, v1.42)** 은 아이디 · 비밀번호 해시(`member_password`) · 닉네임을 저장한다(이용약관 · 개인정보처리방침 FE-117). 카카오 계정과 아이디 계정은 **합치지 않는다** — 같은 사람이어도 다른 회원이다.
-- **약관 동의 기록(v1.50, BE-133)**: `terms_agreed_at` · `terms_version`은 함께 있거나 함께 없다(CHECK `ck_member_terms_agreement`). NULL은 "동의 기록이 없다"는 뜻이다 — 카카오로 처음 가입하는 경로는 동의를 묻지 않아 비어 있다(docs/decisions/BE-133.md).
+- **약관 동의 기록(v1.51, BE-133)**: `terms_agreed_at` · `terms_version`은 함께 있거나 함께 없다(CHECK `ck_member_terms_agreement`). NULL은 "동의 기록이 없다"는 뜻이다 — 카카오로 처음 가입하는 경로는 동의를 묻지 않아 비어 있다(docs/decisions/BE-133.md).
 
 #### `member_password` — 아이디 회원 로그인 정보 (확장 단계, v1.42 · BE-113 · V33)
 
