@@ -19,7 +19,7 @@
 | 대상 | 규칙 |
 | --- | --- |
 | 피고인신문 마지막 질문 | 쟁점 유형별 고정: ①인정 · ③부인 · ④정신상태 → "공소사실을 인정합니까?", ②고의 다툼 · ⑤방어 주장 → "행위 사실을 인정합니까?". 답은 사건 데이터의 인정 여부로 "…네, 인정합니다." / "…아닙니다." |
-| 피고인신문 답(A씨 역) | "예 · 네"로 시작하면 "…네.", "아니요 · 아닙니다"면 "…아닙니다."로 정규화(최소 응답) |
+| 피고인신문 답(A씨 역) | "예 · 네"로 시작하면 "…네.", "아니요 · 아닙니다"면 "…아닙니다."로 정규화(최소 응답). 저장 블록에는 정규화 전 답을 둔다(아래 "저장 블록") |
 | 최후진술 | 두지 않는다(10/28 결정: "…이상입니다." 한마디를 위해 의상을 바꾸고 가운데로 나오는 장면이 어색함). 3막 절차는 검사 의견 · 최종변론 · 판결 |
 
 ## 검수 조건 (`../../script_review.py`, BE-122)
@@ -53,8 +53,29 @@
 - 다 고친 뒤 대본 전체를 다시 검사해 `review`를 바꾼다. 끝내 남은 오류는 그대로 두어 공개를 막는다 — 관리자가 검수 화면에서 고친다(BE-129).
 - 한 일은 대본의 `repairs`에 남는다.
   - 줄: `{"unit", "path", "codes", "action": "line", "attempts", "ok", "before", "after", "lastRejected", "affects"}`(U3는 `factorId`). `before` · `after`는 고치기 전 · 받은 줄(관리자가 원문을 본다), `lastRejected`는 받지 않은 마지막 줄(못 고쳤을 때 어디서 막혔는지).
-  - 단위: `{"unit", "path": "", "codes", "action": "unit", "attempts", "ok", "errorsBefore", "errorsAfter", "affects"}`.
-  - `affects`: 값이 바뀌어 낡았을 수 있는 뒤 단위(BE-129 연동 표). U0 → `["U2", "U4"]`, U2 → `["U4"]`, 나머지 → `[]`. 값이 바뀌지 않았으면 `[]`.
+  - 단위: `{"unit", "path": "", "codes", "action": "unit", "attempts", "ok", "replaced", "errorsBefore", "errorsAfter", "affects"}`. `replaced`는 새 값으로 바꿨는지(오류가 줄었을 때만 바꾼다).
+  - `affects`: 값이 바뀌어 낡았을 수 있는 뒤 단위(BE-129 연동 표). U0 → `["U2", "U4"]`, U2 → `["U4"]`, 나머지 → `[]`. 값이 바뀌지 않았으면 `[]`. 아래 "저장 블록"의 `BLOCK_BASIS`에서 계산한다.
+
+## 저장 블록 (BE-126 적재 계약)
+
+대본은 단위 블록(U0 ~ U4)과 메타로 저장한다(백엔드 `case_script_block`). 대본의 `blocks` · `meta`가 그 값이다(`script_assembler.build_blocks`). 고정 문구 · 연출 · 민감 안내 · 기사 · 4 ~ 6막은 블록에 넣지 않는다 — 프론트 공통 틀(FE-33 · FE-139)이 조립할 때 붙이고, 기사는 API 17, 민감 안내는 FE-129가 맡는다. 대본의 `acts`는 같은 대사를 case-1 형식으로 조립해 본 것(확인 · 시험용)이다.
+
+- `blocks`: `{"U0": 블록, …}`. 만들지 못한 단위는 빠진다(`pending`이 알린다). 블록 하나는 `{"content", "revision", "basis", "review", "warnings", "repairs"}`.
+  - `content`: 블록 값. 화면에 바로 쓸 값으로 다듬되(U1 줄 접두어 제거, U2 `cards.indict.law`가 비면 사건 적용 법조) 모양은 생성 결과 그대로라 검수 결과 `path`가 맞는다. **U2 신문 답은 모델이 쓴 그대로**다 — "…네." 정규화는 읽는 쪽(API 18)이 한다. U3는 증거조사 대사 목록 전체(만들지 못한 줄 포함, `factorId` · `role` · `validation`).
+  - `revision`: 판. 처음 만든 블록은 1, 고쳐 쓰기가 값을 바꿀 때마다(줄을 받거나 단위를 바꿈) 1씩 오른다.
+  - `basis`: 만들 때 본 값. 키는 `BLOCK_BASIS`(아래 표), 값은 분류 · 배역 · 기사는 그대로, 앞 블록은 그때의 판 번호다. 지금 값과 다르면 낡은 블록이다(계산 · 표시는 백엔드, BE-126 2차). 예: U0 줄을 고쳐 받으면 U0는 2판이 되고, 그 전에 만든 U2의 `basis.U0`는 1이라 적재하자마자 낡음으로 보인다.
+  - `review` · `repairs`: 그 단위의 검수 결과 · 고쳐 쓰기 기록(형식은 위). 대본 전체에 걸린 `REVIEW_FAILED`는 대본의 `review`에만 있다. `warnings`: 단위 형식 경고(U3 경고는 줄마다 `validation`에 있다).
+- `meta`: `{"cast", "issue", "admits"}`. 프론트 공통 틀이 고정 문구를 고르는 값이다 — 이름 · 자리(`cast`), 신문 마지막 질문(`issue`, `LAST_QUESTION`), 마지막 답 "…네, 인정합니다." / "…아닙니다."(`admits`, U0 세 번째 답). U0가 없으면 `admits`는 `null`.
+
+| 블록 | `basis` (이 값이 바뀌면 낡는다) |
+| --- | --- |
+| U0 설계도 | `mood` · `issue` · `victim` · `thirdParty` · `sensitiveFlags` |
+| U1 1막 해설 | `mood` · `sensitiveFlags` · `paper` |
+| U2 재판 도입부 | `cast` · `mood` · `issue` · `thirdParty` · `sensitiveFlags` · `U0` |
+| U3 증거조사 | `cast` · `victim` · `thirdParty` · `sensitiveFlags` |
+| U4 3막 | `cast` · `mood` · `issue` · `victim` · `sensitiveFlags` · `U0` · `U2` |
+
+분류 축은 "CASE GUIDE" 표의 넣는 단위와 같고, 민감 플래그는 모든 단위, 배역은 배역이 말하는 U2 · U3 · U4다. 정본은 `script_assembler.BLOCK_BASIS`이고, 백엔드는 같은 표와 신문 답 규칙(`normalize_answer` · `admits`)을 `../../contracts/script_blocks.json`으로 맞춘다 — 규칙을 바꾸면 파이썬 → 이 파일 → 백엔드 순서로 고친다(양쪽 테스트가 이 파일을 읽는다).
 
 ## 검수 결과 형식 (BE-122 · BE-129 계약)
 
