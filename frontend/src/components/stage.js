@@ -186,7 +186,7 @@ const GLIDE_MIN_MS = 420;
 const GLIDE_MAX_MS = 1000;
 const easeInOutCubic = (t) => (t < .5 ? 4 * t * t * t : 1 - ((-2 * t + 2) ** 3) / 2);
 export const glideMs = (distance, quick = false) => Math.round(Math.min(GLIDE_MAX_MS, Math.max(GLIDE_MIN_MS, 300 + Math.abs(distance) * 0.55)) * (quick ? 0.7 : 1));
-function createGlider() {
+function createGlider(alive = () => true) {
   let frame = 0;
   const stop = () => { cancelAnimationFrame(frame); frame = 0; };
   function to(top, { quick = false } = {}) {
@@ -197,6 +197,7 @@ function createGlider() {
     const duration = glideMs(distance, quick);
     const start = performance.now();
     const tick = (now) => {
+      if (!alive()) { frame = 0; return; } // 무대가 떠난 뒤(다른 화면으로 이동)에는 새 화면의 스크롤을 건드리지 않는다
       const t = Math.min(1, (now - start) / duration);
       window.scrollTo(0, from + distance * easeInOutCubic(t));
       frame = t < 1 ? requestAnimationFrame(tick) : 0;
@@ -211,7 +212,7 @@ function createGlider() {
 // 아래쪽에 고정된 대사창(dock)이 가리는 부분을 빼고 그 위 공간 가운데에 맞춘다(기사가 그 공간보다 길면 기사 위쪽에 맞춘다)
 function paperCamera(sheet, dockTop, byKeyboard = () => false) {
   let at = null;
-  const glider = createGlider();
+  const glider = createGlider(() => sheet.isConnected);
   function show(target) {
     requestAnimationFrame(() => {
       const box = target.getBoundingClientRect();

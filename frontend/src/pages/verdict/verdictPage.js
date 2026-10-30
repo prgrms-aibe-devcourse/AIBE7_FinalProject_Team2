@@ -486,7 +486,8 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
     function signRowVisible() {
       const box = signRow.getBoundingClientRect();
       const frame = layout.closest('.scroll-body')?.getBoundingClientRect();
-      const top = Math.max(frame?.top ?? 0, 0);
+      const head = document.querySelector('#route-header .site-header')?.getBoundingClientRect().bottom ?? 0; // 위에 붙은 공통 헤더가 가리는 만큼도 보이는 곳이 아니다
+      const top = Math.max(frame?.top ?? 0, head, 0);
       const bottom = Math.min(frame?.bottom ?? Infinity, window.innerHeight - 90);
       return box.top >= top && box.bottom <= bottom;
     }
@@ -525,8 +526,9 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       signed = true;
       submitting = true;
       submitError.textContent = '';
+      update(); // 스크롤을 기다리는 동안 입력 · 제출 버튼을 먼저 잠근다(그 사이 바꾼 값이 아닌 이미 만든 payload가 제출되지 않게)
       await revealSignRow(); // "서명하고 제출"은 무대 아래 버튼이라 서명란이 카드 아래에 가려져 있을 수 있다 — 서명이 쓰이는 자리가 보이게 먼저 굴린다(FE-140)
-      if (!active()) return;
+      if (!active() || !layout.isConnected) { signed = false; submitting = false; return; } // 스크롤을 기다리는 사이 서명 카드가 떠났으면(무대 ◀ 이전) 제출하지 않는다
       const signInk = signatureSvg(signerSeed(), { blank: true }); // 눌렀을 때 한 획으로 처음부터 끝까지 쓰인다(움직임 줄이기면 바로 나타난다)
       signature.append(signInk);
       // 서명하는 동안 카드 안쪽 스크롤을 지금 자리에 묶어 둔다(정한 내용을 다시 그리거나 상태가 바뀌어도 위로 튀지 않게)
