@@ -17,10 +17,12 @@ import com.team2.project.admin.caseimport.domain.CaseImport;
 import com.team2.project.admin.caseimport.domain.CaseImportStatus;
 import com.team2.project.admin.caseimport.dto.CaseImportCreateRequest;
 import com.team2.project.admin.caseimport.dto.CaseImportResponse;
+import com.team2.project.admin.caseimport.load.CaseImportLoader;
 import com.team2.project.admin.caseimport.repository.CaseImportRepository;
 import com.team2.project.admin.service.AdminPrincipal;
 import com.team2.project.common.exception.BusinessException;
 import com.team2.project.common.exception.ErrorCode;
+import com.team2.project.common.exception.FieldErrorDetail;
 import com.team2.project.legalcase.domain.CourtLevel;
 import com.team2.project.legalcase.domain.CrimeType;
 import com.team2.project.legalcase.repository.CaseSourceRepository;
@@ -28,6 +30,7 @@ import com.team2.project.pipeline.PipelineClient;
 import com.team2.project.pipeline.PipelineException;
 import com.team2.project.pipeline.PipelineJob;
 import com.team2.project.pipeline.PipelineJobRequest;
+import com.team2.project.pipeline.PipelineResult;
 import com.team2.project.pipeline.config.PipelineProperties;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Duration;
@@ -50,6 +53,7 @@ class AdminCaseImportServiceTest {
 	private CaseSourceRepository caseSourceRepository;
 	private PipelineClient pipelineClient;
 	private AdminAuditLogger auditLogger;
+	private CaseImportLoader loader;
 	private AdminCaseImportService service;
 
 	private final AdminPrincipal admin = mock(AdminPrincipal.class);
@@ -61,6 +65,7 @@ class AdminCaseImportServiceTest {
 		caseSourceRepository = mock(CaseSourceRepository.class);
 		pipelineClient = mock(PipelineClient.class);
 		auditLogger = mock(AdminAuditLogger.class);
+		loader = mock(CaseImportLoader.class);
 		when(pipelineClient.enabled()).thenReturn(true);
 		when(caseSourceRepository.findExistingCaseNumbers(any())).thenReturn(List.of());
 		when(importRepository.findCaseNumbersInUse(any(), any())).thenReturn(List.of());
@@ -72,7 +77,7 @@ class AdminCaseImportServiceTest {
 	private AdminCaseImportService newService() {
 		return new AdminCaseImportService(importRepository, caseSourceRepository, pipelineClient,
 			new PipelineProperties("http://pipeline:8000", List.of("gemini:test"), null, Duration.ofSeconds(30), null, null, null),
-			auditLogger, mock(com.team2.project.admin.caseimport.load.CaseImportLoader.class),
+			auditLogger, loader,
 			new NoOpTransactionManager());
 	}
 
@@ -405,6 +410,48 @@ class AdminCaseImportServiceTest {
 		assertThatThrownBy(() -> service.getImport(9L))
 			.isInstanceOf(BusinessException.class)
 			.extracting(e -> ((BusinessException) e).getErrorCode()).isEqualTo(ErrorCode.IMPORT_NOT_FOUND);
+	}
+
+	// ---------------------------------------------------------------- A-14-1
+
+	@Test
+	@DisplayName("범죄 유형이 달라 적재를 거절하면 등록을 FAILED로 닫는다 — 같은 사건번호로 다시 등록할 수 있게 (BE-138)")
+	void loadImport_crimeTypeMismatch_failsImport() {
+		CaseImport entity = running("abc123");
+		entity.applyProgress(CaseImportStatus.SUCCEEDED, null, null, null, null);
+		when(importRepository.findById(1L)).thenReturn(Optional.of(entity));
+		when(importRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(entity));
+		PipelineResult result = mock(PipelineResult.class);
+		when(result.loadable()).thenReturn(true);
+		when(pipelineClient.getResult("abc123")).thenReturn(result);
+		BusinessException mismatch = new BusinessException(ErrorCode.IMPORT_RESULT_INVALID, "범죄 유형이 다릅니다", null,
+			List.of(new FieldErrorDetail("case.crimeType", ErrorCode.IMPORT_RESULT_INVALID.name())));
+		when(loader.load(entity, result)).thenThrow(mismatch);
+
+		assertThatThrownBy(() -> service.loadImport(1L, admin, httpRequest)).isSameAs(mismatch);
+
+		assertThat(entity.getStatus()).isEqualTo(CaseImportStatus.FAILED);
+		assertThat(entity.getErrorCode()).isEqualTo(ErrorCode.IMPORT_RESULT_INVALID.name());
+		assertThat(entity.getMessage()).isEqualTo("범죄 유형이 다릅니다");
+		verify(pipelineClient).deleteJobQuietly("abc123");
+	}
+
+	@Test
+	@DisplayName("다른 이유로 적재를 거절하면 SUCCEEDED 그대로 둔다 — 고쳐서 다시 누를 수 있다")
+	void loadImport_otherRejection_keepsSucceeded() {
+		CaseImport entity = running("abc123");
+		entity.applyProgress(CaseImportStatus.SUCCEEDED, null, null, null, null);
+		when(importRepository.findById(1L)).thenReturn(Optional.of(entity));
+		when(importRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(entity));
+		PipelineResult result = mock(PipelineResult.class);
+		when(result.loadable()).thenReturn(true);
+		when(pipelineClient.getResult("abc123")).thenReturn(result);
+		when(loader.load(entity, result)).thenThrow(new BusinessException(ErrorCode.DUPLICATE_TITLE));
+
+		assertThatThrownBy(() -> service.loadImport(1L, admin, httpRequest)).isInstanceOf(BusinessException.class);
+
+		assertThat(entity.getStatus()).isEqualTo(CaseImportStatus.SUCCEEDED);
+		verify(pipelineClient, never()).deleteJobQuietly(anyString());
 	}
 
 	// ---------------------------------------------------------------- 도우미

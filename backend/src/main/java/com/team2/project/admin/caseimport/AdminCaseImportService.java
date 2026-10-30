@@ -196,25 +196,51 @@ public class AdminCaseImportService {
 		}
 		PipelineResult result = fetchResult(entity.getJobId());
 
-		LegalCase legalCase = transactionTemplate.execute(status -> {
-			// 행을 잠그고 다시 본다. 버튼을 두 번 누르거나 재시도가 겹치면 둘 다 "아직 적재 안 함"을
-			// 통과해 같은 사건을 두 번 만들려 한다 (PR #242 리뷰)
-			CaseImport managed = importRepository.findByIdForUpdate(importId)
-				.orElseThrow(() -> new BusinessException(ErrorCode.IMPORT_NOT_FOUND));
-			if (managed.isLoaded()) {
-				throw new BusinessException(ErrorCode.IMPORT_NOT_READY, "이미 사건으로 만든 등록입니다.");
+		LegalCase legalCase;
+		try {
+			legalCase = transactionTemplate.execute(status -> {
+				// 행을 잠그고 다시 본다. 버튼을 두 번 누르거나 재시도가 겹치면 둘 다 "아직 적재 안 함"을
+				// 통과해 같은 사건을 두 번 만들려 한다 (PR #242 리뷰)
+				CaseImport managed = importRepository.findByIdForUpdate(importId)
+					.orElseThrow(() -> new BusinessException(ErrorCode.IMPORT_NOT_FOUND));
+				if (managed.isLoaded()) {
+					throw new BusinessException(ErrorCode.IMPORT_NOT_READY, "이미 사건으로 만든 등록입니다.");
+				}
+				LegalCase created = loader.load(managed, result);
+				managed.linkLoadedCase(created);
+				// 원문은 적재하면서 case_source로 옮겼다. 사건번호만 남겨 무엇이 만들어졌는지 추적한다
+				auditLogger.record(admin, AdminAuditAction.CASE_IMPORT_LOAD, AuditTargetType.CASE, created.getId(),
+					Map.of("importId", importId), httpRequest);
+				return created;
+			});
+		} catch (BusinessException e) {
+			if (isCrimeTypeRejection(e)) {
+				failRejectedLoad(importId, entity.getJobId(), e);
 			}
-			LegalCase created = loader.load(managed, result);
-			managed.linkLoadedCase(created);
-			// 원문은 적재하면서 case_source로 옮겼다. 사건번호만 남겨 무엇이 만들어졌는지 추적한다
-			auditLogger.record(admin, AdminAuditAction.CASE_IMPORT_LOAD, AuditTargetType.CASE, created.getId(),
-				Map.of("importId", importId), httpRequest);
-			return created;
-		});
+			throw e;
+		}
 		log.info("사건 등록 적재 완료: importId={}, caseId={}", importId, legalCase.getId());
 		// 적재가 끝났으니 파이프라인에 남은 판결문 원문을 치운다 (FR-5-3)
 		pipelineClient.deleteJobQuietly(entity.getJobId());
 		return getImport(importId);
+	}
+
+	/** 범죄 유형 때문에 적재를 거절했는지 (BE-138). 같은 결과로 다시 눌러도 늘 거절되는 경우다 */
+	private static boolean isCrimeTypeRejection(BusinessException e) {
+		return e.getErrorCode() == ErrorCode.IMPORT_RESULT_INVALID && e.getDetails() != null
+			&& e.getDetails().stream().anyMatch(detail -> "case.crimeType".equals(detail.field()));
+	}
+
+	/**
+	 * 끝내 적재할 수 없는 등록을 실패로 닫는다 (PR #356 리뷰). 적재 트랜잭션은 이미 되돌려졌으므로 따로 적는다.
+	 *
+	 * <p>SUCCEEDED로 남기면 안내대로 맞는 유형으로 다시 등록할 때 같은 사건번호가 DUPLICATE_SOURCE에 막힌다.
+	 * 이 결과는 더 쓰지 않으니 파이프라인에 남은 판결문 원문도 치운다 (FR-5-3).
+	 */
+	private void failRejectedLoad(Long importId, String jobId, BusinessException e) {
+		transactionTemplate.executeWithoutResult(ignored -> importRepository.findById(importId)
+			.ifPresent(managed -> managed.failLoad(e.getErrorCode().name(), e.getMessage())));
+		pipelineClient.deleteJobQuietly(jobId);
 	}
 
 	private PipelineResult fetchResult(String jobId) {

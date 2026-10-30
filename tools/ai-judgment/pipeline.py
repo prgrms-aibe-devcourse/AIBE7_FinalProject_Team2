@@ -754,6 +754,9 @@ def require_crime_type(config, case_path, outputs=None):
     어느 쪽이 맞는지는 사람이 정하고, 맞는 유형으로 다시 등록한다."""
     requested = config.get("crimeType")
     extracted = load_json(case_path).get("crimeType")
+    if requested and not extracted:
+        raise PipelineError(f"판결문에서 범죄 유형을 읽지 못했습니다(등록 요청은 {requested}). "
+                            "판결문을 확인해 다시 등록해 주세요", outputs or {})
     if requested and extracted != requested:
         raise PipelineError(f"범죄 유형이 다릅니다: 등록 요청은 {requested}, 판결문에서 읽은 유형은 {extracted}입니다. "
                             "판결문을 확인해 맞는 유형으로 다시 등록해 주세요", outputs or {})
@@ -1665,8 +1668,9 @@ def run_pipeline(config, start=None, until=None, skip=(), rerun=False, log=print
         log(f"외부 전송: 사건 분류 단계에서 비식별화한 사건 개요 · 사건 기록 · 판단 요소가 "
             f"{providers_text(classify_spec) if classify_spec else ', '.join(providers)}로 전송됩니다")
     if "script" in steps:
-        case_title = load_json(input_file(config, state, "case"))["title"]
-        log(f"외부 전송: 대본 증거조사 단계에서 비식별화한 사건 제목({case_title}) · 개요 · 판단 요소가 "
+        # extract가 이번에 돌면 아직 case.json이 없다(등록 요청 A-14가 그렇다). 그때는 제목 없이 안내한다 (PR #356 리뷰)
+        case_title = "" if "extract" in steps else f"({load_json(input_file(config, state, 'case'))['title']})"
+        log(f"외부 전송: 대본 증거조사 단계에서 비식별화한 사건 제목{case_title} · 개요 · 판단 요소가 "
             f"{providers_text(config['stages']['script']['model'])}로 전송됩니다")
     for notice in free_tier_notices(config, steps):
         log(notice)

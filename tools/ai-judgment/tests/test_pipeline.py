@@ -2044,6 +2044,30 @@ class PipelineTest(unittest.TestCase):
         state = self.run_with(config, {"openai:a": [self.output]}, start="generate")
         self.assertEqual(state["stages"]["load"]["status"], "done")
 
+    def test_crime_type_missing_in_case_says_unread(self):
+        """PR #356 리뷰: 추출 결과에 유형이 없으면 "읽은 유형은 None"이 아니라 읽지 못했다고 알린다."""
+        case = dict(self.case)
+        case.pop("crimeType", None)
+        write_json(self.dir / "no-type.json", case)
+        with self.assertRaises(pipeline.PipelineError) as ctx:
+            pipeline.require_crime_type({"crimeType": "MURDER"}, self.dir / "no-type.json")
+        self.assertIn("범죄 유형을 읽지 못했습니다(등록 요청은 MURDER)", str(ctx.exception))
+        self.assertNotIn("None", str(ctx.exception))
+        pipeline.require_crime_type({}, self.dir / "no-type.json")  # 요청에 유형이 없으면(로컬 실행) 비교하지 않는다
+
+    def test_script_notice_before_extract_does_not_need_case(self):
+        """PR #356 리뷰: 등록 요청(A-14)처럼 extract와 script를 한 번에 돌리면 시작할 때 case.json이 없다.
+        대본 외부 전송 안내가 사건 제목을 읽으려다 extract 전에 멈추면 안 된다."""
+        config = self.config(extract={"enabled": True}, script={
+            "enabled": True, "model": "openai:a", "cast": {"prosecutor": "naero", "defense": "nambul"}})
+        config["inputs"]["case"] = None
+        ran = []
+        functions = {stage: (lambda s: lambda *args: ran.append(s) or {})(stage) for stage in pipeline.STAGES}
+        pipeline.run_pipeline(config, until="script", log=self.logs.append, functions=functions)
+        self.assertEqual(ran[0], "extract")
+        self.assertIn("script", ran)
+        self.assertTrue(any("대본 증거조사 단계에서 비식별화한 사건 제목 · 개요" in line for line in self.logs))
+
     def test_crime_types_match_extractor_and_service(self):
         """범죄 유형 목록은 파이프라인(common) · 추출기 스키마 · 서비스가 따로 갖는다 — 늘릴 때 한 곳만 고치면 이 테스트가 깨진다."""
         sys.path.insert(0, str(pipeline.EXTRACTOR_DIR))
