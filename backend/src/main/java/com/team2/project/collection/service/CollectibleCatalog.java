@@ -6,11 +6,13 @@ import com.team2.project.common.exception.FieldErrorDetail;
 import com.team2.project.illustration.service.IllustrationCatalog;
 import com.team2.project.legalcase.repository.LegalCaseRepository;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -43,16 +45,16 @@ public class CollectibleCatalog {
 	private static final String ROLES_FOLDER = "characters/roles/";
 
 	private final LegalCaseRepository legalCaseRepository;
-	private final Set<String> castIds;
+	private final SortedSet<String> castIds;
 
 	public CollectibleCatalog(LegalCaseRepository legalCaseRepository) {
 		this.legalCaseRepository = legalCaseRepository;
 		this.castIds = castIdsOf(IllustrationCatalog.read());
 	}
 
-	/** 일러스트 목록의 역할 의상 그림 → 의상 id. {@code characters/roles/naero_judge.webp} → {@code naero:judge} */
-	public static Set<String> castIdsOf(List<String> imagePaths) {
-		Set<String> ids = new TreeSet<>();
+	/** 일러스트 목록의 역할 의상 그림 → 의상 id(이름순). {@code characters/roles/naero_judge.webp} → {@code naero:judge} */
+	public static SortedSet<String> castIdsOf(List<String> imagePaths) {
+		SortedSet<String> ids = new TreeSet<>();
 		for (String path : imagePaths) {
 			if (!path.startsWith(ROLES_FOLDER)) {
 				continue;
@@ -65,11 +67,11 @@ public class CollectibleCatalog {
 				ids.add(stem.substring(0, underscore) + ":" + stem.substring(underscore + 1));
 			}
 		}
-		return Set.copyOf(ids);
+		return Collections.unmodifiableSortedSet(ids);	// 응답 · 로그에 쓸 때도 순서가 같게 정렬을 유지한다 (PR #350 리뷰)
 	}
 
-	/** 모을 수 있는 의상 id 전체 */
-	public Set<String> castIds() {
+	/** 모을 수 있는 의상 id 전체(이름순) */
+	public SortedSet<String> castIds() {
 		return castIds;
 	}
 

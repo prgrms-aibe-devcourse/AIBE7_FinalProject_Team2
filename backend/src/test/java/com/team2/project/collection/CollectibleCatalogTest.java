@@ -1,6 +1,7 @@
 package com.team2.project.collection;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.team2.project.collection.dto.CollectionRecordRequest;
 import com.team2.project.collection.dto.CollectionRecordRequest.Item;
@@ -46,5 +47,14 @@ class CollectibleCatalogTest {
 		List<Item> items = List.of(new Item("cast", "naero:case-1"), new Item("cast", "naero:judge"));
 		assertThat(catalog.rejected(items, 1L)).isEmpty();
 		assertThat(catalog.rejected(items, 2L)).extracting(detail -> detail.field()).containsExactly("items[0].itemId");
+	}
+
+	@Test
+	void 의상_목록은_이름순이고_바꿀_수_없다() {
+		var castIds = CollectibleCatalog.castIdsOf(List.of(
+			"characters/roles/nambul_judge.webp", "characters/roles/naero_judge.webp", "characters/roles/naero_actor.webp"));
+		assertThat(castIds).containsExactly("naero:actor", "naero:judge", "nambul:judge");
+		assertThatThrownBy(() -> castIds.add("naero:x"))
+			.isInstanceOf(UnsupportedOperationException.class);
 	}
 }
