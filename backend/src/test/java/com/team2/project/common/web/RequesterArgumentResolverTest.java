@@ -3,6 +3,7 @@ package com.team2.project.common.web;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.team2.project.admin.service.AdminPrincipal;
 import com.team2.project.common.exception.BusinessException;
 import com.team2.project.common.exception.ErrorCode;
 import com.team2.project.common.security.token.MemberPrincipal;
@@ -66,6 +67,16 @@ class RequesterArgumentResolverTest {
 	void springAnonymous_isNotMember() {
 		SecurityContextHolder.getContext().setAuthentication(new AnonymousAuthenticationToken(
 			"key", "anonymousUser", AuthorityUtils.createAuthorityList("ROLE_ANONYMOUS")));
+
+		assertThat(resolve(new MockHttpServletRequest()).memberId()).isEmpty();
+	}
+
+	@Test
+	@DisplayName("관리자 세션(AdminPrincipal)은 회원이 아니다 — 관리자 표시로 사용자 API를 불러도 memberId가 비어 있다")
+	void adminSession_isNotMember() {
+		AdminPrincipal admin = new AdminPrincipal(1L, "admin@example.com", "관리자", "hash", true);
+		SecurityContextHolder.getContext().setAuthentication(
+			new UsernamePasswordAuthenticationToken(admin, null, AuthorityUtils.createAuthorityList("ROLE_ADMIN")));
 
 		assertThat(resolve(new MockHttpServletRequest()).memberId()).isEmpty();
 	}
