@@ -34,9 +34,11 @@ export async function login({ method, id, password } = {}) {
 
 // 목업 회원가입 (FE-104). 계정을 만들지 않고 닉네임만 돌려준다(가입하면 바로 로그인된 상태).
 // admin으로 시작하는 아이디는 이미 있는 아이디로 본다(중복 안내 화면 확인용). 응답 { nickname }
-export async function signup({ id, password, nickname } = {}) {
+// 약관 동의(agreed)가 true가 아니면 서버처럼 400(details agreed)이다 — 중복 검사보다 먼저 (BE-133)
+export async function signup({ id, password, nickname, agreed } = {}) {
   await delay();
   if (!String(id ?? '').trim() || !password || !String(nickname ?? '').trim()) fail('VALIDATION_ERROR');
+  if (agreed !== true) fail('VALIDATION_ERROR', 'agreed');
   if (String(id).trim().startsWith('admin')) fail('DUPLICATE_ID', 'id');
   if (isTakenNickname(nickname)) fail('DUPLICATE_NICKNAME', 'nickname');
   return { nickname: String(nickname).trim() };

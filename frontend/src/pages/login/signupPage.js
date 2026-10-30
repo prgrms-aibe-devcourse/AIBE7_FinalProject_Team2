@@ -21,7 +21,8 @@ const SIGNED_UP_LOGIN_AGAIN = '가입은 됐어요. 로그인 화면에서 방�
 // 서버 형식 검사(400 VALIDATION_ERROR)가 칸 이름을 알려 주면 그 칸에 붙이는 문구. 화면 검사를 통과했는데 서버가 거절한 경우라 드물다
 // 이미 쓰는 닉네임(409 DUPLICATE_NICKNAME, BE-139: 대소문자만 달라도 같다)
 const DUPLICATE_NICKNAME = '이미 쓰고 있는 닉네임이에요. 다른 닉네임을 골라 주세요.';
-const SERVER_FIELD_MESSAGE = { id: '아이디 형식을 다시 확인해 주세요.', password: '비밀번호 형식을 다시 확인해 주세요.', nickname: '닉네임 형식을 다시 확인해 주세요.' };
+// agreed: 서버도 약관 동의를 확인한다(BE-133). 화면 검사를 통과한 뒤라 거의 없지만, 오면 동의 줄에 붙인다
+const SERVER_FIELD_MESSAGE = { id: '아이디 형식을 다시 확인해 주세요.', password: '비밀번호 형식을 다시 확인해 주세요.', nickname: '닉네임 형식을 다시 확인해 주세요.', agreed: '이용약관과 개인정보처리방침에 동의해 주세요.' };
 
 export function renderSignupPage(container, { api, navigate }) {
   const { root, main, card, peek } = loginDesk(container);
@@ -171,7 +172,7 @@ export function renderSignupPage(container, { api, navigate }) {
       pending = true;
       setBusy([kakao, submit], true, submit, '가입하는 중…');
       try {
-        const { nickname } = await api.signup({ id: values.id.trim(), password: values.password, nickname: values.nickname.trim() });
+        const { nickname } = await api.signup({ id: values.id.trim(), password: values.password, nickname: values.nickname.trim(), agreed: values.agreed });
         saveUser({ nickname }); // 화면을 떠났어도 로그인 표시는 남긴다 — 서버는 이미 가입 · 로그인됐다
         if (!container.contains(root)) return; // 기다리는 사이 다른 화면으로 갔으면 이동하지 않는다
         finish();

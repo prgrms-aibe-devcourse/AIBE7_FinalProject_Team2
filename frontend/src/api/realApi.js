@@ -120,7 +120,8 @@ export function login({ method, id, password } = {}) {
 
 // M-5 아이디 회원가입 (BE-113 · FE-117). 가입하면 바로 로그인된다(응답 · 쿠키는 아이디 로그인과 같다).
 // 중복 아이디는 409 DUPLICATE_ID, 중복 닉네임은 409 DUPLICATE_NICKNAME(BE-139, 대소문자 무관), 형식 오류는 400 VALIDATION_ERROR(details에 칸 이름), Origin 검증 실패 403, 요청 제한 429
-export const signup = ({ id, password, nickname }) => withAccessToken(post('/auth/signup', { id, password, nickname }));
+// agreed: 이용약관 · 개인정보처리방침 동의(BE-133). 서버는 true만 받고, 없거나 false면 400(details agreed). 동의 시각 · 약관 버전은 서버가 남긴다
+export const signup = ({ id, password, nickname, agreed }) => withAccessToken(post('/auth/signup', { id, password, nickname, agreed: agreed === true }));
 
 // M-1 · M-2 — 재발급(콜백 화면이 첫 액세스 토큰을 받는다) · 로그아웃
 export const reissueToken = () => reissueAccessToken();
