@@ -47,7 +47,7 @@ public class LocalAuthController {
 	public LoginResponse signup(@Valid @RequestBody SignupRequest body, HttpServletRequest request,
 		HttpServletResponse response) {
 		LocalLoginResult result = localAccountService.signup(body.id(), body.password(), body.nickname(),
-			Boolean.TRUE.equals(body.agreed()), anonymousIdCookie.read(request));
+			body.isAgreed(), anonymousIdCookie.read(request));
 		return complete(result, response);
 	}
 

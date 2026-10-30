@@ -75,7 +75,7 @@
 | v0.71 | 2026-10-29 | **사건 사진 주소 규칙 기본값 (BE-141)** — API 1 · 2 · 16 · 17과 커뮤니티 홈(C-6)의 `thumbnailUrl` · 사진 URL이 저장된 값이 없으면 규칙 주소 `/images/cases/case-{caseId}-{reenact\|origin\|conclusion}.webp`로 채워진다(저장된 값이 있으면 그것이 우선, 관리자 사진 업로드 A-13-3 ~ 5는 그대로). API 17 `extraPhotos.origin` · `conclusion`은 사진 행이 없어도 `null`이 아니라 규칙 주소(캡션 `null`)다 |
 | v0.72 | 2026-10-29 | **닉네임 후속 (BE-139 리뷰 반영, FE-137)** — M-5 · M-7: `방청객`으로 시작하는 닉네임 금지(자동 이름 흉내 방지). M-5 · M-6 응답 `nickname`은 항상 표시 이름 문자열(닉네임이 없으면 `방청객 {회원 ID}`). 12장 글쓴이 `nickname` 설명에서 "닉네임 설정은 후속" 삭제(M-7로 생김) · M-5 설명의 버전을 v0.69로 정정 |
 | v0.73 | 2026-10-29 | **일러스트 총 개수 API 신설 (BE-142, FE-138)** — 13장 I-1 `GET /api/v1/illustrations/summary`(공개). 사건 컷 · 캐릭터(아이콘 포함) 일러스트의 총 장수와 종류별 장수. 로그인 전 마이페이지 안내("일러스트 N장")용. 이미지는 프론트에만 있어 백엔드는 목록 파일(`illustration-images.txt`)로 세고, 테스트가 이미지 폴더와의 어긋남을 막는다(`docs/decisions/BE-142.md`) |
-| v0.74 | 2026-10-30 | **아이디 회원가입 약관 동의 서버 검증 · 동의 기록 (BE-133, ERD v1.50 · V40)** — M-5 요청에 `agreed`(필수, `true`만) 추가. 없거나 `null`이면 400 `VALIDATION_ERROR`(`details`: `agreed` · `NotNull`), `false`면 400(`agreed` · `AssertTrue`) — 형식 검사라 409(중복 아이디 · 닉네임)보다 먼저다. 가입하면 서버가 동의 시각 · 약관 버전을 회원에 남긴다(응답은 그대로). 카카오 로그인(M-3 · M-4)으로 처음 가입하는 경로는 이번 범위 밖(결정 기록 BE-133) |
+| v0.74 | 2026-10-30 | **아이디 회원가입 약관 동의 서버 검증 · 동의 기록 (BE-133, ERD v1.50 · V40)** — M-5 요청에 `agreed`(필수, JSON `true`만) 추가. 없음 · `null` · `false` · 문자열 `"true"` · 숫자 `1`이면 400 `VALIDATION_ERROR`(`details`: `agreed` · `AssertTrue`) — 형식 검사라 409(중복 아이디 · 닉네임)보다 먼저다. 가입하면 서버가 동의 시각 · 약관 버전을 회원에 남긴다(응답은 그대로). 카카오 로그인(M-3 · M-4)으로 처음 가입하는 경로는 이번 범위 밖(결정 기록 BE-133) |
 
 ---
 
@@ -2309,7 +2309,7 @@ Origin이 이 서버 자신과 같은 출처인지)을 거친다 — 벗어나�
 
 | 거절 | 조건 |
 | --- | --- |
-| 400 `VALIDATION_ERROR` | 위 규칙 위반. `details`에 칸 이름이 실린다: `[{ "field": "id" \| "password" \| "nickname" \| "agreed", "reason": "..." }]`. `agreed`가 없거나 `null`이면 `reason` `NotNull`, `false`면 `AssertTrue`(v0.74). 400이면 아무것도 저장하지 않는다 |
+| 400 `VALIDATION_ERROR` | 위 규칙 위반. `details`에 칸 이름이 실린다: `[{ "field": "id" \| "password" \| "nickname" \| "agreed", "reason": "..." }]`. `agreed`가 JSON `true`가 아니면(없음 · `null` · `false` · 문자열 `"true"` · 숫자 `1`) `reason` `AssertTrue`(v0.74). 400이면 아무것도 저장하지 않는다 |
 | 409 `DUPLICATE_ID` | 이미 쓰는 아이디(대소문자만 다른 아이디 포함, 동시 가입 포함) |
 | 409 `DUPLICATE_NICKNAME` | (v0.69) 이미 쓰는 닉네임(대소문자만 달라도 같다, 동시 가입 포함). 아이디보다 나중에 검사한다 |
 | 403 `FORBIDDEN` | Origin(없으면 Referer)이 이 서버와 다른 출처 |

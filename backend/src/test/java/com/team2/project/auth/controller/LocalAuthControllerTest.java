@@ -272,9 +272,11 @@ class LocalAuthControllerTest extends ApiIntegrationTest {
 		String id = newLoginId();
 		// 동의 칸 → 서버가 details[].reason으로 알려 줄 사유. 칸 이름은 늘 agreed라 화면이 동의 줄에 안내를 붙인다 (BE-133)
 		Map<String, String> notAgreed = new LinkedHashMap<>();
-		notAgreed.put(",\"agreed\":false", "AssertTrue");	// 동의하지 않음
-		notAgreed.put(",\"agreed\":null", "NotNull");		// 값 없음
-		notAgreed.put("", "NotNull");						// 칸 없음 (BE-133 전 화면 · API 직접 호출)
+		notAgreed.put(",\"agreed\":false", "AssertTrue");		// 동의하지 않음
+		notAgreed.put(",\"agreed\":null", "AssertTrue");		// 값 없음
+		notAgreed.put("", "AssertTrue");						// 칸 없음 (BE-133 전 화면 · API 직접 호출)
+		notAgreed.put(",\"agreed\":\"true\"", "AssertTrue");	// 문자열 — 불리언으로 바꿔 받지 않는다 (PR #349 리뷰)
+		notAgreed.put(",\"agreed\":1", "AssertTrue");			// 숫자
 		for (Map.Entry<String, String> body : notAgreed.entrySet()) {
 			mockMvc.perform(json(SIGNUP, signupBody(id, PASSWORD, uniqueNickname(), body.getKey())))
 				.andExpect(status().isBadRequest())
