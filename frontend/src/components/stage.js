@@ -547,6 +547,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
   const rest = element('button', 'postcard-rest');
   rest.type = 'button';
   rest.hidden = true;
+  rest.classList.add(`at-${sideOf('nambul', cast)}`); // 넓은 화면에서는 이 버튼이 남불 옆의 작은 엽서가 된다(CSS)
   rest.addEventListener('click', () => setPutDown(!putDown));
   // 넓은 화면에서는 아래 버튼 대신 엽서 왼쪽 위의 ✕로 내려놓는다(CSS가 폭에 따라 하나만 보인다). 엽서 바깥(어두운 배경)을 눌러도 내려놓는다
   const close = element('button', 'postcard-close', '✕');
@@ -867,6 +868,8 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
     if (event.defaultPrevented || event.target.closest('input, textarea, select, [role="slider"]')) return;
     // 보드를 클릭하면 보드가 포커스를 받는다. 입력 카드는 제출로만 넘어가니 이전(←)만 받고, 다른 보드에서는 Space만 스크롤에 양보한다
     if (event.target.closest('.board') && ((stage.classList.contains('bmode') && event.key !== 'ArrowLeft') || event.key === ' ')) return;
+    // 엽서를 내려놓은 동안 → · Enter는 다음 장면이 아니라 엽서를 다시 펼친다(다음 버튼은 눌러도 넘어가지 않는다)
+    if (paperMode && wasInput && putDown && (event.key === 'ArrowRight' || event.key === 'Enter')) { event.preventDefault(); setPutDown(false); return; }
     if (event.key === 'ArrowRight' || event.key === ' ' || event.key === 'Enter') {
       if (event.target.closest('button') && event.key !== 'ArrowRight') return; // 버튼 위의 Space · Enter는 버튼이 처리한다
       event.preventDefault();
