@@ -66,6 +66,7 @@ export function renderCommunityHomePage(container, { api, navigate }) {
   // 사건 글 목록으로: 사건 거르기 값은 주소가 아니라 기록 항목에 담긴다(communityPage.js) — 새 탭으로 열면 거르지 않은 목록이 열린다
   const caseListLink = (caseId, count, className = 'cm-home-more') => routeLink(`이 사건 글 ${count}개 모두 보기`, '/community/posts', () => navigate('communityPosts', { filterCaseId: caseId }), className);
 
+  // tag: 목 모드에서만 제목 옆에 "목데이터" 표시를 붙일 섹션인지(실제 모드는 C-6 응답이라 붙이지 않는다, FE-142)
   function sectionHead(titleText, id, { tag = false, note = null } = {}) {
     const box = element('div', 'cm-home-section-head');
     const title = element('h2', 'cm-home-title', titleText);
