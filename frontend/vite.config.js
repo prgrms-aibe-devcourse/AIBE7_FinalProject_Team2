@@ -6,12 +6,16 @@ import { defineConfig, loadEnv } from 'vite'
 // 허용: mocks/mockStageButtons.js — 실제 화면이 정적으로 쓰는 껍데기이고, 배포 빌드에서는 안쪽의 목 저장소 import가 접혀 빠진다
 const MOCK_DIR = '/src/mocks/'
 const ALLOWED_MOCK_MODULES = ['/src/mocks/mockStageButtons.js']
-function noMocksInRealBuild(mode) {
-  const env = loadEnv(mode, process.cwd(), 'VITE_')
-  const real = (process.env.VITE_API_MODE ?? env.VITE_API_MODE) === 'real'
+function noMocksInRealBuild() {
+  let real = false
   return {
     name: 'no-mocks-in-real-build',
     apply: 'build',
+    // .env는 Vite가 정한 envDir에서 읽는다 — frontend/ 밖에서(--root 등) 빌드해도 같은 .env를 본다 (PR #354 리뷰). 환경변수가 .env보다 앞선다
+    configResolved(config) {
+      const env = loadEnv(config.mode, config.envDir || config.root, 'VITE_')
+      real = (process.env.VITE_API_MODE ?? env.VITE_API_MODE) === 'real'
+    },
     generateBundle(_options, bundle) {
       if (!real) return
       const leaked = new Set()
@@ -33,8 +37,8 @@ function noMocksInRealBuild(mode) {
 }
 
 // https://vite.dev/config/
-export default defineConfig(({ mode }) => ({
-  plugins: [noMocksInRealBuild(mode)],
+export default defineConfig(() => ({
+  plugins: [noMocksInRealBuild()],
   server: {
     port: 5173,
     // 로컬 개발 시 /api 요청을 Spring Boot(8080)로 전달해 CORS 설정 없이 연동

@@ -64,7 +64,8 @@ jobs:
       # 청크에 섞인 목 모듈(이름에 mock이 없는 청크)은 위 Build 단계에서 vite.config.js의 no-mocks-in-real-build가 막는다 — 이 단계는 파일 이름으로 한 번 더 본다
       - name: Check no mock files in build
         run: |
-          if ls dist/assets | grep -i mock; then
+          # mockStageButtons는 실제 화면이 쓰는 껍데기라 허용한다(vite.config.js ALLOWED_MOCK_MODULES와 같다) — 여러 화면이 공유해 별도 청크로 나뉘어도 실패하지 않게 (PR #354 리뷰)
+          if ls dist/assets | grep -i mock | grep -v '^mockStageButtons-'; then
             echo "배포 빌드(VITE_API_MODE=real)에 목 파일이 들어갔습니다. api/config.js의 FE-135 설명을 확인하세요." >&2
             exit 1
           fi
