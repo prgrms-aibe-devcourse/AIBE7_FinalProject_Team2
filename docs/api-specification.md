@@ -75,7 +75,7 @@
 | v0.71 | 2026-10-29 | **사건 사진 주소 규칙 기본값 (BE-141)** — API 1 · 2 · 16 · 17과 커뮤니티 홈(C-6)의 `thumbnailUrl` · 사진 URL이 저장된 값이 없으면 규칙 주소 `/images/cases/case-{caseId}-{reenact\|origin\|conclusion}.webp`로 채워진다(저장된 값이 있으면 그것이 우선, 관리자 사진 업로드 A-13-3 ~ 5는 그대로). API 17 `extraPhotos.origin` · `conclusion`은 사진 행이 없어도 `null`이 아니라 규칙 주소(캡션 `null`)다 |
 | v0.72 | 2026-10-29 | **닉네임 후속 (BE-139 리뷰 반영, FE-137)** — M-5 · M-7: `방청객`으로 시작하는 닉네임 금지(자동 이름 흉내 방지). M-5 · M-6 응답 `nickname`은 항상 표시 이름 문자열(닉네임이 없으면 `방청객 {회원 ID}`). 12장 글쓴이 `nickname` 설명에서 "닉네임 설정은 후속" 삭제(M-7로 생김) · M-5 설명의 버전을 v0.69로 정정 |
 | v0.73 | 2026-10-29 | **일러스트 총 개수 API 신설 (BE-142, FE-138)** — 13장 I-1 `GET /api/v1/illustrations/summary`(공개). 사건 컷 · 캐릭터(아이콘 포함) 일러스트의 총 장수와 종류별 장수. 로그인 전 마이페이지 안내("일러스트 N장")용. 이미지는 프론트에만 있어 백엔드는 목록 파일(`illustration-images.txt`)로 세고, 테스트가 이미지 폴더와의 어긋남을 막는다(`docs/decisions/BE-142.md`) |
-| v0.75 | 2026-10-30 | **수집 항목 화이트리스트 (BE-136)** — P-9 `itemId`를 모을 수 있는 목록으로 거른다: 일러스트는 `case-{공개 사건 id}-{origin \| conclusion \| reenact}`(요청한 사건과 달라도 된다 — 그림별 key), 의상은 역할 의상 그림이 있는 `{who}:{role}`. 목록에 없으면 400 `VALIDATION_ERROR`(`details`: `items[i].itemId` · `NOT_COLLECTIBLE`), 하나라도 있으면 아무것도 저장하지 않는다. 의상의 사용자당 상한 12 삭제(목록이 곧 전체) — 409 `COLLECTION_LIMIT_EXCEEDED`는 일러스트 사건당 5만 남는다. (v0.74는 BE-133 PR이 쓴다) |
+| v0.75 | 2026-10-30 | **수집 항목 화이트리스트 (BE-136)** — P-9 `itemId`를 모을 수 있는 목록으로 거른다: 일러스트는 `case-{공개 사건 id}-{origin \| conclusion \| reenact}`(요청한 사건과 달라도 된다 — 그림별 key), 의상은 역할 의상 그림이 있는 `{who}:{role}`(사건 전용 의상 `{who}:case-{n}`은 그 사건에서만). 목록에 없으면 400 `VALIDATION_ERROR`(`details`: `items[i].itemId` · `NOT_COLLECTIBLE`), 하나라도 있으면 아무것도 저장하지 않는다. 의상의 사용자당 상한 12 삭제(목록이 곧 전체) — 409 `COLLECTION_LIMIT_EXCEEDED`는 일러스트 사건당 5만 남는다. (v0.74는 BE-133 PR이 쓴다) |
 
 ---
 
@@ -2113,7 +2113,7 @@ json
 | --- | --- |
 | `caseId` | 이 항목들을 얻은 사건. 이 사용자가 **완료한 회차가 하나라도 있어야** 한다(다시 하기 중이어도 된다) |
 | `backfill` | 생략하면 `false`. **기존 사용자 백필**: 이미 완료한 사건인데 `collection`에 항목이 빠져 있으면 화면이 마이페이지 진입 때 `true`로 보낸다. `true`면 획득 시각을 **그 사건의 첫 완료 시각**으로, "본 것"으로 남기고("새로 얻음"이 한꺼번에 뜨지 않게), 이 요청으로 해금된 도전과제도 "본 것"으로 남긴다 |
-| `items` | 1 ~ 20개. `kind`: `illustration`(투명 배경 일러스트) · `cast`(역할 의상). `itemId`: 소문자 · 숫자로 시작하고 소문자 · 숫자 · `:` · `_` · `-`로 64자까지. 일러스트는 일러스트 id(예: `case-1-origin`), 의상은 `{who}:{role}`(예: `naero:judge`). **모을 수 있는 목록에 있어야 한다**(v0.75, BE-136): 일러스트는 `case-{사건 id}-{origin \| conclusion \| reenact}`이고 그 사건이 공개 중이어야 한다(요청한 `caseId`와 달라도 된다 — 같은 그림을 여러 사건이 쓰는 그림별 key). 의상은 역할 의상 그림(`characters/roles/{who}_{role}.webp`, 일러스트 목록 BE-142)이 있는 것만 |
+| `items` | 1 ~ 20개. `kind`: `illustration`(투명 배경 일러스트) · `cast`(역할 의상). `itemId`: 소문자 · 숫자로 시작하고 소문자 · 숫자 · `:` · `_` · `-`로 64자까지. 일러스트는 일러스트 id(예: `case-1-origin`), 의상은 `{who}:{role}`(예: `naero:judge`). **모을 수 있는 목록에 있어야 한다**(v0.75, BE-136): 일러스트는 `case-{사건 id}-{origin \| conclusion \| reenact}`이고 그 사건이 공개 중이어야 한다(요청한 `caseId`와 달라도 된다 — 같은 그림을 여러 사건이 쓰는 그림별 key). 의상은 역할 의상 그림(`characters/roles/{who}_{role}.webp`, 일러스트 목록 BE-142)이 있는 것만이고, 사건 전용 의상(`{who}:case-{n}`)은 `caseId`가 n일 때만 |
 
 **응답 200**
 

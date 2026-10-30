@@ -63,7 +63,7 @@ public class CollectionService {
 	@Transactional
 	public CollectionRecordResponse record(Optional<UUID> anonymousId, CollectionRecordRequest request) {
 		// 가짜 항목 id 거절(BE-136). 입력 검사라 쿠키 · 체험 확인보다 먼저 한다 — DTO 형식 검사(400) 다음 단계다
-		List<FieldErrorDetail> notCollectible = collectibleCatalog.rejected(request.items());
+		List<FieldErrorDetail> notCollectible = collectibleCatalog.rejected(request.items(), request.caseId());
 		if (!notCollectible.isEmpty()) {
 			throw new BusinessException(ErrorCode.VALIDATION_ERROR, ErrorCode.VALIDATION_ERROR.getMessage(), null,
 				notCollectible);

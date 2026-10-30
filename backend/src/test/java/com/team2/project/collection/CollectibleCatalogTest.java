@@ -3,6 +3,7 @@ package com.team2.project.collection;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.team2.project.collection.dto.CollectionRecordRequest;
+import com.team2.project.collection.dto.CollectionRecordRequest.Item;
 import com.team2.project.collection.service.CollectibleCatalog;
 import com.team2.project.illustration.service.IllustrationCatalog;
 import java.util.List;
@@ -36,5 +37,14 @@ class CollectibleCatalogTest {
 			}
 		}
 		assertThat(castIds).allMatch(id -> id.matches(CollectionRecordRequest.ITEM_ID_PATTERN));
+	}
+
+	@Test
+	void 사건_전용_의상은_그_사건의_기록에서만_받는다() {
+		// 의상만 보내면 사건 조회를 하지 않는다(저장소 없이 확인)
+		CollectibleCatalog catalog = new CollectibleCatalog(null);
+		List<Item> items = List.of(new Item("cast", "naero:case-1"), new Item("cast", "naero:judge"));
+		assertThat(catalog.rejected(items, 1L)).isEmpty();
+		assertThat(catalog.rejected(items, 2L)).extracting(detail -> detail.field()).containsExactly("items[0].itemId");
 	}
 }
