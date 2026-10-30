@@ -555,15 +555,16 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
   mini.hidden = true;
   mini.addEventListener('click', () => setPutDown(false));
   // 하단 조작 줄(z 28)보다 위에 보여야 해서 남불 그림(z 19) 안이 아니라 무대 바깥에 두고, 남불 그림의 자리를 읽어 곁에 붙인다
+  // 창 크기를 바꾸면 남불 그림이 자리를 옮기는 동안(전환) 값이 계속 바뀌므로, 엽서가 보이는 동안은 프레임마다 따라간다(읽기 한 번 · 쓰기 두 번)
+  let miniFrame = 0;
   function placeMini() {
-    if (!wrap.isConnected) { window.removeEventListener('resize', placeMini); return; }
-    if (mini.hidden) return;
+    miniFrame = 0;
+    if (!wrap.isConnected || mini.hidden) return;
     const box = figures.nambul.getBoundingClientRect();
-    const mw = mini.offsetWidth;
-    mini.style.left = `${figures.nambul.dataset.seat === 'left' ? box.right + 8 : box.left - 8 - mw}px`; // 오른쪽에 선 남불은 왼쪽, 왼쪽에 선 남불은 오른쪽
+    mini.style.left = `${figures.nambul.dataset.seat === 'left' ? box.right + 8 : box.left - 8 - mini.offsetWidth}px`; // 오른쪽에 선 남불은 왼쪽, 왼쪽에 선 남불은 오른쪽
     mini.style.top = `${box.bottom - box.height * 0.38 - mini.offsetHeight}px`;
+    miniFrame = requestAnimationFrame(placeMini);
   }
-  window.addEventListener('resize', placeMini);
   const close = element('button', 'postcard-close', '✕');
   close.type = 'button';
   close.setAttribute('aria-label', '엽서 내려놓기');
@@ -614,6 +615,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
     else { board.removeAttribute('role'); board.removeAttribute('aria-label'); }
     rest.hidden = !input;
     mini.hidden = !(input && putDown);
+    cancelAnimationFrame(miniFrame);
     placeMini();
     rest.textContent = putDown ? '엽서 다시 펼치기 ▴' : '엽서 내려놓고 사건 보기 ▾';
     rest.setAttribute('aria-expanded', String(!putDown));

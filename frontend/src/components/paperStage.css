@@ -9,7 +9,8 @@
 .case-paper-page .paper { margin-bottom: 0; }
 #app:has(.case-paper-page) > #route-footer { display: none; } /* 법적 고지는 지면 안 맨 아래 줄에 있다 */
 .stage-wrap.paper-mode .stage { position: relative; aspect-ratio: auto; overflow: visible; border: 0; border-radius: 0; background: none; user-select: auto; }
-.stage-wrap.paper-mode .scene { position: static; inset: auto; aspect-ratio: auto; overflow: visible; border: 0; cursor: pointer; }
+.stage-wrap.paper-mode .scene { position: static; inset: auto; aspect-ratio: auto; overflow: visible; border: 0; cursor: auto; } /* 지면 무대는 빈 곳을 눌러도 넘어가지 않으니 눌러지는 듯한 손 모양을 두지 않는다(FE-140) */
+.stage-wrap.paper-mode .stage:has(> .board:not([hidden])) { cursor: pointer; } /* 열린 엽서의 바깥(어두운 배경)은 눌러 내려놓는 자리다 */
 .stage-wrap.paper-mode .bg { display: none; }
 .stage-wrap.paper-mode .stage.bmode .scene { display: block; }
 /* 지금 읽는 기사만 또렷하게 */
