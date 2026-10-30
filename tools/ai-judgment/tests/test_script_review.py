@@ -93,6 +93,14 @@ class LineCheckTest(unittest.TestCase):
         self.assertIn("징역 2년", issues[0]["message"])
         record = {**CLOSING, "prosecutor": "검사 측 의견입니다. 피고인은 징역 10개월을 선고받은 전력이 있습니다."}
         self.assertEqual(codes(review(case=case, judgment=judged, units={"U4": record}), sr.ERROR), [])
+        # 판결 · 권고형과 값이 달라도 형량을 말하면 앵커링이다(PR #355 해송님 실측: AI 판결이 24개월이 아닌 사건)
+        other = {**CLOSING, "defense": "변호인 측 최종변론입니다. 징역 5년은 과합니다."}
+        issues = review(case=case, judgment=judged, units={"U4": other})
+        self.assertEqual(codes(issues, sr.ERROR), [("U4", "/defense", "VERDICT_LEAK")])
+        self.assertNotIn("판결 · 권고형과 같은", issues[0]["message"])
+        # 입력의 전과 형량을 다른 표기로 옮겨도("10개월" → "10월") 같은 값이면 통과한다
+        record_short = {**CLOSING, "prosecutor": "검사 측 의견입니다. 피고인은 징역 10월을 선고받은 전력이 있습니다."}
+        self.assertEqual(codes(review(case=case, judgment=judged, units={"U4": record_short}), sr.ERROR), [])
         short = {**CLOSING, "defense": "변호인 측 최종변론입니다. 2년형은 과합니다."}  # "징역" 없이 "N년형"
         self.assertIn(("U4", "/defense", "VERDICT_LEAK"), codes(review(case=case, judgment=judged, units={"U4": short})))
         fine = {**CLOSING, "defense": "변호인 측 최종변론입니다. 벌금 500만 원 정도가 맞습니다."}
