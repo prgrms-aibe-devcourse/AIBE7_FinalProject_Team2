@@ -57,8 +57,11 @@ class LineRepairTest(unittest.TestCase):
         caller, fixed, _ = repair(result, [{"text": GOOD_DEFENSE_TEXT}])
         self.assertEqual(errors(fixed), [])
         self.assertEqual(fixed["units"]["U4"]["value"], {**CLOSING, "defense": GOOD_DEFENSE_TEXT})
+        # 관리자가 원문을 볼 수 있게 고치기 전 · 후 줄을 남긴다. U4를 바꿔도 낡는 뒤 단위는 없다
         self.assertEqual(fixed["repairs"], [{"unit": "U4", "path": "/defense", "codes": ["NUMBER_NOT_IN_SOURCE"],
-                                             "action": "line", "attempts": 1, "ok": True}])
+                                             "action": "line", "attempts": 1, "ok": True,
+                                             "before": BAD_DEFENSE["defense"], "after": GOOD_DEFENSE_TEXT,
+                                             "lastRejected": None, "affects": []}])
         self.assertEqual(result["units"]["U4"]["value"], BAD_DEFENSE)  # 넘긴 값은 바꾸지 않는다
         call = caller.calls[0]
         # 단위를 만들 때와 같은 블록(페르소나 · ROLE · 가드)과 사건 데이터에 지금 줄 · 고칠 점 · 앞 줄을 더한다
@@ -84,6 +87,9 @@ class LineRepairTest(unittest.TestCase):
         # 줄 2번 실패 → U4는 단위째 다시 만든다(한 번). 다시 만든 값이 깨끗하면 바꾼다
         self.assertEqual([(r["action"], r["attempts"], r["ok"]) for r in fixed["repairs"]],
                          [("line", 2, False), ("unit", 1, True)])
+        line, unit = fixed["repairs"]
+        self.assertEqual((line["after"], line["lastRejected"]), (None, sentencing["text"]))  # 어디서 막혔는지 남긴다
+        self.assertEqual((unit["errorsBefore"], unit["errorsAfter"]), (1, 0))
         self.assertEqual(fixed["units"]["U4"]["value"], CLOSING)
         self.assertEqual(errors(fixed), [])
 
@@ -103,8 +109,50 @@ class LineRepairTest(unittest.TestCase):
         self.assertEqual(len(caller.calls), 1)
         self.assertIn("기사를 짚는 대사 5줄", caller.calls[0]["user"])  # 단위 요청(intro_request)
         self.assertEqual(fixed["repairs"], [{"unit": "U1", "path": "", "codes": ["LINE_MISSING"], "action": "unit",
-                                             "attempts": 1, "ok": True}])
+                                             "attempts": 1, "ok": True, "errorsBefore": 1, "errorsAfter": 0,
+                                             "affects": []}])
         self.assertEqual(errors(fixed), [])
+
+    def test_design_change_marks_later_units_stale(self):
+        """U0(설계도)를 고치면 U2(질문) · U4(쟁점)가 낡았을 수 있다 — BE-129 연동 표대로 affects에 남긴다(PR #355 리뷰).
+        U2를 고치면 U4, 고치지 못했으면(값이 그대로) 빈 목록이다."""
+        design = {**generated()["units"]["U0"]["value"], "issues": ["범행 경위", "징역 7년의 무게", "피해 회복"]}
+        _, fixed, _ = repair(reviewed(units={"U0": design}), [{"text": "범행 뒤 행동"}])
+        self.assertEqual([(r["unit"], r["ok"], r["affects"]) for r in fixed["repairs"]], [("U0", True, ["U2", "U4"])])
+        narr = {**OPENING, "issues_narr": ["쟁점은 범행 경위입니다.", OPENING["issues_narr"][1]]}
+        _, fixed, _ = repair(reviewed(units={"U2": narr}), [{"text": "쟁점은 범행 경위예요."}])
+        self.assertEqual(fixed["repairs"][0]["affects"], ["U4"])
+        _, failed, _ = repair(reviewed(units={"U2": narr}), [{"text": "쟁점은 범행 경위입니다."}] * 2)
+        self.assertEqual(failed["repairs"][0]["affects"], [])
+
+    def test_rewrite_that_adds_errors_elsewhere_is_rejected(self):
+        """그 줄의 오류가 풀려도 단위의 다른 오류가 늘면 받지 않는다(재생성과 같은 기준, PR #355 리뷰). U2 카드는 같은 사실을
+        담으므로, 공소사실 줄이 카드와 겹치는 새 숫자 오류를 만드는 경우를 흉내 낸다."""
+        bad = {**OPENING, "issues_narr": ["쟁점은 범행 경위입니다.", OPENING["issues_narr"][1]]}
+        original = sp.review_unit
+        calls = []
+
+        def worse_after_first(unit, value, ctx, **kwargs):
+            issues = original(unit, value, ctx, **kwargs)
+            calls.append(1)
+            if len(calls) == 2:  # 첫 고친 줄을 검사할 때만 다른 줄에 오류가 생긴 것처럼
+                issues.append(sr.make_issue("U2", "/plea/0", "NUMBER_NOT_IN_SOURCE", "입력에 없는 숫자 '9'", fix=sr.FIX_LINE))
+            return issues
+
+        sp.review_unit = worse_after_first
+        try:
+            caller, fixed, _ = repair(reviewed(units={"U2": bad}), [{"text": "쟁점은 범행 경위예요!"}, {"text": "쟁점은 범행 경위예요."}])
+        finally:
+            sp.review_unit = original
+        self.assertIn("다른 줄에 오류가 생겼습니다", caller.calls[1]["user"])
+        self.assertEqual((fixed["repairs"][0]["attempts"], fixed["repairs"][0]["after"]), (2, "쟁점은 범행 경위예요."))
+
+    def test_warnings_follow_the_rewritten_line(self):
+        """고친 단위의 경고(validate_line)는 바뀐 대사로 다시 계산한다 — 옛 대사의 경고가 남지 않는다(CodeRabbit 리뷰)."""
+        result = reviewed(units={"U4": BAD_DEFENSE})
+        result["units"]["U4"]["warnings"] = ["2번째 대사: 옛 경고"]
+        _, fixed, _ = repair(result, [{"text": GOOD_DEFENSE_TEXT}])
+        self.assertEqual(fixed["units"]["U4"]["warnings"], [])
 
     def test_regenerated_unit_kept_only_when_better(self):
         caller, fixed, _ = repair(reviewed(units={"U4": BAD_DEFENSE}), ["JSON 아님", "JSON 아님", BAD_DEFENSE])

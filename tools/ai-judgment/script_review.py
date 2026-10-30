@@ -85,7 +85,8 @@ SENTENCING_PATTERN = r"구형|(?:징역|금고|벌금)[^.\n]{0,15}\d[^.\n]{0,15}
 SENTENCING = re.compile(SENTENCING_PATTERN)
 # 형량 문형("징역 2년" · "벌금 500만 원"). 값이 권고형 · AI 판결 형량과 같고 입력에 같은 문형이 없으면 누출이다. 숫자만 비교하면
 # 입력 어딘가에 같은 한 자리 숫자("2")가 있을 때 "징역 2년"(AI 판결 24개월)을 놓친다(PR #352 해송님 리뷰)
-PENALTY = re.compile(r"(?P<kind>징역|금고|벌금|집행유예)\s*(?P<n>\d[\d,]*)\s*(?P<unit>년|개월|만\s*원|억\s*원|원)")
+PENALTY = re.compile(r"(?:징역|금고|벌금|집행유예)\s*(?P<n>\d[\d,]*)\s*(?P<unit>년|개월|만\s*원|억\s*원|원)"
+                     r"|(?P<n2>\d[\d,]*)\s*(?P<unit2>년|개월)\s*형(?![가-힣]*사)")  # "2년형" (형사 · 형사재판은 아니다)
 # 판결 전에 공개되지 않는 단계 (BE-119 공개 범위)
 HIDDEN_STAGES = ("LAW", "SUMMARY")
 
@@ -237,14 +238,15 @@ def line_issues(unit, path, text, kind, ctx, *, factor=None):
     flat = lambda t: re.sub(r"[\s,]", "", t or "")  # noqa: E731
     leaked_numbers = set()
     for m in PENALTY.finditer(text):
-        n = int(m.group("n").replace(",", ""))
-        unit_name = re.sub(r"\s", "", m.group("unit"))
+        raw = m.group("n") or m.group("n2")
+        n = int(raw.replace(",", ""))
+        unit_name = re.sub(r"\s", "", m.group("unit") or m.group("unit2"))
         months = {"년": n * 12, "개월": n}.get(unit_name)
         won = {"만원": n * 10_000, "억원": n * 100_000_000, "원": n}.get(unit_name)
         hit = months in ctx["leak_months"] if months is not None else won in ctx["leak_won"]
         if hit and flat(m.group(0)) not in flat(source):
             issues.append(issue("VERDICT_LEAK", f"판결 · 권고형과 같은 형량 '{m.group(0)}'가 들어갔습니다(판결 입력 전 앵커링)"))
-            leaked_numbers.add(m.group("n").replace(",", ""))
+            leaked_numbers.add(raw.replace(",", ""))
 
     # 숫자: 입력에 없는 숫자. 공개 전 정보(양형기준 · 정리 · 판결 형량)의 숫자면 누출로 본다
     known = _number_tokens(source)

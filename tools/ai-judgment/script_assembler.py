@@ -282,6 +282,16 @@ def check_closing(value):
     return sentencing_errors("검사 의견", value["prosecutor"]) + sentencing_errors("최종변론", value["defense"])
 
 
+def unit_warnings(unit, value, case, paper):
+    """`ask_unit`이 단위를 받을 때 남기는 경고(BE-107 `validate_line`)를 값으로 다시 계산한다. 줄을 고쳐 쓰거나 단위를 다시
+    만든 뒤 경고가 바뀐 대사와 어긋나지 않게 한다(script_repair, PR #355 리뷰). 입력은 generate_units와 같다."""
+    lines_of = {"U0": lambda v: [q["q"] for q in v["questions"][:3]],
+                "U1": lambda v: [strip_line_prefix(x) for x in v["lines"][:5]],
+                "U2": opening_lines, "U4": lambda v: [v["prosecutor"], v["defense"]]}[unit]
+    source = json.dumps(paper if unit == "U1" else public_case(case, UNIT_STAGES["U0"]), ensure_ascii=False)
+    return _line_errors(lines_of(value), source)[1]
+
+
 def opening_lines(value):
     return [*value["indict"][:2], *value["plea"][:2], *value["issues_narr"][:2],
             *[q["q"] for q in value["questions"][:2]]]

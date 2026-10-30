@@ -93,6 +93,8 @@ class LineCheckTest(unittest.TestCase):
         self.assertIn("징역 2년", issues[0]["message"])
         record = {**CLOSING, "prosecutor": "검사 측 의견입니다. 피고인은 징역 10개월을 선고받은 전력이 있습니다."}
         self.assertEqual(codes(review(case=case, judgment=judged, units={"U4": record}), sr.ERROR), [])
+        short = {**CLOSING, "defense": "변호인 측 최종변론입니다. 2년형은 과합니다."}  # "징역" 없이 "N년형"
+        self.assertIn(("U4", "/defense", "VERDICT_LEAK"), codes(review(case=case, judgment=judged, units={"U4": short})))
         fine = {**CLOSING, "defense": "변호인 측 최종변론입니다. 벌금 500만 원 정도가 맞습니다."}
         judged_fine = {**JUDGMENT_OUTPUT, "fineAmount": 5_000_000}
         self.assertIn(("U4", "/defense", "VERDICT_LEAK"),
