@@ -39,7 +39,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 일러스트 · 의상 수집 상태 (BE-83, docs/decisions/BE-83.md).
  * 획득 조건 판정은 프론트(collectionOf · castOf)가 하고, 서버는 항목 · 획득 시각(서버 시각) · 확인 여부만 저장한다.
- * 서버는 대본을 몰라 가짜 항목 id를 막지 못하므로 최소 검증만 한다: 사건 체험 완료 · 형식 · 종류별 상한
+ * 서버 검증: 형식 · 모을 수 있는 항목 목록(화이트리스트, BE-136 {@link CollectibleCatalog}) · 사건 체험 완료 · 사건당 일러스트 상한
  */
 @Service
 @RequiredArgsConstructor
@@ -52,15 +52,22 @@ public class CollectionService {
 	private final AnonymousUserRepository anonymousUserRepository;
 	private final ProfileStatsReader statsReader;
 	private final AchievementUnlockRecorder unlockRecorder;
+	private final CollectibleCatalog collectibleCatalog;
 	private final Clock clock;
 
 	/**
 	 * P-9 수집 기록. 멱등: 이미 가진 항목(다른 사건에서 얻은 같은 그림 포함)은 건너뛰고 처음 사건 · 시각을 유지한다.
-	 * 하나라도 검증에 걸리면 아무것도 저장하지 않는다.
+	 * 하나라도 검증에 걸리면 아무것도 저장하지 않는다. 목록에 없는 항목은 400(사용자 · 사건을 보기 전에 거절, BE-136).
 	 * 쿠키가 없거나 그 사건을 완료하지 않았으면 거절한다(익명 ID를 새로 발급하지 않는다 — 체험을 마친 사용자만 부른다)
 	 */
 	@Transactional
 	public CollectionRecordResponse record(Optional<UUID> anonymousId, CollectionRecordRequest request) {
+		// 가짜 항목 id 거절(BE-136). 입력 검사라 쿠키 · 체험 확인보다 먼저 한다 — DTO 형식 검사(400) 다음 단계다
+		List<FieldErrorDetail> notCollectible = collectibleCatalog.rejected(request.items(), request.caseId());
+		if (!notCollectible.isEmpty()) {
+			throw new BusinessException(ErrorCode.VALIDATION_ERROR, ErrorCode.VALIDATION_ERROR.getMessage(), null,
+				notCollectible);
+		}
 		UUID userId = anonymousUserService.findAndTouch(anonymousId)
 			.orElseThrow(() -> new BusinessException(ErrorCode.EXPERIENCE_NOT_FOUND))
 			.getId();
@@ -137,8 +144,9 @@ public class CollectionService {
 	}
 
 	/**
-	 * 종류별 상한: 일러스트는 이 사건에서 처음 얻은 수, 의상은 사용자 전체 수. 이미 가진 것은 세지 않는다.
-	 * 넘으면 409 COLLECTION_LIMIT_EXCEEDED, details에 넘친 종류를 담는다
+	 * 사건당 일러스트 상한: 이 사건에서 처음 얻은 수. 이미 가진 것은 세지 않는다. 넘으면 409 COLLECTION_LIMIT_EXCEEDED, details에 넘친 종류.
+	 * 일러스트는 다른 사건의 그림도 받으므로(그림별 key) 이 상한이 한 사건에서 모을 수 있는 수를 묶는다.
+	 * 의상은 목록(화이트리스트)이 곧 전체라 상한을 두지 않는다 — 역할 그림이 늘어도 정상 사용자가 막히지 않게 (BE-136)
 	 */
 	private void checkLimits(UUID userId, long caseId, Map<CollectionKind, List<String>> fresh) {
 		List<FieldErrorDetail> exceeded = new ArrayList<>();
@@ -147,11 +155,6 @@ public class CollectionService {
 			CollectionKind.ILLUSTRATION.key(), caseId) + illustrations.size()
 			> ProfileDecoCatalog.COLLECTION_ILLUSTRATIONS_PER_CASE) {
 			exceeded.add(new FieldErrorDetail("items.kind", CollectionKind.ILLUSTRATION.key()));
-		}
-		List<String> casts = fresh.getOrDefault(CollectionKind.CAST, List.of());
-		if (!casts.isEmpty() && collectionItemRepository.countByIdAnonymousUserIdAndIdKind(userId,
-			CollectionKind.CAST.key()) + casts.size() > ProfileDecoCatalog.COLLECTION_CASTS_PER_USER) {
-			exceeded.add(new FieldErrorDetail("items.kind", CollectionKind.CAST.key()));
 		}
 		if (!exceeded.isEmpty()) {
 			throw new BusinessException(ErrorCode.COLLECTION_LIMIT_EXCEEDED,

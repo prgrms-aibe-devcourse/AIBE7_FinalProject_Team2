@@ -11,7 +11,7 @@ import java.util.Optional;
 public enum CollectionKind {
 
 	ILLUSTRATION("illustration"),	// 투명 배경 일러스트. 사건당 3장이 콘텐츠 규칙
-	CAST("cast");					// 만난 모습(역할 의상) {who}:{role}. 사건과 무관하게 전체 최대 8가지
+	CAST("cast");					// 만난 모습(역할 의상) {who}:{role}. 사건과 무관, 모을 수 있는 것은 역할 의상 그림 목록(BE-136 CollectibleCatalog)
 
 	/** 요청 검증용 정규식 (DTO @Pattern). 종류를 더하면 함께 고친다 */
 	public static final String PATTERN = "^(illustration|cast)$";
