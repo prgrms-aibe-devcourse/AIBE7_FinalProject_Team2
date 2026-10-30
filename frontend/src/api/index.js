@@ -5,7 +5,9 @@ import { API_MODE } from './config.js';
 export { API_MODE };
 
 export async function loadApi() {
-  if (API_MODE === 'real') {
+  // 배포 빌드(VITE_API_MODE=real, DEV 아님)는 앞 조건이 빌드 시점에 true로 접혀 아래 목 import가 번들에서 빠진다(FE-135).
+  // import.meta.env를 이 자리에서 직접 읽어야 접힌다(config.js 설명)
+  if ((import.meta.env?.VITE_API_MODE === 'real' && !import.meta.env?.DEV) || API_MODE === 'real') {
     return import('./realApi.js');
   }
   // 목은 개발 중 화면 확인용이다 (src/mocks/README.md). 실제 모드에서는 목 파일을 불러오지 않는다.

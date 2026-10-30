@@ -1,7 +1,7 @@
 // npm test : 닉네임 검사 (내 정보 수정, FE-77)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isUnnamed, lockNicknameLength, nicknameError } from './nickname.js';
+import { NICKNAME_CLAMPED, isUnnamed, lockNicknameLength, nicknameError } from './nickname.js';
 
 test('한글이 있으면 8자, 영문 · 숫자만이면 12자까지는 통과, 앞뒤 공백은 무시', () => {
   ['판사', 'judge7', '익명의판사12', '  해송  ', '가'.repeat(8), 'a'.repeat(12)].forEach((value) => assert.equal(nicknameError(value), '', value));
@@ -42,4 +42,31 @@ test('닉네임을 정하지 않은 회원의 표시 이름(방청객 {회원 ID
 test("'방청객'으로 시작하는 닉네임은 서버처럼 거절한다 — 자동 이름 흉내 방지 (BE-139 리뷰)", () => {
   ['방청객', '방청객99', '방청객가나'].forEach((value) => assert.match(nicknameError(value), /방청객/, value));
   ['판사', '나는방청객'].forEach((value) => assert.equal(nicknameError(value), '', value)); // 앞에 오지 않으면 괜찮다
+});
+
+test('입력 잠금이 뒤를 자르면 onClamp로 알린다 — 다른 input 처리가 끝난 뒤라 칸 안내가 바로 지워지지 않는다 (BE-134)', () => {
+  const handlers = {};
+  const order = [];
+  const input = {
+    value: '',
+    addEventListener: (type, fn) => { handlers[type] = fn; },
+    dispatchEvent: () => order.push('input 처리(칸 안내 지움)'),
+  };
+  let clamped = 0;
+  lockNicknameLength(input, { onClamp: () => { clamped += 1; order.push('onClamp'); } });
+
+  input.value = '가나다abcdefghij'; // 영문을 치다가 한글 한도(8자)를 넘김
+  handlers.input({ isComposing: false });
+  assert.equal(input.value, '가나다abcde');
+  assert.equal(clamped, 1);
+
+  input.value = '가나다라마바사아자'; // 한글 조합이 끝난 뒤 자른다
+  handlers.compositionend();
+  assert.equal(input.value, '가나다라마바사아');
+  assert.deepEqual(order.slice(-2), ['input 처리(칸 안내 지움)', 'onClamp']);
+
+  input.value = 'abcdefghijkl'; // 영문 · 숫자만이면 자르지 않는다
+  handlers.input({ isComposing: false });
+  assert.equal(clamped, 2);
+  assert.match(NICKNAME_CLAMPED, /한글이 들어가면 8자까지/);
 });

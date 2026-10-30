@@ -11,6 +11,9 @@ function storedMode() {
   try { return localStorage.getItem(MODE_KEY); } catch { return null; }
 }
 export const API_MODE = (storedMode() ?? import.meta.env?.VITE_API_MODE) === 'real' ? 'real' : 'mock';
+// 배포 빌드에서 목 빼기(FE-135): API_MODE는 실행 시점 값(localStorage)이 섞여 번들러가 접지 못한다. 그래서 목을 동적 import 하는 곳
+// (api/index.js · pages/admin/adminApi.js · mocks/mockStageButtons.js)은 그 자리에서 import.meta.env?.VITE_API_MODE · DEV를 직접 읽어 빌드 시점에 분기를 접는다.
+// 다른 모듈의 상수로 빼면 접히지 않아 목이 다시 번들에 들어간다(빌드 결과로 확인)
 
 export function setApiMode(mode) {
   try { localStorage.setItem(MODE_KEY, mode); } catch { return; }

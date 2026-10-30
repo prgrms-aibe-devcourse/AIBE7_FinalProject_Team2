@@ -7,7 +7,7 @@ import { canGoBackInApp } from '../../app/router.js';
 import { devJumpBar } from './loginDevJump.js';
 import { loginDesk } from './loginDesk.js';
 import { kakaoButton, setBusy } from './loginParts.js';
-import { NICKNAME_MAX, NICKNAME_MAX_HANGUL, lockNicknameLength } from '../../utils/nickname.js';
+import { NICKNAME_CLAMPED, NICKNAME_MAX, NICKNAME_MAX_HANGUL, lockNicknameLength } from '../../utils/nickname.js';
 import { validateSignup } from './signupRule.js';
 import { offerAnonymousImport } from './anonymousImport.js';
 
@@ -82,10 +82,14 @@ export function renderSignupPage(container, { api, navigate }) {
       id: field(form, 'signup-id', '아이디', { type: 'text', autocomplete: 'username', hint: '영문 소문자 · 숫자 · 밑줄(_) 4~20자' }),
       password: field(form, 'signup-password', '비밀번호', { type: 'password', autocomplete: 'new-password', hint: '영문과 숫자를 섞어 8~64자' }),
       passwordConfirm: field(form, 'signup-password-confirm', '비밀번호 확인', { type: 'password', autocomplete: 'new-password' }),
-      nickname: field(form, 'signup-nickname', '닉네임', { type: 'text', autocomplete: 'nickname', hint: `2자 이상, 한글은 ${NICKNAME_MAX_HANGUL}자 · 영문 · 숫자는 ${NICKNAME_MAX}자까지 · 커뮤니티와 랭킹에 보여요`, maxLength: NICKNAME_MAX }),
+      nickname: field(form, 'signup-nickname', '닉네임', { type: 'text', autocomplete: 'nickname', hint: `2자 이상 · 한글이 들어가면 ${NICKNAME_MAX_HANGUL}자, 영문 · 숫자만이면 ${NICKNAME_MAX}자까지 · 커뮤니티와 랭킹에 보여요`, maxLength: NICKNAME_MAX }),
       agreed: agreement(form),
     };
-    lockNicknameLength(fields.nickname.input);
+    // 한글이 섞여 뒤를 자르면 칸 아래에 알린다(BE-134). 오류가 아니라 aria-invalid는 붙이지 않는다
+    lockNicknameLength(fields.nickname.input, { onClamp: () => {
+      fields.nickname.note.textContent = NICKNAME_CLAMPED;
+      fields.nickname.note.hidden = false;
+    } });
     const submit = element('button', 'primary-button login-submit', '가입하기');
     submit.type = 'submit';
     form.append(error, submit);

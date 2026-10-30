@@ -76,6 +76,7 @@
 | v0.72 | 2026-10-29 | **닉네임 후속 (BE-139 리뷰 반영, FE-137)** — M-5 · M-7: `방청객`으로 시작하는 닉네임 금지(자동 이름 흉내 방지). M-5 · M-6 응답 `nickname`은 항상 표시 이름 문자열(닉네임이 없으면 `방청객 {회원 ID}`). 12장 글쓴이 `nickname` 설명에서 "닉네임 설정은 후속" 삭제(M-7로 생김) · M-5 설명의 버전을 v0.69로 정정 |
 | v0.73 | 2026-10-29 | **일러스트 총 개수 API 신설 (BE-142, FE-138)** — 13장 I-1 `GET /api/v1/illustrations/summary`(공개). 사건 컷 · 캐릭터(아이콘 포함) 일러스트의 총 장수와 종류별 장수. 로그인 전 마이페이지 안내("일러스트 N장")용. 이미지는 프론트에만 있어 백엔드는 목록 파일(`illustration-images.txt`)로 세고, 테스트가 이미지 폴더와의 어긋남을 막는다(`docs/decisions/BE-142.md`) |
 | v0.75 | 2026-10-30 | **수집 항목 화이트리스트 (BE-136)** — P-9 `itemId`를 모을 수 있는 목록으로 거른다: 일러스트는 `case-{공개 사건 id}-{origin \| conclusion \| reenact}`(요청한 사건과 달라도 된다 — 그림별 key), 의상은 역할 의상 그림이 있는 `{who}:{role}`(사건 전용 의상 `{who}:case-{n}`은 그 사건에서만). 목록에 없으면 400 `VALIDATION_ERROR`(`details`: `items[i].itemId` · `NOT_COLLECTIBLE`), 하나라도 있으면 아무것도 저장하지 않는다. 의상의 사용자당 상한 12 삭제(목록이 곧 전체) — 409 `COLLECTION_LIMIT_EXCEEDED`는 일러스트 사건당 5만 남는다. (v0.74는 BE-133 PR이 쓴다) |
+| v0.76 | 2026-10-30 | **닉네임 거절 사유 이름 (BE-134)** — M-5 · M-7의 닉네임 400 `details[].reason`을 사유별 이름으로: `NotBlank` · `Pattern` · `Size`(요청 DTO 검사와 같은 이름) · `SizeWithHangul`(한글이 들어가 8자 초과) · `Reserved`(`방청객`으로 시작). 예전에는 서비스 검사(한글 8자 · 방청객)가 모두 `VALIDATION_ERROR`였다. 칸 이름 · 에러 코드는 그대로. (v0.74는 BE-133 PR #349가 쓴다) |
 
 ---
 
@@ -2390,7 +2391,7 @@ Origin이 이 서버 자신과 같은 출처인지)을 거친다 — 벗어나�
 | 거절 | 조건 |
 | --- | --- |
 | 401 `UNAUTHORIZED` | 로그인하지 않음 |
-| 400 `VALIDATION_ERROR` | `nickname`이 없음 · 문자열이 아님 · 형식 위반(`details`: `field: nickname`) |
+| 400 `VALIDATION_ERROR` | `nickname`이 없음 · 문자열이 아님 · 형식 위반(`details`: `field: nickname`). `reason`(v0.76, BE-134 — M-5 가입의 닉네임도 같다): `NotBlank`(없음 · 빈 값) · `Pattern`(한글 · 영문 · 숫자 밖의 글자, 공백) · `Size`(2 ~ 12자 밖) · `SizeWithHangul`(한글이 들어가 8자 초과) · `Reserved`(`방청객`으로 시작). 처음 걸린 하나만 실린다 |
 | 409 `DUPLICATE_NICKNAME` | 다른 회원이 쓰는 닉네임(동시 요청 포함 — 한 명만 된다) |
 
 ## 11. (확장) 레벨 · 직업 API (BE-106)

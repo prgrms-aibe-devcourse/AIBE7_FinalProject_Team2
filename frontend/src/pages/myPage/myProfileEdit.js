@@ -7,7 +7,7 @@ import { cardSignature } from '../../components/personCards.js';
 import { signatureSvg, signerSeed } from '../../components/signatureInk.js';
 import { API_MODE } from '../../api/config.js';
 import { clearUser, currentUser, saveUser } from '../../utils/session.js';
-import { NICKNAME_HINT, NICKNAME_MAX, isUnnamed, lockNicknameLength, nicknameError } from '../../utils/nickname.js';
+import { NICKNAME_CLAMPED, NICKNAME_HINT, NICKNAME_MAX, isUnnamed, lockNicknameLength, nicknameError } from '../../utils/nickname.js';
 import { BIO_MAX, getProfileSettings, updateProfileSettings } from '../../utils/profileSettings.js';
 import { isNicknameChanged, planMeSync, saveNickname, saveStatus } from './nicknameSave.js';
 
@@ -77,7 +77,8 @@ export function renderProfileEdit({ api, navigate, go, data = {}, card, fan }) {
   input.value = savedNickname;
   if (unnamed) input.placeholder = '아직 정하지 않았어요';
   input.maxLength = NICKNAME_MAX;
-  lockNicknameLength(input);
+  // 한글이 섞여 뒤를 자르면 칸 아래에 알린다(BE-134). error는 아래에서 만들어 부를 때 있다
+  lockNicknameLength(input, { onClamp: () => { error.textContent = NICKNAME_CLAMPED; } });
   input.autocomplete = 'nickname';
   input.spellcheck = false;
   input.disabled = !user;

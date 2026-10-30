@@ -25,12 +25,24 @@ export function nicknameError(value) {
   return '';
 }
 
-/** 입력칸 잠금: 한글이 섞이면 한글 한도를 넘게 쳐지지 않는다. 한글 조합 중에는 글자가 깨지지 않게 조합이 끝난 뒤 자른다 */
-export function lockNicknameLength(input) {
+/** 입력칸 잠금으로 뒤를 잘랐을 때 알리는 문구 (BE-134: 영문을 치다가 말없이 잘려 혼란스러웠다) */
+export const NICKNAME_CLAMPED = `한글이 들어가면 ${NICKNAME_MAX_HANGUL}자까지라 뒤는 잘랐어요.`;
+
+/**
+ * 입력칸 잠금: 한글이 섞이면 한글 한도를 넘게 쳐지지 않는다. 한글 조합 중에는 글자가 깨지지 않게 조합이 끝난 뒤 자른다.
+ * onClamp: 잘랐을 때 부른다(화면이 NICKNAME_CLAMPED를 보여 준다). 다른 input 처리(칸 안내 지우기)가 끝난 뒤에 부르므로 안내가 바로 지워지지 않는다
+ */
+export function lockNicknameLength(input, { onClamp } = {}) {
   const clamp = () => {
     const trimmed = input.value.trim(); // 검증(nicknameError)과 같이 앞뒤 공백을 빼고 센다
-    if (/[가-힣]/.test(trimmed) && trimmed.length > NICKNAME_MAX_HANGUL) input.value = trimmed.slice(0, NICKNAME_MAX_HANGUL);
+    if (!/[가-힣]/.test(trimmed) || trimmed.length <= NICKNAME_MAX_HANGUL) return false;
+    input.value = trimmed.slice(0, NICKNAME_MAX_HANGUL);
+    return true;
   };
-  input.addEventListener('input', (event) => { if (!event.isComposing) clamp(); });
-  input.addEventListener('compositionend', () => { clamp(); input.dispatchEvent(new Event('input')); });
+  input.addEventListener('input', (event) => { if (!event.isComposing && clamp()) onClamp?.(); });
+  input.addEventListener('compositionend', () => {
+    const cut = clamp();
+    input.dispatchEvent(new Event('input')); // 다른 처리(칸 안내 지우기)가 새 값을 보게 한다
+    if (cut) onClamp?.();
+  });
 }

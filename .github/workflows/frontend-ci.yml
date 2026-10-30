@@ -58,3 +58,12 @@ jobs:
         env:
           VITE_API_BASE_URL: /api/v1
           VITE_API_MODE: real
+
+      # 배포 빌드에 목 구현이 들어가지 않았는지 (FE-135). 목 · 실제 분기를 빌드 시점에 접어 빼므로,
+      # 누군가 목을 고르는 조건을 실행 시점 값(API_MODE)만으로 바꾸면 목 파일이 다시 생긴다 → 여기서 막는다
+      - name: Check no mock files in build
+        run: |
+          if ls dist/assets | grep -i mock; then
+            echo "배포 빌드(VITE_API_MODE=real)에 목 파일이 들어갔습니다. api/config.js의 FE-135 설명을 확인하세요." >&2
+            exit 1
+          fi
