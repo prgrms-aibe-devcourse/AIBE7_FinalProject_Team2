@@ -1367,8 +1367,15 @@ def stage_script(config, state, log, caller=call):
                 log(f"⚠ [{unit}] {warning}")
         if script["pending"]:
             log(f"⚠ 만들지 못한 단위: {', '.join(script['pending'])} — 대본 전체는 공개할 수 없습니다")
+        # 검수 조건(BE-122): 오류가 있으면 공개할 수 없고, 경고는 관리자가 본다. 목록 전체는 script.json의 review에 있다
+        review_errors = [i for i in script["review"] if i["severity"] == "error"]
+        for issue in script["review"]:
+            log(f"{'✗' if issue['severity'] == 'error' else '⚠'} [{issue['unit']}{issue['path']}] {issue['code']}: {issue['message']}")
+        if review_errors:
+            log(f"⚠ 검수 오류 {len(review_errors)}건 — 고치기 전에는 대본 전체를 공개할 수 없습니다")
         outputs.update({"scriptFile": str(script_file), "pending": script["pending"],
-                        "scriptPublishable": script["publishable"]})
+                        "scriptPublishable": script["publishable"], "reviewErrors": len(review_errors),
+                        "reviewWarnings": len(script["review"]) - len(review_errors)})
     return outputs
 
 

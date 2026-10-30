@@ -1153,7 +1153,8 @@ class PipelineTest(unittest.TestCase):
                    "cards": {"indict": {"ul": ["요약"], "law": "법조"}, "plea": {"b": "인정", "ul": ["주장"]},
                              "issues": {"p": "정리", "ul": ["쟁점"]}}}
         closing = {"prosecutor": "검사 측 의견입니다.", "defense": "변호인 측 최종변론입니다."}
-        evidence_lines = [f"증거 대사 {i}입니다." for i in range(6)]
+        # 숫자를 넣지 않는다 — 입력에 없는 숫자는 검수 오류다(BE-122)
+        evidence_lines = [f"증거 대사 {name}입니다." for name in ("가", "나", "다", "라", "마", "바")]
         paper = {"headline": "제목", "deck": "부제", "caption": "설명", "article": ["문단1", "문단2"]}
         intro = {"lines": ["하나예요.", "둘이에요.", "셋이에요.", "넷이에요.", "다섯이에요."]}
         answers = [json.dumps(v, ensure_ascii=False) for v in (paper, design, intro, opening)] + evidence_lines \
@@ -1163,6 +1164,7 @@ class PipelineTest(unittest.TestCase):
         self.assertTrue(outputs["publishable"])  # 증거조사는 다 만들었다
         self.assertEqual(outputs["pending"], [])
         self.assertTrue(outputs["scriptPublishable"])
+        self.assertEqual(outputs["reviewErrors"], 0)
         evidence_data = load_json(outputs["evidenceFile"])
         self.assertEqual([e["text"] for e in evidence_data["evidence"]], evidence_lines)
         script = load_json(outputs["scriptFile"])
