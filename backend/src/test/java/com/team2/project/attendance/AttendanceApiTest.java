@@ -7,25 +7,23 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.team2.project.support.ApiIntegrationTest;
-import jakarta.servlet.http.Cookie;
+import com.team2.project.support.FakeMemberTokens;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 
 /**
- * 출석 API (BE-97) · 마이페이지 profile.attendanceDays.
+ * 출석 API (BE-97, BE-140 회원 키)  · 마이페이지 profile.attendanceDays.
  * 시각을 고정해 두 요청 사이에 자정이 지나도 결과가 같게 한다 (#227 리뷰). 고정 시각은 KST 2026-03-02 03:30
  */
+@Import(FakeMemberTokens.class)
 class AttendanceApiTest extends ApiIntegrationTest {
 
 	private static final Instant NOW = Instant.parse("2026-03-01T18:30:00Z");
@@ -44,93 +42,70 @@ class AttendanceApiTest extends ApiIntegrationTest {
 	private static final String ATTENDANCE = "/api/v1/attendance";
 	private static final String MY_PAGE = "/api/v1/my-page";
 
-	private final List<UUID> createdUserIds = new ArrayList<>();
-
-	@AfterEach
-	void deleteAttendance() {
-		createdUserIds.forEach(id -> {
-			jdbcTemplate.update("DELETE FROM attendance WHERE anonymous_user_id = ?", id);
-			jdbcTemplate.update("DELETE FROM anonymous_user WHERE id = ?", id);
-		});
-		createdUserIds.clear();
-	}
-
-	private UUID newUser() {
-		UUID id = UUID.randomUUID();
-		jdbcTemplate.update("INSERT INTO anonymous_user (id) VALUES (?)", id);
-		createdUserIds.add(id);
-		return id;
-	}
-
-	private int countRows(UUID id) {
-		return jdbcTemplate.queryForObject("SELECT count(*) FROM attendance WHERE anonymous_user_id = ?", Integer.class, id);
+	private int countRows(long memberId) {
+		return jdbcTemplate.queryForObject("SELECT count(*) FROM member_attendance WHERE member_id = ?", Integer.class, memberId);
 	}
 
 	@Test
 	@DisplayName("같은 날 여러 번 출석해도 하루로 센다 (204)")
 	void sameDayCountsOnce() throws Exception {
-		UUID id = newUser();
-		Cookie cookie = new Cookie(COOKIE, id.toString());
+		long id = registerMember();
 
-		mockMvc.perform(post(ATTENDANCE).cookie(cookie)).andExpect(status().isNoContent());
-		mockMvc.perform(post(ATTENDANCE).cookie(cookie)).andExpect(status().isNoContent());
+		mockMvc.perform(post(ATTENDANCE).header("Authorization", bearer(id))).andExpect(status().isNoContent());
+		mockMvc.perform(post(ATTENDANCE).header("Authorization", bearer(id))).andExpect(status().isNoContent());
 
 		assertThat(countRows(id)).isEqualTo(1);
-		assertThat(jdbcTemplate.queryForObject("SELECT attended_on FROM attendance WHERE anonymous_user_id = ?",
+		assertThat(jdbcTemplate.queryForObject("SELECT attended_on FROM member_attendance WHERE member_id = ?",
 			LocalDate.class, id)).isEqualTo(TODAY_KST);	// UTC로는 3/1이지만 KST 날짜로 저장된다
 	}
 
 	@Test
-	@DisplayName("쿠키가 없거나 DB에 없는 익명 ID면 기록하지 않고 발급도 하지 않는다 (204)")
-	void noCookieOrUnknownIdIsIgnored() throws Exception {
+	@DisplayName("비회원이 출석해도 204이지만 아무것도 기록하지 않고 쿠키도 발급하지 않는다")
+	void guestIsNoOp() throws Exception {
+		int before = jdbcTemplate.queryForObject("SELECT count(*) FROM member_attendance", Integer.class);
+
 		mockMvc.perform(post(ATTENDANCE))
 			.andExpect(status().isNoContent())
 			.andExpect(result -> assertThat(result.getResponse().getHeader("Set-Cookie")).isNull());
-
-		UUID unknown = UUID.randomUUID();
-		mockMvc.perform(post(ATTENDANCE).cookie(new Cookie(COOKIE, unknown.toString())))
+		mockMvc.perform(post(ATTENDANCE).cookie(new jakarta.servlet.http.Cookie(COOKIE, java.util.UUID.randomUUID().toString())))
 			.andExpect(status().isNoContent());
 
-		assertThat(countRows(unknown)).isZero();
-		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM anonymous_user WHERE id = ?", Integer.class, unknown))
-			.isZero();
-	}
-
-	@Test
-	@DisplayName("쿠키 없이 체험을 시작하면 발급과 함께 그날 출석이 남고, 이어 출석 API를 불러도 하루다 (BE-98)")
-	void issuingCookieRecordsAttendance() throws Exception {
-		Cookie cookie = startAndGetCookie(insertCase("MURDER", "PUBLISHED"));	// 부모가 사건 · 체험 · 사용자 · 출석을 지운다
-		UUID id = UUID.fromString(cookie.getValue());
-
-		assertThat(countRows(id)).isEqualTo(1);
-		assertThat(jdbcTemplate.queryForObject("SELECT attended_on FROM attendance WHERE anonymous_user_id = ?",
-			LocalDate.class, id)).isEqualTo(TODAY_KST);
-
-		mockMvc.perform(post(ATTENDANCE).cookie(cookie)).andExpect(status().isNoContent());
-		assertThat(countRows(id)).isEqualTo(1);
+		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM member_attendance", Integer.class)).isEqualTo(before);
 	}
 
 	@Test
 	@DisplayName("마이페이지 profile.attendanceDays는 누적 출석 일수다")
 	void myPageShowsAttendanceDays() throws Exception {
-		UUID id = newUser();
-		Cookie cookie = new Cookie(COOKIE, id.toString());
+		long id = registerMember();
 		LocalDate base = LocalDate.of(2026, 1, 1);	// 고정한 오늘(3/2)과 겹치지 않는 지난 날짜
-		jdbcTemplate.update("INSERT INTO attendance (anonymous_user_id, attended_on) VALUES (?, ?), (?, ?)",
+		jdbcTemplate.update("INSERT INTO member_attendance (member_id, attended_on) VALUES (?, ?), (?, ?)",
 			id, base, id, base.plusDays(1));
 
-		mockMvc.perform(post(ATTENDANCE).cookie(cookie)).andExpect(status().isNoContent());
+		mockMvc.perform(post(ATTENDANCE).header("Authorization", bearer(id))).andExpect(status().isNoContent());
 
-		mockMvc.perform(get(MY_PAGE).cookie(cookie))
+		mockMvc.perform(get(MY_PAGE).header("Authorization", bearer(id)))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.profile.attendanceDays").value(3));
 	}
 
 	@Test
-	@DisplayName("쿠키가 없으면 빈 마이페이지의 출석 일수는 0")
-	void emptyMyPageHasZeroDays() throws Exception {
-		mockMvc.perform(get(MY_PAGE))
+	@DisplayName("다른 회원의 출석은 내 마이페이지에 세지 않는다")
+	void otherMemberAttendanceNotVisible() throws Exception {
+		long mine = registerMember();
+		long other = registerMember();
+		jdbcTemplate.update("INSERT INTO member_attendance (member_id, attended_on) VALUES (?, ?)", other, LocalDate.of(2026, 1, 1));
+
+		mockMvc.perform(get(MY_PAGE).header("Authorization", bearer(mine)))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.profile.attendanceDays").value(0));
+		assertThat(countRows(mine)).isZero();
+	}
+
+	@Test
+	@DisplayName("비회원 마이페이지는 401 UNAUTHORIZED")
+	void guestMyPageUnauthorized() throws Exception {
+		mockMvc.perform(get(MY_PAGE))
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
 	}
 }

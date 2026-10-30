@@ -7,65 +7,45 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.team2.project.support.ApiIntegrationTest;
-import jakarta.servlet.http.Cookie;
-import java.util.ArrayList;
+import com.team2.project.support.FakeMemberTokens;
 import java.util.List;
-import java.util.UUID;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.http.HttpHeaders;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
-import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.web.servlet.ResultActions;
 
 /** 프로필 선택 설정 부분 저장 PATCH /profile-settings · 마이페이지 profileSettings (P-8 · P-5 v0.52, BE-104) */
+@Import(FakeMemberTokens.class)
 class ProfileSettingsApiTest extends ApiIntegrationTest {
 
 	private static final String SETTINGS = "/api/v1/profile-settings";
 	private static final String MY_PAGE = "/api/v1/my-page";
 
-	/** 체험이 없는 사용자(부모 정리 대상이 아님)는 여기서 지운다 */
-	private final List<UUID> bareUserIds = new ArrayList<>();
-
-	@AfterEach
-	void deleteBareUsers() {
-		bareUserIds.forEach(id -> {
-			jdbcTemplate.update("DELETE FROM attendance WHERE anonymous_user_id = ?", id);	// 발급 시 출석(BE-98)
-			jdbcTemplate.update("DELETE FROM profile_setting WHERE anonymous_user_id = ?", id);
-			jdbcTemplate.update("DELETE FROM anonymous_user WHERE id = ?", id);
-		});
-		bareUserIds.clear();
-	}
-
-	private Cookie newUser() {
-		UUID id = UUID.randomUUID();
-		jdbcTemplate.update("INSERT INTO anonymous_user (id) VALUES (?)", id);
-		bareUserIds.add(id);
-		return new Cookie(COOKIE, id.toString());
-	}
-
-	private ResultActions patchSettings(Cookie cookie, String json) throws Exception {
+	private ResultActions patchSettings(Long memberId, String json) throws Exception {
 		var request = patch(SETTINGS).contentType(MediaType.APPLICATION_JSON).content(json);
-		return mockMvc.perform(cookie == null ? request : request.cookie(cookie));
+		return mockMvc.perform(memberId == null ? request : request.header("Authorization", bearer(memberId)));
 	}
 
-	private int countSettings(Cookie cookie) {
-		return jdbcTemplate.queryForObject("SELECT count(*) FROM profile_setting WHERE anonymous_user_id = ?::uuid",
-			Integer.class, cookie.getValue());
+	private int countSettings(long memberId) {
+		return jdbcTemplate.queryForObject("SELECT count(*) FROM member_profile_setting WHERE member_id = ?",
+			Integer.class, memberId);
 	}
 
 	@Test
-	@DisplayName("P-5: 저장한 적이 없으면 profileSettings는 기본값(최근 · 최근 · 소개 없음), 쿠키가 없어도 같다")
+	@DisplayName("P-5: 저장한 적이 없으면 profileSettings는 기본값(최근 · 최근 · 소개 없음), 다른 회원이 저장해도 영향이 없다")
 	void myPage_defaults() throws Exception {
-		mockMvc.perform(get(MY_PAGE).cookie(newUser()))
+		mockMvc.perform(get(MY_PAGE).header("Authorization", bearer(registerMember())))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.profileSettings.shownCard").value("current"))
 			.andExpect(jsonPath("$.profileSettings.profileCardType").value("current"))
 			.andExpect(jsonPath("$.profileSettings.bio").value(""))
 			.andExpect(jsonPath("$.profileSettings.cardLine").value("type"))
 			.andExpect(jsonPath("$.profileSettings.cardLevel").value(false));
-		mockMvc.perform(get(MY_PAGE))
+		long other = registerMember();
+		long saver = registerMember();
+		patchSettings(saver, "{\"bio\":\"남의 소개\"}").andExpect(status().isOk());
+		mockMvc.perform(get(MY_PAGE).header("Authorization", bearer(other)))
 			.andExpect(jsonPath("$.profileSettings.shownCard").value("current"))
 			.andExpect(jsonPath("$.profileSettings.bio").value(""));
 	}
@@ -73,14 +53,14 @@ class ProfileSettingsApiTest extends ApiIntegrationTest {
 	@Test
 	@DisplayName("P-8: 보낸 칸만 바꾸고 응답은 세 값 전체. 마이페이지에도 그대로 보인다")
 	void patch_oneField_returnsAll() throws Exception {
-		Cookie cookie = newUser();
-		patchSettings(cookie, "{\"shownCard\":\"initial\"}")
+		long me = registerMember();
+		patchSettings(me, "{\"shownCard\":\"initial\"}")
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.shownCard").value("initial"))
 			.andExpect(jsonPath("$.profileCardType").value("current"))
 			.andExpect(jsonPath("$.bio").value(""));
 
-		mockMvc.perform(get(MY_PAGE).cookie(cookie))
+		mockMvc.perform(get(MY_PAGE).header("Authorization", bearer(me)))
 			.andExpect(jsonPath("$.profileSettings.shownCard").value("initial"))
 			.andExpect(jsonPath("$.profileSettings.profileCardType").value("current"));
 	}
@@ -88,57 +68,57 @@ class ProfileSettingsApiTest extends ApiIntegrationTest {
 	@Test
 	@DisplayName("P-8: 다른 화면에서 다른 칸을 저장해도 앞서 저장한 칸을 덮어쓰지 않는다(부분 저장)")
 	void patch_otherField_keepsEarlier() throws Exception {
-		Cookie cookie = newUser();
-		patchSettings(cookie, "{\"bio\":\"판결은 신중하게\"}").andExpect(status().isOk());
-		patchSettings(cookie, "{\"shownCard\":\"retake\"}").andExpect(status().isOk());	// 재심이 없어도 받는다
-		patchSettings(cookie, "{\"profileCardType\":\"initial\"}")
+		long me = registerMember();
+		patchSettings(me, "{\"bio\":\"판결은 신중하게\"}").andExpect(status().isOk());
+		patchSettings(me, "{\"shownCard\":\"retake\"}").andExpect(status().isOk());	// 재심이 없어도 받는다
+		patchSettings(me, "{\"profileCardType\":\"initial\"}")
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.shownCard").value("retake"))
 			.andExpect(jsonPath("$.profileCardType").value("initial"))
 			.andExpect(jsonPath("$.bio").value("판결은 신중하게"));
-		assertThat(countSettings(cookie)).isEqualTo(1);
+		assertThat(countSettings(me)).isEqualTo(1);
 	}
 
 	@Test
 	@DisplayName("P-8: 소개는 앞뒤 공백을 빼고 40자까지, 빈 문자열은 소개 지우기")
 	void patch_bio_trimmedAndCleared() throws Exception {
-		Cookie cookie = newUser();
+		long me = registerMember();
 		String forty = "가".repeat(40);
-		patchSettings(cookie, "{\"bio\":\"  " + forty + "  \"}")
+		patchSettings(me, "{\"bio\":\"  " + forty + "  \"}")
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.bio").value(forty));
-		patchSettings(cookie, "{\"bio\":\"\"}")
+		patchSettings(me, "{\"bio\":\"\"}")
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.bio").value(""));
 		// 이모지(서로게이트 쌍)도 한 글자로 센다 — DB varchar(40)과 같은 기준
-		patchSettings(cookie, "{\"bio\":\"" + "😀".repeat(40) + "\"}").andExpect(status().isOk());
+		patchSettings(me, "{\"bio\":\"" + "😀".repeat(40) + "\"}").andExpect(status().isOk());
 	}
 
 	@Test
 	@DisplayName("P-8: cardLine · cardLevel을 저장하고 다른 칸은 그대로 둔다. 마이페이지에도 보인다")
 	void patch_cardLine_cardLevel() throws Exception {
-		Cookie cookie = newUser();
-		patchSettings(cookie, "{\"bio\":\"판결은 신중하게\"}").andExpect(status().isOk());
-		patchSettings(cookie, "{\"cardLine\":\"job\"}")
+		long me = registerMember();
+		patchSettings(me, "{\"bio\":\"판결은 신중하게\"}").andExpect(status().isOk());
+		patchSettings(me, "{\"cardLine\":\"job\"}")
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.cardLine").value("job"))
 			.andExpect(jsonPath("$.cardLevel").value(false))
 			.andExpect(jsonPath("$.bio").value("판결은 신중하게"));
-		patchSettings(cookie, "{\"cardLevel\":true}")
+		patchSettings(me, "{\"cardLevel\":true}")
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.cardLine").value("job"))
 			.andExpect(jsonPath("$.cardLevel").value(true));
 
-		mockMvc.perform(get(MY_PAGE).cookie(cookie))
+		mockMvc.perform(get(MY_PAGE).header("Authorization", bearer(me)))
 			.andExpect(jsonPath("$.profileSettings.cardLine").value("job"))
 			.andExpect(jsonPath("$.profileSettings.cardLevel").value(true));
-		assertThat(countSettings(cookie)).isEqualTo(1);
+		assertThat(countSettings(me)).isEqualTo(1);
 	}
 
 	@Test
 	@DisplayName("P-8: 형식이 틀리면 400 VALIDATION_ERROR이고 아무것도 저장하지 않는다")
 	void patch_invalid_rejected() throws Exception {
-		Cookie cookie = newUser();
+		long me = registerMember();
 		List<String> bodies = List.of(
 			"{}",										// 바꿀 칸이 없음
 			"[]",										// 객체가 아님
@@ -158,44 +138,53 @@ class ProfileSettingsApiTest extends ApiIntegrationTest {
 			"{\"bio\":\"a\\tb\"}",					// 탭 등 제어 문자
 			"{\"bio\":\"한 줄\",\"isPublic\":true}");	// 모르는 칸(공개 범위는 두지 않는다)
 		for (String body : bodies) {
-			patchSettings(cookie, body)
+			patchSettings(me, body)
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 		}
-		patchSettings(cookie, "{\"bio\":\"한 줄\",\"nickname\":\"x\"}")
+		patchSettings(me, "{\"bio\":\"한 줄\",\"nickname\":\"x\"}")
 			.andExpect(jsonPath("$.details[0].field").value("nickname"));
-		assertThat(countSettings(cookie)).isZero();
+		assertThat(countSettings(me)).isZero();
 	}
 
 	@Test
-	@DisplayName("P-8: 쿠키가 없으면 익명 ID를 발급하고 저장한다. 형식이 틀리면 발급하지 않는다")
-	void patch_withoutCookie_issues() throws Exception {
-		int usersBefore = jdbcTemplate.queryForObject("SELECT count(*) FROM anonymous_user", Integer.class);
-		MockHttpServletResponse rejected = patchSettings(null, "{\"shownCard\":\"first\"}")
-			.andExpect(status().isBadRequest())
-			.andReturn().getResponse();
-		assertThat(rejected.getHeader(HttpHeaders.SET_COOKIE)).isNull();
-		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM anonymous_user", Integer.class)).isEqualTo(usersBefore);
+	@DisplayName("P-8 · P-5: 비회원은 저장도 마이페이지도 401 UNAUTHORIZED이고 아무것도 만들지 않는다 (쿠키는 무시)")
+	void guest_unauthorized() throws Exception {
+		int before = jdbcTemplate.queryForObject("SELECT count(*) FROM member_profile_setting", Integer.class);
+		patchSettings(null, "{\"profileCardType\":\"retake\"}")
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+		mockMvc.perform(patch(SETTINGS).contentType(MediaType.APPLICATION_JSON).content("{\"bio\":\"x\"}")
+				.cookie(new jakarta.servlet.http.Cookie(COOKIE, java.util.UUID.randomUUID().toString())))
+			.andExpect(status().isUnauthorized());
+		mockMvc.perform(get(MY_PAGE))
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM member_profile_setting", Integer.class)).isEqualTo(before);
+	}
 
-		MockHttpServletResponse saved = patchSettings(null, "{\"profileCardType\":\"retake\"}")
+	@Test
+	@DisplayName("P-8: 다른 회원의 설정은 내 저장에 섞이지 않는다")
+	void otherMemberIsolated() throws Exception {
+		long a = registerMember();
+		long b = registerMember();
+		patchSettings(a, "{\"bio\":\"A의 소개\"}").andExpect(status().isOk());
+		patchSettings(b, "{\"shownCard\":\"initial\"}")
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.profileCardType").value("retake"))
-			.andReturn().getResponse();
-		String setCookie = saved.getHeader(HttpHeaders.SET_COOKIE);
-		assertThat(setCookie).startsWith(COOKIE + "=");
-		UUID issued = UUID.fromString(setCookie.split(";")[0].substring((COOKIE + "=").length()));
-		bareUserIds.add(issued);
-		assertThat(countSettings(new Cookie(COOKIE, issued.toString()))).isEqualTo(1);
+			.andExpect(jsonPath("$.bio").value(""));
+		mockMvc.perform(get(MY_PAGE).header("Authorization", bearer(a)))
+			.andExpect(jsonPath("$.profileSettings.bio").value("A의 소개"))
+			.andExpect(jsonPath("$.profileSettings.shownCard").value("current"));
 	}
 
 	@Test
 	@DisplayName("P-8 · P-7: 프로필 선택 설정은 꾸미기 저장과 따로 있어 서로 덮어쓰지 않는다")
 	void patch_doesNotTouchProfileDeco() throws Exception {
-		Cookie cookie = newUser();
-		patchSettings(cookie, "{\"shownCard\":\"initial\"}").andExpect(status().isOk());
-		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM profile_deco WHERE anonymous_user_id = ?::uuid",
-			Integer.class, cookie.getValue())).isZero();
-		mockMvc.perform(get(MY_PAGE).cookie(cookie))
+		long me = registerMember();
+		patchSettings(me, "{\"shownCard\":\"initial\"}").andExpect(status().isOk());
+		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM member_profile_deco WHERE member_id = ?",
+			Integer.class, me)).isZero();
+		mockMvc.perform(get(MY_PAGE).header("Authorization", bearer(me)))
 			.andExpect(jsonPath("$.profileDeco.frame").value("basic"))	// 꾸미기는 기본값 그대로
 			.andExpect(jsonPath("$.profileSettings.shownCard").value("initial"));
 	}
