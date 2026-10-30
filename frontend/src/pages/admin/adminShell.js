@@ -116,8 +116,8 @@ export async function renderAdminShell(container, { navigate, title, section, dr
   // FE-143: 서버 API가 아직 없는 화면(실제 모드의 운영 메뉴)은 draw를 부르지 않는다 — 404 요청과 눌러도 소용없는 "다시 시도"를 막는다.
   // 모양은 대시보드의 404 안내와 같다(제목 + 안내 한 줄). 공통 createLoader는 그대로 둔다(사건 검수 목록이 같은 함수를 쓴다)
   function drawNotReady() {
+    // role은 두지 않는다: 들어오면 제목(h1)으로 포커스가 가고 안내는 바로 아래 글로 읽힌다. status를 두면 제목과 겹쳐 두 번 읽힐 수 있다(PR #360 리뷰)
     const panel = element('div', 'admin-message');
-    panel.setAttribute('role', 'status');
     panel.append(element('p', '', NOT_READY_TEXT));
     main.replaceChildren(pageTop(title), panel);
   }
