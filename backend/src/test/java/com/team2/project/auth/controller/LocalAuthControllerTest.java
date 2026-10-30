@@ -280,6 +280,30 @@ class LocalAuthControllerTest extends ApiIntegrationTest {
 	// ---- 로그인 ----
 
 	@Test
+	void 닉네임이_비워진_아이디_회원이_로그인하면_표시_이름_방청객_회원ID를_준다() throws Exception {
+		String id = newLoginId();
+		signup(id, "비워진회원");
+		long memberId = memberIdOf(id);
+		jdbcTemplate.update("UPDATE member SET nickname = NULL WHERE id = ?", memberId);	// V39가 겹치던 닉네임을 비운 회원
+
+		MvcResult result = mockMvc.perform(json(LOGIN, loginBody(id, PASSWORD)))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.nickname").value("방청객 " + memberId))	// null이 아니라 항상 문자열
+			.andReturn();
+		remember(result);
+	}
+
+	@Test
+	void 방청객으로_시작하는_닉네임으로는_가입할_수_없다() throws Exception {
+		String id = newLoginId();
+		mockMvc.perform(json(SIGNUP, signupBody(id, PASSWORD, "방청객99")))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+			.andExpect(jsonPath("$.details[0].field").value("nickname"));
+		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM member_password WHERE login_id = ?", Integer.class, id)).isZero();
+	}
+
+	@Test
 	void 로그인하면_리프레시_쿠키와_닉네임을_주고_대문자로_입력해도_된다() throws Exception {
 		String id = newLoginId();
 		signup(id, "로그인회원");

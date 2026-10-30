@@ -19,6 +19,8 @@ const TOO_MANY = '요청이 너무 많아요. 잠시 뒤 다시 시도해 주세
 // 계정은 만들어졌는데 첫 토큰을 받지 못했다(api/authFlow.js). "가입하지 못했어요"라고 하면 다시 눌러 409(이미 쓰는 아이디)를 보게 된다
 const SIGNED_UP_LOGIN_AGAIN = '가입은 됐어요. 로그인 화면에서 방금 만든 아이디로 로그인해 주세요.';
 // 서버 형식 검사(400 VALIDATION_ERROR)가 칸 이름을 알려 주면 그 칸에 붙이는 문구. 화면 검사를 통과했는데 서버가 거절한 경우라 드물다
+// 이미 쓰는 닉네임(409 DUPLICATE_NICKNAME, BE-139: 대소문자만 달라도 같다)
+const DUPLICATE_NICKNAME = '이미 쓰고 있는 닉네임이에요. 다른 닉네임을 골라 주세요.';
 const SERVER_FIELD_MESSAGE = { id: '아이디 형식을 다시 확인해 주세요.', password: '비밀번호 형식을 다시 확인해 주세요.', nickname: '닉네임 형식을 다시 확인해 주세요.' };
 
 export function renderSignupPage(container, { api, navigate }) {
@@ -34,6 +36,7 @@ export function renderSignupPage(container, { api, navigate }) {
     { label: '입력 폼', run: () => showForm() },
     { label: '칸 오류', run: () => showForm().form.requestSubmit() },
     { label: '아이디 중복', run: () => showForm().fill({ id: 'admin_naero' }).fieldError('id', '이미 쓰고 있는 아이디예요. 다른 아이디를 골라 주세요. 방금 가입했다면 로그인해 주세요.') },
+    { label: '닉네임 중복', run: () => showForm().fill({ nickname: '중복판사' }).fieldError('nickname', DUPLICATE_NICKNAME) },
     { label: '가입 중(로딩)', run: () => { const { busy } = showForm(); setBusy(busy, true, busy[1], '가입하는 중…'); } },
     { label: '가입됨 · 로그인 필요', run: () => showForm().showSignedUpLoginAgain() },
     { label: '이미 로그인', run: () => showSignedIn({ nickname: '내로판사' }, false) },
@@ -185,6 +188,9 @@ export function renderSignupPage(container, { api, navigate }) {
           // 그 사람은 이미 가입된 것이라 로그인으로 안내한다
           fieldError('id', '이미 쓰고 있는 아이디예요. 다른 아이디를 골라 주세요. 방금 가입했다면 로그인해 주세요.');
           fields.id.input.focus();
+        } else if (failure?.code === 'DUPLICATE_NICKNAME') {
+          fieldError('nickname', DUPLICATE_NICKNAME);
+          fields.nickname.input.focus();
         } else if (serverField) {
           fieldError(serverField, SERVER_FIELD_MESSAGE[serverField]);
           fields[serverField].input.focus();

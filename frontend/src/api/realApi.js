@@ -59,6 +59,34 @@ export const putProfileDeco = (deco) => put('/profile-deco', deco);
 // P-8 — 프로필 선택 설정 부분 저장(FE-81, BE-104). 보낸 칸만 바꾸고, 응답은 세 값 전체 { shownCard, profileCardType, bio }
 export const patchProfileSettings = (settings) => patch('/profile-settings', settings);
 
+// 커뮤니티 C-1 ~ C-7 (BE-115, 명세 12장, FE-137). 목(mocks/communityMockApi.js)과 같은 이름 · 인자 · 응답 모양이다.
+// 읽기는 누구나, 글쓰기 · 좋아요 · 댓글은 로그인한 회원만(401 UNAUTHORIZED — 목의 임시 코드 LOGIN_REQUIRED를 이 코드로 맞췄다)
+// 사진 올리기는 서버에 아직 없어(후속) images가 비어 있지 않으면 400 VALIDATION_ERROR(details images)다 — 화면은 실제 모드에서 사진 칸을 숨긴다
+const community = (postId) => `/community/posts/${encodeURIComponent(postId)}`;
+// 값이 있는 쿼리만 붙인다(category · caseId는 없으면 전체, sort는 LATEST · LIKES · COMMENTS, page는 1부터 — 첫 글부터 page쪽 끝까지 내려 준다)
+export function getCommunityPosts({ category, caseId, sort, page } = {}) {
+  const query = new URLSearchParams();
+  if (category) query.set('category', category);
+  if (caseId) query.set('caseId', String(caseId));
+  if (sort) query.set('sort', sort);
+  if (page && page > 1) query.set('page', String(page));
+  const text = query.toString();
+  return get(text ? `/community/posts?${text}` : '/community/posts');
+}
+export const getCommunityPost = (postId) => get(community(postId));
+export const createCommunityPost = (body) => post('/community/posts', body);
+export const toggleCommunityLike = (postId) => post(`${community(postId)}/like`);
+export const createCommunityComment = (postId, body) => post(`${community(postId)}/comments`, body);
+export const getCommunityHome = () => get('/community/home');
+// 글에 붙일 수 있는 내 판결. 판결을 확정하기 전이면 204라 null이다(client.js)
+export const getMyShareableVerdict = () => get('/community/shareable-verdict');
+
+// 회원 정보 M-8 · 닉네임 설정 M-7 (BE-139, 명세 10장). 로그인한 회원만.
+// getMe: { nickname(없으면 null), displayName(없으면 '방청객 {회원 ID}'), provider: KAKAO | LOCAL, loginId(카카오는 null), createdAt, lastLoginAt }
+// putNickname: 200 { nickname } · 400 VALIDATION_ERROR(details nickname) · 409 DUPLICATE_NICKNAME(대소문자 무관 중복)
+export const getMe = () => get('/members/me');
+export const putNickname = (nickname) => put('/members/me/nickname', { nickname });
+
 // 레벨 · 직업 L-1 · L-2 (BE-106, 명세 11장). 응답은 둘 다 { level, xp, currentLevelXp, nextLevelXp, job: { code, name }, jobs: [...] }.
 // 마이페이지(P-5)의 level도 같은 모양이다. 아직 안 열린 직업을 고르면 409 JOB_LOCKED
 export const getLevel = () => get('/level');
@@ -91,7 +119,7 @@ export function login({ method, id, password } = {}) {
 }
 
 // M-5 아이디 회원가입 (BE-113 · FE-117). 가입하면 바로 로그인된다(응답 · 쿠키는 아이디 로그인과 같다).
-// 중복 아이디는 409 DUPLICATE_ID, 형식 오류는 400 VALIDATION_ERROR(details에 칸 이름), Origin 검증 실패 403, 요청 제한 429
+// 중복 아이디는 409 DUPLICATE_ID, 중복 닉네임은 409 DUPLICATE_NICKNAME(BE-139, 대소문자 무관), 형식 오류는 400 VALIDATION_ERROR(details에 칸 이름), Origin 검증 실패 403, 요청 제한 429
 export const signup = ({ id, password, nickname }) => withAccessToken(post('/auth/signup', { id, password, nickname }));
 
 // M-1 · M-2 — 재발급(콜백 화면이 첫 액세스 토큰을 받는다) · 로그아웃
