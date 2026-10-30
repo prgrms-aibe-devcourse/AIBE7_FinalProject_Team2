@@ -9,6 +9,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -69,6 +70,8 @@ public class Member {
 	 * 약관 동의는 호출한 쪽이 확인한 뒤 부른다 — 동의 시각과 지금 약관 버전을 함께 남긴다 (BE-133)
 	 */
 	public static Member local(String nickname, Instant termsAgreedAt) {
+		// 동의 시각 없이는 만들 수 없다 — 비면 버전만 채워져 CHECK(ck_member_terms_agreement) 위반이 INSERT 때 500으로 나오므로 여기서 먼저 막는다 (PR #349 리뷰)
+		Objects.requireNonNull(termsAgreedAt, "termsAgreedAt");
 		Member member = new Member(AuthProvider.LOCAL, UUID.randomUUID().toString(), nickname);
 		member.termsAgreedAt = termsAgreedAt;
 		member.termsVersion = TermsVersion.CURRENT;

@@ -9,12 +9,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.jayway.jsonpath.JsonPath;
+import com.team2.project.common.exception.BusinessException;
+import com.team2.project.common.exception.ErrorCode;
 import com.team2.project.common.security.token.AccessTokenVerifier;
 import com.team2.project.common.security.token.MemberPrincipal;
 import com.team2.project.common.security.token.jwt.RefreshTokenStore;
 import com.team2.project.common.web.AnonymousIdCookie;
-import com.team2.project.common.exception.BusinessException;
-import com.team2.project.common.exception.ErrorCode;
 import com.team2.project.common.web.RefreshTokenCookies;
 import com.team2.project.member.domain.TermsVersion;
 import com.team2.project.member.service.LocalAccountService;

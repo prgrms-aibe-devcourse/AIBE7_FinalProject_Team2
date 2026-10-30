@@ -88,7 +88,7 @@ public class LocalAccountService {
 
 		return transactionTemplate.execute(status -> {
 			Instant now = clock.instant();
-			Member member = saveLocalMember(nickname, now);	// now = 약관 동의 시각
+			Member member = saveLocalMember(nickname, now);
 			// 0이면 그사이 같은 아이디로 먼저 가입됐다 → 예외로 회원 행까지 되돌린다 (결정 4)
 			if (passwordRepository.insertIfLoginIdAbsent(member.getId(), loginId, passwordHash) == 0) {
 				throw new BusinessException(ErrorCode.DUPLICATE_ID);
