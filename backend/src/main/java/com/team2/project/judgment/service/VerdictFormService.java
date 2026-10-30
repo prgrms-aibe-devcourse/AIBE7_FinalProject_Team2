@@ -1,5 +1,6 @@
 package com.team2.project.judgment.service;
 
+import com.team2.project.common.web.Requester;
 import com.team2.project.experience.domain.Experience;
 import com.team2.project.experience.domain.ExperienceStatus;
 import com.team2.project.experience.service.MyExperienceService;
@@ -11,8 +12,6 @@ import com.team2.project.legalcase.domain.PenaltyType;
 import com.team2.project.legalcase.repository.FactorRepository;
 import com.team2.project.legalcase.repository.PenaltyRuleRepository;
 import java.util.Arrays;
-import java.util.Optional;
-import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -28,8 +27,8 @@ public class VerdictFormService {
 
 	/** API 8. REVIEWED에서만 볼 수 있다. 아니면 INVALID_STATE(currentStatus 포함) */
 	@Transactional(readOnly = true)
-	public VerdictFormResponse getForm(Long caseId, Optional<UUID> anonymousId) {
-		Experience experience = myExperienceService.getMyExperienceBetween(caseId, anonymousId,
+	public VerdictFormResponse getForm(Long caseId, Requester requester) {
+		Experience experience = myExperienceService.getMyExperienceBetween(caseId, requester,
 			ExperienceStatus.REVIEWED, ExperienceStatus.REVIEWED);
 		LegalCase legalCase = experience.getLegalCase();
 		var options = penaltyRuleRepository.findAllByCaseId(caseId).stream()

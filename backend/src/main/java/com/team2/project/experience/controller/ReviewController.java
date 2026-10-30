@@ -26,13 +26,13 @@ public class ReviewController {
 	/** API 6. 사건 정보 (S-04) */
 	@GetMapping("/review")
 	public ReviewResponse getReview(@PathVariable Long caseId, Requester requester) {
-		return reviewService.getReview(caseId, requester.anonymousId());
+		return reviewService.getReview(caseId, requester);
 	}
 
 	/** API 7. 섹션 확인 기록 */
 	@PostMapping("/review-steps")
 	public ReviewStepResponse confirmStep(@PathVariable Long caseId, @Valid @RequestBody ReviewStepRequest body,
 		Requester requester) {
-		return reviewService.confirmStep(caseId, requester.anonymousId(), body);
+		return reviewService.confirmStep(caseId, requester, body);
 	}
 }

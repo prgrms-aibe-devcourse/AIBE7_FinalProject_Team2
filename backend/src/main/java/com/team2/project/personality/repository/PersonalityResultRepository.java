@@ -1,5 +1,6 @@
 package com.team2.project.personality.repository;
 
+import com.team2.project.common.owner.Owner;
 import com.team2.project.personality.domain.PersonalityResult;
 import java.util.Optional;
 import java.util.UUID;
@@ -41,4 +42,46 @@ public interface PersonalityResultRepository extends JpaRepository<PersonalityRe
 	@Modifying(flushAutomatically = true, clearAutomatically = true)
 	@Query("UPDATE PersonalityResult r SET r.current = false WHERE r.anonymousUser.id = :anonymousUserId AND r.current = true")
 	int clearCurrent(@Param("anonymousUserId") UUID anonymousUserId);
+
+	// ── 회원 쪽 (BE-140). 뜻은 위 익명 쪽과 같다 ──
+
+	Optional<PersonalityResult> findByMemberIdAndCurrentTrue(Long memberId);
+
+	boolean existsByMemberId(Long memberId);
+
+	boolean existsByMemberIdAndBaselineRetakeTrue(Long memberId);
+
+	Optional<PersonalityResult> findFirstByMemberIdOrderByCreatedAtAscIdAsc(Long memberId);
+
+	Optional<PersonalityResult> findByMemberIdAndBaselineRetakeTrue(Long memberId);
+
+	@Modifying(flushAutomatically = true, clearAutomatically = true)
+	@Query("UPDATE PersonalityResult r SET r.current = false WHERE r.memberId = :memberId AND r.current = true")
+	int clearCurrentOfMember(@Param("memberId") long memberId);
+
+	// ── 주인(회원 또는 익명 ID)으로 고르기 ──
+
+	default Optional<PersonalityResult> findCurrent(Owner owner) {
+		return owner.fold(this::findByMemberIdAndCurrentTrue, this::findByAnonymousUser_IdAndCurrentTrue);
+	}
+
+	default boolean existsAny(Owner owner) {
+		return owner.fold(this::existsByMemberId, this::existsByAnonymousUser_Id);
+	}
+
+	default boolean existsBaselineRetake(Owner owner) {
+		return owner.fold(this::existsByMemberIdAndBaselineRetakeTrue, this::existsByAnonymousUser_IdAndBaselineRetakeTrue);
+	}
+
+	default Optional<PersonalityResult> findFirst(Owner owner) {
+		return owner.fold(this::findFirstByMemberIdOrderByCreatedAtAscIdAsc, this::findFirstByAnonymousUser_IdOrderByCreatedAtAscIdAsc);
+	}
+
+	default Optional<PersonalityResult> findBaselineRetake(Owner owner) {
+		return owner.fold(this::findByMemberIdAndBaselineRetakeTrue, this::findByAnonymousUser_IdAndBaselineRetakeTrue);
+	}
+
+	default int clearCurrent(Owner owner) {
+		return owner.fold(this::clearCurrentOfMember, this::clearCurrent);
+	}
 }

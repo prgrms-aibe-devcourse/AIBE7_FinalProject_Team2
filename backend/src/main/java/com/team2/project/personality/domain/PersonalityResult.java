@@ -42,6 +42,8 @@ public class PersonalityResult {
 	@JoinColumn(name = "anonymous_user_id")
 	private AnonymousUser anonymousUser;
 
+	private Long memberId;		// 회원 결과의 주인(BE-140). 익명 사용자와 둘 중 정확히 하나만 있다(chk_personality_result_owner)
+
 	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "type_code")
 	private PersonalityType type;
@@ -78,6 +80,22 @@ public class PersonalityResult {
 	public static PersonalityResult create(AnonymousUser anonymousUser, PersonalityType type,
 		Map<ValueAxis, Double> axisScores, List<PersonalityAnswer> answers, Integer completedExperienceCount,
 		boolean baselineRetake) {
+		PersonalityResult result = create(type, axisScores, answers, completedExperienceCount, baselineRetake);
+		result.anonymousUser = anonymousUser;
+		return result;
+	}
+
+	/** 회원의 새 현재 결과 (BE-140). 규칙은 익명 쪽과 같다 */
+	public static PersonalityResult createForMember(long memberId, PersonalityType type,
+		Map<ValueAxis, Double> axisScores, List<PersonalityAnswer> answers, Integer completedExperienceCount,
+		boolean baselineRetake) {
+		PersonalityResult result = create(type, axisScores, answers, completedExperienceCount, baselineRetake);
+		result.memberId = memberId;
+		return result;
+	}
+
+	private static PersonalityResult create(PersonalityType type, Map<ValueAxis, Double> axisScores,
+		List<PersonalityAnswer> answers, Integer completedExperienceCount, boolean baselineRetake) {
 		if (completedExperienceCount != null && completedExperienceCount < 0) {
 			throw new IllegalArgumentException("완료 사건 수는 0 이상이어야 한다");
 		}
@@ -88,7 +106,6 @@ public class PersonalityResult {
 			throw new IllegalArgumentException("네 축 모두 0 ~ 1 점수가 있어야 한다");
 		}
 		PersonalityResult result = new PersonalityResult();
-		result.anonymousUser = anonymousUser;
 		result.type = type;
 		result.axisScores = new EnumMap<>(axisScores);
 		result.answers = List.copyOf(answers);

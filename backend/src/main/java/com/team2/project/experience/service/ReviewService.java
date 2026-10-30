@@ -1,5 +1,6 @@
 package com.team2.project.experience.service;
 
+import com.team2.project.common.web.Requester;
 import com.team2.project.experience.domain.Experience;
 import com.team2.project.experience.domain.ExperienceStatus;
 import com.team2.project.experience.dto.ReviewResponse;
@@ -10,8 +11,6 @@ import com.team2.project.legalcase.repository.CaseSectionRepository;
 import com.team2.project.legalcase.repository.PenaltyRuleRepository;
 import java.time.Clock;
 import java.time.Instant;
-import java.util.Optional;
-import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -34,8 +33,8 @@ public class ReviewService {
 
 	/** API 6. PRE_JUDGED ~ REVIEWED에서만 볼 수 있다. 아니면 INVALID_STATE(currentStatus 포함) */
 	@Transactional(readOnly = true)
-	public ReviewResponse getReview(Long caseId, Optional<UUID> anonymousId) {
-		Experience experience = myExperienceService.getMyExperienceBetween(caseId, anonymousId,
+	public ReviewResponse getReview(Long caseId, Requester requester) {
+		Experience experience = myExperienceService.getMyExperienceBetween(caseId, requester,
 			ExperienceStatus.PRE_JUDGED, ExperienceStatus.REVIEWED);
 		return assembler.assemble(experience.getStatus(), experience.getLastReviewedStep(), experience.getLegalCase(),
 			sectionRepository.findAllByCaseId(caseId), ruleRepository.findAllByCaseId(caseId));
@@ -47,8 +46,8 @@ public class ReviewService {
 	 * step 형식(2 ~ 4)은 컨트롤러 @Valid에서 먼저 400으로 거절한다.
 	 */
 	@Transactional
-	public ReviewStepResponse confirmStep(Long caseId, Optional<UUID> anonymousId, ReviewStepRequest request) {
-		Experience experience = myExperienceService.getMyExperienceBetween(caseId, anonymousId,
+	public ReviewStepResponse confirmStep(Long caseId, Requester requester, ReviewStepRequest request) {
+		Experience experience = myExperienceService.getMyExperienceBetween(caseId, requester,
 			ExperienceStatus.PRE_JUDGED, ExperienceStatus.REVIEWED);
 		Instant now = clock.instant();
 		TransitionResult result = transitionService.applyIdempotent(experience,

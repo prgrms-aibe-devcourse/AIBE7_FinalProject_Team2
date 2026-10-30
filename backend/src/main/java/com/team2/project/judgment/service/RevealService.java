@@ -1,5 +1,6 @@
 package com.team2.project.judgment.service;
 
+import com.team2.project.common.web.Requester;
 import com.team2.project.experience.domain.Experience;
 import com.team2.project.experience.domain.ExperienceStatus;
 import com.team2.project.experience.service.ExperienceTransitionService;
@@ -13,9 +14,7 @@ import com.team2.project.personality.service.ExperiencePersonalityRecorder;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
-import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -42,8 +41,8 @@ public class RevealService {
 
 	/** API 11. VERDICT_CONFIRMED면 AI_REVEALED로. 이미 공개했으면 그대로 */
 	@Transactional
-	public RevealResponse revealCourt(Long caseId, Optional<UUID> anonymousId) {
-		Experience experience = myExperienceService.getMyExperienceAtLeast(caseId, anonymousId,
+	public RevealResponse revealCourt(Long caseId, Requester requester) {
+		Experience experience = myExperienceService.getMyExperienceAtLeast(caseId, requester,
 			ExperienceStatus.VERDICT_CONFIRMED);
 		requirePublishedJudgments(caseId);
 		Instant now = clock.instant();
@@ -55,8 +54,8 @@ public class RevealService {
 
 	/** API 13. AI_REVEALED면 COMPLETED로 바꾸고 첫 회차 체험의 성향 기여를 저장한다. 이미 완료했으면 그대로 */
 	@Transactional
-	public RevealResponse revealComparison(Long caseId, Optional<UUID> anonymousId) {
-		Experience experience = myExperienceService.getMyExperienceAtLeast(caseId, anonymousId,
+	public RevealResponse revealComparison(Long caseId, Requester requester) {
+		Experience experience = myExperienceService.getMyExperienceAtLeast(caseId, requester,
 			ExperienceStatus.AI_REVEALED);
 		requirePublishedJudgments(caseId);
 		Instant now = clock.instant();

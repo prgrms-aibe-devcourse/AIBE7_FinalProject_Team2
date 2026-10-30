@@ -35,7 +35,7 @@ public class LegalCaseController {
 	 */
 	@GetMapping
 	public CaseListResponse getCases(@RequestParam(required = false) CrimeType crimeType, Requester requester) {
-		return legalCaseService.getCases(crimeType, requester.anonymousId());
+		return legalCaseService.getCases(crimeType, requester);
 	}
 
 	/**
@@ -44,7 +44,7 @@ public class LegalCaseController {
 	 */
 	@GetMapping("/{caseId}")
 	public CaseDetailResponse getCase(@PathVariable Long caseId, Requester requester) {
-		return legalCaseService.getCase(caseId, requester.anonymousId());
+		return legalCaseService.getCase(caseId, requester);
 	}
 
 	/**

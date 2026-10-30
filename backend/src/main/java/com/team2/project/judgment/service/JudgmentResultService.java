@@ -1,5 +1,6 @@
 package com.team2.project.judgment.service;
 
+import com.team2.project.common.web.Requester;
 import com.team2.project.experience.domain.Experience;
 import com.team2.project.experience.domain.ExperienceStatus;
 import com.team2.project.experience.service.MyExperienceService;
@@ -17,8 +18,6 @@ import com.team2.project.legalcase.repository.CaseSourceRepository;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -44,8 +43,8 @@ public class JudgmentResultService {
 
 	/** API 10. 판결을 확정한 뒤(VERDICT_CONFIRMED 이상)에만 볼 수 있다 */
 	@Transactional(readOnly = true)
-	public AiJudgmentResponse getAiJudgment(Long caseId, Optional<UUID> anonymousId) {
-		Experience experience = myExperienceService.getMyExperienceAtLeast(caseId, anonymousId,
+	public AiJudgmentResponse getAiJudgment(Long caseId, Requester requester) {
+		Experience experience = myExperienceService.getMyExperienceAtLeast(caseId, requester,
 			ExperienceStatus.VERDICT_CONFIRMED);
 		Judgment ai = judgmentRepository.findPublishedJudgment(caseId, SubjectType.AI)
 			.orElseThrow(() -> missingJudgment(caseId, SubjectType.AI));
@@ -61,8 +60,8 @@ public class JudgmentResultService {
 
 	/** API 12. 실제 판결을 공개한 뒤(AI_REVEALED 이상)에만 볼 수 있다 */
 	@Transactional(readOnly = true)
-	public CourtJudgmentResponse getCourtJudgment(Long caseId, Optional<UUID> anonymousId) {
-		Experience experience = myExperienceService.getMyExperienceAtLeast(caseId, anonymousId,
+	public CourtJudgmentResponse getCourtJudgment(Long caseId, Requester requester) {
+		Experience experience = myExperienceService.getMyExperienceAtLeast(caseId, requester,
 			ExperienceStatus.AI_REVEALED);
 		// 공개 판결은 주체별로 1건씩이므로 한 번에 읽는다
 		Map<SubjectType, Judgment> published = judgmentRepository.findPublishedJudgments(caseId).stream()

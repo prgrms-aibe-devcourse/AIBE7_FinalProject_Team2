@@ -208,10 +208,9 @@ class UserSecurityChainTest extends ApiIntegrationTest {
 
 	@Test
 	void userPost_withToken_noCsrfNeeded() throws Exception {
-		long caseId = insertCase("FRAUD", "PUBLISHED");
-
-		mockMvc.perform(post(experienceUrl(caseId)).header(HttpHeaders.AUTHORIZATION, bearer("member-7")))
-			.andExpect(status().isCreated());
+		// 가짜 토큰의 회원 7은 DB에 없어 체험을 만들 수 없다(체험의 주인이 회원, BE-140). CSRF만 보므로 회원 행이 필요 없는 POST를 쓴다
+		mockMvc.perform(post("/api/v1/attendance").header(HttpHeaders.AUTHORIZATION, bearer("member-7")))
+			.andExpect(status().isNoContent());
 	}
 
 	// ---- 관리자 체인과의 경계 ----
