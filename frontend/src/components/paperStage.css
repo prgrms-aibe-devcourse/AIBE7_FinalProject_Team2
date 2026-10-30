@@ -60,6 +60,9 @@
 /* 건네기: 남불이 앞으로 나서며 엽서를 내밀고(0.7초), 엽서는 남불 손에서 날아와 가운데에서 펼쳐진다 */
 .stage-wrap.paper-mode .spr.b.delivering { animation: nambul-hand .75s cubic-bezier(.3, .7, .2, 1); }
 @keyframes nambul-hand { 35% { transform: translate(-46%, -10%) rotate(-7deg); } 60% { transform: translate(-40%, -6%) rotate(-4deg); } }
+/* 배역이 바뀌어 남불이 왼쪽(묶음 A)에 서면 가운데 쪽(오른쪽)으로 손을 내민다(FE-128) */
+.stage-wrap.paper-mode .spr.b[data-seat="left"].delivering { animation-name: nambul-hand-right; }
+@keyframes nambul-hand-right { 35% { transform: translate(46%, -10%) rotate(7deg); } 60% { transform: translate(40%, -6%) rotate(4deg); } }
 .stage-wrap.paper-mode .board.delivering { animation: postcard-in .7s cubic-bezier(.25, .8, .25, 1) .22s backwards; }
 @keyframes postcard-in { from { opacity: 0; transform: translate(var(--from-x), var(--from-y)) scale(.3) rotate(-14deg); } 25% { opacity: 1; } }
 /* 화면 아래 고정: 대사창 · 조작 줄, 그 양옆에 내로 · 남불(발이 화면 아래 끝). 읽는 공간(대사창 위)을 가리지 않는다. 좁은 화면은 대사창 위 양 끝 */
@@ -158,6 +161,7 @@
 .case-paper-page .story-extra:empty { display: none; }
 .case-paper-page .extra-label { margin: 0 0 8px; padding-bottom: 6px; border-bottom: 3px double var(--color-border-strong); font-size: var(--text-caption); font-weight: 700; letter-spacing: .08em; color: var(--color-label); }
 .case-paper-page .extra-text { margin: 0; font: 400 13px/1.65 var(--font-article); letter-spacing: -.02em; color: var(--color-text); word-break: keep-all; text-align: justify; }
+.case-paper-page .extra-notice { font-weight: 700; } /* 민감 사건 안내(FE-129): 있으면 일반 설명을 대신한다 */
 .case-paper-page .extra-list { margin: 0; padding: 0; list-style: none; }
 .case-paper-page .extra-list li + li { border-top: 1px dotted var(--color-border-strong); }
 .case-paper-page .extra-link { display: block; width: 100%; min-height: 44px; padding: 6px 0; border: 0; background: transparent; color: var(--color-heading); font: 700 15px/1.45 var(--font-heading); letter-spacing: -.03em; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; } /* 제목은 한 줄만, 길면 … */
@@ -277,12 +281,12 @@
 .stage-wrap.paper-mode .dlg::before, .stage-wrap.paper-mode .dlg::after { content: ''; position: absolute; bottom: 22px; width: 30px; height: 30px; pointer-events: none; }
 .stage-wrap.paper-mode .dlg::before { background: var(--color-text); clip-path: polygon(100% 0, 100% 100%, 0 78%); }
 .stage-wrap.paper-mode .dlg::after { width: 27px; height: 24px; bottom: 25px; background: var(--color-paper); clip-path: polygon(100% 0, 100% 100%, 0 80%); }
-.stage-wrap.paper-mode .dlg[data-speaker="naero"]::before { left: -30px; }
-.stage-wrap.paper-mode .dlg[data-speaker="naero"]::after { left: -25px; }
-.stage-wrap.paper-mode .dlg[data-speaker="nambul"]::before { right: -30px; scale: -1 1; }
-.stage-wrap.paper-mode .dlg[data-speaker="nambul"]::after { right: -25px; scale: -1 1; }
-.stage-wrap.paper-mode .dlg[data-speaker="none"]::before, .stage-wrap.paper-mode .dlg[data-speaker="none"]::after, .stage-wrap.paper-mode .dlg:not([data-speaker])::before, .stage-wrap.paper-mode .dlg:not([data-speaker])::after { display: none; }
-.stage-wrap.paper-mode .dlg[data-speaker="nambul"] .name { left: auto; right: 22px; }
+.stage-wrap.paper-mode .dlg[data-side="left"]::before { left: -30px; }
+.stage-wrap.paper-mode .dlg[data-side="left"]::after { left: -25px; }
+.stage-wrap.paper-mode .dlg[data-side="right"]::before { right: -30px; scale: -1 1; }
+.stage-wrap.paper-mode .dlg[data-side="right"]::after { right: -25px; scale: -1 1; }
+.stage-wrap.paper-mode .dlg[data-side="none"]::before, .stage-wrap.paper-mode .dlg[data-side="none"]::after, .stage-wrap.paper-mode .dlg:not([data-side])::before, .stage-wrap.paper-mode .dlg:not([data-side])::after { display: none; }
+.stage-wrap.paper-mode .dlg[data-side="right"] .name { left: auto; right: 22px; }
 .stage-wrap.paper-mode .name { top: -18px; left: 22px; gap: 6px; padding: 2px 14px 2px 3px; border: 2px solid var(--color-text); background: var(--color-paper); color: var(--color-heading); box-shadow: none; font: 400 22px/1.15 var(--font-hand); }
 .stage-wrap.paper-mode .name img { width: 28px; height: 28px; }
 .stage-wrap.paper-mode .name i { font: 700 12px/1 var(--font-body); color: var(--color-muted); }

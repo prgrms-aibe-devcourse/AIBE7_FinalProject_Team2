@@ -44,9 +44,46 @@ export const imageOf = (who, look) => (look.startsWith('role:') ? `${IMAGES}role
     : look.startsWith('deform:') ? `${IMAGES}deform/${who}_${look.slice(7)}.webp` // 데포르메(란마 등, 시트에서 잘라 public에 둔다)
     : `${IMAGES}scene/${who}_${look}.webp`);
 // 법정 자리는 역할 의상(look "role:…")이 정한다: 검사 · 판사 = 왼쪽(검사편, 가운데는 카드 · 판이 많이 떠서 판사도 왼쪽이 기본) · 변호인 = 오른쪽 변호인석.
-// 판사를 가운데에 세우려면 대본 spots로 준다. 그 밖의 의상은 캐릭터 기본 자리(내로 왼쪽 · 남불 오른쪽)
+// 판사를 가운데에 세우려면 대본 spots로 준다.
 const SEAT = { prosecutor: 'left', judge: 'left', defense: 'right' };
-const seatOf = (look) => (look.startsWith('role:') ? SEAT[look.slice(5)] : undefined);
+// 묶음 자리(FE-128): 사건마다 내로 · 남불이 묶음 A(판사 · 검사) · B(변호인 · 피고인)를 번갈아 맡는다(BE-125). 그 밖의 의상(피고인 역 actor ·
+// 평상복 · 볼따구)은 캐릭터 이름이 아니라 **그 캐릭터의 묶음 쪽**(A 왼쪽 · B 오른쪽)에 선다 — 이름 기준이면 남불이 판사인 사건에서
+// 5막 판사 · 피고인이 같은 쪽에 겹치고, 3 → 4막에서 의상이 평상복으로 바뀔 때 둘이 서로 자리를 바꾼다.
+// 배역은 대본 cast { prosecutor, defense }(서버 대본 API 18과 같은 모양)에서 읽고, 없거나 맞지 않으면 기본 배역(내로 A · 남불 B)이다
+export const DEFAULT_CAST = { prosecutor: 'naero', defense: 'nambul' };
+/**
+ * 대본의 묶음 배역 `script.cast` `{ prosecutor, defense }`(서버 대본 API 18의 `cast`와 같은 모양)를 검사해 돌려준다.
+ * 막 단위 `act.cast`(그 막에 나오는 캐릭터 배열, 장면의 `step.cast`)와는 이름만 같은 **다른 것**이다.
+ */
+export function castOf(cast) {
+  const { prosecutor, defense } = cast ?? {};
+  const valid = (who) => who === 'naero' || who === 'nambul';
+  return valid(prosecutor) && valid(defense) && prosecutor !== defense ? { prosecutor, defense } : DEFAULT_CAST;
+}
+/** 그 캐릭터의 묶음 쪽: A(prosecutor) 왼쪽, B(defense) 오른쪽 */
+export const sideOf = (who, cast = DEFAULT_CAST) => (castOf(cast).prosecutor === who ? 'left' : 'right');
+/** 이 장면에서 서는 쪽: 역할 의상(피고인 역 제외)이면 의상 자리, 그 밖은 묶음 쪽 */
+export const seatFor = (who, look, cast = DEFAULT_CAST) => (look?.startsWith('role:') && SEAT[look.slice(5)]) || sideOf(who, cast);
+// 바라보는 방향(FE-128): 원본 그림은 내로가 오른쪽, 남불이 왼쪽을 본다(캐릭터 이미지 규칙). 서 있는 곳에서 **가운데를 보도록** 좌우를 뒤집는다 —
+// 왼쪽에 서면 오른쪽을, 오른쪽에 서면 왼쪽을 본다. 가운데(피고인석 stand · 슬롯 30)에서는 원본 방향 그대로다.
+// 이 규칙은 그림이 규칙대로 그려져 있다는 전제다(어긋난 그림은 이미지 쪽에서 바로잡는다)
+export const FACING = { naero: 'right', nambul: 'left' };
+/** x: 슬롯 0~60(30 = 가운데) 또는 쪽('left' · 'right'). 뒤집어야 하면 true */
+export function flipFor(who, x) {
+  const at = x === 'left' ? 0 : x === 'right' ? 60 : x;
+  if (!Number.isFinite(at) || at === 30) return false;
+  return (at < 30 ? 'right' : 'left') !== FACING[who];
+}
+/**
+ * 한 장면에서 캐릭터가 서는 곳(FE-128). 묶음 자리 · 피고인석(stand) · 숫자 슬롯을 합쳐 정한다.
+ * seat: 묶음 자리, flip: 가운데를 보게 뒤집을지, side: 말풍선 꼬리 · 이름표 쪽(슬롯이 있으면 슬롯 기준), center: 피고인석 가운데(꼬리도 가운데)
+ */
+export function placeFor(who, look, spot, cast = DEFAULT_CAST) {
+  const seat = seatFor(who, look, cast);
+  const slot = spot && typeof spot === 'object' && Number.isFinite(spot.slot) ? spot.slot : null;
+  const x = spot === 'stand' ? 30 : slot ?? (seat === 'left' ? 0 : 60);
+  return { seat, flip: flipFor(who, x), side: x === 30 ? seat : x < 30 ? 'left' : 'right', center: x === 30 && (spot === 'stand' || slot === 30) };
+}
 let chipsOff = false; // 개발 전용: 역할 이름표 끄기(이름표가 필요한지 판단용). 화면을 다시 그려도 유지한다
 const FACES = ['neutral', 'happy', 'surprised', 'thinking', 'sorry', 'cheer'];
 const iconOf = (who, look) => {
@@ -90,6 +127,21 @@ export function flatten(acts, order) {
     });
   });
   return steps;
+}
+
+// 민감 사건 안내 (FE-129): 2막 시작 대사보다 먼저, 안내 문구만 나오는 빈 무대 장면 하나를 앞에 끼운다(캐릭터 · 대사 없음).
+// 장면 정보(절차 번호 · 섹션 · 모습)는 2막 첫 장면에서 이어받아, "② 모두진술부터 열기"처럼 섹션으로 시작해도 이 장면이 먼저 나온다.
+// 별도 장면이라 첫 장면의 지문 · 암전 문구를 덮어쓰지 않으므로 그 문구가 있어도 안내는 빠지지 않는다(안내 누락 방지, 리뷰 반영).
+// matchesStart: 이어 보기(예: ③ 쟁점 정리에서 시작)면 그 시작 장면 앞에 끼워, 어느 지점에서 열어도 안내가 먼저 나온다(리뷰 반영).
+// 맞는 장면이 없거나 넘기지 않으면 막의 첫 장면 앞이다. 안내할 내용이 없으면(notice 빈 값) 그대로 돌려준다
+export function attachNotice(steps, notice, actId = '2', matchesStart) {
+  if (!notice) return steps;
+  const inAct = (step) => step.actId === actId;
+  const found = matchesStart ? steps.findIndex((step) => inAct(step) && matchesStart(step)) : -1;
+  const at = found >= 0 ? found : steps.findIndex(inAct);
+  if (at < 0) return steps;
+  const { say, text, textAgain, role, cameo, delay, card, ev, confirm, next, auto, choices, board, source, system, blackout, ...base } = steps[at];
+  return [...steps.slice(0, at), { ...base, hideCast: true, system: notice }, ...steps.slice(at)];
 }
 
 // 대사 건너뛰기: 같은 막에서 다음 보드 장면, 없으면 막의 마지막 장면으로 간다.
@@ -276,6 +328,7 @@ function evidenceBoard(script, at) {
 // (테스트 기간 · 목 데이터 전용, 이 화면에 없는 막은 화면이 넘겨 준다). 반환한 요소의 enterPhoto()는 신문 사진 속으로 들어가는 연출.
 // choices: 대사창 안 선택지 { 이름: [{ label, action(note), primary }] } — 대본 step.choices로 고른다(타이핑이 끝나면 뜬다, note는 결과 안내 줄).
 // sheet: 대본 scene "sheet"에서 쓰는 큰 지면(6막은 화면이 넘겨 주고, 없으면 대본 paper로 1막 사건 기사를 만든다).
+// notice: 민감 사건 안내 한 줄(FE-129) — 2막 시작 대사보다 먼저 안내만 나오는 장면으로 끼운다(attachNotice).
 // 장면의 focus 기사로 카메라가 옮겨 가고, 첫 장면의 from 요소가 무대를 채운 데서 빠져나온다.
 // fromRect: 첫 장면의 from 요소를 이 화면 사각형(앞 막 무대 자리)에서 시작한다(6막). cameraFill · cameraMinScale · cameraMaxUnit은 sheetCamera 옵션.
 // layout 'paper': 무대 상자 없이 지면(sheet)이 화면 전체가 된다(S-20 · 1막, S-02 신문과 같은 짜임). 막 칩 · 보드는 지면의
@@ -283,13 +336,14 @@ function evidenceBoard(script, at) {
 // 캐릭터 · 대사창 · 조작 줄은 화면 아래에 고정된다. 카메라는 화면을 굴린다(paperCamera)
 // parked: 지면만 보여 주고 캐릭터 · 대사창 · 조작 줄은 숨긴 채 기다린다(S-20 사건 정보 — 체험 시작 전). 화면이 wrap.release()로 풀면
 // 내로 · 남불이 들어오며 첫 대사가 시작된다.
-export function renderStage({ script, order, cards = {}, inputCards = [], choices = {}, start, onConfirm, onRestart, onJump, sheet: given, layout = 'box', parked: parkedAtStart = false, cameraFill = false, cameraMinScale = 0, cameraMaxUnit = 0, fromRect }) {
+export function renderStage({ script, order, cards = {}, inputCards = [], choices = {}, start, onConfirm, onRestart, onJump, sheet: given, layout = 'box', parked: parkedAtStart = false, cameraFill = false, cameraMinScale = 0, cameraMaxUnit = 0, fromRect, notice = '' }) {
   const paperMode = layout === 'paper' && Boolean(given);
   let parked = parkedAtStart;
   let again = false; // 이미 지나온 체험을 다시 보는 중(S-20 "시작하기"): 대본 textAgain이 있으면 그 문장을 쓴다
   const lineOf = (step) => (again && step.textAgain) || step.text || '';
   const asks = (step) => Boolean(step.choices && choices[step.choices]); // 선택지로만 넘어가는 장면
-  const steps = flatten(script.acts, order);
+  const cast = castOf(script.cast); // 묶음 자리(FE-128)
+  const steps = attachNotice(flatten(script.acts, order), notice, '2', start);
   let index = Math.max(0, start ? steps.findIndex(start) : 0);
   const jumpAct = takeJump();
   const jumped = steps.findIndex((step) => step.actId === jumpAct);
@@ -396,7 +450,8 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
   function popCameo(who) {
     cameo.getAnimations().forEach((animation) => animation.cancel());
     cameo.src = imageOf(who, CAMEO_LOOK);
-    cameo.className = `cameo cameo-${who}`;
+    cameo.className = `cameo cameo-${who} at-${sideOf(who, cast)}`; // 높이는 캐릭터 그림, 가로 자리는 묶음 쪽(FE-128)
+    cameo.dataset.flip = flipFor(who, sideOf(who, cast)) ? '1' : ''; // 볼따구도 가운데를 본다
     cameo.hidden = false;
     if (!reducedMotion()) cameo.animate([{ scale: '0' }, { scale: '1.12', offset: .7 }, { scale: '1' }], { duration: 220, easing: 'cubic-bezier(.2, .8, .2, 1)' }); // 0 크기에서 뿅
   }
@@ -527,8 +582,9 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
       if (spot && !at) figures[who].dataset.spot = spot; else delete figures[who].dataset.spot;
       if (at && Number.isFinite(at.slot)) { figures[who].dataset.slot = ''; figures[who].style.setProperty('--slot', at.slot); } else { delete figures[who].dataset.slot; figures[who].style.removeProperty('--slot'); }
       if (at?.row) figures[who].dataset.row = at.row; else delete figures[who].dataset.row;
-      const seat = seatOf(look);
-      if (seat) figures[who].dataset.seat = seat; else delete figures[who].dataset.seat;
+      const place = placeFor(who, look, spot, cast);
+      figures[who].dataset.seat = place.seat; // 묶음 자리(FE-128). 피고인석(stand) · 슬롯은 위 spot · slot이 덮는다
+      figures[who].dataset.flip = place.flip ? '1' : ''; // 가운데를 보게
       chips[who].textContent = step.chips[who];
       chips[who].dataset.role = ROLE_COLOR[step.chips[who]] ?? 'actor';
       chips[who].hidden = !step.chips[who];
@@ -613,7 +669,11 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
       // 말풍선 꼬리 방향(말하는 캐릭터 쪽). 볼따구는 대사창 모서리에 나온 작은 캐릭터 쪽
       dialog.dataset.speaker = cameoWho ? `cameo-${cameoWho}` : step.say === 'naero' || step.say === 'nambul' ? step.say : 'none';
       // 말하는 캐릭터가 가운데 피고인석(stand)에 서 있으면 꼬리도 가운데로
-      dialog.dataset.spot = !cameoWho && (step.say === 'naero' || step.say === 'nambul') ? (typeof step.spots[step.say] === 'string' ? step.spots[step.say] : '') : '';
+      const speaker = !cameoWho && (step.say === 'naero' || step.say === 'nambul') ? step.say : '';
+      const speakerPlace = speaker ? placeFor(speaker, step.look[speaker], step.spots[speaker], cast) : null;
+      dialog.dataset.spot = speakerPlace ? (typeof step.spots[speaker] === 'string' ? step.spots[speaker] : speakerPlace.center ? 'stand' : '') : '';
+      // 꼬리는 이름이 아니라 실제로 서 있는 쪽으로(FE-128): 배역이 바뀐 사건에서는 내로가 오른쪽에 선다
+      dialog.dataset.side = speakerPlace ? speakerPlace.side : 'none'; // 슬롯에 서 있으면 슬롯 쪽으로(리뷰 반영)
       const who = cameoWho || step.say;
       const deform = !cameoWho && step.look[who]?.startsWith('cheek-slim:') ? SLIM_CHEEK_LABEL : !cameoWho && DEFORM_LABEL[step.look[who]?.split(':')[1]] && step.look[who].startsWith('deform:') ? DEFORM_LABEL[step.look[who].split(':')[1]] : '';
       if (NAMES[who]) name.append(picture(iconOf(who, cameoWho ? 'idle-thinking' : step.look[who])), NAMES[who]); // AI 판사는 이름 · 얼굴 없이 역할만
@@ -627,6 +687,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
       cameo.dataset.who = cameoWho;
       if (cameoWho) { if (enterDelay) cameo.hidden = true; else popCameo(cameoWho); } else hideCameo();
     }
+    // 스크린 리더 알림: 대사가 없으면 지문을 읽는다(민감 사건 안내도 대사 없는 장면이라 이 알림 영역이 읽는다)
     live.textContent = parked ? '' : line || caption;
     const options = choices[step.choices] ?? [];
     const note = element('p', 'dlg-note');

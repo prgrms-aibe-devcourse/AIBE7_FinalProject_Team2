@@ -53,6 +53,7 @@
 | v1.47 | 2026-10-29 | 사건 배역 · 민감 플래그 (**확장 단계**, BE-125 · V37 · API 명세 v0.67) — `legal_case.cast_roles`(jsonb, `{"prosecutor": "naero", "defense": "nambul"}`) · `sensitive_flags`(jsonb 문자열 배열) 추가. 두 칸 모두 DB CHECK를 두지 않고 코드(`CastRoles` · `SensitiveFlag`)가 검사한다. 새 사건은 적재할 때 배정한다 — 대본이 함께 오면 그 배역, 아니면 같은 범죄 유형에서 피고인 역을 덜 맡은 캐릭터(같으면 마지막 배정의 반대). 이미 있는 사건의 초기값은 비공개 시드 저장소의 UPDATE로 넣는다 (`docs/decisions/BE-125.md`) |
 | v1.48 | 2026-10-29 | 커뮤니티 테이블 추가 (**확장 단계**, BE-115 · V38 · API 명세 v0.68) — `community_post`(글쓴이 회원 · 명함 기준 익명 ID · 말머리 · 사건 · 제목 · 본문 · 판결 공유 jsonb · 좋아요 · 댓글 수) · `community_comment` · `community_like`(회원 × 글 하나) 신설. 14장 추가 |
 | v1.49 | 2026-10-29 | 닉네임 중복 금지 (**확장 단계**, BE-139 · V39 · API 명세 v0.69) — `member`에 `uq_member_nickname`(`lower(nickname)` 유니크 인덱스, `nickname IS NOT NULL`인 행만) 추가. 칸은 그대로. 겹치던 기존 닉네임은 먼저 가입한 회원만 남기고 나머지를 NULL로 비운다 |
+| v1.50 | 2026-10-30 | 회원 기준 소유로 전환 (**확장 단계**, BE-140 · V40 ~ V43 · API 명세 M-9 ~ M-11) — 로그인 전용이 된 사용자 데이터의 주인을 익명 ID에서 회원으로 옮길 자리를 만든다. BE-60 "main으로 가는 마이그레이션은 추가만" 규칙에 맞게 NOT NULL 해제 · 칸 · 제약 · 인덱스 · 테이블 추가만 한다(지금 앱은 그대로 돈다)<br>• V40: `experience` · `personality_result`는 손님도 쓰므로 **이중 소유** — `anonymous_user_id` · `member_id` 중 정확히 하나(CHECK `chk_experience_owner` · `chk_personality_result_owner`). `anonymous_user_id` NOT NULL 해제, `personality_result.member_id` 추가, 두 `member_id`에 FK. 회원 쪽 유니크 · 조회는 부분 인덱스(`uk_experience_member_case_attempt` · `ux_personality_result_current_member` · `ux_personality_result_baseline_retake_member` · `ix_personality_result_member_created`). `experience.member_id`(V3부터 있었으나 아무도 채우지 않음)의 뜻을 "체험 시작 시 로그인 회원"에서 "체험의 주인 회원"으로 바꾼다<br>• V41: 회원 키 테이블 7개 신설 — `member_attendance` · `member_profile_deco` · `member_profile_setting` · `member_xp_event` · `member_profile_job` · `member_collection_item` · `member_achievement_unlock`(칸 · 제약은 익명 쪽과 같고 주인만 회원, 회원 FK `ON DELETE CASCADE`). 익명 데이터는 옮기지 않고(체험만 이관), 옛 익명 테이블은 쓰지 않고 두었다가 후속 이슈에서 지운다<br>• V42: `member_anonymous_import` 신설 — 첫 로그인 가져오기 결정(`IMPORTED` · `DISCARDED`), 회원마다 한 번<br>• V43: `community_post` · `community_comment`의 작성자를 회원 또는 익명 ID로 넓힌다 — `member_id` · `anonymous_user_id` NOT NULL 해제, 적어도 하나(CHECK `chk_community_post_author` · `chk_community_comment_author`). "정확히 하나"로 좁히는 일은 다음 배포로 나눈다<br>• 15장 추가, 3-2 · 8 ~ 14장 갱신 |
 | v1.51 | 2026-10-30 | 약관 동의 기록 (**확장 단계**, BE-133 · V44 · API 명세 v0.74, v1.50 · V40 ~ V43은 BE-140 PR #351) — `member`에 `terms_agreed_at`(timestamptz) · `terms_version`(varchar 20) 추가, 둘 다 NULL 허용. CHECK `ck_member_terms_agreement`(둘이 함께 있거나 함께 없다). 아이디 가입(M-5) 때만 채우고, 기존 회원 · 카카오 회원은 NULL(동의 기록 없음) |
 
 ---
@@ -80,7 +81,8 @@ erDiagram
     LEGAL_CASE ||--o{ JUDGMENT : "판단"
     LEGAL_CASE ||--o{ EXPERIENCE : "체험"
     SENTENCE_RANGE_OPTION |o--o{ JUDGMENT : "사전 판단 선택"
-    ANONYMOUS_USER ||--o{ EXPERIENCE : "체험"
+    ANONYMOUS_USER |o--o{ EXPERIENCE : "체험 (손님)"
+    MEMBER |o--o{ EXPERIENCE : "체험 (회원, v1.50)"
     EXPERIENCE |o--o{ JUDGMENT : "사용자 판단"
     JUDGMENT ||--o{ JUDGMENT_FACTOR : "요소 평가"
     FACTOR ||--o{ JUDGMENT_FACTOR : "평가 대상"
@@ -126,12 +128,17 @@ erDiagram
         timestamptz created_at
         timestamptz last_seen_at
     }
+    MEMBER {
+        bigint id PK
+        varchar provider "KAKAO LOCAL"
+        varchar nickname
+    }
     EXPERIENCE {
         bigint id PK
-        uuid anonymous_user_id FK
+        uuid anonymous_user_id FK "손님 주인 (둘 중 하나)"
         bigint case_id FK
         int attempt_no "회차"
-        bigint member_id "체험 시작 시 로그인"
+        bigint member_id FK "회원 주인 (둘 중 하나, v1.50)"
         varchar status "STARTED ~ COMPLETED"
         int last_reviewed_step
     }
@@ -502,7 +509,7 @@ S-03의 객관식 선택지. 범죄 유형별로 정의한다(FR-2-8).
 | last_seen_at | timestamptz | ✓ |  |
 - 카카오 로그인(BE-62)하는 순간 해당 브라우저의 `member_id`를 채운다. 그러면 비로그인 때 한 체험이 회원 기록으로 이어진다.
 - **연결 규칙 (v1.30, BE-62)**: 아직 연결 안 됨 → 이 회원에 연결 / 같은 회원 → 그대로 / **다른 회원에 연결됨(공용 PC) → 덮어쓰지 않고 이 회원에 연결된 새 익명 ID를 발급**(그대로 두면 이후 체험이 앞 사람 계정으로 쌓인다) / 쿠키 없음 · 모르는 값 → 새 익명 ID 발급. 연결은 `member_id IS NULL`일 때만 바꾸는 조건부 UPDATE라 동시에 와도 꼬이지 않는다
-- 기존 체험의 `experience.member_id`는 일괄로 채우지 않는다(`anonymous_user`를 거쳐 찾는다).
+- 기존 체험의 `experience.member_id`는 일괄로 채우지 않는다(`anonymous_user`를 거쳐 찾는다). v1.50(BE-140)부터 회원 체험은 `experience.member_id`가 주인이고, 손님 때 한 체험은 첫 로그인 가져오기(`member_anonymous_import`, 15장)로 회원 것으로 옮긴다.
 
 #### `member` — 회원 (확장 단계, v1.33 · BE-62 · V25, v1.42 · BE-113 · V33, v1.51 · BE-133 · V44)
 
@@ -540,17 +547,17 @@ erDiagram
 - 회원 행 · 비밀번호 행 · 익명 기록 연결은 한 트랜잭션이다. 비밀번호 해시 계산은 트랜잭션 밖에서 한다(BE-67과 같은 이유).
 - 회원 탈퇴가 생기면 `member` 행을 지우기 전에 이 행을 지운다(FK에 `ON DELETE` 동작 없음, `anonymous_user.member_id`와 함께 BE-62 추후 재검토).
 
-#### `experience` — 체험 (익명 사용자 × 사건 × 회차)
+#### `experience` — 체험 (익명 사용자 또는 회원 × 사건 × 회차)
 
 IA 9장의 진행 상태를 저장한다.
 
 | 컬럼 | 타입 | 필수 | 설명 |
 | --- | --- | --- | --- |
 | id | bigint PK | ✓ |  |
-| anonymous_user_id | uuid FK | ✓ |  |
+| anonymous_user_id | uuid FK |  | 손님(비로그인) 체험의 주인. v1.50(BE-140 · V40)부터 NULL 허용 — `member_id`와 둘 중 정확히 하나만 채운다 |
 | case_id | bigint FK | ✓ |  |
 | attempt_no | int | ✓ | 이 사건의 몇 번째 체험인지. 기본값 1. **MVP에서는 항상 1** |
-| member_id | bigint |  | 체험을 **시작할 때** 로그인 상태였다면 회원 ID. MVP에서는 비워 둠 |
+| member_id | bigint FK → member |  | 회원 체험의 주인(v1.50, BE-140 · V40, FK `fk_experience_member`). V3부터 있던 "체험 시작 시 로그인 상태였다면 회원 ID" 자리였지만 어떤 코드도 채우지 않았고, 뜻을 "체험의 주인 회원"으로 바꿨다. V40은 두 칸이 다 찬 행이 있으면 `member_id`를 비워 지금 주인(익명 ID)을 지킨다 |
 | status | varchar(30) | ✓ | `STARTED` / `PRE_JUDGED` / `REVIEWING` / `REVIEWED` / `VERDICT_CONFIRMED` / `AI_REVEALED` / `COMPLETED` |
 | last_reviewed_step | int | ✓ | S-04에서 확인을 마친 마지막 섹션 번호 (0 ~ 4). 기본값 0(`STARTED`). 사전 판단 제출 시 1(섹션 ① 개요는 S-03에서 본 것으로 처리), 섹션 ② ~ ④ 확인 시 2 ~ 4. 새로고침 복원용 |
 | started_at | timestamptz | ✓ |  |
@@ -560,11 +567,12 @@ IA 9장의 진행 상태를 저장한다.
 | ai_revealed_at | timestamptz |  |  |
 | completed_at | timestamptz |  |  |
 | updated_at | timestamptz | ✓ |  |
-- **유니크 제약**: (`anonymous_user_id`, `case_id`, `attempt_no`)
-- **CHECK**: `last_reviewed_step`은 0 ~ 4, `attempt_no`는 1 이상 (v1.5)
+- **유니크 제약**: (`anonymous_user_id`, `case_id`, `attempt_no`) — `uk_experience_user_case_attempt`. NULL끼리는 겹치지 않아 회원 행을 막지 않는다. 회원 쪽은 부분 유니크 인덱스 `uk_experience_member_case_attempt` (`member_id`, `case_id`, `attempt_no`) `WHERE member_id IS NOT NULL`(v1.50)
+- **CHECK**: `last_reviewed_step`은 0 ~ 4, `attempt_no`는 1 이상 (v1.5). 주인은 정확히 하나 — `chk_experience_owner` (`num_nonnulls(anonymous_user_id, member_id) = 1`, v1.50)
+- **이중 소유 (v1.50, BE-140)**: 로그인 없이도 체험할 수 있어 이 테이블과 `personality_result`(8장)만 손님(익명 ID)과 회원이 함께 쓴다. 나머지 사용자 데이터는 회원 키 테이블(15장)로 간다. V40 시점의 앱은 늘 익명 ID만 채우므로 그대로 돈다
 - MVP에서는 `attempt_no = 1`만 만든다. 같은 브라우저에서 이미 체험을 시작한 사건에 들어오면 새 체험을 만들지 않고 기존 체험의 진행 단계로 보낸다. 완료(`COMPLETED`)한 사건이면 S-08 결과 화면으로 보낸다.
 - 통계와 참여자 비교에는 `attempt_no = 1`인 체험만 쓴다. 두 번째 체험부터는 실제 판결을 이미 알고 있는 상태이기 때문이다.
-- 체험 당시 로그인 여부 구분:
+- 체험 당시 로그인 여부 구분 (v1.50 전 기준. `experience.member_id`를 채우는 코드가 없어 셋째 줄은 실제로 생기지 않았다. v1.50부터 `member_id`는 주인 회원이고 `anonymous_user_id`와 함께 채우지 않는다):
 
 | 상황 | anonymous_user.member_id | experience.member_id | 해석 |
 | --- | --- | --- | --- |
@@ -987,7 +995,8 @@ IA 9장의 규칙을 어느 테이블·제약이 책임지는지 정리한다.
 
 ```mermaid
 erDiagram
-    anonymous_user ||--o{ personality_result : "응시"
+    anonymous_user |o--o{ personality_result : "응시 (손님)"
+    member |o--o{ personality_result : "응시 (회원, v1.50)"
     personality_type ||--o{ personality_result : "결과 유형"
     personality_question ||--|{ personality_choice : "선택지"
     experience ||--o| experience_personality : "체험별 성향 기여"
@@ -998,16 +1007,25 @@ erDiagram
 | `personality_question` | id, axis(`APOLOGY_SINCERITY` / `FAULT_STANDARD` / `PRINCIPLE_RELATION` / `ORDER_OPPORTUNITY`, `factor.value_axis`와 같은 값), scenario(`FRIEND` / `FAMILY` / `WORK` / `NEIGHBOR`), content(상황 문장), option_a · option_b(두 끝 행동 문장), display_order(unique), is_active | 일상 시나리오 문항. 법률 용어 금지. (id, axis) 유니크는 선택지 복합 FK용 |
 | `personality_choice` | id, (question_id, axis) 복합 FK, letter(varchar(1), 보통은 NULL), score(int), display_order(1 ~ 5) | 5칸(매우 A · 조금 A · 보통 · 조금 B · 매우 B) 중 한 칸. 문구는 없고 글자 · 점수만. 칸 순서로 점수가 정해진다(1 · 5칸 2점, 2 · 4칸 1점, 3칸은 글자 없음 0점, CHECK). 글자는 그 축의 두 글자만(E·I / S·N / T·F / J·P). (question_id, display_order) 유니크 |
 | `personality_type` | code PK(varchar(4), 내부용), share_id(unique, 영숫자 6 ~ 16자), name, character_code(`NAERO` / `NAMBUL`), one_liner, meme, daily_description, verdict_description, tolerance, image_url | 16유형 콘텐츠. 코드는 화면 · 공유 주소에 쓰지 않고(#119) 공유 주소는 `/test/types/{share_id}`. share_id는 시드로 고정하고 바꾸지 않는다. tolerance = 코드의 I · N · F · P 개수(CHECK) |
-| `personality_result` | id, anonymous_user_id FK, type_code FK, axis_scores jsonb(네 축 키, 값 0 ~ 1), answers jsonb(배열, `{questionId, choiceId}`), is_current, completed_experience_count int NULL, is_baseline_retake boolean, created_at | 응시 결과. 재응시는 이전 행 `is_current=false` 후 새 행. 사용자당 현재 결과 1건(부분 유니크 인덱스). 이력은 남는다. v1.36: `completed_experience_count`는 응시 시점에 완료한 사건 수(이전 행 NULL), `is_baseline_retake`는 성향카드 다시 정하기로 낸 결과(사용자당 1건, 부분 유니크 인덱스). 처음 성향 = 그 사용자의 가장 오래된 행 |
+| `personality_result` | id, anonymous_user_id FK NULL, member_id FK NULL(v1.50), type_code FK, axis_scores jsonb(네 축 키, 값 0 ~ 1), answers jsonb(배열, `{questionId, choiceId}`), is_current, completed_experience_count int NULL, is_baseline_retake boolean, created_at | 응시 결과. 재응시는 이전 행 `is_current=false` 후 새 행. 사용자당 현재 결과 1건(부분 유니크 인덱스). 이력은 남는다. v1.36: `completed_experience_count`는 응시 시점에 완료한 사건 수(이전 행 NULL), `is_baseline_retake`는 성향카드 다시 정하기로 낸 결과(사용자당 1건, 부분 유니크 인덱스). 처음 성향 = 그 사용자의 가장 오래된 행. v1.50(BE-140 · V40): 주인은 손님(`anonymous_user_id`) 또는 회원(`member_id`, FK `fk_personality_result_member`) 중 정확히 하나(CHECK `chk_personality_result_owner`), 회원 쪽도 같은 규칙의 부분 인덱스를 따로 둔다 |
 | `experience_personality` | id, experience_id FK unique, axis_counts jsonb(네 축 키, 각 `{down, up}` 0 이상 정수), created_at | 판결 체험이 끝날 때 남기는 축별 형량 ↓ / ↑ 선택 개수. 고르지 않은 축도 `{0, 0}`으로 키를 둔다. 유형 코드는 저장하지 않고 산식(v0.4)이 합산해서 계산한다. 종합 성향은 각 사건 첫 회차만 쓴다 |
 
 - 사용자 응답에 원본 판결문 정보가 섞이지 않는다는 원칙(5장)은 그대로다. 성향 기여는 사용자의 `USER` · `FINAL` 판단 요소 기록(`judgment_factor`)에서만 계산한다.
 - 공유 링크는 `personality_type`만 읽는다. `personality_result`의 응답 · 점수는 공유 응답에 넣지 않는다.
 - `factor.value_axis`가 `NULL`인 판단 요소는 성향 계산에서 빠진다(4장 규칙과 동일).
+- **`personality_result` 이중 소유 (v1.50, BE-140 · V40)**: 로그인 없이도 응시할 수 있어 `experience`와 함께 손님 · 회원이 같이 쓴다. `anonymous_user_id` NOT NULL을 풀고 `member_id`(bigint, FK → member)를 더했다. 익명 쪽 인덱스(`ux_personality_result_current_user` · `ux_personality_result_baseline_retake_user` · `ix_personality_result_user_created`)는 그대로 두고, 회원 쪽에 같은 규칙을 부분 인덱스로 둔다.
+
+| 인덱스 | 칸 | 조건 | 뜻 |
+| --- | --- | --- | --- |
+| `ux_personality_result_current_member` (유니크) | `member_id` | `is_current AND member_id IS NOT NULL` | 회원마다 현재 결과 하나 |
+| `ux_personality_result_baseline_retake_member` (유니크) | `member_id` | `is_baseline_retake AND member_id IS NOT NULL` | 회원마다 재심(다시 정하기) 결과 하나 |
+| `ix_personality_result_member_created` | `member_id`, `created_at` DESC | `member_id IS NOT NULL` | 최근 결과 조회 |
 
 ## 9. (확장 단계) 출석 기록 테이블 (v1.30, BE-97)
 
 > **V22 마이그레이션.** 마이페이지 출석 일수(API 명세 P-5 `profile.attendanceDays`) · 출석 도전과제(FE-68, BE-96)에 쓴다. 기록은 P-6 `POST /attendance`. 결정 기록 [`BE-97.md`](decisions/BE-97.md)
+>
+> **v1.50(BE-140)부터 회원은 `member_attendance`(15장)를 쓴다.** BE-140 회원 기준 전환 뒤에는 이 테이블에 더 쓰지 않는다. 행은 옮기지 않고 두었다가 후속 이슈에서 지운다. 아래 "로그인 이관" 규칙은 v1.50 전 기준이다.
 
 ```mermaid
 erDiagram
@@ -1028,6 +1046,8 @@ erDiagram
 ## 10. (확장 단계) 프로필 꾸미기 테이블 (v1.31, BE-96)
 
 > **V23 마이그레이션.** 마이페이지 꾸미기(FE-68)를 서버에 저장한다. 저장은 API 명세 P-7 `PUT /profile-deco`, 조회는 P-5. 결정 기록 [`BE-96.md`](decisions/BE-96.md)
+>
+> **v1.50(BE-140)부터 회원은 `member_profile_deco`(15장)를 쓴다.** BE-140 회원 기준 전환 뒤에는 이 테이블에 더 쓰지 않는다. 행은 옮기지 않고 두었다가 후속 이슈에서 지운다. 아래 "로그인 이관" 규칙은 v1.50 전 기준이다.
 
 ```mermaid
 erDiagram
@@ -1053,6 +1073,8 @@ erDiagram
 ## 11. (확장 단계) 프로필 선택 설정 테이블 (v1.38, BE-104 · 칸 추가 v1.46, BE-114)
 
 > **V29 마이그레이션.** 공개 성향카드 · 프로필카드 아래 성향 · 한 줄 소개(FE-77)를 서버에 저장한다. 저장은 API 명세 P-8 `PATCH /profile-settings`(보낸 칸만), 조회는 P-5 `profileSettings`. 결정 기록 [`BE-104.md`](decisions/BE-104.md)
+>
+> **v1.50(BE-140)부터 회원은 `member_profile_setting`(15장)을 쓴다.** BE-140 회원 기준 전환 뒤에는 이 테이블에 더 쓰지 않는다. 행은 옮기지 않고 두었다가 후속 이슈에서 지운다. 아래 "로그인 이관" 규칙은 v1.50 전 기준이다.
 
 ```mermaid
 erDiagram
@@ -1077,6 +1099,8 @@ erDiagram
 ## 12. (확장 단계) 레벨 · 직업 테이블 (v1.39, BE-106)
 
 > **V30 마이그레이션.** 레벨은 저장하지 않고 XP 합계로 계산한다(API 명세 11장). 결정 기록 [`BE-106.md`](decisions/BE-106.md)
+>
+> **v1.50(BE-140)부터 회원은 `member_xp_event` · `member_profile_job`(15장)을 쓴다.** BE-140 회원 기준 전환 뒤에는 `xp_event` · `profile_job`에 더 쓰지 않는다. 행은 옮기지 않고 두었다가 후속 이슈에서 지운다.
 
 ```mermaid
 erDiagram
@@ -1114,6 +1138,8 @@ erDiagram
 ## 13. (확장 단계) 수집 상태 · 도전과제 해금 기록 테이블 (v1.45, BE-83)
 
 > **V35 마이그레이션.** 마이페이지 컬렉션의 획득 시점 · "새로 얻음"과 도전과제 "새로 열림"(FE-132)을 서버에 남긴다. 기록은 API 명세 P-9 `POST /collection`, 확인은 P-10 · P-11, 조회는 P-5. 결정 기록 [`BE-83.md`](decisions/BE-83.md)
+>
+> **v1.50(BE-140)부터 회원은 `member_collection_item` · `member_achievement_unlock`(15장)을 쓴다.** BE-140 회원 기준 전환 뒤에는 `collection_item` · `achievement_unlock`에 더 쓰지 않는다. 행은 옮기지 않고 두었다가 후속 이슈에서 지운다. 아래 "로그인 이관" 규칙은 v1.50 전 기준이다.
 
 ```mermaid
 erDiagram
@@ -1156,12 +1182,12 @@ erDiagram
 
 ```mermaid
 erDiagram
-    member ||--o{ community_post : "글쓴이"
-    anonymous_user ||--o{ community_post : "명함 기준"
+    member |o--o{ community_post : "글쓴이"
+    anonymous_user |o--o{ community_post : "명함 기준"
     legal_case |o--o{ community_post : "이야기하는 사건"
     community_post ||--o{ community_comment : "댓글"
-    member ||--o{ community_comment : "댓글쓴이"
-    anonymous_user ||--o{ community_comment : "명함 기준"
+    member |o--o{ community_comment : "댓글쓴이"
+    anonymous_user |o--o{ community_comment : "명함 기준"
     community_post ||--o{ community_like : "좋아요"
     member ||--o{ community_like : "누른 회원"
 ```
@@ -1171,8 +1197,8 @@ erDiagram
 | 컬럼 | 타입 | NOT NULL | 설명 |
 | --- | --- | --- | --- |
 | id | bigserial PK | ✓ | |
-| member_id | bigint FK | ✓ | 글쓴이(`member.id`) |
-| anonymous_user_id | uuid FK | ✓ | 명함 · 경험치 기준 익명 ID(`anonymous_user.id`). 쓴 요청에서 회원에 연결된 익명 ID |
+| member_id | bigint FK | | 글쓴이(`member.id`). v1.50(V43)부터 NULL 허용 — 비로그인 작성을 열 때 비운다 |
+| anonymous_user_id | uuid FK | | 명함 · 경험치 기준 익명 ID(`anonymous_user.id`). 쓴 요청에서 회원에 연결된 익명 ID. v1.50(V43)부터 NULL 허용 |
 | category | varchar(10) | ✓ | `VERDICT` · `QUESTION` · `FREE`, CHECK |
 | case_id | bigint FK | | 이야기하는 사건(`legal_case.id`). 없으면 NULL |
 | title | varchar(60) | ✓ | 제목(앞뒤 공백 없음) |
@@ -1182,6 +1208,7 @@ erDiagram
 | created_at | timestamptz | ✓ | 쓴 시각 |
 
 - 인덱스: (`created_at` DESC, `id` DESC) 최신순, (`case_id`, `created_at` DESC) 사건 거르기 · 이야기 수, (`member_id`, `created_at` DESC) 랭킹 후보.
+- **CHECK** `chk_community_post_author` (v1.50, V43): `num_nonnulls(member_id, anonymous_user_id) >= 1` — 작성자는 회원 또는 익명 ID 중 적어도 하나.
 
 **community_comment** — 댓글
 
@@ -1189,12 +1216,13 @@ erDiagram
 | --- | --- | --- | --- |
 | id | bigserial PK | ✓ | |
 | post_id | bigint FK | ✓ | `community_post.id` (`ON DELETE CASCADE`) |
-| member_id | bigint FK | ✓ | 댓글쓴이 |
-| anonymous_user_id | uuid FK | ✓ | 명함 · 경험치 기준 익명 ID |
+| member_id | bigint FK | | 댓글쓴이. v1.50(V43)부터 NULL 허용 |
+| anonymous_user_id | uuid FK | | 명함 · 경험치 기준 익명 ID. v1.50(V43)부터 NULL 허용 |
 | body | varchar(500) | ✓ | |
 | created_at | timestamptz | ✓ | |
 
 - 인덱스: (`post_id`, `id`) 상세의 오래된 순, (`created_at` DESC) 이야기 수, (`member_id`, `created_at` DESC) 랭킹 후보.
+- **CHECK** `chk_community_comment_author` (v1.50, V43): `num_nonnulls(member_id, anonymous_user_id) >= 1`.
 
 **community_like** — 좋아요. 회원 한 명이 글 하나에 하나
 
@@ -1205,5 +1233,129 @@ erDiagram
 | created_at | timestamptz | ✓ | |
 
 - **글쓴이는 회원, 명함은 익명 ID**: 레벨 · 직업 · 꾸미기 · 카드 아래 줄이 아직 익명 ID 단위(9 ~ 13장)라 글마다 명함 기준 익명 ID를 함께 남긴다. 마이페이지 · 레벨을 회원 기준으로 옮기면 이 칸을 쓰지 않게 된다(후속).
+- **작성자 = 회원 또는 익명 ID (v1.50, BE-140 · V43)**: 지금은 쓰기가 로그인 전용이라 회원만 쓰지만, 반응을 보고 비로그인 작성을 열 수 있게 두 칸의 NOT NULL을 풀었다(BE-140 결정 5). 명함은 회원이면 회원 기준(15장 회원 키 테이블), 아니면 익명 ID 기준으로 그린다. V43 시점의 앱은 두 칸을 모두 채우므로 "적어도 하나"만 건다. 회원 기준 전환(BE-140 후속 PR)이 끝나 회원 글에 익명 ID를 남기지 않게 되면 "정확히 하나"(`= 1`)로 좁히는 일은 다음 배포로 나눈다(BE-60 추가만 규칙).
 - 좋아요 · 댓글 수는 넣고 뺄 때 같은 트랜잭션에서 한 문장 UPDATE로 더하고 뺀다(동시에 눌러도 어긋나지 않는다). 좋아요는 `INSERT … ON CONFLICT DO NOTHING`으로 넣는다.
 - 글 삭제 · 숨김은 아직 없다. 댓글 · 좋아요의 `ON DELETE CASCADE`는 글 삭제가 생길 때를 위한 것이다.
+
+## 15. (확장 단계) 회원 기준 소유 테이블 (v1.50, BE-140)
+
+> **V41 · V42 마이그레이션.** 로그인 전용이 된 사용자 데이터(출석 · 꾸미기 · 프로필 설정 · 경험치 · 직업 · 수집 · 도전과제)를 회원 키로 저장하고, 첫 로그인 때 손님 체험을 가져올지 정한 기록을 남긴다. 체험 · 성향 테스트 결과는 손님도 쓰므로 새 테이블 없이 이중 소유로 둔다(V40, 3-2 `experience` · 8장). 커뮤니티 작성자 확장은 V43(14장).
+>
+> - **칸 · 제약은 익명 쪽 테이블(V22 · V23 · V29 · V30 · V35 · V36)과 같고 주인만 회원이다.** 값의 뜻 · 서버 규칙은 9 ~ 13장을 그대로 따른다.
+> - **기존 익명 데이터는 옮기지 않는다**(BE-140 결정: 체험만 이관하고 나머지는 초기화). 옛 익명 테이블은 BE-140 회원 기준 전환 뒤 쓰지 않고 두었다가 후속 이슈에서 지운다.
+> - **회원 FK는 모두 `ON DELETE CASCADE`**: 회원에 딸린 기록이라 회원이 지워지면 함께 지운다(13장 `collection_item` · `achievement_unlock`과 같은 이유). 익명 쪽과 다른 곳은 이 삭제 동작뿐이다(V22 · V23 · V29 · V30의 익명 FK는 기본 `NO ACTION`). 체험 · 성향 결과 · 커뮤니티의 `member_id` FK는 `NO ACTION`이라 회원 탈퇴를 만들 때 그 행들을 먼저 정리해야 한다.
+> - 테이블 추가뿐이라 BE-60 "main으로 가는 마이그레이션은 추가만" 규칙에 맞는다(V41 · V42 시점의 앱은 이 테이블을 모른다).
+
+```mermaid
+erDiagram
+    member ||--o{ member_attendance : "출석"
+    member ||--o| member_profile_deco : "꾸미기"
+    member ||--o| member_profile_setting : "프로필 선택 설정"
+    member ||--o{ member_xp_event : "경험치 지급"
+    member ||--o| member_profile_job : "고른 직업"
+    member ||--o{ member_collection_item : "모은 그림"
+    legal_case ||--o{ member_collection_item : "처음 얻은 사건"
+    member ||--o{ member_achievement_unlock : "해금"
+    member ||--o| member_anonymous_import : "첫 로그인 가져오기"
+    anonymous_user ||--o{ member_anonymous_import : "가져온 · 버린 익명 ID"
+```
+
+**member_attendance** — 출석 (9장 `attendance`)
+
+| 컬럼 | 타입 | NOT NULL | 설명 |
+| --- | --- | --- | --- |
+| member_id | bigint PK FK | ✓ | `member.id` (`ON DELETE CASCADE`) |
+| attended_on | date PK | ✓ | 서버가 정한 출석 날짜(9장과 같은 기준) |
+| created_at | timestamptz | ✓ | 기본 `now()` |
+
+- 기본 키 `pk_member_attendance` (`member_id`, `attended_on`). 하루 한 줄.
+
+**member_profile_deco** — 카드 꾸미기 · 책갈피 (10장 `profile_deco`)
+
+| 컬럼 | 타입 | NOT NULL | 설명 |
+| --- | --- | --- | --- |
+| member_id | bigint PK FK | ✓ | `member.id` (`ON DELETE CASCADE`). 회원당 한 줄 |
+| portrait | varchar(200) | ✓ | 대표 이미지 경로 |
+| frame · background | varchar(30) | ✓ | 카드 테두리 · 배경 |
+| sash_style | varchar(30) | ✓ | 카드 책갈피 모양 |
+| sash_color_short · sash_color_long | varchar(30) | ✓ | 모양별 색 |
+| sash_icon_left · sash_icon_right | varchar(30) | ✓ | 짧은 책갈피 좌우 아이콘 |
+| bookmark_character · bookmark_face · bookmark_face_style · bookmark_color | varchar(30) | ✓ | 책갈피 캐릭터 · 얼굴 표정 · 얼굴 종류 · 리본 색 |
+| updated_at | timestamptz | ✓ | 기본 `now()` |
+
+- 값 검사는 서버 코드(`ProfileDecoCatalog`)가 한다. CHECK 없음(10장과 같다).
+
+**member_profile_setting** — 공개 카드 · 카드 아래 줄 · 한 줄 소개 (11장 `profile_setting`, V29 + V36 칸)
+
+| 컬럼 | 타입 | NOT NULL | 설명 |
+| --- | --- | --- | --- |
+| member_id | bigint PK FK | ✓ | `member.id` (`ON DELETE CASCADE`). 회원당 한 줄 |
+| shown_card | varchar(10) | ✓ | `initial` · `retake` · `current`, 기본 `current`, CHECK |
+| profile_card_type | varchar(10) | ✓ | 값은 `shown_card`와 같다. 기본 `current`, CHECK |
+| bio | varchar(40) | ✓ | 한 줄 소개(앞뒤 공백 · 줄바꿈 없음, CHECK). 기본 `''` |
+| card_line | varchar(10) | ✓ | `type` · `signature` · `job`, 기본 `type`, CHECK |
+| card_level | boolean | ✓ | 기본 `false` |
+| updated_at | timestamptz | ✓ | 기본 `now()` |
+
+- CHECK: `chk_member_profile_setting_shown_card` · `chk_member_profile_setting_profile_card_type` · `chk_member_profile_setting_bio` (`bio = btrim(bio) AND bio !~ '[\r\n]'`) · `chk_member_profile_setting_card_line`.
+
+**member_xp_event** — 경험치 지급 원장 (12장 `xp_event`)
+
+| 컬럼 | 타입 | NOT NULL | 설명 |
+| --- | --- | --- | --- |
+| id | bigint PK | ✓ | identity |
+| member_id | bigint FK | ✓ | XP를 받은 회원(`member.id`, `ON DELETE CASCADE`) |
+| source | varchar(20) | ✓ | `POST` · `SHARE_POST` · `COMMENT` · `LIKE_GIVEN` · `LIKE_RECEIVED` · `SNS_SHARE`, CHECK |
+| ref_key | varchar(80) | ✓ | 지급 대상. (`member_id`, `source`, `ref_key`) 유니크 `uq_member_xp_event_ref` — 같은 대상으로 두 번 받지 않는다 |
+| group_key | varchar(80) | ✓ | 묶음 상한 키. 기본 `''` |
+| amount | int | ✓ | 받은 XP(> 0, CHECK) |
+| awarded_on | date | ✓ | 일일 상한을 세는 한국 시간 날짜 |
+| created_at | timestamptz | ✓ | 기본 `now()` |
+
+- 인덱스: `ix_member_xp_event_day` (`member_id`, `source`, `awarded_on`) 일일 상한 · `ix_member_xp_event_group` (`member_id`, `source`, `group_key`) 묶음 상한.
+
+**member_profile_job** — 카드에 보일 직업 (12장 `profile_job`)
+
+| 컬럼 | 타입 | NOT NULL | 설명 |
+| --- | --- | --- | --- |
+| member_id | bigint PK FK | ✓ | `member.id` (`ON DELETE CASCADE`). 회원당 한 줄 |
+| job | varchar(30) | ✓ | 직업 코드 11개 중 하나(CHECK `chk_member_profile_job_job`, 12장과 같은 값) |
+| updated_at | timestamptz | ✓ | 기본 `now()` |
+
+**member_collection_item** — 모은 일러스트 · 의상 (13장 `collection_item`)
+
+| 컬럼 | 타입 | NOT NULL | 설명 |
+| --- | --- | --- | --- |
+| member_id | bigint PK FK | ✓ | `member.id` (`ON DELETE CASCADE`) |
+| kind | varchar(20) PK | ✓ | `illustration` · `cast` 등. CHECK 없이 서버 코드가 검사한다(13장과 같다) |
+| item_id | varchar(64) PK | ✓ | 일러스트 id · 의상 `{who}:{role}` |
+| case_id | bigint FK | ✓ | 처음 얻은 사건(`legal_case.id`, `ON DELETE CASCADE`) |
+| acquired_at | timestamptz | ✓ | 기본 `now()` |
+| seen_at | timestamptz | | 확인 시각. `NULL`이면 "새로 얻음" |
+
+- 인덱스: `idx_member_collection_item_case` (`member_id`, `case_id`, `kind`) 사건당 상한 검사용.
+
+**member_achievement_unlock** — 도전과제 해금 기록 (13장 `achievement_unlock`)
+
+| 컬럼 | 타입 | NOT NULL | 설명 |
+| --- | --- | --- | --- |
+| member_id | bigint PK FK | ✓ | `member.id` (`ON DELETE CASCADE`) |
+| achievement_id | varchar(40) PK | ✓ | `ProfileDecoCatalog.ACHIEVEMENTS`의 id |
+| unlocked_at | timestamptz | ✓ | 기본 `now()` |
+| seen_at | timestamptz | | 확인 시각. `NULL`이면 "새로 열림" |
+
+- 옛 해금 기록은 옮기지 않는다. 체험 결과를 다시 보면 다시 판정해 남긴다(BE-140 결정). V35와 달리 배포 시점 백필도 하지 않는다.
+
+**member_anonymous_import** — 첫 로그인 가져오기 결정 (V42, API 명세 M-9 ~ M-11)
+
+| 컬럼 | 타입 | NOT NULL | 설명 |
+| --- | --- | --- | --- |
+| member_id | bigint PK FK | ✓ | `member.id` (`ON DELETE CASCADE`). 회원마다 한 줄 — 기록이 있으면 다시 묻지 않는다 |
+| anonymous_user_id | uuid FK | ✓ | 결정할 때 이 브라우저 쿠키의 익명 ID(`anonymous_user.id`, 삭제 동작 없음) |
+| decision | varchar(10) | ✓ | `IMPORTED`(그 익명 ID의 체험을 회원 것으로 옮겼다, M-10) · `DISCARDED`(옮기지 않고 그 익명 ID를 버렸다, M-11), CHECK `chk_member_anonymous_import_decision` |
+| experience_count | int | ✓ | 옮긴 체험 수. 기본 0. `DISCARDED`면 0(CHECK `chk_member_anonymous_import_count`: `experience_count >= 0 AND (decision = 'IMPORTED' OR experience_count = 0)`) |
+| decided_at | timestamptz | ✓ | 기본 `now()` |
+
+- 인덱스: `idx_member_anonymous_import_anonymous_user (anonymous_user_id)` — FK 칸 인덱스(7장 규칙).
+- `DISCARDED`여도 익명 기록은 지우지 않고 그대로 둔다(되돌릴 여지, 나중에 정리 배치로 지운다). 브라우저의 익명 ID 쿠키만 지운다.
+- 가져오기는 체험(`experience`)만 대상이다. 출석 · 꾸미기 등 나머지 익명 데이터는 옮기지 않는다(위 안내).

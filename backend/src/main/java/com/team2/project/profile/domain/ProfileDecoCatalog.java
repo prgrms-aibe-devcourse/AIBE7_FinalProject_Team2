@@ -68,14 +68,12 @@ public final class ProfileDecoCatalog {
 		new Achievement("attend-30", AchievementStat.ATTENDANCE_DAYS, 30, Rewards.builder()
 			.kinds("characters/mascot").frames("navy").sashColors("short:gold", "long:gold").sashIcons("law").build()));
 
-	// ── 수집 (BE-83, docs/decisions/BE-83.md) ──
-	// 서버는 대본을 몰라 가짜 항목 id를 막지 못하므로, 종류별 상한으로 총량만 묶는다.
-	// 콘텐츠 규칙(사건당 일러스트 3장 · 의상 최대 8가지)에 여유를 둔 값이다. 랭킹처럼 다른 사용자와 비교하는 곳에 collected를 쓰기 전에
-	// 서버 화이트리스트 검증으로 바꾸는 것을 다시 검토한다
+	// ── 수집 (BE-83 · BE-136, docs/decisions/BE-136.md) ──
+	// 항목 id는 화이트리스트(CollectibleCatalog)로 거른다. 일러스트는 다른 사건의 그림도 받으므로(그림별 key)
+	// 한 사건에서 처음 얻을 수 있는 수를 이 상한으로 묶는다(콘텐츠 규칙 사건당 3장에 여유를 둔 값).
+	// 의상은 목록이 곧 전체라 상한이 없다(BE-136에서 사용자당 12 삭제)
 	/** 한 사건에서 처음 얻을 수 있는 일러스트 수 */
 	public static final int COLLECTION_ILLUSTRATIONS_PER_CASE = 5;
-	/** 사용자당 의상(만난 모습) 수 */
-	public static final int COLLECTION_CASTS_PER_USER = 12;
 
 	/** 카드 책갈피 색의 해금 키: "모양:색" */
 	public static String sashColorKey(String style, String color) {

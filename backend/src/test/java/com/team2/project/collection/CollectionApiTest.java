@@ -2,7 +2,9 @@ package com.team2.project.collection;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.everyItem;
 import static org.hamcrest.Matchers.hasItem;
+import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -14,10 +16,12 @@ import jakarta.servlet.http.Cookie;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -26,6 +30,7 @@ import org.springframework.test.web.servlet.ResultActions;
 
 /**
  * 수집 기록 P-9 · 컬렉션 봤음 P-10 · 도전과제 봤음 P-11 · 마이페이지 collection · achievements 해금 (BE-83)
+ * 항목 id는 모을 수 있는 목록(BE-136)에 있어야 한다: 일러스트 case-{공개 사건 id}-{origin|conclusion|reenact}, 의상은 역할 의상 그림({who}:{role})
  */
 class CollectionApiTest extends ApiIntegrationTest {
 
@@ -75,9 +80,19 @@ class CollectionApiTest extends ApiIntegrationTest {
 			Integer.class, userId);
 	}
 
-	private static String[] illustrations(long caseId, int count) {
-		return IntStream.rangeClosed(1, count).mapToObj(i -> item("illustration", "case-" + caseId + "-" + i))
+	/** 사건 일러스트 id (BE-136 목록 규칙) */
+	private static String illustration(long caseId, String slot) {
+		return "case-" + caseId + "-" + slot;
+	}
+
+	/** 그 사건의 일러스트 3장 전부(발단 · 결론 · 재연) */
+	private static String[] illustrations(long caseId) {
+		return Stream.of("origin", "conclusion", "reenact").map(slot -> item("illustration", illustration(caseId, slot)))
 			.toArray(String[]::new);
+	}
+
+	private static String[] concat(String[]... groups) {
+		return Stream.of(groups).flatMap(Stream::of).toArray(String[]::new);
 	}
 
 	@Test
@@ -87,11 +102,11 @@ class CollectionApiTest extends ApiIntegrationTest {
 		UUID userId = completedUser(caseId);
 		Cookie cookie = cookieOf(userId);
 
-		record(cookie, body(caseId, false, item("illustration", "case-1-origin"), item("cast", "naero:judge")))
+		record(cookie, body(caseId, false, item("illustration", illustration(caseId, "origin")), item("cast", "naero:judge")))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.added.length()").value(2))
 			.andExpect(jsonPath("$.added[0].kind").value("illustration"))
-			.andExpect(jsonPath("$.added[0].itemId").value("case-1-origin"))
+			.andExpect(jsonPath("$.added[0].itemId").value(illustration(caseId, "origin")))
 			.andExpect(jsonPath("$.added[0].caseId").value(caseId))
 			.andExpect(jsonPath("$.added[0].isNew").value(true))
 			.andExpect(jsonPath("$.collected").value(2));
@@ -111,7 +126,8 @@ class CollectionApiTest extends ApiIntegrationTest {
 	void idempotent() throws Exception {
 		long caseId = insertCase("MURDER", "PUBLISHED");
 		Cookie cookie = cookieOf(completedUser(caseId));
-		String json = body(caseId, false, item("illustration", "case-1-origin"), item("illustration", "case-1-origin"));
+		String json = body(caseId, false, item("illustration", illustration(caseId, "origin")),
+			item("illustration", illustration(caseId, "origin")));
 
 		record(cookie, json).andExpect(status().isOk()).andExpect(jsonPath("$.added.length()").value(1));
 		record(cookie, json)
@@ -129,11 +145,13 @@ class CollectionApiTest extends ApiIntegrationTest {
 		insertExperience(userId, secondCase, 1, "COMPLETED");
 		Cookie cookie = cookieOf(userId);
 
-		record(cookie, body(firstCase, false, item("illustration", "shared-courtroom"))).andExpect(status().isOk());
+		// 두 번째 사건이 첫 사건의 그림을 다시 쓴다(그림별 key) — 목록에 있는 다른 공개 사건의 그림이라 받는다 (BE-136)
+		String shared = item("illustration", illustration(firstCase, "origin"));
+		record(cookie, body(firstCase, false, shared)).andExpect(status().isOk());
 		Instant firstAcquired = jdbcTemplate.queryForObject(
 			"SELECT acquired_at FROM collection_item WHERE anonymous_user_id = ?", Timestamp.class, userId).toInstant();
 
-		record(cookie, body(secondCase, false, item("illustration", "shared-courtroom")))
+		record(cookie, body(secondCase, false, shared))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.added.length()").value(0));
 
@@ -147,7 +165,7 @@ class CollectionApiTest extends ApiIntegrationTest {
 	@DisplayName("쿠키가 없거나 체험 기록이 없으면 404 EXPERIENCE_NOT_FOUND, 없는 사건이면 404 CASE_NOT_FOUND")
 	void notFound() throws Exception {
 		long caseId = insertCase("MURDER", "PUBLISHED");
-		String json = body(caseId, false, item("illustration", "case-1-origin"));
+		String json = body(caseId, false, item("illustration", illustration(caseId, "origin")));
 
 		record(null, json).andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("EXPERIENCE_NOT_FOUND"));
 
@@ -157,7 +175,7 @@ class CollectionApiTest extends ApiIntegrationTest {
 		record(cookieOf(bare), json)
 			.andExpect(status().isNotFound())
 			.andExpect(jsonPath("$.code").value("EXPERIENCE_NOT_FOUND"));
-		record(cookieOf(bare), body(Long.MAX_VALUE, false, item("illustration", "case-1-origin")))
+		record(cookieOf(bare), body(Long.MAX_VALUE, false, item("illustration", illustration(caseId, "origin"))))
 			.andExpect(status().isNotFound())
 			.andExpect(jsonPath("$.code").value("CASE_NOT_FOUND"));
 	}
@@ -169,7 +187,7 @@ class CollectionApiTest extends ApiIntegrationTest {
 		UUID userId = UUID.randomUUID();
 		insertExperience(userId, caseId, 1, "REVIEWING");
 
-		record(cookieOf(userId), body(caseId, false, item("illustration", "case-1-origin")))
+		record(cookieOf(userId), body(caseId, false, item("illustration", illustration(caseId, "origin"))))
 			.andExpect(status().isConflict())
 			.andExpect(jsonPath("$.code").value("INVALID_STATE"))
 			.andExpect(jsonPath("$.currentStatus").value("REVIEWING"));
@@ -196,31 +214,52 @@ class CollectionApiTest extends ApiIntegrationTest {
 	@DisplayName("일러스트가 사건당 상한(5)을 넘으면 409 COLLECTION_LIMIT_EXCEEDED, 아무것도 저장하지 않는다. 이미 가진 것은 세지 않는다")
 	void illustrationLimit() throws Exception {
 		long caseId = insertCase("MURDER", "PUBLISHED");
+		long otherCase = insertCase("FRAUD", "PUBLISHED");
 		UUID userId = completedUser(caseId);
 		Cookie cookie = cookieOf(userId);
+		// 목록에 있는 그림 6장: 이 사건 3장 + 다른 공개 사건 3장(그림별 key라 받지만 사건당 5장까지)
+		String[] six = concat(illustrations(caseId), illustrations(otherCase));
 
-		record(cookie, body(caseId, false, illustrations(caseId, 6)))
+		record(cookie, body(caseId, false, six))
 			.andExpect(status().isConflict())
 			.andExpect(jsonPath("$.code").value("COLLECTION_LIMIT_EXCEEDED"))
 			.andExpect(jsonPath("$.details[0].field").value("items.kind"))
 			.andExpect(jsonPath("$.details[0].reason").value("illustration"));
 		assertThat(countItems(userId)).isZero();
 
-		record(cookie, body(caseId, false, illustrations(caseId, 5))).andExpect(status().isOk());
-		record(cookie, body(caseId, false, illustrations(caseId, 5))).andExpect(status().isOk());	// 이미 가진 5장은 세지 않는다
-		record(cookie, body(caseId, false, item("illustration", "one-more"))).andExpect(status().isConflict());
+		String[] five = Arrays.copyOf(six, 5);
+		record(cookie, body(caseId, false, five)).andExpect(status().isOk());
+		record(cookie, body(caseId, false, five)).andExpect(status().isOk());	// 이미 가진 5장은 세지 않는다
+		record(cookie, body(caseId, false, six[5])).andExpect(status().isConflict());
 	}
 
 	@Test
-	@DisplayName("의상은 사용자당 상한(12)을 넘으면 409")
-	void castLimit() throws Exception {
+	@DisplayName("목록에 없는 항목은 400 VALIDATION_ERROR(items[i].itemId · NOT_COLLECTIBLE), 섞여 있으면 하나도 저장하지 않는다 (BE-136)")
+	void notCollectible() throws Exception {
 		long caseId = insertCase("MURDER", "PUBLISHED");
-		Cookie cookie = cookieOf(completedUser(caseId));
-		String[] casts = IntStream.rangeClosed(1, 13).mapToObj(i -> item("cast", "naero:role" + i)).toArray(String[]::new);
+		long reviewCase = insertCase("FRAUD", "REVIEW");
+		UUID userId = completedUser(caseId);
+		Cookie cookie = cookieOf(userId);
 
-		record(cookie, body(caseId, false, casts))
-			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.details[0].reason").value("cast"));
+		record(cookie, body(caseId, false,
+			item("illustration", illustration(caseId, "origin")),		// 0 — 목록에 있다
+			item("illustration", illustration(caseId, "verdict")),	// 1 — 없는 칸 이름
+			item("illustration", "shared-courtroom"),					// 2 — 사건 그림 규칙이 아니다
+			item("illustration", illustration(reviewCase, "origin")),	// 3 — 공개 전 사건
+			item("illustration", "case-999999999999-origin"),			// 4 — 없는 사건
+			item("cast", "naero:judge"),								// 5 — 목록에 있다
+			item("cast", "naero:role1"),								// 6 — 그림이 없는 역할
+			item("cast", "never:owned")))								// 7 — 모르는 인물
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+			.andExpect(jsonPath("$.details[*].field").value(contains(
+				"items[1].itemId", "items[2].itemId", "items[3].itemId", "items[4].itemId", "items[6].itemId",
+				"items[7].itemId")))
+			.andExpect(jsonPath("$.details[*].reason", everyItem(is("NOT_COLLECTIBLE"))));
+		assertThat(countItems(userId)).isZero();	// 목록에 있는 0 · 5번도 저장하지 않는다
+
+		// 목록 검사는 입력 검사라 쿠키 · 체험 확인보다 먼저다 — 쿠키가 없어도 400
+		record(null, body(caseId, false, item("cast", "never:owned"))).andExpect(status().isBadRequest());
 	}
 
 	@Test
@@ -229,9 +268,10 @@ class CollectionApiTest extends ApiIntegrationTest {
 		long caseId = insertCase("MURDER", "PUBLISHED");
 		Cookie cookie = cookieOf(completedUser(caseId));
 
-		record(cookie, body(caseId, false, illustrations(caseId, 4))).andExpect(status().isOk())
+		record(cookie, body(caseId, false, concat(illustrations(caseId), new String[] {item("cast", "naero:judge")})))
+			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.newlyUnlocked", not(hasItem("collect-5"))));
-		record(cookie, body(caseId, false, item("cast", "nambul:lawyer")))
+		record(cookie, body(caseId, false, item("cast", "nambul:judge")))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.collected").value(5))
 			.andExpect(jsonPath("$.newlyUnlocked", hasItem("collect-5")));
@@ -277,14 +317,15 @@ class CollectionApiTest extends ApiIntegrationTest {
 	void markSeen() throws Exception {
 		long caseId = insertCase("MURDER", "PUBLISHED");
 		Cookie cookie = cookieOf(completedUser(caseId));
-		record(cookie, body(caseId, false, item("illustration", "case-1-origin"), item("cast", "naero:judge"),
+		String origin = illustration(caseId, "origin");
+		record(cookie, body(caseId, false, item("illustration", origin), item("cast", "naero:judge"),
 			item("cast", "nambul:judge"))).andExpect(status().isOk());
 
 		mockMvc.perform(post(COLLECTION_SEEN).cookie(cookie).contentType(MediaType.APPLICATION_JSON)
-				.content("{\"items\":[" + item("illustration", "case-1-origin") + "]}"))
+				.content("{\"items\":[" + item("illustration", origin) + "]}"))
 			.andExpect(status().isNoContent());
 		mockMvc.perform(get(MY_PAGE).cookie(cookie))
-			.andExpect(jsonPath("$.collection.items[?(@.itemId == 'case-1-origin')].isNew", contains(false)))
+			.andExpect(jsonPath("$.collection.items[?(@.itemId == '" + origin + "')].isNew", contains(false)))
 			.andExpect(jsonPath("$.collection.items[?(@.kind == 'cast')].isNew", contains(true, true)));
 
 		mockMvc.perform(post(COLLECTION_SEEN).cookie(cookie).contentType(MediaType.APPLICATION_JSON)
@@ -306,20 +347,22 @@ class CollectionApiTest extends ApiIntegrationTest {
 		long caseId = insertCase("MURDER", "PUBLISHED");
 		UUID userId = completedUser(caseId);
 		Cookie cookie = cookieOf(userId);
-		record(cookie, body(caseId, false, item("illustration", "case-1-origin"), item("illustration", "case-1-verdict"),
+		String origin = illustration(caseId, "origin");
+		String conclusion = illustration(caseId, "conclusion");
+		record(cookie, body(caseId, false, item("illustration", origin), item("illustration", conclusion),
 			item("cast", "naero:judge"), item("cast", "nambul:judge"))).andExpect(status().isOk());
 
 		// 일러스트 1 · 의상 1을 한 요청에, 같은 항목 중복 · 얻지 않은 항목도 섞어 보낸다
 		mockMvc.perform(post(COLLECTION_SEEN).cookie(cookie).contentType(MediaType.APPLICATION_JSON)
-				.content("{\"items\":[" + String.join(",", item("illustration", "case-1-origin"),
+				.content("{\"items\":[" + String.join(",", item("illustration", origin),
 					item("cast", "naero:judge"), item("cast", "naero:judge"), item("cast", "never:owned")) + "]}"))
 			.andExpect(status().isNoContent());
 
 		mockMvc.perform(get(MY_PAGE).cookie(cookie))
-			.andExpect(jsonPath("$.collection.items[?(@.itemId == 'case-1-origin')].isNew", contains(false)))
+			.andExpect(jsonPath("$.collection.items[?(@.itemId == '" + origin + "')].isNew", contains(false)))
 			.andExpect(jsonPath("$.collection.items[?(@.itemId == 'naero:judge')].isNew", contains(false)))
 			// 지정하지 않은 항목은 그대로 새 항목
-			.andExpect(jsonPath("$.collection.items[?(@.itemId == 'case-1-verdict')].isNew", contains(true)))
+			.andExpect(jsonPath("$.collection.items[?(@.itemId == '" + conclusion + "')].isNew", contains(true)))
 			.andExpect(jsonPath("$.collection.items[?(@.itemId == 'nambul:judge')].isNew", contains(true)));
 		assertThat(countItems(userId)).isEqualTo(4);	// 얻지 않은 항목은 새로 생기지 않는다
 	}
@@ -334,7 +377,8 @@ class CollectionApiTest extends ApiIntegrationTest {
 			Timestamp.from(completedAt), userId);
 		Cookie cookie = cookieOf(userId);
 
-		record(cookie, body(caseId, true, illustrations(caseId, 5)))
+		record(cookie, body(caseId, true, concat(illustrations(caseId),
+			new String[] {item("cast", "naero:judge"), item("cast", "nambul:judge")})))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.added[0].isNew").value(false))
 			.andExpect(jsonPath("$.added[0].acquiredAt").value("2026-10-01T12:00:00+09:00"))

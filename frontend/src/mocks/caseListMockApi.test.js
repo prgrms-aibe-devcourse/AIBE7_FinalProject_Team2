@@ -33,3 +33,8 @@ test('scriptReady: 대본이 있는 사건 1만 true이고 목록 · 상세가 �
   assert.equal((await getCaseDetail(1)).scriptReady, true);
   assert.equal((await getCaseDetail(2)).scriptReady, false);
 });
+
+test('API 16 목: 안내 대상 플래그는 사건 4에만 있고 나머지는 필드를 뺀다(FE-129)', async () => {
+  assert.deepEqual((await getCaseDetail(4)).sensitiveFlags, ['MENTAL_HEALTH']);
+  assert.equal('sensitiveFlags' in (await getCaseDetail(1)), false);
+});
