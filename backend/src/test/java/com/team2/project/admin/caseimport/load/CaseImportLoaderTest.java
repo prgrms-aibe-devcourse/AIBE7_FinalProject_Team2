@@ -118,6 +118,18 @@ class CaseImportLoaderTest extends ApiIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("요청은 양형기준이 있는 유형(살인), 읽은 유형은 없는 유형(절도)이어도 유형 불일치로 거절한다 — 양형기준을 찾기 전에 비교한다 (BE-138)")
+	void load_crimeTypeMismatch_isCheckedBeforeGuideline() {
+		CaseImport murder = caseImport(CrimeType.MURDER);
+
+		assertThatThrownBy(() -> loader.load(murder, resultWith(theftContent())))
+			.isInstanceOf(BusinessException.class)
+			.hasMessageContaining("등록 요청은 MURDER, 판결문에서 읽은 유형은 THEFT");
+		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM legal_case WHERE title LIKE ?", Integer.class,
+			TITLE_PREFIX + "%")).isZero();
+	}
+
+	@Test
 	@DisplayName("판단 요소의 display_order는 배열 순서가 아니라 factorId다 (판결이 이 번호로 요소를 찾는다)")
 	void load_factorDisplayOrderIsFactorId() {
 		LegalCase legalCase = loader.load(caseImport(), result());

@@ -2031,6 +2031,19 @@ class PipelineTest(unittest.TestCase):
             self.config({"crimeType": "ARSON"})
         self.assertIn("crimeType", str(ctx.exception))
 
+    def test_resume_without_extract_checks_crime_type(self):
+        """BE-138 (PR #356 리뷰): extract를 돌리지 않는 실행(--from · 끝난 extract 건너뜀)도 뒤 단계 전에 유형을 비교한다."""
+        extracted = self.case["crimeType"]
+        other = next(t for t in pipeline.CRIME_TYPES if t != extracted)
+        config = self.config({"crimeType": other}, generate={"models": ["openai:a"], "runs": 1, "maxRetries": 0})
+        with self.assertRaises(pipeline.PipelineError) as ctx:
+            self.run_with(config, {"openai:a": [self.output]}, start="generate")
+        self.assertIn(f"등록 요청은 {other}, 판결문에서 읽은 유형은 {extracted}", str(ctx.exception))
+        self.assertEqual(pipeline.load_state(config)["stages"], {})  # 판결 생성 · 적재는 시작하지 않는다
+        config = self.config({"crimeType": extracted}, generate={"models": ["openai:a"], "runs": 1, "maxRetries": 0})
+        state = self.run_with(config, {"openai:a": [self.output]}, start="generate")
+        self.assertEqual(state["stages"]["load"]["status"], "done")
+
     def test_crime_types_match_extractor_and_service(self):
         """범죄 유형 목록은 파이프라인(common) · 추출기 스키마 · 서비스가 따로 갖는다 — 늘릴 때 한 곳만 고치면 이 테스트가 깨진다."""
         sys.path.insert(0, str(pipeline.EXTRACTOR_DIR))

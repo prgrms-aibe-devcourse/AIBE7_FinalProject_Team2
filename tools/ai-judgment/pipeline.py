@@ -742,15 +742,21 @@ def stage_extract(config, state, log):
     if eligibility.get("eligible") is False and cfg["requireEligible"]:
         raise PipelineError("서비스 대상이 아닌 판결로 판정됐습니다 (stages.extract.requireEligible=false로 무시 가능): "
                             + " / ".join(eligibility.get("reasons", [])), outputs)
-    extracted = load_json(case_path).get("crimeType")
-    outputs["crimeType"] = extracted
-    requested = config.get("crimeType")
-    if requested and extracted != requested:
-        # 요청 값으로 덮어쓰지 않는다 — 관리자가 유형을 잘못 골랐으면 양형기준 · 판례 · 사전판단이 모두 틀린 채로 적재된다.
-        # 어느 쪽이 맞는지는 사람이 정하고, 맞는 유형으로 다시 등록한다 (BE-138)
-        raise PipelineError(f"범죄 유형이 다릅니다: 등록 요청은 {requested}, 판결문에서 읽은 유형은 {extracted}입니다. "
-                            "판결문을 확인해 맞는 유형으로 다시 등록해 주세요", outputs)
+    outputs["crimeType"] = load_json(case_path).get("crimeType")
+    require_crime_type(config, case_path, outputs)
     return outputs
+
+
+def require_crime_type(config, case_path, outputs=None):
+    """등록 요청의 범죄 유형(설정 crimeType)과 case.json의 유형이 다르면 멈춘다 (BE-138). 요청에 유형이 없으면(로컬 실행) 비교하지 않는다.
+
+    요청 값으로 덮어쓰지 않는다 — 관리자가 유형을 잘못 골랐으면 양형기준 · 판례 · 사전판단이 모두 틀린 채로 적재된다.
+    어느 쪽이 맞는지는 사람이 정하고, 맞는 유형으로 다시 등록한다."""
+    requested = config.get("crimeType")
+    extracted = load_json(case_path).get("crimeType")
+    if requested and extracted != requested:
+        raise PipelineError(f"범죄 유형이 다릅니다: 등록 요청은 {requested}, 판결문에서 읽은 유형은 {extracted}입니다. "
+                            "판결문을 확인해 맞는 유형으로 다시 등록해 주세요", outputs or {})
 
 
 def attach_summary_tags(report_path, report, options, log, embed_fn=None):
@@ -1630,6 +1636,10 @@ def run_pipeline(config, start=None, until=None, skip=(), rerun=False, log=print
     if not steps:
         log("돌릴 단계가 없습니다 (모두 끝났거나 꺼짐). 다시 돌리려면 --from <단계>")
         return state
+    if "extract" not in steps and config.get("crimeType"):
+        # 이어서 돌리거나(끝난 extract 건너뜀) --from으로 뒤 단계부터 시작해도 같은 비교를 한다. 서비스는 작업마다 처음부터
+        # 돌아 extract에서 비교하므로 로컬 실행 경로다 (PR #356 리뷰)
+        require_crime_type(config, input_file(config, state, "case"))
     if "contamination" not in steps:  # 점검 단계는 시작할 때 스스로 무료 모델 목록을 처음부터 펼친다
         resolve_free_models(config, state, log, fresh=rerun or start == "contamination")
     providers = sorted({free_token_provider(m) if is_free_token(m) else parse_model_spec(m)[0]

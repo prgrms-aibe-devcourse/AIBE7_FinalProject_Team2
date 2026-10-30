@@ -93,10 +93,11 @@ public class CaseImportLoader {
 				"같은 제목의 사건이 이미 있습니다. 제목을 바꾼 뒤 다시 등록해 주세요.");
 		}
 
+		// 양형기준을 요청 값으로 찾기(guidelineFor) 전에 본다 — 어긋난 사건이 다른 오류로 먼저 끝나지 않게 (PR #356 리뷰)
+		requireRequestedCrimeType(caseImport, content);
 		LocalDate incidentDate = incidentDate(caseImport);
 		LegalCase legalCase = caseContentMapper.toCase(content, report, incidentDate,
 			guidelineFor(content, caseImport, incidentDate));
-		requireRequestedCrimeType(caseImport, legalCase);
 		legalCase.assignCast(castFor(legalCase, result));
 		legalCase.changeSensitiveFlags(sensitiveFlags(result));
 		saveCase(legalCase);
@@ -120,9 +121,9 @@ public class CaseImportLoader {
 	 * 보내지 않던 때 만든 작업이나 로컬 실행 결과가 들어와도 어긋난 채 적재되지 않게 한다. 요청 값으로 덮어쓰지 않는 이유는
 	 * 관리자가 유형을 잘못 골랐을 때 양형기준 · 판례까지 틀린 채 들어가기 때문이다. 어느 쪽이 맞는지는 사람이 정한다.
 	 */
-	private static void requireRequestedCrimeType(CaseImport caseImport, LegalCase legalCase) {
+	private static void requireRequestedCrimeType(CaseImport caseImport, JsonNode content) {
 		CrimeType requested = caseImport.getCrimeType();
-		CrimeType extracted = legalCase.getCrimeType();
+		CrimeType extracted = Json.requiredEnum(CrimeType.class, Json.text(content, "crimeType"), "case.crimeType");
 		if (requested != extracted) {
 			throw new BusinessException(ErrorCode.IMPORT_RESULT_INVALID,
 				"범죄 유형이 다릅니다: 등록 요청은 " + requested + ", 판결문에서 읽은 유형은 " + extracted
