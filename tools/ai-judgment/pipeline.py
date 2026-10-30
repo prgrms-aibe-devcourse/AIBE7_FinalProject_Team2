@@ -41,7 +41,7 @@ from court_seed_sql import CourtSeedError, build_court_sql
 from check_contamination import DEFAULT_CRITERIA, aggregate, build_contamination_prompt, classify, criteria_with
 from axis_vote import AxisVoteError, aggregate_votes, apply_votes, build_axis_prompt, parse_axis_answer
 from case_classify import ClassifyError, aggregate_classification, build_classify_prompt, parse_classify_answer, rule_flags
-from common import AXIS_PROMPT_VERSION, CLASSIFY_PROMPT_VERSION, TOOL_DIR, load_json, write_json
+from common import AXIS_PROMPT_VERSION, CLASSIFY_PROMPT_VERSION, CRIME_TYPES, TOOL_DIR, load_json, write_json
 from compare import _majority, direction_table, load_runs
 from generate import RUNS_DIR, GenerateError, generate_runs, model_slug, prompt_digest
 from llm import (DEFAULT_MAX_ATTEMPTS, DEFAULT_MAX_WAIT, LLMError, LLMQuotaExhaustedError, api_key, call,
@@ -78,6 +78,9 @@ DEFAULT_CONFIG = {
     "incidentDate": None,
     # 공소제기일 YYYY-MM-DD (BE-54). 양형기준 버전 기준일은 이 값 → 없으면 발생일 (docs/sentencing-guideline-rag.md 6장)
     "indictmentDate": None,
+    # 관리자가 등록 요청에서 고른 범죄 유형 (BE-138). 주면 extract가 판결문에서 읽은 유형(case.json crimeType)과 비교해 다르면
+    # 멈춘다 — 양형기준 · 배역 배정 · 사전판단이 서로 다른 유형을 쓰지 않게 비싼 단계(판결 · 대본) 전에 잡는다
+    "crimeType": None,
     # LLM 호출 재시도 (BE-36). 과부하(503 · 529) · 한도(429) · 서버 오류 때 요청 한 건을 보내는 최대 횟수(첫 시도 포함)와
     # 한 번에 기다릴 최대 시간(초). 무료 등급이면 각 단계의 delay(호출 사이 대기)도 함께 둔다 (README "무료 등급 한도 대응")
     "retry": {"maxAttempts": DEFAULT_MAX_ATTEMPTS, "maxWait": DEFAULT_MAX_WAIT},
@@ -434,6 +437,8 @@ def validate_config(config):
             datetime.date.fromisoformat(config["indictmentDate"])
         except (TypeError, ValueError):
             errors.append("indictmentDate는 YYYY-MM-DD다")
+    if config.get("crimeType") is not None and config["crimeType"] not in CRIME_TYPES:
+        errors.append(f"crimeType은 {' · '.join(CRIME_TYPES)} 중 하나다")
     if stages["extract"]["enabled"] and not config["sources"]:
         errors.append("extract를 쓰려면 sources에 판결문 경로를 넣는다")
     extract_model = stages["extract"]["model"]
@@ -737,6 +742,14 @@ def stage_extract(config, state, log):
     if eligibility.get("eligible") is False and cfg["requireEligible"]:
         raise PipelineError("서비스 대상이 아닌 판결로 판정됐습니다 (stages.extract.requireEligible=false로 무시 가능): "
                             + " / ".join(eligibility.get("reasons", [])), outputs)
+    extracted = load_json(case_path).get("crimeType")
+    outputs["crimeType"] = extracted
+    requested = config.get("crimeType")
+    if requested and extracted != requested:
+        # 요청 값으로 덮어쓰지 않는다 — 관리자가 유형을 잘못 골랐으면 양형기준 · 판례 · 사전판단이 모두 틀린 채로 적재된다.
+        # 어느 쪽이 맞는지는 사람이 정하고, 맞는 유형으로 다시 등록한다 (BE-138)
+        raise PipelineError(f"범죄 유형이 다릅니다: 등록 요청은 {requested}, 판결문에서 읽은 유형은 {extracted}입니다. "
+                            "판결문을 확인해 맞는 유형으로 다시 등록해 주세요", outputs)
     return outputs
 
 

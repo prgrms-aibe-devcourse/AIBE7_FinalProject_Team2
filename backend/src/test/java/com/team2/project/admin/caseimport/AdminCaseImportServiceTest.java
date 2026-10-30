@@ -263,6 +263,8 @@ class AdminCaseImportServiceTest {
 		ArgumentCaptor<PipelineJobRequest> sent = ArgumentCaptor.forClass(PipelineJobRequest.class);
 		verify(pipelineClient).createJob(sent.capture());
 		assertThat(sent.getValue().finalSourceIndex()).isEqualTo(1);
+		// 관리자가 고른 범죄 유형도 넘긴다 — 파이프라인이 판결문에서 읽은 유형과 비교해 다르면 멈춘다 (BE-138)
+		assertThat(sent.getValue().crimeType()).isEqualTo("MURDER");
 	}
 
 	// ---------------------------------------------------------------- A-15

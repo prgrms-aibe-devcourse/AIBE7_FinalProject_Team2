@@ -2008,6 +2008,38 @@ class PipelineTest(unittest.TestCase):
         sources = fake_module.run.call_args[0][0]
         self.assertEqual([p.name for p in sources], ["a.txt", "b.txt"])
 
+    def test_extract_stops_when_crime_type_differs_from_request(self):
+        """BE-138: 등록 요청의 범죄 유형(crimeType)과 판결문에서 읽은 유형이 다르면 비싼 단계 전에 멈춘다. 요청 값으로 덮어쓰지
+        않는다. 같거나 요청에 유형이 없으면(로컬 실행) 그대로 진행하고, 읽은 유형을 출력에 남긴다."""
+        write_json(self.dir / "r.json", report_for(self.case))
+        fake_module = mock.MagicMock()
+        fake_module.run.return_value = (self.raw_config["inputs"]["case"], self.raw_config["inputs"]["court"],
+                                        str(self.dir / "r.json"), self.raw_config["inputs"]["source"])
+        fake_module.ExtractError = RuntimeError
+        extracted = self.case["crimeType"]
+        other = next(t for t in pipeline.CRIME_TYPES if t != extracted)
+        with mock.patch.dict(sys.modules, {"extract_case": fake_module}):
+            with self.assertRaises(pipeline.PipelineError) as ctx:
+                pipeline.stage_extract(self.config({"crimeType": other}, extract={"enabled": True}), {"stages": {}},
+                                       self.logs.append)
+            self.assertIn(f"등록 요청은 {other}, 판결문에서 읽은 유형은 {extracted}", str(ctx.exception))
+            self.assertEqual(ctx.exception.args[1]["crimeType"], extracted)  # 멈춰도 읽은 유형은 출력에 남는다
+            for config in (self.config({"crimeType": extracted}, extract={"enabled": True}),
+                           self.config(extract={"enabled": True})):
+                self.assertEqual(pipeline.stage_extract(config, {"stages": {}}, self.logs.append)["crimeType"], extracted)
+        with self.assertRaises(pipeline.PipelineError) as ctx:
+            self.config({"crimeType": "ARSON"})
+        self.assertIn("crimeType", str(ctx.exception))
+
+    def test_crime_types_match_extractor_and_service(self):
+        """범죄 유형 목록은 파이프라인(common) · 추출기 스키마 · 서비스가 따로 갖는다 — 늘릴 때 한 곳만 고치면 이 테스트가 깨진다."""
+        sys.path.insert(0, str(pipeline.EXTRACTOR_DIR))
+        sys.path.insert(0, str(TOOL_DIR / "service"))
+        import jobs  # noqa: E402
+        import schema  # noqa: E402
+        self.assertEqual(pipeline.CRIME_TYPES, schema.CRIME_TYPES)
+        self.assertEqual(pipeline.CRIME_TYPES, jobs.CRIME_TYPES)
+
 
 if __name__ == "__main__":
     unittest.main()

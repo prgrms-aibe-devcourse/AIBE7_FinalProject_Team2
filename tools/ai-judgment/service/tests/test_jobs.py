@@ -74,6 +74,19 @@ class JobStoreTest(unittest.TestCase):
         # 원문은 작업 폴더 안에만 둔다
         self.assertTrue(first.is_relative_to(self.jobs_dir / job_id))
 
+    def test_create_passes_requested_crime_type(self):
+        """BE-138: 관리자가 고른 범죄 유형을 설정에 넣어 extract 결과와 비교하게 한다. 모르는 유형은 400(아무것도 쓰지 않음)."""
+        job_id = self.store.create(self._request(crimeType="FRAUD"))
+        config = json.loads((self.jobs_dir / job_id / "config.json").read_text(encoding="utf-8"))
+        self.assertEqual(config["crimeType"], "FRAUD")
+        no_type = self.store.create(self._request())
+        self.assertNotIn("crimeType", json.loads((self.jobs_dir / no_type / "config.json").read_text(encoding="utf-8")))
+        before = set(self.jobs_dir.iterdir())
+        for bad in ("ARSON", "murder", 1):
+            with self.assertRaises(JobError):
+                self.store.create(self._request(crimeType=bad))
+        self.assertEqual(set(self.jobs_dir.iterdir()), before)
+
     def test_create_disables_load_rag_contamination_by_default(self):
         job_id = self.store.create(self._request())
 
