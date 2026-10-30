@@ -548,6 +548,19 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
   rest.type = 'button';
   rest.hidden = true;
   rest.addEventListener('click', () => setPutDown(!putDown));
+  // 넓은 화면에서는 아래 버튼 대신 엽서 왼쪽 위의 ✕로 내려놓는다(CSS가 폭에 따라 하나만 보인다). 엽서 바깥(어두운 배경)을 눌러도 내려놓는다
+  const close = element('button', 'postcard-close', '✕');
+  close.type = 'button';
+  close.setAttribute('aria-label', '엽서 내려놓기');
+  close.addEventListener('click', () => setPutDown(true));
+  stage.addEventListener('click', (event) => { if (paperMode && wasInput && !putDown && event.target === stage) setPutDown(true); });
+  // 내려놓은 동안 첫 클릭(다음 버튼 포함)은 엽서를 다시 펼치기만 하고 동작은 다음 클릭부터 한다
+  wrap.addEventListener('click', (event) => {
+    if (!paperMode || !wasInput || !putDown || rest.contains(event.target)) return;
+    event.stopPropagation();
+    event.preventDefault();
+    setPutDown(false);
+  }, true);
   wrap.append(acts, stage, controls, live, rest);
   // 신문 지면 무대: 막 칩은 지면의 탭 줄로 옮긴다
   // 신문 지면 무대에는 막 칩이 없다(지면 탭 줄은 신문의 다른 면 목차, newspaperFront.js). 막 칩은 상자 무대(2 ~ 6막)에서만 보인다
@@ -589,8 +602,8 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
     controls.inert = open; // 조작부(◀ 이전 등)로 Tab 포커스가 빠져나가지 않게(aria-modal만으로는 가둬지지 않는다)
     const siteHeader = document.getElementById('route-header'); // 무대 밖 공통 헤더(FE-56)도 같이 막는다. 화면이 바뀌면 라우터가 푼다
     if (siteHeader) siteHeader.inert = open;
-    if (open) { board.setAttribute('role', 'dialog'); board.setAttribute('aria-modal', 'true'); board.setAttribute('aria-label', '첫인상 엽서'); }
-    else { board.removeAttribute('role'); board.removeAttribute('aria-modal'); board.removeAttribute('aria-label'); }
+    if (open) { board.setAttribute('role', 'dialog'); board.setAttribute('aria-label', '첫인상 엽서'); } // aria-modal은 두지 않는다: 낭독기가 모달 밖 "내려놓기" 버튼에 닿지 못한다
+    else { board.removeAttribute('role'); board.removeAttribute('aria-label'); }
     rest.hidden = !input;
     rest.textContent = putDown ? '엽서 다시 펼치기 ▴' : '엽서 내려놓고 사건 보기 ▾';
     rest.setAttribute('aria-expanded', String(!putDown));
@@ -706,6 +719,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
       if (!input || !wasInput) putDown = false; // 엽서가 새로 뜨면 펼친 채로 시작한다
       wasInput = input;
       syncModal(input);
+      if (input) board.append(close);
     }
     board.classList.toggle('wide', input);
     board.classList.toggle('fill', step.card === 'evidence'); // 증거판은 보드를 꽉 채운다(가운데 정렬 없음)

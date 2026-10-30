@@ -226,12 +226,14 @@ test('6막 1면 사진(FE-141): 5막 마지막 법정처럼 대본 배역의 묶
   const swapped = courtPhotoCast({ prosecutor: 'nambul', defense: 'naero' });
   assert.deepEqual(swapped.map(({ who, look, side }) => [who, look, side]), [['nambul', 'role:judge', 'left'], ['naero', 'role:actor', 'right']]);
   assert.deepEqual(swapped.map(({ flip }) => flip), [true, true], '남불이 왼쪽 · 내로가 오른쪽이면 가운데를 보게 뒤집는다');
-  // 5막 마지막 장면의 자리와 같다
-  const court = flatten(script.acts, ['5']).at(-1);
-  const cast = { prosecutor: 'nambul', defense: 'naero' };
-  const fiveSide = { nambul: seatFor('nambul', 'role:judge', cast), naero: seatFor('naero', 'role:actor', cast) };
-  swapped.forEach(({ who, side }) => assert.equal(side, fiveSide[who], `${who}: 5막과 같은 쪽`));
-  assert.ok(court, '5막이 있다');
-  const base = courtPhotoCast(undefined);
-  assert.deepEqual(base.map(({ who, flip }) => [who, flip]), [['naero', false], ['nambul', false]], '기본 배역(사건 1)은 화면이 그대로');
+  // 실제 5막 대본과 같다: 마지막 판사 장면의 말하는 사람이 사진의 판사(왼쪽)이고, 피고인 역은 그 상대다
+  const court = flatten(script.acts, ['5']).filter((step) => step.role === '판사').at(-1);
+  assert.ok(court, '5막에 판사 장면이 있다');
+  const base = courtPhotoCast(script.cast);
+  assert.equal(base[0].who, court.say, '사진의 판사 = 5막 마지막 판사 장면의 화자');
+  assert.equal(base[0].side, 'left');
+  assert.notEqual(base[1].who, court.say, '피고인 역은 상대 캐릭터');
+  // 배역을 바꾸면 판사와 피고인 역이 서로 바뀐다(자리는 그대로)
+  assert.deepEqual(swapped.map(({ who }) => who), [base[1].who, base[0].who]);
+  assert.deepEqual(courtPhotoCast(undefined).map(({ who, flip }) => [who, flip]), [['naero', false], ['nambul', false]], '기본 배역(사건 1)은 화면이 그대로');
 });
