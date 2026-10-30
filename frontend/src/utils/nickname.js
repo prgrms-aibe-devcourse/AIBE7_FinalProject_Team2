@@ -44,7 +44,9 @@ export const NICKNAME_CLAMPED = `한글이 들어가면 ${NICKNAME_MAX_HANGUL}�
 
 /**
  * 입력칸 잠금: 한글이 섞이면 한글 한도를 넘게 쳐지지 않는다. 한글 조합 중에는 글자가 깨지지 않게 조합이 끝난 뒤 자른다.
- * onClamp: 잘랐을 때 부른다(화면이 NICKNAME_CLAMPED를 보여 준다). 다른 input 처리(칸 안내 지우기)가 끝난 뒤에 부르므로 안내가 바로 지워지지 않는다
+ * onClamp: 잘랐을 때 부른다(화면이 NICKNAME_CLAMPED를 보여 준다). 다른 input 처리(칸 안내 지우기)가 끝난 뒤에 부르므로 안내가 바로 지워지지 않는다.
+ * 조합 끝의 이벤트 순서는 브라우저마다 다르다 — Firefox는 compositionend 뒤에 input을 한 번 더 보낸다(PR #354 리뷰). 그 input이 칸 안내를 지워도
+ * 같은 작업(task) 안이면 onClamp를 한 번 더 불러 안내를 되살린다. 다음 작업에서는 잊는다(사용자가 다음 글자를 칠 때는 다시 부르지 않는다)
  */
 export function lockNicknameLength(input, { onClamp } = {}) {
   const clamp = () => {
@@ -53,10 +55,18 @@ export function lockNicknameLength(input, { onClamp } = {}) {
     input.value = trimmed.slice(0, NICKNAME_MAX_HANGUL);
     return true;
   };
-  input.addEventListener('input', (event) => { if (!event.isComposing && clamp()) onClamp?.(); });
+  let justClamped = false; // 조합 끝에서 잘랐고, 같은 작업 안에서 뒤따를 input을 기다리는 중
+  input.addEventListener('input', (event) => {
+    if (event.isComposing) return;
+    if (clamp()) onClamp?.();
+    else if (justClamped) { justClamped = false; onClamp?.(); } // Firefox: compositionend 뒤 input이 지운 안내를 되살린다
+  });
   input.addEventListener('compositionend', () => {
     const cut = clamp();
     input.dispatchEvent(new Event('input')); // 다른 처리(칸 안내 지우기)가 새 값을 보게 한다
-    if (cut) onClamp?.();
+    if (!cut) return;
+    onClamp?.();
+    justClamped = true;
+    setTimeout(() => { justClamped = false; }, 0);
   });
 }

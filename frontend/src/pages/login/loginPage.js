@@ -9,7 +9,7 @@ import { devJumpBar } from './loginDevJump.js';
 import { loginDesk } from './loginDesk.js';
 import { kakaoButton, setBusy } from './loginParts.js';
 import { offerAnonymousImport } from './anonymousImport.js';
-import { isCredentialFailure } from './loginRule.js';
+import { credentialInputsToMark, isCredentialFailure } from './loginRule.js';
 
 // S-12 로그인 (FE-52, IA 4장 /login). 책상 위 펠트 패드(FE-69)에 카카오 로그인 버튼 + 아이디 · 비밀번호 폼.
 // 목 모드에서는 개발용 목업 로그인(mocks/authMockApi.js)이, 실제 모드에서는 카카오 로그인(realApi.js login, FE-74)이 받는다.
@@ -124,6 +124,8 @@ export function renderLoginPage(container, { api, navigate }) {
       const busy = [kakao, submit];
       setBusy(busy, true, request.method === 'kakao' ? kakao : submit);
       error.hidden = true;
+      // 카카오로 넘어가면 지난 아이디 · 비밀번호 실패 표시를 지운다 — 돌아와도(LOGIN_CANCELLED) 문구 없이 칸만 빨갛게 남지 않게 (PR #354 리뷰)
+      if (request.method === 'kakao') [idInput, passwordInput].forEach((input) => input.removeAttribute('aria-invalid'));
       try {
         // 아이디에 @가 있으면 관리자 로그인만, 없으면 회원 로그인만 시도한다(FE-117, adminLoginRule.js loginTarget). 둘 다 부르지 않는다.
         // 관리자면 마이페이지 자리가 관리자 페이지가 된다 (FE-53)
@@ -151,8 +153,10 @@ export function renderLoginPage(container, { api, navigate }) {
       } catch (failure) {
         if (!container.contains(root)) return;
         if (failure?.code !== 'LOGIN_CANCELLED') showError(failureMessage(failure, request.method), request.method === 'kakao' ? kakao : form);
-        // 아이디 · 비밀번호가 틀렸으면 두 칸을 잘못된 입력으로 표시한다(FE-133). 다시 입력하면 그 칸은 풀린다(field)
-        if (isCredentialFailure(failure, request.method)) [idInput, passwordInput].forEach((input) => input.setAttribute('aria-invalid', 'true'));
+        // 아이디 · 비밀번호가 틀렸으면 두 칸을 잘못된 입력으로 표시한다(FE-133). 기다리는 사이 고친 칸은 빼고(PR #354 리뷰), 다시 입력하면 그 칸은 풀린다(field)
+        const inputs = { id: idInput, password: passwordInput };
+        credentialInputsToMark(failure, request, { id: idInput.value, password: passwordInput.value })
+          .forEach((name) => inputs[name].setAttribute('aria-invalid', 'true'));
         setBusy(busy, false);
         pending = false;
       }

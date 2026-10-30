@@ -60,7 +60,8 @@ jobs:
           VITE_API_MODE: real
 
       # 배포 빌드에 목 구현이 들어가지 않았는지 (FE-135). 목 · 실제 분기를 빌드 시점에 접어 빼므로,
-      # 누군가 목을 고르는 조건을 실행 시점 값(API_MODE)만으로 바꾸면 목 파일이 다시 생긴다 → 여기서 막는다
+      # 누군가 목을 고르는 조건을 실행 시점 값(API_MODE)만으로 바꾸면 목 파일이 다시 생긴다 → 여기서 막는다.
+      # 청크에 섞인 목 모듈(이름에 mock이 없는 청크)은 위 Build 단계에서 vite.config.js의 no-mocks-in-real-build가 막는다 — 이 단계는 파일 이름으로 한 번 더 본다
       - name: Check no mock files in build
         run: |
           if ls dist/assets | grep -i mock; then

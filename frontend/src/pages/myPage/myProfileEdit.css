@@ -15,6 +15,8 @@
 .edit-error { margin: 0; color: var(--color-danger); font-size: var(--text-small); }
 .edit-error:empty { display: none; }
 .edit-notice:empty { display: none; } /* 닉네임 잘림 안내(BE-134), 없을 때는 자리를 차지하지 않는다 */
+/* 스크린리더에만 읽히는 알림 영역(닉네임 잘림, PR #354 리뷰) */
+.edit-live { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .edit-facts { display: grid; gap: 8px; margin: 0; }
 .edit-fact { display: grid; grid-template-columns: 7em minmax(0, 1fr); gap: 12px; }
 .edit-fact dt { color: var(--color-muted); }

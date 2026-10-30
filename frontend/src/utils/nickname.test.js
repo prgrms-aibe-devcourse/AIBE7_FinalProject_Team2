@@ -44,7 +44,7 @@ test("'방청객'으로 시작하는 닉네임은 서버처럼 거절한다 — 
   ['판사', '나는방청객'].forEach((value) => assert.equal(nicknameError(value), '', value)); // 앞에 오지 않으면 괜찮다
 });
 
-test('입력 잠금이 뒤를 자르면 onClamp로 알린다 — 다른 input 처리가 끝난 뒤라 칸 안내가 바로 지워지지 않는다 (BE-134)', () => {
+test('입력 잠금이 뒤를 자르면 onClamp로 알린다 — 다른 input 처리가 끝난 뒤라 칸 안내가 바로 지워지지 않는다 (BE-134)', async () => {
   const handlers = {};
   const order = [];
   const input = {
@@ -65,6 +65,7 @@ test('입력 잠금이 뒤를 자르면 onClamp로 알린다 — 다른 input �
   assert.equal(input.value, '가나다라마바사아');
   assert.deepEqual(order.slice(-2), ['input 처리(칸 안내 지움)', 'onClamp']);
 
+  await new Promise((resolve) => setTimeout(resolve, 0)); // 사용자의 다음 입력은 다음 작업이다
   input.value = 'abcdefghijkl'; // 영문 · 숫자만이면 자르지 않는다
   handlers.input({ isComposing: false });
   assert.equal(clamped, 2);
@@ -75,4 +76,25 @@ test('거절 사유 이름은 서버(Nickname.validate)와 같은 순서 · 이�
   const cases = [[null, 'NotBlank'], ['  ', 'NotBlank'], ['닉네임!', 'Pattern'], ['방청객 7', 'Pattern'], ['가', 'Size'],
     ['a'.repeat(13), 'Size'], ['가'.repeat(9), 'SizeWithHangul'], ['방청객', 'Reserved'], ['가나다abcde', ''], ['a'.repeat(12), '']];
   cases.forEach(([value, reason]) => assert.equal(nicknameReason(value), reason, String(value)));
+});
+
+test('조합 끝 뒤에 input이 한 번 더 와도(Firefox) 잘림 안내를 되살리고, 다음 작업의 입력에는 다시 부르지 않는다 (PR #354 리뷰)', async () => {
+  const handlers = {};
+  const input = { value: '', addEventListener: (type, fn) => { handlers[type] = fn; }, dispatchEvent: (event) => handlers.input(event) };
+  let clamped = 0;
+  lockNicknameLength(input, { onClamp: () => { clamped += 1; } });
+  input.value = '가나다라마바사아자';
+  handlers.compositionend(); // 자르고 알림 1번(그 안의 input은 이미 잘린 값이라 부르지 않는다)
+  assert.equal(clamped, 1);
+  handlers.input({ isComposing: false }); // Firefox가 뒤따라 보내는 input — 화면이 안내를 지웠으니 되살린다
+  assert.equal(clamped, 2);
+  handlers.input({ isComposing: false }); // 같은 작업 안이라도 한 번만
+  assert.equal(clamped, 2);
+  handlers.compositionend();
+  assert.equal(clamped, 2); // 이미 8자라 자르지 않음
+  input.value = '가나다라마바사아자';
+  handlers.compositionend();
+  await new Promise((resolve) => setTimeout(resolve, 0)); // 다음 작업
+  handlers.input({ isComposing: false });
+  assert.equal(clamped, 3); // 다음 작업의 입력에는 다시 부르지 않는다
 });

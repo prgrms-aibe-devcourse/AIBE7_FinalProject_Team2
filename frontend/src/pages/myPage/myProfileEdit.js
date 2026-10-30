@@ -77,10 +77,19 @@ export function renderProfileEdit({ api, navigate, go, data = {}, card, fan }) {
   input.value = savedNickname;
   if (unnamed) input.placeholder = '아직 정하지 않았어요';
   input.maxLength = NICKNAME_MAX;
-  // 한글이 섞여 뒤를 자르면 칸 아래 안내 줄에 알린다(BE-134, 오류 줄이 아니다). 다시 입력하면 지운다 —
-  // 지우는 처리를 잠금보다 먼저 달아야 잠금이 부르는 알림이 바로 지워지지 않는다. clampNotice는 아래에서 만들고, 입력이 있을 때만 쓴다
-  input.addEventListener('input', () => { clampNotice.textContent = ''; });
-  lockNicknameLength(input, { onClamp: () => { clampNotice.textContent = NICKNAME_CLAMPED; } });
+  // 다시 입력하면 지난 오류 · 잘림 안내를 지운다(PR #354 리뷰: 잘려서 맞는 길이가 돼도 aria-invalid가 남았다).
+  // 한글이 섞여 뒤를 자르면 칸 아래 안내 줄 · 스크린리더 알림 영역에 알린다(BE-134, 오류 줄이 아니다).
+  // 지우는 처리를 잠금보다 먼저 달아야 잠금이 부르는 알림이 바로 지워지지 않는다. 아래 요소들은 뒤에서 만들고, 입력이 있을 때만 쓴다
+  input.addEventListener('input', () => {
+    clampNotice.textContent = '';
+    clampLive.textContent = '';
+    error.textContent = '';
+    input.removeAttribute('aria-invalid');
+  });
+  lockNicknameLength(input, { onClamp: () => {
+    clampNotice.textContent = NICKNAME_CLAMPED;
+    clampLive.textContent = NICKNAME_CLAMPED;
+  } });
   input.autocomplete = 'nickname';
   input.spellcheck = false;
   input.disabled = !user;
@@ -91,11 +100,12 @@ export function renderProfileEdit({ api, navigate, go, data = {}, card, fan }) {
   hint.id = 'edit-nickname-hint';
   const clampNotice = element('p', 'edit-hint edit-notice');
   clampNotice.id = 'edit-nickname-clamped';
-  clampNotice.setAttribute('aria-live', 'polite');
+  const clampLive = element('p', 'edit-live'); // 늘 있는 알림 영역이라 내용이 바뀌면 바로 읽힌다(:empty로 숨는 clampNotice는 안 읽힐 수 있다)
+  clampLive.setAttribute('aria-live', 'polite');
   const error = element('p', 'edit-error');
   error.id = 'edit-nickname-error';
   const nickname = element('div', 'edit-field');
-  nickname.append(label, input, hint, clampNotice, error);
+  nickname.append(label, input, hint, clampNotice, clampLive, error);
 
   // 한 줄 소개: 프로필카드와 커뮤니티에 함께 보일 문구
   const bio = element('input', 'edit-input');
