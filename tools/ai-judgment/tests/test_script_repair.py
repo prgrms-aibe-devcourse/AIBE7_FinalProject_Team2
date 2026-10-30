@@ -109,8 +109,8 @@ class LineRepairTest(unittest.TestCase):
         self.assertEqual(len(caller.calls), 1)
         self.assertIn("기사를 짚는 대사 5줄", caller.calls[0]["user"])  # 단위 요청(intro_request)
         self.assertEqual(fixed["repairs"], [{"unit": "U1", "path": "", "codes": ["LINE_MISSING"], "action": "unit",
-                                             "attempts": 1, "ok": True, "errorsBefore": 1, "errorsAfter": 0,
-                                             "affects": []}])
+                                             "attempts": 1, "ok": True, "replaced": True, "errorsBefore": 1,
+                                             "errorsAfter": 0, "affects": []}])
         self.assertEqual(errors(fixed), [])
 
     def test_design_change_marks_later_units_stale(self):

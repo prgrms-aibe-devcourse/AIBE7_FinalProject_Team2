@@ -1,0 +1,43 @@
+{
+  "description": "대본 블록 계약 (BE-126). 파이프라인(script_assembler.py)과 백엔드(자바)가 같은 규칙을 쓰는지 양쪽 테스트가 이 파일로 확인한다. 정본은 파이썬이다 — 규칙을 바꾸면 파이썬을 고치고 이 파일을 맞춘 뒤 백엔드를 고친다.",
+  "basis": {
+    "U0": ["mood", "issue", "victim", "thirdParty", "sensitiveFlags"],
+    "U1": ["mood", "sensitiveFlags", "paper"],
+    "U2": ["cast", "mood", "issue", "thirdParty", "sensitiveFlags", "U0"],
+    "U3": ["cast", "victim", "thirdParty", "sensitiveFlags"],
+    "U4": ["cast", "mood", "issue", "victim", "sensitiveFlags", "U0", "U2"]
+  },
+  "affects": {
+    "U0": ["U2", "U4"],
+    "U1": [],
+    "U2": ["U4"],
+    "U3": [],
+    "U4": []
+  },
+  "normalizeAnswer": [
+    {"answer": "예", "expected": "…네."},
+    {"answer": "네, 맞습니다.", "expected": "…네."},
+    {"answer": "…예", "expected": "…네."},
+    {"answer": "...네, 인정합니다.", "expected": "…네."},
+    {"answer": "  네 ", "expected": "…네."},
+    {"answer": "아니요", "expected": "…아닙니다."},
+    {"answer": "아니요, 아닙니다.", "expected": "…아닙니다."},
+    {"answer": "아닙니다", "expected": "…아닙니다."},
+    {"answer": "…아니요", "expected": "…아닙니다."},
+    {"answer": "잘 모르겠습니다.", "expected": "…잘 모르겠습니다."},
+    {"answer": "기억나지 않습니다", "expected": "…기억나지 않습니다"},
+    {"answer": "", "expected": "…"},
+    {"answer": null, "expected": "…"}
+  ],
+  "admits": [
+    {"answer": "예", "expected": true},
+    {"answer": "네, 인정합니다.", "expected": true},
+    {"answer": "…예", "expected": true},
+    {"answer": "...네", "expected": true},
+    {"answer": "아니요", "expected": false},
+    {"answer": "아닙니다", "expected": false},
+    {"answer": "잘 모르겠습니다.", "expected": false},
+    {"answer": "", "expected": false},
+    {"answer": null, "expected": false}
+  ]
+}
