@@ -57,7 +57,6 @@
   .stage-wrap.paper-mode .postcard-mini:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
   .stage-wrap.paper-mode .postcard-mini[hidden] { display: none; }
 }
-}
 .stage-wrap.paper-mode .postcard-rest:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
 @media (hover: hover) and (pointer: fine) { .stage-wrap.paper-mode .postcard-rest:hover { border-color: var(--color-heading); } }
 .stage-wrap.paper-mode .board > .scroll-area { border-radius: 3px; max-height: calc(100dvh - 208px); background: color-mix(in srgb, var(--color-desk-kraft) 10%, var(--color-card)); }
