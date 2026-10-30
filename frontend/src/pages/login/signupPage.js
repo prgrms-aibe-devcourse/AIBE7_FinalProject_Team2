@@ -88,6 +88,7 @@ export function renderSignupPage(container, { api, navigate }) {
     // 한글이 섞여 뒤를 자르면 칸 아래에 알린다(BE-134). 오류가 아니라 aria-invalid는 붙이지 않는다
     lockNicknameLength(fields.nickname.input, { onClamp: () => {
       fields.nickname.note.textContent = NICKNAME_CLAMPED;
+      fields.nickname.note.classList.add('is-notice'); // 오류 줄 자리지만 안내 색으로(오류 표시는 fieldError가 지운다)
       fields.nickname.note.hidden = false;
     } });
     const submit = element('button', 'primary-button login-submit', '가입하기');
@@ -147,6 +148,7 @@ export function renderSignupPage(container, { api, navigate }) {
     // message가 없으면 그 칸 안내를 지운다
     function fieldError(name, message) {
       const { input, note } = fields[name];
+      note.classList.remove('is-notice'); // 닉네임 잘림 안내(BE-134)였으면 오류 모양으로 되돌린다
       note.textContent = message ?? '';
       note.hidden = !message;
       if (message) input.setAttribute('aria-invalid', 'true');

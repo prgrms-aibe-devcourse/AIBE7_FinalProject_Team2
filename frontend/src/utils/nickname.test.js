@@ -1,7 +1,7 @@
 // npm test : 닉네임 검사 (내 정보 수정, FE-77)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { NICKNAME_CLAMPED, isUnnamed, lockNicknameLength, nicknameError } from './nickname.js';
+import { NICKNAME_CLAMPED, isUnnamed, lockNicknameLength, nicknameError, nicknameReason } from './nickname.js';
 
 test('한글이 있으면 8자, 영문 · 숫자만이면 12자까지는 통과, 앞뒤 공백은 무시', () => {
   ['판사', 'judge7', '익명의판사12', '  해송  ', '가'.repeat(8), 'a'.repeat(12)].forEach((value) => assert.equal(nicknameError(value), '', value));
@@ -69,4 +69,10 @@ test('입력 잠금이 뒤를 자르면 onClamp로 알린다 — 다른 input �
   handlers.input({ isComposing: false });
   assert.equal(clamped, 2);
   assert.match(NICKNAME_CLAMPED, /한글이 들어가면 8자까지/);
+});
+
+test('거절 사유 이름은 서버(Nickname.validate)와 같은 순서 · 이름이다 (BE-134)', () => {
+  const cases = [[null, 'NotBlank'], ['  ', 'NotBlank'], ['닉네임!', 'Pattern'], ['방청객 7', 'Pattern'], ['가', 'Size'],
+    ['a'.repeat(13), 'Size'], ['가'.repeat(9), 'SizeWithHangul'], ['방청객', 'Reserved'], ['가나다abcde', ''], ['a'.repeat(12), '']];
+  cases.forEach(([value, reason]) => assert.equal(nicknameReason(value), reason, String(value)));
 });

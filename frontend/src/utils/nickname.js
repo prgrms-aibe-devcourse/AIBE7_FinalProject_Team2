@@ -13,6 +13,20 @@ export const NICKNAME_HINT = `한글 · 영문 · 숫자로 ${NICKNAME_MIN}자 �
  */
 export const isUnnamed = (nickname) => /^(방청객 \d+|카카오 회원)$/.test(String(nickname ?? '').trim());
 
+/**
+ * 서버가 닉네임을 거절할 때의 사유 이름(BE-134, member/domain/Nickname.java와 같은 순서 · 이름). 괜찮으면 빈 문자열.
+ * 화면은 사유로 분기하지 않는다 — 목(authMockApi)이 서버와 같은 오류 모양을 내는 데 쓴다. 공백은 앞뒤도 그대로 본다(서버는 자르지 않는다)
+ */
+export function nicknameReason(value) {
+  const nickname = value == null ? '' : String(value);
+  if (!nickname.trim()) return 'NotBlank';
+  if (!/^[가-힣A-Za-z0-9]+$/.test(nickname)) return 'Pattern';
+  if (nickname.length < NICKNAME_MIN || nickname.length > NICKNAME_MAX) return 'Size';
+  if (/[가-힣]/.test(nickname) && nickname.length > NICKNAME_MAX_HANGUL) return 'SizeWithHangul';
+  if (nickname.startsWith(RESERVED_PREFIX)) return 'Reserved';
+  return '';
+}
+
 /** 문제가 있으면 고치는 방법을 담은 안내 문구, 괜찮으면 빈 문자열 */
 export function nicknameError(value) {
   const nickname = String(value).trim();

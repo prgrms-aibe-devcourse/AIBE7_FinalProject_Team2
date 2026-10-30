@@ -47,12 +47,14 @@ test("닉네임이 '중복'으로 시작하면 가입 · 닉네임 설정은 이
   await assert.rejects(putNickname('중복판사'), { code: 'DUPLICATE_NICKNAME' });
 });
 
-test('닉네임 설정은 형식이 맞으면 { nickname }을 돌려주고 틀리면 입력값 오류다', async () => {
+test('닉네임 설정은 형식이 맞으면 { nickname }을 돌려주고 틀리면 서버와 같은 사유 이름의 입력값 오류다 (BE-134)', async () => {
   assert.deepEqual(await putNickname('내로판사'), { nickname: '내로판사' });
-  for (const value of ['', '가', '닉 네임', '가'.repeat(9), ' 판사 ']) {
+  const cases = [['', 'NotBlank'], ['가', 'Size'], ['abcdefghijklm', 'Size'], ['닉 네임', 'Pattern'], [' 판사 ', 'Pattern'],
+    ['가'.repeat(9), 'SizeWithHangul'], ['가나다abcdef', 'SizeWithHangul'], ['방청객12', 'Reserved']];
+  for (const [value, reason] of cases) {
     await assert.rejects(putNickname(value), (failure) => {
       assert.equal(failure.code, 'VALIDATION_ERROR');
-      assert.deepEqual(failure.details, [{ field: 'nickname', reason: 'VALIDATION_ERROR' }]);
+      assert.deepEqual(failure.details, [{ field: 'nickname', reason }]);
       return true;
     }, JSON.stringify(value));
   }

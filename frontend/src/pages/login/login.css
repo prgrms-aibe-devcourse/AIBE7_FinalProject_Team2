@@ -75,6 +75,8 @@
 /* 회원가입(FE-104, signupPage.js): 로그인과 같은 패드 · 입력칸. 칸 아래 도움말은 흐린 글자, 틀리면 그 아래 오류 글자 */
 .signup-hint { margin: 0; color: var(--felt-muted); font-size: var(--text-small); line-height: 1.5; word-break: keep-all; }
 .signup-field-error { font-size: var(--text-small); }
+/* 닉네임 잘림 안내(BE-134): 오류 줄 자리를 빌리지만 오류가 아니라 안내 문구 색으로 */
+.signup-field-error.is-notice { color: var(--felt-muted); font-weight: 400; }
 .signup-agree { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
 .signup-agree-check { display: flex; align-items: center; gap: 10px; min-height: 44px; }
 .signup-agree-check input { flex: none; width: 20px; height: 20px; margin: 0; accent-color: var(--color-range-fill); cursor: pointer; }

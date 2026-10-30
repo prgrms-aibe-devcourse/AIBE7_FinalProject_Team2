@@ -27,6 +27,7 @@
 - 응답은 실제 네트워크처럼 0.25초 지연시킨다.
 - 실제 체험 진행 상태는 서버가 관리한다. `mockExperienceStore.js`와 위 두 함수는 목 전용이다.
 - 화면은 `api` 객체로 주입받아 쓰므로, 실제 API로 바꿀 때는 화면 코드가 아니라 이 객체를 교체한다. (`preview.html`이 목 API들을 합쳐서 주입한다)
+- **배포 빌드(`VITE_API_MODE=real`)에는 이 폴더의 파일이 들어가지 않는다(FE-135).** 목을 고르는 곳(`api/index.js` · `pages/admin/adminApi.js` · `mockStageButtons.js`)이 그 자리에서 `import.meta.env?.VITE_API_MODE` · `DEV`를 읽어 빌드 때 분기를 접는다. 목을 고르는 코드를 새로 더할 때도 같은 조건을 그 자리에 써야 한다(`API_MODE`만 보면 목이 다시 번들에 들어가고, `frontend-ci.yml`의 "Check no mock files in build"가 실패한다). 실제 코드가 이 폴더를 정적으로 import 해도 같은 검사에 걸린다
 
 ## 확인 방법
 
