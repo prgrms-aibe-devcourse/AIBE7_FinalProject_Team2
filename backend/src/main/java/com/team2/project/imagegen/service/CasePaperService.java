@@ -14,6 +14,7 @@ import com.team2.project.legalcase.domain.RevealStage;
 import com.team2.project.legalcase.repository.CasePaperRepository;
 import com.team2.project.legalcase.repository.FactorRepository;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -109,13 +110,21 @@ public class CasePaperService {
 		} catch (JsonProcessingException e) {
 			throw new BusinessException(ErrorCode.PROMPT_GENERATION_FAILED, "신문 지면 응답을 JSON으로 읽지 못했습니다");
 		}
-		if (paper.headline() == null || paper.headline().isBlank() || tooLong(paper.headline(), 200)
+		return checked(paper).orElseThrow(() -> new BusinessException(ErrorCode.PROMPT_GENERATION_FAILED,
+			"신문 지면 응답이 headline · article 규칙(A-13-8과 동일한 길이 · 빈 문단 규칙)을 지키지 않습니다"));
+	}
+
+	/**
+	 * 지면 규칙(A-13-8과 같은 길이 · 빈 문단 규칙)을 지키면 정리한 값, 아니면 비어 있음. Gemini 응답과 파이프라인이 만든 기사
+	 * (사건 등록 적재, BE-126)에 같은 규칙을 쓴다
+	 */
+	public static Optional<GeneratedPaper> checked(GeneratedPaper paper) {
+		if (paper == null || paper.headline() == null || paper.headline().isBlank() || tooLong(paper.headline(), 200)
 				|| tooLong(paper.deck(), 300) || tooLong(paper.caption(), 200) || paper.article() == null
 				|| paper.article().isEmpty() || paper.article().stream().anyMatch(p -> p == null || p.isBlank())) {
-			throw new BusinessException(ErrorCode.PROMPT_GENERATION_FAILED,
-				"신문 지면 응답이 headline · article 규칙(A-13-8과 동일한 길이 · 빈 문단 규칙)을 지키지 않습니다");
+			return Optional.empty();
 		}
-		return normalize(paper);
+		return Optional.of(normalize(paper));
 	}
 
 	/** A-13-8 수정(PATCH, CasePaperEditRequest)처럼 앞뒤 공백을 지우고, deck · caption이 빈 값이면 null로 맞춘다 */

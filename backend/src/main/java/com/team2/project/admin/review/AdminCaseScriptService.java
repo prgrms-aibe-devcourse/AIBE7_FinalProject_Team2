@@ -15,6 +15,7 @@ import com.team2.project.legalcase.repository.FactorRepository;
 import com.team2.project.legalcase.repository.LegalCaseRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -44,15 +45,16 @@ public class AdminCaseScriptService {
 	}
 
 	/**
-	 * 승인 = 이 대본을 공개한다 (A-13-11). 파이프라인이 어긋난다고 표시한 대본({@code publishable: false})은
-	 * 승인할 수 없다 — 증거 카드와 대사가 1:1로 맞지 않는 상태라 체험이 깨진다(BE-107 PR #277 리뷰 7번).
+	 * 승인 = 이 대본을 공개한다 (A-13-11). 1차는 <b>통승인</b>이다 — 모든 블록을 한 번에 승인한다(BE-126).
+	 * 승인할 수 없는 대본({@link CaseScript#isApprovable()})은 거절한다 — 증거 카드와 대사가 1:1로 맞지 않거나
+	 * (BE-107 PR #277 리뷰 7번), 만들지 못한 단위 · 검수 조건 오류가 있으면 체험이 깨진다.
 	 */
 	@Transactional
 	public CaseScriptResponse approve(Long caseId, AdminPrincipal admin, HttpServletRequest request) {
 		CaseScript script = lockAndFindScript(caseId);
-		if (!script.isPublishable()) {
+		if (!script.isApprovable()) {
 			throw new BusinessException(ErrorCode.INVALID_STATE,
-				"증거 카드와 대사가 어긋난 대본은 승인할 수 없습니다. 대본을 다시 생성해 주세요.");
+				"만들지 못한 대사 · 단위나 검수 오류가 있는 대본은 승인할 수 없습니다. 대본을 다시 생성해 주세요.");
 		}
 		script.approve(admin.adminId(), Instant.now());
 		auditLogger.record(admin, AdminAuditAction.CASE_SCRIPT_APPROVE, AuditTargetType.CASE, caseId, Map.of(),
@@ -61,7 +63,8 @@ public class AdminCaseScriptService {
 	}
 
 	/**
-	 * 반려 (A-13-12). 반려한 대본은 공개되지 않는다(BE-109 서빙 기준).
+	 * 반려 (A-13-12). 1차는 <b>통거절</b>이다 — 모든 블록을 한 번에 반려한다(BE-126). 반려한 대본은 공개되지 않고
+	 * (BE-109 서빙 기준), 블록 단위로 고칠 수 있게 되기(2차) 전까지는 다시 등록해 새로 만든다.
 	 *
 	 * <p>승인한 대본도 반려로 내릴 수 있다 — 판결 후보(A-10)는 교체할 다른 후보가 있어 공개 중인 것을 막지만,
 	 * 대본은 사건마다 하나뿐이라 막으면 잘못 승인한 대본을 되돌릴 방법이 없어진다.
@@ -82,8 +85,8 @@ public class AdminCaseScriptService {
 	 * <p>{@code factorId}는 파이프라인 번호다(= {@code factor.display_order}). 대사는 판단 요소마다 한 줄이고
 	 * 어느 측이 말하는지는 요소의 방향에서 정해지므로(`script_generation.py`), 이 번호 하나로 줄이 정해진다.
 	 *
-	 * <p>고치면 검수 기록이 지워져 <b>다시 검수 대기</b>가 된다. 빈 대사를 사람이 채워 모든 줄이 차면
-	 * {@code publishable}도 다시 계산돼 승인할 수 있게 된다.
+	 * <p>대사는 U3 블록에 있다(BE-126). 고치면 모든 블록의 검수 기록이 지워져 <b>다시 검수 대기</b>가 된다. 빈 대사를
+	 * 사람이 채워 모든 줄이 차면 {@code publishable}도 다시 계산돼 승인할 수 있게 된다.
 	 */
 	@Transactional
 	public CaseScriptResponse editLine(Long caseId, int factorId, String text, AdminPrincipal admin,
@@ -108,14 +111,17 @@ public class AdminCaseScriptService {
 		for (Factor factor : factorRepository.findAllByCaseId(caseId)) {
 			labels.put(factor.getDisplayOrder(), factor.getLabel());
 		}
-		return CaseScriptResponse.of(script, labels, reviewerEmail(script));
+		Map<Long, String> emails = new HashMap<>();
+		return CaseScriptResponse.of(script, labels,
+			adminId -> adminId == null ? null : emails.computeIfAbsent(adminId, this::reviewerEmail));
 	}
 
-	/** 검수자는 A-8과 같이 이메일로 내려준다. 계정이 지워졌으면 비운다(감사 로그가 이메일을 따로 보관한다) */
-	private String reviewerEmail(CaseScript script) {
-		Long adminId = script.getReviewedByAdminId();
-		return adminId == null ? null
-			: accountRepository.findById(adminId).map(account -> account.getEmail()).orElse(null);
+	/**
+	 * 검수자는 A-8과 같이 이메일로 내려준다. 계정이 지워졌으면 비운다(감사 로그가 이메일을 따로 보관한다). 블록마다 검수자가
+	 * 있어 같은 계정을 여러 번 찾지 않게 위에서 모아 둔다
+	 */
+	private String reviewerEmail(Long adminId) {
+		return accountRepository.findById(adminId).map(account -> account.getEmail()).orElse(null);
 	}
 
 	/** 사건이 없으면 CASE_NOT_FOUND, 사건은 있는데 대본이 없으면 SCRIPT_NOT_FOUND (신문 지면 A-13-7과 같은 구분) */

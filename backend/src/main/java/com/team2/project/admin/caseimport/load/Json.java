@@ -99,7 +99,8 @@ final class Json {
 		return map;
 	}
 
-	private static Object toPlain(JsonNode node) {
+	/** 아무 값이나 jsonb에 넣을 자바 값(Map · List · 문자열 · 숫자 · 불리언)으로. null이면 null */
+	static Object toPlain(JsonNode node) {
 		if (node == null || node.isNull()) {
 			return null;
 		}
