@@ -13,7 +13,6 @@ import com.team2.project.judgment.repository.JudgmentFactorRepository;
 import com.team2.project.judgment.repository.JudgmentRepository;
 import com.team2.project.legalcase.domain.CrimeType;
 import com.team2.project.legalcase.repository.CaseSectionRepository;
-import com.team2.project.legalcase.repository.CaseScriptRepository;
 import com.team2.project.legalcase.repository.CaseSourceRepository;
 import com.team2.project.legalcase.repository.FactorRepository;
 import com.team2.project.legalcase.repository.LegalCaseRepository;
@@ -46,10 +45,9 @@ class CaseImportLoaderTitleRaceTest {
 
 		CaseImportLoader loader = new CaseImportLoader(caseRepository, mock(CaseSectionRepository.class),
 			mock(PenaltyRuleRepository.class), mock(FactorRepository.class), mock(CaseSourceRepository.class),
-			mock(CaseScriptRepository.class),
 			mock(JudgmentRepository.class), mock(JudgmentFactorRepository.class), mock(AiGenerationRepository.class),
 			mock(SentencingGuidelineRepository.class), new CaseContentMapper(), new JudgmentMapper(),
-			new CaseCastAssigner(caseRepository));
+			new CaseCastAssigner(caseRepository), mock(CaseScriptLoader.class));
 
 		assertThatThrownBy(() -> loader.load(caseImport(), result()))
 			.isInstanceOf(BusinessException.class)
@@ -66,10 +64,9 @@ class CaseImportLoaderTitleRaceTest {
 
 		CaseImportLoader loader = new CaseImportLoader(caseRepository, mock(CaseSectionRepository.class),
 			mock(PenaltyRuleRepository.class), mock(FactorRepository.class), mock(CaseSourceRepository.class),
-			mock(CaseScriptRepository.class),
 			mock(JudgmentRepository.class), mock(JudgmentFactorRepository.class), mock(AiGenerationRepository.class),
 			mock(SentencingGuidelineRepository.class), new CaseContentMapper(), new JudgmentMapper(),
-			new CaseCastAssigner(caseRepository));
+			new CaseCastAssigner(caseRepository), mock(CaseScriptLoader.class));
 
 		assertThatThrownBy(() -> loader.load(caseImport(), result()))
 			.isInstanceOf(DataIntegrityViolationException.class);

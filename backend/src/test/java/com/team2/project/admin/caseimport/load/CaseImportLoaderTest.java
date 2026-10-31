@@ -63,7 +63,7 @@ class CaseImportLoaderTest extends ApiIntegrationTest {
 			jdbcTemplate.update("""
 				DELETE FROM judgment_factor WHERE judgment_id IN (SELECT id FROM judgment WHERE case_id = ?)""", caseId);
 			for (String table : List.of("judgment", "case_source", "factor", "penalty_rule", "case_section",
-				"case_script")) {
+				"case_script", "case_paper")) {
 				jdbcTemplate.update("DELETE FROM " + table + " WHERE case_id = ?", caseId);
 			}
 			jdbcTemplate.update("DELETE FROM legal_case WHERE id = ?", caseId);
@@ -293,7 +293,7 @@ class CaseImportLoaderTest extends ApiIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("대본(script)이 함께 오면 case_script에 비공개 · 검수 대기로 들어간다 (BE-108)")
+	@DisplayName("대본(script)이 함께 오면 case_script에 비공개 · 검수 대기로 들어간다 — 대사는 U3 블록 하나 (BE-108 · BE-126)")
 	void load_savesScript() {
 		CaseImport caseImport = caseImport();
 
@@ -307,9 +307,91 @@ class CaseImportLoaderTest extends ApiIntegrationTest {
 		assertThat(row.get("stopped")).isEqualTo(false);
 		assertThat(row.get("balance_warning")).isNull();
 		assertThat(row.get("generated_at")).isNotNull();	// createdAt을 읽어 둔다 (적재 시각과 다르다)
-		assertThat(row.get("review_status")).isNull();		// 비어 있으면 검수 대기 (judgment V16과 같은 방식)
-		assertThat(String.valueOf(row.get("evidence"))).contains("계약서").contains("\"factorId\"");
+		assertThat(row.get("issue")).isNull();				// 분류 없이 만든 대본
+		assertThat(row.get("admits")).isNull();
 		assertThat(String.valueOf(row.get("cast_roles"))).contains("나로");
+
+		List<Map<String, Object>> blocks = blocks(caseId);
+		assertThat(blocks).extracting(block -> block.get("unit")).containsExactly("U3");
+		Map<String, Object> evidence = blocks.get(0);
+		assertThat(evidence.get("review_status")).isNull();		// 비어 있으면 검수 대기 (judgment V16과 같은 방식)
+		assertThat(evidence.get("publishable")).isEqualTo(true);
+		assertThat(evidence.get("revision")).isEqualTo(1);
+		assertThat(String.valueOf(evidence.get("content"))).contains("계약서").contains("\"factorId\"");
+		// 이 경로는 생성 근거를 내보내지 않는다 — 아는 값(사건 내용 판 · 배역)만 남긴다
+		assertThat(String.valueOf(evidence.get("basis"))).contains("\"case\": 1").contains("나로");
+	}
+
+	@Test
+	@DisplayName("대본 전체(fullScript)는 블록 · 메타로 들어가고, DB 값(사건 내용 · 기사)의 판을 basis에 채운다 (BE-126)")
+	void load_fullScript_savesBlocksMetaAndPaper() {
+		LegalCase legalCase = loader.load(caseImport(), resultWithScript(node(fullScriptJson("…예", true))));
+
+		Long caseId = legalCase.getId();
+		Map<String, Object> row = jdbcTemplate.queryForMap("SELECT * FROM case_script WHERE case_id = ?", caseId);
+		assertThat(row.get("issue")).isEqualTo("admitted");
+		assertThat(row.get("admits")).isEqualTo(true);			// U0 세 번째 답을 서버가 다시 읽는다
+		assertThat(row.get("publishable")).isEqualTo(true);		// scriptPublishable
+		assertThat(String.valueOf(row.get("pending"))).isEqualTo("[]");
+		// 대본 전체에 걸린 검수 결과만 대본에 둔다 (블록 것은 블록에)
+		assertThat(String.valueOf(row.get("review"))).contains("REVIEW_NOTE").doesNotContain("FORMAL_ENDING");
+
+		Map<String, Map<String, Object>> blocks = new java.util.LinkedHashMap<>();
+		blocks(caseId).forEach(block -> blocks.put(String.valueOf(block.get("unit")), block));
+		assertThat(blocks).containsOnlyKeys("U0", "U1", "U2", "U3", "U4");
+		assertThat(blocks.values()).allSatisfy(block -> assertThat(block.get("review_status")).isNull());
+
+		// U2: 판 · 검수 결과 · 고쳐 쓰기 기록이 블록에 남고, 신문 답은 모델이 쓴 그대로다
+		Map<String, Object> opening = blocks.get("U2");
+		assertThat(opening.get("revision")).isEqualTo(2);
+		assertThat(String.valueOf(opening.get("content"))).contains("...네, 인정합니다.");
+		assertThat(String.valueOf(opening.get("review"))).contains("FORMAL_ENDING");
+		assertThat(String.valueOf(opening.get("repairs"))).contains("고치기 전");
+		assertThat(opening.get("publishable")).isEqualTo(true);		// 경고는 승인을 막지 않는다
+		// 사건 내용(case)은 파이프라인이 null로 보내고 적재가 DB 판으로 채운다. 분류 · 앞 블록 판은 받은 그대로
+		assertThat(String.valueOf(opening.get("basis"))).contains("\"case\": 1").contains("\"U0\": 1")
+			.contains("\"mood\": \"tragic\"");
+
+		// U1: 기사(paper)는 같이 온 기사를 사건 지면으로 저장하고 그 판을 남긴다. 사건 내용은 받지 않는 블록이다
+		assertThat(String.valueOf(blocks.get("U1").get("basis"))).contains("\"paper\": 1").doesNotContain("\"case\"");
+		Map<String, Object> paper = jdbcTemplate.queryForMap("SELECT * FROM case_paper WHERE case_id = ?", caseId);
+		assertThat(paper.get("headline")).isEqualTo("헤드라인");
+		assertThat(paper.get("deck")).isNull();				// 빈 부제는 null (A-13-8과 같은 정리)
+		assertThat(paper.get("revision")).isEqualTo(1);
+
+		// U3: 증거조사 대사 배열 그대로 (만들지 못한 줄 포함)
+		assertThat(String.valueOf(blocks.get("U3").get("content"))).contains("계약서");
+	}
+
+	@Test
+	@DisplayName("대본 전체: 만들지 못한 단위는 블록이 없고 pending에 남는다. 지면 규칙에 맞지 않는 기사는 저장하지 않는다 (BE-126)")
+	void load_fullScript_pendingUnitAndBadPaper() {
+		LegalCase legalCase = loader.load(caseImport(), resultWithScript(node("""
+			{"evidence": [], "model": "google:gemini-2.5-flash", "cast": {"prosecutor": "나로", "defense": "남불"},
+			 "publishable": false, "stopped": false, "pending": ["U1"], "scriptPublishable": false,
+			 "fullScript": {"paper": {"headline": "", "article": []},
+			   "meta": {"cast": {"prosecutor": "나로", "defense": "남불"}, "issue": "denied", "admits": false},
+			   "review": [],
+			   "blocks": {"U0": {"content": {"questions": [{"q": "1", "a": "네"}, {"q": "2", "a": "네"},
+			                                              {"q": "3", "a": "아니요"}]},
+			                    "revision": 1, "basis": {"case": null}, "review": [], "warnings": [], "repairs": []}}}}""")));
+
+		Long caseId = legalCase.getId();
+		Map<String, Object> row = jdbcTemplate.queryForMap("SELECT * FROM case_script WHERE case_id = ?", caseId);
+		assertThat(String.valueOf(row.get("pending"))).contains("U1");
+		assertThat(row.get("admits")).isEqualTo(false);
+		assertThat(row.get("publishable")).isEqualTo(false);
+		assertThat(blocks(caseId)).extracting(block -> block.get("unit")).containsExactly("U0");
+		assertThat(count("case_paper", caseId)).isZero();
+	}
+
+	@Test
+	@DisplayName("신문 답 규칙: 접두만 같은 말(\"예전에는\")은 인정으로 읽지 않는다 (BE-126 계약)")
+	void load_fullScript_admitsUsesWordBoundary() {
+		LegalCase legalCase = loader.load(caseImport(), resultWithScript(node(fullScriptJson("예전에는 그런 적이 없습니다", true))));
+
+		assertThat(jdbcTemplate.queryForObject("SELECT admits FROM case_script WHERE case_id = ?", Boolean.class,
+			legalCase.getId())).isFalse();
 	}
 
 	@Test
@@ -524,6 +606,47 @@ class CaseImportLoaderTest extends ApiIntegrationTest {
 		return new PipelineResult("job", node(caseJson()), node(reportJson()), node(courtDraftJson()),
 			node(aiJudgmentJson()),
 			new PipelineResult.Selection("gemini:test", 1, "consensus", "합의", List.of()), null, script, null);
+	}
+
+	private List<Map<String, Object>> blocks(Long caseId) {
+		return jdbcTemplate.queryForList("""
+			SELECT b.* FROM case_script_block b JOIN case_script s ON s.id = b.script_id WHERE s.case_id = ? ORDER BY b.unit""",
+			caseId);
+	}
+
+	/**
+	 * 대본 전체 산출물(BE-121 · BE-126). 블록 모양은 `script_assembler.build_blocks`와 같다 — basis의 사건 내용 · 기사는 null로 온다.
+	 *
+	 * @param lastAnswer U0 세 번째 답 (admits를 서버가 다시 읽는지 본다)
+	 */
+	private static String fullScriptJson(String lastAnswer, boolean publishable) {
+		return """
+			{"evidence": [{"factorId": 1, "role": "prosecutor", "character": "나로", "text": "계약서에 서명했습니다."}],
+			 "model": "google:gemini-2.5-flash", "cast": {"prosecutor": "나로", "defense": "남불"},
+			 "publishable": %1$s, "stopped": false, "pending": [], "scriptPublishable": %1$s,
+			 "createdAt": "2026-10-31T09:00:00+09:00",
+			 "fullScript": {
+			   "paper": {"desk": "사회부", "headline": "헤드라인", "deck": "  ", "caption": "캡션", "article": ["문단1", "문단2"]},
+			   "meta": {"cast": {"prosecutor": "나로", "defense": "남불"}, "issue": "admitted", "admits": null},
+			   "review": [{"unit": "", "path": "", "code": "REVIEW_NOTE", "severity": "warning", "fix": null},
+			              {"unit": "U2", "path": "/issues_narr/0", "code": "FORMAL_ENDING", "severity": "warning"}],
+			   "blocks": {
+			     "U0": {"content": {"plea": "인정", "questions": [{"q": "1", "a": "네"}, {"q": "2", "a": "네"},
+			                                                     {"q": "3", "a": "%2$s"}]},
+			            "revision": 1, "basis": {"case": null, "mood": "tragic", "issue": "admitted"},
+			            "review": [], "warnings": [], "repairs": []},
+			     "U1": {"content": {"lines": ["해설"]}, "revision": 1, "basis": {"mood": "tragic", "paper": null},
+			            "review": [], "warnings": [], "repairs": []},
+			     "U2": {"content": {"indict": "공소", "questions": [{"q": "인정합니까?", "a": "...네, 인정합니다."}]},
+			            "revision": 2, "basis": {"case": null, "mood": "tragic", "U0": 1},
+			            "review": [{"unit": "U2", "path": "/issues_narr/0", "code": "FORMAL_ENDING", "severity": "warning"}],
+			            "warnings": [], "repairs": [{"unit": "U2", "before": "고치기 전", "after": "고친 뒤", "ok": true}]},
+			     "U3": {"content": [{"factorId": 1, "role": "prosecutor", "character": "나로", "text": "계약서에 서명했습니다."}],
+			            "revision": 1, "basis": {"case": null, "cast": {"prosecutor": "나로", "defense": "남불"}},
+			            "review": [], "warnings": [], "repairs": []},
+			     "U4": {"content": {"prosecutor": "의견", "defense": "의견"}, "revision": 1,
+			            "basis": {"case": null, "U0": 1, "U2": 2}, "review": [], "warnings": [], "repairs": []}}}}"""
+			.formatted(publishable, lastAnswer);
 	}
 
 	/** script 단계 산출물(BE-107). 적재는 evidence · model · cast · publishable · createdAt · stopped만 본다 */

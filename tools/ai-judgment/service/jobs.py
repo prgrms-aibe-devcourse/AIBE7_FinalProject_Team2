@@ -242,7 +242,7 @@ def _script_result(script):
     증거 파일에는 `stopped`가 아예 없어서 파일에서 가져오면 항상 false가 된다.
 
     대본 전체(BE-121, `stages.script.full`)를 만들었으면 `scriptFile`도 같은 이유로 경로를 빼고 내용을
-    `fullScript`로 넣는다. 적재(`case_script` 확장)는 BE-126이다 — 그전까지 백엔드는 이 값을 읽지 않는다.
+    `fullScript`로 넣는다. 백엔드 적재가 `fullScript.blocks` · `meta` · `paper`를 읽는다(BE-126 `CaseScriptLoader`).
     """
     if not script:
         return None

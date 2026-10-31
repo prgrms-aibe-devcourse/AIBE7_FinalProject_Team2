@@ -15,6 +15,7 @@ import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -88,6 +89,12 @@ public class LegalCase {
 	@JdbcTypeCode(SqlTypes.JSON)
 	private List<String> sensitiveFlags;
 
+	/**
+	 * 사건 내용의 판 (BE-126). 대본 블록이 "어느 판의 사건 내용을 보고 만들었는지"를 이 값으로 남긴다. 대본 입력(제목 · 개요)이
+	 * 바뀔 때만 오른다 — {@code updatedAt}은 공개 상태 같은 다른 수정에도 바뀌어 대본이 낡았다고 잘못 알린다
+	 */
+	private int contentRevision = 1;
+
 	@Enumerated(EnumType.STRING)
 	private CaseStatus status;
 
@@ -126,6 +133,9 @@ public class LegalCase {
 
 	// 관리자 사건 내용 수정 (A-11). 값 검사는 AdminCaseEditService가 API 명세 A-11 표대로 먼저 한다
 	public void changeTitle(String title) {
+		if (!Objects.equals(this.title, title)) {
+			this.contentRevision++;		// 대본 입력이다 (U0 · U2 · U3 · U4)
+		}
 		this.title = title;
 	}
 
@@ -134,6 +144,9 @@ public class LegalCase {
 	}
 
 	public void changeOverview(String overview) {
+		if (!Objects.equals(this.overview, overview)) {
+			this.contentRevision++;
+		}
 		this.overview = overview;
 	}
 

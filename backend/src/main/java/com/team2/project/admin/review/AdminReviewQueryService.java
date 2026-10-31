@@ -108,7 +108,7 @@ public class AdminReviewQueryService {
 			new PublishReadinessResponse(readiness.ready(), readiness.reasons()),
 			// 대본은 공개를 막지 않는다. 화면이 경고로 쓰도록 있는지 · 검수 상태 · 공개 가능 여부만 알려 준다
 			scriptRepository.findByLegalCaseId(caseId)
-				.map(script -> new ScriptSummary(true, script.reviewState(), script.isPublishable()))
+				.map(script -> new ScriptSummary(true, script.reviewState(), script.isApprovable()))
 				.orElse(ScriptSummary.NONE));
 	}
 

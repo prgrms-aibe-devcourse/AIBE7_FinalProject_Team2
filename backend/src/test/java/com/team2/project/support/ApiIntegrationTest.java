@@ -61,13 +61,27 @@ public abstract class ApiIntegrationTest {
 		return id;
 	}
 
-	/** 대본(BE-108) 한 건. reviewStatus가 null이면 검수 대기. 내용은 비워 두고 "승인 여부"만 본다 */
-	protected void insertScriptWithReview(long caseId, String reviewStatus) {
+	/**
+	 * 대본(BE-108) 한 건 — 블록(BE-126)은 U3 하나. reviewStatus가 null이면 검수 대기. 내용은 비워 두고 "승인 여부"만 본다
+	 *
+	 * @return 대본 ID (블록을 더 붙일 때 쓴다)
+	 */
+	protected long insertScriptWithReview(long caseId, String reviewStatus) {
+		Long scriptId = jdbcTemplate.queryForObject("""
+				INSERT INTO case_script (case_id, model, generated_at, stopped, cast_roles, publishable)
+				VALUES (?, 'test', now(), false, '{}'::jsonb, true)
+				RETURNING id
+				""", Long.class, caseId);
+		insertScriptBlock(scriptId, "U3", "[]", reviewStatus);
+		return scriptId;
+	}
+
+	/** 대본 블록(BE-126) 한 행. 오류 없는 블록(publishable)으로 넣는다 */
+	protected void insertScriptBlock(long scriptId, String unit, String contentJson, String reviewStatus) {
 		jdbcTemplate.update("""
-				INSERT INTO case_script (case_id, evidence, model, generated_at, stopped, cast_roles, publishable,
-				                         review_status)
-				VALUES (?, '[]'::jsonb, 'test', now(), false, '{}'::jsonb, true, ?)
-				""", caseId, reviewStatus);
+				INSERT INTO case_script_block (script_id, unit, content, publishable, review_status)
+				VALUES (?, ?, ?::jsonb, true, ?)
+				""", scriptId, unit, contentJson, reviewStatus);
 	}
 
 	/** 신문 지면(BE-92). 사건당 1건 */

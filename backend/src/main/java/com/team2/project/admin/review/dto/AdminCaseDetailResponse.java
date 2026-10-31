@@ -37,7 +37,7 @@ public record AdminCaseDetailResponse(
 	 *
 	 * @param exists       대본이 적재돼 있는지. false면 나머지 두 값은 null이다(기존 사건은 모두 이 경우)
 	 * @param reviewStatus 검수 상태(A-13-10과 같은 값). 기록이 없으면 PENDING
-	 * @param publishable  파이프라인이 공개 가능하다고 본 결과. false면 승인 자체가 막힌다
+	 * @param publishable  승인할 수 있는 대본인지(A-13-10의 publishable — 파이프라인 판단과 블록 오류, BE-126). false면 승인 자체가 막힌다
 	 */
 	public record ScriptSummary(boolean exists, ReviewStatus reviewStatus, Boolean publishable) {
 

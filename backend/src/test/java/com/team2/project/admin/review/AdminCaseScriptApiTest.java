@@ -351,6 +351,116 @@ class AdminCaseScriptApiTest extends ApiIntegrationTest {
 		assertThat(reviewStatus()).isNull();
 	}
 
+	// --- 블록 (BE-126) ---
+
+	@Test
+	@DisplayName("A-13-10: 블록마다 내용 · 판 · 생성 근거 · 검수 결과 · 고쳐 쓰기 기록을 주고, 메타 · 못 만든 단위도 준다 (BE-126)")
+	void getScript_carriesBlocks() throws Exception {
+		long scriptId = insertScript(true, false);
+		jdbcTemplate.update("""
+			UPDATE case_script SET issue = 'denied', admits = false, pending = '["U1"]'::jsonb WHERE id = ?""", scriptId);
+		insertBlockRow(scriptId, "U0", """
+			{"questions": [{"q": "질문", "a": "아니요"}]}""", true, """
+			[{"unit": "U0", "path": "/questions/0/q", "code": "FORMAL_ENDING", "severity": "warning"}]""");
+
+		perform(get(scriptUrl()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.blocks.length()").value(2))
+			.andExpect(jsonPath("$.blocks[0].unit").value("U0"))		// U0 → U4 순서
+			.andExpect(jsonPath("$.blocks[0].content.questions[0].a").value("아니요"))	// 관리자에게는 저장값 그대로
+			.andExpect(jsonPath("$.blocks[0].revision").value(1))
+			.andExpect(jsonPath("$.blocks[0].basis.case").value(1))
+			.andExpect(jsonPath("$.blocks[0].review[0].code").value("FORMAL_ENDING"))
+			.andExpect(jsonPath("$.blocks[0].repairs[0].before").value("고치기 전"))
+			.andExpect(jsonPath("$.blocks[0].publishable").value(true))
+			.andExpect(jsonPath("$.blocks[0].reviewStatus").value("PENDING"))
+			.andExpect(jsonPath("$.blocks[1].unit").value("U3"))
+			.andExpect(jsonPath("$.blocks[1].content[0].factorId").value(1))
+			.andExpect(jsonPath("$.meta.issue").value("denied"))
+			.andExpect(jsonPath("$.meta.admits").value(false))
+			.andExpect(jsonPath("$.meta.cast.prosecutor").value("나로"))
+			.andExpect(jsonPath("$.pending[0]").value("U1"))
+			.andExpect(jsonPath("$.evidence[0].label").value("계약서에 서명했다"));	// 기존 필드는 U3에서 그대로
+	}
+
+	@Test
+	@DisplayName("A-13-11 · 12: 통승인 · 통거절은 모든 블록에 한 번에 적용한다 (1차, BE-126)")
+	void approveAndReject_applyToAllBlocks() throws Exception {
+		long scriptId = insertScript(true, false);
+		insertBlockRow(scriptId, "U1", "{\"lines\": [\"해설\"]}", true, "[]");
+		insertBlockRow(scriptId, "U4", "{\"prosecutor\": \"의견\", \"defense\": \"의견\"}", true, "[]");
+
+		perform(post(scriptUrl() + "/approve"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.reviewStatus").value("APPROVED"))
+			.andExpect(jsonPath("$.blocks[*].reviewStatus", everyItem(org.hamcrest.Matchers.is("APPROVED"))))
+			.andExpect(jsonPath("$.blocks[*].reviewedBy", everyItem(org.hamcrest.Matchers.is(admin.getEmail()))));
+		assertThat(blockReviewStatuses()).containsOnlyKeys("U1", "U3", "U4").allSatisfy(
+			(unit, status) -> assertThat(status).isEqualTo("APPROVED"));
+
+		perform(post(scriptUrl() + "/reject").contentType(MediaType.APPLICATION_JSON).content("{\"reason\":\"다시 만들기\"}"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.reviewStatus").value("REJECTED"))
+			.andExpect(jsonPath("$.blocks[*].reviewNote", everyItem(org.hamcrest.Matchers.is("다시 만들기"))));
+		assertThat(blockReviewStatuses().values()).containsOnly("REJECTED");
+	}
+
+	@Test
+	@DisplayName("A-13-11: 오류 있는 블록 · 만들지 못한 단위가 있으면 409 — 다른 블록도 승인되지 않는다 (BE-126)")
+	void approve_blockErrorOrPending_isConflict() throws Exception {
+		long scriptId = insertScript(true, false);
+		insertBlockRow(scriptId, "U2", "{\"questions\": []}", false, """
+			[{"unit": "U2", "path": "/issues_narr/1", "code": "FORMAL_ENDING", "severity": "error"}]""");
+
+		perform(get(scriptUrl()))
+			.andExpect(jsonPath("$.publishable").value(false))
+			.andExpect(jsonPath("$.blocks[0].publishable").value(false));
+		perform(post(scriptUrl() + "/approve"))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.code").value("INVALID_STATE"));
+		assertThat(blockReviewStatuses().values()).containsOnlyNulls();
+
+		// 블록에 오류가 없어도 만들지 못한 단위가 있으면 대본 전체가 공개 불가다 — 파이프라인 publishable이 false로 온다
+		jdbcTemplate.update("DELETE FROM case_script_block WHERE script_id = ? AND unit = 'U2'", scriptId);
+		jdbcTemplate.update("UPDATE case_script SET pending = '[\"U1\"]'::jsonb, publishable = false WHERE id = ?",
+			scriptId);
+		perform(post(scriptUrl() + "/approve")).andExpect(status().isConflict());
+		assertThat(auditActions()).isEmpty();
+	}
+
+	@Test
+	@DisplayName("A-13-13: 대사를 고치면 U3 판이 오르고, 그 줄의 검수 오류가 지워지고, 모든 블록이 다시 검수 대기가 된다 (BE-126)")
+	void editLine_bumpsRevisionClearsLineErrorAndResetsAllBlocks() throws Exception {
+		long scriptId = insertScriptRow(true, false, null);
+		insertBlockRow(scriptId, "U3", """
+			[{"factorId": 1, "role": "PROSECUTOR", "character": "나로", "text": "징역 3년이 마땅합니다.",
+			  "attempts": 1, "validation": {"warnings": []}},
+			 {"factorId": 2, "role": "DEFENSE", "character": "남불", "text": "둘째 줄입니다.",
+			  "attempts": 1, "validation": {"warnings": []}}]""", false, """
+			[{"unit": "U3", "path": "/0", "code": "SENTENCING", "severity": "error", "factorId": 1},
+			 {"unit": "U3", "path": "/0", "code": "LENGTH", "severity": "warning", "factorId": 1},
+			 {"unit": "U3", "path": "/1", "code": "LENGTH", "severity": "warning", "factorId": 2}]""");
+		insertBlockRow(scriptId, "U4", "{\"prosecutor\": \"의견\", \"defense\": \"의견\"}", true, "[]");
+		jdbcTemplate.update("UPDATE case_script SET publishable = false WHERE id = ?", scriptId);
+		jdbcTemplate.update("UPDATE case_script_block SET review_status = 'REJECTED', review_note = '구형' WHERE script_id = ?",
+			scriptId);
+
+		perform(patch(scriptUrl() + "/evidence/1").contentType(MediaType.APPLICATION_JSON)
+				.content("{\"text\":\"계약서에 서명한 사실은 분명합니다.\"}"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.blocks[0].unit").value("U3"))
+			.andExpect(jsonPath("$.blocks[0].revision").value(2))
+			.andExpect(jsonPath("$.blocks[0].review.length()").value(2))		// 그 줄의 오류만 지운다 (경고는 남긴다)
+			.andExpect(jsonPath("$.blocks[0].review[*].severity", everyItem(org.hamcrest.Matchers.is("warning"))))
+			.andExpect(jsonPath("$.blocks[0].publishable").value(true))
+			.andExpect(jsonPath("$.blocks[1].revision").value(1))			// 다른 블록 값은 그대로
+			.andExpect(jsonPath("$.publishable").value(true))
+			.andExpect(jsonPath("$.reviewStatus").value("PENDING"));
+		assertThat(blockReviewStatuses().values()).containsOnlyNulls();		// 반려였던 U4도 다시 대기 (통승인 1차)
+
+		perform(post(scriptUrl() + "/approve")).andExpect(status().isOk());
+	}
+
 	// --- 도움 함수 ---
 
 	private ResultActions perform(MockHttpServletRequestBuilder request) throws Exception {
@@ -363,33 +473,56 @@ class AdminCaseScriptApiTest extends ApiIntegrationTest {
 
 	/** 모든 줄에 대사가 있는 대본 (빈 줄이 없어 publishable이 계속 true다) */
 	private void insertFullScript() {
-		jdbcTemplate.update("""
-			INSERT INTO case_script (case_id, evidence, model, generated_at, stopped, cast_roles, publishable)
-			VALUES (?, ?::jsonb, 'google:gemini-2.5-flash', now(), false, ?::jsonb, true)""",
-			caseId, """
+		long scriptId = insertScriptRow(true, false, null);
+		insertBlockRow(scriptId, "U3", """
 			[{"factorId": 1, "role": "PROSECUTOR", "character": "나로", "text": "첫째 줄입니다.",
 			  "attempts": 1, "validation": {"warnings": []}},
 			 {"factorId": 2, "role": "DEFENSE", "character": "남불", "text": "둘째 줄입니다.",
-			  "attempts": 1, "validation": {"warnings": []}}]""", CAST);
+			  "attempts": 1, "validation": {"warnings": []}}]""", true, "[]");
 	}
 
-	/** 적재(A-14-1)가 넣는 모양 그대로 한 건 만든다 */
-	private void insertScript(boolean publishable, boolean stopped) {
+	/** 적재(A-14-1)가 넣는 모양 그대로 한 건 만든다 — 증거조사만 만든 대본은 U3 블록 하나다(BE-126) */
+	private long insertScript(boolean publishable, boolean stopped) {
+		long scriptId = insertScriptRow(publishable, stopped, publishable ? null : "검사 쪽 대사가 변호인보다 두 배 깁니다");
+		insertBlockRow(scriptId, "U3", EVIDENCE, publishable, "[]");
+		return scriptId;
+	}
+
+	private long insertScriptRow(boolean publishable, boolean stopped, String balanceWarning) {
+		return jdbcTemplate.queryForObject("""
+			INSERT INTO case_script (case_id, model, generated_at, stopped, cast_roles, balance_warning, publishable)
+			VALUES (?, 'google:gemini-2.5-flash', now() - interval '1 hour', ?, ?::jsonb, ?::text, ?)
+			RETURNING id""", Long.class, caseId, stopped, CAST, balanceWarning, publishable);
+	}
+
+	private void insertBlockRow(long scriptId, String unit, String content, boolean publishable, String review) {
 		jdbcTemplate.update("""
-			INSERT INTO case_script (case_id, evidence, model, generated_at, stopped, cast_roles, balance_warning,
-			                         publishable)
-			VALUES (?, ?::jsonb, 'google:gemini-2.5-flash', now() - interval '1 hour', ?, ?::jsonb, ?::text, ?)""",
-			caseId, EVIDENCE, stopped, CAST, publishable ? null : "검사 쪽 대사가 변호인보다 두 배 깁니다", publishable);
+			INSERT INTO case_script_block (script_id, unit, content, publishable, review, basis, repairs)
+			VALUES (?, ?, ?::jsonb, ?, ?::jsonb, '{"case": 1}'::jsonb, '[{"unit": "%s", "before": "고치기 전"}]'::jsonb)"""
+			.formatted(unit), scriptId, unit, content, publishable, review);
 	}
 
 	private String firstLineText() {
-		return jdbcTemplate.queryForObject(
-			"SELECT evidence -> 0 ->> 'text' FROM case_script WHERE case_id = ?", String.class, caseId);
+		return jdbcTemplate.queryForObject("""
+			SELECT b.content -> 0 ->> 'text' FROM case_script_block b JOIN case_script s ON s.id = b.script_id
+			WHERE s.case_id = ? AND b.unit = 'U3'""", String.class, caseId);
 	}
 
+	/** U3 블록의 검수 상태 */
 	private String reviewStatus() {
-		return jdbcTemplate.queryForObject("SELECT review_status FROM case_script WHERE case_id = ?", String.class,
-			caseId);
+		return blockReviewStatuses().get("U3");
+	}
+
+	/** 블록마다의 검수 상태 (단위 → 상태, 대기는 null) */
+	private Map<String, String> blockReviewStatuses() {
+		Map<String, String> statuses = new java.util.LinkedHashMap<>();
+		jdbcTemplate.query("""
+			SELECT b.unit, b.review_status FROM case_script_block b JOIN case_script s ON s.id = b.script_id
+			WHERE s.case_id = ? ORDER BY b.unit""",
+			rs -> {
+				statuses.put(rs.getString(1), rs.getString(2));
+			}, caseId);
+		return statuses;
 	}
 
 	private String caseStatus() {
