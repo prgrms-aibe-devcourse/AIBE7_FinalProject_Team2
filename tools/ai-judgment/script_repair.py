@@ -20,9 +20,9 @@ import time
 
 from llm import LLMError, LLMQuotaExhaustedError
 from llm import call as default_call
-from script_assembler import (NO_SENTENCING, QUESTION_RULES, ask_unit, build_user, check_closing, check_design,
-                              check_intro, check_opening, closing_request, evidence_blocks, intro_request,
-                              strip_line_prefix, unit_prompt, unit_warnings)
+from script_assembler import (BLOCK_BASIS, BLOCK_UNITS, NO_SENTENCING, QUESTION_RULES, ask_unit, build_user,
+                              check_closing, check_design, check_intro, check_opening, closing_request,
+                              evidence_blocks, intro_request, strip_line_prefix, unit_prompt, unit_warnings)
 from script_generation import build_evidence_prompt, ordered_evidence_factors, validate_line
 from script_review import (ERROR, FIX_LINE, FIX_UNIT, review_evidence, review_failed, review_script, review_unit,
                            unit_context, unit_lines)
@@ -31,8 +31,8 @@ UNIT_ORDER = ("U0", "U1", "U2", "U3", "U4")
 # 줄을 고쳐도 남으면 단위째 다시 만드는 단위 (모듈 설명 참고)
 REGENERATE_UNITS = ("U1", "U4")
 # 단위가 바뀌면 낡는(다시 만들어야 할 수 있는) 뒤 단위 — BE-129 연동 표(U0 → U2 → U4, U2 → U4). U2는 설계도의 질문을,
-# U4는 설계도의 쟁점과 U2의 변호인 입장을 받는다. U1 · U3 · U4를 바꿔도 다른 단위는 그대로다
-AFFECTS = {"U0": ["U2", "U4"], "U1": [], "U2": ["U4"], "U3": [], "U4": []}
+# U4는 설계도의 쟁점과 U2의 변호인 입장을 받는다. U1 · U3 · U4를 바꿔도 다른 단위는 그대로다. 정본은 BLOCK_BASIS다(BE-126)
+AFFECTS = {unit: [later for later in BLOCK_UNITS if unit in BLOCK_BASIS[later]] for unit in BLOCK_UNITS}
 
 # path 첫 키 → 고쳐 쓸 줄의 설명 (모델에게 어떤 줄인지 알린다)
 LINE_ROLES = {
@@ -312,8 +312,9 @@ def repair_units(case, judgment_output, cast, cls, generated, *, model, caller=d
             ok, replaced, errors_before, errors_after = regenerate_unit(unit, case, judgment_output, cast, cls, generated,
                                                                         model=model, caller=caller, opts=opts, log=log)
             codes = sorted({i["code"] for i in errors if i["unit"] == unit})
+            # replaced: 새 값으로 바꿨는지(오류가 줄었을 때만 바꾼다). U1 · U4는 affects가 늘 비어 있어 따로 남긴다 — 블록 판(BE-126)이 이 값으로 오른다
             generated["repairs"].append({"unit": unit, "path": "", "codes": codes, "action": "unit", "attempts": 1, "ok": ok,
-                                         "errorsBefore": errors_before, "errorsAfter": errors_after,
+                                         "replaced": replaced, "errorsBefore": errors_before, "errorsAfter": errors_after,
                                          "affects": AFFECTS[unit] if replaced else []})
     except LLMQuotaExhaustedError as e:
         if log:

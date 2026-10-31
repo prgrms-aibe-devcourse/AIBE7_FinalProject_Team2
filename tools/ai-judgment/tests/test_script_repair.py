@@ -109,8 +109,8 @@ class LineRepairTest(unittest.TestCase):
         self.assertEqual(len(caller.calls), 1)
         self.assertIn("기사를 짚는 대사 5줄", caller.calls[0]["user"])  # 단위 요청(intro_request)
         self.assertEqual(fixed["repairs"], [{"unit": "U1", "path": "", "codes": ["LINE_MISSING"], "action": "unit",
-                                             "attempts": 1, "ok": True, "errorsBefore": 1, "errorsAfter": 0,
-                                             "affects": []}])
+                                             "attempts": 1, "ok": True, "replaced": True, "errorsBefore": 1,
+                                             "errorsAfter": 0, "affects": []}])
         self.assertEqual(errors(fixed), [])
 
     def test_design_change_marks_later_units_stale(self):
@@ -200,6 +200,22 @@ class LineRepairTest(unittest.TestCase):
         script = sa.build_script(CASE, CAST, CLS, fixed, model="openai:a")
         self.assertEqual(len(script["repairs"]), 1)
         self.assertTrue(script["publishable"])
+
+    def test_block_revisions_follow_real_repairs(self):
+        """고쳐 쓰기 기록 → 블록 판 번호(BE-126)를 이어서 본다 — 두 모듈의 기록 형식이 어긋나면 잡힌다(PR #363 리뷰).
+        U0 줄을 고쳐 받으면 U0는 2판이고 그 전에 만든 U2는 옛 U0(1판)를 본다(낡음). 단위째 다시 만든 U4는 새 U0를 본다."""
+        design = {**generated()["units"]["U0"]["value"], "issues": ["범행 경위", "징역 7년의 무게", "피해 회복"]}
+        still_bad = {"text": "변호인 측 최종변론입니다. 피고인은 3번이나 사과했습니다."}
+        _, fixed, _ = repair(reviewed(units={"U0": design, "U4": BAD_DEFENSE}),
+                             [{"text": "범행 뒤 행동"}, still_bad, still_bad, CLOSING])
+        self.assertEqual([(r["unit"], r["action"], r["ok"]) for r in fixed["repairs"]],
+                         [("U0", "line", True), ("U4", "line", False), ("U4", "unit", True)])
+        blocks, _ = sa.build_blocks(CASE, CAST, CLS, fixed)
+        self.assertEqual({unit: block["revision"] for unit, block in blocks.items()},
+                         {"U0": 2, "U1": 1, "U2": 1, "U3": 1, "U4": 2})
+        self.assertEqual(blocks["U2"]["basis"]["U0"], 1)  # 낡음
+        self.assertEqual((blocks["U4"]["basis"]["U0"], blocks["U4"]["basis"]["U2"]), (2, 1))  # 낡지 않음
+        self.assertEqual([r["action"] for r in blocks["U4"]["repairs"]], ["line", "unit"])
 
 
 if __name__ == "__main__":
