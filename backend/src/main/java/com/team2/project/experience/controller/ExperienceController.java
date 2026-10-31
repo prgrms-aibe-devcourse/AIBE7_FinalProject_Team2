@@ -38,7 +38,7 @@ public class ExperienceController {
 	@PostMapping
 	public ResponseEntity<ExperienceResponse> start(@PathVariable Long caseId, Requester requester,
 			HttpServletResponse response) {
-		StartResult result = experienceService.start(caseId, requester.anonymousId());
+		StartResult result = experienceService.start(caseId, requester);
 		if (result.issuedCookieId() != null) {
 			anonymousIdCookie.write(response, result.issuedCookieId());
 		}
@@ -48,19 +48,19 @@ public class ExperienceController {
 	/** API 3. 내 체험 상태 */
 	@GetMapping
 	public ExperienceResponse getMyExperience(@PathVariable Long caseId, Requester requester) {
-		return experienceService.getMyExperience(caseId, requester.anonymousId());
+		return experienceService.getMyExperience(caseId, requester);
 	}
 
 	/** API 4. 사건 개요 · 사전 판단 선택지 */
 	@GetMapping("/overview")
 	public OverviewResponse getOverview(@PathVariable Long caseId, Requester requester) {
-		return preJudgmentService.getOverview(caseId, requester.anonymousId());
+		return preJudgmentService.getOverview(caseId, requester);
 	}
 
 	/** API 5. 사전 판단 제출 */
 	@PostMapping("/pre-judgment")
 	public PreJudgmentResponse submitPreJudgment(@PathVariable Long caseId, Requester requester,
 			@Valid @RequestBody PreJudgmentRequest body) {
-		return preJudgmentService.submit(caseId, requester.anonymousId(), body);
+		return preJudgmentService.submit(caseId, requester, body);
 	}
 }

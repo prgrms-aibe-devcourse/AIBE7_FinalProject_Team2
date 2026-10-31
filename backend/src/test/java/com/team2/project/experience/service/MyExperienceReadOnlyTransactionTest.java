@@ -2,6 +2,7 @@ package com.team2.project.experience.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.team2.project.common.web.Requester;
 import com.team2.project.experience.domain.AnonymousUser;
 import com.team2.project.experience.domain.Experience;
 import com.team2.project.experience.repository.AnonymousUserRepository;
@@ -68,14 +69,14 @@ class MyExperienceReadOnlyTransactionTest {
 		TransactionTemplate readOnly = new TransactionTemplate(transactionManager);
 		readOnly.setReadOnly(true);
 
-		Experience experience = readOnly.execute(status -> myExperienceService.getMyExperience(caseId, Optional.of(anonymousId)));
+		Experience experience = readOnly.execute(status -> myExperienceService.getMyExperience(caseId, Requester.guest(anonymousId)));
 
 		assertThat(experience).isNotNull();
 		Instant touched = lastSeenAt();
 		assertThat(touched).isAfter(before);
 
 		// 10분 안에 다시 조회하면 갱신하지 않는다 (조회마다 UPDATE 방지)
-		readOnly.execute(status -> myExperienceService.getMyExperience(caseId, Optional.of(anonymousId)));
+		readOnly.execute(status -> myExperienceService.getMyExperience(caseId, Requester.guest(anonymousId)));
 		assertThat(lastSeenAt()).isEqualTo(touched);
 	}
 

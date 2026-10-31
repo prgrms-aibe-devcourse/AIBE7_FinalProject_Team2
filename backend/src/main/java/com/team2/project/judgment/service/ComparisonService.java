@@ -1,5 +1,6 @@
 package com.team2.project.judgment.service;
 
+import com.team2.project.common.web.Requester;
 import com.team2.project.experience.domain.Experience;
 import com.team2.project.experience.domain.ExperienceStatus;
 import com.team2.project.experience.service.MyExperienceService;
@@ -22,8 +23,6 @@ import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -48,8 +47,8 @@ public class ComparisonService {
 	private final JudgmentViewAssembler assembler;
 
 	@Transactional(readOnly = true)
-	public ComparisonResponse getComparison(Long caseId, Optional<UUID> anonymousId) {
-		Experience experience = myExperienceService.getMyExperienceAtLeast(caseId, anonymousId,
+	public ComparisonResponse getComparison(Long caseId, Requester requester) {
+		Experience experience = myExperienceService.getMyExperienceAtLeast(caseId, requester,
 			ExperienceStatus.COMPLETED);
 
 		Map<SubjectType, Judgment> published = judgmentRepository.findPublishedJudgments(caseId).stream()

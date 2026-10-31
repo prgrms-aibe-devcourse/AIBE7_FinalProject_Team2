@@ -1,5 +1,6 @@
 package com.team2.project.personality.repository;
 
+import com.team2.project.common.owner.Owner;
 import com.team2.project.personality.domain.ExperiencePersonality;
 import java.util.List;
 import java.util.Optional;
@@ -24,4 +25,14 @@ public interface ExperiencePersonalityRepository extends JpaRepository<Experienc
 		+ "WHERE e.anonymousUser.id = :anonymousUserId AND e.attemptNo = 1 "
 		+ "ORDER BY COALESCE(e.completedAt, p.createdAt), p.id")
 	List<ExperiencePersonality> findFirstAttemptsByAnonymousUser(@Param("anonymousUserId") UUID anonymousUserId);
+
+	/** findFirstAttemptsByAnonymousUser의 회원 쪽 (BE-140) */
+	@Query("SELECT p FROM ExperiencePersonality p JOIN FETCH p.experience e JOIN FETCH e.legalCase "
+		+ "WHERE e.memberId = :memberId AND e.attemptNo = 1 "
+		+ "ORDER BY COALESCE(e.completedAt, p.createdAt), p.id")
+	List<ExperiencePersonality> findFirstAttemptsByMember(@Param("memberId") long memberId);
+
+	default List<ExperiencePersonality> findFirstAttempts(Owner owner) {
+		return owner.fold(this::findFirstAttemptsByMember, this::findFirstAttemptsByAnonymousUser);
+	}
 }

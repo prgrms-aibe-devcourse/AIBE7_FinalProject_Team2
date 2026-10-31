@@ -3,14 +3,13 @@ package com.team2.project.experience.service;
 import java.time.Clock;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.team2.project.common.exception.BusinessException;
 import com.team2.project.common.exception.ErrorCode;
+import com.team2.project.common.web.Requester;
 import com.team2.project.experience.domain.Experience;
 import com.team2.project.experience.domain.ExperienceStatus;
 import com.team2.project.experience.dto.OverviewResponse;
@@ -47,8 +46,8 @@ public class PreJudgmentService {
 
 	/** API 4. 사건 · 체험(404) → 상태(STARTED가 아니면 409) 확인 뒤, DTO 변환까지 읽기 전용 트랜잭션 안에서 한다. */
 	@Transactional(readOnly = true)
-	public OverviewResponse getOverview(Long caseId, Optional<UUID> anonymousId) {
-		Experience experience = myExperienceService.getMyExperienceBetween(caseId, anonymousId,
+	public OverviewResponse getOverview(Long caseId, Requester requester) {
+		Experience experience = myExperienceService.getMyExperienceBetween(caseId, requester,
 				ExperienceStatus.STARTED, ExperienceStatus.STARTED);
 		LegalCase legalCase = experience.getLegalCase();
 
@@ -60,8 +59,8 @@ public class PreJudgmentService {
 
 	/** API 5. 검사 순서: 사건 · 체험(404) → 상태(409) → 형량 구간 · 판단 요소(422). */
 	@Transactional
-	public PreJudgmentResponse submit(Long caseId, Optional<UUID> anonymousId, PreJudgmentRequest request) {
-		Experience experience = myExperienceService.getMyExperienceBetween(caseId, anonymousId,
+	public PreJudgmentResponse submit(Long caseId, Requester requester, PreJudgmentRequest request) {
+		Experience experience = myExperienceService.getMyExperienceBetween(caseId, requester,
 				ExperienceStatus.STARTED, ExperienceStatus.STARTED);
 		LegalCase legalCase = experience.getLegalCase();
 

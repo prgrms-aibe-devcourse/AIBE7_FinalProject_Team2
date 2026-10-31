@@ -3,9 +3,7 @@ package com.team2.project.legalcase.service;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
-import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -14,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.team2.project.common.exception.BusinessException;
 import com.team2.project.common.exception.ErrorCode;
+import com.team2.project.common.web.Requester;
 import com.team2.project.experience.repository.CaseParticipantCount;
 import com.team2.project.experience.repository.ExperienceRepository;
 import com.team2.project.legalcase.domain.CaseScript;
@@ -43,14 +42,14 @@ public class LegalCaseService {
 	 * 공개된 사건 목록. MVP는 사건이 몇 개 안 되므로 공개 사건을 한 번에 읽어
 	 * summary(전체 기준)와 필터 결과를 메모리에서 만든다.
 	 *
-	 * @param anonymousUserId 익명 ID 쿠키 값. 있으면 사건마다 내 진행 상태(myStatus)를 붙인다. 쿠키를 새로 발급하지는 않는다
+	 * @param requester 회원이거나 익명 ID 쿠키가 있으면 사건마다 내 진행 상태(myStatus)를 붙인다. 쿠키를 새로 발급하지는 않는다
 	 */
 	@Transactional(readOnly = true)
-	public CaseListResponse getCases(CrimeType crimeType, Optional<UUID> anonymousUserId) {
+	public CaseListResponse getCases(CrimeType crimeType, Requester requester) {
 		List<LegalCase> published = legalCaseRepository.findAllPublished();
 		Map<Long, Long> participantCounts = experienceRepository.countCompletedFirstAttemptsByCase().stream()
 				.collect(Collectors.toMap(CaseParticipantCount::getCaseId, CaseParticipantCount::getParticipantCount));
-		Map<Long, MyStatus> myStatuses = myStatuses(anonymousUserId);
+		Map<Long, MyStatus> myStatuses = myStatuses(requester);
 		Set<Long> scriptReadyCaseIds = scriptRepository.findApprovedCaseIds();	// 사건마다 조회하지 않고 한 번에
 
 		List<CaseItem> items = published.stream()
@@ -69,11 +68,11 @@ public class LegalCaseService {
 	 * @throws BusinessException CASE_NOT_FOUND — 사건 없음 · 비공개(구분하지 않는다)
 	 */
 	@Transactional(readOnly = true)
-	public CaseDetailResponse getCase(Long caseId, Optional<UUID> anonymousUserId) {
+	public CaseDetailResponse getCase(Long caseId, Requester requester) {
 		LegalCase legalCase = legalCaseRepository.findPublishedById(caseId)
 				.orElseThrow(() -> new BusinessException(ErrorCode.CASE_NOT_FOUND));
-		MyStatus myStatus = anonymousUserId
-				.flatMap(id -> experienceRepository.findLatest(id, caseId))
+		MyStatus myStatus = requester.owner()
+				.flatMap(owner -> experienceRepository.findLatest(owner, caseId))
 				.map(experience -> MyStatus.from(experience.getStatus()))
 				.orElse(null);
 		boolean scriptReady = scriptRepository.findByLegalCaseId(caseId).filter(CaseScript::isPublic).isPresent();	// API 18과 같은 조건
@@ -82,13 +81,13 @@ public class LegalCaseService {
 	}
 
 	/**
-	 * 사건별 내 진행 상태 (FE-19 배지). 쿠키가 없으면(첫 방문) 조회하지 않는다.
+	 * 사건별 내 진행 상태 (FE-19 배지). 손님인데 쿠키가 없으면(첫 방문) 조회하지 않는다.
 	 * 기준은 API 2 · 3과 같은 "사건마다 가장 최근 회차"라, 배지와 체험 시작 후 이동하는 화면이 어긋나지 않는다.
 	 * 마이페이지와 같은 쿼리(findLatestPerCase)를 한 번만 불러 사건 수만큼 조회하지 않는다.
 	 */
-	private Map<Long, MyStatus> myStatuses(Optional<UUID> anonymousUserId) {
-		return anonymousUserId
-				.map(id -> experienceRepository.findLatestPerCase(id).stream()
+	private Map<Long, MyStatus> myStatuses(Requester requester) {
+		return requester.owner()
+				.map(owner -> experienceRepository.findLatestPerCase(owner).stream()
 						.collect(Collectors.toMap(experience -> experience.getLegalCase().getId(),
 								experience -> MyStatus.from(experience.getStatus()))))
 				.orElseGet(Map::of);

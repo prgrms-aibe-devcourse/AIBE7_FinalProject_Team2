@@ -1,6 +1,8 @@
 package com.team2.project.personality.service;
 
 import com.team2.project.collection.service.CollectionService;
+import com.team2.project.common.owner.Owner;
+import com.team2.project.common.web.Requester;
 import com.team2.project.experience.repository.ExperienceRepository;
 import com.team2.project.experience.service.AnonymousUserService;
 import com.team2.project.legalcase.domain.ValueAxis;
@@ -89,15 +91,17 @@ public class MyPageService {
 	 * 요청들이 서로 연결을 기다리며 대기 시간만큼 멈춘다. 순서대로 열고 닫아 연결을 한 번에 하나만 쓴다:
 	 * 사용자 찾기(접속 시각 갱신) → 통계 읽기 → 해금 기록(있을 때만) → 읽기 전용으로 조회 조립
 	 */
-	public MyPageResponse get(Optional<UUID> anonymousId) {
-		Optional<UUID> userId = anonymousUserService.findAndTouch(anonymousId).map(user -> user.getId());
+	public MyPageResponse get(Requester requester) {
+		Optional<UUID> userId = anonymousUserService.findAndTouch(requester.anonymousId()).map(user -> user.getId());
 		if (userId.isEmpty()) {
 			return MyPageResponse.empty();	// 쿠키가 없거나 모르는 ID면 빈 마이페이지 (404가 아니다)
 		}
 		UUID id = userId.get();
+		// 체험 · 성향은 주인(회원이면 회원) 기준이다(BE-140). 꾸미기 · 통계 · 레벨 등은 다음 단계(3b)에서 회원 키로 옮길 때까지 익명 ID 기준이다
+		Owner owner = requester.owner().orElseThrow();
 		// 꾸미기 · 도전과제와 레벨이 같은 통계를 쓰므로 한 번만 읽는다
 		ProfileStats stats = recordNewUnlocks(id, readOnly(() -> statsReader.read(id)));
-		return readOnly(() -> build(id, stats));
+		return readOnly(() -> build(id, owner, stats));
 	}
 
 	/** 읽기 전용 트랜잭션 하나로 실행한다 (open-in-view가 꺼져 있어 지연 로딩에 트랜잭션이 필요하다) */
@@ -107,14 +111,14 @@ public class MyPageService {
 		return template.execute(status -> work.get());
 	}
 
-	private MyPageResponse build(UUID userId, ProfileStats stats) {
-		PersonalityResultResponse personality = resultRepository.findByAnonymousUser_IdAndCurrentTrue(userId)
+	private MyPageResponse build(UUID userId, Owner owner, ProfileStats stats) {
+		PersonalityResultResponse personality = resultRepository.findCurrent(owner)
 			.map(PersonalityResultResponse::from).orElse(null);
-		Optional<PersonalityResult> firstTest = resultRepository.findFirstByAnonymousUser_IdOrderByCreatedAtAscIdAsc(userId);
-		Optional<PersonalityResultResponse> retake = resultRepository.findByAnonymousUser_IdAndBaselineRetakeTrue(userId)
+		Optional<PersonalityResult> firstTest = resultRepository.findFirst(owner);
+		Optional<PersonalityResultResponse> retake = resultRepository.findBaselineRetake(owner)
 			.map(PersonalityResultResponse::from);
 
-		List<ExperiencePersonality> contributions = contributionRepository.findFirstAttemptsByAnonymousUser(userId);
+		List<ExperiencePersonality> contributions = contributionRepository.findFirstAttempts(owner);
 		// 현재 판결 성향은 완료 순서(쿼리의 completedAt, id 순)로 최근 3건만 평균한다. 흐름(history)은 전체를 내려준다
 		List<ExperiencePersonality> recent = contributions.subList(
 			Math.max(0, contributions.size() - RECENT_COUNT), contributions.size());
@@ -151,7 +155,7 @@ public class MyPageService {
 				.orElse(null));
 		BaselineRetake baselineRetake = new BaselineRetake(firstTest.isPresent() && retake.isEmpty(), retake.orElse(null));
 
-		List<ExperienceItem> experiences = experienceRepository.findLatestPerCase(userId).stream()
+		List<ExperienceItem> experiences = experienceRepository.findLatestPerCase(owner).stream()
 			.map(ExperienceItem::from).toList();
 		ProfileDecoView deco = profileDecoService.view(userId, stats);
 		return new MyPageResponse(personality, initial, baselineRetake, judgment, history, experiences,

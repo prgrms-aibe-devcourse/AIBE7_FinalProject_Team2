@@ -3,6 +3,7 @@ package com.team2.project.judgment;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.team2.project.common.web.Requester;
 import com.team2.project.experience.domain.ExperienceStatus;
 import com.team2.project.experience.domain.InvalidExperienceStateException;
 import com.team2.project.experience.repository.ExperienceRepository;
@@ -102,7 +103,7 @@ class VerdictServiceTest {
 	@Test
 	@Transactional(propagation = Propagation.NOT_SUPPORTED)
 	void getForm_reviewed_returnsOrderedPublicFields() {
-		var result = forms.getForm(caseId, Optional.of(userId));
+		var result = forms.getForm(caseId, Requester.guest(userId));
 		assertThat(result.penaltyOptions()).extracting(option -> option.penaltyType())
 			.containsExactly(PenaltyType.DEATH, PenaltyType.LIFE, PenaltyType.PRISON);
 		assertThat(result.penaltyOptions().get(0).reducibleTo()).containsExactly(PenaltyType.LIFE, PenaltyType.PRISON);
@@ -128,7 +129,7 @@ class VerdictServiceTest {
 	@Test
 	void getForm_preJudged_rejectsState() {
 		jdbc.update("UPDATE experience SET status = 'PRE_JUDGED' WHERE id = ?", experienceId);
-		assertThatThrownBy(() -> forms.getForm(caseId, Optional.of(userId))).isInstanceOfSatisfying(InvalidExperienceStateException.class,
+		assertThatThrownBy(() -> forms.getForm(caseId, Requester.guest(userId))).isInstanceOfSatisfying(InvalidExperienceStateException.class,
 			exception -> assertThat(exception.getExperienceStatus()).isEqualTo(ExperienceStatus.PRE_JUDGED));
 	}
 
@@ -142,7 +143,7 @@ class VerdictServiceTest {
 		double before = verdictConfirmedCount();
 		// submit()의 @Transactional은 바깥 트랜잭션에 참여한다. 바깥이 롤백되면 판결도 함께 사라지므로 세면 안 된다 (#110 리뷰)
 		new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
-			assertThat(service.submit(caseId, Optional.of(userId), validRequest()).status()).isEqualTo(ExperienceStatus.VERDICT_CONFIRMED);
+			assertThat(service.submit(caseId, Requester.guest(userId), validRequest()).status()).isEqualTo(ExperienceStatus.VERDICT_CONFIRMED);
 			assertThat(verdictConfirmedCount()).isEqualTo(before);	// 커밋 전이라 아직 세지 않았다
 			status.setRollbackOnly();
 		});
@@ -159,7 +160,7 @@ class VerdictServiceTest {
 	void submit_validRequest_commitsJudgmentFactorsAndState() {
 		double before = meterRegistry.get("lawnambul.verdict.confirmed").counter().count();
 		// 서비스 자체 트랜잭션이 끝난 뒤 새 트랜잭션에서 DB 저장 결과를 확인한다.
-		assertThat(service.submit(caseId, Optional.of(userId), validRequest()).status()).isEqualTo(ExperienceStatus.VERDICT_CONFIRMED);
+		assertThat(service.submit(caseId, Requester.guest(userId), validRequest()).status()).isEqualTo(ExperienceStatus.VERDICT_CONFIRMED);
 		assertThat(meterRegistry.get("lawnambul.verdict.confirmed").counter().count()).isEqualTo(before + 1);
 		new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
 			var rows = jdbc.queryForList("SELECT subject_type, timing, penalty_type, reduced_to, prison_months FROM judgment WHERE experience_id = ?", experienceId);
@@ -171,7 +172,7 @@ class VerdictServiceTest {
 			assertThat(found.getStatus()).isEqualTo(ExperienceStatus.VERDICT_CONFIRMED);
 			assertThat(found.getVerdictConfirmedAt()).isNotNull();
 		});
-		assertThatThrownBy(() -> service.submit(caseId, Optional.of(userId), validRequest())).isInstanceOf(InvalidExperienceStateException.class);
+		assertThatThrownBy(() -> service.submit(caseId, Requester.guest(userId), validRequest())).isInstanceOf(InvalidExperienceStateException.class);
 		assertThat(meterRegistry.get("lawnambul.verdict.confirmed").counter().count()).isEqualTo(before + 1);	// 이미 확정된 뒤 재제출은 세지 않는다
 	}
 
@@ -179,7 +180,7 @@ class VerdictServiceTest {
 	@Transactional(propagation = Propagation.NOT_SUPPORTED)
 	void submit_wrongState_doesNotSave() {
 		jdbc.update("UPDATE experience SET status = 'PRE_JUDGED' WHERE id = ?", experienceId);
-		assertThatThrownBy(() -> service.submit(caseId, Optional.of(userId), validRequest())).isInstanceOf(InvalidExperienceStateException.class);
+		assertThatThrownBy(() -> service.submit(caseId, Requester.guest(userId), validRequest())).isInstanceOf(InvalidExperienceStateException.class);
 		assertUnchanged("PRE_JUDGED");
 	}
 
@@ -188,14 +189,14 @@ class VerdictServiceTest {
 	void submit_invalidRange_doesNotSave() {
 		var request = new VerdictRequest("LIFE", "PRISON", 119, null, null, null, null);
 		assertThat(beanValidator.validate(request)).isEmpty();
-		assertThatThrownBy(() -> service.submit(caseId, Optional.of(userId), request)).isInstanceOf(InvalidJudgmentException.class);
+		assertThatThrownBy(() -> service.submit(caseId, Requester.guest(userId), request)).isInstanceOf(InvalidJudgmentException.class);
 		assertUnchanged("REVIEWED");
 	}
 
 	@Test
 	@Transactional(propagation = Propagation.NOT_SUPPORTED)
 	void submitAndGetForm_otherAnonymousUser_rejectsNotFound() {
-		var stranger = Optional.of(UUID.randomUUID());
+		var stranger = Requester.guest(UUID.randomUUID());
 		assertThatThrownBy(() -> forms.getForm(caseId, stranger)).isInstanceOfSatisfying(
 			com.team2.project.common.exception.BusinessException.class,
 			exception -> assertThat(exception.getErrorCode()).isEqualTo(com.team2.project.common.exception.ErrorCode.EXPERIENCE_NOT_FOUND));
@@ -223,7 +224,7 @@ class VerdictServiceTest {
 	@Transactional(propagation = Propagation.NOT_SUPPORTED)
 	void submit_rejectedRequest_leavesNoJudgmentAndKeepsReviewed(String name, VerdictRequest request, Reason reason) {
 		assertThat(beanValidator.validate(request)).isEmpty();
-		assertThatThrownBy(() -> service.submit(caseId, Optional.of(userId), request))
+		assertThatThrownBy(() -> service.submit(caseId, Requester.guest(userId), request))
 			.isInstanceOfSatisfying(InvalidJudgmentException.class, exception -> assertThat(exception.getReason()).isEqualTo(reason));
 		assertUnchanged("REVIEWED");
 		assertThat(jdbc.queryForObject("SELECT count(*) FROM judgment_factor WHERE judgment_id IN (SELECT id FROM judgment WHERE experience_id = ?)",
@@ -231,7 +232,7 @@ class VerdictServiceTest {
 		assertThat(jdbc.queryForObject("SELECT verdict_confirmed_at FROM experience WHERE id = ?", Timestamp.class, experienceId)).isNull();
 
 		// 거절이 체험을 망가뜨리지 않는다: 같은 체험으로 올바른 요청을 보내면 확정된다
-		assertThat(service.submit(caseId, Optional.of(userId), validRequest()).status()).isEqualTo(ExperienceStatus.VERDICT_CONFIRMED);
+		assertThat(service.submit(caseId, Requester.guest(userId), validRequest()).status()).isEqualTo(ExperienceStatus.VERDICT_CONFIRMED);
 		assertThat(jdbc.queryForObject("SELECT count(*) FROM judgment WHERE experience_id = ?", Integer.class, experienceId)).isEqualTo(1);
 		assertThat(jdbc.queryForObject("SELECT status FROM experience WHERE id = ?", String.class, experienceId)).isEqualTo("VERDICT_CONFIRMED");
 	}
@@ -254,7 +255,7 @@ class VerdictServiceTest {
 					experiences.findById(experienceId).orElseThrow();
 					try { barrier.await(10, TimeUnit.SECONDS); }
 					catch (Exception exception) { throw new IllegalStateException(exception); }
-					service.submit(caseId, Optional.of(userId), request);
+					service.submit(caseId, Requester.guest(userId), request);
 					return "SUCCESS";
 				});
 			} catch (InvalidExperienceStateException exception) {
