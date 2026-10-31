@@ -352,11 +352,11 @@ public class CommunityService {
 	}
 
 	static Writer writerOf(CommunityPost post) {
-		return new Writer(post.getMemberId(), post.getAnonymousUserId());
+		return new Writer(post.getMemberId());
 	}
 
 	static Writer writerOf(CommunityComment comment) {
-		return new Writer(comment.getMemberId(), comment.getAnonymousUserId());
+		return new Writer(comment.getMemberId());
 	}
 
 	static OffsetDateTime kst(Instant instant) {
