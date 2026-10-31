@@ -21,7 +21,6 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -44,8 +43,11 @@ public class AuthorCardAssembler {
 	private final ProfileDecoRepository profileDecoRepository;
 	private final ShownTypeResolver shownTypeResolver;
 
-	/** 글 · 댓글을 쓴 사람: 회원 + 글에 남긴 익명 ID(명함은 회원 기준이라 쓰지 않는다, 되돌림 때 이전 코드가 읽는다) */
-	public record Writer(long memberId, UUID anonymousUserId) {
+	/**
+	 * 글 · 댓글을 쓴 사람: 회원. 명함은 회원 기준이라 글에 남긴 익명 ID는 보지 않는다 — 비어 있어도 되고,
+	 * 같은 회원의 글이 다른 익명 ID(또는 없음)를 가져도 한 명으로 센다 (BE-140)
+	 */
+	public record Writer(long memberId) {
 	}
 
 	@Transactional(readOnly = true)

@@ -50,27 +50,18 @@ public interface CommunityPostRepository extends JpaRepository<CommunityPost, Lo
 	List<CaseCount> countPostsByCase(@Param("caseIds") Collection<Long> caseIds);
 
 	/**
-	 * 랭킹 후보: 글이나 댓글을 쓴 회원마다 가장 최근에 쓴 요청의 익명 ID (명함 기준).
-	 * 회원 수만큼 명함을 계산하므로 회원이 많아지면 미리 계산해 두는 쪽으로 바꾼다(docs/decisions/BE-115.md)
+	 * 랭킹 후보: 글이나 댓글을 쓴 회원. 회원 수만큼 명함을 계산하므로 회원이 많아지면 미리 계산해 두는 쪽으로 바꾼다(docs/decisions/BE-115.md)
 	 */
 	@Query(value = """
-		select distinct on (t.member_id) t.member_id as memberId, t.anonymous_user_id as anonymousUserId from (
-		    select member_id, anonymous_user_id, created_at from community_post
-		    union all
-		    select member_id, anonymous_user_id, created_at from community_comment
-		) t order by t.member_id, t.created_at desc
+		select member_id from community_post where member_id is not null
+		union
+		select member_id from community_comment where member_id is not null
 		""", nativeQuery = true)
-	List<WriterRef> findLatestWriters();
+	List<Long> findWriterIds();
 
 	interface CaseCount {
 		Long getCaseId();
 
 		long getCount();
-	}
-
-	interface WriterRef {
-		Long getMemberId();
-
-		java.util.UUID getAnonymousUserId();
 	}
 }
