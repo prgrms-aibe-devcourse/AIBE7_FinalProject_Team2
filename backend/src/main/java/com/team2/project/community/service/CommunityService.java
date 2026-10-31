@@ -1,5 +1,6 @@
 package com.team2.project.community.service;
 
+import com.team2.project.common.owner.Owner;
 import com.team2.project.common.exception.BusinessException;
 import com.team2.project.common.exception.ErrorCode;
 import com.team2.project.common.exception.FieldErrorDetail;
@@ -145,8 +146,8 @@ public class CommunityService {
 	/** C-7 글에 붙일 수 있는 내 판결: 가장 최근에 확정한 판결. 없으면 empty (판결 확정 전 · 쿠키 없음) */
 	@Transactional(readOnly = true)
 	public Optional<ShareableVerdictResponse> shareableVerdict(Viewer viewer) {
-		return viewer.anonymousUserId()
-			.flatMap(id -> judgmentReader.findConfirmedFinals(id, VERDICT_DONE, FIRST).stream().findFirst())
+		return viewer.owner()
+			.flatMap(owner -> judgmentReader.findConfirmedFinals(owner, VERDICT_DONE, FIRST).stream().findFirst())
 			.map(judgment -> new ShareableVerdictResponse(judgment.getLegalCase().getId(),
 				judgment.getLegalCase().getTitle(), sharedVerdict(judgment)));
 	}
@@ -186,8 +187,8 @@ public class CommunityService {
 		SharedVerdict verdict = null;
 		if (Boolean.TRUE.equals(request.shareVerdict())) {
 			Judgment judgment = (caseId == null
-				? judgmentReader.findConfirmedFinals(actor.anonymousUserId(), VERDICT_DONE, FIRST)
-				: judgmentReader.findConfirmedFinalsOfCase(actor.anonymousUserId(), VERDICT_DONE, caseId, FIRST))
+				? judgmentReader.findConfirmedFinals(new Owner.MemberOwner(memberId), VERDICT_DONE, FIRST)
+				: judgmentReader.findConfirmedFinalsOfCase(new Owner.MemberOwner(memberId), VERDICT_DONE, caseId, FIRST))
 				.stream().findFirst()
 				.orElseThrow(() -> new BusinessException(ErrorCode.VALIDATION_ERROR, ErrorCode.VALIDATION_ERROR.getMessage(),
 					null, List.of(new FieldErrorDetail("shareVerdict", "VERDICT_NOT_CONFIRMED"))));
@@ -197,11 +198,11 @@ public class CommunityService {
 
 		CommunityPost post = postRepository.save(
 			CommunityPost.of(memberId, actor.anonymousUserId(), category, caseId, title, body, verdict, clock.instant()));
-		levelService.award(actor.anonymousUserId(), XpSource.POST, String.valueOf(post.getId()), "");
+		levelService.award(memberId, XpSource.POST, String.valueOf(post.getId()), "");
 		if (verdict != null) {
-			levelService.award(actor.anonymousUserId(), XpSource.SHARE_POST, String.valueOf(caseId), "");
+			levelService.award(memberId, XpSource.SHARE_POST, String.valueOf(caseId), "");
 		}
-		Viewer self = new Viewer(Optional.of(memberId), Optional.of(actor.anonymousUserId()));
+		Viewer self = new Viewer(Optional.of(memberId), Optional.empty());
 		Map<Writer, AuthorCard> cards = cardAssembler.cards(List.of(writerOf(post)));
 		return view(post, cards, titles(legalCaseRepository.findAllPublished()), Set.of(), judged(self), self);
 	}
@@ -219,8 +220,8 @@ public class CommunityService {
 		if (likeRepository.insertIfAbsent(postId, memberId) == 1) {
 			liked = true;
 			postRepository.addLikeCount(postId, 1);
-			if (post.getMemberId() != memberId) {
-				awardLike(actor.anonymousUserId(), post.getAnonymousUserId(), postId, memberId);
+			if (post.getMemberId() != null && post.getMemberId() != memberId) {
+				awardLike(memberId, post.getMemberId(), postId);
 			}
 		} else {
 			liked = false;
@@ -243,22 +244,22 @@ public class CommunityService {
 		CommunityComment comment = commentRepository.save(
 			CommunityComment.of(postId, memberId, actor.anonymousUserId(), body, clock.instant()));
 		postRepository.incrementCommentCount(postId);
-		levelService.award(actor.anonymousUserId(), XpSource.COMMENT, String.valueOf(comment.getId()), "");
+		levelService.award(memberId, XpSource.COMMENT, String.valueOf(comment.getId()), "");
 		Map<Writer, AuthorCard> cards = cardAssembler.cards(List.of(writerOf(comment)));
-		return commentView(comment, cards, new Viewer(Optional.of(memberId), Optional.of(actor.anonymousUserId())));
+		return commentView(comment, cards, new Viewer(Optional.of(memberId), Optional.empty()));
 	}
 
 	// ---------- 도우미 ----------
 
 	/**
-	 * 좋아요 경험치 두 건. award는 사용자 행을 잠그므로, 두 사람이 서로의 글에 동시에 누르면 잠금 순서가 엇갈려 교착이 날 수 있다 —
-	 * 익명 ID 순서로 차례를 고정한다
+	 * 좋아요 경험치 두 건. award는 회원 행을 잠그므로, 두 사람이 서로의 글에 동시에 누르면 잠금 순서가 엇갈려 교착이 날 수 있다 —
+	 * 회원 ID 순서로 차례를 고정한다(BE-140: 예전에는 익명 ID 순서)
 	 */
-	private void awardLike(UUID likerId, UUID authorId, long postId, long likerMemberId) {
+	private void awardLike(long likerId, long authorId, long postId) {
 		Runnable given = () -> levelService.award(likerId, XpSource.LIKE_GIVEN, String.valueOf(postId), "");
-		Runnable received = () -> levelService.award(authorId, XpSource.LIKE_RECEIVED, postId + ":" + likerMemberId,
+		Runnable received = () -> levelService.award(authorId, XpSource.LIKE_RECEIVED, postId + ":" + likerId,
 			String.valueOf(postId));
-		if (likerId.compareTo(authorId) <= 0) {
+		if (likerId <= authorId) {
 			given.run();
 			received.run();
 		} else {
@@ -304,8 +305,8 @@ public class CommunityService {
 	}
 
 	private Set<Long> judged(Viewer viewer) {
-		return viewer.anonymousUserId()
-			.map(id -> (Set<Long>) new HashSet<>(judgmentReader.findJudgedCaseIds(id, VERDICT_DONE)))
+		return viewer.owner()
+			.map(owner -> (Set<Long>) new HashSet<>(judgmentReader.findJudgedCaseIds(owner, VERDICT_DONE)))
 			.orElse(Set.of());
 	}
 

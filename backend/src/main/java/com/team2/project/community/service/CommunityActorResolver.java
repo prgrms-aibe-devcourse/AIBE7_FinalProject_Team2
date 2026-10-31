@@ -1,5 +1,6 @@
 package com.team2.project.community.service;
 
+import com.team2.project.common.owner.Owner;
 import com.team2.project.experience.domain.AnonymousUser;
 import com.team2.project.experience.repository.AnonymousUserRepository;
 import java.time.Clock;
@@ -23,12 +24,20 @@ public class CommunityActorResolver {
 	private final AnonymousUserRepository anonymousUserRepository;
 	private final Clock clock;
 
-	/** 쓰기 요청을 한 사람. anonymousUserId는 DB에 있는 익명 ID다(경험치 지급 · 글 FK) */
+	/** 쓰기 요청을 한 사람. anonymousUserId는 DB에 있는 익명 ID로 글 · 댓글에 남긴다(되돌림 때 이전 코드가 읽는다, V43). 명함 · 경험치 · 판결은 회원 기준이다(BE-140) */
 	public record Actor(long memberId, UUID anonymousUserId) {
 	}
 
-	/** 보는 사람. 로그인 전이면 memberId가 없고, 판결 여부(viewerJudged)는 쿠키의 익명 ID로 본다 */
+	/**
+	 * 보는 사람. 로그인했으면 회원이 기준이고(anonymousUserId는 비어 있다), 로그인 전이면 memberId가 없고
+	 * 판결 여부(viewerJudged)는 쿠키의 익명 ID로 본다
+	 */
 	public record Viewer(Optional<Long> memberId, Optional<UUID> anonymousUserId) {
+
+		/** 체험 · 판결을 읽는 기준: 회원이면 회원, 아니면 쿠키의 익명 ID (BE-140) */
+		public Optional<Owner> owner() {
+			return memberId.<Owner>map(Owner.MemberOwner::new).or(() -> anonymousUserId.map(Owner.AnonymousOwner::new));
+		}
 	}
 
 	/** 로그인 회원의 쓰기 요청. 연결된 익명 ID가 하나도 없으면(로그인 처리가 늘 만들어 두므로 드물다) 이 회원에 연결된 익명 ID를 새로 만든다 */
@@ -42,7 +51,7 @@ public class CommunityActorResolver {
 	@Transactional(readOnly = true)
 	public Viewer viewer(Optional<Long> memberId, Optional<UUID> cookie) {
 		Optional<UUID> anonymousUserId = memberId.isPresent()
-			? linkedAnonymousId(memberId.get(), cookie)
+			? Optional.empty()
 			: cookie.flatMap(anonymousUserRepository::findById).map(AnonymousUser::getId);
 		return new Viewer(memberId, anonymousUserId);
 	}

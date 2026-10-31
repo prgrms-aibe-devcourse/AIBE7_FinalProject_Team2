@@ -25,13 +25,13 @@ public class CollectionController {
 	/** P-9 수집 기록 — 200 + 새로 저장된 항목 · 모은 수 · 새로 해금된 도전과제 */
 	@PostMapping("/collection")
 	public CollectionRecordResponse record(@Valid @RequestBody CollectionRecordRequest body, Requester requester) {
-		return collectionService.record(requester.anonymousId(), body);
+		return collectionService.record(requester.requireMember(), body);
 	}
 
 	/** P-10 컬렉션 "봤음" — 204 (멱등) */
 	@PostMapping("/collection/seen")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
 	public void markSeen(@Valid @RequestBody CollectionSeenRequest body, Requester requester) {
-		collectionService.markSeen(requester.anonymousId(), body);
+		collectionService.markSeen(requester.requireMember(), body);
 	}
 }

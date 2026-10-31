@@ -17,10 +17,10 @@ public class AttendanceController {
 
 	private final AttendanceService attendanceService;
 
-	/** 오늘 출석 기록 — 쿠키가 없어도 · 이미 출석했어도 204 (익명 ID를 새로 발급하지 않는다) */
+	/** 오늘 출석 기록 — 로그인하지 않았어도 · 이미 출석했어도 204 (손님은 기록하지 않는다, BE-140) */
 	@PostMapping("/attendance")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
 	public void record(Requester requester) {
-		attendanceService.record(requester.anonymousId());
+		attendanceService.record(requester);
 	}
 }

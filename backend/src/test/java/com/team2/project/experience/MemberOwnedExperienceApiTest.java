@@ -179,8 +179,8 @@ class MemberOwnedExperienceApiTest extends ApiIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("마이페이지의 체험 목록 · 성향은 회원 기준이다(꾸미기 등은 3b까지 쿠키 기준)")
-	void myPage_experiencesAndPersonality_ofMember() throws Exception {
+	@DisplayName("마이페이지는 로그인한 회원 것이다 — 체험 목록은 회원 기준이고, 쿠키만 있는 손님은 401이다")
+	void myPage_ofMember_guestUnauthorized() throws Exception {
 		long memberId = newMember();
 		long caseId = insertCase("MURDER", "PUBLISHED");
 		long guestCaseId = insertCase("FRAUD", "PUBLISHED");
@@ -195,6 +195,7 @@ class MemberOwnedExperienceApiTest extends ApiIntegrationTest {
 			.andExpect(jsonPath("$.experiences[0].caseId").value(caseId))
 			.andExpect(jsonPath("$.personality").doesNotExist());
 		mockMvc.perform(get("/api/v1/my-page").cookie(guest))
-			.andExpect(jsonPath("$.experiences[0].caseId").value(guestCaseId));
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
 	}
 }
