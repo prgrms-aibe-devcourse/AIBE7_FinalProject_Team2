@@ -79,6 +79,7 @@
 | v0.75 | 2026-10-30 | **수집 항목 화이트리스트 (BE-136)** — P-9 `itemId`를 모을 수 있는 목록으로 거른다: 일러스트는 `case-{공개 사건 id}-{origin \| conclusion \| reenact}`(요청한 사건과 달라도 된다 — 그림별 key), 의상은 역할 의상 그림이 있는 `{who}:{role}`(사건 전용 의상 `{who}:case-{n}`은 그 사건에서만). 목록에 없으면 400 `VALIDATION_ERROR`(`details`: `items[i].itemId` · `NOT_COLLECTIBLE`), 하나라도 있으면 아무것도 저장하지 않는다. 의상의 사용자당 상한 12 삭제(목록이 곧 전체) — 409 `COLLECTION_LIMIT_EXCEEDED`는 일러스트 사건당 5만 남는다. (v0.74는 BE-133 PR이 쓴다) |
 | v0.76 | 2026-10-30 | **닉네임 거절 사유 이름 (BE-134)** — M-5 · M-7의 닉네임 400 `details[].reason`을 사유별 이름으로(M-7은 하나, M-5는 요청 검사 사유가 여럿일 수 있다): `NotBlank` · `Pattern` · `Size`(요청 DTO 검사와 같은 이름) · `SizeWithHangul`(한글이 들어가 8자 초과) · `Reserved`(`방청객`으로 시작). 예전에는 서비스 검사(한글 8자 · 방청객)가 모두 `VALIDATION_ERROR`였다. 칸 이름 · 에러 코드는 그대로. (v0.74는 BE-133 PR #349가 쓴다) |
 | v0.77 | 2026-10-30 | **체험 · 성향 결과의 주인 (BE-140 3a)** — 1-3: 내 체험은 로그인했으면 회원 기준(쿠키는 보지 않음), 아니면 익명 ID 쿠키 기준. API 1 · 16의 `myStatus`, API 2 ~ 15, P-2 · P-3, P-5의 체험 목록 · 성향이 같은 기준이다. 회원은 체험 시작 · 성향 제출에서 익명 ID를 발급받지 않는다. 손님 때 한 체험을 회원 것으로 옮기는 일은 M-9 ~ M-11(후속)이 맡는다 |
+| v0.79 | 2026-10-31 | **첫 로그인 가져오기 M-9 ~ M-11 신설 (BE-140 3c)** — `GET /members/me/anonymous-import`(후보의 체험 수 · 첫인상 엽서 수, 없으면 404) · `POST /members/me/anonymous-import`(체험을 회원 것으로 이동) · `POST /members/me/anonymous-import/discard`(결정만 남기고 익명 ID 쿠키를 지움). 에러 코드 `ANONYMOUS_IMPORT_NOT_AVAILABLE` 추가 |
 
 ---
 
@@ -169,6 +170,7 @@ json
 | 404 | `PERSONALITY_RESULT_NOT_FOUND` | (확장, 성향 API) 성향 테스트 결과가 없음 (쿠키 없음 포함) | S-15 테스트 안내 |
 | 404 | `PERSONALITY_TYPE_NOT_FOUND` | (확장, 성향 API) 공유 주소의 유형이 없음 | 공유 결과 없음 안내 · 테스트 권유 |
 | 409 | `DUPLICATE_NICKNAME` | (확장, 회원 M-5 · M-7, v0.69) 이미 쓰는 닉네임(대소문자만 달라도 같다). 동시에 같은 닉네임을 정해도 한 명만 되고 나머지는 이 코드다 | 닉네임 칸에 안내 |
+| 409 | `ANONYMOUS_IMPORT_NOT_AVAILABLE` | (확장, 회원 M-10 · M-11, v0.79) 가져올 수 있는 기록이 없거나 이미 다른 결정을 했다
 | 409 | `DUPLICATE_ID` | (확장, 회원 M-5, v0.58) 이미 쓰는 아이디(대소문자만 다른 아이디 포함). 동시에 같은 아이디로 가입해도 한 명만 만들어지고 나머지는 이 코드다 | 아이디 칸에 안내. "방금 가입했다면 로그인" 안내도 함께 (가입 직후 서버 오류 뒤 다시 누른 경우) |
 | 409 | `DUPLICATE_TITLE` | (확장, 관리자 API) 사건 제목이 다른 사건과 겹침 | 입력 안내 |
 | 409 | `PUBLISH_NOT_READY` | (확장, 관리자 API) 공개 조건 미충족. `details`에 조건 코드 | 남은 조건 안내 (A-13) |
@@ -2397,6 +2399,57 @@ Origin이 이 서버 자신과 같은 출처인지)을 거친다 — 벗어나�
 | 401 `UNAUTHORIZED` | 로그인하지 않음 |
 | 400 `VALIDATION_ERROR` | `nickname`이 없음 · 문자열이 아님 · 형식 위반(`details`: `field: nickname`). `reason`(v0.76, BE-134): `NotBlank`(없음 · 빈 값 · 공백만 있는 값) · `Pattern`(공백 아닌 글자가 있는데 한글 · 영문 · 숫자 밖의 글자나 공백이 섞임, 예: `닉 네임` · `닉네임!`) · `Size`(2 ~ 12자 밖) · `SizeWithHangul`(한글이 들어가 8자 초과) · `Reserved`(`방청객`으로 시작). M-7은 처음 걸린 하나만 실린다. M-5 가입은 요청 검사(`@NotBlank` · `@Size` · `@Pattern`)가 먼저라 한 칸에 여러 사유가 함께 실릴 수 있고(예: 빈 닉네임), 그 검사를 통과한 뒤의 `SizeWithHangul` · `Reserved`는 하나다. 문자열로 읽을 수 없는 값(객체 · 배열 등)은 본문 해석 단계의 400이라 `details`가 `null`이다 |
 | 409 `DUPLICATE_NICKNAME` | 다른 회원이 쓰는 닉네임(동시 요청 포함 — 한 명만 된다) |
+
+### M-9. 가져올 기록 조회 — `GET /api/v1/members/me/anonymous-import` (BE-140)
+
+> 로그인한 회원만(`Authorization: Bearer`, 아니면 401). 로그인 · 가입 · 카카오 콜백 직후 화면이 불러 확인 창을 띄울지 정한다. 결정 기록 [`BE-140.md`](decisions/BE-140.md)
+
+**후보 조건** (M-10 · M-11도 같다): 쿠키 `NLNB_AID`의 익명 ID 하나만 본다. 그 익명 ID가 이 회원에 연결되어 있고(로그인이 연결한다), 체험이 1건 이상 있고, 회원의 체험이 0건이고, 이 회원의 결정 기록이 없어야 한다.
+
+**응답 200**
+
+```json
+{ "experienceCount": 3, "preJudgmentCount": 2 }
+```
+
+| 칸 | 설명 |
+| --- | --- |
+| `experienceCount` | 그 익명 ID의 체험 수(진행 중 포함) |
+| `preJudgmentCount` | 그중 첫인상 엽서(사전 판단) 수 |
+
+| 에러 | 조건 |
+| --- | --- |
+| 401 `UNAUTHORIZED` | 로그인 전 |
+| 404 `NOT_FOUND` | 후보가 없다. 화면은 창 없이 로그인을 마친다 |
+
+### M-10. 가져오기 — `POST /api/v1/members/me/anonymous-import` (BE-140)
+
+> 로그인한 회원만. 본문 없음. 후보의 체험 전부를 한 트랜잭션에서 회원 것으로 **이동**한다(복사가 아니다). 진행 중 체험도 옮기고, 첫인상 엽서 · 판결 · 체험 기여는 체험에 딸려 간다. 성향 테스트 결과(`personality_result`)와 출석 · 꾸미기 · 수집 · 도전과제 등은 옮기지 않는다.
+
+**응답 200**
+
+```json
+{ "experienceCount": 3 }
+```
+
+- 같은 요청을 다시 보내면(재시도 · 동시 요청) 다시 옮기지 않고 처음 옮긴 수를 돌려준다.
+- 옮긴 뒤 다른 탭의 손님 요청이 그 체험을 찾으면 `EXPERIENCE_NOT_FOUND`다.
+
+| 에러 | 조건 |
+| --- | --- |
+| 401 `UNAUTHORIZED` | 로그인 전 |
+| 409 `ANONYMOUS_IMPORT_NOT_AVAILABLE` | 후보가 없거나, 이미 M-11로 정했거나, 옮기는 사이 회원이 같은 사건 체험을 시작했다 |
+
+### M-11. 초기화(가져오지 않기) — `POST /api/v1/members/me/anonymous-import/discard` (BE-140)
+
+> 로그인한 회원만. 본문 없음. `DISCARDED` 결정을 남기고 익명 ID 쿠키를 지운다(`Set-Cookie: NLNB_AID=; Max-Age=0`). 익명 기록은 지우지 않는다 — 나중에 정리 배치가 지운다.
+
+**응답 204** (본문 없음). 같은 요청을 다시 보내도 204다.
+
+| 에러 | 조건 |
+| --- | --- |
+| 401 `UNAUTHORIZED` | 로그인 전 |
+| 409 `ANONYMOUS_IMPORT_NOT_AVAILABLE` | 후보가 없거나, 이미 M-10으로 옮겼다. 쿠키는 지우지 않는다 |
 
 ## 11. (확장) 레벨 · 직업 API (BE-106)
 

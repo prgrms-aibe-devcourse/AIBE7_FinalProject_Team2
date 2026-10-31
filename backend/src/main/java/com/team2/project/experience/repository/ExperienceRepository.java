@@ -150,4 +150,19 @@ public interface ExperienceRepository extends JpaRepository<Experience, Long> {
 		@Param("aiRevealedAt") Instant aiRevealedAt,
 		@Param("completedAt") Instant completedAt,
 		@Param("updatedAt") Instant updatedAt);
+
+	/** 이 회원의 체험이 있는가 (첫 로그인 가져오기, BE-140: 회원 체험이 0건일 때만 옮긴다) */
+	boolean existsByMemberId(Long memberId);
+
+	/** 이 익명 ID의 체험 수 (M-9) */
+	long countByAnonymousUser_Id(UUID anonymousUserId);
+
+	/**
+	 * 익명 ID의 체험 전부를 회원 것으로 옮긴다 (M-10). 복사가 아니라 이동이라 익명 쪽에는 남지 않는다.
+	 * 첫인상 엽서 · 판결 · 체험 기여는 체험 ID로 이어져 있어 따라온다. updatedAt은 그대로 둬 체험 목록 순서를 지킨다
+	 * @return 옮긴 체험 수
+	 */
+	@Modifying(clearAutomatically = true)
+	@Query("update Experience e set e.memberId = :memberId, e.anonymousUser = null where e.anonymousUser.id = :anonymousUserId")
+	int moveToMember(@Param("anonymousUserId") UUID anonymousUserId, @Param("memberId") long memberId);
 }
