@@ -74,15 +74,19 @@ LAST_QUESTION = {"admitted": "공소사실을 인정합니까?", "denied": "공�
 BLOCK_UNITS = ("U0", "U1", "U2", "U3", "U4")
 # 블록이 무엇을 보고 만들어지는지 — 이 값이 바뀌면 그 블록은 낡는다(BE-126 낡음 계산 · BE-129 연동 표의 정본).
 # 분류 축은 GUIDE_UNITS와 같고(extra 축의 분류 값 이름은 thirdParty), 민감 플래그는 모든 단위(가드), 배역은 배역이 말하는
-# U2 · U3 · U4, 기사는 기사를 읽는 U1, 블록 이름은 그 블록의 값을 받는 단위다(U2는 U0 질문, U4는 U0 쟁점 · U2 변호인 입장).
+# U2 · U3 · U4, 기사는 기사를 읽는 U1, 사건 내용(제목 · 개요 · 섹션 · 판단 요소, 관리자가 A-11로 고칠 수 있다)은 사건을 직접 받는
+# U0 · U2 · U3 · U4(U1은 기사만 받는다), 블록 이름은 그 블록의 값을 받는 단위다(U2는 U0 질문, U4는 U0 쟁점 · U2 변호인 입장).
 # 백엔드는 같은 표를 contracts/script_blocks.json으로 맞춘다 — 표를 고치면 그 파일도 고친다(테스트가 잡는다)
 BLOCK_BASIS = {
-    "U0": ("mood", "issue", "victim", "thirdParty", "sensitiveFlags"),
+    "U0": ("case", "mood", "issue", "victim", "thirdParty", "sensitiveFlags"),
     "U1": ("mood", "sensitiveFlags", "paper"),
-    "U2": ("cast", "mood", "issue", "thirdParty", "sensitiveFlags", "U0"),
-    "U3": ("cast", "victim", "thirdParty", "sensitiveFlags"),
-    "U4": ("cast", "mood", "issue", "victim", "sensitiveFlags", "U0", "U2"),
+    "U2": ("case", "cast", "mood", "issue", "thirdParty", "sensitiveFlags", "U0"),
+    "U3": ("case", "cast", "victim", "thirdParty", "sensitiveFlags"),
+    "U4": ("case", "cast", "mood", "issue", "victim", "sensitiveFlags", "U0", "U2"),
 }
+# basis 중 DB가 가진 값 — 파이프라인은 DB의 판을 모르므로 비워 두고(None) 적재할 때 백엔드가 그 판으로 채운다.
+# 값 통째(기사 문단 · 사건 섹션)를 남기면 백엔드가 필드 · 공백까지 맞춰 비교해야 한다(PR #363 리뷰)
+DB_BASIS = ("case", "paper")
 
 # 단위별로 넣는 공개 단계 (사건 섹션 `stage` · 판단 요소 `revealStage`). LAW · SUMMARY는 넣지 않는다
 UNIT_STAGES = {"PAPER": ("OVERVIEW",), "U0": ("OVERVIEW", "DETAIL", "ARGUMENT"), "U2": ("OVERVIEW", "DETAIL", "ARGUMENT"),
@@ -204,12 +208,22 @@ def strip_line_prefix(text):
     return re.sub(r"^\s*(?:[①-⑳]\s*|\d+[.)]\s+)?(?:(?:남불|내로)\s*[:：\-–]\s*)?", "", text or "").strip()
 
 
+# 답 앞의 공백 · 말줄임표 · 마침표(섞여 있어도 한 번에)와, 예 · 네 / 아니요 · 아닙니다가 한 낱말로 끝났는지 보는 경계.
+# 경계가 없으면 "예전에는" · "네가" · "아니었습니다"처럼 접두만 같은 문장을 답으로 읽는다(PR #363 리뷰). 백엔드도 같은 규칙이다
+_ANSWER_LEAD = re.compile(r"^[\s….]+")
+_ANSWER_END = r"(?=$|[\s,.!?…])"
+_YES = re.compile(rf"^(?:예|네){_ANSWER_END}")
+_NO = re.compile(rf"^(?:아니요|아니오|아닙니다|아니){_ANSWER_END}")
+
+
 def normalize_answer(answer):
-    """피고인 역 답을 최소 응답으로(README): 예 · 네 → "…네.", 아니요 · 아닙니다 → "…아닙니다."."""
-    stripped = (answer or "").strip().lstrip("…").lstrip(".").strip()
-    if stripped.startswith(("예", "네")):
+    """피고인 역 답을 최소 응답으로(README): 예 · 네 → "…네.", 아니요 · 아닙니다 → "…아닙니다.". 그 밖의 답은 앞에 "…"만 붙인다.
+    예 · 네 · 아니요는 **한 낱말일 때만** 답으로 본다 — 뒤가 끝 · 공백 · 쉼표 · 마침표 · 물음표 · 느낌표 · 말줄임표여야 한다.
+    사례는 contracts/script_blocks.json(백엔드가 같은 파일로 맞춘다)."""
+    stripped = _ANSWER_LEAD.sub("", (answer or "").strip()).strip()
+    if _YES.match(stripped):
         return "…네."
-    if stripped.startswith(("아니", "아닙")):
+    if _NO.match(stripped):
         return "…아닙니다."
     return "…" + stripped
 
@@ -694,7 +708,8 @@ def block_contents(case, generated):
             indict["law"] = case.get("appliedLaw")
         contents["U2"] = opening
     if generated.get("evidence"):
-        contents["U3"] = generated["evidence"]  # 만들지 못한 줄까지 둔다 — 검수 결과 path(/{순번})가 이 목록을 가리킨다
+        # 만들지 못한 줄까지 둔다 — 검수 결과 path(/{순번})가 이 목록을 가리킨다. 생성 결과와 따로 가공할 수 있게 복사한다
+        contents["U3"] = json.loads(json.dumps(generated["evidence"]))
     if value("U4"):
         contents["U4"] = value("U4")
     return contents
@@ -704,7 +719,8 @@ def build_blocks(case, cast, cls, generated):
     """대본을 단위 블록과 메타로 나눈다 (BE-126 `case_script_block` 적재 계약).
 
     블록 하나: {"content", "revision", "basis", "review", "warnings", "repairs"}. `basis`는 그 블록을 만들 때 본 값
-    (`BLOCK_BASIS`)이다 — 앞 블록은 판 번호, 나머지는 값 그대로. 지금 값과 다르면 낡은 블록이다(계산은 백엔드).
+    (`BLOCK_BASIS`)이다 — 앞 블록은 판 번호, 분류 · 배역은 값 그대로, 사건 · 기사(`DB_BASIS`)는 None(적재할 때 백엔드가 DB 판으로
+    채운다). 지금 값과 다르면 낡은 블록이다(계산은 백엔드). `review` · `warnings` · `repairs`는 관리자 화면 전용이다.
     `review` · `repairs`는 그 단위 것만 담는다(대본 전체에 걸린 `REVIEW_FAILED`는 대본의 `review`에만 있다).
     메타: {"cast", "issue", "admits"} — 프론트 공통 틀이 고정 문구(신문 마지막 질문 · 답, 이름 · 자리)를 고르는 값이다."""
     contents = block_contents(case, generated)
@@ -712,7 +728,7 @@ def build_blocks(case, cast, cls, generated):
     revision, seen = block_revisions(contents, repairs)
     values = {"cast": dict(cast), "mood": cls.get("mood"), "issue": cls.get("issue"), "victim": cls.get("victim"),
               "thirdParty": bool(cls.get("thirdParty")), "sensitiveFlags": sorted(cls.get("sensitiveFlags") or []),
-              "paper": generated.get("paper")}
+              **dict.fromkeys(DB_BASIS)}
     review = generated.get("review", [])
     blocks = {}
     for unit in BLOCK_UNITS:

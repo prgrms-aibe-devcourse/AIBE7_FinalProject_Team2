@@ -309,15 +309,19 @@ class BlocksTest(unittest.TestCase):
         generated, script = self.generate(answers(), cls=cls)
         blocks = script["blocks"]
         self.assertEqual(list(blocks), ["U0", "U1", "U2", "U3", "U4"])
-        self.assertEqual(blocks["U1"]["content"]["lines"][0], "기사 제목부터 같이 봐요.")  # 접두어를 뗀 값
+        self.assertEqual(blocks["U1"]["content"]["lines"], [sa.strip_line_prefix(x) for x in INTRO["lines"]])  # 접두어를 뗀 값
+        self.assertEqual(blocks["U1"]["content"]["lines"][0], "기사 제목부터 같이 봐요.")
         # 신문 답은 모델이 쓴 그대로 둔다 — "…네." 정규화는 읽는 쪽이 한다(U0를 고치면 어긋나는 파생값을 저장하지 않는다)
         self.assertEqual([q["a"] for q in blocks["U2"]["content"]["questions"]], ["아니요, 아닙니다.", "네, 맞습니다."])
         self.assertEqual(blocks["U3"]["content"], generated["evidence"])
         self.assertEqual(blocks["U4"]["content"], CLOSING)
         self.assertEqual({unit: block["revision"] for unit, block in blocks.items()}, dict.fromkeys(blocks, 1))
-        self.assertEqual(blocks["U2"]["basis"], {"cast": CAST, "mood": "impulsive", "issue": "admitted", "thirdParty": False,
-                                                 "sensitiveFlags": ["MENTAL_HEALTH", "SELF_HARM"], "U0": 1})
-        self.assertEqual(blocks["U1"]["basis"]["paper"], PAPER)
+        self.assertEqual(blocks["U2"]["basis"], {"case": None, "cast": CAST, "mood": "impulsive", "issue": "admitted",
+                                                 "thirdParty": False, "sensitiveFlags": ["MENTAL_HEALTH", "SELF_HARM"], "U0": 1})
+        # 사건 · 기사는 DB가 가진 값이라 비워 두고 적재할 때 백엔드가 DB 판으로 채운다(값 통째를 비교하지 않는다)
+        self.assertEqual(blocks["U1"]["basis"]["paper"], None)
+        self.assertEqual(blocks["U3"]["basis"]["case"], None)
+        self.assertIsNot(blocks["U3"]["content"], generated["evidence"])  # 생성 결과와 따로 가공할 수 있게 복사한다
         self.assertEqual(blocks["U4"]["basis"]["U2"], 1)
         self.assertEqual({unit: list(block["basis"]) for unit, block in blocks.items()},
                          {unit: list(keys) for unit, keys in sa.BLOCK_BASIS.items()})
@@ -377,6 +381,12 @@ class BlocksTest(unittest.TestCase):
         self.assertEqual(script["blocks"], {})
         self.assertIsNone(script["meta"]["admits"])
 
+    def test_meta_admits_false_when_design_denies(self):
+        denied = {**DESIGN, "questions": [*DESIGN["questions"][:2], {"q": "공소사실을 인정합니까?", "a": "아니요"}]}
+        _, script = self.generate([denied, INTRO, OPENING, *EVIDENCE, CLOSING])
+        self.assertFalse(script["meta"]["admits"])
+        self.assertIn("…아닙니다.", [s.get("text") for s in script["acts"]["2"]["steps"] if s.get("confirm") == 3])
+
 
 class BlockContractTest(unittest.TestCase):
     """contracts/script_blocks.json — 백엔드(자바)가 같은 파일로 같은 규칙을 확인한다(BE-126). 정본은 파이썬이다."""
@@ -386,6 +396,7 @@ class BlockContractTest(unittest.TestCase):
     def test_basis_and_affects_match(self):
         import script_repair  # noqa: E402 (script_repair가 script_assembler를 불러온다)
         self.assertEqual(self.CONTRACT["basis"], {unit: list(keys) for unit, keys in sa.BLOCK_BASIS.items()})
+        self.assertEqual(self.CONTRACT["dbBasis"], list(sa.DB_BASIS))
         self.assertEqual(self.CONTRACT["affects"], script_repair.AFFECTS)
         self.assertEqual(script_repair.AFFECTS, {"U0": ["U2", "U4"], "U1": [], "U2": ["U4"], "U3": [], "U4": []})
 

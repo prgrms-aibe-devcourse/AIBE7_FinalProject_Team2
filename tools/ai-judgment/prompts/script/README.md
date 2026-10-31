@@ -19,7 +19,7 @@
 | 대상 | 규칙 |
 | --- | --- |
 | 피고인신문 마지막 질문 | 쟁점 유형별 고정: ①인정 · ③부인 · ④정신상태 → "공소사실을 인정합니까?", ②고의 다툼 · ⑤방어 주장 → "행위 사실을 인정합니까?". 답은 사건 데이터의 인정 여부로 "…네, 인정합니다." / "…아닙니다." |
-| 피고인신문 답(A씨 역) | "예 · 네"로 시작하면 "…네.", "아니요 · 아닙니다"면 "…아닙니다."로 정규화(최소 응답). 저장 블록에는 정규화 전 답을 둔다(아래 "저장 블록") |
+| 피고인신문 답(A씨 역) | "예 · 네"면 "…네.", "아니요 · 아닙니다"면 "…아닙니다."로 정규화(최소 응답, 한 낱말일 때만 — 아래 "저장 블록"의 신문 답 규칙). 저장 블록에는 정규화 전 답을 둔다 |
 | 최후진술 | 두지 않는다(10/28 결정: "…이상입니다." 한마디를 위해 의상을 바꾸고 가운데로 나오는 장면이 어색함). 3막 절차는 검사 의견 · 최종변론 · 판결 |
 
 ## 검수 조건 (`../../script_review.py`, BE-122)
@@ -63,19 +63,22 @@
 - `blocks`: `{"U0": 블록, …}`. 만들지 못한 단위는 빠진다(`pending`이 알린다). 블록 하나는 `{"content", "revision", "basis", "review", "warnings", "repairs"}`.
   - `content`: 블록 값. 화면에 바로 쓸 값으로 다듬되(U1 줄 접두어 제거, U2 `cards.indict.law`가 비면 사건 적용 법조) 모양은 생성 결과 그대로라 검수 결과 `path`가 맞는다. **U2 신문 답은 모델이 쓴 그대로**다 — "…네." 정규화는 읽는 쪽(API 18)이 한다. U3는 증거조사 대사 목록 전체(만들지 못한 줄 포함, `factorId` · `role` · `validation`).
   - `revision`: 판. 처음 만든 블록은 1, 고쳐 쓰기가 값을 바꿀 때마다(줄을 받거나 단위를 바꿈) 1씩 오른다.
-  - `basis`: 만들 때 본 값. 키는 `BLOCK_BASIS`(아래 표), 값은 분류 · 배역 · 기사는 그대로, 앞 블록은 그때의 판 번호다. 지금 값과 다르면 낡은 블록이다(계산 · 표시는 백엔드, BE-126 2차). 예: U0 줄을 고쳐 받으면 U0는 2판이 되고, 그 전에 만든 U2의 `basis.U0`는 1이라 적재하자마자 낡음으로 보인다.
+  - `basis`: 만들 때 본 값. 키는 `BLOCK_BASIS`(아래 표). 분류 · 배역은 값 그대로, 앞 블록은 그때의 판 번호다. **사건 내용(`case`) · 기사(`paper`)는 DB가 가진 값이라 `null`로 내보내고 적재할 때 백엔드가 DB의 판으로 채운다**(`DB_BASIS`) — 파이프라인은 DB 판을 모르고, 값 통째를 남기면 백엔드가 필드 · 공백까지 맞춰 비교해야 한다. 지금 값과 다르면 낡은 블록이다(계산 · 표시는 백엔드, BE-126 2차). 예: U0 줄을 고쳐 받으면 U0는 2판이 되고, 그 전에 만든 U2의 `basis.U0`는 1이라 적재하자마자 낡음으로 보인다.
   - `review` · `repairs`: 그 단위의 검수 결과 · 고쳐 쓰기 기록(형식은 위). 대본 전체에 걸린 `REVIEW_FAILED`는 대본의 `review`에만 있다. `warnings`: 단위 형식 경고(U3 경고는 줄마다 `validation`에 있다).
+  - **`review` · `warnings` · `repairs`는 관리자 화면 전용이다.** 고치기 전 · 받지 않은 문장과 대본 인용이 들어 있어 공개 API(API 18)에 싣지 않는다. API 18은 `content`만 내리고, U3는 줄마다 `factorId` · `role` · `text`만 내린다(`validation` · `attempts` 같은 생성 내부 값은 뺀다).
 - `meta`: `{"cast", "issue", "admits"}`. 프론트 공통 틀이 고정 문구를 고르는 값이다 — 이름 · 자리(`cast`), 신문 마지막 질문(`issue`, `LAST_QUESTION`), 마지막 답 "…네, 인정합니다." / "…아닙니다."(`admits`, U0 세 번째 답). U0가 없으면 `admits`는 `null`.
 
 | 블록 | `basis` (이 값이 바뀌면 낡는다) |
 | --- | --- |
-| U0 설계도 | `mood` · `issue` · `victim` · `thirdParty` · `sensitiveFlags` |
+| U0 설계도 | `case` · `mood` · `issue` · `victim` · `thirdParty` · `sensitiveFlags` |
 | U1 1막 해설 | `mood` · `sensitiveFlags` · `paper` |
-| U2 재판 도입부 | `cast` · `mood` · `issue` · `thirdParty` · `sensitiveFlags` · `U0` |
-| U3 증거조사 | `cast` · `victim` · `thirdParty` · `sensitiveFlags` |
-| U4 3막 | `cast` · `mood` · `issue` · `victim` · `sensitiveFlags` · `U0` · `U2` |
+| U2 재판 도입부 | `case` · `cast` · `mood` · `issue` · `thirdParty` · `sensitiveFlags` · `U0` |
+| U3 증거조사 | `case` · `cast` · `victim` · `thirdParty` · `sensitiveFlags` |
+| U4 3막 | `case` · `cast` · `mood` · `issue` · `victim` · `sensitiveFlags` · `U0` · `U2` |
 
-분류 축은 "CASE GUIDE" 표의 넣는 단위와 같고, 민감 플래그는 모든 단위, 배역은 배역이 말하는 U2 · U3 · U4다. 정본은 `script_assembler.BLOCK_BASIS`이고, 백엔드는 같은 표와 신문 답 규칙(`normalize_answer` · `admits`)을 `../../contracts/script_blocks.json`으로 맞춘다 — 규칙을 바꾸면 파이썬 → 이 파일 → 백엔드 순서로 고친다(양쪽 테스트가 이 파일을 읽는다).
+분류 축은 "CASE GUIDE" 표의 넣는 단위와 같고, 민감 플래그는 모든 단위, 배역은 배역이 말하는 U2 · U3 · U4다. 사건 내용(제목 · 개요 · 섹션 · 판단 요소 — 관리자가 A-11로 고칠 수 있다)은 사건을 직접 받는 U0 · U2 · U3 · U4이고, U1은 기사만 받는다.
+
+신문 답 규칙(`normalize_answer`): 앞의 공백(전각 포함) · 말줄임표 · 마침표를 섞인 채로 벗긴 뒤, "예 · 네"는 "…네.", "아니요 · 아니오 · 아닙니다 · 아니"는 "…아닙니다."로 바꾼다. **한 낱말일 때만**이다 — 뒤가 끝 · 공백 · 쉼표 · 마침표 · 물음표 · 느낌표 · 말줄임표여야 하고, "예전에는" · "네가" · "아니었습니다"처럼 접두만 같은 말은 앞에 "…"만 붙인다. `admits`(인정 여부)는 정규화한 답이 "…네."인지다. 정본은 `script_assembler.BLOCK_BASIS`이고, 백엔드는 같은 표와 신문 답 규칙(`normalize_answer` · `admits`)을 `../../contracts/script_blocks.json`으로 맞춘다 — 규칙을 바꾸면 파이썬 → 이 파일 → 백엔드 순서로 고친다(양쪽 테스트가 이 파일을 읽는다).
 
 ## 검수 결과 형식 (BE-122 · BE-129 계약)
 
