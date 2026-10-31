@@ -65,7 +65,8 @@
   - `revision`: 판. 처음 만든 블록은 1, 고쳐 쓰기가 값을 바꿀 때마다(줄을 받거나 단위를 바꿈) 1씩 오른다.
   - `basis`: 만들 때 본 값. 키는 `BLOCK_BASIS`(아래 표). 분류 · 배역은 값 그대로, 앞 블록은 그때의 판 번호다. **사건 내용(`case`) · 기사(`paper`)는 DB가 가진 값이라 `null`로 내보내고 적재할 때 백엔드가 DB의 판으로 채운다**(`DB_BASIS`) — 파이프라인은 DB 판을 모르고, 값 통째를 남기면 백엔드가 필드 · 공백까지 맞춰 비교해야 한다. 지금 값과 다르면 낡은 블록이다(계산 · 표시는 백엔드, BE-126 2차). 예: U0 줄을 고쳐 받으면 U0는 2판이 되고, 그 전에 만든 U2의 `basis.U0`는 1이라 적재하자마자 낡음으로 보인다.
   - `review` · `repairs`: 그 단위의 검수 결과 · 고쳐 쓰기 기록(형식은 위). 대본 전체에 걸린 `REVIEW_FAILED`는 대본의 `review`에만 있다. `warnings`: 단위 형식 경고(U3 경고는 줄마다 `validation`에 있다).
-  - **`review` · `warnings` · `repairs`는 관리자 화면 전용이다.** 고치기 전 · 받지 않은 문장과 대본 인용이 들어 있어 공개 API(API 18)에 싣지 않는다. API 18은 `content`만 내리고, U3는 줄마다 `factorId` · `role` · `text`만 내린다(`validation` · `attempts` 같은 생성 내부 값은 뺀다).
+  - **`review` · `warnings` · `repairs`는 관리자 화면 전용이다.** 고치기 전 · 받지 않은 문장과 대본 인용이 들어 있어 공개 API(API 18)에 싣지 않는다. API 18은 `content`만 내리고, U3는 줄마다 `factorId` · `role` · `text`만 내린다(`validation` · `attempts` 같은 생성 내부 값은 뺀다). U0(설계도)는 U2 · U4를 만든 재료라 API 18에 내리지 않고, 화면이 쓰는 값(인정 여부)은 `meta.admits`로 준다.
+  - 대본의 `paper`(기사)는 백엔드 적재가 사건의 신문 지면(API 17)으로 저장한다 — U1이 그 기사를 보고 만들었기 때문이다. 그래서 U1 `basis.paper`는 그 지면의 판(1)이 된다.
 - `meta`: `{"cast", "issue", "admits"}`. 프론트 공통 틀이 고정 문구를 고르는 값이다 — 이름 · 자리(`cast`), 신문 마지막 질문(`issue`, `LAST_QUESTION`), 마지막 답 "…네, 인정합니다." / "…아닙니다."(`admits`, U0 세 번째 답). U0가 없으면 `admits`는 `null`.
 
 | 블록 | `basis` (이 값이 바뀌면 낡는다) |

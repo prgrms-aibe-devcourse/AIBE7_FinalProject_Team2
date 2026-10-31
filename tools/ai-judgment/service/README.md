@@ -121,8 +121,8 @@
   `reviewErrors` · `reviewWarnings`로 온다. 오류가 하나라도 있으면 `scriptPublishable`이 `false`다. 오류는 먼저 그 줄만
   고쳐 쓰고(`stages.script.repairRetries`, 기본 2), 한 일은 `fullScript.repairs`에 남는다(BE-122 2차, 같은 README "고쳐 쓰기").
   저장 단위는 `fullScript.blocks`(U0 ~ U4 블록, 블록마다 `content` · `revision` · `basis` · `review` · `warnings` · `repairs`)와
-  `fullScript.meta`(`cast` · `issue` · `admits`)다(BE-126, 같은 README "저장 블록"). 백엔드 적재(`case_script_block`)는 BE-126 1차 두 번째 PR이라
-  그전까지 백엔드는 `fullScript`를 읽지 않는다.
+  `fullScript.meta`(`cast` · `issue` · `admits`)다(BE-126, 같은 README "저장 블록"). 백엔드 적재는 블록을 `case_script_block`에,
+  `fullScript.paper`를 사건의 신문 지면(`case_paper`, API 17)에 넣고, 만들지 못한 단위는 `pending`, 공개 가능 여부는 `scriptPublishable`을 읽는다.
   `load`는 여기서 켜도 되돌려 끈다.
 
 상태 값:
