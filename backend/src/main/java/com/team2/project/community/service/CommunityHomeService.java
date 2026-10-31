@@ -98,8 +98,7 @@ public class CommunityHomeService {
 			.collect(Collectors.toMap(Map.Entry::getKey, entry -> postRepository
 				.findByCaseIdOrderByLikeCountDescCreatedAtDescIdDesc(entry.getKey(), PageRequest.of(0, entry.getValue()))));
 
-		List<Writer> rankingWriters = postRepository.findLatestWriters().stream()
-			.map(ref -> new Writer(ref.getMemberId(), ref.getAnonymousUserId())).toList();
+		List<Writer> rankingWriters = postRepository.findWriterIds().stream().map(Writer::new).toList();
 		List<Writer> allWriters = new ArrayList<>(rankingWriters);
 		casePosts.values().forEach(posts -> posts.forEach(post -> allWriters.add(CommunityService.writerOf(post))));
 		Map<Writer, AuthorCard> cards = cardAssembler.cards(allWriters);

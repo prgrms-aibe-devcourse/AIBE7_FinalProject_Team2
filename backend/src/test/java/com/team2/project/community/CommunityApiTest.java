@@ -66,6 +66,8 @@ class CommunityApiTest extends ApiIntegrationTest {
 				memberId);
 			jdbcTemplate.update("DELETE FROM community_comment WHERE post_id IN (SELECT id FROM community_post WHERE member_id = ?)",
 				memberId);
+			jdbcTemplate.update("DELETE FROM community_comment WHERE member_id = ?", memberId);
+			jdbcTemplate.update("DELETE FROM community_post WHERE member_id = ?", memberId);
 			for (UUID id : jdbcTemplate.queryForList("SELECT id FROM anonymous_user WHERE member_id = ?", UUID.class, memberId)) {
 				deleteAnonymous(id);
 			}
@@ -304,6 +306,28 @@ class CommunityApiTest extends ApiIntegrationTest {
 			UUID.class, author.memberId())).isEqualTo(author.anonymousId());
 		assertThat(xp(author, "POST")).isEqualTo(30);
 		assertThat(xp(other, "POST")).isZero();
+	}
+
+	@Test
+	@DisplayName("글 · 댓글에 익명 ID가 없어도(회원만 작성자) 상세 · 목록 · 메인 랭킹의 명함이 나오고 좋아요 경험치도 회원이 받는다")
+	void authorWithoutAnonymousId_cardAndLike() throws Exception {
+		User author = newUser("익명 없는 글쓴이");
+		User reader = newUser("읽는 사람");
+		long postId = writePost(author, "익명 ID 없음");
+		comment(author, postId, "{\"body\":\"댓글\"}").andExpect(status().isCreated());
+		jdbcTemplate.update("UPDATE community_post SET anonymous_user_id = NULL WHERE member_id = ?", author.memberId());
+		jdbcTemplate.update("UPDATE community_comment SET anonymous_user_id = NULL WHERE member_id = ?", author.memberId());
+
+		mockMvc.perform(as(get(POSTS + "/" + postId), reader)).andExpect(status().isOk())
+			.andExpect(jsonPath("$.author.nickname").value("익명 없는 글쓴이"))
+			.andExpect(jsonPath("$.comments[0].author.nickname").value("익명 없는 글쓴이"));
+		mockMvc.perform(as(get(POSTS), reader)).andExpect(status().isOk())
+			.andExpect(jsonPath("$.posts[?(@.postId == " + postId + ")].author.nickname").value(org.hamcrest.Matchers.contains("익명 없는 글쓴이")));
+		like(reader, postId).andExpect(status().isOk());
+		assertThat(xp(author, "LIKE_RECEIVED")).isPositive();
+
+		String home = mockMvc.perform(get(HOME)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+		assertThat((List<String>) JsonPath.read(home, "$.ranking[*].nickname")).doesNotHaveDuplicates();
 	}
 
 	// ---------- 판결 공유 ----------
