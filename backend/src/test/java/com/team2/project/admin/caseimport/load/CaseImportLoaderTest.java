@@ -380,7 +380,8 @@ class CaseImportLoaderTest extends ApiIntegrationTest {
 
 		Long caseId = legalCase.getId();
 		Map<String, Object> row = jdbcTemplate.queryForMap("SELECT * FROM case_script WHERE case_id = ?", caseId);
-		assertThat(String.valueOf(row.get("pending"))).contains("U1");
+		// 입력 pending에 없어도 블록이 없는 단위(U2 ~ U4)는 pending에 올린다
+		assertThat(String.valueOf(row.get("pending"))).isEqualTo("[\"U1\", \"U2\", \"U3\", \"U4\"]");
 		assertThat(row.get("admits")).isEqualTo(false);
 		assertThat(row.get("publishable")).isEqualTo(false);
 		assertThat(blocks(caseId)).extracting(block -> block.get("unit")).containsExactly("U0");
