@@ -1,5 +1,5 @@
 import { formatPenalty, formatDispositions } from '../../utils/judgmentFormat.js';
-import { SCRIPTS } from '../../content/scripts.js';
+import { loadCaseScript } from '../../utils/caseScript.js';
 import { renderCourtStage, openComparison } from './courtStage.js';
 import { mountStage } from '../comparison/comparisonStage.js';
 
@@ -49,9 +49,8 @@ export async function renderCourtPage(container, { caseId, caseHeader, api, navi
     return group;
   }
 
-  // 대본의 제목이 사건 제목과 같을 때만 무대를 쓴다(S-03 ~ S-06과 같은 규칙)
-  const candidate = SCRIPTS[caseId];
-  const script = candidate?.title === caseHeader.title ? candidate : undefined;
+  // 서버 대본이 있는 사건만 무대를 쓴다(FE-139)
+  const script = await loadCaseScript(api, caseId);
 
   // 5막 실제 판결(재진입 · 바로 들어온 경우). 보통은 S-06 4막에서 무대를 이어 받고 주소만 바뀐다(courtStage.js)
   function drawStage(data) {

@@ -3,7 +3,7 @@ import { objectParticle } from '../../utils/koreanParticle.js';
 import { renderAiRevealIntro, takeAiRevealIntro } from './aiRevealIntro.js';
 import { formatPenalty, diffPhrase } from '../../utils/judgmentFormat.js';
 import { renderStage, LAWS, LAW_TITLES } from '../../components/stage.js';
-import { SCRIPTS } from '../../content/scripts.js';
+import { loadCaseScript } from '../../utils/caseScript.js';
 import { restartMock, jumpActMock } from '../../mocks/mockStageButtons.js';
 import { renderCourtStage, openComparison } from '../court/courtStage.js';
 import { mountStage } from '../comparison/comparisonStage.js';
@@ -49,9 +49,8 @@ export async function renderAiPage(container, { caseId, caseHeader, api, navigat
     return group;
   }
 
-  // 대본의 제목이 사건 제목과 같을 때만 무대를 쓴다(S-03 ~ S-05와 같은 규칙)
-  const candidate = SCRIPTS[caseId];
-  const script = candidate?.title === caseHeader.title ? candidate : undefined;
+  // 서버 대본이 있는 사건만 무대를 쓴다(FE-139)
+  const script = await loadCaseScript(api, caseId);
 
   // 판단 요소를 짚는 대사: 로마다 말투가 다르다(캐릭터 프로필 4-3, 재판 말투 경어 · 짧은 문장). 인자는 "정한다" 대신 "본다 · 살핀다"
   const FACTOR_LINES = {

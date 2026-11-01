@@ -16,6 +16,9 @@ export const getCaseDetail = (caseId) => get(`/cases/${encodeURIComponent(caseId
 // API 17 — 공개 신문 지면 (S-20 기사 지면 · 증거조사. FE-64). 헤드라인 · 본문 · 발단 · 결론 사진(extraPhotos.origin · conclusion, 고정 자리)
 export const getCasePaper = (caseId) => get(`/cases/${encodeURIComponent(caseId)}/paper`);
 
+// API 18 — 공개 사건 대본 (판결 체험 무대. 단위 블록 · 메타, FE-139). 승인된 대본이 없으면 404 SCRIPT_NOT_FOUND
+export const getCaseScript = (caseId) => get(`/cases/${encodeURIComponent(caseId)}/script`);
+
 // API 2 — 체험 시작 (있으면 기존 체험, 쿠키가 없으면 익명 ID 쿠키를 내려준다)
 export const startExperience = (caseId) => post(experience(caseId));
 

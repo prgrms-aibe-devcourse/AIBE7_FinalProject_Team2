@@ -1,5 +1,5 @@
 import { formatPenalty, formatDispositions } from '../../utils/judgmentFormat.js';
-import { SCRIPTS } from '../../content/scripts.js';
+import { loadCaseScript } from '../../utils/caseScript.js';
 import { renderComparisonStage, mountNewspaperStage } from './comparisonStage.js';
 
 const directionSymbols = { UP: '↑', DOWN: '↓' };
@@ -47,9 +47,8 @@ export async function renderComparisonPage(container, { caseId, caseHeader, api,
     return element('td', `matrix-direction${direction ? ` is-${direction.toLowerCase()}` : ' is-none'}`, direction ? directionSymbols[direction] : '—');
   }
 
-  // 대본의 제목이 사건 제목과 같을 때만 무대를 쓴다(S-03 ~ S-07과 같은 규칙). 보통은 5막 무대에서 이어지고 주소만 바뀐다
-  const candidate = SCRIPTS[caseId];
-  const script = candidate?.title === caseHeader.title ? candidate : undefined;
+  // 서버 대본이 있는 사건만 무대를 쓴다(FE-139)
+  const script = await loadCaseScript(api, caseId);
 
   function draw(data) {
     if (script) {
