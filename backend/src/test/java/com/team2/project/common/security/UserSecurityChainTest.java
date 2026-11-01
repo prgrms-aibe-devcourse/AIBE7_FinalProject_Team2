@@ -208,9 +208,11 @@ class UserSecurityChainTest extends ApiIntegrationTest {
 
 	@Test
 	void userPost_withToken_noCsrfNeeded() throws Exception {
-		// 가짜 토큰의 회원 7은 DB에 없어 체험을 만들 수 없다(체험의 주인이 회원, BE-140). CSRF만 보므로 회원 행이 필요 없는 POST를 쓴다
-		mockMvc.perform(post("/api/v1/attendance").header(HttpHeaders.AUTHORIZATION, bearer("member-7")))
-			.andExpect(status().isNoContent());
+		// 이 시험의 가짜 토큰 검증기는 member-7만 안다. 회원 7은 DB에 없어 회원 행이 필요한 쓰기(출석 · 체험)는 FK 오류가 난다(BE-140).
+		// 여기서는 CSRF만 보므로, 회원 행을 쓰지 않는 쓰기(회원 기준 쓰기 전 검증이 먼저 끝나는 잘못된 본문 → 400)로 인증 · CSRF 통과를 확인한다
+		mockMvc.perform(post("/api/v1/collection").header(HttpHeaders.AUTHORIZATION, bearer("member-7"))
+				.contentType(org.springframework.http.MediaType.APPLICATION_JSON).content("{}"))
+			.andExpect(status().isBadRequest());	// 401(인증 실패) · 403(CSRF)이 아니라 입력 검사(400)까지 왔다
 	}
 
 	// ---- 관리자 체인과의 경계 ----

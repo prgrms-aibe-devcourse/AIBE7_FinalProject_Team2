@@ -1,5 +1,6 @@
 package com.team2.project.community.service;
 
+import com.team2.project.common.owner.Owner;
 import com.team2.project.community.dto.AuthorCard.ShownType;
 import com.team2.project.personality.domain.ExperiencePersonality;
 import com.team2.project.personality.domain.PersonalityResult;
@@ -14,7 +15,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,22 +39,22 @@ public class ShownTypeResolver {
 
 	/** @return 보여 줄 성향이 하나도 없으면 null */
 	@Transactional(readOnly = true)
-	public ShownType resolve(UUID anonymousUserId, String chosen) {
+	public ShownType resolve(Owner owner, String chosen) {
 		Map<String, PersonalityType> slots = new LinkedHashMap<>();
-		resultRepository.findFirstByAnonymousUser_IdOrderByCreatedAtAscIdAsc(anonymousUserId)
+		resultRepository.findFirst(owner)
 			.ifPresent(result -> slots.put("initial", result.getType()));
-		resultRepository.findByAnonymousUser_IdAndBaselineRetakeTrue(anonymousUserId)
+		resultRepository.findBaselineRetake(owner)
 			.map(PersonalityResult::getType)
 			.ifPresent(type -> slots.put("retake", type));
-		currentType(anonymousUserId).ifPresent(type -> slots.put("current", type));
+		currentType(owner).ifPresent(type -> slots.put("current", type));
 
 		String slot = slots.containsKey(chosen) ? chosen
 			: FALLBACK.stream().filter(slots::containsKey).findFirst().orElse(null);
 		return slot == null ? null : new ShownType(slot, PersonalityTypeResponse.from(slots.get(slot)), null);
 	}
 
-	private Optional<PersonalityType> currentType(UUID anonymousUserId) {
-		List<ExperiencePersonality> contributions = contributionRepository.findFirstAttemptsByAnonymousUser(anonymousUserId);
+	private Optional<PersonalityType> currentType(Owner owner) {
+		List<ExperiencePersonality> contributions = contributionRepository.findFirstAttempts(owner);
 		List<ExperiencePersonality> recent = contributions.subList(
 			Math.max(0, contributions.size() - RECENT_COUNT), contributions.size());
 		return PersonalityScoring.overall(recent.stream().map(ExperiencePersonality::getAxisCounts).toList())

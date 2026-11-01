@@ -37,6 +37,24 @@ public abstract class ApiIntegrationTest {
 	protected static final String COOKIE = "NLNB_AID";
 
 	private final List<Long> createdCaseIds = new ArrayList<>();
+	private final List<Long> createdMemberIds = new ArrayList<>();
+
+	/**
+	 * 회원 한 명(카카오, 닉네임 없음). 끝나면 회원 키 데이터(member_* — 회원 삭제로 함께 지워짐) · 체험 · 성향 결과 · 커뮤니티 글과 함께 지운다.
+	 * 인증은 시험용 토큰 "member-{id}"(FakeMemberTokens)이므로 쓰는 시험 클래스에 {@code @Import(FakeMemberTokens.class)}를 붙인다 (BE-140)
+	 */
+	protected long registerMember() {
+		Long id = jdbcTemplate.queryForObject(
+				"INSERT INTO member (provider, provider_user_id) VALUES ('KAKAO', ?) RETURNING id", Long.class,
+				UUID.randomUUID().toString());
+		createdMemberIds.add(id);
+		return id;
+	}
+
+	/** 그 회원의 Authorization 헤더 값 (FakeMemberTokens) */
+	protected static String bearer(long memberId) {
+		return FakeMemberTokens.bearer(memberId);
+	}
 
 	protected long insertCase(String crimeType, String status) {
 		Long id = jdbcTemplate.queryForObject("""
@@ -132,9 +150,7 @@ public abstract class ApiIntegrationTest {
 			jdbcTemplate.update("DELETE FROM experience WHERE case_id = ?", caseId);
 		}
 		userIds.forEach(id -> {
-			jdbcTemplate.update("DELETE FROM attendance WHERE anonymous_user_id = ?", id);	// 출석 기록(BE-97, FK)
-			jdbcTemplate.update("DELETE FROM profile_deco WHERE anonymous_user_id = ?", id);	// 꾸미기(BE-96, FK)
-			jdbcTemplate.update("DELETE FROM profile_setting WHERE anonymous_user_id = ?", id);	// 프로필 선택 설정(BE-104, FK)
+			jdbcTemplate.update("DELETE FROM personality_result WHERE anonymous_user_id = ?", id);
 			jdbcTemplate.update("DELETE FROM anonymous_user WHERE id = ?", id);
 		});
 		for (Long caseId : createdCaseIds) {
@@ -146,5 +162,16 @@ public abstract class ApiIntegrationTest {
 			jdbcTemplate.update("DELETE FROM legal_case WHERE id = ?", caseId);
 		}
 		createdCaseIds.clear();
+		// 회원 키 데이터(member_* 7개 · 가져오기 결정)는 회원 삭제로 함께 지워진다(ON DELETE CASCADE). 아닌 것을 먼저 지운다 (BE-140)
+		createdMemberIds.forEach(id -> {
+			jdbcTemplate.update("DELETE FROM community_like WHERE member_id = ?", id);
+			jdbcTemplate.update("DELETE FROM community_comment WHERE member_id = ?", id);
+			jdbcTemplate.update("DELETE FROM community_post WHERE member_id = ?", id);	// 글의 댓글 · 좋아요는 함께 지워진다
+			jdbcTemplate.update("DELETE FROM personality_result WHERE member_id = ?", id);
+			jdbcTemplate.update("DELETE FROM experience_personality WHERE experience_id IN (SELECT id FROM experience WHERE member_id = ?)", id);
+			jdbcTemplate.update("DELETE FROM experience WHERE member_id = ?", id);
+			jdbcTemplate.update("DELETE FROM member WHERE id = ?", id);
+		});
+		createdMemberIds.clear();
 	}
 }

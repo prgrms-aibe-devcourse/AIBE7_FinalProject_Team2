@@ -4,25 +4,24 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
 import java.io.Serializable;
 import java.util.Objects;
-import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/** 도전과제 해금 기록 기본 키: 익명 사용자 × 도전과제 id (V35) */
+/** 도전과제 해금 기록 기본 키: 회원 × 도전과제 id (V41) */
 @Embeddable
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class AchievementUnlockId implements Serializable {
 
-	@Column(name = "anonymous_user_id")
-	private UUID anonymousUserId;
+	@Column(name = "member_id")
+	private Long memberId;
 
 	@Column(name = "achievement_id")
 	private String achievementId;
 
-	public AchievementUnlockId(UUID anonymousUserId, String achievementId) {
-		this.anonymousUserId = anonymousUserId;
+	public AchievementUnlockId(Long memberId, String achievementId) {
+		this.memberId = memberId;
 		this.achievementId = achievementId;
 	}
 
@@ -34,11 +33,11 @@ public class AchievementUnlockId implements Serializable {
 		if (!(o instanceof AchievementUnlockId other)) {
 			return false;
 		}
-		return Objects.equals(anonymousUserId, other.anonymousUserId) && Objects.equals(achievementId, other.achievementId);
+		return Objects.equals(memberId, other.memberId) && Objects.equals(achievementId, other.achievementId);
 	}
 
 	@Override
 	public int hashCode() {
-		return Objects.hash(anonymousUserId, achievementId);
+		return Objects.hash(memberId, achievementId);
 	}
 }

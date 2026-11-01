@@ -1,5 +1,6 @@
 package com.team2.project.community.repository;
 
+import com.team2.project.common.owner.Owner;
 import com.team2.project.experience.domain.ExperienceStatus;
 import com.team2.project.judgment.domain.Judgment;
 import java.util.Collection;
@@ -43,4 +44,51 @@ public interface CommunityJudgmentReader extends Repository<Judgment, Long> {
 		""")
 	List<Long> findJudgedCaseIds(@Param("anonymousUserId") UUID anonymousUserId,
 		@Param("statuses") Collection<ExperienceStatus> statuses);
+
+	// ── 회원 쪽 (BE-140): 체험의 주인이 회원이면 회원 기준으로 읽는다. 위는 손님(익명 ID) 쪽이다 ──
+
+	@Query("""
+		select j from Judgment j join fetch j.experience e join fetch j.legalCase c
+		where e.memberId = :memberId and e.status in :statuses
+		  and j.subjectType = com.team2.project.judgment.domain.SubjectType.USER
+		  and j.timing = com.team2.project.judgment.domain.Timing.FINAL
+		  and c.status = com.team2.project.legalcase.domain.CaseStatus.PUBLISHED
+		order by j.createdAt desc, j.id desc
+		""")
+	List<Judgment> findConfirmedFinalsOfMember(@Param("memberId") long memberId,
+		@Param("statuses") Collection<ExperienceStatus> statuses, Pageable pageable);
+
+	@Query("""
+		select j from Judgment j join fetch j.experience e join fetch j.legalCase c
+		where e.memberId = :memberId and e.status in :statuses and c.id = :caseId
+		  and j.subjectType = com.team2.project.judgment.domain.SubjectType.USER
+		  and j.timing = com.team2.project.judgment.domain.Timing.FINAL
+		  and c.status = com.team2.project.legalcase.domain.CaseStatus.PUBLISHED
+		order by j.createdAt desc, j.id desc
+		""")
+	List<Judgment> findConfirmedFinalsOfCaseOfMember(@Param("memberId") long memberId,
+		@Param("statuses") Collection<ExperienceStatus> statuses, @Param("caseId") long caseId, Pageable pageable);
+
+	@Query("""
+		select distinct e.legalCase.id from Experience e
+		where e.memberId = :memberId and e.status in :statuses
+		""")
+	List<Long> findJudgedCaseIdsOfMember(@Param("memberId") long memberId,
+		@Param("statuses") Collection<ExperienceStatus> statuses);
+
+	default List<Judgment> findConfirmedFinals(Owner owner, Collection<ExperienceStatus> statuses, Pageable pageable) {
+		return owner.fold(memberId -> findConfirmedFinalsOfMember(memberId, statuses, pageable),
+			anonymousUserId -> findConfirmedFinals(anonymousUserId, statuses, pageable));
+	}
+
+	default List<Judgment> findConfirmedFinalsOfCase(Owner owner, Collection<ExperienceStatus> statuses, long caseId,
+		Pageable pageable) {
+		return owner.fold(memberId -> findConfirmedFinalsOfCaseOfMember(memberId, statuses, caseId, pageable),
+			anonymousUserId -> findConfirmedFinalsOfCase(anonymousUserId, statuses, caseId, pageable));
+	}
+
+	default List<Long> findJudgedCaseIds(Owner owner, Collection<ExperienceStatus> statuses) {
+		return owner.fold(memberId -> findJudgedCaseIdsOfMember(memberId, statuses),
+			anonymousUserId -> findJudgedCaseIds(anonymousUserId, statuses));
+	}
 }
