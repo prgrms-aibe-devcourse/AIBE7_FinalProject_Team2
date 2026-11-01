@@ -872,7 +872,7 @@ FE-64가 쓰는 API(S-20 기사 지면 · 증거조사). 관리자 신문 지면
   - **U2 신문 답(`questions[].a`)은 정규화해 준다** — 예 · 네 → `"…네."`, 아니요 · 아닙니다 → `"…아닙니다."`, 그 밖의 답은 앞에 `"…"`를 붙인다. 한 낱말일 때만 답으로 본다("예전에는 …"은 그대로). 저장값은 모델이 쓴 그대로다. 규칙은 파이프라인과 공용 계약 파일(`tools/ai-judgment/contracts/script_blocks.json`)로 맞춘다.
   - U3는 줄마다 `factorId` · `role`(소문자, 저장값 그대로) · `text`만 준다. 같은 대사가 `evidence`에도 있다.
   - 검수용 값(블록의 `review` · `warnings` · `repairs`, 대사의 `validation` · `attempts`)은 내리지 않는다 — 고치기 전 문장과 대본 인용이 들어 있다.
-  - U1 · U2 · U4는 **화면이 쓰는 키만** 준다 — U1 `lines`, U2 `indict` · `plea` · `issues_narr` · `questions` · `cards`, U4 `prosecutor` · `defense`. U2 `questions[]`는 질문마다 `q` · `a`만 준다. 모델이 덧붙인 다른 키는 내리지 않는다.
+  - U1 · U2 · U4는 **화면이 쓰는 키만** 준다 — U1 `lines`, U2 `indict` · `plea` · `issues_narr` · `questions` · `cards`, U4 `prosecutor` · `defense`. U2 `questions[]`는 질문마다 `q` · `a`만 주고, U2 `cards`는 `indict`(`ul` · `law`) · `plea`(`b` · `ul`) · `issues`(`p` · `ul`)만 준다(FE-139 조립기가 읽는 키). 모델이 덧붙인 다른 키는 내리지 않는다.
   - 공개 대본은 다섯 단위가 모두 있으므로 `blocks`에는 늘 U1 ~ U4가 있다.
 - (v0.78) `meta`: `cast`(배역, 위 `cast`와 같은 값) · `issue`(분류 쟁점 — 신문 마지막 질문을 고른다) · `admits`(피고인이 혐의를 인정하는지 — 마지막 답 "…네, 인정합니다." / "…아닙니다."를 고른다). 분류 없이 만든 대본은 `issue`가, U0가 없는 대본은 `admits`가 `null`이다.
 - `character` · `cast`는 저장된 **코드값**(`naero` · `nambul` 등)을 그대로 내려준다. 화면에 보일 한글 이름(나로 · 남불)으로 바꾸는 것은 프론트 몫이다.

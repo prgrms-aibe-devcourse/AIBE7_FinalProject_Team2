@@ -12,6 +12,7 @@ import com.team2.project.pipeline.PipelineResult;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -75,8 +76,26 @@ class CaseScriptLoader {
 		}
 		Integer paperRevision = savePaper(legalCase, full.get("paper"), result).map(CasePaper::getRevision).orElse(null);
 		JsonNode meta = full.get("meta");
-		List<String> pending = script.has("pending") ? Json.stringArray(script, "pending")
-			: Json.stringArray(full, "pending");
+		List<String> pending = new ArrayList<>(script.has("pending") ? Json.stringArray(script, "pending")
+			: Json.stringArray(full, "pending"));
+		// 읽을 수 있는 블록만 모은다. 만들지 못한 단위(없음 · 객체 아님 · 내용 없음)는 pending에 없더라도 여기서 올린다
+		Map<ScriptUnit, JsonNode> usable = new LinkedHashMap<>();
+		Map<ScriptUnit, Object> contents = new LinkedHashMap<>();
+		for (ScriptUnit unit : ScriptUnit.values()) {
+			JsonNode block = blocks.get(unit.name());
+			Object content = block != null && block.isObject() ? Json.toPlain(block.get("content")) : null;
+			if (content == null) {
+				if (block != null) {
+					log.warn("대본 블록 {}에 읽을 수 있는 내용이 없어 건너뜁니다 (jobId={})", unit, result.jobId());
+				}
+				if (!pending.contains(unit.name())) {
+					pending.add(unit.name());
+				}
+				continue;
+			}
+			usable.put(unit, block);
+			contents.put(unit, content);
+		}
 		// 대본 전체에 걸린 검수 결과(REVIEW_FAILED, unit "")만 대본에 둔다. 블록 것은 블록이 갖는다
 		List<Map<String, Object>> scriptReview = maps(full, "review").stream()
 			.filter(issue -> ScriptUnit.find(String.valueOf(issue.get("unit"))).isEmpty()).toList();
@@ -86,16 +105,10 @@ class CaseScriptLoader {
 		CaseScript caseScript = CaseScript.of(legalCase, model(script, full), Json.toMap(script.get("cast")),
 			Json.text(meta, "issue"), admits(blocks.get(ScriptUnit.U0.name())), pending, scriptReview,
 			Json.text(script, "balanceWarning"), publishable, generatedAt(script), Json.bool(script, "stopped"));
-		for (ScriptUnit unit : ScriptUnit.values()) {
-			JsonNode block = blocks.get(unit.name());
-			if (block == null || !block.isObject()) {
-				continue;		// 만들지 못한 단위 — pending이 알린다
-			}
-			Object content = Json.toPlain(block.get("content"));
-			if (content == null) {
-				log.warn("대본 블록 {}에 내용이 없어 건너뜁니다 (jobId={})", unit, result.jobId());
-				continue;
-			}
+		for (Map.Entry<ScriptUnit, JsonNode> entry : usable.entrySet()) {
+			ScriptUnit unit = entry.getKey();
+			JsonNode block = entry.getValue();
+			Object content = contents.get(unit);
 			Integer revision = Json.integer(block, "revision");
 			Map<String, Object> basis = Optional.ofNullable(Json.toMap(block.get("basis"))).orElseGet(LinkedHashMap::new);
 			fillDbBasis(unit, basis, legalCase, paperRevision);

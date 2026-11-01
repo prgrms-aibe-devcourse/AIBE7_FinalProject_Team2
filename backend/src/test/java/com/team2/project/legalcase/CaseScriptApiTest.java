@@ -114,7 +114,9 @@ class CaseScriptApiTest extends ApiIntegrationTest {
 		setContent(scriptId, "U2", """
 			{"indict": "공소 요지", "questions": [{"q": "인정합니까?", "a": "...네, 인정합니다.", "note": "질문 안 메모"},
 			                                     {"q": "예전에도 그랬습니까?", "a": "예전에는 그런 적이 없습니다"},
-			                                     {"q": "다투십니까?", "a": "　아니요"}]}""");
+			                                     {"q": "다투십니까?", "a": "　아니요"}],
+			 "cards": {"indict": {"ul": ["사실1"], "law": "형법 제347조", "note": "카드 메모"}, "plea": {"b": "다툽니다", "ul": []},
+			           "issues": {"p": "쟁점", "ul": ["하나"], "thinking": "생각"}, "extra": {"x": 1}}}""");
 		setContent(scriptId, "U4", """
 			{"prosecutor": "검사 의견", "defense": "변호인 의견", "thinking": "사고 과정"}""");
 		jdbcTemplate.update("""
@@ -134,6 +136,13 @@ class CaseScriptApiTest extends ApiIntegrationTest {
 				.andExpect(jsonPath("$.blocks.U2.questions[0].note").doesNotExist())	// 질문 안의 여분 키도 내리지 않는다
 				.andExpect(jsonPath("$.blocks.U2.questions[1].a").value("…예전에는 그런 적이 없습니다"))	// 접두만 같은 말
 				.andExpect(jsonPath("$.blocks.U2.questions[2].a").value("…아닙니다."))	// 전각 공백
+				.andExpect(jsonPath("$.blocks.U2.cards.indict.law").value("형법 제347조"))
+				.andExpect(jsonPath("$.blocks.U2.cards.indict.ul[0]").value("사실1"))
+				.andExpect(jsonPath("$.blocks.U2.cards.indict.note").doesNotExist())	// 카드 안의 여분 키도 내리지 않는다
+				.andExpect(jsonPath("$.blocks.U2.cards.plea.b").value("다툽니다"))
+				.andExpect(jsonPath("$.blocks.U2.cards.issues.p").value("쟁점"))
+				.andExpect(jsonPath("$.blocks.U2.cards.issues.thinking").doesNotExist())
+				.andExpect(jsonPath("$.blocks.U2.cards.extra").doesNotExist())	// 아는 카드 셋만
 				.andExpect(jsonPath("$.blocks.U2.review").doesNotExist())
 				.andExpect(jsonPath("$.blocks.U2.repairs").doesNotExist())
 				.andExpect(jsonPath("$.blocks.U3[0].factorId").value(1))
