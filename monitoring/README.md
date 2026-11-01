@@ -45,7 +45,7 @@ Grafana 폴더 "남불법정"에 들어간다. 각 패널의 ⓘ에 "이 수치�
 
 - **AI 파이프라인**: `lawnambul_ai_call_total`이 재는 것은 RAG 유사 판례 검색의 임베딩 호출(`GeminiQueryEmbeddingClient`)뿐이다.
   판결문 생성은 오프라인 파이프라인(`tools/ai-judgment`)에서 돌아 서버 메트릭에 잡히지 않는다. 생성 단계 계측은 COMMON-40과 함께 본다.
-- **DB**: `postgres_exporter`를 붙이지 않았다. 7.1.2에서 RDS로 전환하면(**10/28 예정**, COMMON-43 협의에서 D 확인) 연결 대상이 바뀌어 다시 해야 하기 때문이다.
+- **DB**: `postgres_exporter`를 붙이지 않았다. 7.1.2 RDS 전환(**10/28 완료**, BE-59) 전에 붙이면 연결 대상이 바뀌어 다시 해야 했기 때문이다. 전환 뒤 RDS 지표(CloudWatch · `postgres_exporter`)는 아직 정하지 않았다(`deploy/README.md` "다음 작업에서 바꿀 곳").
   대신 7.3.1 경보가 실제로 쓸 지표인 **HikariCP 커넥션 풀**로 먼저 만들었다.
 
 ## 경보 (7.3.1 · 7.3.2)
@@ -84,7 +84,7 @@ Alertmanager도 운영에서는 Grafana Cloud 쪽(Cloud Alerting)으로 옮긴�
 계산되므로 **backend가 죽으면 지표 자체가 끊겨 아무 경보도 안 울린다** — 가장 큰 장애에서 오히려
 조용해지는 구멍이었다(PR #262 리뷰, 머지 전 필수 수정). `Watchdog`은 `null` 수신자로 보내 외부에
 생존 신호를 전달하지 않아, 이 로컬 구성만으로는 "신호가 조용해졌다"는 걸 알아챌 외부 관찰자가 없다
-— 운영은 서버 밖(Grafana Cloud)에서 평가해, 서버 전체가 멈춰도 `BackendScrapeTargetMissing`이 알린다Cloud의 `Watchdog`은 하루 한 번 Slack에 생존 신호를 보내, 경보 경로 자체가 멈춘 것도 알 수 있게 했다(아래 "Grafana Cloud 운영 설정" 절).
+— 운영은 서버 밖(Grafana Cloud)에서 평가해, 서버 전체가 멈춰도 `BackendScrapeTargetMissing`이 알린다. Cloud의 `Watchdog`은 하루 한 번 Slack에 생존 신호를 보내, 경보 경로 자체가 멈춘 것도 알 수 있게 했다(아래 "Grafana Cloud 운영 설정" 절).
 `AlertDeliveryFailing`은 **로컬 전용이다** — Cloud에는 옮기지 않았다(같은 절 참고).
 
 ### Slack 웹훅 설정
@@ -270,9 +270,9 @@ Loki로 보낸다.
 ## 스크레이프 대상 범위 (지금 정한 것 · 미룬 것)
 
 - **지금 포함**: `backend`(Actuator), `prometheus`(자기 자신), `node`(호스트 자원 — 7.2.4 인프라 대시보드가 쓴다)
-- **보류**: `postgres_exporter` — 7.1.2에서 RDS로 전환(**10/28 예정**)하면 연결 대상이 바뀌므로, 전환 일정이 확정된 뒤 추가한다
-- **아직 결정 안 함**: Prometheus Agent 모드(수집만 하고 평가는 Grafana Cloud에서) 여부 — 7.3 경보 설계(어디서 규칙을 평가할지)와 묶인 결정이라
-  지금은 TODO로만 남겨 둔다
+- **보류**: `postgres_exporter` — 7.1.2 RDS 전환(**10/28 완료**)으로 연결 대상이 정해졌다. CloudWatch와 어느 쪽으로 볼지 정한 뒤 추가한다
+- **결정됨 (COMMON-63 · 64)**: 운영 서버에는 Prometheus를 두지 않는다. Alloy가 지표 · 로그를 Grafana Cloud로 보내고, 규칙 평가 · 알림도 Cloud에서 한다
+  (`deploy/docker-compose.monitoring-agent.yml`, 아래 "Grafana Cloud 운영 설정"). 이 폴더의 Prometheus · Alertmanager는 로컬 확인용이다
 
 ## 로그 라벨 · 민감정보
 
