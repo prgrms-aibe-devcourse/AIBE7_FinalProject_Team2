@@ -629,14 +629,14 @@ set +o pipefail; unset PGPASSWORD H P; unset -f q envv
 | 언제 | 방법 | 보관 |
 |---|---|---|
 | 하루 1번 (운영 시간 중 첫 정각+17분) | 서버 cron으로 `deploy/backup-db.sh` → `~/backups/lawnambul-YYYY-MM-DD.dump` | 7일 |
-| 평일 17:47 (퇴근 전) | 서버 cron으로 `deploy/backup-db.sh evening` → `~/backups/lawnambul-YYYY-MM-DD-1747-evening.dump` | 7일(같은 정리 규칙) |
+| 평일 17:47 (퇴근 전, cron `1-5`) | 서버 cron으로 `deploy/backup-db.sh evening` → `~/backups/lawnambul-YYYY-MM-DD-1747-evening.dump` | 7일(같은 정리 규칙) |
 | 시드 갱신 · `loads/` 실행 · 위험한 마이그레이션 직전 | `./backup-db.sh <작업 이름>`을 손으로 한 번 | 7일(같은 정리 규칙) |
 | RDS(10/28 ~) | RDS 자동 백업(매일 1회, 백업 기간은 콘솔 설정) · 위 `backup-db.sh`(외부 DB 모드라 RDS를 덤프)도 그대로 돈다 | 7일 |
 | `loads/` 실행 · 큰 데이터 변경 직전(RDS) | RDS 수동 스냅샷(콘솔 → 작업 → 스냅샷 생성) | 지울 때까지 (안 쓰면 지운다 — 저장 용량 요금) |
 
 ```bash
 # 09:17 ~ 17:17 매시 확인하고, 오늘 백업 파일이 없을 때만 한 번 만든다 (crontab -e 로 한 줄). 결과는 ~/backups/backup.log
-# 서버는 평일 09:00 ~ 18:00에만 켜져 있다(주말은 강제 종료) — 새벽 시각으로 두면 한 번도 돌지 않는다(10/26 확인).
+# 서버는 매일 09:00 ~ 18:00에만 켜져 있다(처음엔 평일만, 지금은 주말 포함) — 새벽 시각으로 두면 한 번도 돌지 않는다(10/26 확인).
 # 매시 확인하므로 아침에 늦게 켜지거나 9시대 백업이 실패해도 다음 시각에 다시 시도한다
 # umask 077: 백업 폴더 · 로그를 처음부터 나만 읽게 만든다(덤프 파일은 backup-db.sh가 umask 077로 만든다)
 17 9-17 * * * umask 077; mkdir -p $HOME/backups && { [ -f $HOME/backups/lawnambul-$(date +\%F).dump ] || /opt/lawnambul/app/deploy/backup-db.sh >> $HOME/backups/backup.log 2>&1; }
@@ -646,8 +646,9 @@ set +o pipefail; unset PGPASSWORD H P; unset -f q envv
 ```
 
 - crontab 안에서는 `%`를 `\%`로 쓴다(그대로 두면 cron이 줄바꿈으로 읽어 명령이 잘린다).
-- 서버가 꺼져 있는 주말 · 공휴일에는 백업이 없다. 그 사이에는 데이터도 바뀌지 않는다.
-- 확인: `ls -lh ~/backups/ && tail -3 ~/backups/backup.log` — 평일이면 오늘 날짜 파일이 있어야 하고, 18시 이후에는 `-evening` 파일도 있어야 한다.
+- 서버가 꺼져 있는 시간(18:00 ~ 다음 날 09:00)에는 백업이 없다. 그 사이에는 데이터도 바뀌지 않는다.
+- 저녁 백업(17:47)은 cron이 평일(`1-5`)만이다. 주말에도 서버를 켜게 되면서 주말 저녁 백업이 필요하면 `1-5`를 `*`로 바꾼다.
+- 확인: `ls -lh ~/backups/ && tail -3 ~/backups/backup.log` — 오늘 날짜 파일이 있어야 하고, 평일 18시 이후에는 `-evening` 파일도 있어야 한다.
 - 저장 위치를 바꾸려고 crontab에 `BACKUP_DIR=`을 두면 **첫 줄의 확인 경로(`$HOME/backups/…`)도 같이 고친다.** `backup-db.sh`는 `BACKUP_DIR`(기본 `~/backups`)에 저장하는데 확인 경로는 고정이라, 하나만 바꾸면 매시 백업을 새로 만든다.
 
 - `backup-db.sh`는 임시 파일에 먼저 덤프하고, `pg_dump`가 성공하고 `pg_restore --list`로 형식을 읽을 수 있을 때만 최종 이름으로 옮긴다. 실패하면 임시 파일을 지우고 실패 코드로 끝나서, 반쯤 만들어진 파일이 백업처럼 남지 않는다. 확인: `tail ~/backups/backup.log`

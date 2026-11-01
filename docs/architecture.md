@@ -64,7 +64,7 @@ flowchart LR
 | 항목 | 내용 | 상세 |
 | --- | --- | --- |
 | 서버 | EC2 t3.small(2GB) 한 대, 탄력적 IP. **스테이징 없음** — `main`이 곧 운영 | `deploy/README.md` |
-| **운영 시간** | **평일 09:00 ~ 18:00에만 켜져 있다(주말 · 공휴일은 꺼짐).** 그 시간 밖에는 서비스 · 백업이 멈추고, 경보는 음소거 `운영시간외`(평일 09:10 전 · 18:00 뒤 · 주말)로 울리지 않는다. 저녁 · 주말에 서버를 켜고 작업하면 장애 알림도 오지 않는다 | `deploy/README.md` "운영 DB 백업" · `monitoring/README.md` "알림 경로 · 음소거" |
+| **운영 시간** | **매일 09:00 ~ 18:00에만 켜져 있다**(처음엔 평일만이었고, 주말 가동으로 바뀌었다). 그 밖 시간에는 서비스 · 백업이 멈추고, 경보는 음소거 `운영시간외`로 울리지 않는다. 저녁에 서버를 켜고 작업하면 장애 알림도 오지 않는다. | `deploy/README.md` "운영 DB 백업" · `monitoring/README.md` "알림 경로 · 음소거" |
 | 도메인 · 인증서 | `naelawnambul.today` → 탄력적 IP. HTTP 80은 443으로 이동. Let's Encrypt(certbot) 90일 인증서, 자동 갱신 | BE-75 |
 | 메모리 배분 | backend 1g · redis 256m (+ 모니터링 에이전트). RDS 전환으로 postgres 512m이 빠졌다. swap 2GB · `swappiness 10`은 순간 급증용 안전망 | COMMON-54 |
 | DB | RDS PostgreSQL 17(`db.t4g.micro`, 단일 AZ), `vector` 확장, 앱 계정 `lawnambul_app`(마스터 아님). 연결 풀 5 | `deploy/README.md` "RDS 전환" |
@@ -120,7 +120,7 @@ develop → main    deploy images publish → GHCR main 태그
 
 | 무엇 | 언제 | 보관 |
 | --- | --- | --- |
-| `backup-db.sh` 덤프(RDS `public` 스키마) | 운영 시간 중 하루 1번 + 평일 17:47 | 7일 |
+| `backup-db.sh` 덤프(RDS `public` 스키마) | 매일 운영 시간 중 1번 + 평일 17:47 | 7일 |
 | RDS 자동 백업 | 매일 | 콘솔 설정 |
 | RDS 수동 스냅샷 | `loads/` 실행 · 큰 데이터 변경 · 큰 `main` 머지 직전 | 직접 지울 때까지(안 쓰면 지운다 — 저장 용량 요금) |
 
