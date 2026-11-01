@@ -20,11 +20,12 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  *                     <b>이 단계에는 판결문 원문이 들어가므로 유료 등급 키의 모델만 쓴다</b>
  * @param timeout      작업 생성 · 상태 조회 호출의 대기 시간. 파이프라인은 202로 바로 답하므로 길 필요가 없다
  *                     (실제 생성은 수십 분이지만 그건 서비스가 뒤에서 돌린다)
- * @param scriptModel  사건 대본(증거조사 대사) 생성 모델 (BE-107 · BE-108). <b>비우면 대본을 만들지 않는다</b> —
- *                     판단 요소마다 모델을 한 번씩 더 부르므로, 설정을 건드린 적 없는 서버에서 호출이 늘지 않게
- *                     기본을 꺼짐으로 둔다. 켜면 등록이 끝날 때 대본이 비공개로 함께 적재된다(관리자 검수 뒤 공개)
- * @param scriptCast   배역. {@code prosecutor} · {@code defense}에 캐릭터 id(naero · nambul)를 넣는다.
- *                     기본은 사건 1 대본과 같은 내로 = 검사 · 남불 = 변호인이다(BE-107은 배역을 자동으로 정하지 않는다)
+ * @param scriptModel  사건 대본 생성 모델 (BE-107 · BE-108, 대본 전체는 BE-129). <b>비우면 대본을 만들지 않는다</b> —
+ *                     단위마다 모델을 여러 번 더 부르므로, 설정을 건드린 적 없는 서버에서 호출이 늘지 않게 기본을 꺼짐으로 둔다.
+ *                     켜면 등록 한 번에 분류 → 대본 전체(U0 ~ U4) → 검수까지 돌고, 적재 때 대본이 비공개로 함께 들어간다
+ *                     (관리자 검수 뒤 공개). 배역은 설정이 아니라 등록 요청을 받을 때 범죄 유형별 균형으로 정한다(BE-129)
+ * @param classifyModel 사건 자동 분류(classify 단계, BE-123) 모델. 대본을 켰을 때만 쓴다(대본 전체의 입력이다). 비우면
+ *                     파이프라인이 AI 판결 생성 모델(models)의 첫 모델로 분류한다. 비식별화한 사건 개요 · 기록 · 판단 요소가 나간다
  */
 @ConfigurationProperties("pipeline-service")
 public record PipelineProperties(
@@ -33,8 +34,7 @@ public record PipelineProperties(
 	String extractModel,
 	@DefaultValue("30s") Duration timeout,
 	String scriptModel,
-	@DefaultValue("naero") String scriptProsecutor,
-	@DefaultValue("nambul") String scriptDefense
+	String classifyModel
 ) {
 
 	static final String DEFAULT_MODEL = "gemini:gemini-3.7-flash";
@@ -50,19 +50,18 @@ public record PipelineProperties(
 		List<String> cleaned = models == null ? List.of()
 			: models.stream().filter(model -> model != null && !model.isBlank()).map(String::trim).toList();
 		models = cleaned.isEmpty() ? List.of(DEFAULT_MODEL) : cleaned;
-		// 빈 문자열로 넘어온 배역은 기본값으로 되돌린다(models와 같은 이유 — Compose가 빈 값을 넘긴다).
-		// 파이프라인은 배역이 비었거나 둘이 같으면 설정 오류로 거절한다(script_generation.py)
-		scriptProsecutor = blankToDefault(scriptProsecutor, "naero");
-		scriptDefense = blankToDefault(scriptDefense, "nambul");
+		// 빈 문자열로 넘어온 모델은 "설정 안 함"으로 본다(models와 같은 이유 — Compose가 빈 값을 넘긴다)
+		scriptModel = blankToNull(scriptModel);
+		classifyModel = blankToNull(classifyModel);
 	}
 
-	private static String blankToDefault(String value, String fallback) {
-		return value == null || value.isBlank() ? fallback : value.trim();
+	private static String blankToNull(String value) {
+		return value == null || value.isBlank() ? null : value.trim();
 	}
 
 	/** 대본을 만들 설정인지. 모델이 없으면 등록은 지금까지처럼 대본 없이 끝난다 */
 	public boolean scriptEnabled() {
-		return scriptModel != null && !scriptModel.isBlank();
+		return scriptModel != null;
 	}
 
 	public boolean enabled() {
@@ -74,6 +73,7 @@ public record PipelineProperties(
 		return "PipelineProperties[baseUrl=" + (enabled() ? baseUrl : "(없음)") + ", models=" + models
 			+ ", extractModel=" + (extractModel == null ? "(파이프라인 기본값)" : extractModel)
 			+ ", timeout=" + timeout
-			+ ", scriptModel=" + (scriptEnabled() ? scriptModel : "(대본 생성 끔)") + "]";
+			+ ", scriptModel=" + (scriptEnabled() ? scriptModel : "(대본 생성 끔)")
+			+ ", classifyModel=" + (classifyModel == null ? "(생성 모델의 첫 모델)" : classifyModel) + "]";
 	}
 }

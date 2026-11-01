@@ -72,17 +72,37 @@ public interface LegalCaseRepository extends JpaRepository<LegalCase, Long> {
 		nativeQuery = true)
 	Integer lockCastAssignment(@Param("crimeType") String crimeType);
 
-	/** 범죄 유형별 피고인 역(defense) 캐릭터마다 배정된 사건 수. 배정하지 않은 사건은 세지 않는다 (BE-125) */
+	/**
+	 * 범죄 유형별 피고인 역(defense) 캐릭터마다 배정된 수 (BE-125). 배정하지 않은 사건은 세지 않는다.
+	 *
+	 * <p>(BE-129) 배역은 등록 요청을 받을 때 정하므로 <b>아직 적재되지 않은 등록</b>(case_import, case_id 없음)도 센다 —
+	 * 빼면 등록 중인 사건이 있을 때 다음 등록이 같은 배역을 받는다. 실패한 등록(FAILED)은 사건이 되지 않으므로 빼고,
+	 * 적재된 등록은 사건 쪽에서 세므로 뺀다. 생성은 끝났지만 끝내 적재하지 않은 등록(SUCCEEDED)도 세는데, 드물고 기간으로
+	 * 자르면 기준이 하나 더 생겨 그대로 둔다(docs/decisions/BE-129.md)
+	 */
 	@Query(value = """
-		SELECT cast_roles->>'defense' AS defense, count(*) AS cnt FROM legal_case
-		WHERE crime_type = :crimeType AND cast_roles IS NOT NULL GROUP BY cast_roles->>'defense'""",
+		SELECT defense, count(*) AS cnt FROM (
+		    SELECT cast_roles->>'defense' AS defense FROM legal_case
+		    WHERE crime_type = :crimeType AND cast_roles IS NOT NULL
+		    UNION ALL
+		    SELECT cast_roles->>'defense' FROM case_import
+		    WHERE crime_type = :crimeType AND cast_roles IS NOT NULL AND case_id IS NULL AND status <> 'FAILED'
+		) assigned GROUP BY defense""",
 		nativeQuery = true)
 	List<Object[]> countDefenseByCrimeType(@Param("crimeType") String crimeType);
 
-	/** 범죄 유형별로 가장 나중에 만들어진 배정 사건의 피고인 역. 없으면 null (BE-125) */
+	/**
+	 * 범죄 유형별로 가장 나중에 배정된 피고인 역. 없으면 null (BE-125). 위와 같은 대상에서 만든 시각이 가장 늦은 것이다(BE-129) —
+	 * 사건과 등록은 id가 다른 순번이라 시각으로 맞춘다. 같은 시각이면 등록 쪽(더 나중에 배정한 쪽), 그다음 id가 큰 쪽을 앞에 둔다(한 트랜잭션에서 만든 행은 시각이 같다)
+	 */
 	@Query(value = """
-		SELECT cast_roles->>'defense' FROM legal_case
-		WHERE crime_type = :crimeType AND cast_roles IS NOT NULL ORDER BY id DESC LIMIT 1""",
+		SELECT defense FROM (
+		    SELECT cast_roles->>'defense' AS defense, created_at, 0 AS pending, id FROM legal_case
+		    WHERE crime_type = :crimeType AND cast_roles IS NOT NULL
+		    UNION ALL
+		    SELECT cast_roles->>'defense', created_at, 1, id FROM case_import
+		    WHERE crime_type = :crimeType AND cast_roles IS NOT NULL AND case_id IS NULL AND status <> 'FAILED'
+		) assigned ORDER BY created_at DESC, pending DESC, id DESC LIMIT 1""",
 		nativeQuery = true)
 	String findLastDefenseByCrimeType(@Param("crimeType") String crimeType);
 }

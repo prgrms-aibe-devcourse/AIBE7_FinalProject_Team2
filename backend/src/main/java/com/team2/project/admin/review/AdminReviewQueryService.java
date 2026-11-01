@@ -208,7 +208,9 @@ public class AdminReviewQueryService {
 			guideline == null ? null : new Guideline(guideline.getId(), guideline.getVersionName()),
 			legalCase.getDeidentifiedItems(),
 			legalCase.getCastRoles(),
-			legalCase.getSensitiveFlags());
+			legalCase.getSensitiveFlags(),
+			legalCase.getClassification(),
+			legalCase.getClassificationNeedsReview());
 	}
 
 	private static Source source(CaseSource source) {
