@@ -64,14 +64,18 @@ class CaseDetailApiTest extends ApiIntegrationTest {
 		insertScriptWithReview(pending, null);
 		long rejected = insertCase("FRAUD", "PUBLISHED");
 		insertScriptWithReview(rejected, "REJECTED");
-		// 블록 하나라도 승인 전이면 준비되지 않은 대본이다 (BE-126: 모든 블록 승인)
+		// 블록 하나라도 승인 전이면 준비되지 않은 대본이다 (BE-126: 다섯 단위 모두 승인)
 		long partial = insertCase("FRAUD", "PUBLISHED");
-		insertScriptBlock(insertScriptWithReview(partial, "APPROVED"), "U4", "{}", null);
+		jdbcTemplate.update("UPDATE case_script_block SET review_status = NULL WHERE script_id = ? AND unit = 'U4'",
+				insertScriptWithReview(partial, "APPROVED"));
+		// 증거조사만 만든 대본은 승인돼 있어도 준비 중이다 (BE-126, 해송님 합의)
+		long evidenceOnly = insertCase("FRAUD", "PUBLISHED");
+		insertEvidenceOnlyScript(evidenceOnly, "APPROVED");
 		long noScript = insertCase("FRAUD", "PUBLISHED");
 
 		mockMvc.perform(get(caseUrl(approved))).andExpect(jsonPath("$.scriptReady").value(true));
 		mockMvc.perform(get(caseUrl(approved) + "/script")).andExpect(status().isOk());
-		for (long caseId : new long[] {pending, rejected, partial, noScript}) {
+		for (long caseId : new long[] {pending, rejected, partial, evidenceOnly, noScript}) {
 			mockMvc.perform(get(caseUrl(caseId))).andExpect(jsonPath("$.scriptReady").value(false));
 			mockMvc.perform(get(caseUrl(caseId) + "/script")).andExpect(status().isNotFound());
 		}

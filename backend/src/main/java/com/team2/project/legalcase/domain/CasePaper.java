@@ -75,7 +75,11 @@ public class CasePaper {
 
 	/** 다시 생성(덮어쓰기). 사건마다 신문 지면은 1건이라 새로 만들지 않고 내용만 바꾼다 */
 	public void overwrite(String desk, String headline, String deck, String caption, List<String> article) {
-		this.revision++;		// 다시 생성한 기사는 새 판이다
+		// 다시 생성해도 같은 기사면 판을 올리지 않는다 — U1이 낡았다고 잘못 보이지 않게 (PR #367 리뷰)
+		if (!Objects.equals(this.headline, headline) || !Objects.equals(this.deck, deck)
+				|| !Objects.equals(this.caption, caption) || !Objects.equals(this.article, article)) {
+			this.revision++;
+		}
 		this.desk = desk;
 		this.headline = headline;
 		this.deck = deck;

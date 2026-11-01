@@ -15,10 +15,12 @@ import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -32,10 +34,11 @@ import org.hibernate.type.SqlTypes;
  * 사건 대본 (BE-108, 블록 저장은 BE-126). 사건마다 1건. 내용은 단위 블록({@link CaseScriptBlock}, U0 ~ U4)에 있고
  * 여기에는 대본 전체 값(메타 · 생성 정보 · 공개 가능 여부)만 둔다.
  *
- * <p>증거조사 대사만 만든 대본(BE-107, {@code stages.script.full = false})은 U3 블록 하나다. 대본 전체(BE-121)는
- * 만든 단위만큼 블록이 있고, 만들지 못한 단위는 {@link #pending}에 남는다.
+ * <p>대본 전체(BE-121)는 만든 단위만큼 블록이 있고, 만들지 못한 단위는 {@link #pending}에 남는다. 증거조사 대사만 만든
+ * 대본(BE-107, {@code stages.script.full = false})은 U3 블록 하나이고 나머지 단위가 {@code pending}이다 — <b>체험할 수 없는
+ * "준비 중" 대본</b>이다(해송님 합의, BE-126 PR #367 리뷰 1번).
  *
- * <p><b>검수 상태는 블록에 있다.</b> 대본의 상태는 블록에서 계산한다 — 모든 블록이 승인됐으면 공개({@link #isPublic()}).
+ * <p><b>검수 상태는 블록에 있다.</b> 대본의 상태는 블록에서 계산한다 — 다섯 단위가 모두 있고 모두 승인됐으면 공개({@link #isPublic()}).
  * 1차는 통승인 · 통거절이라 모든 블록에 한 번에 적용하고(A-13-11 · 12), 블록 단위 승인은 2차다.
  * <b>사건 공개와 대본 공개는 별개다</b> — 사건이 {@code PUBLISHED}여도 대본은 승인 전까지 내려가지 않는다(BE-109).
  */
@@ -142,7 +145,7 @@ public class CaseScript {
 		return block(ScriptUnit.U3).map(CaseScriptBlock::lines).orElse(List.of());
 	}
 
-	/** 대본의 검수 상태. 모든 블록이 승인이면 승인, 하나라도 반려면 반려, 그 밖은 대기 */
+	/** 대본의 검수 상태. 공개 대본(다섯 단위 모두 승인)이면 승인, 하나라도 반려면 반려, 그 밖은 대기 */
 	public ReviewStatus reviewState() {
 		if (isPublic()) {
 			return ReviewStatus.APPROVED;
@@ -154,16 +157,45 @@ public class CaseScript {
 	}
 
 	/**
-	 * 공개할 수 있는 대본인지 = <b>모든 블록이 승인됐는지</b> (BE-109 서빙 기준, API 1 · 16 · 18의 {@code scriptReady}).
-	 * 사건 공개 여부와는 별개다. {@code CaseScriptRepository.findApprovedCaseIds}가 같은 조건을 쿼리로 쓴다
+	 * 공개할 수 있는 대본인지 = <b>다섯 단위(U0 ~ U4)가 모두 있고 모두 승인됐는지</b> (BE-109 서빙 기준, API 1 · 16 · 18의
+	 * {@code scriptReady}). 증거조사만 있는 대본은 승인돼 있어도 공개하지 않는다(준비 중). 사건 공개 여부와는 별개다.
+	 * {@code CaseScriptRepository.findApprovedCaseIds}가 같은 조건을 쿼리로 쓴다
 	 */
 	public boolean isPublic() {
-		return !blocks.isEmpty() && blocks.stream().allMatch(CaseScriptBlock::isApproved);
+		return isComplete() && blocks.stream().allMatch(CaseScriptBlock::isApproved);
 	}
 
-	/** 승인할 수 있는지: 파이프라인이 공개해도 된다고 봤고, 모든 블록에 오류가 없다 */
+	/** 승인할 수 있는지: 다섯 단위가 모두 있고, 파이프라인이 공개해도 된다고 봤고, 모든 블록에 오류가 없다 */
 	public boolean isApprovable() {
-		return publishable && !blocks.isEmpty() && blocks.stream().allMatch(CaseScriptBlock::isPublishable);
+		return publishable && isComplete() && blocks.stream().allMatch(CaseScriptBlock::isPublishable);
+	}
+
+	/** 다섯 단위가 모두 있는지. 만들지 못한 단위가 있거나 증거조사만 만든 대본이면 false */
+	public boolean isComplete() {
+		return Arrays.stream(ScriptUnit.values()).allMatch(unit -> block(unit).isPresent());
+	}
+
+	/**
+	 * 만든 뒤 DB 값(사건 내용 · 기사)이 바뀐 블록 — {@code basis}의 판이 지금 판과 다르다. 적재 뒤 관리자가 개요를 고치거나(A-11)
+	 * 기사를 다시 만들면(A-13-6) 그 값을 보고 만든 블록은 옛 내용을 말한다. 분류 · 배역 · 앞 블록의 낡음은 2차에서 계산한다.
+	 *
+	 * @param contentRevision 사건 내용의 지금 판 ({@link LegalCase#getContentRevision()})
+	 * @param paperRevision   기사의 지금 판 ({@link CasePaper#getRevision()}), 기사가 없으면 null
+	 */
+	public List<ScriptUnit> staleOnDbInput(int contentRevision, Integer paperRevision) {
+		return blocks.stream().filter(block -> differs(block, ScriptUnit.CASE_BASIS, contentRevision)
+				|| differs(block, ScriptUnit.PAPER_BASIS, paperRevision))
+			.map(CaseScriptBlock::getUnit).toList();
+	}
+
+	/** 그 블록이 보는 값인데 판이 다른지. 저장된 JSON 숫자는 Integer · Long 어느 쪽으로도 와서 long으로 맞춘다 */
+	private static boolean differs(CaseScriptBlock block, String key, Integer current) {
+		if (!block.getUnit().basis().contains(key)) {
+			return false;
+		}
+		Object saved = block.getBasis().get(key);
+		Long savedRevision = saved instanceof Number number ? number.longValue() : null;
+		return !Objects.equals(savedRevision, current == null ? null : current.longValue());
 	}
 
 	/** 가장 최근에 검수한 블록 (검수 화면의 검수자 · 시각 · 사유). 통승인 · 통거절이라 1차는 모든 블록이 같다 */
@@ -175,7 +207,7 @@ public class CaseScript {
 	/** 통승인 (A-13-11) — 모든 블록을 승인한다. 승인할 수 없는 대본이면 거절한다 */
 	public void approve(Long adminId, Instant at) {
 		if (!isApprovable()) {
-			throw new IllegalStateException("오류가 있거나 만들지 못한 단위가 있는 대본은 승인할 수 없다 — 다시 생성해야 한다");
+			throw new IllegalStateException("오류가 있거나 빠진 단위가 있는 대본은 승인할 수 없다 — 다시 생성해야 한다");
 		}
 		blocks.forEach(block -> block.approve(adminId, at));
 	}

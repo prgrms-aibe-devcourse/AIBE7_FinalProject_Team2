@@ -55,7 +55,7 @@
 | v1.49 | 2026-10-29 | 닉네임 중복 금지 (**확장 단계**, BE-139 · V39 · API 명세 v0.69) — `member`에 `uq_member_nickname`(`lower(nickname)` 유니크 인덱스, `nickname IS NOT NULL`인 행만) 추가. 칸은 그대로. 겹치던 기존 닉네임은 먼저 가입한 회원만 남기고 나머지를 NULL로 비운다 |
 | v1.50 | 2026-10-30 | 회원 기준 소유로 전환 (**확장 단계**, BE-140 · V40 ~ V43 · API 명세 M-9 ~ M-11) — 로그인 전용이 된 사용자 데이터의 주인을 익명 ID에서 회원으로 옮길 자리를 만든다. BE-60 "main으로 가는 마이그레이션은 추가만" 규칙에 맞게 NOT NULL 해제 · 칸 · 제약 · 인덱스 · 테이블 추가만 한다(지금 앱은 그대로 돈다)<br>• V40: `experience` · `personality_result`는 손님도 쓰므로 **이중 소유** — `anonymous_user_id` · `member_id` 중 정확히 하나(CHECK `chk_experience_owner` · `chk_personality_result_owner`). `anonymous_user_id` NOT NULL 해제, `personality_result.member_id` 추가, 두 `member_id`에 FK. 회원 쪽 유니크 · 조회는 부분 인덱스(`uk_experience_member_case_attempt` · `ux_personality_result_current_member` · `ux_personality_result_baseline_retake_member` · `ix_personality_result_member_created`). `experience.member_id`(V3부터 있었으나 아무도 채우지 않음)의 뜻을 "체험 시작 시 로그인 회원"에서 "체험의 주인 회원"으로 바꾼다<br>• V41: 회원 키 테이블 7개 신설 — `member_attendance` · `member_profile_deco` · `member_profile_setting` · `member_xp_event` · `member_profile_job` · `member_collection_item` · `member_achievement_unlock`(칸 · 제약은 익명 쪽과 같고 주인만 회원, 회원 FK `ON DELETE CASCADE`). 익명 데이터는 옮기지 않고(체험만 이관), 옛 익명 테이블은 쓰지 않고 두었다가 후속 이슈에서 지운다<br>• V42: `member_anonymous_import` 신설 — 첫 로그인 가져오기 결정(`IMPORTED` · `DISCARDED`), 회원마다 한 번<br>• V43: `community_post` · `community_comment`의 작성자를 회원 또는 익명 ID로 넓힌다 — `member_id` · `anonymous_user_id` NOT NULL 해제, 적어도 하나(CHECK `chk_community_post_author` · `chk_community_comment_author`). "정확히 하나"로 좁히는 일은 다음 배포로 나눈다<br>• 15장 추가, 3-2 · 8 ~ 14장 갱신 |
 | v1.51 | 2026-10-30 | 약관 동의 기록 (**확장 단계**, BE-133 · V44 · API 명세 v0.74, v1.50 · V40 ~ V43은 BE-140 PR #351) — `member`에 `terms_agreed_at`(timestamptz) · `terms_version`(varchar 20) 추가, 둘 다 NULL 허용. CHECK `ck_member_terms_agreement`(둘이 함께 있거나 함께 없다). 아이디 가입(M-5) 때만 채우고, 기존 회원 · 카카오 회원은 NULL(동의 기록 없음) |
-| v1.52 | 2026-10-31 | 대본 단위 블록 (**확장 단계**, BE-126 1차 · V45 · API 명세 v0.78) — `case_script_block` 신설(대본마다 단위 U0 ~ U4 하나에 한 행: 내용 `content` · 판 `revision` · 생성 근거 `basis` · 검수 결과 `review` · `warnings` · `repairs` · 공개 가능 여부 `publishable` · 검수 칸 4개, 유니크 `(script_id, unit)`, "오류 블록은 승인 불가" CHECK). `case_script`의 `evidence`는 U3 블록으로 옮기고(검수 상태 포함) 검수 칸 4개를 지웠다 — 대본의 검수 상태는 블록에서 계산한다(모든 블록 승인 = 공개). `case_script`에 메타 `issue` · `admits`와 `pending`(만들지 못한 단위) · `review`(대본 전체 검수 결과) 추가. 블록의 생성 근거가 가리킬 판 `legal_case.content_revision` · `case_paper.revision` 추가(대본 입력이 바뀔 때만 오른다, `updated_at`을 쓰지 않는 이유는 아래 표) (결정: `docs/decisions/BE-126.md`) |
+| v1.52 | 2026-10-31 | 대본 단위 블록 (**확장 단계**, BE-126 1차 · V45 · API 명세 v0.78) — `case_script_block` 신설(대본마다 단위 U0 ~ U4 하나에 한 행: 내용 `content` · 판 `revision` · 생성 근거 `basis` · 검수 결과 `review` · `warnings` · `repairs` · 공개 가능 여부 `publishable` · 검수 칸 4개, 유니크 `(script_id, unit)`, "오류 블록은 승인 불가" CHECK). `case_script`의 `evidence`는 U3 블록으로 옮기고(검수 상태 포함, 나머지 네 단위는 `pending`) 검수 칸 4개를 지웠다 — 대본의 검수 상태는 블록에서 계산한다(다섯 단위 모두 승인 = 공개, 증거조사만 있는 대본은 준비 중). `case_script`에 메타 `issue` · `admits`와 `pending`(만들지 못한 단위) · `review`(대본 전체 검수 결과) 추가. 블록의 생성 근거가 가리킬 판 `legal_case.content_revision` · `case_paper.revision` 추가(대본 입력이 바뀔 때만 오른다, `updated_at`을 쓰지 않는 이유는 아래 표) (결정: `docs/decisions/BE-126.md`) |
 
 ---
 
@@ -412,14 +412,14 @@ S-05에서 보여 줄 형벌 선택지, 그리고 **선고 가능 범위 밖 판
 | cast_roles | jsonb |  | 배역 `{prosecutor, defense}` (메타 `cast`). `cast`는 SQL 예약어라 이름을 바꿨다 |
 | issue | varchar(30) |  | 메타: 분류 쟁점(`admitted` · `denied` …). 프론트 공통 틀이 신문 마지막 질문을 고른다. 값 목록은 파이프라인이 정해 CHECK를 걸지 않는다(`sensitive_flags`와 같은 이유). 분류 없이 만든 대본은 비어 있다 (v1.52) |
 | admits | boolean |  | 메타: 피고인이 혐의를 인정하는지(U0 세 번째 답, 서버가 신문 답 규칙으로 읽는다). U0가 없으면 비어 있다 (v1.52) |
-| pending | jsonb | ✓ | 파이프라인이 만들지 못한 단위 배열(예: `["U1"]`), 기본 `[]`. 하나라도 있으면 대본 전체를 승인할 수 없다 (v1.52) |
+| pending | jsonb | ✓ | 파이프라인이 만들지 못한 단위 배열(예: `["U1"]`), 기본 `[]`. 하나라도 있으면 대본 전체를 승인할 수 없다. 블록 단위가 아닌 `"PAPER"`(기사를 만들지 못함)가 들어올 수 있고, 증거조사만 만든 대본은 `["U0", "U1", "U2", "U4"]`다 (v1.52) |
 | review | jsonb | ✓ | 대본 전체에 걸린 검수 결과(`REVIEW_FAILED`), 기본 `[]`. 블록 것은 블록 행에 있다 (v1.52) |
 | balance_warning | text |  | 검사 · 변호인 분량이 치우쳤다는 경고. **길이를 제한하지 않는다** — 모델 문장이 들어오는 칸을 varchar로 두면 한 번 넘칠 때 적재 전체가 막힌다(BE-93 1차에서 겪음) |
 | publishable | boolean | ✓ | 파이프라인이 공개해도 된다고 본 결과(생성 실패 · 중단 · 못 만든 단위 · 검수 오류가 없다). false면 승인할 수 없다 |
 | created_at | timestamptz | ✓ | 적재 시각 |
 | updated_at | timestamptz | ✓ |  |
 
-- **검수 상태는 블록에 있다**(v1.52). 대본의 상태는 블록에서 계산한다 — 모든 블록 승인이면 공개(API 1 · 16 · 18의 `scriptReady`), 하나라도 반려면 반려, 그 밖은 대기. 1차는 통승인 · 통거절이라 모든 블록에 한 번에 적용한다(A-13-11 · 12).
+- **검수 상태는 블록에 있다**(v1.52). 대본의 상태는 블록에서 계산한다 — 다섯 단위(U0 ~ U4)가 모두 있고 모두 승인이면 공개(API 1 · 16 · 18의 `scriptReady`, 증거조사만 만든 대본은 "준비 중"), 하나라도 반려면 반려, 그 밖은 대기. 1차는 통승인 · 통거절이라 모든 블록에 한 번에 적용한다(A-13-11 · 12).
 - 승인 조건은 이 표의 `publishable`과 모든 블록의 `publishable`이 참인 것이다. `publishable`이 false인 이유: 끝내 생성하지 못한 줄이 있거나(U3 `text`가 null), 호출 한도로 멈췄거나(`stopped`), 만들지 못한 단위가 있거나(`pending`), 검수 조건 오류가 있다.
 - **대본 검수는 사건 상태를 바꾸지 않는다.** 판결 후보 승인(A-9)은 `legal_case.status`를 DRAFT → REVIEW로 올리지만, 대본은 사건 내용이 아니라 체험 연출이라 사건 공개 흐름과 따로 둔다.
 - 다시 생성해 덮어쓰는 경로는 아직 없다(적재는 사건을 새로 만든다). 블록 재생성은 BE-129다.
@@ -458,7 +458,7 @@ jsonb에 블록을 모두 담으면 블록 하나를 고칠 때 다른 블록의
 - **오류 있는 블록은 승인할 수 없다**: `CHECK (review_status <> 'APPROVED' OR publishable)` — V32 `case_script`에 있던 제약을 블록으로 옮겼다(BE-107 PR #277 리뷰 7번의 계약).
 - `review` · `warnings` · `repairs`는 고치기 전 문장과 대본 인용이 들어 있어 공개 API(API 18)에 싣지 않는다. API 18은 `content`만, U3는 `factorId` · `role` · `text`만 준다.
 - U3 `content[].factorId`는 **`factor.display_order`** 와 맞춘다(적재가 파이프라인 `factorId`를 그대로 넣는다, v1.37). A-13-10이 이 번호로 판단 요소 문구를 찾아 대사마다 붙여 준다.
-- V45가 기존 대본의 `evidence`를 U3 블록 하나로 옮겼다(검수 상태 포함, `basis`는 `{case: 1, cast}`). 증거조사만 만드는 경로(BE-107)도 U3 블록 하나로 적재한다.
+- V45가 기존 대본의 `evidence`를 U3 블록 하나로 옮겼다(검수 상태 포함, `basis`는 `{case: 1, cast}`, 대본 `pending`은 나머지 네 단위). 증거조사만 만드는 경로(BE-107)도 U3 블록 하나로 적재한다 — 둘 다 공개되지 않는 "준비 중" 대본이다.
 
 #### `case_import` · `case_import_source` — 사건 등록 작업 (BE-93, A-14 · A-15)
 

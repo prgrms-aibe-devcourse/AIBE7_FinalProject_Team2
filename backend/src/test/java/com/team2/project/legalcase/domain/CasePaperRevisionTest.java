@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 class CasePaperRevisionTest {
 
 	@Test
-	@DisplayName("새 기사는 1판, 같은 값으로 고치면 그대로, 다른 값이면 오르고, 다시 생성하면 오른다")
+	@DisplayName("새 기사는 1판, 같은 값으로 고치거나 다시 생성하면 그대로, 다른 값이면 오른다")
 	void revision_bumpsOnlyOnChange() {
 		CasePaper paper = CasePaper.of(null, "사회부", "헤드라인", null, "캡션", List.of("문단1", "문단2"));
 		assertThat(paper.getRevision()).isEqualTo(1);
@@ -22,6 +22,9 @@ class CasePaperRevisionTest {
 
 		paper.changeCaption("다른 캡션");
 		assertThat(paper.getRevision()).isEqualTo(2);
+
+		paper.overwrite("사회부", "헤드라인", null, "다른 캡션", List.of("문단1", "문단2"));
+		assertThat(paper.getRevision()).isEqualTo(2);		// 다시 생성해도 같은 기사면 그대로 (PR #367 리뷰)
 
 		paper.overwrite("사회부", "새 헤드라인", null, null, List.of("새 문단"));
 		assertThat(paper.getRevision()).isEqualTo(3);

@@ -12,6 +12,7 @@ import com.team2.project.pipeline.PipelineResult;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,7 +30,8 @@ import tools.jackson.databind.JsonNode;
  * <ul>
  *   <li><b>대본 전체</b>(BE-121, {@code stages.script.full = true}): {@code fullScript.blocks}(U0 ~ U4) · {@code fullScript.meta}를
  *       블록 · 메타로 저장한다. 형식은 `tools/ai-judgment/prompts/script/README.md` "저장 블록"</li>
- *   <li><b>증거조사 대사만</b>(BE-107): {@code evidence}를 U3 블록 하나로 저장한다</li>
+ *   <li><b>증거조사 대사만</b>(BE-107): {@code evidence}를 U3 블록 하나로 저장하고 나머지 단위는 {@code pending}에 둔다 —
+ *       체험할 수 없는 "준비 중" 대본이다(BE-126 PR #367 리뷰 1번, 해송님 합의)</li>
  * </ul>
  *
  * <p>블록의 {@code basis}(만들 때 본 값)에서 사건 내용 · 기사는 파이프라인이 {@code null}로 보낸다 — DB가 가진 값이라
@@ -107,7 +109,7 @@ class CaseScriptLoader {
 		return caseScript;
 	}
 
-	/** 증거조사 대사만 (BE-107): U3 블록 하나 */
+	/** 증거조사 대사만 (BE-107): U3 블록 하나. 나머지 단위는 만들지 않았으므로 pending — 승인 · 공개할 수 없다 */
 	private CaseScript evidenceOnly(LegalCase legalCase, JsonNode script, PipelineResult result) {
 		List<Object> evidence = Json.array(script, "evidence").stream()
 			.map(Json::toMap).filter(Objects::nonNull).map(line -> (Object) line).toList();
@@ -116,7 +118,10 @@ class CaseScriptLoader {
 			return null;
 		}
 		Map<String, Object> cast = Json.toMap(script.get("cast"));
-		CaseScript caseScript = CaseScript.of(legalCase, Json.text(script, "model"), cast, null, null, List.of(),
+		List<String> pending = Arrays.stream(ScriptUnit.values()).filter(unit -> unit != ScriptUnit.U3)
+			.map(ScriptUnit::name).toList();
+		// publishable은 파이프라인 값(대사 조건)을 그대로 둔다 — 대사만 보면 공개할 수 있어도 빠진 단위 때문에 승인은 막힌다
+		CaseScript caseScript = CaseScript.of(legalCase, Json.text(script, "model"), cast, null, null, pending,
 			List.of(), Json.text(script, "balanceWarning"), Json.bool(script, "publishable"), generatedAt(script),
 			Json.bool(script, "stopped"));
 		// 이 경로는 생성 근거를 내보내지 않는다. 아는 값(사건 내용 판 · 배역)만 남기고, 분류 값은 비워 둔다

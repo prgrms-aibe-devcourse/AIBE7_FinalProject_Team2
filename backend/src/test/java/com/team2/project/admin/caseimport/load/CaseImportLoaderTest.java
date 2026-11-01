@@ -310,6 +310,8 @@ class CaseImportLoaderTest extends ApiIntegrationTest {
 		assertThat(row.get("issue")).isNull();				// 분류 없이 만든 대본
 		assertThat(row.get("admits")).isNull();
 		assertThat(String.valueOf(row.get("cast_roles"))).contains("나로");
+		// 나머지 단위는 만들지 않았다 — 증거조사만 있는 대본은 승인 · 공개할 수 없는 "준비 중"이다 (PR #367 리뷰 1번)
+		assertThat(String.valueOf(row.get("pending"))).isEqualTo("[\"U0\", \"U1\", \"U2\", \"U4\"]");
 
 		List<Map<String, Object>> blocks = blocks(caseId);
 		assertThat(blocks).extracting(block -> block.get("unit")).containsExactly("U3");

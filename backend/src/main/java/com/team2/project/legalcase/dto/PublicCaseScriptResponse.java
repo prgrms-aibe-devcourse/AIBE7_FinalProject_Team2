@@ -9,9 +9,9 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * 공개 사건 대본 (API 18, BE-109 · 블록은 BE-126). 관리자가 승인한(모든 블록 승인) 대본만 내려준다.
+ * 공개 사건 대본 (API 18, BE-109 · 블록은 BE-126). 관리자가 승인한(다섯 단위 모두 승인) 대본만 내려준다.
  *
- * <p>{@code blocks}는 단위 블록의 값({@code content})뿐이다. 고정 문구 · 연출 · 민감 안내 · 기사 · 4 ~ 6막은 블록에 없다 —
+ * <p>{@code blocks}는 단위 블록의 값({@code content})뿐이다. 다섯 단위가 모두 승인된 대본만 공개된다(증거조사만 있는 대본은 준비 중). 고정 문구 · 연출 · 민감 안내 · 기사 · 4 ~ 6막은 블록에 없다 —
  * 프론트 공통 틀(FE-33 · FE-139)이 {@code meta}로 고정 문구를 골라 블록과 조립하고, 기사는 API 17, 민감 안내는 FE-129가 맡는다.
  * 검수용 값(블록의 {@code review} · {@code warnings} · {@code repairs}, 대사의 {@code validation} · {@code attempts} ·
  * {@code editedAt})은 내리지 않는다 — 고치기 전 문장과 대본 인용이 들어 있다.
@@ -20,14 +20,14 @@ import java.util.Map;
  *       (마지막 답의 인정 여부)은 {@code meta.admits}로 준다</li>
  *   <li>U2 신문 답({@code questions[].a})은 여기서 "…네." · "…아닙니다."로 정규화한다({@link ScriptAnswers}). 저장값은 모델이
  *       쓴 그대로다 — 저장값에 계산한 값을 섞지 않는다</li>
- *   <li>U3는 줄마다 {@code factorId} · {@code role} · {@code text}만 준다</li>
+ *   <li>U3는 줄마다 {@code factorId} · {@code role} · {@code text}만, U1 · U2 · U4는 화면이 쓰는 키만 준다</li>
  * </ul>
  *
  * <p>{@code evidence} · {@code cast}는 BE-109 때 모양 그대로 둔다(U3 대사와 같은 값) — 블록을 읽지 않는 화면이 그대로 돈다.
  * <b>{@code evidence} 순서는 배열 순서 그대로가 재생 순서다</b>.
  *
  * @param cast   배역 {@code {prosecutor, defense}}. {@link CaseScript#getCastRoles()}를 그대로 내려준다
- * @param blocks 단위 → 값. U1 · U2 · U3 · U4 중 대본에 있는 것만 (증거조사만 만든 대본은 U3뿐)
+ * @param blocks 단위 → 값. U1 · U2 · U3 · U4 (공개 대본은 다섯 단위가 모두 있다)
  * @param meta   {@code {cast, issue, admits}}. 분류 없이 만든 대본은 {@code issue}, U0가 없으면 {@code admits}가 null
  */
 public record PublicCaseScriptResponse(List<EvidenceLine> evidence, Map<String, Object> cast,
@@ -41,9 +41,10 @@ public record PublicCaseScriptResponse(List<EvidenceLine> evidence, Map<String, 
 			switch (block.getUnit()) {
 				case U0 -> {
 				}
-				case U2 -> blocks.put(block.getUnit().name(), withNormalizedAnswers(block.getContent()));
+				case U2 -> blocks.put(block.getUnit().name(), withNormalizedAnswers(allowed(block.getContent(), U2_KEYS)));
 				case U3 -> blocks.put(block.getUnit().name(), block.lines().stream().map(PublicCaseScriptResponse::publicLine).toList());
-				default -> blocks.put(block.getUnit().name(), block.getContent());
+				case U1 -> blocks.put(block.getUnit().name(), allowed(block.getContent(), U1_KEYS));
+				case U4 -> blocks.put(block.getUnit().name(), allowed(block.getContent(), U4_KEYS));
 			}
 		}
 		Map<String, Object> meta = new LinkedHashMap<>();	// Map.of는 null 값을 허용하지 않는다
@@ -51,6 +52,23 @@ public record PublicCaseScriptResponse(List<EvidenceLine> evidence, Map<String, 
 		meta.put("issue", script.getIssue());
 		meta.put("admits", script.getAdmits());
 		return new PublicCaseScriptResponse(lines, script.getCastRoles(), blocks, meta);
+	}
+
+	/**
+	 * 단위마다 화면이 쓰는 키 (`tools/ai-judgment/prompts/script/README.md` "출력 형식"). 파이프라인 형식 검사는 필요한 키가
+	 * 있는지만 보고 여분의 키(모델이 덧붙인 메모 등)는 막지 않아, 아는 키만 내린다(PR #367 리뷰 4번)
+	 */
+	private static final List<String> U1_KEYS = List.of("lines");
+	private static final List<String> U2_KEYS = List.of("indict", "plea", "issues_narr", "questions", "cards");
+	private static final List<String> U4_KEYS = List.of("prosecutor", "defense");
+
+	/** 아는 키만 담은 사본. 객체가 아니면(형식이 어긋난 값) 비운다 */
+	private static Map<String, Object> allowed(Object content, List<String> keys) {
+		Map<String, Object> copy = new LinkedHashMap<>();
+		if (content instanceof Map<?, ?> value) {
+			keys.stream().filter(value::containsKey).forEach(key -> copy.put(key, value.get(key)));
+		}
+		return copy;
 	}
 
 	/** U3 한 줄의 공개 값. 생성 내부 값(validation · attempts)과 배역 이름(character)은 뺀다 */

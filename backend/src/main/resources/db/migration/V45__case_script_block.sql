@@ -53,7 +53,8 @@ CREATE TABLE case_script_block (
 -- issue: 분류 쟁점(admitted · denied …). 프론트 공통 틀이 신문 마지막 질문을 고른다. 값 목록은 파이프라인이 정해 CHECK를
 --        걸지 않는다(V37 sensitive_flags와 같은 이유). 분류 없이 만든 대본(증거조사만)은 비어 있다
 -- admits: 피고인이 혐의를 인정하는지(U0 세 번째 답). 마지막 답 "…네, 인정합니다." / "…아닙니다."를 고른다. U0가 없으면 비어 있다
--- pending: 파이프라인이 만들지 못한 단위(["U1"] 등). 하나라도 있으면 대본 전체를 승인할 수 없다
+-- pending: 파이프라인이 만들지 못한 단위(["U1"] 등). 하나라도 있으면 대본 전체를 승인할 수 없다. 블록 단위가 아닌 "PAPER"
+--          (기사를 만들지 못함 — 그래서 U1도 빠진다)가 들어올 수 있다. 증거조사만 만든 대본은 U3 말고 네 단위가 들어간다
 -- review: 대본 전체에 걸린 검수 결과(REVIEW_FAILED — 검사 자체가 돌지 못함). 블록 것은 블록 행에 있다
 ALTER TABLE case_script ADD COLUMN issue varchar(30);
 ALTER TABLE case_script ADD COLUMN admits boolean;
@@ -61,7 +62,8 @@ ALTER TABLE case_script ADD COLUMN pending jsonb NOT NULL DEFAULT '[]'::jsonb;
 ALTER TABLE case_script ADD COLUMN review jsonb NOT NULL DEFAULT '[]'::jsonb;
 
 -- 기존 대본(증거조사 대사뿐, BE-108)은 U3 블록 하나로 옮긴다. 운영은 0행이라(2026-10-30 확인) 개발 · 로컬 DB용이다.
--- 검수 상태는 대본의 것을 그대로 옮긴다 — 승인한 대본은 승인한 U3 하나라 공개 여부가 바뀌지 않는다.
+-- 검수 상태는 U3에 그대로 옮기지만, 나머지 네 단위가 없어(pending) 공개되지 않는다 — 증거조사만 있는 대본은 "준비 중"이다
+-- (해송님 합의, PR #367 리뷰 1번). 공개 기준은 다섯 단위 모두 승인이다.
 -- 블록의 공개 가능 여부는 대본의 값을 쓴다(대사뿐인 대본은 둘이 같은 식이다: 멈추지 않았고 빈 줄이 없다).
 -- 생성 근거는 적재(증거조사만 만든 대본)와 같게 아는 값만 남긴다 — 사건 내용 판(위에서 1로 시작)과 배역
 INSERT INTO case_script_block (script_id, unit, content, basis, publishable, review_status, reviewed_by_admin_id,
@@ -70,7 +72,9 @@ SELECT id, 'U3', evidence, jsonb_build_object('case', 1, 'cast', cast_roles), pu
        reviewed_by_admin_id, reviewed_at, review_note, created_at, updated_at
 FROM case_script;
 
--- 대사와 검수 칸은 블록으로 옮겼다. 대본의 검수 상태는 블록에서 계산한다(모든 블록 승인 = 공개)
+UPDATE case_script SET pending = '["U0", "U1", "U2", "U4"]'::jsonb;
+
+-- 대사와 검수 칸은 블록으로 옮겼다. 대본의 검수 상태는 블록에서 계산한다(다섯 단위 모두 승인 = 공개)
 ALTER TABLE case_script DROP CONSTRAINT chk_case_script_publishable_approved;
 ALTER TABLE case_script DROP CONSTRAINT chk_case_script_review_note;
 ALTER TABLE case_script DROP CONSTRAINT chk_case_script_review_status;

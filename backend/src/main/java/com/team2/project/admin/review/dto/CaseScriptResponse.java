@@ -19,7 +19,7 @@ import java.util.stream.Stream;
  *
  * <p>검수 칸(reviewStatus · isPublished · reviewedBy · reviewedAt · reviewNote)은 <b>판결 후보 A-8과 같은
  * 이름 · 같은 형식</b>이다 — 화면이 검수 영역을 같은 부품으로 그릴 수 있게 한다(FE 요청, 2026-10-27). 검수 상태는 블록에
- * 있고 여기 값은 블록에서 계산한다: 모든 블록 승인이면 {@code APPROVED}, 하나라도 반려면 {@code REJECTED}, 그 밖은
+ * 있고 여기 값은 블록에서 계산한다: 다섯 단위가 모두 있고 모두 승인이면 {@code APPROVED}, 하나라도 반려면 {@code REJECTED}, 그 밖은
  * {@code PENDING}. 검수자 · 시각 · 사유는 가장 최근에 검수한 블록의 것이다(1차는 통승인 · 통거절이라 모든 블록이 같다).
  *
  * <p>{@code evidence[]}는 U3 블록의 대사이고 BE-108 때와 같은 모양이다(화면이 쓰는 값: {@code factorId} · {@code role} ·
@@ -27,11 +27,12 @@ import java.util.stream.Stream;
  * 어느 사실에 대한 대사인지는 사건의 판단 요소에 있다(파이프라인 {@code factorId} = {@code factor.display_order}).
  * 생성에 실패한 줄은 {@code text}가 {@code null}이다.
  *
- * <p>{@code publishable}이 {@code false}면 승인할 수 없다 — 끝내 생성하지 못한 줄 · 단위가 있거나({@code pending}),
+ * <p>{@code publishable}이 {@code false}면 승인할 수 없다 — 끝내 생성하지 못한 줄 · 빠진 단위가 있거나({@code pending},
+ * 증거조사만 만든 대본 포함),
  * 호출 한도로 멈췄거나({@code stopped}), 검수 조건 오류가 있다(블록의 {@code review}, 대본 전체는 {@code review}).
  *
  * @param reviewStatus 검수 상태. 블록에서 계산한다 (위)
- * @param isPublished  지금 공개되는 대본인지(= 모든 블록 승인). <b>사건 공개 여부와는 별개다</b>
+ * @param isPublished  지금 공개되는 대본인지(= 다섯 단위 모두 승인, 증거조사만 있는 대본은 승인돼도 false). <b>사건 공개 여부와는 별개다</b>
  * @param reviewedBy   검수한 관리자 이메일. A-8과 같은 값을 쓴다(계정이 지워졌으면 null)
  * @param generatedAt  파이프라인이 만든 시각. 적재 시각({@code updatedAt})보다 앞선다
  * @param meta         {@code {cast, issue, admits}} — 프론트 공통 틀이 고정 문구를 고르는 값 (API 18과 같다)

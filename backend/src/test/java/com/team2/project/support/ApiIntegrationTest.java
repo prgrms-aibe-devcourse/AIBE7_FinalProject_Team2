@@ -62,18 +62,35 @@ public abstract class ApiIntegrationTest {
 	}
 
 	/**
-	 * 대본(BE-108) 한 건 — 블록(BE-126)은 U3 하나. reviewStatus가 null이면 검수 대기. 내용은 비워 두고 "승인 여부"만 본다
+	 * 대본(BE-108) 한 건 — 블록(BE-126)은 다섯 단위 모두, 같은 검수 상태로. reviewStatus가 null이면 검수 대기. 내용은 비워 두고
+	 * "승인 여부"만 본다
 	 *
-	 * @return 대본 ID (블록을 더 붙일 때 쓴다)
+	 * @return 대본 ID (블록 상태를 바꿀 때 쓴다)
 	 */
 	protected long insertScriptWithReview(long caseId, String reviewStatus) {
-		Long scriptId = jdbcTemplate.queryForObject("""
+		long scriptId = insertScriptRow(caseId);
+		for (String unit : List.of("U0", "U1", "U2", "U4")) {
+			insertScriptBlock(scriptId, unit, "{}", reviewStatus);
+		}
+		insertScriptBlock(scriptId, "U3", "[]", reviewStatus);
+		return scriptId;
+	}
+
+	/** 증거조사만 만든 대본(BE-107) — U3 블록 하나, 나머지 단위는 pending. 승인돼 있어도 "준비 중"이다(BE-126) */
+	protected long insertEvidenceOnlyScript(long caseId, String reviewStatus) {
+		long scriptId = insertScriptRow(caseId);
+		jdbcTemplate.update("UPDATE case_script SET pending = '[\"U0\", \"U1\", \"U2\", \"U4\"]'::jsonb WHERE id = ?",
+				scriptId);
+		insertScriptBlock(scriptId, "U3", "[]", reviewStatus);
+		return scriptId;
+	}
+
+	private long insertScriptRow(long caseId) {
+		return jdbcTemplate.queryForObject("""
 				INSERT INTO case_script (case_id, model, generated_at, stopped, cast_roles, publishable)
 				VALUES (?, 'test', now(), false, '{}'::jsonb, true)
 				RETURNING id
 				""", Long.class, caseId);
-		insertScriptBlock(scriptId, "U3", "[]", reviewStatus);
-		return scriptId;
 	}
 
 	/** 대본 블록(BE-126) 한 행. 오류 없는 블록(publishable)으로 넣는다 */

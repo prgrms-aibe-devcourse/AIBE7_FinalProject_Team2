@@ -8,8 +8,11 @@ import com.team2.project.admin.review.dto.CaseScriptResponse;
 import com.team2.project.admin.service.AdminPrincipal;
 import com.team2.project.common.exception.BusinessException;
 import com.team2.project.common.exception.ErrorCode;
+import com.team2.project.legalcase.domain.CasePaper;
 import com.team2.project.legalcase.domain.CaseScript;
 import com.team2.project.legalcase.domain.Factor;
+import com.team2.project.legalcase.domain.ScriptUnit;
+import com.team2.project.legalcase.repository.CasePaperRepository;
 import com.team2.project.legalcase.repository.CaseScriptRepository;
 import com.team2.project.legalcase.repository.FactorRepository;
 import com.team2.project.legalcase.repository.LegalCaseRepository;
@@ -17,7 +20,9 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +41,7 @@ public class AdminCaseScriptService {
 	private final LegalCaseRepository caseRepository;
 	private final CaseScriptRepository scriptRepository;
 	private final FactorRepository factorRepository;
+	private final CasePaperRepository paperRepository;
 	private final AdminAccountRepository accountRepository;
 	private final AdminAuditLogger auditLogger;
 
@@ -47,7 +53,8 @@ public class AdminCaseScriptService {
 	/**
 	 * 승인 = 이 대본을 공개한다 (A-13-11). 1차는 <b>통승인</b>이다 — 모든 블록을 한 번에 승인한다(BE-126).
 	 * 승인할 수 없는 대본({@link CaseScript#isApprovable()})은 거절한다 — 증거 카드와 대사가 1:1로 맞지 않거나
-	 * (BE-107 PR #277 리뷰 7번), 만들지 못한 단위 · 검수 조건 오류가 있으면 체험이 깨진다.
+	 * (BE-107 PR #277 리뷰 7번), 빠진 단위 · 검수 조건 오류가 있으면 체험이 깨진다. 증거조사만 만든 대본도 승인할 수 없다(준비 중).
+	 * 만든 뒤 사건 내용 · 기사가 바뀐 블록이 있어도 거절한다(PR #367 리뷰 2번).
 	 */
 	@Transactional
 	public CaseScriptResponse approve(Long caseId, AdminPrincipal admin, HttpServletRequest request) {
@@ -55,6 +62,14 @@ public class AdminCaseScriptService {
 		if (!script.isApprovable()) {
 			throw new BusinessException(ErrorCode.INVALID_STATE,
 				"만들지 못한 대사 · 단위나 검수 오류가 있는 대본은 승인할 수 없습니다. 대본을 다시 생성해 주세요.");
+		}
+		// 만든 뒤 사건 내용(A-11) · 기사(A-13-6 · 8)가 바뀌었으면 그 블록은 옛 내용을 말한다 — 낡음 표시(2차) 전에도 공개는 막는다
+		List<ScriptUnit> stale = script.staleOnDbInput(script.getLegalCase().getContentRevision(),
+			paperRepository.findByLegalCaseId(caseId).map(CasePaper::getRevision).orElse(null));
+		if (!stale.isEmpty()) {
+			throw new BusinessException(ErrorCode.INVALID_STATE, "대본을 만든 뒤 사건 내용이나 기사가 바뀌어 "
+				+ stale.stream().map(ScriptUnit::name).collect(Collectors.joining(" · "))
+				+ " 블록이 옛 내용을 말합니다. 대본을 다시 생성해 주세요.");
 		}
 		script.approve(admin.adminId(), Instant.now());
 		auditLogger.record(admin, AdminAuditAction.CASE_SCRIPT_APPROVE, AuditTargetType.CASE, caseId, Map.of(),

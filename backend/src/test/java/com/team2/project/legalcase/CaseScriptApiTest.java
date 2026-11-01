@@ -107,16 +107,16 @@ class CaseScriptApiTest extends ApiIntegrationTest {
 		long caseId = insertCase("FRAUD", "PUBLISHED");
 		long scriptId = insertCaseScript(caseId, "APPROVED");
 		jdbcTemplate.update("UPDATE case_script SET issue = 'admitted', admits = true WHERE id = ?", scriptId);
-		insertBlock(scriptId, "U0", """
+		setContent(scriptId, "U0", """
 			{"plea": "인정", "questions": [{"q": "질문1", "a": "네"}, {"q": "질문2", "a": "네"}, {"q": "질문3", "a": "예"}]}""");
-		insertBlock(scriptId, "U1", """
-			{"lines": ["해설 한 줄"]}""");
-		insertBlock(scriptId, "U2", """
+		setContent(scriptId, "U1", """
+			{"lines": ["해설 한 줄"], "note": "모델이 덧붙인 메모"}""");
+		setContent(scriptId, "U2", """
 			{"indict": "공소 요지", "questions": [{"q": "인정합니까?", "a": "...네, 인정합니다."},
 			                                     {"q": "예전에도 그랬습니까?", "a": "예전에는 그런 적이 없습니다"},
 			                                     {"q": "다투십니까?", "a": "　아니요"}]}""");
-		insertBlock(scriptId, "U4", """
-			{"prosecutor": "검사 의견", "defense": "변호인 의견"}""");
+		setContent(scriptId, "U4", """
+			{"prosecutor": "검사 의견", "defense": "변호인 의견", "thinking": "사고 과정"}""");
 		jdbcTemplate.update("""
 			UPDATE case_script_block SET review = '[{"unit": "U2", "code": "FORMAL_ENDING", "severity": "warning"}]'::jsonb,
 			                             repairs = '[{"unit": "U2", "before": "고치기 전"}]'::jsonb
@@ -126,6 +126,8 @@ class CaseScriptApiTest extends ApiIntegrationTest {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.blocks.U0").doesNotExist())	// 설계도는 재료다 — 인정 여부는 meta.admits로
 				.andExpect(jsonPath("$.blocks.U1.lines[0]").value("해설 한 줄"))
+				.andExpect(jsonPath("$.blocks.U1.note").doesNotExist())		// 화면이 쓰는 키만 내린다
+				.andExpect(jsonPath("$.blocks.U4.thinking").doesNotExist())
 				.andExpect(jsonPath("$.blocks.U2.indict").value("공소 요지"))
 				.andExpect(jsonPath("$.blocks.U2.questions[0].q").value("인정합니까?"))
 				.andExpect(jsonPath("$.blocks.U2.questions[0].a").value("…네."))
@@ -151,17 +153,14 @@ class CaseScriptApiTest extends ApiIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("증거조사만 만든 대본은 blocks에 U3뿐이고 meta의 issue · admits는 null이다")
-	void getCaseScript_evidenceOnly_hasOnlyU3() throws Exception {
+	@DisplayName("증거조사만 만든 대본(U3 하나)은 승인돼 있어도 준비 중이다 — 404 SCRIPT_NOT_FOUND (BE-126, 해송님 합의)")
+	void getCaseScript_evidenceOnly_isScriptNotFound() throws Exception {
 		long caseId = insertCase("FRAUD", "PUBLISHED");
-		insertCaseScript(caseId, "APPROVED");
+		insertEvidenceOnlyScript(caseId, "APPROVED");
 
 		mockMvc.perform(get(scriptUrl(caseId)))
-				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.blocks.U3.length()").value(3))
-				.andExpect(jsonPath("$.blocks.U1").doesNotExist())
-				.andExpect(jsonPath("$.meta.issue").value((Object) null))
-				.andExpect(jsonPath("$.meta.admits").value((Object) null));
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.code").value("SCRIPT_NOT_FOUND"));
 	}
 
 	@Test
@@ -169,7 +168,8 @@ class CaseScriptApiTest extends ApiIntegrationTest {
 	void getCaseScript_oneBlockNotApproved_isScriptNotFound() throws Exception {
 		long caseId = insertCase("FRAUD", "PUBLISHED");
 		long scriptId = insertCaseScript(caseId, "APPROVED");
-		insertScriptBlock(scriptId, "U4", "{\"prosecutor\": \"의견\", \"defense\": \"의견\"}", null);
+		jdbcTemplate.update("UPDATE case_script_block SET review_status = NULL WHERE script_id = ? AND unit = 'U4'",
+				scriptId);
 
 		mockMvc.perform(get(scriptUrl(caseId)))
 				.andExpect(status().isNotFound())
@@ -177,20 +177,23 @@ class CaseScriptApiTest extends ApiIntegrationTest {
 	}
 
 	/**
-	 * 적재(A-14-1) · 검수(A-13-11/12)가 끝난 모양 그대로 한 건 만든다 — 대사는 U3 블록(BE-126). reviewStatus가 null이면
-	 * 검수 대기(PENDING)
+	 * 적재(A-14-1) · 검수(A-13-11/12)가 끝난 모양 그대로 한 건 만든다 — 다섯 단위 블록(BE-126), 대사는 U3. reviewStatus가
+	 * null이면 검수 대기(PENDING)
 	 */
 	private long insertCaseScript(long caseId, String reviewStatus) {
 		Long scriptId = jdbcTemplate.queryForObject("""
 			INSERT INTO case_script (case_id, model, generated_at, stopped, cast_roles, publishable)
 			VALUES (?, 'google:gemini-2.5-flash', now(), false, ?::jsonb, true)
 			RETURNING id""", Long.class, caseId, CAST);
+		for (String unit : java.util.List.of("U0", "U1", "U2", "U4")) {
+			insertScriptBlock(scriptId, unit, "{}", reviewStatus);
+		}
 		insertScriptBlock(scriptId, "U3", EVIDENCE, reviewStatus);
 		return scriptId;
 	}
 
-	/** 승인한 블록 하나 */
-	private void insertBlock(long scriptId, String unit, String content) {
-		insertScriptBlock(scriptId, unit, content, "APPROVED");
+	private void setContent(long scriptId, String unit, String content) {
+		jdbcTemplate.update("UPDATE case_script_block SET content = ?::jsonb WHERE script_id = ? AND unit = ?",
+				content, scriptId, unit);
 	}
 }
