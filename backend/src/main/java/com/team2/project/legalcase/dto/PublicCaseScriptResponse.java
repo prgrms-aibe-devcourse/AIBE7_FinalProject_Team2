@@ -116,7 +116,11 @@ public record PublicCaseScriptResponse(List<EvidenceLine> evidence, Map<String, 
 		Map<String, Object> copy = new LinkedHashMap<>();
 		CARD_KEYS.forEach((card, keys) -> {
 			if (cards.containsKey(card)) {
-				copy.put(card, allowed(cards.get(card), keys));
+				Map<String, Object> publicCard = allowed(cards.get(card), keys);
+				if (!(publicCard.get("ul") instanceof List<?> ul && ul.stream().allMatch(String.class::isInstance))) {
+					publicCard.remove("ul");	// 문자열 목록이 아니면 내리지 않는다 — 화면이 목록으로 돈다
+				}
+				copy.put(card, publicCard);
 			}
 		});
 		return copy;

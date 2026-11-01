@@ -65,6 +65,7 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
   container.replaceChildren(root);
   const active = () => container.contains(root);
   let loading = false;
+  let script = null; // 서버 대본(FE-139). load()가 받는다
 
   function showError(error) {
     if (!active()) return;
@@ -935,8 +936,6 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
     update();
   }
 
-  // 서버 대본이 있는 사건만 무대를 쓴다(FE-139)
-  const script = await loadCaseScript(api, caseId);
   async function load() {
     if (loading || !active()) return;
     loading = true;
@@ -944,6 +943,7 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
     message.setAttribute('role', 'status');
     root.replaceChildren(message);
     try {
+      script = await loadCaseScript(api, caseId); // 서버 대본이 있는 사건만 무대를 쓴다(FE-139)
       // 사건 요약 장(API 6)은 못 받아도 판결은 할 수 있게 따로 받는다
       const [form, review] = await Promise.all([api.getVerdictForm(caseId), api.getReview(caseId).catch(() => null)]);
       if (active()) draw(form, review);

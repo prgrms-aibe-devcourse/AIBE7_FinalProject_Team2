@@ -47,8 +47,8 @@ export async function renderComparisonPage(container, { caseId, caseHeader, api,
     return element('td', `matrix-direction${direction ? ` is-${direction.toLowerCase()}` : ' is-none'}`, direction ? directionSymbols[direction] : '—');
   }
 
-  // 서버 대본이 있는 사건만 무대를 쓴다(FE-139)
-  const script = await loadCaseScript(api, caseId);
+  // 서버 대본이 있는 사건만 무대를 쓴다(FE-139). load()가 받는다 — 조회가 실패하면 화면의 오류 · 다시 시도 경로로 간다
+  let script = null;
 
   function draw(data) {
     if (script) {
@@ -117,6 +117,7 @@ export async function renderComparisonPage(container, { caseId, caseHeader, api,
     loading = true;
     message('판결 비교 정보를 불러오는 중…');
     try {
+      script = await loadCaseScript(api, caseId);
       const data = await api.getComparison(caseId);
       if (active()) draw(data);
     } catch (error) {

@@ -79,3 +79,13 @@ test('증거 카드 문구는 판단 요소(card)이고, 요소가 지워졌으�
   assert.equal(script.evidence[0].text, given.blocks.U3[0].text);
   assert.equal(script.evidence[1].text, given.evidence[1].card);
 });
+
+test('카드의 ul이 문자열 배열이 아니어도 무대가 멈추지 않게 빈 목록으로 둔다', async () => {
+  const given = await response();
+  const cards = { indict: { ul: '문자열', law: 3 }, plea: { b: ['배열'], ul: [1, '하나', null] }, issues: { p: '쟁점', ul: { 0: '객체' } } };
+  const script = assembleScript({ ...given, blocks: { ...given.blocks, U2: { ...given.blocks.U2, cards } } });
+  assert.deepEqual(script.cards.indict, { k: '공소사실 · 검사', ul: [], p: [] });
+  assert.deepEqual(script.cards.plea.ul, ['하나']);
+  assert.deepEqual(script.cards.plea.p, []);
+  assert.deepEqual(script.cards.issues, { k: '쟁점 정리', p: ['쟁점'], ul: [] });
+});

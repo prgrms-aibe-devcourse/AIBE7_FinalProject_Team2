@@ -49,8 +49,8 @@ export async function renderAiPage(container, { caseId, caseHeader, api, navigat
     return group;
   }
 
-  // 서버 대본이 있는 사건만 무대를 쓴다(FE-139)
-  const script = await loadCaseScript(api, caseId);
+  // 서버 대본이 있는 사건만 무대를 쓴다(FE-139). load()가 받는다 — 조회가 실패하면 화면의 오류 · 다시 시도 경로로 간다
+  let script = null;
 
   // 판단 요소를 짚는 대사: 로마다 말투가 다르다(캐릭터 프로필 4-3, 재판 말투 경어 · 짧은 문장). 인자는 "정한다" 대신 "본다 · 살핀다"
   const FACTOR_LINES = {
@@ -265,7 +265,9 @@ export async function renderAiPage(container, { caseId, caseHeader, api, navigat
     if (!intro) message('AI 판결 정보를 불러오는 중…');
     try {
       const request = api.getAiJudgment(caseId);
-      if (intro) {
+      request.catch(() => {}); // 대본 조회가 먼저 실패해도 이 요청의 거부가 처리되지 않은 채 남지 않게
+      script = await loadCaseScript(api, caseId);
+      if (intro && !script) {
         renderAiRevealIntro(root, {
           ready: request,
           onContinue: () => request.then((data) => { if (active()) draw(data); }),
@@ -273,6 +275,7 @@ export async function renderAiPage(container, { caseId, caseHeader, api, navigat
         await request; // 실패하면 아래 catch가 안내를 바꾼다
         return;
       }
+      if (intro) message('AI 판결 정보를 불러오는 중…'); // 무대가 있으면 확정 직후 안내는 4막의 기다림 장면이 대신한다
       const data = await request;
       if (active()) draw(data);
     } catch (error) {
@@ -288,7 +291,5 @@ export async function renderAiPage(container, { caseId, caseHeader, api, navigat
       }
     } finally { loading = false; }
   }
-  // 무대가 있으면 확정 직후 안내는 4막의 기다림 장면이 대신한다(표시는 지운다)
-  const intro = takeAiRevealIntro(caseId);
-  await load(intro && !script);
+  await load(takeAiRevealIntro(caseId)); // 표시는 여기서 지운다
 }

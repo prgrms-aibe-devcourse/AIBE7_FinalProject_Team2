@@ -90,11 +90,15 @@ function verdictAct(cast, U4) {
   };
 }
 
+// 서버가 준 카드 값은 모양을 믿지 않는다 — 문자열 배열이 아닌 ul · 문자열이 아닌 문구는 비운다(무대가 forEach로 돌 때 멈추지 않게)
+const texts = (list) => (Array.isArray(list) ? list.filter((item) => typeof item === 'string' && item) : []);
+const text = (value) => (typeof value === 'string' && value ? value : '');
+
 function cardsOf({ indict, plea, issues }) {
   return {
-    indict: { k: '공소사실 · 검사', ul: indict?.ul ?? [], p: indict?.law ? [{ b: '적용 법조', t: indict.law }] : [] },
-    plea: { k: '피고인 측 모두진술 · 변호인', p: plea?.b ? [{ b: plea.b }] : [], ul: plea?.ul ?? [] },
-    issues: { k: '쟁점 정리', p: issues?.p ? [issues.p] : [], ul: issues?.ul ?? [] },
+    indict: { k: '공소사실 · 검사', ul: texts(indict?.ul), p: text(indict?.law) ? [{ b: '적용 법조', t: indict.law }] : [] },
+    plea: { k: '피고인 측 모두진술 · 변호인', p: text(plea?.b) ? [{ b: plea.b }] : [], ul: texts(plea?.ul) },
+    issues: { k: '쟁점 정리', p: text(issues?.p) ? [issues.p] : [], ul: texts(issues?.ul) },
   };
 }
 

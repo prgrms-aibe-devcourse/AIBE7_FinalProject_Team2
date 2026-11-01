@@ -49,8 +49,8 @@ export async function renderCourtPage(container, { caseId, caseHeader, api, navi
     return group;
   }
 
-  // 서버 대본이 있는 사건만 무대를 쓴다(FE-139)
-  const script = await loadCaseScript(api, caseId);
+  // 서버 대본이 있는 사건만 무대를 쓴다(FE-139). load()가 받는다 — 조회가 실패하면 화면의 오류 · 다시 시도 경로로 간다
+  let script = null;
 
   // 5막 실제 판결(재진입 · 바로 들어온 경우). 보통은 S-06 4막에서 무대를 이어 받고 주소만 바뀐다(courtStage.js)
   function drawStage(data) {
@@ -129,6 +129,7 @@ export async function renderCourtPage(container, { caseId, caseHeader, api, navi
     loading = true;
     message('실제 판결 정보를 불러오는 중…');
     try {
+      script = await loadCaseScript(api, caseId);
       const data = await api.getCourtJudgment(caseId);
       if (active()) draw(data);
     } catch (error) {
