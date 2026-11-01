@@ -108,6 +108,14 @@ for expected in "x-content-type-options: nosniff" "x-frame-options: DENY" "refer
     echo "  ⚠ / → '${expected}' 헤더가 없다 — COMMON-67 이전 이미지면 정상, 아니면 security-headers.conf include를 확인한다"
   fi
 done
+# CSP (COMMON-70): 1단계는 Report-Only, 2단계는 Content-Security-Policy다. 어느 단계든 frame-ancestors가 들어 있으면 통과
+if tr -d '\r' < "$HEADER_FILE" | grep -qiE "^content-security-policy(-report-only)?: .*frame-ancestors 'none'"; then
+  pass "/ → content-security-policy(-report-only)"
+elif [[ "${SMOKE_REQUIRE_SECURITY_HEADERS:-}" == "1" ]]; then
+  fail "/ → CSP 헤더가 없음 (snippets/security-headers.conf, COMMON-70)"
+else
+  echo "  ⚠ / → CSP 헤더가 없다 — COMMON-70 이전 이미지면 정상, 아니면 security-headers.conf를 확인한다"
+fi
 
 echo "[HTTPS 준비]"
 # 없는 확인 파일은 404여야 한다. 200 + HTML이면 SPA fallback이 이 경로를 가로챈 것 (snippets/acme-challenge.conf)

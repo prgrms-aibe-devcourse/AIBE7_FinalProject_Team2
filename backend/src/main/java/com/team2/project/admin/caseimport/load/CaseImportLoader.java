@@ -5,6 +5,7 @@ import com.team2.project.admin.caseimport.domain.CaseImport;
 import com.team2.project.admin.caseimport.domain.CaseImportSource;
 import com.team2.project.common.exception.BusinessException;
 import com.team2.project.common.exception.ErrorCode;
+import com.team2.project.common.exception.FieldErrorDetail;
 import com.team2.project.common.exception.UniqueViolations;
 import com.team2.project.judgment.domain.AiGeneration;
 import com.team2.project.judgment.domain.Judgment;
@@ -16,11 +17,9 @@ import com.team2.project.legalcase.domain.CastRoles;
 import com.team2.project.legalcase.domain.CrimeType;
 import com.team2.project.legalcase.domain.SensitiveFlag;
 import com.team2.project.legalcase.domain.Factor;
-import com.team2.project.legalcase.domain.CaseScript;
 import com.team2.project.legalcase.domain.LegalCase;
 import com.team2.project.legalcase.domain.SentencingGuideline;
 import com.team2.project.legalcase.repository.CaseSectionRepository;
-import com.team2.project.legalcase.repository.CaseScriptRepository;
 import com.team2.project.legalcase.repository.CaseSourceRepository;
 import com.team2.project.legalcase.repository.FactorRepository;
 import com.team2.project.legalcase.repository.LegalCaseRepository;
@@ -28,15 +27,11 @@ import com.team2.project.legalcase.repository.PenaltyRuleRepository;
 import com.team2.project.legalcase.repository.SentencingGuidelineRepository;
 import com.team2.project.legalcase.service.CaseCastAssigner;
 import com.team2.project.pipeline.PipelineResult;
-import java.time.Instant;
 import java.time.LocalDate;
-import java.time.OffsetDateTime;
-import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -64,7 +59,6 @@ public class CaseImportLoader {
 	private final PenaltyRuleRepository penaltyRuleRepository;
 	private final FactorRepository factorRepository;
 	private final CaseSourceRepository caseSourceRepository;
-	private final CaseScriptRepository caseScriptRepository;
 	private final JudgmentRepository judgmentRepository;
 	private final JudgmentFactorRepository judgmentFactorRepository;
 	private final AiGenerationRepository aiGenerationRepository;
@@ -72,6 +66,7 @@ public class CaseImportLoader {
 	private final CaseContentMapper caseContentMapper;
 	private final JudgmentMapper judgmentMapper;
 	private final CaseCastAssigner castAssigner;
+	private final CaseScriptLoader scriptLoader;
 
 	/** 범죄 유형 → 양형기준 분류. 지금은 살인만 적재돼 있고 나머지는 양형기준 없이 만들어진다 */
 	private static final Map<CrimeType, String> GUIDELINE_CATEGORIES = Map.of(CrimeType.MURDER, "살인범죄");
@@ -92,6 +87,8 @@ public class CaseImportLoader {
 				"같은 제목의 사건이 이미 있습니다. 제목을 바꾼 뒤 다시 등록해 주세요.");
 		}
 
+		// 양형기준을 요청 값으로 찾기(guidelineFor) 전에 본다 — 어긋난 사건이 다른 오류로 먼저 끝나지 않게 (PR #356 리뷰)
+		requireRequestedCrimeType(caseImport, content);
 		LocalDate incidentDate = incidentDate(caseImport);
 		LegalCase legalCase = caseContentMapper.toCase(content, report, incidentDate,
 			guidelineFor(content, caseImport, incidentDate));
@@ -106,8 +103,27 @@ public class CaseImportLoader {
 
 		saveCourtJudgment(legalCase, factors, result);
 		saveAiJudgment(legalCase, factors, result);
-		saveScript(legalCase, result);
+		scriptLoader.save(legalCase, result);
 		return legalCase;
+	}
+
+	/**
+	 * 등록 요청의 범죄 유형과 판결문에서 읽은 유형(case.json)이 같은지 본다 (BE-138). 다르면 적재하지 않는다 —
+	 * 양형기준은 요청 값으로, 사건 유형 · 배역 균형 · 사전판단 선택지는 읽은 값으로 정해져 서로 어긋난다.
+	 *
+	 * <p>파이프라인이 extract 직후에 같은 비교로 먼저 멈추므로(요청에 crimeType을 보낸다) 여기는 안전망이다 — 범죄 유형을
+	 * 보내지 않던 때 만든 작업이나 로컬 실행 결과가 들어와도 어긋난 채 적재되지 않게 한다. 요청 값으로 덮어쓰지 않는 이유는
+	 * 관리자가 유형을 잘못 골랐을 때 양형기준 · 판례까지 틀린 채 들어가기 때문이다. 어느 쪽이 맞는지는 사람이 정한다.
+	 */
+	private static void requireRequestedCrimeType(CaseImport caseImport, JsonNode content) {
+		CrimeType requested = caseImport.getCrimeType();
+		CrimeType extracted = Json.requiredEnum(CrimeType.class, Json.text(content, "crimeType"), "case.crimeType");
+		if (requested != extracted) {
+			throw new BusinessException(ErrorCode.IMPORT_RESULT_INVALID,
+				"범죄 유형이 다릅니다: 등록 요청은 " + requested + ", 판결문에서 읽은 유형은 " + extracted
+					+ "입니다. 판결문을 확인해 맞는 유형으로 다시 등록해 주세요.",
+				null, List.of(new FieldErrorDetail("case.crimeType", ErrorCode.IMPORT_RESULT_INVALID.name())));
+		}
 	}
 
 	/**
@@ -221,48 +237,6 @@ public class CaseImportLoader {
 			flags.add(name);
 		}
 		return List.copyOf(flags);
-	}
-
-	/**
-	 * 사건 대본 (BE-108). 대본을 돌리지 않았거나 대사가 하나도 없으면 건너뛴다 — 재판부 초안이 없을 때와
-	 * 같이 <b>사건은 그대로 만들어진다</b>. 대본은 나중에 들어와도 되고, 없으면 화면이 MVP 흐름으로 간다
-	 * (frontend {@code scripts.js} "대본이 없는 사건은 MVP 화면 그대로").
-	 *
-	 * <p>파이프라인이 어긋난다고 표시한 대본({@code publishable: false})도 <b>적재는 한다</b> — 관리자가
-	 * 검수 화면에서 무엇이 모자란지 보고 다시 생성할지 정해야 하기 때문이다. 대신 승인은 막는다
-	 * ({@link CaseScript#approve}).
-	 */
-	private void saveScript(LegalCase legalCase, PipelineResult result) {
-		JsonNode script = result.script();
-		if (script == null || script.isNull()) {
-			return;		// 대본을 돌리지 않은 등록이다 (기본값). 흔한 경우라 로그로 남기지 않는다
-		}
-		List<Map<String, Object>> evidence = Json.array(script, "evidence").stream()
-			.map(Json::toMap).filter(Objects::nonNull).toList();
-		if (evidence.isEmpty()) {
-			log.warn("대본에 대사가 없어 건너뜁니다 (jobId={})", result.jobId());
-			return;
-		}
-		caseScriptRepository.save(CaseScript.of(legalCase, evidence, Json.text(script, "model"),
-			Json.toMap(script.get("cast")), Json.text(script, "balanceWarning"), Json.bool(script, "publishable"),
-			generatedAt(script), Json.bool(script, "stopped")));
-	}
-
-	/**
-	 * 파이프라인이 대본을 만든 시각. 형식이 다르거나 없으면 비워 둔다 — 화면에 보여 주는 값이라 적재를 막지 않는다
-	 * (BE-93의 "모르는 필드는 지나가게 둔다"와 같은 원칙)
-	 */
-	private static Instant generatedAt(JsonNode script) {
-		String value = Json.text(script, "createdAt");
-		if (value == null || value.isBlank()) {
-			return null;
-		}
-		try {
-			return OffsetDateTime.parse(value).toInstant();
-		} catch (DateTimeParseException e) {
-			log.warn("대본 생성 시각을 읽지 못해 비워 둡니다: {}", value);
-			return null;
-		}
 	}
 
 	/**

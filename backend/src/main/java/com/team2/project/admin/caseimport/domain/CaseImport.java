@@ -139,6 +139,21 @@ public class CaseImport {
 		}
 	}
 
+	/**
+	 * 생성은 끝났지만 이 결과로는 끝내 적재할 수 없어 등록을 실패로 닫는다 (BE-138 범죄 유형 불일치).
+	 *
+	 * <p>{@link #applyProgress}와 달리 끝난(SUCCEEDED) 작업을 바꾼다. SUCCEEDED로 두면 같은 사건번호를 다시 등록할 때
+	 * DUPLICATE_SOURCE에 막힌다(FAILED만 재등록을 허용한다). 이미 적재했거나 SUCCEEDED가 아니면 그대로 둔다.
+	 */
+	public void failLoad(String errorCode, String message) {
+		if (status != CaseImportStatus.SUCCEEDED || isLoaded()) {
+			return;
+		}
+		this.status = CaseImportStatus.FAILED;
+		this.errorCode = limit(errorCode, ERROR_CODE_MAX);
+		this.message = limit(message, MESSAGE_MAX);
+	}
+
 	public Long caseId() {
 		return legalCase == null ? null : legalCase.getId();
 	}

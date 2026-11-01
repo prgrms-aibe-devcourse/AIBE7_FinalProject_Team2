@@ -46,7 +46,7 @@ class HttpPipelineClientTest {
 
 	private static PipelineJobRequest request() {
 		return new PipelineJobRequest(List.of(new PipelineJobRequest.Source("판결문 본문", null)),
-			List.of("gemini:test"), null, null, null);
+			List.of("gemini:test"), null, null, null, null);
 	}
 
 	@Test
@@ -126,7 +126,7 @@ class HttpPipelineClientTest {
 
 		assertThatThrownBy(() -> client().createJob(
 			new PipelineJobRequest(List.of(new PipelineJobRequest.Source(judgment, null)),
-				List.of("gemini:test"), null, null, null)))
+				List.of("gemini:test"), null, null, null, null)))
 			.isInstanceOf(PipelineException.class)
 			.hasMessageNotContaining(judgment)
 			// 원인 예외의 메시지에도 본문이 들어 있어 아예 달지 않는다

@@ -248,8 +248,9 @@
 .stage-wrap .sheet-photo[data-live] { filter: none; transition: none; }
 .stage-wrap .sheet-photo img { position: absolute; bottom: 25%; height: 52%; width: auto; }
 /* 사진 속 인물 자리는 5막 무대의 자리(왼쪽 16% · 오른쪽 84%, 역할 의상 키 52%)와 같다 — 6막이 이 사진을 가득 채운 데서 시작하면 5막 화면 그대로 보인다 */
-.stage-wrap .sheet-photo .sheet-photo-n { left: 16%; translate: -50% 0; }
+.stage-wrap .sheet-photo .sheet-photo-a { left: 16%; translate: -50% 0; } /* 묶음 A(판사) — 대본 배역을 따른다(FE-141) */
 .stage-wrap .sheet-photo .sheet-photo-b { left: 84%; translate: -50% 0; }
+.stage-wrap .sheet-photo img[data-flip="1"] { scale: -1 1; } /* 무대처럼 가운데를 본다(FE-128) */
 /* 세 판결: 같은 크기 · 같은 무게. 판결마다 색은 위 선 · 이름에만 */
 .stage-wrap .sheet-verdict-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: calc(var(--u) * 1.6); }
 /* 세 판결은 위아래로: 왼쪽에 누구 · 형량, 오른쪽에 한 줄 요약 */
@@ -478,7 +479,7 @@
   /* 좁은 화면: 1면 사진을 5막 무대(4:3)와 같은 구도로 — 6막이 이 사진에서 빠져나올 때 이어 보이게 */
   .stage-wrap .sheet-photo { aspect-ratio: 4 / 3; }
   .stage-wrap .sheet-photo img { bottom: 4%; height: 62%; }
-  .stage-wrap .sheet-photo .sheet-photo-n { left: 25%; }
+  .stage-wrap .sheet-photo .sheet-photo-a { left: 25%; }
   .stage-wrap .sheet-photo .sheet-photo-b { left: 75%; }
   .stage-wrap .sheet-letters { padding-top: 12px; border-top: 1px solid var(--color-text); }
   .stage-wrap :is(.sheet-info, .sheet-date) { font-size: 10px; }

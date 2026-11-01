@@ -45,7 +45,7 @@ export function paperFromCase(data, casePaper, fallback = {}, info) {
       : data?.article?.length ? data.article
         : data?.shortIntro ? [data.shortIntro]
           : fallback.article ?? [];
-    return {
+    return withoutRepeats({
       headline: casePaper.headline || data?.headline || data?.title || fallback.headline,
       deck: casePaper.deck || data?.deck || data?.shortIntro || fallback.deck,
       article,
@@ -54,9 +54,9 @@ export function paperFromCase(data, casePaper, fallback = {}, info) {
       extraPhotos: extraPhotosOf(extraPhotosFromApi(casePaper.extraPhotos), commonCategoryOf(commonOf), Number(commonOf?.caseId) || 0),
       caption: casePaper.caption || fallback.caption || '사건 이해를 돕기 위한 연출 이미지',
       desk: casePaper.desk || fallback.desk || '사회부',
-    };
+    });
   }
-  return {
+  return withoutRepeats({
     headline: data.headline || data.title,
     deck: data.deck || data.shortIntro,
     article: data.article?.length ? data.article : [data.shortIntro].filter(Boolean),
@@ -64,7 +64,17 @@ export function paperFromCase(data, casePaper, fallback = {}, info) {
     extraPhotos: extraPhotosOf(fallback.extraPhotos, commonCategoryOf(commonOf), Number(commonOf?.caseId) || 0), // 기사 속 작은 사진(대본 지면에만 있다, 사건 1의 재연 컷). 없는 사건은 범죄 분류에 맞는 공용 컷
     caption: '사건 이해를 돕기 위한 연출 이미지',
     desk: '사회부', // S-02 기사와 같은 기자 줄
-  };
+  });
+}
+
+// FE-144: 지면(API 17)이 없는 사건은 부제 · 본문을 모두 shortIntro로 채워 같은 문장이 부제 · 본문 · 인용구로 되풀이된다.
+// 본문은 그대로 두고(첫인상 화면 S-03도 이 지면을 쓴다) 되풀이만 뺀다 — 부제가 본문 단락과 같으면 부제를,
+// 본문이 한 단락뿐이면 바로 위 단락을 되풀이하게 되는 인용구(quote: false)를 뺀다
+const sameText = (a, b) => String(a ?? '').replace(/\s+/g, ' ').trim() === String(b ?? '').replace(/\s+/g, ' ').trim();
+function withoutRepeats(paper) {
+  const article = paper.article ?? [];
+  const deck = paper.deck && !article.some((line) => sameText(line, paper.deck)) ? paper.deck : null;
+  return { ...paper, deck, ...(article.length === 1 ? { quote: false } : {}) };
 }
 
 // 사건 기사 지면의 귀(제호 양옆). 왼쪽은 "다른 사건 보기"(S-02로), 오른쪽은 사건 번호 · 분류(S-20에서는 "이어서 하기"로 바꿔 끼운다)
@@ -192,7 +202,7 @@ export function caseNewspaper({ paper, info, navigate, earRight = caseInfoEar(in
   const byline = element('p', 'story-byline');
   byline.append(element('b', '', `${paper.desk ?? '사회부'} 기자`), element('span', '', todayLabel()),
     element('span', '', `${info.crimeCategoryLabel ?? ''} · 사건 ${String(info.caseId).padStart(2, '0')}`));
-  head.append(element('h1', 'story-title', paper.headline), element('p', 'story-deck', paper.deck), byline);
+  head.append(element('h1', 'story-title', paper.headline), ...(paper.deck ? [element('p', 'story-deck', paper.deck)] : []), byline); // 부제가 본문과 같으면 비운다(FE-144)
   const top = element('div', 'story-top');
   top.append(head, caseMemo(info));
 
@@ -209,7 +219,7 @@ export function caseNewspaper({ paper, info, navigate, earRight = caseInfoEar(in
   paper.article.forEach((line, i) => {
     body.append(element('p', '', line));
     // 첫 단락 뒤에 인용구(기사 첫 문장), 둘째 단락 뒤에 작은 사진 — 신문 기사 면처럼 본문 사이에 쉼을 둔다
-    if (i === 0) body.append(pullQuote(paper.article[0]));
+    if (i === 0 && paper.quote !== false) body.append(pullQuote(paper.article[0])); // 한 단락뿐인 기사는 인용구를 두지 않는다(FE-144)
     if (i === 1) body.append(smallFigure(inlinePhoto, 2, 'conclusion', commonCategoryOf(info))); // 결론사진 — 없거나 실패하면 결론 공용 컷
   });
   const main = element('div', 'story-main');

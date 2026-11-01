@@ -28,6 +28,10 @@ NO_TERM_PENALTIES = ("DEATH", "LIFE")
 
 DIRECTIONS = ("UP", "DOWN")
 
+# 범죄 유형 (legal_case.crime_type). 추출기 스키마(case-extractor/schema.py CRIME_TYPES) · 백엔드 CrimeType enum과 같다 —
+# 유형을 늘릴 때 함께 늘린다 (tests/test_pipeline.py가 추출기 값과 같은지 본다)
+CRIME_TYPES = ("MURDER", "FRAUD", "INJURY", "ROBBERY", "THEFT")
+
 # legal_case.crime_type → sentencing_guideline.crime_category (양형기준 버전 고르기, BE-54). 범죄 유형을 넓힐 때 함께 늘린다
 GUIDELINE_CATEGORIES = {"MURDER": "살인범죄"}
 

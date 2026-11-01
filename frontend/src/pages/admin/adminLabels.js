@@ -1,6 +1,9 @@
 // S-19 화면 문구 (API 명세 8-2의 코드 → 한국어)
 import { AXES } from '../../utils/personalityAxes.js';
 
+// 서버 API가 아직 없는 화면의 안내(FE-143): 준비 중 화면(adminShell) · 404 안내(createLoader · 대시보드)가 같은 문구를 쓴다
+export const NOT_READY_TEXT = '서버에 아직 준비되지 않은 기능이에요.';
+
 export const CASE_STATUS = { DRAFT: '적재됨 (검수 전)', REVIEW: '검수 중', PUBLISHED: '공개됨' };
 export const REVIEW_STATUS = { PENDING: '검수 대기', APPROVED: '승인', REJECTED: '반려' };
 export const SUBJECT = { AI: 'AI 판결 후보', COURT: '재판부 판결 후보' };

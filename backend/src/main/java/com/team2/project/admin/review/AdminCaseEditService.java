@@ -13,6 +13,7 @@ import com.team2.project.common.exception.UniqueViolations;
 import com.team2.project.legalcase.domain.Difficulty;
 import com.team2.project.legalcase.domain.Factor;
 import com.team2.project.legalcase.domain.LegalCase;
+import com.team2.project.legalcase.domain.ScriptUnit;
 import com.team2.project.legalcase.domain.ValueAxis;
 import com.team2.project.legalcase.repository.FactorRepository;
 import com.team2.project.legalcase.repository.LegalCaseRepository;
@@ -37,6 +38,7 @@ public class AdminCaseEditService {
 	private final LegalCaseRepository caseRepository;
 	private final FactorRepository factorRepository;
 	private final AdminReviewQueryService queryService;
+	private final AdminCaseScriptService scriptService;
 	private final AdminAuditLogger auditLogger;
 	private final Clock clock;
 
@@ -96,6 +98,8 @@ public class AdminCaseEditService {
 		if (edit.has("sensitiveFlags")) {
 			legalCase.changeSensitiveFlags(edit.<List<String>>get("sensitiveFlags"));
 		}
+		// 제목 · 개요가 바뀌어 판이 오르면 그 내용을 보고 만든 대본 블록의 승인을 지운다(PR #367 리뷰)
+		List<ScriptUnit> revoked = scriptService.revokeStaleApprovals(legalCase);
 		legalCase.startReview();
 		try {
 			caseRepository.saveAndFlush(legalCase);
@@ -115,6 +119,7 @@ public class AdminCaseEditService {
 				detail.put(field, edit.get(field));
 			}
 		}
+		AdminCaseScriptService.withRevoked(detail, revoked);
 		auditLogger.record(admin, AdminAuditAction.CASE_UPDATE, AuditTargetType.CASE, caseId, detail, request);
 		caseRepository.flush();
 		return queryService.getCase(caseId);

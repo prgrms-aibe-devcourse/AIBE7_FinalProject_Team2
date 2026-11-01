@@ -17,6 +17,9 @@ BE-119가 만든 블록(`prompts/script/`)을 사건 분류에 맞게 골라 조
 - U3 증거조사: BE-107(`script_generation.generate_evidence_lines`) 그대로, CASE GUIDE · 민감 가드만 더한다.
 - U4 3막: 검사 의견 · 최종변론을 한 호출로(분량을 맞추려고). 최후진술은 두지 않는다(10/28 결정).
 
+저장은 단위 블록(U0 ~ U4)과 메타다(`build_blocks`, BE-126). 고정 문구 · 연출은 블록에 넣지 않고 프론트 공통 틀이 붙인다 —
+`build_script`의 `acts`는 같은 대사를 case-1 형식으로 조립해 본 것이다. 블록 계약은 `prompts/script/README.md` "저장 블록".
+
 모델은 대사 텍스트만 만든다. 자리 · 모습 · 이름표 · 절차 번호는 배역(`cast`)에서 코드가 정한다. 1b · 4 · 5 · 6막은
 사건마다 바뀌는 대사가 없고(고정 문구 · API 값) 배역만 따르는 공통 틀이라 여기서 만들지 않는다(FE-33 · FE-128).
 
@@ -66,6 +69,24 @@ SENSITIVE_FLAGS = {
 LAST_QUESTION = {"admitted": "공소사실을 인정합니까?", "denied": "공소사실을 인정합니까?",
                  "mental_state": "공소사실을 인정합니까?", "intent_disputed": "행위 사실을 인정합니까?",
                  "defense_claim": "행위 사실을 인정합니까?"}
+
+# 대본 저장 단위 (BE-126). 기사(PAPER)는 블록이 아니다 — API 17이 단일 출처다
+BLOCK_UNITS = ("U0", "U1", "U2", "U3", "U4")
+# 블록이 무엇을 보고 만들어지는지 — 이 값이 바뀌면 그 블록은 낡는다(BE-126 낡음 계산 · BE-129 연동 표의 정본).
+# 분류 축은 GUIDE_UNITS와 같고(extra 축의 분류 값 이름은 thirdParty), 민감 플래그는 모든 단위(가드), 배역은 배역이 말하는
+# U2 · U3 · U4, 기사는 기사를 읽는 U1, 사건 내용(제목 · 개요 · 섹션 · 판단 요소, 관리자가 A-11로 고칠 수 있다)은 사건을 직접 받는
+# U0 · U2 · U3 · U4(U1은 기사만 받는다), 블록 이름은 그 블록의 값을 받는 단위다(U2는 U0 질문, U4는 U0 쟁점 · U2 변호인 입장).
+# 백엔드는 같은 표를 contracts/script_blocks.json으로 맞춘다 — 표를 고치면 그 파일도 고친다(테스트가 잡는다)
+BLOCK_BASIS = {
+    "U0": ("case", "mood", "issue", "victim", "thirdParty", "sensitiveFlags"),
+    "U1": ("mood", "sensitiveFlags", "paper"),
+    "U2": ("case", "cast", "mood", "issue", "thirdParty", "sensitiveFlags", "U0"),
+    "U3": ("case", "cast", "victim", "thirdParty", "sensitiveFlags"),
+    "U4": ("case", "cast", "mood", "issue", "victim", "sensitiveFlags", "U0", "U2"),
+}
+# basis 중 DB가 가진 값 — 파이프라인은 DB의 판을 모르므로 비워 두고(None) 적재할 때 백엔드가 그 판으로 채운다.
+# 값 통째(기사 문단 · 사건 섹션)를 남기면 백엔드가 필드 · 공백까지 맞춰 비교해야 한다(PR #363 리뷰)
+DB_BASIS = ("case", "paper")
 
 # 단위별로 넣는 공개 단계 (사건 섹션 `stage` · 판단 요소 `revealStage`). LAW · SUMMARY는 넣지 않는다
 UNIT_STAGES = {"PAPER": ("OVERVIEW",), "U0": ("OVERVIEW", "DETAIL", "ARGUMENT"), "U2": ("OVERVIEW", "DETAIL", "ARGUMENT"),
@@ -187,18 +208,30 @@ def strip_line_prefix(text):
     return re.sub(r"^\s*(?:[①-⑳]\s*|\d+[.)]\s+)?(?:(?:남불|내로)\s*[:：\-–]\s*)?", "", text or "").strip()
 
 
+# 답 앞의 공백 · 말줄임표 · 마침표(섞여 있어도 한 번에)와, 예 · 네 / 아니요 · 아닙니다가 한 낱말로 끝났는지 보는 경계.
+# 경계가 없으면 "예전에는" · "네가" · "아니었습니다"처럼 접두만 같은 문장을 답으로 읽는다(PR #363 리뷰). 백엔드도 같은 규칙이다
+_ANSWER_LEAD = re.compile(r"^[\s….]+")
+_ANSWER_END = r"(?=$|[\s,.!?…])"
+_YES = re.compile(rf"^(?:예|네){_ANSWER_END}")
+_NO = re.compile(rf"^(?:아니요|아니오|아닙니다|아니){_ANSWER_END}")
+
+
 def normalize_answer(answer):
-    """피고인 역 답을 최소 응답으로(README): 예 · 네 → "…네.", 아니요 · 아닙니다 → "…아닙니다."."""
-    stripped = (answer or "").strip().lstrip("…").lstrip(".").strip()
-    if stripped.startswith(("예", "네")):
+    """피고인 역 답을 최소 응답으로(README): 예 · 네 → "…네.", 아니요 · 아닙니다 → "…아닙니다.". 그 밖의 답은 앞에 "…"만 붙인다.
+    예 · 네 · 아니요는 **한 낱말일 때만** 답으로 본다 — 뒤가 끝 · 공백 · 쉼표 · 마침표 · 물음표 · 느낌표 · 말줄임표여야 한다.
+    사례는 contracts/script_blocks.json(백엔드가 같은 파일로 맞춘다)."""
+    stripped = _ANSWER_LEAD.sub("", (answer or "").strip()).strip()
+    if _YES.match(stripped):
         return "…네."
-    if stripped.startswith(("아니", "아닙")):
+    if _NO.match(stripped):
         return "…아닙니다."
     return "…" + stripped
 
 
 def admits(answer):
-    return (answer or "").strip().lstrip("…").strip().startswith(("예", "네"))
+    """설계도 세 번째 답이 인정인지. 신문 답 정규화와 같은 기준이다("...네"처럼 마침표로 시작해도 인정) —
+    백엔드도 같은 규칙으로 다시 계산하므로 contracts/script_blocks.json의 사례로 맞춘다(BE-126)."""
+    return normalize_answer(answer) == "…네."
 
 
 def _josa(word, with_final, without_final):
@@ -638,6 +671,82 @@ def _cards(case, opening):
     }
 
 
+# ---------------------------------------------------------------- 블록 (BE-126 저장 단위)
+
+def block_revisions(present, repairs):
+    """블록마다 (판, 만들 때 본 앞 블록의 판). 처음 만든 블록은 1판이고, 고쳐 쓰기(BE-122 2차)가 값을 바꿀 때마다 1씩 오른다.
+    단위째 다시 만든 블록은 그때의 앞 블록 판을 본다. 그래서 U0 줄을 고치면 그 전에 만든 U2 · U4는 옛 U0를 보고 만든 것이 되어
+    적재하자마자 낡음으로 보인다 — 실제로 그렇기 때문이다."""
+    revision = {unit: 1 for unit in present}
+    seen = {unit: {dep: 1 for dep in BLOCK_BASIS[unit] if dep in present} for unit in present}
+    for repair in repairs:
+        unit = repair["unit"]
+        changed = repair["ok"] if repair["action"] == "line" else repair.get("replaced", False)
+        if unit not in revision or not changed:
+            continue
+        revision[unit] += 1
+        if repair["action"] == "unit":
+            seen[unit] = {dep: revision[dep] for dep in seen[unit]}
+    return revision, seen
+
+
+def block_contents(case, generated):
+    """블록에 저장할 값. 화면에 바로 쓸 값으로 다듬되(U1 접두어 제거 · U2 카드 적용 법조), 다른 값에서 계산되는 값은 넣지 않는다 —
+    U2 신문 답은 모델이 쓴 그대로 두고 "…네." 정규화는 읽는 쪽(API 18)이 한다. 검수 결과의 `path`가 그대로 맞도록 모양은 바꾸지 않는다.
+    만들지 못한 단위는 빠진다(`pending`이 알린다)."""
+    units = generated["units"]
+    value = lambda unit: (units.get(unit) or {}).get("value")  # noqa: E731
+    contents = {}
+    if value("U0"):
+        contents["U0"] = value("U0")
+    if value("U1"):
+        contents["U1"] = {**value("U1"), "lines": [strip_line_prefix(x) for x in value("U1")["lines"][:5]]}
+    if value("U2"):
+        opening = json.loads(json.dumps(value("U2")))
+        indict = (opening.get("cards") or {}).get("indict")
+        if isinstance(indict, dict) and not indict.get("law"):
+            indict["law"] = case.get("appliedLaw")
+        contents["U2"] = opening
+    if generated.get("evidence"):
+        # 만들지 못한 줄까지 둔다 — 검수 결과 path(/{순번})가 이 목록을 가리킨다. 생성 결과와 따로 가공할 수 있게 복사한다
+        contents["U3"] = json.loads(json.dumps(generated["evidence"]))
+    if value("U4"):
+        contents["U4"] = value("U4")
+    return contents
+
+
+def build_blocks(case, cast, cls, generated):
+    """대본을 단위 블록과 메타로 나눈다 (BE-126 `case_script_block` 적재 계약).
+
+    블록 하나: {"content", "revision", "basis", "review", "warnings", "repairs"}. `basis`는 그 블록을 만들 때 본 값
+    (`BLOCK_BASIS`)이다 — 앞 블록은 판 번호, 분류 · 배역은 값 그대로, 사건 · 기사(`DB_BASIS`)는 None(적재할 때 백엔드가 DB 판으로
+    채운다). 지금 값과 다르면 낡은 블록이다(계산은 백엔드). `review` · `warnings` · `repairs`는 관리자 화면 전용이다.
+    `review` · `repairs`는 그 단위 것만 담는다(대본 전체에 걸린 `REVIEW_FAILED`는 대본의 `review`에만 있다).
+    메타: {"cast", "issue", "admits"} — 프론트 공통 틀이 고정 문구(신문 마지막 질문 · 답, 이름 · 자리)를 고르는 값이다."""
+    contents = block_contents(case, generated)
+    repairs = generated.get("repairs", [])
+    revision, seen = block_revisions(contents, repairs)
+    values = {"cast": dict(cast), "mood": cls.get("mood"), "issue": cls.get("issue"), "victim": cls.get("victim"),
+              "thirdParty": bool(cls.get("thirdParty")), "sensitiveFlags": sorted(cls.get("sensitiveFlags") or []),
+              **dict.fromkeys(DB_BASIS)}
+    review = generated.get("review", [])
+    blocks = {}
+    for unit in BLOCK_UNITS:
+        if unit not in contents:
+            continue
+        blocks[unit] = {
+            "content": contents[unit], "revision": revision[unit],
+            "basis": {key: seen[unit].get(key) if key in BLOCK_UNITS else values[key] for key in BLOCK_BASIS[unit]},
+            "review": [issue for issue in review if issue["unit"] == unit],
+            "warnings": (generated["units"].get(unit) or {}).get("warnings", []),  # U3 경고는 줄마다 validation에 있다
+            "repairs": [repair for repair in repairs if repair["unit"] == unit],
+        }
+    design = contents.get("U0")
+    final_answer = design["questions"][2]["a"] if design and len(design.get("questions", [])) > 2 else None
+    meta = {"cast": dict(cast), "issue": cls.get("issue"), "admits": admits(final_answer) if design else None}
+    return blocks, meta
+
+
 def build_script(case, cast, cls, generated, *, model):
     """생성 결과를 case-1 형식 대본으로 묶는다. 만들지 못한 막은 빼고 `pending`에 단위를 남긴다."""
     units = generated["units"]
@@ -659,7 +768,10 @@ def build_script(case, cast, cls, generated, *, model):
     publishable = (not generated["stopped"] and not pending
                    and all(line.get("text") for line in generated["evidence"]) and bool(evidence)
                    and not has_errors(review))
+    blocks, meta = build_blocks(case, cast, cls, generated)
     return {
+        # 저장 단위(BE-126): 백엔드는 blocks · meta를 적재한다. 아래 acts는 같은 대사를 case-1 형식으로 조립한 것(확인 · 시험용)
+        "blocks": blocks, "meta": meta,
         "caseId": case.get("caseId"), "title": case.get("title"), "model": model,
         "cast": dict(cast), "classification": cls, "sensitiveNotice": notice, "design": design,
         "paper": generated.get("paper"),

@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { ACT_GROUPS, DEFAULT_CAST, attachNotice, castOf, flatten, flipFor, placeFor, seatFor, sideOf, skipTarget } from './stage.js';
+import { ACT_GROUPS, DEFAULT_CAST, attachNotice, castOf, courtPhotoCast, glideMs, flatten, flipFor, placeFor, seatFor, sideOf, skipTarget } from './stage.js';
 
 const script = JSON.parse(readFileSync(new URL('../content/case-1/script.json', import.meta.url)));
 const steps = flatten(script.acts, ['1a', '1b']);
@@ -212,4 +212,28 @@ test('민감 사건 안내: 이어 보기로 시작하는 장면(예: ③)이 �
   assert.ok(at > 0, '막 첫 장면 앞이 아니라 ③ 앞');
   const none = attachNotice(all, notice, '2', (step) => step.section === 99);
   assert.equal(none.findIndex((step) => step.system === notice), 0, '맞는 장면이 없으면 막의 첫 장면 앞');
+});
+
+test('지면 굴리기(FE-140): 거리에 비례해 시간이 늘고 상한 · 하한이 있으며, 키보드는 조금 더 빠르다', () => {
+  assert.equal(glideMs(0), 420, '아주 가까워도 하한');
+  assert.ok(glideMs(300) > glideMs(100), '멀수록 길다');
+  assert.equal(glideMs(100000), 1000, '아주 멀어도 상한');
+  assert.equal(glideMs(-600), glideMs(600), '방향과 상관없다');
+  assert.ok(glideMs(600, true) < glideMs(600), '키보드는 더 짧다');
+});
+
+test('6막 1면 사진(FE-141): 5막 마지막 법정처럼 대본 배역의 묶음 A가 판사로 왼쪽, B가 피고인 역으로 오른쪽', () => {
+  const swapped = courtPhotoCast({ prosecutor: 'nambul', defense: 'naero' });
+  assert.deepEqual(swapped.map(({ who, look, side }) => [who, look, side]), [['nambul', 'role:judge', 'left'], ['naero', 'role:actor', 'right']]);
+  assert.deepEqual(swapped.map(({ flip }) => flip), [true, true], '남불이 왼쪽 · 내로가 오른쪽이면 가운데를 보게 뒤집는다');
+  // 실제 5막 대본과 같다: 마지막 판사 장면의 말하는 사람이 사진의 판사(왼쪽)이고, 피고인 역은 그 상대다
+  const court = flatten(script.acts, ['5']).filter((step) => step.role === '판사').at(-1);
+  assert.ok(court, '5막에 판사 장면이 있다');
+  const base = courtPhotoCast(script.cast);
+  assert.equal(base[0].who, court.say, '사진의 판사 = 5막 마지막 판사 장면의 화자');
+  assert.equal(base[0].side, 'left');
+  assert.notEqual(base[1].who, court.say, '피고인 역은 상대 캐릭터');
+  // 배역을 바꾸면 판사와 피고인 역이 서로 바뀐다(자리는 그대로)
+  assert.deepEqual(swapped.map(({ who }) => who), [base[1].who, base[0].who]);
+  assert.deepEqual(courtPhotoCast(undefined).map(({ who, flip }) => [who, flip]), [['naero', false], ['nambul', false]], '기본 배역(사건 1)은 화면이 그대로');
 });

@@ -1,9 +1,9 @@
 import { button, element } from '../../components/siteLayout.js';
 import { API_MODE } from '../../api/config.js';
 import { loadAdminApi } from './adminApi.js';
-import { focusHeading, labeledField } from './adminKit.js';
-import { errorText } from './adminLabels.js';
-import { ADMIN_MENU, isMenuReady } from './adminMenu.js';
+import { focusHeading, labeledField, pageTop } from './adminKit.js';
+import { NOT_READY_TEXT, errorText } from './adminLabels.js';
+import { ADMIN_MENU, isMenuReady, isSectionReady } from './adminMenu.js';
 import { clearUser, isAdmin } from '../../utils/session.js';
 import './admin.css';
 
@@ -113,6 +113,15 @@ export async function renderAdminShell(container, { navigate, title, section, dr
     main.replaceChildren(element('h1', '', title), panel);
   }
 
+  // FE-143: 서버 API가 아직 없는 화면(실제 모드의 운영 메뉴)은 draw를 부르지 않는다 — 404 요청과 눌러도 소용없는 "다시 시도"를 막는다.
+  // 모양은 대시보드의 404 안내와 같다(제목 + 안내 한 줄). 공통 createLoader는 그대로 둔다(사건 검수 목록이 같은 함수를 쓴다)
+  function drawNotReady() {
+    // role은 두지 않는다: 들어오면 제목(h1)으로 포커스가 가고 안내는 바로 아래 글로 읽힌다. status를 두면 제목과 겹쳐 두 번 읽힐 수 있다(PR #360 리뷰)
+    const panel = element('div', 'admin-message');
+    panel.append(element('p', '', NOT_READY_TEXT));
+    main.replaceChildren(pageTop(title), panel);
+  }
+
   function showLogin(notice) {
     if (isAdmin()) clearUser(); // 로그아웃 · 세션 만료로 로그인 폼이 뜨면 사용자 사이트의 관리자 표시도 거둔다
     body.dataset.locked = '1';
@@ -191,7 +200,8 @@ export async function renderAdminShell(container, { navigate, title, section, dr
       unauthorized: () => showLogin('세션이 끝났어요. 다시 로그인해 주세요.'),
     };
     try {
-      await draw(ctx);
+      if (isSectionReady(section)) await draw(ctx);
+      else drawNotReady();
       // 화면에 들어오면 제목으로 포커스: 로그인 뒤 · 메뉴로 옮겨 온 뒤 키보드 위치가 문서 처음(body)에 남지 않게
       const focused = document.activeElement;
       if (active() && (!focused || focused === document.body || !root.contains(focused))) focusHeading(main);

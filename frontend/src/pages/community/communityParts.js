@@ -220,7 +220,7 @@ export function nameCard(author) {
   const section = element('section', 'cm-namecard');
   const title = element('h2', 'cm-namecard-title', '글쓴이 명함');
   title.id = 'cm-namecard-title';
-  title.append(mockTag());
+  if (API_MODE === 'mock') title.append(mockTag()); // 목 모드에서만 — 실제 모드는 C-2 응답의 명함이다(FE-142)
   section.setAttribute('aria-labelledby', title.id);
   const body = element('div', 'cm-namecard-body');
   body.append(cardPair(author), authorInfo(author));
@@ -360,7 +360,8 @@ export function communityShell({ navigate, withCompose = true }) {
     event.preventDefault();
     navigate('community');
   });
-  title.append(home, mockTag());
+  title.append(home);
+  if (API_MODE === 'mock') title.append(mockTag()); // 목 모드에서만(FE-142)
   head.append(title, element('p', 'cm-sub', '같은 기록, 다른 생각'));
   filters.append(head);
 
@@ -439,7 +440,7 @@ export function popularList(popular, navigate) {
   box.setAttribute('aria-labelledby', 'cm-popular-title');
   const title = element('h2', 'cm-side-title', '많이 본 글');
   title.id = 'cm-popular-title';
-  title.append(mockTag());
+  if (API_MODE === 'mock') title.append(mockTag()); // 목 모드에서만 — 실제 모드는 C-1 · C-6 응답의 많이 본 글이다(FE-142)
   const list = element('ol', 'cm-popular-list');
   popular.forEach(({ postId, title: text }) => {
     const item = element('li');

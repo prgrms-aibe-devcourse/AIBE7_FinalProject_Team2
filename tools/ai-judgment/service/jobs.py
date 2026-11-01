@@ -51,6 +51,8 @@ ARTIFACT_DIRS = ("cases", "out/runs")
 
 # 파이프라인 단계 순서 (pipeline.py STAGES와 같아야 한다)
 STAGES = ("extract", "court", "contamination", "rag", "generate", "select", "axis", "classify", "script", "load")
+# 범죄 유형 (common.CRIME_TYPES와 같아야 한다 — 서비스는 파이프라인 모듈을 불러오지 않는다, BE-138)
+CRIME_TYPES = ("MURDER", "FRAUD", "INJURY", "ROBBERY", "THEFT")
 
 # pipeline.py에서 **기본값이 꺼짐**인 단계 (pipeline.py DEFAULT_CONFIG의 stages.script · classify.enabled = False).
 # 나머지 단계는 설정에 없으면 돈다는 뜻이라, 이 목록을 따로 두지 않으면 요청하지 않은 대본 단계가
@@ -240,7 +242,7 @@ def _script_result(script):
     증거 파일에는 `stopped`가 아예 없어서 파일에서 가져오면 항상 false가 된다.
 
     대본 전체(BE-121, `stages.script.full`)를 만들었으면 `scriptFile`도 같은 이유로 경로를 빼고 내용을
-    `fullScript`로 넣는다. 적재(`case_script` 확장)는 BE-126이다 — 그전까지 백엔드는 이 값을 읽지 않는다.
+    `fullScript`로 넣는다. 백엔드 적재가 `fullScript.blocks` · `meta` · `paper`를 읽는다(BE-126 `CaseScriptLoader`).
     """
     if not script:
         return None
@@ -393,7 +395,11 @@ class JobStore:
             "sources": config_sources,
             "stages": stages,
         }
-        for key in ("incidentDate", "indictmentDate", "finalSourceIndex", "allowFreeTierForJudgment"):
+        crime_type = request.get("crimeType")
+        if crime_type is not None and crime_type not in CRIME_TYPES:
+            raise JobError(f"crimeType은 {' · '.join(CRIME_TYPES)} 중 하나입니다")
+        # crimeType: 관리자가 고른 범죄 유형. extract 결과와 다르면 파이프라인이 멈춘다 (BE-138)
+        for key in ("incidentDate", "indictmentDate", "finalSourceIndex", "allowFreeTierForJudgment", "crimeType"):
             if request.get(key) is not None:
                 config[key] = request[key]
         return config

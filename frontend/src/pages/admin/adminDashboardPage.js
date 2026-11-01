@@ -1,5 +1,5 @@
 import { button, element } from '../../components/siteLayout.js';
-import { AUDIT_ACTION, errorText } from './adminLabels.js';
+import { AUDIT_ACTION, NOT_READY_TEXT, errorText } from './adminLabels.js';
 import { formatDate, pageTop } from './adminKit.js';
 import { renderAdminShell } from './adminShell.js';
 
@@ -62,7 +62,7 @@ export function renderAdminDashboardPage(container, { navigate }) {
         if (failure?.code === 'UNAUTHORIZED') { unauthorized(); return; }
         const panel = element('div', 'admin-message');
         panel.setAttribute('role', 'alert');
-        panel.append(element('p', '', errorText(failure, failure?.status === 404 ? '서버에 아직 준비되지 않은 기능이에요.' : '대시보드를 불러오지 못했어요.')));
+        panel.append(element('p', '', errorText(failure, failure?.status === 404 ? NOT_READY_TEXT : '대시보드를 불러오지 못했어요.')));
         main.replaceChildren(pageTop('대시보드'), panel);
       }
     },
