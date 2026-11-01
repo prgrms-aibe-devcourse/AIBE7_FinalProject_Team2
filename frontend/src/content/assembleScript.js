@@ -111,7 +111,7 @@ const playable = ({ blocks, meta }) => {
   const { U1, U2, U3, U4 } = blocks ?? {};
   return hasLines(U1?.lines, 5) && hasLines(U2?.indict, 2) && hasLines(U2?.plea, 2) && hasLines(U2?.issues_narr, 2)
     && hasLines(U2?.questions, 2) && U2.questions.slice(0, 2).every(({ q, a }) => q && a)
-    && Array.isArray(U3) && U3.length > 0 && U3.every(({ role, text }) => text && ['prosecutor', 'defense'].includes(role))
+    && Array.isArray(U3) && U3.length > 0 && U3.every((line) => line?.text && ['prosecutor', 'defense'].includes(line.role))
     && U4?.prosecutor && U4?.defense && LAST_QUESTION[meta?.issue] && typeof meta?.admits === 'boolean';
 };
 

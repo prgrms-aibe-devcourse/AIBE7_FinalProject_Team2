@@ -68,6 +68,7 @@ test('조립할 수 없으면 null이다(준비 중)', async () => {
   assert.equal(assembleScript({ ...given, meta: { ...given.meta, issue: null } }), null);
   assert.equal(assembleScript({ ...given, meta: { ...given.meta, admits: null } }), null);
   assert.equal(assembleScript({ ...given, blocks: { ...given.blocks, U3: [] } }), null);
+  assert.equal(assembleScript({ ...given, blocks: { ...given.blocks, U3: [null] } }), null, 'U3에 null 원소');
   assert.equal(assembleScript({ ...given, blocks: { ...given.blocks, U1: { lines: ['한 줄'] } } }), null);
   assert.equal(assembleScript({ evidence: [], cast: given.cast }), null, '블록 없는 옛 응답');
 });
