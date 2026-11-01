@@ -7,6 +7,7 @@ on:
       - backend/**
       - frontend/og/**  # 성향 OG 빌드 입력. 시드와 같은지 백엔드 테스트가 확인한다 (BE-73)
       - frontend/public/images/**  # 일러스트 목록 파일과 같은지 백엔드 테스트가 확인한다 (BE-142)
+      - tools/ai-judgment/contracts/**  # 대본 블록 계약. 파이프라인과 규칙이 같은지 백엔드 테스트가 확인한다 (BE-126)
       - .github/workflows/backend-ci.yml
   push:
     branches: [develop]
@@ -14,6 +15,7 @@ on:
       - backend/**
       - frontend/og/**
       - frontend/public/images/**
+      - tools/ai-judgment/contracts/**
       - .github/workflows/backend-ci.yml
   workflow_dispatch:
 

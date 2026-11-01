@@ -11,10 +11,12 @@ import com.team2.project.common.exception.ErrorCode;
 import com.team2.project.imagegen.service.CasePaperService;
 import com.team2.project.legalcase.domain.CasePaper;
 import com.team2.project.legalcase.domain.LegalCase;
+import com.team2.project.legalcase.domain.ScriptUnit;
 import com.team2.project.legalcase.repository.CaseIncidentPhotoRepository;
 import com.team2.project.legalcase.repository.LegalCaseRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -31,15 +33,17 @@ public class AdminCasePaperService {
 	private final LegalCaseRepository caseRepository;
 	private final CasePaperService paperService;
 	private final CaseIncidentPhotoRepository incidentPhotoRepository;
+	private final AdminCaseScriptService scriptService;
 	private final AdminAuditLogger auditLogger;
 	private final TransactionTemplate transactionTemplate;
 
 	public AdminCasePaperService(LegalCaseRepository caseRepository, CasePaperService paperService,
-			CaseIncidentPhotoRepository incidentPhotoRepository, AdminAuditLogger auditLogger,
-			PlatformTransactionManager transactionManager) {
+			CaseIncidentPhotoRepository incidentPhotoRepository, AdminCaseScriptService scriptService,
+			AdminAuditLogger auditLogger, PlatformTransactionManager transactionManager) {
 		this.caseRepository = caseRepository;
 		this.paperService = paperService;
 		this.incidentPhotoRepository = incidentPhotoRepository;
+		this.scriptService = scriptService;
 		this.auditLogger = auditLogger;
 		this.transactionTemplate = new TransactionTemplate(transactionManager);
 	}
@@ -59,11 +63,12 @@ public class AdminCasePaperService {
 			LegalCase legalCase = lockCase(caseId);
 			guardNotPublished(legalCase);
 			CasePaper paper = paperService.savePaper(legalCase, generated);
+			List<ScriptUnit> revoked = scriptService.revokeStaleApprovals(legalCase);
 			legalCase.startReview();
 			caseRepository.saveAndFlush(legalCase);
 
-			auditLogger.record(admin, AdminAuditAction.CASE_PAPER_GENERATE, AuditTargetType.CASE, caseId, Map.of(),
-				request);
+			auditLogger.record(admin, AdminAuditAction.CASE_PAPER_GENERATE, AuditTargetType.CASE, caseId,
+				AdminCaseScriptService.withRevoked(new LinkedHashMap<>(), revoked), request);
 			return toResponse(legalCase, paper);
 		});
 	}
@@ -93,11 +98,13 @@ public class AdminCasePaperService {
 		if (edit.has("article")) {
 			paper.changeArticle(edit.get("article"));
 		}
+		List<ScriptUnit> revoked = scriptService.revokeStaleApprovals(legalCase);
 		legalCase.startReview();
 		caseRepository.saveAndFlush(legalCase);
 
 		Map<String, Object> detail = new LinkedHashMap<>();
 		detail.put("fields", edit.changes().keySet());
+		AdminCaseScriptService.withRevoked(detail, revoked);
 		auditLogger.record(admin, AdminAuditAction.CASE_PAPER_UPDATE, AuditTargetType.CASE, caseId, detail, request);
 		return toResponse(legalCase, paper);
 	}
