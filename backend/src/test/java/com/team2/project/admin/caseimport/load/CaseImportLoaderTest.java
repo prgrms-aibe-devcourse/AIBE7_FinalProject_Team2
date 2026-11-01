@@ -14,6 +14,7 @@ import com.team2.project.legalcase.domain.CastRoles;
 import com.team2.project.legalcase.domain.CourtLevel;
 import com.team2.project.legalcase.domain.CrimeType;
 import com.team2.project.legalcase.domain.LegalCase;
+import com.team2.project.legalcase.repository.LegalCaseRepository;
 import com.team2.project.legalcase.service.CaseCastAssigner;
 import com.team2.project.pipeline.PipelineResult;
 import com.team2.project.support.ApiIntegrationTest;
@@ -41,6 +42,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 class CaseImportLoaderTest extends ApiIntegrationTest {
 
 	@Autowired CaseImportLoader loader;
+	@Autowired LegalCaseRepository legalCaseRepository;
 
 	private static final JsonMapper MAPPER = JsonMapper.builder().build();
 
@@ -545,6 +547,35 @@ class CaseImportLoaderTest extends ApiIntegrationTest {
 		} finally {
 			jdbcTemplate.update("DELETE FROM case_import WHERE job_id IN (?, ?)", failedJob, runningJob);
 		}
+	}
+
+	@Test
+	@DisplayName("마지막 배정은 등록 때 정한 배역이면 등록 시각으로 본다 — 등록 순서와 다르게 적재해도 바뀌지 않는다 (BE-129)")
+	void lastDefense_usesImportTimeWhenCastAssignedAtImport() {
+		// 나중에 등록한 B를 먼저 적재하고, 먼저 등록한 A를 나중에 적재한다. 두 배역은 서로 다르다
+		Map<String, String> castB = CastRoles.withDefense("naero");
+		Map<String, String> castA = CastRoles.withDefense("nambul");
+		LegalCase caseB = loader.load(caseImport(CrimeType.THEFT, castB), resultWith(theftContent()));
+		LegalCase caseA = loader.load(caseImport(CrimeType.THEFT, castA), resultWith(theftContent()));
+		// 다른 테스트가 남긴 행보다 뒤에 오도록 등록 시각을 앞으로 둔다
+		String importA = insertLoadedImportRow(caseA.getId(), castA, "1 hour");
+		String importB = insertLoadedImportRow(caseB.getId(), castB, "2 hours");
+		try {
+			assertThat(legalCaseRepository.findLastDefenseByCrimeType("THEFT")).isEqualTo("naero");
+		} finally {
+			jdbcTemplate.update("DELETE FROM case_import WHERE job_id IN (?, ?)", importA, importB);
+		}
+	}
+
+	/** 사건으로 적재된 등록 한 건. 등록 시각은 지금보다 offset 뒤다. 작업 ID를 돌려준다 */
+	private String insertLoadedImportRow(Long caseId, Map<String, String> castRoles, String offset) {
+		String jobId = UUID.randomUUID().toString().replace("-", "");
+		jdbcTemplate.update("""
+			INSERT INTO case_import (job_id, status, crime_type, cast_roles, case_id, created_at)
+			VALUES (?, 'SUCCEEDED', 'THEFT', ?::jsonb, ?, now() + ?::interval)""",
+			jobId, "{\"prosecutor\": \"%s\", \"defense\": \"%s\"}"
+				.formatted(castRoles.get("prosecutor"), castRoles.get("defense")), caseId, offset);
+		return jobId;
 	}
 
 	/** 적재되지 않은 등록 한 건 (배역만 정해진 상태). 작업 ID를 돌려준다 */
