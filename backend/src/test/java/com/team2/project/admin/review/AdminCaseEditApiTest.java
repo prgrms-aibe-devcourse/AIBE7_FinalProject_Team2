@@ -29,6 +29,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.AbstractMockHttpServletRequestBuilder;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * 사건 내용 수정 · 가치관 축 확정 · 사건 공개 · 공개 취소 A-11 ~ A-13 · A-13-14 (API 명세 8-2, BE-43 · BE-118).
@@ -175,6 +176,29 @@ class AdminCaseEditApiTest extends ApiIntegrationTest {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.content.sensitiveFlags.length()").value(0))
 			.andExpect(jsonPath("$.content.castRoles.defense").value("naero"));	// 보내지 않은 배역은 그대로
+	}
+
+	@Test
+	@DisplayName("A-11: 대본 입력(제목 · 개요)이 실제로 바뀔 때만 사건 내용 판이 오른다 (BE-126 블록 basis)")
+	void edit_bumpsContentRevisionOnlyForScriptInputs() throws Exception {
+		perform(patch(caseUrl()).contentType(MediaType.APPLICATION_JSON).content("{\"shortIntro\": \"소개만 바꾼다\"}"))
+			.andExpect(status().isOk());
+		assertThat(contentRevision()).isEqualTo(1);		// 대본이 받지 않는 값
+
+		String overview = jdbcTemplate.queryForObject("SELECT overview FROM legal_case WHERE id = ?", String.class, caseId);
+		perform(patch(caseUrl()).contentType(MediaType.APPLICATION_JSON)
+				.content(JsonMapper.builder().build().writeValueAsString(Map.of("overview", overview))))
+			.andExpect(status().isOk());
+		assertThat(contentRevision()).isEqualTo(1);		// 같은 값으로 저장
+
+		perform(patch(caseUrl()).contentType(MediaType.APPLICATION_JSON)
+				.content("{\"title\": \"판 확인용 새 제목 " + UUID.randomUUID() + "\", \"overview\": \"개요를 고친다\"}"))
+			.andExpect(status().isOk());
+		assertThat(contentRevision()).isEqualTo(3);		// 제목 · 개요 각각
+	}
+
+	private int contentRevision() {
+		return jdbcTemplate.queryForObject("SELECT content_revision FROM legal_case WHERE id = ?", Integer.class, caseId);
 	}
 
 	@Test

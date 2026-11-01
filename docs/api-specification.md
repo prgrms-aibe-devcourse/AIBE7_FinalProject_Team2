@@ -79,6 +79,7 @@
 | v0.75 | 2026-10-30 | **수집 항목 화이트리스트 (BE-136)** — P-9 `itemId`를 모을 수 있는 목록으로 거른다: 일러스트는 `case-{공개 사건 id}-{origin \| conclusion \| reenact}`(요청한 사건과 달라도 된다 — 그림별 key), 의상은 역할 의상 그림이 있는 `{who}:{role}`(사건 전용 의상 `{who}:case-{n}`은 그 사건에서만). 목록에 없으면 400 `VALIDATION_ERROR`(`details`: `items[i].itemId` · `NOT_COLLECTIBLE`), 하나라도 있으면 아무것도 저장하지 않는다. 의상의 사용자당 상한 12 삭제(목록이 곧 전체) — 409 `COLLECTION_LIMIT_EXCEEDED`는 일러스트 사건당 5만 남는다. (v0.74는 BE-133 PR이 쓴다) |
 | v0.76 | 2026-10-30 | **닉네임 거절 사유 이름 (BE-134)** — M-5 · M-7의 닉네임 400 `details[].reason`을 사유별 이름으로(M-7은 하나, M-5는 요청 검사 사유가 여럿일 수 있다): `NotBlank` · `Pattern` · `Size`(요청 DTO 검사와 같은 이름) · `SizeWithHangul`(한글이 들어가 8자 초과) · `Reserved`(`방청객`으로 시작). 예전에는 서비스 검사(한글 8자 · 방청객)가 모두 `VALIDATION_ERROR`였다. 칸 이름 · 에러 코드는 그대로. (v0.74는 BE-133 PR #349가 쓴다) |
 | v0.77 | 2026-10-30 | **사건 등록 범죄 유형 일치 검사 (BE-138)** — A-14 요청의 `crimeType`을 파이프라인에 넘겨, 파이프라인이 판결문에서 읽은 유형과 다르면 **판결 · 대본을 만들기 전에(extract 직후) 멈춘다**. A-15는 `FAILED`가 되고 `message`에 두 유형을 적는다(예: "범죄 유형이 다릅니다: 등록 요청은 FRAUD, 판결문에서 읽은 유형은 MURDER입니다. …"). 요청 값으로 덮어쓰지 않는다 — 관리자가 유형을 잘못 고르면 양형기준 · 판례 · 사전판단 선택지가 모두 틀린 채 들어가기 때문이다. 맞는 유형으로 다시 등록한다. A-14-1 적재도 같은 비교를 한 번 더 해 다르면 422 `IMPORT_RESULT_INVALID`(`details[].field`: `case.crimeType`)로 거절한다(범죄 유형을 보내지 않던 때의 작업 대비). 이때 등록은 `FAILED`가 되어 같은 사건번호로 다시 등록할 수 있다. 요청 · 응답 형식은 그대로다 (v0.76은 BE-134가 쓴다) |
+| v0.78 | 2026-10-31 | **대본 단위 블록 저장 (BE-126 1차)** — 대본을 단위 블록 U0 ~ U4(설계도 · 1막 해설 · 재판 도입부 · 증거조사 · 3막)와 메타(`cast` · `issue` · `admits`)로 저장한다(ERD v1.52 `case_script_block` · V45). **검수 상태는 블록마다 있고 대본의 상태는 블록에서 계산한다** — 모든 블록 승인 = 공개. 1차는 통승인 · 통거절이라 A-13-11 · 12가 모든 블록에 한 번에 적용한다(블록 단위 승인은 2차). A-13-10에 `blocks`(블록마다 `content` · `revision` · `basis` · `review` · `warnings` · `repairs` · `publishable` · 검수 칸) · `meta` · `pending` · `review` 추가, 기존 필드(`evidence` 등)는 U3 블록에서 그대로 준다. A-13-11은 빠진 단위(`pending`, 기사 `"PAPER"` 포함) · 검수 오류가 있어도 거절한다. A-13-13은 U3 블록을 고치고 판을 올리며, 모든 블록을 다시 검수 대기로 돌린다. **API 18에 `blocks`(U1 ~ U4의 `content`만, U3는 `factorId` · `role` · `text`) · `meta` 추가** — U0는 내리지 않고(재료), U2 신문 답은 "…네." · "…아닙니다."로 정규화해 준다. 기존 `evidence` · `cast`는 그대로. **API 1 · 16 · 18의 `scriptReady`(200 조건) 기준이 "다섯 단위(U0 ~ U4)가 모두 있고 모두 승인"으로 바뀐다** — 증거조사만 만든 대본(U3 하나, 나머지는 `pending`)은 승인할 수 없고 기존에 승인돼 있던 것도 "준비 중"이 된다(해송님 합의). A-13-11은 만든 뒤 사건 내용(A-11) · 기사(A-13-6 · 8)가 바뀐 블록이 있어도 거절하고, 승인한 뒤 A-11 · A-13-6 · 8로 그 값을 고치면 그 값을 보고 만든 블록의 승인을 지운다(다시 검수 대기 — 공개 전 사건만 고칠 수 있어 공개 중인 대본이 내려가지는 않는다, 감사 로그에 `scriptApprovalRevoked`)(낡음 표시는 2차). 사건 등록 적재(A-14-1)는 대본 전체와 함께 온 기사를 신문 지면(API 17 · A-13-7)으로 저장한다(1막 해설이 그 기사를 보고 만들어졌다) (`docs/decisions/BE-126.md`) |
 
 ---
 
@@ -260,7 +261,7 @@ json
 - `chargeName`: 죄명(`legal_case.charge_name`, 예: "살인"). 사건 상단 바(S-04~S-08)가 `caseId`로 이 목록에서 제목과 함께 찾아 쓴다(BE-79, D-01). 사건 개요(API 4) · API 16의 `chargeName`과 같은 값이다.
 - `thumbnailUrl`: `legal_case.thumbnail_url`. **없으면 규칙 주소 `/images/cases/case-{caseId}-reenact.webp`를 내려준다**(BE-141). 그 파일이 없으면 화면이 범죄 유형별 공용 컷으로 바꾼다.
 - `participantCount`: `attempt_no = 1`이고 `COMPLETED`인 체험 수.
-- (v0.60, BE-116) `scriptReady`: 이 사건에 **승인된 공개 대본**이 있는가(`true` / `false`). 기준은 API 18이 200을 주는 조건과 같다(사건 `PUBLISHED` + 대본 `reviewStatus: APPROVED`) — 대본이 없거나 검수 대기 · 반려면 `false`다. 화면(S-02)은 이 값으로 체험 가능한 사건을 먼저 보이고, `false`는 "준비 중"으로 다룬다. 사용자와 무관한 값이다. **화면 정책이며 서버는 막지 않는다** — API 2(체험 시작)는 `scriptReady`를 보지 않는다. 또 대사를 직접 수정(A-13-13)하면 검수 기록이 지워져 `true → false`로 바뀔 수 있다(이때 API 18도 404).
+- (v0.60, BE-116) `scriptReady`: 이 사건에 **승인된 공개 대본**이 있는가(`true` / `false`). 기준은 API 18이 200을 주는 조건과 같다(사건 `PUBLISHED` + 대본 `reviewStatus: APPROVED`) — 대본이 없거나 검수 대기 · 반려면 `false`다. 화면(S-02)은 이 값으로 체험 가능한 사건을 먼저 보이고, `false`는 "준비 중"으로 다룬다. 사용자와 무관한 값이다. **화면 정책이며 서버는 막지 않는다** — API 2(체험 시작)는 `scriptReady`를 보지 않는다. 또 대사를 직접 수정(A-13-13)하면 검수 기록이 지워져 `true → false`로 바뀔 수 있다(이때 API 18도 404). (v0.78, BE-126) 대본은 단위 블록으로 저장되고, 기준은 **다섯 단위(U0 ~ U4)가 모두 있고 모두 승인됐는가**다 — 블록 하나라도 대기 · 반려거나 증거조사만 만든 대본(U3 하나)이면 `false`다.
 - 정렬: `published_at` 최신순 고정 (정렬 선택은 이후 단계, REQ-009).
 - (v0.27, FE-19 · REQ-010) `myStatus`: 이 사건에 대한 **내 최신 회차** 체험 상태를 목록 배지용 두 값으로 묶은 것.
 
@@ -838,6 +839,8 @@ FE-64가 쓰는 API(S-20 기사 지면 · 증거조사). 관리자 신문 지면
 
 ### API 18. (확장) 공개 사건 대본 — `GET /cases/{caseId}/script`
 
+> **(v0.78, BE-126) 지금 응답**: 증거조사 대사(`evidence`) · 배역(`cast`)에 더해 단위 블록(`blocks`, U1 ~ U4)과 `meta`를 담는다. U0는 내리지 않고, 블록에 없는 고정 문구 · 연출 · 기사 · 4 ~ 6막은 프론트 공통 틀과 다른 API(기사 API 17)가 맡는다. 아래 인용은 신설 당시(BE-109)의 범위다.
+>
 > **신설 (BE-109).** A-13-10 ~ 12(BE-108)가 적재 · 검수한 대본에서 **승인된 것만** 공개용으로 가져다 조립한다 — 새로 저장하지 않는다(API 17과 같은 원칙). 담는 것은 **2막 증거조사 대사뿐**이다 — 나머지 막(1막 해설 · 공소사실 · 쟁점 정리 · 피고인신문 · 검사의견 · 최종변론 · 최후진술)은 파이프라인이 만들지 않아(COMMON-65) 이 API에 넣지 않는다. 그중 사건마다 달라지지 않는 부분만 FE-33이 공통 틀로 채우고, 공소사실 · 피고인신문처럼 사건별 대사가 필요한 막은 당분간 "증거조사 중심 축약판"으로 둔다 — 자세한 내용은 [BE-109 결정 기록](decisions/BE-109.md) 참고. 설계 근거: BE-109 Jira 댓글(승호님 제안 · 해송님 FE-33 담당 합의, 2026-10-27).
 
 **요청**: 본문 없음.
@@ -852,10 +855,26 @@ FE-64가 쓰는 API(S-20 기사 지면 · 증거조사). 관리자 신문 지면
     { "factorId": 2, "side": "DEFENSE", "character": "nambul", "card": "돈을 돌려주지 않았다",
       "text": "그 돈은 빌린 것이 아니라 받은 것입니다." }
   ],
-  "cast": { "prosecutor": "naero", "defense": "nambul" }
+  "cast": { "prosecutor": "naero", "defense": "nambul" },
+  "blocks": {
+    "U1": { "lines": ["…"] },
+    "U2": { "indict": "…", "plea": "…", "issues_narr": ["…"],
+            "questions": [{ "q": "공소사실을 인정합니까?", "a": "…네." }], "cards": { "…": "…" } },
+    "U3": [ { "factorId": 1, "role": "prosecutor", "text": "계약서에 서명한 사실은 분명합니다." } ],
+    "U4": { "prosecutor": "…", "defense": "…" }
+  },
+  "meta": { "cast": { "prosecutor": "naero", "defense": "nambul" }, "issue": "admitted", "admits": true }
 }
 ```
 
+- (v0.78, BE-126) `blocks`: 단위 블록의 값(`content`)만 준다. 고정 문구 · 연출 · 민감 안내 · 기사 · 4 ~ 6막은 블록에 없다 — 프론트 공통 틀(FE-33 · FE-139)이 `meta`로 고정 문구를 골라 조립하고, 기사는 API 17, 민감 안내는 FE-129가 맡는다. 블록 값의 모양은 파이프라인 계약(`tools/ai-judgment/prompts/script/README.md` "저장 블록")과 같다.
+  - **U0(설계도)는 내리지 않는다** — 화면에 나가는 값이 아니라 U2 · U4를 만든 재료다. 마지막 답의 인정 여부는 `meta.admits`로 준다.
+  - **U2 신문 답(`questions[].a`)은 정규화해 준다** — 예 · 네 → `"…네."`, 아니요 · 아닙니다 → `"…아닙니다."`, 그 밖의 답은 앞에 `"…"`를 붙인다. 한 낱말일 때만 답으로 본다("예전에는 …"은 그대로). 저장값은 모델이 쓴 그대로다. 규칙은 파이프라인과 공용 계약 파일(`tools/ai-judgment/contracts/script_blocks.json`)로 맞춘다.
+  - U3는 줄마다 `factorId` · `role`(소문자, 저장값 그대로) · `text`만 준다. 같은 대사가 `evidence`에도 있다.
+  - 검수용 값(블록의 `review` · `warnings` · `repairs`, 대사의 `validation` · `attempts`)은 내리지 않는다 — 고치기 전 문장과 대본 인용이 들어 있다.
+  - U1 · U2 · U4는 **화면이 쓰는 키만** 준다 — U1 `lines`, U2 `indict` · `plea` · `issues_narr` · `questions` · `cards`, U4 `prosecutor` · `defense`. U2 `questions[]`는 질문마다 `q` · `a`만 준다. 모델이 덧붙인 다른 키는 내리지 않는다.
+  - 공개 대본은 다섯 단위가 모두 있으므로 `blocks`에는 늘 U1 ~ U4가 있다.
+- (v0.78) `meta`: `cast`(배역, 위 `cast`와 같은 값) · `issue`(분류 쟁점 — 신문 마지막 질문을 고른다) · `admits`(피고인이 혐의를 인정하는지 — 마지막 답 "…네, 인정합니다." / "…아닙니다."를 고른다). 분류 없이 만든 대본은 `issue`가, U0가 없는 대본은 `admits`가 `null`이다.
 - `character` · `cast`는 저장된 **코드값**(`naero` · `nambul` 등)을 그대로 내려준다. 화면에 보일 한글 이름(나로 · 남불)으로 바꾸는 것은 프론트 몫이다.
 - `side`는 A-13-10의 `role`을 **대문자 코드값**(`PROSECUTOR` · `DEFENSE`)으로 바꿔 내려준다 — 다른 공개 API가 모두 코드값이라 맞췄다. 화면 한글(검사 · 변호인)로 바꾸는 것은 프론트 몫이다.
 - `card`는 A-13-10의 `label`과 같은 값(= 사건의 판단 요소 문구). 파이프라인 사건에는 정적 증거 카드가 없어 이 문구가 카드 역할을 그대로 한다 — 요소가 지워졌으면 `null`이다.
@@ -863,7 +882,7 @@ FE-64가 쓰는 API(S-20 기사 지면 · 증거조사). 관리자 신문 지면
 - **배열 순서가 곧 재생 순서다.** 별도 정렬 필드를 두지 않는다.
 - `cast`는 A-13-10과 같은 값(`{ prosecutor, defense }`).
 - (v0.60, BE-116) 이 조건은 API 1 · API 16의 `scriptReady`와 같다 — `scriptReady: true`인 사건만 이 API가 200이다. 목록은 이 API를 사건마다 부르지 말고 `scriptReady`를 본다.
-- **승인(`reviewStatus: APPROVED`)한 대본만 내려준다.** 검수 전 · 반려된 대본은 없는 것으로 본다 — 사건이 `PUBLISHED`여도 대본이 미승인이면 `SCRIPT_NOT_FOUND`다(API 16 · 17과 달리 사건 공개 여부만으로는 판단하지 않는다).
+- **승인(`reviewStatus: APPROVED`)한 대본만 내려준다** — (v0.78) 대본의 모든 블록이 승인돼야 한다. 검수 전 · 반려된 대본은 없는 것으로 본다 — 사건이 `PUBLISHED`여도 대본이 미승인이면 `SCRIPT_NOT_FOUND`다(API 16 · 17과 달리 사건 공개 여부만으로는 판단하지 않는다).
 - 한 캐릭터가 두 배역을 번갈아 맡는 장면(피고인신문)은 이번 응답에 들어오지 않는다 — 그 장면이 서버 데이터로 들어오는 때에 `cast` 확장이 필요하다(FE-60 "추후 재검토").
 
 | 거절 | 조건 |
@@ -1294,6 +1313,7 @@ API 1 · 2 · 16 · 17은 상태와 관계없이 부를 수 있다. 표에 없�
 - 감사 로그 `CASE_UPDATE`에는 바꾼 필드 이름만 남긴다(`{"fields": ["shortIntro", "keywords"]}`). 값은 사건 본문이라 남기지 않는다. 단 `castRoles` · `sensitiveFlags`는 짧고 자동 결과를 사람이 뒤집은 기록이라 바꾼 값까지 남긴다(`{"fields": ["castRoles"], "castRoles": {…}}`, v0.67).
 - 배역을 바꿔도 이미 만든 대본(`case_script`)은 다시 만들지 않는다 — 대사에 캐릭터가 들어가 있어 사건 배역과 어긋난다. 대본을 다시 만드는 경로는 BE-129에서 정한다.
 - 사건이 `DRAFT`면 `REVIEW`로 바꾼다(8-3 #3).
+- (v0.78, BE-126) **대본 블록의 승인을 지울 수 있다.** 제목 · 개요가 실제로 바뀌면 사건 내용의 판(`legal_case.content_revision`)이 오르고, 그 내용을 보고 만든 대본 블록(U0 · U2 · U3 · U4)의 **승인을 지운다** — 승인은 검수한 그때의 내용에 대한 것이라, 남겨 두면 옛 내용을 말하는 대본이 공개된다. 반려한 블록은 그대로 둔다. 지웠으면 감사 로그에 단위를 남긴다(`"scriptApprovalRevoked": ["U0", …]`). 공개한 사건은 고칠 수 없으므로 공개 중인 대본이 내려가지는 않는다.
 
 | 거절 | 조건 |
 | --- | --- |
@@ -1506,6 +1526,7 @@ API 1 · 2 · 16 · 17은 상태와 관계없이 부를 수 있다. 표에 없�
 - `photo`는 A-13-3으로 올린 사건 대표사진(`legal_case.thumbnail_url`)을 그대로 내려준다. 아직 안 올렸으면 `null`.
 - `extraPhotos`는 A-13-5와 같은 배열 — `case_incident_photo`를 그대로 재사용한다(새로 저장하지 않는다, `docs/decisions/BE-92.md`). **v0.48부터는 `role`이 있는 사진만 발단(`ORIGIN`) → 결론(`CONCLUSION`) 순으로 내려준다** — 역할 칸 도입 이전에 사건당 3번째 이상 올라간 사진(`role: null`)은 여기서 빠진다(`docs/decisions/BE-78.md`). **정렬은 1단계 동안 `display_order`로 한다**(`ORIGIN` = 0, `CONCLUSION` = 1로 고정 채번되므로 결과적으로 역할 순과 같다) — `display_order`를 빼는 2 · 3단계에서 역할 기준 정렬로 바꾼다.
 - 공개한 사건은 바꿀 수 없다(A-11과 같은 규칙). 감사 로그 `CASE_PAPER_GENERATE`를 남긴다.
+- (v0.78, BE-126) **대본 블록의 승인을 지울 수 있다.** 기사가 바뀌면 기사의 판(`case_paper.revision`)이 오르고, 그 기사를 보고 만든 U1(1막 해설)의 승인을 지운다(A-11과 같은 규칙, 감사 로그 `scriptApprovalRevoked`).
 
 | 거절 | 조건 |
 | --- | --- |
@@ -1539,6 +1560,8 @@ A-11과 같은 방식(보낸 필드만, `null` = 지움). `headline` · `article
 
 응답은 A-13-6과 같은 형식.
 
+- (v0.78, BE-126) **대본 블록의 승인을 지울 수 있다.** 값이 실제로 바뀌면 U1의 승인을 지운다(A-13-6과 같다). 같은 값으로 보내면 판이 그대로라 지우지 않는다.
+
 | 거절 | 조건 |
 | --- | --- |
 | 400 `VALIDATION_ERROR` | 위 규칙 위반, 또는 모르는 필드 |
@@ -1548,6 +1571,8 @@ A-11과 같은 방식(보낸 필드만, `null` = 지움). `headline` · `article
 
 ### A-13-10. 사건 대본 조회 — `GET /admin/cases/{caseId}/script`
 
+> **(v0.78, BE-126) 지금 응답**: 대본 단위 블록(`blocks`, U0 ~ U4 중 만든 것)과 `meta` · `pending` · `review`를 담고, 기존 `evidence`는 U3 블록의 대사로 준다. 아래 인용은 신설 당시(BE-108)의 범위다.
+>
 > **신설 (BE-108).** 증거조사에서 검사 · 변호인이 주고받는 대사. 파이프라인 `script` 단계(BE-107)가 만들고 적재(A-14-1)가 넣는다. **담는 것은 증거조사 대사뿐이다** — 1막 기사 해설 · 피고인신문 · 최종의견은 파이프라인 범위 밖이다(COMMON-65 · FE-33). 공개 서빙은 API 18(BE-109)이 승인된 대본만 가져다 준다.
 
 ```json
@@ -1569,13 +1594,30 @@ A-11과 같은 방식(보낸 필드만, `null` = 지움). `headline` · `article
   "isPublished": false,
   "reviewedBy": null,
   "reviewedAt": null,
-  "reviewNote": null
+  "reviewNote": null,
+  "meta": { "cast": { "prosecutor": "naero", "defense": "nambul" }, "issue": "denied", "admits": false },
+  "pending": [],
+  "review": [],
+  "blocks": [
+    { "unit": "U2", "content": { "questions": [{ "q": "…", "a": "아니요" }], "…": "…" }, "revision": 2,
+      "basis": { "case": 1, "cast": { "…": "…" }, "mood": "tragic", "issue": "denied", "U0": 1, "…": "…" },
+      "review": [{ "unit": "U2", "path": "/issues_narr/1", "code": "FORMAL_ENDING", "severity": "warning", "…": "…" }],
+      "warnings": [], "repairs": [{ "unit": "U2", "…": "…" }], "publishable": true,
+      "reviewStatus": "PENDING", "reviewedBy": null, "reviewedAt": null, "reviewNote": null },
+    { "unit": "U3", "content": [{ "factorId": 1, "role": "prosecutor", "…": "…" }], "…": "…" }
+  ]
 }
 ```
 
-- `evidence[]`는 파이프라인이 만든 모양 그대로이고, **`label`만 서버가 더해 준다** — 어느 사실에 대한 대사인지는 사건의 판단 요소에 있다(파이프라인 `factorId` = `factor.display_order`, ERD v1.37). 화면이 A-6을 다시 불러 번호를 맞추지 않아도 된다. 요소가 지워졌거나 못 찾으면 그 줄의 `label`은 `null`이다.
+- (v0.78, BE-126) **`blocks`**: 단위 블록(U0 설계도 · U1 1막 해설 · U2 재판 도입부 · U3 증거조사 · U4 3막), U0 → U4 순서, 만든 단위만. 블록 값(`content`)은 파이프라인이 만든 모양 그대로다(검수 결과 `path`가 가리킨다, 형식은 `tools/ai-judgment/prompts/script/README.md` "저장 블록"). 관리자 화면에는 U2 신문 답도 저장값 그대로 준다(정규화는 API 18).
+  - `revision`: 판. 고쳐 쓰기 · 대사 수정으로 값이 바뀔 때마다 오른다. `basis`: 그 블록을 만들 때 본 값 — 앞 블록은 판, 분류 · 배역은 값, 사건 내용(`case`) · 기사(`paper`)는 그때의 판(`legal_case.content_revision` · `case_paper.revision`, 적재할 때 서버가 채운다). 지금 값과 다르면 낡은 블록이다(낡음 표시는 2차).
+  - `review`: 그 블록의 검수 조건 결과(BE-122, `severity: error`가 있으면 그 블록은 `publishable: false`), `warnings`: 단위 형식 경고, `repairs`: 자동으로 고친 기록(고치기 전 · 후 문장).
+  - 블록마다 검수 칸(`reviewStatus` · `reviewedBy` · `reviewedAt` · `reviewNote`)이 있다. 1차는 통승인 · 통거절이라 모두 같다.
+- (v0.78) 위 검수 칸 다섯 개는 **블록에서 계산한다** — 다섯 단위가 모두 있고 모두 승인이면 `APPROVED`(`isPublished: true`), 하나라도 반려면 `REJECTED`, 그 밖은 `PENDING`. 검수자 · 시각 · 사유는 가장 최근에 검수한 블록의 것이다.
+- (v0.78) `meta`는 API 18과 같은 값이다. `pending`: 파이프라인이 만들지 못한 단위(그 블록은 없다). 블록 단위가 아닌 `"PAPER"`(기사를 만들지 못함 — 그래서 U1도 빠진다)가 들어올 수 있고, 증거조사만 만든 대본은 `["U0", "U1", "U2", "U4"]`다. `review`: 대본 전체에 걸린 검수 결과(`REVIEW_FAILED` — 검사 자체가 돌지 못함).
+- `evidence[]`는 U3 블록의 대사이고(v0.78) 파이프라인이 만든 모양 그대로이고, **`label`만 서버가 더해 준다** — 어느 사실에 대한 대사인지는 사건의 판단 요소에 있다(파이프라인 `factorId` = `factor.display_order`, ERD v1.37). 화면이 A-6을 다시 불러 번호를 맞추지 않아도 된다. 요소가 지워졌거나 못 찾으면 그 줄의 `label`은 `null`이다.
 - **생성에 실패한 줄은 `text`가 `null`**이다. `attempts`는 그 줄을 몇 번 만들어 봤는지, `validation.warnings`는 그 줄에 대한 경고다(어느 대사의 경고인지 줄 안에 있어 따로 연결할 필요가 없다).
-- `publishable`이 `false`면 승인할 수 없다(A-13-11). 이유는 둘이고 둘 다 내려 준다 — 끝내 생성하지 못한 줄이 있거나(`text: null`), 호출 한도로 중간에 멈췄거나(`stopped: true`). 화면이 "다시 생성"과 "이어서 생성"을 구분해 안내할 수 있다.
+- `publishable`이 `false`면 승인할 수 없다(A-13-11). 이유는 둘이고 둘 다 내려 준다 — 끝내 생성하지 못한 줄이 있거나(`text: null`), 호출 한도로 중간에 멈췄거나(`stopped: true`). 화면이 "다시 생성"과 "이어서 생성"을 구분해 안내할 수 있다. (v0.78) 대본 전체(BE-121)는 만들지 못한 단위(`pending`)나 검수 조건 오류(블록 · 대본의 `review`에 `severity: error`)가 있어도 `false`다 — 블록마다의 값은 `blocks[].publishable`.
 - `generatedAt`은 파이프라인이 만든 시각이고 `updatedAt`은 적재 · 검수 시각이다. 시각은 모두 KST 오프셋.
 - 검수 칸 다섯 개는 **A-8과 같은 이름 · 같은 형식**이다(검수 기록이 없으면 `reviewStatus: "PENDING"`, `reviewedBy`는 관리자 이메일). 화면이 판결 후보 검수 영역과 같은 부품을 쓸 수 있게 맞췄다.
 - **`isPublished`는 사건 공개 여부와 별개다.** 공개한 사건에 대본만 늦게 들어와 승인될 수도 있고, 공개 전에 대본만 승인돼 있을 수도 있다.
@@ -1589,14 +1631,21 @@ A-11과 같은 방식(보낸 필드만, `null` = 지움). `headline` · `article
 
 승인 = 이 대본을 공개한다. 요청 본문 없음. 응답은 A-13-10과 같은 형식(`reviewStatus: "APPROVED"` · `isPublished: true`).
 
-- **`publishable`이 `false`면 거절한다.** 증거 카드와 대사가 1:1로 맞지 않는 상태로 공개하면 체험이 깨진다(BE-107 계약). DB에도 같은 제약을 두었다(`chk_case_script_publishable_approved`).
+- (v0.78, BE-126) **통승인** — 모든 블록을 한 번에 승인한다. 블록 단위 승인은 2차다.
+- (v0.78) **다섯 단위가 모두 있어야 한다.** 증거조사만 만든 대본(U3 하나)은 대사에 문제가 없어도 승인할 수 없다 — "준비 중"으로 둔다(해송님 합의).
+- (v0.78) **만든 뒤 사건 내용 · 기사가 바뀐 블록이 있으면 거절한다** — 블록의 `basis.case` · `basis.paper`가 지금 판(`legal_case.content_revision` · `case_paper.revision`)과 다른 경우다. 적재 뒤 개요를 고치거나(A-11) 기사를 다시 만들면(A-13-6) 그 값을 보고 만든 블록이 옛 내용을 말한다. `message`에 해당 블록을 적는다. 분류 · 배역 · 앞 블록의 낡음은 2차에서 표시한다.
+  - 승인한 **뒤에** 고치면 A-11 · A-13-6 · A-13-8이 그 블록의 승인을 지운다(아래 각 API). 다시 승인하려 하면 이 조건에 걸리므로 대본을 다시 생성한다.
+- (v0.78) **`pending`이 남아 있으면 거절한다** — 블록이 다섯 개여도 기사를 만들지 못한 대본(`pending: ["PAPER"]`)은 1막 해설이 볼 기사가 없다.
+
+- **`publishable`이 `false`면 거절한다.** 증거 카드와 대사가 1:1로 맞지 않는 상태로 공개하면 체험이 깨진다(BE-107 계약). DB에도 같은 제약을 두었다(v0.78부터 블록마다: `chk_case_script_block_publishable_approved`).
 - **사건 상태(`legal_case.status`)는 바꾸지 않는다.** 판결 후보 승인(A-9)은 DRAFT → REVIEW로 올리지만, 대본은 사건 내용이 아니라 체험 연출이라 사건 공개 흐름과 따로 둔다.
 - 감사 로그 `CASE_SCRIPT_APPROVE`.
 
 | 거절 | 조건 |
 | --- | --- |
 | 404 `CASE_NOT_FOUND` · `SCRIPT_NOT_FOUND` | A-13-10과 같음 |
-| 409 `INVALID_STATE` | `publishable: false` — 대본을 다시 생성해야 한다 |
+| 409 `INVALID_STATE` | `publishable: false` — 대본을 다시 생성해야 한다(어느 블록도 승인되지 않는다) |
+| 409 `INVALID_STATE` | (v0.78) 만든 뒤 사건 내용 · 기사가 바뀐 블록이 있음 (예: "대본을 만든 뒤 사건 내용이나 기사가 바뀌어 U1 블록이 옛 내용을 말합니다. …") |
 
 ### A-13-12. 사건 대본 반려 — `POST /admin/cases/{caseId}/script/reject`
 
@@ -1610,6 +1659,7 @@ A-11과 같은 방식(보낸 필드만, `null` = 지움). `headline` · `article
 
 응답은 A-13-10과 같은 형식(`reviewStatus: "REJECTED"` · `isPublished: false` · `reviewNote`에 사유).
 
+- (v0.78, BE-126) **통거절** — 모든 블록을 한 번에 반려한다(사유도 블록마다 같다). 1차 동안 반려한 대본은 다시 등록해 새로 만든다(블록 단위 수정 · 재생성은 2차 · BE-129).
 - **승인한 대본도 반려로 내릴 수 있다.** 판결 후보 반려(A-10)는 공개 중인 후보를 막지만(교체할 다른 후보가 있다), 대본은 사건마다 하나뿐이라 막으면 잘못 승인한 대본을 되돌릴 방법이 없어진다.
 - 감사 로그 `CASE_SCRIPT_REJECT`.
 
@@ -1633,8 +1683,8 @@ A-11과 같은 방식(보낸 필드만, `null` = 지움). `headline` · `article
 - `{factorId}`는 **파이프라인 번호**(= `factor.display_order`)다. 대사는 판단 요소마다 한 줄이고 어느 측이 말하는지는 요소의 방향에서 정해지므로, 이 번호 하나로 줄이 정해진다.
 - 금지어 · 원문에 없는 숫자 같은 **의미 검사는 하지 않는다.** 그 판단을 사람이 하라고 두는 기능이다.
 - 고친 줄은 `validation`이 `{ ok: true, manual: true, warnings: [...] }`가 되고 `editedAt`이 붙는다. **경고는 남긴다** — 사람이 보고 판단할 값이다. 화면은 `manual`로 "사람이 고침"을 표시한다.
-- **고치면 검수 기록이 지워져 다시 대기가 된다.** 내용이 바뀌었는데 지난 승인이 남아 있으면 검수하지 않은 대사가 공개된다.
-- **`publishable`을 다시 계산한다.** 파이프라인과 같은 식(`not stopped and not failed`)을 다시 적용한다 — 빈 대사를 사람이 채워 모든 줄이 차면 승인할 수 있게 올라가고, 호출 한도로 멈춘 대본(`stopped: true`)은 **줄 자체가 모자라** 고쳐도 올라가지 않는다(그때는 다시 생성해야 한다).
+- **고치면 검수 기록이 지워져 다시 대기가 된다.** 내용이 바뀌었는데 지난 승인이 남아 있으면 검수하지 않은 대사가 공개된다. (v0.78, BE-126) 대사는 U3 블록에 있다. 1차는 통승인이라 **모든 블록**이 다시 대기가 된다. U3 블록의 판(`revision`)이 오르고, 고친 줄의 검수 조건 오류(`review`에서 그 `factorId`의 `severity: error`)는 지운다 — 경고는 남긴다.
+- **`publishable`을 다시 계산한다.** 파이프라인과 같은 식(`not stopped and not failed`, v0.78부터 대본 전체는 만들지 못한 단위 · 검수 오류도 함께)을 다시 적용한다 — 빈 대사를 사람이 채워 모든 줄이 차면 승인할 수 있게 올라가고, 호출 한도로 멈춘 대본(`stopped: true`)은 **줄 자체가 모자라** 고쳐도 올라가지 않는다(그때는 다시 생성해야 한다).
 - 감사 로그 `CASE_SCRIPT_UPDATE`. **고친 대사 본문은 남기지 않는다**(어느 요소를 고쳤는지만) — 원문 · 모델 출력과 같은 취급이다.
 - `balanceWarning`은 **고치기 전 기준**으로 남는다(검사 · 변호인 분량은 파이프라인이 생성할 때 한 번 재는 값이다). 화면은 "수정 전 기준"으로 읽으면 된다.
 - 길이는 파이프라인과 같은 방식으로 센다 — **줄바꿈은 글자 수에 넣지 않는다**. 50자 + 50자 두 줄은 통과한다.

@@ -143,6 +143,13 @@ class CaseListApiTest extends ApiIntegrationTest {
 		insertScriptWithReview(pending, null);
 		long rejected = insertCase("FRAUD", "PUBLISHED");
 		insertScriptWithReview(rejected, "REJECTED");
+		// 블록 하나라도 승인 전이면 준비되지 않은 대본이다 (BE-126: 다섯 단위 모두 승인)
+		long partial = insertCase("FRAUD", "PUBLISHED");
+		jdbcTemplate.update("UPDATE case_script_block SET review_status = NULL WHERE script_id = ? AND unit = 'U4'",
+				insertScriptWithReview(partial, "APPROVED"));
+		// 증거조사만 만든 대본은 승인돼 있어도 준비 중이다 (BE-126, 해송님 합의)
+		long evidenceOnly = insertCase("FRAUD", "PUBLISHED");
+		insertEvidenceOnlyScript(evidenceOnly, "APPROVED");
 		long noScript = insertCase("FRAUD", "PUBLISHED");
 
 		mockMvc.perform(get("/api/v1/cases"))
@@ -150,11 +157,13 @@ class CaseListApiTest extends ApiIntegrationTest {
 				.andExpect(jsonPath(CASE_BY_ID.formatted(approved) + ".scriptReady").value(true))
 				.andExpect(jsonPath(CASE_BY_ID.formatted(pending) + ".scriptReady").value(false))
 				.andExpect(jsonPath(CASE_BY_ID.formatted(rejected) + ".scriptReady").value(false))
+				.andExpect(jsonPath(CASE_BY_ID.formatted(partial) + ".scriptReady").value(false))
+				.andExpect(jsonPath(CASE_BY_ID.formatted(evidenceOnly) + ".scriptReady").value(false))
 				.andExpect(jsonPath(CASE_BY_ID.formatted(noScript) + ".scriptReady").value(false));
 
 		// API 18과 같은 결론인지 — 목록이 true인 사건만 대본이 200이다
 		mockMvc.perform(get("/api/v1/cases/" + approved + "/script")).andExpect(status().isOk());
-		for (long caseId : new long[] {pending, rejected, noScript}) {
+		for (long caseId : new long[] {pending, rejected, partial, evidenceOnly, noScript}) {
 			mockMvc.perform(get("/api/v1/cases/" + caseId + "/script")).andExpect(status().isNotFound());
 		}
 	}

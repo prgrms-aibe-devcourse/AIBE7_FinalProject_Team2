@@ -17,11 +17,9 @@ import com.team2.project.legalcase.domain.CastRoles;
 import com.team2.project.legalcase.domain.CrimeType;
 import com.team2.project.legalcase.domain.SensitiveFlag;
 import com.team2.project.legalcase.domain.Factor;
-import com.team2.project.legalcase.domain.CaseScript;
 import com.team2.project.legalcase.domain.LegalCase;
 import com.team2.project.legalcase.domain.SentencingGuideline;
 import com.team2.project.legalcase.repository.CaseSectionRepository;
-import com.team2.project.legalcase.repository.CaseScriptRepository;
 import com.team2.project.legalcase.repository.CaseSourceRepository;
 import com.team2.project.legalcase.repository.FactorRepository;
 import com.team2.project.legalcase.repository.LegalCaseRepository;
@@ -29,15 +27,11 @@ import com.team2.project.legalcase.repository.PenaltyRuleRepository;
 import com.team2.project.legalcase.repository.SentencingGuidelineRepository;
 import com.team2.project.legalcase.service.CaseCastAssigner;
 import com.team2.project.pipeline.PipelineResult;
-import java.time.Instant;
 import java.time.LocalDate;
-import java.time.OffsetDateTime;
-import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -65,7 +59,6 @@ public class CaseImportLoader {
 	private final PenaltyRuleRepository penaltyRuleRepository;
 	private final FactorRepository factorRepository;
 	private final CaseSourceRepository caseSourceRepository;
-	private final CaseScriptRepository caseScriptRepository;
 	private final JudgmentRepository judgmentRepository;
 	private final JudgmentFactorRepository judgmentFactorRepository;
 	private final AiGenerationRepository aiGenerationRepository;
@@ -73,6 +66,7 @@ public class CaseImportLoader {
 	private final CaseContentMapper caseContentMapper;
 	private final JudgmentMapper judgmentMapper;
 	private final CaseCastAssigner castAssigner;
+	private final CaseScriptLoader scriptLoader;
 
 	/** 범죄 유형 → 양형기준 분류. 지금은 살인만 적재돼 있고 나머지는 양형기준 없이 만들어진다 */
 	private static final Map<CrimeType, String> GUIDELINE_CATEGORIES = Map.of(CrimeType.MURDER, "살인범죄");
@@ -109,7 +103,7 @@ public class CaseImportLoader {
 
 		saveCourtJudgment(legalCase, factors, result);
 		saveAiJudgment(legalCase, factors, result);
-		saveScript(legalCase, result);
+		scriptLoader.save(legalCase, result);
 		return legalCase;
 	}
 
@@ -243,48 +237,6 @@ public class CaseImportLoader {
 			flags.add(name);
 		}
 		return List.copyOf(flags);
-	}
-
-	/**
-	 * 사건 대본 (BE-108). 대본을 돌리지 않았거나 대사가 하나도 없으면 건너뛴다 — 재판부 초안이 없을 때와
-	 * 같이 <b>사건은 그대로 만들어진다</b>. 대본은 나중에 들어와도 되고, 없으면 화면이 MVP 흐름으로 간다
-	 * (frontend {@code scripts.js} "대본이 없는 사건은 MVP 화면 그대로").
-	 *
-	 * <p>파이프라인이 어긋난다고 표시한 대본({@code publishable: false})도 <b>적재는 한다</b> — 관리자가
-	 * 검수 화면에서 무엇이 모자란지 보고 다시 생성할지 정해야 하기 때문이다. 대신 승인은 막는다
-	 * ({@link CaseScript#approve}).
-	 */
-	private void saveScript(LegalCase legalCase, PipelineResult result) {
-		JsonNode script = result.script();
-		if (script == null || script.isNull()) {
-			return;		// 대본을 돌리지 않은 등록이다 (기본값). 흔한 경우라 로그로 남기지 않는다
-		}
-		List<Map<String, Object>> evidence = Json.array(script, "evidence").stream()
-			.map(Json::toMap).filter(Objects::nonNull).toList();
-		if (evidence.isEmpty()) {
-			log.warn("대본에 대사가 없어 건너뜁니다 (jobId={})", result.jobId());
-			return;
-		}
-		caseScriptRepository.save(CaseScript.of(legalCase, evidence, Json.text(script, "model"),
-			Json.toMap(script.get("cast")), Json.text(script, "balanceWarning"), Json.bool(script, "publishable"),
-			generatedAt(script), Json.bool(script, "stopped")));
-	}
-
-	/**
-	 * 파이프라인이 대본을 만든 시각. 형식이 다르거나 없으면 비워 둔다 — 화면에 보여 주는 값이라 적재를 막지 않는다
-	 * (BE-93의 "모르는 필드는 지나가게 둔다"와 같은 원칙)
-	 */
-	private static Instant generatedAt(JsonNode script) {
-		String value = Json.text(script, "createdAt");
-		if (value == null || value.isBlank()) {
-			return null;
-		}
-		try {
-			return OffsetDateTime.parse(value).toInstant();
-		} catch (DateTimeParseException e) {
-			log.warn("대본 생성 시각을 읽지 못해 비워 둡니다: {}", value);
-			return null;
-		}
 	}
 
 	/**

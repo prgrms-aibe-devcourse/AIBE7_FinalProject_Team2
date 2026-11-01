@@ -8,15 +8,22 @@ import com.team2.project.admin.review.dto.CaseScriptResponse;
 import com.team2.project.admin.service.AdminPrincipal;
 import com.team2.project.common.exception.BusinessException;
 import com.team2.project.common.exception.ErrorCode;
+import com.team2.project.legalcase.domain.CasePaper;
 import com.team2.project.legalcase.domain.CaseScript;
 import com.team2.project.legalcase.domain.Factor;
+import com.team2.project.legalcase.domain.LegalCase;
+import com.team2.project.legalcase.domain.ScriptUnit;
+import com.team2.project.legalcase.repository.CasePaperRepository;
 import com.team2.project.legalcase.repository.CaseScriptRepository;
 import com.team2.project.legalcase.repository.FactorRepository;
 import com.team2.project.legalcase.repository.LegalCaseRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,6 +42,7 @@ public class AdminCaseScriptService {
 	private final LegalCaseRepository caseRepository;
 	private final CaseScriptRepository scriptRepository;
 	private final FactorRepository factorRepository;
+	private final CasePaperRepository paperRepository;
 	private final AdminAccountRepository accountRepository;
 	private final AdminAuditLogger auditLogger;
 
@@ -44,15 +52,24 @@ public class AdminCaseScriptService {
 	}
 
 	/**
-	 * 승인 = 이 대본을 공개한다 (A-13-11). 파이프라인이 어긋난다고 표시한 대본({@code publishable: false})은
-	 * 승인할 수 없다 — 증거 카드와 대사가 1:1로 맞지 않는 상태라 체험이 깨진다(BE-107 PR #277 리뷰 7번).
+	 * 승인 = 이 대본을 공개한다 (A-13-11). 1차는 <b>통승인</b>이다 — 모든 블록을 한 번에 승인한다(BE-126).
+	 * 승인할 수 없는 대본({@link CaseScript#isApprovable()})은 거절한다 — 증거 카드와 대사가 1:1로 맞지 않거나
+	 * (BE-107 PR #277 리뷰 7번), 빠진 단위 · 검수 조건 오류가 있으면 체험이 깨진다. 증거조사만 만든 대본도 승인할 수 없다(준비 중).
+	 * 만든 뒤 사건 내용 · 기사가 바뀐 블록이 있어도 거절한다(PR #367 리뷰 2번).
 	 */
 	@Transactional
 	public CaseScriptResponse approve(Long caseId, AdminPrincipal admin, HttpServletRequest request) {
 		CaseScript script = lockAndFindScript(caseId);
-		if (!script.isPublishable()) {
+		if (!script.isApprovable()) {
 			throw new BusinessException(ErrorCode.INVALID_STATE,
-				"증거 카드와 대사가 어긋난 대본은 승인할 수 없습니다. 대본을 다시 생성해 주세요.");
+				"만들지 못한 대사 · 단위나 검수 오류가 있는 대본은 승인할 수 없습니다. 대본을 다시 생성해 주세요.");
+		}
+		// 만든 뒤 사건 내용(A-11) · 기사(A-13-6 · 8)가 바뀌었으면 그 블록은 옛 내용을 말한다 — 낡음 표시(2차) 전에도 공개는 막는다
+		List<ScriptUnit> stale = script.staleOnDbInput(script.getLegalCase().getContentRevision(), paperRevision(caseId));
+		if (!stale.isEmpty()) {
+			throw new BusinessException(ErrorCode.INVALID_STATE, "대본을 만든 뒤 사건 내용이나 기사가 바뀌어 "
+				+ stale.stream().map(ScriptUnit::name).collect(Collectors.joining(" · "))
+				+ " 블록이 옛 내용을 말합니다. 대본을 다시 생성해 주세요.");
 		}
 		script.approve(admin.adminId(), Instant.now());
 		auditLogger.record(admin, AdminAuditAction.CASE_SCRIPT_APPROVE, AuditTargetType.CASE, caseId, Map.of(),
@@ -61,7 +78,8 @@ public class AdminCaseScriptService {
 	}
 
 	/**
-	 * 반려 (A-13-12). 반려한 대본은 공개되지 않는다(BE-109 서빙 기준).
+	 * 반려 (A-13-12). 1차는 <b>통거절</b>이다 — 모든 블록을 한 번에 반려한다(BE-126). 반려한 대본은 공개되지 않고
+	 * (BE-109 서빙 기준), 블록 단위로 고칠 수 있게 되기(2차) 전까지는 다시 등록해 새로 만든다.
 	 *
 	 * <p>승인한 대본도 반려로 내릴 수 있다 — 판결 후보(A-10)는 교체할 다른 후보가 있어 공개 중인 것을 막지만,
 	 * 대본은 사건마다 하나뿐이라 막으면 잘못 승인한 대본을 되돌릴 방법이 없어진다.
@@ -82,8 +100,8 @@ public class AdminCaseScriptService {
 	 * <p>{@code factorId}는 파이프라인 번호다(= {@code factor.display_order}). 대사는 판단 요소마다 한 줄이고
 	 * 어느 측이 말하는지는 요소의 방향에서 정해지므로(`script_generation.py`), 이 번호 하나로 줄이 정해진다.
 	 *
-	 * <p>고치면 검수 기록이 지워져 <b>다시 검수 대기</b>가 된다. 빈 대사를 사람이 채워 모든 줄이 차면
-	 * {@code publishable}도 다시 계산돼 승인할 수 있게 된다.
+	 * <p>대사는 U3 블록에 있다(BE-126). 고치면 모든 블록의 검수 기록이 지워져 <b>다시 검수 대기</b>가 된다. 빈 대사를
+	 * 사람이 채워 모든 줄이 차면 {@code publishable}도 다시 계산돼 승인할 수 있게 된다.
 	 */
 	@Transactional
 	public CaseScriptResponse editLine(Long caseId, int factorId, String text, AdminPrincipal admin,
@@ -99,6 +117,38 @@ public class AdminCaseScriptService {
 	}
 
 	/**
+	 * 사건 내용(A-11) · 기사(A-13-6 · 8)를 고친 뒤, 판이 바뀐 블록의 승인을 지운다(PR #367 리뷰). 부르는 쪽이 사건 행을 잠근
+	 * 트랜잭션 안에서 부른다 — 승인(A-13-11)도 같은 행을 잠그므로 둘이 엇갈리지 않는다. 판이 그대로면(같은 값으로 고친 경우)
+	 * 아무것도 지우지 않는다.
+	 *
+	 * <p>공개한 사건은 두 경로 모두 고칠 수 없어, 이 처리로 공개 중인 사건의 대본이 내려가는 일은 없다. 승인한 대본이 있는
+	 * 초안 사건을 고치면 공개 전에 대본이 다시 검수 대기가 된다.
+	 *
+	 * @return 승인을 지운 단위. 대본이 없으면 빈 목록
+	 */
+	@Transactional
+	public List<ScriptUnit> revokeStaleApprovals(LegalCase legalCase) {
+		return scriptRepository.findByLegalCaseId(legalCase.getId())
+			.map(script -> script.revokeStaleApprovals(legalCase.getContentRevision(), paperRevision(legalCase.getId())))
+			.orElse(List.of());
+	}
+
+	/**
+	 * 승인을 지웠으면 감사 로그에 어느 단위인지 남긴다 — 관리자가 고친 것은 사건 내용 · 기사지만 공개될 대본의 상태도 바뀌었기
+	 * 때문이다. 고친 쪽(A-11 · A-13-6 · 8)의 감사 기록에 붙인다
+	 */
+	static Map<String, Object> withRevoked(Map<String, Object> detail, List<ScriptUnit> revoked) {
+		if (!revoked.isEmpty()) {
+			detail.put("scriptApprovalRevoked", revoked.stream().map(ScriptUnit::name).toList());
+		}
+		return detail;
+	}
+
+	private Integer paperRevision(Long caseId) {
+		return paperRepository.findByLegalCaseId(caseId).map(CasePaper::getRevision).orElse(null);
+	}
+
+	/**
 	 * 대사마다 "어느 사실에 대한 것인지"(판단 요소 문구)를 붙여 돌려준다. 파이프라인의 {@code factorId}는
 	 * 적재할 때 {@code factor.display_order}로 들어가므로(BE-93 2차) 그 번호로 맞춘다 — 화면이 이 연결을
 	 * 다시 하지 않아도 되게 한다(FE 요청, 2026-10-27).
@@ -108,14 +158,17 @@ public class AdminCaseScriptService {
 		for (Factor factor : factorRepository.findAllByCaseId(caseId)) {
 			labels.put(factor.getDisplayOrder(), factor.getLabel());
 		}
-		return CaseScriptResponse.of(script, labels, reviewerEmail(script));
+		Map<Long, String> emails = new HashMap<>();
+		return CaseScriptResponse.of(script, labels,
+			adminId -> adminId == null ? null : emails.computeIfAbsent(adminId, this::reviewerEmail));
 	}
 
-	/** 검수자는 A-8과 같이 이메일로 내려준다. 계정이 지워졌으면 비운다(감사 로그가 이메일을 따로 보관한다) */
-	private String reviewerEmail(CaseScript script) {
-		Long adminId = script.getReviewedByAdminId();
-		return adminId == null ? null
-			: accountRepository.findById(adminId).map(account -> account.getEmail()).orElse(null);
+	/**
+	 * 검수자는 A-8과 같이 이메일로 내려준다. 계정이 지워졌으면 비운다(감사 로그가 이메일을 따로 보관한다). 블록마다 검수자가
+	 * 있어 같은 계정을 여러 번 찾지 않게 위에서 모아 둔다
+	 */
+	private String reviewerEmail(Long adminId) {
+		return accountRepository.findById(adminId).map(account -> account.getEmail()).orElse(null);
 	}
 
 	/** 사건이 없으면 CASE_NOT_FOUND, 사건은 있는데 대본이 없으면 SCRIPT_NOT_FOUND (신문 지면 A-13-7과 같은 구분) */
