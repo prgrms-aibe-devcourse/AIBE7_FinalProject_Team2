@@ -386,6 +386,19 @@ export async function publishCase(caseId) {
   return detail(item);
 }
 
+// A-13-14 공개 취소 (BE-118): PUBLISHED → REVIEW. 사유는 앞뒤 공백을 잘라 1 ~ 200자
+export async function unpublishCase(caseId, reasonText) {
+  await delay();
+  requireLogin();
+  const trimmed = typeof reasonText === 'string' ? reasonText.trim() : '';
+  if (!trimmed || trimmed.length > 200) fail('VALIDATION_ERROR', '공개 취소 사유를 1 ~ 200자로 입력해 주세요.', { status: 400, details: [{ field: 'reason', reason: 'Size' }] });
+  const item = findCase(caseId);
+  if (item.status !== 'PUBLISHED') invalidState(item, 'CASE_NOT_PUBLISHED');
+  item.status = 'REVIEW';
+  item.updatedAt = now();
+  return detail(item);
+}
+
 // A-14 · A-15 · A-14-1 사건 등록 (원본 판결문 → 파이프라인 실행 → 적재).
 // 목은 getImport를 부를 때마다 단계를 하나씩 진행한다. 생성이 끝나면(SUCCEEDED) 실제 서버와 같이 caseId가 아직 없고,
 // 관리자가 적재(A-14-1 loadImport)를 불러야 DRAFT 사건이 생긴다 — 조회가 쓰기를 하지 않는다(BE-93 2차).

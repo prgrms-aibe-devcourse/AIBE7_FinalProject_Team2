@@ -51,6 +51,7 @@ export const PUBLISH_REASON = {
 // INVALID_STATE details 사유 코드
 export const STATE_REASON = {
   CASE_PUBLISHED: '이미 공개한 사건이라 바꿀 수 없어요.',
+  CASE_NOT_PUBLISHED: '공개 중인 사건이 아니라 공개를 취소할 수 없어요.',
   CANDIDATE_REJECTED: '이미 반려한 후보예요.',
   CANDIDATE_PUBLISHED: '공개 중인 후보는 반려할 수 없어요. 먼저 다른 후보를 승인해 교체해 주세요.',
   // 운영 메뉴
