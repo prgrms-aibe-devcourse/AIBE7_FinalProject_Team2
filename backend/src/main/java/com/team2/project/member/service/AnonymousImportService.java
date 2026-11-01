@@ -61,16 +61,21 @@ public class AnonymousImportService {
 		return new AnonymousImportResponse(moved);
 	}
 
+	/**
+	 * @return 호출한 쪽이 익명 ID 쿠키를 지워야 하는가. 처음 정할 때는 true. 같은 결정을 다시 보낸 경우는 쿠키가 그때 버린 익명 ID일 때만 true —
+	 *         그 뒤 이 회원이 다른 브라우저에서 만든 익명 ID의 쿠키는 지우지 않는다
+	 */
 	@Transactional
-	public void discard(long memberId, Optional<UUID> cookie) {
+	public boolean discard(long memberId, Optional<UUID> cookie) {
 		lockMember(memberId);
 		Optional<MemberAnonymousImport> decided = importRepository.findById(memberId);
 		if (decided.isPresent()) {
 			requireDecision(decided.get(), Decision.DISCARDED);
-			return;
+			return cookie.filter(decided.get().getAnonymousUserId()::equals).isPresent();
 		}
 		UUID anonymousUserId = candidateId(memberId, cookie).orElseThrow(AnonymousImportService::notAvailable);
 		importRepository.save(MemberAnonymousImport.discarded(memberId, anonymousUserId));
+		return true;
 	}
 
 	private Optional<UUID> candidateId(long memberId, Optional<UUID> cookie) {

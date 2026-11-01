@@ -200,7 +200,7 @@ class AnonymousImportApiTest extends ApiIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("M-11: 결정만 남기고 익명 기록은 그대로 두며 쿠키를 지운다. 다시 보내도 204, 이후 M-9는 404, M-10은 409다")
+	@DisplayName("M-11: 결정만 남기고 익명 기록은 그대로 두며 쿠키를 지운다. 다시 보내도 204(쿠키는 버린 익명 ID일 때만 지운다), 이후 M-9는 404, M-10은 409다")
 	void discard_keepsRows() throws Exception {
 		long memberId = newMember();
 		UUID anonymousId = newAnonymous(memberId);
@@ -214,7 +214,14 @@ class AnonymousImportApiTest extends ApiIntegrationTest {
 		assertThat(experiences("member_id", memberId)).isZero();
 		assertThat(decision(memberId)).isEqualTo("DISCARDED");
 
-		mockMvc.perform(as(post(DISCARD_URL), memberId, anonymousId)).andExpect(status().isNoContent());
+		mockMvc.perform(as(post(DISCARD_URL), memberId, anonymousId))
+			.andExpect(status().isNoContent())
+			.andExpect(header().string(HttpHeaders.SET_COOKIE, org.hamcrest.Matchers.containsString("Max-Age=0")));
+		// 그 뒤 다른 브라우저의 익명 ID로 다시 보내도 204지만 그 쿠키는 지우지 않는다
+		UUID otherBrowser = newAnonymous(memberId);
+		mockMvc.perform(as(post(DISCARD_URL), memberId, otherBrowser))
+			.andExpect(status().isNoContent())
+			.andExpect(header().doesNotExist(HttpHeaders.SET_COOKIE));
 		mockMvc.perform(as(get(URL), memberId, anonymousId)).andExpect(status().isNotFound());
 		mockMvc.perform(as(post(URL), memberId, anonymousId)).andExpect(status().isConflict());
 	}

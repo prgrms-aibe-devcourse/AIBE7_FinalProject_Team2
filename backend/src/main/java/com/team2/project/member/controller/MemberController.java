@@ -63,7 +63,8 @@ public class MemberController {
 	@PostMapping("/anonymous-import/discard")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
 	public void discardAnonymous(Requester requester, HttpServletResponse response) {
-		anonymousImportService.discard(requester.requireMember(), requester.anonymousId());
-		anonymousIdCookie.clear(response);
+		if (anonymousImportService.discard(requester.requireMember(), requester.anonymousId())) {
+			anonymousIdCookie.clear(response);
+		}
 	}
 }
