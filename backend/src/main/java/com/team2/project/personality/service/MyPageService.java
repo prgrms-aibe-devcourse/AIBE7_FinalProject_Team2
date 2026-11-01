@@ -4,7 +4,6 @@ import com.team2.project.collection.service.CollectionService;
 import com.team2.project.common.owner.Owner;
 import com.team2.project.common.web.Requester;
 import com.team2.project.experience.repository.ExperienceRepository;
-import com.team2.project.experience.service.AnonymousUserService;
 import com.team2.project.legalcase.domain.ValueAxis;
 import com.team2.project.personality.domain.AxisCount;
 import com.team2.project.personality.domain.ExperiencePersonality;
@@ -43,7 +42,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.UUID;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -72,7 +70,6 @@ public class MyPageService {
 	/** 테스트 전 처음 성향(첫 판결)에 쓰는 처음 체험 수 (성향 산식 5장 v0.9) */
 	private static final int FIRST_COUNT = 3;
 
-	private final AnonymousUserService anonymousUserService;
 	private final PersonalityResultRepository resultRepository;
 	private final PersonalityTypeRepository typeRepository;
 	private final ExperiencePersonalityRepository contributionRepository;
@@ -92,16 +89,11 @@ public class MyPageService {
 	 * 사용자 찾기(접속 시각 갱신) → 통계 읽기 → 해금 기록(있을 때만) → 읽기 전용으로 조회 조립
 	 */
 	public MyPageResponse get(Requester requester) {
-		Optional<UUID> userId = anonymousUserService.findAndTouch(requester.anonymousId()).map(user -> user.getId());
-		if (userId.isEmpty()) {
-			return MyPageResponse.empty();	// 쿠키가 없거나 모르는 ID면 빈 마이페이지 (404가 아니다)
-		}
-		UUID id = userId.get();
-		// 체험 · 성향은 주인(회원이면 회원) 기준이다(BE-140). 꾸미기 · 통계 · 레벨 등은 다음 단계(3b)에서 회원 키로 옮길 때까지 익명 ID 기준이다
-		Owner owner = requester.owner().orElseThrow();
+		long memberId = requester.requireMember();	// 마이페이지는 로그인한 회원만(BE-140). 손님은 401
+		Owner owner = new Owner.MemberOwner(memberId);
 		// 꾸미기 · 도전과제와 레벨이 같은 통계를 쓰므로 한 번만 읽는다
-		ProfileStats stats = recordNewUnlocks(id, readOnly(() -> statsReader.read(id)));
-		return readOnly(() -> build(id, owner, stats));
+		ProfileStats stats = recordNewUnlocks(memberId, readOnly(() -> statsReader.read(memberId)));
+		return readOnly(() -> build(memberId, owner, stats));
 	}
 
 	/** 읽기 전용 트랜잭션 하나로 실행한다 (open-in-view가 꺼져 있어 지연 로딩에 트랜잭션이 필요하다) */
@@ -111,7 +103,7 @@ public class MyPageService {
 		return template.execute(status -> work.get());
 	}
 
-	private MyPageResponse build(UUID userId, Owner owner, ProfileStats stats) {
+	private MyPageResponse build(long memberId, Owner owner, ProfileStats stats) {
 		PersonalityResultResponse personality = resultRepository.findCurrent(owner)
 			.map(PersonalityResultResponse::from).orElse(null);
 		Optional<PersonalityResult> firstTest = resultRepository.findFirst(owner);
@@ -157,10 +149,10 @@ public class MyPageService {
 
 		List<ExperienceItem> experiences = experienceRepository.findLatestPerCase(owner).stream()
 			.map(ExperienceItem::from).toList();
-		ProfileDecoView deco = profileDecoService.view(userId, stats);
+		ProfileDecoView deco = profileDecoService.view(memberId, stats);
 		return new MyPageResponse(personality, initial, baselineRetake, judgment, history, experiences,
 			new Profile(stats.attendanceDays()), deco.profileDeco(), deco.achievements(), deco.unlocked(),
-			collectionService.view(userId), profileSettingsService.view(userId), levelService.view(userId, stats));
+			collectionService.view(memberId), profileSettingsService.view(memberId), levelService.view(memberId, stats));
 	}
 
 	/**
@@ -168,12 +160,12 @@ public class MyPageService {
 	 * 조회 트랜잭션 밖에서 호출되므로 기록 트랜잭션이 이때 쓰는 유일한 연결이다(get 참고). 새로 남길 것이 있을 때만 연다(대부분의 조회는 없다).
 	 * 기록에 실패해도 조회는 그대로 내려 준다 — 판정은 계산값이라 화면은 같고, 다음 조회 때 다시 기록한다
 	 */
-	private ProfileStats recordNewUnlocks(UUID userId, ProfileStats stats) {
+	private ProfileStats recordNewUnlocks(long memberId, ProfileStats stats) {
 		if (AchievementJudge.unrecordedClears(stats).isEmpty()) {
 			return stats;
 		}
 		try {
-			Map<String, UnlockMark> added = unlockRecorder.recordSeparately(userId, stats);
+			Map<String, UnlockMark> added = unlockRecorder.recordSeparately(memberId, stats);
 			return added.isEmpty() ? stats : stats.withUnlocks(added);
 		} catch (DataAccessException | TransactionException e) {
 			// TransactionException: 커넥션 풀이 모자라 새 트랜잭션을 못 열거나(CannotCreateTransactionException) 커밋에 실패한 경우
