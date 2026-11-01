@@ -5,7 +5,7 @@
 
 | 버전 | 날짜 | 내용 |
 | --- | --- | --- |
-| v1 | 2026-11-02 | 신설 (COMMON-71). 11/01 기준 아키텍처 그림을 저장소 설정(compose · nginx · workflows · `.env.example`)과 대조해 정리. Supabase 공용 DB 종료(COMMON-59) 반영 |
+| v1 | 2026-11-02 | 신설 (COMMON-71). 11/01 기준 아키텍처 그림을 저장소 설정(compose · nginx · workflows · `.env.example`)과 대조해 정리. Supabase 공용 DB 종료(COMMON-59) 반영. 서버 가동은 매일 09:00 ~ 18:00(주말 포함). 공유용 그림 `docs/assets/architecture.png` 추가 |
 
 ## 상세 문서
 
@@ -20,6 +20,8 @@
 | 왜 그렇게 정했는지 | `docs/decisions/` — BE-58(이미지) · BE-59(외부 DB · RDS) · BE-60(CD) · BE-61(Redis) · BE-63(요청 제한) · BE-75(HTTPS) · COMMON-43 · 61 ~ 64(모니터링) · COMMON-47(S3) · COMMON-50(파이프라인) · COMMON-54(Swap) · COMMON-67 · 70(보안 헤더 · CSP) |
 
 ## 전체 구성
+
+발표 · 포트폴리오용 상세 그림은 [`docs/assets/architecture.png`](assets/architecture.png)에 있다(2026-11 기준). 아래 Mermaid는 저장소에서 바로 고치는 간단한 구성도다. **구성이 바뀌면 두 그림을 함께 고친다.**
 
 ```mermaid
 flowchart LR
