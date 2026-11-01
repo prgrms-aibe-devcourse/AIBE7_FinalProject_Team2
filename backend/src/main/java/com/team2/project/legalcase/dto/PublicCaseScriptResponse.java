@@ -80,7 +80,10 @@ public record PublicCaseScriptResponse(List<EvidenceLine> evidence, Map<String, 
 		return copy;
 	}
 
-	/** U2 신문 답을 정규화한 사본. 저장값(엔티티)은 건드리지 않는다 */
+	/**
+	 * U2 신문 답을 정규화한 사본. 저장값(엔티티)은 건드리지 않는다. 질문마다 {@code q}와 정규화한 {@code a}만 담는다 —
+	 * 최상위 키만 거르면 질문 안에 모델이 덧붙인 키가 그대로 내려간다(PR #367 리뷰). 객체가 아닌 질문은 비운다(자리는 지킨다)
+	 */
 	private static Object withNormalizedAnswers(Object content) {
 		if (!(content instanceof Map<?, ?> opening) || !(opening.get("questions") instanceof List<?> questions)) {
 			return content;
@@ -88,9 +91,10 @@ public record PublicCaseScriptResponse(List<EvidenceLine> evidence, Map<String, 
 		Map<Object, Object> copy = new LinkedHashMap<>(opening);
 		copy.put("questions", questions.stream().map(question -> {
 			if (!(question instanceof Map<?, ?> pair)) {
-				return question;
+				return null;
 			}
-			Map<Object, Object> normalized = new LinkedHashMap<>(pair);
+			Map<String, Object> normalized = new LinkedHashMap<>();
+			normalized.put("q", pair.get("q"));
 			normalized.put("a", ScriptAnswers.normalize(pair.get("a") instanceof String answer ? answer : null));
 			return normalized;
 		}).toList());

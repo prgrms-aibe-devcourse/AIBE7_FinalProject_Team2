@@ -11,6 +11,7 @@ import com.team2.project.common.exception.ErrorCode;
 import com.team2.project.legalcase.domain.CasePaper;
 import com.team2.project.legalcase.domain.CaseScript;
 import com.team2.project.legalcase.domain.Factor;
+import com.team2.project.legalcase.domain.LegalCase;
 import com.team2.project.legalcase.domain.ScriptUnit;
 import com.team2.project.legalcase.repository.CasePaperRepository;
 import com.team2.project.legalcase.repository.CaseScriptRepository;
@@ -64,8 +65,7 @@ public class AdminCaseScriptService {
 				"만들지 못한 대사 · 단위나 검수 오류가 있는 대본은 승인할 수 없습니다. 대본을 다시 생성해 주세요.");
 		}
 		// 만든 뒤 사건 내용(A-11) · 기사(A-13-6 · 8)가 바뀌었으면 그 블록은 옛 내용을 말한다 — 낡음 표시(2차) 전에도 공개는 막는다
-		List<ScriptUnit> stale = script.staleOnDbInput(script.getLegalCase().getContentRevision(),
-			paperRepository.findByLegalCaseId(caseId).map(CasePaper::getRevision).orElse(null));
+		List<ScriptUnit> stale = script.staleOnDbInput(script.getLegalCase().getContentRevision(), paperRevision(caseId));
 		if (!stale.isEmpty()) {
 			throw new BusinessException(ErrorCode.INVALID_STATE, "대본을 만든 뒤 사건 내용이나 기사가 바뀌어 "
 				+ stale.stream().map(ScriptUnit::name).collect(Collectors.joining(" · "))
@@ -114,6 +114,38 @@ public class AdminCaseScriptService {
 		auditLogger.record(admin, AdminAuditAction.CASE_SCRIPT_UPDATE, AuditTargetType.CASE, caseId,
 			Map.<String, Object>of("factorId", factorId), request);
 		return response(caseId, script);
+	}
+
+	/**
+	 * 사건 내용(A-11) · 기사(A-13-6 · 8)를 고친 뒤, 판이 바뀐 블록의 승인을 지운다(PR #367 리뷰). 부르는 쪽이 사건 행을 잠근
+	 * 트랜잭션 안에서 부른다 — 승인(A-13-11)도 같은 행을 잠그므로 둘이 엇갈리지 않는다. 판이 그대로면(같은 값으로 고친 경우)
+	 * 아무것도 지우지 않는다.
+	 *
+	 * <p>공개한 사건은 두 경로 모두 고칠 수 없어, 이 처리로 공개 중인 사건의 대본이 내려가는 일은 없다. 승인한 대본이 있는
+	 * 초안 사건을 고치면 공개 전에 대본이 다시 검수 대기가 된다.
+	 *
+	 * @return 승인을 지운 단위. 대본이 없으면 빈 목록
+	 */
+	@Transactional
+	public List<ScriptUnit> revokeStaleApprovals(LegalCase legalCase) {
+		return scriptRepository.findByLegalCaseId(legalCase.getId())
+			.map(script -> script.revokeStaleApprovals(legalCase.getContentRevision(), paperRevision(legalCase.getId())))
+			.orElse(List.of());
+	}
+
+	/**
+	 * 승인을 지웠으면 감사 로그에 어느 단위인지 남긴다 — 관리자가 고친 것은 사건 내용 · 기사지만 공개될 대본의 상태도 바뀌었기
+	 * 때문이다. 고친 쪽(A-11 · A-13-6 · 8)의 감사 기록에 붙인다
+	 */
+	static Map<String, Object> withRevoked(Map<String, Object> detail, List<ScriptUnit> revoked) {
+		if (!revoked.isEmpty()) {
+			detail.put("scriptApprovalRevoked", revoked.stream().map(ScriptUnit::name).toList());
+		}
+		return detail;
+	}
+
+	private Integer paperRevision(Long caseId) {
+		return paperRepository.findByLegalCaseId(caseId).map(CasePaper::getRevision).orElse(null);
 	}
 
 	/**

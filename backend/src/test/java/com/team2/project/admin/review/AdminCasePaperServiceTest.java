@@ -44,8 +44,8 @@ class AdminCasePaperServiceTest {
 		paperService = mock(CasePaperService.class);
 		CaseIncidentPhotoRepository incidentPhotoRepository = mock(CaseIncidentPhotoRepository.class);
 		auditLogger = mock(AdminAuditLogger.class);
-		service = new AdminCasePaperService(caseRepository, paperService, incidentPhotoRepository, auditLogger,
-			new NoOpTransactionManager());
+		service = new AdminCasePaperService(caseRepository, paperService, incidentPhotoRepository,
+			mock(AdminCaseScriptService.class), auditLogger, new NoOpTransactionManager());
 	}
 
 	@Test

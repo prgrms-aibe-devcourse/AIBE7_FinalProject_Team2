@@ -470,6 +470,71 @@ class AdminCaseScriptApiTest extends ApiIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("A-13-11: 다섯 블록이 다 있어도 pending에 기사(PAPER)가 남아 있으면 409 (PR #367 리뷰)")
+	void approve_pendingPaper_isConflict() throws Exception {
+		long scriptId = insertFullScript();
+		jdbcTemplate.update("UPDATE case_script SET pending = '[\"PAPER\"]'::jsonb WHERE id = ?", scriptId);
+
+		perform(get(scriptUrl()))
+			.andExpect(jsonPath("$.blocks.length()").value(5))
+			.andExpect(jsonPath("$.blocks[*].publishable", everyItem(org.hamcrest.Matchers.is(true))))
+			.andExpect(jsonPath("$.publishable").value(false));
+		perform(post(scriptUrl() + "/approve"))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.code").value("INVALID_STATE"));
+		assertThat(blockReviewStatuses().values()).containsOnlyNulls();
+	}
+
+	@Test
+	@DisplayName("A-11: 승인한 뒤 개요를 고치면 사건 내용을 보고 만든 블록의 승인이 지워져 공개가 꺼지고, 감사 로그에 남는다 (PR #367 리뷰)")
+	void editCase_afterApprove_revokesStaleBlocks() throws Exception {
+		insertFullScript();
+		perform(post(scriptUrl() + "/approve")).andExpect(status().isOk());
+
+		// 같은 값으로 고치면 판이 그대로라 아무것도 지우지 않는다
+		String overview = jdbcTemplate.queryForObject("SELECT overview FROM legal_case WHERE id = ?", String.class, caseId);
+		perform(patch("/api/v1/admin/cases/" + caseId).contentType(MediaType.APPLICATION_JSON)
+				.content(MAPPER.writeValueAsString(Map.of("overview", overview))))
+			.andExpect(status().isOk());
+		assertThat(blockReviewStatuses().values()).containsOnly("APPROVED");
+
+		perform(patch("/api/v1/admin/cases/" + caseId).contentType(MediaType.APPLICATION_JSON)
+				.content("{\"overview\":\"승인한 뒤 고친 개요입니다.\"}"))
+			.andExpect(status().isOk());
+
+		// U1은 사건 내용을 보지 않는다(기사 · 분위기만) — 그대로 승인. 나머지는 다시 검수 대기
+		assertThat(blockReviewStatuses()).containsEntry("U1", "APPROVED")
+			.containsEntry("U0", null).containsEntry("U2", null).containsEntry("U3", null).containsEntry("U4", null);
+		perform(get(scriptUrl()))
+			.andExpect(jsonPath("$.reviewStatus").value("PENDING"))
+			.andExpect(jsonPath("$.isPublished").value(false));
+		assertThat(auditDetails()).contains("scriptApprovalRevoked").contains("U0").doesNotContain("U1");
+		// 다시 승인하려 하면 판 비교가 막는다 — 대본을 다시 생성해야 한다
+		perform(post(scriptUrl() + "/approve")).andExpect(status().isConflict());
+	}
+
+	@Test
+	@DisplayName("A-13-8: 승인한 뒤 기사를 고치면 기사를 보고 만든 U1의 승인만 지워진다 (PR #367 리뷰)")
+	void editPaper_afterApprove_revokesU1() throws Exception {
+		long scriptId = insertFullScript();
+		insertCasePaper(caseId, "적재 때 저장한 기사");	// 기사 판 1
+		jdbcTemplate.update("""
+			UPDATE case_script_block SET basis = '{"paper": 1}'::jsonb WHERE script_id = ? AND unit = 'U1'""", scriptId);
+		perform(post(scriptUrl() + "/approve")).andExpect(status().isOk());
+
+		perform(patch("/api/v1/admin/cases/" + caseId + "/paper").contentType(MediaType.APPLICATION_JSON)
+				.content("{\"headline\":\"승인한 뒤 고친 헤드라인\"}"))
+			.andExpect(status().isOk());
+
+		Map<String, String> statuses = blockReviewStatuses();
+		assertThat(statuses).containsEntry("U1", null);
+		assertThat(statuses).containsEntry("U0", "APPROVED").containsEntry("U2", "APPROVED")
+			.containsEntry("U3", "APPROVED").containsEntry("U4", "APPROVED");
+		perform(get(scriptUrl())).andExpect(jsonPath("$.isPublished").value(false));
+		assertThat(auditDetails()).contains("scriptApprovalRevoked");
+	}
+
+	@Test
 	@DisplayName("A-13-13: 대사를 고치면 U3 판이 오르고, 그 줄의 검수 오류가 지워지고, 모든 블록이 다시 검수 대기가 된다 (BE-126)")
 	void editLine_bumpsRevisionClearsLineErrorAndResetsAllBlocks() throws Exception {
 		long scriptId = insertScriptRow(true, false, null);

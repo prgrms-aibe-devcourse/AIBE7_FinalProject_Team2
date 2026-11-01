@@ -112,7 +112,7 @@ class CaseScriptApiTest extends ApiIntegrationTest {
 		setContent(scriptId, "U1", """
 			{"lines": ["해설 한 줄"], "note": "모델이 덧붙인 메모"}""");
 		setContent(scriptId, "U2", """
-			{"indict": "공소 요지", "questions": [{"q": "인정합니까?", "a": "...네, 인정합니다."},
+			{"indict": "공소 요지", "questions": [{"q": "인정합니까?", "a": "...네, 인정합니다.", "note": "질문 안 메모"},
 			                                     {"q": "예전에도 그랬습니까?", "a": "예전에는 그런 적이 없습니다"},
 			                                     {"q": "다투십니까?", "a": "　아니요"}]}""");
 		setContent(scriptId, "U4", """
@@ -131,6 +131,7 @@ class CaseScriptApiTest extends ApiIntegrationTest {
 				.andExpect(jsonPath("$.blocks.U2.indict").value("공소 요지"))
 				.andExpect(jsonPath("$.blocks.U2.questions[0].q").value("인정합니까?"))
 				.andExpect(jsonPath("$.blocks.U2.questions[0].a").value("…네."))
+				.andExpect(jsonPath("$.blocks.U2.questions[0].note").doesNotExist())	// 질문 안의 여분 키도 내리지 않는다
 				.andExpect(jsonPath("$.blocks.U2.questions[1].a").value("…예전에는 그런 적이 없습니다"))	// 접두만 같은 말
 				.andExpect(jsonPath("$.blocks.U2.questions[2].a").value("…아닙니다."))	// 전각 공백
 				.andExpect(jsonPath("$.blocks.U2.review").doesNotExist())

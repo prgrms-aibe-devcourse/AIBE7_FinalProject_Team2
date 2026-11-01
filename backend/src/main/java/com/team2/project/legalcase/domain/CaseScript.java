@@ -165,9 +165,14 @@ public class CaseScript {
 		return isComplete() && blocks.stream().allMatch(CaseScriptBlock::isApproved);
 	}
 
-	/** 승인할 수 있는지: 다섯 단위가 모두 있고, 파이프라인이 공개해도 된다고 봤고, 모든 블록에 오류가 없다 */
+	/**
+	 * 승인할 수 있는지: 다섯 단위가 모두 있고, 만들지 못한 것({@code pending})이 없고, 파이프라인이 공개해도 된다고 봤고,
+	 * 모든 블록에 오류가 없다. {@code pending}에는 단위가 아닌 {@code "PAPER"}(기사)도 들어와 블록이 다섯 개여도 따로 본다
+	 * (PR #367 리뷰)
+	 */
 	public boolean isApprovable() {
-		return publishable && isComplete() && blocks.stream().allMatch(CaseScriptBlock::isPublishable);
+		return publishable && pending.isEmpty() && isComplete()
+			&& blocks.stream().allMatch(CaseScriptBlock::isPublishable);
 	}
 
 	/** 다섯 단위가 모두 있는지. 만들지 못한 단위가 있거나 증거조사만 만든 대본이면 false */
@@ -186,6 +191,21 @@ public class CaseScript {
 		return blocks.stream().filter(block -> differs(block, ScriptUnit.CASE_BASIS, contentRevision)
 				|| differs(block, ScriptUnit.PAPER_BASIS, paperRevision))
 			.map(CaseScriptBlock::getUnit).toList();
+	}
+
+	/**
+	 * 판이 바뀐 블록의 승인을 지운다 — 사건 내용(A-11) · 기사(A-13-6 · 8)를 고친 뒤 부른다. 승인은 검수한 그때의 내용에 대한
+	 * 것이라, 남겨 두면 승인한 뒤 고친 사건에서 옛 내용을 말하는 대본이 공개된다(PR #367 리뷰). 지우면 그 블록은 다시 검수
+	 * 대기이고, 다시 승인하려 하면 {@link #staleOnDbInput}이 막아 대본을 다시 생성하게 된다. 반려한 블록은 그대로 둔다.
+	 *
+	 * @return 승인을 지운 단위
+	 */
+	public List<ScriptUnit> revokeStaleApprovals(int contentRevision, Integer paperRevision) {
+		List<ScriptUnit> stale = staleOnDbInput(contentRevision, paperRevision);
+		List<CaseScriptBlock> revoked = blocks.stream()
+			.filter(block -> block.isApproved() && stale.contains(block.getUnit())).toList();
+		revoked.forEach(CaseScriptBlock::clearReview);
+		return revoked.stream().map(CaseScriptBlock::getUnit).toList();
 	}
 
 	/** 그 블록이 보는 값인데 판이 다른지. 저장된 JSON 숫자는 Integer · Long 어느 쪽으로도 와서 long으로 맞춘다 */
