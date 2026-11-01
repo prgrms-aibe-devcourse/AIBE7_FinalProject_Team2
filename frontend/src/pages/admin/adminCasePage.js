@@ -183,8 +183,8 @@ export function renderAdminCasePage(container, { caseId, navigate }) {
         // 아니라 A-6의 script 요약을 읽어 경고로만 보여 준다(BE-108 결정)
         const scriptWarning = publishScriptWarning(data.script);
         if (scriptWarning) body.push(element('p', 'admin-warn', scriptWarning));
-        // 지면 · 대표사진도 공개 조건은 아니다. 없으면 사용자 화면이 공용 컷 · 기본 지면으로 돌아간다
-        if (!media.paper) body.push(element('p', 'admin-warn', '신문 지면을 아직 만들지 않았어요. 공개는 막지 않지만 메인 화면이 기본 지면으로 보여요.'));
+        // 신문 지면은 공개 조건이 됐다(BE-147, NO_PAPER) — 위 사유 목록에 나오므로 따로 경고하지 않는다.
+        // 대표사진은 여전히 공개 조건이 아니다(없으면 사용자 화면이 공용 컷으로 돌아간다)
 
         const checks = element('fieldset', 'admin-checklist');
         checks.append(element('legend', '', '공개 전 확인'));

@@ -159,9 +159,10 @@ class AdminReviewQueryApiTest extends ApiIntegrationTest {
 			.andExpect(jsonPath("$.candidates.COURT[0].reviewStatus").value("APPROVED"))	// 시드처럼 공개만 된 판결 = 승인
 			.andExpect(jsonPath("$.candidates.COURT[0].isPublished").value(true))
 			.andExpect(jsonPath("$.publishReadiness.ready").value(false))
-			.andExpect(jsonPath("$.publishReadiness.reasons.length()").value(2))
+			.andExpect(jsonPath("$.publishReadiness.reasons.length()").value(3))
 			.andExpect(jsonPath("$.publishReadiness.reasons[0]").value("NO_PUBLISHED_AI"))
-			.andExpect(jsonPath("$.publishReadiness.reasons[1]").value("NO_PENALTY_RULE"));
+			.andExpect(jsonPath("$.publishReadiness.reasons[1]").value("NO_PENALTY_RULE"))
+			.andExpect(jsonPath("$.publishReadiness.reasons[2]").value("NO_PAPER"));
 	}
 
 	@Test

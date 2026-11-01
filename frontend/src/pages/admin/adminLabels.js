@@ -46,6 +46,7 @@ export const PUBLISH_REASON = {
   NO_FACTORS: '판단 요소가 1개 이상 있어야 해요.',
   NO_OVERVIEW_FACTOR: '사전 판단에 쓸 개요 단계 판단 요소가 있어야 해요.',
   NO_PENALTY_RULE: '형벌 규칙이 1개 이상 있어야 해요. (SQL 경로로 추가)',
+  NO_PAPER: '신문 지면을 만들어야 해요. (사진 · 지면에서 만들기)',
 };
 
 // INVALID_STATE details 사유 코드
