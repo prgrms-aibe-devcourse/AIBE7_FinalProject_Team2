@@ -66,7 +66,7 @@ flowchart LR
 | 항목 | 내용 | 상세 |
 | --- | --- | --- |
 | 서버 | EC2 t3.small(2GB) 한 대, 탄력적 IP. **스테이징 없음** — `main`이 곧 운영 | `deploy/README.md` |
-| **운영 시간** | **매일 09:00 ~ 18:00에만 켜져 있다**(처음엔 평일만이었고, 주말 가동으로 바뀌었다). 그 밖 시간에는 서비스 · 백업이 멈추고, 경보는 음소거 `운영시간외`로 울리지 않는다. 저녁에 서버를 켜고 작업하면 장애 알림도 오지 않는다. | `deploy/README.md` "운영 DB 백업" · `monitoring/README.md` "알림 경로 · 음소거" |
+| **운영 시간** | **매일 09:00 ~ 18:00에만 켜져 있다**(처음엔 평일만이었고, 주말 가동으로 바뀌었다). 그 밖 시간에는 EC2 서비스와 서버 cron 백업(`backup-db.sh`)이 멈추고, 경보는 음소거 `운영시간외`로 울리지 않는다. RDS 자동 백업은 운영 시간과 무관하게 매일 1회 따로 돈다. 저녁에 서버를 켜고 작업하면 장애 알림도 오지 않는다. | `deploy/README.md` "운영 DB 백업" · `monitoring/README.md` "알림 경로 · 음소거" |
 | 도메인 · 인증서 | `naelawnambul.today` → 탄력적 IP. HTTP 80은 443으로 이동. Let's Encrypt(certbot) 90일 인증서, 자동 갱신 | BE-75 |
 | 메모리 배분 | backend 1g · redis 256m (+ 모니터링 에이전트). RDS 전환으로 postgres 512m이 빠졌다. swap 2GB · `swappiness 10`은 순간 급증용 안전망 | COMMON-54 |
 | DB | RDS PostgreSQL 17(`db.t4g.micro`, 단일 AZ), `vector` 확장, 앱 계정 `lawnambul_app`(마스터 아님). 연결 풀 5 | `deploy/README.md` "RDS 전환" |
