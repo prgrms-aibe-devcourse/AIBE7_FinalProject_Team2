@@ -46,6 +46,8 @@ CODES = {
     "ISSUE_QUESTION_MISMATCH": WARNING,  # 신문 질문이 설계도(쟁점에 맞춘 질문)와 다르거나 정신상태를 물음
     "EVIDENCE_FILLER": WARNING,        # 증거조사 둘째 줄 군더더기
     "REPEATED_LINE": WARNING,          # 같은 단위 안에서 같은 말 되풀이
+    "CARD_LIST_INVALID": WARNING,      # U2 카드 `ul`이 문자열 목록이 아님(공개 응답 · 화면이 비워 낸다, BE-159)
+    "CARD_LIST_EMPTY": WARNING,        # U2 카드 `ul`이 빈 목록(빈 카드가 공개된다, BE-159)
     "REVIEW_FAILED": ERROR,            # 검사 자체가 돌지 못함(값 모양이 어긋남) — 검수 못 한 대본은 공개하지 않는다
 }
 
@@ -381,7 +383,28 @@ def review_unit(unit, value, ctx, *, strip_prefix=lambda s: s):
                                          fix=FIX_LINE if unit in ("U0", "U2") else FIX_UNIT))
             continue
         issues += line_issues(unit, path, text, kind, ctx)
+    if unit == "U2":
+        issues += card_list_issues(value)
     return issues + repeated_issues(unit, lines)
+
+
+def card_list_issues(value):
+    """U2 카드(공소사실 · 변호인 입장 · 쟁점)의 `ul` 모양. 생성 단계(`check_opening`)는 새로 만든 값만 막으므로, 이미 저장된 블록 ·
+    가져온 값이 같은 기준을 지키는지 여기서 본다(BE-159). 공개 응답 · 화면이 틀린 값을 비워 내 예외는 나지 않지만 카드가 빈 채로
+    보이므로 경고로 알린다 — 줄 하나를 고쳐 쓰는 오류가 아니라 사람이 목록을 채워야 한다."""
+    cards = value.get("cards")
+    issues = []
+    for card in ("indict", "plea", "issues"):
+        body = cards.get(card) if isinstance(cards, dict) else None
+        if not isinstance(body, dict):
+            continue  # 카드 자체가 없는 모양은 `check_opening`의 몫이다
+        ul = body.get("ul")
+        path = f"/cards/{card}/ul"
+        if not (isinstance(ul, list) and all(isinstance(v, str) for v in ul)):
+            issues.append(make_issue("U2", path, "CARD_LIST_INVALID", "카드 목록(ul)이 문자열 목록이 아닙니다"))
+        elif not any(v.strip() for v in ul):
+            issues.append(make_issue("U2", path, "CARD_LIST_EMPTY", "카드 목록(ul)이 비었습니다"))
+    return issues
 
 
 def review_evidence(evidence, case, judgment_output):

@@ -236,6 +236,21 @@ class WarningCheckTest(unittest.TestCase):
                              "U2": {**OPENING, "questions": [drug_q, OPENING["questions"][1]]}})
         self.assertNotIn("ISSUE_QUESTION_MISMATCH", [c for _, _, c in codes(drug)])
 
+    def test_card_list_shape_and_empty(self):
+        """저장된 U2 블록의 카드 `ul`이 문자열 목록이 아니거나 비면 경고한다(BE-159) — 오류가 아니라 공개는 막지 않는다."""
+        self.assertFalse([c for _, _, c in codes(review()) if c.startswith("CARD_LIST")])  # 정상 값
+        for key in ("indict", "plea", "issues"):
+            for bad in ("문자열", None, [1, 2], [["중첩"]]):
+                value = {**OPENING, "cards": {**OPENING["cards"], key: {**OPENING["cards"][key], "ul": bad}}}
+                self.assertEqual(codes(review(units={"U2": value})), [("U2", f"/cards/{key}/ul", "CARD_LIST_INVALID")], (key, bad))
+            for empty in ([], ["", " "]):
+                value = {**OPENING, "cards": {**OPENING["cards"], key: {**OPENING["cards"][key], "ul": empty}}}
+                found = review(units={"U2": value})
+                self.assertEqual(codes(found), [("U2", f"/cards/{key}/ul", "CARD_LIST_EMPTY")], (key, empty))
+                self.assertFalse(sr.has_errors(found))
+        missing = {**OPENING, "cards": {**OPENING["cards"], "plea": {"b": "입장"}}}  # ul 키가 없는 것도 모양이 틀린 것이다
+        self.assertEqual(codes(review(units={"U2": missing})), [("U2", "/cards/plea/ul", "CARD_LIST_INVALID")])
+
     def test_evidence_filler_and_repeat(self):
         evidence = [{"factorId": 2, "role": "prosecutor", "text": "검사 측 증거입니다. 흉기를 집어 들었습니다.\n이 사정도 함께 살펴 주시기 바랍니다."},
                     {"factorId": 3, "role": "prosecutor", "text": "검사 측 증거입니다. 흉기를 집어 들었습니다."}]
