@@ -2,7 +2,7 @@
 import { existsSync } from 'node:fs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { BOOKMARK_CHARACTERS, BOOKMARK_FACES, BOOKMARK_LAWS, BOOKMARK_STYLES, bookmarkFace, getBookmarkCharacter, getBookmarkColor, setBookmarkColor, selectedBookmarkFace, setBookmarkCharacter, setBookmarkFace } from './bookmarkCharacter.js';
+import { BOOKMARK_CHARACTERS, BOOKMARK_FACES, BOOKMARK_LAWS, BOOKMARK_STYLES, bookmarkFace, getBookmarkCharacter, getBookmarkColor, setBookmarkColor, selectedBookmarkFace, setBookmarkCharacter, setBookmarkFace, syncBookmarkFromServer } from './bookmarkCharacter.js';
 
 const memory = () => {
   const data = new Map();
@@ -86,4 +86,32 @@ test('리본 색을 저장하고, 처음 · 모르는 값 · 저장소 차단이
   const broken = { getItem: () => { throw new Error('blocked'); }, setItem: () => { throw new Error('blocked'); } };
   assert.doesNotThrow(() => setBookmarkColor('wine', broken));
   assert.equal(getBookmarkColor(broken), 'bronze');
+});
+
+test('서버 책갈피 맞추기: P-5의 profileDeco를 거울에 옮긴다(FE-73)', async () => {
+  const storage = memory();
+  await syncBookmarkFromServer(async () => ({ profileDeco: { bookmarkCharacter: 'nambul', bookmarkFace: 'cheer', bookmarkFaceStyle: 'cropped', bookmarkColor: 'wine' } }), storage);
+  assert.equal(getBookmarkCharacter(storage), 'nambul');
+  assert.equal(getBookmarkColor(storage), 'wine');
+  assert.equal(selectedBookmarkFace(storage), '/images/characters/icon/cropped/nambul_face-cheer.webp');
+});
+
+test('서버 책갈피 맞추기: 실패하거나 값이 없으면 거울을 그대로 둔다', async () => {
+  const storage = memory();
+  setBookmarkCharacter('nambul', storage);
+  await assert.doesNotReject(syncBookmarkFromServer(async () => { throw new Error('network'); }, storage));
+  await syncBookmarkFromServer(async () => ({}), storage);
+  await syncBookmarkFromServer(undefined, storage);
+  assert.equal(getBookmarkCharacter(storage), 'nambul');
+});
+
+test('서버 책갈피 맞추기: 기다리는 사이 이 기기에서 바꿨으면 늦게 온 서버 값으로 덮지 않는다', async () => {
+  const storage = memory();
+  setBookmarkCharacter('naero', storage);
+  await syncBookmarkFromServer(async () => {
+    setBookmarkCharacter('nambul', storage); // 응답이 오기 전에 마이페이지에서 고름
+    return { profileDeco: { bookmarkCharacter: 'naero', bookmarkColor: 'wine' } };
+  }, storage);
+  assert.equal(getBookmarkCharacter(storage), 'nambul');
+  assert.equal(getBookmarkColor(storage), 'bronze', '덮지 않으면 서버 값은 하나도 들어오지 않는다');
 });

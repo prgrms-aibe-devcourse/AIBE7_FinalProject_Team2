@@ -2,6 +2,7 @@ import { button, element } from '../../components/siteLayout.js';
 import { screenByStatus } from '../../utils/screenByStatus.js';
 import { TYPE_NOTES } from '../../content/typeNotes.js';
 import { sensitiveNotice } from '../../content/sensitiveNotice.js';
+import { clearStageResume } from '../../components/stage.js';
 import { caseStage, mountStagePage, scriptFor } from '../overview/overviewPage.js';
 import { caseInfoEar, caseNewspaper, earButton, paperFromCase } from '../../components/newspaperFront.js';
 import { evidencePhotosFromPaper, fetchCasePaper } from '../../utils/newspaper.js';
@@ -219,6 +220,7 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
     }
     // 이미 사전 판단을 낸 사건을 1막부터 다시 본다. 판단은 바꿀 수 없으니 엽서 차례에 보낸 판단을 보여 주고 저장된 단계로 잇는다(주소는 S-20 그대로)
     async function playAgain(experience, saved) {
+      clearStageResume(); // 다시 보기는 처음부터 보려고 누르는 버튼이라 막마다 남긴 이어 보기 위치를 지우고 들어간다(FE-51)
       stage.replay();
       if (prompt) stage.advance({ dropCurrent: true }); // 묻는 장면은 빼서 ◀ 이전으로 다시 나오지 않게
       // 완료한 사건만 세 판결 비교(API 14)에서 보낸 판단을 읽어 보여 준다. 진행 중이면 형량은 보여 주지 않고 제출 완료 안내만 한다(BE-77)
