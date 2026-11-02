@@ -24,7 +24,7 @@
 .court-page .factor-list-plain li + li { margin-top: 10px; }
 .court-page .factor-evidence { margin: 4px 0 0; padding-left: 12px; border-left: 2px solid var(--color-border); color: var(--color-muted); font-size: 12px; }
 .court-page .court-footer { display: flex; justify-content: flex-end; padding: 24px 28px; border-top: 1px solid var(--color-border); }
-@media (max-width: 760px) {
+@media (max-width: 720px) {
   .court-page .court-banner { flex-direction: column; padding: 20px 16px; }
   .court-page .banner-compare { text-align: left; }
   .court-page .court-main { padding: 20px 16px; }

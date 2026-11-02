@@ -35,7 +35,7 @@
 .ai-page .factor-list-plain { list-style: none; padding: 0; margin: 0; font-size: 13px; }
 .ai-page .factor-list-plain li { padding: 4px 0; }
 .ai-page .ai-footer { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; padding: 24px 28px; border-top: 1px solid var(--color-border); }
-@media (max-width: 760px) {
+@media (max-width: 720px) {
   .ai-page .release-tabs { grid-template-columns: minmax(0, 1fr); }
   .ai-page .release-tab { border-right: 0; border-bottom: 1px solid var(--color-border); }
   .ai-page .ai-layout { grid-template-columns: minmax(0, 1fr); }
