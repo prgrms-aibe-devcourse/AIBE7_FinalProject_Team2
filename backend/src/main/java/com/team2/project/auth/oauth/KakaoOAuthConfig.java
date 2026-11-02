@@ -61,7 +61,7 @@ public class KakaoOAuthConfig {
 		ClientRegistrationRepository clientRegistrations, KakaoOAuthProperties properties,
 		@Qualifier(RedisConfig.TOKEN) StringRedisTemplate tokenRedisTemplate, JsonMapper jsonMapper,
 		MemberLoginService memberLoginService, TokenIssuer tokenIssuer, RefreshTokenCookies refreshTokenCookies,
-		AnonymousIdCookie anonymousIdCookie, Clock clock) throws Exception {
+		AnonymousIdCookie anonymousIdCookie, KakaoSignupPending signupPending, Clock clock) throws Exception {
 		OAuthAuthorizationRequestRepository authorizationRequests =
 			new OAuthAuthorizationRequestRepository(tokenRedisTemplate, jsonMapper, BASE_PATH);
 		OAuthLoginFailureHandler failure = new OAuthLoginFailureHandler(properties.failureRedirect());
@@ -85,7 +85,7 @@ public class KakaoOAuthConfig {
 				.redirectionEndpoint(endpoint -> endpoint.baseUri(CALLBACK_BASE_URI + "/*"))
 				.authorizedClientRepository(new NoStoreAuthorizedClientRepository())
 				.successHandler(new OAuthLoginSuccessHandler(memberLoginService, tokenIssuer, refreshTokenCookies,
-					anonymousIdCookie, clock, properties.successRedirect(), properties.failureRedirect()))
+					anonymousIdCookie, signupPending, clock, properties.successRedirect(), properties.failureRedirect()))
 				.failureHandler(failure))
 			// 이 체인에서 인증이 필요한 곳은 없다. 혹시 막히면 로그인 페이지(/login)가 아니라 실패 화면으로 보낸다
 			.exceptionHandling(e -> e.authenticationEntryPoint((request, response, ex) ->

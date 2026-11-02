@@ -11,7 +11,8 @@ import java.time.OffsetDateTime;
  * @param loginId     아이디 회원의 로그인 아이디(소문자). 카카오 회원은 null
  * @param createdAt   가입 시각
  * @param lastLoginAt 최근 로그인 시각. 기록이 없으면 null
+ * @param termsRequired 약관 동의 기록이 없어 동의 창을 거쳐야 하면 true (BE-145). 동의하면(M-14) false가 된다
  */
 public record MemberMeResponse(String nickname, String displayName, String provider, String loginId,
-	OffsetDateTime createdAt, OffsetDateTime lastLoginAt) {
+	OffsetDateTime createdAt, OffsetDateTime lastLoginAt, boolean termsRequired) {
 }

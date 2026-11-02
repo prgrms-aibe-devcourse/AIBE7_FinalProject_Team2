@@ -6,6 +6,7 @@
 | 버전 | 날짜 | 내용 |
 | --- | --- | --- |
 | v1 | 2026-11-02 | 신설 (COMMON-71). 11/01 기준 아키텍처 그림을 저장소 설정(compose · nginx · workflows · `.env.example`)과 대조해 정리. Supabase 공용 DB 종료(COMMON-59) 반영. 서버 가동은 매일 09:00 ~ 18:00(주말 포함). 공유용 그림 `docs/assets/architecture.png` 추가 |
+| v2 | 2026-11-02 | 카카오 첫 가입 대기(Redis 토큰 DB 10분)와 카카오 가입 동의(M-12)의 요청 제한 반영 (BE-145) |
 
 ## 상세 문서
 
@@ -32,7 +33,7 @@ flowchart LR
     subgraph ec2["EC2 t3.small · Docker Compose (이미지는 GHCR main)"]
       web["web · Nginx 1.28<br/>TLS 종료 · 요청 제한<br/>/ → SPA · /api → backend"]
       backend["backend<br/>Spring Boot 4.1.1 · Java 17<br/>:8080 · Actuator :8081(내부)"]
-      redis["redis 7.4<br/>DB1 토큰 · OAuth state<br/>(DB0 캐시는 아직 미사용)"]
+      redis["redis 7.4<br/>DB1 토큰 · OAuth state · 카카오 가입 대기<br/>(DB0 캐시는 아직 미사용)"]
       pipeline["pipeline :8000<br/>AI 판결 생성 · 사건 등록<br/>(팀 합의 후 켬, COMMON-52)"]
       agent["Alloy + node-exporter<br/>(모니터링 에이전트)"]
       pg[("postgres 컨테이너<br/>외부 DB 모드라 기본 실행에서 제외")]
@@ -71,12 +72,12 @@ flowchart LR
 | 메모리 배분 | backend 1g · redis 256m (+ 모니터링 에이전트). RDS 전환으로 postgres 512m이 빠졌다. swap 2GB · `swappiness 10`은 순간 급증용 안전망 | COMMON-54 |
 | DB | RDS PostgreSQL 17(`db.t4g.micro`, 단일 AZ), `vector` 확장, 앱 계정 `lawnambul_app`(마스터 아님). 연결 풀 5 | `deploy/README.md` "RDS 전환" |
 | 파일 | S3 버킷 하나(퍼블릭 차단, SSE-S3). EC2 IAM 역할로 접근하고, 브라우저에는 Presigned URL로만 준다 | COMMON-47 |
-| Redis | DB 0 캐시(지금 쓰는 코드 없음) · DB 1 토큰 저장소(리프레시 토큰 · OAuth state). AOF `everysec` · `noeviction` · 모든 키 TTL | `tech-stack.md` 2장 |
+| Redis | DB 0 캐시(지금 쓰는 코드 없음) · DB 1 토큰 저장소(리프레시 토큰 · OAuth state · 카카오 가입 대기 10분). AOF `everysec` · `noeviction` · 모든 키 TTL | `tech-stack.md` 2장 |
 
 ## 요청 흐름
 
 1. 브라우저 → `https://naelawnambul.today` (443). Nginx가 TLS를 끝내고 보안 헤더 · HSTS(1일)를 붙인다.
-2. Nginx 요청 제한: `/api` 전체 IP별 초당 20번(순간 40), 넘으면 JSON 429. 경로별로 더 좁게 — 카카오 로그인 분당 30, 토큰 재발급 · 로그아웃 분당 30, 관리자 로그인 분당 5, 회원 로그인 분당 20 · 가입 분당 10.
+2. Nginx 요청 제한: `/api` 전체 IP별 초당 20번(순간 40), 넘으면 JSON 429. 경로별로 더 좁게 — 카카오 로그인 분당 30, 토큰 재발급 · 로그아웃 분당 30, 관리자 로그인 분당 5, 회원 로그인 분당 20 · 가입(아이디 가입 · 카카오 가입 동의) 분당 10.
 3. `/api/*` → backend `:8080`, 그 밖 → SPA 정적 파일(없는 경로는 `index.html`).
 4. backend → Redis(토큰) · RDS(5432 TLS) · S3(사진 업로드 · Presigned URL 발급).
 5. 사건 사진은 브라우저가 S3에서 직접 받는다(CSP `img-src`에 S3 주소 허용).

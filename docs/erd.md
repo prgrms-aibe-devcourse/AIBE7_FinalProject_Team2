@@ -590,13 +590,13 @@ S-03의 객관식 선택지. 범죄 유형별로 정의한다(FR-2-8).
 | created_at | timestamptz | ✓ |  |
 | last_login_at | timestamptz |  | 마지막 로그인 성공 시각 |
 | nickname | varchar(12) |  | 표시 이름(v1.42). 아이디 회원은 가입 때 채우고 카카오 회원은 NULL(커뮤니티에는 `방청객 {회원 ID}`로 보임). **중복 금지**(v1.49, 대소문자 구분 없음 — `uq_member_nickname`, NULL은 겹쳐도 된다). 설정 · 변경은 API 명세 M-7 |
-| terms_agreed_at | timestamptz |  | 이용약관 · 개인정보처리방침에 동의한 시각(v1.51). 아이디 가입(M-5) 때 가입 시각으로 채운다. 카카오 회원 · BE-133 전 가입자는 NULL |
+| terms_agreed_at | timestamptz |  | 이용약관 · 개인정보처리방침에 동의한 시각(v1.51). 아이디 가입(M-5) · 카카오 가입(M-12, BE-145) 때 가입 시각으로 채우고, 그 전에 가입한 회원은 M-14로 동의하면 채운다. 동의 전 회원은 NULL |
 | terms_version | varchar(20) |  | 동의한 약관 버전(v1.51, 코드 `TermsVersion.CURRENT`). 문서를 바꿔도 이미 동의한 값은 바꾸지 않는다 |
 
 - `(provider, provider_user_id)` 유일(`uq_member_provider_user`). 행은 `INSERT ... ON CONFLICT DO NOTHING`으로 만들어, 같은 계정의 첫 로그인이 동시에 와도 한 행만 생긴다.
 - **카카오 회원은 개인정보를 저장하지 않는다**: 카카오 동의항목(닉네임 · 이메일 · 프로필)을 요청하지 않고 회원번호만 쓴다.
 - **아이디 회원(`LOCAL`, v1.42)** 은 아이디 · 비밀번호 해시(`member_password`) · 닉네임을 저장한다(이용약관 · 개인정보처리방침 FE-117). 카카오 계정과 아이디 계정은 **합치지 않는다** — 같은 사람이어도 다른 회원이다.
-- **약관 동의 기록(v1.51, BE-133)**: `terms_agreed_at` · `terms_version`은 함께 있거나 함께 없다(CHECK `ck_member_terms_agreement`). NULL은 "동의 기록이 없다"는 뜻이다 — 카카오로 처음 가입하는 경로는 동의를 묻지 않아 비어 있다(docs/decisions/BE-133.md).
+- **약관 동의 기록(v1.51, BE-133)**: `terms_agreed_at` · `terms_version`은 함께 있거나 함께 없다(CHECK `ck_member_terms_agreement`). NULL은 "동의 기록이 없다"는 뜻이다 — BE-145 전에 가입한 카카오 회원 · BE-133 전에 가입한 아이디 회원이 그렇고, M-8 `termsRequired`가 `true`다. 처음 온 카카오 계정은 동의해야 회원이 만들어져 처음부터 채워진다(docs/decisions/BE-133.md · BE-145.md).
 
 #### `member_password` — 아이디 회원 로그인 정보 (확장 단계, v1.42 · BE-113 · V33)
 

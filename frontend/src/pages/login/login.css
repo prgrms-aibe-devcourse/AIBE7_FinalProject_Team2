@@ -170,3 +170,10 @@
 @media (hover: hover) and (pointer: fine) {
   .import-dialog-close:hover { background: color-mix(in srgb, var(--color-desk-kraft) 16%, transparent); color: var(--color-heading); }
 }
+/* 약관 동의 창(BE-145)은 가져오기 창(.import-dialog)을 그대로 쓰고, 체크 줄과 문서 링크만 더한다 */
+.terms-dialog-check { display: flex; align-items: flex-start; gap: 10px; margin: 14px 0 6px; }
+.terms-dialog-check input { flex: none; width: 22px; height: 22px; margin: 1px 0 0; }
+.terms-dialog-check label { cursor: pointer; font-weight: 700; color: var(--color-heading); word-break: keep-all; }
+.terms-dialog-links { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0 0 4px; }
+.terms-dialog-link { display: inline-flex; align-items: center; min-height: 44px; color: var(--color-text); text-decoration: underline; text-underline-offset: 3px; } /* 밝은 창 바탕 — 펠트 패드용 .signup-doc-link 색은 쓰지 않는다 */
+.terms-dialog-link:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; border-radius: 4px; }

@@ -2,6 +2,7 @@ package com.team2.project.member;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -19,9 +20,10 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.ResultActions;
 
-/** 내 회원 정보 GET /members/me (API 명세 M-8, BE-139) */
+/** 내 회원 정보 GET /members/me (API 명세 M-8, BE-139) · 약관 동의 POST /members/me/terms-agreement (M-14, BE-145) */
 class MemberMeApiTest extends ApiIntegrationTest {
 
 	private static final String URL = "/api/v1/members/me";
@@ -105,5 +107,65 @@ class MemberMeApiTest extends ApiIntegrationTest {
 	@DisplayName("로그인하지 않으면 401 UNAUTHORIZED")
 	void requiresLogin() throws Exception {
 		me(null).andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+	}
+
+	private ResultActions agree(Long memberId, String body) throws Exception {
+		var request = post(URL + "/terms-agreement").contentType(MediaType.APPLICATION_JSON).content(body);
+		return mockMvc.perform(memberId == null ? request : request.header(HttpHeaders.AUTHORIZATION, "Bearer member-" + memberId));
+	}
+
+	@Test
+	@DisplayName("동의 기록이 없는 회원은 termsRequired가 true이고, 동의 기록이 있으면 false다 (BE-145)")
+	void termsRequired() throws Exception {
+		long without = newMember("KAKAO", null);
+		me(without).andExpect(status().isOk()).andExpect(jsonPath("$.termsRequired").value(true));
+
+		long with = newMember("LOCAL", "tr" + UUID.randomUUID().toString().replace("-", "").substring(0, 8));
+		jdbcTemplate.update("UPDATE member SET terms_agreed_at = now(), terms_version = '2026-10-draft' WHERE id = ?", with);
+		me(with).andExpect(status().isOk()).andExpect(jsonPath("$.termsRequired").value(false));
+	}
+
+	@Test
+	@DisplayName("M-14: 동의하면 시각 · 약관 버전이 남고 termsRequired가 false가 된다")
+	void agree_recordsConsent() throws Exception {
+		long id = newMember("KAKAO", null);
+
+		agree(id, "{\"agreed\":true}").andExpect(status().isNoContent());
+
+		var row = jdbcTemplate.queryForMap("SELECT terms_agreed_at, terms_version FROM member WHERE id = ?", id);
+		assertThat(row.get("terms_agreed_at")).isNotNull();
+		assertThat(row.get("terms_version")).isEqualTo(com.team2.project.member.domain.TermsVersion.CURRENT);
+		me(id).andExpect(jsonPath("$.termsRequired").value(false));
+	}
+
+	@Test
+	@DisplayName("M-14: 이미 동의한 회원이 다시 동의해도 처음 기록은 바뀌지 않는다")
+	void agree_keepsFirstConsent() throws Exception {
+		long id = newMember("KAKAO", null);
+		jdbcTemplate.update("UPDATE member SET terms_agreed_at = '2026-10-01 09:00:00+09', terms_version = 'old-version' WHERE id = ?", id);
+
+		agree(id, "{\"agreed\":true}").andExpect(status().isNoContent());
+
+		var row = jdbcTemplate.queryForMap("SELECT terms_agreed_at, terms_version FROM member WHERE id = ?", id);
+		assertThat(row.get("terms_version")).isEqualTo("old-version");
+		assertThat(row.get("terms_agreed_at").toString()).startsWith("2026-10-01");
+	}
+
+	@Test
+	@DisplayName("M-14: 동의하지 않은 요청(없음 · null · false · 문자열 · 숫자)은 400 agreed이고 기록이 남지 않는다")
+	void agree_rejectsNotTrue() throws Exception {
+		long id = newMember("KAKAO", null);
+
+		for (String body : new String[] {"{}", "{\"agreed\":null}", "{\"agreed\":false}", "{\"agreed\":\"true\"}", "{\"agreed\":1}"}) {
+			agree(id, body).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+		}
+
+		assertThat(jdbcTemplate.queryForObject("SELECT terms_agreed_at IS NULL FROM member WHERE id = ?", Boolean.class, id)).isTrue();
+	}
+
+	@Test
+	@DisplayName("M-14: 로그인하지 않으면 401 UNAUTHORIZED")
+	void agree_requiresLogin() throws Exception {
+		agree(null, "{\"agreed\":true}").andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
 	}
 }
