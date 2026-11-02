@@ -659,7 +659,7 @@ def _trial_act(cast, cls, design, opening, evidence, notice):
         {"say": "narrator", "cameo": A, "hideCast": True, "confirm": 4, "next": "판결로",
          "text": "재판은 여기까지예요. 이제 재판장, 당신이 판결할 차례예요.", "source": _src("fixed")},
     ]
-    return {"title": "2막 재판", "scene": "court", "procedures": ["인정신문", "모두진술", "쟁점 정리", "증거조사", "피고인신문"],
+    return {"title": "2막 재판", "scene": "court", "procedures": ["재판 시작", "모두진술", "쟁점 정리", "증거조사", "피고인신문"],
             "look": {A: "role:prosecutor", B: "role:defense"}, "slots": _court_slots(cast), "steps": steps}
 
 

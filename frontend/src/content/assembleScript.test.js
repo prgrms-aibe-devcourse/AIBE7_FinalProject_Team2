@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { assembleScript } from './assembleScript.js';
+import frame from './scriptFrame.json' with { type: 'json' };
 import { flatten } from '../components/stage.js';
 import { getCaseScript } from '../mocks/caseListMockApi.js';
 
@@ -27,7 +28,7 @@ test('막 · 카드 이동 값(section · confirm · slots)을 조립기가 채�
   const steps = assembleScript(await response()).acts['2'].steps;
   assert.deepEqual(steps.filter((step) => step.section).map((step) => step.section), [2, 3, 4]);
   assert.deepEqual(steps.filter((step) => step.confirm).map((step) => step.confirm), [2, 3, 4]);
-  assert.equal(steps.at(-1).next, '판결로');
+  assert.equal(steps.at(-1).next, '의견 듣기');
   assert.equal(steps.find((step) => step.section === 3).slots.nambul.slot, 30);
 });
 
@@ -37,7 +38,11 @@ test('배역이 반대면 법정 막의 화자 · 자리 · 문구가 따라 바
   assert.equal(script.cast.prosecutor, 'nambul');
   assert.deepEqual(trial.slots, { nambul: { slot: 10, row: 'front' }, naero: { slot: 50, row: 'front' } });
   assert.equal(trial.steps.find((step) => step.proc === 1).say, 'nambul');
-  assert.match(trial.steps.find((step) => step.proc === 4).text, /내로가 변호인석에서 일어나 A씨 자리에 서고, 검사 남불이 질문해요/);
+  // 피고인 역으로 서는 쪽(묶음 B)이 따라 바뀐다 — 문장에 이름이 없어도 배역은 cameo · 이름표 · 자리에 실린다
+  const stand = trial.steps.find((step) => step.proc === 4);
+  assert.equal(stand.cameo, 'naero');
+  assert.deepEqual(stand.tags, { naero: 'A씨 역' });
+  assert.deepEqual(stand.slots, { naero: { slot: 30, row: 'front' } });
   assert.equal(script.acts['3'].steps[0].say, 'nambul');
   assert.equal(script.acts['5'].steps[0].say, 'nambul', '5막 판사는 묶음 A');
   assert.equal(script.acts['5'].look.nambul, 'role:judge');
@@ -89,4 +94,17 @@ test('카드의 ul이 문자열 배열이 아니어도 무대가 멈추지 않�
   assert.deepEqual(script.cards.plea.ul, ['하나']);
   assert.deepEqual(script.cards.plea.p, []);
   assert.deepEqual(script.cards.issues, { k: '쟁점 정리', p: ['쟁점'], ul: [] });
+});
+
+// 생성 문맥(tools/ai-judgment `INTRO_FIXED`)과 화면의 1막 고정 대사가 같은지 — 어긋나면 AI가 보는 앞뒤 대사와 실제 화면이 달라진다(PR #379 리뷰)
+const pySource = readFileSync(new URL('../../../tools/ai-judgment/script_assembler.py', import.meta.url), 'utf8');
+const hasIntroFixed = pySource.includes('INTRO_FIXED = {');
+test('생성 문맥의 1막 고정 대사(INTRO_FIXED)가 화면 틀과 같다', { skip: hasIntroFixed ? false : 'INTRO_FIXED가 아직 develop에 없다(#379 머지 전)' }, async () => {
+  const fixed = Object.fromEntries([...pySource.slice(pySource.indexOf('INTRO_FIXED = {')).split('}')[0].matchAll(/"(\w+)": "([^"]+)"/g)].map((m) => [m[1], m[2]]));
+  assert.deepEqual(Object.keys(fixed), ['opening', 'photo', 'end', 'postcard']);
+  const steps = assembleScript(await response()).acts['1a'].steps;
+  assert.equal(steps[1].text, fixed.photo);
+  assert.equal(steps[5].text, fixed.end);
+  assert.equal(frame['1b'].steps[0].text, fixed.postcard);
+  assert.ok(readFileSync(new URL('../pages/overview/overviewPage.js', import.meta.url), 'utf8').includes(fixed.opening), '① 앞 안내 대사(overviewPage INTRO_STEP)');
 });

@@ -10,7 +10,6 @@ const LAST_QUESTION = {
   intent_disputed: '행위 사실을 인정합니까?',
   defense_claim: '행위 사실을 인정합니까?',
 };
-const SUBJECT = { naero: '내로가', nambul: '남불이' };
 const SLOT = { A: 10, B: 50, stand: 30 };
 
 const courtSlots = ({ prosecutor, defense }) => ({
@@ -22,11 +21,11 @@ const courtSlots = ({ prosecutor, defense }) => ({
 function introAct(lines) {
   const steps = [
     { say: 'nambul', look: { nambul: 'guide-neutral' }, text: lines[0], focus: 'head' },
-    { say: 'naero', text: '사진은 사건을 이해하도록 만든 연출 이미지예요. 실제 현장 사진이 아니에요.', focus: 'photo' },
+    { say: 'naero', text: '그럼, 좀 더 자세히 살펴볼까요?', focus: 'photo' },
     { say: 'nambul', text: lines[1], focus: 'body' },
     { say: 'naero', text: lines[2], focus: 'body' },
     { say: 'nambul', text: lines[3], focus: 'body' },
-    { say: 'naero', look: { naero: 'react-sorry', nambul: 'idle-neutral' }, text: '기사로 알 수 있는 건 여기까지예요. 기사에 없는 이야기는 지어내지 않을게요.', focus: 'body' },
+    { say: 'naero', look: { naero: 'react-sorry', nambul: 'idle-neutral' }, text: '여기까지가 기사에 나온 내용이네요.', focus: 'body' },
     { say: 'nambul', look: { nambul: 'react-sorry' }, text: lines[4], focus: 'body' },
   ];
   return {
@@ -47,9 +46,9 @@ function trialAct(cast, { U2, U3 }, meta) {
     ...(i === U3.length - 1 ? { confirm: 2 } : {}),
   }));
   const steps = [
-    { say: 'narrator', cameo: A, hideCast: true, delay: 500, proc: 0, section: 2, text: '재판을 시작해요. 재판장은 당신이에요. 먼저 피고인 A씨가 본인이 맞는지 확인할게요.' },
-    { say: A, role: '검사', text: '이번 재판에서 저는 검사 자리를 맡을게요.' },
-    { say: B, role: '변호인', text: '저는 변호인 자리예요. 둘 다 맡은 쪽의 주장만 전해요.' },
+    { say: 'narrator', cameo: A, hideCast: true, delay: 500, proc: 0, section: 2, text: '지금부터 재판을 시작할게요. 이번 재판의 재판장은 여러분이에요.' },
+    { say: A, role: '검사', text: '검사 측, 준비됐습니다.' },
+    { say: B, role: '변호인', text: '변호인 측도 준비됐습니다.' },
     { say: A, role: '검사', proc: 1, card: 'indict', text: U2.indict[0] },
     { say: A, role: '검사', card: 'indict', text: U2.indict[1] },
     { say: B, role: '변호인', card: 'plea', text: U2.plea[0] },
@@ -60,18 +59,18 @@ function trialAct(cast, { U2, U3 }, meta) {
     {
       say: 'narrator', cameo: B, proc: 4, section: 3,
       look: { [A]: 'role:prosecutor', [B]: 'role:actor' }, tags: { [B]: 'A씨 역' }, spots: { [B]: 'stand' }, slots: { [B]: { slot: SLOT.stand, row: 'front' } },
-      text: `이제 피고인에게 직접 물어볼 차례예요. ${SUBJECT[B]} 변호인석에서 일어나 A씨 자리에 서고, 검사 ${SUBJECT[A]} 질문해요.`,
+      text: '이제 피고인신문 차례예요. 먼저 검사 측의 질문을 들어볼게요.',
     },
     // 답은 서버가 정규화해 준다(API 18)
     ...U2.questions.slice(0, 2).flatMap(({ q, a }) => [{ say: A, role: '검사', text: q }, { say: B, role: 'A씨 역', text: a }]),
     { say: A, role: '검사', text: LAST_QUESTION[meta.issue] },
     { say: B, role: 'A씨 역', confirm: 3, text: meta.admits ? '…네, 인정합니다.' : '…아닙니다.' },
-    { say: A, role: '검사', section: 4, text: '이상으로 피고인 신문을 마치겠습니다.' },
-    { say: B, role: '변호인', look: { [B]: 'role:defense' }, tags: { [B]: '' }, spots: { [B]: '' }, slots: { [B]: { slot: SLOT.B, row: 'front' } }, text: '변호인도 추가 질문 없습니다.' },
-    { say: 'narrator', cameo: A, hideCast: true, confirm: 4, next: '판결로', text: '재판은 여기까지예요. 이제 재판장, 당신이 판결할 차례예요.' },
+    { say: A, role: '검사', section: 4, text: '검사 측 질문은 여기까지입니다.' },
+    { say: B, role: '변호인', look: { [B]: 'role:defense' }, tags: { [B]: '' }, spots: { [B]: '' }, slots: { [B]: { slot: SLOT.B, row: 'front' } }, text: '변호인 측은 질문 없습니다.' },
+    { say: 'narrator', cameo: A, hideCast: true, confirm: 4, next: '의견 듣기', text: '피고인신문이 끝났어요. 이제 검사 측의 의견과 변호인의 최종변론을 들어볼게요.' },
   ];
   return {
-    title: '2막 재판', scene: 'court', procedures: ['인정신문', '모두진술', '쟁점 정리', '증거조사', '피고인신문'],
+    title: '2막 재판', scene: 'court', procedures: ['재판 시작', '모두진술', '쟁점 정리', '증거조사', '피고인신문'],
     look: { [A]: 'role:prosecutor', [B]: 'role:defense' }, slots: courtSlots(cast), steps,
   };
 }
@@ -84,7 +83,7 @@ function verdictAct(cast, U4) {
     steps: [
       { say: A, role: '검사', proc: 0, text: U4.prosecutor },
       { say: B, role: '변호인', proc: 1, text: U4.defense },
-      { say: A, role: '검사', proc: 2, text: '재판장님, 이제 판결을 내려 주십시오. 형벌의 종류와 형량, 그리고 양형에 고려한 요소를 정해 주십시오.' },
+      { say: A, role: '검사', proc: 2, text: '이제 모든 진술이 끝났습니다. 재판장님, 판결을 내려 주십시오.' },
       { proc: 2, card: 'verdict', look: { [A]: 'read-thinking' }, board: 'full' },
     ],
   };
