@@ -42,11 +42,12 @@ public class CaseScriptQueryService {
 	public PublicCaseScriptResponse getCaseScript(Long caseId) {
 		legalCaseRepository.findPublishedById(caseId).orElseThrow(() -> new BusinessException(ErrorCode.CASE_NOT_FOUND));
 		CaseScript script = scriptRepository.findByLegalCaseId(caseId).orElse(null);
-		switch (ScriptStatus.of(script)) {
-			case PREPARING -> throw new BusinessException(ErrorCode.SCRIPT_NOT_FOUND);
-			case MAINTENANCE -> throw new BusinessException(ErrorCode.SCRIPT_UNDER_MAINTENANCE);
-			case READY -> {
-			}
+		ScriptStatus status = ScriptStatus.of(script);
+		if (status == ScriptStatus.PREPARING) {
+			throw new BusinessException(ErrorCode.SCRIPT_NOT_FOUND);
+		}
+		if (status == ScriptStatus.MAINTENANCE) {
+			throw new BusinessException(ErrorCode.SCRIPT_UNDER_MAINTENANCE);
 		}
 		return PublicCaseScriptResponse.of(script, labelsByFactorId(caseId));
 	}
