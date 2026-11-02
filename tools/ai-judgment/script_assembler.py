@@ -98,6 +98,7 @@ PAPER_DESK = "사회부"  # 백엔드 CasePaperService.DEFAULT_DESK와 같다
 PAPER_LIMITS = {"headline": 200, "deck": 300, "caption": 200}
 SLOT = {"A": 10, "B": 50, "stand": 30}  # case-1 2 · 3막 자리. 묶음 기준이라 배역이 바뀌어도 같은 쪽에 선다
 OUTPUT_HEADING = "# 출력 형식"
+SENSITIVE_NO_REACTION = "- 민감 사건이다. 분위기 안내와 상관없이 감탄 · 외침 · 리액션을 쓰지 않는다."
 
 
 def classification_errors(cls):
@@ -167,6 +168,8 @@ def build_system(unit, cls, roles):
     parts += [read_prompt(f"script_role_{role}.md") for role in roles]
     parts += guide_blocks(cls, unit)
     parts.append(guardrail_rules())
+    if cls.get("sensitiveFlags"):
+        parts.append(SENSITIVE_NO_REACTION)  # 분위기 블록의 리액션 허용을 덮어쓴다(BE-124)
     parts += sensitive_blocks(cls)
     return "\n\n".join(part.strip() for part in parts if part.strip())
 
@@ -422,6 +425,12 @@ def normalize_paper(value):
 
 # 검사 의견에 구형(형량)이 들어가면 사용자가 판결을 입력하기 직전에 앵커링이 된다(PR #329 YOLO-NIM 리뷰). 실제 재판의 검사 의견은
 # 구형을 포함하므로 모델이 그대로 따라 할 가능성이 높다. 잡는 문형(SENTENCING_PATTERN)은 script_review가 갖는다
+# U1 대사 사이에 끼는 고정 대사(프론트 틀). AI가 보지 못하면 장면 연결 · 되풀이를 못 피한다(BE-124, 팀원 개선안 개발-2).
+# 틀의 문구를 바꾸면 여기도 함께 고친다
+INTRO_FIXED_CONTEXT = ("대사 사이에 아래 고정 대사가 들어간다. 이 말을 되풀이하지 않고 앞뒤가 이어지게 쓴다: ①과 ② 사이에 내로 \"그럼, 좀 더 자세히 살펴볼까요?\" / "
+                       "④와 ⑤ 사이에 내로 \"여기까지가 기사에 나온 내용이네요.\" / ⑤ 뒤에 첫인상 엽서 질문 \"이 사건에서는 어느 정도의 벌이 적절하다고 생각하세요?\"가 이어진다.")
+CLAIM_VS_FACT = ("- 변호인 대사에서도 사건 데이터에 사실로 적힌 내용(구금 · 자수 · 합의 같은 확인된 사실)은 \"주장합니다\"를 붙이지 않고 사실로 말한다. "
+                 "\"~라고 주장합니다\"는 사건 데이터에 주장으로 적힌 내용에만 쓴다. 한 문장에 둘이 섞이면 문장을 나눈다.")
 NO_SENTENCING = ("- 구형 · 형량 · 벌금액(\"징역 몇 년\" · \"벌금 얼마\")을 말하지 않는다. 사용자가 판결을 입력하기 전이라 앵커링이 된다. "
                  "전과 · 선고 이력 같은 사실은 데이터대로 말해도 된다.")
 def sentencing_errors(label, text):
@@ -467,9 +476,11 @@ def design_request(case, cls):
 def intro_request(paper, cls):
     system, scene, data = unit_prompt("U1", None, cls, paper=paper)
     return system, build_user(scene, data, [
-            "기사를 짚는 대사 5줄을 쓰세요. 순서: ① 남불 제목 소개 ② 남불 본문 첫 내용 ③ 내로 이어지는 내용 "
-            "④ 남불 이어지는 내용 ⑤ 남불 마무리(서두르지 말고 생각해 보자는 권유, 사건의 무게에 맞는 어조).",
-            "기사에 있는 내용만 쓴다. 대사 앞에 번호 · 화자 이름을 붙이지 않는다.",
+            "기사를 짚는 대사 5줄을 쓰세요. 순서: ① 남불 기사를 읽고 무슨 사건인지 자연스럽고 간단하게 소개 ② 남불 본문 첫 내용 "
+            "③ 내로 이어지는 내용 ④ 남불 이어지는 내용 ⑤ 남불 마무리(평가 없이 짧게 사용자가 첫인상을 남기는 단계로 넘긴다. "
+            "기사를 다시 요약하지 않고, 마지막 줄의 어조는 CASE GUIDE를 따른다).",
+            INTRO_FIXED_CONTEXT,
+            "기사에 있는 내용만 쓴다. 대사 앞에 번호 · 화자 이름을 붙이지 않는다. 조사를 빼지 않은 완전한 문장으로 쓰고, 문장 끝에 문장부호를 붙인다.",
             '출력은 JSON 객체 하나: {"lines":["①","②","③","④","⑤"]}',
         ])
 
@@ -489,6 +500,9 @@ def opening_request(case, cls, cast, design):
             "- 변호인 입장은 공개된 사실 · 입장 한 줄까지만 쓴다.",
             NO_SENTENCING,
             "- 공소사실 첫 대사는 \"공소사실을 말씀드리겠습니다.\"로 시작한다.",
+            "- 공소사실의 각 대사는 100자 이내다. 둘째 대사에 사건 내용과 적용 법조를 모두 담기 어려우면 사건 내용을 짧게 줄이고 "
+            "적용 법조는 한 구절로만 쓴다.",
+            CLAIM_VS_FACT,
         ])
 
 
@@ -498,6 +512,7 @@ def closing_request(case, cls, cast, design, opening):
             f"검사({NAMES[cast['prosecutor']]}) 의견 한 줄, 변호인({NAMES[cast['defense']]}) 최종변론 한 줄. 각 두 줄 이내.",
             "검사 의견은 \"검사 측 의견입니다.\"로, 최종변론은 \"변호인 측 최종변론입니다.\"로 시작한다.",
             NO_SENTENCING,
+            CLAIM_VS_FACT,
             '출력은 JSON 객체 하나: {"prosecutor":"...","defense":"..."}',
         ])
 

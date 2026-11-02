@@ -414,5 +414,27 @@ class BlockContractTest(unittest.TestCase):
             self.assertEqual(sa.admits(case["answer"]), case["expected"], case["answer"])
 
 
+class MoodClosingTest(unittest.TestCase):
+    """BE-124: 1막 마지막 줄 초점은 분위기 블록의 U1 절에만 있고, 단위 지시는 마무리 문구를 정하지 않는다."""
+
+    def test_focus_reaches_only_u1(self):
+        for mood in sa.MOODS:
+            cls = {**CLS, "mood": mood}
+            self.assertIn("1막 마지막 줄의 어조", "\n".join(sa.guide_blocks(cls, "U1")), mood)
+            for unit in ("U0", "U2", "U4"):
+                self.assertNotIn("1막 마지막 줄의 어조", "\n".join(sa.guide_blocks(cls, unit)), (mood, unit))
+
+    def test_sensitive_flag_overrides_reaction(self):
+        for unit, roles in (("U1", ["guide"]), ("U2", ["narrator"])):
+            self.assertIn(sa.SENSITIVE_NO_REACTION, sa.build_system(unit, {**CLS, "sensitiveFlags": ["SELF_HARM"]}, roles))
+            self.assertNotIn(sa.SENSITIVE_NO_REACTION, sa.build_system(unit, CLS, roles))
+
+    def test_intro_request_does_not_fix_closing_words(self):
+        system, user = sa.intro_request({"headline": "제목", "deck": "부제", "article": ["본문"]}, CLS)
+        self.assertNotIn("서두르지", system + user)
+        self.assertIn("CASE GUIDE", user)
+        self.assertIn(sa.INTRO_FIXED_CONTEXT, user)
+
+
 if __name__ == "__main__":
     unittest.main()
