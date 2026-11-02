@@ -56,7 +56,6 @@ function timeNode(iso, full) {
 // ---- 글쓴이 명함(FE-88) ----
 // 글쓴이는 닉네임이 아니라 프로필카드 + 공개 성향카드 두 장(명함)으로 보인다. 카드는 마이페이지에서 꾸민 모양 그대로(.cm-cards가 커피 색을 입힌다).
 // 성향으로 거르기 · 정렬 · 순위는 만들지 않는다(편 가르기 · 앵커링 방지). 글쓴이 값(author)은 목 API가 채우고, 실제 API가 같은 모양으로 내려준다(mocks/communityMockData.js)
-const CLIP_PATH = 'M7 30V8a4 4 0 0 1 8 0v30a6 6 0 0 1-12 0V14';
 const typeImage = (author) => author.shownType?.type.imageUrl ?? null;
 const SLOT_NAMES = { initial: '초심', retake: '재심', current: '최근' };
 const typeNameOf = (author) => author.shownType?.type.name ?? null;
@@ -87,13 +86,12 @@ export function svgIcon(viewBox, className, paths) {
 }
 
 export function clip() {
-  const node = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  node.setAttribute('viewBox', '0 0 22 52');
+  // B안 클립 이미지(FE-150). 예전에는 선 그림(SVG)이었다
+  const node = document.createElement('img');
+  node.src = '/images/desk/clip.webp';
+  node.alt = '';
   node.setAttribute('aria-hidden', 'true');
   node.classList.add('cm-clip');
-  const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  line.setAttribute('d', CLIP_PATH);
-  node.append(line);
   return node;
 }
 

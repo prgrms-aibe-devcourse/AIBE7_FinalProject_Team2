@@ -46,6 +46,8 @@ CODES = {
     "ISSUE_QUESTION_MISMATCH": WARNING,  # 신문 질문이 설계도(쟁점에 맞춘 질문)와 다르거나 정신상태를 물음
     "EVIDENCE_FILLER": WARNING,        # 증거조사 둘째 줄 군더더기
     "REPEATED_LINE": WARNING,          # 같은 단위 안에서 같은 말 되풀이
+    "CARD_LIST_INVALID": WARNING,      # U2 카드 `ul`이 문자열 목록이 아님(공개 응답 · 화면이 비워 낸다, BE-159)
+    "CARD_LIST_EMPTY": WARNING,        # U2 카드 `ul`이 빈 목록(빈 카드가 공개된다, BE-159)
     "REVIEW_FAILED": ERROR,            # 검사 자체가 돌지 못함(값 모양이 어긋남) — 검수 못 한 대본은 공개하지 않는다
 }
 
@@ -381,7 +383,34 @@ def review_unit(unit, value, ctx, *, strip_prefix=lambda s: s):
                                          fix=FIX_LINE if unit in ("U0", "U2") else FIX_UNIT))
             continue
         issues += line_issues(unit, path, text, kind, ctx)
+    if unit == "U2":
+        issues += card_list_issues(value)
     return issues + repeated_issues(unit, lines)
+
+
+CARD_LABELS = {"indict": "공소사실", "plea": "변호인 입장", "issues": "쟁점"}
+
+
+def card_list_issues(value):
+    """U2 카드(공소사실 · 변호인 입장 · 쟁점)의 모양과 `ul`. 생성 단계(`check_opening`)는 새로 만든 값만 막으므로, 이미 저장된 블록 ·
+    가져온 값이 같은 기준을 지키는지 여기서 본다(BE-159). 공개 응답 · 화면이 틀린 값을 비워 내 예외는 나지 않지만 카드가 빈 채로
+    보이므로 경고로 알린다 — 줄 하나를 고쳐 쓰는 오류가 아니라 사람이 목록을 채워야 한다.
+
+    `path`는 블록 전체(`""`)다. 관리자 화면은 path가 글 한 줄(문자열 잎)과 같은 항목만 그 줄에 그리고 블록 전체 항목은 블록 머리에
+    그리는데(`issuesAt`), 목록 자체(`/cards/…/ul`)는 어느 잎과도 맞지 않아 보이지 않는다(PR #414 리뷰). 어느 카드인지는 메시지에 쓴다."""
+    cards = value.get("cards")
+    issues = []
+    for card, label in CARD_LABELS.items():
+        body = cards.get(card) if isinstance(cards, dict) else None
+        if not isinstance(body, dict):
+            issues.append(make_issue("U2", "", "CARD_LIST_INVALID", f"{label} 카드가 없거나 객체가 아닙니다"))
+            continue
+        ul = body.get("ul")
+        if not (isinstance(ul, list) and all(isinstance(v, str) for v in ul)):
+            issues.append(make_issue("U2", "", "CARD_LIST_INVALID", f"{label} 카드 목록(ul)이 문자열 목록이 아닙니다"))
+        elif not any(v.strip() for v in ul):
+            issues.append(make_issue("U2", "", "CARD_LIST_EMPTY", f"{label} 카드 목록(ul)이 비었습니다"))
+    return issues
 
 
 def review_evidence(evidence, case, judgment_output):

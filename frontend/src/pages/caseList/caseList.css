@@ -87,6 +87,7 @@
 .case-list-page .status-stamp { margin-left: auto; flex: none; padding: 0 6px; border: 3px double; border-radius: 3px; font: 900 11px/1.5 var(--font-heading); letter-spacing: .04em; white-space: nowrap; rotate: -4deg; }
 .case-list-page .status-active { border-color: var(--color-accent-text); color: var(--color-accent-text); }
 .case-list-page .status-done { border-color: var(--color-border-strong); color: var(--color-muted); }
+.case-list-page .status-locked { border-style: dashed; border-color: var(--color-border-strong); color: var(--color-muted); } /* 잠김(FE-149, BE-146): 준비 중 도장(S-20)과 같은 점선 — 아직 찍히지 않은 자리 */
 .case-list-page .type-MURDER { background: var(--color-case-murder); }
 .case-list-page .type-FRAUD { background: var(--color-case-fraud); }
 .case-list-page .type-INJURY { background: var(--color-case-injury); }

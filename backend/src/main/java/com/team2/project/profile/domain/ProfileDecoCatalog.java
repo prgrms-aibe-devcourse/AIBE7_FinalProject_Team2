@@ -14,8 +14,10 @@ public final class ProfileDecoCatalog {
 	}
 
 	// ── 값 목록 (목록에 없으면 VALIDATION_ERROR) ──
-	public static final List<String> FRAMES = List.of("basic", "wood", "gold", "navy", "stitch");
-	public static final List<String> BACKGROUNDS = List.of("cream", "latte", "tarot", "news", "linen");
+	// 뒤 4개 테두리 · 14개 배경은 FE-150 이미지 꾸미기. 기준은 프론트 목 해금표(frontend/src/mocks/profileDecoMockData.js)와 같은 값이다(BE-158)
+	public static final List<String> FRAMES = List.of("basic", "wood", "gold", "navy", "stitch", "oak", "brass", "court", "thread");
+	public static final List<String> BACKGROUNDS = List.of("cream", "latte", "tarot", "news", "linen",
+		"kraft", "ledger", "tracing", "parchment", "coffee", "wood", "blotter", "envelope", "lamp", "legalpad", "felt", "blinds", "leather", "bronze");
 	/** 카드 책갈피 모양. none이면 색 · 아이콘을 쓰지 않는다 */
 	public static final List<String> SASH_STYLES = List.of("none", "long", "short");
 	public static final String SASH_NONE = "none";
@@ -55,23 +57,23 @@ public final class ProfileDecoCatalog {
 	 */
 	public static final List<Achievement> ACHIEVEMENTS = List.of(
 		new Achievement("first-case", AchievementStat.COMPLETED, 1, Rewards.builder()
-			.kinds("characters/scene").frames("wood").sashStyles("long").sashColors("long:wine").build()),
+			.kinds("characters/scene").frames("wood", "oak").backgrounds("kraft", "ledger").sashStyles("long").sashColors("long:wine").build()),
 		new Achievement("personality", AchievementStat.HAS_TYPE, 1, Rewards.builder()
-			.kinds("characters/personality").backgrounds("tarot").sashIcons("scale").build()),
+			.kinds("characters/personality").backgrounds("tarot", "tracing", "parchment").sashIcons("scale").build()),
 		new Achievement("attend-3", AchievementStat.ATTENDANCE_DAYS, 3, Rewards.builder()
-			.kinds("characters/icon/generated").backgrounds("latte").sashIcons("cup").build()),
+			.kinds("characters/icon/generated").backgrounds("latte", "coffee", "wood").sashIcons("cup").build()),
 		new Achievement("collect-5", AchievementStat.COLLECTED, 5, Rewards.builder()
-			.kinds("cases").backgrounds("news").sashIcons("naero", "nambul").build()),
+			.kinds("cases").backgrounds("news", "blotter", "envelope").sashIcons("naero", "nambul").build()),
 		new Achievement("attend-7", AchievementStat.ATTENDANCE_DAYS, 7, Rewards.builder()
-			.kinds("characters/cheek", "characters/cheek-slim").frames("gold").sashIcons("heart").build()),
+			.kinds("characters/cheek", "characters/cheek-slim").frames("gold", "brass").backgrounds("lamp", "legalpad").sashIcons("heart").build()),
 		new Achievement("cases-3", AchievementStat.COMPLETED, 3, Rewards.builder()
-			.frames("stitch").backgrounds("linen").sashColors("short:navy", "long:navy").sashIcons("gavel").build()),
+			.frames("stitch", "thread").backgrounds("linen", "felt").sashColors("short:navy", "long:navy").sashIcons("gavel").build()),
 		new Achievement("cases-5", AchievementStat.COMPLETED, 5, Rewards.NONE),
 		new Achievement("collect-20", AchievementStat.COLLECTED, 20, Rewards.builder()
-			.kinds("characters/law", "characters/adult").sashColors("short:green", "long:green").build()),
+			.kinds("characters/law", "characters/adult").backgrounds("blinds").sashColors("short:green", "long:green").build()),
 		new Achievement("collect-50", AchievementStat.COLLECTED, 50, Rewards.NONE),
 		new Achievement("attend-30", AchievementStat.ATTENDANCE_DAYS, 30, Rewards.builder()
-			.kinds("characters/mascot").frames("navy").sashColors("short:gold", "long:gold").sashIcons("law").build()));
+			.kinds("characters/mascot").frames("navy", "court").backgrounds("leather", "bronze").sashColors("short:gold", "long:gold").sashIcons("law").build()));
 
 	// ── 수집 (BE-83 · BE-136, docs/decisions/BE-136.md) ──
 	// 항목 id는 화이트리스트(CollectibleCatalog)로 거른다. 일러스트는 다른 사건의 그림도 받으므로(그림별 key)

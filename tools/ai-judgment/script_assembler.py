@@ -306,6 +306,11 @@ def check_opening(value):
     cards = value.get("cards")
     if not (isinstance(cards, dict) and all(isinstance(cards.get(k), dict) for k in ("indict", "plea", "issues"))):
         errors.append("cards에 indict · plea · issues 객체가 있어야 한다")
+    else:
+        for k in ("indict", "plea", "issues"):
+            ul = cards[k].get("ul")
+            if not (isinstance(ul, list) and all(isinstance(v, str) for v in ul)):
+                errors.append(f"cards.{k}.ul은 문자열 목록이다")
     for key, label in (("indict", "공소사실"), ("plea", "변호인 입장"), ("issues_narr", "쟁점 해설")):
         errors += sentencing_errors(label, " ".join(v for v in (value.get(key) or []) if isinstance(v, str)))
     return errors
@@ -505,6 +510,7 @@ def opening_request(case, cls, cast, design):
             "- 질문은 design.questions의 앞 두 개만 쓴다(마지막 인정 여부 질문은 따로 붙는다).",
             *QUESTION_RULES,
             "- 변호인 입장은 공개된 사실 · 입장 한 줄까지만 쓴다.",
+            "- 진행 해설은 살펴볼 점을 말한다. 사건 사실을 이야기처럼 다시 들려주거나 숫자를 늘어놓지 않는다. 둘째 줄은 첫 줄에 쓴 말(쟁점 이름 등)을 되풀이하지 않는다.",
             NO_SENTENCING,
             "- 공소사실 첫 대사는 \"공소사실을 말씀드리겠습니다.\"로 시작한다.",
             "- 공소사실의 각 대사는 100자 이내다. 둘째 대사에 사건 내용과 적용 법조를 모두 담기 어려우면 사건 내용을 짧게 줄이고 "

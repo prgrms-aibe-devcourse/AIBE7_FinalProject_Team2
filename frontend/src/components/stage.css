@@ -18,25 +18,12 @@
 .stage-wrap .stage { position: relative; aspect-ratio: 16 / 9; width: 100%; overflow: hidden; border-radius: 10px; border: 1px solid var(--line); background: var(--color-stage-news); user-select: none; container-type: inline-size; }
 .stage-wrap .scene { position: absolute; inset: 0; cursor: pointer; }
 .stage-wrap .bg { position: absolute; inset: 0; }
-.stage-wrap .bg.news { background:
-  linear-gradient(var(--color-desk-news-sheet-1), var(--color-desk-news-sheet-1)) 6% 6% / 88% 13% no-repeat,
-  repeating-linear-gradient(var(--color-desk-news-sheet-2) 0 2px, transparent 2px 16px) 6% 26% / 41% 46% no-repeat,
-  repeating-linear-gradient(var(--color-desk-news-sheet-2) 0 2px, transparent 2px 16px) 94% 26% / 41% 46% no-repeat,
-  var(--color-stage-news); }
+.stage-wrap .bg.news { background: url('/images/stage/act1-news-bg.webp') center / cover no-repeat var(--color-stage-news); } /* B안 신문 지면 배경(FE-150) */
 /* 2막 법정(재판장 시점): 판사석에서 내려다본 법정. 색 · 모양은 여기서만 정한다(장면 테마) */
 .stage-wrap .bg.court { background: var(--color-surface-strong); }
-/* 원근: 뒤일수록 나무색을 종이색에 섞어 옅게 */
-.stage-wrap .court { --wood-far: color-mix(in srgb, var(--color-stage-bench) 38%, var(--color-paper)); --wood-mid: color-mix(in srgb, var(--color-stage-bench) 68%, var(--color-paper)); position: absolute; inset: 0; pointer-events: none; }
-/* 뒤 벽: 가운데(피고인석 뒤)에 한 단 짙은 판을 둬 법정의 축을 만든다 */
-.stage-wrap .court-wall { position: absolute; left: 0; right: 0; top: 0; height: 42%; background: linear-gradient(var(--color-surface-strong), var(--color-surface-strong)) 50% 0 / 30% 100% no-repeat, var(--color-paper); }
-/* 방청석 난간: 얇은 손잡이 + 낮은 판 */
-.stage-wrap .court-rail { position: absolute; left: 0; right: 0; top: 38%; height: 8%; background: var(--wood-far); border-top: .6cqw solid var(--wood-mid); }
-/* 피고인석(증언대): 가운데 뒤. 피고인신문 때 피고인 역이 그 앞에 서고, 카드가 뜨면 가려진다 */
-.stage-wrap .court-stand { position: absolute; left: 45%; width: 10%; top: 33%; height: 22%; border-radius: .3cqw .3cqw 0 0; background: var(--wood-mid); border-top: .8cqw solid var(--color-stage-bench); box-shadow: 0 .5cqw 1cqw -.4cqw color-mix(in srgb, var(--color-desk-shadow) 35%, transparent); }
-/* 검사석 · 변호인석: 양옆에서 가운데를 향해 비스듬히 놓인 책상 */
-.stage-wrap .court-desk { position: absolute; top: 50%; width: 26%; height: 15%; background: var(--wood-mid); border-top: .8cqw solid var(--color-stage-bench); }
-.stage-wrap .court-desk.p { left: 0; clip-path: polygon(0 0, 100% 24%, 100% 100%, 0 100%); }
-.stage-wrap .court-desk.d { right: 0; clip-path: polygon(0 24%, 100% 0, 100% 100%, 0 100%); }
+/* 법정 그림(B안, FE-150): 무대 16:9를 꽉 채운다. 법정 요소(벽 · 난간 · 증언대 · 책상)는 그림 안에 있다 */
+.stage-wrap .court { position: absolute; inset: 0; pointer-events: none; }
+.stage-wrap .court img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .stage-wrap .bg.dark { background: var(--color-heading); }
 
 /* 캐릭터 = 그림 + 역할 이름표(한 묶음, stage.js). 자리는 캐릭터 가운데 기준(left): 내로 왼쪽(--l) · 남불 오른쪽(--r),
@@ -199,10 +186,7 @@
    기사 배치(FE-32, 두 단 · 세로로 긴 지면): 제호 / 1면(제목 · 법정 사진 · 리드) | 독자 의견 / 세 판결 | 판단 요소 / 공통점 · 차이점 | 만난 모습 / 광고 · 알림.
    두 단 사이 여백이 지면 가운데 접힌 선(courtSketch.css)에 오도록 단 폭을 같게 둔다. 맨 아래 광고 · 알림 단은 마지막 기사들도 카메라가 화면 가운데로 당길 수 있게 지면을 아래로 늘린다 */
 .stage-wrap .bg.sheet { background:
-    radial-gradient(ellipse at 8% 0%, color-mix(in srgb, var(--color-desk-wood-glow) 38%, transparent), transparent 55%),
-    repeating-linear-gradient(176deg, color-mix(in srgb, var(--color-desk-shadow) 6%, transparent) 0 2px, transparent 2px 9px),
-    repeating-linear-gradient(178deg, color-mix(in srgb, var(--color-desk-wood-glow) 6%, transparent) 0 1px, transparent 1px 23px),
-    linear-gradient(180deg, var(--color-desk-wood-light), var(--color-desk-wood) 40%, var(--color-desk-wood-dark)); } /* 메인 책상(landing.css .desk-wood)과 같은 나뭇결 */
+    url('/images/desk/wood.webp') center / cover no-repeat var(--color-desk-wood); } /* 메인 책상(landing.css .desk-wood)과 같은 나뭇결(B안 이미지, FE-150) */
 .stage-wrap .sheet-frame { position: absolute; left: 19%; right: 19%; top: 4%; bottom: 27%; pointer-events: none; }
 .stage-wrap .sheet { --u: 1cqw; position: absolute; left: 0; top: 0; width: calc(var(--u) * 118); display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
   grid-template-areas: "mast mast" "front letters" "verdicts factors" "rules cast" "ads ads";
@@ -248,6 +232,7 @@
 .stage-wrap .sheet-photo { position: relative; aspect-ratio: 16 / 9; overflow: hidden; background: var(--color-surface-strong); filter: var(--photo-filter); transition: filter .9s ease-out .4s; }
 .stage-wrap .sheet-photo[data-live] { filter: none; transition: none; }
 .stage-wrap .sheet-photo img { position: absolute; bottom: 25%; height: 52%; width: auto; }
+.stage-wrap .sheet-photo .court img { position: static; bottom: auto; width: 100%; height: 100%; } /* 법정 그림(B안, FE-150)은 캐릭터가 아니라 사진 칸을 채운다 */
 /* 사진 속 인물 자리는 5막 무대의 자리(왼쪽 16% · 오른쪽 84%, 역할 의상 키 52%)와 같다 — 6막이 이 사진을 가득 채운 데서 시작하면 5막 화면 그대로 보인다 */
 .stage-wrap .sheet-photo .sheet-photo-a { left: 16%; translate: -50% 0; } /* 묶음 A(판사) — 대본 배역을 따른다(FE-141) */
 .stage-wrap .sheet-photo .sheet-photo-b { left: 84%; translate: -50% 0; }

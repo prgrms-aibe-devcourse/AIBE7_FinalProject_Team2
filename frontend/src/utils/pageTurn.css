@@ -30,17 +30,12 @@
    움직임 줄이기면 연출 자체를 하지 않는다(landingPage.js) */
 .coffee-fly-layer { position: fixed; inset: 0; z-index: 1000; overflow: hidden; pointer-events: none; }
 .coffee-fly-table { position: absolute; }
-.coffee-fly-mug {
-  position: absolute; border-radius: 50%; transform-origin: 50% 50%; will-change: transform;
-  background: var(--color-desk-mug); box-shadow: inset 0 0 0 var(--rim) var(--color-desk-mug-rim); /* --rim: 잔 지름의 7.5%(책상 잔 120px에 9px), coffeeDive.js가 넣는다 */
-}
-.coffee-fly-coffee {
-  position: absolute; inset: 16.7%; border-radius: 50%;
-  background: radial-gradient(circle at 38% 34%, var(--color-desk-coffee-light) 0 8%, var(--color-desk-coffee) 30%, var(--color-desk-coffee-dark));
-}
-.coffee-fly-mug::after { /* 손잡이: 날아오는 잔은 오른쪽(책상 잔의 좌우 반전) */
-  content: ''; position: absolute; right: -25%; top: 51.7%; width: 33.3%; height: 25%;
-  border: var(--rim) solid var(--color-desk-mug); border-left: 0; border-radius: 0 15% 15% 0 / 0 25% 25% 0; transform: rotate(24deg);
+/* B안(FE-150): 책상 잔과 같은 그림(큰 해상도 mug-large). 잔 원 지름은 coffeeDive.js가 --m으로 넣고, 그림(손잡이 포함)은 ::after가 원에 맞춰 얹는다. 손잡이는 책상 잔과 같은 오른쪽 아래다 */
+.coffee-fly-mug { position: absolute; border-radius: 50%; transform-origin: 50% 50%; will-change: transform; }
+.coffee-fly-coffee { position: absolute; inset: 16.7%; border-radius: 50%; }
+.coffee-fly-mug::after {
+  content: ''; position: absolute; left: calc(var(--m) * -.133); top: calc(var(--m) * -.103); width: calc(var(--m) * 1.525); height: calc(var(--m) * 1.22);
+  background: url('/images/desk/mug-large.webp') 0 0 / 100% 100% no-repeat;
 }
 
 /* 메인 책상 노트북 → 커뮤니티 (utils/laptopBoot.js, FE-47). 컴퓨터 부팅: 화면이 위아래에서 눈을 감듯 어두워지고, 눈을 뜨듯 열리며 커뮤니티가 드러난다.
@@ -54,10 +49,7 @@
 .paper-hand-layer { position: fixed; inset: 0; z-index: 1000; overflow: hidden; pointer-events: none; perspective: 1800px; }
 .paper-hand-shade { position: absolute; inset: 0; }
 .paper-hand-shade.is-desk { background:
-    radial-gradient(ellipse at 8% 0%, color-mix(in srgb, var(--color-desk-wood-glow) 38%, transparent), transparent 55%),
-    repeating-linear-gradient(176deg, color-mix(in srgb, var(--color-desk-shadow) 6%, transparent) 0 2px, transparent 2px 9px),
-    repeating-linear-gradient(178deg, color-mix(in srgb, var(--color-desk-wood-glow) 6%, transparent) 0 1px, transparent 1px 23px),
-    linear-gradient(180deg, var(--color-desk-wood-light), var(--color-desk-wood) 40%, var(--color-desk-wood-dark)); }
+    url('/images/desk/wood.webp') center / cover no-repeat var(--color-desk-wood); }
 .paper-hand { position: absolute; overflow: hidden; background: var(--color-desk-news); transform-origin: 50% 50%; backface-visibility: hidden;
   box-shadow: 0 24px 40px -18px color-mix(in srgb, var(--color-desk-shadow) 60%, transparent); }
 .paper-hand .sheet { position: absolute; transform-origin: 0 0; box-shadow: none; }

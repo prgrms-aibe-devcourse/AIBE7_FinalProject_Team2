@@ -8,6 +8,13 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+# psql 클라이언트 (BE-161). RAG 검색(rag 단계)이 DB 함수를 psql로 부른다(pipeline.py query_rag_db).
+# 베이스 이미지의 데비안 기본 저장소 버전을 쓴다(11/02 빌드 기준 17). 서버보다 낮아져도 SELECT 질의에는 문제없다
+# — \d 같은 메타 명령은 쓰지 않는다
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
 # 의존성을 먼저 넣어 레이어 캐시를 재사용한다
 COPY service/requirements.txt service/requirements.txt
 COPY case-extractor/requirements.txt case-extractor/requirements.txt

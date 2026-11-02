@@ -70,8 +70,9 @@ _STAGE_STATUS = {"running": STAGE_RUNNING, "done": DONE, "failed": STAGE_FAILED}
 # 서비스에서 기본으로 끄는 단계
 # - load: 적재는 관리자가 검수한 뒤 백엔드(Java)가 한다(BE-93). 파이프라인의 load는 비공개 저장소 체크아웃과
 #   로컬 DB를 요구하므로 컨테이너에서는 쓰지 않는다
-# - rag: psql로 로컬 DB에 붙어야 하는데 컨테이너에서는 DB가 로컬이 아니다(pipeline.py _is_local_host).
-#   못 쓰면 사건 입력의 references로 진행한다는 기존 정책(요구사항 v5.5 "RAG 우선, 안 되면 퓨샷")을 따른다
+# - rag: 기본은 끈다. 요청이 켜면 RAG_DB_*(읽기 전용 원격 접속, BE-161)로 검색한다 — 컨테이너에서는 DB가 로컬이 아니라
+#   로컬 전용 경로(pipeline.py query_db · _is_local_host)로는 검색할 수 없기 때문이다. RAG_DB_*가 없거나 검색에 실패하면
+#   사건 입력의 references로 진행한다는 기존 정책(요구사항 v5.5 "RAG 우선, 안 되면 퓨샷")을 따른다
 # - contamination: 사전 학습 점검은 호출 수가 많아(기본 10회) 기본은 꺼 둔다. 요청에서 켤 수 있다
 DISABLED_STAGES = ("load", "rag", "contamination")
 
@@ -220,6 +221,43 @@ def _terminate(pid):
         pass
 
 
+# 사전 학습 점검 판정에서 내보내는 값 (BE-160). pipeline.contamination_verdicts의 모델별 결과 중
+# 판정 · 근거 · 분류별 개수 · 응답 수 · 기준만 — 회차별 응답(모델이 예측한 형량)은 run-*.json에만 두고 내보내지 않는다
+CONTAMINATION_RESULT_KEYS = ("verdict", "reason", "counts", "answered", "runs", "criteria", "replacedBy")
+
+
+def _contamination_result(contamination):
+    """사전 학습 점검 판정을 모델별로 돌려준다 (BE-160, PR #411 리뷰).
+
+    SUSPECT(의심)는 기본 설정에서 등록을 계속하므로, 판정이 결과로 나가지 않으면 적재 뒤 작업이 지워지면서
+    관리자가 후검수 · 집계할 길이 없어진다. 백엔드는 고른 모델(selection.modelSpec)의 값을 생성 기록에 남긴다
+    (오프라인 적재의 pipeline.build_generation_report와 같은 값). 점검을 돌리지 않았으면 None
+    """
+    results = (contamination or {}).get("results")
+    if not isinstance(results, dict) or not results:
+        return None
+    return {spec: {key: value[key] for key in CONTAMINATION_RESULT_KEYS if key in value}
+            for spec, value in results.items() if isinstance(value, dict)}
+
+
+# RAG 검색 보고에서 내보내는 값 (BE-161 2차). pipeline.rag_report(오프라인 적재의 generation_report.rag)와 같은 키 —
+# 상태 · 대체 사유 · 양형기준 버전 이름 · 기준 종류 · 조각 / 판례 id · 점수 · 경고. 판례 본문 · 사건번호 · 참고 자료 파일 경로는 없다
+RAG_RESULT_KEYS = ("status", "fallbackReasons", "embeddingModel", "guideline", "guidelineBasis", "guidelineFactors",
+                   "precedents", "excludedSuspects", "warnings")
+
+
+def _rag_result(rag):
+    """RAG 검색 보고를 돌려준다 (BE-161 2차, PR #412 리뷰).
+
+    적재 뒤 작업이 지워지므로, 내보내지 않으면 "이 사건은 RAG가 실제로 쓰였는가"를 나중에 볼 길이 없다.
+    RAG_DB_*를 일부만 넣은 설정 실수도 대체 사유(fallbackReasons)로 여기 남는다. rag를 돌리지 않았으면 None
+    """
+    report = (rag or {}).get("report")
+    if not isinstance(report, dict):
+        return None
+    return {key: report.get(key) for key in RAG_RESULT_KEYS}
+
+
 def _axis_result(axis):
     """가치관 축 투표 결과를 **내용으로** 돌려준다.
 
@@ -349,23 +387,31 @@ class JobStore:
             note = source.get("note")
             if note is not None and not isinstance(note, str):
                 raise JobError(f"sources[{index}].note는 문자열이어야 합니다")
-            texts.append((text, note))
+            # 등록 요청의 사건번호 (BE-161 2차, PR #413 리뷰). RAG가 자기 사건을 유사 판례에서 뺄 때 판결문 본문에서 찾은 번호보다
+            # 먼저 쓴다(pipeline.rag_inputs → resolve_sources 덮어쓰기). 본문에 다른 판례 번호가 먼저 나오거나 머리가 없으면
+            # 대상 판결이 참고 자료로 들어갈 수 있어서다. 해시로만 비교하고 모델에는 보내지 않는다(extract는 원문 파일만 읽는다)
+            case_number = source.get("caseNumber")
+            if case_number is not None and not isinstance(case_number, str):
+                raise JobError(f"sources[{index}].caseNumber는 문자열이어야 합니다")
+            texts.append((text, note, (case_number or "").strip() or None))
 
         job_id = uuid.uuid4().hex
         path = self.jobs_dir / job_id
         raw_dir = path / "raw"
         # 원문은 작업 폴더에만 둔다(공개 저장소에 남기지 않는다). 볼륨 설정은 docker-compose.pipeline.yml 참고
         config_sources = []
-        for index, (text, note) in enumerate(texts, start=1):
+        for index, (text, note, case_number) in enumerate(texts, start=1):
             entry = {"path": str(raw_dir / f"source-{index}.txt")}
             if note:
                 entry["note"] = note
+            if case_number:
+                entry["caseNumber"] = case_number
             config_sources.append(entry)
         config = self._build_config(job_id, config_sources, request)  # 여기서 실패해도 쓴 파일이 없다
 
         # 2) 검증이 모두 끝난 뒤에만 쓴다
         raw_dir.mkdir(parents=True, exist_ok=True)
-        for index, (text, _) in enumerate(texts, start=1):
+        for index, (text, _note, _case_number) in enumerate(texts, start=1):
             (raw_dir / f"source-{index}.txt").write_text(text, encoding="utf-8")
         _write_json(path / "config.json", config)
         _write_json(path / "job.json", {
@@ -668,6 +714,10 @@ class JobStore:
             if selection else None,
             "axis": _axis_result(outputs.get("axis") or {}),
             "classify": _classify_result(outputs.get("classify") or {}),
+            # 사전 학습 점검 판정 (BE-160). 점검을 안 돌렸으면 None — 백엔드가 생성 기록에 SKIPPED로 남긴다
+            "contamination": _contamination_result(outputs.get("contamination") or {}),
+            # RAG 검색 보고 (BE-161 2차). rag를 안 돌렸으면 None — 백엔드가 생성 기록에 SKIPPED로 남긴다
+            "rag": _rag_result(outputs.get("rag") or {}),
             # 대본은 안 돌렸으면 None이다. 사건 · 판결만 있으면 적재는 그대로 되고, 대본은 나중에 들어와도 된다(BE-108)
             "script": _script_result(outputs.get("script") or {}),
         }

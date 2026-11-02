@@ -29,7 +29,16 @@ public record PipelineJobRequest(
 	String crimeType
 ) {
 
+	/**
+	 * 판결문 한 건.
+	 *
+	 * @param originalText 판결문 원문. extract 단계가 로컬 마스킹 뒤 모델에 보낸다
+	 * @param note         관리자 메모 (선택)
+	 * @param caseNumber   관리자가 등록 때 입력한 사건번호 (BE-161 2차, PR #413 리뷰). RAG가 <b>자기 사건(같은 사건 그룹)을
+	 *                     유사 판례에서 뺄 때</b> 판결문 본문에서 찾은 번호보다 먼저 쓴다 — 본문에 다른 판례 번호가 먼저 나오거나
+	 *                     머리가 없으면 대상 판결이 참고 자료로 들어갈 수 있어서다. 파이프라인 안에서 해시로만 비교하고 모델에는 보내지 않는다
+	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record Source(String originalText, String note) {
+	public record Source(String originalText, String note, String caseNumber) {
 	}
 }
