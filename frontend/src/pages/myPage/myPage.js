@@ -1664,16 +1664,17 @@ export async function renderMyPage(container, { api, navigate, view, from }) {
 
   // 기존 사용자 백필(P-9 backfill, FE-132): 수집 기록이 생기기 전에 마친 사건 · 손님 때 마친 사건은 일러스트 · 의상이 비어 있다.
   // 그 사건 대본으로 얻은 것을 보내 채우고("본 것", 획득 시각은 그 사건의 첫 완료 시각 — 서버가 정한다), 다 보내면 다시 받아 그린다.
-  // 대본을 받지 못하면(준비 중 · 점검) 일러스트만 보내고, 그 사건은 의상이 남았다고 적어 두었다가 다음에 들어올 때 다시 시도한다
+  // 대본을 받지 못하면(준비 중 · 점검) 일러스트만 보낸다. 점검 · 네트워크 오류로 못 받은 사건만 의상이 남았다고 적어 두었다가 다음에 들어올 때 다시 시도한다(대본이 없는 사건은 되풀이하지 않는다)
   async function backfill(given) {
     const targets = backfillCaseIds(given.experiences, given.collection?.items, castPending()).filter((caseId) => !backfilled.has(caseId));
     if (targets.length === 0 || !api.postCollection) return;
     targets.forEach((caseId) => backfilled.add(caseId));
     let added = 0;
     for (const caseId of targets) {
-      const script = await loadCaseScript(api, caseId).catch(() => null);
+      let failed = false;
+      const script = await loadCaseScript(api, caseId).catch(() => { failed = true; return null; });
       const result = await recordCollection(api, caseId, script, { backfill: true });
-      if (result) castPending(caseId, !script);
+      if (result) castPending(caseId, failed); // 대본이 없는 사건(SCRIPT_NOT_FOUND)은 되풀이하지 않고, 점검 · 네트워크 오류로 못 받은 사건만 다시 시도
       added += result?.added?.length ?? 0;
     }
     if (!added || !active()) return;
