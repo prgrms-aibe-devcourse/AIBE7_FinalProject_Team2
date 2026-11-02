@@ -130,14 +130,23 @@ export function renderAdminCasePage(container, { caseId, navigate }) {
         errorTarget.textContent = '';
         try {
           await action();
-          await load();
-          if (!active()) return;
-          returnTo(anchor);
-          notify(okText);
         } catch (failure) {
           handleFailure(failure, '요청을 처리하지 못했어요.', errorTarget);
           if (active()) trigger.disabled = false;
+          return;
         }
+        // 동작은 이미 성공했다: 다시 불러오기만 실패하면 실패로 알리지 않고 새로고침을 안내한다 (after와 같은 처리)
+        try {
+          await load();
+        } catch (failure) {
+          if (!active()) return;
+          if (failure?.code === 'UNAUTHORIZED') { unauthorized(); return; }
+          notify('저장은 됐지만 화면을 새로 불러오지 못했어요. 새로고침해 주세요.');
+          return;
+        }
+        if (!active()) return;
+        returnTo(anchor);
+        notify(okText);
       }
 
       // 다시 그린 화면에서 누른 자리를 찾아 보이게 하고 포커스를 둔다. 자리가 사라졌으면(예: 공개 뒤) 그 부분 제목으로
@@ -179,8 +188,10 @@ export function renderAdminCasePage(container, { caseId, navigate }) {
         form.append(labeledField('공개 취소 사유 (1 ~ 200자, 사용자에게는 보이지 않아요)', reason), send);
         const open = button('공개 취소', () => {
           form.hidden = !form.hidden;
+          open.setAttribute('aria-expanded', String(!form.hidden));
           if (!form.hidden) reason.focus();
         });
+        open.setAttribute('aria-expanded', 'false');
         form.addEventListener('submit', (event) => {
           event.preventDefault();
           if (!reason.value.trim()) { error.textContent = '공개 취소 사유를 입력해 주세요.'; reason.focus(); return; }

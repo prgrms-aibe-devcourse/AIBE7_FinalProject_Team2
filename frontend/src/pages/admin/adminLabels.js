@@ -75,7 +75,7 @@ export const REPORT_ACTION = { HIDE: '숨김 처리', SUSPEND: '회원 정지 (7
 export const ADMIN_ROLE = { SUPER: '총괄', REVIEWER: '검수' };
 export const AUDIT_ACTION = {
   LOGIN_SUCCESS: '로그인', LOGIN_FAILURE: '로그인 실패', LOGOUT: '로그아웃', SOURCE_VIEW: '원본 판결문 열람', JUDGMENT_APPROVE: '판결 후보 승인',
-  JUDGMENT_REJECT: '판결 후보 반려', CASE_UPDATE: '사건 내용 수정', VALUE_AXIS_CONFIRM: '가치관 축 확정', CASE_PUBLISH: '사건 공개',
+  JUDGMENT_REJECT: '판결 후보 반려', CASE_UPDATE: '사건 내용 수정', VALUE_AXIS_CONFIRM: '가치관 축 확정', CASE_PUBLISH: '사건 공개', CASE_UNPUBLISH: '사건 공개 취소',
 };
 
 export const AXIS_LABEL = Object.fromEntries(AXES.map((axis) => [axis.key, axis.label]));
