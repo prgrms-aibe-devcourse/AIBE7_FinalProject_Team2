@@ -17,6 +17,44 @@ export const UNIT_LABEL = {
 /** 사용자 쪽 대본 상태 (API 1 · 16과 같은 값, BE-126 2차-2) */
 export const SCRIPT_STATUS = { READY: '사용자에게 공개 중', PREPARING: '준비 중', MAINTENANCE: '점검 중' };
 
+/**
+ * 대본 상태 배지 문구. READY여도 사용자에게 나간 적이 없으면(releasedAt 없음 — 초안 사건에서 승인만 함) 공개 중이 아니다
+ * (PR #388 리뷰 1부 3번)
+ */
+export function statusLabel(script) {
+  if (script.scriptStatus === 'READY' && !script.releasedAt) return '승인 완료 · 사건 공개 대기';
+  return SCRIPT_STATUS[script.scriptStatus] ?? script.scriptStatus;
+}
+
+/** 분류 값 → 화면 문구 (파이프라인 `prompts/script/README.md` "CASE GUIDE") */
+export const MOOD_LABEL = {
+  tragic: '비극 · 연민', impulsive: '격분 · 충동', cold: '냉혹 · 계획', betrayal: '신뢰 배반', calculated: '건조 · 계산', tense: '위협 · 긴장',
+};
+
+/** 재생성이 유일한 길일 때 덧붙이는 안내. 재생성 화면은 FE-148 2차에 들어간다 */
+export const REGENERATE_NOTE = '재생성 화면은 다음 배포에 들어가요.';
+
+/**
+ * 말하는 대사 자리 (BE-153) — 대사 길이 규칙(100자 · 2줄)을 거는 자리다. 정본은 파이프라인 검수(`script_review.unit_lines`)이고
+ * 계약 파일(`tools/ai-judgment/contracts/script_blocks.json` `spokenPaths`)과 같은지 테스트가 본다. '*'는 배열 순번 하나다.
+ * 설계도(U0) · U2 카드 · 신문 답은 화면 대사가 아니라 길이를 제한하지 않는다(서버도 같다). U3 대사는 늘 대사다
+ */
+export const SPOKEN_PATHS = {
+  U0: [],
+  U1: ['/lines/*'],
+  U2: ['/indict/*', '/plea/*', '/issues_narr/*', '/questions/*/q'],
+  U4: ['/prosecutor', '/defense'],
+};
+
+const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** 그 자리가 말하는 대사인지 */
+export function isSpoken(unit, path) {
+  if (unit === 'U3') return true;
+  return (SPOKEN_PATHS[unit] ?? []).some((pattern) =>
+    new RegExp(`^${pattern.split('*').map(escapeRegex).join('\\d+')}$`).test(path));
+}
+
 /** 낡음 근거 키 → 화면 문구 (A-13-10 staleReasons · unknownBasis) */
 export const BASIS_LABEL = {
   U0: '설계도(U0)',
@@ -43,10 +81,16 @@ export function countChars(text) {
   return text.split('\n').filter((part) => part.trim()).reduce((sum, part) => sum + part.length, 0);
 }
 
-/** 길이 규칙 위반 문구. 지키면 null */
-export function textViolation(text) {
+/** 대사가 아닌 자리의 상한 (서버 Bean Validation과 같다) */
+export const MAX_TEXT = 500;
+
+/**
+ * 길이 규칙 위반 문구. 지키면 null. 말하는 대사 자리(spoken)만 100자 · 2줄을 보고, 나머지는 빈 값 · 500자만 본다(BE-153)
+ */
+export function textViolation(text, spoken = true) {
   const lines = text.split('\n').filter((part) => part.trim());
   if (!lines.length) return '문장을 입력해 주세요.';
+  if (!spoken) return text.length > MAX_TEXT ? `${MAX_TEXT}자까지 쓸 수 있어요. (지금 ${text.length}자)` : null;
   if (lines.length > MAX_LINES) return `${MAX_LINES}줄까지 쓸 수 있어요.`;
   const chars = countChars(text);
   if (chars > MAX_CHARS) return `줄바꿈을 빼고 ${MAX_CHARS}자까지 쓸 수 있어요. (지금 ${chars}자)`;
@@ -72,7 +116,7 @@ export function textLeaves(content, path = '') {
 
 // path의 마지막 이름 → 화면 문구. 모르는 이름은 path를 그대로 보인다(검수 결과 path와 대조할 수 있게)
 const KEY_LABEL = {
-  q: '질문', a: '답', lines: '해설', issues: '쟁점', issues_narr: '쟁점 해설', indict: '공소 요지', plea: '인부',
+  tone: '어조', q: '질문', a: '답', lines: '해설', issues: '쟁점', issues_narr: '쟁점 해설', indict: '공소 요지', plea: '인부',
   prosecutor: '검사 의견', defense: '최종변론', law: '적용 법조', cards: '카드', ul: '항목', b: '강조', p: '문단',
 };
 
@@ -111,12 +155,18 @@ export function basisText(keys) {
  * 대본 조건(멈춤 · 만들지 못한 것 · 대본 전체 검수 오류)을 먼저 본다 — 그때는 블록을 고쳐도 풀리지 않는다.
  */
 export function blockApproveGate(script, block) {
-  if (script.stopped) return '생성이 중간에 멈춘 대본이라 블록을 승인할 수 없어요. 다시 생성해 주세요.';
+  if (script.stopped) return `생성이 중간에 멈춘 대본이라 블록을 승인할 수 없어요. 다시 생성해 주세요. ${REGENERATE_NOTE}`;
   if ((script.pending ?? []).length) {
-    return `만들지 못한 것(${script.pending.join(' · ')})이 있어 블록을 승인할 수 없어요. 다시 생성해 주세요.`;
+    return `만들지 못한 것(${script.pending.join(' · ')})이 있어 블록을 승인할 수 없어요. 다시 생성해 주세요. ${REGENERATE_NOTE}`;
   }
-  if (hasError(script.review)) return '대본 전체 검수가 돌지 못했어요(REVIEW_FAILED). 다시 생성해 주세요.';
-  if (!block.publishable) return '이 블록에 검수 오류가 있어요. 오류 자리를 고치면 승인할 수 있어요.';
+  if (hasError(script.review)) return `대본 전체 검수가 돌지 못했어요(REVIEW_FAILED). 다시 생성해 주세요. ${REGENERATE_NOTE}`;
+  if (!block.publishable) {
+    // fix: unit(줄 수 미달 등)은 문장 수정으로 풀리지 않는다 — A-13-21은 이미 있는 자리만 고친다(PR #388 리뷰 2부 2번)
+    if ((block.review ?? []).some((issue) => issue.severity === 'error' && issue.fix === 'unit')) {
+      return `이 블록은 다시 생성해야 하는 오류(줄 수 미달 등)가 있어요. ${REGENERATE_NOTE}`;
+    }
+    return '이 블록에 검수 오류가 있어요. 오류 자리를 고치면 승인할 수 있어요.';
+  }
   if (block.staleBlocksApproval) {
     return `만든 뒤 ${basisText(block.staleReasons)}이(가) 바뀌었어요. 다시 생성하거나 "확인했음"으로 표시해 주세요.`;
   }
@@ -149,4 +199,24 @@ export function opensToUsers(script, unit, caseStatus) {
   const blocks = script.blocks ?? [];
   if (SCRIPT_UNITS.some((name) => !blocks.some((block) => block.unit === name))) return false;
   return blocks.every((block) => block.unit === unit || block.reviewStatus === 'APPROVED');
+}
+
+/**
+ * 블록을 만든 뒤 사건에 새로 생긴 민감 플래그 — 그 플래그의 가드 없이 만든 블록이라 "확인했음"을 서버가 거절한다(409).
+ * 근거에 플래그가 없거나(모름) 사건 값이 없으면 빈 목록 (서버 `CaseScript.addedSensitiveFlags`와 같은 규칙, PR #388 리뷰 2부 5번)
+ */
+export function addedSensitiveFlags(block, caseFlags) {
+  const before = block.basis?.sensitiveFlags;
+  if (!Array.isArray(before) || !Array.isArray(caseFlags)) return [];
+  return caseFlags.filter((flag) => !before.includes(flag)).sort();
+}
+
+/**
+ * 인정 여부 — 신문 답이 한 낱말 "예 · 네"인지. 서버(`ScriptAnswers.admits`) · 파이프라인(`script_assembler.admits`)과 같은 규칙이고
+ * 계약 파일 `admits` 사례로 테스트한다. 화면은 서버 값(meta.admits)을 쓰고, 이 함수는 목 API가 U0 수정 뒤 다시 계산할 때 쓴다
+ */
+export function admits(answer) {
+  if (typeof answer !== 'string') return false;
+  const stripped = answer.replace(/^[\s\u3000…．.]+/u, '');
+  return /^(예|네)(?=$|[\s,.?!…])/u.test(stripped);
 }

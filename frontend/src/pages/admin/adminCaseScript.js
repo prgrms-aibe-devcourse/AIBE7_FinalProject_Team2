@@ -2,8 +2,9 @@ import { button, element } from '../../components/siteLayout.js';
 import { confirmChange, labeledField } from './adminKit.js';
 import { CAST_NAME, REVIEW_STATUS, SCRIPT_SIDE, formatDateTime } from './adminLabels.js';
 import {
-  FIX_ORDER, MAX_CHARS, MAX_LINES, SCRIPT_STATUS, SCRIPT_UNITS, UNIT_LABEL, basisText, blockApproveGate, blockingStaleUnits,
-  countChars, issuesAt, leafLabel, opensToUsers, takeDownConfirm, textLeaves, textViolation,
+  FIX_ORDER, MAX_CHARS, MAX_LINES, MAX_TEXT, MOOD_LABEL, REGENERATE_NOTE, SCRIPT_UNITS, UNIT_LABEL, addedSensitiveFlags, basisText,
+  blockApproveGate, blockingStaleUnits, countChars, isSpoken, issuesAt, leafLabel, opensToUsers, statusLabel, takeDownConfirm, textLeaves,
+  textViolation,
 } from './adminScriptBlocks.js';
 
 // 사건 대본 검수 (A-13-10 ~ 13 · A-13-18 ~ 21, FE-106 · FE-148). 사건 검수 상세에 붙는 부분이다.
@@ -18,8 +19,11 @@ import {
 // **공개 중 수정 = 점검** (BE-126 2차-2): 사용자에게 나간 대본(releasedAt)의 승인을 푸는 요청은 서버가 막지 않고 대본이 점검 중이
 // 된다(API 18 503). 오탈자 하나로 체험이 잠기는 실수를 막으려고 그런 요청 전에는 확인을 받는다(PR #384 리뷰 1번).
 
-/** 고치기 폼 하나 — 대사(U3) · 블록 문장(U0 · U1 · U2 · U4)이 함께 쓴다. 저장하면 onSave(value)를 부른다 */
-function editForm({ label, value, saveText, onSave, error }) {
+/**
+ * 고치기 폼 하나 — 대사(U3) · 블록 문장(U0 · U1 · U2 · U4)이 함께 쓴다. 저장하면 onSave(value)를 부른다.
+ * 말하는 대사 자리(spoken)만 100자 · 2줄을 보고, 나머지는 500자까지다(BE-153)
+ */
+function editForm({ label, value, saveText, onSave, error, spoken = true }) {
   const form = element('form', 'admin-inline-form');
   form.hidden = true;
   form.noValidate = true;
@@ -27,6 +31,11 @@ function editForm({ label, value, saveText, onSave, error }) {
   Object.assign(input, { rows: 2, value: value ?? '' });
   const counter = element('p', 'admin-sub');
   const sync = () => {
+    if (!spoken) {
+      counter.textContent = `${input.value.length} / ${MAX_TEXT}자 (화면 대사가 아니라 줄 수는 보지 않아요)`;
+      counter.className = input.value.length > MAX_TEXT ? 'admin-error' : 'admin-sub';
+      return;
+    }
     const chars = countChars(input.value);
     counter.textContent = `${chars} / ${MAX_CHARS}자 · ${MAX_LINES}줄까지`;
     counter.className = chars > MAX_CHARS ? 'admin-error' : 'admin-sub';
@@ -35,12 +44,14 @@ function editForm({ label, value, saveText, onSave, error }) {
   sync();
   const send = element('button', 'primary-button', saveText);
   send.type = 'submit';
-  form.append(labeledField(label, input), counter, send);
+  // 고친 문장은 파이프라인 검사(금지어 · 판결 정보 누출 · 말투)를 다시 거치지 않는다 — 서버 재검사(BE-154) 전까지 사람이 본다
+  const recheck = element('p', 'admin-sub', '고친 문장은 다시 검사하지 않아요. 금지어 · 형량 표현 · 말투를 직접 확인해 주세요.');
+  form.append(labeledField(label, input), counter, recheck, send);
   form.addEventListener('submit', (event) => {
     event.preventDefault();
     error.textContent = '';
     const text = input.value.trim();
-    const violation = textViolation(text);
+    const violation = textViolation(text, spoken);
     if (violation) { error.textContent = violation; input.focus(); return; }
     send.disabled = true;
     onSave(text, () => { send.disabled = false; });
@@ -145,7 +156,7 @@ function leafItem(ctx, script, block, leaf) {
   const error = element('p', 'admin-error');
   error.setAttribute('role', 'alert');
   const { form, input } = editForm({
-    label: leafLabel(leaf.path), value: leaf.text, saveText: '이 문장 저장', error,
+    label: leafLabel(leaf.path), value: leaf.text, saveText: '이 문장 저장', error, spoken: isSpoken(block.unit, leaf.path),
     onSave: (value, release) => {
       if (!confirmTakeDown(script, `${block.unit} ${leafLabel(leaf.path)}을(를) 고칠까요?`)) { release(); return; }
       api.updateScriptBlockText(caseId, block.unit, leaf.path, value)
@@ -180,7 +191,8 @@ function repairsDetails(repairs) {
 }
 
 /** 블록 하나: 머리줄(검수 상태 · 판 · 낡음) → 낡음 안내 → 내용 → 자동 고친 기록 → 승인 · 반려 · 확인했음 */
-function blockItem(ctx, script, block, caseStatus) {
+function blockItem(ctx, script, block, caseData) {
+  const caseStatus = caseData?.status;
   const { api, caseId, after, handleFailure } = ctx;
   const item = element('li', 'admin-script-block');
   const error = element('p', 'admin-error');
@@ -203,9 +215,16 @@ function blockItem(ctx, script, block, caseStatus) {
 
   if (block.stale) {
     const reasons = basisText(block.staleReasons);
-    item.append(element('p', block.staleBlocksApproval ? 'admin-warn' : 'admin-sub', block.staleBlocksApproval
-      ? `만든 뒤 바뀐 값: ${reasons}. 옛 값을 보고 만든 블록이라 승인이 막혀요 — 다시 생성하거나, 그대로 둬도 되면 "확인했음"으로 표시해 주세요.`
-      : `만든 뒤 바뀐 값: ${reasons}. 표시만 해요 — 다시 만들지 그대로 둘지 골라 주세요.`));
+    // 앞 블록(U0 · U2)이 바뀌면 신문 질문 · 의견이 설계도와 어긋날 수 있다 — 정합 검사가 다시 돌지 않아 눈에 띄게 둔다(PR #388 리뷰 2부 6번)
+    const upstream = (block.staleReasons ?? []).filter((key) => key === 'U0' || key === 'U2');
+    let text = `만든 뒤 바뀐 값: ${reasons}. 표시만 해요 — 다시 만들지 그대로 둘지 골라 주세요.`;
+    if (upstream.length) {
+      text = `앞 블록(${upstream.join(' · ')})이 바뀌었어요. 이 블록의 질문 · 의견이 바뀐 설계도와 어긋날 수 있어 다시 생성을 권장해요. ${REGENERATE_NOTE}`;
+    }
+    if (block.staleBlocksApproval) {
+      text = `만든 뒤 바뀐 값: ${reasons}. 옛 값을 보고 만든 블록이라 승인이 막혀요 — 다시 생성하거나, 그대로 둬도 되면 "확인했음"으로 표시해 주세요.`;
+    }
+    item.append(element('p', block.staleBlocksApproval || upstream.length ? 'admin-warn' : 'admin-sub', text));
   }
   if (block.unknownBasis?.length) {
     item.append(element('p', 'admin-sub', `근거가 없어 비교하지 못한 값: ${basisText(block.unknownBasis)} (이관 · 증거조사만 만든 대본)`));
@@ -279,7 +298,9 @@ function blockItem(ctx, script, block, caseStatus) {
   actions.append(approve, reject);
 
   if (block.stale) {
-    // 운영 기록(근거)만 바뀌는 작업이라 묻지 않는다(DESIGN.md 확인 기준). 새로 생긴 민감 플래그는 서버가 409로 막는다
+    // 운영 기록(근거)만 바뀌는 작업이라 묻지 않는다(DESIGN.md 확인 기준).
+    // 새로 생긴 민감 플래그는 그 가드 없이 만든 블록이라 서버가 409로 막는다 — 누르기 전에 잠그고 이유를 보인다(PR #388 리뷰 2부 5번)
+    const added = addedSensitiveFlags(block, caseData?.content?.sensitiveFlags);
     const acknowledge = button('확인했음 (그대로 두기)', () => {
       acknowledge.disabled = true;
       error.textContent = '';
@@ -288,6 +309,14 @@ function blockItem(ctx, script, block, caseStatus) {
         .catch((failure) => { handleFailure(failure, '확인했음으로 표시하지 못했어요.', error); acknowledge.disabled = false; });
     });
     acknowledge.setAttribute('aria-label', `${block.unit} ${UNIT_LABEL[block.unit] ?? ''} 낡음 확인했음`);
+    if (added.length) {
+      acknowledge.disabled = true;
+      const note = element('p', 'admin-warn', `새로 생긴 민감 플래그(${added.join(' · ')})의 가드 없이 만든 블록이라 "확인했음"으로 둘 수 없어요. `
+        + `다시 생성해야 해요. ${REGENERATE_NOTE}`);
+      note.id = `admin-script-flags-${block.unit}`;
+      acknowledge.setAttribute('aria-describedby', note.id);
+      item.append(note);
+    }
     actions.append(acknowledge);
   }
   item.append(actions, rejectForm, error);
@@ -333,8 +362,9 @@ export function scriptSection(ctx, data) {
     REVIEW_STATUS[script.reviewStatus] ?? script.reviewStatus);
   head.append(element('strong', '', '대본'), state);
   if (script.scriptStatus) {
-    const tone = { READY: 'is-published', MAINTENANCE: 'is-rejected', PREPARING: 'is-pending' }[script.scriptStatus] ?? '';
-    head.append(element('span', `admin-badge ${tone}`, SCRIPT_STATUS[script.scriptStatus] ?? script.scriptStatus));
+    const tone = script.scriptStatus === 'READY' && !script.releasedAt ? 'is-approved'
+      : ({ READY: 'is-published', MAINTENANCE: 'is-rejected', PREPARING: 'is-pending' }[script.scriptStatus] ?? '');
+    head.append(element('span', `admin-badge ${tone}`, statusLabel(script)));
   }
   head.append(element('span', 'admin-sub', `${script.model ?? ''} · 만든 때 ${formatDateTime(script.generatedAt)}`));
   parts.push(head, ...statusParts(script));
@@ -352,11 +382,19 @@ export function scriptSection(ctx, data) {
     + `${script.meta?.issue ? ` · 쟁점 ${script.meta.issue}` : ''}`
     + `${script.meta?.admits == null ? '' : ` · 혐의 ${script.meta.admits ? '인정' : '부인'}`}`));
 
+  // 생성 문맥 — 검수자가 어떤 분위기 · 가드로 만든 대본인지 알고 어조를 본다(PR #388 리뷰 2부 3번). 사건의 지금 값이다(A-6)
+  const mood = data?.content?.classification?.mood;
+  const flags = data?.content?.sensitiveFlags;
+  if (mood || flags) {
+    parts.push(element('p', 'admin-sub', `생성 문맥 — 분위기 ${mood ? (MOOD_LABEL[mood] ?? mood) : '—'}`
+      + ` · 민감 플래그 ${flags == null ? '분류 전' : flags.length ? flags.join(' · ') : '없음'}`));
+  }
+
   // 대본 전체에 걸린 막힘: 멈춤 · 만들지 못한 것 · 대본 전체 검수 오류 — 블록을 고쳐도 풀리지 않아 "다시 생성"이 길이다
-  if (script.stopped) parts.push(element('p', 'admin-warn', '호출 한도로 중간에 멈춘 대본이에요. 빠진 대사는 줄 자체가 없어서 고칠 수 없어요 — 다시 생성해야 해요.'));
+  if (script.stopped) parts.push(element('p', 'admin-warn', `호출 한도로 중간에 멈춘 대본이에요. 빠진 대사는 줄 자체가 없어서 고칠 수 없어요 — 다시 생성해야 해요. ${REGENERATE_NOTE}`));
   if (script.pending?.length) {
     const names = script.pending.map((unit) => (UNIT_LABEL[unit] ? `${unit} ${UNIT_LABEL[unit]}` : unit === 'PAPER' ? '기사(PAPER)' : unit));
-    parts.push(element('p', 'admin-warn', `만들지 못한 것: ${names.join(' · ')}. 다시 생성해야 승인할 수 있어요.`));
+    parts.push(element('p', 'admin-warn', `만들지 못한 것: ${names.join(' · ')}. 다시 생성해야 승인할 수 있어요. ${REGENERATE_NOTE}`));
   }
   const scriptIssues = issueList(script.review ?? []);
   if (scriptIssues) parts.push(scriptIssues);
@@ -368,7 +406,7 @@ export function scriptSection(ctx, data) {
   const blocks = element('ul', 'admin-script-blocks');
   SCRIPT_UNITS.forEach((unit) => {
     const block = (script.blocks ?? []).find((entry) => entry.unit === unit);
-    if (block) { blocks.append(blockItem(ctx, script, block, data?.status)); return; }
+    if (block) { blocks.append(blockItem(ctx, script, block, data)); return; }
     const missing = element('li', 'admin-script-block is-missing');
     missing.append(element('strong', '', `${unit} ${UNIT_LABEL[unit]}`), element('p', 'admin-sub', '만들지 못한 블록이에요.'));
     blocks.append(missing);

@@ -2,7 +2,7 @@
 // 사건 · 원문은 모두 가상 값이다. 상태는 메모리에만 두고(새로고침하면 처음으로), 로그인 여부만 sessionStorage에 둔다.
 // 원본 판결문 같은 내부 정보를 브라우저 저장소에 남기지 않기 위해서다.
 import { ADMIN, SESSION_KEY, delay, fail, now, requireLogin } from './adminMockBase.js';
-import { SCRIPT_UNITS, textLeaves, textViolation } from './adminScriptBlocks.js';
+import { SCRIPT_UNITS, addedSensitiveFlags, admits, isSpoken, textLeaves, textViolation } from './adminScriptBlocks.js';
 
 export * from './adminOpsMockApi.js'; // 운영 메뉴(대시보드 · 회원 · 게시글 · 신고 · 관리자 계정 · 공지) 목
 
@@ -79,6 +79,9 @@ const content = (title, extra = {}) => ({
   recommendedMinMonths: 120, recommendedMaxMonths: 192, recommendedBasis: '살인범죄 양형기준 제2유형 기본 영역 (가상)',
   incidentDate: '2024-03-02', guideline: { guidelineId: 4, versionName: '2023 수정 (가상)' },
   deidentifiedItems: ['인명', '지명', '사건번호'],
+  // 배역 · 민감 플래그 · 분류 (BE-125 · BE-129). 대본 화면이 생성 문맥 · 새로 생긴 민감 플래그를 이 값으로 본다(FE-148)
+  castRoles: { prosecutor: 'naero', defense: 'nambul' }, sensitiveFlags: [],
+  classification: { mood: 'tragic', issue: 'intent_disputed', victim: 'punish', thirdParty: false }, classificationNeedsReview: [],
   ...extra,
 });
 
@@ -105,7 +108,7 @@ function line(factorId, label, role, character, text, warnings = [], attempts = 
 /** 블록 하나 (A-13-10 blocks[]). 검수 칸 · 낡음 칸은 서버가 계산해 주는 값을 그대로 담아 둔다 */
 function scriptBlock(unit, content, extra = {}) {
   return {
-    unit, content, revision: 1, basis: {}, review: [], warnings: [], repairs: [], publishable: true,
+    unit, content, revision: 1, basis: { sensitiveFlags: [] }, review: [], warnings: [], repairs: [], publishable: true,
     reviewStatus: 'PENDING', reviewedBy: null, reviewedAt: null, reviewNote: null,
     stale: false, staleReasons: [], staleBlocksApproval: false, unknownBasis: [], ...extra,
   };
@@ -734,10 +737,10 @@ function reasonOf(text) {
   return note;
 }
 
-/** 길이 규칙(A-13-13 · 21). 줄바꿈은 글자 수에 넣지 않는다 */
-function textOf(text) {
+/** 길이 규칙(A-13-13 · 21). 말하는 대사 자리만 100자 · 2줄(줄바꿈은 세지 않는다), 나머지는 500자까지(BE-153) */
+function textOf(text, spoken = true) {
   const value = (text ?? '').trim();
-  const violation = textViolation(value);
+  const violation = textViolation(value, spoken);
   if (violation) fail('VALIDATION_ERROR', violation, { status: 400 });
   return value;
 }
@@ -827,16 +830,18 @@ export async function rejectScriptBlock(caseId, unit, reasonText) {
   return scriptView(item.caseId);
 }
 
-/** A-13-20 확인했음 — 근거를 지금 값으로 맞춘다. 새로 생긴 민감 플래그(addedSensitiveFlags, 목 전용 표시)는 거절한다 */
+/** A-13-20 확인했음 — 근거를 지금 값으로 맞춘다. 블록을 만든 뒤 사건에 새로 생긴 민감 플래그가 있으면 거절한다(서버와 같은 규칙) */
 export async function acknowledgeScriptBlockStale(caseId, unit) {
   await delay(); requireLogin();
   const item = findCase(caseId);
   const script = scriptOf(item);
   const block = blockOf(script, unit);
-  if (block.addedSensitiveFlags?.length) {
-    fail('INVALID_STATE', `새로 생긴 민감 플래그(${block.addedSensitiveFlags.join(' · ')})의 가드 없이 만든 블록이라 확인했음으로 둘 수 없습니다. 다시 생성해 주세요.`, { status: 409 });
+  const added = addedSensitiveFlags(block, item.content.sensitiveFlags);
+  if (added.length) {
+    fail('INVALID_STATE', `새로 생긴 민감 플래그(${added.join(' · ')})의 가드 없이 만든 블록이라 확인했음으로 둘 수 없습니다. 다시 생성해 주세요.`, { status: 409 });
   }
   Object.assign(block, { stale: false, staleReasons: [], staleBlocksApproval: false });
+  block.basis = { ...block.basis, sensitiveFlags: [...(item.content.sensitiveFlags ?? [])] };
   return scriptView(item.caseId);
 }
 
@@ -847,7 +852,7 @@ export async function updateScriptBlockText(caseId, unit, path, text) {
   const item = findCase(caseId);
   const script = scriptOf(item);
   const block = blockOf(script, unit);
-  const value = textOf(text);
+  const value = textOf(text, isSpoken(unit, path));
   const leaf = textLeaves(block.content).find((entry) => entry.path === path);
   if (!leaf) fail('SCRIPT_LINE_NOT_FOUND', `블록에 그 자리의 문장이 없습니다: ${path}`, { status: 404 });
   const tokens = path.split('/').slice(1).map((token) => token.replaceAll('~1', '/').replaceAll('~0', '~'));
@@ -863,7 +868,7 @@ export async function updateScriptBlockText(caseId, unit, path, text) {
     other.stale = true;
     if (!other.staleReasons.includes(unit)) other.staleReasons = [...other.staleReasons, unit];
   });
-  if (unit === 'U0') script.meta.admits = /^(…|\.|\s)*(예|네)/.test(block.content.questions?.[2]?.a ?? '');
+  if (unit === 'U0') script.meta.admits = admits(block.content.questions?.[2]?.a);
   script.updatedAt = now();
   return scriptView(item.caseId);
 }
