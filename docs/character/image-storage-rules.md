@@ -32,7 +32,8 @@ character/
 │   ├── {naero|nambul}/icon/                                  얼굴 아이콘
 │   ├── {law-scale|law-gavel|law-book}/…                      로 컷(마스코트 버전은 mascot/)
 │   ├── personality/                                          성향 결과 컷
-│   ├── reenact/common/                                       공용 재연 컷
+│   ├── reenact/common/                                       공용 재연 컷(분류 5종 × 3)
+│   ├── inquiry/                                              탐구 · 대화 컷(신문 여백 사진, 11/02)
 │   ├── reenact/case-{사건 키}/                               사건별 재연 컷
 │   ├── reenact/background/                                   공용 배경(`bg-B01` ~ `bg-B16`, 불투명) · 폴백 합성용
 │   ├── reenact/composite/                                    임시 합성 사건 사진(투명 컷 + 배경, 10/29) · 폴백
@@ -54,7 +55,7 @@ character/
 
 | 구분 | 값 |
 | --- | --- |
-| 대상 | `naero` · `nambul` · `law-scale` · `law-gavel` · `law-book` · `trio` · `compare` · `all`(여럿이 나오는 시트) · `reenact-common-{property\|body\|life}` · `reenact-case-{사건 키}` · `personality-{번호}_{캐릭터}` |
+| 대상 | `naero` · `nambul` · `law-scale` · `law-gavel` · `law-book` · `trio` · `compare` · `all`(여럿이 나오는 시트) · `reenact-common-{property\|body\|life\|robbery\|theft}` · `inquiry`(탐구 · 대화 컷) · `reenact-case-{사건 키}` · `personality-{번호}_{캐릭터}` |
 | 종류 | `standing` · `sheet` · `cut` · `cut-cheek` · `cut-cheek-slim` · `cut-role-{judge\|prosecutor\|defense\|actor\|case-{사건 키}}` · `cut-mascot` · `icon` |
 | 세부 | 컷: `{장면}-{감정}` / 시트: `reference` · `acting` · `role-outfits` · `wardrobe` · `deform-*` / 재연 컷: `{headline\|origin\|conclusion}` / 성향: 밈 이름 |
 
@@ -73,7 +74,8 @@ character/
 | ② | `origin` | 발단(관계 · 배경) | 변호인 측 증거 화면 |
 | ③ | `conclusion` | 결론(사건 뒤) | 검사 측 증거 화면 |
 
-- 공용: `cuts/reenact/common/reenact-common-{property|body|life}_cut_{headline|origin|conclusion}.png`. 범죄 분류 3종(재산 · 신체 · 생명) × 자리 3장 = 9장.
+- 공용: `cuts/reenact/common/reenact-common-{property|body|life|robbery|theft}_cut_{headline|origin|conclusion}.png`. 분류 5종(재산 · 신체 · 생명 · 강도 · 절도) × 자리 3장 = 15장. 강도 · 절도는 범죄 유형(`ROBBERY` · `THEFT`, V31)이 늘면서 11/02에 따로 뽑았고, 화면은 이 두 유형의 사건에 이 세트를 쓴다(라벨이 재산범죄여도). 분류를 끝내 모를 때 돌려 쓰는 폴백은 재산 · 신체 · 생명 3종이다.
+- 탐구 · 대화 컷: `cuts/inquiry/inquiry_cut_{reading|magnifier|talk|walk|window|board}.png` 6장(16:9, 배경 포함). 사건과 상관없는 차분한 장면이라 신문 여백 사진 칸에 공용 재연 컷과 섞어 쓴다.
 - 사건별: `cuts/reenact/case-{사건 키}/reenact-case-{사건 키}_cut_{headline|origin|conclusion}.png`. 폴더 이름과 파일 이름의 사건 키가 같다.
 - **사건 재연 컷은 10/29부터 배경까지 포함해 뽑는 것이 기본이다**(프롬프트 가이드 9-7 `BG-scene`). 배경 포함본은 위 `reenact-case-{사건 키}_cut_{자리}.png` 이름 그대로 `case-{사건 키}/`에 둔다.
 - 10/29 이전에 만든 63장은 **투명 컷**이다. 이것은 같은 이름으로 `case-{사건 키}/`에 있고, 배경과 합성한 임시본(`composite/`)이 사건 사진으로 쓰인다(8장). 배경 포함본이 나오면 투명 컷은 `_original/`에 `_v1`로 보존하고 같은 이름의 배경 포함본으로 교체한다.
@@ -83,7 +85,7 @@ character/
 
 ### 3-2. 공용 배경 (투명 컷 아래에 깔리는 배경, 폴백용)
 
-`cuts/reenact/background/bg-B{01~16}.png`. 캐릭터가 없는 배경이고, 가운데 아래쪽을 비워 두며 바닥선은 이미지 높이 80% 근처에 둔다. 배경은 불투명 PNG다(알파 없음, 1670~1672 × 940~942). 번호와 장소 대응은 작업 시점의 프롬프트 문서를 따른다. 합성본(`composite/`)의 이름은 `reenact-case-{사건 키}_composite_{headline|origin|conclusion}.png`다. 배경 포함본으로 뽑는 컷은 배경을 따로 만들지 않고, 같은 장소를 맞추려면 이 배경을 참조 이미지로 첨부한다.
+`cuts/reenact/background/bg-B{01~16}.png`. 캐릭터가 없는 배경이고, 가운데 아래쪽을 비워 두며 바닥선은 이미지 높이 80% 근처에 둔다. 배경은 불투명 PNG다(알파 없음, 1670~1672 × 940~942). 번호와 장소 대응은 작업 시점의 프롬프트 문서를 따른다. 합성본(`composite/`)의 이름은 `reenact-case-{사건 키}_composite_{headline|origin|conclusion}.png`다. 배경 포함본으로 뽑는 컷은 배경을 따로 만들지 않는다. 11/02부터는 이 배경을 참조 이미지로 첨부하지도 않고(장소 설명을 프롬프트에 직접 적는다), 이 폴더와 합성본은 아직 교체되지 않은 컷의 폴백으로만 남는다.
 
 ## 4. 원본 백업 (`_original/`)
 
@@ -100,6 +102,8 @@ character/
 | 아이콘 | 1:1, 1254 × 1254 | 투명 |
 | 시트 | 16:9, 1672 × 941 (±1 px 허용) | 투명(10/15부터). 그 전에 만든 시트는 신문지색 `#ECE2D4` |
 | 사건 재연 컷 | 16:9, 1672 × 941 (±1 px 허용) | **배경 포함이 기본**(10/29부터). 10/29 이전 63장은 투명 컷 |
+| 탐구 · 대화 컷 | 16:9, 1672 × 941 | 배경 포함(11/02) |
+| 역할 표정 컷(`cut-role-actor_idle-{표정}`) | 4:5, 1122 × 1402 | 투명 |
 | 합의 · 비교 컷 | 16:9, 1672 × 941 | 투명 |
 | 스탠딩 | 로 971 × 1619, 내로 · 남불 1672 × 941 캔버스 | 투명 |
 
@@ -112,18 +116,20 @@ character/
 
 | 원본 PNG | 웹 webp | 크기 |
 | --- | --- | --- |
-| `reenact-common-{분류}_cut_{자리}.png` | `cases/common-{분류}-{reenact\|origin\|conclusion}.webp` | 1200 × 675 |
+| `reenact-common-{분류}_cut_{자리}.png`(분류 `property` · `body` · `life` · `robbery` · `theft`) | `cases/common-{분류}-{reenact\|origin\|conclusion}.webp` | 1200 × 675 |
+| `inquiry_cut_{장면}.png` | `cases/inquiry-{장면}.webp` | 1200 × 675 |
 | `reenact-case-{사건 키}_cut_{자리}.png`(배경 포함본) · `reenact-case-{사건 키}_composite_{자리}.png`(임시 합성본) | `cases/case-{사건 id}-{reenact\|origin\|conclusion}.webp` | 1200 × 675 |
 | `{캐릭터}_cut_{장면}-{감정}.png` | `characters/scene/{캐릭터}_{장면}-{감정}.webp` | 800 × 1000 |
-| `{캐릭터}_cut-cheek_*.png` | `characters/cheek/{캐릭터}_idle-{sorry\|thinking}.webp` | 800 × 1000 |
+| `{캐릭터}_cut-cheek_*.png` | `characters/cheek/{캐릭터}_idle-{neutral\|happy\|surprised\|cheer\|sorry\|thinking}.webp`(여섯 표정, 11/02에 네 표정 추가) | 800 × 1000 |
 | `{캐릭터}_cut-role-{역할}_idle-neutral.png` | `characters/roles/{캐릭터}_{역할}.webp` | 높이 560 |
+| `{캐릭터}_cut-role-actor_idle-{sad\|angry\|apologetic\|anxious\|relieved}.png` | `characters/roles/{캐릭터}_actor-{표정}.webp` | 높이 560 |
 | `{로}_cut-mascot_*.png` | `characters/mascot/{로}_{idle\|think\|deliver}.webp` | 높이 560 |
 | `{trio\|compare}_cut-mascot_*.png` | `characters/mascot/` | 1600 × 900 |
 | `*_standing.png` | `characters/standing/*.webp` | 높이 800 |
 | `personality-{번호}_{캐릭터}_{밈}.png` | `characters/personality/{번호 01~32}.webp` | 4:5 |
 | `{캐릭터}_icon_face-{감정}.png` | `characters/icon/generated/{캐릭터}_face-{감정}.webp` | 128 × 128 |
 
-- 웹 폴더에 남아 있는 `adult/` · `law/` · `cheek-slim/` · `deform/`은 지금 화면이 읽지 않지만 사용 예정이거나 보존용이다. 지우지 않는다.
+- 웹 폴더에 남아 있는 `adult/` · `law/` · `cheek-slim/`은 지금 화면이 읽지 않지만 사용 예정이거나 보존용이다. 지우지 않는다. `deform/`(란마 2장)은 11/02에 지웠다(COMMON-69). 이 변환을 하면 `tools/illustrations/update-manifest.sh`로 백엔드 목록(`illustration-images.txt`)을 갱신한다(어긋나면 `IllustrationCatalogTest` 실패).
 - 성향 이미지는 4글자 유형 코드를 이름에 쓰지 않고 번호만 쓴다(화면 비노출 원칙). 한 번 정한 번호는 바꾸지 않는다.
 - 사건 id는 사건 DB 번호다. 사건 키를 id로 바꾸는 시점은 3-1을 본다.
 
@@ -137,6 +143,8 @@ character/
 6. 화면에 쓸 것은 6장 대응으로 webp로 변환해 `frontend/public/images/`에 넣고, `character-image-checklist.md`의 진행 상태를 갱신한다.
 
 ## 8. 임시 사건 사진 (10/29)
+
+> 11/02: 재생성한 41장(사건 3 · 4 · 5 · 6 · 10 · 11 · 12 · 13 · 14 · 15 · 16 · 17 · 18 · 19 · 20 · 21 · 22의 해당 컷)은 배경 포함본으로 교체했고, 웹 변환본(`cases/case-{사건 id}-*.webp`)도 같은 이름으로 바꿨다(COMMON-69). 아래 합성본은 교체되지 않은 컷의 폴백이다.
 
 사건 재연 컷 21건 × 3장 중 배경 포함본이 아직 없는 것은 **투명 컷에 공용 배경을 합성한 임시본**을 사건 사진으로 쓴다.
 

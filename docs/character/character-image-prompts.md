@@ -19,6 +19,7 @@
 | v3.0 | 2026-10-29 | **사건 재연 컷 63장 작업 교훈 반영** — 7-1에 사물 문제 3행, 7-2에 사물 점검, 9-7 `PROPS RULES` 블록, 9-8 · 9-17 AVOID 덧붙임 |
 | v3.1 | 2026-10-29 | **사건 재연 컷은 배경 포함이 기본**(10/29 결정) — 투명 컷 + 배경 합성은 63장을 합성해 보니 어색한 컷이 많아 폐기. 1-3 · 9-7 `BG` · `reenact` · `PROPS RULES` · 9-17 수정. 캐릭터 컷 · 시트 · 아이콘은 그대로 투명 |
 | v3.2 | 2026-10-30 | **바라보는 방향 규칙**(FE-128): 내로 단일 이미지는 오른쪽, 남불은 왼쪽을 본다(1-2 · 7-2). 무대는 서 있는 곳에서 가운데를 보도록 좌우를 뒤집는다 |
+| v3.3 | 2026-11-02 | **사건 재연 컷 재생성 교훈 반영**(COMMON-69) — 배경 이미지를 첨부하지 않고 사건 내용에 맞춘 장소 설명을 `BG-scene`에 직접 적는다(공용 배경 B01 ~ B16 폐기). 탐구 · 대화 컷(B5)과 공용 컷(B6, 강도 · 절도 신규)도 배경 포함. 7-1에 "시트에 의상이 여러 칸이면 어느 칸을 입힐지 명시" 행 추가 |
 
 > 기준 결정: `character-main-handover.md` v2의 10/13 변경 절 (기본 = 마스코트형 약 3.5등신 · 란마풍 등은 변형 · 모든 캐릭터 무성 · 소품 제한 해제 · 화난 표정 금지)
 > 이 문서는 **복사해서 바로 쓰는 프롬프트 모음**이다. 설계 배경은 `character-law-ai-judge-plan.md` v0.3을 본다(`Claude outputs/character/plan/`, 커밋 안 함).
@@ -712,6 +713,7 @@ DEFORMATION — Japanese-made Western-cartoon-inspired deformation (graphic and 
 | 법봉 머리 위로 더듬이가 남 | 손잡이를 머리 위로 세운 설명 | 손잡이는 머리 아래 목처럼, `nothing sticking out of the top` |
 | 법봉이 위협적으로 보임 | 휘두르는 자세 | `never swung or struck`, 가만히 선 자세 |
 | 문 · 창문 · 선반이 허공에 떠 있음(사건 재연 컷) | 달린 사물만 그리고 지지물을 생략함 | 9-7 `PROPS RULES`: 문틀 · 벽 같은 지지물까지 함께 그림 |
+| 역할 의상 시트에서 엉뚱한 의상(검사 법복 등)으로 그려짐 | 시트에 판사 · 검사 · 변호인 · 사건 역할 네 칸이 있는데 프롬프트가 어느 칸인지 말하지 않음 | 첨부 설명에 네 칸을 풀어 쓰고 "맨 오른쪽 칸만 입히고 나머지는 쓰지 말 것"을 명시, AVOID에 법복 · 가발 · 정장 추가 |
 | 책상 · 카운터의 다리 · 의자가 빠짐(사건 재연 컷) | 가구 아래쪽을 생략함 | 9-7 `PROPS RULES`: 상판과 다리, 앉는 자리의 의자를 함께 그림 |
 | 의자 · 스툴 같은 복잡한 사물의 모양이 이상함(사건 재연 컷) | 구조가 복잡한 사물을 모델이 자주 틀림 | 9-7 `PROPS RULES`: 단순한 형태로 쓰고 **형태를 다시 확인(double-check)하게 명시** |
 
@@ -946,7 +948,7 @@ BACKGROUND — fully transparent background (PNG with alpha). No background colo
 BACKGROUND — a complete, fully drawn setting behind and around the characters: {place and time of day}. The characters stand or sit inside the scene on its floor, with everything in the scene drawn complete and physically supported (doors set in their frames and walls, furniture standing on the floor). Warm, flat 2D style matching the characters; light direction consistent between the characters and the setting; soft, subtle contact shadows under the characters and furniture. No text, no signs with writing. Aspect ratio 16:9 landscape.
 ```
 
-- 장소 문구는 공용 배경 번호표(`사건별_재연컷_프롬프트_복붙용` 공용 배경 B01 ~ B16)의 장소를 쓴다. 같은 장소의 분위기를 맞추려면 **그 배경 이미지를 참조 이미지로 같이 첨부**하고 "use the attached background image as the exact setting"을 덧붙인다.
+- 장소 문구는 **사건 내용과 장면에 맞춰 컷마다 직접 쓴다**(11/02, COMMON-69). 공용 배경 B01 ~ B16은 더 쓰지 않고 배경 이미지도 첨부하지 않는다. 예: `the place is a small game arcade just before dawn: a dark wall lined with arcade cabinets whose screens glow blank, a dim ceiling light, a dark carpet floor`. 사건과 무관한 컷(탐구 · 공용 컷)도 장면에 맞는 장소를 적는다.
 - 이유: 투명 컷에 배경을 합성한 63장은 문 · 문틀이 배경 앞에 따로 선 패널처럼 보이고, 빛 방향 · 그림자가 맞지 않는 컷이 많았다(10/29). 투명 배경 조건이 허공에 뜬 문 · 다리 없는 책상 같은 사물 문제의 원인이기도 했다. 이미 만든 투명 컷 + 합성본은 배경 포함본이 나올 때까지 폴백이다.
 
 - 투명 출력이 안 되는 환경에서만 `Background: perfectly flat uniform solid green #00B140, no gradient, no floor, no shadow. Do not use green anywhere on the character or props.`로 바꾸고 배경을 지운다.

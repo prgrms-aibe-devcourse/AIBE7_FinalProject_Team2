@@ -187,6 +187,36 @@ class ProfileDecoApiTest extends ApiIntegrationTest {
 		assertThat(countDeco(b)).isZero();
 	}
 
+	@Test
+	@DisplayName("V49: 지운 란마 이미지를 대표 이미지로 저장한 회원은 같은 캐릭터의 기본 스탠딩으로 되돌아가고, 다른 이미지는 그대로다")
+	void ranmaPortraitIsResetByMigration() throws Exception {
+		long naero = registerMember();
+		long nambul = registerMember();
+		long other = registerMember();
+		insertSavedDeco(naero, "basic", "none", "wine");
+		insertSavedDeco(nambul, "basic", "none", "wine");
+		insertSavedDeco(other, "basic", "none", "wine");
+		jdbcTemplate.update("UPDATE member_profile_deco SET portrait = '/images/characters/deform/naero_ranma.webp' WHERE member_id = ?", naero);
+		jdbcTemplate.update("UPDATE member_profile_deco SET portrait = '/images/characters/deform/nambul_ranma.webp' WHERE member_id = ?", nambul);
+		jdbcTemplate.update("UPDATE member_profile_deco SET portrait = '/images/characters/scene/nambul_guide-happy.webp' WHERE member_id = ?", other);
+
+		String sql = new String(new org.springframework.core.io.ClassPathResource("db/migration/V49__reset_removed_ranma_portrait.sql")
+			.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+		for (String statement : sql.replaceAll("(?m)^--.*$", "").split(";")) {
+			if (!statement.isBlank()) {
+				jdbcTemplate.execute(statement);
+			}
+		}
+
+		assertThat(portraitOf(naero)).isEqualTo("/images/characters/standing/naero.webp");
+		assertThat(portraitOf(nambul)).isEqualTo("/images/characters/standing/nambul.webp");
+		assertThat(portraitOf(other)).isEqualTo("/images/characters/scene/nambul_guide-happy.webp");
+	}
+
+	private String portraitOf(long memberId) {
+		return jdbcTemplate.queryForObject("SELECT portrait FROM member_profile_deco WHERE member_id = ?", String.class, memberId);
+	}
+
 	private void insertSavedDeco(long id, String frame, String sashStyle, String sashColorShort) {
 		jdbcTemplate.update("""
 			INSERT INTO member_profile_deco (member_id, portrait, frame, background, sash_style, sash_color_short,
