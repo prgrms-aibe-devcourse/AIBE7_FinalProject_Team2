@@ -1864,7 +1864,7 @@ A-11과 같은 방식(보낸 필드만, `null` = 지움). `headline` · `article
 | 필드 | 규칙 |
 | --- | --- |
 | `path` | 필수. 고칠 자리 — 검수 결과의 `path`와 같은 JSON Pointer(예: `/questions/0/q` · `/lines/4` · `/indict/1` · `/defense`). **이미 문자열이 있는 자리만** 고친다(객체 · 배열 자리, 없는 자리는 404) |
-| `text` | 필수. 앞뒤 공백을 잘라 1자 이상, 500자까지. (v0.89, BE-153) **말하는 대사 자리**면 A-13-13과 같은 길이 규칙(100자, 2줄 이하, 줄바꿈은 세지 않는다)을 더 건다 — U1 `/lines/*`, U2 `/indict/*` · `/plea/*` · `/issues_narr/*` · `/questions/*/q`, U4 `/prosecutor` · `/defense`. 설계도(U0) · U2 카드(`/cards/…`) · 신문 답(`/questions/*/a`)은 화면 대사가 아니라 이 규칙을 걸지 않는다. 자리 목록은 파이프라인 검수(`script_review.unit_lines`)와 같고 계약 파일(`contracts/script_blocks.json` `spokenPaths`)로 맞춘다 |
+| `text` | 필수. 앞뒤 공백을 잘라 1자 이상, 500자까지. (v0.89, BE-153) **말하는 대사 자리**면 A-13-13과 같은 길이 규칙(100자, 2줄 이하, 줄바꿈은 세지 않는다)을 더 건다 — U1 `/lines/*`, U2 `/indict/*` · `/plea/*` · `/issues_narr/*` · `/questions/*/q`, U4 `/prosecutor` · `/defense`. 설계도(U0) · U2 카드(`/cards/…`) · 신문 답(`/questions/*/a`)은 화면 대사가 아니라 이 규칙을 걸지 않는다. 자리 목록은 파이프라인 검수(`script_review.unit_lines`)와 같고 계약 파일(`contracts/script_blocks.json` `pathKinds` · `spokenKinds`, 말하는 자리는 `spokenPaths`)로 맞춘다. 없는 자리는 길이보다 먼저 404다 |
 
 - 그 블록의 판이 오르고 **그 블록만** 다시 검수 대기가 된다. 그 자리의 검수 조건 오류(`severity: error`)는 지운다(경고는 남긴다). `publishable`을 다시 계산한다.
 - 이 블록을 보고 만든 뒤 블록(U0 → U2 · U4, U2 → U4)은 **낡음으로 표시된다**(승인은 그대로 — 다시 만들지 확인할지는 관리자가 고른다).
