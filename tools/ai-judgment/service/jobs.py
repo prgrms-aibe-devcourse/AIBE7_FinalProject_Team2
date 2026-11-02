@@ -387,23 +387,31 @@ class JobStore:
             note = source.get("note")
             if note is not None and not isinstance(note, str):
                 raise JobError(f"sources[{index}].note는 문자열이어야 합니다")
-            texts.append((text, note))
+            # 등록 요청의 사건번호 (BE-161 2차, PR #413 리뷰). RAG가 자기 사건을 유사 판례에서 뺄 때 판결문 본문에서 찾은 번호보다
+            # 먼저 쓴다(pipeline.rag_inputs → resolve_sources 덮어쓰기). 본문에 다른 판례 번호가 먼저 나오거나 머리가 없으면
+            # 대상 판결이 참고 자료로 들어갈 수 있어서다. 해시로만 비교하고 모델에는 보내지 않는다(extract는 원문 파일만 읽는다)
+            case_number = source.get("caseNumber")
+            if case_number is not None and not isinstance(case_number, str):
+                raise JobError(f"sources[{index}].caseNumber는 문자열이어야 합니다")
+            texts.append((text, note, (case_number or "").strip() or None))
 
         job_id = uuid.uuid4().hex
         path = self.jobs_dir / job_id
         raw_dir = path / "raw"
         # 원문은 작업 폴더에만 둔다(공개 저장소에 남기지 않는다). 볼륨 설정은 docker-compose.pipeline.yml 참고
         config_sources = []
-        for index, (text, note) in enumerate(texts, start=1):
+        for index, (text, note, case_number) in enumerate(texts, start=1):
             entry = {"path": str(raw_dir / f"source-{index}.txt")}
             if note:
                 entry["note"] = note
+            if case_number:
+                entry["caseNumber"] = case_number
             config_sources.append(entry)
         config = self._build_config(job_id, config_sources, request)  # 여기서 실패해도 쓴 파일이 없다
 
         # 2) 검증이 모두 끝난 뒤에만 쓴다
         raw_dir.mkdir(parents=True, exist_ok=True)
-        for index, (text, _) in enumerate(texts, start=1):
+        for index, (text, _note, _case_number) in enumerate(texts, start=1):
             (raw_dir / f"source-{index}.txt").write_text(text, encoding="utf-8")
         _write_json(path / "config.json", config)
         _write_json(path / "job.json", {

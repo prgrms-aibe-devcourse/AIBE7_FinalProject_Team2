@@ -390,7 +390,7 @@ public class AdminCaseImportService {
 
 	private PipelineJobRequest toPipelineRequest(CaseImportCreateRequest request, Map<String, String> cast) {
 		List<PipelineJobRequest.Source> sources = request.sources().stream()
-			.map(source -> new PipelineJobRequest.Source(source.originalText(), source.note()))
+			.map(source -> new PipelineJobRequest.Source(source.originalText(), source.note(), source.caseNumber()))
 			.toList();
 		Map<String, Object> stages = new LinkedHashMap<>();
 		if (pipelineProperties.extractModel() != null && !pipelineProperties.extractModel().isBlank()) {

@@ -603,6 +603,23 @@ class JobStoreTest(unittest.TestCase):
 
         self.assertEqual(contamination, {"gemini:x": verdict})
 
+    def test_create_passes_request_case_number_to_pipeline_sources(self):
+        """등록 요청의 사건번호를 파이프라인 소스 설정에 넣는다 (BE-161 2차, PR #413 리뷰) — RAG 자기 사건 제외가
+        판결문 본문에서 찾은 번호보다 이 값을 먼저 쓴다. 빈 값은 넣지 않고(본문 값으로 대체), 원문 파일 경로와 함께만 둔다"""
+        job_id = self.store.create(self._request(sources=[
+            {"originalText": "1심 본문", "caseNumber": " 2099고합001 "},
+            {"originalText": "항소심 본문", "caseNumber": "  "},
+            {"originalText": "상고심 본문"},
+        ]))
+        config = json.loads((self.store.job_dir(job_id) / "config.json").read_text(encoding="utf-8"))
+        self.assertEqual(config["sources"][0]["caseNumber"], "2099고합001")
+        self.assertNotIn("caseNumber", config["sources"][1])
+        self.assertNotIn("caseNumber", config["sources"][2])
+
+    def test_create_rejects_non_string_case_number(self):
+        with self.assertRaises(JobError):
+            self.store.create(self._request(sources=[{"originalText": "본문", "caseNumber": 2099}]))
+
     def test_result_before_pipeline_produced_anything(self):
         job_id = self.store.create(self._request())
 

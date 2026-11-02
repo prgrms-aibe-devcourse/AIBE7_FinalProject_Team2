@@ -110,7 +110,11 @@ class AdminCaseImportServiceTest {
 		ArgumentCaptor<PipelineJobRequest> sent = ArgumentCaptor.forClass(PipelineJobRequest.class);
 		verify(pipelineClient).createJob(sent.capture());
 		assertThat(sent.getValue().sources()).singleElement()
-			.satisfies(source -> assertThat(source.originalText()).isEqualTo("판결문 본문"));
+			.satisfies(source -> {
+				assertThat(source.originalText()).isEqualTo("판결문 본문");
+				// 등록 요청의 사건번호 — RAG 자기 사건 제외에 쓴다 (BE-161 2차, PR #413 리뷰)
+				assertThat(source.caseNumber()).isEqualTo("2099고합001");
+			});
 		assertThat(sent.getValue().models()).containsExactly("gemini:test");
 		verify(importRepository).save(any(CaseImport.class));
 		verify(auditLogger).record(eq(admin), eq(AdminAuditAction.CASE_IMPORT), any(), any(), any(), eq(httpRequest));
