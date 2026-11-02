@@ -234,10 +234,10 @@ function pressable(box, label, action) {
 
 // 독자 의견란 엽서 아래 막대그래프(FE-120): 이 사건을 읽은 독자들이 기사만 보고 고른 첫인상 분포. 내가 고른 구간은 막대를 짙게 · 숫자를 굵게 한다.
 // 낭독기는 행마다 "구간 N%"로 읽고, 내 구간은 이름에 "(내 선택)"을 숨긴 글자로 붙인다
-// preToFinal.crowd는 목 전용이라(API 14에 아직 없음) 없으면 그래프 없이 엽서의 빈 줄을 그대로 둔다
+// preToFinal.crowd가 없거나(목 아닌 경우 포함) total이 0이면 그래프 없이 엽서의 빈 줄을 그대로 둔다(FE-34)
 function crowdBars(preToFinal) {
   const crowd = preToFinal?.crowd;
-  if (!crowd?.options?.length) return null;
+  if (!crowd?.options?.length || !crowd.total) return null; // 센 사람이 0명이면(2회차 이상 완료 등) 0%만 늘어선 그래프 대신 빈 줄을 그대로 둔다
   const box = element('div', 'sheet-crowd');
   const head = element('p', 'sheet-crowd-head', `이 사건 독자 ${crowd.total.toLocaleString('ko-KR')}명의 첫인상`);
   // 지금 crowd는 목에만 있지만, API 14에 실제 값이 들어와도 "목데이터"가 붙지 않도록 목 모드에서만 붙인다(FE-142 리뷰)

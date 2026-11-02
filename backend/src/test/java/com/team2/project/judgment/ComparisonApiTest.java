@@ -74,7 +74,11 @@ class ComparisonApiTest extends ApiIntegrationTest {
 
 	/** COMPLETED 상태의 체험 1건 + 사전 판단(흉기 요소 선택) + 최종 판결(징역 15년, 흉기 · 공탁 요소) */
 	private Cookie startCompletedExperience() {
-		insertExperience(anonymousId, caseId, 1, "COMPLETED");
+		return startCompletedExperience(1);
+	}
+
+	private Cookie startCompletedExperience(int attemptNo) {
+		insertExperience(anonymousId, caseId, attemptNo, "COMPLETED");
 		long experienceId = jdbcTemplate.queryForObject(
 			"SELECT id FROM experience WHERE case_id = ? AND anonymous_user_id = ?", Long.class, caseId, anonymousId);
 
@@ -242,6 +246,17 @@ class ComparisonApiTest extends ApiIntegrationTest {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.preToFinal.crowd.total").value(1))
 			.andExpect(jsonPath("$.preToFinal.crowd.options[3].percent").value(100));
+	}
+
+	@Test
+	void getComparison_secondAttemptWithNoOtherReaders_crowdTotalIsZero() throws Exception {
+		// 2회차로 완료한 체험: 내 사전 판단도 DR-7에 따라 집계에서 빠진다
+		Cookie cookie = startCompletedExperience(2);
+
+		mockMvc.perform(get(url()).cookie(cookie))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.preToFinal.crowd.total").value(0))
+			.andExpect(jsonPath("$.preToFinal.crowd.options[3].percent").value(0));
 	}
 
 	@Test
