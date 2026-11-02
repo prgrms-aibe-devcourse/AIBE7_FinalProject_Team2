@@ -90,9 +90,9 @@ class AchievementJudgeTest {
 		assertThat(items.get("attend-3").status()).isEqualTo(AchievementStatus.IN_PROGRESS);
 
 		Rewards open = AchievementJudge.unlocked(progress);
-		assertThat(open.frames()).containsExactly("basic", "wood", "stitch");
+		assertThat(open.frames()).containsExactly("basic", "wood", "oak", "stitch", "thread");
 		assertThat(open.sashColors()).contains("short:wine", "long:wine", "short:navy", "long:navy");
-		assertThat(open.backgrounds()).contains("tarot", "linen").doesNotContain("news", "latte");
+		assertThat(open.backgrounds()).contains("tarot", "tracing", "parchment", "linen", "felt", "kraft").doesNotContain("news", "latte", "coffee", "leather");
 		assertThat(open.kinds()).contains("characters/scene", "characters/personality").doesNotContain("cases");
 	}
 

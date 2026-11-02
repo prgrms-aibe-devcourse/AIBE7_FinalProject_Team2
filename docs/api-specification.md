@@ -2276,8 +2276,8 @@ json
 | 필드 | 값 |
 | --- | --- |
 | `portrait` | 대표 이미지 경로. **`/images/폴더/…/이름.webp` 모양만**(영문 · 숫자 · `_` · `-`). `..` · `//` · `\` · 쿼리 · 외부 주소는 거절. 종류는 `/images/`와 파일명 사이(예: `characters/scene`). 파일이 실제로 있는지는 보지 않는다 |
-| `frame` | `basic` · `wood` · `gold` · `navy` · `stitch` |
-| `background` | `cream` · `latte` · `tarot` · `news` · `linen` |
+| `frame` | `basic` · `wood` · `gold` · `navy` · `stitch` · `oak` · `brass` · `court` · `thread` (뒤 4개는 BE-158, 이미지 테두리) |
+| `background` | `cream` · `latte` · `tarot` · `news` · `linen` · `kraft` · `ledger` · `tracing` · `parchment` · `coffee` · `wood` · `blotter` · `envelope` · `lamp` · `legalpad` · `felt` · `blinds` · `leather` · `bronze` (뒤 14개는 BE-158, 이미지 배경) |
 | `sashStyle` | 카드 책갈피 모양 `none` · `long` · `short` |
 | `sashColorShort` · `sashColorLong` | 모양별 색 `wine` · `navy` · `gold` · `green` |
 | `sashIconLeft` · `sashIconRight` | 짧은 책갈피 아이콘 `none` · `star` · `scale` · `gavel` · `cup` · `heart` · `naero` · `nambul` · `law` |
