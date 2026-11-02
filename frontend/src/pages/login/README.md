@@ -5,7 +5,8 @@
 | 파일 | 내용 |
 | --- | --- |
 | `loginPage.js` | `renderLoginPage(container, { api, navigate })` — 화면을 그린다 |
-| `authCallbackPage.js` | `/auth/callback` 카카오 로그인 콜백 (FE-74) — M-1 재발급으로 첫 토큰을 받고 "카카오 회원"으로 로그인 표시, `?error=` · 재발급 실패면 안내 |
+| `authCallbackPage.js` | `/auth/callback` 카카오 로그인 콜백 (FE-74) — M-1 재발급으로 첫 토큰을 받고 "카카오 회원"으로 로그인 표시, `?error=` · 재발급 실패면 안내. `?signup=terms`(처음 온 카카오 계정, BE-145)면 재발급 대신 약관 동의 창을 띄운다 |
+| `termsConsent.js` | 약관 동의 창 (BE-145). 카카오 첫 가입(M-12 동의하고 가입 · M-13 닫으면 가입 취소)과 기존 회원(M-8 `termsRequired`면 M-14로 동의, 닫으면 로그아웃)이 같은 창을 쓴다. 순서는 동의 → 가져오기. `termsConsent.test.js`로 확인 |
 | `login.css` | 로그인 화면 스타일 (404 서류 한 장 모양도 여기, FE-104) |
 | `signupPage.js` | `renderSignupPage(container, { api, navigate })` — 회원가입 화면 (FE-104) |
 | `signupRule.js` | 회원가입 입력 규칙(아이디 · 비밀번호 · 닉네임 · 동의). `signupRule.test.js`로 확인 |

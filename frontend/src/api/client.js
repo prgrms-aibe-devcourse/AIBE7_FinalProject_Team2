@@ -136,3 +136,5 @@ export const get = (endpoint) => request('GET', endpoint);
 export const post = (endpoint, body) => request('POST', endpoint, body ?? {});
 export const put = (endpoint, body) => request('PUT', endpoint, body ?? {});
 export const patch = (endpoint, body) => request('PATCH', endpoint, body ?? {});
+// 본문 없는 삭제 요청(카카오 가입 취소 M-13, BE-145). 204면 null이다
+export const del = (endpoint) => request('DELETE', endpoint);
