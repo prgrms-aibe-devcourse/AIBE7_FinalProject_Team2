@@ -9,7 +9,7 @@ import { evidencePhotosFromPaper, fetchCasePaper } from '../../utils/newspaper.j
 import { reducedMotion } from '../../utils/motion.js';
 import { loadCaseScript, isScriptMaintenance } from '../../utils/caseScript.js';
 import { isScriptReady, scriptStatusOf, SCRIPT_STATUS } from '../../utils/scriptReady.js';
-import { casesUntilNextStep, isCaseLocked, isLocked } from '../../utils/caseUnlock.js';
+import { isCaseLocked, isLocked } from '../../utils/caseUnlock.js';
 import { landArticle } from '../../utils/articleZoom.js';
 import { openCaseReviewPopup } from '../caseReview/caseReviewPopup.js';
 
@@ -273,8 +273,8 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
       } catch (error) {
         if (!active() || started) return;
         // 잠긴 사건(BE-146): 화면이 아직 잠김을 모른 채 눌렀다(다른 곳에서 열어 둔 화면 · 단계가 바뀐 경우). 새로 받아 잠김 도장으로 다시 그린다
-      if (isCaseLocked(error)) { starting = false; load(); return; }
-      notice.textContent = error?.code === 'CASE_NOT_FOUND' ? '사건을 찾을 수 없어요. 신문으로 돌아가 다시 골라 주세요.' : failText;
+        if (isCaseLocked(error)) { starting = false; load(); return; }
+        notice.textContent = error?.code === 'CASE_NOT_FOUND' ? '사건을 찾을 수 없어요. 신문으로 돌아가 다시 골라 주세요.' : failText;
       } finally {
         starting = false;
         trigger.removeAttribute('aria-busy');
@@ -293,14 +293,8 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
     }
   }
 
-  // 잠긴 이유 한 줄: 몇 건을 더 마치면 열리는지는 사건 목록(API 1)의 unlock이 안다(API 16에는 없다). 못 받으면 건수 없이 알린다
-  async function lockReasonText() {
-    try {
-      const more = casesUntilNextStep((await api.getCases()).unlock);
-      if (more > 0) return `사건 ${more}건을 더 마치면 열려요.`;
-    } catch { /* 건수를 몰라도 잠김은 알린다 */ }
-    return '다른 사건을 더 마치면 열려요.';
-  }
+  // 잠긴 이유 한 줄. 몇 건을 더 마쳐야 이 사건이 열리는지는 사건별로 알 수 없어(단계 값만 있다) 건수를 약속하지 않는다
+  const LOCK_REASON = '다른 사건을 마치면 새 사건이 차례로 열려요.';
 
   async function load() {
     if (!active()) return;
@@ -315,8 +309,7 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
       let script = null;
       // FE-149: 순차 해금으로 잠긴 사건(BE-146)은 대본을 받지 않고 지면만 읽게 둔다. 잠긴 사건은 체험한 적이 없다(myStatus null)
       if (isLocked(data)) {
-        const reason = await lockReasonText();
-        if (active()) drawPaper(data, casePaper, false, false, true, reason);
+        drawPaper(data, casePaper, false, false, true, LOCK_REASON);
         return;
       }
       if (isScriptReady(data, scriptFor(caseId, data.title))) {
