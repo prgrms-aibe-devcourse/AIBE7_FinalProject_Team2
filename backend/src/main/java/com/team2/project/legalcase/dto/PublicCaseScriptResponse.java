@@ -85,10 +85,16 @@ public record PublicCaseScriptResponse(List<EvidenceLine> evidence, Map<String, 
 	 * 최상위 키만 거르면 질문 안에 모델이 덧붙인 키가 그대로 내려간다(PR #367 리뷰). 객체가 아닌 질문은 비운다(자리는 지킨다)
 	 */
 	private static Object withNormalizedAnswers(Object content) {
-		if (!(content instanceof Map<?, ?> opening) || !(opening.get("questions") instanceof List<?> questions)) {
+		if (!(content instanceof Map<?, ?> opening)) {
 			return content;
 		}
 		Map<Object, Object> copy = new LinkedHashMap<>(opening);
+		if (opening.get("cards") instanceof Map<?, ?> cards) {
+			copy.put("cards", publicCards(cards));
+		}
+		if (!(opening.get("questions") instanceof List<?> questions)) {
+			return copy;
+		}
 		copy.put("questions", questions.stream().map(question -> {
 			if (!(question instanceof Map<?, ?> pair)) {
 				return null;
@@ -98,6 +104,25 @@ public record PublicCaseScriptResponse(List<EvidenceLine> evidence, Map<String, 
 			normalized.put("a", ScriptAnswers.normalize(pair.get("a") instanceof String answer ? answer : null));
 			return normalized;
 		}).toList());
+		return copy;
+	}
+
+	/** 증거 카드 한 장마다 화면이 읽는 키 (프론트 조립기 `cardsOf`, FE-139). 모델이 덧붙인 키는 내리지 않는다 */
+	private static final Map<String, List<String>> CARD_KEYS = Map.of(
+		"indict", List.of("ul", "law"), "plea", List.of("b", "ul"), "issues", List.of("p", "ul"));
+
+	/** 아는 카드(공소사실 · 모두진술 · 쟁점)만, 카드마다 아는 키만 담은 사본 */
+	private static Map<String, Object> publicCards(Map<?, ?> cards) {
+		Map<String, Object> copy = new LinkedHashMap<>();
+		CARD_KEYS.forEach((card, keys) -> {
+			if (cards.containsKey(card)) {
+				Map<String, Object> publicCard = allowed(cards.get(card), keys);
+				if (!(publicCard.get("ul") instanceof List<?> ul && ul.stream().allMatch(String.class::isInstance))) {
+					publicCard.remove("ul");	// 문자열 목록이 아니면 내리지 않는다 — 화면이 목록으로 돈다
+				}
+				copy.put(card, publicCard);
+			}
+		});
 		return copy;
 	}
 

@@ -165,6 +165,24 @@ class AdminReviewQueryApiTest extends ApiIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("A-6: 자동 분류와 관리자 확인이 필요한 축 · 플래그를 준다. 분류하지 않은 사건은 null (BE-129)")
+	void getCase_classification() throws Exception {
+		mockMvc.perform(get("/api/v1/admin/cases/" + caseId).session(session))
+			.andExpect(jsonPath("$.content.classification").value(nullValue()))
+			.andExpect(jsonPath("$.content.classificationNeedsReview").value(nullValue()));
+
+		jdbcTemplate.update("""
+			UPDATE legal_case SET classification = '{"mood": "tragic", "issue": "denied", "victim": "forgive", "thirdParty": false}'::jsonb,
+			       classification_needs_review = '["mood", "sensitiveFlags.MENTAL_HEALTH"]'::jsonb WHERE id = ?""", caseId);
+		mockMvc.perform(get("/api/v1/admin/cases/" + caseId).session(session))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.content.classification.mood").value("tragic"))
+			.andExpect(jsonPath("$.content.classification.thirdParty").value(false))
+			.andExpect(jsonPath("$.content.classificationNeedsReview[0]").value("mood"))
+			.andExpect(jsonPath("$.content.classificationNeedsReview[1]").value("sensitiveFlags.MENTAL_HEALTH"));
+	}
+
+	@Test
 	@DisplayName("A-6: 없는 사건은 404 CASE_NOT_FOUND")
 	void getCase_unknown() throws Exception {
 		mockMvc.perform(get("/api/v1/admin/cases/-1").session(session))
