@@ -269,7 +269,9 @@ function caseSheet(paper) {
   const figure = element('figure', 'sheet-figure sheet-story');
   figure.dataset.focus = 'photo';
   // 사진 캡션은 AI가 쓰는 값이라 연출 이미지 고지가 빠질 수 있다 — 고지는 고정 문구로 늘 보여 준다(FE-147, 1막 안내 대사에서 뺀 자리)
-  figure.append(picture(paper.photo, 'sheet-case-photo', '', 0), element('figcaption', '', paper.caption), element('p', 'sheet-photo-notice', 'AI로 만든 연출 이미지예요'));
+  const caption = element('figcaption', '', paper.caption);
+  caption.append(element('span', 'sheet-photo-notice', 'AI로 만든 연출 이미지예요'));
+  figure.append(picture(paper.photo, 'sheet-case-photo', '', 0), caption);
   const body = element('section', 'sheet-story sheet-body');
   body.dataset.focus = 'body';
   paper.article.forEach((line) => body.append(element('p', 'sheet-text', line)));

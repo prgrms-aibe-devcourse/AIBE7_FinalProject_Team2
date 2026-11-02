@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { assembleScript } from './assembleScript.js';
+import frame from './scriptFrame.json' with { type: 'json' };
 import { flatten } from '../components/stage.js';
 import { getCaseScript } from '../mocks/caseListMockApi.js';
 
@@ -93,4 +94,17 @@ test('카드의 ul이 문자열 배열이 아니어도 무대가 멈추지 않�
   assert.deepEqual(script.cards.plea.ul, ['하나']);
   assert.deepEqual(script.cards.plea.p, []);
   assert.deepEqual(script.cards.issues, { k: '쟁점 정리', p: ['쟁점'], ul: [] });
+});
+
+// 생성 문맥(tools/ai-judgment `INTRO_FIXED`)과 화면의 1막 고정 대사가 같은지 — 어긋나면 AI가 보는 앞뒤 대사와 실제 화면이 달라진다(PR #379 리뷰)
+const pySource = readFileSync(new URL('../../../tools/ai-judgment/script_assembler.py', import.meta.url), 'utf8');
+const hasIntroFixed = pySource.includes('INTRO_FIXED = {');
+test('생성 문맥의 1막 고정 대사(INTRO_FIXED)가 화면 틀과 같다', { skip: hasIntroFixed ? false : 'INTRO_FIXED가 아직 develop에 없다(#379 머지 전)' }, async () => {
+  const fixed = Object.fromEntries([...pySource.slice(pySource.indexOf('INTRO_FIXED = {')).split('}')[0].matchAll(/"(\w+)": "([^"]+)"/g)].map((m) => [m[1], m[2]]));
+  assert.deepEqual(Object.keys(fixed), ['opening', 'photo', 'end', 'postcard']);
+  const steps = assembleScript(await response()).acts['1a'].steps;
+  assert.equal(steps[1].text, fixed.photo);
+  assert.equal(steps[5].text, fixed.end);
+  assert.equal(frame['1b'].steps[0].text, fixed.postcard);
+  assert.ok(readFileSync(new URL('../pages/overview/overviewPage.js', import.meta.url), 'utf8').includes(fixed.opening), '① 앞 안내 대사(overviewPage INTRO_STEP)');
 });
