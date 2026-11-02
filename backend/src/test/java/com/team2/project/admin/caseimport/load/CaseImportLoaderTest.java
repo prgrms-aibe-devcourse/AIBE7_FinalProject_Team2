@@ -579,13 +579,18 @@ class CaseImportLoaderTest extends ApiIntegrationTest {
 		return jobId;
 	}
 
-	/** 적재되지 않은 등록 한 건 (배역만 정해진 상태). 작업 ID를 돌려준다 */
+	/**
+	 * 적재되지 않은 등록 한 건 (배역만 정해진 상태). 작업 ID를 돌려준다.
+	 *
+	 * <p>만든 시각은 JVM 시계로 넣는다 — 사건 행은 {@code @CreationTimestamp}(JVM 시계)로 찍히는데 DB 기본값 {@code now()}를 쓰면
+	 * 도커 VM 시계가 늦을 때 "마지막 배정"의 순서가 뒤바뀌어 테스트가 깨졌다(운영은 두 행 모두 JVM 시계라 문제가 없다)
+	 */
 	private String insertImportRow(String crimeType, String status, String defense) {
 		String jobId = UUID.randomUUID().toString().replace("-", "");
 		jdbcTemplate.update("""
-			INSERT INTO case_import (job_id, status, crime_type, cast_roles) VALUES (?, ?, ?, ?::jsonb)""",
+			INSERT INTO case_import (job_id, status, crime_type, cast_roles, created_at) VALUES (?, ?, ?, ?::jsonb, ?)""",
 			jobId, status, crimeType, "{\"prosecutor\": \"%s\", \"defense\": \"%s\"}"
-				.formatted(CastRoles.other(defense), defense));
+				.formatted(CastRoles.other(defense), defense), java.sql.Timestamp.from(java.time.Instant.now()));
 		return jobId;
 	}
 
