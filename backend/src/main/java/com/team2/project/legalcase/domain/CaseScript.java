@@ -140,6 +140,61 @@ public class CaseScript {
 		return blocks.stream().filter(block -> block.getUnit() == unit).findFirst();
 	}
 
+	/**
+	 * 재생성한 블록 하나 (BE-129 2차). 파이프라인 결과의 블록 모양 그대로이고, {@code basis}의 사건 내용 · 기사 판은 반영하는 쪽이
+	 * 요청 당시 판으로 채운 값이다
+	 */
+	public record RegeneratedBlock(Object content, int revision, Map<String, Object> basis,
+			List<Map<String, Object>> review, List<Object> warnings, List<Map<String, Object>> repairs) {
+	}
+
+	/**
+	 * 재생성 결과를 반영한다 (BE-129 2차, A-13-17). 다시 만든 블록만 바꾸거나 새로 붙이고 검수 기록을 지운다 — 다른 블록(승인했을 수
+	 * 있다)은 건드리지 않는다. 메타(배역 · 쟁점 · 혐의 인정)는 지금 값으로 맞추고, 만들지 못했던 단위가 채워졌으면 {@code pending}에서
+	 * 뺀다. 대본 전체 검수 결과({@code REVIEW_FAILED})는 재생성 때 대본 전체를 다시 검사한 결과로 바꾼다.
+	 *
+	 * @param stopped 재생성이 호출 한도로 멈췄는지. 대본의 {@code stopped}는 마지막 생성의 값이다
+	 */
+	public void applyRegeneration(Map<ScriptUnit, RegeneratedBlock> regenerated, Map<String, Object> cast, String issue,
+			List<Map<String, Object>> scriptReview, boolean stopped, String model) {
+		this.pending = new ArrayList<>(pending);	// DB에서 읽은 목록이 바꿀 수 없는 목록일 수 있다
+		for (Map.Entry<ScriptUnit, RegeneratedBlock> entry : regenerated.entrySet()) {
+			RegeneratedBlock value = entry.getValue();
+			Optional<CaseScriptBlock> existing = block(entry.getKey());
+			if (existing.isPresent()) {
+				existing.get().replace(value.content(), value.revision(), value.basis(), value.review(), value.warnings(),
+					value.repairs());
+			} else {
+				addBlock(entry.getKey(), value.content(), value.revision(), value.basis(), value.review(), value.warnings(),
+					value.repairs());
+			}
+			pending.remove(entry.getKey().name());
+		}
+		// 결과에 메타가 비어 오면 지금 값을 둔다(PR #381 리뷰 4번)
+		if (cast != null) {
+			this.castRoles = new LinkedHashMap<>(cast);
+		}
+		if (issue != null) {
+			this.issue = issue;
+		}
+		this.admits = block(ScriptUnit.U0).map(CaseScript::admitsOf).orElse(null);
+		this.review = scriptReview == null ? new ArrayList<>() : new ArrayList<>(scriptReview);
+		this.stopped = stopped;
+		if (model != null) {
+			this.model = model;
+		}
+		this.publishable = recomputePublishable();
+	}
+
+	/** U0 세 번째 답으로 혐의 인정 여부를 정한다 (적재 {@code CaseScriptLoader#admits}와 같은 규칙) */
+	private static Boolean admitsOf(CaseScriptBlock design) {
+		if (!(design.getContent() instanceof Map<?, ?> content) || !(content.get("questions") instanceof List<?> questions)
+			|| questions.size() <= 2 || !(questions.get(2) instanceof Map<?, ?> third)) {
+			return null;
+		}
+		return ScriptAnswers.admits(third.get("a") instanceof String answer ? answer : null);
+	}
+
 	/** 증거조사 대사 (U3 블록). 없으면 빈 목록 */
 	public List<Map<String, Object>> evidence() {
 		return block(ScriptUnit.U3).map(CaseScriptBlock::lines).orElse(List.of());

@@ -202,6 +202,19 @@ public class LegalCase {
 		this.classificationNeedsReview = needsReview == null ? null : List.copyOf(needsReview);
 	}
 
+	/**
+	 * 관리자가 분류를 고친다 (A-11, BE-129 2차). 값 검사는 호출하는 쪽이 {@link ScriptClassification#parse}로 먼저 한다.
+	 * 관리자가 네 축을 직접 정했으므로 확인 필요 목록에서 분류 축 항목을 지운다 — 민감 플래그 항목({@code sensitiveFlags.*})은
+	 * 민감 플래그를 고칠 때의 일이라 남긴다. 사건 내용 판({@link #contentRevision})은 올리지 않는다(분류는 블록 basis가 값으로 갖는다)
+	 */
+	public void changeClassification(Map<String, Object> classification) {
+		this.classification = new LinkedHashMap<>(classification);
+		if (classificationNeedsReview != null) {
+			this.classificationNeedsReview = classificationNeedsReview.stream()
+				.filter(item -> !ScriptClassification.AXES.contains(item)).toList();
+		}
+	}
+
 	/** 사용자에게 노출되는 사건인지 */
 	public boolean isPublished() {
 		return status == CaseStatus.PUBLISHED;

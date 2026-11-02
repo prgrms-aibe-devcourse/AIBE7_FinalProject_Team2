@@ -98,6 +98,9 @@ public class AdminCaseEditService {
 		if (edit.has("sensitiveFlags")) {
 			legalCase.changeSensitiveFlags(edit.<List<String>>get("sensitiveFlags"));
 		}
+		if (edit.has("classification")) {
+			legalCase.changeClassification(edit.<Map<String, Object>>get("classification"));
+		}
 		// 제목 · 개요가 바뀌어 판이 오르면 그 내용을 보고 만든 대본 블록의 승인을 지운다(PR #367 리뷰)
 		List<ScriptUnit> revoked = scriptService.revokeStaleApprovals(legalCase);
 		legalCase.startReview();
@@ -113,8 +116,8 @@ public class AdminCaseEditService {
 
 		Map<String, Object> detail = new LinkedHashMap<>();
 		detail.put("fields", List.copyOf(edit.changes().keySet()));	// 값은 남기지 않는다(본문은 사건 내용이라 길다)
-		// 배역 · 민감 플래그는 짧고, 자동 분류 · 배정을 사람이 뒤집은 기록이라 바꾼 값까지 남긴다 (BE-125)
-		for (String field : List.of("castRoles", "sensitiveFlags")) {
+		// 배역 · 민감 플래그 · 분류는 짧고, 자동 분류 · 배정을 사람이 뒤집은 기록이라 바꾼 값까지 남긴다 (BE-125 · BE-129)
+		for (String field : List.of("castRoles", "sensitiveFlags", "classification")) {
 			if (edit.has(field)) {
 				detail.put(field, edit.get(field));
 			}

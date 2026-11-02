@@ -84,6 +84,7 @@
 | v0.81 | 2026-11-02 | **공개 조건에 신문 지면 (BE-147)** — A-6 `publishReadiness` · A-13 `PUBLISH_NOT_READY`에 `NO_PAPER`(신문 지면 `case_paper`가 없음)를 추가한다. 다른 사유 뒤에 붙는다. 이미 공개된 사건은 다시 판정하지 않으며, 지면이 없는 공개 사건은 공개 취소(A-13-14) → 지면 생성(A-13-6) → 재공개로 맞춘다. 대표사진은 여전히 공개 조건이 아니다 (`docs/decisions/BE-147.md`. v0.79는 BE-140 3차 c(#366)가 쓰고 있어 v0.81로 적었다) |
 | v0.82 | 2026-10-30 | **체험 · 성향 결과의 주인 (BE-140 3a)** — 1-3: 내 체험은 로그인했으면 회원 기준(쿠키는 보지 않음), 아니면 익명 ID 쿠키 기준. API 1 · 16의 `myStatus`, API 2 ~ 15, P-2 · P-3, P-5의 체험 목록 · 성향이 같은 기준이다. 회원은 체험 시작 · 성향 제출에서 익명 ID를 발급받지 않는다. 손님 때 한 체험을 회원 것으로 옮기는 일은 M-9 ~ M-11(후속)이 맡는다 |
 | v0.83 | 2026-10-30 | **마이페이지 · 레벨 · 꾸미기 · 출석 · 수집 · 도전과제를 회원 기준 · 로그인 전용으로 (BE-140 3b, ERD v1.50 · V41)** — P-5 · P-7 ~ P-11 · L-1 ~ L-3은 `Authorization: Bearer`가 없으면 `401 UNAUTHORIZED`(쿠키는 보지 않는다). 데이터는 회원 키 테이블(`member_*`)에 저장하고, 예전 익명 ID 데이터는 옮기지 않는다(체험만 이관, M-9 ~ M-11 후속). P-6 `POST /attendance`는 회원만 기록하고 손님은 아무것도 하지 않고 204. 이 API들은 더 이상 익명 ID 쿠키를 발급하지 않는다. 체험 · 성향은 손님이 계속 쓴다(1-3) |
+| v0.85 | 2026-11-02 | **대본 블록 재생성 A-13-15 ~ A-13-17 신설 · A-11 분류 수정 (BE-129 2차, ERD v1.54 · V47)** — `POST /admin/cases/{caseId}/script/regenerations`(고른 블록 · `cascade`, 202) · `GET .../regenerations/{regenerationId}`(상태 · 끝나면 미리보기) · `POST .../regenerations/{regenerationId}/apply`(관리자가 반영). 사건 등록(A-14 → A-15 → A-14-1)과 같은 흐름이고, 서버가 DB 값(사건 내용 · AI 판결 방향과 형량 · 분류와 민감 플래그 · 배역 · 지금 블록 · 기사)으로 입력을 모아 파이프라인에 보낸다. 반영하면 다시 만든 블록만 바뀌고 그 블록은 다시 검수 대기가 된다. 요청한 뒤 대본 · 사건 내용 · 기사 · 배역 · 분류 · 민감 플래그가 바뀌었으면 반영을 거절한다. **A-11에 `classification`(`{mood, issue, victim, thirdParty}`, 네 축 통째) 추가** — 고치면 `classificationNeedsReview`에서 분류 축 항목이 빠진다. 에러 코드 `SCRIPT_REGENERATION_NOT_FOUND`(404) 추가, `IMPORT_IN_PROGRESS`는 재생성이 돌 때도 쓴다(등록과 재생성은 한 번에 하나) (`docs/decisions/BE-129.md`) |
 | v0.84 | 2026-10-31 | **첫 로그인 가져오기 M-9 ~ M-11 신설 (BE-140 3c)** — `GET /members/me/anonymous-import`(후보의 체험 수 · 첫인상 엽서 수, 없으면 404) · `POST /members/me/anonymous-import`(체험을 회원 것으로 이동) · `POST /members/me/anonymous-import/discard`(결정만 남기고 익명 ID 쿠키를 지움). 에러 코드 `ANONYMOUS_IMPORT_NOT_AVAILABLE` 추가 |
 
 ---
@@ -188,7 +189,8 @@ json
 | 409 | `JOB_LOCKED` | (확장, BE-106) 아직 열리지 않은 직업을 고르려 함 | 화면에서 잠긴 직업은 고를 수 없게 막는다. 오면 레벨(L-1)을 다시 불러온다 (L-2) |
 | 409 | `COLLECTION_LIMIT_EXCEEDED` | (확장, BE-83, v0.63) 모을 수 있는 수를 넘음 — 일러스트는 한 사건에서 처음 얻은 수 5. `details`에 넘친 종류(`field: items.kind`, `reason: illustration`). 의상 사용자당 12는 v0.75(BE-136)에서 삭제 | 개발 오류(콘텐츠 규칙보다 넉넉한 값이라 정상 화면이면 오지 않음) (P-9) |
 | 409 | `DUPLICATE_SOURCE` | (확장, 관리자 API, BE-93) 이미 등록한 사건번호. `details`에 어느 항목인지 담는다 | 입력 안내 (A-14) |
-| 409 | `IMPORT_IN_PROGRESS` | (확장, 관리자 API, BE-93) 실행 중인 등록이 있음. 한 번에 하나만 돌린다(외부 AI 호출 한도 보호) | 끝난 뒤 다시 시도 안내 (A-14) |
+| 409 | `IMPORT_IN_PROGRESS` | (확장, 관리자 API, BE-93) 실행 중인 등록이 있음. 한 번에 하나만 돌린다(외부 AI 호출 한도 보호). (v0.85, BE-129) 대본 블록 재생성도 같은 한도를 써서, 등록 · 재생성 중 하나가 돌면 다른 하나도 이 코드다 | 끝난 뒤 다시 시도 안내 (A-14 · A-13-15) |
+| 404 | `SCRIPT_REGENERATION_NOT_FOUND` | (확장, 관리자 API, BE-129 2차, v0.85) 그 사건의 대본 재생성 작업이 없음. 파이프라인에서 작업이 사라졌을 때 실패 사유 코드로도 쓴다 | 대본 화면을 다시 불러오기 (A-13-16 · 17) |
 | 404 | `POST_NOT_FOUND` | (확장, 커뮤니티 BE-115, v0.68) 글이 없음 | 목록으로 돌아가 다시 불러오기 (C-2 · C-4 · C-5) |
 | 404 | `IMPORT_NOT_FOUND` | (확장, 관리자 API, BE-93) 등록 작업이 없음 | 목록으로 안내 (A-15) |
 | 409 | `IMPORT_NOT_READY` | (확장, 관리자 API, BE-93 2차) 아직 적재할 수 없음 — 생성이 끝나지 않았거나 이미 적재한 등록 | 진행 상황 확인 안내 (A-14-1) |
@@ -1317,11 +1319,12 @@ API 1 · 2 · 16 · 17은 상태와 관계없이 부를 수 있다. 표에 없�
 | `recommendedBasis` | 문자열 · `null` |
 | `castRoles` | (v0.67, BE-125) `{"prosecutor": …, "defense": …}`. 키는 이 둘만, 값은 `naero` · `nambul`을 하나씩. `null`은 거절(배정을 지우면 범죄 유형별 균형 계산에서 빠진다) |
 | `sensitiveFlags` | (v0.67, BE-125) 플래그 이름 배열(`SensitiveFlag` 12종). 모르는 이름 · `null` 원소는 거절, 겹치면 하나로 줄인다. 모두 끌 때는 `[]`. `null`은 거절(`null`은 "분류 전"이라 되돌리지 않는다) |
+| `classification` | (v0.85, BE-129 2차) `{"mood", "issue", "victim", "thirdParty"}` **네 축을 통째로** 보낸다(한 축만 보내면 거절 — 블록 재생성에 그대로 넘기는 값이다). `mood`: `tragic` · `impulsive` · `cold` · `betrayal` · `calculated` · `tense`, `issue`: `admitted` · `intent_disputed` · `denied` · `mental_state` · `defense_claim`, `victim`: `punish` · `forgive` · `mixed` · `unknown`, `thirdParty`: true · false(값 목록의 정본은 파이프라인, 계약 파일 `contracts/script_blocks.json`). 모르는 키 · 값, `null`은 거절. 고치면 `classificationNeedsReview`에서 분류 축 항목(`mood` 등)을 지운다 — 민감 플래그 항목(`sensitiveFlags.*`)은 남긴다 |
 
 - 죄명 · 적용 법조문 · 법정형 · 판단 요소 구성 · 형벌 규칙은 이 API로 바꾸지 않는다(파이프라인 · SQL 경로, WBS 7-5 8순위).
 - 제목 중복은 저장 전에 확인하고, 그 사이 다른 요청이 같은 제목을 저장해 유니크 위반이 나도 `DUPLICATE_TITLE`로 돌려준다.
-- 감사 로그 `CASE_UPDATE`에는 바꾼 필드 이름만 남긴다(`{"fields": ["shortIntro", "keywords"]}`). 값은 사건 본문이라 남기지 않는다. 단 `castRoles` · `sensitiveFlags`는 짧고 자동 결과를 사람이 뒤집은 기록이라 바꾼 값까지 남긴다(`{"fields": ["castRoles"], "castRoles": {…}}`, v0.67).
-- 배역을 바꿔도 이미 만든 대본(`case_script`)은 다시 만들지 않는다 — 대사에 캐릭터가 들어가 있어 사건 배역과 어긋난다. 대본을 다시 만드는 경로는 BE-129에서 정한다.
+- 감사 로그 `CASE_UPDATE`에는 바꾼 필드 이름만 남긴다(`{"fields": ["shortIntro", "keywords"]}`). 값은 사건 본문이라 남기지 않는다. 단 `castRoles` · `sensitiveFlags` · `classification`(v0.85)은 짧고 자동 결과를 사람이 뒤집은 기록이라 바꾼 값까지 남긴다(`{"fields": ["castRoles"], "castRoles": {…}}`, v0.67).
+- 배역 · 민감 플래그 · 분류를 바꿔도 이미 만든 대본(`case_script`)은 저절로 다시 만들어지지 않는다 — 관리자가 블록 재생성(A-13-15, v0.85)으로 다시 만든다. 그 값을 보고 만든 블록은 낡은 블록이다(낡음 표시는 BE-126 2차).
 - 사건이 `DRAFT`면 `REVIEW`로 바꾼다(8-3 #3).
 - (v0.78, BE-126) **대본 블록의 승인을 지울 수 있다.** 제목 · 개요가 실제로 바뀌면 사건 내용의 판(`legal_case.content_revision`)이 오르고, 그 내용을 보고 만든 대본 블록(U0 · U2 · U3 · U4)의 **승인을 지운다** — 승인은 검수한 그때의 내용에 대한 것이라, 남겨 두면 옛 내용을 말하는 대본이 공개된다. 반려한 블록은 그대로 둔다. 지웠으면 감사 로그에 단위를 남긴다(`"scriptApprovalRevoked": ["U0", …]`). 공개한 사건은 고칠 수 없으므로 공개 중인 대본이 내려가지는 않는다.
 
@@ -1732,6 +1735,81 @@ A-11과 같은 방식(보낸 필드만, `null` = 지움). `headline` · `article
 | 400 `VALIDATION_ERROR` | 사유 없음 · 공백만 · 200자 초과 (`details[0].field = "reason"`) |
 | 404 `CASE_NOT_FOUND` | 사건이 없음 |
 | 409 `INVALID_STATE` | 공개 중이 아님(`CASE_NOT_PUBLISHED`) |
+
+### A-13-15. 대본 블록 재생성 요청 — `POST /admin/cases/{caseId}/script/regenerations`
+
+> **신설 (v0.85, BE-129 2차).** 관리자가 배역 · 분류 · 민감 플래그 · 사건 내용 · 기사를 고쳤거나 블록이 마음에 들지 않을 때, 고른 블록만 다시 만든다. 대본 전체를 다시 만들지 않는다 — 다른 블록은 이미 승인했을 수 있다. 사건 등록(A-14 → A-15 → A-14-1)과 같은 흐름이다: 요청(202) → 상태 · 미리보기(A-13-16) → 관리자가 반영(A-13-17).
+
+```json
+{ "units": ["U0"], "cascade": true }
+```
+
+| 필드 | 규칙 |
+| --- | --- |
+| `units` | 필수. `U0` ~ `U4` 1 ~ 5개, 겹치면 안 된다. 그 블록을 입력으로 받는 뒤 블록(U0 → U2 → U4, U2 → U4)과 아예 없는 앞 블록(증거조사만 있는 대본에서 U2를 고르면 U0)은 파이프라인이 더한다(연동 표 정본 `script_assembler.BLOCK_BASIS`) |
+| `cascade` | 선택, 기본 `true`(묶음 수정). `false`면 고른 블록(+ 없는 앞 블록)만 만든다(세부조정) — 남은 뒤 블록은 옛 앞 블록 판을 본 낡은 블록이 된다 |
+
+- 서버가 **DB 값으로 입력을 모아** 파이프라인 서비스에 보낸다(등록 작업 폴더는 적재 뒤 지워진다). 사건 내용은 대본이 읽는 필드(제목 · 죄명 · 적용 법조 · 개요 · 섹션 · 판단 요소 · 권고형)만 보내고 사건번호 같은 원본 정보는 보내지 않는다. AI 판결은 **공개된 AI 판결, 없으면 적재 때 들어온(가장 먼저 만든) AI 판결**의 판단 요소 방향과 형량을 보낸다. 분류는 **민감 플래그를 합쳐** 보낸다(빠지면 민감 사건이 가드 없이 다시 만들어진다). 형식은 `tools/ai-judgment/service/README.md` "대본 블록 재생성".
+- 요청 당시 입력(블록 판 · 사건 내용 판 · 기사 판 · 배역 · 분류 · 민감 플래그, 그리고 **보낸 사건 입력 · AI 판결 입력의 해시**)을 기록해 두고, 반영할 때 지금 값과 비교한다(A-13-17). 해시를 두는 이유: 사건 내용 판은 제목 · 개요를 고칠 때만 오르는데, 보낸 입력에는 섹션 · 판단 요소 문구 · 적용 법조 · 권고형과 AI 판결(방향 · 형량)도 있다.
+- 사건 배역이 지금 대본 배역과 다르면(A-11로 배역을 바꾼 뒤) 배역이 말하는 블록(지금 있는 U2 · U3 · U4)이 **모두** 다시 만들 대상(고른 블록 + `cascade`면 뒤 블록)에 들어 있어야 한다 — 일부만 다시 만들면 대본 배역(API 18 `cast`)은 새 값인데 나머지 블록 문장은 옛 배역이다.
+- 대본 생성 모델(`PIPELINE_SCRIPT_MODEL`)을 켠 서버에서만 쓸 수 있다.
+- 감사 로그 `CASE_SCRIPT_REGENERATE`(`regenerationId` · `units` · `cascade`).
+- 응답(202)은 A-13-16과 같은 형식(`status: QUEUED`).
+
+| 거절 | 조건 |
+| --- | --- |
+| 400 `VALIDATION_ERROR` | `units`가 비었거나 모르는 단위 · 겹친 단위 · 6개 이상 |
+| 404 `CASE_NOT_FOUND` · `SCRIPT_NOT_FOUND` | A-13-10과 같음 |
+| 409 `INVALID_STATE` | 분류나 민감 플래그가 없음(미분류 — A-11로 먼저 정한다) · 배역이 없음 · AI 판결이 없음 · 1막 해설(U1)이 있거나 다시 만드는데 신문 기사가 없음(검수가 U1을 기사와 비교한다 — A-13-6으로 먼저 만든다) · 배역이 바뀌었는데 U2 · U3 · U4가 다시 만들 대상에 다 들어 있지 않음 |
+| 409 `IMPORT_IN_PROGRESS` | 이 사건의 재생성이 아직 돎(파이프라인에 한 번 확인한 뒤 막는다), 또는 다른 사건 등록 · 재생성이 돎(한 번에 하나) |
+| 502 `IMPORT_UNAVAILABLE` | 파이프라인 서비스가 없거나(설정) 대본 생성 모델이 꺼져 있음, 또는 서비스에 닿지 못함 |
+
+### A-13-16. 대본 블록 재생성 상태 — `GET /admin/cases/{caseId}/script/regenerations/{regenerationId}`
+
+> **신설 (v0.85, BE-129 2차).** 화면이 끝날 때까지 묻는다(A-15와 같은 방식). 도는 중이면 파이프라인에 물어 받아 적는다.
+
+```json
+{
+  "regenerationId": 3, "status": "SUCCEEDED", "units": ["U0"], "cascade": true,
+  "stages": [{ "name": "script", "status": "DONE" }], "errorCode": null, "message": null,
+  "createdAt": "2026-11-02T10:00:00+09:00", "finishedAt": "2026-11-02T10:01:10+09:00", "appliedAt": null,
+  "applicable": true, "notApplicable": null,
+  "preview": {
+    "units": ["U0", "U2", "U4"], "regenerated": ["U0", "U2", "U4"], "pending": [], "stopped": false, "publishable": true,
+    "blocks": [{ "unit": "U0", "content": {}, "revision": 3, "basis": {}, "review": [], "warnings": [], "repairs": [] }],
+    "meta": { "cast": { "prosecutor": "naero", "defense": "nambul" }, "issue": "admitted", "admits": true },
+    "manualLinesReplaced": 0
+  }
+}
+```
+
+- `status`: `QUEUED` · `RUNNING` · `SUCCEEDED` · `FAILED`(A-15와 같은 값). `stages`는 재생성이 도는 대본 단계(`script`)만 준다.
+- `applicable`: 지금 반영할 수 있는지 — 끝났고, 반영하지 않았고, 그 사건의 **가장 최근** 재생성이고, 사건이 공개 중이 아니고, 요청한 뒤 입력이 바뀌지 않았고, 결과를 가져왔다(결과가 없으면 수동 수정 줄 수를 알 수 없어 반영 불가로 둔다). 아니면 `notApplicable`에 이유(도는 중이면 `applicable: false`, `notApplicable: null`).
+- `preview`: 끝났고 아직 반영하지 않은 작업의 결과. `units`는 다시 만들기로 한 블록(연동 표로 넓힌 것), `regenerated`는 실제로 만든 블록(반영하면 이것만 바뀐다), `pending`은 만들지 못한 블록(지금 값이 남는다). 블록은 A-13-10 블록과 같은 모양이고 검수 칸이 없다. 블록의 `review`에는 그 블록 것만 있다(만들지 않은 블록의 검수 결과는 바꾸지 않는다).
+- `manualLinesReplaced`: U3를 다시 만들면 바뀌는, **관리자가 직접 고친 대사**(A-13-13, `validation.manual`) 수. 화면은 0보다 크면 반영 전에 확인을 받는다.
+- 결과를 가져오지 못하면 `preview`는 `null`이다(상태는 그대로 준다).
+
+| 거절 | 조건 |
+| --- | --- |
+| 404 `SCRIPT_REGENERATION_NOT_FOUND` | 그 사건의 재생성 작업이 아님 |
+
+### A-13-17. 대본 블록 재생성 반영 — `POST /admin/cases/{caseId}/script/regenerations/{regenerationId}/apply`
+
+> **신설 (v0.85, BE-129 2차).** 관리자가 미리보기를 보고 누른다. **자동으로 반영하지 않는다** — 새 모델 출력이고, U3를 다시 만들면 관리자가 고친 줄이 바뀐다.
+
+- 다시 만든 블록만 내용 · 판 · `basis`(사건 내용 · 기사 판은 요청 당시 판으로 채운다) · `review` · `warnings` · `repairs`를 바꾸고 **그 블록의 검수 기록을 지운다**(다시 검수 대기). 없던 블록이면 붙이고 `pending`에서 뺀다. 다른 블록은 승인 상태까지 그대로다.
+- 메타(`cast` · `issue` · `admits`)를 지금 값으로 맞추고(`admits`는 U0 세 번째 답으로 서버가 다시 계산, 결과에 `cast` · `issue`가 비어 오면 지금 값을 둔다), 대본 전체 검수 결과(`review`, `REVIEW_FAILED`)는 재생성 때 대본 전체를 다시 검사한 결과로 바꾼다. `publishable`을 다시 계산한다.
+- 사건 행을 잠그고 반영한다(A-13-11 ~ 13과 같은 잠금). 반영한 뒤 파이프라인 작업을 지운다.
+- 감사 로그 `CASE_SCRIPT_REGENERATE_APPLY`(`regenerationId` · 바꾼 `units`).
+
+응답은 A-13-10과 같은 형식.
+
+| 거절 | 조건 |
+| --- | --- |
+| 404 `SCRIPT_REGENERATION_NOT_FOUND` · `SCRIPT_NOT_FOUND` | 작업이 없음 · 대본이 없음 |
+| 409 `INVALID_STATE` | 아직 끝나지 않음 · 실패함 · 이미 반영함 · 더 최근 재생성이 있음 · **사건이 공개 중**(반영하면 승인이 풀려 대본이 바로 내려간다 — 점검 상태(BE-126 2차) 전까지는 공개 취소(A-13-14) → 반영 → 승인 → 다시 공개) · **요청한 뒤 대본(블록 판) · 사건 내용(섹션 · 판단 요소 포함) · 기사 · 배역 · 분류 · 민감 플래그 · AI 판결이 바뀜**(옛 입력으로 만든 블록이라 다시 요청한다) · 결과가 사라짐 · 다시 만든 블록이 없음 |
+| 422 `IMPORT_RESULT_INVALID` | 결과의 블록을 읽을 수 없음 |
+| 502 `IMPORT_UNAVAILABLE` | 결과를 가져오지 못함 |
 
 ### A-14. 사건 등록 시작 — `POST /admin/case-imports`
 

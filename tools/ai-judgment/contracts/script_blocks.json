@@ -8,6 +8,11 @@
     "U4": ["case", "cast", "mood", "issue", "victim", "sensitiveFlags", "U0", "U2"]
   },
   "dbBasis": ["case", "paper"],
+  "classification": {
+    "mood": ["tragic", "impulsive", "cold", "betrayal", "calculated", "tense"],
+    "issue": ["admitted", "intent_disputed", "denied", "mental_state", "defense_claim"],
+    "victim": ["punish", "forgive", "mixed", "unknown"]
+  },
   "affects": {
     "U0": ["U2", "U4"],
     "U1": [],

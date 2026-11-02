@@ -400,6 +400,11 @@ class BlockContractTest(unittest.TestCase):
         self.assertEqual(self.CONTRACT["affects"], script_repair.AFFECTS)
         self.assertEqual(script_repair.AFFECTS, {"U0": ["U2", "U4"], "U1": [], "U2": ["U4"], "U3": [], "U4": []})
 
+    def test_classification_values_match(self):
+        """분류 축 값 — 백엔드 A-11(관리자가 분류를 고친다, BE-129 2차)이 같은 목록으로 검사한다."""
+        self.assertEqual(self.CONTRACT["classification"],
+                         {"mood": list(sa.MOODS), "issue": list(sa.ISSUES), "victim": list(sa.VICTIMS)})
+
     def test_basis_axes_follow_guide_units(self):
         """분류 축은 축 블록을 넣는 단위(GUIDE_UNITS)와 같아야 한다 — 블록을 안 넣는 단위가 그 축에 낡을 이유는 없다."""
         for axis, units in sa.GUIDE_UNITS.items():

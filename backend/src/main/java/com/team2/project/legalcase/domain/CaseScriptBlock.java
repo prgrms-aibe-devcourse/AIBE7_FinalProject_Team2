@@ -153,6 +153,28 @@ public class CaseScriptBlock {
 	}
 
 	/**
+	 * 재생성한 값으로 바꾼다 (BE-129 2차, A-13-17). 검수 기록을 지운다 — 새 값은 아무도 검수하지 않았다. 판은 파이프라인이 지금 판에서
+	 * 이어 올린 값이고(요청 뒤 판이 바뀌었으면 반영 전에 거절한다), 그래도 지금 판보다 작으면 지금 판 + 1로 둔다(판은 내려가지 않는다).
+	 */
+	void replace(Object content, int revision, Map<String, Object> basis, List<Map<String, Object>> review,
+			List<Object> warnings, List<Map<String, Object>> repairs) {
+		this.content = content;
+		this.revision = Math.max(revision, this.revision + 1);
+		this.basis = basis == null ? new LinkedHashMap<>() : new LinkedHashMap<>(basis);
+		this.review = review == null ? new ArrayList<>() : new ArrayList<>(review);
+		this.warnings = warnings == null ? new ArrayList<>() : new ArrayList<>(warnings);
+		this.repairs = repairs == null ? new ArrayList<>() : new ArrayList<>(repairs);
+		this.publishable = computePublishable();
+		clearReview();
+	}
+
+	/** 관리자가 직접 고친 U3 줄 수 ({@code validation.manual}). 재생성하면 이 줄들이 새 대사로 바뀐다(A-13-16 미리보기) */
+	public long manualLineCount() {
+		return lines().stream().filter(line -> line.get("validation") instanceof Map<?, ?> validation
+			&& Boolean.TRUE.equals(validation.get("manual"))).count();
+	}
+
+	/**
 	 * U3 대사 한 줄을 관리자가 직접 고친다 (A-13-13). 고친 줄은 {@code validation.manual = true}로 표시하고 실패를 지운다 —
 	 * 모델이 실패로 남긴 줄이라도 사람이 채웠으면 더는 실패가 아니다. 경고는 남긴다(사람이 보고 판단할 값이다).
 	 * 그 줄의 검수 조건 오류(BE-122)도 같은 이유로 지운다. 값이 바뀌었으니 판이 오른다.

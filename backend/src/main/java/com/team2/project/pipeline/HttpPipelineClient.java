@@ -1,6 +1,7 @@
 package com.team2.project.pipeline;
 
 import com.team2.project.pipeline.config.PipelineProperties;
+import tools.jackson.databind.JsonNode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -44,6 +45,16 @@ public class HttpPipelineClient implements PipelineClient {
 
 	@Override
 	public PipelineJob createJob(PipelineJobRequest request) {
+		return postJob(request, "작업 생성");
+	}
+
+	@Override
+	public PipelineJob createRegenerationJob(PipelineRegenerationRequest request) {
+		return postJob(request, "재생성 작업 생성");
+	}
+
+	/** 작업 생성 공통. 본문(판결문 원문 · 사건 내용)은 로그에 남기지 않는다 */
+	private PipelineJob postJob(Object request, String what) {
 		requireEnabled();
 		try {
 			PipelineJob job = restClient.post()
@@ -62,15 +73,15 @@ public class HttpPipelineClient implements PipelineClient {
 			}
 			return job;
 		} catch (RestClientResponseException e) {
-			throw translate(e, "작업 생성");
+			throw translate(e, what);
 		} catch (RestClientException e) {
 			// 원문이 들어간 요청 본문은 로그에 남기지 않는다.
 			// 타임아웃이면 파이프라인은 작업을 만들어 돌고 있을 수 있다 — 그때는 백엔드에 행이 없는데도
 			// 다음 등록이 파이프라인 쪽 잠금에 걸린다. 증상을 알아볼 수 있게 함께 적는다
 			// (docs/decisions/BE-93.md "작업 생성이 타임아웃되면 고아 작업이 남는다")
-			log.warn("파이프라인 서비스에 닿지 못했습니다 (작업 생성): {}. 타임아웃이었다면 파이프라인에"
+			log.warn("파이프라인 서비스에 닿지 못했습니다 ({}): {}. 타임아웃이었다면 파이프라인에"
 				+ " 작업이 남아 다음 등록이 IMPORT_IN_PROGRESS가 될 수 있다 — pipeline 컨테이너를 확인한다",
-				e.toString());
+				what, e.toString());
 			throw new PipelineException("파이프라인 서비스에 닿지 못했습니다", e);
 		}
 	}
@@ -106,6 +117,24 @@ public class HttpPipelineClient implements PipelineClient {
 			throw translate(e, "결과 조회");
 		} catch (RestClientException e) {
 			log.warn("파이프라인 서비스에 닿지 못했습니다 (결과 조회 jobId={}): {}", jobId, e.toString());
+			throw new PipelineException("파이프라인 서비스에 닿지 못했습니다", e);
+		}
+	}
+
+	@Override
+	public JsonNode getRegenerationResult(String jobId) {
+		requireEnabled();
+		try {
+			JsonNode body = restClient.get().uri("/jobs/{jobId}/result", jobId).retrieve().body(JsonNode.class);
+			JsonNode regenerated = body == null ? null : body.get("regenerated");
+			if (regenerated == null || !regenerated.isObject()) {
+				throw new PipelineException("파이프라인 서비스가 재생성 결과를 보내지 않았습니다");
+			}
+			return regenerated;
+		} catch (RestClientResponseException e) {
+			throw translate(e, "재생성 결과 조회");
+		} catch (RestClientException e) {
+			log.warn("파이프라인 서비스에 닿지 못했습니다 (재생성 결과 조회 jobId={}): {}", jobId, e.toString());
 			throw new PipelineException("파이프라인 서비스에 닿지 못했습니다", e);
 		}
 	}
