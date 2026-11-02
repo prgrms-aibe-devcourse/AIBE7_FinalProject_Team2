@@ -400,6 +400,39 @@ class BlockContractTest(unittest.TestCase):
         self.assertEqual(self.CONTRACT["affects"], script_repair.AFFECTS)
         self.assertEqual(script_repair.AFFECTS, {"U0": ["U2", "U4"], "U1": [], "U2": ["U4"], "U3": [], "U4": []})
 
+    def test_path_kinds_match_review(self):
+        """자리별 줄 종류(BE-153) — 검수(unit_lines)가 꺼내는 자리 · 종류와 같다. 말하는 대사 자리(spokenPaths)는 여기서 파생한다.
+        백엔드 A-13-21 · 관리자 화면 · BE-154 재검사가 같은 표를 읽는다."""
+        import re
+        import script_review
+        many = ["가", "나", "다", "라", "마", "바"]
+        sample = {
+            "U0": {"plea": "인정", "issues": many, "questions": [{"q": "질문", "a": "예"}] * 3, "tone": "차분함"},
+            "U1": {"lines": many},
+            "U2": {"indict": many, "plea": many, "issues_narr": many, "questions": [{"q": "질문", "a": "예"}] * 3,
+                   "cards": {"indict": {"ul": many, "law": "형법"}, "plea": {"b": "굵게", "ul": many},
+                             "issues": {"p": "문단", "ul": many}}},
+            "U4": {"prosecutor": "의견", "defense": "변론"},
+        }
+
+        def general(path):
+            path = re.sub(r"/\d+(?=/|$)", "/*", path)
+            return re.sub(r"^/cards/[^/]+/[^/]+", "/cards/{key}/{key}", path)
+
+        kinds, seen = {}, set()
+        for unit, value in sample.items():
+            kinds[unit] = {}
+            for path, _, kind in script_review.unit_lines(unit, value):
+                pattern = general(path)
+                self.assertEqual(kinds[unit].setdefault(pattern, kind), kind, f"{unit} {pattern}: 한 자리에 종류가 둘")
+                seen.add(kind)
+        self.assertEqual(self.CONTRACT["pathKinds"], kinds)
+        # 표본이 모든 종류를 한 번씩 담는지 — 파이프라인이 새 종류를 더하면 여기서 깨진다(PR #390 리뷰 2부 3번)
+        self.assertEqual(seen, {"design", "guide", "narrator", "prosecutor", "defense", "card"})
+        self.assertEqual(self.CONTRACT["spokenKinds"], list(script_review.SPOKEN_KINDS))
+        spoken = {unit: [p for p, k in table.items() if k in script_review.SPOKEN_KINDS] for unit, table in kinds.items()}
+        self.assertEqual(self.CONTRACT["spokenPaths"], spoken)
+
     def test_classification_values_match(self):
         """분류 축 값 — 백엔드 A-11(관리자가 분류를 고친다, BE-129 2차)이 같은 목록으로 검사한다."""
         self.assertEqual(self.CONTRACT["classification"],

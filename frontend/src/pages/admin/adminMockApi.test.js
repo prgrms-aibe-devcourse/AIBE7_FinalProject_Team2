@@ -219,29 +219,33 @@ test('A-13-6: 지면에는 대표사진 · 발단 · 결론 사진이 함께 붙
   assert.equal(paper.extraPhotos[0].role, 'ORIGIN');
 });
 
-test('A-13-10: 대본이 없는 사건은 SCRIPT_NOT_FOUND, A-6 요약도 exists false', async () => {
+test('A-13-10: 대본이 없는 사건은 SCRIPT_NOT_FOUND, A-6 요약도 exists false · 준비 중', async () => {
   // 목 기본 상태에서 12번에는 대본이 있다. 대본이 없는 사건을 만들어 확인한다
   const { importId } = await api.createImport(request({ sources: [source({ caseNumber: '2099고합950' })] }));
   await runToEnd(importId);
   const loaded = await api.loadImport(importId);
   const fresh = await api.getCase(loaded.caseId);
-  assert.deepEqual(fresh.script, { exists: false, reviewStatus: null, publishable: null });
+  assert.deepEqual(fresh.script, { exists: false, reviewStatus: null, publishable: null, scriptStatus: 'PREPARING' });
   assert.equal(await code(api.getCaseScript(loaded.caseId)), 'SCRIPT_NOT_FOUND');
 });
 
-test('A-13-10: 대사마다 label · 측 · 경고가 붙고, 만들지 못한 줄은 text가 null이다', async () => {
+test('A-13-10: 블록 U0 ~ U4와 대본 값 — evidence는 U3, 만들지 못한 줄은 text가 null, 낡음 · 상태 칸이 있다', async () => {
   const script = await api.getCaseScript(12);
+  assert.deepEqual(script.blocks.map((block) => block.unit), ['U0', 'U1', 'U2', 'U3', 'U4']);
   assert.equal(script.evidence.length, 3);
   assert.ok(script.evidence[0].label, '판단 요소 문구가 붙어 있다');
-  assert.equal(script.evidence[0].role, 'PROSECUTOR');
+  assert.equal(script.evidence[0].role, 'prosecutor', '서버 저장값 그대로 소문자다');
   assert.equal(script.evidence[1].text, null, '끝내 만들지 못한 줄');
-  assert.deepEqual(script.evidence[1].validation.warnings, ['증거 카드에 없는 사실을 말했습니다']);
   assert.equal(script.publishable, false);
   assert.equal(script.reviewStatus, 'PENDING');
-  assert.deepEqual((await api.getCase(12)).script, { exists: true, reviewStatus: 'PENDING', publishable: false });
+  assert.equal(script.scriptStatus, 'PREPARING');
+  assert.equal(script.releasedAt, null);
+  const u1 = script.blocks[1];
+  assert.deepEqual([u1.stale, u1.staleReasons, u1.staleBlocksApproval], [true, ['paper'], true]);
+  assert.deepEqual((await api.getCase(12)).script, { exists: true, reviewStatus: 'PENDING', publishable: false, scriptStatus: 'PREPARING' });
 });
 
-test('A-13-11: publishable이 false면 승인은 409. 빈 줄을 채우면 승인할 수 있다', async () => {
+test('A-13-11: 오류 블록 · 승인을 막는 낡음이 있으면 통승인은 409. 빈 줄을 채우고 확인했음을 누르면 승인된다', async () => {
   assert.equal(await code(api.approveCaseScript(12)), 'INVALID_STATE');
 
   const fixed = await api.updateCaseScriptLine(12, 2, '피고인은 흉기를 미리 준비하지 않았습니다.');
@@ -249,18 +253,27 @@ test('A-13-11: publishable이 false면 승인은 409. 빈 줄을 채우면 승�
   assert.equal(fixed.evidence[1].validation.manual, true, '사람이 고침으로 표시된다');
   assert.ok(fixed.evidence[1].editedAt);
   assert.deepEqual(fixed.evidence[1].validation.warnings, ['증거 카드에 없는 사실을 말했습니다'], '경고는 남긴다');
+  assert.equal(fixed.blocks[3].revision, 2, 'U3 판이 오른다');
 
+  const blocked = await api.approveCaseScript(12).catch((error) => error);
+  assert.equal(blocked.code, 'INVALID_STATE');
+  assert.match(blocked.message, /U1/, '어느 블록이 낡아 막혔는지 알려 준다');
+
+  await api.acknowledgeScriptBlockStale(12, 'U1');
   const approved = await api.approveCaseScript(12);
   assert.equal(approved.reviewStatus, 'APPROVED');
   assert.equal(approved.isPublished, true);
+  assert.equal(approved.releasedAt, null, '초안 사건이라 사용자에게 나간 것이 아니다');
   assert.equal((await api.getCase(12)).status, 'DRAFT', '대본 검수는 사건 상태를 바꾸지 않는다');
 });
 
-test('A-13-13: 고치면 검수 기록이 지워져 다시 대기가 된다', async () => {
+test('A-13-13: 고치면 U3 블록만 다시 대기가 되고, 공개 중이던 대본은 점검 중이 된다', async () => {
   const after = await api.updateCaseScriptLine(13, 1, '소음 문제로 다툼이 반복됐습니다. 고쳤어요.');
-  assert.equal(after.reviewStatus, 'PENDING');
+  assert.equal(after.blocks[3].reviewStatus, 'PENDING');
+  assert.equal(after.blocks[0].reviewStatus, 'APPROVED', '다른 블록 승인은 그대로');
   assert.equal(after.isPublished, false);
-  assert.equal(after.reviewedBy, null);
+  assert.equal(after.scriptStatus, 'MAINTENANCE');
+  assert.deepEqual((await api.getCase(13)).script.scriptStatus, 'MAINTENANCE');
 });
 
 test('A-13-13: 길이는 줄바꿈을 빼고 센다 (50자 + 50자 두 줄은 통과)', async () => {
@@ -274,7 +287,7 @@ test('A-13-13: 길이는 줄바꿈을 빼고 센다 (50자 + 50자 두 줄은 �
   assert.equal(await code(api.updateCaseScriptLine(12, 99, '없는 요소')), 'SCRIPT_LINE_NOT_FOUND');
 });
 
-test('A-13-12: 승인한 대본도 반려로 내릴 수 있다. 사유는 1 ~ 500자', async () => {
+test('A-13-12: 승인한 대본도 통거절로 내릴 수 있다 — 나간 대본이라 점검 중. 사유는 1 ~ 500자', async () => {
   assert.equal((await api.getCaseScript(13)).reviewStatus, 'APPROVED');
   assert.equal(await code(api.rejectCaseScript(13, '  ')), 'VALIDATION_ERROR');
   assert.equal(await code(api.rejectCaseScript(13, '가'.repeat(501))), 'VALIDATION_ERROR');
@@ -283,6 +296,71 @@ test('A-13-12: 승인한 대본도 반려로 내릴 수 있다. 사유는 1 ~ 50
   assert.equal(rejected.reviewStatus, 'REJECTED');
   assert.equal(rejected.isPublished, false);
   assert.equal(rejected.reviewNote, '검사 쪽 대사가 너무 깁니다.');
+  assert.equal(rejected.scriptStatus, 'MAINTENANCE');
+});
+
+test('A-13-18 · 19: 블록 반려 → 점검 중, 다시 승인하면 공개 중으로 돌아오고 처음 나간 때는 그대로다', async () => {
+  const { releasedAt } = await api.getCaseScript(13);
+  const rejected = await api.rejectScriptBlock(13, 'U2', '질문이 어색합니다');
+  assert.equal(rejected.blocks[2].reviewStatus, 'REJECTED');
+  assert.equal(rejected.blocks[2].reviewNote, '질문이 어색합니다');
+  assert.equal(rejected.scriptStatus, 'MAINTENANCE');
+
+  const back = await api.approveScriptBlock(13, 'U2');
+  assert.equal(back.scriptStatus, 'READY');
+  assert.equal(back.releasedAt, releasedAt);
+  assert.equal(await code(api.rejectScriptBlock(13, 'U2', '  ')), 'VALIDATION_ERROR');
+  assert.equal(await code(api.approveScriptBlock(13, 'U9')), 'SCRIPT_BLOCK_NOT_FOUND');
+});
+
+test('A-13-18: 오류 블록 · 승인을 막는 낡음 블록은 409, 대본 조건(pending)도 본다', async () => {
+  assert.equal(await code(api.approveScriptBlock(12, 'U3')), 'INVALID_STATE', 'U3에 만들지 못한 줄이 있다');
+  const stale = await api.approveScriptBlock(12, 'U1').catch((error) => error);
+  assert.equal(stale.code, 'INVALID_STATE');
+  assert.match(stale.message, /U1/);
+  assert.equal((await api.approveScriptBlock(12, 'U0')).blocks[0].reviewStatus, 'APPROVED');
+});
+
+test('A-13-20: 확인했음은 낡음 표시를 지우고 승인을 막던 낡음도 푼다', async () => {
+  const after = await api.acknowledgeScriptBlockStale(12, 'U1');
+  assert.deepEqual([after.blocks[1].stale, after.blocks[1].staleBlocksApproval, after.blocks[1].staleReasons], [false, false, []]);
+  assert.equal((await api.approveScriptBlock(12, 'U1')).blocks[1].reviewStatus, 'APPROVED');
+});
+
+test('A-13-21: 블록 문장을 고치면 판이 오르고 그 블록만 대기, 뒤 블록은 낡음(표시만), U0이면 혐의 인정을 다시 계산한다', async () => {
+  const after = await api.updateScriptBlockText(13, 'U0', '/questions/2/a', '아니요');
+  assert.equal(after.blocks[0].revision, 2);
+  assert.equal(after.blocks[0].content.questions[2].a, '아니요');
+  assert.equal(after.blocks[0].reviewStatus, 'PENDING');
+  assert.equal(after.meta.admits, false);
+  assert.deepEqual(after.blocks[2].staleReasons, ['U0']);
+  assert.equal(after.blocks[2].staleBlocksApproval, false);
+  assert.equal(after.blocks[2].reviewStatus, 'APPROVED', '뒤 블록 승인은 그대로');
+  assert.equal(after.scriptStatus, 'MAINTENANCE', '공개 중이던 대본이라 점검 중');
+
+  assert.equal(await code(api.updateScriptBlockText(13, 'U0', '/questions/9/q', '없는 자리')), 'SCRIPT_LINE_NOT_FOUND');
+  assert.equal(await code(api.updateScriptBlockText(13, 'U0', '/questions', '배열 자리')), 'SCRIPT_LINE_NOT_FOUND');
+  assert.equal(await code(api.updateScriptBlockText(13, 'U3', '/0/text', '대사')), 'VALIDATION_ERROR');
+  assert.equal(await code(api.updateScriptBlockText(13, 'U1', '/lines/0', '가'.repeat(101))), 'VALIDATION_ERROR');
+  // 설계도(U0) 질문은 화면 대사가 아니라 100자 · 2줄을 보지 않는다 — 500자까지 (BE-153)
+  const long = `${'가'.repeat(120)}\n나\n다`;
+  assert.equal((await api.updateScriptBlockText(13, 'U0', '/questions/0/q', long)).blocks[0].content.questions[0].q, long);
+  assert.equal(await code(api.updateScriptBlockText(13, 'U0', '/questions/0/q', '가'.repeat(501))), 'VALIDATION_ERROR');
+});
+
+test('A-13: 승인한 대본이 있는 사건을 공개하면 그때 처음 나간 시각이 남는다', async () => {
+  await api.updateCaseScriptLine(12, 2, '피고인은 흉기를 미리 준비하지 않았습니다.');
+  await api.acknowledgeScriptBlockStale(12, 'U1');
+  await api.approveCaseScript(12);
+  assert.equal((await api.getCaseScript(12)).releasedAt, null);
+  // 사건 12의 공개 조건: 지면 · AI 판결(501) · 재판부 판결(502) 승인
+  await api.generateCasePaper(12);
+  await api.approveJudgment(501);
+  await api.approveJudgment(502);
+  const published = await api.publishCase(12).catch((error) => error);
+  assert.equal(published.code, undefined, JSON.stringify(published.details ?? published));
+  assert.ok((await api.getCaseScript(12)).releasedAt);
+  assert.equal((await api.getCase(12)).script.scriptStatus, 'READY');
 });
 
 test('A-13-14: 공개한 사건의 공개를 취소하면 REVIEW로 돌아가고, 다시 취소하면 CASE_NOT_PUBLISHED (BE-118)', async () => {

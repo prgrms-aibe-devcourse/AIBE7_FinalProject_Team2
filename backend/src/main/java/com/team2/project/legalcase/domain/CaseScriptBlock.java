@@ -166,6 +166,11 @@ public class CaseScriptBlock {
 		return true;
 	}
 
+	/** 그 자리(JSON Pointer)에 고칠 수 있는 문자열이 있는지 — {@link #editText}가 고칠 수 있는 자리와 같다. 값은 바꾸지 않는다 */
+	boolean hasText(String path) {
+		return unit != ScriptUnit.U3 && content instanceof Map<?, ?> && replaceString(deepCopy(content), pointer(path), 0, "");
+	}
+
 	/** JSON Pointer → 토큰 ("/questions/0/q" → [questions, 0, q]). 형식이 아니면 빈 목록 */
 	private static List<String> pointer(String path) {
 		if (path == null || !path.startsWith("/") || path.length() < 2) {

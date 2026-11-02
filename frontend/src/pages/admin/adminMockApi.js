@@ -1,7 +1,8 @@
-// 관리자 API 목 (API 명세 8장 A-1 ~ A-15, A-13-1 ~ A-13-13). 7.4.7 구현 전에 S-19 화면을 만들고 확인하는 용도다.
+// 관리자 API 목 (API 명세 8장 A-1 ~ A-15, A-13-1 ~ A-13-13 · A-13-18 ~ 21). 7.4.7 구현 전에 S-19 화면을 만들고 확인하는 용도다.
 // 사건 · 원문은 모두 가상 값이다. 상태는 메모리에만 두고(새로고침하면 처음으로), 로그인 여부만 sessionStorage에 둔다.
 // 원본 판결문 같은 내부 정보를 브라우저 저장소에 남기지 않기 위해서다.
 import { ADMIN, SESSION_KEY, delay, fail, now, requireLogin } from './adminMockBase.js';
+import { SCRIPT_UNITS, addedSensitiveFlags, admits, isSpoken, textLeaves, textViolation } from './adminScriptBlocks.js';
 
 export * from './adminOpsMockApi.js'; // 운영 메뉴(대시보드 · 회원 · 게시글 · 신고 · 관리자 계정 · 공지) 목
 
@@ -78,6 +79,9 @@ const content = (title, extra = {}) => ({
   recommendedMinMonths: 120, recommendedMaxMonths: 192, recommendedBasis: '살인범죄 양형기준 제2유형 기본 영역 (가상)',
   incidentDate: '2024-03-02', guideline: { guidelineId: 4, versionName: '2023 수정 (가상)' },
   deidentifiedItems: ['인명', '지명', '사건번호'],
+  // 배역 · 민감 플래그 · 분류 (BE-125 · BE-129). 대본 화면이 생성 문맥 · 새로 생긴 민감 플래그를 이 값으로 본다(FE-148)
+  castRoles: { prosecutor: 'naero', defense: 'nambul' }, sensitiveFlags: [],
+  classification: { mood: 'tragic', issue: 'intent_disputed', victim: 'punish', thirdParty: false }, classificationNeedsReview: [],
   ...extra,
 });
 
@@ -96,39 +100,76 @@ function mockPaper() {
     updatedAt: '2026-10-19T09:00:00+09:00' };
 }
 
-/** 대사 한 줄. 파이프라인이 만드는 모양 그대로다(A-13-10) */
+/** 대사 한 줄 (U3 블록의 한 줄). 파이프라인이 만드는 모양 그대로다(A-13-10). label은 서버가 붙여 준다 */
 function line(factorId, label, role, character, text, warnings = [], attempts = 1) {
   return { factorId, label, role, character, text, attempts, validation: { ok: text !== null, warnings } };
 }
 
-/** 검수 거리가 있는 대본: 둘째 줄을 끝내 만들지 못해 publishable이 false다 */
-function draftScript() {
+/** 블록 하나 (A-13-10 blocks[]). 검수 칸 · 낡음 칸은 서버가 계산해 주는 값을 그대로 담아 둔다 */
+function scriptBlock(unit, content, extra = {}) {
   return {
-    evidence: [
-      line(1, '빌린 돈을 갚으라는 말에 화가 나 다툼이 시작됐다', 'PROSECUTOR', '나로', '돈을 갚으라는 말에 피고인이 먼저 언성을 높였습니다.'),
-      line(2, '다투던 중 흉기를 집어 들었다', 'DEFENSE', '남불', null, ['증거 카드에 없는 사실을 말했습니다'], 3),
-      line(3, '범행 뒤 현장을 떠났다', 'PROSECUTOR', '나로', '피고인은 구호 조치 없이 집을 나갔습니다.'),
-    ],
-    cast: { prosecutor: '나로', defense: '남불' },
-    model: 'google:gemini-2.5-flash', balanceWarning: '검사 쪽 대사가 변호인보다 두 배 깁니다',
-    publishable: false, stopped: false,
-    generatedAt: '2026-10-20T09:00:00+09:00', updatedAt: '2026-10-20T09:10:00+09:00',
-    reviewStatus: 'PENDING', isPublished: false, reviewedBy: null, reviewedAt: null, reviewNote: null,
+    unit, content, revision: 1, basis: { sensitiveFlags: [] }, review: [], warnings: [], repairs: [], publishable: true,
+    reviewStatus: 'PENDING', reviewedBy: null, reviewedAt: null, reviewNote: null,
+    stale: false, staleReasons: [], staleBlocksApproval: false, unknownBasis: [], ...extra,
   };
 }
 
-/** 이미 승인해 공개 중인 대본 */
-function approvedScript() {
+const U0_CONTENT = () => ({ plea: '인정', issues: ['우발적 범행인지'], questions: [
+  { q: '피고인은 그날 피해자를 만난 사실이 있습니까?', a: '예' },
+  { q: '다툼 중에 흉기를 집어 든 사실이 있습니까?', a: '예' },
+  { q: '공소사실을 인정합니까?', a: '예' },
+] });
+const U2_CONTENT = () => ({ indict: ['피고인은 다툼 끝에 피해자를 해쳤습니다.'], plea: '공소사실을 인정합니다.',
+  issues_narr: ['계획한 범행인지가 쟁점이에요.'], questions: [{ q: '흉기는 미리 준비했습니까?', a: '아니요' }] });
+const U4_CONTENT = () => ({ prosecutor: '피고인의 책임이 무겁습니다.', defense: '우발적으로 일어난 일입니다.' });
+
+/**
+ * 검수 거리가 있는 대본 (사건 12, 초안):
+ * - U3 둘째 줄을 끝내 만들지 못해 U3가 오류 블록이다(승인 막힘) — 직접 채우면 풀린다
+ * - U1은 만든 뒤 기사를 다시 만들어 승인을 막는 낡음이다 — "확인했음"으로 풀린다
+ * - U2에는 경고(쟁점 질문 대응)가 하나 있다 — 공개는 막지 않는다
+ */
+function draftScript() {
   return {
-    evidence: [
-      line(1, '층간 소음으로 여러 번 다툼이 있었다', 'PROSECUTOR', '나로', '소음 문제로 다툼이 반복됐습니다.'),
-      line(2, '피고인이 먼저 문을 두드렸다', 'DEFENSE', '남불', '피고인은 대화를 하려 했을 뿐입니다.'),
+    model: 'openai:gpt-5.6-luna', generatedAt: '2026-10-20T09:00:00+09:00', updatedAt: '2026-10-20T09:10:00+09:00',
+    stopped: false, pending: [], review: [], balanceWarning: '검사 쪽 대사가 변호인보다 두 배 깁니다',
+    meta: { cast: { prosecutor: 'naero', defense: 'nambul' }, issue: 'intent_disputed', admits: true },
+    releasedAt: null,
+    blocks: [
+      scriptBlock('U0', U0_CONTENT()),
+      scriptBlock('U1', { lines: ['그날 밤, 빌린 돈 이야기로 시작된 다툼이었어요.', '사건은 한순간에 벌어졌어요.'] },
+        { stale: true, staleReasons: ['paper'], staleBlocksApproval: true }),
+      scriptBlock('U2', U2_CONTENT(), { review: [{ unit: 'U2', path: '/questions/0/q', code: 'ISSUE_QUESTION_MISMATCH',
+        severity: 'warning', fix: null, message: '설계도의 쟁점 질문과 다릅니다.' }] }),
+      scriptBlock('U3', [
+        line(1, '빌린 돈을 갚으라는 말에 화가 나 다툼이 시작됐다', 'prosecutor', 'naero', '돈을 갚으라는 말에 피고인이 먼저 언성을 높였습니다.'),
+        line(2, '다투던 중 흉기를 집어 들었다', 'defense', 'nambul', null, ['증거 카드에 없는 사실을 말했습니다'], 3),
+        line(3, '범행 뒤 현장을 떠났다', 'prosecutor', 'naero', '피고인은 구호 조치 없이 집을 나갔습니다.'),
+      ], { publishable: false, review: [{ unit: 'U3', path: '/1', code: 'LINE_MISSING', severity: 'error', fix: 'line',
+        message: '대사를 만들지 못했습니다.' }] }),
+      scriptBlock('U4', U4_CONTENT()),
     ],
-    cast: { prosecutor: '나로', defense: '남불' },
-    model: 'google:gemini-2.5-flash', balanceWarning: null, publishable: true, stopped: false,
-    generatedAt: '2026-10-18T09:00:00+09:00', updatedAt: '2026-10-19T09:00:00+09:00',
-    reviewStatus: 'APPROVED', isPublished: true, reviewedBy: 'admin@example.com',
-    reviewedAt: '2026-10-19T09:00:00+09:00', reviewNote: null,
+  };
+}
+
+/** 이미 승인해 사용자에게 공개 중인 대본 (사건 13, 공개). 블록을 반려 · 수정하면 점검 중이 된다 */
+function approvedScript() {
+  const approved = { reviewStatus: 'APPROVED', reviewedBy: 'admin@example.com', reviewedAt: '2026-10-19T09:00:00+09:00' };
+  return {
+    model: 'openai:gpt-5.6-luna', generatedAt: '2026-10-18T09:00:00+09:00', updatedAt: '2026-10-19T09:00:00+09:00',
+    stopped: false, pending: [], review: [], balanceWarning: null,
+    meta: { cast: { prosecutor: 'naero', defense: 'nambul' }, issue: 'admitted', admits: true },
+    releasedAt: '2026-10-19T09:00:00+09:00',
+    blocks: [
+      scriptBlock('U0', U0_CONTENT(), approved),
+      scriptBlock('U1', { lines: ['오랜 층간 소음 끝에 벌어진 일이었어요.'] }, approved),
+      scriptBlock('U2', U2_CONTENT(), approved),
+      scriptBlock('U3', [
+        line(1, '층간 소음으로 여러 번 다툼이 있었다', 'prosecutor', 'naero', '소음 문제로 다툼이 반복됐습니다.'),
+        line(2, '피고인이 먼저 문을 두드렸다', 'defense', 'nambul', '피고인은 대화를 하려 했을 뿐입니다.'),
+      ], approved),
+      scriptBlock('U4', U4_CONTENT(), approved),
+    ],
   };
 }
 
@@ -153,8 +194,8 @@ function createState() {
     // 12번은 지면이 없어 공개 조건 NO_PAPER가 보인다(BE-147) — 지면을 만들면 사라진다
     photos: { 13: [incidentPhoto(21, 'ORIGIN', '다툼이 격해진 순간'), incidentPhoto(22, 'CONCLUSION', '집을 나서는 뒷모습')] },
     papers: { 13: mockPaper() },
-    // 12번은 검수 거리를 보여 주는 대본이다 — 생성하지 못한 줄이 있어 publishable이 false다(승인 버튼이 막힌다).
-    // 13번은 이미 승인해 공개 중인 대본이다
+    // 12번은 검수 거리를 보여 주는 대본이다 — U3에 생성하지 못한 줄(오류 블록), U1에 승인을 막는 낡음, U2에 경고가 있다.
+    // 13번은 이미 승인해 사용자에게 공개 중인 대본이다(releasedAt) — 블록을 반려 · 수정하면 점검 중이 된다
     scripts: { 12: draftScript(), 13: approvedScript() },
     judgments: [
       judgment(501, 12, 'AI', 180),
@@ -218,9 +259,9 @@ function detail(item) {
 
 function scriptSummary(caseId) {
   const script = state.scripts[caseId];
-  return script
-    ? { exists: true, reviewStatus: script.reviewStatus, publishable: script.publishable }
-    : { exists: false, reviewStatus: null, publishable: null };
+  if (!script) return { exists: false, reviewStatus: null, publishable: null, scriptStatus: 'PREPARING' };
+  const view = scriptView(caseId);
+  return { exists: true, reviewStatus: view.reviewStatus, publishable: view.publishable, scriptStatus: view.scriptStatus };
 }
 
 function judgmentDetail(entry) {
@@ -385,6 +426,7 @@ export async function publishCase(caseId) {
   if (!ready) fail('PUBLISH_NOT_READY', '공개 조건을 채우지 못했어요.', { status: 409, details: reasons.map((code) => ({ field: 'case', reason: code })) });
   item.status = 'PUBLISHED';
   item.updatedAt = now();
+  markReleased(item);	// 승인해 둔 대본이 있으면 이때 사용자에게 나간다(BE-126 2차-2)
   return detail(item);
 }
 
@@ -648,53 +690,185 @@ export async function updateCasePaper(caseId, changes) {
   return paperView(item);
 }
 
-// A-13-10 ~ A-13-13 대본 검수
+// A-13-10 ~ A-13-13 · A-13-18 ~ 21 대본 검수 (BE-108 · BE-126 2차). 상태는 블록에 있고 대본 값은 블록에서 계산한다
 const scriptOf = (item) => state.scripts[item.caseId] ?? fail('SCRIPT_NOT_FOUND', '이 사건에는 대본이 없어요.', { status: 404 });
+const blockOf = (script, unit) => script.blocks.find((block) => block.unit === unit)
+  ?? fail('SCRIPT_BLOCK_NOT_FOUND', '대본에 그 단위 블록이 없어요.', { status: 404 });
+const hasError = (review) => review.some((issue) => issue.severity === 'error');
+const isComplete = (script) => SCRIPT_UNITS.every((unit) => script.blocks.some((block) => block.unit === unit));
+const isPublic = (script) => isComplete(script) && script.blocks.every((block) => block.reviewStatus === 'APPROVED');
+const canApproveBlocks = (script) => !script.stopped && !script.pending.length && !hasError(script.review);
+const approvable = (script) => canApproveBlocks(script) && isComplete(script) && script.blocks.every((block) => block.publishable);
+
+/** A-13-10 응답 — 서버가 블록에서 계산해 주는 값까지 만든다 */
+function scriptView(caseId) {
+  const script = state.scripts[caseId];
+  const last = script.blocks.filter((block) => block.reviewedAt).sort((a, b) => b.reviewedAt.localeCompare(a.reviewedAt))[0];
+  const evidence = script.blocks.find((block) => block.unit === 'U3')?.content ?? [];
+  const reviewStatus = isPublic(script) ? 'APPROVED'
+    : script.blocks.some((block) => block.reviewStatus === 'REJECTED') ? 'REJECTED' : 'PENDING';
+  const scriptStatus = isPublic(script) ? 'READY' : script.releasedAt ? 'MAINTENANCE' : 'PREPARING';
+  return structuredClone({
+    evidence, model: script.model, cast: script.meta.cast, balanceWarning: script.balanceWarning,
+    publishable: approvable(script), stopped: script.stopped, reviewStatus, isPublished: isPublic(script),
+    reviewedBy: last?.reviewedBy ?? null, reviewedAt: last?.reviewedAt ?? null, reviewNote: last?.reviewNote ?? null,
+    generatedAt: script.generatedAt, updatedAt: script.updatedAt, meta: script.meta, pending: script.pending,
+    review: script.review, blocks: script.blocks, scriptStatus, releasedAt: script.releasedAt,
+  });
+}
+
+/** 사건이 공개 중이고 대본이 다섯 단위 모두 승인이면 처음 나간 시각을 남긴다(한 번만) */
+function markReleased(item) {
+  const script = state.scripts[item.caseId];
+  if (script && !script.releasedAt && item.status === 'PUBLISHED' && isPublic(script)) script.releasedAt = now();
+}
+
+function review(block, status, note = null) {
+  Object.assign(block, { reviewStatus: status, reviewedBy: ADMIN.email, reviewedAt: now(), reviewNote: note });
+}
+
+function clearReview(block) {
+  Object.assign(block, { reviewStatus: 'PENDING', reviewedBy: null, reviewedAt: null, reviewNote: null });
+}
+
+function reasonOf(text) {
+  const note = (text ?? '').trim();
+  if (!note || note.length > 500) fail('VALIDATION_ERROR', '반려 사유는 1 ~ 500자로 써 주세요.', { status: 400 });
+  return note;
+}
+
+/** 길이 규칙(A-13-13 · 21). 말하는 대사 자리만 100자 · 2줄(줄바꿈은 세지 않는다), 나머지는 500자까지(BE-153) */
+function textOf(text, spoken = true) {
+  const value = (text ?? '').trim();
+  const violation = textViolation(value, spoken);
+  if (violation) fail('VALIDATION_ERROR', violation, { status: 400 });
+  return value;
+}
+
+function guardNotStale(script, units) {
+  const stale = script.blocks.filter((block) => units.includes(block.unit) && block.staleBlocksApproval);
+  if (stale.length) {
+    fail('INVALID_STATE', `대본을 만든 뒤 사건 내용 · 기사 · 민감 플래그가 바뀌어 ${stale.map((block) => block.unit).join(' · ')} `
+      + '블록이 옛 값을 보고 만들어졌습니다. 다시 생성하거나 확인했음으로 표시해 주세요.', { status: 409 });
+  }
+}
 
 export async function getCaseScript(caseId) {
   await delay(); requireLogin();
-  return structuredClone(scriptOf(findCase(caseId)));
+  scriptOf(findCase(caseId));
+  return scriptView(Number(caseId));
 }
 
+/** A-13-11 통승인 */
 export async function approveCaseScript(caseId) {
   await delay(); requireLogin();
   const item = findCase(caseId);
   const script = scriptOf(item);
-  // 파이프라인이 어긋난다고 표시한 대본은 승인할 수 없다 (서버도 409로 막는다)
-  if (!script.publishable) {
-    fail('INVALID_STATE', '증거 카드와 대사가 어긋난 대본은 승인할 수 없어요. 대본을 다시 생성해 주세요.', { status: 409 });
+  if (!approvable(script)) {
+    fail('INVALID_STATE', '만들지 못한 대사 · 단위나 검수 오류가 있는 대본은 승인할 수 없습니다. 대본을 다시 생성해 주세요.', { status: 409 });
   }
-  Object.assign(script, { reviewStatus: 'APPROVED', isPublished: true, reviewedBy: ADMIN.email, reviewedAt: now(), reviewNote: null, updatedAt: now() });
-  return structuredClone(script);	// 대본 검수는 사건 상태를 바꾸지 않는다(touch하지 않는다)
+  guardNotStale(script, SCRIPT_UNITS);
+  script.blocks.forEach((block) => review(block, 'APPROVED'));
+  markReleased(item);
+  return scriptView(item.caseId);	// 대본 검수는 사건 상태를 바꾸지 않는다(touch하지 않는다)
 }
 
+/** A-13-12 통거절 */
 export async function rejectCaseScript(caseId, reasonText) {
   await delay(); requireLogin();
-  const script = scriptOf(findCase(caseId));
-  const note = (reasonText ?? '').trim();
-  if (!note || note.length > 500) fail('VALIDATION_ERROR', '반려 사유는 1 ~ 500자로 써 주세요.', { status: 400 });
-  Object.assign(script, { reviewStatus: 'REJECTED', isPublished: false, reviewedBy: ADMIN.email, reviewedAt: now(), reviewNote: note, updatedAt: now() });
-  return structuredClone(script);
+  const item = findCase(caseId);
+  const script = scriptOf(item);
+  const note = reasonOf(reasonText);
+  script.blocks.forEach((block) => review(block, 'REJECTED', note));
+  return scriptView(item.caseId);
 }
 
-/** A-13-13 대사 한 줄 수정. 길이는 파이프라인과 같은 방식으로 센다(줄바꿈은 글자 수에 넣지 않는다) */
+/** A-13-13 대사 한 줄 수정 — U3 블록만 다시 대기가 된다 */
 export async function updateCaseScriptLine(caseId, factorId, text) {
   await delay(); requireLogin();
-  const script = scriptOf(findCase(caseId));
-  const value = (text ?? '').trim();
-  const lines = value.split('\n').filter((part) => part.trim());
-  if (!lines.length) fail('VALIDATION_ERROR', '대사를 입력해 주세요.', { status: 400 });
-  if (lines.length > 2) fail('VALIDATION_ERROR', '대사는 2줄까지 쓸 수 있어요.', { status: 400 });
-  const chars = lines.reduce((sum, part) => sum + part.length, 0);
-  if (chars > 100) fail('VALIDATION_ERROR', `대사는 줄바꿈을 빼고 100자까지 쓸 수 있어요. (지금 ${chars}자)`, { status: 400 });
-
-  const found = script.evidence.find((entry) => entry.factorId === Number(factorId));
-  if (!found) fail('SCRIPT_LINE_NOT_FOUND', '대본에 그 판단 요소의 대사가 없어요.', { status: 404 });
+  const item = findCase(caseId);
+  const script = scriptOf(item);
+  const value = textOf(text);
+  const evidence = script.blocks.find((block) => block.unit === 'U3');
+  const index = evidence ? evidence.content.findIndex((entry) => entry.factorId === Number(factorId)) : -1;
+  if (index < 0) fail('SCRIPT_LINE_NOT_FOUND', '대본에 그 판단 요소의 대사가 없어요.', { status: 404 });
+  const found = evidence.content[index];
   found.text = value;
   found.validation = { ...found.validation, ok: true, manual: true };	// 사람이 고침
   found.editedAt = now();
-  // 파이프라인과 같은 식으로 다시 계산한다: 멈춘 대본은 줄 자체가 모자라 올라가지 않는다
-  script.publishable = !script.stopped && script.evidence.every((entry) => Boolean(entry.text));
-  Object.assign(script, { reviewStatus: 'PENDING', isPublished: false, reviewedBy: null, reviewedAt: null, reviewNote: null, updatedAt: now() });
-  return structuredClone(script);
+  evidence.review = evidence.review.filter((issue) => !(issue.path === `/${index}` && issue.severity === 'error'));
+  evidence.publishable = !script.stopped && evidence.content.every((entry) => Boolean(entry.text)) && !hasError(evidence.review);
+  evidence.revision += 1;
+  clearReview(evidence);
+  script.updatedAt = now();
+  return scriptView(item.caseId);
+}
+
+/** A-13-18 블록 승인 — 통승인과 같은 대본 조건, 그 블록의 오류 · 승인을 막는 낡음을 본다 */
+export async function approveScriptBlock(caseId, unit) {
+  await delay(); requireLogin();
+  const item = findCase(caseId);
+  const script = scriptOf(item);
+  const block = blockOf(script, unit);
+  if (!canApproveBlocks(script)) {
+    fail('INVALID_STATE', '만들지 못한 단위 · 기사가 있거나 생성이 중간에 멈춘 대본은 블록을 승인할 수 없습니다. 다시 생성해 주세요.', { status: 409 });
+  }
+  if (!block.publishable) fail('INVALID_STATE', '검수 오류가 있는 블록은 승인할 수 없습니다. 고치거나 다시 생성해 주세요.', { status: 409 });
+  guardNotStale(script, [unit]);
+  review(block, 'APPROVED');
+  markReleased(item);
+  return scriptView(item.caseId);
+}
+
+/** A-13-19 블록 반려 */
+export async function rejectScriptBlock(caseId, unit, reasonText) {
+  await delay(); requireLogin();
+  const item = findCase(caseId);
+  const script = scriptOf(item);
+  const block = blockOf(script, unit);
+  review(block, 'REJECTED', reasonOf(reasonText));
+  return scriptView(item.caseId);
+}
+
+/** A-13-20 확인했음 — 근거를 지금 값으로 맞춘다. 블록을 만든 뒤 사건에 새로 생긴 민감 플래그가 있으면 거절한다(서버와 같은 규칙) */
+export async function acknowledgeScriptBlockStale(caseId, unit) {
+  await delay(); requireLogin();
+  const item = findCase(caseId);
+  const script = scriptOf(item);
+  const block = blockOf(script, unit);
+  const added = addedSensitiveFlags(block, item.content.sensitiveFlags);
+  if (added.length) {
+    fail('INVALID_STATE', `새로 생긴 민감 플래그(${added.join(' · ')})의 가드 없이 만든 블록이라 확인했음으로 둘 수 없습니다. 다시 생성해 주세요.`, { status: 409 });
+  }
+  Object.assign(block, { stale: false, staleReasons: [], staleBlocksApproval: false });
+  block.basis = { ...block.basis, sensitiveFlags: [...(item.content.sensitiveFlags ?? [])] };
+  return scriptView(item.caseId);
+}
+
+/** A-13-21 블록 문장 한 줄 수정 (U0 · U1 · U2 · U4). 그 블록만 대기, 판이 올라 뒤 블록은 낡음으로 보인다 */
+export async function updateScriptBlockText(caseId, unit, path, text) {
+  await delay(); requireLogin();
+  if (unit === 'U3') fail('VALIDATION_ERROR', '증거조사 대사(U3)는 대사 수정(A-13-13)으로 고칩니다.', { status: 400 });
+  const item = findCase(caseId);
+  const script = scriptOf(item);
+  const block = blockOf(script, unit);
+  const value = textOf(text, isSpoken(unit, path));
+  const leaf = textLeaves(block.content).find((entry) => entry.path === path);
+  if (!leaf) fail('SCRIPT_LINE_NOT_FOUND', `블록에 그 자리의 문장이 없습니다: ${path}`, { status: 404 });
+  const tokens = path.split('/').slice(1).map((token) => token.replaceAll('~1', '/').replaceAll('~0', '~'));
+  const parent = tokens.slice(0, -1).reduce((node, token) => node[token], block.content);
+  parent[tokens.at(-1)] = value;
+  block.review = block.review.filter((issue) => !(issue.path === path && issue.severity === 'error'));
+  block.publishable = !hasError(block.review);
+  block.revision += 1;
+  clearReview(block);
+  // 이 블록을 보고 만든 뒤 블록은 낡음으로 보인다(표시만, 승인은 그대로) — U0 → U2 · U4, U2 → U4
+  const dependents = { U0: ['U2', 'U4'], U2: ['U4'] }[unit] ?? [];
+  script.blocks.filter((other) => dependents.includes(other.unit)).forEach((other) => {
+    other.stale = true;
+    if (!other.staleReasons.includes(unit)) other.staleReasons = [...other.staleReasons, unit];
+  });
+  if (unit === 'U0') script.meta.admits = admits(block.content.questions?.[2]?.a);
+  script.updatedAt = now();
+  return scriptView(item.caseId);
 }

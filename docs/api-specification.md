@@ -84,7 +84,9 @@
 | v0.81 | 2026-11-02 | **공개 조건에 신문 지면 (BE-147)** — A-6 `publishReadiness` · A-13 `PUBLISH_NOT_READY`에 `NO_PAPER`(신문 지면 `case_paper`가 없음)를 추가한다. 다른 사유 뒤에 붙는다. 이미 공개된 사건은 다시 판정하지 않으며, 지면이 없는 공개 사건은 공개 취소(A-13-14) → 지면 생성(A-13-6) → 재공개로 맞춘다. 대표사진은 여전히 공개 조건이 아니다 (`docs/decisions/BE-147.md`. v0.79는 BE-140 3차 c(#366)가 쓰고 있어 v0.81로 적었다) |
 | v0.82 | 2026-10-30 | **체험 · 성향 결과의 주인 (BE-140 3a)** — 1-3: 내 체험은 로그인했으면 회원 기준(쿠키는 보지 않음), 아니면 익명 ID 쿠키 기준. API 1 · 16의 `myStatus`, API 2 ~ 15, P-2 · P-3, P-5의 체험 목록 · 성향이 같은 기준이다. 회원은 체험 시작 · 성향 제출에서 익명 ID를 발급받지 않는다. 손님 때 한 체험을 회원 것으로 옮기는 일은 M-9 ~ M-11(후속)이 맡는다 |
 | v0.83 | 2026-10-30 | **마이페이지 · 레벨 · 꾸미기 · 출석 · 수집 · 도전과제를 회원 기준 · 로그인 전용으로 (BE-140 3b, ERD v1.50 · V41)** — P-5 · P-7 ~ P-11 · L-1 ~ L-3은 `Authorization: Bearer`가 없으면 `401 UNAUTHORIZED`(쿠키는 보지 않는다). 데이터는 회원 키 테이블(`member_*`)에 저장하고, 예전 익명 ID 데이터는 옮기지 않는다(체험만 이관, M-9 ~ M-11 후속). P-6 `POST /attendance`는 회원만 기록하고 손님은 아무것도 하지 않고 204. 이 API들은 더 이상 익명 ID 쿠키를 발급하지 않는다. 체험 · 성향은 손님이 계속 쓴다(1-3) |
-| v0.89 | 2026-11-02 | **사건 순차 해금 · 도전과제 리밸런싱 (BE-146, ERD v1.56 · V50)** — 완료한 사건 수에 따라 사건이 단계로 열린다(완료 0건 → 3건, 1건 → 6건, 3건 → 12건, 5건 → 전체). 순서는 `legal_case.unlock_order`(작은 값 먼저, 비면 맨 뒤 · id 순)이고, 체험할 수 있는(`scriptStatus: READY`) 사건만 순서에 선다. 이미 체험한 사건은 늘 열려 있다. API 1에 `unlock`(`completedCases` · `nextStepAt`) · 카드 `locked`, API 16에 `locked` 추가. **API 2는 기존 체험이 없고 잠긴 사건이면 409 `CASE_LOCKED`**(에러 코드 신설, 쿠키도 발급하지 않는다). 도전과제 `cases-5`(사건 5건) · `collect-50`(수집 50장) 추가 — 꾸미기 보상 없이 경험치 200씩, P-5 `achievements`는 10개 (`docs/decisions/BE-146.md`) |
+| v0.91 | 2026-11-02 | **사건 순차 해금 · 도전과제 리밸런싱 (BE-146, ERD v1.56 · V50)** — 완료한 사건 수에 따라 사건이 단계로 열린다(완료 0건 → 3건, 1건 → 6건, 3건 → 12건, 5건 → 전체). 순서는 `legal_case.unlock_order`(작은 값 먼저, 비면 맨 뒤 · id 순)이고, 체험할 수 있는(`scriptStatus: READY`) 사건만 순서에 선다. 이미 체험한 사건은 늘 열려 있다. API 1에 `unlock`(`completedCases` · `nextStepAt`) · 카드 `locked`, API 16에 `locked` 추가. **API 2는 기존 체험이 없고 잠긴 사건이면 409 `CASE_LOCKED`**(에러 코드 신설, 쿠키도 발급하지 않는다). 도전과제 `cases-5`(사건 5건) · `collect-50`(수집 50장) 추가 — 꾸미기 보상 없이 경험치 200씩, P-5 `achievements`는 10개 (`docs/decisions/BE-146.md`) |
+| v0.90 | 2026-11-02 | **A-13-21 길이 규칙 범위 (BE-153)** — 대사 길이 규칙(100자 · 2줄)을 말하는 대사 자리에만 건다(U1 해설 · U2 공소 · 입장 · 쟁점 해설 · 신문 질문 · U4 의견). 설계도(U0) · U2 카드 · 신문 답은 빈 값 · 500자만 막는다. 자리 목록은 파이프라인 검수와 같고 계약 파일 `spokenPaths`로 맞춘다(FE-148 리뷰) |
+| v0.89 | 2026-11-02 | **API 14 `preToFinal.crowd` 추가 (FE-34)** — 이 사건 독자들이 기사만 읽고 고른 첫인상(사전 판단) 분포. 1회차 사전 판단만 세고(DR-7), 낸 사람만 센다. 숨김 기준 인원은 두지 않는다. 필드 추가뿐이라 기존 응답은 그대로다 |
 | v0.88 | 2026-11-02 | **카카오 첫 가입 약관 동의 (BE-145)** — 처음 온 카카오 계정은 M-4에서 회원을 만들지 않고 가입 대기(Redis 10분 · 쿠키 `NLNB_SIGNUP`)만 둔 채 `/auth/callback?signup=terms`로 보낸다. 약관에 동의해야 회원이 만들어진다: M-12(동의하고 가입) · M-13(취소)을 신설한다. M-8에 `termsRequired`를 더하고 M-14(기존 회원 약관 동의)를 신설한다. 스키마 변경 없음(V44 칸 사용). v0.87은 열린 PR #384(BE-126 2차-2)가 쓰고 있어 v0.88로 적었다 (`docs/decisions/BE-145.md`) |
 | v0.87 | 2026-11-02 | **대본 상태 `scriptStatus` · 점검 중 503 (BE-126 2차-2, ERD v1.55 · V48)** — API 1 · 16 · C-6 `case`에 `scriptStatus`(`READY` · `PREPARING` · `MAINTENANCE`) 추가, `scriptReady`는 호환용으로 `scriptStatus == READY`. **API 18은 점검 중이면 503 `SCRIPT_UNDER_MAINTENANCE`**(에러 코드 신설) — 한 번 사용자에게 나간 대본(`case_script.released_at`: 사건이 공개된 상태에서 다섯 단위가 모두 승인된 첫 순간, 승인 A-13-11 · 18 · 사건 공개 A-13 때 서버가 남긴다)의 승인이 풀린 동안이다. 나간 적 없으면 그대로 404(준비 중). **공개 중 막기를 점검으로 바꿨다** — A-13-13 · A-13-19 · A-13-21의 "공개 중인 사건이면 409"(v0.86)와 A-13-16 · 17의 "사건이 공개 중이면 반영 불가"(v0.85)를 뺐다. 대본을 `READY` → `MAINTENANCE`로 만든 요청은 감사 로그에 `scriptMaintenance: true`. 503에는 `Retry-After: 60` · `Cache-Control: no-store`. A-13-10 응답에 `scriptStatus` · `releasedAt`, A-6 `script`에 `scriptStatus` 추가 |
 | v0.86 | 2026-11-02 | **대본 블록 단위 검수 A-13-18 ~ A-13-21 신설 · 낡음 표시 (BE-126 2차-1)** — 블록 하나 승인(`POST /admin/cases/{caseId}/script/blocks/{unit}/approve`) · 반려(`…/reject`) · "확인했음"(`…/acknowledge-stale`, 낡은 블록의 근거를 지금 값으로 맞춘다) · 문자열 한 줄 직접 수정(`PATCH …/blocks/{unit}/text`, U0 · U1 · U2 · U4, 자리는 검수 결과 `path`). **A-13-10 블록에 `stale` · `staleReasons` · `staleBlocksApproval` · `unknownBasis` 추가** — 블록을 만들 때 본 값(`basis`: 앞 블록 판 · 사건 내용 판 · 기사 판 · 배역 · 분류 네 축 · 민감 플래그)을 지금 값과 비교한다. 낡음은 표시가 기본이고, **사건 내용 · 기사 · 민감 플래그가 바뀐 낡음은 승인을 막는다**(A-13-11 · 18, 1차의 사건 내용 · 기사 규칙에 민감 플래그를 더함). 근거에 없는 키는 "모름"(낡지 않음 + 표시). A-11로 민감 플래그를 고치면 승인한 블록의 승인을 지운다. **A-13-13(U3 대사 수정)은 U3만 다시 검수 대기로 돌린다**(1차는 모든 블록). **공개 중인 사건은 블록 반려 · 문장 수정 · 대사 수정(A-13-13 포함)을 409로 막는다**(승인이 풀리면 체험 중인 사용자의 API 18이 404가 된다 — 점검 상태(BE-126 2차-2) 전까지). 민감 플래그가 **새로 생긴** 블록은 "확인했음"을 거절한다(다시 생성). U0를 고치면 `admits`를 다시 계산한다. 에러 코드 `SCRIPT_BLOCK_NOT_FOUND`(404) 추가 (`docs/decisions/BE-126.md`) |
@@ -190,7 +192,7 @@ json
 | 404 | `PAPER_NOT_FOUND` | (확장, BE-92) 신문 지면을 아직 생성한 적 없음. 관리자 API는 A-13-7 · A-13-8, 공개 API는 API 17(v0.53, BE-102) | 먼저 생성하도록 안내 (A-13-7 · A-13-8). API 17은 S-14로 |
 | 404 | `INCIDENT_PHOTO_NOT_FOUND` | (확장, 관리자 API, BE-78 2차 검토 · BE-101) 그 역할의 발단 · 결론 사진이 없음 | 목록 다시 불러오기 (A-13-9) |
 | 409 | `DECO_LOCKED` | (확장, BE-96) 아직 열리지 않은 꾸미기를 저장하려 함. `details`에 잠긴 필드(`reason: DECO_LOCKED`) | 화면에서 잠긴 항목은 고를 수 없게 막는다. 오면 마이페이지를 다시 불러온다 (P-7) |
-| 409 | `CASE_LOCKED` | (확장, BE-146, v0.89) 아직 열리지 않은 사건으로 새 체험을 시작하려 함. 이미 체험한 사건은 오지 않는다 | 화면에서 잠긴 사건은 시작할 수 없게 막는다. 오면 사건 목록(API 1)을 다시 불러온다 (API 2) |
+| 409 | `CASE_LOCKED` | (확장, BE-146, v0.91) 아직 열리지 않은 사건으로 새 체험을 시작하려 함. 이미 체험한 사건은 오지 않는다 | 화면에서 잠긴 사건은 시작할 수 없게 막는다. 오면 사건 목록(API 1)을 다시 불러온다 (API 2) |
 | 409 | `JOB_LOCKED` | (확장, BE-106) 아직 열리지 않은 직업을 고르려 함 | 화면에서 잠긴 직업은 고를 수 없게 막는다. 오면 레벨(L-1)을 다시 불러온다 (L-2) |
 | 409 | `COLLECTION_LIMIT_EXCEEDED` | (확장, BE-83, v0.63) 모을 수 있는 수를 넘음 — 일러스트는 한 사건에서 처음 얻은 수 5. `details`에 넘친 종류(`field: items.kind`, `reason: illustration`). 의상 사용자당 12는 v0.75(BE-136)에서 삭제 | 개발 오류(콘텐츠 규칙보다 넉넉한 값이라 정상 화면이면 오지 않음) (P-9) |
 | 409 | `DUPLICATE_SOURCE` | (확장, 관리자 API, BE-93) 이미 등록한 사건번호. `details`에 어느 항목인지 담는다 | 입력 안내 (A-14) |
@@ -280,7 +282,7 @@ json
 - (v0.60, BE-116) `scriptReady`: 이 사건에 **승인된 공개 대본**이 있는가(`true` / `false`). 기준은 API 18이 200을 주는 조건과 같다(사건 `PUBLISHED` + 대본 `reviewStatus: APPROVED`) — 대본이 없거나 검수 대기 · 반려면 `false`다. 화면(S-02)은 이 값으로 체험 가능한 사건을 먼저 보이고, `false`는 "준비 중"으로 다룬다. 사용자와 무관한 값이다. **화면 정책이며 서버는 막지 않는다** — API 2(체험 시작)는 `scriptReady`를 보지 않는다. 또 대사를 직접 수정(A-13-13)하면 검수 기록이 지워져 `true → false`로 바뀔 수 있다(이때 API 18은 한 번도 나간 적 없는 대본이면 404, (v0.87) 나간 적 있는 대본이면 503 — 아래 `scriptStatus`). (v0.78, BE-126) 대본은 단위 블록으로 저장되고, 기준은 **다섯 단위(U0 ~ U4)가 모두 있고 모두 승인됐는가**다 — 블록 하나라도 대기 · 반려거나 증거조사만 만든 대본(U3 하나)이면 `false`다.
 - (v0.87, BE-126 2차-2) `scriptStatus`: 대본 상태 `READY` · `PREPARING` · `MAINTENANCE`. `scriptReady`는 호환용으로 남기고 `scriptStatus == READY`와 같다. API 18의 응답과 짝이 맞는다 — `READY`면 200, `PREPARING`(대본이 없거나 아직 한 번도 사용자에게 나가지 않음)이면 404 `SCRIPT_NOT_FOUND`, `MAINTENANCE`(한 번 나간 대본의 블록을 관리자가 고치거나 반려하거나 재생성 결과를 반영해 승인이 풀린 동안)면 503 `SCRIPT_UNDER_MAINTENANCE`. "나갔다"는 사건이 공개된 상태에서 다섯 단위가 모두 승인된 적이 있다는 뜻이다(ERD `case_script.released_at`). 화면은 `MAINTENANCE`를 "점검 중"으로, `PREPARING`을 "준비 중"으로 구분해 보인다(FE-145). 모르는 값이 오면 막는 쪽(`PREPARING`)으로 다룬다.
 - 정렬: `published_at` 최신순 고정 (정렬 선택은 이후 단계, REQ-009). 해금 순서(`unlock_order`)와는 별개다.
-- (v0.89, BE-146) **순차 해금** — 완료한 사건 수(`unlock.completedCases`, 도전과제 `completed`와 같은 값)에 따라 열린 사건 수가 단계로 늘어난다.
+- (v0.91, BE-146) **순차 해금** — 완료한 사건 수(`unlock.completedCases`, 도전과제 `completed`와 같은 값)에 따라 열린 사건 수가 단계로 늘어난다.
 
   | 완료한 사건 | 0 | 1 | 3 | 5 |
   | --- | --- | --- | --- | --- |
@@ -321,12 +323,12 @@ json
 - 이미 체험이 있으면 **새로 만들지 않고** 기존 체험을 돌려준다. 화면은 1-6 표대로 이동한다(완료한 사건이면 S-08, REQ-011 · 012).
 - 동시에 두 번 와도 유니크 제약(`anonymous_user_id`, `case_id`, `attempt_no`)으로 하나만 생긴다. 제약 위반이 나면 서버가 기존 체험을 다시 읽어 `200`으로 돌려준다.
 
-- (v0.89, BE-146) 기존 체험이 없으면 순차 해금을 확인한다(API 1 `locked`와 같은 기준). 잠긴 사건이면 409이고, 체험도 쿠키도 만들지 않는다. 기존 체험이 있으면 잠김과 상관없이 돌려준다.
+- (v0.91, BE-146) 기존 체험이 없으면 순차 해금을 확인한다(API 1 `locked`와 같은 기준). 잠긴 사건이면 409이고, 체험도 쿠키도 만들지 않는다. 기존 체험이 있으면 잠김과 상관없이 돌려준다.
 
 | 거절 | 조건 |
 | --- | --- |
 | 404 `CASE_NOT_FOUND` | 사건 없음 · 비공개 |
-| 409 `CASE_LOCKED` | (v0.89, BE-146) 기존 체험이 없고, 아직 열리지 않은 사건 |
+| 409 `CASE_LOCKED` | (v0.91, BE-146) 기존 체험이 없고, 아직 열리지 않은 사건 |
 
 ---
 
@@ -669,7 +671,15 @@ json
     },
     "finalJudgmentText": "징역 15년",
     "direction": "HEAVIER",
-    "summaryText": "사건을 모두 확인한 뒤, 처음 생각보다 무거운 판결을 내렸어요."
+    "summaryText": "사건을 모두 확인한 뒤, 처음 생각보다 무거운 판결을 내렸어요.",
+    "crowd": {
+      "total": 3,
+      "options": [
+        { "rangeOptionId": 8, "label": "집행유예", "percent": 33 },
+        { "rangeOptionId": 11, "label": "실형 5년 이상 ~ 10년 미만", "percent": 67 },
+        { "…": "…" }
+      ]
+    }
   },
   "preToCourt": {
     "direction": "HEAVIER"
@@ -764,6 +774,7 @@ json
 - (확장, REQ-096) `matrix[].changeType`에 판단 이유 변화 유형(`NEWLY_LEARNED` 새로 알게 된 요소 / `KEPT` 처음부터 알던 요소 · 판단에 그대로 반영 / `WEIGHT_CHANGED` 이미 알던 요소의 무게가 바뀜 / `null`)을 넣는다. 판별 기준은 요구사항 FR-6-6: `OVERVIEW` 이후 요소가 최종 판결에만 있으면 `NEWLY_LEARNED`, `OVERVIEW` 요소가 사전 · 최종 양쪽에 있으면 `KEPT`, 한쪽에만 있으면 `WEIGHT_CHANGED`. 사전 판단 작용 요소가 있을 때만.
 - **사전 판단은 체험 완료 후 이 API에서 처음 내려간다.** 결과 화면의 독자 의견에 처음 선택한 형량을 표시한다. 진행 중에는 선택 구간을 포함한 사전 판단을 다시 조회할 수 없다.
 - **`preToCourt.direction`**: `preToFinal.direction`과 같은 계산을 재판부 판결에 적용한다. **재판부가 더 무거우면 `HEAVIER`**다. `LIGHTER`는 재판부가 사전 판단 구간보다 가벼움, `SAME`은 같은 형벌 종류 및 해당 구간이다. `SAME`은 형량의 정확한 일치를 뜻하지 않는다. 감경은 `reducedTo` 우선, 실형 구간은 하한 이상·상한 미만이며 표시 label을 해석하지 않는다.
+- **`preToFinal.crowd`** (v0.89, FE-34): 같은 사건을 체험한 독자들의 첫인상(사전 판단) 구간별 분포다. 독자 의견란의 막대그래프에 쓴다. `total`은 센 사람 수, `options`는 이 사건 범죄 유형의 **모든 구간을 표시 순서대로**(선택이 0명인 구간은 `percent: 0`) 담는다. `percent`는 정수이고 합은 항상 100이다(반올림 오차는 소수점이 큰 구간부터 1씩 나눠 맞춘다). **1회차 사전 판단만** 센다(요구사항 DR-7). 사전 판단을 낸 사람만 센다. 1회차 체험이면 내 사전 판단도 `total`에 들어간다. 2회차 이상은 내 판단이 빠지므로(DR-7) 다른 독자가 없으면 `total`이 0일 수 있다(이때 모든 `percent`는 0이고, 화면은 그래프를 그리지 않는다). 숨김 기준 인원은 두지 않는다. 맞고 틀림을 말하지 않는 표시 톤은 화면 쪽 규칙이다.
 - `preToCourt`는 API 14 최상위 객체이며 `direction`만 포함한다. 기존 필드·`COMPLETED` 이후 조회 제한은 그대로 유지한다. API 3에서는 이 비교나 AI·재판부 판결을 공개하지 않는다.
 
 | 거절 | 조건 |
@@ -813,7 +824,7 @@ S-20 사건 디테일(정보 구조 v1.12)이 체험을 만들기 전에 부르�
 {  "caseId": 1,  "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",  "crimeType": "MURDER",  "crimeCategoryLabel": "생명범죄",  "chargeName": "살인",  "shortIntro": "빌린 돈 문제로 찾아온 지인과 다투다 흉기로 살해한 사건입니다.",  "keywords": ["돈 문제", "지인", "흉기"],  "difficulty": "MID",  "estimatedMinutes": 15,  "participantCount": 42,  "thumbnailUrl": "/images/cases/case-1-reenact.webp",  "overview": "피고인이 빌린 돈을 갚지 못해 오래 다투던 지인이 집으로 찾아오자, …",  "scriptReady": true, "scriptStatus": "READY",  "myStatus": null,  "cast": { "prosecutor": "naero", "defense": "nambul" },  "sensitiveFlags": ["MENTAL_HEALTH"]}
 ```
 
-- 필드는 API 1 카드와 같고(`chargeName` 포함, v0.32), `overview`(사건 개요, API 4의 `case.overview`와 같은 값)를 더한다. `participantCount` · `myStatus` 기준도 API 1과 같다. (v0.60, BE-116) `scriptReady`도 API 1과 같은 값 · 같은 기준이다 — `false`면 S-20은 시작 대신 "준비 중"을 보인다(API 18을 따로 불러 확인하지 않아도 된다 — (v0.87) 단 `scriptStatus`가 `MAINTENANCE`면 "점검 중"이다). (v0.87, BE-126 2차-2) `scriptStatus`(`READY` · `PREPARING` · `MAINTENANCE`)도 API 1과 같은 값. (v0.89, BE-146) `locked`도 API 1과 같은 값 · 같은 기준이다 — `true`면 S-20은 시작 대신 잠김을 보인다(목록의 `unlock`은 이 API에 없다) · 같은 기준이다 — `MAINTENANCE`면 "점검 중"이다.
+- 필드는 API 1 카드와 같고(`chargeName` 포함, v0.32), `overview`(사건 개요, API 4의 `case.overview`와 같은 값)를 더한다. `participantCount` · `myStatus` 기준도 API 1과 같다. (v0.60, BE-116) `scriptReady`도 API 1과 같은 값 · 같은 기준이다 — `false`면 S-20은 시작 대신 "준비 중"을 보인다(API 18을 따로 불러 확인하지 않아도 된다 — (v0.87) 단 `scriptStatus`가 `MAINTENANCE`면 "점검 중"이다). (v0.87, BE-126 2차-2) `scriptStatus`(`READY` · `PREPARING` · `MAINTENANCE`)도 API 1과 같은 값. (v0.91, BE-146) `locked`도 API 1과 같은 값 · 같은 기준이다 — `true`면 S-20은 시작 대신 잠김을 보인다(목록의 `unlock`은 이 API에 없다) · 같은 기준이다 — `MAINTENANCE`면 "점검 중"이다.
 - **법정형 · 선고 가능 범위 · 권고 범위 · 판결 · 섹션 본문은 넣지 않는다**(FR-2-8, API 4와 같은 기준). 섹션은 체험 중 API 6이 단계별로 연다.
 - 쿠키는 **읽기만** 하고 발급하지 않는다(발급은 API 2 · P-2, 1-2). 쿠키가 없거나 형식이 틀리거나 체험 전이면 `myStatus`는 `null`이다.
 - 버튼 분기(정보 구조 S-20): `myStatus`가 `null`이면 **체험 시작**(API 2로 체험을 만든 뒤 S-03), `IN_PROGRESS`면 **이어서 하기**, `COMPLETED`면 **결과 다시 보기**. 이어서 하기 · 결과 다시 보기도 API 2를 불러 응답 `status`로 이동한다(1-6). 세부 상태(7단계)는 이 API에 내보내지 않는다.
@@ -1878,7 +1889,7 @@ A-11과 같은 방식(보낸 필드만, `null` = 지움). `headline` · `article
 | 필드 | 규칙 |
 | --- | --- |
 | `path` | 필수. 고칠 자리 — 검수 결과의 `path`와 같은 JSON Pointer(예: `/questions/0/q` · `/lines/4` · `/indict/1` · `/defense`). **이미 문자열이 있는 자리만** 고친다(객체 · 배열 자리, 없는 자리는 404) |
-| `text` | 필수. A-13-13과 같은 길이 규칙(앞뒤 공백을 잘라 1 ~ 100자, 2줄 이하, 줄바꿈은 세지 않는다) |
+| `text` | 필수. 앞뒤 공백을 잘라 1자 이상, 500자까지. (v0.90, BE-153) **말하는 대사 자리**면 A-13-13과 같은 길이 규칙(100자, 2줄 이하, 줄바꿈은 세지 않는다)을 더 건다 — U1 `/lines/*`, U2 `/indict/*` · `/plea/*` · `/issues_narr/*` · `/questions/*/q`, U4 `/prosecutor` · `/defense`. 설계도(U0) · U2 카드(`/cards/…`) · 신문 답(`/questions/*/a`)은 화면 대사가 아니라 이 규칙을 걸지 않는다. 자리 목록은 파이프라인 검수(`script_review.unit_lines`)와 같고 계약 파일(`contracts/script_blocks.json` `pathKinds` · `spokenKinds`, 말하는 자리는 `spokenPaths`)로 맞춘다. 없는 자리는 길이보다 먼저 404다 |
 
 - 그 블록의 판이 오르고 **그 블록만** 다시 검수 대기가 된다. 그 자리의 검수 조건 오류(`severity: error`)는 지운다(경고는 남긴다). `publishable`을 다시 계산한다.
 - 이 블록을 보고 만든 뒤 블록(U0 → U2 · U4, U2 → U4)은 **낡음으로 표시된다**(승인은 그대로 — 다시 만들지 확인할지는 관리자가 고른다).
@@ -1890,7 +1901,7 @@ A-11과 같은 방식(보낸 필드만, `null` = 지움). `headline` · `article
 
 | 거절 | 조건 |
 | --- | --- |
-| 400 `VALIDATION_ERROR` | 모르는 단위 · U3(A-13-13으로) · 길이 규칙 위반 |
+| 400 `VALIDATION_ERROR` | 모르는 단위 · U3(A-13-13으로) · 빈 값 · 500자 초과 · 말하는 대사 자리의 길이 규칙 위반 |
 | 404 `CASE_NOT_FOUND` · `SCRIPT_NOT_FOUND` · `SCRIPT_BLOCK_NOT_FOUND` | 사건 · 대본 · 그 블록이 없음 |
 | 404 `SCRIPT_LINE_NOT_FOUND` | 그 자리에 문자열이 없음 |
 
@@ -2221,7 +2232,7 @@ json
 | `experiences` | 체험한 사건. 사건마다 최근 회차 하나, 최근 순. `status`로 결과 다시 보기(`COMPLETED`) · 이어 하기를 나눈다(1-6) |
 | `profile.attendanceDays` | 누적 출석 일수(P-6, v0.41). 기록이 없거나 빈 마이페이지면 `0`. 회원마다 센다(v0.83, 로그인한 회원만 P-5를 부른다) |
 | `profileDeco` | 프로필 꾸미기(v0.42, BE-96). 저장한 적이 없거나 빈 마이페이지면 기본값(내로 스탠딩 · `basic` · `cream` · 책갈피 없음 · 내로 · `happy` · `generated` · `bronze`). **잠긴 값이어도 거절하지 않고 그대로** 내려 준다(표가 바뀌어 잠긴 경우 화면이 기본값으로 보여 준다). 필드는 P-7 요청과 같다 |
-| `achievements` | 도전과제 10개(서버 표가 원본, FE-68 순서 · (v0.89, BE-146) `cases-5`는 `cases-3` 뒤, `collect-50`은 `collect-20` 뒤. 이 둘은 꾸미기 보상이 없어 `rewards`가 모두 빈 배열이다). `stat`: `completed`(완료한 회차가 하나라도 있는 사건 수, 다시 하기를 시작해도 줄지 않는다) · `hasType`(성향 테스트 결과가 있으면 1) · `attendanceDays`(P-6) · `collected`(모은 일러스트 + 의상 수, v0.63 BE-83). `value`는 목표에서 멈춘다. `status`: `CLEARED` · `IN_PROGRESS` · `PENDING`(서버가 셀 수 없는 값 — v0.63부터 나오지 않지만 값은 남긴다. v0.63 전에는 `collected` 도전과제가 `PENDING`이었다). **`unlockedAt` · `isNew`(v0.63)**: 해금 기록이 있으면 해금 시각과 "새로 열림" 여부(아직 P-11로 보지 않았으면 `true`), 없으면 `null` · `false`. **한 번 해금된 도전과제는 표가 바뀌어 다시 미달이 되어도 `CLEARED` · `value = goal`로 남고 보상도 계속 열려 있다**(BE-96 원칙). 해금 시각은 서버가 처음 판정해 기록한 때다 — 마이페이지 조회 · P-9가 막 달성한 도전과제를 기록한다. `rewards`는 여섯 종류(`kinds` · `frames` · `backgrounds` · `sashStyles` · `sashColors`(`모양:색`) · `sashIcons`), 받지 않는 종류는 빈 배열. 제목 · 문구 · 그림은 화면이 `id`로 붙인다 |
+| `achievements` | 도전과제 10개(서버 표가 원본, FE-68 순서 · (v0.91, BE-146) `cases-5`는 `cases-3` 뒤, `collect-50`은 `collect-20` 뒤. 이 둘은 꾸미기 보상이 없어 `rewards`가 모두 빈 배열이다). `stat`: `completed`(완료한 회차가 하나라도 있는 사건 수, 다시 하기를 시작해도 줄지 않는다) · `hasType`(성향 테스트 결과가 있으면 1) · `attendanceDays`(P-6) · `collected`(모은 일러스트 + 의상 수, v0.63 BE-83). `value`는 목표에서 멈춘다. `status`: `CLEARED` · `IN_PROGRESS` · `PENDING`(서버가 셀 수 없는 값 — v0.63부터 나오지 않지만 값은 남긴다. v0.63 전에는 `collected` 도전과제가 `PENDING`이었다). **`unlockedAt` · `isNew`(v0.63)**: 해금 기록이 있으면 해금 시각과 "새로 열림" 여부(아직 P-11로 보지 않았으면 `true`), 없으면 `null` · `false`. **한 번 해금된 도전과제는 표가 바뀌어 다시 미달이 되어도 `CLEARED` · `value = goal`로 남고 보상도 계속 열려 있다**(BE-96 원칙). 해금 시각은 서버가 처음 판정해 기록한 때다 — 마이페이지 조회 · P-9가 막 달성한 도전과제를 기록한다. `rewards`는 여섯 종류(`kinds` · `frames` · `backgrounds` · `sashStyles` · `sashColors`(`모양:색`) · `sashIcons`), 받지 않는 종류는 빈 배열. 제목 · 문구 · 그림은 화면이 `id`로 붙인다 |
 | `unlocked` | 지금 열린 것(여섯 종류). 처음부터 열린 것 + `CLEARED` 도전과제의 보상 |
 | `collection` | 모은 일러스트 · 의상(v0.63, BE-83). `collected`는 `items` 수(일러스트 + 의상, 도전과제 `collected`와 같은 값). `items`는 최근에 얻은 순: `kind`(`illustration` · `cast`) · `itemId` · `caseId`(처음 얻은 사건) · `acquiredAt` · `isNew`(아직 P-10으로 보지 않았으면 `true`, "새로 얻음"). 기록이 없거나 빈 마이페이지면 `{ "collected": 0, "items": [] }` |
 | `level` | 레벨 · 직업(v0.54, BE-106). 모양은 L-1 응답과 같다. 기록이 없거나 빈 마이페이지면 Lv1 · 0 XP · 무직 |
@@ -2755,7 +2766,7 @@ Origin이 이 서버 자신과 같은 출처인지)을 거친다 — 벗어나�
 | 판결 체험 | 사건 첫 완료 | 100 | 사건당 1회 |
 | | 성향 테스트 | 100 | 1회 |
 | | 출석 | 5 | 하루 1회(P-6) |
-| | 업적 달성 | 50 · 100 · 200 | 업적마다 1회. 쉬운 것(첫 사건 · 성향 · 출석 3일) 50, 중간(출석 7일 · 사건 3개 · 수집 5개) 100, 어려운 것(출석 30일 · 수집 20개 · (v0.89, BE-146) 사건 5개 · 수집 50개) 200 |
+| | 업적 달성 | 50 · 100 · 200 | 업적마다 1회. 쉬운 것(첫 사건 · 성향 · 출석 3일) 50, 중간(출석 7일 · 사건 3개 · 수집 5개) 100, 어려운 것(출석 30일 · 수집 20개 · (v0.91, BE-146) 사건 5개 · 수집 50개) 200 |
 | | 일러스트 · 의상 수집 | 10 | 모은 항목 1장마다. `collection_item` 행 수로 계산한다(v0.63, BE-83) |
 | | SNS 공유 | 100 | 완료한 사건만, 사건당 1회 · 하루 1회 (L-3) |
 | 커뮤니티 | 글 작성 | 30 | 하루 3건 |

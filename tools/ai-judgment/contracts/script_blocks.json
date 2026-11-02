@@ -20,6 +20,22 @@
     "U3": [],
     "U4": []
   },
+  "pathKindsNote": "자리별 줄 종류(BE-153, PR #390 리뷰) — 검수(script_review.unit_lines)가 블록 값에서 꺼내는 자리와 종류다. '*'는 배열 순번 하나, '{key}'는 이름 토큰 하나다. 종류는 guide · narrator(해요체 안내 · 진행 해설) · prosecutor · defense(검사 · 변호인 대사) · design(설계도, 화면에 나가지 않음) · card(공소사실 · 쟁점 카드 글). 검사 규칙이 종류마다 달라(길이 · 해요체 · 되풀이) BE-154 재검사도 이 표를 쓴다. 파이프라인은 줄 수를 앞에서 잘라 본다(U1 다섯 줄 · U2 두 줄) — 순번 '*'에는 상한이 없어, 파이프라인이 보지 않는 뒤 줄도 같은 종류로 본다(화면에 나오지 않는 줄이라 해가 없다)",
+  "pathKinds": {
+    "U0": {"/issues/*": "design", "/questions/*/q": "design"},
+    "U1": {"/lines/*": "guide"},
+    "U2": {"/indict/*": "prosecutor", "/plea/*": "defense", "/issues_narr/*": "narrator", "/questions/*/q": "prosecutor",
+           "/cards/{key}/{key}/*": "card", "/cards/{key}/{key}": "card"},
+    "U4": {"/prosecutor": "prosecutor", "/defense": "defense"}
+  },
+  "spokenKinds": ["guide", "narrator", "prosecutor", "defense"],
+  "spokenPathsNote": "말하는 대사 자리 = pathKinds 중 spokenKinds인 자리(파이썬 테스트가 일치를 본다). 대사 길이 규칙(LINE_TOO_LONG, 100자 · 2줄)을 거는 자리라 백엔드 A-13-21과 관리자 화면(FE-148)이 이 목록을 쓴다. U3 대사는 A-13-13이 늘 대사로 본다. U0 앞 두 질문은 U2 신문 질문의 원본이지만 설계도라 길이를 제한하지 않는다 — 길게 고치면 U2를 다시 만들 때 100자 안으로 줄여 써서 질문 불일치 경고(ISSUE_QUESTION_MISMATCH)가 남을 수 있다(PR #390 리뷰 2부 2번, 안 b)",
+  "spokenPaths": {
+    "U0": [],
+    "U1": ["/lines/*"],
+    "U2": ["/indict/*", "/plea/*", "/issues_narr/*", "/questions/*/q"],
+    "U4": ["/prosecutor", "/defense"]
+  },
   "normalizeAnswer": [
     {"answer": "예", "expected": "…네."},
     {"answer": "네, 맞습니다.", "expected": "…네."},
