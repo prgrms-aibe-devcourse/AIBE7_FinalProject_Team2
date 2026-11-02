@@ -569,7 +569,12 @@ cd /opt/lawnambul/private-seed && git fetch -q origin
 PTR=$(git -C /opt/lawnambul/app ls-tree HEAD backend/private-seed | awk '{print $3}')
 git log -1 --format='지금 %h %s'
 git checkout -q --detach "$PTR" && git log -1 --format='바꾼 뒤 %h %s'
-# 이어서 위 5)를 그대로 실행한다 (백업 이름은 before-seed-update 등으로)
+# 이어서 backend를 다시 만든다. 위 5)의 docker compose 명령은 같은 서버 DB 모드용이라 RDS 운영에서는 외부 DB 오버레이가 빠진다
+cd /opt/lawnambul/app/deploy
+./backup-db.sh before-seed-update
+sudo systemctl stop lawnambul-cd.timer
+./deploy.sh --reapply     # .env대로 외부 DB · 시드 오버레이를 붙여 backend를 다시 만든다 + 스모크 테스트
+sudo systemctl start lawnambul-cd.timer
 ```
 
 - 서버에서 `git pull`(비공개 저장소 develop 최신)을 쓰지 않는다. `main`이 검증하지 않은 시드가 운영에 들어간다.
@@ -707,7 +712,12 @@ set +o pipefail; unset PGPASSWORD H P; unset -f q envv
 
 ### 켜기
 
-처음 켠 절차(10/22, Supabase 공용 DB)는 Supabase 종료(COMMON-59)와 함께 지웠다. 접속 값을 바꾸는 절차는 아래 "RDS 전환"과 같다 — 백업 · `.env` 사본 → `EXTERNAL_DB_*` 세 값 교체 → `./deploy.sh --reapply` → 확인. 옛 postgres 컨테이너는 전환해도 저절로 멈추지 않으므로(512m을 계속 쓴다) 확인 뒤 `docker compose -f docker-compose.prod.yml stop postgres`로 멈춘다. 데이터는 `pgdata` 볼륨에 남는다.
+처음 켠 절차(10/22, Supabase 공용 DB)는 Supabase 종료(COMMON-59)와 함께 지웠다. 접속 값을 바꾸는 절차는 데이터를 옮기는지에 따라 다르다.
+
+- **빈 DB로 시작(데이터를 옮기지 않음)** — 아래 "RDS 전환"과 같다: 백업 · `.env` 사본 → `EXTERNAL_DB_*` 세 값 교체 → `./deploy.sh --reapply` → 확인. 10/28 RDS 전환이 이 경우다(빈 RDS에 Flyway · 시드로 시작).
+- **기존 데이터를 유지** — 백업만으로는 새 DB에 아무것도 들어가지 않는다. 순서: 타이머 정지 · backend 정지(쓰기 막기) → `./backup-db.sh before-db-move`(지금 `.env`의 DB를 덤프) → `.env` 사본 → `EXTERNAL_DB_*`를 새 DB 값으로 교체 → 위 "운영 DB 백업"의 외부 DB 되살리기 명령(접속 값을 `.env`에서 읽으므로 새 DB로 복원된다) → 행 수 확인 → `./deploy.sh --reapply` → 확인 → 타이머 재개.
+
+옛 postgres 컨테이너는 전환해도 저절로 멈추지 않으므로(512m을 계속 쓴다) 확인 뒤 `docker compose -f docker-compose.prod.yml stop postgres`로 멈춘다. 데이터는 `pgdata` 볼륨에 남는다.
 
 ### 되돌리기 (같은 서버 postgres로)
 
@@ -957,7 +967,8 @@ backend ──▶ pipeline (FastAPI :8000, 내부 네트워크 전용) ──▶
 ### ⚠️ 켜기 전: 메모리 · 팀 합의
 
 t3.small은 2GB인데 RDS 전환 전 base 구성은 1.75GB를 할당했다(backend 1g · postgres 512m · redis 256m, 실측 여유 약 250MB, 모니터링 에이전트가 그중 100MB).
-그래서 **7.1.2 RDS 전환(postgres 컨테이너 512m이 빠진다) 뒤에 켜는 것을 전제로 했고, 이 전제는 10/28 전환으로 채워졌다.**
+그래서 **7.1.2 RDS 전환(postgres 컨테이너 512m이 빠진다) 뒤에 켜는 것을 전제로 했다.** 10/28 전환으로 **자리는 생겼다** — 빠진 postgres 512m과 파이프라인 `mem_limit` 512m이 같은 예산이다.
+다만 켠 뒤의 실제 여유는 실측이 아니므로, 켜는 날 `docker stats`로 확인한다. 대본까지 만들게 하면 한 등록이 오래 걸리니 한 등록의 소요 시간도 같이 본다.
 남은 조건은 **팀 합의(COMMON-52)** 다 — 운영에서 사건 등록을 열지는 팀이 정한 뒤 켠다.
 
 그 전에 켜려 하면 **`deploy.sh`가 배포를 시작하기 전에 멈춘다.** 여유가 모자란 상태에서 이 컨테이너가 붙으면
@@ -973,13 +984,17 @@ t3.small은 2GB인데 RDS 전환 전 base 구성은 1.75GB를 할당했다(backe
 # 1) .env에 값 추가 (deploy/.env.example "AI 판결 파이프라인 서비스" 참고)
 #    PIPELINE_SERVICE=1
 #    ANTHROPIC_API_KEY · GEMINI_API_KEY · OPENAI_API_KEY 중 하나 이상 (없으면 deploy.sh가 배포 전에 멈춘다)
+#    ※ 쓰려는 모델(PIPELINE_MODELS · PIPELINE_EXTRACT_MODEL 등)의 공급자 키가 있어야 한다. 키가 하나만 있어도 deploy.sh는 통과하므로,
+#      다른 공급자 모델을 고르면 키가 비어 첫 등록에서 실패한다
 #    PIPELINE_MEMORY_CHECKED=1  ← RDS 전환 전(postgres 컨테이너가 있는 서버)에만 필요. 위 "켜기 전: 메모리" 확인 후
 
-# 2) 올린다. 지금 운영에서 쓰는 -f 조합을 그대로 쓴다
-docker compose -f docker-compose.prod.yml -f docker-compose.pipeline.yml up -d --no-build pipeline
-
-# 3) backend를 다시 만들어 PIPELINE_SERVICE_URL을 받게 한다 (환경변수는 컨테이너를 새로 만들어야 반영된다)
-docker compose -f docker-compose.prod.yml -f docker-compose.pipeline.yml up -d --no-build --no-deps backend
+# 2) 같은 이미지로 .env를 다시 적용한다. deploy.sh가 .env를 보고 외부 DB · 시드 · 파이프라인 오버레이를 함께 붙여
+#    pipeline을 올리고 backend를 다시 만든다(PIPELINE_SERVICE_URL 반영) + 스모크 테스트
+#    (docker compose -f docker-compose.prod.yml -f docker-compose.pipeline.yml 처럼 손으로 고르면 외부 DB 오버레이가 빠져
+#     RDS 운영에서 backend가 로컬 postgres를 찾는다)
+sudo systemctl stop lawnambul-cd.timer
+./deploy.sh --reapply
+sudo systemctl start lawnambul-cd.timer
 ```
 
 이후 자동 배포(`deploy.sh`)는 `.env`의 `PIPELINE_SERVICE=1`을 보고 이 오버레이를 함께 쓰고,
