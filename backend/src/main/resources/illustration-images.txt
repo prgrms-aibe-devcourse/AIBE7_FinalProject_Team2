@@ -1,7 +1,6 @@
 cases/case-1-conclusion.webp
 cases/case-1-origin.webp
 cases/case-1-reenact.webp
-cases/case-1.webp
 cases/case-10-conclusion.webp
 cases/case-10-origin.webp
 cases/case-10-reenact.webp

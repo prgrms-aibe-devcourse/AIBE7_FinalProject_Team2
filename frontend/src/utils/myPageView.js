@@ -151,7 +151,7 @@ const CASE_FILE = /^case-(\d+)(?:[-.]|$)/; // cases/case-1-origin.webp → 사�
  */
 export function imageKinds(paths, { labels = {}, caseNames = {} } = {}) {
   const buckets = new Map();
-  [...new Set(paths)].sort().forEach((path) => {
+  [...new Set(paths)].sort((a, b) => a.localeCompare(b, 'en', { numeric: true })).forEach((path) => {
     const slash = path.lastIndexOf('/');
     const folder = path.slice(0, slash).replace(/^\/images\/?/, '');
     const file = path.slice(slash + 1);

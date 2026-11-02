@@ -103,6 +103,11 @@ test('collectedItems: 서버 목록을 그림 주소 · 이름으로 바꾸고, 
   assert.deepEqual(collectedItems(undefined), []);
 });
 
+test('imageKinds: 사건 번호는 자릿수를 따라 정렬한다(2 다음이 10이 아니라 3)', () => {
+  const [cases] = imageKinds(['/images/cases/case-10-origin.webp', '/images/cases/case-2-origin.webp', '/images/cases/case-22-origin.webp', '/images/cases/case-3-origin.webp']);
+  assert.deepEqual(cases.groups.map((group) => group.title), ['사건 2', '사건 3', '사건 10', '사건 22']);
+});
+
 test('collectionGroups: 의상은 한 묶음, 일러스트는 최근에 얻은 사건부터 재연 · 발단 · 결론 순', () => {
   const groups = collectionGroups(collectedItems([
     { kind: 'illustration', itemId: 'case-2-conclusion' },

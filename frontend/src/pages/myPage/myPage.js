@@ -636,7 +636,8 @@ function renderCollection(data, api) {
 function allImagesPreview() {
   const details = element('details', 'collection-preview');
   details.append(element('summary', '', '개발용: 이미지 전체 미리 보기'));
-  imageKinds(ALL_WEBP).forEach((kind) => {
+  // 이름 붙은 종류에 들지 않는 이미지("기타")와 잘라 만든 얼굴 아이콘은 보이지 않는다
+  imageKinds(ALL_WEBP).filter((kind) => kind.key in KIND_TITLES && kind.key !== 'characters/icon/cropped').forEach((kind) => {
     const part = element('section', 'collection-group');
     part.append(element('h2', 'collection-title', `${kind.title} (${kind.items.length})`));
     const grid = (items) => {
