@@ -45,6 +45,15 @@ public interface JudgmentRepository extends JpaRepository<Judgment, Long> {
 		+ "and j.timing = com.team2.project.judgment.domain.Timing.PRE")
 	Optional<Judgment> findPreJudgment(@Param("experienceId") Long experienceId);
 
+	/** 사건의 구간별 첫인상(사전 판단) 선택 수. 통계에는 1회차만 센다(요구사항 DR-7, API 14 crowd, FE-34) */
+	@Query("select j.rangeOption.id as rangeOptionId, count(j) as count from Judgment j "
+		+ "where j.legalCase.id = :caseId "
+		+ "and j.subjectType = com.team2.project.judgment.domain.SubjectType.USER "
+		+ "and j.timing = com.team2.project.judgment.domain.Timing.PRE "
+		+ "and j.experience.attemptNo = 1 "
+		+ "group by j.rangeOption.id")
+	List<RangeOptionCount> countPreJudgmentsByRangeOption(@Param("caseId") Long caseId);
+
 	/** 이 익명 ID의 첫인상 엽서(사전 판단) 수 (M-9, BE-140) */
 	@Query("select count(j) from Judgment j where j.experience.anonymousUser.id = :anonymousUserId "
 		+ "and j.subjectType = com.team2.project.judgment.domain.SubjectType.USER "
