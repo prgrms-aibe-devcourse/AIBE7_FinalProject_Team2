@@ -2217,6 +2217,17 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(pipeline.CRIME_TYPES, schema.CRIME_TYPES)
         self.assertEqual(pipeline.CRIME_TYPES, jobs.CRIME_TYPES)
 
+    def test_service_rag_result_keys_match_offline_generation_report(self):
+        """서비스 결과의 rag(jobs.RAG_RESULT_KEYS)와 오프라인 적재의 generation_report.rag(pipeline.rag_report)는 같은 키다
+        (BE-161 2차) — 두 경로의 생성 기록을 같은 질의로 집계한다. 한쪽만 늘리면 이 테스트가 깨진다."""
+        sys.path.insert(0, str(TOOL_DIR / "service"))
+        import jobs  # noqa: E402
+        report = {key: key for key in jobs.RAG_RESULT_KEYS + ("ownCaseHashes",)}
+        config = {"stages": {"rag": {"enabled": True}}}
+        with mock.patch.object(pipeline, "stage_output", return_value={"report": report}):
+            offline = pipeline.rag_report(config, {})
+        self.assertEqual(tuple(offline), jobs.RAG_RESULT_KEYS)
+
 
 class RagReadOnlyDbTest(unittest.TestCase):
     """RAG 검색 전용 원격 읽기 접속 (BE-161). 적재 · 로컬 검색의 로컬 전용 검사는 그대로여야 한다."""

@@ -240,6 +240,24 @@ def _contamination_result(contamination):
             for spec, value in results.items() if isinstance(value, dict)}
 
 
+# RAG 검색 보고에서 내보내는 값 (BE-161 2차). pipeline.rag_report(오프라인 적재의 generation_report.rag)와 같은 키 —
+# 상태 · 대체 사유 · 양형기준 버전 이름 · 기준 종류 · 조각 / 판례 id · 점수 · 경고. 판례 본문 · 사건번호 · 참고 자료 파일 경로는 없다
+RAG_RESULT_KEYS = ("status", "fallbackReasons", "embeddingModel", "guideline", "guidelineBasis", "guidelineFactors",
+                   "precedents", "excludedSuspects", "warnings")
+
+
+def _rag_result(rag):
+    """RAG 검색 보고를 돌려준다 (BE-161 2차, PR #412 리뷰).
+
+    적재 뒤 작업이 지워지므로, 내보내지 않으면 "이 사건은 RAG가 실제로 쓰였는가"를 나중에 볼 길이 없다.
+    RAG_DB_*를 일부만 넣은 설정 실수도 대체 사유(fallbackReasons)로 여기 남는다. rag를 돌리지 않았으면 None
+    """
+    report = (rag or {}).get("report")
+    if not isinstance(report, dict):
+        return None
+    return {key: report.get(key) for key in RAG_RESULT_KEYS}
+
+
 def _axis_result(axis):
     """가치관 축 투표 결과를 **내용으로** 돌려준다.
 
@@ -690,6 +708,8 @@ class JobStore:
             "classify": _classify_result(outputs.get("classify") or {}),
             # 사전 학습 점검 판정 (BE-160). 점검을 안 돌렸으면 None — 백엔드가 생성 기록에 SKIPPED로 남긴다
             "contamination": _contamination_result(outputs.get("contamination") or {}),
+            # RAG 검색 보고 (BE-161 2차). rag를 안 돌렸으면 None — 백엔드가 생성 기록에 SKIPPED로 남긴다
+            "rag": _rag_result(outputs.get("rag") or {}),
             # 대본은 안 돌렸으면 None이다. 사건 · 판결만 있으면 적재는 그대로 되고, 대본은 나중에 들어와도 된다(BE-108)
             "script": _script_result(outputs.get("script") or {}),
         }

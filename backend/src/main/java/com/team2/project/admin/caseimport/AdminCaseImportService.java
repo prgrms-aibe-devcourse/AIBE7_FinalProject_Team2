@@ -15,6 +15,7 @@ import com.team2.project.admin.service.AdminPrincipal;
 import com.team2.project.common.exception.BusinessException;
 import com.team2.project.common.exception.ErrorCode;
 import com.team2.project.common.exception.FieldErrorDetail;
+import com.team2.project.legalcase.domain.CrimeType;
 import com.team2.project.legalcase.domain.LegalCase;
 import com.team2.project.legalcase.service.CaseCastAssigner;
 import com.team2.project.legalcase.repository.CaseSourceRepository;
@@ -399,6 +400,12 @@ public class AdminCaseImportService {
 		// enabled만 보내고 판정 동작(onContaminated=stop 등)은 파이프라인 기본값을 그대로 쓴다 — 오염이면 등록이 FAILED로 끝난다
 		if (pipelineProperties.contaminationEnabled()) {
 			stages.put("contamination", Map.of("enabled", true));
+		}
+		// RAG(BE-161)도 서비스가 기본으로 끄는 단계라 켜 달라고 보내야 돈다. 자료(양형기준 · 유사 판례)가 살인뿐이라 살인 등록에만
+		// 켠다. 판단은 추출 결과가 아니라 등록 요청의 범죄 유형으로 한다 — 배역(CaseCastAssigner)과 같은 기준이라 한 사건에서 갈리지 않는다.
+		// required는 보내지 않는다(기본 false) — 못 찾으면 사건 입력의 참고 자료로 진행하고 사유는 생성 기록에 남는다
+		if (pipelineProperties.ragEnabled() && request.crimeType() == CrimeType.MURDER) {
+			stages.put("rag", Map.of("enabled", true));
 		}
 		// 대본은 파이프라인 기본값이 꺼짐이라 켜 달라고 보내야 돈다. 등록 한 번에 분류 → 대본 전체(U0 ~ U4) → 검수까지 돌린다
 		// (BE-129, 1회 방식). 분류가 대본 전체의 입력이라 함께 켠다. 배역은 위에서 정한 값을 넘긴다 — 그 단계는 배역을 자동으로

@@ -80,11 +80,13 @@ services:
       #   PIPELINE_SCRIPT_MODEL: 사건 대본(BE-129). 비우면 대본 없이 등록한다
       #   PIPELINE_CLASSIFY_MODEL: 사건 자동 분류(대본을 켰을 때만). 비우면 PIPELINE_MODELS의 첫 모델
       #   PIPELINE_CONTAMINATION_ENABLED: 사전 학습 점검(BE-160). true일 때만 켠다. 비우면 꺼짐
+      #   PIPELINE_RAG_ENABLED: 생성 참고 자료 RAG(BE-161). true + 살인 등록일 때만 켠다. 비우면 꺼짐 (위 pipeline의 RAG_DB_*가 필요)
       PIPELINE_MODELS: ${PIPELINE_MODELS:-}
       PIPELINE_EXTRACT_MODEL: ${PIPELINE_EXTRACT_MODEL:-}
       PIPELINE_SCRIPT_MODEL: ${PIPELINE_SCRIPT_MODEL:-}
       PIPELINE_CLASSIFY_MODEL: ${PIPELINE_CLASSIFY_MODEL:-}
       PIPELINE_CONTAMINATION_ENABLED: ${PIPELINE_CONTAMINATION_ENABLED:-}
+      PIPELINE_RAG_ENABLED: ${PIPELINE_RAG_ENABLED:-}
     # default를 반드시 함께 적는다 — networks를 쓰는 순간 기본 네트워크에서 빠져 postgres · redis · web과 끊긴다
     networks: [default, pipeline]
 

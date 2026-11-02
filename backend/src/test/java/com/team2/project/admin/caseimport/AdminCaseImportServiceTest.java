@@ -86,9 +86,14 @@ class AdminCaseImportServiceTest {
 	}
 
 	private AdminCaseImportService newService(String scriptModel, String classifyModel, boolean contamination) {
+		return newService(scriptModel, classifyModel, contamination, false);
+	}
+
+	private AdminCaseImportService newService(String scriptModel, String classifyModel, boolean contamination,
+		boolean rag) {
 		return new AdminCaseImportService(importRepository, caseSourceRepository, pipelineClient,
 			new PipelineProperties("http://pipeline:8000", List.of("gemini:test"), null, Duration.ofSeconds(30),
-				scriptModel, classifyModel, contamination),
+				scriptModel, classifyModel, contamination, rag),
 			auditLogger, loader, castAssigner,
 			new NoOpTransactionManager());
 	}
@@ -197,6 +202,49 @@ class AdminCaseImportServiceTest {
 		ArgumentCaptor<PipelineJobRequest> sent = ArgumentCaptor.forClass(PipelineJobRequest.class);
 		verify(pipelineClient).createJob(sent.capture());
 		assertThat(sent.getValue().stages() == null || !sent.getValue().stages().containsKey("contamination")).isTrue();
+	}
+
+	@Test
+	@DisplayName("RAG를 켜면 살인 등록에 rag 단계를 enabled만 담아 보낸다 — required는 보내지 않는다 (BE-161 2차)")
+	@SuppressWarnings("unchecked")
+	void startImport_ragEnabled_murder_sendsRag() {
+		when(pipelineClient.createJob(any())).thenReturn(job("abc123", "QUEUED", List.of()));
+		service = newService(null, null, false, true);
+
+		service.startImport(request(), admin, httpRequest);	// request()는 MURDER
+
+		ArgumentCaptor<PipelineJobRequest> sent = ArgumentCaptor.forClass(PipelineJobRequest.class);
+		verify(pipelineClient).createJob(sent.capture());
+		// required를 보내지 않아야 파이프라인 기본값(false: 못 찾으면 사건 입력의 참고 자료로 진행)이 쓰인다
+		assertThat((Map<String, Object>) sent.getValue().stages().get("rag"))
+			.containsExactly(Map.entry("enabled", true));
+		assertThat(sent.getValue().until()).isNull();	// rag는 generate 앞 단계
+	}
+
+	@Test
+	@DisplayName("RAG를 켜도 살인 외 등록에는 보내지 않는다 — 판단은 등록 요청의 범죄 유형으로 한다 (BE-161 2차)")
+	void startImport_ragEnabled_notMurder_notSent() {
+		when(pipelineClient.createJob(any())).thenReturn(job("abc123", "QUEUED", List.of()));
+		service = newService(null, null, false, true);
+
+		service.startImport(new CaseImportCreateRequest(CrimeType.THEFT, List.of(source(CourtLevel.FIRST, "2099고단001"))),
+			admin, httpRequest);
+
+		ArgumentCaptor<PipelineJobRequest> sent = ArgumentCaptor.forClass(PipelineJobRequest.class);
+		verify(pipelineClient).createJob(sent.capture());
+		assertThat(sent.getValue().stages() == null || !sent.getValue().stages().containsKey("rag")).isTrue();
+	}
+
+	@Test
+	@DisplayName("RAG를 끄면(기본) 살인 등록에도 보내지 않는다 (BE-161 2차)")
+	void startImport_ragDisabled_notSent() {
+		when(pipelineClient.createJob(any())).thenReturn(job("abc123", "QUEUED", List.of()));
+
+		service.startImport(request(), admin, httpRequest);
+
+		ArgumentCaptor<PipelineJobRequest> sent = ArgumentCaptor.forClass(PipelineJobRequest.class);
+		verify(pipelineClient).createJob(sent.capture());
+		assertThat(sent.getValue().stages() == null || !sent.getValue().stages().containsKey("rag")).isTrue();
 	}
 
 	@Test

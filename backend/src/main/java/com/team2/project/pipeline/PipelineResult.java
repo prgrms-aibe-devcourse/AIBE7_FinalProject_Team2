@@ -29,6 +29,8 @@ import java.util.List;
  *                      {@code classification.sensitiveFlags}만 읽어 legal_case.sensitive_flags에 넣는다(BE-125)
  * @param contamination 사전 학습 점검 판정 (BE-160). {@code 모델 spec → {verdict, reason, counts, answered, runs, criteria}}.
  *                      점검을 돌리지 않은 작업은 null이다. 적재는 고른 모델의 값을 ai_generation.generation_report에 남긴다
+ * @param rag           생성 참고 자료 RAG 검색 보고 (BE-161 2차). 상태 · 대체 사유 · 양형기준 버전 · 조각 / 판례 id · 점수 · 경고만
+ *                      들어 있다(본문 · 사건번호 없음). rag를 돌리지 않은 작업은 null이다. 적재는 ai_generation.generation_report.rag에 남긴다
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record PipelineResult(
@@ -41,7 +43,8 @@ public record PipelineResult(
 	JsonNode axis,
 	JsonNode script,
 	JsonNode classify,
-	JsonNode contamination
+	JsonNode contamination,
+	JsonNode rag
 ) {
 
 	/** @param warnings 검증 경고. 적재를 막지는 않고 ai_generation에 남겨 관리자가 보게 한다 */

@@ -56,7 +56,7 @@ class PipelinePropertiesTest extends ApiIntegrationTest {
 		assertThat(properties.scriptEnabled()).isTrue();
 		assertThat(properties.classifyModel()).isNull();
 		PipelineProperties blankScript = new PipelineProperties("http://pipeline:8000", null, null,
-			java.time.Duration.ofSeconds(30), "  ", "", null);
+			java.time.Duration.ofSeconds(30), "  ", "", null, null);
 		assertThat(blankScript.scriptEnabled()).isFalse();
 		assertThat(blankScript.classifyModel()).isNull();
 	}
@@ -73,6 +73,18 @@ class PipelinePropertiesTest extends ApiIntegrationTest {
 		assertThat(bind(java.util.Map.of("pipeline-service.contamination-enabled", "false")).contaminationEnabled()).isFalse();
 	}
 
+	@Test
+	@DisplayName("RAG는 기본 꺼짐이고, 값이 없거나 빈 문자열이면 꺼짐으로 본다 (BE-161 2차)")
+	void ragOffByDefault() {
+		assertThat(properties.ragEnabled()).isFalse();
+		assertThat(blank(null).ragEnabled()).isFalse();
+		// Compose가 넘기는 빈 값(${PIPELINE_RAG_ENABLED:-})도 바인딩 실패 없이 꺼짐
+		assertThat(bind(java.util.Map.of("pipeline-service.rag-enabled", "")).ragEnabled()).isFalse();
+		assertThat(bind(java.util.Map.of("pipeline-service.rag-enabled", "true")).ragEnabled()).isTrue();
+		// 두 스위치는 따로 논다
+		assertThat(bind(java.util.Map.of("pipeline-service.rag-enabled", "true")).contaminationEnabled()).isFalse();
+	}
+
 	private static PipelineProperties bind(java.util.Map<String, String> values) {
 		return new org.springframework.boot.context.properties.bind.Binder(
 			new org.springframework.boot.context.properties.source.MapConfigurationPropertySource(values))
@@ -81,6 +93,6 @@ class PipelinePropertiesTest extends ApiIntegrationTest {
 
 	private static PipelineProperties blank(java.util.List<String> models) {
 		return new PipelineProperties("http://pipeline:8000", models, null, java.time.Duration.ofSeconds(30), null, null,
-			null);
+			null, null);
 	}
 }
