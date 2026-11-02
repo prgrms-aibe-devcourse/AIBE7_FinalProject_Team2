@@ -5,6 +5,8 @@ export const SCRIPT_STATUS = { READY: 'READY', PREPARING: 'PREPARING', MAINTENAN
 
 export function scriptStatusOf(item, localScript) {
   if (Object.values(SCRIPT_STATUS).includes(item?.scriptStatus)) return item.scriptStatus;
+  // 모르는 scriptStatus 값(서버가 나중에 추가한 막는 신호일 수 있다)은 열지 않고 PREPARING으로 막는다(PR #377 리뷰)
+  if (item?.scriptStatus != null) return SCRIPT_STATUS.PREPARING;
   const ready = typeof item?.scriptReady === 'boolean' ? item.scriptReady : Boolean(localScript);
   return ready ? SCRIPT_STATUS.READY : SCRIPT_STATUS.PREPARING;
 }

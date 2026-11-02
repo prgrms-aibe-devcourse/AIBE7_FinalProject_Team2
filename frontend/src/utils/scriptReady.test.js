@@ -18,5 +18,5 @@ test('scriptStatus가 있으면 READY만 체험 가능이고, 없으면 scriptRe
   assert.equal(isScriptReady({ scriptStatus: 'MAINTENANCE', scriptReady: true }, { title: 'x' }), false);
   assert.equal(scriptStatusOf({ scriptStatus: 'MAINTENANCE' }), 'MAINTENANCE');
   assert.equal(scriptStatusOf({ scriptReady: false }), 'PREPARING');
-  assert.equal(scriptStatusOf({ scriptStatus: '???', scriptReady: true }), 'READY');
+  assert.equal(scriptStatusOf({ scriptStatus: '???', scriptReady: true }), 'PREPARING'); // 모르는 값은 막는 쪽
 });
