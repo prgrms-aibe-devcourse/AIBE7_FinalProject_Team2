@@ -408,7 +408,7 @@
 .landing-page .room-rug {
   --mark: calc(14 * var(--u));
   --u: calc(var(--W) / 300);
-  --W: min(420px, 24cqw, (min(1180px, 100cqw - 96px) - 100px) / 1.94); /* cqw = 방 폭. 넓은 화면일수록 비례해 크게(최대 420px), 종이 묶음(가로 --ext × W)은 러그 안에 */
+  --W: min(420px, 24 * var(--cqw, 1cqw), (min(1180px, 100 * var(--cqw, 1cqw) - 96px) - 100px) / 1.94); /* --cqw = 방 폭의 1%(px, JS가 측정. Safari가 탭 복귀 뒤 cqw를 옛 값으로 두는 문제 FE-90). 넓은 화면일수록 비례해 크게(최대 420px), 종이 묶음(가로 --ext × W)은 러그 안에 */
   --ext: 1.915; /* 종이 묶음 가로 폭(W 단위). 가운데로 모으고 러그 좌우는 비운다 */
   --rows: 4.25; /* 종이 묶음 세로 길이(W 단위) */
   --pt: 56px;
@@ -429,7 +429,7 @@
 }
 /* 러그 자리 · 기울기는 감싼 칸이 맡는다(러그 밑 서류철 · 접히는 귀퉁이가 같이 기운다) */
 .landing-page .room-rug-wrap {
-  --rw: min(1180px, 100cqw - 96px); /* 러그 폭(cqw = 방 폭). 양 끝 술이 벽에 가리지 않게 옆을 비운다 */
+  --rw: min(1180px, 100 * var(--cqw, 1cqw) - 96px); /* 러그 폭(--cqw = 방 폭의 1%, FE-90). 양 끝 술이 벽에 가리지 않게 옆을 비운다 */
   --fw: calc(var(--rw) * .48); /* 서류철 폭: 러그 폭의 48%(책상 위 서류철보다 조금 크게) */
   --fold: calc(var(--rw) * .36); /* 접히는 귀퉁이(직각 삼각형 한 변) — 서류철 크기에 비례 */
   --peek-x: calc(var(--fw) * .123); /* 서류철이 러그 밖으로 삐져나온 정도(서류철 폭 대비) */
@@ -517,7 +517,7 @@
 .landing-page .room-paper:nth-child(6) { --size: 1.15; --ratio: .6087; --x: 0; --y: 3.5011; --tilt: 4deg; z-index: 0; } /* 가로 1.15W × 세로 0.7W */
 /* 좁은 방(860px 이하): 같은 자리, 러그 안에 들어가게 W만 줄인다 */
 @container (max-width: 860px) {
-  .landing-page .room-rug { --W: min(300px, (100cqw - 196px) / 1.94); }
+  .landing-page .room-rug { --W: min(300px, (100 * var(--cqw, 1cqw) - 196px) / 1.94); }
   .landing-page .room-rug-wrap { --peek-x: calc(var(--fw) * .15); --peek-y: calc(var(--fw) * .17); }
 }
 .landing-page .paper-title { display: block; font: 900 calc(19 * var(--u))/1.35 var(--font-heading); letter-spacing: -.03em; color: var(--color-heading); text-wrap: balance; }
@@ -679,9 +679,9 @@ body:has(.landing-page) #route-header::before { content: ''; position: absolute;
   /* 좁은 화면: 같은 방을 세로로 쌓는다. 벽은 얇게, 서류 · 판결문은 한 줄에 하나 */
   .landing-page .room { --ch: 46vw; } /* 좁은 화면: 책상 대신 메뉴 카드 밑으로 의자를 넣는다 */
   /* 좁은 화면은 러그가 세로로 길어져 술이 위 · 아래 짧은 변으로 간다 */
-  .landing-page .room-rug-wrap { --rw: calc(100cqw - 32px); --peek-x: calc(var(--fw) * .11); --peek-y: calc(var(--fw) * .36); margin: 52px 16px 0; transform: none; }
+  .landing-page .room-rug-wrap { --rw: calc(100 * var(--cqw, 1cqw) - 32px); --peek-x: calc(var(--fw) * .11); --peek-y: calc(var(--fw) * .36); margin: 52px 16px 0; transform: none; }
   /* 서류는 한 장씩 세로로 쌓는다(FE-99). 가로로 겹쳐 놓으면 종이 폭이 W의 절반 남짓이라 글자가 5px대로 줄었다. 왼쪽 · 오른쪽으로 번갈아 기울여 놓는다 */
-  .landing-page .room-rug { --pt: 40px; --W: min(300px, (100cqw - 90px) / 1.2); display: flex; flex-direction: column; gap: calc(var(--W) * .14); height: auto; padding: var(--pt) 24px calc(var(--fold) * .62); }
+  .landing-page .room-rug { --pt: 40px; --W: min(300px, (100 * var(--cqw, 1cqw) - 90px) / 1.2); display: flex; flex-direction: column; gap: calc(var(--W) * .14); height: auto; padding: var(--pt) 24px calc(var(--fold) * .62); }
   .landing-page .room-paper { position: relative; left: auto; top: auto; flex: none; }
   .landing-page .room-paper:nth-child(odd) { align-self: flex-start; }
   .landing-page .room-paper:nth-child(even) { align-self: flex-end; }
