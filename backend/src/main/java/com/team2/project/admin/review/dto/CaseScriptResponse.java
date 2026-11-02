@@ -1,8 +1,10 @@
 package com.team2.project.admin.review.dto;
 
 import com.team2.project.judgment.domain.ReviewStatus;
+import com.team2.project.legalcase.domain.BlockStaleness;
 import com.team2.project.legalcase.domain.CaseScript;
 import com.team2.project.legalcase.domain.CaseScriptBlock;
+import com.team2.project.legalcase.domain.ScriptUnit;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
@@ -53,18 +55,25 @@ public record CaseScriptResponse(List<Map<String, Object>> evidence, String mode
 	 *
 	 * @param content     블록 값. 파이프라인이 만든 모양 그대로다(검수 결과 {@code path}가 가리킨다)
 	 * @param revision    판. 값이 바뀔 때마다 오른다
-	 * @param basis       만들 때 본 값(앞 블록 판 · 분류 · 배역 · 사건 내용 판 · 기사 판). 낡음 표시는 2차
+	 * @param basis       만들 때 본 값(앞 블록 판 · 분류 · 배역 · 사건 내용 판 · 기사 판)
 	 * @param publishable 오류 없이 승인할 수 있는 블록인지
+	 * @param stale       (BE-126 2차) 만들 때 본 값이 지금 값과 다른지 — 낡은 블록. 표시가 기본이다
+	 * @param staleReasons 바뀐 근거 키 (예: {@code U0} · {@code cast} · {@code paper})
+	 * @param staleBlocksApproval 승인을 막는 낡음인지 (사건 내용 · 기사 · 민감 플래그). 재생성하거나 "확인했음"(A-13-20)으로 푼다
+	 * @param unknownBasis 근거에 없어 비교하지 못한 키 (이관 · 증거조사만 만든 대본) — 낡지 않은 것으로 보되 화면이 표시한다
 	 */
 	public record Block(String unit, Object content, int revision, Map<String, Object> basis,
 			List<Map<String, Object>> review, List<Object> warnings, List<Map<String, Object>> repairs,
 			boolean publishable, ReviewStatus reviewStatus, String reviewedBy, OffsetDateTime reviewedAt,
-			String reviewNote) {
+			String reviewNote, boolean stale, List<String> staleReasons, boolean staleBlocksApproval,
+			List<String> unknownBasis) {
 
-		static Block of(CaseScriptBlock block, Function<Long, String> emailOf) {
+		static Block of(CaseScriptBlock block, Function<Long, String> emailOf, BlockStaleness staleness) {
+			BlockStaleness value = staleness == null ? new BlockStaleness(List.of(), List.of()) : staleness;
 			return new Block(block.getUnit().name(), block.getContent(), block.getRevision(), block.getBasis(),
 				block.getReview(), block.getWarnings(), block.getRepairs(), block.isPublishable(), block.reviewState(),
-				emailOf.apply(block.getReviewedByAdminId()), kst(block.getReviewedAt()), block.getReviewNote());
+				emailOf.apply(block.getReviewedByAdminId()), kst(block.getReviewedAt()), block.getReviewNote(),
+				value.stale(), value.reasons(), value.blocksApproval(), value.unknown());
 		}
 	}
 
@@ -74,14 +83,14 @@ public record CaseScriptResponse(List<Map<String, Object>> evidence, String mode
 	 * @param emailOf          검수자 이메일. 부르는 쪽이 관리자 계정에서 찾는다(A-8과 같은 방식, id가 null이면 null)
 	 */
 	public static CaseScriptResponse of(CaseScript script, Map<Integer, String> labelsByFactorId,
-			Function<Long, String> emailOf) {
+			Function<Long, String> emailOf, Map<ScriptUnit, BlockStaleness> staleness) {
 		CaseScriptBlock last = script.lastReviewed().orElse(null);
 		return new CaseScriptResponse(withLabels(script.evidence(), labelsByFactorId), script.getModel(),
 			script.getCastRoles(), script.getBalanceWarning(), script.isApprovable(), script.isStopped(),
 			script.reviewState(), script.isPublic(), last == null ? null : emailOf.apply(last.getReviewedByAdminId()),
 			last == null ? null : kst(last.getReviewedAt()), last == null ? null : last.getReviewNote(),
 			kst(script.getGeneratedAt()), kst(updatedAt(script)), meta(script), script.getPending(), script.getReview(),
-			script.getBlocks().stream().map(block -> Block.of(block, emailOf)).toList());
+			script.getBlocks().stream().map(block -> Block.of(block, emailOf, staleness.get(block.getUnit()))).toList());
 	}
 
 	/** API 18의 meta와 같은 모양. Map.of는 null 값을 허용하지 않아(issue · admits가 비어 있을 수 있다) 새 맵에 담는다 */

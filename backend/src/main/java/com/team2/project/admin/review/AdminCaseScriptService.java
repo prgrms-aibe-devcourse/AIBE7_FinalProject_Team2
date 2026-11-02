@@ -10,6 +10,7 @@ import com.team2.project.common.exception.BusinessException;
 import com.team2.project.common.exception.ErrorCode;
 import com.team2.project.legalcase.domain.CasePaper;
 import com.team2.project.legalcase.domain.CaseScript;
+import com.team2.project.legalcase.domain.CaseScriptBlock;
 import com.team2.project.legalcase.domain.Factor;
 import com.team2.project.legalcase.domain.LegalCase;
 import com.team2.project.legalcase.domain.ScriptUnit;
@@ -64,13 +65,8 @@ public class AdminCaseScriptService {
 			throw new BusinessException(ErrorCode.INVALID_STATE,
 				"만들지 못한 대사 · 단위나 검수 오류가 있는 대본은 승인할 수 없습니다. 대본을 다시 생성해 주세요.");
 		}
-		// 만든 뒤 사건 내용(A-11) · 기사(A-13-6 · 8)가 바뀌었으면 그 블록은 옛 내용을 말한다 — 낡음 표시(2차) 전에도 공개는 막는다
-		List<ScriptUnit> stale = script.staleOnDbInput(script.getLegalCase().getContentRevision(), paperRevision(caseId));
-		if (!stale.isEmpty()) {
-			throw new BusinessException(ErrorCode.INVALID_STATE, "대본을 만든 뒤 사건 내용이나 기사가 바뀌어 "
-				+ stale.stream().map(ScriptUnit::name).collect(Collectors.joining(" · "))
-				+ " 블록이 옛 내용을 말합니다. 대본을 다시 생성해 주세요.");
-		}
+		// 만든 뒤 사건 내용 · 기사 · 민감 플래그가 바뀐 블록은 공개하지 않는다(BlockStaleness.BLOCKING) — 재생성하거나 "확인했음"으로 푼다
+		guardNotBlockingStale(script, script.blockingStale(script.getLegalCase(), paperRevision(caseId)));
 		script.approve(admin.adminId(), Instant.now());
 		auditLogger.record(admin, AdminAuditAction.CASE_SCRIPT_APPROVE, AuditTargetType.CASE, caseId, Map.of(),
 			request);
@@ -117,7 +113,94 @@ public class AdminCaseScriptService {
 	}
 
 	/**
-	 * 사건 내용(A-11) · 기사(A-13-6 · 8)를 고친 뒤, 판이 바뀐 블록의 승인을 지운다(PR #367 리뷰). 부르는 쪽이 사건 행을 잠근
+	 * 블록 하나 승인 (A-13-18, BE-126 2차). 처음 검수는 통승인 · 통거절이고(화면 흐름), 반려한 뒤 · 재생성한 뒤에는 블록마다 승인한다.
+	 * 마지막 블록이 승인되면 대본이 공개된다(다섯 단위 모두 승인). 오류 있는 블록, 대본 전체 검수 오류가 남은 대본, 승인을 막는 낡음이
+	 * 있는 블록은 승인할 수 없다.
+	 */
+	@Transactional
+	public CaseScriptResponse approveBlock(Long caseId, ScriptUnit unit, AdminPrincipal admin, HttpServletRequest request) {
+		CaseScript script = lockAndFindScript(caseId);
+		CaseScriptBlock block = findBlock(script, unit);
+		if (!block.isPublishable() || script.getReview().stream().anyMatch(issue -> "error".equals(issue.get("severity")))) {
+			throw new BusinessException(ErrorCode.INVALID_STATE,
+				"검수 오류가 있는 블록은 승인할 수 없습니다. 고치거나 다시 생성해 주세요.");
+		}
+		guardNotBlockingStale(script, script.blockingStale(script.getLegalCase(), paperRevision(caseId)).stream()
+			.filter(unit::equals).toList());
+		script.approveBlock(unit, admin.adminId(), Instant.now());
+		auditLogger.record(admin, AdminAuditAction.CASE_SCRIPT_APPROVE, AuditTargetType.CASE, caseId,
+			Map.<String, Object>of("unit", unit.name()), request);
+		return response(caseId, script);
+	}
+
+	/** 블록 하나 반려 (A-13-19, BE-126 2차). 반려한 블록이 있으면 대본은 공개되지 않는다 */
+	@Transactional
+	public CaseScriptResponse rejectBlock(Long caseId, ScriptUnit unit, String reason, AdminPrincipal admin,
+			HttpServletRequest request) {
+		CaseScript script = lockAndFindScript(caseId);
+		findBlock(script, unit);
+		script.rejectBlock(unit, admin.adminId(), Instant.now(), reason);
+		auditLogger.record(admin, AdminAuditAction.CASE_SCRIPT_REJECT, AuditTargetType.CASE, caseId,
+			Map.<String, Object>of("unit", unit.name()), request);
+		return response(caseId, script);
+	}
+
+	/**
+	 * "확인했음" (A-13-20, BE-126 2차). 낡았지만 다시 만들지 않고 그대로 두기로 한 블록의 근거를 지금 값으로 맞춘다 — 낡음 표시가
+	 * 사라지고, 승인을 막던 낡음(사건 내용 · 기사 · 민감 플래그)도 풀린다. 내용 · 검수 상태는 그대로다. 무엇을 확인했는지 감사 로그에 남긴다
+	 */
+	@Transactional
+	public CaseScriptResponse acknowledgeStale(Long caseId, ScriptUnit unit, AdminPrincipal admin,
+			HttpServletRequest request) {
+		CaseScript script = lockAndFindScript(caseId);
+		findBlock(script, unit);
+		List<String> acknowledged = script.acknowledgeStale(unit, script.getLegalCase(), paperRevision(caseId));
+		if (!acknowledged.isEmpty()) {
+			Map<String, Object> detail = new LinkedHashMap<>();
+			detail.put("unit", unit.name());
+			detail.put("acknowledgedStale", acknowledged);
+			auditLogger.record(admin, AdminAuditAction.CASE_SCRIPT_UPDATE, AuditTargetType.CASE, caseId, detail, request);
+		}
+		return response(caseId, script);
+	}
+
+	/**
+	 * 블록 문자열 한 줄 직접 수정 (A-13-21, BE-126 2차, U0 · U1 · U2 · U4). 자리는 검수 결과의 {@code path}(JSON Pointer)다. 그 블록만
+	 * 다시 검수 대기가 되고 판이 올라 뒤 블록이 낡음으로 보인다. U0를 고치면 혐의 인정 여부를 다시 계산한다. 고친 문장은 감사 로그에
+	 * 남기지 않는다(A-13-13과 같다)
+	 */
+	@Transactional
+	public CaseScriptResponse editText(Long caseId, ScriptUnit unit, String path, String text, AdminPrincipal admin,
+			HttpServletRequest request) {
+		if (unit == ScriptUnit.U3) {
+			throw new BusinessException(ErrorCode.VALIDATION_ERROR, "증거조사 대사(U3)는 대사 수정(A-13-13)으로 고칩니다.");
+		}
+		CaseScript script = lockAndFindScript(caseId);
+		findBlock(script, unit);
+		if (!script.editText(unit, path, text)) {
+			throw new BusinessException(ErrorCode.SCRIPT_LINE_NOT_FOUND, "블록에 그 자리의 문장이 없습니다: " + path);
+		}
+		Map<String, Object> detail = new LinkedHashMap<>();
+		detail.put("unit", unit.name());
+		detail.put("path", path);
+		auditLogger.record(admin, AdminAuditAction.CASE_SCRIPT_UPDATE, AuditTargetType.CASE, caseId, detail, request);
+		return response(caseId, script);
+	}
+
+	private static CaseScriptBlock findBlock(CaseScript script, ScriptUnit unit) {
+		return script.block(unit).orElseThrow(() -> new BusinessException(ErrorCode.SCRIPT_BLOCK_NOT_FOUND));
+	}
+
+	private static void guardNotBlockingStale(CaseScript script, List<ScriptUnit> stale) {
+		if (!stale.isEmpty()) {
+			throw new BusinessException(ErrorCode.INVALID_STATE, "대본을 만든 뒤 사건 내용 · 기사 · 민감 플래그가 바뀌어 "
+				+ stale.stream().map(ScriptUnit::name).collect(Collectors.joining(" · "))
+				+ " 블록이 옛 값을 보고 만들어졌습니다. 다시 생성하거나 확인했음으로 표시해 주세요.");
+		}
+	}
+
+	/**
+	 * 사건 내용 · 민감 플래그(A-11) · 기사(A-13-6 · 8)를 고친 뒤, 승인을 막는 낡음이 생긴 블록의 승인을 지운다(PR #367 리뷰). 부르는 쪽이 사건 행을 잠근
 	 * 트랜잭션 안에서 부른다 — 승인(A-13-11)도 같은 행을 잠그므로 둘이 엇갈리지 않는다. 판이 그대로면(같은 값으로 고친 경우)
 	 * 아무것도 지우지 않는다.
 	 *
@@ -129,7 +212,7 @@ public class AdminCaseScriptService {
 	@Transactional
 	public List<ScriptUnit> revokeStaleApprovals(LegalCase legalCase) {
 		return scriptRepository.findByLegalCaseId(legalCase.getId())
-			.map(script -> script.revokeStaleApprovals(legalCase.getContentRevision(), paperRevision(legalCase.getId())))
+			.map(script -> script.revokeStaleApprovals(legalCase, paperRevision(legalCase.getId())))
 			.orElse(List.of());
 	}
 
@@ -160,7 +243,8 @@ public class AdminCaseScriptService {
 		}
 		Map<Long, String> emails = new HashMap<>();
 		return CaseScriptResponse.of(script, labels,
-			adminId -> adminId == null ? null : emails.computeIfAbsent(adminId, this::reviewerEmail));
+			adminId -> adminId == null ? null : emails.computeIfAbsent(adminId, this::reviewerEmail),
+			script.staleness(script.getLegalCase(), paperRevision(caseId)));
 	}
 
 	/**

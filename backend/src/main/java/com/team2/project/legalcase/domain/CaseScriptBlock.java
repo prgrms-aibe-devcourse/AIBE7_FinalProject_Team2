@@ -129,6 +129,106 @@ public class CaseScriptBlock {
 		return items.stream().filter(Map.class::isInstance).map(item -> (Map<String, Object>) item).toList();
 	}
 
+	/**
+	 * "확인했음" (BE-126 2차) — 낡았지만 그대로 두기로 한 블록의 근거를 지금 값으로 맞춘다. 내용 · 판 · 검수 상태는 그대로다
+	 * (내용이 바뀐 것이 아니다). 근거 키 목록은 단위가 정한다({@link ScriptUnit#basis()}).
+	 */
+	void acknowledge(Map<String, Object> current) {
+		Map<String, Object> next = new LinkedHashMap<>(basis);
+		for (String key : unit.basis()) {
+			next.put(key, current.get(key));
+		}
+		this.basis = next;
+	}
+
+	/**
+	 * 블록 안의 문자열 한 줄을 관리자가 직접 고친다 (BE-126 2차, U0 · U1 · U2 · U4 — U3는 {@link #editLine}). 자리는 검수 결과의
+	 * {@code path}와 같은 JSON Pointer다. 그 자리의 검수 조건 오류는 지운다(사람이 판단해 고쳤다 — A-13-13과 같다). 값이 바뀌었으니
+	 * 판이 오르고 이 블록의 승인이 풀린다. 뒤 블록은 이 판을 보고 만들어졌으므로 낡음이 된다.
+	 *
+	 * @return 그 자리에 문자열이 있어 고쳤으면 true
+	 */
+	boolean editText(String path, String text) {
+		if (unit == ScriptUnit.U3 || !(content instanceof Map<?, ?>)) {
+			return false;
+		}
+		Object copy = deepCopy(content);
+		if (!replaceString(copy, pointer(path), 0, text)) {
+			return false;
+		}
+		this.content = copy;
+		this.review = new ArrayList<>(review.stream()
+			.filter(issue -> !(ERROR.equals(issue.get("severity")) && path.equals(issue.get("path"))))
+			.toList());
+		this.revision++;
+		this.publishable = computePublishable();
+		clearReview();
+		return true;
+	}
+
+	/** JSON Pointer → 토큰 ("/questions/0/q" → [questions, 0, q]). 형식이 아니면 빈 목록 */
+	private static List<String> pointer(String path) {
+		if (path == null || !path.startsWith("/") || path.length() < 2) {
+			return List.of();
+		}
+		return List.of(path.substring(1).split("/", -1)).stream()
+			.map(token -> token.replace("~1", "/").replace("~0", "~")).toList();
+	}
+
+	@SuppressWarnings("unchecked")
+	private static boolean replaceString(Object node, List<String> tokens, int index, String text) {
+		if (tokens.isEmpty()) {
+			return false;
+		}
+		String token = tokens.get(index);
+		boolean last = index == tokens.size() - 1;
+		if (node instanceof Map<?, ?> map) {
+			Map<String, Object> object = (Map<String, Object>) map;
+			if (!object.containsKey(token)) {
+				return false;
+			}
+			if (last) {
+				if (!(object.get(token) instanceof String)) {
+					return false;
+				}
+				object.put(token, text);
+				return true;
+			}
+			return replaceString(object.get(token), tokens, index + 1, text);
+		}
+		if (node instanceof List<?> list && token.matches("\\d{1,4}")) {
+			int position = Integer.parseInt(token);
+			if (position >= list.size()) {
+				return false;
+			}
+			List<Object> array = (List<Object>) list;
+			if (last) {
+				if (!(array.get(position) instanceof String)) {
+					return false;
+				}
+				array.set(position, text);
+				return true;
+			}
+			return replaceString(array.get(position), tokens, index + 1, text);
+		}
+		return false;
+	}
+
+	/** 바꿀 수 있는 깊은 복사 (저장된 값은 바꿀 수 없는 목록일 수 있다) */
+	private static Object deepCopy(Object value) {
+		if (value instanceof Map<?, ?> map) {
+			Map<Object, Object> copy = new LinkedHashMap<>();
+			map.forEach((key, item) -> copy.put(key, deepCopy(item)));
+			return copy;
+		}
+		if (value instanceof List<?> list) {
+			List<Object> copy = new ArrayList<>();
+			list.forEach(item -> copy.add(deepCopy(item)));
+			return copy;
+		}
+		return value;
+	}
+
 	void approve(Long adminId, Instant at) {
 		if (!publishable) {
 			throw new IllegalStateException("오류가 있는 블록은 승인할 수 없다: " + unit);

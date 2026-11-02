@@ -204,7 +204,7 @@ class AdminCaseScriptApiTest extends ApiIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("A-13-13: 고치면 검수 기록이 지워져 다시 검수 대기가 된다")
+	@DisplayName("A-13-13: 고치면 U3의 검수 기록이 지워져 다시 검수 대기가 된다 — 다른 블록 승인은 그대로다 (BE-126 2차 블록 단위)")
 	void editLine_resetsReview() throws Exception {
 		insertScript(true, false);
 		perform(post(scriptUrl() + "/approve")).andExpect(status().isOk());
@@ -214,8 +214,8 @@ class AdminCaseScriptApiTest extends ApiIntegrationTest {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.reviewStatus").value("PENDING"))
 			.andExpect(jsonPath("$.isPublished").value(false))
-			.andExpect(jsonPath("$.reviewedBy").value(nullValue()))
-			.andExpect(jsonPath("$.reviewedAt").value(nullValue()));
+			.andExpect(jsonPath("$.blocks[3].reviewStatus").value("PENDING"))
+			.andExpect(jsonPath("$.blocks[0].reviewStatus").value("APPROVED"));
 
 		assertThat(reviewStatus()).isNull();
 	}
@@ -451,7 +451,11 @@ class AdminCaseScriptApiTest extends ApiIntegrationTest {
 	@Test
 	@DisplayName("A-13-11: 만든 뒤 사건 내용 · 기사가 바뀐 블록이 있으면 409 — 어느 블록인지 알린다 (PR #367 리뷰 2번)")
 	void approve_staleOnDbInput_isConflict() throws Exception {
-		insertFullScript();	// basis.case = 1, U1 basis.paper 없음(기사 없이 만든 대본)
+		long scriptId = insertFullScript();	// basis.case = 1
+		// 기사 없이 만든 대본 — 적재는 U1 basis.paper를 null로 채운다(키는 있다. 키가 없으면 "모름"이라 낡음으로 보지 않는다)
+		jdbcTemplate.update("""
+			UPDATE case_script_block SET basis = '{"case": 1, "paper": null}'::jsonb WHERE script_id = ? AND unit = 'U1'""",
+			scriptId);
 		insertCasePaper(caseId, "적재 뒤 따로 만든 기사");	// 기사 판 1 — U1은 이 기사를 보지 않았다
 
 		perform(post(scriptUrl() + "/approve"))
@@ -535,7 +539,7 @@ class AdminCaseScriptApiTest extends ApiIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("A-13-13: 대사를 고치면 U3 판이 오르고, 그 줄의 검수 오류가 지워지고, 모든 블록이 다시 검수 대기가 된다 (BE-126)")
+	@DisplayName("A-13-13: 대사를 고치면 U3 판이 오르고, 그 줄의 검수 오류가 지워지고, U3만 다시 검수 대기가 된다 (BE-126 2차)")
 	void editLine_bumpsRevisionClearsLineErrorAndResetsAllBlocks() throws Exception {
 		long scriptId = insertScriptRow(true, false, null);
 		insertBlockRow(scriptId, "U3", """
@@ -561,8 +565,8 @@ class AdminCaseScriptApiTest extends ApiIntegrationTest {
 			.andExpect(jsonPath("$.blocks[3].publishable").value(true))
 			.andExpect(jsonPath("$.blocks[4].revision").value(1))			// 다른 블록 값은 그대로
 			.andExpect(jsonPath("$.publishable").value(true))
-			.andExpect(jsonPath("$.reviewStatus").value("PENDING"));
-		assertThat(blockReviewStatuses().values()).containsOnlyNulls();		// 반려였던 다른 블록도 다시 대기 (통승인 1차)
+			.andExpect(jsonPath("$.reviewStatus").value("REJECTED"));		// 반려한 다른 블록은 그대로다
+		assertThat(blockReviewStatuses()).containsEntry("U3", null).containsEntry("U0", "REJECTED");
 
 		perform(post(scriptUrl() + "/approve")).andExpect(status().isOk());
 	}
