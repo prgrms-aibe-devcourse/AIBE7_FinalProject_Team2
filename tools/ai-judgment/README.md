@@ -300,7 +300,9 @@ python3 pipeline.py status cases/my-case.pipeline.json
 | `generate` | 모델마다 `runs`회 생성 · 검증한다(`generate.py`와 같음). `rag` 단계를 켰으면 그 참고 자료로 프롬프트를 만든다. 검증 통과 회차가 없으면 한 번씩 더 생성한다(최대 `maxRetries`회) | 모든 모델에서 통과 회차가 없으면 멈춘다 |
 | `select` | 검증을 통과한 회차 중 하나를 고른다 | 아래 "회차 선택" |
 | `axis` | 판단 요소의 가치관 축만 같은 모델에 `runs`회(기본 5) 묻고 요소별로 표를 센다(BE-49, 아래 "가치관 축 투표") | 유효 응답이 하나도 없으면 멈춘다. `enabled: false`면 추출기가 한 번 정한 값으로 적재한다(예전 투표 결과가 있어도 쓰지 않음). `--skip axis`는 다른 단계처럼 이번에 다시 투표하지 않을 뿐이라, 끝난 투표 결과가 있으면 그것을 쓰고 없으면 추출기 값을 쓴다 |
-| `load` | 사건(DRAFT) + AI 판결(비공개 · PENDING) 적재 SQL을 만들어 보관하고 로컬 DB에 적재한다 | `case: false`면 사건은 빼고 AI 판결만(사건이 이미 DB에 있을 때). `applyToDb: false`면 SQL만 만든다 |
+| `classify` | 사건을 분위기 · 쟁점 유형 · 피해자 측 · 부가 인물 · 민감 플래그로 분류한다(BE-123, `case_classify.py`). 같은 모델에 `runs`회(기본 3) 묻고 축마다 표를 센다. 결과(`classification` · `needsReview`)가 대본 전체의 입력이다 | **기본 꺼짐**. 유효 응답이 하나도 없으면 멈춘다. `model`이 없으면 `generate.models`의 첫 모델(무료 `free:` 제외) |
+| `script` | 사건 대본을 만든다. `full: false`면 증거조사 대사만(BE-107), `full: true`면 대본 전체 — U0 설계도 · U1 1막 해설 · U2 재판 도입부 · U3 증거조사 · U4 3막 블록과 기사(BE-121, `prompts/script/README.md` "저장 블록"). 검수 조건(BE-122)에서 오류가 난 줄은 `repairRetries`번까지 고쳐 쓰고, 남으면 그 단위만 다시 만든다. 배역(`cast`)은 자동으로 정하지 않는다 — 사건 등록(A-14)은 백엔드가 범죄 유형별 균형으로 정해 넘긴다(BE-129) | **기본 꺼짐**. `full: true`면 `classify` 결과나 `classification`이 있어야 한다. 만들지 못한 단위 · 검수 오류가 있어도 멈추지 않고 `publishable: false`로 남긴다(관리자가 검수 화면에서 본다) |
+| `load` | 사건(DRAFT) + AI 판결(비공개 · PENDING) 적재 SQL을 만들어 보관하고 로컬 DB에 적재한다 | `case: false`면 사건은 빼고 AI 판결만(사건이 이미 DB에 있을 때). `applyToDb: false`면 SQL만 만든다. **대본 · 분류는 적재하지 않는다** — 대본 블록 · 메타 · 기사 · 분류는 사건 등록 적재(백엔드 A-14-1, `CaseImportLoader`)가 넣는다(BE-129) |
 
 **단계 분기 (명령 옵션)**: 끝난 단계는 다음 실행에서 건너뛰고 이어서 한다(상태: `out/pipeline/<name>/state.json`). 단 앞 단계가 다시 돌면 그 뒤 단계는 끝났어도 함께 다시 돈다(예: `generate`가 실패한 뒤 옵션 없이 다시 `run`하면 `generate → select → load`). 끝날 때 적재까지 했는지(DB 적재 · SQL만 · 적재 안 함)를 구분해 알려 준다.
 

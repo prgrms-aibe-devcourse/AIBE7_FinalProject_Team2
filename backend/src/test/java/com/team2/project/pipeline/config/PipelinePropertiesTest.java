@@ -47,7 +47,18 @@ class PipelinePropertiesTest extends ApiIntegrationTest {
 		assertThat(blank(java.util.List.of(" openai:gpt-x ")).models()).containsExactly("openai:gpt-x");
 	}
 
+	@Test
+	@DisplayName("대본 · 분류 모델은 기본으로 꺼져 있고, 빈 문자열도 꺼짐으로 본다 (BE-129)")
+	void scriptAndClassifyOffByDefault() {
+		assertThat(properties.scriptEnabled()).isFalse();
+		assertThat(properties.classifyModel()).isNull();
+		PipelineProperties blankScript = new PipelineProperties("http://pipeline:8000", null, null,
+			java.time.Duration.ofSeconds(30), "  ", "");
+		assertThat(blankScript.scriptEnabled()).isFalse();
+		assertThat(blankScript.classifyModel()).isNull();
+	}
+
 	private static PipelineProperties blank(java.util.List<String> models) {
-		return new PipelineProperties("http://pipeline:8000", models, null, java.time.Duration.ofSeconds(30), null, null, null);
+		return new PipelineProperties("http://pipeline:8000", models, null, java.time.Duration.ofSeconds(30), null, null);
 	}
 }

@@ -11,7 +11,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 새 사건의 배역을 정한다 (BE-125).
+ * 새 사건의 배역을 정한다 (BE-125). 대본을 만드는 등록은 등록 요청을 받을 때(BE-129), 그렇지 않으면 적재할 때 부른다.
  *
  * <p>규칙 (character-profile-worldview 5-2 "범죄 유형별 균형이 연속 금지보다 우선"):
  * <ol>
@@ -21,6 +21,10 @@ import org.springframework.transaction.annotation.Transactional;
  * </ol>
  * 1 · 2만 쓰면 "마지막의 반대"와 같은 결과지만, 관리자가 배역을 고쳤거나 초기값이 한쪽으로 쏠린 유형에서는
  * 마지막만 보면 쏠림이 이어진다 — 그래서 수를 먼저 본다.
+ *
+ * <p>(BE-129) 수와 마지막은 사건과 함께 <b>아직 적재되지 않은 등록</b>(실패한 것은 빼고)의 배역도 센다
+ * ({@code LegalCaseRepository.countDefenseByCrimeType}). 배역을 대본보다 먼저 정하므로, 빼면 등록 중인 사건이 있을 때 다음
+ * 등록이 같은 배역을 받는다.
  *
  * <p><b>호출하는 쪽의 트랜잭션 안에서만 쓴다</b>({@code MANDATORY}). 범죄 유형별 잠금이 그 트랜잭션이 끝날 때
  * 풀려야 같은 유형의 다른 적재가 이 사건까지 세고 배정한다.
