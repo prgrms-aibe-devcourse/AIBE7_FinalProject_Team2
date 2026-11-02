@@ -105,9 +105,14 @@ test('도전과제를 깨면 보상이 열리고, 진행도는 목표에서 멈�
   assert.ok(open.backgrounds.has('tarot') && !open.backgrounds.has('linen'));
 });
 
-test('도전과제 id는 겹치지 않고, 보상이 하나 이상 있다', () => {
+// 경험치만 주는 도전과제(BE-146)는 꾸미기 보상이 비어 있어도 된다
+const XP_ONLY = ['cases-5', 'collect-50'];
+test('도전과제 id는 겹치지 않고, 경험치 전용이 아니면 보상이 하나 이상 있다', () => {
   assert.equal(new Set(SERVER_ACHIEVEMENTS.map((item) => item.id)).size, SERVER_ACHIEVEMENTS.length);
-  SERVER_ACHIEVEMENTS.forEach((item) => assert.ok(REWARD_TYPES.some((type) => item.rewards[type].length > 0), item.id));
+  SERVER_ACHIEVEMENTS.filter((item) => !XP_ONLY.includes(item.id))
+    .forEach((item) => assert.ok(REWARD_TYPES.some((type) => item.rewards[type].length > 0), item.id));
+  SERVER_ACHIEVEMENTS.filter((item) => XP_ONLY.includes(item.id))
+    .forEach((item) => assert.ok(REWARD_TYPES.every((type) => item.rewards[type].length === 0), item.id));
 });
 
 test('unlockerIn: 잠긴 항목을 여는 도전과제를 서버 응답에서 찾는다', () => {

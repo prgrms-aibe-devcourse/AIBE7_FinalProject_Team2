@@ -37,6 +37,11 @@ public class ExperienceService {
 	/** API 2. 체험 시작. 이미 있으면 새로 만들지 않고 기존 체험을 돌려준다. */
 	public StartResult start(Long caseId, Requester requester) {
 		legalCaseService.requirePublished(caseId);
+		// 순차 해금 (BE-146): 새로 시작할 때만 막는다. 쿠키를 발급하기 전에 본다(잠긴 사건으로 익명 ID만 생기지 않게)
+		Optional<Owner> known = requester.owner();
+		if (known.flatMap(found -> experienceRepository.findLatest(found, caseId)).isEmpty()) {
+			legalCaseService.requireUnlocked(caseId, known);
+		}
 		OwnerService.IssuedOwner issued = ownerService.getOrIssue(requester);
 		Owner owner = issued.owner();
 		UUID issuedCookieId = issued.issuedCookieId();

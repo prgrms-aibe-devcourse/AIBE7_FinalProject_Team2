@@ -49,7 +49,10 @@ public final class ProfileDecoCatalog {
 		.kinds("characters/roles", "characters/standing").frames("basic").backgrounds("cream")
 		.sashStyles("none", "short").sashColors("short:wine").sashIcons("none", "star").build();
 
-	/** 도전과제 (FE-68 ACHIEVEMENTS와 같은 순서) */
+	/**
+	 * 도전과제 (FE-68 ACHIEVEMENTS와 같은 순서). cases-5 · collect-50은 BE-146 리밸런싱에서 더했다 —
+	 * 사건 순차 해금의 마지막 단계(5건 완료 → 전체)와 사건 약 15건 분량의 수집이고, 꾸미기 보상 없이 경험치만 준다(LevelXp)
+	 */
 	public static final List<Achievement> ACHIEVEMENTS = List.of(
 		new Achievement("first-case", AchievementStat.COMPLETED, 1, Rewards.builder()
 			.kinds("characters/scene").frames("wood").sashStyles("long").sashColors("long:wine").build()),
@@ -63,8 +66,10 @@ public final class ProfileDecoCatalog {
 			.kinds("characters/cheek", "characters/cheek-slim").frames("gold").sashIcons("heart").build()),
 		new Achievement("cases-3", AchievementStat.COMPLETED, 3, Rewards.builder()
 			.frames("stitch").backgrounds("linen").sashColors("short:navy", "long:navy").sashIcons("gavel").build()),
+		new Achievement("cases-5", AchievementStat.COMPLETED, 5, Rewards.NONE),
 		new Achievement("collect-20", AchievementStat.COLLECTED, 20, Rewards.builder()
 			.kinds("characters/law", "characters/adult").sashColors("short:green", "long:green").build()),
+		new Achievement("collect-50", AchievementStat.COLLECTED, 50, Rewards.NONE),
 		new Achievement("attend-30", AchievementStat.ATTENDANCE_DAYS, 30, Rewards.builder()
 			.kinds("characters/mascot").frames("navy").sashColors("short:gold", "long:gold").sashIcons("law").build()));
 

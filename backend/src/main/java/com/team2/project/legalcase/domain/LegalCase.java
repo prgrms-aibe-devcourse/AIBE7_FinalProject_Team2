@@ -106,6 +106,9 @@ public class LegalCase {
 	 */
 	private int contentRevision = 1;
 
+	/** 순차 해금 순서(BE-146, 1부터). 비어 있으면 맨 뒤 · 사건 id 순이다({@link CaseUnlock}). 운영자가 SQL로 정한다 */
+	private Integer unlockOrder;
+
 	@Enumerated(EnumType.STRING)
 	private CaseStatus status;
 
