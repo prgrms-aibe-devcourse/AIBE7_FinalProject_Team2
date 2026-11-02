@@ -38,12 +38,21 @@ export const scriptReadyOf = (caseId) => caseId === case1Script.caseId;
 export const MAINTENANCE_CASE_ID = 2;
 export const scriptStatusOf = (caseId) => (scriptReadyOf(caseId) ? 'READY' : caseId === MAINTENANCE_CASE_ID ? 'MAINTENANCE' : 'PREPARING');
 
+// 순차 해금(BE-146, FE-149) 확인용 목: 사건 5가 잠겨 있다가, 사건을 하나 마치면(사건 1 완료 등) 열린다. 잠긴 사건은 대본이 있는(READY) 사건이다 —
+// 실제 서버는 체험할 수 있는 사건만 잠그고, 이미 체험한 사건은 잠그지 않는다. 단계 값(0 → 3, 1 → 6, 3 → 12, 5 → 전체)은 서버가 원본이라 목은 다음 단계 완료 수만 흉내 낸다
+export const LOCKED_CASE_ID = 5;
+const completedCount = () => (myStatusOf(1) === 'COMPLETED' ? 1 : 0) + [...startedCases.values()].filter((state) => state.status === 'COMPLETED').length;
+const isLockedCase = (caseId) => caseId === LOCKED_CASE_ID && completedCount() === 0 && myStatusOf(caseId) === null;
+const nextStepAtOf = (completed) => [1, 3, 5].find((step) => completed < step) ?? null;
+
 // 사건 3: scriptStatus 없이 scriptReady만 true인데 API 18이 503을 주는 사건. 서버가 scriptStatus를 아직 안 줄 때(이름 미확정, BE-126 2차 전)
 // 사건 상세가 503만으로 "점검 중"을 알리는지 손으로 확인하려고 둔다(FE-145 리뷰)
 export const LEGACY_MAINTENANCE_CASE_ID = 3;
 const scriptFieldsOf = (caseId) => (caseId === LEGACY_MAINTENANCE_CASE_ID
   ? { scriptReady: true }
-  : { scriptReady: scriptReadyOf(caseId), scriptStatus: scriptStatusOf(caseId) });
+  : caseId === LOCKED_CASE_ID
+    ? { scriptReady: true, scriptStatus: 'READY' } // 잠긴 사건도 대본은 준비돼 있다(준비 중이 아니라 잠김)
+    : { scriptReady: scriptReadyOf(caseId), scriptStatus: scriptStatusOf(caseId) });
 
 // 사건 1은 S-03 개요 목(API 4)과 같은 죄명을 쓰고, 나머지는 유형별 죄명(임의 데이터)
 const CHARGE_NAMES = { MURDER: '살인', FRAUD: '사기', INJURY: '상해', ROBBERY: '강도', THEFT: '절도' };
@@ -61,9 +70,10 @@ export async function getCases(crimeType) {
   ]));
   return structuredClone({
     summary: { total: mockCases.length, byCrimeType },
+    unlock: { completedCases: completedCount(), nextStepAt: nextStepAtOf(completedCount()) },
     cases: mockCases
       .filter((item) => !crimeType || item.crimeType === crimeType)
-      .map((item) => ({ ...item, chargeName: chargeNameOf(item), ...scriptFieldsOf(item.caseId), myStatus: myStatusOf(item.caseId) })),
+      .map((item) => ({ ...item, chargeName: chargeNameOf(item), ...scriptFieldsOf(item.caseId), myStatus: myStatusOf(item.caseId), locked: isLockedCase(item.caseId) })),
   });
 }
 
@@ -84,6 +94,7 @@ export async function getCaseDetail(caseId) {
     ...scriptFieldsOf(caseId),
     ...(mockSensitiveFlags[caseId] ? { sensitiveFlags: mockSensitiveFlags[caseId] } : {}),
     myStatus: myStatusOf(caseId),
+    locked: isLockedCase(caseId),
   });
 }
 
@@ -154,6 +165,7 @@ export async function startExperience(caseId) {
   if (!mockCases.some((item) => item.caseId === caseId)) {
     fail('CASE_NOT_FOUND', '사건을 찾을 수 없습니다.');
   }
+  if (isLockedCase(caseId)) fail('CASE_LOCKED', '아직 열리지 않은 사건입니다.'); // 기존 체험이 없을 때만 막는다(BE-146)
   if (caseId === 1) {
     // 체험 기록이 없으면(myStatus null) 실제 API처럼 새 체험(STARTED, 1막)으로 시작한다. 목 저장소의 초기값(PRE_JUDGED)은
     // 주소로 S-04 이후 화면을 바로 열 때만 쓴다(FE-32 — S-20 "체험 시작"이 2막으로 건너뛰던 문제)
