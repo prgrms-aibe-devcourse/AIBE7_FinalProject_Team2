@@ -13,6 +13,7 @@ import com.team2.project.legalcase.domain.CaseScript;
 import com.team2.project.legalcase.domain.CaseScriptBlock;
 import com.team2.project.legalcase.domain.Factor;
 import com.team2.project.legalcase.domain.LegalCase;
+import com.team2.project.legalcase.domain.ScriptStatus;
 import com.team2.project.legalcase.domain.ScriptUnit;
 import com.team2.project.legalcase.repository.CasePaperRepository;
 import com.team2.project.legalcase.repository.CaseScriptRepository;
@@ -35,6 +36,10 @@ import org.springframework.transaction.annotation.Transactional;
  * <p><b>사건 공개와는 별개다.</b> 공개된 사건이어도 대본은 승인 전까지 내려가지 않고(BE-109), 공개된 뒤에
  * 대본만 늦게 들어와 승인될 수도 있다. 그래서 신문 지면(A-13-6 ~ 8)과 달리 "공개한 사건은 못 고친다"는
  * 제약을 두지 않는다 — 대본은 사건 내용이 아니라 체험 연출이기 때문이다.
+ *
+ * <p><b>공개 뒤 블록 수정 = 점검</b>(BE-126 2차-2). 한 번 사용자에게 나간 대본({@link CaseScript#getReleasedAt()})의 승인을 푸는
+ * 수정 · 반려는 막지 않고, 그동안 API 18이 503 {@code SCRIPT_UNDER_MAINTENANCE}를 준다. 다시 다섯 단위를 모두 승인하면 돌아온다.
+ * 대본을 점검 상태로 만든 요청은 감사 로그에 {@code scriptMaintenance: true}를 남긴다.
  */
 @Service
 @RequiredArgsConstructor
@@ -67,7 +72,9 @@ public class AdminCaseScriptService {
 		}
 		// 만든 뒤 사건 내용 · 기사 · 민감 플래그가 바뀐 블록은 공개하지 않는다(BlockStaleness.BLOCKING) — 재생성하거나 "확인했음"으로 푼다
 		guardNotBlockingStale(script, script.blockingStale(script.getLegalCase(), paperRevision(caseId)));
-		script.approve(admin.adminId(), Instant.now());
+		Instant now = Instant.now();
+		script.approve(admin.adminId(), now);
+		script.markReleasedIfServing(now);
 		auditLogger.record(admin, AdminAuditAction.CASE_SCRIPT_APPROVE, AuditTargetType.CASE, caseId, Map.of(),
 			request);
 		return response(caseId, script);
@@ -78,14 +85,15 @@ public class AdminCaseScriptService {
 	 * (BE-109 서빙 기준), 블록 단위로 고칠 수 있게 되기(2차) 전까지는 다시 등록해 새로 만든다.
 	 *
 	 * <p>승인한 대본도 반려로 내릴 수 있다 — 판결 후보(A-10)는 교체할 다른 후보가 있어 공개 중인 것을 막지만,
-	 * 대본은 사건마다 하나뿐이라 막으면 잘못 승인한 대본을 되돌릴 방법이 없어진다.
+	 * 대본은 사건마다 하나뿐이라 막으면 잘못 승인한 대본을 되돌릴 방법이 없어진다. 한 번 나간 대본이면 점검 중이 된다.
 	 */
 	@Transactional
 	public CaseScriptResponse reject(Long caseId, String reason, AdminPrincipal admin, HttpServletRequest request) {
 		CaseScript script = lockAndFindScript(caseId);
+		ScriptStatus before = script.status();
 		script.reject(admin.adminId(), Instant.now(), reason);
-		auditLogger.record(admin, AdminAuditAction.CASE_SCRIPT_REJECT, AuditTargetType.CASE, caseId, Map.of(),
-			request);
+		auditLogger.record(admin, AdminAuditAction.CASE_SCRIPT_REJECT, AuditTargetType.CASE, caseId,
+			withMaintenance(new LinkedHashMap<>(), before, script), request);
 		return response(caseId, script);
 	}
 
@@ -96,20 +104,22 @@ public class AdminCaseScriptService {
 	 * <p>{@code factorId}는 파이프라인 번호다(= {@code factor.display_order}). 대사는 판단 요소마다 한 줄이고
 	 * 어느 측이 말하는지는 요소의 방향에서 정해지므로(`script_generation.py`), 이 번호 하나로 줄이 정해진다.
 	 *
-	 * <p>대사는 U3 블록에 있다(BE-126). 고치면 모든 블록의 검수 기록이 지워져 <b>다시 검수 대기</b>가 된다. 빈 대사를
-	 * 사람이 채워 모든 줄이 차면 {@code publishable}도 다시 계산돼 승인할 수 있게 된다.
+	 * <p>대사는 U3 블록에 있다(BE-126). 고치면 U3 블록의 검수 기록이 지워져 <b>다시 검수 대기</b>가 된다(공개 중이던 대본은 점검 중).
+	 * 빈 대사를 사람이 채워 모든 줄이 차면 {@code publishable}도 다시 계산돼 승인할 수 있게 된다.
 	 */
 	@Transactional
 	public CaseScriptResponse editLine(Long caseId, int factorId, String text, AdminPrincipal admin,
 			HttpServletRequest request) {
 		CaseScript script = lockAndFindScript(caseId);
-		guardNotPublished(script);
+		ScriptStatus before = script.status();
 		if (!script.editLine(factorId, text, Instant.now())) {
 			throw new BusinessException(ErrorCode.SCRIPT_LINE_NOT_FOUND);
 		}
 		// 고친 대사 본문은 감사 로그에 남기지 않는다 — 어느 요소를 고쳤는지만 남긴다(원문 · 모델 출력 취급)
+		Map<String, Object> detail = new LinkedHashMap<>();
+		detail.put("factorId", factorId);
 		auditLogger.record(admin, AdminAuditAction.CASE_SCRIPT_UPDATE, AuditTargetType.CASE, caseId,
-			Map.<String, Object>of("factorId", factorId), request);
+			withMaintenance(detail, before, script), request);
 		return response(caseId, script);
 	}
 
@@ -133,22 +143,26 @@ public class AdminCaseScriptService {
 		}
 		guardNotBlockingStale(script, script.blockingStale(script.getLegalCase(), paperRevision(caseId)).stream()
 			.filter(unit::equals).toList());
-		script.approveBlock(unit, admin.adminId(), Instant.now());
+		Instant now = Instant.now();
+		script.approveBlock(unit, admin.adminId(), now);
+		script.markReleasedIfServing(now);
 		auditLogger.record(admin, AdminAuditAction.CASE_SCRIPT_APPROVE, AuditTargetType.CASE, caseId,
 			Map.<String, Object>of("unit", unit.name()), request);
 		return response(caseId, script);
 	}
 
-	/** 블록 하나 반려 (A-13-19, BE-126 2차). 반려한 블록이 있으면 대본은 공개되지 않는다 */
+	/** 블록 하나 반려 (A-13-19, BE-126 2차). 반려한 블록이 있으면 대본은 공개되지 않는다 — 한 번 나간 대본이면 점검 중이 된다 */
 	@Transactional
 	public CaseScriptResponse rejectBlock(Long caseId, ScriptUnit unit, String reason, AdminPrincipal admin,
 			HttpServletRequest request) {
 		CaseScript script = lockAndFindScript(caseId);
 		findBlock(script, unit);
-		guardNotPublished(script);
+		ScriptStatus before = script.status();
 		script.rejectBlock(unit, admin.adminId(), Instant.now(), reason);
+		Map<String, Object> detail = new LinkedHashMap<>();
+		detail.put("unit", unit.name());
 		auditLogger.record(admin, AdminAuditAction.CASE_SCRIPT_REJECT, AuditTargetType.CASE, caseId,
-			Map.<String, Object>of("unit", unit.name()), request);
+			withMaintenance(detail, before, script), request);
 		return response(caseId, script);
 	}
 
@@ -190,27 +204,28 @@ public class AdminCaseScriptService {
 		}
 		CaseScript script = lockAndFindScript(caseId);
 		findBlock(script, unit);
-		guardNotPublished(script);
+		ScriptStatus before = script.status();
 		if (!script.editText(unit, path, text)) {
 			throw new BusinessException(ErrorCode.SCRIPT_LINE_NOT_FOUND, "블록에 그 자리의 문장이 없습니다: " + path);
 		}
 		Map<String, Object> detail = new LinkedHashMap<>();
 		detail.put("unit", unit.name());
 		detail.put("path", path);
-		auditLogger.record(admin, AdminAuditAction.CASE_SCRIPT_UPDATE, AuditTargetType.CASE, caseId, detail, request);
+		auditLogger.record(admin, AdminAuditAction.CASE_SCRIPT_UPDATE, AuditTargetType.CASE, caseId,
+			withMaintenance(detail, before, script), request);
 		return response(caseId, script);
 	}
 
 	/**
-	 * 점검 상태(BE-126 2차-2, API 18 503) 전까지: 공개 중인 사건의 대본은 <b>승인을 지우는</b> 수정 · 블록 반려를 받지 않는다 — 승인이
-	 * 풀리는 순간 체험 중인 사용자의 API 18이 404가 된다(PR #383 리뷰 1번). 블록 승인 · 확인했음은 대본을 내리지 않아 막지 않고,
-	 * 통거절(A-13-12)은 잘못 승인한 대본을 내리는 길이라 일부러 둔다
+	 * 이 요청으로 공개 중이던 대본이 점검 중이 됐으면 감사 로그에 남긴다 (BE-126 2차-2). PR #383에서는 이 경우를 409로 막았다 —
+	 * 그때는 승인이 풀리면 API 18이 404(준비 중)라 체험 중인 사용자에게 대본이 사라졌다. 이제는 503(점검 중)이라 화면이 받아 둔 대본으로
+	 * 이어 가므로(FE-145) 막지 않고, 누가 언제 내렸는지만 남긴다
 	 */
-	static void guardNotPublished(CaseScript script) {
-		if (script.getLegalCase().isPublished()) {
-			throw new BusinessException(ErrorCode.INVALID_STATE, "공개 중인 사건의 대본은 지금 고치거나 블록을 반려할 수 없습니다 — "
-				+ "승인이 풀려 체험 중인 사용자에게 대본이 사라집니다. 공개를 취소(A-13-14)한 뒤 고쳐 주세요.");
+	static Map<String, Object> withMaintenance(Map<String, Object> detail, ScriptStatus before, CaseScript script) {
+		if (before == ScriptStatus.READY && script.status() == ScriptStatus.MAINTENANCE) {
+			detail.put("scriptMaintenance", true);
 		}
+		return detail;
 	}
 
 	private static CaseScriptBlock findBlock(CaseScript script, ScriptUnit unit) {
@@ -240,6 +255,15 @@ public class AdminCaseScriptService {
 		return scriptRepository.findByLegalCaseId(legalCase.getId())
 			.map(script -> script.revokeStaleApprovals(legalCase, paperRevision(legalCase.getId())))
 			.orElse(List.of());
+	}
+
+	/**
+	 * 사건을 공개(A-13)할 때 부른다 — 이미 승인한 대본이 있으면 이때 사용자에게 나간다({@link CaseScript#markReleasedIfServing}).
+	 * 부르는 쪽이 사건 행을 잠근 트랜잭션 안에서 부른다
+	 */
+	@Transactional
+	public void markReleasedIfServing(LegalCase legalCase, Instant at) {
+		scriptRepository.findByLegalCaseId(legalCase.getId()).ifPresent(script -> script.markReleasedIfServing(at));
 	}
 
 	/**

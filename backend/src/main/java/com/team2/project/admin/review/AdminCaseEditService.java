@@ -19,6 +19,7 @@ import com.team2.project.legalcase.repository.FactorRepository;
 import com.team2.project.legalcase.repository.LegalCaseRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -161,7 +162,9 @@ public class AdminCaseEditService {
 				legalCase.getStatus().name(),
 				readiness.reasons().stream().map(reason -> new FieldErrorDetail("case", reason)).toList());
 		}
-		legalCase.publish(clock.instant());
+		Instant now = clock.instant();
+		legalCase.publish(now);
+		scriptService.markReleasedIfServing(legalCase, now);
 		caseRepository.saveAndFlush(legalCase);
 		auditLogger.record(admin, AdminAuditAction.CASE_PUBLISH, AuditTargetType.CASE, caseId, null, request);
 		caseRepository.flush();

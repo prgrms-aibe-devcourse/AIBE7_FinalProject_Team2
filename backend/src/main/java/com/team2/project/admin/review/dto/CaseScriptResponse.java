@@ -4,6 +4,7 @@ import com.team2.project.judgment.domain.ReviewStatus;
 import com.team2.project.legalcase.domain.BlockStaleness;
 import com.team2.project.legalcase.domain.CaseScript;
 import com.team2.project.legalcase.domain.CaseScriptBlock;
+import com.team2.project.legalcase.domain.ScriptStatus;
 import com.team2.project.legalcase.domain.ScriptUnit;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -41,12 +42,14 @@ import java.util.stream.Stream;
  * @param pending      파이프라인이 만들지 못한 단위
  * @param review       대본 전체에 걸린 검수 결과({@code REVIEW_FAILED}). 블록 것은 블록에 있다
  * @param blocks       단위 블록 (U0 → U4 순서, 만든 단위만)
+ * @param scriptStatus 사용자 쪽 대본 상태 (BE-126 2차-2, API 1 · 16과 같은 값). MAINTENANCE면 지금 API 18이 503이다
+ * @param releasedAt   대본이 처음 사용자에게 나간 시각(사건 공개 + 다섯 단위 모두 승인). 있으면 승인을 푸는 수정 · 반려가 점검 중을 만든다
  */
 public record CaseScriptResponse(List<Map<String, Object>> evidence, String model, Map<String, Object> cast,
 		String balanceWarning, boolean publishable, boolean stopped, ReviewStatus reviewStatus, boolean isPublished,
 		String reviewedBy, OffsetDateTime reviewedAt, String reviewNote, OffsetDateTime generatedAt,
 		OffsetDateTime updatedAt, Map<String, Object> meta, List<String> pending, List<Map<String, Object>> review,
-		List<Block> blocks) {
+		List<Block> blocks, ScriptStatus scriptStatus, OffsetDateTime releasedAt) {
 
 	private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
@@ -90,7 +93,8 @@ public record CaseScriptResponse(List<Map<String, Object>> evidence, String mode
 			script.reviewState(), script.isPublic(), last == null ? null : emailOf.apply(last.getReviewedByAdminId()),
 			last == null ? null : kst(last.getReviewedAt()), last == null ? null : last.getReviewNote(),
 			kst(script.getGeneratedAt()), kst(updatedAt(script)), meta(script), script.getPending(), script.getReview(),
-			script.getBlocks().stream().map(block -> Block.of(block, emailOf, staleness.get(block.getUnit()))).toList());
+			script.getBlocks().stream().map(block -> Block.of(block, emailOf, staleness.get(block.getUnit()))).toList(),
+			script.status(), kst(script.getReleasedAt()));
 	}
 
 	/** API 18의 meta와 같은 모양. Map.of는 null 값을 허용하지 않아(issue · admits가 비어 있을 수 있다) 새 맵에 담는다 */

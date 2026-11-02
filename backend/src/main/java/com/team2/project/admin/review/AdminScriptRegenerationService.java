@@ -22,6 +22,7 @@ import com.team2.project.legalcase.domain.CaseScriptRegeneration;
 import com.team2.project.legalcase.domain.CastRoles;
 import com.team2.project.legalcase.domain.LegalCase;
 import com.team2.project.legalcase.domain.ScriptRegenerationStatus;
+import com.team2.project.legalcase.domain.ScriptStatus;
 import com.team2.project.legalcase.domain.ScriptUnit;
 import com.team2.project.legalcase.repository.CasePaperRepository;
 import com.team2.project.legalcase.repository.CaseScriptRegenerationRepository;
@@ -77,8 +78,6 @@ public class AdminScriptRegenerationService {
 
 	static final String NOT_LATEST = "이 사건에 더 최근 재생성 요청이 있습니다. 최근 요청의 결과를 반영해 주세요.";
 	static final String INPUTS_CHANGED = "재생성을 요청한 뒤 대본 · 사건 내용 · 기사 · 배역 · 분류 · AI 판결이 바뀌었습니다. 다시 요청해 주세요.";
-	static final String CASE_PUBLISHED = "공개 중인 사건은 반영할 수 없습니다 — 반영하면 승인이 풀려 대본이 바로 내려갑니다. "
-		+ "공개를 취소(A-13-14)한 뒤 반영하고 다시 승인 · 공개해 주세요.";
 	static final String RESULT_UNAVAILABLE = "재생성 결과를 가져오지 못했습니다. 잠시 뒤 다시 확인해 주세요.";
 	static final String CAST_CHANGED = "배역이 바뀌어 배역이 말하는 블록(U2 · U3 · U4)을 함께 다시 만들어야 합니다.";
 
@@ -311,10 +310,7 @@ public class AdminScriptRegenerationService {
 		if (!entity.getId().equals(latestId)) {
 			return NOT_LATEST;
 		}
-		// 점검 상태(BE-126 2차, API 18 503)가 생기기 전까지는 공개 중인 대본을 내리지 않는다(PR #381 리뷰 1번)
-		if (entity.getLegalCase().isPublished()) {
-			return CASE_PUBLISHED;
-		}
+		// 공개 중인 사건도 반영한다 — 승인이 풀린 동안은 점검 중(API 18 503)이다(BE-126 2차-2). PR #381 리뷰 1번에서 임시로 막았던 것을 풀었다
 		if (script == null || !ScriptRegenerationInputs.sameInputs(entity.getInputs(), currentSnapshot(script))) {
 			return INPUTS_CHANGED;
 		}
@@ -374,6 +370,7 @@ public class AdminScriptRegenerationService {
 			if (reason != null) {
 				throw new BusinessException(ErrorCode.INVALID_STATE, reason);
 			}
+			ScriptStatus before = script.status();
 			Map<ScriptUnit, RegeneratedBlock> blocks = regeneratedBlocks(result, managed.getInputs());
 			JsonNode meta = result.path("meta");
 			List<Map<String, Object>> scriptReview = maps(result.get("review")).stream()
@@ -386,7 +383,7 @@ public class AdminScriptRegenerationService {
 			detail.put("regenerationId", regenerationId);
 			detail.put("units", blocks.keySet().stream().map(ScriptUnit::name).toList());
 			auditLogger.record(admin, AdminAuditAction.CASE_SCRIPT_REGENERATE_APPLY, AuditTargetType.CASE, caseId,
-				detail, httpRequest);
+				AdminCaseScriptService.withMaintenance(detail, before, script), httpRequest);
 		});
 		pipelineClient.deleteJobQuietly(entity.getJobId());
 		return scriptService.getScript(caseId);
