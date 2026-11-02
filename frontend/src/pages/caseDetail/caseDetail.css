@@ -1,7 +1,7 @@
 /* S-20 사건 디테일: 모든 사건이 신문 안쪽 면(components/newspaperFront.js · paperStage.css · caseList.css)으로 그려진다.
    이 파일은 자료를 불러오는 동안 · 오류일 때 책상 위에 놓이는 종이 한 장(.detail-clip)만 꾸민다. 색은 style.css 역할 토큰만 쓴다 */
 
-.case-detail-page { min-height: 100vh; padding: 48px 24px 64px; }
+.case-detail-page { min-height: 100dvh; padding: 48px 24px 64px; }
 .case-detail-page .detail-desk {
   position: fixed; inset: 0; z-index: -1;
   background: var(--color-banner-bg) url('/images/desk-felt.webp') center / cover no-repeat;

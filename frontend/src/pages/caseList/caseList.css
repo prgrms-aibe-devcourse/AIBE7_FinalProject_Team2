@@ -3,7 +3,7 @@
    목록은 처음 판단(S-03) 전 화면이라 사건 정보는 제목 · 짧은 소개 · 키워드 · 분류 · 참여 수만 쓴다
    (논의기록 2026-10-08 S02 v11 시안 기준). */
 
-.case-list-page { max-width: none; margin: 0; border: 0; background: transparent; min-height: 100vh; }
+.case-list-page { max-width: none; margin: 0; border: 0; background: transparent; min-height: 100dvh; }
 .case-list-page .desk {
   position: fixed; inset: 0; z-index: -1;
   background: var(--color-banner-bg) url('/images/desk-felt.webp') center / cover no-repeat;
@@ -159,11 +159,13 @@
   .case-list-page .index-grid .article:nth-child(3n + 1) { padding-left: 0; border-left: 0; }
   .case-list-page .index-grid .article:nth-child(3n) { padding-right: 0; }
   .case-list-page .mast { grid-template-columns: 150px minmax(0, 1fr) 150px; }
-  .case-list-page .brand h1 { font-size: 72px; }
+  /* 제호는 72px, 단 좁은 태블릿(721 ~ 약 810px)에서는 가운데 칸을 넘쳐 오른쪽 귀 · 포스트잇에 덮였다(FE-154, 모바일 분기점을 720px로 옮기며 드러남).
+     제호 글자 폭은 글자 크기의 약 4.4배, 포스트잇이 지면 오른쪽 약 215px를 덮으므로 그 안쪽까지만 커진다 */
+  .case-list-page .brand h1 { font-size: min(72px, calc((100vw - 494px) / 4.4)); }
 }
 
 /* ── 모바일: 사진 → 머리기사 → 추천 사건 → 다른 사건 ── */
-@media (max-width: 768px) {
+@media (max-width: 720px) {
   .case-list-page .paper, .case-list-page .paper:is(.case-paper, .inner-page) { width: 100%; margin: 0; padding: 0 18px; box-shadow: none; }
   .case-list-page .info-row { flex-wrap: wrap; gap: 0 10px; font-size: 12px; }
   .case-list-page .mast { grid-template-columns: 1fr; padding: 6px 0 14px; }
@@ -247,9 +249,12 @@
 .case-list-page.is-spreading { overflow: clip; }
 .case-list-page.is-spreading:not(.is-going) .paper { visibility: hidden; }
 
+/* 터치 눌림(FE-154): 호버가 없는 기기는 누르는 동안 호버와 같은 상자(P2 틴트)를 보인다. 호버 규칙은 위에서 이미 (hover: hover) 안이라 따로 지우지 않는다 */
 @media (hover: none) {
-  .case-list-page .is-pickable:hover::after { border-color: transparent; background-color: transparent; }
+  .case-list-page .is-pickable:active::after { border-color: var(--color-desk-kraft); background-color: color-mix(in srgb, var(--color-desk-kraft) 14%, transparent); }
 }
+/* 지면의 조작 버튼(면 탭 · 색인 종류 · 쪽 번호 · 더 보기) 눌림: 전역 버튼 눌림과 같은 값(FE-154) */
+.case-list-page :is(.tab, .face-kind, .face-page, .more-toggle):not(:disabled):active { scale: .96; }
 @media (max-width: 720px) {
   .case-list-page .paper-tip { position: relative; top: auto; right: auto; rotate: -.6deg; width: 100%; aspect-ratio: auto; margin: 10px 0 0; padding: 18px 12px 10px; }
   .case-list-page .paper-tip-text > span:not(.visually-hidden) { grid-column: 2; } /* 좁은 화면은 가로 띠로 둔다 */
@@ -291,7 +296,7 @@
 .case-list-page .face-edge:active { scale: .96; } /* 전역 버튼 눌림과 같은 값 */
 /* 지면이 들어오는 중 · 사건으로 가는 중에는 숨긴다. 모바일은 손가락 밀기로 넘긴다 */
 .case-list-page:is(.is-loading, .is-picking, .is-rising, .is-spreading, .is-unflipping) .face-edges { display: none; }
-@media (max-width: 768px) { .case-list-page .face-edges { display: none; } }
+@media (max-width: 720px) { .case-list-page .face-edges { display: none; } }
 
 /* ── 빈 칸 채움 지면 (FE-118) ── 기사가 모자라 비는 칸: 법정 상식(이중선 머리) · 광고(이중선 상자). 사건 기사와 달리 눌러도 사건으로 가지 않는다 */
 .case-list-page .filler { display: flex; flex-direction: column; min-width: 0; }
@@ -304,7 +309,7 @@
 .case-list-page .filler-column { gap: 18px; }
 /* 다른 사건 줄의 빈 칸: 넓은 화면 6칸 기준으로 만든 것 중 태블릿(3칸) · 모바일(2칸)에서 남는 뒤쪽 칸은 숨긴다(caseListPage.js emptySlots) */
 @media (max-width: 1100px) { .case-list-page .index-grid .filler:not(.fill-3) { display: none; } }
-@media (max-width: 768px) {
+@media (max-width: 720px) {
   .case-list-page .index-grid .filler:not(.fill-2) { display: none; }
   .case-list-page .index-grid .filler.fill-2 { display: flex; }
 }
@@ -455,8 +460,10 @@
   .case-list-page .pf-story > .start { justify-self: end; }
   .case-list-page .pf-figure-image { height: 100px; }
   .case-list-page .pf-card-line { display: block; white-space: nowrap; text-overflow: ellipsis; } /* 한 줄만 */
-  .case-list-page .pf-scale-row { display: grid; grid-template-columns: 7.5em minmax(0, 1fr); align-items: center; gap: 8px; } /* 중간 화면은 축 이름과 양 끝을 한 줄에: 신문 최소 높이 안에 들게 */
-  .case-list-page .pf-scale-row dt { margin: 0; font-size: 14px; }
+  /* 중간 화면은 축 이름과 양 끝을 한 줄에: 신문 최소 높이 안에 들게. 옆 단이 좁으면(721 ~ 약 850px) 양 끝이 한 글자씩 세로로 쪼개졌으므로 그때는 양 끝을 다음 줄로 내린다(FE-154, flex 줄바꿈) */
+  .case-list-page .pf-scale-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+  .case-list-page .pf-scale-row dt { flex: 0 0 7.5em; margin: 0; font-size: 14px; }
+  .case-list-page .pf-scale-row dd { flex: 1 1 140px; min-width: 0; }
   .case-list-page .pf-scale-note { display: none; }
   .case-list-page .pf-ad .filler-text { display: none; }
   .case-list-page .op-banner h2 { font-size: 38px; }
@@ -465,7 +472,7 @@
   .case-list-page .op-figure-image { height: 110px; }
   .case-list-page .op-editorial .dense p { font-size: 13.5px; line-height: 1.65; }
 }
-@media (max-width: 768px) {
+@media (max-width: 720px) {
   .case-list-page .paper:not(.case-paper) { --paper-w: 100vw; }
   .case-list-page .tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; } /* 면이 아홉이라 모바일은 가로로 밀어 고른다 */
   .case-list-page .tab { flex: none; padding: 0 12px; }
@@ -484,6 +491,12 @@
   .case-list-page .op-letter-grid { grid-template-columns: 1fr; }
   .case-list-page .op-letter-grid > .op-letter::before { content: none; }
   .case-list-page .op-letter + .op-letter { border-top: 1px dashed var(--color-border-strong); }
+  /* FE-154 모바일 점검: 성향 테스트 면 배너는 다른 면 배너(30px)와 같게(1100px 이하의 44px가 그대로 내려와 세 줄을 차지했다) */
+  .case-list-page .pf-banner h2 { font-size: 30px; }
+  .case-list-page .face-search { font-size: 16px; } /* 입력창 16px 미만이면 iOS가 화면을 확대한다 */
+  .case-list-page :is(.face-kind, .face-page) { min-height: 44px; } /* 터치 대상 44px */
+  .case-list-page .face-page { min-width: 44px; }
+  .case-list-page :is(.pf-meter, .status-stamp) { font-size: var(--text-caption); } /* 정보 글자(관대 눈금 · 진행 도장) 12px 하한 */
 }
 @media (max-width: 480px) {
   .case-list-page .pf-card { display: flex; } /* 모바일 2열은 칸이 좁아 그림을 다시 위로 */
