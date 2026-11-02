@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.team2.project.support.ApiIntegrationTest;
 import com.team2.project.experience.domain.ExperienceStatus;
 import jakarta.servlet.http.Cookie;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -198,6 +199,49 @@ class ComparisonApiTest extends ApiIntegrationTest {
 				.value("세 판결 모두 흉기 사용을 형량을 높이는 요소로 봤어요."))
 			.andExpect(jsonPath("$.ruleSentences.differences").isNotEmpty())
 			.andExpect(jsonPath("$.matrix[0].summaryTag").doesNotExist());
+	}
+
+	/** 다른 독자의 첫인상(사전 판단) 한 건. 체험 상태와 무관하게 낸 사람으로 센다 */
+	private void insertOtherReaderPre(int attemptNo, long rangeOptionId) {
+		UUID other = UUID.randomUUID();
+		insertExperience(other, caseId, attemptNo, "PRE_JUDGED");
+		long experienceId = jdbcTemplate.queryForObject(
+			"SELECT id FROM experience WHERE case_id = ? AND anonymous_user_id = ?", Long.class, caseId, other);
+		jdbcTemplate.update("""
+			INSERT INTO judgment (case_id, subject_type, timing, experience_id, range_option_id, is_published)
+			VALUES (?, 'USER', 'PRE', ?, ?, true)
+			""", caseId, experienceId, rangeOptionId);
+	}
+
+	@Test
+	void getComparison_returnsCrowdDistributionOfFirstAttemptPreJudgments() throws Exception {
+		Cookie cookie = startCompletedExperience();
+		List<Long> options = rangeOptionIds("MURDER");
+		insertOtherReaderPre(1, preRangeOptionId);
+		insertOtherReaderPre(1, options.get(0));
+		insertOtherReaderPre(2, options.get(1));	// 2회차는 통계에서 뺀다(DR-7)
+
+		// 1회차 3명: 내 구간(4번째) 2명, 첫 구간 1명 → 67% · 33%
+		mockMvc.perform(get(url()).cookie(cookie))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.preToFinal.crowd.total").value(3))
+			.andExpect(jsonPath("$.preToFinal.crowd.options.length()").value(options.size()))
+			.andExpect(jsonPath("$.preToFinal.crowd.options[0].rangeOptionId").value(options.get(0)))
+			.andExpect(jsonPath("$.preToFinal.crowd.options[0].percent").value(33))
+			.andExpect(jsonPath("$.preToFinal.crowd.options[1].percent").value(0))
+			.andExpect(jsonPath("$.preToFinal.crowd.options[3].rangeOptionId").value(preRangeOptionId))
+			.andExpect(jsonPath("$.preToFinal.crowd.options[3].label").value("실형 5년 이상 ~ 10년 미만"))
+			.andExpect(jsonPath("$.preToFinal.crowd.options[3].percent").value(67));
+	}
+
+	@Test
+	void getComparison_crowdWithOnlyMe_showsHundredPercentWithoutHidingThreshold() throws Exception {
+		Cookie cookie = startCompletedExperience();
+
+		mockMvc.perform(get(url()).cookie(cookie))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.preToFinal.crowd.total").value(1))
+			.andExpect(jsonPath("$.preToFinal.crowd.options[3].percent").value(100));
 	}
 
 	@Test

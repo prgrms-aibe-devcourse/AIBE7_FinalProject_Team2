@@ -89,6 +89,7 @@
 | v0.86 | 2026-11-02 | **대본 블록 단위 검수 A-13-18 ~ A-13-21 신설 · 낡음 표시 (BE-126 2차-1)** — 블록 하나 승인(`POST /admin/cases/{caseId}/script/blocks/{unit}/approve`) · 반려(`…/reject`) · "확인했음"(`…/acknowledge-stale`, 낡은 블록의 근거를 지금 값으로 맞춘다) · 문자열 한 줄 직접 수정(`PATCH …/blocks/{unit}/text`, U0 · U1 · U2 · U4, 자리는 검수 결과 `path`). **A-13-10 블록에 `stale` · `staleReasons` · `staleBlocksApproval` · `unknownBasis` 추가** — 블록을 만들 때 본 값(`basis`: 앞 블록 판 · 사건 내용 판 · 기사 판 · 배역 · 분류 네 축 · 민감 플래그)을 지금 값과 비교한다. 낡음은 표시가 기본이고, **사건 내용 · 기사 · 민감 플래그가 바뀐 낡음은 승인을 막는다**(A-13-11 · 18, 1차의 사건 내용 · 기사 규칙에 민감 플래그를 더함). 근거에 없는 키는 "모름"(낡지 않음 + 표시). A-11로 민감 플래그를 고치면 승인한 블록의 승인을 지운다. **A-13-13(U3 대사 수정)은 U3만 다시 검수 대기로 돌린다**(1차는 모든 블록). **공개 중인 사건은 블록 반려 · 문장 수정 · 대사 수정(A-13-13 포함)을 409로 막는다**(승인이 풀리면 체험 중인 사용자의 API 18이 404가 된다 — 점검 상태(BE-126 2차-2) 전까지). 민감 플래그가 **새로 생긴** 블록은 "확인했음"을 거절한다(다시 생성). U0를 고치면 `admits`를 다시 계산한다. 에러 코드 `SCRIPT_BLOCK_NOT_FOUND`(404) 추가 (`docs/decisions/BE-126.md`) |
 | v0.85 | 2026-11-02 | **대본 블록 재생성 A-13-15 ~ A-13-17 신설 · A-11 분류 수정 (BE-129 2차, ERD v1.54 · V47)** — `POST /admin/cases/{caseId}/script/regenerations`(고른 블록 · `cascade`, 202) · `GET .../regenerations/{regenerationId}`(상태 · 끝나면 미리보기) · `POST .../regenerations/{regenerationId}/apply`(관리자가 반영). 사건 등록(A-14 → A-15 → A-14-1)과 같은 흐름이고, 서버가 DB 값(사건 내용 · AI 판결 방향과 형량 · 분류와 민감 플래그 · 배역 · 지금 블록 · 기사)으로 입력을 모아 파이프라인에 보낸다. 반영하면 다시 만든 블록만 바뀌고 그 블록은 다시 검수 대기가 된다. 요청한 뒤 대본 · 사건 내용 · 기사 · 배역 · 분류 · 민감 플래그가 바뀌었으면 반영을 거절한다. **A-11에 `classification`(`{mood, issue, victim, thirdParty}`, 네 축 통째) 추가** — 고치면 `classificationNeedsReview`에서 분류 축 항목이 빠진다. 에러 코드 `SCRIPT_REGENERATION_NOT_FOUND`(404) 추가, `IMPORT_IN_PROGRESS`는 재생성이 돌 때도 쓴다(등록과 재생성은 한 번에 하나) (`docs/decisions/BE-129.md`) |
 | v0.84 | 2026-10-31 | **첫 로그인 가져오기 M-9 ~ M-11 신설 (BE-140 3c)** — `GET /members/me/anonymous-import`(후보의 체험 수 · 첫인상 엽서 수, 없으면 404) · `POST /members/me/anonymous-import`(체험을 회원 것으로 이동) · `POST /members/me/anonymous-import/discard`(결정만 남기고 익명 ID 쿠키를 지움). 에러 코드 `ANONYMOUS_IMPORT_NOT_AVAILABLE` 추가 |
+| v0.89 | 2026-11-02 | **API 14 `preToFinal.crowd` 추가 (FE-34)** — 이 사건 독자들이 기사만 읽고 고른 첫인상(사전 판단) 분포. 1회차 사전 판단만 세고(DR-7), 낸 사람만 센다. 숨김 기준 인원은 두지 않는다. 필드 추가뿐이라 기존 응답은 그대로다 |
 
 ---
 
@@ -654,7 +655,15 @@ json
     },
     "finalJudgmentText": "징역 15년",
     "direction": "HEAVIER",
-    "summaryText": "사건을 모두 확인한 뒤, 처음 생각보다 무거운 판결을 내렸어요."
+    "summaryText": "사건을 모두 확인한 뒤, 처음 생각보다 무거운 판결을 내렸어요.",
+    "crowd": {
+      "total": 3,
+      "options": [
+        { "rangeOptionId": 8, "label": "집행유예", "percent": 33 },
+        { "rangeOptionId": 11, "label": "실형 5년 이상 ~ 10년 미만", "percent": 67 },
+        { "…": "…" }
+      ]
+    }
   },
   "preToCourt": {
     "direction": "HEAVIER"
@@ -749,6 +758,7 @@ json
 - (확장, REQ-096) `matrix[].changeType`에 판단 이유 변화 유형(`NEWLY_LEARNED` 새로 알게 된 요소 / `KEPT` 처음부터 알던 요소 · 판단에 그대로 반영 / `WEIGHT_CHANGED` 이미 알던 요소의 무게가 바뀜 / `null`)을 넣는다. 판별 기준은 요구사항 FR-6-6: `OVERVIEW` 이후 요소가 최종 판결에만 있으면 `NEWLY_LEARNED`, `OVERVIEW` 요소가 사전 · 최종 양쪽에 있으면 `KEPT`, 한쪽에만 있으면 `WEIGHT_CHANGED`. 사전 판단 작용 요소가 있을 때만.
 - **사전 판단은 체험 완료 후 이 API에서 처음 내려간다.** 결과 화면의 독자 의견에 처음 선택한 형량을 표시한다. 진행 중에는 선택 구간을 포함한 사전 판단을 다시 조회할 수 없다.
 - **`preToCourt.direction`**: `preToFinal.direction`과 같은 계산을 재판부 판결에 적용한다. **재판부가 더 무거우면 `HEAVIER`**다. `LIGHTER`는 재판부가 사전 판단 구간보다 가벼움, `SAME`은 같은 형벌 종류 및 해당 구간이다. `SAME`은 형량의 정확한 일치를 뜻하지 않는다. 감경은 `reducedTo` 우선, 실형 구간은 하한 이상·상한 미만이며 표시 label을 해석하지 않는다.
+- **`preToFinal.crowd`** (v0.89, FE-34): 같은 사건을 체험한 독자들의 첫인상(사전 판단) 구간별 분포다. 독자 의견란의 막대그래프에 쓴다. `total`은 센 사람 수, `options`는 이 사건 범죄 유형의 **모든 구간을 표시 순서대로**(선택이 0명인 구간은 `percent: 0`) 담는다. `percent`는 정수이고 합은 항상 100이다(반올림 오차는 소수점이 큰 구간부터 1씩 나눠 맞춘다). **1회차 사전 판단만** 센다(요구사항 DR-7). 사전 판단을 낸 사람만 센다. 내 사전 판단도 `total`에 들어간다(완료한 체험이므로 항상 1명 이상). 숨김 기준 인원은 두지 않는다. 맞고 틀림을 말하지 않는 표시 톤은 화면 쪽 규칙이다.
 - `preToCourt`는 API 14 최상위 객체이며 `direction`만 포함한다. 기존 필드·`COMPLETED` 이후 조회 제한은 그대로 유지한다. API 3에서는 이 비교나 AI·재판부 판결을 공개하지 않는다.
 
 | 거절 | 조건 |
