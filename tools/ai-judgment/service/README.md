@@ -43,7 +43,7 @@
 | 메서드 · 경로 | 내용 |
 | --- | --- |
 | `GET /health` | 컨테이너 헬스체크. `{"status":"UP","runningJobId":...}` — 파이프라인을 돌려 보지는 않는다 |
-| `POST /jobs` | 작업 생성 + 시작. **202**와 함께 첫 상태를 돌려준다 (파이프라인은 수십 분 걸려 기다리지 않는다) |
+| `POST /jobs` | 작업 생성 + 시작. **202**와 함께 첫 상태를 돌려준다 (파이프라인은 수십 분 걸려 기다리지 않는다). 본문에 `regenerate`가 있으면 대본 블록 재생성 작업이다(아래) |
 | `GET /jobs/{id}` | 작업 상태 + 단계별 진행 상황 |
 | `GET /jobs/{id}/result` | 생성 결과 (사건 · 재판부 판결 · AI 판결 · 가치관 축 · 대본). **판결문 원문은 없다** |
 | `GET /jobs/{id}/log?tail=200` | 파이프라인 출력 꼬리 (실패 원인 확인용, text/plain). `tail`은 1 ~ 2000 |
@@ -132,6 +132,40 @@
 | 단계 | `PENDING` · `RUNNING` · `DONE` · `SKIPPED`(서비스에서 끔) · `FAILED` |
 
 작업 프로세스가 중간에 사라졌는데 남은 단계가 시작도 못 했으면 `FAILED`로 본다 — 그래야 백엔드가 영원히 폴링하지 않는다.
+
+### 대본 블록 재생성 (BE-129 2차)
+
+적재된 사건의 대본 블록을 다시 만든다. 등록 작업 폴더는 적재 뒤 지워지므로(위 "삭제가 지우는 것") 이어 쓰지 않고, 백엔드가 DB
+값으로 입력을 모아 새 작업으로 보낸다. 판결문 원문은 없다. 한 번에 하나만 도는 규칙 · 상태 · 중단 · 삭제 · 자동 정리는 등록 작업과 같다.
+
+```json
+{
+  "regenerate": {
+    "units": ["U4"],
+    "case": { "title": "...", "overview": "...", "sections": [], "factors": [] },
+    "judgment": { "factors": [{ "factorId": 1, "direction": "UP" }] },
+    "classification": { "mood": "tragic", "issue": "admitted", "victim": "punish", "thirdParty": false,
+                        "sensitiveFlags": [] },
+    "cast": { "prosecutor": "naero", "defense": "nambul" },
+    "blocks": { "U0": { "content": {}, "revision": 2 }, "U2": { "content": {}, "revision": 1 } },
+    "paper": null
+  },
+  "stages": { "script": { "model": "openai:<모델ID>" } }
+}
+```
+
+- `units`: 관리자가 고른 블록. 그 블록을 입력으로 받는 뒤 블록(U0 → U2 → U4, U2 → U4)과 없는 앞 블록은 파이프라인이 더한다
+  (연동 표 정본 `script_assembler.BLOCK_BASIS`, `script_regenerate.py`).
+- `case`는 파이프라인 사건 입력 형식(`build_prompt`), `judgment.factors`는 AI 판결의 판단 요소 방향(U3가 읽는다), `blocks`는
+  지금 블록(`content` · `revision`), `paper`는 지금 기사(U1을 다시 만들 때 필요).
+- **`classification.sensitiveFlags`는 반드시 목록으로 보낸다**(없으면 `[]`). 백엔드는 분류와 민감 플래그를 따로 저장하므로 합쳐
+  보내야 한다 — 빠지면 민감 사건이 안내 · 표현 가드 없이 다시 만들어질 수 있어 `400`으로 막는다(PR #370 리뷰).
+- `stages`에는 `script`만 넣는다(`model` 필수, 조정 값 `maxRetries` · `repairRetries` 등). 배역 · 분류 · 블록은 `regenerate`로만
+  받고 `stages.script`로 덮을 수 없다. 등록 단계(extract ~ classify)는 모두 꺼진다.
+- `GET /jobs/{id}/result`는 `{"jobId", "kind": "regenerate", "regenerated": {...}}`다. `regenerated`는 다시 만들기로 한 블록
+  (`units`) · 실제로 만든 블록(`regenerated`) · 못 만든 블록(`pending`) · `stopped` · `blocks`(만든 블록만, 적재 블록과 같은 형식 —
+  판은 지금 판 다음, `basis`는 그때 본 앞 블록 판) · `meta` · `review`(대본 전체 검수 결과) · `repairs` · `publishable`(만든
+  블록에 검수 오류가 없는가)이다. 다시 만들지 않은 블록은 들어 있지 않고, 고쳐 쓰기도 만든 블록에만 한다(승인한 블록을 건드리지 않는다).
 
 ## 응답 상태 코드
 
