@@ -11,6 +11,7 @@
 # 3) 정적 파일 캐시 정책 — assets는 오래 캐시, index.html은 캐시 안 함
 # 4) 화면 응답에 보안 헤더가 붙는지 (COMMON-67)
 # 5) Let's Encrypt 확인 경로가 SPA fallback으로 새지 않는지 (BE-75) — index.html이 나가면 인증서 발급 · 갱신이 실패한다
+# 6) 모듈 스크립트(.mjs)가 JavaScript MIME으로 나가는지 (BE-157, COMMON-72) — nosniff 아래에서 다른 형식이면 브라우저가 실행하지 않는다
 
 set -uo pipefail
 
@@ -115,6 +116,55 @@ elif [[ "${SMOKE_REQUIRE_SECURITY_HEADERS:-}" == "1" ]]; then
   fail "/ → CSP 헤더가 없음 (snippets/security-headers.conf, COMMON-70)"
 else
   echo "  ⚠ / → CSP 헤더가 없다 — COMMON-70 이전 이미지면 정상, 아니면 security-headers.conf를 확인한다"
+fi
+
+echo "[모듈 스크립트]"
+# .mjs가 JavaScript MIME으로 나가는지 (BE-157). nginx 기본 MIME 표에는 mjs가 없어 default.conf가 더해 준다(COMMON-72).
+# 빠지면 application/octet-stream으로 나가고, nosniff(COMMON-67) 때문에 브라우저가 실행하지 않아 관리자 PDF 읽기(pdf.js 작업 파일)가 깨진다.
+# - .mjs 이름은 index.html이 아니라 지연 로딩 조각 안에만 있어, /assets/*.js를 따라가며 찾는다(해시가 바뀌어도 된다. 최대 200개)
+# - 기본은 경고만 남긴다: deploy.sh는 되돌릴 때 이 새 스크립트로 COMMON-72 이전 이미지(mjs 매핑 없음)도 검사하므로,
+#   실패로 치면 되돌림까지 실패한다. CI(deploy-images.yml)는 SMOKE_REQUIRE_MODULE_MIME=1로 새 이미지에 대해 실패로 친다
+# - bash 3.2(macOS)에서도 돌게 mapfile · 연관 배열은 쓰지 않는다
+find_module_script() {
+  local queue=() seen=" " path next
+  MODULE_PATH=""
+  MODULE_SCANNED=0
+  request "/"
+  while IFS= read -r next; do queue+=("$next"); done < <(grep -o '/assets/[^"]*\.js' "$BODY_FILE" | sort -u)
+  while (( ${#queue[@]} > 0 )) && [[ -z "$MODULE_PATH" ]] && (( MODULE_SCANNED < 200 )); do
+    path="${queue[0]}"
+    queue=("${queue[@]:1}")
+    [[ "$seen" == *" $path "* ]] && continue
+    seen+="$path "
+    MODULE_SCANNED=$((MODULE_SCANNED + 1))
+    request "$path"
+    [[ "$STATUS" == "200" ]] || continue
+    MODULE_PATH="$(grep -o '/assets/[A-Za-z0-9._-]*\.mjs' "$BODY_FILE" | head -1)"
+    # 이 조각이 부르는 다른 조각(동적 import · preload 목록). Vite는 "assets/x.js" 또는 "./x.js"로 적는다
+    # 이름에 pdf(대소문자 무시, 예: adminPdfLoader)가 든 조각을 먼저 본다(작업 파일 이름은 pdf.js 조각 안에 있다) — 빈 배열 펼치기는 bash 3.2 + set -u에서 막혀 ${arr[@]+...}로 쓴다
+    while IFS= read -r next; do
+      next="/assets/${next##*/}"
+      if [[ "$next" == *[Pp][Dd][Ff]* ]]; then queue=("$next" ${queue[@]+"${queue[@]}"}); else queue+=("$next"); fi
+    done < <(grep -o -E '(assets/|\./)[A-Za-z0-9._-]+\.js' "$BODY_FILE" | sort -u)
+  done
+}
+module_warn_or_fail() {
+  if [[ "${SMOKE_REQUIRE_MODULE_MIME:-}" == "1" ]]; then
+    fail "$1"
+  else
+    echo "  ⚠ $1 — COMMON-72 이전 이미지면 정상, 아니면 nginx/default.conf의 types { application/javascript mjs; }를 확인한다"
+  fi
+}
+find_module_script
+if [[ -z "$MODULE_PATH" ]]; then
+  module_warn_or_fail "/assets/에서 .mjs를 찾지 못함(조각 ${MODULE_SCANNED}개까지 확인)"
+else
+  request "$MODULE_PATH"
+  if [[ "$STATUS" == "200" && ( "$CONTENT_TYPE" == application/javascript* || "$CONTENT_TYPE" == text/javascript* ) ]]; then
+    pass "$MODULE_PATH → 200 ($CONTENT_TYPE)"
+  else
+    module_warn_or_fail "$MODULE_PATH → $STATUS (${CONTENT_TYPE:-없음}), JavaScript MIME이 아님"
+  fi
 fi
 
 echo "[HTTPS 준비]"
