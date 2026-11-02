@@ -103,6 +103,7 @@ public class AdminCaseScriptService {
 	public CaseScriptResponse editLine(Long caseId, int factorId, String text, AdminPrincipal admin,
 			HttpServletRequest request) {
 		CaseScript script = lockAndFindScript(caseId);
+		guardNotPublished(script);
 		if (!script.editLine(factorId, text, Instant.now())) {
 			throw new BusinessException(ErrorCode.SCRIPT_LINE_NOT_FOUND);
 		}
@@ -121,7 +122,12 @@ public class AdminCaseScriptService {
 	public CaseScriptResponse approveBlock(Long caseId, ScriptUnit unit, AdminPrincipal admin, HttpServletRequest request) {
 		CaseScript script = lockAndFindScript(caseId);
 		CaseScriptBlock block = findBlock(script, unit);
-		if (!block.isPublishable() || script.getReview().stream().anyMatch(issue -> "error".equals(issue.get("severity")))) {
+		if (!script.canApproveBlocks()) {
+			// 통승인(A-13-11)과 같은 대본 조건 — 블록 하나씩 승인해 공개하는 길로 우회하지 않게 한다(PR #383 CodeRabbit 리뷰)
+			throw new BusinessException(ErrorCode.INVALID_STATE,
+				"만들지 못한 단위 · 기사가 있거나 생성이 중간에 멈춘 대본은 블록을 승인할 수 없습니다. 다시 생성해 주세요.");
+		}
+		if (!block.isPublishable()) {
 			throw new BusinessException(ErrorCode.INVALID_STATE,
 				"검수 오류가 있는 블록은 승인할 수 없습니다. 고치거나 다시 생성해 주세요.");
 		}
@@ -139,6 +145,7 @@ public class AdminCaseScriptService {
 			HttpServletRequest request) {
 		CaseScript script = lockAndFindScript(caseId);
 		findBlock(script, unit);
+		guardNotPublished(script);
 		script.rejectBlock(unit, admin.adminId(), Instant.now(), reason);
 		auditLogger.record(admin, AdminAuditAction.CASE_SCRIPT_REJECT, AuditTargetType.CASE, caseId,
 			Map.<String, Object>of("unit", unit.name()), request);
@@ -154,6 +161,12 @@ public class AdminCaseScriptService {
 			HttpServletRequest request) {
 		CaseScript script = lockAndFindScript(caseId);
 		findBlock(script, unit);
+		List<String> added = script.addedSensitiveFlags(unit, script.getLegalCase());
+		if (!added.isEmpty()) {
+			// 새로 생긴 플래그의 가드 문구 없이 만든 블록이다 — 확인만으로 공개하면 막은 이유가 사라진다(PR #383 리뷰 2번)
+			throw new BusinessException(ErrorCode.INVALID_STATE, "새로 생긴 민감 플래그(" + String.join(" · ", added)
+				+ ")의 가드 없이 만든 블록이라 확인했음으로 둘 수 없습니다. 다시 생성해 주세요.");
+		}
 		List<String> acknowledged = script.acknowledgeStale(unit, script.getLegalCase(), paperRevision(caseId));
 		if (!acknowledged.isEmpty()) {
 			Map<String, Object> detail = new LinkedHashMap<>();
@@ -177,6 +190,7 @@ public class AdminCaseScriptService {
 		}
 		CaseScript script = lockAndFindScript(caseId);
 		findBlock(script, unit);
+		guardNotPublished(script);
 		if (!script.editText(unit, path, text)) {
 			throw new BusinessException(ErrorCode.SCRIPT_LINE_NOT_FOUND, "블록에 그 자리의 문장이 없습니다: " + path);
 		}
@@ -185,6 +199,18 @@ public class AdminCaseScriptService {
 		detail.put("path", path);
 		auditLogger.record(admin, AdminAuditAction.CASE_SCRIPT_UPDATE, AuditTargetType.CASE, caseId, detail, request);
 		return response(caseId, script);
+	}
+
+	/**
+	 * 점검 상태(BE-126 2차-2, API 18 503) 전까지: 공개 중인 사건의 대본은 <b>승인을 지우는</b> 수정 · 블록 반려를 받지 않는다 — 승인이
+	 * 풀리는 순간 체험 중인 사용자의 API 18이 404가 된다(PR #383 리뷰 1번). 블록 승인 · 확인했음은 대본을 내리지 않아 막지 않고,
+	 * 통거절(A-13-12)은 잘못 승인한 대본을 내리는 길이라 일부러 둔다
+	 */
+	static void guardNotPublished(CaseScript script) {
+		if (script.getLegalCase().isPublished()) {
+			throw new BusinessException(ErrorCode.INVALID_STATE, "공개 중인 사건의 대본은 지금 고치거나 블록을 반려할 수 없습니다 — "
+				+ "승인이 풀려 체험 중인 사용자에게 대본이 사라집니다. 공개를 취소(A-13-14)한 뒤 고쳐 주세요.");
+		}
 	}
 
 	private static CaseScriptBlock findBlock(CaseScript script, ScriptUnit unit) {

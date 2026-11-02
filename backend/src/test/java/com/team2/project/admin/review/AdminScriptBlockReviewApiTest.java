@@ -99,9 +99,10 @@ class AdminScriptBlockReviewApiTest extends ApiIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("낡음: 민감 플래그가 바뀌면 모든 블록이 승인을 막는 낡음 — 확인했음(A-13-20)으로 근거를 지금 값에 맞추면 풀린다")
-	void staleness_sensitiveFlags_blocksApprovalUntilAcknowledged() throws Exception {
-		jdbcTemplate.update("UPDATE legal_case SET sensitive_flags = '[\"SELF_HARM\"]'::jsonb WHERE id = ?", caseId);
+	@DisplayName("낡음: 민감 플래그가 빠지면 모든 블록이 승인을 막는 낡음 — 확인했음(A-13-20)으로 근거를 지금 값에 맞추면 그 블록만 풀린다")
+	void staleness_removedSensitiveFlag_blocksApprovalUntilAcknowledged() throws Exception {
+		jdbcTemplate.update("UPDATE case_script_block SET basis = jsonb_set(basis, '{sensitiveFlags}', '[\"SELF_HARM\"]') "
+			+ "WHERE script_id = ?", scriptId);	// 플래그를 가진 채 만든 대본
 		perform(get(scriptUrl()))
 			.andExpect(jsonPath("$.blocks[1].staleReasons[0]").value("sensitiveFlags"))
 			.andExpect(jsonPath("$.blocks[1].staleBlocksApproval").value(true));
@@ -112,10 +113,43 @@ class AdminScriptBlockReviewApiTest extends ApiIntegrationTest {
 		perform(post(scriptUrl() + "/blocks/U1/acknowledge-stale"))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.blocks[1].stale").value(false))
-			.andExpect(jsonPath("$.blocks[1].basis.sensitiveFlags[0]").value("SELF_HARM"))
+			.andExpect(jsonPath("$.blocks[1].basis.sensitiveFlags.length()").value(0))
 			.andExpect(jsonPath("$.blocks[2].staleBlocksApproval").value(true));	// 확인한 블록만 풀린다
 		perform(post(scriptUrl() + "/blocks/U1/approve")).andExpect(status().isOk());
 		assertThat(auditDetails()).contains("acknowledgedStale").contains("sensitiveFlags");
+	}
+
+	@Test
+	@DisplayName("A-13-20: 민감 플래그가 새로 생긴 블록은 확인했음으로 둘 수 없다 — 그 플래그의 가드 없이 만들어졌다(다시 생성해야 한다)")
+	void acknowledge_addedSensitiveFlag_isConflict() throws Exception {
+		jdbcTemplate.update("UPDATE legal_case SET sensitive_flags = '[\"SELF_HARM\"]'::jsonb WHERE id = ?", caseId);
+		perform(post(scriptUrl() + "/blocks/U1/acknowledge-stale"))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.message", containsString("SELF_HARM")));
+		perform(get(scriptUrl())).andExpect(jsonPath("$.blocks[1].staleBlocksApproval").value(true));
+	}
+
+	@Test
+	@DisplayName("공개 중인 사건: 블록 반려 · 문장 수정 · 대사 수정은 409(체험 중인 사용자의 대본이 사라진다), 블록 승인 · 확인했음 · 통거절은 된다")
+	void publishedCase_guardsChangesThatTakeScriptDown() throws Exception {
+		jdbcTemplate.update("UPDATE case_script_block SET review = '[]'::jsonb, publishable = true WHERE script_id = ?", scriptId);
+		jdbcTemplate.update("UPDATE legal_case SET status = 'PUBLISHED', published_at = now() WHERE id = ?", caseId);
+		perform(post(scriptUrl() + "/blocks/U2/reject").contentType(MediaType.APPLICATION_JSON)
+				.content("{\"reason\": \"어색합니다\"}"))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.message", containsString("공개 중")));
+		perform(patch(scriptUrl() + "/blocks/U0/text").contentType(MediaType.APPLICATION_JSON)
+				.content("{\"path\": \"/questions/0/q\", \"text\": \"고친 질문입니까?\"}"))
+			.andExpect(status().isConflict());
+		perform(patch(scriptUrl() + "/evidence/1").contentType(MediaType.APPLICATION_JSON)
+				.content("{\"text\": \"고친 대사입니다.\"}"))
+			.andExpect(status().isConflict());
+
+		perform(post(scriptUrl() + "/blocks/U2/approve")).andExpect(status().isOk());
+		perform(post(scriptUrl() + "/blocks/U2/acknowledge-stale")).andExpect(status().isOk());
+		perform(post(scriptUrl() + "/reject").contentType(MediaType.APPLICATION_JSON)
+				.content("{\"reason\": \"잘못 승인한 대본을 내립니다\"}"))
+			.andExpect(status().isOk());		// 통거절은 내리는 길이라 둔다
 	}
 
 	@Test
@@ -154,6 +188,20 @@ class AdminScriptBlockReviewApiTest extends ApiIntegrationTest {
 			.andExpect(jsonPath("$.blocks[2].reviewNote").value("질문이 어색합니다"))
 			.andExpect(jsonPath("$.blocks[0].reviewStatus").value("APPROVED"));
 		assertThat(auditDetails()).contains("\"unit\": \"U4\"");
+	}
+
+	@Test
+	@DisplayName("A-13-18: 통승인과 같은 대본 조건 — 기사(PAPER)가 pending이거나 생성이 멈춘 대본은 블록 하나씩도 승인할 수 없다")
+	void approveBlock_scriptConditions() throws Exception {
+		jdbcTemplate.update("UPDATE case_script_block SET review = '[]'::jsonb, publishable = true WHERE script_id = ?", scriptId);
+		jdbcTemplate.update("UPDATE case_script SET pending = '[\"PAPER\"]'::jsonb WHERE id = ?", scriptId);
+		perform(post(scriptUrl() + "/blocks/U1/approve"))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.message", containsString("만들지 못한")));
+		jdbcTemplate.update("UPDATE case_script SET pending = '[]'::jsonb, stopped = true WHERE id = ?", scriptId);
+		perform(post(scriptUrl() + "/blocks/U1/approve")).andExpect(status().isConflict());
+		jdbcTemplate.update("UPDATE case_script SET stopped = false WHERE id = ?", scriptId);
+		perform(post(scriptUrl() + "/blocks/U1/approve")).andExpect(status().isOk());
 	}
 
 	@Test

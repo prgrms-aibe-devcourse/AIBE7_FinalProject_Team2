@@ -340,15 +340,39 @@ public class CaseScript {
 	}
 
 	/**
-	 * 블록 하나를 승인한다 (BE-126 2차, 블록 단위). 오류 있는 블록과, 대본 전체에 검수 오류(REVIEW_FAILED)가 남은 대본의 블록은
-	 * 승인할 수 없다 — 마지막 블록 승인으로 대본이 공개되므로 통승인과 같은 대본 조건을 지킨다. 승인을 막는 낡음은 부르는 쪽이 본다
+	 * 블록을 만든 뒤 <b>새로 생긴</b> 민감 플래그 (BE-126 2차, PR #383 리뷰). 그 플래그의 가드 문구 없이 만든 블록이라 "확인했음"으로
+	 * 풀 수 없고 다시 만들어야 한다. 빠진 플래그는 확인으로 충분하다. 근거에 플래그가 없거나(모름) 지금 값이 없으면 빈 목록
+	 */
+	public List<String> addedSensitiveFlags(ScriptUnit unit, LegalCase legalCase) {
+		CaseScriptBlock block = block(unit).orElseThrow(() -> new IllegalArgumentException("블록이 없다: " + unit));
+		if (!(block.getBasis().get("sensitiveFlags") instanceof List<?> saved) || legalCase.getSensitiveFlags() == null) {
+			return List.of();
+		}
+		List<String> before = saved.stream().map(String::valueOf).toList();
+		return legalCase.getSensitiveFlags().stream().filter(flag -> !before.contains(flag)).sorted().toList();
+	}
+
+	/**
+	 * 블록 하나를 승인한다 (BE-126 2차, 블록 단위). 마지막 블록 승인으로 대본이 공개되므로 통승인({@link #isApprovable()})과 같은
+	 * 대본 조건을 지킨다(PR #383 CodeRabbit 리뷰) — {@link #canApproveBlocks()}와 그 블록에 오류가 없어야 한다. 승인을 막는 낡음은
+	 * 부르는 쪽이 본다
 	 */
 	public void approveBlock(ScriptUnit unit, Long adminId, Instant at) {
 		CaseScriptBlock block = block(unit).orElseThrow(() -> new IllegalArgumentException("블록이 없다: " + unit));
-		if (!block.isPublishable() || review.stream().anyMatch(issue -> ERROR.equals(issue.get("severity")))) {
+		if (!block.isPublishable() || !canApproveBlocks()) {
 			throw new IllegalStateException("오류가 있는 블록 · 대본은 승인할 수 없다: " + unit);
 		}
 		block.approve(adminId, at);
+	}
+
+	/**
+	 * 블록을 승인할 수 있는 대본인지 — 통승인 조건 중 대본 전체에 걸린 것: 호출 한도로 멈추지 않았고, 만들지 못한 것({@code pending},
+	 * 기사 {@code "PAPER"} 포함)이 없고, 대본 전체 검수 오류(REVIEW_FAILED)가 없다. 대본의 {@code publishable}을 그대로 쓰지 않는
+	 * 이유: 그 값은 블록마다의 오류도 합친 값이라, 다른 블록 하나에 오류가 있으면 멀쩡한 블록도 승인할 수 없게 된다. 블록 오류는
+	 * 블록마다 보고, 마지막 블록까지 모두 승인됐다면 모든 블록에 오류가 없다는 뜻이라 공개 조건은 통승인과 같다
+	 */
+	public boolean canApproveBlocks() {
+		return !stopped && pending.isEmpty() && review.stream().noneMatch(issue -> ERROR.equals(issue.get("severity")));
 	}
 
 	/** 블록 하나를 반려한다 (BE-126 2차). 반려한 블록이 있으면 대본은 공개되지 않는다 */
