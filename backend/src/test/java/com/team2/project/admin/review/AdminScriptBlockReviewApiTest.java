@@ -335,6 +335,20 @@ class AdminScriptBlockReviewApiTest extends ApiIntegrationTest {
 		perform(patch(scriptUrl() + "/blocks/U2/text").contentType(MediaType.APPLICATION_JSON)
 				.content("{\"path\": \"/questions/0/q\", \"text\": \"" + "가".repeat(101) + "\"}"))
 			.andExpect(status().isBadRequest());		// U2 신문 질문은 말하는 대사다
+		// U1 해설 · U4 의견도 말하는 대사다 — 101자는 400, 정확히 100자(50자 두 줄)는 받는다 (PR #390 리뷰 1부 2번)
+		for (String[] spoken : new String[][] {{"U1", "/lines/0"}, {"U4", "/defense"}}) {
+			perform(patch(scriptUrl() + "/blocks/" + spoken[0] + "/text").contentType(MediaType.APPLICATION_JSON)
+					.content("{\"path\": \"" + spoken[1] + "\", \"text\": \"" + "가".repeat(101) + "\"}"))
+				.andExpect(status().isBadRequest());
+			perform(patch(scriptUrl() + "/blocks/" + spoken[0] + "/text").contentType(MediaType.APPLICATION_JSON)
+					.content("{\"path\": \"" + spoken[1] + "\", \"text\": \"" + "가".repeat(50) + "\\n" + "나".repeat(50) + "\"}"))
+				.andExpect(status().isOk());
+		}
+		// 없는 자리는 길이보다 먼저 404다 (PR #390 리뷰 1부 3번)
+		perform(patch(scriptUrl() + "/blocks/U1/text").contentType(MediaType.APPLICATION_JSON)
+				.content("{\"path\": \"/lines/9\", \"text\": \"" + "가".repeat(101) + "\"}"))
+			.andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.code").value("SCRIPT_LINE_NOT_FOUND"));
 	}
 
 	@Test

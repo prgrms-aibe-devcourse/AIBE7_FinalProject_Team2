@@ -10,6 +10,8 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -49,24 +51,41 @@ class ScriptBlockContractTest {
 	}
 
 	@Test
-	@DisplayName("말하는 대사 자리: A-13-21이 길이 규칙을 거는 자리가 파이썬 검수(unit_lines)와 같다 (BE-153)")
-	void spokenPaths_matchContract() {
-		Map<String, List<String>> spoken = new LinkedHashMap<>();
+	@DisplayName("자리별 줄 종류 · 말하는 대사 자리: 파이썬 검수(unit_lines)와 같다 (BE-153)")
+	void pathKinds_matchContract() {
+		Map<String, Map<String, String>> kinds = new LinkedHashMap<>();
+		Map<String, Set<String>> spoken = new LinkedHashMap<>();
 		for (ScriptUnit unit : ScriptUnit.values()) {
-			if (unit != ScriptUnit.U3) {		// U3 대사는 A-13-13이 늘 대사로 본다 — 계약 파일에도 없다
-				spoken.put(unit.name(), unit.spokenPaths());
+			if (unit == ScriptUnit.U3) {		// U3 대사는 A-13-13이 늘 대사로 본다 — 계약 파일에도 없다
+				continue;
 			}
+			kinds.put(unit.name(), unit.pathKinds());
+			spoken.put(unit.name(), unit.pathKinds().entrySet().stream()
+				.filter(entry -> ScriptUnit.SPOKEN_KINDS.contains(entry.getValue())).map(Map.Entry::getKey)
+				.collect(Collectors.toSet()));
 		}
-		assertThat(spoken).isEqualTo(stringLists(contract.get("spokenPaths")));
+		Map<String, Map<String, String>> contractKinds = new LinkedHashMap<>();
+		contract.get("pathKinds").properties().forEach(entry -> {
+			Map<String, String> table = new LinkedHashMap<>();
+			entry.getValue().properties().forEach(row -> table.put(row.getKey(), row.getValue().asText()));
+			contractKinds.put(entry.getKey(), table);
+		});
+		assertThat(kinds).isEqualTo(contractKinds);
+		assertThat(ScriptUnit.SPOKEN_KINDS).isEqualTo(strings(contract.get("spokenKinds")));
+		Map<String, Set<String>> contractSpoken = new LinkedHashMap<>();
+		stringLists(contract.get("spokenPaths")).forEach((unit, paths) -> contractSpoken.put(unit, Set.copyOf(paths)));
+		assertThat(spoken).isEqualTo(contractSpoken);
 
 		assertThat(ScriptUnit.U1.isSpoken("/lines/12")).isTrue();
 		assertThat(ScriptUnit.U2.isSpoken("/questions/0/q")).isTrue();
-		assertThat(ScriptUnit.U2.isSpoken("/questions/0/a")).isFalse();		// 신문 답
-		assertThat(ScriptUnit.U2.isSpoken("/cards/issues/ul/1")).isFalse();	// 카드 글
+		assertThat(ScriptUnit.U2.isSpoken("/questions/0/a")).isFalse();		// 신문 답 — 표에 없다
+		assertThat(ScriptUnit.U2.kindOf("/cards/issues/ul/1")).contains("card");
+		assertThat(ScriptUnit.U2.isSpoken("/cards/issues/ul/1")).isFalse();
 		assertThat(ScriptUnit.U2.isSpoken("/indict/x")).isFalse();		// '*'는 순번만
 		assertThat(ScriptUnit.U4.isSpoken("/defense")).isTrue();
 		assertThat(ScriptUnit.U4.isSpoken("/defense/0")).isFalse();
-		assertThat(ScriptUnit.U0.isSpoken("/questions/0/q")).isFalse();		// 설계도
+		assertThat(ScriptUnit.U0.kindOf("/questions/0/q")).contains("design");		// 설계도
+		assertThat(ScriptUnit.U0.isSpoken("/questions/0/q")).isFalse();
 	}
 
 	@Test
