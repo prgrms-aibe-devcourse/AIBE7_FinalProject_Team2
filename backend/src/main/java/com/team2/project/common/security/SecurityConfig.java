@@ -74,6 +74,8 @@ public class SecurityConfig {
 	/** 아이디 회원가입 · 로그인. 응답이 리프레시 토큰 쿠키를 심으므로 로그인 CSRF를 Origin 검증으로 막는다 (BE-113) */
 	public static final String MEMBER_SIGNUP_PATH = "/api/v1/auth/signup";
 	public static final String MEMBER_LOGIN_PATH = "/api/v1/auth/login";
+	/** 카카오 첫 가입 약관 동의(M-12 가입 · M-13 취소). 가입 응답이 리프레시 쿠키를 심으므로 같은 Origin 검증을 받는다 (BE-145) */
+	public static final String KAKAO_SIGNUP_PATH = "/api/v1/auth/kakao/signup";
 	/** 커뮤니티 쓰기(글 · 댓글 · 좋아요)는 로그인한 회원만 (BE-115) */
 	public static final String COMMUNITY_WRITE_PATTERN = "/api/v1/community/**";
 	/** 내 회원 정보(닉네임 설정 등)는 로그인한 회원만 (BE-139) */
@@ -161,13 +163,15 @@ public class SecurityConfig {
 		return (HttpServletRequest request) -> !SAFE_METHODS.contains(request.getMethod());
 	}
 
-	/** Origin 검증 대상: 재발급 · 로그아웃(둘 다 POST). PathPatternRequestMatcher는 디코딩된 경로 · context path 제외 기준으로 비교한다 */
+	/** Origin 검증 대상: 재발급 · 로그아웃 · 아이디 가입 · 로그인(POST), 카카오 가입 동의(POST) · 취소(DELETE). PathPatternRequestMatcher는 디코딩된 경로 · context path 제외 기준으로 비교한다 */
 	private static RequestMatcher originProtectedRequests() {
 		return new OrRequestMatcher(
 			PathPatternRequestMatcher.pathPattern(HttpMethod.POST, REISSUE_PATH),
 			PathPatternRequestMatcher.pathPattern(HttpMethod.POST, LOGOUT_PATH),
 			PathPatternRequestMatcher.pathPattern(HttpMethod.POST, MEMBER_SIGNUP_PATH),
-			PathPatternRequestMatcher.pathPattern(HttpMethod.POST, MEMBER_LOGIN_PATH));
+			PathPatternRequestMatcher.pathPattern(HttpMethod.POST, MEMBER_LOGIN_PATH),
+			PathPatternRequestMatcher.pathPattern(HttpMethod.POST, KAKAO_SIGNUP_PATH),
+			PathPatternRequestMatcher.pathPattern(HttpMethod.DELETE, KAKAO_SIGNUP_PATH));
 	}
 
 	/**
