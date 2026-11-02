@@ -258,3 +258,9 @@ button.admin-card:hover { border-color: var(--color-accent); }
 /* 대사는 읽는 글이라 본문 색 · 줄간격을 그대로 쓴다(옆의 판단 요소 문구는 admin-sub로 흐리다) */
 .admin-script-text { margin: 4px 0 8px; white-space: pre-wrap; }
 .admin-script-line .admin-warnings { margin-top: 8px; }
+/* 대본 블록 U0 ~ U4 (FE-148). 블록 안에 대사 · 문장 상자가 들어가므로 블록은 상자 대신 위 괘선으로 나눈다(카드 안에 카드를 두지 않는다) */
+.admin-script-blocks { margin: 12px 0; padding: 0; list-style: none; }
+.admin-script-block { padding: 16px 0; border-top: 1px solid var(--color-border); }
+.admin-script-block.is-missing { color: var(--color-muted); }
+.admin-script-content > summary, .admin-script-repairs > summary { margin: 8px 0; cursor: pointer; font-weight: 700; }
+.admin-script-line code { font-size: var(--text-caption); overflow-wrap: anywhere; }
