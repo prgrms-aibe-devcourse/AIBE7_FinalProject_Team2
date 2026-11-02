@@ -79,7 +79,7 @@ class CaseImportLoaderTitleRaceTest {
 	}
 
 	private static CaseImport caseImport() {
-		return CaseImport.start("job", CrimeType.MURDER);
+		return CaseImport.start("job", CrimeType.MURDER, null);
 	}
 
 	private static PipelineResult result() {

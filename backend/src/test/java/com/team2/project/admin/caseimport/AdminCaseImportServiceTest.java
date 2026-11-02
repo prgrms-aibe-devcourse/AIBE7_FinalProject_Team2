@@ -26,6 +26,7 @@ import com.team2.project.common.exception.FieldErrorDetail;
 import com.team2.project.legalcase.domain.CourtLevel;
 import com.team2.project.legalcase.domain.CrimeType;
 import com.team2.project.legalcase.repository.CaseSourceRepository;
+import com.team2.project.legalcase.service.CaseCastAssigner;
 import com.team2.project.pipeline.PipelineClient;
 import com.team2.project.pipeline.PipelineException;
 import com.team2.project.pipeline.PipelineJob;
@@ -54,6 +55,7 @@ class AdminCaseImportServiceTest {
 	private PipelineClient pipelineClient;
 	private AdminAuditLogger auditLogger;
 	private CaseImportLoader loader;
+	private CaseCastAssigner castAssigner;
 	private AdminCaseImportService service;
 
 	private final AdminPrincipal admin = mock(AdminPrincipal.class);
@@ -66,6 +68,7 @@ class AdminCaseImportServiceTest {
 		pipelineClient = mock(PipelineClient.class);
 		auditLogger = mock(AdminAuditLogger.class);
 		loader = mock(CaseImportLoader.class);
+		castAssigner = mock(CaseCastAssigner.class);
 		when(pipelineClient.enabled()).thenReturn(true);
 		when(caseSourceRepository.findExistingCaseNumbers(any())).thenReturn(List.of());
 		when(importRepository.findCaseNumbersInUse(any(), any())).thenReturn(List.of());
@@ -75,9 +78,14 @@ class AdminCaseImportServiceTest {
 	}
 
 	private AdminCaseImportService newService() {
+		return newService(null, null);
+	}
+
+	private AdminCaseImportService newService(String scriptModel, String classifyModel) {
 		return new AdminCaseImportService(importRepository, caseSourceRepository, pipelineClient,
-			new PipelineProperties("http://pipeline:8000", List.of("gemini:test"), null, Duration.ofSeconds(30), null, null, null),
-			auditLogger, loader,
+			new PipelineProperties("http://pipeline:8000", List.of("gemini:test"), null, Duration.ofSeconds(30),
+				scriptModel, classifyModel),
+			auditLogger, loader, castAssigner,
 			new NoOpTransactionManager());
 	}
 
@@ -97,6 +105,64 @@ class AdminCaseImportServiceTest {
 		assertThat(sent.getValue().models()).containsExactly("gemini:test");
 		verify(importRepository).save(any(CaseImport.class));
 		verify(auditLogger).record(eq(admin), eq(AdminAuditAction.CASE_IMPORT), any(), any(), any(), eq(httpRequest));
+	}
+
+	@Test
+	@DisplayName("대본을 켜면 등록 요청의 범죄 유형으로 배역을 먼저 정해 넘기고, 분류 · 대본 전체까지 돌린다 (BE-129)")
+	@SuppressWarnings("unchecked")
+	void startImport_scriptEnabled_assignsCastFirstAndRunsFullScript() {
+		Map<String, String> cast = Map.of("prosecutor", "nambul", "defense", "naero");
+		when(castAssigner.assign(CrimeType.MURDER)).thenReturn(cast);
+		when(pipelineClient.createJob(any())).thenReturn(job("abc123", "QUEUED", List.of()));
+		service = newService("gemini:script", "gemini:classify");
+
+		service.startImport(request(), admin, httpRequest);
+
+		ArgumentCaptor<PipelineJobRequest> sent = ArgumentCaptor.forClass(PipelineJobRequest.class);
+		verify(pipelineClient).createJob(sent.capture());
+		assertThat(sent.getValue().until()).isEqualTo("script");
+		assertThat((Map<String, Object>) sent.getValue().stages().get("classify"))
+			.containsEntry("enabled", true).containsEntry("model", "gemini:classify");
+		assertThat((Map<String, Object>) sent.getValue().stages().get("script"))
+			.containsEntry("enabled", true).containsEntry("model", "gemini:script").containsEntry("full", true)
+			.containsEntry("cast", cast);
+		// 정한 배역은 작업 행에 남는다 — 적재 전까지 균형 계산이 센다
+		ArgumentCaptor<CaseImport> saved = ArgumentCaptor.forClass(CaseImport.class);
+		verify(importRepository).save(saved.capture());
+		assertThat(saved.getValue().getCastRoles()).isEqualTo(cast);
+	}
+
+	@Test
+	@DisplayName("분류 모델을 비우면 모델을 보내지 않는다 — 파이프라인이 생성 모델의 첫 모델로 분류한다 (BE-129)")
+	@SuppressWarnings("unchecked")
+	void startImport_scriptEnabled_withoutClassifyModel() {
+		when(castAssigner.assign(CrimeType.MURDER)).thenReturn(Map.of("prosecutor", "naero", "defense", "nambul"));
+		when(pipelineClient.createJob(any())).thenReturn(job("abc123", "QUEUED", List.of()));
+		service = newService("gemini:script", null);
+
+		service.startImport(request(), admin, httpRequest);
+
+		ArgumentCaptor<PipelineJobRequest> sent = ArgumentCaptor.forClass(PipelineJobRequest.class);
+		verify(pipelineClient).createJob(sent.capture());
+		assertThat((Map<String, Object>) sent.getValue().stages().get("classify"))
+			.containsEntry("enabled", true).doesNotContainKey("model");
+	}
+
+	@Test
+	@DisplayName("대본을 끄면 배역을 정하지 않고 분류 · 대본도 보내지 않는다 — 적재 때 지금까지처럼 정한다 (BE-129)")
+	void startImport_scriptDisabled_noCastNoScript() {
+		when(pipelineClient.createJob(any())).thenReturn(job("abc123", "QUEUED", List.of()));
+
+		service.startImport(request(), admin, httpRequest);
+
+		verifyNoInteractions(castAssigner);
+		ArgumentCaptor<PipelineJobRequest> sent = ArgumentCaptor.forClass(PipelineJobRequest.class);
+		verify(pipelineClient).createJob(sent.capture());
+		assertThat(sent.getValue().until()).isNull();
+		assertThat(sent.getValue().stages() == null || !sent.getValue().stages().containsKey("script")).isTrue();
+		ArgumentCaptor<CaseImport> saved = ArgumentCaptor.forClass(CaseImport.class);
+		verify(importRepository).save(saved.capture());
+		assertThat(saved.getValue().getCastRoles()).isNull();
 	}
 
 	@Test
@@ -471,7 +537,7 @@ class AdminCaseImportServiceTest {
 	}
 
 	private static CaseImport running(String jobId) {
-		CaseImport entity = CaseImport.start(jobId, CrimeType.MURDER);
+		CaseImport entity = CaseImport.start(jobId, CrimeType.MURDER, null);
 		entity.applyProgress(CaseImportStatus.RUNNING, null, null, null, null);
 		return entity;
 	}

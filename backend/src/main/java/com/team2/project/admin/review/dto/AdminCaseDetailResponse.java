@@ -48,6 +48,9 @@ public record AdminCaseDetailResponse(
 	 * @param castRoles      배역 {@code {prosecutor, defense}} (BE-125). 배정 전이면 null
 	 * @param sensitiveFlags 민감 플래그 전체 (BE-125). 공개 API와 달리 가드 전용 플래그도 보인다. null이면 분류하지
 	 *                       않은 사건, []면 분류했고 켜진 것이 없는 사건
+	 * @param classification 자동 분류 {@code {mood, issue, victim, thirdParty}} (BE-129). 분류하지 않은 사건이면 null
+	 * @param classificationNeedsReview 표가 갈렸거나 규칙만 잡아 관리자가 확인해야 하는 축 · 플래그
+	 *                       (예: {@code mood}, {@code sensitiveFlags.VIOLENCE}). 분류하지 않은 사건이면 null
 	 */
 	public record Content(
 		String title,
@@ -68,7 +71,9 @@ public record AdminCaseDetailResponse(
 		Guideline guideline,
 		List<String> deidentifiedItems,
 		Map<String, String> castRoles,
-		List<String> sensitiveFlags) {
+		List<String> sensitiveFlags,
+		Map<String, Object> classification,
+		List<String> classificationNeedsReview) {
 	}
 
 	public record Guideline(Long guidelineId, String versionName) {

@@ -56,6 +56,7 @@
 | v1.50 | 2026-10-30 | 회원 기준 소유로 전환 (**확장 단계**, BE-140 · V40 ~ V43 · API 명세 M-9 ~ M-11) — 로그인 전용이 된 사용자 데이터의 주인을 익명 ID에서 회원으로 옮길 자리를 만든다. BE-60 "main으로 가는 마이그레이션은 추가만" 규칙에 맞게 NOT NULL 해제 · 칸 · 제약 · 인덱스 · 테이블 추가만 한다(지금 앱은 그대로 돈다)<br>• V40: `experience` · `personality_result`는 손님도 쓰므로 **이중 소유** — `anonymous_user_id` · `member_id` 중 정확히 하나(CHECK `chk_experience_owner` · `chk_personality_result_owner`). `anonymous_user_id` NOT NULL 해제, `personality_result.member_id` 추가, 두 `member_id`에 FK. 회원 쪽 유니크 · 조회는 부분 인덱스(`uk_experience_member_case_attempt` · `ux_personality_result_current_member` · `ux_personality_result_baseline_retake_member` · `ix_personality_result_member_created`). `experience.member_id`(V3부터 있었으나 아무도 채우지 않음)의 뜻을 "체험 시작 시 로그인 회원"에서 "체험의 주인 회원"으로 바꾼다<br>• V41: 회원 키 테이블 7개 신설 — `member_attendance` · `member_profile_deco` · `member_profile_setting` · `member_xp_event` · `member_profile_job` · `member_collection_item` · `member_achievement_unlock`(칸 · 제약은 익명 쪽과 같고 주인만 회원, 회원 FK `ON DELETE CASCADE`). 익명 데이터는 옮기지 않고(체험만 이관), 옛 익명 테이블은 쓰지 않고 두었다가 후속 이슈에서 지운다<br>• V42: `member_anonymous_import` 신설 — 첫 로그인 가져오기 결정(`IMPORTED` · `DISCARDED`), 회원마다 한 번<br>• V43: `community_post` · `community_comment`의 작성자를 회원 또는 익명 ID로 넓힌다 — `member_id` · `anonymous_user_id` NOT NULL 해제, 적어도 하나(CHECK `chk_community_post_author` · `chk_community_comment_author`). "정확히 하나"로 좁히는 일은 다음 배포로 나눈다<br>• 15장 추가, 3-2 · 8 ~ 14장 갱신 |
 | v1.51 | 2026-10-30 | 약관 동의 기록 (**확장 단계**, BE-133 · V44 · API 명세 v0.74, v1.50 · V40 ~ V43은 BE-140 PR #351) — `member`에 `terms_agreed_at`(timestamptz) · `terms_version`(varchar 20) 추가, 둘 다 NULL 허용. CHECK `ck_member_terms_agreement`(둘이 함께 있거나 함께 없다). 아이디 가입(M-5) 때만 채우고, 기존 회원 · 카카오 회원은 NULL(동의 기록 없음) |
 | v1.52 | 2026-10-31 | 대본 단위 블록 (**확장 단계**, BE-126 1차 · V45 · API 명세 v0.78) — `case_script_block` 신설(대본마다 단위 U0 ~ U4 하나에 한 행: 내용 `content` · 판 `revision` · 생성 근거 `basis` · 검수 결과 `review` · `warnings` · `repairs` · 공개 가능 여부 `publishable` · 검수 칸 4개, 유니크 `(script_id, unit)`, "오류 블록은 승인 불가" CHECK). `case_script`의 `evidence`는 U3 블록으로 옮기고(검수 상태 포함, 나머지 네 단위는 `pending`) 검수 칸 4개를 지웠다 — 대본의 검수 상태는 블록에서 계산한다(다섯 단위 모두 승인 = 공개, 증거조사만 있는 대본은 준비 중). `case_script`에 메타 `issue` · `admits`와 `pending`(만들지 못한 단위) · `review`(대본 전체 검수 결과) 추가. 블록의 생성 근거가 가리킬 판 `legal_case.content_revision` · `case_paper.revision` 추가(대본 입력이 바뀔 때만 오른다, `updated_at`을 쓰지 않는 이유는 아래 표) (결정: `docs/decisions/BE-126.md`) |
+| v1.53 | 2026-11-01 | 등록 때 정한 배역 · 사건 자동 분류 (**확장 단계**, BE-129 1차 · V46 · API 명세 v0.80) — `case_import.cast_roles`(jsonb, 등록 요청을 받을 때 정한 배역) 추가: 대본을 만드는 등록은 배역을 대본보다 먼저 정하므로, 범죄 유형별 균형 계산이 사건과 함께 **아직 적재되지 않은 등록**(`case_id` 없음, `FAILED` 제외)의 이 값도 센다. `legal_case.classification`(jsonb `{mood, issue, victim, thirdParty}`) · `classification_needs_review`(jsonb 문자열 배열) 추가: 사건 등록의 자동 분류(BE-123) 결과와 관리자 확인이 필요한 축 · 플래그. 대본을 다시 만들 때(BE-129 2차) 파이프라인에 그대로 넘기는 값이라 한 칸에 둔다. 민감 플래그는 `sensitive_flags`가 따로 갖는다 (`docs/decisions/BE-129.md`) |
 
 ---
 
@@ -227,6 +228,8 @@ erDiagram
 | cast_roles | jsonb |  | (확장) 배역 `{"prosecutor": "naero", "defense": "nambul"}` — 묶음 A(판사 · 검사) · 묶음 B(변호인 · 피고인 역)를 누가 맡는지. `case_script.cast_roles`와 같은 모양. 비어 있으면 배정 전 (v1.47, BE-125) | COMMON-65 |
 | content_revision | int | ✓ | (확장) 사건 내용의 판, 기본 1. 대본 입력(제목 · 개요)을 A-11로 실제로 바꿀 때만 오른다. 대본 블록의 `basis.case`가 이 값을 남긴다 — `updated_at`은 공개 상태 같은 다른 수정에도 바뀌어 대본이 낡았다고 잘못 알린다 (v1.52, BE-126) | COMMON-65 |
 | sensitive_flags | jsonb |  | (확장) 민감 플래그 이름 배열 (예: `["MENTAL_HEALTH"]`). 파이프라인 분류(BE-123)가 켜고 관리자가 고친다. `null`은 분류 전, `[]`는 분류했고 켜진 것 없음. 공개 API는 사용자 안내 대상 6종만 내보낸다 (v1.47, BE-125) | FR-1-5 |
+| classification | jsonb |  | (확장) 사건 자동 분류 `{"mood": "tragic", "issue": "mental_state", "victim": "forgive", "thirdParty": false}` (파이프라인 `case_classify.py`, BE-123). 사건 등록 적재가 넣고 대본을 다시 만들 때 입력으로 쓴다. 민감 플래그는 `sensitive_flags`에 따로 둔다. `null`은 분류하지 않은 사건 (v1.53, BE-129) |  |
+| classification_needs_review | jsonb |  | (확장) 관리자가 확인해야 하는 분류 축 · 플래그 이름 배열 (예: `["mood", "sensitiveFlags.MENTAL_HEALTH"]`) — 표가 갈렸거나 규칙만 잡은 것. 검수 화면(A-6)이 표시한다 (v1.53, BE-129) |  |
 | status | varchar(20) | ✓ | `DRAFT` / `REVIEW` / `PUBLISHED`. `PUBLISHED`만 사용자에게 노출 | REQ-047, 075 |
 | published_at | timestamptz |  | 공개 시각(A-13). 공개 취소(A-13-14)하면 지우고, 다시 공개하면 새로 기록한다 |  |
 | created_at, updated_at | timestamptz | ✓ |  |  |
@@ -475,6 +478,7 @@ jsonb에 블록을 모두 담으면 블록 하나를 고칠 때 다른 블록의
 | error_code | varchar(50) |  |  |
 | message | varchar(500) |  | 실패 사유. **원문 · 모델 출력을 담지 않는다** |
 | stages | jsonb |  | 파이프라인에서 마지막으로 받은 단계 상태 `[{name, status}, ...]` |
+| cast_roles | jsonb |  | (확장) 등록 요청을 받을 때 정한 배역 `{prosecutor, defense}` (v1.53, BE-129). 대본을 켠 서버만 채운다 — 대본은 배역 이름을 대사에 넣어 만들어지므로 대본보다 먼저 정해 파이프라인에 넘긴다. 적재 전까지는 범죄 유형별 배역 균형 계산이 이 값을 센다(`case_id`가 없고 `FAILED`가 아닌 행). 적재하면 `legal_case.cast_roles`가 이어받는다 |
 | created_at | timestamptz | ✓ |  |
 | finished_at | timestamptz |  |  |
 
@@ -997,7 +1001,7 @@ IA 9장의 규칙을 어느 테이블·제약이 책임지는지 정리한다.
 | 이름 | `pk_` · `fk_{테이블}_{참조 테이블}` · `uk_{테이블}_{내용}` · `chk_{테이블}_{내용}` · `idx_{테이블}_{컬럼}` |
 | FK 인덱스 | FK 컬럼마다 인덱스를 만든다. 유니크 제약의 첫 컬럼과 겹치면 생략한다 |
 | FK 삭제 동작 | 기본값(`NO ACTION`) |
-| jsonb 형식 (v1.7) | 아래 컬럼은 반드시 **배열**로 넣는다. 엔티티가 배열 타입으로 읽어서, 형식이 다르면 그 사건의 조회 전체가 실패한다<br>• `legal_case.keywords` · `deidentified_items` · `sensitive_flags`(v1.47), `judgment.reference_tags`: 문자열 배열<br>• `legal_case.cast_roles`(v1.47): 객체 `{prosecutor, defense}`, 값은 `naero` · `nambul` 하나씩<br>• `case_section.data`: 배열. 원소는 섹션마다 다르다 — DAMAGE `{label, value}` · LAW_TERM `{term, desc}` 객체, SUMMARY 문자열<br>• `judgment.extra_dispositions`: 객체 배열 `{type, value}`, `type`은 `COMMUNITY_SERVICE` · `CONFISCATION`만 |
+| jsonb 형식 (v1.7) | 아래 컬럼은 반드시 **배열**로 넣는다. 엔티티가 배열 타입으로 읽어서, 형식이 다르면 그 사건의 조회 전체가 실패한다<br>• `legal_case.keywords` · `deidentified_items` · `sensitive_flags`(v1.47), `judgment.reference_tags`: 문자열 배열<br>• `legal_case.cast_roles`(v1.47) · `case_import.cast_roles`(v1.53): 객체 `{prosecutor, defense}`, 값은 `naero` · `nambul` 하나씩<br>• `legal_case.classification`(v1.53): 객체, `classification_needs_review`(v1.53): 문자열 배열<br>• `case_section.data`: 배열. 원소는 섹션마다 다르다 — DAMAGE `{label, value}` · LAW_TERM `{term, desc}` 객체, SUMMARY 문자열<br>• `judgment.extra_dispositions`: 객체 배열 `{type, value}`, `type`은 `COMMUNITY_SERVICE` · `CONFISCATION`만 |
 | 본문 줄바꿈 (v1.9) | `case_section.content`의 항목은 줄바꿈(`\n`)으로 나눈다. PostgreSQL에서는 `E'첫 항목\n둘째 항목'`처럼 쓴다. 문장 끝에 마침표를 두어 줄바꿈을 그리지 않는 곳에서도 한 문단으로 읽히게 한다 |
 | 적용 방식 | SQL 파일을 직접 실행하지 않고 서버 기동 시 Flyway가 적용한다. `ddl-auto`는 모든 환경에서 `validate` |
 | 수정 규칙 | develop에 Merge된 파일은 수정하지 않는다. 오픈 전 불가피하면 팀 합의 후 DB 초기화하고 수정, 오픈 후에는 새 마이그레이션만 추가한다 |

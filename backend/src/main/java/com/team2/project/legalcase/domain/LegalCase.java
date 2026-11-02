@@ -90,6 +90,17 @@ public class LegalCase {
 	private List<String> sensitiveFlags;
 
 	/**
+	 * 사건 자동 분류 {@code {mood, issue, victim, thirdParty}} (BE-123 결과, 저장은 BE-129). 대본을 다시 만들 때 파이프라인에 그대로
+	 * 넘기는 값이다. 민감 플래그는 {@link #sensitiveFlags}가 따로 갖는다. 비어 있으면 분류하지 않은 사건
+	 */
+	@JdbcTypeCode(SqlTypes.JSON)
+	private Map<String, Object> classification;
+
+	/** 표가 갈렸거나 규칙만 잡아 관리자가 확인해야 하는 분류 축 · 플래그 (예: {@code mood}, {@code sensitiveFlags.VIOLENCE}). BE-129 */
+	@JdbcTypeCode(SqlTypes.JSON)
+	private List<String> classificationNeedsReview;
+
+	/**
 	 * 사건 내용의 판 (BE-126). 대본 블록이 "어느 판의 사건 내용을 보고 만들었는지"를 이 값으로 남긴다. 대본 입력(제목 · 개요)이
 	 * 바뀔 때만 오른다 — {@code updatedAt}은 공개 상태 같은 다른 수정에도 바뀌어 대본이 낡았다고 잘못 알린다
 	 */
@@ -183,6 +194,12 @@ public class LegalCase {
 	/** 민감 플래그 기록 · 수정 (BE-125). 값 검사는 호출하는 쪽이 한다. null이면 "분류하지 않음"으로 돌린다 */
 	public void changeSensitiveFlags(List<String> sensitiveFlags) {
 		this.sensitiveFlags = sensitiveFlags == null ? null : List.copyOf(sensitiveFlags);
+	}
+
+	/** 자동 분류 결과 기록 (BE-129). 분류하지 않은 등록이면 둘 다 null로 둔다 */
+	public void recordClassification(Map<String, Object> classification, List<String> needsReview) {
+		this.classification = classification == null ? null : new LinkedHashMap<>(classification);
+		this.classificationNeedsReview = needsReview == null ? null : List.copyOf(needsReview);
 	}
 
 	/** 사용자에게 노출되는 사건인지 */
