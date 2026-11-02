@@ -35,6 +35,8 @@
 | v1.28 | 2026-10-29 | 보안 헤더 정리 (COMMON-67, BE-75 후속) — 3장 "보안 헤더" 행: 백엔드가 실제로는 HSTS(1년)를 보내고 있던 것을 끄고(`SecurityHeaders`), Nginx가 HSTS(1일부터) · 화면 · 정적 파일 보안 헤더를 붙인다. CSP는 후속 |
 | v1.29 | 2026-10-29 | 담당 문서 최신화 (B) — 3장 표 "Spring Security"를 체인 세 개 · 토큰 구현됨(BE-94)으로, "카카오 로그인 · JWT"를 "이후 · 검토"에서 구현됨(BE-62 · BE-113 · BE-94)으로 정정. 회원가입 · 로그인 문장을 "MVP 이후 기능"에서 확장 단계 도입으로, "사용자 인증 기반" 머리말 · 담당 경계(WBS 7-2-1 v1.10 반영)를 지금 상태로 정정 |
 | v1.30 | 2026-10-30 | CSP 1단계 (COMMON-70, COMMON-67 후속) — 3장 "보안 헤더" 행: Nginx 화면 · 정적 파일 응답에 `Content-Security-Policy-Report-Only` 추가(같은 출처 + 글꼴 CDN + S3 사건 사진, `'unsafe-inline'` 없음). 운영 위반 확인 후 `Content-Security-Policy`로 전환 |
+| v1.31 | 2026-11-02 | **D 담당 부분 최신화** — 2장: RDS 전환 완료(10/28) · Supabase 공용 DB 종료(COMMON-59), 운영 postgres 컨테이너가 빠진 메모리 배분, 캐시를 붙인 API가 아직 없음을 명시. 3장: 회원 전용 경로(커뮤니티 쓰기 · 내 회원 정보), 토큰 재발급 · 폐기 구현됨(BE-94). 8장: RDS · S3 · Let's Encrypt 추가, Docker 행에서 DB 컨테이너 제외 |
+| v1.32 | 2026-11-02 | 카카오 첫 가입 약관 동의 (BE-145) — 3장: 카카오 첫 가입 대기(Redis 토큰 DB TTL 10분 · 쿠키 `NLNB_SIGNUP`)와 Origin 검증 대상 추가, 2장 Redis DB 1 항목에 OAuth 왕복 상태 · 가입 대기를 적음 |
 
 
 ## **1. Backend**
@@ -158,13 +160,13 @@ MVP에는 관리자 화면이 없으므로 대표 사건 데이터와 검수된 
 
 ### DB 운영 단계
 
-비용 문제로 개발 기간에는 AWS를 쓰지 않고, 최종 단계에서만 AWS RDS로 옮긴다.
+비용 문제로 개발 기간에는 AWS를 쓰지 않고, 최종 단계에서만 AWS RDS로 옮겼다(**10/28 전환 완료**, BE-59 · WBS 7.1.2 — `deploy/README.md` "RDS 전환"). 전환 전 1주(10/22 ~ 10/28)는 Supabase 공용 DB를 운영 · 팀원 로컬이 함께 썼고, 전환 뒤 종료했다(COMMON-59).
 
 | 단계 | DB | 비고 |
 | --- | --- | --- |
 | 개발 (로컬) | Docker PostgreSQL (`pgvector/pgvector:pg17`, `backend/docker-compose.yml`) | 개발용 DB와 Redis를 사용한다 |
 | 테스트 (로컬 · CI) | 별도 PostgreSQL·Redis (`backend/docker-compose.test.yml` / CI 서비스 컨테이너) | 같은 이미지 태그를 사용하되 개발 저장소와 분리한다. 실행 절차는 [테스트 환경 안내](../backend/TESTING.md) |
-| 최종 (운영) | AWS RDS for PostgreSQL | 이미지 태그를 RDS에서 쓸 PostgreSQL 버전과 맞춘다. 접속 정보는 EC2 실행 시 환경변수로만 넘긴다 |
+| 최종 (운영) | AWS RDS for PostgreSQL (10/28 ~) | 이미지 태그를 RDS에서 쓸 PostgreSQL 버전과 맞춘다. 접속 정보는 EC2 서버 `.env`(`EXTERNAL_DB_*`)로만 넘긴다. 서버의 postgres 컨테이너는 외부 DB 오버레이가 기본 실행에서 뺀다(정의 · 볼륨은 되돌리기용으로 남김) |
 
 - 접속 정보는 `DB_URL` · `DB_USERNAME` · `DB_PASSWORD` 환경변수로 받고, 값이 없으면 로컬 Docker 기본값을 쓴다(`application.yml`). 단계를 옮겨도 코드는 바꾸지 않고 환경변수만 바꾼다.
 - 운영 계정 · 비밀번호는 저장소 어디에도 적지 않는다.
@@ -179,7 +181,7 @@ Redis에 있음? ── 예 → 바로 반환
 PostgreSQL 조회 → Redis 저장 → 반환
 ```
 
-캐시는 사건 공개나 AI 판결 교체 시점에 삭제한다.
+캐시는 사건 공개나 AI 판결 교체 시점에 삭제한다. **지금은 캐시를 붙인 API가 없다**(앱이 DB 0에 쓰는 코드가 없고, Redis는 토큰 DB 1만 쓴다) — 위 흐름은 캐시를 붙일 때 지킬 규칙이다.
 
 ### Redis 운영 구성 (확장 단계, BE-61 · WBS 7.1.4)
 
@@ -188,9 +190,9 @@ Redis 한 인스턴스를 **논리 DB 두 개**로 나눠 쓴다. 캐시는 지�
 | 항목 | 내용 |
 | --- | --- |
 | DB 0 — 캐시 | 사건 목록 · 참여자 수 · 공개 판결 등. 원본은 PostgreSQL에 있어 지워져도 다시 만든다. **Redis 장애면 캐시를 건너뛰고 PostgreSQL에서 읽어야 한다 — 이건 아직 구현되지 않은 규칙이다**(BE-61은 연결만 만들었다). 캐시를 붙이는 작업(6.5.3)에서 Redis 예외를 잡아 원본 조회로 넘긴다. Spring Cache(`@Cacheable`)를 쓰면 기본 동작이 예외를 그대로 던져 500이 되므로 `CacheErrorHandler`로 기록만 하고 넘긴다 |
-| DB 1 — 토큰 | 리프레시 토큰 · 폐기 목록(7.4.3, C). 지워지면 로그인이 풀리고 폐기한 토큰이 다시 통하므로 **원본처럼 다룬다**. Redis 장애는 토큰 오류로 바꾸지 않고 500(3장 "사용자 인증 기반") |
+| DB 1 — 토큰 | 리프레시 토큰 · 폐기 목록(7.4.3, C) · OAuth 왕복 상태(TTL 5분) · 카카오 가입 대기(TTL 10분, BE-145). 지워지면 로그인이 풀리고 폐기한 토큰이 다시 통하므로 **원본처럼 다룬다**. Redis 장애는 토큰 오류로 바꾸지 않고 500(3장 "사용자 인증 기반") |
 | 영속화 | AOF, `appendfsync everysec`(최대 1초 유실). 재시작 · 배포 때 토큰이 사라지지 않게 한다. AOF는 인스턴스 전체에 적용돼 캐시도 기록되지만 문제없다(WBS R11). 데이터는 볼륨 `redisdata` |
-| 메모리 · 축출 | `maxmemory 200mb` · **`maxmemory-policy noeviction`**, 컨테이너 `mem_limit 256m`(t3.small 2GB를 백엔드 1g · PostgreSQL 512m과 나눔). `allkeys-lru` 같은 축출 정책은 DB를 구분하지 않아 오래 안 쓴 토큰을 지울 수 있어 쓰지 않는다. 메모리가 차면 **쓰기가 실패**한다(OOM 오류) |
+| 메모리 · 축출 | `maxmemory 200mb` · **`maxmemory-policy noeviction`**, 컨테이너 `mem_limit 256m`(t3.small 2GB를 백엔드 1g와 나눔. PostgreSQL 512m은 RDS 전환 뒤 운영 기본 실행에서 빠졌다). `allkeys-lru` 같은 축출 정책은 DB를 구분하지 않아 오래 안 쓴 토큰을 지울 수 있어 쓰지 않는다. 메모리가 차면 **쓰기가 실패**한다(OOM 오류) |
 | TTL 필수 | `noeviction`이라 자동으로 비워지지 않는다. **모든 키에 TTL을 단다** — 캐시는 기능마다 정하고, 토큰은 만료 시각과 같게 둔다. TTL 없는 키는 리뷰에서 막는다 |
 | 사용자별 값 | 사용자마다 다른 값(사건 목록의 `myStatus` 등, 7.7.2)은 공통 캐시에 넣지 않고 요청마다 붙인다 |
 | 접근 | 비밀번호(`requirepass`, 환경변수 `REDIS_PASSWORD`). 운영에서는 포트를 호스트에 열지 않고 Compose 네트워크 안에서만 쓴다 |
@@ -258,14 +260,15 @@ MVP는 회원가입 없이 핵심 체험이 끝까지 동작해야 한다. 사�
 | 필터 체인 | `SecurityConfig`가 체인 두 개를 둔다(v1.25: 그 사이에 카카오 로그인 체인이 들어가 셋, 아래 "카카오 로그인 체인"). ① `/api/v1/admin/**` 관리자 체인(먼저 검사): 세션 · CSRF · `ROLE_ADMIN`, Bearer 토큰은 보지 않는다. ② 그 밖의 모든 요청 사용자 체인: **세션을 만들지도 읽지도 않는다**(`STATELESS` + 요청 안에서만 쓰는 SecurityContext 저장소). 그래서 브라우저에 관리자 세션 쿠키가 있어도 사용자 API에서는 관리자로 보지 않는다 |
 | Bearer 토큰 | 사용자 체인의 `BearerTokenAuthenticationFilter`. `Authorization` 헤더가 없거나 `Bearer`가 아닌 스킴(`Basic` 등 — 앞단 Nginx 인증 · 모니터링 scrape가 붙일 수 있다)이면 익명. **`Bearer` 헤더는 반드시 검증한다**: 토큰이 비었거나 검증기 빈이 없거나 검증에 실패하면 **401**. 잘못된 토큰을 익명으로 바꾸지 않는다. 사용자 체인 경로라면 `permitAll`이어도 같다(관리자 체인은 Bearer를 보지 않는다). `Authorization` 헤더가 여러 개이거나(스킴과 관계없이) `Bearer` 토큰에 RFC 6750 밖의 글자(공백 · 쉼표 등)가 있으면 검증기를 부르지 않고 401 |
 | 토큰 오류 | 401 `TOKEN_EXPIRED`(만료, 화면은 재발급 시도) · 401 `TOKEN_INVALID`(그 밖). Redis 장애 등 인프라 오류는 토큰 오류로 바꾸지 않는다(500 `INTERNAL_ERROR`, 원인은 서버 로그에만) |
-| 토큰 계약 | `common.security.token` 패키지. `AccessTokenVerifier`(토큰 → `MemberPrincipal`, C 구현) · `TokenIssuer`(회원 → `IssuedTokens` 액세스 · 리프레시 토큰과 만료 시각, C 구현 · D 호출) · `MemberPrincipal`(회원 ID · 접두어 없는 권한 `USER`, 바꿀 수 없음) · `TokenException`(INVALID · EXPIRED). 재발급 · 폐기 · 재사용 탐지 계약은 C가 7.4.3에서 정한다 |
+| 토큰 계약 | `common.security.token` 패키지. `AccessTokenVerifier`(토큰 → `MemberPrincipal`, C 구현) · `TokenIssuer`(회원 → `IssuedTokens` 액세스 · 리프레시 토큰과 만료 시각, C 구현 · D 호출) · `MemberPrincipal`(회원 ID · 접두어 없는 권한 `USER`, 바꿀 수 없음) · `TokenException`(INVALID · EXPIRED). 재발급 · 폐기 · 재사용 탐지는 C가 7.4.3(BE-94)에서 구현했다(API 명세 M-1 · M-2) |
 | 담당 경계 (R14) | B: HTTP 헤더 처리 · 체인 연결(`SecurityConfig` · Bearer 필터) / C: 검증 · 발급 · 재발급 · 폐기 로직 / D: 카카오 로그인 성공 후 발급 호출. WBS 7-2-1에도 같은 경계로 반영됐다(WBS v1.10, BE-57 · #106 리뷰 합의) |
-| 회원 전용 API | 지금은 사용자 체인 전체가 `permitAll`이다. 회원만 쓸 API를 만들면 그 경로에 `authenticated()`를 추가한다(없으면 401 `UNAUTHORIZED`) |
+| 회원 전용 API | 사용자 체인은 기본 `permitAll`이고, 회원만 쓰는 경로에만 `authenticated()`를 둔다(토큰 없으면 401 `UNAUTHORIZED`). 지금은 커뮤니티 쓰기(`POST /api/v1/community/**`, BE-115)와 내 회원 정보(`/api/v1/members/me/**`, BE-139). 회원 전용 API를 새로 만들면 그 경로를 `SecurityConfig`에 추가한다 |
 | 재발급 요청 | 화면은 재발급 요청에 `Authorization` 헤더를 붙이지 않는다(만료된 토큰이 붙으면 401로 막힌다) |
 | 리프레시 토큰 쿠키 (C 결정) | 쿠키에 두면 브라우저가 자동으로 보내므로 재발급 · 로그아웃 요청에 CSRF 대책(CSRF 토큰 또는 Origin 검증)과 `HttpOnly` · `Secure` · `SameSite`가 필요하다. 무상태 · 같은 출처라는 이유만으로 CSRF가 해결되지는 않는다 |
 | 익명 ID 쿠키와 CSRF | 익명 ID 쿠키도 브라우저가 자동으로 보낸다. 사용자 API에 CSRF 토큰을 두지 않는 것은 `SameSite=Lax` · 같은 출처 배포 · 익명 체험이라는 피해 범위를 보고 **받아들인 위험**이다 |
 | 카카오 로그인 체인 (BE-62) | `auth.oauth.KakaoOAuthConfig`의 **OAuth 전용 체인**(`/api/v1/auth/oauth2/**`, `@Order(2)`, B 제안 · 합의). 관리자 체인(1)과 사용자 체인(3, `securityMatcher` 없음) 사이에 둔다. 브라우저 이동 경로라 실패는 JSON 401이 아니라 리다이렉트다. `KAKAO_CLIENT_ID`가 없으면 체인째 꺼지고 그 경로는 404 |
 | OAuth 왕복 임시 상태 (D 결정, BE-62) | 세션을 만들지 않는다(`STATELESS`). 인가 요청 내용은 **Redis 토큰 DB에 JSON**(TTL 5분)으로 두고, 브라우저에는 **state 값만** `NLNB_OAUTH_STATE` 쿠키(`HttpOnly` · `Secure` · **`SameSite=Lax`** — 카카오에서 돌아오는 이동은 다른 사이트발이라 Strict면 빠진다 · `Path=/api/v1/auth/oauth2`)로 준다. 콜백의 `state`와 쿠키가 같을 때만 GETDEL로 꺼낸다(로그인 CSRF · 재사용 방지). 요청 객체를 쿠키에 직렬화하지 않는다(사용자가 고칠 수 있는 값을 역직렬화하지 않기 위해) |
+| 카카오 첫 가입 대기 (D 결정, BE-145) | 처음 온 카카오 계정은 약관에 동의해야 회원이 만들어진다. 동의 전에는 DB에 아무것도 저장하지 않고, 카카오 회원번호만 **Redis 토큰 DB에 TTL 10분**으로 둔다. 브라우저에는 그 값을 찾는 무작위 문자열만 `NLNB_SIGNUP` 쿠키(`HttpOnly` · `Secure` · `SameSite=Lax` · `Path=/api/v1/auth/kakao/signup`)로 주고, 꺼낼 때 `GETDEL`로 한 번만 쓴다(OAuth state와 같은 방식). 동의(M-12)하면 회원과 동의 기록이 한 번에 만들어지고, 닫으면(M-13) 지운다. M-12 · M-13은 쿠키를 심거나 쿠키로 요청하므로 Origin 검증 대상이다(`docs/decisions/BE-145.md`) |
 | 로그인 성공 · 실패 (BE-62) | 성공: 회원 찾기 · 만들기 → 익명 기록 연결(ERD `anonymous_user`) → `TokenIssuer`(BE-94) → **리프레시 토큰만** `RefreshTokenCookies`로 심고 화면 `/auth/callback`으로 302. 토큰은 URL에 싣지 않는다(화면이 재발급 API로 받는다). 실패 · 취소: `/auth/callback?error=login_failed`로 302, 로그에는 오류 코드만. 기본 성공 처리(SavedRequestAware)는 세션을 써서 쓰지 않는다. 카카오 액세스 토큰은 보관하지 않는다(다시 부르지 않음) |
 | 아이디 회원가입 · 로그인 (BE-113, v1.27) | `POST /api/v1/auth/signup` · `/login`(API 명세 M-5 · M-6)은 **사용자 체인**에서 처리한다(별도 체인 없음). 관리자 `AuthenticationManager`(관리자 계정 조회 전용)는 쓰지 않고 회원 서비스가 `PasswordEncoder.matches()`를 직접 부르며, 토큰은 항상 `MemberPrincipal.user(id)`로 발급한다 → 회원 로그인으로 관리자 권한이 생기지 않는다. 비밀번호는 기존 인코더(`{argon2}`, BE-90)로 해시하고 **해시 계산 · 비교 중에는 트랜잭션을 잡지 않는다**(BE-67). 실패는 `INVALID_CREDENTIALS` 하나이고 없는 아이디도 더미 해시와 비교해 응답 시간을 맞춘다. 성공 처리는 카카오와 같다: 익명 기록 연결 → `TokenIssuer` → 리프레시 토큰만 쿠키 → 화면이 재발급(M-1). 응답이 리프레시 쿠키를 심으므로 재발급 · 로그아웃과 같은 **Origin 검증**(`originProtectedRequests()`)을 받는다(로그인 CSRF 방지). 화면은 아이디에 `@`가 있으면 관리자 로그인(A-2), 없으면 이 API로만 보낸다(FE-117). 계정 단위 실패 잠금은 없다(`docs/decisions/BE-113.md` 결정 6) |
 | 프록시 헤더 (BE-62) | `server.forward-headers-strategy: native`. Nginx 뒤에서 `{baseUrl}`(카카오 Redirect URI) · Origin 검증(BE-94) · 클라이언트 IP가 원래 https · 도메인 · IP를 본다. Tomcat은 `internal-proxies`(루프백 + Docker 172.16/12)에서 온 `X-Forwarded-*`만 믿는다. Nginx(`snippets/api-proxy.conf`)는 `Proto` · `Host` · `Port`를 자기가 본 값으로 덮어쓰고 — 비워 두면 클라이언트가 보낸 `X-Forwarded-Host`가 그대로 백엔드의 Host가 된다 — `X-Forwarded-For`는 기존 값 뒤에 접속 IP를 덧붙인다(백엔드는 가장 오른쪽 신뢰 밖 IP를 씀, PR #229 리뷰). 카카오 로그인 시작 경로에는 `/api` 공통 제한에 더해 IP별 · 전체 합계 전용 제한을 둔다(콜백은 공통 제한만)(deploy/README.md "카카오 로그인 경로 전용 제한") |
@@ -518,7 +521,10 @@ Redis도 같다(BE-61). `RedisConfigTest`가 실제 Redis에 붙으므로 **테�
 | **기술** | **사용 목적** |
 | --- | --- |
 | AWS EC2 | 백엔드 · 프론트엔드 서버 운영 |
-| Docker · Docker Compose | EC2에서 웹(Nginx) · 백엔드 · DB · Redis 컨테이너 실행 (`deploy/docker-compose.prod.yml`) |
+| Docker · Docker Compose | EC2에서 웹(Nginx) · 백엔드 · Redis 컨테이너 실행 (`deploy/docker-compose.prod.yml`). DB는 RDS라 `docker-compose.external-db.yml`을 겹친다 |
+| AWS RDS for PostgreSQL | 운영 DB (10/28 ~, BE-59). 2장 "DB 운영 단계" |
+| AWS S3 | 파일 저장소(관리자가 올리는 사건 사진, COMMON-47). Presigned URL로만 내려주고, EC2 IAM 역할로 접근한다 (`deploy/README.md` "파일 저장소 S3") |
+| Let's Encrypt (certbot) | HTTPS 인증서 발급 · 자동 갱신 (BE-75). HSTS는 Nginx가 붙인다(3장 "보안 헤더") |
 | Nginx | 웹 이미지 안에서 프론트엔드 빌드 파일(정적 파일) 서빙, `/api` 요청을 백엔드 컨테이너로 프록시 (`frontend/nginx/default.conf`) |
 | GHCR (GitHub Container Registry) | 운영 이미지 저장소. 서버는 받아서 실행만 한다 (서버에서 빌드하지 않음) |
 

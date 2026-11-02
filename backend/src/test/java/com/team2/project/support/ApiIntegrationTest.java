@@ -37,6 +37,24 @@ public abstract class ApiIntegrationTest {
 	protected static final String COOKIE = "NLNB_AID";
 
 	private final List<Long> createdCaseIds = new ArrayList<>();
+	private final List<Long> createdMemberIds = new ArrayList<>();
+
+	/**
+	 * 회원 한 명(카카오, 닉네임 없음). 끝나면 회원 키 데이터(member_* — 회원 삭제로 함께 지워짐) · 체험 · 성향 결과 · 커뮤니티 글과 함께 지운다.
+	 * 인증은 시험용 토큰 "member-{id}"(FakeMemberTokens)이므로 쓰는 시험 클래스에 {@code @Import(FakeMemberTokens.class)}를 붙인다 (BE-140)
+	 */
+	protected long registerMember() {
+		Long id = jdbcTemplate.queryForObject(
+				"INSERT INTO member (provider, provider_user_id) VALUES ('KAKAO', ?) RETURNING id", Long.class,
+				UUID.randomUUID().toString());
+		createdMemberIds.add(id);
+		return id;
+	}
+
+	/** 그 회원의 Authorization 헤더 값 (FakeMemberTokens) */
+	protected static String bearer(long memberId) {
+		return FakeMemberTokens.bearer(memberId);
+	}
 
 	protected long insertCase(String crimeType, String status) {
 		Long id = jdbcTemplate.queryForObject("""
@@ -61,13 +79,44 @@ public abstract class ApiIntegrationTest {
 		return id;
 	}
 
-	/** 대본(BE-108) 한 건. reviewStatus가 null이면 검수 대기. 내용은 비워 두고 "승인 여부"만 본다 */
-	protected void insertScriptWithReview(long caseId, String reviewStatus) {
+	/**
+	 * 대본(BE-108) 한 건 — 블록(BE-126)은 다섯 단위 모두, 같은 검수 상태로. reviewStatus가 null이면 검수 대기. 내용은 비워 두고
+	 * "승인 여부"만 본다
+	 *
+	 * @return 대본 ID (블록 상태를 바꿀 때 쓴다)
+	 */
+	protected long insertScriptWithReview(long caseId, String reviewStatus) {
+		long scriptId = insertScriptRow(caseId);
+		for (String unit : List.of("U0", "U1", "U2", "U4")) {
+			insertScriptBlock(scriptId, unit, "{}", reviewStatus);
+		}
+		insertScriptBlock(scriptId, "U3", "[]", reviewStatus);
+		return scriptId;
+	}
+
+	/** 증거조사만 만든 대본(BE-107) — U3 블록 하나, 나머지 단위는 pending. 승인돼 있어도 "준비 중"이다(BE-126) */
+	protected long insertEvidenceOnlyScript(long caseId, String reviewStatus) {
+		long scriptId = insertScriptRow(caseId);
+		jdbcTemplate.update("UPDATE case_script SET pending = '[\"U0\", \"U1\", \"U2\", \"U4\"]'::jsonb WHERE id = ?",
+				scriptId);
+		insertScriptBlock(scriptId, "U3", "[]", reviewStatus);
+		return scriptId;
+	}
+
+	private long insertScriptRow(long caseId) {
+		return jdbcTemplate.queryForObject("""
+				INSERT INTO case_script (case_id, model, generated_at, stopped, cast_roles, publishable)
+				VALUES (?, 'test', now(), false, '{}'::jsonb, true)
+				RETURNING id
+				""", Long.class, caseId);
+	}
+
+	/** 대본 블록(BE-126) 한 행. 오류 없는 블록(publishable)으로 넣는다 */
+	protected void insertScriptBlock(long scriptId, String unit, String contentJson, String reviewStatus) {
 		jdbcTemplate.update("""
-				INSERT INTO case_script (case_id, evidence, model, generated_at, stopped, cast_roles, publishable,
-				                         review_status)
-				VALUES (?, '[]'::jsonb, 'test', now(), false, '{}'::jsonb, true, ?)
-				""", caseId, reviewStatus);
+				INSERT INTO case_script_block (script_id, unit, content, publishable, review_status)
+				VALUES (?, ?, ?::jsonb, true, ?)
+				""", scriptId, unit, contentJson, reviewStatus);
 	}
 
 	/** 신문 지면(BE-92). 사건당 1건 */
@@ -132,9 +181,7 @@ public abstract class ApiIntegrationTest {
 			jdbcTemplate.update("DELETE FROM experience WHERE case_id = ?", caseId);
 		}
 		userIds.forEach(id -> {
-			jdbcTemplate.update("DELETE FROM attendance WHERE anonymous_user_id = ?", id);	// 출석 기록(BE-97, FK)
-			jdbcTemplate.update("DELETE FROM profile_deco WHERE anonymous_user_id = ?", id);	// 꾸미기(BE-96, FK)
-			jdbcTemplate.update("DELETE FROM profile_setting WHERE anonymous_user_id = ?", id);	// 프로필 선택 설정(BE-104, FK)
+			jdbcTemplate.update("DELETE FROM personality_result WHERE anonymous_user_id = ?", id);
 			jdbcTemplate.update("DELETE FROM anonymous_user WHERE id = ?", id);
 		});
 		for (Long caseId : createdCaseIds) {
@@ -146,5 +193,16 @@ public abstract class ApiIntegrationTest {
 			jdbcTemplate.update("DELETE FROM legal_case WHERE id = ?", caseId);
 		}
 		createdCaseIds.clear();
+		// 회원 키 데이터(member_* 7개 · 가져오기 결정)는 회원 삭제로 함께 지워진다(ON DELETE CASCADE). 아닌 것을 먼저 지운다 (BE-140)
+		createdMemberIds.forEach(id -> {
+			jdbcTemplate.update("DELETE FROM community_like WHERE member_id = ?", id);
+			jdbcTemplate.update("DELETE FROM community_comment WHERE member_id = ?", id);
+			jdbcTemplate.update("DELETE FROM community_post WHERE member_id = ?", id);	// 글의 댓글 · 좋아요는 함께 지워진다
+			jdbcTemplate.update("DELETE FROM personality_result WHERE member_id = ?", id);
+			jdbcTemplate.update("DELETE FROM experience_personality WHERE experience_id IN (SELECT id FROM experience WHERE member_id = ?)", id);
+			jdbcTemplate.update("DELETE FROM experience WHERE member_id = ?", id);
+			jdbcTemplate.update("DELETE FROM member WHERE id = ?", id);
+		});
+		createdMemberIds.clear();
 	}
 }

@@ -6,7 +6,7 @@
 
 | 파일 | 대응 API | 내용 |
 | --- | --- | --- |
-| `caseListMockApi.js` · `caseListMockData.js` | API 1 · 2 · 3 | 사건 목록, 체험 시작, 내 체험 상태(S-09 진입 확인, 기록을 만들지 않는다). `caseId` 1이 가상 살인 사건이고 2 ~ 9는 임의 데이터. `scriptReady`(BE-116, FE-125)는 대본이 있는 사건 1만 `true`. 목록의 `myStatus`(FE-19 배지)는 체험 시작과 같은 저장소에서 계산한다: 실제 API처럼 체험 기록이 없으면 `null`("체험 시작"). `caseId` 1은 `mockExperienceStore`에 값이 생기면(체험 시작 · 다른 목 화면 진입 시 저장) 진행 중, `setMockStatus('COMPLETED')`면 완료. 나머지는 이번 세션에 시작한 사건만 진행 중 |
+| `caseListMockApi.js` · `caseListMockData.js` | API 1 · 2 · 3 · 18 | 사건 목록, 체험 시작, 내 체험 상태(S-09 진입 확인, 기록을 만들지 않는다). `caseId` 1이 가상 살인 사건이고 2 ~ 9는 임의 데이터. `scriptReady`(BE-116, FE-125) · `scriptStatus`(FE-145: 사건 2는 MAINTENANCE, 사건 3은 `scriptStatus` 없이 `scriptReady`만 true인데 API 18이 503 — 둘 다 `SCRIPT_UNDER_MAINTENANCE`)와 공개 대본(API 18, FE-139)은 대본이 있는 사건 1만 있다 — API 18 목은 `content/case-1/script.json`에서 대사만 뽑아 블록 모양으로 준다(실제 사건 대본은 넣지 않는다). 목록의 `myStatus`(FE-19 배지)는 체험 시작과 같은 저장소에서 계산한다: 실제 API처럼 체험 기록이 없으면 `null`("체험 시작"). `caseId` 1은 `mockExperienceStore`에 값이 생기면(체험 시작 · 다른 목 화면 진입 시 저장) 진행 중, `setMockStatus('COMPLETED')`면 완료. 나머지는 이번 세션에 시작한 사건만 진행 중 |
 | `overviewMockApi.js` · `overviewMockData.js` | API 4 · 5 | 사건 개요 · 형량 구간, 사전 판단 제출 |
 | `reviewMockApi.js` · `reviewMockData.js` | API 6 · 7 | 사건 정보 섹션, 섹션 확인 기록 |
 | `verdictMockApi.js` · `verdictMockData.js` | API 8 · 9 | 판결 입력 정보, 판결 제출 (감경 `reducedTo` 검증 포함) |
@@ -14,6 +14,7 @@
 | `levelMockApi.js` | L-1 · L-2와 P-5 `level` (BE-106, FE-114) | 서버와 같은 레벨 곡선(k=0.08, 총 10000 XP) · 직업 11등급 · 잠김(409 `JOB_LOCKED`). Lv.7 · 무직에서 시작하고, 개발 전용 `setMockLevel` · `unlockMockNextJob` · `resetMockLevel`은 프로필카드 화면의 "개발용" 버튼이 쓴다. 저장값은 `localStorage`(`nlnb-mock-level`) |
 | `communityMockData.js` 글쓴이 | 커뮤니티 글쓴이 · 랭킹 모양 (FE-116) | `level` · `job { code, name }` · `cardLine { line, showLevel }`를 서버 계약 모양으로 둔다. 커뮤니티 API가 생기면 같은 모양으로 오도록 BE에 요청 중. 내 글은 내 레벨 · 직업 · 카드 아래 줄 설정을 쓴다 |
 | `profileDecoMockApi.js` · `profileDecoMockData.js` | P-5 꾸미기 부분 · P-6 · P-7 (BE-96 · BE-97, FE-71) | 서버가 하는 일을 흉내 낸다: 출석 기록(하루 한 번, 이전 11일 + 기록한 날), 꾸미기 전체 저장(값 목록 · 대표 이미지 형식 400 → 잠김 409), 마이페이지에 붙는 `profileDeco` · `achievements` · `unlocked`. 도전과제 · 보상 표(서버 쪽 표)는 `profileDecoMockData.js`에 있고 서버 표를 바꾸면 같이 고친다. 수집 도전과제는 서버처럼 `PENDING`이다. 저장값 · 출석 날짜는 `localStorage`(`nlnb-mock-profile-deco` · `nlnb-mock-attendance`) |
+| `collectionMockApi.js` | P-9 ~ P-11과 P-5 `collection` · 도전과제 `unlockedAt` · `isNew` (BE-83 · BE-136, FE-132) | 수집 기록(형식 · 목록 밖 400, 멱등, `backfill`이면 "본 것"), 컬렉션 · 도전과제 "봤음". 처음 열면 사건 1을 막 마친 것처럼 일러스트 3장 · 의상 4가지가 "새로 얻음"으로 들어 있다. 체험 완료 여부는 보지 않는다. 저장값은 `localStorage`(`nlnb-mock-collection` · `nlnb-mock-achievement-unlocks`) |
 | `authMockApi.js` | 사용자 로그인 (아직 API 없음, FE-52) | 개발용 목업 로그인 · 로그아웃. 어떤 아이디 · 비밀번호든 로그인되고 닉네임은 아이디의 @ 앞부분, 카카오는 "카카오 판사". 계정 · 비밀번호는 저장하지 않는다. 로그인 상태(닉네임)는 화면이 `utils/session.js`에 둔다 |
 | `communityMockApi.js` · `communityMockData.js` | 커뮤니티 (실제 API는 BE-115 · FE-137, 목은 화면 확인용) | 글 목록(말머리 · 사건 거르기, 최신 · 좋아요 · 댓글순, 쪽마다 6개) · 글 상세 · 글쓰기(사진 최대 3장 · 내 판결 붙이기) · 좋아요 켜고 끄기 · 댓글. 다른 사람 글은 고정 값, 내가 쓴 글 · 댓글 · 좋아요는 `localStorage`(`nlnb-mock-community`). 쓰기 · 댓글 · 좋아요는 목업 로그인이 필요하고(`UNAUTHORIZED`, 서버와 같은 코드), 내 판결은 S-05 판결 확정 뒤에만 붙는다(AI · 실제 판결은 붙지 않는다). 커뮤니티 메인(FE-89): 이야기 많은 사건 셋 · 추천 사건 셋 · 레벨 랭킹 열 명(`getCommunityHome`) |
 | `mockExperienceStore.js` | — | 체험 상태를 브라우저 `localStorage`(`nlnb-mock-review`)에 저장하는 목 전용 저장소 |

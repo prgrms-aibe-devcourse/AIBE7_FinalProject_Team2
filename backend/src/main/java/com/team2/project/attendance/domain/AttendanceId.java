@@ -5,25 +5,24 @@ import jakarta.persistence.Embeddable;
 import java.io.Serializable;
 import java.time.LocalDate;
 import java.util.Objects;
-import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/** 출석 기본 키: 익명 사용자 × 출석 날짜 (하루 한 줄, V22) */
+/** 출석 기본 키: 회원 × 출석 날짜 (하루 한 줄, V41) */
 @Embeddable
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class AttendanceId implements Serializable {
 
-	@Column(name = "anonymous_user_id")
-	private UUID anonymousUserId;
+	@Column(name = "member_id")
+	private Long memberId;
 
 	@Column(name = "attended_on")
 	private LocalDate attendedOn;
 
-	public AttendanceId(UUID anonymousUserId, LocalDate attendedOn) {
-		this.anonymousUserId = anonymousUserId;
+	public AttendanceId(Long memberId, LocalDate attendedOn) {
+		this.memberId = memberId;
 		this.attendedOn = attendedOn;
 	}
 
@@ -35,11 +34,11 @@ public class AttendanceId implements Serializable {
 		if (!(o instanceof AttendanceId other)) {
 			return false;
 		}
-		return Objects.equals(anonymousUserId, other.anonymousUserId) && Objects.equals(attendedOn, other.attendedOn);
+		return Objects.equals(memberId, other.memberId) && Objects.equals(attendedOn, other.attendedOn);
 	}
 
 	@Override
 	public int hashCode() {
-		return Objects.hash(anonymousUserId, attendedOn);
+		return Objects.hash(memberId, attendedOn);
 	}
 }

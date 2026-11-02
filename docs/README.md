@@ -26,6 +26,7 @@
 | [api-specification.md](api-specification.md) | API 명세서. 경로 · 요청 · 응답 · 에러 코드 · 상태별 호출 가능 API |
 | [sequence-diagram.md](sequence-diagram.md) | 시퀀스 다이어그램. 사건 등록 · 체험 · 판결 · 비교 흐름 |
 | [tech-stack.md](tech-stack.md) | 기술 스택 정리 |
+| [architecture.md](architecture.md) | 인프라 아키텍처. 운영 구성(EC2 · RDS · S3 · Redis · Nginx) · 운영 시간 · 요청 · 배포 흐름 · 외부 서비스 · 보안 그룹 · 백업 · 운영 규칙 한눈에 보기, 상세 문서 링크 |
 | [ai-judgment-pipeline.md](ai-judgment-pipeline.md) | AI 판결 오프라인 파이프라인. 판결문 → 비식별화 → 재판부 초안 → 사전 학습 점검 → 참고 자료 RAG → 생성 → 선택 → 적재 흐름, 모델 · 재시도 · 무료 등급 정책, 구현 상태 (`tools/ai-judgment`) |
 | [rag-precedent-sources.md](rag-precedent-sources.md) | AI 판결 RAG 판례 수집처 조사. 수집처별 약관 · 자동 수집 가능 여부, 살인 판례 건수 · 중복 확인 결과 (BE-50) |
 | [rag-handover.md](rag-handover.md) | AI 판결 RAG 판례 · 양형기준 저장소 인수인계(BE-50 · BE-51 · BE-52 · BE-54). 현재 데이터 상태 · 결정 사항 · 점수 기준 · generate RAG 결과 · 남은 일(인증키 · 판례 확충 · BE-53 · 55 · BE-56) · 배포 체크리스트 |
@@ -55,9 +56,21 @@
 | [document-consistency-report.md](document-consistency-report.md) | 문서 정합성 점검 보고서. 문서 사이 불일치와 결정 기록 |
 | [cases/](cases/README.md) | 사건 파일 작성 가이드와 가상 사건 샘플. 실제 사건 파일은 저장소에 두지 않고, 판결문 원본 · 적재 SQL은 비공개 저장소(`backend/private-seed`)에 둔다 |
 
+### 운영 · 배포 (docs 밖에 있는 문서)
+
+설정 파일 옆에 두어야 함께 고쳐지는 문서라 각 폴더에 있다. 먼저 [architecture.md](architecture.md)로 전체를 본 뒤 들어간다.
+
+| 문서 | 내용 |
+| --- | --- |
+| [deploy/README.md](../deploy/README.md) | 운영 서버 실행 · 자동 배포 · HTTPS · 요청 제한 · Redis · 운영 데이터 · 백업 · RDS · S3 · Swap · 파이프라인 서비스 · 모니터링 에이전트 |
+| [monitoring/README.md](../monitoring/README.md) | 지표 · 로그 · 대시보드 · 경보, Grafana Cloud 운영 설정 기록 |
+| [.github/workflows/README.md](../.github/workflows/README.md) | CI · 이미지 빌드 · 운영 배포 확인 |
+| [backend/TESTING.md](../backend/TESTING.md) | 로컬 · CI 테스트 DB |
+
 ## 읽는 순서 (처음 보는 사람)
 
 1. 기획서 → 요구사항 정의서 → MVP 정의서: 무엇을 만드는지, MVP 범위는 어디까지인지
 2. 유저 흐름도 → 정보 구조 · 와이어프레임: 사용자가 어디로 가는지, 화면과 상태 규칙
 3. ERD → API 명세서 → 시퀀스 다이어그램: 데이터와 API
 4. 기술 스택 · WBS · 컨벤션: 개발 환경과 일정, 작업 규칙
+5. 인프라 아키텍처: 운영 구성과 배포 흐름 (운영 · 배포를 맡거나 장애를 볼 때)

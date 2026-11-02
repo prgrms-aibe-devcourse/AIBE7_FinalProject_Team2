@@ -15,6 +15,7 @@ import com.team2.project.common.exception.ApiExceptionAdvice;
 import com.team2.project.common.exception.BusinessException;
 import com.team2.project.common.exception.ErrorCode;
 import com.team2.project.common.web.AnonymousIdCookie;
+import com.team2.project.common.web.Requester;
 import com.team2.project.common.web.RequesterArgumentResolver;
 import com.team2.project.experience.domain.ExperienceStatus;
 import com.team2.project.experience.domain.InvalidExperienceStateException;
@@ -55,7 +56,7 @@ class ReviewControllerTest {
 
 	@Test
 	void getReview_withCookie_passesAnonymousIdAndReturns200() throws Exception {
-		when(service.getReview(7L, Optional.of(ANONYMOUS_ID))).thenReturn(
+		when(service.getReview(7L, Requester.guest(ANONYMOUS_ID))).thenReturn(
 			new ReviewResponse(ExperienceStatus.PRE_JUDGED, 1, 2, List.of(), List.of(3, 4), null, null));
 		mockMvc.perform(get("/api/v1/cases/7/experience/review").cookie(cookie()))
 			.andExpect(status().isOk())
@@ -66,7 +67,7 @@ class ReviewControllerTest {
 
 	@Test
 	void getReview_noExperience_returns404() throws Exception {
-		when(service.getReview(7L, Optional.empty())).thenThrow(new BusinessException(ErrorCode.EXPERIENCE_NOT_FOUND));
+		when(service.getReview(7L, Requester.guest(Optional.empty()))).thenThrow(new BusinessException(ErrorCode.EXPERIENCE_NOT_FOUND));
 		mockMvc.perform(get("/api/v1/cases/7/experience/review"))
 			.andExpect(status().isNotFound())
 			.andExpect(jsonPath("$.code").value("EXPERIENCE_NOT_FOUND"));
@@ -74,7 +75,7 @@ class ReviewControllerTest {
 
 	@Test
 	void getReview_wrongState_returns409WithCurrentStatus() throws Exception {
-		when(service.getReview(7L, Optional.of(ANONYMOUS_ID)))
+		when(service.getReview(7L, Requester.guest(ANONYMOUS_ID)))
 			.thenThrow(new InvalidExperienceStateException(ExperienceStatus.STARTED, "x"));
 		mockMvc.perform(get("/api/v1/cases/7/experience/review").cookie(cookie()))
 			.andExpect(status().isConflict())
@@ -84,7 +85,7 @@ class ReviewControllerTest {
 
 	@Test
 	void confirmStep_valid_returns200() throws Exception {
-		when(service.confirmStep(7L, Optional.of(ANONYMOUS_ID), new ReviewStepRequest(3)))
+		when(service.confirmStep(7L, Requester.guest(ANONYMOUS_ID), new ReviewStepRequest(3)))
 			.thenReturn(new ReviewStepResponse(ExperienceStatus.REVIEWING, 3, 4));
 		mockMvc.perform(post("/api/v1/cases/7/experience/review-steps").cookie(cookie())
 				.contentType(MediaType.APPLICATION_JSON).content("{\"step\":3}"))
@@ -106,12 +107,12 @@ class ReviewControllerTest {
 
 	@Test
 	void confirmStep_skipped_returns409StepOutOfOrder() throws Exception {
-		when(service.confirmStep(eq(7L), eq(Optional.of(ANONYMOUS_ID)), any()))
+		when(service.confirmStep(eq(7L), eq(Requester.guest(ANONYMOUS_ID)), any()))
 			.thenThrow(new ReviewStepOutOfOrderException(2, 4));
 		mockMvc.perform(post("/api/v1/cases/7/experience/review-steps").cookie(cookie())
 				.contentType(MediaType.APPLICATION_JSON).content("{\"step\":4}"))
 			.andExpect(status().isConflict())
 			.andExpect(jsonPath("$.code").value("STEP_OUT_OF_ORDER"));
-		verify(service).confirmStep(7L, Optional.of(ANONYMOUS_ID), new ReviewStepRequest(4));
+		verify(service).confirmStep(7L, Requester.guest(ANONYMOUS_ID), new ReviewStepRequest(4));
 	}
 }

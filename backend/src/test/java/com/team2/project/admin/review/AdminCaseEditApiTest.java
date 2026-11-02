@@ -29,6 +29,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.AbstractMockHttpServletRequestBuilder;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * 사건 내용 수정 · 가치관 축 확정 · 사건 공개 · 공개 취소 A-11 ~ A-13 · A-13-14 (API 명세 8-2, BE-43 · BE-118).
@@ -178,6 +179,29 @@ class AdminCaseEditApiTest extends ApiIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("A-11: 대본 입력(제목 · 개요)이 실제로 바뀔 때만 사건 내용 판이 오른다 (BE-126 블록 basis)")
+	void edit_bumpsContentRevisionOnlyForScriptInputs() throws Exception {
+		perform(patch(caseUrl()).contentType(MediaType.APPLICATION_JSON).content("{\"shortIntro\": \"소개만 바꾼다\"}"))
+			.andExpect(status().isOk());
+		assertThat(contentRevision()).isEqualTo(1);		// 대본이 받지 않는 값
+
+		String overview = jdbcTemplate.queryForObject("SELECT overview FROM legal_case WHERE id = ?", String.class, caseId);
+		perform(patch(caseUrl()).contentType(MediaType.APPLICATION_JSON)
+				.content(JsonMapper.builder().build().writeValueAsString(Map.of("overview", overview))))
+			.andExpect(status().isOk());
+		assertThat(contentRevision()).isEqualTo(1);		// 같은 값으로 저장
+
+		perform(patch(caseUrl()).contentType(MediaType.APPLICATION_JSON)
+				.content("{\"title\": \"판 확인용 새 제목 " + UUID.randomUUID() + "\", \"overview\": \"개요를 고친다\"}"))
+			.andExpect(status().isOk());
+		assertThat(contentRevision()).isEqualTo(3);		// 제목 · 개요 각각
+	}
+
+	private int contentRevision() {
+		return jdbcTemplate.queryForObject("SELECT content_revision FROM legal_case WHERE id = ?", Integer.class, caseId);
+	}
+
+	@Test
 	@DisplayName("A-11: 배역 · 민감 플래그가 규칙에 맞지 않으면 400 (BE-125)")
 	void edit_invalidCastAndFlags() throws Exception {
 		for (String body : List.of("{\"castRoles\": null}", "{\"castRoles\": {\"prosecutor\": \"naero\", \"defense\": \"naero\"}}",
@@ -237,16 +261,24 @@ class AdminCaseEditApiTest extends ApiIntegrationTest {
 		perform(post(caseUrl() + "/publish"))
 			.andExpect(status().isConflict())
 			.andExpect(jsonPath("$.code").value("PUBLISH_NOT_READY"))
-			.andExpect(jsonPath("$.details.length()").value(3))
+			.andExpect(jsonPath("$.details.length()").value(4))
 			.andExpect(jsonPath("$.details[0].reason").value("NO_PUBLISHED_AI"))
 			.andExpect(jsonPath("$.details[1].reason").value("NO_PUBLISHED_COURT"))
-			.andExpect(jsonPath("$.details[2].reason").value("NO_PENALTY_RULE"));
+			.andExpect(jsonPath("$.details[2].reason").value("NO_PENALTY_RULE"))
+			.andExpect(jsonPath("$.details[3].reason").value("NO_PAPER"));
 
 		judgment("AI");
 		judgment("COURT");
 		jdbcTemplate.update("""
 			INSERT INTO penalty_rule (case_id, penalty_type, allowed_min, allowed_max, suspension_allowed, display_order)
 			VALUES (?, 'PRISON', 60, 360, true, 1)""", caseId);
+		// 지면만 빠지면 그것 하나로 막힌다(BE-147)
+		perform(post(caseUrl() + "/publish"))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.details.length()").value(1))
+			.andExpect(jsonPath("$.details[0].reason").value("NO_PAPER"));
+
+		insertCasePaper(caseId, "테스트 헤드라인");
 		perform(post(caseUrl() + "/publish"))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.status").value("PUBLISHED"))
@@ -441,13 +473,14 @@ class AdminCaseEditApiTest extends ApiIntegrationTest {
 		return "/api/v1/admin/factors/" + factorId + "/value-axis";
 	}
 
-	/** 공개 조건(A-13)을 모두 채운다: 공개 AI · 재판부 판결, 형벌 규칙 */
+	/** 공개 조건(A-13)을 모두 채운다: 공개 AI · 재판부 판결, 형벌 규칙, 신문 지면(BE-147) */
 	private void makePublishable() {
 		judgment("AI");
 		judgment("COURT");
 		jdbcTemplate.update("""
 			INSERT INTO penalty_rule (case_id, penalty_type, allowed_min, allowed_max, suspension_allowed, display_order)
 			VALUES (?, 'PRISON', 60, 360, true, 1)""", caseId);
+		insertCasePaper(caseId, "테스트 헤드라인");
 	}
 
 	private void judgment(String subjectType) {

@@ -23,7 +23,7 @@ const NAMES = { naero: '내로', nambul: '남불', 'law-scale': 'AI 판사', 'la
 const ENTER_MS = 1000; // paperStage.css의 들어오는 연출(.55초 + 남불 .12초 지연, 대사창 .35초 지연 + .3초)이 모두 끝나는 시간
 const CAMEO_LABEL = '볼따구'; // 해설을 맡는 작은 내로 · 남불(배역이 아니라 데포르메 모습)
 const CAMEO_LOOK = 'cheek:idle-thinking';
-const DEFORM_LABEL = { ranma: '란마' }; // 데포르메 모습 이름(look "deform:ranma" → 이름표 "남불 란마") // 볼따구 컷은 지금 idle-thinking · idle-sorry 두 표정만 있다
+const DEFORM_LABEL = {}; // 데포르메 모습 이름(look "deform:{이름}" → 이름표 "남불 {이름}"). 란마는 11/02 삭제(COMMON-69)라 지금 비어 있다 // 볼따구 컷은 idle-neutral · happy · surprised · cheer · sorry · thinking 여섯 표정이다
 const SLIM_CHEEK_LABEL = '슬림볼따구'; // look "cheek-slim:…"의 모습 이름(이름표 "남불 슬림볼따구")
 const ROLE_LABEL = { actor: '사건 속 인물', prosecutor: '검사', defense: '변호인', judge: '판사' };
 const ROLE_COLOR = { 'AI 판사': 'law', '법정 진행': 'narrator', 볼따구: 'narrator', 판사: 'law', 'A씨 역': 'actor', 'B씨 역': 'actor', '사건 속 인물': 'actor', 검사: 'prosecutor', 변호인: 'defense', 재판장: 'law', 배석판사: 'law' };
@@ -268,7 +268,10 @@ function caseSheet(paper) {
   head.append(element('h2', 'sheet-headline', paper.headline), element('p', 'sheet-deck', paper.deck));
   const figure = element('figure', 'sheet-figure sheet-story');
   figure.dataset.focus = 'photo';
-  figure.append(picture(paper.photo, 'sheet-case-photo', '', 0), element('figcaption', '', paper.caption));
+  // 사진 캡션은 AI가 쓰는 값이라 연출 이미지 고지가 빠질 수 있다 — 고지는 고정 문구로 늘 보여 준다(FE-147, 1막 안내 대사에서 뺀 자리)
+  const caption = element('figcaption', '', paper.caption);
+  caption.append(element('span', 'sheet-photo-notice', 'AI로 만든 연출 이미지예요'));
+  figure.append(picture(paper.photo, 'sheet-case-photo', '', 0), caption);
   const body = element('section', 'sheet-story sheet-body');
   body.dataset.focus = 'body';
   paper.article.forEach((line) => body.append(element('p', 'sheet-text', line)));

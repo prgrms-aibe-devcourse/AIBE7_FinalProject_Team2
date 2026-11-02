@@ -17,6 +17,9 @@ BE-119가 만든 블록(`prompts/script/`)을 사건 분류에 맞게 골라 조
 - U3 증거조사: BE-107(`script_generation.generate_evidence_lines`) 그대로, CASE GUIDE · 민감 가드만 더한다.
 - U4 3막: 검사 의견 · 최종변론을 한 호출로(분량을 맞추려고). 최후진술은 두지 않는다(10/28 결정).
 
+저장은 단위 블록(U0 ~ U4)과 메타다(`build_blocks`, BE-126). 고정 문구 · 연출은 블록에 넣지 않고 프론트 공통 틀이 붙인다 —
+`build_script`의 `acts`는 같은 대사를 case-1 형식으로 조립해 본 것이다. 블록 계약은 `prompts/script/README.md` "저장 블록".
+
 모델은 대사 텍스트만 만든다. 자리 · 모습 · 이름표 · 절차 번호는 배역(`cast`)에서 코드가 정한다. 1b · 4 · 5 · 6막은
 사건마다 바뀌는 대사가 없고(고정 문구 · API 값) 배역만 따르는 공통 틀이라 여기서 만들지 않는다(FE-33 · FE-128).
 
@@ -67,6 +70,24 @@ LAST_QUESTION = {"admitted": "공소사실을 인정합니까?", "denied": "공�
                  "mental_state": "공소사실을 인정합니까?", "intent_disputed": "행위 사실을 인정합니까?",
                  "defense_claim": "행위 사실을 인정합니까?"}
 
+# 대본 저장 단위 (BE-126). 기사(PAPER)는 블록이 아니다 — API 17이 단일 출처다
+BLOCK_UNITS = ("U0", "U1", "U2", "U3", "U4")
+# 블록이 무엇을 보고 만들어지는지 — 이 값이 바뀌면 그 블록은 낡는다(BE-126 낡음 계산 · BE-129 연동 표의 정본).
+# 분류 축은 GUIDE_UNITS와 같고(extra 축의 분류 값 이름은 thirdParty), 민감 플래그는 모든 단위(가드), 배역은 배역이 말하는
+# U2 · U3 · U4, 기사는 기사를 읽는 U1, 사건 내용(제목 · 개요 · 섹션 · 판단 요소, 관리자가 A-11로 고칠 수 있다)은 사건을 직접 받는
+# U0 · U2 · U3 · U4(U1은 기사만 받는다), 블록 이름은 그 블록의 값을 받는 단위다(U2는 U0 질문, U4는 U0 쟁점 · U2 변호인 입장).
+# 백엔드는 같은 표를 contracts/script_blocks.json으로 맞춘다 — 표를 고치면 그 파일도 고친다(테스트가 잡는다)
+BLOCK_BASIS = {
+    "U0": ("case", "mood", "issue", "victim", "thirdParty", "sensitiveFlags"),
+    "U1": ("mood", "sensitiveFlags", "paper"),
+    "U2": ("case", "cast", "mood", "issue", "thirdParty", "sensitiveFlags", "U0"),
+    "U3": ("case", "cast", "victim", "thirdParty", "sensitiveFlags"),
+    "U4": ("case", "cast", "mood", "issue", "victim", "sensitiveFlags", "U0", "U2"),
+}
+# basis 중 DB가 가진 값 — 파이프라인은 DB의 판을 모르므로 비워 두고(None) 적재할 때 백엔드가 그 판으로 채운다.
+# 값 통째(기사 문단 · 사건 섹션)를 남기면 백엔드가 필드 · 공백까지 맞춰 비교해야 한다(PR #363 리뷰)
+DB_BASIS = ("case", "paper")
+
 # 단위별로 넣는 공개 단계 (사건 섹션 `stage` · 판단 요소 `revealStage`). LAW · SUMMARY는 넣지 않는다
 UNIT_STAGES = {"PAPER": ("OVERVIEW",), "U0": ("OVERVIEW", "DETAIL", "ARGUMENT"), "U2": ("OVERVIEW", "DETAIL", "ARGUMENT"),
                "U4": ("OVERVIEW", "DETAIL", "ARGUMENT")}
@@ -77,6 +98,7 @@ PAPER_DESK = "사회부"  # 백엔드 CasePaperService.DEFAULT_DESK와 같다
 PAPER_LIMITS = {"headline": 200, "deck": 300, "caption": 200}
 SLOT = {"A": 10, "B": 50, "stand": 30}  # case-1 2 · 3막 자리. 묶음 기준이라 배역이 바뀌어도 같은 쪽에 선다
 OUTPUT_HEADING = "# 출력 형식"
+SENSITIVE_NO_REACTION = "- 민감 사건이다. 분위기 안내와 상관없이 감탄 · 외침 · 리액션을 쓰지 않는다."
 
 
 def classification_errors(cls):
@@ -146,6 +168,8 @@ def build_system(unit, cls, roles):
     parts += [read_prompt(f"script_role_{role}.md") for role in roles]
     parts += guide_blocks(cls, unit)
     parts.append(guardrail_rules())
+    if cls.get("sensitiveFlags"):
+        parts.append(SENSITIVE_NO_REACTION)  # 분위기 블록의 리액션 허용을 덮어쓴다(BE-124)
     parts += sensitive_blocks(cls)
     return "\n\n".join(part.strip() for part in parts if part.strip())
 
@@ -187,18 +211,30 @@ def strip_line_prefix(text):
     return re.sub(r"^\s*(?:[①-⑳]\s*|\d+[.)]\s+)?(?:(?:남불|내로)\s*[:：\-–]\s*)?", "", text or "").strip()
 
 
+# 답 앞의 공백 · 말줄임표 · 마침표(섞여 있어도 한 번에)와, 예 · 네 / 아니요 · 아닙니다가 한 낱말로 끝났는지 보는 경계.
+# 경계가 없으면 "예전에는" · "네가" · "아니었습니다"처럼 접두만 같은 문장을 답으로 읽는다(PR #363 리뷰). 백엔드도 같은 규칙이다
+_ANSWER_LEAD = re.compile(r"^[\s….]+")
+_ANSWER_END = r"(?=$|[\s,.!?…])"
+_YES = re.compile(rf"^(?:예|네){_ANSWER_END}")
+_NO = re.compile(rf"^(?:아니요|아니오|아닙니다|아니){_ANSWER_END}")
+
+
 def normalize_answer(answer):
-    """피고인 역 답을 최소 응답으로(README): 예 · 네 → "…네.", 아니요 · 아닙니다 → "…아닙니다."."""
-    stripped = (answer or "").strip().lstrip("…").lstrip(".").strip()
-    if stripped.startswith(("예", "네")):
+    """피고인 역 답을 최소 응답으로(README): 예 · 네 → "…네.", 아니요 · 아닙니다 → "…아닙니다.". 그 밖의 답은 앞에 "…"만 붙인다.
+    예 · 네 · 아니요는 **한 낱말일 때만** 답으로 본다 — 뒤가 끝 · 공백 · 쉼표 · 마침표 · 물음표 · 느낌표 · 말줄임표여야 한다.
+    사례는 contracts/script_blocks.json(백엔드가 같은 파일로 맞춘다)."""
+    stripped = _ANSWER_LEAD.sub("", (answer or "").strip()).strip()
+    if _YES.match(stripped):
         return "…네."
-    if stripped.startswith(("아니", "아닙")):
+    if _NO.match(stripped):
         return "…아닙니다."
     return "…" + stripped
 
 
 def admits(answer):
-    return (answer or "").strip().lstrip("…").strip().startswith(("예", "네"))
+    """설계도 세 번째 답이 인정인지. 신문 답 정규화와 같은 기준이다("...네"처럼 마침표로 시작해도 인정) —
+    백엔드도 같은 규칙으로 다시 계산하므로 contracts/script_blocks.json의 사례로 맞춘다(BE-126)."""
+    return normalize_answer(answer) == "…네."
 
 
 def _josa(word, with_final, without_final):
@@ -389,6 +425,19 @@ def normalize_paper(value):
 
 # 검사 의견에 구형(형량)이 들어가면 사용자가 판결을 입력하기 직전에 앵커링이 된다(PR #329 YOLO-NIM 리뷰). 실제 재판의 검사 의견은
 # 구형을 포함하므로 모델이 그대로 따라 할 가능성이 높다. 잡는 문형(SENTENCING_PATTERN)은 script_review가 갖는다
+# U1 대사 앞뒤에 끼는 고정 대사(프론트 틀 · 화면 코드). AI가 보지 못하면 장면 연결 · 되풀이를 못 피한다(BE-124, 팀원 개선안 개발-2).
+# 조립기(`_intro_act`)와 생성 문맥(`INTRO_FIXED_CONTEXT`)이 이 값을 함께 읽는다 — 프론트 틀 문구를 바꾸면 여기만 고친다(FE-147)
+INTRO_FIXED = {
+    "opening": "오늘 신문에 실린 사건이에요. 기사에 나온 내용만 같이 읽어 볼게요.",  # ① 앞. 화면 코드(overviewPage INTRO_STEP)가 붙인다
+    "photo": "그럼, 좀 더 자세히 살펴볼까요?",  # ①과 ② 사이
+    "end": "여기까지가 기사에 나온 내용이네요.",  # ④와 ⑤ 사이
+    "postcard": "이 사건에서는 어느 정도의 벌이 적절하다고 생각하세요?",  # ⑤ 뒤 첫인상 엽서 질문(1b)
+}
+INTRO_FIXED_CONTEXT = (f"대사 앞뒤에 아래 고정 대사가 들어간다. 이 말을 되풀이하지 않고 앞뒤가 이어지게 쓴다: ① 앞에 내로 \"{INTRO_FIXED['opening']}\" / "
+                       f"①과 ② 사이에 내로 \"{INTRO_FIXED['photo']}\" / ④와 ⑤ 사이에 내로 \"{INTRO_FIXED['end']}\" / "
+                       f"⑤ 뒤에 첫인상 엽서 질문 \"{INTRO_FIXED['postcard']}\"가 이어진다.")
+CLAIM_VS_FACT = ("- 변호인 대사에서도 사건 데이터에 사실로 적힌 내용(구금 · 자수 · 합의 같은 확인된 사실)은 \"주장합니다\"를 붙이지 않고 사실로 말한다. "
+                 "\"~라고 주장합니다\"는 사건 데이터에 주장으로 적힌 내용에만 쓴다. 한 문장에 둘이 섞이면 문장을 나눈다.")
 NO_SENTENCING = ("- 구형 · 형량 · 벌금액(\"징역 몇 년\" · \"벌금 얼마\")을 말하지 않는다. 사용자가 판결을 입력하기 전이라 앵커링이 된다. "
                  "전과 · 선고 이력 같은 사실은 데이터대로 말해도 된다.")
 def sentencing_errors(label, text):
@@ -434,9 +483,11 @@ def design_request(case, cls):
 def intro_request(paper, cls):
     system, scene, data = unit_prompt("U1", None, cls, paper=paper)
     return system, build_user(scene, data, [
-            "기사를 짚는 대사 5줄을 쓰세요. 순서: ① 남불 제목 소개 ② 남불 본문 첫 내용 ③ 내로 이어지는 내용 "
-            "④ 남불 이어지는 내용 ⑤ 남불 마무리(서두르지 말고 생각해 보자는 권유, 사건의 무게에 맞는 어조).",
-            "기사에 있는 내용만 쓴다. 대사 앞에 번호 · 화자 이름을 붙이지 않는다.",
+            "기사를 짚는 대사 5줄을 쓰세요. 순서: ① 남불 기사를 읽고 무슨 사건인지 자연스럽고 간단하게 소개 ② 남불 본문 첫 내용 "
+            "③ 내로 이어지는 내용 ④ 남불 이어지는 내용 ⑤ 남불 마무리(평가 없이 짧게 사용자가 첫인상을 남기는 단계로 넘긴다. "
+            "기사를 다시 요약하지 않고, 마지막 줄의 어조는 CASE GUIDE를 따른다).",
+            INTRO_FIXED_CONTEXT,
+            "기사에 있는 내용만 쓴다. 대사 앞에 번호 · 화자 이름을 붙이지 않는다. 조사를 빼지 않은 완전한 문장으로 쓰고, 문장 끝에 문장부호를 붙인다.",
             '출력은 JSON 객체 하나: {"lines":["①","②","③","④","⑤"]}',
         ])
 
@@ -456,6 +507,9 @@ def opening_request(case, cls, cast, design):
             "- 변호인 입장은 공개된 사실 · 입장 한 줄까지만 쓴다.",
             NO_SENTENCING,
             "- 공소사실 첫 대사는 \"공소사실을 말씀드리겠습니다.\"로 시작한다.",
+            "- 공소사실의 각 대사는 100자 이내다. 둘째 대사에 사건 내용과 적용 법조를 모두 담기 어려우면 사건 내용을 짧게 줄이고 "
+            "적용 법조는 한 구절로만 쓴다.",
+            CLAIM_VS_FACT,
         ])
 
 
@@ -465,6 +519,7 @@ def closing_request(case, cls, cast, design, opening):
             f"검사({NAMES[cast['prosecutor']]}) 의견 한 줄, 변호인({NAMES[cast['defense']]}) 최종변론 한 줄. 각 두 줄 이내.",
             "검사 의견은 \"검사 측 의견입니다.\"로, 최종변론은 \"변호인 측 최종변론입니다.\"로 시작한다.",
             NO_SENTENCING,
+            CLAIM_VS_FACT,
             '출력은 JSON 객체 하나: {"prosecutor":"...","defense":"..."}',
         ])
 
@@ -540,13 +595,13 @@ def _intro_act(lines):
     ai = _src("ai", unit="U1", basis=["paper"])
     steps = [
         {"say": "nambul", "look": {"nambul": "guide-neutral"}, "text": lines[0], "source": ai, "focus": "head"},
-        {"say": "naero", "text": "사진은 사건을 이해하도록 만든 연출 이미지예요. 실제 현장 사진이 아니에요.",
+        {"say": "naero", "text": INTRO_FIXED["photo"],
          "source": _src("fixed"), "focus": "photo"},
         {"say": "nambul", "text": lines[1], "source": ai, "focus": "body"},
         {"say": "naero", "text": lines[2], "source": ai, "focus": "body"},
         {"say": "nambul", "text": lines[3], "source": ai, "focus": "body"},
         {"say": "naero", "look": {"naero": "react-sorry", "nambul": "idle-neutral"},
-         "text": "기사로 알 수 있는 건 여기까지예요. 기사에 없는 이야기는 지어내지 않을게요.", "source": _src("fixed"),
+         "text": INTRO_FIXED["end"], "source": _src("fixed"),
          "focus": "body"},
         {"say": "nambul", "look": {"nambul": "react-sorry"}, "text": lines[4], "source": ai, "focus": "body"},
     ]
@@ -604,7 +659,7 @@ def _trial_act(cast, cls, design, opening, evidence, notice):
         {"say": "narrator", "cameo": A, "hideCast": True, "confirm": 4, "next": "판결로",
          "text": "재판은 여기까지예요. 이제 재판장, 당신이 판결할 차례예요.", "source": _src("fixed")},
     ]
-    return {"title": "2막 재판", "scene": "court", "procedures": ["인정신문", "모두진술", "쟁점 정리", "증거조사", "피고인신문"],
+    return {"title": "2막 재판", "scene": "court", "procedures": ["재판 시작", "모두진술", "쟁점 정리", "증거조사", "피고인신문"],
             "look": {A: "role:prosecutor", B: "role:defense"}, "slots": _court_slots(cast), "steps": steps}
 
 
@@ -638,6 +693,90 @@ def _cards(case, opening):
     }
 
 
+# ---------------------------------------------------------------- 블록 (BE-126 저장 단위)
+
+def block_revisions(present, repairs, base=None):
+    """블록마다 (판, 만들 때 본 앞 블록의 판). 처음 만든 블록은 1판이고, 고쳐 쓰기(BE-122 2차)가 값을 바꿀 때마다 1씩 오른다.
+    단위째 다시 만든 블록은 그때의 앞 블록 판을 본다. 그래서 U0 줄을 고치면 그 전에 만든 U2 · U4는 옛 U0를 보고 만든 것이 되어
+    적재하자마자 낡음으로 보인다 — 실제로 그렇기 때문이다.
+
+    `base`는 블록 재생성(BE-129 2차) 때 이미 있는 블록의 판이다. 다시 만든 블록은 그 판의 다음 판에서 시작하고, 다시 만들지 않은
+    앞 블록은 지금 판을 본 것으로 남는다."""
+    base = base or {}
+    revision = {unit: base.get(unit, 0) + 1 for unit in present}
+    current = lambda dep: revision.get(dep, base.get(dep))  # noqa: E731
+    seen = {unit: {dep: current(dep) for dep in BLOCK_BASIS[unit] if current(dep) is not None} for unit in present}
+    for repair in repairs:
+        unit = repair["unit"]
+        changed = repair["ok"] if repair["action"] == "line" else repair.get("replaced", False)
+        if unit not in revision or not changed:
+            continue
+        revision[unit] += 1
+        if repair["action"] == "unit":
+            seen[unit] = {dep: current(dep) for dep in seen[unit]}
+    return revision, seen
+
+
+def block_contents(case, generated):
+    """블록에 저장할 값. 화면에 바로 쓸 값으로 다듬되(U1 접두어 제거 · U2 카드 적용 법조), 다른 값에서 계산되는 값은 넣지 않는다 —
+    U2 신문 답은 모델이 쓴 그대로 두고 "…네." 정규화는 읽는 쪽(API 18)이 한다. 검수 결과의 `path`가 그대로 맞도록 모양은 바꾸지 않는다.
+    만들지 못한 단위는 빠진다(`pending`이 알린다)."""
+    units = generated["units"]
+    value = lambda unit: (units.get(unit) or {}).get("value")  # noqa: E731
+    contents = {}
+    if value("U0"):
+        contents["U0"] = value("U0")
+    if value("U1"):
+        contents["U1"] = {**value("U1"), "lines": [strip_line_prefix(x) for x in value("U1")["lines"][:5]]}
+    if value("U2"):
+        opening = json.loads(json.dumps(value("U2")))
+        indict = (opening.get("cards") or {}).get("indict")
+        if isinstance(indict, dict) and not indict.get("law"):
+            indict["law"] = case.get("appliedLaw")
+        contents["U2"] = opening
+    if generated.get("evidence"):
+        # 만들지 못한 줄까지 둔다 — 검수 결과 path(/{순번})가 이 목록을 가리킨다. 생성 결과와 따로 가공할 수 있게 복사한다
+        contents["U3"] = json.loads(json.dumps(generated["evidence"]))
+    if value("U4"):
+        contents["U4"] = value("U4")
+    return contents
+
+
+def build_blocks(case, cast, cls, generated, *, base=None, units=None):
+    """대본을 단위 블록과 메타로 나눈다 (BE-126 `case_script_block` 적재 계약).
+
+    블록 하나: {"content", "revision", "basis", "review", "warnings", "repairs"}. `basis`는 그 블록을 만들 때 본 값
+    (`BLOCK_BASIS`)이다 — 앞 블록은 판 번호, 분류 · 배역은 값 그대로, 사건 · 기사(`DB_BASIS`)는 None(적재할 때 백엔드가 DB 판으로
+    채운다). 지금 값과 다르면 낡은 블록이다(계산은 백엔드). `review` · `warnings` · `repairs`는 관리자 화면 전용이다.
+    `review` · `repairs`는 그 단위 것만 담는다(대본 전체에 걸린 `REVIEW_FAILED`는 대본의 `review`에만 있다).
+    메타: {"cast", "issue", "admits"} — 프론트 공통 틀이 고정 문구(신문 마지막 질문 · 답, 이름 · 자리)를 고르는 값이다.
+
+    블록 재생성(BE-129 2차)은 `units`(다시 만든 블록)만 내보내고, `base`(지금 블록의 판)에서 판을 잇는다(`block_revisions`)."""
+    contents = block_contents(case, generated)
+    made = [unit for unit in contents if units is None or unit in units]
+    repairs = generated.get("repairs", [])
+    revision, seen = block_revisions(made, repairs, base)
+    values = {"cast": dict(cast), "mood": cls.get("mood"), "issue": cls.get("issue"), "victim": cls.get("victim"),
+              "thirdParty": bool(cls.get("thirdParty")), "sensitiveFlags": sorted(cls.get("sensitiveFlags") or []),
+              **dict.fromkeys(DB_BASIS)}
+    review = generated.get("review", [])
+    blocks = {}
+    for unit in BLOCK_UNITS:
+        if unit not in made:
+            continue
+        blocks[unit] = {
+            "content": contents[unit], "revision": revision[unit],
+            "basis": {key: seen[unit].get(key) if key in BLOCK_UNITS else values[key] for key in BLOCK_BASIS[unit]},
+            "review": [issue for issue in review if issue["unit"] == unit],
+            "warnings": (generated["units"].get(unit) or {}).get("warnings", []),  # U3 경고는 줄마다 validation에 있다
+            "repairs": [repair for repair in repairs if repair["unit"] == unit],
+        }
+    design = contents.get("U0")
+    final_answer = design["questions"][2]["a"] if design and len(design.get("questions", [])) > 2 else None
+    meta = {"cast": dict(cast), "issue": cls.get("issue"), "admits": admits(final_answer) if design else None}
+    return blocks, meta
+
+
 def build_script(case, cast, cls, generated, *, model):
     """생성 결과를 case-1 형식 대본으로 묶는다. 만들지 못한 막은 빼고 `pending`에 단위를 남긴다."""
     units = generated["units"]
@@ -659,7 +798,10 @@ def build_script(case, cast, cls, generated, *, model):
     publishable = (not generated["stopped"] and not pending
                    and all(line.get("text") for line in generated["evidence"]) and bool(evidence)
                    and not has_errors(review))
+    blocks, meta = build_blocks(case, cast, cls, generated)
     return {
+        # 저장 단위(BE-126): 백엔드는 blocks · meta를 적재한다. 아래 acts는 같은 대사를 case-1 형식으로 조립한 것(확인 · 시험용)
+        "blocks": blocks, "meta": meta,
         "caseId": case.get("caseId"), "title": case.get("title"), "model": model,
         "cast": dict(cast), "classification": cls, "sensitiveNotice": notice, "design": design,
         "paper": generated.get("paper"),

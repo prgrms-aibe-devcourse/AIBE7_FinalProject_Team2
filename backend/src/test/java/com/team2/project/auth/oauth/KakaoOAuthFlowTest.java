@@ -10,6 +10,7 @@ import com.team2.project.common.redis.RedisConfig;
 import com.team2.project.common.security.token.TokenIssuer;
 import com.team2.project.common.web.AnonymousIdCookie;
 import com.team2.project.common.web.RefreshTokenCookies;
+import com.team2.project.member.domain.AuthProvider;
 import com.team2.project.member.service.MemberLoginService;
 import com.team2.project.support.ApiIntegrationTest;
 import jakarta.servlet.http.Cookie;
@@ -19,6 +20,7 @@ import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
@@ -69,6 +71,9 @@ class KakaoOAuthFlowTest extends ApiIntegrationTest {
 	private AnonymousIdCookie anonymousIdCookie;
 
 	@Autowired
+	private KakaoSignupPending signupPending;
+
+	@Autowired
 	private Clock clock;
 
 	private final List<String> redisKeys = new ArrayList<>();
@@ -85,7 +90,7 @@ class KakaoOAuthFlowTest extends ApiIntegrationTest {
 
 	private OAuthLoginSuccessHandler handler() {
 		return new OAuthLoginSuccessHandler(memberLoginService, tokenIssuer, refreshTokenCookies, anonymousIdCookie,
-			clock, SUCCESS, FAILURE);
+			signupPending, clock, SUCCESS, FAILURE);
 	}
 
 	private static OAuth2AuthenticationToken kakaoLogin(Object kakaoId) {
@@ -157,13 +162,40 @@ class KakaoOAuthFlowTest extends ApiIntegrationTest {
 	}
 
 	@Test
-	void 성공하면_리프레시_쿠키와_익명_쿠키를_심고_토큰_없이_화면으로_보낸다() throws Exception {
+	void 처음_온_계정이면_회원도_토큰도_만들지_않고_가입_대기만_두고_동의_화면으로_보낸다() throws Exception {
+		MockHttpServletResponse response = new MockHttpServletResponse();
+
+		handler().onAuthenticationSuccess(new MockHttpServletRequest("GET", CALLBACK), response,
+			kakaoLogin(Long.valueOf(KAKAO_ID)));
+
+		assertThat(response.getRedirectedUrl()).isEqualTo(SUCCESS + "?signup=terms");
+		assertThat(jdbcTemplate.queryForObject(
+			"SELECT count(*) FROM member WHERE provider = 'KAKAO' AND provider_user_id = ?", Integer.class, KAKAO_ID))
+			.as("동의 전에는 회원 행을 만들지 않는다").isZero();
+		assertThat(response.getCookie(RefreshTokenCookies.NAME)).as("로그인 쿠키 없음").isNull();
+		assertThat(response.getCookie(AnonymousIdCookie.NAME)).as("익명 기록도 아직 연결하지 않는다").isNull();
+		Cookie pending = response.getCookie(KakaoSignupPending.COOKIE);
+		assertThat(pending).isNotNull();
+		assertThat(pending.isHttpOnly()).isTrue();
+		assertThat(pending.getSecure()).isTrue();
+		assertThat(pending.getPath()).isEqualTo(KakaoSignupPending.PATH);
+		String key = "kakao-signup:pending:" + pending.getValue();
+		redisKeys.add(key);
+		assertThat(tokenRedis.opsForValue().get(key)).as("회원번호는 Redis에만 있다").isEqualTo(KAKAO_ID);
+		assertThat(tokenRedis.getExpire(key)).isBetween(1L, 600L);
+		assertThat(setCookies(response)).as("회원번호가 브라우저로 내려가지 않는다").doesNotContain(KAKAO_ID);
+	}
+
+	@Test
+	void 이미_가입한_회원이면_리프레시_쿠키와_익명_쿠키를_심고_토큰_없이_화면으로_보낸다() throws Exception {
+		memberLoginService.signupWithTerms(AuthProvider.KAKAO, KAKAO_ID, Optional.empty());
 		MockHttpServletResponse response = new MockHttpServletResponse();
 
 		handler().onAuthenticationSuccess(new MockHttpServletRequest("GET", CALLBACK), response,
 			kakaoLogin(Long.valueOf(KAKAO_ID)));
 
 		assertThat(response.getRedirectedUrl()).isEqualTo(SUCCESS);
+		assertThat(response.getCookie(KakaoSignupPending.COOKIE)).as("가입 대기는 만들지 않는다").isNull();
 		Cookie refresh = response.getCookie(RefreshTokenCookies.NAME);
 		assertThat(refresh).isNotNull();
 		redisKeys.add("refresh:" + refresh.getValue());

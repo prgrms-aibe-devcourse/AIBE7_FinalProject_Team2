@@ -12,10 +12,9 @@ export function renderNotFoundPage(container, { navigate }) {
   root.classList.add('not-found-page');
   card.classList.add('not-found-sheet');
   card.setAttribute('aria-labelledby', 'not-found-heading');
-  peek('cheek/idle-sorry');
-
   const path = window.location.pathname;
   const missingCase = CASE_PATH.test(path);
+  peek(missingCase ? 'cheek/idle-sorry' : 'cheek/idle-surprised'); // 사건 기록이 없으면 미안한 표정, 주소가 틀렸으면 놀란 표정
   const heading = element('h1', '', missingCase ? '사건 기록을 찾지 못했어요' : '이 주소의 서류가 없어요');
   heading.id = 'not-found-heading';
   const lead = element('p', 'not-found-lead', missingCase

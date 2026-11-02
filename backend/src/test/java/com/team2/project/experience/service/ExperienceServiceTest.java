@@ -3,6 +3,7 @@ package com.team2.project.experience.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.team2.project.common.web.Requester;
 import com.team2.project.common.exception.BusinessException;
 import com.team2.project.common.exception.ErrorCode;
 import com.team2.project.experience.domain.AnonymousUser;
@@ -89,28 +90,28 @@ class ExperienceServiceTest {
 	@Test
 	@DisplayName("비공개 사건은 CASE_NOT_FOUND, 쿠키 없음 · 모르는 ID · 체험 없음은 EXPERIENCE_NOT_FOUND")
 	void getMyExperience_notFound_throwsByOrder() {
-		assertErrorCode(() -> myExperienceService.getMyExperience(draftCaseId, Optional.of(anonymousId)),
+		assertErrorCode(() -> myExperienceService.getMyExperience(draftCaseId, Requester.guest(anonymousId)),
 			ErrorCode.CASE_NOT_FOUND);
-		assertErrorCode(() -> myExperienceService.getMyExperience(caseId, Optional.empty()),
+		assertErrorCode(() -> myExperienceService.getMyExperience(caseId, Requester.guest(Optional.empty())),
 			ErrorCode.EXPERIENCE_NOT_FOUND);
-		assertErrorCode(() -> myExperienceService.getMyExperience(caseId, Optional.of(UUID.randomUUID())),
+		assertErrorCode(() -> myExperienceService.getMyExperience(caseId, Requester.guest(UUID.randomUUID())),
 			ErrorCode.EXPERIENCE_NOT_FOUND);
 		UUID otherUser = anonymousUserRepository.save(AnonymousUser.issue(Instant.now())).getId();
-		assertErrorCode(() -> myExperienceService.getMyExperience(caseId, Optional.of(otherUser)),
+		assertErrorCode(() -> myExperienceService.getMyExperience(caseId, Requester.guest(otherUser)),
 			ErrorCode.EXPERIENCE_NOT_FOUND);
 	}
 
 	@Test
 	@DisplayName("상태 조건을 만족하지 않으면 INVALID_STATE와 현재 상태를 돌려준다")
 	void getMyExperienceAtLeast_beforeRequired_throwsWithCurrentStatus() {
-		assertThat(myExperienceService.getMyExperience(caseId, Optional.of(anonymousId)).getStatus())
+		assertThat(myExperienceService.getMyExperience(caseId, Requester.guest(anonymousId)).getStatus())
 			.isEqualTo(ExperienceStatus.STARTED);
 
-		assertThatThrownBy(() -> myExperienceService.getMyExperienceAtLeast(caseId, Optional.of(anonymousId),
+		assertThatThrownBy(() -> myExperienceService.getMyExperienceAtLeast(caseId, Requester.guest(anonymousId),
 			ExperienceStatus.VERDICT_CONFIRMED))
 			.isInstanceOfSatisfying(InvalidExperienceStateException.class,
 				e -> assertThat(e.getExperienceStatus()).isEqualTo(ExperienceStatus.STARTED));
-		assertThatThrownBy(() -> myExperienceService.getMyExperienceBetween(caseId, Optional.of(anonymousId),
+		assertThatThrownBy(() -> myExperienceService.getMyExperienceBetween(caseId, Requester.guest(anonymousId),
 			ExperienceStatus.PRE_JUDGED, ExperienceStatus.REVIEWED))
 			.isInstanceOf(InvalidExperienceStateException.class);
 	}
@@ -118,7 +119,7 @@ class ExperienceServiceTest {
 	@Test
 	@DisplayName("상태 이동은 조건부 갱신으로 DB에 반영된다")
 	void apply_unchangedByOthers_updatesState() {
-		Experience experience = myExperienceService.getMyExperience(caseId, Optional.of(anonymousId));
+		Experience experience = myExperienceService.getMyExperience(caseId, Requester.guest(anonymousId));
 		Instant now = Instant.now();
 
 		transitionService.apply(experience, e -> e.markPreJudged(now));
@@ -133,7 +134,7 @@ class ExperienceServiceTest {
 	@Test
 	@DisplayName("다른 요청이 먼저 상태를 바꿨으면 반영하지 않고 INVALID_STATE (동시 사전 판단 제출)")
 	void apply_changedByOtherRequest_throwsInvalidState() {
-		Experience experience = myExperienceService.getMyExperience(caseId, Optional.of(anonymousId));
+		Experience experience = myExperienceService.getMyExperience(caseId, Requester.guest(anonymousId));
 		// 같은 체험을 읽은 다른 요청이 먼저 사전 판단을 제출한 상황
 		jdbc.update("UPDATE experience SET status = 'PRE_JUDGED', last_reviewed_step = 1 WHERE id = ?", experience.getId());
 
@@ -145,7 +146,7 @@ class ExperienceServiceTest {
 	@Test
 	@DisplayName("섹션 확인(API 7) 동시 클릭: 다른 요청이 이미 그 섹션 이상으로 진행시켰으면 성공으로 보고, 실제 현재 값을 돌려준다 (리뷰 반영)")
 	void applyIdempotent_reviewStepAlreadyReachedByOther_succeedsWithActualState() {
-		Experience experience = myExperienceService.getMyExperience(caseId, Optional.of(anonymousId));
+		Experience experience = myExperienceService.getMyExperience(caseId, Requester.guest(anonymousId));
 		Instant now = Instant.now();
 		transitionService.apply(experience, e -> e.markPreJudged(now));			// STARTED -> PRE_JUDGED, step 1
 		transitionService.apply(experience, e -> e.confirmReviewStep(2, now));	// -> REVIEWING, step 2
@@ -166,10 +167,10 @@ class ExperienceServiceTest {
 	@Test
 	@DisplayName("판단 저장 + 상태 전이를 한 번에 묶으면, 정상 제출은 둘 다 반영된다")
 	void apply_withRelatedWrites_savesJudgmentAndTransitionsTogether() {
-		Experience experience = myExperienceService.getMyExperience(caseId, Optional.of(anonymousId));
+		Experience experience = myExperienceService.getMyExperience(caseId, Requester.guest(anonymousId));
 		jdbc.update("UPDATE experience SET status = 'REVIEWED', last_reviewed_step = 4 WHERE id = ?", experience.getId());
 		entityManager.clear();
-		Experience reloaded = myExperienceService.getMyExperience(caseId, Optional.of(anonymousId));
+		Experience reloaded = myExperienceService.getMyExperience(caseId, Requester.guest(anonymousId));
 
 		transitionService.apply(reloaded,
 			() -> judgmentRepository.saveAndFlush(Judgment.userFinal(reloaded, PenaltyType.PRISON, null, 120, null, null, null)),
@@ -185,10 +186,10 @@ class ExperienceServiceTest {
 	@Transactional(propagation = Propagation.NOT_SUPPORTED)
 	@DisplayName("판단 저장 + 상태 전이를 한 번에 묶으면, 동시 중복 제출의 패자도 유니크 위반 없이 currentStatus 포함 INVALID_STATE를 받는다 (리뷰 2번 반영)")
 	void apply_withRelatedWrites_duplicateSubmission_losesCleanlyWithCurrentStatus() {
-		Experience experience = myExperienceService.getMyExperience(caseId, Optional.of(anonymousId));
+		Experience experience = myExperienceService.getMyExperience(caseId, Requester.guest(anonymousId));
 		jdbc.update("UPDATE experience SET status = 'REVIEWED', last_reviewed_step = 4 WHERE id = ?", experience.getId());
 		entityManager.clear();
-		Experience reloaded = myExperienceService.getMyExperience(caseId, Optional.of(anonymousId));
+		Experience reloaded = myExperienceService.getMyExperience(caseId, Requester.guest(anonymousId));
 		// 다른 요청(승자)이 이미 판단을 저장하고 상태까지 확정한 상황
 		judgmentRepository.saveAndFlush(Judgment.userFinal(reloaded, PenaltyType.PRISON, null, 150, null, null, null));
 		jdbc.update("UPDATE experience SET status = 'VERDICT_CONFIRMED' WHERE id = ?", reloaded.getId());
@@ -211,7 +212,7 @@ class ExperienceServiceTest {
 		Long experienceId = experienceRepository.findLatest(anonymousId, caseId).orElseThrow().getId();
 		jdbc.update("UPDATE experience SET status = 'VERDICT_CONFIRMED', last_reviewed_step = 4 WHERE id = ?", experienceId);
 		entityManager.clear();	// 새 요청처럼 DB에서 다시 읽는다
-		Experience experience = myExperienceService.getMyExperience(caseId, Optional.of(anonymousId));
+		Experience experience = myExperienceService.getMyExperience(caseId, Requester.guest(anonymousId));
 		jdbc.update("UPDATE experience SET status = 'AI_REVEALED' WHERE id = ?", experienceId);
 
 		var result = transitionService.applyIdempotent(experience, e -> e.revealCourt(Instant.now()));

@@ -1,5 +1,7 @@
 package com.team2.project.pipeline;
 
+import tools.jackson.databind.JsonNode;
+
 /**
  * AI 판결 파이프라인 서비스 호출 (BE-93 ↔ COMMON-50).
  *
@@ -13,6 +15,18 @@ public interface PipelineClient {
 
 	/** 작업을 만들고 시작한다. 파이프라인은 수십 분 걸리므로 서비스가 202로 바로 답한다 */
 	PipelineJob createJob(PipelineJobRequest request);
+
+	/**
+	 * 대본 블록 재생성 작업을 만들고 시작한다 (BE-129 2차). 등록 작업과 같은 서비스 · 같은 "한 번에 하나" 규칙이라 다른 작업이
+	 * 돌면 {@link PipelineException.Conflict}다. 상태는 {@link #getJob}, 지우기는 {@link #deleteJobQuietly}를 같이 쓴다
+	 */
+	PipelineJob createRegenerationJob(PipelineRegenerationRequest request);
+
+	/**
+	 * 재생성 결과 — 서비스 결과의 {@code regenerated}(다시 만든 블록 · 메타 · 검수 결과). 작업이 SUCCEEDED일 때만 있다.
+	 * 형식은 파이프라인이 정하므로 {@link JsonNode}로 받는다({@link PipelineResult}와 같은 이유)
+	 */
+	JsonNode getRegenerationResult(String jobId);
 
 	/** 작업 상태 (화면이 2초마다 묻는 A-15가 이 값을 쓴다) */
 	PipelineJob getJob(String jobId);

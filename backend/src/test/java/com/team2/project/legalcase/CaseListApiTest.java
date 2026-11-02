@@ -143,6 +143,13 @@ class CaseListApiTest extends ApiIntegrationTest {
 		insertScriptWithReview(pending, null);
 		long rejected = insertCase("FRAUD", "PUBLISHED");
 		insertScriptWithReview(rejected, "REJECTED");
+		// 블록 하나라도 승인 전이면 준비되지 않은 대본이다 (BE-126: 다섯 단위 모두 승인)
+		long partial = insertCase("FRAUD", "PUBLISHED");
+		jdbcTemplate.update("UPDATE case_script_block SET review_status = NULL WHERE script_id = ? AND unit = 'U4'",
+				insertScriptWithReview(partial, "APPROVED"));
+		// 증거조사만 만든 대본은 승인돼 있어도 준비 중이다 (BE-126, 해송님 합의)
+		long evidenceOnly = insertCase("FRAUD", "PUBLISHED");
+		insertEvidenceOnlyScript(evidenceOnly, "APPROVED");
 		long noScript = insertCase("FRAUD", "PUBLISHED");
 
 		mockMvc.perform(get("/api/v1/cases"))
@@ -150,13 +157,49 @@ class CaseListApiTest extends ApiIntegrationTest {
 				.andExpect(jsonPath(CASE_BY_ID.formatted(approved) + ".scriptReady").value(true))
 				.andExpect(jsonPath(CASE_BY_ID.formatted(pending) + ".scriptReady").value(false))
 				.andExpect(jsonPath(CASE_BY_ID.formatted(rejected) + ".scriptReady").value(false))
+				.andExpect(jsonPath(CASE_BY_ID.formatted(partial) + ".scriptReady").value(false))
+				.andExpect(jsonPath(CASE_BY_ID.formatted(evidenceOnly) + ".scriptReady").value(false))
 				.andExpect(jsonPath(CASE_BY_ID.formatted(noScript) + ".scriptReady").value(false));
 
 		// API 18과 같은 결론인지 — 목록이 true인 사건만 대본이 200이다
 		mockMvc.perform(get("/api/v1/cases/" + approved + "/script")).andExpect(status().isOk());
-		for (long caseId : new long[] {pending, rejected, noScript}) {
+		for (long caseId : new long[] {pending, rejected, partial, evidenceOnly, noScript}) {
 			mockMvc.perform(get("/api/v1/cases/" + caseId + "/script")).andExpect(status().isNotFound());
 		}
+	}
+
+	@Test
+	void getCases_scriptStatus_readyPreparingMaintenance() throws Exception {
+		// BE-126 2차-2: 한 번 나간 대본(released_at)의 승인이 풀리면 MAINTENANCE, 나간 적 없으면 PREPARING. scriptReady는 READY일 때만 true
+		long ready = insertCase("FRAUD", "PUBLISHED");
+		jdbcTemplate.update("UPDATE case_script SET released_at = now() WHERE id = ?", insertScriptWithReview(ready, "APPROVED"));
+		long maintenance = insertCase("FRAUD", "PUBLISHED");
+		long maintenanceScript = insertScriptWithReview(maintenance, "APPROVED");
+		jdbcTemplate.update("UPDATE case_script SET released_at = now() WHERE id = ?", maintenanceScript);
+		jdbcTemplate.update("UPDATE case_script_block SET review_status = NULL WHERE script_id = ? AND unit = 'U3'",
+				maintenanceScript);
+		long preparing = insertCase("FRAUD", "PUBLISHED");
+		jdbcTemplate.update("UPDATE case_script_block SET review_status = NULL WHERE script_id = ? AND unit = 'U3'",
+				insertScriptWithReview(preparing, "APPROVED"));
+		long noScript = insertCase("FRAUD", "PUBLISHED");
+
+		mockMvc.perform(get("/api/v1/cases"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath(CASE_BY_ID.formatted(ready) + ".scriptStatus").value("READY"))
+				.andExpect(jsonPath(CASE_BY_ID.formatted(maintenance) + ".scriptStatus").value("MAINTENANCE"))
+				.andExpect(jsonPath(CASE_BY_ID.formatted(maintenance) + ".scriptReady").value(false))
+				.andExpect(jsonPath(CASE_BY_ID.formatted(preparing) + ".scriptStatus").value("PREPARING"))
+				.andExpect(jsonPath(CASE_BY_ID.formatted(noScript) + ".scriptStatus").value("PREPARING"));
+
+		// API 18과 같은 결론인지 — READY는 200, MAINTENANCE는 503, PREPARING은 404
+		mockMvc.perform(get("/api/v1/cases/" + ready + "/script")).andExpect(status().isOk());
+		// 곧 풀리는 일시 상태라 재시도 간격을 알리고, 프록시 · 브라우저가 503을 캐시하지 않게 한다 (PR #384 리뷰 5번)
+		mockMvc.perform(get("/api/v1/cases/" + maintenance + "/script"))
+				.andExpect(status().isServiceUnavailable())
+				.andExpect(jsonPath("$.code").value("SCRIPT_UNDER_MAINTENANCE"))
+				.andExpect(header().string(HttpHeaders.RETRY_AFTER, "60"))
+				.andExpect(header().string(HttpHeaders.CACHE_CONTROL, containsString("no-store")));
+		mockMvc.perform(get("/api/v1/cases/" + preparing + "/script")).andExpect(status().isNotFound());
 	}
 
 	// ---- 진행 상태 배지 myStatus (FE-19, REQ-010 · FR-1-6) ----

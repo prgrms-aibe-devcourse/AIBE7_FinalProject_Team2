@@ -3,7 +3,8 @@ import { renderRecommendedRangeBar } from '../../components/recommendedRangeBar.
 import { renderProgressSidebar } from './progressSidebar.js';
 import { renderContent } from '../../utils/contentLines.js';
 import { renderStage } from '../../components/stage.js';
-import { SCRIPTS } from '../../content/scripts.js';
+import { loadCaseScript, loadFailText } from '../../utils/caseScript.js';
+import { commonCategoryOf, evidencePhotosFromPaper, fetchCasePaper } from '../../utils/newspaper.js';
 import { sensitiveNotice } from '../../content/sensitiveNotice.js';
 import { restartMock, jumpActMock } from '../../mocks/mockStageButtons.js';
 
@@ -52,7 +53,7 @@ export async function renderReviewPage(container, { caseId, caseHeader, api, nav
       box.append(element('p', '', `지금 단계에서는 이 화면을 볼 수 없어요. (현재 상태: ${error.currentStatus})`));
       console.info('현재 상태:', error.currentStatus);
     } else {
-      box.append(element('p', '', '정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.'), button('다시 시도', load));
+      box.append(element('p', '', loadFailText(error)), button('다시 시도', load));
     }
     root.replaceChildren(box);
   }
@@ -140,12 +141,12 @@ export async function renderReviewPage(container, { caseId, caseHeader, api, nav
     root.replaceChildren(header, layout);
   }
   async function draw(data, moveFocus = false) {
-    // 사건 번호는 DB마다 다를 수 있어 번호만으로 고르지 않는다. 대본의 제목이 사건 제목과 같을 때만 무대를 쓴다(S-03과 같은 규칙)
-    const candidate = SCRIPTS[caseId];
-    const script = candidate?.title === caseHeader.title ? candidate : undefined;
+    // 서버 대본이 있는 사건만 무대를 쓴다(FE-139). 증거조사 사진은 1막과 같은 지면(API 17)에서 가져온다
+    const script = await loadCaseScript(api, caseId);
     if (script) {
-      const notice = await loadNotice(); // 무대를 그리다 난 오류도 호출한 쪽(load · confirm)의 오류 처리로 전달된다
-      if (active()) drawStage(data, script, notice);
+      const [notice, casePaper] = await Promise.all([loadNotice(), fetchCasePaper(api, caseId)]); // 무대를 그리다 난 오류도 호출한 쪽(load · confirm)의 오류 처리로 전달된다
+      const evidencePhotos = evidencePhotosFromPaper(casePaper);
+      if (active()) drawStage(data, { ...script, commonCategory: commonCategoryOf(caseHeader), ...(evidencePhotos ? { evidencePhotos } : {}) }, notice);
       return;
     }
     const current = data.openStep ?? 4;

@@ -15,6 +15,7 @@ import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -88,6 +89,23 @@ public class LegalCase {
 	@JdbcTypeCode(SqlTypes.JSON)
 	private List<String> sensitiveFlags;
 
+	/**
+	 * 사건 자동 분류 {@code {mood, issue, victim, thirdParty}} (BE-123 결과, 저장은 BE-129). 대본을 다시 만들 때 파이프라인에 그대로
+	 * 넘기는 값이다. 민감 플래그는 {@link #sensitiveFlags}가 따로 갖는다. 비어 있으면 분류하지 않은 사건
+	 */
+	@JdbcTypeCode(SqlTypes.JSON)
+	private Map<String, Object> classification;
+
+	/** 표가 갈렸거나 규칙만 잡아 관리자가 확인해야 하는 분류 축 · 플래그 (예: {@code mood}, {@code sensitiveFlags.VIOLENCE}). BE-129 */
+	@JdbcTypeCode(SqlTypes.JSON)
+	private List<String> classificationNeedsReview;
+
+	/**
+	 * 사건 내용의 판 (BE-126). 대본 블록이 "어느 판의 사건 내용을 보고 만들었는지"를 이 값으로 남긴다. 대본 입력(제목 · 개요)이
+	 * 바뀔 때만 오른다 — {@code updatedAt}은 공개 상태 같은 다른 수정에도 바뀌어 대본이 낡았다고 잘못 알린다
+	 */
+	private int contentRevision = 1;
+
 	@Enumerated(EnumType.STRING)
 	private CaseStatus status;
 
@@ -126,6 +144,9 @@ public class LegalCase {
 
 	// 관리자 사건 내용 수정 (A-11). 값 검사는 AdminCaseEditService가 API 명세 A-11 표대로 먼저 한다
 	public void changeTitle(String title) {
+		if (!Objects.equals(this.title, title)) {
+			this.contentRevision++;		// 대본 입력이다 (U0 · U2 · U3 · U4)
+		}
 		this.title = title;
 	}
 
@@ -134,6 +155,9 @@ public class LegalCase {
 	}
 
 	public void changeOverview(String overview) {
+		if (!Objects.equals(this.overview, overview)) {
+			this.contentRevision++;
+		}
 		this.overview = overview;
 	}
 
@@ -170,6 +194,25 @@ public class LegalCase {
 	/** 민감 플래그 기록 · 수정 (BE-125). 값 검사는 호출하는 쪽이 한다. null이면 "분류하지 않음"으로 돌린다 */
 	public void changeSensitiveFlags(List<String> sensitiveFlags) {
 		this.sensitiveFlags = sensitiveFlags == null ? null : List.copyOf(sensitiveFlags);
+	}
+
+	/** 자동 분류 결과 기록 (BE-129). 분류하지 않은 등록이면 둘 다 null로 둔다 */
+	public void recordClassification(Map<String, Object> classification, List<String> needsReview) {
+		this.classification = classification == null ? null : new LinkedHashMap<>(classification);
+		this.classificationNeedsReview = needsReview == null ? null : List.copyOf(needsReview);
+	}
+
+	/**
+	 * 관리자가 분류를 고친다 (A-11, BE-129 2차). 값 검사는 호출하는 쪽이 {@link ScriptClassification#parse}로 먼저 한다.
+	 * 관리자가 네 축을 직접 정했으므로 확인 필요 목록에서 분류 축 항목을 지운다 — 민감 플래그 항목({@code sensitiveFlags.*})은
+	 * 민감 플래그를 고칠 때의 일이라 남긴다. 사건 내용 판({@link #contentRevision})은 올리지 않는다(분류는 블록 basis가 값으로 갖는다)
+	 */
+	public void changeClassification(Map<String, Object> classification) {
+		this.classification = new LinkedHashMap<>(classification);
+		if (classificationNeedsReview != null) {
+			this.classificationNeedsReview = classificationNeedsReview.stream()
+				.filter(item -> !ScriptClassification.AXES.contains(item)).toList();
+		}
 	}
 
 	/** 사용자에게 노출되는 사건인지 */

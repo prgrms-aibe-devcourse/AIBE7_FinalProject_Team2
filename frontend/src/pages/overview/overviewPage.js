@@ -4,6 +4,7 @@ import { SCRIPTS } from '../../content/scripts.js';
 import { restartMock, jumpActMock } from '../../mocks/mockStageButtons.js';
 import courtFacts from '../../content/courtFacts.json';
 import { caseNewspaper, paperFromCase } from '../../components/newspaperFront.js';
+import { loadCaseScript, loadFailText } from '../../utils/caseScript.js';
 import { commonCategoryOf, evidencePhotosFromPaper, fetchCasePaper } from '../../utils/newspaper.js';
 import { reducedMotion } from '../../utils/motion.js';
 
@@ -232,7 +233,7 @@ export async function renderOverviewPage(container, { caseId, api, navigate }) {
       box.append(element('p', '', `지금 단계에서는 이 화면을 볼 수 없어요. (현재 상태: ${error.currentStatus})`), button('사건 목록으로', () => navigate('list')));
       console.info('현재 상태:', error.currentStatus);
     } else {
-      box.append(element('p', '', '정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.'), button('다시 시도', load));
+      box.append(element('p', '', loadFailText(error)), button('다시 시도', load));
     }
     root.replaceChildren(box);
   }
@@ -255,9 +256,8 @@ export async function renderOverviewPage(container, { caseId, api, navigate }) {
       submitting = false;
     }
   }
-  function draw(data, detail, casePaper) {
+  function draw(data, detail, casePaper, script) {
     const { case: info, rangeOptions } = data;
-    const script = scriptFor(caseId, info.title);
     if (script) {
       // 1막 무대(신문 지면). 진행 표시는 지면 탭 줄의 막 칩이 맡는다. S-20(대본 있는 사건)과 같은 화면이다
       const { stage, setOverview } = caseStage({
@@ -293,11 +293,11 @@ export async function renderOverviewPage(container, { caseId, api, navigate }) {
     try {
       const data = await api.getOverview(caseId);
       // 대본이 있는 사건은 지면 기사 · 증거조사 사진을 S-20과 같은 사건 데이터(API 16 · 17)로 싣는다. 못 받으면 대본 지면으로(FE-64)
-      const hasScript = scriptFor(caseId, data.case.title);
-      const [detail, casePaper] = hasScript
+      const script = await loadCaseScript(api, caseId);
+      const [detail, casePaper] = script
         ? await Promise.all([api.getCaseDetail(caseId).catch(() => null), fetchCasePaper(api, caseId)])
         : [null, null];
-      if (active()) draw(data, detail, casePaper);
+      if (active()) draw(data, detail, casePaper, script);
     } catch (error) { showError(error); }
     finally { loading = false; }
   }

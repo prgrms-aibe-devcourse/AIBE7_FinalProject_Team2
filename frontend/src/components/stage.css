@@ -244,6 +244,7 @@
 /* 1면 사진: 5막 마지막 법정과 같은 구도(배경 · 판사 남불 · 피고인 역 내로). 지면에서는 흑백, 시작 장면(data-live)에서만 색이 남아 있다가 바랜다 */
 .stage-wrap .sheet-figure { margin: 0; }
 .stage-wrap .sheet-figure figcaption { margin-top: calc(var(--u) * .5); color: var(--muted); font-size: max(12px, calc(var(--u) * 1.1)); }
+.stage-wrap .sheet-figure .sheet-photo-notice { display: block; margin-top: calc(var(--u) * .2); }
 .stage-wrap .sheet-photo { position: relative; aspect-ratio: 16 / 9; overflow: hidden; background: var(--color-surface-strong); filter: var(--photo-filter); transition: filter .9s ease-out .4s; }
 .stage-wrap .sheet-photo[data-live] { filter: none; transition: none; }
 .stage-wrap .sheet-photo img { position: absolute; bottom: 25%; height: 52%; width: auto; }

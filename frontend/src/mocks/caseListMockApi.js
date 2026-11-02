@@ -34,6 +34,17 @@ function myStatusOf(caseId) {
 // 승인된 공개 대본이 있는 사건 (BE-116 scriptReady). 목에서는 대본이 있는 사건 1만 true — getCasePaper와 같은 기준
 export const scriptReadyOf = (caseId) => caseId === case1Script.caseId;
 
+// 대본 점검 중인 사건 (BE-126 2차 scriptStatus · 503, FE-145). 목에서는 사건 2만 MAINTENANCE — 사건 목록 · 상세에는 보이되 체험은 잠긴다
+export const MAINTENANCE_CASE_ID = 2;
+export const scriptStatusOf = (caseId) => (scriptReadyOf(caseId) ? 'READY' : caseId === MAINTENANCE_CASE_ID ? 'MAINTENANCE' : 'PREPARING');
+
+// 사건 3: scriptStatus 없이 scriptReady만 true인데 API 18이 503을 주는 사건. 서버가 scriptStatus를 아직 안 줄 때(이름 미확정, BE-126 2차 전)
+// 사건 상세가 503만으로 "점검 중"을 알리는지 손으로 확인하려고 둔다(FE-145 리뷰)
+export const LEGACY_MAINTENANCE_CASE_ID = 3;
+const scriptFieldsOf = (caseId) => (caseId === LEGACY_MAINTENANCE_CASE_ID
+  ? { scriptReady: true }
+  : { scriptReady: scriptReadyOf(caseId), scriptStatus: scriptStatusOf(caseId) });
+
 // 사건 1은 S-03 개요 목(API 4)과 같은 죄명을 쓰고, 나머지는 유형별 죄명(임의 데이터)
 const CHARGE_NAMES = { MURDER: '살인', FRAUD: '사기', INJURY: '상해', ROBBERY: '강도', THEFT: '절도' };
 const chargeNameOf = (item) =>
@@ -52,7 +63,7 @@ export async function getCases(crimeType) {
     summary: { total: mockCases.length, byCrimeType },
     cases: mockCases
       .filter((item) => !crimeType || item.crimeType === crimeType)
-      .map((item) => ({ ...item, chargeName: chargeNameOf(item), scriptReady: scriptReadyOf(item.caseId), myStatus: myStatusOf(item.caseId) })),
+      .map((item) => ({ ...item, chargeName: chargeNameOf(item), ...scriptFieldsOf(item.caseId), myStatus: myStatusOf(item.caseId) })),
   });
 }
 
@@ -70,7 +81,7 @@ export async function getCaseDetail(caseId) {
     ...item,
     chargeName: chargeNameOf(item),
     overview: known?.overview ?? item.shortIntro,
-    scriptReady: scriptReadyOf(caseId),
+    ...scriptFieldsOf(caseId),
     ...(mockSensitiveFlags[caseId] ? { sensitiveFlags: mockSensitiveFlags[caseId] } : {}),
     myStatus: myStatusOf(caseId),
   });
@@ -97,6 +108,43 @@ export async function getCasePaper(caseId) {
       origin: origin ? { imageUrl: origin.src, caption: origin.caption } : null,
       conclusion: conclusion ? { imageUrl: conclusion.src, caption: conclusion.caption } : null,
     },
+  });
+}
+
+// API 18 — GET /cases/{caseId}/script. 사건 1(가상 사건)의 로컬 대본에서 대사만 뽑아 서버 블록 모양으로 돌려준다(FE-139).
+// 실제 사건 대본은 공개 저장소에 넣지 않는다. 나머지 사건은 승인된 대본이 없는 것으로 본다
+export async function getCaseScript(caseId) {
+  await delay();
+  if (!mockCases.some((item) => item.caseId === caseId)) fail('CASE_NOT_FOUND', '사건을 찾을 수 없습니다.');
+  if (caseId === MAINTENANCE_CASE_ID || caseId === LEGACY_MAINTENANCE_CASE_ID) fail('SCRIPT_UNDER_MAINTENANCE', '대본을 점검하고 있습니다.');
+  if (!scriptReadyOf(caseId)) fail('SCRIPT_NOT_FOUND', '공개된 대본이 없습니다.');
+  const { acts, cards, evidence } = case1Script;
+  const intro = acts['1a'].steps;
+  const trial = acts['2'].steps;
+  const textsOf = (card) => trial.filter((step) => step.card === card).map((step) => step.text);
+  const lines = trial.filter((step) => step.card === 'evidence').map((step) => ({ factorId: step.ev + 1, role: step.role === '검사' ? 'prosecutor' : 'defense', text: step.text }));
+  const asked = trial.findIndex((step) => step.proc === 4) + 1; // 피고인신문 도입 다음부터 질문 · 답이 번갈아 나온다
+  const cast = { prosecutor: 'naero', defense: 'nambul' };
+  return structuredClone({
+    evidence: lines.map((line, i) => ({ factorId: line.factorId, side: line.role.toUpperCase(), character: cast[line.role], card: evidence[i].text, text: line.text })),
+    cast,
+    blocks: {
+      U1: { lines: [0, 2, 3, 4, 6].map((i) => intro[i].text) },
+      U2: {
+        indict: textsOf('indict'),
+        plea: textsOf('plea'),
+        issues_narr: textsOf('issues'),
+        questions: [0, 2].map((i) => ({ q: trial[asked + i].text, a: trial[asked + i + 1].text })),
+        cards: {
+          indict: { ul: cards.indict.ul, law: cards.indict.p[0].t },
+          plea: { b: cards.plea.p[0].b, ul: cards.plea.ul },
+          issues: { p: cards.issues.p[0], ul: cards.issues.ul },
+        },
+      },
+      U3: lines,
+      U4: { prosecutor: acts['3'].steps[0].text, defense: acts['3'].steps[1].text },
+    },
+    meta: { cast, issue: 'admitted', admits: true },
   });
 }
 

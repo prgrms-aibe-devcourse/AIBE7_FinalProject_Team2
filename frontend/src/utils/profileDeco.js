@@ -145,11 +145,12 @@ export function shownDeco(deco, open) {
 const WHO = { naero: '내로', nambul: '남불', 'law-scale': '로(저울)', 'law-gavel': '로(법봉)', 'law-book': '로(책)', trio: '로 셋', compare: '셋 비교' };
 const WORDS = {
   judge: '판사', prosecutor: '검사', defense: '변호인', actor: 'A씨 역', 'case-1': '사건 1 배역',
-  idle: '대기', think: '생각', deliver: '발표', mascot: '마스코트', ranma: '란마',
+  idle: '대기', think: '생각', deliver: '발표', mascot: '마스코트',
   cheer: '응원', guide: '안내', react: '반응', read: '읽기', trio: '셋',
 };
 const CASE_PARTS = { origin: '발단', conclusion: '결론', reenact: '재연' };
-const COMMON_CATEGORIES = { property: '재산', body: '신체', life: '생명' };
+const COMMON_CATEGORIES = { property: '재산', body: '신체', life: '생명', robbery: '강도', theft: '절도' };
+const INQUIRY_SCENES = { reading: '서재', magnifier: '자료실', talk: '대화', walk: '산책', window: '창가', board: '게시판' };
 
 export function portraitLabel(src) {
   const kind = kindOfPortrait(src);
@@ -160,6 +161,8 @@ export function portraitLabel(src) {
     if (own) return `사건 ${own[1]} · ${CASE_PARTS[own[2]] ?? own[2]}`;
     const common = /^common-([a-z]+)-([a-z]+)$/.exec(file);
     if (common) return `공용 ${COMMON_CATEGORIES[common[1]] ?? common[1]} · ${CASE_PARTS[common[2]] ?? common[2]}`;
+    const inquiry = /^inquiry-([a-z]+)$/.exec(file);
+    if (inquiry) return `탐구 · ${INQUIRY_SCENES[inquiry[1]] ?? inquiry[1]}`;
     return file;
   }
   const cut = file.indexOf('_');

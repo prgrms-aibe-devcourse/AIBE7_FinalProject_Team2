@@ -17,11 +17,9 @@ import com.team2.project.legalcase.domain.CastRoles;
 import com.team2.project.legalcase.domain.CrimeType;
 import com.team2.project.legalcase.domain.SensitiveFlag;
 import com.team2.project.legalcase.domain.Factor;
-import com.team2.project.legalcase.domain.CaseScript;
 import com.team2.project.legalcase.domain.LegalCase;
 import com.team2.project.legalcase.domain.SentencingGuideline;
 import com.team2.project.legalcase.repository.CaseSectionRepository;
-import com.team2.project.legalcase.repository.CaseScriptRepository;
 import com.team2.project.legalcase.repository.CaseSourceRepository;
 import com.team2.project.legalcase.repository.FactorRepository;
 import com.team2.project.legalcase.repository.LegalCaseRepository;
@@ -29,15 +27,11 @@ import com.team2.project.legalcase.repository.PenaltyRuleRepository;
 import com.team2.project.legalcase.repository.SentencingGuidelineRepository;
 import com.team2.project.legalcase.service.CaseCastAssigner;
 import com.team2.project.pipeline.PipelineResult;
-import java.time.Instant;
 import java.time.LocalDate;
-import java.time.OffsetDateTime;
-import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -65,7 +59,6 @@ public class CaseImportLoader {
 	private final PenaltyRuleRepository penaltyRuleRepository;
 	private final FactorRepository factorRepository;
 	private final CaseSourceRepository caseSourceRepository;
-	private final CaseScriptRepository caseScriptRepository;
 	private final JudgmentRepository judgmentRepository;
 	private final JudgmentFactorRepository judgmentFactorRepository;
 	private final AiGenerationRepository aiGenerationRepository;
@@ -73,6 +66,7 @@ public class CaseImportLoader {
 	private final CaseContentMapper caseContentMapper;
 	private final JudgmentMapper judgmentMapper;
 	private final CaseCastAssigner castAssigner;
+	private final CaseScriptLoader scriptLoader;
 
 	/** 범죄 유형 → 양형기준 분류. 지금은 살인만 적재돼 있고 나머지는 양형기준 없이 만들어진다 */
 	private static final Map<CrimeType, String> GUIDELINE_CATEGORIES = Map.of(CrimeType.MURDER, "살인범죄");
@@ -98,8 +92,9 @@ public class CaseImportLoader {
 		LocalDate incidentDate = incidentDate(caseImport);
 		LegalCase legalCase = caseContentMapper.toCase(content, report, incidentDate,
 			guidelineFor(content, caseImport, incidentDate));
-		legalCase.assignCast(castFor(legalCase, result));
+		legalCase.assignCast(castFor(legalCase, caseImport, result));
 		legalCase.changeSensitiveFlags(sensitiveFlags(result));
+		recordClassification(legalCase, result);
 		saveCase(legalCase);
 
 		sectionRepository.saveAll(caseContentMapper.sections(legalCase, content));
@@ -109,7 +104,7 @@ public class CaseImportLoader {
 
 		saveCourtJudgment(legalCase, factors, result);
 		saveAiJudgment(legalCase, factors, result);
-		saveScript(legalCase, result);
+		scriptLoader.save(legalCase, result);
 		return legalCase;
 	}
 
@@ -180,10 +175,13 @@ public class CaseImportLoader {
 	 *
 	 * <p>대본이 함께 왔으면 <b>대본을 만든 배역을 그대로 쓴다</b> — 대본에는 캐릭터 이름이 들어가 있어(누가 검사석에서
 	 * 말하는지) 사건 배역이 다르면 화면과 대사가 어긋난다. 대본에 배역이 있는데 읽을 수 없으면 규칙으로 덮지 않고
-	 * 배정하지 않는다(null). 대본이 없으면 범죄 유형별 균형 규칙으로 정한다({@link CaseCastAssigner}).
-	 * 2단계 등록(분류까지 → 적재하며 배정 → 그 배역으로 대본, BE-129)에서는 이쪽이다.
+	 * 배정하지 않는다(null).
+	 *
+	 * <p>대본이 없으면 등록 요청을 받을 때 정한 배역(BE-129, {@code case_import.cast_roles})을 쓴다 — 대본 단계가 실패해도
+	 * 균형 계산에 이미 들어간 값이라 그대로 둔다. 그것도 없으면(대본을 끈 등록 · 이 칸이 생기기 전의 등록) 범죄 유형별 균형
+	 * 규칙으로 정한다({@link CaseCastAssigner}).
 	 */
-	private Map<String, String> castFor(LegalCase legalCase, PipelineResult result) {
+	private Map<String, String> castFor(LegalCase legalCase, CaseImport caseImport, PipelineResult result) {
 		JsonNode script = result.script();
 		if (script != null && !script.isNull() && script.hasNonNull("cast")) {
 			Optional<Map<String, String>> scriptCast = CastRoles.parse(Json.toMap(script.get("cast")));
@@ -193,9 +191,18 @@ public class CaseImportLoader {
 				log.warn("대본의 배역을 읽지 못해 배정하지 않습니다 (jobId={})", result.jobId());
 				return null;
 			}
+			if (caseImport.getCastRoles() != null && !scriptCast.get().equals(caseImport.getCastRoles())) {
+				// 요청 때 정한 배역으로 만들라고 넘겼으므로 다르면 이상한 결과다. 대사에 맞춰 대본 쪽을 쓴다
+				log.warn("대본의 배역이 등록 때 정한 배역과 달라 대본 쪽을 씁니다 (jobId={})", result.jobId());
+			}
 			// 규칙으로 배정하는 같은 유형의 적재가 세는 도중에 이 배역이 끼어들지 못하게 같은 잠금을 잡는다
 			castAssigner.lock(legalCase.getCrimeType());
 			return scriptCast.get();
+		}
+		Optional<Map<String, String>> importCast = CastRoles.parse(caseImport.getCastRoles());
+		if (importCast.isPresent()) {
+			castAssigner.lock(legalCase.getCrimeType());
+			return importCast.get();
 		}
 		return castAssigner.assign(legalCase.getCrimeType());
 	}
@@ -205,6 +212,25 @@ public class CaseImportLoader {
 		JsonNode script = result.script();
 		return script != null && !script.isNull() && script.hasNonNull("cast")
 			&& CastRoles.parse(Json.toMap(script.get("cast"))).isEmpty();
+	}
+
+	/**
+	 * 사건 자동 분류 (BE-129). 대본을 다시 만들 때(2차) 파이프라인에 그대로 넘길 값이라 축 값을 그대로 저장한다. 민감 플래그는
+	 * 따로 저장하므로({@link #sensitiveFlags}) 여기서는 뺀다 — 두 군데 두면 관리자가 A-11로 플래그를 고쳤을 때 어긋난다.
+	 * 분류를 돌리지 않았거나 형식이 다르면 비워 둔다(적재는 막지 않는다).
+	 */
+	private static void recordClassification(LegalCase legalCase, PipelineResult result) {
+		JsonNode classify = result.classify();
+		if (classify == null || classify.isNull()) {
+			return;
+		}
+		Map<String, Object> classification = Json.toMap(classify.get("classification"));
+		if (classification == null) {
+			return;		// sensitiveFlags가 같은 경우를 이미 경고로 남긴다
+		}
+		Map<String, Object> axes = new LinkedHashMap<>(classification);
+		axes.remove("sensitiveFlags");
+		legalCase.recordClassification(axes, Json.stringArray(classify, "needsReview"));
 	}
 
 	/**
@@ -243,48 +269,6 @@ public class CaseImportLoader {
 			flags.add(name);
 		}
 		return List.copyOf(flags);
-	}
-
-	/**
-	 * 사건 대본 (BE-108). 대본을 돌리지 않았거나 대사가 하나도 없으면 건너뛴다 — 재판부 초안이 없을 때와
-	 * 같이 <b>사건은 그대로 만들어진다</b>. 대본은 나중에 들어와도 되고, 없으면 화면이 MVP 흐름으로 간다
-	 * (frontend {@code scripts.js} "대본이 없는 사건은 MVP 화면 그대로").
-	 *
-	 * <p>파이프라인이 어긋난다고 표시한 대본({@code publishable: false})도 <b>적재는 한다</b> — 관리자가
-	 * 검수 화면에서 무엇이 모자란지 보고 다시 생성할지 정해야 하기 때문이다. 대신 승인은 막는다
-	 * ({@link CaseScript#approve}).
-	 */
-	private void saveScript(LegalCase legalCase, PipelineResult result) {
-		JsonNode script = result.script();
-		if (script == null || script.isNull()) {
-			return;		// 대본을 돌리지 않은 등록이다 (기본값). 흔한 경우라 로그로 남기지 않는다
-		}
-		List<Map<String, Object>> evidence = Json.array(script, "evidence").stream()
-			.map(Json::toMap).filter(Objects::nonNull).toList();
-		if (evidence.isEmpty()) {
-			log.warn("대본에 대사가 없어 건너뜁니다 (jobId={})", result.jobId());
-			return;
-		}
-		caseScriptRepository.save(CaseScript.of(legalCase, evidence, Json.text(script, "model"),
-			Json.toMap(script.get("cast")), Json.text(script, "balanceWarning"), Json.bool(script, "publishable"),
-			generatedAt(script), Json.bool(script, "stopped")));
-	}
-
-	/**
-	 * 파이프라인이 대본을 만든 시각. 형식이 다르거나 없으면 비워 둔다 — 화면에 보여 주는 값이라 적재를 막지 않는다
-	 * (BE-93의 "모르는 필드는 지나가게 둔다"와 같은 원칙)
-	 */
-	private static Instant generatedAt(JsonNode script) {
-		String value = Json.text(script, "createdAt");
-		if (value == null || value.isBlank()) {
-			return null;
-		}
-		try {
-			return OffsetDateTime.parse(value).toInstant();
-		} catch (DateTimeParseException e) {
-			log.warn("대본 생성 시각을 읽지 못해 비워 둡니다: {}", value);
-			return null;
-		}
 	}
 
 	/**

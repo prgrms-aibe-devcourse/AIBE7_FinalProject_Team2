@@ -37,7 +37,10 @@ export const IMPORT_STAGE_STATUS = {
 export const PHOTO_ROLE = { ORIGIN: '발단 사진', CONCLUSION: '결론 사진' };
 
 // 대본 대사의 측 (A-13-10). 서버는 코드값으로 주고 화면에서 바꿔 쓴다
-export const SCRIPT_SIDE = { PROSECUTOR: '검사', DEFENSE: '변호인' };
+// 대사 측. 서버 저장값은 소문자(prosecutor · defense, A-13-10)라 둘 다 받는다
+export const SCRIPT_SIDE = { PROSECUTOR: '검사', DEFENSE: '변호인', prosecutor: '검사', defense: '변호인' };
+// 배역 코드값 → 이름 (A-13-10 cast · character). 모르는 값은 그대로 보인다
+export const CAST_NAME = { naero: '내로', nambul: '남불' };
 
 // A-13 공개 조건 코드
 export const PUBLISH_REASON = {
@@ -46,11 +49,13 @@ export const PUBLISH_REASON = {
   NO_FACTORS: '판단 요소가 1개 이상 있어야 해요.',
   NO_OVERVIEW_FACTOR: '사전 판단에 쓸 개요 단계 판단 요소가 있어야 해요.',
   NO_PENALTY_RULE: '형벌 규칙이 1개 이상 있어야 해요. (SQL 경로로 추가)',
+  NO_PAPER: '신문 지면을 만들어야 해요. (사진 · 지면에서 만들기)',
 };
 
 // INVALID_STATE details 사유 코드
 export const STATE_REASON = {
   CASE_PUBLISHED: '이미 공개한 사건이라 바꿀 수 없어요.',
+  CASE_NOT_PUBLISHED: '공개 중인 사건이 아니라 공개를 취소할 수 없어요.',
   CANDIDATE_REJECTED: '이미 반려한 후보예요.',
   CANDIDATE_PUBLISHED: '공개 중인 후보는 반려할 수 없어요. 먼저 다른 후보를 승인해 교체해 주세요.',
   // 운영 메뉴
@@ -74,7 +79,7 @@ export const REPORT_ACTION = { HIDE: '숨김 처리', SUSPEND: '회원 정지 (7
 export const ADMIN_ROLE = { SUPER: '총괄', REVIEWER: '검수' };
 export const AUDIT_ACTION = {
   LOGIN_SUCCESS: '로그인', LOGIN_FAILURE: '로그인 실패', LOGOUT: '로그아웃', SOURCE_VIEW: '원본 판결문 열람', JUDGMENT_APPROVE: '판결 후보 승인',
-  JUDGMENT_REJECT: '판결 후보 반려', CASE_UPDATE: '사건 내용 수정', VALUE_AXIS_CONFIRM: '가치관 축 확정', CASE_PUBLISH: '사건 공개',
+  JUDGMENT_REJECT: '판결 후보 반려', CASE_UPDATE: '사건 내용 수정', VALUE_AXIS_CONFIRM: '가치관 축 확정', CASE_PUBLISH: '사건 공개', CASE_UNPUBLISH: '사건 공개 취소',
 };
 
 export const AXIS_LABEL = Object.fromEntries(AXES.map((axis) => [axis.key, axis.label]));
@@ -83,7 +88,11 @@ export const AXIS_OPTIONS = [...AXES.map((axis) => ({ value: axis.key, label: ax
 /** 관리자 API 에러 → 화면 문구 */
 export function errorText(error, fallback = '요청을 처리하지 못했어요. 잠시 뒤 다시 시도해 주세요.') {
   const code = error?.code;
-  if (code === 'INVALID_STATE') return STATE_REASON[error.details?.[0]?.reason] ?? '지금 상태에서는 할 수 없어요.';
+  if (code === 'INVALID_STATE') {
+    const reason = error.details?.[0]?.reason;
+    // 사유 코드가 없는 409는 서버 문구가 이유를 담는다(예: 대본 블록 승인 — 어느 블록이 왜 막혔는지, FE-148)
+    return STATE_REASON[reason] ?? (!reason && error.message ? error.message : '지금 상태에서는 할 수 없어요.');
+  }
   if (code === 'PUBLISH_NOT_READY') return (error.details ?? []).map((item) => PUBLISH_REASON[item.reason] ?? item.reason).join(' ') || '공개 조건을 채우지 못했어요.';
   if (code === 'DUPLICATE_TITLE') return '다른 사건과 제목이 겹쳐요.';
   if (code === 'DUPLICATE_EMAIL') return '이미 등록된 이메일이에요.';
@@ -104,7 +113,8 @@ export function errorText(error, fallback = '요청을 처리하지 못했어요
   if (code === 'INCIDENT_PHOTO_NOT_FOUND') return '그 자리의 사진이 없어요.';
   if (code === 'PAPER_NOT_FOUND') return '아직 신문 지면을 만들지 않았어요.';
   if (code === 'SCRIPT_NOT_FOUND') return '이 사건에는 대본이 없어요.';
-  if (code === 'SCRIPT_LINE_NOT_FOUND') return '그 판단 요소의 대사가 없어요. 화면을 새로 불러 주세요.';
+  if (code === 'SCRIPT_LINE_NOT_FOUND') return '그 자리의 대사 · 문장이 없어요. 화면을 새로 불러 주세요.';
+  if (code === 'SCRIPT_BLOCK_NOT_FOUND') return '대본에 그 블록이 없어요. 화면을 새로 불러 주세요.';
   if (code === 'IMPORT_UNAVAILABLE') return '사건 등록 기능을 지금 쓸 수 없어요. 파이프라인 서비스 상태를 확인한 뒤 다시 시도해 주세요.';
   if (code?.endsWith('_NOT_FOUND') && error.message) return error.message; // 구체적인 _NOT_FOUND 분기보다 뒤에 둔다
   if (code === 'VALIDATION_ERROR') return error.message || '입력값을 확인해 주세요.';

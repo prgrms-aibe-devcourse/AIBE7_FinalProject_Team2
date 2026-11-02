@@ -3,7 +3,7 @@ import { objectParticle } from '../../utils/koreanParticle.js';
 import { renderAiRevealIntro, takeAiRevealIntro } from './aiRevealIntro.js';
 import { formatPenalty, diffPhrase } from '../../utils/judgmentFormat.js';
 import { renderStage, LAWS, LAW_TITLES } from '../../components/stage.js';
-import { SCRIPTS } from '../../content/scripts.js';
+import { loadCaseScript, loadFailText } from '../../utils/caseScript.js';
 import { restartMock, jumpActMock } from '../../mocks/mockStageButtons.js';
 import { renderCourtStage, openComparison } from '../court/courtStage.js';
 import { mountStage } from '../comparison/comparisonStage.js';
@@ -49,9 +49,8 @@ export async function renderAiPage(container, { caseId, caseHeader, api, navigat
     return group;
   }
 
-  // 대본의 제목이 사건 제목과 같을 때만 무대를 쓴다(S-03 ~ S-05와 같은 규칙)
-  const candidate = SCRIPTS[caseId];
-  const script = candidate?.title === caseHeader.title ? candidate : undefined;
+  // 서버 대본이 있는 사건만 무대를 쓴다(FE-139). load()가 받는다 — 조회가 실패하면 화면의 오류 · 다시 시도 경로로 간다
+  let script = null;
 
   // 판단 요소를 짚는 대사: 로마다 말투가 다르다(캐릭터 프로필 4-3, 재판 말투 경어 · 짧은 문장). 인자는 "정한다" 대신 "본다 · 살핀다"
   const FACTOR_LINES = {
@@ -266,7 +265,9 @@ export async function renderAiPage(container, { caseId, caseHeader, api, navigat
     if (!intro) message('AI 판결 정보를 불러오는 중…');
     try {
       const request = api.getAiJudgment(caseId);
-      if (intro) {
+      request.catch(() => {}); // 대본 조회가 먼저 실패해도 이 요청의 거부가 처리되지 않은 채 남지 않게
+      script = await loadCaseScript(api, caseId);
+      if (intro && !script) {
         renderAiRevealIntro(root, {
           ready: request,
           onContinue: () => request.then((data) => { if (active()) draw(data); }),
@@ -274,6 +275,7 @@ export async function renderAiPage(container, { caseId, caseHeader, api, navigat
         await request; // 실패하면 아래 catch가 안내를 바꾼다
         return;
       }
+      if (intro) message('AI 판결 정보를 불러오는 중…'); // 무대가 있으면 확정 직후 안내는 4막의 기다림 장면이 대신한다
       const data = await request;
       if (active()) draw(data);
     } catch (error) {
@@ -285,11 +287,9 @@ export async function renderAiPage(container, { caseId, caseHeader, api, navigat
         message(`지금 단계에서는 이 화면을 볼 수 없어요. (현재 상태: ${error.currentStatus})`);
         console.info('현재 상태:', error.currentStatus);
       } else {
-        message('정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.', button('다시 시도', load));
+        message(loadFailText(error), button('다시 시도', load));
       }
     } finally { loading = false; }
   }
-  // 무대가 있으면 확정 직후 안내는 4막의 기다림 장면이 대신한다(표시는 지운다)
-  const intro = takeAiRevealIntro(caseId);
-  await load(intro && !script);
+  await load(takeAiRevealIntro(caseId)); // 표시는 여기서 지운다
 }

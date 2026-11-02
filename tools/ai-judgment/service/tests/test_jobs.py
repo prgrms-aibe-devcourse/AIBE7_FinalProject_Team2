@@ -538,6 +538,96 @@ class JobStoreTest(unittest.TestCase):
         with self.assertRaises(JobNotFound):
             self.store.result(job_id)
 
+    # ---------------------------------------------------------------- 대본 블록 재생성 (BE-129 2차)
+
+    def _regenerate_request(self, **changes):
+        regenerate = {"units": ["U4"], "case": {"title": "사건", "factors": []},
+                      "judgment": {"factors": [{"factorId": 1, "direction": "UP"}]},
+                      "classification": {"mood": "tragic", "issue": "admitted", "victim": "punish", "thirdParty": False,
+                                         "sensitiveFlags": ["SELF_HARM"]},
+                      "cast": {"prosecutor": "naero", "defense": "nambul"},
+                      "blocks": {"U0": {"content": {"plea": "인정"}, "revision": 2}}, "paper": None}
+        regenerate.update(changes)
+        return {"regenerate": regenerate, "stages": {"script": {"model": "openai:script"}}}
+
+    def test_create_regeneration_writes_inputs_and_script_only_config(self):
+        """판결문 원문 없이, 넘겨받은 입력을 작업 폴더에 쓰고 대본 단계만 켠다. 등록 단계(extract · generate 등)는 모두 끈다."""
+        job_id = self.store.create(self._regenerate_request())
+        path = self.jobs_dir / job_id
+        config = json.loads((path / "config.json").read_text(encoding="utf-8"))
+        self.assertEqual(config["sources"], [])
+        self.assertEqual({stage for stage, cfg in config["stages"].items() if cfg.get("enabled") is not False}, {"script"})
+        script = config["stages"]["script"]
+        self.assertEqual((script["model"], script["regenerate"]), ("openai:script", ["U4"]))
+        self.assertEqual(script["classification"]["sensitiveFlags"], ["SELF_HARM"])
+        self.assertNotIn("paper", config["inputs"])  # 기사가 없으면 넘기지 않는다
+        for key in ("case", "judgment", "blocks"):
+            file = Path(config["inputs"][key])
+            self.assertTrue(file.is_relative_to(path))  # 사건 입력은 작업 폴더 안에만 둔다(지울 때 함께 지워진다)
+        self.assertEqual(json.loads(Path(config["inputs"]["blocks"]).read_text(encoding="utf-8"))["U0"]["revision"], 2)
+        meta = json.loads((path / "job.json").read_text(encoding="utf-8"))
+        self.assertEqual((meta["kind"], meta["until"], meta["status"]), ("regenerate", "script", QUEUED))
+
+        self.store.start(job_id)
+        self.assertEqual(self.commands[-1][0][-2:], ["--until", "script"])
+        stages = {s["name"]: s["status"] for s in self.store.status(job_id)["stages"]}
+        self.assertEqual({name for name, status in stages.items() if status != SKIPPED}, {"script"})
+
+    def test_create_regeneration_keeps_service_owned_script_keys(self):
+        """배역 · 분류 · 다시 만들 블록은 regenerate 객체로만 받는다 — stages.script로 덮지 못한다."""
+        request = self._regenerate_request()
+        request["stages"]["script"].update(cast={"prosecutor": "nambul", "defense": "naero"}, regenerate=["U0"],
+                                           classification={}, enabled=False, maxRetries=1)
+        job_id = self.store.create(request)
+        script = json.loads((self.jobs_dir / job_id / "config.json").read_text(encoding="utf-8"))["stages"]["script"]
+        self.assertEqual((script["cast"]["prosecutor"], script["regenerate"], script["enabled"]), ("naero", ["U4"], True))
+        self.assertEqual(script["classification"]["mood"], "tragic")
+        self.assertEqual(script["maxRetries"], 1)  # 조정 값은 받는다
+        self.assertTrue(script["regenerateCascade"])  # 기본은 뒤 블록까지
+
+    def test_create_regeneration_passes_cascade_and_paper(self):
+        request = self._regenerate_request(cascade=False, paper={"headline": "제목", "article": ["a", "b"]})
+        request["regenerate"]["blocks"]["U1"] = {"content": {"lines": []}, "revision": 1}
+        request["stages"]["script"]["regenerateCascade"] = True  # stages.script로는 덮지 못한다
+        job_id = self.store.create(request)
+        config = json.loads((self.jobs_dir / job_id / "config.json").read_text(encoding="utf-8"))
+        self.assertFalse(config["stages"]["script"]["regenerateCascade"])
+        self.assertEqual(json.loads(Path(config["inputs"]["paper"]).read_text(encoding="utf-8"))["headline"], "제목")
+
+    def test_create_regeneration_rejects_bad_requests_without_writing(self):
+        """민감 플래그가 없는 분류는 작업을 만들기 전에 400 — 가드 없이 다시 만들어지면 안 된다(PR #370 리뷰)."""
+        without_flags = self._regenerate_request()
+        del without_flags["regenerate"]["classification"]["sensitiveFlags"]
+        no_model = self._regenerate_request()
+        no_model["stages"] = {"script": {}}
+        other_stage = self._regenerate_request()
+        other_stage["stages"]["generate"] = {"enabled": True}
+        with_u1 = self._regenerate_request()
+        with_u1["regenerate"]["blocks"]["U1"] = {"content": {"lines": []}, "revision": 1}
+        rejected = (without_flags, no_model, other_stage, with_u1, self._regenerate_request(units=["U1"]),
+                    self._regenerate_request(judgment={"factors": [{"factorId": 1}, 3]}),
+                    self._regenerate_request(cascade="no"), self._regenerate_request(units=[]),
+                    self._regenerate_request(units=["U5"]), self._regenerate_request(case=None),
+                    self._regenerate_request(judgment={"factors": None}), self._regenerate_request(paper=["문단"]),
+                    self._regenerate_request(blocks=[1]), {**self._regenerate_request(), "sources": [{"originalText": "x"}]},
+                    {"regenerate": "U4"})
+        for request in rejected:
+            with self.subTest(request=json.dumps(request, ensure_ascii=False)[:80]):
+                with self.assertRaises(JobError):
+                    self.store.create(request)
+        self.assertFalse(self.jobs_dir.exists() and any(self.jobs_dir.iterdir()))
+
+    def test_regeneration_result_reads_file_content(self):
+        job_id = self.store.create(self._regenerate_request())
+        with self.assertRaises(JobNotFound):  # 아직 결과가 없다
+            self.store.result(job_id)
+        result_file = self.tool_dir / "out" / "pipeline" / f"job-{job_id}" / "script" / "regenerate.json"
+        result_file.parent.mkdir(parents=True, exist_ok=True)
+        content = {"regenerated": ["U4"], "blocks": {"U4": {"content": {"prosecutor": "의견"}, "revision": 2}}}
+        result_file.write_text(json.dumps(content, ensure_ascii=False), encoding="utf-8")
+        self._write_state(job_id, {"script": {"status": "done", "outputs": {"regenerateFile": str(result_file)}}})
+        self.assertEqual(self.store.result(job_id), {"jobId": job_id, "kind": "regenerate", "regenerated": content})
+
     # ---------------------------------------------------------------- 로그
 
     def test_log_tail_zero_returns_the_tail_not_the_whole_file(self):

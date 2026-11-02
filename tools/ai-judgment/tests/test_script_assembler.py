@@ -296,5 +296,190 @@ class GenerateTest(unittest.TestCase):
         self.assertFalse(script["publishable"])
 
 
+class BlocksTest(unittest.TestCase):
+    """저장 단위 블록 (BE-126). 백엔드가 case_script_block으로 적재하는 계약이다."""
+
+    def generate(self, responses, cls=CLS, paper=PAPER):
+        generated = sa.generate_units(CASE, JUDGMENT_OUTPUT, CAST, cls, model="openai:a", paper=paper,
+                                      caller=FakeCaller(responses), max_retries=1)
+        return generated, sa.build_script(CASE, CAST, cls, generated, model="openai:a")
+
+    def test_blocks_hold_display_values_and_basis(self):
+        cls = {**CLS, "sensitiveFlags": ["SELF_HARM", "MENTAL_HEALTH"]}
+        generated, script = self.generate(answers(), cls=cls)
+        blocks = script["blocks"]
+        self.assertEqual(list(blocks), ["U0", "U1", "U2", "U3", "U4"])
+        self.assertEqual(blocks["U1"]["content"]["lines"], [sa.strip_line_prefix(x) for x in INTRO["lines"]])  # 접두어를 뗀 값
+        self.assertEqual(blocks["U1"]["content"]["lines"][0], "기사 제목부터 같이 봐요.")
+        # 신문 답은 모델이 쓴 그대로 둔다 — "…네." 정규화는 읽는 쪽이 한다(U0를 고치면 어긋나는 파생값을 저장하지 않는다)
+        self.assertEqual([q["a"] for q in blocks["U2"]["content"]["questions"]], ["아니요, 아닙니다.", "네, 맞습니다."])
+        self.assertEqual(blocks["U3"]["content"], generated["evidence"])
+        self.assertEqual(blocks["U4"]["content"], CLOSING)
+        self.assertEqual({unit: block["revision"] for unit, block in blocks.items()}, dict.fromkeys(blocks, 1))
+        self.assertEqual(blocks["U2"]["basis"], {"case": None, "cast": CAST, "mood": "impulsive", "issue": "admitted",
+                                                 "thirdParty": False, "sensitiveFlags": ["MENTAL_HEALTH", "SELF_HARM"], "U0": 1})
+        # 사건 · 기사는 DB가 가진 값이라 비워 두고 적재할 때 백엔드가 DB 판으로 채운다(값 통째를 비교하지 않는다)
+        self.assertEqual(blocks["U1"]["basis"]["paper"], None)
+        self.assertEqual(blocks["U3"]["basis"]["case"], None)
+        self.assertIsNot(blocks["U3"]["content"], generated["evidence"])  # 생성 결과와 따로 가공할 수 있게 복사한다
+        self.assertEqual(blocks["U4"]["basis"]["U2"], 1)
+        self.assertEqual({unit: list(block["basis"]) for unit, block in blocks.items()},
+                         {unit: list(keys) for unit, keys in sa.BLOCK_BASIS.items()})
+        self.assertEqual(script["meta"], {"cast": CAST, "issue": "admitted", "admits": True})
+        # 블록을 나눠도 대본의 기존 값(acts · review)은 그대로다
+        self.assertEqual(sorted(script["acts"]), ["1a", "2", "3"])
+
+    def test_cards_law_is_filled_from_case(self):
+        opening = {**OPENING, "cards": {**OPENING["cards"], "indict": {"ul": ["요약"], "law": ""}}}
+        _, script = self.generate([DESIGN, INTRO, opening, *EVIDENCE, CLOSING])
+        self.assertEqual(script["blocks"]["U2"]["content"]["cards"]["indict"]["law"], CASE["appliedLaw"])
+        self.assertEqual(opening["cards"]["indict"]["law"], "")  # 생성 결과는 고치지 않는다
+
+    def test_review_and_repairs_are_split_by_unit(self):
+        generated, _ = self.generate(answers())
+        generated["review"] = [
+            {"unit": "U2", "path": "/issues_narr/0", "code": "FORMAL_ENDING", "severity": "error", "fix": "line", "message": "m"},
+            {"unit": "U3", "path": "/1", "code": "EVIDENCE_FILLER", "severity": "warning", "fix": None, "message": "m",
+             "factorId": 3}]
+        generated["repairs"] = [{"unit": "U2", "path": "/indict/1", "codes": ["NUMBER_NOT_IN_SOURCE"], "action": "line",
+                                 "attempts": 1, "ok": True, "before": "a", "after": "b", "lastRejected": None,
+                                 "affects": ["U4"]}]
+        blocks, _ = sa.build_blocks(CASE, CAST, CLS, generated)
+        self.assertEqual([i["code"] for i in blocks["U2"]["review"]], ["FORMAL_ENDING"])
+        self.assertEqual([i["factorId"] for i in blocks["U3"]["review"]], [3])
+        self.assertEqual(blocks["U0"]["review"], [])
+        self.assertEqual(len(blocks["U2"]["repairs"]), 1)
+        self.assertEqual(blocks["U4"]["repairs"], [])
+        self.assertEqual(blocks["U2"]["revision"], 2)  # 고쳐 쓴 줄을 받았으니 판이 오른다
+        self.assertEqual(blocks["U4"]["basis"]["U2"], 1)  # U4는 고치기 전 U2를 보고 만들었다 → 낡음
+
+    def test_missing_units_are_left_out(self):
+        bad = {"headline": "", "article": ["하나"]}
+        _, script = self.generate([bad, bad, DESIGN, OPENING, *EVIDENCE, CLOSING], paper=None)
+        self.assertEqual(list(script["blocks"]), ["U0", "U2", "U3", "U4"])
+        _, script = self.generate([DESIGN, INTRO, llm.LLMQuotaExhaustedError("일 한도")])
+        self.assertEqual(list(script["blocks"]), ["U0", "U1"])
+        self.assertTrue(script["meta"]["admits"])
+
+    def test_block_revisions_follow_accepted_repairs(self):
+        present = {"U0": 1, "U1": 1, "U2": 1, "U3": 1, "U4": 1}
+        repairs = [
+            {"unit": "U0", "action": "line", "ok": True},
+            {"unit": "U2", "action": "line", "ok": False},  # 받지 않은 줄은 값이 그대로다
+            {"unit": "U3", "action": "line", "ok": True},
+            {"unit": "U4", "action": "unit", "ok": True, "replaced": True},
+            {"unit": "U1", "action": "unit", "ok": False, "replaced": False},
+        ]
+        revision, seen = sa.block_revisions(present, repairs)
+        self.assertEqual(revision, {"U0": 2, "U1": 1, "U2": 1, "U3": 2, "U4": 2})
+        self.assertEqual(seen["U2"], {"U0": 1})  # 고치기 전 U0를 보고 만들었다 → 낡음
+        self.assertEqual(seen["U4"], {"U0": 2, "U2": 1})  # 다시 만들 때의 판을 본다 → 낡지 않음
+        self.assertEqual(seen["U0"], {})
+
+    def test_meta_admits_without_design(self):
+        _, script = self.generate([llm.LLMQuotaExhaustedError("일 한도")], paper=PAPER)
+        self.assertEqual(script["blocks"], {})
+        self.assertIsNone(script["meta"]["admits"])
+
+    def test_meta_admits_false_when_design_denies(self):
+        denied = {**DESIGN, "questions": [*DESIGN["questions"][:2], {"q": "공소사실을 인정합니까?", "a": "아니요"}]}
+        _, script = self.generate([denied, INTRO, OPENING, *EVIDENCE, CLOSING])
+        self.assertFalse(script["meta"]["admits"])
+        self.assertIn("…아닙니다.", [s.get("text") for s in script["acts"]["2"]["steps"] if s.get("confirm") == 3])
+
+
+class BlockContractTest(unittest.TestCase):
+    """contracts/script_blocks.json — 백엔드(자바)가 같은 파일로 같은 규칙을 확인한다(BE-126). 정본은 파이썬이다."""
+
+    CONTRACT = json.loads((TOOL_DIR / "contracts" / "script_blocks.json").read_text(encoding="utf-8"))
+
+    def test_basis_and_affects_match(self):
+        import script_repair  # noqa: E402 (script_repair가 script_assembler를 불러온다)
+        self.assertEqual(self.CONTRACT["basis"], {unit: list(keys) for unit, keys in sa.BLOCK_BASIS.items()})
+        self.assertEqual(self.CONTRACT["dbBasis"], list(sa.DB_BASIS))
+        self.assertEqual(self.CONTRACT["affects"], script_repair.AFFECTS)
+        self.assertEqual(script_repair.AFFECTS, {"U0": ["U2", "U4"], "U1": [], "U2": ["U4"], "U3": [], "U4": []})
+
+    def test_path_kinds_match_review(self):
+        """자리별 줄 종류(BE-153) — 검수(unit_lines)가 꺼내는 자리 · 종류와 같다. 말하는 대사 자리(spokenPaths)는 여기서 파생한다.
+        백엔드 A-13-21 · 관리자 화면 · BE-154 재검사가 같은 표를 읽는다."""
+        import re
+        import script_review
+        many = ["가", "나", "다", "라", "마", "바"]
+        sample = {
+            "U0": {"plea": "인정", "issues": many, "questions": [{"q": "질문", "a": "예"}] * 3, "tone": "차분함"},
+            "U1": {"lines": many},
+            "U2": {"indict": many, "plea": many, "issues_narr": many, "questions": [{"q": "질문", "a": "예"}] * 3,
+                   "cards": {"indict": {"ul": many, "law": "형법"}, "plea": {"b": "굵게", "ul": many},
+                             "issues": {"p": "문단", "ul": many}}},
+            "U4": {"prosecutor": "의견", "defense": "변론"},
+        }
+
+        def general(path):
+            path = re.sub(r"/\d+(?=/|$)", "/*", path)
+            return re.sub(r"^/cards/[^/]+/[^/]+", "/cards/{key}/{key}", path)
+
+        kinds, seen = {}, set()
+        for unit, value in sample.items():
+            kinds[unit] = {}
+            for path, _, kind in script_review.unit_lines(unit, value):
+                pattern = general(path)
+                self.assertEqual(kinds[unit].setdefault(pattern, kind), kind, f"{unit} {pattern}: 한 자리에 종류가 둘")
+                seen.add(kind)
+        self.assertEqual(self.CONTRACT["pathKinds"], kinds)
+        # 표본이 모든 종류를 한 번씩 담는지 — 파이프라인이 새 종류를 더하면 여기서 깨진다(PR #390 리뷰 2부 3번)
+        self.assertEqual(seen, {"design", "guide", "narrator", "prosecutor", "defense", "card"})
+        self.assertEqual(self.CONTRACT["spokenKinds"], list(script_review.SPOKEN_KINDS))
+        spoken = {unit: [p for p, k in table.items() if k in script_review.SPOKEN_KINDS] for unit, table in kinds.items()}
+        self.assertEqual(self.CONTRACT["spokenPaths"], spoken)
+
+    def test_classification_values_match(self):
+        """분류 축 값 — 백엔드 A-11(관리자가 분류를 고친다, BE-129 2차)이 같은 목록으로 검사한다."""
+        self.assertEqual(self.CONTRACT["classification"],
+                         {"mood": list(sa.MOODS), "issue": list(sa.ISSUES), "victim": list(sa.VICTIMS)})
+
+    def test_basis_axes_follow_guide_units(self):
+        """분류 축은 축 블록을 넣는 단위(GUIDE_UNITS)와 같아야 한다 — 블록을 안 넣는 단위가 그 축에 낡을 이유는 없다."""
+        for axis, units in sa.GUIDE_UNITS.items():
+            key = "thirdParty" if axis == "extra" else axis
+            for unit in sa.BLOCK_UNITS:
+                self.assertEqual(key in sa.BLOCK_BASIS[unit], unit in units, f"{unit} · {key}")
+
+    def test_answer_rules(self):
+        for case in self.CONTRACT["normalizeAnswer"]:
+            self.assertEqual(sa.normalize_answer(case["answer"]), case["expected"], case["answer"])
+        for case in self.CONTRACT["admits"]:
+            self.assertEqual(sa.admits(case["answer"]), case["expected"], case["answer"])
+
+
+class MoodClosingTest(unittest.TestCase):
+    """BE-124: 1막 마지막 줄 초점은 분위기 블록의 U1 절에만 있고, 단위 지시는 마무리 문구를 정하지 않는다."""
+
+    def test_focus_reaches_only_u1(self):
+        for mood in sa.MOODS:
+            cls = {**CLS, "mood": mood}
+            self.assertIn("1막 마지막 줄의 어조", "\n".join(sa.guide_blocks(cls, "U1")), mood)
+            for unit in ("U0", "U2", "U4"):
+                self.assertNotIn("1막 마지막 줄의 어조", "\n".join(sa.guide_blocks(cls, unit)), (mood, unit))
+
+    def test_intro_fixed_lines_are_shared(self):
+        """생성 문맥과 조립기가 같은 고정 대사를 본다 — 한쪽만 고치면 AI가 보는 앞뒤와 화면이 어긋난다(PR #379 리뷰)."""
+        for line in sa.INTRO_FIXED.values():
+            self.assertIn(line, sa.INTRO_FIXED_CONTEXT)
+        fixed = [step["text"] for step in sa._intro_act(["a", "b", "c", "d", "e"])["steps"] if step["source"]["type"] == "fixed"]
+        self.assertEqual(fixed, [sa.INTRO_FIXED["photo"], sa.INTRO_FIXED["end"]])
+
+    def test_sensitive_flag_overrides_reaction(self):
+        for unit, roles in (("U1", ["guide"]), ("U2", ["narrator"])):
+            self.assertIn(sa.SENSITIVE_NO_REACTION, sa.build_system(unit, {**CLS, "sensitiveFlags": ["SELF_HARM"]}, roles))
+            self.assertNotIn(sa.SENSITIVE_NO_REACTION, sa.build_system(unit, CLS, roles))
+
+    def test_intro_request_does_not_fix_closing_words(self):
+        system, user = sa.intro_request({"headline": "제목", "deck": "부제", "article": ["본문"]}, CLS)
+        self.assertNotIn("서두르지", system + user)
+        self.assertIn("CASE GUIDE", user)
+        self.assertIn(sa.INTRO_FIXED_CONTEXT, user)
+
+
 if __name__ == "__main__":
     unittest.main()

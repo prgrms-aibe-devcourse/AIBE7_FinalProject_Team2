@@ -54,7 +54,7 @@ public class Experience {
 
 	private int attemptNo;
 
-	private Long memberId;		// (이후) 체험 시작 시 로그인 상태였다면 회원 ID
+	private Long memberId;		// 회원 체험의 주인(BE-140). 익명 사용자와 둘 중 정확히 하나만 있다(chk_experience_owner)
 
 	@Enumerated(EnumType.STRING)
 	private ExperienceStatus status;
@@ -77,8 +77,9 @@ public class Experience {
 	@UpdateTimestamp
 	private Instant updatedAt;
 
-	private Experience(AnonymousUser anonymousUser, LegalCase legalCase) {
+	private Experience(AnonymousUser anonymousUser, Long memberId, LegalCase legalCase) {
 		this.anonymousUser = anonymousUser;
+		this.memberId = memberId;
 		this.legalCase = legalCase;
 		this.attemptNo = FIRST_ATTEMPT;
 		this.status = ExperienceStatus.STARTED;
@@ -87,7 +88,12 @@ public class Experience {
 
 	/** 체험 시작 (STARTED, 1회차) */
 	public static Experience start(AnonymousUser anonymousUser, LegalCase legalCase) {
-		return new Experience(anonymousUser, legalCase);
+		return new Experience(anonymousUser, null, legalCase);
+	}
+
+	/** 회원의 체험 시작 (STARTED, 1회차, BE-140) */
+	public static Experience startForMember(long memberId, LegalCase legalCase) {
+		return new Experience(null, memberId, legalCase);
 	}
 
 	/** 사전 판단 제출 → PRE_JUDGED, 섹션 ①은 확인한 것으로 처리 */

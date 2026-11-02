@@ -13,6 +13,8 @@ import { restartMock, jumpActMock } from '../../mocks/mockStageButtons.js';
 import { editorNote } from '../../utils/preJudgmentCompare.js';
 import { handPaper } from '../../utils/paperHandoff.js';
 import { castOf } from '../../utils/myPageView.js';
+import { recordCollection } from '../../utils/collectionRecord.js';
+import { currentUser } from '../../utils/session.js';
 import { reducedMotion } from '../../utils/motion.js';
 import { mockTag } from '../../components/siteLayout.js';
 import { API_MODE } from '../../api/config.js';
@@ -232,10 +234,10 @@ function pressable(box, label, action) {
 
 // 독자 의견란 엽서 아래 막대그래프(FE-120): 이 사건을 읽은 독자들이 기사만 보고 고른 첫인상 분포. 내가 고른 구간은 막대를 짙게 · 숫자를 굵게 한다.
 // 낭독기는 행마다 "구간 N%"로 읽고, 내 구간은 이름에 "(내 선택)"을 숨긴 글자로 붙인다
-// preToFinal.crowd는 목 전용이라(API 14에 아직 없음) 없으면 그래프 없이 엽서의 빈 줄을 그대로 둔다
+// preToFinal.crowd가 없거나(목 아닌 경우 포함) total이 0이면 그래프 없이 엽서의 빈 줄을 그대로 둔다(FE-34)
 function crowdBars(preToFinal) {
   const crowd = preToFinal?.crowd;
-  if (!crowd?.options?.length) return null;
+  if (!crowd?.options?.length || !crowd.total) return null; // 센 사람이 0명이면(2회차 이상 완료 등) 0%만 늘어선 그래프 대신 빈 줄을 그대로 둔다
   const box = element('div', 'sheet-crowd');
   const head = element('p', 'sheet-crowd-head', `이 사건 독자 ${crowd.total.toLocaleString('ko-KR')}명의 첫인상`);
   // 지금 crowd는 목에만 있지만, API 14에 실제 값이 들어와도 "목데이터"가 붙지 않도록 목 모드에서만 붙인다(FE-142 리뷰)
@@ -339,6 +341,8 @@ async function share(note, caseId) {
 // fromRect: 5막 무대 장면이 있던 화면 사각형(이어 받을 때). 그 자리 그대로에서 신문으로 빠져나온다
 export function renderComparisonStage({ script, data, caseId, caseTitle, navigate, api, fromRect }) {
   const { judgments } = data;
+  // 6막에 왔으면 사건을 마친 것이다: 얻은 일러스트 · 만난 모습을 남긴다(P-9, FE-132). 회원만, 멱등이라 다시 볼 때마다 보내도 된다. 기다리지 않는다
+  if (currentUser()) recordCollection(api, caseId, script);
   const vsCourt = diffLine(judgments.USER, judgments.COURT, '실제 판결',
     '실제 판결과 형량이 같았네요. 그런데 무겁게 본 요소도 같았을까요?', (head) => `${head} 어떤 요소를 다르게 봤을까요?`);
   const vsAi = diffLine(judgments.USER, judgments.AI, 'AI 판결',

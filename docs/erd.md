@@ -55,6 +55,10 @@
 | v1.49 | 2026-10-29 | 닉네임 중복 금지 (**확장 단계**, BE-139 · V39 · API 명세 v0.69) — `member`에 `uq_member_nickname`(`lower(nickname)` 유니크 인덱스, `nickname IS NOT NULL`인 행만) 추가. 칸은 그대로. 겹치던 기존 닉네임은 먼저 가입한 회원만 남기고 나머지를 NULL로 비운다 |
 | v1.50 | 2026-10-30 | 회원 기준 소유로 전환 (**확장 단계**, BE-140 · V40 ~ V43 · API 명세 M-9 ~ M-11) — 로그인 전용이 된 사용자 데이터의 주인을 익명 ID에서 회원으로 옮길 자리를 만든다. BE-60 "main으로 가는 마이그레이션은 추가만" 규칙에 맞게 NOT NULL 해제 · 칸 · 제약 · 인덱스 · 테이블 추가만 한다(지금 앱은 그대로 돈다)<br>• V40: `experience` · `personality_result`는 손님도 쓰므로 **이중 소유** — `anonymous_user_id` · `member_id` 중 정확히 하나(CHECK `chk_experience_owner` · `chk_personality_result_owner`). `anonymous_user_id` NOT NULL 해제, `personality_result.member_id` 추가, 두 `member_id`에 FK. 회원 쪽 유니크 · 조회는 부분 인덱스(`uk_experience_member_case_attempt` · `ux_personality_result_current_member` · `ux_personality_result_baseline_retake_member` · `ix_personality_result_member_created`). `experience.member_id`(V3부터 있었으나 아무도 채우지 않음)의 뜻을 "체험 시작 시 로그인 회원"에서 "체험의 주인 회원"으로 바꾼다<br>• V41: 회원 키 테이블 7개 신설 — `member_attendance` · `member_profile_deco` · `member_profile_setting` · `member_xp_event` · `member_profile_job` · `member_collection_item` · `member_achievement_unlock`(칸 · 제약은 익명 쪽과 같고 주인만 회원, 회원 FK `ON DELETE CASCADE`). 익명 데이터는 옮기지 않고(체험만 이관), 옛 익명 테이블은 쓰지 않고 두었다가 후속 이슈에서 지운다<br>• V42: `member_anonymous_import` 신설 — 첫 로그인 가져오기 결정(`IMPORTED` · `DISCARDED`), 회원마다 한 번<br>• V43: `community_post` · `community_comment`의 작성자를 회원 또는 익명 ID로 넓힌다 — `member_id` · `anonymous_user_id` NOT NULL 해제, 적어도 하나(CHECK `chk_community_post_author` · `chk_community_comment_author`). "정확히 하나"로 좁히는 일은 다음 배포로 나눈다<br>• 15장 추가, 3-2 · 8 ~ 14장 갱신 |
 | v1.51 | 2026-10-30 | 약관 동의 기록 (**확장 단계**, BE-133 · V44 · API 명세 v0.74, v1.50 · V40 ~ V43은 BE-140 PR #351) — `member`에 `terms_agreed_at`(timestamptz) · `terms_version`(varchar 20) 추가, 둘 다 NULL 허용. CHECK `ck_member_terms_agreement`(둘이 함께 있거나 함께 없다). 아이디 가입(M-5) 때만 채우고, 기존 회원 · 카카오 회원은 NULL(동의 기록 없음) |
+| v1.52 | 2026-10-31 | 대본 단위 블록 (**확장 단계**, BE-126 1차 · V45 · API 명세 v0.78) — `case_script_block` 신설(대본마다 단위 U0 ~ U4 하나에 한 행: 내용 `content` · 판 `revision` · 생성 근거 `basis` · 검수 결과 `review` · `warnings` · `repairs` · 공개 가능 여부 `publishable` · 검수 칸 4개, 유니크 `(script_id, unit)`, "오류 블록은 승인 불가" CHECK). `case_script`의 `evidence`는 U3 블록으로 옮기고(검수 상태 포함, 나머지 네 단위는 `pending`) 검수 칸 4개를 지웠다 — 대본의 검수 상태는 블록에서 계산한다(다섯 단위 모두 승인 = 공개, 증거조사만 있는 대본은 준비 중). `case_script`에 메타 `issue` · `admits`와 `pending`(만들지 못한 단위) · `review`(대본 전체 검수 결과) 추가. 블록의 생성 근거가 가리킬 판 `legal_case.content_revision` · `case_paper.revision` 추가(대본 입력이 바뀔 때만 오른다, `updated_at`을 쓰지 않는 이유는 아래 표) (결정: `docs/decisions/BE-126.md`) |
+| v1.54 | 2026-11-02 | 대본 블록 재생성 작업 (**확장 단계**, BE-129 2차 · V47 · API 명세 v0.85) — `case_script_regeneration` 신설(사건 · 파이프라인 작업 ID · 고른 블록 `units` · `cascade_later` · 요청 당시 입력 `inputs` · 상태 · 실패 사유 · 단계 상태 · 요청자 · 반영자 · 반영 시각). 사건 등록(`case_import`)처럼 진행 상황을 받아 적고, 관리자가 결과를 반영하면 `applied_at`이 채워진다. 대본에 칸을 더하지 않고 행으로 둔 이유는 아래 표. 감사 로그 액션 `CASE_SCRIPT_REGENERATE` · `CASE_SCRIPT_REGENERATE_APPLY` 추가 (`docs/decisions/BE-129.md`) |
+| v1.55 | 2026-11-02 | 대본 상태 · 점검 중 (**확장 단계**, BE-126 2차-2 · V48 · API 명세 v0.87) — `case_script.released_at` 추가(대본이 처음 사용자에게 나간 시각: 사건 공개 + 다섯 단위 모두 승인). 사용자 쪽 대본 상태 `scriptStatus`(`READY` · `PREPARING` · `MAINTENANCE`)를 블록 승인 상태와 이 칸에서 계산한다. 이관: 이미 공개 사건 + 모두 승인인 대본은 마지막 승인 시각(공개 시각이 더 늦으면 공개 시각)으로 채운다 — 운영은 대본 0행 (`docs/decisions/BE-126.md`) |
+| v1.53 | 2026-11-01 | 등록 때 정한 배역 · 사건 자동 분류 (**확장 단계**, BE-129 1차 · V46 · API 명세 v0.80) — `case_import.cast_roles`(jsonb, 등록 요청을 받을 때 정한 배역) 추가: 대본을 만드는 등록은 배역을 대본보다 먼저 정하므로, 범죄 유형별 균형 계산이 사건과 함께 **아직 적재되지 않은 등록**(`case_id` 없음, `FAILED` 제외)의 이 값도 센다. `legal_case.classification`(jsonb `{mood, issue, victim, thirdParty}`) · `classification_needs_review`(jsonb 문자열 배열) 추가: 사건 등록의 자동 분류(BE-123) 결과와 관리자 확인이 필요한 축 · 플래그. 대본을 다시 만들 때(BE-129 2차) 파이프라인에 그대로 넘기는 값이라 한 칸에 둔다. 민감 플래그는 `sensitive_flags`가 따로 갖는다 (`docs/decisions/BE-129.md`) |
 
 ---
 
@@ -224,7 +228,10 @@ erDiagram
 | guideline_id | bigint FK |  | 적용 양형기준 버전 | REQ-080 |
 | incident_date | date |  | 사건 발생일 (양형기준 버전 판단 근거). 자동 파이프라인은 모델이 찾은 날짜를 판결문 원문 · 선고일과 대조해 확인된 값만 넣고, 원문에 날짜가 없으면 비운다(v1.12, BE-38) | FR-3-5-1 |
 | cast_roles | jsonb |  | (확장) 배역 `{"prosecutor": "naero", "defense": "nambul"}` — 묶음 A(판사 · 검사) · 묶음 B(변호인 · 피고인 역)를 누가 맡는지. `case_script.cast_roles`와 같은 모양. 비어 있으면 배정 전 (v1.47, BE-125) | COMMON-65 |
+| content_revision | int | ✓ | (확장) 사건 내용의 판, 기본 1. 대본 입력(제목 · 개요)을 A-11로 실제로 바꿀 때만 오른다. 대본 블록의 `basis.case`가 이 값을 남긴다 — `updated_at`은 공개 상태 같은 다른 수정에도 바뀌어 대본이 낡았다고 잘못 알린다 (v1.52, BE-126) | COMMON-65 |
 | sensitive_flags | jsonb |  | (확장) 민감 플래그 이름 배열 (예: `["MENTAL_HEALTH"]`). 파이프라인 분류(BE-123)가 켜고 관리자가 고친다. `null`은 분류 전, `[]`는 분류했고 켜진 것 없음. 공개 API는 사용자 안내 대상 6종만 내보낸다 (v1.47, BE-125) | FR-1-5 |
+| classification | jsonb |  | (확장) 사건 자동 분류 `{"mood": "tragic", "issue": "mental_state", "victim": "forgive", "thirdParty": false}` (파이프라인 `case_classify.py`, BE-123). 사건 등록 적재가 넣고 대본을 다시 만들 때 입력으로 쓴다. 민감 플래그는 `sensitive_flags`에 따로 둔다. `null`은 분류하지 않은 사건 (v1.53, BE-129) |  |
+| classification_needs_review | jsonb |  | (확장) 관리자가 확인해야 하는 분류 축 · 플래그 이름 배열 (예: `["mood", "sensitiveFlags.MENTAL_HEALTH"]`) — 표가 갈렸거나 규칙만 잡은 것. 검수 화면(A-6)이 표시한다 (v1.53, BE-129) |  |
 | status | varchar(20) | ✓ | `DRAFT` / `REVIEW` / `PUBLISHED`. `PUBLISHED`만 사용자에게 노출 | REQ-047, 075 |
 | published_at | timestamptz |  | 공개 시각(A-13). 공개 취소(A-13-14)하면 지우고, 다시 공개하면 새로 기록한다 |  |
 | created_at, updated_at | timestamptz | ✓ |  |  |
@@ -382,48 +389,109 @@ S-05에서 보여 줄 형벌 선택지, 그리고 **선고 가능 범위 밖 판
 | deck | varchar(300) |  | 부제 |
 | caption | varchar(200) |  | 대표사진 아래 캡션 |
 | article | jsonb | ✓ | 본문 문단 배열 |
+| revision | int | ✓ | 기사의 판, 기본 1. 내용이 실제로 바뀔 때(A-13-8 수정 · A-13-6 재생성)만 오른다. 1막 해설(U1) 블록의 `basis.paper`가 이 값을 남긴다 (v1.52, BE-126) |
 | created_at | timestamptz | ✓ |  |
 | updated_at | timestamptz | ✓ |  |
 
 - 유니크 제약: `case_id` — 사건마다 신문 지면은 1건. 재생성은 새 행을 만들지 않고 덮어쓴다.
+- (v1.52, BE-126) 대본 전체와 함께 등록한 사건은 적재(A-14-1)가 파이프라인이 만든 기사를 이 표에 넣는다 — 1막 해설(U1)이 그 기사를 보고 만들어졌기 때문이다.
 - Gemini `generateContent` 한 번 호출로 `{headline, deck, caption, article}` JSON을 받아 그대로 채운다(`CasePaperService`).
 
-#### `case_script` — 사건 대본 (BE-108, COMMON-65)
+#### `case_script` — 사건 대본 (BE-108 · BE-126, COMMON-65)
 
-증거조사에서 검사 · 변호인이 주고받는 대사. 사건마다 1건. 파이프라인 `script` 단계(BE-107)가 만들고
-적재(A-14-1)가 넣으며, 관리자가 승인한 대본만 공개된다(서빙은 BE-109).
+사건 대본. 사건마다 1건. 파이프라인 `script` 단계(BE-107 · BE-121)가 만들고 적재(A-14-1)가 넣으며, 관리자가 승인한
+대본만 공개된다(서빙은 BE-109). v1.52(BE-126)부터 내용은 단위 블록(`case_script_block`)에 있고, 이 표에는 대본 전체 값
+(메타 · 생성 정보 · 공개 가능 여부)만 둔다.
 
 **`legal_case`에 칸을 더하지 않고 표를 따로 둔 이유**: 대본은 사건 내용과 생애주기가 다르다. 사건이 공개된
 뒤에 대본만 늦게 들어오거나, 대본만 반려돼 다시 만들 수 있다. 한 표에 넣으면 "사건은 공개인데 대본은 검수
 중"을 나타낼 자리가 없다.
 
-**대사를 jsonb 한 칸에 두는 이유**: 서버는 대본 안을 들여다보지 않는다(검색 · 집계 대상이 아니다). 형식을
-정하는 쪽은 파이프라인이고, 칸으로 펼쳐 적으면 파이프라인이 필드를 늘릴 때마다 스키마가 따라 깨진다 —
-`case_paper.article`과 같은 관례다.
-
 | 컬럼 | 타입 | 필수 | 설명 |
 | --- | --- | --- | --- |
 | id | bigint PK | ✓ |  |
 | case_id | bigint FK | ✓ | 유니크 — 사건마다 1건 |
-| evidence | jsonb | ✓ | 판단 요소별 대사 배열. 한 줄 = `{factorId, role, character, text, attempts, validation}`. **생성하지 못한 줄은 `text`가 null**이다 |
 | model | varchar(100) |  | 어느 모델로 만들었는지 (예: `google:gemini-2.5-flash`) |
 | generated_at | timestamptz |  | 파이프라인이 만든 시각(`createdAt`). 적재 시각 `created_at`과 다르다 |
 | stopped | boolean | ✓ | 호출 한도로 중간에 멈췄는지. 기본 false |
-| cast_roles | jsonb |  | 배역 `{prosecutor, defense}`. `cast`는 SQL 예약어라 이름을 바꿨다 |
+| cast_roles | jsonb |  | 배역 `{prosecutor, defense}` (메타 `cast`). `cast`는 SQL 예약어라 이름을 바꿨다 |
+| issue | varchar(30) |  | 메타: 분류 쟁점(`admitted` · `denied` …). 프론트 공통 틀이 신문 마지막 질문을 고른다. 값 목록은 파이프라인이 정해 CHECK를 걸지 않는다(`sensitive_flags`와 같은 이유). 분류 없이 만든 대본은 비어 있다 (v1.52) |
+| admits | boolean |  | 메타: 피고인이 혐의를 인정하는지(U0 세 번째 답, 서버가 신문 답 규칙으로 읽는다). U0가 없으면 비어 있다 (v1.52) |
+| pending | jsonb | ✓ | 파이프라인이 만들지 못한 단위 배열(예: `["U1"]`), 기본 `[]`. 하나라도 있으면 대본 전체를 승인할 수 없다. 블록 단위가 아닌 `"PAPER"`(기사를 만들지 못함)가 들어올 수 있고, 증거조사만 만든 대본은 `["U0", "U1", "U2", "U4"]`다 (v1.52) |
+| review | jsonb | ✓ | 대본 전체에 걸린 검수 결과(`REVIEW_FAILED`), 기본 `[]`. 블록 것은 블록 행에 있다 (v1.52) |
 | balance_warning | text |  | 검사 · 변호인 분량이 치우쳤다는 경고. **길이를 제한하지 않는다** — 모델 문장이 들어오는 칸을 varchar로 두면 한 번 넘칠 때 적재 전체가 막힌다(BE-93 1차에서 겪음) |
-| publishable | boolean | ✓ | 파이프라인이 "증거 카드와 대사가 1:1로 맞는다"고 본 결과. false면 승인할 수 없다 |
+| publishable | boolean | ✓ | 파이프라인이 공개해도 된다고 본 결과(생성 실패 · 중단 · 못 만든 단위 · 검수 오류가 없다). false면 승인할 수 없다 |
+| released_at | timestamptz |  | 대본이 처음 사용자에게 나간 시각 — 사건이 공개(`PUBLISHED`)된 상태에서 다섯 단위가 모두 승인된 첫 순간(승인 · 사건 공개 때 서버가 남긴다). 한 번 채우면 지우지 않는다. 있으면 승인이 풀린 동안 "준비 중"이 아니라 "점검 중"이다(아래) (v1.55) |
+| created_at | timestamptz | ✓ | 적재 시각 |
+| updated_at | timestamptz | ✓ |  |
+
+- **검수 상태는 블록에 있다**(v1.52). 대본의 상태는 블록에서 계산한다 — 다섯 단위(U0 ~ U4)가 모두 있고 모두 승인이면 공개(API 1 · 16 · 18의 `scriptReady`, 증거조사만 만든 대본은 "준비 중"), 하나라도 반려면 반려, 그 밖은 대기. 1차는 통승인 · 통거절이라 모든 블록에 한 번에 적용한다(A-13-11 · 12).
+- 승인 조건은 이 표의 `publishable`과 모든 블록의 `publishable`이 참인 것이다. `publishable`이 false인 이유: 끝내 생성하지 못한 줄이 있거나(U3 `text`가 null), 호출 한도로 멈췄거나(`stopped`), 만들지 못한 단위가 있거나(`pending`), 검수 조건 오류가 있다.
+- **사용자 쪽 대본 상태 `scriptStatus`**(v1.55, BE-126 2차-2): 공개 대본이면 `READY`, 아니면 `released_at`이 있을 때 `MAINTENANCE`(점검 중 — API 18이 503), 없을 때 `PREPARING`(준비 중 — 404). 칸으로 두지 않고 블록 승인 상태와 `released_at`에서 계산한다 — 상태 칸을 따로 두면 블록 승인과 어긋날 수 있다. 초안 사건에서 승인만 한 대본은 사용자가 본 적이 없어 `released_at`을 남기지 않는다.
+- **대본 검수는 사건 상태를 바꾸지 않는다.** 판결 후보 승인(A-9)은 `legal_case.status`를 DRAFT → REVIEW로 올리지만, 대본은 사건 내용이 아니라 체험 연출이라 사건 공개 흐름과 따로 둔다.
+- 다시 생성해 덮어쓰는 경로는 아직 없다(적재는 사건을 새로 만든다). 블록 재생성은 BE-129다.
+
+#### `case_script_block` — 대본 단위 블록 (BE-126, COMMON-65)
+
+대본(`case_script`)마다 단위 하나에 한 행. 단위: U0 설계도(신문 질문 · 답, 쟁점) · U1 1막 해설 · U2 재판 도입부 · U3 증거조사
+대사 · U4 3막 의견. 고정 문구 · 연출 · 민감 안내 · 기사 · 4 ~ 6막은 블록에 넣지 않는다(프론트 공통 틀 · API 17). 블록 형식 ·
+생성 근거의 계약은 `tools/ai-judgment/prompts/script/README.md` "저장 블록", 연동 표 정본은 파이프라인이다
+(`tools/ai-judgment/contracts/script_blocks.json`을 백엔드 테스트가 함께 읽는다).
+
+**블록을 행으로 나눈 이유**: 단위마다 따로 검수 · 승인하고(2차), 한 블록만 다시 만들 수 있어야 한다(BE-129). 한 칸
+jsonb에 블록을 모두 담으면 블록 하나를 고칠 때 다른 블록의 검수 상태까지 함께 다시 써야 하고, "오류 있는 블록은 승인할
+수 없다"를 DB 제약으로 걸 수 없다. **블록 안의 내용을 jsonb 한 칸에 두는 이유**는 V32 때와 같다 — 서버는 대본 안을
+들여다보지 않고(검색 · 집계 대상이 아니다), 형식을 정하는 쪽은 파이프라인이다(`case_paper.article`과 같은 관례).
+
+| 컬럼 | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| id | bigint PK | ✓ |  |
+| script_id | bigint FK | ✓ | `case_script.id`. 대본을 지우면 함께 지운다(`ON DELETE CASCADE`) |
+| unit | varchar(2) | ✓ | `U0` ~ `U4` (CHECK). `(script_id, unit)` 유니크 |
+| content | jsonb | ✓ | 블록 값. 파이프라인이 만든 모양 그대로(검수 결과 `path`가 가리킨다). **U3는 대사 배열**(한 줄 = `{factorId, role, character, text, attempts, validation}`, 생성하지 못한 줄은 `text`가 null), 나머지는 객체. U2 신문 답은 모델이 쓴 그대로다(정규화는 API 18) |
+| revision | int | ✓ | 판, 기본 1(CHECK ≥ 1). 고쳐 쓰기 · 대사 수정으로 값이 바뀔 때마다 오른다 |
+| basis | jsonb | ✓ | 만들 때 본 값, 기본 `{}`. 앞 블록은 판, 분류 · 배역은 값, 사건 내용(`case`) · 기사(`paper`)는 그때의 `legal_case.content_revision` · `case_paper.revision`(적재가 채운다). 지금 값과 다르면 낡은 블록이다(낡음 표시는 2차) |
+| review | jsonb | ✓ | 검수 조건 결과(BE-122) 중 이 블록 것, 기본 `[]`. **관리자 전용** |
+| warnings | jsonb | ✓ | 단위 형식 경고, 기본 `[]`. **관리자 전용** |
+| repairs | jsonb | ✓ | 고쳐 쓰기 기록(BE-122 2차, 고치기 전 · 후 문장) 중 이 블록 것, 기본 `[]`. **관리자 전용** |
+| publishable | boolean | ✓ | 오류 없이 공개할 수 있는 블록인지(`review`에 `severity: error`가 없고, U3는 모든 줄이 채워짐). 적재 · 수정할 때 서버가 계산한다 |
 | review_status | varchar(20) |  | `APPROVED` · `REJECTED`만 저장. **비어 있으면 검수 대기**(`judgment` V16과 같은 방식), CHECK |
 | reviewed_by_admin_id | bigint FK |  | `admin_account.id`. 계정을 지우면 NULL (`ON DELETE SET NULL`) |
 | reviewed_at | timestamptz |  |  |
 | review_note | varchar(500) |  | 반려 사유. 반려일 때만 둔다(CHECK) |
-| created_at | timestamptz | ✓ | 적재 시각 |
+| created_at | timestamptz | ✓ |  |
 | updated_at | timestamptz | ✓ |  |
 
-- **`publishable = false`는 승인할 수 없다**: `CHECK (review_status <> 'APPROVED' OR publishable)`. 증거 카드와 대사가 어긋난 상태로 공개하면 체험이 깨지므로 데이터로도 막아 둔다(BE-107 PR #277 리뷰 7번의 계약).
-- `publishable`이 false인 이유는 둘이다 — 끝내 생성하지 못한 줄이 있거나(`evidence[].text`가 null), 호출 한도로 멈췄거나(`stopped`). 검수 화면이 둘을 구분해 안내한다.
-- **대본 검수는 사건 상태를 바꾸지 않는다.** 판결 후보 승인(A-9)은 `legal_case.status`를 DRAFT → REVIEW로 올리지만, 대본은 사건 내용이 아니라 체험 연출이라 사건 공개 흐름과 따로 둔다.
-- `evidence[].factorId`는 **`factor.display_order`** 와 맞춘다(적재가 파이프라인 `factorId`를 그대로 넣는다, v1.37). A-13-10이 이 번호로 판단 요소 문구를 찾아 대사마다 붙여 준다.
-- 다시 생성해 덮어쓰는 경로는 아직 없다(적재는 사건을 새로 만든다). 생기면 유니크 제약 덕에 행이 둘로 늘지 않는다.
+- **오류 있는 블록은 승인할 수 없다**: `CHECK (review_status <> 'APPROVED' OR publishable)` — V32 `case_script`에 있던 제약을 블록으로 옮겼다(BE-107 PR #277 리뷰 7번의 계약).
+- `review` · `warnings` · `repairs`는 고치기 전 문장과 대본 인용이 들어 있어 공개 API(API 18)에 싣지 않는다. API 18은 `content`만, U3는 `factorId` · `role` · `text`만 준다.
+- U3 `content[].factorId`는 **`factor.display_order`** 와 맞춘다(적재가 파이프라인 `factorId`를 그대로 넣는다, v1.37). A-13-10이 이 번호로 판단 요소 문구를 찾아 대사마다 붙여 준다.
+- V45가 기존 대본의 `evidence`를 U3 블록 하나로 옮겼다(검수 상태 포함, `basis`는 `{case: 1, cast}`, 대본 `pending`은 나머지 네 단위). 증거조사만 만드는 경로(BE-107)도 U3 블록 하나로 적재한다 — 둘 다 공개되지 않는 "준비 중" 대본이다.
+
+#### `case_script_regeneration` — 대본 블록 재생성 작업 (BE-129 2차, A-13-15 ~ 17)
+
+관리자가 고른 블록을 파이프라인 서비스가 다시 만들고, 끝나면 관리자가 결과를 보고 반영한다. 사건 등록(`case_import`)과 같이
+진행 상황의 출처는 파이프라인이고 이 표는 받아 적는 쪽이다(끝난 작업은 다시 바꾸지 않는다).
+
+**대본(`case_script`)에 칸을 더하지 않고 행으로 둔 이유**: 재생성은 한 사건에 여러 번 일어나고, 누가 무엇을 다시 만들었는지 남아야
+한다. 반영하지 않고 버린 작업도 남는다 — 반영할 수 있는 것은 그 사건의 가장 최근 작업뿐이다.
+
+| 컬럼 | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| id | bigint PK | ✓ |  |
+| case_id | bigint FK | ✓ | `legal_case.id`. 사건을 지우면 함께 지운다(`ON DELETE CASCADE`). `(case_id, id DESC)` 인덱스 |
+| job_id | varchar(32) | ✓ | 파이프라인 서비스 작업 ID. 유니크 |
+| units | jsonb | ✓ | 관리자가 고른 블록(단위 이름 배열). 실제로 다시 만들 블록은 파이프라인이 연동 표로 넓힌다 |
+| cascade_later | boolean | ✓ | 그 블록을 입력으로 받는 뒤 블록도 함께 만드는지(`false` = 세부조정). `cascade`는 SQL 키워드라 이 이름이다 |
+| inputs | jsonb | ✓ | 요청 당시 입력 `{blocks: {단위: 판}, case, paper, cast, classification, sensitiveFlags}`. 반영할 때 지금 값과 다르면 거절한다 |
+| status | varchar(20) |  | `QUEUED` · `RUNNING` · `SUCCEEDED` · `FAILED` (CHECK). 첫 진행 상황을 받을 때 채운다 |
+| error_code | varchar(50) |  | 실패 사유 코드 |
+| message | varchar(500) |  | 실패 사유. 원문 · 모델 출력을 담지 않는다 |
+| stages | jsonb |  | 마지막으로 받은 단계 상태 `[{name, status}]`(대본 단계만) |
+| requested_by_admin_id | bigint FK |  | `admin_account.id`. 계정을 지우면 NULL |
+| applied_by_admin_id | bigint FK |  | `admin_account.id`. 계정을 지우면 NULL |
+| applied_at | timestamptz |  | 결과를 블록에 반영한 시각. `SUCCEEDED`일 때만 둔다(CHECK) |
+| created_at | timestamptz | ✓ |  |
+| finished_at | timestamptz |  | 파이프라인 작업이 끝난 시각 |
 
 #### `case_import` · `case_import_source` — 사건 등록 작업 (BE-93, A-14 · A-15)
 
@@ -440,6 +508,7 @@ S-05에서 보여 줄 형벌 선택지, 그리고 **선고 가능 범위 밖 판
 | error_code | varchar(50) |  |  |
 | message | varchar(500) |  | 실패 사유. **원문 · 모델 출력을 담지 않는다** |
 | stages | jsonb |  | 파이프라인에서 마지막으로 받은 단계 상태 `[{name, status}, ...]` |
+| cast_roles | jsonb |  | (확장) 등록 요청을 받을 때 정한 배역 `{prosecutor, defense}` (v1.53, BE-129). 대본을 켠 서버만 채운다 — 대본은 배역 이름을 대사에 넣어 만들어지므로 대본보다 먼저 정해 파이프라인에 넘긴다. 적재 전까지는 범죄 유형별 배역 균형 계산이 이 값을 센다(`case_id`가 없고 `FAILED`가 아닌 행). 적재하면 `legal_case.cast_roles`가 이어받는다 |
 | created_at | timestamptz | ✓ |  |
 | finished_at | timestamptz |  |  |
 
@@ -521,13 +590,13 @@ S-03의 객관식 선택지. 범죄 유형별로 정의한다(FR-2-8).
 | created_at | timestamptz | ✓ |  |
 | last_login_at | timestamptz |  | 마지막 로그인 성공 시각 |
 | nickname | varchar(12) |  | 표시 이름(v1.42). 아이디 회원은 가입 때 채우고 카카오 회원은 NULL(커뮤니티에는 `방청객 {회원 ID}`로 보임). **중복 금지**(v1.49, 대소문자 구분 없음 — `uq_member_nickname`, NULL은 겹쳐도 된다). 설정 · 변경은 API 명세 M-7 |
-| terms_agreed_at | timestamptz |  | 이용약관 · 개인정보처리방침에 동의한 시각(v1.51). 아이디 가입(M-5) 때 가입 시각으로 채운다. 카카오 회원 · BE-133 전 가입자는 NULL |
+| terms_agreed_at | timestamptz |  | 이용약관 · 개인정보처리방침에 동의한 시각(v1.51). 아이디 가입(M-5) · 카카오 가입(M-12, BE-145) 때 가입 시각으로 채우고, 그 전에 가입한 회원은 M-14로 동의하면 채운다. 동의 전 회원은 NULL |
 | terms_version | varchar(20) |  | 동의한 약관 버전(v1.51, 코드 `TermsVersion.CURRENT`). 문서를 바꿔도 이미 동의한 값은 바꾸지 않는다 |
 
 - `(provider, provider_user_id)` 유일(`uq_member_provider_user`). 행은 `INSERT ... ON CONFLICT DO NOTHING`으로 만들어, 같은 계정의 첫 로그인이 동시에 와도 한 행만 생긴다.
 - **카카오 회원은 개인정보를 저장하지 않는다**: 카카오 동의항목(닉네임 · 이메일 · 프로필)을 요청하지 않고 회원번호만 쓴다.
 - **아이디 회원(`LOCAL`, v1.42)** 은 아이디 · 비밀번호 해시(`member_password`) · 닉네임을 저장한다(이용약관 · 개인정보처리방침 FE-117). 카카오 계정과 아이디 계정은 **합치지 않는다** — 같은 사람이어도 다른 회원이다.
-- **약관 동의 기록(v1.51, BE-133)**: `terms_agreed_at` · `terms_version`은 함께 있거나 함께 없다(CHECK `ck_member_terms_agreement`). NULL은 "동의 기록이 없다"는 뜻이다 — 카카오로 처음 가입하는 경로는 동의를 묻지 않아 비어 있다(docs/decisions/BE-133.md).
+- **약관 동의 기록(v1.51, BE-133)**: `terms_agreed_at` · `terms_version`은 함께 있거나 함께 없다(CHECK `ck_member_terms_agreement`). NULL은 "동의 기록이 없다"는 뜻이다 — BE-145 전에 가입한 카카오 회원 · BE-133 전에 가입한 아이디 회원이 그렇고, M-8 `termsRequired`가 `true`다. 처음 온 카카오 계정은 동의해야 회원이 만들어져 처음부터 채워진다(docs/decisions/BE-133.md · BE-145.md).
 
 #### `member_password` — 아이디 회원 로그인 정보 (확장 단계, v1.42 · BE-113 · V33)
 
@@ -685,7 +754,7 @@ AI 판결 1건을 어떤 조건으로 만들었는지 남긴다(REQ-047, 079). M
 | id | bigint PK | ✓ |  |
 | admin_id | bigint FK |  | `admin_account.id`. 로그인 실패는 입력이 실제 계정과 일치할 때만 그 계정, 아니면 NULL. 계정이 지워지면 NULL이 된다(`ON DELETE SET NULL`) |
 | actor_email | varchar(254) |  | 그때의 계정 이메일(소문자, CHECK). 계정이 지워져도 누구였는지 남긴다. **로그인 실패 때 입력한 값은 원문으로 남기지 않는다** — 이메일 칸에 비밀번호를 잘못 넣으면 평문으로 남기 때문이다. 입력이 실제 계정과 일치할 때만 그 계정 이메일, 아니면 NULL(`detail`에 `{"knownAccount": false}`) |
-| action | varchar(30) | ✓ | `LOGIN_SUCCESS` · `LOGIN_FAILURE` · `LOGOUT` · `SOURCE_VIEW` · `JUDGMENT_APPROVE` · `JUDGMENT_REJECT` · `CASE_UPDATE` · `VALUE_AXIS_CONFIRM` · `CASE_PUBLISH` · `CASE_PHOTO_UPLOAD` · `CASE_PHOTO_DELETE` · `CASE_PAPER_GENERATE` · `CASE_PAPER_UPDATE` · `CASE_IMPORT` · `CASE_IMPORT_LOAD` · `CASE_SCRIPT_APPROVE` · `CASE_SCRIPT_REJECT` · `CASE_SCRIPT_UPDATE` · `CASE_UNPUBLISH` (CHECK, 마지막 변경 V34). 코드 enum `AdminAuditAction`과 같은 값이다 |
+| action | varchar(30) | ✓ | `LOGIN_SUCCESS` · `LOGIN_FAILURE` · `LOGOUT` · `SOURCE_VIEW` · `JUDGMENT_APPROVE` · `JUDGMENT_REJECT` · `CASE_UPDATE` · `VALUE_AXIS_CONFIRM` · `CASE_PUBLISH` · `CASE_PHOTO_UPLOAD` · `CASE_PHOTO_DELETE` · `CASE_PAPER_GENERATE` · `CASE_PAPER_UPDATE` · `CASE_IMPORT` · `CASE_IMPORT_LOAD` · `CASE_SCRIPT_APPROVE` · `CASE_SCRIPT_REJECT` · `CASE_SCRIPT_UPDATE` · `CASE_UNPUBLISH` · `CASE_SCRIPT_REGENERATE` · `CASE_SCRIPT_REGENERATE_APPLY` (CHECK, 마지막 변경 V47). 코드 enum `AdminAuditAction`과 같은 값이다 |
 | target_type | varchar(20) |  | `CASE` · `JUDGMENT` · `FACTOR` · `CASE_SOURCE`. `target_id`와 둘 다 있거나 둘 다 없다(CHECK) |
 | target_id | bigint |  | 대상 행 ID (FK 없음 — 대상이 지워져도 기록은 남긴다) |
 | detail | jsonb |  | 판단에 필요한 값만(반려 사유 · 바꾼 필드 이름 등). **비밀번호 · 원문 내용 · 토큰은 넣지 않는다** |
@@ -962,7 +1031,7 @@ IA 9장의 규칙을 어느 테이블·제약이 책임지는지 정리한다.
 | 이름 | `pk_` · `fk_{테이블}_{참조 테이블}` · `uk_{테이블}_{내용}` · `chk_{테이블}_{내용}` · `idx_{테이블}_{컬럼}` |
 | FK 인덱스 | FK 컬럼마다 인덱스를 만든다. 유니크 제약의 첫 컬럼과 겹치면 생략한다 |
 | FK 삭제 동작 | 기본값(`NO ACTION`) |
-| jsonb 형식 (v1.7) | 아래 컬럼은 반드시 **배열**로 넣는다. 엔티티가 배열 타입으로 읽어서, 형식이 다르면 그 사건의 조회 전체가 실패한다<br>• `legal_case.keywords` · `deidentified_items` · `sensitive_flags`(v1.47), `judgment.reference_tags`: 문자열 배열<br>• `legal_case.cast_roles`(v1.47): 객체 `{prosecutor, defense}`, 값은 `naero` · `nambul` 하나씩<br>• `case_section.data`: 배열. 원소는 섹션마다 다르다 — DAMAGE `{label, value}` · LAW_TERM `{term, desc}` 객체, SUMMARY 문자열<br>• `judgment.extra_dispositions`: 객체 배열 `{type, value}`, `type`은 `COMMUNITY_SERVICE` · `CONFISCATION`만 |
+| jsonb 형식 (v1.7) | 아래 컬럼은 반드시 **배열**로 넣는다. 엔티티가 배열 타입으로 읽어서, 형식이 다르면 그 사건의 조회 전체가 실패한다<br>• `legal_case.keywords` · `deidentified_items` · `sensitive_flags`(v1.47), `judgment.reference_tags`: 문자열 배열<br>• `legal_case.cast_roles`(v1.47) · `case_import.cast_roles`(v1.53): 객체 `{prosecutor, defense}`, 값은 `naero` · `nambul` 하나씩<br>• `legal_case.classification`(v1.53): 객체, `classification_needs_review`(v1.53): 문자열 배열<br>• `case_section.data`: 배열. 원소는 섹션마다 다르다 — DAMAGE `{label, value}` · LAW_TERM `{term, desc}` 객체, SUMMARY 문자열<br>• `judgment.extra_dispositions`: 객체 배열 `{type, value}`, `type`은 `COMMUNITY_SERVICE` · `CONFISCATION`만 |
 | 본문 줄바꿈 (v1.9) | `case_section.content`의 항목은 줄바꿈(`\n`)으로 나눈다. PostgreSQL에서는 `E'첫 항목\n둘째 항목'`처럼 쓴다. 문장 끝에 마침표를 두어 줄바꿈을 그리지 않는 곳에서도 한 문단으로 읽히게 한다 |
 | 적용 방식 | SQL 파일을 직접 실행하지 않고 서버 기동 시 Flyway가 적용한다. `ddl-auto`는 모든 환경에서 `validate` |
 | 수정 규칙 | develop에 Merge된 파일은 수정하지 않는다. 오픈 전 불가피하면 팀 합의 후 DB 초기화하고 수정, 오픈 후에는 새 마이그레이션만 추가한다 |

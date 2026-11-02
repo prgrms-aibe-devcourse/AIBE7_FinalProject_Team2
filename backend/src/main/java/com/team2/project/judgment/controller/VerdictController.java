@@ -28,13 +28,13 @@ public class VerdictController {
 	/** API 8. 판결 입력 정보 (S-05) */
 	@GetMapping("/verdict-form")
 	public VerdictFormResponse getForm(@PathVariable Long caseId, Requester requester) {
-		return verdictFormService.getForm(caseId, requester.anonymousId());
+		return verdictFormService.getForm(caseId, requester);
 	}
 
 	/** API 9. 판결 제출 */
 	@PostMapping("/verdict")
 	public VerdictResponse submit(@PathVariable Long caseId, @Valid @RequestBody VerdictRequest body,
 		Requester requester) {
-		return verdictService.submit(caseId, requester.anonymousId(), body);
+		return verdictService.submit(caseId, requester, body);
 	}
 }

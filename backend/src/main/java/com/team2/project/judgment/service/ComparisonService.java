@@ -1,9 +1,11 @@
 package com.team2.project.judgment.service;
 
+import com.team2.project.common.web.Requester;
 import com.team2.project.experience.domain.Experience;
 import com.team2.project.experience.domain.ExperienceStatus;
 import com.team2.project.experience.service.MyExperienceService;
 import com.team2.project.judgment.domain.ComparisonMatrix;
+import com.team2.project.judgment.domain.CrowdPercents;
 import com.team2.project.judgment.domain.FinalJudgmentText;
 import com.team2.project.judgment.domain.Judgment;
 import com.team2.project.judgment.domain.JudgmentFactor;
@@ -12,20 +14,24 @@ import com.team2.project.judgment.domain.PreToFinalDirection;
 import com.team2.project.judgment.domain.RuleSentences;
 import com.team2.project.judgment.domain.SubjectType;
 import com.team2.project.judgment.dto.ComparisonResponse;
+import com.team2.project.judgment.dto.ComparisonResponse.Crowd;
+import com.team2.project.judgment.dto.ComparisonResponse.CrowdOption;
 import com.team2.project.judgment.dto.ComparisonResponse.PreJudgmentView;
 import com.team2.project.judgment.dto.ComparisonResponse.PreToFinal;
 import com.team2.project.judgment.dto.ComparisonResponse.PreToCourt;
 import com.team2.project.judgment.dto.JudgmentView;
 import com.team2.project.judgment.repository.JudgmentFactorRepository;
 import com.team2.project.judgment.repository.JudgmentRepository;
+import com.team2.project.judgment.repository.RangeOptionCount;
+import com.team2.project.legalcase.domain.SentenceRangeOption;
+import com.team2.project.legalcase.repository.SentenceRangeOptionRepository;
 import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -45,11 +51,12 @@ public class ComparisonService {
 	private final MyExperienceService myExperienceService;
 	private final JudgmentRepository judgmentRepository;
 	private final JudgmentFactorRepository judgmentFactorRepository;
+	private final SentenceRangeOptionRepository sentenceRangeOptionRepository;
 	private final JudgmentViewAssembler assembler;
 
 	@Transactional(readOnly = true)
-	public ComparisonResponse getComparison(Long caseId, Optional<UUID> anonymousId) {
-		Experience experience = myExperienceService.getMyExperienceAtLeast(caseId, anonymousId,
+	public ComparisonResponse getComparison(Long caseId, Requester requester) {
+		Experience experience = myExperienceService.getMyExperienceAtLeast(caseId, requester,
 			ExperienceStatus.COMPLETED);
 
 		Map<SubjectType, Judgment> published = judgmentRepository.findPublishedJudgments(caseId).stream()
@@ -86,7 +93,22 @@ public class ComparisonService {
 			pre.getRangeOption().getId(),
 			pre.getRangeOption().getLabel(),
 			preFactors.stream().map(factor -> factor.getFactor().getId()).toList());
-		return new PreToFinal(preJudgmentView, FinalJudgmentText.of(mine), direction, summaryText(direction));
+		return new PreToFinal(preJudgmentView, FinalJudgmentText.of(mine), direction, summaryText(direction),
+			crowd(pre));
+	}
+
+	/** 같은 범죄 유형의 모든 구간(0명인 구간 포함)을 표시 순서대로, 선택한 사람 수 기준 비율로 낸다. 숨김 기준 인원은 두지 않는다(FE-34) */
+	private Crowd crowd(Judgment pre) {
+		Map<Long, Long> counts = judgmentRepository.countPreJudgmentsByRangeOption(pre.getLegalCase().getId())
+			.stream().collect(Collectors.toMap(RangeOptionCount::getRangeOptionId, RangeOptionCount::getCount));
+		List<SentenceRangeOption> options = sentenceRangeOptionRepository
+			.findAllByCrimeTypeOrderByDisplayOrderAsc(pre.getRangeOption().getCrimeType());
+		long[] optionCounts = options.stream().mapToLong(option -> counts.getOrDefault(option.getId(), 0L)).toArray();
+		int[] percents = CrowdPercents.of(optionCounts);
+		List<CrowdOption> crowdOptions = IntStream.range(0, options.size())
+			.mapToObj(i -> new CrowdOption(options.get(i).getId(), options.get(i).getLabel(), percents[i]))
+			.toList();
+		return new Crowd(Arrays.stream(optionCounts).sum(), crowdOptions);
 	}
 
 	private String summaryText(PreToFinalDirection direction) {

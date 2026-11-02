@@ -1,5 +1,5 @@
 import { formatPenalty, formatDispositions } from '../../utils/judgmentFormat.js';
-import { SCRIPTS } from '../../content/scripts.js';
+import { loadCaseScript, loadFailText } from '../../utils/caseScript.js';
 import { renderCourtStage, openComparison } from './courtStage.js';
 import { mountStage } from '../comparison/comparisonStage.js';
 
@@ -49,9 +49,8 @@ export async function renderCourtPage(container, { caseId, caseHeader, api, navi
     return group;
   }
 
-  // 대본의 제목이 사건 제목과 같을 때만 무대를 쓴다(S-03 ~ S-06과 같은 규칙)
-  const candidate = SCRIPTS[caseId];
-  const script = candidate?.title === caseHeader.title ? candidate : undefined;
+  // 서버 대본이 있는 사건만 무대를 쓴다(FE-139). load()가 받는다 — 조회가 실패하면 화면의 오류 · 다시 시도 경로로 간다
+  let script = null;
 
   // 5막 실제 판결(재진입 · 바로 들어온 경우). 보통은 S-06 4막에서 무대를 이어 받고 주소만 바뀐다(courtStage.js)
   function drawStage(data) {
@@ -130,6 +129,7 @@ export async function renderCourtPage(container, { caseId, caseHeader, api, navi
     loading = true;
     message('실제 판결 정보를 불러오는 중…');
     try {
+      script = await loadCaseScript(api, caseId);
       const data = await api.getCourtJudgment(caseId);
       if (active()) draw(data);
     } catch (error) {
@@ -141,7 +141,7 @@ export async function renderCourtPage(container, { caseId, caseHeader, api, navi
         message(`지금 단계에서는 이 화면을 볼 수 없어요. (현재 상태: ${error.currentStatus})`);
         console.info('현재 상태:', error.currentStatus);
       } else {
-        message('정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.', button('다시 시도', load));
+        message(loadFailText(error), button('다시 시도', load));
       }
     } finally { loading = false; }
   }

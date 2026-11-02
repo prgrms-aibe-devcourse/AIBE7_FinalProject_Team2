@@ -20,9 +20,9 @@ import time
 
 from llm import LLMError, LLMQuotaExhaustedError
 from llm import call as default_call
-from script_assembler import (NO_SENTENCING, QUESTION_RULES, ask_unit, build_user, check_closing, check_design,
-                              check_intro, check_opening, closing_request, evidence_blocks, intro_request,
-                              strip_line_prefix, unit_prompt, unit_warnings)
+from script_assembler import (BLOCK_BASIS, BLOCK_UNITS, NO_SENTENCING, QUESTION_RULES, ask_unit, build_user,
+                              check_closing, check_design, check_intro, check_opening, closing_request,
+                              evidence_blocks, intro_request, strip_line_prefix, unit_prompt, unit_warnings)
 from script_generation import build_evidence_prompt, ordered_evidence_factors, validate_line
 from script_review import (ERROR, FIX_LINE, FIX_UNIT, review_evidence, review_failed, review_script, review_unit,
                            unit_context, unit_lines)
@@ -31,8 +31,8 @@ UNIT_ORDER = ("U0", "U1", "U2", "U3", "U4")
 # 줄을 고쳐도 남으면 단위째 다시 만드는 단위 (모듈 설명 참고)
 REGENERATE_UNITS = ("U1", "U4")
 # 단위가 바뀌면 낡는(다시 만들어야 할 수 있는) 뒤 단위 — BE-129 연동 표(U0 → U2 → U4, U2 → U4). U2는 설계도의 질문을,
-# U4는 설계도의 쟁점과 U2의 변호인 입장을 받는다. U1 · U3 · U4를 바꿔도 다른 단위는 그대로다
-AFFECTS = {"U0": ["U2", "U4"], "U1": [], "U2": ["U4"], "U3": [], "U4": []}
+# U4는 설계도의 쟁점과 U2의 변호인 입장을 받는다. U1 · U3 · U4를 바꿔도 다른 단위는 그대로다. 정본은 BLOCK_BASIS다(BE-126)
+AFFECTS = {unit: [later for later in BLOCK_UNITS if unit in BLOCK_BASIS[later]] for unit in BLOCK_UNITS}
 
 # path 첫 키 → 고쳐 쓸 줄의 설명 (모델에게 어떤 줄인지 알린다)
 LINE_ROLES = {
@@ -257,7 +257,7 @@ def regenerate_unit(unit, case, judgment_output, cast, cls, generated, *, model,
 
 def repair_units(case, judgment_output, cast, cls, generated, *, model, caller=default_call, retries=2, max_retries=2,
                  temperature=None, max_tokens=6000, evidence_max_tokens=2000, timeout=150, evidence_timeout=60,
-                 delay=0.0, log=None):
+                 delay=0.0, log=None, units=None):
     """검수 오류를 고친다. `generated`(generate_units 반환값)를 고친 복사본을 돌려준다 — `units` · `evidence`가 바뀌고
     `review`는 다시 검사한 결과, `repairs`는 한 일의 기록이다:
 
@@ -270,14 +270,17 @@ def repair_units(case, judgment_output, cast, cls, generated, *, model, caller=d
     `before` · `after`는 관리자가 자동으로 고친 줄의 원문을 볼 수 있게 남긴다(BE-129 검수 화면). `affects`는 이 일로 값이
     바뀌어 낡았을 수 있는 뒤 단위(`AFFECTS`)다 — 값이 바뀌지 않았으면 빈 목록이다(BE-126 낡음 표시).
 
-    `retries`는 줄 하나를 고쳐 쓰는 최대 횟수다(0이면 고치지 않는다). 호출 한도가 소진되면 그 자리에서 멈추고 남은 오류는 둔다."""
+    `retries`는 줄 하나를 고쳐 쓰는 최대 횟수다(0이면 고치지 않는다). 호출 한도가 소진되면 그 자리에서 멈추고 남은 오류는 둔다.
+    `units`를 주면 그 단위의 오류만 고친다 — 블록 재생성(BE-129 2차)이 다시 만들지 않은 블록(관리자가 승인했을 수 있다)을
+    건드리지 않게 한다. 검사는 그래도 대본 전체를 다시 한다."""
     generated = copy.deepcopy(generated)
     generated.setdefault("repairs", [])
     if retries <= 0:
         return generated
     opts = dict(temperature=temperature, max_tokens=max_tokens, evidence_max_tokens=evidence_max_tokens,
                 timeout=timeout, evidence_timeout=evidence_timeout, delay=delay, max_retries=max_retries)
-    errors = [i for i in generated.get("review", []) if i["severity"] == ERROR and i.get("fix") in (FIX_LINE, FIX_UNIT)]
+    errors = [i for i in generated.get("review", []) if i["severity"] == ERROR and i.get("fix") in (FIX_LINE, FIX_UNIT)
+              and (units is None or i["unit"] in units)]
     by_line = {}
     for issue in errors:
         by_line.setdefault((issue["unit"], issue["path"]), []).append(issue)
@@ -312,8 +315,9 @@ def repair_units(case, judgment_output, cast, cls, generated, *, model, caller=d
             ok, replaced, errors_before, errors_after = regenerate_unit(unit, case, judgment_output, cast, cls, generated,
                                                                         model=model, caller=caller, opts=opts, log=log)
             codes = sorted({i["code"] for i in errors if i["unit"] == unit})
+            # replaced: 새 값으로 바꿨는지(오류가 줄었을 때만 바꾼다). U1 · U4는 affects가 늘 비어 있어 따로 남긴다 — 블록 판(BE-126)이 이 값으로 오른다
             generated["repairs"].append({"unit": unit, "path": "", "codes": codes, "action": "unit", "attempts": 1, "ok": ok,
-                                         "errorsBefore": errors_before, "errorsAfter": errors_after,
+                                         "replaced": replaced, "errorsBefore": errors_before, "errorsAfter": errors_after,
                                          "affects": AFFECTS[unit] if replaced else []})
     except LLMQuotaExhaustedError as e:
         if log:

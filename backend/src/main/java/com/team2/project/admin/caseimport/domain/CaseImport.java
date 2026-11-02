@@ -18,6 +18,7 @@ import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.AccessLevel;
@@ -60,6 +61,13 @@ public class CaseImport {
 
 	@Enumerated(EnumType.STRING)
 	private CrimeType crimeType;
+
+	/**
+	 * 등록 요청을 받을 때 정한 배역 {@code {prosecutor, defense}} (BE-129). 대본보다 먼저 정해 파이프라인에 넘긴다.
+	 * 적재 전까지는 범죄 유형별 균형 계산이 이 값을 센다(실패한 등록은 빼고). 대본 없이 돌린 등록이면 null
+	 */
+	@JdbcTypeCode(SqlTypes.JSON)
+	private Map<String, String> castRoles;
 
 	/** 적재가 끝나면 채워진다 (2차 PR). 1차 범위에서는 SUCCEEDED여도 null이다 */
 	@ManyToOne(fetch = FetchType.LAZY)
@@ -104,10 +112,11 @@ public class CaseImport {
 	 * "끝난 작업은 건드리지 않는다" 규칙에 걸려 <b>실패 사유 · 단계 상태를 하나도 남기지 못한다</b>
 	 * (PR 리뷰 지적).
 	 */
-	public static CaseImport start(String jobId, CrimeType crimeType) {
+	public static CaseImport start(String jobId, CrimeType crimeType, Map<String, String> castRoles) {
 		CaseImport entity = new CaseImport();
 		entity.jobId = jobId;
 		entity.crimeType = crimeType;
+		entity.castRoles = castRoles == null ? null : new LinkedHashMap<>(castRoles);
 		return entity;
 	}
 

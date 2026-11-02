@@ -45,7 +45,7 @@ Grafana 폴더 "남불법정"에 들어간다. 각 패널의 ⓘ에 "이 수치�
 
 - **AI 파이프라인**: `lawnambul_ai_call_total`이 재는 것은 RAG 유사 판례 검색의 임베딩 호출(`GeminiQueryEmbeddingClient`)뿐이다.
   판결문 생성은 오프라인 파이프라인(`tools/ai-judgment`)에서 돌아 서버 메트릭에 잡히지 않는다. 생성 단계 계측은 COMMON-40과 함께 본다.
-- **DB**: `postgres_exporter`를 붙이지 않았다. 7.1.2에서 RDS로 전환하면(**10/28 예정**, COMMON-43 협의에서 D 확인) 연결 대상이 바뀌어 다시 해야 하기 때문이다.
+- **DB**: `postgres_exporter`를 붙이지 않았다. 7.1.2 RDS 전환(**10/28 완료**, BE-59) 전에 붙이면 연결 대상이 바뀌어 다시 해야 했기 때문이다. 전환 뒤 RDS 지표(CloudWatch · `postgres_exporter`)는 아직 정하지 않았다(`deploy/README.md` "다음 작업에서 바꿀 곳").
   대신 7.3.1 경보가 실제로 쓸 지표인 **HikariCP 커넥션 풀**로 먼저 만들었다.
 
 ## 경보 (7.3.1 · 7.3.2)
@@ -84,7 +84,7 @@ Alertmanager도 운영에서는 Grafana Cloud 쪽(Cloud Alerting)으로 옮긴�
 계산되므로 **backend가 죽으면 지표 자체가 끊겨 아무 경보도 안 울린다** — 가장 큰 장애에서 오히려
 조용해지는 구멍이었다(PR #262 리뷰, 머지 전 필수 수정). `Watchdog`은 `null` 수신자로 보내 외부에
 생존 신호를 전달하지 않아, 이 로컬 구성만으로는 "신호가 조용해졌다"는 걸 알아챌 외부 관찰자가 없다
-— 운영은 서버 밖(Grafana Cloud)에서 평가해, 서버 전체가 멈춰도 `BackendScrapeTargetMissing`이 알린다Cloud의 `Watchdog`은 하루 한 번 Slack에 생존 신호를 보내, 경보 경로 자체가 멈춘 것도 알 수 있게 했다(아래 "Grafana Cloud 운영 설정" 절).
+— 운영은 서버 밖(Grafana Cloud)에서 평가해, 서버 전체가 멈춰도 `BackendScrapeTargetMissing`이 알린다. Cloud의 `Watchdog`은 하루 한 번 Slack에 생존 신호를 보내, 경보 경로 자체가 멈춘 것도 알 수 있게 했다(아래 "Grafana Cloud 운영 설정" 절).
 `AlertDeliveryFailing`은 **로컬 전용이다** — Cloud에는 옮기지 않았다(같은 절 참고).
 
 ### Slack 웹훅 설정
@@ -164,18 +164,18 @@ Contact points → New → Slack → Webhook URL에 직접 넣고, Optional Slac
 - **맨 앞 경로** `alertname=Watchdog`: 음소거 `운영시간외` · `repeat_interval 24h` — 먼저 맞는 경로 하나만 타므로 아래 폴더 경로보다 앞에 둔다
 - `grafana_folder=lawnambul` 하위 경로: 음소거 `운영시간외` · `group_wait 30s` · `group_interval 5m` · `repeat_interval 4h`
 - **음소거 `운영시간외`**: Asia/Seoul 평일 00:00 ~ 09:10 · 18:00 ~ 24:00, 토 · 일 종일
-  - 서버가 평일 09:00 ~ 18:00에만 켜져 있어(주말 강제 종료) 꺼진 동안 `BackendScrapeTargetMissing`이 계속 울리는 것을 막는다
+  - 서버가 꺼진 동안 `BackendScrapeTargetMissing`이 계속 울리는 것을 막는다(처음엔 서버가 평일 09:00 ~ 18:00에만 켜져 있었다)
   - 아침은 **09:10까지** — 09:00 부팅 후 backend 준비까지 1분 남짓 걸려, 09:00에 풀면 매일 "발생 → 해결"이 온다
   - 시간대(`location`)를 비우면 UTC로 계산돼 9시간 어긋난다
-  - 평일 공휴일에 서버를 끄면 음소거가 걸리지 않는다 → 그날만 Silence를 건다
-  - 반대로 **주말 · 저녁에 서버를 켜고 작업하면 알림이 오지 않는다**(음소거 시간이라서). 그동안 장애를 받아야 하면
+  - 운영 시간에 서버를 끄는 날(공휴일 등)은 음소거가 걸리지 않는다 → 그날만 Silence를 건다
+  - 반대로 **저녁(18시 뒤)에 서버를 켜고 작업하면 알림이 오지 않는다**(음소거 시간이라서). 그동안 장애를 받아야 하면
     Notification policies에서 `lawnambul` 경로의 음소거를 잠시 빼고, 끝나면 다시 건다
 
 ### 운영 점검 (알림 경로가 살아 있는지)
 
 규칙 · 연락처가 통째로 사라지면 알림은 그냥 조용해진다 — 10/26에 실제로 그랬고 아무도 몰랐다(아래 "처음 연동에서 바뀐 것").
 그래서 **생존 신호 `Watchdog`이 운영일마다 한 번 Slack에 `💚 [생존 신호] 경보 경로 정상`을 보낸다.**
-전송 시각은 "마지막 전송 + 24시간"이고, 그 시각이 음소거(저녁 · 주말)에 걸리면 다음 운영 시간 시작(평일 09:10 무렵)에 나간다.
+전송 시각은 "마지막 전송 + 24시간"이고, 그 시각이 음소거(저녁)에 걸리면 다음 운영 시간 시작(09:10 무렵)에 나간다.
 **운영일에 하루 넘게 생존 신호가 없으면 경보 경로가 멈춘 것이다** — 아래를 바로 확인한다.
 
 | 언제 | 확인 | 방법 |
@@ -270,9 +270,9 @@ Loki로 보낸다.
 ## 스크레이프 대상 범위 (지금 정한 것 · 미룬 것)
 
 - **지금 포함**: `backend`(Actuator), `prometheus`(자기 자신), `node`(호스트 자원 — 7.2.4 인프라 대시보드가 쓴다)
-- **보류**: `postgres_exporter` — 7.1.2에서 RDS로 전환(**10/28 예정**)하면 연결 대상이 바뀌므로, 전환 일정이 확정된 뒤 추가한다
-- **아직 결정 안 함**: Prometheus Agent 모드(수집만 하고 평가는 Grafana Cloud에서) 여부 — 7.3 경보 설계(어디서 규칙을 평가할지)와 묶인 결정이라
-  지금은 TODO로만 남겨 둔다
+- **보류**: `postgres_exporter` — 7.1.2 RDS 전환(**10/28 완료**)으로 연결 대상이 정해졌다. CloudWatch와 어느 쪽으로 볼지 정한 뒤 추가한다
+- **결정됨 (COMMON-63 · 64)**: 운영 서버에는 Prometheus를 두지 않는다. Alloy가 지표 · 로그를 Grafana Cloud로 보내고, 규칙 평가 · 알림도 Cloud에서 한다
+  (`deploy/docker-compose.monitoring-agent.yml`, 아래 "Grafana Cloud 운영 설정"). 이 폴더의 Prometheus · Alertmanager는 로컬 확인용이다
 
 ## 로그 라벨 · 민감정보
 

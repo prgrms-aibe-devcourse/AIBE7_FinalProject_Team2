@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.jayway.jsonpath.JsonPath;
 import com.team2.project.support.ApiIntegrationTest;
+import com.team2.project.support.FakeMemberTokens;
 import jakarta.servlet.http.Cookie;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -25,6 +26,7 @@ import java.util.concurrent.Future;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -34,6 +36,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
  * 판결 성향 API (API 명세 9장 P-1 ~ P-5, BE-72). 문항 · 유형은 콘텐츠 시드(R__personality_content)를 그대로 쓴다.
  * 응답에 4글자 코드 · 축 글자가 섞이지 않는지(#119)도 함께 본다.
  */
+@Import(FakeMemberTokens.class)
 class PersonalityApiTest extends ApiIntegrationTest {
 
 	private static final String RESULTS = "/api/v1/personality/results";
@@ -221,9 +224,30 @@ class PersonalityApiTest extends ApiIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("P-5: 쿠키가 없으면 404가 아니라 빈 마이페이지")
-	void myPage_noCookie_empty() throws Exception {
+	@DisplayName("P-5: 로그인하지 않으면 401 UNAUTHORIZED — 쿠키만으로는 마이페이지를 열 수 없다 (BE-140 3b)")
+	void myPage_withoutToken_unauthorized() throws Exception {
 		mockMvc.perform(get(MY_PAGE))
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+		// 손님이 성향 테스트 · 체험으로 쿠키와 기록을 가졌어도 마찬가지다
+		Cookie guest = submitNew(strictValues());
+		mockMvc.perform(get(MY_PAGE).cookie(guest))
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+	}
+
+	@Test
+	@DisplayName("P-5: 회원은 다른 회원 · 같은 브라우저 손님의 성향 · 체험을 보지 못하고, 기록이 없으면 404가 아니라 빈 마이페이지")
+	void myPage_member_neverSeesOthers() throws Exception {
+		long owner = registerMember();
+		submitAs(owner, strictValues());
+		completedWithContribution(owner, axes(1, 0, 1, 0, 1, 0, 1, 0));
+		Cookie guest = submitNew(strictValues());
+		UUID guestId = UUID.fromString(guest.getValue());
+		completedWithContribution(guestId, axes(1, 0, 1, 0, 1, 0, 1, 0));
+
+		long other = registerMember();
+		mockMvc.perform(get(MY_PAGE).header(HttpHeaders.AUTHORIZATION, bearer(other)).cookie(guest))	// 쿠키는 무시한다
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.personality").isEmpty())
 			.andExpect(jsonPath("$.judgmentPersonality").isEmpty())
@@ -232,26 +256,32 @@ class PersonalityApiTest extends ApiIntegrationTest {
 			.andExpect(jsonPath("$.baselineRetake.result").isEmpty())
 			.andExpect(jsonPath("$.history.length()").value(0))
 			.andExpect(jsonPath("$.experiences.length()").value(0));
+
+		mockMvc.perform(get(MY_PAGE).header(HttpHeaders.AUTHORIZATION, bearer(owner)).cookie(guest))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.personality.type.name").value("국룰 수호자형"))
+			.andExpect(jsonPath("$.history.length()").value(1))
+			.andExpect(jsonPath("$.experiences.length()").value(1));
 	}
 
 	@Test
 	@DisplayName("P-5: 테스트 결과 · 첫 회차 체험 기여로 종합(ISFJ)과 흐름, 사건마다 최근 회차 목록")
 	void myPage_withResultAndContributions() throws Exception {
-		Cookie cookie = submitNew(strictValues());
-		UUID user = UUID.fromString(cookie.getValue());
+		long member = registerMember();
+		String token = submitAs(member, strictValues());
 		long firstCase = insertCase("MURDER", "PUBLISHED");
 		long secondCase = insertCase("FRAUD", "PUBLISHED");
-		insertExperience(user, firstCase, 1, "COMPLETED");
-		insertExperience(user, firstCase, 2, "STARTED");	// 다시 하기 — 목록은 최근 회차, 종합 · 흐름은 첫 회차만
-		insertExperience(user, secondCase, 1, "COMPLETED");
-		contribution(user, firstCase, 1, """
+		insertMemberExperience(member, firstCase, 1, "COMPLETED");
+		insertMemberExperience(member, firstCase, 2, "STARTED");	// 다시 하기 — 목록은 최근 회차, 종합 · 흐름은 첫 회차만
+		insertMemberExperience(member, secondCase, 1, "COMPLETED");
+		contribution(member, firstCase, 1, """
 			{"APOLOGY_SINCERITY":{"down":1,"up":0},"FAULT_STANDARD":{"down":0,"up":2},
 			 "PRINCIPLE_RELATION":{"down":2,"up":0},"ORDER_OPPORTUNITY":{"down":0,"up":1}}""");
-		contribution(user, secondCase, 1, """
+		contribution(member, secondCase, 1, """
 			{"APOLOGY_SINCERITY":{"down":0,"up":0},"FAULT_STANDARD":{"down":0,"up":0},
 			 "PRINCIPLE_RELATION":{"down":1,"up":1},"ORDER_OPPORTUNITY":{"down":0,"up":0}}""");
 
-		mockMvc.perform(get(MY_PAGE).cookie(cookie))
+		mockMvc.perform(get(MY_PAGE).header(HttpHeaders.AUTHORIZATION, token))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.personality.type.name").value("국룰 수호자형"))
 			.andExpect(jsonPath("$.judgmentPersonality.type.name").value("새끼손가락 도장형"))	// ISFJ
@@ -274,15 +304,15 @@ class PersonalityApiTest extends ApiIntegrationTest {
 	@Test
 	@DisplayName("P-5: 체험이 4건 이상이면 현재 판결 성향은 최근 3건 평균, 흐름은 전체 (BE-99)")
 	void myPage_judgmentUsesRecentThree() throws Exception {
-		Cookie cookie = submitNew(strictValues());
-		UUID user = UUID.fromString(cookie.getValue());
+		long member = registerMember();
+		String token = submitAs(member, strictValues());
 		// 가장 오래된 체험은 네 축 모두 가중(0.0). 전체 평균이면 0.75, 최근 3건이면 1.0
-		completedWithContribution(user, axes(0, 5, 0, 5, 0, 5, 0, 5));
+		completedWithContribution(member, axes(0, 5, 0, 5, 0, 5, 0, 5));
 		for (int i = 0; i < 3; i++) {
-			completedWithContribution(user, axes(1, 0, 1, 0, 1, 0, 1, 0));
+			completedWithContribution(member, axes(1, 0, 1, 0, 1, 0, 1, 0));
 		}
 
-		mockMvc.perform(get(MY_PAGE).cookie(cookie))
+		mockMvc.perform(get(MY_PAGE).header(HttpHeaders.AUTHORIZATION, token))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.judgmentPersonality.experienceCount").value(3))	// 평균에 쓴 체험 수
 			.andExpect(jsonPath("$.judgmentPersonality.axisScores.APOLOGY_SINCERITY").value(1.0))
@@ -297,21 +327,21 @@ class PersonalityApiTest extends ApiIntegrationTest {
 	@Test
 	@DisplayName("P-5: 최근 3건은 기여 저장 순서가 아니라 완료 시각 순서로 고른다 (BE-99, #238 리뷰)")
 	void myPage_recentThreeByCompletedAt_notContributionOrder() throws Exception {
-		Cookie cookie = submitNew(strictValues());
-		UUID user = UUID.fromString(cookie.getValue());
+		long member = registerMember();
+		String token = submitAs(member, strictValues());
 		// 동시 비교 공개로 가장 먼저 완료된 체험(가중)의 기여가 가장 늦게 저장된 상황
 		long earliest = insertCase("MURDER", "PUBLISHED");
-		insertExperience(user, earliest, 1, "COMPLETED");
-		completedAt(user, earliest, "2026-10-21T10:00:00+09:00");
+		insertMemberExperience(member, earliest, 1, "COMPLETED");
+		completedAt(member, earliest, "2026-10-21T10:00:00+09:00");
 		for (int i = 1; i <= 3; i++) {
 			long caseId = insertCase("MURDER", "PUBLISHED");
-			insertExperience(user, caseId, 1, "COMPLETED");
-			completedAt(user, caseId, "2026-10-21T10:0" + i + ":00+09:00");
-			contribution(user, caseId, 1, axes(1, 0, 1, 0, 1, 0, 1, 0));
+			insertMemberExperience(member, caseId, 1, "COMPLETED");
+			completedAt(member, caseId, "2026-10-21T10:0" + i + ":00+09:00");
+			contribution(member, caseId, 1, axes(1, 0, 1, 0, 1, 0, 1, 0));
 		}
-		contribution(user, earliest, 1, axes(0, 5, 0, 5, 0, 5, 0, 5));	// 저장은 마지막
+		contribution(member, earliest, 1, axes(0, 5, 0, 5, 0, 5, 0, 5));	// 저장은 마지막
 
-		mockMvc.perform(get(MY_PAGE).cookie(cookie))
+		mockMvc.perform(get(MY_PAGE).header(HttpHeaders.AUTHORIZATION, token))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.judgmentPersonality.experienceCount").value(3))
 			.andExpect(jsonPath("$.judgmentPersonality.axisScores.APOLOGY_SINCERITY").value(1.0))	// 저장 순서면 0.667
@@ -322,14 +352,14 @@ class PersonalityApiTest extends ApiIntegrationTest {
 	@Test
 	@DisplayName("P-5: 최근 3건에 자료가 없는 축은 오래된 체험에 있어도 null이고 유형도 null (BE-99)")
 	void myPage_recentThreeMissingAxis_typeNull() throws Exception {
-		Cookie cookie = submitNew(strictValues());
-		UUID user = UUID.fromString(cookie.getValue());
-		completedWithContribution(user, axes(1, 0, 1, 0, 1, 0, 1, 0));	// 질서 · 기회 축은 이 체험에만 있다
+		long member = registerMember();
+		String token = submitAs(member, strictValues());
+		completedWithContribution(member, axes(1, 0, 1, 0, 1, 0, 1, 0));	// 질서 · 기회 축은 이 체험에만 있다
 		for (int i = 0; i < 3; i++) {
-			completedWithContribution(user, axes(1, 1, 0, 2, 2, 0, 0, 0));
+			completedWithContribution(member, axes(1, 1, 0, 2, 2, 0, 0, 0));
 		}
 
-		mockMvc.perform(get(MY_PAGE).cookie(cookie))
+		mockMvc.perform(get(MY_PAGE).header(HttpHeaders.AUTHORIZATION, token))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.judgmentPersonality.experienceCount").value(3))
 			.andExpect(jsonPath("$.judgmentPersonality.axisScores.APOLOGY_SINCERITY").value(0.5))
@@ -341,14 +371,14 @@ class PersonalityApiTest extends ApiIntegrationTest {
 	@Test
 	@DisplayName("P-5: 최근 3건이 네 축 모두 자료가 없으면 현재 판결 성향은 null, 흐름은 남는다 (BE-99)")
 	void myPage_recentThreeAllEmpty_judgmentNull() throws Exception {
-		Cookie cookie = submitNew(strictValues());
-		UUID user = UUID.fromString(cookie.getValue());
-		completedWithContribution(user, axes(1, 0, 1, 0, 1, 0, 1, 0));
+		long member = registerMember();
+		String token = submitAs(member, strictValues());
+		completedWithContribution(member, axes(1, 0, 1, 0, 1, 0, 1, 0));
 		for (int i = 0; i < 3; i++) {
-			completedWithContribution(user, axes(0, 0, 0, 0, 0, 0, 0, 0));
+			completedWithContribution(member, axes(0, 0, 0, 0, 0, 0, 0, 0));
 		}
 
-		mockMvc.perform(get(MY_PAGE).cookie(cookie))
+		mockMvc.perform(get(MY_PAGE).header(HttpHeaders.AUTHORIZATION, token))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.judgmentPersonality").isEmpty())
 			.andExpect(jsonPath("$.history.length()").value(4));
@@ -357,11 +387,11 @@ class PersonalityApiTest extends ApiIntegrationTest {
 	@Test
 	@DisplayName("P-5: history[].type은 그 체험 하나만으로 낸 종합과 같은 유형이다 — 동점은 관대 글자 (BE-100)")
 	void myPage_historyType_sameRuleAsJudgment() throws Exception {
-		Cookie cookie = submitNew(strictValues());
-		UUID user = UUID.fromString(cookie.getValue());
-		completedWithContribution(user, axes(1, 1, 2, 2, 1, 1, 3, 3));	// 네 축 모두 동점(0.5) → 네 글자 모두 관대
+		long member = registerMember();
+		String token = submitAs(member, strictValues());
+		completedWithContribution(member, axes(1, 1, 2, 2, 1, 1, 3, 3));	// 네 축 모두 동점(0.5) → 네 글자 모두 관대
 
-		String body = mockMvc.perform(get(MY_PAGE).cookie(cookie))
+		String body = mockMvc.perform(get(MY_PAGE).header(HttpHeaders.AUTHORIZATION, token))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.history.length()").value(1))
 			.andExpect(jsonPath("$.history[0].type.tolerance").value(4))	// 관대 글자 4개
@@ -376,14 +406,14 @@ class PersonalityApiTest extends ApiIntegrationTest {
 	@Test
 	@DisplayName("P-5: 사건별 유형은 체험마다 따로 정한다 — 종합에 유형이 없어도 네 축이 다 있는 체험은 유형이 있다 (BE-100)")
 	void myPage_historyType_perExperience() throws Exception {
-		Cookie cookie = submitNew(strictValues());
-		UUID user = UUID.fromString(cookie.getValue());
-		completedWithContribution(user, axes(1, 0, 1, 0, 1, 0, 1, 0));	// 네 축 모두 있음
+		long member = registerMember();
+		String token = submitAs(member, strictValues());
+		completedWithContribution(member, axes(1, 0, 1, 0, 1, 0, 1, 0));	// 네 축 모두 있음
 		for (int i = 0; i < 3; i++) {
-			completedWithContribution(user, axes(1, 1, 0, 2, 2, 0, 0, 0));	// 질서 · 기회 축 없음
+			completedWithContribution(member, axes(1, 1, 0, 2, 2, 0, 0, 0));	// 질서 · 기회 축 없음
 		}
 
-		mockMvc.perform(get(MY_PAGE).cookie(cookie))
+		mockMvc.perform(get(MY_PAGE).header(HttpHeaders.AUTHORIZATION, token))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.judgmentPersonality.type").isEmpty())	// 최근 3건에 질서 · 기회 축이 없다
 			.andExpect(jsonPath("$.history[0].type.tolerance").value(4))	// 가장 오래된 체험은 네 축 모두 관대
@@ -394,9 +424,10 @@ class PersonalityApiTest extends ApiIntegrationTest {
 	@Test
 	@DisplayName("P-5: 쿠키는 있지만 체험 기여가 없으면 현재 판결 성향은 null")
 	void myPage_noContributions_judgmentNull() throws Exception {
-		Cookie cookie = submitNew(strictValues());
+		long member = registerMember();
+		String token = submitAs(member, strictValues());
 
-		mockMvc.perform(get(MY_PAGE).cookie(cookie))
+		mockMvc.perform(get(MY_PAGE).header(HttpHeaders.AUTHORIZATION, token))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.personality").isNotEmpty())
 			.andExpect(jsonPath("$.judgmentPersonality").isEmpty())
@@ -423,34 +454,34 @@ class PersonalityApiTest extends ApiIntegrationTest {
 	@Test
 	@DisplayName("P-2: 테스트한 적 없이 재심을 보내면 첫 테스트로 처리하고 재심 횟수는 쓰지 않는다 (BE-104)")
 	void baseline_withoutTest_countsAsFirstTest() throws Exception {
-		MockHttpServletResponse response = mockMvc.perform(post(RESULTS).contentType(MediaType.APPLICATION_JSON)
+		long member = registerMember();
+		mockMvc.perform(post(RESULTS).header(HttpHeaders.AUTHORIZATION, bearer(member)).contentType(MediaType.APPLICATION_JSON)
 				.content(withBaseline(answersJson(strictValues()), "true")))
-			.andExpect(status().isCreated())
-			.andReturn().getResponse();
-		Cookie cookie = cookieFrom(response);
+			.andExpect(status().isCreated());
 
-		mockMvc.perform(get(MY_PAGE).cookie(cookie))
+		mockMvc.perform(get(MY_PAGE).header(HttpHeaders.AUTHORIZATION, bearer(member)))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.initialPersonality.source").value("TEST"))
 			.andExpect(jsonPath("$.initialPersonality.type.name").value("국룰 수호자형"))
 			.andExpect(jsonPath("$.baselineRetake.available").value(true))
 			.andExpect(jsonPath("$.baselineRetake.result").isEmpty());
-		assertThat(countRetakes(cookie)).isZero();
+		assertThat(countRetakes(member)).isZero();
 	}
 
 	@Test
 	@DisplayName("P-2 · P-5: 재심은 처음 성향을 덮어쓰지 않고 한 건 더 남는다. 이후 일반 응시도 처음 성향 · 재심을 바꾸지 않는다 (BE-104)")
 	void baseline_afterTest_keepsInitial() throws Exception {
-		Cookie cookie = submitNew(strictValues());	// 초심: 국룰 수호자형, 완료 0건
-		completedWithContribution(UUID.fromString(cookie.getValue()), axes(1, 0, 1, 0, 1, 0, 1, 0));
+		long member = registerMember();
+		String token = submitAs(member, strictValues());	// 초심: 국룰 수호자형, 완료 0건
+		completedWithContribution(member, axes(1, 0, 1, 0, 1, 0, 1, 0));
 
-		mockMvc.perform(post(RESULTS).cookie(cookie).contentType(MediaType.APPLICATION_JSON)
+		mockMvc.perform(post(RESULTS).header(HttpHeaders.AUTHORIZATION, token).contentType(MediaType.APPLICATION_JSON)
 				.content(withBaseline(answersJson(questionIds(), 2), "true")))
 			.andExpect(status().isCreated())
 			.andExpect(jsonPath("$.type.name").value("그럴 수도 있지형"))
 			.andExpect(jsonPath("$.completedExperienceCount").value(1));
 
-		mockMvc.perform(get(MY_PAGE).cookie(cookie))
+		mockMvc.perform(get(MY_PAGE).header(HttpHeaders.AUTHORIZATION, token))
 			.andExpect(jsonPath("$.personality.type.name").value("그럴 수도 있지형"))	// 재심 결과가 현재 결과
 			.andExpect(jsonPath("$.initialPersonality.source").value("TEST"))
 			.andExpect(jsonPath("$.initialPersonality.type.name").value("국룰 수호자형"))
@@ -461,14 +492,14 @@ class PersonalityApiTest extends ApiIntegrationTest {
 			.andExpect(jsonPath("$.baselineRetake.result.completedExperienceCount").value(1));
 
 		// 일반 응시는 횟수 제한 없이 되고, 처음 성향 · 재심 결과는 그대로다
-		mockMvc.perform(post(RESULTS).cookie(cookie).contentType(MediaType.APPLICATION_JSON).content(answersJson(strictValues())))
+		mockMvc.perform(post(RESULTS).header(HttpHeaders.AUTHORIZATION, token).contentType(MediaType.APPLICATION_JSON).content(answersJson(strictValues())))
 			.andExpect(status().isCreated());
-		mockMvc.perform(get(MY_PAGE).cookie(cookie))
+		mockMvc.perform(get(MY_PAGE).header(HttpHeaders.AUTHORIZATION, token))
 			.andExpect(jsonPath("$.personality.type.name").value("국룰 수호자형"))
 			.andExpect(jsonPath("$.initialPersonality.type.name").value("국룰 수호자형"))
 			.andExpect(jsonPath("$.baselineRetake.result.type.name").value("그럴 수도 있지형"));
-		assertThat(countResults(cookie, false)).isEqualTo(3);
-		assertThat(countRetakes(cookie)).isEqualTo(1);
+		assertThat(countResults(member, false)).isEqualTo(3);
+		assertThat(countRetakes(member)).isEqualTo(1);
 	}
 
 	@Test
@@ -547,14 +578,14 @@ class PersonalityApiTest extends ApiIntegrationTest {
 	@Test
 	@DisplayName("P-5: 테스트 전 처음 성향은 첫 판결(완료 순서로 처음 3건 평균) — judgmentPersonality 모양 + source (BE-104)")
 	void myPage_initialJudgment_beforeTest() throws Exception {
-		UUID user = UUID.randomUUID();
-		users.add(user);
+		long member = registerMember();
+		String token = bearer(member);
 		for (int i = 0; i < 3; i++) {
-			completedWithContribution(user, axes(1, 0, 1, 0, 1, 0, 1, 0));	// 처음 3건: 네 축 모두 관대
+			completedWithContribution(member, axes(1, 0, 1, 0, 1, 0, 1, 0));	// 처음 3건: 네 축 모두 관대
 		}
-		completedWithContribution(user, axes(0, 5, 0, 5, 0, 5, 0, 5));	// 4번째: 처음 성향에는 들어가지 않는다
+		completedWithContribution(member, axes(0, 5, 0, 5, 0, 5, 0, 5));	// 4번째: 처음 성향에는 들어가지 않는다
 
-		mockMvc.perform(get(MY_PAGE).cookie(new Cookie(COOKIE, user.toString())))
+		mockMvc.perform(get(MY_PAGE).header(HttpHeaders.AUTHORIZATION, token))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.personality").isEmpty())
 			.andExpect(jsonPath("$.initialPersonality.source").value("JUDGMENT"))
@@ -571,14 +602,14 @@ class PersonalityApiTest extends ApiIntegrationTest {
 	@Test
 	@DisplayName("P-5: 테스트 전 처음 3건에 빠진 축이 있으면 처음 성향은 null (유형이 있을 때만, BE-104)")
 	void myPage_initialJudgment_missingAxis_null() throws Exception {
-		UUID user = UUID.randomUUID();
-		users.add(user);
+		long member = registerMember();
+		String token = bearer(member);
 		for (int i = 0; i < 3; i++) {
-			completedWithContribution(user, axes(1, 0, 1, 0, 1, 0, 0, 0));	// 질서 · 기회 축 없음
+			completedWithContribution(member, axes(1, 0, 1, 0, 1, 0, 0, 0));	// 질서 · 기회 축 없음
 		}
-		completedWithContribution(user, axes(1, 0, 1, 0, 1, 0, 1, 0));
+		completedWithContribution(member, axes(1, 0, 1, 0, 1, 0, 1, 0));
 
-		mockMvc.perform(get(MY_PAGE).cookie(new Cookie(COOKIE, user.toString())))
+		mockMvc.perform(get(MY_PAGE).header(HttpHeaders.AUTHORIZATION, token))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.initialPersonality").isEmpty());
 	}
@@ -586,17 +617,16 @@ class PersonalityApiTest extends ApiIntegrationTest {
 	@Test
 	@DisplayName("P-5: 첫 판결이 있어도 테스트를 하면 처음 성향은 그 첫 테스트가 대신한다 (BE-104)")
 	void myPage_initialTest_replacesJudgment() throws Exception {
-		UUID user = UUID.randomUUID();
-		users.add(user);
+		long member = registerMember();
+		String token = bearer(member);
 		for (int i = 0; i < 3; i++) {
-			completedWithContribution(user, axes(1, 0, 1, 0, 1, 0, 1, 0));
+			completedWithContribution(member, axes(1, 0, 1, 0, 1, 0, 1, 0));
 		}
-		Cookie cookie = new Cookie(COOKIE, user.toString());
-		mockMvc.perform(post(RESULTS).cookie(cookie).contentType(MediaType.APPLICATION_JSON).content(answersJson(strictValues())))
+		mockMvc.perform(post(RESULTS).header(HttpHeaders.AUTHORIZATION, token).contentType(MediaType.APPLICATION_JSON).content(answersJson(strictValues())))
 			.andExpect(status().isCreated())
 			.andExpect(jsonPath("$.completedExperienceCount").value(3));
 
-		mockMvc.perform(get(MY_PAGE).cookie(cookie))
+		mockMvc.perform(get(MY_PAGE).header(HttpHeaders.AUTHORIZATION, token))
 			.andExpect(jsonPath("$.initialPersonality.source").value("TEST"))
 			.andExpect(jsonPath("$.initialPersonality.type.name").value("국룰 수호자형"))
 			.andExpect(jsonPath("$.initialPersonality.completedExperienceCount").value(3))
@@ -612,10 +642,54 @@ class PersonalityApiTest extends ApiIntegrationTest {
 		contribution(user, caseId, 1, axisCounts);
 	}
 
-	/** 첫 회차 체험의 완료 시각을 정한다. 정하지 않은 체험은 completed_at이 null이라 기여 저장 시각으로 정렬된다 */
+	/** 회원의 새 사건 하나를 첫 회차로 완료하고 기여를 저장한다 */
+	private void completedWithContribution(long member, String axisCounts) {
+		long caseId = insertCase("MURDER", "PUBLISHED");
+		insertMemberExperience(member, caseId, 1, "COMPLETED");
+		contribution(member, caseId, 1, axisCounts);
+	}
+
+	/** 회원이 주인인 체험(anonymous_user_id는 비운다) */
+	private void insertMemberExperience(long member, long caseId, int attemptNo, String status) {
+		jdbcTemplate.update("INSERT INTO experience (member_id, case_id, attempt_no, status, completed_at) "
+			+ "VALUES (?, ?, ?, ?, CASE WHEN ? = 'COMPLETED' THEN now() END)", member, caseId, attemptNo, status, status);
+	}
+
 	private void completedAt(UUID user, long caseId, String completedAt) {
 		jdbcTemplate.update("UPDATE experience SET completed_at = ?::timestamptz WHERE anonymous_user_id = ? AND case_id = ? AND attempt_no = 1",
 			completedAt, user, caseId);
+	}
+
+	private void completedAt(long member, long caseId, String completedAt) {
+		jdbcTemplate.update("UPDATE experience SET completed_at = ?::timestamptz WHERE member_id = ? AND case_id = ? AND attempt_no = 1",
+			completedAt, member, caseId);
+	}
+
+	private void contribution(long member, long caseId, int attemptNo, String axisCounts) {
+		jdbcTemplate.update("""
+			INSERT INTO experience_personality (experience_id, axis_counts)
+			SELECT id, ?::jsonb FROM experience WHERE member_id = ? AND case_id = ? AND attempt_no = ?""",
+			axisCounts, member, caseId, attemptNo);
+	}
+
+	/** 회원으로 답을 제출하고(쿠키는 내려 주지 않는다) Authorization 헤더 값을 돌려준다 */
+	private String submitAs(long member, List<Integer> values) throws Exception {
+		String token = bearer(member);
+		MockHttpServletResponse response = mockMvc.perform(post(RESULTS).header(HttpHeaders.AUTHORIZATION, token)
+				.contentType(MediaType.APPLICATION_JSON).content(answersJson(values)))
+			.andExpect(status().isCreated()).andReturn().getResponse();
+		assertThat(response.getHeader(HttpHeaders.SET_COOKIE)).isNull();
+		return token;
+	}
+
+	private int countRetakes(long member) {
+		return jdbcTemplate.queryForObject(
+			"SELECT count(*) FROM personality_result WHERE member_id = ? AND is_baseline_retake", Integer.class, member);
+	}
+
+	private int countResults(long member, boolean currentOnly) {
+		return jdbcTemplate.queryForObject("SELECT count(*) FROM personality_result WHERE member_id = ?"
+			+ (currentOnly ? " AND is_current" : ""), Integer.class, member);
 	}
 
 	/** 축 순서(사과 · 과실 · 원칙 · 질서)대로 감경 · 가중 횟수를 받아 axis_counts JSON을 만든다 */

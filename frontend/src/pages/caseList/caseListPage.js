@@ -2,7 +2,7 @@ import { button, element, mockTag, renderSiteFooter } from '../../components/sit
 import { API_MODE } from '../../api/config.js';
 import { scriptFor } from '../overview/overviewPage.js';
 import { isScriptReady } from '../../utils/scriptReady.js';
-import { casePhoto, commonCategoryOf, commonPhotoAt, commonPhotos, useCommonPhotoOnError } from '../../utils/newspaper.js';
+import { casePhoto, commonCategoryOf, commonPhotoAt, commonPhotos, inquiryPhotoAt, useCommonPhotoOnError } from '../../utils/newspaper.js';
 import { newspaperMasthead } from '../../components/newspaperFront.js';
 import { turnPage } from '../../utils/pageTurn.js';
 import { liftArticle } from '../../utils/articleZoom.js';
@@ -427,7 +427,8 @@ export async function renderCaseListPage(container, { api, navigate, from, openA
       const box = element('figure', 'filler filler-photo');
       const frame = element('div', 'halftone');
       const image = element('img', 'photo');
-      image.src = commonPhotoAt(n, PHOTO_ROLES[n % PHOTO_ROLES.length], PHOTO_CATEGORIES[n % PHOTO_CATEGORIES.length]);
+      // 세 번에 한 번은 탐구 · 대화 컷(공용 재연 컷만 돌리면 같은 그림이 빨리 되풀이된다)
+      image.src = n % 3 === 2 ? inquiryPhotoAt(Math.floor(n / 3)) : commonPhotoAt(n, PHOTO_ROLES[n % PHOTO_ROLES.length], PHOTO_CATEGORIES[n % PHOTO_CATEGORIES.length]);
       image.alt = '';
       image.loading = 'lazy';
       image.addEventListener('error', () => box.remove(), { once: true });

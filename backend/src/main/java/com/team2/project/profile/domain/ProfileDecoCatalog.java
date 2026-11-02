@@ -60,7 +60,7 @@ public final class ProfileDecoCatalog {
 		new Achievement("collect-5", AchievementStat.COLLECTED, 5, Rewards.builder()
 			.kinds("cases").backgrounds("news").sashIcons("naero", "nambul").build()),
 		new Achievement("attend-7", AchievementStat.ATTENDANCE_DAYS, 7, Rewards.builder()
-			.kinds("characters/cheek", "characters/cheek-slim", "characters/deform").frames("gold").sashIcons("heart").build()),
+			.kinds("characters/cheek", "characters/cheek-slim").frames("gold").sashIcons("heart").build()),
 		new Achievement("cases-3", AchievementStat.COMPLETED, 3, Rewards.builder()
 			.frames("stitch").backgrounds("linen").sashColors("short:navy", "long:navy").sashIcons("gavel").build()),
 		new Achievement("collect-20", AchievementStat.COLLECTED, 20, Rewards.builder()
