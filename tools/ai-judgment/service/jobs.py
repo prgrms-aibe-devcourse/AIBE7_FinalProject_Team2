@@ -70,8 +70,9 @@ _STAGE_STATUS = {"running": STAGE_RUNNING, "done": DONE, "failed": STAGE_FAILED}
 # 서비스에서 기본으로 끄는 단계
 # - load: 적재는 관리자가 검수한 뒤 백엔드(Java)가 한다(BE-93). 파이프라인의 load는 비공개 저장소 체크아웃과
 #   로컬 DB를 요구하므로 컨테이너에서는 쓰지 않는다
-# - rag: psql로 로컬 DB에 붙어야 하는데 컨테이너에서는 DB가 로컬이 아니다(pipeline.py _is_local_host).
-#   못 쓰면 사건 입력의 references로 진행한다는 기존 정책(요구사항 v5.5 "RAG 우선, 안 되면 퓨샷")을 따른다
+# - rag: 기본은 끈다. 요청이 켜면 RAG_DB_*(읽기 전용 원격 접속, BE-161)로 검색한다 — 컨테이너에서는 DB가 로컬이 아니라
+#   로컬 전용 경로(pipeline.py query_db · _is_local_host)로는 검색할 수 없기 때문이다. RAG_DB_*가 없거나 검색에 실패하면
+#   사건 입력의 references로 진행한다는 기존 정책(요구사항 v5.5 "RAG 우선, 안 되면 퓨샷")을 따른다
 # - contamination: 사전 학습 점검은 호출 수가 많아(기본 10회) 기본은 꺼 둔다. 요청에서 켤 수 있다
 DISABLED_STAGES = ("load", "rag", "contamination")
 
