@@ -310,35 +310,15 @@ function caseSheet(paper) {
 
 // 2막 법정(재판장 시점): 사용자가 판사석에 앉아 법정을 내려다본다. 판사석은 그리지 않는다 — 앉은 사람이 사용자다.
 // 벽 · 방청석 난간 · 피고인석 · 검사석 · 변호인석을 캐릭터 뒤에 둔다(6막 신문 사진도 이 법정을 쓴다)
-// FE-32: 신문의 법정 스케치(재판 취재 삽화)처럼 잉크 선으로 그린 벡터 장면. 자리(%)는 예전 상자 배경과 같아 캐릭터 위치는 그대로다.
-// 좌표계 100 × 56.25(16:9), 선 굵기는 화면 크기와 상관없이 일정(non-scaling-stroke). 색은 stage.css · courtSketch.css가 칠한다
-const COURT_SVG = `
-<svg class="court-sketch" viewBox="0 0 100 56.25" preserveAspectRatio="none" aria-hidden="true" focusable="false">
-  <rect class="cs-wall" x="0" y="0" width="100" height="23.6"/>
-  <rect class="cs-bench-back" x="35" y="0" width="30" height="23.6"/>
-  <g class="cs-ink cs-thin">
-    <path d="M8 0V21.4M16 0V21.4M24 0V21.4M76 0V21.4M84 0V21.4M92 0V21.4"/>
-    <path d="M35 0V23.6M65 0V23.6M38 3H62V18H38Z"/>
-  </g>
-  <rect class="cs-floor" x="0" y="25.9" width="100" height="30.35"/>
-  <g class="cs-ink cs-faint">
-    <path d="M50 25.9L-30 56.25M50 25.9L10 56.25M50 25.9L37 56.25M50 25.9L63 56.25M50 25.9L90 56.25M50 25.9L130 56.25"/>
-    <path d="M0 33H100M0 42H100"/>
-  </g>
-  <rect class="cs-wood cs-rail" x="0" y="21.4" width="100" height="4.5"/>
-  <g class="cs-ink"><path d="M0 21.4H100M0 25.9H100M0 22.6H100"/></g>
-  <g class="cs-ink cs-thin"><path d="M4 22.6V25.9M12 22.6V25.9M20 22.6V25.9M28 22.6V25.9M72 22.6V25.9M80 22.6V25.9M88 22.6V25.9M96 22.6V25.9"/></g>
-  <path class="cs-wood cs-ink" d="M45 30.9V18.9Q45 18.6 45.3 18.6H54.7Q55 18.6 55 18.9V30.9Z"/>
-  <g class="cs-ink cs-thin"><path d="M45 20.1H55M47 22.6H53"/></g>
-  <path class="cs-wood cs-ink" d="M0 28.1L26 29.9V36.6H0Z"/>
-  <path class="cs-wood cs-ink" d="M100 28.1L74 29.9V36.6H100Z"/>
-  <g class="cs-ink cs-thin"><path d="M0 30.3L26 31.6M100 30.3L74 31.6"/></g>
-</svg>`;
+// 법정 그림(B안 이미지 FE-150, 16:9): 피고인석(증언대) 가운데 뒤, 검사석 · 변호인석 양옆, 판사석은 없다. 캐릭터 자리(%)가 이 그림에 맞춰져 있다
+const COURT_IMAGE = '/images/stage/court.webp';
 export function courtSet() {
   const court = element('div', 'court');
   court.setAttribute('aria-hidden', 'true');
-  court.innerHTML = COURT_SVG;
-  court.querySelectorAll('path, rect').forEach((node) => node.setAttribute('vector-effect', 'non-scaling-stroke'));
+  const image = element('img');
+  image.src = COURT_IMAGE;
+  image.alt = '';
+  court.append(image);
   return court;
 }
 

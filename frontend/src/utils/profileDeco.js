@@ -11,6 +11,11 @@ export const FRAMES = [
   { id: 'gold', name: '금박' },
   { id: 'navy', name: '법정 네이비' },
   { id: 'stitch', name: '바느질' },
+  // B안 이미지 테두리(FE-150): 기존 CSS 테두리와 별개의 새 선택지. 모양은 personCards.css의 .deco-frame-{id}
+  { id: 'oak', name: '참나무 액자' },
+  { id: 'brass', name: '황동 액자' },
+  { id: 'court', name: '법정 액자' },
+  { id: 'thread', name: '실 바느질 액자' },
 ];
 export const BACKGROUNDS = [
   { id: 'cream', name: '크림' },
@@ -18,6 +23,21 @@ export const BACKGROUNDS = [
   { id: 'tarot', name: '타로 밤하늘' },
   { id: 'news', name: '신문지' },
   { id: 'linen', name: '체크 리넨' },
+  // B안 이미지 배경(FE-150). 모양은 personCards.css의 .deco-bg-{id}
+  { id: 'kraft', name: '크라프트 서류철' },
+  { id: 'ledger', name: '장부 종이' },
+  { id: 'tracing', name: '트레이싱지' },
+  { id: 'parchment', name: '오래된 문서' },
+  { id: 'coffee', name: '커피 자국' },
+  { id: 'wood', name: '책상 나뭇결' },
+  { id: 'blotter', name: '압지' },
+  { id: 'envelope', name: '봉투 안감' },
+  { id: 'lamp', name: '스탠드 불빛' },
+  { id: 'legalpad', name: '리갈패드' },
+  { id: 'felt', name: '네이비 펠트' },
+  { id: 'blinds', name: '블라인드 햇빛' },
+  { id: 'leather', name: '네이비 가죽' },
+  { id: 'bronze', name: '놋쇠판' },
 ];
 // 카드 책갈피: 모양을 먼저 고르고, 색은 모양마다 따로 있는 표에서 고른다(모양마다 디자인이 다를 수 있어서). 모양은 myPage.css의 .sash-style-{모양} · .deco-sash-{색}
 // short: 카드 윗변에 꽂힌 짧고 굵은 책갈피(아이콘을 달 수 있다) · long: 판사 법복의 띠처럼 카드 좌우를 따라 내려오는 얇고 긴 띠(아이콘 없음)

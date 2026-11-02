@@ -80,23 +80,18 @@
 .my-mini-card[class*="deco-frame-"]::before { inset: 3px; border-radius: 5px; }
 
 :is(.my-card, .my-mini-card).deco-bg-latte {
-  background: radial-gradient(circle at 50% 46%, var(--color-card) 0 20%, var(--palette-coffee-100) 21% 29%, var(--color-card) 30% 34%, var(--palette-coffee-100) 35% 52%, var(--palette-coffee-200) 53%);
+  background: url('/images/card/bg-latte.webp') center / cover no-repeat var(--palette-coffee-100); /* B안 카드 배경(FE-150) */
 }
 :is(.my-card, .my-mini-card).deco-bg-tarot {
-  background:
-    radial-gradient(1px 1px at 18% 22%, var(--color-card), transparent),
-    radial-gradient(1px 1px at 78% 14%, var(--color-card), transparent),
-    radial-gradient(1.5px 1.5px at 84% 70%, var(--color-card), transparent),
-    radial-gradient(1px 1px at 12% 82%, var(--color-card), transparent),
-    radial-gradient(ellipse at 50% 30%, var(--deco-navy-soft), var(--deco-navy) 75%);
+  background: url('/images/card/bg-tarot.webp') center / cover no-repeat var(--deco-navy);
   color: var(--color-card);
 }
 :is(.my-card, .my-mini-card).deco-bg-news {
-  background: repeating-linear-gradient(180deg, transparent 0 7px, var(--deco-news-line) 7px 8px), var(--deco-news);
+  background: url('/images/card/bg-news.webp') center / cover no-repeat var(--deco-news);
   color: var(--deco-news-ink);
 }
 :is(.my-card, .my-mini-card).deco-bg-linen {
-  background: repeating-linear-gradient(90deg, var(--deco-linen-line) 0 6px, transparent 6px 12px), repeating-linear-gradient(180deg, var(--deco-linen-line) 0 6px, transparent 6px 12px), var(--deco-linen);
+  background: url('/images/card/bg-linen.webp') center / cover no-repeat var(--deco-linen);
 }
 .my-card.deco-bg-tarot .my-card-note { color: color-mix(in srgb, var(--color-card) 80%, transparent); }
 .my-card.deco-bg-tarot .my-card-window { background: color-mix(in srgb, var(--color-card) 14%, transparent); border-color: color-mix(in srgb, var(--deco-night-line) 60%, transparent); }
@@ -147,10 +142,40 @@ img.my-sash-icon.is-missing { visibility: hidden; }
 /* 성향카드 꾸미기(FE-82): 같은 테두리 · 배경 · 책갈피를 성향카드(.is-type)에도 입힌다. 기본 테두리(basic) · 기본 배경(classic)은 원래 타로카드 모양 그대로다.
    타로 밤하늘(tarot)이 아닌 배경은 밝아서 글자 · 선을 어둡게 되돌린다. 견본(.my-mini-card)의 기본 배경은 타로카드 바탕이다 */
 .my-mini-card.deco-bg-classic { background: radial-gradient(ellipse at 50% 30%, color-mix(in srgb, var(--color-accent) 70%, var(--color-heading)), var(--color-heading) 75%); }
-.my-card.is-type[class*="deco-bg-"]:not(.deco-bg-tarot, .deco-bg-news) { color: var(--color-heading); }
+.my-card.is-type[class*="deco-bg-"]:not(.deco-bg-tarot, .deco-bg-news, .deco-bg-wood, .deco-bg-blinds, .deco-bg-lamp, .deco-bg-felt, .deco-bg-leather, .deco-bg-bronze) { color: var(--color-heading); }
 .my-card.is-type.deco-bg-cream { background: linear-gradient(180deg, var(--color-card), var(--color-surface)); }
-.my-card.is-type[class*="deco-bg-"]:not(.deco-bg-tarot) .my-card-window { border-color: color-mix(in srgb, var(--color-border-strong) 70%, transparent); }
-.my-card.is-type[class*="deco-bg-"]:not(.deco-bg-tarot) .my-card-note.my-type-quote { border-top-color: color-mix(in srgb, currentColor 30%, transparent); }
+.my-card.is-type[class*="deco-bg-"]:not(.deco-bg-tarot, .deco-bg-wood, .deco-bg-blinds, .deco-bg-lamp, .deco-bg-felt, .deco-bg-leather, .deco-bg-bronze) .my-card-window { border-color: color-mix(in srgb, var(--color-border-strong) 70%, transparent); }
+.my-card.is-type[class*="deco-bg-"]:not(.deco-bg-tarot, .deco-bg-wood, .deco-bg-blinds, .deco-bg-lamp, .deco-bg-felt, .deco-bg-leather, .deco-bg-bronze) .my-card-note.my-type-quote { border-top-color: color-mix(in srgb, currentColor 30%, transparent); }
 .my-card.is-type.deco-bg-tarot .my-card-note.my-type-quote { color: color-mix(in srgb, var(--color-card) 80%, transparent); }
 .my-card.is-preview { cursor: default; }
 @media (hover: hover) and (pointer: fine) { .my-card.is-preview:hover { transform: none; } }
+
+/* ── B안 이미지 카드 배경 · 테두리(FE-150) ──
+   배경은 그림 한 장을 카드에 덮는다(7 : 12, 글자 · 캐릭터가 위에 올라가 조용한 그림이다). 어두운 배경(wood · blinds · lamp · felt · leather · bronze)은 글자를 밝은 종이색으로 뒤집는다.
+   테두리는 정사각 테두리 그림을 9등분(border-image)해 카드 모양에 맞춰 늘인다. 두께는 카드 폭(cqi) 기준이고 견본(.my-mini-card)은 px다 */
+:is(.my-card, .my-mini-card).deco-bg-kraft { background: url('/images/card/bg-kraft.webp') center / cover no-repeat #d6a468; }
+:is(.my-card, .my-mini-card).deco-bg-ledger { background: url('/images/card/bg-ledger.webp') center / cover no-repeat #f4efe4; }
+:is(.my-card, .my-mini-card).deco-bg-tracing { background: url('/images/card/bg-tracing.webp') center / cover no-repeat #f7f3ee; }
+:is(.my-card, .my-mini-card).deco-bg-parchment { background: url('/images/card/bg-parchment.webp') center / cover no-repeat #ead8c0; }
+:is(.my-card, .my-mini-card).deco-bg-coffee { background: url('/images/card/bg-coffee.webp') center / cover no-repeat #f4efe4; }
+:is(.my-card, .my-mini-card).deco-bg-wood { background: url('/images/card/bg-wood.webp') center / cover no-repeat #a8652f; }
+:is(.my-card, .my-mini-card).deco-bg-blotter { background: url('/images/card/bg-blotter.webp') center / cover no-repeat #e4d8c8; }
+:is(.my-card, .my-mini-card).deco-bg-envelope { background: url('/images/card/bg-envelope.webp') center / cover no-repeat #f4efe4; }
+:is(.my-card, .my-mini-card).deco-bg-lamp { background: url('/images/card/bg-lamp.webp') center / cover no-repeat #3a2414; }
+:is(.my-card, .my-mini-card).deco-bg-legalpad { background: url('/images/card/bg-legalpad.webp') center / cover no-repeat #f3e3b3; }
+:is(.my-card, .my-mini-card).deco-bg-felt { background: url('/images/card/bg-felt.webp') center / cover no-repeat #1c2b4f; }
+:is(.my-card, .my-mini-card).deco-bg-blinds { background: url('/images/card/bg-blinds.webp') center / cover no-repeat #a8652f; }
+:is(.my-card, .my-mini-card).deco-bg-leather { background: url('/images/card/bg-leather.webp') center / cover no-repeat #14213f; }
+:is(.my-card, .my-mini-card).deco-bg-bronze { background: url('/images/card/bg-bronze.webp') center / cover no-repeat #8c7340; }
+:is(.my-card, .my-mini-card):is(.deco-bg-wood, .deco-bg-blinds, .deco-bg-lamp, .deco-bg-felt, .deco-bg-leather, .deco-bg-bronze) { color: var(--color-card); }
+.my-card:is(.deco-bg-wood, .deco-bg-blinds, .deco-bg-lamp, .deco-bg-felt, .deco-bg-leather, .deco-bg-bronze) .my-card-note { color: color-mix(in srgb, var(--color-card) 80%, transparent); }
+.my-card:is(.deco-bg-wood, .deco-bg-blinds, .deco-bg-lamp, .deco-bg-felt, .deco-bg-leather, .deco-bg-bronze) .my-card-window { background: color-mix(in srgb, var(--color-card) 14%, transparent); border-color: color-mix(in srgb, var(--deco-night-line) 60%, transparent); }
+.my-card.is-type:is(.deco-bg-wood, .deco-bg-blinds, .deco-bg-lamp, .deco-bg-felt, .deco-bg-leather, .deco-bg-bronze) .my-card-note.my-type-quote { color: color-mix(in srgb, var(--color-card) 80%, transparent); border-top-color: color-mix(in srgb, var(--color-card) 40%, transparent); }
+:is(.my-card, .my-mini-card)[class*="deco-frame-"] { --frame-w: 5.5cqi; }
+.my-mini-card[class*="deco-frame-"] { --frame-w: 3px; }
+:is(.my-card, .my-mini-card):is(.deco-frame-oak, .deco-frame-brass, .deco-frame-court, .deco-frame-thread) { border-color: transparent; }
+:is(.my-card, .my-mini-card):is(.deco-frame-oak, .deco-frame-brass, .deco-frame-court, .deco-frame-thread)::before { inset: 0; border: var(--frame-w) solid transparent; border-radius: 0; z-index: 2; }
+:is(.my-card, .my-mini-card).deco-frame-oak::before { border-image: url('/images/card/frame-oak.webp') 9% / var(--frame-w) stretch; }
+:is(.my-card, .my-mini-card).deco-frame-brass::before { border-image: url('/images/card/frame-brass.webp') 9% / var(--frame-w) stretch; }
+:is(.my-card, .my-mini-card).deco-frame-court::before { border-image: url('/images/card/frame-court.webp') 9% / var(--frame-w) stretch; }
+:is(.my-card, .my-mini-card).deco-frame-thread::before { border-image: url('/images/card/frame-thread.webp') 9% / var(--frame-w) stretch; }

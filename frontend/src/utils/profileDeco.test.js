@@ -201,3 +201,15 @@ test('portraitLabel: 역할 표정 컷의 감정 이름이 원문(sad · angry �
   assert.equal(portraitLabel('/images/characters/roles/nambul_actor-sad.webp'), '남불 · A씨 역 슬픔');
   assert.equal(portraitLabel('/images/characters/roles/naero_actor-relieved.webp'), '내로 · A씨 역 안도');
 });
+
+// B안 이미지 카드 배경 · 테두리(FE-150): CSS 한 줄로만 그리는 값(아래 목록)을 뺀 나머지는 그림 파일이 있어야 한다. 파일이 빠지면 카드가 맨 바탕으로 보인다
+const CSS_ONLY_BACKGROUNDS = ['cream', 'classic'];
+const CSS_ONLY_FRAMES = ['basic', 'wood', 'gold', 'navy', 'stitch'];
+test('이미지 카드 배경 · 테두리는 파일이 모두 있다', () => {
+  BACKGROUNDS.filter(({ id }) => !CSS_ONLY_BACKGROUNDS.includes(id)).forEach(({ id }) => {
+    assert.ok(existsSync(new URL(`../../public/images/card/bg-${id}.webp`, import.meta.url)), `카드 배경 그림이 없다: bg-${id}.webp`);
+  });
+  FRAMES.filter(({ id }) => !CSS_ONLY_FRAMES.includes(id)).forEach(({ id }) => {
+    assert.ok(existsSync(new URL(`../../public/images/card/frame-${id}.webp`, import.meta.url)), `카드 테두리 그림이 없다: frame-${id}.webp`);
+  });
+});
