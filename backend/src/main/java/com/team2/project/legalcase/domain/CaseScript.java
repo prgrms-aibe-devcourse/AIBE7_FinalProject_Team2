@@ -236,41 +236,166 @@ public class CaseScript {
 	}
 
 	/**
-	 * 만든 뒤 DB 값(사건 내용 · 기사)이 바뀐 블록 — {@code basis}의 판이 지금 판과 다르다. 적재 뒤 관리자가 개요를 고치거나(A-11)
-	 * 기사를 다시 만들면(A-13-6) 그 값을 보고 만든 블록은 옛 내용을 말한다. 분류 · 배역 · 앞 블록의 낡음은 2차에서 계산한다.
+	 * 블록마다 낡음 (BE-126 2차). 블록을 만들 때 본 값({@code basis})과 지금 값({@link #currentBasis})을 비교한다 — 앞 블록 판 · 사건
+	 * 내용 판 · 기사 판 · 배역 · 분류 네 축 · 민감 플래그. 근거에 키가 없으면 비교하지 않고 "모름"으로 둔다(이관 · 증거조사만 만든
+	 * 대본, 11/01 합의). 지금 값이 없으면(미분류 사건의 분류 · 민감 플래그) 그 키도 모름이다.
 	 *
-	 * @param contentRevision 사건 내용의 지금 판 ({@link LegalCase#getContentRevision()})
-	 * @param paperRevision   기사의 지금 판 ({@link CasePaper#getRevision()}), 기사가 없으면 null
+	 * @param paperRevision 기사의 지금 판 ({@link CasePaper#getRevision()}), 기사가 없으면 null
 	 */
-	public List<ScriptUnit> staleOnDbInput(int contentRevision, Integer paperRevision) {
-		return blocks.stream().filter(block -> differs(block, ScriptUnit.CASE_BASIS, contentRevision)
-				|| differs(block, ScriptUnit.PAPER_BASIS, paperRevision))
-			.map(CaseScriptBlock::getUnit).toList();
+	public Map<ScriptUnit, BlockStaleness> staleness(LegalCase legalCase, Integer paperRevision) {
+		Map<String, Object> current = currentBasis(legalCase, paperRevision);
+		Map<ScriptUnit, BlockStaleness> result = new LinkedHashMap<>();
+		for (CaseScriptBlock block : blocks) {
+			List<String> reasons = new ArrayList<>();
+			List<String> unknown = new ArrayList<>();
+			for (String key : block.getUnit().basis()) {
+				boolean comparable = block.getBasis().containsKey(key)
+					&& (current.get(key) != null || ScriptUnit.PAPER_BASIS.equals(key));
+				if (!comparable) {
+					unknown.add(key);
+				} else if (!Objects.equals(normalize(block.getBasis().get(key)), normalize(current.get(key)))) {
+					reasons.add(key);
+				}
+			}
+			result.put(block.getUnit(), new BlockStaleness(List.copyOf(reasons), List.copyOf(unknown)));
+		}
+		return result;
 	}
 
 	/**
-	 * 판이 바뀐 블록의 승인을 지운다 — 사건 내용(A-11) · 기사(A-13-6 · 8)를 고친 뒤 부른다. 승인은 검수한 그때의 내용에 대한
-	 * 것이라, 남겨 두면 승인한 뒤 고친 사건에서 옛 내용을 말하는 대본이 공개된다(PR #367 리뷰). 지우면 그 블록은 다시 검수
-	 * 대기이고, 다시 승인하려 하면 {@link #staleOnDbInput}이 막아 대본을 다시 생성하게 된다. 반려한 블록은 그대로 둔다.
+	 * 지금 값 — 블록 근거와 같은 키 · 같은 모양이다. 앞 블록은 지금 판(블록이 없으면 null), 사건 내용 · 기사는 판, 배역 · 분류 · 민감
+	 * 플래그는 사건의 값(민감 플래그는 파이프라인 {@code build_blocks}처럼 정렬)이다
+	 */
+	public Map<String, Object> currentBasis(LegalCase legalCase, Integer paperRevision) {
+		Map<String, Object> current = new LinkedHashMap<>();
+		for (ScriptUnit unit : ScriptUnit.values()) {
+			current.put(unit.name(), block(unit).map(CaseScriptBlock::getRevision).orElse(null));
+		}
+		current.put(ScriptUnit.CASE_BASIS, legalCase.getContentRevision());
+		current.put(ScriptUnit.PAPER_BASIS, paperRevision);
+		current.put("cast", legalCase.getCastRoles() == null ? null : new LinkedHashMap<>(legalCase.getCastRoles()));
+		Map<String, Object> classification = legalCase.getClassification();
+		for (String axis : ScriptClassification.AXES) {
+			current.put(axis, classification == null ? null : classification.get(axis));
+		}
+		current.put("sensitiveFlags", legalCase.getSensitiveFlags() == null ? null
+			: legalCase.getSensitiveFlags().stream().sorted().toList());
+		return current;
+	}
+
+	/** 비교용 모양: JSON 숫자는 Integer · Long 어느 쪽으로도 와서 long으로, 민감 플래그 같은 목록은 정렬한다 */
+	private static Object normalize(Object value) {
+		if (value instanceof Number number) {
+			return number.longValue();
+		}
+		if (value instanceof List<?> list) {
+			return list.stream().map(String::valueOf).sorted().toList();
+		}
+		if (value instanceof Map<?, ?> map) {
+			Map<String, Object> normalized = new java.util.TreeMap<>();
+			map.forEach((key, item) -> normalized.put(String.valueOf(key), normalize(item)));
+			return normalized;
+		}
+		return value;
+	}
+
+	/**
+	 * 승인을 막는 낡음이 있는 블록 — 사건 내용 · 기사 · 민감 플래그가 바뀌었다({@link BlockStaleness#BLOCKING}). 적재 뒤 관리자가
+	 * 개요를 고치거나(A-11) 기사를 다시 만들면(A-13-6) 그 값을 보고 만든 블록은 옛 내용을 말하고(1차), 민감 플래그를 고치면 가드 없이
+	 * 만든 블록일 수 있다(2차). 재생성하거나 "확인했음"({@link #acknowledgeStale})으로 푼다.
+	 */
+	public List<ScriptUnit> blockingStale(LegalCase legalCase, Integer paperRevision) {
+		return staleness(legalCase, paperRevision).entrySet().stream()
+			.filter(entry -> entry.getValue().blocksApproval()).map(Map.Entry::getKey).toList();
+	}
+
+	/**
+	 * 승인을 막는 낡음이 생긴 블록의 승인을 지운다 — 사건 내용 · 민감 플래그(A-11) · 기사(A-13-6 · 8)를 고친 뒤 부른다. 승인은
+	 * 검수한 그때의 내용에 대한 것이라, 남겨 두면 승인한 뒤 고친 사건에서 옛 내용을 말하는 대본이 공개된다(PR #367 리뷰).
+	 * 반려한 블록은 그대로 둔다.
 	 *
 	 * @return 승인을 지운 단위
 	 */
-	public List<ScriptUnit> revokeStaleApprovals(int contentRevision, Integer paperRevision) {
-		List<ScriptUnit> stale = staleOnDbInput(contentRevision, paperRevision);
+	public List<ScriptUnit> revokeStaleApprovals(LegalCase legalCase, Integer paperRevision) {
+		List<ScriptUnit> stale = blockingStale(legalCase, paperRevision);
 		List<CaseScriptBlock> revoked = blocks.stream()
 			.filter(block -> block.isApproved() && stale.contains(block.getUnit())).toList();
 		revoked.forEach(CaseScriptBlock::clearReview);
 		return revoked.stream().map(CaseScriptBlock::getUnit).toList();
 	}
 
-	/** 그 블록이 보는 값인데 판이 다른지. 저장된 JSON 숫자는 Integer · Long 어느 쪽으로도 와서 long으로 맞춘다 */
-	private static boolean differs(CaseScriptBlock block, String key, Integer current) {
-		if (!block.getUnit().basis().contains(key)) {
+	/**
+	 * "확인했음" (BE-126 2차) — 낡았지만 다시 만들지 않고 그대로 두기로 한 블록의 근거를 지금 값으로 맞춘다. 내용 · 판 · 검수 상태는
+	 * 그대로다. 승인을 막던 낡음도 이것으로 풀린다(사소한 개요 수정의 출구, 11/01 합의)
+	 *
+	 * @return 확인한 낡음 키 (낡지 않았으면 빈 목록 — 근거는 그대로 둔다)
+	 */
+	public List<String> acknowledgeStale(ScriptUnit unit, LegalCase legalCase, Integer paperRevision) {
+		CaseScriptBlock block = block(unit).orElseThrow(() -> new IllegalArgumentException("블록이 없다: " + unit));
+		List<String> reasons = staleness(legalCase, paperRevision).get(unit).reasons();
+		if (!reasons.isEmpty()) {
+			block.acknowledge(currentBasis(legalCase, paperRevision));
+		}
+		return reasons;
+	}
+
+	/**
+	 * 블록을 만든 뒤 <b>새로 생긴</b> 민감 플래그 (BE-126 2차, PR #383 리뷰). 그 플래그의 가드 문구 없이 만든 블록이라 "확인했음"으로
+	 * 풀 수 없고 다시 만들어야 한다. 빠진 플래그는 확인으로 충분하다. 근거에 플래그가 없거나(모름) 지금 값이 없으면 빈 목록
+	 */
+	public List<String> addedSensitiveFlags(ScriptUnit unit, LegalCase legalCase) {
+		CaseScriptBlock block = block(unit).orElseThrow(() -> new IllegalArgumentException("블록이 없다: " + unit));
+		if (!(block.getBasis().get("sensitiveFlags") instanceof List<?> saved) || legalCase.getSensitiveFlags() == null) {
+			return List.of();
+		}
+		List<String> before = saved.stream().map(String::valueOf).toList();
+		return legalCase.getSensitiveFlags().stream().filter(flag -> !before.contains(flag)).sorted().toList();
+	}
+
+	/**
+	 * 블록 하나를 승인한다 (BE-126 2차, 블록 단위). 마지막 블록 승인으로 대본이 공개되므로 통승인({@link #isApprovable()})과 같은
+	 * 대본 조건을 지킨다(PR #383 CodeRabbit 리뷰) — {@link #canApproveBlocks()}와 그 블록에 오류가 없어야 한다. 승인을 막는 낡음은
+	 * 부르는 쪽이 본다
+	 */
+	public void approveBlock(ScriptUnit unit, Long adminId, Instant at) {
+		CaseScriptBlock block = block(unit).orElseThrow(() -> new IllegalArgumentException("블록이 없다: " + unit));
+		if (!block.isPublishable() || !canApproveBlocks()) {
+			throw new IllegalStateException("오류가 있는 블록 · 대본은 승인할 수 없다: " + unit);
+		}
+		block.approve(adminId, at);
+	}
+
+	/**
+	 * 블록을 승인할 수 있는 대본인지 — 통승인 조건 중 대본 전체에 걸린 것: 호출 한도로 멈추지 않았고, 만들지 못한 것({@code pending},
+	 * 기사 {@code "PAPER"} 포함)이 없고, 대본 전체 검수 오류(REVIEW_FAILED)가 없다. 대본의 {@code publishable}을 그대로 쓰지 않는
+	 * 이유: 그 값은 블록마다의 오류도 합친 값이라, 다른 블록 하나에 오류가 있으면 멀쩡한 블록도 승인할 수 없게 된다. 블록 오류는
+	 * 블록마다 보고, 마지막 블록까지 모두 승인됐다면 모든 블록에 오류가 없다는 뜻이라 공개 조건은 통승인과 같다
+	 */
+	public boolean canApproveBlocks() {
+		return !stopped && pending.isEmpty() && review.stream().noneMatch(issue -> ERROR.equals(issue.get("severity")));
+	}
+
+	/** 블록 하나를 반려한다 (BE-126 2차). 반려한 블록이 있으면 대본은 공개되지 않는다 */
+	public void rejectBlock(ScriptUnit unit, Long adminId, Instant at, String note) {
+		block(unit).orElseThrow(() -> new IllegalArgumentException("블록이 없다: " + unit)).reject(adminId, at, note);
+	}
+
+	/**
+	 * U0 · U1 · U2 · U4 블록의 문자열 한 줄을 고친다 (BE-126 2차, U3는 {@link #editLine}). 그 블록만 다시 검수 대기가 되고 판이
+	 * 오른다 — 뒤 블록은 낡음으로 보인다. U0를 고치면 혐의 인정 여부({@code admits})를 다시 계산한다(10/30 결정).
+	 *
+	 * @return 그 블록 · 자리에 문자열이 있어 고쳤으면 true
+	 */
+	public boolean editText(ScriptUnit unit, String path, String text) {
+		Optional<CaseScriptBlock> target = block(unit);
+		if (target.isEmpty() || !target.get().editText(path, text)) {
 			return false;
 		}
-		Object saved = block.getBasis().get(key);
-		Long savedRevision = saved instanceof Number number ? number.longValue() : null;
-		return !Objects.equals(savedRevision, current == null ? null : current.longValue());
+		if (unit == ScriptUnit.U0) {
+			this.admits = admitsOf(target.get());
+		}
+		this.publishable = recomputePublishable();
+		return true;
 	}
 
 	/** 가장 최근에 검수한 블록 (검수 화면의 검수자 · 시각 · 사유). 통승인 · 통거절이라 1차는 모든 블록이 같다 */
@@ -295,8 +420,8 @@ public class CaseScript {
 	/**
 	 * 증거조사 대사 한 줄을 관리자가 직접 고친다 (A-13-13). 숫자 하나 · 말투 때문에 모델을 다시 부르는 것보다 싸다.
 	 *
-	 * <p>고치면 <b>모든 블록의 검수 기록을 지운다</b>(1차는 통승인이라 대본 전체가 다시 검수 대기). 내용이 바뀌었는데 지난
-	 * 승인이 남아 있으면 검수하지 않은 대사가 공개된다. 블록 단위로 다시 검수하는 것은 2차다.
+	 * <p>고치면 <b>U3 블록의 검수 기록을 지운다</b>(2차 — 블록 단위로 다시 검수한다. 1차는 통승인이라 모든 블록을 지웠다). 내용이
+	 * 바뀌었는데 지난 승인이 남아 있으면 검수하지 않은 대사가 공개된다. U3를 보고 만드는 뒤 블록은 없다.
 	 *
 	 * @return 그 요소의 대사를 찾아 고쳤으면 true, 대본에 U3가 없거나 그 요소가 없으면 false
 	 */
@@ -305,7 +430,7 @@ public class CaseScript {
 		if (evidence.isEmpty() || !evidence.get().editLine(factorId, text, at)) {
 			return false;
 		}
-		blocks.forEach(CaseScriptBlock::clearReview);
+		evidence.get().clearReview();
 		this.publishable = recomputePublishable();
 		return true;
 	}
