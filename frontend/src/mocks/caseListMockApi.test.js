@@ -44,6 +44,14 @@ test('API 18 목: 사건 1만 블록을 주고, U0 · 검수용 값은 없으며
   assert.deepEqual(Object.keys(blocks).sort(), ['U1', 'U2', 'U3', 'U4']);
   assert.deepEqual(Object.keys(blocks.U3[0]).sort(), ['factorId', 'role', 'text']);
   assert.deepEqual(meta, { cast: { prosecutor: 'naero', defense: 'nambul' }, issue: 'admitted', admits: true });
-  await assert.rejects(getCaseScript(2), { code: 'SCRIPT_NOT_FOUND' });
+  await assert.rejects(getCaseScript(3), { code: 'SCRIPT_NOT_FOUND' });
   await assert.rejects(getCaseScript(99999), { code: 'CASE_NOT_FOUND' });
+});
+
+test('사건 2는 점검 중: 목록 · 상세에 MAINTENANCE로 보이고 API 18은 503 코드다 (FE-145)', async () => {
+  const { cases } = await getCases();
+  assert.equal(cases.find((item) => item.caseId === 2).scriptStatus, 'MAINTENANCE');
+  assert.equal(cases.find((item) => item.caseId === 1).scriptStatus, 'READY');
+  assert.equal((await getCaseDetail(2)).scriptStatus, 'MAINTENANCE');
+  await assert.rejects(getCaseScript(2), { code: 'SCRIPT_UNDER_MAINTENANCE' });
 });

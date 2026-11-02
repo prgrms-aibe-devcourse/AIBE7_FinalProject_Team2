@@ -6,8 +6,8 @@ import { caseStage, mountStagePage, scriptFor } from '../overview/overviewPage.j
 import { caseInfoEar, caseNewspaper, earButton, paperFromCase } from '../../components/newspaperFront.js';
 import { evidencePhotosFromPaper, fetchCasePaper } from '../../utils/newspaper.js';
 import { reducedMotion } from '../../utils/motion.js';
-import { loadCaseScript } from '../../utils/caseScript.js';
-import { isScriptReady } from '../../utils/scriptReady.js';
+import { loadCaseScript, isScriptMaintenance } from '../../utils/caseScript.js';
+import { isScriptReady, scriptStatusOf, SCRIPT_STATUS } from '../../utils/scriptReady.js';
 import { landArticle } from '../../utils/articleZoom.js';
 import { openCaseReviewPopup } from '../caseReview/caseReviewPopup.js';
 
@@ -130,7 +130,7 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
   // FE-56: 서버가 체험할 수 없다고 한 사건(scriptReady false, FE-125)은 새 체험을 열지 않는다. 지면은 그대로 읽게 두고, "시작하기" 자리에 누를 수 없는 "준비 중"을 둔다.
   // 서버는 준비됐다는데 프론트에 대본 무대가 없으면(ready) "시작하기"는 열되 지면은 이 모양이다. 무대는 FE-33이 서버 대본으로 채운다.
   // 이미 하던 · 마친 체험(myStatus)이 있으면 막지 않는다: 오른쪽 귀 "이어서 하기" · "결과 다시 보기"와 우하단 버튼이 API 2 응답 상태로 이어서 볼 화면으로 보낸다
-  function drawPaper(data, casePaper, ready = false) {
+  function drawPaper(data, casePaper, ready = false, maintenance = false) {
     const action = ACTIONS[data.myStatus] ?? (ready ? NOT_STARTED : undefined);
     const notice = element('p', 'paper-start-notice', ''); // 시작하지 못했을 때의 오류만 채운다. 준비 중은 점선 도장 하나로 알리고 설명 상자는 두지 않는다(FE-119)
     notice.setAttribute('role', 'alert');
@@ -142,9 +142,10 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
       go = stampButton(action.label, () => start(go, notice, action.failText));
       go.setAttribute('aria-label', `${action.label}, ${data.title}`); // 화면 글자로 시작해야 음성 입력으로 누를 수 있다(WCAG 2.5.3)
     } else {
-      go = stampButton('준비 중');
+      const label = maintenance ? '점검 중' : '준비 중'; // FE-145: 대본 점검(503 · MAINTENANCE)은 준비 중과 다르게 알린다
+      go = stampButton(label);
       go.setAttribute('aria-disabled', 'true');
-      go.setAttribute('aria-label', `준비 중, ${data.title} 체험`);
+      go.setAttribute('aria-label', `${label}, ${data.title} 체험`);
     }
     const dock = element('div', 'paper-start');
     dock.append(notice);
@@ -286,10 +287,20 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
       const [data, casePaper] = await Promise.all([api.getCaseDetail(caseId), fetchCasePaper(api, caseId)]);
       if (!active()) return;
       // 서버 scriptReady 우선(FE-125). 준비된 사건은 대본(API 18, FE-139)을 받고, 대본이 없으면 준비 중이다
-      const script = isScriptReady(data, scriptFor(caseId, data.title)) ? await loadCaseScript(api, caseId) : null;
+      // FE-145: 점검 중(scriptStatus MAINTENANCE, 또는 API 18 503)이면 "점검 중" 도장. 하던 · 마친 체험은 drawPaper가 그대로 이어서 볼 수 있게 둔다
+      let maintenance = scriptStatusOf(data, scriptFor(caseId, data.title)) === SCRIPT_STATUS.MAINTENANCE;
+      let script = null;
+      if (isScriptReady(data, scriptFor(caseId, data.title))) {
+        try {
+          script = await loadCaseScript(api, caseId);
+        } catch (error) {
+          if (!isScriptMaintenance(error)) throw error;
+          maintenance = true;
+        }
+      }
       if (!active()) return;
       if (script) drawStage(data, script, casePaper);
-      else drawPaper(data, casePaper, false);
+      else drawPaper(data, casePaper, false, maintenance);
     } catch (error) {
       if (!active()) return;
       // CASE_NOT_FOUND는 withErrorRedirect가 S-14로 먼저 보낸다(app/errorRedirect.js). 여기 오는 것은 그 밖의 오류다

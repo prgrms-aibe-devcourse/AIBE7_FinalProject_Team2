@@ -21,3 +21,8 @@ test('그 밖의 오류는 화면으로 던지고, 조립 못 하는 응답은 n
   await assert.rejects(loadCaseScript({ getCaseScript: failing('INTERNAL') }, 103), { code: 'INTERNAL' });
   assert.equal(await loadCaseScript({ getCaseScript: async () => ({ evidence: [], cast: {} }) }, 104), null);
 });
+
+test('503 점검 중은 준비 중(null)과 달리 던지고, 기억하지 않는다 (FE-145)', async () => {
+  await assert.rejects(loadCaseScript({ getCaseScript: failing('SCRIPT_UNDER_MAINTENANCE') }, 105), { code: 'SCRIPT_UNDER_MAINTENANCE' });
+  assert.ok(await loadCaseScript({ getCaseScript: () => getCaseScript(1) }, 105));
+});
