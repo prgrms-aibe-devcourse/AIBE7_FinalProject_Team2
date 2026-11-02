@@ -411,6 +411,11 @@ public class CaseScript {
 	 *
 	 * @return 그 블록 · 자리에 문자열이 있어 고쳤으면 true
 	 */
+	/** 그 블록 · 자리에 고칠 수 있는 문자열이 있는지 (A-13-21 — 길이를 보기 전에 자리부터 확인한다, PR #390 리뷰) */
+	public boolean hasText(ScriptUnit unit, String path) {
+		return block(unit).map(target -> target.hasText(path)).orElse(false);
+	}
+
 	public boolean editText(ScriptUnit unit, String path, String text) {
 		Optional<CaseScriptBlock> target = block(unit);
 		if (target.isEmpty() || !target.get().editText(path, text)) {
