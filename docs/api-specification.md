@@ -821,13 +821,13 @@ S-20 사건 디테일(정보 구조 v1.12)이 체험을 만들기 전에 부르�
 **응답 200**
 
 ```json
-{  "caseId": 1,  "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",  "crimeType": "MURDER",  "crimeCategoryLabel": "생명범죄",  "chargeName": "살인",  "shortIntro": "빌린 돈 문제로 찾아온 지인과 다투다 흉기로 살해한 사건입니다.",  "keywords": ["돈 문제", "지인", "흉기"],  "difficulty": "MID",  "estimatedMinutes": 15,  "participantCount": 42,  "thumbnailUrl": "/images/cases/case-1-reenact.webp",  "overview": "피고인이 빌린 돈을 갚지 못해 오래 다투던 지인이 집으로 찾아오자, …",  "scriptReady": true, "scriptStatus": "READY",  "myStatus": null,  "cast": { "prosecutor": "naero", "defense": "nambul" },  "sensitiveFlags": ["MENTAL_HEALTH"]}
+{  "caseId": 1,  "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",  "crimeType": "MURDER",  "crimeCategoryLabel": "생명범죄",  "chargeName": "살인",  "shortIntro": "빌린 돈 문제로 찾아온 지인과 다투다 흉기로 살해한 사건입니다.",  "keywords": ["돈 문제", "지인", "흉기"],  "difficulty": "MID",  "estimatedMinutes": 15,  "participantCount": 42,  "thumbnailUrl": "/images/cases/case-1-reenact.webp",  "overview": "피고인이 빌린 돈을 갚지 못해 오래 다투던 지인이 집으로 찾아오자, …",  "scriptReady": true, "scriptStatus": "READY",  "myStatus": null,  "locked": false,  "cast": { "prosecutor": "naero", "defense": "nambul" },  "sensitiveFlags": ["MENTAL_HEALTH"]}
 ```
 
 - 필드는 API 1 카드와 같고(`chargeName` 포함, v0.32), `overview`(사건 개요, API 4의 `case.overview`와 같은 값)를 더한다. `participantCount` · `myStatus` 기준도 API 1과 같다. (v0.60, BE-116) `scriptReady`도 API 1과 같은 값 · 같은 기준이다 — `false`면 S-20은 시작 대신 "준비 중"을 보인다(API 18을 따로 불러 확인하지 않아도 된다 — (v0.87) 단 `scriptStatus`가 `MAINTENANCE`면 "점검 중"이다). (v0.87, BE-126 2차-2) `scriptStatus`(`READY` · `PREPARING` · `MAINTENANCE`)도 API 1과 같은 값. (v0.91, BE-146) `locked`도 API 1과 같은 값 · 같은 기준이다 — `true`면 S-20은 시작 대신 잠김을 보인다(목록의 `unlock`은 이 API에 없다) · 같은 기준이다 — `MAINTENANCE`면 "점검 중"이다.
 - **법정형 · 선고 가능 범위 · 권고 범위 · 판결 · 섹션 본문은 넣지 않는다**(FR-2-8, API 4와 같은 기준). 섹션은 체험 중 API 6이 단계별로 연다.
 - 쿠키는 **읽기만** 하고 발급하지 않는다(발급은 API 2 · P-2, 1-2). 쿠키가 없거나 형식이 틀리거나 체험 전이면 `myStatus`는 `null`이다.
-- 버튼 분기(정보 구조 S-20): `myStatus`가 `null`이면 **체험 시작**(API 2로 체험을 만든 뒤 S-03), `IN_PROGRESS`면 **이어서 하기**, `COMPLETED`면 **결과 다시 보기**. 이어서 하기 · 결과 다시 보기도 API 2를 불러 응답 `status`로 이동한다(1-6). 세부 상태(7단계)는 이 API에 내보내지 않는다.
+- 버튼 분기(정보 구조 S-20): **`locked`가 `true`면 (v0.91, BE-146) 시작 대신 잠김을 보인다**(`myStatus`는 늘 `null`이다 — 체험한 사건은 잠기지 않는다). 그 밖에는 `myStatus`가 `null`이면 **체험 시작**(API 2로 체험을 만든 뒤 S-03), `IN_PROGRESS`면 **이어서 하기**, `COMPLETED`면 **결과 다시 보기**. 이어서 하기 · 결과 다시 보기도 API 2를 불러 응답 `status`로 이동한다(1-6). 세부 상태(7단계)는 이 API에 내보내지 않는다.
 - 캐시: `myStatus`가 사용자마다 달라 API 1과 같은 규칙이다(지금은 `no-store`, HTTP 캐시를 켤 때는 `private` + `Vary: Cookie`).
 - 대본(판결 체험 무대, REQ-089)은 이 API에 넣지 않는다. 승인된 대본의 증거조사 대사는 API 18(BE-109)에서 따로 준다.
 - (v0.67, BE-125) `cast`: 이 사건의 배역(`legal_case.cast_roles`). `prosecutor`(묶음 A, 판사 · 검사) · `defense`(묶음 B, 변호인 · 피고인 역)가 각각 `naero` · `nambul` 중 하나다. 배정 전 사건은 **필드가 없다** — 화면은 기본 배치(내로 판사 · 검사, 남불 변호인 · 피고인)를 쓴다(FE-128). 새로 적재하는 사건은 대본이 함께 오면 대본을 만든 배역을 사건 배역으로 쓰므로 API 18의 `cast`와 같다. 다만 관리자가 A-11로 배역을 바꾸면 이미 만든 대본은 그대로라 둘이 달라질 수 있다(대본 재생성은 BE-129).
