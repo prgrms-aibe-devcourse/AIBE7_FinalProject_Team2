@@ -56,6 +56,7 @@
 | v1.50 | 2026-10-30 | 회원 기준 소유로 전환 (**확장 단계**, BE-140 · V40 ~ V43 · API 명세 M-9 ~ M-11) — 로그인 전용이 된 사용자 데이터의 주인을 익명 ID에서 회원으로 옮길 자리를 만든다. BE-60 "main으로 가는 마이그레이션은 추가만" 규칙에 맞게 NOT NULL 해제 · 칸 · 제약 · 인덱스 · 테이블 추가만 한다(지금 앱은 그대로 돈다)<br>• V40: `experience` · `personality_result`는 손님도 쓰므로 **이중 소유** — `anonymous_user_id` · `member_id` 중 정확히 하나(CHECK `chk_experience_owner` · `chk_personality_result_owner`). `anonymous_user_id` NOT NULL 해제, `personality_result.member_id` 추가, 두 `member_id`에 FK. 회원 쪽 유니크 · 조회는 부분 인덱스(`uk_experience_member_case_attempt` · `ux_personality_result_current_member` · `ux_personality_result_baseline_retake_member` · `ix_personality_result_member_created`). `experience.member_id`(V3부터 있었으나 아무도 채우지 않음)의 뜻을 "체험 시작 시 로그인 회원"에서 "체험의 주인 회원"으로 바꾼다<br>• V41: 회원 키 테이블 7개 신설 — `member_attendance` · `member_profile_deco` · `member_profile_setting` · `member_xp_event` · `member_profile_job` · `member_collection_item` · `member_achievement_unlock`(칸 · 제약은 익명 쪽과 같고 주인만 회원, 회원 FK `ON DELETE CASCADE`). 익명 데이터는 옮기지 않고(체험만 이관), 옛 익명 테이블은 쓰지 않고 두었다가 후속 이슈에서 지운다<br>• V42: `member_anonymous_import` 신설 — 첫 로그인 가져오기 결정(`IMPORTED` · `DISCARDED`), 회원마다 한 번<br>• V43: `community_post` · `community_comment`의 작성자를 회원 또는 익명 ID로 넓힌다 — `member_id` · `anonymous_user_id` NOT NULL 해제, 적어도 하나(CHECK `chk_community_post_author` · `chk_community_comment_author`). "정확히 하나"로 좁히는 일은 다음 배포로 나눈다<br>• 15장 추가, 3-2 · 8 ~ 14장 갱신 |
 | v1.51 | 2026-10-30 | 약관 동의 기록 (**확장 단계**, BE-133 · V44 · API 명세 v0.74, v1.50 · V40 ~ V43은 BE-140 PR #351) — `member`에 `terms_agreed_at`(timestamptz) · `terms_version`(varchar 20) 추가, 둘 다 NULL 허용. CHECK `ck_member_terms_agreement`(둘이 함께 있거나 함께 없다). 아이디 가입(M-5) 때만 채우고, 기존 회원 · 카카오 회원은 NULL(동의 기록 없음) |
 | v1.52 | 2026-10-31 | 대본 단위 블록 (**확장 단계**, BE-126 1차 · V45 · API 명세 v0.78) — `case_script_block` 신설(대본마다 단위 U0 ~ U4 하나에 한 행: 내용 `content` · 판 `revision` · 생성 근거 `basis` · 검수 결과 `review` · `warnings` · `repairs` · 공개 가능 여부 `publishable` · 검수 칸 4개, 유니크 `(script_id, unit)`, "오류 블록은 승인 불가" CHECK). `case_script`의 `evidence`는 U3 블록으로 옮기고(검수 상태 포함, 나머지 네 단위는 `pending`) 검수 칸 4개를 지웠다 — 대본의 검수 상태는 블록에서 계산한다(다섯 단위 모두 승인 = 공개, 증거조사만 있는 대본은 준비 중). `case_script`에 메타 `issue` · `admits`와 `pending`(만들지 못한 단위) · `review`(대본 전체 검수 결과) 추가. 블록의 생성 근거가 가리킬 판 `legal_case.content_revision` · `case_paper.revision` 추가(대본 입력이 바뀔 때만 오른다, `updated_at`을 쓰지 않는 이유는 아래 표) (결정: `docs/decisions/BE-126.md`) |
+| v1.54 | 2026-11-02 | 대본 블록 재생성 작업 (**확장 단계**, BE-129 2차 · V47 · API 명세 v0.85) — `case_script_regeneration` 신설(사건 · 파이프라인 작업 ID · 고른 블록 `units` · `cascade_later` · 요청 당시 입력 `inputs` · 상태 · 실패 사유 · 단계 상태 · 요청자 · 반영자 · 반영 시각). 사건 등록(`case_import`)처럼 진행 상황을 받아 적고, 관리자가 결과를 반영하면 `applied_at`이 채워진다. 대본에 칸을 더하지 않고 행으로 둔 이유는 아래 표. 감사 로그 액션 `CASE_SCRIPT_REGENERATE` · `CASE_SCRIPT_REGENERATE_APPLY` 추가 (`docs/decisions/BE-129.md`) |
 | v1.53 | 2026-11-01 | 등록 때 정한 배역 · 사건 자동 분류 (**확장 단계**, BE-129 1차 · V46 · API 명세 v0.80) — `case_import.cast_roles`(jsonb, 등록 요청을 받을 때 정한 배역) 추가: 대본을 만드는 등록은 배역을 대본보다 먼저 정하므로, 범죄 유형별 균형 계산이 사건과 함께 **아직 적재되지 않은 등록**(`case_id` 없음, `FAILED` 제외)의 이 값도 센다. `legal_case.classification`(jsonb `{mood, issue, victim, thirdParty}`) · `classification_needs_review`(jsonb 문자열 배열) 추가: 사건 등록의 자동 분류(BE-123) 결과와 관리자 확인이 필요한 축 · 플래그. 대본을 다시 만들 때(BE-129 2차) 파이프라인에 그대로 넘기는 값이라 한 칸에 둔다. 민감 플래그는 `sensitive_flags`가 따로 갖는다 (`docs/decisions/BE-129.md`) |
 
 ---
@@ -463,6 +464,32 @@ jsonb에 블록을 모두 담으면 블록 하나를 고칠 때 다른 블록의
 - U3 `content[].factorId`는 **`factor.display_order`** 와 맞춘다(적재가 파이프라인 `factorId`를 그대로 넣는다, v1.37). A-13-10이 이 번호로 판단 요소 문구를 찾아 대사마다 붙여 준다.
 - V45가 기존 대본의 `evidence`를 U3 블록 하나로 옮겼다(검수 상태 포함, `basis`는 `{case: 1, cast}`, 대본 `pending`은 나머지 네 단위). 증거조사만 만드는 경로(BE-107)도 U3 블록 하나로 적재한다 — 둘 다 공개되지 않는 "준비 중" 대본이다.
 
+#### `case_script_regeneration` — 대본 블록 재생성 작업 (BE-129 2차, A-13-15 ~ 17)
+
+관리자가 고른 블록을 파이프라인 서비스가 다시 만들고, 끝나면 관리자가 결과를 보고 반영한다. 사건 등록(`case_import`)과 같이
+진행 상황의 출처는 파이프라인이고 이 표는 받아 적는 쪽이다(끝난 작업은 다시 바꾸지 않는다).
+
+**대본(`case_script`)에 칸을 더하지 않고 행으로 둔 이유**: 재생성은 한 사건에 여러 번 일어나고, 누가 무엇을 다시 만들었는지 남아야
+한다. 반영하지 않고 버린 작업도 남는다 — 반영할 수 있는 것은 그 사건의 가장 최근 작업뿐이다.
+
+| 컬럼 | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| id | bigint PK | ✓ |  |
+| case_id | bigint FK | ✓ | `legal_case.id`. 사건을 지우면 함께 지운다(`ON DELETE CASCADE`). `(case_id, id DESC)` 인덱스 |
+| job_id | varchar(32) | ✓ | 파이프라인 서비스 작업 ID. 유니크 |
+| units | jsonb | ✓ | 관리자가 고른 블록(단위 이름 배열). 실제로 다시 만들 블록은 파이프라인이 연동 표로 넓힌다 |
+| cascade_later | boolean | ✓ | 그 블록을 입력으로 받는 뒤 블록도 함께 만드는지(`false` = 세부조정). `cascade`는 SQL 키워드라 이 이름이다 |
+| inputs | jsonb | ✓ | 요청 당시 입력 `{blocks: {단위: 판}, case, paper, cast, classification, sensitiveFlags}`. 반영할 때 지금 값과 다르면 거절한다 |
+| status | varchar(20) |  | `QUEUED` · `RUNNING` · `SUCCEEDED` · `FAILED` (CHECK). 첫 진행 상황을 받을 때 채운다 |
+| error_code | varchar(50) |  | 실패 사유 코드 |
+| message | varchar(500) |  | 실패 사유. 원문 · 모델 출력을 담지 않는다 |
+| stages | jsonb |  | 마지막으로 받은 단계 상태 `[{name, status}]`(대본 단계만) |
+| requested_by_admin_id | bigint FK |  | `admin_account.id`. 계정을 지우면 NULL |
+| applied_by_admin_id | bigint FK |  | `admin_account.id`. 계정을 지우면 NULL |
+| applied_at | timestamptz |  | 결과를 블록에 반영한 시각. `SUCCEEDED`일 때만 둔다(CHECK) |
+| created_at | timestamptz | ✓ |  |
+| finished_at | timestamptz |  | 파이프라인 작업이 끝난 시각 |
+
 #### `case_import` · `case_import_source` — 사건 등록 작업 (BE-93, A-14 · A-15)
 
 관리자가 판결문을 넣으면 백엔드가 AI 판결 파이프라인 서비스(COMMON-50)에 작업을 맡기고 이 표로 추적한다.
@@ -724,7 +751,7 @@ AI 판결 1건을 어떤 조건으로 만들었는지 남긴다(REQ-047, 079). M
 | id | bigint PK | ✓ |  |
 | admin_id | bigint FK |  | `admin_account.id`. 로그인 실패는 입력이 실제 계정과 일치할 때만 그 계정, 아니면 NULL. 계정이 지워지면 NULL이 된다(`ON DELETE SET NULL`) |
 | actor_email | varchar(254) |  | 그때의 계정 이메일(소문자, CHECK). 계정이 지워져도 누구였는지 남긴다. **로그인 실패 때 입력한 값은 원문으로 남기지 않는다** — 이메일 칸에 비밀번호를 잘못 넣으면 평문으로 남기 때문이다. 입력이 실제 계정과 일치할 때만 그 계정 이메일, 아니면 NULL(`detail`에 `{"knownAccount": false}`) |
-| action | varchar(30) | ✓ | `LOGIN_SUCCESS` · `LOGIN_FAILURE` · `LOGOUT` · `SOURCE_VIEW` · `JUDGMENT_APPROVE` · `JUDGMENT_REJECT` · `CASE_UPDATE` · `VALUE_AXIS_CONFIRM` · `CASE_PUBLISH` · `CASE_PHOTO_UPLOAD` · `CASE_PHOTO_DELETE` · `CASE_PAPER_GENERATE` · `CASE_PAPER_UPDATE` · `CASE_IMPORT` · `CASE_IMPORT_LOAD` · `CASE_SCRIPT_APPROVE` · `CASE_SCRIPT_REJECT` · `CASE_SCRIPT_UPDATE` · `CASE_UNPUBLISH` (CHECK, 마지막 변경 V34). 코드 enum `AdminAuditAction`과 같은 값이다 |
+| action | varchar(30) | ✓ | `LOGIN_SUCCESS` · `LOGIN_FAILURE` · `LOGOUT` · `SOURCE_VIEW` · `JUDGMENT_APPROVE` · `JUDGMENT_REJECT` · `CASE_UPDATE` · `VALUE_AXIS_CONFIRM` · `CASE_PUBLISH` · `CASE_PHOTO_UPLOAD` · `CASE_PHOTO_DELETE` · `CASE_PAPER_GENERATE` · `CASE_PAPER_UPDATE` · `CASE_IMPORT` · `CASE_IMPORT_LOAD` · `CASE_SCRIPT_APPROVE` · `CASE_SCRIPT_REJECT` · `CASE_SCRIPT_UPDATE` · `CASE_UNPUBLISH` · `CASE_SCRIPT_REGENERATE` · `CASE_SCRIPT_REGENERATE_APPLY` (CHECK, 마지막 변경 V47). 코드 enum `AdminAuditAction`과 같은 값이다 |
 | target_type | varchar(20) |  | `CASE` · `JUDGMENT` · `FACTOR` · `CASE_SOURCE`. `target_id`와 둘 다 있거나 둘 다 없다(CHECK) |
 | target_id | bigint |  | 대상 행 ID (FK 없음 — 대상이 지워져도 기록은 남긴다) |
 | detail | jsonb |  | 판단에 필요한 값만(반려 사유 · 바꾼 필드 이름 등). **비밀번호 · 원문 내용 · 토큰은 넣지 않는다** |
