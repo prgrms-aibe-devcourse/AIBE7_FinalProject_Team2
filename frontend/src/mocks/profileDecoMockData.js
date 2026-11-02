@@ -16,7 +16,7 @@ export const ACHIEVEMENTS = [
   { id: 'personality', stat: 'hasType', goal: 1, rewards: rewards({ kinds: ['characters/personality'], backgrounds: ['tarot'], sashIcons: ['scale'] }) },
   { id: 'attend-3', stat: 'attendanceDays', goal: 3, rewards: rewards({ kinds: ['characters/icon/generated'], backgrounds: ['latte'], sashIcons: ['cup'] }) },
   { id: 'collect-5', stat: 'collected', goal: 5, rewards: rewards({ kinds: ['cases'], backgrounds: ['news'], sashIcons: ['naero', 'nambul'] }) },
-  { id: 'attend-7', stat: 'attendanceDays', goal: 7, rewards: rewards({ kinds: ['characters/cheek', 'characters/cheek-slim', 'characters/deform'], frames: ['gold'], sashIcons: ['heart'] }) },
+  { id: 'attend-7', stat: 'attendanceDays', goal: 7, rewards: rewards({ kinds: ['characters/cheek', 'characters/cheek-slim'], frames: ['gold'], sashIcons: ['heart'] }) },
   { id: 'cases-3', stat: 'completed', goal: 3, rewards: rewards({ frames: ['stitch'], backgrounds: ['linen'], sashColors: ['short:navy', 'long:navy'], sashIcons: ['gavel'] }) },
   { id: 'collect-20', stat: 'collected', goal: 20, rewards: rewards({ kinds: ['characters/law', 'characters/adult'], sashColors: ['short:green', 'long:green'] }) },
   { id: 'attend-30', stat: 'attendanceDays', goal: 30, rewards: rewards({ kinds: ['characters/mascot'], frames: ['navy'], sashColors: ['short:gold', 'long:gold'], sashIcons: ['law'] }) },

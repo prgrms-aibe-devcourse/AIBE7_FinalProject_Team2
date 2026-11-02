@@ -18,14 +18,14 @@ const openAfter = (stats) => unlockedSets(mockUnlocked(mockAchievements(stats)))
 const DEFAULT_LOOK = { portrait: NAERO, frame: 'basic', background: 'cream', sashStyle: 'none', sashColorShort: 'wine', sashColorLong: 'wine', sashIconLeft: 'none', sashIconRight: 'none' };
 const DEFAULT_SERVER = { ...DEFAULT_LOOK, bookmarkCharacter: 'naero', bookmarkFace: 'happy', bookmarkFaceStyle: 'generated', bookmarkColor: 'bronze' };
 
-test('후보는 130장이고 종류별 개수가 정한 대로이며, 모두 실제 파일이다', () => {
+test('후보는 158장이고 종류별 개수가 정한 대로이며, 모두 실제 파일이다', () => {
   const counts = {};
   PORTRAIT_POOL.forEach((src) => { counts[kindOfPortrait(src)] = (counts[kindOfPortrait(src)] ?? 0) + 1; });
   assert.deepEqual(counts, {
-    'characters/roles': 10, 'characters/scene': 16, 'characters/icon/generated': 12, 'characters/mascot': 12, 'characters/law': 9, 'characters/adult': 9,
-    'characters/standing': 8, 'characters/cheek': 4, 'characters/cheek-slim': 4, 'characters/deform': 2, 'characters/personality': 32, cases: 12,
+    'characters/roles': 20, 'characters/scene': 16, 'characters/icon/generated': 12, 'characters/mascot': 12, 'characters/law': 9, 'characters/adult': 9,
+    'characters/standing': 8, 'characters/cheek': 12, 'characters/cheek-slim': 4, 'characters/personality': 32, cases: 24,
   });
-  assert.equal(new Set(PORTRAIT_POOL).size, 130);
+  assert.equal(new Set(PORTRAIT_POOL).size, 158);
   PORTRAIT_POOL.forEach((src) => assert.ok(existsSync(new URL(`../../public${src}`, import.meta.url)), `없는 파일: ${src}`));
   assert.ok(!PORTRAIT_POOL.some((src) => /cases\/case-\d+\.webp$/.test(src)), '사건 대표 썸네일은 후보가 아니다');
 });
@@ -71,7 +71,7 @@ test('아무것도 안 했으면 역할 의상 · 서 있는 컷 · 기본 테�
   assert.deepEqual([...open.sashStyles], ['none', 'short']);
   assert.deepEqual([...open.sashColors], ['short:wine']);
   assert.deepEqual([...open.sashIcons], ['none', 'star']);
-  assert.equal(PORTRAIT_POOL.filter((src) => open.kinds.has(kindOfPortrait(src))).length, 18);
+  assert.equal(PORTRAIT_POOL.filter((src) => open.kinds.has(kindOfPortrait(src))).length, 28);
 });
 
 test('서버가 알려 준 열린 항목을 Set으로 바꾸고, 빠진 종류는 빈 Set으로 본다', () => {

@@ -1,11 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { casePhoto, commonCategoryOf, commonPhotoAt, commonPhotos, evidencePhotosFromPaper, extraPhotosFromApi, extraPhotosOf, fetchCasePaper } from './newspaper.js';
+import { casePhoto, commonCategoryOf, commonPhotoAt, commonPhotos, evidencePhotosFromPaper, extraPhotosFromApi, extraPhotosOf, fetchCasePaper, inquiryPhotoAt, inquiryPhotos } from './newspaper.js';
 
 test('commonCategoryOf: 범죄 분류 라벨 → 죄명 순으로 공용 컷 분류를 읽고, 모르면 undefined', () => {
   assert.equal(commonCategoryOf({ crimeCategoryLabel: '생명범죄' }), 'life');
   assert.equal(commonCategoryOf({ crimeCategoryLabel: '재산범죄', crimeType: 'INJURY' }), 'property');
-  assert.equal(commonCategoryOf({ crimeType: 'ROBBERY' }), 'property');
+  assert.equal(commonCategoryOf({ crimeType: 'ROBBERY' }), 'robbery');
+  assert.equal(commonCategoryOf({ crimeType: 'THEFT' }), 'theft');
+  assert.equal(commonCategoryOf({ crimeCategoryLabel: '재산범죄', crimeType: 'ROBBERY' }), 'robbery'); // 라벨이 재산범죄여도 강도 · 절도는 별도 세트
   assert.equal(commonCategoryOf({ crimeType: 'INJURY' }), 'body');
   assert.equal(commonCategoryOf({ crimeType: 'MURDER' }), 'life');
   assert.equal(commonCategoryOf({}), undefined);
@@ -64,4 +66,13 @@ test('fetchCasePaper: 지면이 없거나(404) 응답이 늦으면 null을 주�
   assert.equal(await fetchCasePaper({ getCasePaper: async () => paper }, 1), paper);
   assert.equal(await fetchCasePaper({ getCasePaper: () => Promise.reject({ code: 'PAPER_NOT_FOUND' }) }, 1), null);
   assert.equal(await fetchCasePaper({ getCasePaper: () => new Promise(() => {}) }, 1, 10), null); // 영영 끝나지 않는 응답
+});
+
+test('강도 · 절도 공용 컷과 탐구 컷은 실제 파일이고, 탐구 컷은 seed로 돌려 쓴다', () => {
+  assert.equal(commonPhotos.robbery.conclusion, '/images/cases/common-robbery-conclusion.webp');
+  assert.equal(commonPhotos.theft.reenact, '/images/cases/common-theft-reenact.webp');
+  assert.equal(inquiryPhotos.length, 6);
+  assert.equal(inquiryPhotoAt(0), inquiryPhotos[0]);
+  assert.equal(inquiryPhotoAt(7), inquiryPhotos[1]);
+  assert.equal(inquiryPhotoAt(undefined), inquiryPhotos[0]);
 });
