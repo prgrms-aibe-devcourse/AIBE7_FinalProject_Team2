@@ -52,6 +52,31 @@ test('카카오 첫 가입: 가입은 됐는데 재발급만 실패했으면(TOK
   assert.equal((await askKakaoSignupConsent(api, choose('agree'))).status, 'failed');
 });
 
+test('카카오 첫 가입: 가입 대기가 사라졌어도 로그인 쿠키가 살아 있으면(재발급 성공) loggedIn으로 이어 간다 — 동의 창을 다시 연 경우', async () => {
+  const calls = [];
+  const api = {
+    signupKakao: async () => { calls.push('signup'); throw { code: SIGNUP_EXPIRED, status: 409 }; },
+    reissueToken: async () => calls.push('reissue'),
+  };
+  assert.equal((await askKakaoSignupConsent(api, choose('agree'))).status, 'loggedIn');
+  assert.deepEqual(calls, ['signup', 'reissue']);
+});
+
+test('카카오 첫 가입: 가입 대기가 사라졌고 재발급도 안 되면 expired로 남는다 — 재발급 함수가 없는 목 모드도 같다', async () => {
+  const expired = async () => { throw { code: SIGNUP_EXPIRED, status: 409 }; };
+  const failing = { signupKakao: expired, reissueToken: async () => { throw { status: 401 }; } };
+  assert.equal((await askKakaoSignupConsent(failing, choose('agree'))).status, 'expired');
+  assert.equal((await askKakaoSignupConsent({ signupKakao: expired }, choose('agree'))).status, 'expired');
+});
+
+test('카카오 첫 가입: 동의에 성공했거나 닫았을 때는 재발급을 따로 부르지 않는다', async () => {
+  let reissued = 0;
+  const api = { signupKakao: async () => ({ nickname: '방청객 1' }), cancelKakaoSignup: async () => {}, reissueToken: async () => { reissued += 1; } };
+  assert.equal((await askKakaoSignupConsent(api, choose('agree'))).status, 'agreed');
+  assert.equal((await askKakaoSignupConsent(api, choose('decline'))).status, 'declined');
+  assert.equal(reissued, 0);
+});
+
 test('카카오 첫 가입: 그 밖의 실패는 던져서 창이 안내하고 다시 고르게 한다', async () => {
   const api = { signupKakao: async () => { throw { code: 'NETWORK_ERROR', status: 0 }; } };
   await assert.rejects(askKakaoSignupConsent(api, choose('agree')), { code: 'NETWORK_ERROR' });

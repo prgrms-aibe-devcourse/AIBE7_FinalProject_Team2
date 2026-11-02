@@ -18,9 +18,11 @@ export const SIGNUP_EXPIRED = 'KAKAO_SIGNUP_EXPIRED';
  * 카카오 첫 가입 동의. 동의하면 회원이 만들어지고 로그인된다.
  * @param {{ signupKakao: Function, cancelKakaoSignup?: Function }} api
  * @param {Function} show 창을 띄우는 함수(시험에서 바꾼다)
- * @returns {Promise<{ status: 'agreed', nickname?: string } | { status: 'declined' } | { status: 'expired' } | { status: 'failed' }>}
+ * @returns {Promise<{ status: 'agreed', nickname?: string } | { status: 'declined' } | { status: 'expired' } | { status: 'failed' } | { status: 'loggedIn' }>}
  *   declined면 가입하지 않기로 한 것이다. expired면 가입 대기가 사라져 카카오 로그인부터 다시 해야 한다.
- *   failed면 회원은 만들어졌지만(가입 대기는 이미 소비됨) 재발급만 실패해 로그인을 마치지 못한 것이다 — 다시 동의해도 KAKAO_SIGNUP_EXPIRED만 돌아온다
+ *   failed면 회원은 만들어졌지만(가입 대기는 이미 소비됨) 재발급만 실패해 로그인을 마치지 못한 것이다 — 다시 동의해도 KAKAO_SIGNUP_EXPIRED만 돌아온다.
+ *   loggedIn은 expired였는데 이미 가입이 끝나 로그인 쿠키가 살아 있는 경우다(뒤로 가기 · 새로고침으로 동의 창을 다시 열었을 때) —
+ *   "처음부터 다시"를 안내하기 전에 재발급을 한 번 시도해, 되면 로그인으로 이어 가게 한다(PR #385 리뷰)
  */
 export async function askKakaoSignupConsent(api, show = showTermsDialog) {
   let nickname;
@@ -39,7 +41,14 @@ export async function askKakaoSignupConsent(api, show = showTermsDialog) {
     // 가입 대기는 10분 뒤에도 사라지므로 취소 요청이 실패해도 막지 않는다 — 로그인된 것이 없다
     decline: async () => { await Promise.resolve(api.cancelKakaoSignup?.()).catch(() => {}); },
   });
+  if (status === 'expired' && await canReissue(api)) return { status: 'loggedIn' };
   return { status, nickname };
+}
+
+// 로그인 쿠키가 살아 있으면 재발급이 된다. 재발급 함수가 없으면(목 모드) 로그인된 것으로 보지 않는다
+async function canReissue(api) {
+  if (typeof api.reissueToken !== 'function') return false;
+  return Promise.resolve(api.reissueToken()).then(() => true, () => false);
 }
 
 /**

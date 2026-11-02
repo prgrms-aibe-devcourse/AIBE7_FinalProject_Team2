@@ -44,7 +44,12 @@ export function renderAuthCallbackPage(container, { api, navigate }) {
   panel.append(element('h1', '', signupTerms ? '카카오 가입을 마무리해요' : '로그인하는 중…'), waiting);
   if (devLoading) return undefined;
   if (signupTerms) return finishKakaoSignup();
-  return api.reissueToken().then(async () => {
+  return api.reissueToken().then(continueAsMember, () => {
+    if (container.contains(root)) showFailure();
+  });
+
+  // 재발급이 끝나 로그인된 뒤의 흐름: 표시 이름 → 약관 동의(기록이 없으면) → 가져오기 → 메인
+  async function continueAsMember() {
     // 헤더에 보일 이름: 서버의 내 회원 정보(M-8)가 주는 표시 이름(닉네임, 없으면 '방청객 {회원 ID}'). 못 받으면 예전 임시 표시를 쓴다.
     const me = await Promise.resolve(api.getMe?.()).catch(() => null);
     if (!container.contains(root)) return; // 기다리는 사이 다른 화면으로 갔으면 이동하지 않는다
@@ -55,14 +60,16 @@ export function renderAuthCallbackPage(container, { api, navigate }) {
     }
     if (!container.contains(root)) return;
     navigate('landing', {}, { replace: true });
-  }, () => {
-    if (container.contains(root)) showFailure();
-  });
+  }
 
   // 처음 온 카카오 계정: 동의 창 → (동의) 가입 · 로그인 → 가져오기 창 → 메인
   async function finishKakaoSignup() {
     const result = await askKakaoSignupConsent(api);
     if (!container.contains(root)) return;
+    if (result.status === 'loggedIn') { // 이미 가입이 끝나 로그인돼 있다(동의 창을 다시 연 경우). 기존 회원과 같이 이어 간다
+      await continueAsMember();
+      return;
+    }
     if (result.status === 'expired') { // 가입 대기가 사라졌다(10분이 지났거나 이미 썼다). 카카오 로그인부터 다시 해야 한다
       showFailure('가입을 마치지 못했어요. 카카오 로그인을 처음부터 다시 해 주세요.');
       return;
