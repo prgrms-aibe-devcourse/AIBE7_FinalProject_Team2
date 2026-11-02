@@ -170,8 +170,13 @@ public class CaseScript {
 			}
 			pending.remove(entry.getKey().name());
 		}
-		this.castRoles = cast == null ? null : new LinkedHashMap<>(cast);
-		this.issue = issue;
+		// 결과에 메타가 비어 오면 지금 값을 둔다(PR #381 리뷰 4번)
+		if (cast != null) {
+			this.castRoles = new LinkedHashMap<>(cast);
+		}
+		if (issue != null) {
+			this.issue = issue;
+		}
 		this.admits = block(ScriptUnit.U0).map(CaseScript::admitsOf).orElse(null);
 		this.review = scriptReview == null ? new ArrayList<>() : new ArrayList<>(scriptReview);
 		this.stopped = stopped;

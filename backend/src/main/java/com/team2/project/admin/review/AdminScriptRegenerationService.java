@@ -40,11 +40,14 @@ import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -73,7 +76,11 @@ public class AdminScriptRegenerationService {
 	private static final String STAGE_SKIPPED = "SKIPPED";
 
 	static final String NOT_LATEST = "이 사건에 더 최근 재생성 요청이 있습니다. 최근 요청의 결과를 반영해 주세요.";
-	static final String INPUTS_CHANGED = "재생성을 요청한 뒤 대본 · 사건 내용 · 기사 · 배역 · 분류가 바뀌었습니다. 다시 요청해 주세요.";
+	static final String INPUTS_CHANGED = "재생성을 요청한 뒤 대본 · 사건 내용 · 기사 · 배역 · 분류 · AI 판결이 바뀌었습니다. 다시 요청해 주세요.";
+	static final String CASE_PUBLISHED = "공개 중인 사건은 반영할 수 없습니다 — 반영하면 승인이 풀려 대본이 바로 내려갑니다. "
+		+ "공개를 취소(A-13-14)한 뒤 반영하고 다시 승인 · 공개해 주세요.";
+	static final String RESULT_UNAVAILABLE = "재생성 결과를 가져오지 못했습니다. 잠시 뒤 다시 확인해 주세요.";
+	static final String CAST_CHANGED = "배역이 바뀌어 배역이 말하는 블록(U2 · U3 · U4)을 함께 다시 만들어야 합니다.";
 
 	private final LegalCaseRepository caseRepository;
 	private final CaseScriptRepository scriptRepository;
@@ -194,6 +201,7 @@ public class AdminScriptRegenerationService {
 			throw new BusinessException(ErrorCode.INVALID_STATE,
 				"배역이 없는 사건은 대본을 다시 만들 수 없습니다. 사건 수정(A-11)으로 먼저 정해 주세요.");
 		}
+		guardCastCovered(legalCase, script, units, cascade);
 		Judgment judgment = aiJudgment(caseId);
 		CasePaper paper = paperRepository.findByLegalCaseId(caseId).orElse(null);
 		boolean needsPaper = units.contains(ScriptUnit.U1.name()) || script.block(ScriptUnit.U1).isPresent();
@@ -205,7 +213,29 @@ public class AdminScriptRegenerationService {
 			sectionRepository.findAllByCaseId(caseId), factorRepository.findAllByCaseId(caseId), judgment,
 			judgmentFactorRepository.findAllByJudgmentIds(List.of(judgment.getId())), units, cascade);
 		Integer paperRevision = paper == null ? null : paper.getRevision();
-		return new Prepared(request, ScriptRegenerationInputs.snapshot(legalCase, script, paperRevision));
+		return new Prepared(request, ScriptRegenerationInputs.snapshot(legalCase, script, paperRevision,
+			request.get("case"), request.get("judgment")));
+	}
+
+	/**
+	 * 사건 배역이 지금 대본 배역과 다르면, 배역이 말하는 블록(지금 있는 U2 · U3 · U4)을 모두 다시 만들어야 한다(PR #381 리뷰 5번).
+	 * 일부만 다시 만들면 반영한 대본의 배역(API 18 {@code cast})은 새 값인데 나머지 블록의 문장은 옛 배역이라 화면이 어긋난다.
+	 * 다시 만들 대상은 고른 블록 + {@code cascade}면 뒤 블록이다({@link ScriptUnit#affects()}, 파이프라인과 계약 테스트로 맞춘 표)
+	 */
+	private static void guardCastCovered(LegalCase legalCase, CaseScript script, List<String> units, boolean cascade) {
+		if (Objects.equals(legalCase.getCastRoles(), script.getCastRoles())) {
+			return;
+		}
+		Set<ScriptUnit> targets = new HashSet<>(units.stream().map(ScriptUnit::valueOf).toList());
+		boolean grew = cascade;
+		while (grew) {
+			grew = targets.addAll(targets.stream().flatMap(unit -> unit.affects().stream()).toList());
+		}
+		boolean covered = script.getBlocks().stream().map(CaseScriptBlock::getUnit)
+			.filter(unit -> unit.basis().contains("cast")).allMatch(targets::contains);
+		if (!covered) {
+			throw new BusinessException(ErrorCode.INVALID_STATE, CAST_CHANGED);
+		}
 	}
 
 	/**
@@ -213,12 +243,15 @@ public class AdminScriptRegenerationService {
 	 * 만들어졌고, 관리자가 다른 후보를 공개했으면 그 판결을 따르는 것이 맞다
 	 */
 	private Judgment aiJudgment(Long caseId) {
+		return findAiJudgment(caseId).orElseThrow(() -> new BusinessException(ErrorCode.INVALID_STATE,
+			"AI 판결이 없는 사건은 대본을 다시 만들 수 없습니다."));
+	}
+
+	private Optional<Judgment> findAiJudgment(Long caseId) {
 		return judgmentRepository.findPublishedJudgment(caseId, SubjectType.AI)
 			.or(() -> judgmentRepository.findCandidatesByCaseId(caseId).stream()
 				.filter(judgment -> judgment.getSubjectType() == SubjectType.AI && judgment.getTiming() == Timing.FINAL)
-				.reduce((newer, older) -> older))		// 최신 순이라 마지막이 가장 먼저 만든 판결이다
-			.orElseThrow(() -> new BusinessException(ErrorCode.INVALID_STATE,
-				"AI 판결이 없는 사건은 대본을 다시 만들 수 없습니다."));
+				.reduce((newer, older) -> older));		// 최신 순이라 마지막이 가장 먼저 만든 판결이다
 	}
 
 	private PipelineJob createJob(Map<String, Object> request) {
@@ -278,10 +311,18 @@ public class AdminScriptRegenerationService {
 		if (!entity.getId().equals(latestId)) {
 			return NOT_LATEST;
 		}
+		// 점검 상태(BE-126 2차, API 18 503)가 생기기 전까지는 공개 중인 대본을 내리지 않는다(PR #381 리뷰 1번)
+		if (entity.getLegalCase().isPublished()) {
+			return CASE_PUBLISHED;
+		}
 		if (script == null || !ScriptRegenerationInputs.sameInputs(entity.getInputs(), currentSnapshot(script))) {
 			return INPUTS_CHANGED;
 		}
-		if (result != null && texts(result.get("regenerated")).isEmpty()) {
+		if (result == null) {
+			// 미리보기(수동 수정 줄 수) 없이 반영 버튼이 켜지면 확인 없이 고친 줄이 바뀐다(PR #381 리뷰) — 반영은 결과를 다시 가져온다
+			return RESULT_UNAVAILABLE;
+		}
+		if (texts(result.get("regenerated")).isEmpty()) {
 			return "다시 만든 블록이 없습니다. 다시 요청해 주세요.";
 		}
 		return null;
@@ -432,11 +473,16 @@ public class AdminScriptRegenerationService {
 		});
 	}
 
+	/** 지금 값으로 만든 입력 기록 — 요청 때와 같은 방식으로 사건 입력 · AI 판결 입력을 다시 만든다 */
 	private Map<String, Object> currentSnapshot(CaseScript script) {
 		LegalCase legalCase = script.getLegalCase();
-		Integer paperRevision = paperRepository.findByLegalCaseId(legalCase.getId()).map(CasePaper::getRevision)
-			.orElse(null);
-		return ScriptRegenerationInputs.snapshot(legalCase, script, paperRevision);
+		Long caseId = legalCase.getId();
+		Integer paperRevision = paperRepository.findByLegalCaseId(caseId).map(CasePaper::getRevision).orElse(null);
+		Map<String, Object> caseInput = ScriptRegenerationInputs.caseInput(legalCase,
+			sectionRepository.findAllByCaseId(caseId), factorRepository.findAllByCaseId(caseId));
+		Map<String, Object> judgmentInput = findAiJudgment(caseId).map(judgment -> ScriptRegenerationInputs.judgmentInput(
+			judgment, judgmentFactorRepository.findAllByJudgmentIds(List.of(judgment.getId())))).orElse(null);
+		return ScriptRegenerationInputs.snapshot(legalCase, script, paperRevision, caseInput, judgmentInput);
 	}
 
 	private static ScriptRegenerationStatus statusOf(PipelineJob job) {

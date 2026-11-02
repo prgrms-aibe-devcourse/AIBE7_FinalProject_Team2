@@ -8,11 +8,16 @@ import com.team2.project.legalcase.domain.CaseScriptBlock;
 import com.team2.project.legalcase.domain.CaseSection;
 import com.team2.project.legalcase.domain.Factor;
 import com.team2.project.legalcase.domain.LegalCase;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * 대본 블록 재생성(BE-129 2차) 입력을 DB 값으로 만든다. 파이프라인 서비스 요청 형식은 `tools/ai-judgment/service/README.md`
@@ -25,6 +30,7 @@ import java.util.Set;
 final class ScriptRegenerationInputs {
 
 	private static final Set<String> EXCLUDED_SECTIONS = Set.of("LAW_TERM", "SUMMARY");
+	private static final JsonMapper JSON = JsonMapper.builder().build();
 
 	private ScriptRegenerationInputs() {
 	}
@@ -68,10 +74,18 @@ final class ScriptRegenerationInputs {
 
 	/**
 	 * 요청 당시 입력 기록. 반영할 때 다시 만들어 비교하고, 다르면 거절한다 — 그 사이 대사를 고치거나(블록 판) 다른 재생성을 반영했거나,
-	 * 사건 내용 · 기사 · 배역 · 분류 · 민감 플래그를 바꿨으면 옛 입력으로 만든 블록이 들어가기 때문이다. 값은 JSON으로 저장했다 읽어도
-	 * 같게 나오는 모양(정수는 long)으로 맞춘다.
+	 * 사건 내용 · 기사 · 배역 · 분류 · 민감 플래그 · AI 판결을 바꿨으면 옛 입력으로 만든 블록이 들어가기 때문이다. 값은 JSON으로 저장했다
+	 * 읽어도 같게 나오는 모양(정수는 long)으로 맞춘다.
+	 *
+	 * <p>사건 내용 판({@code content_revision})은 제목 · 개요를 고칠 때만 오른다. 파이프라인에 보낸 사건 입력에는 섹션 · 판단 요소 문구 ·
+	 * 적용 법조 · 권고형도 있고 AI 판결(방향 · 형량)도 있어서, <b>보낸 입력 그대로의 해시</b>를 함께 남긴다(PR #381 리뷰 2번) —
+	 * 섹션을 고치거나 다른 AI 판결 후보를 공개해도 반영이 막힌다.
+	 *
+	 * @param caseInput     파이프라인에 보낸(보낼) 사건 입력 ({@link #caseInput})
+	 * @param judgmentInput 파이프라인에 보낸(보낼) AI 판결 입력. AI 판결이 없으면 null
 	 */
-	static Map<String, Object> snapshot(LegalCase legalCase, CaseScript script, Integer paperRevision) {
+	static Map<String, Object> snapshot(LegalCase legalCase, CaseScript script, Integer paperRevision,
+			Object caseInput, Object judgmentInput) {
 		Map<String, Object> blocks = new LinkedHashMap<>();
 		for (CaseScriptBlock block : script.getBlocks()) {
 			blocks.put(block.getUnit().name(), (long) block.getRevision());
@@ -85,7 +99,23 @@ final class ScriptRegenerationInputs {
 			: new LinkedHashMap<>(legalCase.getClassification()));
 		snapshot.put("sensitiveFlags", legalCase.getSensitiveFlags() == null ? null
 			: List.copyOf(legalCase.getSensitiveFlags()));
+		snapshot.put("caseInput", digest(caseInput));
+		snapshot.put("judgmentInput", digest(judgmentInput));
 		return snapshot;
+	}
+
+	/** 입력의 SHA-256 (JSON으로 적은 뒤). 같은 DB 값이면 같은 순서 · 같은 모양으로 만들어지므로 같은 값이 나온다 */
+	private static String digest(Object value) {
+		if (value == null) {
+			return null;
+		}
+		try {
+			byte[] hash = MessageDigest.getInstance("SHA-256")
+				.digest(JSON.writeValueAsString(value).getBytes(StandardCharsets.UTF_8));
+			return HexFormat.of().formatHex(hash);
+		} catch (NoSuchAlgorithmException e) {
+			throw new IllegalStateException("SHA-256을 쓸 수 없다", e);
+		}
 	}
 
 	/** 저장했다 읽은 기록과 지금 기록이 같은지. JSON 숫자는 Integer · Long 어느 쪽으로도 오므로 long으로 맞춰 비교한다 */
@@ -108,7 +138,7 @@ final class ScriptRegenerationInputs {
 		return value;
 	}
 
-	private static Map<String, Object> caseInput(LegalCase legalCase, List<CaseSection> sections, List<Factor> factors) {
+	static Map<String, Object> caseInput(LegalCase legalCase, List<CaseSection> sections, List<Factor> factors) {
 		Map<String, Object> input = new LinkedHashMap<>();
 		input.put("caseId", legalCase.getId());
 		input.put("title", legalCase.getTitle());
@@ -144,7 +174,7 @@ final class ScriptRegenerationInputs {
 		return input;
 	}
 
-	private static Map<String, Object> judgmentInput(Judgment judgment, List<JudgmentFactor> judgmentFactors) {
+	static Map<String, Object> judgmentInput(Judgment judgment, List<JudgmentFactor> judgmentFactors) {
 		List<Map<String, Object>> factors = new ArrayList<>();
 		for (JudgmentFactor judgmentFactor : judgmentFactors) {
 			if (judgmentFactor.getDirection() == null) {

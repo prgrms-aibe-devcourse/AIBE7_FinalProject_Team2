@@ -65,6 +65,19 @@ class CaseScriptRegenerationApplyTest {
 		assertThat(script.isPublishable()).isFalse();
 	}
 
+	@Test
+	@DisplayName("결과에 메타(배역 · 쟁점)가 비어 오면 지금 값을 둔다")
+	void keepsMetaWhenMissing() {
+		CaseScript script = CaseScript.of(null, "old", CAST, "admitted", true, List.of(), List.of(), null, true, null, false);
+		script.addBlock(ScriptUnit.U4, Map.of("v", 1), 1, Map.of(), List.of(), List.of(), List.of());
+
+		script.applyRegeneration(Map.of(ScriptUnit.U4, block(Map.of("prosecutor", "새"), 2)), null, null, List.of(), false,
+			null);
+
+		assertThat(script.getCastRoles()).isEqualTo(CAST);
+		assertThat(script.getIssue()).isEqualTo("admitted");
+	}
+
 	private static RegeneratedBlock block(Map<String, Object> content, int revision) {
 		return new RegeneratedBlock(content, revision, Map.of("case", 1), List.of(), List.of(), List.of());
 	}

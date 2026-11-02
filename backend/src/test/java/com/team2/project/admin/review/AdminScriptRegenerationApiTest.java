@@ -239,6 +239,67 @@ class AdminScriptRegenerationApiTest extends ApiIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("A-13-17: 요청한 뒤 섹션 · AI 판결 형량을 바꿔도 반영하지 않는다 — 사건 내용 판이 오르지 않는 입력도 해시로 본다")
+	void apply_afterSectionOrJudgmentChanged_isConflict() throws Exception {
+		long id = start("{\"units\": [\"U4\"]}");
+		when(pipelineClient.getJob(anyString())).thenReturn(job("SUCCEEDED"));
+		when(pipelineClient.getRegenerationResult(anyString())).thenReturn(result("U4", NEW_CLOSING, 2));
+		jdbcTemplate.update("UPDATE case_section SET content = '고친 사실관계' WHERE case_id = ? AND section_type = 'FACTS'", caseId);
+		perform(get(regenerationsUrl() + "/" + id))
+			.andExpect(jsonPath("$.notApplicable").value(AdminScriptRegenerationService.INPUTS_CHANGED));
+		jdbcTemplate.update("UPDATE case_section SET content = '말다툼 끝에 흉기를 들었다.' WHERE case_id = ? AND section_type = 'FACTS'",
+			caseId);
+		perform(get(regenerationsUrl() + "/" + id)).andExpect(jsonPath("$.applicable").value(true));	// 되돌리면 같은 입력이다
+		jdbcTemplate.update("UPDATE judgment SET prison_months = 120 WHERE case_id = ?", caseId);
+		perform(post(regenerationsUrl() + "/" + id + "/apply"))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.message").value(AdminScriptRegenerationService.INPUTS_CHANGED));
+	}
+
+	@Test
+	@DisplayName("A-13-17: 공개 중인 사건은 반영하지 않는다 — 점검 상태(BE-126 2차) 전까지 승인이 풀려 대본이 내려가는 것을 막는다")
+	void apply_publishedCase_isConflict() throws Exception {
+		long id = start("{\"units\": [\"U4\"]}");
+		when(pipelineClient.getJob(anyString())).thenReturn(job("SUCCEEDED"));
+		when(pipelineClient.getRegenerationResult(anyString())).thenReturn(result("U4", NEW_CLOSING, 2));
+		jdbcTemplate.update("UPDATE legal_case SET status = 'PUBLISHED', published_at = now() WHERE id = ?", caseId);
+
+		perform(get(regenerationsUrl() + "/" + id))
+			.andExpect(jsonPath("$.applicable").value(false))
+			.andExpect(jsonPath("$.notApplicable").value(AdminScriptRegenerationService.CASE_PUBLISHED));
+		perform(post(regenerationsUrl() + "/" + id + "/apply")).andExpect(status().isConflict());
+	}
+
+	@Test
+	@DisplayName("A-13-16: 결과를 가져오지 못하면 반영할 수 없다고 알린다 — 수동 수정 줄 수 없이 반영 버튼이 켜지지 않게")
+	void get_resultUnavailable_isNotApplicable() throws Exception {
+		long id = start("{\"units\": [\"U3\"]}");
+		when(pipelineClient.getJob(anyString())).thenReturn(job("SUCCEEDED"));
+		when(pipelineClient.getRegenerationResult(anyString())).thenThrow(new PipelineException("닿지 못함"));
+
+		perform(get(regenerationsUrl() + "/" + id))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.status").value("SUCCEEDED"))
+			.andExpect(jsonPath("$.applicable").value(false))
+			.andExpect(jsonPath("$.notApplicable").value(AdminScriptRegenerationService.RESULT_UNAVAILABLE))
+			.andExpect(jsonPath("$.preview").doesNotExist());
+	}
+
+	@Test
+	@DisplayName("A-13-15: 사건 배역이 대본 배역과 다르면 배역이 말하는 U2 · U3 · U4를 모두 다시 만들어야 한다")
+	void start_castChanged_requiresCastBlocks() throws Exception {
+		jdbcTemplate.update("UPDATE legal_case SET cast_roles = '{\"prosecutor\": \"nambul\", \"defense\": \"naero\"}'::jsonb WHERE id = ?",
+			caseId);
+		for (String body : List.of("{\"units\": [\"U1\"]}", "{\"units\": [\"U2\", \"U3\"], \"cascade\": false}")) {
+			perform(post(regenerationsUrl()).contentType(MediaType.APPLICATION_JSON).content(body))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.message").value(AdminScriptRegenerationService.CAST_CHANGED));
+		}
+		// cascade면 U2를 고를 때 U4가 따라온다
+		start("{\"units\": [\"U2\", \"U3\"]}");
+	}
+
+	@Test
 	@DisplayName("A-13-17: 더 최근 재생성이 있으면 옛 작업은 반영할 수 없다")
 	void apply_notLatest_isConflict() throws Exception {
 		when(pipelineClient.getJob(anyString())).thenReturn(job("SUCCEEDED"));
