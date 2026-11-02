@@ -208,7 +208,8 @@ export function caseNewspaper({ paper, info, navigate, earRight = caseInfoEar(in
 
   const figure = element('figure', 'story-photo');
   figure.dataset.focus = 'photo';
-  figure.append(newsPhoto(paper.photo, 1200, 675, 0, undefined, commonCategoryOf(info)), element('figcaption', 'caption', paper.caption));
+  // 캡션은 AI가 쓰는 값이라 연출 이미지 고지가 빠질 수 있다. 1막 안내 대사에서 고지를 뺀 자리라 고정 문구를 늘 보여 준다(FE-147)
+  figure.append(newsPhoto(paper.photo, 1200, 675, 0, undefined, commonCategoryOf(info)), element('figcaption', 'caption', paper.caption), element('p', 'caption photo-notice', 'AI로 만든 연출 이미지예요'));
   const [sidePhoto, inlinePhoto] = extraPhotosOf(paper.extraPhotos);
   const media = element('div', 'story-media');
   media.append(figure);

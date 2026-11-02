@@ -27,7 +27,7 @@ test('막 · 카드 이동 값(section · confirm · slots)을 조립기가 채�
   const steps = assembleScript(await response()).acts['2'].steps;
   assert.deepEqual(steps.filter((step) => step.section).map((step) => step.section), [2, 3, 4]);
   assert.deepEqual(steps.filter((step) => step.confirm).map((step) => step.confirm), [2, 3, 4]);
-  assert.equal(steps.at(-1).next, '판결로');
+  assert.equal(steps.at(-1).next, '의견 듣기');
   assert.equal(steps.find((step) => step.section === 3).slots.nambul.slot, 30);
 });
 
@@ -37,7 +37,11 @@ test('배역이 반대면 법정 막의 화자 · 자리 · 문구가 따라 바
   assert.equal(script.cast.prosecutor, 'nambul');
   assert.deepEqual(trial.slots, { nambul: { slot: 10, row: 'front' }, naero: { slot: 50, row: 'front' } });
   assert.equal(trial.steps.find((step) => step.proc === 1).say, 'nambul');
-  assert.match(trial.steps.find((step) => step.proc === 4).text, /내로가 변호인석에서 일어나 A씨 자리에 서고, 검사 남불이 질문해요/);
+  // 피고인 역으로 서는 쪽(묶음 B)이 따라 바뀐다 — 문장에 이름이 없어도 배역은 cameo · 이름표 · 자리에 실린다
+  const stand = trial.steps.find((step) => step.proc === 4);
+  assert.equal(stand.cameo, 'naero');
+  assert.deepEqual(stand.tags, { naero: 'A씨 역' });
+  assert.deepEqual(stand.slots, { naero: { slot: 30, row: 'front' } });
   assert.equal(script.acts['3'].steps[0].say, 'nambul');
   assert.equal(script.acts['5'].steps[0].say, 'nambul', '5막 판사는 묶음 A');
   assert.equal(script.acts['5'].look.nambul, 'role:judge');
