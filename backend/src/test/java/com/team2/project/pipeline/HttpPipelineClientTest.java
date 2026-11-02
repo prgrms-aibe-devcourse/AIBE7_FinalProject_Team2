@@ -41,7 +41,7 @@ class HttpPipelineClientTest {
 
 	private HttpPipelineClient client(String baseUrl) {
 		return new HttpPipelineClient(restClient,
-			new PipelineProperties(baseUrl, List.of("gemini:test"), null, Duration.ofSeconds(30), null, null));
+			new PipelineProperties(baseUrl, List.of("gemini:test"), null, Duration.ofSeconds(30), null, null, null));
 	}
 
 	private static PipelineJobRequest request() {
