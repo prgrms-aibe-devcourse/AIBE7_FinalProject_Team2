@@ -5,7 +5,7 @@
    회원가입 화면(signupPage.js)도 같은 패드에 카카오로 시작하기 · 아이디 가입 폼을 놓는다 */
 
 .login-page {
-  min-height: 100vh; color: var(--color-text); font: var(--text-body)/1.6 var(--font-body);
+  min-height: 100svh; color: var(--color-text); font: var(--text-body)/1.6 var(--font-body);
   background: /* 메인 책상(landing.css .desk-wood)과 같은 나뭇결 */
     radial-gradient(ellipse at 8% 0%, color-mix(in srgb, var(--color-desk-wood-glow) 38%, transparent), transparent 55%),
     repeating-linear-gradient(176deg, color-mix(in srgb, var(--color-desk-shadow) 6%, transparent) 0 2px, transparent 2px 9px),
@@ -47,6 +47,11 @@
 }
 .kakao-button svg { position: absolute; left: 16px; width: 18px; height: 18px; fill: var(--color-on-kakao); }
 .kakao-button[aria-disabled="true"], .login-submit[aria-disabled="true"] { opacity: .6; cursor: default; }
+/* 누르는 순간 눌림(FE-153): 전역 버튼(.primary-button 등)과 같은 scale .96. 카카오 버튼은 전역 목록에 없어 여기서 준다 */
+@media (prefers-reduced-motion: no-preference) {
+  .kakao-button:not([aria-disabled="true"]) { transition: scale .12s cubic-bezier(.2, .8, .2, 1); }
+  .kakao-button:not([aria-disabled="true"]):active { scale: .96; }
+}
 @media (hover: hover) and (pointer: fine) {
   .kakao-button:hover:not([aria-disabled="true"]) { background: color-mix(in srgb, var(--color-kakao) 88%, var(--palette-white)); } /* 살짝 밝아진다. 카카오 가이드 색은 기본 상태에서 그대로 */
 }

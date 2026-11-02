@@ -143,7 +143,8 @@ export function openFeedbackDialog() {
     layer.animate([{ opacity: 0 }, { opacity: 1 }], { duration: FLY_MS, easing: 'ease-out', fill: 'backwards' });
     setTimeout(() => fly.face.remove(), SWAP_DELAY_MS + SWAP_MS + 50);
   }
-  // 펜은 열릴 때 계산한 자리에 고정돼 있어 창 크기가 바뀌면 어긋나므로, 크기가 바뀌면 닫는다
-  window.addEventListener('resize', shut);
+  // 펜은 열릴 때 계산한 자리에 고정돼 있어 창 크기가 바뀌면 어긋나므로, 크기가 바뀌면 닫는다.
+  // 날아온 펜이 없을 때(좁은 화면 메뉴 카드 · 연출 끔)는 닫지 않는다: 모바일은 주소창이 접히고 펴질 때도 resize가 와서 창이 저절로 닫혔다(FE-153)
+  if (fly) window.addEventListener('resize', shut);
   dialog.focus({ preventScroll: true });
 }
