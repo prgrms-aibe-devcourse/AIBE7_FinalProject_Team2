@@ -168,6 +168,37 @@ class CaseListApiTest extends ApiIntegrationTest {
 		}
 	}
 
+	@Test
+	void getCases_scriptStatus_readyPreparingMaintenance() throws Exception {
+		// BE-126 2차-2: 한 번 나간 대본(released_at)의 승인이 풀리면 MAINTENANCE, 나간 적 없으면 PREPARING. scriptReady는 READY일 때만 true
+		long ready = insertCase("FRAUD", "PUBLISHED");
+		jdbcTemplate.update("UPDATE case_script SET released_at = now() WHERE id = ?", insertScriptWithReview(ready, "APPROVED"));
+		long maintenance = insertCase("FRAUD", "PUBLISHED");
+		long maintenanceScript = insertScriptWithReview(maintenance, "APPROVED");
+		jdbcTemplate.update("UPDATE case_script SET released_at = now() WHERE id = ?", maintenanceScript);
+		jdbcTemplate.update("UPDATE case_script_block SET review_status = NULL WHERE script_id = ? AND unit = 'U3'",
+				maintenanceScript);
+		long preparing = insertCase("FRAUD", "PUBLISHED");
+		jdbcTemplate.update("UPDATE case_script_block SET review_status = NULL WHERE script_id = ? AND unit = 'U3'",
+				insertScriptWithReview(preparing, "APPROVED"));
+		long noScript = insertCase("FRAUD", "PUBLISHED");
+
+		mockMvc.perform(get("/api/v1/cases"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath(CASE_BY_ID.formatted(ready) + ".scriptStatus").value("READY"))
+				.andExpect(jsonPath(CASE_BY_ID.formatted(maintenance) + ".scriptStatus").value("MAINTENANCE"))
+				.andExpect(jsonPath(CASE_BY_ID.formatted(maintenance) + ".scriptReady").value(false))
+				.andExpect(jsonPath(CASE_BY_ID.formatted(preparing) + ".scriptStatus").value("PREPARING"))
+				.andExpect(jsonPath(CASE_BY_ID.formatted(noScript) + ".scriptStatus").value("PREPARING"));
+
+		// API 18과 같은 결론인지 — READY는 200, MAINTENANCE는 503, PREPARING은 404
+		mockMvc.perform(get("/api/v1/cases/" + ready + "/script")).andExpect(status().isOk());
+		mockMvc.perform(get("/api/v1/cases/" + maintenance + "/script"))
+				.andExpect(status().isServiceUnavailable())
+				.andExpect(jsonPath("$.code").value("SCRIPT_UNDER_MAINTENANCE"));
+		mockMvc.perform(get("/api/v1/cases/" + preparing + "/script")).andExpect(status().isNotFound());
+	}
+
 	// ---- 진행 상태 배지 myStatus (FE-19, REQ-010 · FR-1-6) ----
 
 	@Test
