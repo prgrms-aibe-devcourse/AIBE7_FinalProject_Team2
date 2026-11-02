@@ -137,7 +137,6 @@ const KINDS = [
   ['characters/standing', '서 있는 컷'],
   ['characters/cheek', '볼따구 컷'],
   ['characters/cheek-slim', '슬림 볼따구 컷'],
-  ['characters/deform', '데포르메'],
   ['characters/personality', '성향 이미지'],
   ['cases', '사건 이미지'],
 ];

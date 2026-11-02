@@ -948,7 +948,7 @@ BACKGROUND — fully transparent background (PNG with alpha). No background colo
 BACKGROUND — a complete, fully drawn setting behind and around the characters: {place and time of day}. The characters stand or sit inside the scene on its floor, with everything in the scene drawn complete and physically supported (doors set in their frames and walls, furniture standing on the floor). Warm, flat 2D style matching the characters; light direction consistent between the characters and the setting; soft, subtle contact shadows under the characters and furniture. No text, no signs with writing. Aspect ratio 16:9 landscape.
 ```
 
-- 장소 문구는 공용 배경 번호표(`사건별_재연컷_프롬프트_복붙용` 공용 배경 B01 ~ B16)의 장소를 쓴다. 같은 장소의 분위기를 맞추려면 **그 배경 이미지를 참조 이미지로 같이 첨부**하고 "use the attached background image as the exact setting"을 덧붙인다.
+- 장소 문구는 **사건 내용과 장면에 맞춰 컷마다 직접 쓴다**(11/02, COMMON-69). 공용 배경 B01 ~ B16은 더 쓰지 않고 배경 이미지도 첨부하지 않는다. 예: `the place is a small game arcade just before dawn: a dark wall lined with arcade cabinets whose screens glow blank, a dim ceiling light, a dark carpet floor`. 사건과 무관한 컷(탐구 · 공용 컷)도 장면에 맞는 장소를 적는다.
 - 이유: 투명 컷에 배경을 합성한 63장은 문 · 문틀이 배경 앞에 따로 선 패널처럼 보이고, 빛 방향 · 그림자가 맞지 않는 컷이 많았다(10/29). 투명 배경 조건이 허공에 뜬 문 · 다리 없는 책상 같은 사물 문제의 원인이기도 했다. 이미 만든 투명 컷 + 합성본은 배경 포함본이 나올 때까지 폴백이다.
 
 - 투명 출력이 안 되는 환경에서만 `Background: perfectly flat uniform solid green #00B140, no gradient, no floor, no shadow. Do not use green anywhere on the character or props.`로 바꾸고 배경을 지운다.

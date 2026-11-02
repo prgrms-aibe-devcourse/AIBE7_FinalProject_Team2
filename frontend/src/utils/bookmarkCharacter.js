@@ -22,7 +22,7 @@ const ALL_WHO = [...BOOKMARK_CHARACTERS, ...BOOKMARK_LAWS];
 export const BOOKMARK_NAMES = { naero: '내로', nambul: '남불', 'law-scale': '로 · 저울', 'law-gavel': '로 · 법봉', 'law-book': '로 · 책' };
 
 export const BOOKMARK_FACES = ['cheer', 'happy', 'neutral', 'sorry', 'surprised', 'thinking'];
-export const FACE_NAMES = { cheer: '응원', happy: '기쁨', neutral: '보통', sorry: '미안', surprised: '놀람', thinking: '생각' };
+export const FACE_NAMES = { cheer: '응원', happy: '기쁨', neutral: '보통', sorry: '미안', surprised: '놀람', thinking: '생각', sad: '슬픔', angry: '분개', apologetic: '미안함', anxious: '불안', relieved: '안도' }; // 뒤 다섯은 역할 표정 컷(actor-*)의 읽는 이름
 
 export const BOOKMARK_STYLES = ['generated', 'cropped'];
 export const STYLE_NAMES = { generated: '생성한 얼굴', cropped: '잘라 만든 얼굴' };

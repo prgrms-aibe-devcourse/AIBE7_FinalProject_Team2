@@ -191,3 +191,8 @@ test('portraitLabel: 파일 이름을 읽기 쉬운 이름으로 바꾼다', () 
   assert.equal(portraitLabel('/images/cases/common-life-origin.webp'), '공용 생명 · 발단');
   assert.equal(portraitLabel('/images/cases/common-property-conclusion.webp'), '공용 재산 · 결론');
 });
+
+test('portraitLabel: 역할 표정 컷의 감정 이름이 원문(sad · angry …) 대신 한글로 읽힌다', () => {
+  assert.equal(portraitLabel('/images/characters/roles/nambul_actor-sad.webp'), '남불 · A씨 역 슬픔');
+  assert.equal(portraitLabel('/images/characters/roles/naero_actor-relieved.webp'), '내로 · A씨 역 안도');
+});
