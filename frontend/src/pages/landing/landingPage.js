@@ -539,6 +539,19 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
     tail.addEventListener('focus', slideOut, { once: true });
   }
 
+  // 러그 종이 크기(--W)의 기준인 방 폭 1%를 px로 직접 넣는다. Safari가 탭을 갔다 오면 cqw를 옛 값으로 남겨 종이가 작아져서(FE-90)
+  const syncRoomWidth = () => { if (room.clientWidth) room.style.setProperty('--cqw', `${room.clientWidth / 100}px`); };
+  const roomObserver = new ResizeObserver(() => {
+    if (!root.isConnected) { roomObserver.disconnect(); return; }
+    syncRoomWidth();
+  });
+  roomObserver.observe(room);
+  const onReturn = () => {
+    if (!root.isConnected) { document.removeEventListener('visibilitychange', onReturn); window.removeEventListener('pageshow', onReturn); return; }
+    if (!document.hidden) syncRoomWidth();
+  };
+  document.addEventListener('visibilitychange', onReturn);
+  window.addEventListener('pageshow', onReturn);
   room.append(chair, deco('room-desk-shade'), head, rugWrap, exit); // 의자는 책상 밑으로 밀어 넣어 위쪽이 책상에 가린다
   intro.append(room);
 

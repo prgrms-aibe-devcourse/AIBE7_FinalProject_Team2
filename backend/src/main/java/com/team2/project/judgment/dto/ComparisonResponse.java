@@ -24,8 +24,14 @@ public record ComparisonResponse(
 		PreJudgmentView preJudgment,
 		String finalJudgmentText,
 		PreToFinalDirection direction,
-		String summaryText
+		String summaryText,
+		Crowd crowd
 	) { }
+
+	/** 이 사건 독자들이 기사만 읽고 고른 첫인상 분포 (FE-34). 1회차 사전 판단만 센다(DR-7). 표시 순서는 구간 순서, 비율 합은 100 */
+	public record Crowd(long total, List<CrowdOption> options) { }
+
+	public record CrowdOption(Long rangeOptionId, String label, int percent) { }
 
 	/** 사전 판단 대비 재판부 판결의 방향. SAME은 정확한 형량 일치가 아니라 같은 구간이다. */
 	public record PreToCourt(PreToFinalDirection direction) { }
