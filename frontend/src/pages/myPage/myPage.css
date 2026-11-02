@@ -61,7 +61,7 @@ body[data-theme="coffee"] .site-footer { background: var(--palette-coffee-50); b
 .site-header[data-theme="coffee"] .switch-thumb { background: var(--palette-coffee-cream); box-shadow: 0 1px 2px color-mix(in srgb, var(--palette-coffee-900) 30%, transparent); }
 .site-header[data-theme="coffee"] .motion-switch[aria-checked="true"] .switch-track { background: var(--palette-coffee-600); box-shadow: none; }
 .site-header[data-theme="coffee"] .motion-switch[aria-checked="true"] .switch-thumb { background: var(--palette-coffee-cream); }
-.my-page button { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.my-page button { touch-action: manipulation; -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; } /* 조작 글자만: 길게 눌러도 글자가 선택되지 않게(본문은 그대로) */
 
 /* ── 위쪽: 프로필카드 | 닉네임 · 수치 | 성향카드 (좌우 대칭, 같은 크기의 세로로 긴 카드) ── */
 .my-top { display: grid; grid-template-columns: 200px minmax(0, 1fr) 200px; gap: 28px; align-items: start; padding-bottom: 36px; }
@@ -71,6 +71,7 @@ body[data-theme="coffee"] .site-footer { background: var(--palette-coffee-50); b
 .my-level-progress { display: grid; gap: 6px; width: calc(100% + 20px); margin: 10px -10px 0; padding: 8px 10px; border: 0; border-radius: 10px; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .my-level-progress:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
 @media (hover: hover) and (pointer: fine) { .my-level-progress { transition: background-color .15s ease-out; } .my-level-progress:hover { background: color-mix(in srgb, var(--color-desk-kraft) 16%, transparent); } } /* P2 면 단위 항목 */
+.my-level-progress:active { background: var(--color-surface-strong); } /* 터치 눌림: 항목 줄(.my-row)과 같다 */
 .my-level-progress .my-achievement-bar { display: block; }
 .my-level-caption { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 8px; color: var(--color-muted); font-size: var(--text-small); font-variant-numeric: tabular-nums; }
 .my-level-more { margin-left: auto; color: var(--color-label); font-size: var(--text-caption); }
@@ -246,6 +247,8 @@ body[data-theme="coffee"] .site-footer { background: var(--palette-coffee-50); b
 .my-type-shift-side { display: grid; justify-items: center; gap: 10px; margin: 0; }
 .my-type-shift-side figcaption { color: var(--color-muted); font-size: var(--text-small); }
 .my-type-shift-arrow { flex: none; width: 28px; height: 28px; margin-bottom: 30px; fill: none; stroke: var(--color-heading); stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+/* 가로 세 장(200 × 3 + 화살표 · 간격 152 = 752px)이 화면보다 넓은 721 ~ 768px에서는 카드만 줄인다(가로 넘침 방지, FE-157). 768px 이상은 200px 그대로 */
+@media (min-width: 721px) { .my-type-shift :is(.my-card.is-detail, .my-retake-slot) { width: min(200px, (100vw - 168px) / 3); } }
 /* 공개 카드(FE-77): 누르면 카드 아래쪽에 결재 도장 "공개"가 비스듬히 찍힌다. 잉크는 네이비(빨강은 오류에만, DESIGN.md) */
 .my-shown-pick { position: relative; display: block; padding: 0; border: 0; border-radius: 14px; background: none; color: inherit; font: inherit; cursor: pointer; }
 .my-shown-pick:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 3px; }
@@ -268,6 +271,7 @@ body[data-theme="coffee"] .site-footer { background: var(--palette-coffee-50); b
 .my-retake-slot:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 3px; }
 .my-retake-slot:disabled { opacity: .6; cursor: default; }
 @media (hover: hover) and (pointer: fine) { .my-retake-slot:not(:disabled):hover { background: var(--color-surface); } }
+.my-retake-slot:not(:disabled):active { background: var(--color-surface-strong); }
 .my-retake-plus { width: 28px; height: 28px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; }
 .my-retake-note { color: var(--color-muted); font-size: var(--text-small); }
 .my-retake-dialog { box-sizing: border-box; width: min(92vw, 440px); padding: 24px; border: 1px solid var(--color-border); border-radius: 16px; background: var(--color-bg); color: var(--color-text); }
@@ -336,7 +340,7 @@ body[data-theme="coffee"] .site-footer { background: var(--palette-coffee-50); b
 .my-deco-option:has(input:focus-visible) .my-bm-swatch-box { outline: 3px solid var(--color-focus); outline-offset: 2px; }
 .my-deco-swatches .my-deco-option:has(.my-bm-swatch) { width: 64px; }
 /* 카드 꾸미기 창(FE-68): 왼쪽 미리 보기(스크롤해도 따라옴) · 오른쪽 테두리 · 배경 · 카드 책갈피 */
-.my-deco-dialog { width: min(94vw, 880px); max-height: 92vh; padding: 0; border: 1px solid var(--color-border); border-radius: 16px; background: var(--color-bg); color: var(--color-text); overflow: auto; overscroll-behavior: contain; }
+.my-deco-dialog { width: min(94vw, 880px); max-height: 92vh; max-height: 92dvh; padding: 0; border: 1px solid var(--color-border); border-radius: 16px; background: var(--color-bg); color: var(--color-text); overflow: auto; overscroll-behavior: contain; }
 body.deco-open { overflow: hidden; }
 html.deco-gutter { scrollbar-gutter: stable; } /* 스크롤을 잠가도 스크롤바 자리는 남겨 뒤 화면이 움찔하지 않게 한다 */
 .my-deco-dialog::backdrop { background: oklch(0 0 0 / 0.55); }
@@ -428,9 +432,9 @@ html.deco-gutter { scrollbar-gutter: stable; } /* 스크롤을 잠가도 스크�
 .collection-card { aspect-ratio: 7 / 12; margin: 0; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-card); overflow: hidden; }
 .collection-open { display: flex; flex-direction: column; width: 100%; height: 100%; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: zoom-in; }
 .collection-open:focus-visible { outline: 2px solid var(--color-focus, currentColor); outline-offset: -2px; }
-.collection-zoom { width: min(92vw, 640px); max-height: 92vh; padding: 16px; border: 1px solid var(--color-border); border-radius: 16px; background: var(--color-bg); color: var(--color-text); text-align: center; overflow: auto; } /* 화면(.my-page)과 같은 라떼색 */
+.collection-zoom { width: min(92vw, 640px); max-height: 92vh; max-height: 92dvh; padding: 16px; border: 1px solid var(--color-border); border-radius: 16px; background: var(--color-bg); color: var(--color-text); text-align: center; overflow: auto; } /* 화면(.my-page)과 같은 라떼색 */
 .collection-zoom::backdrop { background: oklch(0 0 0 / 0.6); }
-.collection-zoom img { display: block; background: var(--color-bg); max-width: 100%; max-height: 70vh; margin: 0 auto; object-fit: contain; }
+.collection-zoom img { display: block; background: var(--color-bg); max-width: 100%; max-height: 70vh; max-height: 70dvh; margin: 0 auto; object-fit: contain; }
 .collection-zoom .collection-label { padding: 10px 0 12px; font-size: var(--text-body); }
 .collection-window { position: relative; flex: 1; min-height: 0; overflow: hidden; background: var(--color-surface); } /* 카드는 모두 타로 비율(7:12). 그림은 잘리지 않게 안에 맞춘다 */
 .collection-window img { box-sizing: border-box; display: block; width: 100%; height: 100%; padding: 20px 14px; object-fit: contain; object-position: center; } /* 못 쟀을 때의 기본 모양에도 여백 */
@@ -471,7 +475,7 @@ html.deco-gutter { scrollbar-gutter: stable; } /* 스크롤을 잠가도 스크�
 .my-case-title { font-weight: 700; }
 .my-case-link { color: inherit; text-decoration: none; }
 .my-case-link.is-continue { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; } /* 체험 중인 사건: 제목이 유일한 입구(FE-103) */
-.my-case-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+@media (hover: hover) and (pointer: fine) { .my-case-link:hover { text-decoration: underline; text-underline-offset: 3px; } }
 .my-case-link:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; border-radius: 2px; text-decoration: underline; text-underline-offset: 3px; }
 .my-case-hint { width: 0; min-width: 100%; color: var(--color-muted); font-size: var(--text-small); text-align: center; text-wrap: balance; } /* 체험 중인 사건: 버튼 자리 안내. 폭은 칸에 맞춰(0 + min 100%) 칸 폭을 키우지 않고 가운데에 둔다 */
 .my-case-status { color: var(--color-muted); font-size: var(--text-small); }
@@ -578,3 +582,12 @@ html.deco-gutter { scrollbar-gutter: stable; } /* 스크롤을 잠가도 스크�
 @media (pointer: coarse) { .my-pager :is(.my-pager-page, .my-pager-step) { min-height: 44px; min-width: 44px; } }
 .my-case-actions :is(.primary-button, .secondary-button) { min-height: 36px; padding: 6px 14px; font-size: var(--text-small); } /* 기본 버튼(44px)보다 작게. 간격은 그대로 */
 @media (pointer: coarse) { .my-case-actions :is(.primary-button, .secondary-button) { min-height: 44px; } } /* 터치는 누를 자리를 줄이지 않는다 */
+/* 터치 대상 44px(FE-157): 보이는 모양은 그대로 두고 누르는 높이만 늘린다. 늘린 만큼 바깥 여백을 줄여 자리는 그대로다 */
+@media (pointer: coarse) {
+  .my-back { min-height: 44px; margin-block: -4px 5px; } /* 35px → 44px, 위 · 아래로 4.5px씩 */
+  .my-page .my-card-deco-button { min-height: 44px; }
+  .my-deco-option.is-pill { min-height: 44px; }
+  .trend-table summary { padding-block: 11px; }
+  .collection-preview > summary { padding-block: 11px; }
+  .my-case-link { display: inline-block; padding-block: 13px; margin-block: -13px; } /* 제목 글자(18px) 위아래로 누르는 자리만 넓힌다. 위아래는 버튼이 아닌 글이라 겹쳐도 된다 */
+}
