@@ -70,7 +70,7 @@ function trialAct(cast, { U2, U3 }, meta) {
     { say: 'narrator', cameo: A, hideCast: true, confirm: 4, next: '의견 듣기', text: '피고인신문이 끝났어요. 이제 검사 측의 의견과 변호인의 최종변론을 들어볼게요.' },
   ];
   return {
-    title: '2막 재판', scene: 'court', procedures: ['인정신문', '모두진술', '쟁점 정리', '증거조사', '피고인신문'],
+    title: '2막 재판', scene: 'court', procedures: ['재판 시작', '모두진술', '쟁점 정리', '증거조사', '피고인신문'],
     look: { [A]: 'role:prosecutor', [B]: 'role:defense' }, slots: courtSlots(cast), steps,
   };
 }
