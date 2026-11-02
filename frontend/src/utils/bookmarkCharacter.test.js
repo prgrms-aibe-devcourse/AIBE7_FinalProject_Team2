@@ -104,3 +104,14 @@ test('서버 책갈피 맞추기: 실패하거나 값이 없으면 거울을 그
   await syncBookmarkFromServer(undefined, storage);
   assert.equal(getBookmarkCharacter(storage), 'nambul');
 });
+
+test('서버 책갈피 맞추기: 기다리는 사이 이 기기에서 바꿨으면 늦게 온 서버 값으로 덮지 않는다', async () => {
+  const storage = memory();
+  setBookmarkCharacter('naero', storage);
+  await syncBookmarkFromServer(async () => {
+    setBookmarkCharacter('nambul', storage); // 응답이 오기 전에 마이페이지에서 고름
+    return { profileDeco: { bookmarkCharacter: 'naero', bookmarkColor: 'wine' } };
+  }, storage);
+  assert.equal(getBookmarkCharacter(storage), 'nambul');
+  assert.equal(getBookmarkColor(storage), 'bronze', '덮지 않으면 서버 값은 하나도 들어오지 않는다');
+});

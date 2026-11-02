@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { ACT_GROUPS, DEFAULT_CAST, attachNotice, castOf, courtPhotoCast, glideMs, flatten, flipFor, placeFor, seatFor, resumeIndex, sideOf, skipTarget } from './stage.js';
+import { ACT_GROUPS, DEFAULT_CAST, attachNotice, castOf, courtPhotoCast, glideMs, flatten, flipFor, placeFor, seatFor, clearStageResume, readResume, resumeIndex, saveResume, sideOf, skipTarget } from './stage.js';
 
 const script = JSON.parse(readFileSync(new URL('../content/case-1/script.json', import.meta.url)));
 const steps = flatten(script.acts, ['1a', '1b']);
@@ -259,4 +259,23 @@ test('이어 보기: 입력 카드 · 선택지 장면이면 같은 막의 앞�
   const saved = { path: '/p', index: blockedFrom, length: trial.length };
   assert.equal(resumeIndex(trial, saved, '/p', blocked), blockedFrom - 2, '연달아 막힌 장면은 일반 장면까지 물러난다');
   assert.equal(resumeIndex(trial, { ...saved, index: 0 }, '/p', () => true), 0, '맨 앞에서는 더 물러나지 않는다');
+});
+
+test('이어 보기 저장: 주소별로 남겨 막 B로 넘어가도 막 A의 위치가 남고, 지우면 모두 사라진다', () => {
+  const data = new Map();
+  const storage = { getItem: (k) => data.get(k) ?? null, setItem: (k, v) => data.set(k, v), removeItem: (k) => data.delete(k) };
+  saveResume({ path: '/cases/1/trial', index: 7, length: 30 }, storage);
+  saveResume({ path: '/cases/1/verdict', index: 2, length: 9 }, storage);
+  assert.equal(readResume('/cases/1/trial', storage).index, 7, '뒤로가기로 막 A에 돌아와도 위치가 남아 있다');
+  assert.equal(readResume('/cases/1/verdict', storage).index, 2);
+  assert.equal(readResume('/cases/2/trial', storage), null);
+  clearStageResume(storage);
+  assert.equal(readResume('/cases/1/trial', storage), null);
+});
+
+test('이어 보기 저장: 저장소가 막히거나 값이 깨져 있어도 던지지 않는다', () => {
+  const broken = { getItem: () => { throw new Error('blocked'); }, setItem: () => { throw new Error('blocked'); }, removeItem: () => { throw new Error('blocked'); } };
+  assert.doesNotThrow(() => { saveResume({ path: '/p', index: 1, length: 2 }, broken); clearStageResume(broken); });
+  assert.equal(readResume('/p', broken), null);
+  assert.equal(readResume('/p', { getItem: () => '[1,2]', setItem() {} }), null, '배열 · 깨진 값은 비어 있는 것으로 본다');
 });

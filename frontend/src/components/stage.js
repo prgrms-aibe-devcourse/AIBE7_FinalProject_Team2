@@ -178,7 +178,8 @@ function takeJump() {
 }
 
 // 새로고침 · 뒤로가기 이어 보기(FE-51): 막 안의 대사 위치를 sessionStorage에 남겼다가 같은 화면(주소)에 다시 들어오면 그 장면에서 시작한다.
-// 주소(pathname)가 사건 · 막마다 달라 화면의 키가 된다. 대본이 바뀌어 장면 수가 다르면 믿지 않는다. 탭을 닫으면 사라진다(서버 저장은 하지 않는다).
+// 주소(pathname)가 사건 · 막마다 달라 화면의 키가 된다. 주소별로 남겨서 막 B로 넘어가도 막 A의 위치가 남아 뒤로가기에서도 이어 본다(한 사건의 막 수만큼만 쌓인다).
+// 대본이 바뀌어 장면 수가 다르면 믿지 않는다. 탭을 닫으면 사라진다(서버 저장은 하지 않는다). "1막부터 다시 보기"는 clearStageResume()으로 지우고 들어간다.
 // 입력 카드 · 선택지 장면은 카드 상태(입력한 값 · 고른 답)를 되살릴 수 없어, 같은 막의 앞쪽 일반 장면으로 물러나 이어 본다
 export const RESUME_KEY = 'nlnb-stage-resume';
 export function resumeIndex(steps, saved, path, blocked) {
@@ -188,14 +189,22 @@ export function resumeIndex(steps, saved, path, blocked) {
   while (at > 0 && blocked(steps[at]) && steps[at - 1].actId === steps[at].actId) at -= 1;
   return at;
 }
-function readResume() {
-  try { return JSON.parse(sessionStorage.getItem(RESUME_KEY) ?? 'null'); } catch { return null; }
+const readAll = (storage) => {
+  const all = JSON.parse(storage.getItem(RESUME_KEY) ?? '{}');
+  return all && typeof all === 'object' && !Array.isArray(all) ? all : {};
+};
+export function readResume(path, storage = globalThis.sessionStorage) {
+  try { return readAll(storage)[path] ?? null; } catch { return null; }
 }
-function saveResume(state) {
-  try { sessionStorage.setItem(RESUME_KEY, JSON.stringify(state)); } catch { /* 저장소를 못 쓰면 이어 보기 없이 처음 장면에서 시작한다 */ }
+export function saveResume(state, storage = globalThis.sessionStorage) {
+  try {
+    const all = readAll(storage);
+    all[state.path] = state;
+    storage.setItem(RESUME_KEY, JSON.stringify(all));
+  } catch { /* 저장소를 못 쓰면 이어 보기 없이 처음 장면에서 시작한다 */ }
 }
-function clearResume() {
-  try { sessionStorage.removeItem(RESUME_KEY); } catch { /* 저장소를 못 쓰면 지울 것도 없다 */ }
+export function clearStageResume(storage = globalThis.sessionStorage) {
+  try { storage.removeItem(RESUME_KEY); } catch { /* 저장소를 못 쓰면 지울 것도 없다 */ }
 }
 
 // 지면 굴리기(FE-140): 브라우저 기본 부드러운 스크롤(behavior: 'smooth')은 거리와 상관없이 짧고 빠르게 끝나(특히 사파리) 기사 사이를 "휙" 옮겨 다닌다.
@@ -413,7 +422,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
   const jumped = steps.findIndex((step) => step.actId === jumpAct);
   if (jumped >= 0) index = jumped;
   else if (!start && !parkedAtStart) { // 화면이 정한 재진입 장면(start) · 막 점프 · 기다리는 지면(parked)이 있으면 그쪽이 먼저다
-    const resumed = resumeIndex(steps, readResume(), location.pathname, (step) => inputCards.includes(step.card) || asks(step));
+    const resumed = resumeIndex(steps, readResume(location.pathname), location.pathname, (step) => inputCards.includes(step.card) || asks(step));
     if (resumed >= 0) index = resumed;
   }
   let typing = null;
@@ -556,7 +565,7 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
   if (onRestart) {
     const restart = element('button', 'stage-restart', '처음부터 다시 (목 데이터)');
     restart.type = 'button';
-    restart.addEventListener('click', (event) => { clearResume(); onRestart(event); });
+    restart.addEventListener('click', (event) => { clearStageResume(); onRestart(event); });
     controls.append(restart);
   }
   // 카드가 무대 전체를 덮는 장면(대본 board: "full", 3막 판결)에서는 캐릭터가 카드 밖으로 나온다:
