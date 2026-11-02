@@ -3,6 +3,7 @@ import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { getCaseDetail, getCaseScript, getCases, getExperience, startExperience } from './caseListMockApi.js';
 import { save as saveExperience, storageKey } from './mockExperienceStore.js';
+import { LOCKED_CASE_ID } from './caseListMockApi.js';
 
 // node에는 localStorage가 없어 테스트마다 빈 저장소를 둔다
 beforeEach(() => {
@@ -29,7 +30,7 @@ test('없는 사건 번호는 CASE_NOT_FOUND', async () => {
 
 test('scriptReady: 대본이 있는 사건 1만 true이고 목록 · 상세가 같다 (BE-116)', async () => {
   const { cases } = await getCases();
-  assert.deepEqual(cases.filter((item) => item.scriptReady).map((item) => item.caseId), [1, 3]); // 3은 scriptStatus 없는 점검 사건(FE-145)
+  assert.deepEqual(cases.filter((item) => item.scriptReady).map((item) => item.caseId), [1, 3, 5]); // 3은 scriptStatus 없는 점검 사건(FE-145), 5는 잠긴 사건(FE-149, 대본은 준비됨)
   assert.equal((await getCaseDetail(1)).scriptReady, true);
   assert.equal((await getCaseDetail(2)).scriptReady, false);
 });
@@ -61,4 +62,21 @@ test('사건 3은 scriptStatus 없이 scriptReady true인데 API 18이 503이다
   assert.equal(detail.scriptReady, true);
   assert.equal('scriptStatus' in detail, false);
   await assert.rejects(getCaseScript(3), { code: 'SCRIPT_UNDER_MAINTENANCE' });
+});
+
+test('순차 해금 목(BE-146, FE-149): 사건 5가 잠겨 있고 시작은 409 CASE_LOCKED, 사건 1을 마치면 열린다', async () => {
+  const { cases, unlock } = await getCases();
+  assert.deepEqual(unlock, { completedCases: 0, nextStepAt: 1 });
+  assert.deepEqual(cases.filter((item) => item.locked).map((item) => item.caseId), [LOCKED_CASE_ID]);
+  assert.equal(cases.find((item) => item.caseId === LOCKED_CASE_ID).scriptStatus, 'READY', '잠김은 준비 중이 아니다');
+  assert.equal((await getCaseDetail(LOCKED_CASE_ID)).locked, true);
+  assert.equal((await getCaseDetail(1)).locked, false);
+  await assert.rejects(startExperience(LOCKED_CASE_ID), { code: 'CASE_LOCKED' });
+
+  saveExperience({ status: 'COMPLETED', lastReviewedStep: 4 }); // 사건 1 완료
+  await startExperience(1);
+  const after = await getCases();
+  assert.deepEqual(after.unlock, { completedCases: 1, nextStepAt: 3 });
+  assert.equal(after.cases.some((item) => item.locked), false);
+  assert.equal((await startExperience(LOCKED_CASE_ID)).caseId, LOCKED_CASE_ID);
 });
