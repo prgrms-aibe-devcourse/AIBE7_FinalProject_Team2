@@ -67,6 +67,10 @@ export function renderAuthCallbackPage(container, { api, navigate }) {
       showFailure('가입을 마치지 못했어요. 카카오 로그인을 처음부터 다시 해 주세요.');
       return;
     }
+    if (result.status === 'failed') { // 회원은 만들어졌지만 재발급이 실패했다(TOKEN_NOT_ISSUED). 가입 대기가 이미 소비돼 다시 동의해도 소용없다
+      showFailure('가입은 완료되었지만 로그인을 마치지 못했어요. 카카오 로그인을 다시 시작해 주세요.');
+      return;
+    }
     if (result.status === 'agreed') {
       saveUser({ nickname: result.nickname || KAKAO_MEMBER_NICKNAME }); // 카카오 회원은 닉네임이 없어 서버가 '방청객 {회원 ID}'를 준다
       await offerAnonymousImport(api);

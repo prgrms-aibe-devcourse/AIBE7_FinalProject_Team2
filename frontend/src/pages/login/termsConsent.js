@@ -7,6 +7,7 @@
 // getMe 조회가 실패하면 동의 창 없이 지나간다 — 로그인을 막지 않는다(가져오기 창과 같다). 서버도 동의를 다른 API의 조건으로 걸지 않는다
 import { button, element } from '../../components/siteLayout.js';
 import { clearUser } from '../../utils/session.js';
+import { TOKEN_NOT_ISSUED } from '../../api/authFlow.js';
 
 const FAILURE = '처리하지 못했어요. 잠시 뒤 다시 눌러 주세요.';
 const NOT_CHECKED = '이용약관과 개인정보처리방침에 동의해 주세요.';
@@ -17,8 +18,9 @@ export const SIGNUP_EXPIRED = 'KAKAO_SIGNUP_EXPIRED';
  * 카카오 첫 가입 동의. 동의하면 회원이 만들어지고 로그인된다.
  * @param {{ signupKakao: Function, cancelKakaoSignup?: Function }} api
  * @param {Function} show 창을 띄우는 함수(시험에서 바꾼다)
- * @returns {Promise<{ status: 'agreed', nickname?: string } | { status: 'declined' } | { status: 'expired' }>}
- *   declined면 가입하지 않기로 한 것이다. expired면 가입 대기가 사라져 카카오 로그인부터 다시 해야 한다
+ * @returns {Promise<{ status: 'agreed', nickname?: string } | { status: 'declined' } | { status: 'expired' } | { status: 'failed' }>}
+ *   declined면 가입하지 않기로 한 것이다. expired면 가입 대기가 사라져 카카오 로그인부터 다시 해야 한다.
+ *   failed면 회원은 만들어졌지만(가입 대기는 이미 소비됨) 재발급만 실패해 로그인을 마치지 못한 것이다 — 다시 동의해도 KAKAO_SIGNUP_EXPIRED만 돌아온다
  */
 export async function askKakaoSignupConsent(api, show = showTermsDialog) {
   let nickname;
@@ -28,6 +30,8 @@ export async function askKakaoSignupConsent(api, show = showTermsDialog) {
         nickname = (await api.signupKakao({ agreed: true }))?.nickname;
       } catch (failure) {
         if (failure?.code === SIGNUP_EXPIRED) return 'expired'; // 창을 닫고 호출한 화면이 안내한다
+        // 가입은 됐는데 재발급만 실패했다(authFlow.js TOKEN_NOT_ISSUED). 가입 대기는 이미 한 번 써서 다시 동의해도 소용없다
+        if (failure?.code === TOKEN_NOT_ISSUED) return 'failed';
         throw failure; // 그 밖의 실패는 창이 안내하고 다시 고르게 한다
       }
       return undefined;

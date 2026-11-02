@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { SIGNUP_EXPIRED, askKakaoSignupConsent, offerTermsConsent } from './termsConsent.js';
+import { TOKEN_NOT_ISSUED } from '../../api/authFlow.js';
 
 // 창을 띄우는 함수를 바꿔 끼운다: 고른 동작(agree · decline)을 실제로 실행하고, 창이 하듯 결과를 돌려준다
 const choose = (pick) => async (_options, { agree, decline }) => {
@@ -44,6 +45,11 @@ test('카카오 첫 가입: 취소 요청이 실패하거나 없어도 닫을 �
 test('카카오 첫 가입: 가입 대기가 사라졌으면(409 KAKAO_SIGNUP_EXPIRED) expired로 끝낸다', async () => {
   const api = { signupKakao: async () => { throw { code: SIGNUP_EXPIRED, status: 409 }; } };
   assert.equal((await askKakaoSignupConsent(api, choose('agree'))).status, 'expired');
+});
+
+test('카카오 첫 가입: 가입은 됐는데 재발급만 실패했으면(TOKEN_NOT_ISSUED) failed로 끝낸다 — 가입 대기가 이미 소비돼 다시 동의해도 소용없다', async () => {
+  const api = { signupKakao: async () => { throw { code: TOKEN_NOT_ISSUED, status: 0 }; } };
+  assert.equal((await askKakaoSignupConsent(api, choose('agree'))).status, 'failed');
 });
 
 test('카카오 첫 가입: 그 밖의 실패는 던져서 창이 안내하고 다시 고르게 한다', async () => {
