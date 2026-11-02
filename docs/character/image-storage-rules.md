@@ -75,7 +75,8 @@ character/
 | ③ | `conclusion` | 결론(사건 뒤) | 검사 측 증거 화면 |
 
 - 공용: `cuts/reenact/common/reenact-common-{property|body|life|robbery|theft}_cut_{headline|origin|conclusion}.png`. 분류 5종(재산 · 신체 · 생명 · 강도 · 절도) × 자리 3장 = 15장. 강도 · 절도는 범죄 유형(`ROBBERY` · `THEFT`, V31)이 늘면서 11/02에 따로 뽑았고, 화면은 이 두 유형의 사건에 이 세트를 쓴다(라벨이 재산범죄여도). 분류를 끝내 모를 때 돌려 쓰는 폴백은 재산 · 신체 · 생명 3종이다.
-- 탐구 · 대화 컷: `cuts/inquiry/inquiry_cut_{reading|magnifier|talk|walk|window|board}.png` 6장(16:9, 배경 포함). 사건과 상관없는 차분한 장면이라 신문 여백 사진 칸에 공용 재연 컷과 섞어 쓴다.
+- 탐구 · 대화 컷: `cuts/inquiry/inquiry_cut_{reading|magnifier|talk|walk|window|board|reporter|clue|sign}.png` 9장(16:9, 배경 포함). 사건과 상관없는 차분한 장면이라 신문 여백 사진 칸에 공용 재연 컷과 섞어 쓴다. `reporter` · `clue` · `sign` 3장은 옛 공용 재연 컷(`discard`의 `headline` · `sub-1` · `detail-1`)을 11/03에 옮긴 것이다(COMMON-73).
+- **좌우를 따로 그린 컷**(COMMON-73): 물음표처럼 글자가 들어 있는 컷은 화면이 CSS로 뒤집으면 글자도 거울 글씨가 된다. 이런 컷은 반대 방향본을 `_{장면}-{감정}-mirror.png`로 함께 둔다(물음표만 떼어 몸을 뒤집고 물음표는 그대로 다시 붙임). 기본 이름은 규칙 방향(내로 오른쪽 · 남불 왼쪽), `-mirror`가 반대 방향이다. 지금은 볼따구 · 볼따구 슬림 `idle-thinking` 4장(내로 · 남불).
 - 사건별: `cuts/reenact/case-{사건 키}/reenact-case-{사건 키}_cut_{headline|origin|conclusion}.png`. 폴더 이름과 파일 이름의 사건 키가 같다.
 - **사건 재연 컷은 10/29부터 배경까지 포함해 뽑는 것이 기본이다**(프롬프트 가이드 9-7 `BG-scene`). 배경 포함본은 위 `reenact-case-{사건 키}_cut_{자리}.png` 이름 그대로 `case-{사건 키}/`에 둔다.
 - 10/29 이전에 만든 63장은 **투명 컷**이다. 이것은 같은 이름으로 `case-{사건 키}/`에 있고, 배경과 합성한 임시본(`composite/`)이 사건 사진으로 쓰인다(8장). 배경 포함본이 나오면 투명 컷은 `_original/`에 `_v1`로 보존하고 같은 이름의 배경 포함본으로 교체한다.
@@ -121,6 +122,7 @@ character/
 | `reenact-case-{사건 키}_cut_{자리}.png`(배경 포함본) · `reenact-case-{사건 키}_composite_{자리}.png`(임시 합성본) | `cases/case-{사건 id}-{reenact\|origin\|conclusion}.webp` | 1200 × 675 |
 | `{캐릭터}_cut_{장면}-{감정}.png` | `characters/scene/{캐릭터}_{장면}-{감정}.webp` | 800 × 1000 |
 | `{캐릭터}_cut-cheek_*.png` | `characters/cheek/{캐릭터}_idle-{neutral\|happy\|surprised\|cheer\|sorry\|thinking}.webp`(여섯 표정, 11/02에 네 표정 추가) | 800 × 1000 |
+| `*-mirror.png`(좌우를 따로 그린 반대 방향본) | 같은 폴더 `*-mirror.webp`. 일러스트 개수 목록(`illustration-images.txt`)에는 넣지 않는다(같은 그림) | 원본과 같음 |
 | `{캐릭터}_cut-role-{역할}_idle-neutral.png` | `characters/roles/{캐릭터}_{역할}.webp` | 높이 560 |
 | `{캐릭터}_cut-role-actor_idle-{sad\|angry\|apologetic\|anxious\|relieved}.png` | `characters/roles/{캐릭터}_actor-{표정}.webp` | 높이 560 |
 | `{로}_cut-mascot_*.png` | `characters/mascot/{로}_{idle\|think\|deliver}.webp` | 높이 560 |

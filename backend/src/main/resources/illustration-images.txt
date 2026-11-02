@@ -80,8 +80,11 @@ cases/common-theft-conclusion.webp
 cases/common-theft-origin.webp
 cases/common-theft-reenact.webp
 cases/inquiry-board.webp
+cases/inquiry-clue.webp
 cases/inquiry-magnifier.webp
 cases/inquiry-reading.webp
+cases/inquiry-reporter.webp
+cases/inquiry-sign.webp
 cases/inquiry-talk.webp
 cases/inquiry-walk.webp
 cases/inquiry-window.webp
