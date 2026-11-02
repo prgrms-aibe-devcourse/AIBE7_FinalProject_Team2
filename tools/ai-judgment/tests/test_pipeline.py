@@ -2218,5 +2218,100 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(pipeline.CRIME_TYPES, jobs.CRIME_TYPES)
 
 
+class RagReadOnlyDbTest(unittest.TestCase):
+    """RAG 검색 전용 원격 읽기 접속 (BE-161). 적재 · 로컬 검색의 로컬 전용 검사는 그대로여야 한다."""
+
+    ENV = {"RAG_DB_HOST": "rag.example.com", "RAG_DB_NAME": "lawnambul", "RAG_DB_USERNAME": "rag_reader",
+           "RAG_DB_PASSWORD": "secret-pw"}
+
+    def test_settings_none_partial_and_defaults(self):
+        self.assertFalse(pipeline.rag_db_configured({}))
+        self.assertFalse(pipeline.rag_db_configured({"RAG_DB_HOST": "  "}))  # Compose가 넘기는 빈 값은 없는 것
+        self.assertTrue(pipeline.rag_db_configured({"RAG_DB_PORT": "5432"}))
+        settings = pipeline.rag_db_settings(self.ENV)
+        self.assertEqual(settings["port"], "5432")  # 비우면 기본 포트
+        with self.assertRaises(pipeline.PipelineError) as ctx:
+            pipeline.rag_db_settings({"RAG_DB_HOST": "rag.example.com", "RAG_DB_PASSWORD": "secret-pw"})
+        self.assertIn("RAG_DB_NAME", str(ctx.exception))
+        self.assertNotIn("secret-pw", str(ctx.exception))  # 값은 오류 문구에 넣지 않는다
+        self.assertNotIn("rag.example.com", str(ctx.exception))
+        with self.assertRaises(pipeline.PipelineError):
+            pipeline.rag_db_settings({**self.ENV, "RAG_DB_PORT": "5432; drop"})
+
+    def test_command_is_read_only_ssl_and_drops_inherited_pg_env(self):
+        inherited = {**self.ENV, "PGSERVICE": "remote", "PGHOSTADDR": "10.0.0.9", "PGSSLMODE": "disable",
+                     "GEMINI_API_KEY": "k"}
+        with mock.patch("shutil.which", return_value="/usr/bin/psql"):
+            command, env = pipeline.rag_db_command(pipeline.rag_db_settings(inherited), inherited)
+        # 접속 값은 명령줄에 없다 (프로세스 목록에 남지 않게)
+        self.assertNotIn("secret-pw", " ".join(command))
+        self.assertNotIn("rag.example.com", " ".join(command))
+        self.assertIn("-X", command)
+        self.assertIn("-w", command)
+        # 물려받은 PG*는 지우고, SSL · 읽기 전용은 코드가 고정한다
+        self.assertNotIn("PGSERVICE", env)
+        self.assertNotIn("PGHOSTADDR", env)
+        self.assertEqual(env["PGSSLMODE"], "require")
+        self.assertIn("default_transaction_read_only=on", env["PGOPTIONS"])
+        self.assertIn("statement_timeout=", env["PGOPTIONS"])
+        self.assertEqual((env["PGHOST"], env["PGUSER"], env["PGPASSWORD"]), ("rag.example.com", "rag_reader", "secret-pw"))
+        self.assertEqual(env["GEMINI_API_KEY"], "k")  # 다른 환경변수는 그대로 둔다
+
+    def test_query_returns_stdout_and_hides_server_in_errors(self):
+        ok = SimpleNamespace(returncode=0, stdout=b'{"precedents": []}\n', stderr=b"")
+        with mock.patch("shutil.which", return_value="/usr/bin/psql"), \
+                mock.patch("subprocess.run", return_value=ok) as run:
+            self.assertEqual(pipeline.query_rag_db("SELECT 1;", self.ENV), '{"precedents": []}\n')
+        self.assertEqual(run.call_args.kwargs["input"], b"SELECT 1;")
+        failed = SimpleNamespace(returncode=2, stdout=b"", stderr=(
+            'psql: error: connection to server at "rag.example.com" (192.0.2.10), port 5432 failed: '
+            'FATAL:  password authentication failed for user "rag_reader"').encode("utf-8"))
+        with mock.patch("shutil.which", return_value="/usr/bin/psql"), mock.patch("subprocess.run", return_value=failed):
+            with self.assertRaises(pipeline.RagUnavailable) as ctx:
+                pipeline.query_rag_db("SELECT 1;", self.ENV)
+        message = str(ctx.exception)
+        self.assertIn("password authentication failed", message)  # 사유는 남긴다
+        self.assertNotIn("rag.example.com", message)  # 서버 주소는 작업 보고로 나가지 않는다
+        self.assertNotIn("192.0.2.10", message)
+
+    def test_query_without_psql_or_settings_is_unavailable(self):
+        # 대체 동작(사건 입력의 references)으로 넘어가야 하므로 RagUnavailable이다
+        with mock.patch("shutil.which", return_value=None):
+            with self.assertRaises(pipeline.RagUnavailable) as ctx:
+                pipeline.query_rag_db("SELECT 1;", self.ENV)
+        self.assertIn("postgresql-client", str(ctx.exception))
+        with self.assertRaises(pipeline.RagUnavailable) as ctx:
+            pipeline.query_rag_db("SELECT 1;", {"RAG_DB_HOST": "rag.example.com"})
+        self.assertIn("일부만", str(ctx.exception))
+
+    def test_stage_rag_uses_remote_only_when_configured(self):
+        config = {"stages": {"load": {"db": {"mode": "docker", "container": "c", "user": "u", "database": "d"}}}}
+        captured = {}
+
+        def fake_build(*args, **kwargs):
+            captured["runner"] = kwargs["runner"]
+            return {}, {"status": "OK"}
+
+        with mock.patch.object(pipeline, "rag_inputs", return_value=({}, [], None, None, {})), \
+                mock.patch.object(pipeline, "build_references", side_effect=fake_build), \
+                mock.patch.object(pipeline, "references_path", return_value=Path(tempfile.mkdtemp()) / "r.json"), \
+                mock.patch.object(pipeline, "input_key", return_value="k"):
+            with mock.patch.dict(os.environ, self.ENV, clear=True):
+                pipeline.stage_rag(config, {}, lambda message: None)
+            self.assertIs(captured["runner"], pipeline.query_rag_db)
+            with mock.patch.dict(os.environ, {}, clear=True), mock.patch.object(pipeline, "query_db") as local:
+                pipeline.stage_rag(config, {}, lambda message: None)
+                captured["runner"]("SELECT 1;")
+            local.assert_called_once_with("SELECT 1;", config["stages"]["load"]["db"])
+
+    def test_local_only_paths_still_reject_remote_even_with_rag_env(self):
+        # RAG_DB_*가 있어도 적재 · 로컬 검색(query_db)은 원격을 거부한다 — 원격은 query_rag_db에만 열었다
+        with mock.patch.dict(os.environ, self.ENV, clear=True):
+            with self.assertRaises(pipeline.PipelineError):
+                pipeline.apply_sql(Path("x.sql"), {"mode": "psql", "url": "postgresql://rag.example.com/lawnambul"})
+            with self.assertRaises(pipeline.RagUnavailable):
+                pipeline.query_db("SELECT 1;", {"mode": "psql", "url": "postgresql://rag.example.com/lawnambul"})
+
+
 if __name__ == "__main__":
     unittest.main()

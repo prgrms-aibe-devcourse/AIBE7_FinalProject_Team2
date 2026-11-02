@@ -38,6 +38,14 @@ services:
       # 끝난 작업을 자동으로 지우기까지의 보관 기간(일). 백엔드의 DELETE 호출이 빠졌을 때를 위한
       # 마지막 안전장치다(COMMON-51, FR-5-3). 비우면 기본 7일, 0 이하면 자동 정리를 끈다
       PIPELINE_JOB_RETENTION_DAYS: ${PIPELINE_JOB_RETENTION_DAYS:-}
+      # RAG 검색(rag 단계) 전용 읽기 전용 DB 접속 (BE-161). 판례 · 양형기준 저장소(rag_precedent · rag_guideline ·
+      # sentencing_guideline)를 SELECT만 하는 계정을 넣는다 — **앱 계정(EXTERNAL_DB_*)은 넣지 않는다**.
+      # 비우면 rag 단계가 DB를 못 찾아 사건 입력의 참고 자료로 진행한다(기존 동작). 값을 일부만 넣으면 그 사유가 작업 보고에 남는다
+      RAG_DB_HOST: ${RAG_DB_HOST:-}
+      RAG_DB_PORT: ${RAG_DB_PORT:-}
+      RAG_DB_NAME: ${RAG_DB_NAME:-}
+      RAG_DB_USERNAME: ${RAG_DB_USERNAME:-}
+      RAG_DB_PASSWORD: ${RAG_DB_PASSWORD:-}
     volumes:
       # 작업 · 생성 결과(out/)와 추출 산출물(cases/). 컨테이너를 다시 만들어도 진행 중이던 작업 상태가 남는다
       # — 파이프라인은 state.json으로 이어서 돌릴 수 있게 돼 있다(BE-31)
