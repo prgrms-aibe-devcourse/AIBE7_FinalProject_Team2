@@ -113,16 +113,20 @@ public class AdminCaseScriptController {
 		return scriptService.acknowledgeStale(caseId, unit(unit), admin, request);
 	}
 
-	/** A-13-21 블록 문자열 한 줄 직접 수정 (U0 · U1 · U2 · U4) */
+	/**
+	 * A-13-21 블록 문자열 한 줄 직접 수정 (U0 · U1 · U2 · U4). 대사 길이 규칙(100자 · 2줄)은 말하는 대사 자리에만 건다(BE-153,
+	 * {@link ScriptUnit#isSpoken}) — 설계도 · 카드 글 · 신문 답은 빈 값 · 500자만 막는다(Bean Validation)
+	 */
 	@PatchMapping("/blocks/{unit}/text")
 	public CaseScriptResponse editText(@PathVariable Long caseId, @PathVariable String unit,
 			@Valid @RequestBody CaseScriptTextRequest body, @AuthenticationPrincipal AdminPrincipal admin,
 			HttpServletRequest request) {
-		String violation = body.lengthViolation();
+		ScriptUnit target = unit(unit);
+		String violation = target.isSpoken(body.path()) ? body.lengthViolation() : null;
 		if (violation != null) {
 			throw new BusinessException(ErrorCode.VALIDATION_ERROR, violation);
 		}
-		return scriptService.editText(caseId, unit(unit), body.path(), body.text(), admin, request);
+		return scriptService.editText(caseId, target, body.path(), body.text(), admin, request);
 	}
 
 	/** 경로의 단위 이름 (U0 ~ U4). 모르는 이름은 400 */
