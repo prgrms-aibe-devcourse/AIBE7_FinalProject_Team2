@@ -290,8 +290,7 @@ textarea.cm-input { resize: vertical; min-height: 96px; line-height: 1.6; }
 .cm-verdict-type { color: var(--color-muted); font-size: var(--text-caption); }
 .cm-verdict-clip { position: relative; margin: -10px 0 0 -88px; rotate: 5deg; }
 .cm-verdict-clip .my-card { width: 82px; }
-.cm-clip { position: absolute; top: -12px; left: 30px; z-index: 3; width: 22px; height: 40px; pointer-events: none; }
-.cm-clip path { fill: none; stroke: var(--color-border-strong); stroke-width: 2.2; stroke-linecap: round; }
+.cm-clip { position: absolute; top: -12px; left: 30px; z-index: 3; width: 17px; height: 40px; object-fit: contain; pointer-events: none; } /* B안 클립 그림(FE-150, 197 : 460) */
 
 /* ── 화면 세 구간(FE-88): 넓은 화면 ≥ 1024px = 3열 / 좁은 화면 721 ~ 1023px = 1열 · 글쓰기는 덮는 창 / 모바일 ≤ 720px = 1열 + 명함 · 작은 창 · 딱지를 세로로 쌓는다.
    720px은 공통 헤더가 두 줄이 되는 경계와 같다 ── */
@@ -349,3 +348,23 @@ textarea.cm-input { resize: vertical; min-height: 96px; line-height: 1.6; }
   .cm-pop:popover-open { animation: none; }
 }
 :root[data-motion="off"] .cm-post.is-new, :root[data-motion="off"] .cm-comment.is-new { animation: none; background: var(--color-accent-tint); }
+
+/* B안 카드 배경 · 테두리(FE-150) — 미니 카드 */
+.cm-mini.deco-bg-kraft { background: url('/images/card/bg-kraft.webp') center / cover no-repeat #d6a468; }
+.cm-mini.deco-bg-ledger { background: url('/images/card/bg-ledger.webp') center / cover no-repeat #f4efe4; }
+.cm-mini.deco-bg-tracing { background: url('/images/card/bg-tracing.webp') center / cover no-repeat #f7f3ee; }
+.cm-mini.deco-bg-parchment { background: url('/images/card/bg-parchment.webp') center / cover no-repeat #ead8c0; }
+.cm-mini.deco-bg-coffee { background: url('/images/card/bg-coffee.webp') center / cover no-repeat #f4efe4; }
+.cm-mini.deco-bg-wood { background: url('/images/card/bg-wood.webp') center / cover no-repeat #a8652f; }
+.cm-mini.deco-bg-blotter { background: url('/images/card/bg-blotter.webp') center / cover no-repeat #e4d8c8; }
+.cm-mini.deco-bg-envelope { background: url('/images/card/bg-envelope.webp') center / cover no-repeat #f4efe4; }
+.cm-mini.deco-bg-lamp { background: url('/images/card/bg-lamp.webp') center / cover no-repeat #3a2414; }
+.cm-mini.deco-bg-legalpad { background: url('/images/card/bg-legalpad.webp') center / cover no-repeat #f3e3b3; }
+.cm-mini.deco-bg-felt { background: url('/images/card/bg-felt.webp') center / cover no-repeat #1c2b4f; }
+.cm-mini.deco-bg-blinds { background: url('/images/card/bg-blinds.webp') center / cover no-repeat #a8652f; }
+.cm-mini.deco-bg-leather { background: url('/images/card/bg-leather.webp') center / cover no-repeat #14213f; }
+.cm-mini.deco-bg-bronze { background: url('/images/card/bg-bronze.webp') center / cover no-repeat #8c7340; }
+.cm-mini.deco-frame-oak { border-color: #8a4f22; box-shadow: inset 0 0 0 1.5px #b06d36; }
+.cm-mini.deco-frame-brass { border-color: #b08d4a; }
+.cm-mini.deco-frame-court { border-color: var(--deco-navy); box-shadow: inset 0 0 0 1px var(--deco-navy-soft); }
+.cm-mini.deco-frame-thread { outline: 1px dashed var(--color-accent); outline-offset: -3px; border-color: var(--color-border-strong); }

@@ -253,8 +253,8 @@ body[data-theme="coffee"] .site-footer { background: var(--palette-coffee-50); b
 .my-shown-pick[aria-pressed="true"], .my-shown-pick[aria-pressed="true"] .my-card { cursor: default; }
 @media (hover: hover) and (pointer: fine) { .my-shown-pick[aria-pressed="false"]:hover .my-card { border-color: var(--color-heading); } } /* P3 선택지: 테두리가 진해진다 */
 .my-stamp {
-  position: absolute; z-index: 1; right: 8%; bottom: 20%; padding: 2px 8px; rotate: -12deg;
-  border: 3px double color-mix(in srgb, var(--color-accent) 80%, transparent); border-radius: 4px;
+  position: absolute; z-index: 1; right: 8%; bottom: 20%; display: grid; place-items: center; width: 4.6em; aspect-ratio: 560 / 359; padding: 0 0 .4em .12em; line-height: 1; /* 도장 그림 비율(560 : 359)을 고정하고 글자는 정중앙에. 왼쪽 .12em는 글자 사이 간격(letter-spacing)이 끝 글자 뒤에 남는 만큼, 아래 .4em는 명조 글꼴의 윗 · 아랫 여백이 달라 글자가 아래로 처지는 만큼 */ rotate: -12deg;
+  background: url('/images/mark/stamp-ink-flat.webp') center / 100% 100% no-repeat; /* B안 잉크 도장(FE-150) */
   color: color-mix(in srgb, var(--color-accent) 80%, transparent); font: 900 var(--text-title-3)/1.2 var(--font-heading); letter-spacing: .12em;
   pointer-events: none;
 }

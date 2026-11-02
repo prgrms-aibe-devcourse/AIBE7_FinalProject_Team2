@@ -64,7 +64,7 @@
 .stage-wrap.paper-mode .board .postcard-head { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px dashed var(--color-border-strong); }
 .stage-wrap.paper-mode .board .postcard-head h2 { margin: 0 0 4px; font: 900 22px/1.3 var(--font-heading); letter-spacing: .08em; color: var(--color-heading); }
 .stage-wrap.paper-mode .board .postcard-head p { margin: 0; color: var(--color-muted); font-size: 13px; }
-.stage-wrap.paper-mode .board .postcard-stamp { position: relative; flex: none; display: grid; place-items: center; width: 64px; height: 76px; border: 3px dotted var(--color-label); background: var(--color-paper); color: var(--color-label); font: 900 13px/1.15 var(--font-heading); text-align: center; transform: rotate(3deg); }
+.stage-wrap.paper-mode .board .postcard-stamp { position: relative; flex: none; display: grid; place-items: center; width: 64px; height: 76px; background: url('/images/mark/stamp-postage.webp') center / 100% 100% no-repeat; color: var(--color-accent); font: 900 13px/1.15 var(--font-heading); text-align: center; transform: rotate(3deg); }
 .stage-wrap.paper-mode .board :is(.guide-box, .pre-judgment-form) { margin: 0; padding-left: 0; padding-right: 0; }
 .stage-wrap.paper-mode .board .guide-box { margin-bottom: 12px; padding: 0; border: 0; background: none; font: 400 19px/1.4 var(--font-hand); color: var(--color-muted); } /* 엽서 안 안내는 회색 상자 대신 엽서에 적힌 메모 한 줄 */
 .stage-wrap.paper-mode .board .pre-judgment-form { padding-bottom: 0; }

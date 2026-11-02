@@ -12,16 +12,16 @@ export const FREE = rewards({
 
 // stat: completed(완료한 회차가 하나라도 있는 사건 수) · hasType(성향 테스트 결과가 있으면 1) · attendanceDays(누적 출석 일수) · collected(모은 일러스트, 서버가 셀 수 없다)
 export const ACHIEVEMENTS = [
-  { id: 'first-case', stat: 'completed', goal: 1, rewards: rewards({ kinds: ['characters/scene'], frames: ['wood'], sashStyles: ['long'], sashColors: ['long:wine'] }) },
-  { id: 'personality', stat: 'hasType', goal: 1, rewards: rewards({ kinds: ['characters/personality'], backgrounds: ['tarot'], sashIcons: ['scale'] }) },
-  { id: 'attend-3', stat: 'attendanceDays', goal: 3, rewards: rewards({ kinds: ['characters/icon/generated'], backgrounds: ['latte'], sashIcons: ['cup'] }) },
-  { id: 'collect-5', stat: 'collected', goal: 5, rewards: rewards({ kinds: ['cases'], backgrounds: ['news'], sashIcons: ['naero', 'nambul'] }) },
-  { id: 'attend-7', stat: 'attendanceDays', goal: 7, rewards: rewards({ kinds: ['characters/cheek', 'characters/cheek-slim'], frames: ['gold'], sashIcons: ['heart'] }) },
-  { id: 'cases-3', stat: 'completed', goal: 3, rewards: rewards({ frames: ['stitch'], backgrounds: ['linen'], sashColors: ['short:navy', 'long:navy'], sashIcons: ['gavel'] }) },
+  { id: 'first-case', stat: 'completed', goal: 1, rewards: rewards({ kinds: ['characters/scene'], frames: ['wood', 'oak'], backgrounds: ['kraft', 'ledger'], sashStyles: ['long'], sashColors: ['long:wine'] }) },
+  { id: 'personality', stat: 'hasType', goal: 1, rewards: rewards({ kinds: ['characters/personality'], backgrounds: ['tarot', 'tracing', 'parchment'], sashIcons: ['scale'] }) },
+  { id: 'attend-3', stat: 'attendanceDays', goal: 3, rewards: rewards({ kinds: ['characters/icon/generated'], backgrounds: ['latte', 'coffee', 'wood'], sashIcons: ['cup'] }) },
+  { id: 'collect-5', stat: 'collected', goal: 5, rewards: rewards({ kinds: ['cases'], backgrounds: ['news', 'blotter', 'envelope'], sashIcons: ['naero', 'nambul'] }) },
+  { id: 'attend-7', stat: 'attendanceDays', goal: 7, rewards: rewards({ kinds: ['characters/cheek', 'characters/cheek-slim'], frames: ['gold', 'brass'], backgrounds: ['lamp', 'legalpad'], sashIcons: ['heart'] }) },
+  { id: 'cases-3', stat: 'completed', goal: 3, rewards: rewards({ frames: ['stitch', 'thread'], backgrounds: ['linen', 'felt'], sashColors: ['short:navy', 'long:navy'], sashIcons: ['gavel'] }) },
   { id: 'cases-5', stat: 'completed', goal: 5, rewards: rewards({}) }, // BE-146: 꾸미기 보상 없이 경험치만
-  { id: 'collect-20', stat: 'collected', goal: 20, rewards: rewards({ kinds: ['characters/law', 'characters/adult'], sashColors: ['short:green', 'long:green'] }) },
+  { id: 'collect-20', stat: 'collected', goal: 20, rewards: rewards({ kinds: ['characters/law', 'characters/adult'], backgrounds: ['blinds'], sashColors: ['short:green', 'long:green'] }) },
   { id: 'collect-50', stat: 'collected', goal: 50, rewards: rewards({}) }, // BE-146: 꾸미기 보상 없이 경험치만
-  { id: 'attend-30', stat: 'attendanceDays', goal: 30, rewards: rewards({ kinds: ['characters/mascot'], frames: ['navy'], sashColors: ['short:gold', 'long:gold'], sashIcons: ['law'] }) },
+  { id: 'attend-30', stat: 'attendanceDays', goal: 30, rewards: rewards({ kinds: ['characters/mascot'], frames: ['navy', 'court'], backgrounds: ['leather', 'bronze'], sashColors: ['short:gold', 'long:gold'], sashIcons: ['law'] }) },
 ];
 
 // 저장 기록이 없을 때의 꾸미기 (서버 기본값)

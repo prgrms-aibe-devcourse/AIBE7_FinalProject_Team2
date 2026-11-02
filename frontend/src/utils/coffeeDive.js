@@ -61,7 +61,7 @@ export function flyCoffee(onNavigate, page) {
   const mug = div('coffee-fly-mug');
   mug.append(div('coffee-fly-coffee'));
   Object.assign(mug.style, { width: `${size}px`, height: `${size}px`, left: `${(width - size) / 2}px`, top: `${(height - size) / 2}px` });
-  mug.style.setProperty('--rim', `${size * 0.075}px`);
+  mug.style.setProperty('--m', `${size}px`); // 잔 지름(그림 크기 기준, pageTurn.css)
   layer.append(mug);
   document.body.append(layer);
 
