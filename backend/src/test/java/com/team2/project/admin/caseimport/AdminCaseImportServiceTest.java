@@ -462,6 +462,25 @@ class AdminCaseImportServiceTest {
 	}
 
 	@Test
+	@DisplayName("사전 학습 점검이 오염으로 멈추면 FAILED와 파이프라인 사유가 그대로 화면(A-15)에 간다 (BE-160, PR #411 리뷰)")
+	void getImport_contaminationStop_showsReason() {
+		CaseImport entity = running("abc123");
+		when(importRepository.findById(1L)).thenReturn(Optional.of(entity));
+		when(pipelineClient.getJob("abc123")).thenReturn(new PipelineJob("abc123", "FAILED",
+			List.of(stage("extract", "DONE"), stage("contamination", "FAILED"), stage("generate", "PENDING")),
+			"사전 학습 점검에서 멈춤: gemini:x: CONTAMINATED", null, null, null));
+
+		CaseImportResponse response = service.getImport(1L);
+
+		assertThat(response.status()).isEqualTo("FAILED");
+		assertThat(response.message()).isEqualTo("사전 학습 점검에서 멈춤: gemini:x: CONTAMINATED");
+		assertThat(response.stages()).anySatisfy(stage -> {
+			assertThat(stage.name()).isEqualTo("contamination");
+			assertThat(stage.status()).isEqualTo("FAILED");
+		});
+	}
+
+	@Test
 	@DisplayName("처음부터 FAILED로 돌아온 작업도 실패 사유와 단계를 남긴다 (상태를 두 번 적지 않는다)")
 	void startImport_jobAlreadyFailed_keepsReason() {
 		when(pipelineClient.createJob(any())).thenReturn(new PipelineJob("abc123", "FAILED",
