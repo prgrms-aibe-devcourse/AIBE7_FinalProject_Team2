@@ -75,6 +75,7 @@ def create_job(request: dict):
 
     본문: {"sources": [{"originalText": "...", "note": "..."}], "models": ["gemini:..."],
            "stages": {...}, "until": "axis", "incidentDate": "...", "indictmentDate": "..."}
+    대본 블록 재생성(BE-129 2차)은 {"regenerate": {...}, "stages": {"script": {"model": "..."}}} (README "대본 블록 재생성")
 
     시작하지 못하면 만들어 둔 작업을 **지우고** 오류를 돌려준다 (PR #219 리뷰 반영). 그냥 두면 이미 도는
     작업이 있어 409로 거절된 요청의 판결문 원문이 디스크에 남는다 (FR-5-3).
