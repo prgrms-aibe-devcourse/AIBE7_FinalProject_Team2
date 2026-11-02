@@ -166,6 +166,15 @@ function popover() {
   return popNode;
 }
 
+// 닫기 버튼(FE-158): 모바일의 아래에서 올라오는 판에만 보인다(community.css). 넓은 화면은 바깥 누르기 · Esc로 닫는다
+function closeButton(node) {
+  const button = element('button', 'cm-pop-close', '✕');
+  button.type = 'button';
+  button.setAttribute('aria-label', '명함 닫기');
+  button.addEventListener('click', () => node.hidePopover());
+  return button;
+}
+
 function openPop(author, from) {
   const node = popover();
   if (!node.showPopover) return; // 작은 창을 못 쓰는 브라우저는 카드를 펼치지 않는다(닉네임 · 성향 이름은 그대로 보인다)
@@ -173,7 +182,7 @@ function openPop(author, from) {
   if (node.matches(':popover-open')) popOpener?.setAttribute('aria-expanded', 'false');
   popOpener = from;
   node.setAttribute('aria-label', `${author.nickname}의 명함`);
-  node.replaceChildren(cardPair(author), authorInfo(author));
+  node.replaceChildren(closeButton(node), cardPair(author), authorInfo(author));
   if (!node.matches(':popover-open')) node.showPopover();
   from.setAttribute('aria-expanded', 'true');
   node.focus({ preventScroll: true });

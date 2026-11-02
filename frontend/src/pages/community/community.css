@@ -20,7 +20,7 @@ body:has(.community-page) { background: var(--color-desk-bezel); }
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr);
   max-width: 1400px;
-  min-height: calc(100vh - var(--site-header-h, 64px) - 32px);
+  min-height: calc(100dvh - var(--site-header-h, 64px) - 32px);
   margin: 0 auto;
   border-radius: 12px;
   background: var(--color-bg);
@@ -47,7 +47,7 @@ body:has(.community-page) { background: var(--color-desk-bezel); }
   width: 100%; padding: 8px 10px; border: 0; border-radius: 6px; background: transparent;
   color: var(--color-text); text-align: left; transition: background-color .15s ease-out;
 }
-.cm-filter:hover { background: var(--color-surface); }
+@media (hover: hover) and (pointer: fine) { .cm-filter:hover { background: var(--color-surface); } }
 .cm-filter[aria-pressed="true"] { background: var(--color-accent-tint); color: var(--color-accent-text); font-weight: 700; }
 .cm-select {
   width: 100%; min-height: 40px; padding: 8px 10px; border: 1px solid var(--color-border-strong); border-radius: 6px;
@@ -59,7 +59,7 @@ body:has(.community-page) { background: var(--color-desk-bezel); }
 .cm-case-search { width: 100%; min-height: 40px; padding: 8px 10px; border: 1px solid var(--color-border-strong); border-radius: 6px; background: var(--color-card); color: var(--color-text); font: inherit; font-size: max(16px, var(--text-small)); }
 .cm-case-results { display: grid; gap: 2px; max-height: 220px; margin: 6px 0 0; padding: 4px; overflow-y: auto; list-style: none; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-card); }
 .cm-case-pick { width: 100%; padding: 8px 10px; border: 0; border-radius: 4px; background: transparent; color: var(--color-text); font: inherit; font-size: var(--text-small); text-align: left; transition: background-color .15s ease-out; }
-.cm-case-pick:hover { background: var(--color-surface); }
+@media (hover: hover) and (pointer: fine) { .cm-case-pick:hover { background: var(--color-surface); } }
 .cm-case-empty { margin: 6px 0 0; padding: 0 2px; font-size: var(--text-small); color: var(--color-muted); }
 .cm-case-chosen { display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 10px; border: 1px solid var(--color-accent-tint); border-radius: 6px; background: var(--color-accent-tint); color: var(--color-accent-text); font-size: var(--text-small); font-weight: 700; }
 .cm-case-chosen span { min-width: 0; flex: 1; }
@@ -98,7 +98,7 @@ body:has(.community-page) { background: var(--color-desk-bezel); }
 .cm-tag.is-case { color: var(--color-muted); font-weight: 600; max-width: 22em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cm-post-title { margin: 12px 0 4px; font: 700 var(--text-title-3)/1.45 var(--font-heading); letter-spacing: -.01em; text-wrap: balance; }
 .cm-post-title a { color: var(--color-heading); text-decoration: none; }
-.cm-post-title a:hover { text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+@media (hover: hover) and (pointer: fine) { .cm-post-title a:hover { text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; } }
 .cm-excerpt {
   max-width: 68ch; margin: 0; color: var(--color-muted); white-space: pre-line;
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
@@ -111,7 +111,7 @@ body:has(.community-page) { background: var(--color-desk-bezel); }
 .cm-images img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: contain; border-radius: 8px; background: var(--color-surface-strong); }
 .cm-images.count-1 img { aspect-ratio: auto; height: auto; max-height: 480px; }
 .cm-images.is-full { max-width: 680px; grid-template-columns: 1fr; }
-.cm-images.is-full img { aspect-ratio: auto; height: auto; max-height: 70vh; }
+.cm-images.is-full img { aspect-ratio: auto; height: auto; max-height: 70svh; } /* svh: 모바일 주소창이 접혀도 사진 높이가 흔들리지 않게 */
 
 /* 내 판결 카드: 세 판결 색 중 "내 판결" 색은 선 · 라벨에만 쓴다(바탕을 칠하지 않는다, style.css) */
 .cm-verdict {
@@ -133,7 +133,7 @@ body:has(.community-page) { background: var(--color-desk-bezel); }
   background: transparent; color: var(--color-muted); font-size: var(--text-small); text-decoration: none;
   transition: background-color .15s ease-out, color .15s ease-out;
 }
-.cm-action:hover { background: var(--color-surface); color: var(--color-text); }
+@media (hover: hover) and (pointer: fine) { .cm-action:hover { background: var(--color-surface); color: var(--color-text); } }
 .cm-count { font-variant-numeric: tabular-nums; font-weight: 700; }
 .cm-like[aria-pressed="true"] { color: var(--color-accent); }
 .cm-like[aria-pressed="true"] .cm-icon svg { fill: currentColor; }
@@ -194,7 +194,7 @@ textarea.cm-input { resize: vertical; min-height: 96px; line-height: 1.6; }
 
 .cm-input::placeholder { color: var(--color-muted); }
 .cm-segments { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--color-border-strong); border-radius: 6px; overflow: hidden; }
-.cm-segment { position: relative; display: grid; place-items: center; min-height: 36px; font-size: var(--text-small); cursor: pointer; }
+.cm-segment { position: relative; display: grid; place-items: center; min-height: 36px; font-size: var(--text-small); cursor: pointer; -webkit-user-select: none; user-select: none; }
 .cm-segment + .cm-segment { border-left: 1px solid var(--color-border); }
 .cm-segment input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; }
 .cm-segment:has(input:checked) { background: var(--color-accent-tint); color: var(--color-accent-text); font-weight: 700; }
@@ -203,7 +203,7 @@ textarea.cm-input { resize: vertical; min-height: 96px; line-height: 1.6; }
   display: inline-flex; align-items: center; justify-self: start; gap: 6px; min-height: 36px; padding: 6px 12px;
   border: 1px dashed var(--color-border-strong); border-radius: 6px; background: transparent; color: var(--color-text); font-size: var(--text-small);
 }
-.cm-attach:hover:not(:disabled) { background: var(--color-surface); }
+@media (hover: hover) and (pointer: fine) { .cm-attach:hover:not(:disabled) { background: var(--color-surface); } }
 .cm-attach:disabled { opacity: .55; cursor: default; }
 .cm-previews { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 0; padding: 0; list-style: none; }
 .cm-previews:empty { display: none; }
@@ -226,7 +226,7 @@ textarea.cm-input { resize: vertical; min-height: 96px; line-height: 1.6; }
 .cm-popular-list { margin: 10px 0 0; padding-left: 1.3em; font-size: var(--text-small); }
 .cm-popular-list li { margin-bottom: 8px; padding-left: 2px; color: var(--color-muted); }
 .cm-popular-list a { color: var(--color-text); text-decoration: none; }
-.cm-popular-list a:hover { text-decoration: underline; text-underline-offset: 3px; }
+@media (hover: hover) and (pointer: fine) { .cm-popular-list a:hover { text-decoration: underline; text-underline-offset: 3px; } }
 
 /* ── 글쓴이 명함(FE-88) ── 카드는 마이페이지에서 꾸민 모양 그대로다(.cm-cards = 카드 칸 안에서만 커피 색, myPage.css). 카드 크기는 폭으로 정하고 안 글자 · 책갈피는 폭에 비례한다 */
 .cm-cards .my-card { cursor: default; }
@@ -274,6 +274,7 @@ textarea.cm-input { resize: vertical; min-height: 96px; line-height: 1.6; }
 /* 넓은 화면인데 화면이 팝오버(약 346px)보다 낮을 때만 높이 상한과 세로 스크롤을 둔다(높으면 overflow: visible 그대로) */
 @media (min-width: 721px) and (max-height: 400px) { .cm-pop:popover-open { max-height: calc(100dvh - 16px); overflow: hidden auto; } }
 .cm-pop:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+.cm-pop-close { display: none; } /* 닫기 버튼 · 손잡이는 모바일 판에서만(아래 모바일 블록) */
 /* 사파리는 aspect-ratio로 높이를 정하는 카드의 높이를 grid 안에서 크게 잡아 상자가 화면 끝까지 늘어난다 → 작은 창 카드는 높이까지 px로 준다(7:14 그대로) */
 .cm-pop .cm-card-pair { gap: 8px; }
 .cm-pop .cm-card-pair .my-card { width: 102px; height: 204px; }
@@ -292,6 +293,13 @@ textarea.cm-input { resize: vertical; min-height: 96px; line-height: 1.6; }
 .cm-verdict-clip .my-card { width: 82px; }
 .cm-clip { position: absolute; top: -12px; left: 30px; z-index: 3; width: 22px; height: 40px; pointer-events: none; }
 .cm-clip path { fill: none; stroke: var(--color-border-strong); stroke-width: 2.2; stroke-linecap: round; }
+
+/* 눌림 피드백(FE-158): 터치에는 호버가 없으므로 누르는 순간을 보인다. 면 단위 항목(P2)은 호버와 같은 틴트, 정렬 칩(P1 버튼)은 전역 버튼과 같은 scale .96(style.css) */
+:is(.cm-filter:not([aria-pressed="true"]), .cm-action, .cm-case-pick, .cm-attach:not(:disabled)):active { background: var(--color-surface); }
+@media (prefers-reduced-motion: no-preference) {
+  .cm-chip { transition: background-color .15s ease-out, border-color .15s ease-out, scale .12s cubic-bezier(.2, .8, .2, 1); }
+  .cm-chip:active { scale: .96; }
+}
 
 /* ── 화면 세 구간(FE-88): 넓은 화면 ≥ 1024px = 3열 / 좁은 화면 721 ~ 1023px = 1열 · 글쓰기는 덮는 창 / 모바일 ≤ 720px = 1열 + 명함 · 작은 창 · 딱지를 세로로 쌓는다.
    720px은 공통 헤더가 두 줄이 되는 경계와 같다 ── */
@@ -324,6 +332,18 @@ textarea.cm-input { resize: vertical; min-height: 96px; line-height: 1.6; }
   .cm-tags { margin-left: 0; width: 100%; padding-left: 56px; } /* 말머리 · 사건 딱지는 닉네임 아래 줄(작은 명함 46px + 간격 10px만큼 들여 쓴다) */
   .cm-comment-body { margin-left: 0; }
   .cm-article-title { font-size: var(--text-title-3); }
+  .cm-tag { font-size: 12px; } /* 말머리 · 사건 이름은 정보라 12px 아래로 두지 않는다 */
+
+  /* 터치 대상 44px(FE-158). 보이는 크기를 키워도 되는 것은 높이를, 작게 보여야 하는 것은 누르는 영역만 넓힌다 */
+  .cm-title-link, .cm-back, .cm-filter, .cm-chip, .cm-action, .cm-attach, .cm-segment, .cm-compose-open, .cm-select, .cm-case-search, .cm-case-pick, .cm-check { min-height: 44px; }
+  .cm-text-button { min-width: 44px; min-height: 44px; }
+  /* 글 제목 링크: 위아래 안쪽 여백만큼 바깥 여백을 빼서 글자 자리는 그대로, 누르는 높이만 44px 이상 */
+  .cm-post-title { margin: 3px 0 -5px; }
+  .cm-post-title a { display: block; padding-block: 9px; }
+  /* 작은 원형 · 칩 버튼: 눌리는 영역만 사방으로 넓힌다(옆 조작과 겹치지 않는 거리) */
+  .cm-case-clear { position: relative; } /* .cm-preview-remove는 이미 absolute라 ::before의 기준이 된다 */
+  .cm-case-clear::before { content: ''; position: absolute; inset: -9px; } /* 테두리 1px 안쪽 기준: 28 − 2 + 18 = 44px */
+  .cm-preview-remove::before { content: ''; position: absolute; inset: -8px; } /* 테두리 없음: 28 + 16 = 44px */
 
   /* ② 명함: 카드 두 장을 위에, 소개를 아래에. 카드는 칸 폭을 반씩 나누되 150px을 넘지 않는다 */
   .cm-namecard { padding: 14px 14px 18px; }
@@ -332,8 +352,13 @@ textarea.cm-input { resize: vertical; min-height: 96px; line-height: 1.6; }
   .cm-author-name { font-size: var(--text-title-3); }
 
   /* ③ 작은 창: 화면 아래에서 올라오는 판. 누른 자리 계산(left · top)은 쓰지 않는다(communityParts.js openPop) */
-  .cm-pop, .cm-pop:popover-open { inset: auto 0 0 0; width: auto; max-width: none; max-height: 85dvh; overflow: hidden auto; padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); border-width: 1px 0 0; border-radius: 14px 14px 0 0; }
+  .cm-pop, .cm-pop:popover-open { inset: auto 0 0 0; width: auto; max-width: none; max-height: 85dvh; overflow: hidden auto; padding: 18px 16px calc(18px + env(safe-area-inset-bottom, 0px)); border-width: 1px 0 0; border-radius: 14px 14px 0 0; }
   .cm-pop .cm-card-pair { justify-content: center; }
+  /* 판 위쪽 가운데 손잡이(아래로 내려 닫는 판임을 알린다, 장식) + 오른쪽 위 닫기 버튼 44px(FE-158) */
+  .cm-pop::before { content: ''; position: absolute; top: 7px; left: 50%; width: 36px; height: 4px; margin-left: -18px; border-radius: 2px; background: var(--color-border-strong); }
+  .cm-pop-close { position: absolute; top: 6px; right: 6px; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--color-muted); font: 400 18px/1 var(--font-body); cursor: pointer; }
+  .cm-pop-close:active { background: var(--color-surface); }
+  .cm-pop-close:focus-visible { outline: 3px solid var(--color-focus); outline-offset: -3px; }
   .cm-pop .cm-card-pair .my-card { width: 112px; height: 224px; }
 
   /* 판결 공유 클립: 성향카드를 줄이고 판결 카드 오른쪽 여백도 함께 줄인다 */
