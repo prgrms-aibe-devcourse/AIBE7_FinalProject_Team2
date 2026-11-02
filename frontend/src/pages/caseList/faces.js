@@ -5,10 +5,11 @@ import { FRONT_LIMIT } from '../../utils/newspaperFaces.js';
 
 // 1면 포스트잇 문구: 지금 눌러서 체험을 시작할 수 있는 사건 수에 맞춘다(FE-102 — 모두 열린 것처럼 "눌러 보세요"만 권하지 않는다).
 // 포스트잇은 1면에만 붙어 있다(FE-126, caseListPage.js draw)
-export function tipMessage(total, playable) {
+// more: 잠긴 사건이 있을 때 다음 단계가 열리기까지 더 마쳐야 하는 사건 수(BE-146, caseUnlock.js casesUntilNextStep). 0이면 문구를 더하지 않는다
+export function tipMessage(total, playable, more = 0) {
   const base = `오늘 지면에 사건이 ${total}건 실렸어요.`;
   if (playable >= total) return `${base} 마음이 가는 기사를 눌러 보세요!`;
-  if (playable > 0) return `${base} 지금 체험할 수 있는 기사는 ${playable}건이에요.`;
+  if (playable > 0) return `${base} 지금 체험할 수 있는 기사는 ${playable}건이에요.${more > 0 ? ` 사건 ${more}건을 더 마치면 새 기사가 열려요.` : ''}`;
   return `${base} 체험은 곧 열려요. 기사는 미리 읽어 볼 수 있어요.`;
 }
 

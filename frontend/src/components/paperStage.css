@@ -181,6 +181,8 @@
 /* 준비 중(FE-56, 대본 없는 사건): 누를 수 없는 점선 도장(찍히지 않은 자리). 안내 문구는 주의색 대신 차분한 글자색 */
 .case-paper-page .stamp-button[aria-disabled="true"] { border-style: dashed; border-color: var(--color-border-strong); background: transparent; color: var(--color-muted); rotate: -3deg; cursor: default; }
 .case-paper-page .stamp-button[aria-disabled="true"] small { color: var(--color-muted); }
+/* 잠김(FE-149, BE-146 순차 해금): 준비 중과 같은 점선 도장에 글자만 "잠김". 이유는 도장 밑 한 줄(차분한 글자색, 상자 없음) */
+.case-paper-page .paper-start-lock { max-width: 280px; margin: 0; color: var(--color-muted); font-size: var(--text-small); line-height: 1.5; text-align: center; }
 /* 제목 칸 아래 왼쪽 빈 자리: 알아두기(일반 법률 설명) | 같은 유형의 다른 사건. 신문 사이드 박스처럼 이중 선 머리 */
 .case-paper-page .story-extra { grid-column: 1; grid-row: 2; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 28px; align-self: start; padding-top: 22px; }
 .case-paper-page .story-extra:empty { display: none; }
