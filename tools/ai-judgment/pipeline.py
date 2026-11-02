@@ -49,6 +49,7 @@ from llm import (DEFAULT_MAX_ATTEMPTS, DEFAULT_MAX_WAIT, LLMError, LLMQuotaExhau
                  parse_model_spec)
 from to_seed_sql import NAME_MAX_LENGTH, build_sql
 from script_assembler import build_script, check_paper, classification_errors, generate_units, normalize_paper
+from script_regenerate import RegenerationError, regenerate_blocks, regeneration_classification_errors, unit_list_errors
 from script_repair import repair_units
 from script_generation import balance_warning, generate_evidence_lines
 from script_generation import cast_errors as script_cast_errors
@@ -94,7 +95,11 @@ DEFAULT_CONFIG = {
     # courtDraft: 재판부 판결(BE-14 형식) 파일. court 단계를 끄고 사람이 쓴 판결을 넣을 때 쓴다 (BE-38)
     # paper: 1막 신문 기사 JSON(headline · deck · caption · article). 없으면 대본 전체 생성(stages.script.full)이 기사를 먼저
     # 만든다. 관리자가 고친 기사로 다시 돌릴 때만 넣는다 (BE-121, script_assembler.py)
-    "inputs": {"case": None, "court": None, "report": None, "source": None, "courtDraft": None, "paper": None},
+    # judgment · blocks: 대본 블록 재생성(stages.script.regenerate, BE-129 2차)의 입력. judgment는 AI 판결 출력(판단 요소 factorId ·
+    # direction — U3가 읽는다, 없으면 select 결과), blocks는 지금 대본 블록 {단위: {content, revision}}이다. 적재된 사건을 다시 만들
+    # 때는 등록 작업 폴더가 지워진 뒤라 백엔드가 DB 값으로 이 파일들을 만들어 넘긴다
+    "inputs": {"case": None, "court": None, "report": None, "source": None, "courtDraft": None, "paper": None,
+               "judgment": None, "blocks": None},
     "stages": {
         # model: Claude는 모델 ID(또는 anthropic:모델ID), 다른 공급자는 openai:모델ID · gemini:모델ID (BE-35). maxTokens는 Claude 외 공급자의 출력 상한
         # 목록으로 주면 앞 모델이 과부하 · 한도로 막혔을 때(재시도를 다 쓴 뒤) 다음 모델로 넘어간다 (BE-45)
@@ -141,9 +146,12 @@ DEFAULT_CONFIG = {
         # (분위기 · 쟁점 · 피해자 측 · 부가 인물 · 민감 플래그)이 필요하다 — 자동 분류(BE-123) 전까지는 설정으로 넣는다.
         # unitMaxTokens · unitTimeout은 여러 줄을 한 번에 받는 U0 · U1 · U2 · U4용(maxTokens · timeout은 증거조사 한 줄용)
         # repairRetries: 대본 전체(full)의 검수 오류(BE-122)가 난 줄 하나를 고쳐 쓰는 최대 횟수. 0이면 고치지 않는다
+        # regenerate: 대본 전체 대신 고른 블록(예: ["U4"])과 그에 기대는 뒤 블록만 다시 만든다 (BE-129 2차, script_regenerate.py).
+        # inputs.blocks(지금 블록)를 입력으로 쓰고, 분류에는 민감 플래그(sensitiveFlags)가 반드시 있어야 한다
         "script": {"enabled": False, "model": None, "cast": None, "maxRetries": 2, "temperature": None,
                    "maxTokens": 2000, "timeout": 60, "delay": 0.0,
-                   "full": False, "classification": None, "unitMaxTokens": 6000, "unitTimeout": 150, "repairRetries": 2},
+                   "full": False, "classification": None, "unitMaxTokens": 6000, "unitTimeout": 150, "repairRetries": 2,
+                   "regenerate": None},
         "load": {
             # court: 재판부 판결 초안이 있으면 비공개로 함께 적재한다 (BE-38)
             "enabled": True, "case": True, "court": True, "applyToDb": True,
@@ -555,9 +563,14 @@ def script_errors(config):
         except LLMError as e:
             errors.append(str(e))
     errors += script_cast_errors(cfg.get("cast") or {})
+    if cfg.get("regenerate") is not None:
+        errors += [f"stages.script.regenerate: {error}" for error in unit_list_errors(cfg["regenerate"])]
+        if not (cfg.get("classification") is None and config["stages"]["classify"]["enabled"]):
+            errors += regeneration_classification_errors(cfg.get("classification"))
     if not isinstance(cfg.get("full"), bool):
         errors.append("stages.script.full은 true 또는 false다")
-    elif cfg["full"] and not (cfg.get("classification") is None and config["stages"]["classify"]["enabled"]):
+    elif cfg["full"] and cfg.get("regenerate") is None and not (cfg.get("classification") is None
+                                                                 and config["stages"]["classify"]["enabled"]):
         # 분류를 설정에 넣지 않았으면 classify 단계 결과를 쓴다(BE-123). 둘 다 없으면 블록을 고를 수 없다
         errors += classification_errors(cfg.get("classification"))
     for key, minimum in (("maxRetries", 0), ("maxTokens", 1), ("timeout", 1), ("unitMaxTokens", 1), ("unitTimeout", 1),
@@ -1326,6 +1339,8 @@ def stage_script(config, state, log, caller=call):
     단계가 자동으로 정하지 않는다(해송님 정정, 2026-10-24). 범위(지금은 증거조사만, 피고인신문 등은 범위
     밖인 이유)는 script_generation.py 모듈 docstring 참고."""
     cfg = config["stages"]["script"]
+    if cfg.get("regenerate") is not None:
+        return stage_script_regenerate(config, state, log, caller=caller)
     selection = stage_output(state, "select")
     if not selection:
         raise PipelineError("script 단계는 select 단계가 고른 판결(방향 · 이유)이 있어야 합니다. select를 먼저 돌리세요")
@@ -1411,6 +1426,69 @@ def stage_script(config, state, log, caller=call):
                         "scriptPublishable": script["publishable"], "reviewErrors": len(review_errors),
                         "reviewWarnings": len(script["review"]) - len(review_errors)})
     return outputs
+
+
+def load_input_json(config, key):
+    """설정 inputs의 JSON 파일. 설정하지 않았으면 None, 설정했는데 없거나 읽을 수 없으면 멈춘다(load_paper와 같은 이유)."""
+    path = resolve_path(config, config["inputs"].get(key))
+    if path is None:
+        return None
+    if not path.exists():
+        raise PipelineError(f"inputs.{key} 파일이 없습니다: {path}")
+    try:
+        return load_json(path)
+    except ValueError as e:
+        raise PipelineError(f"inputs.{key}를 JSON으로 읽을 수 없습니다: {e}")
+
+
+def stage_script_regenerate(config, state, log, caller=call):
+    """대본 블록 재생성 (BE-129 2차, script_regenerate.py). 고른 블록과 그 블록에 기대는 뒤 블록만 다시 만들고 결과를
+    regenerate.json에 쓴다. 적재된 사건의 블록은 백엔드가 이 결과로 바꾼다 — 다시 만들지 않은 블록은 내보내지 않는다.
+
+    입력: 사건(inputs.case 또는 extract 결과), AI 판결의 판단 요소 방향(inputs.judgment 또는 select 결과), 지금 블록
+    (inputs.blocks), 기사(inputs.paper, U1을 다시 만들 때). 입력을 모두 읽고 재생성이 끝난 뒤에야 지난 결과를 지운다."""
+    cfg = config["stages"]["script"]
+    case = load_json(input_file(config, state, "case"))
+    judgment = load_input_json(config, "judgment")
+    if judgment is None:
+        selection = stage_output(state, "select")
+        if not selection:
+            raise PipelineError("블록 재생성에는 AI 판결의 판단 요소 방향이 필요합니다. inputs.judgment를 넣거나 select를 먼저 돌리세요")
+        ensure_selection_matches_case(config, state, selection)
+        judgment = load_json(selection["outputFile"])
+    if not isinstance(judgment, dict) or not isinstance(judgment.get("factors"), list):
+        raise PipelineError("inputs.judgment는 판단 요소 목록(factors: factorId · direction)을 가진 객체다")
+    blocks = load_input_json(config, "blocks")
+    paper = load_paper(config)
+    classification = cfg["classification"] or stage_output(state, "classify").get("classification")
+    cast = cfg["cast"]
+    log(f"대본 블록 재생성: {cfg['model']} (고른 블록 {' · '.join(cfg['regenerate'])}, 배역 — 검사 · 판사: {cast['prosecutor']}"
+        f" · 변호인 · 피고인 역: {cast['defense']})")
+    try:
+        result = regenerate_blocks(
+            case, judgment, cast, classification, {} if blocks is None else blocks, cfg["regenerate"], model=cfg["model"],
+            paper=paper, caller=caller, max_retries=cfg["maxRetries"], temperature=cfg["temperature"],
+            max_tokens=cfg["unitMaxTokens"], evidence_max_tokens=cfg["maxTokens"], timeout=cfg["unitTimeout"],
+            evidence_timeout=cfg["timeout"], delay=cfg["delay"], repair_retries=cfg["repairRetries"], log=log)
+    except RegenerationError as e:
+        raise PipelineError("블록 재생성 입력 오류:\n- " + "\n- ".join(e.args[0]))
+    out_dir = PIPELINE_DIR / config["name"] / "script"
+    if out_dir.exists():
+        shutil.rmtree(out_dir)  # 이전 실행 결과와 섞지 않는다
+    regenerate_file = out_dir / "regenerate.json"
+    write_json(regenerate_file, {**result, "model": cfg["model"], "cast": cast, "classification": classification,
+                                 "createdAt": _now()})
+    made = set(result["regenerated"])
+    review_errors = [i for i in result["review"] if i["severity"] == "error" and (i["unit"] in made or not i["unit"])]
+    for issue in result["review"]:
+        if issue["unit"] in made or not issue["unit"]:
+            log(f"{'✗' if issue['severity'] == 'error' else '⚠'} [{issue['unit']}{issue['path']}] {issue['code']}: {issue['message']}")
+    if result["pending"]:
+        log(f"⚠ 다시 만들지 못한 블록: {', '.join(result['pending'])} — 지금 값을 그대로 둡니다")
+    log(f"결과: 다시 만든 블록 {', '.join(result['regenerated']) or '없음'} (검수 오류 {len(review_errors)}건)")
+    return {"regenerateFile": str(regenerate_file), "model": cfg["model"], "cast": cast, "units": result["units"],
+            "regenerated": result["regenerated"], "pending": result["pending"], "stopped": result["stopped"],
+            "publishable": result["publishable"], "reviewErrors": len(review_errors)}
 
 
 def stage_load(config, state, log, apply=None):
@@ -1670,8 +1748,12 @@ def run_pipeline(config, start=None, until=None, skip=(), rerun=False, log=print
     if "script" in steps:
         # extract가 이번에 돌면 아직 case.json이 없다(등록 요청 A-14가 그렇다). 그때는 제목 없이 안내한다 (PR #356 리뷰)
         case_title = "" if "extract" in steps else f"({load_json(input_file(config, state, 'case'))['title']})"
-        log(f"외부 전송: 대본 증거조사 단계에서 비식별화한 사건 제목{case_title} · 개요 · 판단 요소가 "
-            f"{providers_text(config['stages']['script']['model'])}로 전송됩니다")
+        if config["stages"]["script"].get("regenerate") is not None:
+            log(f"외부 전송: 대본 블록 재생성 단계에서 비식별화한 사건 제목{case_title} · 개요 · 판단 요소와 지금 대본 블록이 "
+                f"{providers_text(config['stages']['script']['model'])}로 전송됩니다")
+        else:
+            log(f"외부 전송: 대본 증거조사 단계에서 비식별화한 사건 제목{case_title} · 개요 · 판단 요소가 "
+                f"{providers_text(config['stages']['script']['model'])}로 전송됩니다")
     for notice in free_tier_notices(config, steps):
         log(notice)
     for stage in steps:

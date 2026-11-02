@@ -673,12 +673,17 @@ def _cards(case, opening):
 
 # ---------------------------------------------------------------- 블록 (BE-126 저장 단위)
 
-def block_revisions(present, repairs):
+def block_revisions(present, repairs, base=None):
     """블록마다 (판, 만들 때 본 앞 블록의 판). 처음 만든 블록은 1판이고, 고쳐 쓰기(BE-122 2차)가 값을 바꿀 때마다 1씩 오른다.
     단위째 다시 만든 블록은 그때의 앞 블록 판을 본다. 그래서 U0 줄을 고치면 그 전에 만든 U2 · U4는 옛 U0를 보고 만든 것이 되어
-    적재하자마자 낡음으로 보인다 — 실제로 그렇기 때문이다."""
-    revision = {unit: 1 for unit in present}
-    seen = {unit: {dep: 1 for dep in BLOCK_BASIS[unit] if dep in present} for unit in present}
+    적재하자마자 낡음으로 보인다 — 실제로 그렇기 때문이다.
+
+    `base`는 블록 재생성(BE-129 2차) 때 이미 있는 블록의 판이다. 다시 만든 블록은 그 판의 다음 판에서 시작하고, 다시 만들지 않은
+    앞 블록은 지금 판을 본 것으로 남는다."""
+    base = base or {}
+    revision = {unit: base.get(unit, 0) + 1 for unit in present}
+    current = lambda dep: revision.get(dep, base.get(dep))  # noqa: E731
+    seen = {unit: {dep: current(dep) for dep in BLOCK_BASIS[unit] if current(dep) is not None} for unit in present}
     for repair in repairs:
         unit = repair["unit"]
         changed = repair["ok"] if repair["action"] == "line" else repair.get("replaced", False)
@@ -686,7 +691,7 @@ def block_revisions(present, repairs):
             continue
         revision[unit] += 1
         if repair["action"] == "unit":
-            seen[unit] = {dep: revision[dep] for dep in seen[unit]}
+            seen[unit] = {dep: current(dep) for dep in seen[unit]}
     return revision, seen
 
 
@@ -715,24 +720,27 @@ def block_contents(case, generated):
     return contents
 
 
-def build_blocks(case, cast, cls, generated):
+def build_blocks(case, cast, cls, generated, *, base=None, units=None):
     """대본을 단위 블록과 메타로 나눈다 (BE-126 `case_script_block` 적재 계약).
 
     블록 하나: {"content", "revision", "basis", "review", "warnings", "repairs"}. `basis`는 그 블록을 만들 때 본 값
     (`BLOCK_BASIS`)이다 — 앞 블록은 판 번호, 분류 · 배역은 값 그대로, 사건 · 기사(`DB_BASIS`)는 None(적재할 때 백엔드가 DB 판으로
     채운다). 지금 값과 다르면 낡은 블록이다(계산은 백엔드). `review` · `warnings` · `repairs`는 관리자 화면 전용이다.
     `review` · `repairs`는 그 단위 것만 담는다(대본 전체에 걸린 `REVIEW_FAILED`는 대본의 `review`에만 있다).
-    메타: {"cast", "issue", "admits"} — 프론트 공통 틀이 고정 문구(신문 마지막 질문 · 답, 이름 · 자리)를 고르는 값이다."""
+    메타: {"cast", "issue", "admits"} — 프론트 공통 틀이 고정 문구(신문 마지막 질문 · 답, 이름 · 자리)를 고르는 값이다.
+
+    블록 재생성(BE-129 2차)은 `units`(다시 만든 블록)만 내보내고, `base`(지금 블록의 판)에서 판을 잇는다(`block_revisions`)."""
     contents = block_contents(case, generated)
+    made = [unit for unit in contents if units is None or unit in units]
     repairs = generated.get("repairs", [])
-    revision, seen = block_revisions(contents, repairs)
+    revision, seen = block_revisions(made, repairs, base)
     values = {"cast": dict(cast), "mood": cls.get("mood"), "issue": cls.get("issue"), "victim": cls.get("victim"),
               "thirdParty": bool(cls.get("thirdParty")), "sensitiveFlags": sorted(cls.get("sensitiveFlags") or []),
               **dict.fromkeys(DB_BASIS)}
     review = generated.get("review", [])
     blocks = {}
     for unit in BLOCK_UNITS:
-        if unit not in contents:
+        if unit not in made:
             continue
         blocks[unit] = {
             "content": contents[unit], "revision": revision[unit],
