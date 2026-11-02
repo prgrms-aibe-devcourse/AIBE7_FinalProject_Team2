@@ -424,6 +424,13 @@ class MoodClosingTest(unittest.TestCase):
             for unit in ("U0", "U2", "U4"):
                 self.assertNotIn("1막 마지막 줄의 어조", "\n".join(sa.guide_blocks(cls, unit)), (mood, unit))
 
+    def test_intro_fixed_lines_are_shared(self):
+        """생성 문맥과 조립기가 같은 고정 대사를 본다 — 한쪽만 고치면 AI가 보는 앞뒤와 화면이 어긋난다(PR #379 리뷰)."""
+        for line in sa.INTRO_FIXED.values():
+            self.assertIn(line, sa.INTRO_FIXED_CONTEXT)
+        fixed = [step["text"] for step in sa._intro_act(["a", "b", "c", "d", "e"])["steps"] if step["source"]["type"] == "fixed"]
+        self.assertEqual(fixed, [sa.INTRO_FIXED["photo"], sa.INTRO_FIXED["end"]])
+
     def test_sensitive_flag_overrides_reaction(self):
         for unit, roles in (("U1", ["guide"]), ("U2", ["narrator"])):
             self.assertIn(sa.SENSITIVE_NO_REACTION, sa.build_system(unit, {**CLS, "sensitiveFlags": ["SELF_HARM"]}, roles))

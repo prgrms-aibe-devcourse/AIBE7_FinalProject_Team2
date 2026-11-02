@@ -425,10 +425,17 @@ def normalize_paper(value):
 
 # 검사 의견에 구형(형량)이 들어가면 사용자가 판결을 입력하기 직전에 앵커링이 된다(PR #329 YOLO-NIM 리뷰). 실제 재판의 검사 의견은
 # 구형을 포함하므로 모델이 그대로 따라 할 가능성이 높다. 잡는 문형(SENTENCING_PATTERN)은 script_review가 갖는다
-# U1 대사 사이에 끼는 고정 대사(프론트 틀). AI가 보지 못하면 장면 연결 · 되풀이를 못 피한다(BE-124, 팀원 개선안 개발-2).
-# 틀의 문구를 바꾸면 여기도 함께 고친다
-INTRO_FIXED_CONTEXT = ("대사 사이에 아래 고정 대사가 들어간다. 이 말을 되풀이하지 않고 앞뒤가 이어지게 쓴다: ①과 ② 사이에 내로 \"그럼, 좀 더 자세히 살펴볼까요?\" / "
-                       "④와 ⑤ 사이에 내로 \"여기까지가 기사에 나온 내용이네요.\" / ⑤ 뒤에 첫인상 엽서 질문 \"이 사건에서는 어느 정도의 벌이 적절하다고 생각하세요?\"가 이어진다.")
+# U1 대사 앞뒤에 끼는 고정 대사(프론트 틀 · 화면 코드). AI가 보지 못하면 장면 연결 · 되풀이를 못 피한다(BE-124, 팀원 개선안 개발-2).
+# 조립기(`_intro_act`)와 생성 문맥(`INTRO_FIXED_CONTEXT`)이 이 값을 함께 읽는다 — 프론트 틀 문구를 바꾸면 여기만 고친다(FE-147)
+INTRO_FIXED = {
+    "opening": "오늘 신문에 실린 사건이에요. 기사에 나온 내용만 같이 읽어 볼게요.",  # ① 앞. 화면 코드(overviewPage INTRO_STEP)가 붙인다
+    "photo": "그럼, 좀 더 자세히 살펴볼까요?",  # ①과 ② 사이
+    "end": "여기까지가 기사에 나온 내용이네요.",  # ④와 ⑤ 사이
+    "postcard": "이 사건에서는 어느 정도의 벌이 적절하다고 생각하세요?",  # ⑤ 뒤 첫인상 엽서 질문(1b)
+}
+INTRO_FIXED_CONTEXT = (f"대사 앞뒤에 아래 고정 대사가 들어간다. 이 말을 되풀이하지 않고 앞뒤가 이어지게 쓴다: ① 앞에 내로 \"{INTRO_FIXED['opening']}\" / "
+                       f"①과 ② 사이에 내로 \"{INTRO_FIXED['photo']}\" / ④와 ⑤ 사이에 내로 \"{INTRO_FIXED['end']}\" / "
+                       f"⑤ 뒤에 첫인상 엽서 질문 \"{INTRO_FIXED['postcard']}\"가 이어진다.")
 CLAIM_VS_FACT = ("- 변호인 대사에서도 사건 데이터에 사실로 적힌 내용(구금 · 자수 · 합의 같은 확인된 사실)은 \"주장합니다\"를 붙이지 않고 사실로 말한다. "
                  "\"~라고 주장합니다\"는 사건 데이터에 주장으로 적힌 내용에만 쓴다. 한 문장에 둘이 섞이면 문장을 나눈다.")
 NO_SENTENCING = ("- 구형 · 형량 · 벌금액(\"징역 몇 년\" · \"벌금 얼마\")을 말하지 않는다. 사용자가 판결을 입력하기 전이라 앵커링이 된다. "
@@ -588,13 +595,13 @@ def _intro_act(lines):
     ai = _src("ai", unit="U1", basis=["paper"])
     steps = [
         {"say": "nambul", "look": {"nambul": "guide-neutral"}, "text": lines[0], "source": ai, "focus": "head"},
-        {"say": "naero", "text": "사진은 사건을 이해하도록 만든 연출 이미지예요. 실제 현장 사진이 아니에요.",
+        {"say": "naero", "text": INTRO_FIXED["photo"],
          "source": _src("fixed"), "focus": "photo"},
         {"say": "nambul", "text": lines[1], "source": ai, "focus": "body"},
         {"say": "naero", "text": lines[2], "source": ai, "focus": "body"},
         {"say": "nambul", "text": lines[3], "source": ai, "focus": "body"},
         {"say": "naero", "look": {"naero": "react-sorry", "nambul": "idle-neutral"},
-         "text": "기사로 알 수 있는 건 여기까지예요. 기사에 없는 이야기는 지어내지 않을게요.", "source": _src("fixed"),
+         "text": INTRO_FIXED["end"], "source": _src("fixed"),
          "focus": "body"},
         {"say": "nambul", "look": {"nambul": "react-sorry"}, "text": lines[4], "source": ai, "focus": "body"},
     ]
