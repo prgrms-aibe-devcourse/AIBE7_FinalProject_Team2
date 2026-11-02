@@ -49,6 +49,27 @@ class ScriptBlockContractTest {
 	}
 
 	@Test
+	@DisplayName("말하는 대사 자리: A-13-21이 길이 규칙을 거는 자리가 파이썬 검수(unit_lines)와 같다 (BE-153)")
+	void spokenPaths_matchContract() {
+		Map<String, List<String>> spoken = new LinkedHashMap<>();
+		for (ScriptUnit unit : ScriptUnit.values()) {
+			if (unit != ScriptUnit.U3) {		// U3 대사는 A-13-13이 늘 대사로 본다 — 계약 파일에도 없다
+				spoken.put(unit.name(), unit.spokenPaths());
+			}
+		}
+		assertThat(spoken).isEqualTo(stringLists(contract.get("spokenPaths")));
+
+		assertThat(ScriptUnit.U1.isSpoken("/lines/12")).isTrue();
+		assertThat(ScriptUnit.U2.isSpoken("/questions/0/q")).isTrue();
+		assertThat(ScriptUnit.U2.isSpoken("/questions/0/a")).isFalse();		// 신문 답
+		assertThat(ScriptUnit.U2.isSpoken("/cards/issues/ul/1")).isFalse();	// 카드 글
+		assertThat(ScriptUnit.U2.isSpoken("/indict/x")).isFalse();		// '*'는 순번만
+		assertThat(ScriptUnit.U4.isSpoken("/defense")).isTrue();
+		assertThat(ScriptUnit.U4.isSpoken("/defense/0")).isFalse();
+		assertThat(ScriptUnit.U0.isSpoken("/questions/0/q")).isFalse();		// 설계도
+	}
+
+	@Test
 	@DisplayName("분류 축 값: A-11이 받는 분위기 · 쟁점 · 피해자 측 값이 파이썬과 같다 (BE-129 2차)")
 	void classificationValues_matchContract() {
 		JsonNode classification = contract.get("classification");

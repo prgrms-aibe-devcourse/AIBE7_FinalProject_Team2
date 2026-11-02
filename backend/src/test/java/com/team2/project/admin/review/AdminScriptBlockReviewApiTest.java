@@ -322,6 +322,22 @@ class AdminScriptBlockReviewApiTest extends ApiIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("A-13-21: 대사 길이(100자 · 2줄)는 말하는 대사 자리에만 — 설계도(U0) 질문은 101자 · 세 줄도 받고 500자를 넘으면 400 (BE-153)")
+	void editText_lengthRuleOnlyOnSpokenPaths() throws Exception {
+		String longQuestion = "가".repeat(60) + "\\n" + "나".repeat(41) + "\\n" + "다";	// 102자 · 세 줄
+		perform(patch(scriptUrl() + "/blocks/U0/text").contentType(MediaType.APPLICATION_JSON)
+				.content("{\"path\": \"/questions/0/q\", \"text\": \"" + longQuestion + "\"}"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.blocks[0].content.questions[0].q").value(longQuestion.replace("\\n", "\n")));
+		perform(patch(scriptUrl() + "/blocks/U0/text").contentType(MediaType.APPLICATION_JSON)
+				.content("{\"path\": \"/questions/0/q\", \"text\": \"" + "가".repeat(501) + "\"}"))
+			.andExpect(status().isBadRequest());
+		perform(patch(scriptUrl() + "/blocks/U2/text").contentType(MediaType.APPLICATION_JSON)
+				.content("{\"path\": \"/questions/0/q\", \"text\": \"" + "가".repeat(101) + "\"}"))
+			.andExpect(status().isBadRequest());		// U2 신문 질문은 말하는 대사다
+	}
+
+	@Test
 	@DisplayName("A-11: 민감 플래그를 고치면 승인한 블록의 승인이 지워진다 — 승인을 막는 낡음이라서(감사 로그에 단위)")
 	void editCase_sensitiveFlags_revokesApprovals() throws Exception {
 		jdbcTemplate.update("UPDATE case_script_block SET review = '[]'::jsonb, publishable = true, review_status = 'APPROVED', "
