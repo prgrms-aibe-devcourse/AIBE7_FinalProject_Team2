@@ -412,6 +412,7 @@ docker compose -f docker-compose.prod.yml logs web 2>&1 | grep -E 'zone "(auth_t
 | --- | --- | --- | --- |
 | `POST /api/v1/auth/login` | `member_login_per_ip` | IP별 분당 20번, 순간 20번 | 백엔드에 계정별 실패 잠금이 없어(docs/decisions/BE-113.md 결정 6) 비밀번호 대입을 늦춘다. 관리자(분당 5번)보다 넉넉한 이유는 같은 와이파이에서 여러 명이 동시에 로그인하기 때문 |
 | `POST /api/v1/auth/signup` | `member_signup_per_ip` | IP별 분당 10번, 순간 10번 | 가입은 중복 아이디(409)로 아이디가 있는지 드러나므로 대량 조회를 늦춘다 |
+| `POST /api/v1/auth/kakao/signup` | `member_signup_per_ip` (아이디 가입과 같은 zone) | IP별 분당 10번, 순간 10번 | 카카오 첫 가입 약관 동의(M-12, BE-145). 회원이 만들어지는 요청이라 가입과 같이 늦춘다. 해시를 쓰지 않아 합계 제한은 없다 |
 | 두 경로 합계 | `member_auth_all` | 초당 10번, **넘으면 순간 20번까지 기다렸다가 보냄**(nodelay 없음) | 요청마다 Argon2 해시(m=19MiB)가 메모리를 쓴다. 여러 IP로 나눠 와도 백엔드에서 동시에 도는 해시 수를 묶는다(`oauth_all`과 같은 이유). 20번을 넘게 쌓이면 429 |
 
 - **관리자 로그인 zone과 따로 센다.** 회원 로그인이 관리자 로그인 한도(분당 5번)를 쓰지 않는다.

@@ -70,6 +70,8 @@ public enum ErrorCode {
 	IMPORT_RESULT_INVALID(HttpStatus.UNPROCESSABLE_CONTENT, "생성 결과를 사건으로 만들 수 없습니다."),
 	// 아이디 회원가입 (확장 단계, BE-113, API 명세 M-5). 로그인 실패는 INVALID_CREDENTIALS를 함께 쓴다
 	DUPLICATE_ID(HttpStatus.CONFLICT, "이미 사용 중인 아이디입니다."),
+	// 카카오 첫 가입 약관 동의 (확장 단계, BE-145, API 명세 M-12). 가입 대기가 없거나 시간이 지났거나 이미 썼다
+	KAKAO_SIGNUP_EXPIRED(HttpStatus.CONFLICT, "카카오 가입 시간이 지났습니다. 카카오 로그인을 다시 시작해 주세요."),
 	// 닉네임 (확장 단계, BE-139, API 명세 M-5 · M-7)
 	DUPLICATE_NICKNAME(HttpStatus.CONFLICT, "이미 사용 중인 닉네임입니다."),
 	// 첫 로그인 가져오기 (확장 단계, BE-140, API 명세 M-10 · M-11)

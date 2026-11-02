@@ -58,6 +58,7 @@
 | v1.52 | 2026-10-31 | 대본 단위 블록 (**확장 단계**, BE-126 1차 · V45 · API 명세 v0.78) — `case_script_block` 신설(대본마다 단위 U0 ~ U4 하나에 한 행: 내용 `content` · 판 `revision` · 생성 근거 `basis` · 검수 결과 `review` · `warnings` · `repairs` · 공개 가능 여부 `publishable` · 검수 칸 4개, 유니크 `(script_id, unit)`, "오류 블록은 승인 불가" CHECK). `case_script`의 `evidence`는 U3 블록으로 옮기고(검수 상태 포함, 나머지 네 단위는 `pending`) 검수 칸 4개를 지웠다 — 대본의 검수 상태는 블록에서 계산한다(다섯 단위 모두 승인 = 공개, 증거조사만 있는 대본은 준비 중). `case_script`에 메타 `issue` · `admits`와 `pending`(만들지 못한 단위) · `review`(대본 전체 검수 결과) 추가. 블록의 생성 근거가 가리킬 판 `legal_case.content_revision` · `case_paper.revision` 추가(대본 입력이 바뀔 때만 오른다, `updated_at`을 쓰지 않는 이유는 아래 표) (결정: `docs/decisions/BE-126.md`) |
 | v1.54 | 2026-11-02 | 대본 블록 재생성 작업 (**확장 단계**, BE-129 2차 · V47 · API 명세 v0.85) — `case_script_regeneration` 신설(사건 · 파이프라인 작업 ID · 고른 블록 `units` · `cascade_later` · 요청 당시 입력 `inputs` · 상태 · 실패 사유 · 단계 상태 · 요청자 · 반영자 · 반영 시각). 사건 등록(`case_import`)처럼 진행 상황을 받아 적고, 관리자가 결과를 반영하면 `applied_at`이 채워진다. 대본에 칸을 더하지 않고 행으로 둔 이유는 아래 표. 감사 로그 액션 `CASE_SCRIPT_REGENERATE` · `CASE_SCRIPT_REGENERATE_APPLY` 추가 (`docs/decisions/BE-129.md`) |
 | v1.53 | 2026-11-01 | 등록 때 정한 배역 · 사건 자동 분류 (**확장 단계**, BE-129 1차 · V46 · API 명세 v0.80) — `case_import.cast_roles`(jsonb, 등록 요청을 받을 때 정한 배역) 추가: 대본을 만드는 등록은 배역을 대본보다 먼저 정하므로, 범죄 유형별 균형 계산이 사건과 함께 **아직 적재되지 않은 등록**(`case_id` 없음, `FAILED` 제외)의 이 값도 센다. `legal_case.classification`(jsonb `{mood, issue, victim, thirdParty}`) · `classification_needs_review`(jsonb 문자열 배열) 추가: 사건 등록의 자동 분류(BE-123) 결과와 관리자 확인이 필요한 축 · 플래그. 대본을 다시 만들 때(BE-129 2차) 파이프라인에 그대로 넘기는 값이라 한 칸에 둔다. 민감 플래그는 `sensitive_flags`가 따로 갖는다 (`docs/decisions/BE-129.md`) |
+| v1.55 | 2026-11-02 | 카카오 첫 가입 약관 동의 (**확장 단계**, BE-145 · API 명세 v0.87) — **스키마 변경 없음**(V44 칸 사용). `member.terms_agreed_at` · `terms_version`을 카카오 가입(M-12) 때도 채우고, 기존 회원(카카오 회원 · BE-133 이전 아이디 회원)은 M-14로 동의하면 채운다. 처음 온 카카오 계정은 동의 전에는 `member` 행을 만들지 않는다(가입 대기는 DB가 아니라 Redis 토큰 DB, 10분) |
 
 ---
 
@@ -587,13 +588,13 @@ S-03의 객관식 선택지. 범죄 유형별로 정의한다(FR-2-8).
 | created_at | timestamptz | ✓ |  |
 | last_login_at | timestamptz |  | 마지막 로그인 성공 시각 |
 | nickname | varchar(12) |  | 표시 이름(v1.42). 아이디 회원은 가입 때 채우고 카카오 회원은 NULL(커뮤니티에는 `방청객 {회원 ID}`로 보임). **중복 금지**(v1.49, 대소문자 구분 없음 — `uq_member_nickname`, NULL은 겹쳐도 된다). 설정 · 변경은 API 명세 M-7 |
-| terms_agreed_at | timestamptz |  | 이용약관 · 개인정보처리방침에 동의한 시각(v1.51). 아이디 가입(M-5) 때 가입 시각으로 채운다. 카카오 회원 · BE-133 전 가입자는 NULL |
+| terms_agreed_at | timestamptz |  | 이용약관 · 개인정보처리방침에 동의한 시각(v1.51). 아이디 가입(M-5) · 카카오 가입(M-12, v1.55) 때 가입 시각으로 채우고, 그 전에 가입한 회원은 M-14로 동의하면 채운다. 동의 전 회원은 NULL |
 | terms_version | varchar(20) |  | 동의한 약관 버전(v1.51, 코드 `TermsVersion.CURRENT`). 문서를 바꿔도 이미 동의한 값은 바꾸지 않는다 |
 
 - `(provider, provider_user_id)` 유일(`uq_member_provider_user`). 행은 `INSERT ... ON CONFLICT DO NOTHING`으로 만들어, 같은 계정의 첫 로그인이 동시에 와도 한 행만 생긴다.
 - **카카오 회원은 개인정보를 저장하지 않는다**: 카카오 동의항목(닉네임 · 이메일 · 프로필)을 요청하지 않고 회원번호만 쓴다.
 - **아이디 회원(`LOCAL`, v1.42)** 은 아이디 · 비밀번호 해시(`member_password`) · 닉네임을 저장한다(이용약관 · 개인정보처리방침 FE-117). 카카오 계정과 아이디 계정은 **합치지 않는다** — 같은 사람이어도 다른 회원이다.
-- **약관 동의 기록(v1.51, BE-133)**: `terms_agreed_at` · `terms_version`은 함께 있거나 함께 없다(CHECK `ck_member_terms_agreement`). NULL은 "동의 기록이 없다"는 뜻이다 — 카카오로 처음 가입하는 경로는 동의를 묻지 않아 비어 있다(docs/decisions/BE-133.md).
+- **약관 동의 기록(v1.51, BE-133)**: `terms_agreed_at` · `terms_version`은 함께 있거나 함께 없다(CHECK `ck_member_terms_agreement`). NULL은 "동의 기록이 없다"는 뜻이다 — BE-145(v1.55) 전에 가입한 카카오 회원 · BE-133 전에 가입한 아이디 회원이 그렇고, M-8 `termsRequired`가 `true`다. 처음 온 카카오 계정은 동의해야 회원이 만들어져 처음부터 채워진다(docs/decisions/BE-133.md · BE-145.md).
 
 #### `member_password` — 아이디 회원 로그인 정보 (확장 단계, v1.42 · BE-113 · V33)
 

@@ -52,7 +52,7 @@ public class Member {
 	@Column(length = 12)
 	private String nickname;
 
-	/** 이용약관 · 개인정보처리방침에 동의한 시각 (BE-133). 아이디 가입 때만 채운다 */
+	/** 이용약관 · 개인정보처리방침에 동의한 시각 (BE-133 · BE-145). 아이디 가입 · 카카오 가입 때 채운다. 그 전에 가입한 회원은 NULL(동의 기록이 없다) */
 	private Instant termsAgreedAt;
 
 	/** 동의한 약관 버전({@link TermsVersion}). terms_agreed_at과 함께 있거나 함께 없다(CHECK ck_member_terms_agreement) */
@@ -81,6 +81,24 @@ public class Member {
 	/** 닉네임을 바꾼다. 형식 · 중복 검사는 서비스가 먼저 한다 */
 	public void changeNickname(String nickname) {
 		this.nickname = nickname;
+	}
+
+	/** 동의 기록이 없어 동의 창을 거쳐야 하는가 (M-8 termsRequired, BE-145) */
+	public boolean isTermsRequired() {
+		return termsAgreedAt == null;
+	}
+
+	/**
+	 * 약관 동의를 기록한다. 이미 동의한 회원의 값은 바꾸지 않는다 — 그때 동의한 시각 · 버전이다 (BE-133 TermsVersion).
+	 * 두 칸은 함께 채운다(CHECK ck_member_terms_agreement)
+	 */
+	public void agreeTerms(Instant now) {
+		Objects.requireNonNull(now, "now");
+		if (termsAgreedAt != null) {
+			return;
+		}
+		this.termsAgreedAt = now;
+		this.termsVersion = TermsVersion.CURRENT;
 	}
 
 	/** 로그인 성공 시각 기록 */

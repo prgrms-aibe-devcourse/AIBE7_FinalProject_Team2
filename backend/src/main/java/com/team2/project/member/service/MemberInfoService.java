@@ -33,7 +33,7 @@ public class MemberInfoService {
 			.orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED));
 		String loginId = passwordRepository.findById(memberId).map(MemberPassword::getLoginId).orElse(null);
 		return new MemberMeResponse(member.getNickname(), Nickname.displayName(memberId, member.getNickname()),
-			member.getProvider().name(), loginId, kst(member.getCreatedAt()), kst(member.getLastLoginAt()));
+			member.getProvider().name(), loginId, kst(member.getCreatedAt()), kst(member.getLastLoginAt()), member.isTermsRequired());
 	}
 
 	private static OffsetDateTime kst(Instant instant) {
