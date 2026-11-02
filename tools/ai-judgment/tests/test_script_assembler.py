@@ -470,6 +470,15 @@ class MoodClosingTest(unittest.TestCase):
             for unit in ("U0", "U2", "U4"):
                 self.assertNotIn("1막 마지막 줄의 어조", "\n".join(sa.guide_blocks(cls, unit)), (mood, unit))
 
+    def test_mood_u2_section_reaches_only_u2(self):
+        """분위기 `## U2` 절(진행 해설 길이 · 초점)은 U2에만 들어간다 — 절 제목 오타로 범위가 바뀌는 것을 잡는다(PR #397 리뷰)."""
+        marker = "이 절은 진행 해설(issues_narr)에만 적용한다"
+        for mood in sa.MOODS:
+            cls = {**CLS, "mood": mood}
+            self.assertIn(marker, "\n".join(sa.guide_blocks(cls, "U2")), mood)
+            for unit in ("U0", "U1", "U4"):
+                self.assertNotIn(marker, "\n".join(sa.guide_blocks(cls, unit)), (mood, unit))
+
     def test_intro_fixed_lines_are_shared(self):
         """생성 문맥과 조립기가 같은 고정 대사를 본다 — 한쪽만 고치면 AI가 보는 앞뒤와 화면이 어긋난다(PR #379 리뷰)."""
         for line in sa.INTRO_FIXED.values():
