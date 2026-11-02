@@ -1539,6 +1539,7 @@ function accountNote(api, navigate) {
 
 export async function renderMyPage(container, { api, navigate, view, from }) {
   if (isAdmin()) { navigate(homeRoute(), {}, { replace: true }); return; } // 관리자는 마이페이지 자리가 관리자 페이지다 (FE-53)
+  keepNew(null, []); // 화면에 새로 들어올 때마다 이전 방문의 "새로 얻음" · "새로 열림" 표시를 비운다
   const root = element('div', 'my-page');
   container.replaceChildren(root); // 헤더는 라우터가 붙인 공통 헤더다(FE-66)
   const active = () => container.contains(root);
