@@ -306,6 +306,11 @@ def check_opening(value):
     cards = value.get("cards")
     if not (isinstance(cards, dict) and all(isinstance(cards.get(k), dict) for k in ("indict", "plea", "issues"))):
         errors.append("cards에 indict · plea · issues 객체가 있어야 한다")
+    else:
+        for k in ("indict", "plea", "issues"):
+            ul = cards[k].get("ul")
+            if not (isinstance(ul, list) and all(isinstance(v, str) for v in ul)):
+                errors.append(f"cards.{k}.ul은 문자열 목록이다")
     for key, label in (("indict", "공소사실"), ("plea", "변호인 입장"), ("issues_narr", "쟁점 해설")):
         errors += sentencing_errors(label, " ".join(v for v in (value.get(key) or []) if isinstance(v, str)))
     return errors

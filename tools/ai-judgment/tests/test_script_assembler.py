@@ -271,6 +271,14 @@ class GenerateTest(unittest.TestCase):
         leaked_opening = {**OPENING, "indict": ["공소사실을 말씀드리겠습니다.", "징역 3년에 처해 주십시오."]}
         self.assertTrue(sa.check_opening(leaked_opening))
 
+    def test_opening_card_ul_must_be_string_list(self):
+        """카드 ul이 문자열 목록이 아니면 생성 단계에서 오류로 다시 요청한다(BE-149)."""
+        self.assertEqual(sa.check_opening(OPENING), [])
+        for bad in ("문자열", None, [1, 2], [["중첩"]]):
+            for key in ("indict", "plea", "issues"):
+                opening = {**OPENING, "cards": {**OPENING["cards"], key: {**OPENING["cards"][key], "ul": bad}}}
+                self.assertIn(f"cards.{key}.ul은 문자열 목록이다", sa.check_opening(opening), (key, bad))
+
     def test_design_last_question_must_match_fixed_question(self):
         """화면의 마지막 질문은 고정 문구라, 설계도의 세 번째 질문(답의 근거)이 다르면 답의 뜻이 달라진다(PR #329 YOLO-NIM 리뷰)."""
         self.assertEqual(sa.check_design(DESIGN, "admitted"), [])
