@@ -1,8 +1,7 @@
-import { existsSync } from 'node:fs';
 // npm test : 무대 대본 진행 로직(모습 · 이름표 이어받기, 대사 건너뛰기 경계, 서버 확인 장면)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { ACT_GROUPS, DEFAULT_CAST, MIRRORED_LOOKS, attachNotice, castOf, courtPhotoCast, facedImage, glideMs, flatten, flipFor, imageOf, placeFor, seatFor, clearStageResume, readResume, resumeIndex, saveResume, sideOf, skipTarget } from './stage.js';
 
 const script = JSON.parse(readFileSync(new URL('../content/case-1/script.json', import.meta.url)));

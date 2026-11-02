@@ -44,7 +44,8 @@ export const imageOf = (who, look) => (look.startsWith('role:') ? `${IMAGES}role
     : look.startsWith('deform:') ? `${IMAGES}deform/${who}_${look.slice(7)}.webp` // 데포르메(란마 등, 시트에서 잘라 public에 둔다)
     : `${IMAGES}scene/${who}_${look}.webp`);
 // 좌우를 따로 그린 모습(COMMON-73): 물음표처럼 글자가 들어 있어 CSS로 뒤집으면 글자도 거울 글씨가 된다.
-// 이 모습은 뒤집는 대신 반대 방향으로 따로 그린 그림(`-mirror`, 물음표는 그대로)을 쓴다. 기본 그림은 규칙 방향(FACING)이다
+// 이 모습은 뒤집는 대신 반대 방향으로 따로 그린 그림(`-mirror`, 물음표는 그대로)을 쓴다. 기본 그림은 규칙 방향(FACING)이다.
+// **이 모습에 좌우 반전(data-flip 등)을 거는 자리는 반드시 `facedImage`를 거친다.** `imageOf`만 부르는 자리(AI 판결 대기 아이캐치 · 3막 빼꼼 마스코트)는 지금 반전이 없어 괜찮지만, 나중에 반전을 걸면 물음표가 다시 거울 글씨가 된다
 export const MIRRORED_LOOKS = new Set(['cheek:idle-thinking', 'cheek-slim:idle-thinking']);
 /** 서 있는 자리에서 쓸 그림과 CSS 뒤집기 여부. flip: flipFor 결과 */
 export function facedImage(who, look, flip) {

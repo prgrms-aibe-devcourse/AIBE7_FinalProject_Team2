@@ -16,6 +16,7 @@
 - **`-mirror`는 일러스트 개수에서 뺀다.** 같은 그림의 방향만 다른 것이라 수집 · 대표 이미지 후보로 세면 안 된다. `update-manifest.sh`와 `IllustrationCatalogTest`가 같은 규칙(`*-mirror.webp` 제외)을 쓴다.
 - 탐구 컷: 대체되어 `discard`에 있던 옛 공용 재연 컷 3장(`headline` · `sub-1` · `detail-1`)을 `cuts/inquiry`로 옮겨 `reporter` · `clue` · `sign`으로 이름을 붙였다(사용자 결정). 신문 여백 사진 목록(`newspaper.js`)과 대표 이미지 후보(`portraitPool.js`)에 더했다.
 - webp 변환은 이미지 보관 규칙(6장)의 크기 · 품질 85를 따랐다. 역할 컷은 기존 파일과 같은 방식(표정 컷은 캔버스 그대로, 옛 컷은 여백을 잘라 높이 560)으로 맞췄다.
+- 재생성 반영(11/03): 내로 변호인 역할 컷 · 노트북 · 데스크 펠트는 프롬프트(가이드 10-11 · B안 27-1 · 27-2)로 다시 뽑았다. 노트북은 화면 면에 생긴 흐릿한 얼룩을 화면 면만 균일하게 다시 칠해 고쳤다. 새 노트북은 그림이 캔버스를 거의 꽉 채워(이전 여백 약 6%) 화면 위치 CSS(`.laptop-art` 배경 크기 · `.laptop-screen`)를 다시 맞췄다. 변호인은 알파 영역 기준으로 잘라 판사 · 검사와 같은 크기(290 × 560)가 됐다.
 
 ## 고려한 제약 사항
 - 로컬 작업 폴더가 기준이다(사용자: "로컬 파일은 전부 정답"). 방향과 무관하게 바뀐 파일이 섞여 있어도 그대로 옮겼다.
@@ -24,5 +25,17 @@
 
 ## 추후 재검토가 필요하면
 - 글자 · 기호가 든 컷이 더 생기면 `MIRRORED_LOOKS`에 모습을 더하고 `-mirror` 그림을 만든다(파일이 빠지면 `stage.test.js`가 실패한다).
-- (11/03 반영 완료) 내로 변호인 역할 컷 · 노트북 · 데스크 펠트는 프롬프트(가이드 10-11 · B안 27-1 · 27-2)로 다시 뽑았다. 노트북은 화면 면에 생긴 흐릿한 얼룩을 화면 면만 균일하게 다시 칠해 고쳤다. 새 노트북은 그림이 캔버스를 거의 꽉 채워(이전 여백 약 6%) 화면 위치 CSS(`.laptop-art` 배경 크기 · `.laptop-screen`)를 다시 맞췄다. 변호인은 알파 영역 기준으로 잘라 판사 · 검사와 같은 크기(290 × 560)가 됐다.
-- 이미지 레포의 사건 1 재연 컷(`reenact/case-1` 2장 · `_original` 4장)은 사용자 의도대로 삭제했다(비공개 전환 예정).
+
+## 바뀐 파일과 이유 (이미지 레포 `NaeLawNamBul_Images#10`, `cuts` 기준 수정 20장 · 추가 7장 · 삭제 2장)
+이미지는 diff로 볼 수 없어, 옛 파일과 새 파일을 160px로 줄여 **옛 파일의 좌우 반전본과 같은지**를 픽셀 오차(RMSE, 0 ~ 65535)로 갈랐다. 오차 15 이하면 같은 그림으로 본다.
+
+| 구분 | 파일 | 이유 |
+| --- | --- | --- |
+| 좌우 반전 7장 | 내로 `role-actor_idle-{angry · anxious · apologetic · relieved · sad}` 5장 · `role-case-1_idle-neutral` · 남불 `role-judge_idle-neutral` | 새 파일이 옛 파일의 반전본과 같다(오차 7 ~ 16). 규칙(내로 오른쪽 · 남불 왼쪽)과 반대로 그려져 있던 것을 바로잡음 |
+| 재저장 수준 10장 | 내로 `cut-cheek_idle-cheer` · `cut_{cheer-cheer · guide-happy · guide-neutral · idle-neutral · react-happy · react-sorry · react-surprised · read-thinking}` 8장 · 남불 `role-actor_idle-relieved` | 옛 파일과 같은 그림이다(오차 0 ~ 14, 알파 영역 크기도 같음). 사용자가 로컬에서 방향을 확인하며 다시 저장한 것으로 보이고 방향 · 크기 변화는 없다 |
+| 남불 thinking 2장(교체) | 남불 `cut-cheek_idle-thinking` · `cut-cheek-slim_idle-thinking` | 몸을 왼쪽으로 반전하고 물음표는 그대로 다시 붙인 새 그림이 기본이 됨(오차가 옛 파일의 반전본과 가까움). 옛 오른쪽본은 `-mirror`로 보존 |
+| 재생성 1장 | 내로 `role-defense_idle-neutral` | 크기 문제(캔버스 2:3, 키 902 → 4:5, 키 1295)로 프롬프트 10-11로 다시 뽑음. 옛 컷은 `_original`에 `_v2` |
+| 추가 7장 | `-mirror` 4장(내로 · 남불 × cheek · cheek-slim `idle-thinking`) · `inquiry_cut_{reporter · clue · sign}` | 물음표 반대 방향본, 옛 공용 재연 컷 3장을 탐구 컷으로 |
+| 삭제 2장(+ `_original` 4장) | 사건 1 `reenact-case-1_cut_{origin · conclusion}` | 사용자 의도한 삭제(비공개 전환 예정) |
+
+본 레포 webp는 이 중 변경분을 같은 규칙으로 변환한 것(재저장 수준 10장도 같이 다시 변환). 노트북 · 펠트는 이미지 레포가 아니라 B안 원본 폴더 소관이라 이 표에 없다.
