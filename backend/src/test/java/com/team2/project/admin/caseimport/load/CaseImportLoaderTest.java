@@ -212,7 +212,7 @@ class CaseImportLoaderTest extends ApiIntegrationTest {
 	void load_judgmentPointsToUnknownFactor() {
 		PipelineResult broken = new PipelineResult("job", node(caseJson()), node(reportJson()),
 			node(courtDraftJson()), node(aiJudgmentJson().replace("\"factorId\": 7", "\"factorId\": 99")),
-			new PipelineResult.Selection("gemini:test", 1, "consensus", "합의", List.of()), null, null, null);
+			new PipelineResult.Selection("gemini:test", 1, "consensus", "합의", List.of()), null, null, null, null);
 
 		assertThatThrownBy(() -> loader.load(caseImport(), broken))
 			.isInstanceOf(BusinessException.class)
@@ -229,7 +229,7 @@ class CaseImportLoaderTest extends ApiIntegrationTest {
 				{"runs": 5, "factors": [
 				  {"factorId": 7, "valueAxis": "PRINCIPLE_RELATION",
 				   "valueAxisVotes": {"runs": 5, "counts": {"PRINCIPLE_RELATION": 4, "FAULT_STANDARD": 1},
-				                      "needsReview": false, "requestedRuns": 5}}]}"""), null, null);
+				                      "needsReview": false, "requestedRuns": 5}}]}"""), null, null, null);
 
 		LegalCase legalCase = loader.load(caseImport(), withVotes);
 
@@ -506,6 +506,29 @@ class CaseImportLoaderTest extends ApiIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("사전 학습 점검 판정은 고른 모델의 것만 생성 기록에 남긴다 — 판정 · 근거 · 개수 · 기준만 (BE-160, PR #411 리뷰)")
+	void load_savesContaminationVerdictOfSelectedModel() {
+		LegalCase legalCase = loader.load(caseImport(), resultWithContamination(node("""
+			{"gemini:test": {"verdict": "SUSPECT", "reason": "가까움 60%", "counts": {"CLOSE": 6, "FAR": 4},
+			                 "answered": 10, "runs": 10, "criteria": {"minAnswered": 5}},
+			 "openai:other": {"verdict": "CONTAMINATED", "reason": "다른 모델"}}""")));
+
+		// SUSPECT는 등록을 계속하므로, 적재 뒤 작업이 지워져도 후검수 · 집계할 수 있게 여기 남아야 한다
+		assertThat(savedContamination(legalCase.getId()))
+			.contains("SUSPECT", "가까움 60%", "CLOSE", "minAnswered")
+			.doesNotContain("CONTAMINATED", "다른 모델")	// 고르지 않은 모델의 판정은 남기지 않는다
+			.doesNotContain("\"answered\"");			// 오프라인 적재(build_generation_report)와 같은 키만
+	}
+
+	@Test
+	@DisplayName("점검을 돌리지 않았거나 고른 모델의 판정이 없으면 SKIPPED로 남긴다 — 오프라인 적재와 같은 값 (BE-160)")
+	void load_contaminationSkippedWhenNotRun() {
+		LegalCase legalCase = loader.load(caseImport(), result());
+
+		assertThat(savedContamination(legalCase.getId())).isEqualTo("{\"verdict\": \"SKIPPED\"}");
+	}
+
+	@Test
 	@DisplayName("대본이 없으면 같은 범죄 유형의 배정 수 · 마지막 배정을 보고 정한다 (BE-125)")
 	void load_assignsCastByCrimeType() {
 		String[] expected = expectedSequence("THEFT", 2);
@@ -696,7 +719,7 @@ class CaseImportLoaderTest extends ApiIntegrationTest {
 	private PipelineResult resultOf(JsonNode caseContent, JsonNode script, JsonNode classify) {
 		return new PipelineResult("job", caseContent, node(reportJson()), node(courtDraftJson()),
 			node(aiJudgmentJson()),
-			new PipelineResult.Selection("gemini:test", 1, "consensus", "합의", List.of()), null, script, classify);
+			new PipelineResult.Selection("gemini:test", 1, "consensus", "합의", List.of()), null, script, classify, null);
 	}
 
 	private PipelineResult result() {
@@ -706,13 +729,26 @@ class CaseImportLoaderTest extends ApiIntegrationTest {
 	private PipelineResult resultWith(JsonNode caseContent) {
 		return new PipelineResult("job", caseContent, node(reportJson()), node(courtDraftJson()),
 			node(aiJudgmentJson()),
-			new PipelineResult.Selection("gemini:test", 1, "consensus", "합의", List.of()), null, null, null);
+			new PipelineResult.Selection("gemini:test", 1, "consensus", "합의", List.of()), null, null, null, null);
 	}
 
 	private PipelineResult resultWithScript(JsonNode script) {
 		return new PipelineResult("job", node(caseJson()), node(reportJson()), node(courtDraftJson()),
 			node(aiJudgmentJson()),
-			new PipelineResult.Selection("gemini:test", 1, "consensus", "합의", List.of()), null, script, null);
+			new PipelineResult.Selection("gemini:test", 1, "consensus", "합의", List.of()), null, script, null, null);
+	}
+
+	private PipelineResult resultWithContamination(JsonNode contamination) {
+		return new PipelineResult("job", node(caseJson()), node(reportJson()), node(courtDraftJson()),
+			node(aiJudgmentJson()),
+			new PipelineResult.Selection("gemini:test", 1, "consensus", "합의", List.of()), null, null, null,
+			contamination);
+	}
+
+	private String savedContamination(Long caseId) {
+		return jdbcTemplate.queryForObject("""
+			SELECT (g.generation_report->'contamination')::text FROM ai_generation g
+			JOIN judgment j ON j.id = g.judgment_id WHERE j.case_id = ?""", String.class, caseId);
 	}
 
 	private List<Map<String, Object>> blocks(Long caseId) {

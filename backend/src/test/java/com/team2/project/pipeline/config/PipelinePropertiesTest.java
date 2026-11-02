@@ -56,12 +56,31 @@ class PipelinePropertiesTest extends ApiIntegrationTest {
 		assertThat(properties.scriptEnabled()).isTrue();
 		assertThat(properties.classifyModel()).isNull();
 		PipelineProperties blankScript = new PipelineProperties("http://pipeline:8000", null, null,
-			java.time.Duration.ofSeconds(30), "  ", "");
+			java.time.Duration.ofSeconds(30), "  ", "", null);
 		assertThat(blankScript.scriptEnabled()).isFalse();
 		assertThat(blankScript.classifyModel()).isNull();
 	}
 
+	@Test
+	@DisplayName("사전 학습 점검은 기본 꺼짐이고, 값이 없거나 빈 문자열이면 꺼짐으로 본다 (BE-160)")
+	void contaminationOffByDefault() {
+		// 운영 기본값: 설정을 건드린 적 없는 서버에서 모델 호출이 늘지 않는다
+		assertThat(properties.contaminationEnabled()).isFalse();
+		assertThat(blank(null).contaminationEnabled()).isFalse();
+		// Compose는 .env에 없는 값을 빈 문자열로 넘긴다(${PIPELINE_CONTAMINATION_ENABLED:-}) → 바인딩 실패 없이 꺼짐
+		assertThat(bind(java.util.Map.of("pipeline-service.contamination-enabled", "")).contaminationEnabled()).isFalse();
+		assertThat(bind(java.util.Map.of("pipeline-service.contamination-enabled", "true")).contaminationEnabled()).isTrue();
+		assertThat(bind(java.util.Map.of("pipeline-service.contamination-enabled", "false")).contaminationEnabled()).isFalse();
+	}
+
+	private static PipelineProperties bind(java.util.Map<String, String> values) {
+		return new org.springframework.boot.context.properties.bind.Binder(
+			new org.springframework.boot.context.properties.source.MapConfigurationPropertySource(values))
+			.bindOrCreate("pipeline-service", PipelineProperties.class);
+	}
+
 	private static PipelineProperties blank(java.util.List<String> models) {
-		return new PipelineProperties("http://pipeline:8000", models, null, java.time.Duration.ofSeconds(30), null, null);
+		return new PipelineProperties("http://pipeline:8000", models, null, java.time.Duration.ofSeconds(30), null, null,
+			null);
 	}
 }

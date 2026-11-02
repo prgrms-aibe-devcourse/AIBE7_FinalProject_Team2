@@ -319,6 +319,26 @@ class JobStoreTest(unittest.TestCase):
         self.assertEqual(status["error"], "비식별화 실패: 모델 응답 없음")  # 첫 줄만
         self.assertEqual([s for s in status["stages"] if s["name"] == "court"][0]["status"], STAGE_FAILED)
 
+    def test_status_is_failed_with_reason_when_contamination_stops(self):
+        """사전 학습 점검이 오염(CONTAMINATED)으로 멈추면 작업은 FAILED이고, 사유가 A-15 실패 사유로 그대로 나간다
+        (BE-160, PR #411 리뷰). 일부러 오염 판정을 만들기 어려워 운영 대신 여기서 고정한다"""
+        job_id = self.store.create(self._request(stages={"contamination": {"enabled": True}}))
+        self.store.start(job_id)
+        # pipeline.stage_contamination이 남기는 문구 그대로 (onContaminated=stop)
+        self._write_state(job_id, {
+            "extract": {"status": "done"},
+            "court": {"status": "done"},
+            "contamination": {"status": "failed", "error": "사전 학습 점검에서 멈춤: gemini:x: CONTAMINATED"},
+        })
+
+        status = self.store.status(job_id)
+
+        self.assertEqual(status["status"], FAILED)
+        self.assertEqual(status["error"], "사전 학습 점검에서 멈춤: gemini:x: CONTAMINATED")
+        stages = {s["name"]: s["status"] for s in status["stages"]}
+        self.assertEqual(stages["contamination"], STAGE_FAILED)
+        self.assertEqual(stages["generate"], PENDING)  # 생성은 돌지 않았다
+
     def test_status_is_succeeded_when_every_planned_stage_is_done(self):
         job_id = self.store.create(self._request())
         self.store.start(job_id)  # 가짜 프로세스는 이미 끝난 상태다
@@ -531,6 +551,28 @@ class JobStoreTest(unittest.TestCase):
 
         self.assertIsNone(self.store.result(job_id)["script"])
         self.assertIsNone(self.store.result(job_id)["classify"])
+        self.assertIsNone(self.store.result(job_id)["contamination"])  # 점검을 안 돌렸다 (BE-160)
+
+    def test_result_sends_contamination_verdicts_without_predictions(self):
+        """사전 학습 점검 판정을 모델별로 내보낸다 — SUSPECT는 등록을 계속하므로 적재 뒤에도 남아야 한다 (BE-160, PR #411 리뷰).
+        판정 · 근거 · 개수 · 기준만 내보내고, 모델이 예측한 형량이 든 회차 파일 경로 · 내용은 내보내지 않는다"""
+        job_id = self.store.create(self._request())
+        case_file = self.tool_dir / "cases" / "case.json"
+        case_file.parent.mkdir(parents=True, exist_ok=True)
+        case_file.write_text(json.dumps({"title": "사건"}, ensure_ascii=False), encoding="utf-8")
+        verdict = {"verdict": "SUSPECT", "reason": "가까움 60%", "counts": {"EXACT": 1, "CLOSE": 5, "FAR": 4},
+                   "answered": 10, "runs": 10, "criteria": {"minAnswered": 5}}
+        self._write_state(job_id, {
+            "extract": {"status": "done", "outputs": {"case": str(case_file)}},
+            "contamination": {"status": "done", "outputs": {
+                "results": {"gemini:x": {**verdict, "runFile": "/app/out/pipeline/job-x/contamination/run-001.json",
+                                         "predictedMonths": 120}},
+                "excluded": []}},
+        })
+
+        contamination = self.store.result(job_id)["contamination"]
+
+        self.assertEqual(contamination, {"gemini:x": verdict})
 
     def test_result_before_pipeline_produced_anything(self):
         job_id = self.store.create(self._request())

@@ -82,9 +82,13 @@ class AdminCaseImportServiceTest {
 	}
 
 	private AdminCaseImportService newService(String scriptModel, String classifyModel) {
+		return newService(scriptModel, classifyModel, false);
+	}
+
+	private AdminCaseImportService newService(String scriptModel, String classifyModel, boolean contamination) {
 		return new AdminCaseImportService(importRepository, caseSourceRepository, pipelineClient,
 			new PipelineProperties("http://pipeline:8000", List.of("gemini:test"), null, Duration.ofSeconds(30),
-				scriptModel, classifyModel),
+				scriptModel, classifyModel, contamination),
 			auditLogger, loader, castAssigner,
 			new NoOpTransactionManager());
 	}
@@ -163,6 +167,36 @@ class AdminCaseImportServiceTest {
 		ArgumentCaptor<CaseImport> saved = ArgumentCaptor.forClass(CaseImport.class);
 		verify(importRepository).save(saved.capture());
 		assertThat(saved.getValue().getCastRoles()).isNull();
+	}
+
+	@Test
+	@DisplayName("사전 학습 점검을 켜면 contamination 단계를 enabled만 담아 보낸다 — 판정 동작은 파이프라인 기본값 (BE-160)")
+	@SuppressWarnings("unchecked")
+	void startImport_contaminationEnabled_sendsEnabledOnly() {
+		when(pipelineClient.createJob(any())).thenReturn(job("abc123", "QUEUED", List.of()));
+		service = newService(null, null, true);
+
+		service.startImport(request(), admin, httpRequest);
+
+		ArgumentCaptor<PipelineJobRequest> sent = ArgumentCaptor.forClass(PipelineJobRequest.class);
+		verify(pipelineClient).createJob(sent.capture());
+		// onContaminated 등을 보내지 않아야 파이프라인 기본값(오염 → 중단)이 그대로 쓰인다
+		assertThat((Map<String, Object>) sent.getValue().stages().get("contamination"))
+			.containsExactly(Map.entry("enabled", true));
+		// 점검은 generate 앞 단계라 until을 바꾸지 않는다
+		assertThat(sent.getValue().until()).isNull();
+	}
+
+	@Test
+	@DisplayName("사전 학습 점검을 끄면(기본) contamination 단계를 보내지 않는다 — 서비스가 끈 채로 둔다 (BE-160)")
+	void startImport_contaminationDisabled_notSent() {
+		when(pipelineClient.createJob(any())).thenReturn(job("abc123", "QUEUED", List.of()));
+
+		service.startImport(request(), admin, httpRequest);
+
+		ArgumentCaptor<PipelineJobRequest> sent = ArgumentCaptor.forClass(PipelineJobRequest.class);
+		verify(pipelineClient).createJob(sent.capture());
+		assertThat(sent.getValue().stages() == null || !sent.getValue().stages().containsKey("contamination")).isTrue();
 	}
 
 	@Test
@@ -425,6 +459,25 @@ class AdminCaseImportServiceTest {
 
 		assertThat(response.status()).isEqualTo("FAILED");
 		assertThat(response.message()).hasSizeLessThanOrEqualTo(500).endsWith("…");
+	}
+
+	@Test
+	@DisplayName("사전 학습 점검이 오염으로 멈추면 FAILED와 파이프라인 사유가 그대로 화면(A-15)에 간다 (BE-160, PR #411 리뷰)")
+	void getImport_contaminationStop_showsReason() {
+		CaseImport entity = running("abc123");
+		when(importRepository.findById(1L)).thenReturn(Optional.of(entity));
+		when(pipelineClient.getJob("abc123")).thenReturn(new PipelineJob("abc123", "FAILED",
+			List.of(stage("extract", "DONE"), stage("contamination", "FAILED"), stage("generate", "PENDING")),
+			"사전 학습 점검에서 멈춤: gemini:x: CONTAMINATED", null, null, null));
+
+		CaseImportResponse response = service.getImport(1L);
+
+		assertThat(response.status()).isEqualTo("FAILED");
+		assertThat(response.message()).isEqualTo("사전 학습 점검에서 멈춤: gemini:x: CONTAMINATED");
+		assertThat(response.stages()).anySatisfy(stage -> {
+			assertThat(stage.name()).isEqualTo("contamination");
+			assertThat(stage.status()).isEqualTo("FAILED");
+		});
 	}
 
 	@Test

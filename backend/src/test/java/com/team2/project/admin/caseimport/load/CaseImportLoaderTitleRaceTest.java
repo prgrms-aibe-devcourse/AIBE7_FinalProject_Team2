@@ -99,6 +99,6 @@ class CaseImportLoaderTitleRaceTest {
 			mapper.readTree("""
 				{"penaltyType": "PRISON", "prisonMonths": 168, "summary": "요약", "reasoning": "이유",
 				 "factors": []}"""),
-			new PipelineResult.Selection("gemini:test", 1, "consensus", "합의", List.of()), null, null, null);
+			new PipelineResult.Selection("gemini:test", 1, "consensus", "합의", List.of()), null, null, null, null);
 	}
 }

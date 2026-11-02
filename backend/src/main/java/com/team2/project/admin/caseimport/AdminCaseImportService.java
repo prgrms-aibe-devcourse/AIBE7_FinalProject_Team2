@@ -395,6 +395,11 @@ public class AdminCaseImportService {
 		if (pipelineProperties.extractModel() != null && !pipelineProperties.extractModel().isBlank()) {
 			stages.put("extract", Map.of("model", pipelineProperties.extractModel()));
 		}
+		// 사전 학습 점검(BE-160)은 파이프라인 서비스가 기본으로 끄는 단계라 켜 달라고 보내야 돈다(service/jobs.py DISABLED_STAGES).
+		// enabled만 보내고 판정 동작(onContaminated=stop 등)은 파이프라인 기본값을 그대로 쓴다 — 오염이면 등록이 FAILED로 끝난다
+		if (pipelineProperties.contaminationEnabled()) {
+			stages.put("contamination", Map.of("enabled", true));
+		}
 		// 대본은 파이프라인 기본값이 꺼짐이라 켜 달라고 보내야 돈다. 등록 한 번에 분류 → 대본 전체(U0 ~ U4) → 검수까지 돌린다
 		// (BE-129, 1회 방식). 분류가 대본 전체의 입력이라 함께 켠다. 배역은 위에서 정한 값을 넘긴다 — 그 단계는 배역을 자동으로
 		// 고르지 않는다. until도 script로 올려야 거기까지 돈다(서비스 기본값은 axis)

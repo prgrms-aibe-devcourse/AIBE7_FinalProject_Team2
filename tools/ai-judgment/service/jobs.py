@@ -220,6 +220,25 @@ def _terminate(pid):
         pass
 
 
+# 사전 학습 점검 판정에서 내보내는 값 (BE-160). pipeline.contamination_verdicts의 모델별 결과 중
+# 판정 · 근거 · 분류별 개수 · 응답 수 · 기준만 — 회차별 응답(모델이 예측한 형량)은 run-*.json에만 두고 내보내지 않는다
+CONTAMINATION_RESULT_KEYS = ("verdict", "reason", "counts", "answered", "runs", "criteria", "replacedBy")
+
+
+def _contamination_result(contamination):
+    """사전 학습 점검 판정을 모델별로 돌려준다 (BE-160, PR #411 리뷰).
+
+    SUSPECT(의심)는 기본 설정에서 등록을 계속하므로, 판정이 결과로 나가지 않으면 적재 뒤 작업이 지워지면서
+    관리자가 후검수 · 집계할 길이 없어진다. 백엔드는 고른 모델(selection.modelSpec)의 값을 생성 기록에 남긴다
+    (오프라인 적재의 pipeline.build_generation_report와 같은 값). 점검을 돌리지 않았으면 None
+    """
+    results = (contamination or {}).get("results")
+    if not isinstance(results, dict) or not results:
+        return None
+    return {spec: {key: value[key] for key in CONTAMINATION_RESULT_KEYS if key in value}
+            for spec, value in results.items() if isinstance(value, dict)}
+
+
 def _axis_result(axis):
     """가치관 축 투표 결과를 **내용으로** 돌려준다.
 
@@ -668,6 +687,8 @@ class JobStore:
             if selection else None,
             "axis": _axis_result(outputs.get("axis") or {}),
             "classify": _classify_result(outputs.get("classify") or {}),
+            # 사전 학습 점검 판정 (BE-160). 점검을 안 돌렸으면 None — 백엔드가 생성 기록에 SKIPPED로 남긴다
+            "contamination": _contamination_result(outputs.get("contamination") or {}),
             # 대본은 안 돌렸으면 None이다. 사건 · 판결만 있으면 적재는 그대로 되고, 대본은 나중에 들어와도 된다(BE-108)
             "script": _script_result(outputs.get("script") or {}),
         }
