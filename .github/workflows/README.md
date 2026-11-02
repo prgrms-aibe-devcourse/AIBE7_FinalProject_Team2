@@ -48,7 +48,7 @@
 3. `deploy/smoke-test.sh`로 `/` · 화면 주소(SPA fallback) · `/api`(없는 주소도 JSON) · 캐시 정책 · 보안 헤더를 확인한다.
 4. 파이프라인은 운영 스택에 없어 위 스모크 테스트가 건드리지 않는다. 대신 이미지 안에서 작업 관리 단위 테스트(`tools/ai-judgment/service/tests`)를 돌리고, 컨테이너를 띄워 `/health`가 200인지 본다. LLM은 부르지 않는다.
 5. **push일 때만** 통과한 이미지를 파일로 넘기고(아티팩트, 하루 뒤 삭제), **`publish` job**이 그 이미지를 그대로 GHCR(`ghcr.io/prgrms-aibe-devcourse/lawnambul-web` · `-backend` · `-pipeline`)에 올린다. 다시 빌드하지 않으므로 올라가는 이미지는 테스트한 이미지와 같다.
-6. **`verify-deploy` job (`main` push만):** 서버의 `cd-agent`(2분마다 GHCR `main` 확인)가 배포하기를 기다린다. 운영 `/version.json`의 `revision`이 이 커밋이 될 때까지 최대 60회(매회 `curl` 최대 5초 + 15초 대기, 응답이 느리면 최악 약 20분까지)까지 확인한 뒤, 운영 주소로 `smoke-test.sh`를 돌린다(job 제한 20분). 저장소 변수 `DEPLOY_URL`이 없으면 건너뛴다. 실패하면 커밋한 사람에게 GitHub 알림이 간다.
+6. **`verify-deploy` job (`main` push · `main` 수동 실행):** 서버의 `cd-agent`(2분마다 GHCR `main` 확인)가 배포하기를 기다린다. 운영 `/version.json`의 `revision`이 이 커밋이 될 때까지 최대 60회(매회 `curl` 최대 5초 + 15초 대기, 응답이 느리면 최악 약 20분까지)까지 확인한 뒤, 운영 주소로 `smoke-test.sh`를 돌린다(job 제한 20분). 저장소 변수 `DEPLOY_URL`이 없으면 건너뛴다. 실패하면 커밋한 사람에게 GitHub 알림이 간다.
 
 - 공통 규칙의 예외: 업로드 때문에 **`publish` job만** `packages: write` 권한을 쓴다. PR에서 도는 `build` job은 읽기 권한뿐이고, checkout 토큰도 git 설정에 남기지 않는다(`persist-credentials: false`). 이미지 업로드는 중간에 끊기지 않도록 push 실행은 취소하지 않는다(PR 실행만 취소).
 - Actions는 서버에 들어가지 않는다(SSH · AWS 권한 없음). 서버가 GHCR을 보고 스스로 배포하고, 실패하면 직전 이미지로 되돌린다(`deploy/cd-agent.sh` · `deploy/deploy.sh`).
