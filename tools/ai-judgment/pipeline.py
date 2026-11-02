@@ -148,10 +148,11 @@ DEFAULT_CONFIG = {
         # repairRetries: 대본 전체(full)의 검수 오류(BE-122)가 난 줄 하나를 고쳐 쓰는 최대 횟수. 0이면 고치지 않는다
         # regenerate: 대본 전체 대신 고른 블록(예: ["U4"])과 그에 기대는 뒤 블록만 다시 만든다 (BE-129 2차, script_regenerate.py).
         # inputs.blocks(지금 블록)를 입력으로 쓰고, 분류에는 민감 플래그(sensitiveFlags)가 반드시 있어야 한다
+        # regenerateCascade: false면 뒤 블록을 함께 만들지 않는다(세부조정 — 뒤 블록은 낡음으로 남는다)
         "script": {"enabled": False, "model": None, "cast": None, "maxRetries": 2, "temperature": None,
                    "maxTokens": 2000, "timeout": 60, "delay": 0.0,
                    "full": False, "classification": None, "unitMaxTokens": 6000, "unitTimeout": 150, "repairRetries": 2,
-                   "regenerate": None},
+                   "regenerate": None, "regenerateCascade": True},
         "load": {
             # court: 재판부 판결 초안이 있으면 비공개로 함께 적재한다 (BE-38)
             "enabled": True, "case": True, "court": True, "applyToDb": True,
@@ -565,6 +566,8 @@ def script_errors(config):
     errors += script_cast_errors(cfg.get("cast") or {})
     if cfg.get("regenerate") is not None:
         errors += [f"stages.script.regenerate: {error}" for error in unit_list_errors(cfg["regenerate"])]
+        if not isinstance(cfg.get("regenerateCascade"), bool):
+            errors.append("stages.script.regenerateCascade는 true 또는 false다")
         if not (cfg.get("classification") is None and config["stages"]["classify"]["enabled"]):
             errors += regeneration_classification_errors(cfg.get("classification"))
     if not isinstance(cfg.get("full"), bool):
@@ -1469,7 +1472,8 @@ def stage_script_regenerate(config, state, log, caller=call):
             case, judgment, cast, classification, {} if blocks is None else blocks, cfg["regenerate"], model=cfg["model"],
             paper=paper, caller=caller, max_retries=cfg["maxRetries"], temperature=cfg["temperature"],
             max_tokens=cfg["unitMaxTokens"], evidence_max_tokens=cfg["maxTokens"], timeout=cfg["unitTimeout"],
-            evidence_timeout=cfg["timeout"], delay=cfg["delay"], repair_retries=cfg["repairRetries"], log=log)
+            evidence_timeout=cfg["timeout"], delay=cfg["delay"], repair_retries=cfg["repairRetries"],
+            cascade=cfg["regenerateCascade"], log=log)
     except RegenerationError as e:
         raise PipelineError("블록 재생성 입력 오류:\n- " + "\n- ".join(e.args[0]))
     out_dir = PIPELINE_DIR / config["name"] / "script"
@@ -1478,11 +1482,9 @@ def stage_script_regenerate(config, state, log, caller=call):
     regenerate_file = out_dir / "regenerate.json"
     write_json(regenerate_file, {**result, "model": cfg["model"], "cast": cast, "classification": classification,
                                  "createdAt": _now()})
-    made = set(result["regenerated"])
-    review_errors = [i for i in result["review"] if i["severity"] == "error" and (i["unit"] in made or not i["unit"])]
+    review_errors = [i for i in result["review"] if i["severity"] == "error"]  # 만든 블록 것과 단위 없는 것만 들어 있다
     for issue in result["review"]:
-        if issue["unit"] in made or not issue["unit"]:
-            log(f"{'✗' if issue['severity'] == 'error' else '⚠'} [{issue['unit']}{issue['path']}] {issue['code']}: {issue['message']}")
+        log(f"{'✗' if issue['severity'] == 'error' else '⚠'} [{issue['unit']}{issue['path']}] {issue['code']}: {issue['message']}")
     if result["pending"]:
         log(f"⚠ 다시 만들지 못한 블록: {', '.join(result['pending'])} — 지금 값을 그대로 둡니다")
     log(f"결과: 다시 만든 블록 {', '.join(result['regenerated']) or '없음'} (검수 오류 {len(review_errors)}건)")

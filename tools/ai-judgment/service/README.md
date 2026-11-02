@@ -142,8 +142,10 @@
 {
   "regenerate": {
     "units": ["U4"],
+    "cascade": true,
     "case": { "title": "...", "overview": "...", "sections": [], "factors": [] },
-    "judgment": { "factors": [{ "factorId": 1, "direction": "UP" }] },
+    "judgment": { "factors": [{ "factorId": 1, "direction": "UP" }], "prisonMonths": 60, "suspensionMonths": null,
+                  "fineAmount": null },
     "classification": { "mood": "tragic", "issue": "admitted", "victim": "punish", "thirdParty": false,
                         "sensitiveFlags": [] },
     "cast": { "prosecutor": "naero", "defense": "nambul" },
@@ -155,17 +157,25 @@
 ```
 
 - `units`: 관리자가 고른 블록. 그 블록을 입력으로 받는 뒤 블록(U0 → U2 → U4, U2 → U4)과 없는 앞 블록은 파이프라인이 더한다
-  (연동 표 정본 `script_assembler.BLOCK_BASIS`, `script_regenerate.py`).
-- `case`는 파이프라인 사건 입력 형식(`build_prompt`), `judgment.factors`는 AI 판결의 판단 요소 방향(U3가 읽는다), `blocks`는
-  지금 블록(`content` · `revision`), `paper`는 지금 기사(U1을 다시 만들 때 필요).
+  (연동 표 정본 `script_assembler.BLOCK_BASIS`, `script_regenerate.py`). `cascade: false`면 뒤 블록은 더하지 않는다(세부조정 —
+  남은 뒤 블록은 `basis`가 옛 판이라 낡음으로 보인다). 기본 `true`.
+- `case`는 파이프라인 사건 입력 형식(`build_prompt`)이고 양형기준 권고형(`recommended`)도 넣는다.
+- `judgment`는 AI 판결이다. U3는 판단 요소 방향(`factors[].factorId · direction`)을 읽고, 검수는 형량(`prisonMonths` ·
+  `suspensionMonths` · `fineAmount`)과 `case.recommended`를 대사에 새어 나온 숫자를 잡는 데 쓴다 — 있으면 함께 넘긴다.
+  `factors`의 요소는 객체여야 한다(아니면 `400`).
+- `blocks`는 지금 블록(`content` · `revision`).
+- `paper`는 지금 기사다. **지금 U1 블록이 있거나 U1을 다시 만들면 반드시 넘긴다**(없으면 `400`). 검수가 U1을 이 기사와 비교하므로,
+  없으면 건드리지 않은 U1에 가짜 오류가 나온다. 기사를 고친 뒤에는 새 기사로 검사되어 옛 U1이 어긋난 것도 드러난다.
 - **`classification.sensitiveFlags`는 반드시 목록으로 보낸다**(없으면 `[]`). 백엔드는 분류와 민감 플래그를 따로 저장하므로 합쳐
   보내야 한다 — 빠지면 민감 사건이 안내 · 표현 가드 없이 다시 만들어질 수 있어 `400`으로 막는다(PR #370 리뷰).
 - `stages`에는 `script`만 넣는다(`model` 필수, 조정 값 `maxRetries` · `repairRetries` 등). 배역 · 분류 · 블록은 `regenerate`로만
   받고 `stages.script`로 덮을 수 없다. 등록 단계(extract ~ classify)는 모두 꺼진다.
+- 등록과 재생성은 AI 호출 한도를 함께 쓰므로 한 번에 하나만 돈다. 등록이 도는 동안(수십 분) 재생성 요청은 `409`다.
 - `GET /jobs/{id}/result`는 `{"jobId", "kind": "regenerate", "regenerated": {...}}`다. `regenerated`는 다시 만들기로 한 블록
   (`units`) · 실제로 만든 블록(`regenerated`) · 못 만든 블록(`pending`) · `stopped` · `blocks`(만든 블록만, 적재 블록과 같은 형식 —
-  판은 지금 판 다음, `basis`는 그때 본 앞 블록 판) · `meta` · `review`(대본 전체 검수 결과) · `repairs` · `publishable`(만든
-  블록에 검수 오류가 없는가)이다. 다시 만들지 않은 블록은 들어 있지 않고, 고쳐 쓰기도 만든 블록에만 한다(승인한 블록을 건드리지 않는다).
+  판은 지금 판 다음, `basis`는 그때 본 앞 블록 판) · `meta` · `review`(검수는 대본 전체를 하되, 다시 만든 블록의 항목과 단위가 없는
+  `REVIEW_FAILED`만 담는다 — 만들지 않은 블록의 검수 결과를 덮어쓰지 않게) · `repairs` · `publishable`(만든 블록에 검수 오류가
+  없는가)이다. 다시 만들지 않은 블록은 들어 있지 않고, 고쳐 쓰기도 만든 블록에만 한다(승인한 블록을 건드리지 않는다).
 
 ## 응답 상태 코드
 

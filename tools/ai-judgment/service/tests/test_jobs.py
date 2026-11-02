@@ -583,6 +583,16 @@ class JobStoreTest(unittest.TestCase):
         self.assertEqual((script["cast"]["prosecutor"], script["regenerate"], script["enabled"]), ("naero", ["U4"], True))
         self.assertEqual(script["classification"]["mood"], "tragic")
         self.assertEqual(script["maxRetries"], 1)  # 조정 값은 받는다
+        self.assertTrue(script["regenerateCascade"])  # 기본은 뒤 블록까지
+
+    def test_create_regeneration_passes_cascade_and_paper(self):
+        request = self._regenerate_request(cascade=False, paper={"headline": "제목", "article": ["a", "b"]})
+        request["regenerate"]["blocks"]["U1"] = {"content": {"lines": []}, "revision": 1}
+        request["stages"]["script"]["regenerateCascade"] = True  # stages.script로는 덮지 못한다
+        job_id = self.store.create(request)
+        config = json.loads((self.jobs_dir / job_id / "config.json").read_text(encoding="utf-8"))
+        self.assertFalse(config["stages"]["script"]["regenerateCascade"])
+        self.assertEqual(json.loads(Path(config["inputs"]["paper"]).read_text(encoding="utf-8"))["headline"], "제목")
 
     def test_create_regeneration_rejects_bad_requests_without_writing(self):
         """민감 플래그가 없는 분류는 작업을 만들기 전에 400 — 가드 없이 다시 만들어지면 안 된다(PR #370 리뷰)."""
@@ -592,7 +602,11 @@ class JobStoreTest(unittest.TestCase):
         no_model["stages"] = {"script": {}}
         other_stage = self._regenerate_request()
         other_stage["stages"]["generate"] = {"enabled": True}
-        rejected = (without_flags, no_model, other_stage, self._regenerate_request(units=[]),
+        with_u1 = self._regenerate_request()
+        with_u1["regenerate"]["blocks"]["U1"] = {"content": {"lines": []}, "revision": 1}
+        rejected = (without_flags, no_model, other_stage, with_u1, self._regenerate_request(units=["U1"]),
+                    self._regenerate_request(judgment={"factors": [{"factorId": 1}, 3]}),
+                    self._regenerate_request(cascade="no"), self._regenerate_request(units=[]),
                     self._regenerate_request(units=["U5"]), self._regenerate_request(case=None),
                     self._regenerate_request(judgment={"factors": None}), self._regenerate_request(paper=["문단"]),
                     self._regenerate_request(blocks=[1]), {**self._regenerate_request(), "sources": [{"originalText": "x"}]},

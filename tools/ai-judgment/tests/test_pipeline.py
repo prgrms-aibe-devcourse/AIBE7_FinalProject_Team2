@@ -1445,9 +1445,22 @@ class PipelineTest(unittest.TestCase):
                 self.assertIn(message, str(ctx.exception))
         # classify를 켜면 그 결과(민감 플래그를 늘 담는다)를 쓰므로 분류 설정이 없어도 된다
         base = {"enabled": True, "model": "openai:a", "cast": self.REGEN_CAST, "regenerate": ["U4"]}
+        with self.assertRaises(pipeline.PipelineError) as ctx:
+            self.config(script={**base, "regenerateCascade": "no"}, classify={"enabled": True})
+        self.assertIn("regenerateCascade", str(ctx.exception))
         self.config(script=base, classify={"enabled": True})
         with self.assertRaises(pipeline.PipelineError):
             self.config(script=base)
+
+    def test_script_regenerate_cascade_false(self):
+        """regenerateCascade: false면 고른 블록만 만든다(세부조정)."""
+        raw = self.regenerate_config(["U0"], judgment={"factors": []}, blocks=self.REGEN_BLOCKS)
+        raw["stages"]["script"]["regenerateCascade"] = False
+        design = self.REGEN_BLOCKS["U0"]["content"]
+        state = self.run_with(raw, {}, until="script", script_answers=[json.dumps(design, ensure_ascii=False)])
+        outputs = state["stages"]["script"]["outputs"]
+        self.assertEqual((outputs["units"], outputs["regenerated"]), (["U0"], ["U0"]))
+        self.assertEqual(len(self.script_requests), 1)
 
     def test_script_regenerate_requires_judgment_and_valid_inputs(self):
         config = self.regenerate_config(["U4"], blocks=self.REGEN_BLOCKS)

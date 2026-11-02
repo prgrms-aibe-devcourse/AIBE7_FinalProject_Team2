@@ -6,11 +6,17 @@
 - 다시 만들 블록: 고른 블록 + `BLOCK_BASIS`에서 그 블록을 입력으로 받는 뒤 블록(U0 → U2 → U4, U2 → U4). 연동 표의 정본이
   `BLOCK_BASIS`라 여기서 따로 표를 두지 않는다. 다시 만들 블록이 기대는 앞 블록이 아예 없으면(증거조사만 있는 대본 등) 그 앞
   블록도 함께 만든다.
+- `cascade=False`면 뒤 블록을 더하지 않는다(세부조정, 10/30 결정 "블록을 하나씩 따로"). 그때 뒤 블록은 `basis`가 옛 판을
+  가리켜 낡음으로 보인다. 없는 앞 블록은 그래도 더한다 — 입력이 없으면 만들 수 없다.
+- 지금 U1 블록이 있으면 기사(`paper`)를 반드시 받는다. 검수가 대본 전체를 보는데 U1은 기사와 비교하므로, 기사가 없으면 건드리지
+  않은 U1에 가짜 오류(`NUMBER_NOT_IN_SOURCE`)가 나온다(PR #378 리뷰).
 - 다시 만들지 않는 블록은 지금 값(부르는 쪽이 넘긴 `content`)을 입력으로 쓴다. 예: U4만 다시 만들면 지금 U0 쟁점 · U2 변호인
   입장을 본다.
 - 앞 블록을 만들지 못하면 그 블록에 기대는 뒤 블록은 만들지 않고 `pending`에 남긴다 — 옛 앞 블록으로 만들면 관리자가 바꾸려던
   값이 그대로 남는다. 호출 한도가 소진되면 그 자리에서 멈춘다(`stopped`).
-- 만든 뒤 대본 전체를 검수하고(BE-122), 오류 줄 고쳐 쓰기(BE-122 2차)는 다시 만든 블록에만 한다.
+- 만든 뒤 대본 전체를 검수하고(BE-122), 오류 줄 고쳐 쓰기(BE-122 2차)는 다시 만든 블록에만 한다. 돌려주는 `review`에는 다시
+  만든 블록의 항목과 단위가 없는 항목(`REVIEW_FAILED`)만 담는다 — 만들지 않은 블록의 검수 결과는 그 블록을 만들 때의 것이 그대로
+  맞고, 부르는 쪽이 덮어써 승인된 블록을 "오류 블록"으로 만들면 안 된다.
 - 판은 지금 판에서 이어 오른다. `basis`에는 그때 본 앞 블록의 판(다시 만들지 않은 블록은 지금 판)을 남긴다(`build_blocks`).
 
 분류에는 민감 플래그(`sensitiveFlags`)가 **반드시** 있어야 한다. 백엔드는 분류(`legal_case.classification`)와 민감 플래그
@@ -78,11 +84,11 @@ def block_errors(blocks):
     return errors
 
 
-def regeneration_targets(units, existing):
-    """다시 만들 블록 (U0 → U4 순서). 고른 블록 + 그 블록을 입력으로 받는 뒤 블록 + 없는 앞 블록."""
+def regeneration_targets(units, existing, cascade=True):
+    """다시 만들 블록 (U0 → U4 순서). 고른 블록 + 그 블록을 입력으로 받는 뒤 블록(`cascade`일 때) + 없는 앞 블록."""
     targets = set(units)
     while True:
-        later = {unit for unit in BLOCK_UNITS if any(dep in targets for dep in INPUT_BLOCKS[unit])}
+        later = {unit for unit in BLOCK_UNITS if any(dep in targets for dep in INPUT_BLOCKS[unit])} if cascade else set()
         missing = {dep for unit in targets for dep in INPUT_BLOCKS[unit] if dep not in existing}
         added = (later | missing) - targets
         if not added:
@@ -100,17 +106,19 @@ def _existing(blocks, paper):
 
 def regenerate_blocks(case, judgment_output, cast, cls, blocks, units, *, model, paper=None, caller=default_call,
                       max_retries=2, temperature=None, max_tokens=6000, evidence_max_tokens=2000, timeout=150,
-                      evidence_timeout=60, delay=0.0, repair_retries=2, log=None):
+                      evidence_timeout=60, delay=0.0, repair_retries=2, cascade=True, log=None):
     """고른 블록(`units`)과 그에 기대는 블록을 다시 만든다. `blocks`는 지금 블록 `{단위: {"content", "revision"}}`,
-    `paper`는 지금 기사(U1을 다시 만들 때 필요하다).
+    `paper`는 지금 기사(U1 블록이 있거나 U1을 만들 때 필요하다), `cascade`는 뒤 블록을 함께 만들지다.
 
     돌려주는 값: {"units": 다시 만들기로 한 블록, "regenerated": 실제로 만든 블록, "pending": 만들지 못한 블록,
     "stopped": 호출 한도로 멈췄는가, "blocks": 만든 블록(build_blocks 형식), "meta": 메타, "review": 대본 전체 검수 결과,
-    "repairs": 고쳐 쓰기 기록, "publishable": 만든 블록에 검수 오류가 없는가}"""
+    "repairs": 고쳐 쓰기 기록, "publishable": 만든 블록에 검수 오류가 없는가}. `review`는 만든 블록 것과 단위가 없는 것만이다."""
     errors = unit_list_errors(units) + block_errors(blocks) + regeneration_classification_errors(cls)
-    targets = [] if errors else regeneration_targets(units, blocks)
-    if "U1" in targets and not paper:
-        errors.append("1막 해설(U1)을 다시 만들려면 기사(paper)가 필요하다")
+    if not isinstance(cascade, bool):
+        errors.append("cascade는 true 또는 false다")
+    targets = [] if errors else regeneration_targets(units, blocks, cascade)
+    if not paper and ("U1" in targets or (not errors and "U1" in blocks)):
+        errors.append("1막 해설(U1)이 있거나 다시 만들면 기사(paper)가 필요하다 — 검수가 U1을 기사와 비교한다")
     if errors:
         raise RegenerationError(errors)
     if log:
@@ -175,8 +183,7 @@ def regenerate_blocks(case, judgment_output, cast, cls, blocks, units, *, model,
                                  evidence_timeout=evidence_timeout, delay=delay, log=log, units=made)
     new_blocks, meta = build_blocks(case, cast, cls, generated, base={u: b["revision"] for u, b in blocks.items()},
                                     units=made)
-    review = generated["review"]
-    publishable = bool(made) and not pending and not any(
-        i["severity"] == ERROR and (i["unit"] in made or i["unit"] not in BLOCK_UNITS) for i in review)
+    review = [i for i in generated["review"] if i["unit"] in made or i["unit"] not in BLOCK_UNITS]
+    publishable = bool(made) and not pending and not any(i["severity"] == ERROR for i in review)
     return {"units": targets, "regenerated": made, "pending": pending, "stopped": stopped, "blocks": new_blocks,
             "meta": meta, "review": review, "repairs": generated.get("repairs", []), "publishable": publishable}

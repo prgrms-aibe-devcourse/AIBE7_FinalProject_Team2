@@ -104,6 +104,58 @@ class InputTest(unittest.TestCase):
                 self.assertTrue(any(message in error for error in ctx.exception.args[0]), ctx.exception.args[0])
 
 
+class ReviewScopeTest(unittest.TestCase):
+    def test_existing_u1_requires_paper(self):
+        """U1 블록이 있는데 기사를 넘기지 않으면 거절한다 — 검수가 U1을 빈 기사와 비교해 숫자가 든 해설에 가짜 오류를 낸다
+        (PR #378 리뷰, 실제 대본에서 NUMBER_NOT_IN_SOURCE 5건). U1이 없으면 기사 없이 된다."""
+        with self.assertRaises(rg.RegenerationError) as ctx:
+            regenerate(["U4"], [], paper=None)
+        self.assertIn("기사(paper)", ctx.exception.args[0][0])
+        no_u1 = current_blocks(units=("U0", "U2", "U3", "U4"))
+        _, result, _ = regenerate(["U4"], [NEW_CLOSING], blocks=no_u1, paper=None)
+        self.assertEqual(result["regenerated"], ["U4"])
+
+    def test_numbers_in_existing_u1_are_checked_against_the_paper(self):
+        """숫자가 든 지금 U1은 기사와 비교해 검사된다 — 기사에 있는 숫자면 오류가 아니다."""
+        paper = {**PAPER, "article": ["피해액은 3천만 원이었다.", "문단2"]}
+        blocks = current_blocks()
+        blocks["U1"]["content"] = {"lines": ["기사 제목부터 같이 봐요.", "피해액이 3천만 원이었대요.", *INTRO["lines"][2:]]}
+        generated_review = []
+        original = rg.review_script
+
+        def spy(*args, **kwargs):
+            generated_review.extend(original(*args, **kwargs))
+            return generated_review
+
+        rg.review_script = spy
+        try:
+            regenerate(["U4"], [NEW_CLOSING], blocks=blocks, paper=paper)
+        finally:
+            rg.review_script = original
+        self.assertEqual([i for i in generated_review if i["unit"] == "U1" and i["severity"] == sr.ERROR], [])
+
+
+class CascadeTest(unittest.TestCase):
+    def test_cascade_false_makes_only_the_chosen_block(self):
+        """세부조정(10/30 결정): U0만 다시 만들고 U2 · U4는 둔다. 둔 블록은 basis가 옛 U0 판이라 백엔드가 낡음으로 본다."""
+        self.assertEqual(rg.regeneration_targets(["U0"], current_blocks(), cascade=False), ["U0"])
+        blocks = current_blocks({"U0": 3})
+        caller, result, _ = regenerate(["U0"], [DESIGN], blocks=blocks, cascade=False)
+        self.assertEqual(len(caller.calls), 1)
+        self.assertEqual((result["units"], result["regenerated"]), (["U0"], ["U0"]))
+        self.assertEqual(result["blocks"]["U0"]["revision"], 4)
+        self.assertTrue(all(i["unit"] in ("U0", "") for i in result["review"]))
+
+    def test_cascade_false_still_adds_missing_input_blocks(self):
+        only_evidence = current_blocks(units=("U3",))
+        self.assertEqual(rg.regeneration_targets(["U4"], only_evidence, cascade=False), ["U0", "U2", "U4"])
+        self.assertEqual(rg.regeneration_targets(["U2"], only_evidence, cascade=False), ["U0", "U2"])
+
+    def test_cascade_must_be_bool(self):
+        with self.assertRaises(rg.RegenerationError):
+            regenerate(["U4"], [], cascade="no")
+
+
 class RegenerateTest(unittest.TestCase):
     def test_regenerates_only_the_chosen_block_from_current_inputs(self):
         """U4만 고르면 U4만 부른다 — 지금 U0 쟁점 · U2 변호인 입장을 보고, 판은 지금 판 다음 판, basis는 지금 앞 블록 판이다."""
@@ -165,7 +217,8 @@ class RegenerateTest(unittest.TestCase):
         self.assertEqual((result["regenerated"], result["pending"], result["blocks"]), ([], ["U3"], {}))
 
     def test_repairs_touch_only_regenerated_blocks(self):
-        """지금 U1에 검수 오류가 있어도 U4만 다시 만들면 U1은 고쳐 쓰지 않는다(승인했을 수 있다). 검사는 대본 전체를 한다."""
+        """지금 U1에 검수 오류가 있어도 U4만 다시 만들면 U1은 고쳐 쓰지 않는다(승인했을 수 있다). 돌려주는 review에도 U1 항목은
+        넣지 않는다 — 부르는 쪽이 덮어쓰면 승인된 블록이 "오류 블록"이 된다(PR #378 리뷰)."""
         blocks = current_blocks()
         blocks["U1"]["content"] = {"lines": [*INTRO["lines"][1:4], "서두르지 말고 생각해 보시기 바랍니다.", "다섯째 줄이에요."]}
         bad_closing = {**CLOSING, "defense": "변호인 측 최종변론입니다. 피고인은 3번이나 사과했습니다."}
@@ -175,8 +228,7 @@ class RegenerateTest(unittest.TestCase):
         self.assertEqual(result["blocks"]["U4"]["content"]["defense"], fixed_text)
         self.assertEqual(result["blocks"]["U4"]["revision"], 3)  # 다시 만든 판(2) + 고쳐 쓴 판
         self.assertEqual([r["unit"] for r in result["repairs"]], ["U4"])
-        self.assertEqual([(i["unit"], i["code"]) for i in result["review"] if i["severity"] == sr.ERROR],
-                         [("U1", "FORMAL_ENDING")])
+        self.assertEqual([i["unit"] for i in result["review"]], [])
         self.assertTrue(result["publishable"])  # 다시 만든 블록에는 오류가 없다
 
     def test_review_failure_blocks_publishing(self):

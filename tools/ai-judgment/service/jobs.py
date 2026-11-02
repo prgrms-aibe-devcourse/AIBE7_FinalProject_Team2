@@ -85,7 +85,7 @@ IMPORT, REGENERATE = "import", "regenerate"
 # 대본 블록 단위 (script_assembler.BLOCK_UNITS와 같아야 한다 — 서비스는 파이프라인 모듈을 불러오지 않는다)
 BLOCK_UNITS = ("U0", "U1", "U2", "U3", "U4")
 # 재생성 요청에서 서비스가 정하는 대본 설정 값. 요청의 stages.script로 덮을 수 없다(입력은 regenerate 객체로만 받는다)
-REGENERATE_FIXED_KEYS = ("enabled", "cast", "classification", "regenerate", "full")
+REGENERATE_FIXED_KEYS = ("enabled", "cast", "classification", "regenerate", "regenerateCascade", "full")
 
 JOB_ID_PATTERN = re.compile(r"^[0-9a-f]{32}$")
 
@@ -402,8 +402,11 @@ class JobStore:
         for key in ("case", "judgment", "classification", "cast"):
             if not isinstance(regenerate.get(key), dict):
                 raise JobError(f"regenerate.{key}는 객체여야 합니다")
-        if not isinstance(regenerate["judgment"].get("factors"), list):
-            raise JobError("regenerate.judgment.factors는 판단 요소(factorId · direction) 목록이어야 합니다")
+        factors = regenerate["judgment"].get("factors")
+        # 요소가 객체인지까지 본다 — 숫자 · 문자열이 섞이면 202를 돌려준 뒤 작업이 AttributeError로 실패한다(PR #378 리뷰).
+        # factorId · direction이 없는 요소는 파이프라인이 증거로 쓰지 않고 건너뛰므로 필수로 두지 않는다
+        if not isinstance(factors, list) or not all(isinstance(factor, dict) for factor in factors):
+            raise JobError("regenerate.judgment.factors는 판단 요소(factorId · direction) 객체의 목록이어야 합니다")
         if not isinstance(regenerate["classification"].get("sensitiveFlags"), list):
             raise JobError("regenerate.classification.sensitiveFlags는 목록이어야 합니다 — 민감 플래그를 합쳐 넘깁니다(없으면 [])")
         blocks = regenerate.get("blocks") or {}
@@ -412,6 +415,12 @@ class JobStore:
         paper = regenerate.get("paper")
         if paper is not None and not isinstance(paper, dict):
             raise JobError("regenerate.paper는 객체 또는 null이어야 합니다")
+        if paper is None and ("U1" in units or "U1" in blocks):
+            # 검수가 U1을 기사와 비교한다 — 없으면 건드리지 않은 U1에 가짜 오류가 나온다(PR #378 리뷰)
+            raise JobError("regenerate.paper가 없습니다 — 1막 해설(U1)이 있거나 다시 만들면 지금 기사를 함께 넘깁니다")
+        cascade = regenerate.get("cascade", True)
+        if not isinstance(cascade, bool):
+            raise JobError("regenerate.cascade는 true 또는 false입니다")
         overrides = request.get("stages") or {}
         if not isinstance(overrides, dict) or set(overrides) - {"script"} or not isinstance(overrides.get("script"), dict):
             raise JobError("재생성 요청의 stages에는 script 객체만 넣습니다")
@@ -426,7 +435,7 @@ class JobStore:
         if paper is not None:
             files["paper"] = input_dir / "paper.json"
         script.update(enabled=True, cast=regenerate["cast"], classification=regenerate["classification"],
-                      regenerate=units)
+                      regenerate=units, regenerateCascade=cascade)
         config = {
             "name": self.pipeline_name(job_id),
             "sources": [],
