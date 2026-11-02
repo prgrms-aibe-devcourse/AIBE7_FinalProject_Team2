@@ -50,7 +50,10 @@ class PipelinePropertiesTest extends ApiIntegrationTest {
 	@Test
 	@DisplayName("대본 · 분류 모델은 기본으로 꺼져 있고, 빈 문자열도 꺼짐으로 본다 (BE-129)")
 	void scriptAndClassifyOffByDefault() {
-		assertThat(properties.scriptEnabled()).isFalse();
+		assertThat(blank(null).scriptEnabled()).isFalse();
+		assertThat(blank(null).classifyModel()).isNull();
+		// 테스트 설정(application-test.yml)은 운영에서 켤 상태로 대본 모델을 켜 둔다 — 블록 재생성(A-13-15)을 시험하려고
+		assertThat(properties.scriptEnabled()).isTrue();
 		assertThat(properties.classifyModel()).isNull();
 		PipelineProperties blankScript = new PipelineProperties("http://pipeline:8000", null, null,
 			java.time.Duration.ofSeconds(30), "  ", "");

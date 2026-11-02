@@ -4,6 +4,7 @@ import com.team2.project.common.exception.BusinessException;
 import com.team2.project.common.exception.ErrorCode;
 import com.team2.project.legalcase.domain.CastRoles;
 import com.team2.project.legalcase.domain.Difficulty;
+import com.team2.project.legalcase.domain.ScriptClassification;
 import com.team2.project.legalcase.domain.SensitiveFlag;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -26,7 +27,7 @@ record CaseEditRequest(Map<String, Object> changes) {
 
 	static final Set<String> FIELDS = Set.of("title", "shortIntro", "overview", "keywords", "difficulty",
 		"estimatedMinutes", "thumbnailUrl", "recommendedMinMonths", "recommendedMaxMonths", "recommendedBasis",
-		"castRoles", "sensitiveFlags");
+		"castRoles", "sensitiveFlags", "classification");
 
 	/** 본문을 검사해 바꿀 값만 담는다. 값은 검사를 마친 타입(String · List · Map · Difficulty · Integer · null) */
 	static CaseEditRequest parse(Map<String, Object> body) {
@@ -49,6 +50,7 @@ record CaseEditRequest(Map<String, Object> changes) {
 				case "recommendedBasis" -> value == null ? null : text(field, value, Integer.MAX_VALUE);
 				case "castRoles" -> castRoles(value);
 				case "sensitiveFlags" -> sensitiveFlags(value);
+				case "classification" -> classification(value);
 				default -> throw invalid(field);	// 모르는 필드 (죄명 · 법조문 · 요소 등은 이 API로 바꾸지 않는다)
 			});
 		}
@@ -130,6 +132,14 @@ record CaseEditRequest(Map<String, Object> changes) {
 			flags.add(name);
 		}
 		return List.copyOf(flags);
+	}
+
+	/**
+	 * 사건 분류 (BE-129 2차). 네 축(mood · issue · victim · thirdParty)을 통째로 보낸다 — 블록 재생성에 그대로 넘기는 값이다.
+	 * null로 지울 수 없다(배역과 같은 이유 — 분류가 없으면 재생성을 할 수 없다)
+	 */
+	private static Map<String, Object> classification(Object value) {
+		return ScriptClassification.parse(value).orElseThrow(() -> invalid("classification"));
 	}
 
 	private static Difficulty difficulty(Object value) {

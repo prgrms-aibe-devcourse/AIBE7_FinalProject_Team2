@@ -49,6 +49,15 @@ class ScriptBlockContractTest {
 	}
 
 	@Test
+	@DisplayName("분류 축 값: A-11이 받는 분위기 · 쟁점 · 피해자 측 값이 파이썬과 같다 (BE-129 2차)")
+	void classificationValues_matchContract() {
+		JsonNode classification = contract.get("classification");
+		assertThat(ScriptClassification.MOODS).isEqualTo(strings(classification.get("mood")));
+		assertThat(ScriptClassification.ISSUES).isEqualTo(strings(classification.get("issue")));
+		assertThat(ScriptClassification.VICTIMS).isEqualTo(strings(classification.get("victim")));
+	}
+
+	@Test
 	@DisplayName("신문 답 정규화: 계약 사례가 모두 같은 값이 된다 (말줄임표 · 마침표 섞임, 전각 공백, 접두만 같은 낱말)")
 	void normalizeAnswer_matchesContract() {
 		List<String> mismatches = new ArrayList<>();
