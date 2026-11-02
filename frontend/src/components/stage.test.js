@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { ACT_GROUPS, DEFAULT_CAST, attachNotice, castOf, courtPhotoCast, glideMs, flatten, flipFor, placeFor, seatFor, sideOf, skipTarget } from './stage.js';
+import { ACT_GROUPS, DEFAULT_CAST, attachNotice, castOf, courtPhotoCast, glideMs, flatten, flipFor, placeFor, seatFor, resumeIndex, sideOf, skipTarget } from './stage.js';
 
 const script = JSON.parse(readFileSync(new URL('../content/case-1/script.json', import.meta.url)));
 const steps = flatten(script.acts, ['1a', '1b']);
@@ -236,4 +236,27 @@ test('6막 1면 사진(FE-141): 5막 마지막 법정처럼 대본 배역의 묶
   // 배역을 바꾸면 판사와 피고인 역이 서로 바뀐다(자리는 그대로)
   assert.deepEqual(swapped.map(({ who }) => who), [base[1].who, base[0].who]);
   assert.deepEqual(courtPhotoCast(undefined).map(({ who, flip }) => [who, flip]), [['naero', false], ['nambul', false]], '기본 배역(사건 1)은 화면이 그대로');
+});
+
+test('이어 보기: 같은 화면 · 같은 장면 수면 저장한 장면에서 시작한다(FE-51)', () => {
+  const none = () => false;
+  assert.equal(resumeIndex(trial, { path: '/cases/1/trial', index: 5, length: trial.length }, '/cases/1/trial', none), 5);
+});
+
+test('이어 보기: 다른 화면 · 장면 수가 바뀐 대본 · 범위 밖 값은 믿지 않는다', () => {
+  const none = () => false;
+  const saved = { path: '/cases/1/trial', index: 3, length: trial.length };
+  assert.equal(resumeIndex(trial, saved, '/cases/2/trial', none), -1, '다른 사건 화면');
+  assert.equal(resumeIndex(trial, { ...saved, length: trial.length + 1 }, '/cases/1/trial', none), -1, '대본이 바뀜');
+  assert.equal(resumeIndex(trial, { ...saved, index: trial.length }, '/cases/1/trial', none), -1, '범위 밖');
+  assert.equal(resumeIndex(trial, { ...saved, index: 1.5 }, '/cases/1/trial', none), -1, '정수가 아님');
+  assert.equal(resumeIndex(trial, null, '/cases/1/trial', none), -1, '저장값 없음');
+});
+
+test('이어 보기: 입력 카드 · 선택지 장면이면 같은 막의 앞쪽 일반 장면으로 물러난다', () => {
+  const blockedFrom = 4;
+  const blocked = (step) => step === trial[blockedFrom] || step === trial[blockedFrom - 1];
+  const saved = { path: '/p', index: blockedFrom, length: trial.length };
+  assert.equal(resumeIndex(trial, saved, '/p', blocked), blockedFrom - 2, '연달아 막힌 장면은 일반 장면까지 물러난다');
+  assert.equal(resumeIndex(trial, { ...saved, index: 0 }, '/p', () => true), 0, '맨 앞에서는 더 물러나지 않는다');
 });
