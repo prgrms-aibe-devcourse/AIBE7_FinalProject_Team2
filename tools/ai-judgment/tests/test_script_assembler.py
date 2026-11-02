@@ -400,6 +400,25 @@ class BlockContractTest(unittest.TestCase):
         self.assertEqual(self.CONTRACT["affects"], script_repair.AFFECTS)
         self.assertEqual(script_repair.AFFECTS, {"U0": ["U2", "U4"], "U1": [], "U2": ["U4"], "U3": [], "U4": []})
 
+    def test_spoken_paths_match_review(self):
+        """말하는 대사 자리(BE-153) — 검수(unit_lines)가 대사 길이를 거는 자리와 같다. 백엔드 A-13-21 · 관리자 화면이 같은 목록을 읽는다."""
+        import re
+        import script_review
+        many = ["가", "나", "다", "라", "마", "바"]
+        sample = {
+            "U0": {"plea": "인정", "issues": many, "questions": [{"q": "질문", "a": "예"}] * 3, "tone": "차분함"},
+            "U1": {"lines": many},
+            "U2": {"indict": many, "plea": many, "issues_narr": many, "questions": [{"q": "질문", "a": "예"}] * 3,
+                   "cards": {"indict": {"ul": many, "law": "형법"}, "issues": {"p": "문단", "ul": many}}},
+            "U4": {"prosecutor": "의견", "defense": "변론"},
+        }
+        spoken = {}
+        for unit, value in sample.items():
+            paths = {re.sub(r"/\d+(?=/|$)", "/*", path) for path, _, kind in script_review.unit_lines(unit, value)
+                     if kind in script_review.SPOKEN_KINDS}
+            spoken[unit] = sorted(paths)
+        self.assertEqual({unit: sorted(paths) for unit, paths in self.CONTRACT["spokenPaths"].items()}, spoken)
+
     def test_classification_values_match(self):
         """분류 축 값 — 백엔드 A-11(관리자가 분류를 고친다, BE-129 2차)이 같은 목록으로 검사한다."""
         self.assertEqual(self.CONTRACT["classification"],
