@@ -16,10 +16,13 @@ MVP는 로그인 없이, 대표 사건 1건으로 아래 흐름을 끝까지 체
 | --- | --- |
 | Backend | Java 17, Spring Boot 4.1.1 (Web MVC · Data JPA · Validation), Gradle |
 | DB | PostgreSQL 17, Flyway(스키마 마이그레이션) |
+| Cache · 토큰 | Redis 7.4 |
 | Frontend | HTML + JavaScript, Vite |
-| CI | GitHub Actions |
+| 인프라 | AWS EC2 · RDS · S3, Docker Compose, Nginx(HTTPS · 요청 제한), GHCR |
+| CI · CD | GitHub Actions(테스트 · 이미지 빌드) · 서버 `cd-agent`(`main` 자동 배포) |
+| 모니터링 | Grafana Cloud(Alloy 에이전트) · Slack 경보 |
 
-자세한 구성과 선택 이유는 [기술 스택 정리](docs/tech-stack.md)를 본다.
+자세한 구성과 선택 이유는 [기술 스택 정리](docs/tech-stack.md), 운영 구성 전체는 [인프라 아키텍처](docs/architecture.md)를 본다.
 
 ## 폴더 구조
 
@@ -28,8 +31,10 @@ MVP는 로그인 없이, 대표 사건 1건으로 아래 흐름을 끝까지 체
 | `backend/` | Spring Boot API 서버, 로컬 개발용 PostgreSQL(`docker-compose.yml`), DB 마이그레이션 · 개발용 시드 |
 | `frontend/` | 화면 (자세한 내용은 [frontend/README.md](frontend/README.md)) |
 | `docs/` | 기획 · 설계 문서 ([문서 목차](docs/README.md)) |
-| `tools/ai-judgment/` | AI 판결 오프라인 생성 · 검수 도구 ([README](tools/ai-judgment/README.md)) |
-| `.github/workflows/` | CI 워크플로우 ([README](.github/workflows/README.md)) |
+| `tools/ai-judgment/` | AI 판결 생성 · 검수 도구와 파이프라인 서비스 ([README](tools/ai-judgment/README.md)) |
+| `deploy/` | 운영 배포 구성 · 스크립트 (Compose · 배포 · 백업 · HTTPS, [README](deploy/README.md)) |
+| `monitoring/` | 지표 · 로그 · 대시보드 · 경보 설정 (로컬 확인용 + Grafana Cloud 설정 기록, [README](monitoring/README.md)) |
+| `.github/workflows/` | CI · 이미지 빌드 · 운영 배포 확인 워크플로우 ([README](.github/workflows/README.md)) |
 
 ## 로컬 실행
 
@@ -116,6 +121,7 @@ API 없이 화면만 확인하려면 개발 서버를 켠 뒤 `http://localhost:
 | [ERD](docs/erd.md) | 테이블 · 제약 · 예시 데이터 |
 | [정보 구조](docs/information-architecture.md) | 화면 목록과 흐름 |
 | [유저 흐름도](docs/user-flow.md) | MVP · 확장 단계 사용자 흐름 |
+| [인프라 아키텍처](docs/architecture.md) | 운영 구성 · 요청 흐름 · 배포 흐름 · 외부 서비스 · 운영 규칙 (배포 · 모니터링 문서의 입구) |
 
 ## 협업 규칙
 
