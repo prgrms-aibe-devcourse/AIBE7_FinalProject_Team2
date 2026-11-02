@@ -1,7 +1,7 @@
 import { renderLawInfoBox } from '../../components/lawInfoBox.js';
 import { renderRecommendedRangeBar, formatMonths } from '../../components/recommendedRangeBar.js';
 import { renderStage } from '../../components/stage.js';
-import { SCRIPTS } from '../../content/scripts.js';
+import { loadCaseScript } from '../../utils/caseScript.js';
 import { restartMock, jumpActMock } from '../../mocks/mockStageButtons.js';
 import { getDraft, saveDraft, clearDraft } from './verdictDraft.js';
 import { markAiRevealIntro } from '../ai/aiRevealIntro.js';
@@ -65,6 +65,7 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
   container.replaceChildren(root);
   const active = () => container.contains(root);
   let loading = false;
+  let script = null; // 서버 대본(FE-139). load()가 받는다
 
   function showError(error) {
     if (!active()) return;
@@ -756,9 +757,6 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
     const folderBody = element('div', 'folder-body');
     folderBody.append(...pages.map(({ panel }) => panel));
     layout.append(tabList, denied, folderBody);
-    // 대본의 제목이 사건 제목과 같을 때만 무대를 쓴다(S-03 · S-04와 같은 규칙, 사건 번호는 DB마다 다를 수 있다)
-    const candidate = SCRIPTS[caseId];
-    const script = candidate?.title === caseHeader.title ? candidate : undefined;
     if (script) {
       // 3막 당신이 판사(흐름 목업): 검사 의견 → 최종변론을 지나 판결 장면에서 이 화면(입력 · 참고 정보)을
       // 무대 입력 카드로 띄운다. 입력 · 확정 · 오류 처리는 아래 그대로이고, 확정하면 AI 판결(S-06)으로 간다
@@ -945,6 +943,7 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
     message.setAttribute('role', 'status');
     root.replaceChildren(message);
     try {
+      script = await loadCaseScript(api, caseId); // 서버 대본이 있는 사건만 무대를 쓴다(FE-139)
       // 사건 요약 장(API 6)은 못 받아도 판결은 할 수 있게 따로 받는다
       const [form, review] = await Promise.all([api.getVerdictForm(caseId), api.getReview(caseId).catch(() => null)]);
       if (active()) draw(form, review);

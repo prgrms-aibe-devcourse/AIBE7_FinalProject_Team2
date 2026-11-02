@@ -15,7 +15,7 @@
 | `docker-compose.real-seed.yml` | 서버 전용 덧붙임 파일. 실제 사건 seed 폴더를 백엔드에 읽기 전용으로 연결 |
 | `docker-compose.monitoring-agent.yml` | 서버 전용 덧붙임 파일. 모니터링 에이전트(Alloy · node_exporter)와 backend의 로그 볼륨. 호스트로 여는 포트는 없다 (COMMON-43 · 64). `.env`의 `MONITORING_AGENT=1`이면 `deploy.sh`가 자동으로 함께 쓴다 — 아래 "모니터링 에이전트 (Grafana Cloud)" |
 | `alloy-agent.alloy` | 위 Alloy 설정. 백엔드 · 429 로그와 backend · node 지표를 Grafana Cloud(Loki · Prometheus)로 보낸다 (COMMON-43 · 62 · 64) |
-| `docker-compose.pipeline.yml` | 서버 전용 덧붙임 파일. AI 판결 파이프라인 서비스(관리자 사건 등록 A-14)와 backend의 `PIPELINE_SERVICE_URL` (COMMON-50). `.env`의 `PIPELINE_SERVICE=1`이면 `deploy.sh`가 자동으로 함께 쓴다. **켜기 전 메모리 확인 필요** — 아래 "AI 판결 파이프라인 서비스" |
+| `docker-compose.pipeline.yml` | 서버 전용 덧붙임 파일. AI 판결 파이프라인 서비스(관리자 사건 등록 A-14)와 backend의 `PIPELINE_SERVICE_URL` (COMMON-50). `.env`의 `PIPELINE_SERVICE=1`이면 `deploy.sh`가 자동으로 함께 쓴다. **켜는 시점은 팀 합의 후(COMMON-52)** — 아래 "AI 판결 파이프라인 서비스" |
 | `.env.example` | 환경변수 예시. `.env`로 복사해 쓴다 (`.env`는 커밋하지 않음) |
 | `smoke-test.sh` | `/` · 화면 주소 · `/api` · 캐시 정책 · Let's Encrypt 확인 경로 확인. CI와 서버에서 같은 스크립트를 쓴다 |
 | `verify-origin-headers.sh` | Nginx `X-Forwarded-Proto` 전달 · `forward-headers-strategy: native`가 실제로 적용됐는지, 재발급 · 로그아웃 Origin 검증(`OriginVerificationFilter`)으로 확인한다. BASE_URL에 지금 떠 있는 배포만 확인하므로 운영에서는 배포 **직후**마다(`smoke-test.sh` 다음 줄) 돌리고, 동일 TLS 종료 구성의 스테이징이 있으면 배포 **전**에도 미리 돌려볼 수 있다. https 주소만 받고, 로그인 없이도 쓸 수 있다 (BE-95) |
@@ -417,7 +417,7 @@ docker compose -f docker-compose.prod.yml logs web 2>&1 | grep -E 'zone "(auth_t
 - **관리자 로그인 zone과 따로 센다.** 회원 로그인이 관리자 로그인 한도(분당 5번)를 쓰지 않는다.
 - `Retry-After`: 로그인 3초 · 가입 6초. 429 로그 `route`는 둘 다 `member_auth`다.
 - 운영 이미지와 같은 `nginx:1.28-alpine`으로 확인: 같은 IP에서 로그인 POST 30번 중 약 21번 통과 · 나머지 429, 가입 15번 중 11번 통과, 그 직후에도 관리자 로그인 · 재발급은 영향 없음, GET은 전용 제한을 받지 않음.
-- **`KAKAO_CLIENT_ID`는 HTTPS(BE-75) 적용 뒤에만 넣는다.** state 쿠키 · `NLNB_RT` · `NLNB_AID`가 모두 `Secure`라 http에서는 브라우저가 저장하지 않아 로그인이 끝나지 않는다(PR #229 리뷰). 넣는 즉시 카카오 로그인 경로가 켜지므로, 화면 `/auth/callback`(FE 후속)이 배포되기 전에는 로그인 후 화면이 404로 보인다.
+- **`KAKAO_CLIENT_ID`는 HTTPS(BE-75) 적용 뒤에만 넣는다.** state 쿠키 · `NLNB_RT` · `NLNB_AID`가 모두 `Secure`라 http에서는 브라우저가 저장하지 않아 로그인이 끝나지 않는다(PR #229 리뷰). 넣는 즉시 카카오 로그인 경로가 켜진다. 운영에는 HTTPS 뒤에 넣어 화면 `/auth/callback`과 함께 동작하고 있다.
 
 ## Redis (BE-61, docs/tech-stack.md 2장 "Redis 운영 구성")
 
@@ -426,7 +426,7 @@ docker compose -f docker-compose.prod.yml logs web 2>&1 | grep -E 'zone "(auth_t
 | 설정 | 값 | 이유 |
 | --- | --- | --- |
 | 영속화 | AOF `everysec` | 재시작 · 배포 뒤에도 토큰이 남는다 (최대 1초 유실) |
-| 메모리 | `maxmemory 200mb`, 컨테이너 256m | t3.small 2GB를 백엔드 · PostgreSQL과 나눈다. 남는 56MB는 AOF 재작성 여유분이라, **`used_memory`가 150MB를 넘으면 점검**한다(재작성 중 컨테이너가 메모리 초과로 죽을 수 있다) |
+| 메모리 | `maxmemory 200mb`, 컨테이너 256m | t3.small 2GB를 백엔드와 나눈다(PostgreSQL 컨테이너는 10/28 RDS 전환 뒤 외부 DB 오버레이가 기본 실행에서 뺀다 — 아래 "외부 DB 모드"). 남는 56MB는 AOF 재작성 여유분이라, **`used_memory`가 150MB를 넘으면 점검**한다(재작성 중 컨테이너가 메모리 초과로 죽을 수 있다) |
 | 축출 | `noeviction` | 꽉 차도 토큰을 지우지 않는다. **대신 모든 키에 TTL이 있어야 한다** |
 | 접근 | `requirepass`, 포트를 밖에 열지 않음 | 컨테이너 네트워크 안에서만 쓴다 |
 
@@ -446,6 +446,7 @@ docker compose -f docker-compose.prod.yml exec redis redis-cli -n 0 --scan | hea
 - **캐시만 비울 때**: `redis-cli -n 0 FLUSHDB`. 다른 DB는 그대로다. **`FLUSHALL`은 토큰까지 지우므로 쓰지 않는다.**
 - **메모리가 찼을 때**(쓰기가 `OOM command not allowed`로 실패): 먼저 TTL 없는 캐시 키를 찾아 원인 코드를 고치고, 급하면 DB 0만 비운다.
 - **데이터 위치**: 볼륨 `redisdata`. `docker compose down -v`는 이 볼륨도 지워 **모든 사용자가 로그아웃**되니 운영에서 쓰지 않는다.
+- **Redis가 꺼졌을 때 백엔드 상태(BE-61 실측, Boot 4.1.1)**: `/actuator/health`(전체)는 **DOWN(503)**, `/actuator/health/liveness` · `/readiness`는 **UP**, API는 정상(실측은 로그인 기능 전). 로그인 · 재발급처럼 토큰 저장소를 쓰는 요청은 설계상 500이다(`docs/tech-stack.md` 3장 "사용자 인증 기반"). 그래서 백엔드 healthcheck(`docker-compose.prod.yml`)는 전체 상태가 아니라 readiness를 본다 — 전체 상태를 쓰면 Redis 장애 때 백엔드까지 unhealthy로 본다.
 
 ## 운영 데이터 (docs/tech-stack.md 2장 · COMMON-17)
 
@@ -508,7 +509,9 @@ systemctl list-timers lawnambul-cd.timer --no-pager            # NEXT가 보여�
 curl -s https://naelawnambul.today/api/v1/cases | head -c 200; echo   # total이 0이 아니면 성공
 ```
 
-### 외부 DB(Supabase · RDS)에 실제 사건 시드 올리기 (BE-59, 팀 합의 후)
+### 외부 DB(RDS)에 실제 사건 시드 올리기 (BE-59, 팀 합의 후)
+
+**실제 사건 시드(비공개 저장소)는 팀이 합의한 뒤에만 외부 DB에 올린다.** `.env`에 경로(`REAL_SEED_DIR`)와 합의 표시(`EXTERNAL_DB_ALLOWS_REAL_SEED=1`)가 **둘 다** 있어야 `deploy.sh`가 올린다 — 경로만 넣은 실수로 비공개 데이터가 올라가지 않게 한다. 사용 불가 데이터(LBox Open 판례, 라이선스상 사용 불가 — BE-54에서 시드에서 지움)는 합의와 별개로 올리지 않는다. 다시 들어오면 `deploy.sh`가 `'LBOX'` 행을 보고 멈춘다.
 
 외부 DB 모드에서는 **위 5)의 손 Compose 명령을 쓰지 않는다.** `-f docker-compose.external-db.yml`이 빠져 backend가 같은 서버의 옛 postgres로 붙는다. `deploy.sh --reapply`가 오버레이를 모두 맞춰 준다.
 
@@ -548,9 +551,9 @@ $C logs backend | grep -E 'Migrating schema|Successfully applied|ERROR'
 curl -s http://localhost/api/v1/cases | head -c 200; echo
 ```
 
-- 공용 DB(Supabase)라 **팀원 로컬에도 실제 사건이 보인다.** 가상 사건 시드도 그대로 남아 함께 보인다.
-- `.env`에서 두 줄을 빼도 **이미 들어간 데이터는 지워지지 않는다.** RDS로 옮긴 뒤 Supabase의 실제 데이터는 따로 지운다(`SHARED-DEV-DB.md` 규칙 6).
-- RDS로 옮길 때도 같은 두 줄을 그대로 두고 `EXTERNAL_DB_*`만 바꾼 뒤 `--reapply`하면 새 DB에 시드가 들어간다.
+- 가상 사건 시드도 그대로 남아 함께 보인다.
+- `.env`에서 두 줄을 빼도 **이미 들어간 데이터는 지워지지 않는다.**
+- 운영 RDS에는 10/28 전환 때 이 두 줄로 시드가 들어가 있다(아래 "RDS 전환"). 10/26 ~ 10/28 Supabase 공용 DB에 올렸던 실제 사건은 프로젝트 삭제(COMMON-59)와 함께 지워졌다.
 
 ### 시드가 바뀌었을 때 (비공개 저장소에 머지된 뒤)
 
@@ -566,7 +569,12 @@ cd /opt/lawnambul/private-seed && git fetch -q origin
 PTR=$(git -C /opt/lawnambul/app ls-tree HEAD backend/private-seed | awk '{print $3}')
 git log -1 --format='지금 %h %s'
 git checkout -q --detach "$PTR" && git log -1 --format='바꾼 뒤 %h %s'
-# 이어서 위 5)를 그대로 실행한다 (백업 이름은 before-seed-update 등으로)
+# 이어서 backend를 다시 만든다. 위 5)의 docker compose 명령은 같은 서버 DB 모드용이라 RDS 운영에서는 외부 DB 오버레이가 빠진다
+cd /opt/lawnambul/app/deploy
+./backup-db.sh before-seed-update
+sudo systemctl stop lawnambul-cd.timer
+./deploy.sh --reapply     # .env대로 외부 DB · 시드 오버레이를 붙여 backend를 다시 만든다 + 스모크 테스트
+sudo systemctl start lawnambul-cd.timer
 ```
 
 - 서버에서 `git pull`(비공개 저장소 develop 최신)을 쓰지 않는다. `main`이 검증하지 않은 시드가 운영에 들어간다.
@@ -629,14 +637,14 @@ set +o pipefail; unset PGPASSWORD H P; unset -f q envv
 | 언제 | 방법 | 보관 |
 |---|---|---|
 | 하루 1번 (운영 시간 중 첫 정각+17분) | 서버 cron으로 `deploy/backup-db.sh` → `~/backups/lawnambul-YYYY-MM-DD.dump` | 7일 |
-| 평일 17:47 (퇴근 전) | 서버 cron으로 `deploy/backup-db.sh evening` → `~/backups/lawnambul-YYYY-MM-DD-1747-evening.dump` | 7일(같은 정리 규칙) |
+| 평일 17:47 (퇴근 전, cron `1-5`) | 서버 cron으로 `deploy/backup-db.sh evening` → `~/backups/lawnambul-YYYY-MM-DD-1747-evening.dump` | 7일(같은 정리 규칙) |
 | 시드 갱신 · `loads/` 실행 · 위험한 마이그레이션 직전 | `./backup-db.sh <작업 이름>`을 손으로 한 번 | 7일(같은 정리 규칙) |
 | RDS(10/28 ~) | RDS 자동 백업(매일 1회, 백업 기간은 콘솔 설정) · 위 `backup-db.sh`(외부 DB 모드라 RDS를 덤프)도 그대로 돈다 | 7일 |
 | `loads/` 실행 · 큰 데이터 변경 직전(RDS) | RDS 수동 스냅샷(콘솔 → 작업 → 스냅샷 생성) | 지울 때까지 (안 쓰면 지운다 — 저장 용량 요금) |
 
 ```bash
 # 09:17 ~ 17:17 매시 확인하고, 오늘 백업 파일이 없을 때만 한 번 만든다 (crontab -e 로 한 줄). 결과는 ~/backups/backup.log
-# 서버는 평일 09:00 ~ 18:00에만 켜져 있다(주말은 강제 종료) — 새벽 시각으로 두면 한 번도 돌지 않는다(10/26 확인).
+# 서버는 매일 09:00 ~ 18:00에만 켜져 있다(처음엔 평일만, 지금은 주말 포함) — 새벽 시각으로 두면 한 번도 돌지 않는다(10/26 확인).
 # 매시 확인하므로 아침에 늦게 켜지거나 9시대 백업이 실패해도 다음 시각에 다시 시도한다
 # umask 077: 백업 폴더 · 로그를 처음부터 나만 읽게 만든다(덤프 파일은 backup-db.sh가 umask 077로 만든다)
 17 9-17 * * * umask 077; mkdir -p $HOME/backups && { [ -f $HOME/backups/lawnambul-$(date +\%F).dump ] || /opt/lawnambul/app/deploy/backup-db.sh >> $HOME/backups/backup.log 2>&1; }
@@ -646,8 +654,9 @@ set +o pipefail; unset PGPASSWORD H P; unset -f q envv
 ```
 
 - crontab 안에서는 `%`를 `\%`로 쓴다(그대로 두면 cron이 줄바꿈으로 읽어 명령이 잘린다).
-- 서버가 꺼져 있는 주말 · 공휴일에는 백업이 없다. 그 사이에는 데이터도 바뀌지 않는다.
-- 확인: `ls -lh ~/backups/ && tail -3 ~/backups/backup.log` — 평일이면 오늘 날짜 파일이 있어야 하고, 18시 이후에는 `-evening` 파일도 있어야 한다.
+- 서버가 꺼져 있는 시간(18:00 ~ 다음 날 09:00)에는 백업이 없다. 그 사이에는 데이터도 바뀌지 않는다.
+- 저녁 백업(17:47)은 cron이 평일(`1-5`)만이다. 주말에도 서버를 켜게 되면서 주말 저녁 백업이 필요하면 `1-5`를 `*`로 바꾼다.
+- 확인: `ls -lh ~/backups/ && tail -3 ~/backups/backup.log` — 오늘 날짜 파일이 있어야 하고, 평일 18시 이후에는 `-evening` 파일도 있어야 한다.
 - 저장 위치를 바꾸려고 crontab에 `BACKUP_DIR=`을 두면 **첫 줄의 확인 경로(`$HOME/backups/…`)도 같이 고친다.** `backup-db.sh`는 `BACKUP_DIR`(기본 `~/backups`)에 저장하는데 확인 경로는 고정이라, 하나만 바꾸면 매시 백업을 새로 만든다.
 
 - `backup-db.sh`는 임시 파일에 먼저 덤프하고, `pg_dump`가 성공하고 `pg_restore --list`로 형식을 읽을 수 있을 때만 최종 이름으로 옮긴다. 실패하면 임시 파일을 지우고 실패 코드로 끝나서, 반쯤 만들어진 파일이 백업처럼 남지 않는다. 확인: `tail ~/backups/backup.log`
@@ -689,64 +698,27 @@ set +o pipefail; unset PGPASSWORD H P; unset -f q envv
 
 ## 외부 DB 모드 (BE-59, WBS 7.1.2)
 
-같은 서버의 postgres 컨테이너 대신 **외부 PostgreSQL**에 붙는다. 10/22 ~ 10/28 오전은 Supabase 공용 DB(`backend/SHARED-DEV-DB.md`)에 붙었고, **10/28 11:22부터 운영은 AWS RDS**다(같은 구성에서 접속 값만 바꿈 — 아래 "RDS 전환"). postgres 컨테이너(512m)가 빠져 서버 메모리 여유가 생긴다.
+같은 서버의 postgres 컨테이너 대신 **외부 PostgreSQL**에 붙는다. 10/22 ~ 10/28 오전은 Supabase 공용 DB(테스트용, COMMON-59 — 종료 · 삭제)에 붙었고, **10/28 11:22부터 운영은 AWS RDS**다(같은 구성에서 접속 값만 바꿈 — 아래 "RDS 전환"). postgres 컨테이너(512m)가 빠져 서버 메모리 여유가 생긴다.
 
 | 항목 | 내용 |
 | --- | --- |
 | 스위치 | `deploy/.env`의 `EXTERNAL_DB_URL` · `EXTERNAL_DB_USERNAME` · `EXTERNAL_DB_PASSWORD`. URL이 있으면 `deploy.sh`가 `docker-compose.external-db.yml`을 자동으로 겹친다 |
 | 오버레이가 하는 일 | backend 접속 값을 외부 DB로 바꾸고, `depends_on`에서 postgres를 뺀다(redis만 기다림). postgres는 `profiles`로 기본 실행에서 뺀다 — 정의 · `pgdata` 볼륨은 남겨 되돌릴 수 있다 |
 | 적용 | `.env`만 바꾼 변경은 자동 배포가 하지 않는다(이미지 태그가 같다) → **`./deploy.sh --reapply`** |
-| 연결 수 | backend 기본 5개(`EXTERNAL_DB_POOL_SIZE`). Supabase 무료 최대 60개를 운영 · 팀원 로컬이 나눠 쓴다 |
+| 연결 수 | backend 기본 5개(`EXTERNAL_DB_POOL_SIZE`). 운영 backend 하나만 붙는다(Supabase 때는 팀원 로컬과 연결 수를 나눠 써서 작게 잡았다) |
 | 백업 | `backup-db.sh`가 외부 DB의 `public` 스키마를 덤프한다(`postgres:17-alpine` 클라이언트 컨테이너, 처음 한 번 이미지를 받음) |
 | 필요 버전 | Docker Compose **2.24.4 이상**(`!override`). `deploy.sh`가 먼저 확인한다 |
 
-`deploy.sh`가 배포 전에 멈추는 경우(종료 코드 4, 아무것도 바꾸지 않음): `EXTERNAL_DB_USERNAME` · `PASSWORD`가 없음 / URL에 `sslmode=require`(또는 `verify-ca` · `verify-full`)가 없음 / **`REAL_SEED_DIR`이 있는데 `EXTERNAL_DB_ALLOWS_REAL_SEED=1`이 없음**(팀 합의 표시 — `SHARED-DEV-DB.md` 규칙 6) / `REAL_SEED_DIR` 폴더가 없거나 SQL 파일이 없음 / 하위 폴더를 끝까지 찾지 못함(권한 · 링크 순환) / 배포 계정이 못 읽는 SQL 파일이 있음 / 시드에 LBox 행(`'LBOX'`)이 있음 — **하위 폴더까지 검사한다**(Flyway `filesystem:` 위치가 하위 폴더까지 읽기 때문) / Compose가 2.24.4 미만.
+`deploy.sh`가 배포 전에 멈추는 경우(종료 코드 4, 아무것도 바꾸지 않음): `EXTERNAL_DB_USERNAME` · `PASSWORD`가 없음 / URL에 `sslmode=require`(또는 `verify-ca` · `verify-full`)가 없음 / **`REAL_SEED_DIR`이 있는데 `EXTERNAL_DB_ALLOWS_REAL_SEED=1`이 없음**(팀 합의 표시 — 위 "외부 DB(RDS)에 실제 사건 시드 올리기") / `REAL_SEED_DIR` 폴더가 없거나 SQL 파일이 없음 / 하위 폴더를 끝까지 찾지 못함(권한 · 링크 순환) / 배포 계정이 못 읽는 SQL 파일이 있음 / 시드에 LBox 행(`'LBOX'`)이 있음 — **하위 폴더까지 검사한다**(Flyway `filesystem:` 위치가 하위 폴더까지 읽기 때문) / Compose가 2.24.4 미만.
 
-### 켜기 (Supabase, 처음 한 번)
+### 켜기
 
-전제: **이 변경이 `main`에 배포돼 있어야 한다**(서버의 `deploy.sh`가 `--reapply`와 외부 DB 모드를 알아야 함). 접속 값은 담당자에게 DM으로 받는다(Supabase 대시보드 Connect → **Session pooler**, 포트 5432).
+처음 켠 절차(10/22, Supabase 공용 DB)는 Supabase 종료(COMMON-59)와 함께 지웠다. 접속 값을 바꾸는 절차는 데이터를 옮기는지에 따라 다르다.
 
-```bash
-cd /opt/lawnambul/app/deploy
-docker compose version --short                     # 2.24.4 이상인지
-grep -E '^REAL_SEED_DIR=.+' .env && echo "⚠️ REAL_SEED_DIR을 먼저 비운다" || echo "실제 사건 시드 없음 ✔"
+- **빈 DB로 시작(데이터를 옮기지 않음)** — 아래 "RDS 전환"과 같다: 백업 · `.env` 사본 → `EXTERNAL_DB_*` 세 값 교체 → `./deploy.sh --reapply` → 확인. 10/28 RDS 전환이 이 경우다(빈 RDS에 Flyway · 시드로 시작).
+- **기존 데이터를 유지** — 백업만으로는 새 DB에 아무것도 들어가지 않는다. 순서: 타이머 정지 · backend 정지(쓰기 막기) → `./backup-db.sh before-db-move`(지금 `.env`의 DB를 덤프) → `.env` 사본 → `EXTERNAL_DB_*`를 새 DB 값으로 교체 → 위 "운영 DB 백업"의 외부 DB 되살리기 명령(접속 값을 `.env`에서 읽으므로 새 DB로 복원된다) → 행 수 확인 → `./deploy.sh --reapply` → 확인 → 타이머 재개.
 
-# 1) 지금 DB(같은 서버 postgres) 백업 + .env 사본 — 되돌릴 때 쓴다
-./backup-db.sh before-external-db
-cp -p .env ~/backups/env-$(date +%F-%H%M)-before-external-db.bak
-
-# 2) .env에 외부 DB 값 추가 (nano: 붙여 넣고 Ctrl+O → Enter로 저장, Ctrl+X로 나가기)
-nano .env
-#   EXTERNAL_DB_URL=jdbc:postgresql://<세션 풀러 호스트>:5432/postgres?sslmode=require
-#   EXTERNAL_DB_USERNAME=postgres.<프로젝트 ref>
-#   EXTERNAL_DB_PASSWORD=<DM으로 받은 값>
-#   REAL_SEED_DIR=          ← 값을 지워 비운다 (실제 사건 시드는 팀 합의 후 아래 "외부 DB에 실제 사건 시드 올리기"로 따로 올린다)
-#   (POSTGRES_PASSWORD는 지우지 않는다 — 되돌리기용 postgres 정의가 요구한다)
-
-# 3) 설정 다시 적용 (이미지는 그대로) — 로그에 "외부 DB 모드"와 ✅가 나와야 한다
-./deploy.sh --reapply
-```
-
-확인:
-
-```bash
-C="docker compose -f docker-compose.prod.yml -f docker-compose.external-db.yml"
-$C exec -T backend printenv DB_URL | sed 's/?.*//'          # 외부 DB 호스트로 바뀌었는지 (비밀번호는 출력하지 않는다)
-$C logs backend | grep -E "Successfully validated|Current version|now at version|Schema .* is up to date"   # Flyway
-curl -s -o /dev/null -w "%{http_code}\n" http://localhost/api/v1/cases      # 200
-```
-
-Supabase Table Editor에서 운영 화면으로 만든 체험 기록이 보이면 끝이다. 그 뒤 **옛 postgres 컨테이너를 멈춘다**(전환해도 저절로 멈추지 않아 512m을 계속 쓴다). 데이터는 `pgdata` 볼륨에 그대로 남는다.
-
-```bash
-docker compose -f docker-compose.prod.yml stop postgres
-docker stats --no-stream --format '{{.Name}} {{.MemUsage}}'   # postgres가 목록에서 빠졌는지
-```
-
-- **운영 화면의 사건이 바뀐다.** 같은 서버 DB에는 실제 사건 시드가 들어 있지만, 공용 Supabase DB에는 가상 사건 시드만 있다(실제 사건은 팀 합의 전 올리지 않음). 전환하면 운영 화면에는 공용 DB의 사건이 보인다. 되돌리면 원래 실제 사건이 다시 보인다(`pgdata`에 그대로).
-- **이번 전환은 운영 데이터를 옮기지 않는다.** 운영 DB에도 테스트 데이터만 있다는 판단(10/22)이다. 운영 backend가 Supabase에 처음 붙으면 Flyway가 main 기준 마이그레이션을 맞추고(공용 DB는 담당자가 develop 기준으로 먼저 적용해 둠 — 같거나 앞서 있다), 성향 콘텐츠(`R__personality_content`)도 그대로 관리된다. 공용 DB의 개발용 시드 이력은 `application.yml`의 `repeatable:missing` 무시 규칙으로 문제없다.
-- 공용 DB라 **팀원이 로컬에서 만든 데이터가 운영 화면에도 보인다**(테스트 목적이라 감수, `SHARED-DEV-DB.md`).
-- 파이프라인 메모리 가드(`PIPELINE_MEMORY_CHECKED`)는 외부 DB 모드에서 묻지 않는다. 다만 **옛 postgres를 멈춘 뒤에** 파이프라인을 켠다.
+옛 postgres 컨테이너는 전환해도 저절로 멈추지 않으므로(512m을 계속 쓴다) 확인 뒤 `docker compose -f docker-compose.prod.yml stop postgres`로 멈춘다. 데이터는 `pgdata` 볼륨에 남는다.
 
 ### 되돌리기 (같은 서버 postgres로)
 
@@ -845,7 +817,7 @@ select count(*) from admin_account;                        -- 1 (관리자는 me
 ./env-set.sh --clear ADMIN_BOOTSTRAP_EMAIL && ./env-set.sh --clear ADMIN_BOOTSTRAP_PASSWORD && ./deploy.sh --reapply
 ```
 
-되돌리기: `install -m 600 ~/.env.before-rds.<MMDD> .env && ./deploy.sh --reapply` → Supabase로 돌아간다(RDS에 쓰인 데이터는 RDS에만 남는다). Supabase를 지운 뒤에는 되돌릴 곳이 없다 — 그때부터는 RDS 스냅샷 · 자동 백업으로 복구한다.
+되돌리기: `install -m 600 ~/.env.before-rds.<MMDD> .env && ./deploy.sh --reapply` → Supabase로 돌아가는 절차였다. **Supabase를 지웠으므로(COMMON-59) 이 되돌리기는 더 쓸 수 없다** — RDS 스냅샷 · 자동 백업으로 복구한다.
 
 #### RDS 전환 때 실제로 막힌 것
 
@@ -862,7 +834,7 @@ select count(*) from admin_account;                        -- 1 (관리자는 me
 
 | 증상 | 확인 · 조치 |
 | --- | --- |
-| `--reapply` 후 backend가 healthy가 되지 않음 · 로그에 `password authentication failed` | `EXTERNAL_DB_USERNAME`이 `postgres.<ref>` 형식인지, 비밀번호가 맞는지. 대시보드에서 비밀번호를 리셋했다면 팀원 `.env.supabase`도 같이 바꿔야 한다 |
+| `--reapply` 후 backend가 healthy가 되지 않음 · 로그에 `password authentication failed` | `EXTERNAL_DB_USERNAME`이 앱 계정(`lawnambul_app`, 마스터 계정 아님)인지, 비밀번호가 맞는지 |
 | 로그에 `Max client connections reached` 등 연결 수 오류 | `EXTERNAL_DB_POOL_SIZE`를 줄이거나, 팀원 로컬 backend가 여러 개 떠 있지 않은지 본다 |
 | 로그에 `Schema-validation: missing …` | 공용 DB가 main보다 뒤처졌다(담당자가 develop 기준 `--migrate`를 아직 안 함). 운영 backend의 Flyway가 맞추지만, 실패하면 담당자에게 알린다 |
 | 서비스가 이상하다 · 원인을 못 찾겠다 | 위 "되돌리기"로 같은 서버 postgres로 돌아간다(데이터는 `pgdata`에 그대로) |
@@ -993,11 +965,12 @@ backend ──▶ pipeline (FastAPI :8000, 내부 네트워크 전용) ──▶
 - 운영 DB에 직접 쓰지 않는다. 파이프라인의 `load` 단계는 서비스에서 꺼 두고, 검수 · 등록은 백엔드가 한다.
 - 판결문 원문은 이미지가 아니라 볼륨에만 있고, 결과 응답에도 넣지 않는다 (FR-5-3). 검수가 끝나면 백엔드가 작업을 지운다.
 
-### ⚠️ 켜기 전: 메모리
+### ⚠️ 켜기 전: 메모리 · 팀 합의
 
-t3.small은 2GB인데 지금 base 구성이 이미 1.75GB를 할당한다(backend 1g · postgres 512m · redis 256m).
-실측 여유는 약 250MB이고, 모니터링 에이전트를 켠 서버는 그중 100MB를 이미 쓴다.
-그래서 **7.1.2 RDS 전환(postgres 컨테이너 512m이 빠진다) 뒤에 켜는 것을 전제로 한다.**
+t3.small은 2GB인데 RDS 전환 전 base 구성은 1.75GB를 할당했다(backend 1g · postgres 512m · redis 256m, 실측 여유 약 250MB, 모니터링 에이전트가 그중 100MB).
+그래서 **7.1.2 RDS 전환(postgres 컨테이너 512m이 빠진다) 뒤에 켜는 것을 전제로 했다.** 10/28 전환으로 **자리는 생겼다** — 빠진 postgres 512m과 파이프라인 `mem_limit` 512m이 같은 예산이다.
+다만 켠 뒤의 실제 여유는 실측이 아니므로, 켜는 날 `docker stats`로 확인한다. 대본까지 만들게 하면 한 등록이 오래 걸리니 한 등록의 소요 시간도 같이 본다.
+남은 조건은 **팀 합의(COMMON-52)** 다 — 운영에서 사건 등록을 열지는 팀이 정한 뒤 켠다.
 
 그 전에 켜려 하면 **`deploy.sh`가 배포를 시작하기 전에 멈춘다.** 여유가 모자란 상태에서 이 컨테이너가 붙으면
 커널 OOM이 가장 큰 프로세스(backend)를 먼저 죽일 수 있기 때문이다. 꼭 켜야 하면 `backend`의 `mem_limit`을
@@ -1012,13 +985,20 @@ t3.small은 2GB인데 지금 base 구성이 이미 1.75GB를 할당한다(backen
 # 1) .env에 값 추가 (deploy/.env.example "AI 판결 파이프라인 서비스" 참고)
 #    PIPELINE_SERVICE=1
 #    ANTHROPIC_API_KEY · GEMINI_API_KEY · OPENAI_API_KEY 중 하나 이상 (없으면 deploy.sh가 배포 전에 멈춘다)
+#    ※ 쓰려는 모델(PIPELINE_MODELS · PIPELINE_EXTRACT_MODEL 등)의 공급자 키가 있어야 한다. 키가 하나만 있어도 deploy.sh는 통과하므로,
+#      다른 공급자 모델을 고르면 키가 비어 첫 등록에서 실패한다
+#    ※ 서비스를 켜는 것(PIPELINE_SERVICE=1)과 대본까지 만드는 것은 별개 스위치다(BE-129). 대본까지 만들려면 PIPELINE_SCRIPT_MODEL을 따로 넣는다
+#      (기본 꺼짐 — 비우면 대본 없이 등록). 켜면 등록 한 번에 분류 · 대본 · 검수까지 돌아 모델 호출과 소요 시간이 늘어난다.
+#      분류 모델(PIPELINE_CLASSIFY_MODEL)은 대본 모델과 같은 값으로 적는다 — 자세한 이유는 .env.example
 #    PIPELINE_MEMORY_CHECKED=1  ← RDS 전환 전(postgres 컨테이너가 있는 서버)에만 필요. 위 "켜기 전: 메모리" 확인 후
 
-# 2) 올린다. 지금 운영에서 쓰는 -f 조합을 그대로 쓴다
-docker compose -f docker-compose.prod.yml -f docker-compose.pipeline.yml up -d --no-build pipeline
-
-# 3) backend를 다시 만들어 PIPELINE_SERVICE_URL을 받게 한다 (환경변수는 컨테이너를 새로 만들어야 반영된다)
-docker compose -f docker-compose.prod.yml -f docker-compose.pipeline.yml up -d --no-build --no-deps backend
+# 2) 같은 이미지로 .env를 다시 적용한다. deploy.sh가 .env를 보고 외부 DB · 시드 · 파이프라인 오버레이를 함께 붙여
+#    pipeline을 올리고 backend를 다시 만든다(PIPELINE_SERVICE_URL 반영) + 스모크 테스트
+#    (docker compose -f docker-compose.prod.yml -f docker-compose.pipeline.yml 처럼 손으로 고르면 외부 DB 오버레이가 빠져
+#     RDS 운영에서 backend가 로컬 postgres를 찾는다)
+sudo systemctl stop lawnambul-cd.timer
+./deploy.sh --reapply
+sudo systemctl start lawnambul-cd.timer
 ```
 
 이후 자동 배포(`deploy.sh`)는 `.env`의 `PIPELINE_SERVICE=1`을 보고 이 오버레이를 함께 쓰고,
@@ -1138,8 +1118,6 @@ Grafana Cloud 경보가 no data로 울리기 시작하므로, 끄기 전에 Graf
 
 | 작업 | 바꿀 곳 |
 | --- | --- |
-| 7.1.2 RDS 전환 · 시크릿 | (BE-59, **10/28 RDS 전환 완료** — 위 "RDS 전환") 남은 것: Supabase 프로젝트 삭제 · 공용 DB 파일 정리(COMMON-59 "종료"), 비밀값을 시크릿 저장소(SSM 등)로 옮길지, `sslmode=verify-full`(RDS CA 인증서), `deploy.sh`의 마이그레이션 비교를 외부 DB로도 할지, 안정되면 `docker-compose.prod.yml`에서 postgres 정의를 지울지, DB 지표(CloudWatch · `postgres_exporter`) 경보 |
-| 7.4.3 JWT (C) | 토큰은 `@Qualifier(RedisConfig.TOKEN)` 템플릿(DB 1)에 TTL과 함께 저장 |
-| 백엔드 healthcheck 추가 (BE-66 이후) | Actuator(관리 포트 8081)에는 Redis 헬스체크가 자동으로 붙고, 커넥션 팩토리 두 개가 `redis` 아래 묶인다. **실측(BE-61, Boot 4.1.1)**: Redis를 끄면 `/actuator/health`는 **DOWN(503)**, `/actuator/health/liveness` · `/readiness`는 **UP**, API는 정상. liveness · readiness는 추가 설정 없이 이미 열려 있다. 그래서 컨테이너 healthcheck · 재시작 조건에는 **`/actuator/health`가 아니라 `/actuator/health/liveness`** 를 쓴다(전체 상태를 쓰면 Redis 장애 때 백엔드까지 재시작된다) |
+| 7.1.2 RDS 전환 · 시크릿 | (BE-59, **10/28 RDS 전환 완료** — 위 "RDS 전환") Supabase 프로젝트 삭제 · 공용 DB 파일 정리(COMMON-59)도 끝났다. 남은 것: 비밀값을 시크릿 저장소(SSM 등)로 옮길지, `sslmode=verify-full`(RDS CA 인증서), `deploy.sh`의 마이그레이션 비교를 외부 DB로도 할지, 안정되면 `docker-compose.prod.yml`에서 postgres 정의를 지울지, DB 지표(CloudWatch · `postgres_exporter`) 경보 |
 | CSP 2단계 (COMMON-70) | 운영 주요 화면에서 Report-Only 위반이 없음을 확인한 뒤 `frontend/nginx/snippets/security-headers.conf`의 `Content-Security-Policy-Report-Only`를 `Content-Security-Policy`로 바꾼다(`docs/decisions/COMMON-70.md` "다음 단계") |
 | HTTPS 안정화 후 (BE-75 · COMMON-67 후속) | 첫 인증서 자동 갱신이 정상으로 돈 뒤 `frontend/nginx/default.conf`의 `$hsts_header`를 1일 → 1주 → 1년으로 늘린다(위 "HTTPS로 풀리는 것 · 남은 것") |

@@ -20,7 +20,7 @@ import org.springframework.stereotype.Component;
  * 읽는다 — 스크레이프할 때마다 직접 DB를 조회하지 않는다(PR #262 리뷰 지적). 스크레이프 시점에 DB를
  * 직접 조회하면, 정작 `DbConnectionPoolNearExhaustion`이 울려야 할 순간(커넥션 풀이 가득 찬 순간)에
  * 이 조회가 커넥션을 기다리다 스크레이프 타임아웃을 넘겨 **그 스크레이프의 모든 지표가 함께 빠지고**
- * 정작 필요한 경보조차 계산되지 않는 문제가 생긴다 — 운영이 외부 DB(Supabase, BE-59)에 작은 커넥션
+ * 정작 필요한 경보조차 계산되지 않는 문제가 생긴다 — 운영이 외부 DB(RDS, BE-59)에 작은 커넥션
  * 풀(5개)로 붙어 있어 더 쉽게 일어난다.
  */
 @Component

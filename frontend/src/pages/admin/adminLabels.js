@@ -46,11 +46,13 @@ export const PUBLISH_REASON = {
   NO_FACTORS: '판단 요소가 1개 이상 있어야 해요.',
   NO_OVERVIEW_FACTOR: '사전 판단에 쓸 개요 단계 판단 요소가 있어야 해요.',
   NO_PENALTY_RULE: '형벌 규칙이 1개 이상 있어야 해요. (SQL 경로로 추가)',
+  NO_PAPER: '신문 지면을 만들어야 해요. (사진 · 지면에서 만들기)',
 };
 
 // INVALID_STATE details 사유 코드
 export const STATE_REASON = {
   CASE_PUBLISHED: '이미 공개한 사건이라 바꿀 수 없어요.',
+  CASE_NOT_PUBLISHED: '공개 중인 사건이 아니라 공개를 취소할 수 없어요.',
   CANDIDATE_REJECTED: '이미 반려한 후보예요.',
   CANDIDATE_PUBLISHED: '공개 중인 후보는 반려할 수 없어요. 먼저 다른 후보를 승인해 교체해 주세요.',
   // 운영 메뉴
@@ -74,7 +76,7 @@ export const REPORT_ACTION = { HIDE: '숨김 처리', SUSPEND: '회원 정지 (7
 export const ADMIN_ROLE = { SUPER: '총괄', REVIEWER: '검수' };
 export const AUDIT_ACTION = {
   LOGIN_SUCCESS: '로그인', LOGIN_FAILURE: '로그인 실패', LOGOUT: '로그아웃', SOURCE_VIEW: '원본 판결문 열람', JUDGMENT_APPROVE: '판결 후보 승인',
-  JUDGMENT_REJECT: '판결 후보 반려', CASE_UPDATE: '사건 내용 수정', VALUE_AXIS_CONFIRM: '가치관 축 확정', CASE_PUBLISH: '사건 공개',
+  JUDGMENT_REJECT: '판결 후보 반려', CASE_UPDATE: '사건 내용 수정', VALUE_AXIS_CONFIRM: '가치관 축 확정', CASE_PUBLISH: '사건 공개', CASE_UNPUBLISH: '사건 공개 취소',
 };
 
 export const AXIS_LABEL = Object.fromEntries(AXES.map((axis) => [axis.key, axis.label]));

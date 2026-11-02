@@ -284,3 +284,19 @@ test('A-13-12: 승인한 대본도 반려로 내릴 수 있다. 사유는 1 ~ 50
   assert.equal(rejected.isPublished, false);
   assert.equal(rejected.reviewNote, '검사 쪽 대사가 너무 깁니다.');
 });
+
+test('A-13-14: 공개한 사건의 공개를 취소하면 REVIEW로 돌아가고, 다시 취소하면 CASE_NOT_PUBLISHED (BE-118)', async () => {
+  assert.equal((await api.getCase(13)).status, 'PUBLISHED');
+  assert.equal((await api.unpublishCase(13, '  권리자 요청으로 내림  ')).status, 'REVIEW');
+  assert.equal((await api.getCase(13)).status, 'REVIEW');
+  const failure = await api.unpublishCase(13, '다시').catch((error) => error);
+  assert.equal(failure.code, 'INVALID_STATE');
+  assert.equal(failure.details[0].reason, 'CASE_NOT_PUBLISHED');
+});
+
+test('A-13-14: 사유는 앞뒤 공백을 잘라 1 ~ 200자. 없는 사건은 404', async () => {
+  assert.equal(await code(api.unpublishCase(13, '   ')), 'VALIDATION_ERROR');
+  assert.equal(await code(api.unpublishCase(13, 'ㄱ'.repeat(201))), 'VALIDATION_ERROR');
+  assert.equal(await code(api.unpublishCase(9999, '사유')), 'CASE_NOT_FOUND');
+  assert.equal((await api.unpublishCase(13, 'ㄱ'.repeat(200))).status, 'REVIEW');
+});
