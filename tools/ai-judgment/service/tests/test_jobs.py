@@ -531,6 +531,28 @@ class JobStoreTest(unittest.TestCase):
 
         self.assertIsNone(self.store.result(job_id)["script"])
         self.assertIsNone(self.store.result(job_id)["classify"])
+        self.assertIsNone(self.store.result(job_id)["contamination"])  # 점검을 안 돌렸다 (BE-160)
+
+    def test_result_sends_contamination_verdicts_without_predictions(self):
+        """사전 학습 점검 판정을 모델별로 내보낸다 — SUSPECT는 등록을 계속하므로 적재 뒤에도 남아야 한다 (BE-160, PR #411 리뷰).
+        판정 · 근거 · 개수 · 기준만 내보내고, 모델이 예측한 형량이 든 회차 파일 경로 · 내용은 내보내지 않는다"""
+        job_id = self.store.create(self._request())
+        case_file = self.tool_dir / "cases" / "case.json"
+        case_file.parent.mkdir(parents=True, exist_ok=True)
+        case_file.write_text(json.dumps({"title": "사건"}, ensure_ascii=False), encoding="utf-8")
+        verdict = {"verdict": "SUSPECT", "reason": "가까움 60%", "counts": {"EXACT": 1, "CLOSE": 5, "FAR": 4},
+                   "answered": 10, "runs": 10, "criteria": {"minAnswered": 5}}
+        self._write_state(job_id, {
+            "extract": {"status": "done", "outputs": {"case": str(case_file)}},
+            "contamination": {"status": "done", "outputs": {
+                "results": {"gemini:x": {**verdict, "runFile": "/app/out/pipeline/job-x/contamination/run-001.json",
+                                         "predictedMonths": 120}},
+                "excluded": []}},
+        })
+
+        contamination = self.store.result(job_id)["contamination"]
+
+        self.assertEqual(contamination, {"gemini:x": verdict})
 
     def test_result_before_pipeline_produced_anything(self):
         job_id = self.store.create(self._request())

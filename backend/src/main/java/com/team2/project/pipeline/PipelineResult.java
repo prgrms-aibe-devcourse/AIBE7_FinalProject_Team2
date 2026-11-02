@@ -27,6 +27,8 @@ import java.util.List;
  *                      {@code balanceWarning}이 들어 있다. 적재는 BE-108이 한다
  * @param classify      사건 분류 (BE-123 classify 단계). 분류를 돌리지 않은 작업은 null이다. 적재는
  *                      {@code classification.sensitiveFlags}만 읽어 legal_case.sensitive_flags에 넣는다(BE-125)
+ * @param contamination 사전 학습 점검 판정 (BE-160). {@code 모델 spec → {verdict, reason, counts, answered, runs, criteria}}.
+ *                      점검을 돌리지 않은 작업은 null이다. 적재는 고른 모델의 값을 ai_generation.generation_report에 남긴다
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record PipelineResult(
@@ -38,7 +40,8 @@ public record PipelineResult(
 	Selection selection,
 	JsonNode axis,
 	JsonNode script,
-	JsonNode classify
+	JsonNode classify,
+	JsonNode contamination
 ) {
 
 	/** @param warnings 검증 경고. 적재를 막지는 않고 ai_generation에 남겨 관리자가 보게 한다 */
