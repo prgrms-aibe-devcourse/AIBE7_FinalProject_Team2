@@ -26,13 +26,6 @@ test('errorText: 그 밖의 _NOT_FOUND는 서버 메시지를 그대로 쓴다',
   assert.equal(errorText({ code: 'CASE_NOT_FOUND', message: '사건을 찾을 수 없어요.' }), '사건을 찾을 수 없어요.');
 });
 
-test('errorText: 사유 코드가 없는 INVALID_STATE는 서버 문구를 쓰고, 사유 코드가 있으면 그 문구를 쓴다 (FE-148)', () => {
-  assert.equal(errorText({ code: 'INVALID_STATE', message: 'U1 블록이 옛 값을 보고 만들어졌습니다.' }), 'U1 블록이 옛 값을 보고 만들어졌습니다.');
-  assert.equal(errorText({ code: 'INVALID_STATE', message: 'x', details: [{ reason: 'CASE_PUBLISHED' }] }), '이미 공개한 사건이라 바꿀 수 없어요.');
-  assert.equal(errorText({ code: 'INVALID_STATE', message: 'x', details: [{ reason: 'UNKNOWN' }] }), '지금 상태에서는 할 수 없어요.');
-  assert.equal(errorText({ code: 'INVALID_STATE' }), '지금 상태에서는 할 수 없어요.');
-});
-
 test('formatDate · formatDateTime: 빈 값은 —, 읽을 수 없는 값은 그대로, 날짜만 · 시각까지 같은 기준으로 만든다', () => {
   assert.equal(formatDate(null), '—');
   assert.equal(formatDateTime(''), '—');

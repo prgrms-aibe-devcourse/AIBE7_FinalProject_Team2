@@ -20,13 +20,6 @@
     "U3": [],
     "U4": []
   },
-  "spokenPathsNote": "말하는 대사 자리(BE-153) — 검수가 대사 길이(LINE_TOO_LONG, 100자 · 2줄)를 거는 자리다(script_review.unit_lines의 guide · narrator · prosecutor · defense). '*'는 배열 순번 하나다. 백엔드 A-13-21과 관리자 화면(FE-148)이 이 자리에만 길이 규칙을 건다. U0(설계도) · U2 카드 · 신문 답은 화면 대사가 아니라 없다. U3 대사는 A-13-13이 늘 대사로 본다",
-  "spokenPaths": {
-    "U0": [],
-    "U1": ["/lines/*"],
-    "U2": ["/indict/*", "/plea/*", "/issues_narr/*", "/questions/*/q"],
-    "U4": ["/prosecutor", "/defense"]
-  },
   "normalizeAnswer": [
     {"answer": "예", "expected": "…네."},
     {"answer": "네, 맞습니다.", "expected": "…네."},

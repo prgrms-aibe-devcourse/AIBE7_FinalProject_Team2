@@ -1,4 +1,4 @@
-// 관리자 API 실제 호출 (API 명세 8장 A-1 ~ A-15, A-13-1 ~ A-13-13 · A-13-18 ~ 21). adminMockApi.js와 함수 이름 · 인자 · 응답 형식이 같다.
+// 관리자 API 실제 호출 (API 명세 8장 A-1 ~ A-15, A-13-1 ~ A-13-13). adminMockApi.js와 함수 이름 · 인자 · 응답 형식이 같다.
 // A-1 ~ A-13은 BE-39 · BE-41 ~ BE-43으로 구현돼 있다. A-14 · A-15(사건 등록)는 초안 계약이라 서버가 구현되기 전에는 404가 온다.
 import { adminDelete, adminGet, adminPatch, adminPost, adminPut, fetchCsrf } from './adminClient.js';
 
@@ -80,12 +80,3 @@ export const rejectCaseScript = (caseId, reason) => adminPost(`/cases/${id(caseI
 /** A-13-13 대사 한 줄 수정. factorId는 파이프라인 번호(= factor.display_order)다 */
 export const updateCaseScriptLine = (caseId, factorId, text) =>
   adminPatch(`/cases/${id(caseId)}/script/evidence/${id(factorId)}`, { text });
-
-// ── A-13-18 ~ A-13-21 대본 블록 단위 검수 (BE-126 2차, FE-148). unit은 U0 ~ U4, 응답은 모두 A-13-10과 같은 형식이다
-const blockUrl = (caseId, unit) => `/cases/${id(caseId)}/script/blocks/${id(unit)}`;
-export const approveScriptBlock = (caseId, unit) => adminPost(`${blockUrl(caseId, unit)}/approve`);
-export const rejectScriptBlock = (caseId, unit, reason) => adminPost(`${blockUrl(caseId, unit)}/reject`, { reason });
-/** A-13-20 "확인했음" — 낡았지만 그대로 두기로 한 블록의 근거를 지금 값으로 맞춘다 */
-export const acknowledgeScriptBlockStale = (caseId, unit) => adminPost(`${blockUrl(caseId, unit)}/acknowledge-stale`);
-/** A-13-21 블록 문장 한 줄 수정 (U0 · U1 · U2 · U4). path는 검수 결과와 같은 JSON Pointer다 */
-export const updateScriptBlockText = (caseId, unit, path, text) => adminPatch(`${blockUrl(caseId, unit)}/text`, { path, text });
