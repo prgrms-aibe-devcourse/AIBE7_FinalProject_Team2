@@ -986,6 +986,9 @@ t3.small은 2GB인데 RDS 전환 전 base 구성은 1.75GB를 할당했다(backe
 #    ANTHROPIC_API_KEY · GEMINI_API_KEY · OPENAI_API_KEY 중 하나 이상 (없으면 deploy.sh가 배포 전에 멈춘다)
 #    ※ 쓰려는 모델(PIPELINE_MODELS · PIPELINE_EXTRACT_MODEL 등)의 공급자 키가 있어야 한다. 키가 하나만 있어도 deploy.sh는 통과하므로,
 #      다른 공급자 모델을 고르면 키가 비어 첫 등록에서 실패한다
+#    ※ 서비스를 켜는 것(PIPELINE_SERVICE=1)과 대본까지 만드는 것은 별개 스위치다(BE-129). 대본까지 만들려면 PIPELINE_SCRIPT_MODEL을 따로 넣는다
+#      (기본 꺼짐 — 비우면 대본 없이 등록). 켜면 등록 한 번에 분류 · 대본 · 검수까지 돌아 모델 호출과 소요 시간이 늘어난다.
+#      분류 모델(PIPELINE_CLASSIFY_MODEL)은 대본 모델과 같은 값으로 적는다 — 자세한 이유는 .env.example
 #    PIPELINE_MEMORY_CHECKED=1  ← RDS 전환 전(postgres 컨테이너가 있는 서버)에만 필요. 위 "켜기 전: 메모리" 확인 후
 
 # 2) 같은 이미지로 .env를 다시 적용한다. deploy.sh가 .env를 보고 외부 DB · 시드 · 파이프라인 오버레이를 함께 붙여
