@@ -218,6 +218,23 @@ class KakaoSignupApiTest extends ApiIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("같은 카카오 계정의 가입 대기가 둘(두 탭)이어도 회원은 하나만 만들어지고, 처음 동의 기록은 바뀌지 않는다")
+	void twoPendingsForSameAccount_createOneMember() throws Exception {
+		Cookie first = newPending();
+		Cookie second = newPending();
+		trackRefresh(mockMvc.perform(agree(SAME_ORIGIN, first, "{\"agreed\":true}")).andExpect(status().isOk()).andReturn());
+		String firstConsent = jdbcTemplate.queryForObject(
+			"SELECT terms_agreed_at::text FROM member WHERE provider = 'KAKAO' AND provider_user_id = ?", String.class, KAKAO_ID);
+
+		trackRefresh(mockMvc.perform(agree(SAME_ORIGIN, second, "{\"agreed\":true}")).andExpect(status().isOk()).andReturn());
+
+		assertThat(memberCount()).isEqualTo(1);
+		assertThat(jdbcTemplate.queryForObject(
+			"SELECT terms_agreed_at::text FROM member WHERE provider = 'KAKAO' AND provider_user_id = ?", String.class, KAKAO_ID))
+			.isEqualTo(firstConsent);
+	}
+
+	@Test
 	@DisplayName("M-13: 동의하지 않고 닫으면 가입 대기가 지워지고 DB에는 아무것도 남지 않는다")
 	void cancel_leavesNothing() throws Exception {
 		Cookie pending = newPending();
