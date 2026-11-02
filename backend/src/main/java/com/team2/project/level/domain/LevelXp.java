@@ -16,11 +16,11 @@ public final class LevelXp {
 	static final int ATTENDANCE_DAY = 5;
 	static final int COLLECTED_ITEM = 10;	// 모은 일러스트 · 의상 1장 (BE-83)
 
-	/** 업적별 XP: 쉬운 것 50 · 중간 100 · 어려운 것 200 (ProfileDecoCatalog.ACHIEVEMENTS의 id) */
+	/** 업적별 XP: 쉬운 것 50 · 중간 100 · 어려운 것 200 (ProfileDecoCatalog.ACHIEVEMENTS의 id). cases-5 · collect-50은 BE-146 */
 	private static final Map<String, Integer> ACHIEVEMENT_XP = Map.of(
 		"first-case", 50, "personality", 50, "attend-3", 50,
 		"attend-7", 100, "cases-3", 100, "collect-5", 100,
-		"attend-30", 200, "collect-20", 200);
+		"attend-30", 200, "collect-20", 200, "cases-5", 200, "collect-50", 200);
 
 	private LevelXp() {
 	}

@@ -20,6 +20,9 @@ import org.junit.jupiter.api.Test;
 /** 표 자체가 앞뒤가 맞는지 (BE-96). 표를 고칠 때 오타 · 없는 값을 잡는다 */
 class ProfileDecoCatalogTest {
 
+	/** V35 배포 뒤에 더한 도전과제 (BE-146). 처음 달성하면 "새로 열림"으로 보이는 것이 맞다 */
+	private static final java.util.Set<String> ADDED_AFTER_V35 = java.util.Set.of("cases-5");
+
 	private static Stream<Rewards> allRewards() {
 		return Stream.concat(Stream.of(ProfileDecoCatalog.FREE), ProfileDecoCatalog.ACHIEVEMENTS.stream().map(Achievement::rewards));
 	}
@@ -32,7 +35,7 @@ class ProfileDecoCatalogTest {
 	@DisplayName("도전과제 id는 겹치지 않고, 목표는 1 이상이다")
 	void achievementIds() {
 		List<String> ids = ProfileDecoCatalog.ACHIEVEMENTS.stream().map(Achievement::id).toList();
-		assertThat(ids).doesNotHaveDuplicates().hasSize(8);
+		assertThat(ids).doesNotHaveDuplicates().hasSize(10);
 		assertThat(ProfileDecoCatalog.ACHIEVEMENTS).allSatisfy(item -> assertThat(item.goal()).isPositive());
 	}
 
@@ -71,6 +74,7 @@ class ProfileDecoCatalogTest {
 
 		Map<String, Integer> catalog = ProfileDecoCatalog.ACHIEVEMENTS.stream()
 			.filter(item -> item.stat() != AchievementStat.COLLECTED)	// 배포 시점 수집 수는 0이라 백필하지 않는다
+			.filter(item -> !ADDED_AFTER_V35.contains(item.id()))	// V35 뒤에 더한 도전과제는 백필 대상이 아니다(1회성 SQL)
 			.collect(Collectors.toMap(Achievement::id, Achievement::goal));
 		assertThat(goals).isEqualTo(catalog);
 	}
