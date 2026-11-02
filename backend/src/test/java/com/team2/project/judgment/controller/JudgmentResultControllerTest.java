@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.team2.project.common.exception.ApiExceptionAdvice;
 import com.team2.project.common.web.AnonymousIdCookie;
+import com.team2.project.common.web.Requester;
 import com.team2.project.common.web.RequesterArgumentResolver;
 import com.team2.project.experience.domain.ExperienceStatus;
 import com.team2.project.experience.domain.InvalidExperienceStateException;
@@ -49,7 +50,7 @@ class JudgmentResultControllerTest {
 
 	@Test
 	void getAiJudgment_beforeVerdict_returns409WithCurrentStatus() throws Exception {
-		when(resultService.getAiJudgment(7L, Optional.of(ANONYMOUS_ID)))
+		when(resultService.getAiJudgment(7L, Requester.guest(ANONYMOUS_ID)))
 			.thenThrow(new InvalidExperienceStateException(ExperienceStatus.REVIEWED, "x"));
 
 		mockMvc.perform(get("/api/v1/cases/7/experience/judgments/ai").cookie(cookie()))
@@ -60,7 +61,7 @@ class JudgmentResultControllerTest {
 
 	@Test
 	void getCourtJudgment_beforeReveal_returns409WithCurrentStatus() throws Exception {
-		when(resultService.getCourtJudgment(7L, Optional.of(ANONYMOUS_ID)))
+		when(resultService.getCourtJudgment(7L, Requester.guest(ANONYMOUS_ID)))
 			.thenThrow(new InvalidExperienceStateException(ExperienceStatus.VERDICT_CONFIRMED, "x"));
 
 		mockMvc.perform(get("/api/v1/cases/7/experience/judgments/court").cookie(cookie()))
@@ -71,7 +72,7 @@ class JudgmentResultControllerTest {
 
 	@Test
 	void revealCourt_withoutBody_returnsStatus() throws Exception {
-		when(revealService.revealCourt(7L, Optional.of(ANONYMOUS_ID)))
+		when(revealService.revealCourt(7L, Requester.guest(ANONYMOUS_ID)))
 			.thenReturn(new RevealResponse(ExperienceStatus.AI_REVEALED));
 
 		mockMvc.perform(post("/api/v1/cases/7/experience/court-reveal").cookie(cookie()))
@@ -81,7 +82,7 @@ class JudgmentResultControllerTest {
 
 	@Test
 	void revealComparison_withoutBody_returnsStatus() throws Exception {
-		when(revealService.revealComparison(7L, Optional.of(ANONYMOUS_ID)))
+		when(revealService.revealComparison(7L, Requester.guest(ANONYMOUS_ID)))
 			.thenReturn(new RevealResponse(ExperienceStatus.COMPLETED));
 
 		mockMvc.perform(post("/api/v1/cases/7/experience/comparison-reveal").cookie(cookie()))
@@ -91,7 +92,7 @@ class JudgmentResultControllerTest {
 
 	@Test
 	void getComparison_beforeComplete_returns409WithCurrentStatus() throws Exception {
-		when(comparisonService.getComparison(7L, Optional.of(ANONYMOUS_ID)))
+		when(comparisonService.getComparison(7L, Requester.guest(ANONYMOUS_ID)))
 			.thenThrow(new InvalidExperienceStateException(ExperienceStatus.AI_REVEALED, "x"));
 
 		mockMvc.perform(get("/api/v1/cases/7/experience/comparison").cookie(cookie()))
@@ -102,7 +103,7 @@ class JudgmentResultControllerTest {
 
 	@Test
 	void revealCourt_withoutCookie_passesEmptyAnonymousId() throws Exception {
-		when(revealService.revealCourt(7L, Optional.empty()))
+		when(revealService.revealCourt(7L, Requester.guest(Optional.empty())))
 			.thenThrow(new InvalidExperienceStateException(ExperienceStatus.STARTED, "x"));
 
 		mockMvc.perform(post("/api/v1/cases/7/experience/court-reveal"))

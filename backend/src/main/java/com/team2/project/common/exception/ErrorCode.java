@@ -69,6 +69,8 @@ public enum ErrorCode {
 	DUPLICATE_ID(HttpStatus.CONFLICT, "이미 사용 중인 아이디입니다."),
 	// 닉네임 (확장 단계, BE-139, API 명세 M-5 · M-7)
 	DUPLICATE_NICKNAME(HttpStatus.CONFLICT, "이미 사용 중인 닉네임입니다."),
+	// 첫 로그인 가져오기 (확장 단계, BE-140, API 명세 M-10 · M-11)
+	ANONYMOUS_IMPORT_NOT_AVAILABLE(HttpStatus.CONFLICT, "가져올 수 있는 기록이 없습니다."),
 	// 수집 상태 저장 (확장 단계, BE-83). details에 넘친 종류(items.kind)를 담는다
 	COLLECTION_LIMIT_EXCEEDED(HttpStatus.CONFLICT, "모을 수 있는 수를 넘었습니다."),
 	// 커뮤니티 (확장 단계, BE-115, API 명세 12장)

@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.team2.project.common.exception.ApiExceptionAdvice;
 import com.team2.project.common.web.AnonymousIdCookie;
+import com.team2.project.common.web.Requester;
 import com.team2.project.common.web.RequesterArgumentResolver;
 import com.team2.project.experience.domain.ExperienceStatus;
 import com.team2.project.experience.domain.InvalidExperienceStateException;
@@ -55,7 +56,7 @@ class VerdictControllerTest {
 
 	@Test
 	void getForm_wrongState_returns409WithCurrentStatus() throws Exception {
-		when(formService.getForm(7L, Optional.of(ANONYMOUS_ID)))
+		when(formService.getForm(7L, Requester.guest(ANONYMOUS_ID)))
 			.thenThrow(new InvalidExperienceStateException(ExperienceStatus.REVIEWING, "x"));
 		mockMvc.perform(get("/api/v1/cases/7/experience/verdict-form").cookie(cookie()))
 			.andExpect(status().isConflict())
@@ -65,7 +66,7 @@ class VerdictControllerTest {
 
 	@Test
 	void submit_valid_returns200VerdictConfirmed() throws Exception {
-		when(verdictService.submit(eq(7L), eq(Optional.of(ANONYMOUS_ID)), any()))
+		when(verdictService.submit(eq(7L), eq(Requester.guest(ANONYMOUS_ID)), any()))
 			.thenReturn(new VerdictResponse(ExperienceStatus.VERDICT_CONFIRMED));
 		mockMvc.perform(post("/api/v1/cases/7/experience/verdict").cookie(cookie())
 				.contentType(MediaType.APPLICATION_JSON).content(VALID))
@@ -75,7 +76,7 @@ class VerdictControllerTest {
 
 	@Test
 	void submit_outOfRange_returns422WithFieldDetail() throws Exception {
-		when(verdictService.submit(eq(7L), eq(Optional.of(ANONYMOUS_ID)), any())).thenThrow(new InvalidJudgmentException(
+		when(verdictService.submit(eq(7L), eq(Requester.guest(ANONYMOUS_ID)), any())).thenThrow(new InvalidJudgmentException(
 			InvalidJudgmentException.Reason.OUT_OF_ALLOWED_RANGE, "x", "prisonMonths"));
 		mockMvc.perform(post("/api/v1/cases/7/experience/verdict").cookie(cookie())
 				.contentType(MediaType.APPLICATION_JSON).content(VALID))

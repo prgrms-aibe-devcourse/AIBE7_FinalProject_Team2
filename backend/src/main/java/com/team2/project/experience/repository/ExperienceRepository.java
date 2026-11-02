@@ -1,5 +1,6 @@
 package com.team2.project.experience.repository;
 
+import com.team2.project.common.owner.Owner;
 import com.team2.project.experience.domain.Experience;
 import com.team2.project.experience.domain.ExperienceStatus;
 import java.time.Instant;
@@ -24,12 +25,33 @@ public interface ExperienceRepository extends JpaRepository<Experience, Long> {
 		order by e.updatedAt desc, e.id desc""")
 	List<Experience> findLatestPerCase(@Param("anonymousUserId") UUID anonymousUserId);
 
+	/** findLatestPerCase의 회원 쪽 (BE-140) */
+	@Query("""
+		select e from Experience e join fetch e.legalCase
+		where e.memberId = :memberId
+		  and e.attemptNo = (select max(e2.attemptNo) from Experience e2
+		                     where e2.memberId = e.memberId and e2.legalCase = e.legalCase)
+		order by e.updatedAt desc, e.id desc""")
+	List<Experience> findLatestPerCaseOfMember(@Param("memberId") long memberId);
+
+	default List<Experience> findLatestPerCase(Owner owner) {
+		return owner.fold(this::findLatestPerCaseOfMember, this::findLatestPerCase);
+	}
+
 	/** 내 체험: 익명 ID + 사건의 가장 최근 회차 (API 명세 1-3, MVP는 항상 1회차) */
 	Optional<Experience> findFirstByAnonymousUser_IdAndLegalCase_IdOrderByAttemptNoDesc(UUID anonymousUserId,
 		Long caseId);
 
 	default Optional<Experience> findLatest(UUID anonymousUserId, Long caseId) {
 		return findFirstByAnonymousUser_IdAndLegalCase_IdOrderByAttemptNoDesc(anonymousUserId, caseId);
+	}
+
+	/** 내 체험의 회원 쪽 (BE-140) */
+	Optional<Experience> findFirstByMemberIdAndLegalCase_IdOrderByAttemptNoDesc(Long memberId, Long caseId);
+
+	default Optional<Experience> findLatest(Owner owner, Long caseId) {
+		return owner.fold(memberId -> findFirstByMemberIdAndLegalCase_IdOrderByAttemptNoDesc(memberId, caseId),
+			anonymousUserId -> findLatest(anonymousUserId, caseId));
 	}
 
 	/** 참여자 수: 1회차이고 완료한 체험 수 (API 1 participantCount, 통계는 1회차만, DR-7) */
@@ -57,16 +79,41 @@ public interface ExperienceRepository extends JpaRepository<Experience, Long> {
 		+ "and e.status = com.team2.project.experience.domain.ExperienceStatus.COMPLETED")
 	long countCompletedCases(@Param("anonymousUserId") UUID anonymousUserId);
 
+	@Query("select count(distinct e.legalCase.id) from Experience e where e.memberId = :memberId "
+		+ "and e.status = com.team2.project.experience.domain.ExperienceStatus.COMPLETED")
+	long countCompletedCasesOfMember(@Param("memberId") long memberId);
+
+	default long countCompletedCases(Owner owner) {
+		return owner.fold(this::countCompletedCasesOfMember, this::countCompletedCases);
+	}
+
 	/** 그 사건을 완료한 회차가 하나라도 있는지 (SNS 공유 보상, BE-106) */
 	@Query("select count(e) > 0 from Experience e where e.anonymousUser.id = :anonymousUserId and e.legalCase.id = :caseId "
 		+ "and e.status = com.team2.project.experience.domain.ExperienceStatus.COMPLETED")
 	boolean existsCompleted(@Param("anonymousUserId") UUID anonymousUserId, @Param("caseId") Long caseId);
+
+	@Query("select count(e) > 0 from Experience e where e.memberId = :memberId and e.legalCase.id = :caseId "
+		+ "and e.status = com.team2.project.experience.domain.ExperienceStatus.COMPLETED")
+	boolean existsCompletedOfMember(@Param("memberId") long memberId, @Param("caseId") Long caseId);
+
+	default boolean existsCompleted(Owner owner, Long caseId) {
+		return owner.fold(memberId -> existsCompletedOfMember(memberId, caseId), anonymousUserId -> existsCompleted(anonymousUserId, caseId));
+	}
 
 	/** 그 사건의 첫 완료 시각 (수집 백필의 획득 시각, BE-83). 완료한 회차가 없거나 시각이 비어 있으면 null */
 	@Query("select min(e.completedAt) from Experience e where e.anonymousUser.id = :anonymousUserId "
 		+ "and e.legalCase.id = :caseId "
 		+ "and e.status = com.team2.project.experience.domain.ExperienceStatus.COMPLETED")
 	Instant findFirstCompletedAt(@Param("anonymousUserId") UUID anonymousUserId, @Param("caseId") Long caseId);
+
+	@Query("select min(e.completedAt) from Experience e where e.memberId = :memberId "
+		+ "and e.legalCase.id = :caseId "
+		+ "and e.status = com.team2.project.experience.domain.ExperienceStatus.COMPLETED")
+	Instant findFirstCompletedAtOfMember(@Param("memberId") long memberId, @Param("caseId") Long caseId);
+
+	default Instant findFirstCompletedAt(Owner owner, Long caseId) {
+		return owner.fold(memberId -> findFirstCompletedAtOfMember(memberId, caseId), anonymousUserId -> findFirstCompletedAt(anonymousUserId, caseId));
+	}
 
 	/** 체험의 현재 상태만 다시 읽는다 (조건부 갱신이 실패했을 때 currentStatus 응답용) */
 	@Query("select e.status from Experience e where e.id = :id")
@@ -120,4 +167,19 @@ public interface ExperienceRepository extends JpaRepository<Experience, Long> {
 		@Param("aiRevealedAt") Instant aiRevealedAt,
 		@Param("completedAt") Instant completedAt,
 		@Param("updatedAt") Instant updatedAt);
+
+	/** 이 회원의 체험이 있는가 (첫 로그인 가져오기, BE-140: 회원 체험이 0건일 때만 옮긴다) */
+	boolean existsByMemberId(Long memberId);
+
+	/** 이 익명 ID의 체험 수 (M-9) */
+	long countByAnonymousUser_Id(UUID anonymousUserId);
+
+	/**
+	 * 익명 ID의 체험 전부를 회원 것으로 옮긴다 (M-10). 복사가 아니라 이동이라 익명 쪽에는 남지 않는다.
+	 * 첫인상 엽서 · 판결 · 체험 기여는 체험 ID로 이어져 있어 따라온다. updatedAt은 그대로 둬 체험 목록 순서를 지킨다
+	 * @return 옮긴 체험 수
+	 */
+	@Modifying(clearAutomatically = true)
+	@Query("update Experience e set e.memberId = :memberId, e.anonymousUser = null where e.anonymousUser.id = :anonymousUserId")
+	int moveToMember(@Param("anonymousUserId") UUID anonymousUserId, @Param("memberId") long memberId);
 }

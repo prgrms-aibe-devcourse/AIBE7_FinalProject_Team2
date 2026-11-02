@@ -45,7 +45,7 @@ public class PersonalityController {
 	@ResponseStatus(HttpStatus.CREATED)
 	public PersonalityResultResponse submit(@Valid @RequestBody PersonalitySubmitRequest body, Requester requester,
 		HttpServletResponse response) {
-		SubmitResult result = personalityService.submit(requester.anonymousId(), body);
+		SubmitResult result = personalityService.submit(requester, body);
 		if (result.issuedCookieId() != null) {
 			anonymousIdCookie.write(response, result.issuedCookieId());
 		}
@@ -55,7 +55,7 @@ public class PersonalityController {
 	/** P-3 내 현재 결과 */
 	@GetMapping("/personality/results/me")
 	public PersonalityResultResponse getMine(Requester requester) {
-		return personalityService.getMine(requester.anonymousId());
+		return personalityService.getMine(requester);
 	}
 
 	/** P-4 공유용 유형 설명 (공개, 쿠키를 읽지 않는다) */
@@ -67,6 +67,6 @@ public class PersonalityController {
 	/** P-5 마이페이지 */
 	@GetMapping("/my-page")
 	public MyPageResponse getMyPage(Requester requester) {
-		return myPageService.get(requester.anonymousId());
+		return myPageService.get(requester);
 	}
 }
