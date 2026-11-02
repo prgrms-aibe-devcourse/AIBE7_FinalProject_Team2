@@ -439,6 +439,27 @@ html.deco-gutter { scrollbar-gutter: stable; } /* 스크롤을 잠가도 스크�
 .collection-card img.is-missing { visibility: hidden; }
 .collection-card .collection-label { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; } /* 카드의 이름은 한 줄, 길면 ... */
 .collection-label { margin: 0; padding: 8px 12px 10px; color: var(--color-text); font-size: var(--text-small); }
+.collection-label:has(+ .collection-date) { padding-bottom: 0; }
+.collection-date { margin: 0; padding: 0 12px 10px; color: var(--color-muted); font-size: var(--text-caption); font-variant-numeric: tabular-nums; }
+.collection-window .my-new-badge { position: absolute; top: 8px; left: 8px; z-index: 1; } /* 그림 위 왼쪽 위 모서리. 그림(is-fitted)이 absolute라 그 위에 얹는다 */
+.collection-preview { margin-top: 40px; padding-top: 16px; border-top: 1px dashed var(--color-border-strong); }
+.collection-preview > summary { cursor: pointer; color: var(--color-muted); font-size: var(--text-small); }
+.collection-preview > .collection-group { margin-top: 20px; }
+
+/* "새로 얻음" · "새로 열림"(FE-132): 아직 안 본 획득 · 해금. 주 버튼과 같은 색 조합의 작은 알약, 글자로 알린다(색만으로 알리지 않는다).
+   제목 줄 · 버튼 글자 옆에 붙고, 컬렉션 카드에서는 그림 왼쪽 위에 얹는다. 보고 나서 다음에 들어오면 사라진다 */
+.my-new-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  font: 700 var(--text-caption)/1.5 var(--font-body);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  vertical-align: 0.1em;
+  white-space: nowrap;
+}
 
 /* 체험한 사건 */
 .my-empty { padding: 28px 20px; border: 1px dashed var(--color-border-strong); border-radius: 12px; background: var(--color-surface); text-align: center; }

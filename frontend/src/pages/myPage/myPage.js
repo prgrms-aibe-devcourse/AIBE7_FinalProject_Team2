@@ -1,15 +1,15 @@
 import { button, element, mockTag } from '../../components/siteLayout.js';
 import { API_MODE } from '../../api/config.js';
 import { appendEmptyAxis, renderAxisRow } from '../../components/axisRow.js';
-import { imageOf } from '../../components/stage.js';
 import { emptyWindow, myNickname, nameOf, picture, profileCardParts, sashClasses, sashIcon, sashNote, sashes, svg, typeDecoClasses, typeFace, typePortrait } from '../../components/personCards.js';
 import { AXES } from '../../utils/personalityAxes.js';
-import { KIND_TITLES, lenientPercent, axisChange, steadyBand, axisTrend, collectionOf, imageKinds, leanText, retakeAfterOrder } from '../../utils/myPageView.js';
+import { KIND_TITLES, lenientPercent, axisChange, steadyBand, axisTrend, acquiredDate, backfillCaseIds, collectedItems, collectionGroups, imageKinds, leanText, retakeAfterOrder } from '../../utils/myPageView.js';
+import { recordCollection, recordsSettled } from '../../utils/collectionRecord.js';
+import { loadCaseScript } from '../../utils/caseScript.js';
 import { renderTrend, trendsOf } from '../../components/trendGraph.js';
 import { BACKGROUNDS, DEFAULT_DECO, DEFAULT_PORTRAITS, FRAMES, SASH_COLORS, SASH_ICONS, SASH_STYLES, achievementView, normalizeDeco, sashColorField, sashColorKey, sashColorOf, kindOfPortrait, portraitLabel, shownDeco, unlockedSets, unlockerIn } from '../../utils/profileDeco.js';
 import { PORTRAIT_POOL } from '../../content/portraitPool.js';
 import { BOOKMARK_CHARACTERS, BOOKMARK_FACES, BOOKMARK_LAWS, BOOKMARK_NAMES, BOOKMARK_STYLES, FACE_NAMES, STYLE_NAMES, applyBookmark, getBookmarkCharacter, getBookmarkFaceName, getBookmarkStyle, bookmarkFace, BOOKMARK_COLORS, getBookmarkColor, selectedBookmarkFace } from '../../utils/bookmarkCharacter.js';
-import { SCRIPTS } from '../../content/scripts.js';
 import { fitPortraitIn } from '../../utils/portraitFit.js';
 import { fitOneLine } from '../../utils/fitText.js';
 import { lockScroll, unlockScroll } from '../../utils/scrollLock.js';
@@ -55,7 +55,8 @@ const VIEWS = {
 };
 // 프로필카드에서 들어가는 화면은 뒤로 가기가 프로필카드로 간다(FE-68)
 const PARENTS = { achievements: 'profile', bookmark: 'profile' };
-// 닉네임 아래 프로필 수치. 레벨 · 직업은 서버 값(P-5 level, BE-106)이고, 없을 때만 목 값으로 채운다(옛 data.profile이 오면 그 값). 출석 일수는 서버 값(P-5 profile.attendanceDays)이다. 완료한 사건 · 모은 일러스트는 지금 기록에서 센다
+// 닉네임 아래 프로필 수치. 레벨 · 직업은 서버 값(P-5 level, BE-106)이고, 없을 때만 목 값으로 채운다(옛 data.profile이 오면 그 값). 출석 일수는 서버 값(P-5 profile.attendanceDays)이다.
+// 완료한 사건은 지금 기록에서 세고, 모은 일러스트는 서버 수집 기록(P-5 collection.collected, 일러스트 + 의상 — 도전과제와 같은 값, FE-132)이다
 const MOCK_PROFILE = { level: 7, job: '수습 판사', attendanceDays: 0 };
 const IS_MOCK = API_MODE === 'mock'; // 목 모드에서는 체험 기록 · 성향 평균도 목(mocks/personalityMockApi.js)이라 함께 표기한다(FE-56)
 // 개발 서버 + 목 모드에서만 public/images의 webp 전부를 컬렉션 아래에 펼친다(FE-67). 빌드에서는 이 분기가 통째로 빠진다
@@ -66,6 +67,16 @@ let refresh = null; // 저장이 거절됐을 때 서버 값으로 화면을 다
 let saveQueue = Promise.resolve(); // 저장은 고른 순서대로 한 번에 하나씩 보낸다(PUT은 전체를 덮어쓰므로 순서가 바뀌면 안 된다)
 let saveEpoch = 0; // 거절되면 올린다. 거절 전에 줄 선 저장은 건너뛴다
 let decoVersion = 0; // 꾸미기를 고를 때마다 올린다. 받아 둔 서버 값이 그 사이에 고른 것을 덮어쓰지 않게 비교한다
+const backfilled = new Set(); // 이번 방문(새로고침 전)에 백필을 보낸 사건. 실패해도 되풀이하지 않는다
+// 화면을 연 동안 보여 준 "새로 얻음" · "새로 열림"(FE-132). 화면을 열자마자 "봤음"을 보내므로, 뒤이어 새로 받은 응답(isNew false)으로
+// 다시 그려도 이 화면에서는 표시를 지우지 않는다. 다른 화면으로 가면 비운다
+let keptView = null;
+const keptNew = new Set();
+function keepNew(view, keys) {
+  if (keptView !== view) { keptView = view; keptNew.clear(); }
+  keys.forEach((key) => keptNew.add(key));
+  return keptNew;
+}
 
 // 지금 고른 꾸미기(서버 값 + 방금 고른 것). 잠겼는지는 보지 않는다(shownDeco가 한다)
 const currentDeco = () => normalizeDeco(cache?.profileDeco);
@@ -123,6 +134,7 @@ function saveDeco(patch) {
  */
 async function loadMyPage(api) {
   await saveQueue;
+  await recordsSettled(); // 6막에서 막 보낸 수집 기록이 있으면 끝난 뒤에 받는다(FE-132)
   const version = decoVersion;
   const data = await api.getMyPage();
   hydrateProfileSettings(data.profileSettings);
@@ -150,11 +162,10 @@ function statsOf(data) {
   const levelData = data.level;
   if (levelData) { profile.level = levelData.level ?? profile.level; profile.job = levelData.job?.name ?? profile.job; }
   const experiences = data.experiences ?? [];
-  const groups = collectionOf(experiences, SCRIPTS);
   return {
     ...profile,
     completed: experiences.filter((item) => item.status === 'COMPLETED').length,
-    collected: groups.reduce((sum, group) => sum + group.cast.length + group.items.length, 0),
+    collected: data.collection?.collected ?? 0,
     mocked: { level: IS_MOCK || (!levelData && missing('level')), job: IS_MOCK || (!levelData && missing('job')), attendanceDays: IS_MOCK || missing('attendanceDays'), completed: IS_MOCK, collected: IS_MOCK },
   };
 }
@@ -256,13 +267,15 @@ function renderTop(data, go) {
   return section;
 }
 
-// spoken: 미리보기에만 보이는 값(건수 등)을 스크린리더에도 읽어 준다(미리보기는 aria-hidden)
-function row(view, sub, preview, go, spoken) {
+// spoken: 미리보기에만 보이는 값(건수 등)을 스크린리더에도 읽어 준다(미리보기는 aria-hidden). badge: 제목 옆 "새로 얻음" 표시(FE-132)
+function row(view, sub, preview, go, spoken, badge) {
   const item = element('li');
   const open = element('button', 'my-row');
   open.type = 'button';
   const text = element('span', 'my-row-text');
-  text.append(element('strong', '', VIEWS[view]), element('span', 'my-row-sub', sub));
+  const title = element('strong', '', VIEWS[view]);
+  if (badge) title.append(' ', newBadge(badge));
+  text.append(title, element('span', 'my-row-sub', sub));
   if (spoken) text.append(element('span', 'visually-hidden', `, ${spoken}`));
   const look = element('span', 'my-row-preview');
   look.setAttribute('aria-hidden', 'true');
@@ -278,18 +291,16 @@ function renderRows(data, go) {
   const list = element('ul', 'my-rows');
   const experiences = data.experiences ?? [];
 
-  const groups = collectionOf(experiences, SCRIPTS);
-  const total = groups.reduce((sum, group) => sum + group.cast.length + group.items.length, 0);
+  // 만난 모습(컬렉션): 서버 수집 기록의 총 획득 수(일러스트 + 의상)와 최근에 얻은 네 장. 아직 안 본 것이 있으면 "새로 얻음 N"
+  const collected = collectedOf(data);
+  const total = data.collection?.collected ?? 0;
+  const fresh = collected.filter((item) => item.isNew).length;
   let thumbs = null;
-  if (total > 0) {
+  if (collected.length > 0) {
     thumbs = element('span', 'my-thumbs');
-    const firsts = groups.flatMap((group) => [
-      ...group.cast.map(({ who, role }) => ({ src: imageOf(who, `role:${role}`), cast: true })),
-      ...group.items.map(({ src }) => ({ src, cast: false })),
-    ]).slice(0, 4);
-    firsts.forEach(({ src, cast }) => thumbs.append(picture(src, '', cast ? 'is-cast' : '')));
+    collected.slice(0, 4).forEach(({ src, kind }) => thumbs.append(picture(src, '', kind === 'cast' ? 'is-cast' : '')));
   }
-  list.append(row('collection', total > 0 ? `체험한 사건에서 만난 캐릭터 ${total}가지를 모았어요` : '체험을 마치면 사건에서 만난 캐릭터가 모여요', thumbs, go));
+  list.append(row('collection', total > 0 ? `사건에서 모은 일러스트 ${total}장` : '체험을 마치면 사건에서 만난 모습과 일러스트가 모여요', thumbs, go, null, fresh ? `새로 얻음 ${fresh}` : null));
 
   const latest = [...experiences].sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')))[0];
   list.append(row('cases', latest ? `최근: ${latest.title}` : '아직 체험한 사건이 없어요', element('span', 'my-count', `${experiences.length}건`), go, `${experiences.length}건`));
@@ -524,63 +535,106 @@ function zoomIn(src, alt, label) {
   dialog.showModal();
 }
 
-function collectionCard(className, src, alt, label) {
+// "새로 얻음" · "새로 열림" 표시(FE-132). 글자로 읽히므로 색만으로 알리지 않는다
+function newBadge(text) {
+  return element('span', 'my-new-badge', text);
+}
+
+// 컬렉션 카드 하나. label: 크게 보기 · 스크린리더 이름. item(collectedItems 항목)이 있으면 카드 글자는 짧은 이름(item.label)이고,
+// "새로 얻음" 표시와 획득 날짜를 붙인다(개발용 전체 미리 보기에는 없다)
+function collectionCard(className, src, alt, label, item) {
   const card = element('li', `collection-card ${className}`.trim());
   const open = element('button', 'collection-open');
   open.type = 'button';
-  open.setAttribute('aria-label', `${label} 크게 보기`);
+  const date = acquiredDate(item?.acquiredAt);
+  open.setAttribute('aria-label', `${label}${item?.isNew ? ', 새로 얻음' : ''}${date ? `, ${date} 획득` : ''} 크게 보기`);
   const frame = element('div', 'collection-window'); // 그림 틀. 캐릭터가 틀에서 같은 크기로 서도록 맞춘다(FE-67)
   const image = picture(src, '');
   frame.append(image);
   fitPortraitIn(frame, image, { top: 20, bottom: 20, side: 0.84, center: true });
-  const caption = element('p', 'collection-label', label);
-  caption.title = label; // 길어서 줄여 보일 때 전체 이름
-  open.append(frame, caption); // 이름은 캡션이 읽는다
+  if (item?.isNew) frame.append(newBadge('새로 얻음'));
+  const shortLabel = item?.label ?? label;
+  const caption = element('p', 'collection-label', shortLabel);
+  caption.title = shortLabel; // 길어서 줄여 보일 때 전체 이름
+  open.append(frame, caption); // 이름은 버튼 이름(aria-label)이 읽는다
+  if (date) open.append(element('p', 'collection-date', `${date} 획득`));
   open.addEventListener('click', () => zoomIn(src, alt, label));
   card.append(open);
   return card;
 }
 
-// 컬렉션 — 이미지를 사건별이 아니라 종류별(역할 의상 · 얼굴 아이콘 · 장면 컷 …)로 보여 준다. 사건 고유 이미지는 "사건 이미지" 안에서 사건별로 나눈다
-// 실제 모드: 체험을 마친 사건에서 만난 모습(역할 의상)과 사건 일러스트만 모은다
-// 목 모드(FE-67): public/images의 webp를 전부 펼쳐 어떻게 모이는지 미리 본다
-function collectedKinds(experiences) {
-  if (IS_MOCK && ALL_WEBP.length > 0) return imageKinds(ALL_WEBP, { caseNames: caseNamesOf() });
-  const groups = collectionOf(experiences, SCRIPTS);
-  const labels = {};
-  const paths = [];
-  groups.forEach((group) => {
-    group.cast.forEach(({ who, role, label }) => { const src = imageOf(who, `role:${role}`); paths.push(src); labels[src] = label; });
-    group.items.forEach(({ src, label }) => { paths.push(src); labels[src] = `${group.title} · ${label}`; });
-  });
-  return imageKinds(paths, { labels, caseNames: caseNamesOf() });
+// 체험 기록의 사건 제목(사건 번호 → 제목). 같은 사건이 여럿이면 처음 것
+function caseTitlesOf(data) {
+  const titles = {};
+  (data.experiences ?? []).forEach(({ caseId, title }) => { if (title && !(caseId in titles)) titles[caseId] = title; });
+  return titles;
 }
 
-const caseNamesOf = () => Object.fromEntries(Object.values(SCRIPTS).map(({ caseId, title }) => [caseId, title]));
+// 서버 수집 기록(P-5 collection.items, 최근에 얻은 순)을 화면 항목으로
+const collectedOf = (data) => collectedItems(data.collection?.items, caseTitlesOf(data));
 
-function renderCollection(experiences) {
+// 컬렉션 화면을 열면 "새로 얻음"을 본 것으로 남긴다(P-10, 종류마다 한 번). 이번 화면의 표시는 그대로 두고, 받아 둔 응답(cache)만 바꿔
+// 첫 화면으로 돌아갔을 때 "새로 얻음 N"이 사라지게 한다. 실패하면 다음에 다시 보인다
+function markCollectionSeen(collected, api) {
+  if (!api?.postCollectionSeen) return;
+  const kinds = [...new Set(collected.filter((item) => item.isNew).map((item) => item.kind))];
+  kinds.forEach((kind) => api.postCollectionSeen({ kind }).then(() => {
+    cache?.collection?.items?.forEach((item) => { if (item.kind === kind) item.isNew = false; });
+  }, (error) => console.warn('[FE-132] 컬렉션 봤음을 남기지 못했습니다', error)));
+}
+
+// 컬렉션 — 만난 모습(역할 의상) 한 묶음 + 사건별 일러스트. 서버 수집 기록을 그린다(FE-132). 카드마다 획득 날짜, 아직 안 본 것은 "새로 얻음"
+// 목 모드 개발 서버(FE-67)는 아래에 public/images의 webp 전부를 접어 둔 미리 보기로 붙인다
+function renderCollection(data, api) {
   const box = element('div', 'my-detail');
   box.append(element('p', 'my-hint', '체험한 사건에서 만난 캐릭터 모습과 일러스트를 모아 두는 곳이에요.'));
-  const kinds = collectedKinds(experiences);
-  if (kinds.length === 0) {
-    box.append(element('p', 'my-hint', '사건 체험을 마치면 그 사건에서 만난 모습과 일러스트가 여기에 모여요.'));
-    return box;
-  }
+  const fresh = collectedOf(data);
+  const kept = keepNew('collection', fresh.filter((item) => item.isNew).map((item) => `${item.kind}/${item.itemId}`));
+  const collected = fresh.map((item) => ({ ...item, isNew: kept.has(`${item.kind}/${item.itemId}`) }));
+  const { cast, cases } = collectionGroups(collected);
   const cards = (items) => {
     const grid = element('ul', 'collection-grid');
-    items.forEach((item) => grid.append(collectionCard('', item.src, item.label, item.label)));
+    items.forEach((item) => grid.append(collectionCard('', item.src, item.label, item.fullLabel ?? item.label, item)));
     return grid;
   };
-  kinds.forEach((kind) => {
+  const section = (title, ...children) => {
     const part = element('section', 'collection-group');
-    const title = element('h2', 'collection-title', `${kind.title} (${kind.items.length})`);
-    if (IS_MOCK) title.append(mockTag());
-    part.append(title);
-    if (kind.groups) kind.groups.forEach((group) => part.append(element('h3', 'collection-subtitle', `${group.title} (${group.items.length})`), cards(group.items)));
-    else part.append(cards(kind.items));
+    const heading = element('h2', 'collection-title', title);
+    if (IS_MOCK) heading.append(mockTag());
+    part.append(heading, ...children);
     box.append(part);
-  });
+  };
+  if (collected.length === 0) box.append(element('p', 'my-hint', '사건 체험을 마치면 그 사건에서 만난 모습과 일러스트가 여기에 모여요.'));
+  if (cast.length > 0) section(`만난 모습 (${cast.length})`, cards(cast));
+  if (cases.length > 0) {
+    const count = cases.reduce((sum, group) => sum + group.items.length, 0);
+    section(`사건 일러스트 (${count})`, ...cases.flatMap((group) => [
+      element('h3', 'collection-subtitle', `${group.title} (${group.items.length})`),
+      cards(group.items.map((item) => ({ ...item, fullLabel: `${group.title} · ${item.label}` }))),
+    ]));
+  }
+  markCollectionSeen(fresh, api);
+  if (IS_MOCK && ALL_WEBP.length > 0) box.append(allImagesPreview());
   return box;
+}
+
+// 개발용(FE-67): public/images의 webp 전부를 종류별로 펼쳐 어떻게 모이는지 미리 본다. 접어 둔다
+function allImagesPreview() {
+  const details = element('details', 'collection-preview');
+  details.append(element('summary', '', '개발용: 이미지 전체 미리 보기'));
+  imageKinds(ALL_WEBP).forEach((kind) => {
+    const part = element('section', 'collection-group');
+    part.append(element('h2', 'collection-title', `${kind.title} (${kind.items.length})`));
+    const grid = (items) => {
+      const list = element('ul', 'collection-grid');
+      items.forEach((item) => list.append(collectionCard('', item.src, item.label, item.label)));
+      return list;
+    };
+    if (kind.groups) kind.groups.forEach((group) => part.append(element('h3', 'collection-subtitle', `${group.title} (${group.items.length})`), grid(group.items)));
+    else part.append(grid(kind.items));
+    details.append(part);
+  });
+  return details;
 }
 
 const CASES_PER_PAGE = 10; // 내가 체험한 사건은 한 페이지에 이만큼만 보여 준다
@@ -1094,7 +1148,8 @@ function rewardText({ rewards }) {
   ].join(' · ');
 }
 
-// 서버가 내려 준 도전과제(P-5 achievements)를 제목 · 문구와 함께 그린다. PENDING(수집 도전과제, BE-83 전)은 아직 셀 수 없어 "준비 중"으로 둔다
+// 서버가 내려 준 도전과제(P-5 achievements)를 제목 · 문구와 함께 그린다. PENDING(판정할 수 없는 도전과제)은 "준비 중"으로 둔다.
+// 달성한 것은 달성 날짜(unlockedAt), 아직 안 본 해금(isNew)은 "새로 열림"을 붙인다(FE-132)
 function achievementList(achievements) {
   const progress = achievements.map(achievementView);
   const section = element('section', 'my-achievements-section');
@@ -1107,9 +1162,12 @@ function achievementList(achievements) {
     const head = element('div', 'my-achievement-head');
     const pending = item.status === 'PENDING' || item.value == null;
     const value = pending ? 0 : item.value;
-    const state = element('span', 'my-achievement-state', pending ? '준비 중' : item.cleared ? '달성' : `${value} / ${item.goal}`);
+    const date = item.cleared ? acquiredDate(item.unlockedAt) : '';
+    const state = element('span', 'my-achievement-state', pending ? '준비 중' : item.cleared ? `달성${date ? ` · ${date}` : ''}` : `${value} / ${item.goal}`);
     if (IS_MOCK) state.append(mockTag());
-    head.append(element('strong', '', item.title), state);
+    const name = element('strong', '', item.title);
+    if (item.isNew) name.append(' ', newBadge('새로 열림'));
+    head.append(name, state);
     const bar = element('div', 'my-achievement-bar');
     bar.setAttribute('role', 'progressbar');
     bar.setAttribute('aria-label', `${item.title} 진행도`);
@@ -1349,7 +1407,10 @@ function renderProfilePage(data, go) {
   });
   const actions = element('div', 'my-profile-actions');
   const decorate = button('카드 꾸미기', () => openDecoDialog({ open, data, onPick: paintPreview, opener: decorate }), 'primary-button my-card-deco-button');
-  actions.append(button('책갈피 설정', () => go('bookmark'), 'secondary-button'), button('도전과제 보기', () => go('achievements'), 'secondary-button'));
+  const showAchievements = button('도전과제 보기', () => go('achievements'), 'secondary-button');
+  const freshAchievements = progress.filter((item) => item.isNew).length;
+  if (freshAchievements) showAchievements.append(' ', newBadge(`새로 열림 ${freshAchievements}`));
+  actions.append(button('책갈피 설정', () => go('bookmark'), 'secondary-button'), showAchievements);
   // 개발 전용: 목 API에서 도전과제를 전부 깬 것으로 본다(잠긴 꾸미기를 확인할 때). 개발 서버 + 목 모드에서만 보인다
   if (import.meta.env?.DEV && apiRef?.setMockUnlockAll) {
     const allCleared = progress.length > 0 && progress.every((item) => item.cleared);
@@ -1367,10 +1428,18 @@ function renderProfilePage(data, go) {
   return box;
 }
 
-// 도전과제 화면(FE-68): 진행도 · 보상 목록
-function renderAchievementsPage(data) {
+// 도전과제 화면(FE-68): 진행도 · 보상 목록. 열면 "새로 열림"을 본 것으로 남긴다(P-11, FE-132) — 컬렉션과 같이 이번 화면 표시는 두고 받아 둔 응답만 바꾼다
+function renderAchievementsPage(data, api) {
   const box = element('div', 'my-detail');
-  box.append(element('p', 'my-hint', '도전과제를 깨면 프로필카드의 대표 이미지 · 카드 꾸미기가 열려요.'), achievementList(data.achievements ?? []));
+  const achievements = data.achievements ?? [];
+  const fresh = achievements.filter((item) => item.isNew).map((item) => item.id).slice(0, 20); // 한 번에 20개까지(명세 P-11)
+  const kept = keepNew('achievements', fresh);
+  box.append(element('p', 'my-hint', '도전과제를 깨면 프로필카드의 대표 이미지 · 카드 꾸미기가 열려요.'), achievementList(achievements.map((item) => ({ ...item, isNew: kept.has(item.id) }))));
+  if (fresh.length > 0 && api?.postAchievementsSeen) {
+    api.postAchievementsSeen(fresh).then(() => {
+      cache?.achievements?.forEach((item) => { if (fresh.includes(item.id)) item.isNew = false; });
+    }, (error) => console.warn('[FE-132] 도전과제 봤음을 남기지 못했습니다', error));
+  }
   return box;
 }
 
@@ -1441,10 +1510,10 @@ function renderView(view, data, navigate, go, api) {
   head.append(back, title);
   const body = {
     profile: () => renderProfilePage(data, go),
-    achievements: () => renderAchievementsPage(data),
+    achievements: () => renderAchievementsPage(data, api),
     bookmark: () => renderBookmarkPage(),
     type: () => renderTypePage(data, navigate),
-    collection: () => renderCollection(data.experiences),
+    collection: () => renderCollection(data, api),
     cases: () => renderCases(data.experiences ?? [], navigate, api),
     edit: () => renderProfileEdit({ api, navigate, go, data, card: () => profileCardOf(data, go), fan: () => typeFan(data, navigate, go) }),
     settings: () => renderSettings(),
@@ -1493,6 +1562,7 @@ export async function renderMyPage(container, { api, navigate, view, from }) {
   };
 
   const paint = (data) => {
+    if (shown !== 'collection' && shown !== 'achievements') keepNew(null, []); // 표시를 지켜 둘 화면이 아니면 비운다
     if (shown) {
       main.replaceChildren(...renderView(shown, data, navigate, go, api));
       return;
@@ -1574,4 +1644,25 @@ export async function renderMyPage(container, { api, navigate, view, from }) {
     if (shown && !from) main.querySelector('h1')?.focus({ preventScroll: true });
   }
   reveal();
+  backfill(data);
+
+  // 기존 사용자 백필(P-9 backfill, FE-132): 수집 기록이 생기기 전에 마친 사건 · 손님 때 마친 사건은 일러스트 · 의상이 비어 있다.
+  // 그 사건 대본으로 얻은 것을 보내 채우고("본 것", 획득 시각은 그 사건의 첫 완료 시각 — 서버가 정한다), 다 보내면 다시 받아 그린다.
+  // 대본을 받지 못하면(준비 중 · 점검) 일러스트만 보낸다
+  async function backfill(given) {
+    const targets = backfillCaseIds(given.experiences, given.collection?.items).filter((caseId) => !backfilled.has(caseId));
+    if (targets.length === 0 || !api.postCollection) return;
+    targets.forEach((caseId) => backfilled.add(caseId));
+    let added = 0;
+    for (const caseId of targets) {
+      const script = await loadCaseScript(api, caseId).catch(() => null);
+      const result = await recordCollection(api, caseId, script, { backfill: true });
+      added += result?.added?.length ?? 0;
+    }
+    if (!added || !active()) return;
+    const fresh = await loadMyPage(api).catch(() => null);
+    if (!fresh || !active()) return;
+    cache = fresh;
+    paint(fresh);
+  }
 }

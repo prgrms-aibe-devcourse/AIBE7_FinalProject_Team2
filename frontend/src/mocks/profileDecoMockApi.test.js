@@ -27,8 +27,36 @@ test('P-5: 저장한 적이 없으면 기본 꾸미기와 도전과제 8개 · �
   assert.equal(page.achievements.length, 8);
   assert.deepEqual(Object.keys(page.unlocked).sort(), ['backgrounds', 'frames', 'kinds', 'sashColors', 'sashIcons', 'sashStyles']);
   assert.equal(typeof page.profile.attendanceDays, 'number');
-  const collect = page.achievements.find((item) => item.stat === 'collected');
-  assert.deepEqual([collect.status, collect.value, collect.cleared], ['PENDING', null, false]);
+  // 수집 도전과제는 수집 목의 모은 수로 판정한다(FE-132). 처음엔 사건 1을 막 마친 것처럼 7장(일러스트 3 + 의상 4)이 "새로 얻음"으로 있다
+  assert.equal(page.collection.collected, 7);
+  assert.ok(page.collection.items.every((item) => item.isNew));
+  const collect = page.achievements.find((item) => item.id === 'collect-5');
+  assert.deepEqual([collect.status, collect.value, collect.cleared, collect.isNew], ['CLEARED', 5, true, true]);
+  assert.equal(typeof collect.unlockedAt, 'string');
+  assert.deepEqual([page.achievements.find((item) => item.id === 'collect-20').unlockedAt], [null]);
+});
+
+test('P-9 ~ P-11: 수집 기록은 멱등이고 목록 밖은 400, 봤음은 표시를 지운다', async () => {
+  reset();
+  const { postCollection, postCollectionSeen, postAchievementsSeen } = await import('./collectionMockApi.js');
+  const items = [{ kind: 'illustration', itemId: 'case-2-origin' }, { kind: 'cast', itemId: 'naero:judge' }];
+  const first = await postCollection({ caseId: 2, items });
+  assert.deepEqual(first.added.map((item) => item.itemId), ['case-2-origin']); // naero:judge는 이미 있다
+  assert.equal(first.collected, 8);
+  assert.deepEqual((await postCollection({ caseId: 2, items })).added, []);
+  await assert.rejects(postCollection({ caseId: 2, items: [{ kind: 'cast', itemId: 'naero:case-1' }] }),
+    (error) => error.code === 'VALIDATION_ERROR' && error.details[0].reason === 'NOT_COLLECTIBLE');
+  const backfilled = await postCollection({ caseId: 3, items: [{ kind: 'illustration', itemId: 'case-3-origin' }], backfill: true });
+  assert.equal(backfilled.added[0].isNew, false);
+
+  assert.equal(await postCollectionSeen({ kind: 'illustration' }), null);
+  const page = await getMyPage();
+  assert.ok(page.collection.items.filter((item) => item.kind === 'illustration').every((item) => !item.isNew));
+  assert.ok(page.collection.items.filter((item) => item.kind === 'cast').every((item) => item.isNew));
+  await assert.rejects(postCollectionSeen({ kind: 'cast', items: [] }), { code: 'VALIDATION_ERROR' });
+
+  await postAchievementsSeen(['collect-5']);
+  assert.equal((await getMyPage()).achievements.find((item) => item.id === 'collect-5').isNew, false);
 });
 
 test('P-6: 같은 날 여러 번 불러도 출석은 하루로 센다', async () => {

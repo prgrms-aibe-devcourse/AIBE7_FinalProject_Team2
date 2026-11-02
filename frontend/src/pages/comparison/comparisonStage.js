@@ -13,6 +13,8 @@ import { restartMock, jumpActMock } from '../../mocks/mockStageButtons.js';
 import { editorNote } from '../../utils/preJudgmentCompare.js';
 import { handPaper } from '../../utils/paperHandoff.js';
 import { castOf } from '../../utils/myPageView.js';
+import { recordCollection } from '../../utils/collectionRecord.js';
+import { currentUser } from '../../utils/session.js';
 import { reducedMotion } from '../../utils/motion.js';
 import { mockTag } from '../../components/siteLayout.js';
 import { API_MODE } from '../../api/config.js';
@@ -339,6 +341,8 @@ async function share(note, caseId) {
 // fromRect: 5막 무대 장면이 있던 화면 사각형(이어 받을 때). 그 자리 그대로에서 신문으로 빠져나온다
 export function renderComparisonStage({ script, data, caseId, caseTitle, navigate, api, fromRect }) {
   const { judgments } = data;
+  // 6막에 왔으면 사건을 마친 것이다: 얻은 일러스트 · 만난 모습을 남긴다(P-9, FE-132). 회원만, 멱등이라 다시 볼 때마다 보내도 된다. 기다리지 않는다
+  if (currentUser()) recordCollection(api, caseId, script);
   const vsCourt = diffLine(judgments.USER, judgments.COURT, '실제 판결',
     '실제 판결과 형량이 같았네요. 그런데 무겁게 본 요소도 같았을까요?', (head) => `${head} 어떤 요소를 다르게 봤을까요?`);
   const vsAi = diffLine(judgments.USER, judgments.AI, 'AI 판결',

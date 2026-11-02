@@ -48,3 +48,4 @@ API 10 ~ 14는 백엔드 구현 전에는 404가 온다. 구현되면 그대로 
 | `getMe()` · `putNickname(nickname)` | M-8 내 회원 정보 `{ nickname(없으면 null), displayName('방청객 {회원 ID}'), provider, loginId, createdAt, lastLoginAt }` · M-7 닉네임 설정(BE-139, FE-137). 형식 400 `VALIDATION_ERROR`, 중복 409 `DUPLICATE_NICKNAME`(가입 M-5도 같다) |
 | `patchProfileSettings(settings)` | P-8 프로필 선택 설정 부분 저장(공개 성향카드 `shownCard` · 프로필카드 아래 성향 `profileCardType` · 한 줄 소개 `bio`). 보낸 칸만 바꾸고 응답은 세 값 전체. 400 `VALIDATION_ERROR`. 조회는 `getMyPage()`의 `profileSettings` |
 | `postAttendance()` | P-6 출석 기록. 앱 시작 때 한 번, 항상 204 (`main.js`) |
+| `postCollection({ caseId, items, backfill })` · `postCollectionSeen({ items } \| { kind })` · `postAchievementsSeen(ids)` | P-9 ~ P-11 수집 상태(BE-83, FE-132). 회원만(로그인 전 401). P-9는 멱등이고 응답 `{ added, collected, newlyUnlocked }`, 목록 밖 `itemId`는 400 `VALIDATION_ERROR`(`NOT_COLLECTIBLE`). 봤음 둘은 204. 조회는 `getMyPage()`의 `collection` · `achievements[].isNew` |
