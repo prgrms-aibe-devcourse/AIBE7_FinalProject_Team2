@@ -188,7 +188,7 @@ class ProfileDecoApiTest extends ApiIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("V48: 지운 란마 이미지를 대표 이미지로 저장한 회원은 같은 캐릭터의 기본 스탠딩으로 되돌아가고, 다른 이미지는 그대로다")
+	@DisplayName("V49: 지운 란마 이미지를 대표 이미지로 저장한 회원은 같은 캐릭터의 기본 스탠딩으로 되돌아가고, 다른 이미지는 그대로다")
 	void ranmaPortraitIsResetByMigration() throws Exception {
 		long naero = registerMember();
 		long nambul = registerMember();
@@ -200,7 +200,7 @@ class ProfileDecoApiTest extends ApiIntegrationTest {
 		jdbcTemplate.update("UPDATE member_profile_deco SET portrait = '/images/characters/deform/nambul_ranma.webp' WHERE member_id = ?", nambul);
 		jdbcTemplate.update("UPDATE member_profile_deco SET portrait = '/images/characters/scene/nambul_guide-happy.webp' WHERE member_id = ?", other);
 
-		String sql = new String(new org.springframework.core.io.ClassPathResource("db/migration/V48__reset_removed_ranma_portrait.sql")
+		String sql = new String(new org.springframework.core.io.ClassPathResource("db/migration/V49__reset_removed_ranma_portrait.sql")
 			.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
 		for (String statement : sql.replaceAll("(?m)^--.*$", "").split(";")) {
 			if (!statement.isBlank()) {
