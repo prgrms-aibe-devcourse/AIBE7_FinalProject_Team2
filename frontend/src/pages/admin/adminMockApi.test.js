@@ -342,6 +342,10 @@ test('A-13-21: 블록 문장을 고치면 판이 오르고 그 블록만 대기,
   assert.equal(await code(api.updateScriptBlockText(13, 'U0', '/questions', '배열 자리')), 'SCRIPT_LINE_NOT_FOUND');
   assert.equal(await code(api.updateScriptBlockText(13, 'U3', '/0/text', '대사')), 'VALIDATION_ERROR');
   assert.equal(await code(api.updateScriptBlockText(13, 'U1', '/lines/0', '가'.repeat(101))), 'VALIDATION_ERROR');
+  // 설계도(U0) 질문은 화면 대사가 아니라 100자 · 2줄을 보지 않는다 — 500자까지 (BE-153)
+  const long = `${'가'.repeat(120)}\n나\n다`;
+  assert.equal((await api.updateScriptBlockText(13, 'U0', '/questions/0/q', long)).blocks[0].content.questions[0].q, long);
+  assert.equal(await code(api.updateScriptBlockText(13, 'U0', '/questions/0/q', '가'.repeat(501))), 'VALIDATION_ERROR');
 });
 
 test('A-13: 승인한 대본이 있는 사건을 공개하면 그때 처음 나간 시각이 남는다', async () => {

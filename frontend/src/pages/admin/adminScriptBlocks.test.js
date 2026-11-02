@@ -1,8 +1,13 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import {
-  basisText, blockApproveGate, blockingStaleUnits, issuesAt, leafLabel, opensToUsers, takeDownConfirm, textLeaves, textViolation,
+  SPOKEN_PATHS, addedSensitiveFlags, admits, basisText, blockApproveGate, blockingStaleUnits, isSpoken, issuesAt, leafLabel, opensToUsers,
+  statusLabel, takeDownConfirm, textLeaves, textViolation,
 } from './adminScriptBlocks.js';
+
+// 파이프라인 · 백엔드와 같은 계약 파일 (정본은 파이썬). 화면 규칙이 어긋나면 이 파일과 비교하는 테스트가 깨진다
+const CONTRACT = JSON.parse(readFileSync(new URL('../../../../tools/ai-judgment/contracts/script_blocks.json', import.meta.url), 'utf8'));
 
 const clean = { stopped: false, pending: [], review: [] };
 const block = (unit, extra = {}) => ({ unit, publishable: true, reviewStatus: null, staleBlocksApproval: false, staleReasons: [], ...extra });
@@ -76,4 +81,49 @@ test('opensToUsers: 공개 사건에서 나머지 네 블록이 승인돼 있으
   assert.equal(opensToUsers(allButU2, 'U3', 'PUBLISHED'), false, 'U2가 아직 남았다');
   const missing = { blocks: allButU2.blocks.filter((item) => item.unit !== 'U4') };
   assert.equal(opensToUsers(missing, 'U2', 'PUBLISHED'), false, '다섯 단위가 모두 있어야 한다');
+});
+
+test('SPOKEN_PATHS · isSpoken: 말하는 대사 자리가 계약 파일과 같고, 설계도 · 카드 · 신문 답은 대사가 아니다 (BE-153)', () => {
+  assert.deepEqual(SPOKEN_PATHS, CONTRACT.spokenPaths);
+  assert.equal(isSpoken('U1', '/lines/12'), true);
+  assert.equal(isSpoken('U2', '/questions/0/q'), true);
+  assert.equal(isSpoken('U2', '/questions/0/a'), false, '신문 답');
+  assert.equal(isSpoken('U2', '/cards/issues/ul/1'), false, '카드 글');
+  assert.equal(isSpoken('U2', '/indict/x'), false, "'*'는 순번만");
+  assert.equal(isSpoken('U4', '/defense'), true);
+  assert.equal(isSpoken('U0', '/questions/0/q'), false, '설계도');
+  assert.equal(isSpoken('U3', '/0/text'), true, 'U3 대사는 늘 대사');
+});
+
+test('textViolation: 대사가 아닌 자리는 줄 수 · 100자를 보지 않고 500자까지만 본다', () => {
+  assert.equal(textViolation(`${'가'.repeat(150)}\n나\n다`, false), null);
+  assert.match(textViolation('가'.repeat(501), false), /500자/);
+  assert.match(textViolation('  ', false), /입력/);
+});
+
+test('admits: 계약 파일의 인정 여부 사례가 모두 같다 (서버 · 파이프라인과 같은 규칙)', () => {
+  const mismatches = CONTRACT.admits.filter((example) => admits(example.answer) !== example.expected);
+  assert.deepEqual(mismatches, []);
+  assert.ok(CONTRACT.admits.length >= 5, '계약 파일을 제대로 읽었는지');
+});
+
+test('statusLabel: 나간 적 없는 READY는 "승인 완료 · 사건 공개 대기"다 (초안 사건에서 승인만 함)', () => {
+  assert.equal(statusLabel({ scriptStatus: 'READY', releasedAt: null }), '승인 완료 · 사건 공개 대기');
+  assert.equal(statusLabel({ scriptStatus: 'READY', releasedAt: '2026-11-02T10:00:00+09:00' }), '사용자에게 공개 중');
+  assert.equal(statusLabel({ scriptStatus: 'MAINTENANCE', releasedAt: '2026-11-02T10:00:00+09:00' }), '점검 중');
+});
+
+test('addedSensitiveFlags: 블록을 만든 뒤 사건에 새로 생긴 플래그만 (빠진 플래그는 확인으로 충분, 근거가 없으면 모름)', () => {
+  const block = { basis: { sensitiveFlags: ['SELF_HARM'] } };
+  assert.deepEqual(addedSensitiveFlags(block, ['SELF_HARM', 'MENTAL_HEALTH']), ['MENTAL_HEALTH']);
+  assert.deepEqual(addedSensitiveFlags(block, []), [], '빠진 플래그');
+  assert.deepEqual(addedSensitiveFlags({ basis: {} }, ['MENTAL_HEALTH']), [], '근거에 플래그가 없으면 모름');
+  assert.deepEqual(addedSensitiveFlags(block, null), [], '분류 전 사건');
+});
+
+test('blockApproveGate: fix: unit 오류는 문장 수정으로 풀리지 않아 다시 생성으로 안내한다', () => {
+  const unitError = block('U1', { publishable: false, review: [{ severity: 'error', fix: 'unit', code: 'LINE_MISSING' }] });
+  assert.match(blockApproveGate(clean, unitError), /다시 생성/);
+  const lineError = block('U1', { publishable: false, review: [{ severity: 'error', fix: 'line', code: 'BANNED_WORD' }] });
+  assert.match(blockApproveGate(clean, lineError), /오류 자리를 고치면/);
 });
