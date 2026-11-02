@@ -145,35 +145,42 @@ find_module_script() {
     [[ "$STATUS" == "200" ]] || continue
     MODULE_PATH="$(grep -o '/assets/[A-Za-z0-9._-]*\.mjs' "$BODY_FILE" | head -1)"
     # 이 조각이 부르는 다른 조각(동적 import · preload 목록). Vite는 "assets/x.js" 또는 "./x.js"로 적는다
+    # .js 뒤가 이름 글자면 잡지 않는다 — 끝을 막지 않으면 ./manifest.json이 manifest.js로 잘려 큐에 들어간다(#399 리뷰).
+    # 막는 글자 하나까지 잡히므로 sed로 떼어 낸다 (\b는 macOS grep에서 다르게 동작해 쓰지 않는다)
     # 이름에 pdf(대소문자 무시, 예: adminPdfLoader)가 든 조각을 먼저 본다(작업 파일 이름은 pdf.js 조각 안에 있다) — 빈 배열 펼치기는 bash 3.2 + set -u에서 막혀 ${arr[@]+...}로 쓴다
     while IFS= read -r next; do
       next="/assets/${next##*/}"
       if [[ "$next" == *[Pp][Dd][Ff]* ]]; then queue=("$next" ${queue[@]+"${queue[@]}"}); else queue+=("$next"); fi
-    done < <(grep -o -E '(assets/|\./)[A-Za-z0-9._-]+\.js' "$BODY_FILE" | sort -u)
+    done < <(grep -o -E '(assets/|\./)[A-Za-z0-9._-]+\.js([^A-Za-z0-9._-]|$)' "$BODY_FILE" | sed -E 's/\.js.$/.js/' | sort -u)
   done
   # 더 볼 조각이 남았는데 시간이 다 됐으면(찾지 못한 이유가 매핑이 아니라 느린 응답일 수 있다) 따로 표시한다
   if [[ -z "$MODULE_PATH" ]] && (( ${#queue[@]} > 0 )) && (( SECONDS >= deadline )); then MODULE_TIMED_OUT=1; fi
 }
+# $1 = 무엇이 일어났는지, $2 = 어디를 볼지. 경우마다 원인이 달라 안내도 나눈다(#399 리뷰) — CI 실패 줄에도 같은 안내를 붙인다
 module_warn_or_fail() {
   if [[ "${SMOKE_REQUIRE_MODULE_MIME:-}" == "1" ]]; then
-    fail "$1"
+    fail "$1 — $2"
   else
-    echo "  ⚠ $1 — COMMON-72 이전 이미지면 정상, 아니면 nginx/default.conf의 types { application/javascript mjs; }를 확인한다"
+    echo "  ⚠ $1 — $2"
   fi
 }
 find_module_script
 if [[ -z "$MODULE_PATH" ]]; then
   if [[ "$MODULE_TIMED_OUT" == "1" ]]; then
-    module_warn_or_fail "/assets/에서 .mjs를 찾다가 ${SMOKE_MODULE_SEARCH_SECONDS:-120}초 제한에 걸림(조각 ${MODULE_SCANNED}개까지 확인 — 응답이 느린지 먼저 본다)"
+    module_warn_or_fail "/assets/에서 .mjs를 찾다가 ${SMOKE_MODULE_SEARCH_SECONDS:-120}초 제한에 걸림(조각 ${MODULE_SCANNED}개까지 확인)" \
+      "응답이 느린지 먼저 본다(제한은 SMOKE_MODULE_SEARCH_SECONDS로 늘릴 수 있다)"
   else
-    module_warn_or_fail "/assets/에서 .mjs를 찾지 못함(조각 ${MODULE_SCANNED}개까지 확인)"
+    # 매핑 문제가 아니다 — 찾을 .mjs 이름 자체가 없다
+    module_warn_or_fail "/assets/에서 .mjs를 찾지 못함(조각 ${MODULE_SCANNED}개까지 확인)" \
+      "pdf.js 이전 이미지면 정상. 아니면 빌드가 .mjs를 더 이상 내지 않거나(작업 파일이 인라인 · .js로 바뀜) 조각이 200개를 넘은 것이다 — nginx 매핑이 아니라 찾기 범위를 다시 정한다(docs/decisions/BE-157.md)"
   fi
 else
   request "$MODULE_PATH"
   if [[ "$STATUS" == "200" && ( "$CONTENT_TYPE" == application/javascript* || "$CONTENT_TYPE" == text/javascript* ) ]]; then
     pass "$MODULE_PATH → 200 ($CONTENT_TYPE)"
   else
-    module_warn_or_fail "$MODULE_PATH → $STATUS (${CONTENT_TYPE:-없음}), JavaScript MIME이 아님"
+    module_warn_or_fail "$MODULE_PATH → $STATUS (${CONTENT_TYPE:-없음}), JavaScript MIME이 아님" \
+      "COMMON-72 이전 이미지면 정상, 아니면 nginx/default.conf의 types { application/javascript mjs; }를 확인한다"
   fi
 fi
 
