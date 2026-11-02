@@ -33,6 +33,8 @@ export const rejectJudgment = (judgmentId, reason) => adminPost(`/judgments/${id
 export const updateCase = (caseId, changes) => adminPatch(`/cases/${id(caseId)}`, changes);
 export const setValueAxis = (factorId, valueAxis) => adminPut(`/factors/${id(factorId)}/value-axis`, { valueAxis });
 export const publishCase = (caseId) => adminPost(`/cases/${id(caseId)}/publish`);
+// A-13-14 공개 취소: 사용자 화면에서 숨긴다(PUBLISHED → REVIEW). 사유는 감사 로그에만 남는다 (BE-118)
+export const unpublishCase = (caseId, reason) => adminPost(`/cases/${id(caseId)}/unpublish`, { reason });
 
 // A-14 · A-15 · A-14-1 사건 등록(원본 판결문 → 파이프라인 실행 → 적재)
 export const createImport = (request) => adminPost('/case-imports', request);
