@@ -3,7 +3,7 @@ import { objectParticle } from '../../utils/koreanParticle.js';
 import { renderAiRevealIntro, takeAiRevealIntro } from './aiRevealIntro.js';
 import { formatPenalty, diffPhrase } from '../../utils/judgmentFormat.js';
 import { renderStage, LAWS, LAW_TITLES } from '../../components/stage.js';
-import { loadCaseScript } from '../../utils/caseScript.js';
+import { loadCaseScript, loadFailText } from '../../utils/caseScript.js';
 import { restartMock, jumpActMock } from '../../mocks/mockStageButtons.js';
 import { renderCourtStage, openComparison } from '../court/courtStage.js';
 import { mountStage } from '../comparison/comparisonStage.js';
@@ -287,7 +287,7 @@ export async function renderAiPage(container, { caseId, caseHeader, api, navigat
         message(`지금 단계에서는 이 화면을 볼 수 없어요. (현재 상태: ${error.currentStatus})`);
         console.info('현재 상태:', error.currentStatus);
       } else {
-        message('정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.', button('다시 시도', load));
+        message(loadFailText(error), button('다시 시도', load));
       }
     } finally { loading = false; }
   }

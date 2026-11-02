@@ -4,7 +4,7 @@ import { SCRIPTS } from '../../content/scripts.js';
 import { restartMock, jumpActMock } from '../../mocks/mockStageButtons.js';
 import courtFacts from '../../content/courtFacts.json';
 import { caseNewspaper, paperFromCase } from '../../components/newspaperFront.js';
-import { loadCaseScript } from '../../utils/caseScript.js';
+import { loadCaseScript, loadFailText } from '../../utils/caseScript.js';
 import { commonCategoryOf, evidencePhotosFromPaper, fetchCasePaper } from '../../utils/newspaper.js';
 import { reducedMotion } from '../../utils/motion.js';
 
@@ -233,7 +233,7 @@ export async function renderOverviewPage(container, { caseId, api, navigate }) {
       box.append(element('p', '', `지금 단계에서는 이 화면을 볼 수 없어요. (현재 상태: ${error.currentStatus})`), button('사건 목록으로', () => navigate('list')));
       console.info('현재 상태:', error.currentStatus);
     } else {
-      box.append(element('p', '', '정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.'), button('다시 시도', load));
+      box.append(element('p', '', loadFailText(error)), button('다시 시도', load));
     }
     root.replaceChildren(box);
   }

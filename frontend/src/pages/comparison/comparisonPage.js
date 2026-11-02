@@ -1,5 +1,5 @@
 import { formatPenalty, formatDispositions } from '../../utils/judgmentFormat.js';
-import { loadCaseScript } from '../../utils/caseScript.js';
+import { loadCaseScript, loadFailText } from '../../utils/caseScript.js';
 import { renderComparisonStage, mountNewspaperStage } from './comparisonStage.js';
 
 const directionSymbols = { UP: '↑', DOWN: '↓' };
@@ -129,7 +129,7 @@ export async function renderComparisonPage(container, { caseId, caseHeader, api,
         message(`지금 단계에서는 이 화면을 볼 수 없어요. (현재 상태: ${error.currentStatus})`);
         console.info('현재 상태:', error.currentStatus);
       } else {
-        message('정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.', button('다시 시도', load));
+        message(loadFailText(error), button('다시 시도', load));
       }
     } finally { loading = false; }
   }

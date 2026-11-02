@@ -3,7 +3,7 @@ import { renderRecommendedRangeBar } from '../../components/recommendedRangeBar.
 import { renderProgressSidebar } from './progressSidebar.js';
 import { renderContent } from '../../utils/contentLines.js';
 import { renderStage } from '../../components/stage.js';
-import { loadCaseScript } from '../../utils/caseScript.js';
+import { loadCaseScript, loadFailText } from '../../utils/caseScript.js';
 import { commonCategoryOf, evidencePhotosFromPaper, fetchCasePaper } from '../../utils/newspaper.js';
 import { sensitiveNotice } from '../../content/sensitiveNotice.js';
 import { restartMock, jumpActMock } from '../../mocks/mockStageButtons.js';
@@ -53,7 +53,7 @@ export async function renderReviewPage(container, { caseId, caseHeader, api, nav
       box.append(element('p', '', `지금 단계에서는 이 화면을 볼 수 없어요. (현재 상태: ${error.currentStatus})`));
       console.info('현재 상태:', error.currentStatus);
     } else {
-      box.append(element('p', '', '정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.'), button('다시 시도', load));
+      box.append(element('p', '', loadFailText(error)), button('다시 시도', load));
     }
     root.replaceChildren(box);
   }
