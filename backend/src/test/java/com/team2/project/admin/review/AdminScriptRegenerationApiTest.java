@@ -257,17 +257,29 @@ class AdminScriptRegenerationApiTest extends ApiIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("A-13-17: 공개 중인 사건은 반영하지 않는다 — 점검 상태(BE-126 2차) 전까지 승인이 풀려 대본이 내려가는 것을 막는다")
-	void apply_publishedCase_isConflict() throws Exception {
+	@DisplayName("A-13-17: 공개 중인 사건도 반영한다 — 나가 있던 대본은 점검 중(API 18 503)이 되고 감사 로그에 남는다 (BE-126 2차-2)")
+	void apply_publishedCase_putsScriptUnderMaintenance() throws Exception {
+		jdbcTemplate.update("UPDATE legal_case SET status = 'PUBLISHED', published_at = now() WHERE id = ?", caseId);
+		jdbcTemplate.update("UPDATE case_script_block SET review_status = 'APPROVED', reviewed_by_admin_id = ?, reviewed_at = now() "
+			+ "WHERE script_id = ?", admin.getId(), scriptId);
+		jdbcTemplate.update("UPDATE case_script SET released_at = now() WHERE id = ?", scriptId);
 		long id = start("{\"units\": [\"U4\"]}");
 		when(pipelineClient.getJob(anyString())).thenReturn(job("SUCCEEDED"));
 		when(pipelineClient.getRegenerationResult(anyString())).thenReturn(result("U4", NEW_CLOSING, 2));
-		jdbcTemplate.update("UPDATE legal_case SET status = 'PUBLISHED', published_at = now() WHERE id = ?", caseId);
 
-		perform(get(regenerationsUrl() + "/" + id))
-			.andExpect(jsonPath("$.applicable").value(false))
-			.andExpect(jsonPath("$.notApplicable").value(AdminScriptRegenerationService.CASE_PUBLISHED));
-		perform(post(regenerationsUrl() + "/" + id + "/apply")).andExpect(status().isConflict());
+		perform(get(regenerationsUrl() + "/" + id)).andExpect(jsonPath("$.applicable").value(true));
+		perform(post(regenerationsUrl() + "/" + id + "/apply"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.scriptStatus").value("MAINTENANCE"))
+			.andExpect(jsonPath("$.blocks[4].reviewStatus").value("PENDING"));
+
+		mockMvc.perform(get("/api/v1/cases/" + caseId + "/script"))
+			.andExpect(status().isServiceUnavailable())
+			.andExpect(jsonPath("$.code").value("SCRIPT_UNDER_MAINTENANCE"));
+		assertThat(jdbcTemplate.queryForObject("""
+			SELECT detail ->> 'scriptMaintenance' FROM admin_audit_log
+			WHERE actor_email = ? AND action = 'CASE_SCRIPT_REGENERATE_APPLY'""", String.class, admin.getEmail()))
+			.isEqualTo("true");
 	}
 
 	@Test

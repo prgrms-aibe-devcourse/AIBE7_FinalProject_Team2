@@ -57,6 +57,7 @@
 | v1.51 | 2026-10-30 | 약관 동의 기록 (**확장 단계**, BE-133 · V44 · API 명세 v0.74, v1.50 · V40 ~ V43은 BE-140 PR #351) — `member`에 `terms_agreed_at`(timestamptz) · `terms_version`(varchar 20) 추가, 둘 다 NULL 허용. CHECK `ck_member_terms_agreement`(둘이 함께 있거나 함께 없다). 아이디 가입(M-5) 때만 채우고, 기존 회원 · 카카오 회원은 NULL(동의 기록 없음) |
 | v1.52 | 2026-10-31 | 대본 단위 블록 (**확장 단계**, BE-126 1차 · V45 · API 명세 v0.78) — `case_script_block` 신설(대본마다 단위 U0 ~ U4 하나에 한 행: 내용 `content` · 판 `revision` · 생성 근거 `basis` · 검수 결과 `review` · `warnings` · `repairs` · 공개 가능 여부 `publishable` · 검수 칸 4개, 유니크 `(script_id, unit)`, "오류 블록은 승인 불가" CHECK). `case_script`의 `evidence`는 U3 블록으로 옮기고(검수 상태 포함, 나머지 네 단위는 `pending`) 검수 칸 4개를 지웠다 — 대본의 검수 상태는 블록에서 계산한다(다섯 단위 모두 승인 = 공개, 증거조사만 있는 대본은 준비 중). `case_script`에 메타 `issue` · `admits`와 `pending`(만들지 못한 단위) · `review`(대본 전체 검수 결과) 추가. 블록의 생성 근거가 가리킬 판 `legal_case.content_revision` · `case_paper.revision` 추가(대본 입력이 바뀔 때만 오른다, `updated_at`을 쓰지 않는 이유는 아래 표) (결정: `docs/decisions/BE-126.md`) |
 | v1.54 | 2026-11-02 | 대본 블록 재생성 작업 (**확장 단계**, BE-129 2차 · V47 · API 명세 v0.85) — `case_script_regeneration` 신설(사건 · 파이프라인 작업 ID · 고른 블록 `units` · `cascade_later` · 요청 당시 입력 `inputs` · 상태 · 실패 사유 · 단계 상태 · 요청자 · 반영자 · 반영 시각). 사건 등록(`case_import`)처럼 진행 상황을 받아 적고, 관리자가 결과를 반영하면 `applied_at`이 채워진다. 대본에 칸을 더하지 않고 행으로 둔 이유는 아래 표. 감사 로그 액션 `CASE_SCRIPT_REGENERATE` · `CASE_SCRIPT_REGENERATE_APPLY` 추가 (`docs/decisions/BE-129.md`) |
+| v1.55 | 2026-11-02 | 대본 상태 · 점검 중 (**확장 단계**, BE-126 2차-2 · V48 · API 명세 v0.87) — `case_script.released_at` 추가(대본이 처음 사용자에게 나간 시각: 사건 공개 + 다섯 단위 모두 승인). 사용자 쪽 대본 상태 `scriptStatus`(`READY` · `PREPARING` · `MAINTENANCE`)를 블록 승인 상태와 이 칸에서 계산한다. 이관: 이미 공개 사건 + 모두 승인인 대본은 마지막 승인 시각(공개 시각이 더 늦으면 공개 시각)으로 채운다 — 운영은 대본 0행 (`docs/decisions/BE-126.md`) |
 | v1.53 | 2026-11-01 | 등록 때 정한 배역 · 사건 자동 분류 (**확장 단계**, BE-129 1차 · V46 · API 명세 v0.80) — `case_import.cast_roles`(jsonb, 등록 요청을 받을 때 정한 배역) 추가: 대본을 만드는 등록은 배역을 대본보다 먼저 정하므로, 범죄 유형별 균형 계산이 사건과 함께 **아직 적재되지 않은 등록**(`case_id` 없음, `FAILED` 제외)의 이 값도 센다. `legal_case.classification`(jsonb `{mood, issue, victim, thirdParty}`) · `classification_needs_review`(jsonb 문자열 배열) 추가: 사건 등록의 자동 분류(BE-123) 결과와 관리자 확인이 필요한 축 · 플래그. 대본을 다시 만들 때(BE-129 2차) 파이프라인에 그대로 넘기는 값이라 한 칸에 둔다. 민감 플래그는 `sensitive_flags`가 따로 갖는다 (`docs/decisions/BE-129.md`) |
 
 ---
@@ -420,11 +421,13 @@ S-05에서 보여 줄 형벌 선택지, 그리고 **선고 가능 범위 밖 판
 | review | jsonb | ✓ | 대본 전체에 걸린 검수 결과(`REVIEW_FAILED`), 기본 `[]`. 블록 것은 블록 행에 있다 (v1.52) |
 | balance_warning | text |  | 검사 · 변호인 분량이 치우쳤다는 경고. **길이를 제한하지 않는다** — 모델 문장이 들어오는 칸을 varchar로 두면 한 번 넘칠 때 적재 전체가 막힌다(BE-93 1차에서 겪음) |
 | publishable | boolean | ✓ | 파이프라인이 공개해도 된다고 본 결과(생성 실패 · 중단 · 못 만든 단위 · 검수 오류가 없다). false면 승인할 수 없다 |
+| released_at | timestamptz |  | 대본이 처음 사용자에게 나간 시각 — 사건이 공개(`PUBLISHED`)된 상태에서 다섯 단위가 모두 승인된 첫 순간(승인 · 사건 공개 때 서버가 남긴다). 한 번 채우면 지우지 않는다. 있으면 승인이 풀린 동안 "준비 중"이 아니라 "점검 중"이다(아래) (v1.55) |
 | created_at | timestamptz | ✓ | 적재 시각 |
 | updated_at | timestamptz | ✓ |  |
 
 - **검수 상태는 블록에 있다**(v1.52). 대본의 상태는 블록에서 계산한다 — 다섯 단위(U0 ~ U4)가 모두 있고 모두 승인이면 공개(API 1 · 16 · 18의 `scriptReady`, 증거조사만 만든 대본은 "준비 중"), 하나라도 반려면 반려, 그 밖은 대기. 1차는 통승인 · 통거절이라 모든 블록에 한 번에 적용한다(A-13-11 · 12).
 - 승인 조건은 이 표의 `publishable`과 모든 블록의 `publishable`이 참인 것이다. `publishable`이 false인 이유: 끝내 생성하지 못한 줄이 있거나(U3 `text`가 null), 호출 한도로 멈췄거나(`stopped`), 만들지 못한 단위가 있거나(`pending`), 검수 조건 오류가 있다.
+- **사용자 쪽 대본 상태 `scriptStatus`**(v1.55, BE-126 2차-2): 공개 대본이면 `READY`, 아니면 `released_at`이 있을 때 `MAINTENANCE`(점검 중 — API 18이 503), 없을 때 `PREPARING`(준비 중 — 404). 칸으로 두지 않고 블록 승인 상태와 `released_at`에서 계산한다 — 상태 칸을 따로 두면 블록 승인과 어긋날 수 있다. 초안 사건에서 승인만 한 대본은 사용자가 본 적이 없어 `released_at`을 남기지 않는다.
 - **대본 검수는 사건 상태를 바꾸지 않는다.** 판결 후보 승인(A-9)은 `legal_case.status`를 DRAFT → REVIEW로 올리지만, 대본은 사건 내용이 아니라 체험 연출이라 사건 공개 흐름과 따로 둔다.
 - 다시 생성해 덮어쓰는 경로는 아직 없다(적재는 사건을 새로 만든다). 블록 재생성은 BE-129다.
 

@@ -55,6 +55,8 @@ public enum ErrorCode {
 	SCRIPT_NOT_FOUND(HttpStatus.NOT_FOUND, "사건 대본이 없습니다."),
 	SCRIPT_LINE_NOT_FOUND(HttpStatus.NOT_FOUND, "대본에 그 판단 요소의 대사가 없습니다."),
 	SCRIPT_BLOCK_NOT_FOUND(HttpStatus.NOT_FOUND, "대본에 그 단위 블록이 없습니다."),
+	// 대본 점검 중 (BE-126 2차-2, API 18) — 한 번 공개한 대본의 블록을 고치는 동안. 준비 중(404 SCRIPT_NOT_FOUND)과 구분한다
+	SCRIPT_UNDER_MAINTENANCE(HttpStatus.SERVICE_UNAVAILABLE, "사건 대본을 점검하고 있습니다. 잠시 뒤 다시 시도해 주세요."),
 	// 대본 블록 재생성 (BE-129 2차, API 명세 A-13-15 ~ 17)
 	SCRIPT_REGENERATION_NOT_FOUND(HttpStatus.NOT_FOUND, "대본 재생성 작업을 찾을 수 없습니다."),
 	// 프로필 꾸미기 (확장 단계, BE-96). details에 잠긴 필드를 담는다

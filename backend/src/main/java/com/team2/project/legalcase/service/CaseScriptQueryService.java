@@ -4,6 +4,7 @@ import com.team2.project.common.exception.BusinessException;
 import com.team2.project.common.exception.ErrorCode;
 import com.team2.project.legalcase.domain.CaseScript;
 import com.team2.project.legalcase.domain.Factor;
+import com.team2.project.legalcase.domain.ScriptStatus;
 import com.team2.project.legalcase.dto.PublicCaseScriptResponse;
 import com.team2.project.legalcase.repository.CaseScriptRepository;
 import com.team2.project.legalcase.repository.FactorRepository;
@@ -24,6 +25,10 @@ import org.springframework.transaction.annotation.Transactional;
  * BE-109 Jira 댓글, 2026-10-27) — API 17 신문 지면의 {@code PAPER_NOT_FOUND}와 같은 모양이라
  * 프론트는 404를 "대본 없음"으로 보고 MVP 화면으로 가면 된다. 빈 배열 대신 404를 쓰는 이유는, 빈
  * 배열이면 대본이 없는 것인지 대사가 0줄인 것인지 구분할 수 없기 때문이다.
+ *
+ * <p><b>점검 중은 503이다</b>(BE-126 2차-2). 한 번 사용자에게 나간 대본({@link CaseScript#getReleasedAt()})의 승인이 블록 수정 ·
+ * 반려 · 재생성 반영으로 풀린 동안은 {@code SCRIPT_UNDER_MAINTENANCE}를 준다 — 404(준비 중)와 나눠야 화면이 "곧 돌아온다"를
+ * 알리고, 이미 받아 둔 대본으로 체험을 이어 가게 할 수 있다(FE-145). 상태 판정은 API 1 · 16의 {@code scriptStatus}와 같다.
  */
 @Service
 @RequiredArgsConstructor
@@ -36,9 +41,14 @@ public class CaseScriptQueryService {
 	@Transactional(readOnly = true)
 	public PublicCaseScriptResponse getCaseScript(Long caseId) {
 		legalCaseRepository.findPublishedById(caseId).orElseThrow(() -> new BusinessException(ErrorCode.CASE_NOT_FOUND));
-		CaseScript script = scriptRepository.findByLegalCaseId(caseId).filter(CaseScript::isPublic)
-			.orElseThrow(() -> new BusinessException(ErrorCode.SCRIPT_NOT_FOUND));
-
+		CaseScript script = scriptRepository.findByLegalCaseId(caseId).orElse(null);
+		ScriptStatus status = ScriptStatus.of(script);
+		if (status == ScriptStatus.PREPARING) {
+			throw new BusinessException(ErrorCode.SCRIPT_NOT_FOUND);
+		}
+		if (status == ScriptStatus.MAINTENANCE) {
+			throw new BusinessException(ErrorCode.SCRIPT_UNDER_MAINTENANCE);
+		}
 		return PublicCaseScriptResponse.of(script, labelsByFactorId(caseId));
 	}
 

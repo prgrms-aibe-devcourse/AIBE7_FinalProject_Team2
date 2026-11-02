@@ -85,6 +85,7 @@
 | v0.82 | 2026-10-30 | **체험 · 성향 결과의 주인 (BE-140 3a)** — 1-3: 내 체험은 로그인했으면 회원 기준(쿠키는 보지 않음), 아니면 익명 ID 쿠키 기준. API 1 · 16의 `myStatus`, API 2 ~ 15, P-2 · P-3, P-5의 체험 목록 · 성향이 같은 기준이다. 회원은 체험 시작 · 성향 제출에서 익명 ID를 발급받지 않는다. 손님 때 한 체험을 회원 것으로 옮기는 일은 M-9 ~ M-11(후속)이 맡는다 |
 | v0.83 | 2026-10-30 | **마이페이지 · 레벨 · 꾸미기 · 출석 · 수집 · 도전과제를 회원 기준 · 로그인 전용으로 (BE-140 3b, ERD v1.50 · V41)** — P-5 · P-7 ~ P-11 · L-1 ~ L-3은 `Authorization: Bearer`가 없으면 `401 UNAUTHORIZED`(쿠키는 보지 않는다). 데이터는 회원 키 테이블(`member_*`)에 저장하고, 예전 익명 ID 데이터는 옮기지 않는다(체험만 이관, M-9 ~ M-11 후속). P-6 `POST /attendance`는 회원만 기록하고 손님은 아무것도 하지 않고 204. 이 API들은 더 이상 익명 ID 쿠키를 발급하지 않는다. 체험 · 성향은 손님이 계속 쓴다(1-3) |
 | v0.88 | 2026-11-02 | **카카오 첫 가입 약관 동의 (BE-145)** — 처음 온 카카오 계정은 M-4에서 회원을 만들지 않고 가입 대기(Redis 10분 · 쿠키 `NLNB_SIGNUP`)만 둔 채 `/auth/callback?signup=terms`로 보낸다. 약관에 동의해야 회원이 만들어진다: M-12(동의하고 가입) · M-13(취소)을 신설한다. M-8에 `termsRequired`를 더하고 M-14(기존 회원 약관 동의)를 신설한다. 스키마 변경 없음(V44 칸 사용). v0.87은 열린 PR #384(BE-126 2차-2)가 쓰고 있어 v0.88로 적었다 (`docs/decisions/BE-145.md`) |
+| v0.87 | 2026-11-02 | **대본 상태 `scriptStatus` · 점검 중 503 (BE-126 2차-2, ERD v1.55 · V48)** — API 1 · 16 · C-6 `case`에 `scriptStatus`(`READY` · `PREPARING` · `MAINTENANCE`) 추가, `scriptReady`는 호환용으로 `scriptStatus == READY`. **API 18은 점검 중이면 503 `SCRIPT_UNDER_MAINTENANCE`**(에러 코드 신설) — 한 번 사용자에게 나간 대본(`case_script.released_at`: 사건이 공개된 상태에서 다섯 단위가 모두 승인된 첫 순간, 승인 A-13-11 · 18 · 사건 공개 A-13 때 서버가 남긴다)의 승인이 풀린 동안이다. 나간 적 없으면 그대로 404(준비 중). **공개 중 막기를 점검으로 바꿨다** — A-13-13 · A-13-19 · A-13-21의 "공개 중인 사건이면 409"(v0.86)와 A-13-16 · 17의 "사건이 공개 중이면 반영 불가"(v0.85)를 뺐다. 대본을 `READY` → `MAINTENANCE`로 만든 요청은 감사 로그에 `scriptMaintenance: true`. 503에는 `Retry-After: 60` · `Cache-Control: no-store`. A-13-10 응답에 `scriptStatus` · `releasedAt`, A-6 `script`에 `scriptStatus` 추가 |
 | v0.86 | 2026-11-02 | **대본 블록 단위 검수 A-13-18 ~ A-13-21 신설 · 낡음 표시 (BE-126 2차-1)** — 블록 하나 승인(`POST /admin/cases/{caseId}/script/blocks/{unit}/approve`) · 반려(`…/reject`) · "확인했음"(`…/acknowledge-stale`, 낡은 블록의 근거를 지금 값으로 맞춘다) · 문자열 한 줄 직접 수정(`PATCH …/blocks/{unit}/text`, U0 · U1 · U2 · U4, 자리는 검수 결과 `path`). **A-13-10 블록에 `stale` · `staleReasons` · `staleBlocksApproval` · `unknownBasis` 추가** — 블록을 만들 때 본 값(`basis`: 앞 블록 판 · 사건 내용 판 · 기사 판 · 배역 · 분류 네 축 · 민감 플래그)을 지금 값과 비교한다. 낡음은 표시가 기본이고, **사건 내용 · 기사 · 민감 플래그가 바뀐 낡음은 승인을 막는다**(A-13-11 · 18, 1차의 사건 내용 · 기사 규칙에 민감 플래그를 더함). 근거에 없는 키는 "모름"(낡지 않음 + 표시). A-11로 민감 플래그를 고치면 승인한 블록의 승인을 지운다. **A-13-13(U3 대사 수정)은 U3만 다시 검수 대기로 돌린다**(1차는 모든 블록). **공개 중인 사건은 블록 반려 · 문장 수정 · 대사 수정(A-13-13 포함)을 409로 막는다**(승인이 풀리면 체험 중인 사용자의 API 18이 404가 된다 — 점검 상태(BE-126 2차-2) 전까지). 민감 플래그가 **새로 생긴** 블록은 "확인했음"을 거절한다(다시 생성). U0를 고치면 `admits`를 다시 계산한다. 에러 코드 `SCRIPT_BLOCK_NOT_FOUND`(404) 추가 (`docs/decisions/BE-126.md`) |
 | v0.85 | 2026-11-02 | **대본 블록 재생성 A-13-15 ~ A-13-17 신설 · A-11 분류 수정 (BE-129 2차, ERD v1.54 · V47)** — `POST /admin/cases/{caseId}/script/regenerations`(고른 블록 · `cascade`, 202) · `GET .../regenerations/{regenerationId}`(상태 · 끝나면 미리보기) · `POST .../regenerations/{regenerationId}/apply`(관리자가 반영). 사건 등록(A-14 → A-15 → A-14-1)과 같은 흐름이고, 서버가 DB 값(사건 내용 · AI 판결 방향과 형량 · 분류와 민감 플래그 · 배역 · 지금 블록 · 기사)으로 입력을 모아 파이프라인에 보낸다. 반영하면 다시 만든 블록만 바뀌고 그 블록은 다시 검수 대기가 된다. 요청한 뒤 대본 · 사건 내용 · 기사 · 배역 · 분류 · 민감 플래그가 바뀌었으면 반영을 거절한다. **A-11에 `classification`(`{mood, issue, victim, thirdParty}`, 네 축 통째) 추가** — 고치면 `classificationNeedsReview`에서 분류 축 항목이 빠진다. 에러 코드 `SCRIPT_REGENERATION_NOT_FOUND`(404) 추가, `IMPORT_IN_PROGRESS`는 재생성이 돌 때도 쓴다(등록과 재생성은 한 번에 하나) (`docs/decisions/BE-129.md`) |
 | v0.84 | 2026-10-31 | **첫 로그인 가져오기 M-9 ~ M-11 신설 (BE-140 3c)** — `GET /members/me/anonymous-import`(후보의 체험 수 · 첫인상 엽서 수, 없으면 404) · `POST /members/me/anonymous-import`(체험을 회원 것으로 이동) · `POST /members/me/anonymous-import/discard`(결정만 남기고 익명 ID 쿠키를 지움). 에러 코드 `ANONYMOUS_IMPORT_NOT_AVAILABLE` 추가 |
@@ -192,6 +193,7 @@ json
 | 409 | `COLLECTION_LIMIT_EXCEEDED` | (확장, BE-83, v0.63) 모을 수 있는 수를 넘음 — 일러스트는 한 사건에서 처음 얻은 수 5. `details`에 넘친 종류(`field: items.kind`, `reason: illustration`). 의상 사용자당 12는 v0.75(BE-136)에서 삭제 | 개발 오류(콘텐츠 규칙보다 넉넉한 값이라 정상 화면이면 오지 않음) (P-9) |
 | 409 | `DUPLICATE_SOURCE` | (확장, 관리자 API, BE-93) 이미 등록한 사건번호. `details`에 어느 항목인지 담는다 | 입력 안내 (A-14) |
 | 409 | `IMPORT_IN_PROGRESS` | (확장, 관리자 API, BE-93) 실행 중인 등록이 있음. 한 번에 하나만 돌린다(외부 AI 호출 한도 보호). (v0.85, BE-129) 대본 블록 재생성도 같은 한도를 써서, 등록 · 재생성 중 하나가 돌면 다른 하나도 이 코드다 | 끝난 뒤 다시 시도 안내 (A-14 · A-13-15) |
+| 503 | `SCRIPT_UNDER_MAINTENANCE` | (확장, BE-126 2차-2, v0.87) 한 번 사용자에게 나간 대본의 블록을 관리자가 고치는 중이라 승인이 풀려 있음. 준비 중(404 `SCRIPT_NOT_FOUND`)과 구분한다 | "점검 중"으로 보이고, 받아 둔 대본이 있으면 체험을 이어 간다 (API 18, FE-145) |
 | 404 | `SCRIPT_BLOCK_NOT_FOUND` | (확장, 관리자 API, BE-126 2차, v0.86) 대본에 그 단위 블록이 없음(만들지 못한 단위 · 증거조사만 만든 대본) | 대본 화면을 다시 불러오기 (A-13-18 ~ 21) |
 | 404 | `SCRIPT_REGENERATION_NOT_FOUND` | (확장, 관리자 API, BE-129 2차, v0.85) 그 사건의 대본 재생성 작업이 없음. 파이프라인에서 작업이 사라졌을 때 실패 사유 코드로도 쓴다 | 대본 화면을 다시 불러오기 (A-13-16 · 17) |
 | 404 | `POST_NOT_FOUND` | (확장, 커뮤니티 BE-115, v0.68) 글이 없음 | 목록으로 돌아가 다시 불러오기 (C-2 · C-4 · C-5) |
@@ -265,7 +267,7 @@ json
 json
 
 ```json
-{  "summary": { "total": 9, "byCrimeType": { "MURDER": 3, "FRAUD": 3, "INJURY": 3, "ROBBERY": 0, "THEFT": 0 } },  "cases": [    {      "caseId": 1,      "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",      "crimeType": "MURDER",      "crimeCategoryLabel": "생명범죄",      "chargeName": "살인",      "shortIntro": "빌린 돈 문제로 찾아온 지인과 다투다 흉기로 살해한 사건입니다.",      "keywords": ["돈 문제", "집으로 찾아옴"],      "difficulty": "HIGH",      "estimatedMinutes": 15,      "participantCount": 1284,      "thumbnailUrl": "/images/cases/case-1-reenact.webp",      "scriptReady": true,      "myStatus": "IN_PROGRESS"    }  ]}
+{  "summary": { "total": 9, "byCrimeType": { "MURDER": 3, "FRAUD": 3, "INJURY": 3, "ROBBERY": 0, "THEFT": 0 } },  "cases": [    {      "caseId": 1,      "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",      "crimeType": "MURDER",      "crimeCategoryLabel": "생명범죄",      "chargeName": "살인",      "shortIntro": "빌린 돈 문제로 찾아온 지인과 다투다 흉기로 살해한 사건입니다.",      "keywords": ["돈 문제", "집으로 찾아옴"],      "difficulty": "HIGH",      "estimatedMinutes": 15,      "participantCount": 1284,      "thumbnailUrl": "/images/cases/case-1-reenact.webp",      "scriptReady": true, "scriptStatus": "READY",      "myStatus": "IN_PROGRESS"    }  ]}
 ```
 
 - `PUBLISHED` 사건만. `summary`는 필터와 관계없이 전체 기준(칩 옆 건수 표시용). `byCrimeType`은 공개 사건이 없는 유형도 0으로 모든 범죄 유형 키를 내려 준다(v0.55부터 5개).
@@ -273,7 +275,8 @@ json
 - `chargeName`: 죄명(`legal_case.charge_name`, 예: "살인"). 사건 상단 바(S-04~S-08)가 `caseId`로 이 목록에서 제목과 함께 찾아 쓴다(BE-79, D-01). 사건 개요(API 4) · API 16의 `chargeName`과 같은 값이다.
 - `thumbnailUrl`: `legal_case.thumbnail_url`. **없으면 규칙 주소 `/images/cases/case-{caseId}-reenact.webp`를 내려준다**(BE-141). 그 파일이 없으면 화면이 범죄 유형별 공용 컷으로 바꾼다.
 - `participantCount`: `attempt_no = 1`이고 `COMPLETED`인 체험 수.
-- (v0.60, BE-116) `scriptReady`: 이 사건에 **승인된 공개 대본**이 있는가(`true` / `false`). 기준은 API 18이 200을 주는 조건과 같다(사건 `PUBLISHED` + 대본 `reviewStatus: APPROVED`) — 대본이 없거나 검수 대기 · 반려면 `false`다. 화면(S-02)은 이 값으로 체험 가능한 사건을 먼저 보이고, `false`는 "준비 중"으로 다룬다. 사용자와 무관한 값이다. **화면 정책이며 서버는 막지 않는다** — API 2(체험 시작)는 `scriptReady`를 보지 않는다. 또 대사를 직접 수정(A-13-13)하면 검수 기록이 지워져 `true → false`로 바뀔 수 있다(이때 API 18도 404). (v0.78, BE-126) 대본은 단위 블록으로 저장되고, 기준은 **다섯 단위(U0 ~ U4)가 모두 있고 모두 승인됐는가**다 — 블록 하나라도 대기 · 반려거나 증거조사만 만든 대본(U3 하나)이면 `false`다.
+- (v0.60, BE-116) `scriptReady`: 이 사건에 **승인된 공개 대본**이 있는가(`true` / `false`). 기준은 API 18이 200을 주는 조건과 같다(사건 `PUBLISHED` + 대본 `reviewStatus: APPROVED`) — 대본이 없거나 검수 대기 · 반려면 `false`다. 화면(S-02)은 이 값으로 체험 가능한 사건을 먼저 보이고, `false`는 "준비 중"으로 다룬다. 사용자와 무관한 값이다. **화면 정책이며 서버는 막지 않는다** — API 2(체험 시작)는 `scriptReady`를 보지 않는다. 또 대사를 직접 수정(A-13-13)하면 검수 기록이 지워져 `true → false`로 바뀔 수 있다(이때 API 18은 한 번도 나간 적 없는 대본이면 404, (v0.87) 나간 적 있는 대본이면 503 — 아래 `scriptStatus`). (v0.78, BE-126) 대본은 단위 블록으로 저장되고, 기준은 **다섯 단위(U0 ~ U4)가 모두 있고 모두 승인됐는가**다 — 블록 하나라도 대기 · 반려거나 증거조사만 만든 대본(U3 하나)이면 `false`다.
+- (v0.87, BE-126 2차-2) `scriptStatus`: 대본 상태 `READY` · `PREPARING` · `MAINTENANCE`. `scriptReady`는 호환용으로 남기고 `scriptStatus == READY`와 같다. API 18의 응답과 짝이 맞는다 — `READY`면 200, `PREPARING`(대본이 없거나 아직 한 번도 사용자에게 나가지 않음)이면 404 `SCRIPT_NOT_FOUND`, `MAINTENANCE`(한 번 나간 대본의 블록을 관리자가 고치거나 반려하거나 재생성 결과를 반영해 승인이 풀린 동안)면 503 `SCRIPT_UNDER_MAINTENANCE`. "나갔다"는 사건이 공개된 상태에서 다섯 단위가 모두 승인된 적이 있다는 뜻이다(ERD `case_script.released_at`). 화면은 `MAINTENANCE`를 "점검 중"으로, `PREPARING`을 "준비 중"으로 구분해 보인다(FE-145). 모르는 값이 오면 막는 쪽(`PREPARING`)으로 다룬다.
 - 정렬: `published_at` 최신순 고정 (정렬 선택은 이후 단계, REQ-009).
 - (v0.27, FE-19 · REQ-010) `myStatus`: 이 사건에 대한 **내 최신 회차** 체험 상태를 목록 배지용 두 값으로 묶은 것.
 
@@ -792,10 +795,10 @@ S-20 사건 디테일(정보 구조 v1.12)이 체험을 만들기 전에 부르�
 **응답 200**
 
 ```json
-{  "caseId": 1,  "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",  "crimeType": "MURDER",  "crimeCategoryLabel": "생명범죄",  "chargeName": "살인",  "shortIntro": "빌린 돈 문제로 찾아온 지인과 다투다 흉기로 살해한 사건입니다.",  "keywords": ["돈 문제", "지인", "흉기"],  "difficulty": "MID",  "estimatedMinutes": 15,  "participantCount": 42,  "thumbnailUrl": "/images/cases/case-1-reenact.webp",  "overview": "피고인이 빌린 돈을 갚지 못해 오래 다투던 지인이 집으로 찾아오자, …",  "scriptReady": true,  "myStatus": null,  "cast": { "prosecutor": "naero", "defense": "nambul" },  "sensitiveFlags": ["MENTAL_HEALTH"]}
+{  "caseId": 1,  "title": "빌린 돈 문제로 찾아온 지인을 살해한 사건",  "crimeType": "MURDER",  "crimeCategoryLabel": "생명범죄",  "chargeName": "살인",  "shortIntro": "빌린 돈 문제로 찾아온 지인과 다투다 흉기로 살해한 사건입니다.",  "keywords": ["돈 문제", "지인", "흉기"],  "difficulty": "MID",  "estimatedMinutes": 15,  "participantCount": 42,  "thumbnailUrl": "/images/cases/case-1-reenact.webp",  "overview": "피고인이 빌린 돈을 갚지 못해 오래 다투던 지인이 집으로 찾아오자, …",  "scriptReady": true, "scriptStatus": "READY",  "myStatus": null,  "cast": { "prosecutor": "naero", "defense": "nambul" },  "sensitiveFlags": ["MENTAL_HEALTH"]}
 ```
 
-- 필드는 API 1 카드와 같고(`chargeName` 포함, v0.32), `overview`(사건 개요, API 4의 `case.overview`와 같은 값)를 더한다. `participantCount` · `myStatus` 기준도 API 1과 같다. (v0.60, BE-116) `scriptReady`도 API 1과 같은 값 · 같은 기준이다 — `false`면 S-20은 시작 대신 "준비 중"을 보인다(API 18을 따로 불러 확인하지 않아도 된다).
+- 필드는 API 1 카드와 같고(`chargeName` 포함, v0.32), `overview`(사건 개요, API 4의 `case.overview`와 같은 값)를 더한다. `participantCount` · `myStatus` 기준도 API 1과 같다. (v0.60, BE-116) `scriptReady`도 API 1과 같은 값 · 같은 기준이다 — `false`면 S-20은 시작 대신 "준비 중"을 보인다(API 18을 따로 불러 확인하지 않아도 된다 — (v0.87) 단 `scriptStatus`가 `MAINTENANCE`면 "점검 중"이다). (v0.87, BE-126 2차-2) `scriptStatus`(`READY` · `PREPARING` · `MAINTENANCE`)도 API 1과 같은 값 · 같은 기준이다 — `MAINTENANCE`면 "점검 중"이다.
 - **법정형 · 선고 가능 범위 · 권고 범위 · 판결 · 섹션 본문은 넣지 않는다**(FR-2-8, API 4와 같은 기준). 섹션은 체험 중 API 6이 단계별로 연다.
 - 쿠키는 **읽기만** 하고 발급하지 않는다(발급은 API 2 · P-2, 1-2). 쿠키가 없거나 형식이 틀리거나 체험 전이면 `myStatus`는 `null`이다.
 - 버튼 분기(정보 구조 S-20): `myStatus`가 `null`이면 **체험 시작**(API 2로 체험을 만든 뒤 S-03), `IN_PROGRESS`면 **이어서 하기**, `COMPLETED`면 **결과 다시 보기**. 이어서 하기 · 결과 다시 보기도 API 2를 불러 응답 `status`로 이동한다(1-6). 세부 상태(7단계)는 이 API에 내보내지 않는다.
@@ -893,14 +896,16 @@ FE-64가 쓰는 API(S-20 기사 지면 · 증거조사). 관리자 신문 지면
 - **검수용 값(`manual` · `editedAt` · `validation` · `attempts`)은 내려주지 않는다.** 사람이 고친 줄도 같은 응답에 그대로 나오면 충분하다.
 - **배열 순서가 곧 재생 순서다.** 별도 정렬 필드를 두지 않는다.
 - `cast`는 A-13-10과 같은 값(`{ prosecutor, defense }`).
-- (v0.60, BE-116) 이 조건은 API 1 · API 16의 `scriptReady`와 같다 — `scriptReady: true`인 사건만 이 API가 200이다. 목록은 이 API를 사건마다 부르지 말고 `scriptReady`를 본다.
-- **승인(`reviewStatus: APPROVED`)한 대본만 내려준다** — (v0.78) 대본의 모든 블록이 승인돼야 한다. 검수 전 · 반려된 대본은 없는 것으로 본다 — 사건이 `PUBLISHED`여도 대본이 미승인이면 `SCRIPT_NOT_FOUND`다(API 16 · 17과 달리 사건 공개 여부만으로는 판단하지 않는다).
+- (v0.60, BE-116) 이 조건은 API 1 · API 16의 `scriptReady`와 같다 — `scriptReady: true`인 사건만 이 API가 200이다. 목록은 이 API를 사건마다 부르지 말고 `scriptReady`를 본다. (v0.87) `scriptStatus`와도 짝이 맞는다: `READY` 200 · `PREPARING` 404 · `MAINTENANCE` 503.
+- **승인(`reviewStatus: APPROVED`)한 대본만 내려준다** — (v0.78) 대본의 모든 블록이 승인돼야 한다. 검수 전 · 반려된 대본은 없는 것으로 본다 — 사건이 `PUBLISHED`여도 대본이 미승인이면 `SCRIPT_NOT_FOUND`다(API 16 · 17과 달리 사건 공개 여부만으로는 판단하지 않는다). (v0.87) 단 한 번 나간 적 있는 대본은 404가 아니라 아래 503(점검 중)이다.
+- (v0.87, BE-126 2차-2) **점검 중이면 503 `SCRIPT_UNDER_MAINTENANCE`다.** 한 번 사용자에게 나간 대본(사건 공개 + 다섯 단위 모두 승인을 한 번이라도 채움)의 승인이 블록 반려 · 문장 · 대사 수정 · 재생성 반영 · 통거절로 풀린 동안이다. 다시 다섯 단위가 모두 승인되면 200으로 돌아온다. 404(준비 중)와 나누는 이유: 화면이 "곧 돌아온다"를 알리고, 체험 중인 사용자는 이미 받아 둔 대본으로 이어 가게 하기 위해서다(FE-145). 나간 적 없는 대본은 그대로 404다.
 - 한 캐릭터가 두 배역을 번갈아 맡는 장면(피고인신문)은 이번 응답에 들어오지 않는다 — 그 장면이 서버 데이터로 들어오는 때에 `cast` 확장이 필요하다(FE-60 "추후 재검토").
 
 | 거절 | 조건 |
 | --- | --- |
 | 404 `CASE_NOT_FOUND` | 사건 없음 · 비공개 |
-| 404 `SCRIPT_NOT_FOUND` | 대본이 없거나, 아직 검수 대기 · 반려 상태(= 승인 전) — 빈 배열 대신 404를 쓰는 이유는 "대본 없음"과 "대사 0줄"을 구분하기 위해서다(A-13-7 `PAPER_NOT_FOUND`와 같은 구분) |
+| 404 `SCRIPT_NOT_FOUND` | 대본이 없거나, 아직 검수 대기 · 반려 상태(= 승인 전) — 빈 배열 대신 404를 쓰는 이유는 "대본 없음"과 "대사 0줄"을 구분하기 위해서다(A-13-7 `PAPER_NOT_FOUND`와 같은 구분). (v0.87) 한 번 나간 대본이면 404 대신 아래 503이다 |
+| 503 `SCRIPT_UNDER_MAINTENANCE` | (v0.87, BE-126 2차-2) 한 번 나간 대본을 관리자가 고치는 중(승인이 풀림) — `scriptStatus: MAINTENANCE`. 헤더 `Retry-After: 60`(초) · `Cache-Control: no-store` — 곧 풀리는 일시 상태라 재시도 간격을 알리고 캐시하지 않게 한다 |
 | 400 `VALIDATION_ERROR` | `caseId`가 숫자가 아님 |
 
 ---
@@ -1191,7 +1196,7 @@ API 1 · 2 · 16 · 17은 상태와 관계없이 부를 수 있다. 표에 없�
     ]
   },
   "publishReadiness": { "ready": false, "reasons": ["NO_PUBLISHED_AI", "NO_PUBLISHED_COURT"] },
-  "script": { "exists": true, "reviewStatus": "PENDING", "publishable": false }
+  "script": { "exists": true, "reviewStatus": "PENDING", "publishable": false, "scriptStatus": "PREPARING" }
 }
 ```
 
@@ -1202,7 +1207,7 @@ API 1 · 2 · 16 · 17은 상태와 관계없이 부를 수 있다. 표에 없�
 - `penaltyLabel`은 API 14 `preToFinal.finalJudgmentText`(예: "징역 15년")와 같은 규칙으로 만든다.
 - `factors[].summaryTagCandidates`(BE-80): 요약어 후보(ERD `factor.summary_tag_candidates`). 후보 계산을 켜지 않고 적재한 요소는 `null`. **제안일 뿐 요약어(`summaryTag`)를 바꾸지 않는다** — `suggested`가 있으면 관리자가 요약어를 그 값으로 맞출지 판단한다(요약어 수정 API는 아직 없음). `ambiguous: true`면 1 · 2순위가 붙어 제안하지 않은 것이다.
 - `publishReadiness.reasons`는 A-13의 공개 조건 코드(A-13 표)다. 비어 있으면 `ready = true`.
-- `script`는 사건 대본 요약이다(BE-108). **공개 조건이 아니라 경고용 값이다** — 미승인 대본은 사건 공개를 막지 않으므로(대본은 사건 내용이 아니라 체험 연출이다) `publishReadiness.reasons`에 넣지 않고 따로 내려준다. 대본이 없으면 `{ "exists": false, "reviewStatus": null, "publishable": null }`이고, 기존 사건은 모두 이 경우다. 내용은 A-13-10으로 본다.
+- `script`는 사건 대본 요약이다(BE-108). **공개 조건이 아니라 경고용 값이다** — 미승인 대본은 사건 공개를 막지 않으므로(대본은 사건 내용이 아니라 체험 연출이다) `publishReadiness.reasons`에 넣지 않고 따로 내려준다. 대본이 없으면 `{ "exists": false, "reviewStatus": null, "publishable": null, "scriptStatus": "PREPARING" }`이고, 기존 사건은 모두 이 경우다. 내용은 A-13-10으로 본다. (v0.87, BE-126 2차-2) `scriptStatus`는 API 1 · 16과 같은 사용자 쪽 상태다 — `MAINTENANCE`면 지금 사용자에게 "점검 중"으로 보인다.
 - 원문(`original_text`)은 크기가 커서 A-7로 따로 받는다.
 
 | 거절 | 조건 |
@@ -1378,6 +1383,7 @@ API 1 · 2 · 16 · 17은 상태와 관계없이 부를 수 있다. 표에 없�
 - 이미 공개된 사건은 다시 판정하지 않는다. 지면이 없는 공개 사건은 공개 취소(A-13-14) → 지면 생성 → 재공개로 맞춘다(BE-147).
 - 공개 조건은 A-6 `publishReadiness`와 같은 코드로 판정한다. 화면을 본 뒤 상태가 바뀌었을 수 있으므로 요청 때 사건 행을 잠근 뒤 다시 판정한다.
 - 감사 로그 `CASE_PUBLISH`를 남긴다.
+- (v0.87, BE-126 2차-2) 이미 다섯 단위가 모두 승인된 대본이 있으면 이 공개로 대본이 사용자에게 나가므로 대본의 `releasedAt`을 남긴다(A-13-10). 대본은 공개 조건이 아니다(위 표에 없다).
 
 | 거절 | 조건 |
 | --- | --- |
@@ -1640,6 +1646,7 @@ A-11과 같은 방식(보낸 필드만, `null` = 지움). `headline` · `article
 - `generatedAt`은 파이프라인이 만든 시각이고 `updatedAt`은 적재 · 검수 시각이다. 시각은 모두 KST 오프셋.
 - 검수 칸 다섯 개는 **A-8과 같은 이름 · 같은 형식**이다(검수 기록이 없으면 `reviewStatus: "PENDING"`, `reviewedBy`는 관리자 이메일). 화면이 판결 후보 검수 영역과 같은 부품을 쓸 수 있게 맞췄다.
 - **`isPublished`는 사건 공개 여부와 별개다.** 공개한 사건에 대본만 늦게 들어와 승인될 수도 있고, 공개 전에 대본만 승인돼 있을 수도 있다.
+- (v0.87, BE-126 2차-2) `scriptStatus`: 사용자 쪽 대본 상태(API 1 · 16과 같은 값) — `READY` · `PREPARING` · `MAINTENANCE`. `releasedAt`: 대본이 처음 사용자에게 나간 시각(사건이 공개된 상태에서 다섯 단위가 모두 승인된 첫 순간 — 승인 A-13-11 · 18 또는 사건 공개 A-13 때 서버가 남긴다), 나간 적 없으면 `null`. **`releasedAt`이 있으면 승인을 푸는 요청(A-13-12 · 13 · 17 · 19 · 21)이 대본을 점검 중으로 만든다** — 그동안 API 18은 503이다. 화면은 이 값으로 "고치면 점검 중이 됩니다" 안내를 띄운다. 초안 사건에서 승인만 한 대본은 나간 것이 아니다.
 
 | 거절 | 조건 |
 | --- | --- |
@@ -1658,6 +1665,7 @@ A-11과 같은 방식(보낸 필드만, `null` = 지움). `headline` · `article
 
 - **`publishable`이 `false`면 거절한다.** 증거 카드와 대사가 1:1로 맞지 않는 상태로 공개하면 체험이 깨진다(BE-107 계약). DB에도 같은 제약을 두었다(v0.78부터 블록마다: `chk_case_script_block_publishable_approved`).
 - **사건 상태(`legal_case.status`)는 바꾸지 않는다.** 판결 후보 승인(A-9)은 DRAFT → REVIEW로 올리지만, 대본은 사건 내용이 아니라 체험 연출이라 사건 공개 흐름과 따로 둔다.
+- (v0.87, BE-126 2차-2) 공개 중인 사건이면 이 승인으로 대본이 사용자에게 나가므로 `releasedAt`을 남긴다(처음 한 번). 점검 중이던 대본은 `READY`로 돌아온다.
 - 감사 로그 `CASE_SCRIPT_APPROVE`.
 
 | 거절 | 조건 |
@@ -1679,8 +1687,8 @@ A-11과 같은 방식(보낸 필드만, `null` = 지움). `headline` · `article
 응답은 A-13-10과 같은 형식(`reviewStatus: "REJECTED"` · `isPublished: false` · `reviewNote`에 사유).
 
 - (v0.78, BE-126) **통거절** — 모든 블록을 한 번에 반려한다(사유도 블록마다 같다). 1차 동안 반려한 대본은 다시 등록해 새로 만든다(블록 단위 수정 · 재생성은 2차 · BE-129).
-- **승인한 대본도 반려로 내릴 수 있다.** 판결 후보 반려(A-10)는 공개 중인 후보를 막지만(교체할 다른 후보가 있다), 대본은 사건마다 하나뿐이라 막으면 잘못 승인한 대본을 되돌릴 방법이 없어진다.
-- 감사 로그 `CASE_SCRIPT_REJECT`.
+- **승인한 대본도 반려로 내릴 수 있다.** 판결 후보 반려(A-10)는 공개 중인 후보를 막지만(교체할 다른 후보가 있다), 대본은 사건마다 하나뿐이라 막으면 잘못 승인한 대본을 되돌릴 방법이 없어진다. (v0.87) 한 번 나간 대본이면 점검 중(`MAINTENANCE`, API 18 503)이 된다.
+- 감사 로그 `CASE_SCRIPT_REJECT`. (v0.87) 이 요청으로 `READY` → `MAINTENANCE`가 됐으면 `{"scriptMaintenance": true}`를 남긴다(A-13-13 · 17 · 19 · 21도 같다).
 
 | 거절 | 조건 |
 | --- | --- |
@@ -1702,7 +1710,7 @@ A-11과 같은 방식(보낸 필드만, `null` = 지움). `headline` · `article
 - `{factorId}`는 **파이프라인 번호**(= `factor.display_order`)다. 대사는 판단 요소마다 한 줄이고 어느 측이 말하는지는 요소의 방향에서 정해지므로, 이 번호 하나로 줄이 정해진다.
 - 금지어 · 원문에 없는 숫자 같은 **의미 검사는 하지 않는다.** 그 판단을 사람이 하라고 두는 기능이다.
 - 고친 줄은 `validation`이 `{ ok: true, manual: true, warnings: [...] }`가 되고 `editedAt`이 붙는다. **경고는 남긴다** — 사람이 보고 판단할 값이다. 화면은 `manual`로 "사람이 고침"을 표시한다.
-- (v0.86) **공개 중인 사건이면 409 `INVALID_STATE`** — 고치면 승인이 풀려 체험 중인 사용자의 API 18이 404가 된다. 점검 상태(BE-126 2차-2) 전까지는 공개 취소(A-13-14) 뒤 고친다.
+- (v0.86) ~~공개 중인 사건이면 409 `INVALID_STATE`~~ → (v0.87, BE-126 2차-2) **공개 중인 사건도 고칠 수 있다.** 승인이 풀린 동안 대본은 점검 중(`MAINTENANCE`)이고 API 18은 503이다 — 체험 중인 사용자는 받아 둔 대본으로 이어 간다(FE-145). U3를 다시 승인(A-13-18)하면 돌아온다.
 - **고치면 검수 기록이 지워져 다시 대기가 된다.** 내용이 바뀌었는데 지난 승인이 남아 있으면 검수하지 않은 대사가 공개된다. (v0.78, BE-126) 대사는 U3 블록에 있다. 1차는 통승인이라 **모든 블록**이 다시 대기가 됐다. (v0.86, BE-126 2차) **U3 블록만** 다시 대기가 된다 — 블록 단위로 다시 검수한다(U3를 보고 만드는 뒤 블록은 없다). U3 블록의 판(`revision`)이 오르고, 고친 줄의 검수 조건 오류(`review`에서 그 `factorId`의 `severity: error`)는 지운다 — 경고는 남긴다.
 - **`publishable`을 다시 계산한다.** 파이프라인과 같은 식(`not stopped and not failed`, v0.78부터 대본 전체는 만들지 못한 단위 · 검수 오류도 함께)을 다시 적용한다 — 빈 대사를 사람이 채워 모든 줄이 차면 승인할 수 있게 올라가고, 호출 한도로 멈춘 대본(`stopped: true`)은 **줄 자체가 모자라** 고쳐도 올라가지 않는다(그때는 다시 생성해야 한다).
 - 감사 로그 `CASE_SCRIPT_UPDATE`. **고친 대사 본문은 남기지 않는다**(어느 요소를 고쳤는지만) — 원문 · 모델 출력과 같은 취급이다.
@@ -1789,7 +1797,7 @@ A-11과 같은 방식(보낸 필드만, `null` = 지움). `headline` · `article
 ```
 
 - `status`: `QUEUED` · `RUNNING` · `SUCCEEDED` · `FAILED`(A-15와 같은 값). `stages`는 재생성이 도는 대본 단계(`script`)만 준다.
-- `applicable`: 지금 반영할 수 있는지 — 끝났고, 반영하지 않았고, 그 사건의 **가장 최근** 재생성이고, 사건이 공개 중이 아니고, 요청한 뒤 입력이 바뀌지 않았고, 결과를 가져왔다(결과가 없으면 수동 수정 줄 수를 알 수 없어 반영 불가로 둔다). 아니면 `notApplicable`에 이유(도는 중이면 `applicable: false`, `notApplicable: null`).
+- `applicable`: 지금 반영할 수 있는지 — 끝났고, 반영하지 않았고, 그 사건의 **가장 최근** 재생성이고, 요청한 뒤 입력이 바뀌지 않았고, 결과를 가져왔다(결과가 없으면 수동 수정 줄 수를 알 수 없어 반영 불가로 둔다). 아니면 `notApplicable`에 이유(도는 중이면 `applicable: false`, `notApplicable: null`). (v0.87, BE-126 2차-2) v0.85의 "사건이 공개 중이 아님" 조건은 뺐다 — 공개 중인 사건에 반영하면 대본이 점검 중이 된다(A-13-17).
 - `preview`: 끝났고 아직 반영하지 않은 작업의 결과. `units`는 다시 만들기로 한 블록(연동 표로 넓힌 것), `regenerated`는 실제로 만든 블록(반영하면 이것만 바뀐다), `pending`은 만들지 못한 블록(지금 값이 남는다). 블록은 A-13-10 블록과 같은 모양이고 검수 칸이 없다. 블록의 `review`에는 그 블록 것만 있다(만들지 않은 블록의 검수 결과는 바꾸지 않는다).
 - `manualLinesReplaced`: U3를 다시 만들면 바뀌는, **관리자가 직접 고친 대사**(A-13-13, `validation.manual`) 수. 화면은 0보다 크면 반영 전에 확인을 받는다.
 - 결과를 가져오지 못하면 `preview`는 `null`이다(상태는 그대로 준다).
@@ -1812,7 +1820,7 @@ A-11과 같은 방식(보낸 필드만, `null` = 지움). `headline` · `article
 | 거절 | 조건 |
 | --- | --- |
 | 404 `SCRIPT_REGENERATION_NOT_FOUND` · `SCRIPT_NOT_FOUND` | 작업이 없음 · 대본이 없음 |
-| 409 `INVALID_STATE` | 아직 끝나지 않음 · 실패함 · 이미 반영함 · 더 최근 재생성이 있음 · **사건이 공개 중**(반영하면 승인이 풀려 대본이 바로 내려간다 — 점검 상태(BE-126 2차) 전까지는 공개 취소(A-13-14) → 반영 → 승인 → 다시 공개) · **요청한 뒤 대본(블록 판) · 사건 내용(섹션 · 판단 요소 포함) · 기사 · 배역 · 분류 · 민감 플래그 · AI 판결이 바뀜**(옛 입력으로 만든 블록이라 다시 요청한다) · 결과가 사라짐 · 다시 만든 블록이 없음 |
+| 409 `INVALID_STATE` | 아직 끝나지 않음 · 실패함 · 이미 반영함 · 더 최근 재생성이 있음 · **요청한 뒤 대본(블록 판) · 사건 내용(섹션 · 판단 요소 포함) · 기사 · 배역 · 분류 · 민감 플래그 · AI 판결이 바뀜**(옛 입력으로 만든 블록이라 다시 요청한다) · 결과가 사라짐 · 다시 만든 블록이 없음 |
 | 422 `IMPORT_RESULT_INVALID` | 결과의 블록을 읽을 수 없음 |
 | 502 `IMPORT_UNAVAILABLE` | 결과를 가져오지 못함 |
 
@@ -1833,7 +1841,7 @@ A-11과 같은 방식(보낸 필드만, `null` = 지움). `headline` · `article
 
 ### A-13-19. 대본 블록 반려 — `POST /admin/cases/{caseId}/script/blocks/{unit}/reject`
 
-> **신설 (v0.86, BE-126 2차).** 블록 하나를 반려한다. 본문은 A-13-12와 같다(`{ "reason": "…" }`, 1 ~ 500자). 반려한 블록이 있으면 대본은 공개되지 않는다. 감사 로그 `CASE_SCRIPT_REJECT`(`{"unit": …}`). 거절은 A-13-18의 400 · 404와 같고, **공개 중인 사건이면 409 `INVALID_STATE`**다(점검 상태 전까지 — 체험 중인 사용자의 대본이 사라진다). 잘못 승인한 공개 대본을 내리려면 통거절(A-13-12)을 쓴다.
+> **신설 (v0.86, BE-126 2차).** 블록 하나를 반려한다. 본문은 A-13-12와 같다(`{ "reason": "…" }`, 1 ~ 500자). 반려한 블록이 있으면 대본은 공개되지 않는다. 감사 로그 `CASE_SCRIPT_REJECT`(`{"unit": …}`). 거절은 A-13-18의 400 · 404와 같다. (v0.87, BE-126 2차-2) v0.86의 "공개 중인 사건이면 409"는 뺐다 — 한 번 나간 대본이면 반려하는 동안 점검 중(API 18 503)이다.
 
 ### A-13-20. 낡은 블록 확인 — `POST /admin/cases/{caseId}/script/blocks/{unit}/acknowledge-stale`
 
@@ -1860,6 +1868,7 @@ A-11과 같은 방식(보낸 필드만, `null` = 지움). `headline` · `article
 - 그 블록의 판이 오르고 **그 블록만** 다시 검수 대기가 된다. 그 자리의 검수 조건 오류(`severity: error`)는 지운다(경고는 남긴다). `publishable`을 다시 계산한다.
 - 이 블록을 보고 만든 뒤 블록(U0 → U2 · U4, U2 → U4)은 **낡음으로 표시된다**(승인은 그대로 — 다시 만들지 확인할지는 관리자가 고른다).
 - U0를 고치면 혐의 인정 여부(`meta.admits`, 세 번째 답)를 서버가 다시 계산한다(10/30 결정).
+- (v0.87, BE-126 2차-2) 공개 중인 사건도 고칠 수 있다(v0.86의 409를 뺐다) — 한 번 나간 대본이면 그 블록을 다시 승인할 때까지 점검 중이다.
 - 의미 검사(금지어 · 원문에 없는 숫자)는 하지 않는다(A-13-13과 같다). 감사 로그 `CASE_SCRIPT_UPDATE`(`{"unit", "path"}`) — 고친 문장은 남기지 않는다.
 
 응답은 A-13-10과 같은 형식.
@@ -1867,7 +1876,6 @@ A-11과 같은 방식(보낸 필드만, `null` = 지움). `headline` · `article
 | 거절 | 조건 |
 | --- | --- |
 | 400 `VALIDATION_ERROR` | 모르는 단위 · U3(A-13-13으로) · 길이 규칙 위반 |
-| 409 `INVALID_STATE` | 공개 중인 사건(점검 상태 전까지 — 공개 취소 A-13-14 뒤 고친다) |
 | 404 `CASE_NOT_FOUND` · `SCRIPT_NOT_FOUND` · `SCRIPT_BLOCK_NOT_FOUND` | 사건 · 대본 · 그 블록이 없음 |
 | 404 `SCRIPT_LINE_NOT_FOUND` | 그 자리에 문자열이 없음 |
 
@@ -2967,7 +2975,7 @@ Origin이 이 서버 자신과 같은 출처인지)을 거친다 — 벗어나�
 
 ```json
 {
-  "hotCases": [ { "case": { "caseId": 1, "title": "…", "crimeCategoryLabel": "살인", "shortIntro": "…", "headline": "…", "deck": "…", "article": ["…", "…"], "thumbnailUrl": "…", "participantCount": 120, "estimatedMinutes": 15, "scriptReady": true }, "talkCount": 7, "postCount": 12, "posts": [ { "postId": 108, "title": "…", "likeCount": 24, "commentCount": 3, "author": { "…": "…" } } ] } ],
+  "hotCases": [ { "case": { "caseId": 1, "title": "…", "crimeCategoryLabel": "살인", "shortIntro": "…", "headline": "…", "deck": "…", "article": ["…", "…"], "thumbnailUrl": "…", "participantCount": 120, "estimatedMinutes": 15, "scriptReady": true, "scriptStatus": "READY" }, "talkCount": 7, "postCount": 12, "posts": [ { "postId": 108, "title": "…", "likeCount": 24, "commentCount": 3, "author": { "…": "…" } } ] } ],
   "recommendedCases": [ { "case": { "…": "…" }, "postCount": 2, "posts": [ "…" ] } ],
   "ranking": [ { "rank": 1, "nickname": "…", "level": 71, "job": { "…": "…" }, "cardLine": { "…": "…" }, "completedCount": 21, "profileCard": { "…": "…" }, "shownType": { "…": "…" } } ],
   "popular": [ { "postId": 108, "title": "…" } ],
@@ -2977,7 +2985,7 @@ Origin이 이 서버 자신과 같은 출처인지)을 거친다 — 벗어나�
 
 - **이야기 많은 사건 `hotCases`**: 최근 하루의 이야기 수(`talkCount` = 그 사건 글 + 그 사건 글에 달린 댓글)가 1 이상인 사건을 많은 순으로 셋(같으면 사건 ID 순). 사건 글은 좋아요 순으로 셋.
 - **추천 사건 `recommendedCases`**: 이야기 많은 사건에 없는 공개 사건을 이야기 수 → 판결한 사람 수 순으로 셋. 사건 글은 둘. `talkCount`는 없다.
-- `case`: 신문 지면(API 17)의 `headline` · `deck` · `article` 앞 두 단락과 사건 목록(API 1)의 값. 지면이 없으면 `headline` · `deck`은 `null`, `article`은 빈 배열. `postCount`는 그 사건 글 수(전체 기간).
+- `case`: 신문 지면(API 17)의 `headline` · `deck` · `article` 앞 두 단락과 사건 목록(API 1)의 값. 지면이 없으면 `headline` · `deck`은 `null`, `article`은 빈 배열. `postCount`는 그 사건 글 수(전체 기간). (v0.87, BE-126 2차-2) `scriptReady` · `scriptStatus`는 API 1과 같은 값이다.
 - **레벨 랭킹 `ranking`**: 글이나 댓글을 쓴 회원을 레벨 → 체험한 사건 수 → 닉네임 순으로 열 명. 명함은 그 회원이 가장 최근에 쓴 글 · 댓글의 익명 ID 기준. 레벨은 사건 체험 · 커뮤니티 활동으로 오르며 성향과 무관하다. 명함에서 `intro`만 뺀 값이다.
 
 ### C-7. 붙일 수 있는 내 판결 — `GET /community/shareable-verdict`

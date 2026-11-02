@@ -559,7 +559,14 @@ class CommunityApiTest extends ApiIntegrationTest {
 			// 저장된 사진이 없으면 사건 번호 규칙 주소(BE-141)
 			assertThat((List<String>) JsonPath.read(body, "$.hotCases[?(@.case.caseId == " + caseId + ")].case.thumbnailUrl"))
 				.containsExactly("/images/cases/case-" + caseId + "-reenact.webp");
+			// 대본 상태는 API 1과 같은 값 — 대본이 없으면 준비 중(BE-126 2차-2)
+			assertThat((List<String>) JsonPath.read(body, "$.hotCases[?(@.case.caseId == " + caseId + ")].case.scriptStatus"))
+				.containsExactly("PREPARING");
 		}
+		// 위 사건이 셋 밖이어도 늘 검사한다 — 실린 사건마다 scriptStatus가 있고 세 값 중 하나다 (PR #384 CodeRabbit 리뷰)
+		List<String> statuses = JsonPath.read(body, "$['hotCases','recommendedCases'][*].case.scriptStatus");
+		List<Integer> shown = JsonPath.read(body, "$['hotCases','recommendedCases'][*].case.caseId");
+		assertThat(statuses).hasSameSizeAs(shown).allMatch(List.of("READY", "PREPARING", "MAINTENANCE")::contains);
 		assertThat((List<Object>) JsonPath.read(body, "$.recommendedCases[*].talkCount")).isEmpty();
 		List<String> ranked = JsonPath.read(body, "$.ranking[*].nickname");
 		assertThat(ranked).hasSizeLessThanOrEqualTo(10);
