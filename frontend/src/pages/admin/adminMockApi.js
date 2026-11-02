@@ -150,6 +150,7 @@ function createState() {
     ],
     imports: [],
     // 사건 사진(A-13-4 · 5) · 신문 지면(A-13-6 ~ 8) · 대본(A-13-10 ~ 13). 사건 번호를 키로 둔다
+    // 12번은 지면이 없어 공개 조건 NO_PAPER가 보인다(BE-147) — 지면을 만들면 사라진다
     photos: { 13: [incidentPhoto(21, 'ORIGIN', '다툼이 격해진 순간'), incidentPhoto(22, 'CONCLUSION', '집을 나서는 뒷모습')] },
     papers: { 13: mockPaper() },
     // 12번은 검수 거리를 보여 주는 대본이다 — 생성하지 못한 줄이 있어 publishable이 false다(승인 버튼이 막힌다).
@@ -199,6 +200,7 @@ function readiness(item) {
   if (!item.factors.length) reasons.push('NO_FACTORS');
   if (!item.factors.some((factor) => factor.revealStage === 'OVERVIEW')) reasons.push('NO_OVERVIEW_FACTOR');
   if (!item.penaltyRules) reasons.push('NO_PENALTY_RULE');
+  if (!state.papers[item.caseId]) reasons.push('NO_PAPER');
   return { ready: reasons.length === 0, reasons };
 }
 

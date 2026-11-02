@@ -23,6 +23,8 @@ const CHECKLIST = [
   '사건 내용과 원본 판결문을 대조해 인명 · 지명 · 사건번호 등 비식별화를 확인했다',
   '공개할 AI 판결과 재판부 판결 후보의 내용을 확인했다',
   '적용 양형기준 버전과 권고 형량 범위를 확인했다',
+  // 사건 등록이 저장한 지면은 대본 자동 검수(BE-122) 대상이 아니고, 공개 뒤에는 고칠 수 없다(BE-147)
+  '신문 지면(제목 · 부제 · 본문)이 사건 사실과 맞고 판결 · 형량을 암시하지 않는지 읽어 확인했다',
 ];
 
 // key가 있으면 맨 위 "바로 가기"가 이 부분의 제목으로 건너뛴다
@@ -221,8 +223,8 @@ export function renderAdminCasePage(container, { caseId, navigate }) {
         // 아니라 A-6의 script 요약을 읽어 경고로만 보여 준다(BE-108 결정)
         const scriptWarning = publishScriptWarning(data.script);
         if (scriptWarning) body.push(element('p', 'admin-warn', scriptWarning));
-        // 지면 · 대표사진도 공개 조건은 아니다. 없으면 사용자 화면이 공용 컷 · 기본 지면으로 돌아간다
-        if (!media.paper) body.push(element('p', 'admin-warn', '신문 지면을 아직 만들지 않았어요. 공개는 막지 않지만 메인 화면이 기본 지면으로 보여요.'));
+        // 신문 지면은 공개 조건이 됐다(BE-147, NO_PAPER) — 위 사유 목록에 나오므로 따로 경고하지 않는다.
+        // 대표사진은 여전히 공개 조건이 아니다(없으면 사용자 화면이 공용 컷으로 돌아간다)
 
         const checks = element('fieldset', 'admin-checklist');
         checks.append(element('legend', '', '공개 전 확인'));
