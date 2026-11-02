@@ -122,15 +122,17 @@ echo "[모듈 스크립트]"
 # .mjs가 JavaScript MIME으로 나가는지 (BE-157). nginx 기본 MIME 표에는 mjs가 없어 default.conf가 더해 준다(COMMON-72).
 # 빠지면 application/octet-stream으로 나가고, nosniff(COMMON-67) 때문에 브라우저가 실행하지 않아 관리자 PDF 읽기(pdf.js 작업 파일)가 깨진다.
 # - .mjs 이름은 index.html이 아니라 지연 로딩 조각 안에만 있어, /assets/*.js를 따라가며 찾는다(해시가 바뀌어도 된다. 최대 200개, 2분)
-#   요청마다 최대 15초(request())라 횟수 제한만으로는 느린 서버에서 최악 약 50분 걸릴 수 있어 시간 제한도 둔다(CodeRabbit 리뷰)
+#   요청마다 최대 15초(request())라 횟수 제한만으로는 느린 서버에서 최악 약 50분 걸릴 수 있어 시간 제한도 둔다(CodeRabbit 리뷰).
+#   제한은 SMOKE_MODULE_SEARCH_SECONDS(기본 120초)로 바꿀 수 있고, 제한에 걸려 멈추면 "못 찾음"과 구분해 알린다(느린 서버인지 매핑 누락인지 헷갈리지 않게)
 # - 기본은 경고만 남긴다: deploy.sh는 되돌릴 때 이 새 스크립트로 COMMON-72 이전 이미지(mjs 매핑 없음)도 검사하므로,
 #   실패로 치면 되돌림까지 실패한다. CI(deploy-images.yml)는 SMOKE_REQUIRE_MODULE_MIME=1로 새 이미지에 대해 실패로 친다
 # - bash 3.2(macOS)에서도 돌게 mapfile · 연관 배열은 쓰지 않는다
 find_module_script() {
   local queue=() seen=" " path next
-  local deadline=$((SECONDS + 120))
+  local deadline=$((SECONDS + ${SMOKE_MODULE_SEARCH_SECONDS:-120}))
   MODULE_PATH=""
   MODULE_SCANNED=0
+  MODULE_TIMED_OUT=0
   request "/"
   while IFS= read -r next; do queue+=("$next"); done < <(grep -o '/assets/[^"]*\.js' "$BODY_FILE" | sort -u)
   while (( ${#queue[@]} > 0 )) && [[ -z "$MODULE_PATH" ]] && (( MODULE_SCANNED < 200 )) && (( SECONDS < deadline )); do
@@ -149,6 +151,8 @@ find_module_script() {
       if [[ "$next" == *[Pp][Dd][Ff]* ]]; then queue=("$next" ${queue[@]+"${queue[@]}"}); else queue+=("$next"); fi
     done < <(grep -o -E '(assets/|\./)[A-Za-z0-9._-]+\.js' "$BODY_FILE" | sort -u)
   done
+  # 더 볼 조각이 남았는데 시간이 다 됐으면(찾지 못한 이유가 매핑이 아니라 느린 응답일 수 있다) 따로 표시한다
+  if [[ -z "$MODULE_PATH" ]] && (( ${#queue[@]} > 0 )) && (( SECONDS >= deadline )); then MODULE_TIMED_OUT=1; fi
 }
 module_warn_or_fail() {
   if [[ "${SMOKE_REQUIRE_MODULE_MIME:-}" == "1" ]]; then
@@ -159,7 +163,11 @@ module_warn_or_fail() {
 }
 find_module_script
 if [[ -z "$MODULE_PATH" ]]; then
-  module_warn_or_fail "/assets/에서 .mjs를 찾지 못함(조각 ${MODULE_SCANNED}개까지 확인)"
+  if [[ "$MODULE_TIMED_OUT" == "1" ]]; then
+    module_warn_or_fail "/assets/에서 .mjs를 찾다가 ${SMOKE_MODULE_SEARCH_SECONDS:-120}초 제한에 걸림(조각 ${MODULE_SCANNED}개까지 확인 — 응답이 느린지 먼저 본다)"
+  else
+    module_warn_or_fail "/assets/에서 .mjs를 찾지 못함(조각 ${MODULE_SCANNED}개까지 확인)"
+  fi
 else
   request "$MODULE_PATH"
   if [[ "$STATUS" == "200" && ( "$CONTENT_TYPE" == application/javascript* || "$CONTENT_TYPE" == text/javascript* ) ]]; then
