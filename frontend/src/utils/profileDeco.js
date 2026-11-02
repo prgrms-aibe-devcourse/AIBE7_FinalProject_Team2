@@ -111,6 +111,13 @@ export const unlockerIn = (achievements, type, id) => {
   return found ? achievementView(found) : null;
 };
 
+/**
+ * 서버가 아는 꾸미기인가(FE-150). 이미 열려 있거나(open) 어떤 도전과제 보상에 든 id만 서버가 안다.
+ * 프론트 목록(FRAMES · BACKGROUNDS)에 새 id를 먼저 더해도, 서버 카탈로그(BE-158)에 들어가기 전에는 실제 모드에서 목록 · 분모에서 빠진다.
+ * 목 서버는 새 id까지 도전과제 보상에 넣어 두어 전부 보인다. type: 'frames' | 'backgrounds' (REWARD_TYPES 중 하나)
+ */
+export const isServerDeco = (open, achievements, type, id) => open[type].has(id) || unlockerIn(achievements, type, id) !== null;
+
 // "/images/characters/scene/a.webp" → "characters/scene"
 export const kindOfPortrait = (src) => src.slice('/images/'.length, src.lastIndexOf('/'));
 

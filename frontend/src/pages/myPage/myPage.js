@@ -7,7 +7,7 @@ import { KIND_TITLES, lenientPercent, axisChange, steadyBand, axisTrend, acquire
 import { recordCollection, recordsSettled } from '../../utils/collectionRecord.js';
 import { loadCaseScript } from '../../utils/caseScript.js';
 import { renderTrend, trendsOf } from '../../components/trendGraph.js';
-import { BACKGROUNDS, DEFAULT_DECO, DEFAULT_PORTRAITS, FRAMES, SASH_COLORS, SASH_ICONS, SASH_STYLES, achievementView, normalizeDeco, sashColorField, sashColorKey, sashColorOf, kindOfPortrait, portraitLabel, shownDeco, unlockedSets, unlockerIn } from '../../utils/profileDeco.js';
+import { BACKGROUNDS, DEFAULT_DECO, DEFAULT_PORTRAITS, FRAMES, SASH_COLORS, SASH_ICONS, SASH_STYLES, achievementView, normalizeDeco, sashColorField, sashColorKey, sashColorOf, kindOfPortrait, portraitLabel, shownDeco, unlockedSets, unlockerIn, isServerDeco } from '../../utils/profileDeco.js';
 import { PORTRAIT_POOL } from '../../content/portraitPool.js';
 import { BOOKMARK_CHARACTERS, BOOKMARK_FACES, BOOKMARK_LAWS, BOOKMARK_NAMES, BOOKMARK_STYLES, FACE_NAMES, STYLE_NAMES, applyBookmark, getBookmarkCharacter, getBookmarkFaceName, getBookmarkStyle, bookmarkFace, BOOKMARK_COLORS, getBookmarkColor, selectedBookmarkFace } from '../../utils/bookmarkCharacter.js';
 import { fitPortraitIn } from '../../utils/portraitFit.js';
@@ -1055,7 +1055,8 @@ function swatchPicker(type, open, shown, onPick, base = PLAIN_DECO, legendClass 
   const field = element('fieldset', `my-deco${legendClass ? ` ${legendClass}` : ''}`);
   field.append(element('legend', '', title));
   const row = element('div', 'my-deco-swatches');
-  (type === 'background' ? target.backgrounds : list).forEach(({ id, name }) => {
+  // 서버가 모르는 새 꾸미기(BE-158 전 실제 모드)는 칸에서 뺀다. 늘 열려 있는 칸(성향카드 배경 "기본")은 그대로 둔다
+  (type === 'background' ? target.backgrounds : list).filter(({ id }) => target.alwaysOpen[set]?.includes(id) || isServerDeco(open, cache?.achievements, set, id)).forEach(({ id, name }) => {
     row.append(unlockOption(open, set, id, {
       group: `${target.prefix}-${group}`, id, name, checked: id === shown, art: miniCard({ ...base, [type]: id }), alwaysOpen: target.alwaysOpen[set]?.includes(id),
       onChange: () => { target.save({ [type]: id }); onPick(); },
@@ -1411,8 +1412,8 @@ function renderProfilePage(data, go) {
   const sashTotal = SASH_STYLES.length + Object.values(SASH_COLORS).reduce((sum, list) => sum + list.length, 0) + SASH_ICONS.length;
   [
     ['대표 이미지', PORTRAIT_POOL.filter((src) => open.kinds.has(kindOfPortrait(src))).length, PORTRAIT_POOL.length],
-    ['카드 테두리', open.frames.size, FRAMES.length],
-    ['카드 배경', open.backgrounds.size, BACKGROUNDS.length],
+    ['카드 테두리', open.frames.size, FRAMES.filter(({ id }) => isServerDeco(open, progress, 'frames', id)).length], // 분모도 서버가 아는 것만(FE-150)
+    ['카드 배경', open.backgrounds.size, BACKGROUNDS.filter(({ id }) => isServerDeco(open, progress, 'backgrounds', id)).length],
     ['카드 책갈피', open.sashStyles.size + open.sashColors.size + open.sashIcons.size, sashTotal],
     ['도전과제', progress.filter((item) => item.cleared).length, progress.length],
   ].forEach(([label, have, total]) => {
