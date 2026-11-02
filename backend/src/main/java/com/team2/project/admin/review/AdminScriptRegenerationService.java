@@ -376,7 +376,8 @@ public class AdminScriptRegenerationService {
 			List<Map<String, Object>> scriptReview = maps(result.get("review")).stream()
 				.filter(issue -> ScriptUnit.find(String.valueOf(issue.get("unit"))).isEmpty()).toList();
 			script.applyRegeneration(blocks, map(meta.get("cast")), meta.path("issue").isString()
-				? meta.get("issue").asString() : null, scriptReview, result.path("stopped").asBoolean(false),
+				? meta.get("issue").asString() : null, scriptReview, unchangedWarnings(result.get("unchangedWarnings")),
+				result.path("stopped").asBoolean(false),
 				result.path("model").isString() ? result.get("model").asString() : null);
 			managed.markApplied(admin.adminId(), Instant.now());
 			Map<String, Object> detail = new LinkedHashMap<>();
@@ -525,6 +526,19 @@ public class AdminScriptRegenerationService {
 	@SuppressWarnings("unchecked")
 	private static Map<String, Object> map(JsonNode node) {
 		return node != null && node.isObject() ? (Map<String, Object>) plain(node) : null;
+	}
+
+	/**
+	 * 다시 만들지 않은 블록의 새 경고 (BE-163, 파이프라인 {@code unchangedWarnings}). 모르는 단위는 버린다. 이 필드가 없는 옛
+	 * 결과(파이프라인 배포 전)는 빈 값이라 지금처럼 다른 블록을 건드리지 않는다
+	 */
+	private static Map<ScriptUnit, List<Map<String, Object>>> unchangedWarnings(JsonNode node) {
+		Map<ScriptUnit, List<Map<String, Object>>> warnings = new LinkedHashMap<>();
+		if (node != null && node.isObject()) {
+			node.properties().forEach(entry -> ScriptUnit.find(entry.getKey())
+				.ifPresent(unit -> warnings.put(unit, maps(entry.getValue()))));
+		}
+		return warnings;
 	}
 
 	private static List<Map<String, Object>> maps(JsonNode node) {
