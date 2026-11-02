@@ -79,6 +79,14 @@ DISABLED_STAGES = ("load", "rag", "contamination")
 # (rag · contamination은 stages로 켤 수 있다)
 NEVER_ENABLED_STAGES = ("load",)
 
+# 작업 종류. 등록(판결문 → 사건 · 판결 · 대본)이 기본이고, 적재된 사건의 대본 블록 재생성(BE-129 2차)이 하나 더 있다.
+# 재생성은 판결문 원문이 없다 — 백엔드가 DB 값(사건 · AI 판결 방향 · 분류 · 배역 · 지금 블록 · 기사)으로 입력을 만들어 넘긴다
+IMPORT, REGENERATE = "import", "regenerate"
+# 대본 블록 단위 (script_assembler.BLOCK_UNITS와 같아야 한다 — 서비스는 파이프라인 모듈을 불러오지 않는다)
+BLOCK_UNITS = ("U0", "U1", "U2", "U3", "U4")
+# 재생성 요청에서 서비스가 정하는 대본 설정 값. 요청의 stages.script로 덮을 수 없다(입력은 regenerate 객체로만 받는다)
+REGENERATE_FIXED_KEYS = ("enabled", "cast", "classification", "regenerate", "regenerateCascade", "full")
+
 JOB_ID_PATTERN = re.compile(r"^[0-9a-f]{32}$")
 
 # 로그 꼬리 요청의 상한 (log 참고)
@@ -317,7 +325,13 @@ class JobStore:
 
         **요청을 전부 검증한 뒤에야 파일을 쓴다** (PR #219 리뷰 반영). 원문을 먼저 쓰고 나중에 검증하면,
         400으로 거절한 요청의 판결문 원문이 디스크에 남는다
+
+        `regenerate`가 있으면 대본 블록 재생성 작업이다 (`_create_regeneration`).
         """
+        if not isinstance(request, dict):
+            raise JobError("요청 본문은 객체여야 합니다")
+        if request.get("regenerate") is not None:
+            return self._create_regeneration(request)
         sources = request.get("sources")
         if not isinstance(sources, list) or not sources:
             raise JobError("sources가 비어 있습니다 (판결문 1건 이상)")
@@ -363,6 +377,85 @@ class JobStore:
             "until": request.get("until") or "axis",
             # 원문은 메타에 남기지 않는다(판결문 원문은 작업 폴더의 raw/에만 둔다)
             "sourceCount": len(config_sources),
+        })
+        return job_id
+
+    def _create_regeneration(self, request):
+        """대본 블록 재생성 작업 (BE-129 2차). 판결문 원문 없이, 넘겨받은 입력을 파일로 쓰고 대본 단계만 켠 설정을 만든다.
+
+        본문: {"regenerate": {"units": ["U4"], "case": {...}, "judgment": {"factors": [...]}, "classification": {...},
+               "cast": {"prosecutor", "defense"}, "blocks": {"U0": {"content", "revision"}, ...}, "paper": {...} | null},
+               "stages": {"script": {"model": "openai:...", ...}}}
+
+        여기서는 모양만 본다. 내용(분류 값 · 블록 형식 · 배역)은 파이프라인 설정 검사와 재생성 모듈이 본다 — 같은 규칙을 두 곳에
+        두지 않는다. 다만 **민감 플래그는 여기서도 막는다**: 분류에 `sensitiveFlags` 목록이 없으면 민감 사건이 가드 없이 다시
+        만들어질 수 있어서(PR #370 리뷰), 작업을 만들기 전에 400으로 돌려준다.
+        """
+        regenerate = request["regenerate"]
+        if not isinstance(regenerate, dict):
+            raise JobError("regenerate는 객체여야 합니다")
+        if request.get("sources") is not None:
+            raise JobError("재생성 요청에는 sources(판결문)를 넣지 않습니다")
+        units = regenerate.get("units")
+        if not isinstance(units, list) or not units or any(unit not in BLOCK_UNITS for unit in units):
+            raise JobError(f"regenerate.units는 {' · '.join(BLOCK_UNITS)} 중 하나 이상의 목록입니다")
+        for key in ("case", "judgment", "classification", "cast"):
+            if not isinstance(regenerate.get(key), dict):
+                raise JobError(f"regenerate.{key}는 객체여야 합니다")
+        factors = regenerate["judgment"].get("factors")
+        # 요소가 객체인지까지 본다 — 숫자 · 문자열이 섞이면 202를 돌려준 뒤 작업이 AttributeError로 실패한다(PR #378 리뷰).
+        # factorId · direction이 없는 요소는 파이프라인이 증거로 쓰지 않고 건너뛰므로 필수로 두지 않는다
+        if not isinstance(factors, list) or not all(isinstance(factor, dict) for factor in factors):
+            raise JobError("regenerate.judgment.factors는 판단 요소(factorId · direction) 객체의 목록이어야 합니다")
+        if not isinstance(regenerate["classification"].get("sensitiveFlags"), list):
+            raise JobError("regenerate.classification.sensitiveFlags는 목록이어야 합니다 — 민감 플래그를 합쳐 넘깁니다(없으면 [])")
+        blocks = regenerate.get("blocks") or {}
+        if not isinstance(blocks, dict):
+            raise JobError("regenerate.blocks는 {단위: {content, revision}} 객체여야 합니다")
+        paper = regenerate.get("paper")
+        if paper is not None and not isinstance(paper, dict):
+            raise JobError("regenerate.paper는 객체 또는 null이어야 합니다")
+        if paper is None and ("U1" in units or "U1" in blocks):
+            # 검수가 U1을 기사와 비교한다 — 없으면 건드리지 않은 U1에 가짜 오류가 나온다(PR #378 리뷰)
+            raise JobError("regenerate.paper가 없습니다 — 1막 해설(U1)이 있거나 다시 만들면 지금 기사를 함께 넘깁니다")
+        cascade = regenerate.get("cascade", True)
+        if not isinstance(cascade, bool):
+            raise JobError("regenerate.cascade는 true 또는 false입니다")
+        overrides = request.get("stages") or {}
+        if not isinstance(overrides, dict) or set(overrides) - {"script"} or not isinstance(overrides.get("script"), dict):
+            raise JobError("재생성 요청의 stages에는 script 객체만 넣습니다")
+        script = {key: value for key, value in overrides["script"].items() if key not in REGENERATE_FIXED_KEYS}
+        if not isinstance(script.get("model"), str) or not script["model"].strip():
+            raise JobError("stages.script.model이 없습니다 (대본 생성 모델)")
+
+        job_id = uuid.uuid4().hex
+        path = self.jobs_dir / job_id
+        input_dir = path / "input"
+        files = {key: input_dir / f"{key}.json" for key in ("case", "judgment", "blocks")}
+        if paper is not None:
+            files["paper"] = input_dir / "paper.json"
+        script.update(enabled=True, cast=regenerate["cast"], classification=regenerate["classification"],
+                      regenerate=units, regenerateCascade=cascade)
+        config = {
+            "name": self.pipeline_name(job_id),
+            "sources": [],
+            # 등록 단계는 모두 끈다. 사건 입력(비식별화된 사건 내용)은 작업 폴더의 input/에만 둔다 — 지울 때 함께 지워진다
+            "inputs": {key: str(file) for key, file in files.items()},
+            "stages": {**{stage: {"enabled": False} for stage in STAGES if stage != "script"}, "script": script},
+        }
+        input_dir.mkdir(parents=True, exist_ok=True)
+        for key, file in files.items():
+            _write_json(file, blocks if key == "blocks" else paper if key == "paper" else regenerate[key])
+        _write_json(path / "config.json", config)
+        _write_json(path / "job.json", {
+            "jobId": job_id,
+            "kind": REGENERATE,
+            "status": QUEUED,
+            "createdAt": _now(),
+            "finishedAt": None,
+            "pid": None,
+            "until": "script",
+            "units": units,
         })
         return job_id
 
@@ -558,9 +651,11 @@ class JobStore:
         (case-extractor/schema.py build_court_judgment) 적재에 필요한 judgmentFactors · 요약 ·
         판결 이유가 없다. 처음에는 그 파일을 내보냈는데 적재(BE-93 2차)를 붙이면서 드러났다.
         """
-        self.job_dir(job_id)  # 없는 작업이면 여기서 JobNotFound
+        path = self.job_dir(job_id)  # 없는 작업이면 여기서 JobNotFound
         state = _read_json(self.state_path(job_id)) or {"stages": {}}
         outputs = {stage: (state.get("stages", {}).get(stage) or {}).get("outputs") or {} for stage in STAGES}
+        if _read_meta(path).get("kind") == REGENERATE:
+            return self._regeneration_result(job_id, outputs.get("script") or {})
         extract, court = outputs.get("extract") or {}, outputs.get("court") or {}
         selection = outputs.get("select") or {}
         result = {
@@ -579,6 +674,14 @@ class JobStore:
         if result["case"] is None and result["judgment"] is None:
             raise JobNotFound(f"아직 결과가 없습니다: {job_id}")
         return result
+
+    @staticmethod
+    def _regeneration_result(job_id, script):
+        """재생성 결과 (BE-129 2차) — `regenerate.json`을 **내용으로** 돌려준다(_script_result와 같은 이유로 경로는 뺀다).
+        다시 만든 블록만 들어 있다. 블록을 바꿀지는 백엔드와 관리자가 정한다."""
+        if not script.get("regenerateFile"):
+            raise JobNotFound(f"아직 결과가 없습니다: {job_id}")
+        return {"jobId": job_id, "kind": REGENERATE, "regenerated": _read_json(Path(script["regenerateFile"]))}
 
     def log(self, job_id, tail=200):
         """파이프라인 출력의 마지막 tail줄.

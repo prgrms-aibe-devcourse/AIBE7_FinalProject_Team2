@@ -52,6 +52,58 @@ SOURCES = [
 ]
 
 
+class ServiceRegenerationTest(unittest.TestCase):
+    """서비스(service/jobs.py)가 만든 블록 재생성 설정이 파이프라인 설정 검사를 통과하고, 대본 단계 결과를 서비스가 그대로
+    돌려주며, 작업을 지우면 입력 · 결과가 남지 않는지 (BE-129 2차). 서비스는 파이프라인 모듈을 불러오지 않으므로 두 쪽의
+    약속(설정 키 · 결과 파일 경로)은 이 테스트가 묶는다."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        self.tool_dir = root / "tool"
+        patch = mock.patch.object(pipeline, "PIPELINE_DIR", self.tool_dir / "out" / "pipeline")
+        patch.start()
+        self.addCleanup(patch.stop)
+        sys.path.insert(0, str(TOOL_DIR / "service"))
+        self.addCleanup(sys.path.remove, str(TOOL_DIR / "service"))
+        import jobs
+        self.jobs = jobs
+        self.store = jobs.JobStore(jobs_dir=root / "jobs", tool_dir=self.tool_dir,
+                                   popen=lambda *a, **k: SimpleNamespace(pid=0, poll=lambda: 0))
+
+    def test_service_config_runs_through_pipeline(self):
+        blocks = PipelineTest.REGEN_BLOCKS
+        job_id = self.store.create({"regenerate": {
+            "units": ["U4"], "case": listing_case(), "judgment": {"factors": [{"factorId": 1, "direction": "UP"}]},
+            "classification": PipelineTest.REGEN_CLS, "cast": PipelineTest.REGEN_CAST, "blocks": blocks, "paper": None},
+            "stages": {"script": {"model": "openai:a"}}})
+        self.store.start(job_id)
+        config = pipeline.load_config(self.store.job_dir(job_id) / "config.json")  # 설정 검사를 통과한다
+        requests = []
+
+        def caller(spec, system, user, **kw):
+            requests.append(user)
+            return llm.LLMResult(json.dumps(PipelineTest.REGEN_CLOSING, ensure_ascii=False), *llm.parse_model_spec(spec))
+
+        functions = {**pipeline.STAGE_FUNCTIONS, "script": lambda c, s, log: pipeline.stage_script(c, s, log, caller=caller)}
+        pipeline.run_pipeline(config, until="script", functions=functions, log=lambda *_: None)
+        self.assertEqual(len(requests), 1)
+
+        status = self.store.status(job_id)
+        self.assertEqual(status["status"], self.jobs.SUCCEEDED)
+        result = self.store.result(job_id)
+        self.assertEqual(result["kind"], "regenerate")
+        self.assertEqual(result["regenerated"]["regenerated"], ["U4"])
+        self.assertEqual(result["regenerated"]["blocks"]["U4"]["revision"], 1)  # 지금 U4가 없었으니 첫 판
+        self.assertEqual(result["regenerated"]["blocks"]["U4"]["basis"]["U0"], 2)
+        self.assertNotIn("regenerateFile", json.dumps(result))  # 컨테이너 안 경로는 내보내지 않는다
+
+        self.store.delete(job_id)
+        self.assertFalse(self.store.state_path(job_id).parent.exists())
+        self.assertFalse((self.tool_dir / "out" / "pipeline").exists() and any((self.tool_dir / "out" / "pipeline").iterdir()))
+
+
 class CaseSeedSqlTest(unittest.TestCase):
     def test_resolve_sources_overrides_and_final(self):
         sources = resolve_sources(SOURCES, [{}, {"caseNumber": "2099노2"}])
@@ -1336,6 +1388,94 @@ class PipelineTest(unittest.TestCase):
         with self.assertRaises(pipeline.PipelineError) as ctx:
             self.run_with(config, {"openai:a": [self.output]}, start="script", script_answers=[])
         self.assertIn("--from generate", str(ctx.exception))
+
+    REGEN_CAST = {"prosecutor": "naero", "defense": "nambul"}
+    REGEN_CLS = {"mood": "tragic", "issue": "admitted", "victim": "punish", "thirdParty": False, "sensitiveFlags": []}
+    REGEN_BLOCKS = {
+        "U0": {"revision": 2, "content": {"plea": "인정", "issues": ["범행 경위", "범행 뒤 행동", "피해 회복"],
+                                          "questions": [{"q": "다툰 적이 있습니까?", "a": "예"}, {"q": "사과했습니까?", "a": "예"},
+                                                        {"q": "공소사실을 인정합니까?", "a": "예"}], "tone": "무겁게"}},
+        "U2": {"revision": 1, "content": {"indict": ["공소사실을 말씀드리겠습니다.", "적용 법조를 말씀드립니다."],
+                                          "plea": ["피고인은 공소사실을 인정합니다.", "반성하고 있습니다."],
+                                          "issues_narr": ["쟁점은 형량이에요.", "범행 경위를 보세요."],
+                                          "questions": [{"q": "다툰 적이 있습니까?", "a": "예"}, {"q": "사과했습니까?", "a": "예"}],
+                                          "cards": {}}},
+    }
+    REGEN_CLOSING = {"prosecutor": "검사 측 의견입니다. 엄하게 살펴 주십시오.", "defense": "변호인 측 최종변론입니다. 반성을 살펴 주십시오."}
+
+    def regenerate_config(self, units, classification=None, **inputs):
+        """적재된 사건의 블록 재생성 설정 (BE-129 2차) — 서비스가 만드는 설정처럼 대본 단계만 켜고 입력을 파일로 넘긴다."""
+        files = dict(self.raw_config["inputs"])
+        for key, value in inputs.items():
+            files[key] = str(self.dir / f"regen-{key}.json")
+            write_json(files[key], value)
+        return self.config({"name": "regen-case", "inputs": files}, generate={"enabled": False}, select={"enabled": False},
+                           axis={"enabled": False},
+                           script={"enabled": True, "model": "openai:a", "cast": self.REGEN_CAST,
+                                   "classification": classification or self.REGEN_CLS, "regenerate": units})
+
+    def test_script_regenerate_uses_inputs_without_select(self):
+        """BE-129 2차: 등록 작업 폴더가 지워진 뒤에도 넘겨받은 사건 · 판결 방향 · 지금 블록만으로 고른 블록을 다시 만든다."""
+        config = self.regenerate_config(["U4"], judgment={"factors": [{"factorId": 1, "direction": "UP"}]},
+                                        blocks=self.REGEN_BLOCKS)
+        state = self.run_with(config, {}, until="script",
+                              script_answers=[json.dumps(self.REGEN_CLOSING, ensure_ascii=False)])
+        self.assertEqual(list(state["stages"]), ["script"])  # 앞 단계는 돌지 않는다
+        outputs = state["stages"]["script"]["outputs"]
+        self.assertEqual((outputs["units"], outputs["regenerated"], outputs["pending"]), (["U4"], ["U4"], []))
+        self.assertTrue(outputs["publishable"])
+        saved = load_json(outputs["regenerateFile"])
+        self.assertEqual(list(saved["blocks"]), ["U4"])
+        self.assertEqual(saved["blocks"]["U4"]["content"], self.REGEN_CLOSING)
+        self.assertEqual(saved["blocks"]["U4"]["basis"]["U0"], 2)
+        self.assertEqual(saved["classification"], self.REGEN_CLS)
+        self.assertEqual(len(self.script_requests), 1)
+        self.assertIn("범행 경위", self.script_requests[0][2])  # 지금 U0 쟁점을 받는다
+        self.assertTrue(any(line.startswith("외부 전송: 대본 블록 재생성 단계") for line in self.logs))
+        self.assertFalse((Path(outputs["regenerateFile"]).parent / "evidence.json").exists())
+
+    def test_script_regenerate_config_requires_sensitive_flags(self):
+        """분류에 민감 플래그 키가 없으면 설정 단계에서 막는다(PR #370 리뷰 1번). 단위 목록도 검사한다."""
+        without = {k: v for k, v in self.REGEN_CLS.items() if k != "sensitiveFlags"}
+        for units, classification, message in ((["U4"], without, "sensitiveFlags"), (["U9"], None, "모르는 단위"),
+                                               ([], None, "regenerate")):
+            with self.subTest(message):
+                with self.assertRaises(pipeline.PipelineError) as ctx:
+                    self.regenerate_config(units, classification)
+                self.assertIn(message, str(ctx.exception))
+        # classify를 켜면 그 결과(민감 플래그를 늘 담는다)를 쓰므로 분류 설정이 없어도 된다
+        base = {"enabled": True, "model": "openai:a", "cast": self.REGEN_CAST, "regenerate": ["U4"]}
+        with self.assertRaises(pipeline.PipelineError) as ctx:
+            self.config(script={**base, "regenerateCascade": "no"}, classify={"enabled": True})
+        self.assertIn("regenerateCascade", str(ctx.exception))
+        self.config(script=base, classify={"enabled": True})
+        with self.assertRaises(pipeline.PipelineError):
+            self.config(script=base)
+
+    def test_script_regenerate_cascade_false(self):
+        """regenerateCascade: false면 고른 블록만 만든다(세부조정)."""
+        raw = self.regenerate_config(["U0"], judgment={"factors": []}, blocks=self.REGEN_BLOCKS)
+        raw["stages"]["script"]["regenerateCascade"] = False
+        design = self.REGEN_BLOCKS["U0"]["content"]
+        state = self.run_with(raw, {}, until="script", script_answers=[json.dumps(design, ensure_ascii=False)])
+        outputs = state["stages"]["script"]["outputs"]
+        self.assertEqual((outputs["units"], outputs["regenerated"]), (["U0"], ["U0"]))
+        self.assertEqual(len(self.script_requests), 1)
+
+    def test_script_regenerate_requires_judgment_and_valid_inputs(self):
+        config = self.regenerate_config(["U4"], blocks=self.REGEN_BLOCKS)
+        with self.assertRaises(pipeline.PipelineError) as ctx:
+            pipeline.stage_script(config, pipeline.load_state(config), self.logs.append)
+        self.assertIn("판단 요소 방향", str(ctx.exception))
+        config = self.regenerate_config(["U1"], judgment={"factors": []}, blocks=self.REGEN_BLOCKS)
+        with self.assertRaises(pipeline.PipelineError) as ctx:
+            pipeline.stage_script(config, pipeline.load_state(config), self.logs.append)
+        self.assertIn("블록 재생성 입력 오류", str(ctx.exception))
+        self.assertIn("기사(paper)", str(ctx.exception))
+        config = self.regenerate_config(["U4"], judgment=[1, 2], blocks=self.REGEN_BLOCKS)
+        with self.assertRaises(pipeline.PipelineError) as ctx:
+            pipeline.stage_script(config, pipeline.load_state(config), self.logs.append)
+        self.assertIn("factors", str(ctx.exception))
 
     def test_script_stage_requires_select_stage(self):
         config = self.config(generate={"models": ["openai:a"], "runs": 1},
