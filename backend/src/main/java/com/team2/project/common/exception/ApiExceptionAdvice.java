@@ -27,10 +27,21 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 @RestControllerAdvice
 public class ApiExceptionAdvice extends ResponseEntityExceptionHandler {
 
+	/**
+	 * 대본 점검 중(503 {@code SCRIPT_UNDER_MAINTENANCE})의 재시도 간격(초). 점검은 관리자가 블록을 다시 승인하면 풀리는 일시
+	 * 상태라 {@code Retry-After}로 알린다(BE-126 2차-2, PR #384 리뷰 5번). 캐시 금지({@code Cache-Control: no-store})는
+	 * Spring Security 기본 헤더가 이미 붙인다
+	 */
+	static final String SCRIPT_MAINTENANCE_RETRY_AFTER_SECONDS = "60";
+
 	/** 비즈니스 예외 (도메인 예외 포함) → ErrorCode 그대로 */
 	@ExceptionHandler(BusinessException.class)
 	public ResponseEntity<ErrorResponse> handleBusiness(BusinessException e) {
-		return ResponseEntity.status(e.getErrorCode().getStatus()).body(ErrorResponse.from(e));
+		ResponseEntity.BodyBuilder response = ResponseEntity.status(e.getErrorCode().getStatus());
+		if (e.getErrorCode() == ErrorCode.SCRIPT_UNDER_MAINTENANCE) {
+			response.header(HttpHeaders.RETRY_AFTER, SCRIPT_MAINTENANCE_RETRY_AFTER_SECONDS);
+		}
+		return response.body(ErrorResponse.from(e));
 	}
 
 	/**

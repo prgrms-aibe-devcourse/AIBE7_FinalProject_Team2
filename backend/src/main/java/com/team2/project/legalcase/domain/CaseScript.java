@@ -98,6 +98,12 @@ public class CaseScript {
 	 */
 	private boolean publishable;
 
+	/**
+	 * 대본이 처음 사용자에게 나간 시각 (BE-126 2차-2) — 사건이 공개된 상태에서 공개 조건(다섯 단위 모두 승인)을 처음 채운 때.
+	 * 있으면 승인이 풀린 동안은 "준비 중"이 아니라 "점검 중"이다({@link ScriptStatus}). 한 번 채우면 지우지 않는다
+	 */
+	private Instant releasedAt;
+
 	@CreationTimestamp
 	private Instant createdAt;
 
@@ -228,6 +234,25 @@ public class CaseScript {
 	public boolean isApprovable() {
 		return publishable && pending.isEmpty() && isComplete()
 			&& blocks.stream().allMatch(CaseScriptBlock::isPublishable);
+	}
+
+	/** 사용자 쪽 대본 상태 (BE-126 2차-2, API 1 · 16 · 18) */
+	public ScriptStatus status() {
+		return ScriptStatus.of(this);
+	}
+
+	/**
+	 * 지금 사용자에게 나가 있으면 처음 나간 시각을 남긴다 (BE-126 2차-2). 대본이 공개 조건을 채우는 때(통승인 · 블록 승인)와 사건을
+	 * 공개하는 때(A-13) 둘 다 부른다 — 어느 쪽이 나중이든 둘이 함께 채워진 순간이 "나간" 때다. 이미 있으면 그대로 둔다
+	 *
+	 * @return 이번에 처음 남겼으면 true
+	 */
+	public boolean markReleasedIfServing(Instant at) {
+		if (releasedAt != null || !isPublic() || !legalCase.isPublished()) {
+			return false;
+		}
+		this.releasedAt = at;
+		return true;
 	}
 
 	/** 다섯 단위가 모두 있는지. 만들지 못한 단위가 있거나 증거조사만 만든 대본이면 false */

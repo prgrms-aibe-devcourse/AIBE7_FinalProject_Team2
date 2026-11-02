@@ -1,7 +1,7 @@
 // 실제 백엔드 API. src/mocks/*MockApi.js와 함수 이름 · 인자 · 응답 형식이 같다 (docs/api-specification.md)
 // 화면은 api 객체로 주입받아 쓰므로, 목 ↔ 실제 전환은 VITE_API_MODE로 한다 (src/api/index.js).
 import { API_BASE_URL } from './config.js';
-import { get, logout, patch, post, put, reissueAccessToken } from './client.js';
+import { get, logout, patch, post, put, reissueAccessToken, del } from './client.js';
 import { completeLogin } from './authFlow.js';
 
 const experience = (caseId) => `/cases/${encodeURIComponent(caseId)}/experience`;
@@ -62,6 +62,12 @@ export const putProfileDeco = (deco) => put('/profile-deco', deco);
 // P-8 — 프로필 선택 설정 부분 저장(FE-81, BE-104). 보낸 칸만 바꾸고, 응답은 세 값 전체 { shownCard, profileCardType, bio }
 export const patchProfileSettings = (settings) => patch('/profile-settings', settings);
 
+// 수집 상태 P-9 ~ P-11 (BE-83, FE-132) — 회원만(로그인 전 401). 마친 사건에서 얻은 일러스트 · 의상 기록(멱등, backfill: 기존 사용자 채우기),
+// 컬렉션 "봤음"({ items } 또는 { kind } 하나만), 도전과제 "봤음". 봤음 둘은 204(null)
+export const postCollection = ({ caseId, items, backfill = false }) => post('/collection', { caseId, backfill, items });
+export const postCollectionSeen = (seen) => post('/collection/seen', seen);
+export const postAchievementsSeen = (achievementIds) => post('/achievements/seen', { achievementIds });
+
 // 커뮤니티 C-1 ~ C-7 (BE-115, 명세 12장, FE-137). 목(mocks/communityMockApi.js)과 같은 이름 · 인자 · 응답 모양이다.
 // 읽기는 누구나, 글쓰기 · 좋아요 · 댓글은 로그인한 회원만(401 UNAUTHORIZED — 목의 임시 코드 LOGIN_REQUIRED를 이 코드로 맞췄다)
 // 사진 올리기는 서버에 아직 없어(후속) images가 비어 있지 않으면 400 VALIDATION_ERROR(details images)다 — 화면은 실제 모드에서 사진 칸을 숨긴다
@@ -85,7 +91,7 @@ export const getCommunityHome = () => get('/community/home');
 export const getMyShareableVerdict = () => get('/community/shareable-verdict');
 
 // 회원 정보 M-8 · 닉네임 설정 M-7 (BE-139, 명세 10장). 로그인한 회원만.
-// getMe: { nickname(없으면 null), displayName(없으면 '방청객 {회원 ID}'), provider: KAKAO | LOCAL, loginId(카카오는 null), createdAt, lastLoginAt }
+// getMe: { nickname(없으면 null), displayName(없으면 '방청객 {회원 ID}'), provider: KAKAO | LOCAL, loginId(카카오는 null), createdAt, lastLoginAt, termsRequired(약관 동의 기록이 없으면 true, BE-145) }
 // putNickname: 200 { nickname } · 400 VALIDATION_ERROR(details nickname) · 409 DUPLICATE_NICKNAME(대소문자 무관 중복)
 export const getMe = () => get('/members/me');
 export const putNickname = (nickname) => put('/members/me/nickname', { nickname });
@@ -137,6 +143,17 @@ export function login({ method, id, password } = {}) {
 // 중복 아이디는 409 DUPLICATE_ID, 중복 닉네임은 409 DUPLICATE_NICKNAME(BE-139, 대소문자 무관), 형식 오류는 400 VALIDATION_ERROR(details에 칸 이름), Origin 검증 실패 403, 요청 제한 429
 // agreed: 이용약관 · 개인정보처리방침 동의(BE-133). 서버는 true만 받고, 없거나 false면 400(details agreed). 동의 시각 · 약관 버전은 서버가 남긴다
 export const signup = ({ id, password, nickname, agreed }) => withAccessToken(post('/auth/signup', { id, password, nickname, agreed: agreed === true }));
+
+// M-12 카카오 첫 가입 — 약관에 동의하고 가입 (BE-145). 카카오 콜백(M-4)이 처음 온 계정을 /auth/callback?signup=terms로 보냈을 때 부른다.
+// 서버는 가입 대기 쿠키(NLNB_SIGNUP)로 회원을 만들고 리프레시 쿠키만 심은 뒤 { nickname }을 준다 → 아이디 가입과 같이 바로 M-1 재발급으로 첫 액세스 토큰을 받는다.
+// 409 KAKAO_SIGNUP_EXPIRED: 가입 대기가 없거나 10분이 지났거나 이미 썼다(카카오 로그인부터 다시). 400 VALIDATION_ERROR(details agreed): 동의가 true가 아님. 403 FORBIDDEN: Origin. 429
+export const signupKakao = ({ agreed } = {}) => withAccessToken(post('/auth/kakao/signup', { agreed: agreed === true }));
+
+// M-13 카카오 가입 취소 — 동의하지 않고 창을 닫았다. 204(null). 가입 대기가 이미 없어도 204. 회원은 만들어진 적이 없다
+export const cancelKakaoSignup = () => del('/auth/kakao/signup');
+
+// M-14 약관 동의(기존 회원) — M-8 getMe의 termsRequired가 true인 회원(카카오 회원 · BE-133 이전 아이디 회원). 204(null). 이미 동의한 회원이 불러도 204이고 기록은 그대로다
+export const agreeTerms = ({ agreed } = {}) => post('/members/me/terms-agreement', { agreed: agreed === true });
 
 // M-1 · M-2 — 재발급(콜백 화면이 첫 액세스 토큰을 받는다) · 로그아웃
 export const reissueToken = () => reissueAccessToken();

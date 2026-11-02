@@ -151,7 +151,7 @@ const CASE_FILE = /^case-(\d+)(?:[-.]|$)/; // cases/case-1-origin.webp → 사�
  */
 export function imageKinds(paths, { labels = {}, caseNames = {} } = {}) {
   const buckets = new Map();
-  [...new Set(paths)].sort().forEach((path) => {
+  [...new Set(paths)].sort((a, b) => a.localeCompare(b, 'en', { numeric: true })).forEach((path) => {
     const slash = path.lastIndexOf('/');
     const folder = path.slice(0, slash).replace(/^\/images\/?/, '');
     const file = path.slice(slash + 1);
@@ -174,27 +174,78 @@ export function imageKinds(paths, { labels = {}, caseNames = {} } = {}) {
   });
 }
 
-// 컬렉션 — 체험을 마친 사건마다 만난 모습(역할 의상)과 대본에 나온 일러스트를 모은다. 같은 그림은 한 장으로 센다.
-// 대본이 없는 사건은 모을 것이 없으므로 건너뛴다.
-// 사진 주소는 화면에 박힌 대본(저장소 파일) 기준이다 — 가능한 한 DB 기준으로 저장소를 최신화한다. 사건 사진은 DB 저장값(관리자 업로드)이 우선이지만(BE-141)
-// 이 컬렉션은 DB 값을 보지 않으므로, 관리자가 DB에 사진을 올릴 때 같은 파일을 저장소에도 올리면 어긋나지 않는다. 조금 다른 것은 감수한다(필수가 아닌 후속 이슈 BE-143).
-export function collectionOf(experiences, scripts) {
-  return (experiences ?? [])
-    .filter((item) => item.status === 'COMPLETED' && scripts?.[item.caseId])
-    .map((item) => {
-      const script = scripts[item.caseId];
-      const { paper, evidencePhotos } = script;
-      const seen = new Set();
-      const items = [];
-      const add = (src, label) => {
-        if (!src || seen.has(src)) return;
-        seen.add(src);
-        items.push({ src, label });
-      };
-      add(paper?.photo, '신문 1면');
-      (paper?.extraPhotos ?? []).forEach((photo, index) => add(photo.src, `연출 컷 ${index + 1}`));
-      Object.entries(evidencePhotos ?? {}).forEach(([side, src]) => add(src, `${side} 재연`));
-      return { caseId: item.caseId, title: item.title, cast: castOf(script), items };
-    })
-    .filter((group) => group.items.length > 0 || group.cast.length > 0);
+// ── 컬렉션(FE-132) ──
+// 획득 조건은 화면이 판정하고, 서버(P-9 POST /collection)는 항목 · 획득 시각 · 확인 여부만 저장한다. 마이페이지는 서버 목록(P-5 collection)을 그린다.
+// 일러스트 key는 사건별이 아니라 그림별이다. 사건마다 일러스트 3장(재연 · 발단 · 결론 자리)이고 id는 사진 주소 규칙(BE-141)과 같은 이름이다:
+// case-{사건}-{reenact | origin | conclusion} → /images/cases/{id}.webp. 신문 1면(재연) · 기사 속 작은 사진(발단 · 결론) · 증거조사 두 칸(결론 · 발단)이 이 셋을 가리킨다.
+// 관리자가 사진을 DB에만 올려도(A-13) 자리 id는 같고, 컬렉션은 저장소 파일을 보여 준다(BE-143 후속).
+export const ILLUSTRATION_SLOTS = ['reenact', 'origin', 'conclusion'];
+const SLOT_NAMES = { reenact: '재연', origin: '발단', conclusion: '결론' };
+const ILLUSTRATION_ID = /^case-(\d+)-(reenact|origin|conclusion)$/;
+
+export const illustrationIdsOf = (caseId) => ILLUSTRATION_SLOTS.map((slot) => `case-${caseId}-${slot}`);
+
+/** 사건 하나를 마치면 얻는 것: 일러스트 3장 + 만난 모습(역할 의상 {who}:{role}). P-9 items 모양({ kind, itemId }) */
+export function collectionOf(caseId, script) {
+  return [
+    ...illustrationIdsOf(caseId).map((itemId) => ({ kind: 'illustration', itemId })),
+    ...castOf(script).map(({ who, role }) => ({ kind: 'cast', itemId: `${who}:${role}` })),
+  ];
+}
+
+// 역할 이름. 사건 전용 의상(role "case-1")은 "사건 1 배역"
+const roleName = (role) => ROLE_NAMES[role] ?? (/^case-(\d+)$/.test(role) ? `사건 ${role.slice(5)} 배역` : role);
+
+/**
+ * 서버 목록(P-5 collection.items, 최근에 얻은 순)을 화면 항목으로 바꾼다. 모르는 종류 · 형식은 뺀다.
+ * caseTitles: 사건 번호 → 제목(체험 기록에서). 없으면 "사건 N"
+ * 돌려주는 항목: { kind, itemId, caseId(그림의 사건, 일러스트만), who · role(의상만), src, label, acquiredAt, isNew }
+ */
+export function collectedItems(items, caseTitles = {}) {
+  return (items ?? []).flatMap((item) => {
+    const base = { kind: item.kind, itemId: item.itemId, acquiredAt: item.acquiredAt ?? null, isNew: item.isNew === true };
+    if (item.kind === 'illustration') {
+      const match = ILLUSTRATION_ID.exec(item.itemId ?? '');
+      if (!match) return [];
+      const caseId = Number(match[1]);
+      return [{ ...base, caseId, caseTitle: caseTitles[caseId] ?? `사건 ${caseId}`, slot: match[2], src: `/images/cases/${item.itemId}.webp`, label: SLOT_NAMES[match[2]] }];
+    }
+    if (item.kind === 'cast') {
+      const [who, role] = String(item.itemId ?? '').split(':');
+      if (!CAST_NAMES[who] || !role) return [];
+      return [{ ...base, who, role, src: `/images/characters/roles/${who}_${role}.webp`, label: `${CAST_NAMES[who]} · ${roleName(role)}` }];
+    }
+    return [];
+  });
+}
+
+/**
+ * 컬렉션 화면의 묶음: 만난 모습(역할 의상) 한 묶음 + 사건별 일러스트 묶음(최근에 얻은 사건부터, 사건 안은 재연 · 발단 · 결론 순)
+ * @returns {{ cast: object[], cases: { caseId: number, title: string, items: object[] }[] }}
+ */
+export function collectionGroups(collected) {
+  const cases = new Map();
+  collected.filter((item) => item.kind === 'illustration').forEach((item) => {
+    if (!cases.has(item.caseId)) cases.set(item.caseId, { caseId: item.caseId, title: item.caseTitle, items: [] });
+    cases.get(item.caseId).items.push(item);
+  });
+  const slotOrder = (item) => ILLUSTRATION_SLOTS.indexOf(item.slot);
+  return {
+    cast: collected.filter((item) => item.kind === 'cast'),
+    cases: [...cases.values()].map((group) => ({ ...group, items: [...group.items].sort((a, b) => slotOrder(a) - slotOrder(b)) })),
+  };
+}
+
+/** 기존 사용자 백필(P-9 backfill): 마친 사건인데 그 사건 일러스트가 하나라도 빠진 사건 번호(중복 없이). retry는 의상이 남아 다시 보낼 사건 */
+export function backfillCaseIds(experiences, items, retry = []) {
+  const have = new Set((items ?? []).map((item) => item.itemId));
+  const done = (experiences ?? []).filter((item) => item.status === 'COMPLETED').map((item) => item.caseId);
+  return [...new Set(done)].filter((caseId) => retry.includes(caseId) || illustrationIdsOf(caseId).some((id) => !have.has(id)));
+}
+
+/** 획득 · 달성 날짜(한국 시간): "2026. 10. 14." 값이 없거나 읽지 못하면 '' */
+export function acquiredDate(value) {
+  const time = Date.parse(value ?? '');
+  if (Number.isNaN(time)) return '';
+  return new Date(time).toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul', year: 'numeric', month: 'numeric', day: 'numeric' });
 }

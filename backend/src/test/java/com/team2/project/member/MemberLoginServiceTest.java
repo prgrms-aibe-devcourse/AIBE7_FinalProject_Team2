@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.team2.project.member.domain.AuthProvider;
+import com.team2.project.member.domain.TermsVersion;
 import com.team2.project.member.service.MemberLoginService;
 import com.team2.project.member.service.MemberLoginService.LoginResult;
 import com.team2.project.support.ApiIntegrationTest;
@@ -18,6 +19,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 /**
  * 카카오 로그인 성공 처리의 회원 찾기 · 만들기와 익명 기록 연결 규칙 (BE-62 · docs/decisions/BE-62.md)
+ * 처음 온 계정은 동의해야 회원이 만들어진다(BE-145 · docs/decisions/BE-145.md)
  * 실제 PostgreSQL에서 확인한다. 테스트가 만든 회원 · 익명 사용자만 지운다
  */
 class MemberLoginServiceTest extends ApiIntegrationTest {
@@ -60,7 +62,7 @@ class MemberLoginServiceTest extends ApiIntegrationTest {
 	}
 
 	private LoginResult login(String kakaoId, Optional<UUID> anonymousId) {
-		LoginResult result = memberLoginService.login(AuthProvider.KAKAO, kakaoId, anonymousId);
+		LoginResult result = memberLoginService.signupWithTerms(AuthProvider.KAKAO, kakaoId, anonymousId);
 		result.issuedAnonymousId().ifPresent(anonymousIds::add);
 		return result;
 	}
@@ -77,12 +79,47 @@ class MemberLoginServiceTest extends ApiIntegrationTest {
 	}
 
 	@Test
-	void 카카오_첫_로그인으로_만든_회원은_약관_동의_기록이_없다() {
-		// 카카오 첫 가입은 동의를 묻는 단계가 없어 동의 시각 · 버전이 NULL이다 (BE-133 범위 밖, 후속 이슈에서 정한다)
+	void 동의하고_가입한_카카오_회원은_동의_시각과_약관_버전이_함께_남는다() {
 		long memberId = login(newKakaoId(), Optional.empty()).memberId();
 		assertThat(jdbcTemplate.queryForMap("SELECT terms_agreed_at, terms_version FROM member WHERE id = ?", memberId))
-			.containsEntry("terms_agreed_at", null)
-			.containsEntry("terms_version", null);
+			.doesNotContainEntry("terms_agreed_at", null)
+			.containsEntry("terms_version", TermsVersion.CURRENT);
+	}
+
+	@Test
+	void 처음_온_카카오_계정은_로그인만으로는_회원이_만들어지지_않는다() {
+		String kakaoId = newKakaoId();
+
+		Optional<LoginResult> result = memberLoginService.loginExisting(AuthProvider.KAKAO, kakaoId, Optional.empty());
+
+		assertThat(result).isEmpty();
+		assertThat(jdbcTemplate.queryForObject(
+			"SELECT count(*) FROM member WHERE provider = 'KAKAO' AND provider_user_id = ?", Integer.class, kakaoId)).isZero();
+	}
+
+	@Test
+	void 이미_가입한_카카오_회원은_loginExisting으로_같은_회원이_로그인한다() {
+		String kakaoId = newKakaoId();
+		long memberId = login(kakaoId, Optional.empty()).memberId();
+
+		Optional<LoginResult> result = memberLoginService.loginExisting(AuthProvider.KAKAO, kakaoId, Optional.empty());
+		result.flatMap(LoginResult::issuedAnonymousId).ifPresent(anonymousIds::add);
+
+		assertThat(result).isPresent();
+		assertThat(result.get().memberId()).isEqualTo(memberId);
+	}
+
+	@Test
+	void 같은_계정으로_다시_동의해도_처음_동의_기록은_바뀌지_않는다() {
+		String kakaoId = newKakaoId();
+		long memberId = login(kakaoId, Optional.empty()).memberId();
+		jdbcTemplate.update("UPDATE member SET terms_agreed_at = '2026-10-01 09:00:00+09', terms_version = 'old-version' WHERE id = ?",
+			memberId);
+
+		login(kakaoId, Optional.empty());
+
+		assertThat(jdbcTemplate.queryForMap("SELECT terms_version FROM member WHERE id = ?", memberId))
+			.containsEntry("terms_version", "old-version");
 	}
 
 	@Test
@@ -139,10 +176,12 @@ class MemberLoginServiceTest extends ApiIntegrationTest {
 	}
 
 	@Test
-	void 공급자_회원번호_형식이_다르면_막는다() {
-		assertThatThrownBy(() -> memberLoginService.login(AuthProvider.KAKAO, "abc", Optional.empty()))
-			.isInstanceOf(IllegalArgumentException.class);
-		assertThatThrownBy(() -> memberLoginService.login(AuthProvider.KAKAO, null, Optional.empty()))
-			.isInstanceOf(IllegalArgumentException.class);
+	void 공급자_회원번호_형식이_다르면_회원을_만들지_않고_막는다() {
+		for (String invalid : new String[] {"abc", "not-a-number", null}) {
+			assertThatThrownBy(() -> memberLoginService.loginExisting(AuthProvider.KAKAO, invalid, Optional.empty()))
+				.isInstanceOf(IllegalArgumentException.class);
+			assertThatThrownBy(() -> memberLoginService.signupWithTerms(AuthProvider.KAKAO, invalid, Optional.empty()))
+				.isInstanceOf(IllegalArgumentException.class);
+		}
 	}
 }

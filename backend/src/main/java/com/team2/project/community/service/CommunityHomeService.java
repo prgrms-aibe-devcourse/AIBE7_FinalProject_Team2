@@ -15,6 +15,7 @@ import com.team2.project.experience.repository.ExperienceRepository;
 import com.team2.project.legalcase.domain.CasePaper;
 import com.team2.project.legalcase.domain.CasePhotoUrls;
 import com.team2.project.legalcase.domain.LegalCase;
+import com.team2.project.legalcase.domain.ScriptStatus;
 import com.team2.project.legalcase.repository.CasePaperRepository;
 import com.team2.project.legalcase.repository.CaseScriptRepository;
 import com.team2.project.legalcase.repository.LegalCaseRepository;
@@ -103,9 +104,10 @@ public class CommunityHomeService {
 		casePosts.values().forEach(posts -> posts.forEach(post -> allWriters.add(CommunityService.writerOf(post))));
 		Map<Writer, AuthorCard> cards = cardAssembler.cards(allWriters);
 
-		Set<Long> scriptReady = caseScriptRepository.findApprovedCaseIds();
+		Map<Long, ScriptStatus> scriptStatuses = caseScriptRepository.findScriptStatuses();
 		Function<LegalCase, CaseSummary> summary = legalCase -> summary(legalCase,
-			participants.getOrDefault(legalCase.getId(), 0L), scriptReady.contains(legalCase.getId()));
+			participants.getOrDefault(legalCase.getId(), 0L),
+			scriptStatuses.getOrDefault(legalCase.getId(), ScriptStatus.PREPARING));
 		List<CaseBlock> hotBlocks = hot.stream().map(legalCase -> new CaseBlock(summary.apply(legalCase),
 			talk.get(legalCase.getId()), postCounts.getOrDefault(legalCase.getId(), 0L),
 			casePostsOf(casePosts.get(legalCase.getId()), cards))).toList();
@@ -117,13 +119,14 @@ public class CommunityHomeService {
 			communityService.popular(), CommunityService.caseLinks(published));
 	}
 
-	private CaseSummary summary(LegalCase legalCase, long participantCount, boolean scriptReady) {
+	private CaseSummary summary(LegalCase legalCase, long participantCount, ScriptStatus scriptStatus) {
 		CasePaper paper = casePaperRepository.findByLegalCaseId(legalCase.getId()).orElse(null);
 		List<String> article = paper == null || paper.getArticle() == null ? List.of()
 			: paper.getArticle().stream().limit(ARTICLE_PARAGRAPHS).toList();
 		return new CaseSummary(legalCase.getId(), legalCase.getTitle(), legalCase.getCrimeType().getCategoryLabel(),
 			legalCase.getShortIntro(), paper == null ? null : paper.getHeadline(), paper == null ? null : paper.getDeck(),
-			article, CasePhotoUrls.thumbnail(legalCase.getId(), legalCase.getThumbnailUrl()), participantCount, legalCase.getEstimatedMinutes(), scriptReady);
+			article, CasePhotoUrls.thumbnail(legalCase.getId(), legalCase.getThumbnailUrl()), participantCount, legalCase.getEstimatedMinutes(),
+			scriptStatus == ScriptStatus.READY, scriptStatus);
 	}
 
 	private static List<CasePost> casePostsOf(List<CommunityPost> posts, Map<Writer, AuthorCard> cards) {

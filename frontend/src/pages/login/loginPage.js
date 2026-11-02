@@ -9,6 +9,7 @@ import { devJumpBar } from './loginDevJump.js';
 import { loginDesk } from './loginDesk.js';
 import { kakaoButton, setBusy } from './loginParts.js';
 import { offerAnonymousImport } from './anonymousImport.js';
+import { offerTermsConsent } from './termsConsent.js';
 import { credentialInputsToMark, isCredentialFailure } from './loginRule.js';
 
 // S-12 로그인 (FE-52, IA 4장 /login). 책상 위 펠트 패드(FE-69)에 카카오 로그인 버튼 + 아이디 · 비밀번호 폼.
@@ -142,6 +143,13 @@ export function renderLoginPage(container, { api, navigate }) {
         // 여기부터는 회원 로그인(카카오 · 아이디). @가 없는 입력은 관리자 API로 가지 않는다
         const { nickname } = await api.login(request);
         saveUser({ nickname }); // 화면을 떠났어도 로그인 표시는 남긴다(위 관리자와 같은 이유)
+        // 약관 동의 기록이 없는 회원(BE-133 이전에 가입한 아이디 회원)은 동의가 먼저다(BE-145). 창을 닫으면 로그아웃이라 이 화면에 남는다.
+        // 내 회원 정보(M-8)를 못 받으면 창 없이 지나간다 — 로그인을 막지 않는다
+        const me = await Promise.resolve(api.getMe?.()).catch(() => null);
+        if (await offerTermsConsent(api, me) === 'declined') {
+          if (container.contains(root)) { setBusy(busy, false); pending = false; }
+          return;
+        }
         // 이 브라우저의 체험 기록 · 첫인상 엽서가 있으면 가져올지 먼저 고르게 한다(FE-138). 창을 닫으면 로그인하지 않기로 한 것이라 이 화면에 남는다
         if (await offerAnonymousImport(api) === 'declined') {
           if (container.contains(root)) { setBusy(busy, false); pending = false; }

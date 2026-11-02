@@ -8,6 +8,7 @@ import com.team2.project.legalcase.domain.CasePhotoUrls;
 import com.team2.project.legalcase.domain.CrimeType;
 import com.team2.project.legalcase.domain.Difficulty;
 import com.team2.project.legalcase.domain.LegalCase;
+import com.team2.project.legalcase.domain.ScriptStatus;
 
 /** API 1 응답. */
 public record CaseListResponse(Summary summary, List<CaseItem> cases) {
@@ -34,7 +35,8 @@ public record CaseListResponse(Summary summary, List<CaseItem> cases) {
 	 *                 사용자마다 다른 값이라 사건 목록을 캐시할 때(6.5.3)는 이 필드를 빼고 요청마다 붙인다 (기술 스택 2장).
 	 *                 HTTP 캐시를 켤 때도 public 금지 — private + Vary: Cookie (API 명세 API 1, CaseListApiTest가 no-store를 고정)
 	 * @param scriptReady 승인된 공개 대본이 있는가 (BE-116). API 18이 200을 주는 조건과 같다 —
-	 *                    목록이 사건마다 API 18을 부르지 않고 "체험 가능"을 알 수 있게 한다
+	 *                    목록이 사건마다 API 18을 부르지 않고 "체험 가능"을 알 수 있게 한다. 호환용이고 {@code scriptStatus == READY}다
+	 * @param scriptStatus 대본 상태 (BE-126 2차-2): READY · PREPARING(준비 중, API 18은 404) · MAINTENANCE(점검 중, API 18은 503)
 	 */
 	public record CaseItem(
 			Long caseId,
@@ -49,9 +51,10 @@ public record CaseListResponse(Summary summary, List<CaseItem> cases) {
 			long participantCount,
 			String thumbnailUrl,
 			boolean scriptReady,
+			ScriptStatus scriptStatus,
 			MyStatus myStatus) {
 
-		public static CaseItem of(LegalCase legalCase, long participantCount, boolean scriptReady,
+		public static CaseItem of(LegalCase legalCase, long participantCount, ScriptStatus scriptStatus,
 				MyStatus myStatus) {
 			CrimeType crimeType = legalCase.getCrimeType();
 			List<String> keywords = legalCase.getKeywords() == null ? List.of() : legalCase.getKeywords();
@@ -67,7 +70,8 @@ public record CaseListResponse(Summary summary, List<CaseItem> cases) {
 					legalCase.getEstimatedMinutes(),
 					participantCount,
 					CasePhotoUrls.thumbnail(legalCase.getId(), legalCase.getThumbnailUrl()),
-					scriptReady,
+					scriptStatus == ScriptStatus.READY,
+					scriptStatus,
 					myStatus);
 		}
 	}

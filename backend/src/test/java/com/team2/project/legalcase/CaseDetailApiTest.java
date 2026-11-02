@@ -73,12 +73,32 @@ class CaseDetailApiTest extends ApiIntegrationTest {
 		insertEvidenceOnlyScript(evidenceOnly, "APPROVED");
 		long noScript = insertCase("FRAUD", "PUBLISHED");
 
-		mockMvc.perform(get(caseUrl(approved))).andExpect(jsonPath("$.scriptReady").value(true));
+		mockMvc.perform(get(caseUrl(approved))).andExpect(jsonPath("$.scriptReady").value(true))
+				.andExpect(jsonPath("$.scriptStatus").value("READY"));
 		mockMvc.perform(get(caseUrl(approved) + "/script")).andExpect(status().isOk());
 		for (long caseId : new long[] {pending, rejected, partial, evidenceOnly, noScript}) {
-			mockMvc.perform(get(caseUrl(caseId))).andExpect(jsonPath("$.scriptReady").value(false));
+			mockMvc.perform(get(caseUrl(caseId))).andExpect(jsonPath("$.scriptReady").value(false))
+					.andExpect(jsonPath("$.scriptStatus").value("PREPARING"));
 			mockMvc.perform(get(caseUrl(caseId) + "/script")).andExpect(status().isNotFound());
 		}
+	}
+
+	@Test
+	void getCase_scriptStatus_maintenanceAfterRelease() throws Exception {
+		// BE-126 2차-2: 한 번 나간 대본(released_at)의 승인이 풀리면 점검 중 — API 18은 404(준비 중)가 아니라 503이다
+		long caseId = insertCase("FRAUD", "PUBLISHED");
+		long scriptId = insertScriptWithReview(caseId, "APPROVED");
+		jdbcTemplate.update("UPDATE case_script SET released_at = now() WHERE id = ?", scriptId);
+		mockMvc.perform(get(caseUrl(caseId))).andExpect(jsonPath("$.scriptStatus").value("READY"));
+
+		jdbcTemplate.update("UPDATE case_script_block SET review_status = 'REJECTED', review_note = '고칠 곳' "
+				+ "WHERE script_id = ? AND unit = 'U2'", scriptId);
+		mockMvc.perform(get(caseUrl(caseId)))
+				.andExpect(jsonPath("$.scriptReady").value(false))
+				.andExpect(jsonPath("$.scriptStatus").value("MAINTENANCE"));
+		mockMvc.perform(get(caseUrl(caseId) + "/script"))
+				.andExpect(status().isServiceUnavailable())
+				.andExpect(jsonPath("$.code").value("SCRIPT_UNDER_MAINTENANCE"));
 	}
 
 	@Test

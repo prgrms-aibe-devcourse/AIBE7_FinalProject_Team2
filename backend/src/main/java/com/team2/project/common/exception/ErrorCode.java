@@ -55,6 +55,8 @@ public enum ErrorCode {
 	SCRIPT_NOT_FOUND(HttpStatus.NOT_FOUND, "사건 대본이 없습니다."),
 	SCRIPT_LINE_NOT_FOUND(HttpStatus.NOT_FOUND, "대본에 그 판단 요소의 대사가 없습니다."),
 	SCRIPT_BLOCK_NOT_FOUND(HttpStatus.NOT_FOUND, "대본에 그 단위 블록이 없습니다."),
+	// 대본 점검 중 (BE-126 2차-2, API 18) — 한 번 공개한 대본의 블록을 고치는 동안. 준비 중(404 SCRIPT_NOT_FOUND)과 구분한다
+	SCRIPT_UNDER_MAINTENANCE(HttpStatus.SERVICE_UNAVAILABLE, "사건 대본을 점검하고 있습니다. 잠시 뒤 다시 시도해 주세요."),
 	// 대본 블록 재생성 (BE-129 2차, API 명세 A-13-15 ~ 17)
 	SCRIPT_REGENERATION_NOT_FOUND(HttpStatus.NOT_FOUND, "대본 재생성 작업을 찾을 수 없습니다."),
 	// 프로필 꾸미기 (확장 단계, BE-96). details에 잠긴 필드를 담는다
@@ -70,6 +72,8 @@ public enum ErrorCode {
 	IMPORT_RESULT_INVALID(HttpStatus.UNPROCESSABLE_CONTENT, "생성 결과를 사건으로 만들 수 없습니다."),
 	// 아이디 회원가입 (확장 단계, BE-113, API 명세 M-5). 로그인 실패는 INVALID_CREDENTIALS를 함께 쓴다
 	DUPLICATE_ID(HttpStatus.CONFLICT, "이미 사용 중인 아이디입니다."),
+	// 카카오 첫 가입 약관 동의 (확장 단계, BE-145, API 명세 M-12). 가입 대기가 없거나 시간이 지났거나 이미 썼다
+	KAKAO_SIGNUP_EXPIRED(HttpStatus.CONFLICT, "카카오 가입 시간이 지났습니다. 카카오 로그인을 다시 시작해 주세요."),
 	// 닉네임 (확장 단계, BE-139, API 명세 M-5 · M-7)
 	DUPLICATE_NICKNAME(HttpStatus.CONFLICT, "이미 사용 중인 닉네임입니다."),
 	// 첫 로그인 가져오기 (확장 단계, BE-140, API 명세 M-10 · M-11)

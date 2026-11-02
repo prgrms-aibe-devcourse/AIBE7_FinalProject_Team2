@@ -78,6 +78,39 @@ export async function discardAnonymous() {
   return null;
 }
 
+// 목업 약관 동의 (BE-145, 서버 M-8 termsRequired · M-12 ~ M-14). 동의 창을 확인하려고 목 회원은 늘 동의 기록이 없는 것으로 보이고,
+// 동의하면 이번 방문 동안은 없다(importDone과 같은 방식). 서버처럼 agreed가 true가 아니면 400(details agreed)이다
+let termsAgreed = false;
+const requireAgreed = (agreed) => { if (agreed !== true) fail('VALIDATION_ERROR', 'agreed'); };
+
+// 목업 내 회원 정보(M-8). 카카오 회원처럼 닉네임이 없다
+export async function getMe() {
+  await delay();
+  return { nickname: null, displayName: KAKAO_NICKNAME, provider: 'KAKAO', loginId: null, createdAt: '2026-10-27T14:00:00+09:00', lastLoginAt: '2026-11-02T09:30:00+09:00', termsRequired: !termsAgreed };
+}
+
+// 목업 카카오 첫 가입(M-12): 가입하면 바로 로그인된 상태. 카카오 회원은 닉네임이 없어 '방청객 {회원 ID}'로 보인다. 응답 { nickname }
+export async function signupKakao({ agreed } = {}) {
+  await delay();
+  requireAgreed(agreed);
+  termsAgreed = true;
+  return { nickname: '방청객 1024' };
+}
+
+// 목업 카카오 가입 취소(M-13): 아무것도 남지 않는다. 204
+export async function cancelKakaoSignup() {
+  await delay();
+  return null;
+}
+
+// 목업 약관 동의(M-14). 204
+export async function agreeTerms({ agreed } = {}) {
+  await delay();
+  requireAgreed(agreed);
+  termsAgreed = true;
+  return null;
+}
+
 export async function logout() {
   await delay();
   return null;

@@ -1,6 +1,7 @@
 import { BACKGROUNDS, DEFAULT_PORTRAITS, FRAMES, SASH_COLORS, SASH_ICONS, SASH_STYLES, kindOfPortrait, sashColorKey } from '../utils/profileDeco.js';
 import { BOOKMARK_CHARACTERS, BOOKMARK_COLORS, BOOKMARK_FACES, BOOKMARK_LAWS, BOOKMARK_STYLES } from '../utils/bookmarkCharacter.js';
 import { ACHIEVEMENTS, DEFAULT_SERVER_DECO, FREE, REWARD_TYPES } from './profileDecoMockData.js';
+import { mockCollectionView, withUnlocks } from './collectionMockApi.js';
 
 // 프로필 꾸미기 저장(P-7) · 출석 기록(P-6) 목 API와 마이페이지(P-5)에 붙는 꾸미기 · 도전과제 응답 (BE-96 · BE-97, 명세 9장).
 // 서버가 하는 일을 흉내 낸다: 진행도는 저장하지 않고 그때그때 계산, 값 목록 · 형식 → 400, 잠김 → 409. 저장값과 출석 날짜는 목 전용으로 localStorage에 둔다.
@@ -50,7 +51,7 @@ const attendanceDays = () => EARLIER_ATTENDANCE + read(ATTENDANCE_KEY, []).lengt
 
 /**
  * 개발 전용(실제 API에는 없다): 도전과제를 전부 깬 것으로 보게 하거나 되돌린다. 마이페이지 프로필카드 화면의 "모두 해금" 버튼이 쓴다.
- * 수집 도전과제(PENDING)도 깬 것으로 보므로 잠긴 보상까지 모두 확인해 볼 수 있다
+ * 수집 도전과제도 깬 것으로 보므로 잠긴 보상까지 모두 확인해 볼 수 있다
  */
 export async function setMockUnlockAll(on) {
   await delay();
@@ -58,7 +59,7 @@ export async function setMockUnlockAll(on) {
   return null;
 }
 
-/** 도전과제 진행도. collected는 서버가 셀 수 없어 PENDING · value null · 잠김 (개발 전용 모두 해금이면 전부 달성) */
+/** 도전과제 진행도. 값이 없는 stat(null)은 PENDING · value null · 잠김 (개발 전용 모두 해금이면 전부 달성). collected는 수집 목의 모은 수(FE-132) */
 export function mockAchievements(stats) {
   const unlockAll = read(UNLOCK_ALL_KEY, false);
   return ACHIEVEMENTS.map((item) => {
@@ -79,14 +80,16 @@ export function mockUnlocked(achievements) {
   return open;
 }
 
-/** 마이페이지(P-5)에 붙는 부분. stats: { completed, hasType } 마이페이지 목이 가진 기록에서 센 값 */
+/** 마이페이지(P-5)에 붙는 부분. stats: { completed, hasType } 마이페이지 목이 가진 기록에서 센 값. 모은 수 · 해금 기록은 수집 목(FE-132)에서 */
 export function mockProfileView(stats) {
-  const achievements = mockAchievements({ ...stats, attendanceDays: attendanceDays(), collected: null });
+  const collection = mockCollectionView();
+  const achievements = withUnlocks(mockAchievements({ ...stats, attendanceDays: attendanceDays(), collected: collection.collected }));
   return {
     profile: { attendanceDays: attendanceDays() },
     profileDeco: { ...DEFAULT_SERVER_DECO, ...read(DECO_KEY, {}) },
     achievements,
     unlocked: mockUnlocked(achievements),
+    collection,
   };
 }
 

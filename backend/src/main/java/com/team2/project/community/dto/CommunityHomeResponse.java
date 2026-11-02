@@ -6,6 +6,7 @@ import com.team2.project.community.dto.AuthorCard.CardLine;
 import com.team2.project.community.dto.AuthorCard.ShownType;
 import com.team2.project.community.dto.PostListResponse.CaseLink;
 import com.team2.project.community.dto.PostListResponse.PostLink;
+import com.team2.project.legalcase.domain.ScriptStatus;
 import com.team2.project.level.dto.LevelStatus.JobView;
 import com.team2.project.profile.domain.ProfileDecoValues;
 import java.util.List;
@@ -23,10 +24,13 @@ public record CommunityHomeResponse(List<CaseBlock> hotCases, List<CaseBlock> re
 		@JsonInclude(JsonInclude.Include.NON_NULL) Long talkCount, long postCount, List<CasePost> posts) {
 	}
 
-	/** 메인에 싣는 사건 요약: 신문 지면(API 17)의 제목 · 부제 · 본문 두 단락과 사건 목록(API 1)의 값. 지면이 없으면 headline · deck은 null, article은 빈 배열 */
+	/**
+	 * 메인에 싣는 사건 요약: 신문 지면(API 17)의 제목 · 부제 · 본문 두 단락과 사건 목록(API 1)의 값. 지면이 없으면 headline · deck은 null, article은 빈 배열.
+	 * {@code scriptReady} · {@code scriptStatus}는 API 1과 같은 값이다(BE-126 2차-2)
+	 */
 	public record CaseSummary(long caseId, String title, String crimeCategoryLabel, String shortIntro, String headline,
 		String deck, List<String> article, String thumbnailUrl, long participantCount, Integer estimatedMinutes,
-		boolean scriptReady) {
+		boolean scriptReady, ScriptStatus scriptStatus) {
 	}
 
 	public record CasePost(long postId, String title, int likeCount, int commentCount, AuthorCard author) {
