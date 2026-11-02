@@ -193,9 +193,12 @@ class CaseListApiTest extends ApiIntegrationTest {
 
 		// API 18과 같은 결론인지 — READY는 200, MAINTENANCE는 503, PREPARING은 404
 		mockMvc.perform(get("/api/v1/cases/" + ready + "/script")).andExpect(status().isOk());
+		// 곧 풀리는 일시 상태라 재시도 간격을 알리고, 프록시 · 브라우저가 503을 캐시하지 않게 한다 (PR #384 리뷰 5번)
 		mockMvc.perform(get("/api/v1/cases/" + maintenance + "/script"))
 				.andExpect(status().isServiceUnavailable())
-				.andExpect(jsonPath("$.code").value("SCRIPT_UNDER_MAINTENANCE"));
+				.andExpect(jsonPath("$.code").value("SCRIPT_UNDER_MAINTENANCE"))
+				.andExpect(header().string(HttpHeaders.RETRY_AFTER, "60"))
+				.andExpect(header().string(HttpHeaders.CACHE_CONTROL, containsString("no-store")));
 		mockMvc.perform(get("/api/v1/cases/" + preparing + "/script")).andExpect(status().isNotFound());
 	}
 

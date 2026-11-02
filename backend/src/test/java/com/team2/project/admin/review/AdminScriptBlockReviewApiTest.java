@@ -177,6 +177,29 @@ class AdminScriptBlockReviewApiTest extends ApiIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("점검 (2차-2): READY 대본에서 바로 문장 수정(A-13-21) · 대사 수정(A-13-13)해도 점검 중이 되고, 그 요청에 scriptMaintenance가 남는다")
+	void publishedCase_editsFromReady_putScriptUnderMaintenance() throws Exception {
+		jdbcTemplate.update("UPDATE case_script_block SET review = '[]'::jsonb, publishable = true WHERE script_id = ?", scriptId);
+		jdbcTemplate.update("UPDATE legal_case SET status = 'PUBLISHED', published_at = now() WHERE id = ?", caseId);
+		perform(post(scriptUrl() + "/approve")).andExpect(jsonPath("$.scriptStatus").value("READY"));
+
+		perform(patch(scriptUrl() + "/blocks/U0/text").contentType(MediaType.APPLICATION_JSON)
+				.content("{\"path\": \"/questions/0/q\", \"text\": \"고친 질문입니까?\"}"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.scriptStatus").value("MAINTENANCE"));
+		mockMvc.perform(get(publicScriptUrl())).andExpect(status().isServiceUnavailable());
+		assertThat(maintenanceAuditDetails()).hasSize(1).first().asString().contains("\"unit\": \"U0\"");
+
+		perform(post(scriptUrl() + "/blocks/U0/approve")).andExpect(jsonPath("$.scriptStatus").value("READY"));
+		perform(patch(scriptUrl() + "/evidence/1").contentType(MediaType.APPLICATION_JSON)
+				.content("{\"text\": \"고친 대사입니다.\"}"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.scriptStatus").value("MAINTENANCE"));
+		mockMvc.perform(get(publicScriptUrl())).andExpect(status().isServiceUnavailable());
+		assertThat(maintenanceAuditDetails()).hasSize(2).last().asString().contains("\"factorId\": 1");
+	}
+
+	@Test
 	@DisplayName("점검 (2차-2): 초안 사건에서 승인만 한 대본은 나간 것이 아니다 — 고치면 준비 중, 승인한 채 사건을 공개(A-13)하면 그때 나간 시각을 남긴다")
 	void draftCase_approvalIsNotRelease() throws Exception {
 		jdbcTemplate.update("UPDATE case_script_block SET review = '[]'::jsonb, publishable = true WHERE script_id = ?", scriptId);
@@ -326,6 +349,13 @@ class AdminScriptBlockReviewApiTest extends ApiIntegrationTest {
 	/** API 18 (사용자 쪽 공개 대본) */
 	private String publicScriptUrl() {
 		return "/api/v1/cases/" + caseId + "/script";
+	}
+
+	/** 대본을 점검 중으로 만든 요청의 감사 로그 detail (오래된 순) */
+	private List<String> maintenanceAuditDetails() {
+		return jdbcTemplate.queryForList("""
+			SELECT detail::text FROM admin_audit_log WHERE actor_email = ? AND detail ->> 'scriptMaintenance' = 'true' ORDER BY id""",
+			String.class, admin.getEmail());
 	}
 
 	private String releasedAt() {
