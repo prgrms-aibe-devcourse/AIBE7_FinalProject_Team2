@@ -30,6 +30,9 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  *                     생성 모델마다 기본 10회를 더 부르고 등록이 그만큼 길어지므로, 설정을 건드린 적 없는 서버에서 호출이
  *                     늘지 않게 대본과 같은 방식으로 기본을 꺼짐으로 둔다. 켜면 판정 동작은 파이프라인 기본값을 그대로 쓴다
  *                     (오염 → 등록 중단, 의심 → 계속, 응답 부족 → 중단). 비식별화한 사건 개요가 생성 모델 공급자로 나간다
+ * @param ragEnabled   생성 참고 자료 RAG(rag 단계, BE-54 · BE-161)를 켤지. <b>비우면 꺼짐</b>. 켜도 <b>등록 요청의 범죄 유형이
+ *                     살인(MURDER)일 때만</b> 요청한다 — 양형기준 · 유사 판례 자료가 살인뿐이다(docs/decisions/BE-161.md 2차).
+ *                     검색은 파이프라인이 읽기 전용 계정(RAG_DB_*)으로 한다. 못 찾으면 사건 입력의 참고 자료로 진행한다
  */
 @ConfigurationProperties("pipeline-service")
 public record PipelineProperties(
@@ -39,7 +42,8 @@ public record PipelineProperties(
 	@DefaultValue("30s") Duration timeout,
 	String scriptModel,
 	String classifyModel,
-	Boolean contaminationEnabled
+	Boolean contaminationEnabled,
+	Boolean ragEnabled
 ) {
 
 	static final String DEFAULT_MODEL = "gemini:gemini-3.7-flash";
@@ -60,6 +64,7 @@ public record PipelineProperties(
 		classifyModel = blankToNull(classifyModel);
 		// Compose가 빈 값을 넘기면 바인딩 결과가 null이다. "설정 안 함" = 꺼짐으로 본다
 		contaminationEnabled = Boolean.TRUE.equals(contaminationEnabled);
+		ragEnabled = Boolean.TRUE.equals(ragEnabled);
 	}
 
 	private static String blankToNull(String value) {
@@ -82,6 +87,7 @@ public record PipelineProperties(
 			+ ", timeout=" + timeout
 			+ ", scriptModel=" + (scriptEnabled() ? scriptModel : "(대본 생성 끔)")
 			+ ", classifyModel=" + (classifyModel == null ? "(생성 모델의 첫 모델)" : classifyModel)
-			+ ", contaminationEnabled=" + contaminationEnabled + "]";
+			+ ", contaminationEnabled=" + contaminationEnabled
+			+ ", ragEnabled=" + ragEnabled + "]";
 	}
 }

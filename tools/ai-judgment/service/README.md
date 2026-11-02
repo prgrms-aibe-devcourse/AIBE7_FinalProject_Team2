@@ -93,7 +93,7 @@
 
 ```json
 {
-  "sources": [{ "originalText": "판결문 전문", "note": "열람 출력본" }],
+  "sources": [{ "originalText": "판결문 전문", "note": "열람 출력본", "caseNumber": "2099고합001" }],
   "models": ["gemini:gemini-3.7-flash"],
   "stages": { "contamination": { "enabled": true, "runs": 3 } },
   "incidentDate": "2023-04-01",
@@ -103,6 +103,7 @@
 ```
 
 - `sources` 필수, 1 ~ 3개. `originalText`가 비면 `400`.
+- `caseNumber`(선택, BE-161 2차): 관리자가 등록 때 입력한 사건번호. RAG가 자기 사건을 유사 판례에서 뺄 때 판결문 본문에서 찾은 번호보다 먼저 쓴다. 해시로만 비교하고 모델에는 보내지 않는다. 문자열이 아니면 `400`.
 - `models` 필수 (`generate` 단계가 쓸 모델). 없으면 `400`.
 - `stages`는 선택. 끈 단계를 다시 켜거나 단계 설정을 덮어쓸 때만 쓴다. 모르는 단계 이름이면 `400`.
 - `crimeType`은 선택(BE-138). 관리자가 고른 범죄 유형(`MURDER` · `FRAUD` · `INJURY` · `ROBBERY` · `THEFT`, 다른 값이면 `400`)으로,

@@ -212,7 +212,7 @@ class CaseImportLoaderTest extends ApiIntegrationTest {
 	void load_judgmentPointsToUnknownFactor() {
 		PipelineResult broken = new PipelineResult("job", node(caseJson()), node(reportJson()),
 			node(courtDraftJson()), node(aiJudgmentJson().replace("\"factorId\": 7", "\"factorId\": 99")),
-			new PipelineResult.Selection("gemini:test", 1, "consensus", "합의", List.of()), null, null, null, null);
+			new PipelineResult.Selection("gemini:test", 1, "consensus", "합의", List.of()), null, null, null, null, null);
 
 		assertThatThrownBy(() -> loader.load(caseImport(), broken))
 			.isInstanceOf(BusinessException.class)
@@ -229,7 +229,7 @@ class CaseImportLoaderTest extends ApiIntegrationTest {
 				{"runs": 5, "factors": [
 				  {"factorId": 7, "valueAxis": "PRINCIPLE_RELATION",
 				   "valueAxisVotes": {"runs": 5, "counts": {"PRINCIPLE_RELATION": 4, "FAULT_STANDARD": 1},
-				                      "needsReview": false, "requestedRuns": 5}}]}"""), null, null, null);
+				                      "needsReview": false, "requestedRuns": 5}}]}"""), null, null, null, null);
 
 		LegalCase legalCase = loader.load(caseImport(), withVotes);
 
@@ -526,6 +526,30 @@ class CaseImportLoaderTest extends ApiIntegrationTest {
 		LegalCase legalCase = loader.load(caseImport(), result());
 
 		assertThat(savedContamination(legalCase.getId())).isEqualTo("{\"verdict\": \"SKIPPED\"}");
+		assertThat(savedRag(legalCase.getId())).isEqualTo("{\"status\": \"SKIPPED\"}");	// rag도 안 돌렸다 (BE-161 2차)
+	}
+
+	@Test
+	@DisplayName("RAG 검색 보고를 생성 기록에 남긴다 — 대체 사유까지, 적재 뒤에도 RAG가 쓰였는지 볼 수 있게 (BE-161 2차, PR #412 리뷰)")
+	void load_savesRagReport() {
+		LegalCase legalCase = loader.load(caseImport(), resultWithRag(node("""
+			{"status": "PARTIAL", "embeddingModel": "gemini-embedding-001", "guideline": "2023 살인범죄",
+			 "guidelineBasis": "INCIDENT_DATE", "guidelineFactors": [{"id": 11, "score": 0.65}],
+			 "precedents": [], "excludedSuspects": 0, "warnings": [],
+			 "fallbackReasons": ["유사 판례: 점수 0.7 이상 판례 없음"]}""")));
+
+		assertThat(savedRag(legalCase.getId()))
+			.contains("PARTIAL", "2023 살인범죄", "INCIDENT_DATE", "유사 판례: 점수 0.7 이상 판례 없음", "gemini-embedding-001");
+	}
+
+	@Test
+	@DisplayName("RAG_DB_*를 일부만 넣은 설정 실수도 대체 사유로 생성 기록에 남는다 (BE-161 2차, PR #412 리뷰)")
+	void load_savesRagMisconfigurationReason() {
+		LegalCase legalCase = loader.load(caseImport(), resultWithRag(node("""
+			{"status": "FALLBACK", "fallbackReasons": [
+			  "DB 검색 실패: RAG 읽기 전용 DB 설정이 일부만 있습니다 (빠진 값: RAG_DB_PASSWORD)"]}""")));
+
+		assertThat(savedRag(legalCase.getId())).contains("FALLBACK", "일부만 있습니다", "RAG_DB_PASSWORD");
 	}
 
 	@Test
@@ -719,7 +743,7 @@ class CaseImportLoaderTest extends ApiIntegrationTest {
 	private PipelineResult resultOf(JsonNode caseContent, JsonNode script, JsonNode classify) {
 		return new PipelineResult("job", caseContent, node(reportJson()), node(courtDraftJson()),
 			node(aiJudgmentJson()),
-			new PipelineResult.Selection("gemini:test", 1, "consensus", "합의", List.of()), null, script, classify, null);
+			new PipelineResult.Selection("gemini:test", 1, "consensus", "합의", List.of()), null, script, classify, null, null);
 	}
 
 	private PipelineResult result() {
@@ -729,20 +753,33 @@ class CaseImportLoaderTest extends ApiIntegrationTest {
 	private PipelineResult resultWith(JsonNode caseContent) {
 		return new PipelineResult("job", caseContent, node(reportJson()), node(courtDraftJson()),
 			node(aiJudgmentJson()),
-			new PipelineResult.Selection("gemini:test", 1, "consensus", "합의", List.of()), null, null, null, null);
+			new PipelineResult.Selection("gemini:test", 1, "consensus", "합의", List.of()), null, null, null, null, null);
 	}
 
 	private PipelineResult resultWithScript(JsonNode script) {
 		return new PipelineResult("job", node(caseJson()), node(reportJson()), node(courtDraftJson()),
 			node(aiJudgmentJson()),
-			new PipelineResult.Selection("gemini:test", 1, "consensus", "합의", List.of()), null, script, null, null);
+			new PipelineResult.Selection("gemini:test", 1, "consensus", "합의", List.of()), null, script, null, null, null);
 	}
 
 	private PipelineResult resultWithContamination(JsonNode contamination) {
 		return new PipelineResult("job", node(caseJson()), node(reportJson()), node(courtDraftJson()),
 			node(aiJudgmentJson()),
 			new PipelineResult.Selection("gemini:test", 1, "consensus", "합의", List.of()), null, null, null,
-			contamination);
+			contamination, null);
+	}
+
+	private PipelineResult resultWithRag(JsonNode rag) {
+		return new PipelineResult("job", node(caseJson()), node(reportJson()), node(courtDraftJson()),
+			node(aiJudgmentJson()),
+			new PipelineResult.Selection("gemini:test", 1, "consensus", "합의", List.of()), null, null, null, null,
+			rag);
+	}
+
+	private String savedRag(Long caseId) {
+		return jdbcTemplate.queryForObject("""
+			SELECT (g.generation_report->'rag')::text FROM ai_generation g
+			JOIN judgment j ON j.id = g.judgment_id WHERE j.case_id = ?""", String.class, caseId);
 	}
 
 	private String savedContamination(Long caseId) {

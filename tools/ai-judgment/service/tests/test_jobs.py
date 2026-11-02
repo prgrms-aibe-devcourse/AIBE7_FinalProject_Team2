@@ -552,6 +552,35 @@ class JobStoreTest(unittest.TestCase):
         self.assertIsNone(self.store.result(job_id)["script"])
         self.assertIsNone(self.store.result(job_id)["classify"])
         self.assertIsNone(self.store.result(job_id)["contamination"])  # 점검을 안 돌렸다 (BE-160)
+        self.assertIsNone(self.store.result(job_id)["rag"])  # rag도 안 돌렸다 (BE-161 2차)
+
+    def test_result_sends_rag_report_without_references_file(self):
+        """RAG 검색 보고를 내보낸다 — 적재 뒤에도 RAG가 쓰였는지 · 대체 사유를 볼 수 있게 (BE-161 2차, PR #412 리뷰).
+        오프라인 rag_report와 같은 키만 — 참고 자료 파일 경로(판례 본문이 들어 있다)와 입력 지문은 내보내지 않는다"""
+        job_id = self.store.create(self._request(stages={"rag": {"enabled": True}}))
+        case_file = self.tool_dir / "cases" / "case.json"
+        case_file.parent.mkdir(parents=True, exist_ok=True)
+        case_file.write_text(json.dumps({"title": "사건"}, ensure_ascii=False), encoding="utf-8")
+        report = {"status": "OK", "fallbackReasons": [], "embeddingModel": "gemini-embedding-001",
+                  "guideline": "2023 살인범죄", "guidelineBasis": "INCIDENT_DATE",
+                  "guidelineFactors": [{"id": 11, "score": 0.65}], "precedents": [{"id": 3, "score": 0.77,
+                                                                                  "sameGuideline": True}],
+                  "excludedSuspects": 0, "warnings": [], "ownCaseHashes": 2}
+        self._write_state(job_id, {
+            "extract": {"status": "done", "outputs": {"case": str(case_file)}},
+            "rag": {"status": "done", "outputs": {"referencesFile": "/app/out/pipeline/job-x/references.json",
+                                                  "report": report, "inputKey": "abc"}},
+        })
+
+        rag = self.store.result(job_id)["rag"]
+
+        self.assertEqual(rag["status"], "OK")
+        self.assertEqual(rag["guideline"], "2023 살인범죄")
+        self.assertEqual(rag["precedents"], [{"id": 3, "score": 0.77, "sameGuideline": True}])
+        self.assertNotIn("ownCaseHashes", rag)  # rag_report에 없는 키는 내보내지 않는다
+        dumped = json.dumps(self.store.result(job_id), ensure_ascii=False)
+        self.assertNotIn("references.json", dumped)
+        self.assertNotIn("inputKey", dumped)
 
     def test_result_sends_contamination_verdicts_without_predictions(self):
         """사전 학습 점검 판정을 모델별로 내보낸다 — SUSPECT는 등록을 계속하므로 적재 뒤에도 남아야 한다 (BE-160, PR #411 리뷰).
@@ -573,6 +602,23 @@ class JobStoreTest(unittest.TestCase):
         contamination = self.store.result(job_id)["contamination"]
 
         self.assertEqual(contamination, {"gemini:x": verdict})
+
+    def test_create_passes_request_case_number_to_pipeline_sources(self):
+        """등록 요청의 사건번호를 파이프라인 소스 설정에 넣는다 (BE-161 2차, PR #413 리뷰) — RAG 자기 사건 제외가
+        판결문 본문에서 찾은 번호보다 이 값을 먼저 쓴다. 빈 값은 넣지 않고(본문 값으로 대체), 원문 파일 경로와 함께만 둔다"""
+        job_id = self.store.create(self._request(sources=[
+            {"originalText": "1심 본문", "caseNumber": " 2099고합001 "},
+            {"originalText": "항소심 본문", "caseNumber": "  "},
+            {"originalText": "상고심 본문"},
+        ]))
+        config = json.loads((self.store.job_dir(job_id) / "config.json").read_text(encoding="utf-8"))
+        self.assertEqual(config["sources"][0]["caseNumber"], "2099고합001")
+        self.assertNotIn("caseNumber", config["sources"][1])
+        self.assertNotIn("caseNumber", config["sources"][2])
+
+    def test_create_rejects_non_string_case_number(self):
+        with self.assertRaises(JobError):
+            self.store.create(self._request(sources=[{"originalText": "본문", "caseNumber": 2099}]))
 
     def test_result_before_pipeline_produced_anything(self):
         job_id = self.store.create(self._request())
