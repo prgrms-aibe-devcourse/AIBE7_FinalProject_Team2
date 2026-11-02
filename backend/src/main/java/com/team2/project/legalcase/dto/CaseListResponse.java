@@ -11,10 +11,19 @@ import com.team2.project.legalcase.domain.LegalCase;
 import com.team2.project.legalcase.domain.ScriptStatus;
 
 /** API 1 응답. */
-public record CaseListResponse(Summary summary, List<CaseItem> cases) {
+public record CaseListResponse(Summary summary, Unlock unlock, List<CaseItem> cases) {
 
 	/** 필터와 관계없이 전체 PUBLISHED 사건 기준 건수 (칩 옆 건수 표시용). */
 	public record Summary(int total, Map<CrimeType, Integer> byCrimeType) {
+	}
+
+	/**
+	 * 순차 해금 진행 (BE-146). 사용자마다 다른 값이다(myStatus와 같은 캐시 주의).
+	 *
+	 * @param completedCases 완료한 사건 수(도전과제 completed와 같은 값). 손님인데 쿠키가 없으면 0
+	 * @param nextStepAt 다음 단계가 열리는 완료 수. 사건이 모두 열리는 단계면 null
+	 */
+	public record Unlock(long completedCases, Integer nextStepAt) {
 	}
 
 	/**
@@ -37,6 +46,7 @@ public record CaseListResponse(Summary summary, List<CaseItem> cases) {
 	 * @param scriptReady 승인된 공개 대본이 있는가 (BE-116). API 18이 200을 주는 조건과 같다 —
 	 *                    목록이 사건마다 API 18을 부르지 않고 "체험 가능"을 알 수 있게 한다. 호환용이고 {@code scriptStatus == READY}다
 	 * @param scriptStatus 대본 상태 (BE-126 2차-2): READY · PREPARING(준비 중, API 18은 404) · MAINTENANCE(점검 중, API 18은 503)
+	 * @param locked 아직 열리지 않은 사건 (BE-146 순차 해금). 체험할 수 있는(READY) 사건만 잠길 수 있고, 잠긴 사건은 API 2가 409 CASE_LOCKED로 막는다
 	 */
 	public record CaseItem(
 			Long caseId,
@@ -52,10 +62,11 @@ public record CaseListResponse(Summary summary, List<CaseItem> cases) {
 			String thumbnailUrl,
 			boolean scriptReady,
 			ScriptStatus scriptStatus,
-			MyStatus myStatus) {
+			MyStatus myStatus,
+			boolean locked) {
 
 		public static CaseItem of(LegalCase legalCase, long participantCount, ScriptStatus scriptStatus,
-				MyStatus myStatus) {
+				MyStatus myStatus, boolean locked) {
 			CrimeType crimeType = legalCase.getCrimeType();
 			List<String> keywords = legalCase.getKeywords() == null ? List.of() : legalCase.getKeywords();
 			return new CaseItem(
@@ -72,7 +83,8 @@ public record CaseListResponse(Summary summary, List<CaseItem> cases) {
 					CasePhotoUrls.thumbnail(legalCase.getId(), legalCase.getThumbnailUrl()),
 					scriptStatus == ScriptStatus.READY,
 					scriptStatus,
-					myStatus);
+					myStatus,
+					locked);
 		}
 	}
 }

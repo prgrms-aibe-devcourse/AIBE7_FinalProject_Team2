@@ -5,6 +5,8 @@ import { routes } from './app/routes.js';
 import { createRouter } from './app/router.js';
 import { loadApi } from './api/index.js';
 import { applyMotion } from './utils/motion.js';
+import { syncBookmarkFromServer } from './utils/bookmarkCharacter.js';
+import { currentUser } from './utils/session.js';
 
 applyMotion(); // 연출 스위치 설정을 첫 화면 전에 <html data-motion>에 반영한다
 // 등록한 사용자 속성(@property)을 아는 브라우저에서만 종이 귀를 움직인다. 모르면 키프레임 사이가 이어지지 않고 뚝뚝 바뀐다(FE-96 · FE-110)
@@ -34,6 +36,8 @@ try {
   const baseApi = await loadApi();
   // 출석 기록(BE-97 P-6): 사이트에 들어올 때 한 번 부른다. 같은 날 다시 불러도 하루로 센다. 실패해도 화면은 그대로 쓰므로 에러 이동(createAppApi)을 거치지 않고 조용히 넘긴다
   Promise.resolve(baseApi.postAttendance?.()).catch(() => {});
+  // 책갈피(FE-73): 로그인한 회원이면 서버의 설정을 거울에 맞춘다. 비로그인 방문(쿠키 없는 첫 방문 포함)은 부르지 않는다. 화면은 기다리지 않는다
+  if (currentUser()) syncBookmarkFromServer(baseApi.getMyPage);
   const api = createAppApi(baseApi, {
     navigate: router.navigate,
     currentCaseId: router.currentCaseId,

@@ -46,6 +46,15 @@ class LevelXpTest {
 	}
 
 	@Test
+	@DisplayName("BE-146 업적: 5건 완료면 cases-5 200, 50장 모으면 collect-50 200")
+	void rebalancedAchievements() {
+		// 사건 5 × 100 + first-case 50 + cases-3 100 + cases-5 200
+		assertThat(LevelXp.derived(new ProfileStats(5, false, 0, null))).isEqualTo(500 + 50 + 100 + 200);
+		// 50장 × 10 + collect-5 100 + collect-20 200 + collect-50 200
+		assertThat(LevelXp.derived(new ProfileStats(0, false, 0, 50))).isEqualTo(500 + 100 + 200 + 200);
+	}
+
+	@Test
 	@DisplayName("해금 기록이 있는 업적은 계산값이 미달이어도 XP가 그대로다 (BE-83)")
 	void unlockedAchievementKeepsXp() {
 		ProfileStats stats = new ProfileStats(0, false, 0, 0,

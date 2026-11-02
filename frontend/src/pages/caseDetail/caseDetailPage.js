@@ -2,12 +2,14 @@ import { button, element } from '../../components/siteLayout.js';
 import { screenByStatus } from '../../utils/screenByStatus.js';
 import { TYPE_NOTES } from '../../content/typeNotes.js';
 import { sensitiveNotice } from '../../content/sensitiveNotice.js';
+import { clearStageResume } from '../../components/stage.js';
 import { caseStage, mountStagePage, scriptFor } from '../overview/overviewPage.js';
 import { caseInfoEar, caseNewspaper, earButton, paperFromCase } from '../../components/newspaperFront.js';
 import { evidencePhotosFromPaper, fetchCasePaper } from '../../utils/newspaper.js';
 import { reducedMotion } from '../../utils/motion.js';
 import { loadCaseScript, isScriptMaintenance } from '../../utils/caseScript.js';
 import { isScriptReady, scriptStatusOf, SCRIPT_STATUS } from '../../utils/scriptReady.js';
+import { isCaseLocked, isLocked } from '../../utils/caseUnlock.js';
 import { landArticle } from '../../utils/articleZoom.js';
 import { openCaseReviewPopup } from '../caseReview/caseReviewPopup.js';
 
@@ -120,6 +122,8 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
       if (!active()) return;
       trigger.disabled = false;
       trigger.removeAttribute('aria-busy');
+      // 잠긴 사건(BE-146): 화면이 아직 잠김을 모른 채 눌렀다(다른 곳에서 열어 둔 화면 · 단계가 바뀐 경우). 새로 받아 잠김 도장으로 다시 그린다
+      if (isCaseLocked(error)) { starting = false; load(); return; }
       notice.textContent = error?.code === 'CASE_NOT_FOUND' ? '사건을 찾을 수 없어요. 신문으로 돌아가 다시 골라 주세요.' : failText;
     } finally {
       starting = false;
@@ -130,7 +134,7 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
   // FE-56: 서버가 체험할 수 없다고 한 사건(scriptReady false, FE-125)은 새 체험을 열지 않는다. 지면은 그대로 읽게 두고, "시작하기" 자리에 누를 수 없는 "준비 중"을 둔다.
   // 서버는 준비됐다는데 프론트에 대본 무대가 없으면(ready) "시작하기"는 열되 지면은 이 모양이다. 무대는 FE-33이 서버 대본으로 채운다.
   // 이미 하던 · 마친 체험(myStatus)이 있으면 막지 않는다: 오른쪽 귀 "이어서 하기" · "결과 다시 보기"와 우하단 버튼이 API 2 응답 상태로 이어서 볼 화면으로 보낸다
-  function drawPaper(data, casePaper, ready = false, maintenance = false) {
+  function drawPaper(data, casePaper, ready = false, maintenance = false, locked = false, lockReason = '') {
     const action = ACTIONS[data.myStatus] ?? (ready ? NOT_STARTED : undefined);
     const notice = element('p', 'paper-start-notice', ''); // 시작하지 못했을 때의 오류만 채운다. 준비 중은 점선 도장 하나로 알리고 설명 상자는 두지 않는다(FE-119)
     notice.setAttribute('role', 'alert');
@@ -142,7 +146,8 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
       go = stampButton(action.label, () => start(go, notice, action.failText));
       go.setAttribute('aria-label', `${action.label}, ${data.title}`); // 화면 글자로 시작해야 음성 입력으로 누를 수 있다(WCAG 2.5.3)
     } else {
-      const label = maintenance ? '점검 중' : '준비 중'; // FE-145: 대본 점검(503 · MAINTENANCE)은 준비 중과 다르게 알린다
+      // FE-145: 대본 점검(503 · MAINTENANCE)은 준비 중과 다르게 알린다. FE-149: 순차 해금으로 아직 열리지 않은 사건은 "잠김"(BE-146)
+      const label = locked ? '잠김' : maintenance ? '점검 중' : '준비 중';
       go = stampButton(label);
       go.setAttribute('aria-disabled', 'true');
       go.setAttribute('aria-label', `${label}, ${data.title} 체험`);
@@ -154,6 +159,12 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
       dock.append(button('독자 엽서 쓰기', (event) => openCaseReviewPopup({ caseId, api, navigate, from: event.currentTarget }), 'secondary-button'));
     }
     dock.append(go);
+    if (locked && !action) { // 잠긴 이유는 도장 밑에 한 줄(준비 중 · 점검 중은 도장만, FE-119). 낭독기가 도장과 함께 이유를 읽도록 잇는다
+      const reason = element('p', 'paper-start-lock', lockReason);
+      reason.id = 'paper-start-lock';
+      go.setAttribute('aria-describedby', reason.id);
+      dock.append(reason);
+    }
     const deskBack = element('div', 'desk');
     deskBack.setAttribute('aria-hidden', 'true');
     root.className = 'case-list-page case-paper-page overview-page';
@@ -219,6 +230,7 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
     }
     // 이미 사전 판단을 낸 사건을 1막부터 다시 본다. 판단은 바꿀 수 없으니 엽서 차례에 보낸 판단을 보여 주고 저장된 단계로 잇는다(주소는 S-20 그대로)
     async function playAgain(experience, saved) {
+      clearStageResume(); // 다시 보기는 처음부터 보려고 누르는 버튼이라 막마다 남긴 이어 보기 위치를 지우고 들어간다(FE-51)
       stage.replay();
       if (prompt) stage.advance({ dropCurrent: true }); // 묻는 장면은 빼서 ◀ 이전으로 다시 나오지 않게
       // 완료한 사건만 세 판결 비교(API 14)에서 보낸 판단을 읽어 보여 준다. 진행 중이면 형량은 보여 주지 않고 제출 완료 안내만 한다(BE-77)
@@ -260,6 +272,8 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
         if (fresh) await playFresh(); else await playAgain(experience, saved);
       } catch (error) {
         if (!active() || started) return;
+        // 잠긴 사건(BE-146): 화면이 아직 잠김을 모른 채 눌렀다(다른 곳에서 열어 둔 화면 · 단계가 바뀐 경우). 새로 받아 잠김 도장으로 다시 그린다
+        if (isCaseLocked(error)) { starting = false; load(); return; }
         notice.textContent = error?.code === 'CASE_NOT_FOUND' ? '사건을 찾을 수 없어요. 신문으로 돌아가 다시 골라 주세요.' : failText;
       } finally {
         starting = false;
@@ -279,6 +293,9 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
     }
   }
 
+  // 잠긴 이유 한 줄. 몇 건을 더 마쳐야 이 사건이 열리는지는 사건별로 알 수 없어(단계 값만 있다) 건수를 약속하지 않는다
+  const LOCK_REASON = '다른 사건을 마치면 새 사건이 차례로 열려요.';
+
   async function load() {
     if (!active()) return;
     message('사건 정보를 불러오는 중…');
@@ -290,6 +307,11 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
       // FE-145: 점검 중(scriptStatus MAINTENANCE, 또는 API 18 503)이면 "점검 중" 도장. 하던 · 마친 체험은 drawPaper가 그대로 이어서 볼 수 있게 둔다
       let maintenance = scriptStatusOf(data, scriptFor(caseId, data.title)) === SCRIPT_STATUS.MAINTENANCE;
       let script = null;
+      // FE-149: 순차 해금으로 잠긴 사건(BE-146)은 대본을 받지 않고 지면만 읽게 둔다. 잠긴 사건은 체험한 적이 없다(myStatus null)
+      if (isLocked(data)) {
+        drawPaper(data, casePaper, false, false, true, LOCK_REASON);
+        return;
+      }
       if (isScriptReady(data, scriptFor(caseId, data.title))) {
         try {
           script = await loadCaseScript(api, caseId);

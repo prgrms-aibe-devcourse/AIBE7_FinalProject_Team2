@@ -1193,7 +1193,7 @@ function achievementList(achievements) {
     const fill = element('span');
     fill.style.width = `${Math.round((value / item.goal) * 100)}%`;
     bar.append(fill);
-    line.append(head, element('p', 'my-achievement-text', item.text), bar, element('p', 'my-achievement-reward', `보상: ${rewardText(item)}`));
+    line.append(head, element('p', 'my-achievement-text', item.text), bar, element('p', 'my-achievement-reward', `보상: ${rewardText(item) || '경험치'}`));
     list.append(line);
   });
   section.append(list);

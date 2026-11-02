@@ -20,11 +20,11 @@ const reset = (stats = { completed: 0, hasType: 0 }) => {
   setStatsReader(() => stats);
 };
 
-test('P-5: 저장한 적이 없으면 기본 꾸미기와 도전과제 8개 · 열린 항목이 온다', async () => {
+test('P-5: 저장한 적이 없으면 기본 꾸미기와 도전과제 10개 · 열린 항목이 온다', async () => {
   reset();
   const page = await getMyPage();
   assert.deepEqual(page.profileDeco, DEFAULT);
-  assert.equal(page.achievements.length, 8);
+  assert.equal(page.achievements.length, 10);
   assert.deepEqual(Object.keys(page.unlocked).sort(), ['backgrounds', 'frames', 'kinds', 'sashColors', 'sashIcons', 'sashStyles']);
   assert.equal(typeof page.profile.attendanceDays, 'number');
   // 수집 도전과제는 수집 목의 모은 수로 판정한다(FE-132). 처음엔 사건 1을 막 마친 것처럼 7장(일러스트 3 + 의상 4)이 "새로 얻음"으로 있다

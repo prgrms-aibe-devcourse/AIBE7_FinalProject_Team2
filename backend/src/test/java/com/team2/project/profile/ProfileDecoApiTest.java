@@ -62,12 +62,12 @@ class ProfileDecoApiTest extends ApiIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("새 회원의 마이페이지: 기본 꾸미기 · 도전과제 8개(수집도 0부터, BE-83) · 처음부터 열린 것 · 빈 컬렉션")
+	@DisplayName("새 회원의 마이페이지: 기본 꾸미기 · 도전과제 10개(수집도 0부터 BE-83, cases-5 · collect-50 BE-146) · 처음부터 열린 것 · 빈 컬렉션")
 	void emptyMyPage() throws Exception {
 		mockMvc.perform(get(MY_PAGE).header("Authorization", bearer(registerMember())))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.profileDeco.portrait").value("/images/characters/standing/naero.webp"))
-			.andExpect(jsonPath("$.achievements.length()").value(8))
+			.andExpect(jsonPath("$.achievements.length()").value(10))
 			.andExpect(jsonPath("$.achievements[0].id").value("first-case"))
 			.andExpect(jsonPath("$.achievements[0].stat").value("completed"))
 			.andExpect(jsonPath("$.achievements[0].status").value("IN_PROGRESS"))
