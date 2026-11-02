@@ -137,7 +137,6 @@ const KINDS = [
   ['characters/standing', '서 있는 컷'],
   ['characters/cheek', '볼따구 컷'],
   ['characters/cheek-slim', '슬림 볼따구 컷'],
-  ['characters/deform', '데포르메'],
   ['characters/personality', '성향 이미지'],
   ['cases', '사건 이미지'],
 ];
@@ -237,11 +236,11 @@ export function collectionGroups(collected) {
   };
 }
 
-/** 기존 사용자 백필(P-9 backfill): 마친 사건인데 그 사건 일러스트가 하나라도 빠진 사건 번호(중복 없이) */
-export function backfillCaseIds(experiences, items) {
+/** 기존 사용자 백필(P-9 backfill): 마친 사건인데 그 사건 일러스트가 하나라도 빠진 사건 번호(중복 없이). retry는 의상이 남아 다시 보낼 사건 */
+export function backfillCaseIds(experiences, items, retry = []) {
   const have = new Set((items ?? []).map((item) => item.itemId));
   const done = (experiences ?? []).filter((item) => item.status === 'COMPLETED').map((item) => item.caseId);
-  return [...new Set(done)].filter((caseId) => illustrationIdsOf(caseId).some((id) => !have.has(id)));
+  return [...new Set(done)].filter((caseId) => retry.includes(caseId) || illustrationIdsOf(caseId).some((id) => !have.has(id)));
 }
 
 /** 획득 · 달성 날짜(한국 시간): "2026. 10. 14." 값이 없거나 읽지 못하면 '' */

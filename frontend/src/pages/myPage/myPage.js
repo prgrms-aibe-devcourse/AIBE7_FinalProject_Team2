@@ -67,6 +67,16 @@ let refresh = null; // 저장이 거절됐을 때 서버 값으로 화면을 다
 let saveQueue = Promise.resolve(); // 저장은 고른 순서대로 한 번에 하나씩 보낸다(PUT은 전체를 덮어쓰므로 순서가 바뀌면 안 된다)
 let saveEpoch = 0; // 거절되면 올린다. 거절 전에 줄 선 저장은 건너뛴다
 let decoVersion = 0; // 꾸미기를 고를 때마다 올린다. 받아 둔 서버 값이 그 사이에 고른 것을 덮어쓰지 않게 비교한다
+// 대본을 못 받아 의상을 못 보낸 사건 번호. 일러스트만 채워진 사건은 backfillCaseIds가 빠졌다고 보지 않으므로 따로 기억한다
+const CAST_PENDING_KEY = 'nlnb-collection-cast-pending';
+function castPending(caseId, pending) {
+  let ids = [];
+  try { ids = JSON.parse(localStorage.getItem(CAST_PENDING_KEY)) ?? []; } catch { ids = []; }
+  if (caseId === undefined) return ids;
+  const next = pending ? [...new Set([...ids, caseId])] : ids.filter((id) => id !== caseId);
+  try { localStorage.setItem(CAST_PENDING_KEY, JSON.stringify(next)); } catch { /* 저장소를 못 쓰면 이번 방문만 */ }
+  return next;
+}
 const backfilled = new Set(); // 이번 방문(새로고침 전)에 백필을 보낸 사건. 실패해도 되풀이하지 않는다
 // 화면을 연 동안 보여 준 "새로 얻음" · "새로 열림"(FE-132). 화면을 열자마자 "봤음"을 보내므로, 뒤이어 새로 받은 응답(isNew false)으로
 // 다시 그려도 이 화면에서는 표시를 지우지 않는다. 다른 화면으로 가면 비운다
@@ -300,7 +310,7 @@ function renderRows(data, go) {
     thumbs = element('span', 'my-thumbs');
     collected.slice(0, 4).forEach(({ src, kind }) => thumbs.append(picture(src, '', kind === 'cast' ? 'is-cast' : '')));
   }
-  list.append(row('collection', total > 0 ? `사건에서 모은 일러스트 ${total}장` : '체험을 마치면 사건에서 만난 모습과 일러스트가 모여요', thumbs, go, null, fresh ? `새로 얻음 ${fresh}` : null));
+  list.append(row('collection', total > 0 ? `사건에서 모은 모습과 일러스트 ${total}개` : '체험을 마치면 사건에서 만난 모습과 일러스트가 모여요', thumbs, go, null, fresh ? `새로 얻음 ${fresh}` : null));
 
   const latest = [...experiences].sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')))[0];
   list.append(row('cases', latest ? `최근: ${latest.title}` : '아직 체험한 사건이 없어요', element('span', 'my-count', `${experiences.length}건`), go, `${experiences.length}건`));
@@ -575,12 +585,16 @@ const collectedOf = (data) => collectedItems(data.collection?.items, caseTitlesO
 
 // 컬렉션 화면을 열면 "새로 얻음"을 본 것으로 남긴다(P-10, 종류마다 한 번). 이번 화면의 표시는 그대로 두고, 받아 둔 응답(cache)만 바꿔
 // 첫 화면으로 돌아갔을 때 "새로 얻음 N"이 사라지게 한다. 실패하면 다음에 다시 보인다
+const seenSending = new Set(); // 응답을 기다리는 종류. paint(cache) · paint(data)로 두 번 그려도 한 번만 보낸다
 function markCollectionSeen(collected, api) {
   if (!api?.postCollectionSeen) return;
-  const kinds = [...new Set(collected.filter((item) => item.isNew).map((item) => item.kind))];
-  kinds.forEach((kind) => api.postCollectionSeen({ kind }).then(() => {
-    cache?.collection?.items?.forEach((item) => { if (item.kind === kind) item.isNew = false; });
-  }, (error) => console.warn('[FE-132] 컬렉션 봤음을 남기지 못했습니다', error)));
+  const kinds = [...new Set(collected.filter((item) => item.isNew).map((item) => item.kind))].filter((kind) => !seenSending.has(kind));
+  kinds.forEach((kind) => {
+    seenSending.add(kind);
+    api.postCollectionSeen({ kind }).then(() => {
+      cache?.collection?.items?.forEach((item) => { if (item.kind === kind) item.isNew = false; });
+    }, (error) => console.warn('[FE-132] 컬렉션 봤음을 남기지 못했습니다', error)).finally(() => seenSending.delete(kind));
+  });
 }
 
 // 컬렉션 — 만난 모습(역할 의상) 한 묶음 + 사건별 일러스트. 서버 수집 기록을 그린다(FE-132). 카드마다 획득 날짜, 아직 안 본 것은 "새로 얻음"
@@ -1645,19 +1659,20 @@ export async function renderMyPage(container, { api, navigate, view, from }) {
     if (shown && !from) main.querySelector('h1')?.focus({ preventScroll: true });
   }
   reveal();
-  backfill(data);
+  backfill(data).catch((error) => console.warn('[FE-132] 수집 백필 처리 중 오류', error));
 
   // 기존 사용자 백필(P-9 backfill, FE-132): 수집 기록이 생기기 전에 마친 사건 · 손님 때 마친 사건은 일러스트 · 의상이 비어 있다.
   // 그 사건 대본으로 얻은 것을 보내 채우고("본 것", 획득 시각은 그 사건의 첫 완료 시각 — 서버가 정한다), 다 보내면 다시 받아 그린다.
-  // 대본을 받지 못하면(준비 중 · 점검) 일러스트만 보낸다
+  // 대본을 받지 못하면(준비 중 · 점검) 일러스트만 보내고, 그 사건은 의상이 남았다고 적어 두었다가 다음에 들어올 때 다시 시도한다
   async function backfill(given) {
-    const targets = backfillCaseIds(given.experiences, given.collection?.items).filter((caseId) => !backfilled.has(caseId));
+    const targets = backfillCaseIds(given.experiences, given.collection?.items, castPending()).filter((caseId) => !backfilled.has(caseId));
     if (targets.length === 0 || !api.postCollection) return;
     targets.forEach((caseId) => backfilled.add(caseId));
     let added = 0;
     for (const caseId of targets) {
       const script = await loadCaseScript(api, caseId).catch(() => null);
       const result = await recordCollection(api, caseId, script, { backfill: true });
+      if (result) castPending(caseId, !script);
       added += result?.added?.length ?? 0;
     }
     if (!added || !active()) return;

@@ -121,6 +121,7 @@ test('backfillCaseIds: 마친 사건 중 그 사건 일러스트가 하나라도
   ];
   const items = ['case-1-reenact', 'case-1-origin', 'case-1-conclusion', 'case-4-reenact'].map((itemId) => ({ kind: 'illustration', itemId }));
   assert.deepEqual(backfillCaseIds(experiences, items), [2, 4]);
+  assert.deepEqual(backfillCaseIds(experiences, items, [1]), [1, 2, 4]); // 의상이 남은 사건은 일러스트가 있어도 다시
   assert.deepEqual(backfillCaseIds(undefined, undefined), []);
 });
 
