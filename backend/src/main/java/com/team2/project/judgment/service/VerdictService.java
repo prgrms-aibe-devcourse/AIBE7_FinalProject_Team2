@@ -1,6 +1,7 @@
 package com.team2.project.judgment.service;
 
 import com.team2.project.common.metrics.BusinessMetrics;
+import com.team2.project.common.web.Requester;
 import com.team2.project.experience.domain.Experience;
 import com.team2.project.experience.domain.ExperienceStatus;
 import com.team2.project.experience.service.ExperienceTransitionService;
@@ -16,8 +17,6 @@ import com.team2.project.legalcase.repository.FactorRepository;
 import com.team2.project.legalcase.repository.PenaltyRuleRepository;
 import java.time.Clock;
 import java.time.Instant;
-import java.util.Optional;
-import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -48,8 +47,8 @@ public class VerdictService {
 
 	/** Bean Validation(@Valid)을 통과한 요청을 받는다. REVIEWED가 아니면 INVALID_STATE (이미 확정 포함) */
 	@Transactional
-	public VerdictResponse submit(Long caseId, Optional<UUID> anonymousId, VerdictRequest request) {
-		Experience experience = myExperienceService.getMyExperienceBetween(caseId, anonymousId,
+	public VerdictResponse submit(Long caseId, Requester requester, VerdictRequest request) {
+		Experience experience = myExperienceService.getMyExperienceBetween(caseId, requester,
 			ExperienceStatus.REVIEWED, ExperienceStatus.REVIEWED);
 		var options = penaltyRuleRepository.findAllByCaseId(caseId).stream().map(VerdictValidator.Option::from).toList();
 		var factors = factorRepository.findAllByCaseId(caseId).stream().collect(Collectors.toMap(Factor::getId, Function.identity()));

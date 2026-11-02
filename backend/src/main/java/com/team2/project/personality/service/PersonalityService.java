@@ -2,11 +2,12 @@ package com.team2.project.personality.service;
 
 import com.team2.project.common.exception.BusinessException;
 import com.team2.project.common.exception.ErrorCode;
-import com.team2.project.experience.domain.AnonymousUser;
+import com.team2.project.common.owner.Owner;
+import com.team2.project.common.web.Requester;
 import com.team2.project.experience.repository.AnonymousUserRepository;
 import com.team2.project.experience.repository.ExperienceRepository;
-import com.team2.project.experience.service.AnonymousUserService;
-import com.team2.project.experience.service.AnonymousUserService.IssuedAnonymousUser;
+import com.team2.project.experience.service.OwnerService;
+import com.team2.project.member.repository.MemberRepository;
 import com.team2.project.personality.domain.PersonalityAnswer;
 import com.team2.project.personality.domain.PersonalityChoice;
 import com.team2.project.personality.domain.PersonalityQuestion;
@@ -46,8 +47,9 @@ public class PersonalityService {
 	/** share_id 형식 (V15 chk_personality_type_share_id). 형식이 아니면 조회하지 않고 404 (P-4) */
 	private static final Pattern SHARE_ID = Pattern.compile("[A-Za-z0-9]{6,16}");
 
-	private final AnonymousUserService anonymousUserService;
+	private final OwnerService ownerService;
 	private final AnonymousUserRepository anonymousUserRepository;
+	private final MemberRepository memberRepository;
 	private final PersonalityQuestionRepository questionRepository;
 	private final PersonalityChoiceRepository choiceRepository;
 	private final PersonalityTypeRepository typeRepository;
@@ -62,13 +64,13 @@ public class PersonalityService {
 	}
 
 	/**
-	 * P-2 응답 제출. 쿠키가 없으면 익명 ID를 발급하고, 재응시면 이전 현재 결과를 이력으로 내린다.
+	 * P-2 응답 제출. 손님인데 쿠키가 없으면 익명 ID를 발급하고(회원은 회원이 주인, BE-140), 재응시면 이전 현재 결과를 이력으로 내린다.
 	 * 같은 사용자의 제출은 사용자 행을 잠가 차례로 처리한다 (#124 리뷰).
 	 * 성향카드 재심(baseline: true)은 사용자당 1회다. 이미 했으면 409이고 결과를 저장하지 않는다.
 	 * 테스트한 적이 없으면 첫 테스트로 처리하고 횟수는 쓰지 않는다(API 명세 P-2 v0.50, BE-104)
 	 */
 	@Transactional
-	public SubmitResult submit(Optional<UUID> anonymousId, PersonalitySubmitRequest request) {
+	public SubmitResult submit(Requester requester, PersonalitySubmitRequest request) {
 		List<PersonalityQuestion> questions = questionRepository.findAllByActiveTrueOrderByDisplayOrderAsc();
 		Map<Long, Integer> values = validateAnswers(request, questions);
 		boolean baseline = request.baselineRequested();	// 형식 검사는 익명 ID 발급 전에 끝낸다(P-2)
@@ -90,30 +92,32 @@ public class PersonalityService {
 		}
 		Score score = PersonalityScoring.scoreTest(picks);
 
-		IssuedAnonymousUser issued = anonymousUserService.getOrIssue(anonymousId);
-		UUID userId = issued.user().getId();
-		anonymousUserRepository.findByIdForUpdate(userId).orElseThrow();
-		// 사용자 행을 잠근 뒤에 보므로 같은 사용자의 동시 재심 제출도 차례로 판정된다. V28 부분 유니크가 마지막 방어선이다
-		boolean retake = baseline && resultRepository.existsByAnonymousUser_Id(userId);
-		if (retake && resultRepository.existsByAnonymousUser_IdAndBaselineRetakeTrue(userId)) {
+		OwnerService.IssuedOwner issued = ownerService.getOrIssue(requester);
+		Owner owner = issued.owner();
+		owner.fold(memberId -> memberRepository.findByIdForUpdate(memberId).orElseThrow(),
+			anonymousUserId -> anonymousUserRepository.findByIdForUpdate(anonymousUserId).orElseThrow());
+		// 사용자 행을 잠근 뒤에 보므로 같은 사용자의 동시 재심 제출도 차례로 판정된다. V28 · V40 부분 유니크가 마지막 방어선이다
+		boolean retake = baseline && resultRepository.existsAny(owner);
+		if (retake && resultRepository.existsBaselineRetake(owner)) {
 			throw new BusinessException(ErrorCode.BASELINE_RETAKE_USED);
 		}
-		int completedCases = Math.toIntExact(experienceRepository.countCompletedCases(userId));
+		int completedCases = Math.toIntExact(experienceRepository.countCompletedCases(owner));
 		// clearCurrent는 영속성 컨텍스트를 비운다. 앞에서 읽은 엔티티는 detach되므로 아래에서 다시 잡는다 (#124 리뷰)
-		resultRepository.clearCurrent(userId);
-		AnonymousUser user = anonymousUserRepository.getReferenceById(userId);
+		resultRepository.clearCurrent(owner);
 		PersonalityType type = typeRepository.findById(score.typeCode()).orElseThrow(
 			() -> new IllegalStateException("유형 시드가 없음: " + score.typeCode()));
-		PersonalityResult saved = resultRepository.saveAndFlush(
-			PersonalityResult.create(user, type, score.axisScores(), answers, completedCases, retake));
-		return new SubmitResult(PersonalityResultResponse.from(saved), issued.issued() ? userId : null);
+		PersonalityResult saved = resultRepository.saveAndFlush(owner.fold(
+			memberId -> PersonalityResult.createForMember(memberId, type, score.axisScores(), answers, completedCases, retake),
+			anonymousUserId -> PersonalityResult.create(anonymousUserRepository.getReferenceById(anonymousUserId), type,
+				score.axisScores(), answers, completedCases, retake)));
+		return new SubmitResult(PersonalityResultResponse.from(saved), issued.issuedCookieId());
 	}
 
-	/** P-3 내 현재 결과. 테스트한 적 없으면(쿠키 없음 포함) 404 */
+	/** P-3 내 현재 결과. 테스트한 적 없으면(손님의 쿠키 없음 포함) 404 */
 	@Transactional(readOnly = true)
-	public PersonalityResultResponse getMine(Optional<UUID> anonymousId) {
-		return anonymousUserService.findAndTouch(anonymousId)
-			.flatMap(user -> resultRepository.findByAnonymousUser_IdAndCurrentTrue(user.getId()))
+	public PersonalityResultResponse getMine(Requester requester) {
+		return ownerService.find(requester)
+			.flatMap(resultRepository::findCurrent)
 			.map(PersonalityResultResponse::from)
 			.orElseThrow(() -> new BusinessException(ErrorCode.PERSONALITY_RESULT_NOT_FOUND));
 	}

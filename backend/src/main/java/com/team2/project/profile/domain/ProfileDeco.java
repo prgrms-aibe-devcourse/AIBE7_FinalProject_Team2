@@ -4,20 +4,19 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
-import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/** 프로필 꾸미기 설정 (BE-96, V23). 익명 사용자당 한 줄. 검증은 ProfileDecoValidator가 저장 전에 한다 */
+/** 프로필 꾸미기 설정 (BE-96, V23 → BE-140 V41 member_profile_deco). 회원당 한 줄. 검증은 ProfileDecoValidator가 저장 전에 한다 */
 @Entity
-@Table(name = "profile_deco")
+@Table(name = "member_profile_deco")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ProfileDeco {
 
 	@Id
-	private UUID anonymousUserId;
+	private Long memberId;
 
 	private String portrait;
 	private String frame;
@@ -34,9 +33,9 @@ public class ProfileDeco {
 
 	private Instant updatedAt;	// 로그인 이관 때 가장 최근 꾸미기를 고르는 기준
 
-	public static ProfileDeco of(UUID anonymousUserId, ProfileDecoValues values, Instant now) {
+	public static ProfileDeco of(long memberId, ProfileDecoValues values, Instant now) {
 		ProfileDeco deco = new ProfileDeco();
-		deco.anonymousUserId = anonymousUserId;
+		deco.memberId = memberId;
 		deco.apply(values, now);
 		return deco;
 	}

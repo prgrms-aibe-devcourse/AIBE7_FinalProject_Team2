@@ -33,30 +33,30 @@ public class JudgmentResultController {
 	/** API 10. AI 판결 (S-06) */
 	@GetMapping("/judgments/ai")
 	public AiJudgmentResponse getAiJudgment(@PathVariable Long caseId, Requester requester) {
-		return judgmentResultService.getAiJudgment(caseId, requester.anonymousId());
+		return judgmentResultService.getAiJudgment(caseId, requester);
 	}
 
 	/** API 11. 실제 판결 공개 (본문 없음) */
 	@PostMapping("/court-reveal")
 	public RevealResponse revealCourt(@PathVariable Long caseId, Requester requester) {
-		return revealService.revealCourt(caseId, requester.anonymousId());
+		return revealService.revealCourt(caseId, requester);
 	}
 
 	/** API 12. 실제 판결 (S-07) */
 	@GetMapping("/judgments/court")
 	public CourtJudgmentResponse getCourtJudgment(@PathVariable Long caseId, Requester requester) {
-		return judgmentResultService.getCourtJudgment(caseId, requester.anonymousId());
+		return judgmentResultService.getCourtJudgment(caseId, requester);
 	}
 
 	/** API 13. 비교 공개 (본문 없음) */
 	@PostMapping("/comparison-reveal")
 	public RevealResponse revealComparison(@PathVariable Long caseId, Requester requester) {
-		return revealService.revealComparison(caseId, requester.anonymousId());
+		return revealService.revealComparison(caseId, requester);
 	}
 
 	/** API 14. 세 판결 비교 (S-08) */
 	@GetMapping("/comparison")
 	public ComparisonResponse getComparison(@PathVariable Long caseId, Requester requester) {
-		return comparisonService.getComparison(caseId, requester.anonymousId());
+		return comparisonService.getComparison(caseId, requester);
 	}
 }

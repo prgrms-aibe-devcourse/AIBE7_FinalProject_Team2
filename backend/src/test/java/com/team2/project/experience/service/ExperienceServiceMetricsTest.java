@@ -2,6 +2,7 @@ package com.team2.project.experience.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.team2.project.common.web.Requester;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -44,11 +45,11 @@ class ExperienceServiceMetricsTest {
 	void start_onlyCountsNewlyCreatedExperience() {
 		double before = experienceStartedCount();
 
-		var first = experienceService.start(caseId, Optional.empty());
+		var first = experienceService.start(caseId, Requester.guest(Optional.empty()));
 		assertThat(first.created()).isTrue();
 		assertThat(experienceStartedCount()).isEqualTo(before + 1);
 
-		var again = experienceService.start(caseId, Optional.of(first.issuedCookieId()));
+		var again = experienceService.start(caseId, Requester.guest(first.issuedCookieId()));
 		assertThat(again.created()).isFalse();
 		assertThat(experienceStartedCount()).isEqualTo(before + 1);
 	}

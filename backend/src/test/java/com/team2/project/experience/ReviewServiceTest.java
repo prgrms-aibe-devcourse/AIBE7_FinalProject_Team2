@@ -3,6 +3,7 @@ package com.team2.project.experience;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.team2.project.common.web.Requester;
 import com.team2.project.common.exception.BusinessException;
 import com.team2.project.common.exception.ErrorCode;
 import com.team2.project.experience.domain.ExperienceStatus;
@@ -98,8 +99,8 @@ class ReviewServiceTest {
 	private void state(ExperienceStatus status, int step) {
 		jdbc.update("UPDATE experience SET status = ?, last_reviewed_step = ? WHERE id = ?", status.name(), step, experienceId);
 	}
-	private Optional<UUID> me() {
-		return Optional.of(userId);
+	private Requester me() {
+		return Requester.guest(userId);
 	}
 	private ReviewStepRequest request(int step) {
 		var request = new ReviewStepRequest(step);
@@ -183,9 +184,9 @@ class ReviewServiceTest {
 	}
 	@Test
 	void getReviewAndConfirmStep_missingExperience_rejects() {
-		errorCode(() -> service.getReview(caseId, Optional.of(UUID.randomUUID())), ErrorCode.EXPERIENCE_NOT_FOUND);
-		errorCode(() -> service.getReview(caseId, Optional.empty()), ErrorCode.EXPERIENCE_NOT_FOUND);
-		errorCode(() -> service.confirmStep(caseId, Optional.empty(), request(2)), ErrorCode.EXPERIENCE_NOT_FOUND);
+		errorCode(() -> service.getReview(caseId, Requester.guest(UUID.randomUUID())), ErrorCode.EXPERIENCE_NOT_FOUND);
+		errorCode(() -> service.getReview(caseId, Requester.guest(Optional.empty())), ErrorCode.EXPERIENCE_NOT_FOUND);
+		errorCode(() -> service.confirmStep(caseId, Requester.guest(Optional.empty()), request(2)), ErrorCode.EXPERIENCE_NOT_FOUND);
 		stored(ExperienceStatus.PRE_JUDGED, 1);
 	}
 	@Test
