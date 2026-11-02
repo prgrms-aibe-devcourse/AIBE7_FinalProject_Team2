@@ -1,6 +1,7 @@
 import { button, element } from '../../components/siteLayout.js';
 import { loginDesk } from './loginDesk.js';
 import { saveUser } from '../../utils/session.js';
+import { syncBookmarkFromServer } from '../../utils/bookmarkCharacter.js';
 import { devJumpBar } from './loginDevJump.js';
 import { offerAnonymousImport } from './anonymousImport.js';
 import { askKakaoSignupConsent, offerTermsConsent } from './termsConsent.js';
@@ -54,6 +55,7 @@ export function renderAuthCallbackPage(container, { api, navigate }) {
     const me = await Promise.resolve(api.getMe?.()).catch(() => null);
     if (!container.contains(root)) return; // 기다리는 사이 다른 화면으로 갔으면 이동하지 않는다
     saveUser({ nickname: me?.displayName || KAKAO_MEMBER_NICKNAME });
+    syncBookmarkFromServer(api.getMyPage); // 다른 기기에서 고른 책갈피를 이 기기의 판결 체험에 맞춘다(FE-73). 이동을 기다리게 하지 않는다
     // 동의 기록이 없는 회원은 동의가 먼저다(BE-145). 닫으면 로그아웃이라 가져오기 창은 띄우지 않고 메인으로 간다
     if (await offerTermsConsent(api, me) !== 'declined') {
       await offerAnonymousImport(api); // 이 브라우저의 체험 기록 · 첫인상 엽서가 있으면 가져올지 먼저 고르게 한다(FE-138)
@@ -80,6 +82,7 @@ export function renderAuthCallbackPage(container, { api, navigate }) {
     }
     if (result.status === 'agreed') {
       saveUser({ nickname: result.nickname || KAKAO_MEMBER_NICKNAME }); // 카카오 회원은 닉네임이 없어 서버가 '방청객 {회원 ID}'를 준다
+      syncBookmarkFromServer(api.getMyPage);
       await offerAnonymousImport(api);
       if (!container.contains(root)) return;
     }

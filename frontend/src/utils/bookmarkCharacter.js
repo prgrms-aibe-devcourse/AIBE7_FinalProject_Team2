@@ -119,3 +119,20 @@ export function applyBookmark(deco, storage = localStore()) {
     // 저장소를 못 쓰면 이번 화면에서만 바뀐다
   }
 }
+
+/**
+ * 로그인한 회원이면 서버의 책갈피 설정을 받아 거울에 맞춘다(FE-73). 다른 기기에서 고른 책갈피가 마이페이지를 열지 않아도 판결 체험에 반영된다.
+ * 사이트에 들어올 때(main.js)와 로그인을 마쳤을 때(카카오 콜백) 부른다. 못 받으면 거울을 그대로 둔다(화면은 이 호출을 기다리지 않는다)
+ */
+export async function syncBookmarkFromServer(getMyPage, storage = localStore()) {
+  // 기다리는 사이 이 기기에서 책갈피를 바꿨으면(마이페이지) 늦게 온 서버 값으로 덮지 않는다
+  const before = bookmarkSnapshot(storage);
+  try {
+    const deco = (await getMyPage?.())?.profileDeco;
+    if (bookmarkSnapshot(storage) === before) applyBookmark(deco, storage);
+  } catch {
+    // 서버를 못 받아도 이 브라우저의 거울로 보여 준다
+  }
+}
+
+const bookmarkSnapshot = (storage) => [getBookmarkCharacter(storage), getBookmarkFaceName(storage), getBookmarkStyle(storage), getBookmarkColor(storage)].join('|');

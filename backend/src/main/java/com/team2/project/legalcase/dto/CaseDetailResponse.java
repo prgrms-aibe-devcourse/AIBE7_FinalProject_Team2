@@ -21,6 +21,7 @@ import com.team2.project.legalcase.dto.CaseListResponse.MyStatus;
  * @param scriptStatus 대본 상태 (BE-126 2차-2): READY · PREPARING(준비 중, API 18은 404) · MAINTENANCE(점검 중, API 18은 503)
  * @param myStatus 이 사건에 대한 내 최신 회차 상태(API 1과 같은 기준). 쿠키가 없거나 체험 전이면 null.
  *                 사용자마다 다르므로 HTTP 캐시를 켤 때 public 금지 — private + Vary: Cookie (API 1과 같음)
+ * @param locked 아직 열리지 않은 사건 (BE-146, API 1과 같은 기준). 잠긴 사건은 API 2가 409 CASE_LOCKED로 막는다
  * @param cast 배역 {@code {prosecutor, defense}} (BE-125). 배정하지 않은 사건은 필드를 빼서 화면이 기본 배치를 쓴다
  * @param sensitiveFlags 사용자에게 안내하는 민감 플래그만 (BE-125, FE-129 알아두기). 대본 가드 전용 플래그는
  *                       내보내지 않는다(형량을 미리 짐작하게 하는 값이 있다). 안내할 것이 없으면 필드를 뺀다
@@ -41,11 +42,12 @@ public record CaseDetailResponse(
 		boolean scriptReady,
 		ScriptStatus scriptStatus,
 		MyStatus myStatus,
+		boolean locked,
 		@JsonInclude(JsonInclude.Include.NON_NULL) Map<String, String> cast,
 		@JsonInclude(JsonInclude.Include.NON_NULL) List<String> sensitiveFlags) {
 
 	public static CaseDetailResponse of(LegalCase legalCase, long participantCount, ScriptStatus scriptStatus,
-			MyStatus myStatus) {
+			MyStatus myStatus, boolean locked) {
 		CrimeType crimeType = legalCase.getCrimeType();
 		List<String> keywords = legalCase.getKeywords() == null ? List.of() : legalCase.getKeywords();
 		List<String> notices = legalCase.getSensitiveFlags() == null ? List.of()
@@ -66,6 +68,7 @@ public record CaseDetailResponse(
 				scriptStatus == ScriptStatus.READY,
 				scriptStatus,
 				myStatus,
+				locked,
 				legalCase.getCastRoles(),
 				notices.isEmpty() ? null : notices);
 	}

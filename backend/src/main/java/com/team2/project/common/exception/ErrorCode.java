@@ -61,6 +61,8 @@ public enum ErrorCode {
 	SCRIPT_REGENERATION_NOT_FOUND(HttpStatus.NOT_FOUND, "대본 재생성 작업을 찾을 수 없습니다."),
 	// 프로필 꾸미기 (확장 단계, BE-96). details에 잠긴 필드를 담는다
 	DECO_LOCKED(HttpStatus.CONFLICT, "아직 열리지 않은 꾸미기입니다."),
+	// 사건 순차 해금 (BE-146, API 2). 이미 체험한 사건은 막지 않는다
+	CASE_LOCKED(HttpStatus.CONFLICT, "아직 열리지 않은 사건입니다."),
 	// 레벨 · 직업 (확장 단계, BE-106)
 	JOB_LOCKED(HttpStatus.CONFLICT, "아직 열리지 않은 직업입니다."),
 	// 사건 등록 API (확장 단계, BE-93, API 명세 A-14 · A-15)

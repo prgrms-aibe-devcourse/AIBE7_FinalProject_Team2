@@ -71,7 +71,9 @@ export const ACHIEVEMENT_TEXT = {
   'collect-5': { title: '수집가', text: '일러스트를 5장 모아요' },
   'attend-7': { title: '일주일 출석', text: '7일 출석해요' },
   'cases-3': { title: '세 번째 판결', text: '사건 체험을 세 건 마쳐요' },
+  'cases-5': { title: '다섯 번째 판결', text: '사건 체험을 다섯 건 마쳐요' },
   'collect-20': { title: '열혈 수집가', text: '일러스트를 20장 모아요' },
+  'collect-50': { title: '전설의 수집가', text: '일러스트와 의상을 합쳐 50장 모아요' }, // 서버 collected는 일러스트 + 의상 수(BE-83)
   'attend-30': { title: '한 달 출석', text: '30일 출석해요' },
 };
 
