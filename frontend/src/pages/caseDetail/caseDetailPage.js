@@ -6,6 +6,7 @@ import { caseStage, mountStagePage, scriptFor } from '../overview/overviewPage.j
 import { caseInfoEar, caseNewspaper, earButton, paperFromCase } from '../../components/newspaperFront.js';
 import { evidencePhotosFromPaper, fetchCasePaper } from '../../utils/newspaper.js';
 import { reducedMotion } from '../../utils/motion.js';
+import { loadCaseScript } from '../../utils/caseScript.js';
 import { isScriptReady } from '../../utils/scriptReady.js';
 import { landArticle } from '../../utils/articleZoom.js';
 import { openCaseReviewPopup } from '../caseReview/caseReviewPopup.js';
@@ -284,10 +285,11 @@ export async function renderCaseDetailPage(container, { caseId, api, navigate, f
       // 지면 기사 · 증거조사 사진(API 17)은 함께 부르되, 못 받아도(PAPER_NOT_FOUND · 지연 등) 사건 디테일(API 16)만으로 화면을 그린다(FE-64)
       const [data, casePaper] = await Promise.all([api.getCaseDetail(caseId), fetchCasePaper(api, caseId)]);
       if (!active()) return;
-      const script = scriptFor(caseId, data.title);
-      const ready = isScriptReady(data, script); // 서버 scriptReady 우선(FE-125), 없으면 로컬 대본
-      if (ready && script) drawStage(data, script, casePaper);
-      else drawPaper(data, casePaper, ready);
+      // 서버 scriptReady 우선(FE-125). 준비된 사건은 대본(API 18, FE-139)을 받고, 대본이 없으면 준비 중이다
+      const script = isScriptReady(data, scriptFor(caseId, data.title)) ? await loadCaseScript(api, caseId) : null;
+      if (!active()) return;
+      if (script) drawStage(data, script, casePaper);
+      else drawPaper(data, casePaper, false);
     } catch (error) {
       if (!active()) return;
       // CASE_NOT_FOUND는 withErrorRedirect가 S-14로 먼저 보낸다(app/errorRedirect.js). 여기 오는 것은 그 밖의 오류다

@@ -16,6 +16,7 @@ import com.team2.project.common.exception.BusinessException;
 import com.team2.project.common.exception.ErrorCode;
 import com.team2.project.common.exception.FieldErrorDetail;
 import com.team2.project.legalcase.domain.LegalCase;
+import com.team2.project.legalcase.service.CaseCastAssigner;
 import com.team2.project.legalcase.repository.CaseSourceRepository;
 import com.team2.project.pipeline.PipelineClient;
 import com.team2.project.pipeline.PipelineException;
@@ -63,11 +64,12 @@ public class AdminCaseImportService {
 	private final PipelineProperties pipelineProperties;
 	private final AdminAuditLogger auditLogger;
 	private final CaseImportLoader loader;
+	private final CaseCastAssigner castAssigner;
 	private final TransactionTemplate transactionTemplate;
 
 	/** 파이프라인 단계 순서 (COMMON-50 STAGES와 같아야 한다). 아직 아무 값도 못 받았을 때 쓴다 */
 	private static final List<String> STAGES =
-		List.of("extract", "court", "contamination", "rag", "generate", "select", "axis", "load");
+		List.of("extract", "court", "contamination", "rag", "generate", "select", "axis", "classify", "script", "load");
 
 	private static final String STAGE_PENDING = "PENDING";
 
@@ -77,13 +79,14 @@ public class AdminCaseImportService {
 	 */
 	public AdminCaseImportService(CaseImportRepository importRepository, CaseSourceRepository caseSourceRepository,
 			PipelineClient pipelineClient, PipelineProperties pipelineProperties, AdminAuditLogger auditLogger,
-			CaseImportLoader loader, PlatformTransactionManager transactionManager) {
+			CaseImportLoader loader, CaseCastAssigner castAssigner, PlatformTransactionManager transactionManager) {
 		this.importRepository = importRepository;
 		this.caseSourceRepository = caseSourceRepository;
 		this.pipelineClient = pipelineClient;
 		this.pipelineProperties = pipelineProperties;
 		this.auditLogger = auditLogger;
 		this.loader = loader;
+		this.castAssigner = castAssigner;
 		this.transactionTemplate = new TransactionTemplate(transactionManager);
 	}
 
@@ -100,11 +103,12 @@ public class AdminCaseImportService {
 		guardNotAlreadyImported(request.sources());
 		guardNoRunningImport();
 
+		Map<String, String> cast = assignCast(request);
 		// 파이프라인 호출은 트랜잭션 밖에서 한다 — 외부 호출 동안 DB 커넥션을 잡고 있지 않게 (BE-92와 같은 이유)
-		PipelineJob job = createJob(request);
+		PipelineJob job = createJob(request, cast);
 		try {
 			return transactionTemplate.execute(status -> {
-				CaseImport saved = importRepository.save(toEntity(request, job));
+				CaseImport saved = importRepository.save(toEntity(request, job, cast));
 				// 감사 로그는 같은 트랜잭션에 묶는다 — 작업 행과 기록이 함께 남거나 함께 없어야 한다
 				auditLogger.record(admin, AdminAuditAction.CASE_IMPORT, null, null, auditDetail(request), httpRequest);
 				return CaseImportCreatedResponse.from(saved);
@@ -354,9 +358,9 @@ public class AdminCaseImportService {
 
 	// ---------------------------------------------------------------- 파이프라인
 
-	private PipelineJob createJob(CaseImportCreateRequest request) {
+	private PipelineJob createJob(CaseImportCreateRequest request, Map<String, String> cast) {
 		try {
-			return pipelineClient.createJob(toPipelineRequest(request));
+			return pipelineClient.createJob(toPipelineRequest(request, cast));
 		} catch (PipelineException.Conflict e) {
 			// 서비스 쪽 잠금에 걸렸다 = 다른 등록이 도는 중
 			throw new BusinessException(ErrorCode.IMPORT_IN_PROGRESS);
@@ -366,7 +370,24 @@ public class AdminCaseImportService {
 		}
 	}
 
-	private PipelineJobRequest toPipelineRequest(CaseImportCreateRequest request) {
+	/**
+	 * 배역을 대본보다 먼저 정한다 (BE-129, 해송님 결정 2026-10-29). 대본은 배역 이름을 대사에 넣어 만들어지므로 파이프라인에 넘길
+	 * 값이 있어야 하고, 기준은 등록 요청의 범죄 유형이다(판결문에서 읽은 유형이 다르면 BE-138이 멈춘다). 대본을 만들지 않는
+	 * 설정이면 정하지 않는다 — 적재 때 지금까지처럼 규칙으로 정한다.
+	 *
+	 * <p>짧은 트랜잭션으로 범죄 유형 잠금을 잡고 센다. 이 값이 균형 계산에 들어가는 것은 아래에서 작업 행을 저장한 뒤인데,
+	 * 그 사이(파이프라인 호출 동안) 잠금을 들고 있지 않는다. 다른 등록이 같은 배역을 받을 수는 있지만, 파이프라인은 한 번에
+	 * 작업 하나만 받으므로(IMPORT_IN_PROGRESS) 둘 중 하나는 작업을 만들지 못하고 끝난다. 사건 적재(같은 잠금)와 겹쳐도
+	 * 등록 행과 사건이 한 번씩만 세어진다(적재된 등록은 세지 않는다).
+	 */
+	private Map<String, String> assignCast(CaseImportCreateRequest request) {
+		if (!pipelineProperties.scriptEnabled()) {
+			return null;
+		}
+		return transactionTemplate.execute(status -> castAssigner.assign(request.crimeType()));
+	}
+
+	private PipelineJobRequest toPipelineRequest(CaseImportCreateRequest request, Map<String, String> cast) {
 		List<PipelineJobRequest.Source> sources = request.sources().stream()
 			.map(source -> new PipelineJobRequest.Source(source.originalText(), source.note()))
 			.toList();
@@ -374,13 +395,19 @@ public class AdminCaseImportService {
 		if (pipelineProperties.extractModel() != null && !pipelineProperties.extractModel().isBlank()) {
 			stages.put("extract", Map.of("model", pipelineProperties.extractModel()));
 		}
-		// 대본(BE-107 script 단계)은 파이프라인 기본값이 꺼짐이라 켜 달라고 보내야 돈다. 배역도 여기서 정한다 —
-		// 그 단계는 배역을 자동으로 고르지 않는다. until도 script로 올려야 거기까지 돈다(서비스 기본값은 axis)
+		// 대본은 파이프라인 기본값이 꺼짐이라 켜 달라고 보내야 돈다. 등록 한 번에 분류 → 대본 전체(U0 ~ U4) → 검수까지 돌린다
+		// (BE-129, 1회 방식). 분류가 대본 전체의 입력이라 함께 켠다. 배역은 위에서 정한 값을 넘긴다 — 그 단계는 배역을 자동으로
+		// 고르지 않는다. until도 script로 올려야 거기까지 돈다(서비스 기본값은 axis)
 		String until = null;
-		if (pipelineProperties.scriptEnabled()) {
-			stages.put("script", Map.of("enabled", true, "model", pipelineProperties.scriptModel(),
-				"cast", Map.of("prosecutor", pipelineProperties.scriptProsecutor(),
-					"defense", pipelineProperties.scriptDefense())));
+		if (cast != null) {
+			Map<String, Object> classify = new LinkedHashMap<>();
+			classify.put("enabled", true);
+			if (pipelineProperties.classifyModel() != null) {
+				classify.put("model", pipelineProperties.classifyModel());
+			}
+			stages.put("classify", classify);
+			stages.put("script", Map.of("enabled", true, "model", pipelineProperties.scriptModel(), "cast", cast,
+				"full", true));
 			until = "script";
 		}
 		return new PipelineJobRequest(sources, pipelineProperties.models(),
@@ -400,8 +427,8 @@ public class AdminCaseImportService {
 
 	// ---------------------------------------------------------------- 저장 · 변환
 
-	private static CaseImport toEntity(CaseImportCreateRequest request, PipelineJob job) {
-		CaseImport entity = CaseImport.start(job.jobId(), request.crimeType());
+	private static CaseImport toEntity(CaseImportCreateRequest request, PipelineJob job, Map<String, String> cast) {
+		CaseImport entity = CaseImport.start(job.jobId(), request.crimeType(), cast);
 		// 상태는 한 번만 적는다. 파이프라인이 처음부터 FAILED를 주는 경우도 있어 실패 사유까지 함께 받아 적는다
 		entity.applyProgress(statusOf(job), errorCodeOf(job), job.error(), parseInstant(job.finishedAt()),
 			stageSnapshot(job));

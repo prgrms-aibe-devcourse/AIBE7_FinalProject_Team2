@@ -92,8 +92,9 @@ public class CaseImportLoader {
 		LocalDate incidentDate = incidentDate(caseImport);
 		LegalCase legalCase = caseContentMapper.toCase(content, report, incidentDate,
 			guidelineFor(content, caseImport, incidentDate));
-		legalCase.assignCast(castFor(legalCase, result));
+		legalCase.assignCast(castFor(legalCase, caseImport, result));
 		legalCase.changeSensitiveFlags(sensitiveFlags(result));
+		recordClassification(legalCase, result);
 		saveCase(legalCase);
 
 		sectionRepository.saveAll(caseContentMapper.sections(legalCase, content));
@@ -174,10 +175,13 @@ public class CaseImportLoader {
 	 *
 	 * <p>대본이 함께 왔으면 <b>대본을 만든 배역을 그대로 쓴다</b> — 대본에는 캐릭터 이름이 들어가 있어(누가 검사석에서
 	 * 말하는지) 사건 배역이 다르면 화면과 대사가 어긋난다. 대본에 배역이 있는데 읽을 수 없으면 규칙으로 덮지 않고
-	 * 배정하지 않는다(null). 대본이 없으면 범죄 유형별 균형 규칙으로 정한다({@link CaseCastAssigner}).
-	 * 2단계 등록(분류까지 → 적재하며 배정 → 그 배역으로 대본, BE-129)에서는 이쪽이다.
+	 * 배정하지 않는다(null).
+	 *
+	 * <p>대본이 없으면 등록 요청을 받을 때 정한 배역(BE-129, {@code case_import.cast_roles})을 쓴다 — 대본 단계가 실패해도
+	 * 균형 계산에 이미 들어간 값이라 그대로 둔다. 그것도 없으면(대본을 끈 등록 · 이 칸이 생기기 전의 등록) 범죄 유형별 균형
+	 * 규칙으로 정한다({@link CaseCastAssigner}).
 	 */
-	private Map<String, String> castFor(LegalCase legalCase, PipelineResult result) {
+	private Map<String, String> castFor(LegalCase legalCase, CaseImport caseImport, PipelineResult result) {
 		JsonNode script = result.script();
 		if (script != null && !script.isNull() && script.hasNonNull("cast")) {
 			Optional<Map<String, String>> scriptCast = CastRoles.parse(Json.toMap(script.get("cast")));
@@ -187,9 +191,18 @@ public class CaseImportLoader {
 				log.warn("대본의 배역을 읽지 못해 배정하지 않습니다 (jobId={})", result.jobId());
 				return null;
 			}
+			if (caseImport.getCastRoles() != null && !scriptCast.get().equals(caseImport.getCastRoles())) {
+				// 요청 때 정한 배역으로 만들라고 넘겼으므로 다르면 이상한 결과다. 대사에 맞춰 대본 쪽을 쓴다
+				log.warn("대본의 배역이 등록 때 정한 배역과 달라 대본 쪽을 씁니다 (jobId={})", result.jobId());
+			}
 			// 규칙으로 배정하는 같은 유형의 적재가 세는 도중에 이 배역이 끼어들지 못하게 같은 잠금을 잡는다
 			castAssigner.lock(legalCase.getCrimeType());
 			return scriptCast.get();
+		}
+		Optional<Map<String, String>> importCast = CastRoles.parse(caseImport.getCastRoles());
+		if (importCast.isPresent()) {
+			castAssigner.lock(legalCase.getCrimeType());
+			return importCast.get();
 		}
 		return castAssigner.assign(legalCase.getCrimeType());
 	}
@@ -199,6 +212,25 @@ public class CaseImportLoader {
 		JsonNode script = result.script();
 		return script != null && !script.isNull() && script.hasNonNull("cast")
 			&& CastRoles.parse(Json.toMap(script.get("cast"))).isEmpty();
+	}
+
+	/**
+	 * 사건 자동 분류 (BE-129). 대본을 다시 만들 때(2차) 파이프라인에 그대로 넘길 값이라 축 값을 그대로 저장한다. 민감 플래그는
+	 * 따로 저장하므로({@link #sensitiveFlags}) 여기서는 뺀다 — 두 군데 두면 관리자가 A-11로 플래그를 고쳤을 때 어긋난다.
+	 * 분류를 돌리지 않았거나 형식이 다르면 비워 둔다(적재는 막지 않는다).
+	 */
+	private static void recordClassification(LegalCase legalCase, PipelineResult result) {
+		JsonNode classify = result.classify();
+		if (classify == null || classify.isNull()) {
+			return;
+		}
+		Map<String, Object> classification = Json.toMap(classify.get("classification"));
+		if (classification == null) {
+			return;		// sensitiveFlags가 같은 경우를 이미 경고로 남긴다
+		}
+		Map<String, Object> axes = new LinkedHashMap<>(classification);
+		axes.remove("sensitiveFlags");
+		legalCase.recordClassification(axes, Json.stringArray(classify, "needsReview"));
 	}
 
 	/**

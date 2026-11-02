@@ -80,6 +80,7 @@
 | v0.76 | 2026-10-30 | **닉네임 거절 사유 이름 (BE-134)** — M-5 · M-7의 닉네임 400 `details[].reason`을 사유별 이름으로(M-7은 하나, M-5는 요청 검사 사유가 여럿일 수 있다): `NotBlank` · `Pattern` · `Size`(요청 DTO 검사와 같은 이름) · `SizeWithHangul`(한글이 들어가 8자 초과) · `Reserved`(`방청객`으로 시작). 예전에는 서비스 검사(한글 8자 · 방청객)가 모두 `VALIDATION_ERROR`였다. 칸 이름 · 에러 코드는 그대로. (v0.74는 BE-133 PR #349가 쓴다) |
 | v0.77 | 2026-10-30 | **사건 등록 범죄 유형 일치 검사 (BE-138)** — A-14 요청의 `crimeType`을 파이프라인에 넘겨, 파이프라인이 판결문에서 읽은 유형과 다르면 **판결 · 대본을 만들기 전에(extract 직후) 멈춘다**. A-15는 `FAILED`가 되고 `message`에 두 유형을 적는다(예: "범죄 유형이 다릅니다: 등록 요청은 FRAUD, 판결문에서 읽은 유형은 MURDER입니다. …"). 요청 값으로 덮어쓰지 않는다 — 관리자가 유형을 잘못 고르면 양형기준 · 판례 · 사전판단 선택지가 모두 틀린 채 들어가기 때문이다. 맞는 유형으로 다시 등록한다. A-14-1 적재도 같은 비교를 한 번 더 해 다르면 422 `IMPORT_RESULT_INVALID`(`details[].field`: `case.crimeType`)로 거절한다(범죄 유형을 보내지 않던 때의 작업 대비). 이때 등록은 `FAILED`가 되어 같은 사건번호로 다시 등록할 수 있다. 요청 · 응답 형식은 그대로다 (v0.76은 BE-134가 쓴다) |
 | v0.78 | 2026-10-31 | **대본 단위 블록 저장 (BE-126 1차)** — 대본을 단위 블록 U0 ~ U4(설계도 · 1막 해설 · 재판 도입부 · 증거조사 · 3막)와 메타(`cast` · `issue` · `admits`)로 저장한다(ERD v1.52 `case_script_block` · V45). **검수 상태는 블록마다 있고 대본의 상태는 블록에서 계산한다** — 모든 블록 승인 = 공개. 1차는 통승인 · 통거절이라 A-13-11 · 12가 모든 블록에 한 번에 적용한다(블록 단위 승인은 2차). A-13-10에 `blocks`(블록마다 `content` · `revision` · `basis` · `review` · `warnings` · `repairs` · `publishable` · 검수 칸) · `meta` · `pending` · `review` 추가, 기존 필드(`evidence` 등)는 U3 블록에서 그대로 준다. A-13-11은 빠진 단위(`pending`, 기사 `"PAPER"` 포함) · 검수 오류가 있어도 거절한다. A-13-13은 U3 블록을 고치고 판을 올리며, 모든 블록을 다시 검수 대기로 돌린다. **API 18에 `blocks`(U1 ~ U4의 `content`만, U3는 `factorId` · `role` · `text`) · `meta` 추가** — U0는 내리지 않고(재료), U2 신문 답은 "…네." · "…아닙니다."로 정규화해 준다. 기존 `evidence` · `cast`는 그대로. **API 1 · 16 · 18의 `scriptReady`(200 조건) 기준이 "다섯 단위(U0 ~ U4)가 모두 있고 모두 승인"으로 바뀐다** — 증거조사만 만든 대본(U3 하나, 나머지는 `pending`)은 승인할 수 없고 기존에 승인돼 있던 것도 "준비 중"이 된다(해송님 합의). A-13-11은 만든 뒤 사건 내용(A-11) · 기사(A-13-6 · 8)가 바뀐 블록이 있어도 거절하고, 승인한 뒤 A-11 · A-13-6 · 8로 그 값을 고치면 그 값을 보고 만든 블록의 승인을 지운다(다시 검수 대기 — 공개 전 사건만 고칠 수 있어 공개 중인 대본이 내려가지는 않는다, 감사 로그에 `scriptApprovalRevoked`)(낡음 표시는 2차). 사건 등록 적재(A-14-1)는 대본 전체와 함께 온 기사를 신문 지면(API 17 · A-13-7)으로 저장한다(1막 해설이 그 기사를 보고 만들어졌다) (`docs/decisions/BE-126.md`) |
+| v0.80 | 2026-11-01 | **사건 등록 한 번에 대본까지 (BE-129 1차, ERD v1.53 · V46)** — 서버가 대본 생성 모델(`PIPELINE_SCRIPT_MODEL`)을 켜면 A-14가 **등록 요청의 `crimeType`으로 배역을 먼저 정해** 파이프라인에 넘기고, 분류(`classify`) → 대본 전체(`script`, U0 ~ U4 · 기사) → 검수까지 한 번에 돌린다(해송님 결정 "등록 방식 1회"). 배역 균형은 아직 적재되지 않은 등록의 배역도 센다(실패한 등록은 뺀다). A-14-1 적재가 대본의 배역(없으면 등록 때 정한 배역)을 사건 배역으로 쓰고, 분류 결과를 사건에 저장한다. **A-6 `content`에 `classification`(`{mood, issue, victim, thirdParty}`) · `classificationNeedsReview`(표가 갈려 관리자가 확인할 축 · 플래그) 추가.** A-15 `stages`에 `classify` · `script`가 보인다(대본을 끈 서버는 `SKIPPED`). 요청 · 응답 형식은 그대로다 (`docs/decisions/BE-129.md`). (번호 메모: v0.79는 BE-140 3차 c(PR #366)가 쓰고 있다) |
 
 ---
 
@@ -872,7 +873,7 @@ FE-64가 쓰는 API(S-20 기사 지면 · 증거조사). 관리자 신문 지면
   - **U2 신문 답(`questions[].a`)은 정규화해 준다** — 예 · 네 → `"…네."`, 아니요 · 아닙니다 → `"…아닙니다."`, 그 밖의 답은 앞에 `"…"`를 붙인다. 한 낱말일 때만 답으로 본다("예전에는 …"은 그대로). 저장값은 모델이 쓴 그대로다. 규칙은 파이프라인과 공용 계약 파일(`tools/ai-judgment/contracts/script_blocks.json`)로 맞춘다.
   - U3는 줄마다 `factorId` · `role`(소문자, 저장값 그대로) · `text`만 준다. 같은 대사가 `evidence`에도 있다.
   - 검수용 값(블록의 `review` · `warnings` · `repairs`, 대사의 `validation` · `attempts`)은 내리지 않는다 — 고치기 전 문장과 대본 인용이 들어 있다.
-  - U1 · U2 · U4는 **화면이 쓰는 키만** 준다 — U1 `lines`, U2 `indict` · `plea` · `issues_narr` · `questions` · `cards`, U4 `prosecutor` · `defense`. U2 `questions[]`는 질문마다 `q` · `a`만 준다. 모델이 덧붙인 다른 키는 내리지 않는다.
+  - U1 · U2 · U4는 **화면이 쓰는 키만** 준다 — U1 `lines`, U2 `indict` · `plea` · `issues_narr` · `questions` · `cards`, U4 `prosecutor` · `defense`. U2 `questions[]`는 질문마다 `q` · `a`만 주고, U2 `cards`는 `indict`(`ul` · `law`) · `plea`(`b` · `ul`) · `issues`(`p` · `ul`)만 준다(FE-139 조립기가 읽는 키). 모델이 덧붙인 다른 키는 내리지 않는다.
   - 공개 대본은 다섯 단위가 모두 있으므로 `blocks`에는 늘 U1 ~ U4가 있다.
 - (v0.78) `meta`: `cast`(배역, 위 `cast`와 같은 값) · `issue`(분류 쟁점 — 신문 마지막 질문을 고른다) · `admits`(피고인이 혐의를 인정하는지 — 마지막 답 "…네, 인정합니다." / "…아닙니다."를 고른다). 분류 없이 만든 대본은 `issue`가, U0가 없는 대본은 `admits`가 `null`이다.
 - `character` · `cast`는 저장된 **코드값**(`naero` · `nambul` 등)을 그대로 내려준다. 화면에 보일 한글 이름(나로 · 남불)으로 바꾸는 것은 프론트 몫이다.
@@ -1139,7 +1140,9 @@ API 1 · 2 · 16 · 17은 상태와 관계없이 부를 수 있다. 표에 없�
     "guideline": { "guidelineId": 4, "versionName": "2023 수정 (…)" },
     "deidentifiedItems": ["인명", "지명", "사건번호"],
     "castRoles": { "prosecutor": "naero", "defense": "nambul" },
-    "sensitiveFlags": ["MENTAL_HEALTH", "CAPITAL_PENALTY"]
+    "sensitiveFlags": ["MENTAL_HEALTH", "CAPITAL_PENALTY"],
+    "classification": { "mood": "tragic", "issue": "mental_state", "victim": "forgive", "thirdParty": false },
+    "classificationNeedsReview": ["mood", "sensitiveFlags.MENTAL_HEALTH"]
   },
   "sources": [
     {
@@ -1184,6 +1187,7 @@ API 1 · 2 · 16 · 17은 상태와 관계없이 부를 수 있다. 표에 없�
 - 예시의 사건번호 · 법원명은 가상 값이다. 실제 값은 저장소 문서에 적지 않는다.
 - `content`는 A-11에서 고칠 수 있는 필드와 읽기 전용 필드를 함께 담는다(고칠 수 있는 필드는 A-11 표).
 - `candidates`는 최신 순. 반려(`REJECTED`)된 후보도 이력으로 함께 내려 준다.
+- (v0.80, BE-129) `content.classification`: 사건 등록 때 파이프라인이 자동 분류한 값(분위기 `mood` · 쟁점 `issue` · 피해자 측 `victim` · 부가 인물 `thirdParty`, 값 목록은 파이프라인 `case_classify.py`). 대본을 다시 만들 때(BE-129 2차) 입력으로 쓴다. 민감 플래그는 `sensitiveFlags`에 따로 있다. `classificationNeedsReview`: 표가 갈렸거나 규칙만 잡아 **관리자가 확인해야 하는** 축 이름 · `sensitiveFlags.<플래그>`. 분류하지 않고 만든 사건은 둘 다 `null`이다. 읽기 전용이다(고치는 경로는 2차).
 - `penaltyLabel`은 API 14 `preToFinal.finalJudgmentText`(예: "징역 15년")와 같은 규칙으로 만든다.
 - `factors[].summaryTagCandidates`(BE-80): 요약어 후보(ERD `factor.summary_tag_candidates`). 후보 계산을 켜지 않고 적재한 요소는 `null`. **제안일 뿐 요약어(`summaryTag`)를 바꾸지 않는다** — `suggested`가 있으면 관리자가 요약어를 그 값으로 맞출지 판단한다(요약어 수정 API는 아직 없음). `ambiguous: true`면 1 · 2순위가 붙어 제안하지 않은 것이다.
 - `publishReadiness.reasons`는 A-13의 공개 조건 코드(A-13 표)다. 비어 있으면 `ready = true`.
@@ -1729,6 +1733,12 @@ A-11과 같은 방식(보낸 필드만, `null` = 지움). `headline` · `article
 
 원본 판결문을 받아 파이프라인(비식별화 · 구조화 → 재판부 판결 정리 → 사전 학습 점검 → 참고 자료 검색 → AI 판결 생성 → 회차 선택 → 가치관 축 분류)을 서버에서 실행한다. 오래 걸리므로 **작업만 만들고 202로 바로 돌려준다.**
 
+(v0.80, BE-129) 서버가 대본 생성 모델(`PIPELINE_SCRIPT_MODEL`)을 켰으면 **사건 분류 → 대본 전체(U0 ~ U4 · 기사) → 검수까지 같은 작업에서 돌린다**(등록 방식 1회, 중간에 멈추지 않는다). 이때 서버는 작업을 만들기 전에 **배역을 정해** 파이프라인에 넘긴다 — 대본은 배역 이름을 대사에 넣어 만들어지기 때문이다.
+- 기준은 요청의 `crimeType`이다(판결문에서 읽은 유형이 다르면 위 규칙대로 멈춘다). 규칙은 BE-125와 같다 — 그 유형에서 피고인 역을 덜 맡은 캐릭터, 같으면 마지막 배정의 반대.
+- 세는 대상은 사건과 **아직 적재되지 않은 등록**이다. 실패(`FAILED`)한 등록은 빼고, 생성이 끝났지만 적재하지 않은 등록(`SUCCEEDED`)은 센다.
+- 정한 배역은 등록 행(ERD `case_import.cast_roles`)에 남는다. 응답에는 싣지 않는다.
+- 대본을 끈 서버는 지금까지처럼 배역을 적재(A-14-1) 때 정하고, 분류 · 대본을 돌리지 않는다.
+
 **적재는 파이프라인이 하지 않는다.** 파이프라인에도 적재(`load`) 단계가 있지만 운영 DB에 직접 쓰는 단계라 서비스에서 **어떤 요청으로도 켜지지 않게 막아 두었다**(COMMON-50). 그래서 A-15의 `load`는 1차 · 2차 모두 항상 `SKIPPED`다. 사건을 만드는 일은 검수 흐름을 쥔 서버가 BE-93 2차에서 맡는다.
 
 ```json
@@ -1788,8 +1798,9 @@ A-11과 같은 방식(보낸 필드만, `null` = 지움). `headline` · `article
 ```
 
 - `status`: `QUEUED` · `RUNNING` · `SUCCEEDED` · `FAILED`. 화면은 끝날 때까지 2초마다 묻는다.
-- `stages[].name`: `extract` · `court` · `contamination` · `rag` · `generate` · `select` · `axis` · `load`. 값은 `PENDING` · `RUNNING` · `DONE` · `SKIPPED` · `FAILED`.
+- `stages[].name`: `extract` · `court` · `contamination` · `rag` · `generate` · `select` · `axis` · `classify` · `script` · `load`(`classify` · `script`는 v0.80에 문서화, 파이프라인은 그전부터 보냈다). 값은 `PENDING` · `RUNNING` · `DONE` · `SKIPPED` · `FAILED`.
   - **항상 `SKIPPED`인 단계가 셋 있다**: `load`(적재는 서버가 한다, A-14 참고) · `rag` · `contamination`. 서비스에서 끄고 시작하기 때문이며(COMMON-50) 오류가 아니다. 화면도 건너뜀으로 그린다.
+  - (v0.80) `classify` · `script`는 대본을 켠 서버에서만 돈다. 끈 서버는 `SKIPPED`다.
 - `SUCCEEDED`일 때 `caseId`는 **서버 구현 차수에 따라 다르다.** 클라이언트는 `caseId`가 있을 때만 검수 화면으로 보낸다.
 
   | 차수 | `SUCCEEDED` 응답 | 뜻 |

@@ -10,9 +10,11 @@ import com.team2.project.admin.caseimport.domain.CaseImportSource;
 import com.team2.project.common.exception.BusinessException;
 import com.team2.project.common.exception.ErrorCode;
 import com.team2.project.legalcase.domain.CaseStatus;
+import com.team2.project.legalcase.domain.CastRoles;
 import com.team2.project.legalcase.domain.CourtLevel;
 import com.team2.project.legalcase.domain.CrimeType;
 import com.team2.project.legalcase.domain.LegalCase;
+import com.team2.project.legalcase.repository.LegalCaseRepository;
 import com.team2.project.legalcase.service.CaseCastAssigner;
 import com.team2.project.pipeline.PipelineResult;
 import com.team2.project.support.ApiIntegrationTest;
@@ -40,6 +42,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 class CaseImportLoaderTest extends ApiIntegrationTest {
 
 	@Autowired CaseImportLoader loader;
+	@Autowired LegalCaseRepository legalCaseRepository;
 
 	private static final JsonMapper MAPPER = JsonMapper.builder().build();
 
@@ -286,7 +289,11 @@ class CaseImportLoaderTest extends ApiIntegrationTest {
 	}
 
 	private CaseImport caseImport(CrimeType crimeType) {
-		CaseImport entity = CaseImport.start(UUID.randomUUID().toString().replace("-", ""), crimeType);
+		return caseImport(crimeType, null);
+	}
+
+	private CaseImport caseImport(CrimeType crimeType, Map<String, String> castRoles) {
+		CaseImport entity = CaseImport.start(UUID.randomUUID().toString().replace("-", ""), crimeType, castRoles);
 		entity.addSource(CaseImportSource.of(CourtLevel.FIRST, "2099고합001", "가상지방법원",
 			LocalDate.of(2025, 1, 10), true, null, "판결문 전문입니다", null));
 		return entity;
@@ -380,7 +387,8 @@ class CaseImportLoaderTest extends ApiIntegrationTest {
 
 		Long caseId = legalCase.getId();
 		Map<String, Object> row = jdbcTemplate.queryForMap("SELECT * FROM case_script WHERE case_id = ?", caseId);
-		assertThat(String.valueOf(row.get("pending"))).contains("U1");
+		// 입력 pending에 없어도 블록이 없는 단위(U2 ~ U4)는 pending에 올린다
+		assertThat(String.valueOf(row.get("pending"))).isEqualTo("[\"U1\", \"U2\", \"U3\", \"U4\"]");
 		assertThat(row.get("admits")).isEqualTo(false);
 		assertThat(row.get("publishable")).isEqualTo(false);
 		assertThat(blocks(caseId)).extracting(block -> block.get("unit")).containsExactly("U0");
@@ -420,6 +428,27 @@ class CaseImportLoaderTest extends ApiIntegrationTest {
 
 		assertThat(jdbcTemplate.queryForObject("SELECT sensitive_flags::text FROM legal_case WHERE id = ?",
 			String.class, legalCase.getId())).isEqualTo("[\"MENTAL_HEALTH\", \"CAPITAL_PENALTY\", \"NOT_A_FLAG\"]");
+	}
+
+	@Test
+	@DisplayName("분류 결과의 축 값과 확인 필요 목록을 사건에 적는다 — 민감 플래그는 따로 두므로 빼고 (BE-129)")
+	void load_recordsClassification() {
+		LegalCase legalCase = loader.load(caseImport(), resultOf(node(caseJson()), null, node("""
+			{"model": "openai:test", "runs": 3, "needsReview": ["mood", "sensitiveFlags.MENTAL_HEALTH"],
+			 "classification": {"mood": "tragic", "issue": "mental_state", "victim": "forgive", "thirdParty": true,
+			                    "sensitiveFlags": ["MENTAL_HEALTH"]}}""")));
+
+		Map<String, Object> row = jdbcTemplate.queryForMap("""
+			SELECT classification::text AS c, classification_needs_review::text AS r FROM legal_case WHERE id = ?""",
+			legalCase.getId());
+		assertThat(row.get("c")).isEqualTo(
+			"{\"mood\": \"tragic\", \"issue\": \"mental_state\", \"victim\": \"forgive\", \"thirdParty\": true}");
+		assertThat(row.get("r")).isEqualTo("[\"mood\", \"sensitiveFlags.MENTAL_HEALTH\"]");
+
+		LegalCase notClassified = loader.load(caseImport(), result());
+		assertThat(jdbcTemplate.queryForMap("""
+			SELECT classification, classification_needs_review FROM legal_case WHERE id = ?""", notClassified.getId()))
+			.containsEntry("classification", null).containsEntry("classification_needs_review", null);
 	}
 
 	@Test
@@ -487,6 +516,77 @@ class CaseImportLoaderTest extends ApiIntegrationTest {
 		assertThat(castOf(first.getId())).containsEntry("defense", expected[0]);
 		assertThat(castOf(second.getId())).containsEntry("defense", expected[1]);
 		assertThat(castOf(second.getId()).get("prosecutor")).isNotEqualTo(castOf(second.getId()).get("defense"));
+	}
+
+	@Test
+	@DisplayName("대본 없이 끝난 등록은 등록 요청 때 정한 배역을 쓴다 — 규칙으로 다시 정하지 않는다 (BE-129)")
+	void load_withoutScript_usesCastAssignedAtImport() {
+		String[] expected = expectedSequence("THEFT", 1);
+		Map<String, String> assigned = CastRoles.withDefense(CastRoles.other(expected[0]));	// 규칙과 반대 값
+
+		LegalCase legalCase = loader.load(caseImport(CrimeType.THEFT, assigned), resultWith(theftContent()));
+
+		assertThat(castOf(legalCase.getId())).isEqualTo(assigned);
+	}
+
+	@Test
+	@DisplayName("배역 균형은 아직 적재되지 않은 등록의 배역도 센다 — 실패한 등록은 빼고 (BE-129)")
+	void load_castBalanceCountsPendingImports() {
+		String[] expected = expectedSequence("THEFT", 2);
+		String failedJob = insertImportRow("THEFT", "FAILED", expected[0]);
+		String runningJob = null;
+		try {
+			// 실패한 등록은 세지 않는다 — 없을 때와 같은 배정이다
+			LegalCase first = loader.load(caseImport(CrimeType.THEFT), resultWith(theftContent()));
+			assertThat(castOf(first.getId())).containsEntry("defense", expected[0]);
+
+			// 등록 중인 사건이 다음 배정을 먼저 받아 갔다 — 이번 적재는 그다음 차례를 받는다
+			String[] next = expectedSequence("THEFT", 2);
+			runningJob = insertImportRow("THEFT", "RUNNING", next[0]);
+			LegalCase second = loader.load(caseImport(CrimeType.THEFT), resultWith(theftContent()));
+			assertThat(castOf(second.getId())).containsEntry("defense", next[1]);
+		} finally {
+			jdbcTemplate.update("DELETE FROM case_import WHERE job_id IN (?, ?)", failedJob, runningJob);
+		}
+	}
+
+	@Test
+	@DisplayName("마지막 배정은 등록 때 정한 배역이면 등록 시각으로 본다 — 등록 순서와 다르게 적재해도 바뀌지 않는다 (BE-129)")
+	void lastDefense_usesImportTimeWhenCastAssignedAtImport() {
+		// 나중에 등록한 B를 먼저 적재하고, 먼저 등록한 A를 나중에 적재한다. 두 배역은 서로 다르다
+		Map<String, String> castB = CastRoles.withDefense("naero");
+		Map<String, String> castA = CastRoles.withDefense("nambul");
+		LegalCase caseB = loader.load(caseImport(CrimeType.THEFT, castB), resultWith(theftContent()));
+		LegalCase caseA = loader.load(caseImport(CrimeType.THEFT, castA), resultWith(theftContent()));
+		// 다른 테스트가 남긴 행보다 뒤에 오도록 등록 시각을 앞으로 둔다
+		String importA = insertLoadedImportRow(caseA.getId(), castA, "1 hour");
+		String importB = insertLoadedImportRow(caseB.getId(), castB, "2 hours");
+		try {
+			assertThat(legalCaseRepository.findLastDefenseByCrimeType("THEFT")).isEqualTo("naero");
+		} finally {
+			jdbcTemplate.update("DELETE FROM case_import WHERE job_id IN (?, ?)", importA, importB);
+		}
+	}
+
+	/** 사건으로 적재된 등록 한 건. 등록 시각은 지금보다 offset 뒤다. 작업 ID를 돌려준다 */
+	private String insertLoadedImportRow(Long caseId, Map<String, String> castRoles, String offset) {
+		String jobId = UUID.randomUUID().toString().replace("-", "");
+		jdbcTemplate.update("""
+			INSERT INTO case_import (job_id, status, crime_type, cast_roles, case_id, created_at)
+			VALUES (?, 'SUCCEEDED', 'THEFT', ?::jsonb, ?, now() + ?::interval)""",
+			jobId, "{\"prosecutor\": \"%s\", \"defense\": \"%s\"}"
+				.formatted(castRoles.get("prosecutor"), castRoles.get("defense")), caseId, offset);
+		return jobId;
+	}
+
+	/** 적재되지 않은 등록 한 건 (배역만 정해진 상태). 작업 ID를 돌려준다 */
+	private String insertImportRow(String crimeType, String status, String defense) {
+		String jobId = UUID.randomUUID().toString().replace("-", "");
+		jdbcTemplate.update("""
+			INSERT INTO case_import (job_id, status, crime_type, cast_roles) VALUES (?, ?, ?, ?::jsonb)""",
+			jobId, status, crimeType, "{\"prosecutor\": \"%s\", \"defense\": \"%s\"}"
+				.formatted(CastRoles.other(defense), defense));
+		return jobId;
 	}
 
 	@Test

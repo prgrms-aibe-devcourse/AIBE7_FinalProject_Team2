@@ -1,7 +1,7 @@
 // npm test : API 3 내 체험 상태 목 (FE-58, S-09 리뷰 페이지 진입 확인)
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { getCaseDetail, getCases, getExperience, startExperience } from './caseListMockApi.js';
+import { getCaseDetail, getCaseScript, getCases, getExperience, startExperience } from './caseListMockApi.js';
 import { save as saveExperience, storageKey } from './mockExperienceStore.js';
 
 // node에는 localStorage가 없어 테스트마다 빈 저장소를 둔다
@@ -37,4 +37,13 @@ test('scriptReady: 대본이 있는 사건 1만 true이고 목록 · 상세가 �
 test('API 16 목: 안내 대상 플래그는 사건 4에만 있고 나머지는 필드를 뺀다(FE-129)', async () => {
   assert.deepEqual((await getCaseDetail(4)).sensitiveFlags, ['MENTAL_HEALTH']);
   assert.equal('sensitiveFlags' in (await getCaseDetail(1)), false);
+});
+
+test('API 18 목: 사건 1만 블록을 주고, U0 · 검수용 값은 없으며, 대본 없는 사건 · 없는 사건은 명세의 에러다', async () => {
+  const { blocks, meta } = await getCaseScript(1);
+  assert.deepEqual(Object.keys(blocks).sort(), ['U1', 'U2', 'U3', 'U4']);
+  assert.deepEqual(Object.keys(blocks.U3[0]).sort(), ['factorId', 'role', 'text']);
+  assert.deepEqual(meta, { cast: { prosecutor: 'naero', defense: 'nambul' }, issue: 'admitted', admits: true });
+  await assert.rejects(getCaseScript(2), { code: 'SCRIPT_NOT_FOUND' });
+  await assert.rejects(getCaseScript(99999), { code: 'CASE_NOT_FOUND' });
 });
