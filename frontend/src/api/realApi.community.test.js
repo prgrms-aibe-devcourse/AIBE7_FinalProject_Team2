@@ -1,9 +1,10 @@
-// npm test : 실제 API의 커뮤니티 · 닉네임 · 회원 정보 함수 (BE-115 · BE-139, FE-137). fetch를 바꿔 끼워 요청 주소 · 방식 · 본문을 확인한다
+// npm test : 실제 API의 커뮤니티 · 닉네임 · 회원 정보 · 수집 상태 함수 (BE-115 · BE-139, FE-137 · FE-132). fetch를 바꿔 끼워 요청 주소 · 방식 · 본문을 확인한다
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createCommunityComment, createCommunityPost, getCommunityHome, getCommunityPost, getCommunityPosts, getMe,
   getMyShareableVerdict, putNickname, toggleCommunityLike, getAnonymousImport, importAnonymous, discardAnonymous, getIllustrationSummary,
+  postCollection, postCollectionSeen, postAchievementsSeen,
 } from './realApi.js';
 import { logout } from './client.js';
 
@@ -99,4 +100,18 @@ test('일러스트 총 개수는 GET /illustrations/summary로 받는다', async
   stubFetch(() => ({ status: 200, body: { total: 212, byKind: { cases: 76 } } }));
   assert.deepEqual(await getIllustrationSummary(), { total: 212, byKind: { cases: 76 } });
   assert.deepEqual([last().method, last().url], ['GET', '/api/v1/illustrations/summary']);
+});
+
+test('수집 상태: 기록 · 컬렉션 봤음 · 도전과제 봤음은 명세 P-9 ~ P-11 주소와 본문으로 보낸다', async () => {
+  stubFetch(() => ({ status: 200, body: { added: [], collected: 3, newlyUnlocked: [] } }));
+  const items = [{ kind: 'illustration', itemId: 'case-1-origin' }];
+  assert.equal((await postCollection({ caseId: 1, items })).collected, 3);
+  assert.deepEqual([last().method, last().url, last().body], ['POST', '/api/v1/collection', { caseId: 1, backfill: false, items }]);
+  await postCollection({ caseId: 1, items, backfill: true });
+  assert.equal(last().body.backfill, true);
+  stubFetch(() => ({ status: 204 }));
+  await postCollectionSeen({ kind: 'cast' });
+  assert.deepEqual([last().method, last().url, last().body], ['POST', '/api/v1/collection/seen', { kind: 'cast' }]);
+  await postAchievementsSeen(['collect-5']);
+  assert.deepEqual([last().method, last().url, last().body], ['POST', '/api/v1/achievements/seen', { achievementIds: ['collect-5'] }]);
 });

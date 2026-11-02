@@ -1,7 +1,7 @@
 // npm test : 마이페이지 변화 흐름 계산
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { trendOrders, trendSlotOrders, recordOf, axisChange, steadyBand, lenientPercent, axisSeries, axisTrend, castOf, collectionOf, leanText, imageKinds, retakeAfterOrder, withRetakeSlot } from './myPageView.js';
+import { trendOrders, trendSlotOrders, recordOf, axisChange, steadyBand, lenientPercent, axisSeries, axisTrend, castOf, collectionOf, collectedItems, collectionGroups, backfillCaseIds, acquiredDate, leanText, imageKinds, retakeAfterOrder, withRetakeSlot } from './myPageView.js';
 
 const AXIS = { key: 'APOLOGY_SINCERITY', strict: { name: '행동증명형' }, lenient: { name: '마음신뢰형' } };
 const entry = (value) => ({ axisScores: { APOLOGY_SINCERITY: value } });
@@ -72,22 +72,68 @@ test('leanText: 더 기운 쪽 이름과 비중, 반반이면 반반', () => {
   assert.equal(leanText((1 / 3 + 2 / 3) / 2, FULL_AXIS), '반반');
 });
 
-test('collectionOf: 체험을 마친 사건의 일러스트만 모으고 같은 그림은 한 장으로 센다', () => {
-  const scripts = {
-    1: {
-      paper: { photo: 'a.png', extraPhotos: [{ src: 'b.webp' }] },
-      evidencePhotos: { 검사: 'a.png', 변호인: 'c.png' },
-    },
-  };
+test('collectionOf: 사건 하나를 마치면 일러스트 3장(재연 · 발단 · 결론 자리 id)과 만난 모습(who:role)을 얻는다', () => {
+  const script = { acts: { 1: { look: { naero: 'role:judge', nambul: 'role:actor' }, steps: [{ look: { naero: 'role:judge' } }] } } };
+  assert.deepEqual(collectionOf(7, script), [
+    { kind: 'illustration', itemId: 'case-7-reenact' },
+    { kind: 'illustration', itemId: 'case-7-origin' },
+    { kind: 'illustration', itemId: 'case-7-conclusion' },
+    { kind: 'cast', itemId: 'naero:judge' },
+    { kind: 'cast', itemId: 'nambul:actor' },
+  ]);
+  // 대본이 없으면(받지 못함) 일러스트만
+  assert.deepEqual(collectionOf(2, null).map((item) => item.kind), ['illustration', 'illustration', 'illustration']);
+});
+
+test('collectedItems: 서버 목록을 그림 주소 · 이름으로 바꾸고, 모르는 종류 · 형식은 뺀다', () => {
+  const items = collectedItems([
+    { kind: 'cast', itemId: 'nambul:case-1', caseId: 1, acquiredAt: '2026-10-14T15:00:10+09:00', isNew: true },
+    { kind: 'illustration', itemId: 'case-3-origin', caseId: 1, acquiredAt: '2026-10-14T15:00:10+09:00', isNew: false },
+    { kind: 'illustration', itemId: 'case-x-origin' },
+    { kind: 'cast', itemId: 'law:judge' },
+    { kind: 'background', itemId: 'night' },
+  ], { 3: '빌린 돈 사건' });
+  assert.deepEqual(items.map((item) => [item.src, item.label, item.isNew]), [
+    ['/images/characters/roles/nambul_case-1.webp', '남불 · 사건 1 배역', true],
+    ['/images/cases/case-3-origin.webp', '발단', false],
+  ]);
+  // 그림별 key: 처음 얻은 사건(caseId 1)이 아니라 그림의 사건(3)으로 묶는다
+  assert.equal(items[1].caseId, 3);
+  assert.equal(items[1].caseTitle, '빌린 돈 사건');
+  assert.deepEqual(collectedItems(undefined), []);
+});
+
+test('imageKinds: 사건 번호는 자릿수를 따라 정렬한다(2 다음이 10이 아니라 3)', () => {
+  const [cases] = imageKinds(['/images/cases/case-10-origin.webp', '/images/cases/case-2-origin.webp', '/images/cases/case-22-origin.webp', '/images/cases/case-3-origin.webp']);
+  assert.deepEqual(cases.groups.map((group) => group.title), ['사건 2', '사건 3', '사건 10', '사건 22']);
+});
+
+test('collectionGroups: 의상은 한 묶음, 일러스트는 최근에 얻은 사건부터 재연 · 발단 · 결론 순', () => {
+  const groups = collectionGroups(collectedItems([
+    { kind: 'illustration', itemId: 'case-2-conclusion' },
+    { kind: 'cast', itemId: 'naero:judge' },
+    { kind: 'illustration', itemId: 'case-1-origin' },
+    { kind: 'illustration', itemId: 'case-2-reenact' },
+  ]));
+  assert.deepEqual(groups.cast.map((item) => item.itemId), ['naero:judge']);
+  assert.deepEqual(groups.cases.map((group) => [group.title, group.items.map((item) => item.slot)]), [['사건 2', ['reenact', 'conclusion']], ['사건 1', ['origin']]]);
+});
+
+test('backfillCaseIds: 마친 사건 중 그 사건 일러스트가 하나라도 빠진 사건만, 한 번씩', () => {
   const experiences = [
-    { caseId: 1, title: '사건', status: 'COMPLETED' },
-    { caseId: 2, title: '대본 없음', status: 'COMPLETED' },
-    { caseId: 1, title: '진행 중', status: 'IN_PROGRESS' },
+    { caseId: 1, status: 'COMPLETED' }, { caseId: 2, status: 'COMPLETED' }, { caseId: 2, status: 'COMPLETED' },
+    { caseId: 3, status: 'REVIEWED' }, { caseId: 4, status: 'COMPLETED' },
   ];
-  const [group, ...rest] = collectionOf(experiences, scripts);
-  assert.equal(rest.length, 0);
-  assert.deepEqual(group.items.map((item) => item.src), ['a.png', 'b.webp', 'c.png']);
-  assert.deepEqual(collectionOf([], scripts), []);
+  const items = ['case-1-reenact', 'case-1-origin', 'case-1-conclusion', 'case-4-reenact'].map((itemId) => ({ kind: 'illustration', itemId }));
+  assert.deepEqual(backfillCaseIds(experiences, items), [2, 4]);
+  assert.deepEqual(backfillCaseIds(experiences, items, [1]), [1, 2, 4]); // 의상이 남은 사건은 일러스트가 있어도 다시
+  assert.deepEqual(backfillCaseIds(undefined, undefined), []);
+});
+
+test('acquiredDate: 한국 시간 날짜, 읽지 못하면 빈 문자열', () => {
+  assert.equal(acquiredDate('2026-10-14T15:30:00Z'), '2026. 10. 15.'); // 한국 시간 15일 0시 30분
+  assert.equal(acquiredDate(null), '');
+  assert.equal(acquiredDate('어제'), '');
 });
 
 test('imageKinds: 사건별이 아니라 종류(폴더)별로 정해진 순서대로 묶는다', () => {
@@ -119,13 +165,6 @@ test('castOf:대본의 역할 의상을 등장 순서대로 한 번씩 모으고
   };
   assert.deepEqual(castOf(script).map((item) => item.label), ['남불 · A씨 역', '내로 · 판사', '내로 · 검사']);
   assert.deepEqual(castOf(undefined), []);
-});
-
-test('collectionOf: 일러스트가 없어도 만난 모습이 있으면 묶음을 만든다', () => {
-  const scripts = { 1: { acts: { 1: { look: { naero: 'role:defense' }, steps: [] } } } };
-  const [group] = collectionOf([{ caseId: 1, title: '사건', status: 'COMPLETED' }], scripts);
-  assert.deepEqual(group.cast.map((item) => item.role), ['defense']);
-  assert.deepEqual(group.items, []);
 });
 
 test('retakeAfterOrder: 다시 정한 시각까지 마친 체험 수(시각 기준, FE-77)', () => {

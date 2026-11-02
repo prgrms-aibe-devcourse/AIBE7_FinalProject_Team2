@@ -21,6 +21,7 @@ export async function loadApi() {
     import('../mocks/comparisonMockApi.js'),
     import('../mocks/personalityMockApi.js'),
     import('../mocks/profileDecoMockApi.js'), // 꾸미기 저장 · 출석 기록(P-6 · P-7)
+    import('../mocks/collectionMockApi.js'), // 수집 기록 · 봤음(P-9 ~ P-11, FE-132)
     import('../mocks/levelMockApi.js'), // 레벨 · 직업(FE-114, BE-106)
     import('../mocks/caseReviewMockApi.js'), // 사건 리뷰(FE-55). 실제 모드에는 아직 없다
     import('../mocks/communityMockApi.js'), // 커뮤니티(FE-47). 실제 모드에는 아직 없다

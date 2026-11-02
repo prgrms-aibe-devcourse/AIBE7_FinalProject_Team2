@@ -62,6 +62,12 @@ export const putProfileDeco = (deco) => put('/profile-deco', deco);
 // P-8 — 프로필 선택 설정 부분 저장(FE-81, BE-104). 보낸 칸만 바꾸고, 응답은 세 값 전체 { shownCard, profileCardType, bio }
 export const patchProfileSettings = (settings) => patch('/profile-settings', settings);
 
+// 수집 상태 P-9 ~ P-11 (BE-83, FE-132) — 회원만(로그인 전 401). 마친 사건에서 얻은 일러스트 · 의상 기록(멱등, backfill: 기존 사용자 채우기),
+// 컬렉션 "봤음"({ items } 또는 { kind } 하나만), 도전과제 "봤음". 봤음 둘은 204(null)
+export const postCollection = ({ caseId, items, backfill = false }) => post('/collection', { caseId, backfill, items });
+export const postCollectionSeen = (seen) => post('/collection/seen', seen);
+export const postAchievementsSeen = (achievementIds) => post('/achievements/seen', { achievementIds });
+
 // 커뮤니티 C-1 ~ C-7 (BE-115, 명세 12장, FE-137). 목(mocks/communityMockApi.js)과 같은 이름 · 인자 · 응답 모양이다.
 // 읽기는 누구나, 글쓰기 · 좋아요 · 댓글은 로그인한 회원만(401 UNAUTHORIZED — 목의 임시 코드 LOGIN_REQUIRED를 이 코드로 맞췄다)
 // 사진 올리기는 서버에 아직 없어(후속) images가 비어 있지 않으면 400 VALIDATION_ERROR(details images)다 — 화면은 실제 모드에서 사진 칸을 숨긴다
