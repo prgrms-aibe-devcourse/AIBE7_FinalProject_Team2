@@ -4,6 +4,7 @@ import com.team2.project.admin.audit.AdminAuditAction;
 import com.team2.project.admin.audit.AdminAuditLogger;
 import com.team2.project.admin.audit.AuditTargetType;
 import com.team2.project.admin.repository.AdminAccountRepository;
+import com.team2.project.admin.review.dto.CaseScriptLineRequest;
 import com.team2.project.admin.review.dto.CaseScriptResponse;
 import com.team2.project.admin.service.AdminPrincipal;
 import com.team2.project.common.exception.BusinessException;
@@ -204,6 +205,15 @@ public class AdminCaseScriptService {
 		}
 		CaseScript script = lockAndFindScript(caseId);
 		findBlock(script, unit);
+		if (!script.hasText(unit, path)) {
+			throw new BusinessException(ErrorCode.SCRIPT_LINE_NOT_FOUND, "블록에 그 자리의 문장이 없습니다: " + path);
+		}
+		// 대사 길이 규칙(100자 · 2줄)은 말하는 대사 자리에만 건다(BE-153). 컨트롤러가 아니라 여기서 본다 — 이 서비스를 부르는 다른 경로가
+		// 생겨도 우회되지 않게, 그리고 없는 자리는 길이보다 먼저 404로 알리게(PR #390 리뷰 1부 1 · 3번)
+		String violation = unit.isSpoken(path) ? new CaseScriptLineRequest(text).lengthViolation() : null;
+		if (violation != null) {
+			throw new BusinessException(ErrorCode.VALIDATION_ERROR, violation);
+		}
 		ScriptStatus before = script.status();
 		if (!script.editText(unit, path, text)) {
 			throw new BusinessException(ErrorCode.SCRIPT_LINE_NOT_FOUND, "블록에 그 자리의 문장이 없습니다: " + path);
