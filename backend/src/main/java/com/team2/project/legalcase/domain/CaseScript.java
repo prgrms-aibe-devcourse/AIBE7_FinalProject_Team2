@@ -164,14 +164,16 @@ public class CaseScript {
 	 *
 	 * @param stopped 재생성이 호출 한도로 멈췄는지. 대본의 {@code stopped}는 마지막 생성의 값이다
 	 * @param unchangedWarnings 다시 만들지 않은 블록마다 새 경고. 검수가 돌지 못했으면 비어 온다(옛 경고를 둔다)
+	 * @return 경고가 바뀐 (다시 만들지 않은) 블록 단위 — 감사 로그에 남겨 "왜 그 블록에 경고가 새로 생겼나"를 따라갈 수 있게 한다
 	 */
-	public void applyRegeneration(Map<ScriptUnit, RegeneratedBlock> regenerated, Map<String, Object> cast, String issue,
+	public List<ScriptUnit> applyRegeneration(Map<ScriptUnit, RegeneratedBlock> regenerated, Map<String, Object> cast, String issue,
 			List<Map<String, Object>> scriptReview, Map<ScriptUnit, List<Map<String, Object>>> unchangedWarnings,
 			boolean stopped, String model) {
 		this.pending = new ArrayList<>(pending);	// DB에서 읽은 목록이 바꿀 수 없는 목록일 수 있다
+		List<ScriptUnit> warningsChanged = new ArrayList<>();
 		unchangedWarnings.forEach((unit, warnings) -> {
-			if (!regenerated.containsKey(unit)) {
-				block(unit).ifPresent(block -> block.replaceWarnings(warnings));
+			if (!regenerated.containsKey(unit) && block(unit).map(block -> block.replaceWarnings(warnings)).orElse(false)) {
+				warningsChanged.add(unit);
 			}
 		});
 		for (Map.Entry<ScriptUnit, RegeneratedBlock> entry : regenerated.entrySet()) {
@@ -200,6 +202,7 @@ public class CaseScript {
 			this.model = model;
 		}
 		this.publishable = recomputePublishable();
+		return warningsChanged;
 	}
 
 	/** U0 세 번째 답으로 혐의 인정 여부를 정한다 (적재 {@code CaseScriptLoader#admits}와 같은 규칙) */

@@ -197,7 +197,7 @@ def regenerate_blocks(case, judgment_output, cast, cls, blocks, units, *, model,
 
 def unchanged_warnings(review, blocks, made):
     """만들지 않은 (지금 있는) 블록마다 새 검수 경고 (모듈 설명 · BE-163). 검수가 돌지 못했으면 빈 객체."""
-    if any(i["unit"] not in BLOCK_UNITS for i in review if i["severity"] == ERROR):  # REVIEW_FAILED
+    if any(i["code"] == "REVIEW_FAILED" for i in review):
         return {}
     return {unit: [i for i in review if i["unit"] == unit and i["severity"] == WARNING]
             for unit in BLOCK_UNITS if unit in blocks and unit not in made}

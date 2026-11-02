@@ -233,7 +233,7 @@ class AdminScriptRegenerationApiTest extends ApiIntegrationTest {
 		result.set("unchangedWarnings", MAPPER.readTree("""
 			{"U2": [{"unit": "U2", "path": "", "code": "CARD_LIST_EMPTY", "severity": "warning", "fix": null,
 			         "message": "쟁점 카드 목록(ul)이 비었습니다"}],
-			 "U0": [], "U9": [{"severity": "warning"}]}"""));
+			 "U0": [], "U1": null, "U4": "x", "U9": [{"severity": "warning"}]}"""));
 		when(pipelineClient.getRegenerationResult(anyString())).thenReturn(result);
 
 		perform(post(regenerationsUrl() + "/" + id + "/apply"))
@@ -244,6 +244,10 @@ class AdminScriptRegenerationApiTest extends ApiIntegrationTest {
 			.andExpect(jsonPath("$.blocks[2].reviewStatus").value("APPROVED"))
 			.andExpect(jsonPath("$.blocks[2].revision").value(1))
 			.andExpect(jsonPath("$.blocks[4].reviewStatus").value("PENDING"));
+		// 감사 로그에는 다시 만들지 않았는데 경고가 바뀐 블록을 남긴다 — U0은 빈 목록 그대로, U1은 모양이 틀려 건너뛰었다
+		assertThat(jdbcTemplate.queryForObject("""
+			SELECT detail->'warningUnits' FROM admin_audit_log WHERE action = 'CASE_SCRIPT_REGENERATE_APPLY'
+			ORDER BY id DESC LIMIT 1""", String.class)).isEqualTo("[\"U2\"]");
 	}
 
 	@Test

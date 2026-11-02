@@ -375,7 +375,7 @@ public class AdminScriptRegenerationService {
 			JsonNode meta = result.path("meta");
 			List<Map<String, Object>> scriptReview = maps(result.get("review")).stream()
 				.filter(issue -> ScriptUnit.find(String.valueOf(issue.get("unit"))).isEmpty()).toList();
-			script.applyRegeneration(blocks, map(meta.get("cast")), meta.path("issue").isString()
+			List<ScriptUnit> warningsChanged = script.applyRegeneration(blocks, map(meta.get("cast")), meta.path("issue").isString()
 				? meta.get("issue").asString() : null, scriptReview, unchangedWarnings(result.get("unchangedWarnings")),
 				result.path("stopped").asBoolean(false),
 				result.path("model").isString() ? result.get("model").asString() : null);
@@ -383,6 +383,9 @@ public class AdminScriptRegenerationService {
 			Map<String, Object> detail = new LinkedHashMap<>();
 			detail.put("regenerationId", regenerationId);
 			detail.put("units", blocks.keySet().stream().map(ScriptUnit::name).toList());
+			if (!warningsChanged.isEmpty()) {	// 다시 만들지 않았는데 경고가 바뀐 블록(BE-163, PR #416 리뷰)
+				detail.put("warningUnits", warningsChanged.stream().map(ScriptUnit::name).toList());
+			}
 			auditLogger.record(admin, AdminAuditAction.CASE_SCRIPT_REGENERATE_APPLY, AuditTargetType.CASE, caseId,
 				AdminCaseScriptService.withMaintenance(detail, before, script), httpRequest);
 		});
@@ -535,8 +538,9 @@ public class AdminScriptRegenerationService {
 	private static Map<ScriptUnit, List<Map<String, Object>>> unchangedWarnings(JsonNode node) {
 		Map<ScriptUnit, List<Map<String, Object>>> warnings = new LinkedHashMap<>();
 		if (node != null && node.isObject()) {
-			node.properties().forEach(entry -> ScriptUnit.find(entry.getKey())
-				.ifPresent(unit -> warnings.put(unit, maps(entry.getValue()))));
+			// 배열이 아닌 값은 건너뛴다 — 빈 목록은 "다시 검사했더니 경고 없음"이라 모양이 틀린 값과 같게 보면 옛 경고가 지워진다
+			node.properties().stream().filter(entry -> entry.getValue().isArray()).forEach(entry ->
+				ScriptUnit.find(entry.getKey()).ifPresent(unit -> warnings.put(unit, maps(entry.getValue()))));
 		}
 		return warnings;
 	}
