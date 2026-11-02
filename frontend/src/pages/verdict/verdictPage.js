@@ -1,7 +1,7 @@
 import { renderLawInfoBox } from '../../components/lawInfoBox.js';
 import { renderRecommendedRangeBar, formatMonths } from '../../components/recommendedRangeBar.js';
 import { renderStage } from '../../components/stage.js';
-import { loadCaseScript } from '../../utils/caseScript.js';
+import { loadCaseScript, loadFailText } from '../../utils/caseScript.js';
 import { restartMock, jumpActMock } from '../../mocks/mockStageButtons.js';
 import { getDraft, saveDraft, clearDraft } from './verdictDraft.js';
 import { markAiRevealIntro } from '../ai/aiRevealIntro.js';
@@ -78,7 +78,7 @@ export async function renderVerdictPage(container, { caseId, caseHeader, api, na
       panel.append(element('p', '', `지금 단계에서는 이 화면을 볼 수 없어요. (현재 상태: ${error.currentStatus})`));
       console.info('현재 상태:', error.currentStatus);
     } else {
-      panel.append(element('p', '', '정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.'), button('다시 시도', load));
+      panel.append(element('p', '', loadFailText(error)), button('다시 시도', load));
     }
     root.replaceChildren(panel);
   }

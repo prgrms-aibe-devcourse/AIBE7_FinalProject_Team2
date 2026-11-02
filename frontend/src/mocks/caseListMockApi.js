@@ -34,6 +34,17 @@ function myStatusOf(caseId) {
 // 승인된 공개 대본이 있는 사건 (BE-116 scriptReady). 목에서는 대본이 있는 사건 1만 true — getCasePaper와 같은 기준
 export const scriptReadyOf = (caseId) => caseId === case1Script.caseId;
 
+// 대본 점검 중인 사건 (BE-126 2차 scriptStatus · 503, FE-145). 목에서는 사건 2만 MAINTENANCE — 사건 목록 · 상세에는 보이되 체험은 잠긴다
+export const MAINTENANCE_CASE_ID = 2;
+export const scriptStatusOf = (caseId) => (scriptReadyOf(caseId) ? 'READY' : caseId === MAINTENANCE_CASE_ID ? 'MAINTENANCE' : 'PREPARING');
+
+// 사건 3: scriptStatus 없이 scriptReady만 true인데 API 18이 503을 주는 사건. 서버가 scriptStatus를 아직 안 줄 때(이름 미확정, BE-126 2차 전)
+// 사건 상세가 503만으로 "점검 중"을 알리는지 손으로 확인하려고 둔다(FE-145 리뷰)
+export const LEGACY_MAINTENANCE_CASE_ID = 3;
+const scriptFieldsOf = (caseId) => (caseId === LEGACY_MAINTENANCE_CASE_ID
+  ? { scriptReady: true }
+  : { scriptReady: scriptReadyOf(caseId), scriptStatus: scriptStatusOf(caseId) });
+
 // 사건 1은 S-03 개요 목(API 4)과 같은 죄명을 쓰고, 나머지는 유형별 죄명(임의 데이터)
 const CHARGE_NAMES = { MURDER: '살인', FRAUD: '사기', INJURY: '상해', ROBBERY: '강도', THEFT: '절도' };
 const chargeNameOf = (item) =>
@@ -52,7 +63,7 @@ export async function getCases(crimeType) {
     summary: { total: mockCases.length, byCrimeType },
     cases: mockCases
       .filter((item) => !crimeType || item.crimeType === crimeType)
-      .map((item) => ({ ...item, chargeName: chargeNameOf(item), scriptReady: scriptReadyOf(item.caseId), myStatus: myStatusOf(item.caseId) })),
+      .map((item) => ({ ...item, chargeName: chargeNameOf(item), ...scriptFieldsOf(item.caseId), myStatus: myStatusOf(item.caseId) })),
   });
 }
 
@@ -70,7 +81,7 @@ export async function getCaseDetail(caseId) {
     ...item,
     chargeName: chargeNameOf(item),
     overview: known?.overview ?? item.shortIntro,
-    scriptReady: scriptReadyOf(caseId),
+    ...scriptFieldsOf(caseId),
     ...(mockSensitiveFlags[caseId] ? { sensitiveFlags: mockSensitiveFlags[caseId] } : {}),
     myStatus: myStatusOf(caseId),
   });
@@ -105,6 +116,7 @@ export async function getCasePaper(caseId) {
 export async function getCaseScript(caseId) {
   await delay();
   if (!mockCases.some((item) => item.caseId === caseId)) fail('CASE_NOT_FOUND', '사건을 찾을 수 없습니다.');
+  if (caseId === MAINTENANCE_CASE_ID || caseId === LEGACY_MAINTENANCE_CASE_ID) fail('SCRIPT_UNDER_MAINTENANCE', '대본을 점검하고 있습니다.');
   if (!scriptReadyOf(caseId)) fail('SCRIPT_NOT_FOUND', '공개된 대본이 없습니다.');
   const { acts, cards, evidence } = case1Script;
   const intro = acts['1a'].steps;
