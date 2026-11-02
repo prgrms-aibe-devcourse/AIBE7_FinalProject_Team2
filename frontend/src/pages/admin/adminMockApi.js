@@ -150,6 +150,7 @@ function createState() {
     ],
     imports: [],
     // 사건 사진(A-13-4 · 5) · 신문 지면(A-13-6 ~ 8) · 대본(A-13-10 ~ 13). 사건 번호를 키로 둔다
+    // 12번은 지면이 없어 공개 조건 NO_PAPER가 보인다(BE-147) — 지면을 만들면 사라진다
     photos: { 13: [incidentPhoto(21, 'ORIGIN', '다툼이 격해진 순간'), incidentPhoto(22, 'CONCLUSION', '집을 나서는 뒷모습')] },
     papers: { 13: mockPaper() },
     // 12번은 검수 거리를 보여 주는 대본이다 — 생성하지 못한 줄이 있어 publishable이 false다(승인 버튼이 막힌다).
@@ -199,6 +200,7 @@ function readiness(item) {
   if (!item.factors.length) reasons.push('NO_FACTORS');
   if (!item.factors.some((factor) => factor.revealStage === 'OVERVIEW')) reasons.push('NO_OVERVIEW_FACTOR');
   if (!item.penaltyRules) reasons.push('NO_PENALTY_RULE');
+  if (!state.papers[item.caseId]) reasons.push('NO_PAPER');
   return { ready: reasons.length === 0, reasons };
 }
 
@@ -382,6 +384,19 @@ export async function publishCase(caseId) {
   const { ready, reasons } = readiness(item);
   if (!ready) fail('PUBLISH_NOT_READY', '공개 조건을 채우지 못했어요.', { status: 409, details: reasons.map((code) => ({ field: 'case', reason: code })) });
   item.status = 'PUBLISHED';
+  item.updatedAt = now();
+  return detail(item);
+}
+
+// A-13-14 공개 취소 (BE-118): PUBLISHED → REVIEW. 사유는 앞뒤 공백을 잘라 1 ~ 200자
+export async function unpublishCase(caseId, reasonText) {
+  await delay();
+  requireLogin();
+  const trimmed = typeof reasonText === 'string' ? reasonText.trim() : '';
+  if (!trimmed || trimmed.length > 200) fail('VALIDATION_ERROR', '공개 취소 사유를 1 ~ 200자로 입력해 주세요.', { status: 400, details: [{ field: 'reason', reason: 'Size' }] });
+  const item = findCase(caseId);
+  if (item.status !== 'PUBLISHED') invalidState(item, 'CASE_NOT_PUBLISHED');
+  item.status = 'REVIEW';
   item.updatedAt = now();
   return detail(item);
 }

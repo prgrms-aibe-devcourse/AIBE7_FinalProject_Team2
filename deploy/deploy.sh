@@ -82,7 +82,7 @@ cleanup_old_images() {
 }
 
 COMPOSE=(docker compose -f "$DEPLOY_DIR/docker-compose.prod.yml")
-# 외부 DB 모드 (BE-59): .env에 EXTERNAL_DB_URL이 있으면 postgres 컨테이너 대신 외부 PostgreSQL(Supabase → RDS)에 붙는다.
+# 외부 DB 모드 (BE-59): .env에 EXTERNAL_DB_URL이 있으면 postgres 컨테이너 대신 외부 PostgreSQL(RDS)에 붙는다.
 # 오버레이를 빼먹으면 backend가 다시 같은 서버의 postgres로 붙어 "어느 DB에 썼는지"가 조용히 바뀌므로, 플래그로 자동으로 겹친다
 EXTERNAL_DB_URL_VALUE="$(env_value EXTERNAL_DB_URL | tr -d "\"' \r")"
 # 실제 사건 시드 경로: 아래 외부 DB 검사와 오버레이 판정이 같은 값(따옴표 · 공백 · CR 정리)을 보게 한 번만 읽는다.
@@ -106,7 +106,7 @@ if [[ -n "$EXTERNAL_DB_URL_VALUE" ]]; then
     *[?\&]sslmode=require|*[?\&]sslmode=require\&*|*[?\&]sslmode=verify-ca*|*[?\&]sslmode=verify-full*) ;;
     *) log "❌ EXTERNAL_DB_URL에 sslmode=require(또는 verify-ca · verify-full)가 없다 — 주소 끝에 ?sslmode=require를 붙인다"; exit 4 ;;
   esac
-  # 외부 DB(Supabase → RDS)에 실제 사건 시드는 팀 합의 표시가 있을 때만 올린다 (backend/SHARED-DEV-DB.md 규칙 6).
+  # 외부 DB(RDS)에 실제 사건 시드는 팀 합의 표시가 있을 때만 올린다 (deploy/README.md "외부 DB(RDS)에 실제 사건 시드 올리기").
   # 경로만 넣은 실수로 비공개 데이터가 외부 DB에 올라가지 않게, 사람이 EXTERNAL_DB_ALLOWS_REAL_SEED=1을 따로 넣어야 한다
   if [[ -n "$REAL_SEED_DIR_VALUE" ]]; then
     if [[ "$(env_value EXTERNAL_DB_ALLOWS_REAL_SEED | tr -d "\"' \r")" != "1" ]]; then
@@ -147,12 +147,12 @@ if [[ -n "$EXTERNAL_DB_URL_VALUE" ]]; then
       fi
     done
     # 사용 불가 데이터(LBox Open, 라이선스상 사용 불가 — 10/12)는 합의와 별개로 외부 DB에 올리지 않는다.
-    # 지금 시드에는 없다(BE-54에서 삭제). 다시 들어오면 여기서 막는다 (backend/run-shared-db.sh와 같은 검사).
+    # 지금 시드에는 없다(BE-54에서 삭제). 다시 들어오면 여기서 막는다.
     # grep 종료 코드: 0 = LBox 있음, 1 = 없음, 2 이상 = 읽기 오류 → 1일 때만 통과한다(오류를 "없음"으로 보지 않는다, PR #281 리뷰)
     lbox_rc=0
     grep -qil "'LBOX'" "${seed_sql_files[@]}" || lbox_rc=$?
     if (( lbox_rc == 0 )); then
-      log "❌ 실제 사건 시드에 LBox 행('LBOX')이 있다 — 사용 불가 데이터라 외부 DB에 올리지 않는다 (SHARED-DEV-DB.md 규칙 6)"
+      log "❌ 실제 사건 시드에 LBox 행('LBOX')이 있다 — 사용 불가 데이터라 외부 DB에 올리지 않는다 (deploy/README.md 실제 사건 시드 절)"
       exit 4
     elif (( lbox_rc != 1 )); then
       log "❌ 실제 사건 시드의 LBox 검사를 끝내지 못했다(grep 종료 코드 ${lbox_rc}) — 파일을 읽을 수 있는지 확인한다"

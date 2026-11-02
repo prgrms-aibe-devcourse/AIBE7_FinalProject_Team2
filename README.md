@@ -16,10 +16,13 @@ MVP는 로그인 없이, 대표 사건 1건으로 아래 흐름을 끝까지 체
 | --- | --- |
 | Backend | Java 17, Spring Boot 4.1.1 (Web MVC · Data JPA · Validation), Gradle |
 | DB | PostgreSQL 17, Flyway(스키마 마이그레이션) |
+| Cache · 토큰 | Redis 7.4 |
 | Frontend | HTML + JavaScript, Vite |
-| CI | GitHub Actions |
+| 인프라 | AWS EC2 · RDS · S3, Docker Compose, Nginx(HTTPS · 요청 제한), GHCR |
+| CI · CD | GitHub Actions(테스트 · 이미지 빌드) · 서버 `cd-agent`(`main` 자동 배포) |
+| 모니터링 | Grafana Cloud(Alloy 에이전트) · Slack 경보 |
 
-자세한 구성과 선택 이유는 [기술 스택 정리](docs/tech-stack.md)를 본다.
+자세한 구성과 선택 이유는 [기술 스택 정리](docs/tech-stack.md), 운영 구성 전체는 [인프라 아키텍처](docs/architecture.md)를 본다.
 
 ## 폴더 구조
 
@@ -28,8 +31,10 @@ MVP는 로그인 없이, 대표 사건 1건으로 아래 흐름을 끝까지 체
 | `backend/` | Spring Boot API 서버, 로컬 개발용 PostgreSQL(`docker-compose.yml`), DB 마이그레이션 · 개발용 시드 |
 | `frontend/` | 화면 (자세한 내용은 [frontend/README.md](frontend/README.md)) |
 | `docs/` | 기획 · 설계 문서 ([문서 목차](docs/README.md)) |
-| `tools/ai-judgment/` | AI 판결 오프라인 생성 · 검수 도구 ([README](tools/ai-judgment/README.md)) |
-| `.github/workflows/` | CI 워크플로우 ([README](.github/workflows/README.md)) |
+| `tools/ai-judgment/` | AI 판결 생성 · 검수 도구와 파이프라인 서비스 ([README](tools/ai-judgment/README.md)) |
+| `deploy/` | 운영 배포 구성 · 스크립트 (Compose · 배포 · 백업 · HTTPS, [README](deploy/README.md)) |
+| `monitoring/` | 지표 · 로그 · 대시보드 · 경보 설정 (로컬 확인용 + Grafana Cloud 설정 기록, [README](monitoring/README.md)) |
+| `.github/workflows/` | CI · 이미지 빌드 · 운영 배포 확인 워크플로우 ([README](.github/workflows/README.md)) |
 
 ## 로컬 실행
 
@@ -71,8 +76,6 @@ ls backend/private-seed/seed                # R__10 · R__20 · R__30 세 파일
 - 서브모듈은 `src/main/resources` 밖에 있어 jar에 들어가지 않고, `backend/.dockerignore`로 Docker 빌드에서도 뺀다.
 
 로컬 DB를 비우고 처음부터 다시 만들려면 `docker compose down -v && docker compose up -d`를 실행한다. (볼륨이 삭제된다 — 로컬 Redis 데이터도 함께 지워진다)
-
-> **(종료 예정, COMMON-59) 팀 공용 개발 DB**: 10/28 운영이 RDS로 옮겨져 Supabase 공용 DB는 지운다. **새로 접속하지 않는다** — 로컬 개발은 위 Docker DB 절차만 쓴다. 담당자의 종료 절차는 [backend/SHARED-DEV-DB.md "종료 (RDS 전환 후)"](backend/SHARED-DEV-DB.md#종료-rds-전환-후)에 있고, 그 문서의 접속 방법은 종료 전까지의 기록으로만 남긴다.
 
 테스트는 개발 DB와 분리된 **테스트 전용 PostgreSQL(55432) · Redis(56379)** 에 연결한다(BE-87).
 컨테이너 준비·macOS/Linux 및 Windows 명령·IDE 설정·정리 절차는 [backend/TESTING.md](backend/TESTING.md)를 따른다.
@@ -118,6 +121,7 @@ API 없이 화면만 확인하려면 개발 서버를 켠 뒤 `http://localhost:
 | [ERD](docs/erd.md) | 테이블 · 제약 · 예시 데이터 |
 | [정보 구조](docs/information-architecture.md) | 화면 목록과 흐름 |
 | [유저 흐름도](docs/user-flow.md) | MVP · 확장 단계 사용자 흐름 |
+| [인프라 아키텍처](docs/architecture.md) | 운영 구성 · 요청 흐름 · 배포 흐름 · 외부 서비스 · 운영 규칙 (배포 · 모니터링 문서의 입구) |
 
 ## 협업 규칙
 

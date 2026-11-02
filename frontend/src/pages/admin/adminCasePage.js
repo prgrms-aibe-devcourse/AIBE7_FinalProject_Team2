@@ -23,6 +23,8 @@ const CHECKLIST = [
   '사건 내용과 원본 판결문을 대조해 인명 · 지명 · 사건번호 등 비식별화를 확인했다',
   '공개할 AI 판결과 재판부 판결 후보의 내용을 확인했다',
   '적용 양형기준 버전과 권고 형량 범위를 확인했다',
+  // 사건 등록이 저장한 지면은 대본 자동 검수(BE-122) 대상이 아니고, 공개 뒤에는 고칠 수 없다(BE-147)
+  '신문 지면(제목 · 부제 · 본문)이 사건 사실과 맞고 판결 · 형량을 암시하지 않는지 읽어 확인했다',
 ];
 
 // key가 있으면 맨 위 "바로 가기"가 이 부분의 제목으로 건너뛴다
@@ -130,14 +132,23 @@ export function renderAdminCasePage(container, { caseId, navigate }) {
         errorTarget.textContent = '';
         try {
           await action();
-          await load();
-          if (!active()) return;
-          returnTo(anchor);
-          notify(okText);
         } catch (failure) {
           handleFailure(failure, '요청을 처리하지 못했어요.', errorTarget);
           if (active()) trigger.disabled = false;
+          return;
         }
+        // 동작은 이미 성공했다: 다시 불러오기만 실패하면 실패로 알리지 않고 새로고침을 안내한다 (after와 같은 처리)
+        try {
+          await load();
+        } catch (failure) {
+          if (!active()) return;
+          if (failure?.code === 'UNAUTHORIZED') { unauthorized(); return; }
+          notify('저장은 됐지만 화면을 새로 불러오지 못했어요. 새로고침해 주세요.');
+          return;
+        }
+        if (!active()) return;
+        returnTo(anchor);
+        notify(okText);
       }
 
       // 다시 그린 화면에서 누른 자리를 찾아 보이게 하고 포커스를 둔다. 자리가 사라졌으면(예: 공개 뒤) 그 부분 제목으로
@@ -165,12 +176,41 @@ export function renderAdminCasePage(container, { caseId, navigate }) {
         return '대본을 아직 승인하지 않았어요. 공개는 막지 않지만, 승인 전에는 공개 대본으로 정해지지 않아요. (사용자 체험 연결은 BE-109 이후예요)';
       }
 
+      // ── 공개 취소 (A-13-14, BE-118): 사용자 화면에서 숨기고 REVIEW로 돌린다. 지우지 않으며 고친 뒤 다시 공개할 수 있다
+      function unpublishForm() {
+        const wrap = element('div', 'admin-unpublish');
+        const error = errorLine();
+        const form = element('form', 'admin-reject');
+        form.hidden = true;
+        form.noValidate = true; // 빈 사유는 아래 문구로 알린다
+        const reason = element('textarea');
+        Object.assign(reason, { rows: 2, maxLength: 200, required: true });
+        const send = element('button', 'secondary-button', '공개 취소하기');
+        send.type = 'submit';
+        form.append(labeledField('공개 취소 사유 (1 ~ 200자, 사용자에게는 보이지 않아요)', reason), send);
+        const open = button('공개 취소', () => {
+          form.hidden = !form.hidden;
+          open.setAttribute('aria-expanded', String(!form.hidden));
+          if (!form.hidden) reason.focus();
+        });
+        open.setAttribute('aria-expanded', 'false');
+        form.addEventListener('submit', (event) => {
+          event.preventDefault();
+          if (!reason.value.trim()) { error.textContent = '공개 취소 사유를 입력해 주세요.'; reason.focus(); return; }
+          if (!confirmChange('이 사건의 공개를 취소할까요?', '사용자 화면에서 바로 사라지고, 이미 끝낸 체험의 결과도 볼 수 없어요. 고친 뒤 다시 공개할 수 있어요.')) return;
+          mutate(send, error, () => api.unpublishCase(caseId, reason.value.trim()), '공개를 취소했어요. 사건은 검수 상태로 돌아갔어요.', 'publish');
+        });
+        wrap.append(open, form, error);
+        return wrap;
+      }
+
       // ── 공개 준비 (A-13)
       function publishSection(data) {
         const { status, publishReadiness, factors } = data;
         const body = [];
         if (status === 'PUBLISHED') {
           body.push(element('p', 'admin-ok', '공개한 사건이에요. 판결 교체 · 내용 수정은 막혀 있고, 반려 · 가치관 축 확정은 할 수 있어요.'));
+          body.push(unpublishForm());
           return section('공개', 'publish', ...body);
         }
         const reasons = element('ul', 'admin-reasons');
@@ -183,8 +223,8 @@ export function renderAdminCasePage(container, { caseId, navigate }) {
         // 아니라 A-6의 script 요약을 읽어 경고로만 보여 준다(BE-108 결정)
         const scriptWarning = publishScriptWarning(data.script);
         if (scriptWarning) body.push(element('p', 'admin-warn', scriptWarning));
-        // 지면 · 대표사진도 공개 조건은 아니다. 없으면 사용자 화면이 공용 컷 · 기본 지면으로 돌아간다
-        if (!media.paper) body.push(element('p', 'admin-warn', '신문 지면을 아직 만들지 않았어요. 공개는 막지 않지만 메인 화면이 기본 지면으로 보여요.'));
+        // 신문 지면은 공개 조건이 됐다(BE-147, NO_PAPER) — 위 사유 목록에 나오므로 따로 경고하지 않는다.
+        // 대표사진은 여전히 공개 조건이 아니다(없으면 사용자 화면이 공용 컷으로 돌아간다)
 
         const checks = element('fieldset', 'admin-checklist');
         checks.append(element('legend', '', '공개 전 확인'));

@@ -32,6 +32,7 @@ import com.team2.project.legalcase.domain.Factor;
 import com.team2.project.legalcase.domain.LegalCase;
 import com.team2.project.legalcase.domain.RevealStage;
 import com.team2.project.legalcase.domain.SentencingGuideline;
+import com.team2.project.legalcase.repository.CasePaperRepository;
 import com.team2.project.legalcase.repository.CaseSourceRepository;
 import com.team2.project.legalcase.repository.CaseScriptRepository;
 import com.team2.project.legalcase.repository.FactorRepository;
@@ -74,6 +75,7 @@ public class AdminReviewQueryService {
 	private final AiGenerationRepository generationRepository;
 	private final AdminAccountRepository adminAccountRepository;
 	private final CaseScriptRepository scriptRepository;
+	private final CasePaperRepository paperRepository;
 	private final JudgmentViewAssembler assembler;
 	private final AdminAuditLogger auditLogger;
 
@@ -166,7 +168,8 @@ public class AdminReviewQueryService {
 			candidates.stream().anyMatch(j -> j.getSubjectType() == SubjectType.COURT && j.isPublished()),
 			factors.size(),
 			(int) factors.stream().filter(factor -> factor.getRevealStage() == RevealStage.OVERVIEW).count(),
-			penaltyRuleRepository.findAllByCaseId(caseId).size());
+			penaltyRuleRepository.findAllByCaseId(caseId).size(),
+			paperRepository.existsByLegalCaseId(caseId));
 	}
 
 	private LegalCase findCase(Long caseId) {
