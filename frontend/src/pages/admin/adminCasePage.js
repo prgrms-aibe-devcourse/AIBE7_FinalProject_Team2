@@ -166,14 +166,17 @@ export function renderAdminCasePage(container, { caseId, navigate }) {
         return line;
       }
 
-      /** A-6 script 요약(BE-108)을 공개 준비 화면의 경고 한 줄로 바꾼다. 없으면 null */
+      /** A-6 script 요약(BE-108 · BE-126 2차-2)을 공개 준비 화면의 경고 한 줄로 바꾼다. 없으면 null */
       function publishScriptWarning(summary) {
-        if (!summary?.exists) return null;	// 대본이 없는 사건(기존 사건은 모두 이 경우)은 알릴 것이 없다
+        if (!summary?.exists) return null;	// 대본 없이 등록한 사건은 알릴 것이 없다(사용자에게 "준비 중")
+        if (summary.scriptStatus === 'MAINTENANCE') {
+          return '대본이 점검 중이에요 — 사용자에게 이 사건 체험이 잠겨 있어요. 대본 검수에서 승인이 풀린 블록을 다시 승인하면 풀려요.';
+        }
         if (summary.reviewStatus === 'APPROVED') return null;
         if (summary.publishable === false) {
-          return '대본이 아직 검수를 통과하지 못했어요(증거 카드와 대사가 어긋남). 공개는 막지 않지만, 공개 대본으로는 정해지지 않아요.';
+          return '대본에 만들지 못한 것이나 검수 오류가 남아 있어요. 공개는 막지 않지만, 승인 전에는 사용자에게 "준비 중"으로 보여요.';
         }
-        return '대본을 아직 승인하지 않았어요. 공개는 막지 않지만, 승인 전에는 공개 대본으로 정해지지 않아요. (사용자 체험 연결은 BE-109 이후예요)';
+        return '대본을 아직 승인하지 않았어요. 공개는 막지 않지만, 승인 전에는 사용자에게 "준비 중"으로 보여요.';
       }
 
       // ── 공개 취소 (A-13-14, BE-118): 사용자 화면에서 숨기고 REVIEW로 돌린다. 지우지 않으며 고친 뒤 다시 공개할 수 있다
@@ -210,6 +213,8 @@ export function renderAdminCasePage(container, { caseId, navigate }) {
         const body = [];
         if (status === 'PUBLISHED') {
           body.push(element('p', 'admin-ok', '공개한 사건이에요. 판결 교체 · 내용 수정은 막혀 있고, 반려 · 가치관 축 확정은 할 수 있어요.'));
+          // 점검 중은 공개한 사건에서 생긴다(대본 블록을 고치거나 반려함, BE-126 2차-2) — 맨 위에서 알린다
+          if (data.script?.scriptStatus === 'MAINTENANCE') body.push(element('p', 'admin-warn', publishScriptWarning(data.script)));
           body.push(unpublishForm());
           return section('공개', 'publish', ...body);
         }
