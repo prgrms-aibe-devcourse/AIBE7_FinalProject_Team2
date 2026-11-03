@@ -29,7 +29,7 @@
 - AI 판결은 **미리 생성 → 관리자 검수 후 공개** (비식별화 · RAG · 사전 학습 점검 파이프라인)
 - 관리자(세션 · CSRF) · 카카오 로그인(OAuth) · 사용자(JWT) **보안 필터 체인 3분리**
 - IAM 권한 없이 서버가 이미지를 당겨 오는 **자동 배포**, 실패하면 직전 버전으로 자동 되돌림
-- Grafana Cloud · Slack 경보, Nginx 요청 제한, 작업마다 남긴 **의사결정 기록 240건 이상**
+- Grafana Cloud · Slack 경보, Nginx 요청 제한, 작업마다 남긴 **의사결정 기록**
 
 ## 체험 흐름
 
@@ -98,8 +98,8 @@ flowchart LR
 
 ```bash
 cd backend
-docker compose up -d      # 로컬 PostgreSQL · Redis
-./gradlew bootRun         # http://localhost:8080 (시작할 때 Flyway가 스키마 · 개발용 가상 사건을 넣는다)
+docker compose up -d   # PostgreSQL · Redis
+./gradlew bootRun      # http://localhost:8080
 ```
 
 ### Frontend
@@ -107,66 +107,38 @@ docker compose up -d      # 로컬 PostgreSQL · Redis
 ```bash
 cd frontend
 npm install
-npm run dev               # http://localhost:5173 (/api는 8080으로 프록시)
+npm run dev            # http://localhost:5173
 ```
 
 <details>
 <summary>로컬 실행 상세 (시드 · 실제 사건 서브모듈 · 환경변수 · 테스트)</summary>
 
-`./gradlew bootRun`은 **시드 위치를 자동으로 정한다**(BE-28, `backend/build.gradle`). 환경변수를 따로 줄 필요가 없다.
+**시드**
 
-- 기본 `bootRun` 설정에서는 개발용 가상 사건 시드(`db/seed`)를 함께 넣는다. `FLYWAY_LOCATIONS`를 직접 지정하면 지정한 위치만 사용하므로, 가상 사건 시드도 사용하려면 `classpath:db/seed`를 포함한다. ([시드 설명](backend/src/main/resources/db/seed/README.md))
-- 실제 대표 사건은 **비공개 저장소 서브모듈(`backend/private-seed`)에 SQL이 있으면** 자동으로 넣는다(BE-17). 접근 권한이 없으면 빈 폴더로 남고, 가상 사건만으로 그대로 개발할 수 있다.
-- 시작할 때 `[bootRun] Flyway 위치(...)` · `[bootRun] 실제 사건 시드: 포함 / 없음` 두 줄이 찍힌다. 실제 사건이 안 보이면 이 줄부터 확인한다. (`FLYWAY_LOCATIONS`를 직접 지정했으면 포함 여부를 판정하지 않고 지정한 위치를 그대로 쓴다고만 찍힌다.)
-- 위치를 직접 정하고 싶으면 `FLYWAY_LOCATIONS`를 주면 그 값을 그대로 쓴다. (예: 스키마만 `FLYWAY_LOCATIONS=classpath:db/migration ./gradlew bootRun`)
+- `bootRun`은 스키마와 개발용 가상 사건을 자동으로 넣는다(BE-28). 실제 사건은 비공개 서브모듈에 SQL이 있을 때만 들어간다(BE-17).
+- IDE에서는 `BackendApplication` ▶ 대신 Gradle `bootRun`으로 실행한다. main 클래스로 띄우면 시드 자동 설정이 빠진다.
+- 로컬 DB 초기화: `docker compose down -v && docker compose up -d`
 
-```bash
-# 실제 사건을 보려면 저장소 루트에서 처음 한 번 (권한 필요)
-git submodule update --init backend/private-seed
-```
-
-⚠️ `git pull`은 서브모듈을 갱신하지 않는다. 공개 저장소가 서브모듈 커밋을 올렸다면(예: `R__20` 재판부 판결 · `R__30` AI 판결 추가) pull 뒤에 `git submodule update --init backend/private-seed`를 다시 실행해야 한다. 그렇지 않으면 예전 커밋의 시드만 들어가고, `bootRun`은 SQL이 하나라도 있으면 "포함"으로 찍어 오류 없이 뜬다. 이때 실제 사건에서 `GET /api/v1/cases/{id}/experience/judgments/ai` · `/judgments/court`가 500(`IllegalStateException`, 공개 사건인데 AI · 재판부 판결 row가 없음)을 낸다. 아래로 확인한다. (BE-29)
+**실제 사건 서브모듈** (권한 필요)
 
 ```bash
-git submodule status backend/private-seed   # 맨 앞이 '-'(미초기화) 또는 '+'(커밋 불일치)이면 위 update 명령 실행
-ls backend/private-seed/seed                # R__10 · R__20 · R__30 세 파일이 있어야 한다
+git submodule update --init backend/private-seed   # 처음 한 번, 그리고 pull 뒤에도 다시 실행 (BE-29)
 ```
 
-서브모듈을 맞춘 뒤 `bootRun`을 다시 띄우면 Flyway가 새 시드를 반복 마이그레이션(`R__`)으로 적용한다. DB를 비울 필요는 없다.
+- 서브모듈 파일을 공개 저장소의 다른 위치로 복사하지 않고, 커밋 · PR · Jira에 사건 내용을 쓰지 않는다.
 
-이 자동 설정은 로컬 실행(`bootRun`)에만 적용된다. 운영(jar · Docker)은 `application.yml` 기본값(스키마만), 테스트는 별도 `test` 프로필(스키마 + 공개 가상 시드)을 쓴다(BE-87).
+**환경변수** (값이 없으면 로컬 `docker-compose.yml` 기본값, 전체 목록은 `application.yml`)
 
-⚠️ IDE에서 실행할 때는 `BackendApplication`의 ▶ 버튼(main 클래스 실행) 대신 Gradle 창의 `Tasks > application > bootRun`을 쓴다. main 클래스로 실행하면 Gradle을 거치지 않아 자동 설정이 적용되지 않고 `application.yml` 기본값(스키마만)으로 떠서, 새 DB라면 사건이 하나도 없다. 꼭 main 클래스로 실행해야 하면 실행 구성의 환경변수에 `FLYWAY_LOCATIONS`를 직접 넣는다.
-- 서브모듈 안의 파일을 공개 저장소의 다른 위치(`db/seed` 등)로 **복사하지 않는다.** 공개 저장소의 커밋 메시지 · PR · Jira 댓글에도 사건 내용(형량 · 판단 요소 · 사실관계)을 쓰지 않는다.
-- 서브모듈은 `src/main/resources` 밖에 있어 jar에 들어가지 않고, `backend/.dockerignore`로 Docker 빌드에서도 뺀다.
+| 이름 | 설명 |
+| --- | --- |
+| `JWT_SECRET` | 필수. `export JWT_SECRET=$(openssl rand -base64 32)` |
+| `DB_URL` · `DB_USERNAME` · `DB_PASSWORD` | 운영 · 개발 서버 접속 값 |
+| `FLYWAY_LOCATIONS` | 주면 `bootRun` 자동 시드 설정보다 우선 |
+| `SWAGGER_ENABLED` | 로컬에서만 `true` (`/swagger-ui/index.html`) |
+| `ADMIN_BOOTSTRAP_EMAIL` · `ADMIN_BOOTSTRAP_PASSWORD` | 첫 관리자 계정. 만든 뒤 지운다 |
+| `KAKAO_CLIENT_ID` · `KAKAO_CLIENT_SECRET` | 비우면 카카오 로그인만 꺼진다 |
 
-로컬 DB를 비우고 처음부터 다시 만들려면 `docker compose down -v && docker compose up -d`를 실행한다. (볼륨이 삭제된다 — 로컬 Redis 데이터도 함께 지워진다)
-
-테스트는 개발 DB와 분리된 **테스트 전용 PostgreSQL(55432) · Redis(56379)** 에 연결한다(BE-87).
-컨테이너 준비·macOS/Linux 및 Windows 명령·IDE 설정·정리 절차는 [backend/TESTING.md](backend/TESTING.md)를 따른다.
-개발용 컨테이너만 실행한 상태로는 통합 테스트를 실행할 수 없다.
-
-다음 접속 환경변수는 **개발·운영 서버 실행용**이다. 값이 없으면 로컬 `docker-compose.yml` 기본값을 쓴다. (`backend/src/main/resources/application.yml`)
-테스트는 아래 변수를 상속하지 않고 `TEST_*` 설정과 접속 검증을 사용한다([테스트 환경 안내](backend/TESTING.md)).
-
-| 이름 | 기본값 | 설명 |
-| --- | --- | --- |
-| `DB_URL` | `jdbc:postgresql://localhost:5432/lawnambul` | DB 접속 주소 |
-| `DB_USERNAME` | `lawnambul` | DB 계정 (로컬 전용 값) |
-| `DB_PASSWORD` | `lawnambul` | DB 비밀번호 (로컬 전용 값) |
-| `DDL_AUTO` | `validate` | Hibernate 스키마 처리 방식 (스키마는 Flyway로만 바꾼다) |
-| `FLYWAY_LOCATIONS` | `classpath:db/migration` (`bootRun`은 자동: 가상 시드 + 실제 사건이 있으면 포함) | 마이그레이션 위치. 주면 `bootRun` 자동 설정보다 우선한다. 가상 시드는 `classpath:db/seed`, 실제 사건은 `filesystem:./private-seed/seed` |
-| `SWAGGER_ENABLED` | `false` | Swagger UI · OpenAPI 문서 노출. 로컬 · 개발에서만 `true`로 켠다 (`/swagger-ui/index.html`, `/v3/api-docs`) |
-| `ADMIN_BOOTSTRAP_EMAIL` · `ADMIN_BOOTSTRAP_PASSWORD` | 없음 | (확장, BE-39) 첫 관리자 계정. 둘 다 있고 그 이메일의 계정이 없을 때만 기동 시 한 번 만든다(비밀번호 12자 이상). 만든 뒤 환경변수를 지운다. `ADMIN_BOOTSTRAP_NAME`으로 표시 이름 지정(기본 `관리자`) |
-| `SESSION_COOKIE_SECURE` | `true` | (확장) 관리자 세션 · CSRF 쿠키의 Secure 속성. localhost는 Secure 쿠키를 그대로 받으므로 보통 바꿀 필요 없다 |
-| `ADMIN_SESSION_TIMEOUT` | `30m` | (확장) 관리자 세션 유지 시간 |
-| `JWT_SECRET` | 없음(필수) | (확장, BE-94) 액세스 토큰 서명 키. Base64, 디코딩 32바이트 이상. 없으면 기동이 실패한다(공개 저장소에 기본값을 두지 않는다 — 있으면 누구나 토큰을 위조할 수 있다). 로컬은 `export JWT_SECRET=$(openssl rand -base64 32)`처럼 각자 만들어 쓴다 |
-| `JWT_ACCESS_TOKEN_TTL` · `JWT_REFRESH_TOKEN_TTL` | `15m` · `14d` | (확장, BE-94) 액세스 · 리프레시 토큰 유효 기간 |
-| `KAKAO_CLIENT_ID` · `KAKAO_CLIENT_SECRET` | 없음 | (확장, BE-62) 카카오 로그인 REST API 키 · Client Secret. 비어 있으면 카카오 로그인 경로만 꺼진다. ID를 넣으면 SECRET도 필수(없으면 기동 실패). 로컬은 카카오 콘솔 Redirect URI에 `http://localhost:<포트>/api/v1/auth/oauth2/callback/kakao`를 등록해 쓴다 |
-| `KAKAO_LOGIN_SUCCESS_REDIRECT` · `KAKAO_LOGIN_FAILURE_REDIRECT` | `/auth/callback` · `/auth/callback?error=login_failed` | (확장, BE-62) 로그인 성공 · 실패 후 보낼 화면 경로. 우리 사이트 안의 경로(`/...`)만 허용 |
-
-운영 DB 계정은 이 저장소에 적지 않고 실행할 때 환경변수로만 넘긴다. 시드는 운영에 넣지 않는다.
-
+**테스트 · 화면만 보기**
 
 - 테스트는 테스트 전용 PostgreSQL(55432) · Redis(56379)를 쓴다 → [backend/TESTING.md](./backend/TESTING.md)
 - API 없이 화면만 보려면 `http://localhost:5173/preview.html` → [frontend/README.md](./frontend/README.md)
