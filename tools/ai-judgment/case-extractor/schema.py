@@ -14,7 +14,7 @@ sys.path.insert(0, str(PARENT_DIR))
 from common import NO_TERM_PENALTIES, PENALTY_TYPES, REDUCIBLE_TO, VALUE_AXES, format_months, format_won  # noqa: E402
 
 # 프롬프트나 스키마를 고치면 올린다. 보고서(report.json)에 기록된다.
-EXTRACT_PROMPT_VERSION = "extract-v8"  # v3: Claude 외 공급자 스키마 안내 (BE-35), v4: 사건 발생일 incidentDate (BE-38), v5: 판단 요소 가치관 축 valueAxis (BE-47), v6: 판단 요소 작성 예시 퓨샷 extract_fewshot.md (BE-53), v7: 서비스 대상 조건 · 범죄 유형 ROBBERY · THEFT · 아동 나이 표현 (BE-111), v8: 형벌 규칙 계산 기준(감경 경로 합집합 · statutoryMax 의미 · 신구법, BE-117)
+EXTRACT_PROMPT_VERSION = "extract-v9"  # v3: Claude 외 공급자 스키마 안내 (BE-35), v4: 사건 발생일 incidentDate (BE-38), v5: 판단 요소 가치관 축 valueAxis (BE-47), v6: 판단 요소 작성 예시 퓨샷 extract_fewshot.md (BE-53), v7: 서비스 대상 조건 · 범죄 유형 ROBBERY · THEFT · 아동 나이 표현 (BE-111), v8: 형벌 규칙 계산 기준(감경 경로 합집합 · statutoryMax 의미 · 신구법, BE-117), v9: 이번 선고와 같은 전과 형량 숫자 쓰지 않기 (BE-166)
 
 CRIME_TYPES = ("MURDER", "FRAUD", "INJURY", "ROBBERY", "THEFT")  # ERD legal_case.crime_type
 REVEAL_STAGES = ("OVERVIEW", "DETAIL", "ARGUMENT", "LAW")  # ERD factor.reveal_stage
@@ -362,8 +362,13 @@ def _alternatives(forms):
 
 
 def _month_forms(months):
-    """개월 수의 표기 변형 (공백은 뺀 형태): "10년", "120개월", "10년6개월"."""
-    return {format_months(months).replace(" ", ""), f"{months}개월"}
+    """개월 수의 표기 변형 (공백은 뺀 형태): "10년", "120개월", "10년6개월".
+
+    판결문 표기("징역 6월", "징역 1년 6월")도 본다 — 모델이 판결문 문장을 그대로 옮기면 "개월"이 아니라 "월"이 남는다(BE-166).
+    "징역" 바로 옆에 붙을 때만 찾으므로("징역6월", "6월의징역") 날짜의 "6월"과 헷갈리지 않는다.
+    """
+    text = format_months(months).replace(" ", "")
+    return {text, f"{months}개월", text.replace("개월", "월"), f"{months}월"}
 
 
 def _won_forms(amount):
