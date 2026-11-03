@@ -182,6 +182,18 @@ html:has(.comparison-full .stage-wrap:not(.reading-paper)) { overflow: hidden; }
 .comparison-full .stage-wrap.reading-paper .ctrl, .comparison-full .stage-wrap.reading-paper .stage > :not(.scene), .comparison-full .stage-wrap.reading-paper .scene > :is(.bg, :not(.sheet)) { display: none !important; } /* 지면 안 사진(법정 그림)은 그대로 */
 .comparison-full .stage-wrap.reading-paper .sheet { --u: min(10px, calc((100vw - 32px) / 118)); position: relative; left: auto; top: auto; margin: 28px auto 40px; transform: none !important; }
 .comparison-full .stage-wrap.reading-paper .sheet:focus { outline: none; }
+/* 태블릿 폭(FE-160): 지면 단위(--u)가 화면 폭에 비례해 721px에서 약 5.8px까지 줄어 본문이 9px대가 됐다.
+   지면 폭 · 두 단 배치는 원래 --u 그대로 두고, 맨 위 제호 줄(.sheet-mast)을 뺀 단 안의 글자 단위에만 7.6px 하한을 둔다(본문 약 12px).
+   단은 fr 격자라 글자가 커지면 줄만 더 바뀐다. 약 930px 이상은 원래 --u가 7.6px보다 커서 그대로다. 모바일(≤ 720px)은 자기 규칙(stage.css 6막 모바일 신문)을 쓴다 */
+@media (min-width: 721px) {
+  .comparison-full .stage-wrap.reading-paper .sheet { --u-sheet: var(--u); --u-text: max(var(--u-sheet), 7.6px); }
+  .comparison-full .stage-wrap.reading-paper .sheet > :not(.sheet-mast) { --u: var(--u-text); }
+  /* 짧은 라벨(판결 주체 · 보조 줄 · 표 머리 · 광고 문구)은 모바일(stage.css)과 같은 12px 하한. 지면 단위가 10px인 넓은 화면(약 1210px 이상)에서는 원래 값이 12px 이상이라 그대로다 */
+  .comparison-full .stage-wrap.reading-paper .sheet-who { font-size: max(12px, calc(var(--u) * 1.4)); }
+  .comparison-full .stage-wrap.reading-paper .sheet-sub { font-size: max(12px, calc(var(--u) * 1.3)); }
+  .comparison-full .stage-wrap.reading-paper .sheet-matrix thead th { font-size: max(12px, calc(var(--u) * 1.2)); }
+  .comparison-full .stage-wrap.reading-paper .sheet-ad-text { font-size: max(12px, calc(var(--u) * 1.3)); }
+}
 @media (max-width: 720px) {
   .comparison-full .stage-wrap.reading-paper .sheet { width: calc(100vw - 16px); margin: 8px auto 24px; }
 }
