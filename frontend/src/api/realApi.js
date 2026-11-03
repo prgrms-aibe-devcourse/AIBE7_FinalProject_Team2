@@ -68,7 +68,7 @@ export const postCollection = ({ caseId, items, backfill = false }) => post('/co
 export const postCollectionSeen = (seen) => post('/collection/seen', seen);
 export const postAchievementsSeen = (achievementIds) => post('/achievements/seen', { achievementIds });
 
-// 커뮤니티 C-1 ~ C-7 (BE-115, 명세 12장, FE-137). 목(mocks/communityMockApi.js)과 같은 이름 · 인자 · 응답 모양이다.
+// 커뮤니티 C-1 ~ C-8 (BE-115, 명세 12장, FE-137). 목(mocks/communityMockApi.js)과 같은 이름 · 인자 · 응답 모양이다.
 // 읽기는 누구나, 글쓰기 · 좋아요 · 댓글은 로그인한 회원만(401 UNAUTHORIZED — 목의 임시 코드 LOGIN_REQUIRED를 이 코드로 맞췄다)
 // 사진 올리기는 서버에 아직 없어(후속) images가 비어 있지 않으면 400 VALIDATION_ERROR(details images)다 — 화면은 실제 모드에서 사진 칸을 숨긴다
 const community = (postId) => `/community/posts/${encodeURIComponent(postId)}`;
@@ -86,6 +86,7 @@ export const getCommunityPost = (postId) => get(community(postId));
 export const createCommunityPost = (body) => post('/community/posts', body);
 export const toggleCommunityLike = (postId) => post(`${community(postId)}/like`);
 export const createCommunityComment = (postId, body) => post(`${community(postId)}/comments`, body);
+export const deleteCommunityPost = (postId) => del(community(postId)); // C-8 내 글 삭제(BE-167): 204, 남의 글 403 FORBIDDEN · 없는 글 404 POST_NOT_FOUND
 export const getCommunityHome = () => get('/community/home');
 // 글에 붙일 수 있는 내 판결. 판결을 확정하기 전이면 204라 null이다(client.js)
 export const getMyShareableVerdict = () => get('/community/shareable-verdict');

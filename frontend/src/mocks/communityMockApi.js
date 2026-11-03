@@ -250,6 +250,19 @@ export async function createCommunityComment(postId, { body } = {}) {
   return structuredClone({ ...comment, author: withCard(comment.author) });
 }
 
+// DELETE /community/posts/{postId} — 내 글 삭제(C-8, BE-167). 글 · 그 글의 댓글 · 좋아요가 함께 사라진다. 남의 글(고정 글 포함)은 FORBIDDEN
+// 목은 경험치를 거두지 않는다(실제 서버는 글 작성 · 받은 좋아요 XP를 거두되 레벨은 내리지 않는다)
+export async function deleteCommunityPost(postId) {
+  await delay();
+  me();
+  const state = load();
+  findPost(state, postId);
+  if (!state.posts.some((item) => item.postId === postId)) fail('FORBIDDEN', '권한이 없거나 요청을 확인할 수 없습니다.');
+  const { [postId]: _comments, ...comments } = state.comments;
+  const { [postId]: _liked, ...liked } = state.liked;
+  store({ ...state, posts: state.posts.filter((item) => item.postId !== postId), comments, liked });
+}
+
 // 목 전용: 내가 쓴 글 · 댓글 · 좋아요를 지워 처음부터 다시 확인한다
 export async function resetCommunityMock() {
   await delay();

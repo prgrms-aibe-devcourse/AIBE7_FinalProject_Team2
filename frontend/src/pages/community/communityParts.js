@@ -29,6 +29,7 @@ const ICONS = {
   image: '<rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="m5 18 5-5 3 3 2-2 4 4"/>',
   close: '<path d="M6 6l12 12M18 6 6 18"/>',
   pen: '<path d="M5 19h4L19 9l-4-4L5 15v4Z"/><path d="m13 7 4 4"/>',
+  trash: '<path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12M10 11v5M14 11v5"/>',
 };
 export function icon(name) {
   const node = element('span', `cm-icon icon-${name}`);
@@ -333,6 +334,67 @@ export function likeButton(post, { api, onLoginNeeded }) {
     }
   });
   return node;
+}
+
+// 내 글 삭제(FE-165, C-8): 누르면 같은 자리에서 "정말 지울까요?" 한 단계를 거친다(되돌릴 수 없어서). 확인 뒤에야 서버를 부르고,
+// 성공하면 onDeleted, 실패하면 이유를 알리고 확인 단계를 닫는다. 확인 단계가 열리면 포커스는 안전한 쪽(취소)에 둔다
+export function deleteControl(post, { api, onDeleted }) {
+  const wrap = element('div', 'cm-delete');
+  const open = element('button', 'cm-action cm-delete-open');
+  open.type = 'button';
+  open.append(icon('trash'), element('span', '', '삭제'));
+  const confirm = element('div', 'cm-delete-confirm');
+  confirm.hidden = true;
+  confirm.setAttribute('role', 'group');
+  confirm.setAttribute('aria-label', '글 삭제 확인');
+  const message = element('p', 'cm-delete-message', '이 글과 댓글, 좋아요가 모두 사라져요. 되돌릴 수 없어요.');
+  const error = element('p', 'cm-error');
+  error.setAttribute('role', 'alert');
+  const yes = element('button', 'cm-delete-yes', '삭제하기');
+  yes.type = 'button';
+  const no = element('button', 'cm-delete-no', '취소');
+  no.type = 'button';
+  const buttons = element('div', 'cm-delete-buttons');
+  buttons.append(yes, no);
+  confirm.append(message, buttons);
+  wrap.append(open, confirm, error);
+
+  const close = ({ refocus = true } = {}) => {
+    confirm.hidden = true;
+    open.hidden = false;
+    if (refocus) open.focus();
+  };
+  open.addEventListener('click', () => {
+    error.textContent = '';
+    open.hidden = true;
+    confirm.hidden = false;
+    no.focus();
+  });
+  no.addEventListener('click', () => close());
+  confirm.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') close();
+  });
+  yes.addEventListener('click', async () => {
+    yes.disabled = true;
+    no.disabled = true;
+    try {
+      await api.deleteCommunityPost(post.postId);
+      onDeleted();
+    } catch (failure) {
+      if (!open.isConnected) return;
+      error.textContent = {
+        UNAUTHORIZED: '로그인이 풀렸어요. 다시 로그인해 주세요.',
+        FORBIDDEN: '내 글만 지울 수 있어요.',
+        POST_NOT_FOUND: '이미 지워진 글이에요. 목록으로 돌아가 주세요.',
+      }[failure?.code] ?? '글을 지우지 못했어요. 잠시 뒤 다시 시도해 주세요.';
+      close({ refocus: false });
+      open.focus();
+    } finally {
+      yes.disabled = false;
+      no.disabled = false;
+    }
+  });
+  return wrap;
 }
 
 // 로그인 안내 한 줄(좋아요 · 댓글을 로그아웃 상태에서 눌렀을 때). 같은 자리에 한 번만 붙는다

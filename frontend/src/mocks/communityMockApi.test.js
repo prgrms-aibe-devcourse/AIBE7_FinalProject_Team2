@@ -3,7 +3,7 @@ import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   BODY_MAX, COMMENT_MAX, HOT_SIZE, IMAGE_MAX, PAGE_SIZE, RANKING_SIZE, RECOMMENDED_SIZE, TITLE_MAX,
-  createCommunityComment, createCommunityPost, getCommunityHome, getCommunityPost, getCommunityPosts, getMyShareableVerdict, resetCommunityMock, toggleCommunityLike,
+  createCommunityComment, createCommunityPost, deleteCommunityPost, getCommunityHome, getCommunityPost, getCommunityPosts, getMyShareableVerdict, resetCommunityMock, toggleCommunityLike,
 } from './communityMockApi.js';
 import { save as saveExperience, saveJudgment } from './mockExperienceStore.js';
 import { clearUser, saveUser } from '../utils/session.js';
@@ -45,6 +45,20 @@ test('없는 글은 POST_NOT_FOUND', async () => {
   await assert.rejects(getCommunityPost(99999), { code: 'POST_NOT_FOUND' });
   await assert.rejects(toggleCommunityLike(99999), { code: 'POST_NOT_FOUND' });
   await assert.rejects(createCommunityComment(99999, { body: '댓글' }), { code: 'POST_NOT_FOUND' });
+});
+
+test('내 글 삭제: 글 · 댓글 · 좋아요가 함께 사라지고, 남의 글은 FORBIDDEN · 없는 글은 POST_NOT_FOUND · 로그아웃은 UNAUTHORIZED (BE-167)', async () => {
+  const mine = await createCommunityPost(post());
+  await createCommunityComment(mine.postId, { body: '댓글' });
+  await toggleCommunityLike(mine.postId);
+  await deleteCommunityPost(mine.postId);
+  await assert.rejects(getCommunityPost(mine.postId), { code: 'POST_NOT_FOUND' });
+  assert.ok(!(await getCommunityPosts()).posts.some((item) => item.postId === mine.postId));
+  await assert.rejects(deleteCommunityPost(mine.postId), { code: 'POST_NOT_FOUND' });
+  await assert.rejects(deleteCommunityPost(108), { code: 'FORBIDDEN' });
+  assert.ok((await getCommunityPost(108)).title, '남의 글은 그대로');
+  clearUser();
+  await assert.rejects(deleteCommunityPost(108), { code: 'UNAUTHORIZED' });
 });
 
 test('로그아웃 상태면 쓰기 · 댓글 · 좋아요는 UNAUTHORIZED, 읽기는 된다', async () => {
