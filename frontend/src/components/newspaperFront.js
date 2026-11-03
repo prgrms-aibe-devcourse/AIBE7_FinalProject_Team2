@@ -144,6 +144,8 @@ export function pageIndex(navigate, current = 'case', { turn } = {}) {
 
 // 좁은 화면(FE-155): 목차 줄은 가로로 굴러가는데 처음 그릴 때 왼쪽 끝에 붙어 있어 지금 면(3면 · 10면)이 줄 밖에 반쯤 잘려 보였다.
 // 화면에 붙은 뒤 지금 면을 줄 가운데로 가로만 굴린다(scrollIntoView는 세로로도 페이지를 움직여 쓰지 않는다). 줄이 넘치지 않으면 그대로 둔다
+// 한계: 붙을 때까지 최대 10프레임(약 160ms)만 기다리고 조용히 그만둔다. 지금 호출처는 같은 틱에 화면에 붙여서 충분하다. 비동기로 늦게 붙는 화면에서 부르면 가운데 맞춤이 빠지므로,
+// 그때는 붙인 직후 직접 부르거나 IntersectionObserver로 바꾼다(PR #405 리뷰)
 function revealCurrentWhenShown(nav, tries = 10) {
   if (typeof requestAnimationFrame !== 'function') return; // 테스트(node) 환경
   requestAnimationFrame(() => {
