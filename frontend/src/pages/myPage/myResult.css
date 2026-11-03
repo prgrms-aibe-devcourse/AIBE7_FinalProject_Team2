@@ -47,7 +47,8 @@
 
 /* 내 결과 지면의 글자를 6막 지면보다 조금 키운다(1.12배). 지면 글자 크기는 --u(지면 폭 단위)에서 나오므로 글 요소만 --u를 키워 쓰고,
    지면 폭 · 단 · 간격은 원래 --u 그대로다(--u-base). 그래프 · 막대 줄의 px 글자도 같은 비율로 키운다 */
-.my-result-page .stage-wrap .sheet-result { --u-base: var(--u); --text-up: 1.12; }
+.my-result-page .stage-wrap .sheet-result { --u-base: var(--u-text, var(--u)); --text-up: 1.12; } /* --u-text: 태블릿 폭의 글자 단위 하한(courtSketch.css, FE-160). 없으면 지면 단위 그대로 */
+.my-result-page .stage-wrap .sheet-result > .sheet-mast { --u-base: var(--u); } /* 제호 줄은 하한 없이 지면 단위 그대로(6막 읽기 지면과 같다) */
 .my-result-page .stage-wrap .sheet-result :is(.sheet-info, .sheet-date, .sheet-brand, .sheet-headline, .sheet-head, .sheet-deck, .sheet-text, .sheet-figure figcaption, .sheet-ad-tag, .sheet-ad-title, .sheet-ad-text, .sheet-ads-note) {
   --u: calc(var(--u-base) * var(--text-up));
 }

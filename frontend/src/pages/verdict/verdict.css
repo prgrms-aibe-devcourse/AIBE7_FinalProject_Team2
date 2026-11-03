@@ -29,7 +29,7 @@
 
 /* ── 파일철(FE-43): 크라프트 서류철 위로 튀어나온 색인 탭 두 개, 철 안에는 종이 한 장(1 판결 · 2 참고 정보) ──
    메인 책상의 서류철과 같은 재료(--color-desk-kraft · -sheet). 고른 탭은 철과 같은 색으로 이어지고, 안 고른 탭은 한 겹 뒤(어둡고 낮게) */
-.verdict-page .verdict-folder { display: block; min-width: 0; }
+.verdict-page .verdict-folder { display: block; min-width: 0; container: verdict-folder / inline-size; } /* 탭을 이름으로 보일지는 화면 폭이 아니라 철 폭으로 정한다(아래 @container, FE-160) */
 .verdict-page .folder-tabs { display: flex; align-items: flex-end; gap: 4px; padding-left: 24px; }
 .verdict-page .folder-tab {
   position: relative; z-index: 1; display: inline-flex; align-items: baseline; gap: 8px; min-height: 44px; margin-bottom: -1px; padding: 10px 22px 9px;
@@ -213,10 +213,7 @@
 @media (max-width: 720px) {
   .verdict-page .sentence-entry { float: none; display: flex; margin: 0 0 10px; }
   .verdict-page .folder-tabs { padding-left: 10px; }
-  .verdict-page .folder-tab { flex: 1; justify-content: center; padding: 10px 6px 9px; white-space: nowrap; }
-  /* 탭 다섯 장이 한 줄에 들어가게: 고른 장만 번호 + 이름, 나머지는 번호만(이름은 화면 읽기 프로그램용으로 남긴다) */
-  .verdict-page .folder-tab[aria-selected='false'] { flex: 0 0 44px; }
-  .verdict-page .folder-tab[aria-selected='false'] > span:not(.folder-tab-no) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .verdict-page .folder-tab { justify-content: center; padding: 10px 6px 9px; white-space: nowrap; }
   .verdict-page .folder-body { padding: 6px; border-radius: 8px; }
   .verdict-page .folder-sheet { min-height: 0; padding: 20px 16px 22px 34px; }
   .verdict-page .folder-sheet::before { left: 11px; top: 56px; width: 10px; height: 10px; }
@@ -225,4 +222,12 @@
   .verdict-page .factor-row { flex-direction: column; align-items: stretch; gap: 10px; }
   .verdict-page .factor-actions { justify-content: flex-end; }
   .verdict-page .number-field input { width: 88px; }
+}
+
+/* 탭 다섯 장이 한 줄에 다 들어가지 않을 만큼 철이 좁으면(FE-160): 고른 장만 번호 + 이름, 나머지는 번호만(이름은 화면 읽기 프로그램용으로 남긴다).
+   예전에는 화면 720px 이하에서 늘 이렇게 해서, 철이 넓은 601 ~ 720px에서도 고른 탭 하나가 철 폭을 다 차지했다 */
+@container verdict-folder (max-width: 420px) { /* 이름 다섯 개 + 간격은 약 392px(좁은 화면의 작은 탭 글자 13px). 390px 폰(철 약 350px)은 번호 탭 그대로 */
+  .verdict-page .folder-tab { flex: 1; }
+  .verdict-page .folder-tab[aria-selected='false'] { flex: 0 0 44px; }
+  .verdict-page .folder-tab[aria-selected='false'] > span:not(.folder-tab-no) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 }

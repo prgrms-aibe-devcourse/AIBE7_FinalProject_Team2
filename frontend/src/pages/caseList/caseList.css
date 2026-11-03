@@ -473,6 +473,18 @@
   .case-list-page .op-figure-image { height: 110px; }
   .case-list-page .op-editorial .dense p { font-size: 13.5px; line-height: 1.65; }
 }
+
+/* ── 좁은 태블릿(721 ~ 900px, FE-160) ── */
+@media (min-width: 721px) and (max-width: 900px) {
+  /* 1면 머리기사: 2 : 1 두 단이면 오른쪽 기사 단이 약 200px라 사진이 세로로 길게 늘어났다 → 모바일처럼 사진(16 : 9) 위, 기사 아래 한 단 */
+  .case-list-page .front-grid { display: flex; flex-direction: column; }
+  .case-list-page .lead-photo { padding: 0 0 4px; }
+  .case-list-page .lead-photo .photo { flex: none; aspect-ratio: 16 / 9; min-height: 0; }
+  .case-list-page .lead-col { margin-top: 14px; padding: 18px 0 0; border-left: 0; border-top: 1px solid var(--color-border-strong); }
+  /* 성향 테스트 면 16유형: 그림을 왼쪽에 둔 가로 칸(칸 148 ~ 193px)은 이름이 2 ~ 4줄로 꺾였다 → 4열 그대로 그림 위 · 이름 아래(넓은 화면 8열 칸과 같은 모양) */
+  .case-list-page .pf-card { display: flex; flex-direction: column; }
+  .case-list-page .pf-card-image { height: 72px; margin: 0 0 6px; }
+}
 @media (max-width: 720px) {
   .case-list-page .paper:not(.case-paper) { --paper-w: 100vw; }
   .case-list-page .tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; } /* 면이 아홉이라 모바일은 가로로 밀어 고른다 */
