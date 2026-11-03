@@ -553,6 +553,39 @@ class CaseImportLoaderTest extends ApiIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("특별 모드로 낮춘 검사 오류는 생성 기록의 specialMode와 validationWarnings 앞에 남고, 판결은 비공개다 (BE-165)")
+	void load_savesSpecialModeWarnings() {
+		String extract = "{\"specialMode\": {\"mode\": \"format\", \"downgraded\": [\"[특별 모드] summary: 정확한 날짜 의심\"]},"
+			+ reportJson().strip().substring(1);
+		String court = "{\"specialMode\": {\"mode\": \"format\", \"downgraded\": [\"[특별 모드] excerpt: 원문 인용이 아닙니다\"]},"
+			+ courtDraftJson().strip().substring(1);
+		LegalCase legalCase = loader.load(caseImport(), new PipelineResult("job", node(caseJson()), node(extract),
+			node(court), node(aiJudgmentJson()),
+			new PipelineResult.Selection("gemini:test", 1, "consensus", "합의", List.of("선택 경고")), null, null, null, null,
+			null));
+
+		String report = jdbcTemplate.queryForObject("""
+			SELECT g.generation_report::text FROM ai_generation g
+			JOIN judgment j ON j.id = g.judgment_id WHERE j.case_id = ?""", String.class, legalCase.getId());
+		JsonNode saved = node(report);
+		assertThat(saved.path("specialMode").path("extract").path("mode").asText()).isEqualTo("format");
+		assertThat(saved.path("specialMode").path("court").path("downgraded").get(0).asText()).contains("원문 인용이 아닙니다");
+		assertThat(saved.path("validationWarnings").toString())
+			.isEqualTo("[\"[특별 모드] summary: 정확한 날짜 의심\",\"[특별 모드] excerpt: 원문 인용이 아닙니다\",\"선택 경고\"]");
+		assertThat(jdbcTemplate.queryForObject("SELECT bool_or(is_published) FROM judgment WHERE case_id = ?", Boolean.class,
+			legalCase.getId())).isFalse();
+		assertThat(jdbcTemplate.queryForObject("SELECT special_mode_review FROM legal_case WHERE id = ?", String.class,
+			legalCase.getId())).isEqualTo("PENDING");	// 확인 전에는 공개할 수 없다
+		// 특별 모드가 아니면 키 자체가 없다
+		LegalCase plain = loader.load(caseImport(), result());
+		assertThat(jdbcTemplate.queryForObject("SELECT special_mode_review FROM legal_case WHERE id = ?", String.class,
+			plain.getId())).isNull();
+		assertThat(jdbcTemplate.queryForObject("""
+			SELECT g.generation_report->'specialMode' IS NOT NULL FROM ai_generation g
+			JOIN judgment j ON j.id = g.judgment_id WHERE j.case_id = ?""", Boolean.class, plain.getId())).isFalse();
+	}
+
+	@Test
 	@DisplayName("대본이 없으면 같은 범죄 유형의 배정 수 · 마지막 배정을 보고 정한다 (BE-125)")
 	void load_assignsCastByCrimeType() {
 		String[] expected = expectedSequence("THEFT", 2);

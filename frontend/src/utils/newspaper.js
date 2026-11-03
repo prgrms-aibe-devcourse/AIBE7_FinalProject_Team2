@@ -7,15 +7,6 @@ export function todayLabel() {
   return `${now.getFullYear()}년 ${now.getMonth() + 1}월 ${now.getDate()}일 ${WEEKDAYS[now.getDay()]}요일`;
 }
 
-// thumbnailUrl이 없을 때 쓰는 유형별 연출 이미지 (frontend/public/images)
-export const fallbackImages = {
-  MURDER: '/images/case-murder.svg',
-  FRAUD: '/images/case-fraud.svg',
-  INJURY: '/images/case-injury.svg',
-  ROBBERY: '/images/case-robbery.svg',
-  THEFT: '/images/case-theft.svg',
-};
-
 // 공용 재연 컷(FE-32 · FE-65): 사건 사진이 없을 때 쓰는 샘플 연출 사진. 내로 · 남불이 기록을 읽는 장면이라 특정 사건 내용을 드러내지 않는다.
 // 범죄 분류 5종(property 재산 · body 신체 · life 생명 · robbery 강도 · theft 절도) × 자리 3장(reenact 대표 · origin 발단 · conclusion 결론) = 15장.
 // 원본은 이미지 레포 character/cuts/reenact/common/reenact-common-{분류}_cut_{headline|origin|conclusion}.png → 1200px webp로 줄여 public에 둔다
@@ -23,8 +14,8 @@ const COMMON_CATEGORIES = ['property', 'body', 'life', 'robbery', 'theft'];
 // 분류를 끝내 모를 때(seed로 순환)는 범죄 분류 3종만 돌린다. 강도 · 절도는 분류가 정해진 사건에만 쓴다
 const FALLBACK_CATEGORIES = ['property', 'body', 'life'];
 const COMMON_ROLES = ['reenact', 'origin', 'conclusion'];
-// 탐구 · 대화 컷 6장(COMMON-69): 사건과 상관없는 차분한 장면이라 신문 여백 사진 칸에 섞어 쓴다. 원본 character/cuts/inquiry/inquiry_cut_{장면}.png
-const INQUIRY_SCENES = ['reading', 'magnifier', 'talk', 'walk', 'window', 'board'];
+// 탐구 · 대화 컷 9장(COMMON-69 6장 + COMMON-73 옛 공용 재연 컷 3장): 사건과 상관없는 차분한 장면이라 신문 여백 사진 칸에 섞어 쓴다. 원본 character/cuts/inquiry/inquiry_cut_{장면}.png
+const INQUIRY_SCENES = ['reading', 'magnifier', 'talk', 'walk', 'window', 'board', 'reporter', 'clue', 'sign'];
 export const inquiryPhotos = INQUIRY_SCENES.map((scene) => `/images/cases/inquiry-${scene}.webp`);
 export const inquiryPhotoAt = (seed = 0) => inquiryPhotos[Math.abs(Number(seed) || 0) % inquiryPhotos.length];
 

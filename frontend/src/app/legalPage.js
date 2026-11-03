@@ -167,7 +167,7 @@ function renderLegalPage(container, { navigate }, key) {
   const toc = element('nav', 'legal-toc');
   toc.setAttribute('aria-label', `${doc.title} 목차`);
   const tocFold = element('details', 'legal-toc-fold');
-  tocFold.open = !window.matchMedia?.('(max-width: 680px)').matches;
+  tocFold.open = !window.matchMedia?.('(max-width: 720px)').matches;
   const tocSummary = element('summary', '', `목차 · ${doc.sections.length}개 조항`);
   const tocList = element('ol');
   const scrollTo = (node, focusNode) => {

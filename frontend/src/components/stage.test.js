@@ -1,8 +1,8 @@
 // npm test : 무대 대본 진행 로직(모습 · 이름표 이어받기, 대사 건너뛰기 경계, 서버 확인 장면)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { ACT_GROUPS, DEFAULT_CAST, attachNotice, castOf, courtPhotoCast, glideMs, flatten, flipFor, placeFor, seatFor, clearStageResume, readResume, resumeIndex, saveResume, sideOf, skipTarget } from './stage.js';
+import { existsSync, readFileSync } from 'node:fs';
+import { ACT_GROUPS, DEFAULT_CAST, MIRRORED_LOOKS, attachNotice, castOf, courtPhotoCast, facedImage, glideMs, flatten, flipFor, imageOf, placeFor, seatFor, clearStageResume, readResume, resumeIndex, saveResume, sideOf, skipTarget } from './stage.js';
 
 const script = JSON.parse(readFileSync(new URL('../content/case-1/script.json', import.meta.url)));
 const steps = flatten(script.acts, ['1a', '1b']);
@@ -278,4 +278,17 @@ test('이어 보기 저장: 저장소가 막히거나 값이 깨져 있어도 �
   assert.doesNotThrow(() => { saveResume({ path: '/p', index: 1, length: 2 }, broken); clearStageResume(broken); });
   assert.equal(readResume('/p', broken), null);
   assert.equal(readResume('/p', { getItem: () => '[1,2]', setItem() {} }), null, '배열 · 깨진 값은 비어 있는 것으로 본다');
+});
+
+// COMMON-73: 물음표가 들어 있는 볼따구 컷은 CSS로 뒤집으면 물음표도 거울 글씨가 된다 → 반대 방향 그림을 쓴다
+test('물음표 컷은 뒤집어야 하는 자리에서 CSS 대신 반대 방향 그림(-mirror)을 쓴다', () => {
+  assert.deepEqual(facedImage('naero', 'cheek:idle-thinking', true), { src: '/images/characters/cheek/naero_idle-thinking-mirror.webp', flip: false });
+  assert.deepEqual(facedImage('nambul', 'cheek-slim:idle-thinking', true), { src: '/images/characters/cheek-slim/nambul_idle-thinking-mirror.webp', flip: false });
+  assert.deepEqual(facedImage('naero', 'cheek:idle-thinking', false), { src: '/images/characters/cheek/naero_idle-thinking.webp', flip: false }, '안 뒤집는 자리는 기본 그림');
+  assert.deepEqual(facedImage('nambul', 'cheek:idle-happy', true), { src: '/images/characters/cheek/nambul_idle-happy.webp', flip: true }, '다른 모습은 지금처럼 CSS로 뒤집는다');
+  // 반대 방향 그림 파일이 모두 있어야 한다(빠지면 그 자리에서 그림이 사라진다)
+  ['naero', 'nambul'].forEach((who) => MIRRORED_LOOKS.forEach((look) => {
+    const file = imageOf(who, look).replace(/\.webp$/, '-mirror.webp');
+    assert.ok(existsSync(new URL(`../../public${file}`, import.meta.url)), `반대 방향 그림이 없다: ${file}`);
+  }));
 });

@@ -172,6 +172,22 @@ public class AdminCaseEditService {
 	}
 
 	/**
+	 * A-13-22 특별 모드 경고 확인 (BE-165). 특별 모드로 낮춘 검사 오류를 관리자가 원 판결문과 대조한 뒤 누른다.
+	 * 확인해야 공개 조건 SPECIAL_MODE_UNREVIEWED가 풀린다. 특별 모드 사건이 아니거나 이미 확인했으면 바꾸지 않고 그대로 돌려준다
+	 */
+	@Transactional
+	public AdminCaseDetailResponse confirmSpecialMode(Long caseId, AdminPrincipal admin, HttpServletRequest request) {
+		LegalCase legalCase = lockCase(caseId);
+		if (legalCase.specialModePending()) {
+			legalCase.confirmSpecialMode(admin.adminId(), clock.instant());
+			caseRepository.saveAndFlush(legalCase);
+			auditLogger.record(admin, AdminAuditAction.CASE_SPECIAL_MODE_CONFIRM, AuditTargetType.CASE, caseId, null, request);
+			caseRepository.flush();
+		}
+		return queryService.getCase(caseId);
+	}
+
+	/**
 	 * A-13-14 사건 공개 취소 (BE-118). PUBLISHED → REVIEW, 공개 시각을 지운다. 사용자 API는 PUBLISHED만 읽으므로
 	 * 목록 · 상세 · 체험 · 결과에서 바로 사라진다. 행 · 판결 · 사용자 체험 기록은 지우지 않는다(숨김, 1단계).
 	 * 다시 공개하려면 A-13을 다시 부른다(공개 조건을 다시 판정)

@@ -244,9 +244,9 @@
 /* B안 노트북(FE-150): 본체 · 키 · 트랙패드 · 베젤은 그림이 맡고, 화면 면 위에만 말풍선(HTML)을 올린다. 그림의 오른쪽 · 위 가장자리를 상자(410 × 410)에 맞춰 돌릴 때 기준점이 예전과 같다 */
 .landing-page .laptop-art {
   position: absolute; left: 77px; top: -38px; width: 410px; height: 410px; transform: rotate(calc(-29deg - var(--t, 0) * 10deg)); transform-origin: 100% 100%; /* 여유가 있으면 더 기운다 */
-  background: url('/images/desk/laptop.webp') 2px -11px / 432px 432px no-repeat;
+  background: url('/images/desk/laptop.webp') 0 0 / 410px 410px no-repeat; /* 11/03 재생성본(COMMON-73): 그림이 캔버스를 거의 꽉 채워 상자(410 × 410)에 그대로 맞춘다 */
 }
-.landing-page .laptop-screen { position: absolute; left: 38px; top: 16px; width: 359px; height: 168px; padding: 0; }
+.landing-page .laptop-screen { position: absolute; left: 43px; top: 35px; width: 323px; height: 158px; padding: 0; } /* 그림의 화면 면(1254 기준 x 132 ~ 1121, y 108 ~ 592)을 410px로 줄인 자리 */
 .landing-page .laptop-display {
   display: flex; flex-direction: column; gap: 9px; height: 100%; overflow: hidden; padding: 12px 14px; border-radius: 4px;
   font-size: 12px; line-height: 1.35; color: var(--color-text); word-break: keep-all;
@@ -627,17 +627,27 @@ body:has(.landing-page) #route-header::before { content: ''; position: absolute;
   .landing-page .desk-menu-peek { flex: 1 1 0; min-height: 96px; max-height: 190px; margin-top: 16px; overflow: hidden; display: flex; justify-content: flex-end; align-items: flex-end; padding-right: 12%; }
   .landing-page .desk-menu-naero { display: block; width: auto; height: 190px; margin-bottom: -56px; filter: var(--shadow-rest, none); }
   .landing-page .desk-menu-item:focus-visible { outline-color: var(--color-range-fill); }
+  /* 누르는 순간 눌림(FE-153): 터치에는 호버가 없어 전역 버튼과 같은 scale .96으로 반응을 준다 */
+  @media (prefers-reduced-motion: no-preference) {
+    .landing-page .desk-menu-item:not(.is-soon) { transition: scale .12s cubic-bezier(.2, .8, .2, 1); }
+    .landing-page .desk-menu-item:not(.is-soon):active { scale: .96; }
+  }
   /* 좁은 화면: 같은 방을 세로로 쌓는다. 벽은 얇게, 서류 · 판결문은 한 줄에 하나 */
   .landing-page .room { --ch: 46vw; } /* 좁은 화면: 책상 대신 메뉴 카드 밑으로 의자를 넣는다 */
   /* 좁은 화면은 러그가 세로로 길어져 술이 위 · 아래 짧은 변으로 간다 */
   .landing-page .room-rug-wrap { --rw: calc(100 * var(--cqw, 1cqw) - 32px); --peek-x: calc(var(--fw) * .06); --peek-y: calc(var(--fw) * .2); margin: 52px 16px 0; transform: none; }
   /* 서류는 한 장씩 세로로 쌓는다(FE-99). 가로로 겹쳐 놓으면 종이 폭이 W의 절반 남짓이라 글자가 5px대로 줄었다. 왼쪽 · 오른쪽으로 번갈아 기울여 놓는다 */
   .landing-page .room-rug { --pt: 40px; --W: min(300px, (100 * var(--cqw, 1cqw) - 90px) / 1.2); display: flex; flex-direction: column; gap: calc(var(--W) * .14); height: auto; padding: var(--pt) 24px calc(var(--fold) * .62); }
-  .landing-page .room-paper { position: relative; left: auto; top: auto; flex: none; }
+  .landing-page .room-paper { position: relative; left: auto; top: auto; flex: none; height: auto; min-height: calc(var(--W) * var(--size) * var(--ratio)); } /* 세로로 쌓으니 높이를 풀어 둔다(FE-153): 360px에서 글자 하한(12px) 때문에 설명이 종이 밖으로 넘쳤다. 넉넉하면 원래 비율 그대로 */
   .landing-page .room-paper:nth-child(odd) { align-self: flex-start; }
   .landing-page .room-paper:nth-child(even) { align-self: flex-end; }
   .landing-page .room-paper:nth-child(5) { align-self: flex-end; }
   .landing-page .room-paper:nth-child(6) { align-self: flex-start; } /* 오른쪽 아래 귀퉁이는 접히는 자리라 비운다 */
+  /* 종이 안 작은 라벨은 좁은 화면에서 11px 하한에 걸려 있었다(FE-153): 12px로 올린다. 판단 요소 표 머리(.factor-row.is-head)는 칸 폭(50u)이 좁아 11px 그대로 */
+  .landing-page :is(.clip-kicker, .verdict-who, .verdict-value .mock-tag) { font-size: max(12px, calc(11 * var(--u))); }
+  .landing-page .sheet-label { font-size: max(12px, calc(12 * var(--u))); }
+  .landing-page .bar-ticks { font-size: max(12px, calc(10 * var(--u))); }
+  .landing-page .verdict-note { font-size: max(12px, calc(12 * var(--u))); }
   .landing-page .room-rug::before, .landing-page .room-rug::after { top: auto; left: 6px; right: 6px; width: auto; height: 14px; background: repeating-linear-gradient(90deg, var(--fringe) 0 2px, transparent 2px 6px); }
   .landing-page .room-rug::before { bottom: 100%; }
   .landing-page .room-rug::after { top: 100%; }
@@ -674,5 +684,5 @@ html.feedback-gutter { scrollbar-gutter: stable; } /* 스크롤을 잠가도 스
 .landing-page .footer-links { display: flex; flex-wrap: wrap; gap: 0 16px; margin-top: 2px; }
 .landing-page .footer-link { min-height: 44px; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .landing-page .footer-link { touch-action: manipulation; }
-.landing-page .footer-link:hover { opacity: .75; }
+@media (hover: hover) and (pointer: fine) { .landing-page .footer-link:hover { opacity: .75; } }
 .landing-page .footer-link:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }

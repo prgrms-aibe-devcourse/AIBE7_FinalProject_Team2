@@ -57,15 +57,22 @@ function flyObjects(dialog) {
   nib.style.cssText = `position:fixed;left:0;top:0;width:${w}px;height:${h}px;z-index:1001;pointer-events:none;`;
   nib.append(...[...pen.children].map((child) => child.cloneNode(true)));
   card.closest('.landing-page').append(nib);
-  const penX = Math.min(to.right + PEN_GAP, window.innerWidth - w / 2 - 8);
+  const penEnd = (rect) => `translate(${Math.min(rect.right + PEN_GAP, window.innerWidth - w / 2 - 8) - w / 2}px, ${rect.top + rect.height / 2 - h / 2}px) rotate(48deg)`;
   nib.animate([
     { transform: `translate(${penRect.left + penRect.width / 2 - w / 2}px, ${penRect.top + penRect.height / 2 - h / 2}px) scale(${penRect.width / w})` },
-    { transform: `translate(${penX - w / 2}px, ${toY - h / 2}px) rotate(48deg)` },
+    { transform: penEnd(to) },
   ], { duration: FLY_MS, easing: EASE, fill: 'forwards' });
 
   card.style.visibility = 'hidden';
   pen.style.visibility = 'hidden';
-  return { ghosts: [nib], sources: [card, pen], face };
+  // 화면 크기가 바뀌면(창 크기 · 태블릿 사파리 주소창 접힘 · 펴짐) 창은 가운데에 다시 놓이므로, 펜도 창 옆 자리로 다시 놓는다.
+  // 날아가는 중이면 끝난 뒤에 놓는다(날아가는 창의 자리는 아직 변형 중이다)
+  const replace = () => Promise.allSettled(dialog.getAnimations().map((animation) => animation.finished)).then(() => {
+    if (!nib.isConnected) return;
+    nib.getAnimations().forEach((animation) => animation.cancel());
+    nib.style.transform = penEnd(dialog.getBoundingClientRect());
+  });
+  return { ghosts: [nib], sources: [card, pen], face, replace };
 }
 
 export function openFeedbackDialog() {
@@ -119,7 +126,7 @@ export function openFeedbackDialog() {
     fly?.sources.forEach((node) => { node.style.visibility = ''; });
     layer.remove();
     unlockScroll(...SCROLL_CLASSES);
-    window.removeEventListener('resize', shut);
+    if (fly) window.removeEventListener('resize', fly.replace);
     if (opener?.isConnected) opener.focus({ preventScroll: true });
   }
 
@@ -143,7 +150,8 @@ export function openFeedbackDialog() {
     layer.animate([{ opacity: 0 }, { opacity: 1 }], { duration: FLY_MS, easing: 'ease-out', fill: 'backwards' });
     setTimeout(() => fly.face.remove(), SWAP_DELAY_MS + SWAP_MS + 50);
   }
-  // 펜은 열릴 때 계산한 자리에 고정돼 있어 창 크기가 바뀌면 어긋나므로, 크기가 바뀌면 닫는다
-  window.addEventListener('resize', shut);
+  // 펜은 열릴 때 계산한 자리(px)에 있어 창 크기가 바뀌면 어긋난다. 예전에는 크기가 바뀌면 창을 닫았는데, 모바일 · 태블릿 사파리는
+  // 주소창이 접히고 펴질 때도 resize가 와서 창이 저절로 닫혔다(FE-153). 닫는 대신 펜을 다시 놓는다. 날아온 펜이 없으면(좁은 화면 메뉴 카드 · 연출 끔) 할 일이 없다
+  if (fly) window.addEventListener('resize', fly.replace);
   dialog.focus({ preventScroll: true });
 }

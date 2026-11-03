@@ -246,6 +246,14 @@ def guideline_version_sql(crime_type, base_date):
     return f"sentencing_guideline_at({sql_text(category)}, {sql_date(base_date)})"
 
 
+def special_mode_review_sql(title):
+    """특별 모드로 낮춘 경고가 있는 사건을 공개 전 확인 대기(PENDING)로 표시한다 (BE-165, V51). 관리자가 이미 확인한(CONFIRMED)
+    사건은 되돌리지 않는다. 사건 SQL 뒤(또는 load.case=false면 AI 판결 적재 뒤)에 붙인다 — 새로 넣은 사건 · 이미 있던 DRAFT 모두 같다."""
+    return (f"-- 특별 모드 경고 확인 대기 (BE-165): 관리자가 확인(A-13-22)해야 공개할 수 있다\n"
+            f"UPDATE legal_case SET special_mode_review = 'PENDING'\n"
+            f"WHERE title = {sql_text(title)} AND special_mode_review IS DISTINCT FROM 'CONFIRMED';\n")
+
+
 def build_case_sql(case, report, sources, *, source_org=DEFAULT_SOURCE_ORG, source_note=None, incident_date=None,
                    indictment_date=None):
     """사건 콘텐츠 INSERT를 담은 DO 블록 (BEGIN/COMMIT 없음). sources는 resolve_sources를 거친 값.

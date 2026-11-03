@@ -71,8 +71,8 @@ export function planFiller({ space, width }) {
   const columns = Math.max(1, Math.min(FILL_MAX_COLS, Math.floor((width + FILL_GAP) / (FILL_MIN_COL + FILL_GAP))));
   const rows = Math.min(FILL_MAX_ROWS, Math.floor((space + FILL_GAP) / (FILL_MIN_ROW + FILL_GAP)));
   const rowHeight = (space - FILL_GAP * (rows - 1)) / rows;
-  // 높은 줄은 사진을 대각선으로 엇갈리게(첫 줄 첫 칸, 둘째 줄 끝 칸) 놓아 사진이 한 줄에 몰리지 않게 한다
-  const pattern = rowHeight >= FILL_TALL_ROW ? ['photo', 'fact', 'ad', 'fact', 'fact', 'photo'] : ['ad', 'fact', 'fact'];
+  // 높은 줄은 사진을 엇갈리게(첫 줄 첫 칸, 둘째 줄 첫 칸과 끝 칸) 놓는다. 면마다 사진 번호가 3의 배수부터 시작하므로 사진이 3장은 돼야 탐구 컷(번호 % 3 === 2)에 닿는다
+  const pattern = rowHeight >= FILL_TALL_ROW ? ['photo', 'fact', 'ad', 'fact', 'photo', 'photo'] : ['ad', 'fact', 'fact'];
   let adUsed = false;
   const kinds = Array.from({ length: rows * columns }, (_, i) => {
     const kind = pattern[i % pattern.length];

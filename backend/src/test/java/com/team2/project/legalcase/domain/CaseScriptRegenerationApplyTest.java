@@ -28,7 +28,7 @@ class CaseScriptRegenerationApplyTest {
 		made.put(ScriptUnit.U2, block(Map.of("questions", List.of()), 1));
 		made.put(ScriptUnit.U4, block(Map.of("prosecutor", "의견"), 1));
 
-		script.applyRegeneration(made, CAST, "denied", List.of(), false, "new");
+		script.applyRegeneration(made, CAST, "denied", List.of(), Map.of(), false, "new");
 
 		assertThat(script.getPending()).containsExactly("U1");
 		assertThat(script.getAdmits()).isFalse();	// 새 U0 세 번째 답
@@ -37,7 +37,7 @@ class CaseScriptRegenerationApplyTest {
 		assertThat(script.isApprovable()).isFalse();	// U1이 아직 없다
 
 		script.applyRegeneration(Map.of(ScriptUnit.U1, block(Map.of("lines", List.of("해설")), 1)), CAST, "denied",
-			List.of(), false, null);
+			List.of(), Map.of(), false, null);
 		assertThat(script.getPending()).isEmpty();
 		assertThat(script.isApprovable()).isTrue();
 		assertThat(script.getModel()).isEqualTo("new");	// 모델이 오지 않으면 그대로 둔다
@@ -54,8 +54,8 @@ class CaseScriptRegenerationApplyTest {
 		script.approve(1L, Instant.now());
 
 		script.applyRegeneration(Map.of(ScriptUnit.U4, new RegeneratedBlock(Map.of("prosecutor", "새"), 2, Map.of(),
-			List.of(Map.of("severity", "error", "unit", "U4")), List.of(), List.of())), CAST, "admitted", List.of(), false,
-			null);
+			List.of(Map.of("severity", "error", "unit", "U4")), List.of(), List.of())), CAST, "admitted", List.of(), Map.of(),
+			false, null);
 
 		CaseScriptBlock u4 = script.block(ScriptUnit.U4).orElseThrow();
 		assertThat(u4.getRevision()).isEqualTo(4);	// 결과 판(2)이 지금 판(3)보다 작으면 지금 판 + 1
@@ -71,11 +71,53 @@ class CaseScriptRegenerationApplyTest {
 		CaseScript script = CaseScript.of(null, "old", CAST, "admitted", true, List.of(), List.of(), null, true, null, false);
 		script.addBlock(ScriptUnit.U4, Map.of("v", 1), 1, Map.of(), List.of(), List.of(), List.of());
 
-		script.applyRegeneration(Map.of(ScriptUnit.U4, block(Map.of("prosecutor", "새"), 2)), null, null, List.of(), false,
-			null);
+		script.applyRegeneration(Map.of(ScriptUnit.U4, block(Map.of("prosecutor", "새"), 2)), null, null, List.of(), Map.of(),
+			false, null);
 
 		assertThat(script.getCastRoles()).isEqualTo(CAST);
 		assertThat(script.getIssue()).isEqualTo("admitted");
+	}
+
+	@Test
+	@DisplayName("다시 만들지 않은 블록은 경고만 새 값으로 바꾼다 — 오류 · 승인 · 판은 그대로다 (BE-163)")
+	void replacesWarningsOfUnchangedBlocks() {
+		CaseScript script = CaseScript.of(null, "old", CAST, "admitted", true, List.of(), List.of(), null, true, null, false);
+		Map<String, Object> oldWarning = Map.of("unit", "U2", "path", "/plea/0", "code", "FACT_AS_CLAIM", "severity", "warning");
+		Map<String, Object> error = Map.of("unit", "U1", "path", "/lines/0", "code", "NUMBER_NOT_IN_SOURCE", "severity", "error");
+		for (ScriptUnit unit : ScriptUnit.values()) {
+			script.addBlock(unit, unit == ScriptUnit.U3 ? List.of(Map.of("factorId", 1, "text", "대사")) : Map.of("v", 1),
+				3, Map.of(), unit == ScriptUnit.U2 ? List.of(oldWarning) : List.of(), List.of(), List.of());
+		}
+		script.approve(1L, Instant.now());
+		script.block(ScriptUnit.U1).orElseThrow().getReview().add(error);	// 승인 뒤 생긴 오류 (적재 · 수정 경로를 흉내 낸다)
+
+		Map<String, Object> cardWarning = Map.of("unit", "U2", "path", "", "code", "CARD_LIST_EMPTY", "severity", "warning");
+		Map<String, Object> newError = Map.of("unit", "U2", "path", "", "code", "X", "severity", "error");	// 섞여 와도 버린다
+		Map<String, Object> u1Warning = Map.of("unit", "U1", "path", "/lines/1", "code", "ONE_SIDED", "severity", "warning");
+		Map<ScriptUnit, List<Map<String, Object>>> unchanged = new LinkedHashMap<>();
+		unchanged.put(ScriptUnit.U2, List.of(cardWarning, newError));
+		unchanged.put(ScriptUnit.U1, List.of(u1Warning));
+		unchanged.put(ScriptUnit.U4, List.of(cardWarning));	// 다시 만든 단위는 결과 블록의 review를 쓴다
+
+		List<ScriptUnit> changed = script.applyRegeneration(Map.of(ScriptUnit.U4, block(Map.of("prosecutor", "새"), 4)), CAST,
+			"admitted", List.of(), unchanged, false, null);
+
+		assertThat(changed).containsExactly(ScriptUnit.U2, ScriptUnit.U1);	// 경고가 바뀐 블록 (다시 만든 U4 · 결과에 없는 U0은 아니다)
+
+		CaseScriptBlock u2 = script.block(ScriptUnit.U2).orElseThrow();
+		assertThat(u2.getReview()).containsExactly(cardWarning);	// 옛 경고는 지우고 새 경고만
+		assertThat(u2.reviewState()).isEqualTo(ReviewStatus.APPROVED);
+		assertThat(u2.getRevision()).isEqualTo(3);
+		assertThat(u2.isPublishable()).isTrue();
+		CaseScriptBlock u1 = script.block(ScriptUnit.U1).orElseThrow();
+		assertThat(u1.getReview()).containsExactly(error, u1Warning);	// 오류는 그대로 두고 경고만 더한다
+		assertThat(u1.reviewState()).isEqualTo(ReviewStatus.APPROVED);
+		assertThat(script.block(ScriptUnit.U4).orElseThrow().getReview()).isEmpty();
+		assertThat(script.block(ScriptUnit.U0).orElseThrow().getReview()).isEmpty();	// 결과에 없는 단위는 건드리지 않는다
+
+		// 같은 경고를 다시 받으면 바뀐 것이 없다
+		assertThat(script.applyRegeneration(Map.of(ScriptUnit.U4, block(Map.of("prosecutor", "또"), 5)), CAST, "admitted",
+			List.of(), Map.of(ScriptUnit.U2, List.of(cardWarning)), false, null)).isEmpty();
 	}
 
 	private static RegeneratedBlock block(Map<String, Object> content, int revision) {

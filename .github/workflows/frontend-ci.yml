@@ -5,11 +5,13 @@ on:
     branches: [develop]
     paths:
       - frontend/**
+      - backend/src/main/java/com/team2/project/profile/domain/ProfileDecoCatalog.java  # 해금 표 대조 테스트(profileDecoMockData.test.js)가 읽는 서버 표 (FE-162)
       - .github/workflows/frontend-ci.yml
   push:
     branches: [develop]
     paths:
       - frontend/**
+      - backend/src/main/java/com/team2/project/profile/domain/ProfileDecoCatalog.java  # 해금 표 대조 테스트(profileDecoMockData.test.js)가 읽는 서버 표 (FE-162)
       - .github/workflows/frontend-ci.yml
   workflow_dispatch:
 

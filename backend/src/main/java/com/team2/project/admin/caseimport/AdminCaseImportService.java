@@ -423,7 +423,8 @@ public class AdminCaseImportService {
 			until = "script";
 		}
 		return new PipelineJobRequest(sources, pipelineProperties.models(),
-			stages.isEmpty() ? null : stages, finalSourceIndex(request), until, request.crimeType().name());
+			stages.isEmpty() ? null : stages, finalSourceIndex(request), until, request.crimeType().name(),
+			request.specialMode() == null ? null : request.specialMode().pipelineValue());
 	}
 
 	/** 최종 확정 판결의 번호(0부터). 아무도 표시하지 않았으면 null — 파이프라인이 심급으로 정한다 */

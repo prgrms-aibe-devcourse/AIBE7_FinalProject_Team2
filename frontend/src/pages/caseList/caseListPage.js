@@ -242,10 +242,12 @@ export async function renderCaseListPage(container, { api, navigate, from, openA
   }
   document.addEventListener('keydown', onKey);
 
-  // 손가락 밀기: 왼쪽으로 밀면 다음 면, 오른쪽이면 앞 면. 세로 스크롤은 그대로 두려고 지켜보기만 한다(passive). 두 손가락은 확대라 무시
+  // 손가락 밀기: 왼쪽으로 밀면 다음 면, 오른쪽이면 앞 면. 세로 스크롤은 그대로 두려고 지켜보기만 한다(passive). 두 손가락은 확대라 무시.
+  // 모바일 면 탭 줄(.tabs)은 가로로 밀어 고르는 줄이라, 거기서 시작한 밀기는 면을 넘기지 않는다(FE-154: 탭 줄을 밀면 면이 넘어갔다)
   let touch = null;
   paper.addEventListener('touchstart', (event) => {
-    touch = event.touches.length === 1 ? { x: event.touches[0].clientX, y: event.touches[0].clientY, at: event.timeStamp } : null;
+    const own = event.touches.length === 1 && !event.target.closest?.('.tabs');
+    touch = own ? { x: event.touches[0].clientX, y: event.touches[0].clientY, at: event.timeStamp } : null;
   }, { passive: true });
   paper.addEventListener('touchend', (event) => {
     const start = touch;
@@ -286,6 +288,7 @@ export async function renderCaseListPage(container, { api, navigate, from, openA
     box.append(element('p', '', '사건 목록을 불러오지 못했어요.'), element('p', 'muted', '네트워크 연결을 확인하고 다시 시도해 주세요.'), button('다시 시도', retry));
     main.replaceChildren(renderTabs(lastSummary), box);
     syncEdges(); // 오류 면에서도 앞 · 뒤 면으로 넘어갈 수 있다
+    showCurrentTab();
     tipLine.textContent = '지면을 다시 불러오면 마음이 가는 기사를 눌러 볼 수 있어요.';
     tip.hidden = !faceOf(selected).front; // 1면에만(draw와 같다)
     paper.classList.toggle('has-tip', !tip.hidden && !root.classList.contains('tip-off'));
@@ -506,6 +509,17 @@ export async function renderCaseListPage(container, { api, navigate, from, openA
     return zone;
   }
 
+  // 모바일 면 탭 줄은 가로로 넘치므로(caseList.css .tabs) 다시 그린 줄에서 지금 면 탭이 보이게 가로로만 옮긴다(FE-154: 밀기 · 화살표로 색인 · 오피니언 면에 가면 탭이 줄 밖에 있었다).
+  // scrollIntoView는 쪽 전체를 세로로도 움직이므로 쓰지 않는다. 줄이 넘치지 않는 넓은 화면에서는 아무 일도 없다
+  function showCurrentTab() {
+    const bar = main.querySelector('.tabs');
+    const tab = bar?.querySelector('.tab[aria-pressed="true"]');
+    if (!tab || bar.scrollWidth <= bar.clientWidth) return;
+    const barBox = bar.getBoundingClientRect();
+    const tabBox = tab.getBoundingClientRect();
+    bar.scrollLeft += (tabBox.left + tabBox.width / 2) - (barBox.left + barBox.width / 2); // 가운데로
+  }
+
   // 한 줄 6칸 격자 + 마지막 줄의 빈 칸 채움. 넓은 화면(6칸) 기준으로 만들고, 태블릿(3칸) · 모바일(2칸)에서 남는 칸은 CSS가 뒤에서부터 숨긴다(fill-3 · fill-2만 남긴다)
   function indexGrid(items) {
     const list = element('div', 'index-grid');
@@ -712,6 +726,7 @@ export async function renderCaseListPage(container, { api, navigate, from, openA
     main.replaceChildren(...parts, ...(fill ? [fill] : []));
     mountFill(fill, deck.fork());
     syncEdges();
+    showCurrentTab();
     paper.classList.toggle('inner-page', !face.front); // 1면만 1면, 나머지 면(유형 면 · 색인 · 성향 테스트 · 오피니언)은 안쪽 면(오른쪽 면)
   }
 

@@ -15,8 +15,12 @@
 - 앞 블록을 만들지 못하면 그 블록에 기대는 뒤 블록은 만들지 않고 `pending`에 남긴다 — 옛 앞 블록으로 만들면 관리자가 바꾸려던
   값이 그대로 남는다. 호출 한도가 소진되면 그 자리에서 멈춘다(`stopped`).
 - 만든 뒤 대본 전체를 검수하고(BE-122), 오류 줄 고쳐 쓰기(BE-122 2차)는 다시 만든 블록에만 한다. 돌려주는 `review`에는 다시
-  만든 블록의 항목과 단위가 없는 항목(`REVIEW_FAILED`)만 담는다 — 만들지 않은 블록의 검수 결과는 그 블록을 만들 때의 것이 그대로
-  맞고, 부르는 쪽이 덮어써 승인된 블록을 "오류 블록"으로 만들면 안 된다.
+  만든 블록의 항목과 단위가 없는 항목(`REVIEW_FAILED`)만 담는다 — 부르는 쪽이 만들지 않은 블록의 오류를 덮어써 승인된 블록을
+  "오류 블록"으로 만들면 안 된다(PR #378 리뷰).
+- 만들지 않은 (지금 있는) 블록의 **경고**는 `unchangedWarnings`(`{단위: [경고]}`)로 따로 돌려준다(BE-163). 그 블록의 경고는 그 블록을
+  만들 때 계산한 것이라, 새 검사(BE-159 카드 목록 등)나 바뀐 앞 블록(`cascade=False`로 U0만 바꾼 뒤 U2 질문 대응 등)이 반영되지
+  않는다. 경고는 공개 · 승인을 막지 않으므로 부르는 쪽이 그 블록의 경고만 바꿔도 승인 상태는 그대로다. 오류는 여기에 넣지 않는다.
+  경고가 없는 블록도 빈 목록으로 넣는다(옛 경고를 지우려면). 검수가 돌지 못했으면(`REVIEW_FAILED`) 빈 객체다 — 옛 경고를 둔다.
 - 판은 지금 판에서 이어 오른다. `basis`에는 그때 본 앞 블록의 판(다시 만들지 않은 블록은 지금 판)을 남긴다(`build_blocks`).
 
 분류에는 민감 플래그(`sensitiveFlags`)가 **반드시** 있어야 한다. 백엔드는 분류(`legal_case.classification`)와 민감 플래그
@@ -36,7 +40,7 @@ from script_assembler import (BLOCK_BASIS, BLOCK_UNITS, UNIT_STAGES, ask_unit, b
                               strip_line_prefix)
 from script_generation import generate_evidence_lines
 from script_repair import repair_units
-from script_review import ERROR, review_failed, review_script
+from script_review import ERROR, WARNING, review_failed, review_script
 
 # 블록마다 입력으로 받는 앞 블록 (U2는 U0, U4는 U0 · U2)
 INPUT_BLOCKS = {unit: tuple(dep for dep in BLOCK_BASIS[unit] if dep in BLOCK_UNITS) for unit in BLOCK_UNITS}
@@ -112,7 +116,8 @@ def regenerate_blocks(case, judgment_output, cast, cls, blocks, units, *, model,
 
     돌려주는 값: {"units": 다시 만들기로 한 블록, "regenerated": 실제로 만든 블록, "pending": 만들지 못한 블록,
     "stopped": 호출 한도로 멈췄는가, "blocks": 만든 블록(build_blocks 형식), "meta": 메타, "review": 대본 전체 검수 결과,
-    "repairs": 고쳐 쓰기 기록, "publishable": 만든 블록에 검수 오류가 없는가}. `review`는 만든 블록 것과 단위가 없는 것만이다."""
+    "repairs": 고쳐 쓰기 기록, "publishable": 만든 블록에 검수 오류가 없는가, "unchangedWarnings": 만들지 않은 블록의 새 경고}.
+    `review`는 만든 블록 것과 단위가 없는 것만이다."""
     errors = unit_list_errors(units) + block_errors(blocks) + regeneration_classification_errors(cls)
     if not isinstance(cascade, bool):
         errors.append("cascade는 true 또는 false다")
@@ -186,4 +191,13 @@ def regenerate_blocks(case, judgment_output, cast, cls, blocks, units, *, model,
     review = [i for i in generated["review"] if i["unit"] in made or i["unit"] not in BLOCK_UNITS]
     publishable = bool(made) and not pending and not any(i["severity"] == ERROR for i in review)
     return {"units": targets, "regenerated": made, "pending": pending, "stopped": stopped, "blocks": new_blocks,
-            "meta": meta, "review": review, "repairs": generated.get("repairs", []), "publishable": publishable}
+            "meta": meta, "review": review, "repairs": generated.get("repairs", []), "publishable": publishable,
+            "unchangedWarnings": unchanged_warnings(generated["review"], blocks, made)}
+
+
+def unchanged_warnings(review, blocks, made):
+    """만들지 않은 (지금 있는) 블록마다 새 검수 경고 (모듈 설명 · BE-163). 검수가 돌지 못했으면 빈 객체."""
+    if any(i["code"] == "REVIEW_FAILED" for i in review):
+        return {}
+    return {unit: [i for i in review if i["unit"] == unit and i["severity"] == WARNING]
+            for unit in BLOCK_UNITS if unit in blocks and unit not in made}

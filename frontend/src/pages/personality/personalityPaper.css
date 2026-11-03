@@ -8,7 +8,7 @@
 /* 최소 높이는 사건 목록 신문과 같다(caseList.css: 화면 + 120px, 신문 폭 × 1.4 중 큰 쪽, FE-126) */
 .tp-page .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 /* 신문을 넘겨 들어온다(사건 정보 · 사건 목록 · 6막에서): 왼쪽 가장자리를 축으로 넘어와 바닥에 내려앉는다 */
-.tp-sheet.is-turning-in { animation: tp-turn-in .65s cubic-bezier(.2, .8, .2, 1) both; }
+.tp-sheet.is-turning-in { animation: tp-turn-in .65s cubic-bezier(.2, .8, .2, 1) backwards; } /* 끝난 뒤 변환을 남기지 않는다(both면 perspective가 남아 좁은 화면에서 쪽이 가로로 20 ~ 30px 늘어났다) */
 @keyframes tp-turn-in { from { transform: perspective(2400px) rotateY(-88deg); } to { transform: perspective(2400px) rotateY(0deg); } }
 .tp-body { flex: 1; padding-top: calc(var(--u) * 2.4); padding-bottom: calc(var(--u) * 2.4); }
 .tp-sheet .site-footer { margin-top: auto; }
@@ -66,7 +66,7 @@
 
 /* 다섯 칸: 네모 칸에 펜으로 체크한다. 양 끝일수록 칸이 크다 */
 .tp-ballot { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: calc(var(--u) * .8); }
-.tp-option { position: relative; display: grid; grid-template-rows: 34px auto; place-items: center; gap: 6px; padding: 6px 2px 4px; cursor: pointer; }
+.tp-option { position: relative; display: grid; grid-template-rows: 34px auto; place-items: center; gap: 6px; padding: 6px 2px 4px; cursor: pointer; -webkit-user-select: none; user-select: none; } /* 조작용 칸이라 길게 눌러도 글자가 잡히지 않게 */
 .tp-option input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; }
 .tp-box { display: grid; place-items: center; width: 26px; height: 26px; border: 2px solid var(--color-text); }
 .tp-option:is(.step-0, .step-4) .tp-box { width: 34px; height: 34px; }
@@ -75,6 +75,7 @@
 .tp-degree { font: 700 max(13px, calc(var(--u) * 1.35)) / 1.2 var(--font-body); color: var(--color-text); white-space: nowrap; }
 .tp-option:has(input:checked) .tp-degree { color: var(--color-label); }
 .tp-option:has(input:focus-visible) { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+.tp-option:active .tp-box { background: color-mix(in srgb, var(--color-text) 8%, transparent); } /* 터치 눌림(호버와 같다) */
 @media (hover: hover) and (pointer: fine) { .tp-option:hover .tp-box { background: color-mix(in srgb, var(--color-text) 8%, transparent); } }
 .tp-ballot-ends { display: flex; justify-content: space-between; margin-top: 4px; color: var(--color-muted); font-size: max(12px, calc(var(--u) * 1.15)); }
 
@@ -155,5 +156,6 @@
   .tpr-graph .axis-row { grid-template-columns: 6.5em minmax(0, 1fr); }
   .tpr-graph .axis-row::after { left: calc(6.5em + 12px + (100% - 6.5em - 12px) / 2); }
   .tpr-actions > .primary-button { width: 100%; }
+  .tpr-more { flex-direction: column; align-items: stretch; width: 100%; } /* 공유 · 마이페이지 · 다시 하기가 2 + 1로 들쭉날쭉 감기지 않게 한 줄씩(서류철 결과지 .result-more와 같다) */
 }
 @media (prefers-reduced-motion: reduce) { .tp-sheet.is-turning-in { animation: none; } }

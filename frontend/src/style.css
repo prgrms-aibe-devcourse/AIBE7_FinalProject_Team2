@@ -284,10 +284,12 @@ h1 { font-family: var(--font-heading); color: var(--color-heading); letter-spaci
   cursor: pointer;
 }
 .primary-button { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-on-accent); }
-.primary-button:hover:not(:disabled) { background: var(--color-accent-hover); border-color: var(--color-accent-hover); }
 .primary-button:disabled { opacity: .6; }
 .secondary-button { color: var(--color-text); background: var(--color-card); border-color: var(--color-border-strong); }
-.secondary-button:hover { background: var(--color-surface); }
+@media (hover: hover) and (pointer: fine) {
+  .primary-button:hover:not(:disabled) { background: var(--color-accent-hover); border-color: var(--color-accent-hover); }
+  .secondary-button:hover { background: var(--color-surface); }
+}
 
 /* 겹치는 스크롤바 (components/scrollArea.js). 스크롤 영역은 모두 이 형식을 쓴다:
    기본 막대는 숨기고, 글 위에 겹치는 반투명 막대를 스크롤하는 동안만 보여 준다 */
@@ -330,13 +332,12 @@ html { scroll-padding-top: calc(var(--site-header-h, 64px) + 8px); }
 .site-nav { display: flex; align-items: center; gap: 8px; margin-left: auto; } /* 로고는 왼쪽, 메뉴 · 로그인은 오른쪽 */
 .site-header .nav-button[aria-current="page"] { color: var(--color-banner-text); box-shadow: inset 0 -2px 0 currentColor; } /* 지금 보고 있는 메뉴 */
 .site-header .nav-button[aria-disabled="true"] { cursor: default; opacity: .6; }
-.site-header .nav-button[aria-disabled="true"]:hover { text-decoration: none; }
 /* 위 .site-header button { font: inherit } · 화면 CSS의 button 규칙보다 우선하도록 .site-header를 붙인다.
    화면 CSS가 .xx-page .site-header button처럼 더 구체적으로 쓰면 이 규칙을 이기므로, 그때는 :not(.logo-button)으로 로고를 빼 둔다(FE-56) */
 .site-header .logo-button { flex: none; white-space: nowrap; border: 0; background: transparent; padding: 6px 0; font-family: var(--font-heading); font-size: 22px; font-weight: 900; letter-spacing: -.04em; color: var(--color-banner-text); }
 .site-header .logo-button .law { display: inline; color: var(--color-range-fill); }
 .nav-button { border: 0; background: transparent; padding: 10px 12px; min-height: 44px; color: var(--color-banner-muted); font-size: var(--text-small); white-space: nowrap; }
-@media (hover: hover) and (pointer: fine) { .nav-button:hover { color: var(--color-banner-text); } }
+@media (hover: hover) and (pointer: fine) { .nav-button:not([aria-disabled="true"]):hover { color: var(--color-banner-text); } }
 /* 로그인(FE-50): 메뉴 맨 오른쪽, 얇은 테두리로 계정 동작임을 구분한다. 테두리는 글자색을 따라가 네이비 · 흰 헤더 모두에 맞는다 */
 .site-header .login-button { flex: none; margin-left: 4px; padding: 6px 14px; min-height: 36px; border: 1px solid color-mix(in srgb, currentColor 45%, transparent); border-radius: 6px; }
 .site-header .login-button { position: relative; }
@@ -354,7 +355,8 @@ html { scroll-padding-top: calc(var(--site-header-h, 64px) + 8px); }
 .site-footer { padding: 24px 28px; border-top: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-muted); font-size: 13px; word-break: keep-all; overflow-wrap: anywhere; text-wrap: pretty; } /* 단어 중간에서 끊기지 않게(FE-103), 너무 긴 낱말만 예외로 꺾는다 */
 /* 한 줄 헤더가 빠듯한 폭(721 ~ 1000px): 로고가 줄바꿈되지 않게 로고 · 메뉴 글자 · 간격을 폭에 맞춰 함께 줄인다(FE-87) */
 @media (min-width: 721px) and (max-width: 1000px) {
-  .site-header { gap: clamp(6px, 1.2vw, 16px); padding-inline: clamp(14px, 2.6vw, 32px); }
+  /* 폰을 가로로 돌리면(390 × 844 → 폭 844px) 이 구간이라, 노치 쪽 여백도 여기서 safe-area로 지킨다(FE-152 리뷰 반영) */
+  .site-header { gap: clamp(6px, 1.2vw, 16px); padding-left: max(clamp(14px, 2.6vw, 32px), env(safe-area-inset-left, 0px)); padding-right: max(clamp(14px, 2.6vw, 32px), env(safe-area-inset-right, 0px)); }
   .site-header .logo-button { font-size: clamp(17px, 2.2vw, 22px); }
   .site-nav { gap: clamp(0px, .6vw, 8px); }
   .site-header .nav-button { padding-inline: clamp(5px, 1vw, 12px); font-size: clamp(11.5px, 1.3vw, 13px); }
@@ -365,9 +367,12 @@ html { scroll-padding-top: calc(var(--site-header-h, 64px) + 8px); }
 }
 @media (max-width: 720px) {
   /* 좁은 화면(FE-52): 두 줄. 윗줄 = 로고 · 로그인, 아랫줄 = 메뉴(넘치면 가로로 민다) */
-  .site-header { flex-wrap: wrap; row-gap: 0; padding: 12px 16px; }
+  /* 노치 · 가로 모드의 둥근 모서리(FE-152): 좌우 안쪽 여백을 safe-area만큼 넓힌다(세로 화면에서는 0이라 그대로 16px) */
+  .site-header { flex-wrap: wrap; row-gap: 0; padding: 12px max(16px, env(safe-area-inset-right, 0px)) 12px max(16px, env(safe-area-inset-left, 0px)); }
   .site-header .login-button { order: 2; margin-left: auto; }
-  .site-nav { order: 3; width: 100%; margin: 0 -8px; gap: 0; overflow-x: auto; scrollbar-width: none; }
+  /* 메뉴 줄은 가로로 민다: 끝에 닿아도 페이지 뒤로 가기 제스처로 번지지 않게(contain) */
+  .site-nav { order: 3; width: 100%; margin: 0 -8px; gap: 0; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; }
+  .site-nav::-webkit-scrollbar { display: none; }
   .site-nav .nav-button { padding: 8px; }
 }
 
@@ -385,7 +390,17 @@ html { scroll-padding-top: calc(var(--site-header-h, 64px) + 8px); }
 .tolerance-ends { display: flex; justify-content: space-between; color: var(--color-muted); font-size: var(--text-caption); }
 
 /* 터치 기기 공통(FE-32 점검, mobile-native): 탭 번쩍임 제거 · 즉시 반응 · 컨트롤 글자 선택 막기 · 누르는 순간의 눌림 피드백 */
-html { -webkit-tap-highlight-color: transparent; }
+/* 가로로 돌렸을 때 iOS가 글자를 멋대로 키우지 않게(FE-152) */
+html { -webkit-tap-highlight-color: transparent; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+/* 입력창 글자 16px 이상(FE-152): iOS 사파리는 16px 미만 입력창에 포커스하면 화면을 확대하고 되돌리지 않는다.
+   터치 기기(pointer: coarse)에서만 올리므로 마우스 데스크톱 모양은 그대로다. 일부러 강제한다: :not() 안의 속성 선택자 때문에 명시도가 (0,1,1)이라
+   화면 CSS의 단일 클래스 규칙(.xx { font-size: 14px })보다 이긴다. 한 곳만 놓쳐도 확대가 되돌아오지 않아 화면별 점검에 맡기지 않는다.
+   대가: 태블릿 터치로 보는 촘촘한 화면(관리자 표 안 입력창 등)도 16px 이상이다 */
+@media (pointer: coarse) {
+  input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"]), textarea, select { font-size: max(16px, 1em); }
+}
+/* 공통 푸터 아래 홈 표시줄 자리(FE-152) */
+.site-footer { padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px)); }
 button, [role="button"], a, label.range-option, summary { touch-action: manipulation; }
 button, [role="button"] { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 @media (prefers-reduced-motion: no-preference) {

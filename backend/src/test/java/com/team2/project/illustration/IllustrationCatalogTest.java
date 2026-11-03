@@ -48,6 +48,7 @@ class IllustrationCatalogTest {
 		List<String> onDisk = Stream.of("cases", "characters")
 				.flatMap(folder -> walk(IMAGES.resolve(folder)))
 				.map(path -> IMAGES.relativize(path).toString().replace('\\', '/'))
+				.filter(path -> !path.endsWith("-mirror.webp"))	// 좌우를 따로 그린 반대 방향 그림은 같은 그림이라 세지 않는다(COMMON-73)
 				.sorted()
 				.toList();
 

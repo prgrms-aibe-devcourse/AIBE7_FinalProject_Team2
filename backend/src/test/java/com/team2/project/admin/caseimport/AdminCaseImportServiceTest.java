@@ -424,6 +424,21 @@ class AdminCaseImportServiceTest {
 		assertThat(sent.getValue().crimeType()).isEqualTo("MURDER");
 	}
 
+	@Test
+	@DisplayName("특별 모드는 파이프라인 값(format · all)으로 넘기고, 비우면 보내지 않는다 (BE-165)")
+	void startImport_passesSpecialMode() {
+		when(pipelineClient.createJob(any())).thenReturn(job("abc123", "QUEUED", List.of()));
+		List<CaseImportCreateRequest.Source> sources = List.of(source(CourtLevel.FIRST, "2099고합001"));
+
+		service.startImport(new CaseImportCreateRequest(CrimeType.MURDER, sources, CaseImportCreateRequest.SpecialMode.ALL),
+			admin, httpRequest);
+		service.startImport(new CaseImportCreateRequest(CrimeType.MURDER, sources), admin, httpRequest);
+
+		ArgumentCaptor<PipelineJobRequest> sent = ArgumentCaptor.forClass(PipelineJobRequest.class);
+		verify(pipelineClient, org.mockito.Mockito.times(2)).createJob(sent.capture());
+		assertThat(sent.getAllValues()).extracting(PipelineJobRequest::specialMode).containsExactly("all", null);
+	}
+
 	// ---------------------------------------------------------------- A-15
 
 	@Test

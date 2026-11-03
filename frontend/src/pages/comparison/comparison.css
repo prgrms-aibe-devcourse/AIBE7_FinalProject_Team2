@@ -42,7 +42,7 @@
 .comparison-page .rule-box:last-child { border-right: 0; }
 .comparison-page .rule-box h3 { color: var(--color-label); font-size: 13px; margin-bottom: 10px; }
 .comparison-page .rule-box p + p { margin-top: 8px; }
-@media (max-width: 760px) {
+@media (max-width: 720px) {
   .comparison-page .pre-to-final,
   .comparison-page .matrix-section { padding: 20px 16px; }
   .comparison-page .pre-to-final-compare { flex-direction: column; }
