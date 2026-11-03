@@ -1,14 +1,63 @@
-# 내Law남불
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./docs/assets/wordmark-dark.webp" />
+    <img src="./docs/assets/wordmark-light.webp" alt="내Law남불" width="360" />
+  </picture>
+</p>
 
-> 당신이 판사라면, 어떤 판결을 내리겠습니까?
+<p align="center">
+  다 알고 나서도, 같은 판단일까?<br />
+  사건을 단계별로 읽고 직접 판결을 내린 뒤, AI · 실제 판결과 같은 기준으로 비교하는 판결 체험 서비스
+</p>
 
-사용자가 사건을 단계별로 읽고 **직접 판결을 내린 뒤**, AI 판결과 실제 판결을 **같은 판단 요소**로 비교해 보는 서비스다. AIBE7 최종 프로젝트 Team2가 만든다.
+<div align="center">
 
-MVP는 로그인 없이, 대표 사건 1건으로 아래 흐름을 끝까지 체험하는 것이다. ([MVP 정의서](docs/mvp-definition.md))
+|                                     백승호                                     |                                   정민석                                   |                                   김현중                                   |                                  김해송                                   |
+|:---------------------------------------------------------------------------:|:-----------------------------------------------------------------------:|:-----------------------------------------------------------------------:|:----------------------------------------------------------------------:|
+| <img src="https://avatars.githubusercontent.com/pooreunblue" width="100"/> | <img src="https://avatars.githubusercontent.com/jms0326" width="100"/> | <img src="https://avatars.githubusercontent.com/YOLO-NIM" width="100"/> | <img src="https://avatars.githubusercontent.com/peanutboi710" width="100"/> |
+|              [@pooreunblue](https://github.com/pooreunblue)               |                [@jms0326](https://github.com/jms0326)                 |                [@YOLO-NIM](https://github.com/YOLO-NIM)                 |                 [@peanutboi710](https://github.com/peanutboi710)                 |
 
+</div>
+
+## 핵심 포인트
+
+- <sub>실제 판결은 마지막 막까지 비공개, 제출한 판단은 고칠 수 없게 **서버가 진행 상태 7단계를 강제**</sub>
+- <sub>사용자 · AI · 재판부 판단을 `judgment` 한 테이블에 저장, "1회 제출"은 **부분 유니크 인덱스로 보장**</sub>
+- <sub>AI 판결은 **미리 생성 → 관리자 검수 후 공개** (비식별화 · RAG · 사전 학습 점검 파이프라인)</sub>
+- <sub>관리자(세션 · CSRF) · 카카오 로그인(OAuth) · 사용자(JWT) **보안 필터 체인 3분리**</sub>
+- <sub>IAM 권한 없이 서버가 이미지를 당겨 오는 **자동 배포**, 실패하면 직전 버전으로 자동 되돌림</sub>
+- <sub>Grafana Cloud · Slack 경보, Nginx 요청 제한, 작업마다 남긴 **의사결정 기록 240건 이상**</sub>
+
+## 체험 흐름
+
+```mermaid
+flowchart LR
+    A["성향 테스트"] --> B["첫인상<br/>(구경꾼의 나)"]
+    B --> C["재판"]
+    C --> D["내 판결<br/>(판사의 나)"]
+    D --> E["AI 판결"]
+    E --> F["실제 판결"]
+    F --> G["세 판결 비교"]
+    G --> H["마이페이지 · 성향 갱신"]
 ```
-사전 판단 → 단계별 사건 확인 → 직접 판결 → AI 판결 → 실제 판결 → 세 판결 비교
-```
+
+## 주요 화면
+
+| 메인 | 첫인상 |
+| :---: | :---: |
+| ![메인](./docs/assets/screenshots/main-desk.webp) | ![첫인상](./docs/assets/screenshots/first-impression.webp) |
+| **재판** | **내 판결** |
+| ![재판](./docs/assets/screenshots/trial.webp) | ![내 판결](./docs/assets/screenshots/my-verdict.webp) |
+| **AI 판결** | **세 판결 비교** |
+| ![AI 판결](./docs/assets/screenshots/ai-verdict.webp) | ![세 판결 비교](./docs/assets/screenshots/comparison.webp) |
+| **성향 테스트** | **관리자 검수** |
+| ![성향 테스트](./docs/assets/screenshots/personality.webp) | ![관리자 검수](./docs/assets/screenshots/admin-review.webp) |
+
+## 아키텍처
+
+<p align="center">
+  <img src="./docs/assets/architecture.png" alt="인프라 아키텍처" width="90%" />
+</p>
 
 ## 기술 스택
 
@@ -24,29 +73,41 @@ MVP는 로그인 없이, 대표 사건 1건으로 아래 흐름을 끝까지 체
 
 자세한 구성과 선택 이유는 [기술 스택 정리](docs/tech-stack.md), 운영 구성 전체는 [인프라 아키텍처](docs/architecture.md)를 본다.
 
-## 폴더 구조
+## 상세 문서
 
-| 폴더 | 내용 |
+| 문서 | 링크 |
 | --- | --- |
-| `backend/` | Spring Boot API 서버, 로컬 개발용 PostgreSQL(`docker-compose.yml`), DB 마이그레이션 · 개발용 시드 |
-| `frontend/` | 화면 (자세한 내용은 [frontend/README.md](frontend/README.md)) |
-| `docs/` | 기획 · 설계 문서 ([문서 목차](docs/README.md)) |
-| `tools/ai-judgment/` | AI 판결 생성 · 검수 도구와 파이프라인 서비스 ([README](tools/ai-judgment/README.md)) |
-| `deploy/` | 운영 배포 구성 · 스크립트 (Compose · 배포 · 백업 · HTTPS, [README](deploy/README.md)) |
-| `monitoring/` | 지표 · 로그 · 대시보드 · 경보 설정 (로컬 확인용 + Grafana Cloud 설정 기록, [README](monitoring/README.md)) |
-| `.github/workflows/` | CI · 이미지 빌드 · 운영 배포 확인 워크플로우 ([README](.github/workflows/README.md)) |
+| 전체 문서 안내 | [docs/README.md](./docs/README.md) |
+| 기술 스택 · 선택 이유 | [docs/tech-stack.md](./docs/tech-stack.md) |
+| API 명세 | [docs/api-specification.md](./docs/api-specification.md) |
+| ERD | [docs/erd.md](./docs/erd.md) |
+| 유저 흐름도 | [docs/user-flow.md](./docs/user-flow.md) |
+| 인프라 아키텍처 | [docs/architecture.md](./docs/architecture.md) |
+| AI 판결 파이프라인 | [docs/ai-judgment-pipeline.md](./docs/ai-judgment-pipeline.md) |
+| 배포 · 운영 | [deploy/README.md](./deploy/README.md) |
+| 모니터링 | [monitoring/README.md](./monitoring/README.md) |
+| Git · 코드 컨벤션 | [GIT_CONVENTIONS.md](./docs/conventions/GIT_CONVENTIONS.md) · [CODE_CONVENTIONS.md](./docs/conventions/CODE_CONVENTIONS.md) |
 
-## 로컬 실행
+## 실행
 
-### 백엔드
-
-JDK 17이 필요하다. 기본 JDK가 17이 아니면 `JAVA_HOME`을 17로 지정한 뒤 실행한다.
+### Backend
 
 ```bash
 cd backend
-docker compose up -d      # PostgreSQL(lawnambul-postgres, 5432) · Redis(lawnambul-redis, 127.0.0.1:6379) 컨테이너 실행
-./gradlew bootRun         # 서버 실행 (기본 8080, 시작할 때 Flyway가 스키마 · 시드를 넣는다)
+docker compose up -d      # 로컬 PostgreSQL · Redis
+./gradlew bootRun         # http://localhost:8080 (시작할 때 Flyway가 스키마 · 개발용 가상 사건을 넣는다)
 ```
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev               # http://localhost:5173 (/api는 8080으로 프록시)
+```
+
+<details>
+<summary>로컬 실행 상세 (시드 · 실제 사건 서브모듈 · 환경변수 · 테스트)</summary>
 
 `./gradlew bootRun`은 **시드 위치를 자동으로 정한다**(BE-28, `backend/build.gradle`). 환경변수를 따로 줄 필요가 없다.
 
@@ -102,33 +163,8 @@ ls backend/private-seed/seed                # R__10 · R__20 · R__30 세 파일
 
 운영 DB 계정은 이 저장소에 적지 않고 실행할 때 환경변수로만 넘긴다. 시드는 운영에 넣지 않는다.
 
-### 프론트엔드
 
-```bash
-cd frontend
-npm install
-npm run dev     # http://localhost:5173 (/api 요청은 localhost:8080 백엔드로 프록시)
-```
+- 테스트는 테스트 전용 PostgreSQL(55432) · Redis(56379)를 쓴다 → [backend/TESTING.md](./backend/TESTING.md)
+- API 없이 화면만 보려면 `http://localhost:5173/preview.html` → [frontend/README.md](./frontend/README.md)
 
-API 없이 화면만 확인하려면 개발 서버를 켠 뒤 `http://localhost:5173/preview.html`을 연다. 자세한 내용은 [frontend/README.md](frontend/README.md)와 [목 API 설명](frontend/src/mocks/README.md)을 본다.
-
-## 문서
-
-| 문서 | 내용 |
-| --- | --- |
-| [문서 목차](docs/README.md) | 모든 문서의 역할과 읽는 순서 |
-| [API 명세서](docs/api-specification.md) | 경로 · 요청 · 응답 · 에러 코드 |
-| [ERD](docs/erd.md) | 테이블 · 제약 · 예시 데이터 |
-| [정보 구조](docs/information-architecture.md) | 화면 목록과 흐름 |
-| [유저 흐름도](docs/user-flow.md) | MVP · 확장 단계 사용자 흐름 |
-| [인프라 아키텍처](docs/architecture.md) | 운영 구성 · 요청 흐름 · 배포 흐름 · 외부 서비스 · 운영 규칙 (배포 · 모니터링 문서의 입구) |
-
-## 협업 규칙
-
-작업은 **Jira 이슈**로 시작하고, 브랜치 · 커밋 · PR 이름에 이슈 키(`BE-15`, `FE-8` 등)를 넣는다. 자세한 규칙은 [Git 컨벤션](docs/conventions/GIT_CONVENTIONS.md), 코드 규칙은 [코드 컨벤션](docs/conventions/CODE_CONVENTIONS.md)을 따른다.
-
-| 항목 | 형식 | 예 |
-| --- | --- | --- |
-| 브랜치 | `feature/{ISSUE-KEY}-{작업내용}` | `feature/BE-15-login-api` |
-| 커밋 | `영어카테고리 : ISSUE-KEY 한글 설명` | `feat : BE-15 로그인 API 구현` |
-| PR 제목 | `[ISSUE-KEY] 작업 내용` | `[BE-15] 로그인 API 구현` |
+</details>
