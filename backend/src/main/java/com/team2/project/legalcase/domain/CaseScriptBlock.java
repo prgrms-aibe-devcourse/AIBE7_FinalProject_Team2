@@ -41,6 +41,7 @@ import org.hibernate.type.SqlTypes;
 public class CaseScriptBlock {
 
 	private static final String ERROR = "error";
+	private static final String WARNING = "warning";
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -271,6 +272,23 @@ public class CaseScriptBlock {
 		this.repairs = repairs == null ? new ArrayList<>() : new ArrayList<>(repairs);
 		this.publishable = computePublishable();
 		clearReview();
+	}
+
+	/**
+	 * 검수 결과 중 경고만 새 값으로 바꾼다 (BE-163, A-13-17). 다른 블록을 재생성할 때 이 블록(다시 만들지 않음)을 다시 검사한
+	 * 경고다 — 새 검사나 바뀐 앞 블록에 따른 경고가 관리자 화면에 보이게 한다. 오류는 그대로 두고, 경고는 공개 · 승인을 막지
+	 * 않으므로 내용 · 판 · 승인 상태 · {@code publishable}은 바꾸지 않는다. 경고가 아닌 항목이 섞여 오면 버린다
+	 *
+	 * @return 경고가 실제로 바뀌었는지(감사 로그에 남긴다)
+	 */
+	boolean replaceWarnings(List<Map<String, Object>> newWarnings) {
+		List<Map<String, Object>> before = review.stream().filter(issue -> WARNING.equals(issue.get("severity"))).toList();
+		List<Map<String, Object>> after = newWarnings.stream().filter(issue -> WARNING.equals(issue.get("severity"))).toList();
+		List<Map<String, Object>> kept = new ArrayList<>(review.stream()
+			.filter(issue -> ERROR.equals(issue.get("severity"))).toList());
+		kept.addAll(after);
+		this.review = kept;
+		return !before.equals(after);
 	}
 
 	/** 관리자가 직접 고친 U3 줄 수 ({@code validation.manual}). 재생성하면 이 줄들이 새 대사로 바뀐다(A-13-16 미리보기) */

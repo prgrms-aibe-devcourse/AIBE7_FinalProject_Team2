@@ -230,6 +230,22 @@ class RegenerateTest(unittest.TestCase):
         self.assertEqual([r["unit"] for r in result["repairs"]], ["U4"])
         self.assertEqual([i["unit"] for i in result["review"]], [])
         self.assertTrue(result["publishable"])  # 다시 만든 블록에는 오류가 없다
+        # 만들지 않은 블록의 경고는 따로 돌려주되 오류는 넣지 않는다(BE-163)
+        self.assertEqual(sorted(result["unchangedWarnings"]), ["U0", "U1", "U2", "U3"])
+        self.assertTrue(all(i["severity"] == sr.WARNING for items in result["unchangedWarnings"].values() for i in items))
+
+    def test_unchanged_blocks_get_new_warnings(self):
+        """U4만 다시 만들어도, 지금 U2에 새 검사(BE-159 카드 목록)로 생긴 경고를 `unchangedWarnings`로 돌려준다(BE-163).
+        다시 만든 블록 · 없는 블록은 넣지 않고, 경고가 없는 블록은 빈 목록이다(옛 경고를 지우려면)."""
+        blocks = current_blocks(units=("U0", "U1", "U2", "U4"))
+        cards = blocks["U2"]["content"]["cards"]
+        blocks["U2"]["content"]["cards"] = {**cards, "issues": {**cards["issues"], "ul": []}}
+        _, result, _ = regenerate(["U4"], [NEW_CLOSING], blocks=blocks)
+        warnings = result["unchangedWarnings"]
+        self.assertEqual(sorted(warnings), ["U0", "U1", "U2"])  # U4는 다시 만들었고, U3는 없다
+        self.assertEqual([i["code"] for i in warnings["U2"]], ["CARD_LIST_EMPTY"])
+        self.assertEqual(warnings["U0"], [])
+        self.assertNotIn("CARD_LIST_EMPTY", [i["code"] for i in result["review"]])  # 결과 review는 다시 만든 블록 것만
 
     def test_review_failure_blocks_publishing(self):
         original = rg.review_script
@@ -240,6 +256,7 @@ class RegenerateTest(unittest.TestCase):
             rg.review_script = original
         self.assertEqual(result["review"][0]["code"], "REVIEW_FAILED")
         self.assertFalse(result["publishable"])
+        self.assertEqual(result["unchangedWarnings"], {})  # 검수가 돌지 못했으면 옛 경고를 둔다(BE-163)
 
 
 if __name__ == "__main__":

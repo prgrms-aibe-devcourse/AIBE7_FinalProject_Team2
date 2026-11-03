@@ -37,6 +37,7 @@ import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * 대본 블록 재생성 A-13-15 ~ 17 (BE-129 2차)와 A-11 분류 수정. 파이프라인 클라이언트는 가짜다(TestPipelineClientConfig) —
@@ -215,6 +216,38 @@ class AdminScriptRegenerationApiTest extends ApiIntegrationTest {
 		assertThat(auditActions()).containsExactly("CASE_SCRIPT_REGENERATE", "CASE_SCRIPT_REGENERATE_APPLY");
 		// 같은 결과를 두 번 반영하지 않는다
 		perform(post(regenerationsUrl() + "/" + id + "/apply")).andExpect(status().isConflict());
+	}
+
+	@Test
+	@DisplayName("A-13-17 (BE-163): 다시 만들지 않은 블록은 결과의 unchangedWarnings로 경고만 바꾸고 승인은 그대로 둔다")
+	void apply_replacesWarningsOfUnchangedBlocks() throws Exception {
+		jdbcTemplate.update("UPDATE case_script_block SET review_status = 'APPROVED', reviewed_at = now() WHERE script_id = ?",
+			scriptId);
+		jdbcTemplate.update("""
+			UPDATE case_script_block
+			SET review = '[{"unit": "U2", "path": "/plea/0", "code": "FACT_AS_CLAIM", "severity": "warning"}]'::jsonb
+			WHERE script_id = ? AND unit = 'U2'""", scriptId);
+		long id = start("{\"units\": [\"U4\"]}");
+		when(pipelineClient.getJob(anyString())).thenReturn(job("SUCCEEDED"));
+		ObjectNode result = (ObjectNode) result("U4", NEW_CLOSING, 2);
+		result.set("unchangedWarnings", MAPPER.readTree("""
+			{"U2": [{"unit": "U2", "path": "", "code": "CARD_LIST_EMPTY", "severity": "warning", "fix": null,
+			         "message": "쟁점 카드 목록(ul)이 비었습니다"}],
+			 "U0": [], "U1": null, "U4": "x", "U9": [{"severity": "warning"}]}"""));
+		when(pipelineClient.getRegenerationResult(anyString())).thenReturn(result);
+
+		perform(post(regenerationsUrl() + "/" + id + "/apply"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.blocks[2].unit").value("U2"))
+			.andExpect(jsonPath("$.blocks[2].review.length()").value(1))
+			.andExpect(jsonPath("$.blocks[2].review[0].code").value("CARD_LIST_EMPTY"))	// 옛 경고는 새 경고로 바뀐다
+			.andExpect(jsonPath("$.blocks[2].reviewStatus").value("APPROVED"))
+			.andExpect(jsonPath("$.blocks[2].revision").value(1))
+			.andExpect(jsonPath("$.blocks[4].reviewStatus").value("PENDING"));
+		// 감사 로그에는 다시 만들지 않았는데 경고가 바뀐 블록을 남긴다 — U0은 빈 목록 그대로, U1은 모양이 틀려 건너뛰었다
+		assertThat(jdbcTemplate.queryForObject("""
+			SELECT detail->'warningUnits' FROM admin_audit_log WHERE action = 'CASE_SCRIPT_REGENERATE_APPLY'
+			ORDER BY id DESC LIMIT 1""", String.class)).isEqualTo("[\"U2\"]");
 	}
 
 	@Test

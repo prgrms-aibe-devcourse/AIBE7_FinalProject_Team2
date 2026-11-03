@@ -159,11 +159,23 @@ public class CaseScript {
 	 * 있다)은 건드리지 않는다. 메타(배역 · 쟁점 · 혐의 인정)는 지금 값으로 맞추고, 만들지 못했던 단위가 채워졌으면 {@code pending}에서
 	 * 뺀다. 대본 전체 검수 결과({@code REVIEW_FAILED})는 재생성 때 대본 전체를 다시 검사한 결과로 바꾼다.
 	 *
+	 * <p>(BE-163) 다시 만들지 않은 블록은 <b>경고만</b> 재생성 때 다시 검사한 값으로 바꾼다({@code unchangedWarnings}). 오류 · 승인
+	 * 상태는 그대로다 — 승인된 블록을 "오류 블록"으로 만들지 않는다. 결과에 없는 단위 · 다시 만든 단위 · 없는 블록은 건너뛴다.
+	 *
 	 * @param stopped 재생성이 호출 한도로 멈췄는지. 대본의 {@code stopped}는 마지막 생성의 값이다
+	 * @param unchangedWarnings 다시 만들지 않은 블록마다 새 경고. 검수가 돌지 못했으면 비어 온다(옛 경고를 둔다)
+	 * @return 경고가 바뀐 (다시 만들지 않은) 블록 단위 — 감사 로그에 남겨 "왜 그 블록에 경고가 새로 생겼나"를 따라갈 수 있게 한다
 	 */
-	public void applyRegeneration(Map<ScriptUnit, RegeneratedBlock> regenerated, Map<String, Object> cast, String issue,
-			List<Map<String, Object>> scriptReview, boolean stopped, String model) {
+	public List<ScriptUnit> applyRegeneration(Map<ScriptUnit, RegeneratedBlock> regenerated, Map<String, Object> cast, String issue,
+			List<Map<String, Object>> scriptReview, Map<ScriptUnit, List<Map<String, Object>>> unchangedWarnings,
+			boolean stopped, String model) {
 		this.pending = new ArrayList<>(pending);	// DB에서 읽은 목록이 바꿀 수 없는 목록일 수 있다
+		List<ScriptUnit> warningsChanged = new ArrayList<>();
+		unchangedWarnings.forEach((unit, warnings) -> {
+			if (!regenerated.containsKey(unit) && block(unit).map(block -> block.replaceWarnings(warnings)).orElse(false)) {
+				warningsChanged.add(unit);
+			}
+		});
 		for (Map.Entry<ScriptUnit, RegeneratedBlock> entry : regenerated.entrySet()) {
 			RegeneratedBlock value = entry.getValue();
 			Optional<CaseScriptBlock> existing = block(entry.getKey());
@@ -190,6 +202,7 @@ public class CaseScript {
 			this.model = model;
 		}
 		this.publishable = recomputePublishable();
+		return warningsChanged;
 	}
 
 	/** U0 세 번째 답으로 혐의 인정 여부를 정한다 (적재 {@code CaseScriptLoader#admits}와 같은 규칙) */
