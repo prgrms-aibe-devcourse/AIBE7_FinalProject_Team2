@@ -125,6 +125,12 @@ pipeline-service:
   script-model: ${PIPELINE_SCRIPT_MODEL:}
   # 사건 자동 분류 모델 (BE-123). 대본을 켰을 때만 쓴다. 비우면 파이프라인이 위 models의 첫 모델로 분류한다
   classify-model: ${PIPELINE_CLASSIFY_MODEL:}
+  # 사전 학습 점검 (BE-160). true일 때만 켠다(기본 꺼짐 — 생성 모델마다 기본 10회를 더 부르고 등록이 길어진다).
+  # 판정 동작은 파이프라인 기본값: 오염이면 등록을 멈추고(FAILED), 의심이면 계속한다
+  contamination-enabled: ${PIPELINE_CONTAMINATION_ENABLED:false}
+  # 생성 참고 자료 RAG (BE-161). true일 때만, 그리고 등록 요청의 범죄 유형이 살인일 때만 켠다(자료가 살인뿐이다).
+  # 검색은 파이프라인이 읽기 전용 계정(RAG_DB_*)으로 한다. 못 찾으면 사건 입력의 참고 자료로 진행하고 사유는 생성 기록에 남는다
+  rag-enabled: ${PIPELINE_RAG_ENABLED:false}
   # 작업 생성 · 상태 조회만 하는 호출이라 짧다. 실제 생성(수십 분)은 서비스가 뒤에서 돌린다
   timeout: ${PIPELINE_SERVICE_TIMEOUT:30s}
 

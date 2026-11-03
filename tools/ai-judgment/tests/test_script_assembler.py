@@ -271,6 +271,14 @@ class GenerateTest(unittest.TestCase):
         leaked_opening = {**OPENING, "indict": ["공소사실을 말씀드리겠습니다.", "징역 3년에 처해 주십시오."]}
         self.assertTrue(sa.check_opening(leaked_opening))
 
+    def test_opening_card_ul_must_be_string_list(self):
+        """카드 ul이 문자열 목록이 아니면 생성 단계에서 오류로 다시 요청한다(BE-149)."""
+        self.assertEqual(sa.check_opening(OPENING), [])
+        for bad in ("문자열", None, [1, 2], [["중첩"]]):
+            for key in ("indict", "plea", "issues"):
+                opening = {**OPENING, "cards": {**OPENING["cards"], key: {**OPENING["cards"][key], "ul": bad}}}
+                self.assertIn(f"cards.{key}.ul은 문자열 목록이다", sa.check_opening(opening), (key, bad))
+
     def test_design_last_question_must_match_fixed_question(self):
         """화면의 마지막 질문은 고정 문구라, 설계도의 세 번째 질문(답의 근거)이 다르면 답의 뜻이 달라진다(PR #329 YOLO-NIM 리뷰)."""
         self.assertEqual(sa.check_design(DESIGN, "admitted"), [])
@@ -461,6 +469,15 @@ class MoodClosingTest(unittest.TestCase):
             self.assertIn("1막 마지막 줄의 어조", "\n".join(sa.guide_blocks(cls, "U1")), mood)
             for unit in ("U0", "U2", "U4"):
                 self.assertNotIn("1막 마지막 줄의 어조", "\n".join(sa.guide_blocks(cls, unit)), (mood, unit))
+
+    def test_mood_u2_section_reaches_only_u2(self):
+        """분위기 `## U2` 절(진행 해설 길이 · 초점)은 U2에만 들어간다 — 절 제목 오타로 범위가 바뀌는 것을 잡는다(PR #397 리뷰)."""
+        marker = "이 절은 진행 해설(issues_narr)에만 적용한다"
+        for mood in sa.MOODS:
+            cls = {**CLS, "mood": mood}
+            self.assertIn(marker, "\n".join(sa.guide_blocks(cls, "U2")), mood)
+            for unit in ("U0", "U1", "U4"):
+                self.assertNotIn(marker, "\n".join(sa.guide_blocks(cls, unit)), (mood, unit))
 
     def test_intro_fixed_lines_are_shared(self):
         """생성 문맥과 조립기가 같은 고정 대사를 본다 — 한쪽만 고치면 AI가 보는 앞뒤와 화면이 어긋난다(PR #379 리뷰)."""

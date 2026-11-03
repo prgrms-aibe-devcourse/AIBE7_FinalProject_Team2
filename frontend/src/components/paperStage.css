@@ -64,7 +64,7 @@
 .stage-wrap.paper-mode .board .postcard-head { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px dashed var(--color-border-strong); }
 .stage-wrap.paper-mode .board .postcard-head h2 { margin: 0 0 4px; font: 900 22px/1.3 var(--font-heading); letter-spacing: .08em; color: var(--color-heading); }
 .stage-wrap.paper-mode .board .postcard-head p { margin: 0; color: var(--color-muted); font-size: 13px; }
-.stage-wrap.paper-mode .board .postcard-stamp { position: relative; flex: none; display: grid; place-items: center; width: 64px; height: 76px; border: 3px dotted var(--color-label); background: var(--color-paper); color: var(--color-label); font: 900 13px/1.15 var(--font-heading); text-align: center; transform: rotate(3deg); }
+.stage-wrap.paper-mode .board .postcard-stamp { position: relative; flex: none; display: grid; place-items: center; width: 64px; height: 76px; background: url('/images/mark/stamp-postage.webp') center / 100% 100% no-repeat; color: var(--color-accent); font: 900 13px/1.15 var(--font-heading); text-align: center; transform: rotate(3deg); }
 .stage-wrap.paper-mode .board :is(.guide-box, .pre-judgment-form) { margin: 0; padding-left: 0; padding-right: 0; }
 .stage-wrap.paper-mode .board .guide-box { margin-bottom: 12px; padding: 0; border: 0; background: none; font: 400 19px/1.4 var(--font-hand); color: var(--color-muted); } /* 엽서 안 안내는 회색 상자 대신 엽서에 적힌 메모 한 줄 */
 .stage-wrap.paper-mode .board .pre-judgment-form { padding-bottom: 0; }
@@ -181,6 +181,8 @@
 /* 준비 중(FE-56, 대본 없는 사건): 누를 수 없는 점선 도장(찍히지 않은 자리). 안내 문구는 주의색 대신 차분한 글자색 */
 .case-paper-page .stamp-button[aria-disabled="true"] { border-style: dashed; border-color: var(--color-border-strong); background: transparent; color: var(--color-muted); rotate: -3deg; cursor: default; }
 .case-paper-page .stamp-button[aria-disabled="true"] small { color: var(--color-muted); }
+/* 잠김(FE-149, BE-146 순차 해금): 준비 중과 같은 점선 도장에 글자만 "잠김". 이유는 도장 밑 한 줄(차분한 글자색, 상자 없음) */
+.case-paper-page .paper-start-lock { max-width: 280px; margin: 0; color: var(--color-muted); font-size: var(--text-small); line-height: 1.5; text-align: center; }
 /* 제목 칸 아래 왼쪽 빈 자리: 알아두기(일반 법률 설명) | 같은 유형의 다른 사건. 신문 사이드 박스처럼 이중 선 머리 */
 .case-paper-page .story-extra { grid-column: 1; grid-row: 2; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 28px; align-self: start; padding-top: 22px; }
 .case-paper-page .story-extra:empty { display: none; }

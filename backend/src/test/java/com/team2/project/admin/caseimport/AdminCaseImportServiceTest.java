@@ -82,9 +82,18 @@ class AdminCaseImportServiceTest {
 	}
 
 	private AdminCaseImportService newService(String scriptModel, String classifyModel) {
+		return newService(scriptModel, classifyModel, false);
+	}
+
+	private AdminCaseImportService newService(String scriptModel, String classifyModel, boolean contamination) {
+		return newService(scriptModel, classifyModel, contamination, false);
+	}
+
+	private AdminCaseImportService newService(String scriptModel, String classifyModel, boolean contamination,
+		boolean rag) {
 		return new AdminCaseImportService(importRepository, caseSourceRepository, pipelineClient,
 			new PipelineProperties("http://pipeline:8000", List.of("gemini:test"), null, Duration.ofSeconds(30),
-				scriptModel, classifyModel),
+				scriptModel, classifyModel, contamination, rag),
 			auditLogger, loader, castAssigner,
 			new NoOpTransactionManager());
 	}
@@ -101,7 +110,11 @@ class AdminCaseImportServiceTest {
 		ArgumentCaptor<PipelineJobRequest> sent = ArgumentCaptor.forClass(PipelineJobRequest.class);
 		verify(pipelineClient).createJob(sent.capture());
 		assertThat(sent.getValue().sources()).singleElement()
-			.satisfies(source -> assertThat(source.originalText()).isEqualTo("판결문 본문"));
+			.satisfies(source -> {
+				assertThat(source.originalText()).isEqualTo("판결문 본문");
+				// 등록 요청의 사건번호 — RAG 자기 사건 제외에 쓴다 (BE-161 2차, PR #413 리뷰)
+				assertThat(source.caseNumber()).isEqualTo("2099고합001");
+			});
 		assertThat(sent.getValue().models()).containsExactly("gemini:test");
 		verify(importRepository).save(any(CaseImport.class));
 		verify(auditLogger).record(eq(admin), eq(AdminAuditAction.CASE_IMPORT), any(), any(), any(), eq(httpRequest));
@@ -163,6 +176,79 @@ class AdminCaseImportServiceTest {
 		ArgumentCaptor<CaseImport> saved = ArgumentCaptor.forClass(CaseImport.class);
 		verify(importRepository).save(saved.capture());
 		assertThat(saved.getValue().getCastRoles()).isNull();
+	}
+
+	@Test
+	@DisplayName("사전 학습 점검을 켜면 contamination 단계를 enabled만 담아 보낸다 — 판정 동작은 파이프라인 기본값 (BE-160)")
+	@SuppressWarnings("unchecked")
+	void startImport_contaminationEnabled_sendsEnabledOnly() {
+		when(pipelineClient.createJob(any())).thenReturn(job("abc123", "QUEUED", List.of()));
+		service = newService(null, null, true);
+
+		service.startImport(request(), admin, httpRequest);
+
+		ArgumentCaptor<PipelineJobRequest> sent = ArgumentCaptor.forClass(PipelineJobRequest.class);
+		verify(pipelineClient).createJob(sent.capture());
+		// onContaminated 등을 보내지 않아야 파이프라인 기본값(오염 → 중단)이 그대로 쓰인다
+		assertThat((Map<String, Object>) sent.getValue().stages().get("contamination"))
+			.containsExactly(Map.entry("enabled", true));
+		// 점검은 generate 앞 단계라 until을 바꾸지 않는다
+		assertThat(sent.getValue().until()).isNull();
+	}
+
+	@Test
+	@DisplayName("사전 학습 점검을 끄면(기본) contamination 단계를 보내지 않는다 — 서비스가 끈 채로 둔다 (BE-160)")
+	void startImport_contaminationDisabled_notSent() {
+		when(pipelineClient.createJob(any())).thenReturn(job("abc123", "QUEUED", List.of()));
+
+		service.startImport(request(), admin, httpRequest);
+
+		ArgumentCaptor<PipelineJobRequest> sent = ArgumentCaptor.forClass(PipelineJobRequest.class);
+		verify(pipelineClient).createJob(sent.capture());
+		assertThat(sent.getValue().stages() == null || !sent.getValue().stages().containsKey("contamination")).isTrue();
+	}
+
+	@Test
+	@DisplayName("RAG를 켜면 살인 등록에 rag 단계를 enabled만 담아 보낸다 — required는 보내지 않는다 (BE-161 2차)")
+	@SuppressWarnings("unchecked")
+	void startImport_ragEnabled_murder_sendsRag() {
+		when(pipelineClient.createJob(any())).thenReturn(job("abc123", "QUEUED", List.of()));
+		service = newService(null, null, false, true);
+
+		service.startImport(request(), admin, httpRequest);	// request()는 MURDER
+
+		ArgumentCaptor<PipelineJobRequest> sent = ArgumentCaptor.forClass(PipelineJobRequest.class);
+		verify(pipelineClient).createJob(sent.capture());
+		// required를 보내지 않아야 파이프라인 기본값(false: 못 찾으면 사건 입력의 참고 자료로 진행)이 쓰인다
+		assertThat((Map<String, Object>) sent.getValue().stages().get("rag"))
+			.containsExactly(Map.entry("enabled", true));
+		assertThat(sent.getValue().until()).isNull();	// rag는 generate 앞 단계
+	}
+
+	@Test
+	@DisplayName("RAG를 켜도 살인 외 등록에는 보내지 않는다 — 판단은 등록 요청의 범죄 유형으로 한다 (BE-161 2차)")
+	void startImport_ragEnabled_notMurder_notSent() {
+		when(pipelineClient.createJob(any())).thenReturn(job("abc123", "QUEUED", List.of()));
+		service = newService(null, null, false, true);
+
+		service.startImport(new CaseImportCreateRequest(CrimeType.THEFT, List.of(source(CourtLevel.FIRST, "2099고단001"))),
+			admin, httpRequest);
+
+		ArgumentCaptor<PipelineJobRequest> sent = ArgumentCaptor.forClass(PipelineJobRequest.class);
+		verify(pipelineClient).createJob(sent.capture());
+		assertThat(sent.getValue().stages() == null || !sent.getValue().stages().containsKey("rag")).isTrue();
+	}
+
+	@Test
+	@DisplayName("RAG를 끄면(기본) 살인 등록에도 보내지 않는다 (BE-161 2차)")
+	void startImport_ragDisabled_notSent() {
+		when(pipelineClient.createJob(any())).thenReturn(job("abc123", "QUEUED", List.of()));
+
+		service.startImport(request(), admin, httpRequest);
+
+		ArgumentCaptor<PipelineJobRequest> sent = ArgumentCaptor.forClass(PipelineJobRequest.class);
+		verify(pipelineClient).createJob(sent.capture());
+		assertThat(sent.getValue().stages() == null || !sent.getValue().stages().containsKey("rag")).isTrue();
 	}
 
 	@Test
@@ -425,6 +511,25 @@ class AdminCaseImportServiceTest {
 
 		assertThat(response.status()).isEqualTo("FAILED");
 		assertThat(response.message()).hasSizeLessThanOrEqualTo(500).endsWith("…");
+	}
+
+	@Test
+	@DisplayName("사전 학습 점검이 오염으로 멈추면 FAILED와 파이프라인 사유가 그대로 화면(A-15)에 간다 (BE-160, PR #411 리뷰)")
+	void getImport_contaminationStop_showsReason() {
+		CaseImport entity = running("abc123");
+		when(importRepository.findById(1L)).thenReturn(Optional.of(entity));
+		when(pipelineClient.getJob("abc123")).thenReturn(new PipelineJob("abc123", "FAILED",
+			List.of(stage("extract", "DONE"), stage("contamination", "FAILED"), stage("generate", "PENDING")),
+			"사전 학습 점검에서 멈춤: gemini:x: CONTAMINATED", null, null, null));
+
+		CaseImportResponse response = service.getImport(1L);
+
+		assertThat(response.status()).isEqualTo("FAILED");
+		assertThat(response.message()).isEqualTo("사전 학습 점검에서 멈춤: gemini:x: CONTAMINATED");
+		assertThat(response.stages()).anySatisfy(stage -> {
+			assertThat(stage.name()).isEqualTo("contamination");
+			assertThat(stage.status()).isEqualTo("FAILED");
+		});
 	}
 
 	@Test

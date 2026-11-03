@@ -294,10 +294,53 @@ public class CaseImportLoader {
 		if (result.axis() != null && !result.axis().isNull()) {
 			report.put("axis", Json.toMap(result.axis()));
 		}
+		// 사전 학습 점검 판정 (BE-160, PR #411 리뷰). SUSPECT는 등록을 계속하고 적재 뒤 작업은 지워지므로, 여기 남겨야
+		// 관리자가 후검수 · 집계할 수 있다. 모양은 오프라인 적재(pipeline.py build_generation_report)와 같다
+		report.put("contamination", contamination(result));
+		// RAG 검색 보고 (BE-161 2차, PR #412 리뷰). 적재 뒤 작업이 지워지므로 "RAG가 실제로 쓰였는가" · 대체 사유를 여기 남긴다.
+		// 모양은 오프라인 적재(pipeline.py rag_report)와 같다. 안 돌렸으면 {"status": "SKIPPED"}
+		report.put("rag", rag(result));
 		if (unreadableScriptCast(result)) {
 			report.put("castWarning", "대본의 배역을 읽지 못해 사건 배역을 정하지 않았습니다. 관리자가 정해 주세요.");
 		}
 		return report;
+	}
+
+	/**
+	 * 고른 모델의 사전 학습 점검 판정 (BE-160). 판정 · 근거 · 분류별 개수 · 기준만 남긴다(예측 형량은 결과에 오지 않는다).
+	 *
+	 * <p>점검을 돌리지 않았거나 고른 모델의 판정이 없으면 {@code {"verdict": "SKIPPED"}} — 오프라인 적재와 같은 값이라
+	 * 두 경로의 생성 기록을 같은 질의로 집계할 수 있다.
+	 */
+	private static Map<String, Object> contamination(PipelineResult result) {
+		PipelineResult.Selection selection = result.selection();
+		JsonNode all = result.contamination();
+		JsonNode picked = all == null || selection == null || selection.modelSpec() == null ? null
+			: all.get(selection.modelSpec());
+		if (picked == null || !picked.isObject() || Json.text(picked, "verdict") == null) {
+			return Map.of("verdict", "SKIPPED");
+		}
+		Map<String, Object> verdict = new LinkedHashMap<>();
+		for (String key : List.of("verdict", "reason", "counts", "criteria")) {
+			Object value = Json.toPlain(picked.get(key));
+			if (value != null) {
+				verdict.put(key, value);
+			}
+		}
+		return verdict;
+	}
+
+	/**
+	 * RAG 검색 보고 (BE-161 2차). 파이프라인이 보낸 키(상태 · 대체 사유 · 양형기준 버전 · 조각 / 판례 id · 점수 · 경고)를 그대로
+	 * 남긴다 — 그쪽에서 이미 본문 · 사건번호를 뺀 값이다. rag를 안 돌렸거나 상태가 없으면 {@code {"status": "SKIPPED"}}
+	 * (오프라인 적재 rag_report와 같은 값이라 두 경로를 같은 질의로 집계할 수 있다).
+	 */
+	private static Map<String, Object> rag(PipelineResult result) {
+		JsonNode rag = result.rag();
+		if (rag == null || !rag.isObject() || Json.text(rag, "status") == null) {
+			return Map.of("status", "SKIPPED");
+		}
+		return Json.toMap(rag);
 	}
 
 	/** 모델 이름 (`공급자:모델ID`에서 모델ID만). ai_generation.model_name은 50자까지다 */

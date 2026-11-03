@@ -2,6 +2,7 @@ import { button, element, mockTag, renderSiteFooter } from '../../components/sit
 import { API_MODE } from '../../api/config.js';
 import { scriptFor } from '../overview/overviewPage.js';
 import { isScriptReady } from '../../utils/scriptReady.js';
+import { casesUntilNextStep, isLocked } from '../../utils/caseUnlock.js';
 import { casePhoto, commonCategoryOf, commonPhotoAt, commonPhotos, inquiryPhotoAt, useCommonPhotoOnError } from '../../utils/newspaper.js';
 import { newspaperMasthead } from '../../components/newspaperFront.js';
 import { turnPage } from '../../utils/pageTurn.js';
@@ -52,15 +53,19 @@ const STATUS_VIEW = {
   IN_PROGRESS: { badge: '진행 중', tone: 'active' },
   COMPLETED: { badge: '완료', tone: 'done' },
 };
+// 아직 열리지 않은 사건(BE-146 순차 해금): 체험한 사건은 잠기지 않으므로 myStatus가 있으면 위 도장이 먼저다. 누르면 S-20에서 잠김과 이유를 알린다
+const LOCKED_VIEW = { badge: '잠김', tone: 'locked' };
 // FE-119: 진행 상태는 글자 배지가 아니라 지면에 찍힌 작은 도장으로 구분한다. 진행 중 · 완료만 찍고, 체험 전 · 준비 중 사건에는 아무것도 찍지 않는다(준비 중은 S-20 도장에서 알린다).
 // 체험할 수 없는 사건(서버 scriptReady가 false, FE-125 · 값이 없으면 로컬 대본 기준)은 "준비 중"으로 치되(정렬 · 포스트잇 건수에만 쓴다 — 머리기사 · 추천에 앞서지 않게), 기사 · 사건 정보(S-20)는 읽을 수 있고 새 체험 시작은 S-20에서 막는다(FE-56).
 // 도장은 준비 여부와 따로 내 체험 상태(myStatus)만 보인다(이어서 하기 · 결과 보기는 S-20에서 열린다). 준비 여부는 하던 · 마친 사건에도 그대로 적용한다(#323 리뷰)
-const stampOf = (item) => STATUS_VIEW[item.myStatus] ?? null;
+const stampOf = (item) => STATUS_VIEW[item.myStatus] ?? (isLocked(item) ? LOCKED_VIEW : null);
 function stampMark(item) {
   const { badge, tone } = stampOf(item);
   return element('span', `status-stamp status-${tone}`, badge);
 }
 const isSoon = (item) => !isScriptReady(item, scriptFor(item.caseId, item.title));
+// 지금 눌러서 체험을 시작할 수 없는 사건: 준비 중 · 잠김(BE-146). 머리기사 · 추천 · 체험 가능 건수는 이 기준으로 뒤로 민다
+const isClosed = (item) => isSoon(item) || isLocked(item);
 const typeFromUrl = () => faceKeyOf(new URLSearchParams(window.location.search).get('type')); // 면 열쇠(범죄 유형 · 색인 · 성향 테스트 · 오피니언)
 // 탭 선택을 주소(?type=)에 남긴다. 사건 정보에 다녀오거나 새로고침해도 같은 면으로 돌아온다(화면을 다시 그리지 않는 replaceState)
 function saveTypeToUrl(key) {
@@ -681,14 +686,14 @@ export async function renderCaseListPage(container, { api, navigate, from, openA
     opinion: () => opinionFace({ navigate, api, active: faceActive('OPINION') }),
   };
 
-  function draw({ summary, cases }) {
+  function draw({ summary, cases, unlock }) {
     const face = faceOf(selected);
     drawCount += 1;
     lastSummary = summary;
     root.classList.remove('is-loading');
     mates.clear(); // 아래에서 다시 만드는 영역으로 새로 모은다
     // 오른쪽 귀는 어느 면에서나 "오늘의 사건 n건"만 채운다(포스트잇을 떼거나 1면을 넘기면 드러난다)
-    if (face.front) tipLine.textContent = tipMessage(summary.total, cases.filter((item) => !isSoon(item)).length); // 1면은 전체 목록을 받는다
+    if (face.front) tipLine.textContent = tipMessage(summary.total, cases.filter((item) => !isClosed(item)).length, cases.some(isLocked) ? casesUntilNextStep(unlock) : 0); // 1면은 전체 목록을 받는다
     // 떼지 않은 포스트잇은 1면에 붙어 있다(FE-126): 다른 면으로 넘기면 1면과 함께 넘어가고, 1면으로 돌아오면 함께 돌아온다.
     // 넘기는 한 장(pageTurn.js)은 지면을 본떠 만들므로 hidden · has-tip이 지면에 있어야 넘어가는 장에도 그대로 보인다
     tip.hidden = !face.front;
@@ -697,9 +702,9 @@ export async function renderCaseListPage(container, { api, navigate, from, openA
     tip.disabled = false;
     tip.classList.remove('is-waiting');
 
-    // 지금 체험할 수 있는 사건이 먼저, 그다음 참여 많은 순: 첫 사건이 머리기사, 다음 2건이 추천 사건, 나머지는 다른 사건
+    // 지금 체험할 수 있는 사건(준비 중 · 잠김이 아닌 사건)이 먼저, 그다음 참여 많은 순: 첫 사건이 머리기사, 다음 2건이 추천 사건, 나머지는 다른 사건
     // (눌러 보라고 권하는 자리인 머리기사 · 추천에 "준비 중" 사건이 앞서지 않게, FE-102)
-    const ordered = [...cases].sort((a, b) => Number(isSoon(a)) - Number(isSoon(b)) || b.participantCount - a.participantCount);
+    const ordered = [...cases].sort((a, b) => Number(isClosed(a)) - Number(isClosed(b)) || b.participantCount - a.participantCount);
     deck = createFillerDeck(FACES.indexOf(face) * 3); // 면마다 다른 법정 상식 · 사진부터
     const parts = [renderTabs(summary), ...FACE_VIEWS[face.view](face, ordered)];
     const fill = face.fill ? element('div', 'face-fill') : null; // 면 아래 세로 여백 칸(내용은 mountFill이 높이를 재서 채운다)

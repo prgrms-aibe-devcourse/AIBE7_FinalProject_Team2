@@ -38,6 +38,14 @@ services:
       # 끝난 작업을 자동으로 지우기까지의 보관 기간(일). 백엔드의 DELETE 호출이 빠졌을 때를 위한
       # 마지막 안전장치다(COMMON-51, FR-5-3). 비우면 기본 7일, 0 이하면 자동 정리를 끈다
       PIPELINE_JOB_RETENTION_DAYS: ${PIPELINE_JOB_RETENTION_DAYS:-}
+      # RAG 검색(rag 단계) 전용 읽기 전용 DB 접속 (BE-161). 판례 · 양형기준 저장소(rag_precedent · rag_guideline ·
+      # sentencing_guideline)를 SELECT만 하는 계정을 넣는다 — **앱 계정(EXTERNAL_DB_*)은 넣지 않는다**.
+      # 비우면 rag 단계가 DB를 못 찾아 사건 입력의 참고 자료로 진행한다(기존 동작). 값을 일부만 넣으면 그 사유가 작업 보고에 남는다
+      RAG_DB_HOST: ${RAG_DB_HOST:-}
+      RAG_DB_PORT: ${RAG_DB_PORT:-}
+      RAG_DB_NAME: ${RAG_DB_NAME:-}
+      RAG_DB_USERNAME: ${RAG_DB_USERNAME:-}
+      RAG_DB_PASSWORD: ${RAG_DB_PASSWORD:-}
     volumes:
       # 작업 · 생성 결과(out/)와 추출 산출물(cases/). 컨테이너를 다시 만들어도 진행 중이던 작업 상태가 남는다
       # — 파이프라인은 state.json으로 이어서 돌릴 수 있게 돼 있다(BE-31)
@@ -71,10 +79,14 @@ services:
       #   PIPELINE_EXTRACT_MODEL: 비식별화 · 구조화(extract). 판결문 원문이 나가므로 **유료 등급 키의 모델만** 쓴다
       #   PIPELINE_SCRIPT_MODEL: 사건 대본(BE-129). 비우면 대본 없이 등록한다
       #   PIPELINE_CLASSIFY_MODEL: 사건 자동 분류(대본을 켰을 때만). 비우면 PIPELINE_MODELS의 첫 모델
+      #   PIPELINE_CONTAMINATION_ENABLED: 사전 학습 점검(BE-160). true일 때만 켠다. 비우면 꺼짐
+      #   PIPELINE_RAG_ENABLED: 생성 참고 자료 RAG(BE-161). true + 살인 등록일 때만 켠다. 비우면 꺼짐 (위 pipeline의 RAG_DB_*가 필요)
       PIPELINE_MODELS: ${PIPELINE_MODELS:-}
       PIPELINE_EXTRACT_MODEL: ${PIPELINE_EXTRACT_MODEL:-}
       PIPELINE_SCRIPT_MODEL: ${PIPELINE_SCRIPT_MODEL:-}
       PIPELINE_CLASSIFY_MODEL: ${PIPELINE_CLASSIFY_MODEL:-}
+      PIPELINE_CONTAMINATION_ENABLED: ${PIPELINE_CONTAMINATION_ENABLED:-}
+      PIPELINE_RAG_ENABLED: ${PIPELINE_RAG_ENABLED:-}
     # default를 반드시 함께 적는다 — networks를 쓰는 순간 기본 네트워크에서 빠져 postgres · redis · web과 끊긴다
     networks: [default, pipeline]
 

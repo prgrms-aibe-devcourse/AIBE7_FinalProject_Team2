@@ -7,10 +7,7 @@
 .login-page {
   min-height: 100svh; color: var(--color-text); font: var(--text-body)/1.6 var(--font-body);
   background: /* 메인 책상(landing.css .desk-wood)과 같은 나뭇결 */
-    radial-gradient(ellipse at 8% 0%, color-mix(in srgb, var(--color-desk-wood-glow) 38%, transparent), transparent 55%),
-    repeating-linear-gradient(176deg, color-mix(in srgb, var(--color-desk-shadow) 6%, transparent) 0 2px, transparent 2px 9px),
-    repeating-linear-gradient(178deg, color-mix(in srgb, var(--color-desk-wood-glow) 6%, transparent) 0 1px, transparent 1px 23px),
-    linear-gradient(180deg, var(--color-desk-wood-light), var(--color-desk-wood) 40%, var(--color-desk-wood-dark));
+    url('/images/desk/wood.webp') center / cover no-repeat var(--color-desk-wood);
 }
 .login-main { display: flex; justify-content: center; padding: 72px 20px 96px; }
 .login-desk { position: relative; width: min(1080px, 100%); }
@@ -22,7 +19,7 @@
   --felt-line: color-mix(in srgb, var(--color-desk-pad-glow) 35%, transparent);
   position: relative; z-index: 1; border-radius: 24px; color: var(--felt-ink);
   padding: 48px max(36px, calc((100% - 400px) / 2)) 40px; /* 메인처럼 가로로 긴 패드. 글줄 · 입력칸은 가운데 400px 단에 둔다 */
-  background: radial-gradient(ellipse at 10% 0%, color-mix(in srgb, var(--color-desk-pad-glow) 16%, transparent), transparent 50%), var(--color-desk-pad);
+  background: url('/images/desk/pad-felt.webp') center / cover no-repeat var(--color-desk-pad); /* B안 펠트 질감(FE-150) */
   box-shadow: inset 0 0 0 3px var(--color-desk-pad-edge), 2px 4px 6px color-mix(in srgb, var(--color-desk-shadow) 35%, transparent), 6px 18px 28px color-mix(in srgb, var(--color-desk-shadow) 30%, transparent);
 }
 .login-card h1 { margin: 0 0 8px; font: 900 28px/1.3 var(--font-heading); letter-spacing: -.02em; color: var(--felt-ink); word-break: keep-all; text-wrap: balance; }
@@ -104,10 +101,10 @@
 .login-peek.peek-naero { left: calc(50% - 180px); }
 .login-peek.peek-nambul { left: calc(50% + 20px); }
 
-/* 펜(장식): 패드 오른쪽에 비스듬히 걸쳐 둔다. 메인 책상 펜(landing.css .pen-art)과 같은 색 띠 */
+/* 펜(장식): 패드 오른쪽에 비스듬히 걸쳐 둔다. 메인 책상 펜(landing.css .pen-art)과 같은 이미지 */
 .login-pen {
-  position: absolute; z-index: 2; right: -12px; top: 64px; width: 14px; height: 230px; border-radius: 7px; transform: rotate(16deg); pointer-events: none;
-  background: linear-gradient(180deg, var(--color-desk-pen-gold) 0 5%, var(--color-desk-pen) 5% 46%, var(--color-desk-pen-gold) 46% 49%, var(--color-desk-pen) 49% 92%, var(--color-desk-pen-cap) 92%);
+  position: absolute; z-index: 2; right: -14px; top: 64px; width: 18px; height: 230px; transform: rotate(16deg); pointer-events: none;
+  background: url('/images/desk/pen.webp') center / 100% 100% no-repeat; /* B안 펜(FE-150) */
   filter: drop-shadow(9px 11px 7px color-mix(in srgb, var(--color-desk-shadow) 42%, transparent));
 }
 

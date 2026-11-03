@@ -26,6 +26,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -970,10 +971,17 @@ def stage_rag(config, state, log, embedder=None, runner=None):
     """생성 참고 자료(양형기준 · 유사 판례)를 RAG로 찾아 references.json에 둔다 (BE-54). 사건 입력 파일은 바꾸지 않는다."""
     case, sources, indictment_date, incident_date, options = rag_inputs(config, state)
     db = config["stages"]["load"]["db"]
+    if runner is None:
+        # RAG_DB_*가 있으면 읽기 전용 원격 접속(운영 서비스 컨테이너, BE-161), 없으면 지금처럼 로컬 DB(stages.load.db)
+        if rag_db_configured():
+            log("RAG 검색 DB: 읽기 전용 원격 접속 (RAG_DB_*)")
+            runner = query_rag_db
+        else:
+            runner = lambda sql: query_db(sql, db)  # noqa: E731
     try:
         references, report = build_references(
             case, sources, indictment_date=indictment_date, incident_date=incident_date, options=options,
-            embedder=embedder, runner=runner or (lambda sql: query_db(sql, db)), log=log)
+            embedder=embedder, runner=runner, log=log)
     except RagContextError as e:
         raise PipelineError(f"RAG 참고 자료 실패: {e}")
     path = references_path(config)
@@ -1662,6 +1670,78 @@ def query_db(sql, db):
         raise RagUnavailable(str(e.args[0] if isinstance(e, PipelineError) else e))
     if completed.returncode != 0:
         raise RagUnavailable(completed.stderr.decode("utf-8", "replace").strip()[-1000:])
+    return completed.stdout.decode("utf-8", "replace")
+
+
+# RAG 검색 전용 원격 읽기 접속 (BE-161). 운영 서비스 컨테이너에서는 DB(RDS)가 로컬이 아니라 query_db로는 검색할 수 없다.
+# 적재(apply_sql)와 로컬 검색(query_db)의 로컬 전용 검사는 그대로 두고, **RAG 검색에만** 따로 연 경로다:
+#   - 접속 값은 RAG_DB_* 환경변수에서만 받는다. 설정 파일(stages.load.db)로는 원격을 열 수 없다
+#   - 계정은 RAG 테이블 SELECT만 있는 읽기 전용 계정을 쓴다(운영 rag_reader). 코드에서도 세션을 읽기 전용으로 고정한다
+#     (PGOPTIONS default_transaction_read_only) — 계정을 잘못 넣어도 쓰기는 막히는 두 번째 방어선이다
+#   - 물려받은 PG* 환경변수(PGSERVICE · PGHOSTADDR 등)는 지우고 넣는다. 서비스 파일 · 다른 호스트로 새는 길을 막는다 (#143 리뷰와 같은 이유)
+RAG_DB_REQUIRED_ENV = ("RAG_DB_HOST", "RAG_DB_NAME", "RAG_DB_USERNAME", "RAG_DB_PASSWORD")
+RAG_DB_ENV = RAG_DB_REQUIRED_ENV + ("RAG_DB_PORT",)
+RAG_DB_STATEMENT_TIMEOUT_MS = 10000  # 검색 질의 하나. 판례 · 조각이 수백 건이라 순차 스캔도 1초 안쪽이다
+RAG_DB_CONNECT_TIMEOUT_S = 10
+
+
+def rag_db_configured(environ=None):
+    """RAG_DB_* 중 하나라도 들어 있으면 원격 읽기 경로를 쓴다(일부만 있으면 rag_db_settings가 사유를 알려 준다)."""
+    environ = os.environ if environ is None else environ
+    return any((environ.get(key) or "").strip() for key in RAG_DB_ENV)
+
+
+def rag_db_settings(environ=None):
+    """RAG_DB_*를 읽는다. 필수 값이 빠졌거나 포트가 숫자가 아니면 PipelineError (값은 오류 문구에 넣지 않는다)."""
+    environ = os.environ if environ is None else environ
+    values = {key: (environ.get(key) or "").strip() for key in RAG_DB_REQUIRED_ENV}
+    missing = [key for key, value in values.items() if not value]
+    if missing:
+        raise PipelineError(f"RAG 읽기 전용 DB 설정이 일부만 있습니다 (빠진 값: {', '.join(missing)})")
+    port = (environ.get("RAG_DB_PORT") or "").strip() or "5432"
+    if not port.isdigit():
+        raise PipelineError("RAG_DB_PORT는 숫자여야 합니다")
+    return {"host": values["RAG_DB_HOST"], "port": port, "database": values["RAG_DB_NAME"],
+            "user": values["RAG_DB_USERNAME"], "password": values["RAG_DB_PASSWORD"]}
+
+
+def rag_db_command(settings, environ=None):
+    """원격 읽기 전용 psql 명령과 환경 변수. 접속 값은 명령줄이 아니라 환경 변수로만 넘긴다(프로세스 목록에 남지 않는다)."""
+    if not shutil.which("psql"):
+        raise PipelineError("psql 명령이 없습니다 (파이프라인 이미지에 postgresql-client가 필요합니다)")
+    environ = os.environ if environ is None else environ
+    env = {key: value for key, value in environ.items() if not key.startswith("PG")}
+    env.update({
+        "PGHOST": settings["host"], "PGPORT": settings["port"], "PGDATABASE": settings["database"],
+        "PGUSER": settings["user"], "PGPASSWORD": settings["password"],
+        # RDS는 SSL 접속만 받는다. 암호화 없이 붙는 일이 없게 require로 고정한다
+        "PGSSLMODE": "require", "PGCONNECT_TIMEOUT": str(RAG_DB_CONNECT_TIMEOUT_S),
+        "PGOPTIONS": f"-c default_transaction_read_only=on -c statement_timeout={RAG_DB_STATEMENT_TIMEOUT_MS}",
+        "PGAPPNAME": "lawnambul-pipeline-rag",
+    })
+    # -X: ~/.psqlrc를 읽지 않는다 · -w: 비밀번호를 묻지 않는다(대기하지 않고 실패) · -At: JSON 한 값만 받는다
+    return ["psql", "-X", "-w", "-At", "-v", "ON_ERROR_STOP=1", "-q"], env
+
+
+def _hide_server(message, settings):
+    """libpq 오류의 서버 주소('server at "호스트" (IP), port …')와 호스트 값을 지운다. 사유는 작업 보고로 백엔드까지 간다."""
+    message = re.sub(r'server at "[^"]*" \([^)]*\)', "server", message)
+    return message.replace(settings["host"], "<RAG_DB_HOST>") if settings.get("host") else message
+
+
+def query_rag_db(sql, environ=None):
+    """RAG 검색 질의 하나를 읽기 전용 원격 접속으로 보낸다 (BE-161). 실패는 RagUnavailable(대체 동작으로 넘어간다)."""
+    settings = {}
+    try:
+        settings = rag_db_settings(environ)
+        command, env = rag_db_command(settings, environ)
+        completed = subprocess.run(command, input=sql.encode("utf-8"), capture_output=True, env=env, timeout=120)
+    except PipelineError as e:
+        raise RagUnavailable(str(e.args[0]))
+    except (OSError, subprocess.SubprocessError) as e:
+        raise RagUnavailable(_hide_server(str(e), settings))
+    if completed.returncode != 0:
+        raise RagUnavailable(_hide_server(completed.stderr.decode("utf-8", "replace").strip()[-1000:], settings))
     return completed.stdout.decode("utf-8", "replace")
 
 

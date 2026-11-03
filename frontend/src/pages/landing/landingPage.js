@@ -6,6 +6,7 @@ import { flyCoffee } from '../../utils/coffeeDive.js';
 import { bootLaptop } from '../../utils/laptopBoot.js';
 import { reducedMotion } from '../../utils/motion.js';
 import { isAdmin } from '../../utils/session.js';
+import { FACES } from '../caseList/faces.js';
 import { homeRoute } from '../admin/adminMenu.js';
 import { peelOff } from '../../utils/peelOff.js';
 import { openFeedbackDialog } from './feedbackDialog.js';
@@ -82,20 +83,8 @@ const VERDICTS = [
   { key: 'court', name: '실제 판결', title: '재판부의 선고', at: 40, value: '징역 ■년', sealed: '맨 마지막에 공개' },
 ];
 
-// 서류철 그림 (장식). 색은 클래스로 landing.css에서 칠한다
-const FOLDER_SVG = `
-<svg viewBox="0 0 443 521" aria-hidden="true" focusable="false">
-  <path class="folder-back" d="M262 14 L318 4 Q326 3 328 11 L338 52 L372 47 Q380 46 382 54 L438 420 Q440 432 428 436 L120 516 Z"/>
-  <path class="folder-shade" d="M380 128 L396 126 L404 196 L389 199 Z"/>
-  <path class="folder-sheet" d="M268 36 L346 30 L414 404 L340 424 Z"/>
-  <g class="folder-lines">
-    <path d="M300 70 L330 67"/><path d="M306 104 L338 101"/><path d="M313 140 L345 137"/><path d="M320 176 L352 173"/>
-    <path d="M327 212 L359 209"/><path d="M334 248 L366 245"/><path d="M341 284 L373 281"/><path d="M348 320 L380 317"/>
-  </g>
-  <path class="folder-front" d="M4 85 L262 6 Q272 3 275 13 L372 404 Q375 414 365 418 L104 516 Q94 519 92 509 L2 96 Q0 88 4 85 Z"/>
-  <path class="folder-gloss" d="M4 85 L262 6 Q272 3 275 13 L282 40 L12 128 Z"/>
-  <path class="folder-edge" d="M92 509 L104 516 L365 418 L372 404 L360 400 L100 498 Z"/>
-</svg>`;
+// 서류철 그림 (장식, B안 이미지 FE-150). 원본 방향: 앞표지 왼쪽 · 뒤표지와 종이 오른쪽. 크기는 landing.css가 서류철 상자(443 × 521)에 맞춘다
+const FOLDER_IMAGE = '/images/desk/folder.webp';
 
 function span(className, text) {
   return element('span', className, text);
@@ -142,7 +131,11 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
 
   // 서류철
   const folderArt = span('folder-art');
-  folderArt.innerHTML = FOLDER_SVG;
+  const folderImage = element('img');
+  folderImage.src = FOLDER_IMAGE;
+  folderImage.alt = '';
+  folderImage.setAttribute('aria-hidden', 'true');
+  folderArt.append(folderImage);
   folderArt.append(deco('folder-label'));
   folderArt.lastChild.textContent = '3분 성향 테스트';
 
@@ -175,7 +168,7 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
   date.append(span('', '내Law남불'), span('', todayLabel()), span('', '참여 무료'));
   const tabs = span('news-tabs');
   const tabCount = span('news-count', '');
-  ['전체', '살인', '사기', '상해', '강도', '절도'].forEach((label, i) => tabs.append(span(i === 0 ? 'on' : '', label)));
+  FACES.forEach(({ label }, i) => tabs.append(span(i === 0 ? 'on' : '', label))); // 사건 목록(S-02)의 면 이름과 같게: 1면 · 범죄 유형 · 색인 · 성향 테스트 · 오피니언(faces.js 한 곳)
   tabs.append(tabCount);
   const banner = span('news-banner', '오늘의 지면을 펼쳐 보세요');
   const photo = element('img', 'news-photo');

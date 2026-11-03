@@ -26,6 +26,13 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  *                     (관리자 검수 뒤 공개). 배역은 설정이 아니라 등록 요청을 받을 때 범죄 유형별 균형으로 정한다(BE-129)
  * @param classifyModel 사건 자동 분류(classify 단계, BE-123) 모델. 대본을 켰을 때만 쓴다(대본 전체의 입력이다). 비우면
  *                     파이프라인이 AI 판결 생성 모델(models)의 첫 모델로 분류한다. 비식별화한 사건 개요 · 기록 · 판단 요소가 나간다
+ * @param contaminationEnabled 사전 학습 점검(contamination 단계, BE-37 · BE-160)을 켤지. <b>비우면 꺼짐</b> —
+ *                     생성 모델마다 기본 10회를 더 부르고 등록이 그만큼 길어지므로, 설정을 건드린 적 없는 서버에서 호출이
+ *                     늘지 않게 대본과 같은 방식으로 기본을 꺼짐으로 둔다. 켜면 판정 동작은 파이프라인 기본값을 그대로 쓴다
+ *                     (오염 → 등록 중단, 의심 → 계속, 응답 부족 → 중단). 비식별화한 사건 개요가 생성 모델 공급자로 나간다
+ * @param ragEnabled   생성 참고 자료 RAG(rag 단계, BE-54 · BE-161)를 켤지. <b>비우면 꺼짐</b>. 켜도 <b>등록 요청의 범죄 유형이
+ *                     살인(MURDER)일 때만</b> 요청한다 — 양형기준 · 유사 판례 자료가 살인뿐이다(docs/decisions/BE-161.md 2차).
+ *                     검색은 파이프라인이 읽기 전용 계정(RAG_DB_*)으로 한다. 못 찾으면 사건 입력의 참고 자료로 진행한다
  */
 @ConfigurationProperties("pipeline-service")
 public record PipelineProperties(
@@ -34,7 +41,9 @@ public record PipelineProperties(
 	String extractModel,
 	@DefaultValue("30s") Duration timeout,
 	String scriptModel,
-	String classifyModel
+	String classifyModel,
+	Boolean contaminationEnabled,
+	Boolean ragEnabled
 ) {
 
 	static final String DEFAULT_MODEL = "gemini:gemini-3.7-flash";
@@ -53,6 +62,9 @@ public record PipelineProperties(
 		// 빈 문자열로 넘어온 모델은 "설정 안 함"으로 본다(models와 같은 이유 — Compose가 빈 값을 넘긴다)
 		scriptModel = blankToNull(scriptModel);
 		classifyModel = blankToNull(classifyModel);
+		// Compose가 빈 값을 넘기면 바인딩 결과가 null이다. "설정 안 함" = 꺼짐으로 본다
+		contaminationEnabled = Boolean.TRUE.equals(contaminationEnabled);
+		ragEnabled = Boolean.TRUE.equals(ragEnabled);
 	}
 
 	private static String blankToNull(String value) {
@@ -74,6 +86,8 @@ public record PipelineProperties(
 			+ ", extractModel=" + (extractModel == null ? "(파이프라인 기본값)" : extractModel)
 			+ ", timeout=" + timeout
 			+ ", scriptModel=" + (scriptEnabled() ? scriptModel : "(대본 생성 끔)")
-			+ ", classifyModel=" + (classifyModel == null ? "(생성 모델의 첫 모델)" : classifyModel) + "]";
+			+ ", classifyModel=" + (classifyModel == null ? "(생성 모델의 첫 모델)" : classifyModel)
+			+ ", contaminationEnabled=" + contaminationEnabled
+			+ ", ragEnabled=" + ragEnabled + "]";
 	}
 }

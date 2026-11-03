@@ -201,3 +201,31 @@ test('portraitLabel: 역할 표정 컷의 감정 이름이 원문(sad · angry �
   assert.equal(portraitLabel('/images/characters/roles/nambul_actor-sad.webp'), '남불 · A씨 역 슬픔');
   assert.equal(portraitLabel('/images/characters/roles/naero_actor-relieved.webp'), '내로 · A씨 역 안도');
 });
+
+// B안 이미지 카드 배경 · 테두리(FE-150): CSS 한 줄로만 그리는 값(아래 목록)을 뺀 나머지는 그림 파일이 있어야 한다. 파일이 빠지면 카드가 맨 바탕으로 보인다
+const CSS_ONLY_BACKGROUNDS = ['cream', 'classic'];
+const CSS_ONLY_FRAMES = ['basic', 'wood', 'gold', 'navy', 'stitch'];
+test('이미지 카드 배경 · 테두리는 파일이 모두 있다', () => {
+  BACKGROUNDS.filter(({ id }) => !CSS_ONLY_BACKGROUNDS.includes(id)).forEach(({ id }) => {
+    assert.ok(existsSync(new URL(`../../public/images/card/bg-${id}.webp`, import.meta.url)), `카드 배경 그림이 없다: bg-${id}.webp`);
+  });
+  FRAMES.filter(({ id }) => !CSS_ONLY_FRAMES.includes(id)).forEach(({ id }) => {
+    assert.ok(existsSync(new URL(`../../public/images/card/frame-${id}.webp`, import.meta.url)), `카드 테두리 그림이 없다: frame-${id}.webp`);
+  });
+});
+
+// FE-150 리뷰: BE-158 전 실제 서버 카탈로그에는 새 id가 없다 → 서버 응답에 없는 id는 "서버가 아는 꾸미기"가 아니다(목록 · 분모에서 뺀다)
+test('서버 응답에 없는 새 꾸미기는 서버가 아는 것이 아니다', async () => {
+  const { isServerDeco } = await import('./profileDeco.js');
+  const open = unlockedSets({ frames: ['basic'], backgrounds: ['cream'] });
+  const realServer = [{ id: 'first-case', rewards: { frames: ['wood'], backgrounds: [] } }, { id: 'personality', rewards: { backgrounds: ['tarot'] } }];
+  assert.ok(isServerDeco(open, realServer, 'frames', 'basic'), '열려 있으면 안다');
+  assert.ok(isServerDeco(open, realServer, 'frames', 'wood'), '도전과제 보상에 있으면 안다');
+  assert.ok(!isServerDeco(open, realServer, 'frames', 'oak'), 'BE-158 전: 새 테두리는 모른다');
+  assert.ok(!isServerDeco(open, realServer, 'backgrounds', 'kraft'), 'BE-158 전: 새 배경은 모른다');
+  assert.ok(!isServerDeco(open, undefined, 'backgrounds', 'kraft'), '도전과제 응답이 없어도 던지지 않는다');
+  const mock = mockAchievements(NOTHING);
+  [...FRAMES.map(({ id }) => ['frames', id]), ...BACKGROUNDS.map(({ id }) => ['backgrounds', id])].forEach(([type, id]) => {
+    assert.ok(isServerDeco(unlockedSets(mockUnlocked(mock)), mock, type, id), `목 서버는 ${type}/${id}를 안다`);
+  });
+});

@@ -87,4 +87,22 @@ class ProfileDecoCatalogTest {
 		assertThat(ProfileDecoCatalog.DEFAULT_PORTRAITS).allSatisfy(path ->
 			assertThat(ProfileDecoCatalog.FREE.kinds()).contains(ProfileDecoCatalog.kindOf(path)));
 	}
+
+	@Test
+	@DisplayName("새 꾸미기(FE-150)는 모두 도전과제 하나가 열어 주고, 경험치만 주는 도전과제는 꾸미기를 주지 않는다 (BE-158 · BE-146)")
+	void newDecoUnlockedByAchievements() {
+		List<String> newFrames = List.of("oak", "brass", "court", "thread");
+		List<String> newBackgrounds = List.of("kraft", "ledger", "tracing", "parchment", "coffee", "wood", "blotter", "envelope", "lamp", "legalpad", "felt", "blinds", "leather", "bronze");
+		assertThat(ProfileDecoCatalog.FRAMES).containsAll(newFrames);
+		assertThat(ProfileDecoCatalog.BACKGROUNDS).containsAll(newBackgrounds);
+		List<String> givenFrames = ProfileDecoCatalog.ACHIEVEMENTS.stream().flatMap(item -> item.rewards().frames().stream()).toList();
+		List<String> givenBackgrounds = ProfileDecoCatalog.ACHIEVEMENTS.stream().flatMap(item -> item.rewards().backgrounds().stream()).toList();
+		assertThat(givenFrames).containsAll(newFrames).doesNotHaveDuplicates();
+		assertThat(givenBackgrounds).containsAll(newBackgrounds).doesNotHaveDuplicates();
+		// 도전과제가 열어 주지 않는 id가 값 목록에 남아 있으면 영영 못 여는 항목이 된다(처음부터 열린 것만 예외)
+		assertThat(ProfileDecoCatalog.FRAMES).allSatisfy(id -> assertThat(givenFrames.contains(id) || ProfileDecoCatalog.FREE.frames().contains(id)).as(id).isTrue());
+		assertThat(ProfileDecoCatalog.BACKGROUNDS).allSatisfy(id -> assertThat(givenBackgrounds.contains(id) || ProfileDecoCatalog.FREE.backgrounds().contains(id)).as(id).isTrue());
+		ProfileDecoCatalog.ACHIEVEMENTS.stream().filter(item -> List.of("cases-5", "collect-50").contains(item.id()))
+			.forEach(item -> assertThat(item.rewards()).isEqualTo(Rewards.NONE));
+	}
 }

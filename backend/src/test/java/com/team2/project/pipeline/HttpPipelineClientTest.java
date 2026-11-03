@@ -41,11 +41,11 @@ class HttpPipelineClientTest {
 
 	private HttpPipelineClient client(String baseUrl) {
 		return new HttpPipelineClient(restClient,
-			new PipelineProperties(baseUrl, List.of("gemini:test"), null, Duration.ofSeconds(30), null, null));
+			new PipelineProperties(baseUrl, List.of("gemini:test"), null, Duration.ofSeconds(30), null, null, null, null));
 	}
 
 	private static PipelineJobRequest request() {
-		return new PipelineJobRequest(List.of(new PipelineJobRequest.Source("판결문 본문", null)),
+		return new PipelineJobRequest(List.of(new PipelineJobRequest.Source("판결문 본문", null, "2099고합001")),
 			List.of("gemini:test"), null, null, null, null);
 	}
 
@@ -55,6 +55,8 @@ class HttpPipelineClientTest {
 		server.expect(requestTo(BASE + "/jobs"))
 			.andExpect(method(HttpMethod.POST))
 			.andExpect(jsonPath("$.sources[0].originalText").value("판결문 본문"))
+			// 등록 요청의 사건번호 — RAG 자기 사건 제외에 쓴다 (BE-161 2차, PR #413 리뷰)
+			.andExpect(jsonPath("$.sources[0].caseNumber").value("2099고합001"))
 			.andExpect(jsonPath("$.models[0]").value("gemini:test"))
 			.andRespond(withStatus(HttpStatus.ACCEPTED).contentType(MediaType.APPLICATION_JSON)
 				.body("""
@@ -125,7 +127,7 @@ class HttpPipelineClientTest {
 				+ judgment + "\"}]}"));
 
 		assertThatThrownBy(() -> client().createJob(
-			new PipelineJobRequest(List.of(new PipelineJobRequest.Source(judgment, null)),
+			new PipelineJobRequest(List.of(new PipelineJobRequest.Source(judgment, null, null)),
 				List.of("gemini:test"), null, null, null, null)))
 			.isInstanceOf(PipelineException.class)
 			.hasMessageNotContaining(judgment)
