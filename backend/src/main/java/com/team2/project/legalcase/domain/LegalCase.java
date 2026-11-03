@@ -109,6 +109,13 @@ public class LegalCase {
 	/** 순차 해금 순서(BE-146, 1부터). 비어 있으면 맨 뒤 · 사건 id 순이다({@link CaseUnlock}). 운영자가 SQL로 정한다 */
 	private Integer unlockOrder;
 
+	/** 특별 모드 경고 확인 상태 (BE-165). null=해당 없음, PENDING=미확인(공개 불가), CONFIRMED=확인함 */
+	private String specialModeReview;
+
+	private Long specialModeReviewedByAdminId;
+
+	private Instant specialModeReviewedAt;
+
 	@Enumerated(EnumType.STRING)
 	private CaseStatus status;
 
@@ -127,6 +134,24 @@ public class LegalCase {
 	public void startReview() {
 		if (status == CaseStatus.DRAFT) {
 			status = CaseStatus.REVIEW;
+		}
+	}
+
+	/** 특별 모드로 낮춘 경고가 있어 관리자 확인이 필요하다 (BE-165). 적재 때 한 번 부른다 */
+	public void requireSpecialModeReview() {
+		this.specialModeReview = "PENDING";
+	}
+
+	public boolean specialModePending() {
+		return "PENDING".equals(specialModeReview);
+	}
+
+	/** 관리자가 특별 모드 경고를 확인했다 (BE-165, A-13-22). 미확인일 때만 바꾼다 */
+	public void confirmSpecialMode(Long adminId, Instant at) {
+		if (specialModePending()) {
+			this.specialModeReview = "CONFIRMED";
+			this.specialModeReviewedByAdminId = adminId;
+			this.specialModeReviewedAt = at;
 		}
 	}
 

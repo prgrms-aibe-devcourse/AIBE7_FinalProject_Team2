@@ -232,6 +232,15 @@ class CheckDraftTest(unittest.TestCase):
             self.assertEqual(any("가린 표시가 인용에 남았습니다" in e for e in errors), rejected, (evidence, errors))
             self.assertFalse(any("원문 인용이 아닙니다" in e for e in errors), errors)  # 원문 대조 자체는 둘 다 통과
 
+    def test_maskTokenReported_evenWhenQuoteMismatch(self):
+        # 리뷰 반영: 원문 대조가 실패해도 "가린 표시가 인용에 남았습니다"를 함께 알려 재요청에서 같이 고치게 한다
+        masked = JUDGMENT.replace("가상시 가상구 소재", "[주소]")
+        evidence = "[주소] 별빛주점에서 술값을 지급할 의사가 전혀 없었음에도"
+        draft = draft_with(factors=[{"factorId": 3, "direction": "UP", "evidence": evidence}])
+        errors, _ = check_draft(draft, CASE, masked)
+        self.assertTrue(any("원문 인용이 아닙니다" in e for e in errors), errors)
+        self.assertTrue(any("가린 표시가 인용에 남았습니다" in e for e in errors), errors)
+
     def test_commonPhrase_notAddress(self):
         # "당시 친구" 같은 일반 문장은 상세 주소로 보지 않는다 — 원문 그대로 인용해야 해서 모델이 피할 수 없다 (BE-164)
         src = JUDGMENT + "\n피고인은 범행 당시 친구와 함께 있었고, 피해자도 친구의 연락을 받고 나왔다."
@@ -307,6 +316,65 @@ class RunTest(unittest.TestCase):
         self.assertFalse((self.dir / "c.court_draft.json").exists())  # 실패하면 이전 초안도 지운다
         report = json.loads((self.dir / "c.court_report.json").read_text(encoding="utf-8"))
         self.assertEqual(report["status"], "ERROR")
+
+    def test_run_specialMode_downgradesQuoteError_andMarks(self):
+        # 특별 모드 (BE-165): 다시 요청해도 인용이 틀리면 마지막 후보로 초안을 만들고 낮춘 오류를 남긴다
+        bad = draft_with(excerpt="지어낸 문장이다.")
+        call, calls = self.caller([bad, bad, bad])
+        draft_path, report_path = run("c", self.dir, "openai:gpt-x", caller=call, special_mode="format")
+        self.assertEqual(len(calls), 3)  # 낮출 수 있어도 끝까지 다시 요청한다
+        draft = json.loads(draft_path.read_text(encoding="utf-8"))
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+        self.assertEqual(report["status"], "NEEDS_REVIEW")
+        self.assertFalse(draft["judgment"]["isPublished"])
+        self.assertEqual(draft["specialMode"]["mode"], "format")
+        self.assertTrue(draft["specialMode"]["downgraded"][0].startswith("[특별 모드] excerpt: 원문 인용이 아닙니다"))
+        self.assertEqual(report["specialMode"], draft["specialMode"])
+        self.assertIn(draft["specialMode"]["downgraded"][0], report["warnings"])
+
+    def test_run_specialMode_retryPasses_noMark(self):
+        call, _ = self.caller([draft_with(excerpt="지어낸 문장이다."), DRAFT])
+        draft_path, report_path = run("c", self.dir, "openai:gpt-x", caller=call, special_mode="all")
+        self.assertNotIn("specialMode", json.loads(draft_path.read_text(encoding="utf-8")))
+        self.assertNotIn("specialMode", json.loads(report_path.read_text(encoding="utf-8")))
+
+    def test_run_specialMode_scopeAndPrivacyFloor(self):
+        evaluation = draft_with(reasoning="재판부 판단이 정답이다.")
+        pii = draft_with(notes=["사건 2099고단77 확인"])
+        for mode, draft, passes in (("format", evaluation, False), ("all", evaluation, True), ("all", pii, False)):
+            call, _ = self.caller([draft] * 3)
+            if passes:
+                run("c", self.dir, "openai:gpt-x", caller=call, special_mode=mode)
+            else:
+                with self.assertRaises(CourtDraftError, msg=(mode, draft)):
+                    run("c", self.dir, "openai:gpt-x", caller=call, special_mode=mode)
+
+    def test_run_specialMode_forgedQuoteStillBlocked(self):
+        # 리뷰 반영: 지어낸 인용 방지 장치(⟦ ⟧ 대부분 · 안 길이)는 어느 모드든 막는다. "찾을 수 없음"만 낮춘다
+        mostly = draft_with(excerpt="⟦지어낸 문장 하나⟧ ⟦또 지어낸 문장 둘⟧ 피고인을 징역")
+        for mode in ("format", "all"):
+            call, _ = self.caller([mostly] * 3)
+            with self.assertRaises(CourtDraftError, msg=mode):
+                run("c", self.dir, "openai:gpt-x", caller=call, special_mode=mode)
+
+    def test_run_specialMode_keepsFewestDowngraded_andSurvivesCallError(self):
+        two = draft_with(excerpt="지어낸 문장이다.", factors=[
+            {"factorId": 1, "direction": "DOWN", "evidence": "지어낸 근거 하나다."}] + DRAFT["factors"][1:])
+        one = draft_with(excerpt="지어낸 문장이다.")
+        # 오류 2건 → 1건 → 호출 실패(키 없는 LLMError): 오류가 적은 1건 후보를 쓴다
+        queue = [two, one]
+
+        def call(spec, system, user, **kwargs):
+            if not queue:
+                raise llm.LLMError("연결 실패")
+            return SimpleNamespace(text=json.dumps(queue.pop(0), ensure_ascii=False), served_model="m", stop_reason="stop")
+
+        _, report_path = run("c", self.dir, "openai:gpt-x", caller=call, special_mode="format")
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+        self.assertEqual(len(report["specialMode"]["downgraded"]), 1)
+        with self.assertRaises(CourtDraftError):  # 특별 모드가 아니면 그대로 실패
+            queue[:] = [one]
+            run("c", self.dir, "openai:gpt-x", caller=call)
 
     def test_run_retry_includesPreviousResponse(self):
         # 재요청에는 직전 응답을 함께 보내 오류 항목만 고치게 한다 (BE-164)

@@ -11,6 +11,12 @@ public record PublishReadiness(List<String> reasons) {
 
 	public static PublishReadiness of(boolean hasPublishedAi, boolean hasPublishedCourt, int factorCount,
 		int overviewFactorCount, int penaltyRuleCount, boolean hasPaper) {
+		return of(hasPublishedAi, hasPublishedCourt, factorCount, overviewFactorCount, penaltyRuleCount, hasPaper, false);
+	}
+
+	/** @param specialModePending 특별 모드로 낮춘 경고를 아직 확인하지 않았다 (BE-165) */
+	public static PublishReadiness of(boolean hasPublishedAi, boolean hasPublishedCourt, int factorCount,
+		int overviewFactorCount, int penaltyRuleCount, boolean hasPaper, boolean specialModePending) {
 		List<String> reasons = new ArrayList<>();
 		if (!hasPublishedAi) {
 			reasons.add("NO_PUBLISHED_AI");
@@ -29,6 +35,9 @@ public record PublishReadiness(List<String> reasons) {
 		}
 		if (!hasPaper) {
 			reasons.add("NO_PAPER");
+		}
+		if (specialModePending) {
+			reasons.add("SPECIAL_MODE_UNREVIEWED");
 		}
 		return new PublishReadiness(List.copyOf(reasons));
 	}

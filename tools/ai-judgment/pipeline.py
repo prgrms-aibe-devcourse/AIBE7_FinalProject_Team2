@@ -35,7 +35,7 @@ import urllib.parse
 from pathlib import Path
 
 from build_prompt import InputError, build_prompt
-from case_seed_sql import DEFAULT_SOURCE_ORG, CaseSeedError, build_case_sql, resolve_sources
+from case_seed_sql import DEFAULT_SOURCE_ORG, CaseSeedError, build_case_sql, resolve_sources, special_mode_review_sql
 from rag_context import RagContextError, RagUnavailable, build_references, input_key
 from rag_context import option_errors as rag_option_errors
 from court_seed_sql import CourtSeedError, build_court_sql
@@ -59,6 +59,7 @@ from select_semantic import option_errors as select_semantic_option_errors
 from select_semantic import reasoning_similarity_scores
 from summary_tags import DEFAULT_MIN_SCORE, DEFAULT_TOP_K, SummaryTagError, annotate_report, load_vocabulary, skipped_report
 from summary_tags import option_errors as summary_tag_option_errors
+from special_mode import MODES as SPECIAL_MODES
 from validate_output import parse_output
 
 STAGES = ("extract", "court", "contamination", "rag", "generate", "select", "axis", "classify", "script", "load")
@@ -83,6 +84,9 @@ DEFAULT_CONFIG = {
     # 관리자가 등록 요청에서 고른 범죄 유형 (BE-138). 주면 extract가 판결문에서 읽은 유형(case.json crimeType)과 비교해 다르면
     # 멈춘다 — 양형기준 · 배역 배정 · 사전판단이 서로 다른 유형을 쓰지 않게 비싼 단계(판결 · 대본) 전에 잡는다
     "crimeType": None,
+    # 특별 모드 (BE-165): null · "format" · "all". extract · court 검사 오류 일부를 경고로 낮춰 적재까지 진행한다 — 관리자가 원 판결문과
+    # 대조해 검수한다. 개인정보 최소선 · DB 제약 오류는 어느 모드든 막는다 (special_mode.py)
+    "specialMode": None,
     # LLM 호출 재시도 (BE-36). 과부하(503 · 529) · 한도(429) · 서버 오류 때 요청 한 건을 보내는 최대 횟수(첫 시도 포함)와
     # 한 번에 기다릴 최대 시간(초). 무료 등급이면 각 단계의 delay(호출 사이 대기)도 함께 둔다 (README "무료 등급 한도 대응")
     "retry": {"maxAttempts": DEFAULT_MAX_ATTEMPTS, "maxWait": DEFAULT_MAX_WAIT},
@@ -437,6 +441,8 @@ def validate_config(config):
     if not name or not all(c.islower() or c.isdigit() or c == "-" for c in name):
         errors.append("name은 영어 소문자 · 숫자 · 하이픈으로 정한다 (사건을 특정할 수 없는 이름, 예: long-marriage-conflict)")
     stages = config["stages"]
+    if config.get("specialMode") not in (None,) + SPECIAL_MODES:
+        errors.append(f"specialMode는 null 또는 {' · '.join(SPECIAL_MODES)}다")
     if config.get("incidentDate") is not None:
         try:
             datetime.date.fromisoformat(config["incidentDate"])
@@ -739,7 +745,7 @@ def stage_extract(config, state, log):
     try:
         case_path, court_path, report_path, source_path = extract_run(
             sources, config["name"], out_dir=CASES_DIR, model=model, effort=cfg["effort"],
-            max_tokens=cfg.get("maxTokens"), log=log, free_models=free_backup)
+            max_tokens=cfg.get("maxTokens"), log=log, free_models=free_backup, special_mode=config.get("specialMode"))
     except ExtractError as e:
         raise PipelineError(f"비식별화 실패: {e}")
     outputs = {"case": str(case_path), "court": str(court_path), "report": str(report_path), "source": str(source_path)}
@@ -751,6 +757,8 @@ def stage_extract(config, state, log):
     outputs["eligible"] = eligibility.get("eligible")
     outputs["warnings"] = len(report.get("warnings", []))
     outputs["model"] = report.get("model")  # 실제로 응답한 모델 (court 단계와 같다)
+    if report.get("specialMode"):
+        outputs["specialMode"] = report["specialMode"]
     if report.get("usedFreeTier"):
         outputs["usedFreeTier"] = True
         log("⚠ 무료 등급 백업 모델이 판결문 원문을 처리했습니다 (제품 개선에 쓰이고 사람이 검토할 수 있습니다). report.json의 usedFreeTier 참고")
@@ -829,7 +837,7 @@ def stage_court(config, state, log, caller=None):
             config["name"], out_dir=CASES_DIR, model=model, max_tokens=cfg["maxTokens"], caller=caller,
             case_path=input_file(config, state, "case"), court_path=input_file(config, state, "court"),
             source_path=input_file(config, state, "source"), final_index=config["finalSourceIndex"], log=log,
-            free_models=free_backup)
+            free_models=free_backup, special_mode=config.get("specialMode"))
     except CourtDraftError as e:
         raise PipelineError(f"재판부 판결 초안 실패: {e}")
     report = load_json(report_path)
@@ -837,6 +845,8 @@ def stage_court(config, state, log, caller=None):
         f"경고 {len(report.get('warnings', []))} · 시도 {report.get('attempts')}회")
     outputs = {"courtDraft": str(draft_path), "report": str(report_path), "model": report.get("model"),
                "warnings": len(report.get("warnings", []))}
+    if report.get("specialMode"):
+        outputs["specialMode"] = report["specialMode"]
     if report.get("usedFreeTier"):
         outputs["usedFreeTier"] = True
         log("⚠ 무료 등급 백업 모델이 판결문 원문을 처리했습니다 (제품 개선에 쓰이고 사람이 검토할 수 있습니다). court_report.json의 usedFreeTier 참고")
@@ -1132,12 +1142,29 @@ def stage_select(config, state, log):
     }
 
 
+def special_marks(config, state):
+    """특별 모드로 낮춘 검사 오류 표시 {extract?, court?} (BE-165). 단계를 돌렸으면 그 결과에서, 건너뛰고 inputs 파일을 썼으면
+    파일(report.json · court_draft.json)에서 읽는다 — 어느 쪽이든 같은 표시가 생성 기록과 공개 차단에 반영된다."""
+    marks = {}
+    for stage, key in (("extract", "report"), ("court", "courtDraft")):
+        mark = stage_output(state, stage).get("specialMode")
+        if not mark:
+            path = resolve_path(config, config["inputs"].get(key))
+            mark = load_json(path).get("specialMode") if path and Path(path).exists() else None
+        if mark:
+            marks[stage] = mark
+    return marks
+
+
 def build_generation_report(config, state, run_record, selection):
     """ai_generation.generation_report (V8). 관리자 후검수 화면이 볼 값. 사건 내용 · 실제 판결 값은 넣지 않는다."""
     raw = json.dumps(run_record["output"], ensure_ascii=False, sort_keys=True)
     run_key = hashlib.sha256(f"{config['name']}|{selection['modelSpec']}|{selection['runIndex']}|{raw}".encode()).hexdigest()
     contamination = stage_output(state, "contamination").get("results", {}).get(selection["modelSpec"])
-    return {
+    # 특별 모드로 낮춘 검사 오류 (BE-165). 관리자 화면이 이미 보여 주는 validationWarnings 앞에도 넣는다
+    special = special_marks(config, state)
+    downgraded = [w for marker in special.values() for w in marker["downgraded"]]
+    report = {
         "runKey": run_key[:32],
         "pipeline": config["name"],
         "modelSpec": selection["modelSpec"],
@@ -1145,7 +1172,7 @@ def build_generation_report(config, state, run_record, selection):
         "runIndex": selection["runIndex"],
         "generatedAt": run_record.get("createdAt"),
         "usage": (run_record.get("meta") or {}).get("usage"),
-        "validationWarnings": run_record["validation"]["warnings"],
+        "validationWarnings": downgraded + run_record["validation"]["warnings"],
         "selection": {"strategy": selection["strategy"], "reason": selection["reason"], "score": selection["score"]},
         # 판정 · 근거 · 분류별 개수 · 기준만 남긴다 (예측 형량 등은 남기지 않음)
         "contamination": ({"verdict": contamination["verdict"], "reason": contamination.get("reason"),
@@ -1154,6 +1181,9 @@ def build_generation_report(config, state, run_record, selection):
         # 참고 자료 검색 요약 (BE-54): 버전 이름 · 기준 종류 · 판례 id · 점수 · 대체 사유. 사건번호 · 판례 본문은 넣지 않는다
         "rag": rag_report(config, state),
     }
+    if special:
+        report["specialMode"] = special
+    return report
 
 
 def rag_report(config, state):
@@ -1542,6 +1572,9 @@ def stage_load(config, state, log, apply=None):
         else:
             log("재판부 판결 초안이 없어 사건 · AI 판결만 적재합니다 (공개 전에 재판부 판결이 필요합니다)")
 
+    if special_marks(config, state):  # 오프라인 적재도 서버 적재(CaseImportLoader)처럼 공개 전 확인을 요구한다 (BE-165)
+        parts.append(special_mode_review_sql(case["title"]))
+
     model_name = (run_record.get("meta") or {}).get("servedModel") or parse_model_spec(selection["modelSpec"])[1]
     if len(model_name) > NAME_MAX_LENGTH:
         model_name = parse_model_spec(selection["modelSpec"])[1][:NAME_MAX_LENGTH]
@@ -1894,11 +1927,15 @@ def main():
     run_cmd.add_argument("--until", choices=STAGES, help="이 단계까지만 돌린다")
     run_cmd.add_argument("--skip", action="append", default=[], choices=STAGES, help="건너뛸 단계 (여러 번 가능)")
     run_cmd.add_argument("--rerun", action="store_true", help="끝난 단계도 모두 다시 돌린다")
+    run_cmd.add_argument("--special", choices=SPECIAL_MODES,
+                         help="특별 모드 (BE-165). 설정의 specialMode보다 우선한다")
     status_cmd = sub.add_parser("status", help="단계별 상태를 본다")
     status_cmd.add_argument("config")
     args = parser.parse_args()
     try:
         config = load_config(args.config)
+        if getattr(args, "special", None):
+            config["specialMode"] = args.special
         if args.command == "status":
             print_status(config)
             return 0

@@ -295,6 +295,38 @@ class AdminCaseEditApiTest extends ApiIntegrationTest {
 			.andExpect(jsonPath("$.details[0].reason").value("CASE_PUBLISHED"));
 	}
 
+	@Test
+	@DisplayName("A-13-22: 특별 모드 사건은 경고를 확인해야 공개된다 — 확인은 한 번만 기록하고 감사 로그를 남긴다 (BE-165)")
+	void specialModeConfirm_unblocksPublish() throws Exception {
+		judgment("AI");
+		judgment("COURT");
+		jdbcTemplate.update("""
+			INSERT INTO penalty_rule (case_id, penalty_type, allowed_min, allowed_max, suspension_allowed, display_order)
+			VALUES (?, 'PRISON', 60, 360, true, 1)""", caseId);
+		insertCasePaper(caseId, "테스트 헤드라인");
+		jdbcTemplate.update("UPDATE legal_case SET special_mode_review = 'PENDING' WHERE id = ?", caseId);
+
+		perform(post(caseUrl() + "/publish"))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.details.length()").value(1))
+			.andExpect(jsonPath("$.details[0].reason").value("SPECIAL_MODE_UNREVIEWED"));
+		perform(get(caseUrl()))
+			.andExpect(jsonPath("$.publishReadiness.reasons[0]").value("SPECIAL_MODE_UNREVIEWED"));
+
+		perform(post(caseUrl() + "/special-mode/confirm"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.publishReadiness.ready").value(true));
+		perform(post(caseUrl() + "/special-mode/confirm")).andExpect(status().isOk());	// 다시 눌러도 그대로
+		assertThat(jdbcTemplate.queryForObject("""
+			SELECT special_mode_review || ':' || (special_mode_reviewed_by_admin_id IS NOT NULL)
+			FROM legal_case WHERE id = ?""", String.class, caseId)).isEqualTo("CONFIRMED:true");
+		assertThat(jdbcTemplate.queryForList("""
+			SELECT action FROM admin_audit_log WHERE actor_email = ? AND action = 'CASE_SPECIAL_MODE_CONFIRM'""", String.class,
+			admin.getEmail())).hasSize(1);
+
+		perform(post(caseUrl() + "/publish")).andExpect(status().isOk());
+	}
+
 	// --- A-13-14 ---
 
 	@Test

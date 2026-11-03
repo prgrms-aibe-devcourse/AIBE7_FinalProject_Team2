@@ -43,6 +43,7 @@ from extract_case import (  # noqa: E402
 )
 from llm import LLMError, api_key, call as llm_call, model_provider  # noqa: E402
 from validate_output import FORBIDDEN_EXPRESSIONS, parse_output  # noqa: E402
+from special_mode import MODES as SPECIAL_MODES, marker as special_marker, split_errors  # noqa: E402
 
 # v2: 인용 · 요소 선택 예시 퓨샷 court_draft_fewshot.md (BE-53)
 # v3: 재요청에 직전 응답을 붙여 오류 항목만 고치게 함, 행정구역 미리 가림 (BE-164)
@@ -272,8 +273,13 @@ def check_draft(draft, case, source_text):
         ok, reason = quote_matches(quote, source_text)
         if not ok:
             errors.append(f"{where}: 원문 인용이 아닙니다 — {reason}")
-        # 미리 가린 표시([주소] 등)는 원문 글자와 같아 위 대조를 통과한다. 규칙(⟦ ⟧로 일반화)을 여기서 지킨다 (BE-53)
-        elif any(token in text for is_literal, text in split_quote(quote) if is_literal for token in MASK_TOKENS):
+        # 미리 가린 표시([주소] 등)는 원문 글자와 같아 위 대조를 통과한다. 규칙(⟦ ⟧로 일반화)을 여기서 지킨다 (BE-53).
+        # 대조가 실패해도 함께 알려야 재요청 때 모델이 같이 고친다 (BE-165 리뷰)
+        try:
+            literals = [text for is_literal, text in split_quote(quote) if is_literal]
+        except CourtDraftError:
+            literals = []  # ⟦ ⟧ 짝이 안 맞는 건 위 대조에서 이미 오류다
+        if any(token in text for text in literals for token in MASK_TOKENS):
             errors.append(f"{where}: 가린 표시가 인용에 남았습니다 — 일반적인 말로 바꿔 ⟦ ⟧로 감쌉니다")
 
     if len(draft["summary"]) > SUMMARY_MAX_LENGTH:
@@ -365,12 +371,13 @@ def retry_message(user, last_text, last_errors):
             "가린 표시는 일반적인 말로 바꿔 ⟦ ⟧로 감싼다. JSON 객체 하나만 다시 출력하세요")
 
 
-def request_draft(system, user, case, masked_text, model, max_tokens=MAX_TOKENS, caller=llm_call):
+def request_draft(system, user, case, masked_text, model, max_tokens=MAX_TOKENS, caller=llm_call, special_mode=None):
     """모델에 초안을 요청하고 검사한다. 오류가 있으면 내용을 알려 주며 다시 요청한다. (초안, 경고, 실제 모델, 시도 횟수)
 
-    다시 요청할 때는 직전 응답도 함께 보내 오류가 난 항목만 고치게 한다. 오류 목록만 주면 모델이 초안 전체를 새로 써서
-    통과했던 인용에서 새 오류가 나기 쉽다 (BE-164)."""
-    last_errors, last_text = [], None
+    다시 요청할 때는 직전 응답도 함께 보내 오류가 난 항목만 고치게 한다 (BE-164).
+    special_mode(BE-165)면 낮출 수 있는 오류만 남은 초안을 후보로 두고 끝까지 다시 요청한다. 모두 실패하면 낮춘 오류가 가장
+    적은 후보(같으면 더 나중)를 쓰고, 낮춘 오류는 "[특별 모드]" 경고로 돌려준다."""
+    last_errors, last_text, fallback, fallback_count = [], None, None, 0
     for attempt in range(1 + RETRIES):
         message = user if not last_errors else retry_message(user, last_text, last_errors)
         try:
@@ -378,10 +385,16 @@ def request_draft(system, user, case, masked_text, model, max_tokens=MAX_TOKENS,
         except LLMError as e:
             if e.kind:  # 과부하 · 한도: 다음 모델로 넘어갈 수 있다 (BE-45)
                 raise ModelUnavailableError(str(e), e.kind) from e
+            if fallback:  # 특별 모드: 앞 시도에서 보관한 후보를 버리지 않는다 (BE-165, 리뷰)
+                return fallback
             raise CourtDraftError(str(e)) from e
         if result.stop_reason in TRUNCATED_REASONS:
+            if fallback:
+                return fallback
             raise CourtDraftError(f"출력이 최대 길이({max_tokens} 토큰)에서 잘렸습니다")
         if result.stop_reason not in NORMAL_STOP_REASONS:
+            if fallback:
+                return fallback
             raise CourtDraftError(f"응답이 비정상 종료되었습니다 (사유: {result.stop_reason}). 다시 보내도 같으므로 멈춥니다")
         last_text = result.text  # 다음 재요청에 함께 보낼 직전 응답
         try:
@@ -392,12 +405,19 @@ def request_draft(system, user, case, masked_text, model, max_tokens=MAX_TOKENS,
         errors, warnings = check_draft(draft, case, masked_text)
         if not errors:
             return draft, warnings, result.served_model, attempt + 1
+        hard, downgraded = split_errors(errors, special_mode, "court")
+        # 낮춘 오류가 가장 적은 후보를 둔다 (같으면 더 나중, 오류만 고친 재요청이라 더 다듬어진 초안)
+        if not hard and (fallback is None or len(downgraded) <= fallback_count):
+            fallback, fallback_count = (draft, downgraded + warnings, result.served_model, attempt + 1), len(downgraded)
         last_errors = errors
+    if fallback:
+        return fallback
     raise CourtDraftError(f"{1 + RETRIES}번 모두 검사를 통과하지 못했습니다: " + " | ".join(last_errors[:8]))
 
 
 def run(name, out_dir=DEFAULT_OUT_DIR, model=DEFAULT_MODEL, max_tokens=MAX_TOKENS, caller=None,
-        case_path=None, court_path=None, source_path=None, final_index=None, log=print, free_models=()):
+        case_path=None, court_path=None, source_path=None, final_index=None, log=print, free_models=(),
+        special_mode=None):
     """초안 생성 전체 흐름. (초안 파일, 보고서 파일). 실패하면 CourtDraftError (보고서는 남김).
 
     입력 파일은 기본으로 out_dir/<name>.case.json 등을 쓰고, 경로를 주면 그 파일을 쓴다(파이프라인 inputs).
@@ -456,7 +476,7 @@ def run(name, out_dir=DEFAULT_OUT_DIR, model=DEFAULT_MODEL, max_tokens=MAX_TOKEN
     system, user = build_messages(case, court, masked_text)
     try:
         (draft, warnings, served, attempts), used_model, skipped = run_with_fallback(
-            models, lambda m: request_draft(system, user, case, masked_text, spec_of(m), max_tokens, caller), log,
+            models, lambda m: request_draft(system, user, case, masked_text, spec_of(m), max_tokens, caller, special_mode), log,
             free_models)
     except (CourtDraftError, ModelUnavailableError) as e:
         draft_path.unlink(missing_ok=True)
@@ -470,6 +490,11 @@ def run(name, out_dir=DEFAULT_OUT_DIR, model=DEFAULT_MODEL, max_tokens=MAX_TOKEN
             raise CourtDraftError(str(e)) from e
         raise
     result = build_court_draft(draft, case, court, served)
+    special = special_marker(special_mode, [w for w in warnings if w.startswith("[특별 모드]")])
+    if special:  # 적재 뒤 관리자 후검수 기록(ai_generation.generation_report)에 남기려고 초안에도 싣는다
+        result["specialMode"] = special
+        report["specialMode"] = special
+        log(f"⚠ 특별 모드({special_mode}): 검사 오류 {len(special['downgraded'])}건을 경고로 낮췄습니다. 관리자가 원 판결문과 대조해 검수하세요")
     if len(models) > 1:
         report.update(requestedModel=used_model, modelChain=models,
                       fallbacks=[{**f, "error": scrub(f["error"])} for f in skipped])
@@ -491,10 +516,12 @@ def main():
                         help=f"'공급자:모델ID' (openai · gemini · anthropic, 기본: {DEFAULT_MODEL}). 여러 번 주면 앞 모델이 "
                              "과부하 · 한도로 막혔을 때 다음 모델로 넘어간다")
     parser.add_argument("--max-tokens", type=int, default=MAX_TOKENS)
+    parser.add_argument("--special", choices=SPECIAL_MODES,
+                        help="특별 모드 (BE-165): format은 형식 오류만, all은 내용 오류까지 경고로 낮춘다. 개인정보 최소선은 그대로 막는다")
     args = parser.parse_args()
     try:
         model = args.model[0] if args.model and len(args.model) == 1 else (args.model or DEFAULT_MODEL)
-        paths = run(args.name, args.out_dir, model, args.max_tokens)
+        paths = run(args.name, args.out_dir, model, args.max_tokens, special_mode=args.special)
     except (CourtDraftError, OSError, json.JSONDecodeError) as e:
         print(f"[오류] {e}", file=sys.stderr)
         return 1

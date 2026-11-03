@@ -463,6 +463,15 @@ class RunTest(unittest.TestCase):
         self.assertTrue((self.dir / "out" / "bad-case.report.json").exists())
         self.assertFalse((self.dir / "out" / "bad-case.case.json").exists())
 
+    def test_run_specialMode_keepsDateAndCourtName(self):
+        # 특별 모드 (BE-165): extract는 날짜 · 나이(사건 본문)도, 법원명(개인정보 최소선)도 어느 모드든 막는다
+        out = self.dir / "out"
+        for name, overview in (("date-case", "2099. 1. 10. 사건이다."), ("court-case", "가상지방법원 사건이다.")):
+            for mode in ("format", "all"):
+                with self.assertRaises(ExtractError, msg=(name, mode)):
+                    run(self.input, name, out_dir=out, call=fake_call(output_with(overview=overview)), special_mode=mode)
+            self.assertFalse((out / f"{name}.case.json").exists())
+
     def test_run_checkErrors_removesStaleOutputs(self):
         out = self.dir / "out"
         run(self.input, "same-name", out_dir=out, call=fake_call(FAKE_OUTPUT))

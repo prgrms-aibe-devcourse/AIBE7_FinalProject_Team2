@@ -87,6 +87,17 @@ class JobStoreTest(unittest.TestCase):
                 self.store.create(self._request(crimeType=bad))
         self.assertEqual(set(self.jobs_dir.iterdir()), before)
 
+    def test_create_passes_special_mode(self):
+        """BE-165: 특별 모드(format · all)를 설정에 넣는다. 모르는 값은 400(아무것도 쓰지 않음)."""
+        job_id = self.store.create(self._request(specialMode="format"))
+        config = json.loads((self.jobs_dir / job_id / "config.json").read_text(encoding="utf-8"))
+        self.assertEqual(config["specialMode"], "format")
+        before = set(self.jobs_dir.iterdir())
+        for bad in ("FORMAT", "everything", 1):
+            with self.assertRaises(JobError):
+                self.store.create(self._request(specialMode=bad))
+        self.assertEqual(set(self.jobs_dir.iterdir()), before)
+
     def test_create_disables_load_rag_contamination_by_default(self):
         job_id = self.store.create(self._request())
 

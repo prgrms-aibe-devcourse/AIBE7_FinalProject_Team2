@@ -366,6 +366,27 @@ extract가 끝나면 요소마다 요약어(`summaryTag`)를 기준 목록 [`sum
 - **SQL 보관**: `sqlDir`(기본 `backend/private-seed/loads/`)에 `<시각>-<name>.sql`로 남긴다. 원본 판결문이 들어 있으므로 **비공개 저장소에만** 둔다. 보관 폴더의 상위가 실제 git 체크아웃이어야 하고(서브모듈을 받지 않아 빈 `private-seed` 폴더면 멈춘다), 공개 저장소 안이면 `backend/private-seed` 아래만 허용한다. Flyway가 읽는 `seed/`가 아니라서 자동 실행되지 않는다(관리자가 DB에서 바꾼 검수 상태를 R__ 재실행이 덮지 않게).
 - **DB 적재는 로컬에만**: `db.mode`가 `docker`(기본, `lawnambul-postgres` 컨테이너. `DOCKER_HOST` · docker context가 원격이면 거부) 또는 `psql`(`DB_URL`. URL 호스트와 쿼리의 `host` · `hostaddr`가 모두 localhost여야 한다. 호스트 없는 URL은 `PGHOST`를 보고, 없으면 유닉스 소켓이라 허용). 운영은 보관한 SQL 파일을 서버에서 실행한다: `psql -v ON_ERROR_STOP=1 -f <파일>`.
 
+### 특별 모드 (`specialMode`, BE-165)
+
+검사 오류가 반복돼 등록이 멈출 때, 오류 일부를 **경고로 낮춰** 적재까지 진행하고 관리자가 원 판결문과 대조해 검수한다. 설정 `specialMode`
+(`null` · `"format"` · `"all"`) 또는 `pipeline.py run --special format|all`(설정보다 우선). `extract_case.py` · `court_draft.py`도
+`--special`을 받는다. 사건 등록 API(A-14)는 `specialMode: FORMAT | ALL`로 켠다.
+
+| 모드 | 경고로 낮추는 오류 |
+| --- | --- |
+| `format` (B) | 원문 인용 대조("원문에서 찾을 수 없음"만) · 상세 주소(행정구역), **court만** 정확한 날짜 · 정확한 나이 |
+| `all` (A) | `format` + 평가 표현 · 재판부가 고려한 판단 요소 없음 |
+
+- **어느 모드든 막는 것**: 개인정보 최소선(마스킹 표시 · 주민등록번호 · 이메일 · 전화번호 · 계좌번호 · 사건번호 · 법원명), DB 제약 · 구조 오류
+  (스키마 · 길이 상한 · 판단 요소 번호 등 — 낮춰도 적재에서 실패한다), 실제 선고 형량 노출. 허용 목록 방식이라 새 검사 오류는 기본으로 막힌다(`special_mode.py`).
+- extract(사용자에게 보이는 사건 본문)의 정확한 날짜 · 나이는 어느 모드든 막는다.
+- 지어낸 인용을 막는 장치(원문 그대로인 부분이 너무 적음 · `⟦ ⟧` 안 길이 · 짝)와 동 · 호수 주소(`동 · 호수 주소 의심`)는 어느 모드든 막는다.
+- court는 낮출 수 있는 오류만 남아도 **재시도를 끝까지 한다**. 모두 실패하면 낮춘 오류가 가장 적은 후보(같으면 더 나중 후보)를 쓰고, 재시도 중 호출이 실패해도(과부하 · 한도는 BE-45대로 다음 모델) 보관한 후보를 버리지 않는다.
+- 낮춘 오류는 `[특별 모드] 위치: 규칙` 경고로 보고서 `warnings`와 `specialMode`(`{mode, downgraded}`)에, court는 초안 파일에도 남는다.
+  적재는 `ai_generation.generation_report`의 `specialMode`와 `validationWarnings` 맨 앞에 넣는다(관리자 화면이 이미 보여 주는 칸).
+  원본 값은 남기지 않는다(메시지는 위치와 규칙뿐).
+- 판결은 비공개 · 사건은 DRAFT로 들어가고, 낮춘 경고가 있는 사건은 관리자가 확인(A-13-22)해야 공개할 수 있다(공개 조건 `SPECIAL_MODE_UNREVIEWED`, V51). 오프라인 적재 SQL도 사건을 `special_mode_review='PENDING'`으로 표시한다(V51이 적용된 DB에서만 실행된다).
+
 ### 보안 · 데이터
 
 | 항목 | 처리 |

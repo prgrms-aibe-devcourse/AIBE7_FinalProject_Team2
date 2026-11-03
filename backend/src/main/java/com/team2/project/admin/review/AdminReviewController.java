@@ -117,6 +117,13 @@ public class AdminReviewController {
 		return caseEditService.publish(caseId, admin, request);
 	}
 
+	/** A-13-22 특별 모드 경고 확인 (BE-165) */
+	@PostMapping("/cases/{caseId}/special-mode/confirm")
+	public AdminCaseDetailResponse confirmSpecialMode(@PathVariable Long caseId,
+		@AuthenticationPrincipal AdminPrincipal admin, HttpServletRequest request) {
+		return caseEditService.confirmSpecialMode(caseId, admin, request);
+	}
+
 	/** A-13-14 사건 공개 취소 (사유 필수) */
 	@PostMapping("/cases/{caseId}/unpublish")
 	public AdminCaseDetailResponse unpublish(@PathVariable Long caseId, @Valid @RequestBody AdminUnpublishRequest body,
