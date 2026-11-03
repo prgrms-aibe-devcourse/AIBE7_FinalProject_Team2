@@ -18,7 +18,7 @@
 |:---------------------------------------------------------------------------:|:-----------------------------------------------------------------------:|:-----------------------------------------------------------------------:|:----------------------------------------------------------------------:|
 | <img src="https://avatars.githubusercontent.com/pooreunblue" width="100"/> | <img src="https://avatars.githubusercontent.com/jms0326" width="100"/> | <img src="https://avatars.githubusercontent.com/YOLO-NIM" width="100"/> | <img src="https://avatars.githubusercontent.com/peanutboi710" width="100"/> |
 |              [@pooreunblue](https://github.com/pooreunblue)               |                [@jms0326](https://github.com/jms0326)                 |                [@YOLO-NIM](https://github.com/YOLO-NIM)                 |                 [@peanutboi710](https://github.com/peanutboi710)                 |
-| AI 판결 · 비교 · 모니터링 · JWT | 인프라 · 배포 · 운영 · 카카오 로그인 | 성향 백엔드 · 보안 기반 · 판례 저장소 | 화면 · 캐릭터 · 성향 콘텐츠 · 관리자 검수 |
+| <sub>AI 판결 · 비교<br/>JWT · 모니터링</sub> | <sub>공통 기반 · 에러<br/>카카오 OAuth<br/>Redis · RDS · 배포</sub> | <sub>성향 백엔드<br/>보안 · 관리자 API<br/>판례 저장소</sub> | <sub>화면 · 캐릭터<br/>성향 콘텐츠<br/>관리자 검수 화면</sub> |
 
 </div>
 
