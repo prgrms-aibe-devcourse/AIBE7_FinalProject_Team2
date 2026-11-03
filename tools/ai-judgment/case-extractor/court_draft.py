@@ -364,7 +364,7 @@ def request_draft(system, user, case, masked_text, model, max_tokens=MAX_TOKENS,
         errors, warnings = check_draft(draft, case, masked_text)
         if not errors:
             return draft, warnings, result.served_model, attempt + 1
-        hard, downgraded = split_errors(errors, special_mode)
+        hard, downgraded = split_errors(errors, special_mode, "court")
         # 낮춘 오류가 가장 적은 후보를 둔다 (같으면 더 나중, 오류만 고친 재요청이라 더 다듬어진 초안)
         if not hard and (fallback is None or len(downgraded) <= fallback_count):
             fallback, fallback_count = (draft, downgraded + warnings, result.served_model, attempt + 1), len(downgraded)

@@ -30,19 +30,27 @@ ERRORS = [
 
 class SplitErrorsTest(unittest.TestCase):
     def test_off_keepsAll(self):
-        self.assertEqual(split_errors(ERRORS, None), (ERRORS, []))
+        self.assertEqual(split_errors(ERRORS, None, "court"), (ERRORS, []))
 
-    def test_format_and_all(self):
-        kept, down = split_errors(ERRORS, "format")
+    def test_court_format_and_all(self):
+        kept, down = split_errors(ERRORS, "format", "court")
         self.assertEqual(down, [PREFIX + e for e in ERRORS[:4]])
         self.assertEqual(kept, ERRORS[4:])
-        kept, down = split_errors(ERRORS, "all")
+        kept, down = split_errors(ERRORS, "all", "court")
         self.assertEqual(down, [PREFIX + e for e in ERRORS[:6]])
         self.assertEqual(kept, ERRORS[6:])  # 개인정보 최소선 · 구조 오류 · 모르는 오류는 어느 모드든 남는다
 
+    def test_extract_keepsDateAndAge(self):
+        # extract는 사용자에게 보이는 사건 본문이라 정확한 날짜 · 나이를 어느 모드든 막는다
+        for mode in ("format", "all"):
+            kept, down = split_errors(ERRORS, mode, "extract")
+            self.assertEqual(down, [PREFIX + e for e in ERRORS[:2] + (ERRORS[4:6] if mode == "all" else [])])
+            self.assertIn("summary: 정확한 날짜 의심", kept)
+            self.assertIn("sections[0]: 정확한 나이 의심", kept)
+
     def test_unknownMode_rejected(self):
         with self.assertRaises(ValueError):
-            split_errors(ERRORS, "everything")
+            split_errors(ERRORS, "everything", "court")
 
     def test_marker(self):
         self.assertIsNone(marker("all", []))

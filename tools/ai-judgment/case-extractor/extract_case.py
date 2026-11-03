@@ -410,7 +410,7 @@ def run(input_path, name, out_dir=DEFAULT_OUT_DIR, model=DEFAULT_MODEL, effort=D
     except (KeyError, TypeError, OutputError) as e:
         raise ExtractError(f"응답 형식이 스키마와 다릅니다: {e}") from e
 
-    errors, downgraded = split_errors(errors, special_mode)  # 특별 모드 (BE-165): 낮춘 오류는 경고로
+    errors, downgraded = split_errors(errors, special_mode, "extract")  # 특별 모드 (BE-165): 낮춘 오류는 경고로
     warnings = downgraded + warnings
     special = special_marker(special_mode, downgraded)
     if special:
