@@ -59,6 +59,11 @@ public interface CommunityPostRepository extends JpaRepository<CommunityPost, Lo
 		""", nativeQuery = true)
 	List<Long> findWriterIds();
 
+	/** 이 회원이 같은 사건에 판결을 붙인 다른 글이 남아 있는지(판결 공유 보너스를 거둘지 정할 때) */
+	@Query(value = "select count(*) > 0 from community_post where member_id = :memberId and case_id = :caseId and verdict is not null and id <> :excludeId",
+		nativeQuery = true)
+	boolean existsOtherSharedVerdict(@Param("memberId") long memberId, @Param("caseId") long caseId, @Param("excludeId") long excludeId);
+
 	interface CaseCount {
 		Long getCaseId();
 

@@ -5,5 +5,6 @@ public enum AuditTargetType {
 	CASE,
 	JUDGMENT,
 	FACTOR,
-	CASE_SOURCE
+	CASE_SOURCE,
+	COMMUNITY_POST
 }

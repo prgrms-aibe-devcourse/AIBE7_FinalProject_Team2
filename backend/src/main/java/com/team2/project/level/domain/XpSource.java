@@ -14,6 +14,7 @@ package com.team2.project.level.domain;
  * LIKE_RECEIVED  "글 ID:누른 사람 ID"      글 ID
  * SHARE_POST     사건 ID                   빈 문자열
  * SNS_SHARE      사건 ID                   빈 문자열
+ * LEVEL_FLOOR    지운 글 ID                빈 문자열 (LevelService.revokePostXp만 넣는다)
  * </pre>
  *
  * @param amount     한 번에 주는 XP
@@ -27,7 +28,8 @@ public enum XpSource {
 	COMMENT(10, 5, 0),			// 댓글 작성
 	LIKE_GIVEN(2, 10, 0),		// 좋아요 누르기 (글당 1회 — 대상 = 글 ID)
 	LIKE_RECEIVED(3, 30, 10),	// 좋아요 받기 (글당 10개 · 하루 30개)
-	SNS_SHARE(100, 1, 0);		// SNS 공유 (사건당 1회 · 하루 1회)
+	SNS_SHARE(100, 1, 0),		// SNS 공유 (사건당 1회 · 하루 1회)
+	LEVEL_FLOOR(0, 0, 0);		// 글 삭제로 XP를 회수해도 레벨이 내려가지 않게 채우는 보정(BE-167). 금액은 그때그때 정하므로 award()로 주지 않는다
 
 	private final int amount;
 	private final int dailyCap;

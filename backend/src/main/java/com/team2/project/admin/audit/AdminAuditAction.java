@@ -23,5 +23,6 @@ public enum AdminAuditAction {
 	CASE_SCRIPT_REGENERATE_APPLY,	// 대본 블록 재생성 결과 반영 (BE-129 2차, A-13-17). 바꾼 블록만 남긴다
 	CASE_PHOTO_DELETE,	// 발단 · 결론 사진 삭제 (BE-78 2차 검토, BE-101, A-13-9)
 	CASE_UNPUBLISH,		// 사건 공개 취소 (BE-118, A-13-14). 사유를 남긴다
-	CASE_SPECIAL_MODE_CONFIRM	// 특별 모드 경고 확인 (BE-165, A-13-22). 확인해야 공개할 수 있다
+	CASE_SPECIAL_MODE_CONFIRM,	// 특별 모드 경고 확인 (BE-165, A-13-22). 확인해야 공개할 수 있다
+	COMMUNITY_POST_DELETE		// 커뮤니티 글 삭제 (BE-167). 글 ID · 글쓴이 회원 ID만 남기고 본문은 남기지 않는다
 }

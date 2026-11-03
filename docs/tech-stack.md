@@ -262,7 +262,7 @@ MVP는 회원가입 없이 핵심 체험이 끝까지 동작해야 한다. 사�
 | 토큰 오류 | 401 `TOKEN_EXPIRED`(만료, 화면은 재발급 시도) · 401 `TOKEN_INVALID`(그 밖). Redis 장애 등 인프라 오류는 토큰 오류로 바꾸지 않는다(500 `INTERNAL_ERROR`, 원인은 서버 로그에만) |
 | 토큰 계약 | `common.security.token` 패키지. `AccessTokenVerifier`(토큰 → `MemberPrincipal`, C 구현) · `TokenIssuer`(회원 → `IssuedTokens` 액세스 · 리프레시 토큰과 만료 시각, C 구현 · D 호출) · `MemberPrincipal`(회원 ID · 접두어 없는 권한 `USER`, 바꿀 수 없음) · `TokenException`(INVALID · EXPIRED). 재발급 · 폐기 · 재사용 탐지는 C가 7.4.3(BE-94)에서 구현했다(API 명세 M-1 · M-2) |
 | 담당 경계 (R14) | B: HTTP 헤더 처리 · 체인 연결(`SecurityConfig` · Bearer 필터) / C: 검증 · 발급 · 재발급 · 폐기 로직 / D: 카카오 로그인 성공 후 발급 호출. WBS 7-2-1에도 같은 경계로 반영됐다(WBS v1.10, BE-57 · #106 리뷰 합의) |
-| 회원 전용 API | 사용자 체인은 기본 `permitAll`이고, 회원만 쓰는 경로에만 `authenticated()`를 둔다(토큰 없으면 401 `UNAUTHORIZED`). 지금은 커뮤니티 쓰기(`POST /api/v1/community/**`, BE-115)와 내 회원 정보(`/api/v1/members/me/**`, BE-139). 회원 전용 API를 새로 만들면 그 경로를 `SecurityConfig`에 추가한다 |
+| 회원 전용 API | 사용자 체인은 기본 `permitAll`이고, 회원만 쓰는 경로에만 `authenticated()`를 둔다(토큰 없으면 401 `UNAUTHORIZED`). 지금은 커뮤니티 쓰기(`POST` · `DELETE /api/v1/community/**`, BE-115 · BE-167)와 내 회원 정보(`/api/v1/members/me/**`, BE-139). 회원 전용 API를 새로 만들면 그 경로를 `SecurityConfig`에 추가한다 |
 | 재발급 요청 | 화면은 재발급 요청에 `Authorization` 헤더를 붙이지 않는다(만료된 토큰이 붙으면 401로 막힌다) |
 | 리프레시 토큰 쿠키 (C 결정) | 쿠키에 두면 브라우저가 자동으로 보내므로 재발급 · 로그아웃 요청에 CSRF 대책(CSRF 토큰 또는 Origin 검증)과 `HttpOnly` · `Secure` · `SameSite`가 필요하다. 무상태 · 같은 출처라는 이유만으로 CSRF가 해결되지는 않는다 |
 | 익명 ID 쿠키와 CSRF | 익명 ID 쿠키도 브라우저가 자동으로 보낸다. 사용자 API에 CSRF 토큰을 두지 않는 것은 `SameSite=Lax` · 같은 출처 배포 · 익명 체험이라는 피해 범위를 보고 **받아들인 위험**이다 |

@@ -89,6 +89,7 @@
 | v0.93 | 2026-11-03 | **A-13-17 재생성 반영 때 다시 만들지 않은 블록의 경고 갱신 (BE-163)** — 파이프라인 재생성 결과에 `unchangedWarnings`(`{단위: [경고]}`, 다시 만들지 않은 지금 블록을 재생성 때 다시 검사한 **경고**)를 더했다. 반영하면 그 블록의 `review`에서 **경고만** 이 값으로 바꾸고 오류 · 내용 · 판 · 승인 상태 · `publishable`은 그대로 둔다(승인된 블록을 오류 블록으로 만들지 않는다). 새 검사(BE-159 카드 목록 등)나 바뀐 앞 블록에 따른 경고가 관리자 화면에 보이게 하려는 것이다. 결과에 이 필드가 없거나(옛 결과) 검수가 돌지 못했으면 다른 블록은 그대로다. A-13-16 미리보기 응답은 바뀌지 않는다 (`docs/decisions/BE-163.md`) |
 | v0.92 | 2026-11-03 | **A-8 `generation.generationReport`에 사전 학습 점검 · RAG 요약 명시 (BE-160 · BE-161 2차)** — 사건 등록(A-14) 적재가 `contamination`(고른 모델의 `verdict` · `reason` · `counts` · `criteria`, 안 돌렸으면 `{"verdict": "SKIPPED"}`)과 `rag`(`status` · `fallbackReasons` · `embeddingModel` · `guideline` · `guidelineBasis` · `guidelineFactors` · `precedents` · `excludedSuspects` · `warnings`, 안 돌렸으면 `{"status": "SKIPPED"}`)를 남긴다. 오프라인 적재와 같은 모양. 판례 본문 · 사건번호 · 예측 형량은 없다. 활성화 조건과 `verdict` · `status` 값의 뜻은 A-8 설명에 적었다. **형식 변경 없음**(`generationReport`는 원래 자유 형식 객체) |
 | v0.91 | 2026-11-02 | **사건 순차 해금 · 도전과제 리밸런싱 (BE-146, ERD v1.56 · V50)** — 완료한 사건 수에 따라 사건이 단계로 열린다(완료 0건 → 3건, 1건 → 6건, 3건 → 12건, 5건 → 전체). 순서는 `legal_case.unlock_order`(작은 값 먼저, 비면 맨 뒤 · id 순)이고, 체험할 수 있는(`scriptStatus: READY`) 사건만 순서에 선다. 이미 체험한 사건은 늘 열려 있다. API 1에 `unlock`(`completedCases` · `nextStepAt`) · 카드 `locked`, API 16에 `locked` 추가. **API 2는 기존 체험이 없고 잠긴 사건이면 409 `CASE_LOCKED`**(에러 코드 신설, 쿠키도 발급하지 않는다). 도전과제 `cases-5`(사건 5건) · `collect-50`(수집 50장) 추가 — 꾸미기 보상 없이 경험치 200씩, P-5 `achievements`는 10개 (`docs/decisions/BE-146.md`) |
+| v0.91 | 2026-11-03 | **커뮤니티 글 삭제 C-8 · 관리자 글 삭제 A-42 신설 (BE-167, V52)** — `DELETE /community/posts/{postId}`(본인 글만, 204 · 남의 글 403 `FORBIDDEN` · 없는 글 404 `POST_NOT_FOUND`) · `DELETE /admin/community/posts/{postId}`(관리자, 204). 글을 지우면 댓글 · 좋아요도 함께 지워지고, 글쓴이의 글 작성 · 받은 좋아요 · 판결 공유 XP를 거두되 레벨은 내리지 않는다(`LEVEL_FLOOR` 보정). 결정 기록 [`BE-167.md`](decisions/BE-167.md) |
 | v0.90 | 2026-11-02 | **A-13-21 길이 규칙 범위 (BE-153)** — 대사 길이 규칙(100자 · 2줄)을 말하는 대사 자리에만 건다(U1 해설 · U2 공소 · 입장 · 쟁점 해설 · 신문 질문 · U4 의견). 설계도(U0) · U2 카드 · 신문 답은 빈 값 · 500자만 막는다. 자리 목록은 파이프라인 검수와 같고 계약 파일 `spokenPaths`로 맞춘다(FE-148 리뷰) |
 | v0.89 | 2026-11-02 | **API 14 `preToFinal.crowd` 추가 (FE-34)** — 이 사건 독자들이 기사만 읽고 고른 첫인상(사전 판단) 분포. 1회차 사전 판단만 세고(DR-7), 낸 사람만 센다. 숨김 기준 인원은 두지 않는다. 필드 추가뿐이라 기존 응답은 그대로다 |
 | v0.88 | 2026-11-02 | **카카오 첫 가입 약관 동의 (BE-145)** — 처음 온 카카오 계정은 M-4에서 회원을 만들지 않고 가입 대기(Redis 10분 · 쿠키 `NLNB_SIGNUP`)만 둔 채 `/auth/callback?signup=terms`로 보낸다. 약관에 동의해야 회원이 만들어진다: M-12(동의하고 가입) · M-13(취소)을 신설한다. M-8에 `termsRequired`를 더하고 M-14(기존 회원 약관 동의)를 신설한다. 스키마 변경 없음(V44 칸 사용). v0.87은 열린 PR #384(BE-126 2차-2)가 쓰고 있어 v0.88로 적었다 (`docs/decisions/BE-145.md`) |
@@ -2100,6 +2101,7 @@ A-11과 같은 방식(보낸 필드만, `null` = 지움). `headline` · `article
 | A-39 | `GET /admin/banned-words` | 금칙어 목록 |
 | A-40 | `POST /admin/banned-words` | 금칙어 추가 `{ "word" }` (30자 이하) |
 | A-41 | `DELETE /admin/banned-words/{word}` | 금칙어 삭제 |
+| A-42 | `DELETE /admin/community/posts/{postId}` | **커뮤니티 글 삭제 (BE-167, 구현됨)** — 204. 글쓴이와 상관없이 지운다(실제 삭제 · 댓글 · 좋아요 함께). XP 처리는 C-8과 같다. 감사 로그 `COMMUNITY_POST_DELETE`(대상 `COMMUNITY_POST`, 글 ID · `authorMemberId`만, 본문 없음). 없는 글 404 `POST_NOT_FOUND`. 아래 초안 A-25(소프트 삭제)와 달리 **실제 삭제**이며, 서버는 A-42를 기준으로 한다 |
 
 - **상태 충돌(409 `INVALID_STATE`)**: `details[0].reason`에 `ALREADY_SUSPENDED` · `MEMBER_WITHDRAWN` · `NOT_SUSPENDED` · `NOT_VISIBLE` · `NOT_HIDDEN` · `ALREADY_DELETED` · `ALREADY_HANDLED` · `SELF_DEACTIVATE`(자기 계정 비활성화 금지)를 쓴다.
 - **그 밖 에러**: 404 `MEMBER_NOT_FOUND` · `POST_NOT_FOUND` · `COMMENT_NOT_FOUND` · `REPORT_NOT_FOUND` · `ADMIN_NOT_FOUND` · `NOTICE_NOT_FOUND` · `WORD_NOT_FOUND`, 409 `DUPLICATE_EMAIL` · `DUPLICATE_WORD`, 400 `VALIDATION_ERROR`.
@@ -3033,6 +3035,15 @@ Origin이 이 서버 자신과 같은 출처인지)을 거친다 — 벗어나�
 
 - 판결을 확정하기 전이거나 쿠키가 없으면 **204**(본문 없음). 목의 `null` 응답과 같은 뜻이다.
 - 로그인했으면 12-1의 명함 기준 익명 ID, 아니면 쿠키의 익명 ID로 찾는다. 글쓰기(C-3)가 붙이는 판결과 같은 기준이다.
+
+### C-8. 내 글 삭제 — `DELETE /community/posts/{postId}` (로그인)
+
+**응답 204** — 본문 없음. 글 · 그 글의 댓글 · 좋아요가 함께 지워진다.
+
+- 본인 글만 지울 수 있다: 남의 글은 **403** `FORBIDDEN`, 없는 글은 **404** `POST_NOT_FOUND`, 로그인하지 않았으면 **401** `UNAUTHORIZED`.
+- **경험치**: 이 글로 받은 글 작성 XP · 받은 좋아요 XP · (판결 공유 글이면) 판결 공유 보너스를 거둔다. 거둔 뒤 XP가 지금 레벨의 시작 XP보다 모자라면 그 차이를 `LEVEL_FLOOR`로 채워 **레벨은 내려가지 않는다**. 남이 이 글에 단 댓글 · 누른 좋아요의 XP는 거두지 않는다. 거둔 지급 행은 금액만 0이 되고 남아, 지운 글도 하루 글 3건 상한에 계속 포함된다(쓰고 지우기로 XP를 더 모을 수 없다).
+- 삭제 직후 커뮤니티 메인(C-6) 캐시를 비워 랭킹 · 사건별 글 수가 바로 바뀐다.
+- 비회원 글쓰기는 없으므로(C-3은 로그인 전용) 익명 글 삭제는 없다.
 
 ## 13. (확장) 일러스트 API (BE-142)
 
