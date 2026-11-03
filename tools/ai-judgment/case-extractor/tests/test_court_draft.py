@@ -23,6 +23,7 @@ from court_draft import (  # noqa: E402
     quote_matches, run,
 )
 from common import write_json  # noqa: E402
+from deidentify import premask  # noqa: E402
 import llm  # noqa: E402
 
 # 설명용 가상 판결문. 개인정보 값은 모두 지어낸 것이다.
@@ -125,6 +126,31 @@ class QuoteTest(unittest.TestCase):
     def test_unbalancedMarks_rejected(self):
         self.assertFalse(quote_matches("피고인을 징역 ⟦6월에 처한다.", JUDGMENT)[0])
 
+    def test_pageNumberLine_ignored(self):
+        # PDF 쪽이 넘어가며 문장 중간에 낀 쪽 번호 줄은 대조에서 뺀다 (BE-164)
+        src = "피고인은 범행을 모두 인정하고\n- 6 -\n깊이 반성하고 있다."
+        self.assertTrue(quote_matches("피고인은 범행을 모두 인정하고 깊이 반성하고 있다.", src)[0])
+        self.assertTrue(quote_matches("피고인은 범행을 모두 인정하고 깊이 반성하고 있다.", src.replace("- 6 -", "  – 12 –  "))[0])
+        # 문장 안의 숫자 · 하이픈은 지우지 않는다 (줄 전체가 쪽 번호일 때만)
+        self.assertFalse(quote_matches("피고인은 범행을 모두 인정하고 깊이 반성하고 있다.", "피고인은 범행을 모두 인정하고 - 6 - 깊이 반성하고 있다.")[0])
+
+    def test_pageNumberLine_crlf(self):
+        # CRLF 원문(CP949 txt 등)도 쪽 번호 줄을 지운다 (#422 리뷰)
+        src = "피고인은 범행을 모두 인정하고\r\n- 6 -\r\n깊이 반성하고 있다."
+        self.assertTrue(quote_matches("피고인은 범행을 모두 인정하고 깊이 반성하고 있다.", src)[0])
+
+    def test_quoteWithPageNumber_alsoMatches(self):
+        # 모델이 쪽 번호까지 그대로 옮긴 인용도 원문과 같다 (#422 리뷰)
+        src = "피고인은 범행을 모두 인정하고\n- 6 -\n깊이 반성하고 있다."
+        self.assertTrue(quote_matches("피고인은 범행을 모두 인정하고 - 6 - 깊이 반성하고 있다.", src)[0])
+
+    def test_punctuationVariants_matched(self):
+        # 모델이 문장부호 모양을 바꿔 써도 같은 글자로 본다 (BE-164)
+        src = "피해자의 생명ㆍ신체를 침해한 범행으로 그 결과가 “매우” 중대하다…"
+        self.assertTrue(quote_matches('피해자의 생명·신체를 침해한 범행으로 그 결과가 "매우" 중대하다...', src)[0])
+        # 글자가 다르면 여전히 실패한다
+        self.assertFalse(quote_matches("피해자의 생명·재산을 침해한 범행으로 그 결과가 매우 중대하다", src)[0])
+
 
 class SentenceTest(unittest.TestCase):
     def test_parseSentences(self):
@@ -206,6 +232,24 @@ class CheckDraftTest(unittest.TestCase):
             self.assertEqual(any("가린 표시가 인용에 남았습니다" in e for e in errors), rejected, (evidence, errors))
             self.assertFalse(any("원문 인용이 아닙니다" in e for e in errors), errors)  # 원문 대조 자체는 둘 다 통과
 
+    def test_commonPhrase_notAddress(self):
+        # "당시 친구" 같은 일반 문장은 상세 주소로 보지 않는다 — 원문 그대로 인용해야 해서 모델이 피할 수 없다 (BE-164)
+        src = JUDGMENT + "\n피고인은 범행 당시 친구와 함께 있었고, 피해자도 친구의 연락을 받고 나왔다."
+        evidence = "피고인은 범행 당시 친구와 함께 있었고, 피해자도 친구의 연락을 받고 나왔다."
+        draft = draft_with(factors=[{"factorId": 3, "direction": "UP", "evidence": evidence}])
+        errors, _ = check_draft(draft, CASE, src)
+        self.assertFalse(any("상세 주소" in e for e in errors), errors)
+
+    def test_adminArea_maskedBeforeSending_thenMustBeReplaced(self):
+        # 시·도 + 구는 보내기 전에 [주소]로 가리고, 인용에 그대로 남기면 ⟦ ⟧로 바꾸라는 오류가 난다 (BE-164)
+        masked, _ = premask("피고인은 서울특별시 강남구에 있는 주점에서 피해자와 다투었다.")
+        self.assertNotIn("강남구", masked)
+        self.assertIn("[주소]", masked)
+        kept = "피고인은 [주소]에 있는 주점에서 피해자와 다투었다."
+        draft = draft_with(factors=[{"factorId": 3, "direction": "UP", "evidence": kept}])
+        errors, _ = check_draft(draft, CASE, masked)
+        self.assertTrue(any("가린 표시가 인용에 남았습니다" in e for e in errors), errors)
+
     def test_buildCourtDraft_be14Format(self):
         result = build_court_draft(draft_with(excerpt="피고인은 ⟦사건 당일⟧ 술값을 지급할 의사나 능력이 없음에도"), CASE, COURT, "m")
         j = result["judgment"]
@@ -263,6 +307,28 @@ class RunTest(unittest.TestCase):
         self.assertFalse((self.dir / "c.court_draft.json").exists())  # 실패하면 이전 초안도 지운다
         report = json.loads((self.dir / "c.court_report.json").read_text(encoding="utf-8"))
         self.assertEqual(report["status"], "ERROR")
+
+    def test_run_retry_includesPreviousResponse(self):
+        # 재요청에는 직전 응답을 함께 보내 오류 항목만 고치게 한다 (BE-164)
+        bad = draft_with(excerpt="지어낸 문장이다.")
+        call, calls = self.caller([bad, DRAFT])
+        run("c", self.dir, "openai:gpt-x", caller=call)
+        retry = calls[1]["user"]
+        self.assertIn("# 이전 응답\n\n{", retry)  # 직전 응답(JSON)이 들어 있다
+        self.assertIn("지어낸 문장이다.", retry)
+        self.assertIn("오류가 난 항목만 고치고", retry)
+        self.assertNotIn("# 이전 응답", calls[0]["user"])  # 첫 요청에는 없다
+
+    def test_run_retry_skipsTooLongPreviousResponse(self):
+        # 직전 응답이 너무 길면 붙이지 않고 오류 목록만 보낸다 (입력 토큰이 계속 늘지 않게)
+        long_bad = draft_with(excerpt="지어낸 문장이다.", notes=["가" * 13000])
+        call, calls = self.caller([long_bad, DRAFT])
+        run("c", self.dir, "openai:gpt-x", caller=call)
+        self.assertNotIn("# 이전 응답\n", calls[1]["user"])
+        self.assertIn("이전 응답의 오류", calls[1]["user"])
+        # 모델이 보지 못한 직전 응답을 "그대로 두라"고 하지 않고 전체를 다시 쓰게 한다 (#422 리뷰)
+        self.assertIn("JSON 전체를 다시 작성한다", calls[1]["user"])
+        self.assertNotIn("이전 응답 그대로 둔다", calls[1]["user"])
 
     def test_run_blockedStop_notRetried(self):
         call, calls = self.caller([""], stop_reason="SAFETY")
