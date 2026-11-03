@@ -213,8 +213,10 @@ export function renderAdminCasePage(container, { caseId, navigate }) {
         box.setAttribute('role', 'group');
         box.setAttribute('aria-label', '특별 모드 경고 확인');
         const head = element('p', 'admin-special-head');
-        head.append(element('span', 'admin-badge is-pending', '특별 모드'), ' 검사 오류 일부를 경고로 낮춰 적재한 사건이에요.');
-        const help = element('p', 'admin-sub', 'AI 판결 후보의 “생성 정보 › 검증 경고”에서 [특별 모드]로 시작하는 경고를 찾아, 사건 내용과 재판부 판결(발췌 · 근거)이 원 판결문과 맞는지 확인해 주세요. 개인정보는 특별 모드에서도 걸러지지만, 날짜 · 나이 · 주소가 남았는지는 눈으로 한 번 더 봐 주세요.');
+        head.append(element('span', 'admin-badge is-pending', '특별 모드'), ' 아래 순서로 확인한 뒤 눌러 주세요.');
+        const help = element('ol', 'admin-special-steps');
+        ['AI 판결 후보의 “생성 정보 › 검증 경고”에서 [특별 모드]로 시작하는 경고를 찾아요.', '사건 내용과 재판부 판결(발췌 · 근거)이 원 판결문과 맞는지 봐요.', '날짜 · 나이 · 주소가 남았는지 한 번 더 봐요.']
+          .forEach((text) => help.append(element('li', '', text)));
         const error = errorLine();
         const confirm = button('경고를 확인했어요', () => {
           mutate(confirm, error, () => api.confirmSpecialMode(caseId), '특별 모드 경고를 확인했어요.', 'publish');
