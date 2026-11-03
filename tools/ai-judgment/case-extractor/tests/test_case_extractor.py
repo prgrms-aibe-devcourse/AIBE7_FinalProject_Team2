@@ -143,6 +143,25 @@ class ResidualCheckTest(unittest.TestCase):
         self.assertIn("실명일 수 있음", warnings[0])
         self.assertNotIn("김철수", warnings[0])  # 보고서에 원본 이름을 남기지 않는다
 
+    def test_residualCheck_adminArea_isError(self):
+        # 시·도 + 시·군·구, 구가 있는 시 + 구는 상세 주소로 본다 (BE-164)
+        for text in ("서울특별시 강남구에서 만났다", "경기도 양평군 소재 주택", "충남 천안시 동남구", "수원시 영통구의 상가"):
+            errors, _ = residual_check([("facts", text)])
+            self.assertTrue(any("상세 주소" in e for e in errors), (text, errors))
+
+    def test_residualCheck_commonPhrases_areNotAddress(self):
+        # 예전 규칙이 걸던 일반 문장 ("시"·"도"로 끝나는 말 + "구"·"군"으로 끝나는 말)은 주소가 아니다 (BE-164)
+        for text in ("범행 당시 친구와 함께 있었다", "피해자도 친구의 연락을 받았다", "그 당시 도구를 준비했다",
+                     "수시 요구에 응했다", "피고인도 가구를 옮겼다"):
+            errors, _ = residual_check([("facts", text)])
+            self.assertFalse(any("상세 주소" in e for e in errors), (text, errors))
+
+    def test_premask_adminArea_isReplaced(self):
+        masked, counts = premask("피고인은 서울특별시 강남구 가상로 12, 경기도 양평군에서 일했다.")
+        for raw in ("강남구", "양평군", "가상로 12"):
+            self.assertNotIn(raw, masked)
+        self.assertGreaterEqual(counts.get("주소", 0), 3)
+
     def test_residualCheck_anonymizedText_isClean(self):
         errors, warnings = residual_check([("overview", FAKE_OUTPUT["overview"]), ("facts", FAKE_OUTPUT["facts"])])
 
