@@ -98,8 +98,9 @@ flowchart LR
 
 ```bash
 cd backend
-docker compose up -d   # PostgreSQL · Redis
-./gradlew bootRun      # http://localhost:8080
+docker compose up -d                         # PostgreSQL · Redis
+export JWT_SECRET=$(openssl rand -base64 32)  # 필수, 기본값 없음 (BE-94)
+./gradlew bootRun                            # http://localhost:8080
 ```
 
 ### Frontend
@@ -107,7 +108,8 @@ docker compose up -d   # PostgreSQL · Redis
 ```bash
 cd frontend
 npm install
-npm run dev            # http://localhost:5173
+npm run dev                     # 목 데이터로 실행 (백엔드 없이)
+VITE_API_MODE=real npm run dev  # 실제 백엔드(8080) 연동
 ```
 
 <details>
@@ -127,7 +129,7 @@ git submodule update --init backend/private-seed   # 처음 한 번, 그리고 p
 
 - 서브모듈 파일을 공개 저장소의 다른 위치로 복사하지 않고, 커밋 · PR · Jira에 사건 내용을 쓰지 않는다.
 
-**환경변수** (값이 없으면 로컬 `docker-compose.yml` 기본값, 전체 목록은 `application.yml`)
+**환경변수** (`DB_*` · `REDIS_*`만 값이 없으면 로컬 `docker-compose.yml` 기본값을 쓴다. 전체 목록은 `application.yml`)
 
 | 이름 | 설명 |
 | --- | --- |
