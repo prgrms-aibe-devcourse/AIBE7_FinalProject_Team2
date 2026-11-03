@@ -138,7 +138,23 @@ export function pageIndex(navigate, current = 'case', { turn } = {}) {
     item.append(element('b', '', page), element('span', '', name));
     nav.append(item);
   });
+  revealCurrentWhenShown(nav);
   return nav;
+}
+
+// 좁은 화면(FE-155): 목차 줄은 가로로 굴러가는데 처음 그릴 때 왼쪽 끝에 붙어 있어 지금 면(3면 · 10면)이 줄 밖에 반쯤 잘려 보였다.
+// 화면에 붙은 뒤 지금 면을 줄 가운데로 가로만 굴린다(scrollIntoView는 세로로도 페이지를 움직여 쓰지 않는다). 줄이 넘치지 않으면 그대로 둔다
+// 한계: 붙을 때까지 최대 10프레임(약 160ms)만 기다리고 조용히 그만둔다. 지금 호출처는 같은 틱에 화면에 붙여서 충분하다. 비동기로 늦게 붙는 화면에서 부르면 가운데 맞춤이 빠지므로,
+// 그때는 붙인 직후 직접 부르거나 IntersectionObserver로 바꾼다(PR #405 리뷰)
+function revealCurrentWhenShown(nav, tries = 10) {
+  if (typeof requestAnimationFrame !== 'function') return; // 테스트(node) 환경
+  requestAnimationFrame(() => {
+    if (!nav.isConnected) { if (tries > 0) revealCurrentWhenShown(nav, tries - 1); return; }
+    const here = nav.querySelector('[aria-current="page"]');
+    if (!here || nav.scrollWidth <= nav.clientWidth) return;
+    const left = here.offsetParent === nav ? here.offsetLeft : here.offsetLeft - nav.offsetLeft; // offset 값은 넘기는 연출(transform)에 영향받지 않는다
+    nav.scrollLeft = left - (nav.clientWidth - here.offsetWidth) / 2;
+  });
 }
 
 // 사건 메모: 제목 옆 상자(죄명 · 범죄 분류 · 참여 · 키워드). 받은 값만 줄로 그린다(형량 · 판결 정보는 없다)

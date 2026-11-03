@@ -352,7 +352,7 @@ export function renderComparisonStage({ script, data, caseId, caseTitle, navigat
   const editor = editorNote(data.preToFinal?.direction); // 편집부 의견을 못 만들면(direction이 없거나 모르는 값) 그 대사는 건너뛴다
   const steps = act.steps.filter((step) => editor || !step.text?.includes('{editor}'))
     .map((step) => (step.text ? { ...step, text: step.text.replace('{vsCourt}', vsCourt).replace('{vsAi}', vsAi).replace('{pre}', pre).replace('{editor}', editor ?? '') } : step));
-  const narrow = window.matchMedia('(max-width: 680px)').matches;
+  const narrow = window.matchMedia('(max-width: 720px)').matches;
   const sheet = newspaper(data, script, caseTitle, caseId, navigate, (letter) => openCaseReviewPopup({ caseId, api, navigate, from: letter }));
   const stage = renderStage({
     script: { ...script, acts: { ...script.acts, 6: { ...act, steps } } },

@@ -21,6 +21,7 @@
   display: flex; align-items: center; gap: 16px; padding: 20px 28px; border-bottom: 1px solid var(--color-border);
 }
 :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .back-button { flex-shrink: 0; border: 0; background: transparent; padding: 6px 0; color: var(--color-muted); }
+@media (pointer: coarse), (max-width: 720px) { :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .back-button { min-width: 44px; min-height: 44px; } } /* 터치 대상 44px(FE-155, 전에는 38px) */
 :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .case-title { font-size: 16px; }
 :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .case-badge { padding: 2px 9px; border-radius: 3px; background: var(--color-accent-tint); color: var(--color-accent-text); font-size: 12px; white-space: nowrap; }
 :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .top-progress { margin-left: auto; display: flex; align-items: center; gap: 12px; white-space: nowrap; font-size: 13px; color: var(--color-muted); }
@@ -31,10 +32,10 @@
 :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .primary-button,
 :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .secondary-button { min-height: 44px; padding: 10px 18px; border: 1px solid var(--color-border); border-radius: 4px; font-weight: 700; }
 :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .primary-button { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-on-accent); }
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .primary-button:hover:not(:disabled) { background: var(--color-accent-hover); border-color: var(--color-accent-hover); }
+@media (hover: hover) and (pointer: fine) { :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .primary-button:hover:not(:disabled) { background: var(--color-accent-hover); border-color: var(--color-accent-hover); } }
 :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .primary-button:disabled { opacity: .6; }
 :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .secondary-button { color: var(--color-text); background: var(--color-card); border-color: var(--color-border-strong); }
-:is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .secondary-button:hover { background: var(--color-surface); }
+@media (hover: hover) and (pointer: fine) { :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .secondary-button:hover { background: var(--color-surface); } }
 :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .muted { color: var(--color-muted); font-size: 13px; }
 :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .message-panel { padding: 44px 28px; }
 :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .message-panel button { margin-top: 20px; }
@@ -87,7 +88,7 @@
 .review-page .progress-sidebar li { padding: 9px 10px; color: var(--color-muted); border-radius: 4px; }
 .review-page .progress-sidebar .is-viewing { font-weight: 700; background: var(--color-accent-tint); color: var(--color-accent-text); }
 .review-page .progress-sidebar p { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--color-border); color: var(--color-muted); font-size: 12px; }
-@media (max-width: 760px) {
+@media (max-width: 720px) {
   :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .case-topbar { flex-wrap: wrap; gap: 10px; padding: 16px; }
   :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .case-title { flex: 1; min-width: 160px; }
   :is(.review-page, .summary-page, .verdict-page, .ai-page, .court-page, .comparison-page) .top-progress { gap: 8px; }
