@@ -874,7 +874,7 @@ docker compose -f docker-compose.prod.yml -f docker-compose.real-seed.yml up -d 
 1. **S3 → 버킷 → 권한 → 퍼블릭 액세스 차단(버킷 설정) → 편집**에서 4개 중 **버킷 정책 관련 2개만 끈다**
    - 끈다: "새 퍼블릭 버킷 또는 액세스 지점 정책을 통해 부여된 …" · "임의의 퍼블릭 버킷 또는 액세스 지점 정책을 통해 부여된 …"
    - **켠 채로 둔다**: ACL 관련 2개("새 ACL을 통해 …" · "임의의 ACL을 통해 …"). 공개는 아래 정책 한 곳에서만 연다
-   - 계정 수준 퍼블릭 액세스 차단(S3 왼쪽 메뉴)이 켜져 있으면 버킷 설정보다 우선하므로, 그쪽도 같은 2개를 확인한다
+   - 계정 수준 퍼블릭 액세스 차단(S3 왼쪽 메뉴)이 켜져 있으면 버킷 설정보다 우선한다. 다만 계정 수준 설정은 **그 계정의 모든 버킷**에 걸리므로, 함부로 끄지 않는다. 꺼야 한다면 먼저 계정의 다른 버킷 정책에 공개 문이 없는지 확인하고, 다른 버킷을 계속 막아야 하면 계정 수준은 그대로 두고 CloudFront + OAC(`docs/decisions/COMMON-74.md` 대안 C)로 간다
 2. **권한 → 버킷 정책 → 편집**에 아래를 넣는다. 기존 정책 문(Statement)이 있으면 지우지 말고 배열에 이 문만 추가한다
 
 ```json
@@ -899,9 +899,13 @@ docker compose -f docker-compose.prod.yml -f docker-compose.real-seed.yml up -d 
 ### 확인
 
 ```bash
-# 0) 사건 사진 공개 읽기 (COMMON-74) — 관리자 화면에 올린 사진 주소 하나로 200, 경로 밖은 403
-curl -s -o /dev/null -w '%{http_code}\n' "https://<운영 버킷 이름>.s3.ap-northeast-2.amazonaws.com/case-photos/<사건 사진 키>"   # 200
-curl -s -o /dev/null -w '%{http_code}\n' "https://<운영 버킷 이름>.s3.ap-northeast-2.amazonaws.com/"                             # 403 (목록은 닫혀 있다)
+# 0) 사건 사진 공개 읽기 (COMMON-74) — 올린 사진 주소는 200, 버킷 목록과 경로 밖 객체는 403
+#    사진 주소는 DB에서 하나 꺼낸다(값은 화면에서만 보고 공유하지 않는다):
+#      select thumbnail_url from legal_case where thumbnail_url like '%case-photos/%' limit 1;
+curl -s -o /dev/null -w '%{http_code}\n' "<위에서 꺼낸 사진 주소>"                                   # 200
+curl -s -o /dev/null -w '%{http_code}\n' "https://<운영 버킷 이름>.s3.ap-northeast-2.amazonaws.com/"   # 403 (목록은 닫혀 있다)
+#    경로 밖: 실제로 있는 객체로만 확인한다. 목록 권한이 없어 없는 키도 403이 나므로, 지어낸 키의 403은 증거가 안 된다
+#    (예: 로컬 실행이 올린 local/case-photos/… 객체 → 403). 경로 밖 객체가 없으면 버킷 정책의 Resource가 case-photos/* 하나뿐인지 콘솔에서 본다
 
 # 1) 컨테이너 안에서 IAM 역할 이름이 보이면 정상 (안 보이면 역할 연결 · 홉 제한 확인)
 docker exec lawnambul-backend-1 sh -c '
