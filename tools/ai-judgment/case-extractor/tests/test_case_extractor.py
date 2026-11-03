@@ -991,11 +991,11 @@ class OtherProviderTest(unittest.TestCase):
             self.assertIn(f'"{key}"', text)
 
 
-
 class PriorSentenceLeakTest(unittest.TestCase):
     """전과 형량이 이번 선고와 같을 때 (BE-166). 프롬프트가 권하는 문장은 통과하고, 형량을 그대로 옮기면 막힌다."""
 
-    PHRASE = "동종 전과가 있고, 이전 형의 유예기간 중에 범행했다"
+    PHRASE = "동종 전과가 있고, 이전 형의 유예기간 중에 범행했다"   # 전과가 집행유예였을 때
+    PHRASE_PRISON = "동종 전과로 실형을 받은 적이 있다"            # 전과가 실형이었을 때
 
     @staticmethod
     def case_input(text):
@@ -1005,6 +1005,7 @@ class PriorSentenceLeakTest(unittest.TestCase):
         # 프롬프트 문장을 바꾸면 이 테스트로 누출 검사를 통과하는지 다시 본다
         prompt = (EXTRACTOR_DIR / "prompts" / "extract_system.md").read_text(encoding="utf-8")
         self.assertIn(self.PHRASE, prompt)
+        self.assertIn(self.PHRASE_PRISON, prompt)
 
     def test_priorSentenceSameAsActual_isLeak(self):
         # "개월" 표기와 판결문 표기("월") 모두 막힌다 — "월"은 v8까지 검사에서 빠져 있었다
@@ -1017,6 +1018,13 @@ class PriorSentenceLeakTest(unittest.TestCase):
     def test_courtNotation_yearsAndMonths_isLeak(self):
         court = {"prisonMonths": 18, "fineAmount": None, "suspensionMonths": None}
         for text in ("징역 1년 6월에 처한다는 판결을 받은 적이 있다", "1년 6월의 징역형을 받은 적이 있다"):
+            errors, _ = sentence_leak_check(self.case_input(text), court)
+            self.assertEqual(len(errors), 1, text)
+
+    def test_courtNotation_reverseWithParticle_isLeak(self):
+        # 역방향 단독 "N월"은 "의 · 간"이 붙을 때만 잡는다 — "6월 징역 2년"(날짜)은 test_monthOfDate_notLeak에서 통과 확인
+        court = {"prisonMonths": 6, "fineAmount": None, "suspensionMonths": None}
+        for text in ("6월의 징역형을 받은 적이 있다", "6월간 징역을 살았다"):
             errors, _ = sentence_leak_check(self.case_input(text), court)
             self.assertEqual(len(errors), 1, text)
 
@@ -1045,8 +1053,9 @@ class PriorSentenceLeakTest(unittest.TestCase):
         # 실형(유예 없음) · 집행유예 선고 둘 다: 숫자와 '징역형의 집행유예' 표현이 없어 걸리지 않아야 한다
         for court in ({"prisonMonths": 6, "fineAmount": None, "suspensionMonths": None},
                       {"prisonMonths": 6, "fineAmount": None, "suspensionMonths": 24}):
-            errors, _ = sentence_leak_check(self.case_input(self.PHRASE), court)
-            self.assertEqual(errors, [], court)
+            for phrase in (self.PHRASE, self.PHRASE_PRISON):
+                errors, _ = sentence_leak_check(self.case_input(phrase), court)
+                self.assertEqual(errors, [], (court, phrase))
 
 
 if __name__ == "__main__":

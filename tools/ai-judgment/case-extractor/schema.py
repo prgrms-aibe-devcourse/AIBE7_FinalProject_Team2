@@ -375,7 +375,8 @@ def _reverse_month_forms(forms):
     """역방향("6월의 징역")에 쓸 표기. 연도 없는 단독 "N월"은 뺀다 (PR #425 리뷰).
 
     "같은 해 6월 징역 2년을 선고받았다"의 "6월"은 날짜인데, 역방향으로 보면 "6월징역"이 되어 이번 선고(6월)로 잘못 잡힌다.
-    판결문은 "징역 6월" 순서로 쓰므로 단독 "N월"은 순방향에서만 찾는다. "1년6월"처럼 연이 붙은 표기는 날짜와 헷갈리지 않아 남긴다.
+    판결문은 "징역 6월" 순서로 쓰므로 단독 "N월"은 역방향에서 "의 · 간"이 붙을 때만 찾는다("6월의 징역형", 팀 리뷰) —
+    _leak_patterns의 strict 부분. "1년6월"처럼 연이 붙은 표기는 날짜와 헷갈리지 않아 그대로 남긴다.
     """
     return {f for f in forms if not re.fullmatch(r"\d+월", f)}
 
@@ -393,9 +394,14 @@ def _leak_patterns(court):
     def add(label, term, forms, before, reverse_forms=None):
         # before: 역방향 표현에서 앞에 올 수 없는 글자. 더 큰 금액 · 기간의 뒷부분("1억 2천만원", "2년 6개월")을 잘라 오탐하지 않는다
         # reverse_forms: 역방향("6개월의 징역")에 쓸 표기. 기본은 forms와 같다
+        # forms에는 있고 reverse_forms에 없는 표기(단독 "N월")는 역방향에서 "의 · 간"이 붙을 때만 찾는다("6월의징역")
         alt = _alternatives(forms)
-        rev = _alternatives(forms if reverse_forms is None else reverse_forms)
-        patterns.append((label, re.compile(f"(?:{term}{alt}{_AMOUNT_END}|(?<![{before}]){rev}(?:간|의)?{term})")))
+        rev_forms = forms if reverse_forms is None else reverse_forms
+        parts = [f"{term}{alt}{_AMOUNT_END}", f"(?<![{before}]){_alternatives(rev_forms)}(?:간|의)?{term}"]
+        strict = set(forms) - set(rev_forms)
+        if strict:
+            parts.append(f"(?<![{before}]){_alternatives(strict)}(?:간|의){term}")
+        patterns.append((label, re.compile("(?:" + "|".join(parts) + ")")))
 
     if court.get("prisonMonths"):
         forms = _month_forms(court["prisonMonths"])
