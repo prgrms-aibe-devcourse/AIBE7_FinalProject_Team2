@@ -170,7 +170,7 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
   date.append(span('', '내Law남불'), span('', todayLabel()), span('', '참여 무료'));
   const tabs = span('news-tabs');
   const tabCount = span('news-count', '');
-  FACES.forEach(({ label }, i) => tabs.append(span(i === 0 ? 'on' : '', label))); // 사건 목록(S-02)의 면 이름과 같게: 1면 · 범죄 유형 · 색인 · 성향 테스트 · 오피니언(faces.js 한 곳)
+  FACES.forEach(({ label }, i) => tabs.append(span(i === 0 ? 'on' : '', label))); // 사건 목록(S-02)의 면 이름과 같게: 1면 · 범죄 유형 · 사건 검색/목록 · 성향 테스트 · 오피니언(faces.js 한 곳)
   tabs.append(tabCount);
   const banner = span('news-banner', '오늘의 지면을 펼쳐 보세요');
   const photo = element('img', 'news-photo');
