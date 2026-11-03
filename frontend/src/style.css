@@ -355,7 +355,8 @@ html { scroll-padding-top: calc(var(--site-header-h, 64px) + 8px); }
 .site-footer { padding: 24px 28px; border-top: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-muted); font-size: 13px; word-break: keep-all; overflow-wrap: anywhere; text-wrap: pretty; } /* 단어 중간에서 끊기지 않게(FE-103), 너무 긴 낱말만 예외로 꺾는다 */
 /* 한 줄 헤더가 빠듯한 폭(721 ~ 1000px): 로고가 줄바꿈되지 않게 로고 · 메뉴 글자 · 간격을 폭에 맞춰 함께 줄인다(FE-87) */
 @media (min-width: 721px) and (max-width: 1000px) {
-  .site-header { gap: clamp(6px, 1.2vw, 16px); padding-inline: clamp(14px, 2.6vw, 32px); }
+  /* 폰을 가로로 돌리면(390 × 844 → 폭 844px) 이 구간이라, 노치 쪽 여백도 여기서 safe-area로 지킨다(FE-152 리뷰 반영) */
+  .site-header { gap: clamp(6px, 1.2vw, 16px); padding-left: max(clamp(14px, 2.6vw, 32px), env(safe-area-inset-left, 0px)); padding-right: max(clamp(14px, 2.6vw, 32px), env(safe-area-inset-right, 0px)); }
   .site-header .logo-button { font-size: clamp(17px, 2.2vw, 22px); }
   .site-nav { gap: clamp(0px, .6vw, 8px); }
   .site-header .nav-button { padding-inline: clamp(5px, 1vw, 12px); font-size: clamp(11.5px, 1.3vw, 13px); }
@@ -392,7 +393,9 @@ html { scroll-padding-top: calc(var(--site-header-h, 64px) + 8px); }
 /* 가로로 돌렸을 때 iOS가 글자를 멋대로 키우지 않게(FE-152) */
 html { -webkit-tap-highlight-color: transparent; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 /* 입력창 글자 16px 이상(FE-152): iOS 사파리는 16px 미만 입력창에 포커스하면 화면을 확대하고 되돌리지 않는다.
-   터치 기기에서만 올리고(데스크톱 모양 그대로), 화면 CSS가 클래스로 더 작게 정한 곳은 각 화면에서 고친다 */
+   터치 기기(pointer: coarse)에서만 올리므로 마우스 데스크톱 모양은 그대로다. 일부러 강제한다: :not() 안의 속성 선택자 때문에 명시도가 (0,1,1)이라
+   화면 CSS의 단일 클래스 규칙(.xx { font-size: 14px })보다 이긴다. 한 곳만 놓쳐도 확대가 되돌아오지 않아 화면별 점검에 맡기지 않는다.
+   대가: 태블릿 터치로 보는 촘촘한 화면(관리자 표 안 입력창 등)도 16px 이상이다 */
 @media (pointer: coarse) {
   input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"]), textarea, select { font-size: max(16px, 1em); }
 }
