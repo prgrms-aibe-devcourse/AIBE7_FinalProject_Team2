@@ -95,6 +95,9 @@ public class CaseImportLoader {
 			guidelineFor(content, caseImport, incidentDate));
 		legalCase.assignCast(castFor(legalCase, caseImport, result));
 		legalCase.changeSensitiveFlags(sensitiveFlags(result));
+		if (hasSpecialMode(result)) {
+			legalCase.requireSpecialModeReview();	// 특별 모드로 낮춘 경고는 관리자가 확인해야 공개된다 (BE-165)
+		}
 		recordClassification(legalCase, result);
 		saveCase(legalCase);
 
@@ -313,6 +316,16 @@ public class CaseImportLoader {
 	 * 보여 주는 {@code validationWarnings} 앞에도 넣는다. 모양은 오프라인 적재(pipeline.py build_generation_report)와 같다.
 	 * 메시지에는 위치와 규칙만 있다(원본 값 없음)
 	 */
+	private static boolean hasSpecialMode(PipelineResult result) {
+		for (JsonNode source : new JsonNode[] {result.report(), result.courtDraft()}) {
+			JsonNode marker = source == null ? null : source.get("specialMode");
+			if (marker != null && marker.isObject()) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	private static void specialMode(Map<String, Object> report, PipelineResult result) {
 		Map<String, Object> special = new LinkedHashMap<>();
 		List<Object> downgraded = new ArrayList<>();

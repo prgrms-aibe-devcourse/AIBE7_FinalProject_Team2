@@ -574,8 +574,12 @@ class CaseImportLoaderTest extends ApiIntegrationTest {
 			.isEqualTo("[\"[특별 모드] summary: 정확한 날짜 의심\",\"[특별 모드] excerpt: 원문 인용이 아닙니다\",\"선택 경고\"]");
 		assertThat(jdbcTemplate.queryForObject("SELECT bool_or(is_published) FROM judgment WHERE case_id = ?", Boolean.class,
 			legalCase.getId())).isFalse();
+		assertThat(jdbcTemplate.queryForObject("SELECT special_mode_review FROM legal_case WHERE id = ?", String.class,
+			legalCase.getId())).isEqualTo("PENDING");	// 확인 전에는 공개할 수 없다
 		// 특별 모드가 아니면 키 자체가 없다
 		LegalCase plain = loader.load(caseImport(), result());
+		assertThat(jdbcTemplate.queryForObject("SELECT special_mode_review FROM legal_case WHERE id = ?", String.class,
+			plain.getId())).isNull();
 		assertThat(jdbcTemplate.queryForObject("""
 			SELECT g.generation_report->'specialMode' IS NOT NULL FROM ai_generation g
 			JOIN judgment j ON j.id = g.judgment_id WHERE j.case_id = ?""", Boolean.class, plain.getId())).isFalse();

@@ -33,4 +33,13 @@ class PublishReadinessTest {
 		assertThat(readiness.reasons()).containsExactly("NO_PUBLISHED_AI", "NO_PUBLISHED_COURT", "NO_FACTORS",
 			"NO_OVERVIEW_FACTOR", "NO_PENALTY_RULE", "NO_PAPER");
 	}
+
+	@Test
+	@DisplayName("특별 모드 경고를 확인하지 않았으면 SPECIAL_MODE_UNREVIEWED가 맨 뒤에 붙는다 (BE-165)")
+	void specialModePending() {
+		assertThat(PublishReadiness.of(true, true, 1, 1, 1, true, true).reasons()).containsExactly("SPECIAL_MODE_UNREVIEWED");
+		assertThat(PublishReadiness.of(true, true, 1, 1, 1, true, false).ready()).isTrue();
+		assertThat(PublishReadiness.of(false, true, 1, 1, 1, true, true).reasons())
+			.containsExactly("NO_PUBLISHED_AI", "SPECIAL_MODE_UNREVIEWED");
+	}
 }

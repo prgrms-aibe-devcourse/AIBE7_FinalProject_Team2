@@ -98,7 +98,7 @@ public class AdminReviewQueryService {
 		byKind.put(SubjectType.AI.name(), candidates(candidates, SubjectType.AI, generations));
 		byKind.put(SubjectType.COURT.name(), candidates(candidates, SubjectType.COURT, generations));
 
-		PublishReadiness readiness = readiness(caseId, candidates, factors);
+		PublishReadiness readiness = readiness(caseId, candidates, factors, legalCase.specialModePending());
 
 		return new AdminCaseDetailResponse(
 			legalCase.getId(),
@@ -159,17 +159,19 @@ public class AdminReviewQueryService {
 
 	/** 공개 조건 (A-6 표시 · A-13 확인이 같은 판정을 쓴다) */
 	public PublishReadiness readinessOf(Long caseId) {
-		return readiness(caseId, judgmentRepository.findCandidatesByCaseId(caseId), factorRepository.findAllByCaseId(caseId));
+		return readiness(caseId, judgmentRepository.findCandidatesByCaseId(caseId), factorRepository.findAllByCaseId(caseId),
+			findCase(caseId).specialModePending());
 	}
 
-	private PublishReadiness readiness(Long caseId, List<Judgment> candidates, List<Factor> factors) {
+	private PublishReadiness readiness(Long caseId, List<Judgment> candidates, List<Factor> factors,
+		boolean specialModePending) {
 		return PublishReadiness.of(
 			candidates.stream().anyMatch(j -> j.getSubjectType() == SubjectType.AI && j.isPublished()),
 			candidates.stream().anyMatch(j -> j.getSubjectType() == SubjectType.COURT && j.isPublished()),
 			factors.size(),
 			(int) factors.stream().filter(factor -> factor.getRevealStage() == RevealStage.OVERVIEW).count(),
 			penaltyRuleRepository.findAllByCaseId(caseId).size(),
-			paperRepository.existsByLegalCaseId(caseId));
+			paperRepository.existsByLegalCaseId(caseId), specialModePending);
 	}
 
 	private LegalCase findCase(Long caseId) {
