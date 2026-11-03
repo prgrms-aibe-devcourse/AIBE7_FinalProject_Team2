@@ -16,6 +16,7 @@ import com.team2.project.community.service.CommunityService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -73,6 +74,14 @@ public class CommunityController {
 	public CommentView comment(@PathVariable long postId, @RequestBody CreateCommentRequest body,
 		Requester requester) {
 		return communityService.comment(requester.requireMember(), requester.anonymousId(), postId, body);
+	}
+
+	/** C-8 내 글 삭제 — 204. 댓글 · 좋아요도 함께 지운다. 남의 글 403 · 없는 글 404 */
+	@DeleteMapping("/posts/{postId}")
+	@ResponseStatus(HttpStatus.NO_CONTENT)
+	public void delete(@PathVariable long postId, Requester requester) {
+		communityService.deleteMine(requester.requireMember(), postId);
+		communityHomeCache.clear();	// 랭킹 · 사건별 글 수가 바로 바뀌게(트랜잭션은 위에서 끝났다)
 	}
 
 	/** C-6 커뮤니티 메인 — 계산한 응답을 일정 시간 그대로 준다(CommunityHomeCache) */

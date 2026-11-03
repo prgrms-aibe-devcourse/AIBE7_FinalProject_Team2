@@ -36,4 +36,14 @@ public interface XpEventRepository extends JpaRepository<XpEvent, Long> {
 	@Query(value = "select count(*) from member_xp_event where member_id = :userId and source = :source and group_key = :groupKey",
 		nativeQuery = true)
 	int countInGroup(@Param("userId") long userId, @Param("source") String source, @Param("groupKey") String groupKey);
+
+	/** 지급 한 건을 거둔다(글 삭제 회수). @return 지운 행 수 */
+	@Modifying
+	@Query(value = "delete from member_xp_event where member_id = :userId and source = :source and ref_key = :refKey", nativeQuery = true)
+	int deleteOne(@Param("userId") long userId, @Param("source") String source, @Param("refKey") String refKey);
+
+	/** 같은 묶음의 지급을 모두 거둔다(글이 받은 좋아요 XP). @return 지운 행 수 */
+	@Modifying
+	@Query(value = "delete from member_xp_event where member_id = :userId and source = :source and group_key = :groupKey", nativeQuery = true)
+	int deleteGroup(@Param("userId") long userId, @Param("source") String source, @Param("groupKey") String groupKey);
 }

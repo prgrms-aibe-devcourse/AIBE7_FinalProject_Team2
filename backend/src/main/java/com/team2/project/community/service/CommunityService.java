@@ -249,6 +249,36 @@ public class CommunityService {
 		return commentView(comment, cards, new Viewer(Optional.of(memberId), Optional.empty()));
 	}
 
+	/**
+	 * C-8 내 글 삭제 (BE-167). 본인 글만(남의 글은 403, 없으면 404). 댓글 · 좋아요는 DB가 함께 지운다(ON DELETE CASCADE).
+	 * 글이 준 경험치는 거두되 레벨은 내리지 않는다(LevelService.revokePostXp). 홈 캐시는 커밋 뒤 호출하는 쪽이 비운다
+	 */
+	@Transactional
+	public void deleteMine(long memberId, long postId) {
+		CommunityPost post = findPost(postId);
+		if (post.getMemberId() == null || post.getMemberId() != memberId) {
+			throw new BusinessException(ErrorCode.FORBIDDEN);
+		}
+		remove(post);
+	}
+
+	/** 관리자 글 삭제(A-15, BE-167): 글쓴이와 상관없이 같은 방식으로 지운다. 지운 글쓴이 회원 ID를 돌려준다(감사 로그용) */
+	@Transactional
+	public long deleteByAdmin(long postId) {
+		CommunityPost post = findPost(postId);
+		remove(post);
+		return post.getMemberId();
+	}
+
+	private void remove(CommunityPost post) {
+		Long sharedCaseId = post.getVerdict() != null && post.getCaseId() != null
+			&& !postRepository.existsOtherSharedVerdict(post.getMemberId(), post.getCaseId(), post.getId())
+			? post.getCaseId() : null;
+		levelService.revokePostXp(post.getMemberId(), post.getId(), sharedCaseId);
+		postRepository.delete(post);
+		postRepository.flush();
+	}
+
 	// ---------- 도우미 ----------
 
 	/**
