@@ -36,4 +36,17 @@ public interface XpEventRepository extends JpaRepository<XpEvent, Long> {
 	@Query(value = "select count(*) from member_xp_event where member_id = :userId and source = :source and group_key = :groupKey",
 		nativeQuery = true)
 	int countInGroup(@Param("userId") long userId, @Param("source") String source, @Param("groupKey") String groupKey);
+
+	/**
+	 * 지급 한 건을 거둔다(글 삭제 회수): 행은 남기고 금액만 0으로 만든다. 행이 남아 하루 상한 횟수 · 같은 대상 중복 지급 방지는 그대로라,
+	 * 쓰고 지우기를 반복해도 상한이 다시 비지 않는다(BE-167 리뷰). @return 바꾼 행 수
+	 */
+	@Modifying
+	@Query(value = "update member_xp_event set amount = 0 where member_id = :userId and source = :source and ref_key = :refKey", nativeQuery = true)
+	int zeroOne(@Param("userId") long userId, @Param("source") String source, @Param("refKey") String refKey);
+
+	/** 같은 묶음의 지급을 모두 거둔다(글이 받은 좋아요 XP). @return 지운 행 수 */
+	@Modifying
+	@Query(value = "delete from member_xp_event where member_id = :userId and source = :source and group_key = :groupKey", nativeQuery = true)
+	int deleteGroup(@Param("userId") long userId, @Param("source") String source, @Param("groupKey") String groupKey);
 }

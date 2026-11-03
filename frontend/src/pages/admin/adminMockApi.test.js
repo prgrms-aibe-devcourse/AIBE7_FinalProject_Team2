@@ -357,6 +357,7 @@ test('A-13: 승인한 대본이 있는 사건을 공개하면 그때 처음 나�
   await api.generateCasePaper(12);
   await api.approveJudgment(501);
   await api.approveJudgment(502);
+  await api.confirmSpecialMode(12);	// 12번은 특별 모드 사건이라 경고를 확인해야 공개된다 (BE-165)
   const published = await api.publishCase(12).catch((error) => error);
   assert.equal(published.code, undefined, JSON.stringify(published.details ?? published));
   assert.ok((await api.getCaseScript(12)).releasedAt);

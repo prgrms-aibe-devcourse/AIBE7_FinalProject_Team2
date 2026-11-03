@@ -134,6 +134,27 @@ body:has(.community-page) { background: var(--color-desk-bezel); }
   transition: background-color .15s ease-out, color .15s ease-out;
 }
 @media (hover: hover) and (pointer: fine) { .cm-action:hover { background: var(--color-surface); color: var(--color-text); } }
+/* 내 글 삭제(FE-165): 좋아요 줄 오른쪽 끝. 눌러도 바로 지우지 않고 같은 자리에서 한 번 더 묻는다 */
+.cm-article .cm-actions { flex-wrap: wrap; align-items: flex-start; } /* 글 상세에만: 목록 카드의 좋아요 · 댓글 줄은 그대로 */
+.cm-delete { margin-left: auto; margin-right: 10px; display: grid; justify-items: end; gap: 6px; }
+.cm-delete-confirm { display: grid; justify-items: end; gap: 8px; max-width: 24em; padding: 10px 12px; border: 1px solid var(--color-border-strong); border-radius: 8px; background: var(--color-surface); }
+.cm-delete-confirm[hidden], .cm-delete-open[hidden] { display: none; }
+.cm-delete-message { margin: 0; font-size: var(--text-small); color: var(--color-text); text-align: right; }
+.cm-delete-buttons { display: flex; gap: 8px; }
+.cm-delete-yes, .cm-delete-no { min-height: 40px; padding: 4px 14px; border-radius: 6px; font-size: var(--text-small); font-weight: 700; transition: background-color .15s ease-out, color .15s ease-out, opacity .15s ease-out; }
+.cm-delete-yes { border: 1px solid var(--color-danger); background: transparent; color: var(--color-danger); }
+.cm-delete-no { border: 1px solid var(--color-border-strong); background: transparent; color: var(--color-text); }
+.cm-delete-yes:disabled, .cm-delete-no:disabled { opacity: .5; }
+.cm-delete-open:active { color: var(--color-danger); }
+.cm-delete-yes:active:not(:disabled) { background: var(--color-danger); color: var(--color-card); }
+.cm-delete-no:active:not(:disabled) { background: var(--color-surface-strong); }
+.cm-delete-yes:focus-visible, .cm-delete-no:focus-visible, .cm-delete-open:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+.cm-delete .cm-error { margin: 0; text-align: right; }
+@media (hover: hover) and (pointer: fine) {
+  .cm-delete-open:hover { color: var(--color-danger); }
+  .cm-delete-yes:hover:not(:disabled) { background: var(--color-danger); color: var(--color-card); }
+  .cm-delete-no:hover:not(:disabled) { background: var(--color-surface-strong); }
+}
 .cm-count { font-variant-numeric: tabular-nums; font-weight: 700; }
 .cm-like[aria-pressed="true"] { color: var(--color-accent); }
 .cm-like[aria-pressed="true"] .cm-icon svg { fill: currentColor; }
@@ -321,6 +342,17 @@ textarea.cm-input { resize: vertical; min-height: 96px; line-height: 1.6; }
   .cm-article-title { font-size: var(--text-title-2); }
 }
 
+/* 중간 화면(태블릿): 말머리 칩과 사건 검색창이 한 줄 — 칩은 왼쪽, 검색창은 오른쪽(FE-165 후속). 검색 결과 목록은 줄 높이를 밀지 않게 검색창 아래에 띄운다.
+   "사건" 글자는 화면에서만 감추고(낭독용 label은 그대로) 자리는 placeholder가 말한다. 모바일(≤ 720px)은 폭이 좁아 위아래 두 줄 그대로 */
+@media (min-width: 721px) and (max-width: 1023px) {
+  .cm-filter-groups { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+  .cm-filter-group:not(.cm-filter-group-case) { flex: 1 1 auto; min-width: 0; }
+  .cm-filter-group-case { position: relative; flex: 0 1 280px; min-width: 200px; }
+  .cm-filter-group-case .cm-filter-title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .cm-filter-group-case .cm-case-results { position: absolute; top: 100%; right: 0; left: 0; z-index: 3; box-shadow: 0 6px 16px color-mix(in srgb, var(--color-heading) 14%, transparent); }
+  .cm-filter-group-case .cm-case-empty { position: absolute; top: 100%; right: 0; left: 0; margin: 6px 0 0; padding: 8px 10px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-card); }
+}
+
 /* 모바일 */
 @media (max-width: 720px) {
   .community-page { padding: 6px 6px 10px; }
@@ -334,7 +366,7 @@ textarea.cm-input { resize: vertical; min-height: 96px; line-height: 1.6; }
   .cm-tag { font-size: 12px; } /* 말머리 · 사건 이름은 정보라 12px 아래로 두지 않는다 */
 
   /* 터치 대상 44px(FE-158). 보이는 크기를 키워도 되는 것은 높이를, 작게 보여야 하는 것은 누르는 영역만 넓힌다 */
-  .cm-title-link, .cm-back, .cm-filter, .cm-chip, .cm-action, .cm-attach, .cm-segment, .cm-compose-open, .cm-select, .cm-case-search, .cm-case-pick, .cm-check { min-height: 44px; }
+  .cm-title-link, .cm-back, .cm-filter, .cm-chip, .cm-action, .cm-attach, .cm-segment, .cm-compose-open, .cm-select, .cm-case-search, .cm-case-pick, .cm-check, .cm-delete-yes, .cm-delete-no { min-height: 44px; }
   .cm-text-button { min-width: 44px; min-height: 44px; }
   /* 글 제목 링크: 위아래 안쪽 여백만큼 바깥 여백을 빼서 글자 자리는 그대로, 누르는 높이만 44px 이상 */
   .cm-post-title { margin: 3px 0 -5px; }

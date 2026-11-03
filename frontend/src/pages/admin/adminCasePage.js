@@ -75,7 +75,7 @@ function generationView(generation) {
   wrap.append(element('h4', '', `검증 경고 (${view.warnings.length})`));
   if (view.warnings.length) {
     const list = element('ul', 'admin-warnings');
-    view.warnings.forEach((text) => list.append(element('li', '', text)));
+    view.warnings.forEach((text) => list.append(element('li', text.startsWith('[특별 모드]') ? 'is-special' : '', text)));
     wrap.append(list);
   } else {
     wrap.append(element('p', 'admin-sub', '경고가 없어요.'));
@@ -207,6 +207,24 @@ export function renderAdminCasePage(container, { caseId, navigate }) {
         return wrap;
       }
 
+      // ── 특별 모드 경고 확인 (A-13-22, BE-165): 검사 오류 일부를 경고로 낮춰 적재한 사건은 확인해야 공개할 수 있다
+      function specialModeBox() {
+        const box = element('div', 'admin-special-mode');
+        box.setAttribute('role', 'group');
+        box.setAttribute('aria-label', '특별 모드 경고 확인');
+        const head = element('p', 'admin-special-head');
+        head.append(element('span', 'admin-badge is-pending', '특별 모드'), ' 아래 순서로 확인한 뒤 눌러 주세요.');
+        const help = element('ol', 'admin-special-steps');
+        ['AI 판결 후보의 “생성 정보 › 검증 경고”에서 [특별 모드]로 시작하는 경고를 찾아요.', '사건 내용과 재판부 판결(발췌 · 근거)이 원 판결문과 맞는지 봐요.', '날짜 · 나이 · 주소가 남았는지 한 번 더 봐요.']
+          .forEach((text) => help.append(element('li', '', text)));
+        const error = errorLine();
+        const confirm = button('경고를 확인했어요', () => {
+          mutate(confirm, error, () => api.confirmSpecialMode(caseId), '특별 모드 경고를 확인했어요.', 'publish');
+        });
+        box.append(head, help, confirm, error);
+        return box;
+      }
+
       // ── 공개 준비 (A-13)
       function publishSection(data) {
         const { status, publishReadiness, factors } = data;
@@ -222,6 +240,7 @@ export function renderAdminCasePage(container, { caseId, navigate }) {
         if (publishReadiness.ready) reasons.append(element('li', 'admin-ok', '공개 조건을 모두 채웠어요.'));
         publishReadiness.reasons.forEach((code) => reasons.append(element('li', '', PUBLISH_REASON[code] ?? code)));
         body.push(reasons);
+        if (publishReadiness.reasons.includes('SPECIAL_MODE_UNREVIEWED')) body.push(specialModeBox());
         const axisAuto = factors.filter((factor) => factor.valueAxisStatus === 'AUTO').length;
         if (axisAuto) body.push(element('p', 'admin-warn', `가치관 축을 아직 확정하지 않은 판단 요소가 ${axisAuto}개 있어요. 공개는 막지 않지만 확인을 권해요.`));
         // 대본은 공개를 막지 않는다(사건 내용이 아니라 체험 연출이다). 그래서 publishReadiness.reasons가

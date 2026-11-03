@@ -241,6 +241,9 @@
 .stage-wrap .sheet-photo img[data-flip="1"] { scale: -1 1; } /* 무대처럼 가운데를 본다(FE-128) */
 /* 세 판결: 같은 크기 · 같은 무게. 판결마다 색은 위 선 · 이름에만 */
 .stage-wrap .sheet-verdict-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: calc(var(--u) * 1.6); }
+/* 옆 칸(판단 요소 표)이 길어져 행이 늘어나면, 세 판결이 그만큼 같은 높이로 나눠 가져 아래 공백이 생기지 않게 한다(FE-164) */
+.stage-wrap .sheet-verdicts { display: flex; flex-direction: column; }
+.stage-wrap .sheet-verdicts .sheet-verdict-row { flex: 1; grid-auto-rows: 1fr; }
 /* 세 판결은 위아래로: 왼쪽에 누구 · 형량, 오른쪽에 한 줄 요약 */
 .stage-wrap .sheet-verdict { display: grid; grid-template-columns: calc(var(--u) * 17) minmax(0, 1fr); column-gap: calc(var(--u) * 2); align-items: start; }
 .stage-wrap .sheet-verdict > :not(.sheet-who, .sheet-penalty) { grid-column: 2; grid-row: 1 / span 3; }
@@ -480,6 +483,7 @@
   .stage-wrap .sheet-deck { font-size: 15px; }
   .stage-wrap .sheet-text { font-size: 14px; }
   .stage-wrap .sheet-verdict-row { gap: 10px; }
+  .stage-wrap .sheet-verdicts .sheet-verdict-row { flex: none; grid-auto-rows: auto; } /* 모바일은 세로로 쌓여 옆 칸이 없다: 높이를 맞추면 짧은 판결 아래에 빈칸이 생긴다(FE-164 리뷰) */
   .stage-wrap .sheet-who { font-size: 12px; }
   .stage-wrap .sheet-penalty { font-size: 18px; }
   .stage-wrap .sheet-sub { font-size: 12px; }

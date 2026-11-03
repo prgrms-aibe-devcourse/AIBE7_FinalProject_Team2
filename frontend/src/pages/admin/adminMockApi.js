@@ -49,7 +49,8 @@ function aiGeneration(round) {
     generationReport: {
       runKey: `mock-run-${round}`, pipeline: 'mock-pipeline', modelSpec: 'gemini:gemini-mock', servedModel: 'gemini-mock-001', runIndex: round, generatedAt: '2026-10-20T09:00:00+09:00',
       usage: { inputTokens: 5210, outputTokens: 840 },
-      validationWarnings: round === 1 ? ['참고 판례 1건의 죄명이 다름'] : [],
+      validationWarnings: round === 1 ? ['[특별 모드] excerpt: 원문 인용이 아닙니다 — 원문에서 찾을 수 없습니다 (⟦ ⟧ 밖의 글자가 원문과 다름)', '참고 판례 1건의 죄명이 다름'] : [],
+      ...(round === 1 ? { specialMode: { court: { mode: 'format', downgraded: ['[특별 모드] excerpt: 원문 인용이 아닙니다 — 원문에서 찾을 수 없습니다 (⟦ ⟧ 밖의 글자가 원문과 다름)'] } } } : {}),
       selection: { strategy: 'consensus', reason: '판단 요소 근거가 가장 구체적인 회차', score: 0.8125 },
       contamination,
       rag: round === 3
@@ -177,7 +178,8 @@ function createState() {
   return {
     cases: [
       {
-        caseId: 12, status: 'DRAFT', content: content('빌린 돈 문제로 찾아온 지인을 살해한 사건'),
+        // 12번은 특별 모드로 적재된 사건이다 — 경고를 확인(A-13-22)해야 공개할 수 있다 (BE-165)
+        caseId: 12, status: 'DRAFT', specialModeReview: 'PENDING', content: content('빌린 돈 문제로 찾아온 지인을 살해한 사건'),
         sources: [{ sourceId: 30, courtLevel: 'FIRST', caseNumber: '2099고합000', courtName: '가상지방법원', decidedAt: '2025-01-10', isFinal: true, sourceOrg: '법제처', note: null, hasOriginalText: true }],
         factors: baseFactors(100), penaltyRules: 1,
         createdAt: '2026-10-20T09:00:00+09:00', updatedAt: '2026-10-20T09:00:00+09:00',
@@ -242,6 +244,7 @@ function readiness(item) {
   if (!item.factors.some((factor) => factor.revealStage === 'OVERVIEW')) reasons.push('NO_OVERVIEW_FACTOR');
   if (!item.penaltyRules) reasons.push('NO_PENALTY_RULE');
   if (!state.papers[item.caseId]) reasons.push('NO_PAPER');
+  if (item.specialModeReview === 'PENDING') reasons.push('SPECIAL_MODE_UNREVIEWED');
   return { ready: reasons.length === 0, reasons };
 }
 
@@ -414,6 +417,18 @@ export async function setValueAxis(factorId, valueAxis) {
   Object.assign(factor, { valueAxis, valueAxisStatus: 'CONFIRMED' });
   touch(item);
   return { factorId: factor.factorId, valueAxis, valueAxisStatus: 'CONFIRMED' };
+}
+
+// A-13-22 특별 모드 경고 확인 (BE-165). 특별 모드 사건이 아니거나 이미 확인했으면 바꾸지 않고 그대로 돌려준다
+export async function confirmSpecialMode(caseId) {
+  await delay();
+  requireLogin();
+  const item = findCase(caseId);
+  if (item.specialModeReview === 'PENDING') {
+    item.specialModeReview = 'CONFIRMED';
+    touch(item);
+  }
+  return detail(item);
 }
 
 // A-13

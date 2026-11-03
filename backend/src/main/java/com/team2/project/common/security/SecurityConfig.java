@@ -125,6 +125,7 @@ public class SecurityConfig {
 		http
 			.authorizeHttpRequests(auth -> auth
 				.requestMatchers(HttpMethod.POST, COMMUNITY_WRITE_PATTERN).authenticated()
+				.requestMatchers(HttpMethod.DELETE, COMMUNITY_WRITE_PATTERN).authenticated()	// 글 삭제 (BE-167)
 				.requestMatchers(MEMBER_ME_PATTERN).authenticated()
 				.anyRequest().permitAll())
 			.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

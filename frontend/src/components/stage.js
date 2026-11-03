@@ -74,7 +74,8 @@ export const sideOf = (who, cast = DEFAULT_CAST) => (castOf(cast).prosecutor ===
 /** 이 장면에서 서는 쪽: 역할 의상(피고인 역 제외)이면 의상 자리, 그 밖은 묶음 쪽 */
 export const seatFor = (who, look, cast = DEFAULT_CAST) => (look?.startsWith('role:') && SEAT[look.slice(5)]) || sideOf(who, cast);
 // 바라보는 방향(FE-128): 원본 그림은 내로가 오른쪽, 남불이 왼쪽을 본다(캐릭터 이미지 규칙). 서 있는 곳에서 **가운데를 보도록** 좌우를 뒤집는다 —
-// 왼쪽에 서면 오른쪽을, 오른쪽에 서면 왼쪽을 본다. 가운데(피고인석 stand · 슬롯 30)에서는 원본 방향 그대로다.
+// 왼쪽에 서면 오른쪽을, 오른쪽에 서면 왼쪽을 본다. 슬롯 30(가운데)은 원본 방향 그대로이고,
+// 피고인석(stand)은 왼쪽에 선 검사 쪽을 보게 한다(placeFor, FE-164).
 // 이 규칙은 그림이 규칙대로 그려져 있다는 전제다(어긋난 그림은 이미지 쪽에서 바로잡는다)
 export const FACING = { naero: 'right', nambul: 'left' };
 /** x: 슬롯 0~60(30 = 가운데) 또는 쪽('left' · 'right'). 뒤집어야 하면 true */
@@ -91,7 +92,9 @@ export function placeFor(who, look, spot, cast = DEFAULT_CAST) {
   const seat = seatFor(who, look, cast);
   const slot = spot && typeof spot === 'object' && Number.isFinite(spot.slot) ? spot.slot : null;
   const x = spot === 'stand' ? 30 : slot ?? (seat === 'left' ? 0 : 60);
-  return { seat, flip: flipFor(who, x), side: x === 30 ? seat : x < 30 ? 'left' : 'right', center: x === 30 && (spot === 'stand' || slot === 30) };
+  // 피고인석(stand)은 왼쪽에 선 검사 쪽(왼쪽)을 본다: 원본이 오른쪽을 보는 내로는 뒤집어 왼쪽을 보게(꼬리는 오른쪽으로 간다, FE-164)
+  const flip = spot === 'stand' ? FACING[who] !== 'left' : flipFor(who, x);
+  return { seat, flip, side: x === 30 ? seat : x < 30 ? 'left' : 'right', center: x === 30 && (spot === 'stand' || slot === 30) };
 }
 /**
  * 6막 1면 사진(5막 마지막 법정 그대로, FE-141): 묶음 A가 판사로 왼쪽, 묶음 B가 피고인 역으로 오른쪽에 서고 무대처럼 가운데를 본다.

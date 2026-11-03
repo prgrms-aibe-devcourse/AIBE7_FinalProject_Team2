@@ -3,7 +3,7 @@ import { canGoBackInApp } from '../../app/router.js';
 import { currentUser } from '../../utils/session.js';
 import { signatureSvg } from '../../components/signatureInk.js';
 import {
-  NOT_READY, authorButton, communityShell, filterControls, foldedVerdict, formatDate, likeButton, loginHint, popularList, nameCard, postImages, postMeta, textField, verdictWithType,
+  NOT_READY, authorButton, communityShell, deleteControl, filterControls, foldedVerdict, formatDate, likeButton, loginHint, popularList, nameCard, postImages, postMeta, textField, verdictWithType,
 } from './communityParts.js';
 
 // S-18 커뮤니티 글 상세 (FE-47, /community/posts/:postId). 목록과 같은 노트북 화면 틀에 글 전체 · 좋아요 · 댓글을 둔다.
@@ -70,6 +70,9 @@ export function renderCommunityPostPage(container, { api, navigate, postId }) {
     if (post.verdict) node.append(foldedVerdict(post, () => verdictWithType(post.verdict, post.caseTitle, post.author)));
     const actions = element('div', 'cm-actions');
     actions.append(likeButton(post, { api, onLoginNeeded: () => loginHint(node, navigate, '로그인하면 좋아요를 누를 수 있어요.') }));
+    if (post.mine && api.deleteCommunityPost) {
+      actions.append(deleteControl(post, { api, onDeleted: () => navigate('communityPosts', {}, { replace: true }) }));
+    }
     node.append(actions, nameCard(post.author));
     return node;
   }
