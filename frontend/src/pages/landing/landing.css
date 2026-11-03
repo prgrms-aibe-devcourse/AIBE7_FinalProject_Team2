@@ -244,9 +244,9 @@
 /* B안 노트북(FE-150): 본체 · 키 · 트랙패드 · 베젤은 그림이 맡고, 화면 면 위에만 말풍선(HTML)을 올린다. 그림의 오른쪽 · 위 가장자리를 상자(410 × 410)에 맞춰 돌릴 때 기준점이 예전과 같다 */
 .landing-page .laptop-art {
   position: absolute; left: 77px; top: -38px; width: 410px; height: 410px; transform: rotate(calc(-29deg - var(--t, 0) * 10deg)); transform-origin: 100% 100%; /* 여유가 있으면 더 기운다 */
-  background: url('/images/desk/laptop.webp') 2px -11px / 432px 432px no-repeat;
+  background: url('/images/desk/laptop.webp') 0 0 / 410px 410px no-repeat; /* 11/03 재생성본(COMMON-73): 그림이 캔버스를 거의 꽉 채워 상자(410 × 410)에 그대로 맞춘다 */
 }
-.landing-page .laptop-screen { position: absolute; left: 38px; top: 16px; width: 359px; height: 168px; padding: 0; }
+.landing-page .laptop-screen { position: absolute; left: 43px; top: 35px; width: 323px; height: 158px; padding: 0; } /* 그림의 화면 면(1254 기준 x 132 ~ 1121, y 108 ~ 592)을 410px로 줄인 자리 */
 .landing-page .laptop-display {
   display: flex; flex-direction: column; gap: 9px; height: 100%; overflow: hidden; padding: 12px 14px; border-radius: 4px;
   font-size: 12px; line-height: 1.35; color: var(--color-text); word-break: keep-all;

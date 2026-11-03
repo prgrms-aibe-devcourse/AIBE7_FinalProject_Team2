@@ -18,14 +18,14 @@ const openAfter = (stats) => unlockedSets(mockUnlocked(mockAchievements(stats)))
 const DEFAULT_LOOK = { portrait: NAERO, frame: 'basic', background: 'cream', sashStyle: 'none', sashColorShort: 'wine', sashColorLong: 'wine', sashIconLeft: 'none', sashIconRight: 'none' };
 const DEFAULT_SERVER = { ...DEFAULT_LOOK, bookmarkCharacter: 'naero', bookmarkFace: 'happy', bookmarkFaceStyle: 'generated', bookmarkColor: 'bronze' };
 
-test('후보는 158장이고 종류별 개수가 정한 대로이며, 모두 실제 파일이다', () => {
+test('후보는 161장이고 종류별 개수가 정한 대로이며, 모두 실제 파일이다', () => {
   const counts = {};
   PORTRAIT_POOL.forEach((src) => { counts[kindOfPortrait(src)] = (counts[kindOfPortrait(src)] ?? 0) + 1; });
   assert.deepEqual(counts, {
     'characters/roles': 20, 'characters/scene': 16, 'characters/icon/generated': 12, 'characters/mascot': 12, 'characters/law': 9, 'characters/adult': 9,
-    'characters/standing': 8, 'characters/cheek': 12, 'characters/cheek-slim': 4, 'characters/personality': 32, cases: 24,
+    'characters/standing': 8, 'characters/cheek': 12, 'characters/cheek-slim': 4, 'characters/personality': 32, cases: 27,
   });
-  assert.equal(new Set(PORTRAIT_POOL).size, 158);
+  assert.equal(new Set(PORTRAIT_POOL).size, 161);
   PORTRAIT_POOL.forEach((src) => assert.ok(existsSync(new URL(`../../public${src}`, import.meta.url)), `없는 파일: ${src}`));
   assert.ok(!PORTRAIT_POOL.some((src) => /cases\/case-\d+\.webp$/.test(src)), '사건 대표 썸네일은 후보가 아니다');
 });

@@ -23,8 +23,8 @@ const COMMON_CATEGORIES = ['property', 'body', 'life', 'robbery', 'theft'];
 // 분류를 끝내 모를 때(seed로 순환)는 범죄 분류 3종만 돌린다. 강도 · 절도는 분류가 정해진 사건에만 쓴다
 const FALLBACK_CATEGORIES = ['property', 'body', 'life'];
 const COMMON_ROLES = ['reenact', 'origin', 'conclusion'];
-// 탐구 · 대화 컷 6장(COMMON-69): 사건과 상관없는 차분한 장면이라 신문 여백 사진 칸에 섞어 쓴다. 원본 character/cuts/inquiry/inquiry_cut_{장면}.png
-const INQUIRY_SCENES = ['reading', 'magnifier', 'talk', 'walk', 'window', 'board'];
+// 탐구 · 대화 컷 9장(COMMON-69 6장 + COMMON-73 옛 공용 재연 컷 3장): 사건과 상관없는 차분한 장면이라 신문 여백 사진 칸에 섞어 쓴다. 원본 character/cuts/inquiry/inquiry_cut_{장면}.png
+const INQUIRY_SCENES = ['reading', 'magnifier', 'talk', 'walk', 'window', 'board', 'reporter', 'clue', 'sign'];
 export const inquiryPhotos = INQUIRY_SCENES.map((scene) => `/images/cases/inquiry-${scene}.webp`);
 export const inquiryPhotoAt = (seed = 0) => inquiryPhotos[Math.abs(Number(seed) || 0) % inquiryPhotos.length];
 

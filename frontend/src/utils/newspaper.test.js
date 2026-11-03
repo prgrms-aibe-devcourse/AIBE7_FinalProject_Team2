@@ -71,8 +71,8 @@ test('fetchCasePaper: 지면이 없거나(404) 응답이 늦으면 null을 주�
 test('강도 · 절도 공용 컷과 탐구 컷은 실제 파일이고, 탐구 컷은 seed로 돌려 쓴다', () => {
   assert.equal(commonPhotos.robbery.conclusion, '/images/cases/common-robbery-conclusion.webp');
   assert.equal(commonPhotos.theft.reenact, '/images/cases/common-theft-reenact.webp');
-  assert.equal(inquiryPhotos.length, 6);
+  assert.equal(inquiryPhotos.length, 9);
   assert.equal(inquiryPhotoAt(0), inquiryPhotos[0]);
-  assert.equal(inquiryPhotoAt(7), inquiryPhotos[1]);
+  assert.equal(inquiryPhotoAt(10), inquiryPhotos[1]);
   assert.equal(inquiryPhotoAt(undefined), inquiryPhotos[0]);
 });

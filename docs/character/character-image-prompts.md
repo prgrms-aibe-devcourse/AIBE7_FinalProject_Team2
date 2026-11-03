@@ -20,6 +20,7 @@
 | v3.1 | 2026-10-29 | **사건 재연 컷은 배경 포함이 기본**(10/29 결정) — 투명 컷 + 배경 합성은 63장을 합성해 보니 어색한 컷이 많아 폐기. 1-3 · 9-7 `BG` · `reenact` · `PROPS RULES` · 9-17 수정. 캐릭터 컷 · 시트 · 아이콘은 그대로 투명 |
 | v3.2 | 2026-10-30 | **바라보는 방향 규칙**(FE-128): 내로 단일 이미지는 오른쪽, 남불은 왼쪽을 본다(1-2 · 7-2). 무대는 서 있는 곳에서 가운데를 보도록 좌우를 뒤집는다 |
 | v3.3 | 2026-11-02 | **사건 재연 컷 재생성 교훈 반영**(COMMON-69) — 배경 이미지를 첨부하지 않고 사건 내용에 맞춘 장소 설명을 `BG-scene`에 직접 적는다(공용 배경 B01 ~ B16 폐기). 탐구 · 대화 컷(B5)과 공용 컷(B6, 강도 · 절도 신규)도 배경 포함. 7-1에 "시트에 의상이 여러 칸이면 어느 칸을 입힐지 명시" 행 추가 |
+| v3.4 | 2026-11-03 | **10-11 내로 변호인 역할 컷 재생성 프롬프트**(COMMON-73) — 다른 역할 컷보다 작게 나온 것(캔버스 2:3 · 키가 높이의 약 59%, 다른 역할 컷은 4:5 · 약 91%)을 같은 크기로 다시 뽑는다. 크기 기준 컷을 첨부하고 키 비율을 숫자로 적는다. 7-1에 "한 장만 작게 나옴" 행 추가 |
 
 > 기준 결정: `character-main-handover.md` v2의 10/13 변경 절 (기본 = 마스코트형 약 3.5등신 · 란마풍 등은 변형 · 모든 캐릭터 무성 · 소품 제한 해제 · 화난 표정 금지)
 > 이 문서는 **복사해서 바로 쓰는 프롬프트 모음**이다. 설계 배경은 `character-law-ai-judge-plan.md` v0.3을 본다(`Claude outputs/character/plan/`, 커밋 안 함).
@@ -716,6 +717,7 @@ DEFORMATION — Japanese-made Western-cartoon-inspired deformation (graphic and 
 | 역할 의상 시트에서 엉뚱한 의상(검사 법복 등)으로 그려짐 | 시트에 판사 · 검사 · 변호인 · 사건 역할 네 칸이 있는데 프롬프트가 어느 칸인지 말하지 않음 | 첨부 설명에 네 칸을 풀어 쓰고 "맨 오른쪽 칸만 입히고 나머지는 쓰지 말 것"을 명시, AVOID에 법복 · 가발 · 정장 추가 |
 | 책상 · 카운터의 다리 · 의자가 빠짐(사건 재연 컷) | 가구 아래쪽을 생략함 | 9-7 `PROPS RULES`: 상판과 다리, 앉는 자리의 의자를 함께 그림 |
 | 의자 · 스툴 같은 복잡한 사물의 모양이 이상함(사건 재연 컷) | 구조가 복잡한 사물을 모델이 자주 틀림 | 9-7 `PROPS RULES`: 단순한 형태로 쓰고 **형태를 다시 확인(double-check)하게 명시** |
+| 같은 묶음(역할 컷 등) 중 한 장만 캐릭터가 작게 나옴 | 비율(4:5)을 말하지 않거나 여백 비율만 적어 모델이 캔버스 · 여백을 제멋대로 정함(내로 변호인: 2:3 캔버스에 키가 높이의 약 59%) | 같은 묶음의 잘 나온 컷을 **크기 기준으로 첨부**하고, 캔버스 비율과 "키가 이미지 높이의 약 90%"를 숫자로 적는다(10-11). 뽑은 뒤 알파 영역 높이를 다른 컷과 비교한다 |
 
 ### 7-2. 검수
 
@@ -1671,3 +1673,37 @@ AVOID: text, letters, numbers, logos, watermarks, labels, speech bubbles, violen
 ```
 
 남불 `nambul_cut-role-case-1_idle-neutral.png`은 이름 · 첨부, OUTFIT 줄(`OUTFIT — a worn, stretched grey hoodie, loose track pants and house slippers.`), AVOID 끝(9-8 남불)을 바꾼다.
+
+### 10-11. 내로 변호인 역할 컷 재생성 (COMMON-73)
+
+대표: `naero_cut-role-defense_idle-neutral.png` · 첨부 `standing/naero_standing.png` · `sheets/role-outfits/naero_sheet_role-outfits.png` · **크기 기준** `cuts/naero/base/role/naero_cut-role-prosecutor_idle-neutral.png`
+
+지금 컷은 다른 역할 컷보다 작다: 캔버스 1024 × 1536(2:3)에 캐릭터 키가 902px(높이의 약 59%)이다. 같은 묶음의 검사 · 판사 컷은 1122 × 1402(4:5)에 키 1266 ~ 1278px(약 91%)이다. 화면은 역할 컷을 같은 높이로 줄여 쓰므로(`roles/*.webp` 높이 560) 이 차이가 그대로 "작은 변호인"으로 보인다. 옷을 입은 역할 컷 중 이 한 장만 짧다. 의상 · 자세는 10-9와 같고, **크기 기준 컷 첨부와 키 비율 숫자**를 더했다. 셔츠 칼라가 투명하게 비던 문제(FE-128)도 처음부터 채우도록 적었다.
+
+```
+ATTACHMENTS — naero_standing.png is the exact model of Naero; naero_sheet_role-outfits.png is the exact model of the defense lawyer outfit: copy that outfit exactly as drawn in the sheet. naero_cut-role-prosecutor_idle-neutral.png is the SIZE REFERENCE: draw the new image at exactly the same canvas size, the same character scale and the same position as that image (only the outfit is different). Draw ONE full-body cut.
+
+ART STYLE — clean, warm 2D flat mascot illustration:
+- No black outlines and no line art; shapes are separated only by flat color areas.
+- Facial features (if any) are filled shapes, not strokes.
+- One soft shadow tone per surface on the lower-right side; at most a very subtle gradient on large areas.
+- Warm light from the upper left. Matte finish. No cast shadow, no ground shadow, no drop shadow, no glow.
+- Mood: friendly, cheerful, slightly vintage.
+
+OUTFIT — the defense lawyer outfit from the role-outfit sheet. The shirt collar on both sides of the tie is fully filled with the shirt color (no transparent or missing area inside the collar). No bandana.
+
+POSE — standing calmly, slight three-quarter view with the body and face turned toward the viewer's right, both hands relaxed at the sides, a small calm smile, looking at the viewer. Exactly the same pose and expression as the prosecutor size reference.
+
+SCENE — a single character, centered horizontally. The full body from the tips of the ears to the feet is visible and fills about 90% of the image height: about 5% empty space above the ears and about 3% below the feet. Same scale as the size reference: the character must not look smaller than the prosecutor.
+
+BACKGROUND — fully transparent background (PNG with alpha). No background color, no floor, no ground line, no shadow, no frame, no border. Aspect ratio 4:5 vertical (same canvas as the size reference, e.g. 1122 × 1402).
+
+AVOID: text, letters, numbers, logos, watermarks, labels, speech bubbles, angry or hostile faces or poses, sexualized or revealing depiction, gendered body features, cropped limbs, black outlines, line art, drop shadows, ground shadows, background colors or scenery, 3D render, CGI, photo realism, extra characters, name tags, props in the hands, a bandana, a different fur color, a human face, whisker lines, a transparent hole in the shirt collar, a small character with large empty space, a 2:3 tall canvas.
+```
+
+| 검수 | 기준 |
+| --- | --- |
+| 크기 | 알파 영역 높이가 캔버스 높이의 약 88 ~ 92%(검사 컷 1266 / 1402 ≈ 90%). 캔버스가 4:5인지 |
+| 방향 | 몸 · 얼굴이 오른쪽을 본다(내로 규칙, v3.2) |
+| 칼라 | 넥타이 양옆 셔츠 칼라에 투명한 곳이 없다 |
+

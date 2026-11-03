@@ -43,6 +43,15 @@ export const imageOf = (who, look) => (look.startsWith('role:') ? `${IMAGES}role
     : look.startsWith('cheek:') ? `${IMAGES}cheek/${who}_${look.slice(6)}.webp` // 볼따구(기다림)
     : look.startsWith('deform:') ? `${IMAGES}deform/${who}_${look.slice(7)}.webp` // 데포르메(란마 등, 시트에서 잘라 public에 둔다)
     : `${IMAGES}scene/${who}_${look}.webp`);
+// 좌우를 따로 그린 모습(COMMON-73): 물음표처럼 글자가 들어 있어 CSS로 뒤집으면 글자도 거울 글씨가 된다.
+// 이 모습은 뒤집는 대신 반대 방향으로 따로 그린 그림(`-mirror`, 물음표는 그대로)을 쓴다. 기본 그림은 규칙 방향(FACING)이다.
+// **이 모습에 좌우 반전(data-flip 등)을 거는 자리는 반드시 `facedImage`를 거친다.** `imageOf`만 부르는 자리(AI 판결 대기 아이캐치 · 3막 빼꼼 마스코트)는 지금 반전이 없어 괜찮지만, 나중에 반전을 걸면 물음표가 다시 거울 글씨가 된다
+export const MIRRORED_LOOKS = new Set(['cheek:idle-thinking', 'cheek-slim:idle-thinking']);
+/** 서 있는 자리에서 쓸 그림과 CSS 뒤집기 여부. flip: flipFor 결과 */
+export function facedImage(who, look, flip) {
+  if (flip && MIRRORED_LOOKS.has(look)) return { src: imageOf(who, look).replace(/\.webp$/, '-mirror.webp'), flip: false };
+  return { src: imageOf(who, look), flip };
+}
 // 법정 자리는 역할 의상(look "role:…")이 정한다: 검사 · 판사 = 왼쪽(검사편, 가운데는 카드 · 판이 많이 떠서 판사도 왼쪽이 기본) · 변호인 = 오른쪽 변호인석.
 // 판사를 가운데에 세우려면 대본 spots로 준다.
 const SEAT = { prosecutor: 'left', judge: 'left', defense: 'right' };
@@ -508,9 +517,10 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
   // 볼따구 등장 · 퇴장: 빠른 뿅(커졌다 자리 잡기 0.22초 · 작아지며 사라지기 0.16초)
   function popCameo(who) {
     cameo.getAnimations().forEach((animation) => animation.cancel());
-    cameo.src = imageOf(who, CAMEO_LOOK);
+    const face = facedImage(who, CAMEO_LOOK, flipFor(who, sideOf(who, cast))); // 볼따구도 가운데를 본다(물음표 컷은 반대 방향 그림)
+    cameo.src = face.src;
     cameo.className = `cameo cameo-${who} at-${sideOf(who, cast)}`; // 높이는 캐릭터 그림, 가로 자리는 묶음 쪽(FE-128)
-    cameo.dataset.flip = flipFor(who, sideOf(who, cast)) ? '1' : ''; // 볼따구도 가운데를 본다
+    cameo.dataset.flip = face.flip ? '1' : '';
     cameo.hidden = false;
     if (!reducedMotion()) cameo.animate([{ scale: '0' }, { scale: '1.12', offset: .7 }, { scale: '1' }], { duration: 220, easing: 'cubic-bezier(.2, .8, .2, 1)' }); // 0 크기에서 뿅
   }
@@ -683,7 +693,6 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
     ['naero', 'nambul'].forEach((who) => {
       const look = step.look[who];
       sprites[who].hidden = false;
-      sprites[who].src = imageOf(who, look);
       figures[who].classList.toggle('role', look.startsWith('role:'));
       figures[who].classList.toggle('dim', Boolean(step.say) && step.say !== who);
       figures[who].classList.toggle('near', onSheet && step.say === who); // 지면에서는 말하는 쪽이 기사에 다가선다
@@ -697,7 +706,9 @@ export function renderStage({ script, order, cards = {}, inputCards = [], choice
       if (at?.row) figures[who].dataset.row = at.row; else delete figures[who].dataset.row;
       const place = placeFor(who, look, spot, cast);
       figures[who].dataset.seat = place.seat; // 묶음 자리(FE-128). 피고인석(stand) · 슬롯은 위 spot · slot이 덮는다
-      figures[who].dataset.flip = place.flip ? '1' : ''; // 가운데를 보게
+      const face = facedImage(who, look, place.flip); // 가운데를 보게(물음표 컷은 CSS로 뒤집지 않고 반대 방향 그림을 쓴다)
+      sprites[who].src = face.src;
+      figures[who].dataset.flip = face.flip ? '1' : '';
       chips[who].textContent = step.chips[who];
       chips[who].dataset.role = ROLE_COLOR[step.chips[who]] ?? 'actor';
       chips[who].hidden = !step.chips[who];
