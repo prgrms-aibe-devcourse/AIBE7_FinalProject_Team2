@@ -52,7 +52,7 @@
 
 .legal-actions { display: flex; justify-content: center; margin-top: 28px; }
 
-@media (max-width: 680px) {
+@media (max-width: 720px) {
   .legal-page { padding: 16px 12px 40px; }
   .legal-doc { padding: 20px 16px 8px; }
   .legal-head h1 { font-size: 22px; }

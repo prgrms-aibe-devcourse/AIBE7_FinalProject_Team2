@@ -23,6 +23,18 @@ function buildPath(path, caseId, shareId, postId) {
 
 const validPostId = (value) => Number.isSafeInteger(value) && value > 0;
 
+// 모바일 상태 바 색(theme-color, FE-152): 화면 맨 위 헤더 바탕색을 따른다(마이페이지 커피 헤더 등).
+// 헤더를 직접 그리는 화면(관리자)은 index.html의 처음 값(네이비)으로 돌린다
+// 주의: 헤더를 붙인 직후(화면 render 전)에 한 번만 읽는다. 화면이 그려진 뒤 body:has(.xx-page) .site-header처럼 헤더 색을 바꾸면 이 값에 반영되지 않는다
+// (지금 그런 화면은 없다. 생기면 화면 render 뒤에 syncThemeColor를 다시 부른다)
+const themeMeta = typeof document === 'undefined' ? null : document.querySelector('meta[name="theme-color"]');
+const defaultThemeColor = themeMeta?.content;
+function syncThemeColor(header) {
+  if (!themeMeta) return;
+  const color = header?.isConnected ? getComputedStyle(header).backgroundColor : '';
+  themeMeta.content = color && color !== 'rgba(0, 0, 0, 0)' ? color : defaultThemeColor;
+}
+
 // deskY(책상에서 누른 때의 스크롤 자리)는 연출용이라 같은 이동인지 가릴 때 뺀다 — 안 그러면 스크롤만 달리해 다시 눌렀을 때 같은 화면이 한 번 더 열린다
 function sameExtras(a, b) {
   const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
@@ -85,6 +97,7 @@ export function createRouter({ view, headerHost, footerHost, routes }) {
       if (route.theme) node.dataset.theme = route.theme; else delete node.dataset.theme;
     }
     headerHost?.replaceChildren(...(header ? [header] : []));
+    syncThemeColor(header);
     if (headerHost) headerHost.inert = false; // 이전 화면의 대화창(엽서 · 커뮤니티 글쓰기 창)이 막아 둔 헤더 · 푸터를 푼다(stage.js, communityParts.js)
     footerHost.inert = false;
 
