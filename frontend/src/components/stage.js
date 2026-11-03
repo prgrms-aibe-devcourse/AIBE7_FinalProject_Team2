@@ -74,7 +74,8 @@ export const sideOf = (who, cast = DEFAULT_CAST) => (castOf(cast).prosecutor ===
 /** 이 장면에서 서는 쪽: 역할 의상(피고인 역 제외)이면 의상 자리, 그 밖은 묶음 쪽 */
 export const seatFor = (who, look, cast = DEFAULT_CAST) => (look?.startsWith('role:') && SEAT[look.slice(5)]) || sideOf(who, cast);
 // 바라보는 방향(FE-128): 원본 그림은 내로가 오른쪽, 남불이 왼쪽을 본다(캐릭터 이미지 규칙). 서 있는 곳에서 **가운데를 보도록** 좌우를 뒤집는다 —
-// 왼쪽에 서면 오른쪽을, 오른쪽에 서면 왼쪽을 본다. 가운데(피고인석 stand · 슬롯 30)에서는 원본 방향 그대로다.
+// 왼쪽에 서면 오른쪽을, 오른쪽에 서면 왼쪽을 본다. 슬롯 30(가운데)은 원본 방향 그대로이고,
+// 피고인석(stand)은 왼쪽에 선 검사 쪽을 보게 한다(placeFor, FE-164).
 // 이 규칙은 그림이 규칙대로 그려져 있다는 전제다(어긋난 그림은 이미지 쪽에서 바로잡는다)
 export const FACING = { naero: 'right', nambul: 'left' };
 /** x: 슬롯 0~60(30 = 가운데) 또는 쪽('left' · 'right'). 뒤집어야 하면 true */

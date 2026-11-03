@@ -483,6 +483,7 @@
   .stage-wrap .sheet-deck { font-size: 15px; }
   .stage-wrap .sheet-text { font-size: 14px; }
   .stage-wrap .sheet-verdict-row { gap: 10px; }
+  .stage-wrap .sheet-verdicts .sheet-verdict-row { flex: none; grid-auto-rows: auto; } /* 모바일은 세로로 쌓여 옆 칸이 없다: 높이를 맞추면 짧은 판결 아래에 빈칸이 생긴다(FE-164 리뷰) */
   .stage-wrap .sheet-who { font-size: 12px; }
   .stage-wrap .sheet-penalty { font-size: 18px; }
   .stage-wrap .sheet-sub { font-size: 12px; }
