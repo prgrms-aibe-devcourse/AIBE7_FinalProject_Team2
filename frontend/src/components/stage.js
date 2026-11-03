@@ -91,7 +91,9 @@ export function placeFor(who, look, spot, cast = DEFAULT_CAST) {
   const seat = seatFor(who, look, cast);
   const slot = spot && typeof spot === 'object' && Number.isFinite(spot.slot) ? spot.slot : null;
   const x = spot === 'stand' ? 30 : slot ?? (seat === 'left' ? 0 : 60);
-  return { seat, flip: flipFor(who, x), side: x === 30 ? seat : x < 30 ? 'left' : 'right', center: x === 30 && (spot === 'stand' || slot === 30) };
+  // 피고인석(stand)은 왼쪽에 선 검사 쪽(왼쪽)을 본다: 원본이 오른쪽을 보는 내로는 뒤집어 왼쪽을 보게(꼬리는 오른쪽으로 간다, FE-164)
+  const flip = spot === 'stand' ? FACING[who] !== 'left' : flipFor(who, x);
+  return { seat, flip, side: x === 30 ? seat : x < 30 ? 'left' : 'right', center: x === 30 && (spot === 'stand' || slot === 30) };
 }
 /**
  * 6막 1면 사진(5막 마지막 법정 그대로, FE-141): 묶음 A가 판사로 왼쪽, 묶음 B가 피고인 역으로 오른쪽에 서고 무대처럼 가운데를 본다.
