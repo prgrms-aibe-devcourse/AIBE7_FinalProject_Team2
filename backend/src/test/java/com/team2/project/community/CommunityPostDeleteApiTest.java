@@ -31,7 +31,7 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
-/** 커뮤니티 글 삭제 C-8 · 관리자 글 삭제 A-15 (BE-167). 댓글 · 좋아요 함께 삭제, 경험치 회수, 레벨 유지 */
+/** 커뮤니티 글 삭제 C-8 · 관리자 글 삭제 A-42 (BE-167). 댓글 · 좋아요 함께 삭제, 경험치 회수, 레벨 유지 */
 @Import(FakeMemberTokens.class)
 @TestPropertySource(properties = "community.home-cache-ttl=0")
 class CommunityPostDeleteApiTest extends ApiIntegrationTest {
@@ -170,8 +170,56 @@ class CommunityPostDeleteApiTest extends ApiIntegrationTest {
 		assertThat(postRows(first)).isEqualTo(1);	// 다른 글은 그대로
 	}
 
+	/** 판결을 확정한 체험 + 최종 판결 한 건(판결 공유 글에 붙는다) */
+	private void confirmVerdict(User user) {
+		Long experienceId = jdbcTemplate.queryForObject("""
+			INSERT INTO experience (member_id, case_id, attempt_no, status, completed_at)
+			VALUES (?, ?, 1, 'VERDICT_CONFIRMED', now()) RETURNING id""", Long.class, user.memberId(), caseId);
+		Long judgmentId = jdbcTemplate.queryForObject("""
+			INSERT INTO judgment (case_id, subject_type, timing, experience_id, penalty_type, prison_months, is_published)
+			VALUES (?, 'USER', 'FINAL', ?, 'PRISON', 60, true) RETURNING id""", Long.class, caseId, experienceId);
+		long factorId = insertFactor(caseId, "OVERVIEW", "요소", null, 1);
+		jdbcTemplate.update("INSERT INTO judgment_factor (judgment_id, factor_id, direction) VALUES (?, ?, 'UP')", judgmentId, factorId);
+	}
+
+	private long writeVerdictPost(User user, String title) throws Exception {
+		String body = mockMvc.perform(user.sign(post(POSTS)).contentType(MediaType.APPLICATION_JSON).content("""
+				{"category":"VERDICT","title":"%s","body":"본문","shareVerdict":true}""".formatted(title)))
+			.andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+		return ((Number) JsonPath.read(body, "$.postId")).longValue();
+	}
+
 	@Test
-	@DisplayName("A-15: 관리자는 남의 글도 지울 수 있고(204) 감사 로그에 글 ID만 남는다. 로그인 없이는 거절")
+	@DisplayName("C-8: 판결 공유 글을 지우면 판결 공유 보너스도 거둔다")
+	void deleteMine_revokesShareBonus() throws Exception {
+		User author = newUser();
+		confirmVerdict(author);
+		long postId = writeVerdictPost(author, "판결 공유");
+		assertThat(xp(author, "SHARE_POST")).isEqualTo(20);
+
+		deleteMine(author, postId).andExpect(status().isNoContent());
+
+		assertThat(xp(author, "SHARE_POST")).isZero();
+		assertThat(xp(author, "POST")).isZero();
+	}
+
+	@Test
+	@DisplayName("C-8: 같은 사건에 판결을 붙인 다른 글이 남아 있으면 판결 공유 보너스는 거두지 않는다")
+	void deleteMine_keepsShareBonusWhenAnotherSharedPostRemains() throws Exception {
+		User author = newUser();
+		confirmVerdict(author);
+		long first = writeVerdictPost(author, "첫 공유");
+		long second = writeVerdictPost(author, "둘째 공유");
+
+		deleteMine(author, first).andExpect(status().isNoContent());
+		assertThat(xp(author, "SHARE_POST")).isEqualTo(20);	// 둘째 글이 남아 있다
+
+		deleteMine(author, second).andExpect(status().isNoContent());
+		assertThat(xp(author, "SHARE_POST")).isZero();	// 마지막 글을 지우면 거둔다
+	}
+
+	@Test
+	@DisplayName("A-42: 관리자는 남의 글도 지울 수 있고(204) 감사 로그에 글 ID만 남는다. 로그인 없이는 거절")
 	void adminDelete() throws Exception {
 		User author = newUser();
 		long postId = writePost(author, "관리자가 지울 글");

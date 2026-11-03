@@ -262,12 +262,12 @@ public class CommunityService {
 		remove(post);
 	}
 
-	/** 관리자 글 삭제(A-15, BE-167): 글쓴이와 상관없이 같은 방식으로 지운다. 지운 글쓴이 회원 ID를 돌려준다(감사 로그용) */
+	/** 관리자 글 삭제(A-42, BE-167): 글쓴이와 상관없이 같은 방식으로 지운다. 지운 글쓴이 회원 ID를 돌려준다(감사 로그용) */
 	@Transactional
 	public long deleteByAdmin(long postId) {
 		CommunityPost post = findPost(postId);
 		remove(post);
-		return post.getMemberId();
+		return post.getMemberId();	// member_id는 NOT NULL(V38)이라 항상 있다
 	}
 
 	private void remove(CommunityPost post) {

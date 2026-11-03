@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 관리자 커뮤니티 글 삭제 API (BE-167, A-15). 관리자 체인(세션 · ADMIN 역할 · CSRF)이 지킨다 */
+/** 관리자 커뮤니티 글 삭제 API (BE-167, A-42). 관리자 체인(세션 · ADMIN 역할 · CSRF)이 지킨다 */
 @RestController
 @RequestMapping("/api/v1/admin/community/posts")
 @RequiredArgsConstructor
