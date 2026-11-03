@@ -367,7 +367,8 @@ components:
 | 본문 글자 단위 | `--u` = `min(10px, (100vw − 128px) / 120)`(지면 안쪽 폭이 줄면 같이 줄어든다), 720px 이하 6px | 흐름 |
 | 법적 고지 | 지면 맨 아래 줄(다른 신문 지면과 같다, 라우터의 바깥 푸터는 `ownsFooter`로 끔) | 흐름 |
 
-- 책상 배경(`.desk`, `position: fixed`)이 잘리지 않게 루트에 `perspective` · `overflow: clip`을 두지 않는다. 신문을 넘겨 들어오는 연출(`tp-turn-in`)의 원근은 지면 자신의 변환에 넣는다.
+- 책상 배경(`.desk`, `position: fixed`)이 잘리지 않게 루트에 `perspective` · `overflow: clip`을 두지 않는다. 신문을 넘겨 들어오는 연출(`tp-turn-in`)의 원근은 지면 자신의 변환에 넣고, 끝난 뒤 변환을 남기지 않는다(`animation-fill-mode: backwards` — `both`면 남은 `perspective`가 좁은 화면에서 쪽을 가로로 늘렸다, FE-156).
+- **좁은 화면(≤ 720px, FE-156)**: 지면 목차는 가로로 미는 줄이다(들어올 때 지금 면(10면)을 줄 가운데로 미는 것은 공용 `pageIndex`가 한다, FE-155). 결과 지면의 보조 버튼(공유 · 마이페이지 · 다시 하기)은 서류철 결과지처럼 한 줄씩 쌓는다. 문항 화면은 한 화면에 들어오게 진행자 한마디를 12px로 줄인 그대로 둔다.
 - **문항 문구(FE-126)**: 이 지면만 "이번 주 사건사고 제보" 단신 문구로 싣는다(`content/paperQuestions.js`). 문항 id · 축 · A/B 방향은 그대로라 점수 뜻이 같고, 서버에는 문항 id로 저장된다. 일반 테스트(`/test`)는 원래 문구 그대로다.
 - **결과 지면(`/test/paper/result`, FE-126)**: 신문 테스트를 마치면 온다. 내용은 `/test/result`와 같고(부품 공용) 모양만 신문이다: 큰 제목 = 유형 이름 → 캐릭터 사진 | 4축 · 관용 지수 → 두 단 해설 + 다른 캐릭터 · 안내 → 다음 행동. 지면 목차 · 이전으로도 같은 넘김을 쓴다. 900px대 이하 한 단. 일반 테스트의 서류철 결과(`/test/result`)는 그대로 남는다.
 - 문항 화면 본문(찬반 토론 A | B · 독자 설문 응모권 · 진행 칸)은 기존 구조 그대로이고 색 토큰만 신문 지면색(`--color-paper` · `--color-text` · `--color-muted`)으로 맞췄다(옛 6막 지면색 `--color-desk-news*` 제거).
@@ -478,7 +479,7 @@ components:
 | --- | --- | --- |
 | **P1 버튼** | 배경색만 한 단계 변함. 크기 · 위치 그대로. 방향은 배경에서 멀어지는 쪽(흰 면 위는 어둡게, 펠트 · 어두운 면 위는 밝게). 눌림은 전역 `scale .96`(전역 목록에 없는 카카오 버튼 · 좁은 화면 메인 메뉴 카드는 화면 CSS에서 같은 값, FE-153) | 공통 버튼 · 로그인 박스 · 카카오 버튼 · 신문 면 넘김 화살표 `.face-edge`(종이색 → kraft 16% 틴트) |
 | **P2 면 단위 항목** | 틴트 `kraft 16%`(`color-mix(in srgb, var(--color-desk-kraft) 16%, transparent)`). 테두리 · 글자 그대로 | `.cm-filter` · `.cm-action` · `.cm-attach` · `.my-row` · `.admin-menu-item` · `.is-pickable` · 지면 귀 |
-| **P3 선택지** | 테두리 `--color-heading` + 틴트 `kraft 16%`, 둘이 함께 바뀜 | `.range-option` · `.answer-cell` · `.test-option` · `.tp-option` · `button.admin-card` |
+| **P3 선택지** | 테두리 `--color-heading` + 틴트 `kraft 16%`, 둘이 함께 바뀜. 성향 테스트 선택지(`.answer-cell` · `.test-option` · `.tp-option`)는 터치에서 누르는 동안(`:active`) 같은 모양을 보인다(FE-156) | `.range-option` · `.answer-cell` · `.test-option` · `.tp-option` · `button.admin-card` |
 | **P4 글자 링크** *(임시)* | 호버에서 밑줄(3px), 평소 밑줄 없음 | `.paper-link` · `.case-review-back` · `.cm-post-title a` 등 |
 | **P5 헤더 메뉴** | 글자색만 변함(`--color-banner-text`). 마이페이지 커피 헤더는 `--color-text`(스코프 테마 예외) | `.nav-button` |
 | **P6 비활성** | 호버 반응 없음, 커서 그대로. `opacity .6` 통일을 제안 | `.is-soon` · `[aria-disabled]` · `:disabled` |
@@ -494,14 +495,15 @@ components:
 | 펜 → 엽서 연동 | 펜에 올리면 엽서도 반응. 키보드용 `:focus-visible` 짝 있음 | `landing.css` |
 | 카드 들어올림 | `translateY(-3px)`, 눌리면 `1px`. 미리보기 · 상세에서는 끔 | `myPage.css` `.my-card` |
 | 6막 엽서(옛 8막 편지) | `translate -0.4u` + 그림자 | `stage.css` |
-| 폴더 탭 눌림 | `translateY(1px)` | `personality.css` · `verdict.css` |
+| 폴더 탭 눌림 | `translateY(1px)`. 성향 결과 색인 탭은 터치에서 누르는 동안(`:active`)도 같다(FE-156) | `personality.css` · `verdict.css` |
 | 별 확대 | `scale 1.12` | `caseReview.css` |
 | 판결 입력 하단 버튼 | 무대의 "다음" 버튼이 장을 넘기고(`다음 장 ▶`) 마지막 장에서는 `서명하고 제출 ▶`로 바뀐다. 서명 = 제출. 카드가 `layout.stageNext`로 라벨 · 안내 · 활성 여부를 넘기고 `stagenextchange` 이벤트로 알린다 | `stage.js` · `verdictPage.js` |
 | 겹친 카드 앞뒤 바꾸기(성향 공유) | 같은 크기 카드 두 장(내로 앞 · 남불 뒤)을 겹쳐 놓고, 뒤 카드는 오른쪽 아래(`--peek-x` 50px · `--peek-y` 22px)로 비스듬히(5deg) 삐져나온다. 앞 · 뒤 어느 카드를 눌러도 앞뒤가 바뀐다(0.36s, `z-index`도 전환). 호버는 뒤 카드만 6px 더 나온다. 키보드 · 낭독기용 투명 버튼이 뒤 카드를 덮는다 | `personality.css` `.result-portrait-set` · `personalityParts.js` `portraitPair` |
 | 철 돌리기 | 성향 테스트 검사지(가로) ↔ 결과지(세로). 제출 후 결과지는 눕힌 철을 돌려 세우고, 공유 화면의 "나도 해 보기"는 세운 철을 눕힌다. 떠나던 철의 자리 · 크기 · 스크롤 위치를 기억해 눈에 보이던 자리에서 시작한다(`folder-turn`, 1s). **모바일(≤ 720px)과 연출 끄기 · 동작 줄이기에서는 건너뛴다** | `personality.css` · `personalityParts.js` `canTurnFolder` |
+| 서류철 올라오기 (FE-50) | 메인 책상의 서류철(좁은 화면은 메뉴의 "판결 성향 테스트")을 누르면 검사지 철이 화면 아래에서 세워진 채(90°) 올라오며 눕고(`folder-rise` 1.15s), 뒤에 남긴 책상은 흐려진다. 헤더 · 서비스 소개로 오면 연출 없이 바로. **모바일(≤ 720px)에서도 돈다**(철 돌리기와 달리 건너뛰지 않기로 확정, FE-156). 쪽은 `.is-test`의 `overflow: clip`으로 가로로 늘지 않는다. 동작 줄이기에서는 끈다 | `personality.css` · `personalityParts.js` `renderFolder` |
 | 선고 도장(4 · 5막, FE-97) | 판결문이 놓이고 .45s 뒤 주문의 형량(4막 `.vp-penalty` · 5막 `.cp-penalty`, 같은 크기 `max(22px, 3cqw)`)이 도장처럼 찍힌다(`penalty-stamp` .55s: 1.35배 · -3deg → .96 → 제자리). AI · 실제 판결이 같은 무게로 공개되게 같은 움직임. 4막 합의 대기 장면("AI 판사들이 의견을 맞추고 있어요")은 1.1초 | `stage.css` · `aiPage.js` |
 | 판결 접수 도장(3막, FE-97) | 서명 획(.9s) → 확정이 되면 서명 끝에 "판결 접수" 도장(겹줄 원 · 강조색, 6막 엽서 "접수 완료" 소인과 같은 모양)이 찍히고(`filed-stamp` .42s) .9초 뒤 AI 판결로 넘어간다. 화면 읽기 프로그램에는 "판결이 접수되었어요"를 알린다 | `verdict.css` · `verdictPage.js` |
-| 결과 공개(성향 결과, FE-95) | 검사지를 막 제출했을 때만: 철이 선 뒤(`--reveal-at`, 철을 안 돌리면 .15s) 카드가 꽂히고 → **유형 이름이 도장처럼 찍힌다**(+.35s, `name-stamp` .55s: 1.3배 · -3deg에서 내려와 .97로 눌렸다 제자리) → 한 줄 설명(+.8s) → 나머지(+1s, `reveal-up` 8px) → 4축 막대를 가운데 눈금에서 양쪽으로 긋는다(+1.15s, 줄마다 90ms, `axis-draw` `clip-path: inset(0 50%)` → `inset(0 0)`; `none`으로 끝내면 보간되지 않는다). 결과 주소로 바로 오거나 탭을 오가면 다시 하지 않는다(다 끝나면 `.is-revealing`을 뗀다). 모바일은 철 돌리기 없이 곧바로, 동작 줄이기 · 연출 끄기에서는 끔 | `personality.css` · `personalityResultPage.js` |
+| 결과 공개(성향 결과, FE-95) | 검사지를 막 제출했을 때만: 철이 선 뒤(`--reveal-at`, 철을 안 돌리면 .15s) 카드가 꽂히고 → **유형 이름이 도장처럼 찍힌다**(+.35s, `name-stamp` .55s: 1.3배 · -3deg에서 내려와 .97로 눌렸다 제자리) → 한 줄 설명(+.8s) → 나머지(+1s, `reveal-up` 8px) → 4축 막대를 가운데 눈금에서 양쪽으로 긋는다(+1.15s, 줄마다 90ms, `axis-draw` `clip-path: inset(0 50%)` → `inset(0 0)`; `none`으로 끝내면 보간되지 않는다). 결과 주소로 바로 오거나 탭을 오가면 다시 하지 않는다(다 끝나면 `.is-revealing`을 뗀다). 모바일은 철 돌리기 없이 곧바로, 동작 줄이기 · 연출 끄기에서는 끔. 공개 중(`.is-revealing`)에는 루트에 `overflow-x: clip`을 둬 1.3배 도장이 좁은 화면을 가로로 밀지 않게 한다(FE-156) | `personality.css` · `personalityResultPage.js` |
 | 종이 귀 들썩임(판결 체험 말린 모서리 · 성향 결과 장 넘김, FE-96) | 공용 부품 하나(`paperFold`). 메인 신문 모서리 넘김(FE-99)과 같은 방식으로 **접힌 변 길이 하나만 움직인다**(`@property --fold-lift`): 잘려 나간 자리(서류철 크라프트)와 뒤집힌 뒷면이 같은 점을 써서 귀를 통째로 키우거나 돌리지 않고 종이가 실제로 더 접혔다 펴진다. 접힌 변은 모서리 쪽으로 볼록한 곡선, 뒷면은 접힌 선에서 어둡고 → 밝고 → 끝에서 약간 어두운 띠. 3.2초마다 휙 들렸다(1.4배) 망설이고 한 번 더 들썩인 뒤 떨어져 살짝 튀고 가라앉는다(약 45% 쉼). 호버 · 포커스에서 더 접히고(`--fold-hand` 1.1, .2s 전환), 누르면 꾹 눌려 납작해진다(.85). 들썩임과 곱해져 서로 끊지 않는다. 앞 장 귀(`.is-flipped`)는 그림을 왼쪽 아래 꼭짓점에 붙여 좌우로 뒤집는다. 신문 면 넘김 귀(FE-118)는 들린 밑으로 서류철이 아니라 다음 장 신문이 비치므로 잘린 자리를 `--color-desk-news-sheet-1`로 바꾸고, 호버에서 글자에 밑줄이 생긴다. 움직임 줄이기에서는 쉬는 모양 그대로(호버 반응은 바로). `@property`를 모르는 브라우저(사파리 16.4 미만 등)도 쉬는 모양 그대로(`main.js`가 `<html>`에 단 `.has-css-property`가 있을 때만 들썩임 · 전환을 켠다, FE-110) | `folderParts.css` `.paper-fold` |
 | 이 면 더 보기 펼침 (FE-119) | 점선 줄을 누르면 같은 종이가 아래로 길어진다(`grid-template-rows 0fr → 1fr` .55s `cubic-bezier(.22, 1, .36, 1)`). 남은 기사는 .12s 뒤 .4s에 걸쳐 떠오르며 나타나고(opacity + 14px), 화살표가 180도 돈다. 닫힌 동안은 `visibility: hidden`이라 키보드 포커스를 받지 않는다. 움직임 줄이기에서는 바로 | `caseList.css` `.more-fold` |
 | 시작하기 도장 (FE-119) | 평소 -5도로 비스듬히 찍혀 있고, 호버(마우스)에서 기울기는 그대로(-5도)이고 바탕만 서류 네이비로 바뀐다(.18s, P1). 눌림은 전역 `scale .96`. 준비 중 도장은 호버 반응 없음(P6) | `paperStage.css` `.stamp-button` |
