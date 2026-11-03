@@ -7,6 +7,7 @@
 | --- | --- | --- |
 | v1 | 2026-11-02 | 신설 (COMMON-71). 11/01 기준 아키텍처 그림을 저장소 설정(compose · nginx · workflows · `.env.example`)과 대조해 정리. Supabase 공용 DB 종료(COMMON-59) 반영. 서버 가동은 매일 09:00 ~ 18:00(주말 포함). 공유용 그림 `docs/assets/architecture.png` 추가 |
 | v2 | 2026-11-02 | 카카오 첫 가입 대기(Redis 토큰 DB 10분)와 카카오 가입 동의(M-12)의 요청 제한 반영 (BE-145) |
+| v3 | 2026-11-03 | 사건 사진 전달 방식 정정 (COMMON-74) — Presigned URL이 아니라 `case-photos/*`만 버킷 정책으로 공개 읽기. 구현에 Presigned URL 발급이 없어 공개 화면 사진이 403이었다 |
 
 ## 상세 문서
 
@@ -48,11 +49,11 @@ flowchart LR
 
   user -- "HTTPS 443" --> web
   admin -- "HTTPS 443" --> web
-  user -. "사진: Presigned URL" .-> s3
+  user -. "사진: 공개 읽기 (case-photos/*)" .-> s3
   web --> backend
   backend --> redis
   backend -- "JDBC 5432 TLS" --> rds
-  backend -- "업로드 · URL 발급" --> s3
+  backend -- "업로드" --> s3
   backend -- "사건 등록 (내부망)" --> pipeline
   backend --> ext
   pipeline --> ext
@@ -71,7 +72,7 @@ flowchart LR
 | 도메인 · 인증서 | `naelawnambul.today` → 탄력적 IP. HTTP 80은 443으로 이동. Let's Encrypt(certbot) 90일 인증서, 자동 갱신 | BE-75 |
 | 메모리 배분 | backend 1g · redis 256m (+ 모니터링 에이전트). RDS 전환으로 postgres 512m이 빠졌다. swap 2GB · `swappiness 10`은 순간 급증용 안전망 | COMMON-54 |
 | DB | RDS PostgreSQL 17(`db.t4g.micro`, 단일 AZ), `vector` 확장, 앱 계정 `lawnambul_app`(마스터 아님). 연결 풀 5 | `deploy/README.md` "RDS 전환" |
-| 파일 | S3 버킷 하나(퍼블릭 차단, SSE-S3). EC2 IAM 역할로 접근하고, 브라우저에는 Presigned URL로만 준다 | COMMON-47 |
+| 파일 | S3 버킷 하나(퍼블릭 차단, SSE-S3). EC2 IAM 역할로 업로드하고, 사건 사진 경로(`case-photos/*`)만 버킷 정책으로 공개 읽기를 열어 브라우저가 바로 받는다 | COMMON-47 · COMMON-74 |
 | Redis | DB 0 캐시(지금 쓰는 코드 없음) · DB 1 토큰 저장소(리프레시 토큰 · OAuth state · 카카오 가입 대기 10분). AOF `everysec` · `noeviction` · 모든 키 TTL | `tech-stack.md` 2장 |
 
 ## 요청 흐름
@@ -79,8 +80,8 @@ flowchart LR
 1. 브라우저 → `https://naelawnambul.today` (443). Nginx가 TLS를 끝내고 보안 헤더 · HSTS(1일)를 붙인다.
 2. Nginx 요청 제한: `/api` 전체 IP별 초당 20번(순간 40), 넘으면 JSON 429. 경로별로 더 좁게 — 카카오 로그인 분당 30, 토큰 재발급 · 로그아웃 분당 30, 관리자 로그인 분당 5, 회원 로그인 분당 20 · 가입(아이디 가입 · 카카오 가입 동의) 분당 10.
 3. `/api/*` → backend `:8080`, 그 밖 → SPA 정적 파일(없는 경로는 `index.html`).
-4. backend → Redis(토큰) · RDS(5432 TLS) · S3(사진 업로드 · Presigned URL 발급).
-5. 사건 사진은 브라우저가 S3에서 직접 받는다(CSP `img-src`에 S3 주소 허용).
+4. backend → Redis(토큰) · RDS(5432 TLS) · S3(사진 업로드).
+5. 사건 사진은 브라우저가 S3에서 서명 없는 주소로 직접 받는다(`case-photos/*` 공개 읽기, CSP `img-src`에 S3 주소 허용).
 
 ## 외부 서비스
 
