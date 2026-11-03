@@ -1,5 +1,5 @@
 import { button, element, mockTag, renderSiteFooter } from '../../components/siteLayout.js';
-import { casePhoto, commonCategoryOf, fallbackImages, todayLabel, useCommonPhotoOnError } from '../../utils/newspaper.js';
+import { casePhoto, commonCategoryOf, commonPhotoAt, todayLabel, useCommonPhotoOnError } from '../../utils/newspaper.js';
 import { holdPaper, takePaper } from '../../utils/paperHandoff.js';
 import { restingStyle, tailPose } from '../../utils/tailSpread.js';
 import { flyCoffee } from '../../utils/coffeeDive.js';
@@ -31,6 +31,8 @@ import { openFeedbackDialog } from './feedbackDialog.js';
 //   남는 높이가 클수록(--t, 0 ~ 1) 소품을 모양 그대로 큼직하게 키우고 신문 밖 소품은 조금 더 기울인다(landing.css).
 // - 화면 폭이 좁아 책상이 작게 줄어들수록(--u, 0 ~ 1) 작은 소품(엽서 · 펜 · 서류철 · 커피잔 · 포스트잇 · 내로)을 더 키운다.
 //   작은 소품은 둘 중 큰 쪽(--k = max(t, u))을 따른다. 신문 · 노트북은 --t만 따른다
+// 사건 사진이 오기 전 자리를 채우는 공용 컷(특정 사건 내용을 드러내지 않는 기록 읽는 장면)
+const INITIAL_PHOTO = commonPhotoAt(0, 'reenact', 'life');
 const SCENE_WIDTH = 1672;
 const SCENE_HEIGHT = 941;
 const NEWS_GROW_MAX = 142; // 신문 높이 712 → 854(기본의 1.2배까지)
@@ -175,7 +177,7 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
   photo.alt = '';
   photo.width = 3; // 비율 힌트(3:2). 크기는 CSS가 정한다
   photo.height = 2;
-  photo.src = fallbackImages.MURDER;
+  photo.src = INITIAL_PHOTO;
   const kicker = span('news-kicker', '머리기사');
   const deck = span('news-deck', '실제 판결을 바탕으로 재구성한 사건이 기다리고 있습니다.');
   const lead = span('news-lead', '기사 제목만 보고 결론을 내리기는 이릅니다. 사건 기록을 한 단계씩 읽고, 판사석에서 직접 판결해 보세요.');
@@ -330,7 +332,7 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
       mobileNews.photo.alt = '';
       mobileNews.photo.width = 84; // 크기 힌트(늦게 떠도 카드가 밀리지 않게)
       mobileNews.photo.height = 84;
-      mobileNews.photo.src = fallbackImages.MURDER;
+      mobileNews.photo.src = INITIAL_PHOTO;
       const body = span('mn-body');
       body.append(mobileNews.headline, mobileNews.photo);
       item.append(brandRow, body, element('strong', '', label), text);
@@ -398,7 +400,7 @@ export function renderLandingPage(container, { api, navigate, section, from }) {
       rugClip.head = span('clip-head', '오늘의 머리기사');
       rugClip.photo = element('img', 'clip-photo');
       rugClip.photo.alt = '';
-      rugClip.photo.src = fallbackImages.MURDER;
+      rugClip.photo.src = INITIAL_PHOTO;
       return [rugClip.kicker, rugClip.head, rugClip.photo];
     },
     postcard: () => {
