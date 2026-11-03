@@ -7,6 +7,7 @@ import { casePhoto, commonCategoryOf, commonPhotoAt, commonPhotos, inquiryPhotoA
 import { newspaperMasthead } from '../../components/newspaperFront.js';
 import { turnPage } from '../../utils/pageTurn.js';
 import { liftArticle } from '../../utils/articleZoom.js';
+import { watchStripEdges } from '../../utils/scrollStrip.js';
 import { createFillerDeck, emptySlots, faceIndexAfter, FILL_GAP, layoutCases, planFiller, RECOMMENDED, swipeStep, visibleFaces } from '../../utils/newspaperFaces.js';
 import { FACES, faceKeyOf, faceOf, tipMessage } from './faces.js';
 import { crimeCounts, indexPage } from './faceContent.js';
@@ -513,11 +514,7 @@ export async function renderCaseListPage(container, { api, navigate, from, openA
   // scrollIntoView는 쪽 전체를 세로로도 움직이므로 쓰지 않는다. 줄이 넘치지 않는 넓은 화면에서는 아무 일도 없다
   function showCurrentTab() {
     const bar = main.querySelector('.tabs');
-    const tab = bar?.querySelector('.tab[aria-pressed="true"]');
-    if (!tab || bar.scrollWidth <= bar.clientWidth) return;
-    const barBox = bar.getBoundingClientRect();
-    const tabBox = tab.getBoundingClientRect();
-    bar.scrollLeft += (tabBox.left + tabBox.width / 2) - (barBox.left + barBox.width / 2); // 가운데로
+    if (bar) watchStripEdges(bar, { current: () => bar.querySelector('.tab[aria-pressed="true"]') }); // 가운데 맞춤 + 더 있음 표시(공용, FE-161)
   }
 
   // 한 줄 6칸 격자 + 마지막 줄의 빈 칸 채움. 넓은 화면(6칸) 기준으로 만들고, 태블릿(3칸) · 모바일(2칸)에서 남는 칸은 CSS가 뒤에서부터 숨긴다(fill-3 · fill-2만 남긴다)

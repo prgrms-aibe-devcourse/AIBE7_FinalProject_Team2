@@ -408,6 +408,14 @@ button, [role="button"] { -webkit-user-select: none; user-select: none; -webkit-
   :is(.primary-button, .secondary-button, .ear-button, .paper-start button, .dlg-choices button):not(:disabled):active { scale: .96; }
 }
 
+/* 가로로 미는 줄의 "더 있음" 표시(FE-161, utils/scrollStrip.js): 줄 앞 · 뒤에 더 있으면 그쪽 끝 44px가 종이색으로 옅어진다.
+   끝까지 밀면 그쪽이 사라져 "다 봤다"가 전달된다. 새 물건 없이 글자가 잘려 보이는 것이 신호다. 눌림 · 읽기에는 영향이 없다(시각 효과뿐).
+   사파리는 mask-image에 -webkit- 접두사가 필요하다 */
+[data-more-end] { --strip-mask: linear-gradient(90deg, #000 calc(100% - 44px), transparent); }
+[data-more-start] { --strip-mask: linear-gradient(270deg, #000 calc(100% - 44px), transparent); }
+[data-more-start][data-more-end] { --strip-mask: linear-gradient(90deg, transparent, #000 44px, #000 calc(100% - 44px), transparent); }
+:is([data-more-start], [data-more-end]) { -webkit-mask-image: var(--strip-mask); mask-image: var(--strip-mask); }
+
 /* 연출 끄기(FE-50, utils/motion.js): 헤더의 "연출" 스위치를 끄면 <html data-motion="off">가 된다.
    CSS 애니메이션 · 전환을 지우지 않고 길이만 0으로 만들어, 끝 상태(fill)는 그대로 두고 animationend · transitionend도 바로 오게 한다.
    JS 연출은 reducedMotion()으로 따로 건너뛴다. 기기의 "동작 줄이기"는 각 화면 CSS의 prefers-reduced-motion이 그대로 맡는다 */
