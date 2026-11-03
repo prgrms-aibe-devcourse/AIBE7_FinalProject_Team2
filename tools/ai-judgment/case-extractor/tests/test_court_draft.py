@@ -131,8 +131,18 @@ class QuoteTest(unittest.TestCase):
         src = "피고인은 범행을 모두 인정하고\n- 6 -\n깊이 반성하고 있다."
         self.assertTrue(quote_matches("피고인은 범행을 모두 인정하고 깊이 반성하고 있다.", src)[0])
         self.assertTrue(quote_matches("피고인은 범행을 모두 인정하고 깊이 반성하고 있다.", src.replace("- 6 -", "  – 12 –  "))[0])
-        # 문장 안의 숫자 · 하이프은 지우지 않는다 (줄 전체가 쪽 번호일 때만)
+        # 문장 안의 숫자 · 하이픈은 지우지 않는다 (줄 전체가 쪽 번호일 때만)
         self.assertFalse(quote_matches("피고인은 범행을 모두 인정하고 깊이 반성하고 있다.", "피고인은 범행을 모두 인정하고 - 6 - 깊이 반성하고 있다.")[0])
+
+    def test_pageNumberLine_crlf(self):
+        # CRLF 원문(CP949 txt 등)도 쪽 번호 줄을 지운다 (#422 리뷰)
+        src = "피고인은 범행을 모두 인정하고\r\n- 6 -\r\n깊이 반성하고 있다."
+        self.assertTrue(quote_matches("피고인은 범행을 모두 인정하고 깊이 반성하고 있다.", src)[0])
+
+    def test_quoteWithPageNumber_alsoMatches(self):
+        # 모델이 쪽 번호까지 그대로 옮긴 인용도 원문과 같다 (#422 리뷰)
+        src = "피고인은 범행을 모두 인정하고\n- 6 -\n깊이 반성하고 있다."
+        self.assertTrue(quote_matches("피고인은 범행을 모두 인정하고 - 6 - 깊이 반성하고 있다.", src)[0])
 
     def test_punctuationVariants_matched(self):
         # 모델이 문장부호 모양을 바꿔 써도 같은 글자로 본다 (BE-164)
@@ -316,6 +326,9 @@ class RunTest(unittest.TestCase):
         run("c", self.dir, "openai:gpt-x", caller=call)
         self.assertNotIn("# 이전 응답\n", calls[1]["user"])
         self.assertIn("이전 응답의 오류", calls[1]["user"])
+        # 모델이 보지 못한 직전 응답을 "그대로 두라"고 하지 않고 전체를 다시 쓰게 한다 (#422 리뷰)
+        self.assertIn("JSON 전체를 다시 작성한다", calls[1]["user"])
+        self.assertNotIn("이전 응답 그대로 둔다", calls[1]["user"])
 
     def test_run_blockedStop_notRetried(self):
         call, calls = self.caller([""], stop_reason="SAFETY")
