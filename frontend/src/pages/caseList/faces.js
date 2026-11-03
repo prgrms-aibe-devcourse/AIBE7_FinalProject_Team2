@@ -39,7 +39,7 @@ export const FACES = [
   crimeFace('INJURY', '상해'),
   crimeFace('ROBBERY', '강도'),
   crimeFace('THEFT', '절도'),
-  face({ key: 'INDEX', label: '색인', view: 'index' }),
+  face({ key: 'INDEX', label: '사건 검색/목록', view: 'index' }),
   face({ key: 'TEST', label: '성향 테스트', view: 'test' }),
   face({ key: 'OPINION', label: '오피니언', view: 'opinion' }),
 ];

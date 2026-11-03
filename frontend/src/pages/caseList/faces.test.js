@@ -8,7 +8,7 @@ const CRIMES = ['MURDER', 'FRAUD', 'INJURY', 'ROBBERY', 'THEFT'];
 
 test('면 순서: 1면 → 범죄 유형 다섯 면 → 색인 → 성향 테스트 → 오피니언', () => {
   assert.deepEqual(FACES.map(({ key }) => key), [undefined, ...CRIMES, 'INDEX', 'TEST', 'OPINION']);
-  assert.deepEqual(FACES.map(({ label }) => label), ['1면', '살인', '사기', '상해', '강도', '절도', '색인', '성향 테스트', '오피니언']);
+  assert.deepEqual(FACES.map(({ label }) => label), ['1면', '살인', '사기', '상해', '강도', '절도', '사건 검색/목록', '성향 테스트', '오피니언']);
 });
 
 test('범죄 유형 면만 API에 유형을 보내고, 나머지 면은 전체 목록을 받는다', () => {
@@ -16,7 +16,7 @@ test('범죄 유형 면만 API에 유형을 보내고, 나머지 면은 전체 �
 });
 
 test('화살표 · 귀 이름: 범죄 유형 면은 "살인면"처럼, 나머지는 탭 이름 그대로', () => {
-  assert.deepEqual(FACES.map(({ name }) => name), ['1면', '살인면', '사기면', '상해면', '강도면', '절도면', '색인', '성향 테스트', '오피니언']);
+  assert.deepEqual(FACES.map(({ name }) => name), ['1면', '살인면', '사기면', '상해면', '강도면', '절도면', '사건 검색/목록', '성향 테스트', '오피니언']);
 });
 
 test('탭 건수: 1면은 9건까지, 범죄 유형 면은 그 유형 건수, 색인 · 성향 테스트 · 오피니언은 달지 않는다', () => {

@@ -118,7 +118,7 @@ function pullQuote(paragraph) {
 const PAGES = [
   { key: 'front', page: '1면', name: '오늘의 지면', route: 'list' },
   { key: 'case', page: '3면', name: '사회' },
-  { key: 'index', page: '8면', name: '색인', route: 'list', params: { openAt: 'INDEX' } },
+  { key: 'index', page: '8면', name: '사건 검색/목록', route: 'list', params: { openAt: 'INDEX' } },
   { key: 'test', page: '10면', name: '성향테스트', route: 'testPaper', params: { from: 'paper' } },
   { key: 'opinion', page: '12면', name: '오피니언', route: 'list', params: { openAt: 'OPINION' } },
 ];
