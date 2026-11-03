@@ -429,6 +429,21 @@ class RunTest(unittest.TestCase):
         self.assertTrue((self.dir / "out" / "bad-case.report.json").exists())
         self.assertFalse((self.dir / "out" / "bad-case.case.json").exists())
 
+    def test_run_specialMode_downgradesFormatErrors_keepsPrivacyFloor(self):
+        # 특별 모드 (BE-165): 날짜는 경고로 낮춰 case.json을 만들고, 법원명은 어느 모드든 막는다
+        out = self.dir / "out"
+        paths = run(self.input, "date-case", out_dir=out, call=fake_call(output_with(overview="2099. 1. 10. 사건이다.")),
+                    special_mode="format")
+        report = json.loads(paths[2].read_text(encoding="utf-8"))
+        self.assertEqual(report["status"], "NEEDS_REVIEW")
+        self.assertEqual(report["specialMode"]["mode"], "format")
+        self.assertTrue(all(w.startswith("[특별 모드]") and "정확한 날짜" in w for w in report["specialMode"]["downgraded"]))
+        self.assertIn(report["specialMode"]["downgraded"][0], report["warnings"])
+        with self.assertRaises(ExtractError):
+            run(self.input, "court-case", out_dir=out, call=fake_call(output_with(overview="가상지방법원 사건이다.")),
+                special_mode="all")
+        self.assertFalse((out / "court-case.case.json").exists())
+
     def test_run_checkErrors_removesStaleOutputs(self):
         out = self.dir / "out"
         run(self.input, "same-name", out_dir=out, call=fake_call(FAKE_OUTPUT))

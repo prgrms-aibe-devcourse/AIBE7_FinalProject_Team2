@@ -28,6 +28,7 @@ import com.team2.project.legalcase.repository.SentencingGuidelineRepository;
 import com.team2.project.legalcase.service.CaseCastAssigner;
 import com.team2.project.pipeline.PipelineResult;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -303,7 +304,37 @@ public class CaseImportLoader {
 		if (unreadableScriptCast(result)) {
 			report.put("castWarning", "대본의 배역을 읽지 못해 사건 배역을 정하지 않았습니다. 관리자가 정해 주세요.");
 		}
+		specialMode(report, result);
 		return report;
+	}
+
+	/**
+	 * 특별 모드로 낮춘 검사 오류 (BE-165). extract 보고서 · 재판부 초안의 {@code specialMode}를 단계별로 남기고, 관리자 화면이 이미
+	 * 보여 주는 {@code validationWarnings} 앞에도 넣는다. 모양은 오프라인 적재(pipeline.py build_generation_report)와 같다.
+	 * 메시지에는 위치와 규칙만 있다(원본 값 없음)
+	 */
+	private static void specialMode(Map<String, Object> report, PipelineResult result) {
+		Map<String, Object> special = new LinkedHashMap<>();
+		List<Object> downgraded = new ArrayList<>();
+		String[] stages = {"extract", "court"};
+		JsonNode[] sources = {result.report(), result.courtDraft()};
+		for (int i = 0; i < stages.length; i++) {
+			JsonNode marker = sources[i] == null ? null : sources[i].get("specialMode");
+			if (marker != null && marker.isObject()) {
+				special.put(stages[i], Json.toMap(marker));
+				if (Json.toPlain(marker.get("downgraded")) instanceof List<?> items) {
+					downgraded.addAll(items);
+				}
+			}
+		}
+		if (special.isEmpty()) {
+			return;
+		}
+		report.put("specialMode", special);
+		if (report.get("validationWarnings") instanceof List<?> warnings) {
+			downgraded.addAll(warnings);
+		}
+		report.put("validationWarnings", downgraded);
 	}
 
 	/**

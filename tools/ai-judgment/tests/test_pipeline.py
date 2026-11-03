@@ -938,6 +938,22 @@ class PipelineTest(unittest.TestCase):
         with self.assertRaises(pipeline.PipelineError):
             self.config(select={"strategy": "first-valid", "semanticWeight": 0.3})
 
+    def test_special_mode_config_and_generation_report(self):
+        """BE-165: specialMode는 null · format · all만 받는다. 낮춘 오류는 generation_report의 specialMode와
+        validationWarnings 앞에 남는다 (백엔드 CaseImportLoader.specialMode와 같은 모양)."""
+        with self.assertRaises(pipeline.PipelineError):
+            self.config({"specialMode": "everything"})
+        config = self.config({"specialMode": "all"})
+        marks = {"extract": {"mode": "all", "downgraded": ["[특별 모드] a"]},
+                 "court": {"mode": "all", "downgraded": ["[특별 모드] b"]}}
+        state = {"stages": {stage: {"status": "done", "outputs": {"specialMode": mark}} for stage, mark in marks.items()}}
+        run_record = {"output": {}, "validation": {"warnings": ["w"]}, "meta": {}}
+        selection = {"modelSpec": "m", "runIndex": 0, "strategy": "first-valid", "reason": "r", "score": None}
+        report = pipeline.build_generation_report(config, state, run_record, selection)
+        self.assertEqual(report["specialMode"], marks)
+        self.assertEqual(report["validationWarnings"], ["[특별 모드] a", "[특별 모드] b", "w"])
+        self.assertNotIn("specialMode", pipeline.build_generation_report(config, {"stages": {}}, run_record, selection))
+
     def test_validate_config_invalid_semantic_weight_type_does_not_crash(self):
         """semanticWeight가 숫자가 아니면(타입 오류) strategy 비교에서 TypeError가 나지 않고
         option_errors의 타입 오류만 보고한다."""
@@ -2216,6 +2232,7 @@ class PipelineTest(unittest.TestCase):
         import schema  # noqa: E402
         self.assertEqual(pipeline.CRIME_TYPES, schema.CRIME_TYPES)
         self.assertEqual(pipeline.CRIME_TYPES, jobs.CRIME_TYPES)
+        self.assertEqual(pipeline.SPECIAL_MODES, jobs.SPECIAL_MODES)  # BE-165
 
     def test_service_rag_result_keys_match_offline_generation_report(self):
         """서비스 결과의 rag(jobs.RAG_RESULT_KEYS)와 오프라인 적재의 generation_report.rag(pipeline.rag_report)는 같은 키다

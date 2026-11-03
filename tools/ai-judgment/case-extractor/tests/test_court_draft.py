@@ -264,6 +264,38 @@ class RunTest(unittest.TestCase):
         report = json.loads((self.dir / "c.court_report.json").read_text(encoding="utf-8"))
         self.assertEqual(report["status"], "ERROR")
 
+    def test_run_specialMode_downgradesQuoteError_andMarks(self):
+        # 특별 모드 (BE-165): 다시 요청해도 인용이 틀리면 마지막 후보로 초안을 만들고 낮춘 오류를 남긴다
+        bad = draft_with(excerpt="지어낸 문장이다.")
+        call, calls = self.caller([bad, bad, bad])
+        draft_path, report_path = run("c", self.dir, "openai:gpt-x", caller=call, special_mode="format")
+        self.assertEqual(len(calls), 3)  # 낮출 수 있어도 끝까지 다시 요청한다
+        draft = json.loads(draft_path.read_text(encoding="utf-8"))
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+        self.assertEqual(report["status"], "NEEDS_REVIEW")
+        self.assertFalse(draft["judgment"]["isPublished"])
+        self.assertEqual(draft["specialMode"]["mode"], "format")
+        self.assertTrue(draft["specialMode"]["downgraded"][0].startswith("[특별 모드] excerpt: 원문 인용이 아닙니다"))
+        self.assertEqual(report["specialMode"], draft["specialMode"])
+        self.assertIn(draft["specialMode"]["downgraded"][0], report["warnings"])
+
+    def test_run_specialMode_retryPasses_noMark(self):
+        call, _ = self.caller([draft_with(excerpt="지어낸 문장이다."), DRAFT])
+        draft_path, report_path = run("c", self.dir, "openai:gpt-x", caller=call, special_mode="all")
+        self.assertNotIn("specialMode", json.loads(draft_path.read_text(encoding="utf-8")))
+        self.assertNotIn("specialMode", json.loads(report_path.read_text(encoding="utf-8")))
+
+    def test_run_specialMode_scopeAndPrivacyFloor(self):
+        evaluation = draft_with(reasoning="재판부 판단이 정답이다.")
+        pii = draft_with(notes=["사건 2099고단77 확인"])
+        for mode, draft, passes in (("format", evaluation, False), ("all", evaluation, True), ("all", pii, False)):
+            call, _ = self.caller([draft] * 3)
+            if passes:
+                run("c", self.dir, "openai:gpt-x", caller=call, special_mode=mode)
+            else:
+                with self.assertRaises(CourtDraftError, msg=(mode, draft)):
+                    run("c", self.dir, "openai:gpt-x", caller=call, special_mode=mode)
+
     def test_run_blockedStop_notRetried(self):
         call, calls = self.caller([""], stop_reason="SAFETY")
         with self.assertRaises(CourtDraftError) as ctx:

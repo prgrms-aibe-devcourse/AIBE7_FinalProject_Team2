@@ -8,6 +8,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * 사건 등록 요청 (API 명세 A-14).
@@ -21,10 +22,33 @@ import java.util.List;
  */
 public record CaseImportCreateRequest(
 	@NotNull CrimeType crimeType,
-	@NotNull @Size(min = 1, max = 3) List<@NotNull @Valid Source> sources
+	@NotNull @Size(min = 1, max = 3) List<@NotNull @Valid Source> sources,
+	SpecialMode specialMode
 ) {
 
 	public static final int MAX_ORIGINAL_TEXT_LENGTH = 200_000;
+
+	public CaseImportCreateRequest(CrimeType crimeType, List<Source> sources) {
+		this(crimeType, sources, null);
+	}
+
+	/**
+	 * 특별 모드 (BE-165). 비우면 꺼짐 — 검사 오류가 있으면 등록이 실패한다. 켜면 검사 오류 일부를 경고로 낮춰 적재까지 진행하고,
+	 * 낮춘 오류는 ai_generation.generation_report(validationWarnings · specialMode)에 남아 관리자가 원 판결문과 대조해 검수한다.
+	 * 재판부 · AI 판결은 지금처럼 비공개로 들어가므로 관리자가 공개하기 전에는 사용자에게 보이지 않는다.
+	 * 개인정보 최소선(주민등록번호 · 전화번호 등) · DB 제약 오류는 어느 모드든 막는다(tools/ai-judgment/special_mode.py)
+	 */
+	public enum SpecialMode {
+		/** 형식 오류만 낮춘다: 원문 인용 대조 · 상세 주소 · 정확한 날짜 · 정확한 나이 */
+		FORMAT,
+		/** FORMAT에 더해 내용 오류(평가 표현 · 재판부가 고려한 요소 없음)도 낮춘다 */
+		ALL;
+
+		/** 파이프라인 서비스 값 (format · all) */
+		public String pipelineValue() {
+			return name().toLowerCase(Locale.ROOT);
+		}
+	}
 
 	public record Source(
 		@NotNull CourtLevel courtLevel,

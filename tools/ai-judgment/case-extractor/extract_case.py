@@ -40,6 +40,7 @@ from build_prompt import InputError, check_case_input  # noqa: E402
 from common import find_forbidden_keys, write_json  # noqa: E402
 from llm import LLMError, api_key, call as llm_call, model_provider, parse_model_spec  # noqa: E402
 from validate_output import parse_output  # noqa: E402
+from special_mode import MODES as SPECIAL_MODES, marker as special_marker, split_errors  # noqa: E402
 
 DEFAULT_MODEL = "claude-opus-5-5"
 DEFAULT_EFFORT = "high"
@@ -369,7 +370,7 @@ def process_output(output):
 
 
 def run(input_path, name, out_dir=DEFAULT_OUT_DIR, model=DEFAULT_MODEL, effort=DEFAULT_EFFORT,
-        dry_run=False, call=None, max_tokens=None, log=print, free_models=()):
+        dry_run=False, call=None, max_tokens=None, log=print, free_models=(), special_mode=None):
     """전체 흐름. 만든 파일 경로 목록을 돌려준다. 검사 오류가 있으면 ExtractError(보고서는 남김).
 
     model은 문자열 또는 모델 목록이다. 목록이면 앞 모델의 호출이 과부하 · 한도로 막혔을 때 다음 모델로 넘어간다 (BE-45).
@@ -409,6 +410,12 @@ def run(input_path, name, out_dir=DEFAULT_OUT_DIR, model=DEFAULT_MODEL, effort=D
     except (KeyError, TypeError, OutputError) as e:
         raise ExtractError(f"응답 형식이 스키마와 다릅니다: {e}") from e
 
+    errors, downgraded = split_errors(errors, special_mode)  # 특별 모드 (BE-165): 낮춘 오류는 경고로
+    warnings = downgraded + warnings
+    special = special_marker(special_mode, downgraded)
+    if special:
+        log(f"⚠ 특별 모드({special_mode}): 검사 오류 {len(downgraded)}건을 경고로 낮췄습니다. 관리자가 원 판결문과 대조해 검수하세요")
+
     sources = build_source_records(judgments)
     incident_date, incident_warnings = resolve_incident_date(output.get("incidentDate"), judgments, sources)
     warnings += incident_warnings
@@ -420,6 +427,7 @@ def run(input_path, name, out_dir=DEFAULT_OUT_DIR, model=DEFAULT_MODEL, effort=D
            if len(models) > 1 else {}),
         **({"usedFreeTier": used_model in free_models} if free_models else {}),
         "status": "ERROR" if errors else "NEEDS_REVIEW",
+        **({"specialMode": special} if special else {}),
         "premasked": mask_counts,
         "deidentifiedItems": output.get("deidentifiedItems", []),
         "factorExtras": build_factor_extras(output),
@@ -479,11 +487,13 @@ def main():
                         help="Claude 전용 (다른 공급자는 무시)")
     parser.add_argument("--max-tokens", type=positive_int, help=f"Claude 외 공급자의 출력 상한 (기본 {NON_CLAUDE_MAX_TOKENS})")
     parser.add_argument("--dry-run", action="store_true", help="API를 호출하지 않고, 보낼 내용만 파일로 저장한다")
+    parser.add_argument("--special", choices=SPECIAL_MODES,
+                        help="특별 모드 (BE-165): format은 형식 오류만, all은 내용 오류까지 경고로 낮춘다. 개인정보 최소선은 그대로 막는다")
     args = parser.parse_args()
     try:
         model = args.model[0] if args.model and len(args.model) == 1 else (args.model or DEFAULT_MODEL)
         paths = run(args.input, args.name, args.out_dir, model, args.effort, args.dry_run,
-                    max_tokens=args.max_tokens)
+                    max_tokens=args.max_tokens, special_mode=args.special)
     except ExtractError as e:
         print(f"[오류] {e}", file=sys.stderr)
         return 1

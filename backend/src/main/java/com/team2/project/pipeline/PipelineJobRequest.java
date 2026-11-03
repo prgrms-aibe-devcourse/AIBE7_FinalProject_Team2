@@ -18,6 +18,7 @@ import java.util.Map;
  *                         대본까지 만들려면 {@code script}를 보낸다(BE-108)
  * @param crimeType        관리자가 고른 범죄 유형(CrimeType 이름). 파이프라인이 판결문에서 읽은 유형과 다르면 판결 ·
  *                         대본을 만들기 전에 멈춘다(BE-138). 모델에게 보내지는 않는다 — 비교에만 쓴다
+ * @param specialMode      특별 모드 (BE-165): {@code format} · {@code all}. 비우면 꺼짐
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record PipelineJobRequest(
@@ -26,7 +27,8 @@ public record PipelineJobRequest(
 	Map<String, Object> stages,
 	Integer finalSourceIndex,
 	String until,
-	String crimeType
+	String crimeType,
+	String specialMode
 ) {
 
 	/**

@@ -43,6 +43,7 @@ from extract_case import (  # noqa: E402
 )
 from llm import LLMError, api_key, call as llm_call, model_provider  # noqa: E402
 from validate_output import FORBIDDEN_EXPRESSIONS, parse_output  # noqa: E402
+from special_mode import MODES as SPECIAL_MODES, marker as special_marker, split_errors  # noqa: E402
 
 COURT_PROMPT_VERSION = "court-v2"  # v2: 인용 · 요소 선택 예시 퓨샷 court_draft_fewshot.md (BE-53)
 # 비식별화가 미리 가린 표시 ([주소] · [사건번호] 등, deidentify.MASK_RULES). 인용에 그대로 남으면 오류다 (BE-53)
@@ -324,9 +325,12 @@ def build_messages(case, court, masked_text):
     return system, user
 
 
-def request_draft(system, user, case, masked_text, model, max_tokens=MAX_TOKENS, caller=llm_call):
-    """모델에 초안을 요청하고 검사한다. 오류가 있으면 내용을 알려 주며 다시 요청한다. (초안, 경고, 실제 모델, 시도 횟수)"""
-    last_errors = []
+def request_draft(system, user, case, masked_text, model, max_tokens=MAX_TOKENS, caller=llm_call, special_mode=None):
+    """모델에 초안을 요청하고 검사한다. 오류가 있으면 내용을 알려 주며 다시 요청한다. (초안, 경고, 실제 모델, 시도 횟수)
+
+    special_mode(BE-165)면 낮출 수 있는 오류만 남은 초안을 후보로 두고 끝까지 다시 요청한다. 모두 실패하면 가장 최근
+    후보를 쓰고, 낮춘 오류는 "[특별 모드]" 경고로 돌려준다."""
+    last_errors, fallback = [], None
     for attempt in range(1 + RETRIES):
         message = user if not last_errors else (
             user + "\n\n(이전 응답의 오류: " + "; ".join(last_errors[:8]) + ". 인용은 원문을 글자 그대로 옮기고 바꾼 부분만 ⟦ ⟧로 "
@@ -349,12 +353,18 @@ def request_draft(system, user, case, masked_text, model, max_tokens=MAX_TOKENS,
         errors, warnings = check_draft(draft, case, masked_text)
         if not errors:
             return draft, warnings, result.served_model, attempt + 1
+        hard, downgraded = split_errors(errors, special_mode)
+        if not hard:
+            fallback = (draft, downgraded + warnings, result.served_model, attempt + 1)
         last_errors = errors
+    if fallback:
+        return fallback
     raise CourtDraftError(f"{1 + RETRIES}번 모두 검사를 통과하지 못했습니다: " + " | ".join(last_errors[:8]))
 
 
 def run(name, out_dir=DEFAULT_OUT_DIR, model=DEFAULT_MODEL, max_tokens=MAX_TOKENS, caller=None,
-        case_path=None, court_path=None, source_path=None, final_index=None, log=print, free_models=()):
+        case_path=None, court_path=None, source_path=None, final_index=None, log=print, free_models=(),
+        special_mode=None):
     """초안 생성 전체 흐름. (초안 파일, 보고서 파일). 실패하면 CourtDraftError (보고서는 남김).
 
     입력 파일은 기본으로 out_dir/<name>.case.json 등을 쓰고, 경로를 주면 그 파일을 쓴다(파이프라인 inputs).
@@ -413,7 +423,7 @@ def run(name, out_dir=DEFAULT_OUT_DIR, model=DEFAULT_MODEL, max_tokens=MAX_TOKEN
     system, user = build_messages(case, court, masked_text)
     try:
         (draft, warnings, served, attempts), used_model, skipped = run_with_fallback(
-            models, lambda m: request_draft(system, user, case, masked_text, spec_of(m), max_tokens, caller), log,
+            models, lambda m: request_draft(system, user, case, masked_text, spec_of(m), max_tokens, caller, special_mode), log,
             free_models)
     except (CourtDraftError, ModelUnavailableError) as e:
         draft_path.unlink(missing_ok=True)
@@ -427,6 +437,11 @@ def run(name, out_dir=DEFAULT_OUT_DIR, model=DEFAULT_MODEL, max_tokens=MAX_TOKEN
             raise CourtDraftError(str(e)) from e
         raise
     result = build_court_draft(draft, case, court, served)
+    special = special_marker(special_mode, [w for w in warnings if w.startswith("[특별 모드]")])
+    if special:  # 적재 뒤 관리자 후검수 기록(ai_generation.generation_report)에 남기려고 초안에도 싣는다
+        result["specialMode"] = special
+        report["specialMode"] = special
+        log(f"⚠ 특별 모드({special_mode}): 검사 오류 {len(special['downgraded'])}건을 경고로 낮췄습니다. 관리자가 원 판결문과 대조해 검수하세요")
     if len(models) > 1:
         report.update(requestedModel=used_model, modelChain=models,
                       fallbacks=[{**f, "error": scrub(f["error"])} for f in skipped])
@@ -448,10 +463,12 @@ def main():
                         help=f"'공급자:모델ID' (openai · gemini · anthropic, 기본: {DEFAULT_MODEL}). 여러 번 주면 앞 모델이 "
                              "과부하 · 한도로 막혔을 때 다음 모델로 넘어간다")
     parser.add_argument("--max-tokens", type=int, default=MAX_TOKENS)
+    parser.add_argument("--special", choices=SPECIAL_MODES,
+                        help="특별 모드 (BE-165): format은 형식 오류만, all은 내용 오류까지 경고로 낮춘다. 개인정보 최소선은 그대로 막는다")
     args = parser.parse_args()
     try:
         model = args.model[0] if args.model and len(args.model) == 1 else (args.model or DEFAULT_MODEL)
-        paths = run(args.name, args.out_dir, model, args.max_tokens)
+        paths = run(args.name, args.out_dir, model, args.max_tokens, special_mode=args.special)
     except (CourtDraftError, OSError, json.JSONDecodeError) as e:
         print(f"[오류] {e}", file=sys.stderr)
         return 1
