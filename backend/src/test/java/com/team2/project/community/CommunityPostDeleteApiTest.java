@@ -190,6 +190,19 @@ class CommunityPostDeleteApiTest extends ApiIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("C-8: 쓰고 지우기를 반복해도 하루 글 3건 상한은 다시 비지 않아 XP를 더 모을 수 없다")
+	void deleteMine_dailyCapStaysAfterDelete() throws Exception {
+		User author = newUser();
+		for (int i = 0; i < 3; i++) {
+			deleteMine(author, writePost(author, "반복 " + i)).andExpect(status().isNoContent());
+		}
+		writePost(author, "넷째");	// 상한을 넘겨 XP 없음
+
+		assertThat(xp(author, "POST")).isZero();
+		assertThat(totalXp(author)).isZero();	// 3건 90XP는 거뒀고 레벨 1이라 보정도 없다
+	}
+
+	@Test
 	@DisplayName("C-8: 판결 공유 글을 지우면 판결 공유 보너스도 거둔다")
 	void deleteMine_revokesShareBonus() throws Exception {
 		User author = newUser();

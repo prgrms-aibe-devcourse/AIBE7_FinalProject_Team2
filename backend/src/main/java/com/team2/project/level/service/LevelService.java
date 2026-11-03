@@ -109,7 +109,8 @@ public class LevelService {
 	 * 글을 지울 때 그 글로 받은 XP를 거둔다 (BE-167): 글 작성 · 받은 좋아요 · (판결 공유 글이면) 판결 공유 보너스.
 	 * 레벨은 내리지 않는다 — 거둔 뒤 XP가 지금 레벨의 시작 XP보다 모자라면 그 차이만큼 LEVEL_FLOOR로 채운다.
 	 * 남이 이 글에 단 댓글 · 누른 좋아요의 XP는 그 사람이 한 일이라 거두지 않는다.
-	 * 쓰고 지우기로 XP를 모으는 길은 막힌다(거둔 만큼 일일 상한도 비지만 XP는 남지 않는다)
+	 * 거둔 지급 행은 지우지 않고 금액만 0으로 둔다 — 하루 글 3건 상한과 같은 대상 중복 지급 방지가 그대로라 쓰고 지우기를 반복해도 XP를 더 모을 수 없다.
+	 * 받은 좋아요 XP 행은 글이 사라져 다시 쓸 일이 없어 지운다
 	 *
 	 * @param sharedCaseId 이 글이 판결을 붙인 사건 ID(없으면 null). 같은 사건에 판결을 붙인 다른 글이 남아 있으면 호출하는 쪽이 null로 넘긴다
 	 */
@@ -118,10 +119,10 @@ public class LevelService {
 		memberRepository.findByIdForUpdate(memberId);
 		ProfileStats stats = statsReader.read(memberId);
 		int before = LevelXp.derived(stats) + xpEventRepository.sumAmount(memberId);
-		xpEventRepository.deleteOne(memberId, XpSource.POST.name(), String.valueOf(postId));
+		xpEventRepository.zeroOne(memberId, XpSource.POST.name(), String.valueOf(postId));
 		xpEventRepository.deleteGroup(memberId, XpSource.LIKE_RECEIVED.name(), String.valueOf(postId));
 		if (sharedCaseId != null) {
-			xpEventRepository.deleteOne(memberId, XpSource.SHARE_POST.name(), String.valueOf(sharedCaseId));
+			xpEventRepository.zeroOne(memberId, XpSource.SHARE_POST.name(), String.valueOf(sharedCaseId));
 		}
 		int floor = LevelCurve.xpAt(LevelCurve.levelOf(before));
 		int after = LevelXp.derived(stats) + xpEventRepository.sumAmount(memberId);
