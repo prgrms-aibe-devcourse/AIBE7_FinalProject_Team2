@@ -75,10 +75,13 @@ function view(state, post) {
     likeCount: seedLike + (liked ? 1 : 0),
     liked,
     commentCount: commentsOf(state, post.postId).length,
-    mine: Boolean(post.mine),
+    mine: isMine(post), // 쓴 사람이 지금 로그인한 사용자일 때만(계정을 바꾸면 남의 글이다)
     viewerJudged: viewerJudged(post.caseId),
   };
 }
+
+// 내 글인가: 이 브라우저 저장소의 글이고 쓴 닉네임이 지금 로그인한 닉네임과 같을 때(고정 시드 글은 늘 남의 글, 로그아웃이면 아무 글도 내 글이 아니다)
+const isMine = (post) => Boolean(post.mine) && post.author?.nickname === currentUser()?.nickname;
 
 function findPost(state, postId) {
   const post = allPosts(state).find((item) => item.postId === postId);
@@ -257,7 +260,7 @@ export async function deleteCommunityPost(postId) {
   me();
   const state = load();
   findPost(state, postId);
-  if (!state.posts.some((item) => item.postId === postId)) fail('FORBIDDEN', '권한이 없거나 요청을 확인할 수 없습니다.');
+  if (!isMine(state.posts.find((item) => item.postId === postId) ?? {})) fail('FORBIDDEN', '권한이 없거나 요청을 확인할 수 없습니다.');
   const { [postId]: _comments, ...comments } = state.comments;
   const { [postId]: _liked, ...liked } = state.liked;
   store({ ...state, posts: state.posts.filter((item) => item.postId !== postId), comments, liked });

@@ -2,6 +2,7 @@ import { button, element, mockTag } from '../../components/siteLayout.js';
 import { formatDispositions, formatPenalty } from '../../utils/judgmentFormat.js';
 import { API_MODE } from '../../api/config.js';
 import { composeErrorText } from './composeError.js';
+import { deleteErrorText } from './deleteError.js';
 import { currentUser } from '../../utils/session.js';
 import { eraseSignature, signatureSvg, signerSeed, writeSignature } from '../../components/signatureInk.js';
 import { profileFace, typeFace } from '../../components/personCards.js';
@@ -359,10 +360,10 @@ export function deleteControl(post, { api, onDeleted }) {
   confirm.append(message, buttons);
   wrap.append(open, confirm, error);
 
-  const close = ({ refocus = true } = {}) => {
+  const close = () => {
     confirm.hidden = true;
     open.hidden = false;
-    if (refocus) open.focus();
+    open.focus();
   };
   open.addEventListener('click', () => {
     error.textContent = '';
@@ -372,23 +373,18 @@ export function deleteControl(post, { api, onDeleted }) {
   });
   no.addEventListener('click', () => close());
   confirm.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') close();
+    if (event.key === 'Escape' && !yes.disabled) close(); // 요청 중에는 닫지 않는다(결과가 오기 전에 상자가 사라지면 상태가 어긋난다)
   });
   yes.addEventListener('click', async () => {
     yes.disabled = true;
     no.disabled = true;
     try {
       await api.deleteCommunityPost(post.postId);
-      onDeleted();
+      if (open.isConnected) onDeleted(); // 요청이 끝나기 전에 다른 화면으로 갔다면 그 화면에서 다시 이동시키지 않는다
     } catch (failure) {
       if (!open.isConnected) return;
-      error.textContent = {
-        UNAUTHORIZED: '로그인이 풀렸어요. 다시 로그인해 주세요.',
-        FORBIDDEN: '내 글만 지울 수 있어요.',
-        POST_NOT_FOUND: '이미 지워진 글이에요. 목록으로 돌아가 주세요.',
-      }[failure?.code] ?? '글을 지우지 못했어요. 잠시 뒤 다시 시도해 주세요.';
-      close({ refocus: false });
-      open.focus();
+      error.textContent = deleteErrorText(failure);
+      close();
     } finally {
       yes.disabled = false;
       no.disabled = false;
@@ -460,7 +456,7 @@ export function filterControls({ value, cases, onChange }) {
   });
   group.append(groupTitle, list);
 
-  const caseGroup = element('div', 'cm-filter-group');
+  const caseGroup = element('div', 'cm-filter-group cm-filter-group-case');
   const picked = value.caseId ? (cases.find((item) => item.caseId === value.caseId) ?? { caseId: value.caseId, title: '선택한 사건' }) : null; // 목록에 없는 사건으로 걸러 왔어도 거르는 중 표시와 해제 버튼은 보인다
   if (picked) {
     const label = element('span', 'cm-filter-title', '사건');

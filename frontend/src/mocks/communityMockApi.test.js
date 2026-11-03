@@ -61,6 +61,16 @@ test('내 글 삭제: 글 · 댓글 · 좋아요가 함께 사라지고, 남의 
   await assert.rejects(deleteCommunityPost(108), { code: 'UNAUTHORIZED' });
 });
 
+test('다른 계정으로 바꾸면 이전 계정의 글은 mine이 아니고 지울 수 없다 (BE-167 · FE-165 리뷰)', async () => {
+  const mine = await createCommunityPost(post());
+  assert.equal((await getCommunityPost(mine.postId)).mine, true);
+  saveUser({ nickname: '다른 판사' });
+  assert.equal((await getCommunityPost(mine.postId)).mine, false);
+  await assert.rejects(deleteCommunityPost(mine.postId), { code: 'FORBIDDEN' });
+  saveUser({ nickname: '테스트 판사' });
+  await deleteCommunityPost(mine.postId);
+});
+
 test('로그아웃 상태면 쓰기 · 댓글 · 좋아요는 UNAUTHORIZED, 읽기는 된다', async () => {
   clearUser();
   await assert.rejects(createCommunityPost(post()), { code: 'UNAUTHORIZED' });

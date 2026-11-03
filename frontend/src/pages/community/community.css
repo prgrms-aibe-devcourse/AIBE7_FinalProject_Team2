@@ -135,7 +135,7 @@ body:has(.community-page) { background: var(--color-desk-bezel); }
 }
 @media (hover: hover) and (pointer: fine) { .cm-action:hover { background: var(--color-surface); color: var(--color-text); } }
 /* 내 글 삭제(FE-165): 좋아요 줄 오른쪽 끝. 눌러도 바로 지우지 않고 같은 자리에서 한 번 더 묻는다 */
-.cm-actions { flex-wrap: wrap; align-items: flex-start; }
+.cm-article .cm-actions { flex-wrap: wrap; align-items: flex-start; } /* 글 상세에만: 목록 카드의 좋아요 · 댓글 줄은 그대로 */
 .cm-delete { margin-left: auto; margin-right: 10px; display: grid; justify-items: end; gap: 6px; }
 .cm-delete-confirm { display: grid; justify-items: end; gap: 8px; max-width: 24em; padding: 10px 12px; border: 1px solid var(--color-border-strong); border-radius: 8px; background: var(--color-surface); }
 .cm-delete-confirm[hidden], .cm-delete-open[hidden] { display: none; }
@@ -346,11 +346,11 @@ textarea.cm-input { resize: vertical; min-height: 96px; line-height: 1.6; }
    "사건" 글자는 화면에서만 감추고(낭독용 label은 그대로) 자리는 placeholder가 말한다. 모바일(≤ 720px)은 폭이 좁아 위아래 두 줄 그대로 */
 @media (min-width: 721px) and (max-width: 1023px) {
   .cm-filter-groups { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-  .cm-filter-group:first-child { flex: 1 1 auto; min-width: 0; }
-  .cm-filter-group:last-child { position: relative; flex: 0 1 280px; min-width: 200px; }
-  .cm-filter-group:last-child .cm-filter-title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-  .cm-filter-group:last-child .cm-case-results { position: absolute; top: 100%; right: 0; left: 0; z-index: 3; box-shadow: 0 6px 16px color-mix(in srgb, var(--color-heading) 14%, transparent); }
-  .cm-filter-group:last-child .cm-case-empty { position: absolute; top: 100%; right: 0; left: 0; margin: 6px 0 0; padding: 8px 10px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-card); }
+  .cm-filter-group:not(.cm-filter-group-case) { flex: 1 1 auto; min-width: 0; }
+  .cm-filter-group-case { position: relative; flex: 0 1 280px; min-width: 200px; }
+  .cm-filter-group-case .cm-filter-title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .cm-filter-group-case .cm-case-results { position: absolute; top: 100%; right: 0; left: 0; z-index: 3; box-shadow: 0 6px 16px color-mix(in srgb, var(--color-heading) 14%, transparent); }
+  .cm-filter-group-case .cm-case-empty { position: absolute; top: 100%; right: 0; left: 0; margin: 6px 0 0; padding: 8px 10px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-card); }
 }
 
 /* 모바일 */
