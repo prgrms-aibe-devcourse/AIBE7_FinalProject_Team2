@@ -385,7 +385,7 @@ extract가 끝나면 요소마다 요약어(`summaryTag`)를 기준 목록 [`sum
 - 낮춘 오류는 `[특별 모드] 위치: 규칙` 경고로 보고서 `warnings`와 `specialMode`(`{mode, downgraded}`)에, court는 초안 파일에도 남는다.
   적재는 `ai_generation.generation_report`의 `specialMode`와 `validationWarnings` 맨 앞에 넣는다(관리자 화면이 이미 보여 주는 칸).
   원본 값은 남기지 않는다(메시지는 위치와 규칙뿐).
-- 판결은 비공개 · 사건은 DRAFT로 들어가고, 낮춘 경고가 있는 사건은 관리자가 확인(A-13-22)해야 공개할 수 있다(공개 조건 `SPECIAL_MODE_UNREVIEWED`, V51).
+- 판결은 비공개 · 사건은 DRAFT로 들어가고, 낮춘 경고가 있는 사건은 관리자가 확인(A-13-22)해야 공개할 수 있다(공개 조건 `SPECIAL_MODE_UNREVIEWED`, V51). 오프라인 적재 SQL도 사건을 `special_mode_review='PENDING'`으로 표시한다(V51이 적용된 DB에서만 실행된다).
 
 ### 보안 · 데이터
 

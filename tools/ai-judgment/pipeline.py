@@ -35,7 +35,7 @@ import urllib.parse
 from pathlib import Path
 
 from build_prompt import InputError, build_prompt
-from case_seed_sql import DEFAULT_SOURCE_ORG, CaseSeedError, build_case_sql, resolve_sources
+from case_seed_sql import DEFAULT_SOURCE_ORG, CaseSeedError, build_case_sql, resolve_sources, special_mode_review_sql
 from rag_context import RagContextError, RagUnavailable, build_references, input_key
 from rag_context import option_errors as rag_option_errors
 from court_seed_sql import CourtSeedError, build_court_sql
@@ -1142,14 +1142,27 @@ def stage_select(config, state, log):
     }
 
 
+def special_marks(config, state):
+    """특별 모드로 낮춘 검사 오류 표시 {extract?, court?} (BE-165). 단계를 돌렸으면 그 결과에서, 건너뛰고 inputs 파일을 썼으면
+    파일(report.json · court_draft.json)에서 읽는다 — 어느 쪽이든 같은 표시가 생성 기록과 공개 차단에 반영된다."""
+    marks = {}
+    for stage, key in (("extract", "report"), ("court", "courtDraft")):
+        mark = stage_output(state, stage).get("specialMode")
+        if not mark:
+            path = resolve_path(config, config["inputs"].get(key))
+            mark = load_json(path).get("specialMode") if path and Path(path).exists() else None
+        if mark:
+            marks[stage] = mark
+    return marks
+
+
 def build_generation_report(config, state, run_record, selection):
     """ai_generation.generation_report (V8). 관리자 후검수 화면이 볼 값. 사건 내용 · 실제 판결 값은 넣지 않는다."""
     raw = json.dumps(run_record["output"], ensure_ascii=False, sort_keys=True)
     run_key = hashlib.sha256(f"{config['name']}|{selection['modelSpec']}|{selection['runIndex']}|{raw}".encode()).hexdigest()
     contamination = stage_output(state, "contamination").get("results", {}).get(selection["modelSpec"])
     # 특별 모드로 낮춘 검사 오류 (BE-165). 관리자 화면이 이미 보여 주는 validationWarnings 앞에도 넣는다
-    special = {stage: stage_output(state, stage)["specialMode"]
-               for stage in ("extract", "court") if stage_output(state, stage).get("specialMode")}
+    special = special_marks(config, state)
     downgraded = [w for marker in special.values() for w in marker["downgraded"]]
     report = {
         "runKey": run_key[:32],
@@ -1558,6 +1571,9 @@ def stage_load(config, state, log, apply=None):
                 raise PipelineError(str(e))
         else:
             log("재판부 판결 초안이 없어 사건 · AI 판결만 적재합니다 (공개 전에 재판부 판결이 필요합니다)")
+
+    if special_marks(config, state):  # 오프라인 적재도 서버 적재(CaseImportLoader)처럼 공개 전 확인을 요구한다 (BE-165)
+        parts.append(special_mode_review_sql(case["title"]))
 
     model_name = (run_record.get("meta") or {}).get("servedModel") or parse_model_spec(selection["modelSpec"])[1]
     if len(model_name) > NAME_MAX_LENGTH:

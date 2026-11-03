@@ -311,11 +311,7 @@ public class CaseImportLoader {
 		return report;
 	}
 
-	/**
-	 * 특별 모드로 낮춘 검사 오류 (BE-165). extract 보고서 · 재판부 초안의 {@code specialMode}를 단계별로 남기고, 관리자 화면이 이미
-	 * 보여 주는 {@code validationWarnings} 앞에도 넣는다. 모양은 오프라인 적재(pipeline.py build_generation_report)와 같다.
-	 * 메시지에는 위치와 규칙만 있다(원본 값 없음)
-	 */
+	/** 특별 모드로 낮춘 경고가 있는지. 있으면 사건을 공개 전 확인 대기로 적재한다 (BE-165) */
 	private static boolean hasSpecialMode(PipelineResult result) {
 		for (JsonNode source : new JsonNode[] {result.report(), result.courtDraft()}) {
 			JsonNode marker = source == null ? null : source.get("specialMode");
@@ -326,6 +322,11 @@ public class CaseImportLoader {
 		return false;
 	}
 
+	/**
+	 * 특별 모드로 낮춘 검사 오류 (BE-165). extract 보고서 · 재판부 초안의 {@code specialMode}를 단계별로 남기고, 관리자 화면이 이미
+	 * 보여 주는 {@code validationWarnings} 앞에도 넣는다. 모양은 오프라인 적재(pipeline.py build_generation_report)와 같다.
+	 * 메시지에는 위치와 규칙만 있다(원본 값 없음)
+	 */
 	private static void specialMode(Map<String, Object> report, PipelineResult result) {
 		Map<String, Object> special = new LinkedHashMap<>();
 		List<Object> downgraded = new ArrayList<>();
