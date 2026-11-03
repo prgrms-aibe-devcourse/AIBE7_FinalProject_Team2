@@ -3,7 +3,7 @@ import { earButton, innerPageHead, pageIndex } from '../../components/newspaperF
 import { todayLabel } from '../../utils/newspaper.js';
 import { imageOf } from '../../components/stage.js';
 import { PAPER_QUESTIONS, toPaperQuestions } from '../../content/paperQuestions.js';
-import { revealCurrentPage, sheetMessage } from './personalityParts.js';
+import { sheetMessage } from './personalityParts.js';
 import { leaveByTurn } from '../../utils/pageTurn.js';
 import { reducedMotion } from '../../utils/motion.js';
 import { canGoBackInApp } from '../../app/router.js';
@@ -62,7 +62,6 @@ export async function renderPersonalityPaperPage(container, { api, navigate, fro
   root.append(element('h1', 'visually-hidden', '판결 성향 테스트'), desk, sheet);
   container.replaceChildren(root);
   window.scrollTo(0, 0);
-  revealCurrentPage(tabsZone.querySelector('.page-index')); // 좁은 화면: 지금 면(10면)이 색인 줄 안에 보이게
 
   const active = () => container.contains(root);
   const flow = createTestFlow({ api, isActive: active }); // 진행 규칙(답 · 넘기기 · 숫자 키 · 제출)은 /test와 같다

@@ -48,16 +48,6 @@ export function renderFolder(container, { navigate, sheetLabel, orientation = 'p
   return { root, tabs, label, body };
 }
 
-// 신문 지면(/test/paper · /test/paper/result)의 면 색인(components/newspaperFront.js pageIndex)은 좁은 화면에서 가로로 미는 줄이다(paperStage.css).
-// 지금 면(10면)이 오른쪽 끝에 반쯤 잘려 보이므로, 그린 뒤 지금 면이 보이게 줄만 민다(세로 스크롤 · 포커스는 건드리지 않는다). 다 들어가면 그대로
-// FE-155 pageIndex 자체 처리와 겹침, 둘 다 머지되면 이쪽을 지운다
-export function revealCurrentPage(nav) {
-  const here = nav?.querySelector('[aria-current="page"]');
-  if (!here || nav.scrollWidth <= nav.clientWidth) return;
-  const left = here.offsetParent === nav ? here.offsetLeft : here.offsetLeft - nav.offsetLeft; // offset 값은 넘겨 들어오는 연출(transform)에 영향받지 않는다
-  nav.scrollLeft = left - (nav.clientWidth - here.offsetWidth) / 2;
-}
-
 // 철 돌리기는 데스크톱(721px 이상)에서만 한다. 모바일은 철이 화면 폭을 꽉 채워 도는 모양이 어색하고, 연출 끄기 · 동작 줄이기에서도 건너뛴다
 export function canTurnFolder() {
   return !reducedMotion() && window.matchMedia('(min-width: 721px)').matches;

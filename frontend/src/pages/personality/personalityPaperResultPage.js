@@ -5,7 +5,7 @@ import { reducedMotion } from '../../utils/motion.js';
 import { renderAxisRow } from '../../components/axisRow.js';
 import { AXES, CHARACTER_NAMES } from '../../utils/personalityAxes.js';
 import { leaveByTurn } from '../../utils/pageTurn.js';
-import { descriptionSections, noticeBlock, revealCurrentPage, sheetMessage, withOtherCharacter } from './personalityParts.js';
+import { descriptionSections, noticeBlock, sheetMessage, withOtherCharacter } from './personalityParts.js';
 import { share, toleranceBlock } from './personalityResultPage.js';
 
 // 신문 성향 테스트 결과 (FE-126, /test/paper/result). 신문 성향 테스트(personalityPaperPage.js)를 마치면 오는 지면이다.
@@ -53,7 +53,6 @@ export async function renderPersonalityPaperResultPage(container, { api, navigat
   root.append(element('h1', 'visually-hidden', '판결 성향 테스트 결과'), desk, sheet);
   container.replaceChildren(root);
   window.scrollTo(0, 0);
-  revealCurrentPage(tabsZone.querySelector('.page-index')); // 좁은 화면: 지금 면(10면)이 색인 줄 안에 보이게
   const active = () => container.contains(root);
 
   async function load() {
