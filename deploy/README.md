@@ -844,7 +844,8 @@ select count(*) from admin_account;                        -- 1 (관리자는 me
 
 파일 업로드는 S3 버킷 하나에 저장한다. 버킷 · IAM 설정은 AWS 콘솔에서 인프라 담당이 관리하고, 이 저장소에는 비밀값을 두지 않는다.
 
-- **버킷**: 서울 리전(ap-northeast-2), 퍼블릭 액세스 전면 차단, 기본 암호화 SSE-S3. 파일은 Presigned URL로만 내려준다
+- **버킷**: 서울 리전(ap-northeast-2), 기본 암호화 SSE-S3. 퍼블릭 액세스는 차단하고, **사건 사진 경로(`case-photos/*`)만 버킷 정책으로 공개 읽기**를 연다(COMMON-74, 아래 "사건 사진 공개 읽기")
+  - 백엔드는 서명 없는 객체 주소를 DB에 저장하고 브라우저가 그 주소로 바로 받는다. Presigned URL은 쓰지 않는다
 - **인증**: EC2 인스턴스에 연결한 IAM 역할로 한다. 역할의 정책은 이 버킷의 객체 읽기 · 쓰기 · 삭제 · 목록만 허용한다(최소 권한)
   - `AWS_ACCESS_KEY_ID` · `AWS_SECRET_ACCESS_KEY`를 `.env` · Compose · 코드에 넣지 않는다. 넣으면 SDK가 역할보다 그 키를 먼저 쓴다
 - **컨테이너에서 역할 받기**: 인스턴스 메타데이터가 IMDSv2 필수라서, 응답 홉 제한이 1이면 컨테이너 안에서는 자격증명을 받지 못한다 → **2 이상**이어야 한다
@@ -866,9 +867,46 @@ vi .env
 docker compose -f docker-compose.prod.yml -f docker-compose.real-seed.yml up -d --no-build --no-deps backend
 ```
 
+### 처음 한 번: 사건 사진 공개 읽기 (COMMON-74, AWS 콘솔)
+
+관리자가 올린 사건 사진(대표 · 발단 · 결론)은 공개 화면에서 브라우저가 S3에서 직접 받는다. 이 설정이 없으면 S3가 403을 주고, 화면은 오류 없이 공용 컷으로 바꿔 끼워 **"사진을 올려도 기본 이미지로 나온다"**로 보인다. 왜 Presigned URL이 아니라 공개 읽기인지는 `docs/decisions/COMMON-74.md`.
+
+1. **S3 → 버킷 → 권한 → 퍼블릭 액세스 차단(버킷 설정) → 편집**에서 4개 중 **버킷 정책 관련 2개만 끈다**
+   - 끈다: "새 퍼블릭 버킷 또는 액세스 지점 정책을 통해 부여된 …" · "임의의 퍼블릭 버킷 또는 액세스 지점 정책을 통해 부여된 …"
+   - **켠 채로 둔다**: ACL 관련 2개("새 ACL을 통해 …" · "임의의 ACL을 통해 …"). 공개는 아래 정책 한 곳에서만 연다
+   - 계정 수준 퍼블릭 액세스 차단(S3 왼쪽 메뉴)이 켜져 있으면 버킷 설정보다 우선한다. 다만 계정 수준 설정은 **그 계정의 모든 버킷**에 걸리므로, 함부로 끄지 않는다. 꺼야 한다면 먼저 계정의 다른 버킷 정책에 공개 문이 없는지 확인하고, 다른 버킷을 계속 막아야 하면 계정 수준은 그대로 두고 CloudFront + OAC(`docs/decisions/COMMON-74.md` 대안 C)로 간다
+2. **권한 → 버킷 정책 → 편집**에 아래를 넣는다. 기존 정책 문(Statement)이 있으면 지우지 말고 배열에 이 문만 추가한다
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "PublicReadCasePhotos",
+      "Effect": "Allow",
+      "Principal": "*",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::<운영 버킷 이름>/case-photos/*"
+    }
+  ]
+}
+```
+
+- 여는 것은 `case-photos/` 아래 객체 **읽기(`s3:GetObject`) 하나뿐**이다. 목록(`s3:ListBucket`) · 쓰기 · 삭제는 열지 않는다 — 목록이 닫혀 있어 주소를 모르면 다른 사진을 찾을 수 없다
+- 로컬 실행(`S3_DIR_PREFIX=local`)이 올린 `local/case-photos/*`는 열지 않는다. 로컬에서도 사진을 확인해야 하면 그때 `Resource`를 배열로 바꿔 추가한다
+- 기본 암호화가 SSE-S3라 공개 읽기가 된다. SSE-KMS로 바꾸면 익명 요청이 KMS 키를 쓸 수 없어 다시 403이 난다
+
 ### 확인
 
 ```bash
+# 0) 사건 사진 공개 읽기 (COMMON-74) — 올린 사진 주소는 200, 버킷 목록과 경로 밖 객체는 403
+#    사진 주소는 DB에서 하나 꺼낸다(값은 화면에서만 보고 공유하지 않는다):
+#      select thumbnail_url from legal_case where thumbnail_url like '%case-photos/%' limit 1;
+curl -s -o /dev/null -w '%{http_code}\n' "<위에서 꺼낸 사진 주소>"                                   # 200
+curl -s -o /dev/null -w '%{http_code}\n' "https://<운영 버킷 이름>.s3.ap-northeast-2.amazonaws.com/"   # 403 (목록은 닫혀 있다)
+#    경로 밖: 실제로 있는 객체로만 확인한다. 목록 권한이 없어 없는 키도 403이 나므로, 지어낸 키의 403은 증거가 안 된다
+#    (예: 로컬 실행이 올린 local/case-photos/… 객체 → 403). 경로 밖 객체가 없으면 버킷 정책의 Resource가 case-photos/* 하나뿐인지 콘솔에서 본다
+
 # 1) 컨테이너 안에서 IAM 역할 이름이 보이면 정상 (안 보이면 역할 연결 · 홉 제한 확인)
 docker exec lawnambul-backend-1 sh -c '
 TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 60");
@@ -889,6 +927,7 @@ docker exec lawnambul-web-1 nginx -T 2>/dev/null | grep client_max_body_size
 | 1MB가 넘는 파일만 실패 (백엔드 오류) | Spring multipart 상한 → `application.yml` `spring.servlet.multipart` |
 | `Unable to load credentials` | 역할이 연결되지 않았거나 홉 제한이 1 → 위 확인 1) |
 | `AccessDenied` | 역할 정책의 버킷 이름 · 권한 확인 (인프라 담당) |
+| 사진을 올렸는데 공개 화면 · 관리자 미리보기에 안 보임(공용 컷 · 깨진 이미지) | 브라우저 Network 탭에서 S3 요청이 403이면 공개 읽기 정책이 없거나 퍼블릭 액세스 차단이 정책을 막고 있다 → 위 "사건 사진 공개 읽기" · 확인 0) |
 
 ## Swap (COMMON-54)
 

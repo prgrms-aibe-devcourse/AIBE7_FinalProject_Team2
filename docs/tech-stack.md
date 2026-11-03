@@ -37,6 +37,7 @@
 | v1.30 | 2026-10-30 | CSP 1단계 (COMMON-70, COMMON-67 후속) — 3장 "보안 헤더" 행: Nginx 화면 · 정적 파일 응답에 `Content-Security-Policy-Report-Only` 추가(같은 출처 + 글꼴 CDN + S3 사건 사진, `'unsafe-inline'` 없음). 운영 위반 확인 후 `Content-Security-Policy`로 전환 |
 | v1.31 | 2026-11-02 | **D 담당 부분 최신화** — 2장: RDS 전환 완료(10/28) · Supabase 공용 DB 종료(COMMON-59), 운영 postgres 컨테이너가 빠진 메모리 배분, 캐시를 붙인 API가 아직 없음을 명시. 3장: 회원 전용 경로(커뮤니티 쓰기 · 내 회원 정보), 토큰 재발급 · 폐기 구현됨(BE-94). 8장: RDS · S3 · Let's Encrypt 추가, Docker 행에서 DB 컨테이너 제외 |
 | v1.32 | 2026-11-02 | 카카오 첫 가입 약관 동의 (BE-145) — 3장: 카카오 첫 가입 대기(Redis 토큰 DB TTL 10분 · 쿠키 `NLNB_SIGNUP`)와 Origin 검증 대상 추가, 2장 Redis DB 1 항목에 OAuth 왕복 상태 · 가입 대기를 적음 |
+| v1.33 | 2026-11-03 | 사건 사진 전달 방식 정정 (COMMON-74) — 8장 AWS S3 행: "Presigned URL로만"을 `case-photos/*` 버킷 정책 공개 읽기로 고침(구현에 Presigned URL 발급이 없어 공개 화면 사진이 403이었다) |
 
 
 ## **1. Backend**
@@ -523,7 +524,7 @@ Redis도 같다(BE-61). `RedisConfigTest`가 실제 Redis에 붙으므로 **테�
 | AWS EC2 | 백엔드 · 프론트엔드 서버 운영 |
 | Docker · Docker Compose | EC2에서 웹(Nginx) · 백엔드 · Redis 컨테이너 실행 (`deploy/docker-compose.prod.yml`). DB는 RDS라 `docker-compose.external-db.yml`을 겹친다 |
 | AWS RDS for PostgreSQL | 운영 DB (10/28 ~, BE-59). 2장 "DB 운영 단계" |
-| AWS S3 | 파일 저장소(관리자가 올리는 사건 사진, COMMON-47). Presigned URL로만 내려주고, EC2 IAM 역할로 접근한다 (`deploy/README.md` "파일 저장소 S3") |
+| AWS S3 | 파일 저장소(관리자가 올리는 사건 사진, COMMON-47). EC2 IAM 역할로 업로드하고, 사건 사진 경로(`case-photos/*`)만 버킷 정책으로 공개 읽기를 열어 브라우저가 바로 받는다(COMMON-74) (`deploy/README.md` "파일 저장소 S3") |
 | Let's Encrypt (certbot) | HTTPS 인증서 발급 · 자동 갱신 (BE-75). HSTS는 Nginx가 붙인다(3장 "보안 헤더") |
 | Nginx | 웹 이미지 안에서 프론트엔드 빌드 파일(정적 파일) 서빙, `/api` 요청을 백엔드 컨테이너로 프록시 (`frontend/nginx/default.conf`) |
 | GHCR (GitHub Container Registry) | 운영 이미지 저장소. 서버는 받아서 실행만 한다 (서버에서 빌드하지 않음) |
