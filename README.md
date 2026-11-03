@@ -10,23 +10,26 @@
   사건을 단계별로 읽고 직접 판결을 내린 뒤, AI · 실제 판결과 같은 기준으로 비교하는 판결 체험 서비스
 </p>
 
+<p align="center"><a href="https://naelawnambul.today">naelawnambul.today</a></p>
+
 <div align="center">
 
 |                                     백승호                                     |                                   정민석                                   |                                   김현중                                   |                                  김해송                                   |
 |:---------------------------------------------------------------------------:|:-----------------------------------------------------------------------:|:-----------------------------------------------------------------------:|:----------------------------------------------------------------------:|
 | <img src="https://avatars.githubusercontent.com/pooreunblue" width="100"/> | <img src="https://avatars.githubusercontent.com/jms0326" width="100"/> | <img src="https://avatars.githubusercontent.com/YOLO-NIM" width="100"/> | <img src="https://avatars.githubusercontent.com/peanutboi710" width="100"/> |
 |              [@pooreunblue](https://github.com/pooreunblue)               |                [@jms0326](https://github.com/jms0326)                 |                [@YOLO-NIM](https://github.com/YOLO-NIM)                 |                 [@peanutboi710](https://github.com/peanutboi710)                 |
+| AI 판결 · 비교 · 모니터링 · JWT | 인프라 · 배포 · 운영 · 카카오 로그인 | 성향 백엔드 · 보안 기반 · 판례 저장소 | 화면 · 캐릭터 · 성향 콘텐츠 · 관리자 검수 |
 
 </div>
 
 ## 핵심 포인트
 
-- <sub>실제 판결은 마지막 막까지 비공개, 제출한 판단은 고칠 수 없게 **서버가 진행 상태 7단계를 강제**</sub>
-- <sub>사용자 · AI · 재판부 판단을 `judgment` 한 테이블에 저장, "1회 제출"은 **부분 유니크 인덱스로 보장**</sub>
-- <sub>AI 판결은 **미리 생성 → 관리자 검수 후 공개** (비식별화 · RAG · 사전 학습 점검 파이프라인)</sub>
-- <sub>관리자(세션 · CSRF) · 카카오 로그인(OAuth) · 사용자(JWT) **보안 필터 체인 3분리**</sub>
-- <sub>IAM 권한 없이 서버가 이미지를 당겨 오는 **자동 배포**, 실패하면 직전 버전으로 자동 되돌림</sub>
-- <sub>Grafana Cloud · Slack 경보, Nginx 요청 제한, 작업마다 남긴 **의사결정 기록 240건 이상**</sub>
+- 실제 판결은 마지막 막까지 비공개, 제출한 판단은 **서버가 진행 상태 7단계로 잠금**
+- 사용자 · AI · 재판부 판단을 `judgment` 한 테이블에, "1회 제출"은 **부분 유니크 인덱스로 보장**
+- AI 판결은 **미리 생성 → 관리자 검수 후 공개** (비식별화 · RAG · 사전 학습 점검 파이프라인)
+- 관리자(세션 · CSRF) · 카카오 로그인(OAuth) · 사용자(JWT) **보안 필터 체인 3분리**
+- IAM 권한 없이 서버가 이미지를 당겨 오는 **자동 배포**, 실패하면 직전 버전으로 자동 되돌림
+- Grafana Cloud · Slack 경보, Nginx 요청 제한, 작업마다 남긴 **의사결정 기록 240건 이상**
 
 ## 체험 흐름
 
@@ -64,7 +67,7 @@ flowchart LR
 | 구분 | 내용 |
 | --- | --- |
 | Backend | Java 17, Spring Boot 4.1.1 (Web MVC · Data JPA · Validation), Gradle |
-| DB | PostgreSQL 17, Flyway(스키마 마이그레이션) |
+| DB | PostgreSQL 17 + pgvector(RAG 유사 판례 검색), Flyway(스키마 마이그레이션) |
 | Cache · 토큰 | Redis 7.4 |
 | Frontend | HTML + JavaScript, Vite |
 | 인프라 | AWS EC2 · RDS · S3, Docker Compose, Nginx(HTTPS · 요청 제한), GHCR |
@@ -84,6 +87,7 @@ flowchart LR
 | 유저 흐름도 | [docs/user-flow.md](./docs/user-flow.md) |
 | 인프라 아키텍처 | [docs/architecture.md](./docs/architecture.md) |
 | AI 판결 파이프라인 | [docs/ai-judgment-pipeline.md](./docs/ai-judgment-pipeline.md) |
+| 의사결정 기록 | [docs/decisions](./docs/decisions) |
 | 배포 · 운영 | [deploy/README.md](./deploy/README.md) |
 | 모니터링 | [monitoring/README.md](./monitoring/README.md) |
 | Git · 코드 컨벤션 | [GIT_CONVENTIONS.md](./docs/conventions/GIT_CONVENTIONS.md) · [CODE_CONVENTIONS.md](./docs/conventions/CODE_CONVENTIONS.md) |
@@ -168,3 +172,7 @@ ls backend/private-seed/seed                # R__10 · R__20 · R__30 세 파일
 - API 없이 화면만 보려면 `http://localhost:5173/preview.html` → [frontend/README.md](./frontend/README.md)
 
 </details>
+
+---
+
+<sub>이 서비스의 사건은 실제 판결을 바탕으로 비식별 처리한 내용이며, 내Law남불은 법률 자문이나 특정 사건에 대한 법적 판단을 제공하지 않습니다.</sub>
