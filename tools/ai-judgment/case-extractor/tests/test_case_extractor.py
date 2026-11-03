@@ -1021,10 +1021,25 @@ class PriorSentenceLeakTest(unittest.TestCase):
             self.assertEqual(len(errors), 1, text)
 
     def test_monthOfDate_notLeak(self):
-        # 날짜의 "6월"은 징역과 붙어 있지 않으면 걸리지 않는다
+        # 날짜의 "6월"은 이번 선고(6월)로 잡지 않는다 — 날짜 바로 뒤에 "징역"이 와도(PR #425 리뷰)
         court = {"prisonMonths": 6, "fineAmount": None, "suspensionMonths": None}
-        errors, _ = sentence_leak_check(self.case_input("2016년 6월에 범행했고 법정형은 징역 6월 이상이다"), court)
+        for text in ("2016년 6월에 범행했고 법정형은 징역 6월 이상이다",
+                     "같은 해 6월 징역 2년을 선고받은 전력이 있다",
+                     "6월 징역 2년을 선고받은 전력이 있다"):
+            errors, _ = sentence_leak_check(self.case_input(text), court)
+            self.assertEqual(errors, [], text)
+        # 집행유예 기간도 같다: 날짜 "6월" 뒤의 "집행유예"는 잡지 않는다
+        court = {"prisonMonths": 12, "fineAmount": None, "suspensionMonths": 6}
+        errors, _ = sentence_leak_check(self.case_input("6월 집행유예 기간이 끝났다"), court)
         self.assertEqual(errors, [])
+
+    def test_currentSuspension_blocksPriorSuspensionWording(self):
+        # 이번 선고에 집행유예가 있으면, 이전 형량이 달라도 "징역형의 집행유예" 표현과 같은 유예 기간은 막힌다 —
+        # 프롬프트 2장의 둘째 규칙이 이 검사와 맞는지 확인한다 (PR #425 리뷰)
+        court = {"prisonMonths": 12, "fineAmount": None, "suspensionMonths": 24}
+        for text in ("징역 6개월에 징역형의 집행유예를 선고받은 전과가 있다", "징역 6개월에 집행유예 2년을 선고받은 전과가 있다"):
+            errors, _ = sentence_leak_check(self.case_input(text), court)
+            self.assertTrue(errors, text)
 
     def test_recommendedPhrase_passesLeakCheck(self):
         # 실형(유예 없음) · 집행유예 선고 둘 다: 숫자와 '징역형의 집행유예' 표현이 없어 걸리지 않아야 한다

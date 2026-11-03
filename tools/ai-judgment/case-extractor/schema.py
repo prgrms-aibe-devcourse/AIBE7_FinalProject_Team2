@@ -371,6 +371,15 @@ def _month_forms(months):
     return {text, f"{months}개월", text.replace("개월", "월"), f"{months}월"}
 
 
+def _reverse_month_forms(forms):
+    """역방향("6월의 징역")에 쓸 표기. 연도 없는 단독 "N월"은 뺀다 (PR #425 리뷰).
+
+    "같은 해 6월 징역 2년을 선고받았다"의 "6월"은 날짜인데, 역방향으로 보면 "6월징역"이 되어 이번 선고(6월)로 잘못 잡힌다.
+    판결문은 "징역 6월" 순서로 쓰므로 단독 "N월"은 순방향에서만 찾는다. "1년6월"처럼 연이 붙은 표기는 날짜와 헷갈리지 않아 남긴다.
+    """
+    return {f for f in forms if not re.fullmatch(r"\d+월", f)}
+
+
 def _won_forms(amount):
     """금액의 표기 변형: "2천만원", "2천만", "20,000,000원"."""
     text = format_won(amount).replace(" ", "")
@@ -381,17 +390,21 @@ def _leak_patterns(court):
     """(표시할 형량, 공백 없는 문장에서 찾을 패턴) 목록. 형량 용어와 기간 · 금액이 함께 있는 표현만 본다."""
     patterns = []
 
-    def add(label, term, forms, before):
+    def add(label, term, forms, before, reverse_forms=None):
         # before: 역방향 표현에서 앞에 올 수 없는 글자. 더 큰 금액 · 기간의 뒷부분("1억 2천만원", "2년 6개월")을 잘라 오탐하지 않는다
+        # reverse_forms: 역방향("6개월의 징역")에 쓸 표기. 기본은 forms와 같다
         alt = _alternatives(forms)
-        patterns.append((label, re.compile(f"(?:{term}{alt}{_AMOUNT_END}|(?<![{before}]){alt}(?:간|의)?{term})")))
+        rev = _alternatives(forms if reverse_forms is None else reverse_forms)
+        patterns.append((label, re.compile(f"(?:{term}{alt}{_AMOUNT_END}|(?<![{before}]){rev}(?:간|의)?{term})")))
 
     if court.get("prisonMonths"):
-        add(f"징역 {format_months(court['prisonMonths'])}", "징역형?", _month_forms(court["prisonMonths"]), r"\d년")
+        forms = _month_forms(court["prisonMonths"])
+        add(f"징역 {format_months(court['prisonMonths'])}", "징역형?", forms, r"\d년", _reverse_month_forms(forms))
     if court.get("fineAmount"):
         add(f"벌금 {format_won(court['fineAmount'])}", "벌금형?", _won_forms(court["fineAmount"]), r"\d억천백")
     if court.get("suspensionMonths"):
-        add(f"집행유예 {format_months(court['suspensionMonths'])}", "집행유예", _month_forms(court["suspensionMonths"]), r"\d년")
+        forms = _month_forms(court["suspensionMonths"])
+        add(f"집행유예 {format_months(court['suspensionMonths'])}", "집행유예", forms, r"\d년", _reverse_month_forms(forms))
         patterns.append(("집행유예", re.compile("징역형?의?집행을?유예")))
     return patterns
 
