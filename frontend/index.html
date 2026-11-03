@@ -5,8 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" /> <!-- FE-152: 안드로이드 크롬도 키보드가 뜨면 레이아웃을 줄여(iOS와 같게) 아래 고정 조작 줄 · 입력창이 키보드에 가리지 않는다 -->
     <meta name="theme-color" content="#101d39" /> <!-- 모바일 상태 바 색: 메인 책상의 남색 머리글(--palette-navy-900)에 맞춘다 -->
     <title>내Law남불</title>
+    <meta name="description" content="실제 판결을 바탕으로 재구성한 사건을 읽고, 판사석에서 직접 판결해 보세요." />
+    <!-- 링크 미리 보기(FE-162): 문구는 임시, 이미지는 public/images/mark/og-image.svg를 렌더링한 jpg(크롤러는 SVG를 못 읽는다). 문구를 바꾸면 SVG를 다시 렌더링해 jpg도 바꾼다 -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="내Law남불" />
+    <meta property="og:title" content="내Law남불" />
+    <meta property="og:description" content="실제 판결을 바탕으로 재구성한 사건을 읽고, 판사석에서 직접 판결해 보세요." />
+    <meta property="og:url" content="https://naelawnambul.today/" />
+    <meta property="og:image" content="https://naelawnambul.today/images/mark/og-image.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
     <link rel="icon" href="/images/mark/app-icon-32.png" type="image/png" sizes="32x32" />
-    <link rel="icon" href="/images/mark/app-icon-192.png" type="image/png" sizes="192x192" /> <!-- 임시 아이콘(FE-150 B안 시안): 네이비 바탕에 놋쇠 스탠드. 로고가 정해지면 바꾼다. 예전 글자 L(favicon.svg)은 파일만 남겨 둔다 -->
+    <link rel="icon" href="/images/mark/app-icon-192.png" type="image/png" sizes="192x192" /> <!-- 임시 아이콘(FE-150 B안 시안): 네이비 바탕에 놋쇠 스탠드. 로고가 정해지면 바꾼다. -->
     <link rel="apple-touch-icon" href="/images/mark/app-icon-180.png" />
     <!-- 글꼴 (FE-17): 제목 Noto Serif KR · 본문 Pretendard · 신문 기사 본문 나눔명조 · 메모지 손글씨 나눔펜. 바꿀 때는 이 링크와 src/style.css의 --font-* 만 고친다 -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />

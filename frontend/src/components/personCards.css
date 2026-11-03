@@ -168,6 +168,8 @@ img.my-sash-icon.is-missing { visibility: hidden; }
 :is(.my-card, .my-mini-card).deco-bg-leather { background: url('/images/card/bg-leather.webp') center / cover no-repeat #14213f; }
 :is(.my-card, .my-mini-card).deco-bg-bronze { background: url('/images/card/bg-bronze.webp') center / cover no-repeat #8c7340; }
 :is(.my-card, .my-mini-card):is(.deco-bg-wood, .deco-bg-blinds, .deco-bg-lamp, .deco-bg-felt, .deco-bg-leather, .deco-bg-bronze) { color: var(--color-card); }
+/* 먹물 번짐 무늬는 군데군데 어두워 옅은 회색 글씨가 묻힌다(대비 2.7:1) → 본문색으로 진하게(FE-162) */
+.my-card.deco-bg-blotter .my-card-note { color: var(--color-heading); }
 .my-card:is(.deco-bg-wood, .deco-bg-blinds, .deco-bg-lamp, .deco-bg-felt, .deco-bg-leather, .deco-bg-bronze) .my-card-note { color: color-mix(in srgb, var(--color-card) 80%, transparent); }
 .my-card:is(.deco-bg-wood, .deco-bg-blinds, .deco-bg-lamp, .deco-bg-felt, .deco-bg-leather, .deco-bg-bronze) .my-card-window { background: color-mix(in srgb, var(--color-card) 14%, transparent); border-color: color-mix(in srgb, var(--deco-night-line) 60%, transparent); }
 .my-card.is-type:is(.deco-bg-wood, .deco-bg-blinds, .deco-bg-lamp, .deco-bg-felt, .deco-bg-leather, .deco-bg-bronze) .my-card-note.my-type-quote { color: color-mix(in srgb, var(--color-card) 80%, transparent); border-top-color: color-mix(in srgb, var(--color-card) 40%, transparent); }
