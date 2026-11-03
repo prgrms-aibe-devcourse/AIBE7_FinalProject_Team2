@@ -163,7 +163,9 @@ test('서는 곳(placeFor): 자리 · 뒤집기 · 꼬리 방향이 서로 맞�
   const right = placeFor('naero', 'idle-neutral', undefined, cast);
   assert.deepEqual([right.seat, right.flip, right.side], ['right', true, 'right']);
   const stand = placeFor('naero', 'role:actor', 'stand', cast);
-  assert.deepEqual([stand.flip, stand.center], [false, true], '피고인석은 원본 방향 · 꼬리는 가운데');
+  assert.deepEqual([stand.flip, stand.center], [true, true], '피고인석: 왼쪽 검사 쪽을 보게 내로는 뒤집힌다(FE-164) · 꼬리는 가운데');
+  const standNambul = placeFor('nambul', 'role:actor', 'stand', DEFAULT_CAST);
+  assert.deepEqual([standNambul.flip, standNambul.center], [false, true], '남불은 원본이 왼쪽을 봐 그대로');
   // 왼쪽 자리의 화자가 오른쪽 숫자 슬롯에 서면 꼬리 · 뒤집기도 슬롯을 따른다(리뷰 반영)
   const slotRight = placeFor('naero', 'idle-neutral', { slot: 55, row: 'front' }, DEFAULT_CAST);
   assert.deepEqual([slotRight.seat, slotRight.side, slotRight.flip], ['left', 'right', true]);
