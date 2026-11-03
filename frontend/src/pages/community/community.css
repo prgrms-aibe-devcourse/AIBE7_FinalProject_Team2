@@ -274,7 +274,7 @@ textarea.cm-input { resize: vertical; min-height: 96px; line-height: 1.6; }
 /* 넓은 화면인데 화면이 팝오버(약 346px)보다 낮을 때만 높이 상한과 세로 스크롤을 둔다(높으면 overflow: visible 그대로) */
 @media (min-width: 721px) and (max-height: 400px) { .cm-pop:popover-open { max-height: calc(100dvh - 16px); overflow: hidden auto; } }
 .cm-pop:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
-.cm-pop-close { display: none; } /* 닫기 버튼 · 손잡이는 모바일 판에서만(아래 모바일 블록) */
+.cm-pop-close { display: none; } /* 닫기 버튼은 모바일 판에서만(아래 모바일 블록) */
 /* 사파리는 aspect-ratio로 높이를 정하는 카드의 높이를 grid 안에서 크게 잡아 상자가 화면 끝까지 늘어난다 → 작은 창 카드는 높이까지 px로 준다(7:14 그대로) */
 .cm-pop .cm-card-pair { gap: 8px; }
 .cm-pop .cm-card-pair .my-card { width: 102px; height: 204px; }
@@ -354,8 +354,7 @@ textarea.cm-input { resize: vertical; min-height: 96px; line-height: 1.6; }
   /* ③ 작은 창: 화면 아래에서 올라오는 판. 누른 자리 계산(left · top)은 쓰지 않는다(communityParts.js openPop) */
   .cm-pop, .cm-pop:popover-open { inset: auto 0 0 0; width: auto; max-width: none; max-height: 85dvh; overflow: hidden auto; padding: 18px 16px calc(18px + env(safe-area-inset-bottom, 0px)); border-width: 1px 0 0; border-radius: 14px 14px 0 0; }
   .cm-pop .cm-card-pair { justify-content: center; }
-  /* 판 위쪽 가운데 손잡이(아래로 내려 닫는 판임을 알린다, 장식) + 오른쪽 위 닫기 버튼 44px(FE-158) */
-  .cm-pop::before { content: ''; position: absolute; top: 7px; left: 50%; width: 36px; height: 4px; margin-left: -18px; border-radius: 2px; background: var(--color-border-strong); }
+  /* 오른쪽 위 닫기 버튼 44px(FE-158). 손잡이(끌어서 닫는 모양)는 끌기를 만들지 않았으므로 두지 않는다(PR #408 리뷰) */
   .cm-pop-close { position: absolute; top: 6px; right: 6px; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--color-muted); font: 400 18px/1 var(--font-body); cursor: pointer; }
   .cm-pop-close:active { background: var(--color-surface); }
   .cm-pop-close:focus-visible { outline: 3px solid var(--color-focus); outline-offset: -3px; }
