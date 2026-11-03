@@ -169,6 +169,10 @@
 .admin-verdict.is-ok { border-color: var(--color-accent); color: var(--color-accent-text); }
 .admin-verdict.is-warn { border-color: var(--color-caution-border); background: var(--color-caution-tint); color: var(--color-caution); }
 .admin-verdict.is-danger { border-color: var(--color-danger-border); background: var(--color-danger-tint); color: var(--color-danger); }
+.admin-special-mode { margin: 8px 0; padding: 10px 12px; border: 1px solid var(--color-caution-border); border-radius: 4px; background: var(--color-caution-tint); }
+.admin-special-head { margin: 0 0 6px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; color: var(--color-caution); font-size: var(--text-small); }
+.admin-special-mode .admin-sub { margin: 0 0 10px; }
+.admin-warnings .is-special { font-weight: 600; }
 .admin-warnings { margin: 0; padding-left: 18px; font-size: var(--text-small); color: var(--color-caution); }
 .admin-generation > .admin-dl { margin-bottom: 4px; }
 .admin-tag-candidates { display: grid; gap: 2px; margin-top: 4px; font-size: var(--text-small); }

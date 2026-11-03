@@ -36,6 +36,9 @@ export const publishCase = (caseId) => adminPost(`/cases/${id(caseId)}/publish`)
 // A-13-14 공개 취소: 사용자 화면에서 숨긴다(PUBLISHED → REVIEW). 사유는 감사 로그에만 남는다 (BE-118)
 export const unpublishCase = (caseId, reason) => adminPost(`/cases/${id(caseId)}/unpublish`, { reason });
 
+// A-13-22 특별 모드 경고 확인: 낮춘 검사 오류를 원 판결문과 대조한 뒤 누른다. 확인해야 공개 조건 SPECIAL_MODE_UNREVIEWED가 풀린다 (BE-165)
+export const confirmSpecialMode = (caseId) => adminPost(`/cases/${id(caseId)}/special-mode/confirm`);
+
 // A-14 · A-15 · A-14-1 사건 등록(원본 판결문 → 파이프라인 실행 → 적재)
 export const createImport = (request) => adminPost('/case-imports', request);
 export const getImport = (importId) => adminGet(`/case-imports/${id(importId)}`);
