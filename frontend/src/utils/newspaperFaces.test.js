@@ -112,7 +112,7 @@ test('줄은 2줄을 넘기지 않는다', () => {
 
 test('광고는 한 번만, 높은 줄에는 사진 지면이 섞인다', () => {
   const tall = planFiller({ space: 900, width: 1200 });
-  assert.deepEqual(tall.kinds, ['photo', 'fact', 'ad', 'fact', 'fact', 'photo']); // 3칸 2줄, 사진은 대각선
+  assert.deepEqual(tall.kinds, ['photo', 'fact', 'ad', 'fact', 'photo', 'photo']); // 3칸 2줄, 사진 3장(탐구 컷까지 닿는다)
   assert.equal(tall.kinds.filter((kind) => kind === 'ad').length, 1);
   const short = planFiller({ space: 140, width: 1200 });
   assert.equal(short.kinds.length, 3);

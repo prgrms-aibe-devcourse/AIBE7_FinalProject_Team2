@@ -179,7 +179,7 @@ const WORDS = {
 };
 const CASE_PARTS = { origin: '발단', conclusion: '결론', reenact: '재연' };
 const COMMON_CATEGORIES = { property: '재산', body: '신체', life: '생명', robbery: '강도', theft: '절도' };
-const INQUIRY_SCENES = { reading: '서재', magnifier: '자료실', talk: '대화', walk: '산책', window: '창가', board: '게시판' };
+const INQUIRY_SCENES = { reading: '서재', magnifier: '자료실', talk: '대화', walk: '산책', window: '창가', board: '게시판', reporter: '기자', clue: '단서', sign: '표지판' };
 
 export function portraitLabel(src) {
   const kind = kindOfPortrait(src);
