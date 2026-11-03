@@ -63,7 +63,7 @@ export function testFace({ navigate, api, active }) {
   top.setAttribute('aria-label', '판결 성향 테스트 소개');
   const side = element('div', 'pf-side');
 
-  // 열여섯 유형 갤러리: 엄격 → 관대 순서로 8열 → 4열(1100px 이하, 가로 칸) → 2열(768px 이하). 칸마다 그림 · 관대 눈금 · 이름 · 한 줄. 칸을 누르면 그 유형 설명(공유 지면)
+  // 열여섯 유형 갤러리: 엄격 → 관대 순서로 8열 → 4열(1100px 이하, 가로 칸) → 2열(720px 이하). 칸마다 그림 · 관대 눈금 · 이름 · 한 줄. 칸을 누르면 그 유형 설명(공유 지면)
   const board = element('section', 'index pf-board');
   board.setAttribute('aria-label', '열여섯 판사 유형');
   const head = element('div', 'index-head');
