@@ -14,7 +14,7 @@ sys.path.insert(0, str(PARENT_DIR))
 from common import NO_TERM_PENALTIES, PENALTY_TYPES, REDUCIBLE_TO, VALUE_AXES, format_months, format_won  # noqa: E402
 
 # 프롬프트나 스키마를 고치면 올린다. 보고서(report.json)에 기록된다.
-EXTRACT_PROMPT_VERSION = "extract-v8"  # v3: Claude 외 공급자 스키마 안내 (BE-35), v4: 사건 발생일 incidentDate (BE-38), v5: 판단 요소 가치관 축 valueAxis (BE-47), v6: 판단 요소 작성 예시 퓨샷 extract_fewshot.md (BE-53), v7: 서비스 대상 조건 · 범죄 유형 ROBBERY · THEFT · 아동 나이 표현 (BE-111), v8: 형벌 규칙 계산 기준(감경 경로 합집합 · statutoryMax 의미 · 신구법, BE-117)
+EXTRACT_PROMPT_VERSION = "extract-v9"  # v3: Claude 외 공급자 스키마 안내 (BE-35), v4: 사건 발생일 incidentDate (BE-38), v5: 판단 요소 가치관 축 valueAxis (BE-47), v6: 판단 요소 작성 예시 퓨샷 extract_fewshot.md (BE-53), v7: 서비스 대상 조건 · 범죄 유형 ROBBERY · THEFT · 아동 나이 표현 (BE-111), v8: 형벌 규칙 계산 기준(감경 경로 합집합 · statutoryMax 의미 · 신구법, BE-117), v9: 이번 선고와 같은 전과 형량 숫자 쓰지 않기 (BE-166)
 
 CRIME_TYPES = ("MURDER", "FRAUD", "INJURY", "ROBBERY", "THEFT")  # ERD legal_case.crime_type
 REVEAL_STAGES = ("OVERVIEW", "DETAIL", "ARGUMENT", "LAW")  # ERD factor.reveal_stage
@@ -362,8 +362,23 @@ def _alternatives(forms):
 
 
 def _month_forms(months):
-    """개월 수의 표기 변형 (공백은 뺀 형태): "10년", "120개월", "10년6개월"."""
-    return {format_months(months).replace(" ", ""), f"{months}개월"}
+    """개월 수의 표기 변형 (공백은 뺀 형태): "10년", "120개월", "10년6개월".
+
+    판결문 표기("징역 6월", "징역 1년 6월")도 본다 — 모델이 판결문 문장을 그대로 옮기면 "개월"이 아니라 "월"이 남는다(BE-166).
+    "징역" 바로 옆에 붙을 때만 찾으므로("징역6월", "6월의징역") 날짜의 "6월"과 헷갈리지 않는다.
+    """
+    text = format_months(months).replace(" ", "")
+    return {text, f"{months}개월", text.replace("개월", "월"), f"{months}월"}
+
+
+def _reverse_month_forms(forms):
+    """역방향("6월의 징역")에 쓸 표기. 연도 없는 단독 "N월"은 뺀다 (PR #425 리뷰).
+
+    "같은 해 6월 징역 2년을 선고받았다"의 "6월"은 날짜인데, 역방향으로 보면 "6월징역"이 되어 이번 선고(6월)로 잘못 잡힌다.
+    판결문은 "징역 6월" 순서로 쓰므로 단독 "N월"은 역방향에서 "의 · 간"이 붙을 때만 찾는다("6월의 징역형", 팀 리뷰) —
+    _leak_patterns의 strict 부분. "1년6월"처럼 연이 붙은 표기는 날짜와 헷갈리지 않아 그대로 남긴다.
+    """
+    return {f for f in forms if not re.fullmatch(r"\d+월", f)}
 
 
 def _won_forms(amount):
@@ -376,17 +391,26 @@ def _leak_patterns(court):
     """(표시할 형량, 공백 없는 문장에서 찾을 패턴) 목록. 형량 용어와 기간 · 금액이 함께 있는 표현만 본다."""
     patterns = []
 
-    def add(label, term, forms, before):
+    def add(label, term, forms, before, reverse_forms=None):
         # before: 역방향 표현에서 앞에 올 수 없는 글자. 더 큰 금액 · 기간의 뒷부분("1억 2천만원", "2년 6개월")을 잘라 오탐하지 않는다
+        # reverse_forms: 역방향("6개월의 징역")에 쓸 표기. 기본은 forms와 같다
+        # forms에는 있고 reverse_forms에 없는 표기(단독 "N월")는 역방향에서 "의 · 간"이 붙을 때만 찾는다("6월의징역")
         alt = _alternatives(forms)
-        patterns.append((label, re.compile(f"(?:{term}{alt}{_AMOUNT_END}|(?<![{before}]){alt}(?:간|의)?{term})")))
+        rev_forms = forms if reverse_forms is None else reverse_forms
+        parts = [f"{term}{alt}{_AMOUNT_END}", f"(?<![{before}]){_alternatives(rev_forms)}(?:간|의)?{term}"]
+        strict = set(forms) - set(rev_forms)
+        if strict:
+            parts.append(f"(?<![{before}]){_alternatives(strict)}(?:간|의){term}")
+        patterns.append((label, re.compile("(?:" + "|".join(parts) + ")")))
 
     if court.get("prisonMonths"):
-        add(f"징역 {format_months(court['prisonMonths'])}", "징역형?", _month_forms(court["prisonMonths"]), r"\d년")
+        forms = _month_forms(court["prisonMonths"])
+        add(f"징역 {format_months(court['prisonMonths'])}", "징역형?", forms, r"\d년", _reverse_month_forms(forms))
     if court.get("fineAmount"):
         add(f"벌금 {format_won(court['fineAmount'])}", "벌금형?", _won_forms(court["fineAmount"]), r"\d억천백")
     if court.get("suspensionMonths"):
-        add(f"집행유예 {format_months(court['suspensionMonths'])}", "집행유예", _month_forms(court["suspensionMonths"]), r"\d년")
+        forms = _month_forms(court["suspensionMonths"])
+        add(f"집행유예 {format_months(court['suspensionMonths'])}", "집행유예", forms, r"\d년", _reverse_month_forms(forms))
         patterns.append(("집행유예", re.compile("징역형?의?집행을?유예")))
     return patterns
 
