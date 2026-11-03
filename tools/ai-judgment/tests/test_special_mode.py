@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from special_mode import PREFIX, marker, split_errors  # noqa: E402
 
 ERRORS = [
-    "excerpt: 원문 인용이 아닙니다 — 원문에서 찾을 수 없습니다",
+    "excerpt: 원문 인용이 아닙니다 — 원문에서 찾을 수 없습니다 (⟦ ⟧ 밖의 글자가 원문과 다름)",
     "factors[1].evidence: 상세 주소 의심",
     "summary: 정확한 날짜 의심",
     "sections[0]: 정확한 나이 의심",
@@ -19,6 +19,10 @@ ERRORS = [
     "excerpt: 마스킹 표시가 남음 의심",
     "notes[0]: 사건번호 의심",
     "summary가 100자를 넘습니다",
+    "excerpt: 원문 인용이 아닙니다 — 원문 그대로인 부분이 너무 적습니다 (⟦ ⟧로 바꾼 부분이 대부분)",  # 지어낸 인용 방지
+    "excerpt: 원문 인용이 아닙니다 — ⟦ ⟧ 안의 말은 1 ~ 20자여야 합니다 (식별 정보를 일반화한 말만)",
+    "excerpt: 원문 인용이 아닙니다 — ⟦ ⟧ 짝이 맞지 않습니다",
+    "summary: 동 · 호수 주소 의심",
     "판단 요소가 없습니다",  # extract: 사건에 판단 요소가 없음(구조) — 낮추지 않는다
     "excerpt: 새로 생긴 검사",  # 목록에 없는 오류는 막는다
 ]

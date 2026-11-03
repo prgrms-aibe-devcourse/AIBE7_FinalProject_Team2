@@ -206,6 +206,15 @@ class CheckDraftTest(unittest.TestCase):
             self.assertEqual(any("가린 표시가 인용에 남았습니다" in e for e in errors), rejected, (evidence, errors))
             self.assertFalse(any("원문 인용이 아닙니다" in e for e in errors), errors)  # 원문 대조 자체는 둘 다 통과
 
+    def test_maskTokenReported_evenWhenQuoteMismatch(self):
+        # 리뷰 반영: 원문 대조가 실패해도 "가린 표시가 인용에 남았습니다"를 함께 알려 재요청에서 같이 고치게 한다
+        masked = JUDGMENT.replace("가상시 가상구 소재", "[주소]")
+        evidence = "[주소] 별빛주점에서 술값을 지급할 의사가 전혀 없었음에도"
+        draft = draft_with(factors=[{"factorId": 3, "direction": "UP", "evidence": evidence}])
+        errors, _ = check_draft(draft, CASE, masked)
+        self.assertTrue(any("원문 인용이 아닙니다" in e for e in errors), errors)
+        self.assertTrue(any("가린 표시가 인용에 남았습니다" in e for e in errors), errors)
+
     def test_buildCourtDraft_be14Format(self):
         result = build_court_draft(draft_with(excerpt="피고인은 ⟦사건 당일⟧ 술값을 지급할 의사나 능력이 없음에도"), CASE, COURT, "m")
         j = result["judgment"]
@@ -295,6 +304,33 @@ class RunTest(unittest.TestCase):
             else:
                 with self.assertRaises(CourtDraftError, msg=(mode, draft)):
                     run("c", self.dir, "openai:gpt-x", caller=call, special_mode=mode)
+
+    def test_run_specialMode_forgedQuoteStillBlocked(self):
+        # 리뷰 반영: 지어낸 인용 방지 장치(⟦ ⟧ 대부분 · 안 길이)는 어느 모드든 막는다. "찾을 수 없음"만 낮춘다
+        mostly = draft_with(excerpt="⟦지어낸 문장 하나⟧ ⟦또 지어낸 문장 둘⟧ 피고인을 징역")
+        for mode in ("format", "all"):
+            call, _ = self.caller([mostly] * 3)
+            with self.assertRaises(CourtDraftError, msg=mode):
+                run("c", self.dir, "openai:gpt-x", caller=call, special_mode=mode)
+
+    def test_run_specialMode_keepsFewestDowngraded_andSurvivesCallError(self):
+        two = draft_with(excerpt="지어낸 문장이다.", factors=[
+            {"factorId": 1, "direction": "DOWN", "evidence": "지어낸 근거 하나다."}] + DRAFT["factors"][1:])
+        one = draft_with(excerpt="지어낸 문장이다.")
+        # 오류 2건 → 1건 → 호출 실패(키 없는 LLMError): 오류가 적은 1건 후보를 쓴다
+        queue = [two, one]
+
+        def call(spec, system, user, **kwargs):
+            if not queue:
+                raise llm.LLMError("연결 실패")
+            return SimpleNamespace(text=json.dumps(queue.pop(0), ensure_ascii=False), served_model="m", stop_reason="stop")
+
+        _, report_path = run("c", self.dir, "openai:gpt-x", caller=call, special_mode="format")
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+        self.assertEqual(len(report["specialMode"]["downgraded"]), 1)
+        with self.assertRaises(CourtDraftError):  # 특별 모드가 아니면 그대로 실패
+            queue[:] = [one]
+            run("c", self.dir, "openai:gpt-x", caller=call)
 
     def test_run_blockedStop_notRetried(self):
         call, calls = self.caller([""], stop_reason="SAFETY")

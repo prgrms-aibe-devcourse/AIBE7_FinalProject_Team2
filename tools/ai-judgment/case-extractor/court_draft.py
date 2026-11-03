@@ -251,8 +251,13 @@ def check_draft(draft, case, source_text):
         ok, reason = quote_matches(quote, source_text)
         if not ok:
             errors.append(f"{where}: 원문 인용이 아닙니다 — {reason}")
-        # 미리 가린 표시([주소] 등)는 원문 글자와 같아 위 대조를 통과한다. 규칙(⟦ ⟧로 일반화)을 여기서 지킨다 (BE-53)
-        elif any(token in text for is_literal, text in split_quote(quote) if is_literal for token in MASK_TOKENS):
+        # 미리 가린 표시([주소] 등)는 원문 글자와 같아 위 대조를 통과한다. 규칙(⟦ ⟧로 일반화)을 여기서 지킨다 (BE-53).
+        # 대조가 실패해도 함께 알려야 재요청 때 모델이 같이 고친다 (BE-165 리뷰)
+        try:
+            literals = [text for is_literal, text in split_quote(quote) if is_literal]
+        except CourtDraftError:
+            literals = []  # ⟦ ⟧ 짝이 안 맞는 건 위 대조에서 이미 오류다
+        if any(token in text for text in literals for token in MASK_TOKENS):
             errors.append(f"{where}: 가린 표시가 인용에 남았습니다 — 일반적인 말로 바꿔 ⟦ ⟧로 감쌉니다")
 
     if len(draft["summary"]) > SUMMARY_MAX_LENGTH:
@@ -330,7 +335,7 @@ def request_draft(system, user, case, masked_text, model, max_tokens=MAX_TOKENS,
 
     special_mode(BE-165)면 낮출 수 있는 오류만 남은 초안을 후보로 두고 끝까지 다시 요청한다. 모두 실패하면 가장 최근
     후보를 쓰고, 낮춘 오류는 "[특별 모드]" 경고로 돌려준다."""
-    last_errors, fallback = [], None
+    last_errors, fallback, fallback_count = [], None, 0
     for attempt in range(1 + RETRIES):
         message = user if not last_errors else (
             user + "\n\n(이전 응답의 오류: " + "; ".join(last_errors[:8]) + ". 인용은 원문을 글자 그대로 옮기고 바꾼 부분만 ⟦ ⟧로 "
@@ -340,10 +345,16 @@ def request_draft(system, user, case, masked_text, model, max_tokens=MAX_TOKENS,
         except LLMError as e:
             if e.kind:  # 과부하 · 한도: 다음 모델로 넘어갈 수 있다 (BE-45)
                 raise ModelUnavailableError(str(e), e.kind) from e
+            if fallback:  # 특별 모드: 앞 시도에서 보관한 후보를 버리지 않는다 (BE-165, 리뷰)
+                return fallback
             raise CourtDraftError(str(e)) from e
         if result.stop_reason in TRUNCATED_REASONS:
+            if fallback:
+                return fallback
             raise CourtDraftError(f"출력이 최대 길이({max_tokens} 토큰)에서 잘렸습니다")
         if result.stop_reason not in NORMAL_STOP_REASONS:
+            if fallback:
+                return fallback
             raise CourtDraftError(f"응답이 비정상 종료되었습니다 (사유: {result.stop_reason}). 다시 보내도 같으므로 멈춥니다")
         try:
             draft = parse_output(result.text)
@@ -354,8 +365,9 @@ def request_draft(system, user, case, masked_text, model, max_tokens=MAX_TOKENS,
         if not errors:
             return draft, warnings, result.served_model, attempt + 1
         hard, downgraded = split_errors(errors, special_mode)
-        if not hard:
-            fallback = (draft, downgraded + warnings, result.served_model, attempt + 1)
+        # 낮춘 오류가 가장 적은 후보를 둔다 (같으면 더 나중, 오류만 고친 재요청이라 더 다듬어진 초안)
+        if not hard and (fallback is None or len(downgraded) <= fallback_count):
+            fallback, fallback_count = (draft, downgraded + warnings, result.served_model, attempt + 1), len(downgraded)
         last_errors = errors
     if fallback:
         return fallback
