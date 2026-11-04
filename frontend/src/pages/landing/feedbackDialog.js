@@ -5,7 +5,8 @@ import { lockScroll, unlockScroll } from '../../utils/scrollLock.js';
 // 의견 보내기 창 (FE-62). 메인 책상의 펜 · 엽서를 누르면 뜬다. 의견은 바깥 설문 링크로 받는다(입력칸 없음).
 // 창이 열려 있는 동안 Tab은 창 안에서만 돌고, Esc · 바깥 누르기 · 닫기로 닫으면 누른 곳으로 포커스가 돌아온다.
 const FOCUSABLE = 'button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';
-const FEEDBACK_URL = ''; // 의견 받을 링크(정해지면 넣는다). 비어 있으면 입구는 "준비 중"으로 막아 둔다
+// 의견 받을 링크(사용자 설문 구글 폼, COMMON-75). 비우면 입구는 "링크 준비 중"으로 막힌다
+const FEEDBACK_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSefpCSOwmzkAYhHVtSRMRZq7k8oFGaPpHUorm-_wcUbFF5LgQ/viewform';
 const SCROLL_CLASSES = ['feedback-open', 'feedback-gutter'];
 const FLY_MS = 650;
 const SWAP_MS = 160; // 도착 무렵 엽서 앞면은 사라지고 창 내용이 나타난다(엽서 안에서만 바뀐다)
@@ -87,7 +88,7 @@ export function openFeedbackDialog() {
 
   const title = element('h2', '', '의견 보내기');
   title.id = 'feedback-title';
-  const lead = element('p', 'feedback-lead', '서비스를 쓰면서 불편했거나 바라는 점을 들려주세요.');
+  const lead = element('p', 'feedback-lead', '3분이면 끝나요. 좋았던 점, 불편했던 점, 바라는 사건까지 무엇이든 들려주세요.');
   const link = FEEDBACK_URL
     ? element('a', 'feedback-link primary-button', '의견 남기러 가기')
     : element('button', 'feedback-link primary-button', '링크 준비 중');
